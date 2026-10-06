@@ -520,6 +520,8 @@ class TestJellyfin:
                 {"name": "TV", "collection_type": "tvshows", "folder": "tv", "built": False},
                 {"name": "Anime", "collection_type": "tvshows", "folder": "anime", "built": False},
             ],
+            # 頁 3 照它決定進頁要不要自動建立並檢查（M4 票 43）。
+            "bundled_default": True,
             "library_root": str(tmp_path / "library"),
             "berth_paths": [],
         }

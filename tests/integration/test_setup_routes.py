@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import errno
 import os
 from collections.abc import Iterator, Sequence
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.fs import ensure_directory, is_within
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.qbittorrent import (
     CategoryOutcome,
     QbittorrentCategory,
@@ -40,13 +42,17 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    DEFAULT_BUNDLED_LIBRARIES,
     BundledLibrary,
     QbittorrentSettings,
     Route,
+    RouteHealth,
     SetupLibrary,
     SetupSettings,
+    SetupStep,
 )
 from berth.services import routes as routes_module
+from berth.services.jellyfin import bootstrap_jellyfin, save_bundled_libraries
 from berth.services.routes import (
     RouteRejectedError,
     RouteSelection,
@@ -78,6 +84,7 @@ from tests.integration.arrange import (
     factory_for,
     fake_jellyfin,
 )
+from tests.integration.factories import FakeClientFactory
 
 
 def checks(status: RouteSetupStatus, slug: str) -> dict[str, StepView]:
@@ -1018,6 +1025,123 @@ class TestChecks:
         assert checks(status, "tv")[RouteCheck.HARDLINK.value].status is StepStatus.PENDING
 
 
+class TestProgress:
+    """頁 3 輪詢看得到每條 Route 跑到第幾條纜繩（M4 票 43）。
+
+    每一條纜繩開跑前先寫 `running` 並 commit。
+    """
+
+    @staticmethod
+    def _peek_on_probe(
+        jellyfin: FakeJellyfinClient, engine: AsyncEngine
+    ) -> list[dict[str, list[str]]]:
+        """第五條纜繩（`probe_visible`）問 Jellyfin 的每一刻，另一個 session（輪詢）讀到什麼。"""
+        sessions = create_session_factory(engine)
+        seen: list[dict[str, list[str]]] = []
+        validate = jellyfin.validate_path
+
+        async def peek(path: str, *, is_file: bool = True) -> bool:
+            async with sessions() as other:
+                status = await read_route_status(other)
+            seen.append(
+                {row.slug: [step.status.value for step in row.checks] for row in status.routes}
+            )
+            return await validate(path, is_file=is_file)
+
+        # 替身的方法是實例屬性，指派回去就是「這一輪改問這個」。
+        jellyfin.validate_path = peek  # type: ignore[method-assign]
+        return seen
+
+    @pytest.mark.asyncio
+    async def test_another_session_sees_which_cable_each_route_is_on(
+        self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
+    ) -> None:
+        await arrange(session, roots)
+        jellyfin = fake_jellyfin(bundled_libraries(roots["library"]))
+        seen = self._peek_on_probe(jellyfin, engine)
+
+        await build_routes(session, factory_for(roots, jellyfin=jellyfin), ())
+
+        assert [view["movies"][3:] for view in seen] == [
+            ["ok", "running", "pending"],
+            ["ok", "ok", "ok"],
+            ["ok", "ok", "ok"],
+        ]
+        # 第一條建分類（新建是 ok）；第二條的前四條已過、第五條在跑、第六條還沒輪到。
+        assert seen[1]["tv"][4:] == ["running", "pending"]
+        # 還沒輪到的 Route 是剛建的：一條都還沒有。
+        assert seen[0]["anime"] == []
+        assert seen[2]["anime"][4:] == ["running", "pending"]
+
+    @pytest.mark.asyncio
+    async def test_a_recheck_keeps_the_last_result_until_its_turn(
+        self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
+    ) -> None:
+        """重新檢查時還沒輪到的 Route 留著上一次的結果，不先清成空的。"""
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        jellyfin = fake_jellyfin(bundled_libraries(roots["library"]))
+        seen = self._peek_on_probe(jellyfin, engine)
+
+        await check_routes(session, factory_for(roots, jellyfin=jellyfin))
+
+        assert seen[0]["anime"] == ["ok"] * 6
+        assert seen[2]["anime"] == ["ok", "ok", "ok", "ok", "running", "pending"]
+
+    @pytest.mark.asyncio
+    async def test_signing_in_to_qbittorrent_already_reads_as_the_first_cable(
+        self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
+    ) -> None:
+        """登入 qBittorrent 是第一條纜繩的一部分（它的失敗就紅在那一條）：登入那幾秒裡輪詢也讀得到
+        `running`，跑到一半重新整理的頁 3 才知道要接著輪詢。"""
+        await arrange(session, roots)
+        await write_settings(
+            session,
+            QbittorrentSettings(base_url="http://qbittorrent:8080", username="admin", password="x"),
+        )
+        await session.commit()
+        qbittorrent = FakeQbittorrentClient()
+        sessions = create_session_factory(engine)
+        seen: list[list[str]] = []
+        login = qbittorrent.login
+
+        async def peek(username: str, password: str) -> None:
+            async with sessions() as other:
+                status = await read_route_status(other)
+            seen.append([step.status.value for step in status.routes[0].checks])
+            await login(username, password)
+
+        # 替身的方法是實例屬性，指派回去就是「這一輪改問這個」。
+        qbittorrent.login = peek  # type: ignore[method-assign]
+
+        await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
+
+        assert seen[0] == ["running"] + ["pending"] * 5
+
+    @pytest.mark.asyncio
+    async def test_a_check_cut_short_does_not_leave_running_behind(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """一輪檢查被打斷（容器重啟）留下的 `running`，健康迴圈沿用探針結論時不原樣帶下去：
+        那會讓每一頁永遠說「檢查中」、頁 3 永遠輪詢。"""
+        await arrange(session, roots)
+        await build_routes(session, factory_for(roots), ())
+        route = (await session.scalars(select(Route).where(Route.slug == "tv"))).one()
+        cut = RouteHealth.model_validate(route.health_detail_json)
+        cut.checks = [
+            *cut.checks[:2],
+            SetupStep(key=RouteCheck.DOWNLOAD_VISIBLE.value, status=StepStatus.RUNNING),
+            *(SetupStep(key=row.key, status=StepStatus.PENDING) for row in cut.checks[3:]),
+        ]
+        route.health_detail_json = cut.model_dump(mode="json")
+        await session.commit()
+
+        status = await check_routes(session, factory_for(roots), probe_qbittorrent=False)
+
+        tv = next(row for row in status if row.slug == "tv")
+        assert all(step.status is not StepStatus.RUNNING for step in tv.checks)
+
+
 class TestCompletion:
     @pytest.mark.asyncio
     async def test_the_wizard_stays_on_step_five_until_a_route_is_green(
@@ -1287,3 +1411,70 @@ class TestChecksReadTheServices:
         assert "no longer has a library named 'TV'" in row.error
         assert (row.failure, row.params) == (StepFailure.LIBRARY_GONE, {"library": "TV"})
         assert next(row for row in status.routes if row.slug == "movies").health is HealthStatus.OK
+
+
+class TestEnteringTwice:
+    """頁 3 套件內進頁自動建立並檢查（M4 票 43）：同一段送兩次也只建一次（冪等是票 24 的）。
+
+    兩次是前端 `dock` 的整段：重讀媒體庫 → 存清單 → 建媒體庫 → 建 Route 與檢查。重新整理之後前端照
+    伺服器狀態不再自動送；這裡守的是那條規則漏掉時（兩個分頁同時進頁、規則改壞）也不會長出重複的東西。
+    """
+
+    async def _enter(self, session: AsyncSession, factory: FakeClientFactory) -> None:
+        await reread_libraries(session, factory)
+        await save_bundled_libraries(
+            session, [row.model_copy() for row in DEFAULT_BUNDLED_LIBRARIES]
+        )
+        await bootstrap_jellyfin(session, factory)
+        await build_routes(session, factory, ())
+
+    def _blank(self, roots: dict[str, Path]) -> tuple[FakeClientFactory, FakeJellyfinClient]:
+        """還沒有任何媒體庫的套件內 Jellyfin：頁 3 第一次進來的樣子。"""
+        jellyfin = fake_jellyfin(())
+        return factory_for(roots, jellyfin=jellyfin), jellyfin
+
+    @staticmethod
+    async def _assert_built_once(
+        jellyfin: FakeJellyfinClient, qbittorrent: FakeQbittorrentClient, status: RouteSetupStatus
+    ) -> None:
+        assert [row.name for row in jellyfin.libraries_] == ["Movies", "TV", "Anime"]
+        assert all(len(row.locations) == 1 for row in jellyfin.libraries_)
+        assert sorted(row.name for row in await qbittorrent.categories()) == [
+            "berth-anime",
+            "berth-movies",
+            "berth-tv",
+        ]
+        assert [row.slug for row in status.routes] == ["movies", "tv", "anime"]
+        assert all(row.health is HealthStatus.OK for row in status.routes)
+
+    @pytest.mark.asyncio
+    async def test_entering_again_after_a_refresh_builds_nothing_twice(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await arrange(session, roots, libraries=())
+        factory, jellyfin = self._blank(roots)
+
+        await self._enter(session, factory)
+        await self._enter(session, factory)
+
+        await self._assert_built_once(
+            jellyfin, factory.qbittorrent_, await read_route_status(session)
+        )
+
+    @pytest.mark.asyncio
+    async def test_two_tabs_entering_at_once_build_nothing_twice(
+        self, session: AsyncSession, roots: dict[str, Path], engine: AsyncEngine
+    ) -> None:
+        await arrange(session, roots, libraries=())
+        factory, jellyfin = self._blank(roots)
+        sessions = create_session_factory(engine)
+
+        async def tab() -> None:
+            async with sessions() as own_session:
+                await self._enter(own_session, factory)
+
+        await asyncio.gather(tab(), tab())
+
+        await self._assert_built_once(
+            jellyfin, factory.qbittorrent_, await read_route_status(session)
+        )

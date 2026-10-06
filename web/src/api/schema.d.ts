@@ -3273,6 +3273,8 @@ export interface components {
             version_supported: boolean;
             /** Bundled */
             bundled: components["schemas"]["BundledLibraryOut"][];
+            /** Bundled Default */
+            bundled_default: boolean;
             /** Library Root */
             library_root: string;
             /** Berth Paths */

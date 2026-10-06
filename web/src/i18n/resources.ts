@@ -813,7 +813,7 @@ const zhHant = {
     title: '媒體庫路徑',
     lede: {
       bundled:
-        '你列的每一個媒體庫各成為一條 Route：下載完成後硬鏈接到它的寫入目標。進這一頁不會動任何東西，按下「建立並檢查」才建，並實際鏈接一個檔案，確認三個容器看到同一個檔案系統。',
+        '你列的每一個媒體庫各成為一條 Route：下載完成後硬鏈接到它的寫入目標。建好之後實際鏈接一個檔案，確認三個容器看到同一個檔案系統。第一次來、清單還是預設的時候，進這一頁就建立並檢查；改過清單就等你按「建立並檢查」。',
       existing:
         '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。Berth 只往你選的那一條寫，同一個媒體庫的其他路徑維持唯讀；不想讓它寫進你既有的資料夾，選「新的 Berth 路徑」，按「建立並檢查」時才加到 Jellyfin。進這一頁不會動任何東西。',
     },
@@ -823,6 +823,10 @@ const zhHant = {
     docking: '建立並檢查中…',
     list: '這一頁的 Route',
     tally: '{{passed}} / {{total}} 通過',
+    // 跑到一半（M4 票 43）：每條纜繩開跑前後端先寫 running，頁 3 輪詢它。
+    tallyRunning: '第 {{at}} / {{total}} 條 · {{check}}',
+    waiting: '等待中',
+    autoRun: '預設清單沒改過，進這一頁就開始建立並檢查。要多一個媒體庫，等它跑完再展開清單加一列。',
     listSummary: '媒體庫清單',
     listPending_one: '{{count}} 個要建立',
     listPending_other: '{{count}} 個要建立',
@@ -894,6 +898,7 @@ const zhHant = {
       unknown: '尚未檢查',
       ok: '已繫上',
       failed: '阻擋',
+      checking: '檢查中',
     },
     check: {
       category: '建立 qBittorrent 分類',
@@ -3958,7 +3963,7 @@ const en: Translations<typeof zhHant> = {
     title: 'Routes',
     lede: {
       bundled:
-        'Each library you list becomes a route: finished downloads are hard-linked into its write target. Arriving here changes nothing; “Build and check” builds them and links a real file, proving all three containers see one file system.',
+        'Each library you list becomes a route: finished downloads are hard-linked into its write target. Once built, a real file is linked to prove all three containers see one file system. On your first visit with the default list, building and checking starts as you arrive; once you change the list, it waits for “Build and check”.',
       existing:
         'Tick the libraries Berth may write into and pick one write target for each. Berth writes only to the path you pick; the library’s other paths stay read-only. To keep Berth out of your existing folders, pick “new Berth path” — it is added to Jellyfin when you press “Build and check”. Arriving here changes nothing.',
     },
@@ -3969,6 +3974,10 @@ const en: Translations<typeof zhHant> = {
     docking: 'Building and checking…',
     list: 'Routes on this page',
     tally: '{{passed}} / {{total}} passed',
+    tallyRunning: 'Check {{at}} of {{total}} · {{check}}',
+    waiting: 'Waiting',
+    autoRun:
+      'The default list is unchanged, so building and checking started as you arrived. To add a library, wait for it to finish, then open the list and add a row.',
     listSummary: 'Library list',
     listPending_one: '{{count}} to create',
     listPending_other: '{{count}} to create',
@@ -4044,6 +4053,7 @@ const en: Translations<typeof zhHant> = {
       unknown: 'Not checked',
       ok: 'Ready',
       failed: 'Blocked',
+      checking: 'Checking',
     },
     check: {
       category: 'Create the qBittorrent category',

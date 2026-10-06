@@ -18,9 +18,10 @@ import { type RouteView } from '../api/schemas'
 import { STICKY_ACTION, Checkbox, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { RouteCheckList } from '../components/RouteCheckList'
-import { type ExistingServices } from '../components/routeChecks'
+import { checking, type ExistingServices } from '../components/routeChecks'
 import { RouteDelete } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
+import { SIGNAL_FILL } from '../components/signal'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { BUILD_REFUSAL, type BuildRefusal } from './buildRefusal'
@@ -34,13 +35,15 @@ import { useLibraryDraft } from './useLibraryDraft'
 /**
  * 頁 3「媒體庫與路徑」（plan §9.3 頁 3、§9.5；M4 票 08，`.scratch/m4/route-berth-shape.md`）。
  *
- * **進頁不動手，一顆鈕做完**：這一頁會建媒體庫、在 Jellyfin 加路徑、建 qBittorrent 分類、寫探測檔與
- * 硬鏈接測試檔，所以由人按，按之前把這一輪會做的事列出來（`DockPreview`）。套件內這一顆也建清單上
- * 還沒建的媒體庫；既有 Jellyfin 的 Berth 路徑是寫入目標的一個選項，按下時才加——沒有「確認加入」
- * 那種做了一半、走得過去的狀態（使用者拍板）。
+ * **一顆鈕做完**：這一頁會建媒體庫、在 Jellyfin 加路徑、建 qBittorrent 分類、寫探測檔與硬鏈接測試檔，
+ * 按之前把這一輪會做的事列出來（`DockPreview`）。套件內這一顆也建清單上還沒建的媒體庫；既有 Jellyfin 的
+ * Berth 路徑是寫入目標的一個選項，按下時才加——沒有「確認加入」那種做了一半、走得過去的狀態（使用者拍板）。
+ * **套件內什麼都還沒做時進頁就自己跑一次**（M4 票 43，`.scratch/m4/route-auto-run-shape.md`；判定在
+ * `autoDock.startsOnItsOwn`）：那裡沒有選擇要做。既有照舊由人按。
  *
- * 按下之後的順序在 `SetupPage` 的 `dock`：一段失敗就停，後面的不送。每條 Route 收成一列，
- * 紅的自己打開（`RouteRow`）；失敗說出哪個容器少了哪個掛載，既有服務另說同主機、同容器路徑的條件。
+ * 按下之後的順序在 `SetupPage` 的 `dock`：一段失敗就停，後面的不送。跑的時候這一輪的每條 Route 先畫成
+ * 一列（還沒輪到的「等待中」），跑到哪一條纜繩就說哪一條。每條 Route 收成一列，紅的自己打開（`RouteRow`）；
+ * 失敗說出哪個容器少了哪個掛載，既有服務另說同主機、同容器路徑的條件。
  */
 
 /** 按下「建立並檢查」要做的事，照順序。 */
@@ -52,6 +55,8 @@ export type DockPlan =
        * 與後端判定頁 3 的是同一條（`libraries_built`，M4 票 24）。
        */
       libraries: LibraryDraft[]
+      /** 進頁自己開跑的那一次（M4 票 43）：畫面說一句為什麼沒按就開始了。 */
+      onItsOwn?: boolean
     }
   | {
       origin: 'existing'
@@ -85,6 +90,8 @@ interface Common {
   /** 使用者自己的那幾台：它們的檢查失敗時另說改掛載（票 08）。 */
   existing: ExistingServices
   docking: boolean
+  /** 這一頁的建立是進頁自己開跑的（M4 票 43）：說一句為什麼沒按就開始了，留到人自己按為止。 */
+  startedOnItsOwn: boolean
   failure: DockFailure | null
   onDock: (plan: DockPlan) => void
   /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單與精靈的進度要重讀（M4 票 24）。 */
@@ -153,7 +160,10 @@ function BundledRoutes({
   const unrouted = setup.libraries
     .filter((library) => library.listed && library.supported && !library.has_route)
     .sort((a, b) => order(a.name) - order(b.name))
-  const broke = librariesFailed(jellyfin)
+  // 建媒體庫那一段：在跑時說在跑（M4 票 43），紅了就地說原文與手動步驟。
+  const libraries =
+    librariesFailed(jellyfin) ??
+    jellyfin.steps.find((row) => row.step === 'libraries' && row.status === 'running')
   const names = unbuilt.map((row) => row.name.trim()).filter(Boolean)
 
   return (
@@ -189,7 +199,8 @@ function BundledRoutes({
       {/* 清單全部建好了就收成一列，要加一個再展開（shape）；還有沒建的就打開。**永遠是同一個
           `<details>`**：兩種樣子換元件的話，展開後按「加一個媒體庫」清單會被重新掛載，焦點掉回 body
           （code-review）。`open` 只在「有沒有沒建的」變了時才動，使用者自己開關的不蓋掉。 */}
-      <details open={unbuilt.length > 0} className="group mt-6">
+      {/* 跑的時候收起（鎖著也改不了）；自動跑的那一次因此一開始就是收著的「預設 3 個」（M4 票 43）。 */}
+      <details open={unbuilt.length > 0 && !docking} className="group mt-6">
         <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 border-2 border-rule bg-well px-4 py-3">
           <span className="label text-ink-dim">{t('routes.listSummary')}</span>
           <span className="value text-xs text-ink">
@@ -213,13 +224,13 @@ function BundledRoutes({
           />
         </div>
       </details>
-      {broke && (
+      {libraries && (
         <ol className="mt-4 grid gap-3">
           <StepLine
             label={t(STEP_LABEL.libraries)}
             service="Jellyfin"
             endpoint={STEP_ENDPOINT.libraries}
-            row={broke}
+            row={libraries}
             fix={t(STEP_FIX.libraries)}
             commands={manualSteps('libraries', jellyfin.base_url)}
           >
@@ -426,6 +437,7 @@ function RoutePage({
   done,
   existing,
   docking,
+  startedOnItsOwn,
   failure,
   onRouteDeleted,
   note,
@@ -499,13 +511,28 @@ function RoutePage({
     </>
   )
 
-  const rows = setup.routes.length > 0 && (
-    <ul className="mt-4 grid gap-3" aria-label={t('routes.list')}>
+  // 跑的時候這一輪會建、還沒建出來的 Route 先佔一列（M4 票 43）：一開始就看得到總共有幾條、輪到誰。
+  // **用開跑那一刻的 `planned`**：建完媒體庫、Route 還沒建出來的那一下，快照裡兩邊都沒有它們，照當下
+  // 算的話那幾列會消失再冒出來。
+  const [atStart, setAtStart] = useState({ docking, planned })
+  if (atStart.docking !== docking) setAtStart({ docking, planned })
+  const waiting = docking
+    ? atStart.planned.filter((row) => !setup.routes.some((route) => route.library === row.library))
+    : []
+  // 這一輪還在跑：這一頁送出的，或伺服器說有纜繩在跑（跑到一半重新整理，這一頁沒有送出中的請求）。
+  const running = docking || setup.routes.some(checking)
+  const rows = (setup.routes.length > 0 || waiting.length > 0) && (
+    <ul className="mt-4 grid gap-3" aria-label={t('routes.list')} aria-busy={running}>
       {setup.routes.map((route) => (
         <li key={route.slug} className="min-w-0">
           <RouteRow
             route={route}
             attention={route.health === 'failed'}
+            extra={
+              running && route.checks.length === 0 ? (
+                <span className="label shrink-0 text-ink-dim">{t('routes.waiting')}</span>
+              ) : undefined
+            }
             expandLabel={t('common.expand')}
             collapseLabel={t('common.collapse')}
           >
@@ -523,6 +550,11 @@ function RoutePage({
           </RouteRow>
         </li>
       ))}
+      {waiting.map((row, index) => (
+        <li key={`waiting-${row.library}-${index}`} className="min-w-0">
+          <WaitingRow planned={row} />
+        </li>
+      ))}
     </ul>
   )
 
@@ -535,7 +567,7 @@ function RoutePage({
 
       {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
       <p aria-live="polite" className="mt-4 max-w-prose text-sm text-ink">
-        {announcement}
+        {announcement || (startedOnItsOwn ? t('routes.autoRun') : '')}
       </p>
       {/* 做完了（全過、沒有新的）：結果在前，重新檢查是次要的、排在後面。還有事要做時，動作在前。 */}
       {quiet ? (
@@ -551,6 +583,24 @@ function RoutePage({
       )}
       {nav}
     </StepFrame>
+  )
+}
+
+/**
+ * 這一輪會建、還沒建出來的一條 Route（M4 票 43）：與 `RouteRow` 的摘要列同一個框與排法，只有名稱與寫入
+ * 目標——分類與檢查結果要等它真的建出來。不能展開：底下還沒有東西。
+ */
+function WaitingRow({ planned }: { planned: Planned }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-2 border-rule bg-well px-4 py-3">
+      <span className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}>{t('routes.waiting')}</span>
+      <span className="value text-sm font-semibold text-ink">{planned.library}</span>
+      <span className="value min-w-0 grow wrap-anywhere text-xs text-ink-dim">
+        {planned.target || '—'}
+      </span>
+    </div>
   )
 }
 

@@ -31,6 +31,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    DEFAULT_BUNDLED_LIBRARIES,
     BundledLibrary,
     JellyfinSettings,
     PathSettings,
@@ -48,6 +49,7 @@ from berth.services.jellyfin import (
     bootstrap_jellyfin,
     claim_jellyfin,
     connect_jellyfin,
+    read_jellyfin_status,
     save_bundled_libraries,
 )
 from berth.services.routes import read_route_status
@@ -314,6 +316,24 @@ EDITED = [
     BundledLibrary(name="TV", collection_type=CollectionType.TVSHOWS, folder="tv"),
     BundledLibrary(name="電視劇（華語）", collection_type=CollectionType.TVSHOWS, folder="tv-zh"),
 ]
+
+
+@pytest.mark.asyncio
+async def test_the_list_says_whether_it_is_still_the_default(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """頁 3 只在清單沒被改過時進頁自動跑（M4 票 43）：改過的、改回去的都照存下來的那一份比。"""
+    await seed(session, library_root=str(tmp_path / "library"))
+    assert (await read_jellyfin_status(session)).bundled_default is True
+
+    edited = await save_bundled_libraries(session, EDITED)
+    assert edited.bundled_default is False
+
+    back = await save_bundled_libraries(
+        session,
+        [row.model_copy() for row in DEFAULT_BUNDLED_LIBRARIES],
+    )
+    assert back.bundled_default is True
 
 
 @pytest.mark.asyncio

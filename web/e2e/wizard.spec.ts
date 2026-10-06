@@ -10,7 +10,7 @@ import { narrow, shot } from './shot.ts'
 // （M4 票 40，審計 S1）：頁 2、頁 4 的介面登入自動沿用那一組。
 test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => {
   const probed: string[] = []
-  // 精靈送出的寫入（非 GET），頁 3 用它證明「進頁不動手」（M4 票 08）。進頁的重讀不算（M4 票 19、24）：
+  // 精靈送出的寫入（非 GET），頁 3 用它證明進頁自動送的就是那一段（M4 票 43）。進頁的重讀不算（M4 票 19、24）：
   // 它只向 Jellyfin 讀、換 Berth 自己的媒體庫快照，與 `existing.spec.ts` 同一條。
   const writes: string[] = []
   page.on('request', (request) => {
@@ -71,35 +71,37 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '2-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 3. 媒體庫與路徑（M4 票 08）：進頁不送任何寫入；你列的媒體庫、一顆「建立並檢查」建媒體庫、建 Route、
-  //    跑每一條檢查。Movies 改名、加一個，四個媒體庫就是四條 Route。
+  // 3. 媒體庫與路徑（M4 票 43）：套件內第一次來、清單沒改過，進頁就建媒體庫、建 Route、跑每一條檢查，
+  //    不必按（票 08 的按鍵留給改過清單的、跑過一次之後與既有）。跑完再展開清單加一個，加了回到按鍵。
   const arrived = writes.length
   await expect(page.getByRole('heading', { name: '媒體庫路徑', level: 2 })).toBeVisible()
-  await page.waitForLoadState('networkidle')
-  expect(writes.slice(arrived)).toEqual([])
-  // 資料夾跟著名稱走，名稱不是英文字母時要自己填（票 06f）。
-  await page
-    .getByRole('group', { name: 'Movies' })
-    .getByRole('textbox', { name: '名稱' })
-    .fill('電影')
-  const films = page.getByRole('group', { name: '電影' })
-  await expect(films.getByRole('alert')).toHaveText(/資料夾要自己填/)
-  await films.getByRole('textbox', { name: '資料夾' }).fill('movies')
-  await expect(films.getByRole('alert')).toHaveCount(0)
+  const routes = page.getByRole('list', { name: '這一頁的 Route' })
+  await expect(routes.getByText('6 / 6 通過')).toHaveCount(3)
+  expect(writes.slice(arrived).map((url) => new URL(url).pathname)).toEqual([
+    '/api/setup/jellyfin/bundled',
+    '/api/setup/jellyfin/bootstrap',
+    '/api/setup/routes',
+  ])
+  await expect(page.getByText(/預設清單沒改過/)).toBeVisible()
+  await shot(page, '3-auto')
+  // 清單收成一列；展開加一個媒體庫。資料夾跟著名稱走，名稱不是英文字母時要自己填（票 06f）。
+  await page.getByText('媒體庫清單').click()
   await page.getByRole('button', { name: '加一個媒體庫' }).click()
-  // 那一列的名字就是它的組名，所以名稱最後填。
+  // 那一列的名字就是它的組名：名稱填了之後組名跟著換。
   const added = page.getByRole('group', { name: '第 4 個媒體庫' })
   await added.getByRole('combobox', { name: '內容類型' }).selectOption({ label: '電影' })
-  await added.getByRole('textbox', { name: '資料夾' }).fill('documentaries')
   await added.getByRole('textbox', { name: '名稱' }).fill('紀錄片')
+  const documentaries = page.getByRole('group', { name: '紀錄片' })
+  await expect(documentaries.getByRole('alert')).toHaveText(/資料夾要自己填/)
+  await documentaries.getByRole('textbox', { name: '資料夾' }).fill('documentaries')
+  await expect(documentaries.getByRole('alert')).toHaveCount(0)
   const preview = page.getByRole('region', { name: '按下之後會' })
-  await expect(preview.getByText(/在 Jellyfin 建 4 個媒體庫/)).toBeVisible()
+  await expect(preview.getByText(/在 Jellyfin 建 1 個媒體庫：紀錄片/)).toBeVisible()
   await shot(page, '3-libraries')
   await page.getByRole('button', { name: '建立並檢查' }).click()
   // 後端要每一條都綠才前進（plan §9.3），所以「前往下一個泊位」出現就是全綠；四條各一列、收起。
   const next = page.getByRole('button', { name: '前往下一個泊位' })
   await expect(next).toBeVisible()
-  const routes = page.getByRole('list', { name: '這一頁的 Route' })
   await expect(routes.getByText('6 / 6 通過')).toHaveCount(4)
   // 分類名在 Route 列上，展開後「建立分類」那一條的行首也有一份（M4 票 21 的關鍵值）：看 Route 列那一個。
   // 套件內照清單上填的資料夾名，不是媒體庫名（M4 票 31）。

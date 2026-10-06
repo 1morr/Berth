@@ -193,22 +193,18 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('媒體庫路徑')
   })
 
-  // M4 票 08：進頁不動手；一顆「建立並檢查」建媒體庫、建 Route、跑檢查，做完停在結果上。
-  it('頁 3：進頁不送任何東西；按「建立並檢查」之後停在每一條檢查的結果上，按了才走', async () => {
+  // M4 票 43：套件內第一次來、清單是預設，進頁就建媒體庫、建 Route、跑檢查（票 08 的按鍵留給改過清單的
+  // 與既有）；做完停在結果上，按了才走。
+  it('頁 3：套件內第一次來不必按，自動建立並檢查之後停在每一條檢查的結果上，按了才走', async () => {
     const { fetchStub } = wizard(3)
     const user = userEvent.setup()
     renderInRoute(<SetupPage />)
 
     expect(await heading()).toHaveTextContent('媒體庫路徑')
-    await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(posts(fetchStub)).toEqual([
-      REREAD,
-      REREAD,
-      '/api/setup/jellyfin/bootstrap',
-      '/api/setup/routes',
-    ])
+    // 進頁那一次重讀併進了建立（它自己先重讀），所以只有一次。
+    expect(posts(fetchStub)).toEqual([REREAD, '/api/setup/jellyfin/bootstrap', '/api/setup/routes'])
     expect(await heading()).toHaveTextContent('媒體庫路徑')
     expect(screen.getAllByText('berth-tv').length).toBeGreaterThan(0)
 

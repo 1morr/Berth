@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import type { RouteView } from '../api/schemas'
-import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from './routeChecks'
+import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL, checking } from './routeChecks'
 import { UNPAINTED_FILL, SIGNAL_FILL } from './signal'
 
 /**
@@ -13,11 +13,15 @@ import { UNPAINTED_FILL, SIGNAL_FILL } from './signal'
  */
 export function RouteIdentity({ route }: { route: RouteView }) {
   const { t } = useTranslation()
+  // 某條纜繩正在跑（M4 票 43）：色塊說的是現在，不是上一次的總結——那要等這一輪跑完才換。
+  const running = checking(route)
 
   return (
     <>
-      <span className={`label px-2 py-1.5 ${UNPAINTED_FILL[ROUTE_SIGNAL[route.health]]}`}>
-        {t(ROUTE_HEALTH_LABEL[route.health])}
+      <span
+        className={`label px-2 py-1.5 ${running ? SIGNAL_FILL.working : UNPAINTED_FILL[ROUTE_SIGNAL[route.health]]}`}
+      >
+        {running ? t('routes.health.checking') : t(ROUTE_HEALTH_LABEL[route.health])}
       </span>
       {!route.enabled && (
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}>

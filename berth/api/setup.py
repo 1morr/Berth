@@ -419,6 +419,8 @@ class JellyfinSetupOut(BaseModel):
     version_supported: bool
     #: 套件內路徑要建的媒體庫（票 06f）。
     bundled: list[BundledLibraryOut]
+    #: 清單還是預設的那三列：頁 3 只在這時進頁自動建立並檢查（M4 票 43）。
+    bundled_default: bool
     #: 每一列的完整路徑是 `<library_root>/<folder>`。
     library_root: str
     #: 上一次「加入 Berth 路徑」逐個媒體庫的結果（M4 票 19）。

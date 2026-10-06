@@ -68,6 +68,12 @@ const AT_PAGE_THREE = setupStatus({
   services: ALL_BUNDLED.slice(0, 2),
 })
 
+/**
+ * 上一次來時改過清單（`bundled_default` 由後端照存下的清單算；這裡只要它說「改過」）：進頁不自動建，
+ * 等人按（M4 票 43）。清單的驗證與「按下先存再建」只在這條路上看得到。
+ */
+const EDITED_BEFORE = { bundled_default: false }
+
 /** 清單建完了：`libraries` 那一步有結論。 */
 const LIST_BUILT = jellyfinSetup({ steps: SEQUENCE_DONE, api_key_present: true })
 
@@ -101,10 +107,10 @@ function writes(fetchStub: ReturnType<typeof stubApi>): string[] {
 }
 
 describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」（M4 票 08）', () => {
-  it('進頁不送任何寫入：按之前先列出會建哪幾個媒體庫、幾個分類、寫幾個測試檔', async () => {
+  it('清單改過時進頁不送任何寫入：按之前先列出會建哪幾個媒體庫、幾個分類、寫幾個測試檔', async () => {
     const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
-      [JELLYFIN]: { body: jellyfinSetup({ api_key_present: true }) },
+      [JELLYFIN]: { body: jellyfinSetup({ api_key_present: true, ...EDITED_BEFORE }) },
       [ROUTES]: { body: routeSetup() },
     })
 
@@ -440,8 +446,8 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   it('重名、重複資料夾、跳出根目錄、空清單各有擋下的說法，而且不存、不讓靠泊', async () => {
     const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
-      [JELLYFIN]: { body: jellyfinSetup() },
-      [SAVE]: { body: jellyfinSetup() },
+      [JELLYFIN]: { body: jellyfinSetup(EDITED_BEFORE) },
+      [SAVE]: { body: jellyfinSetup(EDITED_BEFORE) },
       [ROUTES]: { body: routeSetup() },
     })
     const user = userEvent.setup()
@@ -474,8 +480,8 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
   it('按下之前先存畫面上的那一份，再建媒體庫', async () => {
     const fetchStub = stubPage({
       [STATUS]: { body: AT_PAGE_THREE },
-      [JELLYFIN]: { body: jellyfinSetup() },
-      [SAVE]: { body: jellyfinSetup() },
+      [JELLYFIN]: { body: jellyfinSetup(EDITED_BEFORE) },
+      [SAVE]: { body: jellyfinSetup(EDITED_BEFORE) },
       [BOOTSTRAP]: { body: LIST_BUILT },
       [ROUTES]: { body: routeSetup() },
       [BUILD]: { body: ROUTES_BUILT },

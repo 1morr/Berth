@@ -1,4 +1,4 @@
-import type { HealthStatus, RouteCheck, StepFailure } from '../api/schemas'
+import type { HealthStatus, RouteCheck, RouteView, StepFailure } from '../api/schemas'
 import type { Signal } from './signal'
 
 /**
@@ -24,6 +24,11 @@ export const ROUTE_HEALTH_LABEL = {
   ok: 'routes.health.ok',
   failed: 'routes.health.failed',
 } as const satisfies Record<HealthStatus, string>
+
+/** 這條 Route 有一條纜繩正在跑（M4 票 43：每條纜繩開跑前後端先寫 `running`）。 */
+export function checking(route: RouteView): boolean {
+  return route.checks.some((row) => row.status === 'running')
+}
 
 export const CHECK_LABEL = {
   category: 'routes.check.category',

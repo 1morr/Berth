@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **精靈頁 3 套件內第一次來就自動建立並檢查，看得到進度**（M4 票 43，brief §19 D7）：清單是預設、什麼都還沒建時，
+  進頁就建媒體庫、建 Route、跑檢查，不必按「建立並檢查」；改過清單、跑過一次之後，或既有 Jellyfin，照舊由人按。
+  跑的時候每條 Route 先畫成一列，說出跑到第幾條檢查；跑到一半重新整理也接得上，不會再送一次。
+  `GET /api/setup/jellyfin` 多一個 `bundled_default`。
+
 ## [0.1.0] - 2026-10-07
 
 第一個正式版本：`ghcr.io/1morr/berth:0.1.0`，同時是 `:0.1` 與 compose 範本 pin 的 `:latest`。M0–M3 驗收完成；

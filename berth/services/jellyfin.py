@@ -61,6 +61,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    DEFAULT_BUNDLED_LIBRARIES,
     BerthPathResult,
     BundledLibrary,
     JellyfinSettings,
@@ -203,6 +204,9 @@ class JellyfinSetupStatus:
     version_supported: bool
     #: 套件內路徑要建的媒體庫（票 06f）。既有路徑照樣帶著，只是畫面不讀它。
     bundled: tuple[BundledLibraryView, ...]
+    #: 清單還是沒人動過的那三列（`DEFAULT_BUNDLED_LIBRARIES`）。頁 3 只在這時進頁自動建立並檢查
+    #: （M4 票 43，brief §19 D7）；改回一模一樣的也算。
+    bundled_default: bool
     #: 媒體庫資料夾的父目錄。剖面上每一列的完整路徑是 `<library_root>/<folder>`。
     library_root: str
     #: 上一次「加入 Berth 路徑」逐個媒體庫的結果（M4 票 19）。
@@ -234,6 +238,7 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
             )
             for row in setup.jellyfin.bundled
         ),
+        bundled_default=tuple(setup.jellyfin.bundled) == DEFAULT_BUNDLED_LIBRARIES,
         library_root=paths.library_root,
         berth_paths=tuple(setup.jellyfin.berth_paths),
     )

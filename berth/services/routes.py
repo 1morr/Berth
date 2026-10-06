@@ -708,10 +708,23 @@ async def _run_checks(
     qbittorrent = factory.qbittorrent(qbittorrent_url)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
     try:
+        # 上一次的結果先讀好：下面寫進度會換掉那一欄，而沿用的探針結論與「最後一次通過」
+        # 都要上一輪的。
+        previous_of = {
+            route.id: RouteHealth.model_validate(route.health_detail_json or {}) for route in routes
+        }
+        if routes:
+            # 登入 qBittorrent 是第一條纜繩的一部分（它的失敗就紅在那一條）：登入的那幾秒裡輪詢也要
+            # 讀得到有東西在跑，跑到一半重新整理的頁 3 才接得上（M4 票 43）。
+            await _progress(session, routes[0], _running_from(RouteCheck.CATEGORY, []))
         signed_out = await try_sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
-            previous = RouteHealth.model_validate(route.health_detail_json or {})
+            previous = previous_of[route.id]
             carried = None if probe_qbittorrent else _last_probe(previous)
+
+            async def progress(checks: list[SetupStep], route: Route = route) -> None:
+                await _progress(session, route, checks)
+
             health = await _check(
                 plan_row,
                 qbittorrent,
@@ -719,6 +732,7 @@ async def _run_checks(
                 carried=carried,
                 signed_out=signed_out,
                 shared_root=_shared_root_of(paths),
+                progress=progress,
             )
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
             health.checked_at = moment
@@ -733,6 +747,31 @@ async def _run_checks(
     finally:
         await qbittorrent.aclose()
         await jellyfin.aclose()
+
+
+async def _progress(session: AsyncSession, route: Route, checks: list[SetupStep]) -> None:
+    """一條纜繩開跑前把這條 Route 寫成「跑到這裡」並 commit（M4 票 43）。
+
+    頁 3 輪詢 `GET /setup/routes` 就看得到這條 Route 跑到第幾條，與 Jellyfin 序列「做之前先寫
+    running」同一個做法。總結的 `health_status` 與兩個時間不動，跑完才換。
+    """
+    previous = RouteHealth.model_validate(route.health_detail_json or {})
+    interim = RouteHealth(
+        checks=checks, checked_at=previous.checked_at, last_ok_at=previous.last_ok_at
+    )
+    async with _stale_write_as_missing(session, route.id):
+        route.health_detail_json = interim.model_dump(mode="json")
+        await session.commit()
+
+
+def _running_from(check: RouteCheck, done: list[SetupStep]) -> list[SetupStep]:
+    """做完的、`check` 這一條 `running`、其餘 `pending`。"""
+    later = list(RouteCheck)[len(done) + 1 :]
+    return [
+        *done,
+        SetupStep(key=check.value, status=StepStatus.RUNNING),
+        *(SetupStep(key=row.value, status=StepStatus.PENDING) for row in later),
+    ]
 
 
 # --- 選擇 → 計劃 -------------------------------------------------------
@@ -914,6 +953,7 @@ async def _check(
     carried: SetupStep | None,
     signed_out: ServiceError | None,
     shared_root: Path,
+    progress: Callable[[list[SetupStep]], Awaitable[None]],
 ) -> RouteHealth:
     """跑完一個 Route 的檢查序列。第一條斷掉之後的檢查一律 `pending`。
 
@@ -921,7 +961,8 @@ async def _check(
     `signed_out` 是登入 qBittorrent 那一次的失敗（`try_sign_in`）：它就是第一條的紅燈與原因——
     不然帳密錯要到建分類時才以一個 403 爆出，代碼與原文都說不出是登入（M4 票 21）。
     `shared_root` 是 Berth 自己的共用掛載（`shared_root_of`）：看不到的路徑在它底下是目錄不見了，
-    不在它底下是沒掛（M4 票 25）。
+    不在它底下是沒掛（M4 票 25）。`progress` 在每一條真的去問之前收到「做完的、這一條 `running`、
+    其餘 `pending`」（M4 票 43）。
     """
     checker = _Checker(plan_row, qbittorrent, jellyfin, signed_out, shared_root)
     checks: list[SetupStep] = []
@@ -934,6 +975,7 @@ async def _check(
             checks.append(carried)
             stopped = carried.status is StepStatus.FAILED
             continue
+        await progress(_running_from(check, checks))
         result = await checker.run(check)
         checks.append(result)
         stopped = result.status is StepStatus.FAILED
@@ -1102,10 +1144,16 @@ class _Checker:
 
 
 def _last_probe(previous: RouteHealth) -> SetupStep:
-    """上一次 `download_visible` 的結果；從來沒問過（票 19 之前建的 Route）是 `pending`。"""
+    """上一次 `download_visible` 的結論；從來沒問過（票 19 之前建的 Route）是 `pending`。
+
+    **`running` 不是結論**（M4 票 43）：那是被打斷的一輪（容器重啟）留下的。原樣沿用的話它每一輪都
+    帶下去，畫面永遠說「檢查中」、頁 3 永遠輪詢；當成沒問過，等下一次真的探測。
+    """
     key = RouteCheck.DOWNLOAD_VISIBLE.value
     last = next((row for row in previous.checks if row.key == key), None)
-    return last if last is not None else SetupStep(key=key, status=StepStatus.PENDING)
+    if last is None or last.status is StepStatus.RUNNING:
+        return SetupStep(key=key, status=StepStatus.PENDING)
+    return last
 
 
 def _library_key(item_id: str, name: str) -> str:

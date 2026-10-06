@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ROUTE_CHECKS, type RouteView } from '../api/schemas'
 import { RouteIdentity } from './RouteIdentity'
+import { CHECK_LABEL } from './routeChecks'
 import { isSettled } from './steps'
 
 /**
@@ -60,10 +61,26 @@ export function RouteRow({
 /**
  * 「6 / 6 通過」。`skipped`（已經是這樣）也算通過，與纜繩列的塗法一致。一次都還沒檢查過的
  * 不畫：「0 / 6」讀起來像每一條都壞了，而健康色塊已經說了「尚未檢查」。
+ *
+ * 跑到一半時說跑到第幾條、是哪一條（M4 票 43）：每條纜繩開跑前後端先寫 `running`，頁 3 輪詢它。
  */
 export function CheckTally({ route }: { route: RouteView }) {
   const { t } = useTranslation()
   if (route.checks.length === 0) return null
+  const running = ROUTE_CHECKS.findIndex((check) =>
+    route.checks.some((row) => row.step === check && row.status === 'running'),
+  )
+  if (running !== -1) {
+    return (
+      <span className="value shrink-0 text-xs text-ink">
+        {t('routes.tallyRunning', {
+          at: running + 1,
+          total: ROUTE_CHECKS.length,
+          check: t(CHECK_LABEL[ROUTE_CHECKS[running]!]),
+        })}
+      </span>
+    )
+  }
   const passed = route.checks.filter((row) => isSettled(row.status)).length
 
   return (

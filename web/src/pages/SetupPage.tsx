@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -40,6 +40,7 @@ import {
   type IndexerSetup,
   type InterfaceLogin,
   type JellyfinSetup,
+  type LibraryDraft,
   type RouteSetup,
   type SetupStatus,
   type TmdbSetup,
@@ -60,6 +61,7 @@ import { GAP, indexerGaps } from '../setup/indexerGaps'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
 import { librariesFailed } from '../setup/jellyfinSteps'
+import { librariesRunning, routesRunning, startsOnItsOwn, storedList } from '../setup/autoDock'
 import { RouteStep, type DockFailure, type DockPlan } from '../setup/RouteStep'
 import { BUILD_REFUSAL, type BuildRefusal } from '../setup/buildRefusal'
 import { TmdbStep } from '../setup/TmdbStep'
@@ -94,6 +96,9 @@ const POLL_INTERVAL_MS = 3000
  * 所以請求還在飛的時候讀 `GET /setup/jellyfin` 就看得到序列走到哪裡。
  */
 const PROGRESS_INTERVAL_MS = 1500
+
+/** 頁 3 進頁那一刻做的事（M4 票 43）：套件內什麼都還沒做就照存下的清單建立並檢查，否則只重讀。 */
+type OnEntry = { kind: 'dock'; libraries: LibraryDraft[] } | { kind: 'reread' }
 
 /**
  * 設定精靈。方向見 `.impeccable/surfaces/web-src-pages-setuppage-tsx.md`：
@@ -284,7 +289,9 @@ export function SetupPage() {
       }
       return buildRoutes(plan.selections)
     },
-    onSuccess: (next) => {
+    onSuccess: async (next) => {
+      // 輪詢進度的那一支可能還在路上（M4 票 43）：它讀到的是跑完之前的樣子，晚到就會蓋掉結果。
+      await queryClient.cancelQueries({ queryKey: routeSetupQueryOptions.queryKey })
       if (next) absorbBerth(routeSetupQueryOptions.queryKey, next)
       // 媒體庫清單或某個媒體庫的路徑變了：那一份也要重讀。
       else void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
@@ -389,7 +396,9 @@ export function SetupPage() {
   const jellyfin = useQuery({
     ...jellyfinSetupQueryOptions,
     enabled: step === STEP.routes,
-    refetchInterval: dock.isPending ? PROGRESS_INTERVAL_MS : false,
+    // 送出中，或伺服器說建媒體庫那一步還在跑（跑到一半重新整理，M4 票 43）。
+    refetchInterval: (query) =>
+      dock.isPending || librariesRunning(query.state.data) ? PROGRESS_INTERVAL_MS : false,
   })
   const qbittorrentChoice = current?.services.find((row) => row.kind === 'qbittorrent')
   // 頁 2 的差異是**現查的**：使用者可能在 qBittorrent 自己的介面上改過東西。**選了、連上了才問**
@@ -419,7 +428,15 @@ export function SetupPage() {
     enabled: step === STEP.jellyfin || step === STEP.qbittorrent || step === STEP.indexer,
   })
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
-  const routes = useQuery({ ...routeSetupQueryOptions, enabled: backend >= STEP.routes })
+  const routes = useQuery({
+    ...routeSetupQueryOptions,
+    enabled: backend >= STEP.routes,
+    // 頁 3 看得到每條 Route 跑到第幾條纜繩（M4 票 43）：送出中，或伺服器說還有纜繩在跑。
+    refetchInterval: (query) =>
+      step === STEP.routes && (dock.isPending || routesRunning(query.state.data))
+        ? PROGRESS_INTERVAL_MS
+        : false,
+  })
   // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19；套件內也是，票 24）：頁 1 之後在 Jellyfin 改的掛載、
   // 路徑與媒體庫要看得到。讀的是 Jellyfin、寫的是 Berth 的快照，不動任何服務；但快照決定清單哪幾列
   // 已建立、頁 3 走不走得過去，所以重讀清單與精靈狀態——後端因此前進時畫面停在這裡（網址沒變）。
@@ -430,11 +447,30 @@ export function SetupPage() {
       void queryClient.invalidateQueries({ queryKey: jellyfinSetupQueryOptions.queryKey })
     },
   })
-  const rereadOnEntry = step === STEP.routes && routes.data !== undefined
+  // 進頁那一刻二選一（每次進這一頁一次）：套件內什麼都還沒做就直接建立並檢查（M4 票 43，它自己會先重讀），
+  // 否則只重讀。
+  const onRoutes = step === STEP.routes
+  const entry = useMemo((): OnEntry | null => {
+    if (!onRoutes || !routes.data || !jellyfin.data) return null
+    return startsOnItsOwn(jellyfin.data, routes.data) && !advanced(step, backend)
+      ? { kind: 'dock', libraries: storedList(jellyfin.data) }
+      : { kind: 'reread' }
+  }, [onRoutes, routes.data, jellyfin.data, step, backend])
+  const entered = useRef(false)
   const { mutate: rereadNow } = reread
+  const { mutate: dockNow, reset: resetDock } = dock
   useEffect(() => {
-    if (rereadOnEntry) rereadNow()
-  }, [rereadOnEntry, rereadNow])
+    if (!onRoutes) {
+      // 離開這一頁：下一次回來是另一次進頁，上一輪的結果與「自動開跑」的說明不跟過來。
+      if (entered.current) resetDock()
+      entered.current = false
+      return
+    }
+    if (entry === null || entered.current) return
+    entered.current = true
+    if (entry.kind === 'reread') rereadNow()
+    else dockNow({ origin: 'bundled', libraries: entry.libraries, onItsOwn: true })
+  }, [onRoutes, entry, rereadNow, dockNow, resetDock])
   const indexers = useQuery({ ...indexerSetupQueryOptions, enabled: backend >= STEP.indexer })
   // 完成頁列出 Jellyfin 開在哪（M4 票 31）：與媒體庫深連結同一份推導（`/settings/jellyfin`）。
   const jellyfinAddress = useQuery({
@@ -608,6 +644,7 @@ export function SetupPage() {
               onReread: () => reread.mutate(),
             }}
             docking={dock.isPending}
+            startedOnItsOwn={dock.variables?.origin === 'bundled' && !!dock.variables.onItsOwn}
             failure={dockFailure(dock.error)}
             onDock={(plan) => dock.mutate(plan)}
             onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
