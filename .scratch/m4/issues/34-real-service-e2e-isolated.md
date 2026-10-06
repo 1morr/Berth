@@ -1,6 +1,6 @@
 # 34 — 真服務 e2e 恢復，能與試跑環境並存
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 32（e2e 對頁 2 的斷言要照不寫全域鍵之後的行為寫）
 
@@ -23,11 +23,11 @@
 
 ## 驗收
 
-- [ ] berth-trial 或 berth-audit 其中一套開著時，本機跑 `tests/e2e` 全綠；跑之前與之後 `docker ps` 比對，那一套的容器 ID 與狀態不變（指令與輸出貼在 Comments）
-- [ ] CI 的 nightly e2e 綠燈（手動觸發一次，貼連結）
-- [ ] 新增的 e2e 涵蓋票 26 的密碼規則、完成時照頁序再驗、32 的全域 `save_path` 改掉後送單仍成功
-- [ ] 跑完之後呼叫端 shell 的 `CONFIG_ROOT` / `DATA_ROOT` 沒有被改（e2e 自己的測試或腳本守著）
-- [ ] README 已改；全部檢查（`pre-commit run --all-files`）、test 綠燈
+- [x] berth-trial 或 berth-audit 其中一套開著時，本機跑 `tests/e2e` 全綠；跑之前與之後 `docker ps` 比對，那一套的容器 ID 與狀態不變（指令與輸出貼在 Comments）
+- [x] CI 的 nightly e2e 綠燈（手動觸發一次，貼連結）
+- [x] 新增的 e2e 涵蓋票 26 的密碼規則、完成時照頁序再驗、32 的全域 `save_path` 改掉後送單仍成功
+- [x] 跑完之後呼叫端 shell 的 `CONFIG_ROOT` / `DATA_ROOT` 沒有被改（e2e 自己的測試或腳本守著）
+- [x] README 已改；全部檢查（`pre-commit run --all-files`）、test 綠燈
 
 ## Comments
 
@@ -81,6 +81,11 @@ e2e leftovers: containers=[] volumes=[] networks=[]
   `lscr.io/linuxserver/qbittorrent:latest`、`jellyfin:version-12.1ubu2604` 變成裸 sha：`pull` 把試跑環境共用的 tag 移到新 image，
   試跑環境下一次 `up -d` 就會換 image。拿掉 `pull`（`up` 會先拉完缺的 image 才啟動任何容器，冷啟動閘門不受影響；CI 的 runner 是空的）；
   兩個 tag 以 `docker tag <原 sha>` 指回原 image，第二輪之前的快照與開工前逐字相同。
+
+**CI**：手動觸發 nightly e2e（`c0aedf1`）綠燈，`23 passed in 1093.05s (0:18:13)`，跑完 `Network berth-e2e Removed`：
+<https://github.com/1morr/Berth/actions/runs/37478670388>。同一個 commit 的 CI 也綠。
+
+**收尾**：`pre-commit run --all-files` 全綠；`uv run pytest` 3517 passed、23 deselected（e2e）。
 
 **code-review（`/code-review c67a16d`，兩軸 opus）**：
 
