@@ -122,7 +122,7 @@
 - 每個 Route 建立時與每次啟動時執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
 - 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、**反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，M4 票 19，§20.2）、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式、帶自己的未完成目錄（M4 票 22）。
 - **硬鏈接失敗不退回複製**（與 Sonarr 不同）：複製會讓刪除範圍與空間估算失真，違反「避免複製檔案」的需求。
-- Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；路徑字串可以是 `/data` 以外的任何值，套件預設 `/data`，既有服務沿用它們原本的路徑（§16.4）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
+- Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；容器路徑固定是 `/data`：Berth 的 incomplete / complete 根目錄在 `/data/torrent/…`、媒體庫根目錄在 `/data/library`，都沒有設定可改，所以既有服務也要把共用父目錄掛在 `/data`（§16.4；原本寫「路徑字串可以是 `/data` 以外的任何值」，程式從來沒有那個設定，M4 票 33 改）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
 - 已知限制要寫進 README：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
 
 ### 4.5 檔名與目錄安全
@@ -518,7 +518,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 頁面 | 目的 | 關鍵內容 |
 | --- | --- | --- |
-| 設定精靈 | 首次啟動（只管第一次，跑完之後導向設定，2026-09-25） | 找到 Jellyfin、以它的管理員成為擁有者（套件內代建，2026-09-26）→ 偵測套件內的 qBittorrent / Prowlarr 並一鍵設定，或連接既有服務 → 路徑 → 建立 Route → 健康檢查（§16.3） |
+| 設定精靈 | 首次啟動（只管第一次，跑完之後導向設定，2026-09-25） | Jellyfin、qBittorrent、Prowlarr 各一頁，每頁由使用者選套件內或既有、選完當場測試（不偵測，2026-09-29）：Jellyfin → 以它的管理員成為擁有者（套件內或還沒初始化的那一台由擁有者建，2026-09-26）→ qBittorrent → 媒體庫路徑與 Route（建立並跑檢查）→ Prowlarr 與索引站 → TMDB → 完成。兩種來源都只建 Berth 擁有的物件（§16.3、§16.4） |
 | 探索（首頁 `/`） | 找東西 | **只放 TMDB 牆**（2026-09-24 拍板、M3 票 06 實作）：趨勢 / 熱門 / 搜尋；繼續觀看與下一集只在媒體庫頁，登入後預設落在媒體庫、媒體庫裡還沒有 Berth 入庫的東西時落在這裡（2026-09-26，M4 票 10；M1.5 票 07 原本把那兩列放在這裡上方）；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
 | Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、**這部作品的下載**（M4 票 12，排在 RSS 訂閱之後、季集之前：每一筆 Job 的狀態、進度、大小、來源與字幕組、Route、時間，展開看它的檔案、大小與計劃對到的季集，連到 Job 詳情；預設只列還沒了結的——在路上的加上已入庫而還有檔案待確認的，其餘在「全部」；從沒送過下載的作品整段不畫；季表的「下載中 / 卡住」連到蓋到那一集的那一筆）、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
 | 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：待審 / 對不到（只給 admin，M2 票 14）。原本還有一個「有 Issue」，2026-09-24 使用者拍板拿掉：`/issues` 已經是獨立頁（M3 票 01）。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
@@ -629,7 +629,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - **每個服務由使用者選來源，不偵測**（§19 2026-09-29）：Jellyfin、qBittorrent、Prowlarr 各一頁，頁首二選一「套件內」/「既有」。Seerr 連 Jellyfin、加 Sonarr / Radarr，Sonarr / Radarr 加下載器，全都是手動填位址與憑證、按 Test，沒有自動偵測（§20.14）。選擇存下來，從此「套件內 / 既有」由它決定：套件內的連 compose 主機名，既有的填位址與憑證。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。原本的偵測（2026-09-26 起「只有 compose 主機名上探到的才可能是套件內」）說不出服務是誰的，只能靠「免密可進」「無索引站」這類跡象猜，猜錯就會寫使用者的服務（M4 票 05 的 bug）。
 - **不偵測、不判定，但選完要測試**：選了套件內而 compose 沒起那個服務（`COMPOSE_PROFILES` 拿掉了）時，測試失敗要說出怎麼補：「把 `qbittorrent` 加回 `.env` 的 `COMPOSE_PROFILES` 再 `docker compose up -d`」。容器還在啟動的輪詢規則照舊（plan §9.3）。
-- **表單跟著那一台的狀態走，選擇決定 Berth 之後寫什麼**：套件內但已經初始化過（重裝保留了 config、精靈中途中斷）時，Jellyfin 已有管理員就改成「用管理員登入」、不再建立；qBittorrent / Prowlarr 已設過介面登入同理，不強迫再設。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣由擁有者建管理員——它上面沒有任何人的帳號可以蓋掉（2026-09-26 的「Jellyfin 例外」，理由不變）。
+- **兩種來源接下來做的事一樣，只差誰讓服務登得進去**（§19 D1，M4 票 33）：Berth 只建立與管理自己擁有的物件——Jellyfin 的 API key「Berth」、Berth 路徑（既有）或清單上的媒體庫（套件內）、`berth-*` 分類、勾選加入的站——不碰全域偏好與帳密（清單與能不能撤回見 §16.4）。套件內多出來的只有 bootstrap：Jellyfin 的管理員與初始設定、qBittorrent 與 Prowlarr 的介面登入、免密白名單（預置）、掛載的 Prowlarr API key；既有由使用者給憑證。
+- **表單跟著那一台的狀態走**：套件內但已經初始化過（重裝保留了 config、精靈中途中斷）時，Jellyfin 已有管理員就改成「用管理員登入」、不再建立；qBittorrent / Prowlarr 已設過介面登入同理，不強迫再設。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣由擁有者建管理員、跑完它的初始設定（語言與地區、遠端存取在畫面上問）——它上面沒有任何人的帳號可以蓋掉（2026-09-26 的「Jellyfin 例外」，理由不變）；這是既有服務唯一的 bootstrap。
 - **「沿用 Jellyfin 帳密」**：套件內 qBittorrent / Prowlarr 的介面登入預設勾選。勾選時帳號帶入擁有者的名字，密碼請使用者**打一次**，Berth 先向 Jellyfin 驗證這組帳密正確再寫入；取消勾選就自設一組、密碼打兩次（M4 票 07 的欄位）。**Berth 不存這兩組介面密碼的明文**，只記帳號與加鹽雜湊，夠比對「已經是這一組」（§19 2026-09-29：勾了沿用時那就是 Jellyfin 的密碼，存明文會推翻 M4 票 06「資料庫裡沒有擁有者的明文密碼」；Berth 連套件內 qBittorrent 靠免密白名單，本來就用不到它）。
 - compose 用 profiles：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起。選「既有」時那一頁說出要從 `COMPOSE_PROFILES` 拿掉哪一個（不叫人改 compose 檔）；忘了拿掉也不致命。套件的容器名是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`（`berth` 維持；compose 服務名與 DNS 名不變）：同一台主機上既有的容器多半就叫 `jellyfin` / `qbittorrent` / `prowlarr`、用 8096 / 8080 / 9696 / 6881。沒有前綴時撞名會讓**整套**起不來（連 `berth`），所以加了前綴；撞 port 仍可能發生，只有撞到的那一個套件內容器起不來（M4 票 16 實測，§20.14）。
 - 預置只在設定檔不存在時寫入一次，之後使用者在各服務介面改什麼都行。沒有「建議設定」可漂移：Berth 不寫也不看 qBittorrent 的全域偏好（D2，M4 票 32；原本的漂移檢查與「還原建議設定」一起拿掉）。精靈的 qBittorrent 頁會列出「已預置的項目」。
@@ -638,11 +639,31 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.4 既有服務的接入規則【決定】
 
-> **2026-10-06 改（§19「精靈審計後的八項」D1、D3、D6）**：「接管」定義為只建立與管理 Berth 擁有的物件，套件內同一條；Prowlarr 不再接受 Torznab 端點；換台時列出舊那台的遺留物。
+> **2026-10-06 改（§19「精靈審計後的八項」D3、D6）**：Prowlarr 不再接受 Torznab 端點；換台時列出舊那台的遺留物。下文待拆票後改寫。（D1 已寫進下文「接管＝只建立與管理 Berth 擁有的物件」那一段，M4 票 33。）
 
 > **2026-09-29 改**：「既有」由使用者在該服務那一頁選（§16.3），不再由偵測判定；本節的條件在「既有」選項旁說明（M4 票 15、17）。
 
 允許接入既有服務；NAS 使用者是主要客群，Seerr 與 Sonarr 也都支援。問題只有一類：路徑與檔案系統邊界。
+
+**接管＝只建立與管理 Berth 擁有的物件**（§19 D1，2026-10-06 使用者拍板，M4 票 33）。套件內與既有是同一條，差在套件內由 Berth 讓服務有人登得進去（§16.3）。理由是 2026-09-26 `berth-lab` 的兩件事（§19）：使用者自己的 Prowlarr 被覆寫登入、既有 qBittorrent 的全域 `save_path` 被改成 Berth 的目錄；Sonarr / Radarr 對下載器同樣只用自己的分類、不碰全域。Berth 擁有的物件都是獨立的一件，刪掉它不動使用者原有的任何東西：
+
+| 物件 | 套件內 | 既有 | 在 Berth 能撤回嗎 | 撤不回時怎麼辦 |
+| --- | --- | --- | --- | --- |
+| Jellyfin 管理員帳號 | 那一台還沒初始化時建 | 只在那一台還沒初始化時建（唯一的例外） | 不能 | Jellyfin 的使用者管理 |
+| Jellyfin 語言、地區、遠端存取 | 還沒初始化時設（跟 UI，不開遠端） | 還沒初始化時設（畫面上問） | 不能 | Jellyfin 控制台 |
+| Jellyfin API key「Berth」 | 建 | 建 | 不能（Berth 不刪）；在 Jellyfin 刪掉之後 Berth 偵測得到，請你重新登入換一把 | Jellyfin「API 金鑰」頁 |
+| Jellyfin 媒體庫 | 建精靈清單上的 | 不建 | 不能；已建的在 Berth 裡鎖住 | Jellyfin 刪 |
+| 媒體庫上的 Berth 路徑 | — | 頁 3「建立並檢查」時加 | 不能；頁 3 的檢查失敗也留著 | Jellyfin 媒體庫設定移除 |
+| qBittorrent 免密白名單 | 預置（容器啟動前，只放 Berth 的 IP） | 不碰 | — | `qBittorrent.conf` |
+| qBittorrent 全域偏好 | 不寫（D2，M4 票 32） | 不寫 | — | — |
+| qBittorrent WebUI 登入 | 設 | 不碰 | 只能再設一組蓋過 | qBittorrent 偏好 |
+| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 不能；刪 Route、換一台都不刪分類 | qBittorrent 刪分類 |
+| 探測 torrent、探測檔 | 暫時，自清 | 同左 | 自清（Berth 中途崩潰可能殘留） | 手動刪 |
+| Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除；既有不移除 | Prowlarr 刪 |
+| Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
+| TMDB | 不寫 | 不寫 | — | — |
+
+閘門是 `tests/integration/test_setup_owned_writes.py`：整個精靈經 API 跑套件內一輪、既有兩輪（Jellyfin 初始化過與還沒），三台替身收到的每一個寫入都要對得上「Berth 擁有的物件 + 套件內的 bootstrap」那張白名單；既有那一輪的 bootstrap 只放行那台 Jellyfin 還沒初始化。它只看得到 Berth 經三個服務的 adapter 送出的寫入；預置的免密白名單、掛載的 key 與探測檔的自清不在它的範圍。
 
 - **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器在**同一台主機**、把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data` 掛載，§20.14）。Berth 的 incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`，所以 Berth 與 qBittorrent 的共用掛載要掛在 `/data`（M4 票 22：原本寫「根目錄可設定」，程式從來沒有那個設定）；媒體庫路徑讀自 Jellyfin。**這是既有 qBittorrent 與 Jellyfin 最關鍵的條件**：在另一台 NAS 上的、或把下載與媒體庫分開掛成 `/downloads`、`/tv` 的，要先改掛載才接得上。「既有」選項旁說明這個條件；媒體庫與路徑泊位的探測檔 / 硬鏈接檢查失敗時，說出怎麼改掛載（M4 票 08）。
 - **既有服務要給的東西各不相同**（§20.14）：
@@ -746,7 +767,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 一套服務只配一個 Berth（2026-10-01，精靈實測；使用者拍板） | 兩個 Berth 接同一台 qBittorrent / Jellyfin 時共用 `berth-*` 分類與「Berth」API key，**不區分**：重裝 Berth 接回原本的服務時沿用正是要的行為；*arr 也不替接同一台的多個實例自動分開 | `docs/research/wizard-qa-2026-10-01.md` |
 | 只有 Berth 時的「套件內」卡片先查主機名（2026-10-01，精靈實測；使用者拍板；M4 票 30） | 服務頁進頁只做 `jellyfin` / `qbittorrent` / `prowlarr` 的主機名解析，**不對服務發請求**；解不到的卡片寫「這套 compose 沒有起 X」並附加回 `COMPOSE_PROFILES` 的指令；**不預選、不停用**。「每個服務手動選擇、選之前不發請求」不變 | plan §9.3、`docs/research/wizard-qa-2026-10-01.md` |
 | 擁有者成立之前沒有人登得進來、帳密只送到畫面上那一台（2026-10-01，精靈實測第 14、15 條；M4 票 28） | 「誰先到誰建立」不變（Jellyfin、Seerr、Home Assistant 的首次設定都是這樣）；要堵的是提早登入與目標被換：擁有者成立前 `/auth/login` 一律拒絕；`POST /setup/owner` 帶畫面上測過的位址與 ServerId（§20.15），與存下的不同就不送帳密、請使用者重新測試。 | plan §6、§9.3 頁 1 |
-| 精靈審計後的八項（2026-10-06，使用者拍板 D1–D8 全照建議；`docs/research/wizard-audit-2026-10-06.md`） | **D1 接管＝只建立與管理 Berth 擁有的物件**（Jellyfin API key「Berth」、`berth-*` 分類、Berth 路徑、使用者確認加入的站），全域偏好與帳密不碰；套件內與既有共用這條，差別只在套件內由 Berth 讓它有人登得進去（Jellyfin 管理員、介面登入、白名單、掛載的 key）。**D2 套件內 qBittorrent 也不寫三個全域鍵**（`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`；它們不影響 Berth，留著只讓 Route 為了 Berth 不用的路徑轉紅），頁 2 差異表、漂移與「還原建議設定」一起拿掉。**D3 BTH 4 只支援 Prowlarr**，拿掉通用 Torznab 端點（推翻 §3 的「只依賴 Torznab 協定、支援 Jackett」），已存 `torznab` 的安裝要資料 migration、頁 4 回到待處理；泊位名改「Prowlarr」。**D4 密碼只問一次**：頁 1 建擁有者時預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」，精靈期間只留在前端記憶體、不落地，到頁 2、頁 4 照舊先向 Jellyfin 驗過再寫。**D5 拿掉不寫入的確認鍵**（既有 qBittorrent 的「確認，不改任何設定」、重跑時的「套用這 0 項」），測試通過即可前進。**D6 換一台 qBittorrent / Prowlarr 時列出 Berth 在舊那台建的東西**，可一鍵移除 Berth 建的空分類。**D7 頁 3 套件內**預設清單沒改時進頁自動建立並檢查、顯示進度（M4 票 08「進頁不寫」只留給既有）。**D8 P0 修完才發第一個正式 image** | §3、§16.3、§16.4（本文待改寫）；`CONTEXT.md` Existing / Bundled service；`docs/research/wizard-audit-2026-10-06.md` 改進清單 P0-1–P2-11 |
+| 精靈審計後的八項（2026-10-06，使用者拍板 D1–D8 全照建議；`docs/research/wizard-audit-2026-10-06.md`） | **D1 接管＝只建立與管理 Berth 擁有的物件**（Jellyfin API key「Berth」、`berth-*` 分類、Berth 路徑、使用者確認加入的站），全域偏好與帳密不碰；套件內與既有共用這條，差別只在套件內由 Berth 讓它有人登得進去（Jellyfin 管理員、介面登入、白名單、掛載的 key）。**D2 套件內 qBittorrent 也不寫三個全域鍵**（`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`；它們不影響 Berth，留著只讓 Route 為了 Berth 不用的路徑轉紅），頁 2 差異表、漂移與「還原建議設定」一起拿掉。**D3 BTH 4 只支援 Prowlarr**，拿掉通用 Torznab 端點（推翻 §3 的「只依賴 Torznab 協定、支援 Jackett」），已存 `torznab` 的安裝要資料 migration、頁 4 回到待處理；泊位名改「Prowlarr」。**D4 密碼只問一次**：頁 1 建擁有者時預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」，精靈期間只留在前端記憶體、不落地，到頁 2、頁 4 照舊先向 Jellyfin 驗過再寫。**D5 拿掉不寫入的確認鍵**（既有 qBittorrent 的「確認，不改任何設定」、重跑時的「套用這 0 項」），測試通過即可前進。**D6 換一台 qBittorrent / Prowlarr 時列出 Berth 在舊那台建的東西**，可一鍵移除 Berth 建的空分類。**D7 頁 3 套件內**預設清單沒改時進頁自動建立並檢查、顯示進度（M4 票 08「進頁不寫」只留給既有）。**D8 P0 修完才發第一個正式 image** | §3、§16.3、§16.4（D1 已寫進 §16.3、§16.4 與 `CONTEXT.md` 的 Existing / Bundled service，M4 票 33；其餘本文待改寫）；`docs/research/wizard-audit-2026-10-06.md` 改進清單 P0-1–P2-11 |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：

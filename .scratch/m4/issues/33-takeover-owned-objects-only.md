@@ -1,6 +1,6 @@
 # 33 — 接管＝只管 Berth 擁有的物件：名詞表、brief 與寫入白名單閘門
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 32（套件內 qBittorrent 不寫全域鍵之後，這條定義才對兩種來源都成立）
 
@@ -26,8 +26,17 @@
 
 ## 驗收
 
-- [ ] `CONTEXT.md` 與 brief §16.3、§16.4 用同一套說法描述「Berth 只管自己擁有的物件」，兩者不互相矛盾
-- [ ] 寫入白名單閘門測試在測試檔內做雙向變異驗證：既有那一輪多送一個全域偏好要變紅，改無關命名不變紅
-- [ ] 報告「文件與實作不符」表中這張負責的四列（CONTEXT:110-112、brief:519、brief:123、README:28）都已改
-- [ ] progress.md「偏差與決定」記一行
-- [ ] 全部檢查（`pre-commit run --all-files`）、test 綠燈
+- [x] `CONTEXT.md` 與 brief §16.3、§16.4 用同一套說法描述「Berth 只管自己擁有的物件」，兩者不互相矛盾
+- [x] 寫入白名單閘門測試在測試檔內做雙向變異驗證：既有那一輪多送一個全域偏好要變紅，改無關命名不變紅
+- [x] 報告「文件與實作不符」表中這張負責的四列（CONTEXT:110-112、brief:519、brief:123、README:28）都已改
+- [x] progress.md「偏差與決定」記一行
+- [x] 全部檢查（`pre-commit run --all-files`）、test 綠燈
+
+## Comments
+
+2026-10-06 code-review（Standards 與 Spec 兩軸）沒有處理的發現：
+
+- README〈選「既有」的條件〉仍寫「同一個容器路徑（例如三個都是 `/data`）」，比 brief §4.4 的「固定 `/data`」寬。那一段的改寫屬於審計 P1-6，留給那張票。
+- README 服務表下新加的總述說既有 Prowlarr 也能加「你勾選加入的站」（票 20 起的實際行為），表裡 BTH 4 既有那一欄仍是「用你已經有的站」。BTH 4 的敘述照票面留給 37、44。
+- `ok`、`under`、`methods` 這幾個測試 helper 名字偏短（Mysterious Name，判斷題）：只在這個檔案裡用、用法一眼看得出，不改。
+- 測試從 `test_setup_api.py` 匯入 `_choose`、`_seen`、`_set_paths` 這幾個私有 helper：鄰近的測試檔已有同樣做法，不算違規。
