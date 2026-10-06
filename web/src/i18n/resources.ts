@@ -198,10 +198,15 @@ const zhHant = {
     bundled: {
       title: '套件內',
       lede: 'compose 帶來的那一台 {{service}}。Berth 連它、替你設定好：',
-      // 主機名解不到（M4 票 30）：只查過 DNS，還沒連它。
-      absent: '這套 compose 沒有起 {{service}}。',
+      // 主機名解不到（M4 票 30）：只查過 DNS，還沒連它。停掉的容器與不在 COMPOSE_PROFILES 裡的服務一樣解不到，
+      // 分不出是哪一種，所以說「沒在跑」、補法兩種都給（票 35）。
+      absent: '這套 compose 的 {{service}} 沒在跑。',
       absentFix:
-        '要用套件內的 {{service}}：把 {{kind}} 加回 .env 的 COMPOSE_PROFILES，再 docker compose up -d，然後點「套件內」。要接你自己的那一台就選「既有」。',
+        '要用套件內的 {{service}}：照它沒在跑的原因做下面其中一種，然後點「套件內」。要接你自己的那一台就選「既有」。',
+    },
+    bringBack: {
+      stopped: '容器停了：',
+      missing: '{{kind}} 不在 COMPOSE_PROFILES 裡：',
     },
     existing: {
       title: '既有',
@@ -272,7 +277,7 @@ const zhHant = {
     pasteKey: '用這把 key 再測一次',
     fix: {
       notDeployed:
-        '這個主機名解不到：{{kind}} 的容器沒在跑（停掉的容器不在 compose 的網路上），或它不在這套 compose 裡。停了就 docker compose up -d 把它起回來；不在的話把 {{kind}} 加回 .env 的 COMPOSE_PROFILES 再 up；或改選「既有」接你自己的那一台。起來之後按「重新測試」。',
+        '這個主機名解不到，{{kind}} 的容器沒在跑：可能停掉了（停掉的容器不在 compose 的網路上），或不在 .env 的 COMPOSE_PROFILES 裡。照原因做下面其中一種，或改選「既有」接你自己的那一台。起來之後按「重新測試」。',
       somethingElse:
         '等到上限了，{{kind}} 這個主機名上回應的還是別的東西。確認 compose 裡那個服務名對應的是它，或改選「既有」。',
       apiKeyMissing:
@@ -3296,9 +3301,13 @@ const en: Translations<typeof zhHant> = {
     bundled: {
       title: 'Bundled',
       lede: 'The {{service}} compose brought along. Berth connects to it and sets it up for you:',
-      absent: 'This compose project has not started {{service}}.',
+      absent: 'The {{service}} in this compose project is not running.',
       absentFix:
-        'To use the bundled {{service}}: put {{kind}} back into COMPOSE_PROFILES in .env, run docker compose up -d, then pick “Bundled”. To connect your own, choose “Existing”.',
+        'To use the bundled {{service}}: do whichever of the two below matches why it is not running, then pick “Bundled”. To connect your own, choose “Existing”.',
+    },
+    bringBack: {
+      stopped: 'If the container stopped:',
+      missing: 'If {{kind}} is not in COMPOSE_PROFILES:',
     },
     existing: {
       title: 'Existing',
@@ -3370,7 +3379,7 @@ const en: Translations<typeof zhHant> = {
     pasteKey: 'Test again with this key',
     fix: {
       notDeployed:
-        'This hostname does not resolve: the {{kind}} container is not running (a stopped container is not on the compose network), or it is not part of this compose project. If it stopped, docker compose up -d brings it back; if it is missing, put {{kind}} back into COMPOSE_PROFILES in .env and run it — or choose “Existing” for your own one. Then press “Test again”.',
+        'This hostname does not resolve, so the {{kind}} container is not running: it may have stopped (a stopped container is not on the compose network), or it is not in COMPOSE_PROFILES in .env. Do whichever below matches, or choose “Existing” for your own one. Then press “Test again”.',
       somethingElse:
         'The limit has passed and something other than {{kind}} still answers on that hostname. Check that the compose service by that name is really it, or choose “Existing”.',
       apiKeyMissing:

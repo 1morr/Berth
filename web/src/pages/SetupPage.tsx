@@ -184,6 +184,9 @@ export function SetupPage() {
     if (kind === 'qbittorrent') {
       void queryClient.invalidateQueries({ queryKey: routeSetupQueryOptions.queryKey })
     }
+    // 測完重問主機名（M4 票 35）：容器停了又起回來，卡片的「沒在跑」不停在進頁那一刻。只查 DNS，
+    // 啟動中的輪詢也跟著問——那時主機名解得到，幾毫秒。
+    void queryClient.invalidateQueries({ queryKey: composeQueryOptions.queryKey })
   }
   // 服務頁的二選一（M4 票 15）：存下、測一次。結果回來照樣停在這一頁（網址沒變）。
   const choose = useMutation({
@@ -398,7 +401,7 @@ export function SetupPage() {
     retestedLoss.current = qbittorrentLostAt
     retestNow({ kind: 'qbittorrent', restart: true })
   }, [qbittorrentLostAt, retesting, retestNow])
-  // 服務頁進頁問一次套件內的主機名解不解得到（M4 票 30）：只查 DNS，不對服務發請求（brief §19）。
+  // 服務頁進頁問一次套件內的主機名解不解得到（M4 票 30），每次測完再問（票 35）：只查 DNS，不對服務發請求（brief §19）。
   const composeHosts = useQuery({
     ...composeQueryOptions,
     enabled: step === STEP.jellyfin || step === STEP.qbittorrent || step === STEP.indexer,

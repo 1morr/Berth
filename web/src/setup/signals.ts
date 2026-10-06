@@ -93,11 +93,17 @@ export function composeProfiles(
 }
 
 /**
- * 把套件內那一台加回 compose 的兩行（M4 票 30）：還沒選時「套件內」卡片下的那一份，與選了之後主機名解不到的
- * 補法是同一組。
+ * 把套件內那一台起回來（M4 票 30、35）：還沒選時「套件內」卡片下的那一份，與選了之後主機名解不到的補法是同一組。
+ * 只查 DNS 分不出兩種原因——停掉的容器與不在 `COMPOSE_PROFILES` 裡的服務都解不到——所以兩種都給。
  */
-export function bringBack(status: SetupStatus, kind: ServiceKind): string[] {
-  return [composeProfiles(status, kind, 'bundled'), 'docker compose up -d']
+export function bringBack(
+  status: SetupStatus,
+  kind: ServiceKind,
+): { stopped: string[]; missing: string[] } {
+  return {
+    stopped: [`docker compose start ${kind}`],
+    missing: [composeProfiles(status, kind, 'bundled'), 'docker compose up -d'],
+  }
 }
 
 export const REASON_LABEL = {

@@ -309,7 +309,11 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     expect(await screen.findByText('沒通過')).toBeInTheDocument()
     expect(screen.getByText('找不到這個名字的主機')).toBeInTheDocument()
-    expect(screen.getByText(/jellyfin 的容器沒在跑.*或它不在這套 compose 裡/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/jellyfin 的容器沒在跑：可能停掉了.*或不在 \.env 的 COMPOSE_PROFILES 裡/),
+    ).toBeInTheDocument()
+    // 兩種原因分不出來（M4 票 35）：停了就 start，不在 COMPOSE_PROFILES 裡就加回去再 up。
+    expect(screen.getByText('docker compose start jellyfin')).toBeInTheDocument()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeInTheDocument()
     expect(screen.getByText('docker compose up -d')).toBeInTheDocument()
     // 連不上就還沒有擁有者表單可填。

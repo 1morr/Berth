@@ -1913,7 +1913,8 @@ function stubRemoval() {
 
 /**
  * 只有 Berth 時（M4 票 30，使用者 2026-10-01 決定）：「套件內」照常列出，進頁只問主機名解不解得到；
- * 解不到的卡片說這套 compose 沒有起它、給加回的那一行。不預選、不停用。
+ * 解不到的卡片說它沒在跑、給兩種補法（票 35：只查 DNS 分不出停掉的容器與不在 `COMPOSE_PROFILES` 裡的服務）。
+ * 不預選、不停用。
  */
 describe('只有 Berth 時的套件內卡片', () => {
   const COMPOSE = 'GET /api/setup/compose'
@@ -1921,16 +1922,21 @@ describe('只有 Berth 時的套件內卡片', () => {
     body: { resolvable: { jellyfin: false, qbittorrent: false, prowlarr: false } },
   }
 
-  it('頁 1：卡片說沒有起 Jellyfin，下面給加回它的那一行；不預選、不停用、一個 POST 都不送', async () => {
+  it('頁 1：卡片說 Jellyfin 沒在跑，下面給兩種補法；不預選、不停用、一個 POST 都不送', async () => {
     const stub = stubApi({ [STATUS]: { body: setupStatus() }, [COMPOSE]: ONLY_BERTH })
 
     renderInRoute(<SetupPage />)
 
-    expect(await screen.findByText('這套 compose 沒有起 Jellyfin。')).toBeVisible()
-    expect(bundledCard()).toHaveAccessibleName(/這套 compose 沒有起 Jellyfin/)
+    expect(await screen.findByText('這套 compose 的 Jellyfin 沒在跑。')).toBeVisible()
+    expect(bundledCard()).toHaveAccessibleName(/這套 compose 的 Jellyfin 沒在跑/)
+    expect(screen.queryByText(/沒有起/)).not.toBeInTheDocument()
     expect(bundledCard()).not.toBeChecked()
     expect(bundledCard()).toBeEnabled()
-    // 與選了之後的補法同一行（`bringBack`）：還沒選的都算在套件內。
+    // 停掉的容器：啟動它就好。
+    expect(screen.getByText('容器停了：')).toBeVisible()
+    expect(screen.getByText('docker compose start jellyfin')).toBeVisible()
+    // 不在 COMPOSE_PROFILES 裡：與選了之後的補法同一組（`bringBack`），還沒選的都算在套件內。
+    expect(screen.getByText('jellyfin 不在 COMPOSE_PROFILES 裡：')).toBeVisible()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeVisible()
     expect(screen.getByText('docker compose up -d')).toBeVisible()
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
@@ -1957,6 +1963,71 @@ describe('只有 Berth 時的套件內卡片', () => {
     // 選了之後交給測試那一條的補法，卡片下不再重複一份。
     expect(await screen.findByText('找不到這個名字的主機')).toBeVisible()
     expect(screen.getAllByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toHaveLength(1)
+    expect(screen.getAllByText('docker compose start jellyfin')).toHaveLength(1)
+  })
+
+  /**
+   * 票 35（審計 S3）：主機名不只在進頁問一次。容器停了、起回來、按「重新測試」轉綠之後，卡片原本仍說它沒在跑。
+   */
+  it('頁 2：起回來、重新測試轉綠之後重問主機名，加註消失', async () => {
+    let running = false
+    const stub = stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          ...CHOOSING_QBITTORRENT,
+          services: [
+            ALL_BUNDLED[0],
+            chosen({ ...ALL_BUNDLED[1], state: 'failed', reason: 'not_deployed', detail: '' }),
+          ],
+        }),
+      },
+      [COMPOSE]: () => ({
+        body: { resolvable: { jellyfin: true, qbittorrent: running, prowlarr: true } },
+      }),
+      [RETEST_QBITTORRENT]: { body: AT_QBITTORRENT },
+      [QBITTORRENT]: { body: qbittorrentSetup() },
+    })
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText('這套 compose 的 qBittorrent 沒在跑。')).toBeVisible()
+    // 選了之後補法在測試那一條上，兩種都列。
+    expect(screen.getByText('docker compose start qbittorrent')).toBeVisible()
+    expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeVisible()
+
+    running = true
+    await user.click(screen.getByRole('button', { name: '重新測試' }))
+
+    expect(await screen.findByText('這台 qBittorrent')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByText('這套 compose 的 qBittorrent 沒在跑。')).not.toBeInTheDocument(),
+    )
+    expect(stub.mock.calls.filter(([url]) => url === '/api/setup/compose')).toHaveLength(2)
+  })
+
+  it('頁 2：重新測試仍解不到，加註留著', async () => {
+    const failed = setupStatus({
+      ...CHOOSING_QBITTORRENT,
+      services: [
+        ALL_BUNDLED[0],
+        chosen({ ...ALL_BUNDLED[1], state: 'failed', reason: 'not_deployed', detail: '' }),
+      ],
+    })
+    const stub = stubApi({
+      [STATUS]: { body: failed },
+      [COMPOSE]: { body: { resolvable: { jellyfin: true, qbittorrent: false, prowlarr: true } } },
+      [RETEST_QBITTORRENT]: { body: failed },
+    })
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText('這套 compose 的 qBittorrent 沒在跑。')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: '重新測試' }))
+
+    await waitFor(() =>
+      expect(stub.mock.calls.filter(([url]) => url === '/api/setup/compose')).toHaveLength(2),
+    )
+    expect(screen.getByText('這套 compose 的 qBittorrent 沒在跑。')).toBeVisible()
   })
 
   it('主機名解得到的服務不加註', async () => {
@@ -1969,7 +2040,7 @@ describe('只有 Berth 時的套件內卡片', () => {
 
     await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
     await waitFor(() => expect(called(stub, '/api/setup/compose')).toBe(true))
-    expect(screen.queryByText(/這套 compose 沒有起/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/沒在跑/)).not.toBeInTheDocument()
     expect(screen.queryByText('docker compose up -d')).not.toBeInTheDocument()
   })
 
@@ -1982,7 +2053,7 @@ describe('只有 Berth 時的套件內卡片', () => {
 
     renderInRoute(<SetupPage />)
 
-    expect(await screen.findByText('這套 compose 沒有起 Prowlarr。')).toBeVisible()
+    expect(await screen.findByText('這套 compose 的 Prowlarr 沒在跑。')).toBeVisible()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeVisible()
   })
 })

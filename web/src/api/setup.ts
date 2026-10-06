@@ -46,8 +46,8 @@ export const setupStatusQueryOptions = queryOptions({
 })
 
 /**
- * 套件內三個主機名解不解得到（M4 票 30）：`false` 是這套 compose 沒有起那個服務。服務頁進頁問一次；
- * 後端只做 DNS，不對服務發請求。
+ * 套件內三個主機名解不解得到（M4 票 30）：`false` 是那個服務沒在跑（容器停了，或不在 `COMPOSE_PROFILES` 裡）。
+ * 服務頁進頁問一次、每次測完再問（票 35）；後端只做 DNS，不對服務發請求。
  */
 export type ComposeHosts = Schemas['ComposeOut']['resolvable']
 

@@ -53,8 +53,8 @@ const JELLYFIN_UPGRADE_NOTES = 'https://jellyfin.org/posts/jellyfin-release-12.0
 /** 頁面接到 `ServiceChoice` 的那幾樣：兩支 mutation 與它們的進度（`SetupPage`）。 */
 export interface ChoiceControls {
   /**
-   * 套件內三個主機名解不解得到（`GET /setup/compose`，M4 票 30）。`false` 的那一個：「套件內」卡片說這套
-   * compose 沒有起它、給加回的那一行。沒問到（還在問、問失敗、設定頁）就是空的，不說。
+   * 套件內三個主機名解不解得到（`GET /setup/compose`，M4 票 30）。`false` 的那一個：「套件內」卡片說它沒在跑、
+   * 給起回來的兩種補法。沒問到（還在問、問失敗、設定頁）就是空的，不說。
    */
   composeHosts?: ComposeHosts
   /** 選擇送出去還沒回來。 */
@@ -136,7 +136,7 @@ export function ServiceChoice({
   const confirming = switching && Boolean(switchWarning)
   const warning = service?.origin === 'existing' ? t(`choice.switchAway.${kind}`) : switchWarning
   const name = t(SERVICE_LABEL[kind])
-  // 只有 Berth 時（M4 票 30）：照常列出、不預選、不停用，只說它沒起與怎麼加回來。
+  // 只有 Berth 或容器停了時（M4 票 30、35）：照常列出、不預選、不停用，只說它沒在跑與怎麼起回來。
   const absent = composeHosts[kind] === false
 
   useEffect(() => {
@@ -329,13 +329,9 @@ export function ServiceChoice({
       {absent && selected === null && (
         <div className="grid gap-2">
           <p className="max-w-prose text-xs text-ink-dim">
-            {t('choice.bundled.absentFix', { service: name, kind })}
+            {t('choice.bundled.absentFix', { service: name })}
           </p>
-          <div className="grid grid-cols-1 gap-px">
-            {bringBack(status, kind).map((command) => (
-              <CopyLine key={command} command={command} />
-            ))}
-          </div>
+          <BringBack status={status} kind={kind} />
         </div>
       )}
 
@@ -776,6 +772,7 @@ function Fix({
 
   let lede: string
   let commands: string[] = []
+  let notRunning = false
   // 「至少要 X，這一台是 Y」（M4 票 18）：與「既有」旁的下限同一組數字。
   const outdated = { floor: VERSION_FLOOR[kind], version: service.detail }
   const scheme = schemeFix(reason)
@@ -790,9 +787,9 @@ function Fix({
     // 位址的協定寫錯（M4 票 25）：原本說成連不上、叫人查 port。
     lede = t(scheme)
   } else if (bundled && reason === 'not_deployed') {
-    // 主機名解不到＝它不在 compose 裡：說出怎麼加回來（plan §9.3）。
+    // 主機名解不到＝容器停了或不在 COMPOSE_PROFILES 裡：兩種起回來的方法都給（plan §9.3、M4 票 35）。
     lede = t('connection.fix.notDeployed', { kind })
-    commands = bringBack(status, kind)
+    notRunning = true
   } else if (bundled && reason === 'protocol_mismatch') {
     lede = t('connection.fix.somethingElse', { kind })
   } else if (bundled && reason === 'api_key_missing') {
@@ -834,8 +831,38 @@ function Fix({
           ))}
         </div>
       )}
+      {notRunning && (
+        <div className="mt-2">
+          <BringBack status={status} kind={kind} />
+        </div>
+      )}
       <TechnicalDetails lines={[testEndpoint(status, kind), service.error]} />
     </section>
+  )
+}
+
+/** 套件內那一台主機名解不到時的兩種補法（`bringBack`）：各自一句什麼情況、底下是可複製的指令。 */
+function BringBack({ status, kind }: { status: SetupStatus; kind: ServiceKind }) {
+  const { t } = useTranslation()
+  const { stopped, missing } = bringBack(status, kind)
+  return (
+    <div className="grid gap-3">
+      {(
+        [
+          [t('choice.bringBack.stopped'), stopped],
+          [t('choice.bringBack.missing', { kind }), missing],
+        ] as const
+      ).map(([when, commands]) => (
+        <div key={when} className="grid gap-1">
+          <p className="max-w-prose text-xs text-ink-dim">{when}</p>
+          <div className="grid grid-cols-1 gap-px">
+            {commands.map((command) => (
+              <CopyLine key={command} command={command} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
