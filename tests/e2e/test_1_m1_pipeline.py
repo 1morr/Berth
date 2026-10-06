@@ -19,11 +19,22 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from contextlib import closing
 
 import httpx
 import pytest
 
-from tests.e2e.harness import Json, Submitted, imports_of, in_container, ok, stat_each
+from tests.e2e.harness import (
+    BERTH_CONTAINER,
+    GLOBAL_SAVE_PATH,
+    Json,
+    Submitted,
+    imports_of,
+    in_container,
+    ok,
+    qbittorrent_webui,
+    stat_each,
+)
 from tests.e2e.payload import PACKS
 
 pytestmark = pytest.mark.e2e
@@ -70,6 +81,21 @@ def test_every_release_is_imported_without_a_human(
         ]
         assert not by_hand, by_hand
         assert "review_required" not in types, types
+
+
+def test_the_global_save_path_steers_nothing(
+    submitted: tuple[Submitted, ...], jobs: dict[str, Json]
+) -> None:
+    """精靈頁 2 之後，全域的預設儲存路徑被改到別處（M4 票 32，`conftest` 的
+    `_move_the_global_save_path`）。
+
+    Berth 沒把它改回來，三筆也都不在它底下——下載路徑是分類的，不是全域的。三筆都入庫了由
+    上一條守著。
+    """
+    with closing(qbittorrent_webui()) as qbittorrent:
+        assert ok(qbittorrent.get("/api/v2/app/preferences"))["save_path"] == GLOBAL_SAVE_PATH
+    roots = {job.pack.route_slug: jobs[job.info_hash]["content_path"] for job in submitted}
+    assert not [root for root in roots.values() if root.startswith(GLOBAL_SAVE_PATH)], roots
 
 
 def test_the_ledger_holds_every_episode_the_corpus_imports(
@@ -120,7 +146,7 @@ def test_jellyfin_holds_every_import_where_berth_says(
     )["Items"]
     by_path = {source["Path"]: item for item in items for source in item.get("MediaSources") or []}
     ledger: dict[str, str] = json.loads(
-        in_container("python", "-c", LEDGER_ITEM_IDS, container="berth")
+        in_container("python", "-c", LEDGER_ITEM_IDS, container=BERTH_CONTAINER)
     )
     for job in submitted:
         for row in resolved[job.media]["files"]:

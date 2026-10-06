@@ -32,13 +32,12 @@ import httpx
 import pytest
 
 from tests.e2e.harness import (
-    QBITTORRENT,
     Json,
     all_jobs,
     in_container,
     ledger_of,
     ok,
-    qbittorrent_session,
+    qbittorrent_webui,
     wait,
 )
 from tests.e2e.sites import (
@@ -106,8 +105,7 @@ def _release_index() -> dict[str, Json]:
 
 @pytest.fixture(scope="module")
 def qbittorrent(configured: None) -> Iterator[httpx.Client]:
-    with closing(httpx.Client(base_url=QBITTORRENT, headers={"Referer": QBITTORRENT})) as client:
-        qbittorrent_session(client)
+    with closing(qbittorrent_webui()) as client:
         yield client
 
 

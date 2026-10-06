@@ -1,21 +1,33 @@
 # e2e（plan §10、票 15）：疊在 deploy/docker-compose.yml 之上，其餘就是使用者起的那一套——
 # 真的 qBittorrent、真的 Jellyfin、真的 Prowlarr，Berth 由這份工作目錄 build。
 #
-#   CONFIG_ROOT=<空目錄> docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml \
-#     --env-file tests/e2e/e2e.env up -d --build
+#   uv run --env-file .env python -m tests.e2e.stack    # 起、測、拆一次走完（README〈e2e〉）
 #
 # **不要加 `--wait`**：fixture 要從服務還在啟動時開始偵測（冷啟動，M3 票 06h），等全部健康才開跑
-# 的話 `conftest.py` 的第一個斷言就紅。起完立刻跑 pytest（README〈e2e〉）。
+# 的話 `conftest.py` 的第一個斷言就紅。`stack.py` 起完立刻跑 pytest。
 #
 # **相對路徑相對於第一個檔案所在的 deploy/**，不是這個檔案：compose 把多個 -f 合併成同一個專案。
 #
-# 專案名換掉，`down -v` 才只刪 e2e 自己的 volume。容器名與網路名沿用正式的那一份（berth 的固定
-# IP 是 qBittorrent 免密白名單的依據），所以同一台機器上不能與正式部署同時跑。
+# **與同一台機器上的試跑環境並存**（M4 票 34）：專案名、四個容器名、網路名與子網都在這裡換掉，
+# host port 在 e2e.env；產品那一份一個字都不改（使用者看到的容器名是 `berth-*`，票 16）。子網也要換：
+# 兩個 Docker 網路的網段重疊時後起的那一個建不起來，所以挑 Docker 自動配發的範圍（172.17–31、
+# 192.168）以外的一段，別的專案自動拿到的網段也撞不到它。四份 /config 換成這個專案自己的 named volume
+# （合併時以掛載點為準蓋掉產品那一條），`down --volumes` 之後下一輪就是全新的。
+# tests/unit/test_e2e_stack.py 守著每一個名字、port 與宿主路徑都換掉了。
 name: berth-e2e
+
+networks:
+  default:
+    name: berth-e2e
+    ipam:
+      config: !override
+        - subnet: 10.231.0.0/16
+          ip_range: 10.231.1.0/24
 
 services:
   berth:
     image: berth:e2e
+    container_name: berth-e2e
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -26,9 +38,32 @@ services:
       SSL_CERT_FILE: /tls/bundle.pem
     volumes:
       - berth-e2e-tls:/tls:ro
+      - berth-e2e-config:/config
+      - prowlarr-config:/ext/prowlarr:ro
+    networks:
+      default:
+        # qBittorrent 的免密白名單認這一個位址（產品那一份的 `x-berth-ip`，在這個子網裡）。
+        ipv4_address: 10.231.0.2
     depends_on:
       ca-bundle:
         condition: service_completed_successfully
+
+  qbittorrent:
+    container_name: berth-e2e-qbittorrent
+    environment:
+      BERTH_IP: 10.231.0.2
+    volumes:
+      - qbittorrent-config:/config
+
+  jellyfin:
+    container_name: berth-e2e-jellyfin
+    volumes:
+      - jellyfin-config:/config
+
+  prowlarr:
+    container_name: berth-e2e-prowlarr
+    volumes:
+      - prowlarr-config:/config
 
   ca-bundle:
     image: python:3.13-alpine
@@ -91,3 +126,7 @@ volumes:
   # 路徑上限放不下（票 12 實測）；而 Docker Desktop VM 的 ext4 與 CI 上的 Linux 是同一種檔案系統。
   berth-e2e-data: {}
   berth-e2e-tls: {}
+  berth-e2e-config: {}
+  qbittorrent-config: {}
+  jellyfin-config: {}
+  prowlarr-config: {}

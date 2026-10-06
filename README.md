@@ -379,20 +379,29 @@ Prowlarr 也會起來讓精靈選套件內、測到連上，但索引站那一�
 （`-m 'not e2e'`）。
 
 ```bash
-# CONFIG_ROOT 是宿主上的空目錄；/data 是 named volume（tests/e2e/e2e.env），
-# 因為發佈名很長，Windows bind mount 的 260 字元路徑放不下。
-export CONFIG_ROOT="$PWD/.local/e2e-config"          # PowerShell: $env:CONFIG_ROOT = "$PWD/.local/e2e-config"
-docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env up -d --build
-uv run --env-file .env pytest -m e2e tests/e2e -rA     # 要 .env 裡的 TMDB_API_KEY：精靈 TMDB 那一頁是閘門
-docker compose -f deploy/docker-compose.yml -f tests/e2e/compose.yml --env-file tests/e2e/e2e.env down --volumes
+uv run --env-file .env python -m tests.e2e.stack       # 要 .env 裡的 TMDB_API_KEY：精靈 TMDB 那一頁是閘門
+uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣交給 pytest
 ```
 
+`tests/e2e/stack.py` 一條指令走完：先拆掉上一輪留下的 → build → `up` → `pytest -m e2e tests/e2e`
+→ 失敗時印出容器狀態與 log → **不論結果都 `down --volumes`，跑完不留容器、不留資料**。
+
+- **試跑環境開著也能跑**（M4 票 34）：e2e 有自己的專案名（`berth-e2e`）、容器名（`berth-e2e-*`）、網路與
+  子網（`10.231.0.0/16`，在 Docker 自動配發的範圍外）、host port（`28383`、`28096`、`28080`、`26881`、`29696`），`/data` 與四份
+  `/config` 都是它自己的 named volume；全在 `tests/e2e/compose.yml` 與 `tests/e2e/e2e.env` 換掉，正式的
+  `deploy/docker-compose.yml` 不動。`tests/unit/test_e2e_stack.py` 守著每一個名字、port 與宿主路徑都換掉了。
+- **環境變數不外洩，也不被你的 shell 蓋掉**：compose 的變數只放進子程序的環境，`e2e.env` 的值優先於你
+  shell 裡的同名變數（compose 自己讓 shell 優先於 `--env-file`，一個沒清掉的 `DATA_ROOT` 就會把 e2e
+  掛到試跑環境的媒體庫上）。不要再 `export CONFIG_ROOT` / `DATA_ROOT`。
+- **不 `pull`**：`lscr.io/linuxserver/*` 的 tag 與試跑環境共用，拉新的會讓試跑環境下一次 `up -d` 換 image。
+  本機用的是已經有的那一份；要對新版跑，先在試跑環境那邊自己 `docker compose pull`。CI 的 runner 每次都是空的，
+  拉到的就是最新的。
 - **不加 `--wait`，`up` 完馬上跑測試**：這是冷啟動閘門（票 06h）。精靈在 Jellyfin 與 Prowlarr 還在啟動時就開始，
   三個服務頁都選套件內，各自照常每 2 秒重測到連上（頁 1 連上之後成立擁有者），都不按「重新測試」；測一輪就全部連上的話
-  測試會失敗，因為那一輪沒碰到啟動中的那幾秒。所以 `up` 之前先 `build`（與拉 image），不要讓 `up` 之後還有東西要等。
-- **一次 `up` 只跑得了一次**：精靈走完就不能再走一遍，重跑前先 `down --volumes`。
-- 容器名、網路名與 port 與正式部署相同（qBittorrent 的免密白名單認的是 berth 的固定 IP），
-  所以同一台機器上正式的那一套要先停下來。
+  測試會失敗，因為那一輪沒碰到啟動中的那幾秒。所以 `up` 之前先 `build`，不要讓 `up` 之後還有東西要等（缺的 image `up` 會先拉完才啟動任何容器）。
+- 精靈那一段也守著 M4 之後的行為：頁 2 先送一組 qBittorrent 不收的密碼（停在頁 2、說得出被拒），qBittorrent
+  的全域預設儲存路徑被改到別處之後建 Route 與送單照常（Berth 不寫也不看全域偏好），完成前停掉 qBittorrent
+  並收回頁 4 的「之後再說」——完成照頁序先送回頁 2、再送回頁 4。
 - 沒有 peer 可以真的下載：`torrents` 容器在 `/data/e2e/staging` 造出三包發佈（檔案清單取自 benchmark
   語料、影片是 `tests/fixtures/e2e/` 的種子，標頭的片長照語料的 TMDB 快照改寫——片長驗證會擋），測試在
   送單之後把它們複製到 qBittorrent 說的下載路徑再叫它 recheck。

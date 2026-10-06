@@ -11,6 +11,7 @@ M2 那一組會拆掉、換掉媒體庫裡的檔案，所以排在只讀它們�
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections import Counter
@@ -23,8 +24,9 @@ import pytest
 from berth.models import DEFAULT_BUNDLED_LIBRARIES
 from tests.e2e.harness import (
     ADMIN,
+    GLOBAL_SAVE_PATH,
     PASSWORD,
-    QBITTORRENT,
+    QBITTORRENT_CONTAINER,
     TORRENTS,
     TORRENTS_CONTAINER,
     WEB_UI_LOGIN,
@@ -37,7 +39,7 @@ from tests.e2e.harness import (
     in_container,
     jellyfin_client,
     ok,
-    qbittorrent_session,
+    qbittorrent_webui,
     wait,
 )
 from tests.e2e.payload import PACKS, STAGING, info_name
@@ -123,18 +125,83 @@ def configured(berth: httpx.Client) -> None:
     failed = [row for row in jellyfin["steps"] if row["status"] == "failed"]
     assert not failed, failed
 
-    qbittorrent = ok(berth.post("/setup/qbittorrent/apply", json={"login": WEB_UI_LOGIN}))
-    assert qbittorrent["web_ui_username"] == ADMIN, qbittorrent["steps"]
+    _secure_qbittorrent(berth)
+    _move_the_global_save_path()
     ok(berth.post("/setup/indexers/skip", json={"skipped": True}))
     tmdb = ok(berth.post("/setup/tmdb/test", json={"api_key": tmdb_key}))
     assert tmdb["verified"], tmdb["steps"]
 
     routes = ok(berth.post("/setup/routes", json={}, timeout=300))
     assert routes["ready"], [(row["slug"], row["checks"]) for row in routes["routes"]]
-    ok(berth.post("/setup/complete"))
+    _complete_in_page_order(berth)
     # 同一組帳密就是之後登入 Berth 的那一組（Jellyfin 認的帳號），不是另一組 Berth 自己的。
     signed = ok(berth.post("/auth/login", json={"username": ADMIN, "password": PASSWORD}))
     assert signed == {"name": ADMIN, "role": "admin"}, signed
+
+
+def _secure_qbittorrent(berth: httpx.Client) -> None:
+    """頁 2：先送一組 qBittorrent 5.2 起不收的密碼，再送合規的（M4 票 26）。
+
+    被拒的那一組要停在頁 2、說得出是 qBittorrent 拒絕的（`login_rejected`），帳號不算設好；
+    合規的那一組之後就是 `qbittorrent_webui` 登入 WebUI 用的。
+    """
+    short = {**WEB_UI_LOGIN, "password": WEB_UI_LOGIN["password"][:5]}
+    refused = ok(berth.post("/setup/qbittorrent/apply", json={"login": short}))
+    (row,) = [row for row in refused["steps"] if row["step"] == "web_ui_password"]
+    assert (row["status"], row["failure"]) == ("failed", "login_rejected"), row
+    assert ok(berth.get("/setup/status"))["current_step"] == 2
+
+    applied = ok(berth.post("/setup/qbittorrent/apply", json={"login": WEB_UI_LOGIN}))
+    assert applied["web_ui_username"] == ADMIN, applied["steps"]
+
+
+def _move_the_global_save_path() -> None:
+    """使用者在 WebUI 把全域的預設儲存路徑改到別處（M4 票 32）。
+
+    Berth 不再寫、也不再看 qBittorrent 的全域偏好：之後建 Route、送單、入庫都照常
+    （`test_1_m1_pipeline.py` 驗它沒被改回來、下載也沒落在那裡）。
+    """
+    with closing(qbittorrent_webui()) as qbittorrent:
+        moved = json.dumps({"save_path": GLOBAL_SAVE_PATH})
+        ok(qbittorrent.post("/api/v2/app/setPreferences", data={"json": moved}))
+        assert ok(qbittorrent.get("/api/v2/app/preferences"))["save_path"] == GLOBAL_SAVE_PATH
+
+
+def _complete_in_page_order(berth: httpx.Client) -> None:
+    """完成時照頁序把每一頁再問一次（M4 票 31）：停在完成頁的這時，頁 2 與頁 4 都被弄壞了。
+
+    qBittorrent 停了、重新測試紅了（頁 2，M4 票 25）；另一個分頁收回了「之後再說」（頁 4）。
+    完成先被送回頁 2，頁 2 好了再被送回頁 4，兩頁都好了才寫得下去。
+    """
+
+    def refused_at(page: int) -> None:
+        refused = berth.post("/setup/complete")
+        assert refused.status_code == 422, (refused.status_code, refused.text)
+        assert f"page {page}" in refused.json()["detail"], refused.json()
+        assert ok(berth.get("/health"))["setup_completed"] is False
+
+    def qbittorrent_tests(*, green: bool) -> Callable[[], bool | None]:
+        def probe() -> bool | None:
+            services: list[Json] = ok(
+                berth.post("/setup/services/qbittorrent/test", json={"restart": False})
+            )["services"]
+            (row,) = [row for row in services if row["kind"] == "qbittorrent"]
+            return True if (row["state"] == "ok") == green else None
+
+        return probe
+
+    docker("stop", QBITTORRENT_CONTAINER)
+    try:
+        wait("the stopped qBittorrent to test red", 60, qbittorrent_tests(green=False), every=2)
+        ok(berth.post("/setup/indexers/skip", json={"skipped": False}))
+        refused_at(2)
+    finally:
+        docker("start", QBITTORRENT_CONTAINER)
+    wait("qBittorrent to test green again", 180, qbittorrent_tests(green=True), every=2)
+    refused_at(4)
+
+    ok(berth.post("/setup/indexers/skip", json={"skipped": True}))
+    ok(berth.post("/setup/complete"))
 
 
 @pytest.fixture(scope="session")
@@ -182,8 +249,7 @@ def submitted(berth: httpx.Client, configured: None) -> tuple[Submitted, ...]:
 @pytest.fixture(scope="session")
 def planted(submitted: tuple[Submitted, ...]) -> None:
     """位元組到了：複製進 qBittorrent 的下載路徑，再叫它 recheck。"""
-    with httpx.Client(base_url=QBITTORRENT, headers={"Referer": QBITTORRENT}) as qbittorrent:
-        qbittorrent_session(qbittorrent)
+    with closing(qbittorrent_webui()) as qbittorrent:
         for job in submitted:
             info = f"/api/v2/torrents/info?hashes={job.info_hash}"
 

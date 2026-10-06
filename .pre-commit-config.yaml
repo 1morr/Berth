@@ -13,6 +13,9 @@ repos:
       - id: end-of-file-fixer
       - id: check-merge-conflict
       - id: check-yaml
+        # compose 的合併標籤 `!override` 它不認得；這一份由 tests/unit/test_e2e_stack.py 讀
+        # （認得那個標籤），e2e 每一輪的 `docker compose` 也會先解析它。
+        exclude: ^tests/e2e/compose\.yml$
       - id: check-toml
       - id: mixed-line-ending
         args: [--fix=lf]

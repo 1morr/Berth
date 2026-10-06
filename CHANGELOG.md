@@ -1235,6 +1235,11 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   介面登入一區寫明必填與理由（Prowlarr 第一次打開介面會跳出關不掉的設定視窗），按「設定介面登入」走
   `PUT /api/setup/indexers/login`。**`POST /api/setup/indexers/apply` 不再收 `login`**。加站與移除之後，連線卡與
   泊位卡的站數跟著清單；回頭看頁 4 的說明依套件內 / 既有分兩套。
+- **真服務 e2e 改成一條指令、與試跑環境並存**（M4 票 34）：`uv run --env-file .env python -m tests.e2e.stack`
+  起、測、一定 `down --volumes`，本機與 nightly 同一條。e2e 有自己的專案名、容器名（`berth-e2e-*`）、網路與子網、
+  host port（28xxx）與 named volume，正式 compose 不動；compose 的變數只放進子程序、蓋過呼叫端 shell 的同名
+  變數，不再要 `export CONFIG_ROOT`。精靈那一段多守三件事：qBittorrent 不收的介面密碼停在頁 2、全域預設儲存路徑
+  改掉之後送單照常、完成時照頁序再驗。
 ### Removed
 - **qBittorrent 的「建議設定」整組**（M4 票 32，brief §19 D2）：**破壞性**——`POST /api/settings/qbittorrent/apply`
   （「還原建議設定」）與 `GET /api/settings/qbittorrent/diff` 拿掉，設定頁的 qBittorrent 改讀頁 2 的

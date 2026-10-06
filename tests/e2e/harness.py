@@ -17,16 +17,20 @@ import httpx
 
 from tests.conftest import FIXTURES
 from tests.e2e.payload import Pack
+from tests.e2e.stack import E2E_ENV
 
-BERTH = "http://127.0.0.1:8383"
-QBITTORRENT = "http://127.0.0.1:8080"
-JELLYFIN = "http://127.0.0.1:8096"
+#: 宿主上的 port 是 e2e 自己的那一組（`e2e.env`，M4 票 34），與試跑環境的不撞。
+BERTH = f"http://127.0.0.1:{E2E_ENV['BERTH_PORT']}"
+QBITTORRENT = f"http://127.0.0.1:{E2E_ENV['QBITTORRENT_WEBUI_PORT']}"
+JELLYFIN = f"http://127.0.0.1:{E2E_ENV['JELLYFIN_PORT']}"
 #: compose 網路裡 `torrents` 那台的位址：抓 `.torrent` 的是 Berth 的容器，不是這個程序。
 TORRENTS = "http://torrents:8000"
+#: 容器名是 `compose.yml` 換過的那一組（`berth-e2e-*`，M4 票 34）：產品那一份的 `berth-*` 留給
+#: 同一台機器上的試跑環境。
+BERTH_CONTAINER = "berth-e2e"
+JELLYFIN_CONTAINER = "berth-e2e-jellyfin"
+QBITTORRENT_CONTAINER = "berth-e2e-qbittorrent"
 TORRENTS_CONTAINER = "berth-e2e-torrents"
-#: 容器名沿用 `deploy/docker-compose.yml`（套件內三台是 `berth-*`，M4 票 16）：e2e 那一份只換
-#: 專案名，另外加了 `torrents` 這台與自己的 volume。
-JELLYFIN_CONTAINER = "berth-jellyfin"
 
 ADMIN = "skipper"
 #: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的 WebUI 登入是另一組（`WEB_UI_LOGIN`）。
@@ -109,19 +113,25 @@ def docker(*command: str) -> str:
     return result.stdout
 
 
-#: 精靈第 4 步替套件內 qBittorrent 設的 WebUI 登入（M4 票 07：泊位上必填，帳號預填擁有者）。
+#: 精靈頁 2 之後，測試在 qBittorrent 的 WebUI 把全域的預設儲存路徑改到這裡（M4 票 32）。它在 /data
+#: 底下、寫得進去，只是沒有任何一條 Route 用它：Berth 送的每一筆都走分類自己的路徑。
+GLOBAL_SAVE_PATH = "/data/not-berth"
+
+#: 精靈頁 2 替套件內 qBittorrent 設的 WebUI 登入（M4 票 07：泊位上必填，帳號預填擁有者）。
 WEB_UI_LOGIN = {"username": ADMIN, "password": "harbour-webui"}
 
 
-def qbittorrent_session(client: httpx.Client) -> None:
-    """以 WebUI 登入套件內的 qBittorrent，測試才看得到、改得到它的 torrent。
+def qbittorrent_webui() -> httpx.Client:
+    """以 WebUI 登入套件內的 qBittorrent，測試才看得到、改得到它的 torrent 與偏好。
 
-    用的是精靈第 4 步在泊位上設的那一組（M4 票 07）——這也順便驗了「泊位上設的帳密之後能登入
-    qBittorrent WebUI」。
+    用的是精靈頁 2 在泊位上設的那一組（M4 票 07）——這也順便驗了「泊位上設的帳密之後能登入
+    qBittorrent WebUI」。同 `jellyfin_client`，收尾要 `closing()`。
     """
+    client = httpx.Client(base_url=QBITTORRENT, headers={"Referer": QBITTORRENT})
     login = client.post("/api/v2/auth/login", data=WEB_UI_LOGIN)
     # 成功的形狀隨版本不同（4.4 是 `200 Ok.`、5.x 是 `204`，brief §20.7），失敗是 `Fails.`。
     assert login.is_success and login.text != "Fails.", (login.status_code, login.text)
+    return client
 
 
 def in_container(*command: str, container: str = TORRENTS_CONTAINER) -> str:
@@ -175,7 +185,7 @@ def exists(path: str) -> bool:
 def ledger_of(job_hash: str) -> list[Json]:
     """這一筆 Job 在帳本上的正片：`id`、`target_path`、`source_abs_path`、`jellyfin_item_id`。"""
     rows: list[Json] = json.loads(
-        in_container("python", "-c", _LEDGER_OF, job_hash, container="berth")
+        in_container("python", "-c", _LEDGER_OF, job_hash, container=BERTH_CONTAINER)
     )
     return rows
 

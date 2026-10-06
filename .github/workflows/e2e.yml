@@ -21,10 +21,6 @@ jobs:
     name: e2e
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      # 與 README〈e2e〉的 -f / --env-file 是同一組，寫成環境變數之後每一步都不必重複。
-      COMPOSE_FILE: deploy/docker-compose.yml:tests/e2e/compose.yml
-      COMPOSE_ENV_FILES: tests/e2e/e2e.env
     steps:
       - uses: actions/checkout@v7
 
@@ -34,25 +30,9 @@ jobs:
 
       - run: uv sync --locked
 
-      # compose 的 CONFIG_ROOT 是宿主上的目錄；runner.temp 在 job 層級的 env 裡還讀不到。
-      - run: echo "CONFIG_ROOT=$RUNNER_TEMP/berth-e2e-config" >> "$GITHUB_ENV"
-
-      # 先 build、先把 image 拉下來，`up` 才是四個容器同時從零啟動。
-      - run: docker compose build && docker compose pull --ignore-buildable
-
-      # **冷啟動閘門（票 06h）：不加 `--wait`。** 測試在 Berth 一回應就開始精靈，這時 Jellyfin 與
-      # Prowlarr 還在啟動；`--wait` 會等到四個都健康，精靈就永遠碰不到那幾秒（票 06g 的缺陷）。
-      - run: docker compose up --detach
-
-      - run: uv run pytest -m e2e tests/e2e -rA
+      # 與本機同一條指令（README〈e2e〉）：拆掉殘留 → build → `up`（**不加 `--wait`**，冷啟動
+      # 閘門，票 06h）→ pytest → 失敗時印容器狀態與 log → 一定 `down --volumes`（`tests/e2e/stack.py`）。
+      - run: uv run python -m tests.e2e.stack
         env:
-          # 精靈第 6 步是閘門（票 02b）：沒有一把驗得過的 key，走不到建 Route。
+          # 精靈 TMDB 那一頁是閘門（票 02b）：沒有一把驗得過的 key，走不到建 Route。
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-
-      - if: failure()
-        run: |
-          docker compose ps --all
-          docker compose logs --no-color --timestamps
-
-      - if: always()
-        run: docker compose down --volumes
