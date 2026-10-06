@@ -910,7 +910,7 @@ describe('頁 6：完成', () => {
 
     expect(await screen.findByRole('button', { name: '完成設定' })).toBeInTheDocument()
     expect(screen.getByText('/data/torrent/complete/tv')).toBeInTheDocument()
-    expect(screen.getByText(/索引站還沒接/)).toBeInTheDocument()
+    expect(screen.getByText(/Prowlarr 還沒接/)).toBeInTheDocument()
     expect(screen.getByText(/五個泊位/)).toBeInTheDocument()
     // 之後拿什麼登入：擁有者的 Jellyfin 帳號（M4 票 06），套件內與既有同一句。
     expect(screen.getByText(/你是 skipper/)).toBeInTheDocument()

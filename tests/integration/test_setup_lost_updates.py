@@ -99,7 +99,7 @@ async def arrange(session: AsyncSession) -> None:
     await write_settings(session, QbittorrentSettings(base_url=NAS_QBITTORRENT))
     await write_settings(
         session,
-        IndexerSettings(kind="prowlarr", base_url=COMPOSE[ServiceKind.PROWLARR], api_key="k"),
+        IndexerSettings(base_url=COMPOSE[ServiceKind.PROWLARR], api_key="k"),
     )
     await session.commit()
 

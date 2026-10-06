@@ -124,7 +124,7 @@ _Avoid_: external, remote, byo
 _Avoid_: success/error（那是 HTTP 的詞）, done（`ok` 與 `skipped` 都算做完）
 
 **Berth（泊位）**:
-設定精靈的五格，一格一頁（之後是完成頁）：Jellyfin、qBittorrent、媒體庫路徑、Prowlarr（與索引站；或任一 Torznab 端點）、TMDB。
+設定精靈的五格，一格一頁（之後是完成頁）：Jellyfin、qBittorrent、媒體庫路徑、Prowlarr、TMDB。
 一格一個服務（M3 票 06e 把原本的「來源」拆成索引站與 TMDB 兩格；2026-09-29 起 Prowlarr 與索引站同一格、拿掉格子前的擁有者與偵測兩步，擁有者就是 Jellyfin 那一格的結果）。
 用在精靈、健康頁的泊位板與設定頁（一格一頁，同一個順序，M3 票 06i）；與產品名 Berth 同字，指的是畫面上那一格。
 _Avoid_: stage, section, panel

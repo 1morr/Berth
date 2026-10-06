@@ -251,9 +251,6 @@ export function setQbittorrentLogin(login: InterfaceLogin): Promise<QbittorrentS
 
 /** --- 頁 4、5：Prowlarr 與索引站、TMDB（plan §9.3、§8.3、§8.4）--- */
 
-/** `IndexerKind`：既有路徑的兩種接法。 */
-export type IndexerKind = Schemas['IndexerKind']
-
 /** Prowlarr 裡已經有的一站（M4 票 09 的「已加入」）。 */
 export type IndexerSite = Schemas['IndexerSiteOut']
 
@@ -267,7 +264,7 @@ export type SiteFailure = NonNullable<SiteCheck['reason']>
 
 export type IndexerSetup = Schemas['IndexerSetupOut']
 
-/** 既有 Prowlarr 或任意 Torznab 的連線表單。 */
+/** 既有 Prowlarr 的連線表單。 */
 export type IndexerConnectInput = Schemas['IndexerConnectIn']
 
 export type TmdbSetup = Schemas['TmdbSetupOut']

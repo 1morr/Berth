@@ -16,12 +16,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceUnavailableError
+from berth.adapters.http import ProtocolMismatchError, ServiceUnavailableError
 from berth.adapters.prowlarr import ProwlarrIndexer, unsupported_message
 from berth.domain import (
     ConnectionReason,
     ConnectionState,
-    IndexerKind,
     ServiceKind,
     ServiceOrigin,
     StepStatus,
@@ -88,9 +87,7 @@ async def choose_existing(session: AsyncSession, factory: FakeClientFactory) -> 
 
 
 async def connect_existing(session: AsyncSession, factory: FakeClientFactory) -> None:
-    await connect_indexer(
-        session, factory, kind=IndexerKind.PROWLARR, base_url=HOME, api_key="theirs"
-    )
+    await connect_indexer(session, factory, base_url=HOME, api_key="theirs")
 
 
 ENTRIES = {"choose": choose_existing, "connect": connect_existing}
@@ -228,34 +225,6 @@ class TestOtherFailures:
 
         assert (await read_indexer_status(session, factory)).reason is ConnectionReason.UNREACHABLE
 
-    @pytest.mark.parametrize(
-        ("error", "reason"),
-        [
-            (AuthFailedError("t=caps: 401"), ConnectionReason.AUTH_REQUIRED),
-            (ServiceUnavailableError("connection refused"), ConnectionReason.UNREACHABLE),
-        ],
-        ids=["401", "down"],
-    )
-    async def test_a_torznab_key_is_told_apart_from_a_dead_endpoint(
-        self,
-        session: AsyncSession,
-        roots: dict[str, Path],
-        error: Exception,
-        reason: ConnectionReason,
-    ) -> None:
-        factory = await ready(session, roots)
-        factory.torznab_.error = error
-
-        await connect_indexer(
-            session,
-            factory,
-            kind=IndexerKind.TORZNAB,
-            base_url="http://jackett:9117/t",
-            api_key="k",
-        )
-
-        assert (await read_indexer_status(session, factory)).reason is reason
-
 
 class TestAddingToAnExistingProwlarr:
     async def test_only_the_ticked_sites_are_added_and_the_login_is_untouched(
@@ -318,25 +287,6 @@ class TestAddingToAnExistingProwlarr:
         with pytest.raises(ValueError, match="existing service"):
             await remove_indexer(session, factory, added.id)
         assert factory.prowlarr_.deleted == []
-
-    async def test_a_torznab_endpoint_gets_no_sites(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """Torznab 端點沒有站的清單可加：照舊拒絕。"""
-        factory = await ready(session, roots)
-        await connect_indexer(
-            session,
-            factory,
-            kind=IndexerKind.TORZNAB,
-            base_url="http://jackett:9117/t",
-            api_key="k",
-        )
-
-        with pytest.raises(ValueError):
-            await verify_sites(session, factory, ["nyaasi"])
-        with pytest.raises(ValueError):
-            await apply_default_indexers(session, factory, ["nyaasi"])
-        assert await factory.prowlarr_.indexers() == []
 
 
 class TestBundledLoginIsItsOwnStep:

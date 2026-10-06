@@ -55,7 +55,6 @@ from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
 from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering, parse_detail
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
-from berth.adapters.torznab.client import HttpTorznabClient
 from berth.domain import CollectionType, MediaKind, SiteFailure, SortOrder
 from berth.services.indexer import DEFAULT_INDEXERS
 from tests.conftest import read_fixture
@@ -63,7 +62,6 @@ from tests.conftest import read_fixture
 JELLYFIN_URL = "http://jellyfin:8096"
 QBITTORRENT_URL = "http://qbittorrent:8080"
 PROWLARR_URL = "http://prowlarr:9696"
-TORZNAB_URL = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api"
 #: 契約測試不打真的 TMDB；位址是真的那一個，回應是錄下來的那一份。
 TMDB_URL = "https://api.themoviedb.org/3"
 #: v4 read access token 的**形狀**（三段 JWT）。憑證由使用者自備（票 02b），repo 裡不留真的那一把。
@@ -2468,38 +2466,6 @@ async def test_prowlarr_host_config_round_trips_the_whole_object() -> None:
     assert sent["passwordConfirmation"] == "harbour"
     # 整份物件送回去：Prowlarr 用它覆寫，少送的欄位會被清掉。
     assert len(sent) == len(config)
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_torznab_caps_prove_the_endpoint_answers_torznab() -> None:
-    """`t=caps` 一次證明位址對、key 對、而且那一端真的是 Torznab（錄自 Prowlarr 的單站網址）。"""
-    route = respx.get(TORZNAB_URL).respond(200, text=read_fixture("http/torznab/caps.xml"))
-
-    client = HttpTorznabClient(TORZNAB_URL, "the-key")
-    try:
-        caps = await client.caps()
-    finally:
-        await client.aclose()
-
-    assert caps.server_title == "Prowlarr"
-    assert caps.search.available is True
-    assert caps.search.params == frozenset({"q"})
-    # 公開站的 `tv-search` 只認關鍵字與季集，沒有 tmdbid（票 08 實測十個站都沒有）。
-    assert caps.tv.params == frozenset({"q", "season", "ep"})
-    assert caps.categories == ("TV",)
-    assert dict(route.calls.last.request.url.params) == {"t": "caps", "apikey": "the-key"}
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_torznab_rejects_a_page_that_is_not_caps() -> None:
-    respx.get(TORZNAB_URL).respond(200, text="<html><body>Jackett</body></html>")
-
-    client = HttpTorznabClient(TORZNAB_URL, "the-key")
-    with pytest.raises(ProtocolMismatchError):
-        await client.caps()
-    await client.aclose()
 
 
 @respx.mock

@@ -406,8 +406,8 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText(/設定精靈的第 6 步跳過了索引站/)).toBeVisible()
-    expect(screen.getByRole('link', { name: '前往設定：索引站' })).toHaveAttribute(
+    expect(await screen.findByText(/設定精靈的第 6 步跳過了 Prowlarr/)).toBeVisible()
+    expect(screen.getByRole('link', { name: '前往設定：Prowlarr' })).toHaveAttribute(
       'href',
       '/settings/indexers',
     )
@@ -424,13 +424,13 @@ describe('搜尋 torrent 與結果表', () => {
     renderApp('/media/tv:120089')
 
     // 還沒按：一個索引站都沒打，畫面已經說得出下一步。
-    expect(await screen.findByText(/設定精靈的第 6 步跳過了索引站/)).toBeVisible()
-    expect(within(panel()).getByRole('link', { name: '前往設定：索引站' })).toBeVisible()
+    expect(await screen.findByText(/設定精靈的第 6 步跳過了 Prowlarr/)).toBeVisible()
+    expect(within(panel()).getByRole('link', { name: '前往設定：Prowlarr' })).toBeVisible()
 
     await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
 
     expect(await screen.findByText('找到 0 筆，0 個關鍵字沒問到。')).toBeInTheDocument()
-    expect(screen.getAllByText(/設定精靈的第 6 步跳過了索引站/)).toHaveLength(1)
+    expect(screen.getAllByText(/設定精靈的第 6 步跳過了 Prowlarr/)).toHaveLength(1)
   })
 
   it('一般使用者看到的是「請管理員…」而不是一條進不去的連結', async () => {
@@ -447,7 +447,7 @@ describe('搜尋 torrent 與結果表', () => {
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
     expect(await screen.findByText('請管理員到設定接上索引站。')).toBeVisible()
-    expect(screen.queryByRole('link', { name: '前往設定：索引站' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '前往設定：Prowlarr' })).not.toBeInTheDocument()
   })
 
   it('連不上索引站時也給得出「去哪裡改位址」', async () => {
@@ -468,7 +468,7 @@ describe('搜尋 torrent 與結果表', () => {
 
     expect(await screen.findByText(/連不上索引站/)).toBeVisible()
     expect(screen.getByText('GET /api/v1/search: connection refused')).toBeVisible()
-    expect(screen.getByRole('link', { name: '前往設定：索引站' })).toBeVisible()
+    expect(screen.getByRole('link', { name: '前往設定：Prowlarr' })).toBeVisible()
   })
 
   it('搜到但一筆都沒有不是錯誤', async () => {

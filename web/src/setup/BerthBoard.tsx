@@ -8,7 +8,7 @@ import { BerthBoard as Board, type BoardSlot } from '../components/BerthBoard'
 import { BERTHS, type BerthSlot } from '../components/berths'
 import { ORIGIN_LABEL, detailLabel } from '../components/services'
 import type { Signal } from '../components/signal'
-import { hostOf, signalOf } from './signals'
+import { signalOf } from './signals'
 
 /**
  * 精靈的泊位板：版面在 `components/BerthBoard.tsx`（健康頁用同一塊），這裡只負責
@@ -32,9 +32,6 @@ const SIGNAL_LABEL = {
   secured: 'status.ok',
   blocked: 'status.failed',
 } as const satisfies Record<Signal, string>
-
-/** 產品名不翻譯：詳情列說的是接上的是哪一種軟體。 */
-const INDEXER_PRODUCT = { prowlarr: 'Prowlarr', torznab: 'Torznab' } as const
 
 export function BerthBoard({
   services,
@@ -139,11 +136,11 @@ function serviceDetail(
 }
 
 /**
- * 索引站那一格的詳情列（票 06e）：接上的是哪一種（Prowlarr / Torznab，不寫死），加了幾站。
+ * 索引站那一格的詳情列（票 06e）：加了幾站（泊位本身就叫 Prowlarr，詳情列不再寫產品名）。
  *
  * 站數優先讀頁 4 的清單（加完站、或使用者在自己的 Prowlarr 加了站之後，測試時的數字會過期），讀不到
  * 才用測試時的數字。**兩者都沒有就不猜**：還沒測、連不上時測試的詳情是空的，那不是「零站」
- * （票 06e 的 code review）。Torznab 端點沒有站數，說它是哪一台。
+ * （票 06e 的 code review）。
  */
 function indexerDetail(
   t: TFunction,
@@ -151,9 +148,6 @@ function indexerDetail(
   indexers: IndexerSetup | undefined,
 ) {
   if (!chosen && !indexers) return null
-  const kind = indexers?.kind ?? 'prowlarr'
-  const product = INDEXER_PRODUCT[kind]
-  if (kind === 'torznab') return `${product} · ${hostOf(indexers?.base_url ?? '')}`
   // 頁上的清單讀得到就用它：套件內與既有 Prowlarr 都列了它現在有的站（M4 票 09）。
   const count =
     indexers && indexers.origin !== null && indexers.reachable && !indexers.error
@@ -162,9 +156,7 @@ function indexerDetail(
         ? Number(chosen.detail)
         : null
   if (count === null) return null
-  return count > 0
-    ? t('board.indexerCount', { product, count })
-    : t('board.indexerNone', { product })
+  return count > 0 ? t('board.indexerCount', { count }) : t('board.indexerNone')
 }
 
 /** 媒體庫路徑那一格的詳情列：建了幾條 Route。還沒有就留破折號。 */

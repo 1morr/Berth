@@ -98,7 +98,7 @@ async def arrange(
     await write_settings(session, QbittorrentSettings(base_url="http://qbittorrent:8080"))
     await write_settings(
         session,
-        IndexerSettings(kind="prowlarr", base_url="http://prowlarr:9696", api_key="key-prowlarr-0"),
+        IndexerSettings(base_url="http://prowlarr:9696", api_key="key-prowlarr-0"),
     )
     await write_settings(
         session,

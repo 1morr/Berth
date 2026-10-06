@@ -21,11 +21,11 @@ const zhHant = {
     jellyfin: 'Jellyfin',
     qbittorrent: 'qBittorrent',
     library: '媒體庫路徑',
-    indexers: '索引站',
+    indexers: 'Prowlarr',
     tmdb: 'TMDB',
-    indexerNone: '{{product}} · 尚未加入索引站',
-    indexerCount_one: '{{product}} · {{count}} 個索引站',
-    indexerCount_other: '{{product}} · {{count}} 個索引站',
+    indexerNone: '尚未加入索引站',
+    indexerCount_one: '{{count}} 個索引站',
+    indexerCount_other: '{{count}} 個索引站',
     routeCount_one: '{{count}} 條 Route',
     routeCount_other: '{{count}} 條 Route',
     unassigned: '未指派',
@@ -391,7 +391,6 @@ const zhHant = {
     site_unreachable: 'Prowlarr 連不到這個站：它可能掛了，或這台主機連不出去。',
     site_rejected: 'Prowlarr 不肯加這個站。',
     site_not_offered: '這個站 Berth 加不了（不是公開的 torrent 站），要在 Prowlarr 自己加。',
-    no_search: '這個 Torznab 端點不提供搜尋。',
     unexpected: '發生了沒預料到的錯誤。技術細節裡是原文。',
   },
   connect: {
@@ -626,10 +625,10 @@ const zhHant = {
   },
   indexer: {
     noSitesYet: '還沒有站',
-    title: '索引站',
+    title: 'Prowlarr',
     lede: {
       choose:
-        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key（或任一 Torznab 端點），用你已經有的站。',
+        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用你已經有的站。',
       bundled:
         '索引站決定 Berth 找得到什麼。先測試，通過的站勾起來加入；加入之後試搜，不要的就地移除。這一步可以之後再說。',
       existing:
@@ -647,14 +646,11 @@ const zhHant = {
       login: '設定 Prowlarr 介面登入',
     },
     cutaway: {
-      title: '索引站',
+      title: 'Prowlarr',
       kind: '接法',
       bundled: '套件內 Prowlarr',
+      existing: '你自己的 Prowlarr',
       added: '已加入',
-    },
-    kind: {
-      prowlarr: 'Prowlarr',
-      torznab: 'Torznab 端點',
     },
     add: {
       title: '加站',
@@ -703,17 +699,12 @@ const zhHant = {
       saving: '設定中…',
     },
     existing: {
-      title: '接入你自己的索引站',
-      lede: 'Prowlarr 填它的位址與 API key；Jackett 或單站則填整條 Torznab 網址與它的 key。',
-      kind: '接法',
+      title: '接入你自己的 Prowlarr',
+      lede: '填它的位址與 API key。',
       test: '測試連線',
       testing: '測試中…',
       fix: '確認位址、port 與 API key 都對，再確認那台服務從 Berth 這個容器連得到。',
-      hint: {
-        prowlarr: 'Prowlarr 的位址，例如 http://192.168.1.10:9696。API key 在它的「設定 → 一般」。',
-        torznab:
-          '整條 Torznab 網址。Jackett 的聚合網址是 /api/v2.0/indexers/all/results/torznab/api。',
-      },
+      hint: 'Prowlarr 的位址，例如 http://192.168.1.10:9696。API key 在它的「設定 → 一般」。',
     },
     added: {
       title: '已加入',
@@ -983,17 +974,17 @@ const zhHant = {
       nothing: '沒有',
     },
     skipped: {
-      indexers: '索引站',
+      indexers: 'Prowlarr',
     },
     where: {
-      indexers: '索引站還沒接。之後在「設定 → 索引站」補上，補之前搜尋不到任何東西。',
+      indexers: 'Prowlarr 還沒接。之後在「設定 → Prowlarr」補上，補之前搜尋不到任何東西。',
       // 跳過了，但 Prowlarr 上本來就有站（重裝保留它的設定，M4 票 27）：搜尋照樣用得到。
       indexersPresent_one:
-        '這一步跳過了，不過 Prowlarr 上已經有 {{count}} 個站，搜尋用得到它。加站與試搜在「設定 → 索引站」。',
+        '這一步跳過了，不過 Prowlarr 上已經有 {{count}} 個站，搜尋用得到它。加站與試搜在「設定 → Prowlarr」。',
       indexersPresent_other:
-        '這一步跳過了，不過 Prowlarr 上已經有 {{count}} 個站，搜尋用得到它們。加站與試搜在「設定 → 索引站」。',
+        '這一步跳過了，不過 Prowlarr 上已經有 {{count}} 個站，搜尋用得到它們。加站與試搜在「設定 → Prowlarr」。',
       indexersUnread:
-        '這一步跳過了，這一次也讀不到 Prowlarr 的站清單。之後在「設定 → 索引站」確認或補上。',
+        '這一步跳過了，這一次也讀不到 Prowlarr 的站清單。之後在「設定 → Prowlarr」確認或補上。',
     },
   },
   login: {
@@ -1496,15 +1487,11 @@ const zhHant = {
     problem: {
       not_configured: {
         label: '還沒接',
-        body: '設定精靈的第 6 步跳過了索引站，所以 Berth 沒有地方可以搜。接上 Prowlarr 或任意 Torznab 端點之後這一區塊就會動。',
+        body: '設定精靈的第 6 步跳過了 Prowlarr，所以 Berth 沒有地方可以搜。接上 Prowlarr 之後這一區塊就會動。',
       },
       no_query: {
         label: '無法搜尋',
         body: 'Berth 還沒有這部作品的 TMDB 快照，所以不知道要拿什麼名字去問。到上面按「立即重抓」，或自己打一個關鍵字。',
-      },
-      no_search: {
-        label: '不提供搜尋',
-        body: '這個 Torznab 端點回報它不提供搜尋。位址與 key 都對，但它做不了這件事——換一個端點。',
       },
       credential_rejected: {
         label: '憑證被拒',
@@ -2585,8 +2572,8 @@ const zhHant = {
     },
     indexerPage: {
       sites: '站',
-      title: '索引站設定',
-      lede: '加站、試搜、移除；接的是你自己的 Prowlarr 或 Torznab 端點時，在這裡換網址或 key。',
+      title: 'Prowlarr 設定',
+      lede: '加站、試搜、移除；接的是你自己的 Prowlarr 時，在這裡換網址或 key。',
     },
     tmdbPage: {
       title: 'TMDB 設定',
@@ -3121,11 +3108,11 @@ const en: Translations<typeof zhHant> = {
     jellyfin: 'Jellyfin',
     qbittorrent: 'qBittorrent',
     library: 'Library paths',
-    indexers: 'Indexers',
+    indexers: 'Prowlarr',
     tmdb: 'TMDB',
-    indexerNone: '{{product}} · no indexers yet',
-    indexerCount_one: '{{product}} · {{count}} indexer',
-    indexerCount_other: '{{product}} · {{count}} indexers',
+    indexerNone: 'No indexers added yet',
+    indexerCount_one: '{{count}} indexer',
+    indexerCount_other: '{{count}} indexers',
     routeCount_one: '{{count}} route',
     routeCount_other: '{{count}} routes',
     unassigned: 'Unassigned',
@@ -3511,7 +3498,6 @@ const en: Translations<typeof zhHant> = {
     site_rejected: 'Prowlarr refused to add this site.',
     site_not_offered:
       'Berth cannot add this site (it is not a public torrent site); add it in Prowlarr itself.',
-    no_search: 'This Torznab endpoint does not offer search.',
     unexpected: 'Something unexpected went wrong. The original message is under technical details.',
   },
   connect: {
@@ -3759,10 +3745,10 @@ const en: Translations<typeof zhHant> = {
   },
   indexer: {
     noSitesYet: 'No sites yet',
-    title: 'Indexers',
+    title: 'Prowlarr',
     lede: {
       choose:
-        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key (or any Torznab endpoint) and Berth uses the indexers you already have.',
+        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key and Berth uses the indexers you already have.',
       bundled:
         'Indexers decide what Berth can find. Test first, tick the ones that pass and add them; then run a trial search and remove the ones you do not want. This step can wait.',
       existing:
@@ -3782,14 +3768,11 @@ const en: Translations<typeof zhHant> = {
       login: 'Set the Prowlarr interface login',
     },
     cutaway: {
-      title: 'Indexers',
+      title: 'Prowlarr',
       kind: 'Connection',
       bundled: 'Bundled Prowlarr',
+      existing: 'Your own Prowlarr',
       added: 'Added',
-    },
-    kind: {
-      prowlarr: 'Prowlarr',
-      torznab: 'Torznab endpoint',
     },
     add: {
       title: 'Add indexers',
@@ -3841,18 +3824,12 @@ const en: Translations<typeof zhHant> = {
       saving: 'Setting…',
     },
     existing: {
-      title: 'Connect your own indexer',
-      lede: 'For Prowlarr, give its address and API key. For Jackett or a single site, give the whole Torznab URL and its key.',
-      kind: 'Connection',
+      title: 'Connect your own Prowlarr',
+      lede: 'Give its address and API key.',
       test: 'Test connection',
       testing: 'Testing…',
       fix: "Check the address, the port and the API key, then check that Berth's container can reach that service:",
-      hint: {
-        prowlarr:
-          'The Prowlarr address, e.g. http://192.168.1.10:9696. Its API key is under Settings → General.',
-        torznab:
-          "The whole Torznab URL. Jackett's aggregate URL ends in /api/v2.0/indexers/all/results/torznab/api.",
-      },
+      hint: 'The Prowlarr address, e.g. http://192.168.1.10:9696. Its API key is under Settings → General.',
     },
     added: {
       title: 'Added',
@@ -4136,17 +4113,17 @@ const en: Translations<typeof zhHant> = {
       nothing: 'Nothing',
     },
     skipped: {
-      indexers: 'Indexers',
+      indexers: 'Prowlarr',
     },
     where: {
       indexers:
-        'No indexer yet. Add one later under Settings → Indexers; until then searches return nothing.',
+        'Prowlarr is not connected yet. Connect it later under Settings → Prowlarr; until then searches return nothing.',
       indexersPresent_one:
-        'Skipped, but Prowlarr already has {{count}} site, and searches use it. Add sites and try searches under Settings → Indexers.',
+        'Skipped, but Prowlarr already has {{count}} site, and searches use it. Add sites and try searches under Settings → Prowlarr.',
       indexersPresent_other:
-        'Skipped, but Prowlarr already has {{count}} sites, and searches use them. Add sites and try searches under Settings → Indexers.',
+        'Skipped, but Prowlarr already has {{count}} sites, and searches use them. Add sites and try searches under Settings → Prowlarr.',
       indexersUnread:
-        'Skipped, and Prowlarr’s site list could not be read this time. Check or add sites later under Settings → Indexers.',
+        'Skipped, and Prowlarr’s site list could not be read this time. Check or add sites later under Settings → Prowlarr.',
     },
   },
   login: {
@@ -4600,15 +4577,11 @@ const en: Translations<typeof zhHant> = {
     problem: {
       not_configured: {
         label: 'Not connected',
-        body: 'Step 6 of the setup wizard skipped the indexer, so Berth has nowhere to search. Connect Prowlarr or any Torznab endpoint and this section comes alive.',
+        body: 'Step 6 of the setup wizard skipped Prowlarr, so Berth has nowhere to search. Connect Prowlarr and this section comes alive.',
       },
       no_query: {
         label: 'Nothing to ask',
         body: 'Berth has no TMDB snapshot for this title yet, so it does not know what names to ask for. Hit Refresh now above, or type a keyword yourself.',
-      },
-      no_search: {
-        label: 'No search offered',
-        body: 'This Torznab endpoint reports that it does not offer search. The address and key are fine; it simply cannot do this. Use another endpoint.',
       },
       credential_rejected: {
         label: 'Credential rejected',
@@ -5646,8 +5619,8 @@ const en: Translations<typeof zhHant> = {
     },
     indexerPage: {
       sites: 'Sites',
-      title: 'Indexer settings',
-      lede: 'Add sites, try a search, remove what you do not want; when you run your own Prowlarr or Torznab endpoint, change its address or key here.',
+      title: 'Prowlarr settings',
+      lede: 'Add sites, try a search, remove what you do not want; when you run your own Prowlarr, change its address or key here.',
     },
     tmdbPage: {
       title: 'TMDB settings',

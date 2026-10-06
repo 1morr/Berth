@@ -35,10 +35,8 @@ from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
     BudgetUse,
     EpisodeStatus,
-    IndexerKind,
     IndexerProblem,
     MappingStrategy,
-    MediaKind,
     MediaSnapshot,
     ParseContext,
     SeasonSnapshot,
@@ -257,7 +255,6 @@ async def search_torrents(
 
     snapshot = await read_snapshot(session, factory, media_id)
     typed = query.strip()
-    narrowed = missing and not typed
     batches: tuple[QueryBatch, ...] = ()
     if typed:
         texts: tuple[str, ...] = (typed,)
@@ -269,14 +266,9 @@ async def search_torrents(
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
 
-    client = factory.indexer_search(IndexerKind(settings.kind), settings.base_url, settings.api_key)
+    client = factory.indexer_search(settings.base_url, settings.api_key)
+    queries = tuple(SearchQuery(text=text) for text in texts)
     try:
-        capability = await client.capabilities()
-        if not capability.searchable:
-            return _blank(IndexerProblem.NO_SEARCH)
-        # 缺集搜尋不走 id 那條路：id 找的是**整部作品**，收窄到缺的那幾集就沒了，
-        # 而預覽已經告訴使用者要問那幾集（票 10）。
-        queries = _queries(texts, snapshot, frozenset() if narrowed else capability.tmdb_id)
         sites = await client.sites()
         try:
             factory.budget.take(sites, len(queries), BudgetUse.SEARCH)
@@ -290,7 +282,7 @@ async def search_torrents(
             *(_attempt(client, item, timeout) for item in queries), return_exceptions=False
         )
     except ServiceError as exc:
-        # `capabilities()` 垮掉是「這個端點現在整個問不動」，與逐查詢的失敗不同：
+        # `sites()` 垮掉是「這台 Prowlarr 現在整個問不動」，與逐查詢的失敗不同：
         # 那時候一個關鍵字都還沒問出去，所以畫面要說的是連線，不是搜尋結果。
         return _blank(_problem(exc), message(exc))
     finally:
@@ -317,7 +309,7 @@ def _take(results: Sequence[IndexerResult], limit: int) -> list[IndexerResult]:
     The Pirate Bay 的 scene 發佈有 28–86 個做種，而 Mikan 那 1070 筆多半是個位數，
     於是前 100 筆全部來自同一個站——使用者要的 CHT 內嵌版一筆都看不到。
 
-    輪流取也照顧單一 Torznab 端點：只有一個站在答時它自己填滿一百筆。
+    只有一個站在答時它自己填滿一百筆。
     """
     by_indexer: dict[str, list[IndexerResult]] = {}
     for result in results:
@@ -469,21 +461,6 @@ def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:
     )
 
 
-def _queries(
-    texts: Sequence[str], snapshot: MediaSnapshot | None, id_search: frozenset[MediaKind]
-) -> tuple[SearchQuery, ...]:
-    """關鍵字 → 查詢。端點認得 tmdbid 時整批換成**一個** id 查詢。
-
-    id 問得比關鍵字準，而且準到不需要問第二次——別名存在的理由正是「同一部作品有好幾個
-    名字」，而 id 沒有這個問題。實測十個預設公開站一個都不支援，所以這條路平常走不到
-    （627 份定義裡 93 份支援，全部是私站，brief §20.7）。
-    """
-    if snapshot is not None and snapshot.kind in id_search:
-        return (SearchQuery(tmdb_id=snapshot.tmdb_id, kind=snapshot.kind),)
-    kind = snapshot.kind if snapshot is not None else MediaKind.TV
-    return tuple(SearchQuery(text=text, kind=kind) for text in texts)
-
-
 async def _attempt(
     client: IndexerSearch, query: SearchQuery, timeout: float
 ) -> tuple[StepView, tuple[IndexerResult, ...]]:
@@ -492,7 +469,7 @@ async def _attempt(
     **失敗不往上冒**：十個公開站裡有幾個連不上是常態（brief §20.7），一個關鍵字問不動時
     另外四個的結果仍然值得看。垮掉的那一個變成一條紅色的纜繩，不是一片空白。
     """
-    step = query.text or f"tmdbid-{query.tmdb_id}"
+    step = query.text
     try:
         async with asyncio.timeout(timeout):
             rows = await client.search(query)

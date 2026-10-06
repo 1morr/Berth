@@ -26,7 +26,6 @@ from berth.domain import (
     CollectionType,
     ConnectionReason,
     ConnectionState,
-    IndexerKind,
     InterfaceLoginRefusal,
     OwnerRefusal,
     RouteRefusal,
@@ -643,13 +642,12 @@ class IndexerSetupOut(BaseModel):
 
     #: 使用者在頁 4 選的來源；還沒選是 `null`。
     origin: ServiceOrigin | None
-    kind: IndexerKind
     base_url: str
     api_key_present: bool
     reachable: bool
     #: Prowlarr 裡已經有的站（套件內與既有 Prowlarr）。
     sites: list[IndexerSiteOut]
-    #: 還沒加入、Berth 加得了的站。Prowlarr（套件內與既有）才有；Torznab 端點沒有。
+    #: 還沒加入、Berth 加得了的站（套件內與既有）。
     candidates: list[IndexerCandidateOut]
     #: 上一次「加入」對每一站的結論。
     checks: list[SiteCheckOut]
@@ -692,9 +690,8 @@ class IndexerTestOut(BaseModel):
 
 
 class IndexerConnectIn(BaseModel):
-    """既有路徑：Prowlarr 位址 + key，或任意 Torznab 端點 + key。"""
+    """既有路徑：Prowlarr 位址 + key。"""
 
-    kind: IndexerKind
     base_url: str = Field(min_length=1)
     api_key: str = ""
 
@@ -702,7 +699,7 @@ class IndexerConnectIn(BaseModel):
 class SiteSearchOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    indexer_id: int | None
+    indexer_id: int
     definition_name: str
     name: str
     count: int
@@ -739,7 +736,7 @@ async def post_indexers_test(
     """「測試」：逐站問 Prowlarr 通不通，什麼都不建立（M4 票 09；既有的那一台也測，M4 票 20）。
 
     只讀（`read` 命令），但它要 Prowlarr 現場去連那些站、要花幾秒，所以是由人按的 POST。
-    Torznab 端點回 422：沒有站的清單可加。
+    還沒選來源回 422。
     """
     try:
         checks = await verify_sites(session, factory, body.indexers)
@@ -754,7 +751,7 @@ async def post_indexers_apply(
 ) -> IndexerSetupOut:
     """勾起來的站逐個加進 Prowlarr（套件內與既有，M4 票 20），逐站回報成敗。
 
-    Torznab 端點與還沒選的回 422：沒有一台 Prowlarr 可加。
+    還沒選來源回 422：不知道要加到哪一台。
     """
     try:
         result = await apply_default_indexers(session, factory, body.indexers)
@@ -788,7 +785,6 @@ async def post_indexers_connect(
     result = await connect_indexer(
         session,
         factory,
-        kind=body.kind,
         base_url=body.base_url.rstrip("/"),
         api_key=body.api_key.strip(),
     )

@@ -8,7 +8,7 @@ const SLOTS: BoardSlot[] = [
   { code: 'BTH 1', name: 'Jellyfin', status: '已繫上', signal: 'secured', selectable: true },
   { code: 'BTH 2', name: 'qBittorrent', status: '阻擋', signal: 'blocked', selectable: true },
   { code: 'BTH 3', name: '媒體庫路徑', status: '待靠泊', signal: 'assigned', selectable: true },
-  { code: 'BTH 4', name: '索引站', status: '未指派', signal: 'neutral', filled: false },
+  { code: 'BTH 4', name: 'Prowlarr', status: '未指派', signal: 'neutral', filled: false },
   { code: 'BTH 5', name: 'TMDB', status: '未指派', signal: 'neutral', filled: false },
 ]
 

@@ -1,4 +1,4 @@
-"""兩個 `IndexerSearch` 實作對 `tests/fixtures/http/` 錄製回應的契約測試（票 08）。
+"""`ProwlarrSearch` 對 `tests/fixtures/http/` 錄製回應的契約測試（票 08）。
 
 錄製來源與日期見 `tests/fixtures/http/README.md`。驗的是「真服務回這個，adapter 解成那個」，
 所以斷言貼著錄下來的值。
@@ -9,15 +9,11 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-import httpx
 import pytest
 import respx
 
 from berth.adapters.indexer import SearchQuery
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
-from berth.adapters.indexer.torznab import TorznabSearch, capability_of
-from berth.adapters.torznab import TorznabCaps, TorznabSearchMode
-from berth.domain import MediaKind
 from tests.conftest import read_fixture
 
 PROWLARR_URL = "http://prowlarr:9696"
@@ -114,9 +110,6 @@ async def test_prowlarr_search_returns_nothing_rather_than_failing_when_no_site_
     assert rows == ()
 
 
-TORZNAB_URL = "http://prowlarr:9696/2/api"
-
-
 @respx.mock
 @pytest.mark.asyncio
 async def test_prowlarr_search_asks_only_the_sites_it_is_given() -> None:
@@ -171,115 +164,3 @@ async def test_prowlarr_search_reaches_the_base_url_the_indexer_was_set_to() -> 
         await search.aclose()
 
     assert sites == frozenset({"tpb.party"})
-
-
-@pytest.mark.asyncio
-async def test_a_torznab_endpoint_is_one_site() -> None:
-    """單一 Torznab 端點背後是哪一站 Berth 看不到，只記得它自己的主機（plan §8.4）。"""
-    search = TorznabSearch(TORZNAB_URL, API_KEY)
-    try:
-        assert await search.sites() == frozenset({"prowlarr"})
-    finally:
-        await search.aclose()
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_torznab_search_reads_the_same_columns_from_xml() -> None:
-    """同一張結果表，換一個協定填。錄自 Prowlarr 的單站 Torznab 網址。"""
-    route = respx.get(TORZNAB_URL).respond(200, text=read_fixture("http/torznab/search.acgrip.xml"))
-
-    search = TorznabSearch(TORZNAB_URL, API_KEY)
-    try:
-        rows = await search.search(SearchQuery(text="SPY x FAMILY"))
-    finally:
-        await search.aclose()
-
-    first = rows[0]
-    assert first.title.endswith("[简繁内封字幕][Fin]")
-    assert first.indexer == "ACG.RIP"
-    assert first.size == 5153960755
-    assert first.seeders == 1
-    # Torznab 報的是 `peers`（做種 + 下載），做種要自己扣掉才是下載中的人數。
-    assert first.leechers == 1
-    assert first.info_url == "https://acg.rip/t/351871"
-    assert first.categories == (5000,)
-    assert first.download_url.startswith(f"{RECORDED_HOST}/2/download?")
-    assert dict(route.calls.last.request.url.params) == {
-        "t": "search",
-        "apikey": API_KEY,
-        "q": "SPY x FAMILY",
-    }
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_torznab_search_normalises_the_base32_info_hash() -> None:
-    """dmhy 的 `torznab:attr infohash` 是 base32；Mikan 的同一個發佈是十六進位。"""
-    respx.get(TORZNAB_URL).respond(200, text=read_fixture("http/torznab/search.dmhy.xml"))
-
-    search = TorznabSearch(TORZNAB_URL, API_KEY)
-    try:
-        rows = await search.search(SearchQuery(text="SPY x FAMILY"))
-    finally:
-        await search.aclose()
-
-    assert rows[0].info_hash == "4bd0f6ef8a1a55b38b7a4d4f7b10458cfa8b8d3f"
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_torznab_falls_back_to_q_when_caps_do_not_offer_tmdbid() -> None:
-    """十個預設公開站一個都不支援 tmdbid（票 08 實測），所以 `q=` 是常態不是例外。"""
-    respx.get(TORZNAB_URL).mock(
-        side_effect=[
-            httpx.Response(200, text=read_fixture("http/torznab/caps.xml")),
-            httpx.Response(200, text=read_fixture("http/torznab/search.acgrip.xml")),
-        ]
-    )
-
-    search = TorznabSearch(TORZNAB_URL, API_KEY)
-    try:
-        capability = await search.capabilities()
-        await search.search(SearchQuery(text="SPY x FAMILY", tmdb_id=None))
-    finally:
-        await search.aclose()
-
-    assert capability.searchable is True
-    assert capability.tmdb_id == frozenset()
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_torznab_uses_tmdbid_when_the_caller_hands_one_over() -> None:
-    """呼叫端只在 caps 說支援時才給 id；給了就用 id 問，不再帶關鍵字。"""
-    route = respx.get(TORZNAB_URL).respond(200, text=read_fixture("http/torznab/search.acgrip.xml"))
-
-    search = TorznabSearch(TORZNAB_URL, API_KEY)
-    try:
-        await search.search(SearchQuery(text="SPY x FAMILY", tmdb_id=120089, kind=MediaKind.TV))
-        await search.search(SearchQuery(text="Moana 2", tmdb_id=1241982, kind=MediaKind.MOVIE))
-    finally:
-        await search.aclose()
-
-    tv, movie = (dict(call.request.url.params) for call in route.calls)
-    assert tv == {"t": "tvsearch", "apikey": API_KEY, "tmdbid": "120089"}
-    assert movie == {"t": "movie", "apikey": API_KEY, "tmdbid": "1241982"}
-
-
-@pytest.mark.asyncio
-async def test_torznab_capability_reads_tmdbid_out_of_supported_params() -> None:
-    """`t=caps` 的 `supportedParams` 決定得了 id 搜尋——十個公開站都沒有，私站才有。
-
-    這一條沒有 fixture：公開站的 caps 裡根本沒有 `tmdbid`（實測 627 份定義裡 93 份支援，
-    全部是 private / semiPrivate），而手寫一份「錄製回應」等於偽造證據。所以驗的是
-    caps → capability 這個純函式，輸入是 caps 的**值**而不是一份假的 XML。
-    """
-    caps = TorznabCaps(
-        server_title="Aither",
-        search=TorznabSearchMode(available=True, params=frozenset({"q"})),
-        tv=TorznabSearchMode(available=True, params=frozenset({"q", "season", "ep", "tmdbid"})),
-        movie=TorznabSearchMode(available=True, params=frozenset({"q", "imdbid"})),
-    )
-
-    assert capability_of(caps).tmdb_id == frozenset({MediaKind.TV})

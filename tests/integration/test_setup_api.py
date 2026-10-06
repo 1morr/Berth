@@ -330,7 +330,7 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
     ("POST", "/api/setup/indexers/test", {"indexers": ["nyaasi"]}),
     ("PUT", "/api/setup/indexers/login", {"username": "a", "password": "b"}),
-    ("POST", "/api/setup/indexers/connect", {"kind": "prowlarr", "base_url": "http://x"}),
+    ("POST", "/api/setup/indexers/connect", {"base_url": "http://x"}),
     ("POST", "/api/setup/indexers/skip", {}),
     ("POST", "/api/setup/tmdb/test", {"api_key": "k"}),
     ("POST", "/api/setup/routes", {}),
@@ -913,7 +913,6 @@ class TestSource:
 
         recommended = [row for row in body["candidates"] if row["recommended"]]
         assert [row["definition_name"] for row in recommended] == list(DEFAULT_INDEXERS)
-        assert body["kind"] == "prowlarr"
         assert body["origin"] == "bundled"
         # 「在 Prowlarr 加私站」的連結開宿主上的 port（瀏覽器的主機名由前端補，M4 票 09）。
         assert body["web_port"] == config.prowlarr_port
@@ -965,22 +964,17 @@ class TestSource:
         ]
         assert [row["definition_name"] for row in body["sites"]] == ["nyaasi", "mikan"]
 
-    def test_an_existing_torznab_endpoint_is_tested_and_remembered(
-        self, client: TestClient
-    ) -> None:
+    def test_an_existing_prowlarr_is_tested_and_remembered(self, client: TestClient) -> None:
+        """既有表單只送位址與 key（M4 票 37：沒有「接法」）。"""
         body = client.post(
             "/api/setup/indexers/connect",
-            json={
-                "kind": "torznab",
-                "base_url": "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api/",
-                "api_key": "the-key",
-            },
+            json={"base_url": "http://nas:9696/", "api_key": "the-key"},
         ).json()
 
-        assert body["kind"] == "torznab"
-        assert [(row["step"], row["status"]) for row in body["steps"]] == [("torznab", "ok")]
+        assert body["origin"] == "existing"
+        assert [row["step"] for row in body["steps"]] == ["prowlarr"]
         # 尾斜線在存下來之前就削掉，之後組網址才不會出現兩條斜線。
-        assert body["base_url"].endswith("/torznab/api")
+        assert body["base_url"] == "http://nas:9696"
 
     def test_sites_can_be_searched_and_removed_after_they_are_added(
         self, client: TestClient, prowlarr: FakeProwlarrClient

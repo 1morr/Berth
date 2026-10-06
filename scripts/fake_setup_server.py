@@ -90,8 +90,6 @@ from berth.adapters.torrent import (
     magnet_info_hash,
 )
 from berth.adapters.torrent_fake import FakeTorrentFetcher
-from berth.adapters.torznab import TorznabClient
-from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.api.deps import get_bundled_services, get_client_factory, get_host_resolver
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
@@ -102,7 +100,6 @@ from berth.domain import (
     EpisodeSnapshot,
     FileEntry,
     HealthStatus,
-    IndexerKind,
     JobState,
     JobTrigger,
     MediaInfoSummary,
@@ -1621,13 +1618,10 @@ class FakeClientFactory:
             return HttpTmdbClient(credential)
         return self._scenario.tmdb
 
-    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
-        return FakeTorznabClient(base_url=base_url)
-
-    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+    def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.indexer_url:
             return ProwlarrSearch(self._scenario.indexer_url, self._scenario.indexer_key)
-        if not self._scenario.indexer_results and kind is IndexerKind.PROWLARR:
+        if not self._scenario.indexer_results:
             return trial_search(self._scenario.prowlarr, base_url)
         return FakeIndexerSearch(
             base_url=base_url,
@@ -1900,7 +1894,6 @@ async def _moor(
     await write_settings(
         session,
         IndexerSettings(
-            kind="prowlarr",
             base_url=scenario.indexer_url or "http://prowlarr:9696",
             api_key=scenario.indexer_key or "fake-key",
         ),

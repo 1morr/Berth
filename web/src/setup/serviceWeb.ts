@@ -46,12 +46,12 @@ export function browserReachable(
   return `${url.origin}${url.pathname}`.replace(/\/$/, '')
 }
 
-/** Prowlarr 的介面。Torznab 端點沒有 Prowlarr 的介面。 */
+/** Prowlarr 的介面。 */
 export function prowlarrWeb(
-  indexers: Pick<IndexerSetup, 'origin' | 'kind' | 'base_url' | 'web_port'>,
+  indexers: Pick<IndexerSetup, 'origin' | 'base_url' | 'web_port'>,
   page?: Pick<Location, 'protocol' | 'hostname'>,
 ): string | null {
-  return indexers.kind === 'prowlarr' ? serviceWeb(indexers, 'prowlarr', page) : null
+  return serviceWeb(indexers, 'prowlarr', page)
 }
 
 /** qBittorrent 的 WebUI。 */

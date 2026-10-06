@@ -21,7 +21,6 @@ from berth.adapters.http import (
 )
 from berth.adapters.indexer import (
     IndexerResult,
-    SearchCapability,
     SearchQuery,
     normalise_info_hash,
 )
@@ -41,14 +40,6 @@ class ProwlarrSearch:
     @property
     def base_url(self) -> str:
         return self._base_url
-
-    async def capabilities(self) -> SearchCapability:
-        """REST 的搜尋只認關鍵字（brief §20.7 的參數表），所以沒有 tmdbid 那條路。
-
-        不發請求：這一支答得出來的東西是 Prowlarr 的 API 形狀，不是某一台伺服器的狀態。
-        「這台通不通」是精靈與健康檢查的問題，由 `ProwlarrClient` 回答。
-        """
-        return SearchCapability(searchable=True, tmdb_id=frozenset())
 
     async def search(self, query: SearchQuery) -> tuple[IndexerResult, ...]:
         payload = json_body(

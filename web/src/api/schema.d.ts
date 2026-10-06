@@ -1806,7 +1806,7 @@ export interface paths {
          * @description 「測試」：逐站問 Prowlarr 通不通，什麼都不建立（M4 票 09；既有的那一台也測，M4 票 20）。
          *
          *     只讀（`read` 命令），但它要 Prowlarr 現場去連那些站、要花幾秒，所以是由人按的 POST。
-         *     Torznab 端點回 422：沒有站的清單可加。
+         *     還沒選來源回 422。
          */
         post: operations["post_indexers_test_api_setup_indexers_test_post"];
         delete?: never;
@@ -1828,7 +1828,7 @@ export interface paths {
          * Post Indexers Apply
          * @description 勾起來的站逐個加進 Prowlarr（套件內與既有，M4 票 20），逐站回報成敗。
          *
-         *     Torznab 端點與還沒選的回 422：沒有一台 Prowlarr 可加。
+         *     還沒選來源回 422：不知道要加到哪一台。
          */
         post: operations["post_indexers_apply_api_setup_indexers_apply_post"];
         delete?: never;
@@ -2855,10 +2855,9 @@ export interface components {
         };
         /**
          * IndexerConnectIn
-         * @description 既有路徑：Prowlarr 位址 + key，或任意 Torznab 端點 + key。
+         * @description 既有路徑：Prowlarr 位址 + key。
          */
         IndexerConnectIn: {
-            kind: components["schemas"]["IndexerKind"];
             /** Base Url */
             base_url: string;
             /**
@@ -2868,12 +2867,6 @@ export interface components {
             api_key?: string;
         };
         /**
-         * IndexerKind
-         * @description 第 6 步接索引站的兩種方式（plan §8.4、§9.3 第 6 步）。
-         * @enum {string}
-         */
-        IndexerKind: "prowlarr" | "torznab";
-        /**
          * IndexerProblem
          * @description 索引站那邊沒搜到東西的五種樣子（票 08 的結果表）。
          *
@@ -2882,7 +2875,7 @@ export interface components {
          *     畫面要把人送回精靈第 6 步（「來源」那一格），不是叫他重試。
          * @enum {string}
          */
-        IndexerProblem: "not_configured" | "no_query" | "no_search" | "credential_rejected" | "unreachable" | "budget_exhausted";
+        IndexerProblem: "not_configured" | "no_query" | "credential_rejected" | "unreachable" | "budget_exhausted";
         /** IndexerSearchOut */
         IndexerSearchOut: {
             /** Query */
@@ -2895,7 +2888,6 @@ export interface components {
         /** IndexerSetupOut */
         IndexerSetupOut: {
             origin: components["schemas"]["ServiceOrigin"] | null;
-            kind: components["schemas"]["IndexerKind"];
             /** Base Url */
             base_url: string;
             /** Api Key Present */
@@ -4943,7 +4935,7 @@ export interface components {
         /** SiteSearchOut */
         SiteSearchOut: {
             /** Indexer Id */
-            indexer_id: number | null;
+            indexer_id: number;
             /** Definition Name */
             definition_name: string;
             /** Name */
@@ -5002,7 +4994,7 @@ export interface components {
          *     `SetupStep.params`，不拼進英文句子。
          * @enum {string}
          */
-        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "login_rejected" | "credential_missing" | "category_conflict" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
+        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "login_rejected" | "credential_missing" | "category_conflict" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "unexpected";
         /**
          * StepOut
          * @description 一條纜繩：精靈的一步，或一個 Route 的一項檢查。

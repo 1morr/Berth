@@ -643,8 +643,6 @@ class IndexerProblem(StrEnum):
     NOT_CONFIGURED = "not_configured"
     #: 有位址，但這部作品連一個查得出去的關鍵字都沒有（快照還沒抓到，使用者也沒自己打）。
     NO_QUERY = "no_query"
-    #: `t=caps` 說這個端點不提供搜尋。位址對、key 也對，但它做不了這件事。
-    NO_SEARCH = "no_search"
     #: API key 被拒（401 / 403）。
     CREDENTIAL_REJECTED = "credential_rejected"
     #: 連不上、逾時，或回的東西不像索引站。
@@ -805,8 +803,6 @@ class StepFailure(StrEnum):
     SITE_REJECTED = "site_rejected"
     #: 這一站不是 Berth 加得了的（不在推薦清單、也不是公開的 torrent 站）。
     SITE_NOT_OFFERED = "site_not_offered"
-    #: Torznab 端點不提供搜尋。
-    NO_SEARCH = "no_search"
     #: 認不出來的例外。原文照樣在 `error`。
     UNEXPECTED = "unexpected"
 
@@ -861,18 +857,13 @@ class QbittorrentStep(StrEnum):
     PASSWORD = "web_ui_password"
 
 
+#: 頁 4 既有 Prowlarr 那一條纜繩的 key：連得上是站數（plan §9.3 第 6 步）。
+PROWLARR_STEP = "prowlarr"
+
 #: 精靈第 6 步「替 Prowlarr 介面設登入」那一條纜繩的 key（plan §9.3 第 6 步）。
-#: **不與 `IndexerKind.PROWLARR` 同名**：那一條與站接不接得上無關，混在一起會讓「這一步
+#: **與 `PROWLARR_STEP` 分開**：那一條與站接不接得上無關，混在一起會讓「這一步
 #: 做完了沒」把一條永遠存在的憑證步驟當成「至少接上了一個站」。
 PROWLARR_LOGIN_STEP = "prowlarr_login"
-
-
-class IndexerKind(StrEnum):
-    """第 6 步接索引站的兩種方式（plan §8.4、§9.3 第 6 步）。"""
-
-    PROWLARR = "prowlarr"
-    #: 任意 Torznab 端點（Jackett 的聚合網址或單站）。
-    TORZNAB = "torznab"
 
 
 class ConnectionReason(StrEnum):

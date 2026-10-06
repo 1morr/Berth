@@ -103,7 +103,7 @@ const REVISIT_BUNDLED_JELLYFIN = {
   elsewhere: 'setup.revisit.jellyfin.elsewhere',
 } as const
 
-/** 既有的索引站（Prowlarr 或 Torznab）回頭看時的那一套。 */
+/** 既有的 Prowlarr 回頭看時的那一套。 */
 const REVISIT_EXISTING_INDEXER = {
   can: 'setup.revisit.indexer.existing.can',
   elsewhere: 'setup.revisit.indexer.existing.elsewhere',

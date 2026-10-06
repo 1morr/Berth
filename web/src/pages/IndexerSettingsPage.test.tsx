@@ -23,7 +23,6 @@ afterEach(() => {
 const INDEXERS = 'GET /api/setup/indexers'
 const ADD = 'POST /api/setup/indexers/apply'
 const TEST = 'POST /api/setup/indexers/test'
-const CONNECT = 'POST /api/setup/indexers/connect'
 const SEARCH = 'GET /api/setup/indexers/search'
 const REMOVE_YTS = 'DELETE /api/setup/indexers/3'
 const LOGIN = 'PUT /api/setup/indexers/login'
@@ -38,7 +37,7 @@ function withSites(ids: Record<string, number> = { dmhy: 1, mikan: 2, yts: 3 }):
   })
 }
 
-function siteSearch(indexer_id: number | null, name: string, count: number): SiteSearch {
+function siteSearch(indexer_id: number, name: string, count: number): SiteSearch {
   return { indexer_id, definition_name: name.toLowerCase(), name, count, titles: [], error: '' }
 }
 
@@ -69,12 +68,12 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   })
 }
 
-describe('設定 → 索引站', () => {
+describe('設定 → Prowlarr', () => {
   it('頁標題是這一頁唯一的 h1，健康卡是 Prowlarr 那一張', async () => {
     render()
     renderApp('/settings/indexers')
 
-    expect(await screen.findByRole('heading', { level: 1, name: '索引站設定' })).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Prowlarr 設定' })).toBeVisible()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(await screen.findByRole('region', { name: 'Prowlarr' })).toBeInTheDocument()
   })
@@ -157,44 +156,6 @@ describe('設定 → 索引站', () => {
     expect(String(call[0])).toMatch(/\/setup\/indexers\/3$/)
     // 移除之後它回到加站清單，沒勾：要用得再測一次、再加。
     expect(screen.getByRole('checkbox', { name: 'YTS' })).not.toBeChecked()
-  })
-
-  it('既有的 Torznab 換網址或 key：沒有「之後再說」，接上之後照樣試搜', async () => {
-    const existing = indexerSetup({
-      origin: 'existing',
-      kind: 'torznab',
-      base_url: 'http://jackett:9117/api',
-      candidates: [],
-      steps: [step('torznab', 'ok', 'Jackett · TV')],
-      web_ui_login: false,
-    })
-    const stub = render({
-      [INDEXERS]: { body: existing },
-      [CONNECT]: { body: existing },
-    })
-    const user = userEvent.setup()
-    renderApp('/settings/indexers')
-
-    const address = await screen.findByLabelText('位址')
-    expect(address).toHaveValue('http://jackett:9117/api')
-    expect(screen.queryByRole('button', { name: '之後再說' })).not.toBeInTheDocument()
-    await user.clear(address)
-    await user.type(address, 'http://jackett:9117/api/v2')
-    await user.type(screen.getByLabelText('API key'), 'new-key')
-    await user.click(screen.getByRole('button', { name: '測試連線' }))
-
-    await waitFor(() =>
-      expect(stub.mock.calls.some(([url]) => url === '/api/setup/indexers/connect')).toBe(true),
-    )
-    const call = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/connect')!
-    expect(JSON.parse(String(call[1]?.body))).toEqual({
-      kind: 'torznab',
-      base_url: 'http://jackett:9117/api/v2',
-      api_key: 'new-key',
-    })
-    expect(screen.getByRole('button', { name: '搜尋全部' })).toBeInTheDocument()
-    // 既有的索引站沒有介面登入那一區（M4 票 07）。
-    expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
   })
 
   it('改 Prowlarr 介面登入：預設沿用 Jellyfin 帳密，只送登入那一支（M4 票 07、15）', async () => {

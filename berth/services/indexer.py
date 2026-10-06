@@ -8,7 +8,7 @@
   確認），但 Berth 不移除它的站、不碰它的介面登入。
 - **套件內 Prowlarr 的介面登入**是自己的一條（`set_interface_login`，M4 票 20 從「加入」拆出來），
   必填（M4 票 07）。
-- **既有**：Prowlarr 位址 + API key，或任意 Torznab 端點 + key，各有一顆「測試」。**一站都沒有的
+- **既有**：Prowlarr 位址 + API key，有一顆「測試」。**一站都沒有的
   既有 Prowlarr 這一頁不算完成**（`existing_prowlarr_step`，M4 票 20）：零站的 Berth 什麼都搜不到。
 
 **逐站的成敗來自新增那一支**：`POST /api/v1/indexer` 會先連一次那個站，連不上就回 400 而且
@@ -22,7 +22,6 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,9 +43,9 @@ from berth.adapters.prowlarr import (
 )
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
+    PROWLARR_STEP,
     ConnectionReason,
     ConnectionState,
-    IndexerKind,
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
@@ -145,16 +144,15 @@ class SiteCheck:
 class IndexerSetupStatus:
     """`GET /api/setup/indexers` 與兩顆按鈕的整份形狀。"""
 
-    #: 使用者在頁 4 選的來源；還沒選是 `None`。Torznab 端點一律是既有。
+    #: 使用者在頁 4 選的來源；還沒選是 `None`。
     origin: ServiceOrigin | None
-    kind: IndexerKind
     base_url: str
     api_key_present: bool
     #: 連得上那台 Prowlarr（套件內路徑才有意義）。
     reachable: bool
-    #: Prowlarr 裡已經有的站（套件內與既有 Prowlarr；Torznab 端點沒有站的清單）。
+    #: Prowlarr 裡已經有的站（套件內與既有）。
     sites: tuple[IndexerSite, ...]
-    #: 還沒加入、Berth 加得了的站。Prowlarr（套件內與既有，M4 票 20）才有。
+    #: 還沒加入、Berth 加得了的站（套件內與既有都有，M4 票 20）。
     candidates: tuple[IndexerCandidate, ...]
     #: 上一次「加入」對每一站的結論（從 `steps` 導出，理由分好了）。
     checks: tuple[SiteCheck, ...]
@@ -178,8 +176,8 @@ class IndexerSetupStatus:
 class SiteSearch:
     """試搜的一站（票 06e）：搜到幾筆、前三筆叫什麼，或那一站為什麼搜不了。"""
 
-    #: Prowlarr 上的 id。單一 Torznab 端點整個算一站，沒有 id。
-    indexer_id: int | None
+    #: Prowlarr 上的 id。
+    indexer_id: int
     definition_name: str
     name: str
     count: int
@@ -204,14 +202,14 @@ TRIAL_TITLES = 3
 async def read_indexer_status(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
-    """Prowlarr 列出已加入的站與加得了的站；Torznab 只回連線資訊。
+    """Prowlarr 列出已加入的站與加得了的站；還沒選來源時只回設定。
 
     **只讀**：進這一頁（精靈與設定頁）只發這一支，不測任何一站（M4 票 09）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    if origin is None or settings.kind == IndexerKind.TORZNAB.value:
+    if origin is None:
         return _view(setup, settings, origin, base_url)
 
     bundled = origin is ServiceOrigin.BUNDLED
@@ -246,12 +244,12 @@ async def verify_sites(
 
     `indexer/test` 也收還沒加入的定義（2026-09-30 實測，brief §20.7）：送的是 schema 的原樣。
     測的是「加站」那一段的候選，所以一律測定義；Berth 加不了的（私站、usenet、這台沒有的定義）
-    直接回沒通過，一個請求都不送。套件內與既有的 Prowlarr 都測（M4 票 20）；Torznab 端點沒有站可加。
+    直接回沒通過，一個請求都不送。套件內與既有的 Prowlarr 都測（M4 票 20）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    _refuse_unless_prowlarr(origin, settings)
+    _refuse_unchosen(origin)
 
     client = factory.prowlarr(base_url, settings.api_key)
     gate = asyncio.Semaphore(VERIFY_CONCURRENCY)
@@ -300,7 +298,7 @@ async def apply_default_indexers(
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    _refuse_unless_prowlarr(origin, settings)
+    _refuse_unchosen(origin)
     bundled = origin is ServiceOrigin.BUNDLED
 
     client = factory.prowlarr(base_url, settings.api_key)
@@ -321,7 +319,6 @@ async def apply_default_indexers(
         await client.aclose()
 
     def remember_address(latest: IndexerSettings) -> None:
-        latest.kind = IndexerKind.PROWLARR.value
         latest.base_url = base_url
 
     await update_settings(session, IndexerSettings, remember_address)
@@ -343,25 +340,22 @@ async def connect_indexer(
     session: AsyncSession,
     factory: ServiceClientFactory,
     *,
-    kind: IndexerKind,
     base_url: str,
     api_key: str,
 ) -> IndexerSetupStatus:
     """既有路徑的「測試」：先存再測，測不過也存（與服務頁的連線表單同一個規矩）。
 
-    **這就是選了「既有」**（M4 票 15）：頁 4 與設定頁的既有表單走這一支，Torznab 端點
-    （Jackett）也是。
+    **這就是選了「既有」**（M4 票 15）：頁 4 與設定頁的既有表單走這一支。
     選擇記成既有，Berth 從此不替它加站、不設它的登入（票 05）。
     """
 
     def remember(settings: IndexerSettings) -> None:
-        settings.kind = kind.value
         settings.base_url = base_url
         settings.api_key = api_key
 
     await update_settings(session, IndexerSettings, remember)
 
-    probe = await probe_indexer(factory, kind, base_url, api_key)
+    probe = await probe_indexer(factory, base_url, api_key)
     step = probe.step if probe.sites is None else existing_prowlarr_step(probe.sites)
     moment = utcnow()
 
@@ -422,7 +416,7 @@ async def search_indexers(
     哪一站失敗了看不出來，而「一站失敗不影響其他站」正是這一頁要說的事。查詢併發——
     Prowlarr 現場去連每一個站，一個接一個問要好幾分鐘（brief §20.7）。
 
-    空白的查詢也是一個問題：Prowlarr 與 Torznab 都回各站最新的發佈（2026-09-25 實測 dmhy
+    空白的查詢也是一個問題：Prowlarr 回各站最新的發佈（2026-09-25 實測 dmhy
     80 筆、YTS 96 筆，約 1.3 秒），證明那個站回得出東西，不必先想一個標題。
     **不寫任何東西**：它是 `read` 命令，精靈的步驟不因它前進或後退。
 
@@ -430,14 +424,9 @@ async def search_indexers(
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
-    kind = IndexerKind(settings.kind)
     _, base_url = _target(setup, settings)
-    search = factory.indexer_search(kind, base_url, settings.api_key)
+    search = factory.indexer_search(base_url, settings.api_key)
     try:
-        if kind is IndexerKind.TORZNAB:
-            site = await _search_site(search, query, None, "", urlsplit(base_url).netloc)
-            return IndexerSearchResult(query=query, sites=(site,), error="")
-
         client = factory.prowlarr(base_url, settings.api_key)
         try:
             indexers = [
@@ -503,13 +492,12 @@ async def remove_indexer(
 async def _search_site(
     search: IndexerSearch,
     query: str,
-    indexer_id: int | None,
+    indexer_id: int,
     definition_name: str,
     name: str,
 ) -> SiteSearch:
-    ids = (indexer_id,) if indexer_id is not None else ()
     try:
-        results = await search.search(SearchQuery(text=query, indexer_ids=ids))
+        results = await search.search(SearchQuery(text=query, indexer_ids=(indexer_id,)))
     except ServiceError as exc:
         return SiteSearch(indexer_id, definition_name, name, 0, (), message(exc))
     titles = tuple(row.title for row in results[:TRIAL_TITLES])
@@ -597,12 +585,10 @@ def _refuse_existing(origin: ServiceOrigin | None) -> None:
         raise ValueError("this indexer is an existing service; Berth does not change it")
 
 
-def _refuse_unless_prowlarr(origin: ServiceOrigin | None, settings: IndexerSettings) -> None:
-    """測站與加站要一台 Prowlarr：還沒選、或接的是 Torznab 端點（沒有站的清單）都拒絕。"""
+def _refuse_unchosen(origin: ServiceOrigin | None) -> None:
+    """測站與加站要知道是哪一台 Prowlarr：還沒選就拒絕。"""
     if origin is None:
         raise ValueError("choose where Prowlarr comes from first")
-    if settings.kind == IndexerKind.TORZNAB.value:
-        raise ValueError("a Torznab endpoint has no site list for Berth to add to")
 
 
 def _recount(setup: SetupSettings, sites: int) -> None:
@@ -730,14 +716,12 @@ class IndexerProbe:
     step: SetupStep
     #: 給服務頁的理由：版本太舊（M4 票 17）、key 不被接受、回的不是它（M4 票 20），其餘是連不上。
     reason: ConnectionReason
-    #: 連上的 Prowlarr 有幾站。沒連上與 Torznab 端點是 `None`。
+    #: 連上的 Prowlarr 有幾站。沒連上是 `None`。
     sites: int | None = None
 
 
 @command(Effect.READ)
-async def probe_indexer(
-    factory: ServiceClientFactory, kind: IndexerKind, base_url: str, api_key: str
-) -> IndexerProbe:
+async def probe_indexer(factory: ServiceClientFactory, base_url: str, api_key: str) -> IndexerProbe:
     """那個索引站位址現在回得出什麼。
 
     精靈第 6 步的既有路徑與健康檢查的第三項用的是同一支：兩者問的都是「這個端點還能不能
@@ -747,35 +731,6 @@ async def probe_indexer(
     介面的 HTML（1.0.1 實測），版本就說不出來了；`system/status` 從第一版就有、帶 key 才答，所以
     它同時驗了 key（錯的是 401 → `auth_required`）。
     """
-    if kind is IndexerKind.TORZNAB:
-        torznab = factory.torznab(base_url, api_key)
-        try:
-            caps = await torznab.caps()
-        except ServiceError as exc:
-            return _failed_probe(kind, exc)
-        finally:
-            await torznab.aclose()
-        if not caps.search.available:
-            return IndexerProbe(
-                reason=ConnectionReason.UNREACHABLE,
-                step=SetupStep(
-                    key=kind.value,
-                    status=StepStatus.FAILED,
-                    detail=caps.server_title,
-                    failure=StepFailure.NO_SEARCH,
-                    error="t=caps: this endpoint does not offer search",
-                ),
-            )
-        return _connected(
-            SetupStep(
-                key=kind.value,
-                status=StepStatus.OK,
-                detail=" · ".join(
-                    part for part in (caps.server_title, *caps.categories[:3]) if part
-                ),
-            )
-        )
-
     prowlarr = factory.prowlarr(base_url, api_key)
     try:
         status = await prowlarr.status()
@@ -786,10 +741,10 @@ async def probe_indexer(
             )
         indexers = await prowlarr.indexers()
     except ServiceError as exc:
-        return _failed_probe(kind, exc)
+        return _failed_probe(exc)
     finally:
         await prowlarr.aclose()
-    step = SetupStep(key=kind.value, status=StepStatus.OK, detail=str(len(indexers)))
+    step = SetupStep(key=PROWLARR_STEP, status=StepStatus.OK, detail=str(len(indexers)))
     return IndexerProbe(step=step, reason=ConnectionReason.CONNECTED, sites=len(indexers))
 
 
@@ -800,7 +755,7 @@ def existing_prowlarr_step(sites: int) -> SetupStep:
     讀取，或說之後再說（`setup._indexer_settled`）。健康檢查不走這裡：連得上就是綠的。
     """
     return SetupStep(
-        key=IndexerKind.PROWLARR.value,
+        key=PROWLARR_STEP,
         status=StepStatus.OK if sites else StepStatus.PENDING,
         detail=str(sites),
     )
@@ -812,7 +767,7 @@ def outdated_step(version: str) -> SetupStep:
     精靈的兩條入口與健康檢查都寫這一份，所以三處說的是同一句話。
     """
     return SetupStep(
-        key=IndexerKind.PROWLARR.value,
+        key=PROWLARR_STEP,
         status=StepStatus.FAILED,
         detail=version,
         failure=StepFailure.VERSION_UNSUPPORTED,
@@ -821,11 +776,7 @@ def outdated_step(version: str) -> SetupStep:
     )
 
 
-def _connected(step: SetupStep) -> IndexerProbe:
-    return IndexerProbe(step=step, reason=ConnectionReason.CONNECTED)
-
-
-def _failed_probe(kind: IndexerKind, exc: ServiceError) -> IndexerProbe:
+def _failed_probe(exc: ServiceError) -> IndexerProbe:
     """測不過：原文照錄，理由分得出 key 不對與回的不是它（M4 票 20）、位址的協定寫錯（票 25），
     其餘是連不上。"""
     if isinstance(exc, AuthFailedError):
@@ -838,14 +789,11 @@ def _failed_probe(kind: IndexerKind, exc: ServiceError) -> IndexerProbe:
         reason = ConnectionReason.SCHEME_MISSING
     else:
         reason = ConnectionReason.UNREACHABLE
-    return IndexerProbe(step=failed_step(kind.value, exc), reason=reason)
+    return IndexerProbe(step=failed_step(PROWLARR_STEP, exc), reason=reason)
 
 
 def _target(setup: SetupSettings, settings: IndexerSettings) -> tuple[ServiceOrigin | None, str]:
     """要連哪一台、它是誰的：使用者在頁 4 選的（M4 票 15）。還沒選是 `None`，寫入的命令一律拒絕。"""
-    if settings.kind == IndexerKind.TORZNAB.value:
-        # Torznab 是使用者自己貼的端點，與 compose 裡那台 Prowlarr 無關。
-        return (ServiceOrigin.EXISTING, settings.base_url)
     choice = setup.choices.get(ServiceKind.PROWLARR)
     if choice is None:
         return (None, settings.base_url)
@@ -942,8 +890,8 @@ def _sites(present: list[ProwlarrIndexer], *, bundled: bool) -> tuple[IndexerSit
     )
 
 
-#: 頁 4 的纜繩裡不是站的那幾條：介面登入、既有的連線（值是 `IndexerKind`）。
-_NOT_SITES = frozenset({PROWLARR_LOGIN_STEP, *(kind.value for kind in IndexerKind)})
+#: 頁 4 的纜繩裡不是站的那幾條：介面登入、既有的連線。
+_NOT_SITES = frozenset({PROWLARR_LOGIN_STEP, PROWLARR_STEP})
 
 
 def _checks(steps: list[SetupStep]) -> tuple[SiteCheck, ...]:
@@ -970,7 +918,6 @@ def _view(
 ) -> IndexerSetupStatus:
     return IndexerSetupStatus(
         origin=origin,
-        kind=IndexerKind(settings.kind),
         base_url=base_url,
         api_key_present=bool(settings.api_key),
         reachable=reachable,

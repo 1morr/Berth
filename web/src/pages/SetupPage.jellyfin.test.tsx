@@ -304,7 +304,7 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
       4,
       setupStatus({ current_step: 4, owner: 'skipper', services: ALL_BUNDLED }),
       { [ROUTES]: { body: ROUTES_BUILT }, 'GET /api/setup/indexers': { body: indexerSetup() } },
-      '索引站',
+      'Prowlarr',
     ],
   ])('頁 %i 不讀', async (_, status, routes, title) => {
     const fetchStub = stubPage({

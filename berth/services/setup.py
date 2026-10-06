@@ -33,10 +33,10 @@ from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.qbittorrent import IpBannedError
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
+    PROWLARR_STEP,
     ChoiceRefusal,
     ConnectionReason,
     ConnectionState,
-    IndexerKind,
     JellyfinStep,
     OwnerRefusal,
     QbittorrentStep,
@@ -526,7 +526,6 @@ async def _remember_connection(
     else:
 
         def remember_prowlarr(indexer: IndexerSettings) -> None:
-            indexer.kind = IndexerKind.PROWLARR.value
             indexer.base_url = base_url
             # 套件內：使用者貼的優先，否則是掛載讀到的（plan §9.2）。
             indexer.api_key = connection.api_key or (
@@ -809,7 +808,7 @@ def _existing_indexer_step(test: ServiceTest) -> SetupStep:
     if test.reason is ConnectionReason.VERSION_UNSUPPORTED:
         return outdated_step(test.detail)
     return SetupStep(
-        key=IndexerKind.PROWLARR.value,
+        key=PROWLARR_STEP,
         status=StepStatus.FAILED,
         failure=_REASON_FAILURE.get(test.reason, StepFailure.UNEXPECTED),
         error=test.error or test.reason,

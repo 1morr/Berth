@@ -1,7 +1,7 @@
 """精靈第 6–7 步的 services 命令（plan §9.3 第 6–7 步、§8.3、§8.4、票 08）。
 
-驗的是票 08 的驗收條件：預設站逐站顯示成敗、重按不會重複新增、既有 Prowlarr 與任意
-Torznab 各有測試；TMDB 那一半改由票 02b 定義——憑證使用者自備、必填，測得過才走得下去。
+驗的是票 08 的驗收條件：預設站逐站顯示成敗、重按不會重複新增、既有 Prowlarr 有測試；
+TMDB 那一半改由票 02b 定義——憑證使用者自備、必填，測得過才走得下去。
 """
 
 from __future__ import annotations
@@ -18,16 +18,14 @@ from berth.adapters.prowlarr import IndexerDefinition, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.tmdb import TmdbConfiguration
 from berth.adapters.tmdb.fake import FakeTmdbClient
-from berth.adapters.torznab import TorznabCaps, TorznabSearchMode
-from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.db import create_session_factory
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
+    PROWLARR_STEP,
     CollectionType,
     ConnectionReason,
     ConnectionState,
     HealthStatus,
-    IndexerKind,
     JellyfinStep,
     QbittorrentStep,
     ServiceKind,
@@ -75,7 +73,6 @@ NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 #: 泊位上填的 Prowlarr 介面登入（M4 票 07）。
 SKIPPER = InterfaceLogin(username="skipper", password="harbour")
 
-TORZNAB = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/api"
 
 #: 這台 Prowlarr 連不出去的那幾個站，訊息取自 2026-09-08 的實測（brief §20.7）。
 BLOCKED = {
@@ -365,47 +362,18 @@ async def test_an_existing_prowlarr_is_tested_by_address_and_key(session: AsyncS
     status = await connect_indexer(
         session,
         factory,
-        kind=IndexerKind.PROWLARR,
         base_url="http://nas:9696",
         api_key="the-key",
     )
 
     assert [(row.step, row.status, row.detail) for row in status.steps] == [
-        (IndexerKind.PROWLARR.value, StepStatus.OK, "1")
+        (PROWLARR_STEP, StepStatus.OK, "1")
     ]
     settings = await read_settings(session, IndexerSettings)
-    assert (settings.kind, settings.base_url, settings.api_key) == (
-        "prowlarr",
+    assert (settings.base_url, settings.api_key) == (
         "http://nas:9696",
         "the-key",
     )
-
-
-@pytest.mark.asyncio
-async def test_any_torznab_endpoint_works_too(session: AsyncSession) -> None:
-    await arrange(session, origin=ServiceOrigin.EXISTING)
-    factory = FakeClientFactory(
-        torznab=FakeTorznabClient(
-            caps=TorznabCaps(
-                server_title="Jackett",
-                search=TorznabSearchMode(available=True),
-                categories=("TV",),
-            )
-        )
-    )
-
-    status = await connect_indexer(
-        session,
-        factory,
-        kind=IndexerKind.TORZNAB,
-        base_url="http://jackett:9117/api/v2.0/indexers/all/results/torznab/api",
-        api_key="the-key",
-    )
-
-    assert [(row.step, row.status, row.detail) for row in status.steps] == [
-        (IndexerKind.TORZNAB.value, StepStatus.OK, "Jackett · TV")
-    ]
-    assert (await read_settings(session, IndexerSettings)).kind == "torznab"
 
 
 @pytest.mark.asyncio
@@ -417,9 +385,7 @@ async def test_a_failing_endpoint_is_saved_anyway_so_one_field_can_be_fixed(
         prowlarr=FakeProwlarrClient(ping_error=ServiceUnavailableError("connection refused"))
     )
 
-    status = await connect_indexer(
-        session, factory, kind=IndexerKind.PROWLARR, base_url="http://typo:9696", api_key="k"
-    )
+    status = await connect_indexer(session, factory, base_url="http://typo:9696", api_key="k")
 
     assert status.steps[0].status is StepStatus.FAILED
     assert status.steps[0].error == "connection refused"
@@ -747,27 +713,6 @@ async def test_a_trial_search_writes_nothing(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_existing_torznab_endpoint_is_searched_on_its_own_endpoint(
-    session: AsyncSession,
-) -> None:
-    """既有 Torznab 同樣可以試搜：打它自己的 `t=search`，整個端點算一站。"""
-    await arrange(session, origin=ServiceOrigin.EXISTING)
-    search = FakeIndexerSearch(results=_results("Jackett", 2))
-    factory = FakeClientFactory(indexer_search=search)
-    await connect_indexer(
-        session, factory, kind=IndexerKind.TORZNAB, base_url=TORZNAB, api_key="the-key"
-    )
-
-    result = await search_indexers(session, factory, query="Frieren")
-
-    assert [(row.name, row.count, row.indexer_id) for row in result.sites] == [
-        ("jackett:9117", 2, None)
-    ]
-    assert factory.indexer_kinds[-1] is IndexerKind.TORZNAB
-    assert search.base_url == TORZNAB
-
-
-@pytest.mark.asyncio
 async def test_a_trial_search_that_cannot_list_the_sites_says_so(session: AsyncSession) -> None:
     await arrange(session)
     prowlarr = FakeProwlarrClient(indexers_error=ServiceUnavailableError("connection refused"))
@@ -961,9 +906,7 @@ async def test_an_existing_prowlarr_lists_its_own_sites_and_the_public_ones_to_a
         ],
     )
     factory = FakeClientFactory(prowlarr=client)
-    await connect_indexer(
-        session, factory, kind=IndexerKind.PROWLARR, base_url="http://nas:9696", api_key="k"
-    )
+    await connect_indexer(session, factory, base_url="http://nas:9696", api_key="k")
 
     status = await read_indexer_status(session, factory)
 

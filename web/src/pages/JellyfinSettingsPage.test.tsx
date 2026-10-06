@@ -88,7 +88,7 @@ describe('設定 → Jellyfin', () => {
       ['Jellyfin', '/settings/jellyfin'],
       ['qBittorrent', '/settings/qbittorrent'],
       ['媒體庫路徑', '/settings/routes'],
-      ['索引站', '/settings/indexers'],
+      ['Prowlarr', '/settings/indexers'],
       ['TMDB', '/settings/tmdb'],
     ])
     expectCurrentByStateOnly(

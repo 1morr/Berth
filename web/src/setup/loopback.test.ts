@@ -9,7 +9,7 @@ describe('pointsAtBerth（既有服務的位址指到 Berth 自己，M4 票 17�
     'https://LOCALHOST/',
     'http://127.0.0.1:9696',
     '127.0.0.1',
-    'http://127.0.0.1:8080/api/v2.0/indexers/all/results/torznab/api',
+    'http://127.0.0.1:9696',
     'http://[::1]:8096',
     '[::1]:8096',
     '::1',

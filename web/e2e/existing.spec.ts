@@ -78,7 +78,7 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 4. Prowlarr 選既有：貼它的 key，用它已經有的站，試搜；沒有介面登入那一格。
-  await expect(page.getByRole('heading', { name: '索引站', level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
   await page.getByRole('radio', { name: /既有/ }).click()
   await main.getByRole('textbox', { name: '位址' }).fill('http://nas:9696')
   await main.getByRole('textbox', { name: 'API key' }).fill('0123456789abcdef0123456789abcdef')

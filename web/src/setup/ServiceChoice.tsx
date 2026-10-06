@@ -114,7 +114,7 @@ export function ServiceChoice({
      * 有值時換另一格要先確認。從既有換走時說法不同：Berth 沒寫過使用者那一台（`choice.switchAway`）。
      */
     switchWarning?: string
-    /** 既有那一格自己的表單（Prowlarr 頁：Prowlarr 或 Torznab）。沒給就是內建的位址與憑證。 */
+    /** 既有那一格自己的表單（Prowlarr 頁）。沒給就是內建的位址與憑證。 */
     existingForm?: ReactNode
   }) {
   const { t } = useTranslation()

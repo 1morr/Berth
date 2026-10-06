@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Text
@@ -87,8 +87,7 @@ class QbittorrentSettings(SettingsGroup):
 class IndexerSettings(SettingsGroup):
     KEY = "services.indexer"
 
-    #: Prowlarr 或任意 Torznab 端點（Jackett 之類，plan §9.3 第 6 步）。
-    kind: Literal["prowlarr", "torznab"] = "prowlarr"
+    #: 一台 Prowlarr 的位址與 key（plan §9.3 第 6 步）。
     base_url: str = ""
     api_key: str = ""
 
@@ -326,8 +325,8 @@ class SetupIndexer(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    #: 逐站結果。套件內路徑的 `key` 是 Prowlarr 的 `definitionName`；既有路徑只有一條，
-    #: `key` 是 `IndexerKind`。兩條路徑共用同一份形狀，畫面也就是同一組纜繩。
+    #: 逐站結果。套件內路徑的 `key` 是 Prowlarr 的 `definitionName`；既有路徑多一條連線，
+    #: `key` 是 `PROWLARR_STEP`。兩條路徑共用同一份形狀，畫面也就是同一組纜繩。
     steps: list[SetupStep] = []
     #: 「之後再說」。可跳過的只有這一步，完成頁列出跳過了什麼（plan §9.3、票 02b）。
     skipped: bool = False

@@ -23,7 +23,6 @@ from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import IndexerKind
 from berth.main import create_app
 from berth.models import TmdbSettings
 from berth.services.routes import build_routes
@@ -392,16 +391,6 @@ class TestProblems:
         body = client.get(f"/api/search/queries?media={SPY_ID}").json()
 
         assert body["problem"] is None
-
-    def test_the_kind_that_was_set_up_is_the_one_that_gets_built(
-        self, client: TestClient, factory: FakeClientFactory
-    ) -> None:
-        """精靈存的是 `prowlarr`，所以造出來的就要是 REST 那一種（plan §8.4）。"""
-        sign_in(client)
-
-        client.get(f"/api/search?media={SPY_ID}")
-
-        assert factory.indexer_kinds == [IndexerKind.PROWLARR]
 
 
 def _skip_indexer(client: TestClient) -> None:

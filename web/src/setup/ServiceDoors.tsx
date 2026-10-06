@@ -17,7 +17,7 @@ interface Door {
  * （PRODUCT 原則 1），但跑完之後要看下載細節、在 Prowlarr 加私站時，人要知道門在哪、鑰匙是哪一把。
  *
  * 網址照各自的推導（`jellyfinBase`、`serviceWeb`）：給不出就說給不出，不給一條開不起來的連結。
- * 跳過、或接的是 Torznab 端點時沒有 Prowlarr 那一列。
+ * 跳過時沒有 Prowlarr 那一列。
  */
 export function ServiceDoors({
   owner,
@@ -50,7 +50,7 @@ export function ServiceDoors({
           : t('complete.doors.yours'),
     })
   }
-  if (indexers && indexers.kind === 'prowlarr' && indexers.origin !== null) {
+  if (indexers && indexers.origin !== null) {
     doors.push({
       name: 'Prowlarr',
       url: prowlarrWeb(indexers),

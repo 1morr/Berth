@@ -39,7 +39,6 @@ export const FAILURE_TEXT = {
   site_unreachable: 'failure.site_unreachable',
   site_rejected: 'failure.site_rejected',
   site_not_offered: 'failure.site_not_offered',
-  no_search: 'failure.no_search',
   unexpected: 'failure.unexpected',
 } as const satisfies Record<StepFailure, string>
 

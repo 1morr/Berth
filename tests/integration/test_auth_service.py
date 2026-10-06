@@ -24,9 +24,8 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
-from berth.adapters.torznab.fake import FakeTorznabClient
 from berth.db import create_session_factory
-from berth.domain import IndexerKind, Role
+from berth.domain import Role
 from berth.models import JellyfinSettings, User, UserSession
 from berth.services import auth as auth_service
 from berth.services.auth import (
@@ -74,10 +73,7 @@ class OneJellyfin:
     def rss(self) -> FeedFetcher:
         raise AssertionError("login never fetches a feed")
 
-    def torznab(self, base_url: str, api_key: str) -> FakeTorznabClient:
-        raise AssertionError("login never talks to a Torznab endpoint")
-
-    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+    def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         raise AssertionError("login never searches an indexer")
 
 

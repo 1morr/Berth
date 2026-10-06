@@ -1052,7 +1052,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(bodyOf(fetchStub, '/api/setup/indexers/test')).toEqual({ indexers: ['rutor'] })
   })
 
-  it('連上了、還沒加站時，板上那一格說「套件內 · Prowlarr · 尚未加入索引站」', async () => {
+  it('連上了、還沒加站時，板上那一格說「套件內 · 尚未加入索引站」', async () => {
     stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
 
     renderInRoute(<SetupPage />)
@@ -1062,8 +1062,8 @@ describe('頁 4：Prowlarr 與索引站', () => {
         .getByText('BTH 4')
         .closest('li')!,
     )
-    expect(berth.getByText('索引站')).toBeInTheDocument()
-    expect(await berth.findByText('套件內 · Prowlarr · 尚未加入索引站')).toBeInTheDocument()
+    expect(berth.getByText('Prowlarr')).toBeInTheDocument()
+    expect(await berth.findByText('套件內 · 尚未加入索引站')).toBeInTheDocument()
   })
 
   it('測試沒有站數時（例如缺 API key）那一格不說「尚未加入」，留破折號', async () => {
@@ -1105,7 +1105,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
         .getByText('BTH 4')
         .closest('li')!,
     )
-    expect(await berth.findByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
+    expect(await berth.findByText('套件內 · 3 個索引站')).toBeInTheDocument()
   })
 
   it('既有 Prowlarr 的站數也讀頁上的清單：測試之後使用者自己加的站照樣算（berth-lab 實測）', async () => {
@@ -1140,7 +1140,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
         .getByText('BTH 4')
         .closest('li')!,
     )
-    expect(await berth.findByText('既有 · Prowlarr · 2 個索引站')).toBeInTheDocument()
+    expect(await berth.findByText('既有 · 2 個索引站')).toBeInTheDocument()
   })
 
   it('已加入的站可以一站一站搜，也可以全部搜；一站失敗不影響其他站', async () => {
@@ -1611,24 +1611,22 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(screen.queryByTestId('added')).not.toBeInTheDocument()
   })
 
-  it('選「既有」可以填任意 Torznab 端點，接上之後照樣試搜，但沒有移除', async () => {
+  it('選「既有」只有位址與 API key：沒有「接法」，送出的只有 base_url 與 api_key', async () => {
     const existingProwlarr = chosen({
       kind: 'prowlarr',
       origin: 'existing',
-      base_url: 'http://jackett:9117/api',
+      base_url: 'http://192.168.1.10:9696',
       reason: 'connected',
       detail: '',
     })
     let connectedYet = false
     const connected = indexerSetup({
       origin: 'existing',
-      kind: 'torznab',
-      base_url: 'http://jackett:9117/api',
+      base_url: 'http://192.168.1.10:9696',
       candidates: [],
-      steps: [step('torznab', 'ok', 'Jackett · TV')],
+      steps: [step('prowlarr', 'ok', '1.0.0')],
     })
     const fetchStub = stubApi({
-      // 接上就是選了既有：之後重讀的精靈狀態裡有這一台。
       [STATUS]: () => ({
         body: connectedYet
           ? setupStatus({ ...AT_INDEXER, services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr] })
@@ -1639,37 +1637,24 @@ describe('頁 4：Prowlarr 與索引站', () => {
         connectedYet = true
         return { body: connected }
       },
-      [`${SEARCH}?query=`]: {
-        body: { query: '', error: '', sites: [siteSearch(null, 'jackett:9117', 4, ['x'])] },
-      },
     })
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: '索引站' })
+    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
     await user.click(existingCard())
-    // 選「既有」只展開表單；Prowlarr 頁的表單自己送 connect，不經 `services/prowlarr`。
-    expect(fetchStub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
-    await user.click(screen.getByRole('radio', { name: 'Torznab 端點' }))
-    await user.type(screen.getByLabelText('位址'), 'http://jackett:9117/api')
+    expect(screen.queryByRole('radio', { name: /Torznab/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '接法' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Torznab/)).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('位址'), 'http://192.168.1.10:9696')
     await user.type(screen.getByLabelText('API key'), 'the-key')
     await user.click(screen.getByRole('button', { name: '測試連線' }))
 
     await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/connect')).toBe(true))
     expect(bodyOf(fetchStub, '/api/setup/indexers/connect')).toEqual({
-      kind: 'torznab',
-      base_url: 'http://jackett:9117/api',
+      base_url: 'http://192.168.1.10:9696',
       api_key: 'the-key',
     })
-    expect(await screen.findByText('Jackett · TV')).toBeInTheDocument()
-    // 板上那一格說出實際的那一種，不寫死 Prowlarr。
-    const berth = within(within(boardCells()).getByText('BTH 4').closest('li')!)
-    expect(berth.getByText('既有 · Torznab · jackett:9117')).toBeInTheDocument()
-
-    await user.click(await screen.findByRole('button', { name: '搜尋全部' }))
-    const rows = within(await screen.findByTestId('trial'))
-    expect(await rows.findByText('4 筆')).toBeInTheDocument()
-    expect(rows.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
   })
 
   it('索引站可以之後再說，而且跳過之後畫面上看得出來', async () => {
@@ -1709,7 +1694,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: '索引站' })
+    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
     await user.click(existingCard())
 
     const indexerKey = screen.getByLabelText('API key')
@@ -1881,7 +1866,7 @@ describe('頁 5：TMDB', () => {
     expect(await berth.findByText('已驗證')).toBeInTheDocument()
     expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
     const indexers = within(within(boardCells()).getByText('BTH 4').closest('li')!)
-    expect(indexers.getByText('套件內 · Prowlarr · 3 個索引站')).toBeInTheDocument()
+    expect(indexers.getByText('套件內 · 3 個索引站')).toBeInTheDocument()
   })
 })
 
@@ -1894,7 +1879,7 @@ function withSites() {
 }
 
 function siteSearch(
-  indexer_id: number | null,
+  indexer_id: number,
   name: string,
   count: number,
   titles: string[],

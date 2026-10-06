@@ -30,7 +30,6 @@ from berth.domain import (
     ConnectionReason,
     ConnectionState,
     HealthStatus,
-    IndexerKind,
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
@@ -244,8 +243,7 @@ async def test_bundled_prowlarr_uses_the_mounted_key(session: AsyncSession) -> N
     assert view(status, ServiceKind.PROWLARR).detail == "1"
     assert factory.api_keys == ["mounted-key"]
     indexer = await read_settings(session, IndexerSettings)
-    assert (indexer.kind, indexer.base_url, indexer.api_key) == (
-        IndexerKind.PROWLARR.value,
+    assert (indexer.base_url, indexer.api_key) == (
         COMPOSE[ServiceKind.PROWLARR],
         "mounted-key",
     )

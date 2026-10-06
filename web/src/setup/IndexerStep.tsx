@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next'
 
 import type {
   IndexerConnectInput,
-  IndexerKind,
   IndexerSetup,
   InterfaceLogin,
   InterfaceLoginRefusal,
@@ -59,7 +58,6 @@ export interface LoginControls {
  * - **既有 Prowlarr**：同樣的「已加入」與「加站」，加的是使用者自己那一台，Berth 不移除（M4 票 20，
  *   使用者拍板：按一次確認）。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr 加站後重新讀取、
  *   在這裡加推薦的公開站，或之後再說。
- * - **Torznab 端點**：一個端點整個算一站，只有試搜。
  *
  * 整頁可以「之後再說」，連選都還沒選也可以。
  *
@@ -195,10 +193,9 @@ export function IndexerStep({
           )}
         </>
       )}
-      {indexers && mode === 'torznab' && <AddedSites indexers={indexers} controls={sites} />}
       {indexersFailed && <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>}
 
-      {/* 選之前、或 Torznab 那一頁，「之後再說」在這裡；Prowlarr 的在「加入」旁邊。 */}
+      {/* 選之前、或讀不到清單時，「之後再說」在這裡；Prowlarr 的在「加入」旁邊。 */}
       {((mode !== 'bundled' && mode !== 'prowlarr') || unread) && (
         <div className="mt-6">
           <GhostButton type="button" busy={applying || connecting} onClick={onSkip}>
@@ -382,7 +379,7 @@ function ProwlarrLogin({
 }
 
 /**
- * 這個泊位能做的事：Prowlarr 是已加入 + 加站，既有的另有填位址與 key 的表單；Torznab 只試搜。
+ * 這個泊位能做的事：Prowlarr 是已加入 + 加站，既有的另有填位址與 key 的表單。
  * 精靈與設定的索引站那一頁共用這一塊（票 06i）；設定頁不給 `onSkip`——那裡不是第一次，
  * 沒有「之後再說」。介面登入在設定頁它自己的那一區改（M4 票 07）。
  */
@@ -407,7 +404,7 @@ export function IndexerActions({
   const bundled = indexers.origin === 'bundled' && indexers.reachable
   // 連上了：0 站的既有 Prowlarr 是待處理（M4 票 20），也算連上。
   const connected = indexers.steps.some(
-    (row) => row.step === indexers.kind && row.status !== 'failed' && row.status !== 'running',
+    (row) => row.step === 'prowlarr' && row.status !== 'failed' && row.status !== 'running',
   )
   const addSites = (
     <AddSites
@@ -440,12 +437,12 @@ export function IndexerActions({
       />
       {connected && <AddedSites indexers={indexers} controls={sites} />}
       {/* 既有 Prowlarr 也加得了公開站（M4 票 20）；Berth 不移除它的站。 */}
-      {connected && indexers.origin === 'existing' && indexers.kind === 'prowlarr' && addSites}
+      {connected && indexers.origin === 'existing' && addSites}
     </>
   )
 }
 
-/** 剖面：這個泊位接上的是哪一種索引站、加了幾站。 */
+/** 剖面：這個泊位接上的是哪一台 Prowlarr、加了幾站。 */
 function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled: boolean }) {
   const { t } = useTranslation()
 
@@ -453,7 +450,7 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
     <Cutaway title={t('indexer.cutaway.title')}>
       <CutawayRow
         term={t('indexer.cutaway.kind')}
-        value={t(bundled ? 'indexer.cutaway.bundled' : `indexer.kind.${indexers.kind}`)}
+        value={t(bundled ? 'indexer.cutaway.bundled' : 'indexer.cutaway.existing')}
       />
       <CutawayRow term={t('connect.field.baseUrl')} value={indexers.base_url || '—'} />
       <CutawayRow
@@ -461,18 +458,16 @@ function IndexerCutaway({ indexers, bundled }: { indexers: IndexerSetup; bundled
         value={t(indexers.api_key_present ? 'jellyfin.cutaway.held' : 'jellyfin.cutaway.absent')}
         muted={!indexers.api_key_present}
       />
-      {indexers.kind === 'prowlarr' && (
-        <CutawayRow
-          term={t('indexer.cutaway.added')}
-          value={String(indexers.sites.length)}
-          muted={indexers.sites.length === 0}
-        />
-      )}
+      <CutawayRow
+        term={t('indexer.cutaway.added')}
+        value={String(indexers.sites.length)}
+        muted={indexers.sites.length === 0}
+      />
     </Cutaway>
   )
 }
 
-/** 既有：Prowlarr 位址 + key，或任意 Torznab 端點 + key。兩者都有「測試」。 */
+/** 既有：Prowlarr 位址 + key，有「測試」。 */
 function ExistingIndexer({
   indexers,
   connecting,
@@ -486,20 +481,20 @@ function ExistingIndexer({
   onSkip?: () => void
 }) {
   const { t } = useTranslation()
-  const [kind, setKind] = useState<IndexerKind>(indexers.kind)
   const [baseUrl, setBaseUrl] = useState(indexers.base_url)
   const [apiKey, setApiKey] = useState('')
   const [checked, setChecked] = useState(false)
-  // 上一次測試的那一條，只在欄位還是測的那幾個值、而且不在測試中時畫（M4 票 21）：換了種類或位址，
-  // 它說的就是另一個端點——原本 Prowlarr 的狀態列停在上一次。
-  const tested = kind === indexers.kind && baseUrl.trim() === indexers.base_url
-  const row = tested && !connecting ? indexers.steps.find((step) => step.step === kind) : undefined
+  // 上一次測試的那一條，只在欄位還是測的那個位址、而且不在測試中時畫（M4 票 21）：換了位址，
+  // 它說的就是另一台——狀態列不停在上一次。
+  const tested = baseUrl.trim() === indexers.base_url
+  const row =
+    tested && !connecting ? indexers.steps.find((step) => step.step === 'prowlarr') : undefined
 
   function submit(event: FormEvent) {
     event.preventDefault()
     setChecked(true)
     if (addressError(t, baseUrl)) return
-    onConnect({ kind, base_url: baseUrl.trim(), api_key: apiKey.trim() })
+    onConnect({ base_url: baseUrl.trim(), api_key: apiKey.trim() })
   }
 
   return (
@@ -507,39 +502,15 @@ function ExistingIndexer({
       <h3 className="label text-ink-dim">{t('indexer.existing.title')}</h3>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t('indexer.existing.lede')}</p>
 
-      {/* 兩種接法是同一件事的兩個形狀，所以用一組 radio 而不是分頁——沒有 Radix，也不必有。 */}
-      <fieldset className="mt-4 border-2 border-rule bg-well px-4 py-3">
-        <legend className="label px-2 text-ink-dim">{t('indexer.existing.kind')}</legend>
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-          {(['prowlarr', 'torznab'] as const).map((option) => (
-            <label key={option} className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="radio"
-                name="indexer-kind"
-                value={option}
-                checked={kind === option}
-                onChange={() => setKind(option)}
-                className="size-4 accent-[var(--color-assigned)]"
-              />
-              {t(`indexer.kind.${option}`)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
       <form onSubmit={submit} noValidate className="mt-4 grid gap-4">
         <Field
           label={t('connect.field.baseUrl')}
           value={baseUrl}
           inputMode="url"
-          placeholder={
-            kind === 'prowlarr'
-              ? 'http://192.168.1.10:9696'
-              : 'http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab/api'
-          }
+          placeholder="http://192.168.1.10:9696"
           hint={
             <>
-              {t(`indexer.existing.hint.${kind}`)}
+              {t('indexer.existing.hint')}
               {pointsAtBerth(baseUrl) && <LoopbackHint />}
             </>
           }
@@ -567,14 +538,12 @@ function ExistingIndexer({
       {row && (
         <ol className="mt-4 grid gap-3" data-testid="sites">
           <StepLine
-            label={t(`indexer.kind.${kind}`)}
-            service={t(`indexer.kind.${kind}`)}
-            endpoint={kind === 'prowlarr' ? 'GET /api/v1/system/status' : '?t=caps'}
+            label="Prowlarr"
+            service="Prowlarr"
+            endpoint="GET /api/v1/system/status"
             row={row}
             // 連上了、0 站的待處理不是「尚未執行」（`indexer.existing_prowlarr_step`，M4 票 31）。
-            status={
-              row.status === 'pending' && kind === 'prowlarr' ? t('indexer.noSitesYet') : undefined
-            }
+            status={row.status === 'pending' ? t('indexer.noSitesYet') : undefined}
             // 照上一次測試的理由與測過的位址（不是欄位裡正在改的那一個）說補法（M4 票 17）。
             fix={existingFix(t, indexers)}
           />
@@ -589,7 +558,7 @@ function ExistingIndexer({
  * localhost，其餘是一般的那一句。
  */
 function existingFix(t: TFunction, indexers: IndexerSetup): string {
-  if (indexers.reason === 'auth_required' && indexers.kind === 'prowlarr') {
+  if (indexers.reason === 'auth_required') {
     return t('connection.fix.prowlarrKey')
   }
   if (indexers.reason === 'version_unsupported') {

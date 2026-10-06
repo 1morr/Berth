@@ -19,12 +19,12 @@ import { useServiceCheck } from '../settings/useServiceCheck'
 import { IndexerActions } from '../setup/IndexerStep'
 
 /**
- * 設定 → 索引站（票 06i）。進來只讀（M4 票 09：不測任何一站）；測試、加站、試搜、移除、既有
- * Torznab 換網址或 key 都由人按——全部是精靈頁 4 的 `IndexerActions` 與同一批 `setup/indexers/*`
+ * 設定 → Prowlarr（票 06i）。進來只讀（M4 票 09：不測任何一站）；測試、加站、試搜、移除、既有
+ * Prowlarr 換網址或 key 都由人按——全部是精靈頁 4 的 `IndexerActions` 與同一批 `setup/indexers/*`
  * 命令，只是沒有「之後再說」。套件內 Prowlarr 的
  * 介面登入是自己的一區（M4 票 07）：加站不帶登入，登入在這裡改。
  *
- * 健康卡是 Prowlarr 那一張：接的是任意 Torznab 端點時，健康檢查仍以那一項報它（plan §3.2）。
+ * 健康卡是 Prowlarr 那一張（plan §3.2）。
  */
 export function IndexerSettingsPage() {
   const { t } = useTranslation()

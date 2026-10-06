@@ -213,7 +213,7 @@ describe('每個泊位做完都停在結果上', () => {
     expect(screen.getAllByText('berth-tv').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
-    expect(await heading()).toHaveTextContent('索引站')
+    expect(await heading()).toHaveTextContent('Prowlarr')
   })
 
   it('頁 3：清單已經建完、還沒有 Route，進頁照樣不建', async () => {
@@ -264,13 +264,13 @@ describe('每個泊位做完都停在結果上', () => {
     renderInRoute(<SetupPage />)
 
     // TMDB 不在這一頁（票 06e 拆成兩個泊位）。
-    expect(await heading()).toHaveTextContent('索引站')
+    expect(await heading()).toHaveTextContent('Prowlarr')
     expect(screen.queryByLabelText(/TMDB API key/)).not.toBeInTheDocument()
     await typeLogin(user)
     await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(await heading()).toHaveTextContent('索引站')
+    expect(await heading()).toHaveTextContent('Prowlarr')
     expect(screen.getByRole('heading', { name: /^已加入/ })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
@@ -297,8 +297,8 @@ describe('上一個泊位', () => {
   it.each([
     [2, '設定 qBittorrent 的 WebUI 登入', '擁有者：skipper'],
     [3, '媒體庫路徑', '設定 qBittorrent 的 WebUI 登入'],
-    [4, '索引站', '媒體庫路徑'],
-    [5, 'TMDB', '索引站'],
+    [4, 'Prowlarr', '媒體庫路徑'],
+    [5, 'TMDB', 'Prowlarr'],
     [6, '完成設定', 'TMDB'],
   ])('頁 %i 有上一個泊位', async (at, here, previous) => {
     wizard(at, at === 3 ? { 'GET /api/setup/routes': { body: ROUTES_DONE } } : {}, {
@@ -409,7 +409,7 @@ describe('網址上的那一頁', () => {
     await user.click(screen.getByRole('button', { name: '上一個泊位' }))
     expect(await heading()).toHaveTextContent('TMDB')
     await user.click(screen.getByRole('button', { name: '上一個泊位' }))
-    expect(await heading()).toHaveTextContent('索引站')
+    expect(await heading()).toHaveTextContent('Prowlarr')
 
     router.history.back()
     await shows('TMDB')

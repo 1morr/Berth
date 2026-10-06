@@ -118,7 +118,7 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   // 4. Prowlarr 與索引站（M4 票 09）：進頁不送任何測試或寫入；一站都不預勾，先測、通過的才勾得起來。
   //    九個裡有四個連不上是常態（替身的 `BLOCKED_SITES`）：一條摘要、理由各一句。加入之後逐站 / 全部試搜，
   //    不要的移除；替身的 Mikan 演「搜尋時連不上」。再從其他公開站加一個不在推薦清單上的。
-  await expect(page.getByRole('heading', { name: '索引站', level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
   const atIndexers = writes.length
   await page.getByRole('radio', { name: /套件內/ }).click()
   await expect(page.getByTestId('recommended')).toBeVisible()

@@ -44,7 +44,6 @@ plan §9.4 的序列之後那台伺服器的狀態，不是手排出來的場景
 | `prowlarr/indexer.rejected.duplicate.json` | 同名再加一次的 400（`Should be unique`） |
 | `prowlarr/indexer.defaults-added.json` | `GET /api/v1/indexer`，加完那一輪之後。十個站裡加得起來的是這五個，另外五個從這台機器連不出去 |
 | `prowlarr/config-host.json` | `GET /api/v1/config/host`，`apiKey` 換成 `0000…0001`、密碼欄位清空 |
-| `torznab/caps.xml` | Prowlarr 的單站 Torznab 網址 `?t=caps`（Jackett 與單站的形狀相同） |
 | `tmdb/configuration.json` | `GET /3/configuration`，帶 v4 read access token |
 | `tmdb/configuration.unauthorized.json` | 同一支端點帶一把無效的 key，回 401 |
 
@@ -91,14 +90,10 @@ plan §9.4 的序列之後那台伺服器的狀態，不是手排出來的場景
 | `prowlarr/search.severance.json` | 同一支端點，`?query=Severance`。美劇的命名風格，另含兩筆同名的 2006 電影 |
 | `prowlarr/search.moana-2.json` | 同上，`?query=Moana%202` |
 | `prowlarr/search.no-results.json` | 同上，一個查不到的關鍵字。**空陣列加 200**，搜不到不是錯誤 |
-| `torznab/search.acgrip.xml` | Prowlarr 的單站 Torznab 網址 `/2/api?t=search&q=`。前 2 筆。`torznab:attr` 有 `seeders` 與 `peers`（**沒有** `leechers`），這一站不報 `infohash` |
-| `torznab/search.dmhy.xml` | 同上，`/6/api`。前 2 筆。`infohash` 是 base32，`guid` 是磁力連結，一筆帶三個 `category` |
-| `torznab/caps.yts.xml` | `/4/api?t=caps`。`movie-search` 的 `supportedParams` 是 `q,imdbid`——`supportedParams` 是逗號清單，而**公開站沒有 tmdbid** |
 
 這一組的 `apikey` 一律換成 `0000…0001`（Prowlarr 的號碼）。下載網址裡的 `link=` 密文原樣留著：
 它每次請求都不一樣（實測 1021 筆只有 1 筆重疊），所以它不是秘密，而它的形狀正是「不能拿它當身分」
-的證據。**沒有** tmdbid 版本的 caps：627 份定義裡支援 tmdbid 的 93 份全部是私站，錄不到；
-那條分支由 `capability_of()` 的純函式單元測試守著，不偽造一份「錄製回應」。
+的證據。
 
 重錄的指令（`$KEY` 是那台 Prowlarr 的 API key）：
 

@@ -45,7 +45,7 @@ Jellyfin 正確顯示」。長期指標是解析 benchmark 的**誤自動入庫�
 ## Positioning
 
 **Berth 只做協調**（brief §1.1、§1.2）。它負責探索與決策、取得、入庫、帳本與修復、媒體庫檢視、可觀測性；
-播放與轉碼交 Jellyfin，下載協定與做種交 qBittorrent，索引站接入交 Prowlarr / Jackett，metadata 交 TMDB，
+播放與轉碼交 Jellyfin，下載協定與做種交 qBittorrent，索引站接入交 Prowlarr，metadata 交 TMDB，
 多版本合併顯示交 Jellyfin（12 起原生合併；Berth 只支援 Jellyfin 12 以上）。
 
 跟 \*arr 生態的差別（brief §1.3、§4.4、§6.5、§7.4、§20.2、§20.4）：
@@ -68,7 +68,7 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 - **目標宿主**：Linux（NAS 與伺服器）與 Windows（Docker Desktop / WSL2）。exFAT 不支援。
 - **開箱即用套件**：`deploy/docker-compose.yml` 起 `berth`、`qbittorrent`、`jellyfin`、`prowlarr` 四個容器，
   共用同一個 `/data`（brief §16.3、plan §9.1）。每個外部服務都可以從 `COMPOSE_PROFILES` 拿掉，改接既有的那一套。
-- **外部服務**（brief §3）：Prowlarr / Jackett（Torznab）、qBittorrent（Web API v2，下限 4.4 / API 2.8.4）、
+- **外部服務**（brief §3）：Prowlarr（REST API）、qBittorrent（Web API v2，下限 4.4 / API 2.8.4）、
   Jellyfin（伺服器 API key）、TMDB（REST v3，唯一 metadata provider）。RSS 第一批是 Mikan 與 Nyaa。
 - **典型流程**：手動是「探索 → Media 詳情搜 torrent → 選 Route 送單 → 下載 → 解析比對 → 硬鏈接入庫 →
   通知 Jellyfin 掃描 → 深連結播放」；自動是「RSS 訂閱 + Rule → 比對 → 去重 → 建 Job」。

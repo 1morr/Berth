@@ -18,7 +18,6 @@ from berth.domain import (
     ConnectionReason,
     ConnectionState,
     HealthStatus,
-    IndexerKind,
     ServiceKind,
     ServiceOrigin,
     StepFailure,
@@ -64,9 +63,7 @@ class TestWizard:
     ) -> None:
         factory = await ready(session, roots, BELOW_FLOOR)
 
-        status = await connect_indexer(
-            session, factory, kind=IndexerKind.PROWLARR, base_url="http://nas:9696", api_key="k"
-        )
+        status = await connect_indexer(session, factory, base_url="http://nas:9696", api_key="k")
 
         (step,) = status.steps
         assert (step.status, step.detail) == (StepStatus.FAILED, BELOW_FLOOR)
@@ -88,9 +85,7 @@ class TestWizard:
     ) -> None:
         factory = await ready(session, roots, AT_FLOOR)
 
-        status = await connect_indexer(
-            session, factory, kind=IndexerKind.PROWLARR, base_url="http://nas:9696", api_key="k"
-        )
+        status = await connect_indexer(session, factory, base_url="http://nas:9696", api_key="k")
 
         # 過了下限；替身一站都沒有，所以這一頁待處理而不是完成（M4 票 20）。
         assert status.steps[0].status is StepStatus.PENDING

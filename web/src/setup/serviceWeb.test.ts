@@ -34,11 +34,8 @@ describe('prowlarrWeb', () => {
     )
   })
 
-  it('瀏覽器解不到的 compose 主機名、Torznab 端點與解析不了的位址都沒有連結', () => {
+  it('瀏覽器解不到的 compose 主機名與解析不了的位址都沒有連結', () => {
     expect(prowlarrWeb(setup('existing', 'http://prowlarr:9696'), PAGE)).toBeNull()
-    expect(
-      prowlarrWeb({ ...setup('existing', 'http://jackett:9117/api'), kind: 'torznab' }, PAGE),
-    ).toBeNull()
     expect(prowlarrWeb(setup('existing', 'not a url'), PAGE)).toBeNull()
   })
 })

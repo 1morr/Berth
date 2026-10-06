@@ -4,7 +4,7 @@
 
 1. **Jellyfin**：連得上、而且 Berth 那把 API key 還有效（媒體庫列得出來）。
 2. **qBittorrent**：連得上、Web API 夠新。全域偏好不看（M4 票 32）：Berth 不寫也不靠它們。
-3. **索引站**：Prowlarr 或使用者自己貼的 Torznab 端點還搜得動（plan §8.4）。
+3. **索引站**：Prowlarr 還搜得動（plan §8.4）。
 4. **Route**：每一條纜繩重跑一次——category、兩邊回報的路徑、跨服務可見性、真的 `link()`
    一次比 inode（plan §9.5）。與精靈第 5 步是同一組檢查、同一個欄位。
 
@@ -33,7 +33,7 @@ from berth.adapters.budget import SiteUsage
 from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import unsupported_message
 from berth.adapters.qbittorrent import MIN_WEBAPI, IpBannedError
-from berth.domain import HealthStatus, IndexerKind, ServiceKind, ServiceOrigin, StepStatus
+from berth.domain import HealthStatus, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import (
     HealthSettings,
     IndexerSettings,
@@ -137,18 +137,17 @@ async def read_health(session: AsyncSession) -> HealthReport:
     """上一輪的結果。**不連任何服務**——健康頁載入時看的是紀錄，不是又打一次每個服務。"""
     health = await read_settings(session, HealthSettings)
     setup = await read_settings(session, SetupSettings)
-    indexer = await read_settings(session, IndexerSettings)
     #: 畫面顯示的位址就是檢查**真的連過去**的那一條，不是第 2 步探測時記下的那條。
     urls = {
         ServiceKind.JELLYFIN: (await read_settings(session, JellyfinSettings)).base_url,
         ServiceKind.QBITTORRENT: (await read_settings(session, QbittorrentSettings)).base_url,
-        ServiceKind.PROWLARR: indexer.base_url,
+        ServiceKind.PROWLARR: (await read_settings(session, IndexerSettings)).base_url,
     }
     return HealthReport(
         degraded=_degraded(health),
         checked_at=health.checked_at,
         services=tuple(
-            _view(kind, health.services.get(kind) or ServiceHealth(), setup, indexer, urls[kind])
+            _view(kind, health.services.get(kind) or ServiceHealth(), setup, urls[kind])
             for kind in ServiceKind
         ),
         routes=(await read_route_status(session)).routes,
@@ -399,12 +398,10 @@ async def _check_indexer(session: AsyncSession, factory: ServiceClientFactory) -
     if not settings.base_url:
         return _Outcome(HealthStatus.UNKNOWN, configured=False)
 
-    probe = await probe_indexer(
-        factory, IndexerKind(settings.kind), settings.base_url, settings.api_key
-    )
+    probe = await probe_indexer(factory, settings.base_url, settings.api_key)
     step = probe.step
     if step.status is StepStatus.FAILED:
-        # 失敗那一輪的 `detail` 不是站數（版本太舊時是版本，caps 沒有搜尋時是伺服器名），
+        # 失敗那一輪的 `detail` 不是站數（版本太舊時是版本），
         # 而健康頁把它標成「索引站」；該說的都在原文裡（M4 票 17 的 code-review）。
         return _Outcome(HealthStatus.FAILED, error=step.error)
     return _Outcome(HealthStatus.OK, detail=step.detail)
@@ -427,12 +424,12 @@ def _view(
     kind: ServiceKind,
     health: ServiceHealth,
     setup: SetupSettings,
-    indexer: IndexerSettings,
     base_url: str,
 ) -> ServiceHealthView:
     return ServiceHealthView(
         kind=kind,
-        origin=_origin(kind, setup, indexer),
+        # 還沒選就當既有，不給會寫東西的建議（M4 票 15）。
+        origin=setup.origin_of(kind) or ServiceOrigin.EXISTING,
         base_url=base_url,
         status=health.status,
         detail=health.detail,
@@ -445,17 +442,6 @@ def _view(
         unsupported=health.unsupported,
         library_count=health.library_count,
     )
-
-
-def _origin(kind: ServiceKind, setup: SetupSettings, indexer: IndexerSettings) -> ServiceOrigin:
-    """套件內還是既有——使用者在精靈選的（M4 票 15）；還沒選就當既有，不給會寫東西的建議。
-
-    Torznab 是使用者自己貼的端點，與 compose 裡那台 Prowlarr 無關，所以它一律是既有
-    （與 `services/indexer.py` 的規則相同）。
-    """
-    if kind is ServiceKind.PROWLARR and indexer.kind == IndexerKind.TORZNAB.value:
-        return ServiceOrigin.EXISTING
-    return setup.origin_of(kind) or ServiceOrigin.EXISTING
 
 
 def _degraded(health: HealthSettings) -> bool:

@@ -14,7 +14,7 @@
 
 ## 0. 一句話
 
-一個自託管的「媒體取得與入庫協調器」：把索引站（Torznab）搜尋或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析內容、比對 TMDB metadata、以硬鏈接入庫到 Jellyfin 媒體庫，並維護一份可追溯、可修復的入庫帳本。
+一個自託管的「媒體取得與入庫協調器」：把 Prowlarr 搜尋或 RSS 命中的 torrent 送到 qBittorrent，下載完成後解析內容、比對 TMDB metadata、以硬鏈接入庫到 Jellyfin 媒體庫，並維護一份可追溯、可修復的入庫帳本。
 
 第一階段目標：**探索 → 下載 → 入庫 → 在 Jellyfin 可播放** 的全流程跑通，同時支援動漫、美劇、韓劇與電影。
 
@@ -37,7 +37,7 @@
 | --- | --- | --- |
 | 播放、轉碼、觀看紀錄的儲存、刮削圖片與簡介 | Jellyfin | 本系統讀取 Jellyfin 的媒體庫、項目、圖片與每位使用者的觀看紀錄來呈現媒體庫（§12）；唯一寫回的是已看 / 未看標記。播放一律深連結到 Jellyfin |
 | 下載協定、做種、限速、分享率、種子清理 | qBittorrent | 做種策略用 qBittorrent 的分類設定，本系統只處理「種子被移除後」的善後 |
-| 索引站接入 | Prowlarr 或 Jackett（Torznab） | 只依賴 Torznab 協定。開箱即用套件預設打包 Prowlarr（§16.3），已有 Jackett 的使用者直接填 Torznab 端點 |
+| 索引站接入 | 只支援 Prowlarr（套件內或既有） | 搜尋走 Prowlarr REST（`GET /api/v1/search`），加站、移除、測站也走它的 REST。開箱即用套件預設打包 Prowlarr（§16.3）。**2026-10-06 改（§19 D3，M4 票 37）**：原本「只依賴 Torznab 協定、已有 Jackett 的使用者直接填 Torznab 端點」不採用，Jackett 與單站 Torznab 網址沒有路徑，要先裝 Prowlarr |
 | Metadata | TMDB | 第一階段唯一的 provider，見 §10 |
 | 同一集多版本的合併顯示 | Jellyfin（12 起原生合併；本系統只支援 12 以上） | 本系統只保證命名讓 Jellyfin 能合併；不裝 MergeVersions（§7.7、§19） |
 
@@ -68,11 +68,11 @@
 
 ## 3. 外部服務與整合邊界
 
-> **2026-10-06 改（§19「精靈審計後的八項」D3）**：只支援 Prowlarr，拿掉通用 Torznab 端點與 Jackett；下表 Prowlarr / Jackett 那一列與 §16.4、§20 的 Jackett 結論待拆票後改寫。
+> **2026-10-06 改（§19「精靈審計後的八項」D3）**：只支援 Prowlarr，拿掉通用 Torznab 端點與 Jackett；下表 Prowlarr 那一列、§16.4 與 §20 的 Jackett 結論已在 M4 票 37 改寫（Jackett 結論標「已不採用」，來源保留）。
 
 | 服務 | 用途 | 整合方式 | 備註 |
 | --- | --- | --- | --- |
-| Prowlarr / Jackett | torrent 搜尋 | Torznab API（`caps`、`search`、分類碼）；Prowlarr 另有 REST API 可由 Berth 自動加入索引站（§16.3） | 搜尋結果短暫快取 |
+| Prowlarr | torrent 搜尋 | REST API（`/api/v1/search`、`/api/v1/indexer*`、`/api/v1/system/status`）；搜尋與由 Berth 自動加入索引站（§16.3）都走它（M4 票 37 起不再有 Torznab 端點） | 搜尋結果短暫快取 |
 | qBittorrent | 下載 | Web API v2：新增、分類、輪詢 `sync/maindata`、檔案清單、刪除、搬移 | 無 webhook，用輪詢；活躍時短間隔、閒置時退避。支援下限 4.4（API 2.8.4），adapter 依 `webapiVersion` 切換 `paused`/`stopped` 等改名參數（§20.2） |
 | Jellyfin | 媒體庫與播放 | 伺服器 API key 做媒體庫操作；使用者以 Jellyfin 帳號登入本系統 | 讀 VirtualFolders 得到媒體庫與路徑；針對路徑觸發掃描；用路徑反查 item id |
 | TMDB | metadata | REST v3，本地快取 | 探索、搜尋、季集結構、別名與翻譯、episode groups |
@@ -639,7 +639,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.4 既有服務的接入規則【決定】
 
-> **2026-10-06 改（§19「精靈審計後的八項」D3、D6）**：Prowlarr 不再接受 Torznab 端點；換台時列出舊那台的遺留物。下文待拆票後改寫。（D1 已寫進下文「接管＝只建立與管理 Berth 擁有的物件」那一段，M4 票 33。）
+> **2026-10-06 改（§19「精靈審計後的八項」D3、D6）**：Prowlarr 不再接受 Torznab 端點（D3，已在 M4 票 37 改寫進下文）；換台時列出舊那台的遺留物（D6，下文待拆票後改寫）。（D1 已寫進下文「接管＝只建立與管理 Berth 擁有的物件」那一段，M4 票 33。）
 
 > **2026-09-29 改**：「既有」由使用者在該服務那一頁選（§16.3），不再由偵測判定；本節的條件在「既有」選項旁說明（M4 票 15、17）。
 
@@ -669,7 +669,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **既有服務要給的東西各不相同**（§20.14）：
   - Jellyfin：位址 + **管理員**帳密（不是管理員就拒絕，M4 票 06）；Berth 以它登入、自己建 API key。版本下限 12.0（§19 2026-09-15，2026-09-29 使用者再確認），**測連線時就擋**（M4 票 18）。擁有者成立之後只能換到**同一台**的另一個位址（ServerId，§20.15）。還沒初始化的那一台由擁有者表單建立管理員，語言與地區、遠端存取在畫面上問（預設 UI 語言、不開遠端存取）。
   - qBittorrent：位址 + WebUI 帳密。版本下限 4.4（Web API 2.8.4）。5.2 起它有 API key（`Authorization: Bearer`），之後可當第二種接法，這一輪不做。
-  - Prowlarr：位址 + **API key**（Prowlarr 的「設定 → 一般 → 安全性」）；它的 API 只收 API key，帳密只給瀏覽器登入。也可以是任一 Torznab 端點 + key（Jackett）。Berth 用使用者已有的索引站；**一站都沒有不算完成**，可以在 Prowlarr 加站後重新讀取、在精靈測試推薦的公開站並按一次加進它，或之後再說（§19 2026-09-30，M4 票 20）。Berth 不移除它的站、不設它的登入。版本下限 1.3.2（卡住它的是匿名的 `/ping`，§20.14，M4 票 17）；版本從 `system/status` 讀，比 1.3.2 舊、沒有 `/ping` 的那一台也說得出版本（M4 票 20）；key 錯說「API key 不對」而不是連不上；Torznab 端點沒有版本下限。
+  - Prowlarr：位址 + **API key**（Prowlarr 的「設定 → 一般 → 安全性」）；它的 API 只收 API key，帳密只給瀏覽器登入。Berth 用使用者已有的索引站；**一站都沒有不算完成**，可以在 Prowlarr 加站後重新讀取、在精靈測試推薦的公開站並按一次加進它，或之後再說（§19 2026-09-30，M4 票 20）。Berth 不移除它的站、不設它的登入。版本下限 1.3.2（卡住它的是匿名的 `/ping`，§20.14，M4 票 17）；版本從 `system/status` 讀，比 1.3.2 舊、沒有 `/ping` 的那一台也說得出版本（M4 票 20）；key 錯說「API key 不對」而不是連不上。
   - 三個服務的下限都寫在「既有」選項旁（M4 票 17），版本太舊時精靈與健康檢查說出目前版本與下限。
 - **容器裡的 `localhost`**：使用者填 `localhost` / `127.0.0.0/8` / `::1` 時，位址欄下就地提示（只提示、不擋：`network_mode: host` 的部署填 `localhost` 是對的；測試不過時的補法也是同一句，M4 票 17）：Berth 在容器裡，那指的是 Berth 自己；要填 `host.docker.internal`（Docker Desktop 內建；Linux 由 compose 的 `extra_hosts: ["host.docker.internal:host-gateway"]` 提供，且服務要監聽 `0.0.0.0` 而不是 `127.0.0.1`）或區網 IP（§20.14，M4 票 16、17）。
 - **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。送出前先寫探測檔問 Jellyfin 看不看得到：它對加不上的路徑只回 404，說不出原因；看不到就說「Jellyfin 看不到 <路徑>：它沒掛 <共用目錄>」、收回剛建的目錄。多個媒體庫逐個試、逐個回報（M4 票 19）。
@@ -733,7 +733,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | UI 語言 | zh-Hant 與 en 並列，跟隨瀏覽器 | §16.2、`PRODUCT.md` |
 | 授權 | MIT | §16.2 |
 | 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
-| 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）；Jackett 以 Torznab 端點接入 | §3、§16.3、§20.7 |
+| 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）。~~Jackett 以 Torznab 端點接入~~ 已不採用（2026-10-06 D3，M4 票 37）：只支援 Prowlarr | §3、§16.3、§20.7 |
 | 媒體庫的角色（2026-09-15） | 像 Jellyfin 那樣瀏覽，播放跳 Jellyfin；牆上是整個 Jellyfin 媒體庫疊上 Berth 狀態；已看 / 未看可切換並寫回 Jellyfin；探索與媒體庫共用同一個 Media 詳情頁，作品在 Jellyfin 裡時觀看區在最上；排在 M1 驗收後、M2 之前（M1.5） | §1.1、§1.2、§12、§13、§17、plan §11.2b |
 | Jellyfin 支援版本（2026-09-15） | **只支援 Jellyfin 12 以上**（同日稍早定的「兩條版本線都支援、13.0 發佈才拿掉 10.x」被使用者改掉，為了降低複雜度）。MergeVersions 的精靈步驟、既有服務按鈕、resolver 的合併觸發與任務 id 整段移除；既有 Jellyfin 低於 12 時，精靈與健康檢查紅燈，說出目前版本並附升級注意（§20.9），不往下做。代價是已知的：從 10.11 升到 12 有遷移失敗的 open issue、舊客戶端要升級、binhex（unRAID）與 QNAP 社群套件還沒有 12，那些使用者要先升級才能接本系統 | §1.2、§7.7、§16.4、§20.9、M1 票 14b |
 | 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
@@ -1296,7 +1296,7 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 
 **索引站搜尋實測**（2026-09-10，票 08；Prowlarr 2.5.2.5491 + 五個公開站 acgrip / dmhy / mikan /
 thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` 與
-`tests/fixtures/http/torznab/`）
+`tests/fixtures/http/torznab/` 已刪，M4 票 37）
 
 - **`GET /api/v1/search` 很慢而且不吃 `limit`**：單次冷查詢 60–85 秒（Prowlarr 現場去連五個站），
   `limit=20` 仍然回 1200 筆。**三個查詢併發共 35 秒**，所以逐標題併發是對的，逾時要給到 120 秒。
@@ -1310,7 +1310,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
   聯集 1854 筆，各自帶來 391 / 196 / 169 筆另外兩個問不到的結果。
 - **tmdbid 是私站的功能**：627 份 Cardigann 定義裡 93 份的 `tvSearchParams` / `movieSearchParams`
   含 `tmdbId`，**全部是 private 或 semiPrivate**；十個預設公開站一個都沒有（YTS 只有 `imdbid`）。
-  所以 `t=caps` 決定用哪一種問法時，`q=` 那條退路才是常態。
+  所以 `q=` 才是常態（Prowlarr 的 REST 本來就只收關鍵字；M4 票 37 前 Torznab 端點依 `t=caps` 選問法）。
 - **分類碼不是可靠的篩子**：dmhy 對 `cat=5000`、`cat=5070` 與不帶 `cat` 都回同樣 80 筆；
   它一筆帶 5070 / 100002 / 2020 而沒有 5000。Berth 因此不送 `categories`，只把分類當顯示資料。
 - **The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單**：搜 SPY×FAMILY 時前六筆是 Spider-Man、
@@ -1324,7 +1324,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 **Jackett**（[repo](https://github.com/Jackett/Jackett)）
 
 - API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面，無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml` 定義。
-- 結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。
+- ~~結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。~~ **已不採用**（2026-10-06 D3、M4 票 37）：只支援 Prowlarr；以上來源與事實留作紀錄。
 
 **compose 套件實測（2026-09-07，Windows 11 + Docker Desktop 29.6.2，票 03）**
 
@@ -1424,7 +1424,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **只有動漫的絕對編號是接在關鍵字後面的**：`&q={NewsnabifyTitle(queryTitle)}+{searchCriteria.AbsoluteEpisodeNumber:00}`
   ——絕對編號補零到兩位，與標題之間一個空白。
   【來源：`Sonarr/src/NzbDrone.Core/Indexers/Newznab/NewznabRequestGenerator.cs`，develop 分支，2026-09-19 讀】
-- Berth 的兩個實作都只送 `q=`（Prowlarr 的 REST 與 Torznab 的 `t=search`，plan §8.4「分類碼不送」同一個理由：
+- Berth 的搜尋 adapter（Prowlarr 的 REST；M4 票 37 前另有 Torznab 的 `t=search`）只送 `q=`，plan §8.4「分類碼不送」同一個理由：
   各站對結構化參數的支援與映射不一致，而 Berth 打的是公開站），所以季集一律進關鍵字：整季 `S03`、
   單集 `S03E05`、有絕對編號的 `26`。
 
@@ -1467,7 +1467,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 
 播出日比對（M3 票 14）與之後可能的「發佈離播出多近」都要一個發佈時間。試跑環境（Prowlarr 預設公開站）實測：
 
-- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 兩個 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`、`torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】**M3 票 14 起接上**：搜尋結果帶 `published_at`、送單存進 `jobs.published_at`，規劃時做播出日比對（plan §4.4）。
+- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 的 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`；M4 票 37 前另有 `torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】**M3 票 14 起接上**：搜尋結果帶 `published_at`、送單存進 `jobs.published_at`，規劃時做播出日比對（plan §4.4）。
 - **ACG.RIP 的 RSS** 是標準的 `<item><pubDate>`，RFC 822 帶時區（`Thu, 24 Sep 2026 06:01:00 -0700`）。【實測 `https://acg.rip/.xml`】
 - **Mikan 的 RSS 沒有標準的 `<item><pubDate>`**：日期在 `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區**（`2026-09-24T21:01:00.760219`）。同一個發佈在 ACG.RIP 是 13:01 UTC，所以 Mikan 的值是 **UTC+8**；當成 UTC 讀會差 8 小時。【實測 `https://mikanani.me/RSS/Classic`，與 ACG.RIP 同一筆對照】
 - Nyaa 的 RSS 從試跑機器連不上（連線失敗），沒有量到。**2026-09-25 補量**（§20.12）：`<pubDate>` 是 RFC 822 的 `-0000`，即 UTC。

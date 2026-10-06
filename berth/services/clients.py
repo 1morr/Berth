@@ -18,7 +18,6 @@ from berth.adapters.dns import HostResolver as HostResolver
 from berth.adapters.dns import SystemHostResolver
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
-from berth.adapters.indexer.torznab import TorznabSearch
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.jellyfin.client import HttpJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient
@@ -31,10 +30,8 @@ from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
-from berth.adapters.torznab import TorznabClient
-from berth.adapters.torznab.client import HttpTorznabClient
 from berth.config import Config
-from berth.domain import BudgetUse, IndexerKind, ServiceKind
+from berth.domain import BudgetUse, ServiceKind
 
 
 class ServiceClientFactory(Protocol):
@@ -53,10 +50,6 @@ class ServiceClientFactory(Protocol):
         """TMDB 只有一台，位址是寫死的；可變的是憑證（使用者自備，票 02b）。"""
         ...
 
-    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
-        """位址是使用者貼的**整條** Torznab 網址，不是一個服務根。"""
-        ...
-
     def torrent(self) -> TorrentFetcher:
         """送單前把索引站的下載連結換成「一個 info hash + 一份交得出去的東西」（票 09）。
 
@@ -73,12 +66,11 @@ class ServiceClientFactory(Protocol):
         """
         ...
 
-    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+    def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         """搜尋用的索引站 client（票 08）。
 
-        與上面兩支的分工是**問題不同**：`prowlarr()` 與 `torznab()` 回答「這個端點還通不通」
-        （精靈與健康檢查），這一支回答「這部作品有哪些發佈」。挑哪一種實作由 `kind` 決定，
-        而 `kind` 是精靈第 6 步存下來的——呼叫端不必認得兩個類別。
+        與 `prowlarr()` 的分工是**問題不同**：那一支回答「這台還通不通、有哪些站」（精靈與健康
+        檢查），這一支回答「這部作品有哪些發佈」。
         """
         ...
 
@@ -148,16 +140,11 @@ class HttpServiceClientFactory:
     def tmdb(self, credential: str) -> TmdbClient:
         return HttpTmdbClient(credential)
 
-    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
-        return HttpTorznabClient(base_url, api_key)
-
     def torrent(self) -> TorrentFetcher:
         return HttpTorrentFetcher()
 
     def rss(self) -> FeedFetcher:
         return HttpFeedFetcher()
 
-    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
-        if kind is IndexerKind.TORZNAB:
-            return TorznabSearch(base_url, api_key)
+    def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         return ProwlarrSearch(base_url, api_key)

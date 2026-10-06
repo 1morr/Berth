@@ -23,7 +23,7 @@ test('精靈跑完之後：/setup 導向設定頁，加一個索引站並試搜�
   })
   await page.goto('/settings/indexers')
   const main = page.getByRole('main')
-  await expect(main.getByRole('heading', { name: '索引站設定' })).toBeVisible()
+  await expect(main.getByRole('heading', { name: 'Prowlarr 設定' })).toBeVisible()
   await expect(main.getByTestId('added')).toBeVisible()
   await page.waitForLoadState('networkidle')
   expect(writes).toEqual([])

@@ -58,12 +58,12 @@ type CheckState = 'testing' | SiteCheck
 
 // --- 已加入 ---
 
-/** 已加入清單的一列。既有 Torznab 端點整個算一站、沒有 id。 */
+/** 已加入清單的一列。 */
 interface AddedRow {
   key: string
   name: string
   language: string
-  indexerId: number | null
+  indexerId: number
   removable: boolean
   /** 在 Prowlarr 停用的站：搜尋不會問它（`indexer.search_indexers` 只問啟用中的）。 */
   enabled: boolean
@@ -82,7 +82,7 @@ export function AddedSites({
   const [query, setQuery] = useState('')
   // 按過搜尋的每一站：搜尋中、或它的結果。
   const [found, setFound] = useRemembered<ReadonlyMap<string, 'searching' | SiteSearch>>(
-    ['indexer-search', indexers.kind, indexers.base_url],
+    ['indexer-search', indexers.base_url],
     () => new Map(),
   )
   const [failed, setFailed] = useState(false)
@@ -92,26 +92,14 @@ export function AddedSites({
   const [removed, setRemoved] = useState<string | null>(null)
   const bundled = indexers.origin === 'bundled'
   const webUrl = prowlarrWeb(indexers)
-  const rows: AddedRow[] =
-    indexers.kind === 'torznab'
-      ? [
-          {
-            key: 'endpoint',
-            name: hostOf(indexers.base_url),
-            language: '',
-            indexerId: null,
-            removable: false,
-            enabled: true,
-          },
-        ]
-      : indexers.sites.map((site: IndexerSite) => ({
-          key: String(site.indexer_id),
-          name: site.name,
-          language: languageName(site.language, i18n.language),
-          indexerId: site.indexer_id,
-          removable: site.removable,
-          enabled: site.enabled,
-        }))
+  const rows: AddedRow[] = indexers.sites.map((site: IndexerSite) => ({
+    key: String(site.indexer_id),
+    name: site.name,
+    language: languageName(site.language, i18n.language),
+    indexerId: site.indexer_id,
+    removable: site.removable,
+    enabled: site.enabled,
+  }))
   const gone = removed !== null && !rows.some((row) => row.name === removed)
   const searchable = rows.filter((row) => row.enabled)
   const searchingAll =
@@ -128,11 +116,7 @@ export function AddedSites({
       setFound((was) => {
         const next = new Map(was)
         for (const row of targets) {
-          // Torznab 端點整個算一站：回來的那一站就是它。
-          const site =
-            row.indexerId === null
-              ? result.sites[0]
-              : result.sites.find((each) => each.indexer_id === row.indexerId)
+          const site = result.sites.find((each) => each.indexer_id === row.indexerId)
           if (site) next.set(row.key, site)
           else next.delete(row.key)
         }
@@ -376,7 +360,7 @@ export function AddSites({
   const titleId = useId()
   // 起點是上一次「加入」的結論（回頭看時沒通過的那幾站仍說得出為什麼）；之後疊上這一頁按的測試。
   const [checks, setChecks] = useRemembered<ReadonlyMap<string, CheckState>>(
-    ['indexer-checks', indexers.kind, indexers.base_url],
+    ['indexer-checks', indexers.base_url],
     () => new Map(indexers.checks.map((row) => [row.definition_name, row])),
   )
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())

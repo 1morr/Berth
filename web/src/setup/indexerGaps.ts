@@ -2,8 +2,8 @@ import type { IndexerSetup, SetupStatus } from '../api/setup'
 import { STEP } from './navigation'
 import { connected } from './signals'
 
-/** 連上之後畫哪一種：套件內、既有 Prowlarr、Torznab 端點。 */
-export type IndexerMode = 'bundled' | 'prowlarr' | 'torznab'
+/** 連上之後畫哪一種：套件內、既有 Prowlarr。 */
+export type IndexerMode = 'bundled' | 'prowlarr'
 
 /** 清單說的來源與選擇不一致（剛選下去、清單還沒重讀回來）時是 `null`：不畫另一種的東西。 */
 export function modeOf(indexers: IndexerSetup, chosen: string | undefined): IndexerMode | null {
@@ -11,7 +11,7 @@ export function modeOf(indexers: IndexerSetup, chosen: string | undefined): Inde
   // 套件內那一台讀不到清單時也是 `'bundled'`（M4 票 27）：呼叫端只在連線卡綠時問，這時讀不到是 key 被換掉
   // 這類事，畫「讀不到」與「重新讀取」，不把整段收掉。
   if (indexers.origin === 'bundled') return 'bundled'
-  return indexers.kind === 'torznab' ? 'torznab' : 'prowlarr'
+  return 'prowlarr'
 }
 
 /** 頁 4 還差的事，前進鍵的位置照它列（`BerthNav` 的 `missing`）。 */
@@ -22,8 +22,7 @@ export type IndexerGap = 'sites' | 'login'
  *
  * 條件照後端的 `_indexer_settled`：Prowlarr（套件內或既有）上至少一站，套件內那一台另外要介面登入
  * 有結論；跳過了就什麼都不差。站數看的是這一次讀到的清單，後端看的是上一次連線測試記的數——兩者
- * 不一致時 `IndexerStep` 自動重新測試一次。連不上、清單讀不到、或接的是 Torznab 端點時說不出差什麼，
- * 不列。
+ * 不一致時 `IndexerStep` 自動重新測試一次。連不上、清單讀不到時說不出差什麼，不列。
  */
 export function indexerGaps(status: SetupStatus, indexers: IndexerSetup): IndexerGap[] {
   if (status.current_step !== STEP.indexer || indexers.skipped || indexers.error) return []

@@ -22,9 +22,7 @@ from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torrent_fake import FakeTorrentFetcher
-from berth.adapters.torznab import TorznabClient
-from berth.adapters.torznab.fake import FakeTorznabClient
-from berth.domain import IndexerKind, ServiceKind
+from berth.domain import ServiceKind
 from berth.services.clients import BUNDLED_JELLYFIN_URL, BUNDLED_PROWLARR_URL
 
 #: 精靈第 2 步探的三個 compose 位址（`clients.bundled_targets`，port 是預設值）。
@@ -43,7 +41,6 @@ class FakeClientFactory:
         qbittorrent: FakeQbittorrentClient | None = None,
         prowlarr: FakeProwlarrClient | None = None,
         tmdb: FakeTmdbClient | None = None,
-        torznab: FakeTorznabClient | None = None,
         indexer_search: FakeIndexerSearch | None = None,
         torrent: FakeTorrentFetcher | None = None,
         rss: FakeFeedFetcher | None = None,
@@ -57,7 +54,6 @@ class FakeClientFactory:
         self.qbittorrent_ = qbittorrent or FakeQbittorrentClient()
         self.prowlarr_ = prowlarr or FakeProwlarrClient()
         self.tmdb_ = tmdb or FakeTmdbClient()
-        self.torznab_ = torznab or FakeTorznabClient()
         self.indexer_search_ = indexer_search or FakeIndexerSearch()
         self.torrent_ = torrent or FakeTorrentFetcher()
         self.rss_ = rss or FakeFeedFetcher()
@@ -66,7 +62,6 @@ class FakeClientFactory:
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []
-        self.indexer_kinds: list[IndexerKind] = []
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         self.tokens.append(token)
@@ -89,22 +84,15 @@ class FakeClientFactory:
         self.tmdb_.credential = credential
         return self.tmdb_
 
-    def torznab(self, base_url: str, api_key: str) -> TorznabClient:
-        self.api_keys.append(api_key)
-        self.torznab_.base_url = base_url
-        return self.torznab_
-
     def torrent(self) -> TorrentFetcher:
         return self.torrent_
 
     def rss(self) -> FeedFetcher:
         return self.rss_
 
-    def indexer_search(self, kind: IndexerKind, base_url: str, api_key: str) -> IndexerSearch:
+    def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         self.api_keys.append(api_key)
         self.indexer_search_.base_url = base_url
-        # 挑到的是哪一種實作。`kind` 存在資料庫裡，斷言它才驗得出「照存下來的那一種挑」。
-        self.indexer_kinds.append(kind)
         return self.indexer_search_
 
 

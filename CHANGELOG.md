@@ -1241,6 +1241,15 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   變數，不再要 `export CONFIG_ROOT`。精靈那一段多守三件事：qBittorrent 不收的介面密碼停在頁 2、全域預設儲存路徑
   改掉之後送單照常、完成時照頁序再驗。
 ### Removed
+- **BTH 4 只接 Prowlarr：通用 Torznab 端點與 Jackett 拿掉**（M4 票 37，brief §19 D3，2026-10-06 使用者拍板）：
+  **破壞性**——`POST /api/setup/indexers/connect` 不再收 `kind`（只收 `{base_url, api_key}`）、`GET /api/setup/indexers`
+  不再回 `kind`、`IndexerProblem` 與 `StepFailure` 少 `no_search`、`SiteSearchOut.indexer_id` 一律是整數、
+  設定 `services.indexer` 少 `kind`。`TorznabSearch`、`adapters/torznab/`、`IndexerKind`、`IndexerSearch.capabilities()`
+  與 tmdbid 搜尋一起刪（Prowlarr REST 只有關鍵字搜尋）；泊位名改「Prowlarr」，頁 4 與設定頁沒有「接法」單選。
+  資料 migration `b4ca280eaeca`：存著 Torznab 端點的安裝，索引站位址與 key、精靈的 Prowlarr 選擇與頁 4 的步驟都清掉，
+  頁 4 回到待處理、搜尋說沒設定；Prowlarr 的安裝只少 `kind` 這一個鍵。**降版不會還原清掉的資料。**
+  代價：Jackett 與單站 Torznab 網址沒有路徑（先裝 Prowlarr），單站 Torznab 比 Prowlarr REST 冷查詢快的那條捷徑（1.2 秒對
+  60–85 秒）跟著消失。
 - **qBittorrent 的「建議設定」整組**（M4 票 32，brief §19 D2）：**破壞性**——`POST /api/settings/qbittorrent/apply`
   （「還原建議設定」）與 `GET /api/settings/qbittorrent/diff` 拿掉，設定頁的 qBittorrent 改讀頁 2 的
   `GET /api/setup/qbittorrent/diff`（路徑名照舊）。`QbittorrentOut` 少 `diffs` 與 `writes_preferences`、健康那一列

@@ -1,7 +1,7 @@
 """索引站搜尋這一支命令（票 08、plan §6 search 群組）。
 
 驗的是**領域決策**：哪幾個關鍵字問出去、結果怎麼合併去重、一個查詢垮掉時剩下的還在不在、
-每一列的 Tags 與預估季集是什麼。協定本身（Prowlarr 的 REST 與 Torznab 的 XML）由
+每一列的 Tags 與預估季集是什麼。協定本身（Prowlarr 的 REST）由
 `test_indexer_search.py` 對錄製回應守著，所以這裡一律用 `FakeIndexerSearch`。
 """
 
@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.budget import RequestBudget
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.indexer import IndexerResult, SearchCapability
+from berth.adapters.indexer import IndexerResult
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
     IndexerProblem,
@@ -84,9 +84,7 @@ async def arrange_media(session: AsyncSession) -> None:
 
 async def arrange_indexer(session: AsyncSession) -> None:
     """精靈第 6 步接好的樣子：有位址、有 key。"""
-    await write_settings(
-        session, IndexerSettings(kind="prowlarr", base_url="http://prowlarr:9696", api_key="k")
-    )
+    await write_settings(session, IndexerSettings(base_url="http://prowlarr:9696", api_key="k"))
     await session.commit()
 
 
@@ -652,22 +650,6 @@ class TestMissingEpisodes:
         )
 
         assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
-
-    @pytest.mark.asyncio
-    async def test_an_id_search_does_not_swallow_the_narrowing(self, session: AsyncSession) -> None:
-        """端點認得 tmdbid 時整批換成一個 id 查詢（票 08）——但 id 找的是**整部作品**，
-        收窄到缺的那幾集就沒了，而預覽已經說了要問那幾集。缺集搜尋因此不走 id 那條路。"""
-        tv = await route(session)
-        spy = await title(session, seasons=(season_snapshot(1, aired=2),))
-        await linked(session, spy, tv, episode=1)
-        await arrange_indexer(session)
-        indexer = FakeIndexerSearch(capability=SearchCapability(tmdb_id=frozenset({MediaKind.TV})))
-        factory = FakeClientFactory(indexer_search=indexer)
-
-        await search_torrents(session, factory, media_id=spy.id, missing=True)
-
-        assert [query.text for query in indexer.queries] == ["SPY x FAMILY S01E02"]
-        assert [query.tmdb_id for query in indexer.queries] == [None]
 
     @pytest.mark.asyncio
     async def test_gaps_in_seven_seasons_are_asked_batch_by_batch(

@@ -300,7 +300,7 @@ export function SetupPage() {
     mutationFn: setIndexerLogin,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
-  // 既有 Prowlarr 或 Torznab 的表單（頁 4 選「既有」時）：這就是選了既有，精靈狀態裡的選擇也跟著變。
+  // 既有 Prowlarr 的表單（頁 4 選「既有」時）：這就是選了既有，精靈狀態裡的選擇也跟著變。
   const connectSource = useMutation({
     mutationFn: connectIndexer,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),

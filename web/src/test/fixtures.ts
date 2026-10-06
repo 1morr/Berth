@@ -216,7 +216,6 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
   const added = new Set(sites.map((row) => row.definition_name))
   return {
     origin: 'bundled',
-    kind: 'prowlarr',
     base_url: 'http://prowlarr:9696',
     api_key_present: true,
     reachable: true,
