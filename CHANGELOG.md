@@ -6,11 +6,35 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-07
+
+第一個正式版本：`ghcr.io/1morr/berth:0.1.0`，同時是 `:0.1` 與 compose 範本 pin 的 `:latest`。M0–M3 驗收完成；
+M4 在 2026-10-06 精靈與可用性審計之後，先把擋送單與擋第一次設定的問題（審計改進清單的 P0、P1，M4 票 32–40）修完才發
+（brief §19 D8）。原生 Linux 與 NAS 宿主還沒有人實跑過（M4 票 42）。
+
+**從 `0.1.0-rc1` 或自己 build 的 image 升級**：`docker compose pull && docker compose up -d`，Berth 啟動時自動套用
+migration。審計之後（M4 票 32–40）的破壞性變更：
+
+- **qBittorrent 的「建議設定」整組拿掉**（票 32）：`POST /api/settings/qbittorrent/apply`、
+  `GET /api/settings/qbittorrent/diff` 刪除；`QbittorrentOut` 少 `diffs`、`writes_preferences`，`ServiceHealthOut` 少
+  `drift`，`StepFailure` 少 `save_path_missing`。套件內 qBittorrent 不再寫 `save_path`、`auto_tmm_enabled`、
+  `category_changed_tmm_enabled`，**已經寫過的不改回去**。
+- **BTH 4 只接 Prowlarr**（票 37）：通用 Torznab 端點與 Jackett 不再支援，設定與 API 少 `kind`。**資料 migration
+  `b4ca280eaeca` 清掉存著 Torznab 端點的索引站位址與 key**，精靈頁 4 回到待處理、搜尋說沒設定，要先裝 Prowlarr
+  再接；降版不會還原。
+- **`POST /api/setup/indexers/connect` 拿掉**（票 39）：既有 Prowlarr 改送 `POST /api/setup/services/prowlarr`，
+  `GET /api/setup/indexers` 少 `reason`。
+- **真服務 e2e 的指令換了**（票 34，只影響開發）：`uv run --env-file .env python -m tests.e2e.stack`，不再要先
+  `export CONFIG_ROOT`。
+
+票 33、35、36、38、40 沒有破壞性變更（40 只多 `web_ui_login_by_berth` 欄位）。更早的破壞性變更在下面各節標了
+「破壞性」。
+
 **M0（骨架）在 2026-09-08 通過驗收**（brief §17、`.scratch/m0/issues/11-m0-acceptance.md`）：在乾淨的
 Windows Docker Desktop（NTFS bind mount）與 Linux（ext4）上各跑一次 `docker compose up` → 只操作 Berth
 → 四項健康檢查綠燈，全程沒有打開 qBittorrent / Jellyfin / Prowlarr 的介面；另以「既有 Jellyfin +
 套件內 qBittorrent 與 Prowlarr」的組合走一次，既有媒體庫是**加**一條路徑而不是搬路徑，項目 ID 與
-觀看紀錄都沒有變。M0 建的東西全部列在下面，M1 之後的變更接在同一份清單後面；還沒有發佈過正式版本。
+觀看紀錄都沒有變。M0 建的東西全部列在下面，M1 之後的變更接在同一份清單後面。
 
 **M1（手動全流程）在 2026-09-17 通過驗收**（brief §17、`.scratch/m1/issues/15-m1-acceptance.md`）：一部美劇一季
 （The Bear S03）、一部動漫一季（葬送的芙莉蓮 S01 加 11 個特典）、一部電影（奧本海默）從送單到入庫不經人工，
@@ -1655,3 +1679,6 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - **`/api/routes/*` 與 `/api/jellyfin/libraries` 永遠只有 admin**（票 14a，推翻票 14）。原本精靈跑完之前
   它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
   停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。
+
+[Unreleased]: https://github.com/1morr/Berth/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/1morr/Berth/releases/tag/v0.1.0

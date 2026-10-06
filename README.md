@@ -111,8 +111,6 @@ qBittorrent，媒體庫路徑也要重新檢查。
 | 健康 `/health` | 四項健康檢查與下載迴圈；一般使用者也看得到 |
 | 設定 `/settings/*` | 只有管理員。精靈只管第一次，跑完之後改東西都在這裡，一格泊位一頁：**Jellyfin**（健康與重新檢查、既有那一台的位址與重新登入、對外網址）、**qBittorrent**（健康、既有那一台的位址與帳密、套件內那一台的介面登入、磁碟空間門檻）、**媒體庫路徑**（Route 的新增——同一個 Jellyfin 媒體庫可以有第二條——改名、停用、重新檢查與刪除）、**Prowlarr**（加站、試搜、移除；既有那一台換網址或 key）、**TMDB**（換 key 並測試）。精靈跑完之後打開 `/setup` 會被帶到這裡 |
 
-> **compose 範本 pin 的 `ghcr.io/1morr/berth:latest` 還是空的。** GHCR 上目前只有預發佈的 `0.1.0-rc1`（`:latest` 要等第一個正式版本 tag），所以現在要跑 compose 得先在 repo 根目錄自己 build 一份：見下面的〈自己 build image〉。
-
 | 服務 | `.env` 變數（預設） | 備註 |
 | --- | --- | --- |
 | Berth | `BERTH_PORT`（8383） | 唯一需要開的介面 |
@@ -174,13 +172,22 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 各服務的 API key 與密碼存在 `${CONFIG_ROOT}/berth/berth.db`，靠檔案權限保護，不做應用層加密（與 Seerr 相同）。備份 Berth 就是複製 `${CONFIG_ROOT}/berth`。
 
-### 自己 build image
+### 版本與升級
+
+compose 範本拉的是 `ghcr.io/1morr/berth:latest`，永遠是最新的正式版本；每個版本另有 `:<版本>`（例如 `:0.1.0`）與
+`:<主>.<次>`（`:0.1`）兩個 tag，想固定在某一版就把 `deploy/docker-compose.yml` 的 `berth` 改成它。預發佈版本
+（`-rc1` 這種）只有 `:<版本>`，不會動到 `:latest`。升級是 `docker compose pull && docker compose up -d`，Berth 啟動時
+自動套用資料庫 migration；每一版改了什麼、哪些是破壞性變更，見 `CHANGELOG.md`。
+
+### 自己 build image（進階）
+
+要跑還沒發佈的改動時，在 repo 根目錄 build 一份蓋過 compose 用的那個 tag：
 
 ```bash
 docker build -f deploy/Dockerfile -t ghcr.io/1morr/berth:latest .
 ```
 
-發佈由 `.github/workflows/release.yml` 在 `v*` tag 上推到 GHCR。
+之後的 `docker compose pull` 會把它換回 GHCR 上的版本。發佈由 `.github/workflows/release.yml` 在 `v*` tag 上推到 GHCR。
 
 ### 部署疑難排解
 
