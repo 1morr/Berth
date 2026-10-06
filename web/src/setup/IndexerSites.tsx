@@ -343,8 +343,14 @@ export function AddSites({
   onApply,
   onSkip,
   sticky = true,
+  held = false,
 }: {
   indexers: IndexerSetup
+  /**
+   * 介面登入正在送（M4 票 40）：Prowlarr 設完會自行重啟，這時加站撞上它；加站的結果還會整列寫回、蓋掉
+   * 登入那一條。等它回來才按得下去。
+   */
+  held?: boolean
   /**
    * 主鈕固定在窄版底部。精靈裡這一頁走過了（底部導覽有下一個）就不固定：兩條 sticky 會疊在
    * 同一個位置（票 08 的 code-review）。沒有東西可按時本來就不固定。
@@ -525,7 +531,7 @@ export function AddSites({
         <PrimaryButton
           type="button"
           busy={applying}
-          disabled={selected.length === 0}
+          disabled={selected.length === 0 || held}
           onClick={apply}
         >
           {applying
@@ -535,7 +541,7 @@ export function AddSites({
               : t('indexer.add.applyNone')}
         </PrimaryButton>
         {onSkip && (
-          <GhostButton type="button" busy={applying} onClick={onSkip}>
+          <GhostButton type="button" busy={applying} disabled={held} onClick={onSkip}>
             {t('indexer.skip')}
           </GhostButton>
         )}

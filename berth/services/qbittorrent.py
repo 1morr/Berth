@@ -163,6 +163,10 @@ class QbittorrentSetupStatus:
     #: 套件內那一台的 WebUI 帳號：Berth 設下的，或那一台自己就設過的（不是 `admin`）。還沒設過、
     #: 或是既有的那一台是空字串。
     web_ui_username: str
+    #: 那一組是這個 Berth 寫進去的（記著它的密碼雜湊）。那一台自己就設過的（重裝保留
+    #: config）、還沒設、既有的都是 `False`。完成頁照它說密碼是哪一組（M4 票 40）——登入
+    #: 那一條纜繩分不出來：同一組再送一次也是 `skipped`。
+    web_ui_login_by_berth: bool
     #: 連線本身為什麼失敗（M4 票 21）：UI 照它說人話。連上了是 `None`。
     failure: StepFailure | None
     #: 連線本身的失敗原文（英文）。UI 收進「技術細節」。
@@ -471,6 +475,10 @@ def _web_ui_username(
     return setup.qbittorrent.web_ui_username or _instance_username(preferences)
 
 
+def _login_by_berth(setup: SetupSettings, origin: ServiceOrigin | None) -> bool:
+    return origin is ServiceOrigin.BUNDLED and bool(setup.qbittorrent.web_ui_password_hash)
+
+
 def _status(
     setup: SetupSettings,
     settings: QbittorrentSettings,
@@ -492,6 +500,7 @@ def _status(
         steps=step_views(setup.qbittorrent.steps),
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, preferences),
+        web_ui_login_by_berth=_login_by_berth(setup, origin),
         failure=None,
         error="",
     )
@@ -516,6 +525,7 @@ def _unreachable(
         steps=step_views(setup.qbittorrent.steps),
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, {}),
+        web_ui_login_by_berth=_login_by_berth(setup, origin),
         failure=failure,
         error=message(exc),
     )

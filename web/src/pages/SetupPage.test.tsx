@@ -430,14 +430,24 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(bodiesOf(fetchStub, '/api/setup/services/jellyfin/test')).toEqual([])
   })
 
-  it('剖面說出會做什麼，也說出密碼不存下來', async () => {
+  it('剖面說出會做什麼，也說出密碼不存下來、會交給誰', async () => {
     stubApi({ [STATUS]: { body: FOUND } })
+    const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
 
     const cutaway = (await screen.findByText('將會做什麼')).closest('section')!
     expect(within(cutaway).getByText('Jellyfin 管理員')).toBeInTheDocument()
     expect(within(cutaway).getByText('API key「Berth」')).toBeInTheDocument()
+    // 預設勾著「也用這組」（M4 票 40）：密碼也會設成套件內兩台的介面密碼；取消勾選就只交給 Jellyfin。
+    expect(
+      within(cutaway).getByText(
+        '你的密碼（交給 Jellyfin；套件內 qBittorrent 與 Prowlarr 的介面也設成它）',
+      ),
+    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('checkbox', { name: '套件內 qBittorrent 與 Prowlarr 的介面也用這組' }),
+    )
     expect(within(cutaway).getByText('你的密碼（只交給 Jellyfin）')).toBeInTheDocument()
   })
 

@@ -2875,6 +2875,8 @@ export interface components {
             web_ui_login: boolean;
             /** Web Ui Username */
             web_ui_username: string;
+            /** Web Ui Login By Berth */
+            web_ui_login_by_berth: boolean;
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
@@ -4257,6 +4259,8 @@ export interface components {
             web_ui_login: boolean;
             /** Web Ui Username */
             web_ui_username: string;
+            /** Web Ui Login By Berth */
+            web_ui_login_by_berth: boolean;
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;

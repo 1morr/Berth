@@ -15,8 +15,8 @@ import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
-import { useInterfaceLogin } from './interfaceLogin'
-import { BerthLogin } from './InterfaceLoginFields'
+import { useCarriedLogin, useInterfaceLogin } from './interfaceLogin'
+import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
 import { prowlarrWeb } from './serviceWeb'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
@@ -57,6 +57,7 @@ export function IndexerStep({
   indexers,
   indexersFailed,
   owner,
+  carriedPassword,
   applying,
   login,
   onApply,
@@ -72,6 +73,8 @@ export function IndexerStep({
   indexersFailed: boolean
   /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
+  /** 頁 1 帶過來的擁有者密碼（只在這個分頁的記憶體裡，M4 票 40）；沒有就是 `null`。 */
+  carriedPassword: string | null
   applying: boolean
   login: LoginControls
   onApply: (indexers: string[]) => Promise<IndexerSetup>
@@ -167,9 +170,15 @@ export function IndexerStep({
             onApply={onApply}
             onSkip={onSkip}
             sticky={sticky}
+            held={mode === 'bundled' && login.saving}
           />
           {mode === 'bundled' && (
-            <ProwlarrLogin indexers={indexers} owner={owner} controls={login} />
+            <ProwlarrLogin
+              indexers={indexers}
+              owner={owner}
+              carriedPassword={carriedPassword}
+              controls={login}
+            />
           )}
         </>
       )}
@@ -267,15 +276,18 @@ function ReadFailed({
  *
  * **必填**（M4 票 07 shape）：Prowlarr 現行版本不讓介面沒有登入——沒設的話，第一次打開它會跳出關不掉的
  * 視窗要人設一組（v2.6.5 `Page.js` 在驗證沒開時掛 `AuthenticationRequiredModal`，沒有關閉鈕）。精靈在
- * 這一條有結論之前停在頁 4（後端 `_indexer_settled`）。
+ * 這一條有結論之前停在頁 4（後端 `_indexer_settled`）。頁 1 勾了「也用這組」時不問，自動沿用那一組
+ * （`carriedPassword`，M4 票 40）。
  */
 function ProwlarrLogin({
   indexers,
   owner,
+  carriedPassword,
   controls,
 }: {
   indexers: IndexerSetup
   owner: string
+  carriedPassword: string | null
   controls: LoginControls
 }) {
   const { t } = useTranslation()
@@ -292,6 +304,17 @@ function ProwlarrLogin({
   // 請求本身沒走完（Berth 停著、5xx）：原本這一支的 reject 被吞掉，按下去什麼都沒發生（M4 票 31，
   // 實測 #21）。說得出理由的拒絕（`refusal`）照舊由它說，這裡只接其餘的。
   const [failed, setFailed] = useState<unknown>(null)
+  // Prowlarr 沒有帳密規則（`LOGIN_RULES`），頁 1 那一組一定能沿用；頁 2 的 `carriedUnfit` 這裡不必。
+  const carriedLogin = useCarriedLogin({
+    carriedPassword,
+    // 同一個請求還在飛（走開又回來，這一區重掛載）時不再送。
+    needed: !indexers.web_ui_username && !controls.saving,
+    apply: (taken) => {
+      setSentAt(form.edits)
+      setFailed(null)
+      return controls.onSave(taken).catch((error: unknown) => setFailed(error))
+    },
+  })
 
   function save() {
     const taken = form.take()
@@ -319,7 +342,11 @@ function ProwlarrLogin({
         </span>
       </div>
       <div className="mt-4">
-        <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={form} />
+        {carriedLogin.applying ? (
+          <CarriedApplying owner={owner} />
+        ) : (
+          <BerthLogin service="prowlarr" current={indexers.web_ui_username} form={form} />
+        )}
       </div>
       {controls.refusal && sentAt === form.edits && (
         <div className="mt-4">
@@ -333,7 +360,7 @@ function ProwlarrLogin({
           <RequestFailed error={failed} />
         </div>
       )}
-      {form.open && (
+      {form.open && !carriedLogin.applying && (
         <div className="mt-4">
           <PrimaryButton type="button" busy={controls.saving} onClick={save}>
             {controls.saving ? t('indexer.login.saving') : t('indexer.login.save')}

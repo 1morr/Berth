@@ -941,6 +941,66 @@ describe('頁 6：完成', () => {
     expect(doors.getByText(/帳號 deckhand/)).toBeInTheDocument()
   })
 
+  /**
+   * 審計 S5（M4 票 40）：重裝保留 Prowlarr 設定時，那一台的登入是上一個 Berth 設的，完成頁卻寫
+   * 「密碼是精靈裡設的那一組」。照後端說的誰設的（`web_ui_login_by_berth`）：這個 Berth 寫進去的、它原本就有
+   * 的、還沒設的。登入那一條纜繩不算數：加站之後 Berth 設好的也是 `skipped`。
+   */
+  it('介面登入照實際情況說：這一輪設的、原本就有的、還沒設的（M4 票 40）', async () => {
+    const page = (indexers: ReturnType<typeof indexerSetup>) =>
+      stubPage({
+        [STATUS]: { body: AT_THE_END },
+        [ROUTES]: { body: BUILT },
+        [INDEXERS]: { body: indexers },
+        [TMDB]: { body: tmdbSetup() },
+        'GET /api/setup/qbittorrent/diff': {
+          body: qbittorrentSetup({
+            steps: [step('web_ui_password', 'ok', 'skipper')],
+            web_ui_username: 'skipper',
+            web_ui_login_by_berth: true,
+          }),
+        },
+      })
+    const doorsOf = async () =>
+      within((await screen.findByRole('heading', { name: '各服務自己的介面' })).closest('section')!)
+
+    // 重裝：Prowlarr 的登入是上一個 Berth 設的，這一輪連線測試時讀到（`skipped`）。
+    page(
+      indexerSetup({
+        steps: [step('prowlarr_login', 'skipped', 'audit')],
+        web_ui_username: 'audit',
+      }),
+    )
+    const first = renderInRoute(<SetupPage />)
+    let doors = await doorsOf()
+    expect(await doors.findByText('帳號 skipper，密碼是精靈裡設的那一組。')).toBeInTheDocument()
+    expect(
+      doors.getByText('帳號 audit，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。'),
+    ).toBeInTheDocument()
+    expect(doors.getAllByText(/精靈裡設的那一組/)).toHaveLength(1)
+    first.unmount()
+
+    // S1：這一輪設好、之後又加了站——那一條纜繩被重算成 `skipped`，仍是精靈裡設的那一組。
+    page(
+      indexerSetup({
+        steps: [step('prowlarr_login', 'skipped', 'skipper')],
+        web_ui_username: 'skipper',
+        web_ui_login_by_berth: true,
+      }),
+    )
+    const second = renderInRoute(<SetupPage />)
+    doors = await doorsOf()
+    expect(await doors.findAllByText('帳號 skipper，密碼是精靈裡設的那一組。')).toHaveLength(2)
+    second.unmount()
+
+    // 跳過索引站、介面登入也沒設：不說「用你原本的登入」——套件內那一台沒有「你原本的」。
+    page(indexerSetup({ skipped: true }))
+    renderInRoute(<SetupPage />)
+    doors = await doorsOf()
+    expect(await doors.findByText(/還沒設介面登入：第一次打開它會要你設一組/)).toBeInTheDocument()
+    expect(doors.queryByText('用你原本的登入。')).not.toBeInTheDocument()
+  })
+
   it('你自己的 qBittorrent 位址是 compose 主機名時不給連結，登入說用你原本的（M4 票 31）', async () => {
     stubPage({
       [STATUS]: { body: AT_THE_END },

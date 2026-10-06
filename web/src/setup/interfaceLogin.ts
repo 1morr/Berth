@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import type { InterfaceLogin } from '../api/setup'
 
@@ -87,6 +87,62 @@ export function takenLogin(draft: LoginDraft, reuse: boolean): InterfaceLogin {
     : { username: draft.username.trim(), password: draft.password, reuse_owner: false }
 }
 
+/**
+ * 頁 1 帶過來的那一組（M4 票 40，brief §19 D4）照這個服務的規則合不合：不合就說哪裡不合（帳號與密碼
+ * 的問題各一個），合（或根本沒帶）就是 `null`。沿用時帳號是擁有者，所以兩個都要看。
+ */
+export function carriedUnfit(
+  service: LoginService,
+  carriedPassword: string | null,
+  owner: string,
+): LoginProblems | null {
+  if (carriedPassword === null) return null
+  const problems = loginProblems(reuseDraft(carriedPassword), {
+    reuse: true,
+    rules: LOGIN_RULES[service],
+    owner,
+  })
+  return Object.keys(problems).length > 0 ? problems : null
+}
+
+/** 沿用時的欄位：只有密碼那一格（帳號是擁有者，後端填）。 */
+function reuseDraft(password: string): LoginDraft {
+  return { username: '', password, confirm: '' }
+}
+
+/**
+ * 頁 1 勾了「也用這組」時，套件內的那一台還沒有介面登入就自動送一次沿用 Jellyfin 帳密（M4 票 40）。
+ * 照舊經 `reuse_owner`：後端先向 Jellyfin 驗過才寫。**只送一次**，不管結果——失敗了欄位照常打開，
+ * 拒絕與失敗由呼叫端照手動送出的那一套說。
+ *
+ * @param carriedPassword 合規則的那一組（`carriedUnfit` 不是 `null` 的不傳），沒有就是 `null`。
+ * @param needed 那一台還沒有介面登入，頁上本來就要問。
+ */
+export function useCarriedLogin({
+  carriedPassword,
+  needed,
+  apply,
+}: {
+  carriedPassword: string | null
+  needed: boolean
+  apply: (login: InterfaceLogin) => Promise<unknown>
+}): { applying: boolean } {
+  const [applying, setApplying] = useState(false)
+  const sent = useRef(false)
+  // 送出的那一刻用最新的 `apply`：它讀呼叫端當下的欄位版本。
+  const send = useEffectEvent((password: string) => {
+    setApplying(true)
+    const done = () => setApplying(false)
+    apply(takenLogin(reuseDraft(password), true)).then(done, done)
+  })
+  useEffect(() => {
+    if (carriedPassword === null || !needed || sent.current) return
+    sent.current = true
+    send(carriedPassword)
+  }, [carriedPassword, needed])
+  return { applying }
+}
+
 /** 送出時拿到的：要設的那一組、登入照舊（`null`），或欄位還有問題（`undefined`）。 */
 export type TakenLogin = InterfaceLogin | null | undefined
 
@@ -120,24 +176,28 @@ export interface InterfaceLoginForm {
  * @param current 那一台的帳號（Berth 設下的，或它自己就設過的），空字串是還沒設過。
  * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）。
  * @param alwaysOpen 設定頁：那一區本來就是「更新登入」，沒有收起來的狀態。
+ * @param reuse 一開始勾不勾沿用（預設勾）。
  */
 export function useInterfaceLogin({
   service,
   current,
   owner,
   alwaysOpen = false,
+  reuse: reuseAtFirst = true,
 }: {
   service: LoginService
   current: string
   owner: string
   alwaysOpen?: boolean
+  /** 一開始勾不勾沿用：頁 1 那一組不合這個服務的規則時（`carriedUnfit`）一開始就是自設的三格。 */
+  reuse?: boolean
 }): InterfaceLoginForm {
   const [draft, setDraft] = useState<LoginDraft>({
     username: current || owner,
     password: '',
     confirm: '',
   })
-  const [reuse, setReuse] = useState(Boolean(owner))
+  const [reuse, setReuse] = useState(reuseAtFirst && Boolean(owner))
   const [changing, setChanging] = useState(false)
   const [checked, setChecked] = useState(false)
   const [edits, setEdits] = useState(0)

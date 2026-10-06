@@ -44,6 +44,10 @@ export interface ReSignIn {
  * 照 Seerr：先連媒體伺服器。頁首二選一（`ServiceChoice`）——不預選、選了才連；連上之後表單跟著
  * 那一台的狀態走：還沒跑過初始精靈就建立管理員（選既有也一樣），已經有管理員就登入（套件內重裝
  * 保留 config 也一樣）。帳密只交給 Jellyfin，不存下來。擁有者成立之後這一頁的選擇鎖住。
+ *
+ * **建立套件內那一台的管理員時多一個勾選**（M4 票 40，brief §19 D4），預設勾：套件內 qBittorrent 與
+ * Prowlarr 的介面也用這組。勾著的話密碼隨 `onClaim` 交給 `SetupPage` 留在記憶體裡，頁 2、頁 4 自動帶入；
+ * 登入既有的管理員、或選既有那一台時不提——前者沒有「設一組」，後者 Jellyfin 不是 Berth 的。
  */
 export function OwnerStep({
   status,
@@ -65,7 +69,8 @@ export function OwnerStep({
   refusal: OwnerRefusal | null
   /** 請求沒跑完，而且不是一份認得的拒絕（沒有就是 `null`）。 */
   claimError: unknown
-  onClaim: (input: OwnerInput) => void
+  /** `carry`：頁 2、頁 4 套件內的介面也用這組（M4 票 40）。 */
+  onClaim: (input: OwnerInput, carry: boolean) => void
   /** 收掉上一次送出的結果（拒絕那一句）。`target_changed` 之後重新測試時用（M4 票 28）。 */
   onClaimReset: () => void
   reSignIn: ReSignIn
@@ -80,9 +85,20 @@ export function OwnerStep({
   const switching = choice.draft !== null && choice.draft !== jellyfin?.origin
   const mode = switching ? 'choose' : modeOf(status, connected(jellyfin))
   const reSignInId = useId()
+  const offersCarry = mode === 'create' && jellyfin?.origin === 'bundled'
+  const [carry, setCarry] = useState(true)
 
   return (
-    <StepFrame cutaway={<OwnerCutaway status={status} mode={mode} switching={switching} />}>
+    <StepFrame
+      cutaway={
+        <OwnerCutaway
+          status={status}
+          mode={mode}
+          switching={switching}
+          carried={offersCarry && carry}
+        />
+      }
+    >
       <h2 className="text-lg font-semibold text-ink">
         {t(`owner.title.${mode}`, { name: status.owner })}
       </h2>
@@ -116,6 +132,7 @@ export function OwnerStep({
           signsIn={mode === 'signIn'}
           jellyfin={jellyfin}
           remembered={status.jellyfin_startup ?? null}
+          carry={offersCarry ? { checked: carry, onChange: setCarry } : null}
           claiming={claiming}
           refusal={refusal}
           claimError={claimError}
@@ -147,6 +164,7 @@ function OwnerForm({
   signsIn,
   jellyfin,
   remembered,
+  carry,
   claiming,
   refusal,
   claimError,
@@ -168,10 +186,12 @@ function OwnerForm({
    * 重新整理之後照它重填，不退回預設——重試會再寫一次 Jellyfin 的初始設定（實測 E12）。
    */
   remembered: JellyfinStartup | null
+  /** 「也用這組」那一格（M4 票 40）；不提就是 `null`。 */
+  carry: { checked: boolean; onChange: (checked: boolean) => void } | null
   claiming: boolean
   refusal: OwnerRefusal | null
   claimError: unknown
-  onClaim: (input: OwnerInput) => void
+  onClaim: (input: OwnerInput, carry: boolean) => void
   retesting: boolean
   onRetest: () => void
   sticky: boolean
@@ -232,13 +252,16 @@ function OwnerForm({
       password,
     }
     if (signsIn) {
-      onClaim(credentials)
+      onClaim(credentials, false)
       return
     }
     const locale = asksStartup
       ? JELLYFIN_LOCALES.find((row) => row.ui_culture === culture)!
       : localeForUi(i18n.language)
-    onClaim({ ...credentials, ...locale, remote_access: asksStartup && remoteAccess })
+    onClaim(
+      { ...credentials, ...locale, remote_access: asksStartup && remoteAccess },
+      carry?.checked ?? false,
+    )
   }
 
   return (
@@ -264,6 +287,14 @@ function OwnerForm({
           autoComplete="new-password"
           onChange={(event) => edit(() => setConfirm(event.target.value))}
           error={checked && mismatch ? t('owner.error.mismatch') : undefined}
+        />
+      )}
+      {carry && (
+        <Checkbox
+          label={t('owner.carry.label')}
+          hint={t('owner.carry.hint')}
+          checked={carry.checked}
+          onChange={carry.onChange}
         />
       )}
       {asksStartup && (
@@ -340,11 +371,14 @@ function OwnerCutaway({
   status,
   mode,
   switching,
+  carried,
 }: {
   status: SetupStatus
   mode: OwnerMode
   /** 畫面上改選了另一格、還沒測：存下的那一台不是使用者現在在看的（M4 票 31，實測 #48）。 */
   switching: boolean
+  /** 勾著「也用這組」：密碼也會設成套件內兩台的介面密碼（M4 票 40）。 */
+  carried: boolean
 }) {
   const { t } = useTranslation()
   const jellyfin = status.services.find((row) => row.kind === 'jellyfin')
@@ -377,7 +411,11 @@ function OwnerCutaway({
       ) : (
         <CutawayRow term={t('owner.cutaway.create')} value={t('owner.cutaway.apiKey')} />
       )}
-      <CutawayRow term={t('owner.cutaway.stored')} value={t('owner.cutaway.password')} muted />
+      <CutawayRow
+        term={t('owner.cutaway.stored')}
+        value={t(carried ? 'owner.cutaway.passwordCarried' : 'owner.cutaway.password')}
+        muted
+      />
     </Cutaway>
   )
 }

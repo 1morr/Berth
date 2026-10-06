@@ -126,6 +126,11 @@ const zhHant = {
       apiKey: 'API key「Berth」',
       nothing: '不改這台 Jellyfin 的任何設定',
       password: '你的密碼（只交給 Jellyfin）',
+      passwordCarried: '你的密碼（交給 Jellyfin；套件內 qBittorrent 與 Prowlarr 的介面也設成它）',
+    },
+    carry: {
+      label: '套件內 qBittorrent 與 Prowlarr 的介面也用這組',
+      hint: '到那兩頁自動帶入，不用再打一次密碼；Berth 照樣先向 Jellyfin 驗過才寫。密碼只留在這個分頁的記憶體裡，不存進 Berth、也不寫進瀏覽器——重新整理之後會再問一次。',
     },
     field: {
       username: 'Jellyfin 帳號',
@@ -551,6 +556,14 @@ const zhHant = {
     reuseHint:
       '帳號就是 {{owner}}，密碼打一次：Berth 先向 Jellyfin 確認它是對的才寫進去，只記雜湊、不存密碼。取消勾選就自己設一組。',
     ownerPassword: '{{owner}} 的 Jellyfin 密碼',
+    carried: {
+      applying: '沿用頁 1 的 Jellyfin 帳密（{{owner}}），設定中…',
+      unfitLabel: '不能沿用',
+      unfitPassword:
+        '{{service}} 的密碼至少要 {{min}} 個字元，頁 1 那一組 Jellyfin 密碼太短，不能沿用；請在下面另設一組。',
+      unfitUsername:
+        '{{service}} 的帳號至少要 {{min}} 個字元、不能有冒號，{{owner}} 不能沿用；請在下面另設一組。',
+    },
     error: {
       blank: '這一格要填。',
       mismatch: '兩次輸入的密碼不一樣。',
@@ -940,6 +953,12 @@ const zhHant = {
       lede: '平常用不到它們：Berth 替你接好了。要看下載細節、管理 Jellyfin 的使用者、在 Prowlarr 加要帳號的站時才開。',
       jellyfin: '用擁有者 {{name}} 登入，與 Berth 同一組。',
       bundledLogin: '帳號 {{name}}，密碼是精靈裡設的那一組。',
+      instanceLogin: '帳號 {{name}}，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。',
+      noLogin: {
+        qbittorrent:
+          '還沒設 WebUI 登入：只有容器 log 裡每次重啟都換的臨時密碼。到「設定 → qBittorrent」設一組。',
+        prowlarr: '還沒設介面登入：第一次打開它會要你設一組，或到「設定 → Prowlarr」設。',
+      },
       yours: '用你原本的登入。',
       noLink: '給不出連結：Berth 只知道它在容器網路裡的位址。用你平常開它的那個位址。',
     },
@@ -3210,6 +3229,12 @@ const en: Translations<typeof zhHant> = {
       apiKey: 'API key “Berth”',
       nothing: 'Nothing on this Jellyfin',
       password: 'Your password (it only goes to Jellyfin)',
+      passwordCarried:
+        'Your password (it goes to Jellyfin, and becomes the bundled qBittorrent and Prowlarr interface password too)',
+    },
+    carry: {
+      label: 'Use this login for the bundled qBittorrent and Prowlarr interfaces too',
+      hint: 'Those two pages fill it in for you, so you do not type the password again; Berth still checks it with Jellyfin before writing it. The password stays only in this tab’s memory: Berth does not store it and the browser does not save it. After a reload you are asked again.',
     },
     field: {
       username: 'Jellyfin username',
@@ -3660,6 +3685,14 @@ const en: Translations<typeof zhHant> = {
     reuseHint:
       'The username is {{owner}}; type the password once. Berth checks it with Jellyfin before writing it, and keeps only a hash, never the password. Untick to set a login of your own.',
     ownerPassword: "{{owner}}'s Jellyfin password",
+    carried: {
+      applying: 'Reusing the Jellyfin login from page 1 ({{owner}})…',
+      unfitLabel: 'Cannot reuse',
+      unfitPassword:
+        '{{service}} needs a password of at least {{min}} characters; the Jellyfin password from page 1 is too short to reuse. Set one of its own below.',
+      unfitUsername:
+        '{{service}} needs a username of at least {{min}} characters with no colon, so {{owner}} cannot be reused. Set one of its own below.',
+    },
     error: {
       blank: 'Fill this in.',
       mismatch: 'The two passwords differ.',
@@ -4069,6 +4102,14 @@ const en: Translations<typeof zhHant> = {
       lede: 'You will rarely need them: Berth has wired them up. Open them to see download details, manage Jellyfin users, or add sites that need an account in Prowlarr.',
       jellyfin: 'Sign in as the owner, {{name}} — the same account as Berth.',
       bundledLogin: 'Username {{name}}; the password is the one you set in the wizard.',
+      instanceLogin:
+        'Username {{name}}; the password is the one it already had — this run of the wizard did not set it.',
+      noLogin: {
+        qbittorrent:
+          'No WebUI login yet: only the temporary password in the container log, which changes on every restart. Set one in Settings → qBittorrent.',
+        prowlarr:
+          'No interface login yet: it asks you to set one the first time you open it, or set one in Settings → Prowlarr.',
+      },
       yours: 'Use the login you already have.',
       noLink:
         'No link: Berth only knows its address inside the container network. Use the address you normally open it at.',

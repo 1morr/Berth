@@ -656,6 +656,8 @@ class IndexerSetupOut(BaseModel):
     web_ui_login: bool
     #: Berth 替套件內 Prowlarr 設下的介面帳號；還沒設過是空字串。
     web_ui_username: str
+    #: 那一組是這個 Berth 寫進去的；它自己就設過的、還沒設、既有的是 `false`（M4 票 40）。
+    web_ui_login_by_berth: bool
     #: 讀清單那一次為什麼失敗（M4 票 21）。讀到了是 `null`。
     failure: StepFailure | None
     error: str

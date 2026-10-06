@@ -325,3 +325,66 @@ async def test_a_fresh_bundled_prowlarr_still_asks_for_a_login(session: AsyncSes
 
     step = next(row for row in status.steps if row.step == PROWLARR_LOGIN_STEP)
     assert step.status is StepStatus.PENDING
+
+
+# --- 這個 Berth 設的、還是那一台原本就有的（M4 票 40：完成頁照它說）---
+
+
+@pytest.mark.asyncio
+async def test_a_prowlarr_login_berth_set_stays_berths_after_sites_are_added(
+    session: AsyncSession,
+) -> None:
+    """加站會以「不帶登入」重算登入那一條（`skipped`）：纜繩分不出誰設的，所以另給一個布林。"""
+    await bundled_pair(session)
+    clients = factory()
+
+    await set_prowlarr_login(session, clients, REUSED, sleep=_no_sleep)
+    status = await apply_default_indexers(session, clients, ["nyaasi"], sleep=_no_sleep)
+
+    step = next(row for row in status.steps if row.step == PROWLARR_LOGIN_STEP)
+    assert step.status is StepStatus.SKIPPED
+    assert status.web_ui_login_by_berth
+    assert (await read_indexer_status(session, clients)).web_ui_login_by_berth
+
+
+@pytest.mark.asyncio
+async def test_a_prowlarr_login_it_already_had_is_not_berths(session: AsyncSession) -> None:
+    await bundled_pair(session)
+    prowlarr = FakeProwlarrClient(
+        host_config={"authenticationMethod": "forms", "username": "keeper", "password": "x"}
+    )
+    clients = factory(prowlarr=prowlarr)
+
+    status = await apply_default_indexers(session, clients, ["nyaasi"], sleep=_no_sleep)
+
+    assert status.web_ui_username == "keeper"
+    assert not status.web_ui_login_by_berth
+
+
+@pytest.mark.asyncio
+async def test_a_qbittorrent_login_berth_set_is_berths_even_when_sent_again(
+    session: AsyncSession,
+) -> None:
+    """同一組再送一次是 `skipped`（已經是這一組），仍然是這個 Berth 設的。"""
+    await bundled_pair(session)
+    clients = factory()
+
+    first = await apply_qbittorrent(session, clients, login=REUSED)
+    again = await apply_qbittorrent(session, clients, login=REUSED)
+
+    assert password_step(again).status is StepStatus.SKIPPED
+    assert first.web_ui_login_by_berth
+    assert again.web_ui_login_by_berth
+    assert (await read_qbittorrent(session, clients)).web_ui_login_by_berth
+
+
+@pytest.mark.asyncio
+async def test_a_qbittorrent_login_it_already_had_or_none_is_not_berths(
+    session: AsyncSession,
+) -> None:
+    await bundled_pair(session)
+    kept = factory(qbittorrent=FakeQbittorrentClient(preferences={"web_ui_username": "keeper"}))
+
+    assert not (await read_qbittorrent(session, kept)).web_ui_login_by_berth
+    assert not (await apply_qbittorrent(session, kept)).web_ui_login_by_berth
+    assert not (await read_qbittorrent(session, factory())).web_ui_login_by_berth

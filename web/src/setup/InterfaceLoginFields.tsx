@@ -1,8 +1,13 @@
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
-import { Checkbox, Field, GhostButton, PasswordField } from '../components/controls'
-import type { InterfaceLoginForm, LoginProblems, LoginService } from './interfaceLogin'
+import { Checkbox, Field, GhostButton, Notice, PasswordField } from '../components/controls'
+import {
+  LOGIN_RULES,
+  type InterfaceLoginForm,
+  type LoginProblems,
+  type LoginService,
+} from './interfaceLogin'
 
 /** 產品名不翻譯：人話裡的 `{{service}}`。 */
 const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const satisfies Record<
@@ -137,5 +142,38 @@ export function BerthLogin({
         {t('interfaceLogin.change')}
       </GhostButton>
     </div>
+  )
+}
+
+/**
+ * 頁 1 帶過來的那一組正在自動送（M4 票 40）：取代欄位與按鈕，說的是沿用誰的帳密。
+ */
+export function CarriedApplying({ owner }: { owner: string }) {
+  const { t } = useTranslation()
+
+  return (
+    <div aria-live="polite">
+      <Notice signal="working" label={t('status.running')}>
+        {t('interfaceLogin.carried.applying', { owner })}
+      </Notice>
+    </div>
+  )
+}
+
+/**
+ * 頁 1 帶過來的那一組不合 qBittorrent 的規則（M4 票 40、票 26）：說為什麼不能沿用，欄位一開始就是自設的
+ * 三格。只有 qBittorrent 有規則（`LOGIN_RULES`），Prowlarr 永遠沿用得了。
+ */
+export function CarriedUnfit({ owner, problems }: { owner: string; problems: LoginProblems }) {
+  const { t } = useTranslation()
+  const rules = LOGIN_RULES.qbittorrent
+  const rule = { service: PRODUCT.qbittorrent, owner }
+
+  return (
+    <Notice signal="assigned" label={t('interfaceLogin.carried.unfitLabel')}>
+      {problems.username
+        ? t('interfaceLogin.carried.unfitUsername', { ...rule, min: rules.usernameMin })
+        : t('interfaceLogin.carried.unfitPassword', { ...rule, min: rules.passwordMin })}
+    </Notice>
   )
 }

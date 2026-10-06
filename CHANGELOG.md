@@ -722,6 +722,14 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
 - 真服務 e2e 多第四個模組 `tests/e2e/test_4_m3_rss.py`（M3 的八條驗收），公開 RSS 站由 compose 裡的 `sites` 容器冒充（`tests/e2e/sites.py`，HTTPS，測試 CA 在 `tests/fixtures/e2e/tls/`）。前端 e2e 多 `rss-auto-bind`。
 
 ### Changed
+- **精靈的密碼只問一次**（M4 票 40，brief §19 D4，2026-10-06 審計 S1、E-3）：全套件內的流程原本要打 4 次密碼
+  （建擁有者 2 次、qBittorrent 與 Prowlarr 的介面登入各 1 次）。頁 1 建套件內 Jellyfin 的管理員時多一個預設勾著的
+  「套件內 qBittorrent 與 Prowlarr 的介面也用這組」：密碼只留在精靈那一個分頁的記憶體裡，到頁 2、頁 4 自動以
+  「沿用 Jellyfin 帳密」送出（後端照舊先向 Jellyfin 驗過才寫），重新整理之後才再問；Jellyfin 密碼不合
+  qBittorrent 的規則時頁 2 說明不能沿用、給自設的欄位。完成頁的介面登入照實際情況說：這一輪精靈設的、那一台
+  原本就有的（重裝保留 config，原本也說成「精靈裡設的那一組」）、還沒設的。API：`GET /api/setup/qbittorrent/diff`
+  與 `GET /api/setup/indexers`（及回同一份的命令）多 `web_ui_login_by_berth`——那一組是這個 Berth 寫進去的；
+  登入那一條纜繩分不出來（Prowlarr 的「加入」每次把它重算成 `skipped`）。
 - **精靈、設定頁與健康頁的錯誤分成人話與技術細節**（M4 票 21）：失敗的那一條說一句人話（由後端的封閉代碼選
   i18n 文案）、給照來源挑的補法，後端的英文原文、HTTP 狀態、端點、`dev=` / `inode=` 收進預設收起的「技術細節」。
   API：`StepOut` 多 `failure`（`StepFailure`）與 `params`；`QbittorrentOut` 與 `IndexerSetupOut` 多 `failure`；

@@ -6,7 +6,8 @@ import { narrow, shot } from './shot.ts'
 // `bundled`：乾淨的 compose（plan §9.3）。三個服務頁都選「套件內」，六頁走完、中途回頭再往前、關掉
 // 精靈，再以頁 1 那組帳密登入——那組帳密是頁 1 替 Jellyfin 建的管理員，也就是 Berth 的擁有者
 // （M4 票 06）。每一頁做完都停在結果上，按了才走（票 06d）；走的是 1280 與 390 兩種寬度
-// （`playwright.config.ts`）。**選之前一個服務請求都不發**（M4 票 15）。
+// （`playwright.config.ts`）。**選之前一個服務請求都不發**（M4 票 15）。**密碼只在頁 1 建立時打兩次**
+// （M4 票 40，審計 S1）：頁 2、頁 4 的介面登入自動沿用那一組。
 test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => {
   const probed: string[] = []
   // 精靈送出的寫入（非 GET），頁 3 用它證明「進頁不動手」（M4 票 08）。進頁的重讀不算（M4 票 19、24）：
@@ -47,6 +48,9 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await page.getByRole('textbox', { name: 'Jellyfin 帳號' }).fill(ADMIN.user)
   await page.getByRole('textbox', { name: '密碼', exact: true }).fill(ADMIN.password)
   await page.getByRole('textbox', { name: '再輸入一次密碼' }).fill(ADMIN.password)
+  await expect(
+    page.getByRole('checkbox', { name: '套件內 qBittorrent 與 Prowlarr 的介面也用這組' }),
+  ).toBeChecked()
   await shot(page, '1-owner')
   await page.getByRole('button', { name: '建立管理員並登入' }).click()
   await expect(page.getByRole('heading', { name: '擁有者：skipper' })).toBeVisible()
@@ -55,21 +59,14 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '1-owned')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 2. qBittorrent：選之前不讀差異；選了套件內，WebUI 登入預設「沿用 Jellyfin 帳密」，密碼打一次。
+  // 2. qBittorrent：選之前不讀差異；選了套件內，WebUI 登入自動沿用頁 1 那一組（M4 票 40），不問密碼。
   await expect(page.getByRole('heading', { name: '先選 qBittorrent 是哪一台' })).toBeVisible()
   expect(probed.filter((url) => /qbittorrent/.test(url))).toEqual([])
   await page.getByRole('radio', { name: /套件內/ }).click()
   await expect(page.getByRole('heading', { name: '設定 qBittorrent 的 WebUI 登入' })).toBeVisible()
-  const webUi = page.getByRole('group', { name: 'qBittorrent WebUI 登入' })
-  await expect(webUi.getByRole('checkbox', { name: /沿用 Jellyfin 帳密/ })).toBeChecked()
-  // 密碼打錯：Jellyfin 驗不過，什麼都沒寫。
-  await webUi.getByLabel('skipper 的 Jellyfin 密碼').fill('not-the-password')
-  await page.getByRole('button', { name: '設定介面登入' }).click()
-  await expect(page.getByText(/這不是 skipper 的 Jellyfin 密碼/)).toBeVisible()
-  await webUi.getByLabel('skipper 的 Jellyfin 密碼').fill(ADMIN.password)
-  await shot(page, '2-qbittorrent-login')
-  await page.getByRole('button', { name: '設定介面登入' }).click()
   await expect(page.getByText('qBittorrent WebUI 的帳號：')).toBeVisible()
+  await expect(page.getByLabel('skipper 的 Jellyfin 密碼')).toHaveCount(0)
+  expect(writes.filter((url) => url.endsWith('/api/setup/qbittorrent/apply'))).toHaveLength(1)
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '2-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
@@ -123,9 +120,11 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await page.getByRole('radio', { name: /套件內/ }).click()
   await expect(page.getByTestId('recommended')).toBeVisible()
   await page.waitForLoadState('networkidle')
-  // 選套件內那一下是唯一的寫入；清單出來之後一站都沒測、沒加。
+  // 選套件內那一下與自動沿用的介面登入（M4 票 40）是僅有的寫入；清單出來之後一站都沒測、沒加。
+  await expect(page.getByText('Prowlarr 介面的帳號：')).toBeVisible()
   expect(writes.slice(atIndexers).map((url) => new URL(url).pathname)).toEqual([
     '/api/setup/services/prowlarr',
+    '/api/setup/indexers/login',
   ])
   await expect(
     page.getByTestId('recommended').getByRole('checkbox', { checked: true }),
@@ -140,19 +139,12 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await page.getByLabel('搜尋名稱').fill('knab')
   await page.getByRole('button', { name: '測試 Knaben' }).click()
   await page.getByRole('checkbox', { name: 'Knaben' }).check()
-  // 「加入」貼著站清單、不必先填介面登入（M4 票 20）；介面登入是自己的一區與按鈕，必填。
+  // 「加入」貼著站清單；介面登入已經自動沿用頁 1 那一組（M4 票 40），不必再填。
   await page.getByRole('button', { name: '加入 4 個站' }).click()
   const addedSites = page.getByTestId('added')
   await expect(addedSites.getByText('4 站')).toBeVisible()
-  await expect(page.getByRole('button', { name: '前往下一個泊位' })).toHaveCount(0)
-  const prowlarrUi = page.getByRole('group', { name: 'Prowlarr 介面登入' })
-  await prowlarrUi.getByRole('checkbox', { name: /沿用 Jellyfin 帳密/ }).uncheck()
-  await prowlarrUi.getByRole('textbox', { name: '帳號' }).fill('deck')
-  await prowlarrUi.getByLabel('密碼', { exact: true }).fill('harbour-prowlarr')
-  await prowlarrUi.getByLabel('再輸入一次密碼').fill('harbour-prowlarr')
+  await expect(page.getByLabel('skipper 的 Jellyfin 密碼')).toHaveCount(0)
   await shot(page, '4-indexers-login')
-  await page.getByRole('button', { name: '設定介面登入' }).click()
-  await expect(page.getByText('Prowlarr 介面的帳號：')).toBeVisible()
   await addedSites.getByRole('button', { name: '搜尋 YTS' }).click()
   const trial = page.getByTestId('trial')
   const yts = trial.getByRole('listitem').filter({ hasText: 'YTS' }).first()

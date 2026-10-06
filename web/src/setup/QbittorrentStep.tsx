@@ -15,8 +15,8 @@ import { failureText } from '../components/failures'
 import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
-import { useInterfaceLogin } from './interfaceLogin'
-import { BerthLogin } from './InterfaceLoginFields'
+import { carriedUnfit, useCarriedLogin, useInterfaceLogin } from './interfaceLogin'
+import { BerthLogin, CarriedApplying, CarriedUnfit } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
@@ -36,6 +36,7 @@ import { StepFrame } from './StepFrame'
  * **測試通過就做完，沒有不寫入的確認鍵**（M4 票 38，brief §19 D5）：既有的那一台連上即完成；套件內的
  * 那一台多一組 WebUI 登入（`web_ui_login`，M4 票 07），必填、預設「沿用 Jellyfin 帳密」（M4 票 15），
  * 只有要寫它的時候才有「設定介面登入」那一顆。那一台自己就設過的不強迫再設（後端在連線測試時記下）。
+ * 頁 1 勾了「也用這組」時不問，自動沿用那一組（`carriedPassword`，M4 票 40）。
  * 做完了沒照後端的頁序（`done`），與前進鍵同一個來源。
  */
 export function QbittorrentStep({
@@ -43,6 +44,7 @@ export function QbittorrentStep({
   setup,
   setupFailed,
   owner,
+  carriedPassword,
   applying,
   requestError,
   loginRefusal,
@@ -58,6 +60,8 @@ export function QbittorrentStep({
   setupFailed: boolean
   /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
+  /** 頁 1 帶過來的擁有者密碼（只在這個分頁的記憶體裡，M4 票 40）；沒有就是 `null`。 */
+  carriedPassword: string | null
   applying: boolean
   /** 請求本身沒跑完（沒有就是 `null`）。登入那一條的失敗在 `setup.steps` 裡，貼在它那一行。 */
   requestError: unknown
@@ -111,6 +115,7 @@ export function QbittorrentStep({
               key={`${service?.origin}:${service?.base_url}`}
               setup={setup}
               owner={owner}
+              carriedPassword={carriedPassword}
               done={done}
               applying={applying}
               requestError={requestError}
@@ -240,6 +245,7 @@ function DoneNotice({ text }: { text: string }) {
 function LoginSequence({
   setup,
   owner,
+  carriedPassword,
   done,
   applying,
   requestError,
@@ -248,6 +254,7 @@ function LoginSequence({
 }: {
   setup: QbittorrentSetup
   owner: string
+  carriedPassword: string | null
   done: boolean
   applying: boolean
   requestError: unknown
@@ -255,9 +262,26 @@ function LoginSequence({
   onApply: (login: InterfaceLogin | null) => Promise<QbittorrentSetup>
 }) {
   const { t } = useTranslation()
-  const login = useInterfaceLogin({ service: 'qbittorrent', current: setup.web_ui_username, owner })
+  // 頁 1 那一組不合 qBittorrent 的規則（M4 票 26）：不送，說為什麼，一開始就是自設的三格（M4 票 40）。
+  const unfit = carriedUnfit('qbittorrent', carriedPassword, owner)
+  const login = useInterfaceLogin({
+    service: 'qbittorrent',
+    current: setup.web_ui_username,
+    owner,
+    reuse: unfit === null,
+  })
   // 送出那一刻的欄位版本：之後改了一格，上一次的失敗就不畫了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
+  // 同一個請求還在飛（走開又回來，這一區重掛載）時不再送。
+  const needed = !setup.web_ui_username && !applying
+  const carriedLogin = useCarriedLogin({
+    carriedPassword: unfit === null ? carriedPassword : null,
+    needed,
+    apply: (taken) => {
+      setSentAt(login.edits)
+      return onApply(taken)
+    },
+  })
   const failed = requestError !== null && requestError !== undefined && sentAt === login.edits
 
   function apply() {
@@ -280,12 +304,21 @@ function LoginSequence({
   const settled = done || loginTook(setup)
   // 帳號讀得到而後端還沒記那一條（票 38 之前開始的精靈、或連線測試那一次沒讀到偏好）時欄位收著、頁還沒
   // 做完：這一顆送「登入照舊」，把那一條記下來。
-  const showSetLogin = login.open || !settled
+  const showSetLogin = (login.open || !settled) && !carriedLogin.applying
 
   return (
     <>
+      {unfit && !setup.web_ui_username && (
+        <div className="mt-6">
+          <CarriedUnfit owner={owner} problems={unfit} />
+        </div>
+      )}
       <div className="mt-6">
-        <BerthLogin service="qbittorrent" current={setup.web_ui_username} form={login} />
+        {carriedLogin.applying ? (
+          <CarriedApplying owner={owner} />
+        ) : (
+          <BerthLogin service="qbittorrent" current={setup.web_ui_username} form={login} />
+        )}
       </div>
 
       <ol

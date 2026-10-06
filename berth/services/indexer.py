@@ -158,6 +158,9 @@ class IndexerSetupStatus:
     #: 套件內 Prowlarr 的介面帳號：Berth 設下的，或那一台自己就設過的。還沒設過、或是既有的那一台
     #: 是空字串。
     web_ui_username: str
+    #: 那一組是這個 Berth 寫進去的（記著它的密碼雜湊），完成頁照它說密碼是哪一組（M4 票 40）。
+    #: 登入那一條纜繩分不出來：「加入」每次以不帶登入重算它，Berth 設好的也記成 `skipped`。
+    web_ui_login_by_berth: bool
     #: 讀清單那一次為什麼失敗（M4 票 21）：UI 照它說人話。讀到了是 `None`。
     failure: StepFailure | None
     #: 讀清單那一次的失敗原文（英文），收進「技術細節」。
@@ -836,6 +839,8 @@ def _view(
         web_ui_username=(setup.indexer.web_ui_username or instance_username)
         if origin is ServiceOrigin.BUNDLED
         else "",
+        web_ui_login_by_berth=origin is ServiceOrigin.BUNDLED
+        and bool(setup.indexer.web_ui_password_hash),
         failure=failure_of_error(error)[0] if error is not None else None,
         error=message(error) if error is not None else "",
     )

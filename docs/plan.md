@@ -609,12 +609,12 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 | 頁 | 泊位 | 做什麼 | 要先有 |
 | --- | --- | --- | --- |
-| 1 | Jellyfin（BTH 1） | 選來源 → 建立管理員或以管理員登入 → 擁有者 → Berth 建 API key | 無 |
+| 1 | Jellyfin（BTH 1） | 選來源 → 建立管理員或以管理員登入 → 擁有者 → Berth 建 API key；建套件內那一台的管理員時預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」（M4 票 40） | 無 |
 | 2 | qBittorrent（BTH 2） | 選來源 → 測試 → 套件內設 WebUI 登入（那一台自己設過就不必）；既有填位址與 WebUI 帳密，測試通過即完成 | 擁有者 |
 | 3 | 媒體庫與路徑（BTH 3） | 套件內建媒體庫 / 既有加 Berth 路徑 → Route → 按鈕觸發的每一條檢查 | Jellyfin、qBittorrent |
 | 4 | Prowlarr 與索引站（BTH 4） | 選來源 → 套件內讀 key、設介面登入、挑索引站 / 既有貼 API key | 擁有者 |
 | 5 | TMDB（BTH 5） | 貼 key、測試 | 擁有者 |
-| 6 | 完成 | 說出跳過了什麼、之後拿什麼登入 | 前五頁照頁序再問一次（M4 票 31） |
+| 6 | 完成 | 說出跳過了什麼、之後拿什麼登入（套件內兩台的介面登入照 `web_ui_login_by_berth` 說是精靈設的、原本就有的或還沒設，M4 票 40） | 前五頁照頁序再問一次（M4 票 31） |
 
 媒體庫與路徑維持在 qBittorrent 之後、Prowlarr 之前（票 06d：它只依賴 Jellyfin 與 qBittorrent，掛載設錯是最常卡住的地方，越早知道越好；2026-09-29 使用者再確認）。Berth 沒有自己的帳號頁（brief §11）。
 
@@ -643,7 +643,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 設定頁換位址或 key 仍然是登入換 key（`POST /setup/jellyfin/connect`）。套件內 Jellyfin 的媒體庫不在這一頁建，在頁 3。
 2. **qBittorrent**：
    - **套件內**：設 WebUI 登入，全域偏好一個都不寫（M4 票 32，brief §19 D2）——與既有那一台只差這一格。Berth 自己靠免密白名單連它（§9.2），用不到這組登入。
-     - **WebUI 登入預設「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；取消勾選就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。**必填**：不設的話使用者自己打開 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「設定介面登入」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。**那一台自己就設過的**（重裝保留它的 config）在連線測試時就讀到帳號、記成 `skipped`（`qbittorrent.note_qbittorrent_login`，M4 票 38），測試通過即完成；**「設定介面登入」只在欄位開著時出現**（還沒設、或按了「更換登入」），沒有按下去什麼都不寫的「套用這 0 項」（brief §19 D5）。
+     - **WebUI 登入預設「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；取消勾選就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。**頁 1 勾了「也用這組」時不問**（M4 票 40，brief §19 D4）：頁 1 建套件內 Jellyfin 的管理員時那一格預設勾著，密碼由 `SetupPage` 留在 React state（不寫 storage、不送給 Berth 存；重新整理就沒了），這一頁那一台還沒有 WebUI 帳號時自動送一次 `reuse_owner`（`interfaceLogin.useCarriedLogin`），欄位與主鍵換成「設定中」；照 qBittorrent 的規則不合（`carriedUnfit`）就不送，說明不能沿用、欄位一開始是自設的三格。Jellyfin 拒絕那一組（`owner_password`）時丟掉它，頁 4 也不再自動送；同一個請求還在飛（走開又回來）時不重送。頁 4 套件內 Prowlarr 的介面登入同一套，送出中（Prowlarr 設完會自行重啟）「加入」與「之後再說」先停用。**必填**：不設的話使用者自己打開 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「設定介面登入」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。**那一台自己就設過的**（重裝保留它的 config）在連線測試時就讀到帳號、記成 `skipped`（`qbittorrent.note_qbittorrent_login`，M4 票 38），測試通過即完成；**「設定介面登入」只在欄位開著時出現**（還沒設、或按了「更換登入」），沒有按下去什麼都不寫的「套用這 0 項」（brief §19 D5）。
       - **照 qBittorrent 的規則先擋**（M4 票 26，brief §20.2）：帳號至少 3 字元、不能有冒號，密碼至少 6 字元；沿用時也檢查（Jellyfin 密碼太短、擁有者的名字不合就說不能沿用、請另設），設定頁的「更新登入」同一套。Berth **先送密碼、再送帳號**（5.2 帳號先寫、密碼後驗），兩個都進去了才記帳號；qBittorrent 仍回 400 時那一條是 `login_rejected`、原文進技術細節，欄位不收起來。
      - **Berth 只記帳號與密碼的加鹽雜湊**（夠比對「已經是這一組」；票 15 把票 07 存的明文換掉，附 migration）。回頭看時欄位收起來、只說帳號是誰，按「更換登入」才打開。設定頁 → qBittorrent 的「介面登入」一區用同一組欄位與同一個勾選，`PUT /setup/qbittorrent/login`（`qbittorrent.set_interface_login`）只換登入。設定頁的介面登入那一區讀頁 2 的 `GET /setup/qbittorrent/diff`（路徑名是票 32 之前留下的）。
    - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（M4 票 22：它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；原本的「temp path 未啟用只警告」一併撤掉），**測試通過就做完**（M4 票 38，brief §19 D5）：畫面上沒有確認鍵——原本的「確認，不改任何設定」按下去什麼都不寫，只是要人多按一次（照 Sonarr / Home Assistant「測試與儲存合一」的慣例）。沒有介面登入那一格，直接打 `apply` 帶了 `login` 回 422。

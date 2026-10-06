@@ -38,6 +38,7 @@ import {
   tmdbSetupQueryOptions,
   type ChoiceInput,
   type IndexerSetup,
+  type InterfaceLogin,
   type JellyfinSetup,
   type RouteSetup,
   type SetupStatus,
@@ -124,6 +125,16 @@ export function SetupPage() {
     kind: ServiceKind
     origin: ServiceOrigin
   } | null>(null)
+
+  // 頁 1 勾了「也用這組」時的擁有者密碼（M4 票 40，brief §19 D4）：**只在這個分頁的記憶體裡**——不寫
+  // storage、不送給 Berth 存——到頁 2、頁 4 自動帶入。重新整理或離開精靈就沒了，那時照舊問一次。
+  const [carriedPassword, setCarriedPassword] = useState<string | null>(null)
+  /** Jellyfin 不再收帶過來的那一組（在 Jellyfin 改過密碼）：丟掉，下一頁不再自動送它。 */
+  function dropCarried(error: unknown, login: InterfaceLogin | null) {
+    if (loginRefusalOf(error)?.reason === 'owner_password' && login?.reuse_owner) {
+      setCarriedPassword((was) => (was === login.password ? null : was))
+    }
+  }
 
   const current = status.data
   const backend = current?.current_step ?? STEP.jellyfin
@@ -289,6 +300,7 @@ export function SetupPage() {
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
     onSuccess: (next) => absorbBerth(qbittorrentSetupQueryOptions.queryKey, next),
+    onError: dropCarried,
   })
   const applySites = useMutation({
     mutationFn: applyIndexers,
@@ -298,6 +310,7 @@ export function SetupPage() {
   const prowlarrLogin = useMutation({
     mutationFn: setIndexerLogin,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+    onError: dropCarried,
   })
   const skipSites = useMutation({
     mutationFn: () => skipIndexers(true),
@@ -547,7 +560,11 @@ export function SetupPage() {
           claiming={owner.isPending}
           refusal={ownerRefusalOf(owner.error)}
           claimError={ownerRefusalOf(owner.error) ? null : owner.error}
-          onClaim={(input) => owner.mutate(input)}
+          onClaim={(input, carry) =>
+            owner.mutate(input, {
+              onSuccess: () => setCarriedPassword(carry && input.password ? input.password : null),
+            })
+          }
           onClaimReset={owner.reset}
           reSignIn={{
             connecting: reSignIn.isPending,
@@ -564,6 +581,7 @@ export function SetupPage() {
           setup={qbittorrent.data}
           setupFailed={qbittorrent.isError}
           owner={current.owner}
+          carriedPassword={carriedPassword}
           applying={applyPreferences.isPending}
           requestError={applyPreferences.error}
           loginRefusal={loginRefusalOf(applyPreferences.error)}
@@ -643,6 +661,7 @@ export function SetupPage() {
             indexers={indexers.data}
             indexersFailed={indexers.isError}
             owner={current.owner}
+            carriedPassword={carriedPassword}
             applying={applySites.isPending}
             login={{
               saving: prowlarrLogin.isPending,
