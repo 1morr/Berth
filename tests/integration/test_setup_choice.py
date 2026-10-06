@@ -50,6 +50,7 @@ from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     STEP_JELLYFIN,
     STEP_QBITTORRENT,
+    STEP_ROUTES,
     TEST_WINDOW,
     ChoiceLockedError,
     ServiceConnection,
@@ -652,7 +653,8 @@ async def test_switching_qbittorrent_starts_its_page_over_and_voids_the_route_ch
     assert [(route.checks, route.checked_at, route.last_ok_at) for route in routes] == [
         ((), None, None)
     ] * len(routes)
-    assert status.current_step == STEP_QBITTORRENT
+    # 既有那一台測試通過就做完頁 2（M4 票 38）；作廢的 Route 檢查把精靈拉回頁 3。
+    assert status.current_step == STEP_ROUTES
 
 
 @pytest.mark.asyncio

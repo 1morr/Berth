@@ -41,7 +41,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await expect(page.getByRole('heading', { name: '擁有者：owner' })).toBeVisible()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 2. qBittorrent 選既有：填位址與它的 WebUI 帳密。全域偏好與帳密都不動，只確認連得上（M4 票 05）。
+  // 2. qBittorrent 選既有：填位址與它的 WebUI 帳密。全域偏好與帳密都不動（M4 票 05），測試通過就做完
+  //    （M4 票 38）：沒有確認鍵，也不送任何寫入。
   await page.getByRole('radio', { name: /既有/ }).click()
   const main = page.getByRole('main')
   await main.getByRole('textbox', { name: '位址' }).fill('http://nas:8080')
@@ -54,8 +55,10 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await expect(page.getByText(/沒有啟用未完成目錄/)).toHaveCount(0)
   // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
   await expect(page.getByRole('group', { name: 'qBittorrent WebUI 登入' })).toHaveCount(0)
-  await page.getByRole('button', { name: '確認，不改任何設定' }).click()
+  await expect(page.getByText(/這個泊位的事做完了/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /確認|套用/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+  expect(writes.filter((url) => url.endsWith('/api/setup/qbittorrent/apply'))).toEqual([])
   await shot(page, '2-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 

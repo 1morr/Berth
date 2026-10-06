@@ -9,12 +9,11 @@ import {
   type SetupStatus,
 } from '../api/setup'
 import { type QbittorrentSetup, type SetupStep } from '../api/schemas'
-import { STICKY_ACTION, CopyLine, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { STICKY_ACTION, CopyLine, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { failureText } from '../components/failures'
 import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
-import { isSettled } from '../components/steps'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin } from './InterfaceLoginFields'
@@ -32,10 +31,12 @@ import { StepFrame } from './StepFrame'
  * 介面登入。
  *
  * **兩種來源都不寫全域偏好**（M4 票 32，brief §19 D2）：Berth 送單逐個 torrent 帶自己的分類與
- * `autoTMM=true`，全域的哪一個鍵都不影響它。既有的那一台按鈕只是確認連得上、版本夠新。
+ * `autoTMM=true`，全域的哪一個鍵都不影響它。
  *
- * **套件內的那一台多一組 WebUI 登入**（`web_ui_login`，M4 票 07）：跟著「套用」送出，必填；預設
- * 「沿用 Jellyfin 帳密」（M4 票 15）。那一台自己就設過的不強迫再設（`web_ui_username` 已經有值）。
+ * **測試通過就做完，沒有不寫入的確認鍵**（M4 票 38，brief §19 D5）：既有的那一台連上即完成；套件內的
+ * 那一台多一組 WebUI 登入（`web_ui_login`，M4 票 07），必填、預設「沿用 Jellyfin 帳密」（M4 票 15），
+ * 只有要寫它的時候才有「設定介面登入」那一顆。那一台自己就設過的不強迫再設（後端在連線測試時記下）。
+ * 做完了沒照後端的頁序（`done`），與前進鍵同一個來源。
  */
 export function QbittorrentStep({
   status,
@@ -47,6 +48,7 @@ export function QbittorrentStep({
   loginRefusal,
   onApply,
   choice,
+  done,
   note,
   nav,
 }: {
@@ -68,6 +70,8 @@ export function QbittorrentStep({
   onApply: (login: InterfaceLogin | null) => Promise<QbittorrentSetup>
   /** 選擇的兩支 mutation 與畫面上選著、還沒存下的那一格（`SetupPage` 持有）。 */
   choice: ChoiceControls & ChoiceDraft
+  /** 後端說頁 2 做完了（`_qbittorrent_secured`）。 */
+  done: boolean
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
@@ -102,16 +106,19 @@ export function QbittorrentStep({
         (setup ? (
           setup.blocked ? (
             <Blocked setup={setup} />
-          ) : (
-            <ApplySequence
+          ) : setup.web_ui_login ? (
+            <LoginSequence
               key={`${service?.origin}:${service?.base_url}`}
               setup={setup}
               owner={owner}
+              done={done}
               applying={applying}
               requestError={requestError}
               loginRefusal={loginRefusal}
               onApply={onApply}
             />
+          ) : (
+            done && <DoneNotice text={t('qbittorrent.doneExisting')} />
           )
         ) : (
           <p className="mt-6 text-sm text-ink-dim">
@@ -210,15 +217,30 @@ function Blocked({ setup }: { setup: QbittorrentSetup }) {
   )
 }
 
+/** 這一頁做完了的那一句。 */
+function DoneNotice({ text }: { text: string }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="mt-4">
+      <Notice signal="secured" label={t('status.ok')}>
+        {text}
+      </Notice>
+    </div>
+  )
+}
+
 /**
- * 靠泊序列：套件內那一台只有介面登入一條纜繩。
+ * 靠泊序列：套件內那一台只有介面登入一條纜繩。既有的那一台沒有纜繩可列——什麼都不寫，列出來只會是
+ * 一條「已經是這樣」，說的是假話。
  *
- * 既有的那一台沒有纜繩可列——什麼都不寫，列出來只會是一條「已經是這樣」，說的是假話。它只剩一顆
- * 確認鍵與做完之後的那一句。
+ * **主鍵只在有東西要寫時出現**（M4 票 38）：欄位開著（還沒設過、或按了「更換登入」）就是「設定介面
+ * 登入」；已經設好而欄位收著時這一頁就做完了，不留一顆按下去什麼都不寫的鍵。
  */
-function ApplySequence({
+function LoginSequence({
   setup,
   owner,
+  done,
   applying,
   requestError,
   loginRefusal,
@@ -226,6 +248,7 @@ function ApplySequence({
 }: {
   setup: QbittorrentSetup
   owner: string
+  done: boolean
   applying: boolean
   requestError: unknown
   loginRefusal: InterfaceLoginRefusal | null
@@ -238,7 +261,7 @@ function ApplySequence({
   const failed = requestError !== null && requestError !== undefined && sentAt === login.edits
 
   function apply() {
-    const taken = setup.web_ui_login ? login.take() : null
+    const taken = login.take()
     if (taken === undefined) return
     setSentAt(login.edits)
     // 請求沒走完的那一句由 `requestFailed` 說；欄位留著，改一個字再按。登入那一條沒過時也留著
@@ -253,41 +276,30 @@ function ApplySequence({
   // 畫成還沒跑。進頁時（還沒送過）照後端存的那一次。
   if (login.edits !== (sentAt ?? 0)) byStep.delete(PASSWORD_STEP)
   const webUrl = qbittorrentWeb(setup)
-  const started = setup.steps.length > 0
-  const done = started && !applying && setup.steps.every((row) => isSettled(row.status))
-  // 只有套件內那一台有東西要寫：介面登入（M4 票 32 起全域偏好一個都不寫）。
-  const bundled = setup.web_ui_login
-  // 按下去會寫幾項：要設的那一組介面登入，已經設好、沒按「更換」就是 0（按鈕形狀留給 M4 票 38）。
-  const pending = login.open ? 1 : 0
+  // 登入那一條過了也算做完：設好之後頁序要等 status 重讀回來，這段時間裡主鍵不該再冒出來。
+  const settled = done || loginTook(setup)
+  // 帳號讀得到而後端還沒記那一條（票 38 之前開始的精靈、或連線測試那一次沒讀到偏好）時欄位收著、頁還沒
+  // 做完：這一顆送「登入照舊」，把那一條記下來。
+  const showSetLogin = login.open || !settled
 
   return (
     <>
-      {setup.web_ui_login && (
-        <div className="mt-6">
-          <BerthLogin service="qbittorrent" current={setup.web_ui_username} form={login} />
-        </div>
-      )}
+      <div className="mt-6">
+        <BerthLogin service="qbittorrent" current={setup.web_ui_username} form={login} />
+      </div>
 
-      {bundled && (
-        <ol
-          aria-live="polite"
-          aria-busy={applying}
-          className="mt-6 grid gap-3"
-          data-testid="sequence"
-        >
-          {QBITTORRENT_STEPS.map((step) => (
-            <QbittorrentLine key={step} step={step} row={byStep.get(step)} webUrl={webUrl} />
-          ))}
-        </ol>
-      )}
+      <ol
+        aria-live="polite"
+        aria-busy={applying}
+        className="mt-6 grid gap-3"
+        data-testid="sequence"
+      >
+        {QBITTORRENT_STEPS.map((step) => (
+          <QbittorrentLine key={step} step={step} row={byStep.get(step)} webUrl={webUrl} />
+        ))}
+      </ol>
 
-      {done && (
-        <div className="mt-4">
-          <Notice signal="secured" label={t('status.ok')}>
-            {t(bundled ? 'qbittorrent.done' : 'qbittorrent.doneExisting')}
-          </Notice>
-        </div>
-      )}
+      {settled && !applying && <DoneNotice text={t('qbittorrent.done')} />}
 
       {failed && (
         <div className="mt-4">
@@ -301,21 +313,13 @@ function ApplySequence({
         </div>
       )}
 
-      <div className={`mt-6 ${done ? '' : STICKY_ACTION}`}>
-        {done ? (
-          <GhostButton type="button" busy={applying} onClick={apply}>
-            {t(bundled ? 'qbittorrent.rerun' : 'qbittorrent.recheck')}
-          </GhostButton>
-        ) : (
+      {showSetLogin && (
+        <div className={`mt-6 ${STICKY_ACTION}`}>
           <PrimaryButton type="button" busy={applying} onClick={apply}>
-            {applying
-              ? t(bundled ? 'qbittorrent.applying' : 'qbittorrent.checking')
-              : bundled
-                ? t('qbittorrent.apply', { keys: pending })
-                : t('qbittorrent.confirm')}
+            {applying ? t('qbittorrent.settingLogin') : t('qbittorrent.setLogin')}
           </PrimaryButton>
-        )}
-      </div>
+        </div>
+      )}
     </>
   )
 }

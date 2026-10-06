@@ -609,7 +609,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.3 開箱即用（一鍵設定）【決定】
 
-> **2026-10-06 改（§19「精靈審計後的八項」）**：介面密碼沿用頁 1 那一次（D4）、不寫入的確認鍵拿掉（D5）、頁 3 套件內自動跑（D7）、BTH 4 只接 Prowlarr（D3）。下表與本節條列待拆票後改寫。
+> **2026-10-06 改（§19「精靈審計後的八項」）**：介面密碼沿用頁 1 那一次（D4）、不寫入的確認鍵拿掉（D5）、頁 3 套件內自動跑（D7）、BTH 4 只接 Prowlarr（D3）。D5 的頁 2 已寫進下表與條列（M4 票 38）；其餘待拆票後改寫。
 
 > **2026-09-29 改（§19「精靈改為每個服務手動選擇」）**：不再偵測服務是不是套件內。Jellyfin、qBittorrent、Prowlarr 各一頁，使用者自己選「套件內」或「既有」，選擇存下來、選完要測試。取代 2026-09-26「只有 compose 主機名上探到的才可能是套件內」的判定規則（M4 票 05 的判定那一半）；票 05 的「既有服務不寫帳密、不改全域偏好」保留，改讀使用者的選擇。選擇、服務頁與頁序在 M4 票 15 做完；compose 容器名（票 16）與既有服務防呆（票 17）另外做。
 >
@@ -621,7 +621,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07）。**全域偏好一個都不寫**（D2，M4 票 32）：送單逐個 torrent 帶 Berth 的分類與 `autoTMM=true`，save path 與未完成目錄開在分類上（M4 票 22），全域的 save path、autoTMM 都不影響 Berth。既有：填位址與 WebUI 帳密，同樣一個全域偏好都不寫（§16.4）。兩種都依 Route 建立 category | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07）。**全域偏好一個都不寫**（D2，M4 票 32）：送單逐個 torrent 帶 Berth 的分類與 `autoTMM=true`，save path 與未完成目錄開在分類上（M4 票 22），全域的 save path、autoTMM 都不影響 Berth。既有：填位址與 WebUI 帳密，同樣一個全域偏好都不寫（§16.4），**連線測試通過就做完**，沒有不寫入的確認鍵（D5，M4 票 38）。兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 精靈第一頁選套件內或既有 → 那一台還沒跑過初始精靈就以擁有者填的帳密建立 Jellyfin 管理員、跑完它的初始設定；已經有管理員就用管理員登入 → Berth 自己建 API key「Berth」（帳密不存下來，M4 票 06）→ 媒體庫與路徑泊位：套件內建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f），既有只「加入 Berth 路徑」→ 每個媒體庫一個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：推薦清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；AniDex 於 2026-09-25 拿掉，§20.7）與 schema 裡其他公開的 torrent 站，預設不勾、先測試通過才勾得起來再加入（M4 票 09，`indexer/test` 測還沒加入的定義，§20.7）、設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組；自己的一顆按鈕，不跟著「加入」，M4 票 20）。既有：貼 API key，用使用者已有的索引站；一站都沒有時這一頁待處理，也可以測試推薦的公開站、按一次加進它（M4 票 20）；Berth 不移除它的站、不設它的登入 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈的 TMDB 泊位（§20.7） |
@@ -630,7 +630,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **每個服務由使用者選來源，不偵測**（§19 2026-09-29）：Jellyfin、qBittorrent、Prowlarr 各一頁，頁首二選一「套件內」/「既有」。Seerr 連 Jellyfin、加 Sonarr / Radarr，Sonarr / Radarr 加下載器，全都是手動填位址與憑證、按 Test，沒有自動偵測（§20.14）。選擇存下來，從此「套件內 / 既有」由它決定：套件內的連 compose 主機名，既有的填位址與憑證。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。原本的偵測（2026-09-26 起「只有 compose 主機名上探到的才可能是套件內」）說不出服務是誰的，只能靠「免密可進」「無索引站」這類跡象猜，猜錯就會寫使用者的服務（M4 票 05 的 bug）。
 - **不偵測、不判定，但選完要測試**：選了套件內而 compose 沒起那個服務（`COMPOSE_PROFILES` 拿掉了）時，測試失敗要說出怎麼補：「把 `qbittorrent` 加回 `.env` 的 `COMPOSE_PROFILES` 再 `docker compose up -d`」。容器還在啟動的輪詢規則照舊（plan §9.3）。
 - **兩種來源接下來做的事一樣，只差誰讓服務登得進去**（§19 D1，M4 票 33）：Berth 只建立與管理自己擁有的物件——Jellyfin 的 API key「Berth」、Berth 路徑（既有）或清單上的媒體庫（套件內）、`berth-*` 分類、勾選加入的站——不碰全域偏好與帳密（清單與能不能撤回見 §16.4）。套件內多出來的只有 bootstrap：Jellyfin 的管理員與初始設定、qBittorrent 與 Prowlarr 的介面登入、免密白名單（預置）、掛載的 Prowlarr API key；既有由使用者給憑證。
-- **表單跟著那一台的狀態走**：套件內但已經初始化過（重裝保留了 config、精靈中途中斷）時，Jellyfin 已有管理員就改成「用管理員登入」、不再建立；qBittorrent / Prowlarr 已設過介面登入同理，不強迫再設。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣由擁有者建管理員、跑完它的初始設定（語言與地區、遠端存取在畫面上問）——它上面沒有任何人的帳號可以蓋掉（2026-09-26 的「Jellyfin 例外」，理由不變）；這是既有服務唯一的 bootstrap。
+- **表單跟著那一台的狀態走**：套件內但已經初始化過（重裝保留了 config、精靈中途中斷）時，Jellyfin 已有管理員就改成「用管理員登入」、不再建立；qBittorrent / Prowlarr 已設過介面登入同理，不強迫再設——連線測試時就讀到它設過的帳號，頁 2 測試通過即完成，不必再按一次「套用」（D5，M4 票 38；Prowlarr 那一頁的站另算）。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣由擁有者建管理員、跑完它的初始設定（語言與地區、遠端存取在畫面上問）——它上面沒有任何人的帳號可以蓋掉（2026-09-26 的「Jellyfin 例外」，理由不變）；這是既有服務唯一的 bootstrap。
 - **「沿用 Jellyfin 帳密」**：套件內 qBittorrent / Prowlarr 的介面登入預設勾選。勾選時帳號帶入擁有者的名字，密碼請使用者**打一次**，Berth 先向 Jellyfin 驗證這組帳密正確再寫入；取消勾選就自設一組、密碼打兩次（M4 票 07 的欄位）。**Berth 不存這兩組介面密碼的明文**，只記帳號與加鹽雜湊，夠比對「已經是這一組」（§19 2026-09-29：勾了沿用時那就是 Jellyfin 的密碼，存明文會推翻 M4 票 06「資料庫裡沒有擁有者的明文密碼」；Berth 連套件內 qBittorrent 靠免密白名單，本來就用不到它）。
 - compose 用 profiles：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起。選「既有」時那一頁說出要從 `COMPOSE_PROFILES` 拿掉哪一個（不叫人改 compose 檔）；忘了拿掉也不致命。套件的容器名是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`（`berth` 維持；compose 服務名與 DNS 名不變）：同一台主機上既有的容器多半就叫 `jellyfin` / `qbittorrent` / `prowlarr`、用 8096 / 8080 / 9696 / 6881。沒有前綴時撞名會讓**整套**起不來（連 `berth`），所以加了前綴；撞 port 仍可能發生，只有撞到的那一個套件內容器起不來（M4 票 16 實測，§20.14）。
 - 預置只在設定檔不存在時寫入一次，之後使用者在各服務介面改什麼都行。沒有「建議設定」可漂移：Berth 不寫也不看 qBittorrent 的全域偏好（D2，M4 票 32；原本的漂移檢查與「還原建議設定」一起拿掉）。精靈的 qBittorrent 頁會列出「已預置的項目」。

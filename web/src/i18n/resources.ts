@@ -70,7 +70,7 @@ const zhHant = {
         elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
       },
       qbittorrent: {
-        can: '改選套件內或既有（這一頁要重做）、重新檢查：兩種都只重新確認連得上，一個全域偏好都不寫；套件內那一台的 WebUI 登入設好了就不重寫。',
+        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的 WebUI 登入。一個全域偏好都不寫。',
         elsewhere:
           '全域偏好（預設儲存路徑、自動管理…）都在 qBittorrent 自己的介面上改，Berth 不寫也不看——它的下載只走自己的 berth-* 分類。',
       },
@@ -607,19 +607,16 @@ const zhHant = {
     },
     fix: {
       web_ui_password: '在「選項 → Web UI」自己設定帳號與密碼：',
-      loginRejected: '照上面的規則改一組帳密，或取消「沿用 Jellyfin 帳密」另設一組，再按一次套用。',
+      loginRejected:
+        '照上面的規則改一組帳密，或取消「沿用 Jellyfin 帳密」另設一組，再按一次「設定介面登入」。',
     },
     blocked: {
       tooOld:
         'qBittorrent {{version}} 的 Web API 低於 2.8.4，Berth 要用的端點在那之前不存在。升級到 4.4 以上再回來。',
     },
-    apply: '套用這 {{keys}} 項',
-    applying: '套用中…',
-    rerun: '重新檢查並套用',
+    setLogin: '設定介面登入',
+    settingLogin: '設定中…',
     done: '這個泊位的事做完了。WebUI 登入設好了；Berth 沒有改這台 qBittorrent 的全域偏好，它的下載走自己的分類。',
-    confirm: '確認，不改任何設定',
-    checking: '檢查中…',
-    recheck: '重新檢查',
     doneExisting:
       '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
   },
@@ -3157,7 +3154,7 @@ const en: Translations<typeof zhHant> = {
           'See who the owner is. Once there is an owner the source is locked; the bundled one’s address comes from compose, so there is nothing to change.',
       },
       qbittorrent: {
-        can: 'Switch between bundled and existing (this page starts over), or check again: either one is only checked for a connection, with no global preference written; the bundled one’s WebUI login is not rewritten once it is set.',
+        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s WebUI login. No global preference is written.',
         elsewhere:
           'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself; Berth neither writes nor reads them — its downloads only go through its own berth-* categories.',
       },
@@ -3727,19 +3724,15 @@ const en: Translations<typeof zhHant> = {
     fix: {
       web_ui_password: 'Set the username and password yourself under Options → Web UI:',
       loginRejected:
-        'Change the login to fit the rules above, or untick “Reuse the Jellyfin login” and set one of its own, then apply again.',
+        'Change the login to fit the rules above, or untick “Reuse the Jellyfin login” and set one of its own, then press “Set interface login” again.',
     },
     blocked: {
       tooOld:
         'qBittorrent {{version}} speaks a Web API older than 2.8.4, and the endpoints Berth needs did not exist yet. Upgrade to 4.4 or newer and come back.',
     },
-    apply: 'Apply these {{keys}} changes',
-    applying: 'Applying…',
-    rerun: 'Check and apply again',
+    setLogin: 'Set interface login',
+    settingLogin: 'Setting…',
     done: 'This berth is done. The WebUI login is set; Berth changed none of this qBittorrent’s global preferences, and its downloads go through its own categories.',
-    confirm: 'Confirm without changing anything',
-    checking: 'Checking…',
-    recheck: 'Check again',
     doneExisting:
       'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
   },

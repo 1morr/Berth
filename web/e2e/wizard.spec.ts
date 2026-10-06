@@ -64,11 +64,11 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await expect(webUi.getByRole('checkbox', { name: /沿用 Jellyfin 帳密/ })).toBeChecked()
   // 密碼打錯：Jellyfin 驗不過，什麼都沒寫。
   await webUi.getByLabel('skipper 的 Jellyfin 密碼').fill('not-the-password')
-  await page.getByRole('button', { name: /^套用這 \d+ 項$/ }).click()
+  await page.getByRole('button', { name: '設定介面登入' }).click()
   await expect(page.getByText(/這不是 skipper 的 Jellyfin 密碼/)).toBeVisible()
   await webUi.getByLabel('skipper 的 Jellyfin 密碼').fill(ADMIN.password)
   await shot(page, '2-qbittorrent-login')
-  await page.getByRole('button', { name: /^套用這 \d+ 項$/ }).click()
+  await page.getByRole('button', { name: '設定介面登入' }).click()
   await expect(page.getByText('qBittorrent WebUI 的帳號：')).toBeVisible()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   await shot(page, '2-qbittorrent')

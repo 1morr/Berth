@@ -24,7 +24,7 @@ docker compose up -d
 | --- | --- | --- | --- |
 | BTH 1 | 1 Jellyfin | 連 compose 裡的那一台；還在啟動就顯示倒數、自己每 3 秒再測（上限 2 分鐘），不必按 | 填位址、按「測試連線」 |
 | | | 連上之後：那一台還沒跑過初始精靈就以你填的帳密建立管理員、跑完它的初始設定；已經有管理員就用它登入。兩種都在它上面建一把 API key「Berth」 | 測過之後用它的管理員登入，Berth 在你的 Jellyfin 上建一把 API key「Berth」；它還沒跑過初始精靈時，一樣由你填的帳密建立管理員 |
-| BTH 2 | 2 qBittorrent | 設 WebUI 登入；一個全域鍵都不寫 | 填位址與 WebUI 帳密；一個全域鍵都不寫 |
+| BTH 2 | 2 qBittorrent | 設 WebUI 登入（那一台自己設過就不必）；一個全域鍵都不寫 | 填位址與 WebUI 帳密，測試通過即完成；一個全域鍵都不寫 |
 | BTH 3 | 3 媒體庫路徑 | 先建清單上的媒體庫（預設 Movies / TV / Anime，可改名、增刪），再替每個媒體庫自動建一條 Route、跑每一條檢查 | 勾選媒體庫與寫入目標；按「建立並檢查」時才替勾選的媒體庫加 Berth 路徑（舊路徑不動）、建 Route、跑每一條檢查 |
 | BTH 4 | 4 Prowlarr | API key 從掛載讀；加九個預設公開站（每一站標出語言）、設介面登入，加完試搜、不要的移除 | 貼 API key，用你已經有的站，接上之後同樣可以試搜 |
 | BTH 5 | 5 TMDB | 貼你自己的 API key 並測試 | 同左 |
@@ -461,7 +461,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 流程 | 情境 | port（1280 / 390） |
 | --- | --- | --- |
 | 精靈六頁走完（三頁都選套件內、選之前不發請求；頁 1 建 Jellyfin 管理員成為擁有者、頁 2 沿用 Jellyfin 帳密且打錯密碼被拒、頁 3 改媒體庫清單、頁 4 自設 Prowlarr 登入、每一格停在結果上、回頭再往前、試搜與移除），之後以同一組帳密登入、是管理員 | `bundled` | 8491 / 8501 |
-| 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
+| 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、以既有 Jellyfin 的管理員成為擁有者（打錯密碼被拒）、填 qBittorrent 帳密（測試通過就做完、沒有確認鍵）、加 Berth 路徑並選它當寫入目標、貼 Prowlarr 的 key | `mixed` | 8495 / 8505 |
 | 冷啟動：服務還在啟動時選套件內，Jellyfin 與 qBittorrent 各自每 3 秒重測到連上，不按重新測試 | `starting` | 8496 / 8506 |
 | 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、換 TMDB key | `healthy` | 8497 / 8507 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |

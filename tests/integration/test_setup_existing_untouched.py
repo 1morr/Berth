@@ -21,7 +21,6 @@ from berth.domain import (
     RouteCheck,
     ServiceKind,
     ServiceOrigin,
-    StepStatus,
 )
 from berth.models import Media, QbittorrentSettings, SetupSettings
 from berth.services.clients import BundledServices
@@ -35,7 +34,6 @@ from berth.services.qbittorrent import (
 from berth.services.routes import build_routes, incomplete_path_of, save_path_of
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
-    STEP_QBITTORRENT,
     STEP_ROUTES,
     ServiceConnection,
     choose_service,
@@ -187,18 +185,12 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
         base_url="http://home-qbittorrent:8080", preferences=THEIR_PREFERENCES
     )
     factory = factory_for(roots, qbittorrent=qbittorrent)
-    assert (await read_status(session)).current_step == STEP_QBITTORRENT
 
     read = await read_qbittorrent(session, factory)
     # 沒有登入那一格：它的全域偏好與登入都是使用者的（票 07、22、32）。
     assert read.web_ui_login is False
-
-    applied = await apply_qbittorrent(session, factory)
     assert qbittorrent.writes == []
-    # 只剩「確認」那一條：沒有密碼那一格，記成看過、沒動。
-    assert [(row.step, row.status) for row in applied.steps] == [
-        ("web_ui_password", StepStatus.SKIPPED)
-    ]
+    # 連線測試通過就做完頁 2（M4 票 38）：沒有要按的確認鍵。
     assert (await read_status(session)).current_step == STEP_ROUTES
 
     routes = await build_routes(session, factory, ())

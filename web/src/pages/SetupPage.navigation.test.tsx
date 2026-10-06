@@ -184,7 +184,7 @@ describe('每個泊位做完都停在結果上', () => {
     renderInRoute(<SetupPage />)
 
     await typeLogin(user)
-    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
+    await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
     expect(await heading()).toHaveTextContent('設定 qBittorrent 的 WebUI 登入')
@@ -450,7 +450,7 @@ describe('網址上的那一頁', () => {
     const user = userEvent.setup()
     const first = renderInRoute(<SetupPage />)
     await typeLogin(user)
-    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
+    await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
     const href = first.router.state.location.href
     first.unmount()
@@ -522,7 +522,11 @@ describe('泊位板', () => {
 describe('回頭看的泊位說出能改什麼', () => {
   it.each([
     // 兩種都不寫全域偏好（M4 票 32）；來源可以改選（M4 票 15）。
-    ['BTH 2', /改選套件內或既有.*只重新確認連得上.*一個全域偏好都不寫/, /qBittorrent 自己的介面/],
+    [
+      'BTH 2',
+      /改選套件內或既有.*更換套件內那一台的 WebUI 登入.*一個全域偏好都不寫/,
+      /qBittorrent 自己的介面/,
+    ],
     ['BTH 3', /只新增.*清單.*重驗/, /改名.*停用.*設定.*媒體庫路徑/],
     ['BTH 4', /改選套件內或既有.*加.*站.*試搜.*移除/, /要帳號的站.*Prowlarr/],
   ])('%s', async (code, can, elsewhere) => {
@@ -597,7 +601,7 @@ describe('焦點不掉回 body', () => {
     renderInRoute(<SetupPage />)
 
     await typeLogin(user)
-    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
+    await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
     await user.click(await screen.findByRole('button', { name: '前往下一個泊位' }))
 
     const next = await heading()
@@ -611,7 +615,7 @@ describe('焦點不掉回 body', () => {
     renderInRoute(<SetupPage />)
 
     await typeLogin(user)
-    await user.click(await screen.findByRole('button', { name: /^套用這/ }))
+    await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
 
     const next = await screen.findByRole('button', { name: '前往下一個泊位' })
     await waitFor(() => expect(next).toHaveFocus())

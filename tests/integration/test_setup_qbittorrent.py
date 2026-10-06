@@ -18,6 +18,7 @@ from berth.adapters.qbittorrent import QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.domain import (
     ConnectionReason,
+    ConnectionState,
     JellyfinStep,
     QbittorrentStep,
     ServiceKind,
@@ -336,3 +337,108 @@ async def test_a_password_that_will_not_write_fails_its_step_not_the_request(
     setup = await read_settings(session, SetupSettings)
     assert (setup.qbittorrent.web_ui_username, setup.qbittorrent.web_ui_password_hash) == ("", "")
     assert (await read_status(session)).current_step == STEP_QBITTORRENT
+
+
+@pytest.mark.asyncio
+async def test_an_existing_qbittorrent_moves_on_after_its_connection_test_alone(
+    session: AsyncSession,
+) -> None:
+    """既有那一台 Berth 什麼都不寫，測試通過就是這一頁做完了（M4 票 38，brief §19 D5）：不再有
+    「確認，不改任何設定」那一顆。測試紅了就停在這一頁（M4 票 25 的那一條照舊）。"""
+    await arrange(session, origin=ServiceOrigin.EXISTING, username="owner", password="s3cret")
+    client = FakeQbittorrentClient(base_url="http://nas:8080")
+    factory = FakeClientFactory(qbittorrent=client)
+
+    tested = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
+
+    assert tested.current_step == STEP_ROUTES
+    assert client.writes == []
+
+    client.error = ServiceUnavailableError("GET /api/v2/app/version: connection refused")
+    stopped = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
+    assert stopped.current_step == STEP_QBITTORRENT
+
+
+@pytest.mark.asyncio
+async def test_a_bundled_qbittorrent_holds_page_2_until_its_login_is_set(
+    session: AsyncSession,
+) -> None:
+    """套件內那一台測試通過還不夠：介面登入沒設就停在這一頁，設好才往下（M4 票 38）。"""
+    await arrange(session)
+    client = FakeQbittorrentClient()
+    factory = FakeClientFactory(qbittorrent=client)
+
+    tested = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
+    assert tested.current_step == STEP_QBITTORRENT
+
+    await apply_qbittorrent(session, factory, login=SKIPPER)
+    assert (await read_status(session)).current_step == STEP_ROUTES
+
+
+@pytest.mark.asyncio
+async def test_a_bundled_qbittorrent_that_already_has_a_login_moves_on_after_its_test(
+    session: AsyncSession,
+) -> None:
+    """重裝保留 qBittorrent 的 config：那一台自己就有介面登入，連線測試順便讀到它，這一頁就做完了，
+    不必再按「套用這 0 項」（M4 票 38，審計 S5-06）。只讀，一個鍵都不寫。"""
+    await arrange(session)
+    client = FakeQbittorrentClient(preferences={"web_ui_username": "skipper"})
+    factory = FakeClientFactory(qbittorrent=client)
+
+    tested = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
+
+    assert tested.current_step == STEP_ROUTES
+    assert client.writes == []
+    status = await read_qbittorrent(session, factory)
+    assert [(row.step, row.status, row.detail) for row in status.steps] == [
+        (QbittorrentStep.PASSWORD.value, StepStatus.SKIPPED, "skipper")
+    ]
+    setup = await read_settings(session, SetupSettings)
+    assert (setup.qbittorrent.web_ui_username, setup.qbittorrent.web_ui_password_hash) == (
+        "skipper",
+        "",
+    )
+
+
+@pytest.mark.asyncio
+async def test_reading_the_login_never_turns_the_connection_test_red(
+    session: AsyncSession,
+) -> None:
+    """讀偏好只是順便：讀不到時連線照樣是綠的，登入那一條照舊等「設定介面登入」。"""
+    await arrange(session)
+    client = FakeQbittorrentClient()
+    factory = FakeClientFactory(qbittorrent=client)
+
+    async def refuse() -> Mapping[str, Any]:
+        raise ServiceUnavailableError("GET /api/v2/app/preferences: connection reset")
+
+    client.preferences = refuse  # type: ignore[method-assign]  # 只換讀偏好這一支，版本照常
+
+    tested = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
+
+    qbittorrent = next(row for row in tested.services if row.kind is ServiceKind.QBITTORRENT)
+    assert qbittorrent.state is ConnectionState.OK
+    assert tested.current_step == STEP_QBITTORRENT
+
+
+@pytest.mark.asyncio
+async def test_a_failed_login_is_not_papered_over_by_the_next_connection_test(
+    session: AsyncSession,
+) -> None:
+    """換登入失敗之後再測一次：那一台讀得到舊帳號，但剛才那一次失敗照舊掛著、頁 2 不算做完——
+    密碼可能已經換了（M4 票 26：密碼先送），說「已經是這樣」會讓人拿舊的那一組去登入。"""
+    await arrange(session)
+    client = FakeQbittorrentClient(preferences={"web_ui_username": "skipper"})
+    factory = FakeClientFactory(qbittorrent=client)
+
+    async def refuse(values: Mapping[str, Any]) -> None:
+        raise ServiceUnavailableError("connection refused")
+
+    client.set_preferences = refuse  # type: ignore[method-assign]  # 只換這一支，讀偏好照常
+    await apply_qbittorrent(session, factory, login=SKIPPER)
+
+    tested = await retest_service(session, factory, BUNDLED, ServiceKind.QBITTORRENT, now=NOW)
+
+    assert tested.current_step == STEP_QBITTORRENT
+    setup = await read_settings(session, SetupSettings)
+    assert [row.status for row in setup.qbittorrent.steps] == [StepStatus.FAILED]

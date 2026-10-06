@@ -610,7 +610,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 | 頁 | 泊位 | 做什麼 | 要先有 |
 | --- | --- | --- | --- |
 | 1 | Jellyfin（BTH 1） | 選來源 → 建立管理員或以管理員登入 → 擁有者 → Berth 建 API key | 無 |
-| 2 | qBittorrent（BTH 2） | 選來源 → 套件內設偏好與 WebUI 登入 / 既有填位址與 WebUI 帳密 → 測試 | 擁有者 |
+| 2 | qBittorrent（BTH 2） | 選來源 → 測試 → 套件內設 WebUI 登入（那一台自己設過就不必）；既有填位址與 WebUI 帳密，測試通過即完成 | 擁有者 |
 | 3 | 媒體庫與路徑（BTH 3） | 套件內建媒體庫 / 既有加 Berth 路徑 → Route → 按鈕觸發的每一條檢查 | Jellyfin、qBittorrent |
 | 4 | Prowlarr 與索引站（BTH 4） | 選來源 → 套件內讀 key、設介面登入、挑索引站 / 既有貼 API key | 擁有者 |
 | 5 | TMDB（BTH 5） | 貼 key、測試 | 擁有者 |
@@ -643,10 +643,10 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
    - 設定頁換位址或 key 仍然是登入換 key（`POST /setup/jellyfin/connect`）。套件內 Jellyfin 的媒體庫不在這一頁建，在頁 3。
 2. **qBittorrent**：
    - **套件內**：設 WebUI 登入，全域偏好一個都不寫（M4 票 32，brief §19 D2）——與既有那一台只差這一格。Berth 自己靠免密白名單連它（§9.2），用不到這組登入。
-     - **WebUI 登入預設「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；取消勾選就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。**必填**：不設的話使用者自己打開 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「套用」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。
+     - **WebUI 登入預設「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；取消勾選就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。**必填**：不設的話使用者自己打開 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「設定介面登入」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。**那一台自己就設過的**（重裝保留它的 config）在連線測試時就讀到帳號、記成 `skipped`（`qbittorrent.note_qbittorrent_login`，M4 票 38），測試通過即完成；**「設定介面登入」只在欄位開著時出現**（還沒設、或按了「更換登入」），沒有按下去什麼都不寫的「套用這 0 項」（brief §19 D5）。
       - **照 qBittorrent 的規則先擋**（M4 票 26，brief §20.2）：帳號至少 3 字元、不能有冒號，密碼至少 6 字元；沿用時也檢查（Jellyfin 密碼太短、擁有者的名字不合就說不能沿用、請另設），設定頁的「更新登入」同一套。Berth **先送密碼、再送帳號**（5.2 帳號先寫、密碼後驗），兩個都進去了才記帳號；qBittorrent 仍回 400 時那一條是 `login_rejected`、原文進技術細節，欄位不收起來。
      - **Berth 只記帳號與密碼的加鹽雜湊**（夠比對「已經是這一組」；票 15 把票 07 存的明文換掉，附 migration）。回頭看時欄位收起來、只說帳號是誰，按「更換登入」才打開。設定頁 → qBittorrent 的「介面登入」一區用同一組欄位與同一個勾選，`PUT /setup/qbittorrent/login`（`qbittorrent.set_interface_login`）只換登入。設定頁的介面登入那一區讀頁 2 的 `GET /setup/qbittorrent/diff`（路徑名是票 32 之前留下的）。
-   - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（M4 票 22：它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；原本的「temp path 未啟用只警告」一併撤掉），按鈕只是確認連得上、版本夠新，只記密碼那一條 `skipped` 當「按過了」。沒有介面登入那一格，帶了 `login` 回 422。
+   - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（M4 票 22：它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；原本的「temp path 未啟用只警告」一併撤掉），**測試通過就做完**（M4 票 38，brief §19 D5）：畫面上沒有確認鍵——原本的「確認，不改任何設定」按下去什麼都不寫，只是要人多按一次（照 Sonarr / Home Assistant「測試與儲存合一」的慣例）。沒有介面登入那一格，直接打 `apply` 帶了 `login` 回 422。
    - Berth 的路徑全靠分類（建立時帶 save path 與未完成目錄）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。**套件內那一台同一條**（M4 票 32）：票 32 之前寫過的 `save_path` 與兩個 autoTMM 開關 Berth 沒存原值，不改回去；`setup.qbittorrent.steps` 裡那三條舊紀錄讀的時候丟掉（`SetupQbittorrent` 的寬鬆讀取，不寫 migration：下一次套用整份換掉）。頁 2 的纜繩只剩 `web_ui_password` 一條。
 3. **媒體庫與路徑**（票 06d 把它排在 qBittorrent 之後；票 08 改成按鈕觸發）：
    - **套件內 Jellyfin 的媒體庫由使用者列**（票 06f，Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：一張可編輯的清單，預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）；資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元），名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填；名稱與資料夾各自不可重複（不分大小寫）。規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號），停手就存。**已經在 Jellyfin 建好的列鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的——改名與刪除要去 Jellyfin，後端回 `built_changed`。媒體庫以第 1 頁存下的 API key 建（§9.4 第 1、4 步，`bootstrap_jellyfin`；沒有 key 就拒絕）。**沒有安裝插件的按鈕**（票 14b）。
@@ -663,7 +663,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 5. **TMDB**：使用者貼自己的 API key（v3 key 或 v4 token 都收），按「測試」。**這一頁是必填的閘門**：`configuration` 綠燈才走得到完成，畫面同時要說得出去哪裡申請（themoviedb.org → 設定 → API）。完成那一頁再擋一次，閘門看的是存下來的那一條綠燈。還沒有驗過的 key 時先存再測（測不過也存，改一個字再按）；**已經有一把驗過的在用時，新的測不過就不換**，紅燈只回給畫面（票 06i：設定頁換 key 貼錯一把不該讓探索與入庫停擺）。
 6. **完成**：`POST /setup/complete` 寫 `settings.setup.completed`（照〈續行與跳過〉的頁序把每一頁再問一次，有一頁不再成立就回 422——另一個分頁回頭改了頁 2 或頁 4 也擋得住；前端收到 422 就重讀進度、回到那一頁，M4 票 31），說出跳過了什麼與在哪裡補，並說出之後拿什麼登入（擁有者的 Jellyfin 帳號），然後回首頁——擁有者從第 1 頁起就登入著，直接落在探索；`/` 從那一刻起不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
 
-**續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一頁。**步驟由狀態導出，不存游標**：擁有者未成立 → 頁 1；qBittorrent 沒選、最後一次測試不是綠的、沒按過套用，或套件內那一台的登入沒結論 → 頁 2（測試要綠是 M4 票 25：套用之後它停了，重新測試紅了，頁 2 就不算做完；前端讀差異或套用時發現連不上而連線卡還是綠的，自動重新測試一次，卡片照實際的例外變紅、出現「重新測試」）；Route 沒有或沒全綠、或套件內清單有一列不在 Jellyfin 上 → 頁 3（後者看媒體庫快照而不是「建媒體庫那一步跑過沒」，與剖面的「已建立」同一條 `jellyfin.libraries_built`：保留 Jellyfin 重裝 Berth 時清單全部已建立、那一步從不執行，M4 票 24）；Prowlarr 沒結論也沒跳過 → 頁 4；TMDB 沒綠燈 → 頁 5；否則完成。**可跳過的只有頁 4**，完成頁說出跳過了什麼與在哪裡補；頁 2、3、5 不可跳。兩者不同級：沒有索引站只是搜尋不到東西，沒有 TMDB 則探索、季集快照與命名全部停擺（M1 票 02b）。
+**續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一頁。**步驟由狀態導出，不存游標**：擁有者未成立 → 頁 1；qBittorrent 沒選、最後一次測試不是綠的，或套件內那一台的登入沒結論 → 頁 2（既有的那一台測試綠了就算做完，M4 票 38；測試要綠是 M4 票 25：設好之後它停了，重新測試紅了，頁 2 就不算做完；前端讀差異或套用時發現連不上而連線卡還是綠的，自動重新測試一次，卡片照實際的例外變紅、出現「重新測試」）；Route 沒有或沒全綠、或套件內清單有一列不在 Jellyfin 上 → 頁 3（後者看媒體庫快照而不是「建媒體庫那一步跑過沒」，與剖面的「已建立」同一條 `jellyfin.libraries_built`：保留 Jellyfin 重裝 Berth 時清單全部已建立、那一步從不執行，M4 票 24）；Prowlarr 沒結論也沒跳過 → 頁 4；TMDB 沒綠燈 → 頁 5；否則完成。**可跳過的只有頁 4**，完成頁說出跳過了什麼與在哪裡補；頁 2、3、5 不可跳。兩者不同級：沒有索引站只是搜尋不到東西，沒有 TMDB 則探索、季集快照與命名全部停擺（M1 票 02b）。
 
 **前端的導覽**（票 06d；Material Stepper 的 linear 模式，Jellyfin 自己的啟動精靈有「上一步」）。後端的步驟仍然是導出的、前端不改它；前端只決定「畫面停在哪一頁」，進出規則全部是 `web/src/setup/navigation.ts` 的純函式：
 

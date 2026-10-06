@@ -579,6 +579,7 @@ export function SetupPage() {
           loginRefusal={loginRefusalOf(applyPreferences.error)}
           onApply={(login) => applyPreferences.mutateAsync(login)}
           choice={choiceOf('qbittorrent')}
+          done={advanced(step, backend)}
           note={note}
           nav={nav}
         />

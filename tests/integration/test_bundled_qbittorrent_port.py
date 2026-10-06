@@ -38,6 +38,10 @@ async def test_choosing_bundled_knocks_on_the_port_berth_was_given(
     respx.get(f"{MOVED}/api/v2/app/webapiVersion").respond(
         200, text=read_fixture("http/qbittorrent/app-webapiversion.5.2.3.txt")
     )
+    # 套件內那一台的連線測試順便讀它自己的介面登入（M4 票 38）。
+    respx.get(f"{MOVED}/api/v2/app/preferences").respond(
+        200, text=read_fixture("http/qbittorrent/app-preferences.5.2.3.json")
+    )
     config = load_config({"EXT_ROOT": str(tmp_path), "QBITTORRENT_WEBUI_PORT": "18080"})
     await own(session)
 

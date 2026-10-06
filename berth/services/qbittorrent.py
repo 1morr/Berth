@@ -211,8 +211,9 @@ async def apply_qbittorrent(
     `login` 是泊位上填的 WebUI 登入（M4 票 07）。不帶就是「登入照舊」：回頭重按時不帶，已經設過的
     那一組不重寫。
 
-    既有的那一台什麼都不寫：這一步對它的意思只剩「連得上、版本夠新」，按下去只記密碼那一條
-    `skipped`（`setup._qbittorrent_secured` 認它）。帶了登入就拒絕（`ValueError`）。
+    既有的那一台什麼都不寫，畫面上也沒有這一顆（M4 票 38）：它的頁 2 測試通過就做完了
+    （`setup._qbittorrent_secured`）。直接打 API 時只是再連一次、記密碼那一條 `skipped`；帶了登入就
+    拒絕（`ValueError`）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
@@ -340,7 +341,8 @@ async def _apply_password(
 
     不帶登入時：設過的照舊（`skipped`、細節是帳號）；**那一台自己就設過的也不強迫再設**（重裝保留
     config，M4 票 15）——帳號不是 `admin` 就是設過了（brief §20.14），記下帳號、雜湊留空；其餘是
-    `pending`：必填，精靈停在頁 2（`setup._qbittorrent_secured`）。
+    `pending`：必填，精靈停在頁 2（`setup._qbittorrent_secured`）。那一台自己設過的，連線測試時就
+    記下了（`note_qbittorrent_login`，M4 票 38）。
     """
     key = QbittorrentStep.PASSWORD.value
     if origin is not ServiceOrigin.BUNDLED:
@@ -398,6 +400,35 @@ def _keep_login(latest: SetupSettings, before: SetupQbittorrent, after: SetupQbi
         return
     latest.qbittorrent.web_ui_username = after.web_ui_username
     latest.qbittorrent.web_ui_password_hash = after.web_ui_password_hash
+
+
+def note_qbittorrent_login(setup: SetupSettings, instance: str) -> None:
+    """套件內那一台自己就設過介面登入（重裝保留它的 config，M4 票 38）：Berth 還沒記那一條的話記成
+    `skipped`，與「套用」不帶登入時同一個結論（`_apply_password`）。連線測試時呼叫——原本要再按一次
+    「套用這 0 項」才記，頁 2 就停著（審計 S5-06）。Prowlarr 的是 `indexer.note_instance_login`。
+
+    **只補還沒有結論的那一條**：設好了的不動；剛才換登入失敗的也不蓋掉——密碼先送（M4 票 26），
+    那一台的密碼可能已經換了，說「已經是這樣」會讓人拿舊的那一組去登入。
+    """
+    key = QbittorrentStep.PASSWORD.value
+    if not instance or any(
+        row.key == key and row.status is not StepStatus.PENDING for row in setup.qbittorrent.steps
+    ):
+        return
+    if not setup.qbittorrent.web_ui_username:
+        setup.qbittorrent.web_ui_username = instance
+        setup.qbittorrent.web_ui_password_hash = ""
+    step = SetupStep(key=key, status=StepStatus.SKIPPED, detail=setup.qbittorrent.web_ui_username)
+    setup.qbittorrent.steps = [*(row for row in setup.qbittorrent.steps if row.key != key), step]
+
+
+async def qbittorrent_interface_user(client: QbittorrentClient) -> str:
+    """那一台自己設過的 WebUI 帳號（`_instance_username`）。連線測試順便讀：讀不到不讓測試變紅，
+    登入那一條照舊等「設定介面登入」。"""
+    try:
+        return _instance_username(await client.preferences())
+    except ServiceError:
+        return ""
 
 
 def _instance_username(preferences: Mapping[str, Any]) -> str:

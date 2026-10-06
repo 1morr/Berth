@@ -140,11 +140,17 @@ def configured(berth: httpx.Client) -> None:
 
 
 def _secure_qbittorrent(berth: httpx.Client) -> None:
-    """頁 2：先送一組 qBittorrent 5.2 起不收的密碼，再送合規的（M4 票 26）。
+    """頁 2：套件內那一台測試通過還不夠，介面登入設好才往下（M4 票 38）。
 
-    被拒的那一組要停在頁 2、說得出是 qBittorrent 拒絕的（`login_rejected`），帳號不算設好；
-    合規的那一組之後就是 `qbittorrent_webui` 登入 WebUI 用的。
+    先送一組 qBittorrent 5.2 起不收的密碼（M4 票 26）：被拒的那一組要停在頁 2、說得出是 qBittorrent
+    拒絕的（`login_rejected`），帳號不算設好；合規的那一組之後就是 `qbittorrent_webui` 登入 WebUI
+    用的。
+
+    之後換成「既有」再換回套件內：Berth 忘了它設過的登入（換一台就重做那一頁），像重裝保留
+    qBittorrent 的 config 那樣。兩次都只靠連線測試就做完——既有的那一台沒有確認鍵，套件內的那一台
+    在測試時讀到它自己的登入，不必再按一次套用（審計 S5-06）。
     """
+    assert ok(berth.get("/setup/status"))["current_step"] == 2
     short = {**WEB_UI_LOGIN, "password": WEB_UI_LOGIN["password"][:5]}
     refused = ok(berth.post("/setup/qbittorrent/apply", json={"login": short}))
     (row,) = [row for row in refused["steps"] if row["step"] == "web_ui_password"]
@@ -153,6 +159,24 @@ def _secure_qbittorrent(berth: httpx.Client) -> None:
 
     applied = ok(berth.post("/setup/qbittorrent/apply", json={"login": WEB_UI_LOGIN}))
     assert applied["web_ui_username"] == ADMIN, applied["steps"]
+    status = ok(berth.get("/setup/status"))
+    assert status["current_step"] == 3, status
+    (bundled,) = [row for row in status["services"] if row["kind"] == "qbittorrent"]
+
+    existing = ok(
+        berth.post(
+            "/setup/services/qbittorrent",
+            json={"origin": "existing", "base_url": bundled["base_url"], **WEB_UI_LOGIN},
+        )
+    )
+    assert existing["current_step"] == 3, existing
+    again = ok(berth.post("/setup/services/qbittorrent", json={"origin": "bundled"}))
+    assert again["current_step"] == 3, again
+    read = ok(berth.get("/setup/qbittorrent/diff"))
+    assert [(row["step"], row["status"]) for row in read["steps"]] == [
+        ("web_ui_password", "skipped")
+    ], read["steps"]
+    assert read["web_ui_username"] == ADMIN, read
 
 
 def _move_the_global_save_path() -> None:

@@ -100,15 +100,10 @@ def test_a_bundled_qbittorrent_needs_its_login_but_an_existing_one_does_not() ->
     bundled.qbittorrent.steps = ok(QbittorrentStep.PASSWORD.value)
     assert _current_step(bundled, berthed=True) == STEP_COMPLETE
 
-    # 既有的那一台沒有登入那一格：按「確認」只記密碼那一條 `skipped`，它就是做完了。
+    # 既有的那一台沒有登入那一格：測試通過就做完了，沒有要按的確認鍵（M4 票 38）。
     existing = finished(qbittorrent=ServiceOrigin.EXISTING)
-    existing.qbittorrent.steps = [
-        SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.SKIPPED)
-    ]
-    assert _current_step(existing, berthed=True) == STEP_COMPLETE
-    # 還沒按就還沒做完。
     existing.qbittorrent.steps = []
-    assert _current_step(existing, berthed=True) == STEP_QBITTORRENT
+    assert _current_step(existing, berthed=True) == STEP_COMPLETE
 
 
 def test_page_three_holds_until_it_is_berthed() -> None:

@@ -73,6 +73,7 @@ from berth.services.jellyfin import (
     libraries_built,
     remembered_startup,
 )
+from berth.services.qbittorrent import note_qbittorrent_login, qbittorrent_interface_user
 from berth.services.routes import forget_route_checks, routes_ready
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
@@ -159,7 +160,8 @@ class ChoiceLockedError(Exception):
 #: `complete_setup` 拒絕時說哪一頁差什麼。前端不解這句（它照手上的狀態指名），留給 API 的使用者。
 _UNFINISHED = {
     STEP_JELLYFIN: "Jellyfin needs an owner",
-    STEP_QBITTORRENT: "qBittorrent has to be applied and pass its connection test",
+    STEP_QBITTORRENT: "qBittorrent has to pass its connection test and, when bundled, have its "
+    "interface login set",
     STEP_ROUTES: "every library route has to pass its checks",
     STEP_INDEXER: "add an indexer site or skip the page",
     STEP_TMDB: "TMDB needs a credential that passes its test",
@@ -471,6 +473,8 @@ async def _test_and_record(
             latest.indexer.skipped = False
         elif kind is ServiceKind.PROWLARR:
             note_instance_login(latest, outcome.interface_user)
+        elif kind is ServiceKind.QBITTORRENT and choice.origin is ServiceOrigin.BUNDLED:
+            note_qbittorrent_login(latest, outcome.interface_user)
 
     await update_settings(session, SetupSettings, record)
     return await _read(session, now=now)
@@ -547,7 +551,8 @@ class _Outcome:
     server_id: str = ""
     #: 沒連上時的原文（英文），收進畫面的「技術細節」。
     error: str = ""
-    #: 套件內 Prowlarr 自己設過的介面帳號（M4 票 27）；沒設過、或不是那一台是空字串。
+    #: 套件內 Prowlarr（M4 票 27）或 qBittorrent（M4 票 38）自己設過的介面帳號；沒設過、或是既有的
+    #: 那一台是空字串。
     interface_user: str = ""
 
 
@@ -571,6 +576,9 @@ async def _test_connection(
 
     if kind is ServiceKind.QBITTORRENT:
         settings = await read_settings(session, QbittorrentSettings)
+        bundled = (await read_settings(session, SetupSettings)).origin_of(
+            ServiceKind.QBITTORRENT
+        ) is ServiceOrigin.BUNDLED
         qbittorrent = factory.qbittorrent(settings.base_url)
 
         async def qbittorrent_test() -> _Outcome:
@@ -581,10 +589,14 @@ async def _test_connection(
                 # 版本在測連線時就擋（M4 票 21，與 Jellyfin、Prowlarr 同一個時機）：原本這裡是綠燈、
                 # 頁 2 的泊位卡卻是紅的「太舊」，同一個畫面兩種顏色。
                 return _Outcome(reason=ConnectionReason.VERSION_UNSUPPORTED, detail=version.app)
+            # 套件內那一台自己就有介面登入（重裝保留它的 config）：一起讀，記下來頁 2 就做完了
+            # （M4 票 38）。既有的那一台的登入不是 Berth 的事，不讀。
+            user = await qbittorrent_interface_user(qbittorrent) if bundled else ""
             return _Outcome(
                 reason=ConnectionReason.CONNECTED,
                 detail=f"{version.app} · Web API {version.webapi}",
                 ok=True,
+                interface_user=user,
             )
 
         try:
@@ -850,19 +862,23 @@ def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
 
 
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
-    """頁 2 做完了沒：選過、最後一次測試連得上、登入那一條有結論。
+    """頁 2 做完了沒：選過、最後一次測試連得上；套件內那一台另外要介面登入有結論。
 
-    登入必填（M4 票 07 shape）：套件內那一台沒設過時那一條是 `pending`，精靈停在這裡；設好是 `ok`，
-    已經是這一組或那一台自己設過是 `skipped`。既有的那一台沒有登入那一格，按下「確認」只記它
-    `skipped`——它就是「按過了」的記號。全域偏好沒有纜繩（M4 票 32）。換來源時纜繩整份清掉，
-    所以既有那一台的 `skipped` 不會被套件內那一台認成「設好了」。
+    **既有的那一台測試通過就做完了**（M4 票 38，brief §19 D5）：Berth 對它什麼都不寫，原本那一顆
+    「確認，不改任何設定」按下去也什麼都不做，只是要人多按一次。
 
-    **連線測試要是綠的**（M4 票 25）：套用過之後 qBittorrent 停了，重新測試紅了，這一頁就還沒做完
-    ——原本連線卡紅、前進鍵照樣在。它回來、重新測試綠了，套用過的纜繩照舊算數。
+    套件內的登入必填（M4 票 07 shape）：沒設過時那一條是 `pending`，精靈停在這裡；設好是 `ok`，
+    已經是這一組或那一台自己設過是 `skipped`——後者在連線測試時就記下（`note_qbittorrent_login`），
+    重裝保留 config 時不必再按一次「套用」。全域偏好沒有纜繩（M4 票 32）。換來源時纜繩整份清掉。
+
+    **連線測試要是綠的**（M4 票 25）：設好之後 qBittorrent 停了，重新測試紅了，這一頁就還沒做完
+    ——原本連線卡紅、前進鍵照樣在。它回來、重新測試綠了，設好的登入照舊算數。
     """
     choice = setup.choices.get(ServiceKind.QBITTORRENT)
     if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
         return False
+    if choice.origin is not ServiceOrigin.BUNDLED:
+        return True
     return any(
         row.key == QbittorrentStep.PASSWORD.value
         and row.status in (StepStatus.OK, StepStatus.SKIPPED)
