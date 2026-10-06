@@ -34,7 +34,7 @@ from berth.services.jellyfin import InterfaceLoginRejectedError
 from berth.services.qbittorrent import (
     QbittorrentSetupStatus,
     apply_qbittorrent,
-    read_qbittorrent_diff,
+    read_qbittorrent,
 )
 from berth.services.qbittorrent import set_interface_login as set_qbittorrent_login
 from berth.services.settings import read_settings, write_settings
@@ -220,7 +220,7 @@ async def test_a_login_qbittorrent_refuses_says_so_and_records_nothing(
     assert (await qbittorrent.preferences())["web_ui_username"] == "admin"
     # 再讀一次也不是「設好了」：表單照舊打開，精靈停在頁 2。
     assert status.web_ui_username == ""
-    assert (await read_qbittorrent_diff(session, clients)).web_ui_username == ""
+    assert (await read_qbittorrent(session, clients)).web_ui_username == ""
     again = await apply_qbittorrent(session, clients)
     assert password_step(again).status is StepStatus.PENDING
 
@@ -275,7 +275,7 @@ async def test_a_bundled_qbittorrent_that_already_has_a_login_is_not_forced(
     qbittorrent = FakeQbittorrentClient(preferences={"web_ui_username": "keeper"})
     clients = factory(qbittorrent=qbittorrent)
 
-    diff = await read_qbittorrent_diff(session, clients)
+    diff = await read_qbittorrent(session, clients)
     status = await apply_qbittorrent(session, clients)
 
     assert diff.web_ui_username == "keeper"

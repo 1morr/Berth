@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.qbittorrent import TorrentFile
+from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.config import Config
 from berth.db import create_session_factory
 from berth.domain import EventType, JobState, JobTrigger
@@ -43,7 +44,7 @@ from berth.services.jobs import (
 from berth.services.plan import plan_id_of, sweep_plans
 from berth.services.rss import add_feed, bind_series, poll_feed
 from berth.services.settings import read_settings, write_settings
-from tests.integration.arrange import applied_qbittorrent, arrange, factory_for
+from tests.integration.arrange import arrange, factory_for
 from tests.integration.test_deletion import imported
 from tests.integration.test_downloads import status
 from tests.integration.test_jobs import MAGNET_HASH, _media, _route, _source
@@ -379,7 +380,7 @@ class TestNetworkOutsideTheWriteTransaction:
         await arrange(session, roots)
         media = await _media(session)
         route = await _route(session, roots)
-        qbittorrent = applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+        qbittorrent = FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await add_download(
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None

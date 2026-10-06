@@ -776,8 +776,6 @@ class StepFailure(StrEnum):
     CREDENTIAL_MISSING = "credential_missing"
     #: 同名分類已存在而路徑不同，Berth 不覆寫。`params.category`、`params.path`。
     CATEGORY_CONFLICT = "category_conflict"
-    #: qBittorrent 沒報全域 save path。
-    SAVE_PATH_MISSING = "save_path_missing"
     #: 服務報的路徑在 Berth 的容器裡看不到：它不在 Berth 的共用根目錄底下（`/media/tv`），
     #: 沒掛進來。`params.path`。
     PATH_NOT_VISIBLE = "path_not_visible"
@@ -853,16 +851,13 @@ class RouteCheck(StrEnum):
 
 
 class QbittorrentStep(StrEnum):
-    """第 4 步逐鍵套用建議偏好（plan §9.3 第 4 步、§8.1）。
+    """頁 2 的纜繩（plan §9.3、§8.1）。值是 `app/setPreferences` 的鍵名。
 
-    值就是 `app/setPreferences` 的鍵名——一條纜繩對一個鍵，畫面顯示的與送出去的是同一個字串。
-    未完成目錄不在這裡（M4 票 22）：它開在 Berth 的每個分類上（`downloadPath`），不寫全域。
+    **只剩 WebUI 登入**（M4 票 32，brief §19 D2）：Berth 不寫任何全域偏好。送單逐個 torrent 帶
+    分類與 `autoTMM=true`，路徑與未完成目錄都開在 Berth 的分類上，全域的哪一個鍵都不影響它。
     """
 
-    SAVE_PATH = "save_path"
-    AUTO_TMM_ENABLED = "auto_tmm_enabled"
-    CATEGORY_CHANGED_TMM_ENABLED = "category_changed_tmm_enabled"
-    #: 「同一組帳密」勾了才會有這一條；`web_ui_password` 只寫不讀。
+    #: 套件內那一台的 WebUI 登入；既有的那一台記成 `skipped`。`web_ui_password` 只寫不讀。
     PASSWORD = "web_ui_password"
 
 

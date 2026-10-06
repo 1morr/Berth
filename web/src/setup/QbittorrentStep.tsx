@@ -28,12 +28,11 @@ import { StepFrame } from './StepFrame'
 /**
  * 頁 2：qBittorrent（plan §9.3）。
  *
- * 頁首是二選一（M4 票 15，`ServiceChoice`）：不預選、選了才連。連上之後才有這一頁自己的事——
- * 剖面列**逐鍵的差異**：現值在左、建議值在右，一眼看得出按下去會改掉什麼。套用只寫有差異的鍵，
- * 本來就對的那幾條是「已經是這樣」。
+ * 頁首是二選一（M4 票 15，`ServiceChoice`）：不預選、選了才連。連上之後剖面是那一台的位址、版本與
+ * 介面登入。
  *
- * **既有的那一台一個鍵都不寫**（`writes_preferences`，M4 票 05），也不列偏好表（`diffs` 是空的，
- * M4 票 22）：它的全域偏好沒有一個影響 Berth。按鈕只是確認連得上、版本夠新。
+ * **兩種來源都不寫全域偏好**（M4 票 32，brief §19 D2）：Berth 送單逐個 torrent 帶自己的分類與
+ * `autoTMM=true`，全域的哪一個鍵都不影響它。既有的那一台按鈕只是確認連得上、版本夠新。
  *
  * **套件內的那一台多一組 WebUI 登入**（`web_ui_login`，M4 票 07）：跟著「套用」送出，必填；預設
  * 「沿用 Jellyfin 帳密」（M4 票 15）。那一台自己就設過的不強迫再設（`web_ui_username` 已經有值）。
@@ -58,7 +57,7 @@ export function QbittorrentStep({
   /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
   applying: boolean
-  /** 請求本身沒跑完（沒有就是 `null`）。逐鍵的失敗在 `setup.steps` 裡，各自貼在它那一行。 */
+  /** 請求本身沒跑完（沒有就是 `null`）。登入那一條的失敗在 `setup.steps` 裡，貼在它那一行。 */
   requestError: unknown
   /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
   loginRefusal: InterfaceLoginRefusal | null
@@ -79,13 +78,13 @@ export function QbittorrentStep({
   // 標題與 lede 跟著畫面上選著的那一格：換另一格還在確認時就說那一格的事（M4 票 09）。
   const draft = choice.draft !== service?.origin ? choice.draft : null
   const switching = draft !== null
-  // 照選下的來源說，不照差異讀不讀得回來：既有的那一台連不上時，原本標題變成套件內的「套用建議的
-  // 設定……Berth 直接改它的偏好」（M4 票 21）。
+  // 照選下的來源說，不照那一台讀不讀得回來：既有的那一台連不上時，原本標題變成套件內那一句
+  // （M4 票 21）。
   const mode = draft ?? service?.origin ?? 'choose'
   const ready = connected(service) && !switching
 
   return (
-    <StepFrame cutaway={setup && ready ? <DiffCutaway setup={setup} /> : <ChoiceCutaway />}>
+    <StepFrame cutaway={setup && ready ? <ServerCutaway setup={setup} /> : <ChoiceCutaway />}>
       <h2 className="text-lg font-semibold text-ink">{t(`qbittorrent.title.${mode}`)}</h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t(`qbittorrent.lede.${mode}`)}</p>
       {note}
@@ -136,82 +135,34 @@ function ChoiceCutaway() {
   )
 }
 
-/** 剖面即預覽：現值與建議值並排，值貼在它那一行（direction contract）。 */
-function DiffCutaway({ setup }: { setup: QbittorrentSetup }) {
+/** 連上之後的剖面：那一台是誰、介面登入由誰管（direction contract：值貼在它那一行）。 */
+function ServerCutaway({ setup }: { setup: QbittorrentSetup }) {
   const { t } = useTranslation()
 
   return (
-    <div className="grid gap-6">
-      <Cutaway title={t('qbittorrent.cutaway.server')}>
-        <CutawayRow term={t('connect.field.baseUrl')} value={setup.base_url || '—'} />
-        <CutawayRow
-          term={t('detail.version')}
-          value={setup.version || '—'}
-          muted={!setup.version}
-        />
-        <CutawayRow
-          term={t('qbittorrent.cutaway.webapi')}
-          value={setup.webapi_version || '—'}
-          muted={!setup.webapi_version}
-        />
-        <CutawayRow
-          term={t('qbittorrent.cutaway.password')}
-          value={
-            !setup.web_ui_login
-              ? t('qbittorrent.cutaway.existingLogin')
-              : setup.web_ui_username || t('qbittorrent.cutaway.willSet')
-          }
-          muted={!setup.web_ui_username}
-        />
-      </Cutaway>
-
-      {setup.diffs.length > 0 && (
-        <section className="border-2 border-rule bg-well">
-          <h3 className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink-dim">
-            {t('qbittorrent.cutaway.diff')}
-          </h3>
-          <table className="w-full table-fixed border-collapse text-left">
-            <thead>
-              <tr className="border-b-2 border-rule">
-                <th scope="col" className="label px-4 py-2 text-ink-dim">
-                  {t('qbittorrent.cutaway.key')}
-                </th>
-                <th scope="col" className="label px-4 py-2 text-ink-dim">
-                  {t('qbittorrent.cutaway.current')}
-                </th>
-                <th scope="col" className="label px-4 py-2 text-ink-dim">
-                  {t('qbittorrent.cutaway.recommended')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rule">
-              {setup.diffs.map((row) => (
-                <tr key={row.key}>
-                  <th scope="row" className="px-4 py-3 text-xs font-normal text-ink-dim">
-                    {isPreference(row.key) ? t(STEP_LABEL[row.key]) : row.key}
-                  </th>
-                  <td
-                    className={`value px-4 py-3 text-xs wrap-anywhere ${
-                      row.differs ? 'text-ink' : 'text-ink-dim'
-                    }`}
-                  >
-                    {row.current || '—'}
-                  </td>
-                  <td className="value px-4 py-3 text-xs font-semibold wrap-anywhere text-ink">
-                    {row.differs ? row.recommended : t('qbittorrent.cutaway.same')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
-    </div>
+    <Cutaway title={t('qbittorrent.cutaway.server')}>
+      <CutawayRow term={t('connect.field.baseUrl')} value={setup.base_url || '—'} />
+      <CutawayRow term={t('detail.version')} value={setup.version || '—'} muted={!setup.version} />
+      <CutawayRow
+        term={t('qbittorrent.cutaway.webapi')}
+        value={setup.webapi_version || '—'}
+        muted={!setup.webapi_version}
+      />
+      <CutawayRow
+        term={t('qbittorrent.cutaway.password')}
+        value={
+          !setup.web_ui_login
+            ? t('qbittorrent.cutaway.existingLogin')
+            : setup.web_ui_username || t('qbittorrent.cutaway.willSet')
+        }
+        muted={!setup.web_ui_username}
+      />
+    </Cutaway>
   )
 }
 
 /**
- * 讀差異時做不下去：版本太舊或連不上。畫面給的是升級 / 排查的路，不是一顆按不動的按鈕。
+ * 讀那一台時做不下去：版本太舊或連不上。畫面給的是升級 / 排查的路，不是一顆按不動的按鈕。
  *
  * **補法照來源**（M4 票 21）：`docker compose` 的指令只對套件內那一台成立；既有的那一台是使用者自己的
  * 容器，說的是「至少要 X，這一台是 Y」與去檢查位址。版本在測連線時就擋了（`setup._test_connection`），
@@ -259,15 +210,11 @@ function Blocked({ setup }: { setup: QbittorrentSetup }) {
   )
 }
 
-function isPreference(key: string): key is QbittorrentStepKey {
-  return Object.hasOwn(STEP_LABEL, key)
-}
-
 /**
- * 靠泊序列：一個鍵一條纜繩。已經是建議值的那幾條也繫上，只是沒有被寫過。
+ * 靠泊序列：套件內那一台只有介面登入一條纜繩。
  *
- * 既有的那一台沒有纜繩可列——偏好都不寫、密碼也不設，列出來只會是一排「已經是這樣」，
- * 說的是假話。它只剩一顆確認鍵與做完之後的那一句。
+ * 既有的那一台沒有纜繩可列——什麼都不寫，列出來只會是一條「已經是這樣」，說的是假話。它只剩一顆
+ * 確認鍵與做完之後的那一句。
  */
 function ApplySequence({
   setup,
@@ -308,10 +255,10 @@ function ApplySequence({
   const webUrl = qbittorrentWeb(setup)
   const started = setup.steps.length > 0
   const done = started && !applying && setup.steps.every((row) => isSettled(row.status))
-  const writes = setup.writes_preferences
-  // 按下去會寫幾項：有差異的鍵，加上要設的那一組介面登入（M4 票 21：原本只數鍵，按鈕說 5 個、畫面列 6 條）。
-  const pending =
-    setup.diffs.filter((row) => row.differs).length + (setup.web_ui_login && login.open ? 1 : 0)
+  // 只有套件內那一台有東西要寫：介面登入（M4 票 32 起全域偏好一個都不寫）。
+  const bundled = setup.web_ui_login
+  // 按下去會寫幾項：要設的那一組介面登入，已經設好、沒按「更換」就是 0（按鈕形狀留給 M4 票 38）。
+  const pending = login.open ? 1 : 0
 
   return (
     <>
@@ -321,7 +268,7 @@ function ApplySequence({
         </div>
       )}
 
-      {writes && (
+      {bundled && (
         <ol
           aria-live="polite"
           aria-busy={applying}
@@ -337,7 +284,7 @@ function ApplySequence({
       {done && (
         <div className="mt-4">
           <Notice signal="secured" label={t('status.ok')}>
-            {t(writes ? 'qbittorrent.done' : 'qbittorrent.doneExisting')}
+            {t(bundled ? 'qbittorrent.done' : 'qbittorrent.doneExisting')}
           </Notice>
         </div>
       )}
@@ -357,13 +304,13 @@ function ApplySequence({
       <div className={`mt-6 ${done ? '' : STICKY_ACTION}`}>
         {done ? (
           <GhostButton type="button" busy={applying} onClick={apply}>
-            {t(writes ? 'qbittorrent.rerun' : 'qbittorrent.recheck')}
+            {t(bundled ? 'qbittorrent.rerun' : 'qbittorrent.recheck')}
           </GhostButton>
         ) : (
           <PrimaryButton type="button" busy={applying} onClick={apply}>
             {applying
-              ? t(writes ? 'qbittorrent.applying' : 'qbittorrent.checking')
-              : writes
+              ? t(bundled ? 'qbittorrent.applying' : 'qbittorrent.checking')
+              : bundled
                 ? t('qbittorrent.apply', { keys: pending })
                 : t('qbittorrent.confirm')}
           </PrimaryButton>
@@ -383,7 +330,7 @@ function loginTook(next: QbittorrentSetup): boolean {
 }
 
 /**
- * 一條纜繩：一個偏好鍵。`step` 是封閉集合，所以標題與說明都是查表，不必有 fallback。
+ * 一條纜繩。`step` 是封閉集合，所以標題與說明都是查表，不必有 fallback。
  *
  * 補法連到 qBittorrent 自己的設定頁，位址是瀏覽器開得了的那一個（`qbittorrentWeb`）；給不出就不給——
  * 原本連的是 compose 內網的 `http://qbittorrent:8080`（M4 票 26）。qBittorrent 不收那組帳密時不叫人去

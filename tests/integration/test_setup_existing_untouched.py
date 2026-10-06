@@ -25,13 +25,12 @@ from berth.domain import (
 )
 from berth.models import Media, QbittorrentSettings, SetupSettings
 from berth.services.clients import BundledServices
-from berth.services.health import check_health
 from berth.services.indexer import apply_default_indexers, set_interface_login
 from berth.services.jobs import JobSource, add_download
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
     apply_qbittorrent,
-    read_qbittorrent_diff,
+    read_qbittorrent,
 )
 from berth.services.routes import build_routes, incomplete_path_of, save_path_of
 from berth.services.settings import read_settings, write_settings
@@ -43,7 +42,7 @@ from berth.services.setup import (
     read_status,
 )
 from berth.services.steps import InterfaceLogin
-from tests.integration.arrange import NOW, arrange, chosen, factory_for, own
+from tests.integration.arrange import arrange, chosen, factory_for, own
 from tests.integration.factories import COMPOSE, FakeClientFactory
 
 BUNDLED = BundledServices(targets=COMPOSE, prowlarr_api_key="mounted-key")
@@ -107,7 +106,7 @@ async def test_an_existing_password_free_qbittorrent_gets_no_password(
 
 @pytest.mark.asyncio
 async def test_a_bundled_choice_is_still_written(session: AsyncSession) -> None:
-    """雙向：選了套件內的一樣是一個站都沒有、一樣免密可進——那兩台照舊由 Berth 設定。"""
+    """雙向：選了套件內的一樣是一個站都沒有、一樣免密可進——那兩台照舊由 Berth 設登入。"""
     await owner(session)
     qbittorrent = FakeQbittorrentClient()
     prowlarr = FakeProwlarrClient()
@@ -120,10 +119,8 @@ async def test_a_bundled_choice_is_still_written(session: AsyncSession) -> None:
     await set_interface_login(session, factory, LOGIN, sleep=_no_wait)
 
     assert any(WEB_UI_PASSWORD_KEY in write for write in qbittorrent.writes)
-    # 套件內的全域偏好只寫這三個鍵。未完成目錄不寫全域（票 22）：Berth 的分類各自帶
-    # `downloadPath`，兩版實測全域關著也生效（brief §20.2）。
-    preferences = next(write for write in qbittorrent.writes if "save_path" in write)
-    assert set(preferences) == {"save_path", "auto_tmm_enabled", "category_changed_tmm_enabled"}
+    # 全域偏好一個都不寫，套件內也一樣（票 32）：閘門在 `test_qbittorrent_login_only.py`。
+    assert all("save_path" not in write for write in qbittorrent.writes)
     assert prowlarr.restarts == 1
     assert prowlarr.signs_in("labgate", "Lab-gate-1")
 
@@ -192,11 +189,9 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
     factory = factory_for(roots, qbittorrent=qbittorrent)
     assert (await read_status(session)).current_step == STEP_QBITTORRENT
 
-    diff = await read_qbittorrent_diff(session, factory)
-    # 偏好表整張收起（票 22）：它的全域偏好沒有一個影響 Berth——送單逐個 torrent 帶 autoTMM、
-    # 路徑全由 Berth 的分類決定，列出套件內的建議值只會讓人以為該去改。
-    assert diff.writes_preferences is False
-    assert diff.diffs == ()
+    read = await read_qbittorrent(session, factory)
+    # 沒有登入那一格：它的全域偏好與登入都是使用者的（票 07、22、32）。
+    assert read.web_ui_login is False
 
     applied = await apply_qbittorrent(session, factory)
     assert qbittorrent.writes == []
@@ -211,7 +206,10 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
     assert [row.health for row in routes.routes] == [HealthStatus.OK] * 3
     anime = next(row for row in routes.routes if row.slug == "anime")
     download_path = next(row for row in anime.checks if row.step == RouteCheck.DOWNLOAD_PATH.value)
-    assert download_path.detail == save_path_of(str(roots["complete"]), "anime")
+    assert download_path.detail == (
+        f"{save_path_of(str(roots['complete']), 'anime')}"
+        f" · {incomplete_path_of(str(roots['incomplete']), 'anime')}"
+    )
 
     media = Media(
         id="tv:1",
@@ -246,19 +244,3 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
     preferences = await qbittorrent.preferences()
     assert {key: preferences[key] for key in THEIR_PREFERENCES} == THEIR_PREFERENCES
     assert qbittorrent.writes == []
-
-
-@pytest.mark.asyncio
-async def test_an_existing_qbittorrent_reports_no_drift(
-    session: AsyncSession, roots: dict[str, Path]
-) -> None:
-    """它的全域偏好本來就是使用者的：與建議值不同不是漂移，健康頁不給「還原建議設定」。"""
-    await at_step_four_with_existing_qbittorrent(session, roots)
-    qbittorrent = FakeQbittorrentClient(
-        base_url="http://home-qbittorrent:8080", preferences=THEIR_PREFERENCES
-    )
-
-    report = await check_health(session, factory_for(roots, qbittorrent=qbittorrent), now=NOW)
-
-    row = next(row for row in report.services if row.kind is ServiceKind.QBITTORRENT)
-    assert (row.status, row.drift) == (HealthStatus.OK, ())

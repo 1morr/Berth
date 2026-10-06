@@ -737,10 +737,7 @@ def _set_paths(client: TestClient, data_root: Path) -> None:
 
 
 class TestQbittorrent:
-    """第 4 步的兩支端點（plan §9.3 第 4 步、票 08）。
-
-    差異的算法與冪等本身在 `test_setup_qbittorrent.py`。
-    """
+    """頁 2 的端點（plan §9.3、票 08）。冪等本身在 `test_setup_qbittorrent.py`。"""
 
     @pytest.fixture
     def qbittorrent(self) -> FakeQbittorrentClient:
@@ -763,23 +760,18 @@ class TestQbittorrent:
             _claim(running)
             yield running
 
-    def test_the_diff_lists_every_recommended_key(self, client: TestClient) -> None:
+    def test_reading_shows_the_version_and_the_login(self, client: TestClient) -> None:
         response = client.get("/api/setup/qbittorrent/diff")
 
         assert response.status_code == 200
         body = response.json()
-        assert [row["key"] for row in body["diffs"]] == [
-            "save_path",
-            "auto_tmm_enabled",
-            "category_changed_tmm_enabled",
-        ]
         assert body["version"] == "v5.2.3"
         assert body["webapi_version"] == "2.15.1"
         assert body["supported"] is True
         # 套件內的那一台有 WebUI 登入那一格，還沒設過（M4 票 07）。
         assert (body["web_ui_login"], body["web_ui_username"]) == (True, "")
 
-    def test_applying_writes_the_keys_and_leaves_no_difference(
+    def test_applying_writes_only_the_login(
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
     ) -> None:
         body = client.post(
@@ -787,21 +779,21 @@ class TestQbittorrent:
             json={"login": {"username": "skipper", "password": "harbour"}},
         ).json()
 
-        assert [row["differs"] for row in body["diffs"]] == [False] * 3
-        assert [row["status"] for row in body["steps"]] == ["ok"] * 4
-        assert qbittorrent.writes[0].keys() == {
-            "save_path",
-            "auto_tmm_enabled",
-            "category_changed_tmm_enabled",
-        }
+        assert [(row["step"], row["status"]) for row in body["steps"]] == [
+            ("web_ui_password", "ok")
+        ]
+        assert qbittorrent.writes == [
+            {"web_ui_password": "harbour"},
+            {"web_ui_username": "skipper"},
+        ]
         assert body["web_ui_username"] == "skipper"
 
     def test_without_a_login_the_password_line_has_not_run(self, client: TestClient) -> None:
-        """兩格都必填（M4 票 07）：沒帶登入也沒設過，密碼那一條沒跑到（精靈因此停在第 4 步，
+        """兩格都必填（M4 票 07）：沒帶登入也沒設過，密碼那一條沒跑到（精靈因此停在頁 2，
         `test_setup_qbittorrent.py` 驗那一半）。"""
         body = client.post("/api/setup/qbittorrent/apply").json()
 
-        assert [row["status"] for row in body["steps"]] == ["ok"] * 3 + ["pending"]
+        assert [row["status"] for row in body["steps"]] == ["pending"]
 
     @pytest.mark.parametrize(
         "login",
@@ -862,7 +854,6 @@ class TestQbittorrent:
 
         assert (body["supported"], body["blocked"]) == (False, True)
         assert body["webapi_version"] == "2.8.2"
-        assert body["diffs"] == []
 
     def test_an_unreachable_service_is_a_body_not_a_500(
         self, config: Config, tmp_path: Path

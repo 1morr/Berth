@@ -5,7 +5,6 @@
 這裡是——
 
 - 「重新檢查」：立刻重測一個服務，結果就是健康頁上那一列。
-- 「還原建議設定」：qBittorrent 的建議偏好被改掉時把它們寫回去（brief §16.3）。
 - Jellyfin 的**對外網址**（票 13）：瀏覽器開深連結用的那一個，不是 Berth 自己連過去的那一條。
   它不是連線資訊——精靈用不到它，填錯也不會讓任何服務斷線——所以住在這裡而不是精靈。
 - **磁碟空間門檻**（M2 票 09c）：低於它就開一件 `low_disk_space`。同上，它不是連線資訊。
@@ -20,12 +19,11 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep
-from berth.api.schemas import HealthDetailOut, JellyfinWebOut, QbittorrentOut, health_detail
+from berth.api.schemas import HealthDetailOut, JellyfinWebOut, health_detail
 from berth.domain import ServiceKind
 from berth.services.deeplink import PublicUrlRejectedError, jellyfin_web, set_public_url
 from berth.services.health import check_service, read_health
 from berth.services.health_issues import read_min_free, set_min_free
-from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -62,22 +60,6 @@ async def post_service_test(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"{kind!r} is not a service Berth knows"
         ) from exc
     return health_detail(await check_service(session, factory, service))
-
-
-@router.get("/qbittorrent/diff")
-async def get_qbittorrent_diff(
-    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
-) -> QbittorrentOut:
-    """現值與建議值的逐鍵差異——與精靈第 4 步問的是同一個問題。"""
-    return QbittorrentOut.of(await read_qbittorrent_diff(session, factory), config)
-
-
-@router.post("/qbittorrent/apply")
-async def post_qbittorrent_apply(
-    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
-) -> QbittorrentOut:
-    """「還原建議設定」。只寫有差異的鍵，跑的是精靈第 4 步的同一支命令。"""
-    return QbittorrentOut.of(await apply_qbittorrent(session, factory), config)
 
 
 @router.get("/jellyfin")

@@ -1236,6 +1236,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   `PUT /api/setup/indexers/login`。**`POST /api/setup/indexers/apply` 不再收 `login`**。加站與移除之後，連線卡與
   泊位卡的站數跟著清單；回頭看頁 4 的說明依套件內 / 既有分兩套。
 ### Removed
+- **qBittorrent 的「建議設定」整組**（M4 票 32，brief §19 D2）：**破壞性**——`POST /api/settings/qbittorrent/apply`
+  （「還原建議設定」）與 `GET /api/settings/qbittorrent/diff` 拿掉，設定頁的 qBittorrent 改讀頁 2 的
+  `GET /api/setup/qbittorrent/diff`（路徑名照舊）。`QbittorrentOut` 少 `diffs` 與 `writes_preferences`、健康那一列
+  （`ServiceHealthOut`）少 `drift`、`StepFailure` 少 `save_path_missing`；頁 2 的「將會寫入的鍵」、設定頁的差異表與
+  還原鍵、健康頁的「設定被改過」一起消失。存下的舊紀錄照樣讀得回來：三個鍵的步驟讀的時候丟掉、`save_path_missing`
+  讀成 `unexpected`（下一次檢查就換掉）。
 - **`QbittorrentOut.temp_path_warning`**（M4 票 22）：既有 qBittorrent 沒開全域未完成目錄不再是一件事。
 
 - **精靈的偵測**（M4 票 15）：`POST /api/setup/detect`、「偵測服務」那一步與泊位板上方的前置列、「重新偵測這個服務」
@@ -1260,6 +1266,12 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   媒體庫頁那一份 `GET /api/inventory/{library_id}/watching` 不變。
 
 ### Fixed
+- **套件內 qBittorrent 的全域預設儲存路徑一改，Route 就轉紅、送單被擋**（M4 票 32，2026-10-06 審計 S5）：Route 檢查
+  對套件內那一台另外現查全域 `save_path`，Berth 卻不落在那裡——送單逐個 torrent 帶自己的分類與 `autoTMM=true`。
+  錯誤還掛在分類路徑底下、講的是另一個目錄。現在兩種來源都只看分類回報的兩個路徑（完成與未完成），**套件內那一台
+  也不再寫 `save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`**，頁 2 只剩 WebUI 登入。
+  **已經被 Berth 寫過的不改回去**（Berth 沒存原值）：想讓自己手動加的 torrent 放回別處，在 qBittorrent 的
+  「選項 → 下載」改預設儲存路徑即可，不影響 Berth。
 - **精靈的文案與顯示細節**（M4 票 31，2026-10-01 實測的 P3 與第 21 條）：`POST /api/setup/complete` 照頁序把每一頁
   再問一次（原本只驗頁 3 與頁 5，另一個分頁回頭弄壞頁 2 或頁 4 也完成得了），422 說最前面那一頁，畫面回到那一頁並說
   為什麼回來。`POST /api/setup/routes` 的「選擇不成立」改成帶理由的 422（`{reason, detail}`：`library_missing`、

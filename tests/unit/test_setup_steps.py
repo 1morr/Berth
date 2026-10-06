@@ -91,13 +91,16 @@ def test_an_unchosen_qbittorrent_holds_page_two() -> None:
 
 
 def test_a_bundled_qbittorrent_needs_its_login_but_an_existing_one_does_not() -> None:
+    # 套件內那一台的登入沒設過：那一條是 `pending`，停在頁 2。全域偏好沒有纜繩（M4 票 32）。
     bundled = finished()
-    bundled.qbittorrent.steps = ok(
-        *(step.value for step in QbittorrentStep if step is not QbittorrentStep.PASSWORD)
-    )
+    bundled.qbittorrent.steps = [
+        SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.PENDING)
+    ]
     assert _current_step(bundled, berthed=True) == STEP_QBITTORRENT
+    bundled.qbittorrent.steps = ok(QbittorrentStep.PASSWORD.value)
+    assert _current_step(bundled, berthed=True) == STEP_COMPLETE
 
-    # 既有的那一台沒有偏好的纜繩（M4 票 22）：按「確認」只記密碼那一條 `skipped`，它就是做完了。
+    # 既有的那一台沒有登入那一格：按「確認」只記密碼那一條 `skipped`，它就是做完了。
     existing = finished(qbittorrent=ServiceOrigin.EXISTING)
     existing.qbittorrent.steps = [
         SetupStep(key=QbittorrentStep.PASSWORD.value, status=StepStatus.SKIPPED)

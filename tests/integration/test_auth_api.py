@@ -437,8 +437,6 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/settings/disk"): Access.ADMIN,
     ("GET", "/settings/jellyfin"): Access.ADMIN,
     ("POST", "/settings/jellyfin"): Access.ADMIN,
-    ("POST", "/settings/qbittorrent/apply"): Access.ADMIN,
-    ("GET", "/settings/qbittorrent/diff"): Access.ADMIN,
     ("GET", "/settings/services"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,

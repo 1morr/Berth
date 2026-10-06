@@ -137,21 +137,22 @@ class _StillStarting(FakeJellyfinClient):
 
 
 class _JellyfinUpMeanwhile(FakeQbittorrentClient):
-    """頁 2 的套用送偏好的那一刻，Jellyfin 的輪詢先寫完了：它已經起來了。"""
+    """頁 2 的套用讀偏好的那一刻（每一次套用都讀，票 32 起不一定寫），Jellyfin 的輪詢先寫完了：
+    它已經起來了。"""
 
     def __init__(self, engine: AsyncEngine) -> None:
         super().__init__()
         self._engine = engine
         self._done = False
 
-    async def set_preferences(self, values: Mapping[str, Any]) -> None:
+    async def preferences(self) -> Mapping[str, Any]:
         if not self._done:
             self._done = True
             async with create_session_factory(self._engine)() as other:
                 await retest_service(
                     other, FakeClientFactory(), BUNDLED, ServiceKind.JELLYFIN, now=NOW
                 )
-        await super().set_preferences(values)
+        return await super().preferences()
 
 
 @pytest.mark.asyncio
@@ -189,7 +190,7 @@ async def test_two_services_polled_at_once_both_keep_their_results(
 async def test_applying_page_2_does_not_undo_a_poll_that_landed_meanwhile(
     session: AsyncSession, engine: AsyncEngine
 ) -> None:
-    """反過來：頁 2 的套用還在送偏好時，Jellyfin 的輪詢先寫完了。套用寫完之後 Jellyfin 仍是綠的。"""
+    """反過來：頁 2 的套用還在路上時，Jellyfin 的輪詢先寫完了。套用寫完之後 Jellyfin 仍是綠的。"""
     await arrange(session)
     setup = await read_settings(session, SetupSettings)
     setup.choices = {
@@ -298,7 +299,7 @@ async def test_a_second_owner_does_not_replace_the_first(
 
 
 class _Page2Meanwhile(FakeQbittorrentClient):
-    """頁 2 的套用送偏好的那一刻，另一個分頁先寫完了 `meanwhile`。"""
+    """頁 2 的套用讀偏好的那一刻，另一個分頁先寫完了 `meanwhile`。"""
 
     def __init__(self, engine: AsyncEngine, meanwhile: str) -> None:
         super().__init__()
@@ -306,7 +307,7 @@ class _Page2Meanwhile(FakeQbittorrentClient):
         self._meanwhile = meanwhile
         self._done = False
 
-    async def set_preferences(self, values: Mapping[str, Any]) -> None:
+    async def preferences(self) -> Mapping[str, Any]:
         if not self._done:
             self._done = True
             async with create_session_factory(self._engine)() as other:
@@ -322,7 +323,7 @@ class _Page2Meanwhile(FakeQbittorrentClient):
                         ServiceConnection(base_url=NAS_QBITTORRENT),
                         now=NOW,
                     )
-        await super().set_preferences(values)
+        return await super().preferences()
 
 
 async def bundled_qbittorrent(session: AsyncSession) -> None:

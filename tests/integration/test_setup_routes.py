@@ -19,6 +19,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from berth.adapters.fs import ensure_directory, is_within
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import (
     CategoryOutcome,
@@ -45,6 +46,7 @@ from berth.models import (
     SetupLibrary,
     SetupSettings,
 )
+from berth.services import routes as routes_module
 from berth.services.routes import (
     RouteRejectedError,
     RouteSelection,
@@ -69,7 +71,6 @@ from berth.services.setup import (
 from berth.services.steps import StepView
 from tests.integration.arrange import (
     BUNDLED,
-    applied_qbittorrent,
     arrange,
     berth_path,
     bundled_libraries,
@@ -236,7 +237,7 @@ class TestBundled:
     async def test_creates_one_category_per_route_under_the_complete_root(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        qbittorrent = applied_qbittorrent(roots)
+        qbittorrent = FakeQbittorrentClient()
         await arrange(session, roots)
 
         await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
@@ -258,7 +259,7 @@ class TestBundled:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """精靈全程可重跑（票 09 驗收）。"""
-        qbittorrent = applied_qbittorrent(roots)
+        qbittorrent = FakeQbittorrentClient()
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await arrange(session, roots)
 
@@ -560,7 +561,7 @@ class TestExisting:
         target.mkdir()
         libraries = (existing_library(target).model_copy(update={"name": "TV Shows"}),)
         await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
-        qbittorrent = applied_qbittorrent(roots)
+        qbittorrent = FakeQbittorrentClient()
 
         status = await build_routes(
             session,
@@ -588,7 +589,7 @@ class TestExisting:
         route = (await session.scalars(select(Route))).one()
         route.slug, route.category = "tv shows", "berth-tv shows"
         await session.commit()
-        qbittorrent = applied_qbittorrent(roots)
+        qbittorrent = FakeQbittorrentClient()
 
         status = await build_routes(
             session, factory_for(roots, libraries=libraries, qbittorrent=qbittorrent), selection
@@ -690,8 +691,8 @@ class TestChecks:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """已存在但 save path 不同：回報衝突且**不覆寫**（票 09 驗收）。"""
-        qbittorrent = applied_qbittorrent(
-            roots, categories=(QbittorrentCategory(name="berth-tv", save_path="/mnt/old/tv"),)
+        qbittorrent = FakeQbittorrentClient(
+            categories=(QbittorrentCategory(name="berth-tv", save_path="/mnt/old/tv"),)
         )
         await arrange(session, roots)
 
@@ -720,7 +721,7 @@ class TestChecks:
             save_path=save_path_of(str(roots["complete"]), "tv"),
             download_path="/mnt/temp/tv",
         )
-        qbittorrent = applied_qbittorrent(roots, categories=(tv,))
+        qbittorrent = FakeQbittorrentClient(categories=(tv,))
         await arrange(session, roots)
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
@@ -742,7 +743,7 @@ class TestChecks:
         tv = QbittorrentCategory(
             name="berth-tv", save_path=save_path_of(str(roots["complete"]), "tv")
         )
-        qbittorrent = applied_qbittorrent(roots, categories=(tv,))
+        qbittorrent = FakeQbittorrentClient(categories=(tv,))
         await arrange(session, roots)
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
@@ -754,19 +755,50 @@ class TestChecks:
         assert (await qbittorrent.categories())[0] == tv
 
     @pytest.mark.asyncio
-    async def test_a_download_path_berth_cannot_see_fails_the_route(
+    async def test_a_global_save_path_berth_cannot_see_does_not_matter(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """檢查一：qBittorrent 報的 save path 在 Berth 內 `stat` 不到（brief §16.4）。"""
+        """票 32（審計 S5 的 repro）：使用者把套件內那一台的全域 `save_path` 改成一個不存在的目錄。
+        Berth 送單逐個 torrent 帶分類與 `autoTMM=true`，不落在那裡，所以三條 Route 照舊是綠的。"""
         await arrange(session, roots)
-        qbittorrent = FakeQbittorrentClient(preferences={"save_path": "/downloads"})  # 沒掛進 Berth
+        qbittorrent = FakeQbittorrentClient(preferences={"save_path": "/data/my-downloads"})
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
+        assert [row.health for row in status.routes] == [HealthStatus.OK] * 3
+        row = checks(status, "tv")[RouteCheck.DOWNLOAD_PATH.value]
+        assert "/data/my-downloads" not in row.detail
+        assert save_path_of(str(roots["complete"]), "tv") in row.detail
+
+    @pytest.mark.parametrize("side", ["complete", "incomplete"])
+    @pytest.mark.asyncio
+    async def test_a_category_path_berth_cannot_see_fails_check_one(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        side: str,
+    ) -> None:
+        """另一面：分類自己的路徑（complete 與 incomplete）看不到才紅，錯誤說的就是那一條。
+
+        Berth 每一輪先建分類的兩個目錄，所以造「看不到」要讓那一步建不出來（目錄在檢查之間被刪）。
+        """
+        await arrange(session, roots)
+        build = ensure_directory
+        monkeypatch.setattr(
+            routes_module,
+            "ensure_directory",
+            lambda path: False if is_within(path, roots[side]) else build(path),
+        )
+
+        status = await build_routes(session, factory_for(roots), ())
+
+        missing = (save_path_of if side == "complete" else incomplete_path_of)(
+            str(roots[side]), "tv"
+        )
         row = checks(status, "tv")[RouteCheck.DOWNLOAD_PATH.value]
         assert row.status is StepStatus.FAILED
-        assert "/downloads" in row.error
-        assert (row.failure, row.params) == (StepFailure.PATH_NOT_VISIBLE, {"path": "/downloads"})
+        assert (row.failure, row.params) == (StepFailure.DIRECTORY_MISSING, {"path": missing})
 
     @pytest.mark.asyncio
     async def test_a_qbittorrent_that_cannot_see_the_category_path_fails_the_route(
@@ -777,7 +809,7 @@ class TestChecks:
         它讀不到 Berth 寫進分類路徑的探測檔：紅在這一條、理由指名 qBittorrent 與那條路徑，後面不跑。
         """
         await arrange(session, roots)
-        qbittorrent = applied_qbittorrent(roots, visible_roots=("/downloads",))
+        qbittorrent = FakeQbittorrentClient(visible_roots=("/downloads",))
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
@@ -799,7 +831,7 @@ class TestChecks:
     ) -> None:
         """看得到的那一面：探針校驗完整就綠；探針 torrent 移除時不刪檔，探測檔由 Berth 自己刪。"""
         await arrange(session, roots)
-        qbittorrent = applied_qbittorrent(roots)
+        qbittorrent = FakeQbittorrentClient()
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
@@ -934,9 +966,7 @@ class TestChecks:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         await arrange(session, roots)
-        qbittorrent = applied_qbittorrent(
-            roots, error=ServiceUnavailableError("connection refused")
-        )
+        qbittorrent = FakeQbittorrentClient(error=ServiceUnavailableError("connection refused"))
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
@@ -957,8 +987,7 @@ class TestChecks:
             QbittorrentSettings(base_url="http://nas:8080", username="admin", password="wrong"),
         )
         await session.commit()
-        qbittorrent = applied_qbittorrent(
-            roots,
+        qbittorrent = FakeQbittorrentClient(
             login_error=AuthFailedError("auth/login: rejected"),
             error=AuthFailedError("GET /api/v2/torrents/categories: 403"),
         )
@@ -978,10 +1007,13 @@ class TestChecks:
     ) -> None:
         """一條纜繩斷了就停在那裡：後面的檢查測的會是錯的路徑。"""
         await arrange(session, roots)
-        qbittorrent = FakeQbittorrentClient(preferences={"save_path": "/downloads"})  # 沒掛進 Berth
+        qbittorrent = FakeQbittorrentClient(
+            visible_roots=("/downloads",)
+        )  # 分類路徑沒掛進 qBittorrent
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
 
+        assert checks(status, "tv")[RouteCheck.DOWNLOAD_VISIBLE.value].status is StepStatus.FAILED
         assert checks(status, "tv")[RouteCheck.LIBRARY_PATH.value].status is StepStatus.PENDING
         assert checks(status, "tv")[RouteCheck.HARDLINK.value].status is StepStatus.PENDING
 
@@ -1228,8 +1260,8 @@ class TestChecksReadTheServices:
         # 尾斜線是 4.4 的行為（brief §20.7）。路徑本身走 `save_path_of`：Berth 送出去的
         # 就是那一串字，而這個情境問的正是「服務把它原樣回報回來時 Berth 怎麼判」。
         reported = f"{save_path_of(str(roots['complete']), 'tv')}/"
-        qbittorrent = applied_qbittorrent(
-            roots, categories=(QbittorrentCategory(name="berth-tv", save_path=reported),)
+        qbittorrent = FakeQbittorrentClient(
+            categories=(QbittorrentCategory(name="berth-tv", save_path=reported),)
         )
 
         status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
@@ -1239,21 +1271,6 @@ class TestChecksReadTheServices:
         download = checks(status, "tv")[RouteCheck.DOWNLOAD_PATH.value]
         assert download.status is StepStatus.OK
         assert reported.rstrip("/") in download.detail
-
-    @pytest.mark.asyncio
-    async def test_preferences_that_cannot_be_read_fail_check_one(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """讀不到 `app/preferences` 就是這一條的紅燈，不是靜靜地變綠。"""
-        await arrange(session, roots)
-        qbittorrent = FakeQbittorrentClient(preferences={"save_path": ""})
-
-        status = await build_routes(session, factory_for(roots, qbittorrent=qbittorrent), ())
-
-        row = checks(status, "tv")[RouteCheck.DOWNLOAD_PATH.value]
-        assert row.status is StepStatus.FAILED
-        assert "global save_path" in row.error
-        assert row.failure is StepFailure.SAVE_PATH_MISSING
 
     @pytest.mark.asyncio
     async def test_a_library_deleted_in_jellyfin_after_step_three_fails_check_two(

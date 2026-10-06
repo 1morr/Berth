@@ -176,30 +176,6 @@ describe('健康頁', () => {
     expect(await screen.findByText('連續失敗 7 次')).toBeInTheDocument()
   })
 
-  it('設定漂移是「需要你」而不是紅燈——服務還在動', async () => {
-    const base = healthDetail()
-    render({
-      body: {
-        ...base,
-        services: base.services.map((row) =>
-          row.kind === 'qbittorrent' ? { ...row, drift: ['auto_tmm_enabled'] } : row,
-        ),
-      },
-    })
-    renderApp('/health')
-
-    await screen.findByRole('region', { name: 'qBittorrent' })
-
-    expect(card('qBittorrent').getByText('設定被改過')).toBeInTheDocument()
-    expect(card('qBittorrent').getByText('auto_tmm_enabled')).toBeInTheDocument()
-    expect(card('qBittorrent').queryByText('阻擋')).not.toBeInTheDocument()
-    // 漂移是這一頁唯一有東西可以按的狀態，而按鈕住在設定頁。
-    expect(
-      card('qBittorrent').getByRole('link', { name: '前往設定：qBittorrent' }),
-    ).toHaveAttribute('href', '/settings/qbittorrent')
-    expect(card('Jellyfin').queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
-  })
-
   /**
    * 票 03 第 14 條。原本是靜默 `redirect` 到 `/health`：一般使用者按下深連結之後
    * 換了一頁，而畫面一個字都沒說為什麼（PRODUCT.md 原則 4）。
@@ -217,27 +193,6 @@ describe('健康頁', () => {
       expect(await screen.findByText(/只有管理員/)).toBeVisible()
     },
   )
-
-  it('一般使用者看不到那條連結——設定頁只有 admin 進得去', async () => {
-    const base = healthDetail()
-    render(
-      {
-        body: {
-          ...base,
-          services: base.services.map((row) =>
-            row.kind === 'qbittorrent' ? { ...row, drift: ['auto_tmm_enabled'] } : row,
-          ),
-        },
-      },
-      { 'GET /api/auth/me': { body: { name: 'deckhand', role: 'user' } } },
-    )
-    renderApp('/health')
-
-    await screen.findByRole('region', { name: 'qBittorrent' })
-
-    expect(card('qBittorrent').getByText('設定被改過')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
-  })
 
   it('Route 區塊給 admin 一條到 Route 設定的連結，一般使用者沒有（票 14）', async () => {
     render({ body: healthDetail() })

@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +18,7 @@ from berth.domain import (
     ConnectionReason,
     ConnectionState,
     HealthStatus,
+    QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
     StepFailure,
@@ -172,6 +173,10 @@ class ServiceChoice(BaseModel):
         return (self.origin, self.base_url) == (origin, base_url)
 
 
+#: 拿掉的 `StepFailure` 值。存下的步驟裡還可能有它們，讀的時候換成 `unexpected`（`SetupStep`）。
+RETIRED_FAILURES = frozenset({"save_path_missing"})  # M4 票 32：Route 檢查不再看全域 save path
+
+
 class SetupStep(BaseModel):
     """精靈裡一個步驟的最後結果（plan §9.4）。
 
@@ -192,6 +197,16 @@ class SetupStep(BaseModel):
     params: dict[str, str] = {}
     #: 失敗時服務回的原文（英文）。UI 收進「技術細節」，不當標題。
     error: str = ""
+
+    @field_validator("failure", mode="before")
+    @classmethod
+    def _retired_failure(cls, value: object) -> object:
+        """已經拿掉的代碼讀成 `unexpected`：存下的那一列不該讓整份設定或 Route 讀不回來，下一次
+        檢查就換成新的。只認列在 `RETIRED_FAILURES` 的——其餘不認得的值照樣讀不進來，打錯字不會
+        靜靜降級。"""
+        if value in RETIRED_FAILURES:
+            return StepFailure.UNEXPECTED
+        return value
 
 
 class SetupLibrary(BaseModel):
@@ -285,17 +300,25 @@ class SetupJellyfin(BaseModel):
 
 
 class SetupQbittorrent(BaseModel):
-    """精靈第 4 步的狀態（plan §9.3 第 4 步、§8.1）。"""
+    """精靈頁 2（qBittorrent）的狀態（plan §9.3、§8.1）。"""
 
     model_config = ConfigDict(extra="ignore")
 
-    #: 逐鍵的套用結果；`key` 是 `QbittorrentStep`，也就是 `app/setPreferences` 的鍵名。
+    #: 頁 2 的纜繩；`key` 是 `QbittorrentStep`，現在只有 WebUI 登入那一條。
     steps: list[SetupStep] = []
     #: Berth 替套件內那一台設下的 WebUI 登入（M4 票 07、15）。**只記帳號與加鹽雜湊**
     #: （`services.steps.hash_password`）：勾了「沿用 Jellyfin 帳密」時那就是擁有者的密碼。
     #: Berth 自己連它靠免密白名單，用不到這組。帳號在、雜湊空的是「那一台自己就設過了」。
     web_ui_username: str = ""
     web_ui_password_hash: str = ""
+
+    @field_validator("steps", mode="after")
+    @classmethod
+    def _current_steps(cls, steps: list[SetupStep]) -> list[SetupStep]:
+        """票 32 之前的三個全域鍵（`save_path` 等）讀的時候丟掉：Berth 不再寫它們，留著會在頁 2
+        畫出沒有標題的纜繩。寬鬆讀取而不寫 migration：下一次套用整份換掉，舊列自然消失。"""
+        known = set(QbittorrentStep)
+        return [row for row in steps if row.key in known]
 
 
 class SetupIndexer(BaseModel):
@@ -347,8 +370,6 @@ class ServiceHealth(BaseModel):
     failures: int = 0
     #: 這個服務有連線資訊可以拿去檢查。索引站那一步可跳過，所以它可能是 False。
     configured: bool = False
-    #: qBittorrent 被改掉的建議偏好鍵（brief §16.3 的「關鍵設定漂移」）。其餘服務一律是空的。
-    drift: list[str] = []
     #: qBittorrent 把 Berth 這台的 IP 封了（brief §20.2、票 10）。與「帳密不對」分開存，
     #: 因為畫面上的下一步不同——改帳密只會再失敗五次，把封鎖時間重新算一輪。
     banned: bool = False

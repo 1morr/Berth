@@ -3,7 +3,7 @@
 四項各自回答一個問題，合起來就是「Berth 現在還能不能做完一次入庫」：
 
 1. **Jellyfin**：連得上、而且 Berth 那把 API key 還有效（媒體庫列得出來）。
-2. **qBittorrent**：連得上、Web API 夠新，而且建議偏好沒有被改掉（漂移，brief §16.3）。
+2. **qBittorrent**：連得上、Web API 夠新。全域偏好不看（M4 票 32）：Berth 不寫也不靠它們。
 3. **索引站**：Prowlarr 或使用者自己貼的 Torznab 端點還搜得動（plan §8.4）。
 4. **Route**：每一條纜繩重跑一次——category、兩邊回報的路徑、跨服務可見性、真的 `link()`
    一次比 inode（plan §9.5）。與精靈第 5 步是同一組檢查、同一個欄位。
@@ -38,7 +38,6 @@ from berth.models import (
     HealthSettings,
     IndexerSettings,
     JellyfinSettings,
-    PathSettings,
     PollerSettings,
     QbittorrentSettings,
     ServiceHealth,
@@ -48,7 +47,6 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
-from berth.services.qbittorrent import drifted_keys, qbittorrent_target
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
 from berth.services.settings import read_settings, write_settings
 from berth.services.steps import message
@@ -81,8 +79,6 @@ class ServiceHealthView:
     failures: int
     #: 有連線資訊可以檢查。索引站那一步可跳過，所以它可能是 False。
     configured: bool
-    #: 被改掉的建議偏好鍵（qBittorrent 專有）。有值就顯示「還原建議設定」。
-    drift: tuple[str, ...]
     #: qBittorrent 把這台的 IP 封了（brief §20.2）。畫面照它說出下一步——改帳密沒有用。
     banned: bool
     #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：下一步是升級，而升級不可逆。
@@ -242,7 +238,6 @@ class _Outcome:
     detail: str = ""
     error: str = ""
     configured: bool = True
-    drift: tuple[str, ...] = ()
     #: qBittorrent 把這台的 IP 封了。**旗標而不是一句話**：原文由 `error` 帶著（服務說的），
     #: 而畫面要照這個事實挑一句 Berth 自己的下一步（PRODUCT 原則 4）。
     banned: bool = False
@@ -280,7 +275,6 @@ async def _record(
                 else 0
             ),
             configured=outcome.configured,
-            drift=list(outcome.drift),
             banned=outcome.banned,
             unsupported=outcome.unsupported,
             library_count=outcome.library_count,
@@ -363,12 +357,10 @@ async def _check_jellyfin(session: AsyncSession, factory: ServiceClientFactory) 
 
 
 async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
-    """連得上、版本夠新，而且套件內那一台的建議偏好還是建議值（brief §16.3）。"""
+    """連得上、版本夠新（brief §16.3）。全域偏好不看（M4 票 32）：Berth 不寫也不靠它們。"""
     settings = await read_settings(session, QbittorrentSettings)
-    paths = await read_settings(session, PathSettings)
     if not settings.base_url:
         return _Outcome(HealthStatus.UNKNOWN, configured=False)
-    origin, _ = qbittorrent_target(await read_settings(session, SetupSettings), settings)
 
     client = factory.qbittorrent(settings.base_url)
     try:
@@ -382,7 +374,6 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
                 detail=f"{version.app} · Web API {version.webapi}",
                 error=f"Web API {version.webapi} is older than {floor}",
             )
-        preferences = await client.preferences()
     except IpBannedError as banned:
         # 原文照舊（它自己就說了發生什麼事），另外掛一個旗標讓畫面說得出下一步——
         # 改帳密沒有用，那是這一種與「帳密不對」唯一的差別（PRODUCT 原則 4）。
@@ -396,7 +387,6 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
     return _Outcome(
         HealthStatus.OK,
         detail=f"{version.app} · Web API {version.webapi}",
-        drift=drifted_keys(preferences, paths, origin),
     )
 
 
@@ -451,7 +441,6 @@ def _view(
         last_ok_at=health.last_ok_at,
         failures=health.failures,
         configured=health.configured,
-        drift=tuple(health.drift),
         banned=health.banned,
         unsupported=health.unsupported,
         library_count=health.library_count,

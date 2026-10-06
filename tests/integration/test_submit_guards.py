@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.http import ProtocolMismatchError, ServiceUnavailableError
+from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.db import create_session_factory
 from berth.domain import EventType, FeedItemStatus, JobState, JobTrigger
 from berth.models import DiskSettings, Job, Media, Route
@@ -39,7 +40,7 @@ from berth.services.routes import incomplete_path_of
 from berth.services.rss import add_feed, bind_series, list_items, poll_feed
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
-from tests.integration.arrange import applied_qbittorrent, factory_for
+from tests.integration.arrange import factory_for
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_jobs import MAGNET, MAGNET_HASH, OTHER_HASH, OTHER_MAGNET, _ready
 from tests.integration.test_rss import FEED_URL, KIMI, KIMI_KEY, harbour, series_by_key
@@ -230,7 +231,7 @@ async def _failed_once(
 ) -> FakeClientFactory:
     """送一次、qBittorrent 以 `error` 回絕，那一筆落在 `submit_failed`。"""
     media, route, _ = await _ready(session, roots)
-    factory = factory_for(roots, qbittorrent=applied_qbittorrent(roots, error=error))
+    factory = factory_for(roots, qbittorrent=FakeQbittorrentClient(error=error))
     outcome = await add_download(
         session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
     )

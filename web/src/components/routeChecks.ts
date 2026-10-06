@@ -104,7 +104,6 @@ const FIX = {
   libraryChanged: 'routes.fix.libraryChanged',
   berthCannotWrite: 'routes.fix.berthCannotWrite',
   directoryMissing: 'routes.fix.directoryMissing',
-  savePathMissing: 'routes.fix.savePathMissing',
   // 位址的協定寫錯與服務頁同一句（M4 票 25）。
   schemeMismatch: 'connection.fix.schemeMismatch',
   schemeMissing: 'connection.fix.schemeMissing',
@@ -169,11 +168,10 @@ export function remedyFor(
   if (failure === 'library_gone' || failure === 'library_path_gone') {
     return remedy(FIX.libraryChanged, null)
   }
-  // Berth 在自己的容器裡寫不進、目錄不見了、qBittorrent 沒報預設路徑（M4 票 25）：都不是哪一台少了
-  // 掛載。原本照檢查項目落下去——寫不進寫入目標被說成 Jellyfin 沒掛、建不了分類目錄被說成分類衝突。
+  // Berth 在自己的容器裡寫不進、目錄不見了（M4 票 25）：都不是哪一台少了掛載。原本照檢查項目落下去
+  // ——寫不進寫入目標被說成 Jellyfin 沒掛、建不了分類目錄被說成分類衝突。
   if (failure === 'berth_cannot_write') return remedy(FIX.berthCannotWrite, null)
   if (failure === 'directory_missing') return remedy(FIX.directoryMissing, null)
-  if (failure === 'save_path_missing') return remedy(FIX.savePathMissing, null)
 
   switch (check) {
     case 'category':

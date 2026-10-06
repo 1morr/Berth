@@ -59,7 +59,7 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await expect(page.getByRole('heading', { name: '先選 qBittorrent 是哪一台' })).toBeVisible()
   expect(probed.filter((url) => /qbittorrent/.test(url))).toEqual([])
   await page.getByRole('radio', { name: /套件內/ }).click()
-  await expect(page.getByRole('heading', { name: '套用建議的 qBittorrent 設定' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '設定 qBittorrent 的 WebUI 登入' })).toBeVisible()
   const webUi = page.getByRole('group', { name: 'qBittorrent WebUI 登入' })
   await expect(webUi.getByRole('checkbox', { name: /沿用 Jellyfin 帳密/ })).toBeChecked()
   // 密碼打錯：Jellyfin 驗不過，什麼都沒寫。

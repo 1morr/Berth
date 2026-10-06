@@ -14,14 +14,16 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from berth.adapters.budget import BudgetExhaustedError, RequestBudget
 from berth.adapters.http import ServiceUnavailableError
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import BudgetUse, QbittorrentStep
+from berth.domain import BudgetUse
 from berth.main import create_app
+from berth.models import Route, Setting
 from berth.services.health import CHECK_INTERVAL, check_health
 from berth.services.routes import build_routes
 from berth.services.setup import complete_setup
@@ -219,52 +221,78 @@ class TestServiceSettings:
         assert post(client, "/api/settings/services/plex/test").status_code == 422
 
 
-class TestDrift:
-    def test_the_diff_shows_what_was_changed(
+class TestRecordsFromBeforeTicket32:
+    """票 32 之前存下的三個全域鍵紀錄：精靈頁 2、設定頁與健康頁照樣打得開。
+
+    舊資料有三種：`setup.qbittorrent.steps` 裡三個鍵的步驟、健康那一列的 `drift`、Route 檢查裡
+    已經拿掉的失敗代碼 `save_path_missing`。採寬鬆讀取（不另寫 migration）：讀的時候丟掉、
+    下一次寫入就消失。
+    """
+
+    def test_pages_two_settings_and_health_still_open(
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
+        _write_old_records(client)
         sign_in(client, ADMIN)
-        asyncio.run(factory.qbittorrent_.set_preferences({"auto_tmm_enabled": False}))
 
-        body = client.get("/api/settings/qbittorrent/diff").json()
-        diffs = {row["key"]: row for row in body["diffs"]}
+        qbittorrent = client.get("/api/setup/qbittorrent/diff")
+        assert qbittorrent.status_code == 200
+        assert [row["step"] for row in qbittorrent.json()["steps"]] == ["web_ui_password"]
+        assert client.get("/api/setup/status").status_code == 200
+        health = client.get("/api/settings/services")
+        assert health.status_code == 200
+        assert "drift" not in services(health.json())["qbittorrent"]
+        routes = client.get("/api/routes")
+        assert routes.status_code == 200
+        failures = {
+            check["step"]: check["failure"]
+            for check in routes.json()[0]["route"]["checks"]
+            if check["status"] == "failed"
+        }
+        assert failures == {"download_path": "unexpected"}
 
-        assert diffs[QbittorrentStep.AUTO_TMM_ENABLED.value]["differs"] is True
-        assert diffs[QbittorrentStep.AUTO_TMM_ENABLED.value]["current"] == "false"
-        assert diffs[QbittorrentStep.AUTO_TMM_ENABLED.value]["recommended"] == "true"
 
-    def test_restoring_writes_the_recommended_values_back(
-        self, client: TestClient, factory: FakeClientFactory
-    ) -> None:
-        """「還原建議設定」（brief §16.3）。跑的是精靈第 4 步的同一支命令。
+def _write_old_records(client: TestClient) -> None:
+    """照票 32 之前的形狀直接改資料庫裡的 JSON，不經過現在的模型。"""
 
-        所以它也會順便寫一次 WebUI 帳密（套件內 + 勾了「同一組帳密」），與重按第 4 步一樣。
-        這裡只斷言被改掉的那個鍵真的被寫回去了。
-        """
-        sign_in(client, ADMIN)
-        asyncio.run(factory.qbittorrent_.set_preferences({"auto_tmm_enabled": False}))
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+        async with sessions() as session:
+            setup = await session.get(Setting, "setup")
+            steps = [
+                {"key": key, "status": "ok", "detail": "/data/torrent/complete"}
+                for key in ("save_path", "auto_tmm_enabled", "category_changed_tmm_enabled")
+            ]
+            setup.value_json = {
+                **setup.value_json,
+                "qbittorrent": {
+                    **setup.value_json["qbittorrent"],
+                    "steps": [*steps, {"key": "web_ui_password", "status": "ok"}],
+                },
+            }
+            health = await session.get(Setting, "health")
+            rows = health.value_json["services"]
+            rows["qbittorrent"] = {**rows["qbittorrent"], "drift": ["auto_tmm_enabled"]}
+            health.value_json = {**health.value_json, "services": rows}
+            route = (await session.scalars(select(Route).order_by(Route.id))).first()
+            assert route is not None and route.health_detail_json is not None
+            route.health_detail_json = {
+                **route.health_detail_json,
+                "checks": [
+                    {
+                        **check,
+                        "status": "failed",
+                        "failure": "save_path_missing",
+                        "error": "qBittorrent did not report a global save_path",
+                    }
+                    if check["key"] == "download_path"
+                    else check
+                    for check in route.health_detail_json["checks"]
+                ],
+            }
+            await session.commit()
 
-        post(client, "/api/settings/qbittorrent/apply")
-
-        assert {"auto_tmm_enabled": True} in factory.qbittorrent_.writes
-
-    def test_a_restored_service_reports_no_more_drift(
-        self, client: TestClient, factory: FakeClientFactory
-    ) -> None:
-        sign_in(client, ADMIN)
-        asyncio.run(factory.qbittorrent_.set_preferences({"auto_tmm_enabled": False}))
-        body = post(client, "/api/settings/services/qbittorrent/test").json()
-        assert services(body)["qbittorrent"]["drift"] == ["auto_tmm_enabled"]
-
-        post(client, "/api/settings/qbittorrent/apply")
-        body = post(client, "/api/settings/services/qbittorrent/test").json()
-
-        assert services(body)["qbittorrent"]["drift"] == []
-
-    def test_only_administrators_can_restore(self, client: TestClient) -> None:
-        sign_in(client, DECKHAND)
-
-        assert post(client, "/api/settings/qbittorrent/apply").status_code == 403
+    asyncio.run(run())
 
 
 def _seed(client: TestClient, roots: dict[str, Path], factory: FakeClientFactory) -> None:

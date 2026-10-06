@@ -104,7 +104,7 @@ _Avoid_: mode, service type
 
 **Bundled service**（UI 顯示「套件內」）:
 使用者選「套件內」的服務：這套 compose 起的那一台（容器名 `berth-*`，Berth 以 compose 服務名連它），
-Berth 代為設定（建管理員或登入、偏好、介面登入、索引站）。已經初始化過的（重裝保留 config）照樣是套件內，只是改成登入。
+Berth 代為設定（建管理員或登入、介面登入、索引站；qBittorrent 的全域偏好不寫，M4 票 32）。已經初始化過的（重裝保留 config）照樣是套件內，只是改成登入。
 _Avoid_: managed, built-in, ours
 
 **Existing service**（UI 顯示「既有」）:
@@ -305,12 +305,6 @@ qBittorrent、索引站、Route；三個服務與 Route 各對應精靈的一個
 TMDB 那一格（BTH 5）不是檢查：它讀精靈 TMDB 泊位那一次憑證測試的結果。
 背景迴圈每 5 分鐘跑一次，也可以在畫面上按「立即重測」。
 _Avoid_: diagnostics, status check
-
-**Drift（設定漂移）**:
-Berth 建議的 qBittorrent 偏好被改成別的值。**不是紅燈**——那台服務還在動，只是下載路徑或
-自動管理一旦不對，入庫遲早會失敗；畫面用 `assigned`（需要你）而不是 `blocked`，
-並在設定的 qBittorrent 那一頁給逐鍵差異與「還原建議設定」。
-_Avoid_: mismatch, out of sync, misconfiguration
 
 **Event**:
 Job 時間線上的一筆事件：型別、時間、actor、payload。

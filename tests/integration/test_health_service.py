@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import IpBannedError, QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.domain import HealthStatus, QbittorrentStep, ServiceKind, ServiceOrigin, StepStatus
+from berth.domain import HealthStatus, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import HealthSettings, IndexerSettings, QbittorrentSettings, Route
 from berth.services.health import (
     CHECK_INTERVAL,
@@ -32,7 +32,7 @@ from berth.services.health import (
 )
 from berth.services.routes import RouteView, build_routes
 from berth.services.settings import read_settings, write_settings
-from tests.integration.arrange import NOW, applied_qbittorrent, arrange, factory_for
+from tests.integration.arrange import NOW, arrange, factory_for
 from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
@@ -248,30 +248,7 @@ class TestTmdb:
         assert (await read_health(session)).tmdb_verified is True
 
 
-class TestQbittorrentDrift:
-    async def test_a_changed_recommended_key_is_reported_as_drift(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """設定漂移不是斷線：那台服務好好的，只是有人把建議值改掉了（brief §16.3）。"""
-        factory = await ready(session, roots)
-        await factory.qbittorrent_.set_preferences({QbittorrentStep.AUTO_TMM_ENABLED.value: False})
-
-        report = await check_health(session, factory, now=NOW)
-        row = next(row for row in report.services if row.kind is ServiceKind.QBITTORRENT)
-
-        assert row.status is HealthStatus.OK
-        assert row.drift == (QbittorrentStep.AUTO_TMM_ENABLED.value,)
-
-    async def test_a_service_in_agreement_reports_no_drift(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        factory = await ready(session, roots)
-
-        report = await check_health(session, factory, now=NOW)
-        row = next(row for row in report.services if row.kind is ServiceKind.QBITTORRENT)
-
-        assert row.drift == ()
-
+class TestQbittorrent:
     async def test_a_web_api_below_the_floor_is_a_failure(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -279,8 +256,8 @@ class TestQbittorrentDrift:
         await ready(session, roots)
         outdated = factory_for(
             roots,
-            qbittorrent=applied_qbittorrent(
-                roots, version=QbittorrentVersion(app="v4.1.9", webapi="2.2.0")
+            qbittorrent=FakeQbittorrentClient(
+                version=QbittorrentVersion(app="v4.1.9", webapi="2.2.0")
             ),
         )
 
@@ -338,7 +315,7 @@ class TestRoutes:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """反向：精靈那一次是紅的，迴圈不會因為沒問就把它變綠。"""
-        factory = factory_for(roots, qbittorrent=applied_qbittorrent(roots, visible_roots=("/x",)))
+        factory = factory_for(roots, qbittorrent=FakeQbittorrentClient(visible_roots=("/x",)))
         await arrange(session, roots)
         await build_routes(session, factory, ())
 

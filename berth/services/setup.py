@@ -851,12 +851,12 @@ def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
 
 
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
-    """頁 2 做完了沒：選過、最後一次測試連得上、按過；套件內的那一台還要建議鍵都有結論、
-    有 WebUI 登入。
+    """頁 2 做完了沒：選過、最後一次測試連得上、登入那一條有結論。
 
-    登入必填（M4 票 07 shape）：沒設過的那一台密碼那一條是 `pending`，精靈停在這裡。
-    既有的那一台沒有偏好的纜繩（M4 票 22），按下「確認」只記密碼那一條 `skipped`——它就是
-    「按過了」的記號。
+    登入必填（M4 票 07 shape）：套件內那一台沒設過時那一條是 `pending`，精靈停在這裡；設好是 `ok`，
+    已經是這一組或那一台自己設過是 `skipped`。既有的那一台沒有登入那一格，按下「確認」只記它
+    `skipped`——它就是「按過了」的記號。全域偏好沒有纜繩（M4 票 32）。換來源時纜繩整份清掉，
+    所以既有那一台的 `skipped` 不會被套件內那一台認成「設好了」。
 
     **連線測試要是綠的**（M4 票 25）：套用過之後 qBittorrent 停了，重新測試紅了，這一頁就還沒做完
     ——原本連線卡紅、前進鍵照樣在。它回來、重新測試綠了，套用過的纜繩照舊算數。
@@ -864,15 +864,11 @@ def _qbittorrent_secured(setup: SetupSettings) -> bool:
     choice = setup.choices.get(ServiceKind.QBITTORRENT)
     if choice is None or choice.test is None or choice.test.state is not ConnectionState.OK:
         return False
-    origin = choice.origin
-    done = {
-        row.key
+    return any(
+        row.key == QbittorrentStep.PASSWORD.value
+        and row.status in (StepStatus.OK, StepStatus.SKIPPED)
         for row in setup.qbittorrent.steps
-        if row.status in (StepStatus.OK, StepStatus.SKIPPED)
-    }
-    if origin is not ServiceOrigin.BUNDLED:
-        return QbittorrentStep.PASSWORD.value in done
-    return done >= {step.value for step in QbittorrentStep}
+    )
 
 
 def _indexer_settled(setup: SetupSettings) -> bool:

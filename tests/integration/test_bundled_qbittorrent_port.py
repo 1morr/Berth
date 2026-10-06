@@ -17,7 +17,7 @@ from berth.config import load_config
 from berth.domain import ConnectionState, ServiceKind, ServiceOrigin
 from berth.models import SetupSettings
 from berth.services.clients import HttpServiceClientFactory, bundled_services
-from berth.services.qbittorrent import read_qbittorrent_diff
+from berth.services.qbittorrent import read_qbittorrent
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings
 from berth.services.setup import choose_service
@@ -81,7 +81,7 @@ async def test_the_qbittorrent_page_connects_to_the_chosen_one(
     await chosen_at(session, roots, MOVED)
     factory = factory_for(roots)
 
-    status = await read_qbittorrent_diff(session, factory)
+    status = await read_qbittorrent(session, factory)
 
     assert (status.base_url, factory.qbittorrent_.base_url) == (MOVED, MOVED)
 

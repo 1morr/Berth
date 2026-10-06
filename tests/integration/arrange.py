@@ -214,19 +214,6 @@ def existing_library(*locations: Path | str) -> SetupLibrary:
     )
 
 
-def applied_qbittorrent(roots: dict[str, Path], **overrides: object) -> FakeQbittorrentClient:
-    """第 4 步套用過建議偏好之後的那一台：全域 save path 就是 Berth 的 complete root。
-
-    第 5 步的檢查一問的是「qBittorrent 報的路徑 Berth 看得到嗎」，所以它報什麼很重要。
-    """
-    preferences = {
-        "save_path": str(roots["complete"]),
-        "auto_tmm_enabled": True,
-        "category_changed_tmm_enabled": True,
-    }
-    return FakeQbittorrentClient(preferences=preferences, **overrides)  # type: ignore[arg-type]
-
-
 def fake_jellyfin(libraries: tuple[SetupLibrary, ...], **overrides: object) -> FakeJellyfinClient:
     """一台跑完初始精靈、而且**真的報得出這幾個媒體庫**的 Jellyfin。
 
@@ -259,7 +246,7 @@ def factory_for(
 ) -> FakeClientFactory:
     return FakeClientFactory(
         jellyfin=jellyfin or fake_jellyfin(libraries or bundled_libraries(roots["library"])),
-        qbittorrent=qbittorrent or applied_qbittorrent(roots),
+        qbittorrent=qbittorrent or FakeQbittorrentClient(),
         tmdb=tmdb or FakeTmdbClient(),
         indexer_search=indexer_search or FakeIndexerSearch(),
     )

@@ -269,7 +269,6 @@ describe('頁 2 的連線卡跟著最新的失敗（M4 票 25，實測 B9-04～0
           blocked: true,
           reachable: false,
           version: '',
-          diffs: [],
           failure: 'not_deployed',
           error: 'GET /api/v2/app/version: host does not resolve',
         }),

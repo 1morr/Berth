@@ -6,11 +6,19 @@ from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import Text
 from sqlalchemy.dialects import sqlite
 
-from berth.domain import Role
-from berth.models import SETTINGS_GROUPS, Base, JellyfinSettings, PathSettings, SetupSettings
+from berth.domain import Role, StepFailure
+from berth.models import (
+    SETTINGS_GROUPS,
+    Base,
+    JellyfinSettings,
+    PathSettings,
+    SetupSettings,
+    SetupStep,
+)
 from berth.models.types import JsonText, UtcDateTime, enum_column
 
 #: 這兩個 TypeDecorator 都不看 dialect，但簽章要求一個，所以給真的而不是 None。
@@ -169,3 +177,20 @@ def test_rows_written_before_mergeversions_was_removed_still_read() -> None:
     assert not hasattr(jellyfin, "merge_episodes_task_id")
     assert setup.completed is True
     assert not hasattr(setup.jellyfin, "merge_versions_installed")
+
+
+class TestRetiredStepFailures:
+    """拿掉的失敗代碼讀得回來，其餘不認得的照樣讀不進來（M4 票 32）。"""
+
+    def test_a_retired_code_reads_as_unexpected(self) -> None:
+        step = SetupStep.model_validate(
+            {"key": "download_path", "status": "failed", "failure": "save_path_missing"}
+        )
+
+        assert step.failure is StepFailure.UNEXPECTED
+
+    def test_an_unknown_code_still_fails_to_read(self) -> None:
+        with pytest.raises(ValidationError):
+            SetupStep.model_validate(
+                {"key": "download_path", "status": "failed", "failure": "save_path_mising"}
+            )

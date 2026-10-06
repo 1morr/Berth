@@ -3,11 +3,11 @@ import { queryOptions } from '@tanstack/react-query'
 import { apiGet, apiPost } from './client'
 import type { HealthDetail } from './health'
 import type { JellyfinWeb } from './jellyfin'
-import type { QbittorrentSetup, Schemas, ServiceKind } from './schemas'
+import type { Schemas, ServiceKind } from './schemas'
 
 /**
- * `settings/*`：設定頁上**不屬於精靈**的那幾件事（只有 admin）——重新檢查、qBittorrent 建議設定的
- * 還原、Jellyfin 對外網址、磁碟空間門檻。
+ * `settings/*`：設定頁上**不屬於精靈**的那幾件事（只有 admin）——重新檢查、Jellyfin 對外網址、
+ * 磁碟空間門檻。
  *
  * 位址、憑證、索引站與 TMDB key 也在設定頁上改（票 06i），但送的是精靈的同一批 `setup/*` 命令
  * （`api/setup.ts`）：一份命令、一份端點，精靈跑完之後那一組只有 admin 打得到。
@@ -22,17 +22,6 @@ export const servicesQueryOptions = queryOptions({
 /** 「重新檢查」：只重測這一個服務，其餘的結果留著。 */
 export function testService(kind: ServiceKind): Promise<HealthDetail> {
   return apiPost<HealthDetail>(`/settings/services/${kind}/test`)
-}
-
-/** 現值與建議值的逐鍵差異。連得到才有內容（brief §16.3）。 */
-export const qbittorrentDriftQueryOptions = queryOptions({
-  queryKey: ['settings', 'qbittorrent'],
-  queryFn: () => apiGet<QbittorrentSetup>('/settings/qbittorrent/diff'),
-})
-
-/** 「還原建議設定」。只寫有差異的鍵，跑的是精靈第 4 步的同一支命令。 */
-export function restoreQbittorrent(): Promise<QbittorrentSetup> {
-  return apiPost<QbittorrentSetup>('/settings/qbittorrent/apply')
 }
 
 /**

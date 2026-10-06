@@ -3,14 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
-import {
-  ALL_BUNDLED,
-  chosen,
-  diff,
-  healthDetail,
-  qbittorrentSetup,
-  setupStatus,
-} from '../test/fixtures'
+import { ALL_BUNDLED, chosen, healthDetail, qbittorrentSetup, setupStatus } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -18,8 +11,8 @@ afterEach(() => {
 })
 
 const SERVICES = 'GET /api/settings/services'
-const DRIFT = 'GET /api/settings/qbittorrent/diff'
-const APPLY = 'POST /api/settings/qbittorrent/apply'
+/** 頁 2 的同一支讀取：設定頁的介面登入那一區照它畫（M4 票 32 起沒有設定頁專用的那一支）。 */
+const QBITTORRENT = 'GET /api/setup/qbittorrent/diff'
 const TEST_QBIT = 'POST /api/settings/services/qbittorrent/test'
 const DISK = 'GET /api/settings/disk'
 const SAVE_DISK = 'POST /api/settings/disk'
@@ -27,13 +20,8 @@ const STATUS = 'GET /api/setup/status'
 const CONNECT = 'POST /api/setup/services/qbittorrent'
 const LOGIN = 'PUT /api/setup/qbittorrent/login'
 
-/** 建議值全部一致的那一台：沒有漂移，所以不該出現還原按鈕。 */
-const CLEAN = qbittorrentSetup({
-  diffs: [
-    diff('auto_tmm_enabled', 'true', 'true'),
-    diff('save_path', '/data/torrent/complete', '/data/torrent/complete'),
-  ],
-})
+/** 套件內那一台，還沒設過 WebUI 登入。 */
+const CLEAN = qbittorrentSetup()
 
 /** 精靈跑完、三個都是套件內的一台；擁有者 skipper（介面登入沿用的就是他）。 */
 const BUNDLED = setupStatus({
@@ -59,13 +47,12 @@ const EXISTING = setupStatus({
   ),
 })
 
-/** 既有那一台的差異表：Berth 不寫它的偏好，也不管它的登入。 */
-const EXISTING_DRIFT = qbittorrentSetup({
+/** 既有那一台：Berth 不管它的登入。 */
+const EXISTING_QBITTORRENT = qbittorrentSetup({
   origin: 'existing',
   base_url: 'http://nas:8080',
   web_ui_login: false,
   web_ui_username: '',
-  writes_preferences: false,
 })
 
 /** 設過 WebUI 登入（帳號 skipper）的套件內那一台。 */
@@ -98,7 +85,7 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
     [SERVICES]: { body: healthDetail() },
     [STATUS]: { body: BUNDLED },
-    [DRIFT]: { body: CLEAN },
+    [QBITTORRENT]: { body: CLEAN },
     [DISK]: { body: { min_free_gb: 10 } },
     'GET /api/issues': { body: [] },
     ...routes,
@@ -117,7 +104,7 @@ describe('設定 → qBittorrent', () => {
   it('既有 qBittorrent 換帳密：打開表單、送同一支選擇命令帶 existing，然後重測健康（M4 票 15）', async () => {
     const stub = render({
       [STATUS]: { body: EXISTING },
-      [DRIFT]: { body: EXISTING_DRIFT },
+      [QBITTORRENT]: { body: EXISTING_QBITTORRENT },
       [CONNECT]: { body: EXISTING },
       [TEST_QBIT]: { body: healthDetail() },
     })
@@ -151,7 +138,7 @@ describe('設定 → qBittorrent', () => {
   })
 
   it('套件內的 qBittorrent 沒有連線表單，只有它自己的 WebUI 登入（M4 票 07、15）', async () => {
-    render({ [DRIFT]: { body: WITH_LOGIN } })
+    render({ [QBITTORRENT]: { body: WITH_LOGIN } })
     renderApp('/settings/qbittorrent')
 
     const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
@@ -167,7 +154,7 @@ describe('設定 → qBittorrent', () => {
 
   it('改 WebUI 登入預設沿用 Jellyfin 帳密：只打一次擁有者的密碼（M4 票 15）', async () => {
     const stub = render({
-      [DRIFT]: { body: WITH_LOGIN },
+      [QBITTORRENT]: { body: WITH_LOGIN },
       [LOGIN]: { body: loginSet('skipper') },
       [TEST_QBIT]: { body: healthDetail() },
     })
@@ -190,14 +177,14 @@ describe('設定 → qBittorrent', () => {
       password: 'hunter2',
       reuse_owner: true,
     })
-    // 只換登入：不連帶「還原建議設定」。
-    expect(stub.mock.calls.some(([url]) => url === '/api/settings/qbittorrent/apply')).toBe(false)
+    // 只換登入：不連帶頁 2 的套用。
+    expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/apply')).toBe(false)
     expect(login.getByLabelText(OWNER_PASSWORD)).toHaveValue('')
   })
 
   it('不是擁有者的 Jellyfin 密碼：說出來，說什麼都沒寫（M4 票 15）', async () => {
     render({
-      [DRIFT]: { body: WITH_LOGIN },
+      [QBITTORRENT]: { body: WITH_LOGIN },
       [LOGIN]: { status: 422, body: { detail: { reason: 'owner_password', detail: '' } } },
     })
     const user = userEvent.setup()
@@ -216,7 +203,7 @@ describe('設定 → qBittorrent', () => {
 
   it('短於 qBittorrent 規則的密碼送出前就擋下；qBittorrent 不收時照它的規則說（M4 票 26）', async () => {
     const stub = render({
-      [DRIFT]: { body: WITH_LOGIN },
+      [QBITTORRENT]: { body: WITH_LOGIN },
       [LOGIN]: {
         body: qbittorrentSetup({
           ...CLEAN,
@@ -251,7 +238,7 @@ describe('設定 → qBittorrent', () => {
 
   it('取消勾選就自設一組：三格、帳號預填目前那一個，送 reuse_owner false（M4 票 07、15）', async () => {
     const stub = render({
-      [DRIFT]: { body: WITH_LOGIN },
+      [QBITTORRENT]: { body: WITH_LOGIN },
       [LOGIN]: { body: loginSet('deckhand') },
       [TEST_QBIT]: { body: healthDetail() },
     })
@@ -281,13 +268,12 @@ describe('設定 → qBittorrent', () => {
 
   it('改登入時 qBittorrent 連不上：貼出原文，不說成請求沒走完（M4 票 07）', async () => {
     render({
-      [DRIFT]: { body: WITH_LOGIN },
+      [QBITTORRENT]: { body: WITH_LOGIN },
       [LOGIN]: {
         body: qbittorrentSetup({
           web_ui_username: 'skipper',
           reachable: false,
           blocked: true,
-          diffs: [],
           error: 'connection refused',
         }),
       },
@@ -305,7 +291,7 @@ describe('設定 → qBittorrent', () => {
   })
 
   it('自設時兩次密碼不一樣就不送（M4 票 07）', async () => {
-    const stub = render({ [DRIFT]: { body: WITH_LOGIN } })
+    const stub = render({ [QBITTORRENT]: { body: WITH_LOGIN } })
     const user = userEvent.setup()
     renderApp('/settings/qbittorrent')
 
@@ -319,76 +305,28 @@ describe('設定 → qBittorrent', () => {
     expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/login')).toBe(false)
   })
 
-  it('沒有漂移時不給還原按鈕——沒有東西要還原', async () => {
-    render({})
+  it('沒有建議設定、差異表與還原鍵：Berth 不寫也不看全域偏好（M4 票 32）', async () => {
+    render({ [QBITTORRENT]: { body: WITH_LOGIN } })
     renderApp('/settings/qbittorrent')
 
-    expect(await screen.findByText('三個建議鍵都還是建議值。')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument()
+    await loginSection()
+    expect(screen.queryByRole('heading', { name: /建議設定/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /還原/ })).not.toBeInTheDocument()
   })
 
-  it('既有 qBittorrent 沒有建議設定可還原：它的全域偏好是使用者的（M4 票 05）', async () => {
-    render({
+  it('既有 qBittorrent 沒有介面登入那一區：Berth 不寫既有服務的帳密（M4 票 07）', async () => {
+    const stub = render({
       [STATUS]: { body: EXISTING },
-      [DRIFT]: { body: EXISTING_DRIFT },
+      [QBITTORRENT]: { body: EXISTING_QBITTORRENT },
     })
     renderApp('/settings/qbittorrent')
 
-    expect(await screen.findByText(/Berth 不改你這台 qBittorrent 的全域偏好/)).toBeInTheDocument()
-    expect(screen.queryByText(/個鍵與建議值不同/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument()
-    // 也沒有介面登入那一區：Berth 不寫既有服務的帳密（M4 票 07）。
-    expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
-  })
-
-  it('漂移時列出逐鍵差異與還原按鈕（brief §16.3）', async () => {
-    render({
-      [DRIFT]: {
-        body: qbittorrentSetup({
-          diffs: [
-            diff('auto_tmm_enabled', 'false', 'true'),
-            diff('save_path', '/downloads', '/data/torrent/complete'),
-          ],
-        }),
-      },
-    })
-    renderApp('/settings/qbittorrent')
-
-    expect(await screen.findByText('2 個鍵與建議值不同。')).toBeInTheDocument()
-    // 先寫人話、再寫原鍵名（M4 票 31）：與精靈頁 2 那一條同一個名字。
-    const key = screen.getByText('auto_tmm_enabled').closest('td')!
-    expect(key).toHaveTextContent(/^自動 Torrent 管理auto_tmm_enabled$/)
-    expect(screen.getByText('/downloads')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '還原建議設定' })).toBeInTheDocument()
-  })
-
-  it('按下還原之後差異消失', async () => {
-    const applied = qbittorrentSetup({
-      diffs: [diff('auto_tmm_enabled', 'true', 'true')],
-    })
-    render({
-      [DRIFT]: {
-        body: qbittorrentSetup({ diffs: [diff('auto_tmm_enabled', 'false', 'true')] }),
-      },
-      [APPLY]: { body: applied },
-      [TEST_QBIT]: { body: healthDetail() },
-    })
-    renderApp('/settings/qbittorrent')
-
-    await userEvent.click(await screen.findByRole('button', { name: '還原建議設定' }))
-
+    expect(await screen.findByRole('region', { name: '位址與憑證' })).toBeInTheDocument()
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: '還原建議設定' })).not.toBeInTheDocument(),
+      expect(stub.mock.calls.some(([url]) => url === '/api/setup/qbittorrent/diff')).toBe(true),
     )
-  })
-
-  it('連不上 qBittorrent 時說的是「讀不到偏好」，不是假裝沒有差異', async () => {
-    render({
-      [DRIFT]: { body: qbittorrentSetup({ reachable: false, diffs: [], error: 'refused' }) },
-    })
-    renderApp('/settings/qbittorrent')
-
-    expect(await screen.findByText('連不上 qBittorrent，讀不到它現在的偏好。')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '介面登入' })).not.toBeInTheDocument()
   })
 
   it('磁碟空間門檻在設定裡，改了就存（M2 票 09c）', async () => {

@@ -11,13 +11,7 @@ import type {
   SetupStatus,
   TmdbSetup,
 } from '../api/setup'
-import type {
-  PollerView,
-  PreferenceDiff,
-  QbittorrentSetup,
-  RouteView,
-  SetupStep,
-} from '../api/schemas'
+import type { PollerView, QbittorrentSetup, RouteView, SetupStep } from '../api/schemas'
 import type { LibraryOption, ManagedRoute } from '../api/routes'
 import type { Discover, DiscoverItem } from '../api/discover'
 import type { InventoryLibraryChoice } from '../api/inventory'
@@ -129,7 +123,7 @@ export function library(overrides: Partial<JellyfinLibrary> = {}): JellyfinLibra
   }
 }
 
-/** 第 4 步狀態的測試建構子。預設是「套件內、乾淨實例、五個鍵全不同」。 */
+/** 頁 2 狀態的測試建構子。預設是「套件內、乾淨實例、介面登入還沒設過」。 */
 export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): QbittorrentSetup {
   return {
     origin: 'bundled',
@@ -139,25 +133,14 @@ export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): Qbi
     supported: true,
     blocked: false,
     reachable: true,
-    // 錄製回應裡的乾淨實例值（brief §20.7）。
-    diffs: [
-      diff('save_path', '/downloads', '/data/torrent/complete'),
-      diff('auto_tmm_enabled', 'false', 'true'),
-      diff('category_changed_tmm_enabled', 'false', 'true'),
-    ],
     steps: [],
     web_ui_login: true,
     web_ui_username: '',
-    writes_preferences: true,
     failure: null,
     error: '',
     web_port: null,
     ...overrides,
   }
-}
-
-export function diff(key: string, current: string, recommended: string): PreferenceDiff {
-  return { key, current, recommended, differs: current !== recommended }
 }
 
 /** 推薦的九站，名稱、privacy 與語言取自真的 `indexer/schema`（`tests/fixtures/`）。 */
@@ -362,7 +345,6 @@ export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHe
     last_ok_at: CHECKED_AT,
     failures: 0,
     configured: true,
-    drift: [],
     banned: false,
     unsupported: false,
     // 只有 Jellyfin 有這個數字（票 21）；其餘服務覆寫成 `null`。

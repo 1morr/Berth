@@ -45,7 +45,7 @@ from berth.models import (
 )
 from berth.services.clients import BundledServices
 from berth.services.jellyfin import add_berth_paths, connect_jellyfin
-from berth.services.qbittorrent import read_qbittorrent_diff
+from berth.services.qbittorrent import read_qbittorrent
 from berth.services.routes import build_routes, read_route_status, routes_ready
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
@@ -118,7 +118,7 @@ async def test_the_qbittorrent_diff_does_not_knock_before_a_choice(session: Asyn
     await write_settings(session, QbittorrentSettings(base_url=COMPOSE[ServiceKind.QBITTORRENT]))
     factory = FakeClientFactory()
 
-    status = await read_qbittorrent_diff(session, factory)
+    status = await read_qbittorrent(session, factory)
 
     assert (status.origin, status.reachable) == (None, False)
     assert factory.qbittorrent_.calls == 0

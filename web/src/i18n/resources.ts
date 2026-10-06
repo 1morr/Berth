@@ -70,9 +70,9 @@ const zhHant = {
         elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
       },
       qbittorrent: {
-        can: '改選套件內或既有（這一頁要重做）、重新檢查：套件內的那一台再套用一次建議設定，已經是建議值的鍵標「已經是這樣」、不會再寫一次；你自己的 qBittorrent 只重新確認連得上，一個鍵都不寫。',
+        can: '改選套件內或既有（這一頁要重做）、重新檢查：兩種都只重新確認連得上，一個全域偏好都不寫；套件內那一台的 WebUI 登入設好了就不重寫。',
         elsewhere:
-          '套件內那三個鍵以外的偏好，以及你自己那一台的所有偏好，都在 qBittorrent 自己的介面上改，Berth 不碰。',
+          '全域偏好（預設儲存路徑、自動管理…）都在 qBittorrent 自己的介面上改，Berth 不寫也不看——它的下載只走自己的 berth-* 分類。',
       },
       routes: {
         can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的每一條纜繩。選錯的那一條在它底下刪掉。',
@@ -246,7 +246,7 @@ const zhHant = {
     },
     switchWarning: {
       qbittorrent:
-        '換一台 qBittorrent：Berth 已經寫進原本那一台的偏好與登入留在那裡，不會撤回；這一頁要重做，媒體庫與路徑也要重新檢查——分類建在原本那一台上。',
+        '換一台 qBittorrent：Berth 已經設在原本那一台的登入留在那裡，不會撤回；這一頁要重做，媒體庫與路徑也要重新檢查——分類建在原本那一台上。',
       prowlarr:
         '換一台 Prowlarr：Berth 已經加進原本那一台的站與登入留在那裡，不會撤回；這一頁要重做。',
     },
@@ -365,7 +365,6 @@ const zhHant = {
     credential_missing: '還沒有憑證：貼上 key 再測。',
     category_conflict:
       'qBittorrent 已經有一個叫 {{category}} 的分類，存到 {{path}}；Berth 不改別人建的分類。',
-    save_path_missing: 'qBittorrent 沒有回報它預設的儲存路徑。',
     path_not_visible: 'Berth 的容器裡看不到 {{path}}。',
     directory_missing:
       'Berth 的容器裡沒有 {{path}} 這個目錄：它在 Berth 自己掛著的目錄底下，是這個目錄不見了。',
@@ -576,15 +575,15 @@ const zhHant = {
   qbittorrent: {
     title: {
       choose: '先選 qBittorrent 是哪一台',
-      bundled: '套用建議的 qBittorrent 設定',
+      bundled: '設定 qBittorrent 的 WebUI 登入',
       existing: '確認你的 qBittorrent',
     },
     unreachable: '讀不到 qBittorrent 這一步的狀態。確認 Berth 後端還在跑。',
     lede: {
       choose:
-        '套件內的那一台由 Berth 設好偏好與 WebUI 登入；你自己的那一台 Berth 只用自己的分類，一個全域偏好都不寫。選了 Berth 才去連它。',
+        '兩種 Berth 都只用自己的分類，一個全域偏好都不寫；套件內的那一台另外由 Berth 設 WebUI 登入。選了 Berth 才去連它。',
       bundled:
-        '這台 qBittorrent 是套件內的，Berth 直接改它的偏好。下面三個鍵是 Berth 送單與入庫要用的，只有與現值不同的才會被寫。',
+        '這台 qBittorrent 是套件內的，Berth 只替它設 WebUI 登入，全域偏好一個都不寫。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你在它的介面上改預設儲存路徑不影響 Berth。',
       existing:
         '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。',
     },
@@ -594,24 +593,13 @@ const zhHant = {
       password: 'WebUI 登入',
       willSet: '將設為下面填的那一組',
       existingLogin: '不改（這台是你自己的）',
-      bundledPlan: '套用三個建議偏好 · 設定 WebUI 登入',
+      bundledPlan: '設定 WebUI 登入 · 只建 Berth 自己的分類',
       existingPlan: '只建 Berth 自己的分類 · 一個全域偏好都不寫',
-      diff: '將會寫入的鍵',
-      key: '鍵',
-      current: '現值',
-      recommended: '建議值',
-      same: '已經是這樣',
     },
     step: {
-      save_path: '完成目錄',
-      auto_tmm_enabled: '自動 Torrent 管理',
-      category_changed_tmm_enabled: '分類改變時跟著搬',
       web_ui_password: 'WebUI 登入',
     },
     fix: {
-      save_path: '在「選項 → 下載」把預設儲存路徑設成 Berth 的 complete 根目錄：',
-      auto_tmm_enabled: '在「選項 → 下載」把「預設 Torrent 管理模式」設成自動：',
-      category_changed_tmm_enabled: '在「選項 → 下載」讓分類改變時套用新的儲存路徑：',
       web_ui_password: '在「選項 → Web UI」自己設定帳號與密碼：',
       loginRejected: '照上面的規則改一組帳密，或取消「沿用 Jellyfin 帳密」另設一組，再按一次套用。',
     },
@@ -622,7 +610,7 @@ const zhHant = {
     apply: '套用這 {{keys}} 項',
     applying: '套用中…',
     rerun: '重新檢查並套用',
-    done: '這個泊位的事做完了。qBittorrent 的路徑與自動管理都是 Berth 要的樣子。',
+    done: '這個泊位的事做完了。WebUI 登入設好了；Berth 沒有改這台 qBittorrent 的全域偏好，它的下載走自己的分類。',
     confirm: '確認，不改任何設定',
     checking: '檢查中…',
     recheck: '重新檢查',
@@ -926,8 +914,6 @@ const zhHant = {
         'Berth 自己寫不進 {{path}}：berth 容器裡的使用者（.env 的 PUID / PGID）沒有這個目錄的寫入權限，與別的容器的掛載無關。讓 berth 與 qBittorrent、Jellyfin 用同一組 PUID / PGID，或在宿主上把這個目錄的擁有者改成那一組（chown），再按「重新檢查」。',
       directoryMissing:
         'Berth 的容器裡沒有 {{path}}：掛載是好的（它在 Berth 掛著的 {{root}} 底下），是這個目錄被刪了或改了名。在宿主上把它建回來（擁有者是 berth 的 PUID / PGID），或到 {{service}} 改回原本的路徑，再按「重新檢查」。{{service}} 那邊仍看得到它的話，是兩邊的 {{root}} 掛的不是同一個宿主目錄。',
-      savePathMissing:
-        'qBittorrent 的偏好裡沒有預設儲存路徑，這不是掛載的問題。回 qBittorrent 那一頁（精靈跑完之後在「設定 → qBittorrent」）重新套用建議設定，再按「重新檢查」。',
       hardlink:
         '鏈接不起來。complete 目錄與媒體庫目錄要在同一個檔案系統，容器裡的使用者也要寫得進去。',
       // 與掛載無關的失敗（M4 票 21）：連不到、帳密不對時給掛載片段只會叫人白改 compose。
@@ -2510,7 +2496,6 @@ const zhHant = {
     libraryCount_other: '{{count}} 個媒體庫',
     state: {
       ok: '已繫上',
-      drift: '設定被改過',
       failed: '阻擋',
       unknown: '尚未檢查',
       unconfigured: '尚未接上',
@@ -2560,8 +2545,6 @@ const zhHant = {
       askAdmin: '設定頁只有管理員進得去，請管理員來看。',
       unsupported:
         'Berth 需要 Jellyfin 12.0 以上（12.0 就是原本的 10.12）。升級前先把 Jellyfin 的 /config 完整備份 —— 12 改了資料庫，降不回去；再移除第三方插件，10.11 的插件在 12 載入不了。升級後完整掃描一次媒體庫。',
-      drift:
-        'Berth 的建議設定被改掉了（{{keys}}）。服務本身還在動，但下載路徑或自動管理一旦不對，入庫遲早會失敗。',
     },
   },
   // 設定頁（票 06i）：一格泊位一頁，精靈跑完之後改東西都在這裡。
@@ -2591,7 +2574,7 @@ const zhHant = {
     },
     qbittorrentPage: {
       title: 'qBittorrent 設定',
-      lede: '這一台 qBittorrent 還連得上嗎、位址或帳密要不要換、Berth 的建議設定有沒有被改掉，以及下載磁碟剩多少時開始擋送單。',
+      lede: '這一台 qBittorrent 還連得上嗎、位址或帳密要不要換，以及下載磁碟剩多少時開始擋送單。',
     },
     indexerPage: {
       sites: '站',
@@ -2633,22 +2616,6 @@ const zhHant = {
       saved: '已儲存，並且立刻重量了一次。',
       invalid: '要是 0 或更大的整數。',
       failed: '沒有存進去。Berth 自己的 API 沒有回應，先確認它還活著。',
-    },
-    drift: {
-      title: 'qBittorrent 建議設定',
-      clean: '三個建議鍵都還是建議值。',
-      changed_one: '{{count}} 個鍵與建議值不同。',
-      changed_other: '{{count}} 個鍵與建議值不同。',
-      changedKey: '已改',
-      key: '鍵',
-      current: '現值',
-      recommended: '建議值',
-      restore: '還原建議設定',
-      restoring: '還原中…',
-      restoreFailed: '寫不進去。qBittorrent 可能不在了，或帳密變了——看上面那一項的原文。',
-      existing:
-        'Berth 不改你這台 qBittorrent 的全域偏好，這裡沒有要還原的東西。Berth 的下載走自己的 berth-* 分類與逐個 torrent 的自動管理，不看全域的預設路徑。',
-      unreachable: '連不上 qBittorrent，讀不到它現在的偏好。',
     },
   },
   // Route 設定頁（票 14）。「Route」保留原文：它是 CONTEXT.md 的名詞，精靈與健康頁也這樣寫。
@@ -3196,9 +3163,9 @@ const en: Translations<typeof zhHant> = {
           'See who the owner is. Once there is an owner the source is locked; the bundled one’s address comes from compose, so there is nothing to change.',
       },
       qbittorrent: {
-        can: 'Switch between bundled and existing (this page starts over), or check again: the bundled qBittorrent gets the recommended settings applied once more, and keys already at the recommended value show as “already so” and are not written again; your own qBittorrent is only checked for a connection, with no key written.',
+        can: 'Switch between bundled and existing (this page starts over), or check again: either one is only checked for a connection, with no global preference written; the bundled one’s WebUI login is not rewritten once it is set.',
         elsewhere:
-          'Preferences beyond the three bundled keys, and every preference on your own qBittorrent, are changed in qBittorrent itself; Berth leaves them alone.',
+          'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself; Berth neither writes nor reads them — its downloads only go through its own berth-* categories.',
       },
       routes: {
         can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every check on every route runs again. Delete a wrong one underneath it.',
@@ -3376,7 +3343,7 @@ const en: Translations<typeof zhHant> = {
     },
     switchWarning: {
       qbittorrent:
-        'Switching qBittorrent: the preferences and login Berth already wrote to the old one stay there and are not undone; this page starts over, and library paths need checking again — the categories live on the old one.',
+        'Switching qBittorrent: the login Berth already set on the old one stays there and is not undone; this page starts over, and library paths need checking again — the categories live on the old one.',
       prowlarr:
         'Switching Prowlarr: the indexers and login Berth already added to the old one stay there and are not undone; this page starts over.',
     },
@@ -3506,7 +3473,6 @@ const en: Translations<typeof zhHant> = {
     credential_missing: 'There is no credential yet: paste a key and test.',
     category_conflict:
       'qBittorrent already has a category called {{category}} that saves to {{path}}; Berth does not change a category it did not create.',
-    save_path_missing: 'qBittorrent did not report its default save path.',
     path_not_visible: 'Berth’s container cannot see {{path}}.',
     directory_missing:
       'Berth’s container has no folder {{path}}: it is under a folder Berth mounts, so this folder itself is gone.',
@@ -3735,15 +3701,15 @@ const en: Translations<typeof zhHant> = {
   qbittorrent: {
     title: {
       choose: 'First, which qBittorrent?',
-      bundled: 'Apply the recommended qBittorrent settings',
+      bundled: 'Set the qBittorrent WebUI login',
       existing: 'Check your qBittorrent',
     },
     unreachable: 'Cannot read the state of this step. Check that the Berth backend is running.',
     lede: {
       choose:
-        'Berth sets up the preferences and WebUI login on the bundled one; on your own one it uses only its own categories and writes no global preference. Berth only connects once you choose.',
+        'Either way Berth uses only its own categories and writes no global preference; on the bundled one Berth also sets the WebUI login. Berth only connects once you choose.',
       bundled:
-        'This qBittorrent came with the bundle, so Berth writes its preferences directly. The three keys below are the ones Berth needs; only the ones that differ get written.',
+        'This qBittorrent came with the bundle. Berth only sets its WebUI login and writes no global preference. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; changing the default save path in its own UI does not affect Berth.',
       existing:
         'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
     },
@@ -3753,26 +3719,13 @@ const en: Translations<typeof zhHant> = {
       password: 'WebUI login',
       willSet: 'Will be set to the one entered below',
       existingLogin: 'Left alone (this one is yours)',
-      bundledPlan: 'Applies three recommended preferences · sets the WebUI login',
+      bundledPlan: 'Sets the WebUI login · only creates Berth’s own categories',
       existingPlan: 'Only creates Berth’s own categories · writes no global preference',
-      diff: 'Keys that will be written',
-      key: 'Key',
-      current: 'Current',
-      recommended: 'Recommended',
-      same: 'Already set',
     },
     step: {
-      save_path: 'Completed folder',
-      auto_tmm_enabled: 'Automatic torrent management',
-      category_changed_tmm_enabled: 'Relocate when the category changes',
       web_ui_password: 'WebUI login',
     },
     fix: {
-      save_path: "In Options → Downloads, set the default save path to Berth's completed root:",
-      auto_tmm_enabled:
-        'In Options → Downloads, set the default torrent management mode to Automatic:',
-      category_changed_tmm_enabled:
-        'In Options → Downloads, let a category change relocate the torrent:',
       web_ui_password: 'Set the username and password yourself under Options → Web UI:',
       loginRejected:
         'Change the login to fit the rules above, or untick “Reuse the Jellyfin login” and set one of its own, then apply again.',
@@ -3784,7 +3737,7 @@ const en: Translations<typeof zhHant> = {
     apply: 'Apply these {{keys}} changes',
     applying: 'Applying…',
     rerun: 'Check and apply again',
-    done: "This berth is done. qBittorrent's paths and automatic management are what Berth needs.",
+    done: 'This berth is done. The WebUI login is set; Berth changed none of this qBittorrent’s global preferences, and its downloads go through its own categories.',
     confirm: 'Confirm without changing anything',
     checking: 'Checking…',
     recheck: 'Check again',
@@ -4107,8 +4060,6 @@ const en: Translations<typeof zhHant> = {
         'Berth itself cannot write to {{path}}: the user inside the berth container (PUID / PGID in .env) has no write permission on that folder. The other containers’ mounts have nothing to do with it. Give berth the same PUID / PGID as qBittorrent and Jellyfin, or make that PUID / PGID the owner of the folder on the host (chown), then press “Check again”.',
       directoryMissing:
         'Berth’s container has no {{path}}: the mount is fine (it is under {{root}}, which Berth mounts), this folder was deleted or renamed. Create it again on the host (owned by berth’s PUID / PGID), or change {{service}} back to the original path, then press “Check again”. If {{service}} can still see it, the two sides mount different host directories at {{root}}.',
-      savePathMissing:
-        'qBittorrent’s preferences have no default save path; this is not a mount problem. Go back to the qBittorrent page (after setup it is Settings → qBittorrent), apply the recommended settings again, then press “Check again”.',
       hardlink:
         'The link failed. The complete directory and the library directory have to sit on one file system, and the container user has to be able to write there.',
       service: {
@@ -5595,7 +5546,6 @@ const en: Translations<typeof zhHant> = {
     libraryCount_other: '{{count}} libraries',
     state: {
       ok: 'Ready',
-      drift: 'Settings changed',
       failed: 'Blocked',
       unknown: 'Not checked',
       unconfigured: 'Not connected',
@@ -5651,8 +5601,6 @@ const en: Translations<typeof zhHant> = {
       askAdmin: 'Only administrators can open Settings — ask one to take a look.',
       unsupported:
         'Berth needs Jellyfin 12.0 or newer (12.0 is what would have been 10.12). Before upgrading, back up Jellyfin’s /config in full — 12 changes the database and there is no way back — and remove third-party plugins, which cannot load on 12. Run one full library scan afterwards.',
-      drift:
-        "Berth's recommended settings were changed ({{keys}}). The service itself is still running, but once the download paths or automatic management are wrong, imports will fail sooner or later.",
     },
   },
   settings: {
@@ -5681,7 +5629,7 @@ const en: Translations<typeof zhHant> = {
     },
     qbittorrentPage: {
       title: 'qBittorrent settings',
-      lede: 'Whether this qBittorrent still answers, whether its address or credentials need changing, whether Berth’s recommended settings were changed, and how little free disk space stops new downloads.',
+      lede: 'Whether this qBittorrent still answers, whether its address or credentials need changing, and how little free disk space stops new downloads.',
     },
     indexerPage: {
       sites: 'Sites',
@@ -5720,23 +5668,6 @@ const en: Translations<typeof zhHant> = {
       saved: 'Saved, and measured again right away.',
       invalid: 'It has to be a whole number, 0 or more.',
       failed: 'It was not saved. Berth’s own API did not answer — check that it is still running.',
-    },
-    drift: {
-      title: 'qBittorrent recommended settings',
-      clean: 'All three recommended keys still hold their recommended values.',
-      changed_one: '{{count}} key differs from the recommended value.',
-      changed_other: '{{count}} keys differ from the recommended values.',
-      changedKey: 'changed',
-      key: 'Key',
-      current: 'Current',
-      recommended: 'Recommended',
-      restore: 'Restore recommended settings',
-      restoring: 'Restoring…',
-      restoreFailed:
-        'Could not write them. qBittorrent may be gone, or its credentials changed — read the raw message on that check above.',
-      existing:
-        'Berth does not change the global preferences of your qBittorrent, so there is nothing to restore here. Berth’s downloads go through its own berth-* categories with automatic management per torrent, not the global default folder.',
-      unreachable: 'Cannot reach qBittorrent, so its current preferences are unknown.',
     },
   },
   routeSettings: {

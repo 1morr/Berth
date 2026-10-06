@@ -5,17 +5,15 @@ import type { Signal } from '../components/signal'
 /**
  * 一項健康檢查怎麼讀（票 10）。
  *
- * 五種狀態，四個信號色的規則不變（每個顏色只有一個意思）：
+ * 四種狀態，信號色的規則不變（每個顏色只有一個意思）：
  *
- * - `secured` 已繫上——連得上而且沒有漂移。
- * - `assigned` 需要你——服務好好的，但 Berth 的建議設定被改掉了（brief §16.3）。
- *   **不是紅的**：東西還在動，只是有一天會出錯。
+ * - `secured` 已繫上——連得上。
  * - `blocked` 阻擋——連不上、憑證不對、版本太舊。紅色只代表阻擋。
  * - `neutral` 尚未檢查 / 尚未接上——索引站那一步可以跳過（plan §9.3），跳過的人
  *   不該永遠看到一盞紅燈。
  */
 
-export type HealthState = 'ok' | 'drift' | 'failed' | 'unknown' | 'unconfigured'
+export type HealthState = 'ok' | 'failed' | 'unknown' | 'unconfigured'
 
 export function serviceState(row: ServiceHealth): HealthState {
   // **順序有意義**：迴圈第一輪跑之前每一項都還沒被檢查過，而那時候 `configured` 也還是預設的
@@ -24,12 +22,11 @@ export function serviceState(row: ServiceHealth): HealthState {
   if (!row.configured) return 'unconfigured'
   if (row.status === 'failed') return 'failed'
   if (row.status === 'unknown') return 'unknown'
-  return row.drift.length > 0 ? 'drift' : 'ok'
+  return 'ok'
 }
 
 export const STATE_SIGNAL = {
   ok: 'secured',
-  drift: 'assigned',
   failed: 'blocked',
   unknown: 'neutral',
   unconfigured: 'neutral',
@@ -37,7 +34,6 @@ export const STATE_SIGNAL = {
 
 export const STATE_LABEL = {
   ok: 'health.state.ok',
-  drift: 'health.state.drift',
   failed: 'health.state.failed',
   unknown: 'health.state.unknown',
   unconfigured: 'health.state.unconfigured',

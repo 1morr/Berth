@@ -104,15 +104,6 @@ export function ServiceCard({
         </div>
       )}
 
-      {state === 'drift' && (
-        <div className="border-t-2 border-rule bg-hull px-4 py-4">
-          <p className="max-w-prose text-xs text-ink">
-            {t('health.fix.drift', { keys: row.drift.join(', ') })}
-          </p>
-          <p className="value mt-2 text-xs text-ink-dim">{row.drift.join(' · ')}</p>
-        </div>
-      )}
-
       {state === 'unconfigured' && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
           <p className="max-w-prose text-xs text-ink">{t('health.fix.unconfigured')}</p>

@@ -71,16 +71,6 @@ class RouteOut(BaseModel):
     last_ok_at: datetime | None
 
 
-class PreferenceDiffOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    #: `app/setPreferences` 的鍵名。畫面顯示的與送出去的是同一個字串。
-    key: str
-    current: str
-    recommended: str
-    differs: bool
-
-
 class InterfaceLoginIn(BaseModel):
     """套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07）。兩次密碼一致由前端比對。
 
@@ -107,7 +97,7 @@ class InterfaceLoginIn(BaseModel):
 
 
 class QbittorrentOut(BaseModel):
-    """精靈頁 2 與設定頁的漂移還原共用（brief §16.3）。"""
+    """精靈頁 2 與設定頁的 qBittorrent 共用。"""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -119,14 +109,11 @@ class QbittorrentOut(BaseModel):
     supported: bool
     blocked: bool
     reachable: bool
-    diffs: list[PreferenceDiffOut]
     steps: list[StepOut]
     #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
     web_ui_login: bool
     #: 套件內那一台的 WebUI 帳號（Berth 設下的，或它自己就設過的）；還沒設過是空字串。
     web_ui_username: str
-    #: 建議鍵會被寫。既有的那一台是 `false`：Berth 不改它的全域偏好（M4 票 05）。
-    writes_preferences: bool
     #: 連線本身為什麼失敗（M4 票 21）。連上了是 `null`。
     failure: StepFailure | None
     #: 連線本身的失敗原文（英文），收進「技術細節」。
@@ -164,8 +151,6 @@ class ServiceHealthOut(BaseModel):
     failures: int
     #: 有連線資訊可以檢查。索引站那一步可跳過，所以它可能是 False。
     configured: bool
-    #: 被改掉的建議偏好鍵（qBittorrent 專有，brief §16.3）。
-    drift: list[str]
     #: qBittorrent 把這台的 IP 封了（brief §20.2）。畫面照它說出下一步——改帳密沒有用。
     banned: bool
     #: 這台 Jellyfin 低於 12.0（brief §16.4、§20.9）。同上：下一步是升級，而升級不可逆，

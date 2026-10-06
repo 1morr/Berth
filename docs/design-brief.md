@@ -609,7 +609,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.3 開箱即用（一鍵設定）【決定】
 
-> **2026-10-06 改（§19「精靈審計後的八項」）**：套件內 qBittorrent 不再寫全域偏好（D2）、介面密碼沿用頁 1 那一次（D4）、不寫入的確認鍵拿掉（D5）、頁 3 套件內自動跑（D7）、BTH 4 只接 Prowlarr（D3）。下表與本節條列待拆票後改寫。
+> **2026-10-06 改（§19「精靈審計後的八項」）**：介面密碼沿用頁 1 那一次（D4）、不寫入的確認鍵拿掉（D5）、頁 3 套件內自動跑（D7）、BTH 4 只接 Prowlarr（D3）。下表與本節條列待拆票後改寫。
 
 > **2026-09-29 改（§19「精靈改為每個服務手動選擇」）**：不再偵測服務是不是套件內。Jellyfin、qBittorrent、Prowlarr 各一頁，使用者自己選「套件內」或「既有」，選擇存下來、選完要測試。取代 2026-09-26「只有 compose 主機名上探到的才可能是套件內」的判定規則（M4 票 05 的判定那一半）；票 05 的「既有服務不寫帳密、不改全域偏好」保留，改讀使用者的選擇。選擇、服務頁與頁序在 M4 票 15 做完；compose 容器名（票 16）與既有服務防呆（票 17）另外做。
 >
@@ -621,7 +621,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
-| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：套用建議偏好（save path、autoTMM；未完成目錄開在 Berth 的分類上，不寫全域，M4 票 22）、設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07），按下前顯示差異。既有：填位址與 WebUI 帳密，一個全域偏好都不寫（§16.4）。兩種都依 Route 建立 category | 無 |
+| qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07）。**全域偏好一個都不寫**（D2，M4 票 32）：送單逐個 torrent 帶 Berth 的分類與 `autoTMM=true`，save path 與未完成目錄開在分類上（M4 票 22），全域的 save path、autoTMM 都不影響 Berth。既有：填位址與 WebUI 帳密，同樣一個全域偏好都不寫（§16.4）。兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 精靈第一頁選套件內或既有 → 那一台還沒跑過初始精靈就以擁有者填的帳密建立 Jellyfin 管理員、跑完它的初始設定；已經有管理員就用管理員登入 → Berth 自己建 API key「Berth」（帳密不存下來，M4 票 06）→ 媒體庫與路徑泊位：套件內建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f），既有只「加入 Berth 路徑」→ 每個媒體庫一個 Route | 無 |
 | Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：推薦清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；AniDex 於 2026-09-25 拿掉，§20.7）與 schema 裡其他公開的 torrent 站，預設不勾、先測試通過才勾得起來再加入（M4 票 09，`indexer/test` 測還沒加入的定義，§20.7）、設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組；自己的一顆按鈕，不跟著「加入」，M4 票 20）。既有：貼 API key，用使用者已有的索引站；一站都沒有時這一頁待處理，也可以測試推薦的公開站、按一次加進它（M4 票 20）；Berth 不移除它的站、不設它的登入 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈的 TMDB 泊位（§20.7） |
@@ -632,7 +632,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **表單跟著那一台的狀態走，選擇決定 Berth 之後寫什麼**：套件內但已經初始化過（重裝保留了 config、精靈中途中斷）時，Jellyfin 已有管理員就改成「用管理員登入」、不再建立；qBittorrent / Prowlarr 已設過介面登入同理，不強迫再設。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣由擁有者建管理員——它上面沒有任何人的帳號可以蓋掉（2026-09-26 的「Jellyfin 例外」，理由不變）。
 - **「沿用 Jellyfin 帳密」**：套件內 qBittorrent / Prowlarr 的介面登入預設勾選。勾選時帳號帶入擁有者的名字，密碼請使用者**打一次**，Berth 先向 Jellyfin 驗證這組帳密正確再寫入；取消勾選就自設一組、密碼打兩次（M4 票 07 的欄位）。**Berth 不存這兩組介面密碼的明文**，只記帳號與加鹽雜湊，夠比對「已經是這一組」（§19 2026-09-29：勾了沿用時那就是 Jellyfin 的密碼，存明文會推翻 M4 票 06「資料庫裡沒有擁有者的明文密碼」；Berth 連套件內 qBittorrent 靠免密白名單，本來就用不到它）。
 - compose 用 profiles：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起。選「既有」時那一頁說出要從 `COMPOSE_PROFILES` 拿掉哪一個（不叫人改 compose 檔）；忘了拿掉也不致命。套件的容器名是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`（`berth` 維持；compose 服務名與 DNS 名不變）：同一台主機上既有的容器多半就叫 `jellyfin` / `qbittorrent` / `prowlarr`、用 8096 / 8080 / 9696 / 6881。沒有前綴時撞名會讓**整套**起不來（連 `berth`），所以加了前綴；撞 port 仍可能發生，只有撞到的那一個套件內容器起不來（M4 票 16 實測，§20.14）。
-- 預置只在設定檔不存在時寫入一次，之後使用者在各服務介面改什麼都行；健康檢查發現關鍵設定漂移時提供「還原建議設定」按鈕。精靈的 qBittorrent 頁會列出「已預置的項目」。
+- 預置只在設定檔不存在時寫入一次，之後使用者在各服務介面改什麼都行。沒有「建議設定」可漂移：Berth 不寫也不看 qBittorrent 的全域偏好（D2，M4 票 32；原本的漂移檢查與「還原建議設定」一起拿掉）。精靈的 qBittorrent 頁會列出「已預置的項目」。
 - 每顆按鈕都顯示「將會做什麼」與執行結果，失敗給出可複製的手動步驟。
 - 各服務 API 的可行性與細節見 §20.7；手動選擇的慣例與既有服務的條件見 §20.14。
 
@@ -652,8 +652,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
   - 三個服務的下限都寫在「既有」選項旁（M4 票 17），版本太舊時精靈與健康檢查說出目前版本與下限。
 - **容器裡的 `localhost`**：使用者填 `localhost` / `127.0.0.0/8` / `::1` 時，位址欄下就地提示（只提示、不擋：`network_mode: host` 的部署填 `localhost` 是對的；測試不過時的補法也是同一句，M4 票 17）：Berth 在容器裡，那指的是 Berth 自己；要填 `host.docker.internal`（Docker Desktop 內建；Linux 由 compose 的 `extra_hosts: ["host.docker.internal:host-gateway"]` 提供，且服務要監聽 `0.0.0.0` 而不是 `127.0.0.1`）或區網 IP（§20.14，M4 票 16、17）。
 - **既有 Jellyfin 不搬媒體庫**：Jellyfin 的項目 ID 由路徑算出，改路徑等於全部變成新項目、觀看紀錄歸零。做法是用 Jellyfin 的「一個媒體庫多個路徑」：Berth 按鈕以 `POST /Library/VirtualFolders/Paths` 為既有媒體庫**加**一個 Berth 用的路徑（§20.7），Route 指向新路徑；舊媒體原地不動，在 Berth 只是 unmanaged 檔案。送出前先寫探測檔問 Jellyfin 看不看得到：它對加不上的路徑只回 404，說不出原因；看不到就說「Jellyfin 看不到 <路徑>：它沒掛 <共用目錄>」、收回剛建的目錄。多個媒體庫逐個試、逐個回報（M4 票 19）。
-- **既有 qBittorrent 不搬舊種、不改全域偏好**：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫、也不列在精靈上（M4 票 05、22；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄，而它們沒有一個影響 Berth。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`；全域未完成目錄沒開也無妨，Berth 的分類各自帶 `downloadPath`（原本的「temp path 未啟用只警告」撤掉：警告的理由「Berth 比較難分辨下載完」不成立，完成看的是 qBittorrent 回報的 progress / completion_on / state）。票 22 之前建的 Berth 分類沒有自己的未完成目錄，照舊跟著全域設定下載、不算衝突；有而且不同才照衝突規則處理、不覆寫。
-- **健康檢查會擋下的情況**：qBittorrent 回報的 save path 在 Berth 看不到；qBittorrent 讀不到 Berth 寫進分類路徑的探測檔（M4 票 19）；Route 的寫入目標在 Berth 看不到（媒體庫的其他路徑不驗：Berth 只在寫入目標底下讀寫，舊的 `/movies` 看不到不礙事，M4 票 19）；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Prowlarr 低於 1.3.2；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段，**片段對著要改的那一台**（M4 票 19）：寫入目標看不到、Jellyfin 看不到探測檔是 jellyfin；qBittorrent 讀不到探測檔是 qbittorrent；Berth 看不到 qBittorrent 報的路徑與 `EXDEV` 才是 berth。既有服務的片段是「你那一份 compose」要加的一條，照 TRaSH 用單一共用掛載，別分開掛 `/downloads`、`/movies`。
+- **既有 qBittorrent 不搬舊種、不改全域偏好**（套件內那一台的全域偏好同樣不寫，D2，M4 票 32）：使用者多加一個掛載，Berth 用自己的 `berth-*` category 與新的 save path；舊 torrent 留在原目錄，Berth 忽略非自己分類的 torrent。全域的 save path、temp path、autoTMM 一個都不寫、也不列在精靈上（M4 票 05、22；Sonarr / Radarr 對下載器同樣只用分類）——改了它們，使用者不經 Berth 加的 torrent 就會落進 Berth 的目錄，而它們沒有一個影響 Berth。全域 autoTMM 關閉也無妨，Berth 送單時逐個 torrent 指定 `autoTMM=true`；全域未完成目錄沒開也無妨，Berth 的分類各自帶 `downloadPath`（原本的「temp path 未啟用只警告」撤掉：警告的理由「Berth 比較難分辨下載完」不成立，完成看的是 qBittorrent 回報的 progress / completion_on / state）。票 22 之前建的 Berth 分類沒有自己的未完成目錄，照舊跟著全域設定下載、不算衝突；有而且不同才照衝突規則處理、不覆寫。
+- **健康檢查會擋下的情況**：qBittorrent 回報的**分類**路徑（save path 與分類自己的未完成目錄）在 Berth 看不到——全域的預設 save path 不看，兩種來源都一樣（M4 票 32）；qBittorrent 讀不到 Berth 寫進分類路徑的探測檔（M4 票 19）；Route 的寫入目標在 Berth 看不到（媒體庫的其他路徑不驗：Berth 只在寫入目標底下讀寫，舊的 `/movies` 看不到不礙事，M4 票 19）；兩者在 Berth 內是不同掛載（`link()` 回 `EXDEV`）；qBittorrent 低於 4.4；Prowlarr 低於 1.3.2；Jellyfin 低於 12.0（說出目前版本，附升級注意：先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）；媒體庫掛 TVDB 插件（警告，M2 票 09c 起是一件 `library_uses_tvdb` Issue，§9.1）。每項附「哪個容器少了哪個掛載」的 compose 修正片段，**片段對著要改的那一台**（M4 票 19）：寫入目標看不到、Jellyfin 看不到探測檔是 jellyfin；qBittorrent 讀不到探測檔是 qbittorrent；Berth 看不到 qBittorrent 報的路徑與 `EXDEV` 才是 berth。既有服務的片段是「你那一份 compose」要加的一條，照 TRaSH 用單一共用掛載，別分開掛 `/downloads`、`/movies`。
 - **跨主機驗證**：Berth 在 Route 目標寫一個探測檔，再以 `POST /Environment/ValidatePath` 請 Jellyfin 確認看得到同一路徑（§20.7）；Jellyfin 在別台機器而路徑不一致會立刻現形。
 - **不支援**：Jellyfin 10.x（2026-09-15 起只支援 12 以上，§19）；既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把同一個父目錄掛在同一個容器路徑（硬鏈接做不到）；remote path mapping（不做，§18；2026-09-29 使用者再確認）。
 

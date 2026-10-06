@@ -85,7 +85,7 @@ from berth.services.jellyfin import (
     remember_libraries,
     tvdb_fetchers,
 )
-from berth.services.qbittorrent import qbittorrent_target, try_sign_in, writes_preferences
+from berth.services.qbittorrent import qbittorrent_target, try_sign_in
 from berth.services.settings import read_settings
 from berth.services.steps import StepFailedError, StepView, failed_step, message, step_views
 
@@ -704,7 +704,7 @@ async def _run_checks(
     jellyfin_settings = await read_settings(session, JellyfinSettings)
     setup = await read_settings(session, SetupSettings)
     paths = await read_settings(session, PathSettings)
-    qbittorrent_origin, qbittorrent_url = qbittorrent_target(setup, qbittorrent_settings)
+    _, qbittorrent_url = qbittorrent_target(setup, qbittorrent_settings)
     qbittorrent = factory.qbittorrent(qbittorrent_url)
     jellyfin = factory.jellyfin(jellyfin_settings.base_url, token=jellyfin_settings.api_key)
     try:
@@ -715,7 +715,6 @@ async def _run_checks(
             health = await _check(
                 plan_row,
                 qbittorrent,
-                qbittorrent_origin,
                 jellyfin,
                 carried=carried,
                 signed_out=signed_out,
@@ -910,7 +909,6 @@ async def _existing_routes(session: AsyncSession) -> dict[str, Route]:
 async def _check(
     plan_row: _Planned,
     qbittorrent: QbittorrentClient,
-    qbittorrent_origin: ServiceOrigin | None,
     jellyfin: JellyfinClient,
     *,
     carried: SetupStep | None,
@@ -925,7 +923,7 @@ async def _check(
     `shared_root` 是 Berth 自己的共用掛載（`shared_root_of`）：看不到的路徑在它底下是目錄不見了，
     不在它底下是沒掛（M4 票 25）。
     """
-    checker = _Checker(plan_row, qbittorrent, qbittorrent_origin, jellyfin, signed_out, shared_root)
+    checker = _Checker(plan_row, qbittorrent, jellyfin, signed_out, shared_root)
     checks: list[SetupStep] = []
     stopped = False
     for check in RouteCheck:
@@ -949,7 +947,6 @@ class _Checker:
         self,
         plan_row: _Planned,
         qbittorrent: QbittorrentClient,
-        qbittorrent_origin: ServiceOrigin | None,
         jellyfin: JellyfinClient,
         signed_out: ServiceError | None,
         shared_root: Path,
@@ -958,13 +955,14 @@ class _Checker:
         self._signed_out = signed_out
         self._shared_root = shared_root
         self._qbittorrent = qbittorrent
-        self._qbittorrent_origin = qbittorrent_origin
         self._jellyfin = jellyfin
         self._target = Path(plan_row.target_path)
         self._save_path = Path(plan_row.save_path)
         #: qBittorrent 自己報的 category save path。檢查一 `stat` 的是**它**，不是 Berth 算出來
         #: 的那個字串——後者是我們剛建好的目錄，拿它去 stat 一定會過，等於沒檢查。
         self._reported_save_path = ""
+        #: 同上，分類自己的未完成目錄。票 22 之前建的分類沒有，是空字串。
+        self._reported_download_path = ""
         #: 硬鏈接回 `EXDEV`。訊息要多說一句「兩個目錄在 Berth 內是不同掛載」。
         self.cross_device = False
 
@@ -990,6 +988,7 @@ class _Checker:
             self._qbittorrent, self._plan.category, self._plan.save_path, self._plan.incomplete_path
         )
         self._reported_save_path = outcome.save_path
+        self._reported_download_path = outcome.download_path
         detail = f"{outcome.name} → {outcome.save_path}"
         # 票 22 之前建的分類沒有自己的未完成目錄（`ensure_category` 不當它衝突）：說出下載落在哪。
         detail += (
@@ -1007,27 +1006,20 @@ class _Checker:
         return (StepStatus.OK if outcome.created else StepStatus.SKIPPED), detail
 
     async def _download_path(self) -> tuple[StepStatus, str]:
-        """檢查一：**qBittorrent 報的**路徑，Berth 這個容器看得到（plan §9.5）。
+        """檢查一：**qBittorrent 報的**分類路徑，Berth 這個容器看得到（plan §9.5）。
 
-        category 的那條用上一步 `torrents/categories` 回報的值。套件內那一台另外現查全域
-        `save_path`（`app/preferences`）：它在第 4 步被設成 Berth 的 complete 根目錄，讀不到偏好
-        也是這一條的紅燈——把它吞掉會讓這一步在「其實什麼都沒驗到」的情況下變綠。**既有的那一台
-        不看全域**（M4 票 05）：那是使用者自己的預設路徑，Berth 不寫它、送單也不落在那裡
-        （逐個 torrent `autoTMM=true` 走分類），它 Berth 看不看得到與 Berth 無關。
+        用上一步 `torrents/categories` 回報的兩個值：complete 那一條，與分類自己的未完成目錄（票 22
+        之前建的分類沒有，就不看）。**全域 `save_path` 不看，兩種來源都一樣**（M4 票 32）：Berth
+        送單逐個 torrent 帶分類與 `autoTMM=true`，不落在那裡；使用者把它改成別的目錄（審計 S5）
+        與 Berth 無關，原本卻讓每一條 Route 都紅、送單被擋。
         """
-        category_path = self._reported_save_path or str(self._save_path)
-        if not writes_preferences(self._qbittorrent_origin):
-            _visible(category_path, self._shared_root)
-            return StepStatus.OK, category_path
-        preferences = await self._qbittorrent.preferences()
-        global_path = str(preferences.get("save_path", "") or "")
-        if not global_path:
-            raise StepFailedError(
-                StepFailure.SAVE_PATH_MISSING, "qBittorrent did not report a global save_path"
-            )
-        _visible(global_path, self._shared_root)
-        _visible(category_path, self._shared_root)
-        return StepStatus.OK, f"{global_path} · {category_path}"
+        complete = self._reported_save_path or str(self._save_path)
+        incomplete = self._reported_download_path
+        _visible(complete, self._shared_root)
+        if incomplete:
+            _visible(incomplete, self._shared_root)
+            return StepStatus.OK, f"{complete} · {incomplete}"
+        return StepStatus.OK, complete
 
     async def _download_visible(self) -> tuple[StepStatus, str]:
         """反過來問：Berth 寫進分類路徑的檔，qBittorrent 那一台讀得到嗎（M4 票 19，brief §20.2）。

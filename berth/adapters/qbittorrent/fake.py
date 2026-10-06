@@ -19,7 +19,8 @@ from berth.adapters.qbittorrent import (
 )
 
 #: 乾淨實例的偏好值，取自 `tests/fixtures/http/qbittorrent/app-preferences.*.json` 的同名鍵。
-#: 五個建議鍵全部與建議值不同，所以精靈第 4 步真的有差異可套（brief §20.7）。
+#: 全域路徑是 qBittorrent 自己的 `/downloads`，Berth 看不到——Berth 不寫也不看它（M4 票 32），
+#: 所以每一條 Route 測試都在這一台上照樣綠。
 DEFAULT_PREFERENCES: Mapping[str, Any] = {
     "save_path": "/downloads",
     "temp_path": "/downloads/incomplete",

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from berth.adapters import fs
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.qbittorrent import QbittorrentCategory
+from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.torrent import NotATorrentError, TorrentSource
 from berth.adapters.torrent_fake import DEFAULT_HASH, FakeTorrentFetcher
 from berth.db import create_session_factory
@@ -67,7 +68,7 @@ from berth.services.jobs import (
 )
 from berth.services.settings import read_settings, write_settings
 from berth.services.tracking import is_tracked
-from tests.integration.arrange import applied_qbittorrent, arrange, factory_for
+from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
@@ -278,8 +279,8 @@ class TestAddDownload:
         await arrange(session, roots)
         media = await _media(session)
         route = await _route(session, roots)
-        qbittorrent = applied_qbittorrent(
-            roots, categories=(QbittorrentCategory(name="berth-anime", save_path="/mnt/old"),)
+        qbittorrent = FakeQbittorrentClient(
+            categories=(QbittorrentCategory(name="berth-anime", save_path="/mnt/old"),)
         )
         factory = factory_for(roots, qbittorrent=qbittorrent)
 
@@ -402,7 +403,7 @@ class TestFolderNameFreeze:
         media = await _media(session)
         route = await _route(session, roots)
         factory = factory_for(
-            roots, qbittorrent=applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+            roots, qbittorrent=FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         )
 
         await add_download(
@@ -613,7 +614,7 @@ class TestSubmitFailed:
         await arrange(session, roots)
         media = await _media(session)
         route = await _route(session, roots)
-        factory = factory_for(roots, qbittorrent=applied_qbittorrent(roots, add_error=error))
+        factory = factory_for(roots, qbittorrent=FakeQbittorrentClient(add_error=error))
 
         outcome = await add_download(
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
@@ -630,7 +631,7 @@ class TestSubmitFailed:
         await arrange(session, roots)
         media = await _media(session)
         route = await _route(session, roots)
-        qbittorrent = applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+        qbittorrent = FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await add_download(
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
@@ -662,7 +663,7 @@ class TestSubmitFailed:
             sources={url: TorrentSource(info_hash=DEFAULT_HASH, content=b"d4:infodee")}
         )
         factory = factory_for(
-            roots, qbittorrent=applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+            roots, qbittorrent=FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         )
         factory.torrent_ = fetcher
         await add_download(
@@ -673,7 +674,7 @@ class TestSubmitFailed:
             route_id=route.id,
             user_id=None,
         )
-        factory.qbittorrent_ = applied_qbittorrent(roots)
+        factory.qbittorrent_ = FakeQbittorrentClient()
         fetcher.requested.clear()
 
         await retry_job(session, factory, DEFAULT_HASH)
@@ -690,7 +691,7 @@ class TestSubmitFailed:
         media = await _media(session)
         route = await _route(session, roots)
         factory = factory_for(
-            roots, qbittorrent=applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+            roots, qbittorrent=FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         )
         await add_download(
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
@@ -710,7 +711,7 @@ class TestSubmitFailed:
         media = await _media(session)
         route = await _route(session, roots)
         factory = factory_for(
-            roots, qbittorrent=applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+            roots, qbittorrent=FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         )
         await add_download(
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
@@ -816,7 +817,7 @@ class TestTheDiskGate:
         await arrange(session, roots)
         media = await _media(session)
         route = await _route(session, roots)
-        qbittorrent = applied_qbittorrent(roots, add_error=ServiceUnavailableError("down"))
+        qbittorrent = FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await add_download(
             session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
@@ -935,7 +936,7 @@ class TestTheJobSurvivesTheSubmission:
         media = await _media(session)
         route = await _route(session, roots)
         factory = factory_for(
-            roots, qbittorrent=applied_qbittorrent(roots, add_error=RuntimeError("the loop died"))
+            roots, qbittorrent=FakeQbittorrentClient(add_error=RuntimeError("the loop died"))
         )
 
         with pytest.raises(RuntimeError):

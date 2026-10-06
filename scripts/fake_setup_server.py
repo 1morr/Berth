@@ -267,8 +267,9 @@ class Scenario:
     moored: bool = False
     #: 第一輪檢查跑完之後才把索引站弄掉。這樣畫面上「最後成功」有值，看得出「剛剛還好好的」。
     indexer_down: bool = False
-    #: 有人把 qBittorrent 的一個建議鍵改掉了（brief §16.3 的「關鍵設定漂移」）。
-    preference_drift: bool = False
+    #: 使用者在套件內 qBittorrent 把全域預設儲存路徑改成這裡（審計 S5、M4 票 32）。空字串是不改。
+    #: Berth 不看它，Route 照樣綠、送單照常。
+    global_save_path: str = ""
     #: TMDB 只有一台，位址寫死，所以情境裡就一份。
     tmdb: FakeTmdbClient = field(default_factory=FakeTmdbClient)
     #: 存進 `settings.services.tmdb` 的憑證。空的話探索頁走「憑證缺失」那條路。
@@ -614,13 +615,11 @@ def degraded() -> Scenario:
     return scenario
 
 
-def drifted() -> Scenario:
-    """有人把 qBittorrent 的建議設定改掉了：設定的 qBittorrent 那一頁的差異表與「還原建議設定」。
-
-    這**不是紅燈**——那台服務好好的（brief §16.3）。
-    """
-    scenario = healthy()
-    scenario.preference_drift = True
+def global_path() -> Scenario:
+    """`import`，但使用者在套件內 qBittorrent 把全域預設儲存路徑改成 `/data/my-downloads`（Berth
+    的容器裡沒有這個目錄）。審計 S5 的 repro：票 32 之前三條 Route 轉紅、送單被擋。"""
+    scenario = import_scenario()
+    scenario.global_save_path = "/data/my-downloads"
     return scenario
 
 
@@ -1555,7 +1554,7 @@ SCENARIOS = {
     "downloads": downloads_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
-    "drifted": drifted,
+    "global-path": global_path,
     "outdated": outdated,
     "signed-out": signed_out,
     "mixed": mixed,
@@ -1869,17 +1868,9 @@ async def _moor(
             ("anime", "Anime", "tvshows"),
         )
     ]
-    if scenario.qbittorrent_url:
-        # 真的那一台：偏好由使用者的容器自己決定，演練不去改它。
-        pass
-    else:
-        await scenario.qbittorrent.set_preferences(
-            {
-                "save_path": paths.complete_root,
-                "auto_tmm_enabled": True,
-                "category_changed_tmm_enabled": True,
-            }
-        )
+    if scenario.global_save_path:
+        # 建 Route 與第一輪健康檢查之前就改：它們看到的就是使用者改過的那一台。
+        await scenario.qbittorrent.set_preferences({"save_path": scenario.global_save_path})
 
     setup = await read_settings(session, SetupSettings)
     # 擁有者（M4 票 06）：替身 Jellyfin 的管理員 skipper。帳密不存，只記他是誰。
@@ -1927,9 +1918,6 @@ async def _moor(
         for route in await session.scalars(select(Route)):
             route.health_status = HealthStatus.OK
         await session.commit()
-    if scenario.preference_drift:
-        # 檢查之前就改掉，第一輪就看得到漂移。
-        await scenario.qbittorrent.set_preferences({"auto_tmm_enabled": False})
     await check_health(session, factory)
     if scenario.indexer_down:
         # 第一輪之後才掛掉，畫面上「最後成功」才有值——「剛剛還好好的」與「從來沒通過」

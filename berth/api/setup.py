@@ -62,7 +62,7 @@ from berth.services.jellyfin import (
     read_jellyfin_status,
     save_bundled_libraries,
 )
-from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent_diff
+from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent
 from berth.services.qbittorrent import set_interface_login as set_qbittorrent_login
 from berth.services.routes import (
     RouteRejectedError,
@@ -544,8 +544,11 @@ async def post_jellyfin_library_path(
 async def get_qbittorrent_diff(
     session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
 ) -> QbittorrentOut:
-    """現值與建議值的逐鍵差異。連得到才有內容，連不到就是 `reachable=false` 加原文。"""
-    return QbittorrentOut.of(await read_qbittorrent_diff(session, factory), config)
+    """那一台的版本與介面登入。連不到就是 `reachable=false` 加原文。
+
+    路徑名是票 32 之前留下的（那時回逐鍵差異）；設定頁的 qBittorrent 也讀這一支。
+    """
+    return QbittorrentOut.of(await read_qbittorrent(session, factory), config)
 
 
 class QbittorrentApplyIn(BaseModel):
@@ -560,7 +563,7 @@ async def post_qbittorrent_apply(
     factory: ClientFactoryDep,
     body: QbittorrentApplyIn | None = None,
 ) -> QbittorrentOut:
-    """套用建議偏好。只寫有差異的鍵；帶了登入就順便設套件內那一台的 WebUI 登入。
+    """頁 2 的「套用」：帶了登入就設套件內那一台的 WebUI 登入。全域偏好一個都不寫（M4 票 32）。
 
     既有的那一台帶登入回 422：Berth 不寫既有服務的帳密（brief §16.4）。
     """

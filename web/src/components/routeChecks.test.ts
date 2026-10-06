@@ -114,13 +114,6 @@ describe('remedyFor（M4 票 25：補法照原因，不照檢查項目）', () =
     ).toBe('jellyfin')
   })
 
-  it('qBittorrent 沒報預設儲存路徑：回頁 2 重新套用，不給 berth 的掛載片段', () => {
-    const remedy = remedyFor('download_path', { crossDevice: false, failure: 'save_path_missing' })
-
-    expect(remedy.fix).toBe('routes.fix.savePathMissing')
-    expect(remedy.commands).toEqual([])
-  })
-
   it('目錄被刪與不在共用掛載底下分開：前者不給片段，後者照舊是 Jellyfin 的片段', () => {
     const deleted = remedyFor('library_path', {
       existing: EXISTING_JELLYFIN,

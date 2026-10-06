@@ -23,7 +23,6 @@ export const FAILURE_TEXT = {
   login_rejected: 'failure.login_rejected',
   credential_missing: 'failure.credential_missing',
   category_conflict: 'failure.category_conflict',
-  save_path_missing: 'failure.save_path_missing',
   path_not_visible: 'failure.path_not_visible',
   directory_missing: 'failure.directory_missing',
   berth_cannot_write: 'failure.berth_cannot_write',

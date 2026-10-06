@@ -1453,46 +1453,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/qbittorrent/diff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Qbittorrent Diff
-         * @description 現值與建議值的逐鍵差異——與精靈第 4 步問的是同一個問題。
-         */
-        get: operations["get_qbittorrent_diff_api_settings_qbittorrent_diff_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/qbittorrent/apply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Qbittorrent Apply
-         * @description 「還原建議設定」。只寫有差異的鍵，跑的是精靈第 4 步的同一支命令。
-         */
-        post: operations["post_qbittorrent_apply_api_settings_qbittorrent_apply_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/settings/jellyfin": {
         parameters: {
             query?: never;
@@ -1757,7 +1717,9 @@ export interface paths {
         };
         /**
          * Get Qbittorrent Diff
-         * @description 現值與建議值的逐鍵差異。連得到才有內容，連不到就是 `reachable=false` 加原文。
+         * @description 那一台的版本與介面登入。連不到就是 `reachable=false` 加原文。
+         *
+         *     路徑名是票 32 之前留下的（那時回逐鍵差異）；設定頁的 qBittorrent 也讀這一支。
          */
         get: operations["get_qbittorrent_diff_api_setup_qbittorrent_diff_get"];
         put?: never;
@@ -1779,7 +1741,7 @@ export interface paths {
         put?: never;
         /**
          * Post Qbittorrent Apply
-         * @description 套用建議偏好。只寫有差異的鍵；帶了登入就順便設套件內那一台的 WebUI 登入。
+         * @description 頁 2 的「套用」：帶了登入就設套件內那一台的 WebUI 登入。全域偏好一個都不寫（M4 票 32）。
          *
          *     既有的那一台帶登入回 422：Berth 不寫既有服務的帳密（brief §16.4）。
          */
@@ -4286,17 +4248,6 @@ export interface components {
             /** Unknown Torrents */
             unknown_torrents: components["schemas"]["UnknownTorrentOut"][];
         };
-        /** PreferenceDiffOut */
-        PreferenceDiffOut: {
-            /** Key */
-            key: string;
-            /** Current */
-            current: string;
-            /** Recommended */
-            recommended: string;
-            /** Differs */
-            differs: boolean;
-        };
         /**
          * PrimeIn
          * @description 第一輪預覽選哪一個：`all` 全部下載、`later` 只追之後的。
@@ -4326,7 +4277,7 @@ export interface components {
         };
         /**
          * QbittorrentOut
-         * @description 精靈頁 2 與設定頁的漂移還原共用（brief §16.3）。
+         * @description 精靈頁 2 與設定頁的 qBittorrent 共用。
          */
         QbittorrentOut: {
             origin: components["schemas"]["ServiceOrigin"] | null;
@@ -4342,16 +4293,12 @@ export interface components {
             blocked: boolean;
             /** Reachable */
             reachable: boolean;
-            /** Diffs */
-            diffs: components["schemas"]["PreferenceDiffOut"][];
             /** Steps */
             steps: components["schemas"]["StepOut"][];
             /** Web Ui Login */
             web_ui_login: boolean;
             /** Web Ui Username */
             web_ui_username: string;
-            /** Writes Preferences */
-            writes_preferences: boolean;
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
@@ -4884,8 +4831,6 @@ export interface components {
             failures: number;
             /** Configured */
             configured: boolean;
-            /** Drift */
-            drift: string[];
             /** Banned */
             banned: boolean;
             /** Unsupported */
@@ -5057,7 +5002,7 @@ export interface components {
          *     `SetupStep.params`，不拼進英文句子。
          * @enum {string}
          */
-        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "login_rejected" | "credential_missing" | "category_conflict" | "save_path_missing" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
+        StepFailure: "not_deployed" | "unreachable" | "starting" | "auth_rejected" | "ip_banned" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "not_found" | "version_unsupported" | "login_rejected" | "credential_missing" | "category_conflict" | "path_not_visible" | "directory_missing" | "berth_cannot_write" | "probe_unseen" | "probe_unreadable" | "probe_unsettled" | "library_gone" | "library_path_gone" | "jellyfin_cannot_see" | "cross_device" | "link_failed" | "site_cloudflare" | "site_no_results" | "site_unreachable" | "site_rejected" | "site_not_offered" | "no_search" | "unexpected";
         /**
          * StepOut
          * @description 一條纜繩：精靈的一步，或一個 Route 的一項檢查。
@@ -8555,46 +8500,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_qbittorrent_diff_api_settings_qbittorrent_diff_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QbittorrentOut"];
-                };
-            };
-        };
-    };
-    post_qbittorrent_apply_api_settings_qbittorrent_apply_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QbittorrentOut"];
                 };
             };
         };

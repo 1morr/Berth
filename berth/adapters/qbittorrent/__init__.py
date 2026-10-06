@@ -334,11 +334,11 @@ class QbittorrentClient(Protocol):
     async def version(self) -> QbittorrentVersion: ...
 
     async def preferences(self) -> Mapping[str, Any]:
-        """`app/preferences`。精靈第 4 步拿它與建議值比對（plan §8.1）。"""
+        """`app/preferences`。頁 2 只讀 WebUI 帳號：套件內那一台自己設過登入沒（brief §20.14）。"""
         ...
 
     async def set_preferences(self, values: Mapping[str, Any]) -> None:
-        """`app/setPreferences`。只送要改的鍵，其餘不動。"""
+        """`app/setPreferences`。只送要改的鍵，其餘不動。Berth 只拿它設 WebUI 登入（M4 票 32）。"""
         ...
 
     async def categories(self) -> tuple[QbittorrentCategory, ...]: ...
