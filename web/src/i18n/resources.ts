@@ -1521,6 +1521,13 @@ const zhHant = {
       '索引站回了 {{count}} 筆，但沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
     discarded_one: '另有 {{count}} 筆名字對不上這部作品，已經略過。',
     discarded_other: '另有 {{count}} 筆名字對不上這部作品，已經略過。',
+    // 名字對上、年份或類型對不上的（M4 票 49）。收著不丟，展開看得到。
+    onlyAside_one:
+      '名字對得上的 {{count}} 筆，年份或類型都對不上這部作品，收在下面。自己打一個關鍵字也行。',
+    onlyAside_other:
+      '名字對得上的 {{count}} 筆，年份或類型都對不上這部作品，收在下面。自己打一個關鍵字也行。',
+    setAside_one: '另有 {{count}} 筆年份或類型對不上這部作品，已經收起來。',
+    setAside_other: '另有 {{count}} 筆年份或類型對不上這部作品，已經收起來。',
     off: '搜尋沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
     announce_one: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
     announce_other: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
@@ -4690,6 +4697,14 @@ const en: Translations<typeof zhHant> = {
       "The indexer returned {{count}} releases, but none of them carries this title's name. Try typing a keyword yourself.",
     discarded_one: "{{count}} more release did not carry this title's name and was skipped.",
     discarded_other: "{{count}} more releases did not carry this title's name and were skipped.",
+    onlyAside_one:
+      "The {{count}} release carrying this title's name has the wrong year or type; it is set aside below. Try typing a keyword.",
+    onlyAside_other:
+      "All {{count}} releases carrying this title's name have the wrong year or type; they are set aside below. Try typing a keyword.",
+    setAside_one:
+      '{{count}} more release has the wrong year or type for this title and was set aside.',
+    setAside_other:
+      '{{count}} more releases have the wrong year or type for this title and were set aside.',
     off: "The search never went out. Berth's own API did not answer; check that it is still running.",
     announce_one: 'Found {{count}} result; {{failed}} keywords went unanswered.',
     announce_other: 'Found {{count}} results; {{failed}} keywords went unanswered.',

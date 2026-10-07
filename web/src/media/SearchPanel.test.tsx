@@ -120,6 +120,8 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
     rows: [row()],
     total: 1,
     discarded: 0,
+    set_aside: [],
+    set_aside_total: 0,
     attempts: [{ step: 'SPY x FAMILY', status: 'ok', detail: '1', error: '' }],
     problem: null,
     detail: '',
@@ -498,6 +500,47 @@ describe('搜尋 torrent 與結果表', () => {
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
     expect(await screen.findByText('另有 1518 筆名字對不上這部作品，已經略過。')).toBeVisible()
+  })
+
+  it('年份或類型對不上的收起來，說出筆數，展開看得到', async () => {
+    const aside = 'SPY x FAMILY 1998 VHS'
+    render({
+      [SEARCH_PATH]: {
+        body: results({ set_aside: [row({ key: 'aside', title: aside })], set_aside_total: 1 }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+    const summary = await screen.findByText('另有 1 筆年份或類型對不上這部作品，已經收起來。')
+    expect(summary).toBeVisible()
+    expect(screen.getByText(aside)).not.toBeVisible()
+    await userEvent.click(summary)
+    expect(screen.getByText(aside)).toBeVisible()
+  })
+
+  it('對得上名字的全被收起來時，說的是收起來而不是沒有東西', async () => {
+    render({
+      [SEARCH_PATH]: {
+        body: results({
+          rows: [],
+          total: 0,
+          discarded: 40,
+          set_aside: [row({ key: 'aside' })],
+          set_aside_total: 1,
+        }),
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+    expect(await screen.findByText(/年份或類型都對不上/)).toBeVisible()
+    expect(screen.queryByText(/沒有一筆對得上這部作品的名字/)).toBeNull()
+    // 名字對不上的那一份照舊說出來，不被收起來的那一句吞掉。
+    expect(screen.getByText('另有 40 筆名字對不上這部作品，已經略過。')).toBeVisible()
+    expect(screen.getByText('另有 1 筆年份或類型對不上這部作品，已經收起來。')).toBeVisible()
   })
 
   it('預設依做種排序，切成大小之後換一列在最前面', async () => {

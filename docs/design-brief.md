@@ -1589,3 +1589,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **實測（berth-existing，linuxserver 12.1.0 與 10.10.7；`scripts/experiments/jellyfin_server_id.py`）**：同一台用 `localhost`、`127.0.0.1`、從另一個容器用 `host.docker.internal` 連，`Id` 都一樣；`docker restart` 之後不變；`docker compose up -d --force-recreate` 重建容器之後也不變（`/config` 掛載還在），`device.txt` 的內容就是那個值。三台不同的 Jellyfin 各自不同。
 - **`ServerName` 不能拿來認**：沒設過時它是容器的 hostname，重建容器就變（同一次實測 `dc2288726bbe` → `135a4ae43523`）。
 - 所以 Berth 以 `Id` 判「同一台」：擁有者成立時記下，之後換位址只接受 `Id` 相同的（§19「擁有者鎖到同一台 Jellyfin」、plan §9.3）。擁有者成立**之前**也用它：頁 1 的表單帶回測過的位址與 `Id`，與存下的不同就不送帳密（M4 票 28；未初始化的那一台也有 `Id`）。清掉 `/config`（或複製別人的 `/config`）的那一台會換 `Id`（或撞 `Id`）——前者等於一台新的伺服器，擁有者帳號也不在了；後者不防。
+
+
+### 20.16 搜尋結果怎麼用年份與類型篩：Radarr 與 Sonarr（2026-10-07 查證，M4 票 49）
+
+- **Radarr 要年份完全相同，但認兩個年份**：`movie.Year == year || movie.MovieMetadata.Value.SecondaryYear == year`（`AllWithYear`），標題的每一種比對（clean、原文、別名、翻譯）都套這一條；互動搜尋的 `TryGetMovieBySearchCriteria` 同一個判準：`parsedMovieInfo.Year < 1800 || …Year == … || …SecondaryYear == …`。**發佈名沒有年份照收**（`Year < 1800` 那一條放行，只比標題）。【`src/NzbDrone.Core/Movies/QueryExtensions.cs`、`Parser/ParsingService.cs`，[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)，2026-10-07 讀】
+- **Radarr 沒有「這是劇集的一集」那一道**：`Parser.ParseMovieTitle` 不看季集，`Show.S01E02` 被拒是因為標題對不上（`UnknownMovie`），不是因為 `S01E02`。Berth 的粗篩只看「名字出現在發佈名裡」（`mentions`），《Below Deck Down Under S04E02 Night of the Living Dead》過得了那一道，所以電影要另外擋季集記號。
+- **Sonarr 不以年份拒絕**：`FindByTitle(TitleWithoutYear, Year)` 只在純標題找不到時才拿年份來分同名劇（`Parser/ParsingService.cs`，[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core)）。也沒有「這是電影」那一道。
+- **Berth 的做法**（`parser.title.fits`）：年份容許差一年，代替 Berth 快照沒有的「第二年份」（影展與各國上映跨年）；劇集的年份範圍是首播年到最後一季的首播年（各放寬一年），只擋播出期間之外的（《Doctor Who》1963 與 2005 是兩部）；片名自己帶的數字（`Blade Runner 2049`）不算年份。劇集**不**擋沒有季集記號的：`Title - 05`、`[01-12]` 是動漫的常態，`Movie` 又可能是 S00（§6.3 `special_kind`）。篩掉的收著不丟，畫面說數量、可展開（判斷只看發佈名，可能看錯）。

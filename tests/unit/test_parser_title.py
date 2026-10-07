@@ -10,8 +10,8 @@ from datetime import date
 
 import pytest
 
-from berth.domain import MediaKind, MediaSnapshot, ReasonCode, why
-from berth.parser import match_media, normalize_title, parse_release
+from berth.domain import MediaKind, MediaSnapshot, ReasonCode, SeasonSnapshot, why
+from berth.parser import fits, match_media, normalize_title, parse_release
 
 
 def media(
@@ -119,3 +119,119 @@ class TestMatch:
         found = match_media(info, [media(2, "The Bear", year=2022)])
 
         assert found is not None and found.reasons
+
+
+def movie(title_en: str, year: int | None) -> MediaSnapshot:
+    return MediaSnapshot(
+        tmdb_id=10331,
+        kind=MediaKind.MOVIE,
+        title=title_en,
+        title_en=title_en,
+        title_original=title_en,
+        year=year,
+        titles=(title_en,),
+    )
+
+
+def show(title_en: str, year: int, *season_years: int) -> MediaSnapshot:
+    return MediaSnapshot(
+        tmdb_id=57243,
+        kind=MediaKind.TV,
+        title=title_en,
+        title_en=title_en,
+        title_original=title_en,
+        year=year,
+        titles=(title_en,),
+        seasons=tuple(
+            SeasonSnapshot(season_number=number, air_date=date(aired, 3, 1))
+            for number, aired in enumerate(season_years, start=1)
+        ),
+    )
+
+
+class TestFits:
+    """名字對上之後的第二道粗篩：年份與「這是電影」（M4 票 49，審計 S6）。"""
+
+    NIGHT = movie("Night of the Living Dead", 1968)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Night of the Living Dead (1968) [BluRay] [720p] [YTS.AM]",
+            "Night.of.the.Living.Dead.1969.1080p.BluRay",  # 差一年：影展與上映跨年
+            "Night of the Living Dead 1080p BluRay x264",  # 沒寫年份照收（Radarr 同）
+            "Night of the Living Dead 1968 4K Restoration 2018 2160p",  # 有一個對上就算
+        ],
+    )
+    def test_a_movie_keeps_its_own_year_and_releases_without_one(self, name: str) -> None:
+        assert fits(name, self.NIGHT)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Night of the Living Dead 1990 1080p BluRay x264",
+            "Night.of.the.Living.Dead.3D.2006.720p",
+        ],
+    )
+    def test_a_remake_years_away_does_not_fit(self, name: str) -> None:
+        assert not fits(name, self.NIGHT)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Below Deck Down Under S04E02 Night of the Living Dead 1080p",
+            "Night of the Living Dead S01 1080p WEB",
+            "Night of the Living Dead Season 2 720p",
+            "[字幕組] Night of the Living Dead 第2季 [1080p]",
+            "[字幕組] Night of the Living Dead 第05話 [1080p]",
+            "Night.of.the.Living.Dead.S01E01E02.1080p",  # 一個檔兩集
+            "Night.of.the.Living.Dead.S01E05v2.1080p",  # 修正版
+            "Night of the Living Dead 2nd Season 720p",
+            "Night of the Living Dead 1x05 HDTV",
+            "[Group] Night of the Living Dead EP05 [1080p]",
+        ],
+    )
+    def test_a_movie_drops_releases_that_read_as_episodes(self, name: str) -> None:
+        assert not fits(name, self.NIGHT)
+
+    def test_a_year_that_is_part_of_the_title_is_not_a_release_year(self) -> None:
+        """`Blade Runner 2049`（2017）：片名裡的 2049 不是年份。"""
+        blade = movie("Blade Runner 2049", 2017)
+
+        assert fits("Blade.Runner.2049.2017.2160p.UHD.BluRay", blade)
+        assert fits("Blade Runner 2049 1080p WEB", blade)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Night of the Living Dead 1968 1920x1080 x264",  # 解析度不是 `NxNN`
+            "Night of the Living Dead 1968 Subs EPUB",  # `S` / `EP` 後面要接數字
+            "Night of the Living Dead 1968 DDP5.1 Atmos",
+        ],
+    )
+    def test_codec_and_resolution_tokens_do_not_read_as_episodes(self, name: str) -> None:
+        assert fits(name, self.NIGHT)
+
+    def test_resolutions_are_not_years(self) -> None:
+        assert fits("Night of the Living Dead 1920x1080 2160p", self.NIGHT)
+
+    def test_a_movie_without_a_year_on_tmdb_keeps_everything_but_episodes(self) -> None:
+        unknown = movie("Night of the Living Dead", None)
+
+        assert fits("Night of the Living Dead 1990 1080p", unknown)
+        assert not fits("Night of the Living Dead S01E01", unknown)
+
+    def test_a_show_keeps_episodes_and_the_years_it_aired(self) -> None:
+        """劇集照常收季集；年份看整段播出期間，不只首播年（Sonarr 不以年份拒絕）。"""
+        bear = show("The Bear", 2022, 2022, 2023, 2024)
+
+        assert fits("The.Bear.S03E01.1080p.WEB", bear)
+        assert fits("The Bear 2024 S03 1080p", bear)
+        assert fits("The Bear 2025 S04 1080p", bear)  # 新的一季還沒進快照
+        assert fits("The Bear Movie 1080p", bear)  # 沒有季集也照收：`Movie` 可能是 S00
+
+    def test_a_show_drops_a_namesake_from_another_era(self) -> None:
+        """《Doctor Who》1963 與 2005 是兩部作品，搜 2005 那一部時 1963 的不收。"""
+        who = show("Doctor Who", 2005, 2005, 2006)
+
+        assert not fits("Doctor Who 1963 S01E01 DVDRip", who)

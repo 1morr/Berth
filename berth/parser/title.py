@@ -14,8 +14,9 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from berth.domain import ItemReason, MediaSnapshot, ReleaseInfo, why
+from berth.domain import ItemReason, MediaKind, MediaSnapshot, ReleaseInfo, why
 from berth.domain import ReasonCode as Code
+from berth.parser.seasons import SEASON_CN, SEASON_LATIN, SEASON_ORDINAL
 
 #: 正規化之後留下來的字：字母、數字與 CJK。分隔符、括號、`×`、`:` 全部丟掉——
 #: 同一部作品在不同發佈裡的差別幾乎都在這些字元上。
@@ -43,6 +44,20 @@ _MIN_CONTAINED = 4
 
 #: 切詞用。CJK 沒有空白，所以詞比對只對拉丁字有意義——中文標題走「包含」那一條。
 _WORD = re.compile(r"[^0-9a-z]+")
+
+#: 發佈名裡的年份。前後不能是英數：`1920x1080`、`1990s` 都不是年份。
+_YEAR = re.compile(r"(?<![0-9A-Za-z])((?:19|20)[0-9]{2})(?![0-9A-Za-z])")
+#: 年份容許差幾年。Radarr 要完全相同，但它另認一個「第二年份」（影展與各國上映跨年），
+#: 快照沒有那一格，差一年代替它（brief §20.16）。
+_YEAR_SLACK = 1
+#: 讀得出季集的記號，只給電影用。季名的寫法與 `seasons` 共用（`S01`、`Season 2`、`2nd Season`、
+#: `第2季`），再加集號：`S04E02`、`S01E01E02`、`S01E05v2`、`1x05`、`EP05`、`第05話`。
+_EPISODE_MARK = re.compile(
+    rf"(?<![0-9A-Za-z])(?:{SEASON_LATIN}(?:E[0-9]{{1,4}})*(?:v[0-9])?|{SEASON_ORDINAL}"
+    r"|[0-9]{1,2}x[0-9]{2,3}|EP[0-9]{1,4})(?![0-9A-Za-z])"
+    rf"|{SEASON_CN}|第\s*[0-9]{{1,4}}\s*[话話集]",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +116,45 @@ def mentions(release_name: str, media: MediaSnapshot) -> bool:
         len(target) >= _MIN_CONTAINED and target in haystack
         for target in (normalize_title(known) for known in _known_titles(media))
     )
+
+
+def fits(release_name: str, media: MediaSnapshot) -> bool:
+    """名字對上之後，年份與類型也說得過去嗎——`mentions` 之後的第二道粗篩（M4 票 49）。
+
+    同樣**不跑 guessit**，理由與 `mentions` 相同。審計 S6 搜《活死人之夜》（1968）時，主清單
+    混進 1990、2006 的重拍與《Below Deck Down Under S04E02 Night of the Living Dead》。
+
+    - **電影**：讀得出季集記號就不是它。劇集反過來不篩——沒有季集記號的劇集發佈是常態
+      （`Title - 05`、`[01-12]`），`Movie` 又可能是 S00（brief §6.3 的 `special_kind`）。
+    - **年份**照 Radarr：發佈名寫的年份要對上作品的年份，沒寫年份照收（brief §20.16）。
+      Radarr 另認一個「第二年份」，Berth 的快照沒有，所以容許差一年（`_YEAR_SLACK`）。
+      劇集的年份是整段播出期間（各季首播年），Sonarr 不以年份拒絕，Berth 只擋播出期間之外的。
+      寫了好幾個年份時有一個對上就算；片名自己帶的數字（`Blade Runner 2049`）不算年份。
+    """
+    if media.kind is MediaKind.MOVIE and _EPISODE_MARK.search(release_name):
+        return False
+    window = _year_window(media)
+    if window is None:
+        return True
+    in_titles = {year for known in _known_titles(media) for year in _years(known)}
+    written = _years(release_name) - in_titles
+    low, high = window
+    return not written or any(low <= year <= high for year in written)
+
+
+def _years(text: str) -> set[int]:
+    return {int(found) for found in _YEAR.findall(text)}
+
+
+def _year_window(media: MediaSnapshot) -> tuple[int, int] | None:
+    """這部作品的發佈名寫得出哪幾年，兩端都放寬 `_YEAR_SLACK`。TMDB 沒有年份時是 `None`。"""
+    if media.year is None:
+        return None
+    last = max(
+        (season.air_date.year for season in media.seasons if season.air_date is not None),
+        default=media.year,
+    )
+    return media.year - _YEAR_SLACK, max(last, media.year) + _YEAR_SLACK
 
 
 def _score(info: ReleaseInfo, media: MediaSnapshot) -> MediaMatch:

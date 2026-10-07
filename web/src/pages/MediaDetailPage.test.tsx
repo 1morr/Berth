@@ -938,6 +938,8 @@ describe('Media 詳情頁', () => {
         ],
         total: 1,
         discarded: 0,
+        set_aside: [],
+        set_aside_total: 0,
         attempts: [{ step: 'SPY x FAMILY S01E02', status: 'ok', detail: '1', error: '' }],
         problem: null,
         detail: '',

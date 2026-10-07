@@ -206,6 +206,8 @@ class TestResults:
         assert body["total"] == 2
         # 電影那一筆與 Spider-Man 都不是這部作品。
         assert body["discarded"] == 2
+        # 名字對上、年份與類型也對得上的不另收（M4 票 49）。
+        assert (body["set_aside"], body["set_aside_total"]) == ([], 0)
 
     def test_a_typed_keyword_turns_the_filter_off(self, client: TestClient) -> None:
         """自己打字時他要的就是那一串字，不是這部作品——那時 Berth 沒有資格篩。"""

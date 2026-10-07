@@ -88,6 +88,10 @@ class SearchOut(BaseModel):
     total: int
     #: 索引站回了、但名字對不上這部作品的筆數。畫面用它說「那一千五百筆不是這部作品」。
     discarded: int
+    #: 名字對上了、但年份或類型對不上的（M4 票 49），逐站取前 100 筆；畫面收起來，展開看得到。
+    set_aside: list[SearchResultOut]
+    #: 那一份的總筆數。
+    set_aside_total: int
     #: 實際問出去的關鍵字與逐個的成敗。形狀與精靈的纜繩一樣。
     attempts: list[StepOut]
     problem: IndexerProblem | None
@@ -214,6 +218,8 @@ def _out(view: SearchView) -> SearchOut:
         rows=[SearchResultOut.model_validate(row) for row in view.rows],
         total=view.total,
         discarded=view.discarded,
+        set_aside=[SearchResultOut.model_validate(row) for row in view.set_aside],
+        set_aside_total=view.set_aside_total,
         attempts=[StepOut.model_validate(attempt) for attempt in view.attempts],
         problem=view.problem,
         detail=view.detail,

@@ -15,7 +15,7 @@ from berth.parser.release import merge_release, parse_release, tags_of
 from berth.parser.runtime import HELD_BY_RUNTIME, RUNTIME_RATIO, RUNTIME_SLACK, check_runtime
 from berth.parser.structure import StructureHints, structure_hints
 from berth.parser.subtitles import SubtitleMatch, match_subtitle
-from berth.parser.title import MediaMatch, match_media, matches, mentions, normalize_title
+from berth.parser.title import MediaMatch, fits, match_media, matches, mentions, normalize_title
 
 __all__ = [
     "BEHIND_LATEST",
@@ -37,6 +37,7 @@ __all__ = [
     "check_runtime",
     "classify",
     "episode_span",
+    "fits",
     "kind_by_extension",
     "langs_in",
     "map_episode",

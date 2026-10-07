@@ -46,7 +46,7 @@ from berth.domain import (
     collection_type_for,
 )
 from berth.models import IndexerSettings, SetupSettings
-from berth.parser import map_episode, mentions, parse_release, tags_of
+from berth.parser import fits, map_episode, mentions, parse_release, tags_of
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
 from berth.services.inventory import EpisodeView, SeasonView
@@ -118,6 +118,11 @@ class SearchView:
     #: 索引站回了、但名字對不上這部作品的筆數。**不藏起來**：「索引站什麼都沒回」與
     #: 「回了一千八百筆但沒有一筆是這部作品」的下一步不同（前者換關鍵字，後者換索引站）。
     discarded: int = 0
+    #: 名字對上了、但年份或類型對不上的（M4 票 49）：電影搜尋裡的 `S04E02`、差了二十年的重拍。
+    #: **收著不丟**：判斷只看發佈名，可能看錯，所以畫面說出數量、讓人展開。
+    #: 同樣逐站取前 `RESULT_LIMIT` 筆。
+    set_aside: tuple[SearchResult, ...] = ()
+    set_aside_total: int = 0
     problem: IndexerProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
@@ -292,11 +297,17 @@ async def search_torrents(
     next_at = factory.budget.ready_at(sites, len(after)) if after else None
     found = _dedupe(row for _, rows in outcomes for row in rows)
     # 自己打了關鍵字時不篩：他要的就是那一串字，不是這部作品（票 08）。
-    results = found if query.strip() else [row for row in found if _about(row, snapshot)]
+    named = found if typed else [row for row in found if _about(row, snapshot)]
+    results: list[IndexerResult] = []
+    aside: list[IndexerResult] = []
+    for row in named:
+        (results if typed or _fits(row, snapshot) else aside).append(row)
     return SearchView(
         rows=tuple(_row(result, snapshot) for result in _take(results, RESULT_LIMIT)),
         total=len(results),
-        discarded=len(found) - len(results),
+        discarded=len(found) - len(named),
+        set_aside=tuple(_row(result, snapshot) for result in _take(aside, RESULT_LIMIT)),
+        set_aside_total=len(aside),
         attempts=tuple(attempt for attempt, _ in outcomes),
         batch=_batch(batches, next_at),
     )
@@ -333,6 +344,11 @@ def _about(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
     沒有快照時不篩：那時候 Berth 根本不知道這部作品叫什麼，篩了等於全丟。
     """
     return snapshot is None or mentions(result.title, snapshot)
+
+
+def _fits(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
+    """名字對上之後，年份與類型也說得過去嗎（`parser.fits`，M4 票 49）。沒有快照時不篩。"""
+    return snapshot is None or fits(result.title, snapshot)
 
 
 def search_titles(snapshot: MediaSnapshot | None) -> tuple[str, ...]:

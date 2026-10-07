@@ -4699,6 +4699,10 @@ export interface components {
             total: number;
             /** Discarded */
             discarded: number;
+            /** Set Aside */
+            set_aside: components["schemas"]["SearchResultOut"][];
+            /** Set Aside Total */
+            set_aside_total: number;
             /** Attempts */
             attempts: components["schemas"]["StepOut"][];
             problem: components["schemas"]["IndexerProblem"] | null;

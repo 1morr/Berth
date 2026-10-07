@@ -200,15 +200,17 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
       {results && !results.problem && results.total === 0 && (
         <p className="max-w-prose text-sm text-ink-dim">
-          {results.discarded > 0
-            ? t('search.onlyOthers', { count: results.discarded })
-            : t('search.empty')}
+          {results.set_aside_total > 0
+            ? t('search.onlyAside', { count: results.set_aside_total })
+            : results.discarded > 0
+              ? t('search.onlyOthers', { count: results.discarded })
+              : t('search.empty')}
         </p>
       )}
 
       {/* 丟掉了幾筆不藏起來：索引站對搜不到的關鍵字會回它自己的熱門清單，而使用者
-          有權知道那一千五百筆去了哪裡。 */}
-      {results && results.total > 0 && results.discarded > 0 && (
+          有權知道那一千五百筆去了哪裡。主清單是空的而有收起來的（票 49）時也要說——上面那一句只說收起來的。 */}
+      {results && (results.total > 0 || results.set_aside_total > 0) && results.discarded > 0 && (
         <p className="max-w-prose text-xs text-ink-dim">
           {t('search.discarded', { count: results.discarded })}
         </p>
@@ -233,6 +235,26 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           </p>
           <SearchResults rows={rows} sort={sort} onSort={setSort} media={media} route={chosen} />
         </>
+      )}
+
+      {/* 名字對上、年份或類型對不上的（票 49：電影搜尋裡的 `S04E02`、差了二十年的重拍）。判斷只看發佈名，
+          可能看錯，所以與略過的那一行同一個說法、但收著不丟：展開是同一張表，照樣送得了單。放在主表之後，
+          展開時不把主表往下推。 */}
+      {results && results.set_aside_total > 0 && (
+        <details className="grid gap-3">
+          <summary className="max-w-prose cursor-pointer text-xs text-ink-dim hover:text-ink">
+            {t('search.setAside', { count: results.set_aside_total })}
+          </summary>
+          <div className="mt-3">
+            <SearchResults
+              rows={sortRows(results.set_aside, sort)}
+              sort={sort}
+              onSort={setSort}
+              media={media}
+              route={chosen}
+            />
+          </div>
+        </details>
       )}
 
       {/* 整頁只有這一區塊的內容會變，看不見畫面的人得知道按下去發生了什麼。 */}

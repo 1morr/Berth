@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -56,12 +58,15 @@ async def arrange_media(session: AsyncSession) -> None:
                 "season_number": 1,
                 "name": "Season 1",
                 "episode_count": 12,
+                "air_date": "2022-04-09",
                 "episodes": [{"episode_number": n, "name": f"E{n}"} for n in range(1, 13)],
             },
             {
                 "season_number": 3,
                 "name": "Season 3",
                 "episode_count": 13,
+                # 首播之後幾年的發佈名寫的是那一季的年份（M4 票 49 的年份篩看整段播出期間）。
+                "air_date": "2025-10-04",
                 "episodes": [{"episode_number": n, "name": f"E{n}"} for n in range(1, 14)],
             },
         ],
@@ -747,3 +752,122 @@ async def seven_seasons(session: AsyncSession) -> Media:
         await linked(session, long, tv, season_number=number, episode=1)
     await arrange_indexer(session)
     return long
+
+
+NIGHT = build_media_id(MediaKind.MOVIE, 10331)
+#: 審計 S6 搜《活死人之夜》（1968）的結果，從截圖 s6-02 抄下來的發佈名與做種（M4 票 49）。
+NIGHT_RESULTS = (
+    Path(__file__).parents[1] / "fixtures" / "search" / "night-of-the-living-dead-1968.json"
+)
+
+
+async def arrange_night(session: AsyncSession) -> None:
+    session.add(
+        Media(
+            id=NIGHT,
+            tmdb_id=10331,
+            kind=MediaKind.MOVIE,
+            title_en="Night of the Living Dead",
+            title_original="Night of the Living Dead",
+            year=1968,
+            folder_name="Night of the Living Dead (1968) [tmdbid-10331]",
+            tmdb_snapshot_json={
+                "tmdb_id": 10331,
+                "kind": "movie",
+                "title": "活死人之夜",
+                "title_en": "Night of the Living Dead",
+                "title_original": "Night of the Living Dead",
+                "year": 1968,
+                "titles": [
+                    "Night of the Living Dead",
+                    "活死人之夜",
+                    "Die Nacht der lebenden Toten",
+                ],
+            },
+            tmdb_fetched_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+
+def night_results() -> tuple[IndexerResult, ...]:
+    return tuple(result(**row) for row in json.loads(NIGHT_RESULTS.read_text(encoding="utf-8")))
+
+
+@pytest.mark.asyncio
+async def test_a_movie_search_sets_aside_remakes_and_episodes(session: AsyncSession) -> None:
+    """審計 S6：主清單混進 1990、2006 的重拍與一集真人秀。名字對上了，年份與類型對不上——
+    收到另一份，數量照實說，展開看得到（M4 票 49）。"""
+    await arrange_night(session)
+    await arrange_indexer(session)
+    factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=night_results()))
+
+    view = await search_torrents(session, factory, media_id=NIGHT)
+
+    shown = [row.title for row in view.rows]
+    assert shown and all("1968" in title for title in shown)
+    assert not any(year in title for title in shown for year in ("1990", "2006", "2022"))
+    assert not any("S04E02" in title for title in shown)
+    aside = [row.title for row in view.set_aside]
+    assert "Night of the Living Dead (1990) 1080p BRRip x264 -YTS" in aside
+    assert "Below Deck Down Under S04E02 Night of the Living Dead XviD-AFG" in aside
+    assert (view.total, view.set_aside_total, view.discarded) == (8, 12, 0)
+
+
+@pytest.mark.asyncio
+async def test_a_movie_keeps_its_year_and_releases_without_one(session: AsyncSession) -> None:
+    await arrange_night(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            result("Night of the Living Dead 1968 720p", info_hash="a" * 40, seeders=3),
+            result("Night of the Living Dead 1080p BluRay", info_hash="b" * 40, seeders=2),
+            result("Night of the Living Dead 1990 1080p", info_hash="c" * 40, seeders=1),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=NIGHT)
+
+    assert [row.title for row in view.rows] == [
+        "Night of the Living Dead 1968 720p",
+        "Night of the Living Dead 1080p BluRay",
+    ]
+    assert [row.title for row in view.set_aside] == ["Night of the Living Dead 1990 1080p"]
+
+
+@pytest.mark.asyncio
+async def test_a_show_search_keeps_its_episodes(session: AsyncSession) -> None:
+    """反過來那一邊：劇集照常收季集與沒寫年份的，只擋首播之前的年份（M4 票 49）。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    indexer = FakeIndexerSearch(
+        results=(
+            result("SPY x FAMILY S02E01 1080p WEB", info_hash="a" * 40, seeders=9),
+            result("SPY x FAMILY (2022) S01 1080p", info_hash="b" * 40, seeders=8),
+            result("[字幕組] SPY x FAMILY - 05 [1080p]", info_hash="c" * 40, seeders=7),
+            result("SPY x FAMILY 1998 VHS", info_hash="d" * 40, seeders=6),
+        )
+    )
+    factory = FakeClientFactory(indexer_search=indexer)
+
+    view = await search_torrents(session, factory, media_id=SPY)
+
+    assert [row.title for row in view.rows] == [
+        "SPY x FAMILY S02E01 1080p WEB",
+        "SPY x FAMILY (2022) S01 1080p",
+        "[字幕組] SPY x FAMILY - 05 [1080p]",
+    ]
+    assert [row.title for row in view.set_aside] == ["SPY x FAMILY 1998 VHS"]
+
+
+@pytest.mark.asyncio
+async def test_a_typed_keyword_sets_nothing_aside(session: AsyncSession) -> None:
+    """自己打字時 Berth 沒有資格篩，年份與類型也一樣。"""
+    await arrange_night(session)
+    await arrange_indexer(session)
+    factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=night_results()))
+
+    view = await search_torrents(session, factory, media_id=NIGHT, query="Night of the Living")
+
+    assert (view.total, view.set_aside_total) == (20, 0)
