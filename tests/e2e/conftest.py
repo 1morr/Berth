@@ -188,33 +188,36 @@ def _secure_qbittorrent(berth: httpx.Client) -> None:
 def _prowlarr_as_existing(berth: httpx.Client) -> None:
     """頁 4 選「既有」：與頁 1、2 同一支 `POST /setup/services/prowlarr`（M4 票 39）。
 
-    拿套件內那一台的位址當作使用者自己的：key 錯是 `auth_required`（不是連不上），帶對的 key 連上。
-    對的 key 從 berth 唯讀掛載的 `config.xml` 讀——使用者是從 Prowlarr 的「設定 → 一般」抄。
-    最後按「之後再說」，換回套件內時看它有沒有被清掉（呼叫端）。
+    拿套件內那一台的位址當作使用者自己的：key 錯是 `auth_required`（不是連不上），而且測不過不存
+    （M4 票 45：400 `connection_failed`，結論在 `attempt`）；帶對的 key 連上。對的 key 從 berth 唯讀
+    掛載的 `config.xml` 讀——使用者是從 Prowlarr 的「設定 → 一般」抄。最後按「之後再說」，換回套件內
+    時看它有沒有被清掉（呼叫端）。
     """
     status = ok(berth.get("/setup/status"))
     (bundled,) = [row for row in status["services"] if row["kind"] == "prowlarr"]
 
-    def existing(api_key: str) -> Json:
-        chosen = ok(
-            berth.post(
-                "/setup/services/prowlarr",
-                json={"origin": "existing", "base_url": bundled["base_url"], "api_key": api_key},
-            )
+    def existing(api_key: str) -> httpx.Response:
+        return berth.post(
+            "/setup/services/prowlarr",
+            json={"origin": "existing", "base_url": bundled["base_url"], "api_key": api_key},
         )
-        (row,) = [row for row in chosen["services"] if row["kind"] == "prowlarr"]
-        return row
 
     rejected = existing("0" * 32)
-    assert (rejected["origin"], rejected["state"], rejected["reason"]) == (
+    assert rejected.status_code == 400, rejected.text
+    refusal = rejected.json()["detail"]
+    attempt = refusal["attempt"]
+    assert (refusal["reason"], attempt["origin"], attempt["state"], attempt["reason"]) == (
+        "connection_failed",
         "existing",
         "failed",
         "auth_required",
-    ), rejected
+    ), refusal
     config = in_container("cat", "/ext/prowlarr/config.xml", container=BERTH_CONTAINER)
     found = re.search(r"<ApiKey>(\w+)</ApiKey>", config)
     assert found, config
-    accepted = existing(found.group(1))
+    (accepted,) = [
+        row for row in ok(existing(found.group(1)))["services"] if row["kind"] == "prowlarr"
+    ]
     assert (accepted["state"], accepted["reason"]) == ("ok", "connected"), accepted
     ok(berth.post("/setup/indexers/skip", json={"skipped": True}))
 
