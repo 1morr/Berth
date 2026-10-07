@@ -71,6 +71,16 @@ _SEASON_DASH_EPISODE = re.compile(
     r"season[\s_.]*([0-9]{1,4})\s*-\s*([0-9]{1,4})(?![0-9A-Za-z])", re.IGNORECASE
 )
 
+#: 多季一包：`S01 + S02`、`S1-S2`、`S01 S02`、`Season 1 + Season 2`（acg.rip 真實標題，M4 票 48）。
+#: guessit 回 `season: [1, 2]`，而上面 `Season 3 [04]` 那一條會把第二個數字當成集號（S01E02）。
+#: **兩邊都要有季的前綴**才算：`Season 3 - 50` 的第二個數字前面沒有，它是集號；`Season 1-2`、
+#: `S01-03` 兩種都讀得通，不認（照舊）。
+_SEASON_SPAN = re.compile(
+    r"(?<![0-9A-Za-z])(?:s|season[\s_.]*)([0-9]{1,2})(?:\s*[-~+&]\s*|[\s_.]+)"
+    r"(?:s|season[\s_.]*)([0-9]{1,2})(?![0-9A-Za-z])",
+    re.IGNORECASE,
+)
+
 #: `Fin` / `END` 黏在集號後面是中文字幕組的季末寫法（`[01-13Fin]`）。`完` / `完結` 不在
 #: 這裡——`normalize_cjk` 已經把它們吃掉了，而 ASCII 的這兩個它認不得。少了這兩個字，
 #: `[01-13Fin]` 會被讀成「第 1 集」（2026-09-10 票 08 在真的索引站回應裡抓到）。
@@ -110,7 +120,10 @@ def _parse_release(name: str) -> ReleaseInfo:
     cleaned, hints = normalize_cjk(stripped)
     guess: dict[str, Any] = dict(guessit(cleaned, _GUESSIT_OPTIONS))
 
-    season, episode, episode_end = _numbers(cleaned, hints, guess)
+    span = _season_span(cleaned)
+    season, episode, episode_end = _numbers(cleaned, hints, guess, span)
+    # 詞典認出中文季號時以它為準，就不算多季。
+    season_end = span[1] if span is not None and hints.season is None else None
     group = (
         hints.group or (trailing.group(1) if trailing else "") or _text(guess.get("release_group"))
     )
@@ -119,6 +132,7 @@ def _parse_release(name: str) -> ReleaseInfo:
         raw_title=name,
         title_candidates=_titles(guess),
         season=season,
+        season_end=season_end,
         # cour 標記兩邊都可能寫：`Part.2` guessit 讀得出來，`第二部分` 只有詞典認得。
         part=hints.part or _int(guess.get("part")),
         episode=episode,
@@ -137,7 +151,7 @@ def _parse_release(name: str) -> ReleaseInfo:
         year=_int(guess.get("year")),
         air_date=_date(guess.get("date")),
         special_kind=hints.special or (SpecialKind.MOVIE if hints.movie else None),
-        release_kind=_release_kind(cleaned, hints, episode_end, guess),
+        release_kind=_release_kind(cleaned, hints, episode_end, season_end, guess),
         matched_tokens=hints.matched,
     )
 
@@ -150,9 +164,13 @@ def merge_release(primary: ReleaseInfo, fallback: ReleaseInfo) -> ReleaseInfo:
     """
     filled = primary.model_dump()
     for field, value in fallback.model_dump().items():
-        if field in ("raw_title", "matched_tokens", "special_kind"):
+        if field in ("raw_title", "matched_tokens", "special_kind", "season_end"):
             # `special_kind` 不補：`[01-13TV全集+SP]` 說的是「這一包裡有特典」，
             # 不是「這個檔案是特典」。整包 13 集正片會因此全部被當成 SP（真實語料）。
+            # `season_end` 同理：一個檔案不會橫跨兩季。
+            continue
+        # 多季一包的季號也不補：`S1-S2` 的包裡只寫 `29` 的檔案，不在第 1 季（M4 票 48 的真實語料）。
+        if field == "season" and fallback.season_end is not None:
             continue
         # `episode_end` 與 `air_date` 跟著 `episode` 走：檔名說了第 5 集，torrent 名的 `01-28`
         # 不會讓它變成第 5 到 28 集，包名上的日期也不是第 5 集的播出日。
@@ -184,18 +202,23 @@ def _empty(value: object) -> bool:
 
 
 def _numbers(
-    cleaned: str, hints: CjkHints, guess: dict[str, Any]
+    cleaned: str, hints: CjkHints, guess: dict[str, Any], span: tuple[int, int] | None
 ) -> tuple[int | None, int | None, int | None]:
-    """季、集、集尾。三個一起算是因為 guessit 會把它們互相搞混。"""
+    """季、集、集尾。三個一起算是因為 guessit 會把它們互相搞混。
+
+    `span` 是多季一包的（第一季, 最後一季）：guessit 的 `[1, 2]` 是那兩個季號，不是「季號 +
+    集號」，所以換成第一季，集號照其他寫法讀（`S01-S02 [01-24]` 的區間還在）；同一個名字裡的
+    `Season 1-2` 也是季的範圍，不走 `Season 3 - 50`。
+    """
     season = hints.season
     episode = hints.episode
     episode_end = hints.episode_end
 
-    raw_season = guess.get("season")
+    raw_season = guess.get("season") if span is None else span[0]
     raw_episode = guess.get("episode")
 
     # `Season 3 - 50`：季號與集號都寫在字面上，guessit 兩種寫法各讀錯一種。
-    dashed = _SEASON_DASH_EPISODE.search(cleaned)
+    dashed = _SEASON_DASH_EPISODE.search(cleaned) if span is None else None
     if dashed is not None and raw_episode is None:
         raw_season, raw_episode = int(dashed.group(1)), int(dashed.group(2))
 
@@ -231,10 +254,20 @@ def _numbers(
 
     if episode is None:
         episode, episode_end = _episode_from_brackets(cleaned)
-    if episode is None and not isinstance(raw_season, list):
+    # guessit 讀出好幾個季號時，沒有方括號的 `1-2` 多半就是那幾季（`Season 1-2 S01-S02`）。
+    if episode is None and not isinstance(guess.get("season"), list):
         episode, episode_end = _episode_from_range(cleaned)
 
     return season, episode, episode_end
+
+
+def _season_span(cleaned: str) -> tuple[int, int] | None:
+    """多季一包的（第一季, 最後一季）；不是的話 `None`。"""
+    found = _SEASON_SPAN.search(cleaned)
+    if found is None:
+        return None
+    first, last = int(found.group(1)), int(found.group(2))
+    return (first, last) if last > first else None
 
 
 def _episode_from_brackets(cleaned: str) -> tuple[int | None, int | None]:
@@ -256,19 +289,23 @@ def _episode_from_range(cleaned: str) -> tuple[int | None, int | None]:
 
 
 def _release_kind(
-    name: str, hints: CjkHints, episode_end: int | None, guess: dict[str, Any]
+    name: str,
+    hints: CjkHints,
+    episode_end: int | None,
+    season_end: int | None,
+    guess: dict[str, Any],
 ) -> ReleaseKind:
     """`single | range | batch | collection`（brief §6.3）。
 
     `batch` 只認名字**自己說了**的：自己一格括號的 `(Batch)`、`[Vol.1]`（Nyaa 與 acg.rip 搜尋
-    feed 的真實寫法，M3 票 11）。沒說的季包看不出來——那要數檔案，是呼叫端的事（plan §4.1 的
-    `plan` 階段）。
+    feed 的真實寫法，M3 票 11），與兩個季號的多季一包（M4 票 48）。沒說的季包看不出來——那要
+    數檔案，是呼叫端的事（plan §4.1 的 `plan` 階段）。
     """
     if hints.collection:
         return ReleaseKind.COLLECTION
     if episode_end is not None or isinstance(guess.get("episode"), list):
         return ReleaseKind.RANGE
-    if _BATCH.search(name):
+    if season_end is not None or _BATCH.search(name):
         return ReleaseKind.BATCH
     return ReleaseKind.SINGLE
 

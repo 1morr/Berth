@@ -205,6 +205,21 @@ Mikan 下載，解出檔案清單（都是單檔 torrent，infohash 與來源頁
   shincaps 在 Re:Zero 第三輪播完兩週後錄的 `- 01`（nyaa 1957100）大小與片長像第一季第 1 集的重播，
   查不到播出表所以不收；它是「只有剛播的讀法才算數」這條邊界的來由。
 
+## v7 補的兩筆（2026-10-07，M4 票 48）
+
+**兩個季號的多季一包**：`S01 + S02`、`S1-S2`。guessit 回 `season: [1, 2]`，解析器曾把第二個數字當集號，
+發佈名讀成 S01E02（審計 2026-10-06 P2-6，acg.rip 一次性連結）。兩筆都從 acg.rip 下載 `.torrent` 解出檔案
+清單（infohash `81e8ddc2cff1f077de8f3fbb48b23a932da0dd92` 與 `cb2e5cce0b4fe28f91f8c756d34483d2b3def4d6`）；`torrent_name` 照 feed 原樣，ReinForce 那一筆開頭的空白也是。TMDB 快照把第二
+輪併進第 1 季（S01E29–E38），所以兩包的正確答案都是 S01E01–E38。語料變成動漫 26、劇集 10、電影 4。
+
+| id | 為什麼是它 |
+| --- | --- |
+| `anime/frieren-s1-s2-xspitfire911` | **`S01 + S02`、檔名明寫季集**（`Sousou no Frieren S02/… S02E01 …`）：S02 的十集靠虛擬季換成 S01E29–E38，所以 `min_confidence` 是 medium。檔名說了算，修之前也全對 |
+| `anime/frieren-s1-s2-reinforce` | **`S1-S2`、檔名只有絕對集號**（`Sousou no Frieren 29`）：修之前 torrent 名的 `season: 1` 被 `merge_release` 補進每個檔案，第 29–38 集以 high「明說的季號」入庫——這份快照碰巧對，TMDB 分兩季時就是錯的。修完不補季號，走「TMDB 只有一季」的 medium。另有 475 個檔案裡的特典：`Extra/` 底下照發佈者的分類都是 extra（含 `Mini anime/` 的 22 支 `○○の魔法`，自己的序號不對 S0，與 overlord 的 `SP/` 不同是因為發佈者把它們放在 `Extra/`）；`Menu/S1/Vol 1–3` 與 `Menu/S2/Vol 1–3` 指到同一條 extras 路徑，期望是 `review`（衝突，brief §6.4 第 5 點）；`Scan/` 349 張圖略過 |
+
+- **兩筆在 bench 上修之前就不紅**：檔名都帶得出答案。紅燈在發佈名那一層
+  （`tests/unit/test_parser_release.py`），bench 上看得到的差別是 ReinForce 38 集的信心從 high 換成 medium。
+
 ## 外掛字幕怎麼算（票 07 的決定）
 
 字幕檔的 `target` 是**它那個影片的目標路徑**換上字幕的副檔名與語言段（plan §5）。所以：

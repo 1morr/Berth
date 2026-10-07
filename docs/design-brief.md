@@ -204,7 +204,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 對 torrent 名與每個檔名解析出結構化欄位（缺就留空，不猜）：
 
-`title_candidates[]`、`season`（顯式）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`video_codec`、`bit_depth`、`audio`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`air_date`（檔名寫的播出日，§6.4）、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
+`title_candidates[]`、`season`（顯式）/`season_end`（多季一包 `S01 + S02` 的最後一季）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`video_codec`、`bit_depth`、`audio`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`air_date`（檔名寫的播出日，§6.4）、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
 
 - 沒有現成庫能處理中文字幕組命名（§20.4）。【決定】解析分兩段：先用本系統維護的 **CJK 字幕組詞典**（簡繁/繁日/簡日/BIG5/GB/CHT/CHS/內嵌/內封/外掛/第 N 話/第 N 集/全集/合集/第 N 季/劇場版/番外/重製/★前綴/招募廣告/地區限制…，起點是 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 的規則）做正規化與 CJK 欄位抽取，再把剩餘字串交給成熟的西方命名解析庫（Python 用 guessit，TS 用 @ctrl/video-filename-parser）。
 - 欄位定義對齊 AutoBangumi 的 `ParsedRelease`（含 `media_type` 與 `release_kind = single | range | batch | collection`），讓 benchmark 可以互相比較。
@@ -239,7 +239,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 ### 6.6 多集檔、合集、多季
 
 - 單檔多集（`S01E01-E02`、`01-02`）→ 目標檔名用 Jellyfin 支援的 `S01E01-E02` 形式，帳本一筆對多集。
-- 一個 torrent 多季（子資料夾分季或絕對編號連續）→ Plan 逐檔決定季，允許一個 Job 寫入同一 Media 的多季。
+- 一個 torrent 多季（子資料夾分季或絕對編號連續）→ Plan 逐檔決定季，允許一個 Job 寫入同一 Media 的多季。發佈名寫兩個季號（`S01 + S02`、`S1-S2`、`Season 1 + Season 2`，兩邊都要有季的前綴）讀成多季一包：`season`–`season_end`、`release_kind = batch`，所以 RSS 的「合集預設排除」擋得到；它說不出其中一個檔案是哪一季，檔名沒寫季號時不從發佈名補（M4 票 48）。
 - 一個 torrent 多部作品（系列合集）→ 第一階段不自動處理：所有影片對不到上下文 Media 的檔案進 review，使用者在 review 時可把檔案指派給其他 Media。
 - 分割光碟 `CD1/CD2` 電影 → 第一階段進 review。
 

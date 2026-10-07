@@ -523,6 +523,9 @@ class ReleaseInfo(BaseModel):
     title_candidates: tuple[str, ...] = ()
     #: 顯式季號（`S02`、`第二季`、`Season 3`）。
     season: int | None = None
+    #: 多季一包的最後一季（`S01 + S02`、`S1-S2` → `season` 1、`season_end` 2，brief §6.6）。
+    #: 只有發佈名會有：它說的是這一包蓋到哪幾季，說不出其中一個檔案是哪一季。
+    season_end: int | None = None
     #: `Part.2` / `第二部分`：同一季的第幾個 cour。集號從 01 重數的那一種寫法（plan §4.4）。
     part: int | None = None
     episode: int | None = None

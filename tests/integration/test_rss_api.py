@@ -405,6 +405,22 @@ class TestOneshot:
         assert sent.status_code == 200, sent.text
         assert sent.json()["job"]["hash"] == batch.hash
 
+    def test_a_season_pack_without_a_work_claims_no_season(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        """`S01 + S02` 是兩季一包（M4 票 48）：標成多季一包，不說成 S01E02，也不只說 S01。"""
+        seed(client, roots)
+        sign_in(client)
+        pack = Release(371, "[Xspitfire911] Sousou No Frieren S01 + S02 BDRIP 1080p X265 10bit")
+        url = "https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=2"
+        serve(factory, url, [pack])
+
+        read = client.post("/api/rss/oneshot", json={"url": url}, headers=BROWSER)
+
+        (row,) = read.json()["items"]
+        assert row["release_kind"] == "batch"
+        assert (row["season"], row["episode_start"], row["episode_end"]) == (None, None, None)
+
     def test_with_a_work_it_says_what_the_ledger_and_the_jobs_already_have(
         self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
     ) -> None:

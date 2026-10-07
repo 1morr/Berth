@@ -144,6 +144,74 @@ class TestAnimeEpisodePatterns:
         assert (info.season, info.episode, info.episode_end) == (3, episode, None)
         assert info.release_kind is ReleaseKind.SINGLE
 
+    @pytest.mark.parametrize(
+        ("name", "season_end"),
+        [
+            # acg.rip 搜尋 feed 的兩個真實標題（M4 票 48、審計 2026-10-06 P2-6）。
+            (
+                "[Xspitfire911] 葬送的芙莉莲/Sousou No Frieren S01 + S02 "
+                "BDRIP 1080p X265 10bit VOSTFR",
+                2,
+            ),
+            (
+                " [ReinForce] 葬送的芙莉莲 S1-S2 / 葬送のフリーレン /Sousou no Frieren "
+                "(BDRip 1920x1080 x264 FLAC)",
+                2,
+            ),
+            ("Fleabag (2016) Season 1-2 S01-S02 (1080p BluRay x265 HEVC 10bit AAC 5.1 Silence)", 2),
+            ("Show S01~S03 1080p WEB-DL", 3),
+            ("Show Season 1 + Season 2 1080p", 2),
+            ("Show S01 S02 1080p", 2),
+            ("Show.S01.S02.1080p.WEB-DL", 2),
+        ],
+    )
+    def test_two_season_numbers_are_a_multi_season_pack(self, name: str, season_end: int) -> None:
+        """`S01 + S02`、`S1-S2`：兩個都是季號，不是 S01E02。
+
+        guessit 回 `season: [1, 2]`，而 `Season 3 [04]` 那一條把清單的第二個數字當成集號。
+        兩邊都寫了季的前綴才算：`Season 3 - 50` 的第二個數字前面沒有，它是集號。
+        """
+        info = parse_release(name)
+
+        assert (info.season, info.season_end, info.episode) == (1, season_end, None)
+        assert info.release_kind is ReleaseKind.BATCH
+
+    @pytest.mark.parametrize(
+        ("name", "episode", "episode_end"),
+        [
+            ("Show S01-S02 [01-24] 1080p", 1, 24),
+            ("[Sub] Show S1+S2 - 05 [1080p]", 5, None),
+            ("[字幕组] Show S01-S02 第13集 [1080p]", 13, None),
+        ],
+    )
+    def test_an_episode_written_next_to_two_seasons_stays(
+        self, name: str, episode: int, episode_end: int | None
+    ) -> None:
+        """只有從 guessit 季號清單借來的那個「集號」不算；明寫的集號照讀。"""
+        info = parse_release(name)
+
+        assert (info.season, info.season_end) == (1, 2)
+        assert (info.episode, info.episode_end) == (episode, episode_end)
+
+    def test_a_chinese_season_wins_and_lends_no_episode(self) -> None:
+        """詞典認出的 `第二季` 說了算，就不是多季；guessit 的 `[1, 2]` 也不再變成第 2 集。"""
+        info = parse_release("Re Zero S01-S02 第二季 1080p")
+
+        assert (info.season, info.season_end, info.episode) == (2, None, None)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # 第二個數字前面沒有季的前綴：與 `Season 3 - 50`（集號）分不開，不認。
+            "Show Season 1-2 1080p",
+            "Show S01-03 1080p",
+            # 倒過來寫的不是一個季的範圍。
+            "Show S02-S01 1080p",
+        ],
+    )
+    def test_what_is_not_clearly_two_seasons_is_not_a_multi_season_pack(self, name: str) -> None:
+        assert parse_release(name).season_end is None
+
     def test_a_cour_marker_is_read_next_to_the_season(self) -> None:
         """`Season 3 Part 2 - 01`：季號 3、cour 2、集號 1，三個數字互不覆蓋（plan §4.4）。"""
         info = parse_release(
@@ -343,6 +411,18 @@ class TestMerge:
         merged = merge_release(file, torrent)
 
         assert (merged.season, merged.episode, merged.episode_end) == (1, 5, None)
+
+    def test_a_season_pack_does_not_say_which_season_a_file_is_in(self) -> None:
+        """`S1-S2` 的包裡只寫絕對集號的檔案（真實語料）：季號補不得，第 29 集不在第 1 季。"""
+        torrent = parse_release(
+            " [ReinForce] 葬送的芙莉莲 S1-S2 / 葬送のフリーレン /Sousou no Frieren "
+            "(BDRip 1920x1080 x264 FLAC)"
+        )
+        file = parse_release("[ReinForce] Sousou no Frieren 29 (BDRip 1920x1080 x264 FLAC).mkv")
+
+        merged = merge_release(file, torrent)
+
+        assert (merged.season, merged.season_end, merged.episode) == (None, None, 29)
 
     def test_a_pack_date_does_not_become_the_air_date_of_a_numbered_file(self) -> None:
         """播出日是某一集的，跟著集號走（與 `episode_end` 同一個道理）。"""

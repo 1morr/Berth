@@ -47,7 +47,7 @@ TARGET = "Show (2020) [tmdbid-1]/Season 01/Show (2020) - S01E02.mkv"
 #: 票 14f 補了「季號剛好等於方括號集號」的動漫兩筆（TMDB 一季、多季各一）；
 #: M2 票 01 補了「`Season 3 - 50` 的破折號集號」的動漫兩筆（guessit 各錯一種寫法）；
 #: M3 票 16 補了「每輪從 01 重數、發佈時間說得出是哪一輪」的動漫四筆。
-CORPUS_SHAPE = {"anime": 24, "tv": 10, "movie": 4}
+CORPUS_SHAPE = {"anime": 26, "tv": 10, "movie": 4}
 
 
 @pytest.fixture(scope="module")

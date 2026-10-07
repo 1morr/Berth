@@ -137,7 +137,9 @@ async def _item(
         whole, strategy = guess.whole_season, guess.strategy
     else:
         # 發佈名寫的那一個：單集的 `episode_end` 補成起始集，與搜尋結果表同一個規矩。
-        season, start = info.season, info.episode
+        # 多季一包（`S01 + S02`）的第一季不是它的季：與有作品時的預估一樣說不出來（M4 票 48）。
+        season = info.season if info.season_end is None else None
+        start = info.episode
         end = info.episode_end or start
         whole, strategy = False, None
     known = None

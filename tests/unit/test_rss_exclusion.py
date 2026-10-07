@@ -23,6 +23,8 @@ RANGE = (
     "【喵萌奶茶屋】★04月新番★[上伊那牡丹，醉姿如百合 / Kamiina Botan, Yoeru Sugata wa Yuri no Hana]"
     "[01-12][1080p][繁日雙語]"
 )
+#: 多季一包（acg.rip 真實標題，M4 票 48）：沒有集號區間、沒有「合集」字樣，只有兩個季號。
+SEASONS = "[Xspitfire911] 葬送的芙莉莲/Sousou No Frieren S01 + S02 BDRIP 1080p X265 10bit VOSTFR"
 
 
 class TestAKeyword:
@@ -86,7 +88,7 @@ class TestScreening:
     def test_a_single_episode_with_no_rules_passes(self) -> None:
         assert screen(SINGLE, not_single=True, layers=()) is None
 
-    @pytest.mark.parametrize("title", [COLLECTION, RANGE])
+    @pytest.mark.parametrize("title", [COLLECTION, RANGE, SEASONS])
     def test_anything_but_a_single_episode_is_excluded_by_default(self, title: str) -> None:
         assert screen(title, not_single=True, layers=()) == skipped(SkipCode.NOT_SINGLE)
 
