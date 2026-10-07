@@ -375,10 +375,13 @@ class QbittorrentClient(Protocol):
         """
         ...
 
-    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+    async def add_probe(
+        self, name: str, payload: bytes, *, save_path: str, unfinished: bool = False
+    ) -> str:
         """把 `save_path/name` 那個探測檔做成 torrent、**停住**加進去，回它的 info hash。
 
         不掛分類、不帶 tag、`autoTMM=false`：它不是 Berth 的下載，poller 不該看到它（M4 票 19）。
+        `unfinished` 見 `torrent.probe_torrent`（M4 票 46）。
         """
         ...
 
@@ -460,7 +463,8 @@ def conflict_detail(outcome: CategoryOutcome, save_path: str, download_path: str
 class ProbeSight(StrEnum):
     """qBittorrent 校驗探針之後的答案（`probe_sight`，brief §20.2 對 4.4.5 與 5.2.3 實測）。"""
 
-    #: 100%：它讀到的就是 Berth 寫的那個檔，兩邊是同一個目錄。
+    #: 有進度：它讀到的就是 Berth 寫的那個檔，兩邊是同一個目錄。單片的探針是 100%；校驗不完的
+    #: （`unfinished=True`，M4 票 46）停在前面幾片。
     SEEN = "seen"
     #: 0% 而且停在那裡：它那邊的這條路徑底下沒有那個檔（沒掛、或掛在別處）。
     UNSEEN = "unseen"
@@ -486,8 +490,27 @@ PROBE_TIMEOUT_SECONDS = 20.0
 PROBE_POLL_SECONDS = 0.25
 
 
+def sight_error(sight: ProbeSight, path: str) -> str:
+    """探針沒看到時（`SEEN` 以外）的原文（英文，收進畫面的技術細節）：哪一台、哪條路徑。Route
+    檢查（M4 票 19）與頁 2 的連線測試（M4 票 46）說同一句。"""
+    return {
+        ProbeSight.UNSEEN: f"qBittorrent cannot see {path}: it checked the file Berth had just "
+        "written there and found none of it (0% after a recheck)",
+        ProbeSight.UNREADABLE: f"qBittorrent found the file Berth wrote in {path} but could not "
+        "read it (the probe torrent went to error); check the permissions on that directory",
+        ProbeSight.UNSETTLED: f"qBittorrent did not finish checking the file Berth wrote in {path} "
+        f"within {PROBE_TIMEOUT_SECONDS:.0f} s; it may be busy checking other torrents, "
+        "check again later",
+    }[sight]
+
+
 async def probe_sight(
-    client: QbittorrentClient, *, name: str, payload: bytes, save_path: str
+    client: QbittorrentClient,
+    *,
+    name: str,
+    payload: bytes,
+    save_path: str,
+    unfinished: bool = False,
 ) -> ProbeSight:
     """qBittorrent 看不看得到 `save_path/name` 那個檔（M4 票 19，brief §20.2）。
 
@@ -495,10 +518,14 @@ async def probe_sight(
     都移除 torrent 並**不刪檔**——檔是呼叫端的，它自己刪。**停住加入不會自己校驗**
     （實測兩版都停在 0%），所以一定要 recheck。
 
+    `unfinished=True`（M4 票 46，`torrent.probe_torrent`）：校驗到不了 100%，不觸發「torrent 完成時
+    執行外部程式」；`payload` 要至少兩片（`UNFINISHED_PROBE_PAYLOAD`）。5.x 的「加入時執行」兩種都會
+    觸發（實測）。
+
     為什麼繞這一圈：它的 Web API 沒有「這條路徑你看不看得到」。`app/getDirectoryContent` 5.0
     才有，而且它只說目錄在不在——qBittorrent 自己的檔案層裡也可能剛好有一個同名的空目錄。
     """
-    info_hash = await client.add_probe(name, payload, save_path=save_path)
+    info_hash = await client.add_probe(name, payload, save_path=save_path, unfinished=unfinished)
     deadline = time.monotonic() + PROBE_TIMEOUT_SECONDS
     try:
         if not await _await_listed(client, info_hash, deadline):
@@ -535,7 +562,8 @@ async def _await_sight(client: QbittorrentClient, info_hash: str, deadline: floa
         pending = row is None or state.startswith(_PROBE_PENDING)
         if state == ERROR_STATE:
             return ProbeSight.UNREADABLE
-        if row is not None and not pending and row.progress >= 1.0:
+        # 任何一片對得上就是讀到了：校驗不完的探針停在半途，單片的一步到 100%。
+        if row is not None and not pending and row.progress > 0:
             return ProbeSight.SEEN
         if pending or state != last_state:
             still_since = None if pending else now
@@ -591,4 +619,5 @@ __all__ = [
     "ensure_category",
     "parse_status",
     "probe_sight",
+    "sight_error",
 ]

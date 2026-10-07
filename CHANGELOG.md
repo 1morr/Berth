@@ -8,6 +8,12 @@
 
 ### Changed
 
+- **精靈頁 2 測連線時就問 qBittorrent 看不看得到 `/data`**（M4 票 46）：只掛了 `/downloads` 的 qBittorrent 原本頁 2
+  是綠的、要到頁 3 才紅；現在頁 2 就紅，補法與頁 3 同一組（在原本那一份多加一條 `${DATA_ROOT}:/data`）。測試時 Berth
+  在 `/data` 放一個探測檔、請 qBittorrent 停住校驗一次後移除；這個探針校驗不會跑完，不觸發「torrent 完成時執行外部
+  程式」，設了「torrent 加入時執行外部程式」的話會觸發一次。`ConnectionReason` 多三個值：`data_unseen`、
+  `data_unreadable`、`data_unsettled`。
+
 - **只存測過的憑證，錯誤標在欄位上**（M4 票 45）：既有 Jellyfin、qBittorrent、Prowlarr 的位址與憑證，以及 TMDB 的
   key，都要測過才存；測不過什麼都不換，已經有一組能用的照舊在用。精靈與設定頁的既有表單把錯誤標在欄位旁：位址錯
   標位址、帳密或 API key 錯標憑證，其餘留在表單裡。**破壞性**：`POST /api/setup/services/{kind}` 選既有而測不過時

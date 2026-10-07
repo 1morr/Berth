@@ -22,6 +22,7 @@ import {
 } from '../components/controls'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { RequestFailed } from '../components/RequestFailed'
+import { SHARED_ROOT, remedyFor } from '../components/routeChecks'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { escapeOnly } from '../components/useInPlaceConfirm'
 import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
@@ -536,7 +537,9 @@ function ExistingForm({
   // 測不過的那一次（沒存下）：標在哪一格、那一句人話（與連線卡的補法同一句）。
   const attempt = refusal?.reason === 'connection_failed' ? (refusal.attempt ?? null) : null
   const field = attempt?.reason ? connectionField(kind, attempt.reason) : null
-  const said = attempt ? fixOf(t, kind, status, attempt).lede : undefined
+  const { lede: said, remedy } = attempt
+    ? fixOf(t, kind, status, attempt)
+    : { lede: undefined, remedy: null }
   const typed = checked ? addressError(t, baseUrl) : undefined
 
   function submit(event: FormEvent) {
@@ -559,6 +562,13 @@ function ExistingForm({
       className="grid gap-4 border-2 border-rule-strong bg-hull px-4 py-4"
     >
       <p className="max-w-prose text-xs text-ink-dim">{t(`connect.hint.${kind}`)}</p>
+      {kind === 'qbittorrent' && (
+        // 測試會放一個探針（M4 票 46）。說法沿用頁 3「按下之後會」（M4 票 19、31）：只有使用者自己那一台
+        // 可能設了執行外部程式，套件內不提。
+        <p className="-mt-2 max-w-prose text-xs text-ink-dim">
+          {t('connect.probe', { root: SHARED_ROOT })}
+        </p>
+      )}
       <Field
         label={t('connect.field.baseUrl')}
         value={baseUrl}
@@ -620,6 +630,8 @@ function ExistingForm({
       {attempt && field === null && (
         <Notice signal="blocked" label={t('common.failed')}>
           {said}
+          {/* 看不到 /data 時那一台要多加的掛載（M4 票 46）；其餘不屬於哪一格的沒有片段。 */}
+          {remedy && <div className="mt-2">{remedy}</div>}
         </Notice>
       )}
       {attempt && (
@@ -848,6 +860,22 @@ function fixOf(
   } else if (scheme) {
     // 位址的協定寫錯（M4 票 25）：原本說成連不上、叫人查 port。
     lede = t(scheme)
+  } else if (reason === 'data_unseen') {
+    // 頁 2 就問看不看得到 /data（M4 票 46）。片段是頁 3 `download_visible` 那一組（`remedyFor`）：既有的
+    // 只多加一條、compose 與 docker run 各一（M4 票 36），套件內的與 deploy 的 compose 一字不差。路徑是
+    // 後端放探測檔的那一個（`detail`），不寫死。
+    const fix = remedyFor('download_visible', {
+      existing: { qbittorrent: !bundled, jellyfin: false, root: service.detail || SHARED_ROOT },
+      crossDevice: false,
+    })
+    lede = t(bundled ? 'connection.fix.dataUnseenBundled' : 'connection.fix.dataUnseen', {
+      root: fix.root,
+    })
+    remedy = <CopyLines commands={[...fix.commands]} />
+  } else if (reason === 'data_unreadable') {
+    lede = t('connection.fix.dataUnreadable', { root: service.detail || SHARED_ROOT })
+  } else if (reason === 'data_unsettled') {
+    lede = t('connection.fix.dataUnsettled')
   } else if (bundled && reason === 'not_deployed') {
     // 主機名解不到＝容器停了或不在 COMPOSE_PROFILES 裡：兩種起回來的方法都給（plan §9.3、M4 票 35）。
     lede = t('connection.fix.notDeployed', { kind })

@@ -13,6 +13,7 @@ import hashlib
 import pytest
 
 from berth.adapters.torrent import (
+    UNFINISHED_PROBE_PAYLOAD,
     NotATorrentError,
     info_hash_of,
     magnet_info_hash,
@@ -164,3 +165,26 @@ class TestProbeTorrent:
         assert info_hash_of(probe_torrent("berth-probe-a", b"berth")) != info_hash_of(
             probe_torrent("berth-probe-b", b"berth")
         )
+
+    def test_an_unfinished_probe_matches_every_piece_but_the_last(self) -> None:
+        """M4 票 46：頁 2 的探針校驗不到 100%，不觸發「完成時執行外部程式」。看得到的那一台校驗完
+        停在前面幾片：第一片的雜湊對得上 Berth 寫的檔，最後一片對不上。"""
+        payload = UNFINISHED_PROBE_PAYLOAD
+        raw = probe_torrent("berth-probe-1a2b3c4d", payload, unfinished=True)
+
+        first, last = payload[:16384], payload[16384:]
+        never_on_disk = bytes(byte ^ 0xFF for byte in last)
+        info = {
+            b"length": len(payload),
+            b"name": b"berth-probe-1a2b3c4d",
+            b"piece length": 16384,
+            b"pieces": hashlib.sha1(first).digest() + hashlib.sha1(never_on_disk).digest(),
+            b"private": 1,
+        }
+        assert len(payload) == 2 * 16384
+        assert info_hash_of(raw) == hashlib.sha1(bencode(info)).hexdigest()
+
+    def test_an_unfinished_probe_needs_a_piece_to_finish(self) -> None:
+        """只有一片的檔做不成：唯一那一片對不上，看得到也是 0%，就與看不到分不開了。"""
+        with pytest.raises(ValueError, match="two pieces"):
+            probe_torrent("berth-probe-a", b"berth", unfinished=True)

@@ -917,6 +917,12 @@ class ConnectionReason(StrEnum):
     #: 擁有者成立之後，存下的位址上回答的是另一台 Jellyfin（ServerId 不同，brief §20.15、
     #: M4 票 18）：擁有者、Berth 的 key 與媒體庫都在原本那一台。
     OTHER_SERVER = "other_server"
+    #: qBittorrent 連上了，但讀不到 Berth 寫進共用根目錄（`/data`）的探測檔（M4 票 46）：它沒掛
+    #: `/data`，或掛在別的宿主目錄。`detail` 是那條路徑。後面兩種同一個探針的另外兩個答案
+    #: （`ProbeSight`）：檔在、它讀不了（權限）；期限內一直在校驗或排隊。
+    DATA_UNSEEN = "data_unseen"
+    DATA_UNREADABLE = "data_unreadable"
+    DATA_UNSETTLED = "data_unsettled"
 
 
 class PlanStatus(StrEnum):

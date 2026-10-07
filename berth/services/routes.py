@@ -44,12 +44,12 @@ from berth.adapters.fs import (
 from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import JellyfinClient, JellyfinLibrary
 from berth.adapters.qbittorrent import (
-    PROBE_TIMEOUT_SECONDS,
     ProbeSight,
     QbittorrentClient,
     conflict_detail,
     ensure_category,
     probe_sight,
+    sight_error,
 )
 from berth.domain import (
     CollectionType,
@@ -731,7 +731,7 @@ async def _run_checks(
                 jellyfin,
                 carried=carried,
                 signed_out=signed_out,
-                shared_root=_shared_root_of(paths),
+                shared_root=shared_root_of(paths),
                 progress=progress,
             )
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
@@ -1080,8 +1080,9 @@ class _Checker:
                 save_path=save_path,
             )
         if sight is not ProbeSight.SEEN:
-            failure, text = _SIGHT_FAILURE[sight]
-            raise StepFailedError(failure, text.format(path=save_path), path=save_path)
+            raise StepFailedError(
+                _SIGHT_FAILURE[sight], sight_error(sight, save_path), path=save_path
+            )
         return StepStatus.OK, save_path
 
     async def _library_path(self) -> tuple[StepStatus, str]:
@@ -1205,29 +1206,17 @@ def _under_shared_root(path: str, shared_root: Path) -> bool:
     return shared_root != shared_root.parent and is_within(Path(path), shared_root)
 
 
-def _shared_root_of(paths: PathSettings) -> Path:
+def shared_root_of(paths: PathSettings) -> Path:
     """Berth 自己的共用掛載：complete 與媒體庫兩個根目錄的共同父目錄（brief §16.4，前端的
     `commonRoot` 是同一條）。"""
     return Path(os.path.commonpath([paths.complete_root, paths.library_root]))
 
 
-#: 探針沒看到時的代碼與原文。畫面的補法照 `RouteCheck` 挑，原文要說清楚的是「哪一台、哪條路徑」。
+#: 探針沒看到時的代碼。畫面的補法照 `RouteCheck` 挑；原文是 `sight_error`。
 _SIGHT_FAILURE = {
-    ProbeSight.UNSEEN: (
-        StepFailure.PROBE_UNSEEN,
-        "qBittorrent cannot see {path}: it checked the file Berth had just written there "
-        "and found none of it (0% after a recheck)",
-    ),
-    ProbeSight.UNREADABLE: (
-        StepFailure.PROBE_UNREADABLE,
-        "qBittorrent found the file Berth wrote in {path} but could not read it "
-        "(the probe torrent went to error); check the permissions on that directory",
-    ),
-    ProbeSight.UNSETTLED: (
-        StepFailure.PROBE_UNSETTLED,
-        "qBittorrent did not finish checking the file Berth wrote in {path} within "
-        f"{PROBE_TIMEOUT_SECONDS:.0f} s; it may be busy checking other torrents, check again later",
-    ),
+    ProbeSight.UNSEEN: StepFailure.PROBE_UNSEEN,
+    ProbeSight.UNREADABLE: StepFailure.PROBE_UNREADABLE,
+    ProbeSight.UNSETTLED: StepFailure.PROBE_UNSETTLED,
 }
 
 _CHECKS: dict[RouteCheck, Callable[[_Checker], Awaitable[tuple[StepStatus, str]]]] = {

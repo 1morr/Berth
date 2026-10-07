@@ -41,9 +41,13 @@ class Scripted:
     after: list[TorrentStatus | None]
     calls: list[str] = field(default_factory=list)
     rechecked: bool = False
+    unfinished: bool | None = None
 
-    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+    async def add_probe(
+        self, name: str, payload: bytes, *, save_path: str, unfinished: bool = False
+    ) -> str:
         self.calls.append("add")
+        self.unfinished = unfinished
         return "probe"
 
     async def recheck(self, info_hash: str) -> None:
@@ -66,12 +70,13 @@ def quick(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(qbittorrent, "PROBE_TIMEOUT_SECONDS", 1.0)
 
 
-async def sight(client: Scripted) -> ProbeSight:
+async def sight(client: Scripted, *, unfinished: bool = False) -> ProbeSight:
     return await probe_sight(
         client,  # type: ignore[arg-type]  # 劇本只實作探針用得到的那幾支
         name=".berth-probe-1",
         payload=b"berth",
         save_path="/data/torrent/complete/tv",
+        unfinished=unfinished,
     )
 
 
@@ -119,3 +124,21 @@ async def test_a_queue_of_other_checks_is_waited_out_not_read_as_unseen() -> Non
     client = Scripted(before=[row("stoppedDL")], after=[*queued, row("stoppedUP", 1.0)])
 
     assert await sight(client) is ProbeSight.SEEN
+
+
+@pytest.mark.asyncio
+async def test_an_unfinished_probe_that_stops_halfway_is_seen() -> None:
+    """M4 票 46：校驗不完的探針，看得到的那一台停在 50%（brief §20.2 對 4.4.5 與 5.2.3 實測）。
+    任何一片對得上就是它讀到了 Berth 寫的檔；不等 100%，它本來就到不了。"""
+    client = Scripted(before=[row("stoppedDL")], after=[row("checkingDL"), row("stoppedDL", 0.5)])
+
+    assert await sight(client, unfinished=True) is ProbeSight.SEEN
+    assert client.unfinished is True
+    assert client.calls[-1] == "delete(files=False)"
+
+
+@pytest.mark.asyncio
+async def test_an_unfinished_probe_that_stays_at_zero_is_unseen() -> None:
+    client = Scripted(before=[row("pausedDL")], after=[row("pausedDL")])
+
+    assert await sight(client, unfinished=True) is ProbeSight.UNSEEN

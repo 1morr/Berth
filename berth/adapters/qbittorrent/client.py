@@ -178,7 +178,9 @@ class HttpQbittorrentClient:
             return
         raise TorrentRejectedError(f"torrents/add: {response.status_code} {_reason(response)}")
 
-    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+    async def add_probe(
+        self, name: str, payload: bytes, *, save_path: str, unfinished: bool = False
+    ) -> str:
         """探針的 `torrents/add`（M4 票 19）。與 `add_torrent` 刻意不同的幾件事：
 
         - `savepath` 明送、`autoTMM=false`、不掛分類：問的正是「這條路徑」，不能讓分類或全域
@@ -189,7 +191,7 @@ class HttpQbittorrentClient:
           把它當成 Berth 的下載。
         """
         version = await self.version()
-        content = probe_torrent(name, payload)
+        content = probe_torrent(name, payload, unfinished=unfinished)
         response = await self._session.request(
             "POST",
             "/api/v2/torrents/add",

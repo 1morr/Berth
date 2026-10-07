@@ -184,6 +184,8 @@ class Premise:
     complete_root: str
     incomplete_root: str
     ticked: frozenset[str]
+    #: 三層路徑的共同父目錄（compose 裡的 `/data`）：頁 2 的探針放在這裡（M4 票 46）。
+    shared_root: str = ""
 
 
 @dataclass
@@ -210,6 +212,11 @@ def under(path: str, root: str) -> bool:
     return path.startswith(root.rstrip("/\\") + "/")
 
 
+def same_path(path: str, root: str) -> bool:
+    """同一條路徑：結尾斜線不算差別（同 `under`）。"""
+    return bool(root) and path.rstrip("/\\") == root.rstrip("/\\")
+
+
 def _always(write: Write, premise: Premise, made: Made) -> bool:
     return True
 
@@ -234,10 +241,12 @@ ALLOWED: tuple[Allowed, ...] = (
         and under(str(w.args[1]), p.complete_root)
         and under(str(w.kwargs["download_path"]), p.incomplete_root),
     ),
-    # 探測 torrent：加、校驗、移除（不刪檔）。後兩者只對 Berth 加了、放行了的那幾個。
+    # 探測 torrent：加、校驗、移除（不刪檔）。後兩者只對 Berth 加了、放行了的那幾個。頁 3 的在分類
+    # 路徑底下；頁 2 的在共用根目錄本身，而且校驗不完（M4 票 46）。
     Allowed(
         QBITTORRENT, "add_probe",
-        lambda w, p, _: under(str(w.kwargs["save_path"]), p.complete_root),
+        lambda w, p, _: under(str(w.kwargs["save_path"]), p.complete_root)
+        or (same_path(str(w.kwargs["save_path"]), p.shared_root) and w.kwargs["unfinished"]),
     ),
     Allowed(QBITTORRENT, "recheck", lambda w, _, made: w.args[0] in made.probes),
     Allowed(
@@ -445,6 +454,8 @@ def wizard(config: Config, tmp_path: Path) -> Iterator[Callable[[ServiceOrigin, 
         client.__enter__()
         running.append(client)
         data = tmp_path / "data"
+        # 正式環境的 `/data` 是 compose 掛進來的，一開始就在：頁 2 的探針放在它底下（M4 票 46）。
+        data.mkdir(exist_ok=True)
         _set_paths(client, data)
         return Wizard(
             client,
@@ -456,6 +467,7 @@ def wizard(config: Config, tmp_path: Path) -> Iterator[Callable[[ServiceOrigin, 
                 complete_root=str(data / "torrent" / "complete"),
                 incomplete_root=str(data / "torrent" / "incomplete"),
                 ticked=frozenset(TICKED),
+                shared_root=str(data),
             ),
         )
 
@@ -546,6 +558,14 @@ def methods(writes: list[Write]) -> set[tuple[ServiceKind, str]]:
     return {(write.service, write.method) for write in writes}
 
 
+def probed_shared_root(run: Wizard) -> bool:
+    """頁 2 的探針真的跑了（M4 票 46）：放在共用根目錄的那一個。"""
+    return any(
+        write.method == "add_probe" and write.kwargs["save_path"] == run.premise.shared_root
+        for write in run.recorder.writes
+    )
+
+
 # --- 閘門 ---
 
 
@@ -569,6 +589,7 @@ def test_a_bundled_wizard_writes_only_owned_objects_and_the_bootstrap(
         (PROWLARR, "delete_indexer"),
         (PROWLARR, "set_host_config"),
     } <= methods(run.recorder.writes)
+    assert probed_shared_root(run)
 
 
 @pytest.mark.parametrize("initialized", [True, False], ids=["initialized", "fresh-jellyfin"])
@@ -589,6 +610,7 @@ def test_an_existing_wizard_writes_only_owned_objects(
         (QBITTORRENT, "add_probe"),
         (PROWLARR, "add_indexer"),
     } <= methods(run.recorder.writes)
+    assert probed_shared_root(run)
     # 例外只有一個：還沒初始化的那台 Jellyfin 由擁有者跑完它的初始設定。
     assert ((JELLYFIN, "complete_startup") in methods(run.recorder.writes)) is not initialized
 
@@ -642,6 +664,26 @@ def test_the_fresh_jellyfin_exception_does_not_reach_the_other_logins() -> None:
 
     assert violations([write], fresh) != []
     assert violations([write], replace(fresh, origin=ServiceOrigin.BUNDLED)) == []
+
+
+def test_a_probe_on_the_shared_root_has_to_be_one_that_never_finishes() -> None:
+    """違規要紅：頁 2 的探針放在共用根目錄本身，校驗得完的那一種會觸發使用者的「完成時執行外部程式」
+    （M4 票 46）；放在共用根目錄底下別處（不是分類路徑）也不行。校驗不完的那一種放行。"""
+    premise = replace(EXISTING_INITIALIZED, shared_root="/data")
+
+    def probe(save_path: str, *, unfinished: bool) -> Write:
+        return Write(
+            QBITTORRENT,
+            "add_probe",
+            (".berth-probe-1", b"berth"),
+            {"save_path": save_path, "unfinished": unfinished},
+        )
+
+    assert violations([probe("/data", unfinished=False)], premise) != []
+    assert violations([probe("/data/elsewhere", unfinished=True)], premise) != []
+    assert violations([probe("/data", unfinished=True)], premise) == []
+    # 無關的寫法不紅：結尾多一個斜線還是同一條。
+    assert violations([probe("/data/", unfinished=True)], premise) == []
 
 
 def test_unrelated_names_and_address_formatting_stay_green(

@@ -239,21 +239,38 @@ def _info_span(raw: bytes) -> tuple[int, int] | None:
 #: 探針 torrent 的 piece 長度：BitTorrent 允許的最小值。探測檔只有幾個位元組，一片就裝完。
 PROBE_PIECE_LENGTH = 16 * 1024
 
+#: 校驗不完的探針檔（M4 票 46）：剛好兩片。內容是什麼都行，只要 Berth 寫下的就是它。
+UNFINISHED_PROBE_PAYLOAD = (b"berth" * PROBE_PIECE_LENGTH)[: 2 * PROBE_PIECE_LENGTH]
 
-def probe_torrent(name: str, payload: bytes) -> bytes:
+
+def probe_torrent(name: str, payload: bytes, *, unfinished: bool = False) -> bytes:
     """描述 Berth 剛寫下的那一個小檔的單檔 `.torrent`（M4 票 19，brief §20.2）。
 
-    qBittorrent 校驗它時比的是 piece 雜湊，所以只有真的讀到**同一個檔**才會是 100%——這正是
+    qBittorrent 校驗它時比的是 piece 雜湊，所以只有真的讀到**同一個檔**才會有進度——這正是
     「它看不看得到 Berth 寫的那個目錄」的答案。`private` 讓它不上 DHT / PEX / LSD：這個 torrent
     只活幾秒，沒有理由對外說它存在。不掛 tracker 也是同一個理由。
 
+    `unfinished=True`（M4 票 46）：最後一片的雜湊算在**反相**的內容上，看得到的那一台校驗完也停在
+    前面幾片、永遠到不了 100%，所以不觸發「torrent 完成時執行外部程式」（brief §20.2）。要至少兩片：
+    只有一片時看得到與看不到都是 0%。
+
     探測檔名每次不同（`fs.probe_file`），info hash 跟著不同，上一輪沒清掉的不會撞上 409。
     """
+    pieces = [
+        payload[start : start + PROBE_PIECE_LENGTH]
+        for start in range(0, max(len(payload), 1), PROBE_PIECE_LENGTH)
+    ]
+    if unfinished:
+        if len(pieces) < 2:
+            raise ValueError("an unfinished probe needs at least two pieces")
+        pieces[-1] = bytes(byte ^ 0xFF for byte in pieces[-1])
     info: dict[bytes, object] = {
         b"length": len(payload),
         b"name": name.encode(),
         b"piece length": PROBE_PIECE_LENGTH,
-        b"pieces": hashlib.sha1(payload, usedforsecurity=False).digest(),
+        b"pieces": b"".join(
+            hashlib.sha1(piece, usedforsecurity=False).digest() for piece in pieces
+        ),
         b"private": 1,
     }
     return _bencode({b"info": info})
@@ -319,6 +336,7 @@ def _read_string(raw: bytes, position: int) -> tuple[bytes, int]:
 
 __all__ = [
     "MAX_TORRENT_BYTES",
+    "UNFINISHED_PROBE_PAYLOAD",
     "HttpTorrentFetcher",
     "NotATorrentError",
     "TorrentFetcher",

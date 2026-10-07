@@ -38,6 +38,8 @@ class _Probe:
     path: Path
     payload: bytes
     status: TorrentStatus
+    #: 校驗不完的那一種（M4 票 46）：看得到也停在一半。
+    unfinished: bool = False
 
 
 class FakeQbittorrentClient:
@@ -161,7 +163,9 @@ class FakeQbittorrentClient:
         self.created_categories.append(category)
         self._categories.append(category)
 
-    async def add_probe(self, name: str, payload: bytes, *, save_path: str) -> str:
+    async def add_probe(
+        self, name: str, payload: bytes, *, save_path: str, unfinished: bool = False
+    ) -> str:
         if self.error is not None:
             raise self.error
         info_hash = hashlib.sha1(f"{save_path}/{name}".encode(), usedforsecurity=False).hexdigest()
@@ -169,6 +173,7 @@ class FakeQbittorrentClient:
         self.open_probes[info_hash] = _Probe(
             path=Path(save_path) / name,
             payload=payload,
+            unfinished=unfinished,
             status=_probe_status(info_hash, name, save_path, state="stoppedDL", progress=0.0),
         )
         return info_hash
@@ -218,14 +223,16 @@ class FakeQbittorrentClient:
             raise self.error
         probe = self.open_probes.get(info_hash)
         if probe is not None:
-            # 校驗一下子就完：只有一片。看得到是做種完成的樣子，看不到停在 0%（brief §20.2 實測）。
+            # 校驗一下子就完。看得到：單片的是做種完成的樣子，校驗不完的兩片停在一半（M4 票 46）；
+            # 看不到停在 0%（brief §20.2 實測）。
             seen = self._sees(probe)
+            finished = seen and not probe.unfinished
             self.open_probes[info_hash] = replace(
                 probe,
                 status=replace(
                     probe.status,
-                    state="stoppedUP" if seen else "stoppedDL",
-                    progress=1.0 if seen else 0.0,
+                    state="stoppedUP" if finished else "stoppedDL",
+                    progress=(0.5 if probe.unfinished else 1.0) if seen else 0.0,
                 ),
             )
             return

@@ -601,3 +601,98 @@ describe('既有表單測不過：錯誤標在欄位上（M4 票 45）', () => {
     expect(address()).toHaveAttribute('aria-invalid', 'true')
   })
 })
+
+describe('qBittorrent 看不到 /data：頁 2 就紅（M4 票 46）', () => {
+  const blind = {
+    kind: 'qbittorrent' as const,
+    state: 'failed' as const,
+    reason: 'data_unseen' as const,
+    detail: '/data',
+    error: 'qBittorrent cannot see /data: it checked the file Berth had just written there',
+  }
+
+  it('既有而測不過（沒存下）：表單裡說它沒掛 /data，片段只多加一條，compose 與 docker run 各一', async () => {
+    const user = userEvent.setup()
+    const { rerender } = mount('qbittorrent', [])
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+    const attempt = chosen({ ...blind, origin: 'existing', base_url: 'http://nas:8080' })
+    rerender(
+      <Page
+        kind="qbittorrent"
+        services={[]}
+        refusal={{ reason: 'connection_failed', detail: 'data_unseen', attempt }}
+        onChoose={vi.fn()}
+      />,
+    )
+
+    const said = i18next.t('connection.fix.dataUnseen', { root: '/data' })
+    expect(screen.getByText(said)).toBeVisible()
+    expect(said).toContain('/downloads')
+    expect(said).not.toContain('移到')
+    expect(screen.getByText(/qbittorrent:\s+volumes:\s+- \$\{DATA_ROOT\}:\/data/)).toBeVisible()
+    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeVisible()
+    // 不屬於哪一格：位址與帳密都不標。
+    expect(screen.getByRole('textbox', { name: '位址' })).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('既有、存下的那一台重新測試轉紅：連線卡的補法是同一句與同一組片段', () => {
+    mount('qbittorrent', [chosen({ ...blind, origin: 'existing', base_url: 'http://nas:8080' })])
+
+    expect(
+      screen.getByText(i18next.t('connection.fix.dataUnseen', { root: '/data' })),
+    ).toBeVisible()
+    expect(screen.getByText(i18next.t('reason.data_unseen'))).toBeVisible()
+    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeVisible()
+  })
+
+  it('套件內：說 compose 裡那一條掛載，片段與 deploy 的一字不差，沒有 docker run', () => {
+    mount('qbittorrent', [
+      chosen({ ...blind, origin: 'bundled', base_url: 'http://qbittorrent:8080' }),
+    ])
+
+    expect(
+      screen.getByText(i18next.t('connection.fix.dataUnseenBundled', { root: '/data' })),
+    ).toBeVisible()
+    expect(screen.getByText(/qbittorrent:\s+volumes:\s+- \$\{DATA_ROOT\}:\/data/)).toBeVisible()
+    expect(screen.queryByText('-v ${DATA_ROOT}:/data')).toBeNull()
+  })
+
+  it('讀不了是權限、校驗排隊是等一下：兩種都不給掛載片段', () => {
+    const { unmount } = mount('qbittorrent', [
+      chosen({
+        ...blind,
+        origin: 'existing',
+        base_url: 'http://nas:8080',
+        reason: 'data_unreadable',
+      }),
+    ])
+    expect(
+      screen.getByText(i18next.t('connection.fix.dataUnreadable', { root: '/data' })),
+    ).toBeVisible()
+    expect(screen.queryByText('-v ${DATA_ROOT}:/data')).toBeNull()
+    unmount()
+
+    mount('qbittorrent', [
+      chosen({
+        ...blind,
+        origin: 'existing',
+        base_url: 'http://nas:8080',
+        reason: 'data_unsettled',
+      }),
+    ])
+    expect(screen.getByText(i18next.t('connection.fix.dataUnsettled'))).toBeVisible()
+  })
+
+  it('既有表單說測試會放探針：不觸發完成時執行，加入時執行會觸發一次；套件內不提', async () => {
+    const user = userEvent.setup()
+    mount('qbittorrent', [])
+    expect(screen.queryByText(/執行外部程式/)).toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+
+    const hint = screen.getByText(i18next.t('connect.probe', { root: '/data' }))
+    expect(hint).toBeVisible()
+    expect(hint).toHaveTextContent('不觸發「torrent 完成時執行外部程式」')
+    expect(hint).toHaveTextContent('「torrent 加入時執行外部程式」')
+  })
+})

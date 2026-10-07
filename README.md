@@ -737,6 +737,14 @@ python scripts/experiments/qbittorrent_visibility_probe.py     # 5.2.3；報告�
 python scripts/experiments/qbittorrent_visibility_probe.py --image lscr.io/linuxserver/qbittorrent:4.4.5   # 支援下限
 ```
 
+精靈頁 2 的探針「看得到但校驗不完」：看得到的那一台停在 50%、不觸發「完成時執行外部程式」（M4 票 46，brief §20.2）。
+用的是 Berth 自己的 `probe_torrent(unfinished=True)`，沿用上一支的容器名，只發佈在 `127.0.0.1:18096`：
+
+```bash
+uv run python scripts/experiments/qbittorrent_unfinished_probe.py     # 5.2.3；報告寫到 .local/experiments/results/qbittorrent-unfinished-probe-<版本>.json
+uv run python scripts/experiments/qbittorrent_unfinished_probe.py --image lscr.io/linuxserver/qbittorrent:4.4.5
+```
+
 分類自己的未完成目錄（`createCategory` 的 `downloadPath`）下載中是不是落在那裡、完成後搬到 save path，全域
 temp path 開關時誰贏（M4 票 22，brief §20.2）：自己起停一台做種的 5.2.3 與一台受測版本（前綴
 `berth-exp-catpath`，只發佈在 `127.0.0.1:18093`、`18094`），一個版本約兩分鐘：

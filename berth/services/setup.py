@@ -12,13 +12,16 @@ Prowlarr 各一頁，使用者選「套件內」或「既有」，選擇存在 `
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.fs import probe_file
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -30,7 +33,14 @@ from berth.adapters.http import (
     ServiceUnavailableError,
 )
 from berth.adapters.prowlarr import ProwlarrClient
-from berth.adapters.qbittorrent import IpBannedError
+from berth.adapters.qbittorrent import (
+    IpBannedError,
+    ProbeSight,
+    QbittorrentClient,
+    probe_sight,
+    sight_error,
+)
+from berth.adapters.torrent import UNFINISHED_PROBE_PAYLOAD
 from berth.domain import (
     PROWLARR_LOGIN_STEP,
     PROWLARR_STEP,
@@ -74,7 +84,7 @@ from berth.services.jellyfin import (
     remembered_startup,
 )
 from berth.services.qbittorrent import note_qbittorrent_login, qbittorrent_interface_user
-from berth.services.routes import forget_route_checks, routes_ready
+from berth.services.routes import forget_route_checks, routes_ready, shared_root_of
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
 from berth.services.tmdb import tmdb_verified
@@ -389,7 +399,9 @@ async def choose_service(
         tested = await _same_jellyfin(session, factory, setup, previous.base_url, base_url)
     elif origin is ServiceOrigin.EXISTING:
         candidate = await _candidate(session, kind, base_url, connection)
-        tested = await _test_connection(factory, kind, candidate, setup)
+        tested = await _test_connection(
+            factory, kind, candidate, setup, data_root=await _data_root(session)
+        )
     if origin is ServiceOrigin.EXISTING and tested is not None and not _accepted(kind, tested):
         raise await _refused(session, kind, base_url, tested)
     if moved and owned_jellyfin and tested is not None and not tested.server_id:
@@ -473,7 +485,11 @@ async def _test_and_record(
     setup = await read_settings(session, SetupSettings)
     tested_choice = setup.choices[kind]
     outcome = tested or await _test_connection(
-        factory, kind, await _stored_connection(session, kind), setup
+        factory,
+        kind,
+        await _stored_connection(session, kind),
+        setup,
+        data_root=await _data_root(session),
     )
 
     def record(latest: SetupSettings) -> None:
@@ -662,9 +678,12 @@ async def _test_connection(
     kind: ServiceKind,
     connection: ServiceConnection,
     setup: SetupSettings,
+    *,
+    data_root: Path,
 ) -> _Outcome:
     """拿這一組連一次那個服務：存下的那一組（`_stored_connection`），或既有表單還沒存的那一組
-    （`_candidate`）。只讀，不寫任何東西。"""
+    （`_candidate`）。不改那一台的任何設定；qBittorrent 另外請它校驗一次 `data_root` 裡的探測檔
+    （`_data_sight`，M4 票 46），探針 torrent 與探測檔當場收掉。"""
     if kind is ServiceKind.JELLYFIN:
         return await _test_jellyfin(factory, connection.base_url, setup, api_key=connection.api_key)
 
@@ -680,6 +699,14 @@ async def _test_connection(
                 # 版本在測連線時就擋（M4 票 21，與 Jellyfin、Prowlarr 同一個時機）：原本這裡是綠燈、
                 # 頁 2 的泊位卡卻是紅的「太舊」，同一個畫面兩種顏色。
                 return _Outcome(reason=ConnectionReason.VERSION_UNSUPPORTED, detail=version.app)
+            # 看不看得到 `/data` 也在這一頁問（M4 票 46）：原本要到頁 3 的探針才紅。
+            sight = await _data_sight(qbittorrent, data_root)
+            if sight is not None and sight is not ProbeSight.SEEN:
+                return _Outcome(
+                    reason=_SIGHT_REASON[sight],
+                    detail=str(data_root),
+                    error=sight_error(sight, str(data_root)),
+                )
             # 套件內那一台自己就有介面登入（重裝保留它的 config）：一起讀，記下來頁 2 就做完了
             # （M4 票 38）。既有的那一台的登入不是 Berth 的事，不讀。
             user = await qbittorrent_interface_user(qbittorrent) if bundled else ""
@@ -726,6 +753,42 @@ async def _test_connection(
         return await _classified(prowlarr_test)
     finally:
         await prowlarr.aclose()
+
+
+async def _data_root(session: AsyncSession) -> Path:
+    """Berth 自己的共用根目錄（compose 裡的 `/data`）：頁 2 在這裡放探測檔。"""
+    return shared_root_of(await read_settings(session, PathSettings))
+
+
+async def _data_sight(qbittorrent: QbittorrentClient, root: Path) -> ProbeSight | None:
+    """qBittorrent 看不看得到 Berth 的共用根目錄（M4 票 46，brief §20.2）。
+
+    探針**校驗不完**（`unfinished=True`）：看得到的那一台停在一半，不觸發「torrent 完成時執行
+    外部程式」（4.4.5 與 5.2.3 實測，`scripts/experiments/qbittorrent_unfinished_probe.py`）。5.x 的
+    「加入時執行」照樣觸發一次，畫面上說。
+
+    Berth 自己沒有這個目錄、或寫不進去時不問（`None`）：問了也分不出是誰少了掛載，頁 3 Berth 自己
+    那一條會說（`directory_missing` / `berth_cannot_write`）。下載與媒體庫沒有共同父目錄（共同的是
+    `/`）時也不問：那是問 qBittorrent 它自己的 `/`（同 `routes._under_shared_root`）。
+    """
+    if root == root.parent or not root.is_dir() or not os.access(root, os.W_OK):
+        return None
+    with probe_file(root, roots=[root], payload=UNFINISHED_PROBE_PAYLOAD) as probe:
+        return await probe_sight(
+            qbittorrent,
+            name=probe.name,
+            payload=UNFINISHED_PROBE_PAYLOAD,
+            save_path=str(root),
+            unfinished=True,
+        )
+
+
+#: 頁 2 的探針沒看到時的理由（M4 票 46）。補法與頁 3 的 `download_visible` 同一套。
+_SIGHT_REASON = {
+    ProbeSight.UNSEEN: ConnectionReason.DATA_UNSEEN,
+    ProbeSight.UNREADABLE: ConnectionReason.DATA_UNREADABLE,
+    ProbeSight.UNSETTLED: ConnectionReason.DATA_UNSETTLED,
+}
 
 
 async def _test_jellyfin(

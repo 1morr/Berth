@@ -58,6 +58,10 @@ const REASON_FIELD = {
   starting: null,
   version_unsupported: null,
   other_server: null,
+  // 看不到 `/data` 是那一台的掛載，不是表單上哪一格（M4 票 46）。
+  data_unseen: null,
+  data_unreadable: null,
+  data_unsettled: null,
 } as const satisfies Record<ConnectionReason, 'address' | 'credentials' | null>
 
 /**
@@ -161,6 +165,9 @@ export const REASON_LABEL = {
   scheme_missing: 'reason.scheme_missing',
   version_unsupported: 'reason.version_unsupported',
   other_server: 'reason.other_server',
+  data_unseen: 'reason.data_unseen',
+  data_unreadable: 'reason.data_unreadable',
+  data_unsettled: 'reason.data_unsettled',
 } as const satisfies Record<ConnectionReason, string>
 
 /**

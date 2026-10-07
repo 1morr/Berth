@@ -296,6 +296,13 @@ const zhHant = {
       whitelist:
         '套件內那一台要帳密：Berth 的免密白名單沒生效。重啟它讓預置腳本補上白名單，再重新測試：',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
+      dataUnseen:
+        '你的 qBittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有——它多半沒掛 {{root}}（例如只掛了 /downloads），下載會寫進 Berth 拿不到的地方。在你原本那一份 compose（或 docker run 指令）的 qBittorrent 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值；容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後重新測試：',
+      dataUnseenBundled:
+        '這套 compose 的 qbittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有。compose 裡它的這一條掛載被改掉了；改回來、跑 docker compose up -d qbittorrent 之後重新測試：',
+      dataUnreadable:
+        'qBittorrent 容器裡的使用者讀不了 {{root}} 底下 Berth 寫的檔：讓它與 berth 用同一組 PUID / PGID，或放寬那個目錄的權限，再重新測試。',
+      dataUnsettled: '等 qBittorrent 手上的校驗跑完，再重新測試。',
       credentials: '帳號或密碼不對。改好上面的欄位再測一次。',
       authWarning:
         'Berth 這邊已經數到連續 {{failures}} 次登入失敗。qBittorrent 預設連錯 {{limit}} 次就封鎖 Berth 這台的 IP {{minutes}} 分鐘；最多再錯 {{left}} 次就會被封。',
@@ -336,6 +343,9 @@ const zhHant = {
     scheme_missing: '位址沒寫 http:// 或 https://',
     version_unsupported: '連得上，但版本比 Berth 支援的下限舊',
     other_server: '回答的是另一台 Jellyfin，不是擁有者所在的那一台',
+    data_unseen: '連得上，但它看不到 Berth 放在 /data 的檔案',
+    data_unreadable: '連得上，找得到 Berth 放在 /data 的檔案，但讀不了',
+    data_unsettled: '連得上，但它手上的校驗還沒輪到 Berth 的探測檔',
   },
   detail: {
     version: '版本',
@@ -413,6 +423,8 @@ const zhHant = {
       qbittorrent: '免密的話帳密留空。',
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
+    probe:
+      '測試時 Berth 會在 {{root}} 寫一個探測檔、請 qBittorrent 停住校驗一次，看它看不看得到 {{root}}，隨即移除（校驗不會跑完，不觸發「torrent 完成時執行外部程式」；你的 qBittorrent 設了「torrent 加入時執行外部程式」的話，會觸發一次），檔案也刪掉。',
     submit: '測試連線',
     submitting: '測試中…',
     notSaved: '這一組沒有存下：測得過才存。改好再按一次「測試連線」。',
@@ -3431,6 +3443,13 @@ const en: Translations<typeof zhHant> = {
         'The bundled one asks for credentials: Berth’s password-free allowlist did not take. Restart it so the preseed script adds the allowlist, then test again:',
       bundledDown:
         'The container is not up yet. Check on the host that it is running, and read its log:',
+      dataUnseen:
+        'Your qBittorrent cannot see {{root}}: Berth wrote a file there and qBittorrent found none of it after a recheck. It most likely does not mount {{root}} (only /downloads, say), so downloads would land where Berth cannot reach them. Add one mount to the qBittorrent service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env; the container path has to be {{root}}). Leave the mounts it already has: /downloads stays, old torrents keep seeding, and Berth only reads and writes under {{root}}. Berth does not do remote path mapping. Recreate it (docker compose up -d, or remove the container and docker run the new command), then test again:',
+      dataUnseenBundled:
+        'This compose’s qbittorrent cannot see {{root}}: Berth wrote a file there and qBittorrent found none of it after a recheck. Its mount for that path was changed in compose; put it back, run docker compose up -d qbittorrent, then test again:',
+      dataUnreadable:
+        'The user inside the qBittorrent container cannot read files Berth writes under {{root}}: give it the same PUID / PGID as berth, or loosen the permissions on that folder, then test again.',
+      dataUnsettled: 'Let qBittorrent finish the checks it is running, then test again.',
       credentials: 'The username or password is wrong. Fix the fields above and test again.',
       authWarning:
         'Berth has counted {{failures}} failed logins in a row. By default qBittorrent bans this machine’s IP for {{minutes}} minutes after {{limit}}; at most {{left}} more and it will.',
@@ -3473,6 +3492,9 @@ const en: Translations<typeof zhHant> = {
     scheme_missing: 'The address has no http:// or https://',
     version_unsupported: 'It answers, but it is older than the oldest version Berth supports',
     other_server: 'Another Jellyfin answers, not the one the owner is on',
+    data_unseen: 'It answers, but it cannot see the file Berth put in /data',
+    data_unreadable: 'It answers and finds the file Berth put in /data, but cannot read it',
+    data_unsettled: 'It answers, but has not got to Berth’s probe file among its checks',
   },
   detail: {
     version: 'Version',
@@ -3563,6 +3585,8 @@ const en: Translations<typeof zhHant> = {
       qbittorrent: 'Leave the credentials empty if the WebUI has no password.',
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
+    probe:
+      'The test writes a probe file in {{root}} and asks qBittorrent to check it once, stopped, to see whether it can see {{root}}, then removes it (the check never finishes, so “Run external program on torrent finished” does not fire; if your qBittorrent has “Run external program on torrent added” set, that fires once) and deletes the file.',
     submit: 'Test connection',
     submitting: 'Testing…',
     notSaved:

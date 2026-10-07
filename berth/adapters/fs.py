@@ -228,15 +228,17 @@ def mount_point(path: Path) -> Path:
 
 
 @contextmanager
-def probe_file(directory: Path, *, roots: Sequence[Path]) -> Iterator[Path]:
+def probe_file(
+    directory: Path, *, roots: Sequence[Path], payload: bytes = b"berth"
+) -> Iterator[Path]:
     """在 `directory` 底下放一個探測檔，離開這個區塊就刪掉。
 
     「Jellyfin 看得到 Berth 剛寫的檔案嗎」要在檔案還在的時候問，所以清理不能由建立它的
-    那一支順手做完（plan §9.5 的檢查三）。
+    那一支順手做完（plan §9.5 的檢查三）。`payload` 是內容：頁 2 的探針要兩片（M4 票 46）。
     """
     probe = directory / f"{PROBE_PREFIX}{uuid.uuid4().hex[:8]}"
     _guard(probe, roots)
-    probe.write_bytes(b"berth")
+    probe.write_bytes(payload)
     try:
         yield probe
     finally:

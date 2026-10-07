@@ -659,7 +659,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | qBittorrent 全域偏好 | 不寫（D2，M4 票 32） | 不寫 | — | — |
 | qBittorrent WebUI 登入 | 設 | 不碰 | 只能再設一組蓋過 | qBittorrent 偏好 |
 | `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 不能；刪 Route、換一台都不刪分類 | qBittorrent 刪分類 |
-| 探測 torrent、探測檔 | 暫時，自清 | 同左 | 自清（Berth 中途崩潰可能殘留） | 手動刪 |
+| 探測 torrent、探測檔（頁 2 在 `/data`、校驗不完，M4 票 46；頁 3 在分類路徑） | 暫時，自清 | 同左 | 自清（Berth 中途崩潰可能殘留） | 手動刪 |
 | Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除；既有不移除 | Prowlarr 刪 |
 | Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
 | TMDB | 不寫 | 不寫 | — | — |
@@ -993,6 +993,22 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 - 看不到的那一面沒有一個「校驗完了」的狀態可等（4.4.5 第一次讀就已經是結論），所以 Berth 以「不在校驗或排隊中、進度不到 100%、state 3 秒不變」判看不到，整個探針最多等 20 秒（qBittorrent 預設一次只校驗一個 torrent，別的在校驗時要排隊）。
 - **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，4.4.5 與 5.2.3 同一個實驗裡實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**——每條 Route 每 5 分鐘一次，會變成使用者那邊的通知洪水。「按下之後會」說出這件事。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理只在那幾個時機觸發，沒有另外實測。
 - 探針 torrent 不掛分類、不帶 tag（tag 一建就留在使用者的清單裡；`berth` 那一個會讓 poller 把它當成 Berth 的下載），名字是 `.berth-probe-*`，停住、幾秒內就移除。
+
+**校驗不完的探針：頁 2 問「看不看得到 `/data`」**（2026-10-07 實測 4.4.5 與 5.2.3，M4 票 46；`scripts/experiments/qbittorrent_unfinished_probe.py`，送的是 Berth 自己的 `probe_torrent(unfinished=True)`，報告 `.local/experiments/results/qbittorrent-unfinished-probe-*.json`）
+
+探測檔兩片（32 KiB），torrent 的第二片雜湊算在反相的內容上。開著「完成時執行」（`autorun_program`）與「加入時執行」（`autorun_on_torrent_added_program`，各寫不同的檔），每個情境一包新的 torrent、停住加入、等它列出再 recheck：
+
+| 情境 | 4.4.5（API 2.8.5） | 5.2.3（API 2.15.1） |
+| --- | --- | --- |
+| 檔在、校驗不完 | `pausedDL`，**0.5** | `stoppedDL` → `checkingDL` → `stoppedDL`，**0.5** |
+| 檔不在 | `pausedDL` 0 | `stoppedDL` 0 |
+| 檔在、`chmod 000` | → `checkingDL` → `error` | → `error` |
+| 對照：單片（票 19 那一種）、檔在 | → `pausedUP` 1 | → `stoppedUP` 1 |
+| 「完成時執行」被觸發 | 只有對照組 | 只有對照組 |
+| 「加入時執行」被觸發 | （4.4.5 沒有這個設定） | 四包都觸發 |
+
+- 看得到與看不到照樣分得開（0.5 對 0），讀不了照樣是 `error`。所以 Berth 判「看得到」改成**進度大於 0**（`probe_sight`），兩種探針同一條；單片的那一種本來就是 0 或 1。
+- 頁 2 測連線時用這一種（M4 票 46）：不觸發「完成時執行」。「加入時執行」擋不掉——任何加進去的 torrent 都觸發，既有表單照實說會觸發一次。頁 3 的 Route 檢查仍是單片那一種（沒改：它的「按下之後會」照票 19 的說法）。
 
 **WebUI 帳密規則**（2026-10-01 讀原始碼＋實測，M4 票 26；`scripts/experiments/qbittorrent_webui_login_rules.py` 對 4.4.5 與 5.2.3，報告 `.local/experiments/results/qbittorrent-webui-login-rules-*.json`）
 

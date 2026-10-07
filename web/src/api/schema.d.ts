@@ -2453,7 +2453,7 @@ export interface components {
          * @description 測試結果的理由。UI 逐服務顯示，所以是封閉集合而不是自由文字。
          * @enum {string}
          */
-        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "version_unsupported" | "other_server";
+        ConnectionReason: "connected" | "setup_pending" | "setup_completed" | "auth_required" | "ip_banned" | "api_key_missing" | "not_deployed" | "unreachable" | "starting" | "protocol_mismatch" | "scheme_mismatch" | "scheme_missing" | "version_unsupported" | "other_server" | "data_unseen" | "data_unreadable" | "data_unsettled";
         /**
          * ConnectionState
          * @description 選完之後那一次測試的結果（plan §9.3〈服務頁的共同形狀〉）。
