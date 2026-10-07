@@ -275,6 +275,30 @@ class TestChoice:
 
         assert response.status_code == 422
 
+    def test_an_existing_service_that_fails_its_test_is_refused_and_saves_nothing(
+        self, client: TestClient
+    ) -> None:
+        """測過才存（M4 票 45）：400 `connection_failed`，那一次的結論在 `attempt`，畫面照它標欄位；
+        `GET /setup/status` 裡沒有它。這裡是既有 Prowlarr 沒給 key。"""
+        response = client.post(
+            "/api/setup/services/prowlarr",
+            json={"origin": "existing", "base_url": "http://nas:9696"},
+        )
+
+        assert response.status_code == 400
+        refusal = response.json()["detail"]
+        assert (refusal["reason"], refusal["detail"]) == ("connection_failed", "api_key_missing")
+        assert {
+            key: refusal["attempt"][key] for key in ("kind", "origin", "base_url", "state")
+        } == {
+            "kind": "prowlarr",
+            "origin": "existing",
+            "base_url": "http://nas:9696",
+            "state": "failed",
+        }
+        services = client.get("/api/setup/status").json()["services"]
+        assert "prowlarr" not in [row["kind"] for row in services]
+
     def test_the_jellyfin_source_is_a_conflict_once_there_is_an_owner(
         self, client: TestClient
     ) -> None:

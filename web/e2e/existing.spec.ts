@@ -42,13 +42,42 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 2. qBittorrent 選既有：填位址與它的 WebUI 帳密。全域偏好與帳密都不動（M4 票 05），測試通過就做完
-  //    （M4 票 38）：沒有確認鍵，也不送任何寫入。
+  //    （M4 票 38）：沒有確認鍵，也不送任何寫入。測過才存（M4 票 45）：先各錯一次——位址錯標在位址欄、
+  //    帳密錯標在帳號與密碼兩格、版本太舊不屬於哪一格而說在表單裡——都說沒有存下。
   await page.getByRole('radio', { name: /既有/ }).click()
   const main = page.getByRole('main')
-  await main.getByRole('textbox', { name: '位址' }).fill('http://nas:8080')
-  await main.getByRole('textbox', { name: '帳號' }).fill('admin')
-  await main.getByRole('textbox', { name: '密碼' }).fill('adminadmin')
-  await main.getByRole('button', { name: '測試連線' }).click()
+  const address = main.getByRole('textbox', { name: '位址' })
+  const username = main.getByRole('textbox', { name: '帳號' })
+  const password = main.getByRole('textbox', { name: '密碼' })
+  const test = main.getByRole('button', { name: '測試連線' })
+  await address.fill('http://typo-nas:8080')
+  await username.fill('admin')
+  await password.fill('adminadmin')
+  await test.click()
+  await expect(address).toHaveAttribute('aria-invalid', 'true')
+  await expect(address).toHaveAccessibleDescription(/連不到這個位址/)
+  await expect(password).not.toHaveAttribute('aria-invalid')
+  await expect(main.getByText(/這一組沒有存下/)).toBeVisible()
+  await shot(page, '2-qbittorrent-wrong-address')
+  await address.fill('http://nas:8080')
+  await password.fill('not-the-password')
+  await test.click()
+  for (const field of [username, password]) {
+    await expect(field).toHaveAttribute('aria-invalid', 'true')
+    await expect(field).toHaveAccessibleDescription(/帳號或密碼不對/)
+  }
+  await expect(address).not.toHaveAttribute('aria-invalid')
+  await shot(page, '2-qbittorrent-wrong-login')
+  await address.fill('http://old-nas:8080')
+  await password.fill('adminadmin')
+  await test.click()
+  await expect(main.getByText(/至少要 qBittorrent 4.4，這一台是 v4.3.9/)).toBeVisible()
+  for (const field of [address, username, password]) {
+    await expect(field).not.toHaveAttribute('aria-invalid')
+  }
+  await shot(page, '2-qbittorrent-outdated')
+  await address.fill('http://nas:8080')
+  await test.click()
   await expect(page.getByRole('heading', { name: '確認你的 qBittorrent' })).toBeVisible()
   // 偏好表整張收起，也不警告未完成目錄：它的全域偏好沒有一個影響 Berth（M4 票 22）。
   await expect(page.getByRole('table')).toHaveCount(0)
@@ -80,20 +109,22 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await shot(page, '3-routes')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 4. Prowlarr 選既有：與頁 1、2 同一份表單（M4 票 39）。先貼錯的 key：「測試結果」那一列說 key 不被接受、
-  // 補法說去哪裡複製，右欄不說「已取得」；改對再測，用它已經有的站，試搜；沒有介面登入那一格。
+  // 4. Prowlarr 選既有：與頁 1、2 同一份表單（M4 票 39）。先貼錯的 key：測過才存（M4 票 45），錯誤標在
+  // API key 欄、說去哪裡複製，什麼都沒存，右欄仍是「尚未取得」；改對再測，用它已經有的站，試搜；
+  // 沒有介面登入那一格。
   await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
   await page.getByRole('radio', { name: /既有/ }).click()
   await main.getByRole('textbox', { name: '位址' }).fill('http://nas:9696')
   await main.getByRole('textbox', { name: 'API key' }).fill('not-the-key')
   await main.getByRole('button', { name: '測試連線' }).click()
-  await expect(main.getByText('測試結果')).toBeVisible()
-  await expect(main.getByText('API key 不被接受', { exact: true })).toBeVisible()
-  await expect(main.getByText(/API key 不對：在 Prowlarr 的「設定 → 一般」複製/)).toBeVisible()
+  const key = main.getByRole('textbox', { name: 'API key' })
+  await expect(key).toHaveAttribute('aria-invalid', 'true')
+  await expect(key).toHaveAccessibleDescription(/API key 不對：在 Prowlarr 的「設定 → 一般」複製/)
+  await expect(main.getByText(/這一組沒有存下/)).toBeVisible()
   const cutaway = page.locator('section').filter({
     has: page.getByRole('heading', { level: 3, name: 'Prowlarr' }),
   })
-  await expect(cutaway.getByText('不被接受', { exact: true })).toBeVisible()
+  await expect(cutaway.getByText('尚未取得', { exact: true })).toBeVisible()
   await expect(cutaway.getByText('已取得', { exact: true })).toHaveCount(0)
   await shot(page, '4-indexers-wrong-key')
   await main.getByRole('textbox', { name: 'API key' }).fill('0123456789abcdef0123456789abcdef')

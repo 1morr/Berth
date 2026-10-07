@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import HttpSession, SchemeMismatchError, ServiceUnavailableError
 from berth.domain import ConnectionReason, ConnectionState, ServiceKind, ServiceOrigin
 from berth.services.clients import BundledServices, HttpServiceClientFactory
-from berth.services.setup import ServiceConnection, choose_service
+from berth.services.setup import ConnectionFailedError, ServiceConnection, choose_service
 from tests.integration.arrange import own
 from tests.integration.factories import COMPOSE
 
@@ -66,16 +66,18 @@ def _closed_port() -> int:
 
 
 async def _test(session: AsyncSession, base_url: str) -> tuple[ConnectionState, ConnectionReason]:
+    """既有的位址測不過不存（M4 票 45）：結論在拒絕帶回的那一次。"""
     await own(session)
-    status = await choose_service(
-        session,
-        HttpServiceClientFactory(),
-        BUNDLED,
-        ServiceKind.QBITTORRENT,
-        ServiceOrigin.EXISTING,
-        ServiceConnection(base_url=base_url),
-    )
-    row = next(row for row in status.services if row.kind is ServiceKind.QBITTORRENT)
+    with pytest.raises(ConnectionFailedError) as refused:
+        await choose_service(
+            session,
+            HttpServiceClientFactory(),
+            BUNDLED,
+            ServiceKind.QBITTORRENT,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url=base_url),
+        )
+    row = refused.value.attempt
     assert row.state is not None
     assert row.reason is not None
     return row.state, row.reason

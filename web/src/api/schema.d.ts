@@ -1573,7 +1573,8 @@ export interface paths {
          * @description 服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
          *
          *     擁有者成立之後改 Jellyfin 的來源、或把位址換到另一台 Jellyfin 是 409（擁有者是那一台上的帳號，
-         *     M4 票 18）；既有卻沒給位址是 422。
+         *     M4 票 18）；既有服務測不過是 400 `connection_failed`、什麼都不存（M4 票 45）；既有卻沒給位址
+         *     是 422。
          */
         post: operations["post_service_api_setup_services__kind__post"];
         delete?: never;
@@ -2412,12 +2413,13 @@ export interface components {
          * @description 服務頁的選擇不成立（`services/setup.choose_service`，M4 票 15）。
          * @enum {string}
          */
-        ChoiceRefusal: "jellyfin_owned" | "other_server" | "unverified";
+        ChoiceRefusal: "jellyfin_owned" | "other_server" | "unverified" | "connection_failed";
         /** ChoiceRefusalOut */
         ChoiceRefusalOut: {
             reason: components["schemas"]["ChoiceRefusal"];
             /** Detail */
             detail: string;
+            attempt?: components["schemas"]["ServiceOut"] | null;
         };
         /**
          * CollectionType
@@ -8739,6 +8741,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+            /** @description `connection_failed` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoiceRefusalOut"];
                 };
             };
             /** @description `jellyfin_owned` · `other_server` · `unverified` */

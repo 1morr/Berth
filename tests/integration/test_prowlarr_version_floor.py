@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.prowlarr import unsupported_message
 from berth.domain import (
+    ConnectionReason,
     HealthStatus,
     ServiceKind,
     ServiceOrigin,
@@ -27,6 +28,7 @@ from berth.services.health import check_health
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings
 from berth.services.setup import (
+    ConnectionFailedError,
     ServiceConnection,
     choose_service,
     retest_service,
@@ -59,20 +61,39 @@ class TestWizard:
     async def test_choosing_and_retesting_use_the_same_gate(
         self, session: AsyncSession, roots: dict[str, Path], version: str, passes: bool
     ) -> None:
-        """服務頁的二選一與「重新測試」同一道閘：低於下限的那一條說出兩個版本，剛好等於下限的過。"""
+        """服務頁的二選一與「重新測試」同一道閘：低於下限的那一條說出兩個版本，剛好等於下限的過。
+
+        二選一測不過不存（M4 票 45）：低於下限的那一次只在拒絕裡；重新測試測的是存下的那一台，所以先
+        存一台夠新的、再讓它「降版」。
+        """
         factory = await ready(session, roots, version)
         bundled = BundledServices(targets=COMPOSE, prowlarr_api_key="")
 
-        await choose_service(
-            session,
-            factory,
-            bundled,
-            ServiceKind.PROWLARR,
-            ServiceOrigin.EXISTING,
-            ServiceConnection(base_url="http://nas:9696", api_key="k"),
-            now=LATER,
-        )
-        chosen = (await read_settings(session, SetupSettings)).indexer.steps
+        async def choose() -> None:
+            await choose_service(
+                session,
+                factory,
+                bundled,
+                ServiceKind.PROWLARR,
+                ServiceOrigin.EXISTING,
+                ServiceConnection(base_url="http://nas:9696", api_key="k"),
+                now=LATER,
+            )
+
+        if passes:
+            await choose()
+            chosen = (await read_settings(session, SetupSettings)).indexer.steps
+        else:
+            with pytest.raises(ConnectionFailedError) as refused:
+                await choose()
+            attempt = refused.value.attempt
+            assert (attempt.reason, attempt.detail) == (
+                ConnectionReason.VERSION_UNSUPPORTED,
+                version,
+            )
+            factory.prowlarr_.version = AT_FLOOR
+            await choose()
+            factory.prowlarr_.version = version
         await retest_service(
             session, factory, bundled, ServiceKind.PROWLARR, restart=True, now=LATER
         )
@@ -90,7 +111,9 @@ class TestWizard:
                 error=unsupported_message(version),
             )
         )
-        assert chosen == retested == [expected]
+        assert retested == [expected]
+        if passes:
+            assert chosen == retested
 
 
 class TestHealth:

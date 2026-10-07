@@ -438,3 +438,166 @@ describe('換另一格與方向鍵（M4 票 09，票 15 critique / audit 的 P2�
     expect(onChoose).not.toHaveBeenCalled()
   })
 })
+
+describe('既有表單測不過：錯誤標在欄位上（M4 票 45）', () => {
+  const ADDRESS: Record<ServiceKind, string> = {
+    jellyfin: 'http://nas:8096',
+    qbittorrent: 'http://nas:8080',
+    prowlarr: 'http://nas:9696',
+  }
+
+  /** 精靈第一次選既有、按了測試、被拒：什麼都沒存，`services` 還是空的，結論只在拒絕裡。 */
+  async function refused(
+    kind: ServiceKind,
+    reason: NonNullable<ChoiceRefusal['attempt']>['reason'],
+    services = setupStatus().services,
+  ) {
+    const user = userEvent.setup()
+    const { rerender } = mount(kind, services)
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+    const attempt = chosen({
+      kind,
+      origin: 'existing',
+      base_url: ADDRESS[kind],
+      state: 'failed',
+      reason,
+      detail: '',
+      error: 'GET /raw: 401',
+    })
+    rerender(
+      <Page
+        kind={kind}
+        services={services}
+        refusal={{ reason: 'connection_failed', detail: reason ?? '', attempt }}
+        onChoose={vi.fn()}
+      />,
+    )
+  }
+
+  const address = () => screen.getByRole('textbox', { name: '位址' })
+
+  it.each(['jellyfin', 'qbittorrent', 'prowlarr'] as const)(
+    '%s 連不上：標在位址欄，aria-describedby 指到那一句',
+    async (kind) => {
+      await refused(kind, 'unreachable')
+
+      expect(address()).toHaveAttribute('aria-invalid', 'true')
+      expect(address()).toHaveAccessibleDescription(i18next.t('connection.fix.address'))
+      for (const credential of screen.queryAllByLabelText(/^(帳號|密碼|API key)$/)) {
+        expect(credential).not.toHaveAttribute('aria-invalid')
+      }
+      // 沒存下要說出來；原文收進技術細節。
+      expect(screen.getByText(i18next.t('connect.notSaved'))).toBeVisible()
+    },
+  )
+
+  it('填了 localhost 而連不上：位址欄說那一句（指的是 Berth 自己）', async () => {
+    const user = userEvent.setup()
+    const { rerender } = mount('qbittorrent')
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+    const attempt = chosen({
+      kind: 'qbittorrent',
+      origin: 'existing',
+      base_url: 'http://localhost:8080',
+      state: 'failed',
+      reason: 'unreachable',
+    })
+    rerender(
+      <Page
+        kind="qbittorrent"
+        services={[]}
+        refusal={{ reason: 'connection_failed', detail: 'unreachable', attempt }}
+        onChoose={vi.fn()}
+      />,
+    )
+
+    expect(address()).toHaveAttribute('aria-invalid', 'true')
+    expect(address()).toHaveAccessibleDescription(i18next.t('connect.loopback'))
+  })
+
+  it('qBittorrent 帳密錯：帳號、密碼兩格都標、指到同一句，位址欄不標', async () => {
+    await refused('qbittorrent', 'auth_required')
+
+    const said = i18next.t('connection.fix.credentials')
+    expect(screen.getByRole('textbox', { name: '帳號' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: '帳號' })).toHaveAccessibleDescription(said)
+    expect(screen.getByLabelText('密碼')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('密碼')).toHaveAccessibleDescription(said)
+    expect(screen.getAllByText(said)).toHaveLength(1)
+    expect(address()).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('Prowlarr 的 key 錯：標在 API key 欄', async () => {
+    await refused('prowlarr', 'auth_required')
+
+    expect(screen.getByLabelText('API key')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('API key')).toHaveAccessibleDescription(
+      i18next.t('connection.fix.prowlarrKey'),
+    )
+    expect(address()).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('版本太舊不屬於哪一格：留在表單裡，欄位都不標', async () => {
+    await refused('qbittorrent', 'version_unsupported')
+
+    expect(screen.getByText(/至少要 qBittorrent 4.4/)).toBeVisible()
+    expect(address()).not.toHaveAttribute('aria-invalid')
+    expect(screen.getByLabelText('密碼')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('連錯的預警看這一次的次數：沒存下也照數', async () => {
+    const user = userEvent.setup()
+    const { rerender } = mount('qbittorrent')
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+    const attempt = chosen({
+      kind: 'qbittorrent',
+      origin: 'existing',
+      base_url: 'http://nas:8080',
+      state: 'failed',
+      reason: 'auth_required',
+      auth_failures: 3,
+    })
+    rerender(
+      <Page
+        kind="qbittorrent"
+        services={[]}
+        refusal={{ reason: 'connection_failed', detail: 'auth_required', attempt }}
+        onChoose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('密碼')).toHaveAccessibleDescription(/再錯 2 次/)
+  })
+
+  it('已經有一台在用：說它照舊在用', async () => {
+    const user = userEvent.setup()
+    const inUse = chosen({
+      kind: 'qbittorrent',
+      origin: 'existing',
+      base_url: 'http://nas:8080',
+      reason: 'connected',
+    })
+    const { rerender } = mount('qbittorrent', [inUse])
+    await user.click(screen.getByRole('button', { name: '改位址或憑證' }))
+    rerender(
+      <Page
+        kind="qbittorrent"
+        services={[inUse]}
+        refusal={{
+          reason: 'connection_failed',
+          detail: 'unreachable',
+          attempt: chosen({
+            ...inUse,
+            base_url: 'http://typo:8080',
+            state: 'failed',
+            reason: 'unreachable',
+          }),
+        }}
+        onChoose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(i18next.t('connect.notSavedInUse'))).toBeVisible()
+    expect(address()).toHaveAttribute('aria-invalid', 'true')
+  })
+})

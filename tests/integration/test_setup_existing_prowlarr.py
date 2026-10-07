@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ProtocolMismatchError, ServiceUnavailableError
-from berth.adapters.prowlarr import ProwlarrIndexer, unsupported_message
+from berth.adapters.prowlarr import ProwlarrIndexer
 from berth.domain import (
     ConnectionReason,
     ConnectionState,
@@ -38,7 +38,9 @@ from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import (
     STEP_INDEXER,
+    ConnectionFailedError,
     ServiceConnection,
+    ServiceView,
     choose_service,
     read_status,
     retest_service,
@@ -85,9 +87,14 @@ async def choose_existing(session: AsyncSession, factory: FakeClientFactory) -> 
     )
 
 
-async def last_reason(session: AsyncSession) -> ConnectionReason | None:
-    test = (await read_settings(session, SetupSettings)).choices[ServiceKind.PROWLARR].test
-    return test.reason if test is not None else None
+async def refused(session: AsyncSession, factory: FakeClientFactory) -> ServiceView:
+    """測不過不存（M4 票 45）：那一次的結論在拒絕裡，選擇與頁 4 的纜繩都沒動。"""
+    before = await read_settings(session, SetupSettings)
+    with pytest.raises(ConnectionFailedError) as refusal:
+        await choose_existing(session, factory)
+    after = await read_settings(session, SetupSettings)
+    assert (after.choices, after.indexer.steps) == (before.choices, before.indexer.steps)
+    return refusal.value.attempt
 
 
 class TestZeroSites:
@@ -145,21 +152,12 @@ class TestOldProwlarr:
         factory = await ready(session, roots)
         factory.prowlarr_.version = OLD
 
-        await choose_existing(session, factory)
+        attempt = await refused(session, factory)
 
-        setup = await read_settings(session, SetupSettings)
-        test = setup.choices[ServiceKind.PROWLARR].test
-        assert test is not None
-        assert (test.state, test.reason, test.detail) == (
+        assert (attempt.state, attempt.reason, attempt.detail) == (
             ConnectionState.FAILED,
             ConnectionReason.VERSION_UNSUPPORTED,
             OLD,
-        )
-        (step,) = setup.indexer.steps
-        assert (step.status, step.detail, step.error) == (
-            StepStatus.FAILED,
-            OLD,
-            unsupported_message(OLD),
         )
 
     async def test_the_floor_passes(self, session: AsyncSession, roots: dict[str, Path]) -> None:
@@ -180,12 +178,12 @@ class TestWrongKey:
         factory = await ready(session, roots)
         factory.prowlarr_.key_rejected = True
 
-        await choose_existing(session, factory)
+        attempt = await refused(session, factory)
 
-        setup = await read_settings(session, SetupSettings)
-        test = setup.choices[ServiceKind.PROWLARR].test
-        assert test is not None
-        assert (test.state, test.reason) == (ConnectionState.FAILED, ConnectionReason.AUTH_REQUIRED)
+        assert (attempt.state, attempt.reason) == (
+            ConnectionState.FAILED,
+            ConnectionReason.AUTH_REQUIRED,
+        )
 
 
 class TestOtherFailures:
@@ -197,9 +195,7 @@ class TestOtherFailures:
         factory = await ready(session, roots)
         factory.prowlarr_.ping_error = ProtocolMismatchError("/api/v1/system/status: not JSON")
 
-        await choose_existing(session, factory)
-
-        assert await last_reason(session) is ConnectionReason.PROTOCOL_MISMATCH
+        assert (await refused(session, factory)).reason is ConnectionReason.PROTOCOL_MISMATCH
 
     async def test_nothing_answering_is_still_unreachable(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -207,9 +203,7 @@ class TestOtherFailures:
         factory = await ready(session, roots)
         factory.prowlarr_.ping_error = ServiceUnavailableError("connection refused")
 
-        await choose_existing(session, factory)
-
-        assert await last_reason(session) is ConnectionReason.UNREACHABLE
+        assert (await refused(session, factory)).reason is ConnectionReason.UNREACHABLE
 
 
 class TestAddingToAnExistingProwlarr:

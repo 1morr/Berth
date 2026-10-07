@@ -157,6 +157,20 @@ class ChoiceLockedError(Exception):
         self.detail = detail
 
 
+class ConnectionFailedError(Exception):
+    """既有服務那一次測不過，**什麼都沒存**（M4 票 45，審計 E-6）：位址與憑證測過才存，Berth 用的
+    連線、那一頁的選擇與結果都還是原本的。`attempt` 是那一次的結論，畫面標在欄位上（位址錯標位址、
+    帳密錯標帳密）；它沒有存下來，重新整理就不在了——欄位裡使用者打的字才是「改一格再按」的依據。
+
+    只存一樣東西：qBittorrent 連錯的次數（`SetupQbittorrent.auth_failures`）。那一台數的是 Berth
+    這台的 IP，不看 Berth 存了沒。
+    """
+
+    def __init__(self, attempt: ServiceView) -> None:
+        super().__init__(f"{attempt.kind} at {attempt.base_url}: {attempt.reason}")
+        self.attempt = attempt
+
+
 #: `complete_setup` 拒絕時說哪一頁差什麼。前端不解這句（它照手上的狀態指名），留給 API 的使用者。
 _UNFINISHED = {
     STEP_JELLYFIN: "Jellyfin needs an owner",
@@ -337,7 +351,10 @@ async def choose_service(
 ) -> SetupStatus:
     """服務頁的二選一：存下選擇與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
 
-    **測不過也存**：使用者要能改一個欄位再按一次，而不是每次重打整份表單。
+    **既有的先測、測過才存**（M4 票 45；Home Assistant 驗過才 `create_entry`、Sonarr 存之前
+    再測一次）：測不過是 `ConnectionFailedError`，什麼都不換——已經有一台測過的在用時照舊用它。
+    原本測不過也存，設定頁打錯一個字下載就停擺。套件內的照舊先存再測：位址是 compose
+    主機名，沒有使用者填的東西，而啟動中的那一台要靠存下的選擇輪詢。
 
     **換了一台就重做那一頁**（shape 時使用者拍板）：來源或位址變了，那一頁的結果清掉——它們說的是
     原本那一台。Berth 寫進原本那一台的東西不撤回。qBittorrent 換了，所有 Route 的檢查一起作廢：
@@ -366,29 +383,28 @@ async def choose_service(
             raise ValueError("an existing service needs its address")
 
     moved = previous is not None and not previous.is_at(origin, base_url)
+    owned_jellyfin = kind is ServiceKind.JELLYFIN and setup.owner_established()
     tested: _Outcome | None = None
-    if (
-        moved
-        and previous is not None
-        and kind is ServiceKind.JELLYFIN
-        and setup.owner_established()
-    ):
+    if moved and previous is not None and owned_jellyfin:
         tested = await _same_jellyfin(session, factory, setup, previous.base_url, base_url)
-    elif moved and kind is ServiceKind.QBITTORRENT:
+    elif origin is ServiceOrigin.EXISTING:
+        candidate = await _candidate(session, kind, base_url, connection)
+        tested = await _test_connection(factory, kind, candidate, setup)
+    if origin is ServiceOrigin.EXISTING and tested is not None and not _accepted(kind, tested):
+        raise await _refused(session, kind, base_url, tested)
+    if moved and owned_jellyfin and tested is not None and not tested.server_id:
+        # 套件內那一台的 compose 位址換了（改了 `.env` 的 port）而新位址不回答：認不出是不是同一台。
+        # 既有的走不到這裡——沒回答 ServerId 的測試都不是 `ok`，上面就拒了。
+        raise ChoiceLockedError(ChoiceRefusal.UNVERIFIED, tested.reason.value)
+    if moved and kind is ServiceKind.QBITTORRENT:
         await forget_route_checks(session)
     await _remember_connection(session, kind, origin, base_url, connection, bundled)
 
     def record(latest: SetupSettings) -> None:
-        current = latest.choices.get(kind)
-        # 同一個位址改帳密再測：上一次的結果留著，連錯的次數才接得下去（qBittorrent 數的是
-        # 這台的 IP）。
-        kept = current.test if current is not None and current.is_at(origin, base_url) else None
-        if moved and tested is None:
+        if moved and not owned_jellyfin:
             _start_over(latest, kind)
-        latest.choices = {
-            **latest.choices,
-            kind: ServiceChoice(origin=origin, base_url=base_url, test=kept),
-        }
+        # 測試結果由 `_test_and_record` 寫：連錯的次數跟著位址另外記（`_count_auth_failures`）。
+        latest.choices = {**latest.choices, kind: ServiceChoice(origin=origin, base_url=base_url)}
 
     await update_settings(session, SetupSettings, record)
     return await _test_and_record(session, factory, kind, restart=True, now=moment, tested=tested)
@@ -454,13 +470,18 @@ async def _test_and_record(
     30 秒上下，而啟動中的輪詢每 3 秒一次，這段時間裡別的頁、別的分頁可能已經寫進同一組設定。
     測的那一台已經不是現在選的（使用者換了位址），結果說的是原本那一台，不記。
     """
-    tested_choice = (await read_settings(session, SetupSettings)).choices[kind]
-    outcome = tested or await _test_connection(session, factory, kind)
+    setup = await read_settings(session, SetupSettings)
+    tested_choice = setup.choices[kind]
+    outcome = tested or await _test_connection(
+        factory, kind, await _stored_connection(session, kind), setup
+    )
 
     def record(latest: SetupSettings) -> None:
         choice = latest.choices.get(kind)
         if choice is None or not choice.is_at(tested_choice.origin, tested_choice.base_url):
             return
+        if kind is ServiceKind.QBITTORRENT:
+            _count_auth_failures(latest, choice.base_url, outcome)
         test = _settle(outcome, choice, restart=restart, now=now)
         latest.choices = {**latest.choices, kind: choice.model_copy(update={"test": test})}
         if latest.owner_established() and outcome.server_id and not latest.owner.jellyfin_server_id:
@@ -497,6 +518,77 @@ def _start_over(setup: SetupSettings, kind: ServiceKind) -> None:
         setup.indexer.skipped = False
         setup.indexer.web_ui_username = ""
         setup.indexer.web_ui_password_hash = ""
+
+
+def _accepted(kind: ServiceKind, outcome: _Outcome) -> bool:
+    """這一次測試過得了「測過才存」嗎（M4 票 45）。
+
+    例外是 Jellyfin 的 `auth_required`：說的是 Berth 自己那一把 key 被撤了（擁有者重新登入換一把，
+    M4 票 18），不是這張表單填的東西；位址已經答出 ServerId、認得出是哪一台，照樣存下，重新登入才
+    有地方送。
+    """
+    if outcome.ok:
+        return True
+    return (
+        kind is ServiceKind.JELLYFIN
+        and outcome.reason is ConnectionReason.AUTH_REQUIRED
+        and bool(outcome.server_id)
+    )
+
+
+async def _refused(
+    session: AsyncSession, kind: ServiceKind, base_url: str, outcome: _Outcome
+) -> ConnectionFailedError:
+    """測不過的那一次：只記連錯的次數，結論跟著拒絕回去（`ConnectionFailedError`）。"""
+    failures = 0
+    if kind is ServiceKind.QBITTORRENT:
+
+        def count(latest: SetupSettings) -> None:
+            _count_auth_failures(latest, base_url, outcome)
+
+        counted = await update_settings(session, SetupSettings, count)
+        failures = counted.qbittorrent.auth_failures.get(base_url, 0)
+    return ConnectionFailedError(
+        ServiceView(
+            kind=kind,
+            origin=ServiceOrigin.EXISTING,
+            base_url=base_url,
+            state=ConnectionState.FAILED,
+            reason=outcome.reason,
+            detail=outcome.detail,
+            server_id=outcome.server_id,
+            error=outcome.error,
+            auth_failures=failures,
+            waited_seconds=0,
+        )
+    )
+
+
+async def _candidate(
+    session: AsyncSession, kind: ServiceKind, base_url: str, connection: ServiceConnection
+) -> ServiceConnection:
+    """既有那一台要先測的那一組：表單填的位址與憑證。Jellyfin 的表單只有位址，key 是 Berth 自己存的
+    那一把（擁有者成立之後拿它問 `/Auth/Keys`）。"""
+    if kind is ServiceKind.JELLYFIN:
+        api_key = (await read_settings(session, JellyfinSettings)).api_key
+        return ServiceConnection(base_url=base_url, api_key=api_key)
+    return connection
+
+
+async def _stored_connection(session: AsyncSession, kind: ServiceKind) -> ServiceConnection:
+    """Berth 現在用的那一組（`settings.services.*`）：重新測試與套件內的測試測的是它。"""
+    if kind is ServiceKind.JELLYFIN:
+        jellyfin = await read_settings(session, JellyfinSettings)
+        return ServiceConnection(base_url=jellyfin.base_url, api_key=jellyfin.api_key)
+    if kind is ServiceKind.QBITTORRENT:
+        qbittorrent = await read_settings(session, QbittorrentSettings)
+        return ServiceConnection(
+            base_url=qbittorrent.base_url,
+            username=qbittorrent.username,
+            password=qbittorrent.password,
+        )
+    indexer = await read_settings(session, IndexerSettings)
+    return ServiceConnection(base_url=indexer.base_url, api_key=indexer.api_key)
 
 
 async def _remember_connection(
@@ -566,24 +658,23 @@ async def _interface_user(prowlarr: ProwlarrClient) -> str:
 
 
 async def _test_connection(
-    session: AsyncSession, factory: ServiceClientFactory, kind: ServiceKind
+    factory: ServiceClientFactory,
+    kind: ServiceKind,
+    connection: ServiceConnection,
+    setup: SetupSettings,
 ) -> _Outcome:
-    """用存下來的連線資訊連一次那個服務。只讀，不寫任何東西。"""
+    """拿這一組連一次那個服務：存下的那一組（`_stored_connection`），或既有表單還沒存的那一組
+    （`_candidate`）。只讀，不寫任何東西。"""
     if kind is ServiceKind.JELLYFIN:
-        jellyfin = await read_settings(session, JellyfinSettings)
-        setup = await read_settings(session, SetupSettings)
-        return await _test_jellyfin(factory, jellyfin.base_url, setup, api_key=jellyfin.api_key)
+        return await _test_jellyfin(factory, connection.base_url, setup, api_key=connection.api_key)
 
     if kind is ServiceKind.QBITTORRENT:
-        settings = await read_settings(session, QbittorrentSettings)
-        bundled = (await read_settings(session, SetupSettings)).origin_of(
-            ServiceKind.QBITTORRENT
-        ) is ServiceOrigin.BUNDLED
-        qbittorrent = factory.qbittorrent(settings.base_url)
+        bundled = setup.origin_of(ServiceKind.QBITTORRENT) is ServiceOrigin.BUNDLED
+        qbittorrent = factory.qbittorrent(connection.base_url)
 
         async def qbittorrent_test() -> _Outcome:
-            if settings.username:
-                await qbittorrent.login(settings.username, settings.password)
+            if connection.username:
+                await qbittorrent.login(connection.username, connection.password)
             version = await qbittorrent.version()
             if not version.supported:
                 # 版本在測連線時就擋（M4 票 21，與 Jellyfin、Prowlarr 同一個時機）：原本這裡是綠燈、
@@ -604,14 +695,11 @@ async def _test_connection(
         finally:
             await qbittorrent.aclose()
 
-    indexer = await read_settings(session, IndexerSettings)
-    bundled = (await read_settings(session, SetupSettings)).origin_of(
-        ServiceKind.PROWLARR
-    ) is ServiceOrigin.BUNDLED
-    prowlarr = factory.prowlarr(indexer.base_url, indexer.api_key)
+    bundled = setup.origin_of(ServiceKind.PROWLARR) is ServiceOrigin.BUNDLED
+    prowlarr = factory.prowlarr(connection.base_url, connection.api_key)
 
     async def prowlarr_test() -> _Outcome:
-        if not indexer.api_key:
+        if not connection.api_key:
             # 唯讀掛載與環境變數都沒有，使用者也還沒貼：就地給貼 key 的欄位（plan §9.2）。
             # **先問它在不在**（匿名的 `/ping`，M4 票 25）：只有 Berth 時根本沒有那個容器，該說的
             # 是主機名解不到，不是 key——貼了 key 才說出真正原因等於白貼一次。
@@ -699,10 +787,11 @@ async def _same_jellyfin(
     previous_url: str,
     base_url: str,
 ) -> _Outcome:
-    """擁有者成立之後換位址：新位址要先回答它是同一台，不然拒絕、什麼都不存（M4 票 18）。
+    """擁有者成立之後換位址：新位址上是另一台就拒絕、什麼都不存（M4 票 18）。
 
-    **連不上也不存**：認不出是不是同一台，而存下去的話每個人的登入都會打到那個位址。回的是這一次
-    測試，存下之後不必再敲第二次。
+    **連不上也不存**：認不出是不是同一台，而存下去的話每個人的登入都會打到那個位址。那一條由呼叫端
+    擋（`choose_service`）：既有的是「測過才存」的位址錯（M4 票 45，標在位址欄），套件內的是
+    `unverified`。回的是這一次測試，存下之後不必再敲第二次。
 
     票 18 之前成立的擁有者沒記 ServerId：先問原本那一台是誰、記在 `setup` 上，再比新的。存下來的是
     回傳的那一次測試的 ServerId（`_test_and_record`）：過得了這裡就是同一台。
@@ -717,8 +806,6 @@ async def _same_jellyfin(
     outcome = await _test_jellyfin(factory, base_url, setup, api_key=api_key)
     if outcome.reason is ConnectionReason.OTHER_SERVER:
         raise ChoiceLockedError(ChoiceRefusal.OTHER_SERVER, outcome.detail)
-    if not outcome.server_id:
-        raise ChoiceLockedError(ChoiceRefusal.UNVERIFIED, outcome.reason.value)
     return outcome
 
 
@@ -761,7 +848,6 @@ def _settle(
     """一次測試的結果。只有套件內的那一台會「等」：使用者自己填的位址當場就給結論，不該給他一個
     永遠不會好的倒數。等超過上限就逾時；協定不符例外——過了上限還是它，就是主機名上真的是別的東西。
     """
-    failures = _auth_failures(outcome, choice.test)
     if outcome.ok:
         state = ConnectionState.OK
     elif not outcome.transient or choice.origin is ServiceOrigin.EXISTING:
@@ -793,23 +879,24 @@ def _settle(
         detail=outcome.detail,
         server_id=outcome.server_id,
         error=outcome.error,
-        auth_failures=failures,
         checked_at=now,
     )
 
 
-def _auth_failures(outcome: _Outcome, previous: ServiceTest | None) -> int:
-    """這個位址上連續幾次帳密不被接受（M4 票 21）。
+def _count_auth_failures(setup: SetupSettings, base_url: str, outcome: _Outcome) -> None:
+    """這個位址上連續幾次帳密不被接受（M4 票 21）。只有 qBittorrent 數：它連錯 5 次封 IP。
 
     qBittorrent 數的是 Berth 這台的 IP、只在登入成功時歸零（brief §20.2），Berth 照同一個規則
-    數：被封了也不歸零——解封之後再錯一次就又封。換位址的話呼叫端不帶上一次（`choose_service`）。
+    數：被封了也不歸零——解封之後再錯一次就又封。**跟著位址、不跟著選擇**（M4 票 45）：測不過的
+    那一次不存，次數照樣要記。
     """
-    before = previous.auth_failures if previous is not None else 0
+    failures = setup.qbittorrent.auth_failures
     if outcome.reason is ConnectionReason.AUTH_REQUIRED:
-        return before + 1
-    if outcome.ok:
-        return 0
-    return before
+        setup.qbittorrent.auth_failures = {**failures, base_url: failures.get(base_url, 0) + 1}
+    elif outcome.ok:
+        setup.qbittorrent.auth_failures = {
+            address: count for address, count in failures.items() if address != base_url
+        }
 
 
 def _existing_indexer_step(test: ServiceTest) -> SetupStep:
@@ -943,7 +1030,7 @@ def _status(setup: SetupSettings, *, now: datetime, berthed: bool) -> SetupStatu
         owner_signs_in=_owner_signs_in(setup),
         jellyfin_startup=remembered_startup(setup),
         services=tuple(
-            _view(kind, choice, now)
+            _view(kind, choice, now, setup)
             for kind in ServiceKind
             if (choice := setup.choices.get(kind)) is not None
         ),
@@ -951,7 +1038,9 @@ def _status(setup: SetupSettings, *, now: datetime, berthed: bool) -> SetupStatu
     )
 
 
-def _view(kind: ServiceKind, choice: ServiceChoice, now: datetime) -> ServiceView:
+def _view(
+    kind: ServiceKind, choice: ServiceChoice, now: datetime, setup: SetupSettings
+) -> ServiceView:
     test = choice.test
     waited = now - test.waiting_since if test is not None and test.waiting_since else timedelta()
     return ServiceView(
@@ -963,7 +1052,9 @@ def _view(kind: ServiceKind, choice: ServiceChoice, now: datetime) -> ServiceVie
         detail=test.detail if test is not None else "",
         server_id=test.server_id if test is not None else "",
         error=test.error if test is not None else "",
-        auth_failures=test.auth_failures if test is not None else 0,
+        auth_failures=setup.qbittorrent.auth_failures.get(choice.base_url, 0)
+        if kind is ServiceKind.QBITTORRENT
+        else 0,
         waited_seconds=max(int(waited.total_seconds()), 0),
     )
 

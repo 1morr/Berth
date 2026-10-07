@@ -451,6 +451,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "owner_refusal": "OwnerRefusalOut",
             "login_refusal": "InterfaceLoginRefusalOut",
             "choice_refusal": "ChoiceRefusalOut",
+            "connection_failed": "ChoiceRefusalOut",
             "rss_refusal": "RssRefusalOut",
             "_refuse": "JobRefusalOut",
         }

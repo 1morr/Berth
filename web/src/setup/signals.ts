@@ -40,6 +40,42 @@ export function connectFields(kind: ServiceKind): ReadonlyArray<'apiKey' | 'cred
 }
 
 /**
+ * 每一種理由標在哪一格（M4 票 45）：位址類是位址本身寫錯、或那個位址上沒有這個服務；憑證類是帳密或
+ * API key 被拒、連錯太多次被封、key 沒填。一種理由一格：後端多一種理由時 `tsc` 逼人歸類。
+ */
+const REASON_FIELD = {
+  unreachable: 'address',
+  not_deployed: 'address',
+  scheme_mismatch: 'address',
+  scheme_missing: 'address',
+  protocol_mismatch: 'address',
+  auth_required: 'credentials',
+  ip_banned: 'credentials',
+  api_key_missing: 'credentials',
+  connected: null,
+  setup_pending: null,
+  setup_completed: null,
+  starting: null,
+  version_unsupported: null,
+  other_server: null,
+} as const satisfies Record<ConnectionReason, 'address' | 'credentials' | null>
+
+/**
+ * 既有表單測不過的那一次，錯誤標在哪一格（M4 票 45，審計 E-6；Sonarr 與 Home Assistant 的
+ * `errors[欄位]`）：位址錯標位址、憑證錯標憑證，其餘（`null`）留在表單的頁面層級。
+ *
+ * 憑證類只在那個服務的表單有憑證欄時算：Jellyfin 的表單只有位址，它的 `auth_required` 說的是 Berth
+ * 自己那一把 key 被撤了（擁有者重新登入），不是這張表單填的東西。
+ */
+export function connectionField(
+  kind: ServiceKind,
+  reason: ConnectionReason,
+): 'address' | 'credentials' | null {
+  const field = REASON_FIELD[reason]
+  return field === 'credentials' && connectFields(kind).length === 0 ? null : field
+}
+
+/**
  * 測試打的第一支（`services/setup._test_connection`）。Prowlarr 問 `system/status`：1.3.2 之前沒有 `/ping`，
  * 版本就說不出來了（M4 票 20）。
  */
@@ -56,8 +92,12 @@ const TEST_PATH: Record<ServiceKind, string> = {
 export function testEndpoint(status: SetupStatus, kind: ServiceKind): string {
   const chosen = status.services.find((row) => row.kind === kind)?.base_url
   // OpenAPI 把 dict 寫成任意鍵；後端三個服務一定都給（`services/clients.bundled_targets`）。
-  const target = chosen || status.bundled_targets[kind]!
-  return target.replace(/^https?:\/\//, '') + TEST_PATH[kind]
+  return endpointAt(chosen || status.bundled_targets[kind]!, kind)
+}
+
+/** 某個位址上的那一支：既有表單測不過的那一次沒存下，它的位址不在 `status` 裡（M4 票 45）。 */
+export function endpointAt(baseUrl: string, kind: ServiceKind): string {
+  return baseUrl.replace(/^https?:\/\//, '') + TEST_PATH[kind]
 }
 
 /**

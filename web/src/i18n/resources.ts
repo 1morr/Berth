@@ -415,6 +415,8 @@ const zhHant = {
     },
     submit: '測試連線',
     submitting: '測試中…',
+    notSaved: '這一組沒有存下：測得過才存。改好再按一次「測試連線」。',
+    notSavedInUse: '這一組沒有存下：測得過才存，Berth 照舊用原本那一台。',
     error: {
       blank: '位址要填。',
       scheme: '位址要以 http:// 或 https:// 開頭，例如 http://192.168.1.10:8080。',
@@ -810,7 +812,6 @@ const zhHant = {
     },
     required: '必填',
     held: '已取得',
-    heldUnverified: '已存下，沒通過驗證',
     absent: '還沒填',
     whereLabel: '去哪裡拿',
     where:
@@ -3564,6 +3565,10 @@ const en: Translations<typeof zhHant> = {
     },
     submit: 'Test connection',
     submitting: 'Testing…',
+    notSaved:
+      'Nothing was saved: a connection is saved only once it passes. Fix it and test again.',
+    notSavedInUse:
+      'Nothing was saved: a connection is saved only once it passes. Berth keeps using the one it had.',
     error: {
       blank: 'The address is required.',
       scheme:
@@ -3983,7 +3988,6 @@ const en: Translations<typeof zhHant> = {
     },
     required: 'Required',
     held: 'Held',
-    heldUnverified: 'Saved, not verified',
     absent: 'Not set yet',
     whereLabel: 'Where to get one',
     where:

@@ -176,13 +176,11 @@ export function TmdbKey({
 }
 
 /**
- * 憑證那一格：存下來不等於驗過（M4 票 21）。原本測不過時右欄寫「已取得」，泊位卡卻是「失敗 · 待驗證」。
+ * 憑證那一格：只存測過的（M4 票 45），所以存著就是驗過了。原本測不過也存，這裡多一個「已存下，
+ * 沒通過驗證」。
  */
-function credentialLabel(
-  tmdb: TmdbSetup,
-): 'tmdbStep.held' | 'tmdbStep.heldUnverified' | 'tmdbStep.absent' {
-  if (!tmdb.api_key_present) return 'tmdbStep.absent'
-  return tmdb.verified ? 'tmdbStep.held' : 'tmdbStep.heldUnverified'
+function credentialLabel(tmdb: TmdbSetup): 'tmdbStep.held' | 'tmdbStep.absent' {
+  return tmdb.api_key_present ? 'tmdbStep.held' : 'tmdbStep.absent'
 }
 
 /**

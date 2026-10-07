@@ -148,9 +148,6 @@ class ServiceTest(BaseModel):
     server_id: str = ""
     #: 沒連上時服務回的原文（英文）。UI 收進「技術細節」（M4 票 21）。
     error: str = ""
-    #: 這個位址上連續幾次帳密不被接受。qBittorrent 預設連錯 5 次就封 IP（brief §20.2），畫面
-    #: 第 3 次起預警；成功或換位址歸零。只有 qBittorrent 用得到，別的服務一律是 0。
-    auth_failures: int = 0
     checked_at: datetime
     #: 套件內那一台還在啟動時，這一輪 2 分鐘輪詢的起點。有結論就清掉。
     waiting_since: datetime | None = None
@@ -310,6 +307,11 @@ class SetupQbittorrent(BaseModel):
     #: Berth 自己連它靠免密白名單，用不到這組。帳號在、雜湊空的是「那一台自己就設過了」。
     web_ui_username: str = ""
     web_ui_password_hash: str = ""
+    #: Berth 對這個位址連續幾次帳密不被接受（鍵是位址；歸零就拿掉那一列）。qBittorrent
+    #: 預設連錯 5 次封 IP（brief §20.2），畫面第 3 次起預警。**跟著位址、不跟著選擇**
+    #: （M4 票 45）：測不過的那一次不存，次數照樣要記。票 45 之前記在
+    #: `ServiceTest.auth_failures`，讀的時候丟掉（從 0 重數）。
+    auth_failures: dict[str, int] = {}
 
     @field_validator("steps", mode="after")
     @classmethod

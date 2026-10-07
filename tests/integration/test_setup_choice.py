@@ -53,6 +53,7 @@ from berth.services.setup import (
     STEP_ROUTES,
     TEST_WINDOW,
     ChoiceLockedError,
+    ConnectionFailedError,
     ServiceConnection,
     ServiceView,
     SetupStatus,
@@ -480,19 +481,26 @@ async def test_a_container_that_came_up_turns_green(session: AsyncSession) -> No
 async def test_an_existing_address_gets_its_answer_on_the_spot(
     session: AsyncSession, error: Exception, reason: ConnectionReason
 ) -> None:
-    """使用者自己填的位址不給倒數：一個永遠不會好的倒數比紅燈更糟（票 06g）。"""
+    """使用者自己填的位址不給倒數：一個永遠不會好的倒數比紅燈更糟（票 06g）。測不過不存
+    （M4 票 45），那一次的結論跟著拒絕回去，畫面標在欄位上。"""
     await own(session)
     factory = FakeClientFactory(qbittorrent=FakeQbittorrentClient(login_error=error))
 
-    status = await choose(
-        session,
-        factory,
+    with pytest.raises(ConnectionFailedError) as refused:
+        await choose(
+            session,
+            factory,
+            ServiceKind.QBITTORRENT,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://nas:8080", username="home", password="wrong"),
+        )
+
+    row = refused.value.attempt
+    assert (row.kind, row.origin, row.base_url) == (
         ServiceKind.QBITTORRENT,
         ServiceOrigin.EXISTING,
-        ServiceConnection(base_url="http://nas:8080", username="home", password="wrong"),
+        "http://nas:8080",
     )
-
-    row = view(status, ServiceKind.QBITTORRENT)
     assert (row.state, row.reason) == (ConnectionState.FAILED, reason)
     # 原文照錄，畫面收進技術細節（M4 票 21）。
     assert row.error == str(error)
@@ -514,19 +522,18 @@ async def test_qbittorrent_below_the_floor_is_red_at_the_connection_test(
     「太舊」——同一個畫面兩種顏色。下限 Web API 2.8.4 的兩邊各一台。"""
     await own(session)
     factory = FakeClientFactory(qbittorrent=FakeQbittorrentClient(version=version))
+    nas = ServiceConnection(base_url="http://nas:8080")
 
-    status = await choose(
-        session,
-        factory,
-        ServiceKind.QBITTORRENT,
-        ServiceOrigin.EXISTING,
-        ServiceConnection(base_url="http://nas:8080"),
-    )
-
-    row = view(status, ServiceKind.QBITTORRENT)
     if passes:
+        status = await choose(
+            session, factory, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, nas
+        )
+        row = view(status, ServiceKind.QBITTORRENT)
         assert (row.state, row.reason) == (ConnectionState.OK, ConnectionReason.CONNECTED)
     else:
+        with pytest.raises(ConnectionFailedError) as refused:
+            await choose(session, factory, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, nas)
+        row = refused.value.attempt
         assert (row.state, row.reason, row.detail) == (
             ConnectionState.FAILED,
             ConnectionReason.VERSION_UNSUPPORTED,
@@ -537,38 +544,44 @@ async def test_qbittorrent_below_the_floor_is_red_at_the_connection_test(
 @pytest.mark.asyncio
 async def test_failed_logins_are_counted_until_one_succeeds(session: AsyncSession) -> None:
     """連錯的次數（M4 票 21）：qBittorrent 預設連錯 5 次封 IP，只在登入成功時歸零（brief §20.2）。
-    同一個位址改帳密再測接著數；成功歸零；換一個位址是另一台，從頭數。"""
+
+    **次數跟著位址、不跟著選擇**（M4 票 45）：測不過的那一次不存，次數照樣要記——qBittorrent 數的
+    是 Berth 這台的 IP。同一個位址改帳密再測接著數；另一個位址是另一台，各數各的；存下的那一組被
+    拒（重新測試）也算在它的位址上；成功歸零。
+    """
     await own(session)
     wrong = FakeClientFactory(qbittorrent=FakeQbittorrentClient(login_error=AuthFailedError("401")))
-    nas = ServiceConnection(base_url="http://nas:8080", username="home", password="wrong")
 
-    counts = []
-    for password in ("wrong", "still-wrong", "nope"):
-        attempt = ServiceConnection(base_url=nas.base_url, username="home", password=password)
-        status = await choose(
-            session, wrong, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, attempt
-        )
-        counts.append(view(status, ServiceKind.QBITTORRENT).auth_failures)
+    async def attempt(base_url: str, password: str) -> int:
+        connection = ServiceConnection(base_url=base_url, username="home", password=password)
+        with pytest.raises(ConnectionFailedError) as refused:
+            await choose(
+                session, wrong, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, connection
+            )
+        return refused.value.attempt.auth_failures
+
+    counts = [await attempt("http://nas:8080", pw) for pw in ("wrong", "still-wrong", "nope")]
+    assert counts == [1, 2, 3]
+    assert await attempt("http://other:8080", "x") == 1
+
+    right = ServiceConnection(base_url="http://other:8080", username="home", password="x")
+    fixed = await choose(
+        session, FakeClientFactory(), ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, right
+    )
+    assert view(fixed, ServiceKind.QBITTORRENT).auth_failures == 0
+
     retested = await retest_service(
         session, wrong, BUNDLED, ServiceKind.QBITTORRENT, restart=True, now=NOW
     )
-    counts.append(view(retested, ServiceKind.QBITTORRENT).auth_failures)
-    assert counts == [1, 2, 3, 4]
-
-    elsewhere = ServiceConnection(base_url="http://other:8080", username="home", password="x")
-    moved = await choose(session, wrong, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, elsewhere)
-    assert view(moved, ServiceKind.QBITTORRENT).auth_failures == 1
-
-    right = FakeClientFactory()
-    fixed = await choose(session, right, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, elsewhere)
-    assert view(fixed, ServiceKind.QBITTORRENT).auth_failures == 0
+    assert view(retested, ServiceKind.QBITTORRENT).auth_failures == 1
+    assert await attempt("http://nas:8080", "again") == 4
 
 
 @pytest.mark.asyncio
 async def test_existing_qbittorrent_credentials_are_verified_and_kept(
     session: AsyncSession,
 ) -> None:
-    """既有那一台的帳密是 Berth 的連線憑證（brief §16.2）：存下、拿它登入。測不過也存。"""
+    """既有那一台的帳密是 Berth 的連線憑證（brief §16.2）：測過才存、拿它登入（M4 票 45）。"""
     await own(session)
     factory = FakeClientFactory()
 
@@ -606,6 +619,111 @@ async def test_an_existing_prowlarr_is_the_whole_page(session: AsyncSession) -> 
     setup = await read_settings(session, SetupSettings)
     assert setup.indexer.steps == [SetupStep(key="prowlarr", status=StepStatus.OK, detail="1")]
     assert factory.api_keys == ["theirs"]
+
+
+#: 既有那一台的錯憑證與對的那一組（M4 票 45）：qBittorrent 的帳密、Prowlarr 的 key。
+WRONG_CREDENTIALS = [
+    pytest.param(
+        ServiceKind.QBITTORRENT,
+        ServiceConnection(base_url="http://nas:8080", username="home", password="wrong"),
+        ServiceConnection(base_url="http://nas:8080", username="home", password="Home-1"),
+        FakeClientFactory(qbittorrent=FakeQbittorrentClient(login_error=AuthFailedError("401"))),
+        id="qbittorrent",
+    ),
+    pytest.param(
+        ServiceKind.PROWLARR,
+        ServiceConnection(base_url="http://nas:9696", api_key="wrong"),
+        ServiceConnection(base_url="http://nas:9696", api_key="theirs"),
+        FakeClientFactory(prowlarr=FakeProwlarrClient(ping_error=AuthFailedError("401"))),
+        id="prowlarr",
+    ),
+]
+
+
+@pytest.mark.parametrize(("kind", "wrong", "right", "rejecting"), WRONG_CREDENTIALS)
+@pytest.mark.asyncio
+async def test_only_existing_credentials_that_pass_are_saved(
+    session: AsyncSession,
+    kind: ServiceKind,
+    wrong: ServiceConnection,
+    right: ServiceConnection,
+    rejecting: FakeClientFactory,
+) -> None:
+    """測過才存（M4 票 45，審計 E-6）：錯的那一組不進 `settings.services.*`、也不留選擇；對的才存。
+    原本測不過也存，「改一格再按」靠的是表單留著使用者打的字，不必存下來。"""
+    await own(session)
+    group = QbittorrentSettings if kind is ServiceKind.QBITTORRENT else IndexerSettings
+
+    with pytest.raises(ConnectionFailedError) as refused:
+        await choose(session, rejecting, kind, ServiceOrigin.EXISTING, wrong)
+
+    assert refused.value.attempt.reason is ConnectionReason.AUTH_REQUIRED
+    assert await read_settings(session, group) == group()
+    assert kind not in (await read_settings(session, SetupSettings)).choices
+
+    status = await choose(session, FakeClientFactory(), kind, ServiceOrigin.EXISTING, right)
+
+    assert view(status, kind).state is ConnectionState.OK
+    stored = (await read_settings(session, group)).model_dump()
+    assert stored["base_url"] == right.base_url
+    assert (right.password or right.api_key) in stored.values()
+
+
+@pytest.mark.asyncio
+async def test_a_failing_change_leaves_the_connection_in_use_alone(
+    session: AsyncSession, roots: dict[str, Path]
+) -> None:
+    """已經有一台測過的在用（設定頁改位址或帳密）：新的測不過就什麼都不換——連線、選擇、Route 的
+    檢查都還是原本那一台的（M4 票 45；原本打錯一個字下載就停擺）。"""
+    await arrange(session, roots)
+    factory = factory_for(roots)
+    in_use = ServiceConnection(base_url="http://nas:8080", username="home", password="Home-1")
+    await choose(session, factory, ServiceKind.QBITTORRENT, ServiceOrigin.EXISTING, in_use)
+    await build_routes(session, factory, ())
+    assert await routes_ready(session)
+    before = await read_settings(session, SetupSettings)
+    rejecting = FakeClientFactory(
+        qbittorrent=FakeQbittorrentClient(error=ServiceUnavailableError("refused"))
+    )
+
+    with pytest.raises(ConnectionFailedError) as refused:
+        await choose(
+            session,
+            rejecting,
+            ServiceKind.QBITTORRENT,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://typo:8080", username="home", password="Home-1"),
+        )
+
+    assert refused.value.attempt.reason is ConnectionReason.UNREACHABLE
+    assert await read_settings(session, QbittorrentSettings) == QbittorrentSettings(
+        base_url="http://nas:8080", username="home", password="Home-1"
+    )
+    assert (await read_settings(session, SetupSettings)).choices == before.choices
+    assert await routes_ready(session)
+
+
+@pytest.mark.asyncio
+async def test_an_existing_jellyfin_that_does_not_answer_is_not_chosen(
+    session: AsyncSession,
+) -> None:
+    """頁 1 的既有 Jellyfin 只有位址一格：連不上同樣不存，頁 1 停在還沒選（M4 票 45）。"""
+    factory = FakeClientFactory(
+        jellyfin=FakeJellyfinClient(error=ServiceUnavailableError("refused"))
+    )
+
+    with pytest.raises(ConnectionFailedError) as refused:
+        await choose(
+            session,
+            factory,
+            ServiceKind.JELLYFIN,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://nas:8096"),
+        )
+
+    assert refused.value.attempt.reason is ConnectionReason.UNREACHABLE
+    assert (await read_status(session)).services == ()
+    assert (await read_settings(session, JellyfinSettings)).base_url == ""
 
 
 @pytest.mark.asyncio
@@ -820,7 +938,7 @@ async def test_after_the_owner_an_address_that_does_not_answer_is_not_saved(
     )
     await owned_existing_jellyfin(session, factory)
 
-    with pytest.raises(ChoiceLockedError) as refused:
+    with pytest.raises(ConnectionFailedError) as refused:
         await choose(
             session,
             factory,
@@ -829,10 +947,8 @@ async def test_after_the_owner_an_address_that_does_not_answer_is_not_saved(
             ServiceConnection(base_url="http://gone:8096"),
         )
 
-    assert (refused.value.reason, refused.value.detail) == (
-        ChoiceRefusal.UNVERIFIED,
-        ConnectionReason.UNREACHABLE.value,
-    )
+    # 連不上是位址的錯，與擁有者之前同一條、標在位址欄（M4 票 45）；原本是頁面層級的 `unverified`。
+    assert refused.value.attempt.reason is ConnectionReason.UNREACHABLE
     setup = await read_settings(session, SetupSettings)
     assert setup.choices[ServiceKind.JELLYFIN].base_url == "http://nas:8096"
 
@@ -960,20 +1076,20 @@ async def test_an_owner_from_before_the_server_id_whose_old_address_is_gone_cann
 async def test_the_jellyfin_version_floor_is_checked_when_testing(
     session: AsyncSession, version: str, state: ConnectionState, reason: ConnectionReason
 ) -> None:
-    """版本在測連線時就擋，不等到登入（M4 票 18）：頁 1 的擁有者表單因此不會出現。"""
+    """版本在測連線時就擋，不等到登入（M4 票 18）：頁 1 的擁有者表單因此不會出現。太舊的不存
+    （M4 票 45），那一次的結論跟著拒絕回去。"""
     factory = FakeClientFactory(
         jellyfin=FakeJellyfinClient(startup_wizard_completed=True, version=version)
     )
+    nas = ServiceConnection(base_url="http://nas:8096")
 
-    status = await choose(
-        session,
-        factory,
-        ServiceKind.JELLYFIN,
-        ServiceOrigin.EXISTING,
-        ServiceConnection(base_url="http://nas:8096"),
-    )
-
-    tested = view(status, ServiceKind.JELLYFIN)
+    if state is ConnectionState.OK:
+        status = await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.EXISTING, nas)
+        tested = view(status, ServiceKind.JELLYFIN)
+    else:
+        with pytest.raises(ConnectionFailedError) as refused:
+            await choose(session, factory, ServiceKind.JELLYFIN, ServiceOrigin.EXISTING, nas)
+        tested = refused.value.attempt
     assert (tested.state, tested.reason, tested.detail) == (state, reason, version)
 
 

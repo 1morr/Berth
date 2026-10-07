@@ -22,7 +22,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from html import escape
 from pathlib import Path, PurePosixPath
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
@@ -403,6 +403,36 @@ def mixed() -> Scenario:
         connect_indexers=list(NAS_INDEXERS),
         connect_api_key="0123456789abcdef0123456789abcdef",
     )
+
+
+#: 既有 qBittorrent 收的那一組 WebUI 帳密（`web/e2e/existing.spec.ts`）。
+NAS_QBITTORRENT_LOGIN = ("admin", "adminadmin")
+
+
+class NasQbittorrent(FakeQbittorrentClient):
+    """使用者自己那一台 qBittorrent：只收 `NAS_QBITTORRENT_LOGIN`。e2e 先填錯的一組，看錯誤
+    標在帳密欄（M4 票 45）；原本的替身什麼帳密都收，表單那條路徑只走得到綠燈。"""
+
+    async def login(self, username: str, password: str) -> None:
+        if (username, password) != NAS_QBITTORRENT_LOGIN:
+            self.logins.append((username, password))
+            raise AuthFailedError("POST /api/v2/auth/login: Fails.")
+        await super().login(username, password)
+
+
+def nas_qbittorrent(base_url: str) -> FakeQbittorrentClient:
+    """使用者填的 qBittorrent 位址（M4 票 45 的三種錯誤）：主機名帶 `typo` 的連不上（標在位址欄）、
+    帶 `old` 的是 4.3.9（版本太舊，不屬於哪一格，留在表單裡），其餘是 `NasQbittorrent`。"""
+    host = urlsplit(base_url).hostname or ""
+    if "typo" in host:
+        return FakeQbittorrentClient(
+            base_url=base_url, error=ServiceUnavailableError(f"{base_url}: connection refused")
+        )
+    if "old" in host:
+        return NasQbittorrent(
+            base_url=base_url, version=QbittorrentVersion(app="v4.3.9", webapi="2.8.2")
+        )
+    return NasQbittorrent(base_url=base_url)
 
 
 class StartingJellyfin(FakeJellyfinClient):
@@ -1610,9 +1640,11 @@ class FakeClientFactory:
             # **每次造一個新的**：`sync/maindata` 的 rid 掛在那條連線的 session 上，而
             # `Downloader` 自己會把它握著（票 10）。共用一份反而會讓兩個呼叫端搶同一個 rid。
             return HttpQbittorrentClient(self._scenario.qbittorrent_url)
-        if self._scenario.qbittorrent.error is not None and "qbittorrent:" not in base_url:
-            # 要帳密的那一台，使用者填了自己那一台的位址與帳密之後就該連得上。
-            self._scenario.qbittorrent = FakeQbittorrentClient(base_url=base_url)
+        current = self._scenario.qbittorrent
+        moved = isinstance(current, NasQbittorrent) and current.base_url != base_url
+        if "qbittorrent:" not in base_url and (current.error is not None or moved):
+            # 要帳密的那一台（`mixed`）：使用者填的位址照 `nas_qbittorrent` 回答，換位址就換一台。
+            self._scenario.qbittorrent = nas_qbittorrent(base_url)
         client = self._scenario.qbittorrent
         client.base_url = base_url
         return client

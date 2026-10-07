@@ -59,13 +59,14 @@ from berth.services.setup import (
     STEP_COMPLETE,
     STEP_INDEXER,
     STEP_TMDB,
+    ConnectionFailedError,
     ServiceConnection,
     choose_service,
     read_status,
     retest_service,
 )
 from berth.services.steps import InterfaceLogin
-from berth.services.tmdb import read_tmdb_status, verify_tmdb
+from berth.services.tmdb import TmdbSetupStatus, read_tmdb_status, verify_tmdb
 from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import chosen, own
 from tests.integration.factories import COMPOSE, FakeClientFactory
@@ -389,19 +390,19 @@ async def test_an_existing_prowlarr_is_tested_by_address_and_key(session: AsyncS
 
 
 @pytest.mark.asyncio
-async def test_a_failing_endpoint_is_saved_anyway_so_one_field_can_be_fixed(
-    session: AsyncSession,
-) -> None:
+async def test_a_failing_endpoint_is_not_saved(session: AsyncSession) -> None:
+    """測過才存（M4 票 45）：原本「測不過也存，改一格再按」；改一格靠的是表單留著打的字。"""
     await arrange(session, origin=ServiceOrigin.EXISTING)
+    before = await read_settings(session, IndexerSettings)
     factory = FakeClientFactory(
         prowlarr=FakeProwlarrClient(ping_error=ServiceUnavailableError("connection refused"))
     )
 
-    status = await connect_existing(session, factory, base_url="http://typo:9696", api_key="k")
+    with pytest.raises(ConnectionFailedError) as refused:
+        await connect_existing(session, factory, base_url="http://typo:9696", api_key="k")
 
-    assert status.steps[0].status is StepStatus.FAILED
-    assert status.steps[0].error == "connection refused"
-    assert (await read_settings(session, IndexerSettings)).base_url == "http://typo:9696"
+    assert refused.value.attempt.error == "connection refused"
+    assert await read_settings(session, IndexerSettings) == before
 
 
 @pytest.mark.asyncio
@@ -488,8 +489,49 @@ async def test_a_rejected_tmdb_key_is_a_failed_line_not_a_500(session: AsyncSess
     assert status.steps[0].error == "GET /configuration: 401"
     # 401 是「key 不對」，不是「連不出去」：畫面照這個代碼叫人重貼 key（M4 票 21）。
     assert status.steps[0].failure is StepFailure.AUTH_REJECTED
-    # 測不過也存下來，使用者才能改一個字再按一次。
-    assert (await read_settings(session, TmdbSettings)).api_key.endswith("dead")
+
+
+@pytest.mark.asyncio
+async def test_only_a_tmdb_key_that_passes_is_saved(session: AsyncSession) -> None:
+    """測過才存（M4 票 45，審計 E-6）：錯的那一把只回給畫面，不存、也不留它的紅燈；對的才存。
+
+    原本還沒有能用的 key 時測不過也存，右欄因此有「已存下，沒通過驗證」這個狀態。
+    """
+    await arrange(session)
+    rejecting = FakeClientFactory(
+        tmdb=FakeTmdbClient(error=AuthFailedError("GET /configuration: 401"))
+    )
+
+    refused = await verify_tmdb(session, rejecting, api_key="0000000000000000000000000000dead")
+
+    assert [row.status for row in refused.steps] == [StepStatus.FAILED]
+    assert (refused.api_key_present, refused.verified) == (False, False)
+    assert (await read_settings(session, TmdbSettings)).api_key == ""
+    assert await read_tmdb_status(session) == TmdbSetupStatus(
+        api_key_present=False, verified=False, steps=()
+    )
+
+    accepted = await verify_tmdb(
+        session, FakeClientFactory(tmdb=FakeTmdbClient()), api_key=TMDB_API_KEY
+    )
+
+    assert (accepted.api_key_present, accepted.verified) == (True, True)
+    assert (await read_settings(session, TmdbSettings)).api_key == TMDB_API_KEY
+    assert await read_tmdb_status(session) == accepted
+
+
+@pytest.mark.asyncio
+async def test_a_key_saved_unverified_before_0_1_1_reads_as_absent(session: AsyncSession) -> None:
+    """0.1.0 測不過也存（精靈停在頁 5 的安裝）：不寫 migration，讀的時候當作還沒有（使用者拍板）。
+    下一次測過就蓋掉。"""
+    await arrange(session)
+    settings = await read_settings(session, TmdbSettings)
+    settings.api_key = "0000000000000000000000000000dead"
+    await write_settings(session, settings)
+
+    status = await read_tmdb_status(session)
+
+    assert (status.api_key_present, status.verified) == (False, False)
 
 
 @pytest.mark.asyncio

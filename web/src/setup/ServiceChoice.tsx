@@ -36,9 +36,11 @@ import {
   STATE_LABEL,
   VERSION_FLOOR,
   connectFields,
+  connectionField,
   schemeFix,
   bringBack,
   composeProfiles,
+  endpointAt,
   signalOf,
   testEndpoint,
   testTarget,
@@ -61,8 +63,8 @@ export interface ChoiceControls {
   choosing: boolean
   retesting: boolean
   /**
-   * 上一次選擇沒存下的理由（`choiceRefusalOf`，409）：擁有者成立之後的 Jellyfin 換到另一台、或新位址
-   * 認不出是哪一台（M4 票 18）。表單留著、理由就地說。
+   * 上一次選擇沒存下的理由（`choiceRefusalOf`）：擁有者成立之後的 Jellyfin 換到另一台（M4 票 18），或
+   * 既有服務測不過（`connection_failed`，測過才存，M4 票 45）。表單留著、理由就地說——後者標在欄位上。
    */
   refusal: ChoiceRefusal | null
   /**
@@ -214,8 +216,10 @@ export function ServiceChoice({
   const form = showExistingForm && (
     <ExistingForm
       kind={kind}
+      status={status}
       service={service?.origin === 'existing' && !edited ? service : undefined}
       initialUrl={service?.origin === 'existing' ? service.base_url : ''}
+      inUse={service?.state === 'ok'}
       choosing={choosing}
       refusal={edited ? null : refusal}
       focusFirst={editing}
@@ -488,13 +492,17 @@ function ChoiceCard({
 }
 
 /**
- * 選「既有」的表單：位址 + 那個服務要的憑證（brief §16.4）。測不過也存，改一格再按；擁有者成立之後的
- * Jellyfin 換到另一台不存（`refusal`，M4 票 18）。
+ * 選「既有」的表單：位址 + 那個服務要的憑證（brief §16.4）。**測過才存**（M4 票 45）：測不過的那一次
+ * 什麼都不存，結論（`refusal.attempt`）標在欄位上——位址錯標位址、憑證錯標憑證（`connectionField`），
+ * 其餘在表單裡、送出鍵上面；技術細節收在最後（票 21 的分層）。改一格再按靠的是欄位留著打的字。
+ * 擁有者成立之後的 Jellyfin 換到另一台也不存（M4 票 18），那一句照舊在表單裡。
  */
 function ExistingForm({
   kind,
+  status,
   service,
   initialUrl,
+  inUse,
   choosing,
   refusal,
   focusFirst,
@@ -502,10 +510,13 @@ function ExistingForm({
   onSubmit,
 }: {
   kind: ServiceKind
-  /** 上一次測的那一份（連錯的次數在它上面）。改了一格之後是 `undefined`：它說的是舊值。 */
+  status: SetupStatus
+  /** 存下的那一份（重新測試被拒時，連錯的次數在它上面）。改了一格之後是 `undefined`：它說的是舊值。 */
   service: SetupService | undefined
   /** 已經選過既有的話，位址帶回來，不必重打。 */
   initialUrl: string
+  /** 已經有一台連得上的在用：測不過時說它照舊在用。 */
+  inUse: boolean
   choosing: boolean
   refusal: ChoiceRefusal | null
   /** 按「改位址或憑證」打開的：那顆鈕自己卸下了，焦點交給位址欄（audit）。 */
@@ -521,6 +532,12 @@ function ExistingForm({
   const [password, setPassword] = useState('')
   const [checked, setChecked] = useState(false)
   const fields = connectFields(kind)
+  const credentialError = useId()
+  // 測不過的那一次（沒存下）：標在哪一格、那一句人話（與連線卡的補法同一句）。
+  const attempt = refusal?.reason === 'connection_failed' ? (refusal.attempt ?? null) : null
+  const field = attempt?.reason ? connectionField(kind, attempt.reason) : null
+  const said = attempt ? fixOf(t, kind, status, attempt).lede : undefined
+  const typed = checked ? addressError(t, baseUrl) : undefined
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -553,13 +570,14 @@ function ExistingForm({
           setBaseUrl(event.target.value)
           onEdit()
         }}
-        error={checked ? addressError(t, baseUrl) : undefined}
+        error={typed ?? (field === 'address' ? said : undefined)}
       />
       {fields.includes('apiKey') && (
         <PasswordField
           label={t('connect.field.apiKey')}
           value={apiKey}
           autoComplete="off"
+          error={field === 'credentials' ? said : undefined}
           onChange={(event) => {
             setApiKey(event.target.value)
             onEdit()
@@ -568,10 +586,13 @@ function ExistingForm({
       )}
       {fields.includes('credentials') && (
         <>
+          {/* 帳密錯是兩格的事：兩格都標，那一句寫一次、兩格都指到它（M4 票 45）。 */}
           <Field
             label={t('connect.field.username')}
             value={username}
             autoComplete="off"
+            invalid={field === 'credentials'}
+            describedBy={field === 'credentials' ? credentialError : undefined}
             onChange={(event) => {
               setUsername(event.target.value)
               onEdit()
@@ -581,15 +602,35 @@ function ExistingForm({
             label={t('connect.field.password')}
             value={password}
             autoComplete="off"
-            hint={banWarning(t, service)}
+            hint={banWarning(t, attempt ?? service)}
+            invalid={field === 'credentials'}
+            describedBy={field === 'credentials' ? credentialError : undefined}
             onChange={(event) => {
               setPassword(event.target.value)
               onEdit()
             }}
           />
+          {field === 'credentials' && (
+            <span id={credentialError} role="alert" className="-mt-2 text-xs text-blocked-ink">
+              {said}
+            </span>
+          )}
         </>
       )}
-      {refusal && (
+      {attempt && field === null && (
+        <Notice signal="blocked" label={t('common.failed')}>
+          {said}
+        </Notice>
+      )}
+      {attempt && (
+        <div className="grid gap-1">
+          <p className="max-w-prose text-xs text-ink-dim">
+            {t(inUse ? 'connect.notSavedInUse' : 'connect.notSaved')}
+          </p>
+          <TechnicalDetails lines={[endpointAt(attempt.base_url, kind), attempt.error]} />
+        </div>
+      )}
+      {refusal && refusal.reason !== 'connection_failed' && (
         <Notice signal="blocked" label={t('common.failed')}>
           {t(`choice.refused.${refusal.reason}`, {
             detail: refusedDetail(refusal, t),
@@ -766,6 +807,28 @@ function Fix({
   service: SetupService
 }) {
   const { t } = useTranslation()
+  const { lede, remedy } = fixOf(t, kind, status, service)
+
+  return (
+    <section className="border-t-2 border-rule px-4 py-3">
+      <h5 className="label text-ink-dim">{t('connect.fix.title')}</h5>
+      <p className="mt-2 max-w-prose text-xs text-ink-dim">{lede}</p>
+      {remedy && <div className="mt-2">{remedy}</div>}
+      <TechnicalDetails lines={[testEndpoint(status, kind), service.error]} />
+    </section>
+  )
+}
+
+/**
+ * 補法的那一句人話與它下面可複製的指令（沒有就是 `null`）。連線卡的紅燈與既有表單測不過時標在欄位上
+ * 的那一句（M4 票 45）是同一句。
+ */
+function fixOf(
+  t: TFunction,
+  kind: ServiceKind,
+  status: SetupStatus,
+  service: SetupService,
+): { lede: string; remedy: ReactNode } {
   const bundled = service.origin === 'bundled'
   const reason = service.reason
 
@@ -831,15 +894,7 @@ function Fix({
   } else {
     lede = t('connection.fix.address')
   }
-
-  return (
-    <section className="border-t-2 border-rule px-4 py-3">
-      <h5 className="label text-ink-dim">{t('connect.fix.title')}</h5>
-      <p className="mt-2 max-w-prose text-xs text-ink-dim">{lede}</p>
-      {remedy && <div className="mt-2">{remedy}</div>}
-      <TechnicalDetails lines={[testEndpoint(status, kind), service.error]} />
-    </section>
-  )
+  return { lede, remedy }
 }
 
 /** 一組可複製的指令，一行一條。 */

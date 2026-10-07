@@ -75,25 +75,35 @@ export function ownerRefusalOf(error: unknown): OwnerRefusal | null {
   return parseRefusal(error, OWNER_REASONS)
 }
 
-export type ChoiceRefusal = Refusal<Schemas['ChoiceRefusal']>
+export type ChoiceRefusal = Refusal<Schemas['ChoiceRefusal']> & {
+  /** `connection_failed` 那一次測試的結論（沒存下來）；其餘理由沒有。 */
+  attempt?: SetupService | null
+}
 
 const CHOICE_REASONS: ReasonSet<Schemas['ChoiceRefusal']> = {
   jellyfin_owned: true,
   other_server: true,
   unverified: true,
+  connection_failed: true,
 }
 
 /**
- * 選擇沒存下的理由（409）：都是擁有者成立之後的 Jellyfin——改來源、換到另一台、新位址認不出是哪一台
- * （M4 票 18）。認不得的是 `null`。
+ * 選擇沒存下的理由。409 是擁有者成立之後的 Jellyfin——改來源、換到另一台、新位址認不出是哪一台
+ * （M4 票 18）；400 `connection_failed` 是既有服務測不過（測過才存，M4 票 45），那一次的結論在
+ * `attempt`，表單照它把錯誤標在欄位上。認不得的是 `null`。
  */
 export function choiceRefusalOf(error: unknown): ChoiceRefusal | null {
-  return parseRefusal(error, CHOICE_REASONS)
+  const refusal = parseRefusal(error, CHOICE_REASONS)
+  if (!refusal) return null
+  const body = (error as ApiError).detail as Schemas['ChoiceRefusalOut']
+  return {
+    ...refusal,
+    attempt: refusal.reason === 'connection_failed' ? (body.attempt ?? null) : null,
+  }
 }
 
 /**
- * 選來源、存下、測一次。擁有者成立之後改 Jellyfin 的來源、或換到另一台 Jellyfin 是 409
- * （`choiceRefusalOf`）。
+ * 選來源、測一次，套件內的先存、既有的測過才存。被拒的理由見 `choiceRefusalOf`。
  */
 export function chooseService(kind: ServiceKind, body: ChoiceInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>(`/setup/services/${kind}`, body)

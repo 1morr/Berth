@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +32,9 @@ MISSING_CREDENTIAL = "a TMDB credential is required: paste your own API key or r
 class TmdbSetupStatus:
     """`GET /api/setup/tmdb` 與「測試」的整份形狀。"""
 
-    #: 使用者的 key 已經存下來了。存下來不等於測得過——測不過也存（見 `verify_tmdb`）。
+    #: 存著一把測過的 key。**只存測過的**（M4 票 45），所以它與 `verified` 同真同假；
+    #: 0.1.0 測不過也存，那樣的舊值讀成沒有（不寫 migration，使用者拍板），下一次測過就蓋掉。
+    #: 欄位留著是對外的形狀。
     api_key_present: bool
     #: 這一步的閘門：`configuration` 綠燈。前端讀這一個，不自己再導一次。
     verified: bool
@@ -49,26 +51,25 @@ async def read_tmdb_status(session: AsyncSession) -> TmdbSetupStatus:
 async def verify_tmdb(
     session: AsyncSession, factory: ServiceClientFactory, *, api_key: str
 ) -> TmdbSetupStatus:
-    """先存再測（與其他連線表單同一個規矩）：測不過也存，使用者才能改一個字再按一次。
+    """測過才存（M4 票 45，審計 E-6；Home Assistant 驗過才 `create_entry`）：測不過的那一把
+    與它的紅燈只回給畫面，資料庫裡仍是原本的——已經有一把能用的就照舊在用（票 06i），沒有就
+    還是沒有。
 
-    **例外是已經有一把驗過的在用**（票 06i，使用者拍板）：設定頁換 key 時，新的測不過就不換，
-    這一次的紅燈照樣回給畫面，但不存——貼錯一把就讓探索與入庫停擺，代價不對稱。
+    原本還沒有能用的 key 時測不過也存，畫面因此多一個「已存下，沒通過驗證」的狀態，而那一把什麼都
+    做不了；改一個字再按一次靠的是欄位留著使用者打的字，不靠存下來。
     """
-    working = tmdb_verified(await read_settings(session, SetupSettings))
-    settings = await read_settings(session, TmdbSettings)
-    settings.api_key = api_key.strip()
-
-    step, image_base_url = await _test(factory, settings)
-    if working and step.status is not StepStatus.OK:
-        # 不寫回：資料庫裡仍是舊的那一把與它那一條綠燈，這一次的紅燈只回給畫面。
-        return TmdbSetupStatus(api_key_present=True, verified=True, steps=step_views([step]))
+    candidate = TmdbSettings(api_key=api_key.strip())
+    step, image_base_url = await _test(factory, candidate)
+    if step.status is not StepStatus.OK:
+        setup = await read_settings(session, SetupSettings)
+        working = _view(setup, await read_settings(session, TmdbSettings))
+        return replace(working, steps=step_views([step]))
 
     def remember(latest: TmdbSettings) -> None:
-        latest.api_key = settings.api_key
+        latest.api_key = candidate.api_key
         # 圖片基底順手存下來：它對同一把憑證是常數，而探索頁（票 03）每一張卡都要它。
-        latest.image_base_url = image_base_url or latest.image_base_url
+        latest.image_base_url = image_base_url
 
-    # 還沒有能用的 key 時測不過也存，使用者才能改一個字再按一次（與其他連線表單同一個規矩）。
     # 測試在路上時開頭讀到的那一份不整組寫回（M4 票 23）。
     settings = await update_settings(session, TmdbSettings, remember)
 
@@ -118,8 +119,9 @@ def tmdb_verified(setup: SetupSettings) -> bool:
 
 
 def _view(setup: SetupSettings, settings: TmdbSettings) -> TmdbSetupStatus:
+    verified = tmdb_verified(setup)
     return TmdbSetupStatus(
-        api_key_present=bool(credential(settings)),
-        verified=tmdb_verified(setup),
+        api_key_present=verified and bool(credential(settings)),
+        verified=verified,
         steps=step_views(setup.tmdb.steps),
     )

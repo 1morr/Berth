@@ -8,6 +8,14 @@
 
 ### Changed
 
+- **只存測過的憑證，錯誤標在欄位上**（M4 票 45）：既有 Jellyfin、qBittorrent、Prowlarr 的位址與憑證，以及 TMDB 的
+  key，都要測過才存；測不過什麼都不換，已經有一組能用的照舊在用。精靈與設定頁的既有表單把錯誤標在欄位旁：位址錯
+  標位址、帳密或 API key 錯標憑證，其餘留在表單裡。**破壞性**：`POST /api/setup/services/{kind}` 選既有而測不過時
+  改回 400 `connection_failed`（`ChoiceRefusalOut` 多一個 `attempt`，是那一次的測試結果），不再 200 存下紅燈；擁有者
+  之後的既有 Jellyfin 新位址不回答也改成這一種（原本 409 `unverified`）。`POST /api/setup/tmdb/test` 測不過不再存下
+  那一把；`GET /api/setup/tmdb` 的 `api_key_present` 只在有一把驗過的 key 時為真，「已存下，沒通過驗證」這個狀態
+  不再出現（0.1.0 存下的沒驗過的 key 讀成沒有，下一次測過就蓋掉）。qBittorrent 連錯的次數改以位址記，升級後從 0
+  重數。
 - **精靈頁 3 套件內第一次來就自動建立並檢查，看得到進度**（M4 票 43，brief §19 D7）：清單是預設、什麼都還沒建時，
   進頁就建媒體庫、建 Route、跑檢查，不必按「建立並檢查」；改過清單、跑過一次之後，或既有 Jellyfin，照舊由人按。
   跑的時候每條 Route 先畫成一列，說出跑到第幾條檢查；跑到一半重新整理也接得上，不會再送一次。

@@ -36,13 +36,22 @@ type FieldProps = ComponentPropsWithRef<'input'> & {
   label: string
   hint?: ReactNode
   error?: string
+  /**
+   * 錯誤寫在別處、但說的也是這一格（M4 票 45：帳密錯時帳號與密碼兩格都標，那一句只寫一次）：
+   * 這一格照樣標成無效，`describedBy` 指到那一句。
+   */
+  invalid?: boolean
+  describedBy?: string
 }
 
-export function Field({ label, hint, error, ...input }: FieldProps) {
+export function Field({ label, hint, error, invalid = false, describedBy, ...input }: FieldProps) {
   const id = useId()
   const hintId = `${id}-hint`
   const errorId = `${id}-error`
-  const described = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ')
+  const described = [hint ? hintId : null, error ? errorId : null, describedBy ?? null]
+    .filter(Boolean)
+    .join(' ')
+  const wrong = Boolean(error) || invalid
 
   return (
     <p className="grid gap-2">
@@ -52,10 +61,10 @@ export function Field({ label, hint, error, ...input }: FieldProps) {
       <input
         {...input}
         id={id}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={wrong ? true : undefined}
         aria-describedby={described || undefined}
         className={`value w-full border-2 bg-hull px-3 py-2.5 text-sm text-ink placeholder:text-ink-dim disabled:bg-well disabled:text-ink-dim ${
-          error ? 'border-blocked-ink' : 'border-rule-strong focus:border-ink'
+          wrong ? 'border-blocked-ink' : 'border-rule-strong focus:border-ink'
         }`}
       />
       {hint && (

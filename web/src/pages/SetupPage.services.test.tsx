@@ -1956,13 +1956,14 @@ describe('頁 5：TMDB', () => {
 
   /**
    * 票 03 第 4 條：閘門過了，板上那一格要跟著動。票 06e 之後 TMDB 是自己的一格，
-   * 它的詳情列只說憑證；索引站那一格不再被換掉。
+   * 它的詳情列只說憑證；索引站那一格不再被換掉。只存測過的（M4 票 45），所以閘門前是「還沒填」，
+   * 沒有「存著但待驗證」。
    */
   it('通過 TMDB 閘門之後，TMDB 那一格的詳情列跟著換', async () => {
     stubApi({
       [STATUS]: { body: AT_TMDB },
       [INDEXERS]: { body: withSites() },
-      [TMDB]: { body: tmdbSetup({ api_key_present: true }) },
+      [TMDB]: { body: tmdbSetup() },
       [TEST_TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true, steps: [] }) },
     })
     const user = userEvent.setup()
@@ -1973,13 +1974,13 @@ describe('頁 5：TMDB', () => {
         .getByText('BTH 5')
         .closest('li')!,
     )
-    expect(await berth.findByText('待驗證')).toBeInTheDocument()
+    expect(await berth.findByText('還沒填')).toBeInTheDocument()
 
     await user.type(await screen.findByLabelText('你的 TMDB API key'), '0'.repeat(32))
     await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
 
     expect(await berth.findByText('已驗證')).toBeInTheDocument()
-    expect(berth.queryByText('待驗證')).not.toBeInTheDocument()
+    expect(berth.queryByText('還沒填')).not.toBeInTheDocument()
     const indexers = within(within(boardCells()).getByText('BTH 4').closest('li')!)
     expect(indexers.getByText('套件內 · 3 個索引站')).toBeInTheDocument()
   })

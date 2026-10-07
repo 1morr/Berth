@@ -74,6 +74,7 @@ from berth.services.routes import (
 )
 from berth.services.setup import (
     ChoiceLockedError,
+    ConnectionFailedError,
     OwnerRejectedError,
     ServiceConnection,
     SetupStatus,
@@ -199,19 +200,39 @@ def owner_refusal(refusal: OwnerRejectedError) -> HTTPException:
     return HTTPException(_OWNER_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
 
 
-#: 選擇不成立的三種都是擁有者之後的 Jellyfin，都是 409（與它現在的狀態衝突）：改來源、換到另一台、
-#: 新位址認不出是哪一台（M4 票 18）。
-_CHOICE_STATUS: dict[ChoiceRefusal, int] = dict.fromkeys(ChoiceRefusal, status.HTTP_409_CONFLICT)
+#: 擁有者之後的 Jellyfin 那三種是 409（與它現在的狀態衝突）：改來源、換到另一台、新位址認不出是
+#: 哪一台（M4 票 18）。既有服務測不過是 400（M4 票 45）：送來的連線本身不成立，與 Sonarr 存之前
+#: 再測一次、測不過回 400 同一個慣例。
+_CHOICE_STATUS: dict[ChoiceRefusal, int] = {
+    **dict.fromkeys(ChoiceRefusal, status.HTTP_409_CONFLICT),
+    ChoiceRefusal.CONNECTION_FAILED: status.HTTP_400_BAD_REQUEST,
+}
 
 
 class ChoiceRefusalOut(BaseModel):
     reason: ChoiceRefusal
     detail: str
+    #: `connection_failed` 才有：那一次測試的結論，與 `ServiceOut` 同形狀，但沒有存下來。
+    attempt: ServiceOut | None = None
 
 
 def choice_refusal(refusal: ChoiceLockedError) -> HTTPException:
     body = ChoiceRefusalOut(reason=refusal.reason, detail=refusal.detail)
-    return HTTPException(_CHOICE_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
+    return HTTPException(
+        _CHOICE_STATUS[refusal.reason], detail=body.model_dump(mode="json", exclude_none=True)
+    )
+
+
+def connection_failed(refusal: ConnectionFailedError) -> HTTPException:
+    attempt = refusal.attempt
+    body = ChoiceRefusalOut(
+        reason=ChoiceRefusal.CONNECTION_FAILED,
+        detail=attempt.reason.value if attempt.reason is not None else "",
+        attempt=ServiceOut.model_validate(attempt),
+    )
+    return HTTPException(
+        _CHOICE_STATUS[ChoiceRefusal.CONNECTION_FAILED], detail=body.model_dump(mode="json")
+    )
 
 
 class ChoiceIn(BaseModel):
@@ -296,7 +317,8 @@ async def post_service(
     """服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
 
     擁有者成立之後改 Jellyfin 的來源、或把位址換到另一台 Jellyfin 是 409（擁有者是那一台上的帳號，
-    M4 票 18）；既有卻沒給位址是 422。
+    M4 票 18）；既有服務測不過是 400 `connection_failed`、什麼都不存（M4 票 45）；既有卻沒給位址
+    是 422。
     """
     try:
         result = await choose_service(
@@ -314,6 +336,8 @@ async def post_service(
         )
     except ChoiceLockedError as refusal:
         raise choice_refusal(refusal) from refusal
+    except ConnectionFailedError as refusal:
+        raise connection_failed(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return _out(result, config)

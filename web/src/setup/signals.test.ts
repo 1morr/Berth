@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { chosen, setupStatus } from '../test/fixtures'
-import { composeProfiles, reasonLabel } from './signals'
+import { composeProfiles, connectionField, reasonLabel } from './signals'
 
 describe('composeProfiles（`.env` 的 COMPOSE_PROFILES，M4 票 15）', () => {
   it('什麼都還沒選：選了既有就只拿掉那一個', () => {
@@ -52,5 +52,37 @@ describe('reasonLabel（連線卡上那一句理由，M4 票 31）', () => {
   it('等完了還是那樣，就照實說', () => {
     expect(reasonLabel('jellyfin', 'protocol_mismatch', 'failed')).toBe('reason.protocol_mismatch')
     expect(reasonLabel('jellyfin', 'unreachable', 'timeout')).toBe('reason.unreachable')
+  })
+})
+
+describe('connectionField（測不過的那一次標在哪一格，M4 票 45）', () => {
+  it('位址類標在位址欄：連不上、解不到、協定寫錯、回的不是這個服務', () => {
+    for (const reason of [
+      'unreachable',
+      'not_deployed',
+      'scheme_mismatch',
+      'scheme_missing',
+      'protocol_mismatch',
+    ] as const) {
+      expect(connectionField('qbittorrent', reason)).toBe('address')
+    }
+  })
+
+  it('憑證類標在憑證欄：帳密或 key 被拒、被封、key 沒填', () => {
+    expect(connectionField('qbittorrent', 'auth_required')).toBe('credentials')
+    expect(connectionField('qbittorrent', 'ip_banned')).toBe('credentials')
+    expect(connectionField('prowlarr', 'auth_required')).toBe('credentials')
+    expect(connectionField('prowlarr', 'api_key_missing')).toBe('credentials')
+  })
+
+  it('Jellyfin 的表單只有位址：key 被撤不是這張表單的事，留在頁面層級', () => {
+    expect(connectionField('jellyfin', 'auth_required')).toBeNull()
+    expect(connectionField('jellyfin', 'unreachable')).toBe('address')
+  })
+
+  it('其餘留在頁面層級：版本太舊、還在載入、另一台', () => {
+    expect(connectionField('qbittorrent', 'version_unsupported')).toBeNull()
+    expect(connectionField('jellyfin', 'starting')).toBeNull()
+    expect(connectionField('jellyfin', 'other_server')).toBeNull()
   })
 })

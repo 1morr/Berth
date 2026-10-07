@@ -166,16 +166,13 @@ function routeDetail(t: TFunction, routes: RouteSetup | undefined) {
 }
 
 /**
- * TMDB 那一格的詳情列：憑證驗過了沒。頁 5 之前讀不到，就留破折號。還沒貼過 key 不是「待驗證」
- * ——沒有東西可驗（M4 票 31，與剖面的 `credentialLabel` 同一條）。
+ * TMDB 那一格的詳情列：有沒有一把驗過的憑證。頁 5 之前讀不到，就留破折號。還沒貼過 key 不是「待驗證」
+ * ——沒有東西可驗（M4 票 31）；只存測過的（M4 票 45），所以存著就是驗過了（與剖面的 `credentialLabel`
+ * 同一條）。
  */
 function tmdbDetail(t: TFunction, tmdb: TmdbSetup | undefined) {
   if (!tmdb) return null
-  const state = !tmdb.api_key_present
-    ? 'detail.absent'
-    : tmdb.verified
-      ? 'detail.verified'
-      : 'detail.unverified'
+  const state = tmdb.api_key_present ? 'detail.verified' : 'detail.absent'
   return (
     <>
       <span className="label">{t('detail.credential')}</span> {t(state)}

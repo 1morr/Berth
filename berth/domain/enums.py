@@ -1234,8 +1234,12 @@ class ChoiceRefusal(StrEnum):
     #: 沒有存。`detail` 是那一台的 `ServerName`。
     OTHER_SERVER = "other_server"
     #: 擁有者成立之後的新位址沒有回答它是哪一台（連不上、不是 Jellyfin）：認不出是不是同一台，
-    #: 所以沒有存。`detail` 是那一次測試的 `ConnectionReason`。
+    #: 所以沒有存。`detail` 是那一次測試的 `ConnectionReason`。既有的位址連不上是下面那一種；
+    #: 這一種剩套件內 compose 位址換了，以及原本那一台認不出（票 18 之前的擁有者）。
     UNVERIFIED = "unverified"
+    #: 既有服務那一次測不過，什麼都沒存（測過才存，M4 票 45）。`detail` 是那一次的
+    #: `ConnectionReason`，整份結論另外帶在 `attempt`：畫面照它把錯誤標在位址或憑證欄。
+    CONNECTION_FAILED = "connection_failed"
 
 
 class InterfaceLoginRefusal(StrEnum):
