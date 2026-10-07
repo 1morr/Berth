@@ -17,6 +17,7 @@ import { TechnicalDetails } from '../components/TechnicalDetails'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
 import { useCarriedLogin, useInterfaceLogin } from './interfaceLogin'
 import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
+import { AdvancedSites, RecommendedSites } from './RecommendedSites'
 import { prowlarrWeb } from './serviceWeb'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
@@ -26,6 +27,13 @@ import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
 export type { SiteControls } from './IndexerSites'
+
+/** 套件內頁 4 的主鍵（M4 票 44）：測推薦站、把通過的加進去。 */
+export interface RecommendedControls {
+  running: boolean
+  /** 請求沒走完就 reject。 */
+  onRun: () => Promise<IndexerSetup>
+}
 
 /** 套件內 Prowlarr 的介面登入（M4 票 20 從「加入」拆出來的那一區）。 */
 export interface LoginControls {
@@ -41,8 +49,9 @@ export interface LoginControls {
  *
  * 頁首是二選一（`ServiceChoice`），連上之後照接的是哪一種畫：
  *
- * - **套件內 Prowlarr**：「已加入」與「加站」兩段（`IndexerSites`），加站旁邊就是「加入 N 個站」；
- *   介面登入是自己的一區與按鈕（`ProwlarrLogin`，M4 票 20），必填。
+ * - **套件內 Prowlarr**：「已加入」（`IndexerSites`）與主鍵「測試推薦站，加入通過的」（`RecommendedSites`，
+ *   M4 票 44）；逐站測試與勾選、其他公開站收在「進階」。介面登入是自己的一區（`ProwlarrLogin`，M4 票 20），
+ *   必填。
  * - **既有 Prowlarr**：同樣的「已加入」與「加站」，加的是使用者自己那一台，Berth 不移除（M4 票 20，
  *   使用者拍板：按一次確認）。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr 加站後重新讀取、
  *   在這裡加推薦的公開站，或之後再說。位址與 key 的表單、測試那一條與補法是頁 1、2 那一份
@@ -59,6 +68,7 @@ export function IndexerStep({
   owner,
   carriedPassword,
   applying,
+  recommended,
   login,
   onApply,
   onSkip,
@@ -76,6 +86,7 @@ export function IndexerStep({
   /** 頁 1 帶過來的擁有者密碼（只在這個分頁的記憶體裡，M4 票 40）；沒有就是 `null`。 */
   carriedPassword: string | null
   applying: boolean
+  recommended: RecommendedControls
   login: LoginControls
   onApply: (indexers: string[]) => Promise<IndexerSetup>
   onSkip: () => void
@@ -163,21 +174,45 @@ export function IndexerStep({
             />
           )}
           {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
-          <AddSites
-            indexers={indexers}
-            applying={applying}
-            controls={sites}
-            onApply={onApply}
-            onSkip={onSkip}
-            sticky={sticky}
-            held={mode === 'bundled' && login.saving}
-          />
+          {mode === 'bundled' ? (
+            <>
+              <RecommendedSites
+                indexers={indexers}
+                running={recommended.running}
+                held={login.saving || applying}
+                sticky={sticky}
+                onRun={recommended.onRun}
+                onSkip={onSkip}
+              />
+              <AdvancedSites>
+                <AddSites
+                  indexers={indexers}
+                  applying={applying}
+                  controls={sites}
+                  onApply={onApply}
+                  held={login.saving || recommended.running}
+                  sticky={false}
+                  advanced
+                />
+              </AdvancedSites>
+            </>
+          ) : (
+            <AddSites
+              indexers={indexers}
+              applying={applying}
+              controls={sites}
+              onApply={onApply}
+              onSkip={onSkip}
+              sticky={sticky}
+            />
+          )}
           {mode === 'bundled' && (
             <ProwlarrLogin
               indexers={indexers}
               owner={owner}
               carriedPassword={carriedPassword}
               controls={login}
+              held={recommended.running || applying}
             />
           )}
         </>
@@ -284,11 +319,17 @@ function ProwlarrLogin({
   owner,
   carriedPassword,
   controls,
+  held,
 }: {
   indexers: IndexerSetup
   owner: string
   carriedPassword: string | null
   controls: LoginControls
+  /**
+   * 加站還在飛（M4 票 44）：設完登入 Prowlarr 會自行重啟，正在加的站撞上它，整批結論就丟了。等它回來才送，
+   * 與加站那一邊的 `held` 互相讓。
+   */
+  held: boolean
 }) {
   const { t } = useTranslation()
   const form = useInterfaceLogin({
@@ -308,7 +349,7 @@ function ProwlarrLogin({
   const carriedLogin = useCarriedLogin({
     carriedPassword,
     // 同一個請求還在飛（走開又回來，這一區重掛載）時不再送。
-    needed: !indexers.web_ui_username && !controls.saving,
+    needed: !indexers.web_ui_username && !controls.saving && !held,
     apply: (taken) => {
       setSentAt(form.edits)
       setFailed(null)
@@ -362,7 +403,7 @@ function ProwlarrLogin({
       )}
       {form.open && !carriedLogin.applying && (
         <div className="mt-4">
-          <PrimaryButton type="button" busy={controls.saving} onClick={save}>
+          <PrimaryButton type="button" busy={controls.saving} disabled={held} onClick={save}>
             {controls.saving ? t('indexer.login.saving') : t('indexer.login.save')}
           </PrimaryButton>
         </div>

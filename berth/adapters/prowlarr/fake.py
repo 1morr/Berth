@@ -171,6 +171,9 @@ class FakeProwlarrClient:
         indexers_error: Exception | None = None,
         #: 這些站加不進來（連不上、被 CloudFlare 擋），值就是 Prowlarr 回的理由。
         rejects: Mapping[str, str] | None = None,
+        #: 這些站測試通過、加入時卻被拒（M4 票 44；審計實測 Internet Archive：測得過，
+        #: Prowlarr 加之前自己再連一次就連不上）。值是加入那一支回的理由。
+        add_rejects: Mapping[str, str] | None = None,
         host_config: Mapping[str, Any] | None = None,
         version: str = CURRENT_VERSION,
     ) -> None:
@@ -186,6 +189,7 @@ class FakeProwlarrClient:
         #: 送來的 API key 不對：要 key 的端點一律 401（M4 票 20）。`/ping` 是匿名的，照樣回答。
         self.key_rejected = False
         self._rejects = dict(rejects or {})
+        self._add_rejects = dict(add_rejects or {})
         self._host_config: dict[str, Any] = dict(
             host_config
             or {
@@ -199,6 +203,8 @@ class FakeProwlarrClient:
             }
         )
         self.tested: list[str] = []
+        #: 送去新增的 `definitionName`（不論成敗），順序即呼叫順序。
+        self.add_attempts: list[str] = []
         #: 被移除的站的 id，順序即呼叫順序。
         self.deleted: list[int] = []
         self.restarts = 0
@@ -234,9 +240,11 @@ class FakeProwlarrClient:
         return self._definitions
 
     async def add_indexer(self, definition: IndexerDefinition) -> ProwlarrIndexer:
-        reason = self._rejects.get(definition.definition_name)
+        name = definition.definition_name
+        self.add_attempts.append(name)
+        reason = self._rejects.get(name) or self._add_rejects.get(name)
         if reason is not None:
-            raise IndexerRejectedError(f"add {definition.definition_name}", messages=(reason,))
+            raise IndexerRejectedError(f"add {name}", messages=(reason,))
         indexer = ProwlarrIndexer(
             # 移除過的 id 不再發（真的 Prowlarr 也是遞增的）。
             id=max((row.id for row in self._indexers), default=0) + len(self.deleted) + 1,

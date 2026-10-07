@@ -198,6 +198,12 @@ BLOCKED_SITES = {
     "animetosho-xyz": "Unable to connect to indexer, check the log above the ValidationFailure.",
 }
 
+#: 測試通過、加入時卻被拒的站（M4 票 44；審計實測 Internet Archive：Prowlarr 加之前自己再連一次，
+#: 那一次連不上）。頁 4 的主鍵要把它和「測試就沒過」分開說。
+FLAKY_SITES = {
+    "acgrip": "Unable to connect to indexer, check the log above the ValidationFailure.",
+}
+
 #: 使用者那台 NAS 上既有媒體庫的根目錄。`main()` 換成暫存目錄底下真的存在的一層：Route 的
 #: 第三條纜繩會 `stat()` 媒體庫的每一條路徑，寫死 `/volume1` 的話 `mixed` 的第 5 步在這台
 #: 機器上永遠紅，既有服務那條路就走不完（票 06h）。
@@ -362,7 +368,7 @@ def bundled() -> Scenario:
     return Scenario(
         jellyfin=FakeJellyfinClient(),
         qbittorrent=FakeQbittorrentClient(),
-        prowlarr=FakeProwlarrClient(rejects=BLOCKED_SITES),
+        prowlarr=FakeProwlarrClient(rejects=BLOCKED_SITES, add_rejects=FLAKY_SITES),
         prowlarr_api_key="00000000000000000000000000000001",
     )
 

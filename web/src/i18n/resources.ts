@@ -639,7 +639,7 @@ const zhHant = {
       choose:
         '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用你已經有的站。',
       bundled:
-        '索引站決定 Berth 找得到什麼。先測試，通過的站勾起來加入；加入之後試搜，不要的就地移除。這一步可以之後再說。',
+        '索引站決定 Berth 找得到什麼。按一次，Berth 測試推薦的站、把通過的加進去；加入之後試搜，不要的就地移除。要逐站挑選或加其他公開站，展開「進階」。這一步可以之後再說。',
       existing:
         '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；也可以測試推薦的公開站、按一次加進去。Berth 不移除你的站。這一步可以之後再說。',
     },
@@ -666,6 +666,30 @@ const zhHant = {
       keyAbsent: '尚未取得',
     },
     connectFirst: '先在上面接上 Prowlarr，這裡才讀得到它的站。',
+    quick: {
+      title: '推薦站',
+      lede_one:
+        '按一次，Berth 測試推薦的 {{count}} 個公開站，把通過的加進 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態，不影響其他站。',
+      lede_other:
+        '按一次，Berth 測試推薦的 {{count}} 個公開站，把通過的加進 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態，不影響其他站。',
+      run: '測試推薦站，加入通過的',
+      running: '測試並加入中…',
+      requestFailed: '測試與加入沒做完。',
+      added_one: '加入 {{count}} 站',
+      added_other: '加入 {{count}} 站',
+      addFailed_one: '{{count}} 站測過、加不進去',
+      addFailed_other: '{{count}} 站測過、加不進去',
+      testFailed_one: '{{count}} 站沒通過測試',
+      testFailed_other: '{{count}} 站沒通過測試',
+      addFailedNote:
+        '下面這幾站測試時連得上，Prowlarr 加入前自己再連一次卻沒連上，所以沒有加進去、也不算在已加入裡。這種站多半時好時壞：之後在「進階」裡再測、再加。',
+      state: {
+        added: '已加入',
+        addFailed: '測過、加不進去',
+        testFailed: '沒通過',
+      },
+      advanced: '進階：逐站測試與挑選、其他公開站',
+    },
     add: {
       title: '加站',
       lede: '按「測試」時 Prowlarr 會現場連一次那個站，什麼都不建立；通過的才勾得起來。公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
@@ -3776,7 +3800,7 @@ const en: Translations<typeof zhHant> = {
       choose:
         'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key and Berth uses the indexers you already have.',
       bundled:
-        'Indexers decide what Berth can find. Test first, tick the ones that pass and add them; then run a trial search and remove the ones you do not want. This step can wait.',
+        'Indexers decide what Berth can find. One press tests the recommended sites and adds the ones that pass; then run a trial search and remove the ones you do not want. To pick sites one by one or add other public sites, open Advanced. This step can wait.',
       existing:
         'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; you can also test the recommended public sites and add them in one press. Berth never removes your sites. This step can wait.',
     },
@@ -3805,6 +3829,30 @@ const en: Translations<typeof zhHant> = {
       keyAbsent: 'Not yet',
     },
     connectFirst: 'Connect Prowlarr above first; its sites show up here once Berth can reach it.',
+    quick: {
+      title: 'Recommended sites',
+      lede_one:
+        'One press: Berth tests the recommended public site and adds it to Prowlarr if it passes. Prowlarr reaches the site live, which can take a moment.',
+      lede_other:
+        'One press: Berth tests the {{count}} recommended public sites and adds the ones that pass to Prowlarr. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal and does not affect the rest.',
+      run: 'Test recommended sites and add the ones that pass',
+      running: 'Testing and adding…',
+      requestFailed: 'Testing and adding did not finish.',
+      added_one: '{{count}} site added',
+      added_other: '{{count}} sites added',
+      addFailed_one: '{{count}} site passed the test but could not be added',
+      addFailed_other: '{{count}} sites passed the test but could not be added',
+      testFailed_one: '{{count}} site did not pass the test',
+      testFailed_other: '{{count}} sites did not pass the test',
+      addFailedNote:
+        'These sites were reachable during the test, but when Prowlarr connected again before adding them it could not get through, so they were not added and do not count as added. Sites like this tend to come and go: test and add them again later under Advanced.',
+      state: {
+        added: 'Added',
+        addFailed: 'Passed, not added',
+        testFailed: 'Did not pass',
+      },
+      advanced: 'Advanced: test and pick sites one by one, other public sites',
+    },
     add: {
       title: 'Add indexers',
       lede: "Test asks Prowlarr to reach the site right now and creates nothing; only sites that pass can be ticked. A few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",

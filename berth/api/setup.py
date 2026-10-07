@@ -32,12 +32,14 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
+    SiteStage,
     StepFailure,
     StepStatus,
 )
 from berth.services.clients import bundled_targets
 from berth.services.indexer import (
     IndexerSetupStatus,
+    add_recommended_indexers,
     apply_default_indexers,
     read_indexer_status,
     remove_indexer,
@@ -636,6 +638,8 @@ class SiteCheckOut(BaseModel):
     reason: SiteFailure | None
     #: Prowlarr 的原文（英文）。
     detail: str
+    #: 結論來自測試還是新增（M4 票 44）：`passed` 是 `false` 而這裡是 `add`，就是測過而加不進去。
+    stage: SiteStage
 
 
 class IndexerSetupOut(BaseModel):
@@ -749,6 +753,22 @@ async def post_indexers_apply(
     """
     try:
         result = await apply_default_indexers(session, factory, body.indexers)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return IndexerSetupOut.of(result, config)
+
+
+@router.post("/indexers/recommended")
+async def post_indexers_recommended(
+    session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
+) -> IndexerSetupOut:
+    """套件內頁 4 的主鍵（M4 票 44）：測推薦清單上還沒加入的站，通過的加進去，逐站回報。
+
+    已經在 Prowlarr 裡的站不測也不加。既有的那一台與還沒選來源回 422：既有的加站走
+    `/indexers/apply`，要人看過加哪幾站（M4 票 20）。
+    """
+    try:
+        result = await add_recommended_indexers(session, factory)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return IndexerSetupOut.of(result, config)

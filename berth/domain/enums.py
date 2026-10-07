@@ -668,6 +668,20 @@ class SiteFailure(StrEnum):
     OTHER = "other"
 
 
+class SiteStage(StrEnum):
+    """一站的結論來自哪一支（M4 票 44）。
+
+    Prowlarr 加一站之前自己會再連一次，所以測試通過的站加入時照樣可能被拒（審計實測 Internet
+    Archive）。頁 4 的主鍵把兩支串成一次，這兩種沒加進去的要分開說：測試就沒過的是那個站不通，
+    測過而加不進去的多半是它時好時壞。
+    """
+
+    #: `indexer/test`（「測試」），或已經在的站重驗一次。
+    TEST = "test"
+    #: 新增那一支（「加入」）。
+    ADD = "add"
+
+
 class BudgetUse(StrEnum):
     """誰用掉一個站的請求預算（M3 票 20、plan §3.2）。健康頁照它拆「這一小時是誰問的」。"""
 

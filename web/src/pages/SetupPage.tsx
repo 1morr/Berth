@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { ApiError } from '../api/client'
 import {
   addLibraryPaths,
+  addRecommendedIndexers,
   applyIndexers,
   applyQbittorrent,
   bootstrapJellyfin,
@@ -311,6 +312,11 @@ export function SetupPage() {
   })
   const applySites = useMutation({
     mutationFn: applyIndexers,
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+  })
+  // 套件內頁 4 的主鍵（M4 票 44）：測推薦站、把通過的加進去。
+  const addRecommended = useMutation({
+    mutationFn: addRecommendedIndexers,
     onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
   })
   // 套件內 Prowlarr 的介面登入是自己的一顆按鈕（M4 票 20），不跟著「加入」送。
@@ -700,6 +706,10 @@ export function SetupPage() {
             owner={current.owner}
             carriedPassword={carriedPassword}
             applying={applySites.isPending}
+            recommended={{
+              running: addRecommended.isPending,
+              onRun: () => addRecommended.mutateAsync(),
+            }}
             login={{
               saving: prowlarrLogin.isPending,
               refusal: loginRefusalOf(prowlarrLogin.error),

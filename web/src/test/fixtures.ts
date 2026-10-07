@@ -200,13 +200,14 @@ export function site(
   }
 }
 
-/** 測試或加入對一站的結論。 */
+/** 測試或加入對一站的結論。`stage` 預設是加入那一支（「加入」與主鍵記下的）。 */
 export function check(
   definition_name: string,
   reason: SiteCheck['reason'] = null,
   detail = '',
+  stage: SiteCheck['stage'] = 'add',
 ): SiteCheck {
-  return { definition_name, passed: reason === null, reason, detail }
+  return { definition_name, passed: reason === null, reason, detail, stage }
 }
 
 /**

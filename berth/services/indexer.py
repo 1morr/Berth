@@ -45,6 +45,7 @@ from berth.domain import (
     ServiceKind,
     ServiceOrigin,
     SiteFailure,
+    SiteStage,
     StepFailure,
     StepStatus,
 )
@@ -133,6 +134,8 @@ class SiteCheck:
     reason: SiteFailure | None
     #: Prowlarr 的原文（英文），畫面收在可展開的區塊裡。
     detail: str
+    #: 結論來自測試還是新增（M4 票 44）：主鍵之後，「測過而加不進去」與「測試就沒過」分開說。
+    stage: SiteStage
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,9 +250,19 @@ async def verify_sites(
     _refuse_unchosen(origin)
 
     client = factory.prowlarr(base_url, settings.api_key)
+    try:
+        return await _verify(client, names, _by_definition(await client.definitions()))
+    finally:
+        await client.aclose()
+
+
+async def _verify(
+    client: ProwlarrClient, names: Sequence[str], definitions: Mapping[str, IndexerDefinition]
+) -> tuple[SiteCheck, ...]:
+    """逐站 `indexer/test`，一次最多 `VERIFY_CONCURRENCY` 站；結果照 `names` 的順序。"""
     gate = asyncio.Semaphore(VERIFY_CONCURRENCY)
 
-    async def verify(name: str, definitions: Mapping[str, IndexerDefinition]) -> SiteCheck:
+    async def verify(name: str) -> SiteCheck:
         definition = definitions.get(name)
         if definition is None or not _offered(definition):
             return _refused(name)
@@ -257,14 +270,10 @@ async def verify_sites(
             try:
                 await client.test_definition(definition)
             except IndexerRejectedError as exc:
-                return _failed(name, exc.messages)
-        return _passed(name)
+                return _failed(name, exc.messages, SiteStage.TEST)
+        return _passed(name, SiteStage.TEST)
 
-    try:
-        definitions = _by_definition(await client.definitions())
-        return tuple(await asyncio.gather(*(verify(name, definitions) for name in names)))
-    finally:
-        await client.aclose()
+    return tuple(await asyncio.gather(*(verify(name) for name in names)))
 
 
 # 沒有單一反向命令：一次加好幾站，`remove_indexer` 一次只撤得掉一站（既有的那一台 Berth 不撤，
@@ -313,6 +322,77 @@ async def apply_default_indexers(
     finally:
         await client.aclose()
 
+    await _record_added(session, base_url, steps, sites=sites, bundled=bundled, instance=instance)
+    return await read_indexer_status(session, factory)
+
+
+# 沒有單一反向命令：理由同 `apply_default_indexers`，加進去的一站一站用 `remove_indexer` 撤。
+@command(Effect.REVERSIBLE)
+async def add_recommended_indexers(
+    session: AsyncSession, factory: ServiceClientFactory
+) -> IndexerSetupStatus:
+    """套件內頁 4 的主鍵（M4 票 44，審計 E-5）：測推薦清單上還沒加入的站，通過的加進去，一次做完。
+
+    原本是測 → 勾 → 加三個動作；套件內的使用者沒有理由不要已經通過測試的推薦站。逐站的清單與
+    其他公開站照舊走 `verify_sites` 與 `apply_default_indexers`（畫面上的「進階」）。
+
+    **已經在 Prowlarr 裡的站不測也不加**：重跑、重裝保留設定時主鍵不重複加。結論逐站記成纜繩：
+    加進去的 `ok`；測試就沒過的 `failed`、標上是測試那一支（`SiteStage.TEST`），不送去新增；測過而
+    新增被拒的 `failed`、是新增那一支——Prowlarr 加之前自己再連一次，那一次沒連上（審計實測 Internet
+    Archive），它不算已加入。介面登入與「加入」同一個結論（不設，`_apply_password`）。
+
+    只給套件內：既有的那一台加站要人看過加哪幾站、按一次確認（M4 票 20）。
+    """
+    setup = await read_settings(session, SetupSettings)
+    settings = await read_settings(session, IndexerSettings)
+    origin, base_url = _target(setup, settings)
+    _refuse_existing(origin)
+
+    client = factory.prowlarr(base_url, settings.api_key)
+    steps: list[SetupStep] = []
+    try:
+        definitions = _by_definition(await client.definitions())
+        present = {row.definition_name for row in await client.indexers()}
+        checks = await _verify(
+            client,
+            [name for name in DEFAULT_INDEXERS if name in definitions and name not in present],
+            definitions,
+        )
+        # 測試要好幾秒，這段時間另一個分頁可能已經加了同一站：新增之前再讀一次，在了就不加（同名會被
+        # 拒，記成「加不進去」就說錯了）。
+        existing = {row.definition_name: row for row in await client.indexers()}
+        for check in checks:
+            if check.definition_name in existing:
+                continue
+            if check.passed:
+                steps.append(
+                    await _ensure_indexer(client, check.definition_name, definitions, existing)
+                )
+            else:
+                steps.append(_test_failed_step(check))
+        sites = len(await client.indexers())
+        instance = instance_login(await client.host_config())
+        steps.append(await _apply_password(client, setup, None, instance, sleep=asyncio.sleep))
+    except ServiceError as exc:
+        return _view(setup, settings, origin, base_url, reachable=False, error=exc)
+    finally:
+        await client.aclose()
+
+    await _record_added(session, base_url, steps, sites=sites, bundled=True, instance=instance)
+    return await read_indexer_status(session, factory)
+
+
+async def _record_added(
+    session: AsyncSession,
+    base_url: str,
+    steps: list[SetupStep],
+    *,
+    sites: int,
+    bundled: bool,
+    instance: str,
+) -> None:
+    """加站的結論整份換掉頁 4 的纜繩；套件內那一台的最後一條是介面登入。"""
+
     def remember_address(latest: IndexerSettings) -> None:
         latest.base_url = base_url
 
@@ -327,7 +407,6 @@ async def apply_default_indexers(
 
     # 逐站加完要一分鐘上下，這段時間裡第 7 步可能已經寫進同一組設定（M2 票 15）。
     await update_settings(session, SetupSettings, record)
-    return await read_indexer_status(session, factory)
 
 
 @command(Effect.REVERSIBLE, inverse="indexer.skip_indexers")
@@ -458,6 +537,8 @@ async def _ensure_indexer(
             key=definition_name,
             status=StepStatus.FAILED,
             failure=StepFailure.SITE_NOT_OFFERED,
+            # 沒送出去：與「測試」對它的結論同一個（`_refused`）。
+            params=_TESTED,
             error=_refused(definition_name).detail,
         )
 
@@ -466,7 +547,7 @@ async def _ensure_indexer(
         if already is not None:
             # 已經在了：同名再加一次會被拒，所以改成驗一次它現在通不通。
             await client.test_indexer(already)
-            return SetupStep(key=definition_name, status=StepStatus.SKIPPED)
+            return SetupStep(key=definition_name, status=StepStatus.SKIPPED, params=_TESTED)
         assert definition is not None
         await client.add_indexer(definition)
     except IndexerRejectedError as exc:
@@ -474,9 +555,28 @@ async def _ensure_indexer(
             key=definition_name,
             status=StepStatus.FAILED,
             failure=_SITE_FAILURE[failure_of(exc.messages)],
+            params=_TESTED if already is not None else _ADDED,
             error=" · ".join(exc.messages),
         )
-    return SetupStep(key=definition_name, status=StepStatus.OK)
+    return SetupStep(key=definition_name, status=StepStatus.OK, params=_ADDED)
+
+
+#: 一站的纜繩記著結論來自哪一支（`SiteStage`）。放在 `params`：`SetupStep` 給每個泊位共用，
+#: 不為頁 4 多開一個欄位。M4 票 44 之前記下的都是新增那一支（「加入」）。
+_STAGE = "stage"
+_ADDED = {_STAGE: SiteStage.ADD.value}
+_TESTED = {_STAGE: SiteStage.TEST.value}
+
+
+def _test_failed_step(check: SiteCheck) -> SetupStep:
+    """主鍵測試就沒過的一站：沒送去新增，記下測試那一支的理由。"""
+    return SetupStep(
+        key=check.definition_name,
+        status=StepStatus.FAILED,
+        failure=_SITE_FAILURE[check.reason or SiteFailure.OTHER],
+        params=_TESTED,
+        error=check.detail,
+    )
 
 
 @command(Effect.REVERSIBLE)
@@ -734,15 +834,22 @@ def _refused(name: str) -> SiteCheck:
         passed=False,
         reason=SiteFailure.OTHER,
         detail=f"{name}: not a public torrent site this Prowlarr knows; add it in Prowlarr itself",
+        stage=SiteStage.TEST,
     )
 
 
-def _passed(name: str) -> SiteCheck:
-    return SiteCheck(name, passed=True, reason=None, detail="")
+def _passed(name: str, stage: SiteStage) -> SiteCheck:
+    return SiteCheck(name, passed=True, reason=None, detail="", stage=stage)
 
 
-def _failed(name: str, messages: tuple[str, ...]) -> SiteCheck:
-    return SiteCheck(name, passed=False, reason=failure_of(messages), detail=" · ".join(messages))
+def _failed(name: str, messages: tuple[str, ...], stage: SiteStage) -> SiteCheck:
+    return SiteCheck(
+        name,
+        passed=False,
+        reason=failure_of(messages),
+        detail=" · ".join(messages),
+        stage=stage,
+    )
 
 
 def _by_definition(definitions: tuple[IndexerDefinition, ...]) -> dict[str, IndexerDefinition]:
@@ -804,13 +911,19 @@ _NOT_SITES = frozenset({PROWLARR_LOGIN_STEP, PROWLARR_STEP})
 
 
 def _checks(steps: list[SetupStep]) -> tuple[SiteCheck, ...]:
-    """上一次「加入」對每一站的結論。"""
+    """上一次「加入」或主鍵對每一站的結論。"""
     return tuple(
-        _failed(row.key, (row.error,)) if row.status is StepStatus.FAILED else _passed(row.key)
+        _failed(row.key, (row.error,), _stage_of(row))
+        if row.status is StepStatus.FAILED
+        else _passed(row.key, _stage_of(row))
         for row in steps
         if row.key not in _NOT_SITES
         and row.status in (StepStatus.OK, StepStatus.SKIPPED, StepStatus.FAILED)
     )
+
+
+def _stage_of(step: SetupStep) -> SiteStage:
+    return SiteStage(step.params.get(_STAGE, SiteStage.ADD.value))
 
 
 def _view(

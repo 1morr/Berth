@@ -329,6 +329,7 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("PUT", "/api/setup/qbittorrent/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/apply", {"indexers": ["nyaasi"]}),
     ("POST", "/api/setup/indexers/test", {"indexers": ["nyaasi"]}),
+    ("POST", "/api/setup/indexers/recommended", None),
     ("PUT", "/api/setup/indexers/login", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/indexers/skip", {}),
     ("POST", "/api/setup/tmdb/test", {"api_key": "k"}),

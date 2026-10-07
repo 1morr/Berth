@@ -114,13 +114,15 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '3-routes')
   await next.click()
 
-  // 4. Prowlarr 與索引站（M4 票 09）：進頁不送任何測試或寫入；一站都不預勾，先測、通過的才勾得起來。
-  //    九個裡有四個連不上是常態（替身的 `BLOCKED_SITES`）：一條摘要、理由各一句。加入之後逐站 / 全部試搜，
-  //    不要的移除；替身的 Mikan 演「搜尋時連不上」。再從其他公開站加一個不在推薦清單上的。
+  // 4. Prowlarr 與索引站：進頁不送任何測試或寫入。套件內一顆主鍵測推薦站、把通過的加進去（M4 票 44）。
+  //    九個裡有四個測試就沒過（替身的 `BLOCKED_SITES`），ACG.RIP 測過而加不進去（`FLAKY_SITES`，審計實測的
+  //    Internet Archive）：結果逐站列出、兩種分開說。加入之後逐站 / 全部試搜，不要的移除；替身的 Mikan 演「搜尋時
+  //    連不上」。再從「進階」的其他公開站加一個不在推薦清單上的。
   await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
   const atIndexers = writes.length
   await page.getByRole('radio', { name: /套件內/ }).click()
-  await expect(page.getByTestId('recommended')).toBeVisible()
+  const quick = page.getByTestId('recommended-sites')
+  await expect(quick).toBeVisible()
   await page.waitForLoadState('networkidle')
   // 選套件內那一下與自動沿用的介面登入（M4 票 40）是僅有的寫入；清單出來之後一站都沒測、沒加。
   await expect(page.getByText('Prowlarr 介面的帳號：')).toBeVisible()
@@ -128,23 +130,27 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
     '/api/setup/services/prowlarr',
     '/api/setup/indexers/login',
   ])
+  // 逐站清單收在「進階」裡，預設收起。
+  await expect(page.getByTestId('recommended')).toBeHidden()
+  await shot(page, '4-indexers-one-key')
+  await quick.getByRole('button', { name: '測試推薦站，加入通過的' }).click()
+  const outcome = page.getByTestId('one-key-outcome')
+  await expect(outcome.getByText('加入 4 站 · 1 站測過、加不進去 · 4 站沒通過測試')).toBeVisible()
   await expect(
-    page.getByTestId('recommended').getByRole('checkbox', { checked: true }),
-  ).toHaveCount(0)
-  await page.getByRole('button', { name: '測試全部' }).click()
-  const summary = page.getByTestId('check-summary')
-  await expect(summary.getByText('4 站沒通過')).toBeVisible()
+    outcome.getByTestId('add-failed').getByText('ACG.RIP', { exact: true }),
+  ).toBeVisible()
+  await expect(outcome.getByTestId('test-failed').getByText('1337x', { exact: true })).toBeVisible()
+  const addedSites = page.getByTestId('added')
+  await expect(addedSites.getByText('4 站')).toBeVisible()
+  await expect(quick.getByRole('button', { name: '測試推薦站，加入通過的' })).toHaveCount(0)
+  await shot(page, '4-indexers-outcome')
+  await page.getByText('進階：逐站測試與挑選、其他公開站').click()
   await expect(page.getByRole('checkbox', { name: '1337x' })).toBeDisabled()
-  for (const name of ['dmhy', 'Mikan', 'YTS']) {
-    await page.getByRole('checkbox', { name }).check()
-  }
   await page.getByLabel('搜尋名稱').fill('knab')
   await page.getByRole('button', { name: '測試 Knaben' }).click()
   await page.getByRole('checkbox', { name: 'Knaben' }).check()
-  // 「加入」貼著站清單；介面登入已經自動沿用頁 1 那一組（M4 票 40），不必再填。
-  await page.getByRole('button', { name: '加入 4 個站' }).click()
-  const addedSites = page.getByTestId('added')
-  await expect(addedSites.getByText('4 站')).toBeVisible()
+  await page.getByRole('button', { name: '加入 1 個站' }).click()
+  await expect(addedSites.getByText('5 站')).toBeVisible()
   await expect(page.getByLabel('skipper 的 Jellyfin 密碼')).toHaveCount(0)
   await shot(page, '4-indexers-login')
   await addedSites.getByRole('button', { name: '搜尋 YTS' }).click()

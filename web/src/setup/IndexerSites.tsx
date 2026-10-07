@@ -27,6 +27,7 @@ import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
 import { useRemembered } from './remembered'
 import { prowlarrWeb } from './serviceWeb'
+import { useSiteChecks, withChecks, type CheckState } from './siteChecks'
 import { hostOf } from './signals'
 import { GAP } from './indexerGaps'
 
@@ -52,9 +53,6 @@ export interface SiteControls {
   removeFailed: boolean
   onRemove: (indexerId: number) => void
 }
-
-/** 一站在畫面上的測試狀態：還沒測、測試中，或測過的結論。 */
-type CheckState = 'testing' | SiteCheck
 
 // --- 已加入 ---
 
@@ -344,8 +342,14 @@ export function AddSites({
   onSkip,
   sticky = true,
   held = false,
+  advanced = false,
 }: {
   indexers: IndexerSetup
+  /**
+   * 收在套件內頁 4 的「進階」裡（M4 票 44）：主鍵在上面，這裡的「加入」是次要的鍵；「還差」的錨點與
+   * 「之後再說」的標記都在主鍵那一段。呼叫端另外不給 `onSkip`、`sticky={false}`。
+   */
+  advanced?: boolean
   /**
    * 介面登入正在送（M4 票 40）：Prowlarr 設完會自行重啟，這時加站撞上它；加站的結果還會整列寫回、蓋掉
    * 登入那一條。等它回來才按得下去。
@@ -364,11 +368,7 @@ export function AddSites({
 }) {
   const { t, i18n } = useTranslation()
   const titleId = useId()
-  // 起點是上一次「加入」的結論（回頭看時沒通過的那幾站仍說得出為什麼）；之後疊上這一頁按的測試。
-  const [checks, setChecks] = useRemembered<ReadonlyMap<string, CheckState>>(
-    ['indexer-checks', indexers.base_url],
-    () => new Map(indexers.checks.map((row) => [row.definition_name, row])),
-  )
+  const [checks, setChecks] = useSiteChecks(indexers)
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
   const [requestFailed, setRequestFailed] = useState(false)
   const candidates = indexers.candidates
@@ -384,6 +384,7 @@ export function AddSites({
   const others = candidates.filter((row) => !row.recommended)
   const existing = indexers.origin === 'existing'
   const webUrl = prowlarrWeb(indexers)
+  const Apply = advanced ? GhostButton : PrimaryButton
 
   async function test(names: string[]) {
     if (names.length === 0) return
@@ -392,9 +393,7 @@ export function AddSites({
     setChecks((was) => new Map([...was, ...names.map((name) => [name, 'testing'] as const)]))
     try {
       const answers = await controls.onTest(names)
-      setChecks(
-        (was) => new Map([...was, ...answers.map((row) => [row.definition_name, row] as const)]),
-      )
+      setChecks((was) => withChecks(was, answers))
     } catch {
       setRequestFailed(true)
       setChecks((was) => {
@@ -422,14 +421,11 @@ export function AddSites({
     onApply(selected).then(
       (next) => {
         // 加進去的搬去「已加入」；加不進去的（Prowlarr 加之前自己又連了一次）回到沒通過、理由同一套。
-        setChecks(
-          (was) =>
-            new Map([
-              ...was,
-              ...next.checks
-                .filter((row) => selected.includes(row.definition_name))
-                .map((row) => [row.definition_name, row] as const),
-            ]),
+        setChecks((was) =>
+          withChecks(
+            was,
+            next.checks.filter((row) => selected.includes(row.definition_name)),
+          ),
         )
         setTicked(new Set())
       },
@@ -447,17 +443,17 @@ export function AddSites({
 
   return (
     <section
-      id={GAP.sites.target}
+      id={advanced ? undefined : GAP.sites.target}
       // 頁 4 前進鍵位置的「還差」把焦點送到這裡（M4 票 27）。
-      tabIndex={-1}
+      tabIndex={advanced ? undefined : -1}
       aria-labelledby={titleId}
-      className="mt-10 border-t-2 border-rule pt-6"
+      className={advanced ? 'mt-4' : 'mt-10 border-t-2 border-rule pt-6'}
     >
       <div className="flex flex-wrap items-center gap-3">
         <h3 id={titleId} className="label text-ink-dim">
           {t('indexer.add.title')}
         </h3>
-        {indexers.skipped && (
+        {indexers.skipped && !advanced && (
           <span
             data-testid="indexers-deferred"
             className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}
@@ -528,7 +524,7 @@ export function AddSites({
           sticky && selected.length > 0 ? STICKY_ACTION : ''
         }`}
       >
-        <PrimaryButton
+        <Apply
           type="button"
           busy={applying}
           disabled={selected.length === 0 || held}
@@ -539,7 +535,7 @@ export function AddSites({
             : selected.length > 0
               ? t('indexer.add.apply', { count: selected.length })
               : t('indexer.add.applyNone')}
-        </PrimaryButton>
+        </Apply>
         {onSkip && (
           <GhostButton type="button" busy={applying} disabled={held} onClick={onSkip}>
             {t('indexer.skip')}

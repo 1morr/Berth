@@ -78,6 +78,11 @@ function called(stub: ReturnType<typeof stubApi>, url: string) {
 
 /** 二選一的那兩格。label 裡還有說明句與位址，所以只比開頭。 */
 const bundledCard = () => screen.getByRole('radio', { name: /^套件內/ })
+
+/** 套件內頁 4 的逐站清單收在「進階」裡（M4 票 44）：要用它先展開，跟使用者一樣。 */
+async function openAdvanced(user: UserEvent) {
+  await user.click(await screen.findByText('進階：逐站測試與挑選、其他公開站'))
+}
 const existingCard = () => screen.getByRole('radio', { name: /^既有/ })
 
 const EXISTING_QBITTORRENT = chosen({
@@ -809,6 +814,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     const yts = await screen.findByRole('checkbox', { name: 'YTS' })
     const blocked = screen.getByRole('checkbox', { name: '1337x' })
     expect(yts).toBeDisabled()
@@ -837,6 +843,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />, '/setup?step=4')
+    await openAdvanced(user)
     await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'YTS' })).toBeEnabled())
 
@@ -857,6 +864,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     await user.click(await screen.findByRole('button', { name: '測試全部' }))
 
     await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/test')).toBe(true))
@@ -889,6 +897,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     await user.click(await screen.findByRole('button', { name: '測試全部' }))
 
     const summary = await screen.findByTestId('check-summary')
@@ -921,6 +930,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
 
     const summary = await screen.findByTestId('check-summary')
@@ -947,6 +957,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     await user.click(await screen.findByRole('button', { name: '測試 dmhy' }))
     await user.click(screen.getByRole('button', { name: '測試 Mikan' }))
     await user.click(await screen.findByRole('checkbox', { name: 'dmhy' }))
@@ -983,6 +994,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     await user.click(await screen.findByRole('button', { name: '測試 EZTV' }))
     const eztv = screen.getByRole('checkbox', { name: 'EZTV' })
     await waitFor(() => expect(eztv).toBeEnabled())
@@ -990,8 +1002,11 @@ describe('頁 4：Prowlarr 與索引站', () => {
     await user.click(screen.getByRole('button', { name: '加入 1 個站' }))
 
     await waitFor(() => expect(eztv).toBeDisabled())
-    expect(screen.getByText(/被 Cloudflare 擋住/)).toBeInTheDocument()
+    const add = within(screen.getByRole('region', { name: '加站' }))
+    expect(add.getByText(/被 Cloudflare 擋住/)).toBeVisible()
     expect(screen.getByTestId('check-summary')).toHaveTextContent('1 站沒通過')
+    // 上面的加站結果也說它測過而加不進去（M4 票 44）。
+    expect(within(screen.getByTestId('add-failed')).getByText('EZTV')).toBeInTheDocument()
   })
 
   it('Prowlarr 介面登入是自己的一區與按鈕：必填、沒填密碼就不送，填了只送登入（M4 票 07、20）', async () => {
@@ -1076,6 +1091,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await openAdvanced(user)
     // 不搜就不列：八十幾站不該佔掉整頁。
     await screen.findByText('其他公開站')
     expect(screen.queryByTestId('others')).not.toBeInTheDocument()
@@ -1649,7 +1665,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
 
     renderInRoute(<SetupPage />)
 
-    await screen.findByText(/先測試，通過的站勾起來加入/)
+    await screen.findByText(/按一次，Berth 測試推薦的站/)
     expect(screen.queryByText(/你那一台上已經有的站/)).not.toBeInTheDocument()
     expect(screen.queryByTestId('added')).not.toBeInTheDocument()
   })

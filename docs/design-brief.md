@@ -623,7 +623,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- | --- |
 | qBittorrent | **只預置「讓 Berth 進得去」**：只放行 Berth 容器固定 IP 的免密白名單（不是整個網段，理由見 §20.7）。原因是 4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 拿不到，沒有這一步按鈕就登不進去 | 套件內：設定 WebUI 登入（必填；預設「沿用 Jellyfin 帳密」，見下文；不設的話 WebUI 只剩容器 log 裡每次重啟都換的臨時密碼，M4 票 07）。**全域偏好一個都不寫**（D2，M4 票 32）：送單逐個 torrent 帶 Berth 的分類與 `autoTMM=true`，save path 與未完成目錄開在分類上（M4 票 22），全域的 save path、autoTMM 都不影響 Berth。既有：填位址與 WebUI 帳密，同樣一個全域偏好都不寫（§16.4），**連線測試通過就做完**，沒有不寫入的確認鍵（D5，M4 票 38）。兩種都依 Route 建立 category | 無 |
 | Jellyfin | 無 | 精靈第一頁選套件內或既有 → 那一台還沒跑過初始精靈就以擁有者填的帳密建立 Jellyfin 管理員、跑完它的初始設定；已經有管理員就用管理員登入 → Berth 自己建 API key「Berth」（帳密不存下來，M4 票 06）→ 媒體庫與路徑泊位：套件內建立使用者在精靈列的媒體庫（內容類型 + 名稱 + 資料夾，預設 Movies / TV / Anime 對應 `/data/library/{movies,tv,anime}`，可改名、增刪，M3 票 06f），既有只「加入 Berth 路徑」→ 每個媒體庫一個 Route。**套件內第一次來、清單沒改過時進頁就建立並檢查**，逐條 Route 顯示跑到第幾條檢查（D7，M4 票 43）；改過清單、跑過一次之後與既有，照舊按「建立並檢查」 | 無 |
-| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：推薦清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；AniDex 於 2026-09-25 拿掉，§20.7）與 schema 裡其他公開的 torrent 站，預設不勾、先測試通過才勾得起來再加入（M4 票 09，`indexer/test` 測還沒加入的定義，§20.7）、設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組；自己的一顆按鈕，不跟著「加入」，M4 票 20）。既有：貼 API key，用使用者已有的索引站；一站都沒有時這一頁待處理，也可以測試推薦的公開站、按一次加進它（M4 票 20）；Berth 不移除它的站、不設它的登入 | 私有站的帳號 |
+| Prowlarr | 無；Berth 唯讀掛載其設定目錄讀取 API key（套件內零輸入） | 套件內：推薦清單（Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay；AniDex 於 2026-09-25 拿掉，§20.7）**一顆主鍵「測試推薦站，加入通過的」**：測還沒加入的推薦站、通過的加進去，結果逐站列出，測過而新增被拒的（Prowlarr 加之前自己再連一次，§20.7）單獨說、不算已加入；Prowlarr 已經有站時不給這顆鍵（M4 票 44）。逐站測試與勾選、schema 裡其他公開的 torrent 站收在「進階」：預設不勾、先測試通過才勾得起來再加入（M4 票 09，`indexer/test` 測還沒加入的定義，§20.7）；設定介面登入（與 qBittorrent 同一條「沿用 Jellyfin 帳密」規則，各自一組；自己的一顆按鈕，不跟著「加入」，M4 票 20）。既有：貼 API key，用使用者已有的索引站；一站都沒有時這一頁待處理，也可以測試推薦的公開站、按一次加進它（M4 票 20）；Berth 不移除它的站、不設它的登入 | 私有站的帳號 |
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈的 TMDB 泊位（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
@@ -1256,6 +1256,9 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 - **`POST /api/v1/indexer` 會先連一次那個站再存**：成功回 201 與整份資源；連不上回 **400 加一個陣列**，
   每列是 `{isWarning, propertyName, errorMessage, severity}`。站沒有被建立。所以「逐站成敗」來自新增
   那一支，`indexer/test` 是給**已經存在**的站用的（回 200 空物件）。`?forceSave=true` **不會**跳過這個檢查。
+  **測試通過不保證新增成功**：新增那一次是另一次連站，時好時壞的站兩次結果可能不同（2026-10-06 審計實測
+  Internet Archive：`indexer/test` 通過、緊接著新增回「連不上」，`docs/research/wizard-audit-2026-10-06.md` S1 頁 4）。
+  頁 4 的主鍵因此把「測過而加不進去」與「測試就沒過」分開記（M4 票 44）。
 - **同名的第二個站被拒**：400 `{"propertyName": "Name", "errorMessage": "Should be unique"}`。冪等只能靠
   呼叫端先 `GET /api/v1/indexer`。
 - schema 的 `appProfileId` 是 **0**，原樣送回去建不起來；要換成 `1`（Prowlarr 內建的同步設定檔）。

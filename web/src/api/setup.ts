@@ -291,6 +291,14 @@ export function applyIndexers(indexers: string[]): Promise<IndexerSetup> {
   } satisfies Schemas['IndexerApplyIn'])
 }
 
+/**
+ * 套件內頁 4 的主鍵（M4 票 44）：測推薦清單上還沒加入的站，通過的加進去，一次做完。逐站的結論在
+ * `checks`，`stage` 分得出「測過而加不進去」。
+ */
+export function addRecommendedIndexers(): Promise<IndexerSetup> {
+  return apiPost<IndexerSetup>('/setup/indexers/recommended')
+}
+
 /** 精靈與設定頁的介面登入：只換套件內 Prowlarr 的介面登入，等它重啟回來。 */
 export function setIndexerLogin(login: InterfaceLogin): Promise<IndexerSetup> {
   return apiPut<IndexerSetup>('/setup/indexers/login', login)

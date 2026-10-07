@@ -1837,6 +1837,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/indexers/recommended": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Indexers Recommended
+         * @description 套件內頁 4 的主鍵（M4 票 44）：測推薦清單上還沒加入的站，通過的加進去，逐站回報。
+         *
+         *     已經在 Prowlarr 裡的站不測也不加。既有的那一台與還沒選來源回 422：既有的加站走
+         *     `/indexers/apply`，要人看過加哪幾站（M4 票 20）。
+         */
+        post: operations["post_indexers_recommended_api_setup_indexers_recommended_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/indexers/login": {
         parameters: {
             query?: never;
@@ -4894,6 +4917,7 @@ export interface components {
             reason: components["schemas"]["SiteFailure"] | null;
             /** Detail */
             detail: string;
+            stage: components["schemas"]["SiteStage"];
         };
         /**
          * SiteFailure
@@ -4919,6 +4943,16 @@ export interface components {
             /** Error */
             error: string;
         };
+        /**
+         * SiteStage
+         * @description 一站的結論來自哪一支（M4 票 44）。
+         *
+         *     Prowlarr 加一站之前自己會再連一次，所以測試通過的站加入時照樣可能被拒（審計實測 Internet
+         *     Archive）。頁 4 的主鍵把兩支串成一次，這兩種沒加進去的要分開說：測試就沒過的是那個站不通，
+         *     測過而加不進去的多半是它時好時壞。
+         * @enum {string}
+         */
+        SiteStage: "test" | "add";
         /**
          * SkipCode
          * @description 一筆 Feed Item 被擋下的原因。
@@ -9087,6 +9121,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_indexers_recommended_api_setup_indexers_recommended_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexerSetupOut"];
                 };
             };
         };
