@@ -80,6 +80,26 @@ function floor() {
   return screen.getByTestId('version-floor')
 }
 
+describe('兩格的名字（M4 票 54，票 15 的 audit）', () => {
+  it('一組選項由 legend 命名，沒有叫不出名字的 radiogroup', () => {
+    mount('qbittorrent')
+    const group = screen.getByRole('group', { name: '這一台 qBittorrent 是哪一台？' })
+    expect(within(group).getAllByRole('radio')).toHaveLength(2)
+    for (const radiogroup of screen.queryAllByRole('radiogroup')) {
+      expect(radiogroup).toHaveAccessibleName()
+    }
+  })
+
+  it('每一格的名字是標題，說明另外念', () => {
+    mount('qbittorrent')
+    const bundled = screen.getByRole('radio', { name: '套件內' })
+    expect(bundled).toHaveAccessibleDescription(/compose 帶來的那一台 qBittorrent/)
+    expect(screen.getByRole('radio', { name: '既有' })).toHaveAccessibleDescription(
+      /你自己已經在跑的那一台/,
+    )
+  })
+})
+
 describe('「既有」旁的版本下限（M4 票 17）', () => {
   afterEach(async () => {
     await i18next.changeLanguage('zh-Hant')

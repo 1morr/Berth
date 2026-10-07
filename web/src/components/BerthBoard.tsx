@@ -183,7 +183,7 @@ function Summary({
         {here ? (
           <span className="flex flex-wrap items-baseline gap-x-2">
             <span className="value text-xs font-semibold">{here.code}</span>
-            <span className="value truncate text-sm font-semibold">{here.name}</span>
+            <span className="value text-sm font-semibold wrap-anywhere">{here.name}</span>
             <span className="label text-ink-dim">{here.status}</span>
           </span>
         ) : (
@@ -213,7 +213,7 @@ function Cell({ slot }: { slot: BoardSlot }) {
         <span className="value text-xs font-semibold">{slot.code}</span>
         <span className={`label ${secondary}`}>{slot.status}</span>
       </div>
-      <p className="value mt-2 truncate text-base font-semibold">{slot.name}</p>
+      <p className="value mt-2 text-base font-semibold wrap-anywhere">{slot.name}</p>
       {/* 不截斷（DESIGN.md）：390 寬時版本那一行會比格子寬，換行而不是吃掉後半（票 15 的 audit）。 */}
       <p className={`value mt-1 min-h-4 text-xs wrap-anywhere ${secondary}`}>
         {slot.detail || '—'}

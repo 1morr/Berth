@@ -54,6 +54,25 @@ describe('jellyfinBase', () => {
   it('既不知道位址也不知道 port 時是 null，畫面只留文字', () => {
     expect(jellyfinBase({ public_url: '', url: '', port: null }, HERE)).toBeNull()
   })
+
+  // M4 票 54（票 31 實跑抓到，完成頁先修了）：既有 Jellyfin 的位址是 Berth 連過去的那一條。
+  it('既有的那一台填 host.docker.internal 時開在瀏覽器的主機名上', () => {
+    expect(
+      jellyfinBase({ public_url: '', url: 'http://host.docker.internal:8096', port: null }, HERE),
+    ).toBe('http://nas.local:8096')
+  })
+
+  it('既有的那一台填 compose 主機名時給不出——瀏覽器解不到它', () => {
+    expect(
+      jellyfinBase({ public_url: '', url: 'http://jellyfin:8096', port: null }, HERE),
+    ).toBeNull()
+  })
+
+  it('管理員填的對外網址照用，不改寫', () => {
+    expect(
+      jellyfinBase({ public_url: 'http://jellyfin', url: 'http://jellyfin', port: null }, HERE),
+    ).toBe('http://jellyfin')
+  })
 })
 
 describe('jellyfinLibrariesUrl', () => {

@@ -688,7 +688,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 依 brief §20.7：`/Startup/*` 與 `/Library/VirtualFolders` 在精靈完成前不需憑證；插件與排程任務需要管理員 token。
 
-**分兩半跑**（M4 票 06；2026-09-29 起第二半在媒體庫與路徑頁）：Jellyfin 頁（擁有者）跑下面的 1–3、5–7——帳密只在那一刻出現；媒體庫與路徑頁跑 1 與 4，用 Jellyfin 頁存下的 API key（`services.jellyfin` 的 `OWNER_STEPS` / `BERTH_STEPS`）。`JellyfinStep` 的宣告順序就是這個執行順序（媒體庫排最後），畫面照它列。所以媒體庫是在 Jellyfin 的初始精靈跑完之後、以 API key 建的——第 4 步原本的「初始精靈跑完之後這一支要管理員憑證」從重按的特例變成常態。
+**分兩半跑**（M4 票 06；2026-09-29 起第二半在媒體庫與路徑頁）：Jellyfin 頁（擁有者）跑下面的 1–3、5–7——帳密只在那一刻出現；媒體庫與路徑頁跑 1 與 4，用 Jellyfin 頁存下的 API key（`services.jellyfin` 的 `OWNER_STEPS` / `BERTH_STEPS`）。`JellyfinStep` 的宣告順序就是這個執行順序（媒體庫排最後）；畫面只列頁 3 建媒體庫那一步（M4 票 54 刪掉前端照序列七步的查表）。所以媒體庫是在 Jellyfin 的初始精靈跑完之後、以 API key 建的——第 4 步原本的「初始精靈跑完之後這一支要管理員憑證」從重按的特例變成常態。
 
 1. `GET /System/Info/Public` → **先確認版本 ≥ 12.0**（低於就整段停在這裡，brief §16.4），再看 `StartupWizardCompleted`：`false` 給建立管理員的表單、跑 2–7；`true`（既有，或套件內但已初始化過）給登入表單、只跑 7。選套件內或既有不影響這一條（§9.3 的「表單跟著那一台的狀態走」）。
 2. `POST /Startup/Configuration` `{ UICulture, MetadataCountryCode, PreferredMetadataLanguage }`，**套件內那一台另帶 `ServerName = "Berth"`**（M4 票 52，使用者 2026-10-06 拍板；`jellyfin.BUNDLED_SERVER_NAME`）：不帶的話 Jellyfin 寫成空字串，用戶端看到的是容器 ID（brief §20.9）。伺服器名稱是全域設定，既有那一台即使還沒初始化也不帶（brief §16.4）；已經初始化的整步跳過，本來就不寫。不帶等於清成空字串：既有而還沒初始化的那一台要是事先在 `system.xml` 放了名字，會被這一步清掉——票 52 之前就是這樣，要保住得先 `GET /Startup/Configuration` 讀回原值再送，目前不做。**既有那一台在擁有者表單上問**「語言與地區」（一組代碼，預設跟著 UI 語言），**套件內的不問**，帶 UI 語言（`zh-Hant` → `zh-TW` / `TW`，`en` → `en-US` / `US` / `en`）（M4 票 18，使用者 2026-09-30 拍板；`jellyfin.JellyfinStartup`）。第 4 步的媒體庫照 Jellyfin 自己的 metadata 語言與國家建（M4 票 29），也就是這一步寫進去的那一組。**寫給還沒初始化的那一台的選擇記在 `setup.jellyfin.startup`**（M4 票 29）：管理員建好之後某一步失敗，那一台的初始精靈還沒跑完，頁 1 仍是建立表單、照它重填——只有走到第 6 步（`StartupWizardCompleted`）才改成登入，否則登入表單不帶語言，重試會拿預設值蓋掉使用者選的（實測 E12）。

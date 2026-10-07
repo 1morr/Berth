@@ -60,7 +60,7 @@ export function ServiceCard({
           </span>
         )}
         {row.base_url && (
-          <span className="value ml-auto min-w-0 truncate text-xs text-ink-dim">
+          <span className="value ml-auto min-w-0 text-xs wrap-anywhere text-ink-dim">
             {row.base_url}
           </span>
         )}

@@ -252,7 +252,8 @@ export function ServiceChoice({
         <legend id={`${groupName}-legend`} className="label mb-3 text-ink-dim">
           {t('choice.legend', { service: name })}
         </legend>
-        <div role="radiogroup" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* 一組選項是這個 fieldset，由 legend 命名；不另掛沒有名字的 `radiogroup`（M4 票 54）。 */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ChoiceCard
             name={groupName}
             origin="bundled"
@@ -462,6 +463,8 @@ function ChoiceCard({
   onPick: (origin: ServiceOrigin) => void
   children: ReactNode
 }) {
+  // 名字只是標題，說明另外念（M4 票 54）：整張卡當名字時「既有」超過 100 字，方向鍵每移一格念一次。
+  const cardId = useId()
   return (
     <label
       onPointerDown={onPointer}
@@ -485,11 +488,17 @@ function ChoiceCard({
         // 點同一格也要收到：換過另一格又取消之後，再點回原本那一格是「不換了」。
         onChange={() => onPick(origin)}
         onClick={() => checked && onPick(origin)}
+        aria-labelledby={`${cardId}-title`}
+        aria-describedby={`${cardId}-body`}
         className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)]"
       />
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-ink">{title}</span>
-        {children}
+        <span id={`${cardId}-title`} className="block text-sm font-semibold text-ink">
+          {title}
+        </span>
+        <span id={`${cardId}-body`} className="block">
+          {children}
+        </span>
       </span>
     </label>
   )
@@ -743,7 +752,7 @@ export function TestLine({
               : t('connection.untested')}
         </span>
         <span className="value text-sm font-semibold text-ink">{t(SERVICE_LABEL[kind])}</span>
-        <span className="value min-w-0 truncate text-xs text-ink-dim">
+        <span className="value min-w-0 text-xs wrap-anywhere text-ink-dim">
           {testTarget(status, kind)}
         </span>
         {!failed && !testing && (

@@ -660,7 +660,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | qBittorrent 全域偏好 | 不寫（D2，M4 票 32） | 不寫 | — | — |
 | qBittorrent WebUI 登入 | 設 | 不碰 | 只能再設一組蓋過 | qBittorrent 偏好 |
 | `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 刪 Route 不刪分類；換一台時確認框可一鍵移除舊那台上**空的**（M4 票 47），目錄不刪 | qBittorrent 刪分類 |
-| 探測 torrent、探測檔（頁 2 在 `/data`、校驗不完，M4 票 46；頁 3 在分類路徑） | 暫時，自清 | 同左 | 自清（Berth 中途崩潰可能殘留） | 手動刪 |
+| 探測 torrent、探測檔（頁 2 在 `/data`、校驗不完，M4 票 46；頁 3 在分類路徑） | 暫時，自清 | 同左 | 自清（Berth 中途崩潰、或答完之後移除那一下 qBittorrent 斷線時可能殘留：停住、沒有分類，M4 票 54） | 手動刪 |
 | Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除；既有不移除 | Prowlarr 刪 |
 | Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
 | TMDB | 不寫 | 不寫 | — | — |

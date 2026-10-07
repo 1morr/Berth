@@ -8,7 +8,7 @@ import type {
   SetupService,
   SetupStatus,
 } from '../api/setup'
-import { CopyLine, GhostButton, Notice, PrimaryButton, TEXT_LINK } from '../components/controls'
+import { GhostButton, Notice, PrimaryButton, TEXT_LINK } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { failureText } from '../components/failures'
 import { RequestFailed } from '../components/RequestFailed'
@@ -428,35 +428,35 @@ function ProwlarrLogin({
 
 /**
  * 設定頁的索引站那一區（票 06i）：已加入 + 加站。位址與 key 在它上面的連線區改（`ServiceConnection`，
- * M4 票 39：與精靈同一份表單、同一支端點）；介面登入在它自己的那一區（M4 票 07）。
+ * M4 票 39：與精靈同一份表單、同一支端點）；介面登入在它自己的那一區（M4 票 07）。清單讀不到時與精靈頁 4
+ * 同一段（`ReadFailed`，M4 票 54）：套件內那一台的 key 換了，「重新讀取」就是重讀掛載的 key。
  */
 export function IndexerActions({
   indexers,
   applying,
   onApply,
   sites,
+  rereading,
+  onReread,
 }: {
   indexers: IndexerSetup
   applying: boolean
   onApply: (indexers: string[]) => Promise<IndexerSetup>
   sites: SiteControls
+  rereading: boolean
+  onReread: () => void
 }) {
   const { t } = useTranslation()
-  // 連上了：0 站的既有 Prowlarr 是待處理（M4 票 20），也算連上。
-  const reached =
-    indexers.origin === 'bundled'
-      ? indexers.reachable
-      : indexers.steps.some(
-          (row) => row.step === 'prowlarr' && row.status !== 'failed' && row.status !== 'running',
-        )
-
-  if (!reached) {
-    // 套件內的那台連不上：說清楚與怎麼查；既有的那一台連不上由上面測試那一條說。
-    return indexers.origin === 'bundled' ? (
-      <Unreachable indexers={indexers} />
-    ) : (
-      <p className="text-sm text-ink-dim">{t('indexer.connectFirst')}</p>
+  // 既有的那一台連不上由上面測試那一條說；0 站的既有 Prowlarr 是待處理（M4 票 20），也算連上。
+  const connected =
+    indexers.origin === 'bundled' ||
+    indexers.steps.some(
+      (row) => row.step === 'prowlarr' && row.status !== 'failed' && row.status !== 'running',
     )
+
+  if (!connected) return <p className="text-sm text-ink-dim">{t('indexer.connectFirst')}</p>
+  if (indexers.error) {
+    return <ReadFailed indexers={indexers} rereading={rereading} onReread={onReread} />
   }
 
   return (
@@ -510,27 +510,4 @@ function keyState(indexers: IndexerSetup, service: SetupService | undefined) {
   if (service?.state === 'ok') return 'indexer.cutaway.keyHeld'
   if (service?.reason === 'auth_required') return 'indexer.cutaway.keyRejected'
   return 'indexer.cutaway.keyUnverified'
-}
-
-/** 連不上套件內的 Prowlarr 時，畫面仍然要說得出下一步。 */
-function Unreachable({ indexers }: { indexers: IndexerSetup }) {
-  const { t } = useTranslation()
-
-  return (
-    <div className="mt-6 grid gap-4">
-      <Notice signal="blocked" label={t('common.failed')}>
-        {t('indexer.unreachable')}
-      </Notice>
-      {indexers.error && (
-        <p role="alert" className="max-w-prose text-sm text-blocked-ink">
-          {failureText(t, indexers, 'Prowlarr')}
-        </p>
-      )}
-      <div className="grid grid-cols-1 gap-px">
-        <CopyLine command="docker compose ps prowlarr" />
-        <CopyLine command="docker compose logs --tail 50 prowlarr" />
-      </div>
-      <TechnicalDetails lines={[indexers.base_url, indexers.error]} />
-    </div>
-  )
 }

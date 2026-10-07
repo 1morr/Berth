@@ -7,12 +7,14 @@ import { describe, expect, it } from 'vitest'
  *   沒有空格的發佈名在 390px 上把 `/jobs` 撐出 67px 的整頁橫向捲動（票 15 實測）。
  * - **不用 `break-all`**：它連英文詞中間都斷（`(S` / `TEP 4)`）。
  * - 散文照舊 `break-words`——它在詞與詞之間斷，而散文一定有空格。
+ * - **不用 `truncate`**（M4 票 54，票 15 的 audit）：390 寬時位址與版本被吃掉後半，而那正是要看的那一段。
  */
 function wrappingViolations(source: string): string[] {
   const classNames = source.match(/className=(?:"[^"]*"|\{`[^`]*`\})/g) ?? []
   return classNames.filter(
     (name) =>
       /\bbreak-all\b/.test(name) ||
+      /(?<![\w-])truncate(?![\w-])/.test(name) ||
       (/(?<![\w-])value(?![\w-])/.test(name) && /\bbreak-words\b/.test(name)),
   )
 }
@@ -24,7 +26,7 @@ const SOURCES = import.meta.glob<string>(['./**/*.tsx', '!./**/*.test.tsx'], {
 })
 
 describe('long strings wrap the way DESIGN.md says', () => {
-  it('no component breaks a machine string with break-words or anything with break-all', () => {
+  it('no component breaks a machine string with break-words, or anything with break-all or truncate', () => {
     const found = Object.entries(SOURCES).flatMap(([path, source]) =>
       wrappingViolations(source).map((name) => `${path}: ${name}`),
     )
@@ -44,6 +46,13 @@ describe('long strings wrap the way DESIGN.md says', () => {
     expect(wrappingViolations('<span className="block break-all">x</span>')).toHaveLength(1)
   })
 
+  it('catches truncate however the class list is written', () => {
+    expect(
+      wrappingViolations('<span className="value min-w-0 truncate text-xs">x</span>'),
+    ).toHaveLength(1)
+    expect(wrappingViolations('<p className={`truncate ${tone}`}>x</p>')).toHaveLength(1)
+  })
+
   it('leaves prose, wrap-anywhere and look-alike class names alone', () => {
     expect(
       wrappingViolations(
@@ -52,6 +61,7 @@ describe('long strings wrap the way DESIGN.md says', () => {
           '<p className="value text-xs wrap-anywhere">machine</p>',
           '<p className={`values-grid break-words ${tone}`}>not the value class</p>',
           '<p className="label value-small break-words">still not .value</p>',
+          '<p className="truncate-hint wrap-anywhere">{t("review.truncated")}</p>',
         ].join('\n'),
       ),
     ).toEqual([])

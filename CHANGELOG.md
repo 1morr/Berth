@@ -57,6 +57,11 @@
 
 ### Fixed
 
+- **各票 code-review 留下的幾處**（M4 票 54）：既有 Jellyfin 填 `host.docker.internal` 時，媒體庫、作品頁與 Route
+  設定頁的「在 Jellyfin 開啟」連結改開在瀏覽器的主機名上（原本是瀏覽器開不了的位址；填 compose 主機名的不給連結）。
+  設定 → Prowlarr 讀不到站的清單時（例如在 Prowlarr 重新產生了 API key）與精靈頁 4 說同一段、給「重新讀取」，不再說
+  「連不上套件內的 Prowlarr」並叫人跳過。選套件內／既有的兩格，讀屏器念的名字只剩標題、說明另外念；位址與名字在窄版
+  換行而不是被截掉後半。
 - **精靈上四句與實際行為不符的說明**（M4 票 53，2026-10-06 審計的「文件與實作不符」表）：套件內 qBittorrent 不收
   Berth 時原本叫你重啟、說會補上白名單，但預置腳本不蓋掉你改過的設定，在 WebUI 關掉白名單之後重啟補不回來——現在說
   到 qBittorrent 的「選項 → WebUI → 驗證」勾回那一格，不再給 `docker compose restart` 那一行。既有 Jellyfin 卡片補上頁 1

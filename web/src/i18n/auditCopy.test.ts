@@ -6,7 +6,6 @@ import { resources, SUPPORTED_LANGUAGES } from './resources'
  * 審計「文件與實作不符」表上前面的票沒涵蓋的幾句（M4 票 53）：
  *
  * - 既有 Jellyfin 卡片只說頁 3 加路徑，沒說頁 1 會在它上面建 API key「Berth」。
- * - Jellyfin 初始設定的手動步驟寫死「繁體中文、台灣」，實際是畫面上問的（M4 票 18）。
  * - 頁 4 還沒選時的 lede 說你自己的 Prowlarr「用你已經有的站」，卡片與選了之後的 lede 都說也能加站（M4 票 20）；
  *   選了之後的 lede 與回頭看的說明又說「按一次加進去」，實際是測過、勾選、確認才加（卡片說「勾起來的站」）。
  * - 套件內 qBittorrent 不收 Berth 時叫人重啟、說預置腳本會補上白名單；預置腳本只補設定檔裡**沒有**的鍵
@@ -15,8 +14,6 @@ import { resources, SUPPORTED_LANGUAGES } from './resources'
 
 /** 卡片說了 API key「Berth」。 */
 const NAMES_THE_KEY = /API key\s*[「“"]?Berth|key (named|called) Berth/i
-/** 手動步驟寫死某一種語言或地區。 */
-const FIXED_LOCALE = /繁體中文|台灣|Traditional Chinese|Taiwan/i
 /** 說你自己的那一台也能加站。 */
 const EXISTING_ADDS_SITES = /也(可以|能)加|can also add|may also add/i
 /** 說按一次就加進去（既有那一台是勾選之後才加）。 */
@@ -33,12 +30,8 @@ const ALLOWLIST_OPTION = {
   en: 'Bypass authentication for clients in whitelisted IP subnets',
 } as const
 
-describe('五個樣式本身（雙向）', () => {
+describe('四個樣式本身（雙向）', () => {
   it('抓得到原本的寫法', () => {
-    expect('在 Jellyfin 自己的初始精靈把語言設成繁體中文、地區設成台灣：').toMatch(FIXED_LOCALE)
-    expect('set the language to Traditional Chinese and the country to Taiwan').toMatch(
-      FIXED_LOCALE,
-    )
     expect('重啟它讓預置腳本補上白名單，再重新測試：').toMatch(RESTART_RESTORES)
     expect('Restart it so the preseed script adds the allowlist, then test again:').toMatch(
       RESTART_RESTORES,
@@ -60,8 +53,6 @@ describe('五個樣式本身（雙向）', () => {
   })
 
   it('不誤抓無關的說法', () => {
-    expect('在 Jellyfin 自己的初始精靈設定語言與 metadata 地區：').not.toMatch(FIXED_LOCALE)
-    expect('Set the language and metadata country in the startup wizard:').not.toMatch(FIXED_LOCALE)
     expect('預置腳本只補設定檔裡沒有的鍵，重啟不會蓋掉你改過的。').not.toMatch(RESTART_RESTORES)
     expect('Restarting it does not undo what you changed.').not.toMatch(RESTART_RESTORES)
     expect('頁 1 在它上面建一把 API key「Berth」').toMatch(NAMES_THE_KEY)
@@ -77,7 +68,7 @@ describe('五個樣式本身（雙向）', () => {
 })
 
 describe.each(SUPPORTED_LANGUAGES)('文件與實作不符的幾句（%s）', (language) => {
-  const { choice, jellyfin, connection, indexer, setup } = resources[language].translation
+  const { choice, connection, indexer, setup } = resources[language].translation
 
   it('既有 Jellyfin 卡片說頁 1 會建 API key「Berth」', () => {
     expect(choice.existing.adds.jellyfin).toMatch(NAMES_THE_KEY)
@@ -90,10 +81,6 @@ describe.each(SUPPORTED_LANGUAGES)('文件與實作不符的幾句（%s）', (la
   it('既有 Prowlarr 的加站不說成按一次', () => {
     expect(indexer.lede.existing).not.toMatch(ONE_PRESS)
     expect(setup.revisit.indexer.existing.can).not.toMatch(ONE_PRESS)
-  })
-
-  it('初始設定的手動步驟不寫死語言與地區', () => {
-    expect(jellyfin.fix.configuration).not.toMatch(FIXED_LOCALE)
   })
 
   it('白名單的補法說 WebUI 那一格，不說重啟會補回來', () => {

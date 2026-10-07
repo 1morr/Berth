@@ -216,6 +216,44 @@ describe('設定 → Prowlarr', () => {
   })
 })
 
+describe('站的清單讀不到（M4 票 54：跟上精靈頁 4 的票 27）', () => {
+  it('套件內 Prowlarr 換了 key：說讀不到並給「重新讀取」，不說連不上、不叫人跳過', async () => {
+    let rotated = true
+    const fetchStub = render({
+      [INDEXERS]: () => ({
+        body: rotated
+          ? indexerSetup({
+              reachable: false,
+              sites: [],
+              candidates: [],
+              failure: 'auth_rejected',
+              error: 'GET /api/v1/indexer: 401',
+            })
+          : withSites(),
+      }),
+      'POST /api/setup/services/prowlarr/test': () => {
+        rotated = false
+        return { body: setupStatus({ completed: true, current_step: 6, services: ALL_BUNDLED }) }
+      },
+      'POST /api/settings/services/prowlarr/test': { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    const failed = within(await screen.findByTestId('read-failed'))
+    expect(failed.getByText(/讀不到這一台 Prowlarr 的站清單/)).toBeInTheDocument()
+    expect(failed.getByText(/重讀掛載的 key/)).toBeInTheDocument()
+    expect(screen.queryByText(/連不上套件內的 Prowlarr/)).not.toBeInTheDocument()
+    expect(screen.queryByText('docker compose ps prowlarr')).not.toBeInTheDocument()
+
+    await user.click(failed.getByRole('button', { name: '重新讀取' }))
+
+    expect(within(await screen.findByTestId('added')).getByText('3 站')).toBeInTheDocument()
+    const retest = fetchStub.mock.calls.find(([url]) => url === '/api/setup/services/prowlarr/test')
+    expect(JSON.parse(String(retest?.[1]?.body))).toEqual({ restart: true })
+  })
+})
+
 describe('既有 Prowlarr 測不過時的補法（M4 票 17；票 39 起是連線區那一份）', () => {
   function failed(overrides: Partial<SetupService>): SetupService {
     return chosen({

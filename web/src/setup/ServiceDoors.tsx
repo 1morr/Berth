@@ -6,7 +6,7 @@ import type { QbittorrentSetup } from '../api/schemas'
 import type { IndexerSetup } from '../api/setup'
 import { jellyfinBase } from '../inventory/jellyfinLink'
 import type { LoginService } from './interfaceLogin'
-import { jellyfinWeb, prowlarrWeb, qbittorrentWeb } from './serviceWeb'
+import { prowlarrWeb, qbittorrentWeb } from './serviceWeb'
 
 interface Door {
   name: string
@@ -114,6 +114,5 @@ function bundledLogin(
 }
 
 function jellyfinDoor(jellyfin: JellyfinWeb | undefined): string | null {
-  const base = jellyfin ? jellyfinBase(jellyfin, window.location) : null
-  return base ? jellyfinWeb(base) : null
+  return jellyfin ? jellyfinBase(jellyfin, window.location) : null
 }

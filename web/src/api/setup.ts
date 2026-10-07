@@ -142,24 +142,6 @@ export function removeEmptyCategories(): Promise<Leftovers> {
   return apiDelete<Leftovers>('/setup/services/qbittorrent/leftovers/categories')
 }
 
-/**
- * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序、也是執行順序。前六步在頁 1（擁有者）跑，
- * 建媒體庫在頁 3（M4 票 06、15）。
- *
- * 後端把 `StepOut.step` 宣告成 `str`，所以這個集合在 OpenAPI 裡不存在——它是 UI 的
- * 顯示順序，不是 API 的形狀（`QBITTORRENT_STEPS` 同理）。
- */
-export const JELLYFIN_STEPS = [
-  'public_info',
-  'configuration',
-  'admin_user',
-  'remote_access',
-  'complete',
-  'api_key',
-  'libraries',
-] as const
-export type JellyfinStep = (typeof JELLYFIN_STEPS)[number]
-
 export type JellyfinLibrary = Schemas['LibraryOut']
 
 export type JellyfinSetup = Schemas['JellyfinSetupOut']

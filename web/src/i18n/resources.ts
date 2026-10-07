@@ -157,7 +157,6 @@ const zhHant = {
       target_changed:
         'Jellyfin 的位址在你填表時被換過，帳密沒有送出去。重新測試，確認上面的位址是你要的那一台，再送一次。',
     },
-    saved: '擁有者 · {{name}}',
     locked:
       '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以來源鎖住了。同一台換了位址可以改，另一台伺服器會被擋下。',
     startup: {
@@ -239,7 +238,6 @@ const zhHant = {
       upgradeNotes: 'Jellyfin 12.0 升級注意',
     },
     switchToBundled: '改用套件內的那一台',
-    saveFailed: '沒有存下這個選擇。',
     refused: {
       jellyfin_owned: '擁有者成立之後，Jellyfin 的來源換不了。',
       other_server:
@@ -371,7 +369,6 @@ const zhHant = {
     version: '版本',
     server: '伺服器',
     indexers: '索引站',
-    tmdb: 'TMDB',
     credential: '憑證',
     verified: '已驗證',
     unverified: '待驗證',
@@ -431,7 +428,6 @@ const zhHant = {
     unexpected: '發生了沒預料到的錯誤。技術細節裡是原文。',
   },
   connect: {
-    title: '連到你的 {{service}}',
     field: {
       baseUrl: '位址',
       apiKey: 'API key',
@@ -461,12 +457,6 @@ const zhHant = {
     },
   },
   jellyfin: {
-    unreachable: '讀不到 Jellyfin 這一步的狀態。確認 Berth 後端還在跑。',
-    cutaway: {
-      server: '這台 Jellyfin',
-      apiKey: 'API key',
-      libraries: '媒體庫',
-    },
     version: {
       label: '版本太舊',
       current: '這台 Jellyfin 是 {{version}}，Berth 需要 12.0 以上。',
@@ -475,13 +465,7 @@ const zhHant = {
         '升級前：先把 Jellyfin 的 /config 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。升級後：完整掃描一次媒體庫，自動分組的版本才會回來。',
     },
     step: {
-      public_info: '確認版本與初始精靈還沒跑過',
-      configuration: '語言與 metadata 地區',
-      admin_user: '以擁有者的帳密建立管理員（Jellyfin 那一頁）',
       libraries: '建立清單上的媒體庫',
-      remote_access: '開啟遠端存取',
-      complete: '結束初始精靈',
-      api_key: '建立 Berth 專用的 API key',
     },
     bundled: {
       list: {
@@ -519,8 +503,6 @@ const zhHant = {
       },
     },
     existing: {
-      title: '接入你的 Jellyfin',
-      lede: '這台 Jellyfin 已經跑過自己的初始精靈，所以 Berth 只做檢查。它不會建立媒體庫、不會改你既有媒體庫的設定，也不會刪任何東西。',
       username: 'Jellyfin 管理員帳號',
       password: 'Jellyfin 管理員密碼',
       passwordHint: '只用來換一把 Berth 專用的 API key，不會存下來。',
@@ -530,21 +512,7 @@ const zhHant = {
       requestFailed: '請求沒跑完。確認位址與 Berth 後端的狀態後再試一次。',
     },
     libraries: {
-      title: '媒體庫與路徑',
-      lede: '全部是 Jellyfin 自己報出來的。舊路徑一律原地不動——Berth 只會多加一條自己寫入用的路徑。',
-      empty:
-        '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個媒體庫再回來，Berth 才有地方寫入。',
-      emptyLabel: '沒有媒體庫',
-      wired: '已接上',
-      unwired: '待指派',
-      paths: '路徑',
-      berthPath: 'Berth 寫入',
-      fetchers: 'metadata 來源',
-      warningLabel: '警告',
-      tvdb: '這個媒體庫用 TVDB 取 metadata。Berth 第一階段以 TMDB 對應作品，季集編號可能與這裡不一致。不阻擋，但比對出錯時先看這裡。',
-      willAdd: '將會加入這一條路徑',
       addPath: '加入 Berth 路徑',
-      adding: '加入中…',
       // 逐個媒體庫的「加入 Berth 路徑」失敗（M4 票 19）。Jellyfin 自己只回 404，原因由 Berth 分辨。
       pathFailed: {
         title: '「{{library}}」沒加上 Berth 路徑',
@@ -559,16 +527,8 @@ const zhHant = {
       },
     },
     fix: {
-      generic: '在你的 Jellyfin 上手動做這一步，然後回來重試。',
-      public_info: '確認 Jellyfin 容器活著、版本是 12.0 以上，再確認位址與 port 沒有被改掉：',
-      configuration: '在 Jellyfin 自己的初始精靈設定語言與 metadata 地區：',
-      admin_user: '在 Jellyfin 自己的初始精靈建立管理員，帳密要與這裡 Jellyfin 那一頁一致：',
       libraries:
         '在 Jellyfin 的「媒體庫」手動建立清單上的媒體庫（名稱、類型與資料夾照左邊那一份），關掉即時監控、Specials 顯示名稱填 Specials：',
-      remote_access: '在 Jellyfin 的初始精靈開啟遠端存取：',
-      complete: '在 Jellyfin 自己的初始精靈按到最後一頁完成它：',
-      api_key: '在 Jellyfin 的「API 金鑰」建立一把名為 Berth 的金鑰：',
-      retryHint: '手動做完之後按下面的按鈕，Berth 只會重跑還沒完成的步驟。',
     },
   },
   interfaceLogin: {
@@ -1784,7 +1744,6 @@ const zhHant = {
       },
       waitingSince: '等候於 {{value}}',
       job: '下載',
-      loading: '讀取計劃…',
       off: '讀不到這一份計劃。',
       held_one: '{{count}} 列要你看',
       held_other: '{{count}} 列要你看',
@@ -1963,7 +1922,6 @@ const zhHant = {
       keepBothHint:
         '保留兩者時，新的一份檔名會多一個序號標籤（[2]），在 Jellyfin 裡是同一集的另一個版本。',
       working: '處理中…',
-      failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
       done: {
         replace: '已取代，媒體庫裡換成新的一份了。',
         keep_both: '兩份都留在媒體庫了。',
@@ -2969,7 +2927,6 @@ const zhHant = {
       title: 'RSS Series',
       count_one: '{{count}} 個',
       count_other: '{{count}} 個',
-      route: '入庫到 {{route}}',
       season: '第 {{season}} 季',
       offset: '集號偏移 {{offset}}',
       unbind: '解除綁定',
@@ -3156,7 +3113,6 @@ const zhHant = {
         duplicate: '重複',
         passed: '略過',
       },
-      passed: '新 Feed 的第一輪選了「只追之後的」：這一筆在那之前就在了。',
     },
   },
   // 清單的上一頁 / 下一頁（`components/Pager`）：媒體庫的牆與下載列表共用。
@@ -3338,7 +3294,6 @@ const en: Translations<typeof zhHant> = {
       target_changed:
         'The Jellyfin address was changed while you were filling in the form, so your password was not sent. Test again, check that the address above is the one you mean, then send it again.',
     },
-    saved: 'Owner · {{name}}',
     locked:
       'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the source is locked. A new address for the same server is fine; another server is refused.',
     startup: {
@@ -3417,7 +3372,6 @@ const en: Translations<typeof zhHant> = {
       upgradeNotes: 'Jellyfin 12.0 upgrade notes',
     },
     switchToBundled: 'Use the bundled one instead',
-    saveFailed: 'The choice was not saved.',
     refused: {
       jellyfin_owned: 'Once there is an owner, the Jellyfin source cannot change.',
       other_server:
@@ -3552,7 +3506,6 @@ const en: Translations<typeof zhHant> = {
     version: 'Version',
     server: 'Server',
     indexers: 'Indexers',
-    tmdb: 'TMDB',
     credential: 'Credential',
     verified: 'Verified',
     unverified: 'Not verified',
@@ -3625,7 +3578,6 @@ const en: Translations<typeof zhHant> = {
     unexpected: 'Something unexpected went wrong. The original message is under technical details.',
   },
   connect: {
-    title: 'Connect to your {{service}}',
     field: {
       baseUrl: 'Address',
       apiKey: 'API key',
@@ -3659,12 +3611,6 @@ const en: Translations<typeof zhHant> = {
     },
   },
   jellyfin: {
-    unreachable: 'Cannot read the state of this step. Check that the Berth backend is running.',
-    cutaway: {
-      server: 'This Jellyfin',
-      apiKey: 'API key',
-      libraries: 'Libraries',
-    },
     version: {
       label: 'Too old',
       current: 'This Jellyfin is {{version}}; Berth needs 12.0 or newer.',
@@ -3673,13 +3619,7 @@ const en: Translations<typeof zhHant> = {
         'Before upgrading: back up Jellyfin’s /config in full — 12 changes the database and there is no way back except restoring that backup; then remove third-party plugins, since 10.11 plugins cannot load on 12. After upgrading: run one full library scan so the automatically grouped versions come back.',
     },
     step: {
-      public_info: 'Confirm the version and that the startup wizard has not run',
-      configuration: 'Language and metadata region',
-      admin_user: 'Create the administrator with the owner credentials (the Jellyfin page)',
       libraries: 'Create the libraries on the list',
-      remote_access: 'Enable remote access',
-      complete: 'Finish the startup wizard',
-      api_key: 'Create an API key for Berth',
     },
     bundled: {
       list: {
@@ -3721,8 +3661,6 @@ const en: Translations<typeof zhHant> = {
       },
     },
     existing: {
-      title: 'Connect your Jellyfin',
-      lede: 'This Jellyfin already ran its own startup wizard, so Berth only inspects it. It never creates libraries, never changes the options of your existing libraries, and never deletes anything.',
       username: 'Jellyfin administrator',
       password: 'Jellyfin administrator password',
       passwordHint: 'Used once to obtain an API key for Berth. It is not stored.',
@@ -3733,21 +3671,7 @@ const en: Translations<typeof zhHant> = {
         'The request did not finish. Check the address and the Berth backend, then retry.',
     },
     libraries: {
-      title: 'Libraries and paths',
-      lede: 'Everything here is what Jellyfin itself reports. Existing paths are never touched — Berth only adds one more path to write into.',
-      empty:
-        'This Jellyfin has no libraries at all. Create one in Jellyfin and come back, so Berth has somewhere to write.',
-      emptyLabel: 'No libraries',
-      wired: 'Wired',
-      unwired: 'Unassigned',
-      paths: 'Paths',
-      berthPath: 'Berth writes here',
-      fetchers: 'Metadata sources',
-      warningLabel: 'Warning',
-      tvdb: 'This library fetches metadata from TVDB. Berth matches titles against TMDB for now, so season and episode numbers may disagree. Not blocking, but look here first when a match goes wrong.',
-      willAdd: 'This path will be added',
       addPath: 'Add the Berth path',
-      adding: 'Adding…',
       pathFailed: {
         title: 'No Berth path was added to “{{library}}”',
         jellyfin_cannot_see:
@@ -3761,19 +3685,8 @@ const en: Translations<typeof zhHant> = {
       },
     },
     fix: {
-      generic: 'Do this step by hand on your Jellyfin, then come back and retry.',
-      public_info:
-        'Check the Jellyfin container is running and on 12.0 or newer, then check the address and port were not changed:',
-      configuration: "Set the language and metadata country in Jellyfin's own startup wizard:",
-      admin_user:
-        "Create the administrator in Jellyfin's own startup wizard, using the same credentials as the Jellyfin page here:",
       libraries:
         "Create the libraries on the list by hand under Jellyfin's Libraries (names, types and folders as on the left), with real-time monitoring off and Specials as the season-zero name:",
-      remote_access: "Enable remote access in Jellyfin's startup wizard:",
-      complete: "Finish Jellyfin's own startup wizard through to the last page:",
-      api_key: "Create an API key named Berth under Jellyfin's API Keys:",
-      retryHint:
-        'Once you have done it by hand, press the button below — Berth only reruns the steps that are not finished.',
     },
   },
   interfaceLogin: {
@@ -4947,7 +4860,6 @@ const en: Translations<typeof zhHant> = {
       },
       waitingSince: 'Waiting since {{value}}',
       job: 'Download',
-      loading: 'Reading the plan…',
       off: 'Could not read this plan.',
       held_one: '{{count}} row needs you',
       held_other: '{{count}} rows need you',
@@ -5116,8 +5028,6 @@ const en: Translations<typeof zhHant> = {
       keepBothHint:
         'Keeping both adds a number tag ([2]) to the new file name; Jellyfin shows it as another version of the same episode.',
       working: 'Working…',
-      failed:
-        'That did not go through. Berth’s own API did not answer — check that it is still running.',
       done: {
         replace: 'Replaced; the library now has the new one.',
         keep_both: 'Both are in the library now.',
@@ -6117,7 +6027,6 @@ const en: Translations<typeof zhHant> = {
       title: 'RSS Series',
       count_one: '{{count}} series',
       count_other: '{{count}} series',
-      route: 'Imports to {{route}}',
       season: 'Season {{season}}',
       offset: 'Episode offset {{offset}}',
       unbind: 'Unbind',
@@ -6305,8 +6214,6 @@ const en: Translations<typeof zhHant> = {
         duplicate: 'Duplicate',
         passed: 'Passed over',
       },
-      passed:
-        'The feed was new and you chose to follow only what comes next: this item was already in it.',
     },
   },
   pager: {

@@ -5,12 +5,15 @@ import {
   applyIndexers,
   indexerSetupQueryOptions,
   removeIndexer,
+  retestService,
   searchIndexers,
   setIndexerLogin,
+  setupStatusQueryOptions,
   testIndexers,
   type IndexerSetup,
 } from '../api/setup'
 import { Notice } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { HealthSection } from '../settings/HealthSection'
 import { InterfaceLoginSection } from '../settings/InterfaceLoginSection'
@@ -39,21 +42,28 @@ export function IndexerSettingsPage() {
     check.mutate('prowlarr')
   }
 
+  /** 換了一台、換了 key 或重讀了 key：站的清單與介面登入那一區讀的是新的那一台，健康卡也重測。 */
+  function reconnected() {
+    check.mutate('prowlarr')
+    void queryClient.invalidateQueries({ queryKey: indexerSetupQueryOptions.queryKey })
+  }
+
   const apply = useMutation({ mutationFn: applyIndexers, onSuccess: absorb })
   const remove = useMutation({ mutationFn: removeIndexer, onSuccess: absorb })
   const login = useMutation({ mutationFn: setIndexerLogin, onSuccess: absorb })
+  // 清單讀不到時的「重新讀取」：與精靈頁 4 同一支（重測那一台，套件內的重讀掛載的 key，M4 票 27、54）。
+  const reread = useMutation({
+    mutationFn: () => retestService('prowlarr', true),
+    onSuccess: (next) => {
+      queryClient.setQueryData(setupStatusQueryOptions.queryKey, next)
+      reconnected()
+    },
+  })
 
   return (
     <SettingsFrame title={t('settings.indexerPage.title')} lede={t('settings.indexerPage.lede')}>
       <HealthSection kind="prowlarr" check={check} />
-      <ServiceConnection
-        kind="prowlarr"
-        onConnected={() => {
-          check.mutate('prowlarr')
-          // 換了一台或換了 key：站的清單與介面登入那一區讀的是新的那一台。
-          void queryClient.invalidateQueries({ queryKey: indexerSetupQueryOptions.queryKey })
-        }}
-      />
+      <ServiceConnection kind="prowlarr" onConnected={reconnected} />
       {/* 區塊的 `<h2>` 讓 `IndexerActions` 裡的 `<h3>` 不跳級。 */}
       <SettingsSection id="settings-indexer-sites" title={t('settings.indexerPage.sites')}>
         {indexers.data ? (
@@ -70,7 +80,14 @@ export function IndexerSettingsPage() {
                 removeFailed: remove.isError,
                 onRemove: (id) => remove.mutate(id),
               }}
+              rereading={reread.isPending}
+              onReread={() => reread.mutate()}
             />
+            {reread.isError && (
+              <div className="mt-4">
+                <RequestFailed error={reread.error} />
+              </div>
+            )}
           </div>
         ) : indexers.isError ? (
           <Notice signal="blocked" label={t('common.failed')}>

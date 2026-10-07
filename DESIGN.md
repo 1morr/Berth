@@ -1034,7 +1034,7 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 - **Do** 在窄版把泊位板排成 2+2+1，讓五格同時在畫面內（The Board Never Scrolls Rule）。
 - **Do** 讓長字串換行，不橫向捲動、不截斷：機器字串用 `wrap-anywhere`，散文用 `break-words`，
   flex / grid 子項加 `min-w-0`。`web/src/wrapping.test.ts` 守著「`.value` 不配 `break-words`、
-  任何地方不用 `break-all`」這兩條。
+  任何地方不用 `break-all` 與 `truncate`」這幾條（`truncate` 自 M4 票 54）。
 - **Do** 用中性色塊表達角色、語言、分類這類非狀態的東西（The Role Is Not A State Rule）。
 - **Do** 用原生 `input` / `button` / `details`，直到某一步真的需要行為基礎的元件為止。
 - **Do** 讓一份全部正常的清單看不到信號色，只給例外塗漆（The Usual Stays Unpainted Rule）。

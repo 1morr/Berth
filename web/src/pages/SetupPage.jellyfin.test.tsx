@@ -199,6 +199,7 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
       [SAVE]: { body: jellyfinSetup() },
       [BOOTSTRAP]: { body: broken },
       [ROUTES]: { body: routeSetup({ libraries: [] }) },
+      'GET /api/settings/jellyfin': { body: { public_url: '', url: '', port: 18096 } },
     })
     const user = userEvent.setup()
 
@@ -206,7 +207,11 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單與「建立並檢查」�
     await user.click(await screen.findByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByText(/POST \/Library\/VirtualFolders: 500/)).toBeInTheDocument()
-    expect(screen.getByText('http://jellyfin:8096/web/#/dashboard/libraries')).toBeInTheDocument()
+    // 手動步驟開在瀏覽器開得了的位址上，不是 Berth 連它的 compose 位址（M4 票 54）。
+    expect(
+      await screen.findByText('http://localhost:18096/web/#/dashboard/libraries'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/http:\/\/jellyfin:8096/)).not.toBeInTheDocument()
     expect(screen.getByText(/再按一次「建立並檢查」/)).toBeInTheDocument()
     expect(writes(fetchStub)).not.toContain('POST /api/setup/routes')
   })

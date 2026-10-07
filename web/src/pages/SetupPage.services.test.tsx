@@ -2030,7 +2030,7 @@ describe('只有 Berth 時的套件內卡片', () => {
     renderInRoute(<SetupPage />)
 
     expect(await screen.findByText('這套 compose 的 Jellyfin 沒在跑。')).toBeVisible()
-    expect(bundledCard()).toHaveAccessibleName(/這套 compose 的 Jellyfin 沒在跑/)
+    expect(bundledCard()).toHaveAccessibleDescription(/這套 compose 的 Jellyfin 沒在跑/)
     expect(screen.queryByText(/沒有起/)).not.toBeInTheDocument()
     expect(bundledCard()).not.toBeChecked()
     expect(bundledCard()).toBeEnabled()

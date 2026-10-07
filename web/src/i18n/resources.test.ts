@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import ts from 'typescript'
 
 import { resources, SUPPORTED_LANGUAGES } from './resources'
 
@@ -101,5 +102,101 @@ describe('route check counts', () => {
         sites: 'Prowlarr already has 5 sites.',
       }),
     ).toEqual([])
+  })
+})
+
+/**
+ * 沒有引用處的鍵（M4 票 54）。
+ *
+ * 畫面改掉之後鍵留在這裡，下一個人改文案時就在改沒人看得到的句子（`jellyfin.fix.configuration` 還寫著
+ * 「語言設成繁體中文」，語言早就跟著介面或由人選，審計 §A3）。所以每個鍵都要在原始碼裡寫得出來：
+ *
+ * - 字面值（`t('a.b')`、查表的值）照字比；
+ * - 樣板字串（`` t(`indexer.lede.${origin}`) ``）的 `${…}` 換成「任一段鍵」，開頭要是 `命名空間.`——
+ *   `` `${a}.${b}` `` 什麼都比得上，不算；
+ * - 複數鍵（`_one` / `_other`）比的是去掉字尾的那一個，i18next 收到 `count` 時自己接上。
+ *
+ * 字串從 TypeScript 的語法樹取，註解裡提到的鍵不算引用。**這條擋不住的**：查表裡寫了、卻從來沒有被讀的
+ * 那一格——表本身就是引用處（票 54 刪掉的 `jellyfin.step.*` 六格就是這樣漏過的，呼叫端只讀 `.libraries`）。
+ */
+function keyReferences(sources: readonly string[]) {
+  const literals = new Set<string>()
+  const patterns: RegExp[] = []
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  function visit(node: ts.Node) {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      literals.add(node.text)
+    } else if (ts.isTemplateExpression(node) && /^[a-zA-Z]\w*\./.test(node.head.text)) {
+      const parts = [node.head.text, ...node.templateSpans.map((span) => span.literal.text)]
+      patterns.push(new RegExp(`^${parts.map(escape).join('[\\w.-]+')}$`))
+    }
+    ts.forEachChild(node, visit)
+  }
+  for (const source of sources) {
+    visit(
+      ts.createSourceFile('source.tsx', source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX),
+    )
+  }
+  return { literals, patterns }
+}
+
+function unreferencedKeys(tree: Tree, sources: readonly string[]): string[] {
+  const { literals, patterns } = keyReferences(sources)
+  const keys = (branch: Tree, prefix = ''): string[] =>
+    Object.entries(branch).flatMap(([key, value]) => {
+      const path = prefix ? `${prefix}.${key}` : key
+      return typeof value === 'string' ? [path] : keys(value, path)
+    })
+  return keys(tree).filter((path) => {
+    const key = path.replace(/_(zero|one|two|few|many|other)$/, '')
+    return !literals.has(key) && !patterns.some((pattern) => pattern.test(key))
+  })
+}
+
+/** 產品原始碼：測試檔與鍵樹自己不算引用處。 */
+const PRODUCT_SOURCES = import.meta.glob<string>(
+  ['../**/*.{ts,tsx}', '!../**/*.test.{ts,tsx}', '!./resources.ts'],
+  { query: '?raw', import: 'default', eager: true },
+)
+
+describe('unreferenced keys', () => {
+  it('every key is written somewhere in the product source', () => {
+    expect(Object.keys(PRODUCT_SOURCES).length).toBeGreaterThan(100)
+    expect(
+      unreferencedKeys(resources['zh-Hant'].translation, Object.values(PRODUCT_SOURCES)),
+    ).toEqual([])
+  })
+
+  it('catches a key nothing asks for, even when a comment mentions it', () => {
+    expect(
+      unreferencedKeys({ owner: { saved: '已存下', title: '擁有者' } }, [
+        "// owner.saved 以前在這裡用\nconst title = t('owner.title')",
+      ]),
+    ).toEqual(['owner.saved'])
+  })
+
+  it('does not care how a reference is written', () => {
+    expect(
+      unreferencedKeys(
+        {
+          indexer: { lede: { bundled: 'a', existing: 'b' } },
+          reason: { coming_up: 'c' },
+          stage: { berth: 'd' },
+          jobs: { files_one: 'e', files_other: 'f' },
+        },
+        [
+          [
+            'const lede = t(`indexer.lede.${origin}`)',
+            'const LABEL = { waiting: "reason.coming_up" } as const',
+            "const line = `${t('stage.berth', { code })} · ${step}`",
+            't(\n  "jobs.files",\n  { count },\n)',
+          ].join('\n'),
+        ],
+      ),
+    ).toEqual([])
+  })
+
+  it('does not let a template with no namespace stand for every key', () => {
+    expect(unreferencedKeys({ a: { b: 'x' } }, ['const key = `${scope}.${name}`'])).toEqual(['a.b'])
   })
 })

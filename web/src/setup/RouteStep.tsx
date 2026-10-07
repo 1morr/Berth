@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { formatList } from '../i18n/list'
@@ -21,13 +22,15 @@ import { RouteCheckList } from '../components/RouteCheckList'
 import { checking, type ExistingServices } from '../components/routeChecks'
 import { RouteDelete } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
+import { jellyfinAddressQueryOptions } from '../api/settings'
+import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 import { SIGNAL_FILL } from '../components/signal'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { BUILD_REFUSAL, type BuildRefusal } from './buildRefusal'
 import { BundledLibraries } from './BundledLibraries'
 import { AddPathFailures } from './JellyfinExisting'
-import { STEP_ENDPOINT, STEP_FIX, STEP_LABEL, librariesFailed, manualSteps } from './jellyfinSteps'
+import { librariesFailed } from './jellyfinSteps'
 import { previewUnder } from './libraryRules'
 import { StepFrame } from './StepFrame'
 import { useLibraryDraft } from './useLibraryDraft'
@@ -165,6 +168,13 @@ function BundledRoutes({
     librariesFailed(jellyfin) ??
     jellyfin.steps.find((row) => row.step === 'libraries' && row.status === 'running')
   const names = unbuilt.map((row) => row.name.trim()).filter(Boolean)
+  // 手動步驟開在瀏覽器開得了的位址上（`jellyfinLink.ts`，M4 票 54）：Berth 連它的是 compose 內網那一條。
+  // 走到失敗才問；推不出來時只留文字。
+  const address = useQuery({
+    ...jellyfinAddressQueryOptions,
+    enabled: libraries?.status === 'failed',
+  })
+  const manual = address.data ? jellyfinLibrariesUrl(address.data, window.location) : null
 
   return (
     <RoutePage
@@ -227,12 +237,12 @@ function BundledRoutes({
       {libraries && (
         <ol className="mt-4 grid gap-3">
           <StepLine
-            label={t(STEP_LABEL.libraries)}
+            label={t('jellyfin.step.libraries')}
             service="Jellyfin"
-            endpoint={STEP_ENDPOINT.libraries}
+            endpoint="POST /Library/VirtualFolders"
             row={libraries}
-            fix={t(STEP_FIX.libraries)}
-            commands={manualSteps('libraries', jellyfin.base_url)}
+            fix={t('jellyfin.fix.libraries')}
+            commands={manual ? [manual] : []}
           >
             <p className="mt-3 text-xs text-ink-dim">{t('routes.dock.retryHint')}</p>
           </StepLine>

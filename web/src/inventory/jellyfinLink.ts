@@ -1,4 +1,5 @@
 import type { JellyfinWeb } from '../api/jellyfin'
+import { browserReachable } from '../setup/serviceWeb'
 
 /** 瀏覽器現在在哪裡。只取組網址要的兩格，測試才不必偽造整個 `Location`。 */
 export interface BrowserLocation {
@@ -37,11 +38,14 @@ export function jellyfinLibrariesUrl(web: JellyfinWeb, here: BrowserLocation): s
 }
 
 /**
- * 瀏覽器開 Jellyfin 網頁用的主機。深連結與媒體庫設定頁的連結共用這一份推導；兩者都不知道時回 `null`。
+ * 瀏覽器開 Jellyfin 網頁用的主機。深連結、媒體庫設定頁與完成頁的連結共用這一份推導；給不出時回 `null`。
  * Jellyfin 網頁的路由形狀（`/web/#/…`）只寫在這個檔案裡。
+ *
+ * 管理員填的對外網址照用。既有那一台的位址是 Berth 連過去的那一條：`host.docker.internal` 換成瀏覽器
+ * 的主機名、compose 主機名給不出（`browserReachable`，M4 票 54）。
  */
 export function jellyfinBase(web: JellyfinWeb, here: BrowserLocation): string | null {
-  const base =
-    web.url || (web.port === null ? '' : `${here.protocol}//${here.hostname}:${web.port}`)
-  return base || null
+  if (web.public_url) return web.public_url
+  if (web.url) return browserReachable(web.url, 'jellyfin', here)
+  return web.port === null ? null : `${here.protocol}//${here.hostname}:${web.port}`
 }
