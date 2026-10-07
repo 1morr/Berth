@@ -36,6 +36,14 @@ export async function refresh(id: string) {
 }
 
 /**
+ * 還在等 Jellyfin 的檔案先問一次（`resolver.resolve_early`，M4 票 51）。回同一份詳情：Jellyfin 已經列出的
+ * 換成「已收錄」，還沒列出的照舊，也不算 resolver 的一次。
+ */
+export async function resolveEarly(id: string) {
+  return apiPost<Media>(`/media/${encodeURIComponent(id)}/resolve`)
+}
+
+/**
  * 觀看區（`berth/api/media.py` 的 `WatchAreaOut`、M1.5 票 08）：作品在 Jellyfin 裡、這個人看得到時才有，
  * 否則是 `null`——不在與看不到是同一個答案。前端不送任何使用者 id。
  */

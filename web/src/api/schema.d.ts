@@ -702,6 +702,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/media/{media_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Resolve
+         * @description 作品頁打開時，還在等 Jellyfin 的檔案先問一次（M4 票 51）。
+         *
+         *     回這部作品的詳情：Jellyfin 已經列出的那幾列換成「已收錄」，還沒列出的照舊、也不算 resolver
+         *     的一次。不擋 `GET`：檔案清單先照帳本畫，這一支回了再換（觀看區的同一個取捨）。
+         */
+        post: operations["post_resolve_api_media__media_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/media/{media_id}/watch": {
         parameters: {
             query?: never;
@@ -6824,6 +6847,37 @@ export interface operations {
         };
     };
     post_refresh_api_media__media_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_resolve_api_media__media_id__resolve_post: {
         parameters: {
             query?: never;
             header?: never;

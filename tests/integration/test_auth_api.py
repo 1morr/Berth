@@ -502,6 +502,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/jobs/*/retry"): Access.SIGNED_IN,
     ("GET", "/media/*"): Access.SIGNED_IN,
     ("POST", "/media/*/refresh"): Access.SIGNED_IN,
+    # 作品頁打開時先問一次 Jellyfin（M4 票 51）：看詳情的人都會打開它。
+    ("POST", "/media/*/resolve"): Access.SIGNED_IN,
     ("GET", "/media/*/watch"): Access.SIGNED_IN,
     ("GET", "/plans/*"): Access.SIGNED_IN,
     ("GET", "/search"): Access.SIGNED_IN,

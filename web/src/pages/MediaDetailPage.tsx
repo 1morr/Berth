@@ -1,11 +1,17 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { accessRefusal } from '../api/jellyfin'
 import { meQueryOptions } from '../api/auth'
-import { mediaQueryOptions, refresh, watchQueryOptions, type Media } from '../api/media'
+import {
+  mediaQueryOptions,
+  refresh,
+  resolveEarly,
+  watchQueryOptions,
+  type Media,
+} from '../api/media'
 import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
@@ -52,6 +58,20 @@ export function MediaDetailPage({ id }: { id: string }) {
     mutationFn: () => refresh(id),
     onSuccess: (updated) => queryClient.setQueryData(['media', id], updated),
   })
+  // 檔案清單讀的是 resolver 的排程，退避中最多要等 10 分鐘；觀看區與媒體庫頁直接問 Jellyfin。還在等的檔案
+  // 先問一次，Jellyfin 已經列出的就不再說「還在掃描」（M4 票 51）。**一部作品一次**（`asked`）：重抓詳情、
+  // StrictMode 重跑 effect 都不再送——同時兩支會各自寫一次「全部找到」。失敗不說：清單照帳本畫，排程照常。
+  const { mutate: resolveFiles } = useMutation({
+    mutationFn: () => resolveEarly(id),
+    onSuccess: (updated) => queryClient.setQueryData(['media', id], updated),
+  })
+  const asked = useRef<string | null>(null)
+  const waiting = media.data?.files.some((file) => file.presence === 'searching') ?? false
+  useEffect(() => {
+    if (!waiting || asked.current === id) return
+    asked.current = id
+    resolveFiles()
+  }, [id, waiting, resolveFiles])
 
   if (media.isPending) return <Loading />
   // 後端問不到（不是 TMDB 問不到——那是 200 加一個 `problem`）。

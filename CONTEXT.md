@@ -245,7 +245,7 @@ _Avoid_: directory name, slug（slug 是 Route 的）
 _Avoid_: copy, duplicate（Tags 完全相同的才是重複）
 
 **Resolve**（反查）:
-入庫之後向 Jellyfin 問出那個檔案是哪一個 item（劇集再加它的 Series）。延遲、會重試，排程存在帳本上；Jellyfin 列出了 item 但還沒認完（季集、作品是空的）不算找到。找到之前卡片說「Jellyfin 還在掃描」。
+入庫之後向 Jellyfin 問出那個檔案是哪一個 item（劇集再加它的 Series）。延遲、會重試，排程存在帳本上；打開作品頁時還沒到時間的那幾列先問一次，找到才算、沒找到不算一次（M4 票 51）。Jellyfin 列出了 item 但還沒認完（季集、作品是空的）不算找到。找到之前卡片說「Jellyfin 還在掃描」。
 _Avoid_: sync, lookup, match
 
 **Ledger Entry**:

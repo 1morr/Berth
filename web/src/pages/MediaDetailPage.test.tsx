@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job, JobFile, JobPage, MediaJobFilter } from '../api/jobs'
@@ -759,6 +760,97 @@ describe('Media 詳情頁', () => {
 
     expect(within(files).getByText(/Jellyfin 還在掃描/)).toBeVisible()
     expect(within(files).getByText(/3 分鐘/)).toBeVisible()
+  })
+
+  describe('打開作品頁先問一次 Jellyfin（M4 票 51）', () => {
+    const RESOLVE = 'POST /api/media/tv%3A120089/resolve'
+    // 審計 S6：第二次沒找到之後退避到 10 分鐘，畫面寫「下一次查詢 9 分鐘後」。
+    const later = () => new Date(Date.now() + 9 * 60 * 1000).toISOString()
+    const waiting = () =>
+      ledgerFile({ presence: 'searching', resolve_after: later(), resolve_attempts: 2 })
+
+    function resolves(api: ReturnType<typeof render>) {
+      return api.mock.calls.filter(
+        ([input, init]) =>
+          init?.method === 'POST' && String(input) === RESOLVE.slice('POST '.length),
+      )
+    }
+
+    it('Jellyfin 已經列出：檔案與版本不再說還在掃描', async () => {
+      const api = render({
+        [SPY_PATH]: { body: media({ files: [waiting()] }) },
+        [RESOLVE]: { body: media({ files: [ledgerFile()] }) },
+      })
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+      expect(await within(files).findByText('Jellyfin 已收錄 1')).toBeVisible()
+      expect(within(files).queryByText(/掃描/)).not.toBeInTheDocument()
+      expect(resolves(api)).toHaveLength(1)
+    })
+
+    it('Jellyfin 真的還沒有：照舊說還在掃描，下一次是 Berth 確認', async () => {
+      const api = render({
+        [SPY_PATH]: { body: media({ files: [waiting()] }) },
+        [RESOLVE]: { body: media({ files: [waiting()] }) },
+      })
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+      await waitFor(() => expect(resolves(api)).toHaveLength(1))
+      await userEvent.click(within(files).getByText('1 個檔案'))
+
+      expect(within(files).getByText(/^Jellyfin 還在掃描，Berth 下一次確認在/)).toBeVisible()
+      expect(within(files).getByText('9 分鐘後')).toBeVisible()
+      expect(resolves(api)).toHaveLength(1)
+    })
+
+    it('一部作品只問一次：問完之後詳情又讀回還在等，也不再送', async () => {
+      // 重抓快照讀回的是帳本那一份；問 Jellyfin 的那一支與它各自回來，誰後到都可能讓清單又是「還在等」。
+      const api = render({
+        [SPY_PATH]: { body: media({ files: [waiting()] }) },
+        [RESOLVE]: { body: media({ files: [ledgerFile()] }) },
+        'POST /api/media/tv%3A120089/refresh': { body: media({ files: [waiting()] }) },
+      })
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+      expect(await within(files).findByText('Jellyfin 已收錄 1')).toBeVisible()
+      await userEvent.click(screen.getByRole('button', { name: '立即重抓' }))
+      expect(await within(files).findByText('Jellyfin 掃描中 1')).toBeVisible()
+
+      expect(resolves(api)).toHaveLength(1)
+    })
+
+    it('英文介面同一句', async () => {
+      render({
+        [SPY_PATH]: { body: media({ files: [waiting()] }) },
+        [RESOLVE]: { body: media({ files: [waiting()] }) },
+      })
+      await i18next.changeLanguage('en')
+      try {
+        renderApp('/media/tv:120089')
+
+        const files = await screen.findByRole('region', { name: 'Files and versions' })
+        await userEvent.click(within(files).getByText('1 file'))
+
+        expect(
+          within(files).getByText(/^Jellyfin is still scanning; Berth checks again/),
+        ).toBeVisible()
+        expect(within(files).getByText('in 9 minutes')).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
+
+    it('沒有在等 Jellyfin 的檔案就不問', async () => {
+      const api = render({ [SPY_PATH]: { body: media({ files: [ledgerFile()] }) } })
+      renderApp('/media/tv:120089')
+
+      await screen.findByRole('region', { name: '檔案與版本' })
+
+      expect(resolves(api)).toHaveLength(0)
+    })
   })
 
   it('反查用完的檔案說得出試了幾次', async () => {

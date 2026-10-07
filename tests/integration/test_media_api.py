@@ -107,12 +107,23 @@ class TestGate:
     def test_media_needs_a_session(self, client: TestClient) -> None:
         assert client.get(f"/api/media/{SPY_ID}").status_code == 401
         assert client.post(f"/api/media/{SPY_ID}/refresh", headers=BROWSER).status_code == 401
+        assert client.post(f"/api/media/{SPY_ID}/resolve", headers=BROWSER).status_code == 401
 
     def test_an_ordinary_user_may_browse_a_title(self, client: TestClient) -> None:
         """送單是一般使用者的動作（brief §11），瀏覽詳情是它的前一步。"""
         sign_in(client, CREW)
 
         assert client.get(f"/api/media/{SPY_ID}").status_code == 200
+
+    def test_an_ordinary_user_opening_a_title_asks_jellyfin_early(self, client: TestClient) -> None:
+        """作品頁打開時先問一次 Jellyfin（M4 票 51）：看詳情的人都會打開它，`user` 也是。
+        行為本身在 `test_resolve_early.py`；這裡是它回的是同一份詳情。"""
+        sign_in(client, CREW)
+
+        response = client.post(f"/api/media/{SPY_ID}/resolve", headers=BROWSER)
+
+        assert response.status_code == 200
+        assert response.json() == client.get(f"/api/media/{SPY_ID}").json()
 
     def test_there_is_no_track_endpoint(self, client: TestClient) -> None:
         """「追蹤」不是一個動作（票 04b）：`tracked` 是推導出來的（票 09 起以 Job 推）。"""

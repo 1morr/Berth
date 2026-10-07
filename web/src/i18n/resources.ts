@@ -1434,7 +1434,9 @@ const zhHant = {
       },
       jellyfin: {
         found: 'Jellyfin 已收錄',
-        searching: 'Jellyfin 還在掃描，下一次查詢',
+        // 後面接 resolver 下一次排在什麼時候。作品頁打開時已經先問過一次（M4 票 51），所以排程是 Berth 的，
+        // 不是 Jellyfin 的。
+        searching: 'Jellyfin 還在掃描，Berth 下一次確認在',
         // 一組檔案的摘要，只算正片（M1.5 票 09）。
         foundCount_one: 'Jellyfin 已收錄 {{count}}',
         foundCount_other: 'Jellyfin 已收錄 {{count}}',
@@ -4624,7 +4626,7 @@ const en: Translations<typeof zhHant> = {
       },
       jellyfin: {
         found: 'In Jellyfin',
-        searching: 'Jellyfin is still scanning; next look',
+        searching: 'Jellyfin is still scanning; Berth checks again',
         foundCount_one: '{{count}} in Jellyfin',
         foundCount_other: '{{count}} in Jellyfin',
         searchingCount_one: '{{count}} still scanning',

@@ -55,6 +55,7 @@ from berth.domain import CollectionType, EventType, IssueStatus, IssueType, Plan
 from berth.models import Event, Issue, JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.issues import Recorded, clear_by_system, record_issue
 from berth.services.jobs import actor_of, record_event
 from berth.services.resolve_schedule import RESOLVE_DELAYS
@@ -149,8 +150,7 @@ async def sweep_resolutions(
                 if lookup.still_identifying(entry, item) and not _reschedule(entry, moment):
                     identifying.append(entry)
                     continue
-                _remember(entry, item)
-                entry.resolve_after = None
+                _found(entry, item)
                 found.append(entry)
                 verdicts.append(lookup.verdict(entry, item))
         settling = [*identifying, *waiting] if await _remind(client, waiting) else identifying
@@ -165,6 +165,73 @@ async def sweep_resolutions(
     return ResolveOutcome(
         resolved=len(found), retried=len(waiting) + len(identifying), exhausted=len(given_up)
     )
+
+
+# 可逆但沒有單一反向命令：寫下的只有 item、版本名與回驗結論，都是 Jellyfin 現況的抄本，Issue 的
+# 「重新反查」與每日對帳會照新的樣子重寫。
+@command(Effect.REVERSIBLE)
+async def resolve_early(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """作品頁打開時，這部作品還在等反查的那幾列先問一次 Jellyfin（M4 票 51）。回傳找到幾列。
+
+    2026-10-06 審計 S6：入庫約 2 分鐘 Jellyfin 已經有這部，媒體庫頁與觀看區（兩者直接問 Jellyfin）
+    都看得到，作品頁的檔案清單（讀帳本的排程）卻還說「還在掃描」——第二次沒找到之後要等 10 分鐘。
+    **找到而且認完的走 `sweep_resolutions` 找到的同一條路**：記下 item、不再排程、回驗、「全部找到」
+    的事件。回驗的權威來源仍然是這裡。
+
+    **沒找到、還在認、問不到的一列都不動**：不算一次、不改排程、不提醒 Jellyfin。這一支打開頁面
+    就會跑，算次數的話多開幾次頁面就把 6 次用完了；什麼時候再問、什麼時候放棄是排程那一輪的事
+    （plan §3.2）。
+
+    **只問還沒到時間的**：到時間的歸排程那一輪（15 秒內就會問），兩邊同時寫同一列的話，一邊的
+    「找到了」會被另一邊的「沒找到、排下一次」蓋掉。
+    """
+    moment = now or utcnow()
+    waiting = list(
+        await session.scalars(
+            select(LedgerEntry)
+            .where(LedgerEntry.media_id == media_id, LedgerEntry.resolve_after > moment)
+            .order_by(LedgerEntry.id)
+        )
+    )
+    if not waiting:
+        return 0
+
+    routes = list(await session.scalars(select(Route)))
+    settings = await read_settings(session, JellyfinSettings)
+    client = factory.jellyfin(settings.base_url, token=settings.api_key)
+    found: list[LedgerEntry] = []
+    verdicts: list[Verdict] = []
+    try:
+        for route, entries in _by_route(waiting, routes):
+            if route is None:
+                continue
+            try:
+                lookup = await _items_for(session, client, route, entries)
+            except ServiceError as exc:
+                logger.warning(
+                    "jellyfin lookup ahead of schedule failed",
+                    extra={"route": route.slug, "error": message(exc)},
+                )
+                continue
+            for entry in entries:
+                item = locate(entry.target_path, lookup.items)
+                if item is None or lookup.still_identifying(entry, item):
+                    continue
+                _found(entry, item)
+                found.append(entry)
+                verdicts.append(lookup.verdict(entry, item))
+        await _announce(session, found, ())
+        await settle_verdicts(session, verdicts, moment)
+    finally:
+        await client.aclose()
+    await session.commit()
+    return len(found)
 
 
 async def refresh_resolved(
@@ -306,6 +373,12 @@ async def settle_verdicts(
         clear_by_system(list(cleared), now)
     await session.flush()
     return recorded
+
+
+def _found(entry: LedgerEntry, item: JellyfinItem) -> None:
+    """找到而且認完了：記下它，不再排程。"""
+    _remember(entry, item)
+    entry.resolve_after = None
 
 
 def _remember(entry: LedgerEntry, item: JellyfinItem) -> None:

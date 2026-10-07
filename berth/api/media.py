@@ -42,6 +42,7 @@ from berth.services.jellyfin_access import (
     jellyfin_access,
 )
 from berth.services.media import read_media, refresh_media
+from berth.services.resolver import resolve_early
 from berth.services.watch_area import read_watch_area
 
 router = APIRouter(prefix="/media", tags=["media"])
@@ -239,6 +240,17 @@ async def get_media(session: SessionDep, factory: ClientFactoryDep, media_id: st
 async def post_refresh(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
     """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。"""
     return MediaOut.model_validate(await refresh_media(session, factory, media_id))
+
+
+@router.post("/{media_id}/resolve")
+async def post_resolve(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
+    """作品頁打開時，還在等 Jellyfin 的檔案先問一次（M4 票 51）。
+
+    回這部作品的詳情：Jellyfin 已經列出的那幾列換成「已收錄」，還沒列出的照舊、也不算 resolver
+    的一次。不擋 `GET`：檔案清單先照帳本畫，這一支回了再換（觀看區的同一個取捨）。
+    """
+    await resolve_early(session, factory, media_id)
+    return MediaOut.model_validate(await read_media(session, factory, media_id))
 
 
 class WatchSeasonOut(BaseModel):

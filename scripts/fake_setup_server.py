@@ -22,6 +22,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from html import escape
 from pathlib import Path, PurePosixPath
+from typing import Any
 from urllib.parse import quote, urlsplit
 
 import uvicorn
@@ -967,9 +968,13 @@ class ScanningJellyfin(FakeJellyfinClient):
         self.items_ = [item for library in self.libraries_ for item in self._scanned(library)]
         return await super().items(library_id, item_types)
 
+    def _seen(self) -> list[str]:
+        """掃到了的路徑：被通知過的都算。"""
+        return self.notified
+
     def _scanned(self, library: JellyfinLibrary) -> list[JellyfinItem]:
         grown: dict[str, JellyfinItem] = {}
-        for path in dict.fromkeys(self.notified):
+        for path in dict.fromkeys(self._seen()):
             if PurePosixPath(path).suffix not in VIDEO_SUFFIXES:
                 continue
             location = next((row for row in library.locations if path.startswith(f"{row}/")), None)
@@ -1013,6 +1018,34 @@ class ScanningJellyfin(FakeJellyfinClient):
         return list(grown.values())
 
 
+#: `late-scan` 的 Jellyfin 第一次被通知之後多久才列出那個檔案。比 resolver 第二次反查晚一點
+#: （入庫後 2 分 30 秒，迴圈 15 秒醒一次所以最晚 2 分 45 秒）：第二次也沒找到，下一次在 10 分鐘後。
+LATE_SCAN = timedelta(seconds=170)
+
+
+class LateScanningJellyfin(ScanningJellyfin):
+    """晚一步才「掃到」的 Jellyfin（`late-scan` 情境，M4 票 51）。
+
+    2026-10-06 審計 S6 的時間線：入庫後約 2 分鐘 Jellyfin 才有這部，那時 resolver 已經退避到
+    10 分鐘，作品頁的檔案清單一直說「還在掃描」。被通知滿 `LATE_SCAN` 的路徑才列出。
+    """
+
+    # 原樣交給 `FakeJellyfinClient`，它的參數很多，在這裡逐一重抄只會跟著它改。
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._first_notified: dict[str, datetime] = {}
+
+    async def notify_paths(self, paths: Sequence[str]) -> None:
+        await super().notify_paths(paths)
+        moment = datetime.now(UTC)
+        for path in paths:
+            self._first_notified.setdefault(path, moment)
+
+    def _seen(self) -> list[str]:
+        cutoff = datetime.now(UTC) - LATE_SCAN
+        return [path for path in self.notified if self._first_notified[path] <= cutoff]
+
+
 def _scanned_id(path: str) -> str:
     """Jellyfin 的 item id 是 32 個十六進位字元。由路徑導出，重掃時同一個檔案拿到同一個 id。"""
     return hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()
@@ -1030,6 +1063,21 @@ def inventory_scenario() -> Scenario:
     """
     scenario = plan_scenario()
     scenario.jellyfin = ScanningJellyfin(
+        startup_wizard_completed=True,
+        admin=("skipper", "harbour"),
+        users={"deckhand": "rope"},
+    )
+    return scenario
+
+
+def late_scan_scenario() -> Scenario:
+    """作品頁的 Jellyfin 狀態與媒體庫頁一致（M4 票 51）：同 `import`，但 Jellyfin 晚一步才掃到。
+
+    resolver 前兩次（30 秒、2 分 30 秒）都沒找到，下一次排在 10 分鐘後；入庫約 3 分鐘之後打開
+    作品頁，「檔案與版本」先問一次就說已收錄，不必等那 10 分鐘。
+    """
+    scenario = import_scenario()
+    scenario.jellyfin = LateScanningJellyfin(
         startup_wizard_completed=True,
         admin=("skipper", "harbour"),
         users={"deckhand": "rope"},
@@ -1574,6 +1622,7 @@ SCENARIOS = {
     "plan": plan_scenario,
     "import": import_scenario,
     "inventory": inventory_scenario,
+    "late-scan": late_scan_scenario,
     "long-lists": long_lists_scenario,
     "library": library_scenario,
     "poll": poll,
