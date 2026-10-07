@@ -33,7 +33,7 @@ from berth.api.deps import get_bundled_services, get_client_factory
 from berth.config import Config
 from berth.domain import ServiceKind, ServiceOrigin
 from berth.main import create_app
-from berth.services.jellyfin import API_KEY_APP
+from berth.services.jellyfin import API_KEY_APP, BUNDLED_SERVER_NAME
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
     WEB_UI_USERNAME_KEY,
@@ -222,6 +222,17 @@ def _always(write: Write, premise: Premise, made: Made) -> bool:
     return True
 
 
+def _named_only_when_fresh_and_bundled(write: Write, premise: Premise, made: Made) -> bool:
+    """伺服器名稱是全域設定：只有 Berth 替還沒初始化的套件內那一台跑初始精靈時給它名字
+    （M4 票 52）。"""
+    name = write.kwargs.get("server_name")
+    return name is None or (
+        premise.origin is ServiceOrigin.BUNDLED
+        and premise.jellyfin_fresh
+        and name == BUNDLED_SERVER_NAME
+    )
+
+
 def _login_fields_only(write: Write, premise: Premise, made: Made) -> bool:
     values: Mapping[str, Any] = write.args[0]
     changed = {key for key, value in values.items() if write.before.get(key) != value}
@@ -272,10 +283,10 @@ ALLOWED: tuple[Allowed, ...] = (
     ),
     # --- bootstrap：讓那台服務有人登得進去 ---
     # Jellyfin 初始設定。
+    Allowed(JELLYFIN, "start_configuration", _named_only_when_fresh_and_bundled, bootstrap=True),
     *(
         Allowed(JELLYFIN, method, _always, bootstrap=True)
         for method in (
-            "start_configuration",
             "ensure_default_user",
             "create_startup_user",
             "set_remote_access",
@@ -596,6 +607,11 @@ def test_a_bundled_wizard_writes_only_owned_objects_and_the_bootstrap(
         (PROWLARR, "set_host_config"),
     } <= methods(run.recorder.writes)
     assert probed_shared_root(run)
+    assert any(
+        write.method == "start_configuration"
+        and write.kwargs.get("server_name") == BUNDLED_SERVER_NAME
+        for write in run.recorder.writes
+    )
 
 
 @pytest.mark.parametrize("initialized", [True, False], ids=["initialized", "fresh-jellyfin"])
@@ -658,6 +674,25 @@ def test_the_bootstrap_on_an_initialized_existing_jellyfin_is_refused() -> None:
     assert violations([write], EXISTING_INITIALIZED) != []
     assert violations([write], replace(EXISTING_INITIALIZED, jellyfin_fresh=True)) == []
     assert violations([write], replace(EXISTING_INITIALIZED, origin=ServiceOrigin.BUNDLED)) == []
+
+
+def test_naming_a_jellyfin_other_than_a_fresh_bundled_one_is_refused() -> None:
+    """違規要紅：既有 Jellyfin 還沒初始化時初始設定放行，但不替它取名；套件內但已經初始化過的
+    也不取名（M4 票 52）。還沒初始化的套件內那一台放行，換一組語言照樣放行。"""
+    fresh = replace(EXISTING_INITIALIZED, jellyfin_fresh=True)
+
+    def configure(name: str | None, *, culture: str = "zh-TW") -> Write:
+        values = {"ui_culture": culture, "metadata_country_code": "TW", "server_name": name}
+        return Write(JELLYFIN, "start_configuration", (), values)
+
+    named = configure(BUNDLED_SERVER_NAME)
+    assert violations([named], fresh) != []
+    assert violations([configure(None)], fresh) == []
+    bundled = replace(fresh, origin=ServiceOrigin.BUNDLED)
+    assert violations([named], replace(bundled, jellyfin_fresh=False)) != []
+    assert violations([configure("their-nas")], bundled) != []
+    assert violations([named], bundled) == []
+    assert violations([configure(BUNDLED_SERVER_NAME, culture="en-US")], bundled) == []
 
 
 def test_the_fresh_jellyfin_exception_does_not_reach_the_other_logins() -> None:

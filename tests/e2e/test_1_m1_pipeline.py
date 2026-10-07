@@ -24,6 +24,7 @@ from contextlib import closing
 import httpx
 import pytest
 
+from berth.services.jellyfin import BUNDLED_SERVER_NAME
 from tests.e2e.harness import (
     BERTH_CONTAINER,
     GLOBAL_SAVE_PATH,
@@ -96,6 +97,14 @@ def test_the_global_save_path_steers_nothing(
         assert ok(qbittorrent.get("/api/v2/app/preferences"))["save_path"] == GLOBAL_SAVE_PATH
     roots = {job.pack.route_slug: jobs[job.info_hash]["content_path"] for job in submitted}
     assert not [root for root in roots.values() if root.startswith(GLOBAL_SAVE_PATH)], roots
+
+
+def test_the_bundled_jellyfin_is_named_berth(jellyfin: httpx.Client) -> None:
+    """精靈替全新的套件內 Jellyfin 跑初始設定時給它名字（M4 票 52）。
+
+    沒給的話用戶端看到的是容器 ID。
+    """
+    assert ok(jellyfin.get("/System/Info/Public"))["ServerName"] == BUNDLED_SERVER_NAME
 
 
 def test_the_ledger_holds_every_episode_the_corpus_imports(

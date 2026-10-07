@@ -137,6 +137,8 @@ class FakeJellyfinClient:
         #: 讓精靈與健康檢查的版本閘門測得出來。
         version: str = "12.1.0",
         server_name: str = "jellyfin",
+        #: 名稱是空字串時 `/System/Info/Public` 報的（容器裡就是容器 ID，brief §20.9）。
+        hostname: str = "jellyfin",
         #: `/System/Info/Public` 的 `Id`（brief §20.15）。兩台替身要是不同的伺服器就給不同的值。
         server_id: str = SERVER_ID,
         startup_wizard_completed: bool = False,
@@ -169,6 +171,7 @@ class FakeJellyfinClient:
         self.base_url = base_url
         self.version = version
         self.server_name = server_name
+        self.hostname = hostname
         self.server_id = server_id
         self.startup_wizard_completed = startup_wizard_completed
         self.admin = admin
@@ -238,10 +241,17 @@ class FakeJellyfinClient:
     # --- 初始精靈 ---
 
     async def start_configuration(
-        self, *, ui_culture: str, metadata_country_code: str, preferred_metadata_language: str
+        self,
+        *,
+        ui_culture: str,
+        metadata_country_code: str,
+        preferred_metadata_language: str,
+        server_name: str | None,
     ) -> None:
         self._checkpoint()
         self.culture = (ui_culture, metadata_country_code, preferred_metadata_language)
+        # 真的 Jellyfin 整格覆寫：沒送就是空字串，對外報 hostname（brief §20.9）。
+        self.server_name = server_name or self.hostname
 
     async def ensure_default_user(self) -> str:
         self._checkpoint()

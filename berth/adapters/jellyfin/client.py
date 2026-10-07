@@ -90,17 +90,21 @@ class HttpJellyfinClient:
     # --- 初始精靈 ---
 
     async def start_configuration(
-        self, *, ui_culture: str, metadata_country_code: str, preferred_metadata_language: str
+        self,
+        *,
+        ui_culture: str,
+        metadata_country_code: str,
+        preferred_metadata_language: str,
+        server_name: str | None,
     ) -> None:
-        await self._session.request(
-            "POST",
-            "/Startup/Configuration",
-            json={
-                "UICulture": ui_culture,
-                "MetadataCountryCode": metadata_country_code,
-                "PreferredMetadataLanguage": preferred_metadata_language,
-            },
-        )
+        body = {
+            "UICulture": ui_culture,
+            "MetadataCountryCode": metadata_country_code,
+            "PreferredMetadataLanguage": preferred_metadata_language,
+        }
+        if server_name is not None:
+            body["ServerName"] = server_name
+        await self._session.request("POST", "/Startup/Configuration", json=body)
 
     async def ensure_default_user(self) -> str:
         payload = await self._get("/Startup/User")

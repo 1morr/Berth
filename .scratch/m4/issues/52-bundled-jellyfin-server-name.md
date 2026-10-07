@@ -1,6 +1,6 @@
 # 52 — 套件內 Jellyfin 的伺服器名稱設成「Berth」
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -18,8 +18,24 @@
 
 ## 驗收
 
-- [ ] 整合測試（雙向）：套件內未初始化 → 寫 ServerName；已初始化或既有 → 不寫
-- [ ] 33 的寫入白名單閘門同步更新，仍綠
-- [ ] 實跑一次全新套件內 Jellyfin，`/System/Info/Public` 的 `ServerName` 是 `Berth`（輸出貼在 Comments）
-- [ ] plan §9.4、brief §20.9 已改
-- [ ] 全部檢查（`pre-commit run --all-files`）、test、真服務 e2e 綠燈
+- [x] 整合測試（雙向）：套件內未初始化 → 寫 ServerName；已初始化或既有 → 不寫
+- [x] 33 的寫入白名單閘門同步更新，仍綠
+- [x] 實跑一次全新套件內 Jellyfin，`/System/Info/Public` 的 `ServerName` 是 `Berth`（輸出貼在 Comments）
+- [x] plan §9.4、brief §20.9 已改
+- [x] 全部檢查（`pre-commit run --all-files`）、test、真服務 e2e 綠燈
+
+## Comments
+
+2026-10-07 實跑：`uv run --env-file .env python -m tests.e2e.stack` 起的全新套件內 Jellyfin（`lscr.io/linuxserver/jellyfin:version-12.1ubu2604`，容器 hostname `82c2326baf4b`），精靈跑完後：
+
+```
+$ curl -s http://localhost:28096/System/Info/Public
+{"LocalAddress":"http://[::1]:8096","ServerName":"Berth","Version":"12.1.0","ProductName":"Jellyfin Server","OperatingSystem":"","Id":"1013b29dcd9c41cc8a3167b022b936c4","StartupWizardCompleted":true}
+```
+
+e2e 24 passed（含新的 `test_the_bundled_jellyfin_is_named_berth`）。那一輪的 image 是 code-review 修正前 build 的；修正只改了 `_Runner` 收參數的方式與替身，送給 Jellyfin 的請求不變，整合測試（3620 passed）守著。
+
+2026-10-07 code-review（Standards 與 Spec 兩軸）沒有處理的發現：
+
+- `test_a_bundled_jellyfin_is_named_berth` 斷言寫字面值 `"Berth"` 而不是 `BUNDLED_SERVER_NAME`：刻意釘住使用者拍板的那個名字，常數改了這條要紅。
+- 既有而還沒初始化的 Jellyfin，`system.xml` 事先放的名字仍會被第 2 步清空（票 52 之前就是如此）。要保住得先讀 `GET /Startup/Configuration`，不在本票；記在 plan §9.4 與 progress.md「偏差與決定」。

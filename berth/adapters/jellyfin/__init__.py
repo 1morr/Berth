@@ -334,8 +334,16 @@ class JellyfinClient(Protocol):
     # --- 初始精靈（plan §9.4 第 2、3、5、6 步）---
 
     async def start_configuration(
-        self, *, ui_culture: str, metadata_country_code: str, preferred_metadata_language: str
-    ) -> None: ...
+        self,
+        *,
+        ui_culture: str,
+        metadata_country_code: str,
+        preferred_metadata_language: str,
+        server_name: str | None,
+    ) -> None:
+        """`server_name` 是 `None` 時不送那一格：Jellyfin 寫成空字串，對外報容器的 hostname
+        （brief §20.9）。"""
+        ...
 
     async def ensure_default_user(self) -> str:
         """`GET /Startup/User`，回預設使用者的名字。

@@ -652,6 +652,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- | --- | --- |
 | Jellyfin 管理員帳號 | 那一台還沒初始化時建 | 只在那一台還沒初始化時建（唯一的例外） | 不能 | Jellyfin 的使用者管理 |
 | Jellyfin 語言、地區、遠端存取 | 還沒初始化時設（跟 UI，不開遠端） | 還沒初始化時設（畫面上問） | 不能 | Jellyfin 控制台 |
+| Jellyfin 伺服器名稱 | 還沒初始化時設成「Berth」（M4 票 52） | 不設（初始設定照跑、不帶名稱：Jellyfin 清成空字串、報 hostname，§20.9） | 不能 | Jellyfin 控制台「一般」 |
 | Jellyfin API key「Berth」 | 建 | 建 | 不能（Berth 不刪）；在 Jellyfin 刪掉之後 Berth 偵測得到，請你重新登入換一把 | Jellyfin「API 金鑰」頁 |
 | Jellyfin 媒體庫 | 建精靈清單上的 | 不建 | 不能；已建的在 Berth 裡鎖住 | Jellyfin 刪 |
 | 媒體庫上的 Berth 路徑 | — | 頁 3「建立並檢查」時加 | 不能；頁 3 的檢查失敗也留著 | Jellyfin 媒體庫設定移除 |
@@ -1478,6 +1479,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **本系統用到的 24 支端點**在 12.0 / 12.1 都在、授權政策相同，以本系統的 adapter 跑完 plan §9.4 整段。例外兩條：
   - `POST /Startup/User` 在第一個使用者已有密碼時回 **403**（[PR #17369](https://github.com/jellyfin/jellyfin/pull/17369)）。精靈第 3 步做完、後面某步失敗、Jellyfin 沒重啟時按重試，會一直卡在這裡（M1 票 14b）。【原始碼 + 部分實測：精靈未完成時匿名送的那條只讀了原始碼】
   - `POST /Startup/Configuration`、`GET /Startup/User`、`POST /Startup/RemoteAccess` 在 12.x 的 OpenAPI 標 deprecated，現在還能用。Jellyfin 的政策是至少標滿一個大版本週期才移除，所以 13.0 發佈前要換成設定端點（替代端點的欄位【未查】）。【實測 + 文件】
+- **伺服器名稱**（2026-10-07 查證，M4 票 52）：`POST /Startup/Configuration` 的 body 是 `StartupConfigurationDto`，`ServerName` 與另外三格同一層、都可為 null。它**整格覆寫**：`ServerName = dto.ServerName ?? string.Empty`，沒送就是空字串。名稱是空字串時 `/System/Info/Public` 的 `ServerName` 報 `Environment.MachineName`，在容器裡就是容器 ID——所以沒設過的那一台重建容器就換名字（§20.15 的實測）。12.1 與 12.2 這兩段逐字相同。來源：[OpenAPI](https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json)（12.2.0；`StartupConfigurationDto` 四格都是 nullable string，端點標 deprecated）、[`StartupController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/StartupController.cs)（`UpdateInitialConfiguration`）、[`StartupConfigurationDto.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Models/StartupDtos/StartupConfigurationDto.cs)、[`ApplicationHost.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ApplicationHost.cs)（`FriendlyName`）。【文件 + 原始碼】
 - **舊式驗證預設關閉**，連既有安裝也由遷移關掉：`X-Emby-Token`、`X-Emby-Authorization`、`?api_key=` 回 401。本系統用的 `Authorization: MediaBrowser …, Token="…"` 不受影響。【實測 + 原始碼】
 - `GET /Items` 帶 `includeItemTypes` 而沒指定 `recursive` 時預設遞迴（2026-09-17 在 12.1.0 實測，§20.8），本系統一律明確帶 `recursive=true`。`POST /Library/Media/Updated` 背後的 `FileRefresher` 一行沒改，所以「空的媒體庫收到路徑通知無效」（§20.1）仍成立。【原始碼 + 前半句實測 12.1.0】
 - **linuxserver image**：

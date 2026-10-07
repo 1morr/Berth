@@ -142,6 +142,47 @@ async def test_bundled_leaves_jellyfin_ready_for_its_berth(session: AsyncSession
 
 
 @pytest.mark.asyncio
+async def test_a_bundled_jellyfin_is_named_berth(session: AsyncSession) -> None:
+    """沒設的話用戶端看到的是容器 ID（2026-10-06 審計 S4，brief §20.9）；名稱由使用者拍板。"""
+    await found(session)
+    factory = bundled()
+
+    await claim_owner(session, factory, target=SEEN, username="skipper", password=PASSWORD)
+
+    assert (await factory.jellyfin_.public_info()).server_name == "Berth"
+
+
+@pytest.mark.parametrize(
+    ("origin", "reason", "initialized", "named"),
+    [
+        # 初始設定照跑、只是不送名稱：Jellyfin 整格清成空字串，報它的 hostname（brief §20.9）。
+        (ServiceOrigin.EXISTING, ConnectionReason.SETUP_PENDING, False, "d6c8b33ddada"),
+        (ServiceOrigin.EXISTING, ConnectionReason.SETUP_COMPLETED, True, "their-nas"),
+        (ServiceOrigin.BUNDLED, ConnectionReason.SETUP_COMPLETED, True, "their-nas"),
+    ],
+    ids=["existing-fresh", "existing-initialized", "bundled-kept-from-a-reinstall"],
+)
+@pytest.mark.asyncio
+async def test_only_a_bundled_jellyfin_berth_initializes_gets_the_name(
+    session: AsyncSession,
+    origin: ServiceOrigin,
+    reason: ConnectionReason,
+    initialized: bool,
+    named: str,
+) -> None:
+    """伺服器名稱是全域設定（brief §16.4）：既有的、已經初始化過的都不給名字。"""
+    await found(session, origin=origin, reason=reason)
+    factory = existing() if initialized else bundled()
+    factory.jellyfin_.server_name = "their-nas"
+    factory.jellyfin_.hostname = "d6c8b33ddada"
+    username = "captain" if initialized else "skipper"
+
+    await claim_owner(session, factory, target=SEEN, username=username, password=PASSWORD)
+
+    assert (await factory.jellyfin_.public_info()).server_name == named
+
+
+@pytest.mark.asyncio
 async def test_the_owners_password_is_not_stored(session: AsyncSession) -> None:
     await found(session)
 

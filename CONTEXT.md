@@ -105,7 +105,7 @@ _Avoid_: mode, service type
 **Bundled service**（UI 顯示「套件內」）:
 使用者選「套件內」的服務：這套 compose 起的那一台（容器名 `berth-*`，Berth 以 compose 服務名連它）。
 Berth 在它上面做的與 Existing service 同一條——只建立與管理 Berth 擁有的物件——差別只在 Berth 讓它有人登得進去：
-Jellyfin 的管理員與初始設定、qBittorrent 與 Prowlarr 的介面登入，以及讓 Berth 自己進得去的免密白名單與掛載的 API key。
+Jellyfin 的管理員與初始設定（含伺服器名稱「Berth」）、qBittorrent 與 Prowlarr 的介面登入，以及讓 Berth 自己進得去的免密白名單與掛載的 API key。
 套件內 Jellyfin 的媒體庫照精靈的清單由 Berth 建，也算 Berth 擁有的物件。全域偏好不寫（brief §19 D1、D2，M4 票 32、33）。
 已經初始化過的（重裝保留 config）照樣是套件內，只是改成登入。
 _Avoid_: managed, built-in, ours
@@ -113,7 +113,7 @@ _Avoid_: managed, built-in, ours
 **Existing service**（UI 顯示「既有」）:
 使用者選「既有」的服務：使用者自己的那一台，填位址與憑證接進來。Berth 接管它＝**只建立與管理 Berth 擁有的物件**：
 Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、`berth-*` 分類與它的目錄、使用者勾選加入的站、檢查用的暫時探測 torrent 與探測檔。
-帳密、全域偏好、使用者原有的媒體庫與站都不碰；唯一例外是那台 Jellyfin 還沒跑過初始精靈時，由擁有者建它的管理員、跑完它的初始設定（語言、地區、遠端存取，brief §16.4、§19 D1）。
+帳密、全域偏好、使用者原有的媒體庫與站都不碰；唯一例外是那台 Jellyfin 還沒跑過初始精靈時，由擁有者建它的管理員、跑完它的初始設定（語言、地區、遠端存取；不給伺服器名稱，brief §16.4、§19 D1）。
 Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、把同一個父目錄掛在 `/data`。
 _Avoid_: external, remote, byo
 

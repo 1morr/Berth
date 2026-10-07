@@ -84,6 +84,11 @@ from berth.services.steps import (
 #: `POST /Auth/Keys?app=` 用的名字。也是重按時辨認「這把是我建的」的依據。
 API_KEY_APP = "Berth"
 
+#: 套件內那一台的伺服器名稱（M4 票 52，使用者 2026-10-06 拍板）。沒設的話用戶端看到的是容器 ID。
+#: 只在 Berth 替它跑初始精靈的那一次寫：伺服器名稱是全域設定，既有的、已經初始化過的都不碰
+#: （brief §16.4）。
+BUNDLED_SERVER_NAME = "Berth"
+
 
 @dataclass(frozen=True, slots=True)
 class JellyfinStartup:
@@ -665,7 +670,8 @@ async def _run(
     setup = await read_settings(session, SetupSettings)
     jellyfin = await read_settings(session, JellyfinSettings)
     paths = await read_settings(session, PathSettings)
-    base_url = target.base_url if target is not None else _target(setup, jellyfin)[1]
+    origin, chosen_url = _target(setup, jellyfin)
+    base_url = target.base_url if target is not None else chosen_url
 
     client = factory.jellyfin(base_url, token=jellyfin.api_key)
     runner = _Runner(
@@ -673,6 +679,7 @@ async def _run(
         jellyfin,
         paths,
         setup.jellyfin.bundled,
+        server_name=BUNDLED_SERVER_NAME if origin is ServiceOrigin.BUNDLED else None,
         credentials=credentials,
         startup=startup,
         target=target,
@@ -783,11 +790,14 @@ class _Runner:
         paths: PathSettings,
         bundled: Sequence[BundledLibrary],
         *,
+        server_name: str | None,
         credentials: tuple[str, str] | None,
         startup: JellyfinStartup,
         target: JellyfinTarget | None,
     ) -> None:
         self._client = client
+        #: 第 2 步寫給還沒初始化的那一台的伺服器名稱；`None` 是不送（既有的那一台）。
+        self._server_name = server_name
         self._startup = startup
         #: 這一輪只對這一台（擁有者那一半，M4 票 28）；`None` 是不挑。
         self._target = target
@@ -857,6 +867,7 @@ class _Runner:
             ui_culture=startup.ui_culture,
             metadata_country_code=startup.metadata_country,
             preferred_metadata_language=startup.metadata_language,
+            server_name=self._server_name,
         )
         return StepStatus.OK, detail
 
