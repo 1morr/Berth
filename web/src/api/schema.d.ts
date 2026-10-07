@@ -1636,7 +1636,8 @@ export interface paths {
         post?: never;
         /**
          * Delete Service Leftover Categories
-         * @description 移除現在這一台 qBittorrent 上空的 `berth-*` 分類（有 torrent 的、別人的都不碰），回傳之後的清單。
+         * @description 移除現在這一台 qBittorrent 上空的 `berth-*` 分類（有 torrent 的、別人的都不碰）。
+         *     回傳移除之後的清單；連不到或 qBittorrent 沒收下是 502，帶原文。
          */
         delete: operations["delete_service_leftover_categories_api_setup_services_qbittorrent_leftovers_categories_delete"];
         options?: never;
