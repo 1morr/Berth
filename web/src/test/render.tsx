@@ -20,9 +20,14 @@ function newQueryClient() {
   })
 }
 
-/** 只掛資料層，用來單獨測一個元件。 */
+/** 只掛資料層，用來單獨測一個元件。以 `wrapper` 掛，`rerender` 換掉元件時資料層還在。 */
 export function renderWithProviders(ui: ReactElement) {
-  return render(<QueryClientProvider client={newQueryClient()}>{ui}</QueryClientProvider>)
+  const client = newQueryClient()
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  })
 }
 
 /** 掛真正的 route tree，用來測 shell 與路由有沒有接好。 */

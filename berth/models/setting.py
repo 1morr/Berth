@@ -337,6 +337,10 @@ class SetupIndexer(BaseModel):
     #: 「密碼改過了」（票 06c）。
     web_ui_username: str = ""
     web_ui_password_hash: str = ""
+    #: Berth 加進現在這一台 Prowlarr 的站：`definitionName` → 站名（M4 票 47）。換台的確認框靠它列出
+    #: 「Berth 在舊那台加的站」：纜繩每次加站整份換掉，記不住前一批；連不到那一台時站名也從這裡來。
+    #: 在 Berth 移除的站拿掉，換一台整份清掉（`setup._start_over`）。票 47 之前加的站沒有記到。
+    added_sites: dict[str, str] = {}
 
 
 class SetupTmdb(BaseModel):

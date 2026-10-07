@@ -322,7 +322,15 @@ async def apply_default_indexers(
     finally:
         await client.aclose()
 
-    await _record_added(session, base_url, steps, sites=sites, bundled=bundled, instance=instance)
+    await _record_added(
+        session,
+        base_url,
+        steps,
+        sites=sites,
+        bundled=bundled,
+        instance=instance,
+        added=_newly_added(steps, definitions),
+    )
     return await read_indexer_status(session, factory)
 
 
@@ -378,7 +386,15 @@ async def add_recommended_indexers(
     finally:
         await client.aclose()
 
-    await _record_added(session, base_url, steps, sites=sites, bundled=True, instance=instance)
+    await _record_added(
+        session,
+        base_url,
+        steps,
+        sites=sites,
+        bundled=True,
+        instance=instance,
+        added=_newly_added(steps, definitions),
+    )
     return await read_indexer_status(session, factory)
 
 
@@ -390,8 +406,10 @@ async def _record_added(
     sites: int,
     bundled: bool,
     instance: str,
+    added: dict[str, str],
 ) -> None:
-    """加站的結論整份換掉頁 4 的纜繩；套件內那一台的最後一條是介面登入。"""
+    """加站的結論整份換掉頁 4 的纜繩；套件內那一台的最後一條是介面登入。這一次新加的站另外累積進
+    `added_sites`（M4 票 47）。"""
 
     def remember_address(latest: IndexerSettings) -> None:
         latest.base_url = base_url
@@ -401,6 +419,7 @@ async def _record_added(
     def record(latest: SetupSettings) -> None:
         latest.indexer.steps = steps if bundled else [existing_prowlarr_step(sites), *steps]
         latest.indexer.skipped = False
+        latest.indexer.added_sites = {**latest.indexer.added_sites, **added}
         if bundled:
             _record_login(latest, steps[-1], None, instance)
         _recount(latest, sites)
@@ -503,6 +522,9 @@ async def remove_indexer(
 
         def record(latest: SetupSettings) -> None:
             latest.indexer.steps = [row for row in latest.indexer.steps if row.key != removed]
+            latest.indexer.added_sites = {
+                key: name for key, name in latest.indexer.added_sites.items() if key != removed
+            }
             _recount(latest, len(present) - 1)
 
         await update_settings(session, SetupSettings, record)
@@ -559,6 +581,17 @@ async def _ensure_indexer(
             error=" · ".join(exc.messages),
         )
     return SetupStep(key=definition_name, status=StepStatus.OK, params=_ADDED)
+
+
+def _newly_added(
+    steps: list[SetupStep], definitions: dict[str, IndexerDefinition]
+) -> dict[str, str]:
+    """這一次真的新增進去的站（`ok`；已經在了的是 `skipped`）：`definitionName` → 站名。"""
+    return {
+        row.key: definitions[row.key].name
+        for row in steps
+        if row.status is StepStatus.OK and row.key in definitions
+    }
 
 
 #: 一站的纜繩記著結論來自哪一支（`SiteStage`）。放在 `params`：`SetupStep` 給每個泊位共用，

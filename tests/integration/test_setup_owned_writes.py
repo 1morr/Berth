@@ -69,6 +69,7 @@ WRITES: dict[ServiceKind, frozenset[str]] = {
         {
             "set_preferences",
             "create_category",
+            "remove_categories",
             "add_probe",
             "recheck",
             "delete_torrent",
@@ -240,6 +241,11 @@ ALLOWED: tuple[Allowed, ...] = (
         lambda w, p, _: str(w.args[0]).startswith(CATEGORY_PREFIX)
         and under(str(w.args[1]), p.complete_root)
         and under(str(w.kwargs["download_path"]), p.incomplete_root),
+    ),
+    # 換台時一鍵移除的只有 `berth-*`（M4 票 47；空不空由命令重數，這裡只守名字）。
+    Allowed(
+        QBITTORRENT, "remove_categories",
+        lambda w, p, _: all(str(name).startswith(CATEGORY_PREFIX) for name in w.args[0]),
     ),
     # 探測 torrent：加、校驗、移除（不刪檔）。後兩者只對 Berth 加了、放行了的那幾個。頁 3 的在分類
     # 路徑底下；頁 2 的在共用根目錄本身，而且校驗不完（M4 票 46）。
@@ -684,6 +690,18 @@ def test_a_probe_on_the_shared_root_has_to_be_one_that_never_finishes() -> None:
     assert violations([probe("/data", unfinished=True)], premise) == []
     # 無關的寫法不紅：結尾多一個斜線還是同一條。
     assert violations([probe("/data/", unfinished=True)], premise) == []
+
+
+def test_removing_a_category_that_is_not_berths_is_refused() -> None:
+    """違規要紅：換台時一鍵移除夾帶一個不是 `berth-` 的分類（M4 票 47）。只有 `berth-*` 的放行，
+    名字換一個、順序換一下都不紅。"""
+
+    def remove(*names: str) -> Write:
+        return Write(QBITTORRENT, "remove_categories", (list(names),), {})
+
+    assert violations([remove("berth-shows", "movies")], EXISTING_INITIALIZED) != []
+    assert violations([remove("berth-shows")], EXISTING_INITIALIZED) == []
+    assert violations([remove("berth-films", "berth-anime")], EXISTING_INITIALIZED) == []
 
 
 def test_unrelated_names_and_address_formatting_stay_green(

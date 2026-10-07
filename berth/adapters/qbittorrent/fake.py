@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -78,6 +78,8 @@ class FakeQbittorrentClient:
         self.writes: list[dict[str, Any]] = []
         #: 這一台上被建出來的 category，用來斷言「已經在那裡的不會再建一次」。
         self.created_categories: list[QbittorrentCategory] = []
+        #: 被刪掉的 category 名字，依送出順序（M4 票 47：只刪 Berth 建的空分類）。
+        self.removed_categories: list[str] = []
         #: 收下的每一筆 `torrents/add`。送單測試斷言的就是它——category、tag 與
         #: 交出去的到底是磁力連結還是一份 `.torrent`。
         self.added: list[TorrentAdd] = []
@@ -162,6 +164,12 @@ class FakeQbittorrentClient:
         category = QbittorrentCategory(name=name, save_path=save_path, download_path=download_path)
         self.created_categories.append(category)
         self._categories.append(category)
+
+    async def remove_categories(self, names: Sequence[str]) -> None:
+        if self.error is not None:
+            raise self.error
+        self.removed_categories.extend(names)
+        self._categories = [row for row in self._categories if row.name not in names]
 
     async def add_probe(
         self, name: str, payload: bytes, *, save_path: str, unfinished: bool = False

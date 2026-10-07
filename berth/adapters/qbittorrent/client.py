@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import httpx
@@ -143,6 +143,12 @@ class HttpQbittorrentClient:
                 "downloadPathEnabled": "true",
                 "downloadPath": download_path,
             },
+        )
+
+    async def remove_categories(self, names: Sequence[str]) -> None:
+        """表單欄位 `categories`，多個以換行分隔；不論刪到幾個都回 200（brief §20.2）。"""
+        await self._session.request(
+            "POST", "/api/v2/torrents/removeCategories", data={"categories": "\n".join(names)}
         )
 
     async def add_torrent(self, request: TorrentAdd) -> None:

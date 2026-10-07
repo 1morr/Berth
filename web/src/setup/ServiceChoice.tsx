@@ -28,6 +28,7 @@ import { escapeOnly } from '../components/useInPlaceConfirm'
 import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
 import { addressError } from './address'
+import { LeftoverList } from './LeftoverList'
 import type { ChoiceDraft } from './choiceDraft'
 import { pointsAtBerth } from './loopback'
 import {
@@ -112,8 +113,8 @@ export function ServiceChoice({
     /** 來源鎖住：擁有者成立之後的 Jellyfin（shape 時拍板）。值是說給人聽的原因。位址照樣改得了。 */
     locked?: string
     /**
-     * 這一頁已經有結果時換另一格的後果（Berth 寫進原本那一台的東西不撤回、這一頁要重做）。
-     * 有值時換另一格要先確認。從既有換走時說法不同：Berth 沒寫過使用者那一台（`choice.switchAway`）。
+     * 這一頁已經有結果時換另一格的後果（這一頁要重做）。有值時換另一格要先確認，確認區列出 Berth 在
+     * 原本那一台留下的東西（`LeftoverList`，M4 票 47）。從既有換走時說法不同（`choice.switchAway`）。
      */
     switchWarning?: string
   }) {
@@ -359,6 +360,7 @@ export function ServiceChoice({
           <p id={warningId} className="max-w-prose text-xs text-ink">
             {confirming ? warning : t('choice.useBundledLede', { service: name })}
           </p>
+          {confirming && kind !== 'jellyfin' && <LeftoverList kind={kind} />}
           <div className={CONFIRM_ACTIONS}>
             <PrimaryButton type="button" busy={choosing} onClick={chooseBundled}>
               {confirming ? t('choice.switchToBundled') : t('choice.useBundled', { service: name })}
@@ -380,6 +382,7 @@ export function ServiceChoice({
           <p id={warningId} className="max-w-prose text-xs text-ink">
             {warning}
           </p>
+          {kind !== 'jellyfin' && <LeftoverList kind={kind} />}
           {form}
           {cancelButton}
         </ConfirmPanel>

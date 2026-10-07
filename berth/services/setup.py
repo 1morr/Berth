@@ -534,6 +534,7 @@ def _start_over(setup: SetupSettings, kind: ServiceKind) -> None:
         setup.indexer.skipped = False
         setup.indexer.web_ui_username = ""
         setup.indexer.web_ui_password_hash = ""
+        setup.indexer.added_sites = {}
 
 
 def _accepted(kind: ServiceKind, outcome: _Outcome) -> bool:

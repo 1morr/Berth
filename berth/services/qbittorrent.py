@@ -93,14 +93,18 @@ async def unknown_torrents(
     **兩個生產者問同一題**：`qbit_poller` 每一輪、對帳每一天（M2 票 09）。它們寫的是同一個
     冪等鍵，判準若各寫一份，漂移的那一天兩邊會對同一個 hash 一個開、一個不開。
     """
-    categories = {row for row in await session.scalars(select(Route.category)) if row}
-    ours = managed(statuses, categories)
+    ours = managed(statuses, await route_categories(session))
     if not ours:
         return []
     known = set(
         await session.scalars(select(Job.hash).where(Job.hash.in_([row.hash for row in ours])))
     )
     return [row for row in ours if row.hash not in known]
+
+
+async def route_categories(session: AsyncSession) -> set[str]:
+    """Route 用的 qBittorrent 分類：Berth 認得的那幾個。"""
+    return {row for row in await session.scalars(select(Route.category)) if row}
 
 
 def unknown_torrent_detail(status: TorrentStatus) -> dict[str, Any]:

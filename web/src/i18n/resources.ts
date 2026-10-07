@@ -253,14 +253,32 @@ const zhHant = {
     switchAway: {
       jellyfin: '換一台 Jellyfin：這一頁要重做。',
       qbittorrent:
-        '換一台 qBittorrent：Berth 沒改過你那一台的偏好，只在上面建了 berth- 分類，那些留著；這一頁要重做，媒體庫與路徑也要重新檢查。',
-      prowlarr: '換一台 Prowlarr：Berth 沒動過你那一台的站；這一頁要重做。',
+        '換一台 qBittorrent：Berth 沒改過你那一台的偏好；這一頁要重做，媒體庫與路徑也要重新檢查——分類要建在新的那一台上。',
+      prowlarr: '換一台 Prowlarr：這一頁要重做。',
     },
     switchWarning: {
       qbittorrent:
-        '換一台 qBittorrent：Berth 已經設在原本那一台的登入留在那裡，不會撤回；這一頁要重做，媒體庫與路徑也要重新檢查——分類建在原本那一台上。',
-      prowlarr:
-        '換一台 Prowlarr：Berth 已經加進原本那一台的站與登入留在那裡，不會撤回；這一頁要重做。',
+        '換一台 qBittorrent：這一頁要重做，媒體庫與路徑也要重新檢查——分類要建在新的那一台上。',
+      prowlarr: '換一台 Prowlarr：這一頁要重做。',
+    },
+    leftovers: {
+      reading: '讀取 Berth 在原本那一台建了什麼…',
+      readFailed: '讀不到 Berth 在原本那一台建了什麼。',
+      heading: 'Berth 在原本那一台建的，換了之後留在那裡：',
+      remembered: '連不到原本那一台。以下是 Berth 記得在那裡建過的，沒辦法確認現在還在不在：',
+      none: '原本那一台上沒有 Berth 建的東西。',
+      noneRemembered: '連不到原本那一台；Berth 不記得在那裡建過東西。',
+      category: '分類',
+      empty: '空的',
+      torrents_one: '{{count}} 個 torrent',
+      torrents_other: '{{count}} 個 torrent',
+      sites: '加入的站',
+      separator: '、',
+      login: 'Berth 設的介面登入',
+      removeEmpty_one: '移除 {{count}} 個空的 berth- 分類',
+      removeEmpty_other: '移除 {{count}} 個空的 berth- 分類',
+      removed: '空的 berth- 分類已移除。',
+      removeFailed: '沒有移除。',
     },
   },
   connection: {
@@ -3397,15 +3415,33 @@ const en: Translations<typeof zhHant> = {
     switchAway: {
       jellyfin: 'Switching Jellyfin: this page starts over.',
       qbittorrent:
-        'Switching qBittorrent: Berth never changed the preferences on yours, it only created berth- categories there, which stay; this page starts over, and library paths need checking again.',
-      prowlarr:
-        'Switching Prowlarr: Berth never touched the sites on yours; this page starts over.',
+        'Switching qBittorrent: Berth never changed the preferences on yours; this page starts over, and library paths need checking again — the categories have to be created on the new one.',
+      prowlarr: 'Switching Prowlarr: this page starts over.',
     },
     switchWarning: {
       qbittorrent:
-        'Switching qBittorrent: the login Berth already set on the old one stays there and is not undone; this page starts over, and library paths need checking again — the categories live on the old one.',
-      prowlarr:
-        'Switching Prowlarr: the indexers and login Berth already added to the old one stay there and are not undone; this page starts over.',
+        'Switching qBittorrent: this page starts over, and library paths need checking again — the categories have to be created on the new one.',
+      prowlarr: 'Switching Prowlarr: this page starts over.',
+    },
+    leftovers: {
+      reading: 'Reading what Berth created on the old one…',
+      readFailed: 'Could not read what Berth created on the old one.',
+      heading: 'What Berth created on the old one stays there after switching:',
+      remembered:
+        'The old one cannot be reached. This is what Berth remembers creating there; whether it is still there cannot be confirmed:',
+      none: 'Berth created nothing on the old one.',
+      noneRemembered: 'The old one cannot be reached; Berth remembers creating nothing there.',
+      category: 'Category',
+      empty: 'empty',
+      torrents_one: '{{count}} torrent',
+      torrents_other: '{{count}} torrents',
+      sites: 'Indexers added',
+      separator: ', ',
+      login: 'Interface login set by Berth',
+      removeEmpty_one: 'Remove {{count}} empty berth- category',
+      removeEmpty_other: 'Remove {{count}} empty berth- categories',
+      removed: 'The empty berth- categories were removed.',
+      removeFailed: 'Nothing was removed.',
     },
   },
   connection: {

@@ -101,9 +101,9 @@ export function QbittorrentStep({
         kind="qbittorrent"
         status={status}
         {...choice}
-        switchWarning={
-          setup && setup.steps.length > 0 ? t('choice.switchWarning.qbittorrent') : undefined
-        }
+        // 選過一台就先確認：Route 檢查會作廢，而 Berth 可能已經在那一台建了分類（M4 票 47 列出來）。
+        // 不看頁 2 的纜繩：既有的那一台沒有纜繩，分類卻照樣建在它上面。
+        switchWarning={service ? t('choice.switchWarning.qbittorrent') : undefined}
       />
 
       {ready &&

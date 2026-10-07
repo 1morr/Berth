@@ -640,7 +640,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.4 既有服務的接入規則【決定】
 
-> **2026-10-06 改（§19「精靈審計後的八項」D3、D6）**：Prowlarr 不再接受 Torznab 端點（D3，已在 M4 票 37 改寫進下文）；換台時列出舊那台的遺留物（D6，下文待拆票後改寫）。（D1 已寫進下文「接管＝只建立與管理 Berth 擁有的物件」那一段，M4 票 33。）
+> **2026-10-06 改（§19「精靈審計後的八項」D3、D6）**：Prowlarr 不再接受 Torznab 端點（D3，已在 M4 票 37 改寫進下文）；換台時列出舊那台的遺留物（D6，M4 票 47 改寫進下文，表後〈換一台時〉）。（D1 已寫進下文「接管＝只建立與管理 Berth 擁有的物件」那一段，M4 票 33。）
 
 > **2026-09-29 改**：「既有」由使用者在該服務那一頁選（§16.3），不再由偵測判定；本節的條件在「既有」選項旁說明（M4 票 15、17）。
 
@@ -658,11 +658,13 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | qBittorrent 免密白名單 | 預置（容器啟動前，只放 Berth 的 IP） | 不碰 | — | `qBittorrent.conf` |
 | qBittorrent 全域偏好 | 不寫（D2，M4 票 32） | 不寫 | — | — |
 | qBittorrent WebUI 登入 | 設 | 不碰 | 只能再設一組蓋過 | qBittorrent 偏好 |
-| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 不能；刪 Route、換一台都不刪分類 | qBittorrent 刪分類 |
+| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 刪 Route 不刪分類；換一台時確認框可一鍵移除舊那台上**空的**（M4 票 47），目錄不刪 | qBittorrent 刪分類 |
 | 探測 torrent、探測檔（頁 2 在 `/data`、校驗不完，M4 票 46；頁 3 在分類路徑） | 暫時，自清 | 同左 | 自清（Berth 中途崩潰可能殘留） | 手動刪 |
 | Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除；既有不移除 | Prowlarr 刪 |
 | Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
 | TMDB | 不寫 | 不寫 | — | — |
+
+**換一台 qBittorrent / Prowlarr 時**（§19 D6，M4 票 47）：確認框列出 Berth 在原本那一台擁有的物件——`berth-*` 分類各有幾個 torrent、Berth 加進去的站（Berth 加站時記下 `definitionName` 與站名，`SetupIndexer.added_sites`；票 47 之前加的沒記到）、Berth 設的介面登入（只有 Berth 記著雜湊的那一組）。使用者自己的分類與站不列。連不到那一台時列 Berth 記得的（分類取自 Route、站取自那份紀錄），照實說確認不了現況。**能移除的只有空的 `berth-*` 分類**，按下時重數；站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去。移除在確認框裡就做，取消換台也無妨：送單與 Route 檢查都先 `ensure_category`，照 Route 的路徑重建。
 
 閘門是 `tests/integration/test_setup_owned_writes.py`：整個精靈經 API 跑套件內一輪、既有兩輪（Jellyfin 初始化過與還沒），三台替身收到的每一個寫入都要對得上「Berth 擁有的物件 + 套件內的 bootstrap」那張白名單；既有那一輪的 bootstrap 只放行那台 Jellyfin 還沒初始化。它只看得到 Berth 經三個服務的 adapter 送出的寫入；預置的免密白名單、掛載的 key 與探測檔的自清不在它的範圍。
 
@@ -855,6 +857,8 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
   讀回 `torrents/categories` 的鍵是 **`download_path`**（不是駝峰）：設了是字串；停用兩版都是 `false`；沒設 5.2.3 是 `null`、4.4.5 **整個鍵不出現**。對已存在的分類再送 `createCategory` 兩版都是 409 `Unable to create category`。
 - `torrents/categories` 回傳鍵在 4.4.0–4.4.1 曾在 `savePath` / `save_path` 之間反覆，adapter 兩者都要接受。
+- `torrents/removeCategories`：表單欄位 `categories`，多個以 `
+` 分隔，任何情況都回 200（[WebUI API（qBittorrent 5.0）](https://github.com/qbittorrent/qbittorrent/wiki/WebUI-API-(qBittorrent-5.0)#remove-categories)，4.1 起的文件同一支；context7 `/qbittorrent/qbittorrent` 查核，2026-10-07）。分類裡的 torrent 會變成沒有分類，所以 Berth 只送重數過是空的 `berth-*`（M4 票 47）。
 - `createCategory` 的表單鍵是 `category`、`savePath`（Berth 另帶 `downloadPathEnabled`、`downloadPath`）；名稱空字串回 **400** `Category cannot be empty`，名稱不合法或建不起來（含同名已存在）回 **409** `Unable to create category`（查核 master 的 [torrentscontroller.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/api/torrentscontroller.cpp)，2026-09-08）。所以冪等要靠呼叫端先 `torrents/categories` 讀一次。
 - autoTMM 開啟時 save path 跟隨 category；`category_changed_tmm_enabled` 為真時改 category 路徑會**自動搬移所有該分類 torrent**。→ 本系統建立 category 後不再改其 savePath；使用者改 Route 目標時建立新 category，舊 Job 維持原位。
 - TRaSH 明確要求 category 模式必須 `Automatic`（autoTMM），否則下載不會進分類資料夾（[Basic-Setup](https://trash-guides.info/Downloaders/qBittorrent/Basic-Setup)）。

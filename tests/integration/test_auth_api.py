@@ -411,6 +411,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 兩邊的門在 `test_setup_api.py::TestGate` 各有一條。
     ("POST", "/setup/services/*"): Access.SETUP,
     ("POST", "/setup/services/*/test"): Access.SETUP,
+    # 換台確認框的遺留物清單與移除空分類（M4 票 47）。
+    ("GET", "/setup/services/*/leftovers"): Access.SETUP,
+    ("DELETE", "/setup/services/qbittorrent/leftovers/categories"): Access.SETUP,
     ("GET", "/setup/tmdb"): Access.SETUP,
     ("POST", "/setup/tmdb/test"): Access.SETUP,
     # M2 驗收第四條點名的六組（plan §11.3、票 16）：審核、Issue、rematch、對帳、刪除、重新入庫。

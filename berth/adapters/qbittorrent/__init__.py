@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
@@ -392,6 +392,12 @@ class QbittorrentClient(Protocol):
     async def create_category(self, name: str, save_path: str, *, download_path: str) -> None:
         """`torrents/createCategory`，帶分類自己的未完成目錄（M4 票 22）。同名的已經存在時回 409
         （兩版實測 `Unable to create category`），所以呼叫端要先讀再建——`ensure_category` 做這件事。
+        """
+        ...
+
+    async def remove_categories(self, names: Sequence[str]) -> None:
+        """`torrents/removeCategories`，一次刪多個（`categories` 以換行分隔，brief §20.2）。分類裡的
+        torrent 會變成沒有分類，所以呼叫端只送已經確認是空的（M4 票 47）。
         """
         ...
 

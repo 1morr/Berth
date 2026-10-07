@@ -120,6 +120,29 @@ export function retestService(kind: ServiceKind, restart = false): Promise<Setup
 }
 
 /**
+ * 換 qBittorrent / Prowlarr 的確認框列出、Berth 在現在這一台留下的東西（M4 票 47）：`berth-*` 分類與裡面
+ * 幾個 torrent、Berth 加的站、Berth 設的介面登入。`reachable: false` 時是 Berth 記得建過的，torrent 數是 `null`。
+ */
+export type Leftovers = Schemas['LeftoversOut']
+
+export type LeftoverKind = Exclude<ServiceKind, 'jellyfin'>
+
+export function leftoversQueryOptions(kind: LeftoverKind) {
+  return queryOptions({
+    queryKey: ['setup', 'leftovers', kind],
+    // 確認框收起就丟掉：換台之後再打開時，說的是另一台。畫出上一次的清單會讓移除鍵對著現在這一台、
+    // 卻寫著原本那一台的分類。
+    gcTime: 0,
+    queryFn: ({ signal }) => apiGet<Leftovers>(`/setup/services/${kind}/leftovers`, { signal }),
+  })
+}
+
+/** 只移除空的 `berth-*` 分類（後端按下時重數）；回的是移除之後的清單。 */
+export function removeEmptyCategories(): Promise<Leftovers> {
+  return apiDelete<Leftovers>('/setup/services/qbittorrent/leftovers/categories')
+}
+
+/**
  * `JellyfinStep`：plan §9.4 的七步，順序即宣告順序、也是執行順序。前六步在頁 1（擁有者）跑，
  * 建媒體庫在頁 3（M4 票 06、15）。
  *

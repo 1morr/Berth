@@ -1604,6 +1604,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/services/{kind}/leftovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Service Leftovers
+         * @description 換台之前列出 Berth 在現在這一台建的東西。Jellyfin 是 422：擁有者成立之後換不了來源。
+         */
+        get: operations["get_service_leftovers_api_setup_services__kind__leftovers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/services/qbittorrent/leftovers/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Service Leftover Categories
+         * @description 移除現在這一台 qBittorrent 上空的 `berth-*` 分類（有 torrent 的、別人的都不碰），回傳之後的清單。
+         */
+        delete: operations["delete_service_leftover_categories_api_setup_services_qbittorrent_leftovers_categories_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/jellyfin": {
         parameters: {
             query?: never;
@@ -3636,6 +3676,33 @@ export interface components {
          * @enum {string}
          */
         LedgerStatus: "ok" | "target_missing" | "source_missing" | "inode_mismatch" | "unlinked";
+        /** LeftoverCategoryOut */
+        LeftoverCategoryOut: {
+            /** Name */
+            name: string;
+            /** Torrents */
+            torrents: number | null;
+        };
+        /**
+         * LeftoversOut
+         * @description 換 qBittorrent / Prowlarr 的確認框列出的、Berth 在現在這一台留下的東西（M4 票 47）。
+         */
+        LeftoversOut: {
+            kind: components["schemas"]["ServiceKind"];
+            /** Base Url */
+            base_url: string;
+            /** Reachable */
+            reachable: boolean;
+            /** Categories */
+            categories: components["schemas"]["LeftoverCategoryOut"][];
+            /** Sites */
+            sites: string[];
+            /** Login */
+            login: string;
+            failure: components["schemas"]["StepFailure"] | null;
+            /** Error */
+            error: string;
+        };
         /** LibraryChoiceOut */
         LibraryChoiceOut: {
             /** Name */
@@ -8803,6 +8870,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_service_leftovers_api_setup_services__kind__leftovers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["ServiceKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeftoversOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_service_leftover_categories_api_setup_services_qbittorrent_leftovers_categories_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeftoversOut"];
                 };
             };
         };

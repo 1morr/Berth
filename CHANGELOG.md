@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **換一台 qBittorrent / Prowlarr 時列出 Berth 在原本那一台留下的東西**（M4 票 47，brief §19 D6）：確認框列出
+  `berth-` 分類（各有幾個 torrent）、Berth 加進去的站、Berth 設的介面登入；使用者自己的分類與站不列。原本那一台
+  連不到時列 Berth 記得建過的，並說明確認不了現況。可以一鍵移除空的 `berth-` 分類；有 torrent 的、不是 `berth-`
+  的不碰，站與登入只列出。新端點 `GET /api/setup/services/{kind}/leftovers` 與
+  `DELETE /api/setup/services/qbittorrent/leftovers/categories`。站的紀錄從這一版開始累積，之前加的站不會列出。
+  精靈頁 2 選過一台之後換另一台一律先確認（原本既有的那一台換走時沒有確認）。
+
 ### Changed
 
 - **精靈頁 2 測連線時就問 qBittorrent 看不看得到 `/data`**（M4 票 46）：只掛了 `/downloads` 的 qBittorrent 原本頁 2

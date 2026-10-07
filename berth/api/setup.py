@@ -62,6 +62,11 @@ from berth.services.jellyfin import (
     read_jellyfin_status,
     save_bundled_libraries,
 )
+from berth.services.leftovers import (
+    CategoriesNotRemovedError,
+    read_leftovers,
+    remove_empty_categories,
+)
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent
 from berth.services.qbittorrent import set_interface_login as set_qbittorrent_login
 from berth.services.routes import (
@@ -361,6 +366,58 @@ async def post_service_test(
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return _out(result, config)
+
+
+class LeftoverCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    #: 裡面幾個 torrent；那一台連不到時是 `null`（列的是 Berth 記得的）。
+    torrents: int | None
+
+
+class LeftoversOut(BaseModel):
+    """換 qBittorrent / Prowlarr 的確認框列出的、Berth 在現在這一台留下的東西（M4 票 47）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    kind: ServiceKind
+    base_url: str
+    #: 連得到那一台；`false` 時清單是 Berth 記得建過的，沒辦法確認現況。
+    reachable: bool
+    #: `berth-*` 分類（qBittorrent）。
+    categories: list[LeftoverCategoryOut]
+    #: Berth 加進去的站名（Prowlarr）。
+    sites: list[str]
+    #: Berth 設的介面帳號；沒有是空字串。
+    login: str
+    failure: StepFailure | None
+    error: str
+
+
+@router.get("/services/{kind}/leftovers")
+async def get_service_leftovers(
+    session: SessionDep, factory: ClientFactoryDep, kind: ServiceKind
+) -> LeftoversOut:
+    """換台之前列出 Berth 在現在這一台建的東西。Jellyfin 是 422：擁有者成立之後換不了來源。"""
+    try:
+        result = await read_leftovers(session, factory, kind)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return LeftoversOut.model_validate(result)
+
+
+@router.delete("/services/qbittorrent/leftovers/categories")
+async def delete_service_leftover_categories(
+    session: SessionDep, factory: ClientFactoryDep
+) -> LeftoversOut:
+    """移除現在這一台 qBittorrent 上空的 `berth-*` 分類（有 torrent 的、別人的都不碰）。
+    回傳移除之後的清單；連不到或 qBittorrent 沒收下是 502，帶原文。"""
+    try:
+        result = await remove_empty_categories(session, factory)
+    except CategoriesNotRemovedError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    return LeftoversOut.model_validate(result)
 
 
 def _out(result: SetupStatus, config: Config) -> SetupStatusOut:

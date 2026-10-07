@@ -456,14 +456,12 @@ describe('頁 2：qBittorrent', () => {
     await screen.findByText('這台 qBittorrent')
     await user.click(existingCard())
 
-    expect(screen.getByText(/Berth 已經設在原本那一台的登入留在那裡/)).toBeInTheDocument()
+    expect(screen.getByText(/換一台 qBittorrent：這一頁要重做/)).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '位址' })).toBeInTheDocument()
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
 
     await user.click(bundledCard())
-    expect(
-      screen.queryByText(/Berth 已經寫進原本那一台的偏好與登入留在那裡/),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/換一台 qBittorrent：這一頁要重做/)).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: '位址' })).not.toBeInTheDocument()
   })
 
