@@ -55,6 +55,14 @@
   收進「進階」，照樣能用。新增 `POST /api/setup/indexers/recommended`（只給套件內，既有回 422）；`SiteCheckOut` 多一個
   `stage`（`test` / `add`：結論來自測試還是新增）。
 
+### Fixed
+
+- **精靈上四句與實際行為不符的說明**（M4 票 53，2026-10-06 審計的「文件與實作不符」表）：套件內 qBittorrent 不收
+  Berth 時原本叫你重啟、說會補上白名單，但預置腳本不蓋掉你改過的設定，在 WebUI 關掉白名單之後重啟補不回來——現在說
+  到 qBittorrent 的「選項 → WebUI → 驗證」勾回那一格，不再給 `docker compose restart` 那一行。既有 Jellyfin 卡片補上頁 1
+  會建 API key「Berth」；Jellyfin 初始設定的手動步驟不再寫死繁體中文與台灣；頁 4 選擇前的說明補上你自己的 Prowlarr
+  也能加站，選了之後與回頭看的說明從「按一次加進去」改成「勾選通過的加進去」（實際是測過、勾選、確認才加）。
+
 ## [0.1.0] - 2026-10-07
 
 第一個正式版本：`ghcr.io/1morr/berth:0.1.0`，同時是 `:0.1` 與 compose 範本 pin 的 `:latest`。M0–M3 驗收完成；

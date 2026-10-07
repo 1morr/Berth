@@ -84,7 +84,7 @@ const zhHant = {
           elsewhere: '要帳號的站（私站、半私站）在 Prowlarr 自己的介面上加。',
         },
         existing: {
-          can: '改選套件內或既有、重新讀取站的清單、試搜；接的是 Prowlarr 時，也可以測試公開站、按一次加進它。加過的站不會被加第二次。',
+          can: '改選套件內或既有、重新讀取站的清單、試搜；也可以測試公開站、勾選通過的加進它。加過的站不會被加第二次。',
           elsewhere:
             '移除站、加要帳號的站、改介面登入，都在你那一台自己的介面上做；Berth 不移除你的站，也不碰它的登入。',
         },
@@ -220,7 +220,7 @@ const zhHant = {
       // 照實說會加什麼、什麼時候加。
       adds: {
         jellyfin:
-          '只在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。',
+          '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。',
         qbittorrent:
           '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
         prowlarr: '只加你在頁 4 勾起來的站；原本的站不動。',
@@ -311,8 +311,10 @@ const zhHant = {
         '你自己的 Prowlarr 要一把 API key 才連得上：在它的「設定 → 一般 → 安全性」複製，貼進上面的欄位再測一次。',
       prowlarrMount:
         'Berth 讀到的 API key 不被接受。Berth 每次測試都重讀唯讀掛載 /ext/prowlarr 裡的 config.xml，在 Prowlarr 重新產生 key 也跟得上：確認 berth 的 compose 有把 ${CONFIG_ROOT}/prowlarr 掛進去，再按「重新測試」。',
+      // 預置腳本只補設定檔裡沒有的鍵（M4 票 53 實跑：在 WebUI 關掉白名單之後重啟，它說 already configured），
+      // 所以補法是 WebUI 那一格，不給重啟指令（只有兩個鍵整個不見時有用，照著按多半白跑）。標籤見 brief §20.7。
       whitelist:
-        '套件內那一台要帳密：Berth 的免密白名單沒生效。重啟它讓預置腳本補上白名單，再重新測試：',
+        '套件內那一台要帳密：Berth 的免密白名單沒生效，多半是在它的 WebUI 關掉或改過了。打開它的「選項 → WebUI」，在「驗證」勾回「讓已在白名單中的 IP 子網路略過驗證」，底下清單裡預置的那一行（Berth 的位址，結尾是 /32）要留著，存檔後重新測試。重啟補不回來：預置腳本只補設定檔裡沒有的鍵，不蓋掉你改過的。',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
       dataUnseen:
         '你的 qBittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有——它多半沒掛 {{root}}（例如只掛了 /downloads），下載會寫進 Berth 拿不到的地方。在你原本那一份 compose（或 docker run 指令）的 qBittorrent 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值；容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後重新測試：',
@@ -559,7 +561,7 @@ const zhHant = {
     fix: {
       generic: '在你的 Jellyfin 上手動做這一步，然後回來重試。',
       public_info: '確認 Jellyfin 容器活著、版本是 12.0 以上，再確認位址與 port 沒有被改掉：',
-      configuration: '在 Jellyfin 自己的初始精靈把語言設成繁體中文、地區設成台灣：',
+      configuration: '在 Jellyfin 自己的初始精靈設定語言與 metadata 地區：',
       admin_user: '在 Jellyfin 自己的初始精靈建立管理員，帳密要與這裡 Jellyfin 那一頁一致：',
       libraries:
         '在 Jellyfin 的「媒體庫」手動建立清單上的媒體庫（名稱、類型與資料夾照左邊那一份），關掉即時監控、Specials 顯示名稱填 Specials：',
@@ -669,11 +671,11 @@ const zhHant = {
     title: 'Prowlarr',
     lede: {
       choose:
-        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用你已經有的站。',
+        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用它已經有的站，也可以加推薦的公開站。',
       bundled:
         '索引站決定 Berth 找得到什麼。按一次，Berth 測試推薦的站、把通過的加進去；加入之後試搜，不要的就地移除。要逐站挑選或加其他公開站，展開「進階」。這一步可以之後再說。',
       existing:
-        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；也可以測試推薦的公開站、按一次加進去。Berth 不移除你的站。這一步可以之後再說。',
+        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；也可以測試推薦的公開站、勾選通過的加進去。Berth 不移除你的站。這一步可以之後再說。',
     },
     skip: '之後再說',
     deferred: '之後再說',
@@ -3259,7 +3261,7 @@ const en: Translations<typeof zhHant> = {
             'Sites that need an account (private and semi-private) are added in Prowlarr itself.',
         },
         existing: {
-          can: 'Switch between bundled and existing, re-read the site list, run a trial search; with a Prowlarr you can also test public sites and add them in one press. Indexers already added are not added twice.',
+          can: 'Switch between bundled and existing, re-read the site list, run a trial search; you can also test public sites and add the ones you tick. Indexers already added are not added twice.',
           elsewhere:
             'Removing sites, adding ones that need an account and changing the interface login all happen in your instance’s own interface; Berth does not remove your sites or touch its login.',
         },
@@ -3395,7 +3397,7 @@ const en: Translations<typeof zhHant> = {
       lede: 'The {{service}} you already run. Berth leaves your settings alone and {{adds}}',
       adds: {
         jellyfin:
-          'only adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay). If it has not run its own startup wizard yet, page 1 runs it with the account you enter.',
+          'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay). If it has not run its own startup wizard yet, page 1 runs it with the account you enter.',
         qbittorrent:
           'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
         prowlarr: 'only adds the sites you tick on page 4; the sites already there stay.',
@@ -3490,7 +3492,7 @@ const en: Translations<typeof zhHant> = {
       prowlarrMount:
         'Prowlarr does not accept the API key Berth read. Berth rereads config.xml from the read-only mount /ext/prowlarr on every test, so a key regenerated in Prowlarr is picked up: check that berth’s compose mounts ${CONFIG_ROOT}/prowlarr, then press “Test again”.',
       whitelist:
-        'The bundled one asks for credentials: Berth’s password-free allowlist did not take. Restart it so the preseed script adds the allowlist, then test again:',
+        'The bundled one asks for credentials: Berth’s password-free allowlist is not in effect, most likely because it was turned off or edited in its WebUI. Open Options → WebUI and, under Authentication, tick “Bypass authentication for clients in whitelisted IP subnets” again; keep the preseeded line in the list below it (Berth’s address, ending in /32). Save, then test again. A restart will not bring it back: the preseed script only adds keys missing from the config file and leaves the ones you changed.',
       bundledDown:
         'The container is not up yet. Check on the host that it is running, and read its log:',
       dataUnseen:
@@ -3877,11 +3879,11 @@ const en: Translations<typeof zhHant> = {
     title: 'Prowlarr',
     lede: {
       choose:
-        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one paste its API key and Berth uses the indexers you already have.',
+        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one, paste its API key; Berth uses the indexers it already has, and you can also add recommended public sites.',
       bundled:
         'Indexers decide what Berth can find. One press tests the recommended sites and adds the ones that pass; then run a trial search and remove the ones you do not want. To pick sites one by one or add other public sites, open Advanced. This step can wait.',
       existing:
-        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; you can also test the recommended public sites and add them in one press. Berth never removes your sites. This step can wait.',
+        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; you can also test the recommended public sites and add the ones you tick. Berth never removes your sites. This step can wait.',
     },
     skip: 'Do this later',
     deferred: 'Deferred',

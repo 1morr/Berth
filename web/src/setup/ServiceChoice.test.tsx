@@ -336,12 +336,13 @@ describe('套件內那一台不收 Berth 的憑證（M4 票 27）', () => {
     expect(screen.queryByText('docker compose restart prowlarr')).toBeNull()
   })
 
-  it('qBittorrent：照舊是白名單與重啟', () => {
+  it('qBittorrent：說白名單，不給重啟指令（預置腳本補不回關掉的白名單，M4 票 53）', () => {
     mount('qbittorrent', [
       chosen({ ...rejected, kind: 'qbittorrent', base_url: 'http://qbittorrent:8080' }),
     ])
 
     expect(screen.getByText(i18next.t('connection.fix.whitelist'))).toBeVisible()
+    expect(screen.queryByText('docker compose restart qbittorrent')).toBeNull()
     expect(screen.queryByText(i18next.t('connection.fix.prowlarrMount'))).toBeNull()
   })
 })

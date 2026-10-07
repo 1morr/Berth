@@ -597,6 +597,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - **qBittorrent 的 WebUI port 內外兩側一起換**：Host 檢查除了網域還比對 port，`*` 也不放過 port 不符。發佈成 `18080:8080` 之類的偏移，使用者開 `localhost:18080` 會直接吃 401，而原因只寫在容器 log 裡（brief §20.7）。所以 compose 以 `QBITTORRENT_WEBUI_PORT` 同時設發佈的兩側與 `WEBUI_PORT`，compose 內網上那一台也跟著在這個 port；Berth 從同名環境變數組出偵測的位址（`http://qbittorrent:<port>`），判成套件內之後第 4 步與 Route 檢查連的是判定記下的那一條。**不預置 `HostHeaderValidation=false`**：它是防 DNS rebinding 的那一道，內外一致之後本來就用不到。README 的疑難排解有這一條。
 - save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、temp path 都**不預置、也不套用**（M4 票 22、32）：Berth 送單時逐個 torrent 帶 `autoTMM=true`，路徑與未完成目錄開在 Berth 的分類上，所以全域預設值不影響正確性。密碼不預置，由精靈 qBittorrent 頁設（§9.3）。
 - 使用者在 qBittorrent 介面改任何東西都可以，Berth 不看它的全域偏好。
+- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（M4 票 53 實跑，brief §20.7）。所以套件內 qBittorrent 回 `auth_required` 時，補法說 WebUI「選項 → WebUI → 驗證」那一格（`connection.fix.whitelist`），不給重啟指令：重啟只在兩個鍵整個不在設定檔裡時有用，照著按多半白跑。
 
 **Prowlarr**：不預置。Berth 從唯讀掛載的 `/ext/prowlarr/config.xml` 讀 `<ApiKey>`（Prowlarr 首次啟動自動產生）；讀不到時精靈退回手動貼上。也支援 `PROWLARR__AUTH__APIKEY` 環境變數的部署方式。
 

@@ -892,8 +892,8 @@ function fixOf(
     // 掛載卻沒進來時，說的是掛載。
     lede = t('connection.fix.prowlarrMount')
   } else if (bundled && reason === 'auth_required') {
+    // 補法在 WebUI：預置腳本缺鍵才補，重啟補不回使用者關掉的白名單（M4 票 53）。
     lede = t('connection.fix.whitelist')
-    remedy = <CopyLines commands={[`docker compose restart ${kind}`]} />
   } else if (bundled && reason === 'version_unsupported') {
     lede = t('connection.fix.outdatedBundled', outdated)
     remedy = (
