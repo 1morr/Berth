@@ -10,6 +10,7 @@ import {
 } from './routeChecks'
 import { BAN_DEFAULTS } from './services'
 import { StepLine } from './StepLine'
+import { Timestamp } from './Timestamp'
 
 /**
  * 一個 Route 的六條纜繩（plan §9.5）。
@@ -60,6 +61,7 @@ export function RouteCheckList({
               ...BAN_DEFAULTS,
             })}
             commands={remedy.commands}
+            note={check === 'download_visible' && route.probe_carried && <Carried route={route} />}
           >
             {check === 'hardlink' && route.cross_device && (
               <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('routes.fix.crossDevice')}</p>
@@ -71,6 +73,24 @@ export function RouteCheckList({
         )
       })}
     </ol>
+  )
+}
+
+/**
+ * 健康迴圈沿用的探針結論（M4 票 19、50）：它不是這一輪問到的，說出是哪一次、為什麼沒重問、去哪裡重問。
+ * 票 50 之前的結論沒有時間，`Timestamp` 說「沒有紀錄」。
+ */
+function Carried({ route }: { route: RouteView }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      <p>
+        {t('routes.carried.label')} · <Timestamp at={route.probed_at} />
+      </p>
+      <p className="mt-1 max-w-prose">
+        {t('routes.carried.why', { recheck: t('routeSettings.recheck') })}
+      </p>
+    </>
   )
 }
 

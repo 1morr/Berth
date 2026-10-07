@@ -26,6 +26,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
+from typing import TypeGuard
 
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -155,6 +156,10 @@ class RouteView:
     checked_at: datetime | None
     #: 最後一次全綠的時間（brief §16.2）。
     last_ok_at: datetime | None
+    #: 最後一次真的問了 qBittorrent 探針的時間（M4 票 50）；票 50 之前的結論不知道是何時。
+    probed_at: datetime | None
+    #: `download_visible` 這一條是沿用上一次的結論（健康迴圈不跑探針，票 19）。
+    probe_carried: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -720,10 +725,17 @@ async def _run_checks(
         signed_out = await try_sign_in(qbittorrent, qbittorrent_settings)
         for plan_row, route in zip(planned, routes, strict=True):
             previous = previous_of[route.id]
-            carried = None if probe_qbittorrent else _last_probe(previous)
+            last = _last_probe(previous)
+            carried = None
+            if not probe_qbittorrent:
+                carried = last or SetupStep(
+                    key=RouteCheck.DOWNLOAD_VISIBLE.value, status=StepStatus.PENDING
+                )
 
             async def progress(checks: list[SetupStep], route: Route = route) -> None:
-                await _progress(session, route, checks)
+                await _progress(
+                    session, route, checks, probed_at=moment if probe_qbittorrent else None
+                )
 
             health = await _check(
                 plan_row,
@@ -736,6 +748,14 @@ async def _run_checks(
             )
             passed = all(row.status is not StepStatus.FAILED for row in health.checks)
             health.checked_at = moment
+            # 這一輪真的問到了才換掉探針的結論；沒問、或斷在它之前的一輪留著上一次的（M4 票 50）。
+            # `probed_at` 與 `checked_at` 是同一個 `moment`：`_probe_carried` 靠兩者相等認出
+            # 「這一輪問的」。
+            probe = _check_row(health, RouteCheck.DOWNLOAD_VISIBLE)
+            if probe_qbittorrent and _concluded(probe):
+                health.probe, health.probed_at = probe, moment
+            else:
+                health.probe, health.probed_at = last, previous.probed_at
             # 沒過就留住上一次成功的時間，別讓它看起來從來沒通過（brief §16.2）。
             health.last_ok_at = moment if passed else previous.last_ok_at
             # 逐個 commit：三個 Route 裡的第二個中途被刪掉時，第一個的結果仍然留得下來
@@ -749,16 +769,26 @@ async def _run_checks(
         await jellyfin.aclose()
 
 
-async def _progress(session: AsyncSession, route: Route, checks: list[SetupStep]) -> None:
+async def _progress(
+    session: AsyncSession,
+    route: Route,
+    checks: list[SetupStep],
+    *,
+    probed_at: datetime | None = None,
+) -> None:
     """一條纜繩開跑前把這條 Route 寫成「跑到這裡」並 commit（M4 票 43）。
 
     頁 3 輪詢 `GET /setup/routes` 就看得到這條 Route 跑到第幾條，與 Jellyfin 序列「做之前先寫
     running」同一個做法。總結的 `health_status` 與兩個時間不動，跑完才換。
     """
     previous = RouteHealth.model_validate(route.health_detail_json or {})
-    interim = RouteHealth(
-        checks=checks, checked_at=previous.checked_at, last_ok_at=previous.last_ok_at
-    )
+    # 只換 `checks`：兩個時間與探針的結論（M4 票 50）都留著，被打斷的一輪不該把它們弄丟。
+    interim = previous.model_copy(update={"checks": checks})
+    # 這一輪真的問了（`probed_at` 是它的 `moment`）而且已經問到：剛探到的結論現在就存，之後被打斷
+    # 也不會退回上一次的。
+    probe = _check_row(interim, RouteCheck.DOWNLOAD_VISIBLE)
+    if probed_at is not None and _concluded(probe):
+        interim.probe, interim.probed_at = probe, probed_at
     async with _stale_write_as_missing(session, route.id):
         route.health_detail_json = interim.model_dump(mode="json")
         await session.commit()
@@ -1144,17 +1174,39 @@ class _Checker:
         return StepStatus.OK, f"dev={facts.device} · inode={facts.inode} · free={free}"
 
 
-def _last_probe(previous: RouteHealth) -> SetupStep:
-    """上一次 `download_visible` 的結論；從來沒問過（票 19 之前建的 Route）是 `pending`。
+def _last_probe(previous: RouteHealth) -> SetupStep | None:
+    """上一次真的問了 qBittorrent 的 `download_visible` 結論；從來沒問到過是 `None`。
 
-    **`running` 不是結論**（M4 票 43）：那是被打斷的一輪（容器重啟）留下的。原樣沿用的話它每一輪都
-    帶下去，畫面永遠說「檢查中」、頁 3 永遠輪詢；當成沒問過，等下一次真的探測。
+    票 50 之前存下的沒有 `probe`，結論就在 `checks` 那一條（時間不明）。**`running` 與 `pending`
+    不是結論**（M4 票 43）：前者是被打斷的一輪（容器重啟）留下的，原樣沿用的話畫面永遠說「檢查中」、
+    頁 3 永遠輪詢；後者是沒問到。
     """
-    key = RouteCheck.DOWNLOAD_VISIBLE.value
-    last = next((row for row in previous.checks if row.key == key), None)
-    if last is None or last.status is StepStatus.RUNNING:
-        return SetupStep(key=key, status=StepStatus.PENDING)
-    return last
+    if previous.probe is not None:
+        return previous.probe
+    last = _check_row(previous, RouteCheck.DOWNLOAD_VISIBLE)
+    return last if _concluded(last) else None
+
+
+def _check_row(health: RouteHealth, check: RouteCheck) -> SetupStep | None:
+    return next((row for row in health.checks if row.key == check.value), None)
+
+
+def _concluded(row: SetupStep | None) -> TypeGuard[SetupStep]:
+    """問到了結論：不是還沒問（`pending`），也不是問到一半（`running`）。"""
+    return row is not None and row.status not in (StepStatus.PENDING, StepStatus.RUNNING)
+
+
+def _probe_carried(health: RouteHealth) -> bool:
+    """這一輪的 `download_visible` 是沿用的結論（M4 票 50）：有結論，但不是這一輪問到的。
+
+    「這一輪問的」靠 `probed_at == checked_at` 認（`_run_checks` 兩者寫同一個 `moment`）。票 50 之前
+    存下的結論沒有時間（`probed_at` 是 `None`），被迴圈沿用過一次之後也算沿用。
+    """
+    row = _check_row(health, RouteCheck.DOWNLOAD_VISIBLE)
+    if any(step.status is StepStatus.RUNNING for step in health.checks):
+        # 跑到一半（或被打斷）的那一份：兩個時間還是上一輪的，比不出這一條是不是這一輪問的。
+        return False
+    return health.probe is not None and _concluded(row) and health.probed_at != health.checked_at
 
 
 def _library_key(item_id: str, name: str) -> str:
@@ -1260,6 +1312,8 @@ def _route_view(route: Route, complete_root: str) -> RouteView:
         cross_device=health.cross_device,
         checked_at=health.checked_at,
         last_ok_at=health.last_ok_at,
+        probed_at=health.probed_at,
+        probe_carried=_probe_carried(health),
     )
 
 

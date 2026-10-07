@@ -4600,6 +4600,10 @@ export interface components {
             checked_at: string | null;
             /** Last Ok At */
             last_ok_at: string | null;
+            /** Probed At */
+            probed_at: string | null;
+            /** Probe Carried */
+            probe_carried: boolean;
         };
         /**
          * RouteRefusal

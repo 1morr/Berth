@@ -27,6 +27,7 @@ export function StepLine({
   status: statusText,
   fix,
   commands = [],
+  note,
   children,
 }: {
   label: string
@@ -47,6 +48,8 @@ export function StepLine({
   /** 失敗時的補法。手動步驟本身在 `commands`。 */
   fix?: string
   commands?: readonly string[]
+  /** 狀態字之外要先說的一句，紅綠都顯示（健康迴圈沿用的探針結論，M4 票 50）。 */
+  note?: ReactNode
   /** 失敗區塊裡補法之後的補充（例如「重試只會跑沒完成的那幾步」）。 */
   children?: ReactNode
 }) {
@@ -69,6 +72,7 @@ export function StepLine({
         {summary && <span className="value text-xs wrap-anywhere text-ink">{summary}</span>}
         {!failed && <TechnicalDetails inline lines={technical} />}
       </div>
+      {note && <div className="-mt-1 px-4 pb-3 text-xs text-ink-dim">{note}</div>}
 
       {failed && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">

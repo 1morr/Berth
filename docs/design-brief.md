@@ -995,7 +995,7 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 - 看不到時 qBittorrent **不替它建目錄**，移除之後兩版都沒留下任何東西；`deleteFiles=false` 之後小檔還在。
 - `error` 是「檔在、讀不了」（權限），與看不到分得開；Berth 把它說成權限問題而不是掛載。
 - 看不到的那一面沒有一個「校驗完了」的狀態可等（4.4.5 第一次讀就已經是結論），所以 Berth 以「不在校驗或排隊中、進度不到 100%、state 3 秒不變」判看不到，整個探針最多等 20 秒（qBittorrent 預設一次只校驗一個 torrent，別的在校驗時要排隊）。
-- **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，4.4.5 與 5.2.3 同一個實驗裡實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**——每條 Route 每 5 分鐘一次，會變成使用者那邊的通知洪水。「按下之後會」說出這件事。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理只在那幾個時機觸發，沒有另外實測。
+- **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，4.4.5 與 5.2.3 同一個實驗裡實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**——每條 Route 每 5 分鐘一次，會變成使用者那邊的通知洪水。「按下之後會」說出這件事；健康頁那一條說「沿用上一次的結論」與那一次的時間（M4 票 50，使用者 2026-10-06 確認）。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理只在那幾個時機觸發，沒有另外實測。
 - 探針 torrent 不掛分類、不帶 tag（tag 一建就留在使用者的清單裡；`berth` 那一個會讓 poller 把它當成 Berth 的下載），名字是 `.berth-probe-*`，停住、幾秒內就移除。
 
 **校驗不完的探針：頁 2 問「看不看得到 `/data`」**（2026-10-07 實測 4.4.5 與 5.2.3，M4 票 46；`scripts/experiments/qbittorrent_unfinished_probe.py`，送的是 Berth 自己的 `probe_torrent(unfinished=True)`，報告 `.local/experiments/results/qbittorrent-unfinished-probe-*.json`）

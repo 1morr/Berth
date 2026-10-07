@@ -296,6 +296,8 @@ export function routeView(overrides: Partial<RouteView> = {}): RouteView {
     cross_device: false,
     checked_at: CHECKED_AT,
     last_ok_at: CHECKED_AT,
+    probed_at: CHECKED_AT,
+    probe_carried: false,
     ...overrides,
   }
 }

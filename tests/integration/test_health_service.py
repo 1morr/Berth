@@ -17,10 +17,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.jellyfin import JellyfinLibrary
 from berth.adapters.qbittorrent import IpBannedError, QbittorrentVersion
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.domain import HealthStatus, ServiceKind, ServiceOrigin, StepStatus
-from berth.models import HealthSettings, IndexerSettings, QbittorrentSettings, Route
+from berth.domain import HealthStatus, RouteCheck, ServiceKind, ServiceOrigin, StepStatus
+from berth.models import HealthSettings, IndexerSettings, QbittorrentSettings, Route, RouteHealth
 from berth.services.health import (
     CHECK_INTERVAL,
     HealthReport,
@@ -30,7 +31,7 @@ from berth.services.health import (
     overall_status,
     read_health,
 )
-from berth.services.routes import RouteView, build_routes
+from berth.services.routes import RouteView, build_routes, check_routes, read_route_status
 from berth.services.settings import read_settings, write_settings
 from tests.integration.arrange import NOW, arrange, factory_for
 from tests.integration.factories import FakeClientFactory
@@ -326,6 +327,132 @@ class TestRoutes:
         row = next(step for step in route.checks if step.step == "download_visible")
         assert row.status is StepStatus.FAILED
         assert "qBittorrent cannot see" in row.error
+
+    async def test_the_loop_says_the_probe_is_carried_and_from_when(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 50：迴圈沒問的那一條要說「沿用」與那一次的時間，不是看起來像剛剛才問過。"""
+        factory = await ready(session, roots)
+        wizard = {route.slug: route for route in (await read_route_status(session)).routes}
+        assert all(not route.probe_carried for route in wizard.values())
+
+        report = await check_health(session, factory, now=NOW)
+
+        for route in report.routes:
+            assert route.probe_carried is True
+            assert route.probed_at is not None
+            assert route.probed_at == wizard[route.slug].checked_at
+            assert route.checked_at is not None and route.checked_at > route.probed_at
+
+    async def test_a_probe_that_never_ran_is_not_carried(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """反向：票 19 之前建的 Route 從沒探過，迴圈那一輪仍是「尚未執行」，不說沿用。"""
+        factory = await ready(session, roots)
+        for stored in (await session.scalars(select(Route))).all():
+            health = RouteHealth.model_validate(stored.health_detail_json)
+            stored.health_detail_json = {
+                "checks": [
+                    {"key": row.key, "status": "pending"}
+                    if row.key == RouteCheck.DOWNLOAD_VISIBLE.value
+                    else row.model_dump(mode="json")
+                    for row in health.checks
+                ],
+                "checked_at": health.checked_at.isoformat() if health.checked_at else None,
+            }
+        await session.commit()
+
+        report = await check_health(session, factory, now=NOW)
+
+        for route in report.routes:
+            row = next(step for step in route.checks if step.step == "download_visible")
+            assert row.status is StepStatus.PENDING
+            assert route.probe_carried is False
+            assert route.probed_at is None
+
+    async def test_a_recheck_cut_short_before_the_probe_keeps_its_conclusion(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """「重新檢查」斷在探針之前（qBittorrent 一時連不到）：那一輪探針是 `pending`，但上一次的
+        結論仍在；修好之後的迴圈沿用它，不從此停在 5 / 6（精靈審計 S5）。"""
+        factory = await ready(session, roots)
+        probed_at = (await read_route_status(session)).routes[0].checked_at
+        factory.qbittorrent_.error = ServiceUnavailableError("qbittorrent: connection refused")
+        await check_routes(session, factory)
+
+        factory.qbittorrent_.error = None
+        report = await check_health(session, factory, now=NOW)
+
+        route = report.routes[0]
+        row = next(step for step in route.checks if step.step == "download_visible")
+        assert row.status is StepStatus.OK
+        assert route.probe_carried is True
+        assert route.probed_at == probed_at
+
+    async def test_a_recheck_that_probes_is_not_carried_and_the_loop_carries_it(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """「重新檢查」真的問了：那一輪的時間就是探針的時間，不說沿用；之後的迴圈沿用的是這一次。"""
+        factory = await ready(session, roots)
+        await check_health(session, factory, now=NOW)
+
+        routes = {route.slug: route for route in await check_routes(session, factory)}
+        for route in routes.values():
+            assert route.probe_carried is False
+            assert route.probed_at == route.checked_at
+
+        report = await check_health(session, factory, now=NOW + CHECK_INTERVAL)
+        for route in report.routes:
+            assert route.probe_carried is True
+            assert route.probed_at == routes[route.slug].checked_at
+
+    async def test_a_recheck_cut_short_after_the_probe_keeps_the_new_conclusion(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """「重新檢查」探完之後被打斷（容器重啟）：剛探到的結論不丟，下一輪迴圈沿用的是它。中途那一份
+        也不說沿用——上一輪是迴圈的話，舊的兩個時間不相等，看起來就像沿用。"""
+        factory = await ready(session, roots)
+        await check_health(session, factory, now=NOW)
+        wizard = (await read_route_status(session)).routes[0].probed_at
+        assert wizard is not None
+        libraries = factory.jellyfin_.libraries
+
+        async def crash() -> tuple[JellyfinLibrary, ...]:
+            raise RuntimeError("berth restarted")
+
+        # 替身的方法是實例屬性：第 4 條（向 Jellyfin 現查媒體庫）時整輪斷掉，探針已經問完。
+        factory.jellyfin_.libraries = crash  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError):
+            await check_routes(session, factory)
+        cut = (await read_route_status(session)).routes[0]
+        assert cut.probe_carried is False
+
+        factory.jellyfin_.libraries = libraries  # type: ignore[method-assign]
+        report = await check_health(session, factory, now=NOW + CHECK_INTERVAL)
+
+        route = report.routes[0]
+        assert route.probe_carried is True
+        assert route.probed_at is not None and route.probed_at > wizard
+
+    async def test_a_conclusion_stored_before_ticket_50_is_carried_without_a_time(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 50 之前存下的沒有 `probe`：結論在 `checks` 裡，迴圈照樣沿用，只是說不出是何時。"""
+        factory = await ready(session, roots)
+        for stored in (await session.scalars(select(Route))).all():
+            legacy = dict(stored.health_detail_json or {})
+            legacy.pop("probe")
+            legacy.pop("probed_at")
+            stored.health_detail_json = legacy
+        await session.commit()
+
+        report = await check_health(session, factory, now=NOW)
+
+        for route in report.routes:
+            row = next(step for step in route.checks if step.step == "download_visible")
+            assert row.status is StepStatus.OK
+            assert route.probe_carried is True
+            assert route.probed_at is None
 
     async def test_no_routes_at_all_is_unknown_not_degraded(
         self, session: AsyncSession, roots: dict[str, Path]

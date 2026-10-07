@@ -31,6 +31,11 @@ class RouteHealth(BaseModel):
     #: 最後一次每一條纜繩全綠的時間。與服務那一列同一個道理——「現在紅著，但十分鐘前還好好的」
     #: 與「從來沒通過」對維運是兩件事（brief §16.2、票 10）。
     last_ok_at: datetime | None = None
+    #: 最後一次**真的問了** qBittorrent 的 `download_visible` 結論與那一刻（M4 票 50）。健康迴圈
+    #: 不跑探針（票 19），沿用的是它；`checks` 那一條會被斷在它之前的一輪洗成 `pending`，所以另存。
+    #: 票 50 之前存下的沒有它（`routes._last_probe` 從 `checks` 讀，時間不明）。
+    probe: SetupStep | None = None
+    probed_at: datetime | None = None
 
 
 class Route(Base):

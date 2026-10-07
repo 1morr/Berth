@@ -20,6 +20,11 @@
 
 ### Changed
 
+- **健康頁的 Route 說出 qBittorrent 探針是沿用的**（M4 票 50）：5 分鐘的自動檢查不跑探針（會觸發 qBittorrent 的「torrent
+  完成時執行外部程式」），那一條原本看起來像剛問過；現在說「沿用上一次的結論」與那一次的時間，從沒問過的才是
+  「尚未執行」。斷在探針之前的一次「重新檢查」不再洗掉上一次的結論，修好之後不會從此停在 5 / 6。Route 的 API 回應多
+  `probed_at` 與 `probe_carried`。
+
 - **精靈頁 2 測連線時就問 qBittorrent 看不看得到 `/data`**（M4 票 46）：只掛了 `/downloads` 的 qBittorrent 原本頁 2
   是綠的、要到頁 3 才紅；現在頁 2 就紅，補法與頁 3 同一組（在原本那一份多加一條 `${DATA_ROOT}:/data`）。測試時 Berth
   在 `/data` 放一個探測檔、請 qBittorrent 停住校驗一次後移除；這個探針校驗不會跑完，不觸發「torrent 完成時執行外部

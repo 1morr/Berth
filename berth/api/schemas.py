@@ -69,6 +69,10 @@ class RouteOut(BaseModel):
     checked_at: datetime | None
     #: 最後一次每一條纜繩全綠的時間（brief §16.2）。
     last_ok_at: datetime | None
+    #: 最後一次真的問了 qBittorrent 探針的時間（M4 票 50）。票 50 之前的結論沒有記，是 `null`。
+    probed_at: datetime | None
+    #: `download_visible` 這一條沿用上一次的結論：5 分鐘的健康迴圈不跑探針（M4 票 19、50）。
+    probe_carried: bool
 
 
 class InterfaceLoginIn(BaseModel):

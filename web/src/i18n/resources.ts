@@ -880,6 +880,11 @@ const zhHant = {
     tally: '{{passed}} / {{total}} 通過',
     // 跑到一半（M4 票 43）：每條纜繩開跑前後端先寫 running，頁 3 輪詢它。
     tallyRunning: '第 {{at}} / {{total}} 條 · {{check}}',
+    // 健康迴圈不跑探針（M4 票 19、50）：那一條是沿用的結論，說出是哪一次。
+    carried: {
+      label: '沿用上一次的結論',
+      why: '每 5 分鐘的自動檢查不重跑這一條：它會觸發 qBittorrent 的「torrent 完成時執行外部程式」。要再問一次，到 Route 設定按「{{recheck}}」。',
+    },
     waiting: '等待中',
     autoRun: '預設清單沒改過，進這一頁就開始建立並檢查。要多一個媒體庫，等它跑完再展開清單加一列。',
     listSummary: '媒體庫清單',
@@ -4094,6 +4099,10 @@ const en: Translations<typeof zhHant> = {
     list: 'Routes on this page',
     tally: '{{passed}} / {{total}} passed',
     tallyRunning: 'Check {{at}} of {{total}} · {{check}}',
+    carried: {
+      label: 'Carried over from the last probe',
+      why: 'The automatic check every 5 minutes skips this one: it would fire qBittorrent’s “Run external program on torrent finished”. To ask again, press “{{recheck}}” in route settings.',
+    },
     waiting: 'Waiting',
     autoRun:
       'The default list is unchanged, so building and checking started as you arrived. To add a library, wait for it to finish, then open the list and add a row.',
