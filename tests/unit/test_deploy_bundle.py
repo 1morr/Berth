@@ -77,11 +77,14 @@ def test_the_latest_name_is_the_same_bundle(tmp_path: Path) -> None:
     assert (tmp_path / LATEST_NAME).read_bytes() == bundle.read_bytes()
 
 
-def test_the_preseed_script_stays_executable(tmp_path: Path) -> None:
+def test_the_preseed_scripts_stay_executable(tmp_path: Path) -> None:
     with zipfile.ZipFile(build("1.2.3", tmp_path)) as archive:
-        script = archive.getinfo(f"{ROOT_DIR}/preseed/qbittorrent/10-berth.sh")
+        scripts = [
+            info for info in archive.infolist() if info.filename.startswith(f"{ROOT_DIR}/preseed/")
+        ]
 
-    assert script.external_attr >> 16 & 0o111
+    assert scripts
+    assert all(info.external_attr >> 16 & 0o111 for info in scripts)
 
 
 # --- 規則本身的變異驗證：造一個違規證明它會紅，改一次無關的寫法證明它不會紅。 ---
@@ -96,6 +99,13 @@ def deploy_copy(tmp_path: Path) -> Path:
 
 def _bundle(deploy: Path, version: str = "1.2.3") -> Path:
     return build(version, deploy.parent / "dist", deploy)
+
+
+@pytest.mark.parametrize("member", ["docker-compose.yml", ".env.example"])
+def test_a_missing_top_level_file_is_caught(deploy_copy: Path, member: str) -> None:
+    (deploy_copy / member).unlink()
+
+    assert violations(_bundle(deploy_copy)) == [f"missing {member}"]
 
 
 def test_a_missing_preseed_directory_is_caught(deploy_copy: Path) -> None:

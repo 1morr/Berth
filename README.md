@@ -126,7 +126,7 @@ qBittorrent，媒體庫路徑也要重新檢查。
 | Jellyfin | `JELLYFIN_PORT`（8096） | 「在 Jellyfin 開啟」開的就是這個 port |
 | Prowlarr | `PROWLARR_PORT`（9696） | |
 
-port 跟這台機器上別的東西撞到時（同一台還跑著另一套 Berth、開發環境），改 `.env` 的這五個變數再
+port 跟這台機器上別的東西撞到時（例如開發環境），改 `.env` 的這五個變數再
 `docker compose up -d`，**不要改 compose 檔**。`.env` 只放這五個 Berth 在容器裡看不到的宿主端事實；
 服務位址與憑證、下載目錄、媒體庫路徑都在精靈與設定頁裡改（brief §19）。
 **`QBITTORRENT_WEBUI_PORT` 要在跑精靈之前定下來**：Berth 連套件內 qBittorrent 的位址是精靈頁 2 選「套件內」
@@ -184,7 +184,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 ### 外部服務的前提
 
-- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。全域偏好（預設儲存路徑、autoTMM、未完成目錄）Berth 一個都不寫：送單逐個 torrent 開自動管理、放進 `berth-*` 分類，分類帶自己的完成目錄與 `downloadPath`（`/data/torrent/incomplete/<slug>`）。腳本不覆蓋任何已經有值的設定。
+- **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由部署套件裡的 `preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。全域偏好（預設儲存路徑、autoTMM、未完成目錄）Berth 一個都不寫：送單逐個 torrent 開自動管理、放進 `berth-*` 分類，分類帶自己的完成目錄與 `downloadPath`（`/data/torrent/incomplete/<slug>`）。腳本不覆蓋任何已經有值的設定。
 - **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈 Jellyfin 那一頁與健康頁都是紅燈，不會被接進來。
   - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
   - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
@@ -305,9 +305,9 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `CONFIG_ROOT` | `/config` | `berth.db`、設定與 log。啟動時自動建立並套用 migration |
 | `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
 | `PORT` | `8383` | 對外的唯一 port |
-| `JELLYFIN_PORT` | `8096` | 套件內 Jellyfin 在宿主上發佈的 port；「在 Jellyfin 開啟」沒填對外網址時開這個 port。compose 從 `deploy/.env` 的同名變數傳進來 |
-| `PROWLARR_PORT` | `9696` | 套件內 Prowlarr 在宿主上發佈的 port；精靈頁 4 與設定頁「在 Prowlarr 加私站」的連結開這個 port。compose 從 `deploy/.env` 的同名變數傳進來 |
-| `QBITTORRENT_WEBUI_PORT` | `8080` | 套件內 qBittorrent 的 WebUI port（容器內外同一個號碼）；精靈頁 2 選套件內時連 `http://qbittorrent:<它>`。compose 從 `deploy/.env` 的同名變數傳進來 |
+| `JELLYFIN_PORT` | `8096` | 套件內 Jellyfin 在宿主上發佈的 port；「在 Jellyfin 開啟」沒填對外網址時開這個 port。compose 從部署套件 `.env` 的同名變數傳進來 |
+| `PROWLARR_PORT` | `9696` | 套件內 Prowlarr 在宿主上發佈的 port；精靈頁 4 與設定頁「在 Prowlarr 加私站」的連結開這個 port。compose 從部署套件 `.env` 的同名變數傳進來 |
+| `QBITTORRENT_WEBUI_PORT` | `8080` | 套件內 qBittorrent 的 WebUI port（容器內外同一個號碼）；精靈頁 2 選套件內時連 `http://qbittorrent:<它>`。compose 從部署套件 `.env` 的同名變數傳進來 |
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 | `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
 | `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |

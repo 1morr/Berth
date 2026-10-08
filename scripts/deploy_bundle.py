@@ -53,7 +53,7 @@ def build(version: str, out_dir: Path, deploy: Path = DEPLOY) -> Path:
     """寫出 `berth-deploy-<version>.zip` 與同內容的 `berth-deploy.zip`，回傳前者。"""
     out_dir.mkdir(parents=True, exist_ok=True)
     bundle = out_dir / bundle_name(version)
-    with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(bundle, "w") as archive:
         for path in sorted(_files(deploy), key=lambda p: p.relative_to(deploy).as_posix()):
             info = zipfile.ZipInfo(f"{ROOT_DIR}/{path.relative_to(deploy).as_posix()}", _EPOCH)
             info.compress_type = zipfile.ZIP_DEFLATED
@@ -68,11 +68,10 @@ def build(version: str, out_dir: Path, deploy: Path = DEPLOY) -> Path:
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
-    parser.add_argument("version", help="版本號，不含 v（0.2.0、0.2.0-rc1）")
+    parser.add_argument("version", help="版本號，可帶 v（v0.2.0、0.2.0-rc1）")
     parser.add_argument("--out", type=Path, default=Path("dist"), help="輸出目錄（預設 dist/）")
     args = parser.parse_args(argv)
-    version = str(args.version).removeprefix("v")
-    print(build(version, args.out))
+    print(build(args.version.removeprefix("v"), args.out))
 
 
 if __name__ == "__main__":
