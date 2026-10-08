@@ -1,4 +1,4 @@
-"""真服務 e2e 與同一台機器上的試跑環境並存（M4 票 34、README〈e2e〉）。
+"""真服務 e2e 與同一台機器上的試跑環境並存（M4 票 34、docs/development.md〈e2e〉）。
 
 - **名字與宿主資源全部換掉**：專案名、每個容器名、網路名與子網、每個發佈到宿主的 port，都與
   `deploy/docker-compose.yml`（照它的預設值展開）不同；產品那一份掛宿主路徑（`CONFIG_ROOT` /

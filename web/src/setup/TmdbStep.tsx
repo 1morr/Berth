@@ -20,7 +20,7 @@ import { looksLikeTmdbKey } from './tmdbKey'
 /** 使用者去申請 key 的那一頁。連結與可複製的網址用的是同一個字串。 */
 const TMDB_API_SETTINGS = 'https://www.themoviedb.org/settings/api'
 
-/** 「key 沒打錯，那是連不出去嗎」——image 裡沒有 curl（README 的疑難排解），所以用 python。 */
+/** 「key 沒打錯，那是連不出去嗎」——image 裡沒有 curl（docs/guide/troubleshooting.md），所以用 python。 */
 const REACHABILITY_PROBE = `docker compose exec berth python -c "import socket; socket.create_connection(('api.themoviedb.org', 443), 5); print('reachable')"`
 
 /**

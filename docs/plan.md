@@ -10,10 +10,10 @@
 
 ## 0. 工程慣例
 
-- 語言：程式碼、識別符、commit、log 一律英文；文件與註解繁體中文。
+- 語言：程式碼、識別符、commit、log 一律英文；文件與註解繁體中文。例外是給使用者的 README 與 `docs/guide/`：README 英文為主、`README.zh-Hant.md` 是同內容的繁中版，guide 英文（brief §19 第四輪審計 E7、M4 票 57）。
 - Commit：Conventional Commits，subject ≤ 72 字元。分支 `feat/…`、`fix/…`、`docs/…`。
 - 每個里程碑結束時 `main` 可部署、CI 綠燈、README 可照著跑。
-- 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README、`.env.example`、CHANGELOG、專案 `CLAUDE.md`。
+- 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README（兩份）與 `docs/guide/`（使用者）、`docs/development.md`（開發指令）、`.env.example`、CHANGELOG、專案 `CLAUDE.md`。
 - 型別：後端 mypy strict（第三方缺型別時局部放寬並註明）；前端 TypeScript strict。
 - 行為變更同步補測試；解析器改動必跑 benchmark（§4.6）。
 
@@ -574,7 +574,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - `jellyfin`、`qbittorrent`、`prowlarr` 各掛在同名 profile 下，`berth` 永遠啟動；已有某服務的人把它從 `COMPOSE_PROFILES` 拿掉，在精靈那一頁選「既有」（§9.3、§9.5）；選既有時頁面說出要拿掉哪一個，忘了拿掉也不致命。
 - **容器名加 `berth-` 前綴**（brief §19 2026-09-29，M4 票 16）：`container_name` 是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`，`berth` 維持；compose 服務名（也就是 compose 網路上的 DNS 名 `jellyfin`、`qbittorrent`、`prowlarr`）不變。同一台主機上既有的容器多半就叫那三個名字，沒有前綴時撞名會讓 `docker compose up -d` 連 `berth` 在內整套都起不來；撞 port 仍可能發生，只有那一台起不來（票 16 實測，brief §20.14）。`tests/unit/test_deploy_names.py` 守著容器名、服務名、profile 與下一條的 `extra_hosts`。
 - **`berth` 服務帶 `extra_hosts: ["host.docker.internal:host-gateway"]`**（M4 票 16）：Linux 上 Berth 才連得到宿主上的既有服務；Docker Desktop 本來就有這個名字（§9.5〈連線位址〉）。
-- Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，README 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
+- Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，`docs/guide/requirements.md` 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
 - 只有一份 `docker-compose.yml`，Linux 與 Windows 共用；`.env.example` 內附兩種路徑寫法的註解。
 - **使用者拿到的是 release 附件，不是 repo**（M4 票 56，brief §19 E4、§20.17）：`scripts/deploy_bundle.py` 把 compose 檔、`.env.example`、`preseed/` 打成 `berth-deploy-<版本>.zip`（解壓出 `berth/`）與同內容的 `berth-deploy.zip`（README 的 `releases/latest/download/` 連結），release workflow 在 `v*` tag 上附上；預發佈 tag 標成 prerelease，不動 latest。`Dockerfile`、`entrypoint.sh` 不放。`tests/unit/test_deploy_bundle.py` 守著 compose 以字面相對路徑引用的每個來源都在 zip 裡、目錄不是空的。
 - incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`（`PathSettings` 的預設值，沒有 API 或 UI 改它，M4 票 22）；媒體庫路徑讀自 Jellyfin。要換宿主上的位置改 `DATA_ROOT` 掛到哪裡，容器路徑不變。
@@ -727,7 +727,7 @@ services:
 
 `docker run` 起的在原本的指令多加 `-v /volume1/berth:/data`。`/volume1/berth` 與 `/volume1/media` 不必在同一個檔案系統：硬鏈接只發生在 `/volume1/berth` 裡面（complete → library）。
 
-**選了既有之後停掉套件內那一台**：從 `COMPOSE_PROFILES` 拿掉只讓之後的 `up -d` 不再起它，停不掉已經在跑的容器（brief §20.14 實測），所以精靈「選了既有」那一段、README 與 `deploy/.env.example` 都另給 `docker compose stop <服務>`。
+**選了既有之後停掉套件內那一台**：從 `COMPOSE_PROFILES` 拿掉只讓之後的 `up -d` 不再起它，停不掉已經在跑的容器（brief §20.14 實測），所以精靈「選了既有」那一段、`docs/guide/existing-services.md` 與 `deploy/.env.example` 都另給 `docker compose stop <服務>`。
 
 **連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1，而且宿主上的服務要監聽 `0.0.0.0`）或區網 IP（brief §20.14，票 16、17）。
 
@@ -1005,7 +1005,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 | Windows 使用者把 `DATA_ROOT` 指到 exFAT 隨身碟，或分開掛兩個目錄 | 硬鏈接失敗 | NTFS bind mount 已實測可用；健康檢查在精靈頁 3（媒體庫與路徑）就擋下並說明原因 |
 | Jellyfin 首次啟動較慢，精靈頁 1 呼叫 `/Startup/*` 時服務尚未就緒 | 精靈失敗 | 選了套件內之後每 3 秒重測至就緒（上限 2 分鐘）才給擁有者表單；每步可重試 |
 | 既有 Jellyfin 使用者把媒體庫搬到新路徑而不是加路徑 | 觀看紀錄歸零 | 精靈只提供「加入路徑」，文件明說不要搬；健康檢查不會建議改既有路徑 |
-| 既有服務的容器路徑各不相同（`/downloads`、`/tv`、`/movies` 分開掛） | 硬鏈接 `EXDEV`、探測檔看不到 | 檢查訊息附那一台要多加的 `${DATA_ROOT}:/data`（compose 與 `docker run`）；README 用 NAS 範例說明「原本的掛載不動、多加一條」（M4 票 36） |
+| 既有服務的容器路徑各不相同（`/downloads`、`/tv`、`/movies` 分開掛） | 硬鏈接 `EXDEV`、探測檔看不到 | 檢查訊息附那一台要多加的 `${DATA_ROOT}:/data`（compose 與 `docker run`）；`docs/guide/existing-services.md` 用 NAS 範例說明「原本的掛載不動、多加一條」（M4 票 36） |
 | TMDB 與字幕組的動漫季編號不一致 | medium 誤入庫 | benchmark 分開報告 medium 錯誤率；offset 偵測；M3 的 RSS Series offset 與第一批審核；後續接 anime-lists |
 | Jellyfin 的大版本再跳一次（12 → 13）：版本分組、版本名算法或 `/Startup/*` 那幾支 deprecated 端點被移除 | 多版本顯示、精靈頁 1 與頁 3 | 支援下限寫在一處（`adapters/jellyfin.MIN_VERSION`）；版本名讀 Jellyfin 回的而不是自己算；`/Startup/*` 在 13.0 前要換成設定端點（brief §20.9） |
 | Mikan / Nyaa feed 欄位與假設不同 | M3 | 先抓 fixture 再寫 adapter |

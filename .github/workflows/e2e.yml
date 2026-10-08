@@ -30,7 +30,7 @@ jobs:
 
       - run: uv sync --locked
 
-      # 與本機同一條指令（README〈e2e〉）：拆掉殘留 → build → `up`（**不加 `--wait`**，冷啟動
+      # 與本機同一條指令（docs/development.md〈e2e〉）：拆掉殘留 → build → `up`（**不加 `--wait`**，冷啟動
       # 閘門，票 06h）→ pytest → 失敗時印容器狀態與 log → 一定 `down --volumes`（`tests/e2e/stack.py`）。
       - run: uv run python -m tests.e2e.stack
         env:

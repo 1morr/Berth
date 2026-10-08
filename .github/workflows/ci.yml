@@ -123,7 +123,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: web
 
-      # 前端的 API 型別是產出的（README「API 型別」）。後端改了 pydantic model 卻沒有
+      # 前端的 API 型別是產出的（docs/development.md〈API 型別〉）。後端改了 pydantic model 卻沒有
       # 重跑產生器時，重產之後這個檔案就會有 diff——那正是要紅燈的情況。
       - run: pnpm gen:api
         working-directory: web

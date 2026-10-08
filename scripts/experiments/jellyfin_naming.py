@@ -8,7 +8,7 @@ MediaStream → 裝 MergeVersions → 跑合併任務 → 再查一次。
 媒體樹裡 TMDB 對不上的那組作品（make_media.py 的 PROBE），它的標題不會被遠端覆寫。
 
 Jellyfin 的 DB 會保留舊掃描結果，重建媒體庫也清不掉，插件裝過也還在，所以要從乾淨的
-/config 跑才量得到「未裝插件」的基準（砍 /config 的指令見根目錄 README 的〈實驗腳本〉）。
+/config 跑才量得到「未裝插件」的基準（砍 /config 的指令見 `docs/development.md` 的〈實驗腳本〉）。
 
 用法：
     python scripts/experiments/jellyfin_naming.py --base-url http://localhost:18096 --label 10.10.7

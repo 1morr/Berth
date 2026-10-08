@@ -4,7 +4,7 @@
 Fake 是**有狀態**的，而且每個情境只有一份，所以精靈的第 3 步（plan §9.4 的七步）真的會把
 那台假 Jellyfin 一步一步改掉，重按也真的會標成「已經是這樣」。
 
-指令與情境見根目錄 README 的〈設定精靈的 Fake 後端〉。
+指令與情境見 `docs/development.md` 的〈UI 的 Fake 後端〉。
 """
 
 from __future__ import annotations
@@ -787,7 +787,7 @@ def poll() -> Scenario:
     save path，所以 qBittorrent 校驗完就是完成——`sync/maindata` 會真的換 state，
     poller 會真的走完 `submitted → metadata_ready → downloading → completed`。
 
-    位址從 `BERTH_QBITTORRENT_URL` 讀。準備步驟（起容器、把資料放進去）見 README。
+    位址從 `BERTH_QBITTORRENT_URL` 讀。準備步驟（起容器、把資料放進去）見 `docs/development.md`。
     """
     scenario = discover()
     scenario.qbittorrent_url = os.environ.get("BERTH_QBITTORRENT_URL", "http://127.0.0.1:18081")

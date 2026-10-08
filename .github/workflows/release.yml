@@ -57,7 +57,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.0.1
 
-      # 只用標準庫，不必 sync 整個專案；本機用的是同一支（README〈版本與升級〉）。
+      # 只用標準庫，不必 sync 整個專案；本機用的是同一支（docs/development.md〈部署套件〉）。
       - run: uv run --no-project python scripts/deploy_bundle.py "$GITHUB_REF_NAME" --out dist
 
       - env:

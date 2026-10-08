@@ -1,6 +1,6 @@
 # Berth 的部署套件（plan §9.1）。Linux 與 Windows 共用這一份。
 #
-#   cp .env.example .env   # 改 DATA_ROOT / CONFIG_ROOT；port 撞到了再改那五個 *_PORT
+#   cp .env.example .env   # 試跑可不改；正式用改 DATA_ROOT、PUID / PGID、TZ；port 撞到了再改那五個 *_PORT
 #   docker compose up -d   # 之後所有設定都在 http://localhost:8383 的精靈裡完成
 #
 # 已經有 Jellyfin / qBittorrent / Prowlarr 的人，把它從 .env 的 COMPOSE_PROFILES 拿掉（已經起過的
@@ -100,7 +100,7 @@ services:
   jellyfin:
     # 釘在 12.1 這條線（brief §19、plan §9.1）：跟得上 12.1 的修正與重建，但 `docker compose pull`
     # 不會默默跨到下一個大版本。12.0 證明那種跨版是不可逆的——它改資料庫、讓插件失效、改變版本
-    # 分組。升級步驟（先備份 /config、升完完整掃描）見 README。Berth 支援的下限是 Jellyfin 12.0。
+    # 分組。升級步驟（先備份 /config、升完完整掃描）見 repo 的 docs/guide/upgrading.md。Berth 支援的下限是 Jellyfin 12.0。
     image: lscr.io/linuxserver/jellyfin:version-12.1ubu2604
     container_name: berth-jellyfin
     restart: unless-stopped

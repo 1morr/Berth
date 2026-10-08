@@ -1,7 +1,7 @@
 # e2e（plan §10、票 15）：疊在 deploy/docker-compose.yml 之上，其餘就是使用者起的那一套——
 # 真的 qBittorrent、真的 Jellyfin、真的 Prowlarr，Berth 由這份工作目錄 build。
 #
-#   uv run --env-file .env python -m tests.e2e.stack    # 起、測、拆一次走完（README〈e2e〉）
+#   uv run --env-file .env python -m tests.e2e.stack    # 起、測、拆一次走完（docs/development.md〈e2e〉）
 #
 # **不要加 `--wait`**：fixture 要從服務還在啟動時開始偵測（冷啟動，M3 票 06h），等全部健康才開跑
 # 的話 `conftest.py` 的第一個斷言就紅。`stack.py` 起完立刻跑 pytest。

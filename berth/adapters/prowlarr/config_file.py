@@ -1,7 +1,8 @@
 """從唯讀掛載的 Prowlarr 設定讀 API key（plan §9.2）。
 
 Prowlarr 首次啟動就會產生 `<ApiKey>`，Berth 唯讀掛它的設定目錄，使用者不必自己抄。
-用 `PROWLARR__AUTH__APIKEY` 部署的人則把同一個值也給 Berth 的環境（README 有寫）。
+用 `PROWLARR__AUTH__APIKEY` 部署的人則把同一個值也給 Berth 的環境
+（`docs/guide/existing-services.md` 有寫）。
 兩處都沒有時回空字串，精靈退回手動貼上。
 """
 

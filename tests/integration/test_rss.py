@@ -121,7 +121,8 @@ def kimi_snapshot() -> MediaSnapshot:
         kind=MediaKind.TV,
         title="與妳相戀到生命盡頭",
         # 資料夾名與檔名都從它來。刻意取短的那個叫法：Windows 的 `tmp_path` 很深，完整的英文名
-        # 寫兩次（資料夾與檔名）會讓媒體庫那一頭的路徑超過 260 字元（README〈UI 的 Fake 後端〉）。
+        # 寫兩次（資料夾與檔名）會讓媒體庫那一頭的路徑超過 260 字元
+        # （docs/development.md〈UI 的 Fake 後端〉）。
         title_en="Kimishinu",
         title_original="君が死ぬまで恋をしたい",
         year=2026,

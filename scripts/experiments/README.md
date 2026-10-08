@@ -1,7 +1,7 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11、M3 票 03 的實驗。**指令在根目錄的 [README](../../README.md#實驗腳本)**（那份是本專案
-指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11、M3 票 03 的實驗。**指令在 [`docs/development.md`](../../docs/development.md#實驗腳本)**（那份是本專案
+開發指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
 [`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md) 與

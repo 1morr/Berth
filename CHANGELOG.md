@@ -12,8 +12,8 @@
   精靈完成頁與「待處理」最上面說有幾個、為什麼，一顆「從媒體庫重建帳本」——與 `berth rebuild-ledger` 同一個命令，
   只加不刪、可以重按，按完說找回幾個、幾個變成非受管檔案。作品頁的「檔案與版本」在帳本空而 Jellyfin 有這部時，
   改說「Jellyfin 有這部，Berth 的紀錄裡沒有」並連到待處理，不再寫「還沒有任何檔案入庫」。「無主 torrent」那一列
-  說清楚「認領並建立下載」會做什麼。精靈跑完之後打開 `/setup` 被帶到設定頁時多一句「精靈已經完成」；README 新增
-  〈重跑設定精靈〉。新端點 `GET /api/issues/rebuild-ledger` 與 `POST /api/issues/rebuild-ledger`（只有管理員）。
+  說清楚「認領並建立下載」會做什麼。精靈跑完之後打開 `/setup` 被帶到設定頁時多一句「精靈已經完成」；重跑精靈的做法
+  寫在 `docs/guide/backup-and-reinstall.md`。新端點 `GET /api/issues/rebuild-ledger` 與 `POST /api/issues/rebuild-ledger`（只有管理員）。
 
 - **換一台 qBittorrent 之後 Route 自動重新檢查，以及「全部重新檢查」**（M4 票 59）：在設定 → qBittorrent 換了一台、新那台
   測過之後，Berth 自動對每一條 Route 重跑檢查（分類建在新那台、探針重問），畫面說「正在重新檢查 N 條 Route」並逐條
@@ -41,6 +41,16 @@
   精靈頁 2 選過一台之後換另一台一律先確認（原本既有的那一台換走時沒有確認）。
 
 ### Changed
+
+- **README 改成英文為主，另有繁中版；安裝頁只留必讀**（M4 票 57，brief §19 E7）：`README.md` 是英文，
+  `README.zh-Hant.md` 是同內容的繁中版，兩份開頭互相連結。README 只留取得 zip、改 `.env` 的幾個值
+  （`DATA_ROOT`、PUID / PGID、`TZ`、已有服務時的 `COMPOSE_PROFILES`）、`up -d`、先申請 TMDB key、精靈每頁一句、
+  現況與已知限制，附四張英文介面截圖。其餘搬到 `docs/guide/` 的六份英文 guide：精靈（逐頁、帳號與密碼、精靈之後的
+  各頁）、接既有服務（含 Unraid 模板的「Add another Path」）、前置需求與版本下限、升級、疑難排解、備份與重裝。
+  開發指令、e2e、演練伺服器、實驗腳本與目錄結構搬到 `docs/development.md`，它是開發指令的單一來源。順手改正：
+  掛媒體根的是三個容器不是四個；Berth 不存 Jellyfin 密碼的明文，介面登入存的是加鹽雜湊；套件內媒體庫不即時監看，
+  手動丟進去的檔案要等 Jellyfin 下一次掃描；「唯一要離開 Berth 的是 TMDB」只對套件內＋公開站成立。
+  `.env.example` 的註解說清楚 `DATA_ROOT` 試跑可不改、正式用改到哪，`TZ` 要改成自己的時區。
 
 - **每日對帳不再洗掉「沒配上的理由」**（M4 票 60）：重建帳本或「認領進帳本」配不上時，那一件非受管檔案寫著理由；
   04:00 的對帳再記同一件時原本把它清空，待處理頁那一行就不見了。現在留著。

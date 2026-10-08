@@ -123,7 +123,7 @@
 - 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、**反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，M4 票 19，§20.2）、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式、帶自己的未完成目錄（M4 票 22）。
 - **硬鏈接失敗不退回複製**（與 Sonarr 不同）：複製會讓刪除範圍與空間估算失真，違反「避免複製檔案」的需求。
 - Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；容器路徑固定是 `/data`：Berth 的 incomplete / complete 根目錄在 `/data/torrent/…`、媒體庫根目錄在 `/data/library`，都沒有設定可改，所以既有服務也要把共用父目錄掛在 `/data`（§16.4；原本寫「路徑字串可以是 `/data` 以外的任何值」，程式從來沒有那個設定，M4 票 33 改）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
-- 已知限制要寫進 README：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
+- 已知限制要寫進使用者文件（README 與 `docs/guide/requirements.md`）：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
 
 ### 4.5 檔名與目錄安全
 
@@ -592,15 +592,15 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - 技術棧【決定】：後端 Python（FastAPI + 同一程序內的背景 worker + SQLite），前端 React（Vite），單一容器發佈。`/config` 存資料庫與設定，`/data` 掛媒體根。
 - **目標環境【決定】**：Linux（NAS 與伺服器）與 Windows（Docker Desktop，WSL2 後端）。兩種使用者：NAS 使用者已有目錄規劃、可能已有 Jellyfin；一般電腦使用者什麼都沒有，要能「下載一份 compose、跑起來、開瀏覽器」就完成。
-- 範例 `docker-compose.yml` 含 `berth`、qBittorrent、Jellyfin、Prowlarr，四者掛同一個 `/data`；權限採 TRaSH 的「單一使用者 + UMASK 022」簡化方案（§20.2），四個容器同 `PUID/PGID`。
+- 範例 `docker-compose.yml` 含 `berth`、qBittorrent、Jellyfin、Prowlarr，前三者掛同一個 `/data`（Prowlarr 不碰檔案）；權限採 TRaSH 的「單一使用者 + UMASK 022」簡化方案（§20.2），四個容器同 `PUID/PGID`。
 - `/data` 一律用宿主目錄 bind mount（`DATA_ROOT`），Linux 與 Windows 相同：Windows Docker Desktop 的 NTFS bind mount 硬鏈接已實測可用（§20.7）。不支援 exFAT；健康檢查在建立 Route 時即驗證。
-- README 明列：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（category autoTMM）、Jellyfin 版本下限 12.0，以及從 10.x 升級的注意事項（先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
+- 使用者文件明列（README 只留必讀，其餘在 `docs/guide/`，§19 第四輪審計 E7、M4 票 57）：硬鏈接前提（單一掛載、不可 exFAT、不可跨 btrfs 子卷 / ZFS dataset / mergerfs branch）、支援 Linux 宿主與 Windows Docker Desktop（NTFS）、qBittorrent 版本下限與必要設定（category autoTMM）、Jellyfin 版本下限 12.0，以及從 10.x 升級的注意事項（先完整備份、移除第三方插件、升級後完整掃描、不能降級，§20.9）、**使用者要自備 TMDB API key 與取得步驟**（§16.3）、TMDB 的歸屬聲明與 logo。
 
 ### 16.2 跨切面需求
 
 - **外部呼叫**：統一逾時、重試與退避；服務不可達時 Job 停在當前狀態並記事件，不判定失敗；健康檢查頁顯示每個服務最後成功時間。
 - **資料庫**：SQLite WAL；schema migration 從 M0 就用（Alembic）；備份就是複製 `/config`；提供「從磁碟 inode 掃描重建帳本」的災難復原指令（§7.9）。
-- **秘密**：API key 存在 DB，靠檔案權限保護，不做應用層加密（與 Seerr 相同），README 註明。
+- **秘密**：API key 存在 DB，靠檔案權限保護，不做應用層加密（與 Seerr 相同），`docs/guide/backup-and-reinstall.md` 註明。
 - **日誌**：結構化，每行帶 job id；Event 是使用者可見層，log 是維運層，兩者不互相取代。
 - **安全**：所有 API 需登入；未來 AI / MCP 用個人 API token；容器非 root；不開 CORS 萬用字元。
 - **測試**：解析 benchmark（純函式，CI 必跑）；管線整合測試用假的 qBittorrent / Jellyfin / TMDB adapter；docker compose 端到端至少覆蓋 M1 驗收流程。
@@ -740,7 +740,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）。~~Jackett 以 Torznab 端點接入~~ 已不採用（2026-10-06 D3，M4 票 37）：只支援 Prowlarr | §3、§16.3、§20.7 |
 | 媒體庫的角色（2026-09-15） | 像 Jellyfin 那樣瀏覽，播放跳 Jellyfin；牆上是整個 Jellyfin 媒體庫疊上 Berth 狀態；已看 / 未看可切換並寫回 Jellyfin；探索與媒體庫共用同一個 Media 詳情頁，作品在 Jellyfin 裡時觀看區在最上；排在 M1 驗收後、M2 之前（M1.5） | §1.1、§1.2、§12、§13、§17、plan §11.2b |
 | Jellyfin 支援版本（2026-09-15） | **只支援 Jellyfin 12 以上**（同日稍早定的「兩條版本線都支援、13.0 發佈才拿掉 10.x」被使用者改掉，為了降低複雜度）。MergeVersions 的精靈步驟、既有服務按鈕、resolver 的合併觸發與任務 id 整段移除；既有 Jellyfin 低於 12 時，精靈與健康檢查紅燈，說出目前版本並附升級注意（§20.9），不往下做。代價是已知的：從 10.11 升到 12 有遷移失敗的 open issue、舊客戶端要升級、binhex（unRAID）與 QNAP 社群套件還沒有 12，那些使用者要先升級才能接本系統 | §1.2、§7.7、§16.4、§20.9、M1 票 14b |
-| 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，README 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
+| 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，`docs/guide/upgrading.md` 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
 | 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
 | Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核。**14d 量過**（M1 票 01 的真實發佈，§20.4）：規則 1 擋下的 1,095 個檔案裡 928 個其實是第一季；「標題有認不出的多餘字」分不開兩者——連 TMDB 別名一起比會讓 14 個後面季的自動入錯，只比主標題時一個不漏卻是靠 TMDB 英文標題碰巧夠長。**2026-09-17 維持規則 1 原形** | §6.4、§6.5、§20.4、`docs/research/profile-effect.md` §6.1、M1 票 14d（解析器，已完成）/ 14e（拿掉欄位、API、介面與語料，已完成） |
 | M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
@@ -1378,7 +1378,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - `[Preferences]`：`WebUI\Port`、`WebUI\AuthSubnetWhitelistEnabled`、`WebUI\AuthSubnetWhitelist`、`WebUI\LocalHostAuth`、`WebUI\HostHeaderValidation`、`WebUI\CSRFProtection`；`[BitTorrent]`：`Session\DefaultSavePath`、`Session\TempPath`、`Session\TempPathEnabled`、`Session\DisableAutoTMMByDefault`（**預設 true，即 autoTMM 關閉**）、`Session\DisableAutoTMMTriggers\CategorySavePathChanged`、`Session\Port`。
 - Web API `app/setPreferences` 對應鍵：`temp_path_enabled`、`temp_path`、`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`、`bypass_auth_subnet_whitelist(_enabled)`、`bypass_local_auth`、`web_ui_password`（只寫）。
 
-**Jellyfin 命名實測**（2026-09-07，票 04；`jellyfin/jellyfin:10.10.7` 與 `:10.11.11`，dummy 檔 + API 查驗，[完整結果](research/m0-experiments.md#1-jellyfin-命名10107-與101111)）
+**Jellyfin 命名實測**（2026-09-07，票 04；`jellyfin/jellyfin:10.10.7` 與 `:10.11.11`，dummy 檔 + API 查驗，[完整結果](research/m0-experiments.md#1-jellyfin-命名10107-與-101111)）
 
 - **`S01E01` 一律認得**，`S01E03-E04` 解析為 `IndexNumber=3` + `IndexNumberEnd=4`，`S00E01` 進 `Specials` 季。**方括號與 `+` 不會滲進 Series 或 Episode 名稱** —— Jellyfin 根本不從檔名取集標題（TMDB 對不上的作品，帶 tag 與不帶 tag 的兩集名稱完全相同）。
 - **電影多版本**：檔名在 ` - ` 之前必須與資料夾名一字不差（含 `[tmdbid-<id>]`），否則變成兩部獨立的電影。標籤含方括號沒問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Sakurato]`；結尾 `p`/`i` 的標籤依解析度降冪（`2160p` → `1080p` → `720p`），其餘字母序。§7.2 已據此更正。

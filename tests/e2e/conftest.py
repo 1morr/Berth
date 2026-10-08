@@ -6,7 +6,7 @@
 M2 那一組會拆掉、換掉媒體庫裡的檔案，所以排在只讀它們的 M1.5 之後；M1.5 最後一條把 Jellyfin
 停掉再起來，等它回來才結束。
 
-前提是 `tests/e2e/compose.yml` 那一套已經起來（指令在 README〈e2e〉）。
+前提是 `tests/e2e/compose.yml` 那一套已經起來（指令在 docs/development.md〈e2e〉）。
 """
 
 from __future__ import annotations
