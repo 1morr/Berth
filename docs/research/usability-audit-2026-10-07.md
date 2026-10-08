@@ -348,6 +348,13 @@ docker compose up -d
 - 部署方式：Unraid 預設沒有 docker compose，要裝 Compose Manager 外掛；多數人用 Community Apps 模板。
 - 既有服務的補法：Berth 給的是 compose 與 `docker run` 片段，Unraid 使用者改的是模板裡的「Add another Path」。
 
+**2026-10-08 再補：實際查了那台 Unraid（只讀）**，細節在票 55。
+- 主機：Unraid 7.1.4、Docker 27.5.1、Compose Manager 外掛已裝（Compose v2.40.3）。
+- 現有服務：媒體伺服器是 **Emby**、索引站是 **Jackett**，Berth 都接不了；qBittorrent 是 PUID 99 / PGID 100，沒有掛 `/data`。
+- 硬鏈接：share `Roxy` 跨三顆碟加 cache，`fuse_useino="yes"`，Library 裡已有硬鏈接檔，所以 user share 上的硬鏈接看起來可用（推論）。
+- port：8080、8096、6881 已占用，照 README 的預設值會撞。
+- **使用者拍板 (a)**：Berth 帶自己的 Jellyfin，與 Emby 並存，Emby、Jackett、現有 qBittorrent 都不動；之後要不要整個換到 Jellyfin 另外決定。實跑是**票 55**。
+
 **一般自架使用者：還不行。**
 - 擋著的：
   1. 不知道怎麼拿到 `deploy/`（P0-1）。
