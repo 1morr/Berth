@@ -90,7 +90,7 @@ const zhHant = {
         },
       },
       tmdb: {
-        can: '重貼一把 key 再測一次；測不過的 key 照樣存下來，改一個字再按就好。',
+        can: '重貼一把 key 再測一次；只有測過的 key 才存下，測不過時原本那一把照樣在用。',
         elsewhere: 'key 本身的申請、撤銷與重發在 themoviedb.org 的「設定 → API」。',
       },
     },
@@ -3286,7 +3286,7 @@ const en: Translations<typeof zhHant> = {
         },
       },
       tmdb: {
-        can: 'Paste a key and test it again; a key that fails is still saved, so you can fix one character and press again.',
+        can: 'Paste a key and test it again; only a key that passes is saved, and if it fails, the one you had stays in use.',
         elsewhere:
           'Requesting, revoking and reissuing the key itself happens under Settings → API on themoviedb.org.',
       },

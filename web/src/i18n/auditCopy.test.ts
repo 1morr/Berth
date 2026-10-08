@@ -10,6 +10,7 @@ import { resources, SUPPORTED_LANGUAGES } from './resources'
  *   選了之後的 lede 與回頭看的說明又說「按一次加進去」，實際是測過、勾選、確認才加（卡片說「勾起來的站」）。
  * - 套件內 qBittorrent 不收 Berth 時叫人重啟、說預置腳本會補上白名單；預置腳本只補設定檔裡**沒有**的鍵
  *   （`deploy/preseed/qbittorrent/10-berth.sh`），在 WebUI 關掉白名單之後重啟補不回來（票 53 實跑）。
+ * - 頁 5 回頭看的說明說測不過的 TMDB key 照樣存下；票 45 之後測過才存（票 58 發佈後實跑看到）。
  */
 
 /** 卡片說了 API key「Berth」。 */
@@ -21,6 +22,9 @@ const ONE_PRESS = /按一次加|in one press/i
 /** 說重啟會把白名單補回來。 */
 const RESTART_RESTORES =
   /重啟[^。；]{0,15}(補上|補回來)|restart[^.]{0,40}\b(adds|restores|brings back|puts back)\b/i
+/** 說測不過的 key 也會存下。 */
+const FAILED_KEY_SAVED =
+  /測不過[^。；]{0,10}(照樣|也|還是)[^。；]{0,4}存|\bfails?\b[^.;]{0,20}\b(still|also) (saved|kept|stored)/i
 /**
  * qBittorrent WebUI 那一格的標籤（brief §20.7，5.0 的 webui_zh_TW.ts 與 preferences.html）。逐字比對是刻意的：
  * 使用者要在 WebUI 上找到同一串字，換個說法就找不到。
@@ -40,6 +44,12 @@ describe('四個樣式本身（雙向）', () => {
     expect('only adds one path for Berth to write to on a library').not.toMatch(NAMES_THE_KEY)
     expect('你自己的那一台貼 API key，用你已經有的站。').not.toMatch(EXISTING_ADDS_SITES)
     expect('Berth uses the indexers you already have.').not.toMatch(EXISTING_ADDS_SITES)
+    expect('重貼一把 key 再測一次；測不過的 key 照樣存下來，改一個字再按就好。').toMatch(
+      FAILED_KEY_SAVED,
+    )
+    expect('a key that fails is still saved, so you can fix one character').toMatch(
+      FAILED_KEY_SAVED,
+    )
   })
 
   it('換個說法照樣抓得到', () => {
@@ -50,6 +60,8 @@ describe('四個樣式本身（雙向）', () => {
     expect('重啟它，預置腳本會補上白名單。').toMatch(RESTART_RESTORES)
     expect('Restart it and the preseed script restores the allowlist.').toMatch(RESTART_RESTORES)
     expect('頁 1 建一把名為 Berth 的 API key').not.toMatch(NAMES_THE_KEY)
+    expect('測不過的那一把也會存起來').toMatch(FAILED_KEY_SAVED)
+    expect('A key that fails the test is also kept.').toMatch(FAILED_KEY_SAVED)
   })
 
   it('不誤抓無關的說法', () => {
@@ -64,6 +76,10 @@ describe('四個樣式本身（雙向）', () => {
     expect('and you can also add recommended public sites').toMatch(EXISTING_ADDS_SITES)
     expect('重啟補不回來：預置腳本不蓋掉你改過的。').not.toMatch(RESTART_RESTORES)
     expect('A restart will not bring it back.').not.toMatch(RESTART_RESTORES)
+    expect('只有測過的 key 才存下；測不過時原本那一把照樣在用。').not.toMatch(FAILED_KEY_SAVED)
+    expect(
+      'Only a key that passes is saved; if it fails, the one you had is still used.',
+    ).not.toMatch(FAILED_KEY_SAVED)
   })
 })
 
@@ -81,6 +97,10 @@ describe.each(SUPPORTED_LANGUAGES)('文件與實作不符的幾句（%s）', (la
   it('既有 Prowlarr 的加站不說成按一次', () => {
     expect(indexer.lede.existing).not.toMatch(ONE_PRESS)
     expect(setup.revisit.indexer.existing.can).not.toMatch(ONE_PRESS)
+  })
+
+  it('頁 5 回頭看不說測不過的 key 也存下', () => {
+    expect(setup.revisit.tmdb.can).not.toMatch(FAILED_KEY_SAVED)
   })
 
   it('白名單的補法說 WebUI 那一格，不說重啟會補回來', () => {
