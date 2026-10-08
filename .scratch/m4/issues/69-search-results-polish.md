@@ -1,0 +1,28 @@
+# 69 — 搜尋結果：「片名＋年份」搜得到、筆數對得上、同名雜訊收起來
+
+**Status:** ready-for-agent
+
+**Blocked by:** None — can start immediately
+
+**讀:** `docs/research/usability-audit-2026-10-07.md` §3 S3〈下載〉、§8 P2-18、P2-19；brief §6、§20.16（Radarr / Sonarr 怎麼用年份與類型篩）；plan §8.4；M4 票 49（收起來、`parser.fits`）；CONTEXT.md 的 Set Aside
+
+## 為什麼（審計 S3）
+
+- 探索頁搜「Nosferatu 1922」是 0 筆：TMDB 的搜尋不吃年份。
+- 作品頁搜尋寫「共 262 筆 · 逐站取了 100 筆」、「103 筆已略過」、「164 筆已經收起來」，彼此對不上。
+- 主表還混進同名動畫《Tsuki to Laika to Nosferatu》的各集與成人內容。
+
+## 做什麼
+
+1. 探索搜尋：查詢字串結尾是四位數年份時，拆成「片名＋年份」交給 TMDB 的年份參數。查證 TMDB 的搜尋參數（context7 或官方文件），寫進 brief §20。沒有結果時退回原字串。
+2. 作品頁的筆數：定義清楚每個數字數的是什麼（Prowlarr 回幾筆、名字對不上略過幾筆、收起來幾筆、主表幾筆），讓它們加得起來；畫面上照同一個定義說。
+3. 電影搜尋時，讀得出集數的發佈（同名劇集或動畫的各集）收進「收起來」。這要延伸票 49 的 `fits`，紅燈先寫在 fixture。
+   - 成人內容：查 Prowlarr 回傳的分類欄位能不能判斷，能就收起來，不能就記在票的 Comments、不硬做。
+4. 解析器有改動就跑 `berth bench`，`auto_wrong` 不得上升。
+
+## 驗收
+
+- [ ] 單元或整合測試：年份拆分；筆數加得起來；同名劇集的各集在電影搜尋被收起來（fixture 先紅後綠）
+- [ ] `berth bench` 前後的 `auto_wrong` 貼在 Comments
+- [ ] 實跑：《Nosferatu》(1922) 的探索與作品頁搜尋截圖
+- [ ] 全部檢查、test 綠燈；brief §20、plan §8.4 同步；progress.md 記一行

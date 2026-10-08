@@ -1,6 +1,6 @@
 # 55 — Unraid 實跑：Berth 帶自己的 Jellyfin，與 Emby 並存
 
-**Status:** ready
+**Status:** ready-for-agent
 
 **Blocked by:** 無（用本機 build 的 image 傳到 Unraid，不等 0.2.0）
 
