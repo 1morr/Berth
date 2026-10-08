@@ -1,6 +1,6 @@
 [project]
 name = "berth"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-hosted media acquisition and import coordinator"
 readme = "README.md"
 requires-python = ">=3.13"

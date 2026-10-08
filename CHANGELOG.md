@@ -6,6 +6,27 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-09
+
+**公開 beta**：`ghcr.io/1morr/berth:0.2.0`，同時是 `:0.2` 與 `:latest`。部署檔第一次以 release 附件發佈：
+`https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip`（README〈Install〉）。M4 的通知與巡檢
+還沒做；這一版收的是 0.1.0 之後兩輪試跑與審計的修補（M4 票 43–60）。
+
+**測過的平台**：Windows Docker Desktop（每一輪試跑與審計都在這裡跑）、Unraid 7.1（M4 票 55：套件內三個
+服務、與既有的 Emby 並存、硬鏈接過 mover）。其他 Linux 發行版與 NAS 還沒有人實跑。已知限制與還開著的問題在
+README〈[Status & known limitations](README.md#status--known-limitations)〉。
+
+**從 0.1.0 升級**：照 [docs/guide/upgrading.md](docs/guide/upgrading.md)，**下載 0.2.0 的 zip 解壓蓋過原本的部署
+目錄**，再 `docker compose pull && docker compose up -d`。0.1.0 沒有 zip、多半只抓了 compose 一個檔，蓋過時會補上
+`preseed/`；`.env` 不在 zip 裡、不會被蓋掉，`.env.example` 沒有新變數，註解改成英文。compose 檔只改了註解，沒有
+資料庫 migration。破壞性變更：
+
+- **既有服務的憑證測不過就不存**（票 45）：`POST /api/setup/services/{kind}` 選既有而測不過時改回 400
+  `connection_failed`，不再 200 存下紅燈；`POST /api/setup/tmdb/test` 測不過不再存下那一把。0.1.0 存下的沒驗過的
+  TMDB key 升級後讀成沒有，在設定 → TMDB 重新貼一次、測過就好。
+
+其他新端點與回應欄位都是加的，逐條在下面。
+
 ### Added
 
 - **重裝之後在畫面上把帳本找回來**（M4 票 60，brief §19 E6）：媒體庫裡有 Berth 帳本不認得的檔案時（重裝、資料庫遺失），
@@ -41,6 +62,9 @@
   精靈頁 2 選過一台之後換另一台一律先確認（原本既有的那一台換走時沒有確認）。
 
 ### Changed
+
+- **部署檔的註解改成英文**（M4 票 58）：`docker-compose.yml` 與 `.env.example` 給使用者看的說明、`${DATA_ROOT}` /
+  `${CONFIG_ROOT}` 沒設時 Compose 印的錯誤都改成英文，與英文 README 一致。設定值與預設值不變。
 
 - **README 改成英文為主，另有繁中版；安裝頁只留必讀**（M4 票 57，brief §19 E7）：`README.md` 是英文，
   `README.zh-Hant.md` 是同內容的繁中版，兩份開頭互相連結。README 只留取得 zip、改 `.env` 的幾個值
@@ -1781,5 +1805,6 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
   停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。
 
-[Unreleased]: https://github.com/1morr/Berth/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/1morr/Berth/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/1morr/Berth/releases/tag/v0.2.0
 [0.1.0]: https://github.com/1morr/Berth/releases/tag/v0.1.0
