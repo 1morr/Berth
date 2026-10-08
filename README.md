@@ -175,7 +175,8 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
     `CONFIG_ROOT=/mnt/user/appdata/berth`。兩個目錄不用先建。已經有 Emby / Jellyfin、qBittorrent 的機器上 8096、
     8080、6881 多半被佔了，改 `JELLYFIN_PORT`、`QBITTORRENT_WEBUI_PORT`、`QBITTORRENT_BT_PORT`。
   - 硬鏈接：「Settings → Global Share Settings → Tunable (support Hard Links)」要是 Yes，`DATA_ROOT` 整個放在
-    同一個 share 裡。share 用 cache 時，mover 的行為見 brief §20.14。
+    同一個 share 裡。share 用 cache 時 mover 把兩個名字一起搬到陣列，硬鏈接還在（實測）；做種中正被讀的檔
+    mover 會跳過，下一輪再搬。
   - 檔案是 `644` / 目錄 `755`（`UMASK=022`）：從 SMB 看得到、改不了。要從 SMB 刪改就設 `UMASK=000`。
   - 接宿主上既有的服務填 `http://host.docker.internal:<port>`（實測解成 docker0 的 `172.17.0.1`）。
 
@@ -817,6 +818,13 @@ docker compose -f scripts/experiments/compose.yml up -d jellyfin-1010 jellyfin-1
 ```bash
 docker run --rm -v /srv/berth/data:/data -v "$PWD/scripts/experiments:/exp:ro"     alpine:3 sh /exp/hardlink.sh /data                        # 應該 PASS
 docker run --rm -v /srv/a:/data/torrent -v /srv/b:/data/library     -v "$PWD/scripts/experiments:/exp:ro" alpine:3 sh /exp/hardlink.sh /data   # 應該 EXDEV 並回 1
+```
+
+入庫的那一部片 Jellyfin 認不認得、播不播得到（M4 票 55，Unraid 上 mover 前後各問一次）：在已經跑完精靈的
+`berth` 容器裡跑，用 Berth 存的 Jellyfin API key（不印出），只讀。item id 在作品頁「在 Jellyfin 看」的連結裡：
+
+```bash
+ssh root@tower 'docker exec -i berth python - <jellyfin item id>' < scripts/experiments/jellyfin_stream_probe.py
 ```
 
 收工：

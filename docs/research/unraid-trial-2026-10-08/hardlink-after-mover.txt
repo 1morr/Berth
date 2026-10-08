@@ -1,0 +1,10 @@
+2026-10-08 21:14:31
+42 649362777713998419 2 nobody:users 644 828760756 ./library/movies/Night of the Living Dead (1968) [tmdbid-10331]/Night of the Living Dead (1968) [tmdbid-10331] - [BD][720p][YTS.AM].mp4
+42 649362777713998419 2 nobody:users 644 828760756 ./torrent/complete/movies/Night Of The Living Dead (1968) [BluRay] [720p] [YTS.AM]/Night.Of.The.Living.Dead.1968.720p.BluRay.x264-[YTS.AM].mp4
+/mnt/disk3 2307 6442515027 2 828760756 /mnt/disk3/Roxy/Berth/library/movies/Night of the Living Dead (1968) [tmdbid-10331]/Night of the Living Dead (1968) [tmdbid-10331] - [BD][720p][YTS.AM].mp4
+/mnt/disk3 2307 6442515027 2 828760756 /mnt/disk3/Roxy/Berth/torrent/complete/movies/Night Of The Living Dead (1968) [BluRay] [720p] [YTS.AM]/Night.Of.The.Living.Dead.1968.720p.BluRay.x264-[YTS.AM].mp4
+/mnt/disk3 2307 6442515056 1 58132 /mnt/disk3/Roxy/Berth/torrent/complete/movies/Night Of The Living Dead (1968) [BluRay] [720p] [YTS.AM]/www.YTS.AM.jpg
+/mnt/cache: 10 dirs
+/mnt/disk1: 0 dirs
+/mnt/disk2: 0 dirs
+/mnt/disk3: 16 dirs

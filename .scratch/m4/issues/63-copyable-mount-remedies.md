@@ -32,3 +32,7 @@
 - [ ] vitest：合併的補法、Unraid 格式、localhost 不重複（zh-Hant 與 en）
 - [ ] 實跑：既有 Jellyfin 與 qBittorrent 都不掛 `/data`，照畫面的補法一次修好，附截圖
 - [ ] 全部檢查、test、前端 e2e 綠燈；README guide（接既有服務）、brief §16.4 同步；progress.md 記一行
+
+## Comments
+
+- 2026-10-08 票 55 補（`docs/research/unraid-trial-2026-10-08.md` §6 U6）：使用者 Unraid 上的模板欄位是 `<Config Name=… Target="容器路徑" Mode="rw" Type="Path">宿主路徑</Config>`，畫面上是「Add another Path, Port, Variable, Label or Device」→ Config Type Path、Name、Container Path、Host Path、Access Mode（Unraid 7.1.4 `dynamix.docker.manager` 的介面字串）。CA 的 `jellyfin/jellyfin` 模板預設把媒體掛在 `/data/tvshows`、`/data/movies`，加 Berth 的 `/data` 之後是巢狀掛載（沒實測），補法要說這種情況。

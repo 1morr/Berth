@@ -30,3 +30,7 @@
 - [ ] playwright 實跑精靈全程（S1 與 S2 各一次）截圖
 - [ ] impeccable 三步的結論與處理記在票的 Comments
 - [ ] 全部檢查、test、前端 e2e 綠燈；progress.md 記一行
+
+## Comments
+
+- 2026-10-08 票 55 補（`docs/research/unraid-trial-2026-10-08.md` §6 U5、U9）：頁 5 TMDB 的「這裡能做」說「測不過的 key 照樣存下來」（`web/src/i18n/resources.ts` 的 `tmdb.can`，zh-Hant 與 en 都是），與票 45「測過才存」相反。健康頁「最後成功 2 秒後」：瀏覽器時鐘比伺服器慢兩秒時相對時間說成未來。

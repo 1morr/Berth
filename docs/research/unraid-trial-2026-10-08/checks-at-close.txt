@@ -1,0 +1,64 @@
+# 2026-10-08 22:03:21 收尾時在 tower 上重跑（只讀，hardlink.sh 只在 Berth 的目錄建檔再刪掉）；每段前一行是指令
+
+$ grep -E "fuse_useino" /boot/config/share.cfg
+fuse_useino="yes"
+(exit 0)
+
+$ grep -E "shareUseCache|shareMoverLogging" /boot/config/shares/Roxy.cfg /boot/config/share.cfg
+/boot/config/shares/Roxy.cfg:shareUseCache="yes"
+/boot/config/share.cfg:shareMoverLogging="no"
+(exit 0)
+
+$ grep mover /etc/cron.d/root
+# Generated mover schedule:
+0 */3 * * * /usr/local/sbin/mover start &> /dev/null
+(exit 0)
+
+$ ssh root@tower 'sh -s /mnt/user/Roxy/Berth' < scripts/experiments/hardlink.sh   # 從這台 Windows 餵進去
+root:       /mnt/user/Roxy/Berth
+filesystem:
+mount line: shfs            8798458912 6397308392 2399305328      73% /mnt/user
+src:        dev/ino/nlink = 42 11258999075245050 2
+dst:        dev/ino/nlink = 42 11258999075245050 2
+PASS: 同一個 inode、nlink=2
+(exit 0)
+
+$ stat -c "birth=%w change=%z modify=%y %n" /mnt/disk3/Roxy/Berth/library/movies/*/*.mp4
+birth=2026-10-08 21:00:01.997637779 +0800 change=2026-10-08 21:00:02.496639381 +0800 modify=2026-10-08 18:53:13.769072770 +0800 /mnt/disk3/Roxy/Berth/library/movies/Night of the Living Dead (1968) [tmdbid-10331]/Night of the Living Dead (1968) [tmdbid-10331] - [BD][720p][YTS.AM].mp4
+(exit 0)
+
+$ /usr/local/sbin/in_use "$F"
+(exit 1)
+
+$ find /mnt/user/Roxy/Berth /mnt/user/appdata/berth \( ! -user nobody -o ! -group users \) -printf "%u:%g %m %p\n"
+root:root 755 /mnt/user/appdata/berth
+(exit 0)
+
+$ find /mnt/user/Roxy/Berth /mnt/user/appdata/berth | wc -l
+786
+(exit 0)
+
+$ docker exec berth getent hosts host.docker.internal
+172.17.0.1      host.docker.internal
+(exit 0)
+
+$ docker exec berth python -c "import json,urllib.request; [print(x[\"name\"][:40], x[\"state\"], x[\"progress\"], x[\"save_path\"]) for x in json.load(urllib.request.urlopen(\"http://qbittorrent:18080/api/v2/torrents/info\"))]"
+Night Of The Living Dead (1968) [BluRay] stalledUP 1 /data/torrent/complete/movies
+(exit 0)
+
+$ docker inspect emby-amilys --format "{{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}"
+/mnt/user/appdata/emby-amilys:/config /mnt/user/Roxy/Library:/Library
+(exit 0)
+
+$ ss -ltn | grep -E ":(8383|18096|18080|16881|9696) "
+LISTEN 0      4096                   0.0.0.0:18096      0.0.0.0:*
+LISTEN 0      4096                   0.0.0.0:18080      0.0.0.0:*
+LISTEN 0      4096                   0.0.0.0:9696       0.0.0.0:*
+LISTEN 0      4096                   0.0.0.0:8383       0.0.0.0:*
+LISTEN 0      4096                   0.0.0.0:16881      0.0.0.0:*
+LISTEN 0      4096                      [::]:18096         [::]:*
+LISTEN 0      4096                      [::]:18080         [::]:*
+LISTEN 0      4096                      [::]:9696          [::]:*
+LISTEN 0      4096                      [::]:8383          [::]:*
+LISTEN 0      4096                      [::]:16881         [::]:*
+(exit 0)

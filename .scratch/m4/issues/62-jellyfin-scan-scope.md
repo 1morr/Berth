@@ -30,3 +30,7 @@
 - [ ] 整合測試：空媒體庫第一次入庫立即刷新；刷新的範圍是那一個媒體庫（或照查證結果，雙向）
 - [ ] 實跑：全新套件內入庫一部，Jellyfin 認到的時間與文案，附截圖與時間戳
 - [ ] 全部檢查、test、真服務 e2e 綠燈；brief §16.4、plan、CHANGELOG 同步；progress.md 記一行
+
+## Comments
+
+- 2026-10-08 票 55 補（`docs/research/unraid-trial-2026-10-08.md` §3.3、§6 U8）：Unraid 上空媒體庫第一次入庫到「Jellyfin 已收錄」12 分 34 秒。Berth 在 18:55:52 請整庫掃描的同時把下一次反查排到 10 分鐘後（`resolve_after`），Jellyfin 的掃描 12 秒就完成了。改掃描範圍時一起看「請掃描之後多久再問」。

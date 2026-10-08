@@ -14,7 +14,8 @@ stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
 或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`、`jellyfin_images.py` 與 `rss_subscribe_timing.py`**：它們量的就是 Berth
 自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`large_library_berth.py`
-也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
+也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境；`jellyfin_stream_probe.py` 同樣
+跑在 `berth` 容器裡，讀的是那一套 Berth 的資料庫與 compose 內網的 `jellyfin`，不 import `berth`）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
 
 ## 每個檔案在做什麼
@@ -50,7 +51,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `jellyfin_username_rules.py` | M4 票 29：Jellyfin 12 收什麼樣的帳號（`/Startup/User` 與 `/Users/New` 各試一組合法與不合法的，含只有空白的密碼），以及 `GET /System/Configuration` 讀回的 metadata 語言與國家；`--fixture` 把它錄成契約測試的回應。與原始碼的 `ValidUsernameRegex` 一致。自己起停一次性容器（預設 bridge，不建 network）；結論在 brief §20.7 |
 | `compose_collisions.py` | M4 票 16：套件容器撞名（票 16 之前的容器名與現在的 `berth-*` 各一次）、撞 port、`COMPOSE_PROFILES=` 空字串時 `docker compose up -d` 的結束碼、錯誤訊息與每個容器的狀態，以及 `berth` 的 `extra_hosts` host-gateway 在這台 Docker 上解到哪、連不連得到宿主上的 port。從 `deploy/docker-compose.yml` 改出隔離的 compose project，改不到（compose 換了寫法）就停下；結論在 brief §20.14 |
 | `compose_profile_removal.py` | M4 票 36：選了既有之後，把服務從 `COMPOSE_PROFILES` 拿掉再 `up -d`、加 `--remove-orphans`、`docker compose stop <服務>`、再 `up -d`、不帶 profile 的 `down`，各自對已經在跑的套件內容器做了什麼。與上一支同樣從 `deploy/docker-compose.yml` 改出隔離的 project，改不到就停下；結論在 brief §20.14 |
-| `jellyfin_stream_probe.py` | M4 票 55：入庫的那一部片 Jellyfin 認不認得、播不播得到（Unraid 上 mover 前後各問一次）。在 `berth` 容器裡以 `docker exec -i berth python - <item id>` 跑，用 Berth 存的 API key、不印出；只用標準庫。結論在 `docs/research/unraid-trial-2026-10-08.md` |
+| `jellyfin_stream_probe.py` | M4 票 55：入庫的那一部片 Jellyfin 認不認得、播不播得到（Unraid 上 mover 前後各問一次）。在 `berth` 容器裡以 stdin 餵進 `docker exec -i berth python - <item id>` 跑（指令在根 README），用 Berth 存的 API key、不印出；只用標準庫。結論在 `docs/research/unraid-trial-2026-10-08.md` |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方

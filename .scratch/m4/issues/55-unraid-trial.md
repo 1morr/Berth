@@ -1,6 +1,6 @@
 # 55 — Unraid 實跑：Berth 帶自己的 Jellyfin，與 Emby 並存
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 無（用本機 build 的 image 傳到 Unraid，不等 0.2.0）
 
@@ -64,13 +64,13 @@
 
 ## 驗收
 
-- [ ] Unraid 上 S1 走完並入庫一部；附截圖（`docs/research/unraid-trial-<日期>/`）與指令輸出
-- [ ] 硬鏈接在 user share 上成立（link 數 2、同 inode）；mover 跑過之後的結果實測並寫下（成立或不成立都算完成，不成立就開票）
-- [ ] 新建檔案的擁有者是 99:100，結論寫進研究檔
-- [ ] `host.docker.internal` 在原生 Linux（Unraid）上解得到、連得到宿主服務
-- [ ] 結果寫成 `docs/research/unraid-trial-<日期>.md`；結論摘進 brief §20.14（附來源與指令）；README〈支援的宿主平台〉與〈硬鏈接前提〉照結果改（「mergerfs 不行」對 Unraid user share 怎麼說）
-- [ ] 現有的 `emby-amilys`、`qbittorrent`、`jackett` 與其他容器全程沒被動過（開工與收尾各存一次 `docker ps -a` 與 `docker inspect` 摘要比對）
-- [ ] progress.md 記一行；有改程式時，全部檢查與 test 綠燈
+- [x] Unraid 上 S1 走完並入庫一部；附截圖（`docs/research/unraid-trial-<日期>/`）與指令輸出
+- [x] 硬鏈接在 user share 上成立（link 數 2、同 inode）；mover 跑過之後的結果實測並寫下（成立或不成立都算完成，不成立就開票）
+- [x] 新建檔案的擁有者是 99:100，結論寫進研究檔
+- [x] `host.docker.internal` 在原生 Linux（Unraid）上解得到、連得到宿主服務
+- [x] 結果寫成 `docs/research/unraid-trial-<日期>.md`；結論摘進 brief §20.14（附來源與指令）；README〈支援的宿主平台〉與〈硬鏈接前提〉照結果改（「mergerfs 不行」對 Unraid user share 怎麼說）
+- [x] 現有的 `emby-amilys`、`qbittorrent`、`jackett` 與其他容器全程沒被動過（開工與收尾各存一次 `docker ps -a` 與 `docker inspect` 摘要比對）
+- [x] progress.md 記一行；有改程式時，全部檢查與 test 綠燈
 
 ## 規則
 
@@ -79,3 +79,14 @@
   - 不重啟 Docker、不動陣列、不改 share 或全域設定、不手動跑 mover。
   - 要越界就先問。
 - 測試帳密寫在 `/mnt/user/appdata/berth-deploy/CREDENTIALS.md`（不進 repo）。
+
+## Comments
+
+- 2026-10-08 實跑完成，全文在 `docs/research/unraid-trial-2026-10-08.md`。一句話：官方 compose 只改 `.env` 就在 Unraid 7.1.4 上走完 S1；user share 上硬鏈接成立，21:00 的排程 mover 把兩個名字一起搬到 disk3 之後仍是 links 2、Jellyfin 照樣播、對帳 0 件。
+- **帶帳密的四步改走 API**（頁 1 建管理員、頁 2 / 4 介面登入、頁 5 TMDB key）：`tower` 不是 localhost，代理不在瀏覽器裡輸入密碼與 key；瀏覽器的 session 是 API 回的 cookie。所以這一輪沒有量頁 1、2、4、5 的按鍵數（審計 S1 量過）。
+- 「PUID / PGID 不一致時的錯誤訊息」（票 42）：照規則只觀察、沒有製造；這一輪兩者一致。
+- 交給後面的票（研究檔 §6）：U5 頁 5 TMDB 文案「測不過的 key 照樣存下來」與票 45 相反 → 票 68；U9 健康頁時鐘差兩秒說「2 秒後」→ 票 68；U8 空媒體庫第一次入庫 12.5 分鐘才認到（請掃描時就退避 10 分鐘）→ 票 62；U6 CA 的 Jellyfin 模板掛 `/data/tvshows`、`/data/movies`，與 Berth 要的 `/data` 成巢狀 → 票 63。
+- U4（帳本的 shfs inode 在 mover 後過期）不開票：只有「使用者在 qBittorrent 連檔刪 torrent＋mover 搬過＋之後在 Berth 刪作品」會碰到，結果是媒體庫那一份留著（安全的一邊），留給拆下一批票時決定。
+- 這一套照使用者開工時的答覆留著（沒有 down、沒刪目錄）；跑的是本機 build 的 `berth:unraid-b10c9c7`，換 GHCR 版本的做法在研究檔 §8。
+- 收尾檢查（2026-10-08 22:0x）：`pre-commit run --all-files` 全過；`uv run pytest` 3642 passed、1 failed——`tests/integration/test_rss_api.py::TestTheFirstRound::test_preview_then_follow_from_now`，單獨重跑三次都過，是全套負載下的時序不穩，與本票無關（本票只動文件與一支實驗腳本）。直接用 `.venv/Scripts/python -m pytest` 跑時 `test_cli` 的 console script 測試會因 PATH 沒有 venv 而紅，要照 README 用 `uv run`。
+- code-review（Standards / Spec 兩軸）處理：實驗腳本的指令補進根 README〈實驗腳本〉、experiments README 的可攜性例外補上這支、`_api_key` 遞迴改成直接讀扁平的 `api_key`、錯誤字串改英文；研究檔修 image id 抄錯、補 stat 指令與 `checks-at-close.txt`（其餘宣稱連指令重跑一次）、補「Emby 看不到」（它只掛 `Roxy/Library`）、來源標明 Plus 分支不是這台裝的。沒處理：mover 的數字在研究檔、brief、progress、票四處各寫一次（照這個 repo 的慣例，brief 是摘要、progress 是索引）。
