@@ -87,6 +87,6 @@
 - 「PUID / PGID 不一致時的錯誤訊息」（票 42）：照規則只觀察、沒有製造；這一輪兩者一致。
 - 交給後面的票（研究檔 §6）：U5 頁 5 TMDB 文案「測不過的 key 照樣存下來」與票 45 相反 → 票 68；U9 健康頁時鐘差兩秒說「2 秒後」→ 票 68；U8 空媒體庫第一次入庫 12.5 分鐘才認到（請掃描時就退避 10 分鐘）→ 票 62；U6 CA 的 Jellyfin 模板掛 `/data/tvshows`、`/data/movies`，與 Berth 要的 `/data` 成巢狀 → 票 63。
 - U4（帳本的 shfs inode 在 mover 後過期）不開票：只有「使用者在 qBittorrent 連檔刪 torrent＋mover 搬過＋之後在 Berth 刪作品」會碰到，結果是媒體庫那一份留著（安全的一邊），留給拆下一批票時決定。
-- 這一套照使用者開工時的答覆留著（沒有 down、沒刪目錄）；跑的是本機 build 的 `berth:unraid-b10c9c7`，換 GHCR 版本的做法在研究檔 §8。
+- ~~這一套照使用者開工時的答覆留著~~ **2026-10-09 依使用者要求已全部退回**（使用者之後自己從頭部署）：`docker compose down -v`（含 override），刪 `/mnt/user/appdata/berth-deploy`、`/mnt/user/appdata/berth`、`/mnt/user/Roxy/Berth` 與這張票 load / pull 的三個 image（berth、prowlarr、jellyfin；qbittorrent 那個是既有容器在用的，沒刪）。比對：14 個既有容器與開工快照完全一致、三個路徑已不存在、8383 / 18096 / 18080 / 16881 / 9696 已釋放（研究檔 §8、`containers-rollback.txt`）。
 - 收尾檢查（2026-10-08 22:0x）：`pre-commit run --all-files` 全過；`uv run pytest` 3642 passed、1 failed——`tests/integration/test_rss_api.py::TestTheFirstRound::test_preview_then_follow_from_now`，單獨重跑三次都過，是全套負載下的時序不穩，與本票無關（本票只動文件與一支實驗腳本）。直接用 `.venv/Scripts/python -m pytest` 跑時 `test_cli` 的 console script 測試會因 PATH 沒有 venv 而紅，要照 README 用 `uv run`。
 - code-review（Standards / Spec 兩軸）處理：實驗腳本的指令補進根 README〈實驗腳本〉、experiments README 的可攜性例外補上這支、`_api_key` 遞迴改成直接讀扁平的 `api_key`、錯誤字串改英文；研究檔修 image id 抄錯、補 stat 指令與 `checks-at-close.txt`（其餘宣稱連指令重跑一次）、補「Emby 看不到」（它只掛 `Roxy/Library`）、來源標明 Plus 分支不是這台裝的。沒處理：mover 的數字在研究檔、brief、progress、票四處各寫一次（照這個 repo 的慣例，brief 是摘要、progress 是索引）。

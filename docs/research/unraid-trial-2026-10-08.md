@@ -221,7 +221,8 @@ $ ip -4 addr show docker0
 ## 7. 既有容器沒被動過
 
 開工（18:37）與收尾各存一次 `docker ps -a` 與 `docker inspect` 摘要（id、image、啟動時間、狀態、重啟次數、掛載）：
-[`containers-before.txt`](unraid-trial-2026-10-08/containers-before.txt)、[`containers-after.txt`](unraid-trial-2026-10-08/containers-after.txt)。
+[`containers-before.txt`](unraid-trial-2026-10-08/containers-before.txt)、[`containers-after.txt`](unraid-trial-2026-10-08/containers-after.txt)
+（2026-10-09 退回之後再一次：[`containers-rollback.txt`](unraid-trial-2026-10-08/containers-rollback.txt)，見 §8）。
 
 開工時 14 個既有容器、收尾時多了 4 個 `berth*`。把每列的掛載排序、去掉行尾空白之後比對，**14 個既有容器的
 id、image、啟動時間、狀態、重啟次數與掛載完全相同**（`docker inspect` 的掛載順序每次不同，所以要先排序）。
@@ -229,11 +230,28 @@ id、image、啟動時間、狀態、重啟次數與掛載完全相同**（`dock
 
 ## 8. 收尾
 
-使用者開工時就說這一套留著：沒有 `docker compose down`，`/mnt/user/Roxy/Berth`、`/mnt/user/appdata/berth`、
-`/mnt/user/appdata/berth-deploy` 都在。它跑的是本機 build 的 `berth:unraid-b10c9c7`（override 檔指定）；之後要換成
-GHCR 上的版本，刪掉 `docker-compose.override.yml` 再 `docker compose pull && docker compose up -d`。測試帳密在
-`/mnt/user/appdata/berth-deploy/CREDENTIALS.md`（600）。這一輪 API 呼叫的暫存（同目錄 `.trial/`：cookie、帳密、
-回應）收尾時刪了。
+**2026-10-09 依使用者要求已全部退回**（使用者之後自己從頭部署；推翻開工時的「這一套留著」）。這一輪 API 呼叫的暫存
+（`/mnt/user/appdata/berth-deploy/.trial/`：cookie、帳密、回應）在 2026-10-08 收尾時就刪了。
+
+退回時刪的（先列清單、使用者確認之後才動；每一樣都對得上是這張票建的）：
+
+| 東西 | 怎麼刪 |
+| --- | --- |
+| 容器 `berth`、`berth-jellyfin`、`berth-qbittorrent`、`berth-prowlarr` 與網路 `berth`（沒有 volume） | 在 `/mnt/user/appdata/berth-deploy` 下 `docker compose -f docker-compose.yml -f docker-compose.override.yml down -v` |
+| `/mnt/user/appdata/berth-deploy`（含 `CREDENTIALS.md`）、`/mnt/user/appdata/berth`、`/mnt/user/Roxy/Berth`（含入庫的《活死人之夜》與它在 complete 的另一個名字；實體在 disk3，cache 上剩空目錄） | `rm -rf` |
+| image `berth:unraid-b10c9c7`（`0253b28b`）、`lscr.io/linuxserver/prowlarr:latest`（`cc10ec06`）、`lscr.io/linuxserver/jellyfin:version-12.1ubu2604`（`df97e84a`） | `docker rmi`。三個在 imagedb 的寫入時間是 2026-10-08 18:37、18:39:09、18:39:49，就是這張票的 `docker load` 與 `up` |
+
+**沒刪的**：`lscr.io/linuxserver/qbittorrent:latest`（`6625182c`）——2026-08-07 就在，使用者既有的 `qbittorrent` 用的
+就是它，`berth-qbittorrent` 只是共用；這台 Windows 上本機 build 的 `berth:unraid-b10c9c7`（`8050bb25`），不在
+Unraid 上、使用者選了不刪。
+
+退回之後（2026-10-09 04:40）的比對，快照在 [`containers-rollback.txt`](unraid-trial-2026-10-08/containers-rollback.txt)：
+
+- **14 個既有容器與開工快照完全一致**：數量、id、image、啟動時間、狀態、重啟次數、掛載（同 §7 的做法，掛載先排序）。
+- **三個路徑已不存在**：`/mnt/user/appdata/berth-deploy`、`/mnt/user/appdata/berth`、`/mnt/user/Roxy/Berth`；任何一顆碟或
+  pool 上都沒有 `Roxy/Berth` 或 `appdata/berth*`。
+- **五個 port 已釋放**：`ss -ltn` 上沒有 8383、18096、18080、16881、9696。
+- 沒有 `berth` 網路；`Roxy/Library`、`Roxy/Downloads` 的時間戳沒變。沒有跑 mover、沒動陣列、share 設定與 Docker 服務。
 
 ## 來源
 
