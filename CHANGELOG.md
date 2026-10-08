@@ -8,6 +8,12 @@
 
 ### Added
 
+- **部署套件改成 release 附件**（M4 票 56，brief §19 E4）：每一版 release 附一個 zip，解壓出 `berth/`（compose 檔、
+  `.env.example`、`preseed/`），不必 clone repo。檔名帶版本的 `berth-deploy-<版本>.zip` 之外另有同內容的
+  `berth-deploy.zip`，`https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip` 永遠是最新的正式版；
+  預發佈版本也有附件，但不動這個連結。以前只抓 compose 一個檔的話少了 `preseed/`，套件內 qBittorrent 不放 Berth
+  進去。升級改成解壓新的 zip 蓋過原本的 `berth/`（`.env` 不在 zip 裡）。`.env.example` 開頭說明一台主機只跑一套。
+
 - **作品頁打開時先問一次 Jellyfin**（M4 票 51）：入庫後 Jellyfin 已經有這部、媒體庫頁也看得到，作品頁的「檔案與版本」
   卻還寫「Jellyfin 還在掃描」，因為 Berth 的反查在退避（最晚 10 分鐘）。現在作品頁有檔案還在等時先問一次，Jellyfin
   已經列出的就改成已收錄；真的還沒有的照舊，而且不算反查的一次。那一句改說「Berth 下一次確認在 …」，排程是 Berth 的。
