@@ -6,13 +6,21 @@
 
 ## 部署
 
-`deploy/` 是完整的 compose 套件：Berth 加 qBittorrent、Jellyfin、Prowlarr，四個容器掛同一個媒體根。Linux 與 Windows 共用同一份 `docker-compose.yml`。
+部署套件是 release 上的一個 zip：Berth 加 qBittorrent、Jellyfin、Prowlarr 的 compose 檔、`.env.example` 與
+qBittorrent 的預置腳本（`preseed/`）。Linux 與 Windows 共用同一份。**只抓 compose 一個檔不夠**：少了 `preseed/`，
+套件內的 qBittorrent 不放 Berth 進去。
+
+下載最新版 [`berth-deploy.zip`](https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip)
+（沒有 git 也行，瀏覽器下載再解壓），解壓出一個 `berth/` 目錄：
 
 ```bash
-cd deploy
+curl -LO https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip
+unzip berth-deploy.zip && cd berth
 cp .env.example .env        # 改 DATA_ROOT 與 CONFIG_ROOT；port 撞到了再改五個 *_PORT
 docker compose up -d
 ```
+
+一台主機只跑一套：容器名、網路與子網寫在 compose 檔裡，第二套會撞名起不來（`.env.example` 開頭）。
 
 開 <http://localhost:8383>，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開另外三個服務的介面。
 **唯一要離開 Berth 的一步是 TMDB 的 API key**，見下面的〈先申請一把 TMDB API key〉。
@@ -124,7 +132,7 @@ port 跟這台機器上別的東西撞到時（同一台還跑著另一套 Berth
 **`QBITTORRENT_WEBUI_PORT` 要在跑精靈之前定下來**：Berth 連套件內 qBittorrent 的位址是精靈頁 2 選「套件內」
 那一刻存下的那一條，之後再改這個變數不會跟著走（回頭在頁 2 再選一次套件內就會重存）。
 
-已經有其中某個服務的人，在精靈那一頁選「既有」、把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉；`berth` 沒有 profile，永遠會啟動。變數清單見 `deploy/.env.example`，裡面沒有任何秘密欄位。
+已經有其中某個服務的人，在精靈那一頁選「既有」、把它從 `.env` 的 `COMPOSE_PROFILES` 拿掉；`berth` 沒有 profile，永遠會啟動。變數清單見 `.env.example`，裡面沒有任何秘密欄位。
 
 ### 先申請一把 TMDB API key
 
@@ -179,7 +187,7 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 - **qBittorrent**：最低 4.4（Web API 2.8.4）。套件內的容器由 `deploy/preseed/qbittorrent/10-berth.sh` 在服務啟動前補上免密白名單，而且只放行 Berth 那一個固定 IP —— 4.6.1 起首次啟動的隨機密碼只印在容器 log，沒有這一步 Berth 進不去；WebUI 從宿主或 LAN 進來仍然要密碼。全域偏好（預設儲存路徑、autoTMM、未完成目錄）Berth 一個都不寫：送單逐個 torrent 開自動管理、放進 `berth-*` 分類，分類帶自己的完成目錄與 `downloadPath`（`/data/torrent/incomplete/<slug>`）。腳本不覆蓋任何已經有值的設定。
 - **Jellyfin**：**最低 12.0**（12.0 就是原本的 10.12 —— Jellyfin 把版號前面永遠不變的 `10` 拿掉了）。12.0 起同一集的多個版本由 Jellyfin 自己合併成一個條目，不需要任何插件；10.x 要靠第三方插件，而那個插件在 12 上是空跑、還會跨媒體庫誤併，所以 Berth 只支援 12 以上。更舊的伺服器在精靈 Jellyfin 那一頁與健康頁都是紅燈，不會被接進來。
   - **從 10.x 升上來**：10.10.7 與任何 10.11.x 都可以直接升，不必經過中繼版本。**升級前**把 Jellyfin 的 `${CONFIG_ROOT}/jellyfin` 完整備份 —— 12 改了資料庫，降不回去，只能還原備份；再移除第三方插件，10.11 的插件在 12 載入不了。**升級後**完整掃描一次媒體庫，自動分組的版本才會回來。
-  - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `deploy/docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
+  - **套件內的 Jellyfin 釘在 `version-12.1ubu2604`**：`docker compose pull` 只會拿到 12.1 這條線的重建，不會默默跨到下一個大版本。要升級時先備份上面那個目錄，再改 `docker-compose.yml` 的 tag 並 `docker compose up -d jellyfin`。
 - **Prowlarr**：**最低 1.3.2**（Berth 用到的端點裡最晚出現的是匿名的 `/ping`，brief §20.14）；更舊的在精靈 Prowlarr 那一頁與健康頁都是紅燈。接既有的 Prowlarr 要的是位址與 API key（它的「設定 → 一般 → 安全性」）。套件內的不預置任何東西，Berth 唯讀掛載它的設定目錄以讀取它自動產生的 API key。
 - **TMDB**：要你自己申請一把 API key（上面那一節），Berth 不內建。憑證存在 Berth 自己的資料庫裡，
   精靈 TMDB 那一頁或「設定 → TMDB」都改得了。
@@ -191,14 +199,20 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 ### 版本與升級
 
 compose 範本拉的是 `ghcr.io/1morr/berth:latest`，永遠是最新的正式版本；每個版本另有 `:<版本>`（例如 `:0.1.0`）與
-`:<主>.<次>`（`:0.1`）兩個 tag，想固定在某一版就把 `deploy/docker-compose.yml` 的 `berth` 改成它。預發佈版本
+`:<主>.<次>`（`:0.1`）兩個 tag，想固定在某一版就把 `docker-compose.yml` 的 `berth` 改成它。預發佈版本
 （`-rc1` 這種）只有 `:<版本>`，不會動到 `:latest`。
+
+部署套件是每一版 release 上的附件，兩份內容相同：`berth-deploy-<版本>.zip` 與 `berth-deploy.zip`。
+`https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip` 永遠是最新的正式版本；某一版的是
+`https://github.com/1morr/Berth/releases/download/v<版本>/berth-deploy-<版本>.zip`。預發佈版本一樣有附件，
+但 release 標成 prerelease，`latest` 的連結不會指到它。附件由 `scripts/deploy_bundle.py` 產生，release workflow
+與本機用同一支（`uv run python scripts/deploy_bundle.py 0.2.0` 寫到 `dist/`）。
 
 升級時 compose 範本也要跟著換：它會隨版本改（容器名、釘住的 Jellyfin tag、`.env` 的變數），只拉新 image 的話
 你手上的還是舊範本。
 
-1. 把那一版的 `deploy/docker-compose.yml` 蓋過你手上那一份，對照 `deploy/.env.example` 把新變數補進你的 `.env`
-   （`.env` 本身不要蓋掉）。
+1. 下載那一版的 zip，解壓到你原本的 `berth/` 上：`docker-compose.yml` 與 `preseed/` 蓋過去，對照新的
+   `.env.example` 把新變數補進你的 `.env`（`.env` 本身不在 zip 裡，不會被蓋掉）。
 2. `docker compose pull && docker compose up -d`。Berth 啟動時自動套用資料庫 migration。
 
 每一版改了什麼、升級要注意什麼，見 `CHANGELOG.md`。

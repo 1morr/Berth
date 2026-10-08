@@ -576,6 +576,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - **`berth` 服務帶 `extra_hosts: ["host.docker.internal:host-gateway"]`**（M4 票 16）：Linux 上 Berth 才連得到宿主上的既有服務；Docker Desktop 本來就有這個名字（§9.5〈連線位址〉）。
 - Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，README 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
 - 只有一份 `docker-compose.yml`，Linux 與 Windows 共用；`.env.example` 內附兩種路徑寫法的註解。
+- **使用者拿到的是 release 附件，不是 repo**（M4 票 56，brief §19 E4、§20.17）：`scripts/deploy_bundle.py` 把 compose 檔、`.env.example`、`preseed/` 打成 `berth-deploy-<版本>.zip`（解壓出 `berth/`）與同內容的 `berth-deploy.zip`（README 的 `releases/latest/download/` 連結），release workflow 在 `v*` tag 上附上；預發佈 tag 標成 prerelease，不動 latest。`Dockerfile`、`entrypoint.sh` 不放。`tests/unit/test_deploy_bundle.py` 守著 compose 以字面相對路徑引用的每個來源都在 zip 裡、目錄不是空的。
 - incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`（`PathSettings` 的預設值，沒有 API 或 UI 改它，M4 票 22）；媒體庫路徑讀自 Jellyfin。要換宿主上的位置改 `DATA_ROOT` 掛到哪裡，容器路徑不變。
 - 目錄骨架由 Berth 啟動時建立：`<complete root>/..`、`<incomplete root>`。套件內 Jellyfin 的媒體庫目錄（`<library_root>/<資料夾>`，預設 `movies` / `tv` / `anime`）在精靈的媒體庫與路徑頁建立媒體庫之前才建（§9.4 第 4 步）。
 

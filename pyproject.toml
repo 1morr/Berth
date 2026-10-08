@@ -64,6 +64,9 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# scripts/ 不是套件（沒有 __init__.py，各自用 `python scripts/x.py` 跑）；測試要 import 其中的發版工具
+# （`deploy_bundle`），mypy 也以同一個頂層名認它，兩邊才不會把同一個檔案認成兩個模組。
+pythonpath = ["scripts"]
 # e2e 要一整套 compose 在跑（README〈e2e〉），平常的 `pytest` 不收；`-m e2e` 蓋過這一個。
 addopts = "--strict-markers --strict-config -m 'not e2e'"
 markers = ["e2e: needs the tests/e2e compose stack running (README, e2e)"]

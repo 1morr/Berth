@@ -42,3 +42,32 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # 部署檔的 zip（M4 票 56、brief §19 E4、§20.17）：使用者下載它、不 clone repo。等 image 推完才建
+  # release，README 的「最新版」連結指到的那一版一定拉得到 image。預發佈 tag（含 `-`）標成
+  # prerelease，`releases/latest/download/` 就不會指到它。重跑同一個 tag 只重傳附件。
+  bundle:
+    name: deploy bundle
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.0.1
+
+      # 只用標準庫，不必 sync 整個專案；本機用的是同一支（README〈版本與升級〉）。
+      - run: uv run --no-project python scripts/deploy_bundle.py "${GITHUB_REF_NAME#v}" --out dist
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            flags=(--verify-tag --title "$TAG")
+            flags+=(--notes "Changes and upgrade notes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md")
+            if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+            gh release create "$TAG" "${flags[@]}"
+          fi
+          gh release upload "$TAG" dist/*.zip --clobber

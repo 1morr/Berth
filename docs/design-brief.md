@@ -1606,3 +1606,9 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **Radarr 沒有「這是劇集的一集」那一道**：`Parser.ParseMovieTitle` 不看季集，`Show.S01E02` 被拒是因為標題對不上（`UnknownMovie`），不是因為 `S01E02`。Berth 的粗篩只看「名字出現在發佈名裡」（`mentions`），《Below Deck Down Under S04E02 Night of the Living Dead》過得了那一道，所以電影要另外擋季集記號。
 - **Sonarr 不以年份拒絕**：`FindByTitle(TitleWithoutYear, Year)` 只在純標題找不到時才拿年份來分同名劇（`Parser/ParsingService.cs`，[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core)）。也沒有「這是電影」那一道。
 - **Berth 的做法**（`parser.title.fits`）：年份容許差一年，代替 Berth 快照沒有的「第二年份」（影展與各國上映跨年）；劇集的年份範圍是首播年到最後一季的首播年（各放寬一年），只擋播出期間之外的（《Doctor Who》1963 與 2005 是兩部）；片名自己帶的數字（`Blade Runner 2049`）不算年份。劇集**不**擋沒有季集記號的：`Title - 05`、`[01-12]` 是動漫的常態，`Movie` 又可能是 S00（§6.3 `special_kind`）。篩掉的收著不丟，畫面說數量、可展開（判斷只看發佈名，可能看錯）。
+
+### 20.17 部署檔的 release 附件與「最新版」連結（2026-10-08 查證，M4 票 56）
+
+- **`https://github.com/<owner>/<repo>/releases/latest/download/<附件名>` 直接下載最新版本的那個附件**：GitHub 文件〈Linking to releases〉寫明手動上傳的附件用這個後綴（[docs.github.com](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)）。所以每一版都要有一個**同名**的附件，README 才能寫死連結；Berth 每一版附兩份同內容的 zip：`berth-deploy-<版本>.zip` 與 `berth-deploy.zip`。Immich 的安裝步驟就是這樣拿 compose 與 `example.env`（審計 R2 §1.6）。
+- **「最新」只算正式版本**：REST API〈Get the latest release〉——「the most recent non-prerelease, non-draft release, sorted by the `created_at` attribute」；`make_latest` 對草稿與預發佈無效（「Drafts and prereleases cannot be set as latest」）（[docs.github.com](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)）。所以 `-rc` 的 release 標成 prerelease 就不會動到 `latest/download`，與 GHCR 的 `:latest` 規則一致。
+- **`gh release create`**：`--prerelease`、`--verify-tag`（tag 不在遠端就中止）、`--latest=false`；`gh release upload --clobber` 先刪同名附件再傳（[cli.github.com](https://cli.github.com/manual/gh_release_create)）。release workflow 用前兩個建 release、用 `upload --clobber` 附 zip，重跑同一個 tag 不會失敗。
