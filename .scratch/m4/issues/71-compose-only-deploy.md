@@ -1,6 +1,6 @@
 # 71 — 只用 compose 檔加 `.env` 就能部署，發 0.2.1
 
-**Status:** ready-for-agent（第 1–7 步已在分支 `1morr/m4-71-compose-only` 做完；剩第 8 步，等 70、71 合進 main，見 Comments）
+**Status:** done
 
 **Blocked by:** 70（內嵌 preseed 的寫法與結論）；排在 42 之後做（同一批 guide 與 brief §20.14，避免兩個 session 同時改）
 
@@ -57,7 +57,7 @@
 - [x] zip 打包、它的測試與 release workflow 的附件步驟都刪掉；Release 頁照常建、無附件
 - [x] README、README.zh-Hant、guide、development.md（發版步驟含更新 compose 連結）、`.env.example` 已改；全 repo 掃斷鏈 0
 - [x] 乾淨目錄只放 compose＋`.env`：本機與 VM 各一次到頁 2 綠，附指令輸出
-- [ ] `v0.2.1` 已發（合進 main 之後做；版號、CHANGELOG、連結已在分支上改好）：Release run 綠、無附件、GHCR `latest` = `0.2.1` digest；照 README 從乾淨環境入庫一部，附截圖
+- [x] `v0.2.1` 已發：Release run 綠、無附件、GHCR `latest` = `0.2.1` digest；照 README 從乾淨環境入庫一部，附截圖
 - [x] brief E4 推翻紀錄、§20.17 標取代、plan §9.1、CHANGELOG `[0.2.1]`、progress.md 已更新
 - [x] 全部檢查、pytest、vitest、前端 e2e 綠燈
 
@@ -186,3 +186,59 @@ $ pnpm -C web build && pnpm -C web e2e   # port 8484–8520 先確認沒被占
 
 - `inline_preseed.deployed_script()` 與測試的 `embedded_script()` 用兩種方法抽同一段，前者寫死 `    content: |` 與 6 格縮排（Standards，Duplicated Code）。實驗腳本只能用標準庫；compose 一旦重排，它在 `lines.index` 會直接丟 `ValueError`，不會量錯。為了把兩份綁在一起，要讓測試 import `scripts/experiments/`，而這張剛拿掉 `pythonpath = ["scripts"]`。
 - 每次發版要改四處 `v0.2.1`（Standards，Shotgun Surgery）：測試守著，development.md 寫了 `git grep` 的做法。
+
+### 發 0.2.1（2026-10-09 07:33–07:50 +08，協調者授權推 tag）
+
+70、71 合進 main 後（合併 commit `7bfd5c9`，CI run 37859103873 全綠），分支 `git merge --ff-only main` 到 `7bfd5c9`，
+`git tag v0.2.1 7bfd5c9 && git push origin v0.2.1`。**這次是 lightweight tag**（v0.2.0 是 annotated）：workflow 兩種都認，
+沒有刪掉重推，免得再觸發一次 run。
+
+- **Release run 37860161790**：`image: success`、`release notes: success`。
+- **Release 頁**（<https://github.com/1morr/Berth/releases/tag/v0.2.1>）：`prerelease=false`、`draft=false`、**附件 0**；
+  說明就是 CHANGELOG `## [0.2.1]` 那一段，相對連結已換成 `blob/v0.2.1/…`（例如 `docs/guide/upgrading.md`），沒有留下相對連結；
+  `GET /repos/1morr/Berth/releases/latest` 回 `v0.2.1`。
+- **GHCR 匿名查**（`ghcr.io/token?scope=repository:1morr/berth:pull` 拿匿名 token，`HEAD /v2/1morr/berth/manifests/<tag>`）：
+
+  ```
+  latest docker-content-digest: sha256:c3daa193279eb316a583aef60937fbf247bbacba1abdc0d97a9c164d5810732e
+  0.2.1  docker-content-digest: sha256:c3daa193279eb316a583aef60937fbf247bbacba1abdc0d97a9c164d5810732e
+  0.2    docker-content-digest: sha256:c3daa193279eb316a583aef60937fbf247bbacba1abdc0d97a9c164d5810732e
+  ```
+
+**照 README 的連結在乾淨目錄入庫一部**（本機，repo 外 session scratchpad 的 `t71-release/berth/`）：
+
+```
+$ curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/docker-compose.yml
+$ curl -fsSLo .env https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/.env.example
+$ ls -A
+.env
+docker-compose.yml
+$ sha256sum docker-compose.yml .env        # 與 git show v0.2.1:deploy/… 相同
+c69c2ac1…4a99  docker-compose.yml
+24432efd…5d28  .env
+```
+
+`.env` 只改了兩個根（repo 外的絕對路徑）與五個 port（58383 / 58096 / 58080 / 56881 / 59696）。審計環境的 `berth` 還在跑，所以照前兩次的做法，
+override 放在目錄外、以 `-f` 疊上，`COMPOSE_PROJECT_NAME=berth-t71`。只 `docker compose pull berth`（拉到
+`ghcr.io/1morr/berth@sha256:c3daa193…732e`，本機 `:latest` 這個 tag 因此換成 0.2.1；審計環境的容器沒有重建、仍在跑）；三個 lscr
+image 用本機已有的。`up -d` 約 30 秒四個 healthy，`/api/health` 回 `"version":"0.2.1"`，preseed log
+`added … WebUI\AuthSubnetWhitelist=172.27.0.2/32`、`exited 0`。
+
+| 步驟 | 結果 | 截圖（`.playwright-mcp/t71/`，gitignore） |
+| --- | --- | --- |
+| 頁 1 | 套件內 Jellyfin 12.1.0，建 `t71admin`（密碼隨機，由本機 helper 在頁面內 fetch 填入） | `rel-01-page1` |
+| 頁 2 | 套件內 qBittorrent v5.2.3 · Web API 2.15.1，WebUI 登入已設 | `rel-02-page2` |
+| 頁 3 | 進頁自動建立 Movies / TV / Anime，3 條 Route 各 6 / 6 | `rel-03-page3`、`rel-03b-page3-view` |
+| 頁 4 | 「測試推薦站，加入通過的」：加入 5 站（dmhy、Anime Tosho、ACG.RIP、Mikan、The Pirate Bay），4 站沒過（2 連不上、2 被 Cloudflare 擋），與 0.2.0 那次相同 | `rel-04-page4`、`rel-05-page4-added` |
+| 頁 5 | TMDB key 由同一個 helper 從主 checkout 的 `.env` 讀出、在頁面內 fetch 填入，測試通過 | `rel-06-page5` |
+| 頁 6 | 完成設定 → 探索，已登入 | `rel-07-page6`、`rel-08-after-finish` |
+| 搜尋 | 《Night of the Living Dead》(1968，TMDB 10331，公有領域)：34 筆，107 筆名字對不上已略過 | `rel-09-search` |
+| 送單 | `Night Of The Living Dead 1968 720p BRRip x264-x0r`（1.6 GB，22 seeders，The Pirate Bay）→ Movies，07:42:42 | `rel-10-send-confirm`、`rel-11-sent` |
+| 入庫 | 07:45:16 `job imported`；`/data/library/movies/Night of the Living Dead (1968) [tmdbid-10331]/… - [BD][720p][x0r].mkv` 與 `torrent/complete/movies/…x0r.mkv` 都是 link count 2、同一個 inode `2533274793100337`、1743776999 bytes | — |
+| Jellyfin | 作品頁「在 Jellyfin 看」，檔案列「帳本 對得上 · Jellyfin 已收錄」；健康頁全部已繫上 | `rel-12-media-imported`、`rel-13-library`、`rel-14-health` |
+
+**TMDB key 不在任何輸出**：helper 只把它交給頁面，四個容器的 `docker logs`、這個 session 的工具輸出檔、repo 內 `grep -F` 該值的命中數都是 0。
+
+清理：`docker compose down --volumes`（四個容器與 `berth-t71` 網路已移除），刪掉 `t71-release/`（1.7 GB，含下載的片）與 helper；
+`docker ps -a`、`docker network ls` 過濾 `t71` 都是空的，審計環境的 `berth` 仍 `Up 5 hours (healthy)`。過程中發現前一輪 VM
+tunnel 的 `ssh -L 58383` 在 TaskStop 之後還活著、佔著 `127.0.0.1:58383`（`/api/health` 一開始打到它），確認命令列後 `taskkill` 掉。
