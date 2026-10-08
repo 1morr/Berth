@@ -563,6 +563,27 @@ python scripts/experiments/compose_collisions.py --berth-image berth:e2e   # 報
 python scripts/experiments/compose_profile_removal.py --berth-image berth:e2e   # 報告寫到 .local/experiments/results/compose-profile-removal.json
 ```
 
+qBittorrent 的 preseed 腳本內嵌進 compose（頂層 `configs` 的 `content`，加 `mode: 0555`）之後 linuxserver 的 init
+認不認、白名單對不對、重啟與重建冪不冪等、qbittorrent 的 profile 關掉時 `up -d` 會不會報錯，另跑不寫 `mode` 的
+對照組（M4 票 70，brief §20.18）。內嵌的腳本是當下的
+`deploy/preseed/qbittorrent/10-berth.sh`；compose project 與 network 叫 `berth-t70`、容器 `berth-t70-qbittorrent` 與 `berth-t70-idle`（子網
+`10.70.0.0/16`，WebUI port 7080），用本地已有的 `qbittorrent:latest`、不 pull。三個變體約 3 分鐘，結束時 `down` 並刪掉工作目錄。
+換 Compose、Docker 或 linuxserver 版本之後重量；別的 Compose 版本用官方的獨立二進位，不換掉系統的：
+
+```bash
+python scripts/experiments/inline_preseed.py --label desktop     # 報告寫到 .local/experiments/results/inline-preseed-<label>.json
+python scripts/experiments/inline_preseed.py --label compose-2.40.3 --compose-bin <docker-compose 執行檔>
+python scripts/experiments/inline_preseed.py --label debug --variant mode --keep   # --keep 只能配一個變體：留著容器與目錄
+```
+
+搬到 Linux 宿主上跑時保留相對位置（只用標準庫，宿主要有 `python3`）：
+
+```bash
+tar cf - scripts/experiments/inline_preseed.py scripts/experiments/lib.py deploy/preseed/qbittorrent/10-berth.sh \
+  | ssh <host> 'mkdir -p ~/berth-t70 && tar xf - -C ~/berth-t70'
+ssh <host> 'cd ~/berth-t70 && python3 scripts/experiments/inline_preseed.py --label vm-rootless'
+```
+
 `jellyfin_naming.py` 必須從乾淨的 `/config` 跑（Jellyfin 的 DB 會留住舊掃描結果，插件裝過
 就在了，量不到「未裝插件」的基準）：
 

@@ -1,6 +1,6 @@
 # 70 — 原型：把 qBittorrent 的 preseed 腳本寫進 compose 檔
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（只在本機與 VM 上跑，不碰 Unraid；與 42 不衝突）
 
@@ -40,7 +40,50 @@
 
 ## 驗收
 
-- [ ] 三個環境各有一次實跑紀錄：檔案權限、init log、`qBittorrent.conf` 兩個鍵、非白名單位址要密碼、重啟冪等
-- [ ] 選定的寫法在三個環境都成立；有任何一個不成立，寫明原因與替代方案，**停下來問使用者**再開 71
-- [ ] brief §20 新增一節（來源、指令、版本），實驗腳本在 `scripts/experiments/`，有使用說明
-- [ ] 本機與 VM 上這次起的容器與目錄都清掉；progress.md 記一行
+- [x] 三個環境各有一次實跑紀錄：檔案權限、init log、`qBittorrent.conf` 兩個鍵、非白名單位址要密碼、重啟冪等
+- [x] 選定的寫法在三個環境都成立；有任何一個不成立，寫明原因與替代方案，**停下來問使用者**再開 71
+- [x] brief §20 新增一節（來源、指令、版本），實驗腳本在 `scripts/experiments/`，有使用說明
+- [x] 本機與 VM 上這次起的容器與目錄都清掉；progress.md 記一行
+
+## Comments
+
+### 實跑（2026-10-09，`scripts/experiments/inline_preseed.py`）
+
+內嵌的是當下的 `deploy/preseed/qbittorrent/10-berth.sh`（`$`→`$$`），每個變體全新的 CONFIG_ROOT；compose project /
+network `berth-t70`、子網 10.70.0.0/16、WebUI port **7080**（協調者給的 78080 / 76881 超過 65535，取「7 開頭」的本意；
+本機與 VM 事先確認沒被占）。qbittorrent 照部署檔放在 `profiles: [qbittorrent]` 底下，另有一個沒有 profile 的 `idle`
+代替 `berth`。報告在 `.local/experiments/results/inline-preseed-{desktop,compose-2.40.3,vm-rootless}.json`（不進版控）。
+
+| 環境 | Compose / Docker | image | `mode: 0555`（首次 / restart / recreate） | 不寫 `mode` | profile 關掉 |
+| --- | --- | --- | --- | --- | --- |
+| 本機 Docker Desktop | v5.3.1 / 29.6.2 | 5.2.3-ls478 | 三階段全部成立 | 444、`is not an executable file`、BERTH_IP 也 403 | `up -d` 回 0，只起 `idle` |
+| 同機 v2.40.3 官方二進位（scratchpad，未換系統的） | v2.40.3 / 29.6.2 | 同上 | 三階段全部成立 | 同上 | 同上 |
+| 票 42 的 VM，rootless | v5.3.1 / 29.7.1 | 5.2.4-ls479 | 三階段全部成立 | 同上 | 同上 |
+
+「全部成立」逐項是：`root:root 0:0 555 regular file`；容器內 sha256 與原檔相同；log
+`[custom-init] 10-berth.sh: executing...` → `[berth-preseed] added to /config/qBittorrent/qBittorrent.conf: WebUI\AuthSubnetWhitelistEnabled=true WebUI\AuthSubnetWhitelist=10.70.0.2/32`
+→ `exited 0`（restart / recreate 是 `already configured, leaving … untouched`）；沒有 tamper 警告；兩個鍵各一行；
+`/api/v2/app/version`：BERTH_IP 200、宿主經 published port 403、10.70.0.3 403。`docker inspect` 的 `Mounts` 只有
+`/config`：Compose 把檔案寫進容器，不是 bind mount。結論與決定的寫法在 brief §20.18。
+
+清理：每次跑完 `down --volumes` 並刪工作目錄；本機與 VM 上 `docker ps -a` / `docker network ls` 過濾 `berth-t70` 都是空的，
+VM 的 `~/berth-t70` 已刪，本機 `.local/experiments/inline-preseed/` 空。v2.40.3 二進位在 session 的 scratchpad，不在 repo。
+
+VM 上票 42 的四個容器在第一輪實跑中途（05:03:32 +08）被重建，labels 是 project `berth`、working_dir
+`/home/cppt/berth-trial-42/berth`：那是票 42 自己的 compose，這支腳本只對 `berth-t70` 下指令，沒碰它。
+
+### code-review（d3ca61f，Standards 與 Spec 兩軸 opus）已處理
+
+- README 那一列接在檔尾、不在表格裡 → 移進表格（Standards）。
+- 「容器都叫 `berth-t70`」不精確、「掛到」與 brief「不是掛載」矛盾 → 改寫（Standards）。
+- `stages` 的第三欄沒人讀；宿主狀態碼是 int、另兩個是 str → 刪掉、`probe` 回 int（Standards）。
+- `--keep` 配兩個變體時後一個會重建掉前一個 → `--keep` 只准配一個 `--variant`（Standards）。
+- 部署檔的 qbittorrent 有 profile，profile 關掉時頂層 `configs` 沒人用會不會報錯沒量 → 加 `profile-off` 變體，三個環境重跑（Spec）。
+- brief 沒說為什麼沒量 `bash …` / `exec bash` 兩種替代寫法、image 內 init 腳本沒附讀法、「隨身碟上也無妨」是推論 → 補上並標明（Spec）。
+- 檔案不存在時 `split()[2]` 會 IndexError → 防住（Spec）。
+
+### 未處理（判斷後留著）
+
+- 前綴 `berth-t70` 不是既有實驗腳本的 `berth-exp-*`：協調者指定，為了與票 42 並行時好辨認；README 那一列寫了原因。
+- `main` 不管結論都回 0：與其他實驗腳本一致，結論在報告裡。
+- brief §19 E4 那列與 §20.17 還沒標推翻 / 取代：票 71 的「紀錄」一步明列要做，這張只在 §20.18 開頭寫推翻。
