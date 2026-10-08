@@ -1,6 +1,6 @@
 # 71 — 只用 compose 檔加 `.env` 就能部署，發 0.2.1
 
-**Status:** ready-for-agent（第 1–7 步的本機部分已在分支 `1morr/m4-71-compose-only` 做完；剩 VM 實跑與第 8 步，見 Comments）
+**Status:** ready-for-agent（第 1–7 步已在分支 `1morr/m4-71-compose-only` 做完；剩第 8 步，等 70、71 合進 main，見 Comments）
 
 **Blocked by:** 70（內嵌 preseed 的寫法與結論）；排在 42 之後做（同一批 guide 與 brief §20.14，避免兩個 session 同時改）
 
@@ -56,7 +56,7 @@
 - [x] preseed 行為測試改成讀 compose 內嵌的腳本，原有斷言都在且綠
 - [x] zip 打包、它的測試與 release workflow 的附件步驟都刪掉；Release 頁照常建、無附件
 - [x] README、README.zh-Hant、guide、development.md（發版步驟含更新 compose 連結）、`.env.example` 已改；全 repo 掃斷鏈 0
-- [ ] 乾淨目錄只放 compose＋`.env`：本機與 VM 各一次到頁 2 綠，附指令輸出（本機完成；VM 待協調者確認空出來）
+- [x] 乾淨目錄只放 compose＋`.env`：本機與 VM 各一次到頁 2 綠，附指令輸出
 - [ ] `v0.2.1` 已發（合進 main 之後做；版號、CHANGELOG、連結已在分支上改好）：Release run 綠、無附件、GHCR `latest` = `0.2.1` digest；照 README 從乾淨環境入庫一部，附截圖
 - [x] brief E4 推翻紀錄、§20.17 標取代、plan §9.1、CHANGELOG `[0.2.1]`、progress.md 已更新
 - [x] 全部檢查、pytest、vitest、前端 e2e 綠燈
@@ -111,9 +111,47 @@ image 是本機已有的 `ghcr.io/1morr/berth:latest`（= 0.2.0，`9ec2722c`）�
 
 清理：`down --volumes`，刪掉 `t71-local/`；`docker ps -a`、`docker network ls` 過濾 `t71` 都是空的。審計環境的 `berth` 從頭到尾 `Up 4 hours (healthy)`，沒有被動到。
 
-### 實跑：VM（rootless）
+### 實跑：VM（rootless，2026-10-09 07:06–07:10 +08）
 
-尚未做，等協調者確認 VM 空出來。
+協調者確認票 42 已收尾（main `22c904a`，S1 / S2 都 down）之後才做。票 42 的 VM（`cppt-dev`）：Docker rootless、Compose v5.3.1。
+新目錄 `~/berth-t71/berth/` 只放兩個檔，從分支的 `deploy/` 經 ssh 寫過去（`v0.2.1` tag 還不存在）。compose sha256 與 repo 相同
+（`c69c2ac1…4a99`）。`.env` 照 README 只改兩個根（`~/berth-t71/data`、`~/berth-t71/config`，絕對路徑）與 rootless 的 `PUID=0` /
+`PGID=0`（brief §20.14）。port 與容器名都用預設，沒有 override：VM 上沒有別的 Berth 在跑。lscr 的 image 是票 42 從
+`ghcr.io/linuxserver/*` 拉來改過 tag 的那幾份，沒有 pull。
+
+```
+$ ls -A
+.env
+docker-compose.yml
+$ diff deploy/.env.example .env      # 摘要：左邊 repo、右邊 VM
+< DATA_ROOT=./data            > DATA_ROOT=/home/cppt/berth-t71/data
+< CONFIG_ROOT=./config        > CONFIG_ROOT=/home/cppt/berth-t71/config
+< PUID=1000 / PGID=1000       > PUID=0 / PGID=0
+$ docker compose up -d
+ Container berth Started … berth-jellyfin Started
+$ docker compose ps
+berth Up 21 seconds (healthy)  berth-jellyfin … berth-prowlarr … berth-qbittorrent Up 21 seconds (healthy)
+$ docker compose logs qbittorrent | grep -E 'custom-init|berth-preseed|tamper|executable'
+[custom-init] Files found, executing
+[custom-init] 10-berth.sh: executing...
+[berth-preseed] added to /config/qBittorrent/qBittorrent.conf: WebUI\AuthSubnetWhitelistEnabled=true WebUI\AuthSubnetWhitelist=172.28.0.2/32
+[custom-init] 10-berth.sh: exited 0
+$ docker exec berth-qbittorrent stat -c '%U:%G %a %F' /custom-cont-init.d/10-berth.sh
+root:root 555 regular file
+$ curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v2/app/version
+403
+$ ls -ln ~/berth-t71
+drwxrwxr-x 2 1000 1000 berth
+drwxr-xr-x 6 1000 1000 config      # PUID 0 在 rootless 下就是宿主上的自己
+drwxr-xr-x 2 1000 1000 data
+```
+
+精靈從本機經 `ssh -L 58383:localhost:8383` 以 Playwright 走，帳密照本機那一次的做法（隨機產生、helper 在頁面內 fetch、不出現在輸出）：
+頁 1 套件內 Jellyfin 12.1.0 建 `t71admin`；頁 2 套件內：**連上了、v5.2.4 · Web API 2.15.1、WebUI 登入已完成**。截圖
+`.playwright-mcp/t71/t71-vm-01-page1.png`、`t71-vm-02-page2.png`（gitignore）。
+
+清理：`docker compose down --volumes`（四個容器與 `berth` 網路已移除），`rm -rf ~/berth-t71` 回 0、目錄已不在。剩下的只有票 42 的兩個
+`s2-*` exited 容器與 `~/berth-trial-42`，都沒動。tunnel 與 helper 已停。
 
 ### 檢查與測試（2026-10-09，本機）
 
