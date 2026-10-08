@@ -446,6 +446,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/routes"): Access.ADMIN,
     ("DELETE", "/routes/*"): Access.ADMIN,
     ("PUT", "/routes/*"): Access.ADMIN,
+    ("POST", "/routes/check"): Access.ADMIN,
     ("POST", "/routes/*/check"): Access.ADMIN,
     ("GET", "/jellyfin/libraries"): Access.ADMIN,
     # RSS（M3 票 08）：整組 admin——聚合 feed 的網址帶 token，綁定會替整個家送單。

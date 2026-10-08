@@ -8,6 +8,11 @@
 
 ### Added
 
+- **換一台 qBittorrent 之後 Route 自動重新檢查，以及「全部重新檢查」**（M4 票 59）：在設定 → qBittorrent 換了一台、新那台
+  測過之後，Berth 自動對每一條 Route 重跑檢查（分類建在新那台、探針重問），畫面說「正在重新檢查 N 條 Route」並逐條
+  顯示進度，跑完說幾條過了、沒過的指去「媒體庫路徑」。「媒體庫路徑」設定頁多一顆「全部重新檢查」，健康頁的 Route
+  總結是「要重新檢查」時管理員也有同一顆。新端點 `POST /api/routes/check`（只有管理員）。
+
 - **部署套件改成 release 附件**（M4 票 56，brief §19 E4）：每一版 release 附一個 zip，解壓出 `berth/`（compose 檔、
   `.env.example`、`preseed/`），不必 clone repo。檔名帶版本的 `berth-deploy-<版本>.zip` 之外另有同內容的
   `berth-deploy.zip`，`https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip` 永遠是最新的正式版；
@@ -29,6 +34,12 @@
   精靈頁 2 選過一台之後換另一台一律先確認（原本既有的那一台換走時沒有確認）。
 
 ### Changed
+
+- **健康頁的媒體庫路徑不再假綠**（M4 票 59）：換了一台 qBittorrent 之後，那一格原本還寫「已繫上」，三條 Route 卻都是
+  「尚未檢查」；探針那一條從沒問過的 Route（5 / 6）也算綠。現在那一格與那幾條 Route 說「要重新檢查」，問到結論才是
+  「已繫上」。它不算降級：匿名的 `GET /api/health` 照樣是 `ok`。送單規則不變，還沒檢查完的 Route 照樣收單。
+- **完成精靈之後健康頁一打開就有紀錄**（M4 票 59）：原本四格都是「尚未檢查」、「上次檢查 沒有紀錄」，要按「立即重測」。
+  現在完成時把各頁測過的結論寫進健康紀錄；自動檢查在完成之後一個間隔（5 分鐘）才跑第一輪。
 
 - **套件內 Jellyfin 的伺服器名稱是「Berth」**（M4 票 52）：精靈沒設名稱時，Jellyfin 的用戶端顯示的是容器 ID。現在 Berth
   替全新的套件內 Jellyfin 跑初始設定時寫 `ServerName = Berth`；已經初始化過的（重裝保留設定）與既有的那一台不改，

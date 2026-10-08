@@ -417,11 +417,10 @@ class HealthSettings(SettingsGroup):
 
     KEY = "health"
 
-    #: 逐服務的最後結果；鍵是 `ServiceKind`。
+    #: 逐服務的最後結果；鍵是 `ServiceKind`。Route 的總結不存（`routes.routes_health` 現算，
+    #: M4 票 59）：換一台 qBittorrent 之後存著的那一份還說「已繫上」。舊版寫下的 `routes` 鍵
+    #: 讀的時候忽略。
     services: dict[ServiceKind, ServiceHealth] = {}
-    #: 每個 Route 都通過了它的每一項檢查。逐 Route 的明細在 `routes.health_detail_json`，
-    #: 這裡只留總結——匿名的 `GET /api/health` 靠它答 ok / degraded，不必查 routes 表。
-    routes: HealthStatus = HealthStatus.UNKNOWN
     checked_at: datetime | None = None
 
 

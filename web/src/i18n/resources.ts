@@ -847,6 +847,11 @@ const zhHant = {
       label: '沿用上一次的結論',
       why: '每 5 分鐘的自動檢查不重跑這一條：它會觸發 qBittorrent 的「torrent 完成時執行外部程式」。要再問一次，到 Route 設定按「{{recheck}}」。',
     },
+    // 探針從沒問過（換了一台 qBittorrent 之後，M4 票 59）：這條 Route 因此不算「已繫上」。
+    unasked: {
+      label: '還沒問過這一台 qBittorrent',
+      why: '每 5 分鐘的自動檢查不跑這一條：它會觸發 qBittorrent 的「torrent 完成時執行外部程式」。沒問到之前這條 Route 不算已繫上；到 Route 設定按「{{recheck}}」或「{{recheckAll}}」問一次。',
+    },
     waiting: '等待中',
     autoRun: '預設清單沒改過，進這一頁就開始建立並檢查。要多一個媒體庫，等它跑完再展開清單加一列。',
     listSummary: '媒體庫清單',
@@ -918,6 +923,8 @@ const zhHant = {
     },
     health: {
       unknown: '尚未檢查',
+      // 檢查過、但沒有每一條都問到結論（換了一台 qBittorrent、探針從沒問過，M4 票 59）。
+      recheck: '要重新檢查',
       ok: '已繫上',
       failed: '阻擋',
       checking: '檢查中',
@@ -2615,6 +2622,22 @@ const zhHant = {
     qbittorrentPage: {
       title: 'qBittorrent 設定',
       lede: '這一台 qBittorrent 還連得上嗎、位址或帳密要不要換，以及下載磁碟剩多少時開始擋送單。',
+      // 換了一台之後自動重查每一條 Route（M4 票 59）：分類建在原本那一台，新的這一台要再問一次。
+      recheck: {
+        title: 'Route 重新檢查',
+        running_one:
+          '正在重新檢查 {{count}} 條 Route：分類建在新的這一台，qBittorrent 看不看得到 Berth 的檔案也重問一次。',
+        running_other:
+          '正在重新檢查 {{count}} 條 Route：分類建在新的這一台，qBittorrent 看不看得到 Berth 的檔案也重問一次。',
+        meanwhile: '結果出來之前送單照舊：還沒檢查完的 Route 放行，紅了的才擋下。',
+        passed: '{{passed}} / {{total}} 條 Route 通過，都接上新的這一台了。',
+        failed_one:
+          '有 {{count}} 條 Route 沒過：到「媒體庫路徑」看它斷在哪一條。送單到它會被擋下。',
+        failed_other:
+          '有 {{count}} 條 Route 沒過：到「媒體庫路徑」看它們斷在哪一條。送單到它們會被擋下。',
+        error:
+          '重新檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後到「媒體庫路徑」按「{{recheckAll}}」。',
+      },
     },
     indexerPage: {
       sites: '站',
@@ -2693,6 +2716,13 @@ const zhHant = {
     rechecking: '檢查中…',
     recheckFailed: '檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
     rechecked: '檢查跑完了。',
+    // 一次重跑每一條（M4 票 59）：換了一台 qBittorrent 之後不必逐條展開、逐條按。
+    recheckAll: '全部重新檢查',
+    recheckingAll: '全部重新檢查中…',
+    recheckAllHint:
+      '每一條 Route 的每一條纜繩都重跑，連 qBittorrent 的探針也問：會在 qBittorrent 建或核對分類，並寫探測檔、檢查完就刪。',
+    recheckedAll_one: '這條 Route 重新檢查過了。',
+    recheckedAll_other: '{{count}} 條 Route 都重新檢查過了。',
     delete: {
       label: '刪除這條 Route',
       confirm: '確定刪除',
@@ -4020,6 +4050,10 @@ const en: Translations<typeof zhHant> = {
       label: 'Carried over from the last probe',
       why: 'The automatic check every 5 minutes skips this one: it would fire qBittorrent’s “Run external program on torrent finished”. To ask again, press “{{recheck}}” in route settings.',
     },
+    unasked: {
+      label: 'This qBittorrent has not been asked yet',
+      why: 'The automatic check every 5 minutes skips this one: it would fire qBittorrent’s “Run external program on torrent finished”. Until it is asked, this route does not count as ready; press “{{recheck}}” or “{{recheckAll}}” in route settings to ask once.',
+    },
     waiting: 'Waiting',
     autoRun:
       'The default list is unchanged, so building and checking started as you arrived. To add a library, wait for it to finish, then open the list and add a row.',
@@ -4096,6 +4130,7 @@ const en: Translations<typeof zhHant> = {
     },
     health: {
       unknown: 'Not checked',
+      recheck: 'Needs a recheck',
       ok: 'Ready',
       failed: 'Blocked',
       checking: 'Checking',
@@ -5702,6 +5737,22 @@ const en: Translations<typeof zhHant> = {
     qbittorrentPage: {
       title: 'qBittorrent settings',
       lede: 'Whether this qBittorrent still answers, whether its address or credentials need changing, and how little free disk space stops new downloads.',
+      recheck: {
+        title: 'Checking routes again',
+        running_one:
+          'Checking {{count}} route again: its category goes on this new qBittorrent, and whether it can see Berth’s files is asked again.',
+        running_other:
+          'Checking {{count}} routes again: their categories go on this new qBittorrent, and whether it can see Berth’s files is asked again.',
+        meanwhile:
+          'Until the results are in, sending works as before: routes still being checked accept downloads, red ones refuse them.',
+        passed: '{{passed}} / {{total}} routes passed; they all use this new qBittorrent now.',
+        failed_one:
+          '{{count}} route did not pass: see where it breaks under Routes. Downloads sent to it are refused.',
+        failed_other:
+          '{{count}} routes did not pass: see where they break under Routes. Downloads sent to them are refused.',
+        error:
+          'The recheck did not finish. The Berth backend may be down — check the container, then press “{{recheckAll}}” under Routes.',
+      },
     },
     indexerPage: {
       sites: 'Sites',
@@ -5780,6 +5831,12 @@ const en: Translations<typeof zhHant> = {
     recheckFailed:
       'The check did not finish. The Berth backend may be down — check the container and press again.',
     rechecked: 'The check finished.',
+    recheckAll: 'Check all again',
+    recheckingAll: 'Checking all…',
+    recheckAllHint:
+      'Every route runs all of its checks again, including the qBittorrent probe: it creates or verifies the categories in qBittorrent and writes probe files, deleted once checked.',
+    recheckedAll_one: '{{count}} route was checked again.',
+    recheckedAll_other: 'All {{count}} routes were checked again.',
     delete: {
       label: 'Delete this route',
       confirm: 'Delete it',

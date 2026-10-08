@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { useFadingNote } from '../components/useFadingNote'
 
-import { healthQueryOptions } from '../api/health'
 import {
   deleteRoute,
   recheckRoute,
@@ -30,6 +29,8 @@ import { RouteDelete, type RouteChange } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
 import { SettingsTabs } from '../components/SettingsTabs'
 import { AddRoute } from '../settings/AddRoute'
+import { PROGRESS_INTERVAL_MS, refreshRoutes, useRecheckRoutes } from '../settings/recheckRoutes'
+import { RecheckAllButton } from '../settings/RouteRecheck'
 
 /**
  * Route 設定頁 `/settings/routes`（票 14、`.scratch/m1/route-settings-shape.md`）。只有 admin 進得來。
@@ -40,7 +41,12 @@ import { AddRoute } from '../settings/AddRoute'
 export function RouteSettingsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const routes = useQuery(routesQueryOptions)
+  const recheckAll = useRecheckRoutes()
+  // 全部重新檢查跑著的時候每 1.5 秒重讀：每一列照它跑到第幾條纜繩（M4 票 43 的進度）。
+  const routes = useQuery({
+    ...routesQueryOptions,
+    refetchInterval: recheckAll.isPending ? PROGRESS_INTERVAL_MS : false,
+  })
   // 刪掉的那一列連同它自己的訊息一起卸載，所以「已刪除」「已停用」由頁面這一層說（票 14a）。
   const [announcement, setAnnouncement] = useFadingNote()
 
@@ -80,13 +86,16 @@ export function RouteSettingsPage() {
       {routes.data.length === 0 ? (
         <p className="mt-6 max-w-prose text-sm text-ink-dim">{t('routeSettings.empty')}</p>
       ) : (
-        <ul className="mt-6 grid gap-3">
-          {routes.data.map((row) => (
-            <li key={row.route.id} className="min-w-0">
-              <ManagedRouteRow row={row} onChanged={(change) => changed(row.route, change)} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <RecheckAll count={routes.data.length} recheck={recheckAll} />
+          <ul className="mt-6 grid gap-3">
+            {routes.data.map((row) => (
+              <li key={row.route.id} className="min-w-0">
+                <ManagedRouteRow row={row} onChanged={(change) => changed(row.route, change)} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <AddRoute onCreated={() => refreshRoutes(queryClient)} />
@@ -95,14 +104,33 @@ export function RouteSettingsPage() {
 }
 
 /**
- * 一條 Route 改動之後，畫著它的每一處都要重問：這一頁、健康頁的 Route 區塊、媒體庫的切換列
- * （名稱與啟用都顯示在那裡）。檢查結果不論成敗都已經寫進去了，所以失敗時也要重問。
+ * 「全部重新檢查」（M4 票 59）：換了一台 qBittorrent 之後，不必逐條展開、逐條按（審計 S4 的 6 次點擊）。
+ * 按下去會做的事先說出來（票 03 第 1 條）；跑完的那一句給全綠時的回饋——纜繩列一個字都不會變。
  */
-function refreshRoutes(queryClient: QueryClient) {
-  // `void`：畫面不必等重抓完才解除按鈕，回傳的 promise 是刻意不等的。
-  void queryClient.invalidateQueries({ queryKey: routesQueryOptions.queryKey })
-  void queryClient.invalidateQueries({ queryKey: healthQueryOptions.queryKey })
-  void queryClient.invalidateQueries({ queryKey: ['inventory'] })
+function RecheckAll({
+  count,
+  recheck,
+}: {
+  count: number
+  recheck: ReturnType<typeof useRecheckRoutes>
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="mt-6 grid gap-2">
+      <div>
+        <RecheckAllButton recheck={recheck} />
+      </div>
+      <p className="max-w-prose text-xs text-ink-dim">{t('routeSettings.recheckAllHint')}</p>
+      <p aria-live="polite" className="text-xs text-ink-dim">
+        {recheck.isSuccess ? t('routeSettings.recheckedAll', { count }) : ''}
+      </p>
+      {recheck.isError && (
+        <Notice signal="blocked" label={t('common.failed')}>
+          {t('routeSettings.recheckFailed')}
+        </Notice>
+      )}
+    </div>
+  )
 }
 
 /**

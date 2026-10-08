@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import type { RouteView } from '../api/schemas'
-import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL, checking } from './routeChecks'
+import { ROUTE_SIGNAL, checking, routeHealthLabel } from './routeChecks'
 import { UNPAINTED_FILL, SIGNAL_FILL } from './signal'
 
 /**
@@ -21,7 +21,7 @@ export function RouteIdentity({ route }: { route: RouteView }) {
       <span
         className={`label px-2 py-1.5 ${running ? SIGNAL_FILL.working : UNPAINTED_FILL[ROUTE_SIGNAL[route.health]]}`}
       >
-        {running ? t('routes.health.checking') : t(ROUTE_HEALTH_LABEL[route.health])}
+        {running ? t('routes.health.checking') : t(routeHealthLabel(route))}
       </span>
       {!route.enabled && (
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL.neutral}`}>

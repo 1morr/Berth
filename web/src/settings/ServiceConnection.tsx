@@ -28,7 +28,11 @@ export function ServiceConnection({
   onConnected,
 }: {
   kind: ServiceKind
-  onConnected: () => void
+  /**
+   * 存下或重新測試之後。`moved` 是這一次換了一台（來源或位址變了，與後端 `choose_service` 的 `moved` 同一條）：
+   * 只改帳密、原樣再存、重新測試都不是。
+   */
+  onConnected: (next: SetupStatus, moved: boolean) => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -42,15 +46,17 @@ export function ServiceConnection({
   const choose = useMutation({
     mutationFn: (input: ChoiceInput) => chooseService(kind, input),
     onSuccess: (next) => {
+      // 先比再收：`absorb` 之後快取裡就是新的那一台了。
+      const moved = !sameInstance(status.data, next, kind)
       absorb(next)
-      onConnected()
+      onConnected(next, moved)
     },
   })
   const retest = useMutation({
     mutationFn: (restart: boolean) => retestService(kind, restart),
     onSuccess: (next) => {
       absorb(next)
-      onConnected()
+      onConnected(next, false)
     },
   })
 
@@ -89,5 +95,17 @@ export function ServiceConnection({
         />
       )}
     </SettingsSection>
+  )
+}
+
+/** 前後兩份狀態裡這個服務是不是同一台：來源與位址都沒變（後端 `ServiceChoice.is_at`）。 */
+function sameInstance(before: SetupStatus | undefined, after: SetupStatus, kind: ServiceKind) {
+  const was = before?.services.find((row) => row.kind === kind)
+  const is = after.services.find((row) => row.kind === kind)
+  return (
+    was !== undefined &&
+    is !== undefined &&
+    was.origin === is.origin &&
+    was.base_url === is.base_url
   )
 }

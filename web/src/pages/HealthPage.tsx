@@ -6,7 +6,7 @@ import { meQueryOptions } from '../api/auth'
 import { healthDetailQueryOptions, healthQueryOptions, runHealthCheck } from '../api/health'
 import type { RouteView } from '../api/schemas'
 import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
-import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
+import { ROUTE_SIGNAL, routesNeedRecheck, routesSummaryLabel } from '../components/routeChecks'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteRow } from '../components/RouteRow'
 import { UNPAINTED_FILL } from '../components/signal'
@@ -15,6 +15,8 @@ import { HealthBoard } from '../health/HealthBoard'
 import { BudgetCard } from '../health/BudgetCard'
 import { PollerCard } from '../health/PollerCard'
 import { ServiceCard } from '../health/ServiceCard'
+import { PROGRESS_INTERVAL_MS, useRecheckRoutes } from '../settings/recheckRoutes'
+import { RecheckAllButton } from '../settings/RouteRecheck'
 
 /**
  * 健康頁 `/health`（票 10、`.scratch/m0/health-shape.md`）。
@@ -29,7 +31,12 @@ import { ServiceCard } from '../health/ServiceCard'
 export function HealthPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const detail = useQuery(healthDetailQueryOptions)
+  const recheckRoutes = useRecheckRoutes()
+  // 「全部重新檢查」跑著的時候照頁 3 的節奏重讀，每一條 Route 說它跑到第幾條纜繩（M4 票 43、59）。
+  const detail = useQuery({
+    ...healthDetailQueryOptions,
+    refetchInterval: recheckRoutes.isPending ? PROGRESS_INTERVAL_MS : false,
+  })
   //  設定頁只有 admin 進得去（後端 403、前端守衛會彈回來），所以那條連結也只給 admin。
   const me = useQuery(meQueryOptions)
   // 剛才是被 `/settings/*` 的守衛送過來的（票 03 第 14 條）：換了一頁就要說出為什麼。
@@ -60,6 +67,10 @@ export function HealthPage() {
   }
 
   const report = detail.data
+  // 有 Route 而沒全部問到結論（換了一台 qBittorrent、探針從沒問過）：總結說「要重新檢查」，旁邊給那一顆鍵
+  // （M4 票 59）。只給 admin：它打的是 `/routes/*`，與 Route 設定頁同一道門。上面的「立即重測」不跑探針。
+  const needsRecheck = routesNeedRecheck(report.routes_status, report.routes)
+  const admin = me.data?.role === 'admin'
 
   return (
     <>
@@ -120,7 +131,7 @@ export function HealthPage() {
             <span
               className={`label px-2 py-1.5 ${UNPAINTED_FILL[ROUTE_SIGNAL[report.routes_status]]}`}
             >
-              {t(ROUTE_HEALTH_LABEL[report.routes_status])}
+              {t(routesSummaryLabel(report.routes_status, report.routes))}
             </span>
             <h2 id="health-routes" className="value text-sm font-semibold text-ink">
               {t('health.routes.title')}
@@ -129,15 +140,31 @@ export function HealthPage() {
               {t('health.routes.count', { count: report.routes.length })}
             </span>
             {/* 指路是頁面的事（票 10 的決定）：健康頁只診斷，改 Route 在設定頁，而那一頁只有 admin 進得去。 */}
-            {me.data?.role === 'admin' && (
-              <Link
-                to="/settings/routes"
-                className="label ml-auto border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
-              >
-                {t('routeSettings.link')}
-              </Link>
+            {admin && (
+              <span className="ml-auto flex flex-wrap items-center gap-3">
+                {(needsRecheck || recheckRoutes.isPending) && (
+                  <RecheckAllButton recheck={recheckRoutes} />
+                )}
+                <Link
+                  to="/settings/routes"
+                  className="label border-2 border-rule px-4 py-2.5 hover:border-rule-strong"
+                >
+                  {t('routeSettings.link')}
+                </Link>
+              </span>
             )}
           </div>
+          {/* 一般使用者看得到「要重新檢查」卻按不到那一顆：說出要找誰（票 10 的修正同一句）。 */}
+          {needsRecheck && me.data && !admin && (
+            <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('health.fix.askAdmin')}</p>
+          )}
+          {recheckRoutes.isError && (
+            <div className="mt-3">
+              <Notice signal="blocked" label={t('common.failed')}>
+                {t('routeSettings.recheckFailed')}
+              </Notice>
+            </div>
+          )}
 
           {report.routes.length === 0 ? (
             <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('health.routes.empty')}</p>

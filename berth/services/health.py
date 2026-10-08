@@ -17,6 +17,10 @@ Jellyfin，所以那兩台掛掉時 Route 一起紅，那是事實不是連坐�
 
 **檢查結果與使用者設定分開存**（`settings.health`）：迴圈每 5 分鐘寫一次的東西不該混進
 `settings.services.*`，那幾組是整組覆寫的連線資訊，混在一起兩邊會互相蓋掉。
+
+**Route 那一項的總結不存，每次從 `routes` 表算**（`routes_health`，M4 票 59）：Route 的結論不只迴圈
+會改——精靈、「重新檢查」、換一台 qBittorrent（`forget_route_checks`）都會——存一份總結的話，
+換台之後它還說「已繫上」，要等下一輪迴圈才對得上（審計 S4）。
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ from berth.adapters.budget import SiteUsage
 from berth.adapters.http import ServiceError
 from berth.adapters.jellyfin import unsupported_message
 from berth.adapters.qbittorrent import MIN_WEBAPI, IpBannedError
-from berth.domain import HealthStatus, ServiceKind, ServiceOrigin, StepStatus
+from berth.domain import ConnectionState, HealthStatus, ServiceKind, ServiceOrigin, StepStatus
 from berth.models import (
     HealthSettings,
     IndexerSettings,
@@ -48,7 +52,7 @@ from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
-from berth.services.settings import read_settings, write_settings
+from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import message
 from berth.services.tmdb import tmdb_verified
 
@@ -137,6 +141,7 @@ async def read_health(session: AsyncSession) -> HealthReport:
     """上一輪的結果。**不連任何服務**——健康頁載入時看的是紀錄，不是又打一次每個服務。"""
     health = await read_settings(session, HealthSettings)
     setup = await read_settings(session, SetupSettings)
+    routes_status = await routes_health(session)
     #: 畫面顯示的位址就是檢查**真的連過去**的那一條，不是第 2 步探測時記下的那條。
     urls = {
         ServiceKind.JELLYFIN: (await read_settings(session, JellyfinSettings)).base_url,
@@ -144,14 +149,14 @@ async def read_health(session: AsyncSession) -> HealthReport:
         ServiceKind.PROWLARR: (await read_settings(session, IndexerSettings)).base_url,
     }
     return HealthReport(
-        degraded=_degraded(health),
+        degraded=_degraded(health, routes_status),
         checked_at=health.checked_at,
         services=tuple(
             _view(kind, health.services.get(kind) or ServiceHealth(), setup, urls[kind])
             for kind in ServiceKind
         ),
         routes=(await read_route_status(session)).routes,
-        routes_status=health.routes,
+        routes_status=routes_status,
         poller=await _poller(session),
         tmdb_verified=tmdb_verified(setup),
     )
@@ -176,10 +181,11 @@ async def _poller(session: AsyncSession) -> PollerView:
 async def overall_status(session: AsyncSession) -> Status:
     """匿名的 `GET /api/health` 回的那一個字（plan §6）。
 
-    只讀 `settings.health` 那一列：compose 的健康檢查每 30 秒打一次，不該為它去連四個地方。
-    **還沒檢查過不是降級**——降級的意思是有東西已知壞了。
+    只讀紀錄：`settings.health` 那一列與 `routes` 表的總結。compose 的健康檢查每 30 秒打一次，不該
+    為它去連四個地方。**還沒檢查過不是降級**——降級的意思是有東西已知壞了。
     """
-    return "degraded" if _degraded(await read_settings(session, HealthSettings)) else "ok"
+    health = await read_settings(session, HealthSettings)
+    return "degraded" if _degraded(health, await routes_health(session)) else "ok"
 
 
 async def is_due(
@@ -200,8 +206,8 @@ async def check_health(
     for kind in ServiceKind:
         await _record(session, kind, await _run(kind, session, factory), moment)
 
+    await _check_routes(session, factory)
     health = await read_settings(session, HealthSettings)
-    health.routes = await _check_routes(session, factory)
     health.checked_at = moment
     await write_settings(session, health)
     await session.commit()
@@ -224,6 +230,54 @@ async def check_service(
     await _record(session, kind, await _run(kind, session, factory), now or _utcnow())
     await session.commit()
     return await read_health(session)
+
+
+async def record_setup_results(
+    session: AsyncSession, setup: SetupSettings, *, now: datetime | None = None
+) -> None:
+    """完成精靈時，把頁上測過的結論寫進健康紀錄（M4 票 59，審計 P2-17）。
+
+    完成頁照頁序把每一頁存下的結論再看一次（`setup.complete_setup`，不連服務），看的就是這些；不寫的話
+    健康頁一打開四格都是「尚未檢查」、「沒有紀錄」，要按「立即重測」才變綠。**不連任何服務**：抄的是那一頁
+    存下的測試，每一格的時間也是那一次測的時間；整份的「上次檢查」是完成的那一刻，迴圈因此一個間隔之後
+    才跑第一輪（`is_due`）。Route 不必抄：頁 3 的結論本來就寫在 `routes` 表。
+
+    迴圈在精靈跑到一半時已經跑過、而且比那一頁的測試新的那一格留著（`_newer`）：新的結論不該被舊的
+    蓋掉。在寫鎖裡改（`update_settings`）：迴圈可能正好寫同一列。
+    """
+    moment = now or _utcnow()
+
+    def record(health: HealthSettings) -> None:
+        services = dict(health.services)
+        for kind in ServiceKind:
+            choice = setup.choices.get(kind)
+            test = choice.test if choice is not None else None
+            if test is None or _newer(services.get(kind), test.checked_at):
+                continue
+            if kind is ServiceKind.PROWLARR and setup.indexer.skipped:
+                # 之後再說：與迴圈對沒填位址的那一格同一個樣子，「尚未接上」。
+                services[kind] = ServiceHealth(checked_at=test.checked_at, configured=False)
+            elif test.state is ConnectionState.OK:
+                services[kind] = ServiceHealth(
+                    status=HealthStatus.OK,
+                    detail=test.detail,
+                    checked_at=test.checked_at,
+                    last_ok_at=test.checked_at,
+                    configured=True,
+                    library_count=(
+                        len(setup.jellyfin.libraries) if kind is ServiceKind.JELLYFIN else None
+                    ),
+                )
+        health.services = services
+        health.checked_at = max(moment, health.checked_at or moment)
+
+    await update_settings(session, HealthSettings, record)
+
+
+def _newer(recorded: ServiceHealth | None, tested_at: datetime) -> bool:
+    return (
+        recorded is not None and recorded.checked_at is not None and recorded.checked_at > tested_at
+    )
 
 
 # --- 紀錄 ---------------------------------------------------------------
@@ -296,14 +350,15 @@ async def _run(kind: ServiceKind, session: AsyncSession, factory: ServiceClientF
         return _Outcome(HealthStatus.FAILED, error=message(exc))
 
 
-async def _check_routes(session: AsyncSession, factory: ServiceClientFactory) -> HealthStatus:
+async def _check_routes(session: AsyncSession, factory: ServiceClientFactory) -> None:
+    """結論逐條寫在 `routes` 表，總結由 `routes_health` 讀的時候算。炸了的那一輪 log 下來，各條
+    Route 留著已經 commit 的結論（`_run_checks` 逐條 commit）。"""
     try:
         # 探針不在迴圈裡跑：它會觸發使用者 qBittorrent 的「完成時執行外部程式」（M4 票 19）。
         await check_routes(session, factory, probe_qbittorrent=False)
     except Exception:  # 同上：Route 那一項炸了不該弄丟前三項的結果
+        await session.rollback()
         logger.exception("route health checks failed unexpectedly")
-        return HealthStatus.FAILED
-    return await routes_health(session)
 
 
 async def _watch_conditions(
@@ -443,9 +498,9 @@ def _view(
     )
 
 
-def _degraded(health: HealthSettings) -> bool:
-    """任何一項**已知**壞了就是降級；`unknown` 不算（還沒檢查過、或使用者跳過了那一步）。"""
-    return health.routes is HealthStatus.FAILED or any(
+def _degraded(health: HealthSettings, routes: HealthStatus) -> bool:
+    """任何一項**已知**壞了就是降級；`unknown` 不算（還沒檢查過、要重新檢查、或跳過了那一步）。"""
+    return routes is HealthStatus.FAILED or any(
         row.status is HealthStatus.FAILED for row in health.services.values()
     )
 

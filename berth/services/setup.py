@@ -69,6 +69,7 @@ from berth.models import (
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, HostResolver, ServiceClientFactory
 from berth.services.commands import Effect, command
+from berth.services.health import record_setup_results
 from berth.services.indexer import (
     existing_prowlarr_step,
     instance_login,
@@ -204,13 +205,15 @@ async def read_status(session: AsyncSession) -> SetupStatus:
     return await _read(session, now=_utcnow())
 
 
-async def complete_setup(session: AsyncSession) -> SetupStatus:
+async def complete_setup(session: AsyncSession, *, now: datetime | None = None) -> SetupStatus:
     """完成頁：寫下 `settings.setup.completed`，精靈結束（plan §9.3 頁 6）。
 
     寫下去之後 `/` 不再導向精靈、`setup/*` 由設定頁接手（票 06i）；門禁早在擁有者成立時就關上了
     （`owner_established`）。在寫之前要確定每一頁真的還做完——頁序導出的那一條（`_current_step`）
     在這裡再問一次，因為使用者回得去把它們弄壞，另一個分頁也改得了（plan §9.3、票 02b、M4 票 31）。
+    問過的那些結論同時寫進健康紀錄（`health.record_setup_results`，M4 票 59）：健康頁一打開就有。
     """
+    moment = now or _utcnow()
     setup = await read_settings(session, SetupSettings)
     berthed = await _berthed(session, setup)
     # 照頁序問：好幾頁沒做完時，先把人送回最前面那一頁。
@@ -221,8 +224,9 @@ async def complete_setup(session: AsyncSession) -> SetupStatus:
     def record(latest: SetupSettings) -> None:
         latest.completed = True
 
+    await record_setup_results(session, setup, now=moment)
     await update_settings(session, SetupSettings, record)
-    return await _read(session, now=_utcnow())
+    return await _read(session, now=moment)
 
 
 async def _read(session: AsyncSession, *, now: datetime) -> SetupStatus:

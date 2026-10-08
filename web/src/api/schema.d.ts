@@ -1008,6 +1008,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/routes/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Routes Check
+         * @description 全部重新檢查（M4 票 59）：每一條都跑、探針真的問。換了一台 qBittorrent 之後設定頁自動送一次，
+         *     Route 設定頁與健康頁另有一顆鍵。與「重新檢查」一條同樣只是診斷，不動 `enabled`。進度靠前端
+         *     輪詢 `GET /routes`（每條纜繩開跑前寫 `running`，M4 票 43）。
+         */
+        post: operations["post_routes_check_api_routes_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/routes/{route_id}/check": {
         parameters: {
             query?: never;
@@ -7567,6 +7589,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RouteRefusalOut"];
+                };
+            };
+        };
+    };
+    post_routes_check_api_routes_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteOut"][];
                 };
             };
         };

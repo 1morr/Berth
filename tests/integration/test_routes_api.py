@@ -297,6 +297,28 @@ class TestCommands:
         assert response.status_code == 200
         assert response.json()["health"] == "ok"
 
+    def test_every_route_is_rechecked_and_the_probe_is_asked(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """「全部重新檢查」（M4 票 59）：每一條都跑，探針真的問——換台之後要的就是這一輪。"""
+        sign_in(client, ADMIN)
+        probed = len(factory.qbittorrent_.probed)
+
+        response = client.post("/api/routes/check")
+
+        assert response.status_code == 200
+        assert [(row["slug"], row["health"]) for row in response.json()] == [
+            ("movies", "ok"),
+            ("tv", "ok"),
+            ("anime", "ok"),
+        ]
+        assert len(factory.qbittorrent_.probed) == probed + 3
+
+    def test_rechecking_every_route_is_for_administrators(self, client: TestClient) -> None:
+        sign_in(client, DECKHAND)
+
+        assert client.post("/api/routes/check").status_code == 403
+
     def test_an_unknown_route_is_404(self, client: TestClient) -> None:
         sign_in(client, ADMIN)
 

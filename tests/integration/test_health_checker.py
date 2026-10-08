@@ -54,6 +54,11 @@ class _StopError(Exception):
     """測試用的收工訊號。正式的收工是 task 被 cancel。"""
 
 
+async def finish(session: AsyncSession) -> None:
+    """一個間隔之前完成精靈：完成時驗過的結論算一次檢查（M4 票 59），迴圈在 `NOW` 輪到下一次。"""
+    await complete_setup(session, now=NOW - CHECK_INTERVAL)
+
+
 async def checker(
     engine: AsyncEngine,
     factory: FakeClientFactory,
@@ -84,20 +89,19 @@ class TestWhenItRuns:
         self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await ready(session, roots)
-        await complete_setup(session)
+        await finish(session)
         loop = await checker(engine, factory, clock=Clock(NOW))
 
         assert await loop.check_once() is True
 
         stored = await read_settings(session, HealthSettings)
         assert stored.checked_at == NOW
-        assert stored.routes is HealthStatus.OK
 
     async def test_it_waits_out_the_interval_before_checking_again(
         self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await ready(session, roots)
-        await complete_setup(session)
+        await finish(session)
         clock = Clock(NOW)
         loop = await checker(engine, factory, clock=clock)
         await loop.check_once()
@@ -113,7 +117,7 @@ class TestWhenItRuns:
     ) -> None:
         """票 10 的驗收：停掉任一服務後 5 分鐘內該項變紅。"""
         factory = await ready(session, roots)
-        await complete_setup(session)
+        await finish(session)
         clock = Clock(NOW)
         loop = await checker(engine, factory, clock=clock)
         await loop.check_once()
@@ -148,7 +152,7 @@ class TestTheLoop:
     ) -> None:
         """迴圈的例外只記 log，不讓它死掉（plan §3.2）。死掉的話健康頁會永遠停在舊值。"""
         factory = await ready(session, roots)
-        await complete_setup(session)
+        await finish(session)
         sleeps = Sleeps(stop_after=2)
         loop = await checker(engine, factory, clock=Clock(NOW), sleep=sleeps)
 
@@ -171,7 +175,7 @@ class TestTheLoop:
     ) -> None:
         """迴圈與畫面上那顆按鈕跑的是同一支命令。"""
         factory = await ready(session, roots)
-        await complete_setup(session)
+        await finish(session)
         clock = Clock(NOW)
         loop = await checker(engine, factory, clock=clock)
 
@@ -183,4 +187,3 @@ class TestTheLoop:
         from_button = await read_settings(session, HealthSettings)
 
         assert set(from_loop.services) == set(from_button.services)
-        assert from_loop.routes is from_button.routes
