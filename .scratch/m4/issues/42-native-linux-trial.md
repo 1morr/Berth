@@ -2,7 +2,7 @@
 
 **Status:** needs-info
 
-**Blocked by:** 41；**使用者提供一台原生 Linux 機器**（開工前先問：主機、Docker 版本、能不能用 `sudo`、`DATA_ROOT` 放哪個檔案系統）
+**Blocked by:** 41；**使用者提供一台原生 Linux 機器**（開工前先問：主機、Docker 版本、能不能用 `sudo`、`DATA_ROOT` 放哪個檔案系統）。**2026-10-08**：機器是使用者電腦上 VMware Workstation 的 Linux VM（brief §19「第四輪可用性審計的八項」E8）；第四輪審計建議等 0.2.0 與新的取得方式（E4、E5、E7）之後再跑，讓這一輪同時驗新使用者實際會走的路
 
 **讀:** `docs/research/wizard-audit-2026-10-06.md`（環境限制 4、§C1、§C2、§3.2「compose 部署（原生 Linux / NAS）」、§3.3 阻擋項 3、改進清單 P0-3）；brief §16.1、§20.7、§20.14；票 16 的 Comments（`host-gateway` 沒實測）；README〈支援的宿主平台〉
 
