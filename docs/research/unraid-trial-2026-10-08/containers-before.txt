@@ -1,0 +1,29 @@
+Glances	8f6ee2b43b85	nicolargo/glances:dev	Created
+QDirStat	53ebf6e4aea7	jlesage/qdirstat	Exited (0) 2 months ago
+StirlingPDF	722831fadad7	stirlingtools/stirling-pdf	Created
+cli-proxy-api	02f342fa5b20	eceasy/cli-proxy-api	Up 2 weeks
+emby-amilys	00c848b73e5d	amilys/embyserver	Up 3 weeks
+flaresolverr	2cd077647dc0	flaresolverr/flaresolverr	Exited (255) 2 months ago
+iperf3	d3b9a24b6311	networkstatic/iperf3	Created
+jackett	fa51606a53c5	lscr.io/linuxserver/jackett	Up 3 weeks
+qbittorrent	eca59ec6acb0	lscr.io/linuxserver/qbittorrent	Up 3 weeks
+sing-box	6b61948adb1c	ghcr.io/sagernet/sing-box:v1.14.0	Up 3 weeks
+syncthing	bc26708184f5	lscr.io/linuxserver/syncthing	Up 3 weeks
+tavily-mcp-loadbalancer	02822430be19	yatotm1994/tavily-mcp-loadbalancer	Up 3 weeks (healthy)
+vm_custom_icons	5d9df4baed77	spaceinvaderone/vm_custom_icons	Up 3 weeks
+vpn-sub	c8003ba9fe53	nginx:1.30.4-alpine	Up 3 weeks
+
+/Glances id=8f6ee2b43b852497b78404895492b6747f88b3b69fe497b5a08a9bf7f577702f image=sha256:24b18ddc76751544cb533d778874393ec9a5de687d1107e8d53caed16e8e5e9b started=0001-01-01T00:00:00Z status=created restarts=0 mounts=/mnt/user/appdata/glances:/etc/glances:true /etc/os-release:/etc/os-release:false /:/rootfs:false /var/run/docker.sock:/var/run/docker.sock:false
+/QDirStat id=53ebf6e4aea7f3c8fe2c0e4f436b9f21f54f2451ca9070050221537855f3e8ad image=sha256:a90a1e1133abdf116e022490d2d375a9f22545703d777ca0af5bc79951cdc482 started=2026-08-07T15:05:13.25175731Z status=exited restarts=0 mounts=/mnt/user/appdata/QDirStat:/config:true /mnt/user:/storage:false
+/StirlingPDF id=722831fadad7af6ddefd628b1ba5ba9d7f36665bede62fb8e49e57d50ddbe790 image=sha256:0cf97a6b1026bc0c21dc22fb2dc76146b4e42e229fb1a579b3ccae2a216c88bb started=0001-01-01T00:00:00Z status=created restarts=0 mounts=/mnt/user/appdata/Stirling-PDF/configs:/configs:true /mnt/user/appdata/Stirling-PDF/customFiles:/customFiles:true
+/cli-proxy-api id=02f342fa5b206e6c00aea3c70d5678cfa90aa1cdf67b11b85521b4820fe38cae image=sha256:bf2e997f2158d74d5d74ceafc68854de3c938af5d6850911c97a8669b52613dd started=2026-09-20T04:53:20.317721622Z status=running restarts=0 mounts=/mnt/user/appdata/cliproxyapi/data:/data:true /mnt/user/appdata/cliproxyapi/auth:/root/.cli-proxy-api:true
+/emby-amilys id=00c848b73e5de5146bf43ebb6b8e766186c6bde64234e5570b95ece3e10862e1 image=sha256:7dfc0deb6c32d2f002cde07f06079f160eff7ac81e6efb3bdf7d4a2158b4b216 started=2026-09-15T08:54:08.313606162Z status=running restarts=0 mounts=/mnt/user/Roxy/Library:/Library:true /mnt/user/appdata/emby-amilys:/config:true
+/flaresolverr id=2cd077647dc064af7068f2567a67590a5c9f8af98d1a940392824576227ec83e image=sha256:894893ed4d4557764df3e74d27c5bc1b3944e5a33ed410e62ab7c744b348f415 started=2026-06-18T12:33:51.934972249Z status=exited restarts=0 mounts=/var/lib/docker/volumes/2519d6d8caa80313bb0c8082b52f4d80cea7fe5616be8b7673eccdd910a1bdcc/_data:/config:true
+/iperf3 id=d3b9a24b63117eb0a451077d0a1ac3879e781e01b7ec1153f56740b44b5cbb35 image=sha256:62ae8c9662f659a5559b1aaa326f73a138c65543650ccd1490409784e516555b started=0001-01-01T00:00:00Z status=created restarts=0 mounts=
+/jackett id=fa51606a53c584b338ab12662f033356c6c4235b984c4dc44299e860941786b8 image=sha256:2cc2836040ce3b7dc9904ffbdc7bc2c2d1a1deb2ed71905bef2f4434f2ffbaf6 started=2026-09-15T08:54:07.931483696Z status=running restarts=0 mounts=/mnt/user/appdata/jackett:/config:true /mnt/user/Roxy/Downloads:/downloads:true
+/qbittorrent id=eca59ec6acb05b5ab44ab2ab0b81d21dc501d0538be1ee43e0692d18b59094e4 image=sha256:6625182c31663597fb603ab6d37289b1df5010ca355c868d934a3a47105897c2 started=2026-09-15T08:54:06.838368301Z status=running restarts=0 mounts=/mnt/user/Roxy/Library:/Library:true /mnt/user/appdata/qbittorrent:/config:true /mnt/user/Roxy/Downloads:/downloads:true
+/sing-box id=6b61948adb1cd0b0f3e7b26ab7f55483e79d39e979cb505f900e4e8e0fc06991 image=sha256:a3d04988838d9e4386325efa2181363db8b027a6c2172e0dddd8c70c28cfe4ec started=2026-09-15T08:54:03.544949232Z status=running restarts=0 mounts=/etc/localtime:/etc/localtime:false /mnt/user/appdata/sing-box:/etc/sing-box:true
+/syncthing id=bc26708184f50f14e09fc015441c5a1360c3f04102c1d6aea5b80227de6b6989 image=sha256:59c7134d4127b6f2b024db18ab8d35484be2dd774c699c27cb2adad102927cf5 started=2026-09-15T08:54:07.296453214Z status=running restarts=0 mounts=/mnt/user/appdata/syncthing:/config:true /mnt/user/syncthing/data:/data:true
+/tavily-mcp-loadbalancer id=02822430be197fb27490c86d466c0c3ee86b2328c59afab18cc6b77ce0d11473 image=sha256:ef7fd64c1e15bfe018ed9f1226b1ac4e8825b35478c21fa31bf0c3f186c88cf2 started=2026-09-15T08:54:06.009177533Z status=running restarts=0 mounts=/mnt/user/appdata/tavily-mcp-loadbalancer/data:/app/data:true
+/vm_custom_icons id=5d9df4baed77b71c4fabf000ef3971086a753558466db88e6c32e14a263be4b1 image=sha256:dece2b89ea0c08f971b6d5bd9b58fe3d0a57d5117dd30c52b083d68b2b8ef38d started=2026-09-15T08:54:07.5980462Z status=running restarts=0 mounts=/usr/local/emhttp/plugins/dynamix.vm.manager/templates/images:/unraid_vm_icons:true /mnt/user/appdata/vm_custom_icons:/config:true
+/vpn-sub id=c8003ba9fe537ba6ca2793defc0d4f434b474426ea27fe89b4a3bdd4647d54a3 image=sha256:1ae82dcc4a34bcd976195b3c4c5a6b7e569505527a1e2a28c2101e032159a5c7 started=2026-09-15T08:54:03.723721312Z status=running restarts=0 mounts=/mnt/user/appdata/vpn-sub/default.conf:/etc/nginx/conf.d/default.conf:false /mnt/user/appdata/vpn-sub/www:/usr/share/nginx/html:false

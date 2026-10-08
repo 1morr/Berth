@@ -1,0 +1,6 @@
+# 2026-10-08 19:14:10 ssh root@tower 'docker exec -i berth python - dbdba17550c93886524c1d2fa11bc01b' < scripts/experiments/jellyfin_stream_probe.py
+name: 活死人之夜 1968
+tmdb: 10331
+path: /data/library/movies/Night of the Living Dead (1968) [tmdbid-10331]/Night of the Living Dead (1968) [tmdbid-10331] - [BD][720p][YTS.AM].mp4
+container: mp4 size: 828760756 minutes: 96.6
+stream: 206 1048576 bytes

@@ -1219,7 +1219,7 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
   分成兩個 volume 則回 `Cross-device link` 並退出 1）。**但 ext4 那一輪跑的是 Docker Desktop
   自己的 Linux VM（`docker-desktop` 發行版）**，是 daemon 端的檔案系統，不是另一台實體 Linux
   宿主。**剩下：一台原生 Linux 宿主與至少一台 NAS**（Synology / QNAP / TrueNAS 其一），
-  `sh hardlink.sh /volume1/<share>` 即可。
+  `sh hardlink.sh /volume1/<share>` 即可。Unraid 7.1.4 的 user share 已在 2026-10-08 跑過（M4 票 55，§20.14）。
 - **標籤內含中文**（中文字幕組名）未測：實驗用的 tag 全是 ASCII，見 §20.1「多版本」。
 - ~~qBittorrent 4.4 與 5.x 的參數相容測試~~ **完成**，見 §20.7「qBittorrent 版本矩陣」。
 - ~~Jellyfin 10.10/10.11 的命名實測~~ **完成**，見 §20.7「Jellyfin 命名實測」。§7.2 的電影範例與
@@ -1420,7 +1420,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 
 - Linux ext4 單一掛載根：PASS（nlink=2、inode 相同）。Windows NTFS bind mount（9p）：PASS（dev=70）。`torrent/` 與 `library/` 分成兩個 volume：`ln: Cross-device link`，退出碼 1。
 - ext4 那一輪的來源是 **Docker Desktop 自己的 Linux VM**（`/mnt/docker-desktop-disk/...`），daemon 端的檔案系統，與原生 Linux 宿主是同一條 `link()` 路徑，但**不是另一台實體 Linux**。
-- 腳本沒有相依，NAS 上 `sh hardlink.sh /volume1/<share>` 可直接跑；原生 Linux 宿主與 NAS 都尚未實測（§20.6）。
+- 腳本沒有相依，NAS 上 `sh hardlink.sh /volume1/<share>` 可直接跑。2026-10-08 在 Unraid 7.1.4 的 user share 上直接跑 PASS（§20.14 的 Unraid 那一條）；其他原生 Linux 宿主與 NAS 尚未實測（§20.6）。
 
 ### 20.8 媒體庫瀏覽用的 Jellyfin API（M1.5 前置）
 
@@ -1569,7 +1569,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - `docker compose stop jellyfin qbittorrent`（指名不在啟用 profile 裡的服務）結束碼 0，兩台變 `exited`；之後再 `up -d`，它們**留在 `exited`**，不會被叫起來。
   - 不帶 `--profile '*'` 的 `docker compose down` 只收 `berth`、`prowlarr` 與網路，停掉的那兩台留著（`exited`）。
   - 所以「選了既有」的指示是兩步：改 `COMPOSE_PROFILES`（之後的 `up -d` 不再起它）＋`docker compose stop <服務>`（停掉已經在跑的）。2026-10-06 審計 S2 照舊的 README 做完，`berth-jellyfin`、`berth-qbittorrent` 一直在跑。
-- **`extra_hosts: host.docker.internal:host-gateway` 在 Docker Desktop 上不蓋掉內建的解析**（同一次實測）：沒有這一行的容器由 Docker Desktop 的 DNS 解成 `192.168.65.254`；有這一行時 `/etc/hosts` 多出 `192.168.65.254` 與 `fdc4:f303:9324::254` 兩列（`getent hosts` 先回 IPv6 那一個），`berth` 容器以 `http://host.docker.internal:<port>/` 連宿主上發佈的 port 回 200。**Linux 未實測**（沒有環境）；Linux 的條件見上面「容器裡的 `localhost`」那一條。
+- **`extra_hosts: host.docker.internal:host-gateway` 在 Docker Desktop 上不蓋掉內建的解析**（同一次實測）：沒有這一行的容器由 Docker Desktop 的 DNS 解成 `192.168.65.254`；有這一行時 `/etc/hosts` 多出 `192.168.65.254` 與 `fdc4:f303:9324::254` 兩列（`getent hosts` 先回 IPv6 那一個），`berth` 容器以 `http://host.docker.internal:<port>/` 連宿主上發佈的 port 回 200。原生 Linux 的結果見下面 Unraid 那一條；Linux 的條件見上面「容器裡的 `localhost`」那一條。
+- **Unraid 實跑**（M4 票 55，2026-10-08；Unraid 7.1.4、Docker 27.5.1、Compose v2.40.3（Compose Manager 外掛帶的）；全文、指令與輸出在 [`docs/research/unraid-trial-2026-10-08.md`](research/unraid-trial-2026-10-08.md)）：官方 compose 原樣、只改 `.env`，S1 三個套件內走完並入庫一部。
+  - **user share（shfs）上的硬鏈接成立**，前提是全域「Tunable (support Hard Links)」＝ Yes（`/boot/config/share.cfg` 的 `fuse_useino="yes"`，`ShareSettings.page` 的介面名稱）。`sh hardlink.sh /mnt/user/Roxy/Berth` PASS；入庫的兩個名字 `st_dev` 42、同 inode、links 2，底下都在 `/mnt/cache`（btrfs）。**shfs 回報的 inode 是合成的**：`11258999075244504 = 40 << 48 | 6818264`，高位是底下那顆碟的 `st_dev`、低位是它的 inode，所以帳本記的 `(dev, inode)` 是這個合成值。mover 之後的結果見研究檔 §4.2。
+  - **`PUID=99`、`PGID=100` 照 `.env` 生效**：`DATA_ROOT`、`CONFIG_ROOT` 底下 Berth 與三個服務建的全部是 `nobody:users`；只有 Docker 自己建的 `CONFIG_ROOT` 本身是 `root:root`。
+  - **`host-gateway` 在原生 Linux 上成立**：`berth` 容器裡 `getent hosts host.docker.internal` 是 `172.17.0.1`（docker0 的位址，Berth 自己在 172.28 的網路上也走得到），打宿主上既有的 qBittorrent `/api/v2/app/version` 回 403（帶 qBittorrent 的 CSP，連到了、沒登入）、Emby `/System/Info/Public` 200。
+  - **Compose Manager 的 stack 預設存在隨身碟**（`/boot/config/plugins/compose.manager/projects/<名字>/`，vfat、`fmask=0177`）；它的 Indirect Path 讓 stack 指到別的目錄，以 `-p <stack 名>` 跑那個目錄裡所有 `*compose*.yml`、`.env` 從那裡讀（讀外掛 2025.11.01 的 `php/exec.php`、`php/compose_util.php`、`scripts/compose.sh`，沒有在 UI 上實按）。所以 README 叫人把部署目錄放 appdata、stack 名填 `berth`。
 - **Prowlarr 的版本下限是 1.3.2**（M4 票 17，2026-09-29 查證；全表與來源在 [`docs/research/prowlarr-version-floor.md`](research/prowlarr-version-floor.md)，讀的是 Prowlarr 各 tag 的原始碼，沒有對 1.3.x 實跑）：
   - 卡住下限的只有匿名的 `GET /ping`：[`5abb5ad`](https://github.com/Prowlarr/Prowlarr/commit/5abb5ada4991142e871dcfa94c32c8e4cb0ea247)「New: Ping Endpoint」第一個進的是 1.3.0.2757（develop），第一個 stable 是 **1.3.2.3006**（2023-04-07）。1.2.2.2699 雖然較晚發佈，但不含這個 commit。
   - 其餘端點與欄位從第一個 tag 0.1.0.361（2021-06）就有：`/api/v1` 前綴；`indexer` 的列、建（帶 `appProfileId`，內建 id 1）、`schema`、`test`、刪；`config/host` 的 `authenticationMethod` / `username` / `password`；`search` 的 `query` / 重複的 `indexerIds` 與 Berth 讀的每一個回應欄位；`system/status` 的 `version`。`type=search` 是 0.1.4.1155、`authenticationRequired` 是 1.0.0.2171。【原始碼】

@@ -149,14 +149,30 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 - **只掛一個媒體根**：下載目錄與媒體庫都要在 `DATA_ROOT` 底下。分成兩個 bind mount 會得到 `EXDEV`，建立 Route 時的檢查會直接擋下來。
 - **檔案系統要支援硬鏈接**：exFAT 不行；btrfs 子卷、ZFS dataset、mergerfs branch 之間也不行，它們在核心眼中是不同的裝置。
+  Unraid 的 user share（`/mnt/user/...`）是 shfs，不是 mergerfs，硬鏈接可以，條件見下面〈支援的宿主平台〉的 Unraid。
 - **同一台機器**：Berth 與 qBittorrent 要看得到同一份檔案，跨主機與 remote path mapping 不支援。
 
 ### 支援的宿主平台
 
 - **Linux**（NAS 與伺服器）：`DATA_ROOT` 要能被 `PUID` / `PGID` 寫入，例如 `chown -R 1000:1000 /srv/berth/data`。Berth 只在媒體根還是空目錄時自動接手擁有者；已經有內容的目錄一律不碰。
 - **Windows**（Docker Desktop、WSL2 後端）：用一般的 bind mount 就好（`DATA_ROOT=C:\Berth\data`），不需要 named volume，NTFS 上的硬鏈接實測可用（brief §20.7）。`PUID` / `PGID` 在這種掛載上沒有意義，維持預設即可。
+- **Unraid**（7.1 實跑過，brief §20.14）：要先裝 Compose Manager 外掛，`docker compose` 是它帶來的。
+  - 把 `docker-compose.yml`、`.env.example`、`preseed/` 放在 `/mnt/user/appdata/berth-deploy/`，在那裡
+    `cp .env.example .env`、`docker compose up -d`。**不要放在隨身碟上**：Compose Manager 預設把 stack 存在
+    `/boot/config/plugins/compose.manager/projects/`，那是 vfat、檔案不能執行，`./data`、`./config` 也會落在隨身碟。
+    想在 Compose Manager 的畫面上管它：「Add New Stack」名字填 `berth`，在進階欄位的 Indirect Path 填
+    `/mnt/user/appdata/berth-deploy`。
+  - `.env`：`PUID=99`、`PGID=100`（Unraid 的 `nobody:users`），`DATA_ROOT=/mnt/user/<share>/Berth`，
+    `CONFIG_ROOT=/mnt/user/appdata/berth`。兩個目錄不用先建。已經有 Emby / Jellyfin、qBittorrent 的機器上 8096、
+    8080、6881 多半被佔了，改 `JELLYFIN_PORT`、`QBITTORRENT_WEBUI_PORT`、`QBITTORRENT_BT_PORT`。
+  - 硬鏈接：「Settings → Global Share Settings → Tunable (support Hard Links)」要是 Yes，`DATA_ROOT` 整個放在
+    同一個 share 裡。share 用 cache 時，mover 的行為見 brief §20.14。
+  - 檔案是 `644` / 目錄 `755`（`UMASK=022`）：從 SMB 看得到、改不了。要從 SMB 刪改就設 `UMASK=000`。
+  - 接宿主上既有的服務填 `http://host.docker.internal:<port>`（實測解成 docker0 的 `172.17.0.1`）。
 
-實際跑過整套流程的環境（2026-09-08 的 M0 驗收）：Windows Docker Desktop 的 NTFS bind mount，以及 Docker Desktop 那個 Linux VM 上的 ext4。**原生 Linux 宿主與 NAS 還沒有人跑過**——理論上同一條路徑，但沒有實測就不當成驗過。
+實際跑過整套流程的環境：Windows Docker Desktop 的 NTFS bind mount 與它那個 Linux VM 上的 ext4（2026-09-08 的 M0
+驗收），以及 Unraid 7.1.4 的 user share（2026-10-08，`docs/research/unraid-trial-2026-10-08.md`）。**其他原生 Linux
+宿主與 NAS 還沒有人跑過**——理論上同一條路徑，但沒有實測就不當成驗過。
 
 ### 外部服務的前提
 
