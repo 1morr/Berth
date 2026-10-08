@@ -18,14 +18,16 @@ README〈[Status & known limitations](README.md#status--known-limitations)〉。
 
 **從 0.1.0 升級**：照 [docs/guide/upgrading.md](docs/guide/upgrading.md)，**下載 0.2.0 的 zip 解壓蓋過原本的部署
 目錄**，再 `docker compose pull && docker compose up -d`。0.1.0 沒有 zip、多半只抓了 compose 一個檔，蓋過時會補上
-`preseed/`；`.env` 不在 zip 裡、不會被蓋掉，`.env.example` 沒有新變數，註解改成英文。compose 檔只改了註解，沒有
-資料庫 migration。破壞性變更：
+`preseed/`；`.env` 不在 zip 裡、不會被蓋掉。`.env.example` 沒有新變數；三個檔的註解改成英文，compose 檔另外只改了
+`DATA_ROOT` / `CONFIG_ROOT` 沒設時的錯誤訊息。沒有資料庫 migration。破壞性變更：
 
 - **既有服務的憑證測不過就不存**（票 45）：`POST /api/setup/services/{kind}` 選既有而測不過時改回 400
-  `connection_failed`，不再 200 存下紅燈；`POST /api/setup/tmdb/test` 測不過不再存下那一把。0.1.0 存下的沒驗過的
-  TMDB key 升級後讀成沒有，在設定 → TMDB 重新貼一次、測過就好。
+  `connection_failed`（`ChoiceRefusalOut` 多一個 `attempt`），不再 200 存下紅燈；擁有者之後的既有 Jellyfin 新位址
+  不回答也改成這一種，原本是 409 `unverified`。`POST /api/setup/tmdb/test` 測不過不再存下那一把：0.1.0 存下的
+  沒驗過的 TMDB key 升級後讀成沒有，在設定 → TMDB 重新貼一次、測過就好。
 
-其他新端點與回應欄位都是加的，逐條在下面。
+票 43、44、46–57、59、60 沒有破壞性變更：新端點與回應欄位都是加的，逐條在下面。要注意的只有票 46 讓
+`ConnectionReason` 多了三個值（`data_unseen`、`data_unreadable`、`data_unsettled`），對它做窮舉比對的 client 要補上。
 
 ### Added
 
@@ -63,8 +65,9 @@ README〈[Status & known limitations](README.md#status--known-limitations)〉。
 
 ### Changed
 
-- **部署檔的註解改成英文**（M4 票 58）：`docker-compose.yml` 與 `.env.example` 給使用者看的說明、`${DATA_ROOT}` /
-  `${CONFIG_ROOT}` 沒設時 Compose 印的錯誤都改成英文，與英文 README 一致。設定值與預設值不變。
+- **部署檔的註解改成英文**（M4 票 58）：`docker-compose.yml`、`.env.example` 與 `preseed/` 腳本給使用者看的說明，
+  以及 `${DATA_ROOT}` / `${CONFIG_ROOT}` 沒設時 Compose 印的錯誤，都改成英文，與英文 README 一致。設定值與預設值
+  不變。preseed 腳本裡「save path 等由精靈設定、看得到差異」那句在票 32 之後已經不對，一併改正。
 
 - **README 改成英文為主，另有繁中版；安裝頁只留必讀**（M4 票 57，brief §19 E7）：`README.md` 是英文，
   `README.zh-Hant.md` 是同內容的繁中版，兩份開頭互相連結。README 只留取得 zip、改 `.env` 的幾個值
@@ -118,6 +121,9 @@ README〈[Status & known limitations](README.md#status--known-limitations)〉。
 
 ### Fixed
 
+- **「S01 + S02」「S1-S2」讀成多季合集，不是 S01E02**（M4 票 48）：這類發佈名原本被當成第 1 季第 2 集的單集。現在
+  讀成第 1 到第 2 季的合集，名字裡明寫的集號照讀。RSS 的「不自動下載合集」原本擋不到這種包，綁上之後會整包自動
+  送單；現在照設定排除，還沒綁定的舊項目在綁上時重新篩一次。
 - **各票 code-review 留下的幾處**（M4 票 54）：既有 Jellyfin 填 `host.docker.internal` 時，媒體庫、作品頁與 Route
   設定頁的「在 Jellyfin 開啟」連結改開在瀏覽器的主機名上（原本是瀏覽器開不了的位址；填 compose 主機名的不給連結）。
   設定 → Prowlarr 讀不到站的清單時（例如在 Prowlarr 重新產生了 API key）與精靈頁 4 說同一段、給「重新讀取」，不再說

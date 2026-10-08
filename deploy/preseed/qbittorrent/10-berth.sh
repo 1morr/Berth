@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
-# linuxserver 的 custom-cont-init.d：在 qBittorrent 服務啟動前執行（plan §9.2）。
+# A linuxserver custom-cont-init.d script: runs before the qBittorrent service starts.
 #
-# 只補「沒有它 Berth 就進不去」的東西：4.6.1 起首次啟動的隨機密碼只印在容器 log，
-# Berth 沒有 docker socket 讀不到，只能靠免密白名單進 API。密碼、save path、temp path、
-# autoTMM 一律不預置，那些由精靈用 API 設定，看得到差異也可重按。
+# It only adds what Berth cannot get in without: since 4.6.1 the random first-start password is
+# printed only to the container log, which Berth cannot read (it has no docker socket), so Berth
+# reaches the API through a no-password whitelist. The password, save path, temp path and autoTMM
+# are never preset here; the wizard sets the web UI login through the API and leaves the rest alone.
 #
-# 為什麼是「缺鍵才補」而不是 plan 原本寫的「檔案不存在才寫」：image 自己的
-# init-qbittorrent-config 先跑，已經把 /defaults/qBittorrent.conf 複製進 /config，
-# 所以「不存在」永遠不成立。已經有值的鍵一律不動，使用者在 WebUI 改過的設定不會被覆蓋。
+# Why "add missing keys" rather than "write the file if it does not exist": the image's own
+# init-qbittorrent-config runs first and has already copied /defaults/qBittorrent.conf into /config,
+# so the file always exists. Keys that already have a value are never touched, so settings changed
+# in the web UI are not overwritten.
 set -euo pipefail
 
 CONF="${BERTH_QBITTORRENT_CONF:-/config/qBittorrent/qBittorrent.conf}"
 
-# 白名單只放 Berth 那一台，不是整個 compose 網段：Docker Desktop 把發佈 port 進來的
-# 流量的來源位址改寫成閘道（172.28.0.1），而閘道也在網段內，開放整段等於 LAN 上任何人
-# 都能免密打 qBittorrent 的 API。位址由 compose 的 BERTH_IP 傳進來，不在這裡寫死。
+# The whitelist holds only berth's address, not the whole compose subnet: Docker Desktop rewrites
+# the source address of traffic coming in through published ports to the gateway (172.28.0.1),
+# which is inside the subnet, so whitelisting the subnet would let anyone on the LAN use
+# qBittorrent's API without a password. The address comes from BERTH_IP in the compose file.
 if [[ -z "${BERTH_IP:-}" ]]; then
     echo "[berth-preseed] BERTH_IP is not set; it comes from the compose file" >&2
     exit 1
 fi
 
-# `WebUI\ServerDomains` 不在這裡：image 的預設值是 `*`，Host 檢查本來就過得了；
-# 照 plan 寫死成 `qbittorrent` 反而會讓使用者從 localhost:8080 進不了 WebUI。
+# `WebUI\ServerDomains` is not set here: the image defaults to `*`, which already passes the Host
+# check; pinning it to `qbittorrent` would lock users out of the web UI at localhost:8080.
 KEYS=(
     'WebUI\AuthSubnetWhitelistEnabled=true'
     "WebUI\\AuthSubnetWhitelist=${BERTH_IP}/32"
@@ -36,7 +39,8 @@ if [[ ! -f "${CONF}" ]]; then
     exit 1
 fi
 
-# 鍵要在行首完整比對：`WebUI\AuthSubnetWhitelist` 是 `…WhitelistEnabled` 的前綴。
+# Match the whole key at the start of the line: `WebUI\AuthSubnetWhitelist` is a prefix of
+# `…WhitelistEnabled`.
 has_key() {
     BERTH_PRESEED_KEY="$1" awk '
         index($0, ENVIRON["BERTH_PRESEED_KEY"] "=") == 1 { found = 1; exit }
@@ -57,14 +61,14 @@ fi
 tmp="$(mktemp)"
 trap 'rm -f "${tmp}"' EXIT
 
-# 值裡有反斜線，awk 的 -v 會把它當跳脫序列，所以走 ENVIRON。
+# The values contain backslashes, which awk -v would read as escapes, so pass them via ENVIRON.
 BERTH_PRESEED_LINES="$(printf '%s\n' "${missing[@]}")" awk '
     { print }
     !inserted && /^\[Preferences\]/ { print ENVIRON["BERTH_PRESEED_LINES"]; inserted = 1 }
     END { if (!inserted) { print "[Preferences]"; print ENVIRON["BERTH_PRESEED_LINES"] } }
 ' "${CONF}" >"${tmp}"
 
-# 覆寫而不是 mv：保留原本的 inode、擁有者與權限（image 的 init 已經 chown 過）。
+# Overwrite rather than mv, keeping the inode, owner and mode (the image's init already chowned it).
 cat "${tmp}" >"${CONF}"
 
 log "added to ${CONF}: ${missing[*]}"
