@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
@@ -69,6 +70,41 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
 }
 
 describe('設定 → Jellyfin', () => {
+  // 精靈跑完之後打開 `/setup` 原本是靜默轉址（M4 票 60，審計 P2-8）。
+  describe('從 /setup 被帶過來', () => {
+    it('說一句精靈已經完成', async () => {
+      render()
+      const { router } = renderApp('/setup')
+
+      await waitFor(() => expect(router.state.location.pathname).toBe('/settings/jellyfin'))
+      expect(await screen.findByText('精靈已經完成，之後的修改在這裡。')).toBeVisible()
+    })
+
+    it('直接打開設定頁時不說', async () => {
+      render()
+      renderApp('/settings/jellyfin')
+
+      await screen.findByRole('heading', { level: 1, name: 'Jellyfin 設定' })
+      expect(screen.queryByText('精靈已經完成，之後的修改在這裡。')).not.toBeInTheDocument()
+    })
+
+    it('英文介面', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        render()
+        renderApp('/setup')
+
+        expect(
+          await screen.findByText(
+            'The setup wizard is finished; changes from now on are made here.',
+          ),
+        ).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
+  })
+
   it('頁標題是這一頁唯一的 h1', async () => {
     render()
     renderApp('/settings/jellyfin')

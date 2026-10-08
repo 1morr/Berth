@@ -158,6 +158,11 @@ interface HealthSearch {
   denied?: boolean
 }
 
+/** 設定頁從哪裡來：精靈跑完之後打開 `/setup` 被帶過來的是 `setup`（M4 票 60）。 */
+interface SettingsSearch {
+  from?: 'setup'
+}
+
 /** 精靈畫面上的那一頁（M4 票 30）。沒寫或不是精靈的一頁就是 `undefined`，頁面以後端那一步補上。 */
 interface SetupSearch {
   step?: number
@@ -180,7 +185,8 @@ const setupRoute = createRoute({
     }
     const me = await requireSession(context.queryClient, location)
     if (me !== null && me.role !== 'admin') throw redirect({ to: '/' })
-    throw redirect({ to: '/settings' })
+    // 第一個設定分頁，帶著「從精靈來的」：那一頁多說一句精靈已經完成（M4 票 60，審計 P2-8）。
+    throw redirect({ to: '/settings/jellyfin', search: { from: 'setup' } })
   },
   component: SetupPage,
 })
@@ -471,6 +477,8 @@ function settingsRoute(path: `/settings/${string}`, Page: () => React.JSX.Elemen
   return createRoute({
     getParentRoute: () => rootRoute,
     path,
+    validateSearch: (search: Record<string, unknown>): SettingsSearch =>
+      search.from === 'setup' ? { from: 'setup' } : {},
     beforeLoad: async ({ context, location }) => {
       const me = await requireSignedInPage(context.queryClient, location)
       if (me !== null && me.role !== 'admin')

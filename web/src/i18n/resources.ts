@@ -1377,6 +1377,11 @@ const zhHant = {
       total_one: '共 {{count}} 個檔案',
       total_other: '共 {{count}} 個檔案',
       none: '還沒有任何檔案入庫。',
+      // 帳本沒有這部、但 Jellyfin 有（M4 票 60）。不推測是哪一種：Berth 之前就在 Jellyfin 的作品也是這樣。
+      notInLedger:
+        'Jellyfin 有這部，Berth 的紀錄裡沒有：它不是經 Berth 入庫的，或者重裝過 Berth、資料庫遺失了。後者的話檔案還在，從媒體庫重建帳本就會回來。',
+      rebuild: '到待處理從媒體庫重建帳本',
+      askAdmin: '請管理員到待處理從媒體庫重建帳本。',
       special: '特別篇',
       // 逐檔列收起來的那兩行（M1.5 票 09b）：沒有欄頭時一串路徑說不出自己是目標還是來源。
       tags: 'Tags',
@@ -1705,6 +1710,9 @@ const zhHant = {
     },
     // `unmanaged_library_file` 那一列：上一次 `rebuild-ledger` 為什麼沒配上。
     unclaimedBecause: '沒配上的理由',
+    // 無主 torrent 那一列的按鈕會做什麼（M4 票 60，審計 S4）：按鈕名全站一致，缺的是這一句。
+    claimTorrentHint:
+      '「認領並建立下載」：先選它是哪一部作品，Berth 建一筆下載接手這個 torrent，接下來照常規劃、入庫。重裝過 Berth 的話先從媒體庫重建帳本，已經在媒體庫的檔案才會接回帳本上那一列，不另鏈一份。',
     // 認領時選作品（M2 票 10）：搜 TMDB，選一部，再按一次確認。
     pick: {
       label: '這是哪一部作品',
@@ -2028,6 +2036,29 @@ const zhHant = {
     unavailable: '問不到',
     skipped: '跳過了 {{value}}',
     failed: '對帳沒有開始。Berth 自己的 API 沒有回應，先確認它還活著。',
+  },
+  // 從媒體庫重建帳本（M4 票 60）：待處理頁最上面與精靈完成頁。就是 `berth rebuild-ledger`。
+  ledgerGap: {
+    title: '帳本不認得的檔案',
+    found_one:
+      '媒體庫裡有 {{count}} 個檔案不在 Berth 的帳本上。多半是重裝過 Berth 或資料庫遺失：檔案還在，紀錄沒了。',
+    found_other:
+      '媒體庫裡有 {{count}} 個檔案不在 Berth 的帳本上。多半是重裝過 Berth 或資料庫遺失：檔案還在，紀錄沒了。',
+    start: '從媒體庫重建帳本',
+    running: '重建中…',
+    effect:
+      '只加不刪，可以重按。配得上的長回帳本，作品頁的檔案與版本跟著回來；配不上的不猜，列進待處理的「非受管檔案」並寫明理由。',
+    claimed_one: '找回 {{count}} 個檔案。',
+    claimed_other: '找回 {{count}} 個檔案。',
+    unmatched_one: '{{count}} 個配不上，列進待處理的「非受管檔案」，每一件寫著理由。',
+    unmatched_other: '{{count}} 個配不上，列進待處理的「非受管檔案」，每一件寫著理由。',
+    undecided_one:
+      '{{count}} 個說不出有沒有來源：complete 有地方讀不到，這一次沒有判。修好之後再按一次。',
+    undecided_other:
+      '{{count}} 個說不出有沒有來源：complete 有地方讀不到，這一次沒有判。修好之後再按一次。',
+    nothing: '沒有要找回的檔案：帳本已經認得媒體庫裡的每一個檔案。',
+    unread: '有地方讀不到，那裡的檔案這一次沒有比。修好掛載之後再按一次。',
+    failed: '沒有重建。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
   jobs: {
     title: '下載',
@@ -2614,6 +2645,8 @@ const zhHant = {
     jellyfinPage: {
       title: 'Jellyfin 設定',
       lede: '這一台 Jellyfin 還連得上嗎、位址或 API key 要不要換，以及媒體庫上「在 Jellyfin 開啟」開在哪裡。',
+      // 精靈跑完之後打開 `/setup` 被帶到這裡時多說的一句（M4 票 60，審計 P2-8）。
+      wizardDone: '精靈已經完成，之後的修改在這裡。',
       signIn: {
         title: '管理員登入',
         lede: 'Berth 用一把自己的 API key 跟 Jellyfin 說話。那把 key 被撤掉了，就用管理員重新登入一次換一把新的。',
@@ -4552,6 +4585,10 @@ const en: Translations<typeof zhHant> = {
       total_one: '{{count}} file in total',
       total_other: '{{count}} files in total',
       none: 'Nothing has been imported yet.',
+      notInLedger:
+        'Jellyfin has this title, but Berth’s records do not: either it was not imported through Berth, or Berth was reinstalled or lost its database. In the second case the files are still there and rebuilding the ledger from the library brings them back.',
+      rebuild: 'Rebuild the ledger from the library under Issues',
+      askAdmin: 'Ask an administrator to rebuild the ledger from the library under Issues.',
       special: 'Special',
       tags: 'Tags',
       target: 'Target',
@@ -4853,6 +4890,8 @@ const en: Translations<typeof zhHant> = {
         'Its name is not one Berth’s naming templates would write (it was renamed, or the episode’s TMDB name changed). Import it again from complete to get it into the ledger.',
     },
     unclaimedBecause: 'Why it did not match',
+    claimTorrentHint:
+      '“Claim it as a download”: pick which title it is, and Berth creates a download that takes over this torrent, then plans and imports it as usual. If Berth was reinstalled, rebuild the ledger from the library first so files already in the library rejoin their ledger row instead of being linked again.',
     pick: {
       label: 'Which title is this',
       placeholder: 'Type a title to search TMDB',
@@ -5158,6 +5197,32 @@ const en: Translations<typeof zhHant> = {
     skipped: 'Skipped {{value}}',
     failed:
       'The run did not start. Berth’s own API did not answer — check that it is still running.',
+  },
+  ledgerGap: {
+    title: 'Files the ledger does not know',
+    found_one:
+      '{{count}} file in the library is not in Berth’s ledger. This usually means Berth was reinstalled or its database was lost: the files are still there, the records are gone.',
+    found_other:
+      '{{count}} files in the library are not in Berth’s ledger. This usually means Berth was reinstalled or its database was lost: the files are still there, the records are gone.',
+    start: 'Rebuild the ledger from the library',
+    running: 'Rebuilding…',
+    effect:
+      'It only adds, never deletes, and is safe to press again. Files that match grow back into the ledger and reappear under Files and versions on their title page; files that do not are not guessed at and go to Issues as unmanaged files, each with the reason.',
+    claimed_one: 'Recovered {{count}} file.',
+    claimed_other: 'Recovered {{count}} files.',
+    unmatched_one:
+      '{{count}} did not match and is listed under Issues as an unmanaged file, with the reason.',
+    unmatched_other:
+      '{{count}} did not match and are listed under Issues as unmanaged files, each with the reason.',
+    undecided_one:
+      '{{count}} could not be judged: part of complete could not be read, so whether it has a source is unknown. Fix that and press it again.',
+    undecided_other:
+      '{{count}} could not be judged: part of complete could not be read, so whether they have a source is unknown. Fix that and press it again.',
+    nothing: 'Nothing to recover: the ledger already knows every file in the library.',
+    unread:
+      'Some folders could not be read, so the files in them were not compared this time. Fix the mount and press it again.',
+    failed:
+      'The ledger was not rebuilt. Berth’s own API did not answer — check that it is still running.',
   },
   jobs: {
     title: 'Downloads',
@@ -5729,6 +5794,7 @@ const en: Translations<typeof zhHant> = {
     jellyfinPage: {
       title: 'Jellyfin settings',
       lede: 'Whether this Jellyfin still answers, whether its address or API key needs changing, and where “Open in Jellyfin” on the library page opens.',
+      wizardDone: 'The setup wizard is finished; changes from now on are made here.',
       signIn: {
         title: 'Administrator sign-in',
         lede: 'Berth talks to Jellyfin with an API key of its own. If that key was revoked, sign in as an administrator once more to get a new one.',

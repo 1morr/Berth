@@ -411,6 +411,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/issues/rebuild-ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ledger Gap
+         * @description 媒體庫裡有幾個檔案帳本不認得、還沒被重建判過（M4 票 60）。打開待處理與精靈完成頁時現算。
+         */
+        get: operations["get_ledger_gap_api_issues_rebuild_ledger_get"];
+        put?: never;
+        /**
+         * Post Rebuild Ledger
+         * @description 從媒體庫重建帳本：與 `berth rebuild-ledger` 同一個命令，只加不刪、再按一次什麼都不多。
+         *
+         *     對帳正在跑時是 409 `reconcile_running`：兩邊都會替同一個檔案記一件 `unmanaged_library_file`，
+         *     各自開一筆的話第二筆撞上「同一件事只開一筆」的鍵。
+         */
+        post: operations["post_rebuild_ledger_api_issues_rebuild_ledger_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jellyfin/items/{item_id}/images/{image_type}": {
         parameters: {
             query?: never;
@@ -2508,6 +2535,15 @@ export interface components {
             attempt?: components["schemas"]["ServiceOut"] | null;
         };
         /**
+         * ClaimMiss
+         * @description 媒體庫裡的一個檔案**配不上**帳本的理由（`rebuild-ledger` 與「認領進帳本」，M2 票 10）。
+         *
+         *     配不上的一律不猜（plan §11.3 決定 9）：變成一件 `unmanaged_library_file`，理由寫在
+         *     `detail_json.reason`，畫面照它說下一步。宣告順序就是檢查的順序。
+         * @enum {string}
+         */
+        ClaimMiss: "outside_routes" | "no_source" | "unknown_work" | "not_berth_naming";
+        /**
          * CollectionType
          * @description Jellyfin 媒體庫的類型；沿用 Jellyfin 的字串（brief §4.3）。
          * @enum {string}
@@ -3713,6 +3749,14 @@ export interface components {
             actions: components["schemas"]["PlanAction"][];
         };
         /**
+         * LedgerGapOut
+         * @description `GET /issues/rebuild-ledger`：值不值得按一次「從媒體庫重建帳本」（M4 票 60）。
+         */
+        LedgerGapOut: {
+            /** Unknown */
+            unknown: number;
+        };
+        /**
          * LedgerStatus
          * @description 一筆帳本現在與磁碟對不對得起來（plan §2.3 的 `ledger.status`、brief §9.1）。
          *
@@ -4418,6 +4462,26 @@ export interface components {
          * @enum {string}
          */
         ReasonCode: "movie" | "media_by_title" | "title_exact" | "title_contained" | "title_partial" | "year_matches" | "year_differs" | "title_mismatch" | "no_media" | "season_from_job" | "season_from_release" | "season_from_folder" | "season_from_arc" | "final_season" | "single_season" | "absolute_group" | "absolute_cumulative" | "cour_offset" | "air_date_run" | "published_in_run" | "episode_not_on_tmdb" | "absolute_within_first_season" | "air_date_unknown" | "air_date_mismatch" | "range_spans_seasons" | "specials_numbering" | "released_before_airing" | "behind_latest_episode" | "air_date_missing" | "published_missing" | "runtime_mismatch" | "runtime_missing" | "classified" | "disc_structure" | "own_numbered_special" | "no_episode" | "subtitle_orphan" | "subtitle_same_name" | "subtitle_folder_episode" | "subtitle_follows" | "video_not_imported" | "target_contested" | "span_clash" | "library_span_clash" | "same_version" | "too_many_files" | "strategy_outlier" | "season_complete" | "medium_held_by_route" | "set_by_user" | "series_corrected";
+        /**
+         * RebuildOut
+         * @description 一次重建做了什麼（`ledger_rebuild.RebuildReport`，與 CLI 印出來的同一份）。
+         */
+        RebuildOut: {
+            /** Known */
+            known: number;
+            /** Claimed */
+            claimed: number;
+            /** Unmatched */
+            unmatched: {
+                [key: string]: number;
+            };
+            /** Skipped */
+            skipped: string[];
+            /** Unread Complete */
+            unread_complete: string[];
+            /** Undecided */
+            undecided: number;
+        };
         /**
          * ReconcileRunOut
          * @description 一輪對帳。`finished_at` 是 `null` 就是還在跑。
@@ -6161,6 +6225,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconcileRunOut"];
+                };
+            };
+            /** @description `reconcile_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueRefusalOut"];
+                };
+            };
+        };
+    };
+    get_ledger_gap_api_issues_rebuild_ledger_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerGapOut"];
+                };
+            };
+        };
+    };
+    post_rebuild_ledger_api_issues_rebuild_ledger_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebuildOut"];
                 };
             };
             /** @description `reconcile_running` */

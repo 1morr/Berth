@@ -617,3 +617,26 @@ describe('焦點不掉回 body', () => {
     await waitFor(() => expect(next).toHaveFocus())
   })
 })
+
+// 重跑精靈的人正是在完成頁（M4 票 60，審計 S4：原本只寫「跳過：沒有」）。
+describe('完成頁的「從媒體庫重建帳本」', () => {
+  it('媒體庫裡有帳本不認得的檔案時，在 Route 之後給那一顆', async () => {
+    wizard(6, { 'GET /api/issues/rebuild-ledger': { body: { unknown: 5 } } })
+    renderInRoute(<SetupPage />)
+
+    const region = await screen.findByRole('region', { name: '帳本不認得的檔案' })
+
+    expect(within(region).getByText(/媒體庫裡有 5 個檔案不在 Berth 的帳本上/)).toBeVisible()
+    expect(within(region).getByRole('button', { name: '從媒體庫重建帳本' })).toBeVisible()
+    // 這一步的標題是 h2，所以它是 h3：標題層級不跳級。
+    expect(within(region).getByRole('heading', { level: 3 })).toHaveTextContent('帳本不認得的檔案')
+  })
+
+  it('沒有的時候不畫', async () => {
+    wizard(6, { 'GET /api/issues/rebuild-ledger': { body: { unknown: 0 } } })
+    renderInRoute(<SetupPage />)
+
+    expect(await heading()).toHaveTextContent('完成設定')
+    expect(screen.queryByRole('region', { name: '帳本不認得的檔案' })).not.toBeInTheDocument()
+  })
+})

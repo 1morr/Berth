@@ -87,6 +87,12 @@ export function IssueRow({
       sentence={t(`issues.type.${issue.type}`)}
       when={t('issues.detectedAt', { value: whenText(issue.detected_at, i18n.language) })}
       refusal={refusal}
+      body={
+        // 「認領並建立下載」沒說會做什麼（M4 票 60，審計 S4）：在按鈕上面說一次，不收進展開。
+        issue.actions.includes('claim_torrent') ? (
+          <p className="max-w-prose text-xs text-ink-dim">{t('issues.claimTorrentHint')}</p>
+        ) : undefined
+      }
       details={
         // 完整路徑與來源。掃視的時候只看得到檔名——路徑會把一列撐成三行，而這一頁的工作
         // 是「決定」不是「讀路徑」。

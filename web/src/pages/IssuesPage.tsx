@@ -6,6 +6,7 @@ import { issuesQueryOptions, reconcileQueryOptions } from '../api/issues'
 import { PAGE_TITLE } from '../components/controls'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { IssueRow } from '../issues/IssueRow'
+import { LedgerGapNotice } from '../issues/LedgerGapNotice'
 import { ReconcileBanner } from '../issues/ReconcileBanner'
 
 /**
@@ -41,6 +42,9 @@ export function IssuesPage() {
           </p>
         )}
       </div>
+
+      {/* 重裝之後帳本空了（M4 票 60）：只有偵測到時才畫，排在對帳之前——那是這一頁最該先做的事。 */}
+      <LedgerGapNotice />
 
       <ReconcileBanner />
 

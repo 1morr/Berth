@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 
@@ -31,9 +32,15 @@ import { JellyfinSignIn } from '../setup/JellyfinExisting'
 export function JellyfinSettingsPage() {
   const { t } = useTranslation()
   const check = useServiceCheck()
+  // 精靈跑完之後打開 `/setup` 被帶到這裡（`routes.tsx`）：不說一句的話像是點錯了連結（審計 P2-8）。
+  const { from } = useSearch({ from: '/settings/jellyfin' })
 
   return (
-    <SettingsFrame title={t('settings.jellyfinPage.title')} lede={t('settings.jellyfinPage.lede')}>
+    <SettingsFrame
+      title={t('settings.jellyfinPage.title')}
+      lede={t('settings.jellyfinPage.lede')}
+      note={from === 'setup' ? t('settings.jellyfinPage.wizardDone') : undefined}
+    >
       <HealthSection kind="jellyfin" check={check} />
       <ServiceConnection kind="jellyfin" onConnected={() => check.mutate('jellyfin')} />
       <SignIn check={check} />

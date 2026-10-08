@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { meQueryOptions } from '../api/auth'
 import type { Media } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
-import { COMPACT_BUTTON, GHOST_LINK } from '../components/controls'
+import { COMPACT_BUTTON, GHOST_LINK, TEXT_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
@@ -37,8 +37,11 @@ interface Rematching {
  * 蓋到哪幾集、幾個檔案、帳本與 Jellyfin；逐檔要展開那一組才畫（芙莉蓮一季 28 個檔案逐檔攤開是 3,800px）。
  * 帳本對不上、Jellyfin 找不到的那一組排最前。電影的檔案是一兩個，不分組。對不到的檔案排在最後——它們不在媒體庫裡，
  * 只是需要人知道它們在哪。
+ *
+ * 帳本是空的、Jellyfin 卻有這部（`inJellyfin`，觀看區有回）時不說「還沒有任何檔案入庫」：那是重裝或 DB 遺失
+ * 之後的樣子，照字面說會讓人再下載一次（M4 票 60）。重建是整個媒體庫的事，所以這裡只連過去，不放按鈕。
  */
-export function FilesPanel({ media }: { media: Media }) {
+export function FilesPanel({ media, inJellyfin }: { media: Media; inJellyfin: boolean }) {
   const { t } = useTranslation()
   const headingId = useId()
   const hasFeature = media.files.some((file) => file.action === 'import')
@@ -67,9 +70,21 @@ export function FilesPanel({ media }: { media: Media }) {
         {said}
       </p>
 
-      {media.files.length === 0 && (
-        <p className="max-w-prose text-sm text-ink-dim">{t('media.files.none')}</p>
-      )}
+      {media.files.length === 0 &&
+        (inJellyfin ? (
+          <div className="grid gap-1">
+            <p className="max-w-prose text-sm text-ink">{t('media.files.notInLedger')}</p>
+            {isAdmin ? (
+              <Link to="/issues" className={`${TEXT_LINK} justify-self-start`}>
+                {t('media.files.rebuild')}
+              </Link>
+            ) : (
+              <p className="max-w-prose text-sm text-ink-dim">{t('media.files.askAdmin')}</p>
+            )}
+          </div>
+        ) : (
+          <p className="max-w-prose text-sm text-ink-dim">{t('media.files.none')}</p>
+        ))}
 
       {media.files.length > 0 &&
         (media.kind === 'movie' ? (
