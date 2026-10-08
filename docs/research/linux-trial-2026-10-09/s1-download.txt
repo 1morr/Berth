@@ -1,0 +1,60 @@
+$ date; qBittorrent torrents/info, sync/torrentPeers, torrents/trackers (from the berth container, whitelisted)
+2026-10-09T06:40:35+08:00
+{'name': 'Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO', 'state': 'downloading', 'progress': 0.19849016850972462, 'size': 970294506, 'downloaded': 192555426, 'dlspeed': 99039, 'num_seeds': 3, 'num_complete': 61, 'num_leechs': 0, 'num_incomplete': 10, 'eta': 6878, 'added_on': 1791496682, 'time_active': 2552}
+peers connected: 3
+   μTP qBittorrent 5.2.0 dl 56904 progress 1 flags D H X E P
+   μTP qBittorrent 5.0.5 dl 32950 progress 1 flags D H X P
+   μTP qBittorrent/5.2.4 dl 997 progress 1 flags D S H X E P
+  tracker ** [DHT] ** status 2 seeds 3
+  tracker ** [PeX] ** status 2 seeds 3
+  tracker ** [LSD] ** status 2 seeds 0
+  tracker http://tracker.opentrackr.org:1337/announce status 2 seeds 61
+  tracker udp://tracker.auctor.tv:6969/announce status 2 seeds 26
+  tracker udp://opentracker.i2p.rocks:6969/announce status 4 seeds -1 timed out
+  tracker https://opentracker.i2p.rocks:443/announce status 4 seeds -1 stream truncated
+  tracker udp://open.demonii.com:1337/announce status 2 seeds 25
+  tracker udp://tracker.openbittorrent.com:6969/announce status 4 seeds -1 timed out
+  tracker http://tracker.openbittorrent.com:80/announce status 4 seeds -1 End of file
+  tracker udp://open.stealth.si:80/announce status 2 seeds 33
+  tracker udp://tracker.torrent.eu.org:451/announce status 2 seeds 31
+  tracker udp://tracker.moeking.me:6969/announce status 4 seeds -1 timed out
+  tracker udp://explodie.org:6969/announce status 4 seeds -1 timed out
+  tracker udp://exodus.desync.com:6969/announce status 2 seeds 3
+  tracker udp://uploads.gamecoast.net:6969/announce status 4 seeds -1 timed out
+  tracker udp://tracker1.bt.moack.co.kr:80/announce status 4 seeds -1 timed out
+  tracker udp://tracker.tiny-vps.com:6969/announce status 4 seeds -1 timed out
+  tracker udp://tracker.theoks.net:6969/announce status 4 seeds -1 timed out
+  tracker udp://tracker.skyts.net:6969/announce status 4 seeds -1 timed out
+  tracker udp://tracker-udp.gbitt.info:80/announce status 2 seeds 3
+  tracker udp://open.tracker.ink:6969/announce status 4 seeds -1 timed out
+  tracker udp://movies.zsw.ca:6969/announce status 4 seeds -1 timed out
+
+$ mihomo log: dial errors to peers on the swarm port in the last 2000 lines
+66
+27
+
+$ DELETE /api/jobs/53666f631ce2281ad3ec397f843a62f82d65887a?remove_torrent=true&delete_files=true   (2026-10-09T06:40:48+08:00)
+200 0.024382s
+{"links":0,"sources":0,"torrent":true,"purged":false,"freed":0,"unmanaged":[]}
+$ qBittorrent torrents/info?hashes=53666f631ce2281ad3ec397f843a62f82d65887a
+[]
+$ find /home/cppt/berth-data -iname "*living*"
+/home/cppt/berth-data/torrent/incomplete/movies/www.UIndex.org    -    Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO
+/home/cppt/berth-data/torrent/incomplete/movies/www.UIndex.org    -    Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO/Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO.mkv
+(none)
+$ GET /api/jobs?filter=all
+[('Night of the Living Dead 1968 Remastered', 'removed')]
+
+# the half-downloaded file is still in incomplete/ after the delete above (06:41:03, same size as the torrent):
+100999 4096 /home/cppt/berth-data/torrent/incomplete/movies/www.UIndex.org    -    Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO
+100999 970293554 /home/cppt/berth-data/torrent/incomplete/movies/www.UIndex.org    -    Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO/Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO.mkv
+$ docker run --rm -v /home/cppt/berth-data:/d alpine rm -rf "/d/torrent/incomplete/movies/www.UIndex.org    -    Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO"   (cleanup by hand; owned by 100999)
+(none left)
+
+ Network berth Removed
+$ docker ps -a (this ticket)
+s2-qbittorrent Exited (0) About an hour ago
+s2-jellyfin Exited (0) About an hour ago
+s2-qbittorrent Exited (0) About an hour ago
+s2-jellyfin Exited (0) About an hour ago
+ports-free

@@ -17,14 +17,17 @@ Workstation 的 Ubuntu VM（brief §19 E8）。只在 `~/berth-trial-42/`、`/ho
     docker0，不是宿主。宿主上的原生服務、其他 rootless 容器發佈的 port 都是 connection refused；**改填宿主的區網 IP
     就通**（只監聽 `127.0.0.1` 的仍然連不到）。§5。
 - **S2（既有 Jellyfin 與既有 qBittorrent，各自只多掛一條 `/data`）走到頁 3，兩條 Route 各 6/6**：位址用
-  `http://192.168.50.99:<port>`。`host.docker.internal` 那一條的驗收在 rootless 上答案是「連不到」，票上那一格留給使用者決定；
-  rootful 原生 Linux 的 `host-gateway` 只有 Unraid 上的 `getent` 與 curl（票 55），沒有用它走過 S2。
+  `http://192.168.50.99:<port>`。`host.docker.internal` 那一條的驗收在 rootless 上答案是「連不到」；使用者決定把驗收拆成兩半：rootful
+  引用票 55 在 Unraid 上的實測（`getent` 與 curl，沒有用它走過 S2），rootless 記成「不通、要填區網 IP」交給票 72。
 - **PUID / PGID 與 `DATA_ROOT` 擁有者不一致時，頁 3 的錯誤訊息看過了**：`berth_cannot_write`，「Berth itself cannot
   write to /data/torrent …」（§4.2）。訊息指對了地方，但補法「在宿主上 chown 給那組 PUID / PGID」在 rootless 上做不到
   （要 chown 成 100999，沒有 sudo），rootless 的補法是 `PUID=0`。
-- **S1 沒有入庫**：精靈頁 1–3 照 README 走完（三條 Route 各 6/6），但這台 VM 自己的 Clash Verge（mihomo TUN）選的
-  節點整段時間都不通，TMDB、索引站、`lscr.io`、Prowlarr 的站定義全部 TLS 失敗（§6）。頁 4 加不了站、頁 5 測不了
-  TMDB，所以沒有走到送單與入庫。這是這台機器的網路，不是 Berth；改代理設定是使用者的事，這一輪沒有動。
+- **S1 精靈頁 1–6 走完、送單成功，沒有入庫**：頁 1–3 一次走完（三條 Route 各 6/6）；接著 VM 自己的 Clash Verge（mihomo
+  TUN）選的節點不通，TMDB、索引站、`lscr.io`、Prowlarr 的站定義全部 TLS 失敗（§6），停在頁 4。使用者換了節點之後
+  （05:50 確認通了）從頁 4 接著做：加入 5 個推薦站、TMDB 驗證、05:55:56 完成精靈，05:58:02 送出一部《Night of the
+  Living Dead》(1968)。06:00 拿到 metadata、開始下載，到 06:40 只到 19.8%（連上 3 個 peer，§3.1）；**使用者決定不等
+  入庫**，06:40:48 在 Berth 裡刪掉這一筆（連 torrent 與檔案）。入庫那一段的端到端由票 55（Unraid）與票 58（Docker
+  Desktop）實證。刪除時發現下載中的檔案留在 incomplete 目錄（票 74）。
 - **qBittorrent 的免密白名單在 rootless 上仍然安全**：rootless 的 `-p` 不保留來源位址，但白名單只有 Berth 的
   `172.28.0.2/32`，從宿主與區網不登入打 API 都是 403（§5.2）。
 - **改的是文件**：README（兩份）、`docs/guide/requirements.md`〈Linux〉、`docs/guide/existing-services.md`、部署檔
@@ -71,9 +74,29 @@ Workstation 的 Ubuntu VM（brief §19 E8）。只在 `~/berth-trial-42/`、`/ho
 | 04:54:39 | 頁 4「測試推薦站，加入通過的」（`POST /api/setup/indexers/recommended`）：`checks: []`，一站都沒測——Prowlarr 的候選只有磁碟上的 5 個定義，推薦清單上的一個都不在；畫面上推薦站區只剩標題與「Do this later」（[s1-05](linux-trial-2026-10-09/s1-05-page4-no-recommended.jpeg)；§6、票 73） |
 | 04:55:23 | 手動測其中 4 個（Anidex、Knaben、SubsPlease、TorrentsCSV；第 5 個是 showRSS 的 RSS 定義）：全部 `unreachable`；`berth` 容器裡打 TMDB：`SSL: UNEXPECTED_EOF_WHILE_READING` |
 
-頁 4 的回應與測站結果：[`s1-page4.txt`](linux-trial-2026-10-09/s1-page4.txt)。頁 5（TMDB）之後沒有做：key 測不過就不存（票 45），精靈停在頁 5，送單與入庫走不到。之後在 05:03 把這一套還原成照
-README 的 `.env`（§4 做完實驗之後），Route 重查 3 條 ready，然後 `docker compose down` 讓出容器名給 S2（設定與資料都在
-bind mount 上，留著）。
+頁 4 的回應與測站結果：[`s1-page4.txt`](linux-trial-2026-10-09/s1-page4.txt)。頁 5（TMDB）這時做不了：key 測不過就不存（票 45）。
+之後在 05:03 把這一套還原成照 README 的 `.env`（§4 做完實驗之後），Route 重查 3 條 ready，然後 `docker compose down`
+讓出容器名給 S2（設定與資料都在 bind mount 上，留著）。
+
+**網路通了之後接著做**（使用者換了 Clash 節點；05:50:05 在 VM 上 curl：TMDB 401（沒帶 key）、`lscr.io` 401、
+`indexers.prowlarr.com` 200；帶 key 打 TMDB `configuration` 200，key 經檔案送出、不在輸出裡）：
+
+| 時間 | 事件 |
+| --- | --- |
+| 05:50:54 | S1 `docker compose up -d`（`.env` 是照 README 的那一份：`PUID=1000`），四個 healthy；`POST /api/auth/login` 以 `owner` 登入，精靈回到頁 4 |
+| 05:51 | Prowlarr 這次拿到站定義：候選 87 個，推薦清單的 9 個都在（票 73 的失效條件反過來成立：定義在，主鍵就在） |
+| 05:52:40–05:54:34 | 頁 4 畫面上按「Test recommended sites and add the ones that pass」：約 2 分鐘，**加入 5 站**（ACG.RIP、Anime Tosho、dmhy、Mikan、The Pirate Bay）；Nyaa、YTS「Unreachable」，1337x、EZTV「Blocked by Cloudflare」（[s1-06](linux-trial-2026-10-09/s1-06-page4-recommended-added.jpeg)） |
+| 05:55:30 | 頁 5：`POST /api/setup/tmdb/test`（key 從 VM 上的檔案讀）→ `verified: true`（[s1-07](linux-trial-2026-10-09/s1-07-page5-verified.jpeg)） |
+| 05:55:56 | 頁 6「Finish setup」→ 探索頁（[s1-08](linux-trial-2026-10-09/s1-08-page6.jpeg)） |
+| 05:57 | 作品頁《Night of the Living Dead》(1968)（`movie:10331`）按 Search：34 筆，全部來自 The Pirate Bay |
+| 05:58:02 | 送 `Night of the Living Dead 1968 Remastered 720p BluRay x264 DuaL-TURKO`（925 MB、13 seeders）到 Movies；確認框寫明資料夾 `Night of the Living Dead (1968) [tmdbid-10331]`（[s1-09](linux-trial-2026-10-09/s1-09-send-confirm.jpeg)）。`GET /api/jobs`：`submitted`、`save_path /data/torrent/complete/movies` |
+| 06:00:09 | Berth log `job metadata received`（3 個檔）、`job pre-planned`；狀態 `downloading` |
+| 06:00–06:40 | 進度每 2 分鐘約 1%：06:20 10%、06:39 19%（[s1-10](linux-trial-2026-10-09/s1-10-jobs.jpeg)） |
+| 06:40:35 | qBittorrent（從 `berth` 容器問，白名單內）：`progress 0.198`、`downloaded 192,555,426`、`dlspeed 99,039`、`eta 6878`；**連上的 peer 3 個**（都是 μTP、都是完整的種子）；tracker 回報 `num_complete 61`（opentrackr）、25–33（其他四個）、3（兩個），另有 13 個 tracker 逾時或斷線；mihomo 的最近 2000 行 log 裡往 peer 的連線有 66 筆 `connection refused`、27 筆 `i/o timeout`（[`s1-download.txt`](linux-trial-2026-10-09/s1-download.txt)） |
+| 06:40:48 | **使用者決定不等入庫**：`DELETE /api/jobs/{hash}?remove_torrent=true&delete_files=true` → 200 `{"links":0,"sources":0,"torrent":true,"purged":false,"freed":0}`；qBittorrent 裡已沒有這個 hash，Job 是 `removed`。但 `torrent/incomplete/movies/<種子名>/` 底下那個 `.mkv`（表觀大小 970,293,554）留著——開票 74；這一份由我從容器裡手動刪掉（擁有者 100999） |
+
+**為什麼這麼慢，不知道**。看得到的只有上面那些：swarm 有幾十個種子，實際連上 3 個，往外連 peer 有拒絕也有逾時。
+rootless 的 port 轉送、slirp4netns、VM 的 NAT 與代理都在這條路上，這一輪沒有逐一排除，所以不下結論。
 
 ### 3.2 S2：既有 Jellyfin 與既有 qBittorrent（`PUID=0`）
 
@@ -177,7 +200,7 @@ Docker 文件：rootless 的 port forwarding 預設不保留來源位址。白�
 所以從外面來的連線不管被改成哪個位址都進不了免密那一條：S1 套件內 qBittorrent（8080）不登入打 `/api/v2/app/version`，
 VM 宿主上 403、Windows（區網）上 403。Berth 自己從 172.28.0.2 進得去（頁 2、頁 3）。
 
-## 6. VM 的對外網路（S1 停在這裡）
+## 6. VM 的對外網路（S1 在頁 4 停過一次）
 
 指令輸出：[`network.txt`](linux-trial-2026-10-09/network.txt)（05:22 在 VM 與 Windows 上同時打同樣的網址、mihomo 的 log、Prowlarr 的錯誤）。
 
@@ -186,8 +209,8 @@ VM 宿主上 403、Windows（區網）上 403。Berth 自己從 172.28.0.2 進�
   log 照樣記 `match Match using …`。
 - 受影響的：`lscr.io`（§2 繞過）、`indexers.prowlarr.com`（Prowlarr 的站定義更新失敗，退回磁碟上的 5 個）、每一個
   索引站、`api.themoviedb.org`。從 Windows 主機打同樣的網址都正常。
-- 這是使用者 VM 的代理設定，改節點或關 TUN 都是改使用者的設定，這一輪沒有動。**S1 的入庫等使用者把 VM 的網路弄通之後
-  再補**：S1 那一套的 `config/` 與 `berth-data` 留在 VM 上，`docker compose up -d` 就回到頁 4。
+- 這是使用者 VM 的代理設定，改節點或關 TUN 都是改使用者的設定，這一輪沒有動。使用者 05:50 前換了節點，之後
+  TMDB、`lscr.io`、`indexers.prowlarr.com` 都通（§3.1）。
 
 ## 7. 發現與處理
 
@@ -198,12 +221,13 @@ VM 宿主上 403、Windows（區網）上 403。Berth 自己從 172.28.0.2 進�
 | L3 | `berth_cannot_write` 的補法（chown 給那組 PUID / PGID）在 rootless 上做不到 | **票 72**（同一批精靈文案） |
 | L4 | Prowlarr 拿不到站定義時，頁 4 的推薦清單整段消失：只剩標題「Recommended sites」與「Do this later」，主鍵不見、也不說為什麼；按 API 回 `checks: []` | **票 73**。根因是 Prowlarr 連不上 `indexers.prowlarr.com`（這一輪是 VM 的代理），但在擋了那個網域的網路上一樣會發生 |
 | L5 | 拉 `lscr.io` 失敗時整個 `up -d` 中斷 | 不改：這台的代理造成；`ghcr.io/linuxserver/*` 是同一份 image，記在這裡給碰到的人 |
-| L6 | guide〈Host platforms〉與 README〈Status〉說「其他 Linux 沒測過」 | **本票改**：加「Ubuntu 26.04 rootless：精靈到頁 3、兩種情境的 Route 檢查；入庫沒跑」 |
+| L6 | guide〈Host platforms〉與 README〈Status〉說「其他 Linux 沒測過」 | **本票改**：加「Ubuntu 26.04 rootless：精靈走完、送單成功；入庫沒跑」 |
+| L7 | 刪除還在下載的單、勾了刪檔：torrent 移除了，incomplete 目錄裡的檔案留著，回應說 `freed: 0` | **票 74**（`deletion.py` 只刪 complete 根目錄底下的來源，`torrents/delete` 固定不叫 qBittorrent 刪） |
 
 ## 8. 收尾
 
-這一輪**留著**：S1 那一套（`~/berth-trial-42/berth/`，`config/`、`/home/cppt/berth-data`，容器已 `down`）等網路通了補入庫；
-S2 那一套（`~/berth-trial-42/s2/`、`/home/cppt/berth-s2-data`）停在頁 4，05:3x 已 `docker compose down`、`s2-jellyfin` 與
+這一輪**留著**：S1 那一套（`~/berth-trial-42/berth/`，`config/`、`/home/cppt/berth-data`；06:41 已 `docker compose down`，
+送的那一筆已刪、沒有殘留）；S2 那一套（`~/berth-trial-42/s2/`、`/home/cppt/berth-s2-data`）停在頁 4，05:3x 已 `docker compose down`、`s2-jellyfin` 與
 `s2-qbittorrent` 已 `docker stop`（容器留著），讓出 `berth` 這個容器名與 port 給同一台上之後的票 71。帳密與 cookie 在 `~/berth-trial-42/.trial/`（600）。全部清掉的指令：
 
 ```bash

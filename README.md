@@ -81,7 +81,7 @@ Berth is a **public beta**.
 - It works with **Jellyfin 12.0 or newer** and **Prowlarr** only. No Emby, Plex or Jackett.
 - No notifications yet: open Berth to see what needs you.
 - Tested end to end on **Windows with Docker Desktop** and on **Unraid 7.1**. On **Ubuntu 26.04 with rootless
-  Docker**, only wizard pages 1–3 (connecting the services and the library checks) have been run, with no import yet
+  Docker**, the whole setup wizard and sending a release have been run, but not an import
   ([trial notes](docs/research/linux-trial-2026-10-09.md), in Chinese). Other Linux distributions and NAS systems
   have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.

@@ -31,9 +31,9 @@ With a clone of the repo you can check a folder before installing: `sh scripts/e
 ## Host platforms
 
 Tested end to end: Windows with Docker Desktop (an NTFS bind mount, and ext4 inside Docker Desktop's Linux VM)
-and Unraid 7.1.4 on a user share. Ubuntu 26.04 with rootless Docker 29.7 on ext4: only wizard pages 1–3 (bundled
-services, and existing ones with an extra `/data` mount) and the ownership notes below were tested; no import was
-run there yet. **Other Linux distributions and NAS systems have not been tested yet.** They should
+and Unraid 7.1.4 on a user share. Ubuntu 26.04 with rootless Docker 29.7 on ext4: the whole wizard with bundled
+services, the library checks with existing ones (an extra `/data` mount), sending a release and the ownership notes
+below were tested; no import was run there yet. **Other Linux distributions and NAS systems have not been tested yet.** They should
 work the same way, but nobody has run them.
 
 ### Linux
