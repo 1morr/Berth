@@ -579,6 +579,13 @@ docker run --rm -v /srv/berth/data:/data -v "$PWD/scripts/experiments:/exp:ro"  
 docker run --rm -v /srv/a:/data/torrent -v /srv/b:/data/library     -v "$PWD/scripts/experiments:/exp:ro" alpine:3 sh /exp/hardlink.sh /data   # 應該 EXDEV 並回 1
 ```
 
+rootless Docker 上容器的 uid 落到宿主是誰、`berth` 容器連得到宿主上的哪些位址（M4 票 42）：在宿主上、Berth 那一套
+`up -d` 之後跑，第一個參數是宿主的區網 IP，其餘是要多打的 port（既有服務）；只讀，自己起的兩個暫時 http 服務會收掉：
+
+```bash
+sh scripts/experiments/rootless_host_probe.sh 192.168.50.99 18096 18080
+```
+
 入庫的那一部片 Jellyfin 認不認得、播不播得到（M4 票 55，Unraid 上 mover 前後各問一次）：在已經跑完精靈的
 `berth` 容器裡跑，用 Berth 存的 Jellyfin API key（不印出），只讀。item id 在作品頁「在 Jellyfin 看」的連結裡：
 

@@ -1,0 +1,29 @@
+# S1, wizard page 4 (bundled Prowlarr 2.6.5), outputs as captured on the VM (curl against localhost:8383)
+
+## 04:53:56 PUT /api/setup/indexers/login (reuse_owner) -> 200 2.53s
+{"origin":"bundled","base_url":"http://prowlarr:9696","api_key_present":true,"reachable":true,"sites":[],"candidates":[...]}
+
+## GET /api/setup/indexers -> candidates (definition_name) and which are recommended
+5 []
+['Anidex', 'Knaben', 'SubsPlease', 'Torrent RSS Feed', 'TorrentsCSV']
+(Torrent RSS Feed is shown as "showRSS". None of them is on the recommended list.)
+
+## 04:54:39 POST /api/setup/indexers/recommended -> 200 0.51s
+sites: []
+{'origin': 'bundled', 'base_url': 'http://prowlarr:9696', 'api_key_present': True, 'reachable': True, 'checks': [],
+ 'steps': [{'step': 'prowlarr_login', 'status': 'skipped', 'detail': 'owner', ...}], 'skipped': False,
+ 'web_ui_login': True, 'web_ui_username': 'owner', 'web_ui_login_by_berth': True, 'failure': None, 'error': '',
+ 'web_port': 9696}
+
+## 04:55:23 POST /api/setup/indexers/test {"indexers":["Knaben","TorrentsCSV","SubsPlease","Anidex"]} -> 200
+Knaben       passed=False reason=unreachable  "Unable to connect to indexer. This is typically caused by DNS/SSL issues. ..."
+TorrentsCSV  passed=False reason=unreachable  (same)
+SubsPlease   passed=False reason=unreachable  (same)
+Anidex       passed=False reason=unreachable  (same)
+
+## same minute, from inside the berth container
+$ docker exec berth python -c "urllib.request.urlopen('https://api.themoviedb.org/3/configuration', timeout=10)"
+ctr tmdb <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1032)>
+
+## The page itself: s1-05-page4-no-recommended.jpeg ("Recommended sites" heading, no main button; the only
+## buttons the accessibility tree lists in that region are the heading and "Do this later").

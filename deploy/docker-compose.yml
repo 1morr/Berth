@@ -74,6 +74,8 @@ services:
       - ${BERTH_PORT:-8383}:8383
     # For an existing service on the host, enter host.docker.internal (localhost inside the
     # container is Berth itself). Docker Desktop provides that name; on Linux it needs this line.
+    # Rootless Docker is the exception: the name resolves but nothing on the host answers there, so
+    # enter the host's LAN IP instead.
     extra_hosts:
       - host.docker.internal:host-gateway
     networks:

@@ -1,0 +1,17 @@
+== docker
+context: rootless
+security options: [name=seccomp,profile=builtin name=rootless name=cgroupns]
+== 1. who owns what a container writes
+-rw-r--r-- 1 100999 100999 0 Oct  9 05:24 as-1000
+-rw-r--r-- 1 1000   1000   0 Oct  9 05:24 as-root
+== 2. what the berth container can reach
+172.17.0.1      host.docker.internal
+http://host.docker.internal:18901/            URLError: <urlopen error [Errno 111] Connection refused>
+http://host.docker.internal:18902/            URLError: <urlopen error [Errno 111] Connection refused>
+http://host.docker.internal:18096/            URLError: <urlopen error [Errno 111] Connection refused>
+http://host.docker.internal:18080/            URLError: <urlopen error [Errno 111] Connection refused>
+http://192.168.50.99:18901/                   200
+http://192.168.50.99:18902/                   URLError: <urlopen error [Errno 111] Connection refused>
+http://192.168.50.99:18096/                   200
+http://192.168.50.99:18080/                   200
+(18901 listens on 0.0.0.0, 18902 on 127.0.0.1 only)

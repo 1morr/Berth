@@ -1,0 +1,10 @@
+# S2: the existing Jellyfin and qBittorrent after page 3 (05:1x)
+$ cat "Movies/"*.mblink   (Jellyfin library Movies/: one file per path)
+/data/library/movies
+/movies
+$ cat "Shows/"*.mblink   (Jellyfin library Shows/: one file per path)
+/data/library/shows
+/shows
+$ docker inspect s2-jellyfin s2-qbittorrent --format "{{.Name}} {{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}"
+/s2-jellyfin /home/cppt/berth-s2-data:/data /home/cppt/berth-trial-42/s2/existing/jellyfin:/config /home/cppt/berth-trial-42/s2/old-media/movies:/movies /home/cppt/berth-trial-42/s2/old-media/shows:/shows
+/s2-qbittorrent /home/cppt/berth-s2-data:/data /home/cppt/berth-trial-42/s2/existing/qbittorrent:/config /home/cppt/berth-trial-42/s2/old-downloads:/downloads

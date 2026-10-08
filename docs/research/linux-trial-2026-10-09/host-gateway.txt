@@ -1,0 +1,33 @@
+$ docker exec berth getent hosts host.docker.internal
+172.17.0.1      host.docker.internal
+$ ss -ltn (host side, the five ports used)
+LISTEN 0      5          127.0.0.1:18902      0.0.0.0:*
+LISTEN 0      5            0.0.0.0:18901      0.0.0.0:*
+LISTEN 0      4096         0.0.0.0:18096      0.0.0.0:*
+LISTEN 0      4096         0.0.0.0:18080      0.0.0.0:*
+LISTEN 0      4096         0.0.0.0:9696       0.0.0.0:*
+LISTEN 0      4096         0.0.0.0:8383       0.0.0.0:*
+LISTEN 0      4096            [::]:18096         [::]:*
+LISTEN 0      4096            [::]:18080         [::]:*
+LISTEN 0      4096            [::]:9696          [::]:*
+LISTEN 0      4096            [::]:8383          [::]:*
+
+# from inside the berth container (rootless, network berth 172.28.0.0/16); s2-jellyfin publishes 18096, s2-qbittorrent 18080; 18901 = python http.server on 0.0.0.0 on the host, 18902 = on 127.0.0.1
+http://host.docker.internal:18096/System/Info/Public URLError <urlopen error [Errno 111] Connection refused>
+http://host.docker.internal:18080/api/v2/app/version URLError <urlopen error [Errno 111] Connection refused>
+http://host.docker.internal:18901/ URLError <urlopen error [Errno 111] Connection refused>
+http://host.docker.internal:18902/ URLError <urlopen error [Errno 111] Connection refused>
+http://192.168.50.99:18096/System/Info/Public 200 b'{"LocalAddress":"http://[::1]:8096","ServerName":"'
+http://192.168.50.99:18080/api/v2/app/version HTTP 403
+http://192.168.50.99:18901/ 200 b'host-0.0.0.0\n'
+http://192.168.50.99:18902/ URLError <urlopen error [Errno 111] Connection refused>
+
+# qBittorrent whitelist (172.28.0.2/32): published-port traffic does not keep its source address in rootless
+# mode. Measured on the S1 stack (bundled qBittorrent on 8080, preseeded whitelist) at 04:57, no login:
+$ curl -s -o /dev/null -w %{http_code} http://127.0.0.1:8080/api/v2/app/version      (on the VM host)
+403
+$ curl -s -o /dev/null -w %{http_code} http://cppt-dev.local:8080/api/v2/app/version (from the Windows host on the LAN)
+403
+$ grep AuthSubnetWhitelist config/qbittorrent/qBittorrent/qBittorrent.conf
+WebUI\AuthSubnetWhitelist=172.28.0.2/32
+WebUI\AuthSubnetWhitelistEnabled=true

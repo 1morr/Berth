@@ -39,8 +39,8 @@ Berth 是公開 beta。依賴它之前先讀〈[現況與已知限制](#現況�
 2. 改 `.env`：
    - `DATA_ROOT`：下載與媒體庫放在哪。預設的 `./data` 試跑可以不改；正式用請指到你的媒體磁碟
      （`/srv/berth/data`、`C:\Berth\data`）。
-   - `PUID` / `PGID`：擁有 `DATA_ROOT` 的帳號（`id -u` / `id -g`；Unraid 是 `99` / `100`）。Windows 的
-     Docker Desktop 維持預設。
+   - `PUID` / `PGID`：擁有 `DATA_ROOT` 的帳號（`id -u` / `id -g`；Unraid 是 `99` / `100`；
+     [rootless Docker](docs/guide/requirements.md#rootless-docker) 是 `0` / `0`）。Windows 的 Docker Desktop 維持預設。
    - `TZ`：你的時區，例如 `Asia/Taipei`。
    - 已經在跑 Jellyfin、qBittorrent 或 Prowlarr？要接你原本那一台，就把它從 `COMPOSE_PROFILES` 拿掉；要兩台並存，
      就改它的 `*_PORT`。否則 `up -d` 會停在 `port is already allocated`。見
@@ -77,7 +77,9 @@ Berth 是**公開 beta**。
 
 - 只支援 **Jellyfin 12.0 以上**與 **Prowlarr**。不支援 Emby、Plex、Jackett。
 - 還沒有通知：要打開 Berth 才看得到哪裡需要你。
-- 完整實跑過的是 **Windows 的 Docker Desktop** 與 **Unraid 7.1**。其他 Linux 發行版與 NAS 還沒實測。
+- 完整實跑過的是 **Windows 的 Docker Desktop** 與 **Unraid 7.1**。**Ubuntu 26.04 的 rootless Docker** 上只走過精靈
+  頁 1–3（接上服務與媒體庫路徑的檢查），還沒在那裡入庫過（[實跑紀錄](docs/research/linux-trial-2026-10-09.md)）。其他 Linux
+  發行版與 NAS 還沒實測。
 - **不要把 Berth 直接開到公網。** 從區網或 VPN 連。
 - 已知問題（追蹤票，中文）：
   - 沒有 Prowlarr（精靈裡跳過、或之後移除）時健康頁一直紅；還沒有「不用 Prowlarr」的選項

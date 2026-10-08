@@ -99,6 +99,12 @@ Check that the name resolves:
 docker compose exec berth getent hosts host.docker.internal
 ```
 
+**Rootless Docker** (`docker context show` prints `rootless`): `host.docker.internal` still resolves, to
+`172.17.0.1`, but that address is inside rootless Docker's own network namespace, not the host, so nothing on the
+host answers there (tested on Ubuntu 26.04 with Docker 29.7: other containers' published ports and services
+running directly on the host were all "connection refused"). Use the host's LAN IP instead, e.g.
+`http://192.168.1.10:8096`; the service must listen on `0.0.0.0`.
+
 ## Stopping a bundled service you no longer use
 
 Removing a service from `COMPOSE_PROFILES` and running `docker compose up -d` does **not** stop a bundled container

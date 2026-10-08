@@ -1,0 +1,43 @@
+# VM outbound network during the trial (Clash Verge / verge-mihomo TUN, rule mode)
+
+## From the VM host, 2026-10-09T05:21:59+08:00 Windows clock
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://api.themoviedb.org/3/configuration
+curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
+000
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://lscr.io/v2/
+curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
+000
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://indexers.prowlarr.com/master/11/package.zip
+curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
+000
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://yts.mx
+curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
+000
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://github.com
+200
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://ghcr.io/v2/
+401
+
+$ getent hosts lscr.io api.themoviedb.org   (fake-ip)
+198.18.0.18     lscr.io
+198.18.0.34     api.themoviedb.org
+
+$ grep -E "themoviedb|github.com|lscr" mihomo service log | tail -4
+time="2026-10-09T05:19:46.884170251+08:00" level=info msg="[TCP] 198.18.0.1:57906 --> api.themoviedb.org:443 match Match using 冲上云霄[🇨🇳 [直连] 台湾家宽D]"
+time="2026-10-09T05:22:07.202059877+08:00" level=info msg="[TCP] 198.18.0.1:44104 --> api.themoviedb.org:443 match Match using 冲上云霄[🇨🇳 [直连] 台湾家宽D]"
+time="2026-10-09T05:22:11.316703636+08:00" level=info msg="[TCP] 198.18.0.1:45588 --> lscr.io:443 match Match using 冲上云霄[🇨🇳 [直连] 台湾家宽D]"
+time="2026-10-09T05:22:21.531717214+08:00" level=info msg="[TCP] 198.18.0.1:60246 --> github.com:443 match DomainSuffix(github.com) using DIRECT"
+
+$ docker logs berth-prowlarr (S2 stack, bundled Prowlarr) | grep -A3 "Definition update failed" | head -6
+[Error] IndexerDefinitionUpdateService: Definition update failed
+
+[v2.6.5.5623] System.Net.Http.HttpRequestException: The SSL connection could not be established, see inner exception.
+ ---> System.IO.IOException: Received an unexpected EOF or 0 bytes from the transport stream.
+
+## From the Windows host (same moment)
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://api.themoviedb.org/3/configuration
+401
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://lscr.io/v2/
+401
+$ curl -sS -m 10 -o /dev/null -w %{http_code} https://indexers.prowlarr.com/master/11/package.zip
+200

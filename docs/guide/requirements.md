@@ -31,13 +31,30 @@ With a clone of the repo you can check a folder before installing: `sh scripts/e
 ## Host platforms
 
 Tested end to end: Windows with Docker Desktop (an NTFS bind mount, and ext4 inside Docker Desktop's Linux VM)
-and Unraid 7.1.4 on a user share. **Other Linux distributions and NAS systems have not been tested yet.** They
-should work the same way, but nobody has run them.
+and Unraid 7.1.4 on a user share. Ubuntu 26.04 with rootless Docker 29.7 on ext4: only wizard pages 1–3 (bundled
+services, and existing ones with an extra `/data` mount) and the ownership notes below were tested; no import was
+run there yet. **Other Linux distributions and NAS systems have not been tested yet.** They should
+work the same way, but nobody has run them.
 
 ### Linux
 
 `DATA_ROOT` must be writable by `PUID` / `PGID`, e.g. `chown -R 1000:1000 /srv/berth/data`. Berth only takes
-ownership of the media root when it is still empty; it never touches a folder that already has content.
+ownership of the media root when it is still empty; it never touches a folder that already has content. If it
+cannot write there, wizard page 3 stops at its first check with "Berth cannot create a folder or write a file".
+
+#### Rootless Docker
+
+Check with `docker context show` (prints `rootless`) or `docker info` (lists `name=rootless` under security
+options). Two things differ:
+
+- **`PUID=0` and `PGID=0`**, not `id -u` / `id -g`. In rootless mode root inside a container is your own account
+  on the host, while uid 1000 inside is a subordinate id on the host (100999 with the usual `/etc/subuid`). With
+  `PUID=1000` everything works inside the stack, but your own account can no longer write to or delete anything
+  under `DATA_ROOT` and `CONFIG_ROOT`. If that already happened, hand the files back without sudo:
+  `docker run --rm -v /path/to/folder:/d alpine chown -R 0:0 /d`, then set `0` / `0` and `docker compose up -d`.
+  The linuxserver images do not officially support rootless Docker; with `0` / `0` they ran fine in testing.
+- **Existing services: use the host's LAN IP**, not `host.docker.internal`. See
+  [Addresses](existing-services.md#addresses-hostdockerinternal-not-localhost).
 
 ### Windows (Docker Desktop, WSL 2 backend)
 

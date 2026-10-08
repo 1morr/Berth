@@ -1,0 +1,122 @@
+# Ubuntu 26.04, rootless Docker 29.7.1, /etc/subuid cppt:100000:65536. All commands as cppt (uid 1000), no sudo.
+
+## A. S1 as the README says: PUID=1000 / PGID=1000 (`id -u` / `id -g`), DATA_ROOT=/home/cppt/berth-data
+##    (did not exist before `docker compose up -d`, 04:48)
+
+$ ls -ldn /home/cppt/berth-data config config/*
+drwxr-xr-x 2 100999 100999 4096 Oct  9 04:48 /home/cppt/berth-data
+drwxr-xr-x 6 1000   1000   4096 Oct  9 04:48 config
+drwxr-xr-x 2 100999 100999 4096 Oct  9 04:48 config/berth
+drwxr-xr-x 7 100999 100999 4096 Oct  9 04:48 config/jellyfin
+drwxr-xr-x 6 100999 100999 4096 Oct  9 04:48 config/prowlarr
+drwxr-xr-x 4 100999 100999 4096 Oct  9 04:48 config/qbittorrent
+
+# after wizard page 3 (3 routes, 6/6 each):
+$ cd /home/cppt/berth-data; find . -maxdepth 3 -printf "%u:%g %m %p\n"
+100999:100999 755 .
+100999:100999 755 ./library
+100999:100999 755 ./library/anime
+100999:100999 755 ./library/movies
+100999:100999 755 ./library/tv
+100999:100999 755 ./torrent
+100999:100999 755 ./torrent/complete
+...                                   (every entry 100999:100999 755)
+$ touch x
+touch: cannot touch 'x': Permission denied
+$ mkdir library/movies/test
+mkdir: Permission denied
+
+# the same folder seen from inside the containers:
+$ docker exec berth ls -ln /data
+drwxr-xr-x 5 1000 1000 4096 Oct  9 04:52 library
+drwxr-xr-x 4 1000 1000 4096 Oct  9 04:52 torrent
+$ docker exec berth-qbittorrent id abc
+uid=1000(abc) gid=1000(users) groups=1000(users),1000(users)
+
+=> container uid 1000 is host uid 100000 + 1000 - 1 = 100999. Everything works inside the stack (both ends of
+   the hardlink have the same owner), but the account that "owns" DATA_ROOT on the host cannot write to it.
+
+## B. Mismatch: DATA_ROOT already exists, has content, owned by cppt; PUID=1000 (05:00)
+
+$ mkdir -p /home/cppt/berth-data-own/library; echo keep > /home/cppt/berth-data-own/README.txt
+$ ls -ln /home/cppt/berth-data-own
+-rw-rw-r-- 1 1000 1000    5 Oct  9 05:00 README.txt
+drwxrwxr-x 2 1000 1000 4096 Oct  9 05:00 library
+# .env: DATA_ROOT=/home/cppt/berth-data-own, PUID=1000, PGID=1000; docker compose up -d
+$ docker exec berth ls -ln /data
+-rw-rw-r-- 1 0 0    5 Oct  9 05:00 README.txt
+drwxrwxr-x 2 0 0 4096 Oct  9 05:00 library
+
+# Berth's entrypoint leaves a non-empty /data alone, so berth (container uid 1000) cannot write to a folder that
+# container root owns. POST /api/setup/routes (wizard page 3, "Check again"):
+ready: False
+Movies /data/library/movies
+    category failed berth_cannot_write [Errno 13] Permission denied: '/data/torrent'
+    download_path pending
+    download_visible pending
+    library_path pending
+    probe_visible pending
+    hardlink pending
+TV, Anime: the same.
+# Page 3 text (en): see m-01-page3-berth-cannot-write.jpeg
+
+## C. Same folder, PUID=0 / PGID=0 (05:02)
+
+# .env: PUID=0, PGID=0; docker compose up -d
+$ docker exec berth-qbittorrent ps -o user,args | grep qbittorrent-nox
+root     /app/qbittorrent-nox --webui-port=8080 --torrenting-port=6881
+$ docker exec berth-jellyfin ps -eo user,args | grep /usr/bin/jellyfin
+root     /usr/bin/jellyfin --ffmpeg=/usr/lib/jellyfin-ffmpeg/ffmpeg
+# POST /api/setup/routes: category skipped, download_path ok, download_visible ok;
+# library_path failed directory_missing (the bundled Jellyfin's library folders were made under the old DATA_ROOT;
+# unrelated to PUID), probe_visible / hardlink pending.
+$ find /home/cppt/berth-data-own -maxdepth 4 -printf "%u:%g %m %p\n"
+cppt:cppt 775 /home/cppt/berth-data-own
+cppt:cppt 755 /home/cppt/berth-data-own/torrent
+cppt:cppt 755 /home/cppt/berth-data-own/torrent/complete
+...                                   (every entry cppt:cppt)
+cppt:cppt 664 /home/cppt/berth-data-own/README.txt
+
+=> In rootless mode, container root is the host account that runs dockerd. PUID=0 / PGID=0 makes Berth and the
+   three linuxserver images write as cppt.
+
+## D. S2 from scratch with PUID=0 / PGID=0, DATA_ROOT=/home/cppt/berth-s2-data (did not exist), existing Jellyfin
+##    and qBittorrent also PUID=0 (05:09, after page 3: 2 routes, 6/6 each)
+
+$ find /home/cppt/berth-s2-data -maxdepth 3 -printf "%u:%g %m %p\n"
+cppt:cppt 775 /home/cppt/berth-s2-data
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent/complete
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent/complete/shows
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent/complete/movies
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent/incomplete
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent/incomplete/shows
+cppt:cppt 755 /home/cppt/berth-s2-data/torrent/incomplete/movies
+cppt:cppt 755 /home/cppt/berth-s2-data/library
+cppt:cppt 755 /home/cppt/berth-s2-data/library/shows
+cppt:cppt 755 /home/cppt/berth-s2-data/library/movies
+
+## E. S2 stack (PUID=0 / PGID=0), 05:2x: the third linuxserver image and Berth's own process
+
+$ docker exec berth-prowlarr ps -eo user,args | grep /app/prowlarr/bin/Prowlarr
+root     /app/prowlarr/bin/Prowlarr -nobrowser -data=/config
+$ docker exec berth sh -c 'grep -E "^(Uid|Gid)" /proc/1/status'     (the berth server process, after setpriv)
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+$ find ~/berth-trial-42/s2/berth/config -maxdepth 2 -printf "%u:%g\n" | sort | uniq -c
+     18 cppt:cppt
+
+## F. Handing 100999 files back without sudo (05:13, ~/berth-trial-42/chown-test)
+
+$ docker run --rm -v "$PWD":/d alpine sh -c "mkdir -p /d/a/b && touch /d/a/b/f && chown -R 1000:1000 /d/a"
+$ ls -lnR a
+a:
+drwxr-xr-x 2 100999 100999 4096 Oct  9 05:13 b
+$ rm -rf a
+rm: cannot remove 'a/b/f': Permission denied
+$ docker run --rm -v "$PWD":/d alpine chown -R 0:0 /d/a
+$ ls -lnR a
+a:
+drwxr-xr-x 2 1000 1000 4096 Oct  9 05:13 b
+$ rm -rf a && echo removed-ok
+removed-ok

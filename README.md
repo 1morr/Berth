@@ -40,8 +40,9 @@ Berth is a public beta. Read [Status & known limitations](#status--known-limitat
 2. Edit `.env`:
    - `DATA_ROOT`: where downloads and the libraries live. The default `./data` is fine for a trial; for real
      use, point it at your media disk (`/srv/berth/data`, `C:\Berth\data`).
-   - `PUID` / `PGID`: the account that owns `DATA_ROOT` (`id -u` / `id -g`; Unraid: `99` / `100`). Leave them on
-     Docker Desktop for Windows.
+   - `PUID` / `PGID`: the account that owns `DATA_ROOT` (`id -u` / `id -g`; Unraid: `99` / `100`;
+     [rootless Docker](docs/guide/requirements.md#rootless-docker): `0` / `0`). Leave them on Docker Desktop for
+     Windows.
    - `TZ`: your time zone, e.g. `Europe/London`.
    - Already running Jellyfin, qBittorrent or Prowlarr? Remove it from `COMPOSE_PROFILES` to connect yours, or
      change its `*_PORT` to run both. Otherwise `up -d` stops at `port is already allocated`. See
@@ -79,8 +80,10 @@ Berth is a **public beta**.
 
 - It works with **Jellyfin 12.0 or newer** and **Prowlarr** only. No Emby, Plex or Jackett.
 - No notifications yet: open Berth to see what needs you.
-- Tested end to end on **Windows with Docker Desktop** and on **Unraid 7.1**. Other Linux distributions and NAS
-  systems have not been tested yet.
+- Tested end to end on **Windows with Docker Desktop** and on **Unraid 7.1**. On **Ubuntu 26.04 with rootless
+  Docker**, only wizard pages 1–3 (connecting the services and the library checks) have been run, with no import yet
+  ([trial notes](docs/research/linux-trial-2026-10-09.md), in Chinese). Other Linux distributions and NAS systems
+  have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.
 - Known issues (tracking notes, in Chinese):
   - Without Prowlarr (skipped in the wizard or removed later) the health page stays red; there is no "don't use

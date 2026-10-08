@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **rootless Docker 的說明**（M4 票 42，Ubuntu 26.04 實跑）：README〈Install〉、`docs/guide/requirements.md` 新增
+  〈Rootless Docker〉、`docs/guide/existing-services.md`〈Addresses〉、部署檔 `.env.example` 與 compose 的註解。rootless 上
+  `PUID` / `PGID` 要填 `0` / `0`（填 `id -u` 時宿主上的自己寫不進 `DATA_ROOT`），既有服務的位址要填宿主的區網 IP
+  （`host.docker.internal` 連不到宿主）。image 不變，部署檔只改了註解；不是 rootless 的部署不用改 `.env`。
+
 ### Fixed
 
 - **精靈頁 5 回頭看的說明不再說測不過的 TMDB key 照樣存下**（M4 票 58 發佈後實跑看到）：票 45 之後只有測過的 key

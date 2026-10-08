@@ -51,6 +51,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `jellyfin_username_rules.py` | M4 票 29：Jellyfin 12 收什麼樣的帳號（`/Startup/User` 與 `/Users/New` 各試一組合法與不合法的，含只有空白的密碼），以及 `GET /System/Configuration` 讀回的 metadata 語言與國家；`--fixture` 把它錄成契約測試的回應。與原始碼的 `ValidUsernameRegex` 一致。自己起停一次性容器（預設 bridge，不建 network）；結論在 brief §20.7 |
 | `compose_collisions.py` | M4 票 16：套件容器撞名（票 16 之前的容器名與現在的 `berth-*` 各一次）、撞 port、`COMPOSE_PROFILES=` 空字串時 `docker compose up -d` 的結束碼、錯誤訊息與每個容器的狀態，以及 `berth` 的 `extra_hosts` host-gateway 在這台 Docker 上解到哪、連不連得到宿主上的 port。從 `deploy/docker-compose.yml` 改出隔離的 compose project，改不到（compose 換了寫法）就停下；結論在 brief §20.14 |
 | `compose_profile_removal.py` | M4 票 36：選了既有之後，把服務從 `COMPOSE_PROFILES` 拿掉再 `up -d`、加 `--remove-orphans`、`docker compose stop <服務>`、再 `up -d`、不帶 profile 的 `down`，各自對已經在跑的套件內容器做了什麼。與上一支同樣從 `deploy/docker-compose.yml` 改出隔離的 project，改不到就停下；結論在 brief §20.14 |
+| `rootless_host_probe.sh` | M4 票 42：rootless Docker 上容器 root 與容器 uid 1000 寫的檔在宿主上是誰的；`berth` 容器以 `host.docker.internal` 與宿主區網 IP 各打監聽 `0.0.0.0` / `127.0.0.1` 的程式與既有服務的 port。只讀，跑在宿主上；結論在 brief §20.14 |
 | `jellyfin_stream_probe.py` | M4 票 55：入庫的那一部片 Jellyfin 認不認得、播不播得到（Unraid 上 mover 前後各問一次）。在 `berth` 容器裡以 stdin 餵進 `docker exec -i berth python - <item id>` 跑（指令在根 README），用 Berth 存的 API key、不印出；只用標準庫。結論在 `docs/research/unraid-trial-2026-10-08.md` |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
