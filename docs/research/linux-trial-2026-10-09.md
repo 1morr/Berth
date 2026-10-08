@@ -203,11 +203,10 @@ VM 宿主上 403、Windows（區網）上 403。Berth 自己從 172.28.0.2 進�
 ## 8. 收尾
 
 這一輪**留著**：S1 那一套（`~/berth-trial-42/berth/`，`config/`、`/home/cppt/berth-data`，容器已 `down`）等網路通了補入庫；
-S2 那一套（`~/berth-trial-42/s2/`、`/home/cppt/berth-s2-data`、容器 `berth`、`berth-prowlarr`、`s2-jellyfin`、
-`s2-qbittorrent`）停在頁 4。帳密與 cookie 在 `~/berth-trial-42/.trial/`（600）。全部清掉的指令：
+S2 那一套（`~/berth-trial-42/s2/`、`/home/cppt/berth-s2-data`）停在頁 4，05:3x 已 `docker compose down`、`s2-jellyfin` 與
+`s2-qbittorrent` 已 `docker stop`（容器留著），讓出 `berth` 這個容器名與 port 給同一台上之後的票 71。帳密與 cookie 在 `~/berth-trial-42/.trial/`（600）。全部清掉的指令：
 
 ```bash
-cd ~/berth-trial-42/s2/berth && docker compose down
 docker rm -f s2-jellyfin s2-qbittorrent
 # S1 留下的 100999 檔案要先從容器裡還給自己，否則刪不掉（§4.1）
 docker run --rm -v /home/cppt:/h alpine chown -R 0:0 /h/berth-data /h/berth-trial-42
