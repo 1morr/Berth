@@ -110,3 +110,11 @@ export function deleteRoute(id: number): Promise<void> {
 export function recheckRoute(id: number): Promise<RouteView> {
   return apiPost<RouteView>(`/routes/${id}/check`)
 }
+
+/**
+ * 全部重新檢查（M4 票 59）：每一條都跑、探針也問。換了一台 qBittorrent 之後設定頁自動送一次。
+ * 進度靠輪詢 `GET /routes`（或健康頁的 `GET /health/detail`）：每條纜繩開跑前後端先寫 `running`。
+ */
+export function recheckRoutes(): Promise<RouteView[]> {
+  return apiPost<RouteView[]>('/routes/check')
+}

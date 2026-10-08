@@ -25,6 +25,35 @@ export const ROUTE_HEALTH_LABEL = {
   failed: 'routes.health.failed',
 } as const satisfies Record<HealthStatus, string>
 
+/**
+ * 檢查過、但探針那一條從沒問到結論（M4 票 59）：後端只在這種時候把檢查過的 Route 總結成 `unknown`
+ * （`routes._verdict`：有一條紅就紅、每一條都問到才綠）。健康迴圈不問探針，換了一台 qBittorrent 之後就是這樣。
+ */
+export function probeUnasked(route: RouteView): boolean {
+  return route.health === 'unknown' && route.checked_at !== null && !checking(route)
+}
+
+/**
+ * 一條 Route 的色塊文案。`unknown` 分兩種（M4 票 59）：從沒檢查過是「尚未檢查」；探針從沒問過是
+ * 「要重新檢查」，那正是下一步。
+ */
+export function routeHealthLabel(route: RouteView) {
+  return probeUnasked(route) ? 'routes.health.recheck' : ROUTE_HEALTH_LABEL[route.health]
+}
+
+/**
+ * 所有 Route 的總結要不要重新檢查（健康頁的 BTH 3 與 Route 區塊）：總結是 `unknown` 而有啟用中的 Route，
+ * 就是有幾條還沒問到結論——換台之後作廢的、探針從沒問過的——不是「已繫上」（M4 票 59，審計 S4）。停用的
+ * 不算進總結（`routes_health`），全部停用時照舊是「尚未檢查」。
+ */
+export function routesNeedRecheck(status: HealthStatus, routes: readonly RouteView[]): boolean {
+  return status === 'unknown' && routes.some((route) => route.enabled)
+}
+
+export function routesSummaryLabel(status: HealthStatus, routes: readonly RouteView[]) {
+  return routesNeedRecheck(status, routes) ? 'routes.health.recheck' : ROUTE_HEALTH_LABEL[status]
+}
+
 /** 這條 Route 有一條纜繩正在跑（M4 票 43：每條纜繩開跑前後端先寫 `running`）。 */
 export function checking(route: RouteView): boolean {
   return route.checks.some((row) => row.status === 'running')

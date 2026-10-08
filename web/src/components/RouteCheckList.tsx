@@ -6,6 +6,7 @@ import {
   CHECK_LABEL,
   CHECK_SERVICE,
   type ExistingServices,
+  probeUnasked,
   remedyFor,
 } from './routeChecks'
 import { BAN_DEFAULTS } from './services'
@@ -61,7 +62,10 @@ export function RouteCheckList({
               ...BAN_DEFAULTS,
             })}
             commands={remedy.commands}
-            note={check === 'download_visible' && route.probe_carried && <Carried route={route} />}
+            note={
+              check === 'download_visible' &&
+              (route.probe_carried ? <Carried route={route} /> : probeUnasked(route) && <Unasked />)
+            }
           >
             {check === 'hardlink' && route.cross_device && (
               <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('routes.fix.crossDevice')}</p>
@@ -89,6 +93,22 @@ function Carried({ route }: { route: RouteView }) {
       </p>
       <p className="mt-1 max-w-prose">
         {t('routes.carried.why', { recheck: t('routeSettings.recheck') })}
+      </p>
+    </>
+  )
+}
+
+/** 探針這一條從沒問過（M4 票 59）：這條 Route 因此不算已繫上，說出為什麼與去哪裡問。 */
+function Unasked() {
+  const { t } = useTranslation()
+  return (
+    <>
+      <p>{t('routes.unasked.label')}</p>
+      <p className="mt-1 max-w-prose">
+        {t('routes.unasked.why', {
+          recheck: t('routeSettings.recheck'),
+          recheckAll: t('routeSettings.recheckAll'),
+        })}
       </p>
     </>
   )

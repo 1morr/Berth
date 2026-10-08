@@ -20,6 +20,7 @@ from berth.services.routes import (
     RouteInUseError,
     RouteRejectedError,
     check_route,
+    check_routes,
     create_route,
     delete_route,
     list_libraries,
@@ -197,6 +198,14 @@ async def delete_route_endpoint(session: SessionDep, route_id: int) -> None:
         await delete_route(session, route_id)
     except RouteRejectedError as refusal:
         raise route_refusal(refusal) from refusal
+
+
+@router.post("/routes/check")
+async def post_routes_check(session: SessionDep, factory: ClientFactoryDep) -> list[RouteOut]:
+    """全部重新檢查（M4 票 59）：每一條都跑、探針真的問。換了一台 qBittorrent 之後設定頁自動送一次，
+    Route 設定頁與健康頁另有一顆鍵。與「重新檢查」一條同樣只是診斷，不動 `enabled`。進度靠前端
+    輪詢 `GET /routes`（每條纜繩開跑前寫 `running`，M4 票 43）。"""
+    return [RouteOut.model_validate(view) for view in await check_routes(session, factory)]
 
 
 @router.post("/routes/{route_id}/check", responses=REFUSAL_RESPONSES)

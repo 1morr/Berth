@@ -257,7 +257,8 @@ async def routes_health(session: AsyncSession) -> HealthStatus:
         return HealthStatus.FAILED
     if all(status is HealthStatus.OK for status in health):
         return HealthStatus.OK
-    # 有 Route 但還沒被檢查過（剛建好、Berth 才剛啟動）。
+    # 有 Route 但還沒被檢查過（剛建好、換了一台 qBittorrent），或探針從沒問過（`_verdict`）：
+    # 要重新檢查，不是「已繫上」（M4 票 59）。
     return HealthStatus.UNKNOWN
 
 
@@ -746,7 +747,7 @@ async def _run_checks(
                 shared_root=shared_root_of(paths),
                 progress=progress,
             )
-            passed = all(row.status is not StepStatus.FAILED for row in health.checks)
+            verdict = _verdict(health.checks)
             health.checked_at = moment
             # 這一輪真的問到了才換掉探針的結論；沒問、或斷在它之前的一輪留著上一次的（M4 票 50）。
             # `probed_at` 與 `checked_at` 是同一個 `moment`：`_probe_carried` 靠兩者相等認出
@@ -757,12 +758,12 @@ async def _run_checks(
             else:
                 health.probe, health.probed_at = last, previous.probed_at
             # 沒過就留住上一次成功的時間，別讓它看起來從來沒通過（brief §16.2）。
-            health.last_ok_at = moment if passed else previous.last_ok_at
+            health.last_ok_at = moment if verdict is HealthStatus.OK else previous.last_ok_at
             # 逐個 commit：三個 Route 裡的第二個中途被刪掉時，第一個的結果仍然留得下來
             # （那一條的拒絕會結束這一輪，後面的留到下一輪重新檢查）。
             async with _stale_write_as_missing(session, route.id):
                 route.health_detail_json = health.model_dump(mode="json")
-                route.health_status = HealthStatus.OK if passed else HealthStatus.FAILED
+                route.health_status = verdict
                 await session.commit()
     finally:
         await qbittorrent.aclose()
@@ -1172,6 +1173,20 @@ class _Checker:
             raise StepFailedError(failure, message(exc)) from exc
         free = _gigabytes(free_space(self._target))
         return StepStatus.OK, f"dev={facts.device} · inode={facts.inode} · free={free}"
+
+
+def _verdict(checks: Sequence[SetupStep]) -> HealthStatus:
+    """一輪檢查的總結：有一條紅就紅；**每一條都問到了結論**才綠（M4 票 59）。
+
+    剩下的只有健康迴圈沿用不到探針結論的那一種（從沒問過、或換台時作廢了）：其餘五條綠，
+    `download_visible` 是 `pending`。它不是壞了，但 qBittorrent 看不看得到 Berth 的檔案沒人問過，
+    說「已繫上」是假的（審計 S4 換回套件內的 5/6）；是 `unknown`，等「重新檢查」真的問。
+    """
+    if any(row.status is StepStatus.FAILED for row in checks):
+        return HealthStatus.FAILED
+    if all(_concluded(row) for row in checks):
+        return HealthStatus.OK
+    return HealthStatus.UNKNOWN
 
 
 def _last_probe(previous: RouteHealth) -> SetupStep | None:

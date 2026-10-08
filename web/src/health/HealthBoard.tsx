@@ -4,7 +4,7 @@ import type { HealthDetail, ServiceHealth } from '../api/health'
 import { type ServiceKind } from '../api/schemas'
 import { BerthBoard, type BoardSlot } from '../components/BerthBoard'
 import { BERTHS } from '../components/berths'
-import { ROUTE_HEALTH_LABEL, ROUTE_SIGNAL } from '../components/routeChecks'
+import { ROUTE_SIGNAL, routesSummaryLabel } from '../components/routeChecks'
 import { detailLabel } from '../components/services'
 import { STATE_LABEL, STATE_SIGNAL, serviceState } from './signals'
 
@@ -34,7 +34,8 @@ export function HealthBoard({ report }: { report: HealthDetail }) {
       return {
         code: berth.code,
         name: t(berth.nameKey),
-        status: t(ROUTE_HEALTH_LABEL[report.routes_status]),
+        // 有 Route 而沒全部問到結論是「要重新檢查」，不是「已繫上」（M4 票 59）。
+        status: t(routesSummaryLabel(report.routes_status, report.routes)),
         detail:
           report.routes.length > 0
             ? t('health.routes.count', { count: report.routes.length })

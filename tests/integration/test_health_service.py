@@ -564,7 +564,6 @@ class TestStoredSnapshot:
 
         assert stored.checked_at == NOW
         assert set(stored.services) == set(ServiceKind)
-        assert stored.routes is HealthStatus.OK
 
     async def test_an_empty_snapshot_answers_ok(self, session: AsyncSession) -> None:
         """還沒檢查過不是「降級」——降級的意思是有東西**已知**壞了。"""

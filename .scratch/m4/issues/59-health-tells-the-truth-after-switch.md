@@ -1,6 +1,6 @@
 # 59 — 換一台 qBittorrent 之後 Route 自動重查，健康頁不再假綠
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -23,7 +23,20 @@
 
 ## 驗收
 
-- [ ] 整合測試（雙向）：換台後總狀態不是「已繫上」，重查完才是；探針從沒問過時不是綠；完成精靈後健康紀錄有時間
-- [ ] vitest：健康頁與設定頁的狀態文字、「全部重新檢查」
-- [ ] 實跑（repo 外隔離環境）：套件內 → 既有 → 套件內各換一次，健康頁截圖；換台後直接送單，記下結果
-- [ ] 全部檢查、test、前端 e2e 綠燈；plan §9.5、brief §16.4 同步；progress.md 記一行
+- [x] 整合測試（雙向）：換台後總狀態不是「已繫上」，重查完才是；探針從沒問過時不是綠；完成精靈後健康紀錄有時間
+- [x] vitest：健康頁與設定頁的狀態文字、「全部重新檢查」
+- [x] 實跑（repo 外隔離環境）：套件內 → 既有 → 套件內各換一次，健康頁截圖；換台後直接送單，記下結果
+- [x] 全部檢查、test、前端 e2e 綠燈；plan §9.5、brief §16.4 同步；progress.md 記一行
+
+## Comments
+
+- 2026-10-08 實跑（repo 外 `C:\Users\Roxy\berth-t59`，專案 `berth-t59`、port 3xxxx、工作樹 image `berth:t59`；另起 `berth-t59-mine-qbittorrent` 當既有那一台，帳密在同目錄的 `CREDENTIALS.md`）：頁 1–4 真的走（套件內三台、頁 3 自動 6 / 6、頁 4 加 5 個推薦站）；**頁 5 沒有真的 TMDB key，在容器內把 `setup.tmdb` 寫成已驗證**（與本票無關，BTH 5 的「已驗證」因此不是真的）。截圖在 `.playwright-mcp/t59-*.png`（gitignored）。
+  - 完成精靈立刻開健康頁：四格「已繫上」，「上次檢查 3 秒前」（t59-1）。
+  - 套件內 → 既有（設定 → qBittorrent）：「正在重新檢查 3 條 Route」、逐條「第 3 / 6 條 · qBittorrent 讀得到 Berth 寫的檔案」，約 8 秒後「3 / 3 條 Route 通過」（t59-2、3）；新那台有三個 `berth-` 分類；健康頁全綠（t59-4）。
+  - 既有 → 套件內：同上，3 / 3（t59-8）；健康頁全綠（t59-9）。
+  - **換台後直接送單**（經 API 換台、不跑自動重查，馬上 `POST /api/jobs`，三條 Route 都是 `unknown`、明細清空）：200 `submitted`。把新那台的 `berth-*` 分類全刪掉再試一次：送單自己 `createCategory berth-movies` 後送出，torrent 落在 `berth-movies`、save path 與未完成目錄都對（Berth log 11:27:46）。送單規則因此不改（見 progress 偏差）。
+  - 這時健康頁 BTH 3 與 Route 區塊是「要重新檢查」、管理員有「全部重新檢查」（t59-6）；按下去逐條進度，跑到一半時另兩條是迴圈剛跑過的「要重新檢查 · 5 / 6 通過」——探針沒問，不算綠——跑完全綠（t59-7）。
+  - Route 設定頁三條「要重新檢查」→「全部重新檢查」→「3 條 Route 都重新檢查過了。」（t59-10、11）。
+  - code-review 之後重建 image 再跑：換到另一台重查一次，同一台只改帳密不重查（`POST /routes/check` 計數 1 → 1）。
+- code-review（兩軸 opus）處理掉的：同一台改帳密也觸發全部重查（會白問探針、觸發「完成時執行外部程式」；改成只在來源或位址變了時，與後端 `moved` 同一條）；全部停用的 Route 被說成「要重新檢查」（改看啟用中的）；「都接上新的這一台了」在有 `unknown` 時說錯；一般使用者看到「要重新檢查」沒有指路（補「請管理員來看」）；`_check_routes` 炸了的行為改變沒有測試（補）；`record_setup_results` 的 docstring 說成「再問了一次」；前端「探針從沒問過」兩處各自推導（收成 `probeUnasked`）、`needsRecheck` 與文案條件重複（`routesNeedRecheck`）、兩頁各寫一次的按鈕（`RecheckAllButton`）。
+- 未處理（判斷題，留著）：`record_setup_results` 讀 `SetupSettings` 的內部欄位（Feature Envy）——改由 setup 組好 `ServiceHealth` 要讓 setup 認得健康紀錄的形狀，兩邊一樣多知識；`complete_setup` 先寫健康紀錄再寫完成，後者失敗時健康紀錄已寫（它說的是真的結論，無害）；換台畫面每條 Route 只畫 `CheckTally` 而不是頁 3 的整份纜繩清單——頁 3 的「逐條進度」就是這一行（票 43），整份清單在「媒體庫路徑」。

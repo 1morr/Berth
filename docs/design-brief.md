@@ -665,7 +665,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
 | TMDB | 不寫 | 不寫 | — | — |
 
-**換一台 qBittorrent / Prowlarr 時**（§19 D6，M4 票 47）：確認框列出 Berth 在原本那一台擁有的物件——`berth-*` 分類各有幾個 torrent、Berth 加進去的站（Berth 加站時記下 `definitionName` 與站名，`SetupIndexer.added_sites`；票 47 之前加的沒記到）、Berth 設的介面登入（只有 Berth 記著雜湊的那一組）。使用者自己的分類與站不列。連不到那一台時列 Berth 記得的（分類取自 Route、站取自那份紀錄），照實說確認不了現況。**能移除的只有空的 `berth-*` 分類**，按下時重數；站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去。移除在確認框裡就做，取消換台也無妨：送單與 Route 檢查都先 `ensure_category`，照 Route 的路徑重建。
+**換一台 qBittorrent / Prowlarr 時**（§19 D6，M4 票 47）：確認框列出 Berth 在原本那一台擁有的物件——`berth-*` 分類各有幾個 torrent、Berth 加進去的站（Berth 加站時記下 `definitionName` 與站名，`SetupIndexer.added_sites`；票 47 之前加的沒記到）、Berth 設的介面登入（只有 Berth 記著雜湊的那一組）。使用者自己的分類與站不列。連不到那一台時列 Berth 記得的（分類取自 Route、站取自那份紀錄），照實說確認不了現況。**能移除的只有空的 `berth-*` 分類**，按下時重數；站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去。移除在確認框裡就做，取消換台也無妨：送單與 Route 檢查都先 `ensure_category`，照 Route 的路徑重建。**換成功之後 Route 自動重查**（M4 票 59，審計 P1-3）：所有 Route 的檢查作廢，健康頁的媒體庫路徑那一格是「要重新檢查」而不是「已繫上」；設定 → qBittorrent 在新那台測過之後自動跑一次「全部重新檢查」（分類建在新那台、探針重問），說「正在重新檢查 N 條 Route」、逐條進度、跑完說幾條過了。結果出來之前送單照舊——還沒檢查完的放行（送單自己建分類），紅了的才擋。探針從沒問過的 Route 同樣不算「已繫上」。
 
 閘門是 `tests/integration/test_setup_owned_writes.py`：整個精靈經 API 跑套件內一輪、既有兩輪（Jellyfin 初始化過與還沒），三台替身收到的每一個寫入都要對得上「Berth 擁有的物件 + 套件內的 bootstrap」那張白名單；既有那一輪的 bootstrap 只放行那台 Jellyfin 還沒初始化。它只看得到 Berth 經三個服務的 adapter 送出的寫入；預置的免密白名單、掛載的 key 與探測檔的自清不在它的範圍。
 
