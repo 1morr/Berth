@@ -9,24 +9,32 @@ The compose file pulls `ghcr.io/1morr/berth:latest`, which is always the newest 
 has `:<version>` (e.g. `:0.2.0`) and `:<major>.<minor>` (`:0.2`) tags; to stay on one, change the `berth` image in
 `docker-compose.yml` to it. Pre-releases (`-rc1` and so on) only get `:<version>` and never move `:latest`.
 
-The deployment files are attached to every release, twice with the same contents: `berth-deploy-<version>.zip`
-and `berth-deploy.zip`.
-`https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip` is always the newest stable release;
-a given version is at `https://github.com/1morr/Berth/releases/download/v<version>/berth-deploy-<version>.zip`.
-Pre-releases have the attachments too, but they are marked as pre-releases, so the `latest` link never points at
-one.
+The deployment is two files from the repo, `deploy/docker-compose.yml` and `deploy/.env.example`; each release is
+a tag, so a given version's files are at
+`https://raw.githubusercontent.com/1morr/Berth/v<version>/deploy/docker-compose.yml` (and `.env.example` next to
+it). Use the ones from the tag of the version you run, not from `main`: `main` can be ahead of the image. The
+release page has that version's changes and nothing to download.
 
 ## Upgrade steps
 
 Upgrade the compose file along with the image. It changes between versions (container names, the pinned Jellyfin
-tag, variables in `.env`); pulling a new image alone leaves you with the old file.
+tag, the whitelist script inside it, variables in `.env`); pulling a new image alone leaves you with the old file.
 
-1. Download that version's zip and unzip it over your existing `berth/`: `docker-compose.yml` and `preseed/` are
-   replaced. Compare the new `.env.example` with your `.env` and copy any new variables across (`.env` itself is
-   not in the zip and is never overwritten).
-2. `docker compose pull && docker compose up -d`. Berth applies database migrations on start.
+1. Replace your `docker-compose.yml` with that version's whole file (on Unraid: **Edit Stack → Compose File**, paste
+   over everything). Compare that version's `.env.example` with your `.env` and copy any new variables across; your
+   `.env` is never replaced.
+2. `docker compose pull && docker compose up -d` (Unraid: the stack's **Update Stack**). Berth applies
+   database migrations on start.
 
 What changed in each version, and what to watch for when upgrading: [CHANGELOG.md](../../CHANGELOG.md).
+
+### From 0.2.0 (the zip)
+
+0.2.0 came as `berth-deploy.zip` with a `preseed/` folder next to the compose file. From 0.2.1 the compose file
+carries that script itself, so replace `docker-compose.yml` as above and run `docker compose up -d`. The `preseed/`
+folder is no longer used; delete it once the new file is up. Your `.env` needs no change, except on Unraid: if
+`DATA_ROOT` or `CONFIG_ROOT` there is relative (`./data`), make it absolute before moving the stack into Compose
+Manager. You need Compose 2.23.1 or newer (`docker compose version`).
 
 ## Bundled Jellyfin
 

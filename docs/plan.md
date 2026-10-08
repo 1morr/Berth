@@ -57,9 +57,8 @@ tests/
   fixtures/http/       adapter 的錄製回應
   unit/ integration/ e2e/
 deploy/
-  docker-compose.yml   開箱即用套件（§9）
+  docker-compose.yml   開箱即用套件（§9）；qBittorrent 的預置腳本內嵌在它的 `configs`（§9.2）
   .env.example
-  preseed/             qBittorrent 與 Prowlarr 的預置設定檔
 scripts/experiments/   brief §20.6 的實驗腳本
 ```
 
@@ -561,7 +560,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 | 服務 | Image | 掛載 | 備註 |
 | --- | --- | --- | --- |
 | `berth` | `ghcr.io/<owner>/berth` | `${CONFIG_ROOT}/berth:/config`、`${DATA_ROOT}:/data`、`${CONFIG_ROOT}/prowlarr:/ext/prowlarr:ro` | port `${BERTH_PORT}:8383`；`PUID` / `PGID` / `TZ`，加上 `JELLYFIN_PORT`、`QBITTORRENT_WEBUI_PORT`（深連結的 port、套件內 qBittorrent 的位址，`config.py`）；唯讀掛 Prowlarr 設定以讀取其 API key |
-| `qbittorrent` | `lscr.io/linuxserver/qbittorrent` | `${CONFIG_ROOT}/qbittorrent:/config`、`${DATA_ROOT}:/data`、`./preseed/qbittorrent:/custom-cont-init.d:ro` | port `${QBITTORRENT_WEBUI_PORT}`（WebUI）、`${QBITTORRENT_BT_PORT}`（BT，TCP 與 UDP），**兩者都是內外兩側同一個號碼**，並設成 `WEBUI_PORT` / `TORRENTING_PORT`；預置腳本見 §9.2 |
+| `qbittorrent` | `lscr.io/linuxserver/qbittorrent` | `${CONFIG_ROOT}/qbittorrent:/config`、`${DATA_ROOT}:/data`；預置腳本以頂層 `configs` 寫進 `/custom-cont-init.d/10-berth.sh`（`mode: 0555`） | port `${QBITTORRENT_WEBUI_PORT}`（WebUI）、`${QBITTORRENT_BT_PORT}`（BT，TCP 與 UDP），**兩者都是內外兩側同一個號碼**，並設成 `WEBUI_PORT` / `TORRENTING_PORT`；預置腳本見 §9.2 |
 | `jellyfin` | `lscr.io/linuxserver/jellyfin:version-12.1ubu2604`（釘在 12.1 這條線，brief §19；票 14b 改的） | `${CONFIG_ROOT}/jellyfin:/config`、`${DATA_ROOT}:/data` | port `${JELLYFIN_PORT}:8096` |
 | `prowlarr` | `lscr.io/linuxserver/prowlarr` | `${CONFIG_ROOT}/prowlarr:/config` | port `${PROWLARR_PORT}:9696` |
 
@@ -576,7 +575,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - **`berth` 服務帶 `extra_hosts: ["host.docker.internal:host-gateway"]`**（M4 票 16）：Linux 上 Berth 才連得到宿主上的既有服務；Docker Desktop 本來就有這個名字（§9.5〈連線位址〉）。
 - Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，`docs/guide/requirements.md` 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
 - 只有一份 `docker-compose.yml`，Linux 與 Windows 共用；`.env.example` 內附兩種路徑寫法的註解。
-- **使用者拿到的是 release 附件，不是 repo**（M4 票 56，brief §19 E4、§20.17）：`scripts/deploy_bundle.py` 把 compose 檔、`.env.example`、`preseed/` 打成 `berth-deploy-<版本>.zip`（解壓出 `berth/`）與同內容的 `berth-deploy.zip`（README 的 `releases/latest/download/` 連結），release workflow 在 `v*` tag 上附上；預發佈 tag 標成 prerelease，不動 latest。`Dockerfile`、`entrypoint.sh` 不放。`tests/unit/test_deploy_bundle.py` 守著 compose 以字面相對路徑引用的每個來源都在 zip 裡、目錄不是空的。
+- **部署只有 compose 檔加 `.env`**（M4 票 71，brief §19 E4 2026-10-09 推翻 release 附件，§20.18）：使用者把兩個檔貼進 Unraid 的 Compose Manager（檔案在隨身碟上）或放進任何資料夾，旁邊不放別的東西。所以 compose 裡的宿主路徑一律是 `${CONFIG_ROOT}` / `${DATA_ROOT}` 開頭或絕對路徑（`tests/unit/test_deploy_mounts.py` 守著），預置腳本內嵌在 compose 裡（§9.2），`.env.example` 寫明 Unraid 上兩個根要用絕對路徑。README 連到**這一版的 tag** 底下的原始檔（`raw.githubusercontent.com/1morr/Berth/v<版本>/deploy/...`），不指 `main`，compose 才不會比 `:latest` 的 image 新；`tests/unit/test_readme_docs.py` 守著連結的 tag 等於 pyproject 的版號。Release 頁只放 CHANGELOG 那一段，不附檔案；需要 Compose 2.23.1 以上（`configs.content`）。
 - incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`（`PathSettings` 的預設值，沒有 API 或 UI 改它，M4 票 22）；媒體庫路徑讀自 Jellyfin。要換宿主上的位置改 `DATA_ROOT` 掛到哪裡，容器路徑不變。
 - 目錄骨架由 Berth 啟動時建立：`<complete root>/..`、`<incomplete root>`。套件內 Jellyfin 的媒體庫目錄（`<library_root>/<資料夾>`，預設 `movies` / `tv` / `anime`）在精靈的媒體庫與路徑頁建立媒體庫之前才建（§9.4 第 4 步）。
 
@@ -584,7 +583,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 預置的原則：**只放沒有它 Berth 就進不去的東西**，其餘一律由精靈按鈕經 API 完成、按前顯示差異、可重按。
 
-**qBittorrent**（`preseed/qbittorrent/10-berth.sh`，linuxserver 的 `custom-cont-init.d` 機制，在服務啟動前執行）：在 `/config/qBittorrent/qBittorrent.conf` 的 `[Preferences]` 補上這兩個鍵，**已經有值的鍵一律不動**：
+**qBittorrent**（compose 頂層 `configs.qbittorrent-preseed` 的 `content`，Compose 建容器時寫成 `/custom-cont-init.d/10-berth.sh`、`mode: 0555`；linuxserver 的 `custom-cont-init.d` 機制，在服務啟動前執行，只跑有執行位元的檔，brief §20.18）：在 `/config/qBittorrent/qBittorrent.conf` 的 `[Preferences]` 補上這兩個鍵，**已經有值的鍵一律不動**：
 
 ```ini
 WebUI\AuthSubnetWhitelistEnabled=true
@@ -598,7 +597,7 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 - **qBittorrent 的 WebUI port 內外兩側一起換**：Host 檢查除了網域還比對 port，`*` 也不放過 port 不符。發佈成 `18080:8080` 之類的偏移，使用者開 `localhost:18080` 會直接吃 401，而原因只寫在容器 log 裡（brief §20.7）。所以 compose 以 `QBITTORRENT_WEBUI_PORT` 同時設發佈的兩側與 `WEBUI_PORT`，compose 內網上那一台也跟著在這個 port；Berth 從同名環境變數組出偵測的位址（`http://qbittorrent:<port>`），判成套件內之後第 4 步與 Route 檢查連的是判定記下的那一條。**不預置 `HostHeaderValidation=false`**：它是防 DNS rebinding 的那一道，內外一致之後本來就用不到。README 的疑難排解有這一條。
 - save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、temp path 都**不預置、也不套用**（M4 票 22、32）：Berth 送單時逐個 torrent 帶 `autoTMM=true`，路徑與未完成目錄開在 Berth 的分類上，所以全域預設值不影響正確性。密碼不預置，由精靈 qBittorrent 頁設（§9.3）。
 - 使用者在 qBittorrent 介面改任何東西都可以，Berth 不看它的全域偏好。
-- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（M4 票 53 實跑，brief §20.7）。所以套件內 qBittorrent 回 `auth_required` 時，補法說 WebUI「選項 → WebUI → 驗證」那一格（`connection.fix.whitelist`），不給重啟指令：重啟只在兩個鍵整個不在設定檔裡時有用，照著按多半白跑。
+- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（M4 票 53 實跑，brief §20.7）。所以套件內 qBittorrent 回 `auth_required` 時，補法說 WebUI「選項 → WebUI → 驗證」那一格（`connection.fix.whitelist`），不給重啟指令：重啟只在兩個鍵整個不在設定檔裡時有用，照著按多半白跑。兩個鍵整個不在的那一種是 compose 沒完整複製、腳本根本沒跑（漏了 `configs` 或 `mode`，log 只有一行 `is not an executable file`）：同一句接著說重新完整複製 compose、`up -d --force-recreate qbittorrent`（M4 票 71）。
 
 **Prowlarr**：不預置。Berth 從唯讀掛載的 `/ext/prowlarr/config.xml` 讀 `<ApiKey>`（Prowlarr 首次啟動自動產生）；讀不到時精靈退回手動貼上。也支援 `PROWLARR__AUTH__APIKEY` 環境變數的部署方式。
 
@@ -788,7 +787,7 @@ services:
 | 前端 | vitest | 元件與關鍵頁面 |
 | 前端 e2e | playwright（`web/e2e/`，CI 的 `web-e2e` job，每個 push） | 對 `scripts/fake_setup_server.py` 的演練情境跑七條流程（M2 票 15 起四條，M3 票 06h 加三條）：精靈八步走完（`bundled`）、既有服務接入（`mixed`）、冷啟動不按重新探測（`starting`）、精靈跑完之後的設定頁修改（`healthy`）——這四條在 1280 與 390 各走一次、每一格留整頁截圖——以及送單到入庫（`import`，一個請求都不出網）、`/review` 確認一筆 audit（`review`）、`/issues` 修一條 `library_link_missing`（`issues`）。一條流程一台 server、不重試（替身有狀態）；失敗時截圖與 trace 上傳成 artifact。**只蓋這七條**：其餘頁面的 UI 驗證仍是每張票用 playwright MCP 對演練情境實跑並把結果貼進票與 progress.md（CLAUDE.md 的規則），新的一條流程要進閘門就在 `web/e2e/` 加一個 spec 與 `playwright.config.ts` 的一列 |
 | e2e | docker compose（GitHub Actions，`tests/e2e/`；本機與 CI 同一條 `python -m tests.e2e.stack`，起、測、一定拆） | 真 qBittorrent + 真 Jellyfin + 這一份工作目錄 build 的 Berth + 真 TMDB（Prowlarr 起來讓精靈偵測，索引站那一步跳過，搜尋不在 e2e 裡）。**與同一台機器上的試跑環境並存**（M4 票 34）：專案名、容器名、網路與子網、host port、`/data` 與 `/config` 都只在 e2e 的覆寫檔與 `e2e.env` 換掉，產品 compose 不動（`tests/unit/test_e2e_stack.py`）。**一次 compose、一次精靈、一次入庫，三個模組共享**（fixture 在 `tests/e2e/conftest.py`，session scope）：<br>**M1**（`test_1_m1_pipeline.py`）用本地產生的 .torrent 與檔案（benchmark 語料的三包：美劇一季、動漫一季、電影），送單之後把位元組放進 qBittorrent 回報的下載路徑再 `recheck`，跑通 M1 驗收；驗證時間線依序走過各站、硬鏈接 inode、帳本逐檔的 Jellyfin item id（票 15 以 recheck 取代原本寫的 `seedMode`：那是 Web API 2.16 起才有、而且要由送單的 Berth 帶的參數）。<br>**M1.5**（`test_2_m15_library.py`，票 11）以 Jellyfin API 建一個只開放一個媒體庫的一般使用者，用它登入 Berth：看不到沒權限的媒體庫、直接請求也被拒；不經 Berth 放進那個媒體庫的作品照樣在牆上；某一集的 `item_id` 就是 Jellyfin 在帳本那條路徑上的 item；標為已看 / 未看之後**那個帳號自己的** `UserData` 真的變了；帳號被停用之後 Berth 的 session 結束。最後停掉 Jellyfin 容器，驗「問不到 Jellyfin」那一句（票 07 留給這一輪的）。<br>**M2**（`test_3_m2_repair.py`，票 16）三種人為破壞各造一次：以 Jellyfin 的 `DELETE /Items/{id}` 刪掉一集（`library_link_missing` → 重新鏈接）、複製品取代硬鏈接（`inode_mismatch` → 以硬鏈接取代）、手動刪 complete 裡的來源（`source_missing` → 標記為已無來源）與 complete 裡一個沒人認領的目錄（`orphan_complete` → 刪除）；每一種修完再對帳一次，那一件不再開。再把整個 Anime 媒體庫的內容刪光，`POST /jobs/{hash}/reimport` 一次回到同樣的路徑、同一個 inode、同樣的帳本列 |
-| 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
+| 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則（從 compose 的 `configs` 抽出腳本、`$$` 還原成 `$` 再跑）、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
 - CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、前端 e2e、image build；e2e 在 nightly、`v*` tag 與手動觸發時跑（`.github/workflows/e2e.yml`，TMDB 憑證是 repo secret）。

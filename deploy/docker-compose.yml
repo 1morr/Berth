@@ -1,7 +1,9 @@
-# Berth's deployment bundle. The same file for Linux and Windows.
+# Berth's deployment: this file and .env are all it needs, nothing else goes next to them. The same
+# file for Linux, Windows and Unraid's Compose Manager. Needs Docker Compose 2.23.1 or newer.
 #
-#   cp .env.example .env   # fine as is for a trial; for real use set DATA_ROOT, PUID / PGID and TZ,
-#                          # and change the five *_PORT values only if they clash
+#   cp .env.example .env   # fine as is for a trial; for real use set DATA_ROOT and CONFIG_ROOT to
+#                          # absolute paths, PUID / PGID and TZ, and change the five *_PORT values
+#                          # only if they clash
 #   docker compose up -d   # everything else is set in the wizard at http://localhost:8383
 #
 # Already running Jellyfin / qBittorrent / Prowlarr? Remove it from COMPOSE_PROFILES in .env (if it
@@ -15,8 +17,8 @@
 # tests/unit/test_deploy_names.py in the repo.
 name: berth
 
-# A fixed subnet and a fixed IP for berth: qBittorrent's no-password whitelist
-# (preseed/qbittorrent/10-berth.sh) allows only this one address. Whitelisting the whole subnet is
+# A fixed subnet and a fixed IP for berth: qBittorrent's no-password whitelist (the
+# qbittorrent-preseed config below) allows only this one address. Whitelisting the whole subnet is
 # unsafe: Docker Desktop rewrites the source address of traffic coming in through published ports to
 # the gateway (172.28.0.1), which is inside the subnet, so anyone on the LAN would skip the password.
 x-subnet: &subnet 172.28.0.0/16
@@ -29,8 +31,8 @@ x-ids: &ids
   UMASK: ${UMASK:-022}
   TZ: ${TZ:-Etc/UTC}
 
-# The five published ports come from .env; when one is missing, the bundle's original number is
-# used, so an older .env still works. Only host-side facts Berth cannot see from inside its container
+# The five published ports come from .env; when one is missing, the original number is used,
+# so an older .env still works. Only host-side facts Berth cannot see from inside its container
 # belong here; everything else is set in the wizard and the settings pages.
 
 # The three service images have no HEALTHCHECK of their own, so it is added here; berth's is in its
@@ -50,6 +52,91 @@ networks:
           # Dynamic addresses come from this range only, so a container that starts first cannot
           # take berth's fixed IP.
           ip_range: 172.28.1.0/24
+
+# qBittorrent's no-password whitelist for berth, written into the qbittorrent container as a
+# linuxserver custom-cont-init.d script that runs before qBittorrent starts. It lives in this file so
+# the deployment is only this file and .env. Compose expands variables inside `content`, so every `$`
+# of the script is written `$$`. The image runs only executable files there and `content` defaults
+# to 0444, so the qbittorrent service sets `mode: 0555`: without it nothing fails, the log only says
+# `10-berth.sh: is not an executable file`, and Berth cannot log in. Needs Compose 2.23.1 or newer.
+# Guarded by tests/unit/test_qbittorrent_preseed.py in the repo.
+configs:
+  qbittorrent-preseed:
+    content: |
+      #!/usr/bin/env bash
+      # A linuxserver custom-cont-init.d script: runs before the qBittorrent service starts.
+      #
+      # It only adds what Berth cannot get in without: since 4.6.1 the random first-start password is
+      # printed only to the container log, which Berth cannot read (it has no docker socket), so Berth
+      # reaches the API through a no-password whitelist. The password, save path, temp path and autoTMM
+      # are never preset here; the wizard sets the web UI login through the API and leaves the rest alone.
+      #
+      # Why "add missing keys" rather than "write the file if it does not exist": the image's own
+      # init-qbittorrent-config runs first and has already copied /defaults/qBittorrent.conf into /config,
+      # so the file always exists. Keys that already have a value are never touched, so settings changed
+      # in the web UI are not overwritten.
+      set -euo pipefail
+
+      CONF="$${BERTH_QBITTORRENT_CONF:-/config/qBittorrent/qBittorrent.conf}"
+
+      # The whitelist holds only berth's address, not the whole compose subnet: Docker Desktop rewrites
+      # the source address of traffic coming in through published ports to the gateway (172.28.0.1),
+      # which is inside the subnet, so whitelisting the subnet would let anyone on the LAN use
+      # qBittorrent's API without a password. The address comes from BERTH_IP in the compose file.
+      if [[ -z "$${BERTH_IP:-}" ]]; then
+          echo "[berth-preseed] BERTH_IP is not set; it comes from the compose file" >&2
+          exit 1
+      fi
+
+      # `WebUI\ServerDomains` is not set here: the image defaults to `*`, which already passes the Host
+      # check; pinning it to `qbittorrent` would lock users out of the web UI at localhost:8080.
+      KEYS=(
+          'WebUI\AuthSubnetWhitelistEnabled=true'
+          "WebUI\\AuthSubnetWhitelist=$${BERTH_IP}/32"
+      )
+
+      log() {
+          echo "[berth-preseed] $$*"
+      }
+
+      if [[ ! -f "$${CONF}" ]]; then
+          echo "[berth-preseed] $${CONF} not found; the image init should have copied it" >&2
+          exit 1
+      fi
+
+      # Match the whole key at the start of the line: `WebUI\AuthSubnetWhitelist` is a prefix of
+      # `…WhitelistEnabled`.
+      has_key() {
+          BERTH_PRESEED_KEY="$$1" awk '
+              index($$0, ENVIRON["BERTH_PRESEED_KEY"] "=") == 1 { found = 1; exit }
+              END { exit !found }
+          ' "$${CONF}"
+      }
+
+      missing=()
+      for entry in "$${KEYS[@]}"; do
+          has_key "$${entry%%=*}" || missing+=("$${entry}")
+      done
+
+      if [[ $${#missing[@]} -eq 0 ]]; then
+          log "already configured, leaving $${CONF} untouched"
+          exit 0
+      fi
+
+      tmp="$$(mktemp)"
+      trap 'rm -f "$${tmp}"' EXIT
+
+      # The values contain backslashes, which awk -v would read as escapes, so pass them via ENVIRON.
+      BERTH_PRESEED_LINES="$$(printf '%s\n' "$${missing[@]}")" awk '
+          { print }
+          !inserted && /^\[Preferences\]/ { print ENVIRON["BERTH_PRESEED_LINES"]; inserted = 1 }
+          END { if (!inserted) { print "[Preferences]"; print ENVIRON["BERTH_PRESEED_LINES"] } }
+      ' "$${CONF}" >"$${tmp}"
+
+      # Overwrite rather than mv, keeping the inode, owner and mode (the image's init already chowned it).
+      cat "$${tmp}" >"$${CONF}"
+
+      log "added to $${CONF}: $${missing[*]}"
 
 services:
   berth:
@@ -98,8 +185,11 @@ services:
     volumes:
       - ${CONFIG_ROOT}/qbittorrent:/config
       - ${DATA_ROOT}:/data
-      # Adds the no-password whitelist for berth before qBittorrent starts, so Berth can use its API.
-      - ./preseed/qbittorrent:/custom-cont-init.d:ro
+    # Adds the no-password whitelist for berth before qBittorrent starts, so Berth can use its API.
+    configs:
+      - source: qbittorrent-preseed
+        target: /custom-cont-init.d/10-berth.sh
+        mode: 0555
     ports:
       - ${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}
       - ${QBITTORRENT_BT_PORT:-6881}:${QBITTORRENT_BT_PORT:-6881}

@@ -186,18 +186,23 @@ uv run pre-commit run --all-files
 
 CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一組檢查。
 
-### 部署套件
+### 發版
 
-使用者拿到的是 release 附件 `berth-deploy-<版本>.zip` 與同內容的 `berth-deploy.zip`（compose、`.env.example`、
-`preseed/`，解壓出 `berth/`）。release workflow 與本機用同一支腳本產生：
+部署只有兩個檔：`deploy/docker-compose.yml` 與 `deploy/.env.example`（M4 票 71、brief §19 E4）。使用者照 README
+從**這一版的 tag** 底下抓原始檔，Release 頁只放說明、不附檔案。發一版（例如 `0.2.1`）：
 
-```bash
-uv run python scripts/deploy_bundle.py 0.2.0     # 寫到 dist/
-```
+1. `CHANGELOG.md` 的 `[Unreleased]` 改成 `[0.2.1] - <日期>`，寫清楚從上一版升級要注意的；`pyproject.toml` 的
+   `version` 改成 `0.2.1`，`uv lock`。
+2. **把文件裡指向部署檔的連結換成新 tag**：`git grep -n 'raw.githubusercontent.com/1morr/Berth/v'`，README 兩份與
+   `docs/guide/requirements.md`〈Unraid〉都在裡面。指 tag 不指 `main`，compose 才不會比 image 新。
+   `tests/unit/test_readme_docs.py` 守著它們都是 `v<pyproject 的版號>`：改了版號沒換連結就紅。
+3. 合進 `main`、全部檢查與 test 綠燈之後**馬上** `git tag v0.2.1 && git push origin v0.2.1`：tag 推上去之前，`main` 上
+   README 的新連結是 404。預發佈（`v0.3.0-rc1`）一樣要先有 `## [0.3.0-rc1]` 那一段，否則 image 推完、Release 才失敗。
 
-`v*` tag 上 `.github/workflows/release.yml` 先推 image 到 GHCR，再 `gh release create` 帶這兩個附件；`-rc` 標成
-prerelease，不動 `releases/latest/download/`。使用者那一面（tag 的意思、升級步驟）在
-[`guide/upgrading.md`](guide/upgrading.md)。
+`v*` tag 上 `.github/workflows/release.yml` 先推 image 到 GHCR（`:0.2.1`、`:0.2`、`:latest`），再建 Release：
+說明是 CHANGELOG 的 `## [0.2.1]` 那一段（相對連結換成這個 tag 底下的 blob），找不到那一段就失敗。`-rc` 標成
+prerelease，也不動 `:latest`。發完確認 Release run 綠、Release 頁沒有附件，匿名查 GHCR `:latest` 與 `:0.2.1` 是
+同一個 digest。使用者那一面（tag 的意思、升級步驟）在 [`guide/upgrading.md`](guide/upgrading.md)。
 
 ### e2e
 
@@ -565,8 +570,8 @@ python scripts/experiments/compose_profile_removal.py --berth-image berth:e2e   
 
 qBittorrent 的 preseed 腳本內嵌進 compose（頂層 `configs` 的 `content`，加 `mode: 0555`）之後 linuxserver 的 init
 認不認、白名單對不對、重啟與重建冪不冪等、qbittorrent 的 profile 關掉時 `up -d` 會不會報錯，另跑不寫 `mode` 的
-對照組（M4 票 70，brief §20.18）。內嵌的腳本是當下的
-`deploy/preseed/qbittorrent/10-berth.sh`；compose project 與 network 叫 `berth-t70`、容器 `berth-t70-qbittorrent` 與 `berth-t70-idle`（子網
+對照組（M4 票 70，brief §20.18）。內嵌的腳本取自部署檔 `deploy/docker-compose.yml` 的
+`configs.qbittorrent-preseed`（票 71 起它就住在那裡）；compose project 與 network 叫 `berth-t70`、容器 `berth-t70-qbittorrent` 與 `berth-t70-idle`（子網
 `10.70.0.0/16`，WebUI port 7080），用本地已有的 `qbittorrent:latest`、不 pull。三個變體約 3 分鐘，結束時 `down` 並刪掉工作目錄。
 換 Compose、Docker 或 linuxserver 版本之後重量；別的 Compose 版本用官方的獨立二進位，不換掉系統的：
 
@@ -579,7 +584,7 @@ python scripts/experiments/inline_preseed.py --label debug --variant mode --keep
 搬到 Linux 宿主上跑時保留相對位置（只用標準庫，宿主要有 `python3`）：
 
 ```bash
-tar cf - scripts/experiments/inline_preseed.py scripts/experiments/lib.py deploy/preseed/qbittorrent/10-berth.sh \
+tar cf - scripts/experiments/inline_preseed.py scripts/experiments/lib.py deploy/docker-compose.yml \
   | ssh <host> 'mkdir -p ~/berth-t70 && tar xf - -C ~/berth-t70'
 ssh <host> 'cd ~/berth-t70 && python3 scripts/experiments/inline_preseed.py --label vm-rootless'
 ```
@@ -674,7 +679,7 @@ berth/            後端套件
   pipeline/       背景 asyncio 迴圈
   services/       改變狀態的命令函式
 web/              前端（Vite + React + TypeScript）
-deploy/           部署套件：Dockerfile、compose、preseed、.env.example
+deploy/           部署檔（compose、.env.example，使用者只拿這兩個）與 image 的 Dockerfile
 scripts/
   experiments/    對真實外部服務的驗證腳本（可重跑，結果在 docs/research/）
   fake_setup_server.py  以 Fake adapter 起一台 Berth，用來實跑驗證設定精靈

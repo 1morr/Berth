@@ -1,7 +1,7 @@
 """在 qBittorrent 容器啟動前寫好設定檔，讓實驗腳本免密進得去 API。
 
-deploy/preseed/qbittorrent/10-berth.sh 走的是 linuxserver 的 custom-cont-init.d，
-「缺鍵才補」；這裡是實驗環境，直接整份寫死比較好重現 —— 容器隨時 down -v 重建，
+部署檔內嵌的 preseed 腳本（deploy/docker-compose.yml 的 configs）走的是 linuxserver 的
+custom-cont-init.d，「缺鍵才補」；這裡是實驗環境，直接整份寫死比較好重現 —— 容器隨時 down -v 重建，
 不需要保留任何既有內容。內容以 image 的 /defaults/qBittorrent.conf 為底，
 只多了子網白名單（Docker Desktop 會把發佈 port 的來源改寫成閘道，也在網段內，
 所以宿主打得到；正式部署絕不能這樣開，見 plan §9.1）。

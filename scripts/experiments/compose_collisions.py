@@ -112,9 +112,6 @@ def prepare(berth_image: str, *, old_names: bool, profiles: str) -> None:
     (WORK / "docker-compose.yml").write_text(
         isolated_compose(berth_image, old_names=old_names), encoding="utf-8", newline="\n"
     )
-    preseed = WORK / "preseed"
-    if not preseed.exists():
-        shutil.copytree(DEPLOY / "preseed", preseed)
     lines = [
         "CONFIG_ROOT=./config",
         "DATA_ROOT=./data",

@@ -4,6 +4,9 @@
   相同（兩份互連的那一條與同檔錨點除外）。改了一份忘了另一份，這裡紅。
 - README 兩份、`docs/guide/`、`docs/development.md` 裡的相對連結都指得到檔案，帶錨點的指得到
   那一份 Markdown 裡的標題（GitHub 的錨點算法）。
+- 同一批文件裡指向部署檔的連結（`raw.githubusercontent.com/1morr/Berth/<ref>/deploy/...`，M4 票 71）
+  一律是 `v<pyproject 的版號>` 這個 tag，不是 `main`：compose 不能比使用者拉到的 image 新。
+  發版改了版號忘了換連結，這裡紅（`docs/development.md`〈發版〉）。程式碼區塊裡的 `curl` 也算。
 
 比的是標題層級與連結目標，不是文字——翻譯換句話說、標題改措辭都不影響。
 """
@@ -11,6 +14,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from collections import Counter
 from pathlib import Path
 
@@ -23,6 +27,9 @@ README_ZH = ROOT / "README.zh-Hant.md"
 _FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 _LINK = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)\)|<img [^>]*src=\"([^\"]+)\"|<(https?://[^>]+)>")
 _HEADING = re.compile(r"^(#{1,6}) +(.+?) *$", re.MULTILINE)
+_DEPLOY_LINK = re.compile(
+    r"https://raw\.githubusercontent\.com/1morr/Berth/([^/\s<>]+)/(deploy/[^\s)>`]+)"
+)
 
 
 def _prose(markdown: str) -> str:
@@ -94,6 +101,23 @@ def broken_links(path: Path, markdown: str) -> list[str]:
     return problems
 
 
+def release_tag() -> str:
+    """這一版的 tag：`v` 加 pyproject 的版號。"""
+    with (ROOT / "pyproject.toml").open("rb") as file:
+        return f"v{tomllib.load(file)['project']['version']}"
+
+
+def deploy_link_violations(markdown: str, tag: str) -> list[str]:
+    """指向部署檔、卻不是 `tag` 或檔案不在 repo 的連結。"""
+    problems = []
+    for ref, path in _DEPLOY_LINK.findall(markdown):
+        if ref != tag:
+            problems.append(f"{ref}/{path}: should be {tag}")
+        elif not (ROOT / path).is_file():
+            problems.append(f"{ref}/{path}: no such file")
+    return problems
+
+
 def user_docs() -> list[Path]:
     guides = sorted((ROOT / "docs" / "guide").glob("*.md"))
     return [README, README_ZH, ROOT / "docs" / "development.md", *guides]
@@ -111,6 +135,25 @@ def test_the_two_readmes_match() -> None:
 @pytest.mark.parametrize("path", user_docs(), ids=lambda path: path.relative_to(ROOT).as_posix())
 def test_relative_links_resolve(path: Path) -> None:
     assert broken_links(path, path.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize("path", user_docs(), ids=lambda path: path.relative_to(ROOT).as_posix())
+def test_deploy_file_links_point_at_this_release(path: Path) -> None:
+    assert deploy_link_violations(path.read_text(encoding="utf-8"), release_tag()) == []
+
+
+#: README 的安裝步驟要連到的部署檔：上面那道 tag 閘門守的就是它們。
+DEPLOY_FILES = {"deploy/docker-compose.yml", "deploy/.env.example"}
+
+
+def missing_deploy_links(markdown: str) -> set[str]:
+    """`DEPLOY_FILES` 裡這一份沒連到的。"""
+    return DEPLOY_FILES - {path for _, path in _DEPLOY_LINK.findall(markdown)}
+
+
+@pytest.mark.parametrize("readme", [README, README_ZH], ids=lambda path: path.name)
+def test_the_readmes_link_both_deploy_files(readme: Path) -> None:
+    assert missing_deploy_links(readme.read_text(encoding="utf-8")) == set()
 
 
 class TestTheGatesThemselves:
@@ -179,3 +222,39 @@ class TestTheGatesThemselves:
             "現況與已知限制",
             "status--known-limitations-1",
         }
+
+    DEPLOY_URL = "https://raw.githubusercontent.com/1morr/Berth/{ref}/deploy/{path}"
+
+    def test_a_deploy_link_on_another_ref_is_red(self) -> None:
+        link = self.DEPLOY_URL.format(ref="main", path=".env.example")
+        text = f"```bash\ncurl -fsSLo .env {link}\n```"
+
+        assert deploy_link_violations(text, "v1.2.3") == [
+            "main/deploy/.env.example: should be v1.2.3"
+        ]
+
+    def test_a_deploy_link_to_a_missing_file_is_red(self) -> None:
+        link = self.DEPLOY_URL.format(ref="v1.2.3", path="preseed/qbittorrent/10-berth.sh")
+
+        assert deploy_link_violations(f"[x]({link})", "v1.2.3") == [
+            "v1.2.3/deploy/preseed/qbittorrent/10-berth.sh: no such file"
+        ]
+
+    def test_rewording_around_a_deploy_link_stays_green(self) -> None:
+        link = self.DEPLOY_URL.format(ref="v1.2.3", path="docker-compose.yml")
+
+        assert deploy_link_violations(f"Get [the compose file]({link}).", "v1.2.3") == []
+        assert deploy_link_violations(f"取得 <{link}>，存檔。", "v1.2.3") == []
+        placeholder = self.DEPLOY_URL.format(ref="v<version>", path="docker-compose.yml")
+        assert deploy_link_violations(f"`{placeholder}`", "v1.2.3") == []
+
+    def test_a_readme_without_the_env_link_is_red(self) -> None:
+        compose = self.DEPLOY_URL.format(ref="v1.2.3", path="docker-compose.yml")
+        env = self.DEPLOY_URL.format(ref="v1.2.3", path=".env.example")
+        both = f"Put [the compose file]({compose}) and [.env.example]({env}) in a folder."
+
+        assert missing_deploy_links(both) == set()
+        assert missing_deploy_links(both.replace(f"[.env.example]({env})", ".env.example")) == {
+            "deploy/.env.example"
+        }
+        assert missing_deploy_links(f"放進 [compose 檔]({compose}) 與 <{env}>。") == set()
