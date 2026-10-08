@@ -342,6 +342,12 @@ docker compose up -d
   - 若要停用 Prowlarr → E3。
   - 要換 qBittorrent 時 → 記得到「媒體庫路徑」逐條重新檢查（P1-3）。
 
+**2026-10-08 補：你實際要跑 Berth 的機器是 Unraid**，所以上面「Windows Docker Desktop 上可以用」對你不成立，在 Unraid 實跑之前，「你自己用」也要標**未驗證**。Unraid 有幾件事和這一輪的環境不同，都沒有驗過：
+- 硬鏈接：TRaSH Guides 說要在「Global Share Settings」開 `Tunable (support Hard Links)`，下載和媒體放在同一個 share（例如 `/mnt/user/data`）底下才行（<https://trash-guides.info/File-and-Folder-Structure/How-to-set-up/Unraid>）。README 現在寫「mergerfs 不行」，Unraid 的 user share 是 shfs，兩者的關係要實測；cache pool 加 mover 會不會拆散硬鏈接也沒驗過。
+- 權限：Unraid 慣例是 `nobody:users`（PUID 99 / PGID 100），`.env.example` 預設是 1000。
+- 部署方式：Unraid 預設沒有 docker compose，要裝 Compose Manager 外掛；多數人用 Community Apps 模板。
+- 既有服務的補法：Berth 給的是 compose 與 `docker run` 片段，Unraid 使用者改的是模板裡的「Add another Path」。
+
 **一般自架使用者：還不行。**
 - 擋著的：
   1. 不知道怎麼拿到 `deploy/`（P0-1）。
