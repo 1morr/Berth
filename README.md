@@ -165,7 +165,8 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 - **Linux**（NAS 與伺服器）：`DATA_ROOT` 要能被 `PUID` / `PGID` 寫入，例如 `chown -R 1000:1000 /srv/berth/data`。Berth 只在媒體根還是空目錄時自動接手擁有者；已經有內容的目錄一律不碰。
 - **Windows**（Docker Desktop、WSL2 後端）：用一般的 bind mount 就好（`DATA_ROOT=C:\Berth\data`），不需要 named volume，NTFS 上的硬鏈接實測可用（brief §20.7）。`PUID` / `PGID` 在這種掛載上沒有意義，維持預設即可。
 - **Unraid**（7.1 實跑過，brief §20.14）：要先裝 Compose Manager 外掛，`docker compose` 是它帶來的。
-  - 把 `docker-compose.yml`、`.env.example`、`preseed/` 放在 `/mnt/user/appdata/berth-deploy/`，在那裡
+  - 部署套件的 zip 解壓出的 `berth/`（`docker-compose.yml`、`.env.example`、`preseed/`）改名放在
+    `/mnt/user/appdata/berth-deploy/`——不要直接叫 `appdata/berth`，那是下面 `CONFIG_ROOT` 的位置——在那裡
     `cp .env.example .env`、`docker compose up -d`。**不要放在隨身碟上**：Compose Manager 預設把 stack 存在
     `/boot/config/plugins/compose.manager/projects/`，那是 vfat、檔案不能執行，`./data`、`./config` 也會落在隨身碟。
     想在 Compose Manager 的畫面上管它：「Add New Stack」名字填 `berth`，在進階欄位的 Indirect Path 填
