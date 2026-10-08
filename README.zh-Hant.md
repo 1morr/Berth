@@ -15,7 +15,8 @@ Berth 是公開 beta。依賴它之前先讀〈[現況與已知限制](#現況�
 
 ## 需要什麼
 
-- Docker Engine 或 Docker Desktop，加 Compose v2（`docker compose`，不是 `docker-compose`）。
+- Docker Engine 或 Docker Desktop，加 Compose 2.23.1 以上（`docker compose version`；`docker compose`，不是
+  `docker-compose`）。
 - 一個放下載與媒體的資料夾，在一顆支援硬鏈接的本機磁碟上：不是 exFAT、不是網路磁碟。
   細節見 [Requirements](docs/guide/requirements.md)（英文）。
 - **一把免費的 TMDB API key，先申請**，約五分鐘：
@@ -26,19 +27,19 @@ Berth 是公開 beta。依賴它之前先讀〈[現況與已知限制](#現況�
 
 ## 安裝
 
-1. 下載 [`berth-deploy.zip`](https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip) 並解壓，
-   得到一個 `berth/` 資料夾，裡面是 `docker-compose.yml`、`.env.example` 與 `preseed/`。三樣放在一起：少了
-   `preseed/`，Berth 進不了套件內的 qBittorrent。
+1. 建一個放 Berth 的資料夾，放進兩個檔：[`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/docker-compose.yml)，以及存成 `.env` 的
+   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/.env.example)。旁邊不用放別的東西。兩個連結都是這一版的檔案，compose 才不會比
+   image 新。Unraid 改成把這兩份貼進 Compose Manager：見 [Unraid](docs/guide/requirements.md#unraid)（英文）。
 
    ```bash
-   curl -LO https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip
-   unzip berth-deploy.zip && cd berth
-   cp .env.example .env
+   mkdir berth && cd berth
+   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/docker-compose.yml
+   curl -fsSLo .env https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/.env.example
    ```
 
 2. 改 `.env`：
-   - `DATA_ROOT`：下載與媒體庫放在哪。預設的 `./data` 試跑可以不改；正式用請指到你的媒體磁碟
-     （`/srv/berth/data`、`C:\Berth\data`）。
+   - `DATA_ROOT`：下載與媒體庫放在哪；`CONFIG_ROOT`：四個服務的設定放在哪。預設的 `./data`、`./config` 試跑可以
+     不改；正式用請給你媒體磁碟上的絕對路徑（`/srv/berth/data`、`C:\Berth\data`）。Unraid 上一定要是絕對路徑。
    - `PUID` / `PGID`：擁有 `DATA_ROOT` 的帳號（`id -u` / `id -g`；Unraid 是 `99` / `100`；
      [rootless Docker](docs/guide/requirements.md#rootless-docker) 是 `0` / `0`）。Windows 的 Docker Desktop 維持預設。
    - `TZ`：你的時區，例如 `Asia/Taipei`。

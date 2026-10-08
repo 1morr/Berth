@@ -6,12 +6,43 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-09
+
+**部署只要 compose 檔加 `.env`**（M4 票 70、71，使用者 2026-10-09 拍板，推翻 0.2.0 的 release 附件）：貼進 Unraid
+的 Compose Manager，或放進任何一個資料夾，`docker compose up -d`。不下載 zip、不 clone、旁邊不放別的檔案。image
+是 `ghcr.io/1morr/berth:0.2.1`，同時是 `:0.2` 與 `:latest`。
+
+**從 0.2.0 升級**（[docs/guide/upgrading.md](docs/guide/upgrading.md)〈From 0.2.0 (the zip)〉）：
+
+- **換掉整個 `docker-compose.yml`**，用 README 連到的 `v0.2.1` 那一份，再 `docker compose pull && docker compose up -d`。
+  qBittorrent 的白名單腳本改成寫在 compose 檔裡，`preseed/` 目錄不再使用，新檔起來之後可以刪掉。只換 image、留著
+  舊 compose 也照常能跑（舊檔仍掛 `./preseed/`），但之後的版本只照新寫法說明。
+- **需要 Docker Compose 2.23.1 以上**（`docker compose version`）：compose 檔用了頂層 `configs` 的 `content`。
+- `.env` 不用改，`.env.example` 沒有新變數。**Unraid 上 `DATA_ROOT`、`CONFIG_ROOT` 一定要是絕對路徑**：Compose
+  Manager 把 stack 放在隨身碟上，`./data`、`./config` 會寫到隨身碟。
+- 沒有資料庫 migration、沒有 API 變更。
+
 ### Changed
 
+- **部署檔**：`deploy/docker-compose.yml` 以頂層 `configs.qbittorrent-preseed` 內嵌白名單腳本，寫進
+  `/custom-cont-init.d/10-berth.sh`、`mode: 0555`（brief §20.18：linuxserver 的 init 只跑有執行位元的檔）；拿掉
+  `./preseed/qbittorrent` 那條掛載與 `deploy/preseed/`。compose 裡不再有任何相對路徑。`.env.example` 的註解寫明
+  Unraid / Compose Manager 上兩個根要用絕對路徑。
+- **README 與 `docs/guide/`**：安裝改成取得兩個檔 → 改幾個值 → `up -d`，連結指向這一版 tag 底下的原始檔；
+  `requirements.md`〈Unraid〉改成 Compose Manager 的貼上做法（Add New Stack → Edit Stack 貼 compose → ENV File 貼
+  `.env` → Compose Up），不再提 Indirect Path 與 `berth-deploy` 目錄。
+- **套件內 qBittorrent 要帳密時的說明**多一種原因：清單裡沒有 `/32` 那一行時，多半是 compose 沒完整複製，請
+  重新完整複製再 `docker compose up -d --force-recreate qbittorrent`。zh-Hant 與 en 都改。
 - **rootless Docker 的說明**（M4 票 42，Ubuntu 26.04 實跑）：README〈Install〉、`docs/guide/requirements.md` 新增
   〈Rootless Docker〉、`docs/guide/existing-services.md`〈Addresses〉、部署檔 `.env.example` 與 compose 的註解。rootless 上
   `PUID` / `PGID` 要填 `0` / `0`（填 `id -u` 時宿主上的自己寫不進 `DATA_ROOT`），既有服務的位址要填宿主的區網 IP
   （`host.docker.internal` 連不到宿主）。image 不變，部署檔只改了註解；不是 rootless 的部署不用改 `.env`。
+
+### Removed
+
+- **release 附件 `berth-deploy.zip` / `berth-deploy-<版本>.zip`**：打包腳本、它的測試與 release workflow 的附件
+  步驟都拿掉。Release 頁照常建，內容是這一段 CHANGELOG。0.2.0 的 Release 上那兩個 zip 留著，但
+  `releases/latest/download/berth-deploy.zip` 從 0.2.1 起找不到檔案（最新的正式版沒有附件）。
 
 ### Fixed
 
@@ -1823,6 +1854,7 @@ split-cour 的第一批被播出日比對整批擋在審核，改正一次並套
   它們與 `/api/setup/*` 一樣匿名開放，而停用的 Route 不算進完成條件，所以那一刻任何人都能把紅燈 Route
   停用、再按完成。精靈第 7 步的刪除改走 `DELETE /api/setup/routes/{id}`（同一個命令、同一種拒絕）。
 
-[Unreleased]: https://github.com/1morr/Berth/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/1morr/Berth/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/1morr/Berth/releases/tag/v0.2.1
 [0.2.0]: https://github.com/1morr/Berth/releases/tag/v0.2.0
 [0.1.0]: https://github.com/1morr/Berth/releases/tag/v0.1.0

@@ -9,7 +9,7 @@ import { resources, SUPPORTED_LANGUAGES } from './resources'
  * - 頁 4 還沒選時的 lede 說你自己的 Prowlarr「用你已經有的站」，卡片與選了之後的 lede 都說也能加站（M4 票 20）；
  *   選了之後的 lede 與回頭看的說明又說「按一次加進去」，實際是測過、勾選、確認才加（卡片說「勾起來的站」）。
  * - 套件內 qBittorrent 不收 Berth 時叫人重啟、說預置腳本會補上白名單；預置腳本只補設定檔裡**沒有**的鍵
- *   （`deploy/preseed/qbittorrent/10-berth.sh`），在 WebUI 關掉白名單之後重啟補不回來（票 53 實跑）。
+ *   （部署用 compose 的 `configs.qbittorrent-preseed`），在 WebUI 關掉白名單之後重啟補不回來（票 53 實跑）。
  * - 頁 5 回頭看的說明說測不過的 TMDB key 照樣存下；票 45 之後測過才存（票 58 發佈後實跑看到）。
  */
 

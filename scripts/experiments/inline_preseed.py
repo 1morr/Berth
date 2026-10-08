@@ -1,14 +1,14 @@
 """M4 票 70：把 qBittorrent 的 preseed 腳本寫進 compose 檔（頂層 `configs` 的 `content`）。
 
-部署要只剩 compose 檔加 `.env`，所以 `deploy/preseed/qbittorrent/10-berth.sh` 不能再是旁邊的
-檔案。候選做法：頂層 `configs.<名>.content` 放腳本全文（`$` 寫成 `$$`，`content` 會做變數展開），
+部署要只剩 compose 檔加 `.env`，所以 qBittorrent 的 preseed 腳本不能再是旁邊的檔案。
+候選做法：頂層 `configs.<名>.content` 放腳本全文（`$` 寫成 `$$`，`content` 會做變數展開），
 服務以長語法放到 `/custom-cont-init.d/10-berth.sh`。
 
 linuxserver 的 `init-custom-files` 只執行 `-x` 的檔案（`[[ -x ]]`，否則印「is not an executable
 file」），而 Docker 文件說 `content` 放進去預設是 0444。所以要量的是非 swarm 下 `mode` 有沒有效，
 加上：
 
-- 容器裡那個檔案的擁有者、權限、內容（與原檔逐位元組比 sha256，看 `$$` 有沒有展開回 `$`）；
+- 容器裡那個檔案的擁有者、權限、內容（與原腳本逐位元組比 sha256，看 `$$` 有沒有展開回 `$`）；
 - init 的 log 有沒有執行它、有沒有 docker-mods 的 tamper 警告（非 root 擁有、others 可寫）；
 - `qBittorrent.conf` 裡兩個白名單鍵各恰好一行；
 - `/api/v2/app/version` 從三處打：宿主經 published port、compose 網路上的 `BERTH_IP`、同網路的
@@ -37,8 +37,13 @@ CONFIG_ROOT）在 `.local/experiments/inline-preseed/<變體>/`。
 使用者刪不掉 subuid 擁有的檔案）；`--keep` 留著除錯，只能配一個 `--variant`（變體共用同一個
 project，後一個會重建掉前一個）。
 
+腳本取自部署檔（票 71 起內嵌在 `deploy/docker-compose.yml` 的
+`configs.qbittorrent-preseed.content`，`$$` 還原成 `$`），所以換 Compose 或 linuxserver 版本時
+重量的就是使用者拿到的那一份。票 70 實跑時它還是 `deploy/preseed/qbittorrent/10-berth.sh`，
+內容相同。
+
 只用標準庫、不 import `berth`：要原封不動搬到 Linux VM 上跑。搬的時候保留 repo 的相對位置
-（這支、`lib.py`、`deploy/preseed/qbittorrent/10-berth.sh`）。
+（這支、`lib.py`、`deploy/docker-compose.yml`）。
 
 用法（報告寫到 .local/experiments/results/inline-preseed-<label>.json）：
     python scripts/experiments/inline_preseed.py --label desktop
@@ -64,7 +69,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib import Report, poll, request
 
 ROOT = Path(__file__).resolve().parents[2]
-PRESEED = ROOT / "deploy" / "preseed" / "qbittorrent" / "10-berth.sh"
+DEPLOY_COMPOSE = ROOT / "deploy" / "docker-compose.yml"
 WORK = ROOT / ".local" / "experiments" / "inline-preseed"
 RESULTS = ROOT / ".local" / "experiments" / "results"
 
@@ -128,6 +133,23 @@ services:
       - source: qbittorrent-preseed
         target: {target}
 {mode}"""
+
+
+def deployed_script() -> str:
+    """部署檔 `configs.qbittorrent-preseed.content` 的腳本，`$$` 還原成 `$`。
+
+    不解析 YAML（只用標準庫）：取 `content: |` 底下縮排 6 格的那一塊，到第一行縮排更少的非空行為止。
+    """
+    lines = DEPLOY_COMPOSE.read_text(encoding="utf-8").splitlines()
+    start = lines.index("    content: |", lines.index("  qbittorrent-preseed:")) + 1
+    body: list[str] = []
+    for line in lines[start:]:
+        if line and not line.startswith(" " * 6):
+            break
+        body.append(line[6:])
+    while body and not body[-1]:
+        body.pop()
+    return "\n".join(body).replace("$$", "$") + "\n"
 
 
 def embed(script: str) -> str:
@@ -312,7 +334,7 @@ def fresh_stack(compose_cmd: list[str], variant: str, mode: str) -> Stack:
     stack = Stack(compose_cmd, WORK / variant)
     stack.cleanup()
     stack.workdir.mkdir(parents=True)
-    script = PRESEED.read_text(encoding="utf-8")
+    script = deployed_script()
     stack.file.write_text(compose_text(script, mode), encoding="utf-8", newline="\n")
     return stack
 
@@ -358,7 +380,7 @@ def run_profile_off(report: Report, compose_cmd: list[str], keep: bool) -> bool:
 
 
 def run_variant(report: Report, compose_cmd: list[str], variant: str, keep: bool) -> bool:
-    expected_sha = hashlib.sha256(PRESEED.read_bytes()).hexdigest()
+    expected_sha = hashlib.sha256(deployed_script().encode()).hexdigest()
     stack = fresh_stack(compose_cmd, variant, variant)
 
     report.heading(f"變體 {variant}")

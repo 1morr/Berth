@@ -16,7 +16,8 @@ Berth is a public beta. Read [Status & known limitations](#status--known-limitat
 
 ## What you need
 
-- Docker Engine or Docker Desktop with Compose v2 (`docker compose`, not `docker-compose`).
+- Docker Engine or Docker Desktop with Compose 2.23.1 or newer (`docker compose version`; `docker compose`, not
+  `docker-compose`).
 - A folder for downloads and media on one local disk that supports hardlinks: not exFAT, not a network share.
   Details in [Requirements](docs/guide/requirements.md).
 - **A free TMDB API key. Get it first**; it takes about five minutes:
@@ -27,19 +28,21 @@ Berth is a public beta. Read [Status & known limitations](#status--known-limitat
 
 ## Install
 
-1. Download [`berth-deploy.zip`](https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip) and
-   unzip it. You get a `berth/` folder with `docker-compose.yml`, `.env.example` and `preseed/`. Keep them
-   together: without `preseed/`, Berth cannot get into the bundled qBittorrent.
+1. Make a folder for Berth and put two files in it: [`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/docker-compose.yml), and
+   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/.env.example) saved as `.env`. Nothing else goes next to them. Both links are this
+   release's copies, so the compose file is never newer than the image. On Unraid, paste the two into Compose Manager
+   instead: see [Unraid](docs/guide/requirements.md#unraid).
 
    ```bash
-   curl -LO https://github.com/1morr/Berth/releases/latest/download/berth-deploy.zip
-   unzip berth-deploy.zip && cd berth
-   cp .env.example .env
+   mkdir berth && cd berth
+   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/docker-compose.yml
+   curl -fsSLo .env https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/.env.example
    ```
 
 2. Edit `.env`:
-   - `DATA_ROOT`: where downloads and the libraries live. The default `./data` is fine for a trial; for real
-     use, point it at your media disk (`/srv/berth/data`, `C:\Berth\data`).
+   - `DATA_ROOT`: where downloads and the libraries live, and `CONFIG_ROOT`: where the four services keep their
+     settings. The defaults `./data` and `./config` are fine for a trial; for real use, give absolute paths on your
+     media disk (`/srv/berth/data`, `C:\Berth\data`). On Unraid they must be absolute.
    - `PUID` / `PGID`: the account that owns `DATA_ROOT` (`id -u` / `id -g`; Unraid: `99` / `100`;
      [rootless Docker](docs/guide/requirements.md#rootless-docker): `0` / `0`). Leave them on Docker Desktop for
      Windows.

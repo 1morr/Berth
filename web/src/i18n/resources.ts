@@ -311,8 +311,10 @@ const zhHant = {
         'Berth 讀到的 API key 不被接受。Berth 每次測試都重讀唯讀掛載 /ext/prowlarr 裡的 config.xml，在 Prowlarr 重新產生 key 也跟得上：確認 berth 的 compose 有把 ${CONFIG_ROOT}/prowlarr 掛進去，再按「重新測試」。',
       // 預置腳本只補設定檔裡沒有的鍵（M4 票 53 實跑：在 WebUI 關掉白名單之後重啟，它說 already configured），
       // 所以補法是 WebUI 那一格，不給重啟指令（只有兩個鍵整個不見時有用，照著按多半白跑）。標籤見 brief §20.7。
+      // 兩個鍵整個不見的那一種是 compose 沒有完整複製、腳本沒跑（M4 票 71、brief §20.18）：補法是重新複製再
+      // recreate，restart 不會讓 Compose 重寫那個檔。
       whitelist:
-        '套件內那一台要帳密：Berth 的免密白名單沒生效，多半是在它的 WebUI 關掉或改過了。打開它的「選項 → WebUI」，在「驗證」勾回「讓已在白名單中的 IP 子網路略過驗證」，底下清單裡預置的那一行（Berth 的位址，結尾是 /32）要留著，存檔後重新測試。重啟補不回來：預置腳本只補設定檔裡沒有的鍵，不蓋掉你改過的。',
+        '套件內那一台要帳密：Berth 的免密白名單沒生效，多半是在它的 WebUI 關掉或改過了。打開它的「選項 → WebUI」，在「驗證」勾回「讓已在白名單中的 IP 子網路略過驗證」，底下清單裡預置的那一行（Berth 的位址，結尾是 /32）要留著，存檔後重新測試。重啟補不回來：預置腳本只補設定檔裡沒有的鍵，不蓋掉你改過的。沒在 WebUI 動過，清單裡也沒有 /32 那一行的話，多半是 compose 檔沒有完整複製：預置腳本寫在 compose 的 qbittorrent-preseed 那一段（連同 qbittorrent 底下的 mode: 0555），缺了它 qBittorrent 的 log 只有一行 is not an executable file，或什麼都沒有。重新完整複製 compose 檔，跑 docker compose up -d --force-recreate qbittorrent（Unraid：在 Edit Stack → Compose File 整份重貼，再 Compose Up）之後重新測試。',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
       dataUnseen:
         '你的 qBittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有——它多半沒掛 {{root}}（例如只掛了 /downloads），下載會寫進 Berth 拿不到的地方。在你原本那一份 compose（或 docker run 指令）的 qBittorrent 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值；容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後重新測試：',
@@ -3509,7 +3511,7 @@ const en: Translations<typeof zhHant> = {
       prowlarrMount:
         'Prowlarr does not accept the API key Berth read. Berth rereads config.xml from the read-only mount /ext/prowlarr on every test, so a key regenerated in Prowlarr is picked up: check that berth’s compose mounts ${CONFIG_ROOT}/prowlarr, then press “Test again”.',
       whitelist:
-        'The bundled one asks for credentials: Berth’s password-free allowlist is not in effect, most likely because it was turned off or edited in its WebUI. Open Options → WebUI and, under Authentication, tick “Bypass authentication for clients in whitelisted IP subnets” again; keep the preseeded line in the list below it (Berth’s address, ending in /32). Save, then test again. A restart will not bring it back: the preseed script only adds keys missing from the config file and leaves the ones you changed.',
+        'The bundled one asks for credentials: Berth’s password-free allowlist is not in effect, most likely because it was turned off or edited in its WebUI. Open Options → WebUI and, under Authentication, tick “Bypass authentication for clients in whitelisted IP subnets” again; keep the preseeded line in the list below it (Berth’s address, ending in /32). Save, then test again. A restart will not bring it back: the preseed script only adds keys missing from the config file and leaves the ones you changed. If you never changed it there and the list has no /32 line, the compose file was most likely not copied whole: the preseed script is its qbittorrent-preseed config (with mode: 0555 under the qbittorrent service), and without it qBittorrent’s log only says is not an executable file, or nothing at all. Copy the whole compose file again, run docker compose up -d --force-recreate qbittorrent (Unraid: paste the whole file again under Edit Stack → Compose File, then Compose Up), then test again.',
       bundledDown:
         'The container is not up yet. Check on the host that it is running, and read its log:',
       dataUnseen:

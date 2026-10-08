@@ -5,8 +5,9 @@ qBittorrent or Prowlarr is new enough.
 
 ## Docker
 
-Docker Engine or Docker Desktop with Compose v2 (`docker compose`; the old `docker-compose` v1 cannot read the
-compose file). The host must reach `ghcr.io` and `lscr.io` to pull images, and `api.themoviedb.org` for TMDB.
+Docker Engine or Docker Desktop with Compose 2.23.1 or newer (`docker compose version`). The compose file carries
+qBittorrent's whitelist script inline (a top-level `configs` with `content`), which older Compose and the old
+`docker-compose` v1 cannot read. The host must reach `ghcr.io` and `lscr.io` to pull images, and `api.themoviedb.org` for TMDB.
 
 One host runs one Berth stack: the project name, container names, network and subnet are fixed in the compose
 file, so a second copy on the same host (say, one for real use and one to try things) clashes and does not start.
@@ -63,15 +64,25 @@ Use a plain bind mount (`DATA_ROOT=C:\Berth\data`); no named volume is needed. H
 
 ### Unraid
 
-Tested on 7.1.4. Install the **Compose Manager** plugin first; it provides `docker compose`.
+Tested on 7.1.4 (with the compose file in a share; the paste-in steps below came after that test). Install the
+**Compose Manager** plugin first; it provides `docker compose`. Berth needs only its compose file and `.env`, so both
+are pasted into Compose Manager and nothing is copied to the server:
 
-- Rename the `berth/` folder from the zip and put it at `/mnt/user/appdata/berth-deploy/` (not `appdata/berth`,
-  which is where `CONFIG_ROOT` goes below). Run `cp .env.example .env` and `docker compose up -d` there.
-  **Don't keep it on the USB flash drive**: Compose Manager stores stacks under
-  `/boot/config/plugins/compose.manager/projects/` by default, which is vfat, cannot run scripts, and would put
-  `./data` and `./config` on the flash drive too. To manage it from Compose Manager's page: **Add New Stack**,
-  name it `berth`, and set **Indirect Path** under the advanced fields to `/mnt/user/appdata/berth-deploy`
-  (worked out from the plugin's source; not clicked through in testing).
+1. At the bottom of the **Docker** tab, **Add New Stack**, name it `berth`.
+2. From the stack's gear menu, **Edit Stack → Compose File**: paste the whole
+   [`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/docker-compose.yml) and
+   **Save Changes**. Paste all of it: qBittorrent's whitelist script is inside it (`qbittorrent-preseed`), and
+   without that Berth cannot get into the bundled qBittorrent.
+3. **Edit Stack → ENV File**: paste
+   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.1/deploy/.env.example), change the values
+   below, **Save Changes**.
+4. **Compose Up**.
+
+Compose Manager keeps both files on the USB flash drive (`/boot/config/plugins/compose.manager/projects/berth/`).
+That should be fine for these two: Compose writes the whitelist script into the container, so nothing runs from
+the flash drive (inferred from tests elsewhere, not yet tried on Unraid). But **`DATA_ROOT` and `CONFIG_ROOT` must be absolute paths**: the defaults `./data` and
+`./config` would put your media and databases on the flash drive.
+
 - `.env`: `PUID=99`, `PGID=100` (Unraid's `nobody:users`), `DATA_ROOT=/mnt/user/<share>/Berth`,
   `CONFIG_ROOT=/mnt/user/appdata/berth`. You don't need to create either folder. On a server that already runs
   Emby or Jellyfin and qBittorrent, 8096, 8080 and 6881 are usually taken; change `JELLYFIN_PORT`,
@@ -88,8 +99,8 @@ Tested on 7.1.4. Install the **Compose Manager** plugin first; it provides `dock
 
 ## Service versions
 
-- **qBittorrent 4.4 or newer** (Web API 2.8.4). The bundled container gets an address whitelist from
-  `preseed/qbittorrent/10-berth.sh` before it starts, and it lets in only Berth's fixed IP. Since 4.6.1 the
+- **qBittorrent 4.4 or newer** (Web API 2.8.4). The bundled container gets an address whitelist from the
+  script inside the compose file (`qbittorrent-preseed`) before it starts, and it lets in only Berth's fixed IP. Since 4.6.1 the
   first-run random password is printed only in the container log, so without this step Berth cannot get in. The web
   UI still needs a password from the host or your LAN. Berth writes none of the global preferences (default save
   path, automatic torrent management, incomplete folder): each torrent it sends uses automatic management in a

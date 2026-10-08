@@ -43,11 +43,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 部署檔的 zip（M4 票 56、brief §19 E4、§20.17）：使用者下載它、不 clone repo。等 image 推完才建
-  # release，README 的「最新版」連結指到的那一版一定拉得到 image。預發佈 tag（含 `-`）標成
-  # prerelease，`releases/latest/download/` 就不會指到它。重跑同一個 tag（或 release 已經手動建了）只重傳附件。
-  bundle:
-    name: deploy bundle
+  # Release 頁只放這一版的說明，不附任何檔案（M4 票 71、brief §19 E4）：部署只要 compose 檔加 `.env`，
+  # README 連到這個 tag 底下的 deploy/ 原始檔。等 image 推完才建，Release 頁出現時 image 一定拉得到。
+  # 說明是 CHANGELOG 的 `## [<版本>]` 那一段，相對連結換成這個 tag 底下的 blob（Release 頁上相對連結會壞）。
+  # 預發佈 tag（含 `-`）標成 prerelease。重跑同一個 tag（或 release 已經手動建了）只更新說明。
+  release:
+    name: release notes
     needs: image
     runs-on: ubuntu-latest
     permissions:
@@ -55,21 +56,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.0.1
-
-      # 只用標準庫，不必 sync 整個專案；本機用的是同一支（docs/development.md〈部署套件〉）。
-      - run: uv run --no-project python scripts/deploy_bundle.py "$GITHUB_REF_NAME" --out dist
-
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          # 帶附件的 create 先建草稿、傳完才發佈：latest/download 不會有一段指到沒有附件的新版。
+          blob="https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/"
+          awk -v heading="## [${TAG#v}]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md | sed -E "s#\]\((\./)?([^)#:][^):]*)\)#](${blob}\2)#g" >notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "CHANGELOG.md has no '## [${TAG#v}]' section" >&2
+            exit 1
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.zip --clobber
+            gh release edit "$TAG" --notes-file notes.md
             exit 0
           fi
-          flags=(--verify-tag --title "$TAG")
-          flags+=(--notes "Changes and upgrade notes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md")
+          flags=(--verify-tag --title "$TAG" --notes-file notes.md)
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$TAG" dist/*.zip "${flags[@]}"
+          gh release create "$TAG" "${flags[@]}"

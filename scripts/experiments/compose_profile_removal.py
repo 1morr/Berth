@@ -119,7 +119,6 @@ def prepare(berth_image: str) -> None:
     (WORK / "docker-compose.yml").write_text(
         isolated_compose(berth_image), encoding="utf-8", newline="\n"
     )
-    shutil.copytree(DEPLOY / "preseed", WORK / "preseed", dirs_exist_ok=True)
     write_env(ALL_PROFILES)
 
 
