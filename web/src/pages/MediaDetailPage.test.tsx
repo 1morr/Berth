@@ -1886,6 +1886,101 @@ describe('觀看區（M1.5 票 08）', () => {
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
   })
+
+  // M4 票 60（審計 S4）：帳本空、Jellyfin 卻有這部，是重裝或 DB 遺失之後的樣子。說「還沒有任何檔案入庫」
+  // 會讓人再下載一次。
+  describe('Jellyfin 有、帳本是空的', () => {
+    it('說紀錄沒了與為什麼，管理員連到待處理重建', async () => {
+      inJellyfin()
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+      expect(
+        await within(files).findByText(
+          /Jellyfin 有這部，Berth 的紀錄裡沒有：它不是經 Berth 入庫的，或者重裝過 Berth/,
+        ),
+      ).toBeVisible()
+      expect(within(files).queryByText('還沒有任何檔案入庫。')).not.toBeInTheDocument()
+      expect(within(files).getByRole('link', { name: '到待處理從媒體庫重建帳本' })).toHaveAttribute(
+        'href',
+        '/issues',
+      )
+    })
+
+    it('一般使用者請管理員重建，不給連到 admin 頁的連結', async () => {
+      render(
+        {
+          [WATCH_PATH]: { body: area() },
+          [EPISODES(SEASON_TWO)]: { body: [RESUMING] },
+          [EPISODES(SEASON_ONE)]: { body: [episode(1, { season: 1 })] },
+        },
+        'user',
+      )
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+      expect(await within(files).findByText('請管理員到待處理從媒體庫重建帳本。')).toBeVisible()
+      expect(within(files).queryByRole('link')).not.toBeInTheDocument()
+    })
+
+    it('不在 Jellyfin 的照舊說還沒入庫', async () => {
+      render({ [WATCH_PATH]: { body: null } })
+      renderApp('/media/tv:120089')
+
+      const files = await screen.findByRole('region', { name: '檔案與版本' })
+
+      expect(within(files).getByText('還沒有任何檔案入庫。')).toBeVisible()
+      expect(within(files).queryByText(/Berth 的紀錄裡沒有/)).not.toBeInTheDocument()
+    })
+
+    it('英文介面', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        inJellyfin()
+        renderApp('/media/tv:120089')
+
+        const files = await screen.findByRole('region', { name: 'Files and versions' })
+
+        expect(
+          await within(files).findByText(/Jellyfin has this title, but Berth’s records do not/),
+        ).toBeVisible()
+        expect(
+          within(files).getByRole('link', {
+            name: 'Rebuild the ledger from the library under Issues',
+          }),
+        ).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
+
+    it('英文介面：一般使用者', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        render(
+          {
+            [WATCH_PATH]: { body: area() },
+            [EPISODES(SEASON_TWO)]: { body: [RESUMING] },
+            [EPISODES(SEASON_ONE)]: { body: [episode(1, { season: 1 })] },
+          },
+          'user',
+        )
+        renderApp('/media/tv:120089')
+
+        const files = await screen.findByRole('region', { name: 'Files and versions' })
+
+        expect(
+          await within(files).findByText(
+            'Ask an administrator to rebuild the ledger from the library under Issues.',
+          ),
+        ).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
+  })
 })
 
 describe('停在待審核的下載（M2 票 06）', () => {

@@ -19,7 +19,14 @@ from pydantic import BaseModel
 from berth.api.deps import ClientFactoryDep, PlanHintsDep, ReconcilerDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import IssueAction, IssueRefusal, IssueStatus, IssueType, ReconcileSide
+from berth.domain import (
+    ClaimMiss,
+    IssueAction,
+    IssueRefusal,
+    IssueStatus,
+    IssueType,
+    ReconcileSide,
+)
 from berth.services.issues import (
     IssueRejectedError,
     IssueView,
@@ -28,6 +35,7 @@ from berth.services.issues import (
     resolve_issue,
 )
 from berth.services.jobs import actor_of
+from berth.services.ledger_rebuild import RebuildReport, read_ledger_gap, rebuild_ledger
 from berth.services.reconcile import ReconcileReport, SideReport
 
 router = APIRouter(tags=["issues"])
@@ -105,6 +113,31 @@ IGNORE_RESPONSES = _refusals(IssueRefusal.ISSUE_MISSING, IssueRefusal.ISSUE_NOT_
 
 #: 手動對帳唯一做不了的時候：上一輪還在跑。
 RECONCILE_RESPONSES = _refusals(IssueRefusal.RECONCILE_RUNNING)
+
+
+class LedgerGapOut(BaseModel):
+    """`GET /issues/rebuild-ledger`：值不值得按一次「從媒體庫重建帳本」（M4 票 60）。"""
+
+    #: Route 的寫入目標底下、帳本不認得、還沒被重建判過的檔案數
+    #: （`ledger_rebuild.read_ledger_gap`）。
+    unknown: int
+
+
+class RebuildOut(BaseModel):
+    """一次重建做了什麼（`ledger_rebuild.RebuildReport`，與 CLI 印出來的同一份）。"""
+
+    #: 本來就在帳本上、不必動的檔案數。
+    known: int
+    #: 長回帳本的檔案數。
+    claimed: int
+    #: 配不上、變成（或仍是）一件 `unmanaged_library_file` 的檔案數，逐種理由。
+    unmatched: dict[ClaimMiss, int]
+    #: 目標目錄讀不到而整條跳過的 Route（原文）。
+    skipped: list[str]
+    #: 讀不到的 complete 子目錄（原文）。
+    unread_complete: list[str]
+    #: 配不到來源、但 complete 沒讀全所以說不出它是不是真的沒有來源的檔案數。
+    undecided: int
 
 
 class IssueOut(BaseModel):
@@ -252,6 +285,39 @@ async def get_reconcile(reconciler: ReconcilerDep) -> ReconcileStatusOut:
     return ReconcileStatusOut(
         current=_run_out(state.current) if state.current is not None else None,
         last=_run_out(state.last) if state.last is not None else None,
+    )
+
+
+@router.get("/issues/rebuild-ledger")
+async def get_ledger_gap(session: SessionDep) -> LedgerGapOut:
+    """媒體庫裡有幾個檔案帳本不認得、還沒被重建判過（M4 票 60）。打開待處理與精靈完成頁時現算。"""
+    return LedgerGapOut(unknown=await read_ledger_gap(session))
+
+
+@router.post("/issues/rebuild-ledger", responses=RECONCILE_RESPONSES)
+async def post_rebuild_ledger(
+    session: SessionDep, factory: ClientFactoryDep, reconciler: ReconcilerDep
+) -> RebuildOut:
+    """從媒體庫重建帳本：與 `berth rebuild-ledger` 同一個命令，只加不刪、再按一次什麼都不多。
+
+    對帳正在跑時是 409 `reconcile_running`：兩邊都會替同一個檔案記一件 `unmanaged_library_file`，
+    各自開一筆的話第二筆撞上「同一件事只開一筆」的鍵。
+    """
+    if reconciler.running:
+        raise issue_refusal(
+            IssueRejectedError(IssueRefusal.RECONCILE_RUNNING, "a reconcile is running")
+        )
+    return _rebuild_out(await rebuild_ledger(session, factory))
+
+
+def _rebuild_out(report: RebuildReport) -> RebuildOut:
+    return RebuildOut(
+        known=report.known,
+        claimed=report.claimed,
+        unmatched=report.unmatched,
+        skipped=report.skipped,
+        unread_complete=report.unread_complete,
+        undecided=report.undecided,
     )
 
 

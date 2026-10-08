@@ -100,3 +100,26 @@ export async function resolveIssue(id: number, action: IssueAction, media = '') 
 export async function ignoreIssue(id: number) {
   return apiPost<Issue>(`/issues/${id}/ignore`)
 }
+
+/** 值不值得按一次「從媒體庫重建帳本」（`LedgerGapOut`，M4 票 60）。 */
+export type LedgerGap = Schemas['LedgerGapOut']
+
+/** 一次重建做了什麼（`RebuildOut`，與 `berth rebuild-ledger` 印出來的同一份）。 */
+export type RebuildReport = Schemas['RebuildOut']
+
+/**
+ * 媒體庫裡有幾個檔案帳本不認得、還沒被重建判過。打開待處理與精靈完成頁時現算。
+ *
+ * 鍵掛在 `['issues']` 底下：重建、按掉一件、對帳跑完時讓清單失效的那一下也讓它重算。
+ */
+export function ledgerGapQueryOptions() {
+  return queryOptions({
+    queryKey: ['issues', 'rebuild-ledger'],
+    queryFn: () => apiGet<LedgerGap>('/issues/rebuild-ledger'),
+  })
+}
+
+/** 從媒體庫重建帳本：只加不刪，再按一次什麼都不多。對帳正在跑時是 409 `reconcile_running`。 */
+export async function rebuildLedger() {
+  return apiPost<RebuildReport>('/issues/rebuild-ledger')
+}

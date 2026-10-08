@@ -11,16 +11,20 @@ import { SettingsTabs } from '../components/SettingsTabs'
 export function SettingsFrame({
   title,
   lede,
+  note,
   children,
 }: {
   title: string
   lede: string
+  /** lede 之前多說的一句：精靈跑完之後打開 `/setup` 被帶到這裡時（M4 票 60）。 */
+  note?: string
   children: ReactNode
 }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <SettingsTabs />
       <h1 className={`mt-6 ${PAGE_TITLE}`}>{title}</h1>
+      {note && <p className="mt-2 max-w-prose text-sm text-ink">{note}</p>}
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{lede}</p>
       <div className="mt-6 grid gap-8">{children}</div>
     </div>

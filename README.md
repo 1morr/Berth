@@ -198,6 +198,15 @@ TMDB 的條款限非商業使用；歸屬聲明見〈[授權與歸屬](#授權�
 
 各服務的 API key 與密碼存在 `${CONFIG_ROOT}/berth/berth.db`，靠檔案權限保護，不做應用層加密（與 Seerr 相同）。備份 Berth 就是複製 `${CONFIG_ROOT}/berth`。
 
+### 重跑設定精靈
+
+精靈只管第一次：跑完之後打開 `/setup` 會被帶到「設定 → Jellyfin」，那一頁會說「精靈已經完成，之後的修改在這裡」，換服務、改位址與帳密都在設定頁。真的要從頭再跑一次（或資料庫壞了、遺失了），停掉 Berth、把 `${CONFIG_ROOT}/berth` 搬走（不要直接刪，留著當備份），再 `up -d`：
+
+- **三個服務的設定不動**：Jellyfin、qBittorrent、Prowlarr 的 config 留著，精靈每一頁照舊重做一次但不會重複建（API key、媒體庫、分類、站都冪等）。頁 1 變成「用你的 Jellyfin 管理員登入」，頁 3 要自己按「建立並檢查」。
+- **TMDB key 要重貼**：它存在搬走的那一份資料庫裡。
+- **下載紀錄、Job 歷史、審核與待處理全空**：它們也在那一份資料庫裡。
+- **帳本靠重建**：媒體庫裡的檔案都在，但 Berth 不認得它們。精靈完成頁與「待處理」最上面會說媒體庫裡有幾個檔案不在帳本上，按「從媒體庫重建帳本」（與下面的 `berth rebuild-ledger` 同一個命令）就長回來。qBittorrent 上還在做種的那幾包會是「無主 torrent」，重建之後再「認領並建立下載」，已經在媒體庫的檔案接回原本那一列。
+
 ### 版本與升級
 
 compose 範本拉的是 `ghcr.io/1morr/berth:latest`，永遠是最新的正式版本；每個版本另有 `:<版本>`（例如 `:0.1.0`）與
@@ -360,6 +369,10 @@ uv run --env-file .env berth rebuild-ledger      # 開發機
 而且那一輪配不到來源的檔案**不開** `no_source`（問不到不算不見了），只數在 `not decided`。重跑是冪等的。
 
 單一檔案的同一件事是 `/issues` 上 `unmanaged_library_file` 那一列的「認領進帳本」。
+
+**畫面上也按得到**（M4 票 60）：媒體庫裡有帳本不認得、還沒被重建判過的檔案時，精靈完成頁與 `/issues` 最上面
+說有幾個，一顆「從媒體庫重建帳本」（`POST /api/issues/rebuild-ledger`，對帳正在跑時是 409），按完說找回幾個、
+幾個變成非受管檔案。判過的不再算：配不上的那幾件寫著理由（對帳再記一次也留著），被忽略的也算判過。
 
 ### 解析基準測試
 
@@ -593,6 +606,8 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `plan` | 下載完成 → **Import Plan**（票 11）：索引站給兩包替身結果——一包對得上的批次（自動入庫）與一包對不到任何一集的 OST（停在待審核）。qBittorrent 是替身，但它會把那幾個檔案**真的寫進 save path** 並報成 100%，所以 poller 走完狀態機、planner 算出真的 Plan：解析、命名、mediainfo、TMDB 快照全是產品自己的程式碼 |
 | `inventory` | Media 詳情的「檔案與版本」與送單到入庫的媒體庫（票 13）：同 `plan` 的兩包，加上一台會「掃到」入庫檔案的替身 Jellyfin。送單之後那一部先在媒體庫頁的「還沒進 Jellyfin」那一條，約 30 秒後 resolver 反查、替身「掃到」它，它就換到牆上；OST 那一包是「待審」篩選要找到的那一格。深連結指向瀏覽器主機名的 8096，那台 Jellyfin 不存在——Jellyfin 那一端要用真的一套驗 |
 | `late-scan` | 作品頁的 Jellyfin 狀態與媒體庫頁一致（M4 票 51）：同 `import`，但替身 Jellyfin 第一次被通知滿 170 秒才「掃到」入庫的檔案——resolver 前兩次（30 秒、2 分 30 秒）都沒找到，下一次排在 10 分鐘後，正是審計 S6 的時間線。送到 Anime、等約 3 分鐘再打開 `/media/tv:120089`：「檔案與版本」先問一次就是「Jellyfin 已收錄」，不必等那 10 分鐘 |
+| `reinstall-before` | 重裝之前（M4 票 60）：同 `import`，替身 Jellyfin 被通知就「掃到」。**與 `reinstall` 用同一個 `--config-root`**：在這裡送單入庫一部，停掉 server、把 `berth.db*` 搬走 |
+| `reinstall` | 重裝之後重跑精靈（M4 票 60，審計 S4）：精靈從頁 1 開始，三個服務是上一次的樣子——Jellyfin 已初始化（頁 1 用 `skipper` / `harbour` 登入）、三個媒體庫還在、替身列出媒體庫目錄裡真的有的檔案，qBittorrent 掛著 complete 底下還在的那一包（一件無主 torrent），Prowlarr 有站；TMDB key 要重貼（替身收任何 key）。完成頁與 `/issues` 上有「從媒體庫重建帳本」，作品頁 `/media/tv:120089` 在重建之前說「Jellyfin 有這部，Berth 的紀錄裡沒有」 |
 | `long-lists` | 長清單的收合（M1.5 票 09）：同 `inventory`，但索引站只給 benchmark 語料裡葬送的芙莉蓮 `[7³ACG]` BD 合集（39 個檔案：S01 28 集、S00 11 集）。在芙莉蓮的詳情頁（`/media/tv:209867`）送到 Anime，計劃、入庫與替身 Jellyfin 的反查約一分鐘走完，之後看「檔案與版本」與 `/jobs` 那一列的計劃；名偵探柯南（`/media/tv:30983`，TMDB 併成一季 1216 集）不必送單，打開就是那張季表。需要 `TMDB_API_KEY`。**Windows 上加 `--config-root` 指一個短路徑**（例如 `C:/Users/<你>/t9`）：預設的暫存目錄太深，S00 那 11 個檔案的目標路徑會超過 260 字元而入庫失敗 |
 | `library` | 媒體庫頁 `/library` 的整庫瀏覽與權限（M1.5 票 03）：Movies / TV / Anime 三個媒體庫擺好作品（Movies 有 131 部，翻得到第二頁；有一部沒有 TMDB id），海報經 Berth 代理替身 Jellyfin 的 SVG（票 04；`Home Videos 2019` 沒有圖、`Harbour Film 007` 有 tag 但圖不見了，兩格都是「無海報」），Berth 經手的有在牆上的、還沒進 Jellyfin 的、待審與 Unmatched（M2 票 14：`skipper` 在 TV 媒體庫的「待審」是 Slow Horses 一份等審核的計劃，「對不到」是 The Bear 兩個 Extras 檔案，就地按得了；Anime 上是 Frieren 的計劃）。作品有類型與社群評分（票 06：排序、類型與年份篩選看得出差別；Shōgun 的 `War & Politics` 帶 `&`），Home Videos 2019 兩者都沒有。每部劇六集；`deckhand` 看到 The Bear 第三集、第四集看到 18%，看完 Breaking Bad，Slow Horses、Shōgun、Game of Thrones、The Office 各看了幾集，Oppenheimer 看到 42%、Harbour Film 002 看到 65%、看過 Harbour Film 001，`skipper` 看完 Slow Horses、The Bear 看過一集（票 05，標為已看 / 未看寫進替身 Jellyfin，重開伺服器就還原）。所以 `deckhand` 的媒體庫頁上方有繼續觀看與下一集（票 07：劇有 16:9 的 Thumb 或 Backdrop，Harbour Film 002 沒有橫圖是「無圖」；登入後就落在媒體庫——看得到的媒體庫裡有 Berth 入庫的東西時；一筆都沒有時落在探索，M4 票 10——探索頁只放 TMDB 牆，M3 票 06），`bosun` / `knot`（權限同 `deckhand`、什麼都沒看過）兩列都不出現。`skipper` / `harbour` 看得到三個媒體庫；`deckhand` / `rope` 只開放 Movies 與 TV，開 `/library/item-anime` 是「找不到或沒有權限」。`curl -X POST 'http://127.0.0.1:8484/demo/jellyfin/disable?user=deckhand'` 在替身 Jellyfin 停用他（`enable` 復原），至多 60 秒後他的下一個請求被送回登入頁。Media 詳情的觀看區（票 08）：`deckhand` 開 The Bear 是「繼續看 S01E04」、集有劇照；The Office 有兩季與 Specials，主按鈕是「看下一集 S01E05」；Breaking Bad 看完了；Oppenheimer 是電影；SPY×FAMILY 在他看不到的 Anime，頁面上沒有觀看區（`skipper` 開同一頁就有）；`bosun` 開 The Bear 是「從 S01E01 開始看」。有 `TMDB_API_KEY` 時詳情頁打真的 TMDB |
 | `poll` | 送單到完成的狀態**自己走完**（票 10）：qBittorrent 打**真的**那一台，所以 `sync/maindata` 會真的換 state、poller 會真的驅動 §3.1 的轉換、SSE 會真的把那一列推著動。位址從 `BERTH_QBITTORRENT_URL` 讀，準備步驟見下方 |

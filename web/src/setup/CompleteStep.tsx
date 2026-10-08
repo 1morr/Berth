@@ -7,6 +7,7 @@ import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components
 import { SIGNAL_FILL } from '../components/signal'
 import { ROUTE_SIGNAL } from '../components/routeChecks'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { LedgerGapNotice } from '../issues/LedgerGapNotice'
 import { StepFrame } from './StepFrame'
 
 /**
@@ -108,6 +109,10 @@ export function CompleteStep({
           </li>
         ))}
       </ul>
+
+      {/* 重跑精靈的人正是在這一刻（M4 票 60）：媒體庫裡已經有 Berth 不認得的檔案時給那一顆。
+          頁 5 已經驗過 TMDB，重建用得到。沒偵測到就不畫。 */}
+      <LedgerGapNotice heading="h3" className="mt-6" />
 
       {doors}
 

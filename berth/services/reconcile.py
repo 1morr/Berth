@@ -455,13 +455,31 @@ async def _check_unmanaged(
     比的是**整張帳本**的目標，不只是問得到的那幾條 Route 底下的：巢狀的 Route 會讓同一個檔案
     落在兩條底下。比對用 `fs.path_key`——帳本記的是容器裡的 POSIX 字串，走訪拿到的是這台
     機器的 `Path`。
+
+    **還開著的那一件說過的理由留著**：重建與「認領進帳本」配不上時把理由寫在上面
+    （`detail_json.reason`），那是待處理頁「沒配上的理由」那一行，也是「判過了」的記號
+    （`ledger_rebuild.read_ledger_gap`，M4 票 60）。這一輪只知道「它還在」，不知道為什麼配不上。
     """
     known = {fs.path_key(entry.target_path) for entry in survey.ledger}
+    earlier_detail = {
+        row.subject: row.detail_json
+        for row in await session.scalars(
+            select(Issue).where(
+                Issue.type == IssueType.UNMANAGED_LIBRARY_FILE, Issue.status == IssueStatus.OPEN
+            )
+        )
+    }
     for path in survey.library_files:
         if fs.path_key(path) in known:
             continue
         tally.add(
-            await record_issue(session, IssueType.UNMANAGED_LIBRARY_FILE, path=str(path), now=now)
+            await record_issue(
+                session,
+                IssueType.UNMANAGED_LIBRARY_FILE,
+                path=str(path),
+                detail=earlier_detail.get(str(path)),
+                now=now,
+            )
         )
 
 

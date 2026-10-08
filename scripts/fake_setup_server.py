@@ -317,6 +317,9 @@ class Scenario:
     review_demo: bool = False
     #: 作品頁的「下載」段（M4 票 12）。見 `_seed_downloads`。
     downloads_demo: bool = False
+    #: 重裝之後（M4 票 60）：Berth 的資料庫是新的，三個服務與磁碟上的東西還是上一次的樣子。
+    #: 見 `_restore_services`。
+    reinstalled: bool = False
     #: RSS 演練（M3 票 08）：`FeedFetcher` 替身查的「網址 → 原文」。空的話走真的那一支。
     feed_pages: dict[str, bytes] = field(default_factory=dict)
     #: 送單時「下載連結 → torrent」的查表。RSS 的 `.torrent` 網址是 Mikan 的，演練不出網，
@@ -1085,6 +1088,115 @@ def late_scan_scenario() -> Scenario:
     return scenario
 
 
+def reinstall_before_scenario() -> Scenario:
+    """重裝之前（M4 票 60）：同 `import`，Jellyfin 換成被通知就「掃到」的那一台。
+
+    與 `reinstall` 用**同一個 `--config-root`**：在這裡送單入庫一部，停掉 server、搬走 `berth.db`，
+    再以 `reinstall` 起來重跑精靈——磁碟上的鏈接與 complete 裡的來源都還在。
+    """
+    scenario = import_scenario()
+    scenario.jellyfin = ScanningJellyfin(
+        startup_wizard_completed=True,
+        admin=("skipper", "harbour"),
+        users={"deckhand": "rope"},
+    )
+    return scenario
+
+
+class LibraryJellyfin(ScanningJellyfin):
+    """重裝之後的 Jellyfin（`reinstall` 情境）：它自己的資料留著，媒體庫裡的檔案早就掃過了。
+
+    Berth 的資料庫是新的，沒有人通知過它任何路徑；這一台改列媒體庫目錄底下真的有的檔案。帳本空時
+    resolver 不會來問 `items()`，所以作品頁找作品（`tmdb_index`、`item`）時也照磁碟長一次。
+    """
+
+    async def tmdb_index(self, *, user_id: str, item_type: str) -> tuple[JellyfinItem, ...]:
+        self.items_ = [item for library in self.libraries_ for item in self._scanned(library)]
+        return await super().tmdb_index(user_id=user_id, item_type=item_type)
+
+    def _seen(self) -> list[str]:
+        return [
+            path.as_posix()
+            for library in self.libraries_
+            for location in library.locations
+            for path in sorted(Path(location).rglob("*"))
+            if path.is_file()
+        ]
+
+
+def reinstall_scenario() -> Scenario:
+    """搬走 Berth 的資料庫、服務的設定留著，重跑精靈（M4 票 60，審計 S4 的「重裝」）。
+
+    先用 `reinstall-before` 入庫一部；這一台從精靈第 1 步開始，而三個服務是上一次的樣子：Jellyfin
+    已經初始化過（頁 1 用管理員登入）、三個媒體庫還在，qBittorrent 上掛著那一包（它的 Job 跟著
+    資料庫一起沒了，所以是一件「無主 torrent」），Prowlarr 有站。TMDB 的 key 要重貼（替身收任何
+    key）。
+    """
+    scenario = _planning(healthy(), {PLAN_RELEASE: PLAN_FILES})
+    scenario.setup_completed = False
+    scenario.moored = False
+    # 搜得到 SPY：認領那一件無主 torrent 時要選作品（同 `issues` 情境）。
+    scenario.tmdb = demo_tmdb(search={"spy": [SPY_ENTRY], "SPY": [SPY_ENTRY]})
+    scenario.jellyfin = LibraryJellyfin(
+        startup_wizard_completed=True,
+        admin=("skipper", "harbour"),
+        users={"deckhand": "rope"},
+    )
+    scenario.reinstalled = True
+    return scenario
+
+
+def _restore_services(scenario: Scenario, paths: PathSettings) -> None:
+    """把三個服務回到上一次的樣子（`reinstall`）：這一份記憶在替身裡，server 重啟就沒了。
+
+    Jellyfin 的三個媒體庫指著 `library_root` 底下（套件內的預設清單，同 `_moor`）；complete 底下
+    還在的那幾包照 Route 子目錄掛回 qBittorrent，分類是 `berth-<子目錄>`、帶著 `berth` tag。
+    """
+    scenario.jellyfin.libraries_ = [
+        JellyfinLibrary(
+            name=name,
+            item_id=f"item-{slug}",
+            collection_type=collection_type,
+            locations=(f"{paths.library_root}/{slug}",),
+            type_options=(),
+        )
+        for slug, name, collection_type in (
+            ("movies", "Movies", "movies"),
+            ("tv", "TV", "tvshows"),
+            ("anime", "Anime", "tvshows"),
+        )
+    ]
+    now = int(datetime.now(UTC).timestamp())
+    for release in scenario.demo_releases:
+        files = DEMO_PACKS[release]
+        for slug in ("movies", "tv", "anime"):
+            save_path = f"{paths.complete_root}/{slug}"
+            if not Path(save_path, release).is_dir():
+                continue
+            info_hash = demo_torrent(release).info_hash
+            scenario.qbittorrent.torrents = (
+                *scenario.qbittorrent.torrents,
+                TorrentStatus(
+                    hash=info_hash,
+                    name=release,
+                    state="stalledUP",
+                    category=f"berth-{slug}",
+                    tags=("berth",),
+                    progress=1.0,
+                    completion_on=now,
+                    last_activity=now,
+                    added_on=now,
+                    save_path=save_path,
+                    content_path=f"{save_path}/{release}",
+                    total_size=sum(size for _, size in files),
+                ),
+            )
+            scenario.qbittorrent.files_by_hash[info_hash] = tuple(
+                TorrentFile(index=index, name=path, size=size, priority=1, progress=1.0)
+                for index, (path, size) in enumerate(files)
+            )
+
+
 def _corpus_pack(fixture: str) -> tuple[str, tuple[tuple[str, int], ...]]:
     """benchmark 語料的一筆（`tests/fixtures/parser/`）→ 一包演練用的發佈。
 
@@ -1623,6 +1735,8 @@ SCENARIOS = {
     "import": import_scenario,
     "inventory": inventory_scenario,
     "late-scan": late_scan_scenario,
+    "reinstall-before": reinstall_before_scenario,
+    "reinstall": reinstall_scenario,
     "long-lists": long_lists_scenario,
     "library": library_scenario,
     "poll": poll,
@@ -1931,6 +2045,8 @@ async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) 
             await session.commit()
             if scenario.moored:
                 await _moor(session, scenario, factory, paths)
+            if scenario.reinstalled:
+                _restore_services(scenario, paths)
     finally:
         await engine.dispose()
 

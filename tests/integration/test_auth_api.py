@@ -426,6 +426,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/issues"): Access.ADMIN,
     ("POST", "/issues/*/ignore"): Access.ADMIN,
     ("POST", "/issues/*/resolve"): Access.ADMIN,
+    # 從媒體庫重建帳本（M4 票 60）：數一數與按一次，與 CLI 同一個命令。
+    ("GET", "/issues/rebuild-ledger"): Access.ADMIN,
+    ("POST", "/issues/rebuild-ledger"): Access.ADMIN,
     ("POST", "/files/rematch"): Access.ADMIN,
     ("GET", "/reconcile"): Access.ADMIN,
     ("POST", "/reconcile"): Access.ADMIN,
@@ -567,9 +570,9 @@ class TestWhoEachEndpointIsFor:
         """從 app 上的路由算，不從表上抄：`/review` 底下新掛一支，它也在這一組裡。"""
         named = {route for route in APP_ROUTES if named_by_m2(route)}
 
-        # review 6（M3 票 13 加 RSS Series 的整組確認）+ issues 3 + files 1 + reconcile 2
-        # + jobs 上的 2。新掛一支就是 15，有人得看一眼。
-        assert len(named) == 14, sorted(named)
+        # review 6（M3 票 13 加 RSS Series 的整組確認）+ issues 5（M4 票 60 加重建帳本的兩支）
+        # + files 1 + reconcile 2 + jobs 上的 2。新掛一支就是 17，有人得看一眼。
+        assert len(named) == 16, sorted(named)
         assert {route: ACCESS[route] for route in named} == dict.fromkeys(named, Access.ADMIN)
 
     @pytest.mark.parametrize(

@@ -51,7 +51,6 @@ BEFORE_M3 = frozenset(
         "jellyfin_access",
         "jellyfin_images",
         "jobs",
-        "ledger_rebuild",
         "media",
         "plan",
         "plan_review",

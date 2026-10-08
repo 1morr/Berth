@@ -6,6 +6,9 @@
 
 與「認領進帳本」那一顆同一個原語（`claim_file`），差在範圍：這一支走整個媒體庫，那一顆只做一個
 檔案。住在 `claims` 外面是因為它要寫 Issue，而 `services/issues` 反過來要呼叫 `claims`。
+
+畫面上的那一顆（M4 票 60）按的也是 `rebuild_ledger`；`read_ledger_gap` 決定要不要給它
+（`.scratch/m4/ledger-rebuild-shape.md`）。
 """
 
 from __future__ import annotations
@@ -19,8 +22,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
-from berth.domain import ClaimMiss, IssueType
-from berth.models import LedgerEntry, Route
+from berth.domain import ClaimMiss, IssueStatus, IssueType
+from berth.models import Issue, LedgerEntry, Route
 from berth.models.types import utcnow
 from berth.services.claims import (
     UnclaimedError,
@@ -28,6 +31,7 @@ from berth.services.claims import (
     source_index,
 )
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.issues import record_issue
 
 logger = logging.getLogger(__name__)
@@ -54,6 +58,34 @@ class RebuildReport:
     undecided: int = 0
 
 
+@command(Effect.READ)
+async def read_ledger_gap(session: AsyncSession) -> int:
+    """媒體庫裡有幾個檔案值得按一次重建：Route 的寫入目標底下、帳本不認得、還沒被判過的。
+
+    **判過的不算**：重建或「認領進帳本」配不上時寫在那一件 `unmanaged_library_file` 上的理由
+    （`detail_json.reason`）就是記號，那一件開著或被忽略都算判過。否則重建之後配不上的檔案仍然
+    不在帳本上，這顆按鈕永遠不會消失。對帳開的那幾件沒有理由，代表還沒有人試過，仍然算。
+
+    讀不到的 Route 不算：說不出那裡有什麼，那是健康頁與對帳的事。
+    """
+    known = await _known(session)
+    judged = {
+        fs.path_key(row.path)
+        for row in await session.scalars(
+            select(Issue).where(
+                Issue.type == IssueType.UNMANAGED_LIBRARY_FILE,
+                Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
+            )
+        )
+        if (row.detail_json or {}).get("reason")
+    }
+    settled = known | judged
+    files, _ = await _library_files(session)
+    return sum(1 for path in files if fs.path_key(path) not in settled)
+
+
+# 可逆：只加帳本列與 Issue，一個位元組都不刪；再按一次什麼都不多（冪等）。沒有單一的反向命令。
+@command(Effect.REVERSIBLE)
 async def rebuild_ledger(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> RebuildReport:
@@ -66,38 +98,31 @@ async def rebuild_ledger(
     """
     moment = now or utcnow()
     report = RebuildReport()
-    known = {fs.path_key(row) for row in await session.scalars(select(LedgerEntry.target_path))}
+    known = await _known(session)
     index = await source_index(session)
     report.unread_complete = list(index.unread)
-    for route in list(await session.scalars(select(Route).order_by(Route.id))):
-        try:
-            files = fs.files_under(Path(route.target_path))
-        except OSError as exc:
-            report.skipped.append(f"{route.name} ({route.target_path}): {exc}")
+    files, report.skipped = await _library_files(session)
+    for path in files:
+        if fs.path_key(path) in known:
+            report.known += 1
             continue
-        for path in files:
-            if fs.path_key(path) in known:
-                report.known += 1
+        try:
+            entry = await claim_file(session, factory, path, index=index, now=moment, actor=SYSTEM)
+        except UnclaimedError as miss:
+            if miss.reason is ClaimMiss.NO_SOURCE and index.unread:
+                report.undecided += 1
                 continue
-            try:
-                entry = await claim_file(
-                    session, factory, path, index=index, now=moment, actor=SYSTEM
-                )
-            except UnclaimedError as miss:
-                if miss.reason is ClaimMiss.NO_SOURCE and index.unread:
-                    report.undecided += 1
-                    continue
-                report.unmatched[miss.reason] = report.unmatched.get(miss.reason, 0) + 1
-                await record_issue(
-                    session,
-                    IssueType.UNMANAGED_LIBRARY_FILE,
-                    path=str(path),
-                    detail={"reason": miss.reason.value},
-                    now=moment,
-                )
-                continue
-            known.add(fs.path_key(entry.target_path))
-            report.claimed += 1
+            report.unmatched[miss.reason] = report.unmatched.get(miss.reason, 0) + 1
+            await record_issue(
+                session,
+                IssueType.UNMANAGED_LIBRARY_FILE,
+                path=str(path),
+                detail={"reason": miss.reason.value},
+                now=moment,
+            )
+            continue
+        known.add(fs.path_key(entry.target_path))
+        report.claimed += 1
     await session.commit()
     logger.info(
         "ledger rebuilt",
@@ -109,3 +134,27 @@ async def rebuild_ledger(
         },
     )
     return report
+
+
+async def _known(session: AsyncSession) -> set[str]:
+    """帳本上每一列的目標，以 `fs.path_key` 比：帳本記容器裡的 POSIX 字串，走訪拿到這台機器的
+    `Path`。"""
+    return {fs.path_key(row) for row in await session.scalars(select(LedgerEntry.target_path))}
+
+
+async def _library_files(session: AsyncSession) -> tuple[list[Path], list[str]]:
+    """每一條 Route 寫入目標底下的檔案，以及讀不到而整條跳過的 Route（原文）。
+
+    兩條 Route 的目標巢狀時（`…/tv` 與 `…/tv/anime`）同一個檔案只算一次，與對帳同一個做法。
+    """
+    files: dict[str, Path] = {}
+    skipped: list[str] = []
+    for route in await session.scalars(select(Route).order_by(Route.id)):
+        try:
+            walked = fs.files_under(Path(route.target_path))
+        except OSError as exc:
+            skipped.append(f"{route.name} ({route.target_path}): {exc}")
+            continue
+        for path in walked:
+            files.setdefault(fs.path_key(path), path)
+    return list(files.values()), skipped

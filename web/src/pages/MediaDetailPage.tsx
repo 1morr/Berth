@@ -144,7 +144,7 @@ export function MediaDetailPage({ id }: { id: string }) {
             onSearchMissing={(season) => search.current?.searchMissing(season)}
           />
 
-          <FilesPanel media={found} />
+          <FilesPanel media={found} inJellyfin={area !== null} />
         </>
       )}
 
