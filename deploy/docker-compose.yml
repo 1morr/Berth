@@ -1,33 +1,40 @@
-# Berth 的部署套件（plan §9.1）。Linux 與 Windows 共用這一份。
+# Berth's deployment bundle. The same file for Linux and Windows.
 #
-#   cp .env.example .env   # 試跑可不改；正式用改 DATA_ROOT、PUID / PGID、TZ；port 撞到了再改那五個 *_PORT
-#   docker compose up -d   # 之後所有設定都在 http://localhost:8383 的精靈裡完成
+#   cp .env.example .env   # fine as is for a trial; for real use set DATA_ROOT, PUID / PGID and TZ,
+#                          # and change the five *_PORT values only if they clash
+#   docker compose up -d   # everything else is set in the wizard at http://localhost:8383
 #
-# 已經有 Jellyfin / qBittorrent / Prowlarr 的人，把它從 .env 的 COMPOSE_PROFILES 拿掉（已經起過的
-# 另外 docker compose stop <服務>），在精靈那一頁選「既有」（plan §9.5）。berth 沒有 profile，永遠會起。
+# Already running Jellyfin / qBittorrent / Prowlarr? Remove it from COMPOSE_PROFILES in .env (if it
+# already started, also `docker compose stop <service>`) and choose "Existing" on its wizard page.
+# berth has no profile and always starts.
 #
-# 套件內三台的容器名是 berth-*：同一台主機上既有的容器多半就叫 jellyfin / qbittorrent / prowlarr，
-# 撞名時 up -d 會連 berth 在內整套都起不來（brief §20.14）。服務名不加前綴——Berth 以服務名（compose 網路上的 DNS 名）
-# 連它們，profile 也與它同名。tests/unit/test_deploy_names.py 守著。
+# The three bundled containers are named berth-*: existing containers on the same host are usually
+# called jellyfin / qbittorrent / prowlarr, and a name clash stops `up -d` from starting any of them,
+# berth included. Service names have no prefix: Berth reaches the services by service name (their DNS
+# name on the compose network), and each profile has the same name. Guarded by
+# tests/unit/test_deploy_names.py in the repo.
 name: berth
 
-# 固定子網加 berth 的固定 IP：qBittorrent 的免密白名單（preseed/qbittorrent/10-berth.sh）
-# 只放這一個位址。白名單放整個網段是不安全的 —— Docker Desktop 把發佈 port 進來的流量的
-# 來源位址改寫成閘道（172.28.0.1），而閘道也在網段內，LAN 上任何人都會變成免密。
+# A fixed subnet and a fixed IP for berth: qBittorrent's no-password whitelist
+# (preseed/qbittorrent/10-berth.sh) allows only this one address. Whitelisting the whole subnet is
+# unsafe: Docker Desktop rewrites the source address of traffic coming in through published ports to
+# the gateway (172.28.0.1), which is inside the subnet, so anyone on the LAN would skip the password.
 x-subnet: &subnet 172.28.0.0/16
 x-berth-ip: &berth-ip 172.28.0.2
 
-# 四個容器同一組 PUID / PGID / UMASK，硬鏈接兩端的檔案擁有者才會一致（brief §16.1）。
+# All four containers share one PUID / PGID / UMASK, so both ends of a hardlink have the same owner.
 x-ids: &ids
   PUID: ${PUID:-1000}
   PGID: ${PGID:-1000}
   UMASK: ${UMASK:-022}
   TZ: ${TZ:-Etc/UTC}
 
-# 五個對外 port 都從 .env 讀（票 06b）；省略時是套件原本的號碼，舊的 .env 照樣能用。
-# 只有 Berth 在容器裡看不到的宿主端事實放這裡，其餘設定都在精靈與設定頁（brief §19）。
+# The five published ports come from .env; when one is missing, the bundle's original number is
+# used, so an older .env still works. Only host-side facts Berth cannot see from inside its container
+# belong here; everything else is set in the wizard and the settings pages.
 
-# 三個外部服務的 image 自己沒有 HEALTHCHECK，這裡補上；berth 的在它的 Dockerfile 裡。
+# The three service images have no HEALTHCHECK of their own, so it is added here; berth's is in its
+# Dockerfile.
 x-healthcheck: &healthcheck
   interval: 30s
   timeout: 5s
@@ -40,7 +47,8 @@ networks:
     ipam:
       config:
         - subnet: *subnet
-          # 動態配發限在這一段，berth 的固定 IP 不會被先啟動的容器領走。
+          # Dynamic addresses come from this range only, so a container that starts first cannot
+          # take berth's fixed IP.
           ip_range: 172.28.1.0/24
 
 services:
@@ -50,21 +58,22 @@ services:
     restart: unless-stopped
     environment:
       <<: *ids
-      # 深連結開套件內 Jellyfin 用的是宿主上的 port，不是容器內的 8096（services/deeplink.py）。
+      # Links that open the bundled Jellyfin use the host port, not 8096 inside the container.
       JELLYFIN_PORT: ${JELLYFIN_PORT:-8096}
-      # 套件內 qBittorrent 在 compose 內網上也是這一個號碼（見 qbittorrent 服務）。
+      # The bundled qBittorrent uses this same number on the compose network (see the qbittorrent
+      # service).
       QBITTORRENT_WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
-      # 精靈頁 4「在 Prowlarr 加私站」的連結開的是宿主上的 port（M4 票 09）。
+      # The wizard's "add a private indexer in Prowlarr" link (page 4) opens the host port.
       PROWLARR_PORT: ${PROWLARR_PORT:-9696}
     volumes:
-      - ${CONFIG_ROOT:?請在 .env 設定 CONFIG_ROOT}/berth:/config
-      - ${DATA_ROOT:?請在 .env 設定 DATA_ROOT}:/data
-      # 唯讀掛 Prowlarr 的設定目錄，精靈才讀得到它自動產生的 API key（plan §9.2）。
+      - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/berth:/config
+      - ${DATA_ROOT:?set DATA_ROOT in .env}:/data
+      # Prowlarr's config folder, read-only, so the wizard can read the API key Prowlarr generates.
       - ${CONFIG_ROOT}/prowlarr:/ext/prowlarr:ro
     ports:
       - ${BERTH_PORT:-8383}:8383
-    # 接宿主上的既有服務時填 host.docker.internal（容器裡的 localhost 是 Berth 自己）。Docker Desktop
-    # 內建這個名字；Linux 要這一行才解得到（brief §16.4、§20.14）。
+    # For an existing service on the host, enter host.docker.internal (localhost inside the
+    # container is Berth itself). Docker Desktop provides that name; on Linux it needs this line.
     extra_hosts:
       - host.docker.internal:host-gateway
     networks:
@@ -78,29 +87,32 @@ services:
     profiles: [qbittorrent]
     environment:
       <<: *ids
-      # 兩個 port 都是內外兩側同一個號碼：WebUI 的 Host 檢查連 port 都比對，`18080:8080` 會讓
-      # 瀏覽器開 localhost:18080 吃 401（plan §9.2）；BT 對外公告的 port 要與連得進來的一致。
+      # Both ports use the same number inside and outside: the web UI's Host check compares the port
+      # too, so `18080:8080` makes the browser get 401 at localhost:18080; the BitTorrent port it
+      # announces must be the one that accepts connections.
       WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
       TORRENTING_PORT: ${QBITTORRENT_BT_PORT:-6881}
       BERTH_IP: *berth-ip
     volumes:
       - ${CONFIG_ROOT}/qbittorrent:/config
       - ${DATA_ROOT}:/data
-      # 在服務啟動前補上 compose 內網的免密白名單，Berth 才進得去 API（plan §9.2）。
+      # Adds the no-password whitelist for berth before qBittorrent starts, so Berth can use its API.
       - ./preseed/qbittorrent:/custom-cont-init.d:ro
     ports:
       - ${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}
       - ${QBITTORRENT_BT_PORT:-6881}:${QBITTORRENT_BT_PORT:-6881}
       - ${QBITTORRENT_BT_PORT:-6881}:${QBITTORRENT_BT_PORT:-6881}/udp
     healthcheck:
-      # /api/v2/* 要驗證，登入頁不用；這裡只確認 WebUI 活著。
+      # /api/v2/* needs a login and the login page does not; this only checks that the web UI is up.
       <<: *healthcheck
       test: [CMD-SHELL, "curl -fsS http://localhost:${QBITTORRENT_WEBUI_PORT:-8080}/ >/dev/null"]
 
   jellyfin:
-    # 釘在 12.1 這條線（brief §19、plan §9.1）：跟得上 12.1 的修正與重建，但 `docker compose pull`
-    # 不會默默跨到下一個大版本。12.0 證明那種跨版是不可逆的——它改資料庫、讓插件失效、改變版本
-    # 分組。升級步驟（先備份 /config、升完完整掃描）見 repo 的 docs/guide/upgrading.md。Berth 支援的下限是 Jellyfin 12.0。
+    # Pinned to the 12.1 line: `docker compose pull` gets 12.1 fixes and rebuilds but never quietly
+    # moves to the next major version. 12.0 showed such a move cannot be undone: it changes the
+    # database, breaks plugins and changes how versions are grouped. To upgrade (back up /config
+    # first, run a full scan after), see docs/guide/upgrading.md in the repo. Berth needs Jellyfin
+    # 12.0 or newer.
     image: lscr.io/linuxserver/jellyfin:version-12.1ubu2604
     container_name: berth-jellyfin
     restart: unless-stopped
