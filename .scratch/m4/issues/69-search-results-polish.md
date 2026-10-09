@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** None — can start immediately
+**Blocked by:** 79（同樣改搜尋與結果表；79 先拿掉 `download_url`）
 
 **讀:** `docs/research/usability-audit-2026-10-07.md` §3 S3〈下載〉、§8 P2-18、P2-19；brief §6、§20.16（Radarr / Sonarr 怎麼用年份與類型篩）；plan §8.4；M4 票 49（收起來、`parser.fits`）；CONTEXT.md 的 Set Aside
 
@@ -11,6 +11,7 @@
 - 探索頁搜「Nosferatu 1922」是 0 筆：TMDB 的搜尋不吃年份。
 - 作品頁搜尋寫「共 262 筆 · 逐站取了 100 筆」、「103 筆已略過」、「164 筆已經收起來」，彼此對不上。
 - 主表還混進同名動畫《Tsuki to Laika to Nosferatu》的各集與成人內容。
+- 2026-10-09 使用者本機試用（票 77 實跑時查到）：作品頁搜《Law & Order》，The Pirate Bay 0 筆；改搜 `Law and Order` 有 100 筆。片名含 `&` 的作品幾乎搜不到。
 
 ## 做什麼
 
@@ -18,11 +19,16 @@
 2. 作品頁的筆數：定義清楚每個數字數的是什麼（Prowlarr 回幾筆、名字對不上略過幾筆、收起來幾筆、主表幾筆），讓它們加得起來；畫面上照同一個定義說。
 3. 電影搜尋時，讀得出集數的發佈（同名劇集或動畫的各集）收進「收起來」。這要延伸票 49 的 `fits`，紅燈先寫在 fixture。
    - 成人內容：查 Prowlarr 回傳的分類欄位能不能判斷，能就收起來，不能就記在票的 Comments、不硬做。
-4. 解析器有改動就跑 `berth bench`，`auto_wrong` 不得上升。
+4. **片名含 `&`**：作品頁的搜尋多送一組把 `&` 換成 `and` 的查詢（語言照作品的原文名或英文名，中文名不換），結果合併、照 info hash 去重。
+   - 這會多佔請求預算：先看現在一次搜尋送幾組查詢、怎麼佔額度（票 77），再決定是多一組，還是取代原本那一組。理由寫在 Comments。
+   - 先查 Sonarr / Radarr 怎麼處理片名裡的 `&`（它們的 clean title 規則），說明採用了誰的慣例。
+5. 解析器有改動就跑 `berth bench`，`auto_wrong` 不得上升。
 
 ## 驗收
 
 - [ ] 單元或整合測試：年份拆分；筆數加得起來；同名劇集的各集在電影搜尋被收起來（fixture 先紅後綠）
+- [ ] 片名含 `&` 會多一組（或改成）`and` 的查詢；整合測試守著，並驗過不含 `&` 的片名不受影響
+- [ ] 實跑：《Law & Order》作品頁搜尋有結果，附截圖
 - [ ] `berth bench` 前後的 `auto_wrong` 貼在 Comments
 - [ ] 實跑：《Nosferatu》(1922) 的探索與作品頁搜尋截圖
 - [ ] 全部檢查、test 綠燈；brief §20、plan §8.4 同步；progress.md 記一行
