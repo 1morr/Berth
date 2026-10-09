@@ -886,3 +886,215 @@ async def test_a_typed_keyword_sets_nothing_aside(session: AsyncSession) -> None
     )
 
     assert (view.total, view.set_aside_total) == (20, 0)
+
+
+NOSFERATU = build_media_id(MediaKind.MOVIE, 653)
+#: 審計 S3 搜《Nosferatu》(1922)：主表混進同名動畫《Tsuki to Laika to Nosferatu》的各集與成人內容
+#: （M4 票 69）。發佈名照各站的寫法造，分類照 Prowlarr 回的 `categories`（標準碼加站自己的碼）。
+NOSFERATU_RESULTS = Path(__file__).parents[1] / "fixtures" / "search" / "nosferatu-1922.json"
+
+
+async def arrange_nosferatu(session: AsyncSession) -> None:
+    session.add(
+        Media(
+            id=NOSFERATU,
+            tmdb_id=653,
+            kind=MediaKind.MOVIE,
+            title_en="Nosferatu",
+            title_original="Nosferatu, eine Symphonie des Grauens",
+            year=1922,
+            folder_name="Nosferatu (1922) [tmdbid-653]",
+            tmdb_snapshot_json={
+                "tmdb_id": 653,
+                "kind": "movie",
+                "title": "吸血鬼",
+                "title_en": "Nosferatu",
+                "title_original": "Nosferatu, eine Symphonie des Grauens",
+                "year": 1922,
+                "titles": ["Nosferatu", "Nosferatu, eine Symphonie des Grauens", "吸血鬼"],
+            },
+            tmdb_fetched_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+
+def nosferatu_results() -> tuple[IndexerResult, ...]:
+    rows = json.loads(NOSFERATU_RESULTS.read_text(encoding="utf-8"))
+    return tuple(result(**{**row, "categories": tuple(row["categories"])}) for row in rows)
+
+
+class TestNosferatu:
+    """審計 S3（M4 票 69）：同名動畫的各集、成人內容，與畫面上加不起來的幾個筆數。"""
+
+    @pytest.mark.asyncio
+    async def test_a_namesake_shows_episodes_are_set_aside(self, session: AsyncSession) -> None:
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=nosferatu_results()))
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
+
+        assert [row.title for row in view.rows] == [
+            "Nosferatu (1922) [720p] [BluRay] [YTS.MX]",
+            "Nosferatu.1922.1080p.BluRay.x264-OFT",
+            "Nosferatu - Eine Symphonie des Grauens (1922) 1080p BluRay",
+            "Nosferatu 1922 RESTORED 720p BluRay x264",
+        ]
+        aside = {row.title for row in view.set_aside}
+        assert "[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p) [8A1C3B2F].mkv" in aside
+        assert "[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]" in aside
+
+    @pytest.mark.asyncio
+    async def test_releases_the_indexer_files_as_adult_are_set_aside(
+        self, session: AsyncSession
+    ) -> None:
+        """Prowlarr 的 `categories` 帶 Newznab 標準碼，6000–6999 是 XXX（brief §20.19）。"""
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=nosferatu_results()))
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
+
+        assert not any("XXX" in row.title for row in view.rows)
+        assert {"Nosferatu Parody XXX 720p MP4-WRB", "Nosferatu Nights XXX 1080p WEB"} <= {
+            row.title for row in view.set_aside
+        }
+
+    @pytest.mark.asyncio
+    async def test_the_counts_add_up_to_what_the_indexer_returned(
+        self, session: AsyncSession
+    ) -> None:
+        """回了幾筆 = 重複合併的 + 名字對不上略過的 + 收起來的 + 主表的。三個名字各問一次，
+        替身每一次都回同樣 18 筆，所以 36 筆是重複的。"""
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch(results=nosferatu_results())
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
+
+        assert len(indexer.queries) == 3
+        assert (view.returned, view.merged, view.discarded) == (54, 36, 2)
+        assert (view.set_aside_total, view.total) == (12, 4)
+        assert view.returned == view.merged + view.discarded + view.set_aside_total + view.total
+
+    @pytest.mark.asyncio
+    async def test_a_typed_keyword_counts_the_same_way(self, session: AsyncSession) -> None:
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=nosferatu_results()))
+
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=NOSFERATU, query="Nosferatu"
+        )
+
+        assert (view.returned, view.merged, view.discarded, view.set_aside_total) == (
+            18,
+            0,
+            0,
+            0,
+        )
+        assert view.total == 18
+
+
+LAW = build_media_id(MediaKind.TV, 549)
+
+
+async def arrange_law(session: AsyncSession) -> None:
+    session.add(
+        Media(
+            id=LAW,
+            tmdb_id=549,
+            kind=MediaKind.TV,
+            title_en="Law & Order",
+            title_original="Law & Order",
+            year=1990,
+            folder_name="Law & Order (1990) [tmdbid-549]",
+            tmdb_snapshot_json={
+                "tmdb_id": 549,
+                "kind": "tv",
+                "title": "法網遊龍",
+                "title_en": "Law & Order",
+                "title_original": "Law & Order",
+                "year": 1990,
+                "titles": ["Law & Order", "法網遊龍", "Law & Order: Original"],
+                "seasons": [
+                    {"season_number": 1, "name": "Season 1", "episode_count": 22},
+                    {"season_number": 24, "name": "Season 24", "episode_count": 13},
+                ],
+            },
+            tmdb_fetched_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+
+class TestAmpersand:
+    """《Law & Order》：The Pirate Bay 對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆，
+    Mikan 反過來（`TIGER & BUNNY` 81 筆、`TIGER and BUNNY` 0 筆；2026-10-10 實測，M4 票 69）。
+    所以兩種都問：原樣的那一個後面緊接寫開的那一個，仍在 `MAX_QUERIES` 之內。"""
+
+    @pytest.mark.asyncio
+    async def test_the_spelled_out_title_follows_the_original(self, session: AsyncSession) -> None:
+        await arrange_law(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        await search_torrents(session, factory, SourceCache(), media_id=LAW)
+
+        assert [query.text for query in indexer.queries] == [
+            "Law & Order",
+            "Law and Order",
+            "法網遊龍",
+            "Law and Order Season 24",
+            "法網遊龍 第24季",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_the_preview_says_the_same(self, session: AsyncSession) -> None:
+        await arrange_law(session)
+        await arrange_indexer(session)
+
+        planned = await plan_queries(session, FakeClientFactory(), media_id=LAW)
+
+        assert planned.queries[:2] == ("Law & Order", "Law and Order")
+
+    @pytest.mark.asyncio
+    async def test_releases_spelled_either_way_reach_the_table(self, session: AsyncSession) -> None:
+        await arrange_law(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch(
+            results=(
+                result("Law.and.Order.S24E01.1080p.WEB.h264", info_hash="a" * 40, seeders=9),
+                result("Law & Order S24E02 1080p WEB", info_hash="b" * 40, seeders=8),
+                result("Order of the Phoenix 2007 1080p", info_hash="c" * 40, seeders=7),
+            )
+        )
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=LAW)
+
+        assert [row.title for row in view.rows] == [
+            "Law.and.Order.S24E01.1080p.WEB.h264",
+            "Law & Order S24E02 1080p WEB",
+        ]
+        assert view.discarded == 1
+
+    @pytest.mark.asyncio
+    async def test_a_title_without_an_ampersand_is_asked_as_it_is(
+        self, session: AsyncSession
+    ) -> None:
+        await arrange_media(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        await search_torrents(session, factory, SourceCache(), media_id=SPY)
+
+        assert [query.text for query in indexer.queries][:3] == [
+            "SPY x FAMILY",
+            "SPY×FAMILY",
+            "間諜家家酒",
+        ]

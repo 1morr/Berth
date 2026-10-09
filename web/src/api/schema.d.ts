@@ -4776,6 +4776,10 @@ export interface components {
             rows: components["schemas"]["SearchResultOut"][];
             /** Total */
             total: number;
+            /** Returned */
+            returned: number;
+            /** Merged */
+            merged: number;
             /** Discarded */
             discarded: number;
             /** Set Aside */

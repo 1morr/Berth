@@ -45,7 +45,7 @@ from berth.domain import (
     collection_type_for,
 )
 from berth.models import IndexerSettings, SetupSettings
-from berth.parser import fits, map_episode, mentions, parse_release, tags_of
+from berth.parser import fits, map_episode, mentions, parse_release, spell_ampersand, tags_of
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
 from berth.services.inventory import EpisodeView, SeasonView
@@ -67,6 +67,11 @@ RESULT_LIMIT = 100
 #: 單一查詢的上限。adapter 自己也有 HTTP 逾時，這一層是**整次搜尋的保證**：
 #: 換一個逾時寬鬆的 adapter 進來時，畫面等待的時間仍然有一個說得出口的上限。
 QUERY_TIMEOUT_SECONDS = 150.0
+
+#: Newznab 的成人分類（`XXX` 6000 與它的子分類 6010–6090，Prowlarr `NewznabStandardCategory`）。
+#: Prowlarr 回的 `categories` 帶站定義映射到的標準碼，The Pirate Bay 的 Porn 映射到這裡
+#: （brief §20.19）。
+ADULT_CATEGORIES = range(6000, 7000)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,14 +116,22 @@ class SearchView:
     """
 
     rows: tuple[SearchResult, ...]
-    #: 對得上這部作品的總筆數。`rows` 只有其中的前 `RESULT_LIMIT` 筆，逐站輪流取（`_take`）。
+    #: 主表的總筆數：名字、年份與類型都對得上這部作品的。`rows` 只有其中的前 `RESULT_LIMIT` 筆，
+    #: 逐站輪流取（`_take`）。
     total: int
     #: 實際問出去的關鍵字與逐個的成敗。形狀與精靈的纜繩一樣——同一件事同一種說法。
     attempts: tuple[StepView, ...]
     #: 索引站回了、但名字對不上這部作品的筆數。**不藏起來**：「索引站什麼都沒回」與
     #: 「回了一千八百筆但沒有一筆是這部作品」的下一步不同（前者換關鍵字，後者換索引站）。
     discarded: int = 0
-    #: 名字對上了、但年份或類型對不上的（M4 票 49）：電影搜尋裡的 `S04E02`、差了二十年的重拍。
+    #: 每個查詢回的筆數加起來（M4 票 69）。畫面上的幾個數字照這一條加得起來：
+    #: `returned = merged + discarded + set_aside_total + total`。
+    returned: int = 0
+    #: 不同查詢（或不同站）回了同一個發佈，合併掉的筆數（`_dedupe`）。不叫 duplicates：
+    #: CONTEXT.md 的 **Duplicate** 是帳本裡的重複版本。
+    merged: int = 0
+    #: 名字對上了、但年份或類型對不上的（M4 票 49）：電影搜尋裡的 `S04E02`、差了二十年的重拍；
+    #: 同名動畫的 `- 05` 與索引站分在成人類的（M4 票 69）。
     #: **收著不丟**：判斷只看發佈名，可能看錯，所以畫面說出數量、讓人展開。
     #: 同樣逐站取前 `RESULT_LIMIT` 筆。
     set_aside: tuple[SearchResult, ...] = ()
@@ -321,7 +334,8 @@ async def search_torrents(
 
     after = batches[1].queries if len(batches) > 1 else ()
     next_at = factory.budget.ready_at(sites, len(after)) if after else None
-    found = _dedupe(row for _, rows in outcomes for row in rows)
+    returned = [row for _, rows in outcomes for row in rows]
+    found = _dedupe(returned)
     # 自己打了關鍵字時不篩：他要的就是那一串字，不是這部作品（票 08）。
     named = found if typed else [row for row in found if _about(row, snapshot)]
     results: list[IndexerResult] = []
@@ -332,6 +346,8 @@ async def search_torrents(
         rows=tuple(_row(result, snapshot, sources) for result in _take(results, RESULT_LIMIT)),
         total=len(results),
         discarded=len(found) - len(named),
+        returned=len(returned),
+        merged=len(returned) - len(found),
         set_aside=tuple(_row(result, snapshot, sources) for result in _take(aside, RESULT_LIMIT)),
         set_aside_total=len(aside),
         attempts=tuple(attempt for attempt, _ in outcomes),
@@ -388,8 +404,16 @@ def _about(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
 
 
 def _fits(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
-    """名字對上之後，年份與類型也說得過去嗎（`parser.fits`，M4 票 49）。沒有快照時不篩。"""
-    return snapshot is None or fits(result.title, snapshot)
+    """名字對上之後，年份與類型也說得過去嗎（`parser.fits`，M4 票 49）。沒有快照時不篩。
+
+    索引站分在成人類的也收起來（M4 票 69，審計 S3）：發佈名說不出這件事，分類說得出。分類碼
+    不拿來**查**（各站映射自訂，plan §8.4），拿來收起來是因為收錯了展開就救得回來。
+    """
+    if snapshot is None:
+        return True
+    return fits(result.title, snapshot) and not any(
+        category in ADULT_CATEGORIES for category in result.categories
+    )
 
 
 def search_titles(snapshot: MediaSnapshot | None) -> tuple[str, ...]:
@@ -491,8 +515,16 @@ def _episode_token(season_number: int, episode: EpisodeView) -> str:
 
 
 def _title_order(snapshot: MediaSnapshot) -> tuple[str, ...]:
-    """這部作品的名字，照優先序（理由見 `search_titles`）。作品名搜尋與缺集搜尋共用同一份順序。"""
-    return _unique([snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles])
+    """這部作品的名字，照優先序（理由見 `search_titles`）。作品名搜尋與缺集搜尋共用同一份順序。
+
+    拉丁字名字裡有 `&` 的，**原樣那一個後面緊接寫成 `and` 的那一個**
+    （`spell_ampersand`，M4 票 69）：兩種站各認一種——The Pirate Bay 對 `Law & Order` 一筆都不回、
+    `Law and Order` 回 100 筆，Mikan 對 `TIGER & BUNNY` 回 81 筆、`TIGER and BUNNY` 0 筆
+    （2026-10-10 實測）。Sonarr / Radarr 只送寫開的那一個（brief §20.19），照抄會丟掉字幕組那一邊。
+    多出來的那一個仍在 `MAX_QUERIES` 之內，擠掉的是排最後的別名，請求預算（票 77）不因此變大。
+    """
+    names = [snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles]
+    return _unique(spelled for name in names for spelled in (name, spell_ampersand(name)))
 
 
 def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:
@@ -511,7 +543,7 @@ def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:
     return tuple(
         variant
         for title, variant in (
-            (snapshot.title_en, f"{snapshot.title_en} Season {latest}"),
+            (snapshot.title_en, f"{spell_ampersand(snapshot.title_en)} Season {latest}"),
             (snapshot.title, f"{snapshot.title} 第{latest}季"),
         )
         if title

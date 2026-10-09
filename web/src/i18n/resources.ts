@@ -1505,19 +1505,29 @@ const zhHant = {
     answeredRest_one: '其餘 {{count}} 個關鍵字有回應',
     answeredRest_other: '其餘 {{count}} 個關鍵字有回應',
     slow: '索引站要現場去連它認得的每一個追蹤站，這通常要一分鐘左右。',
-    count_one: '共 {{count}} 筆',
-    count_other: '共 {{count}} 筆',
-    countCapped: '共 {{total}} 筆 · 逐站取了 {{shown}} 筆',
+    // 標頭只說結果表那一份（M4 票 69）：「共 N 筆」曾被讀成索引站回的全部，與底下幾個數字對不上。
+    count_one: '結果表 {{count}} 筆',
+    count_other: '結果表 {{count}} 筆',
+    countCapped: '結果表 {{total}} 筆 · 逐站列出前 {{shown}} 筆',
+    // 一次搜尋的筆數照同一個定義加得起來（M4 票 69）：回了幾筆 = 結果表 + 收起來 + 略過 + 重複。
+    // 是 0 的那幾份不說，所以各成一個 key，用 `tallySeparator` 接起來。
+    tally_one: '索引站回了 {{count}} 筆：{{parts}}。',
+    tally_other: '索引站回了 {{count}} 筆：{{parts}}。',
+    tallySeparator: '、',
+    tallyShown_one: '{{count}} 筆列在結果表',
+    tallyShown_other: '{{count}} 筆列在結果表',
+    tallyAside_one: '{{count}} 筆年份或類型對不上（收在下面）',
+    tallyAside_other: '{{count}} 筆年份或類型對不上（收在下面）',
+    tallyDiscarded_one: '{{count}} 筆名字對不上（已略過）',
+    tallyDiscarded_other: '{{count}} 筆名字對不上（已略過）',
+    tallyMerged_one: '{{count}} 筆重複（已合併）',
+    tallyMerged_other: '{{count}} 筆重複（已合併）',
     empty:
       '這幾個關鍵字在你的索引站上沒有東西。換個寫法自己打一次，或改天再搜——公開站的片源是會變的。',
     // 索引站對搜不到的關鍵字常常回它自己的熱門清單（實測 The Pirate Bay），所以
     // 「什麼都沒回」與「回了一堆但沒有一筆是這部作品」是兩件事，下一步也不同。
-    onlyOthers_one:
-      '索引站回了 {{count}} 筆，但沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
-    onlyOthers_other:
-      '索引站回了 {{count}} 筆，但沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
-    discarded_one: '另有 {{count}} 筆名字對不上這部作品，已經略過。',
-    discarded_other: '另有 {{count}} 筆名字對不上這部作品，已經略過。',
+    // 回了幾筆由 `tally` 那一行說，這一句不再報數字（兩個數字一個含重複一個不含，曾經對不上）。
+    onlyOthers: '沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
     // 名字對上、年份或類型對不上的（M4 票 49）。收著不丟，展開看得到。
     onlyAside_one:
       '名字對得上的 {{count}} 筆，年份或類型都對不上這部作品，收在下面。自己打一個關鍵字也行。',
@@ -4735,17 +4745,23 @@ const en: Translations<typeof zhHant> = {
     answeredRest_other: '{{count}} other keywords answered',
     willAskTyped: 'Berth will ask for this only:',
     slow: 'The indexer contacts every tracker it knows, which usually takes about a minute.',
-    count_one: '{{count}} result',
-    count_other: '{{count}} results',
-    countCapped: '{{total}} results · {{shown}} taken across the sites',
+    count_one: '{{count}} in the table',
+    count_other: '{{count}} in the table',
+    countCapped: '{{total}} in the table · first {{shown}} listed, taken across the sites',
+    tally_one: 'The indexer returned {{count}} result: {{parts}}.',
+    tally_other: 'The indexer returned {{count}} results: {{parts}}.',
+    tallySeparator: ', ',
+    tallyShown_one: '{{count}} in the table',
+    tallyShown_other: '{{count}} in the table',
+    tallyAside_one: '{{count}} set aside (year or type does not fit)',
+    tallyAside_other: '{{count}} set aside (year or type does not fit)',
+    tallyDiscarded_one: '{{count}} skipped (name does not match)',
+    tallyDiscarded_other: '{{count}} skipped (name does not match)',
+    tallyMerged_one: '{{count}} duplicate merged',
+    tallyMerged_other: '{{count}} duplicates merged',
     empty:
       'None of those keywords turned up anything on your indexer. Try wording it yourself, or search again later — what public sites carry changes.',
-    onlyOthers_one:
-      "The indexer returned {{count}} release, but none of them carries this title's name. Try typing a keyword yourself.",
-    onlyOthers_other:
-      "The indexer returned {{count}} releases, but none of them carries this title's name. Try typing a keyword yourself.",
-    discarded_one: "{{count}} more release did not carry this title's name and was skipped.",
-    discarded_other: "{{count}} more releases did not carry this title's name and were skipped.",
+    onlyOthers: "None of them carries this title's name. Try typing a keyword yourself.",
     onlyAside_one:
       "The {{count}} release carrying this title's name has the wrong year or type; it is set aside below. Try typing a keyword.",
     onlyAside_other:

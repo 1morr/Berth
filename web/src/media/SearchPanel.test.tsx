@@ -118,6 +118,8 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
   return {
     rows: [row()],
     total: 1,
+    returned: 1,
+    merged: 0,
     discarded: 0,
     set_aside: [],
     set_aside_total: 0,
@@ -597,22 +599,79 @@ describe('搜尋 torrent 與結果表', () => {
 
   it('索引站回了一堆但沒有一筆是這部作品，說得出那一堆去了哪裡', async () => {
     render({
-      [SEARCH_PATH]: { body: results({ rows: [], total: 0, discarded: 1518 }) },
+      [SEARCH_PATH]: { body: results({ rows: [], total: 0, returned: 1518, discarded: 1518 }) },
     })
     renderApp('/media/tv:120089')
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText(/索引站回了 1518 筆/)).toBeVisible()
+    expect(
+      await screen.findByText('索引站回了 1518 筆：1518 筆名字對不上（已略過）。'),
+    ).toBeVisible()
+    expect(screen.getByText(/沒有一筆對得上這部作品的名字/)).toBeVisible()
   })
 
-  it('略過的筆數不藏起來', async () => {
-    render({ [SEARCH_PATH]: { body: results({ discarded: 1518 }) } })
+  it('幾個筆數照同一個定義加得起來（M4 票 69，審計 S3）', async () => {
+    render({
+      [SEARCH_PATH]: {
+        body: results({
+          returned: 629,
+          merged: 100,
+          discarded: 103,
+          set_aside: [row({ key: 'aside' })],
+          set_aside_total: 164,
+          total: 262,
+        }),
+      },
+    })
     renderApp('/media/tv:120089')
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText('另有 1518 筆名字對不上這部作品，已經略過。')).toBeVisible()
+    expect(
+      await screen.findByText(
+        '索引站回了 629 筆：262 筆列在結果表、164 筆年份或類型對不上（收在下面）、' +
+          '103 筆名字對不上（已略過）、100 筆重複（已合併）。',
+      ),
+    ).toBeVisible()
+    // 標頭說的是結果表那一份，不是「共」：審計時「共 262 筆」被讀成全部。
+    expect(screen.getByText('結果表 262 筆 · 逐站列出前 1 筆')).toBeVisible()
+    expect(screen.queryByText(/^共 /)).toBeNull()
+  })
+
+  it('是 0 的那幾份不說', async () => {
+    render({ [SEARCH_PATH]: { body: results({ returned: 3, merged: 2, total: 1 }) } })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+    expect(
+      await screen.findByText('索引站回了 3 筆：1 筆列在結果表、2 筆重複（已合併）。'),
+    ).toBeVisible()
+    expect(screen.getByText('結果表 1 筆')).toBeVisible()
+  })
+
+  it('英文介面照同一個定義說', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      render({
+        [SEARCH_PATH]: {
+          body: results({ returned: 9, merged: 2, discarded: 3, set_aside_total: 3, total: 1 }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+
+      expect(
+        await screen.findByText(
+          'The indexer returned 9 results: 1 in the table, 3 set aside (year or type does not fit), ' +
+            '3 skipped (name does not match), 2 duplicates merged.',
+        ),
+      ).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 
   it('年份或類型對不上的收起來，說出筆數，展開看得到', async () => {
@@ -639,6 +698,7 @@ describe('搜尋 torrent 與結果表', () => {
         body: results({
           rows: [],
           total: 0,
+          returned: 41,
           discarded: 40,
           set_aside: [row({ key: 'aside' })],
           set_aside_total: 1,
@@ -652,7 +712,11 @@ describe('搜尋 torrent 與結果表', () => {
     expect(await screen.findByText(/年份或類型都對不上/)).toBeVisible()
     expect(screen.queryByText(/沒有一筆對得上這部作品的名字/)).toBeNull()
     // 名字對不上的那一份照舊說出來，不被收起來的那一句吞掉。
-    expect(screen.getByText('另有 40 筆名字對不上這部作品，已經略過。')).toBeVisible()
+    expect(
+      screen.getByText(
+        '索引站回了 41 筆：1 筆年份或類型對不上（收在下面）、40 筆名字對不上（已略過）。',
+      ),
+    ).toBeVisible()
     expect(screen.getByText('另有 1 筆年份或類型對不上這部作品，已經收起來。')).toBeVisible()
   })
 

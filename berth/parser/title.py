@@ -51,13 +51,24 @@ _YEAR = re.compile(r"(?<![0-9A-Za-z])((?:19|20)[0-9]{2})(?![0-9A-Za-z])")
 #: 快照沒有那一格，差一年代替它（brief §20.16）。
 _YEAR_SLACK = 1
 #: 讀得出季集的記號，只給電影用。季名的寫法與 `seasons` 共用（`S01`、`Season 2`、`2nd Season`、
-#: `第2季`），再加集號：`S04E02`、`S01E01E02`、`S01E05v2`、`1x05`、`EP05`、`第05話`。
+#: `第2季`），再加集號：`S04E02`、`S01E01E02`、`S01E05v2`、`1x05`、`EP05`、`第05話`、`第01-12话`，
+#: 以及字幕組的集號 `- 05`、`- 07v2`、`- 01 ~ 12`、`[05]`、`[01-12]`、`【12 END】`、`[01-12合集]`
+#: （M4 票 69：同名動畫的各集）。
+#: 字幕組那幾種只認兩到三位數：四位數是年份（`Nosferatu - 1922`、`[1922]`），一位數多半是光碟數或
+#: 續集（`- 2 Disc`、`[3]`，code-review 抓到）——字幕組的集號補零到兩位。
 _EPISODE_MARK = re.compile(
     rf"(?<![0-9A-Za-z])(?:{SEASON_LATIN}(?:E[0-9]{{1,4}})*(?:v[0-9])?|{SEASON_ORDINAL}"
     r"|[0-9]{1,2}x[0-9]{2,3}|EP[0-9]{1,4})(?![0-9A-Za-z])"
-    rf"|{SEASON_CN}|第\s*[0-9]{{1,4}}\s*[话話集]",
+    rf"|{SEASON_CN}|第\s*[0-9]{{1,4}}(?:\s*[~-]\s*[0-9]{{1,4}})?\s*[话話集]"
+    r"|(?<=\s)-\s*[0-9]{2,3}(?:v[0-9])?(?:\s*[~-]\s*[0-9]{2,3})?(?=[\s\[(]|\.(?![0-9])|$)"
+    r"|[\[【][0-9]{2,3}(?:v[0-9])?(?:\s*[~-]\s*[0-9]{2,3})?\s*(?:END|Fin|合集)?[\]】]",
     re.IGNORECASE,
 )
+
+#: CJK 字。名字裡有它的不寫開 `&`（`spell_ampersand`）。
+_CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]")
+#: 名字裡的 `&`，連同兩側的空白。
+_AMPERSAND = re.compile(r"\s*&\s*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +127,18 @@ def mentions(release_name: str, media: MediaSnapshot) -> bool:
         len(target) >= _MIN_CONTAINED and target in haystack
         for target in (normalize_title(known) for known in _known_titles(media))
     )
+
+
+def spell_ampersand(title: str) -> str:
+    """`Law & Order` → `Law and Order`：拉丁字的名字裡，`&` 寫成 `and`（M4 票 69）。
+
+    照 Sonarr / Radarr 的 `GetCleanSceneTitle`（送查詢前 `&` 換成 `and`，brief §20.19）：scene 的
+    發佈名寫 `Law.and.Order`，而 The Pirate Bay 對帶 `&` 的查詢一筆都不回（2026-10-09 實測）。
+    有 CJK 字的名字原樣：中文名的 `&` 不是英文的 and。
+    """
+    if _CJK.search(title):
+        return title
+    return _AMPERSAND.sub(" and ", title).strip()
 
 
 def fits(release_name: str, media: MediaSnapshot) -> bool:
@@ -209,8 +232,13 @@ def _words(text: str) -> frozenset[str]:
 
 
 def _known_titles(media: MediaSnapshot) -> tuple[str, ...]:
-    """TMDB 那一端所有叫得出來的名字（plan §4.3 的 `titles` 已經是去重過的一份）。"""
-    return (media.title, media.title_en, media.title_original, *media.titles)
+    """TMDB 那一端所有叫得出來的名字（plan §4.3 的 `titles` 已經是去重過的一份）。
+
+    帶 `&` 的另加寫開的那一種（`spell_ampersand`）：正規化把 `&` 丟掉、`and` 留著，`Law & Order`
+    與 `Law.and.Order` 不加這一種就是兩串字（M4 票 69）。
+    """
+    names = (media.title, media.title_en, media.title_original, *media.titles)
+    return (*names, *(spell_ampersand(name) for name in names if "&" in name))
 
 
 def _reason(score: float, known: str) -> ItemReason:

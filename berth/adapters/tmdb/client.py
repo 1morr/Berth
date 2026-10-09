@@ -70,6 +70,29 @@ class HttpTmdbClient:
         )
         return parse_entries(payload.get("results"))
 
+    async def search_year(
+        self, kind: MediaKind, query: str, *, year: int, language: str
+    ) -> tuple[TmdbEntry, ...]:
+        # 比的是卡片上那個年份（brief §20.19）。`year` 太寬：劇集的 `year` 連每一集的播出年都比。
+        if kind is MediaKind.MOVIE:
+            payload = await self._get(
+                "/search/movie",
+                language=language,
+                query=query,
+                include_adult="false",
+                primary_release_year=str(year),
+            )
+        else:
+            payload = await self._get(
+                "/search/tv",
+                language=language,
+                query=query,
+                include_adult="false",
+                first_air_date_year=str(year),
+            )
+        # 這兩支的每一筆沒有 `media_type`，型別由端點決定（與 `popular` 同）。
+        return parse_entries(payload.get("results"), kind=kind)
+
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
         """`tv/{id}` 或 `movie/{id}`。
 

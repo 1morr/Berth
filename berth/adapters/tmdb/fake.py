@@ -33,6 +33,7 @@ class FakeTmdbClient:
         trending: Mapping[MediaKind, Sequence[TmdbEntry]] | None = None,
         popular: Mapping[MediaKind, Sequence[TmdbEntry]] | None = None,
         search: Mapping[str, Sequence[TmdbEntry]] | None = None,
+        by_year: Mapping[tuple[MediaKind, str, int], Sequence[TmdbEntry]] | None = None,
         translations: Mapping[int, str] | None = None,
         overview_translations: Mapping[int, str] | None = None,
         poster_translations: Mapping[int, str] | None = None,
@@ -53,6 +54,8 @@ class FakeTmdbClient:
         self._popular = dict(popular or {})
         #: `正規化的查詢 → 結果`。公開的，測試要演「多搜到一部」就改這裡。
         self.search_results = dict(search or {})
+        #: `(kind, 片名, 年份) → 結果`：帶年份的那兩支（M4 票 69）。
+        self.year_results = {key: tuple(value) for key, value in (by_year or {}).items()}
         self._translations = dict(translations or {})
         #: `id → 簡介`，英文那一輪以外的每一輪都回它。沒列的作品照英文那一輪（與標題同一個規矩）。
         self._overview_translations = dict(overview_translations or {})
@@ -98,6 +101,13 @@ class FakeTmdbClient:
         self.requests.append((f"search/{query}", language))
         self._raise()
         return self._localised(self.search_results.get(query, ()), language)
+
+    async def search_year(
+        self, kind: MediaKind, query: str, *, year: int, language: str
+    ) -> tuple[TmdbEntry, ...]:
+        self.requests.append((f"search/{kind.value}/{query}/{year}", language))
+        self._raise()
+        return self._localised(self.year_results.get((kind, query, year), ()), language)
 
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
         self.requests.append((f"detail/{kind.value}/{tmdb_id}", language))

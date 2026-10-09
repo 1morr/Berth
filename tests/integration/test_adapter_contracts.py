@@ -2653,6 +2653,39 @@ async def test_tmdb_sends_the_language_and_the_search_query() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_tmdb_search_with_a_year_asks_the_kind_endpoint_with_its_year_parameter() -> None:
+    """`search/multi` 不吃年份（M4 票 69）。電影用 `primary_release_year`、劇集用
+    `first_air_date_year`——比的是卡片上那個年份；這兩支的每一筆沒有 `media_type`。"""
+    movie = respx.get(f"{TMDB_URL}/search/movie").respond(
+        200, text=read_fixture("http/tmdb/search-movie.nosferatu-1922.en.json")
+    )
+    tv = respx.get(f"{TMDB_URL}/search/tv").respond(
+        200, text=read_fixture("http/tmdb/search-tv.nosferatu-1922.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        movies = await client.search_year(MediaKind.MOVIE, "nosferatu", year=1922, language="en-US")
+        shows = await client.search_year(MediaKind.TV, "nosferatu", year=1922, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert [(entry.kind, entry.tmdb_id, entry.year) for entry in movies] == [
+        (MediaKind.MOVIE, 653, 1922)
+    ]
+    assert shows == ()
+    sent = movie.calls.last.request.url.params
+    assert (sent["query"], sent["primary_release_year"], sent["include_adult"]) == (
+        "nosferatu",
+        "1922",
+        "false",
+    )
+    assert "year" not in sent
+    assert tv.calls.last.request.url.params["first_air_date_year"] == "1922"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_both_credential_shapes_reach_every_tmdb_endpoint() -> None:
     """憑證的兩種形狀在**每一支**端點都送得出去，不是只有精靈打的那一支。
 
@@ -2665,6 +2698,10 @@ async def test_both_credential_shapes_reach_every_tmdb_endpoint() -> None:
         ("/trending/tv/week", lambda c: c.trending(MediaKind.TV, language="en-US")),
         ("/movie/popular", lambda c: c.popular(MediaKind.MOVIE, language="en-US")),
         ("/search/multi", lambda c: c.search("x", language="en-US")),
+        (
+            "/search/movie",
+            lambda c: c.search_year(MediaKind.MOVIE, "x", year=1922, language="en-US"),
+        ),
     )
     for path, call in calls:
         respx.get(f"{TMDB_URL}{path}").respond(200, json={"images": {}, "results": []})

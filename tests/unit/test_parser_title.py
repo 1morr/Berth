@@ -11,7 +11,14 @@ from datetime import date
 import pytest
 
 from berth.domain import MediaKind, MediaSnapshot, ReasonCode, SeasonSnapshot, why
-from berth.parser import fits, match_media, normalize_title, parse_release
+from berth.parser import (
+    fits,
+    match_media,
+    mentions,
+    normalize_title,
+    parse_release,
+    spell_ampersand,
+)
 
 
 def media(
@@ -194,6 +201,49 @@ class TestFits:
     def test_a_movie_drops_releases_that_read_as_episodes(self, name: str) -> None:
         assert not fits(name, self.NIGHT)
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p) [8A1C3B2F].mkv",
+            "[ASW] Tsuki to Laika to Nosferatu - 07v2 [1080p HEVC x265 10Bit][AAC]",
+            "[Erai-raws] Tsuki to Laika to Nosferatu - 01 ~ 12 [1080p][Multiple Subtitle]",
+            "[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]",
+            "【喵萌奶茶屋】★10月新番★[月與萊卡與吸血公主 / Tsuki to Laika to Nosferatu][03][1080p]",
+            "[Group] Tsuki to Laika to Nosferatu 【12】[1080p]",
+            # 2026-10-10 實跑（The Pirate Bay + Mikan）時還留在主表的寫法（中文片名截掉）：
+            "[千夏字幕组][月亮与莱卡与吸血公主_Tsuki to Laika to Nosferatu][第01-12话][BDRip]",
+            "【幻樱字幕组】【合集】【Tsuki to Laika to Nosferatu】【01-12 END】【GB_MP4】",
+            "【幻樱字幕组】【10月新番】【Tsuki to Laika to Nosferatu】【12 END】【GB_MP4】",
+            "[动漫国字幕组&LoliHouse] Tsuki to Laika to Nosferatu [01-12合集][WebRip 1080p]",
+        ],
+    )
+    def test_a_movie_drops_a_namesake_shows_episodes(self, name: str) -> None:
+        """審計 S3：搜《Nosferatu》(1922) 時同名動畫的各集進了主表——字幕組的集號寫成
+        `- 05`、`[05]`、`[01-12]`，不是 `S01E05`（M4 票 69）。"""
+        assert not fits(name, movie("Nosferatu", 1922))
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Nosferatu (1922) [720p] [BluRay] [YTS.MX]",
+            "Nosferatu - Eine Symphonie des Grauens (1922) 1080p BluRay",
+            "Nosferatu - 1922 - 4K Restoration 2160p",  # 年份不是集號
+            "[Group] Nosferatu [1922][BDRip 1080p]",
+            "Nosferatu 1922 - 4K Restoration [1080p] [5.1]",
+            "Nosferatu 1922 1080p BluRay AAC - 2.0 x264",  # 聲道不是集號
+            "Nosferatu (1922) - 2 Disc Set 1080p",  # 一位數不是字幕組的集號（code-review）
+            "Nosferatu 1922 [BluRay] [3] 1080p",
+        ],
+    )
+    def test_dashes_and_brackets_around_a_year_still_fit_the_movie(self, name: str) -> None:
+        assert fits(name, movie("Nosferatu", 1922))
+
+    def test_a_show_keeps_the_fansub_episode_numbers(self) -> None:
+        laika = show("Tsuki to Laika to Nosferatu", 2021, 2021)
+
+        assert fits("[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p)", laika)
+        assert fits("[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]", laika)
+
     def test_a_year_that_is_part_of_the_title_is_not_a_release_year(self) -> None:
         """`Blade Runner 2049`（2017）：片名裡的 2049 不是年份。"""
         blade = movie("Blade Runner 2049", 2017)
@@ -235,3 +285,43 @@ class TestFits:
         who = show("Doctor Who", 2005, 2005, 2006)
 
         assert not fits("Doctor Who 1963 S01E01 DVDRip", who)
+
+
+class TestAmpersand:
+    """片名裡的 `&` 與 `and` 是同一個字（M4 票 69）：Sonarr / Radarr 送查詢前把 `&` 換成 `and`
+    （`GetCleanSceneTitle`），比對時兩者都清掉（`CleanSeriesTitle`）。發佈名照 scene 的寫法是
+    `Law.and.Order`，TMDB 的名字是 `Law & Order`。"""
+
+    LAW = movie("Law & Order", None)
+
+    @pytest.mark.parametrize(
+        ("title", "spelled"),
+        [
+            ("Law & Order", "Law and Order"),
+            ("Law&Order", "Law and Order"),
+            ("Law & Order: Special Victims Unit", "Law and Order: Special Victims Unit"),
+            ("SPY x FAMILY", "SPY x FAMILY"),
+            ("法網遊龍 & 特案組", "法網遊龍 & 特案組"),  # 中文名不換
+        ],
+    )
+    def test_the_ampersand_is_spelled_out_in_latin_titles(self, title: str, spelled: str) -> None:
+        assert spell_ampersand(title) == spelled
+
+    @pytest.mark.parametrize(
+        "name",
+        ["Law.and.Order.S20E01.1080p.WEB", "Law & Order S20E01 1080p", "Law.Order.S20E01"],
+    )
+    def test_either_spelling_names_the_work(self, name: str) -> None:
+        assert mentions(name, self.LAW)
+
+    def test_the_spelled_out_release_is_an_exact_match(self) -> None:
+        found = match_media(parse_release("Law.and.Order.S20E01.1080p.WEB"), [self.LAW])
+
+        assert found is not None and found.score >= 1.0
+
+    def test_and_is_not_dropped_from_titles_without_an_ampersand(self) -> None:
+        """只把 `&` 寫開，不學 Sonarr 把每個 `and` 都刪掉：`Pride and Prejudice` 的發佈名
+        照舊要寫出 `and`。"""
+        pride = movie("Pride and Prejudice", 2005)
+
+        assert not mentions("Pride.Prejudice.2005.1080p", pride)

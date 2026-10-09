@@ -84,11 +84,18 @@ class SearchOut(BaseModel):
     """
 
     rows: list[SearchResultOut]
-    #: 對得上這部作品的總筆數。`rows` 只有其中的前 100 筆，逐站輪流取，畫面用兩個數字說得出差別。
+    #: 主表的總筆數（名字、年份、類型都對得上這部作品的）。`rows` 只有其中的前 100 筆，逐站輪流取，
+    #: 畫面用兩個數字說得出差別。
     total: int
+    #: 每個查詢回的筆數加起來（M4 票 69），畫面照這一條說：
+    #: `returned = merged + discarded + set_aside_total + total`。
+    returned: int
+    #: 不同查詢或不同站回了同一個發佈，合併掉的筆數。
+    merged: int
     #: 索引站回了、但名字對不上這部作品的筆數。畫面用它說「那一千五百筆不是這部作品」。
     discarded: int
-    #: 名字對上了、但年份或類型對不上的（M4 票 49），逐站取前 100 筆；畫面收起來，展開看得到。
+    #: 名字對上了、但年份或類型對不上的（M4 票 49；同名劇集的各集、成人分類，M4 票 69），
+    #: 逐站取前 100 筆；畫面收起來，展開看得到。
     set_aside: list[SearchResultOut]
     #: 那一份的總筆數。
     set_aside_total: int
@@ -231,6 +238,8 @@ def _out(view: SearchView) -> SearchOut:
     return SearchOut(
         rows=[SearchResultOut.model_validate(row) for row in view.rows],
         total=view.total,
+        returned=view.returned,
+        merged=view.merged,
         discarded=view.discarded,
         set_aside=[SearchResultOut.model_validate(row) for row in view.set_aside],
         set_aside_total=view.set_aside_total,

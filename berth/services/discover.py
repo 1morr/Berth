@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -41,6 +42,11 @@ CACHE_TTL = timedelta(hours=1)
 #: 卡片牆用的海報尺寸，取自 `configuration` 的 `poster_sizes`。整頁是一面卡牆，
 #: 拿 `original` 會讓首頁下載好幾十 MB。
 POSTER_SIZE = "w342"
+
+#: 查詢結尾的年份：`nosferatu 1922`、`nosferatu (1922)`。前面要有片名——只打 `1917` 是片名。
+_TRAILING_YEAR = re.compile(
+    r"^(?P<title>.+?)\s+(?P<open>\()?(?P<year>(?:18|19|20)[0-9]{2})(?(open)\))$"
+)
 
 TRENDING_KEY = "discover:trending"
 POPULAR_KEY = "discover:popular"
@@ -116,13 +122,26 @@ async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> 
 async def search_media(
     session: AsyncSession, factory: ServiceClientFactory, query: str
 ) -> DiscoverResult:
-    """`search/multi`：一次查兩種作品，順序照 TMDB 的相關性。"""
+    """`search/multi`：一次查兩種作品，順序照 TMDB 的相關性。
+
+    **結尾是年份時先拆開問**（M4 票 69，審計 S3：「Nosferatu 1922」是 0 筆）：
+    `search/multi` 不吃年份，整串字照字面比。拆成片名與年份，兩種作品各問一次帶年份的那一支
+    （`search_year`），兩份交錯；那一年問不到東西（`Blade Runner 2049` 的 2049 是片名）
+    才照原字串問 `search/multi`。
+    """
     normalised = normalise_query(query)
     if not normalised:
         # 空的查詢不必問 TMDB 才知道沒有結果。
         return DiscoverResult(())
 
     async def fetch(client: TmdbClient, base: str) -> tuple[MediaCard, ...]:
+        split = split_year(normalised)
+        if split is not None:
+            title, year = split
+            listing = await _with_year(client, title, year, BASE_LANGUAGE)
+            if listing:
+                display = _by_key(await _with_year(client, title, year, DISPLAY_LANGUAGE))
+                return tuple(_card(entry, display, base) for entry in listing)
         listing = await client.search(normalised, language=BASE_LANGUAGE)
         display = _by_key(await client.search(normalised, language=DISPLAY_LANGUAGE))
         return tuple(_card(entry, display, base) for entry in listing)
@@ -133,6 +152,24 @@ async def search_media(
 def normalise_query(query: str) -> str:
     """`  SPY  X  Family ` 與 `spy x family` 是同一個查詢，不該各佔一格快取。"""
     return " ".join(query.split()).lower()
+
+
+def split_year(normalised: str) -> tuple[str, int] | None:
+    """`nosferatu 1922` → `("nosferatu", 1922)`；結尾不是年份時是 `None`。"""
+    found = _TRAILING_YEAR.match(normalised)
+    if found is None:
+        return None
+    return found["title"], int(found["year"])
+
+
+async def _with_year(
+    client: TmdbClient, title: str, year: int, language: str
+) -> tuple[TmdbEntry, ...]:
+    """兩種作品各問一次帶年份的搜尋，交錯成一份（與趨勢、熱門同一種合併方式）。"""
+    rows = [
+        await client.search_year(kind, title, year=year, language=language) for kind in MediaKind
+    ]
+    return tuple(entry for row in zip_longest(*rows) for entry in row if entry is not None)
 
 
 def search_key(normalised: str) -> str:
