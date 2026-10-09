@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** 77（使用者要求排在 76、77 之後）
+**Blocked by:** None — can start immediately（與 76 並行；與 77 都改 `web/src/i18n/resources.ts`，後合併的那張解衝突）
 
 **讀:** brief §15「補舊集」與決定表「補舊集維持預設全補（2026-09-26）」；M3 票 12、19；M4 票 07、15、06i；`web/src/rss/SeriesBinder.tsx`、`web/src/media/SubscribePanel.tsx`、`web/src/settings/ServiceConnection.tsx`、`web/src/settings/InterfaceLoginSection.tsx`、`web/src/setup/ServiceChoice.tsx`；`berth/services/rss.py` 的 `bind_series`、`subscribe_mikan`（`backfill`、`passed_before`）
 
