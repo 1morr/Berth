@@ -42,8 +42,7 @@ export function IndexerNotice({
           {t('search.problem.retryAt')} <Timestamp at={retryAt} />
         </p>
       )}
-      {/* 等預算時後端的原文是英文、帶 UTC 的 ISO 時間（M4 票 77）：上面兩行已經說完，不再貼它。 */}
-      {detail && !waiting && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
+      {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
       {toSettings && <SettingsHint slot="prowlarr" fallback={t('search.problem.askAdmin')} />}
     </div>
   )

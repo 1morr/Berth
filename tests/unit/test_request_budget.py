@@ -114,6 +114,8 @@ def test_ready_at_says_when_a_batch_fits() -> None:
     assert requests.ready_at(("mikanani.me",), 3) == START + HOUR
     assert requests.ready_at(("mikanani.me",), 0) == clock.now
     assert requests.ready_at(("nyaa.si",), 5) == clock.now
+    # 有一站現在放得下就是現在：搜尋跳過放不下的站、問那一站（M4 票 77）。
+    assert requests.ready_at(("mikanani.me", "nyaa.si"), 3) == clock.now
 
 
 def test_a_batch_larger_than_the_limit_never_fits() -> None:

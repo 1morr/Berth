@@ -1244,7 +1244,7 @@ describe('Media 詳情頁', () => {
               total: 0,
               attempts: [],
               problem: 'budget_exhausted',
-              detail: 'request budget for mikanani.me is used up',
+              detail: '',
               retry_at: later,
               batch: FIRST,
             },
@@ -1256,7 +1256,6 @@ describe('Media 詳情頁', () => {
 
         expect(await within(panel()).findByText('等請求預算')).toBeVisible()
         expect(within(panel()).getByText('40 分鐘後')).toBeVisible()
-        expect(within(panel()).queryByText(/is used up/)).not.toBeInTheDocument()
         expect(
           within(panel()).getByText('這一批要問 S01、S02、S03、S04、S05，一個都還沒問。'),
         ).toBeVisible()

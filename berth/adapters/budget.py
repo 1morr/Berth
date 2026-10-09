@@ -112,15 +112,14 @@ class RequestBudget:
         return refused
 
     def ready_at(self, sites: Iterable[str], count: int) -> datetime | None:
-        """每一個站都放得下 `count` 個的最早時刻（現在放得下就是現在）；永遠放不下是 `None`。"""
+        """最早有一站放得下 `count` 個的時刻（現在放得下、或一站都沒有就是現在）；每一站都永遠
+        放不下是 `None`。搜尋跳過放不下的站（M4 票 77），所以有一站放得下就問得了。"""
         moment = self._now()
-        latest = moment
-        for site in sites:
-            until = self._fits_at(site, count, moment)
-            if until is None:
-                return None
-            latest = max(latest, until)
-        return latest
+        targets = tuple(sites)
+        if not targets:
+            return moment
+        fits = [until for site in targets if (until := self._fits_at(site, count, moment))]
+        return min(fits, default=None)
 
     def usage(self) -> tuple[SiteUsage, ...]:
         """健康頁那一張卡：視窗裡問過、或有工作被擋著的站，照站名排。"""

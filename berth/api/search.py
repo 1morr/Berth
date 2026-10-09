@@ -128,7 +128,7 @@ class BatchOut(BaseModel):
     later: int
     #: 下一批問哪幾季；最後一批是空的。
     next_seasons: list[int]
-    #: 請求預算放得下下一批的時刻。預覽、最後一批是 `null`。
+    #: 請求預算最早有一站放得下下一批的時刻（M4 票 77）。預覽、最後一批是 `null`。
     next_at: datetime | None
 
 

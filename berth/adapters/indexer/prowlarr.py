@@ -66,7 +66,7 @@ class ProwlarrSearch:
         if not isinstance(payload, list):
             raise ProtocolMismatchError("/api/v1/indexer: expected a list")
         return tuple(
-            SearchSite(indexer_id=row["id"], name=str(row.get("name", "")), site=site_of(url))
+            SearchSite(indexer_id=row["id"], name=str(row.get("name") or ""), site=site_of(url))
             for row in payload
             if isinstance(row, dict) and row.get("enable") and isinstance(row.get("id"), int)
             for url in (_base_url(row),)
