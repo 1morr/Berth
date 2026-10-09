@@ -19,6 +19,7 @@ from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.pipeline.ticks import whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
@@ -66,7 +67,7 @@ class PlannerRunner:
         while True:
             await self._hints.wait(self.tick_seconds)
             try:
-                await self.tick()
+                await whole_tick(self.tick())
             except Exception:
                 logger.exception("planner runner tick failed")
 

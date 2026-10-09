@@ -16,6 +16,7 @@ from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.pipeline.ticks import whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.resolver import ResolveOutcome, sweep_resolutions
 from berth.services.setup import is_setup_complete
@@ -39,7 +40,7 @@ class JellyfinResolver:
         while True:
             await asyncio.sleep(TICK.total_seconds())
             try:
-                await self.tick()
+                await whole_tick(self.tick())
             except Exception:
                 logger.exception("jellyfin resolver tick failed")
 

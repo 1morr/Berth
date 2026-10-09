@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.pipeline.ticks import whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.rss import poll_due
 from berth.services.setup import is_setup_complete
@@ -50,7 +51,7 @@ class RssPoller:
         while True:
             await self._sleep(self._tick.total_seconds())
             try:
-                await self.poll_once()
+                await whole_tick(self.poll_once())
             except Exception:
                 # 迴圈不能死；一個 Feed 的失敗在 `poll_due` 裡就接住了，走到這裡的是資料庫那一層。
                 logger.exception("rss poller tick failed")

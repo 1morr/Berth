@@ -83,11 +83,9 @@ def events_of(client: TestClient) -> list[str]:
 
 
 def settle(done: Callable[[], bool]) -> None:
-    """等背景迴圈把這一輪做完。
+    """等背景迴圈把這一輪做完，斷言才看得到它的結果。
 
-    **不只是為了斷言**：測試結束時 TestClient 會取消還在跑的迴圈，取消在一個查詢的半途時那一條
-    aiosqlite 連線沒有人關，GC 到下一個測試模組才炸（`ResourceWarning`，第一次全量跑時抓到）。
-    所以每一條叫醒迴圈的測試都要等到那一輪的**最後一步**。
+    關機時被 cancel 的那一輪本身不必等：迴圈會先做完再收（`pipeline/ticks.py`，M4 票 71b）。
     """
     deadline = time.monotonic() + 10
     while not done() and time.monotonic() < deadline:

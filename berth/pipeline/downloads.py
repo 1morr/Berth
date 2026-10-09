@@ -27,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.pipeline.ticks import whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import (
     ACTIVE_INTERVAL,
@@ -82,7 +83,7 @@ class QbitPoller:
         while True:
             await self._sleep(self.tick_seconds)
             try:
-                await self.tick()
+                await whole_tick(self.tick())
             except Exception:
                 logger.exception("qbit poller tick failed")
 

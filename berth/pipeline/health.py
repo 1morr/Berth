@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.pipeline.ticks import whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.health import CHECK_INTERVAL, check_health, is_due
 from berth.services.setup import is_setup_complete
@@ -61,7 +62,7 @@ class HealthChecker:
         while True:
             await self._sleep(self.tick_seconds)
             try:
-                await self.check_once()
+                await whole_tick(self.check_once())
             except Exception:
                 # 迴圈不能死。下一次醒來再試一次，畫面上的「上次檢查」會顯示它落後了。
                 logger.exception("health checker tick failed")

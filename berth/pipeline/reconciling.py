@@ -21,6 +21,7 @@ from datetime import datetime, time, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.pipeline.ticks import whole_tick
 from berth.services.reconcile import ReconcileRunner
 from berth.services.setup import is_setup_complete
 
@@ -73,7 +74,7 @@ class Reconciler:
         while True:
             await self._sleep(self.tick_seconds)
             try:
-                await self.run_if_due()
+                await whole_tick(self.run_if_due())
             except Exception:
                 # 迴圈不能死。下一次醒來再試一次。
                 logger.exception("reconciler tick failed")
