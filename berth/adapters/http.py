@@ -16,6 +16,8 @@ from typing import Any, Self
 
 import httpx
 
+from berth.redact import redact_queries
+
 #: 探測用的逾時。容器啟動中通常是 connect 就失敗，不需要等太久（plan §9.3 第 2 步）。
 DEFAULT_TIMEOUT_SECONDS = 5.0
 
@@ -33,7 +35,15 @@ def _ssl_context() -> ssl.SSLContext:
 
 
 class ServiceError(Exception):
-    """與某個外部服務往來時的失敗。"""
+    """與某個外部服務往來時的失敗。
+
+    **訊息裡網址的 query 值在這裡就遮掉**（M4 票 76）：訊息常帶整條網址（`HttpSession` 的
+    「GET <url>: ...」、`.torrent` 下載連結），而它會寫進資料庫（`rss_feeds.last_error`、
+    `Job.error`）、回給畫面、進 log。遮在建構子而不是每一個寫出去的地方：寫出去的地方有幾十個。
+    """
+
+    def __init__(self, *args: object) -> None:
+        super().__init__(*(redact_queries(arg) if isinstance(arg, str) else arg for arg in args))
 
 
 class ServiceNotDeployedError(ServiceError):

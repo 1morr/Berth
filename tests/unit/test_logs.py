@@ -13,8 +13,13 @@ import json
 import logging
 import sys
 
+import httpx
 import pytest
+import respx
 
+from berth.adapters.http import HttpSession, ProtocolMismatchError, ServiceUnavailableError
+from berth.adapters.prowlarr import IndexerRejectedError
+from berth.adapters.rss.client import HttpFeedFetcher
 from berth.logs import JOB_FIELD, configure_logging, job_context, json_line
 
 HASH = "4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b"
@@ -130,3 +135,214 @@ class TestConfigureLogging:
             assert len(root.handlers) == once
         finally:
             root.handlers = before
+
+
+#: 假的 Mikan 個人 token。票 76 的起點：httpx 的 INFO log 把整條網址連 token 印進 `docker logs`。
+TOKEN = "abc0token0secret"
+MIKAN_FEED = f"https://mikanani.me/RSS/MyBangumi?token={TOKEN}"
+PLAIN_FEED = "https://nyaa.si/rss/feed.xml"
+
+
+def logged(caplog: pytest.LogCaptureFixture) -> str:
+    """這一段印出來的每一行，照正式的格式（`json_line`）排好。"""
+    return "\n".join(json_line(entry) for entry in caplog.records)
+
+
+class TestSecretsInUrls:
+    """log 與錯誤訊息裡的網址，query 的值一律遮掉（M4 票 76）。
+
+    兩個方向都要守：秘密不見，而且**不是整行不見**——沒有 query 的網址照常完整出現。
+    """
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_a_feed_token_never_reaches_the_log(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        respx.get(MIKAN_FEED).respond(200, text="<rss/>")
+        caplog.set_level(logging.INFO)
+        fetcher = HttpFeedFetcher()
+        try:
+            await fetcher.fetch(MIKAN_FEED)
+        finally:
+            await fetcher.aclose()
+
+        text = logged(caplog)
+        assert TOKEN not in text
+        # 那一行還在，只是值被遮掉：遮罩不是靠把 httpx 的 log 關掉。
+        assert "https://mikanani.me/RSS/MyBangumi?token=***" in text
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_a_url_without_a_query_is_logged_whole(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        respx.get(PLAIN_FEED).respond(200, text="<rss/>")
+        caplog.set_level(logging.INFO)
+        fetcher = HttpFeedFetcher()
+        try:
+            await fetcher.fetch(PLAIN_FEED)
+        finally:
+            await fetcher.aclose()
+
+        assert f"GET {PLAIN_FEED}" in logged(caplog)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_a_key_sent_as_params_is_masked_too(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """TMDB 的 v3 key 走 `params={"api_key": ...}`：網址是 httpx 拼出來的，呼叫端看不到。"""
+        respx.get("https://api.themoviedb.org/3/configuration").respond(200, json={})
+        caplog.set_level(logging.INFO)
+        async with HttpSession("https://api.themoviedb.org/3") as session:
+            await session.request("GET", "/configuration", params={"api_key": TOKEN})
+
+        text = logged(caplog)
+        assert TOKEN not in text
+        assert "api_key=***" in text
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_the_error_that_reaches_last_error_carries_no_token(self) -> None:
+        """抓不到 Feed 時錯誤的原文寫進 `rss_feeds.last_error`，畫面與 API 都讀它。"""
+        respx.get(MIKAN_FEED).mock(side_effect=httpx.ConnectError("refused"))
+        fetcher = HttpFeedFetcher()
+        try:
+            with pytest.raises(ServiceUnavailableError) as caught:
+                await fetcher.fetch(MIKAN_FEED)
+        finally:
+            await fetcher.aclose()
+
+        assert TOKEN not in str(caught.value)
+        assert "https://mikanani.me/RSS/MyBangumi?token=***" in str(caught.value)
+
+    def test_extras_and_tracebacks_are_masked(self) -> None:
+        """`extra={"url": ...}` 與 traceback 也是那一行的一部分。"""
+        try:
+            raise ValueError(f"could not read {MIKAN_FEED}")
+        except ValueError:
+            failure = logging.getLogger("berth.test").makeRecord(
+                "berth.test",
+                logging.ERROR,
+                __file__,
+                1,
+                "boom",
+                (),
+                sys.exc_info(),
+                extra={"url": MIKAN_FEED, "plain": PLAIN_FEED},
+            )
+
+        line = json.loads(json_line(failure))
+
+        assert TOKEN not in json.dumps(line)
+        assert line["url"] == "https://mikanani.me/RSS/MyBangumi?token=***"
+        assert line["plain"] == PLAIN_FEED
+
+    def test_the_uvicorn_access_log_is_masked(self) -> None:
+        """uvicorn 的 access log 走它自己的 handler（`propagate=False`），JSON 那一層管不到。"""
+        access = logging.getLogger("uvicorn.access")
+        root = logging.getLogger()
+        before = (list(root.handlers), list(access.filters))
+        try:
+            configure_logging()
+            entry = access.makeRecord(
+                "uvicorn.access",
+                logging.INFO,
+                __file__,
+                1,
+                '%s - "%s %s HTTP/%s" %d',
+                ("127.0.0.1:5000", "GET", f"/api/rss/series?token={TOKEN}", "1.1", 200),
+                None,
+            )
+            access.filter(entry)
+
+            assert TOKEN not in entry.getMessage()
+            assert "/api/rss/series?token=***" in entry.getMessage()
+            # uvicorn 的 access formatter 把 `args` 拆成五格來用，整句換掉的話它就拆不開。
+            assert isinstance(entry.args, tuple)
+            assert len(entry.args) == 5
+
+            plain = access.makeRecord(
+                "uvicorn.access",
+                logging.INFO,
+                __file__,
+                1,
+                '%s - "%s %s HTTP/%s" %d',
+                ("127.0.0.1:5000", "GET", "/api/health", "1.1", 200),
+                None,
+            )
+            access.filter(plain)
+            assert '"GET /api/health HTTP/1.1" 200' in plain.getMessage()
+        finally:
+            root.handlers, access.filters = before
+
+    def test_a_placeholder_after_a_question_mark_still_formats(self) -> None:
+        """`?a=` 在格式字串、值在 `args` 裡：先遮格式字串的話占位符變成 `***`、參數數量對不上，
+        整行不見；只遮 `args` 的話認不出那一格是網址的值。"""
+        error = logging.getLogger("uvicorn.error")
+        root = logging.getLogger()
+        before = (list(root.handlers), list(error.filters))
+        try:
+            configure_logging()
+            entry = error.makeRecord(
+                "uvicorn.error",
+                logging.INFO,
+                __file__,
+                1,
+                "GET /x?a=%s&b=%d",
+                (TOKEN, 3),
+                None,
+            )
+            error.filter(entry)
+
+            assert entry.getMessage() == "GET /x?a=***&b=***"
+        finally:
+            root.handlers, error.filters = before
+
+    def test_a_traceback_printed_by_uvicorn_is_masked(self) -> None:
+        """ASGI 未處理的例外由 `uvicorn.error` 印 traceback，走的是 uvicorn 自己的 formatter。"""
+        error = logging.getLogger("uvicorn.error")
+        root = logging.getLogger()
+        before = (list(root.handlers), list(error.filters))
+        try:
+            configure_logging()
+            try:
+                raise ValueError(f"could not read {MIKAN_FEED}")
+            except ValueError:
+                entry = error.makeRecord(
+                    "uvicorn.error",
+                    logging.ERROR,
+                    __file__,
+                    1,
+                    "Exception in ASGI application",
+                    (),
+                    sys.exc_info(),
+                )
+            error.filter(entry)
+            printed = logging.Formatter().format(entry)
+
+            assert TOKEN not in printed
+            assert "MyBangumi?token=***" in printed
+        finally:
+            root.handlers, error.filters = before
+
+    def test_every_service_error_is_masked_at_construction(self) -> None:
+        """`.torrent` 下載連結、`json_body` 的 `request.url` 都是直接拼進訊息的：遮在建構子，
+        誰拼的都一樣。"""
+        download = f"http://prowlarr:9696/1/download?apikey={TOKEN}&link=abc"
+
+        assert str(ProtocolMismatchError(f"{download}: response is not JSON")) == (
+            "http://prowlarr:9696/1/download?apikey=***&link=***: response is not JSON"
+        )
+
+    def test_prowlarr_reasons_are_masked_too(self) -> None:
+        """逐條理由不經過 `args`，寫進畫面與資料庫的是它（`services/indexer.py`）。"""
+        rejected = IndexerRejectedError(
+            "rejected", messages=(f"Unable to connect to {MIKAN_FEED}", "no results")
+        )
+
+        assert rejected.messages == (
+            "Unable to connect to https://mikanani.me/RSS/MyBangumi?token=***",
+            "no results",
+        )

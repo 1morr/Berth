@@ -9,7 +9,9 @@ Everything Berth knows is in `${CONFIG_ROOT}/berth/berth.db`: the services' API 
 download history, review and issue state, and the *ledger* (the record of which library file came from which
 download). Secrets are protected by file permissions only, with no application-level encryption (the same as
 Seerr). Berth never stores your Jellyfin password in plain text; see
-[Accounts and passwords](setup-wizard.md#accounts-and-passwords).
+[Accounts and passwords](setup-wizard.md#accounts-and-passwords). Berth's logs, and the errors it reports when
+a service or feed cannot be reached, show URLs with every query value replaced by `***` (for example a Mikan
+feed's `token=***`), so a log you paste somewhere does not carry your feed token or API keys.
 
 **To back up Berth, copy `${CONFIG_ROOT}/berth`.** Back up the other folders under `CONFIG_ROOT` (`jellyfin`,
 `qbittorrent`, `prowlarr`) if you want those services' settings too. Your media is in `DATA_ROOT` and is not part

@@ -601,7 +601,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 - **外部呼叫**：統一逾時、重試與退避；服務不可達時 Job 停在當前狀態並記事件，不判定失敗；健康檢查頁顯示每個服務最後成功時間。
 - **資料庫**：SQLite WAL；schema migration 從 M0 就用（Alembic）；備份就是複製 `/config`；提供「從磁碟 inode 掃描重建帳本」的災難復原指令（§7.9）。
 - **秘密**：API key 存在 DB，靠檔案權限保護，不做應用層加密（與 Seerr 相同），`docs/guide/backup-and-reinstall.md` 註明。
-- **日誌**：結構化，每行帶 job id；Event 是使用者可見層，log 是維運層，兩者不互相取代。
+- **日誌**：結構化，每行帶 job id；Event 是使用者可見層，log 是維運層，兩者不互相取代。網址的 query 值在 log（含 uvicorn 自己印的兩個 logger）與 `ServiceError` 的訊息（含 Prowlarr 的逐條理由）裡遮成 `***`，不認參數名（M4 票 76：httpx 的 INFO log 印過 Mikan 的個人 token）；守它的是 `tests/unit/test_logs.py` 與 `test_redact.py`。不是 `ServiceError` 的例外原文（Job、Feed 整輪失敗時寫的 `型別: 原文`）不遮：httpx 的例外都在 adapter 裡翻成 `ServiceError`，目前沒有帶網址的例外走到那裡。
 - **安全**：所有 API 需登入；未來 AI / MCP 用個人 API token；容器非 root；不開 CORS 萬用字元。
 - **測試**：解析 benchmark（純函式，CI 必跑）；管線整合測試用假的 qBittorrent / Jellyfin / TMDB adapter；docker compose 端到端至少覆蓋 M1 驗收流程。
 - **i18n**：zh-Hant 與 en 並列，字串集中管理、一律走 key；檔名 token 與 log 一律英文。2026-09-07 改：原本是「UI 繁體中文優先，不做英文版直到有需求」，因確定面向英語自架者而推翻，見 `PRODUCT.md` 的 `## Users`。
