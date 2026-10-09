@@ -213,8 +213,10 @@ class TestRefusals:
         assert refused.status_code == 404
         assert refused.json()["detail"]["reason"] == "series_missing"
 
-    def test_binding_without_backfill(self, client: TestClient, roots: dict[str, Path]) -> None:
-        """`backfill: false`（票 12）：只送聚合 feed 帶到的兩集；替身上沒有單一 feed 也照樣綁。"""
+    def test_binding_when_the_single_feed_cannot_be_read(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """補舊集讀不到單一 feed（替身上沒有）不擋綁定：只送聚合 feed 帶到的兩集（票 12）。"""
         route_id = seed(client, roots)
         sign_in(client)
         feed = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER).json()
@@ -225,7 +227,7 @@ class TestRefusals:
 
         bound = client.put(
             f"/api/rss/series/{pending['id']}/binding",
-            json={"media": KIMI_ID, "route": route_id, "backfill": False},
+            json={"media": KIMI_ID, "route": route_id},
             headers=BROWSER,
         )
 

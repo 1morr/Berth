@@ -33,8 +33,8 @@ Job 已經在了、或另一筆已經送過）→ 帳本已有同 Media / 季 / 
 （`/RSS/Bangumi?bangumiId=&subgroupid=`，整季都在），預設全部補下載；之後滿一天、輪到它所在的
 聚合 Feed 時再讀一次（`_backfill_due`），接住停機期間被聚合 feed 捲掉的集數。補下來的**寫成那個
 聚合 Feed 的 Item**：`(feed_id, guid)` 去重（Mikan 的 guid 是 info hash，聚合 feed 之後帶到同一集
-認得出見過）、同樣看三層排除條件、同樣由 `_submit_waiting` 送出——不另開一條送單的路。人工綁定時
-取消勾選，記在 RSS Series 的 `passed_before`：補舊集與補漏讀到的、在那之前發佈的記成 `passed`。
+認得出見過）、同樣看三層排除條件、同樣由 `_submit_waiting` 送出——不另開一條送單的路。綁定一律
+補，沒有不補的選項（brief §15、M4 票 78）。
 """
 
 from __future__ import annotations
@@ -722,8 +722,7 @@ async def _record(
     **不打網路**（plan §3.3）：RSS Series 的鍵由呼叫的一方先問好（`_series_keys`）。`keys` 裡沒有的
     那一筆（單集頁抓不到、改版了）**不寫**：寫了就是見過，下一輪不會再試。
 
-    `known` 是補舊集讀的單一 feed：每一筆都屬於那一個 RSS Series，沒有鍵要認；取消勾選補舊集之前
-    發佈的記成 `passed`（`passed_before`）。
+    `known` 是補舊集讀的單一 feed：每一筆都屬於那一個 RSS Series，沒有鍵要認。
     """
     items = 0
     grown: list[int] = []
@@ -751,7 +750,7 @@ async def _record(
                 published_at=item.published_at,
                 seen_at=moment,
                 series_id=series.id,
-                status=_arriving(series, skip, item.published_at if known else None),
+                status=_arriving(series, skip),
                 skip_json=_dump(skip),
             )
         )
@@ -760,18 +759,12 @@ async def _record(
     return items, grown
 
 
-def _arriving(
-    series: RssSeries, skip: SkipReason | None, backfilled: datetime | None = None
-) -> FeedItemStatus:
-    """剛寫下的那一筆從哪一個狀態起步。`backfilled` 是補舊集讀到的那一筆的發佈時間。"""
+def _arriving(series: RssSeries, skip: SkipReason | None) -> FeedItemStatus:
+    """剛寫下的那一筆從哪一個狀態起步。"""
     if skip is not None:
         return FeedItemStatus.EXCLUDED
     if series.media_id is None:
         return FeedItemStatus.UNBOUND
-    if backfilled is not None and series.passed_before is not None:
-        return (
-            FeedItemStatus.PASSED if backfilled < series.passed_before else FeedItemStatus.MATCHED
-        )
     return FeedItemStatus.MATCHED
 
 
@@ -1619,7 +1612,6 @@ async def bind_series(
     media_id: str,
     route_id: int,
     user_id: int | None,
-    backfill: bool = True,
     now: datetime | None = None,
 ) -> SeriesView:
     """把一個 RSS Series 綁到作品與 Route，凍結資料夾名，然後把它留著的 Item 送出去。
@@ -1628,9 +1620,8 @@ async def bind_series(
     停用與收錯種類是「綁錯了」，當場拒絕、什麼都不改。
 
     **Mikan 的 RSS Series 同時補舊集**（票 12）：讀單一 feed，聚合 feed 沒帶到的那幾集寫成 Item
-    一起送（`backfill`，預設是；帳本已有、已有 Job 的由送單前的去重跳過）。讀不到不擋綁定，
-    `backfilled_at` 留空、下一輪輪詢再補。取消勾選記在 `passed_before`：那一刻之前發佈的舊集之後
-    不論在哪一個 Feed 補到都記成 `passed`。勾著重綁時，當初略過的那幾筆放回來一起送。
+    一起送（一律補，M4 票 78；帳本已有、已有 Job 的由送單前的去重跳過）。讀不到不擋綁定，
+    `backfilled_at` 留空、下一輪輪詢再補。
 
     反向命令 `unbind_series` 不收回已經送出去的 Job（同一般送單）。
     """
@@ -1649,8 +1640,6 @@ async def bind_series(
     series.media_id = media.id
     series.route_id = route.id
     series.bound_by = actor_of(user_id)
-    # 沒有 Feed 可補（刪掉了）也記下：之後有 Feed 帶到它時，補漏照這個決定走。
-    series.passed_before = None if backfill or series.mikan_bangumi_id is None else moment
     freeze(media, route)
     waiting = await session.scalars(
         select(RssItem).where(
@@ -1659,18 +1648,8 @@ async def bind_series(
     )
     for item in waiting:
         item.status = FeedItemStatus.MATCHED
-    if home is not None:
-        if backfill:
-            # 上一次取消勾選略過的：這一次要整季。排除條件由下面的 `_rescreen` 照現在的規則再看。
-            passed = await session.scalars(
-                select(RssItem).where(
-                    RssItem.series_id == series.id, RssItem.status == FeedItemStatus.PASSED
-                )
-            )
-            for item in passed:
-                item.status = FeedItemStatus.MATCHED
-        if isinstance(season, mikan.SingleFeed):
-            await _backfill(session, home, series, season, moment)
+    if home is not None and isinstance(season, mikan.SingleFeed):
+        await _backfill(session, home, series, season, moment)
     await session.commit()
     await _rescreen(session, RssItem.series_id == series_id)
     logger.info("rss series bound", extra={"series": series_id, "media": media_id})
@@ -1931,7 +1910,6 @@ async def subscribe_mikan(
     user_id: int | None,
     name: str = "",
     subgroup_name: str = "",
-    backfill: bool = True,
     now: datetime | None = None,
 ) -> Subscription:
     """從 Media 頁訂閱一個 Mikan 番組 × 字幕組（brief §15「從 Media 頁訂閱」、票 19）。
@@ -1941,8 +1919,7 @@ async def subscribe_mikan(
 
     建它的單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）、當場長出那一個 RSS Series 並走
     `bind_series` 綁上，讀到的整季寫成這個 Feed 的 Item 送出。**鍵從網址就知道**：單一 feed 只有一個
-    RSS Series，不必一筆一筆抓單集頁。補舊集照票 12：預設全補；`backfill = False` 時綁定之前發佈的
-    記成 `passed`（照 `passed_before`，與補舊集讀到的同一條規則）。
+    RSS Series，不必一筆一筆抓單集頁。整季一律補（票 12、M4 票 78）。
 
     **那個 RSS Series 已經在待綁定**（聚合 feed 帶過）時就地綁它，不多開一條 Feed：補舊集由
     `bind_series` 寫進它原本的 Feed。已經綁了是 `series_bound`。人在場，所以**讀不到單一 feed 就當場
@@ -1966,7 +1943,6 @@ async def subscribe_mikan(
             media_id=media_id,
             route_id=route_id,
             user_id=user_id,
-            backfill=backfill,
             now=moment,
         )
         await _remember_names(session, series.id, "", subgroup_name)
@@ -2011,7 +1987,6 @@ async def subscribe_mikan(
                 media_id=media_id,
                 route_id=route_id,
                 user_id=user_id,
-                backfill=backfill,
                 now=moment,
             )
         except RssRejectedError:

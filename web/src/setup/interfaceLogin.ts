@@ -174,8 +174,9 @@ export interface InterfaceLoginForm {
 /**
  * @param service 哪一個服務的登入：照它的規則擋（`LOGIN_RULES`）。
  * @param current 那一台的帳號（Berth 設下的，或它自己就設過的），空字串是還沒設過。
- * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）。
- * @param alwaysOpen 設定頁：那一區本來就是「更新登入」，沒有收起來的狀態。
+ * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）。設定頁傳空字串：
+ *   那裡沒有沿用，帳號只預填目前那一個（M4 票 78）。
+ * @param alwaysOpen 設定頁：那一區本來就是改帳密的表單，沒有收起來的狀態。
  * @param reuse 一開始勾不勾沿用（預設勾）。
  */
 export function useInterfaceLogin({

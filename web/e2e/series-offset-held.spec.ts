@@ -27,7 +27,7 @@ test('連載中的 split-cour：整批擋在審核 → 改一列套用到 RSS Se
   const row = pending.getByRole('article', { name: /与你相恋到生命尽头/ })
   await row.getByRole('button', { name: /選《與妳相戀到生命盡頭》/ }).click()
   await row.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  await row.getByRole('button', { name: '綁定、送出 2 集並補舊集' }).click()
+  await row.getByRole('button', { name: '綁定並送出' }).click()
   await expect(page.getByText('綁好了，送出 12 集。')).toBeAttached()
 
   // 12 份計劃都規劃完、都停在「要你決定」，理由是播出日對不上；一集都沒入庫。

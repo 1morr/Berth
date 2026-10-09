@@ -146,17 +146,27 @@ describe('設定 → Jellyfin', () => {
     expect(screen.queryByRole('link', { name: /前往設定/ })).not.toBeInTheDocument()
   })
 
-  it('套件內的 Jellyfin：來源鎖住、沒有位址表單——位址是 compose 決定的（M4 票 15）', async () => {
+  it('套件內的 Jellyfin：一張唯讀摘要，沒有二選一、沒有位址表單（M4 票 78）', async () => {
     render()
     renderApp('/settings/jellyfin')
 
-    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
-    // 選擇讀回來之前那一塊說「檢查中」。
-    expect(await connection.findByRole('radio', { name: /^套件內/ })).toBeChecked()
-    // 擁有者是那一台上的帳號：另一格點不下去，旁邊說出為什麼。
-    expect(connection.getByRole('radio', { name: /^既有/ })).toBeDisabled()
-    expect(connection.getByText(/擁有者是這一台 Jellyfin 上的帳號/)).toBeInTheDocument()
-    expect(connection.getByText('連上了')).toBeInTheDocument()
+    const connection = within(await screen.findByRole('region', { name: '連線' }))
+    // 來源、位址、版本、狀態四列；選不了的卡片不畫。
+    const summary = within((await connection.findByText('來源')).closest('dl')!)
+    expect(summary.getAllByRole('term').map((term) => term.textContent)).toEqual([
+      '來源',
+      '位址',
+      '版本',
+      '狀態',
+    ])
+    expect(summary.getByText('套件內')).toBeInTheDocument()
+    expect(summary.getByText('jellyfin:8096')).toBeInTheDocument()
+    expect(summary.getByText('12.1.0')).toBeInTheDocument()
+    expect(summary.getByText('連上了')).toBeInTheDocument()
+    expect(connection.queryByRole('radio')).not.toBeInTheDocument()
+    // 說得出為什麼換不了；精靈頁首那句給開發者看的說明不在了。
+    expect(connection.getByText(/所以不能換成另一台。它是套件內的/)).toBeInTheDocument()
+    expect(screen.queryByText(/與設定精靈那一頁的頁首是同一塊/)).not.toBeInTheDocument()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
     expect(connection.queryByRole('button', { name: '改位址' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新登入' })).not.toBeInTheDocument()
@@ -171,10 +181,11 @@ describe('設定 → Jellyfin', () => {
     const user = userEvent.setup()
     renderApp('/settings/jellyfin')
 
-    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
-    // 來源鎖住，位址照樣改得了。
-    expect(await connection.findByRole('radio', { name: /^既有/ })).toBeChecked()
-    expect(connection.getByRole('radio', { name: /^套件內/ })).toBeDisabled()
+    const connection = within(await screen.findByRole('region', { name: '連線' }))
+    // 來源換不了，位址照樣改得了：摘要說既有，表單要按了才打開。
+    expect(await connection.findByText('既有')).toBeInTheDocument()
+    expect(connection.getByText(/同一台搬了位址，在這裡改/)).toBeInTheDocument()
+    expect(connection.queryByRole('radio')).not.toBeInTheDocument()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
     await user.click(connection.getByRole('button', { name: '改位址' }))
 
@@ -197,9 +208,10 @@ describe('設定 → Jellyfin', () => {
       username: '',
       password: '',
     })
-    // 存完表單收起來，測試那一條說的是新的那一台。
+    // 存完表單收起來，摘要說的是新的那一台，焦點回到「改位址」。
     expect(await connection.findByText('192.168.1.20:8096')).toBeVisible()
     expect(connection.queryByLabelText('位址')).not.toBeInTheDocument()
+    await waitFor(() => expect(connection.getByRole('button', { name: '改位址' })).toHaveFocus())
   })
 
   it('套件內那一台的 key 被撤了（M4 票 18）：出現重新登入，換到 key 之後重測連線', async () => {
@@ -240,7 +252,7 @@ describe('設定 → Jellyfin', () => {
     const user = userEvent.setup()
     renderApp('/settings/jellyfin')
 
-    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    const connection = within(await screen.findByRole('region', { name: '連線' }))
     await user.click(await connection.findByRole('button', { name: '改位址' }))
     const address = connection.getByLabelText('位址')
     await user.clear(address)
@@ -261,7 +273,7 @@ describe('設定 → Jellyfin', () => {
     const user = userEvent.setup()
     renderApp('/settings/jellyfin')
 
-    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    const connection = within(await screen.findByRole('region', { name: '連線' }))
     expect(await connection.findByText('沒通過')).toBeInTheDocument()
     await user.click(connection.getByRole('button', { name: '重新測試' }))
 
@@ -269,6 +281,31 @@ describe('設定 → Jellyfin', () => {
     const call = stub.mock.calls.find(([url]) => url === '/api/setup/services/jellyfin/test')!
     expect(JSON.parse(String(call[1]?.body))).toEqual({ restart: true })
     expect(connection.queryByRole('button', { name: '重新測試' })).not.toBeInTheDocument()
+  })
+
+  it('套件內那一台還在啟動：摘要說等了多久，設定頁照精靈每 3 秒自己重測到連上（M4 票 78）', async () => {
+    const starting = setupStatus({
+      completed: true,
+      owner: 'skipper',
+      window_seconds: 120,
+      services: [chosen({ state: 'waiting', reason: 'starting', detail: '', waited_seconds: 9 })],
+    })
+    const stub = render({
+      [STATUS]: { body: starting },
+      [RETEST]: { body: setupStatus({ completed: true, owner: 'skipper', services: [chosen()] }) },
+      [TEST]: { body: healthDetail() },
+    })
+    renderApp('/settings/jellyfin')
+
+    const connection = within(await screen.findByRole('region', { name: '連線' }))
+    expect(await connection.findByText('9 / 120 秒')).toBeInTheDocument()
+    expect(connection.getByText(/每 3 秒再測一次/)).toBeInTheDocument()
+
+    // 沒人按：自己重測一次（不重算時窗），連上了倒數就收起來。
+    expect(await connection.findByText('連上了', {}, { timeout: 5000 })).toBeInTheDocument()
+    const call = stub.mock.calls.find(([url]) => url === '/api/setup/services/jellyfin/test')!
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ restart: false })
+    expect(connection.queryByText('9 / 120 秒')).not.toBeInTheDocument()
   })
 
   it('既有的 Jellyfin 可以重新登入換一把 API key', async () => {

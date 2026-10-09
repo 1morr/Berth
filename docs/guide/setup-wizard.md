@@ -66,7 +66,8 @@ logins it keeps the username and a salted scrypt hash of the password (when you 
 is a hash of your Jellyfin password), only to tell whether a login is already set. The services' API keys are
 stored as they are; see [Backup, secrets and reinstalling](backup-and-reinstall.md). If a service already has a
 login (you reinstalled and kept its config), the wizard does not make you set it again. Change them later under
-**Settings → qBittorrent / Prowlarr → Interface login**.
+**Settings → qBittorrent / Prowlarr → Interface login**: a plain change-login form (username, new password
+twice, **Save**). Reusing the Jellyfin login is only offered in the wizard.
 
 ## What Berth changes in your services
 

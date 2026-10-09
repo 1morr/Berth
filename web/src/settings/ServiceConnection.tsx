@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -13,15 +14,18 @@ import {
 import { RequestFailed } from '../components/RequestFailed'
 import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
+import { WAITING_RETEST_MS } from '../setup/signals'
+import { JellyfinConnection } from './JellyfinConnection'
 import { SettingsSection } from './SettingsFrame'
 
 /**
- * 一個服務的來源、位址與憑證（票 06i）。**就是精靈服務頁的頁首**（`ServiceChoice`，M4 票 15）：
- * 二選一、測試那一條、既有服務的表單都是同一個元件，送的也是同一支 `POST /setup/services/{kind}`——
- * 精靈跑完之後那一組端點只有 admin 打得到（`api/gate.py`），命令本來就冪等。
+ * 一個服務的來源、位址與憑證（票 06i）。qBittorrent 與 Prowlarr **就是精靈服務頁的頁首**（`ServiceChoice`，
+ * M4 票 15）：二選一、測試那一條、既有服務的表單都是同一個元件，送的也是同一支
+ * `POST /setup/services/{kind}`——精靈跑完之後那一組端點只有 admin 打得到（`api/gate.py`），命令本來就冪等。
  *
- * Jellyfin 的來源鎖住（擁有者是那一台上的帳號），位址照樣改得了。存完或使用者按的重新測試之後頁面
- * 重測健康、重讀那一頁自己的資料（`onConnected`，M4 票 39：Prowlarr 的站那一區看的是測試寫下的結果）。
+ * Jellyfin 的來源換不了（擁有者是那一台上的帳號），畫的是唯讀摘要（`JellyfinConnection`，M4 票 78），
+ * 既有的那一台位址照樣改得了。存完或使用者按的重新測試之後頁面重測健康、重讀那一頁自己的資料
+ * （`onConnected`，M4 票 39：Prowlarr 的站那一區看的是測試寫下的結果）。
  */
 export function ServiceConnection({
   kind,
@@ -60,11 +64,30 @@ export function ServiceConnection({
     },
   })
 
+  // 套件內那一台還在啟動：照精靈每 3 秒重測一次（不重算時窗），直到有結論或後端判逾時（M4 票 78：
+  // 這之前設定頁只畫一個不會動的倒數，配一句「每 3 秒再測一次」）。
+  const waiting = status.data?.services.find((row) => row.kind === kind)?.state === 'waiting'
+  const { mutate: retestNow, isPending: retesting } = retest
+  useEffect(() => {
+    if (!waiting || retesting || choose.isPending) return
+    const timer = window.setTimeout(() => retestNow(false), WAITING_RETEST_MS)
+    return () => window.clearTimeout(timer)
+  }, [waiting, retesting, choose.isPending, retestNow])
+
+  const requestError =
+    choose.isError && !choiceRefusalOf(choose.error)
+      ? choose.error
+      : retest.isError
+        ? retest.error
+        : null
+
   return (
     <SettingsSection
       id={`connection-${kind}`}
-      title={t('settings.connection.title')}
-      lede={t('settings.connection.lede')}
+      title={t(
+        kind === 'jellyfin' ? 'settings.connection.jellyfin.title' : 'settings.connection.title',
+      )}
+      lede={kind === 'jellyfin' ? undefined : t('settings.connection.lede')}
     >
       {!status.data ? (
         status.isError ? (
@@ -72,6 +95,16 @@ export function ServiceConnection({
         ) : (
           <p className="text-sm text-ink-dim">{t('health.checking')}</p>
         )
+      ) : kind === 'jellyfin' ? (
+        <JellyfinConnection
+          status={status.data}
+          choosing={choose.isPending}
+          retesting={retest.isPending}
+          refusal={choiceRefusalOf(choose.error)}
+          requestError={requestError}
+          onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
+          onRetest={(restart) => retest.mutate(restart)}
+        />
       ) : (
         <ServiceChoice
           kind={kind}
@@ -80,18 +113,11 @@ export function ServiceConnection({
           choosing={choose.isPending}
           retesting={retest.isPending}
           refusal={choiceRefusalOf(choose.error)}
-          requestError={
-            choose.isError && !choiceRefusalOf(choose.error)
-              ? choose.error
-              : retest.isError
-                ? retest.error
-                : null
-          }
+          requestError={requestError}
           onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
           onRetest={(restart) => retest.mutate(restart)}
-          locked={kind === 'jellyfin' ? t('settings.connection.locked') : undefined}
-          // Jellyfin 的來源鎖著；另兩個換來源都會清掉那一頁的結果（`_start_over`），先確認。
-          switchWarning={kind === 'jellyfin' ? undefined : t(`choice.switchWarning.${kind}`)}
+          // 換來源會清掉那一頁的結果（`_start_over`），先確認。
+          switchWarning={t(`choice.switchWarning.${kind}`)}
         />
       )}
     </SettingsSection>

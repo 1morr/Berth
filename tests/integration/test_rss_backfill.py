@@ -28,9 +28,9 @@ from berth.domain import (
     Tags,
 )
 from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSeries
-from berth.services.rss import add_feed, bind_series, delete_feed, poll_feed, unbind_series
+from berth.services.rss import add_feed, bind_series, poll_feed
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_rss import FEED_URL, KIMI, KIMI_KEY, NOW, harbour, series_by_key
+from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, series_by_key
 from tests.integration.test_rss_auto_bind import moored
 from tests.integration.test_rss_screen import (
     SINGLE,
@@ -146,148 +146,10 @@ class TestBackfillOnBinding:
         series = await session.get(RssSeries, series_id)
         assert series is not None and series.backfilled_at == NOW
 
-    async def test_unchecking_sends_only_what_the_feed_carried(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """人工綁定時取消勾選：只送聚合 feed 帶到的那兩集，單一 feed 裡更舊的記成略過——
-        之後的每日補漏才不會把它們當成新的送出去。"""
-        media, route, factory, _, series_id = await subscribed(session, roots)
-
-        bound = await bind_series(
-            session,
-            factory,
-            series_id,
-            media_id=media.id,
-            route_id=route.id,
-            user_id=1,
-            backfill=False,
-            now=NOW,
-        )
-
-        assert bound.submitted == 2
-        assert await rss_jobs(session) == {item.info_hash for item in KIMI}
-        for item in OLDER:
-            assert (await item_of(session, item.info_hash)).status is FeedItemStatus.PASSED
-
-        # 隔天的補漏也不送它們。
-        await poll_feed(
-            session,
-            factory,
-            (await item_of(session, episode(1))).feed_id,
-            now=NOW + timedelta(days=1),
-        )
-        assert await rss_jobs(session) == {item.info_hash for item in KIMI}
-
-    async def test_unchecking_holds_even_when_the_single_feed_cannot_be_read(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """取消勾選是記在 RSS Series 上的決定（`passed_before`），不是那一刻讀到的那幾筆：讀不到
-        單一 feed 照樣綁，下一輪讀到的舊集記成略過。"""
-        media, route, factory, feed_id, series_id = await subscribed(session, roots)
-        page = factory.rss_.pages.pop(SINGLE_URL)
-
-        bound = await bind_series(
-            session,
-            factory,
-            series_id,
-            media_id=media.id,
-            route_id=route.id,
-            user_id=1,
-            backfill=False,
-            now=NOW,
-        )
-        factory.rss_.pages[SINGLE_URL] = page
-        await poll_feed(session, factory, feed_id, now=NOW + timedelta(minutes=15))
-
-        assert bound.submitted == 2
-        assert await rss_jobs(session) == {item.info_hash for item in KIMI}
-        for item in OLDER:
-            assert (await item_of(session, item.info_hash)).status is FeedItemStatus.PASSED
-
-    async def test_what_was_passed_stays_passed_in_another_feed(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """同一個 RSS Series 也在第二個 Mikan Feed 裡，而當初補舊集的那個 Feed 刪掉了（連它的 Item
-        一起）：之後在第二個 Feed 補漏，取消勾選的那幾集照樣不送。"""
-        media, route, factory, feed_id, series_id = await subscribed(session, roots)
-        await bind_series(
-            session,
-            factory,
-            series_id,
-            media_id=media.id,
-            route_id=route.id,
-            user_id=1,
-            backfill=False,
-            now=NOW,
-        )
-        second_url = FEED_URL + "&second=1"
-        factory.rss_.pages[second_url] = factory.rss_.pages[FEED_URL]
-        second = await add_feed(session, url=second_url, name="Mikan 2")
-        await poll_feed(session, factory, second.id, now=NOW)
-        await delete_feed(session, feed_id)
-
-        await poll_feed(session, factory, second.id, now=NOW + timedelta(days=1))
-
-        assert await rss_jobs(session) == {item.info_hash for item in KIMI}
-        rows = list(await session.scalars(select(RssItem).where(RssItem.feed_id == second.id)))
-        older = {item.info_hash for item in OLDER}
-        assert {row.status for row in rows if row.info_hash in older} == {FeedItemStatus.PASSED}
-
-    async def test_unchecking_without_a_feed_is_remembered_for_later(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """Feed 刪掉了、只剩待綁定的 RSS Series 時取消勾選綁定：之後重新加回 Feed，
-        補漏照那個決定走。"""
-        media, route, factory, feed_id, series_id = await subscribed(session, roots)
-        await delete_feed(session, feed_id)
-        await bind_series(
-            session,
-            factory,
-            series_id,
-            media_id=media.id,
-            route_id=route.id,
-            user_id=1,
-            backfill=False,
-            now=NOW,
-        )
-
-        again = await add_feed(session, url=FEED_URL, name="Mikan")
-        await poll_feed(session, factory, again.id, now=NOW + timedelta(hours=1))
-
-        assert await rss_jobs(session) == {item.info_hash for item in KIMI}
-        for item in OLDER:
-            assert (await item_of(session, item.info_hash)).status is FeedItemStatus.PASSED
-
-    async def test_binding_again_with_backfill_sends_what_was_passed(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        """取消勾選綁過、解除，再勾著綁一次：這一次要的是整季，當初略過的那幾集送出去。"""
-        media, route, factory, _, series_id = await subscribed(session, roots)
-        await bind_series(
-            session,
-            factory,
-            series_id,
-            media_id=media.id,
-            route_id=route.id,
-            user_id=1,
-            backfill=False,
-            now=NOW,
-        )
-        await unbind_series(session, series_id)
-
-        again = await bind_series(
-            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
-        )
-
-        assert again.submitted == 10
-        assert await rss_jobs(session) == {item.info_hash for item in SEASON}
-        series = await session.get(RssSeries, series_id)
-        assert series is not None and series.passed_before is None
-
     async def test_a_backfill_that_cannot_read_is_tried_next_round(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """勾選時讀不到單一 feed 不擋綁定（聚合 feed 的兩集照送），下一輪輪詢再補。"""
+        """讀不到單一 feed 不擋綁定（聚合 feed 的兩集照送），下一輪輪詢再補。"""
         media, route, factory, feed_id, series_id = await subscribed(session, roots)
         page = factory.rss_.pages.pop(SINGLE_URL)
 

@@ -17,9 +17,9 @@ test('詳情頁訂閱 Mikan 番組 × 字幕組，再建 acg.rip 搜尋 feed 看
   await block.getByRole('button', { name: '与你相恋到生命尽头' }).click()
   await block.getByRole('button', { name: /LoliHouse/ }).click()
   await block.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  await expect(block.getByRole('checkbox', { name: '同時補下載舊集' })).toBeChecked()
+  await expect(block.getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeVisible()
   await shot(page, '1-mikan-picked')
-  await block.getByRole('button', { name: '訂閱並補舊集' }).click()
+  await block.getByRole('button', { name: '訂閱並送出' }).click()
 
   await expect(block.getByText('已訂閱，送出 12 集。')).toBeVisible()
   await expect(block.getByText('MIKAN')).toBeVisible()

@@ -2231,7 +2231,7 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     expect(sent(stub, 'GET', '/api/rss/series?media=tv%3A120089')).toHaveLength(0)
   })
 
-  it('Mikan：以原文標題搜番組 → 選字幕組（綁過的鎖住）→ 訂閱並補舊集', async () => {
+  it('Mikan：以原文標題搜番組 → 選字幕組（綁過的鎖住）→ 訂閱並送出整季', async () => {
     const stub = render({
       [MIKAN_SEARCH]: { body: [{ id: 1234, title: '间谍过家家' }] },
       'GET /api/rss/mikan/bangumi/1234': { body: BANGUMI },
@@ -2249,11 +2249,14 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     expect(within(block).getByText('已經綁在另一部作品上（tv:999）')).toBeVisible()
     await userEvent.click(within(block).getByRole('button', { name: /LoliHouse/ }))
     // 兩條 Route、從沒送過單：要人選了才有確認鍵。
-    expect(within(block).queryByRole('button', { name: '訂閱並補舊集' })).not.toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: '訂閱並送出' })).not.toBeInTheDocument()
     await userEvent.selectOptions(within(block).getByRole('combobox'), '2')
     expect(within(block).getByText('SPY x FAMILY (2022) [tmdbid-120089]')).toBeVisible()
+    // 整季一律補（M4 票 78）：沒有勾選，說的是整季。
+    expect(within(block).queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(block).getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeVisible()
 
-    await userEvent.click(within(block).getByRole('button', { name: '訂閱並補舊集' }))
+    await userEvent.click(within(block).getByRole('button', { name: '訂閱並送出' }))
 
     await waitFor(() => expect(sent(stub, 'POST', '/api/rss/subscriptions/mikan')).toHaveLength(1))
     const [[, init]] = sent(stub, 'POST', '/api/rss/subscriptions/mikan')
@@ -2264,7 +2267,6 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       subgroup: 370,
       name: '间谍过家家 · LoliHouse',
       subgroup_name: 'LoliHouse',
-      backfill: true,
     })
     expect(await within(block).findByText('已訂閱，送出 12 集。')).toBeVisible()
   })

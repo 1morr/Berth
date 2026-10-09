@@ -169,4 +169,16 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await page.getByRole('textbox', { name: '密碼' }).fill(OWNER.password)
   await page.getByRole('button', { name: '登入' }).click()
   await expect(page).toHaveURL('/settings/jellyfin')
+
+  // 設定頁的連線是唯讀摘要（M4 票 78）：來源換不了，不畫二選一；既有的那一台可以改位址。
+  const connection = page.getByRole('main').getByRole('region', { name: '連線' })
+  await expect(connection.getByText('既有', { exact: true })).toBeVisible()
+  await expect(connection.getByRole('status')).toContainText('連上了')
+  await expect(connection.getByRole('radio')).toHaveCount(0)
+  await shot(page, '7-settings-jellyfin')
+  await connection.getByRole('button', { name: '改位址' }).click()
+  await expect(connection.getByRole('textbox', { name: '位址' })).toBeFocused()
+  await shot(page, '8-settings-jellyfin-address')
+  await connection.getByRole('button', { name: '取消' }).click()
+  await expect(connection.getByRole('button', { name: '改位址' })).toBeFocused()
 })

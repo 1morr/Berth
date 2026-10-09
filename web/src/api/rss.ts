@@ -201,9 +201,9 @@ export function pollFeed(id: number) {
   return apiPost<PollOutcome>(`/rss/feeds/${id}/poll`)
 }
 
-/** `backfill` 只對 Mikan 的 RSS Series 有作用（票 12）：讀單一 feed 補舊集；`false` 時舊集記成略過。 */
-export function bindSeries(id: number, media: string, route: number, backfill: boolean) {
-  return apiPut<RssSeries>(`/rss/series/${id}/binding`, { media, route, backfill })
+/** Mikan 的 RSS Series 綁定時一律讀單一 feed 補舊集（票 12、M4 票 78）。 */
+export function bindSeries(id: number, media: string, route: number) {
+  return apiPut<RssSeries>(`/rss/series/${id}/binding`, { media, route })
 }
 
 export function unbindSeries(id: number) {
@@ -223,7 +223,7 @@ export function saveSeriesExclusions(id: number, rules: string[]) {
   return apiPut<RssSeries>(`/rss/series/${id}/exclusions`, { rules })
 }
 
-/** 訂閱 Mikan 番組 × 字幕組並綁到這部作品（票 19）。`backfill` 同綁定（票 12）。 */
+/** 訂閱 Mikan 番組 × 字幕組並綁到這部作品（票 19），整季一起送（同綁定）。 */
 export function subscribeMikan(body: Schemas['MikanSubscriptionIn']) {
   return apiPost<Subscription>('/rss/subscriptions/mikan', body)
 }

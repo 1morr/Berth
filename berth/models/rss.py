@@ -102,10 +102,6 @@ class RssSeries(Base):
     #: 上一次讀 Mikan 單一 feed 補舊集或補漏的那一刻（票 12）。`None` 是還沒補過：綁好的 Mikan
     #: RSS Series 下一輪輪詢就補；之後滿一天再補一次（plan §3.2）。
     backfilled_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
-    #: 綁定時取消勾選補舊集的那一刻（票 12）：補舊集與補漏讀到的、在這之前發佈的記成 `passed`。
-    #: 決定記在這裡而不是那幾筆 Item 上——Item 跟著 Feed 刪掉，同一個 RSS Series 也可能在另一個 Feed
-    #: 裡被補。`None` 是要整季。
-    passed_before: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 

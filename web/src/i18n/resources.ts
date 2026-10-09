@@ -578,10 +578,13 @@ const zhHant = {
     },
     settings: {
       title: '介面登入',
-      current: '目前的帳號是 {{username}}。改了之後舊的那一組就不能再用。',
+      // 一般的改帳密表單（M4 票 78）：先說目前的帳號，三格，一顆「儲存」。
+      current: '目前的帳號：',
       none: '還沒有設過。設一組之後，打開這個服務的介面就用它登入。',
-      save: '更新登入',
-      saving: '更新中…',
+      newPassword: '新密碼',
+      save: '儲存',
+      saving: '儲存中…',
+      after: '改了之後舊的那一組就不能再用。',
       saved: '已更新。之後用 {{username}} 登入，舊的那一組不能再用。',
       refused: '沒有確認到新的登入生效。用新的那一組試登入一次，不行就再按一次。服務回的原文：',
       failed: '這一次請求沒有走完，登入沒有變。確認 Berth 後端還在跑，再按一次。',
@@ -2640,9 +2643,19 @@ const zhHant = {
     },
     connection: {
       title: '位址與憑證',
-      lede: '與設定精靈那一頁的頁首是同一塊：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
-      locked:
-        '擁有者是這一台 Jellyfin 上的帳號，所以來源換不了；同一台換了位址可以在這裡改，另一台伺服器會被擋下。',
+      lede: '換來源或位址：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
+      // Jellyfin 是唯讀摘要（M4 票 78）：來源換不了，只說現在接的是哪一台、還好嗎。
+      jellyfin: {
+        title: '連線',
+        source: '來源',
+        address: '位址',
+        version: '版本',
+        state: '狀態',
+        whyBundled:
+          'Berth 的擁有者與每個人的登入都是這一台 Jellyfin 上的帳號，所以不能換成另一台。它是套件內的，位址由 compose 固定。',
+        whyExisting:
+          'Berth 的擁有者與每個人的登入都是這一台 Jellyfin 上的帳號，所以不能換成另一台。同一台搬了位址，在這裡改；填到另一台會被擋下。',
+      },
     },
     jellyfinPage: {
       title: 'Jellyfin 設定',
@@ -2865,8 +2878,10 @@ const zhHant = {
       releases_other: '{{count}} 筆 · 最近 {{updated}}',
       boundHere: '已經訂閱在這部作品上',
       boundElsewhere: '已經綁在另一部作品上（{{id}}）',
-      confirm: '訂閱，只追之後的',
-      confirmBackfill: '訂閱並補舊集',
+      // 整季一律補（M4 票 78）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
+      season:
+        '訂閱之後讀這個字幕組在 Mikan 上的整季，一起送到 qBittorrent；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+      confirm: '訂閱並送出',
       subscribing: '訂閱中…',
       subscribed_one: '已訂閱，送出 {{count}} 集。',
       subscribed_other: '已訂閱，送出 {{count}} 集。',
@@ -2973,13 +2988,10 @@ const zhHant = {
       willSend_other: '綁定之後會送出 {{count}} 集到 qBittorrent。',
       confirm_one: '綁定並送出 {{count}} 集',
       confirm_other: '綁定並送出 {{count}} 集',
-      // Mikan 的 RSS Series（票 12）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
-      backfill: '同時補下載舊集',
-      backfillOn:
-        '讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
-      backfillOff: '只送 Feed 帶到的這幾集。更早的集數記成略過，之後每天的補漏也不會送它們。',
-      confirmBackfill_one: '綁定、送出 {{count}} 集並補舊集',
-      confirmBackfill_other: '綁定、送出 {{count}} 集並補舊集',
+      // Mikan 的 RSS Series 一律補舊集（票 12、M4 票 78）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
+      willSendSeason:
+        '綁定之後讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+      confirmSeason: '綁定並送出',
       binding: '綁定中…',
       kind: { tv: '劇集', movie: '電影' },
       done_one: '綁好了，送出 {{count}} 集。',
@@ -3800,10 +3812,12 @@ const en: Translations<typeof zhHant> = {
     },
     settings: {
       title: 'Interface login',
-      current: 'The username is {{username}}. Once you change it, the old login stops working.',
+      current: 'Current username:',
       none: 'Not set yet. Set one and use it whenever you open this service yourself.',
-      save: 'Update login',
-      saving: 'Updating…',
+      newPassword: 'New password',
+      save: 'Save',
+      saving: 'Saving…',
+      after: 'Once changed, the old login stops working.',
       saved: 'Updated. Sign in as {{username}} from now on; the old login no longer works.',
       refused:
         'Could not confirm the new login took. Try signing in with it; if that fails, press again. What the service said:',
@@ -5789,9 +5803,18 @@ const en: Translations<typeof zhHant> = {
     },
     connection: {
       title: 'Address and credentials',
-      lede: 'The same block as the top of that wizard page: submitting saves it, then really connects once. The card above checks again right after.',
-      locked:
-        'The owner is an account on this Jellyfin, so its source cannot change; if the same Jellyfin moved to a new address, change it here — another server is refused.',
+      lede: 'Changing the source or address saves it, then really connects once. The card above checks again right after.',
+      jellyfin: {
+        title: 'Connection',
+        source: 'Source',
+        address: 'Address',
+        version: 'Version',
+        state: 'Status',
+        whyBundled:
+          "Berth's owner and everyone's sign-in are accounts on this Jellyfin, so it can't be swapped for another server. It's the bundled one; compose fixes its address.",
+        whyExisting:
+          "Berth's owner and everyone's sign-in are accounts on this Jellyfin, so it can't be swapped for another server. If this same server moved, change its address here; another server is refused.",
+      },
     },
     jellyfinPage: {
       title: 'Jellyfin settings',
@@ -6021,8 +6044,9 @@ const en: Translations<typeof zhHant> = {
       releases_other: '{{count}} releases · latest {{updated}}',
       boundHere: 'Already subscribed for this title',
       boundElsewhere: 'Already bound to another title ({{id}})',
-      confirm: 'Subscribe, new episodes only',
-      confirmBackfill: 'Subscribe and fill in older episodes',
+      season:
+        "Subscribing reads this group's whole season on Mikan and sends it to qBittorrent; episodes already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+      confirm: 'Subscribe and send',
       subscribing: 'Subscribing…',
       subscribed_one: 'Subscribed; sent {{count}} episode.',
       subscribed_other: 'Subscribed; sent {{count}} episodes.',
@@ -6134,13 +6158,9 @@ const en: Translations<typeof zhHant> = {
       willSend_other: 'Binding sends {{count}} episodes to qBittorrent.',
       confirm_one: 'Bind and send {{count}} episode',
       confirm_other: 'Bind and send {{count}} episodes',
-      backfill: 'Also download earlier episodes',
-      backfillOn:
-        "Reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
-      backfillOff:
-        'Sends only the episodes the feed carried. Earlier ones are marked as passed, and the daily catch-up will not send them either.',
-      confirmBackfill_one: 'Bind, send {{count}} episode and catch up',
-      confirmBackfill_other: 'Bind, send {{count}} episodes and catch up',
+      willSendSeason:
+        "Binding reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+      confirmSeason: 'Bind and send',
       binding: 'Binding…',
       kind: { tv: 'Series', movie: 'Film' },
       done_one: 'Bound. {{count}} episode sent.',

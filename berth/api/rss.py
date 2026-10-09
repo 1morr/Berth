@@ -256,9 +256,6 @@ class BindingIn(BaseModel):
 
     media: str = Field(min_length=1)
     route: int
-    #: Mikan 的 RSS Series 同時補舊集（票 12）：讀單一 feed，聚合 feed 沒帶到的那幾集一起送。
-    #: `false` 時綁定之前發佈的舊集記成略過（之後的每日補漏也是）。
-    backfill: bool = True
 
 
 class SkipReasonOut(BaseModel):
@@ -527,7 +524,6 @@ async def put_binding(
             media_id=body.media,
             route_id=body.route,
             user_id=user.id if user is not None else None,
-            backfill=body.backfill,
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
@@ -608,8 +604,6 @@ class MikanSubscriptionIn(BaseModel):
     #: 挑的時候畫面從番組頁讀過的字幕組名（`GET /rss/mikan/bangumi/{id}`），記在 RSS Series 上給
     #: RSS 頁的來源那一格說（M4 票 13）。空的就不記。番組名由單一 feed 自己帶。
     subgroup_name: str = ""
-    #: 補舊集（票 12）：`false` 時綁定之前發佈的記成略過。
-    backfill: bool = True
 
 
 class SubscriptionOut(BaseModel):
@@ -693,7 +687,6 @@ async def post_mikan_subscription(
             user_id=user.id if user is not None else None,
             name=body.name,
             subgroup_name=body.subgroup_name,
-            backfill=body.backfill,
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
