@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-09
+
+**從 0.2.1 升級**：`docker-compose.yml` 與 `.env` 沒有變，`docker compose pull && docker compose up -d` 就好。
+image 是 `ghcr.io/1morr/berth:0.2.2`，同時是 `:0.2` 與 `:latest`。
+
+- **資料庫會自動升級一次**（下面〈Changed〉的 migration `d71e4b9a3c58`）：0.2.1 綁定 Mikan 時取消勾選「同時補下載
+  舊集」而略過的舊集，升級後會被補下載。
+- **建議到 Mikan 重新產生 RSS token**：0.2.1 以前的 `docker logs` 可能印過它（下面〈Security〉）。
+
 ### Security
 
 - **log 與錯誤訊息裡的網址不再帶 query 的值**（M4 票 76）：之前 httpx 的 INFO log 把每個對外請求的整條網址印進
