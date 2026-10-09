@@ -70,11 +70,11 @@ are pasted into Compose Manager and nothing is copied to the server:
 
 1. At the bottom of the **Docker** tab, **Add New Stack**, name it `berth`.
 2. From the stack's gear menu, **Edit Stack → Compose File**: paste the whole
-   [`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.2/deploy/docker-compose.yml) and
+   [`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.3/deploy/docker-compose.yml) and
    **Save Changes**. Paste all of it: qBittorrent's whitelist script is inside it (`qbittorrent-preseed`), and
    without that Berth cannot get into the bundled qBittorrent.
 3. **Edit Stack → ENV File**: paste
-   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.2/deploy/.env.example), change the values
+   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.3/deploy/.env.example), change the values
    below, **Save Changes**.
 4. **Compose Up**.
 

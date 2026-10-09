@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-10
+
+**從 0.2.2 升級**：`docker-compose.yml` 與 `.env` 沒有變，也沒有資料庫 migration，`docker compose pull && docker compose up -d`
+就好。image 是 `ghcr.io/1morr/berth:0.2.3`，同時是 `:0.2` 與 `:latest`。升級之後，升級前開著的搜尋結果頁要重新搜一次
+才能送單（下面〈Security〉：送單改用伺服器記下的 id）。
+
 ### Security
 
 - **搜尋結果不再把 Prowlarr 的 API key 交給瀏覽器**（M4 票 79）：之前搜尋結果的每一列帶著 Prowlarr 的代理下載

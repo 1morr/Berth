@@ -42,14 +42,14 @@ Berth 是公開 beta。依賴它之前先讀〈[現況](#現況)〉。
 
 ## 安裝
 
-1. 建一個放 Berth 的資料夾，放進兩個檔：[`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.2/deploy/docker-compose.yml)，以及存成 `.env` 的
-   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.2/deploy/.env.example)。旁邊不用放別的東西。兩個連結都是這一版的檔案，compose 才不會比
+1. 建一個放 Berth 的資料夾，放進兩個檔：[`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.3/deploy/docker-compose.yml)，以及存成 `.env` 的
+   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.3/deploy/.env.example)。旁邊不用放別的東西。兩個連結都是這一版的檔案，compose 才不會比
    image 新。Unraid 改成把這兩份貼進 Compose Manager：見 [Unraid](docs/guide/requirements.md#unraid)（英文）。
 
    ```bash
    mkdir berth && cd berth
-   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/1morr/Berth/v0.2.2/deploy/docker-compose.yml
-   curl -fsSLo .env https://raw.githubusercontent.com/1morr/Berth/v0.2.2/deploy/.env.example
+   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/1morr/Berth/v0.2.3/deploy/docker-compose.yml
+   curl -fsSLo .env https://raw.githubusercontent.com/1morr/Berth/v0.2.3/deploy/.env.example
    ```
 
 2. 改 `.env`：
