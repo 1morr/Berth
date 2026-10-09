@@ -88,7 +88,31 @@ $ sqlite3 /config/berth.db 'select name, last_error from rss_feeds'
 
 跑完 `docker compose down --volumes`、刪目錄與 image。
 
-這一輪在 code-review **之前**。code-review 改了 uvicorn 的 filter（見下），要重跑時電腦中斷、Docker Desktop 沒在跑；啟動它會連帶拉起 `berth-local`（`restart: unless-stopped`），所以沒啟動、沒重跑。修過的 filter 只有 `test_logs.py` 守（含 access log 遮完 `args` 仍是五格）。
+這一輪在 code-review **之前**。code-review 改了 uvicorn 的 filter（見下）；要重跑時電腦中斷、Docker Desktop 沒在跑，沒自己啟動（會連帶拉起 `berth-local`）。
+
+**code-review 之後重跑（2026-10-09，`495957a`）**：協調者啟動 Docker Desktop 之後，從這個 commit 重 build `berth:t76`，確認 image 裡的 `berth/logs.py` 是修過的 filter（`masked := redact_queries`），同一套隔離 compose。兩個 Feed：Mikan `?token=t76FAKEtoken0deadbeef`；連不上的 `http://127.0.0.1:9/RSS/MyBangumi?a=%s&token=t76FAKEerr0cafe`（格式字串進 `berth.services.rss` 的 extras 與 `last_error`）。另打五個請求：`/api/health?token=…`、`?a=%s&token=…`、`?a=%s&b=%d&token=…`、`?a=%25s%25d&token=…`、不帶 query 的 `/api/health`。
+
+```
+$ docker logs berth-t76 2>&1 | grep -c t76FAKE
+0
+$ docker logs berth-t76 2>&1 | grep -E "/api/health|mikanani|could not be fetched"
+INFO:     172.18.0.1:40936 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50340 - "GET /api/health?token=*** HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50346 - "GET /api/health?a=***&token=*** HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50350 - "GET /api/health?a=***&b=***&token=*** HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50364 - "GET /api/health?a=***&token=*** HTTP/1.1" 200 OK
+INFO:     172.18.0.1:50372 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43128 - "GET /api/health HTTP/1.1" 200 OK
+{"time": "2026-10-09T02:15:50.882+00:00", "level": "INFO", "logger": "httpx", "message": "HTTP Request: GET https://mikanani.me/RSS/MyBangumi?token=*** \"HTTP/1.1 200 OK\""}
+{"time": "2026-10-09T02:15:50.930+00:00", "level": "WARNING", "logger": "berth.services.rss", "message": "rss feed could not be fetched", "feed": 2, "error": "GET http://127.0.0.1:9/RSS/MyBangumi?a=***&token=***: connection refused"}
+$ docker logs berth-t76 2>&1 | grep -ciE "logging error|Traceback|not all arguments"
+0
+$ select name, last_error from rss_feeds
+('t76 fake', '')
+('t76 unreachable', 'GET http://127.0.0.1:9/RSS/MyBangumi?a=***&token=***: connection refused')
+```
+
+access log 帶 `%s`、`%d` 的四個請求都印出來了（uvicorn 的 access formatter 照樣拆得開 `args`），沒有 `Logging error`；不帶 query 的整條出現（第一行是等健康的迴圈、最後一行是容器的 healthcheck）。跑完 `docker compose down --volumes`、刪目錄與 image；`berth-local` 四個容器沒動。
 
 ### 票外發現（沒修，待使用者決定）
 
