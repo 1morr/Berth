@@ -63,6 +63,7 @@ const REASONS: ReasonSet<JobRefusal> = {
   route_disabled: true,
   route_unhealthy: true,
   source_unavailable: true,
+  source_expired: true,
   job_missing: true,
   not_retryable: true,
   not_replannable: true,

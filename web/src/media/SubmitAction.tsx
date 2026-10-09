@@ -52,17 +52,9 @@ export function SubmitAction({
       // 而使用者根本還沒選過。說不行的是上面那句話（票 02b：按鈕永遠按得下去）。
       if (route === null) throw new NoRouteError()
       return submitJob({
-        // `info_hash` 用它自己那一格，不是 `key`——`key` 是「這一列的身分」（info hash
-        // **或** guid），不報 hash 的站那一格是一條網址。
-        // 發佈時間跟著 Job 存下來，規劃時比播出日（M3 票 14）；那個站沒報是 null。
-        // 大小是磁碟門檻算在途量用的：qBittorrent 報得出之前只有它（M4 票 03）。
-        source: {
-          url: row.download_url,
-          title: row.title,
-          info_hash: row.info_hash,
-          published_at: row.published_at,
-          size: row.size,
-        },
+        // 只送 id（M4 票 79）：下載連結帶著 Prowlarr 的 API key，記在伺服器上；發佈名、hash、
+        // 發佈時間與大小也是它記的那一份。過期了後端說 `source_expired`。
+        source_id: row.source_id,
         media: media.id,
         route,
       })

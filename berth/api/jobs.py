@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from berth.api.deps import (
     ClientFactoryDep,
@@ -23,6 +23,7 @@ from berth.api.deps import (
     ImportHintsDep,
     PlanHintsDep,
     SessionDep,
+    SourceCacheDep,
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
@@ -31,7 +32,6 @@ from berth.services import deletion
 from berth.services.deletion import DeleteScope
 from berth.services.jobs import (
     JobRejectedError,
-    JobSource,
     JobView,
     actor_of,
     add_download,
@@ -58,6 +58,8 @@ _STATUS: dict[JobRefusal, int] = {
     JobRefusal.ROUTE_DISABLED: status.HTTP_409_CONFLICT,
     JobRefusal.ROUTE_UNHEALTHY: status.HTTP_409_CONFLICT,
     JobRefusal.SOURCE_UNAVAILABLE: status.HTTP_502_BAD_GATEWAY,
+    # 照 Sonarr 的 interactive search：快取裡找不到那一筆是 404「再搜一次」（M4 票 79）。
+    JobRefusal.SOURCE_EXPIRED: status.HTTP_404_NOT_FOUND,
     JobRefusal.JOB_MISSING: status.HTTP_404_NOT_FOUND,
     JobRefusal.NOT_RETRYABLE: status.HTTP_409_CONFLICT,
     # 已經在入庫的那一份計劃正被 importer 照著動檔案（票 12），重算會讓兩邊指向不同的地方。
@@ -97,9 +99,10 @@ def _refusals(*reasons: JobRefusal) -> dict[int | str, dict[str, Any]]:
     return refusal_responses(JobRefusalOut, {reason: _STATUS[reason] for reason in reasons})
 
 
-#: 送單：Route 的四種前提、作品不在、磁碟不夠、索引站給不出那一份 torrent、同一個 hash 刪除過
-#: 而紀錄還在（`services/jobs.add_download`）。
+#: 送單：來源 id 過期了（`services/sources.SourceCache`），Route 的四種前提、作品不在、磁碟不夠、
+#: 索引站給不出那一份 torrent、同一個 hash 刪除過而紀錄還在（`services/jobs.add_download`）。
 SUBMIT_RESPONSES = _refusals(
+    JobRefusal.SOURCE_EXPIRED,
     JobRefusal.MEDIA_MISSING,
     JobRefusal.ROUTE_MISSING,
     JobRefusal.ROUTE_KIND_MISMATCH,
@@ -147,31 +150,11 @@ DELETE_RESPONSES = _refusals(
 ESTIMATE_RESPONSES = _refusals(JobRefusal.JOB_MISSING)
 
 
-class JobSourceIn(BaseModel):
-    """結果表那一列帶過來的東西。
-
-    **不是一個結果 id**：搜尋結果不落地（票 08），所以送單時前端要把那一列本身送回來。
-    `url` 尤其如此——Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），只有使用者
-    眼前那一輪的那一條是有效的。
-    """
-
-    #: 索引站的下載連結（`.torrent` 或磁力）。
-    url: str = Field(min_length=1)
-    #: 發佈名，原樣。下載列表上認得出這一列的就是它。
-    title: str = Field(min_length=1)
-    #: 索引站報的 info hash。**可能沒有**（實測 ACG.RIP 不報）；有的話重複送單連下載
-    #: 都不必發，沒有的話 Berth 從那份 torrent 自己算。
-    info_hash: str = ""
-    #: 索引站報的發佈時間（`SearchResultOut.published_at`）。站沒報時是 `null`：規劃時照「來源沒給」
-    #: 跳過播出日比對（M3 票 14）。**要帶時區**：沒有時區就不知道是哪一天，存進去時也會炸。
-    published_at: AwareDatetime | None = None
-    #: 索引站報的大小，位元組（`SearchResultOut.size`）；不知道是 `null`。qBittorrent 報得出之前
-    #: 磁碟門檻拿它算在途量（M4 票 03）。
-    size: int | None = Field(default=None, ge=0)
-
-
 class JobCreateIn(BaseModel):
-    source: JobSourceIn
+    #: 結果表那一列的 `source_id`（`SearchResultOut.source_id`、`OneshotItemOut.source_id`）。
+    #: **不是網址**（M4 票 79）：下載連結帶著 Prowlarr 的 API key，記在伺服器上；發佈名、
+    #: info hash、發佈時間、大小也是那一份，不信瀏覽器送回來的。
+    source_id: str = Field(min_length=1)
     #: `tv:<tmdb>` / `movie:<tmdb>`。
     media: str = Field(min_length=1)
     #: 入庫到哪一條 Route。**這一次是承諾**（票 04b：搜尋時它只是偏好），所以是必填——
@@ -348,7 +331,11 @@ class JobEventOut(BaseModel):
 
 @router.post("", status_code=status.HTTP_200_OK, responses=SUBMIT_RESPONSES)
 async def post_job(
-    session: SessionDep, factory: ClientFactoryDep, request: Request, body: JobCreateIn
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    sources: SourceCacheDep,
+    request: Request,
+    body: JobCreateIn,
 ) -> JobCreatedOut:
     """送一個 torrent 進 qBittorrent（plan §3.1、§3.3）。
 
@@ -360,13 +347,7 @@ async def post_job(
         outcome = await add_download(
             session,
             factory,
-            source=JobSource(
-                url=body.source.url,
-                title=body.source.title,
-                info_hash=body.source.info_hash,
-                published_at=body.source.published_at,
-                size=body.source.size or 0,
-            ),
+            source=sources.recall(body.source_id),
             media_id=body.media,
             route_id=body.route,
             user_id=user.id if user is not None else None,

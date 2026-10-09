@@ -170,13 +170,8 @@ function Listing({
         let outcome: Outcome
         try {
           const created = await submitJob({
-            source: {
-              url: row.url,
-              title: row.title,
-              info_hash: row.info_hash,
-              published_at: row.published_at,
-              size: row.size,
-            },
+            // 與搜尋結果同一條路（M4 票 79）：送記下的那一筆的 id，不送網址。
+            source_id: row.source_id,
             media: media.id,
             route,
           })

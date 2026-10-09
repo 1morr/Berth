@@ -145,6 +145,8 @@ _Avoid_: hit, item, row
 
 **Search Result**:
 索引站回傳的一筆候選 torrent，附解析出的 Tags 與預估季集。也就是 Indexer Result 過了解析器之後的樣子。
+它的下載連結不出伺服器（帶著 Prowlarr 的 API key）：畫面拿到的是**來源 id**（`source_id`），送單只收它，
+Berth 記兩小時、重啟就忘（M4 票 79）。一次性 RSS 連結讀出來的每一筆也是。
 _Avoid_: release（僅指發佈名解析時可用）
 
 **Set Aside**（UI 顯示「收起來」）:

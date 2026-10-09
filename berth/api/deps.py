@@ -24,6 +24,7 @@ from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
 from berth.services.reconcile import ReconcileRunner
+from berth.services.sources import SourceCache
 
 
 def get_config(request: Request) -> Config:
@@ -83,6 +84,15 @@ def get_access_cache(request: Request) -> AccessCache:
     return cache
 
 
+def get_source_cache(request: Request) -> SourceCache:
+    """搜尋與一次性連結記下的送單來源（`create_app` 放進 `app.state`，M4 票 79）。
+
+    記的與換回的要是同一份：搜尋那一支記、`POST /jobs` 換。
+    """
+    sources: SourceCache = request.app.state.sources
+    return sources
+
+
 def get_reconciler(request: Request) -> ReconcileRunner:
     """對帳那一輪的擁有者（`main.py` 的 lifespan 放進 `app.state`）。
 
@@ -106,6 +116,7 @@ def get_client_factory(request: Request) -> ServiceClientFactory:
 SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 ClientFactoryDep = Annotated[ServiceClientFactory, Depends(get_client_factory)]
 AccessCacheDep = Annotated[AccessCache, Depends(get_access_cache)]
+SourceCacheDep = Annotated[SourceCache, Depends(get_source_cache)]
 EventHubDep = Annotated[EventHub, Depends(get_event_hub)]
 ImportHintsDep = Annotated[JobHints, Depends(get_import_hints)]
 PlanHintsDep = Annotated[JobHints, Depends(get_plan_hints)]

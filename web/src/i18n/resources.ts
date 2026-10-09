@@ -2484,6 +2484,8 @@ const zhHant = {
       route_disabled: '那條 Route 停用了。到設定裡把它打開，或改選另一條。',
       route_unhealthy: '那條 Route 現在是紅的，送出去也一定進不了庫。到健康頁看是哪一條纜繩斷了。',
       source_unavailable: '索引站給不出這一份 torrent。可能是連結過期了——重新搜一次再送。',
+      source_expired:
+        '這一筆過期了：Berth 只記得最近兩小時搜到、讀到的結果，重啟過也會忘記。重新搜一次（或重新讀一次那條 RSS）再送。',
       job_missing: '這一筆下載不在了。',
       not_retryable:
         '這一筆現在不能重試——只有送單失敗或入庫失敗的那些可以。重新整理看看它現在的狀態。',
@@ -5661,6 +5663,8 @@ const en: Translations<typeof zhHant> = {
         'That library route is red right now, so nothing sent to it would reach the library. The health page says which line came loose.',
       source_unavailable:
         'The indexer would not hand over this torrent. The link may have expired — search again and send the fresh one.',
+      source_expired:
+        'This result has expired: Berth only remembers what it found or read in the last two hours, and forgets it all on a restart. Search again (or read that RSS link again) and send the fresh one.',
       job_missing: 'That download is gone.',
       not_retryable:
         'This one cannot be retried — only the ones that failed to send or to import can. Reload to see where it stands now.',

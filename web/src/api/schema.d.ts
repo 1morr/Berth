@@ -3467,7 +3467,8 @@ export interface components {
         };
         /** JobCreateIn */
         JobCreateIn: {
-            source: components["schemas"]["JobSourceIn"];
+            /** Source Id */
+            source_id: string;
             /** Media */
             media: string;
             /** Route */
@@ -3643,7 +3644,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "source_expired" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -3670,29 +3671,6 @@ export interface components {
             state: components["schemas"]["JobState"];
             /** Progress */
             progress: number;
-        };
-        /**
-         * JobSourceIn
-         * @description 結果表那一列帶過來的東西。
-         *
-         *     **不是一個結果 id**：搜尋結果不落地（票 08），所以送單時前端要把那一列本身送回來。
-         *     `url` 尤其如此——Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），只有使用者
-         *     眼前那一輪的那一條是有效的。
-         */
-        JobSourceIn: {
-            /** Url */
-            url: string;
-            /** Title */
-            title: string;
-            /**
-             * Info Hash
-             * @default
-             */
-            info_hash?: string;
-            /** Published At */
-            published_at?: string | null;
-            /** Size */
-            size?: number | null;
         };
         /**
          * JobState
@@ -4033,10 +4011,8 @@ export interface components {
             title: string;
             /** Link */
             link: string;
-            /** Url */
-            url: string;
-            /** Info Hash */
-            info_hash: string;
+            /** Source Id */
+            source_id: string;
             /** Size */
             size: number | null;
             /** Published At */
@@ -4842,12 +4818,10 @@ export interface components {
             seeders: number | null;
             /** Info Url */
             info_url: string;
-            /** Download Url */
-            download_url: string;
+            /** Source Id */
+            source_id: string;
             /** Key */
             key: string;
-            /** Info Hash */
-            info_hash: string;
             tags: components["schemas"]["TagsOut"];
             /** Season */
             season: number | null;
@@ -6571,6 +6545,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobCreatedOut"];
+                };
+            };
+            /** @description `source_expired` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRefusalOut"];
                 };
             };
             /** @description `route_disabled` · `route_unhealthy` · `low_disk_space` · `job_removed` */

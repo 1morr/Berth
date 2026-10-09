@@ -49,8 +49,10 @@ from berth.parser import fits, map_episode, mentions, parse_release, tags_of
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
 from berth.services.inventory import EpisodeView, SeasonView
+from berth.services.jobs import JobSource
 from berth.services.media import read_media, read_snapshot
 from berth.services.settings import read_settings
+from berth.services.sources import SourceCache
 from berth.services.steps import StepView, failure_of, message
 
 #: 一次搜尋最多發幾個查詢。每一個都是「請這台索引站現場去連它認得的每一個追蹤站」，
@@ -78,13 +80,12 @@ class SearchResult:
     seeders: int | None
     #: 站上的頁面。使用者要自己看一眼時連過去。
     info_url: str
-    #: 送單時要交給 qBittorrent 的那一條（票 09）。
-    download_url: str
-    #: 這一列的身分（info hash 或 guid）。前端畫列表用它。
+    #: 送單時帶的 id（`SourceCache`，M4 票 79）。下載連結是 Prowlarr 的代理網址、帶著它的 API key，
+    #: 所以記在伺服器上，這一列只有換得回它的 id。
+    source_id: str
+    #: 這一列的身分（info hash 或 guid）。前端畫列表用它。**不是送單的 hash**：不報 hash 的站
+    #: （實測 ACG.RIP）那一格是 guid，`source_id` 記的是索引站真的報了的那一個（票 09）。
     key: str
-    #: 索引站報的 info hash，**只有真的是 hash 時才有值**。送單拿它短路重複檢查（票 09）——
-    #: `key` 不行：不報 hash 的站（實測 ACG.RIP）那一格是 guid，拿去當 hash 是在說謊。
-    info_hash: str
     #: `parse_release` 認出來、之後會進檔名的那幾格（brief §6.8）。
     tags: Tags
     #: 預估季集。三者皆 `None` = 判斷不出來，畫面就說判斷不出來，不猜。
@@ -252,6 +253,7 @@ def _batch(batches: tuple[QueryBatch, ...], next_at: datetime | None = None) -> 
 async def search_torrents(
     session: AsyncSession,
     factory: ServiceClientFactory,
+    sources: SourceCache,
     *,
     media_id: str,
     query: str = "",
@@ -270,6 +272,8 @@ async def search_torrents(
     不問」）：查詢只帶放得下的站的 `indexer_ids`，結果的 `skipped` 說出哪幾站沒問、何時放得下——
     Mikan 被 RSS 用完時，搜一部美劇照樣問得到 Nyaa。每一站都放不下才回 `BUDGET_EXHAUSTED` 與最早
     放得下的時刻。
+
+    **每一列的下載連結記進 `sources`**（M4 票 79）：送出去的列只帶換得回它的 id。
     """
     settings = await _indexer(session)
     if settings is None:
@@ -325,10 +329,10 @@ async def search_torrents(
     for row in named:
         (results if typed or _fits(row, snapshot) else aside).append(row)
     return SearchView(
-        rows=tuple(_row(result, snapshot) for result in _take(results, RESULT_LIMIT)),
+        rows=tuple(_row(result, snapshot, sources) for result in _take(results, RESULT_LIMIT)),
         total=len(results),
         discarded=len(found) - len(named),
-        set_aside=tuple(_row(result, snapshot) for result in _take(aside, RESULT_LIMIT)),
+        set_aside=tuple(_row(result, snapshot, sources) for result in _take(aside, RESULT_LIMIT)),
         set_aside_total=len(aside),
         attempts=tuple(attempt for attempt, _ in outcomes),
         skipped=skipped,
@@ -609,8 +613,10 @@ def estimate(title: str, published_at: datetime | None, snapshot: MediaSnapshot 
     )
 
 
-def _row(result: IndexerResult, snapshot: MediaSnapshot | None) -> SearchResult:
-    """索引站回的一列 → 結果表的一列。"""
+def _row(
+    result: IndexerResult, snapshot: MediaSnapshot | None, sources: SourceCache
+) -> SearchResult:
+    """索引站回的一列 → 結果表的一列。下載連結留在 `sources`，這一列帶它的 id。"""
     guess = estimate(result.title, result.published_at, snapshot)
     return SearchResult(
         title=result.title,
@@ -618,9 +624,16 @@ def _row(result: IndexerResult, snapshot: MediaSnapshot | None) -> SearchResult:
         size=result.size,
         seeders=result.seeders,
         info_url=result.info_url,
-        download_url=result.download_url,
+        source_id=sources.remember(
+            JobSource(
+                url=result.download_url,
+                title=result.title,
+                info_hash=result.info_hash,
+                published_at=result.published_at,
+                size=result.size,
+            )
+        ),
         key=result.key,
-        info_hash=result.info_hash,
         tags=tags_of(parse_release(result.title)),
         season=guess.season,
         episode_start=guess.episode_start,

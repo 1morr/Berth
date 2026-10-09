@@ -59,9 +59,8 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     size: 524288000,
     seeders: 42,
     info_url: 'https://acg.rip/t/344604',
-    download_url: 'http://prowlarr:9696/2/download?apikey=k',
+    source_id: 'source-acg-50',
     key: 'a'.repeat(40),
-    info_hash: 'a'.repeat(40),
     tags: {
       source: 'WEB',
       resolution: '1080p',
@@ -740,17 +739,9 @@ describe('搜尋 torrent 與結果表', () => {
 
       expect(await screen.findByText('已送出')).toBeVisible()
       const sent = stub.mock.calls.find(([, init]) => init?.method === 'POST')
+      // 只送那一列的 id（M4 票 79）：連結、發佈名、hash、發佈時間與大小都是伺服器記的那一份。
       expect(JSON.parse(String(sent?.[1]?.body))).toEqual({
-        source: {
-          url: 'http://prowlarr:9696/2/download?apikey=k',
-          title: '[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
-          // 索引站報的那一個，不是 `key`——不報 hash 的站那一格是一條 guid。
-          info_hash: 'a'.repeat(40),
-          // 規劃時比播出日（M3 票 14）：那一列的發佈時間原樣帶回去，沒報就是 null。
-          published_at: null,
-          // 磁碟門檻算在途量用：qBittorrent 報得出之前只有它（M4 票 03）。
-          size: 524_288_000,
-        },
+        source_id: 'source-acg-50',
         media: 'tv:120089',
         route: 1,
       })
@@ -799,6 +790,22 @@ describe('搜尋 torrent 與結果表', () => {
       expect(alert).toHaveTextContent(/那條 Route 現在是紅的/)
       // 服務回的原文貼在旁邊，不翻譯（與精靈的纜繩同一個規矩）。
       expect(alert).toHaveTextContent('tv')
+    })
+
+    it('結果過期了說的是再搜一次（M4 票 79）', async () => {
+      await searched({
+        'POST /api/jobs': {
+          status: 404,
+          body: { detail: { reason: 'source_expired', detail: '' } },
+        },
+      })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/這一筆過期了/)
+      expect(alert).toHaveTextContent(/重新搜一次/)
     })
 
     it('磁碟不夠時說的是那個理由與下一步，量到的數字貼在旁邊（M3 票 04）', async () => {

@@ -31,6 +31,7 @@ from berth.models import IndexerSettings, Media, Route
 from berth.models import media_id as build_media_id
 from berth.services.search import RESULT_LIMIT, plan_queries, search_torrents
 from berth.services.settings import write_settings
+from berth.services.sources import SourceCache
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_inventory import linked, route, title
 from tests.integration.test_inventory import season as season_snapshot
@@ -136,7 +137,7 @@ async def test_every_known_title_gets_its_own_query_and_the_results_merge(
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert sorted(query.text for query in indexer.queries) == sorted(
         ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"]
@@ -164,7 +165,7 @@ async def test_the_same_torrent_from_two_sites_is_one_row(session: AsyncSession)
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.total == 2
     assert sorted(row.indexer for row in view.rows) == ["ACG.RIP", "Mikan"]
@@ -183,7 +184,7 @@ async def test_rows_come_back_seeded_first_and_capped(session: AsyncSession) -> 
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.total == RESULT_LIMIT + 20
     assert len(view.rows) == RESULT_LIMIT
@@ -224,7 +225,7 @@ async def test_every_site_gets_a_seat_at_the_table(session: AsyncSession) -> Non
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert len(view.rows) == RESULT_LIMIT
     assert sorted({row.indexer for row in view.rows}) == ["Mikan", "The Pirate Bay"]
@@ -241,7 +242,7 @@ async def test_one_failing_query_does_not_sink_the_others(session: AsyncSession)
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.problem is None
     assert view.total == 1
@@ -256,7 +257,7 @@ async def test_an_indexer_that_was_never_set_up_says_so(session: AsyncSession) -
     await arrange_media(session)
     factory = FakeClientFactory(indexer_search=FakeIndexerSearch())
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.problem is IndexerProblem.NOT_CONFIGURED
     assert view.rows == ()
@@ -271,7 +272,7 @@ async def test_an_unreachable_indexer_says_which_way_it_failed(session: AsyncSes
         indexer_search=FakeIndexerSearch(error=AuthFailedError("GET /api/v1/search: 401"))
     )
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.problem is IndexerProblem.CREDENTIAL_REJECTED
     assert view.detail == "GET /api/v1/search: 401"
@@ -292,7 +293,7 @@ async def test_each_row_carries_the_parser_verdict(session: AsyncSession) -> Non
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     row = view.rows[0]
     assert row.tags.resolution == "1080p"
@@ -336,7 +337,7 @@ async def test_the_estimate_reads_the_publish_time_like_planning_does(
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     row = view.rows[0]
     assert (row.season, row.episode_start, row.strategy) == (1, 17, MappingStrategy.PUBLISHED_RUN)
@@ -357,7 +358,7 @@ async def test_a_season_pack_reads_as_the_whole_season(session: AsyncSession) ->
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     row = view.rows[0]
     assert (row.season, row.episode_start, row.episode_end) == (3, 1, 13)
@@ -379,7 +380,7 @@ async def test_a_release_the_parser_cannot_place_says_nothing_rather_than_guessi
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     row = view.rows[0]
     assert (row.season, row.episode_start) == (None, None)
@@ -406,7 +407,7 @@ async def test_releases_that_are_not_this_work_do_not_reach_the_table(
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert [row.title for row in view.rows] == ["SPY x FAMILY S02E01 1080p WEB"]
     assert (view.total, view.discarded) == (1, 1)
@@ -422,7 +423,7 @@ async def test_a_typed_keyword_turns_the_filter_off(session: AsyncSession) -> No
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY, query="Spider-Man")
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY, query="Spider-Man")
 
     assert len(view.rows) == 1
     assert view.discarded == 0
@@ -450,7 +451,7 @@ async def test_a_show_past_its_first_season_adds_the_season_variants(
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=SPY)
+    await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     texts = [query.text for query in indexer.queries]
     assert "The Bear Season 3" in texts
@@ -476,7 +477,7 @@ async def test_the_display_title_beats_a_random_alias(session: AsyncSession) -> 
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=SPY)
+    await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     texts = [query.text for query in indexer.queries]
     assert texts[:3] == ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒"]
@@ -494,7 +495,7 @@ async def test_a_single_season_show_does_not_add_them(session: AsyncSession) -> 
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=SPY)
+    await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert season_queries(indexer) == []
 
@@ -529,7 +530,7 @@ async def test_a_movie_does_not_add_them(session: AsyncSession) -> None:
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=OPPENHEIMER)
+    await search_torrents(session, factory, SourceCache(), media_id=OPPENHEIMER)
 
     assert [query.text for query in indexer.queries] == ["Oppenheimer", "奧本海默"]
     assert season_queries(indexer) == []
@@ -543,7 +544,7 @@ async def test_a_typed_query_replaces_the_titles(session: AsyncSession) -> None:
     indexer = FakeIndexerSearch()
     factory = FakeClientFactory(indexer_search=indexer)
 
-    await search_torrents(session, factory, media_id=SPY, query="Spy Family BDRip")
+    await search_torrents(session, factory, SourceCache(), media_id=SPY, query="Spy Family BDRip")
 
     assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
 
@@ -563,7 +564,7 @@ async def test_tags_render_the_way_the_file_name_will(session: AsyncSession) -> 
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.rows[0].tags.source is Source.WEB
     assert view.rows[0].tags.render().startswith("[WEB][1080p]")
@@ -588,7 +589,7 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        await search_torrents(session, factory, media_id=spy.id, missing=True)
+        await search_torrents(session, factory, SourceCache(), media_id=spy.id, missing=True)
 
         assert [query.text for query in indexer.queries] == ["SPY x FAMILY S01E03"]
 
@@ -603,7 +604,9 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        await search_torrents(session, factory, media_id=spy.id, missing=True, season=2)
+        await search_torrents(
+            session, factory, SourceCache(), media_id=spy.id, missing=True, season=2
+        )
 
         assert [query.text for query in indexer.queries] == ["SPY x FAMILY S02"]
 
@@ -620,7 +623,7 @@ class TestMissingEpisodes:
         factory = FakeClientFactory(indexer_search=indexer)
 
         preview = (await plan_queries(session, factory, media_id=spy.id, missing=True)).queries
-        await search_torrents(session, factory, media_id=spy.id, missing=True)
+        await search_torrents(session, factory, SourceCache(), media_id=spy.id, missing=True)
 
         assert list(preview) == [query.text for query in indexer.queries]
         assert preview == ("SPY x FAMILY S01E02", "SPY x FAMILY S01E03")
@@ -635,7 +638,7 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        view = await search_torrents(session, factory, media_id=spy.id, missing=True)
+        view = await search_torrents(session, factory, SourceCache(), media_id=spy.id, missing=True)
 
         assert indexer.queries == []
         assert view.problem is IndexerProblem.NO_QUERY
@@ -651,7 +654,7 @@ class TestMissingEpisodes:
         factory = FakeClientFactory(indexer_search=indexer)
 
         await search_torrents(
-            session, factory, media_id=spy.id, query="Spy Family BDRip", missing=True
+            session, factory, SourceCache(), media_id=spy.id, query="Spy Family BDRip", missing=True
         )
 
         assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
@@ -671,11 +674,14 @@ class TestMissingEpisodes:
             indexer_search=indexer, budget=RequestBudget(limit=60, now=lambda: clock)
         )
 
-        first = await search_torrents(session, factory, media_id=long.id, missing=True)
+        first = await search_torrents(
+            session, factory, SourceCache(), media_id=long.id, missing=True
+        )
         assert first.batch is not None
         second = await search_torrents(
             session,
             factory,
+            SourceCache(),
             media_id=long.id,
             missing=True,
             from_season=first.batch.next_seasons[0],
@@ -707,7 +713,9 @@ class TestMissingEpisodes:
         long = await seven_seasons(session)
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
-        first = await search_torrents(session, factory, media_id=long.id, missing=True)
+        first = await search_torrents(
+            session, factory, SourceCache(), media_id=long.id, missing=True
+        )
         assert first.batch is not None
         tv = await session.scalar(select(Route).where(Route.slug == "tv"))
         assert tv is not None
@@ -717,6 +725,7 @@ class TestMissingEpisodes:
         await search_torrents(
             session,
             factory,
+            SourceCache(),
             media_id=long.id,
             missing=True,
             from_season=first.batch.next_seasons[0],
@@ -737,7 +746,9 @@ class TestMissingEpisodes:
         preview = await plan_queries(
             session, factory, media_id=long.id, missing=True, from_season=6
         )
-        await search_torrents(session, factory, media_id=long.id, missing=True, from_season=6)
+        await search_torrents(
+            session, factory, SourceCache(), media_id=long.id, missing=True, from_season=6
+        )
 
         assert list(preview.queries) == [query.text for query in indexer.queries]
         assert preview.batch is not None
@@ -804,7 +815,7 @@ async def test_a_movie_search_sets_aside_remakes_and_episodes(session: AsyncSess
     await arrange_indexer(session)
     factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=night_results()))
 
-    view = await search_torrents(session, factory, media_id=NIGHT)
+    view = await search_torrents(session, factory, SourceCache(), media_id=NIGHT)
 
     shown = [row.title for row in view.rows]
     assert shown and all("1968" in title for title in shown)
@@ -829,7 +840,7 @@ async def test_a_movie_keeps_its_year_and_releases_without_one(session: AsyncSes
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=NIGHT)
+    view = await search_torrents(session, factory, SourceCache(), media_id=NIGHT)
 
     assert [row.title for row in view.rows] == [
         "Night of the Living Dead 1968 720p",
@@ -853,7 +864,7 @@ async def test_a_show_search_keeps_its_episodes(session: AsyncSession) -> None:
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert [row.title for row in view.rows] == [
         "SPY x FAMILY S02E01 1080p WEB",
@@ -870,6 +881,8 @@ async def test_a_typed_keyword_sets_nothing_aside(session: AsyncSession) -> None
     await arrange_indexer(session)
     factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=night_results()))
 
-    view = await search_torrents(session, factory, media_id=NIGHT, query="Night of the Living")
+    view = await search_torrents(
+        session, factory, SourceCache(), media_id=NIGHT, query="Night of the Living"
+    )
 
     assert (view.total, view.set_aside_total) == (20, 0)

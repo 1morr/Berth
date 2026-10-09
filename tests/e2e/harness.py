@@ -23,14 +23,13 @@ from tests.e2e.stack import E2E_ENV
 BERTH = f"http://127.0.0.1:{E2E_ENV['BERTH_PORT']}"
 QBITTORRENT = f"http://127.0.0.1:{E2E_ENV['QBITTORRENT_WEBUI_PORT']}"
 JELLYFIN = f"http://127.0.0.1:{E2E_ENV['JELLYFIN_PORT']}"
-#: compose 網路裡 `torrents` 那台的位址：抓 `.torrent` 的是 Berth 的容器，不是這個程序。
-TORRENTS = "http://torrents:8000"
 #: 容器名是 `compose.yml` 換過的那一組（`berth-e2e-*`，M4 票 34）：產品那一份的 `berth-*` 留給
 #: 同一台機器上的試跑環境。
 BERTH_CONTAINER = "berth-e2e"
 JELLYFIN_CONTAINER = "berth-e2e-jellyfin"
 QBITTORRENT_CONTAINER = "berth-e2e-qbittorrent"
 TORRENTS_CONTAINER = "berth-e2e-torrents"
+SITES_CONTAINER = "berth-e2e-sites"
 
 ADMIN = "skipper"
 #: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的 WebUI 登入是另一組（`WEB_UI_LOGIN`）。

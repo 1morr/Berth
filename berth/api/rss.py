@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
 from berth.api.schemas import FirstBatchAskOut
@@ -326,9 +326,9 @@ class OneshotItemOut(BaseModel):
     guid: str
     title: str
     link: str
-    #: 送單時放進 `POST /jobs` 的 `source.url`：`.torrent` 網址，或站只給的 magnet。
-    url: str
-    info_hash: str
+    #: 送單時放進 `POST /jobs` 的 `source_id`（M4 票 79）。下載連結記在伺服器上，
+    #: 與搜尋結果同一條路。
+    source_id: str
     size: int | None
     published_at: datetime | None
     #: 合集、區間也照樣勾得了：排除條件只作用在自動下載（brief §15）。
@@ -366,7 +366,7 @@ class OneshotOut(BaseModel):
     ),
 )
 async def post_oneshot(
-    session: SessionDep, factory: ClientFactoryDep, body: OneshotIn
+    session: SessionDep, factory: ClientFactoryDep, sources: SourceCacheDep, body: OneshotIn
 ) -> OneshotOut:
     """讀一條 RSS 網址的每一筆。**只讀**：不建 Feed、不長 RSS Series，勾好的那幾筆走 `POST /jobs`。
 
@@ -374,7 +374,7 @@ async def post_oneshot(
     """
     try:
         view = await read_oneshot(
-            session, factory, body.url, media_id=body.media, route_id=body.route
+            session, factory, sources, body.url, media_id=body.media, route_id=body.route
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal

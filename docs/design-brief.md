@@ -499,7 +499,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 沿用 Seerr 做法：以 Jellyfin 帳號登入本系統。
 
 - 初次設定：輸入 Jellyfin 位址 → 以 Jellyfin **管理員**帳號登入 → 該帳號成為本系統 admin，並產生本系統用的 Jellyfin API key。
-- 其他 Jellyfin 使用者可登入，預設角色 `user`（可探索、可送單到指定 Route、可看自己的 Job）；admin 可改 Route、刪除、審核。**2026-09-22 明確**（M2 拆票前）：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳一律只有 admin（plan §6 的門禁與 `api/gate.py` 同輪補上）；`user` 送單的 Job 停在 review 時只能等，畫面上說「等管理員審核」。
+- 其他 Jellyfin 使用者可登入，預設角色 `user`（可探索、可送單到指定 Route、可看自己的 Job；送單只能送這次搜尋記下的結果，不收網址，也拿不到索引站的 API key，M4 票 79）；admin 可改 Route、刪除、審核。**2026-09-22 明確**（M2 拆票前）：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳一律只有 admin（plan §6 的門禁與 `api/gate.py` 同輪補上）；`user` 送單的 Job 停在 review 時只能等，畫面上說「等管理員審核」。
 - 不自建密碼系統；本系統的 `users` 表只存 Jellyfin user id 與偏好。
 - 未來的審批、配額、通知都掛在這個角色模型上。
 - 取捨：Jellyfin 掛掉時無法登入。可接受，Seerr 同樣如此。
@@ -1336,6 +1336,11 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
   1021 筆只有 1 筆重疊。`guid` 穩定（1200/1200）。所以身分是 infohash 或 `guid`，不是下載網址。
   兩者都是 Prowlarr **自己的代理網址**（主機來自它的 `config/host`，不是 Berth 打過去的位址），
   磁力站（TPB、dmhy）沒有 `downloadUrl`，只有被包成代理網址的 `magnetUrl`。
+  **兩者都帶 `?apikey=<Prowlarr API key>`**（M4 票 76 實作時發現；拿到它就能改 Prowlarr 的設定、索引站與帳密），
+  所以不出伺服器（M4 票 79）：搜尋把每一列的連結記在 Berth 程序裡，前端只拿 id，送單收 id 換回連結。
+  慣例照 Sonarr 的 interactive search（`Sonarr.Api.V3/Indexers/ReleaseController.cs`：搜尋結果以
+  `{indexerId}_{guid}` 放進快取 30 分鐘，送單只帶 `guid` 與 `indexerId`，找不到回 404「try searching again」），
+  Berth 的 id 是隨機的、記兩小時（理由在 `berth/services/sources.py`）。
 - **info hash 有兩種寫法**：同一個發佈在 Mikan 是 40 字十六進位、在 dmhy 是 32 字 base32，
   base32 解碼後位元組相同。不正規化的話單次查詢的 1200 筆裡有 47 筆會重複顯示。
 - **多標題是真的多一批東西**：`Spy x Family` / `SPY×FAMILY` / `间谍过家家` 各搜出 1200 / 908 / 1210 筆，

@@ -1008,9 +1008,8 @@ describe('Media 詳情頁', () => {
             size: 524288000,
             seeders: 42,
             info_url: 'https://acg.rip/t/344604',
-            download_url: 'http://prowlarr:9696/2/download?apikey=k',
+            source_id: 'source-acg',
             key: 'a'.repeat(40),
-            info_hash: 'a'.repeat(40),
             tags: {
               source: 'WEB',
               resolution: '1080p',
