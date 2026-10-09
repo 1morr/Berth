@@ -1,6 +1,6 @@
 # 78 — 設定頁與 RSS 綁定：拿掉精靈留下來的選項與說明
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（與 76 並行；與 77 都改 `web/src/i18n/resources.ts`，後合併的那張解衝突）
 
@@ -27,7 +27,8 @@
      - 按鈕改成「綁定並送出」（en 同義）。整季幾集要讀了才知道，按鈕不寫數字；送出後的結果照舊說送了幾集。
      - `backfillOn` / `backfillOff` 這類只為勾選存在的 i18n key 一起刪。
    - 後端：刪 `backfill` 參數（services、API schema、`web/src/api` 型別）與 `RssSeries.passed_before`，連同所有讀它的分支（`_backfill` 的略過判斷、`subscribe_mikan`）。
-   - Alembic migration：drop `passed_before` 欄位，downgrade 加回。使用者已同意：已存了值的 Series，之後的每日補漏會補回當初略過的舊集。
+   - Alembic migration：drop `passed_before` 欄位，downgrade 加回。使用者已同意：已存了值的 Series，當初略過的舊集補回來。
+     **實際行為（2026-10-09 實作時使用者拍板）**：補漏以 `(feed_id, guid)` 去重，已經寫成 `passed` 的不會被補漏補回，所以 migration 自己放回去——只放回因 `passed_before` 而略過的那幾筆（Mikan Feed 上、Series 的 `passed_before` 有值、發佈早於它），綁著的回 `matched`（下一輪輪詢去重後送出）、解綁的回 `unbound`；「只追之後的」那種 `passed` 不動。downgrade 只加回空欄位、不改回 `passed`。
    - 同一 commit 改 brief §15（刪「取消勾選時…」那一句）與 plan 相關段落，progress.md「偏差與決定」記一行。
 2. **Jellyfin 設定頁改成唯讀摘要**：
    - 不再畫二選一卡片，改成一張摘要：來源（套件內／既有）、位址、版本、連線狀態，加一句為什麼不能換成另一台。
@@ -46,9 +47,25 @@
 
 ## 驗收
 
-- [ ] 手動綁定與作品頁訂閱都沒有補舊集勾選，一律補；`backfill` 參數與 `passed_before` 欄位已刪，migration 升降都測過；brief、plan、progress.md 同步
-- [ ] Jellyfin 設定頁不再出現二選一卡片：套件內只有摘要；既有的有摘要與改位址／API key 表單；開發者說明已刪
-- [ ] qBittorrent 與 Prowlarr 設定頁的介面登入是「帳號、新密碼、再輸入一次、儲存」，沒有「沿用」；精靈裡的「沿用」照舊
-- [ ] 相關 pytest 與 vitest 已改寫，舊勾選的測試已刪；zh-Hant 與 en 文案並列
-- [ ] Playwright 實跑三個畫面並附截圖，用隔離環境（專案名 `berth-t78`、另一組 port）；**不准碰使用者的 `berth-local`**
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；CHANGELOG `[Unreleased]` 已記
+- [x] 手動綁定與作品頁訂閱都沒有補舊集勾選，一律補；`backfill` 參數與 `passed_before` 欄位已刪，migration 升降都測過；brief、plan、progress.md 同步
+- [x] Jellyfin 設定頁不再出現二選一卡片：套件內只有摘要；既有的有摘要與改位址／API key 表單；開發者說明已刪
+- [x] qBittorrent 與 Prowlarr 設定頁的介面登入是「帳號、新密碼、再輸入一次、儲存」，沒有「沿用」；精靈裡的「沿用」照舊
+- [x] 相關 pytest 與 vitest 已改寫，舊勾選的測試已刪；zh-Hant 與 en 文案並列
+- [x] Playwright 實跑三個畫面並附截圖，用隔離環境（專案名 `berth-t78`、另一組 port）；**不准碰使用者的 `berth-local`**
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；CHANGELOG `[Unreleased]` 已記
+
+## Comments
+
+- **2026-10-09 實作（使用者拍板的偏離）**：
+  - Jellyfin「既有」的表單只有位址一格：Jellyfin 沒有使用者填的 API key，Berth 用管理員登入換一把，換 key 在同一頁「管理員登入」區。驗收第二條的「API key」照此解讀。
+  - 作品頁 Mikan 訂閱的鍵是「訂閱並送出」（那一塊的動詞是訂閱），手動綁定才是「綁定並送出」。
+  - qBittorrent／Prowlarr 連線區共用的那句開發者說明一起改成給使用者看的說法，二選一本身不動。
+  - 隔離實跑：Docker Desktop 沒在跑，啟動它會把 `berth-local` 有 restart policy 的容器一起拉起來，所以不起 compose，改用 `scripts/fake_setup_server.py`（config root `berth-t78-healthy` / `berth-t78-rss`，port 8678 / 8679，跑完收掉）。截圖在 `.playwright-mcp/t78-*.png`（不進版控）：RSS 綁定（1280 / 390）、Jellyfin 套件內摘要（1280 / 390）、既有摘要與改位址（e2e `existing` 拍的，1280 / 390）、qBittorrent 介面登入（空、驗證錯誤、已儲存、目前帳號 390）。
+- **code-review（`3e09ddf` 起）處理了的**：Jellyfin 摘要補「等待中」倒數，設定頁照精靈每 3 秒自己重測（之前設定頁的倒數不會動）；migration 測試加一筆非 Mikan Feed 的反例並做過變異驗證（拿掉 `kind = 'mikan'` 會紅）；兩處過時註解；shape 文件與實作對齊。
+- **code-review 沒處理的（判斷題）**：
+  - `InterfaceLoginFields` 與 `NewLoginFields` 各組一次 `rule`（前者還要 owner 給沿用的錯誤句）。
+  - `ServiceConnection` 判 `kind === 'jellyfin'` 三次（標題、lede、內容）；拆成 Jellyfin 專用的 section 要把兩支 mutation 也複製一份，暫不拆。
+  - `InterfaceLoginSection` 傳的 `reuse: false` 在 `owner` 為空時本來就會是 false，留著是寫明意圖。
+  - `whyBundled` / `whyExisting` 第一句相同、`rss.bind.willSendSeason` 與 `rss.subscribe.season` 近似：文案各自完整，不拼字串。
+  - 設定頁還沒設過登入時帳號不再預填擁有者（票 07 的精靈行為），本票要的是「預填目前的帳號」。
+- **沒動的既有問題**：390 寬的整頁截圖裡「管理員登入」區看起來疊在一起，是 `STICKY_ACTION` 黏底按鈕被整頁截圖拍在捲動位置上，不是版面錯。

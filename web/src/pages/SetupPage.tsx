@@ -87,10 +87,7 @@ import { requestProblem } from '../components/requestProblem'
 import { useSignOut } from '../components/useSignOut'
 import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
-import { connected, signalOf } from '../setup/signals'
-
-/** 套件內那一台還在啟動時的重測間隔。上限由後端的輪詢窗口決定（`window_seconds`）。 */
-const POLL_INTERVAL_MS = 3000
+import { WAITING_RETEST_MS, connected, signalOf } from '../setup/signals'
 
 /**
  * bootstrap 進行中的進度輪詢。後端每一步在做之前就把自己標成 `running` 並存下來，
@@ -489,7 +486,7 @@ export function SetupPage() {
     if (!waitingKind || retest.isPending || choose.isPending) return
     const timer = window.setTimeout(
       () => retest.mutate({ kind: waitingKind, restart: false }),
-      POLL_INTERVAL_MS,
+      WAITING_RETEST_MS,
     )
     return () => window.clearTimeout(timer)
   }, [waitingKind, retest, choose.isPending])

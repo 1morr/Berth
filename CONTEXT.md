@@ -346,7 +346,7 @@ Feed 中的一筆項目及其結果：unbound（待綁定）/ matched（綁好�
 _Avoid_: dry-run, backfill（backfill 是 Mikan 的補舊集）
 
 **補舊集**（backfill）:
-Mikan 的 RSS Series 綁定時讀它的**單一 feed**（番組 × 字幕組的 `/RSS/Bangumi?bangumiId=&subgroupid=`，整季都在），聚合 feed 沒帶到的舊集寫成 Feed Item 一起送，預設勾選；之後每天再讀一次，叫**每日補漏**，接住停機期間被聚合 feed 捲掉的集數。補下來的與一般 Feed Item 走同一條路（排除條件、去重、`trigger = rss`）。取消勾選記在 RSS Series 上（`passed_before`）。
+Mikan 的 RSS Series 綁定時讀它的**單一 feed**（番組 × 字幕組的 `/RSS/Bangumi?bangumiId=&subgroupid=`，整季都在），聚合 feed 沒帶到的舊集寫成 Feed Item 一起送，一律補、沒有開關；之後每天再讀一次，叫**每日補漏**，接住停機期間被聚合 feed 捲掉的集數。補下來的與一般 Feed Item 走同一條路（排除條件、去重、`trigger = rss`）。
 _Avoid_: catch-up, sync（sync 是 qBittorrent 的 `sync/maindata`）
 
 **一次性 RSS 連結**（one-shot link）:

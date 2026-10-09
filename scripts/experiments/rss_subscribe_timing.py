@@ -124,7 +124,6 @@ def run(base: str, settle: float) -> None:
                     "bangumi": 4009,
                     "subgroup": subgroup["id"],
                     "subgroup_name": subgroup["name"],
-                    "backfill": True,
                 },
             ),
         )

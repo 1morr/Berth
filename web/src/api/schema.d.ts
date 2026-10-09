@@ -2409,11 +2409,6 @@ export interface components {
             media: string;
             /** Route */
             route: number;
-            /**
-             * Backfill
-             * @default true
-             */
-            backfill?: boolean;
         };
         /**
          * BudgetOut
@@ -4017,11 +4012,6 @@ export interface components {
              * @default
              */
             subgroup_name?: string;
-            /**
-             * Backfill
-             * @default true
-             */
-            backfill?: boolean;
         };
         /**
          * OneshotIn

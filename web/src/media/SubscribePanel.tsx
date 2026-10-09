@@ -21,7 +21,6 @@ import type { Schemas } from '../api/schemas'
 import { queriesQueryOptions } from '../api/search'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import {
-  Checkbox,
   CONFIRM_ACTIONS,
   Field,
   GhostButton,
@@ -50,7 +49,7 @@ const SOURCES: readonly FeedKind[] = ['mikan', 'nyaa', 'acgrip']
  * 以及就地展開的「新增訂閱」——選一個來源建一條 feed，並**預先綁定這部作品**：
  *
  * - **Mikan**：Berth 代搜番組（2026-09-26 拍板；搜尋框預填原文標題，Mikan 的番組名來自 bgm.tv，日文原名
- *   最穩）→ 選字幕組 → 訂閱。它的單一 feed 當場讀完，整季補齊（預設勾選，同綁定的補舊集）。
+ *   最穩）→ 選字幕組 → 訂閱。它的單一 feed 當場讀完，整季補齊（同綁定的補舊集，一律補）。
  * - **Nyaa / acg.rip**：以這部作品的標題（與搜尋區塊同一份）建搜尋 feed，它長出的 RSS Series 都綁到這部作品
  *   （2026-09-26 拍板）。第一輪照樣等人選，建好之後就地畫 `/rss` 那一塊第一輪預覽。
  *
@@ -241,7 +240,6 @@ function MikanPicker({
   const [searched, setSearched] = useState(initial.trim())
   const [bangumi, setBangumi] = useState<BangumiHit | null>(null)
   const [group, setGroup] = useState<Subgroup | null>(null)
-  const [backfill, setBackfill] = useState(true)
   const hits = useQuery({ ...bangumiSearchQueryOptions(searched), enabled: searched !== '' })
   const detail = useQuery({ ...bangumiQueryOptions(bangumi?.id ?? 0), enabled: bangumi !== null })
   const subscribe = useMutation({
@@ -255,7 +253,6 @@ function MikanPicker({
         name: `${bangumi.title} · ${group.name}`,
         // 挑的時候讀過的字幕組名：RSS 頁的來源那一格說它，不說 id（M4 票 13）。番組名單一 feed 自己帶。
         subgroup_name: group.name,
-        backfill,
       })
     },
     onSuccess: async (done) => {
@@ -342,12 +339,7 @@ function MikanPicker({
       {group !== null && (
         <>
           <FolderLine media={media} />
-          <Checkbox
-            label={t('rss.bind.backfill')}
-            hint={t(backfill ? 'rss.bind.backfillOn' : 'rss.bind.backfillOff')}
-            checked={backfill}
-            onChange={setBackfill}
-          />
+          <p className="max-w-prose text-xs text-ink-dim">{t('rss.subscribe.season')}</p>
         </>
       )}
 
@@ -358,9 +350,7 @@ function MikanPicker({
             busy={subscribe.isPending}
             onClick={() => subscribe.mutate()}
           >
-            {subscribe.isPending
-              ? t('rss.subscribe.subscribing')
-              : t(backfill ? 'rss.subscribe.confirmBackfill' : 'rss.subscribe.confirm')}
+            {subscribe.isPending ? t('rss.subscribe.subscribing') : t('rss.subscribe.confirm')}
           </PrimaryButton>
         ) : (
           <span />

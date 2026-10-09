@@ -25,8 +25,7 @@ test('split-cour 的第一批：改一集並套用到 RSS Series，其餘跟著�
   const row = pending.getByRole('article', { name: /与你相恋到生命尽头/ })
   await row.getByRole('button', { name: /選《與妳相戀到生命盡頭》/ }).click()
   await row.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  await expect(row.getByRole('checkbox', { name: '同時補下載舊集' })).toBeChecked()
-  await row.getByRole('button', { name: '綁定、送出 2 集並補舊集' }).click()
+  await row.getByRole('button', { name: '綁定並送出' }).click()
   await expect(page.getByText('綁好了，送出 12 集。')).toBeAttached()
 
   // 12 集都入庫之後，第一批在「已入庫，等你看一眼」是一組。

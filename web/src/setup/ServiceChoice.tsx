@@ -510,7 +510,7 @@ function ChoiceCard({
  * 其餘在表單裡、送出鍵上面；技術細節收在最後（票 21 的分層）。改一格再按靠的是欄位留著打的字。
  * 擁有者成立之後的 Jellyfin 換到另一台也不存（M4 票 18），那一句照舊在表單裡。
  */
-function ExistingForm({
+export function ExistingForm({
   kind,
   status,
   service,
@@ -821,7 +821,7 @@ export function TestLine({
 }
 
 /** 紅燈的補法。套件內與既有的下一步不同：前者是 compose，後者是使用者自己的那一台。 */
-function Fix({
+export function Fix({
   kind,
   status,
   service,

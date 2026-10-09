@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
 from berth.domain import FeedItemStatus, FeedKind, JobTrigger, Role, RssRefusal
-from berth.models import Job, Route, RssFeed, RssItem, RssSeries, User
+from berth.models import Job, Route, RssFeed, RssSeries, User
 from berth.parser import release
 from berth.services.rss import (
     RssRejectedError,
@@ -90,29 +90,6 @@ class TestMikan:
         assert (done.feed.id, done.series.id, done.series.submitted) == (feed.id, series.id, 12)
         # 鍵從網址就知道：一頁單集頁都不必抓。
         assert factory.rss_.requested == [SINGLE_URL]
-
-    async def test_unchecking_backfill_passes_what_was_out_before(
-        self, session: AsyncSession, roots: dict[str, Path]
-    ) -> None:
-        media, route, factory = await harbour(session, roots)
-        serve_single(factory)
-
-        done = await subscribe_mikan(
-            session,
-            factory,
-            bangumi_id=4009,
-            subgroup_id=370,
-            media_id=media.id,
-            route_id=route.id,
-            user_id=1,
-            backfill=False,
-            now=NOW,
-        )
-
-        assert done.series.submitted == 0
-        assert await rss_jobs(session) == set()
-        statuses = set(await session.scalars(select(RssItem.status)))
-        assert statuses == {FeedItemStatus.PASSED}
 
     async def test_the_next_round_of_the_single_feed_lands_in_the_same_series(
         self, session: AsyncSession, roots: dict[str, Path]

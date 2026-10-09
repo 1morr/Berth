@@ -4,8 +4,9 @@ import { signIn } from './login.ts'
 import { shot } from './shot.ts'
 
 // 排除條件三層與去重（M3 票 10），`rss` 情境。全域擋 ANi（`Baha` 是它的片源）、寫壞的正則存不進去、
-// 建議項一鍵加入；綁好《与你相恋》（不補舊集）之後在那個 RSS Series 上擋掉 1–10 集，再加它的單一 feed：
-// 11、12 與聚合 feed 同一個 hash，是重複；1–10 被 RSS Series 那一層擋下。每一筆都說得出為什麼。
+// 建議項一鍵加入；綁好《与你相恋》（整季補齊）之後在那個 RSS Series 上擋掉 1–10 集，再加它的單一 feed：
+// 排除條件在寫下那一刻就看，1–10 被 RSS Series 那一層擋下；11、12 過得了，送單時與聚合 feed 同一個
+// hash，是重複。每一筆都說得出為什麼。
 test('三層排除與重複：清單上每一筆都說得出為什麼沒下載', async ({ page }) => {
   await signIn(page, '/rss')
 
@@ -40,8 +41,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   const row = pending.getByRole('article', { name: /与你相恋到生命尽头/ })
   await row.getByRole('button', { name: /選《與妳相戀到生命盡頭》/ }).click()
   await row.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  await row.getByRole('checkbox', { name: '同時補下載舊集' }).uncheck()
-  await row.getByRole('button', { name: '綁定並送出 2 集' }).click()
+  await row.getByRole('button', { name: '綁定並送出' }).click()
 
   const bound = page
     .getByRole('region', { name: 'RSS Series' })
@@ -68,7 +68,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
     10,
   )
   await expect(items.getByText('重複', { exact: true })).toHaveCount(2)
-  // 重複的兩筆連到聚合 feed 送出的那兩筆下載，連同那兩筆自己：四條連結。
-  await expect(items.getByRole('link', { name: '看這一筆下載' })).toHaveCount(4)
+  // 綁定時整季補齊、送出 12 筆；重複的兩筆連到其中 11、12 那兩筆下載：十四條連結。
+  await expect(items.getByRole('link', { name: '看這一筆下載' })).toHaveCount(14)
   await shot(page, '3-duplicates')
 })

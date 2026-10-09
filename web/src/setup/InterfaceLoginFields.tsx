@@ -16,7 +16,7 @@ const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const sa
 >
 
 /**
- * 介面登入的欄位（M4 票 07、15）：精靈兩頁與設定頁共用。
+ * 精靈的介面登入欄位（M4 票 07、15）：頁 2、頁 4 共用。設定頁沒有沿用，只用下面的 `NewLoginFields`（M4 票 78）。
  *
  * 上面一個「沿用 Jellyfin 帳密」預設勾選：帳號是擁有者、密碼打一次（Jellyfin 會驗它）。取消勾選是
  * 自設的三格：帳號、密碼、再一次密碼。說明句先講這是**那個服務自己的登入**：Berth 用不到它。
@@ -66,37 +66,64 @@ export function InterfaceLoginFields({
           error={reuseError}
         />
       ) : (
-        <>
-          <Field
-            label={t('interfaceLogin.username')}
-            value={draft.username}
-            autoComplete="off"
-            onChange={(event) => form.change({ username: event.target.value })}
-            error={usernameError(t, problems.username, rule)}
-          />
-          <PasswordField
-            label={t('interfaceLogin.password')}
-            value={draft.password}
-            autoComplete="new-password"
-            onChange={(event) => form.change({ password: event.target.value })}
-            error={
-              problems.password === 'short'
-                ? t('interfaceLogin.error.passwordShort', { ...rule, min: rule.passwordMin })
-                : problems.password
-                  ? t('interfaceLogin.error.blank')
-                  : undefined
-            }
-          />
-          <PasswordField
-            label={t('interfaceLogin.confirm')}
-            value={draft.confirm}
-            autoComplete="new-password"
-            onChange={(event) => form.change({ confirm: event.target.value })}
-            error={problems.confirm ? t('interfaceLogin.error.mismatch') : undefined}
-          />
-        </>
+        <NewLoginFields service={service} form={form} />
       )}
     </fieldset>
+  )
+}
+
+/**
+ * 自設一組登入的三格：帳號、密碼、再一次密碼（M4 票 07）。精靈取消「沿用」時與設定頁（M4 票 78，那裡
+ * 沒有沿用、密碼那一格叫「新密碼」）共用，驗證說法同一套。
+ */
+export function NewLoginFields({
+  service,
+  form,
+  passwordLabel,
+}: {
+  service: LoginService
+  form: InterfaceLoginForm
+  /** 密碼那一格的名字；預設「密碼」。 */
+  passwordLabel?: string
+}) {
+  const { t } = useTranslation()
+  const { draft, problems, rules } = form
+  const rule = {
+    service: PRODUCT[service],
+    usernameMin: rules?.usernameMin ?? 0,
+    passwordMin: rules?.passwordMin ?? 0,
+  }
+
+  return (
+    <>
+      <Field
+        label={t('interfaceLogin.username')}
+        value={draft.username}
+        autoComplete="off"
+        onChange={(event) => form.change({ username: event.target.value })}
+        error={usernameError(t, problems.username, rule)}
+      />
+      <PasswordField
+        label={passwordLabel ?? t('interfaceLogin.password')}
+        value={draft.password}
+        autoComplete="new-password"
+        onChange={(event) => form.change({ password: event.target.value })}
+        error={
+          problems.password === 'short'
+            ? t('interfaceLogin.error.passwordShort', { ...rule, min: rule.passwordMin })
+            : problems.password
+              ? t('interfaceLogin.error.blank')
+              : undefined
+        }
+      />
+      <PasswordField
+        label={t('interfaceLogin.confirm')}
+        value={draft.confirm}
+        autoComplete="new-password"
+        onChange={(event) => form.change({ confirm: event.target.value })}
+        error={problems.confirm ? t('interfaceLogin.error.mismatch') : undefined}
+      />
+    </>
   )
 }
 

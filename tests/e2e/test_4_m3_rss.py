@@ -190,7 +190,7 @@ def first_round(
     bound = ok(
         berth.put(
             f"/rss/series/{pending[0]['id']}/binding",
-            json={"media": REZERO, "route": route, "backfill": False},
+            json={"media": REZERO, "route": route},
         )
     )
     assert bound["submitted"] == 4, bound

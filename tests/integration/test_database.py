@@ -696,6 +696,90 @@ async def test_series_bound_before_backfill_do_not_fetch_a_whole_season(config: 
     assert rows == {"mikan:1:1": born, "mikan:2:1": None, "title:kimi:lolihouse": None}
 
 
+NO_PASSING = "d71e4b9a3c58"
+BEFORE_NO_PASSING = "b4ca280eaeca"
+
+
+async def test_dropping_passed_before_puts_back_what_it_passed(config: Config) -> None:
+    """M4 票 78：補舊集不再有開關。因為 `passed_before` 而略過的舊集放回去——綁著的回到 `matched`
+    （下一輪輪詢送出），解綁了的回到 `unbound`；其他理由的 `passed`（「只追之後的」）不動。降版只把
+    欄位加回來、不還原狀態。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    born, before, after = (
+        "2026-09-20T00:00:00.000000+00:00",
+        "2026-09-10T00:00:00.000000+00:00",
+        "2026-09-25T00:00:00.000000+00:00",
+    )
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_NO_PASSING)
+        with _sqlite(config.database_path) as db:
+            for feed, kind in ((1, "mikan"), (2, "acgrip")):
+                db.execute(
+                    "INSERT INTO rss_feeds (id, name, url, kind, interval_sec, last_error,"
+                    " exclude_json, created_at) VALUES (?, '', ?, ?, 1800, '', '[]', ?)",
+                    (feed, f"u{feed}", kind, born),
+                )
+            for series, key, media, bangumi, passed_before in (
+                (1, "mikan:1:1", "tv:1", 1, born),
+                (2, "mikan:2:1", None, 2, born),
+                (3, "mikan:3:1", "tv:3", 3, None),
+                (4, "title:rezero:lolihouse", "tv:4", None, None),
+            ):
+                db.execute(
+                    "INSERT INTO rss_series (id, key, title_raw, media_id, mikan_bangumi_id,"
+                    " mikan_subgroup_id, bound_by, exclude_json, passed_before, created_at)"
+                    " VALUES (?, ?, '', ?, ?, ?, '', '[]', ?, ?)",
+                    (series, key, media, bangumi, bangumi and 1, passed_before, born),
+                )
+            for guid, feed, series, published, status in (
+                ("bound-old", 1, 1, before, "passed"),
+                ("bound-new", 1, 1, after, "matched"),
+                ("bound-excluded", 1, 1, before, "excluded"),
+                ("unbound-old", 1, 2, before, "passed"),
+                ("never-unchecked", 1, 3, before, "passed"),
+                ("primed-later", 2, 4, before, "passed"),
+                # 條件都對得上，只差不在 Mikan Feed 上：只有 Mikan Feed 上的才是它略過的。
+                ("other-feed", 2, 1, before, "passed"),
+            ):
+                db.execute(
+                    "INSERT INTO rss_items (feed_id, guid, title, link, torrent_url, info_hash,"
+                    " published_at, seen_at, series_id, job_hash, status, error)"
+                    " VALUES (?, ?, '', '', '', '', ?, ?, ?, '', ?, '')",
+                    (feed, guid, published, born, series, status),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, NO_PASSING)
+        with _sqlite(config.database_path) as db:
+            statuses = dict(db.execute("SELECT guid, status FROM rss_items").fetchall())
+        upgraded = _columns_of(config.database_path)["rss_series"]
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_NO_PASSING)
+        with _sqlite(config.database_path) as db:
+            restored = dict(db.execute("SELECT key, passed_before FROM rss_series").fetchall())
+            back = dict(db.execute("SELECT guid, status FROM rss_items").fetchall())
+    finally:
+        await engine.dispose()
+
+    assert statuses == {
+        "bound-old": "matched",
+        "bound-new": "matched",
+        "bound-excluded": "excluded",
+        "unbound-old": "unbound",
+        # 從沒取消勾選的 Series 底下不會有它略過的；這一筆是別的理由，不動。
+        "never-unchecked": "passed",
+        "primed-later": "passed",
+        "other-feed": "passed",
+    }
+    assert "passed_before" not in upgraded
+    assert set(restored.values()) == {None}
+    assert back == statuses
+
+
 PUBLISHED = "c8d2f5a1e734"
 
 

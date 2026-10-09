@@ -3,6 +3,12 @@ import type { ServiceKind } from '../api/schemas'
 import type { Signal } from '../components/signal'
 
 /**
+ * 套件內那一台還在啟動（`waiting`）時的重測間隔：精靈的服務頁與設定頁的連線區都照它自己重測。上限由後端
+ * 的輪詢窗口決定（`window_seconds`）。「每 3 秒再測一次」（`connection.waitingHint`）說的就是它。
+ */
+export const WAITING_RETEST_MS = 3000
+
+/**
  * 測試結果 → 信號（M4 票 15）。還沒選是 `neutral`；連上了是 `secured`（這一條繫上了，那一頁自己的
  * 事在它下面）；套件內那一台還在啟動是 `working`；其餘紅燈。
  */

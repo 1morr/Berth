@@ -4,8 +4,8 @@ import { signIn } from './login.ts'
 import { shot } from './shot.ts'
 
 // 補舊集（M3 票 12），`rss` 情境：聚合 feed 裡《与你相恋》喵萌奶茶屋&LoliHouse 只剩 11、12 兩集，
-// 單一 feed 是 01–12。綁定時預設勾選補舊集，聚合 feed 沒帶到的 01–10 一起送——整季 12 集進下載列表。
-test('中途訂閱的一部：綁定時預設補舊集，整季都進下載列表', async ({ page }) => {
+// 單一 feed 是 01–12。綁定一律補舊集（M4 票 78），聚合 feed 沒帶到的 01–10 一起送——整季 12 集進下載列表。
+test('中途訂閱的一部：綁定時補舊集，整季都進下載列表', async ({ page }) => {
   await signIn(page, '/rss')
 
   await page.getByLabel(/RSS 網址/).fill('https://mikanani.me/RSS/MyBangumi?token=REDACTED')
@@ -18,12 +18,11 @@ test('中途訂閱的一部：綁定時預設補舊集，整季都進下載列�
   const row = pending.getByRole('article', { name: /与你相恋到生命尽头/ })
   await row.getByRole('button', { name: /選《與妳相戀到生命盡頭》/ }).click()
   await row.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  // 補幾集要讀了單一 feed 才知道：鍵上只說聚合 feed 帶到的兩集「並補舊集」。
-  const backfill = row.getByRole('checkbox', { name: '同時補下載舊集' })
-  await expect(backfill).toBeChecked()
-  await expect(backfill).toHaveAccessibleDescription(/Feed 沒帶到的集數一起送出/)
+  // 補幾集要讀了單一 feed 才知道：確認區說整季，鍵上不寫數字。
+  await expect(row.getByText(/Feed 沒帶到的集數一起送出/)).toBeVisible()
+  await expect(row.getByRole('checkbox')).toHaveCount(0)
   await shot(page, '1-backfill')
-  await row.getByRole('button', { name: '綁定、送出 2 集並補舊集' }).click()
+  await row.getByRole('button', { name: '綁定並送出' }).click()
   await expect(pending).toContainText('10 個待綁定')
   await expect(page.getByText('綁好了，送出 12 集。')).toBeAttached()
 

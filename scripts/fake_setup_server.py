@@ -2081,16 +2081,27 @@ async def _moor(
     setup = await read_settings(session, SetupSettings)
     # 擁有者（M4 票 06）：替身 Jellyfin 的管理員 skipper。帳密不存，只記他是誰。
     setup.owner = SetupOwner(jellyfin_user_id="moored-owner", name="skipper")
+    # 精靈的測試會把 Jellyfin 的版本記下來：設定頁的連線摘要讀它（M4 票 78）。
     setup.choices = {
         kind: ServiceChoice(
             origin=ServiceOrigin.BUNDLED,
             base_url=base_url,
-            test=ServiceTest(state=ConnectionState.OK, reason=reason, checked_at=datetime.now(UTC)),
+            test=ServiceTest(
+                state=ConnectionState.OK,
+                reason=reason,
+                detail=detail,
+                checked_at=datetime.now(UTC),
+            ),
         )
-        for kind, reason, base_url in (
-            (ServiceKind.JELLYFIN, ConnectionReason.SETUP_COMPLETED, BUNDLED_JELLYFIN_URL),
-            (ServiceKind.QBITTORRENT, ConnectionReason.CONNECTED, "http://qbittorrent:8080"),
-            (ServiceKind.PROWLARR, ConnectionReason.CONNECTED, BUNDLED_PROWLARR_URL),
+        for kind, reason, base_url, detail in (
+            (
+                ServiceKind.JELLYFIN,
+                ConnectionReason.SETUP_COMPLETED,
+                BUNDLED_JELLYFIN_URL,
+                scenario.jellyfin.version,
+            ),
+            (ServiceKind.QBITTORRENT, ConnectionReason.CONNECTED, "http://qbittorrent:8080", ""),
+            (ServiceKind.PROWLARR, ConnectionReason.CONNECTED, BUNDLED_PROWLARR_URL, ""),
         )
     }
     setup.jellyfin.libraries = [
