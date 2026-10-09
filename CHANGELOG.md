@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### Security
+
+- **log 與錯誤訊息裡的網址不再帶 query 的值**（M4 票 76）：之前 httpx 的 INFO log 把每個對外請求的整條網址印進
+  `docker logs`，包括 Mikan 聚合 feed 的個人 `token`、TMDB v3 的 `api_key`、Prowlarr 下載連結的 `apikey`；RSS 抓不到時
+  的錯誤原文（Feed 列表上的那一句）也帶整條網址。現在 query 的每一個值都換成 `***`（`token=***`），不分參數名；沒有
+  query 的網址照常完整出現。uvicorn 的 access log 同樣處理。**之前版本留下的 log 可能含 RSS token，建議到 Mikan 重新產生
+  token**：舊網址隨之失效，Berth 裡那個 Feed 要刪掉、用新網址重加（目前不能直接改網址）。
+
 ### Changed
 
 - **README 開頭說明為什麼有 Berth、能做什麼**（M4 票 75）：兩份 README 多〈Why Berth〉與〈What it does〉兩節，
