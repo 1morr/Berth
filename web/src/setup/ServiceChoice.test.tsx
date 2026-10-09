@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -364,6 +365,117 @@ describe('套件內那一台不收 Berth 的憑證（M4 票 27）', () => {
     expect(screen.getByText(i18next.t('connection.fix.whitelist'))).toBeVisible()
     expect(screen.queryByText('docker compose restart qbittorrent')).toBeNull()
     expect(screen.queryByText(i18next.t('connection.fix.prowlarrMount'))).toBeNull()
+  })
+})
+
+/**
+ * 請求在路上的那幾秒（M4 票 80）：選擇由頁面送出，`choosing` 由它說；「送完」與「沒送到」兩顆鍵
+ * 就是 mutation 回來的那一刻。
+ */
+function InFlight({
+  kind,
+  onChoose,
+}: {
+  kind: ServiceKind
+  onChoose: (input: ChoiceInput) => void
+}) {
+  const draft = useChoiceDraft()
+  const [choosing, setChoosing] = useState(false)
+  const [services, setServices] = useState<ReturnType<typeof setupStatus>['services']>([])
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setChoosing(false)
+          setServices([chosen({ kind, origin: 'bundled', reason: 'connected' })])
+        }}
+      >
+        送完
+      </button>
+      <button type="button" onClick={() => setChoosing(false)}>
+        沒送到
+      </button>
+      <ServiceChoice
+        kind={kind}
+        status={setupStatus({ services })}
+        choosing={choosing}
+        retesting={false}
+        refusal={null}
+        requestError={null}
+        onChoose={(input) => {
+          onChoose(input)
+          setChoosing(true)
+        }}
+        onRetest={vi.fn()}
+        {...draft}
+      />
+    </>
+  )
+}
+
+describe('點下去當下就有回饋（M4 票 80）', () => {
+  const bundled = () => screen.getByRole('radio', { name: /^套件內/ })
+  const existing = () => screen.getByRole('radio', { name: /^既有/ })
+  const announcer = (kind: ServiceKind) =>
+    document.querySelector(`[data-announcer="${kind}"]`) as HTMLElement
+
+  it.each([
+    ['jellyfin', 'Jellyfin'],
+    ['qbittorrent', 'qBittorrent'],
+    ['prowlarr', 'Prowlarr'],
+  ] as const)(
+    '%s：第一次點套件內，那一格當下就選中、下面說測試中並宣告；在路上時不能送第二次',
+    async (kind, name) => {
+      const onChoose = vi.fn()
+      const user = userEvent.setup()
+      renderWithProviders(<InFlight kind={kind} onChoose={onChoose} />)
+
+      await user.click(bundled())
+
+      const busy = `正在設定套件內 ${name}，連線測試中…`
+      expect(bundled()).toBeChecked()
+      expect(screen.getByText(busy, { selector: 'p:not([data-announcer])' })).toBeVisible()
+      expect(screen.getByText('測試中')).toBeVisible()
+      expect(announcer(kind)).toHaveTextContent(busy)
+      expect(existing()).toBeDisabled()
+      await user.click(bundled())
+      expect(onChoose).toHaveBeenCalledExactlyOnceWith({ origin: 'bundled' })
+
+      // 回來之後換成結果：同一個位置是連線那一列。
+      await user.click(screen.getByRole('button', { name: '送完' }))
+      expect(screen.queryByText(busy)).not.toBeInTheDocument()
+      expect(bundled()).toBeChecked()
+      expect(existing()).toBeEnabled()
+      expect(announcer(kind)).not.toHaveTextContent(busy)
+    },
+  )
+
+  it('沒送到：那一格回到沒選，兩格都點得了', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<InFlight kind="qbittorrent" onChoose={vi.fn()} />)
+
+    await user.click(bundled())
+    await user.click(screen.getByRole('button', { name: '沒送到' }))
+
+    expect(bundled()).not.toBeChecked()
+    expect(screen.queryByText(/連線測試中/)).not.toBeInTheDocument()
+    expect(existing()).toBeEnabled()
+  })
+
+  it('既有表單送出之後：另一格不能再送，讀屏說正在測試', async () => {
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    renderWithProviders(<InFlight kind="qbittorrent" onChoose={onChoose} />)
+
+    await user.click(existing())
+    await user.type(screen.getByLabelText('位址'), 'http://nas:8080')
+    await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+    expect(onChoose).toHaveBeenCalledOnce()
+    expect(existing()).toBeChecked()
+    expect(bundled()).toBeDisabled()
+    expect(announcer('qbittorrent')).toHaveTextContent('正在測試既有的 qBittorrent…')
   })
 })
 

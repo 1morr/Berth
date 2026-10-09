@@ -5,8 +5,9 @@ import type { InterfaceLogin } from '../api/setup'
 /**
  * 套件內 qBittorrent / Prowlarr 自己的介面登入（M4 票 07，`.scratch/m4/service-logins-shape.md`）。
  *
- * **預設「沿用 Jellyfin 帳密」**（M4 票 15，brief §16.3）：帳號是擁有者、密碼打一次，後端先向 Jellyfin
- * 驗過才寫。取消勾選是票 07 的三格：設一組新登入就是建立，所以密碼打兩次；兩格都必填。
+ * **「沿用 Jellyfin 帳密」**（M4 票 15，brief §16.3）：帳號是擁有者、密碼打一次，後端先向 Jellyfin
+ * 驗過才寫。不勾是票 07 的三格：設一組新登入就是建立，所以密碼打兩次；兩格都必填。頁 1 帶過來的那一組
+ * 自動送出，所以不帶時一開始就是三格、沿用不勾（M4 票 80：原本預設勾，頁 1 沒帶時等於再問一次）。
  * 頁上還沒設過時欄位直接打開；設過之後說出帳號、按「更換」才打開，不帶就是登入照舊。
  */
 export interface LoginDraft {
@@ -37,24 +38,19 @@ export const LOGIN_RULES = {
 } as const satisfies Record<LoginService, LoginRules | null>
 
 export interface LoginProblems {
-  /** 沿用時是擁有者的名字不合規則（那一格不在畫面上，說在密碼那一格）。 */
   username?: 'blank' | 'short' | 'colon'
   password?: 'blank' | 'short'
   confirm?: 'mismatch'
 }
 
 /**
- * `reuse`：沿用 Jellyfin 帳密時只看密碼那一格，再加上擁有者的名字（`owner`）合不合規則——它就是要寫進去的帳號。
+ * `reuse`：沿用 Jellyfin 帳密時只看密碼那一格。擁有者的名字不合規則時根本勾不起沿用（`reuseUnfit`）。
  */
 export function loginProblems(
   draft: LoginDraft,
-  {
-    reuse = false,
-    rules = null,
-    owner = '',
-  }: { reuse?: boolean; rules?: LoginRules | null; owner?: string } = {},
+  { reuse = false, rules = null }: { reuse?: boolean; rules?: LoginRules | null } = {},
 ): LoginProblems {
-  const username = reuse ? owner : draft.username.trim()
+  const username = draft.username.trim()
   const usernameProblem = !username
     ? 'blank'
     : rules && username.length < rules.usernameMin
@@ -67,12 +63,7 @@ export function loginProblems(
     : rules && draft.password.length < rules.passwordMin
       ? 'short'
       : undefined
-  if (reuse) {
-    return {
-      ...(usernameProblem && usernameProblem !== 'blank' ? { username: usernameProblem } : {}),
-      ...(passwordProblem ? { password: passwordProblem } : {}),
-    }
-  }
+  if (reuse) return passwordProblem ? { password: passwordProblem } : {}
   return {
     ...(usernameProblem ? { username: usernameProblem } : {}),
     ...(passwordProblem ? { password: passwordProblem } : {}),
@@ -87,22 +78,45 @@ export function takenLogin(draft: LoginDraft, reuse: boolean): InterfaceLogin {
     : { username: draft.username.trim(), password: draft.password, reuse_owner: false }
 }
 
+/** 頁 1 帶過來的那一組（M4 票 40、80），由 `SetupPage` 持有。 */
+export interface CarriedLogin {
+  /** 還留在這個分頁記憶體裡的擁有者密碼；沒帶、重新整理過、或 Jellyfin 不再收它就是 `null`。 */
+  password: string | null
+  /**
+   * 那一台現在的登入就是它：這個分頁最後一次替那一台設下的是沿用這一組。帳號是擁有者不夠——按「改用另一組」
+   * 只換密碼時帳號一樣。
+   */
+  inUse: boolean
+}
+
+/** 擁有者的 Jellyfin 帳密哪裡不合一個服務的規則：帳號太短、帳號有冒號、密碼太短。 */
+export type ReuseUnfit = 'usernameShort' | 'usernameColon' | 'passwordShort'
+
 /**
- * 頁 1 帶過來的那一組（M4 票 40，brief §19 D4）照這個服務的規則合不合：不合就說哪裡不合（帳號與密碼
- * 的問題各一個），合（或根本沒帶）就是 `null`。沿用時帳號是擁有者，所以兩個都要看。
+ * 擁有者的 Jellyfin 帳密照這個服務的規則能不能沿用（M4 票 80）：頁 1 的「也用這組」邊打邊看，頁 2 的
+ * 「沿用」看擁有者的名字（密碼要打了才知道，傳空字串）。**空的那一格不算不合**——還沒打。帳號的問題先說：
+ * 改密碼救不了。能沿用（或那個服務沒有規則）是 `null`。
  */
-export function carriedUnfit(
+export function reuseUnfit(
   service: LoginService,
-  carriedPassword: string | null,
   owner: string,
-): LoginProblems | null {
-  if (carriedPassword === null) return null
-  const problems = loginProblems(reuseDraft(carriedPassword), {
-    reuse: true,
-    rules: LOGIN_RULES[service],
-    owner,
-  })
-  return Object.keys(problems).length > 0 ? problems : null
+  password: string,
+): ReuseUnfit | null {
+  const rules = LOGIN_RULES[service]
+  if (!rules) return null
+  const problems = loginProblems({ username: owner, password, confirm: password }, { rules })
+  if (problems.username === 'short') return 'usernameShort'
+  if (problems.username === 'colon') return 'usernameColon'
+  if (problems.password === 'short') return 'passwordShort'
+  return null
+}
+
+/** 只看擁有者的名字時（密碼還沒打）只會是帳號那兩種。 */
+export type OwnerUnfit = Exclude<ReuseUnfit, 'passwordShort'>
+
+function ownerUnfitFor(service: LoginService, owner: string): OwnerUnfit | null {
+  const unfit = owner ? reuseUnfit(service, owner, '') : null
+  return unfit === 'passwordShort' ? null : unfit
 }
 
 /** 沿用時的欄位：只有密碼那一格（帳號是擁有者，後端填）。 */
@@ -115,7 +129,7 @@ function reuseDraft(password: string): LoginDraft {
  * 照舊經 `reuse_owner`：後端先向 Jellyfin 驗過才寫。**只送一次**，不管結果——失敗了欄位照常打開，
  * 拒絕與失敗由呼叫端照手動送出的那一套說。
  *
- * @param carriedPassword 合規則的那一組（`carriedUnfit` 不是 `null` 的不傳），沒有就是 `null`。
+ * @param carriedPassword 頁 1 帶過來的那一組（頁 1 照 qBittorrent 的規則擋過，`reuseUnfit`），沒有就是 `null`。
  * @param needed 那一台還沒有介面登入，頁上本來就要問。
  */
 export function useCarriedLogin({
@@ -149,11 +163,13 @@ export type TakenLogin = InterfaceLogin | null | undefined
 export interface InterfaceLoginForm {
   draft: LoginDraft
   change: (patch: Partial<LoginDraft>) => void
-  /** 沿用 Jellyfin 帳密。沒有擁有者可沿用時（不會發生在精靈裡）永遠是 `false`。 */
+  /** 沿用 Jellyfin 帳密。沒有擁有者可沿用、或擁有者的名字不合規則時永遠是 `false`。 */
   reuse: boolean
   setReuse: (reuse: boolean) => void
   /** 擁有者的名字：沿用時的帳號。 */
   owner: string
+  /** 擁有者的名字不合這個服務的規則：「沿用」勾不起來（M4 票 80）。 */
+  ownerUnfit: OwnerUnfit | null
   /** 按過送出之後才說哪一格不對，打字的當下不罵人。 */
   problems: LoginProblems
   /** 照哪一份規則擋（`LOGIN_RULES`）。文案要說出那個數字。 */
@@ -177,20 +193,23 @@ export interface InterfaceLoginForm {
  * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）。設定頁傳空字串：
  *   那裡沒有沿用，帳號只預填目前那一個（M4 票 78）。
  * @param alwaysOpen 設定頁：那一區本來就是改帳密的表單，沒有收起來的狀態。
- * @param reuse 一開始勾不勾沿用（預設勾）。
+ * @param reuse 一開始勾不勾沿用（預設不勾）。
  */
 export function useInterfaceLogin({
   service,
   current,
   owner,
   alwaysOpen = false,
-  reuse: reuseAtFirst = true,
+  reuse: reuseAtFirst = false,
 }: {
   service: LoginService
   current: string
   owner: string
   alwaysOpen?: boolean
-  /** 一開始勾不勾沿用：頁 1 那一組不合這個服務的規則時（`carriedUnfit`）一開始就是自設的三格。 */
+  /**
+   * 一開始勾不勾沿用：頁 1 帶了一組過來時勾——它自動送出，Jellyfin 不收那一組時欄位打開，要打的就是
+   * 正確的 Jellyfin 密碼（M4 票 40、80）。
+   */
   reuse?: boolean
 }): InterfaceLoginForm {
   const [draft, setDraft] = useState<LoginDraft>({
@@ -203,9 +222,10 @@ export function useInterfaceLogin({
   const [checked, setChecked] = useState(false)
   const [edits, setEdits] = useState(0)
   const open = alwaysOpen || changing || !current
-  const reusing = reuse && Boolean(owner)
+  const ownerUnfit = ownerUnfitFor(service, owner)
+  const reusing = reuse && Boolean(owner) && ownerUnfit === null
   const rules = LOGIN_RULES[service]
-  const problemsNow = () => loginProblems(draft, { reuse: reusing, rules, owner })
+  const problemsNow = () => loginProblems(draft, { reuse: reusing, rules })
 
   return {
     draft,
@@ -223,6 +243,7 @@ export function useInterfaceLogin({
       setEdits((count) => count + 1)
     },
     owner,
+    ownerUnfit,
     problems: checked ? problemsNow() : {},
     rules,
     open,

@@ -64,7 +64,8 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   expect(probed.filter((url) => /qbittorrent/.test(url))).toEqual([])
   await page.getByRole('radio', { name: /套件內/ }).click()
   await expect(page.getByRole('heading', { name: '設定 qBittorrent 的 WebUI 登入' })).toBeVisible()
-  await expect(page.getByText('qBittorrent WebUI 的帳號：')).toBeVisible()
+  // 帶過來而且設好了：只說沿用了誰的（M4 票 80）。
+  await expect(page.getByText('已沿用 Jellyfin 帳密（skipper）')).toBeVisible()
   await expect(page.getByLabel('skipper 的 Jellyfin 密碼')).toHaveCount(0)
   expect(writes.filter((url) => url.endsWith('/api/setup/qbittorrent/apply'))).toHaveLength(1)
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
@@ -125,7 +126,9 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await expect(quick).toBeVisible()
   await page.waitForLoadState('networkidle')
   // 選套件內那一下與自動沿用的介面登入（M4 票 40）是僅有的寫入；清單出來之後一站都沒測、沒加。
-  await expect(page.getByText('Prowlarr 介面的帳號：')).toBeVisible()
+  await expect(
+    page.getByTestId('prowlarr-login').getByText('已沿用 Jellyfin 帳密（skipper）'),
+  ).toBeVisible()
   expect(writes.slice(atIndexers).map((url) => new URL(url).pathname)).toEqual([
     '/api/setup/services/prowlarr',
     '/api/setup/indexers/login',

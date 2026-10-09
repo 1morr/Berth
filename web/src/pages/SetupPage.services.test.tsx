@@ -54,10 +54,16 @@ const FOUR_FAILURES: Record<string, [SiteFailure, string]> = {
   'animetosho-xyz': ['unreachable', 'Unable to connect to indexer, check the log above.'],
 }
 
-/** 介面登入預設沿用 Jellyfin 帳密（M4 票 15）：只有一格擁有者的密碼。 */
+/** 勾了「沿用 Jellyfin 帳密」（M4 票 15）：只有一格擁有者的密碼。 */
 const OWNER_PASSWORD = 'skipper 的 Jellyfin 密碼'
+const REUSE = '沿用 Jellyfin 帳密（skipper）'
 
-/** 取消勾選「沿用」之後的三格（M4 票 07）：帳號預填擁有者的名字，密碼打兩次。 */
+/** 頁 1 沒帶一組過來時介面登入一開始是自設的三格（M4 票 80），勾起「沿用」才是一格密碼。 */
+async function reuseOwner(user: UserEvent, name = REUSE) {
+  await user.click(await screen.findByRole('checkbox', { name }))
+}
+
+/** 不勾「沿用」的三格（M4 票 07）：帳號預填擁有者的名字，密碼打兩次。 */
 async function typeOwnLogin(
   user: UserEvent,
   fields: ReturnType<typeof within>,
@@ -266,7 +272,7 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.getByRole('button', { name: '設定介面登入' })).toBeInTheDocument()
   })
 
-  it('WebUI 登入預設沿用 Jellyfin 帳密：只有一格密碼，套用之後留下那一條的結果', async () => {
+  it('WebUI 登入勾起沿用 Jellyfin 帳密：只有一格密碼，套用之後留下那一條的結果', async () => {
     const applied = qbittorrentSetup({
       steps: [step('web_ui_password', 'ok', 'skipper')],
       web_ui_username: 'skipper',
@@ -281,7 +287,10 @@ describe('頁 2：qBittorrent', () => {
     renderInRoute(<SetupPage />)
     const legend = await screen.findByText('qBittorrent WebUI 登入')
     const fields = within(legend.closest('fieldset')!)
-    expect(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
+    // 頁 1 沒帶一組過來：一開始是自設的三格（M4 票 80）。
+    expect(fields.getByRole('checkbox', { name: REUSE })).not.toBeChecked()
+    expect(fields.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
+    await reuseOwner(user)
     // 說得出這是 qBittorrent 自己的登入、Berth 用不到它。
     expect(fields.getByText(/Berth 自己用不到它/)).toBeInTheDocument()
     expect(fields.queryByLabelText('帳號')).not.toBeInTheDocument()
@@ -342,13 +351,14 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await reuseOwner(user)
     await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
 
     expect(await screen.findByText('這一格要填。')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
   })
 
-  it('取消沿用是自設的三格：帳號預填擁有者，沒填或兩次不同就不送，送的是 reuse_owner:false', async () => {
+  it('不沿用是自設的三格：帳號預填擁有者，沒填或兩次不同就不送，送的是 reuse_owner:false', async () => {
     const stub = stubApi({
       [STATUS]: { body: AT_QBITTORRENT },
       [QBITTORRENT]: { body: qbittorrentSetup() },
@@ -359,7 +369,6 @@ describe('頁 2：qBittorrent', () => {
     renderInRoute(<SetupPage />)
     const legend = await screen.findByText('qBittorrent WebUI 登入')
     const fields = within(legend.closest('fieldset')!)
-    await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
 
     expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
     expect(fields.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
@@ -390,6 +399,7 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
+    await reuseOwner(user)
     await user.type(await screen.findByLabelText(OWNER_PASSWORD), 'wrong-one')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
 
@@ -423,11 +433,11 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.queryByRole('button', { name: /重新檢查/ })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '更換登入' }))
-    expect(screen.getByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '設定介面登入' })).toBeInTheDocument()
-    // 取消沿用時帳號預填那一台現在的帳號，不是擁有者。
-    await user.click(screen.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
+    // 不沿用時帳號預填那一台現在的帳號，不是擁有者。
     expect(screen.getByLabelText('帳號')).toHaveValue('deckhand')
+    await reuseOwner(user)
+    expect(screen.getByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
   })
 
@@ -615,6 +625,7 @@ describe('頁 2：WebUI 登入的規則', () => {
 
     renderInRoute(<SetupPage />)
     const fields = await loginFields()
+    await reuseOwner(user)
     await user.type(fields.getByLabelText(OWNER_PASSWORD), 'abcd')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
 
@@ -635,24 +646,21 @@ describe('頁 2：WebUI 登入的規則', () => {
     )
   })
 
-  it('擁有者的帳號不合 qBittorrent 的規則時也不能沿用', async () => {
-    const stub = stubApi({
-      [STATUS]: { body: setupStatus({ ...AT_QBITTORRENT, owner: 'jo' }) },
+  it('擁有者的帳號不合 qBittorrent 的規則：「沿用」勾不起來並說為什麼，不是勾了才紅（M4 票 80）', async () => {
+    stubApi({
+      [STATUS]: { body: setupStatus({ ...AT_QBITTORRENT, owner: 'j:o' }) },
       [QBITTORRENT]: { body: qbittorrentSetup() },
     })
-    const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
     const fields = await loginFields()
-    await user.type(fields.getByLabelText('jo 的 Jellyfin 密碼'), 'Harbour-1')
-    await user.click(screen.getByRole('button', { name: '設定介面登入' }))
-
-    expect(
-      await fields.findByText(
-        'qBittorrent 的帳號至少要 3 個字元、不能有冒號，jo 不能沿用；請取消勾選，另設一組。',
-      ),
-    ).toBeVisible()
-    expect(called(stub, '/api/setup/qbittorrent/apply')).toBe(false)
+    const reuse = fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（j:o）' })
+    expect(reuse).toBeDisabled()
+    expect(reuse).not.toBeChecked()
+    expect(reuse).toHaveAccessibleDescription(
+      'j:o 有冒號（:），qBittorrent 不收這個帳號，不能沿用。',
+    )
+    expect(fields.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
   })
 
   it('自設的帳號與密碼照規則逐格擋，改對了才送', async () => {
@@ -665,7 +673,6 @@ describe('頁 2：WebUI 登入的規則', () => {
 
     renderInRoute(<SetupPage />)
     const fields = await loginFields()
-    await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
     await user.clear(fields.getByLabelText('帳號'))
     await user.type(fields.getByLabelText('帳號'), 'ab')
     await user.type(fields.getByLabelText('密碼'), 'abcd')
@@ -704,6 +711,7 @@ describe('頁 2：WebUI 登入的規則', () => {
       renderInRoute(<SetupPage />)
       const legend = await screen.findByText('qBittorrent WebUI login')
       const fields = within(legend.closest('fieldset')!)
+      await reuseOwner(user, 'Reuse the Jellyfin login (skipper)')
       await user.type(fields.getByLabelText("skipper's Jellyfin password"), 'abcd')
       await user.click(screen.getByRole('button', { name: 'Set interface login' }))
 
@@ -727,6 +735,7 @@ describe('頁 2：WebUI 登入的規則', () => {
 
     renderInRoute(<SetupPage />)
     const fields = await loginFields()
+    await reuseOwner(user)
     await user.type(fields.getByLabelText(OWNER_PASSWORD), 'Harbour-1')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
 
@@ -743,7 +752,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     expect(screen.queryByText('qBittorrent WebUI 的帳號：')).not.toBeInTheDocument()
   })
 
-  it('取消沿用之後，上一次的失敗不再掛著；登入照舊的那一條也不是失敗', async () => {
+  it('換了沿用與否之後，上一次的失敗不再掛著；登入照舊的那一條也不是失敗', async () => {
     stubApi({
       [STATUS]: { body: AT_QBITTORRENT },
       [QBITTORRENT]: { body: REJECTED },
@@ -754,8 +763,8 @@ describe('頁 2：WebUI 登入的規則', () => {
     const sequence = await screen.findByTestId('sequence')
     expect(await within(sequence).findByText(/qBittorrent 不收這組帳密/)).toBeVisible()
 
-    const fields = await loginFields()
-    await user.click(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
+    await loginFields()
+    await reuseOwner(user)
 
     expect(within(sequence).queryByText(/qBittorrent 不收這組帳密/)).not.toBeInTheDocument()
   })
@@ -1028,7 +1037,8 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const fields = within(
       block.getByText('Prowlarr 介面登入', { selector: 'legend' }).closest('fieldset')!,
     )
-    expect(fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' })).toBeChecked()
+    expect(fields.getByRole('checkbox', { name: REUSE })).not.toBeChecked()
+    await reuseOwner(user)
     await user.click(block.getByRole('button', { name: '設定介面登入' }))
 
     expect(await fields.findByText('這一格要填。')).toBeInTheDocument()
@@ -1056,6 +1066,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
 
     renderInRoute(<SetupPage />)
     const block = within(await screen.findByTestId('prowlarr-login'))
+    await reuseOwner(user)
     await user.type(block.getByLabelText(OWNER_PASSWORD), 'harbour')
     await user.click(block.getByRole('button', { name: '設定介面登入' }))
 

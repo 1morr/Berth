@@ -131,6 +131,12 @@ const zhHant = {
     carry: {
       label: '套件內 qBittorrent 與 Prowlarr 的介面也用這組',
       hint: '到那兩頁自動帶入，不用再打一次密碼；Berth 照樣先向 Jellyfin 驗過才寫。密碼只留在這個分頁的記憶體裡，不存進 Berth、也不寫進瀏覽器——重新整理之後會再問一次。',
+      // 照 qBittorrent 的規則邊打邊看（M4 票 80）：不合就勾不起來。
+      unfit: {
+        usernameShort: '帳號少於 {{min}} 個字元，qBittorrent 不收；頁 2、頁 4 會再問一次介面登入。',
+        usernameColon: '帳號有冒號（:），qBittorrent 不收；頁 2、頁 4 會再問一次介面登入。',
+        passwordShort: '密碼少於 {{min}} 個字元，qBittorrent 不收；頁 2、頁 4 會再問一次介面登入。',
+      },
     },
     field: {
       username: 'Jellyfin 帳號',
@@ -238,6 +244,11 @@ const zhHant = {
       upgradeNotes: 'Jellyfin 12.0 升級注意',
     },
     switchToBundled: '改用套件內的那一台',
+    // 選擇送出去、還沒回來（M4 票 80）：第一次點套件內時還沒有連線那一列可畫。
+    pending: {
+      bundled: '正在設定套件內 {{service}}，連線測試中…',
+      existing: '正在測試既有的 {{service}}…',
+    },
     refused: {
       jellyfin_owned: '擁有者成立之後，Jellyfin 的來源換不了。',
       other_server:
@@ -552,13 +563,15 @@ const zhHant = {
     reuseHint:
       '帳號就是 {{owner}}，密碼打一次：Berth 先向 Jellyfin 確認它是對的才寫進去，只記雜湊、不存密碼。取消勾選就自己設一組。',
     ownerPassword: '{{owner}} 的 Jellyfin 密碼',
+    // 擁有者的名字不合那個服務的規則：「沿用」勾不起來（M4 票 80）。
+    reuseUnfit: {
+      usernameShort: '{{owner}} 少於 {{min}} 個字元，{{service}} 不收這個帳號，不能沿用。',
+      usernameColon: '{{owner}} 有冒號（:），{{service}} 不收這個帳號，不能沿用。',
+    },
     carried: {
       applying: '沿用頁 1 的 Jellyfin 帳密（{{owner}}），設定中…',
-      unfitLabel: '不能沿用',
-      unfitPassword:
-        '{{service}} 的密碼至少要 {{min}} 個字元，頁 1 那一組 Jellyfin 密碼太短，不能沿用；請在下面另設一組。',
-      unfitUsername:
-        '{{service}} 的帳號至少要 {{min}} 個字元、不能有冒號，{{owner}} 不能沿用；請在下面另設一組。',
+      set: '已沿用 Jellyfin 帳密（{{owner}}）',
+      another: '改用另一組',
     },
     error: {
       blank: '這一格要填。',
@@ -568,8 +581,6 @@ const zhHant = {
       passwordShort: '{{service}} 的密碼至少要 {{min}} 個字元。',
       reusePasswordShort:
         '{{service}} 的密碼至少要 {{min}} 個字元，這組 Jellyfin 密碼不能沿用；請取消勾選，另設一組。',
-      reuseUsername:
-        '{{service}} 的帳號至少要 {{min}} 個字元、不能有冒號，{{owner}} 不能沿用；請取消勾選，另設一組。',
     },
     refused: {
       owner_password: '這不是 {{owner}} 的 Jellyfin 密碼，所以什麼都沒寫；改好再按一次。',
@@ -3353,6 +3364,14 @@ const en: Translations<typeof zhHant> = {
     carry: {
       label: 'Use this login for the bundled qBittorrent and Prowlarr interfaces too',
       hint: 'Those two pages fill it in for you, so you do not type the password again; Berth still checks it with Jellyfin before writing it. The password stays only in this tab’s memory: Berth does not store it and the browser does not save it. After a reload you are asked again.',
+      unfit: {
+        usernameShort:
+          'qBittorrent refuses usernames shorter than {{min}} characters; pages 2 and 4 will ask for an interface login again.',
+        usernameColon:
+          'qBittorrent refuses usernames with a colon (:); pages 2 and 4 will ask for an interface login again.',
+        passwordShort:
+          'qBittorrent refuses passwords shorter than {{min}} characters; pages 2 and 4 will ask for an interface login again.',
+      },
     },
     field: {
       username: 'Jellyfin username',
@@ -3458,6 +3477,10 @@ const en: Translations<typeof zhHant> = {
       upgradeNotes: 'Jellyfin 12.0 upgrade notes',
     },
     switchToBundled: 'Use the bundled one instead',
+    pending: {
+      bundled: 'Setting up the bundled {{service}} and testing the connection…',
+      existing: 'Testing your existing {{service}}…',
+    },
     refused: {
       jellyfin_owned: 'Once there is an owner, the Jellyfin source cannot change.',
       other_server:
@@ -3794,13 +3817,16 @@ const en: Translations<typeof zhHant> = {
     reuseHint:
       'The username is {{owner}}; type the password once. Berth checks it with Jellyfin before writing it, and keeps only a hash, never the password. Untick to set a login of your own.',
     ownerPassword: "{{owner}}'s Jellyfin password",
+    reuseUnfit: {
+      usernameShort:
+        '{{owner}} is shorter than {{min}} characters; {{service}} refuses that username, so it cannot be reused.',
+      usernameColon:
+        '{{owner}} has a colon (:); {{service}} refuses that username, so it cannot be reused.',
+    },
     carried: {
       applying: 'Reusing the Jellyfin login from page 1 ({{owner}})…',
-      unfitLabel: 'Cannot reuse',
-      unfitPassword:
-        '{{service}} needs a password of at least {{min}} characters; the Jellyfin password from page 1 is too short to reuse. Set one of its own below.',
-      unfitUsername:
-        '{{service}} needs a username of at least {{min}} characters with no colon, so {{owner}} cannot be reused. Set one of its own below.',
+      set: 'Reusing the Jellyfin login ({{owner}})',
+      another: 'Use a different login',
     },
     error: {
       blank: 'Fill this in.',
@@ -3810,8 +3836,6 @@ const en: Translations<typeof zhHant> = {
       passwordShort: '{{service}} needs a password of at least {{min}} characters.',
       reusePasswordShort:
         '{{service}} needs a password of at least {{min}} characters, so this Jellyfin password cannot be reused; untick the box and set one of its own.',
-      reuseUsername:
-        '{{service}} needs a username of at least {{min}} characters with no colon, so {{owner}} cannot be reused; untick the box and set one of its own.',
     },
     refused: {
       owner_password:

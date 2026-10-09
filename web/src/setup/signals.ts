@@ -117,7 +117,16 @@ export function endpointAt(baseUrl: string, kind: ServiceKind): string {
 export function testTarget(status: SetupStatus, kind: ServiceKind): string {
   const chosen = status.services.find((row) => row.kind === kind)?.base_url
   // OpenAPI 把 dict 寫成任意鍵；後端三個服務一定都給（`services/clients.bundled_targets`）。
-  return (chosen || status.bundled_targets[kind]!).replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  return hostPort(chosen || status.bundled_targets[kind]!)
+}
+
+/** 套件內那一台的 `主機:port`：選了還沒回來時，存下的那一台可能是另一台（M4 票 80）。 */
+export function bundledTarget(status: SetupStatus, kind: ServiceKind): string {
+  return hostPort(status.bundled_targets[kind]!)
+}
+
+function hostPort(baseUrl: string): string {
+  return baseUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
 }
 
 /** `.env` 預設的那一行（`deploy/.env.example`）。 */

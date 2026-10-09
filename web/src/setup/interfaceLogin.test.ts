@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LOGIN_RULES, loginProblems, takenLogin } from './interfaceLogin'
+import { LOGIN_RULES, loginProblems, reuseUnfit, takenLogin } from './interfaceLogin'
 
 describe('loginProblems（M4 票 07：兩格都必填、密碼打兩次）', () => {
   it('帳號、密碼、再一次都對得上就沒有問題', () => {
@@ -58,8 +58,8 @@ describe('qBittorrent 的帳密規則（M4 票 26，brief §20.2）', () => {
   const rules = LOGIN_RULES.qbittorrent
   const own = (username: string, password: string) =>
     loginProblems({ username, password, confirm: password }, { rules })
-  const reused = (owner: string, password: string) =>
-    loginProblems({ username: '', password, confirm: '' }, { reuse: true, rules, owner })
+  const reused = (password: string) =>
+    loginProblems({ username: '', password, confirm: '' }, { reuse: true, rules })
 
   it('密碼短於 6 字元擋下，剛好 6 字元通過；字數照 String.length（六個中文字也是 6）', () => {
     expect(own('skipper', 'abcde')).toEqual({ password: 'short' })
@@ -74,11 +74,9 @@ describe('qBittorrent 的帳密規則（M4 票 26，brief §20.2）', () => {
     expect(own('abc', 'abcdef')).toEqual({})
   })
 
-  it('沿用時照樣檢查：Jellyfin 密碼太短、擁有者的名字不合規則都不能沿用', () => {
-    expect(reused('skipper', 'abcd')).toEqual({ password: 'short' })
-    expect(reused('jo', 'Harbour-1')).toEqual({ username: 'short' })
-    expect(reused('j:o', 'Harbour-1')).toEqual({ username: 'colon' })
-    expect(reused('skipper', 'Harbour-1')).toEqual({})
+  it('沿用時照樣檢查密碼：Jellyfin 密碼太短不能沿用', () => {
+    expect(reused('abcd')).toEqual({ password: 'short' })
+    expect(reused('Harbour-1')).toEqual({})
   })
 
   it('沒有規則的服務（Prowlarr）只要填了就好', () => {
@@ -88,5 +86,28 @@ describe('qBittorrent 的帳密規則（M4 票 26，brief §20.2）', () => {
         { rules: LOGIN_RULES.prowlarr },
       ),
     ).toEqual({})
+  })
+})
+
+describe('reuseUnfit：擁有者的帳密能不能沿用（M4 票 80）', () => {
+  it('qBittorrent：帳號太短、有冒號、密碼太短各說一種；合規則是 null', () => {
+    expect(reuseUnfit('qbittorrent', 'jo', 'Harbour-1')).toBe('usernameShort')
+    expect(reuseUnfit('qbittorrent', 'j:o', 'Harbour-1')).toBe('usernameColon')
+    expect(reuseUnfit('qbittorrent', 'skipper', 'tiny')).toBe('passwordShort')
+    expect(reuseUnfit('qbittorrent', 'skipper', 'Harbour-1')).toBeNull()
+  })
+
+  it('帳號與密碼都不合時先說帳號：改密碼救不了', () => {
+    expect(reuseUnfit('qbittorrent', 'jo', 'tiny')).toBe('usernameShort')
+  })
+
+  it('空的那一格不算不合：還沒打', () => {
+    expect(reuseUnfit('qbittorrent', '', '')).toBeNull()
+    expect(reuseUnfit('qbittorrent', 'skipper', '')).toBeNull()
+    expect(reuseUnfit('qbittorrent', '', 'tiny')).toBe('passwordShort')
+  })
+
+  it('沒有規則的服務（Prowlarr）永遠沿用得了', () => {
+    expect(reuseUnfit('prowlarr', 'j', 'a')).toBeNull()
   })
 })

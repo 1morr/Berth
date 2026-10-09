@@ -142,8 +142,9 @@ function posts(fetchStub: ReturnType<typeof stubApi>): string[] {
     .map(([url]) => String(url))
 }
 
-/** 泊位上的介面登入（M4 票 07、15）：預設沿用擁有者的 Jellyfin 帳密，密碼打一次。 */
+/** 泊位上的介面登入（M4 票 07、15）：勾起沿用擁有者的 Jellyfin 帳密，密碼打一次（M4 票 80 起不預設勾）。 */
 async function typeLogin(user: UserEvent) {
+  await user.click(await screen.findByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }))
   await user.type(await screen.findByLabelText('skipper 的 Jellyfin 密碼'), 'harbour')
 }
 
