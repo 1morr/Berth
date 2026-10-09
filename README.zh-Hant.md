@@ -6,9 +6,9 @@
 
 ## 為什麼做 Berth
 
-常見的那一套是 Seerr（Jellyseerr 或 Overseerr）接 Sonarr、Radarr。我覺得它設定複雜、不好用，而且常常 request
-了，最後拿到的卻不是我想要的那個版本。Berth 的做法不同：發佈由你自己從 Prowlarr 的搜尋結果裡挑，或訂閱 RSS，
-之後一路到 Jellyfin 交給 Berth。另外也接了 Mikan 的 RSS，追當季動畫比較方便。
+Berth 是 Seerr（Jellyseerr 或 Overseerr）搭配 Sonarr、Radarr 之外的另一種做法。那一套要設定好幾個服務，發佈由
+自動規則挑選，最後拿到的不一定是你要的版本。Berth 讓你自己挑發佈：從 Prowlarr 的搜尋結果，或訂閱 RSS（包括追當季
+動畫用的 Mikan），之後由 Berth 匯入 Jellyfin。
 
 ## 能做什麼
 

@@ -6,10 +6,10 @@ Self-hosted media acquisition that ends in your Jellyfin library.
 
 ## Why Berth
 
-I built Berth because the usual stack, Seerr (Jellyseerr or Overseerr) in front of Sonarr and Radarr, felt
-complicated to set up and use, and a request often did not end with the release I wanted. Berth works
-differently: you pick the release yourself from a Prowlarr search, or follow an RSS feed, and Berth takes it into
-Jellyfin. It also reads Mikan's RSS, for following the current anime season.
+Berth is an alternative to running Seerr (Jellyseerr or Overseerr) with Sonarr and Radarr, a stack that takes
+several services to set up and picks releases by automated rules, so the result is not always the one you wanted.
+With Berth you pick the release yourself, from a Prowlarr search or an RSS feed (including Mikan for seasonal
+anime), and Berth imports it into Jellyfin.
 
 ## What it does
 
