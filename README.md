@@ -28,7 +28,7 @@ such as Mikan for seasonal anime, and imports it into Jellyfin.
 | ![The setup wizard checking library paths](docs/assets/screenshots/wizard.png) | ![Searching for a release on a title page](docs/assets/screenshots/title-search.png) |
 | ![A Jellyfin library browsed in Berth](docs/assets/screenshots/library.png) | ![The health page](docs/assets/screenshots/health.png) |
 
-Berth is a public beta. Read [Status & known limitations](#status--known-limitations) before relying on it.
+Berth is a public beta. Read [Status](#status) before relying on it.
 
 ## What you need
 
@@ -93,35 +93,15 @@ file) or **Existing** (one you already run); Berth tests each choice on the spot
 Page by page, with what Berth changes in each service: [Setup wizard](docs/guide/setup-wizard.md).
 Back up `${CONFIG_ROOT}/berth` (`./config/berth` by default); that folder is everything Berth knows.
 
-## Status & known limitations
+## Status
 
 Berth is a **public beta**.
 
 - It works with **Jellyfin 12.0 or newer** and **Prowlarr** only. No Emby, Plex or Jackett.
 - No notifications yet: open Berth to see what needs you.
-- Tested end to end on **Windows with Docker Desktop** and on **Unraid 7.1**. On **Ubuntu 26.04 with rootless
-  Docker**, the whole setup wizard and sending a release have been run, but not an import
-  ([trial notes](docs/research/linux-trial-2026-10-09.md), in Chinese). Other Linux distributions and NAS systems
-  have not been tested yet.
+- Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
+  systems have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.
-- Known issues (tracking notes, in Chinese):
-  - Without Prowlarr (skipped in the wizard or removed later) the health page stays red; there is no "don't use
-    Prowlarr" option yet ([61](.scratch/m4/issues/61-prowlarr-optional.md)).
-  - When a new import does not show up, Berth asks Jellyfin to scan every library, not only its own, and the first
-    import into an empty library can take over ten minutes to show as found
-    ([62](.scratch/m4/issues/62-jellyfin-scan-scope.md)).
-  - When an existing service lacks the `/data` mount, the fix shown says `${DATA_ROOT}:/data` instead of your
-    actual folder, and Jellyfin's mount is only checked on page 3
-    ([63](.scratch/m4/issues/63-copyable-mount-remedies.md)).
-  - An existing Jellyfin needs a library of each type you want; Berth adds a path to it but does not create one
-    ([64](.scratch/m4/issues/64-new-library-on-existing-jellyfin.md)).
-  - After switching to another qBittorrent, torrents still seeding on the old one stay there untracked, and Berth
-    does not say so ([65](.scratch/m4/issues/65-switch-explains-what-stays.md)).
-- Fixed since the last audit:
-  - Switching qBittorrent rechecks every Route by itself, and the health page no longer shows unchecked Routes as
-    green ([59](.scratch/m4/issues/59-health-tells-the-truth-after-switch.md)).
-  - After a reinstall or a lost database, the wizard's last page and **Issues** offer to rebuild the ledger from
-    the library ([60](.scratch/m4/issues/60-rebuild-ledger-from-the-ui.md)).
 
 ## Guides
 

@@ -11,6 +11,8 @@
 - **README 開頭說明為什麼有 Berth、能做什麼**（M4 票 75）：兩份 README 多〈Why Berth〉與〈What it does〉兩節，
   原本開頭那段的內容併進條列。`docs/guide/upgrading.md` 拿掉〈From 0.2.0 (the zip)〉：目前沒有從 0.2.0 升級的使用者
   （使用者 2026-10-09 決定）；下面 0.2.1 那段提到它的地方照歷史紀錄留著。
+- **README〈Status & known limitations〉縮成〈Status〉**：拿掉連到內部票的「已知問題」與「上一輪審計之後已修好」，
+  只留支援的服務、通知、實測平台與「不要開到公網」；修好了什麼看 CHANGELOG。
 - **關機時背景工作先把手上那一輪做完**（M4 票 71b）：原本停止容器會打斷正在跑的輪詢、規劃、入庫，偶爾留下一條沒
   關的資料庫連線；現在等那一輪做完才停（迴圈幾乎都在等待，多半不必等）。
 
@@ -64,8 +66,8 @@
 還沒做；這一版收的是 0.1.0 之後兩輪試跑與審計的修補（M4 票 43–60）。
 
 **測過的平台**：Windows Docker Desktop（每一輪試跑與審計都在這裡跑）、Unraid 7.1（M4 票 55：套件內三個
-服務、與既有的 Emby 並存、硬鏈接過 mover）。其他 Linux 發行版與 NAS 還沒有人實跑。已知限制與還開著的問題在
-README〈[Status & known limitations](README.md#status--known-limitations)〉。
+服務、與既有的 Emby 並存、硬鏈接過 mover）。其他 Linux 發行版與 NAS 還沒有人實跑。已知限制在
+README〈[Status](README.md#status)〉。
 
 **從 0.1.0 升級**：照 [docs/guide/upgrading.md](docs/guide/upgrading.md)，**下載 0.2.0 的 zip 解壓蓋過原本的部署
 目錄**，再 `docker compose pull && docker compose up -d`。0.1.0 沒有 zip、多半只抓了 compose 一個檔，蓋過時會補上

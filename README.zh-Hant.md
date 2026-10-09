@@ -26,7 +26,7 @@ Seerr 搭配 Sonarr、Radarr 要設定好幾個服務，而且發佈由它替你
 | ![設定精靈正在檢查媒體庫路徑](docs/assets/screenshots/wizard.png) | ![在作品頁搜尋發佈](docs/assets/screenshots/title-search.png) |
 | ![在 Berth 裡瀏覽 Jellyfin 媒體庫](docs/assets/screenshots/library.png) | ![健康頁](docs/assets/screenshots/health.png) |
 
-Berth 是公開 beta。依賴它之前先讀〈[現況與已知限制](#現況與已知限制)〉。
+Berth 是公開 beta。依賴它之前先讀〈[現況](#現況)〉。
 
 ## 需要什麼
 
@@ -87,32 +87,14 @@ Berth 是公開 beta。依賴它之前先讀〈[現況與已知限制](#現況�
 逐頁細節，以及 Berth 在每個服務裡改了什麼：[Setup wizard](docs/guide/setup-wizard.md)（英文）。
 備份 `${CONFIG_ROOT}/berth`（預設 `./config/berth`）：Berth 知道的一切都在那個資料夾。
 
-## 現況與已知限制
+## 現況
 
 Berth 是**公開 beta**。
 
 - 只支援 **Jellyfin 12.0 以上**與 **Prowlarr**。不支援 Emby、Plex、Jackett。
 - 還沒有通知：要打開 Berth 才看得到哪裡需要你。
-- 完整實跑過的是 **Windows 的 Docker Desktop** 與 **Unraid 7.1**。**Ubuntu 26.04 的 rootless Docker** 上走完過精靈、
-  送單也成功，但還沒在那裡入庫過（[實跑紀錄](docs/research/linux-trial-2026-10-09.md)）。其他 Linux
-  發行版與 NAS 還沒實測。
+- 實測過 **Windows 的 Docker Desktop** 與 **Unraid 7.1**；Ubuntu 的 rootless Docker 測過一部分。其他系統還沒實測。
 - **不要把 Berth 直接開到公網。** 從區網或 VPN 連。
-- 已知問題（追蹤票，中文）：
-  - 沒有 Prowlarr（精靈裡跳過、或之後移除）時健康頁一直紅；還沒有「不用 Prowlarr」的選項
-    （[61](.scratch/m4/issues/61-prowlarr-optional.md)）。
-  - 新入庫的檔案沒出現時，Berth 請 Jellyfin 掃描全部媒體庫、不只它自己的；空媒體庫的第一次入庫可能要十分鐘以上
-    才顯示「Jellyfin 已收錄」（[62](.scratch/m4/issues/62-jellyfin-scan-scope.md)）。
-  - 既有服務少了 `/data` 掛載時，畫面給的補法寫 `${DATA_ROOT}:/data` 而不是你真正的資料夾；Jellyfin 的掛載
-    要到頁 3 才檢查（[63](.scratch/m4/issues/63-copyable-mount-remedies.md)）。
-  - 既有 Jellyfin 要先有你要的每一種類型的媒體庫；Berth 只替它加路徑、不新建
-    （[64](.scratch/m4/issues/64-new-library-on-existing-jellyfin.md)）。
-  - 換到另一台 qBittorrent 之後，舊那台上還在做種的 torrent 留在那裡、不再被追蹤，Berth 也不會說
-    （[65](.scratch/m4/issues/65-switch-explains-what-stays.md)）。
-- 上一輪審計之後已修好：
-  - 換 qBittorrent 之後 Berth 自己重新檢查每一條 Route，健康頁不再把沒檢查過的 Route 算成綠燈
-    （[59](.scratch/m4/issues/59-health-tells-the-truth-after-switch.md)）。
-  - 重裝或資料庫遺失之後，精靈最後一頁與「待處理」頁會給「從媒體庫重建帳本」
-    （[60](.scratch/m4/issues/60-rebuild-ledger-from-the-ui.md)）。
 
 ## 指南
 
