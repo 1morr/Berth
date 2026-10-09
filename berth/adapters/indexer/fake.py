@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from berth.adapters.indexer import IndexerResult, SearchQuery
+from berth.adapters.indexer import IndexerResult, SearchQuery, SearchSite
 
 
 class FakeIndexerSearch:
@@ -22,7 +22,7 @@ class FakeIndexerSearch:
         errors: Mapping[str, Exception] | None = None,
         by_indexer: Mapping[int, Sequence[IndexerResult]] | None = None,
         indexer_errors: Mapping[int, Exception] | None = None,
-        sites: frozenset[str] = frozenset(),
+        sites: Sequence[SearchSite] = (),
     ) -> None:
         self.base_url = base_url
         self._results = tuple(results)
@@ -39,7 +39,7 @@ class FakeIndexerSearch:
         self.queries: list[SearchQuery] = []
         self.closed = False
         #: 一個查詢打到哪幾站（請求預算的鍵，M3 票 20）。預設沒有：不關心預算的測試不受它影響。
-        self.sites_ = sites
+        self.sites_ = tuple(sites)
 
     async def search(self, query: SearchQuery) -> tuple[IndexerResult, ...]:
         self.queries.append(query)
@@ -56,7 +56,7 @@ class FakeIndexerSearch:
                 return self._by_indexer[site]
         return self._by_query.get(query.text, self._results)
 
-    async def sites(self) -> frozenset[str]:
+    async def sites(self) -> tuple[SearchSite, ...]:
         if self.error is not None:
             raise self.error
         return self.sites_

@@ -330,10 +330,10 @@ class TestRequestBudget:
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
         factory.budget = RequestBudget(limit=2)
-        factory.budget.take(("mikanani.me",), 1, BudgetUse.POLL)
-        factory.budget.take(("mikanani.me",), 1, BudgetUse.BACKFILL)
+        factory.budget.take("mikanani.me", 1, BudgetUse.POLL)
+        factory.budget.take("mikanani.me", 1, BudgetUse.BACKFILL)
         with pytest.raises(BudgetExhaustedError):
-            factory.budget.take(("mikanani.me",), 5, BudgetUse.SEARCH)
+            factory.budget.take("mikanani.me", 5, BudgetUse.SEARCH)
         sign_in(client, DECKHAND)
 
         body = client.get("/api/health/budget").json()

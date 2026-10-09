@@ -15,6 +15,9 @@ export type Tags = Schemas['TagsOut']
 /** 索引站那邊沒搜到東西的幾種樣子。與 `TmdbProblem` 一樣，每一種的下一步都不同。 */
 export type IndexerProblem = NonNullable<Schemas['IndexerProblem']>
 
+/** 請求預算放不下這一批、這次沒問的一站（M4 票 77）。 */
+export type SkippedSite = Schemas['SkippedOut']
+
 /** 缺集搜尋的這一批（M3 票 20）：問了哪幾季、下一批是哪幾季、請求預算何時放得下它。 */
 export type Batch = Schemas['BatchOut']
 

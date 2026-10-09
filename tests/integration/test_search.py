@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.budget import RequestBudget
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.indexer import IndexerResult
+from berth.adapters.indexer import IndexerResult, SearchSite
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
     IndexerProblem,
@@ -663,7 +663,9 @@ class TestMissingEpisodes:
         """M3 票 20 驗收第二條：七季都有缺，季記號放不下一批——**分批問完每一季**，一次也不退回
         作品名。每一批說得出問了哪幾季、下一批是哪幾季、預算何時放得下它。"""
         long = await seven_seasons(session)
-        indexer = FakeIndexerSearch(sites=frozenset({"mikanani.me"}))
+        indexer = FakeIndexerSearch(
+            sites=(SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),)
+        )
         clock = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
         factory = FakeClientFactory(
             indexer_search=indexer, budget=RequestBudget(limit=60, now=lambda: clock)

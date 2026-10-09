@@ -1301,6 +1301,12 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 - **空白查詢回各站最新的發佈**（2026-09-25 實測）：`GET /api/v1/search?query=&indexerIds=<id>&type=search`
   對 dmhy 回 80 筆、YTS 96 筆，各約 1.3 秒。精靈的試搜（票 06e）以它當預設：不必先想一個標題也證明得了
   那一站回得出東西。`indexerIds` 限定那一站，逐站各發一個才分得出哪一站失敗。
+- **`indexerIds` 可以一次帶好幾站，空的是每一個啟用中的站**（2026-10-09 查證，M4 票 77）：`SearchResource`
+  的 `IndexerIds` 是 `List<int>`，查詢字串重複帶（`indexerIds=3&indexerIds=7`）綁得進去；控制器交給
+  `_releaseSearchService.Search(request, payload.IndexerIds, true)`，空的時是全部啟用中的站；帶的每一站都不可用時回 400
+  （上一條）。搜尋因此能跳過請求預算放不下的站、只問其他站，不必換成逐站各發一個。
+  【原始碼 [`SearchResource.cs`](https://github.com/Prowlarr/Prowlarr/blob/develop/src/Prowlarr.Api.V1/Search/SearchResource.cs)、
+  [`_autodocs/api-reference/search.md`](https://github.com/Prowlarr/Prowlarr/blob/develop/_autodocs/api-reference/search.md)，經 context7】
 - **`indexer/test` 也測得了還沒加入的定義；搜尋只吃已加入的站**（2026-09-30 berth-lab `bundled` 的
   Prowlarr 2.6.5.5623 實測，M4 票 09；OpenAPI 的 `POST /api/v1/indexer/test` body 是 `IndexerResource`、
   另有 `forceTest` 查詢參數）：把 `indexer/schema` 的定義原樣送（`appProfileId` 換 1），通過回 **200 `{}`**
@@ -1545,6 +1551,8 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **Cardigann 定義的請求間隔**：`nyaasi.yml` 有 `requestDelay: 2`，`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有——Prowlarr 不替 Mikan 節流。
 - **輪詢間隔**：Sonarr 的 RSS Sync Interval 10–120 分鐘（預設值在文件與原始碼都找不到，社群慣用 15 分鐘）；AutoBangumi 的 `rss_time` 預設 900 秒，輪的是 Mikan 聚合 feed。
 - **出錯退避是另一回事**：Sonarr 的 `EscalationBackOff` 0 秒 → 1 分 → … → 24 小時逐級加重，與配額分開計時。
+- **Berth 的搜尋照「那一站那一次跳過」**（M4 票 77，推翻票 20 的「有一站放不下就整批不問」）：放不下的站這次
+  不問、其他站照問（`indexerIds`，§20.7），每一站都放不下才整批等。
 - **三站都沒有公開的限速或封鎖事故紀錄**（Mikan、acg.rip 找不到；Nyaa 只有上面那 2 秒的間接證據）。預算的數字因此不是量出來的，是照 Berth 的用量推的（plan §3.2）。
 
 ### 20.14 精靈手動選擇的慣例與既有服務的條件（2026-09-29 查證）

@@ -3,7 +3,8 @@
 `rss_poller`、每日補漏與索引站搜尋打的是同一批公開站（Prowlarr 預設的 Mikan、Nyaa、ACG.RIP
 就是 RSS 那三站，brief §20.7），所以它們共用一份：一個站在一段**滾動**視窗裡最多幾個請求。
 形狀照 Prowlarr 索引站的 Query Limit（`docs/research/request-budget.md`）：用完的那一個**被拒絕**，
-不是排隊等——拒絕說得出何時放得下，呼叫的一方照它自己的規矩延後（輪詢下一輪再試、搜尋把時間給畫面）。
+不是排隊等——拒絕說得出何時放得下，呼叫的一方照它自己的規矩延後（輪詢下一輪再試、搜尋這次不問
+那一站、每一站都放不下時把時間給畫面）。
 
 **記在程序的記憶體裡**，重啟歸零：Prowlarr 從它的歷史表數，而 Berth 沒有逐請求的歷史表；
 為了數請求開一張表，就要在背景迴圈與 API 之間多搶一把 SQLite 的寫鎖（輪詢在寫交易裡抓單集頁，
@@ -87,29 +88,38 @@ class RequestBudget:
         self._log: dict[str, deque[tuple[datetime, BudgetUse]]] = {}
         self._deferred: dict[tuple[str, BudgetUse], Deferral] = {}
 
-    def take(self, sites: Iterable[str], count: int, use: BudgetUse) -> None:
-        """在每一個站各佔 `count` 格；有一站放不下就一格都不佔，丟 `BudgetExhaustedError`。"""
+    def take(self, site: str, count: int, use: BudgetUse) -> None:
+        """在這一站佔 `count` 格；放不下就一格都不佔，丟 `BudgetExhaustedError`。"""
+        refused = self.take_each((site,), count, use)
+        if site in refused:
+            raise BudgetExhaustedError(site, refused[site])
+
+    def take_each(
+        self, sites: Iterable[str], count: int, use: BudgetUse
+    ) -> dict[str, datetime | None]:
+        """放得下的站各佔 `count` 格，放不下的一格都不佔、記成被延後；回放不下的站與它們放得下的
+        時刻（`None` 是永遠放不下）。搜尋照它決定這一次問哪幾站（M4 票 77）。"""
         moment = self._now()
-        targets = tuple(dict.fromkeys(sites))
-        for site in targets:
+        refused: dict[str, datetime | None] = {}
+        for site in dict.fromkeys(sites):
             until = self._fits_at(site, count, moment)
             if until != moment:
                 self._defer(site, use, count, moment, until)
-                raise BudgetExhaustedError(site, until)
-        for site in targets:
+                refused[site] = until
+                continue
             self._log.setdefault(site, deque()).extend((moment, use) for _ in range(count))
             self._deferred.pop((site, use), None)
+        return refused
 
     def ready_at(self, sites: Iterable[str], count: int) -> datetime | None:
-        """每一個站都放得下 `count` 個的最早時刻（現在放得下就是現在）；永遠放不下是 `None`。"""
+        """最早有一站放得下 `count` 個的時刻（現在放得下、或一站都沒有就是現在）；每一站都永遠
+        放不下是 `None`。搜尋跳過放不下的站（M4 票 77），所以有一站放得下就問得了。"""
         moment = self._now()
-        latest = moment
-        for site in sites:
-            until = self._fits_at(site, count, moment)
-            if until is None:
-                return None
-            latest = max(latest, until)
-        return latest
+        targets = tuple(sites)
+        if not targets:
+            return moment
+        fits = [until for site in targets if (until := self._fits_at(site, count, moment))]
+        return min(fits, default=None)
 
     def usage(self) -> tuple[SiteUsage, ...]:
         """健康頁那一張卡：視窗裡問過、或有工作被擋著的站，照站名排。"""
@@ -189,7 +199,7 @@ class BudgetedFetcher:
         self._use = use
 
     async def fetch(self, url: str) -> bytes:
-        self._budget.take((site_of(url),), 1, self._use)
+        self._budget.take(site_of(url), 1, self._use)
         return await self._inner.fetch(url)
 
     async def aclose(self) -> None:

@@ -97,10 +97,22 @@ class SearchOut(BaseModel):
     problem: IndexerProblem | None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str
-    #: `budget_exhausted` 時請求預算放得下這一批的時刻（M3 票 20）；永遠放不下是 `null`。
+    #: `budget_exhausted` 時最早有一站放得下這一批的時刻（M3 票 20）；永遠放不下是 `null`。
     retry_at: datetime | None
+    #: 請求預算放不下這一批、這次沒問的站（M4 票 77）；`budget_exhausted` 時是每一站。
+    skipped: list[SkippedOut]
     #: 缺集搜尋的這一批。作品名與自己打的關鍵字沒有批次。
     batch: BatchOut | None
+
+
+class SkippedOut(BaseModel):
+    """這次沒問的一站：主機名、索引站裡的名字、何時放得下這一批（`null` 是永遠放不下）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    site: str
+    indexers: list[str]
+    until: datetime | None
 
 
 class BatchOut(BaseModel):
@@ -116,7 +128,7 @@ class BatchOut(BaseModel):
     later: int
     #: 下一批問哪幾季；最後一批是空的。
     next_seasons: list[int]
-    #: 請求預算放得下下一批的時刻。預覽、最後一批是 `null`。
+    #: 請求預算最早有一站放得下下一批的時刻（M4 票 77）。預覽、最後一批是 `null`。
     next_at: datetime | None
 
 
@@ -224,5 +236,6 @@ def _out(view: SearchView) -> SearchOut:
         problem=view.problem,
         detail=view.detail,
         retry_at=view.retry_at,
+        skipped=[SkippedOut.model_validate(one) for one in view.skipped],
         batch=BatchOut.model_validate(view.batch) if view.batch is not None else None,
     )

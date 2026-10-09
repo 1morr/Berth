@@ -1036,6 +1036,7 @@ describe('Media 詳情頁', () => {
         problem: null,
         detail: '',
         retry_at: null,
+        skipped: [],
         batch: null,
       }
     }
@@ -1243,7 +1244,7 @@ describe('Media 詳情頁', () => {
               total: 0,
               attempts: [],
               problem: 'budget_exhausted',
-              detail: 'request budget for mikanani.me is used up',
+              detail: '',
               retry_at: later,
               batch: FIRST,
             },
