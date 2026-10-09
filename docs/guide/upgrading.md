@@ -28,14 +28,6 @@ tag, the whitelist script inside it, variables in `.env`); pulling a new image a
 
 What changed in each version, and what to watch for when upgrading: [CHANGELOG.md](../../CHANGELOG.md).
 
-### From 0.2.0 (the zip)
-
-0.2.0 came as `berth-deploy.zip` with a `preseed/` folder next to the compose file. From 0.2.1 the compose file
-carries that script itself, so replace `docker-compose.yml` as above and run `docker compose up -d`. The `preseed/`
-folder is no longer used; delete it once the new file is up. Your `.env` needs no change, except on Unraid: if
-`DATA_ROOT` or `CONFIG_ROOT` there is relative (`./data`), make it absolute before moving the stack into Compose
-Manager. You need Compose 2.23.1 or newer (`docker compose version`).
-
 ## Bundled Jellyfin
 
 The bundled Jellyfin is pinned to one minor line (`version-12.1ubu2604`), so `docker compose pull` gets its

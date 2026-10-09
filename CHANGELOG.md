@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **README 開頭說明為什麼有 Berth、能做什麼**（M4 票 75）：兩份 README 多〈Why Berth〉與〈What it does〉兩節，
+  原本開頭那段的內容併進條列。`docs/guide/upgrading.md` 拿掉〈From 0.2.0 (the zip)〉：目前沒有從 0.2.0 升級的使用者
+  （使用者 2026-10-09 決定）；下面 0.2.1 那段提到它的地方照歷史紀錄留著。
+
 ## [0.2.1] - 2026-10-09
 
 **部署只要 compose 檔加 `.env`**（M4 票 70、71，使用者 2026-10-09 拍板，推翻 0.2.0 的 release 附件）：貼進 Unraid

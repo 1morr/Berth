@@ -2,9 +2,25 @@
 
 [English](README.md) · **繁體中文**
 
-自架的媒體取得工具，終點是你的 Jellyfin 媒體庫。從 Prowlarr 找到發佈、或訂閱 RSS feed；Berth 把它送進
-qBittorrent，對照 TMDB 認出每個檔案是哪部電影、哪一集，再以 Jellyfin 認得的名字硬鏈接進媒體庫。它替放進去的
-每個檔案記帳，之後能檢查並修復媒體庫。
+自架的媒體取得工具，終點是你的 Jellyfin 媒體庫。
+
+## 為什麼做 Berth
+
+常見的那一套是 Seerr（Jellyseerr 或 Overseerr）接 Sonarr、Radarr。我覺得它設定複雜、不好用，而且常常 request
+了，最後拿到的卻不是我想要的那個版本。Berth 的做法不同：發佈由你自己從 Prowlarr 的搜尋結果裡挑，或訂閱 RSS，
+之後一路到 Jellyfin 交給 Berth。另外也接了 Mikan 的 RSS，追當季動畫比較方便。
+
+## 能做什麼
+
+- 在作品頁搜尋 Prowlarr，發佈由你自己挑。
+- 訂閱 Mikan、Nyaa、acg.rip 的 RSS：新的一集自動送出並入庫。
+- 對照 TMDB 認出每個檔案是哪部電影、哪一集，以 Jellyfin 認得的名字硬鏈接進媒體庫，不佔兩份空間。
+- 替放進去的每個檔案記帳；每晚的檢查找出被刪掉的集數、被複製檔取代的硬鏈接、
+  沒人認領的 torrent，列出每一件能怎麼處理。
+- 在健康頁每 5 分鐘重新檢查服務與媒體庫路徑。
+- 用精靈帶你設定：設好套件內的 Jellyfin、qBittorrent、Prowlarr，或接你已經在跑的，
+  並用一個真的檔案證明硬鏈接成立。
+- 介面可用繁體中文或英文。
 
 | | |
 | --- | --- |
