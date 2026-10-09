@@ -2,10 +2,27 @@
 
 **English** · [繁體中文](README.zh-Hant.md)
 
-Self-hosted media acquisition that ends in your Jellyfin library. Find a release through Prowlarr or follow an
-RSS feed; Berth sends it to qBittorrent, works out which film or episode each file is (from TMDB), and hardlinks it
-into Jellyfin under a name Jellyfin recognises. It keeps a ledger of every file it placed, so it can check and
-repair the library later.
+Self-hosted media acquisition that ends in your Jellyfin library.
+
+## Why Berth
+
+I built Berth because the usual stack, Seerr (Jellyseerr or Overseerr) in front of Sonarr and Radarr, felt
+complicated to set up and use, and a request often did not end with the release I wanted. Berth works
+differently: you pick the release yourself from a Prowlarr search, or follow an RSS feed, and Berth takes it into
+Jellyfin. It also reads Mikan's RSS, for following the current anime season.
+
+## What it does
+
+- Search Prowlarr from a title's page; you pick the release.
+- Follow Mikan, Nyaa and acg.rip RSS feeds; new episodes are sent and imported automatically.
+- Identify each film or episode from TMDB and hardlink it into Jellyfin under a name it recognises, so nothing
+  is stored twice.
+- Keep a ledger of every file it placed; a nightly check reports deleted episodes, hardlinks replaced by copies and
+  unclaimed torrents, and lists the options for each.
+- Recheck the services and library paths every 5 minutes on a health page.
+- Walk you through setup: configure the bundled Jellyfin, qBittorrent and Prowlarr or connect yours, and prove
+  with a real file that hardlinks work.
+- Show its interface in English or Traditional Chinese.
 
 | | |
 | --- | --- |
