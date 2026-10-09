@@ -61,6 +61,7 @@ import { IndexerStep } from '../setup/IndexerStep'
 import { GAP, indexerGaps } from '../setup/indexerGaps'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
+import type { CarriedLogin, LoginService } from '../setup/interfaceLogin'
 import { librariesFailed } from '../setup/jellyfinSteps'
 import { librariesRunning, routesRunning, startsOnItsOwn, storedList } from '../setup/autoDock'
 import { RouteStep, type DockFailure, type DockPlan } from '../setup/RouteStep'
@@ -137,6 +138,23 @@ export function SetupPage() {
     if (loginRefusalOf(error)?.reason === 'owner_password' && login?.reuse_owner) {
       setCarriedPassword((was) => (was === login.password ? null : was))
     }
+  }
+  // 這個分頁最後一次替哪幾台設下的就是帶過來的那一組（M4 票 80）：頁 2、頁 4 照它說「已沿用」。看帳號
+  // 認不出來——「改用另一組」只換密碼時帳號照舊是擁有者。
+  const [carriedTo, setCarriedTo] = useState<ReadonlySet<LoginService>>(new Set())
+  function noteLogin(service: LoginService, login: InterfaceLogin | null) {
+    // 登入照舊：那一台的登入沒變。
+    if (login === null) return
+    const took = login.reuse_owner && login.password === carriedPassword
+    setCarriedTo((was) => {
+      const next = new Set(was)
+      if (took) next.add(service)
+      else next.delete(service)
+      return next
+    })
+  }
+  function carriedFor(service: LoginService): CarriedLogin {
+    return { password: carriedPassword, inUse: carriedPassword !== null && carriedTo.has(service) }
   }
 
   const current = status.data
@@ -304,7 +322,10 @@ export function SetupPage() {
   }
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
-    onSuccess: (next) => absorbBerth(qbittorrentSetupQueryOptions.queryKey, next),
+    onSuccess: (next, login) => {
+      absorbBerth(qbittorrentSetupQueryOptions.queryKey, next)
+      noteLogin('qbittorrent', login)
+    },
     onError: dropCarried,
   })
   const applySites = useMutation({
@@ -319,7 +340,10 @@ export function SetupPage() {
   // 套件內 Prowlarr 的介面登入是自己的一顆按鈕（M4 票 20），不跟著「加入」送。
   const prowlarrLogin = useMutation({
     mutationFn: setIndexerLogin,
-    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
+    onSuccess: (next, login) => {
+      absorbBerth(indexerSetupQueryOptions.queryKey, next)
+      noteLogin('prowlarr', login)
+    },
     onError: dropCarried,
   })
   const skipSites = useMutation({
@@ -620,7 +644,7 @@ export function SetupPage() {
           setup={qbittorrent.data}
           setupFailed={qbittorrent.isError}
           owner={current.owner}
-          carriedPassword={carriedPassword}
+          carried={carriedFor('qbittorrent')}
           applying={applyPreferences.isPending}
           requestError={applyPreferences.error}
           loginRefusal={loginRefusalOf(applyPreferences.error)}
@@ -701,7 +725,7 @@ export function SetupPage() {
             indexers={indexers.data}
             indexersFailed={indexers.isError}
             owner={current.owner}
-            carriedPassword={carriedPassword}
+            carried={carriedFor('prowlarr')}
             applying={applySites.isPending}
             recommended={{
               running: addRecommended.isPending,

@@ -44,6 +44,7 @@ import {
   composeProfiles,
   endpointAt,
   signalOf,
+  bundledTarget,
   testEndpoint,
   testTarget,
 } from './signals'
@@ -91,6 +92,9 @@ export interface ChoiceControls {
  * 就是一次存下與測試。所以只有指標點下去的那一次算數（方向鍵與空白鍵不送 pointerdown），鍵盤選到的
  * 是草稿，另給一顆「使用套件內的 X」。這一頁已經有結果時換另一格一律先就地確認（`ConfirmPanel`：
  * 焦點進去、Esc 收起回到原本那一格）。
+ *
+ * **送出的那一刻就有回饋**（M4 票 80）：選擇回來之前，送出去的那一格就是選中的樣子、另一格停用；套件內
+ * 第一次選還沒有連線那一列可畫，先畫一條同形的「測試中」（`PendingLine`），回來時換成結果。
  */
 export function ServiceChoice({
   kind,
@@ -127,11 +131,19 @@ export function ServiceChoice({
   // 既有表單改了一格、還沒按測試：上一次的結果說的是舊的那幾個值，先收起來（M4 票 21）。
   const [edited, setEdited] = useState(false)
   const pointer = useRef(false)
+  // 送出去還沒回來的那一格：`choosing` 由真轉假（回來了，成或不成）才清掉。送出與 mutation 進入
+  // pending 之間隔一拍，所以不能只看 `choosing`。
+  const [sent, setSent] = useState<ServiceOrigin | null>(null)
+  const [wasChoosing, setWasChoosing] = useState(choosing)
+  if (choosing !== wasChoosing) {
+    setWasChoosing(choosing)
+    if (!choosing) setSent(null)
+  }
   const radios = useRef<Partial<Record<ServiceOrigin, HTMLInputElement | null>>>({})
   const panel = useRef<HTMLDivElement>(null)
   // 點下去開的確認才把焦點送進去；方向鍵瀏覽時焦點留在 radio 上，才走得回另一格。
   const [focusPanel, setFocusPanel] = useState(false)
-  const selected = draft ?? service?.origin ?? null
+  const selected = sent ?? draft ?? service?.origin ?? null
   const switching = draft !== null && service !== undefined && draft !== service.origin
   // 這一頁有結果時換另一格：先確認。從既有換走，Berth 沒寫過那一台，說的只有這一頁要重做。
   const confirming = switching && Boolean(switchWarning)
@@ -144,10 +156,17 @@ export function ServiceChoice({
     if (focusPanel && draft !== null) panel.current?.focus()
   }, [focusPanel, draft])
 
+  /** 送出一個選擇：回來之前那一格就是選中的、另一格停用。 */
+  function choose(...args: Parameters<typeof onChoose>) {
+    setSent(args[0].origin)
+    onChoose(...args)
+  }
+
   function pick(origin: ServiceOrigin) {
     const clicked = pointer.current
     pointer.current = false
-    if (locked) return
+    // 請求在路上：不送第二個（M4 票 80）。
+    if (locked || sent || choosing) return
     setFocusPanel(false)
     if (origin === service?.origin) {
       onDraft(null)
@@ -160,14 +179,14 @@ export function ServiceChoice({
         service.state !== 'ok' &&
         service.state !== 'waiting'
       ) {
-        onChoose({ origin: 'bundled' })
+        choose({ origin: 'bundled' })
       }
       return
     }
     // 第一次點套件內（或換過來而這一頁沒有結果）：直接存下並測。
     if (origin === 'bundled' && clicked && !(service && switchWarning)) {
       onDraft(null)
-      onChoose({ origin: 'bundled' })
+      choose({ origin: 'bundled' })
       return
     }
     onDraft(origin)
@@ -185,14 +204,14 @@ export function ServiceChoice({
   function chooseBundled() {
     onDraft(null)
     setFocusPanel(false)
-    onChoose({ origin: 'bundled' })
+    choose({ origin: 'bundled' })
   }
 
   function chooseExisting(input: ChoiceInput) {
     setEdited(false)
     // 表單與勾選留到存下來（audit）：先清掉的話，請求還在路上時表單卸下、兩格都沒勾；被拒時
     // （M4 票 18）表單也要留著，理由掛在它上面。
-    onChoose(input, () => {
+    choose(input, () => {
       onDraft(null)
       setEditing(false)
     })
@@ -201,8 +220,11 @@ export function ServiceChoice({
   // 結果由一直都在的宣告區說（WCAG 4.1.3）：測試那一條跟結果一起掛上，第一次的結果念不出來。
   // 測試中清空、有結果再寫，重測結果一樣也再說一次；啟動中的自動重測不清，免得每 3 秒念一次。
   const testing = choosing || retesting
-  const announcement =
-    service?.state && !(testing && service.state !== 'waiting')
+  // 套件內第一次選（或從既有換過來）：存下的那一列不是這一台，先畫「測試中」。
+  const pendingBundled = sent === 'bundled' && service?.origin !== 'bundled'
+  const announcement = sent
+    ? t(`choice.pending.${sent}`, { service: name })
+    : service?.state && !(testing && service.state !== 'waiting')
       ? service.reason
         ? t('connection.announce', {
             service: name,
@@ -258,7 +280,7 @@ export function ServiceChoice({
             name={groupName}
             origin="bundled"
             checked={selected === 'bundled'}
-            disabled={Boolean(locked) && selected !== 'bundled'}
+            disabled={(Boolean(locked) || sent !== null) && selected !== 'bundled'}
             title={t('choice.bundled.title')}
             inputRef={(element) => {
               radios.current.bundled = element
@@ -285,7 +307,7 @@ export function ServiceChoice({
             name={groupName}
             origin="existing"
             checked={selected === 'existing'}
-            disabled={Boolean(locked) && selected !== 'existing'}
+            disabled={(Boolean(locked) || sent !== null) && selected !== 'existing'}
             title={t('choice.existing.title')}
             inputRef={(element) => {
               radios.current.existing = element
@@ -417,8 +439,9 @@ export function ServiceChoice({
         <RequestFailed error={requestError} ownerPending={!status.owner} />
       )}
 
+      {pendingBundled && <PendingLine kind={kind} status={status} />}
       {/* 表單改了一格還沒測，上一次的結果說的是舊值，先不畫。 */}
-      {service && !switching && !(showExistingForm && edited) && (
+      {service && !switching && !pendingBundled && !(showExistingForm && edited) && (
         <TestLine
           kind={kind}
           status={status}
@@ -426,7 +449,7 @@ export function ServiceChoice({
           testing={testing}
           retesting={retesting}
           onRetest={onRetest}
-          onPasteKey={(apiKey) => onChoose({ origin: 'bundled', api_key: apiKey })}
+          onPasteKey={(apiKey) => choose({ origin: 'bundled', api_key: apiKey })}
           onEdit={
             service.origin === 'existing' && !showExistingForm ? () => setEditing(true) : undefined
           }
@@ -705,6 +728,32 @@ export function LoopbackHint() {
     >
       {t('connect.loopback')}
     </span>
+  )
+}
+
+/**
+ * 選了套件內、還沒回來（M4 票 80）：與 `TestLine` 同一個框與行首，回來時同一個位置換成結果。宣告由
+ * `ServiceChoice` 那一個宣告區說，這裡不另開。
+ */
+function PendingLine({ kind, status }: { kind: ServiceKind; status: SetupStatus }) {
+  const { t } = useTranslation()
+  const name = t(SERVICE_LABEL[kind])
+
+  return (
+    <div className="min-w-0 border-2 border-rule bg-well">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <span className={`label px-2 py-1.5 ${SIGNAL_FILL.working}`}>
+          {t('connection.testing')}
+        </span>
+        <span className="value text-sm font-semibold text-ink">{name}</span>
+        <span className="value min-w-0 text-xs wrap-anywhere text-ink-dim">
+          {bundledTarget(status, kind)}
+        </span>
+      </div>
+      <p className="border-t-2 border-rule px-4 py-3 text-sm text-ink">
+        {t('choice.pending.bundled', { service: name })}
+      </p>
+    </div>
   )
 }
 

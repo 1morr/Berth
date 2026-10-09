@@ -2,12 +2,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { Checkbox, Field, GhostButton, Notice, PasswordField } from '../components/controls'
-import {
-  LOGIN_RULES,
-  type InterfaceLoginForm,
-  type LoginProblems,
-  type LoginService,
-} from './interfaceLogin'
+import type { InterfaceLoginForm, LoginProblems, LoginService } from './interfaceLogin'
 
 /** 產品名不翻譯：人話裡的 `{{service}}`。 */
 const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const satisfies Record<
@@ -18,8 +13,9 @@ const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const sa
 /**
  * 精靈的介面登入欄位（M4 票 07、15）：頁 2、頁 4 共用。設定頁沒有沿用，只用下面的 `NewLoginFields`（M4 票 78）。
  *
- * 上面一個「沿用 Jellyfin 帳密」預設勾選：帳號是擁有者、密碼打一次（Jellyfin 會驗它）。取消勾選是
- * 自設的三格：帳號、密碼、再一次密碼。說明句先講這是**那個服務自己的登入**：Berth 用不到它。
+ * 上面一個「沿用 Jellyfin 帳密」：帳號是擁有者、密碼打一次（Jellyfin 會驗它）。不勾是自設的三格：帳號、
+ * 密碼、再一次密碼。擁有者的名字不合那個服務的規則時勾不起來，說明句說為什麼（M4 票 80：原本勾了才紅）。
+ * 說明句先講這是**那個服務自己的登入**：Berth 用不到它。
  */
 export function InterfaceLoginFields({
   service,
@@ -29,17 +25,15 @@ export function InterfaceLoginFields({
   form: InterfaceLoginForm
 }) {
   const { t } = useTranslation()
-  const { draft, problems, owner, rules } = form
+  const { draft, problems, owner, rules, ownerUnfit } = form
   const rule = {
     service: PRODUCT[service],
     owner,
     usernameMin: rules?.usernameMin ?? 0,
     passwordMin: rules?.passwordMin ?? 0,
   }
-  // 沿用時帳號那一格不在畫面上：擁有者的名字不合規則也說在密碼那一格，而且先說它——改密碼救不了。
-  const reuseError = problems.username
-    ? t('interfaceLogin.error.reuseUsername', { ...rule, min: rule.usernameMin })
-    : problems.password === 'short'
+  const reuseError =
+    problems.password === 'short'
       ? t('interfaceLogin.error.reusePasswordShort', { ...rule, min: rule.passwordMin })
       : problems.password
         ? t('interfaceLogin.error.blank')
@@ -52,8 +46,15 @@ export function InterfaceLoginFields({
       {owner && (
         <Checkbox
           label={t('interfaceLogin.reuse', { owner })}
-          hint={form.reuse ? t('interfaceLogin.reuseHint', { owner }) : undefined}
+          hint={
+            ownerUnfit
+              ? t(`interfaceLogin.reuseUnfit.${ownerUnfit}`, { ...rule, min: rule.usernameMin })
+              : form.reuse
+                ? t('interfaceLogin.reuseHint', { owner })
+                : undefined
+          }
           checked={form.reuse}
+          disabled={ownerUnfit !== null}
           onChange={form.setReuse}
         />
       )}
@@ -145,21 +146,41 @@ function usernameError(
 }
 
 /**
- * 泊位上的那一塊：還沒設過就是三格（必填）；設過了說出帳號，按「更換」才打開，不按就是照舊。
+ * 泊位上的那一塊：還沒設過就是三格（必填）；設過了說出帳號，按「更換」才打開，不按就是照舊。頁 1 帶過來而
+ * 且設好了（`carried`）說沿用了誰的帳密，按「改用另一組」打開的是自設的三格（M4 票 80）。
  */
 export function BerthLogin({
   service,
   current,
+  carried = false,
   form,
 }: {
   service: LoginService
   /** 那一台的帳號（Berth 設下的，或它自己就設過的），空字串是還沒設過。 */
   current: string
+  /** 那一台的登入就是頁 1 帶過來的那一組。 */
+  carried?: boolean
   form: InterfaceLoginForm
 }) {
   const { t } = useTranslation()
 
   if (form.open) return <InterfaceLoginFields service={service} form={form} />
+  if (carried) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 border-2 border-rule bg-well px-4 py-3">
+        <p className="text-sm text-ink">{t('interfaceLogin.carried.set', { owner: form.owner })}</p>
+        <GhostButton
+          type="button"
+          onClick={() => {
+            form.setReuse(false)
+            form.openFields()
+          }}
+        >
+          {t('interfaceLogin.carried.another')}
+        </GhostButton>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-wrap items-center gap-3 border-2 border-rule bg-well px-4 py-3">
       <p className="text-sm text-ink">
@@ -184,23 +205,5 @@ export function CarriedApplying({ owner }: { owner: string }) {
         {t('interfaceLogin.carried.applying', { owner })}
       </Notice>
     </div>
-  )
-}
-
-/**
- * 頁 1 帶過來的那一組不合 qBittorrent 的規則（M4 票 40、票 26）：說為什麼不能沿用，欄位一開始就是自設的
- * 三格。只有 qBittorrent 有規則（`LOGIN_RULES`），Prowlarr 永遠沿用得了。
- */
-export function CarriedUnfit({ owner, problems }: { owner: string; problems: LoginProblems }) {
-  const { t } = useTranslation()
-  const rules = LOGIN_RULES.qbittorrent
-  const rule = { service: PRODUCT.qbittorrent, owner }
-
-  return (
-    <Notice signal="assigned" label={t('interfaceLogin.carried.unfitLabel')}>
-      {problems.username
-        ? t('interfaceLogin.carried.unfitUsername', { ...rule, min: rules.usernameMin })
-        : t('interfaceLogin.carried.unfitPassword', { ...rule, min: rules.passwordMin })}
-    </Notice>
   )
 }

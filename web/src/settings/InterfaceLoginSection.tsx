@@ -39,7 +39,7 @@ export function InterfaceLoginSection({
   onSave: (login: InterfaceLogin) => Promise<LoginOutcome>
 }) {
   const { t } = useTranslation()
-  const form = useInterfaceLogin({ service, current, owner: '', alwaysOpen: true, reuse: false })
+  const form = useInterfaceLogin({ service, current, owner: '', alwaysOpen: true })
   const [result, setOutcome] = useState<SetupStep | 'failed' | null>(null)
   // 送出那一刻的欄位版本：之後改了一格，上一次的結果說的就不是這幾格了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)

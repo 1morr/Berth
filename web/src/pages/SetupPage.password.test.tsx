@@ -38,6 +38,9 @@ const SET_LOGIN = 'PUT /api/setup/indexers/login'
 
 const CARRY = '套件內 qBittorrent 與 Prowlarr 的介面也用這組'
 const OWNER_PASSWORD = 'skipper 的 Jellyfin 密碼'
+const REUSE = '沿用 Jellyfin 帳密（skipper）'
+const CARRIED = '已沿用 Jellyfin 帳密（skipper）'
+const ANOTHER = '改用另一組'
 
 type FetchStub = ReturnType<typeof stubApi>
 
@@ -75,6 +78,7 @@ function journey(initial: SetupStatus = CREATING) {
       qbittorrent = qbittorrentSetup({
         steps: [step('web_ui_password', 'ok', 'skipper')],
         web_ui_username: 'skipper',
+        web_ui_login_by_berth: true,
       })
       // 頁 2 做完了；頁 3 由測試直接跳過（它與密碼無關）。
       status = setupStatus({ ...status, current_step: 4 })
@@ -89,6 +93,7 @@ function journey(initial: SetupStatus = CREATING) {
       indexers = indexerSetup({
         steps: [step('prowlarr_login', 'ok', 'skipper')],
         web_ui_username: 'skipper',
+        web_ui_login_by_berth: true,
       })
       return { body: indexers }
     },
@@ -101,8 +106,11 @@ async function createOwner(user: UserEvent, password = 'harbour', carry = true) 
   await user.type(screen.getByLabelText('密碼'), password)
   await user.type(screen.getByLabelText('再輸入一次密碼'), password)
   const box = screen.getByRole('checkbox', { name: CARRY })
-  expect(box).toBeChecked()
-  if (!carry) await user.click(box)
+  // 不合 qBittorrent 規則的那一組勾不起來（M4 票 80）：測試自己看停用的樣子。
+  if (!(box as HTMLInputElement).disabled) {
+    expect(box).toBeChecked()
+    if (!carry) await user.click(box)
+  }
   await user.click(screen.getByRole('button', { name: '建立管理員並登入' }))
   await screen.findByRole('heading', { level: 2, name: '擁有者：skipper' })
 }
@@ -120,6 +128,16 @@ async function toProwlarr(user: UserEvent, router: ReturnType<typeof renderInRou
   await user.click(bundledCard())
 }
 
+/** 頁 2 的介面登入是自設的三格，「沿用」在、但不勾（M4 票 80）。 */
+async function expectOwnFields() {
+  const legend = await screen.findByText('qBittorrent WebUI 登入')
+  const fields = within(legend.closest('fieldset')!)
+  expect(fields.getByRole('checkbox', { name: REUSE })).not.toBeChecked()
+  expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
+  expect(fields.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
+  expect(fields.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
+}
+
 describe('密碼只問一次（M4 票 40）', () => {
   it('頁 1 勾著：頁 2、頁 4 不出現密碼欄，自動沿用頁 1 那一組；密碼不落進瀏覽器的 storage', async () => {
     const written = vi.spyOn(Storage.prototype, 'setItem')
@@ -135,7 +153,10 @@ describe('密碼只問一次（M4 票 40）', () => {
         { login: { username: '', password: 'harbour', reuse_owner: true } },
       ]),
     )
-    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
+    // 帶過來而且設好了：只說沿用了誰的，給一顆「改用另一組」（M4 票 80）。
+    expect(await screen.findByText(CARRIED)).toBeVisible()
+    expect(screen.getByRole('button', { name: ANOTHER })).toBeVisible()
+    expect(screen.queryByText('qBittorrent WebUI 的帳號：')).not.toBeInTheDocument()
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '設定介面登入' })).not.toBeInTheDocument()
 
@@ -146,7 +167,8 @@ describe('密碼只問一次（M4 票 40）', () => {
       ]),
     )
     const login = within(await screen.findByTestId('prowlarr-login'))
-    expect(await login.findByText('Prowlarr 介面的帳號：')).toBeInTheDocument()
+    expect(await login.findByText(CARRIED)).toBeVisible()
+    expect(login.getByRole('button', { name: ANOTHER })).toBeVisible()
     expect(login.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     // 各自只送一次，沒有重送。
     expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toHaveLength(1)
@@ -175,7 +197,7 @@ describe('密碼只問一次（M4 票 40）', () => {
     await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
     await user.click(bundledCard())
 
-    expect(await screen.findByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
+    await expectOwnFields()
     expect(screen.getByRole('button', { name: '設定介面登入' })).toBeInTheDocument()
     expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toEqual([])
   })
@@ -188,7 +210,7 @@ describe('密碼只問一次（M4 票 40）', () => {
     await createOwner(user, 'harbour', false)
     await toQbittorrent(user)
 
-    expect(await screen.findByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
+    await expectOwnFields()
     expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toEqual([])
   })
 
@@ -204,7 +226,7 @@ describe('密碼只問一次（M4 票 40）', () => {
     await screen.findByRole('heading', { level: 2, name: '擁有者：skipper' })
     await toQbittorrent(user)
 
-    expect(await screen.findByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
+    await expectOwnFields()
     expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toEqual([])
   })
 
@@ -222,46 +244,126 @@ describe('密碼只問一次（M4 票 40）', () => {
     expect(screen.queryByRole('checkbox', { name: CARRY })).not.toBeInTheDocument()
   })
 
-  it('Jellyfin 密碼不合 qBittorrent 的規則：頁 2 不送，說明不能沿用、給自設的三格；頁 4 照樣沿用', async () => {
+  it('頁 1 的帳密不合 qBittorrent 的規則：「也用這組」邊打邊停用並說原因，改到合了照舊勾著', async () => {
+    stubApi(journey())
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await screen.findByLabelText('Jellyfin 帳號')
+    const box = () => screen.getByRole('checkbox', { name: CARRY })
+    expect(box()).toBeEnabled()
+    expect(box()).toBeChecked()
+
+    await user.type(screen.getByLabelText('Jellyfin 帳號'), 'jo')
+    expect(box()).toBeDisabled()
+    expect(box()).not.toBeChecked()
+    expect(box()).toHaveAccessibleDescription(
+      '帳號少於 3 個字元，qBittorrent 不收；頁 2、頁 4 會再問一次介面登入。',
+    )
+
+    await user.type(screen.getByLabelText('Jellyfin 帳號'), 'nah')
+    await user.type(screen.getByLabelText('密碼'), 'tiny')
+    expect(box()).toBeDisabled()
+    expect(box()).toHaveAccessibleDescription(
+      '密碼少於 6 個字元，qBittorrent 不收；頁 2、頁 4 會再問一次介面登入。',
+    )
+
+    await user.type(screen.getByLabelText('密碼'), '-ok')
+    expect(box()).toBeEnabled()
+    expect(box()).toBeChecked()
+    expect(box()).toHaveAccessibleDescription(/到那兩頁自動帶入/)
+  })
+
+  it('帳號有冒號：說的是冒號', async () => {
+    stubApi(journey())
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'sea:dog')
+    expect(screen.getByRole('checkbox', { name: CARRY })).toHaveAccessibleDescription(
+      '帳號有冒號（:），qBittorrent 不收；頁 2、頁 4 會再問一次介面登入。',
+    )
+  })
+
+  it('頁 1 用了太短的密碼：沒帶過去，頁 2、頁 4 直接是自設的三格、不預設勾沿用，也不說「不能沿用」', async () => {
     const stub = stubApi(journey())
     const user = userEvent.setup()
 
     const { router } = renderInRoute(<SetupPage />)
-    await createOwner(user, 'tiny5')
+    await createOwner(user, 'tiny')
     await toQbittorrent(user)
 
-    expect(
-      await screen.findByText(
-        'qBittorrent 的密碼至少要 6 個字元，頁 1 那一組 Jellyfin 密碼太短，不能沿用；請在下面另設一組。',
-      ),
-    ).toBeVisible()
-    const legend = screen.getByText('qBittorrent WebUI 登入')
-    const fields = within(legend.closest('fieldset')!)
-    expect(
-      fields.getByRole('checkbox', { name: '沿用 Jellyfin 帳密（skipper）' }),
-    ).not.toBeChecked()
-    expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
-    expect(fields.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
+    await expectOwnFields()
+    expect(screen.queryByText(/不能沿用/)).not.toBeInTheDocument()
     expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toEqual([])
 
-    // 照常自設一組：那一句跟著消失。
-    await user.type(fields.getByLabelText('密碼'), 'harbour')
-    await user.type(fields.getByLabelText('再輸入一次密碼'), 'harbour')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.type(screen.getByLabelText('再輸入一次密碼'), 'harbour')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
     await waitFor(() =>
       expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toEqual([
         { login: { username: 'skipper', password: 'harbour', reuse_owner: false } },
       ]),
     )
-    await waitFor(() => expect(screen.queryByText(/不能沿用/)).not.toBeInTheDocument())
 
-    // Prowlarr 沒有長度規則：照樣沿用。
     await toProwlarr(user, router)
-    await waitFor(() =>
-      expect(bodiesOf(stub, '/api/setup/indexers/login')).toEqual([
-        { username: '', password: 'tiny5', reuse_owner: true },
-      ]),
+    const login = within(await screen.findByTestId('prowlarr-login'))
+    expect(await login.findByRole('checkbox', { name: REUSE })).not.toBeChecked()
+    expect(login.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
+    expect(bodiesOf(stub, '/api/setup/indexers/login')).toEqual([])
+  })
+
+  it('擁有者的名字不合 qBittorrent 的規則：頁 2 的「沿用」勾不起來並說為什麼，不是勾了才紅', async () => {
+    stubApi(journey(setupStatus({ current_step: 2, owner: 'jo', services: [chosen()] })))
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />, '/setup?step=2')
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await user.click(bundledCard())
+
+    const reuse = await screen.findByRole('checkbox', { name: '沿用 Jellyfin 帳密（jo）' })
+    expect(reuse).toBeDisabled()
+    expect(reuse).not.toBeChecked()
+    expect(reuse).toHaveAccessibleDescription(
+      'jo 少於 3 個字元，qBittorrent 不收這個帳號，不能沿用。',
     )
+  })
+
+  it('沿用之後按「改用另一組」：打開自設的三格，沿用不勾；設好的那一組不再說是沿用的', async () => {
+    const stub = stubApi(journey())
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await createOwner(user)
+    await toQbittorrent(user)
+    await user.click(await screen.findByRole('button', { name: ANOTHER }))
+
+    await expectOwnFields()
+    // 帳號照舊是擁有者、只換密碼：那一台的帳號一樣，但已經不是頁 1 那一組。
+    await user.type(screen.getByLabelText('密碼'), 'another-one')
+    await user.type(screen.getByLabelText('再輸入一次密碼'), 'another-one')
+    await user.click(screen.getByRole('button', { name: '設定介面登入' }))
+    await waitFor(() => expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toHaveLength(2))
+    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeVisible()
+    expect(screen.queryByText(CARRIED)).not.toBeInTheDocument()
+  })
+
+  it('頁 1 的表單換掉重來（改選既有又取消）：剖面跟著空的表單說，不留上一張不合規則的結論', async () => {
+    stubApi(journey())
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await user.type(await screen.findByLabelText('密碼'), 'tiny')
+    expect(screen.getByText('你的密碼（只交給 Jellyfin）')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+    await user.click(screen.getByRole('button', { name: '取消' }))
+
+    expect(await screen.findByLabelText('密碼')).toHaveValue('')
+    expect(screen.getByRole('checkbox', { name: CARRY })).toBeChecked()
+    expect(
+      screen.getByText('你的密碼（交給 Jellyfin；套件內 qBittorrent 與 Prowlarr 的介面也設成它）'),
+    ).toBeInTheDocument()
   })
 
   it('頁 4 自動送的登入還在等 Prowlarr 重啟時：加站與跳過先停用，回訪重掛載不重送', async () => {
@@ -278,7 +380,7 @@ describe('密碼只問一次（M4 票 40）', () => {
     const { router } = renderInRoute(<SetupPage />)
     await createOwner(user)
     await toQbittorrent(user)
-    await screen.findByText('qBittorrent WebUI 的帳號：')
+    await screen.findByText(CARRIED)
     await toProwlarr(user, router)
 
     expect(await screen.findByText('沿用頁 1 的 Jellyfin 帳密（skipper），設定中…')).toBeVisible()
@@ -286,13 +388,13 @@ describe('密碼只問一次（M4 票 40）', () => {
 
     // 走開再回來：同一個請求還在飛，不再送一次。
     await router.navigate({ to: '/setup', search: { step: 2 } })
-    await screen.findByText('qBittorrent WebUI 的帳號：')
+    await screen.findByText(CARRIED)
     await router.navigate({ to: '/setup', search: { step: 4 } })
     await screen.findByTestId('prowlarr-login')
     expect(bodiesOf(stub, '/api/setup/indexers/login')).toHaveLength(1)
 
     release()
-    expect(await screen.findByText('Prowlarr 介面的帳號：')).toBeInTheDocument()
+    expect(await screen.findByText(CARRIED)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '之後再說' })).toBeEnabled()
     expect(bodiesOf(stub, '/api/setup/indexers/login')).toHaveLength(1)
   })
@@ -326,7 +428,8 @@ describe('密碼只問一次（M4 票 40）', () => {
 
     await toProwlarr(user, router)
     const login = within(await screen.findByTestId('prowlarr-login'))
-    expect(await login.findByLabelText(OWNER_PASSWORD)).toBeInTheDocument()
+    expect(await login.findByRole('checkbox', { name: REUSE })).not.toBeChecked()
+    expect(login.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
     expect(bodiesOf(stub, '/api/setup/indexers/login')).toEqual([])
   })
 })

@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type {
@@ -24,6 +24,7 @@ import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { JellyfinSignInForm } from './JellyfinExisting'
 import { JELLYFIN_LOCALES, localeForUi, localeLabel } from './jellyfinStartup'
+import { LOGIN_RULES, reuseUnfit } from './interfaceLogin'
 import { trimUsername, usernameProblem, type UsernameProblem } from './jellyfinUsername'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
@@ -48,6 +49,7 @@ export interface ReSignIn {
  * **建立套件內那一台的管理員時多一個勾選**（M4 票 40，brief §19 D4），預設勾：套件內 qBittorrent 與
  * Prowlarr 的介面也用這組。勾著的話密碼隨 `onClaim` 交給 `SetupPage` 留在記憶體裡，頁 2、頁 4 自動帶入；
  * 登入既有的管理員、或選既有那一台時不提——前者沒有「設一組」，後者 Jellyfin 不是 Berth 的。
+ * 帳號與密碼邊打邊照 qBittorrent 的規則看：不合就勾不起來並說為什麼（M4 票 80：原本到頁 2 才說不能沿用）。
  */
 export function OwnerStep({
   status,
@@ -87,6 +89,8 @@ export function OwnerStep({
   const reSignInId = useId()
   const offersCarry = mode === 'create' && jellyfin?.origin === 'bundled'
   const [carry, setCarry] = useState(true)
+  // 表單上那一組合不合 qBittorrent 的規則（表單回報，剖面照它說密碼會交給誰）。
+  const [carryFits, setCarryFits] = useState(true)
 
   return (
     <StepFrame
@@ -95,7 +99,7 @@ export function OwnerStep({
           status={status}
           mode={mode}
           switching={switching}
-          carried={offersCarry && carry}
+          carried={offersCarry && carry && carryFits}
         />
       }
     >
@@ -132,7 +136,7 @@ export function OwnerStep({
           signsIn={mode === 'signIn'}
           jellyfin={jellyfin}
           remembered={status.jellyfin_startup ?? null}
-          carry={offersCarry ? { checked: carry, onChange: setCarry } : null}
+          carry={offersCarry ? { checked: carry, onChange: setCarry, onFits: setCarryFits } : null}
           claiming={claiming}
           refusal={refusal}
           claimError={claimError}
@@ -186,8 +190,15 @@ function OwnerForm({
    * 重新整理之後照它重填，不退回預設——重試會再寫一次 Jellyfin 的初始設定（實測 E12）。
    */
   remembered: JellyfinStartup | null
-  /** 「也用這組」那一格（M4 票 40）；不提就是 `null`。 */
-  carry: { checked: boolean; onChange: (checked: boolean) => void } | null
+  /**
+   * 「也用這組」那一格（M4 票 40）；不提就是 `null`。`onFits`：打的那一組合不合 qBittorrent 的規則
+   * （M4 票 80），每改一格回報一次。
+   */
+  carry: {
+    checked: boolean
+    onChange: (checked: boolean) => void
+    onFits: (fits: boolean) => void
+  } | null
   claiming: boolean
   refusal: OwnerRefusal | null
   claimError: unknown
@@ -229,6 +240,10 @@ function OwnerForm({
   // 密碼打兩次只在建立時（Jellyfin 自己的啟動精靈也是）：登入打錯了 Jellyfin 會拒絕，
   // 建立時打錯了沒有人會告訴他。
   const mismatch = !signsIn && password !== confirm
+  // 「也用這組」照 qBittorrent 的規則邊打邊看（M4 票 80）：不合就勾不起來，送出時也不帶。勾選本身留著，
+  // 改到合了就回來。
+  const carryUnfit = carry ? reuseUnfit('qbittorrent', trimUsername(username), password) : null
+  const carrying = Boolean(carry?.checked) && carryUnfit === null
 
   // 送出那一刻的欄位版本：之後改了帳密，上一次的拒絕說的是舊的那一組，不再畫（M4 票 31，實測 #29；
   // 與 `ProwlarrLogin` 同一個做法）。「目標被換了」例外——它與帳密無關，出口是重新測試。
@@ -239,6 +254,18 @@ function OwnerForm({
     change()
     setEdits((was) => was + 1)
   }
+  function editCredentials(next: { username?: string; password?: string }) {
+    const nextUsername = next.username ?? username
+    const nextPassword = next.password ?? password
+    edit(() => {
+      setUsername(nextUsername)
+      setPassword(nextPassword)
+    })
+    carry?.onFits(reuseUnfit('qbittorrent', trimUsername(nextUsername), nextPassword) === null)
+  }
+  // 表單卸下（改選另一格、畫面上的那一台換了）時打的那一組也沒了：下一張是空的，剖面不留這一張的結論。
+  const forgetFits = useEffectEvent(() => carry?.onFits(true))
+  useEffect(() => () => forgetFits(), [])
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -258,10 +285,7 @@ function OwnerForm({
     const locale = asksStartup
       ? JELLYFIN_LOCALES.find((row) => row.ui_culture === culture)!
       : localeForUi(i18n.language)
-    onClaim(
-      { ...credentials, ...locale, remote_access: asksStartup && remoteAccess },
-      carry?.checked ?? false,
-    )
+    onClaim({ ...credentials, ...locale, remote_access: asksStartup && remoteAccess }, carrying)
   }
 
   return (
@@ -270,14 +294,14 @@ function OwnerForm({
         label={t('owner.field.username')}
         value={username}
         autoComplete="username"
-        onChange={(event) => edit(() => setUsername(event.target.value))}
+        onChange={(event) => editCredentials({ username: event.target.value })}
         error={checked && nameProblem ? t(USERNAME_ERROR[nameProblem]) : undefined}
       />
       <PasswordField
         label={t('owner.field.password')}
         value={password}
         autoComplete={signsIn ? 'current-password' : 'new-password'}
-        onChange={(event) => edit(() => setPassword(event.target.value))}
+        onChange={(event) => editCredentials({ password: event.target.value })}
         error={checked && passwordProblem ? t(passwordProblem) : undefined}
       />
       {!signsIn && (
@@ -292,8 +316,18 @@ function OwnerForm({
       {carry && (
         <Checkbox
           label={t('owner.carry.label')}
-          hint={t('owner.carry.hint')}
-          checked={carry.checked}
+          hint={
+            carryUnfit
+              ? t(`owner.carry.unfit.${carryUnfit}`, {
+                  min:
+                    carryUnfit === 'passwordShort'
+                      ? LOGIN_RULES.qbittorrent.passwordMin
+                      : LOGIN_RULES.qbittorrent.usernameMin,
+                })
+              : t('owner.carry.hint')
+          }
+          checked={carrying}
+          disabled={carryUnfit !== null}
           onChange={carry.onChange}
         />
       )}
