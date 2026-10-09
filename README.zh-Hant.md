@@ -6,9 +6,8 @@
 
 ## 為什麼做 Berth
 
-Berth 是 Seerr（Jellyseerr 或 Overseerr）搭配 Sonarr、Radarr 之外的另一種做法。那一套要設定好幾個服務，發佈由
-自動規則挑選，最後拿到的不一定是你要的版本。Berth 讓你自己挑發佈：從 Prowlarr 的搜尋結果，或訂閱 RSS（包括追當季
-動畫用的 Mikan），之後由 Berth 匯入 Jellyfin。
+Seerr 搭配 Sonarr、Radarr 要設定好幾個服務，而且發佈由它替你挑，拿到的不一定是你要的版本。Berth 讓你自己挑
+發佈，來源可以是 Prowlarr 的搜尋結果，或 RSS（例如追當季動畫用的 Mikan），再由 Berth 匯入 Jellyfin。
 
 ## 能做什麼
 
