@@ -1029,7 +1029,7 @@ describe('Media 詳情頁', () => {
         ],
         total: 1,
         returned: 1,
-        duplicates: 0,
+        merged: 0,
         discarded: 0,
         set_aside: [],
         set_aside_total: 0,

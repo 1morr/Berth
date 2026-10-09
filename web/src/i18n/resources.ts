@@ -1520,8 +1520,8 @@ const zhHant = {
     tallyAside_other: '{{count}} 筆年份或類型對不上（收在下面）',
     tallyDiscarded_one: '{{count}} 筆名字對不上（已略過）',
     tallyDiscarded_other: '{{count}} 筆名字對不上（已略過）',
-    tallyDuplicates_one: '{{count}} 筆重複（已合併）',
-    tallyDuplicates_other: '{{count}} 筆重複（已合併）',
+    tallyMerged_one: '{{count}} 筆重複（已合併）',
+    tallyMerged_other: '{{count}} 筆重複（已合併）',
     empty:
       '這幾個關鍵字在你的索引站上沒有東西。換個寫法自己打一次，或改天再搜——公開站的片源是會變的。',
     // 索引站對搜不到的關鍵字常常回它自己的熱門清單（實測 The Pirate Bay），所以
@@ -4757,8 +4757,8 @@ const en: Translations<typeof zhHant> = {
     tallyAside_other: '{{count}} set aside (year or type does not fit)',
     tallyDiscarded_one: '{{count}} skipped (name does not match)',
     tallyDiscarded_other: '{{count}} skipped (name does not match)',
-    tallyDuplicates_one: '{{count}} duplicate merged',
-    tallyDuplicates_other: '{{count}} duplicates merged',
+    tallyMerged_one: '{{count}} duplicate merged',
+    tallyMerged_other: '{{count}} duplicates merged',
     empty:
       'None of those keywords turned up anything on your indexer. Try wording it yourself, or search again later — what public sites carry changes.',
     onlyOthers: "None of them carries this title's name. Try typing a keyword yourself.",

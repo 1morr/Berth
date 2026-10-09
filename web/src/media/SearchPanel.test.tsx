@@ -119,7 +119,7 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
     rows: [row()],
     total: 1,
     returned: 1,
-    duplicates: 0,
+    merged: 0,
     discarded: 0,
     set_aside: [],
     set_aside_total: 0,
@@ -616,7 +616,7 @@ describe('搜尋 torrent 與結果表', () => {
       [SEARCH_PATH]: {
         body: results({
           returned: 629,
-          duplicates: 100,
+          merged: 100,
           discarded: 103,
           set_aside: [row({ key: 'aside' })],
           set_aside_total: 164,
@@ -640,7 +640,7 @@ describe('搜尋 torrent 與結果表', () => {
   })
 
   it('是 0 的那幾份不說', async () => {
-    render({ [SEARCH_PATH]: { body: results({ returned: 3, duplicates: 2, total: 1 }) } })
+    render({ [SEARCH_PATH]: { body: results({ returned: 3, merged: 2, total: 1 }) } })
     renderApp('/media/tv:120089')
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
@@ -656,7 +656,7 @@ describe('搜尋 torrent 與結果表', () => {
     try {
       render({
         [SEARCH_PATH]: {
-          body: results({ returned: 9, duplicates: 2, discarded: 3, set_aside_total: 3, total: 1 }),
+          body: results({ returned: 9, merged: 2, discarded: 3, set_aside_total: 3, total: 1 }),
         },
       })
       renderApp('/media/tv:120089')

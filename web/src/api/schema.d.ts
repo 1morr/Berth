@@ -4778,8 +4778,8 @@ export interface components {
             total: number;
             /** Returned */
             returned: number;
-            /** Duplicates */
-            duplicates: number;
+            /** Merged */
+            merged: number;
             /** Discarded */
             discarded: number;
             /** Set Aside */

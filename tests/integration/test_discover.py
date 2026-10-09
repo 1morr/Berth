@@ -325,7 +325,9 @@ class TestSearchWithAYear:
         assert [item.id for item in result.items] == ["movie:335984"]
         assert ("search/blade runner 2049", "en-US") in client.requests
 
-    @pytest.mark.parametrize("query", ["1917", "spy x family", "nosferatu 19222"])
+    @pytest.mark.parametrize(
+        "query", ["1917", "spy x family", "nosferatu 19222", "nosferatu (1922", "nosferatu 1922)"]
+    )
     async def test_without_a_trailing_year_only_the_multi_search_is_asked(
         self, session: AsyncSession, query: str
     ) -> None:

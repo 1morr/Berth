@@ -515,7 +515,7 @@ function tally(results: SearchOutcome, t: TFunction): string {
       ['search.tallyShown', results.total],
       ['search.tallyAside', results.set_aside_total],
       ['search.tallyDiscarded', results.discarded],
-      ['search.tallyDuplicates', results.duplicates],
+      ['search.tallyMerged', results.merged],
     ] as const
   )
     .filter(([, count]) => count > 0)

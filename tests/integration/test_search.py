@@ -975,9 +975,9 @@ class TestNosferatu:
         view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
 
         assert len(indexer.queries) == 3
-        assert (view.returned, view.duplicates, view.discarded) == (54, 36, 2)
+        assert (view.returned, view.merged, view.discarded) == (54, 36, 2)
         assert (view.set_aside_total, view.total) == (12, 4)
-        assert view.returned == view.duplicates + view.discarded + view.set_aside_total + view.total
+        assert view.returned == view.merged + view.discarded + view.set_aside_total + view.total
 
     @pytest.mark.asyncio
     async def test_a_typed_keyword_counts_the_same_way(self, session: AsyncSession) -> None:
@@ -989,7 +989,7 @@ class TestNosferatu:
             session, factory, SourceCache(), media_id=NOSFERATU, query="Nosferatu"
         )
 
-        assert (view.returned, view.duplicates, view.discarded, view.set_aside_total) == (
+        assert (view.returned, view.merged, view.discarded, view.set_aside_total) == (
             18,
             0,
             0,
@@ -1031,11 +1031,12 @@ async def arrange_law(session: AsyncSession) -> None:
 
 
 class TestAmpersand:
-    """《Law & Order》：The Pirate Bay 對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆
-    （2026-10-09 實測，M4 票 69）。照 Sonarr / Radarr 送查詢前把 `&` 寫成 `and`，不另外多問一組。"""
+    """《Law & Order》：The Pirate Bay 對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆，
+    Mikan 反過來（`TIGER & BUNNY` 81 筆、`TIGER and BUNNY` 0 筆；2026-10-10 實測，M4 票 69）。
+    所以兩種都問：原樣的那一個後面緊接寫開的那一個，仍在 `MAX_QUERIES` 之內。"""
 
     @pytest.mark.asyncio
-    async def test_the_query_spells_the_ampersand_out(self, session: AsyncSession) -> None:
+    async def test_the_spelled_out_title_follows_the_original(self, session: AsyncSession) -> None:
         await arrange_law(session)
         await arrange_indexer(session)
         indexer = FakeIndexerSearch()
@@ -1044,9 +1045,9 @@ class TestAmpersand:
         await search_torrents(session, factory, SourceCache(), media_id=LAW)
 
         assert [query.text for query in indexer.queries] == [
+            "Law & Order",
             "Law and Order",
             "法網遊龍",
-            "Law and Order: Original",
             "Law and Order Season 24",
             "法網遊龍 第24季",
         ]
@@ -1058,8 +1059,7 @@ class TestAmpersand:
 
         planned = await plan_queries(session, FakeClientFactory(), media_id=LAW)
 
-        assert planned.queries[0] == "Law and Order"
-        assert not any("&" in query for query in planned.queries)
+        assert planned.queries[:2] == ("Law & Order", "Law and Order")
 
     @pytest.mark.asyncio
     async def test_releases_spelled_either_way_reach_the_table(self, session: AsyncSession) -> None:

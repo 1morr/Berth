@@ -88,10 +88,10 @@ class SearchOut(BaseModel):
     #: 畫面用兩個數字說得出差別。
     total: int
     #: 每個查詢回的筆數加起來（M4 票 69），畫面照這一條說：
-    #: `returned = duplicates + discarded + set_aside_total + total`。
+    #: `returned = merged + discarded + set_aside_total + total`。
     returned: int
     #: 不同查詢或不同站回了同一個發佈，合併掉的筆數。
-    duplicates: int
+    merged: int
     #: 索引站回了、但名字對不上這部作品的筆數。畫面用它說「那一千五百筆不是這部作品」。
     discarded: int
     #: 名字對上了、但年份或類型對不上的（M4 票 49；同名劇集的各集、成人分類，M4 票 69），
@@ -239,7 +239,7 @@ def _out(view: SearchView) -> SearchOut:
         rows=[SearchResultOut.model_validate(row) for row in view.rows],
         total=view.total,
         returned=view.returned,
-        duplicates=view.duplicates,
+        merged=view.merged,
         discarded=view.discarded,
         set_aside=[SearchResultOut.model_validate(row) for row in view.set_aside],
         set_aside_total=view.set_aside_total,

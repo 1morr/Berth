@@ -125,10 +125,11 @@ class SearchView:
     #: 「回了一千八百筆但沒有一筆是這部作品」的下一步不同（前者換關鍵字，後者換索引站）。
     discarded: int = 0
     #: 每個查詢回的筆數加起來（M4 票 69）。畫面上的幾個數字照這一條加得起來：
-    #: `returned = duplicates + discarded + set_aside_total + total`。
+    #: `returned = merged + discarded + set_aside_total + total`。
     returned: int = 0
-    #: 不同查詢（或不同站）回了同一個發佈，合併掉的筆數（`_dedupe`）。
-    duplicates: int = 0
+    #: 不同查詢（或不同站）回了同一個發佈，合併掉的筆數（`_dedupe`）。不叫 duplicates：
+    #: CONTEXT.md 的 **Duplicate** 是帳本裡的重複版本。
+    merged: int = 0
     #: 名字對上了、但年份或類型對不上的（M4 票 49）：電影搜尋裡的 `S04E02`、差了二十年的重拍；
     #: 同名動畫的 `- 05` 與索引站分在成人類的（M4 票 69）。
     #: **收著不丟**：判斷只看發佈名，可能看錯，所以畫面說出數量、讓人展開。
@@ -346,7 +347,7 @@ async def search_torrents(
         total=len(results),
         discarded=len(found) - len(named),
         returned=len(returned),
-        duplicates=len(returned) - len(found),
+        merged=len(returned) - len(found),
         set_aside=tuple(_row(result, snapshot, sources) for result in _take(aside, RESULT_LIMIT)),
         set_aside_total=len(aside),
         attempts=tuple(attempt for attempt, _ in outcomes),
@@ -516,12 +517,14 @@ def _episode_token(season_number: int, episode: EpisodeView) -> str:
 def _title_order(snapshot: MediaSnapshot) -> tuple[str, ...]:
     """這部作品的名字，照優先序（理由見 `search_titles`）。作品名搜尋與缺集搜尋共用同一份順序。
 
-    拉丁字名字裡的 `&` 寫成 `and`（`spell_ampersand`，M4 票 69）：照 Sonarr / Radarr，**取代**
-    原本那一個而不是多問一組——The Pirate Bay 對 `Law & Order` 一筆都不回，scene 的發佈名也寫
-    `and`，多問一組只是每一站多佔一格請求預算（票 77）、多擠掉一個別名。
+    拉丁字名字裡有 `&` 的，**原樣那一個後面緊接寫成 `and` 的那一個**
+    （`spell_ampersand`，M4 票 69）：兩種站各認一種——The Pirate Bay 對 `Law & Order` 一筆都不回、
+    `Law and Order` 回 100 筆，Mikan 對 `TIGER & BUNNY` 回 81 筆、`TIGER and BUNNY` 0 筆
+    （2026-10-10 實測）。Sonarr / Radarr 只送寫開的那一個（brief §20.19），照抄會丟掉字幕組那一邊。
+    多出來的那一個仍在 `MAX_QUERIES` 之內，擠掉的是排最後的別名，請求預算（票 77）不因此變大。
     """
     names = [snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles]
-    return _unique(spell_ampersand(name) for name in names)
+    return _unique(spelled for name in names for spelled in (name, spell_ampersand(name)))
 
 
 def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:

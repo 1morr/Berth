@@ -231,6 +231,8 @@ class TestFits:
             "[Group] Nosferatu [1922][BDRip 1080p]",
             "Nosferatu 1922 - 4K Restoration [1080p] [5.1]",
             "Nosferatu 1922 1080p BluRay AAC - 2.0 x264",  # 聲道不是集號
+            "Nosferatu (1922) - 2 Disc Set 1080p",  # 一位數不是字幕組的集號（code-review）
+            "Nosferatu 1922 [BluRay] [3] 1080p",
         ],
     )
     def test_dashes_and_brackets_around_a_year_still_fit_the_movie(self, name: str) -> None:

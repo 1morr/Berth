@@ -44,7 +44,9 @@ CACHE_TTL = timedelta(hours=1)
 POSTER_SIZE = "w342"
 
 #: 查詢結尾的年份：`nosferatu 1922`、`nosferatu (1922)`。前面要有片名——只打 `1917` 是片名。
-_TRAILING_YEAR = re.compile(r"^(?P<title>.+?)\s+\(?(?P<year>(?:18|19|20)[0-9]{2})\)?$")
+_TRAILING_YEAR = re.compile(
+    r"^(?P<title>.+?)\s+(?P<open>\()?(?P<year>(?:18|19|20)[0-9]{2})(?(open)\))$"
+)
 
 TRENDING_KEY = "discover:trending"
 POPULAR_KEY = "discover:popular"
@@ -163,7 +165,7 @@ def split_year(normalised: str) -> tuple[str, int] | None:
 async def _with_year(
     client: TmdbClient, title: str, year: int, language: str
 ) -> tuple[TmdbEntry, ...]:
-    """兩種作品各問一次帶年份的搜尋，交錯成一份（與趨勢、熱門同一種合法）。"""
+    """兩種作品各問一次帶年份的搜尋，交錯成一份（與趨勢、熱門同一種合併方式）。"""
     rows = [
         await client.search_year(kind, title, year=year, language=language) for kind in MediaKind
     ]

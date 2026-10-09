@@ -223,7 +223,7 @@ class TestResults:
 
         body = client.get(f"/api/search?media={SPY_ID}").json()
 
-        parts = body["duplicates"] + body["discarded"] + body["set_aside_total"] + body["total"]
+        parts = body["merged"] + body["discarded"] + body["set_aside_total"] + body["total"]
         assert body["returned"] == parts
         assert body["returned"] > len(body["rows"])
 
