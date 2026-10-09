@@ -295,14 +295,17 @@ def acgrip_feed(term: str, releases: list[tuple[str, Release, int]]) -> bytes:
 
 
 def m1_feed(fixtures: Path) -> bytes:
-    """M1 那三包，一包一筆：發佈名是語料的 `torrent_name`，下載連結是 `torrents` 那一台的檔案。"""
+    """M1 那三包，一包一筆：發佈名是語料的 `torrent_name`，下載連結是 `torrents` 那一台的檔案。
+
+    **不寫 `<pubDate>`**：語料沒有發佈時間，給一個日子就會被播出日比對（M3 票 14）拿去比，早於那一季
+    播出的那一包停在審核（票 79 第一次跑 e2e 抓到）。沒有時是「來源沒給」，照常自動入庫。
+    """
     items = []
     for number, pack in enumerate(PACKS, start=1):
         spec = json.loads((fixtures / "parser" / pack.fixture).read_text(encoding="utf-8"))
         page = f"https://acg.rip/t/{900000 + number}"
         items.append(
             f"<item><title>{escape(spec['torrent_name'])}</title><description></description>"
-            f"<pubDate>{format_datetime(_acgrip('2024-01-01'))}</pubDate>"
             f"<link>{page}</link><guid>{page}</guid>"
             f'<enclosure url="{TORRENTS}/{pack.route_slug}.torrent" '
             'type="application/x-bittorrent"/></item>'

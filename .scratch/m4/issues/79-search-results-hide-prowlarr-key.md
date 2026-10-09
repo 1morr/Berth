@@ -65,7 +65,12 @@
 
 - 測試（雙向，在測試檔內）：`test_search_api.py::TestTheIndexerKeyStaysOnTheServer`（一般使用者的回應全文搜不到 `arrange` 寫進設定的 Prowlarr key，前提先斷言 fixture 的連結真的帶 key、結果有兩列；收起來的那一份也沒有；用 `source_id` 送單成功、伺服器拿原本那條代理連結去要 torrent）；`test_jobs_api.py::TestRefusals`（不認得的 id、過期的 id 都是 404 `source_expired`、沒去要 torrent；物件形狀的網址 422、字串網址 404）；`tests/unit/test_job_sources.py`（id 不洩漏連結、同一發佈兩個 id、過期邊界、清過期）。變異：把 `source_id` 換成下載連結本身，5 條紅。
 - `uv run pytest`：3742 passed（code-review 的 rename 前後各跑一次）；vitest 1428 passed；前端 e2e 35 passed（rename 前後各一次）（`cold-start` 的 8496 被另一個 session 的 `berth-t80` 佔著，用一份不進版控的 config 把它移到 8596 跑，跑完刪掉）；pre-commit 全綠。
-- **docker e2e（`tests/e2e/`）**：它原本直接送 `.torrent` 網址，現在先讀 `sites` 冒充的 acg.rip 一次性連結（`sites.M1_URL`，三包指到 `torrents` 那一台）再送。本機驗了 feed 解析得出三筆、`kind_of` 認得；**整輪 20 分鐘的 stack 沒在這個 session 跑**，nightly 會跑到。
+- **docker e2e（`tests/e2e/`）**：它原本直接送 `.torrent` 網址，現在先讀 `sites` 冒充的 acg.rip 一次性連結（`sites.M1_URL`，三包指到 `torrents` 那一台）再送。合併前照 `docs/development.md`〈e2e〉完整跑（`uv run --env-file <main 的 .env> python -m tests.e2e.stack`，專案 `berth-e2e`、port 28383 / 28096 / 28080 / 26881 / 29696、子網 10.231.0.0/16，與 `berth-local` 不重疊）：
+  - **第一輪紅（10 failed / 14 passed）**：M1 那三包裡 tv（The Bear S03）停在 `review_required`，其餘的失敗都是它沒入庫連帶的（帳本、硬鏈接、Jellyfin、M1.5、M2 依賴它）。原因是我寫的 M1 feed 給每一筆 `<pubDate>2024-01-01`，而 The Bear S03 是 2024-06 播的：播出日比對（M3 票 14）照「發佈早於播出日兩天以上」擋下來。改之前直接送網址不帶發佈時間，比對照「來源沒給」略過。
+  - **修**：`m1_feed` 不寫 `<pubDate>`（語料沒有發佈時間可以照抄），與票 79 之前送進去的是同一件事。新增 `tests/unit/test_e2e_sites.py` 守這條 feed：M1 連結是 acg.rip、三筆的發佈名照語料、下載連結指到 `torrents`、**沒有發佈時間**；雙向——放回 `pubDate` 那一條紅，改頁面 id 基數這種無關的改動不紅。
+  - 第二輪跑到一半電腦意外中斷；確認工作區沒有 null bytes、`git fsck` 乾淨、兩個未提交檔完整之後，用 `stack.compose_command()`（`--project-name berth-e2e`）`down --volumes --remove-orphans` 清掉被 Docker Desktop 拉起來的 `berth-e2e-*`，再從頭跑。
+  - **重跑綠：24 passed（18 分 42 秒）**，`stack.py` 跑完自己 `down --volumes`，沒留容器、volume、網路。`berth-local` 四個容器全程停著，沒碰。
+  - 這一輪也補上 `source_id` 改名之後的實跑缺口：e2e 對 build 自這個分支的 Berth 走 `POST /rss/oneshot` → `POST /jobs {source_id}`，三包不經人工入庫。
 
 ### 實跑（隔離環境）
 
@@ -77,7 +82,7 @@ image `berth:t79`（這個分支，code-review 的 rename 之前），repo 外�
 - 只重啟 `berth-t79` 之後在同一頁送另一列：畫面說「這一筆過期了……重新搜一次」（`.playwright-mcp/t79-expired-1280.png`）。
 - Network 面板：Playwright 拿不到 DevTools 面板的截圖，改用 `browser_network_request` 讀 request / response body（上面那兩行）加原始 JSON 回應的截圖。
 - 跑完 `docker compose down --volumes`、刪 image；`berth-local` 四個容器一直是 Exited，沒動。
-- rename 之後沒有重跑實跑：改的是欄位名，前端 e2e 的送單流程（`submit.spec`）與 vitest 守著兩端一致。
+- rename 之後的實跑由 docker e2e 補上（見〈驗證〉）：真的 Berth、qBittorrent、Jellyfin，送單走 `source_id`。
 
 ### code-review（`22c034d` 起，Standards 與 Spec 兩軸）
 
