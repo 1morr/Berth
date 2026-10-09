@@ -126,6 +126,7 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
     problem: null,
     detail: '',
     retry_at: null,
+    skipped: [],
     batch: null,
     ...overrides,
   }
@@ -471,6 +472,125 @@ describe('搜尋 torrent 與結果表', () => {
     expect(await screen.findByText(/連不上索引站/)).toBeVisible()
     expect(screen.getByText('GET /api/v1/search: connection refused')).toBeVisible()
     expect(screen.getByRole('link', { name: '前往設定：Prowlarr' })).toBeVisible()
+  })
+
+  describe('請求預算放不下的站（M4 票 77）', () => {
+    const minutes = (count: number) => new Date(Date.now() + count * 60 * 1000).toISOString()
+    const RAW =
+      'request budget for mikanani.me is used up; it fits again at 2026-10-09T01:13:14+00:00'
+
+    it('放不下的站這次沒問，其他站的結果照常列出；說出是哪一站、多久之後放得下', async () => {
+      render({
+        [SEARCH_PATH]: {
+          body: results({
+            skipped: [{ site: 'mikanani.me', indexers: ['Mikan'], until: minutes(43) }],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+      const list = await within(panel()).findByRole('list', { name: '這次沒問' })
+      const site = within(list).getByRole('listitem')
+      expect(within(site).getByText('Mikan')).toBeVisible()
+      expect(within(site).getByText('mikanani.me')).toBeVisible()
+      expect(within(site).getByText('43 分鐘後')).toBeVisible()
+      // 中文沒有單數形：一站時也不說「它們」（實跑時抓到）。
+      expect(
+        within(panel()).getByText(
+          '1 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
+        ),
+      ).toBeVisible()
+      expect(within(panel()).getByRole('table')).toBeInTheDocument()
+      expect(within(panel()).queryByText('等請求預算')).not.toBeInTheDocument()
+    })
+
+    it('一批比整份預算還大的站說永遠放不下，不給一個不會到的時間', async () => {
+      render({
+        [SEARCH_PATH]: {
+          body: results({ skipped: [{ site: 'nyaa.si', indexers: ['Nyaa.si'], until: null }] }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+      const list = await within(panel()).findByRole('list', { name: '這次沒問' })
+      const site = within(list).getByRole('listitem')
+      expect(within(site).getByText(/這一批比整份預算還大/)).toBeVisible()
+    })
+
+    it('每一站都放不下才整批等，說最早多久之後放得下；不顯示後端的原文', async () => {
+      render({
+        [SEARCH_PATH]: {
+          body: results({
+            rows: [],
+            total: 0,
+            attempts: [],
+            problem: 'budget_exhausted',
+            detail: RAW,
+            retry_at: minutes(43),
+            skipped: [
+              { site: 'mikanani.me', indexers: ['Mikan'], until: minutes(43) },
+              { site: 'nyaa.si', indexers: ['Nyaa.si'], until: minutes(50) },
+            ],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+      expect(await within(panel()).findByText('等請求預算')).toBeVisible()
+      expect(within(panel()).getByText(/每一個站/)).toBeVisible()
+      expect(within(panel()).getByText('43 分鐘後')).toBeVisible()
+      expect(within(panel()).queryByText(/request budget/)).not.toBeInTheDocument()
+      // 整批等的時候不再逐站列一次：同一件事只說一次。
+      expect(within(panel()).queryByText('這次沒問')).not.toBeInTheDocument()
+    })
+
+    it('英文介面兩種狀態各有自己的說法，時間照樣是相對的', async () => {
+      render({
+        [SEARCH_PATH]: {
+          body: results({
+            skipped: [{ site: 'mikanani.me', indexers: ['Mikan'], until: minutes(43) }],
+          }),
+        },
+        'GET /api/search?media=tv%3A120089&q=law': {
+          body: results({
+            rows: [],
+            total: 0,
+            attempts: [],
+            problem: 'budget_exhausted',
+            detail: RAW,
+            retry_at: minutes(43),
+          }),
+        },
+      })
+      await i18next.changeLanguage('en')
+      try {
+        renderApp('/media/tv:120089')
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+
+        expect(await screen.findByRole('list', { name: 'Not asked this time' })).toBeVisible()
+        expect(
+          screen.getByText(/for this site can't fit this batch, so it wasn't asked/),
+        ).toBeVisible()
+        expect(screen.getByText('in 43 minutes')).toBeVisible()
+
+        await userEvent.type(screen.getByRole('textbox'), 'law')
+        await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+        expect(await screen.findByText('Waiting for the budget')).toBeVisible()
+        expect(screen.getByText(/every site behind the indexer/)).toBeVisible()
+        expect(screen.getByText('in 43 minutes')).toBeVisible()
+        expect(screen.queryByText(/is used up/)).not.toBeInTheDocument()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
   })
 
   it('搜到但一筆都沒有不是錯誤', async () => {

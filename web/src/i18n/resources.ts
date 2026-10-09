@@ -1566,10 +1566,19 @@ const zhHant = {
       // M3 票 20：不是壞了，是 Berth 自己先停手。等得到，所以不塗紅。
       budget_exhausted: {
         label: '等請求預算',
-        body: '索引站背後的站這一小時的請求預算放不下這一批，一個關鍵字都沒問。RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。',
+        body: '索引站背後的每一個站這一小時的請求預算都放不下這一批，一個關鍵字都沒問。RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。',
       },
-      retryAt: '放得下的時間：',
+      retryAt: '最早有一站放得下：',
       askAdmin: '請管理員到設定接上索引站。',
+    },
+    // M4 票 77：預算放不下的站跳過，其他站照問。
+    skipped: {
+      label: '這次沒問',
+      // 中文只有 other 一種複數形，兩格同一句、不帶單複數的代名詞（實跑時「這 1 個站……沒問它們」）。
+      body_one: '{{count}} 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
+      body_other: '{{count}} 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
+      fitsAt: '放得下：',
+      never: '這一批比整份預算還大，放不下',
     },
   },
   // 下載列表頁與送單（票 09、`.scratch/m1/jobs-shape.md`）。發佈名、hash、路徑、category
@@ -4756,10 +4765,19 @@ const en: Translations<typeof zhHant> = {
       },
       budget_exhausted: {
         label: 'Waiting for the budget',
-        body: "This hour's request budget for the sites behind the indexer can't fit this batch, so not a single keyword was asked. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites.",
+        body: "This hour's request budget for every site behind the indexer can't fit this batch, so not a single keyword was asked. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites.",
       },
-      retryAt: 'It fits again:',
+      retryAt: 'The first site fits again:',
       askAdmin: 'Ask an administrator to connect an indexer in Settings.',
+    },
+    skipped: {
+      label: 'Not asked this time',
+      body_one:
+        "This hour's request budget for this site can't fit this batch, so it wasn't asked this time. The other sites were.",
+      body_other:
+        "This hour's request budget for these {{count}} sites can't fit this batch, so they weren't asked this time. The other sites were.",
+      fitsAt: 'Fits again:',
+      never: 'This batch is larger than the whole budget, so it never fits',
     },
   },
   issues: {

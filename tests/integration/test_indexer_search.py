@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import pytest
 import respx
 
-from berth.adapters.indexer import SearchQuery
+from berth.adapters.indexer import SearchQuery, SearchSite
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from tests.conftest import read_fixture
 
@@ -133,7 +133,8 @@ async def test_prowlarr_search_asks_only_the_sites_it_is_given() -> None:
 @pytest.mark.asyncio
 async def test_prowlarr_search_reaches_the_sites_of_its_enabled_indexers() -> None:
     """一個查詢打到 Prowlarr 上每一個啟用中的站（M3 票 20）：請求預算以站的主機名記帳，
-    與 RSS 打 `mikanani.me` 的是同一份。停用的站不算。"""
+    與 RSS 打 `mikanani.me` 的是同一份。停用的站不算。帶著 indexer id 與名字：預算放不下的站
+    這次不問，靠 `indexerIds` 只問其他站（M4 票 77）。"""
     rows = json.loads(read_fixture("http/prowlarr/indexer.defaults-added.json"))
     rows[-1]["enable"] = False  # yts
     respx.get(f"{PROWLARR_URL}/api/v1/indexer").respond(200, json=rows)
@@ -144,7 +145,12 @@ async def test_prowlarr_search_reaches_the_sites_of_its_enabled_indexers() -> No
     finally:
         await search.aclose()
 
-    assert sites == frozenset({"acg.rip", "share.dmhy.org", "mikanani.me", "thepiratebay.org"})
+    assert sites == (
+        SearchSite(indexer_id=2, name="ACG.RIP", site="acg.rip"),
+        SearchSite(indexer_id=6, name="dmhy", site="share.dmhy.org"),
+        SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),
+        SearchSite(indexer_id=5, name="The Pirate Bay", site="thepiratebay.org"),
+    )
 
 
 @respx.mock
@@ -163,4 +169,4 @@ async def test_prowlarr_search_reaches_the_base_url_the_indexer_was_set_to() -> 
     finally:
         await search.aclose()
 
-    assert sites == frozenset({"tpb.party"})
+    assert [site.site for site in sites] == ["tpb.party"]

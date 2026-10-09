@@ -12,6 +12,7 @@ import { ExpandHint } from '../components/ExpandHint'
 import { StepLine } from '../components/StepLine'
 import { Timestamp } from '../components/Timestamp'
 import { IndexerNotice } from './IndexerNotice'
+import { SkippedSites } from './SkippedSites'
 import { RoutePicker } from './RoutePicker'
 import { SearchResults } from './SearchResults'
 import { sortRows, type SortKey } from './searchResult'
@@ -184,6 +185,8 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           retryAt={results?.retry_at ?? null}
         />
       )}
+
+      {results && !results.problem && <SkippedSites skipped={results.skipped} />}
 
       {results?.batch && isBatched(results.batch, missing) && missing && (
         <BatchLine

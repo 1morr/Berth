@@ -4823,6 +4823,8 @@ export interface components {
             detail: string;
             /** Retry At */
             retry_at: string | null;
+            /** Skipped */
+            skipped: components["schemas"]["SkippedOut"][];
             batch: components["schemas"]["BatchOut"] | null;
         };
         /**
@@ -5164,6 +5166,18 @@ export interface components {
             params: {
                 [key: string]: string | number;
             };
+        };
+        /**
+         * SkippedOut
+         * @description 這次沒問的一站：主機名、索引站裡的名字、何時放得下這一批（`null` 是永遠放不下）。
+         */
+        SkippedOut: {
+            /** Site */
+            site: string;
+            /** Indexers */
+            indexers: string[];
+            /** Until */
+            until: string | null;
         };
         /**
          * SortOrder

@@ -40,7 +40,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.indexer import IndexerResult, IndexerSearch
+from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchSite
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import (
@@ -95,6 +95,7 @@ from berth.api.deps import get_bundled_services, get_client_factory, get_host_re
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
+    BudgetUse,
     Confidence,
     ConnectionReason,
     ConnectionState,
@@ -331,7 +332,9 @@ class Scenario:
     #: 一個站一份請求預算的上限（M3 票 20）。`None` 是正式的那一份（每站每小時 60 個）。
     budget_limit: int | None = None
     #: 替身索引站的一個查詢打到哪幾站（請求預算的鍵）。空的話不記帳。
-    indexer_sites: frozenset[str] = frozenset()
+    indexer_sites: tuple[SearchSite, ...] = ()
+    #: 起來時各站已經被輪詢用掉幾個（M4 票 77）：重現「RSS 先把 Mikan 用完」。
+    budget_spent: dict[str, int] = field(default_factory=dict)
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1483,13 +1486,15 @@ def rss_runtime_scenario() -> Scenario:
 
 
 def budget_scenario() -> Scenario:
-    """一個站一份請求預算（M3 票 20）：同 `rss`，但 Mikan 的預算只有 6 個，索引站背後也是 Mikan。
+    """一個站一份請求預算（M3 票 20、M4 票 77）：同 `rss`，但每站的預算只有 6 個，索引站背後是
+    Mikan 與 Nyaa，而 Mikan 起來時已經被輪詢用掉 5 個。
 
     TMDB 上《与你相恋》有七季、每季兩集都播完了，媒體庫一集都沒有：詳情頁按「搜這部作品缺的集」，
-    季記號放不下一批，分兩批（S01–S05、S06–S07）。第一批用掉 5 個，下一批也是 5 個（兩季 ×
-    前三個標題）放不下——那一行說出何時放得下，照樣按「問下一批」是「等請求預算」。之後到
-    `/rss` 加 Mikan 聚合 feed、按「立即輪詢」：Feed 本身用掉最後一個，單集頁全部被擋、下一輪
-    再試；健康頁的「請求預算」列出 mikanani.me 6 / 6、搜尋與輪詢各用了幾個、被延後的是哪幾種。
+    季記號放不下一批，分兩批（S01–S05、S06–S07）。第一批 5 個在 Mikan 放不下、在 Nyaa 放得下：
+    只問 Nyaa，結果下面說 Mikan 這次沒問、何時放得下。下一批也是 5 個，兩站都放不下——那一行
+    說出何時放得下，照樣按「問下一批」是「等請求預算」。之後到 `/rss` 加 Mikan 聚合 feed、按
+    「立即輪詢」：Feed 本身用掉 Mikan 最後一個，單集頁全部被擋、下一輪再試；健康頁的「請求預算」
+    列出 mikanani.me 6 / 6、nyaa.si 5 / 6，被延後的是哪幾種。
     """
     seasons = tuple(
         TmdbSeason(
@@ -1524,11 +1529,15 @@ def budget_scenario() -> Scenario:
     )
     scenario = rss_scenario(detail=detail, seasons=seasons)
     scenario.budget_limit = 6
-    scenario.indexer_sites = frozenset({"mikanani.me"})
+    scenario.indexer_sites = (
+        SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),
+        SearchSite(indexer_id=7, name="Nyaa.si", site="nyaa.si"),
+    )
+    scenario.budget_spent = {"mikanani.me": 5}
     scenario.indexer_results = tuple(
         IndexerResult(
             title=f"[LoliHouse] Kimi ga Shinu made Koi wo Shitai S{number:02d} [1080p]",
-            indexer="Mikan",
+            indexer="Nyaa.si",
             size=4000,
             seeders=3,
             download_url=demo_url(f"/demo/torrent?release=s{number:02d}"),
@@ -1787,6 +1796,8 @@ class FakeClientFactory:
         self._scenario = scenario
         limit = scenario.budget_limit
         self.budget = RequestBudget() if limit is None else RequestBudget(limit=limit)
+        for site, count in scenario.budget_spent.items():
+            self.budget.take(site, count, BudgetUse.POLL)
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         if self._scenario.jellyfin.error is not None and base_url != BUNDLED_JELLYFIN_URL:

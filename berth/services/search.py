@@ -29,9 +29,8 @@ from itertools import zip_longest
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.budget import BudgetExhaustedError
 from berth.adapters.http import AuthFailedError, ServiceError
-from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
+from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery, SearchSite
 from berth.domain import (
     BudgetUse,
     EpisodeStatus,
@@ -126,10 +125,24 @@ class SearchView:
     problem: IndexerProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
-    #: `BUDGET_EXHAUSTED` 時預算放得下這一批的時刻（M3 票 20）。
+    #: `BUDGET_EXHAUSTED` 時最早有一站放得下這一批的時刻（M3 票 20）；每一站都永遠放不下是 `None`。
     retry_at: datetime | None = None
+    #: 請求預算放不下這一批、這次沒問的站（M4 票 77）。`BUDGET_EXHAUSTED` 時是每一站。
+    skipped: tuple[SkippedSite, ...] = ()
     #: 缺集搜尋時問的這一批。作品名與自己打的關鍵字沒有批次，是 `None`。
     batch: BatchView | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SkippedSite:
+    """請求預算放不下這一批、這次沒問的一站（M4 票 77）。"""
+
+    #: 預算的鍵（主機名）。
+    site: str
+    #: 索引站裡打到這一站的那幾個（通常一個）。
+    indexers: tuple[str, ...]
+    #: 放得下這一批的時刻；`None` 是永遠放不下（一批比整份預算還大）。
+    until: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,7 +265,10 @@ async def search_torrents(
     分批時這一批從哪一季起（M3 票 20，`BatchView`）。
 
     **問之前先在請求預算裡佔位**（M3 票 20）：一個查詢打到索引站背後的每一個站，所以一批是在每一站
-    各佔 `len(queries)` 格；有一站放不下就一個都不問，回 `BUDGET_EXHAUSTED` 與放得下的時刻。
+    各佔 `len(queries)` 格。**放不下的站這次不問**（M4 票 77，推翻票 20 的「有一站放不下就一個都
+    不問」）：查詢只帶放得下的站的 `indexer_ids`，結果的 `skipped` 說出哪幾站沒問、何時放得下——
+    Mikan 被 RSS 用完時，搜一部美劇照樣問得到 Nyaa。每一站都放不下才回 `BUDGET_EXHAUSTED` 與最早
+    放得下的時刻。
     """
     settings = await _indexer(session)
     if settings is None:
@@ -272,17 +288,22 @@ async def search_torrents(
         return _blank(IndexerProblem.NO_QUERY)
 
     client = factory.indexer_search(settings.base_url, settings.api_key)
-    queries = tuple(SearchQuery(text=text) for text in texts)
     try:
-        sites = await client.sites()
-        try:
-            factory.budget.take(sites, len(queries), BudgetUse.SEARCH)
-        except BudgetExhaustedError as refused:
+        targets = await client.sites()
+        sites = {target.site for target in targets if target.site}
+        refused = factory.budget.take_each(sites, len(texts), BudgetUse.SEARCH)
+        skipped = _skipped(targets, refused)
+        asked = tuple(target for target in targets if target.site not in refused)
+        if targets and not asked:
             return replace(
-                _blank(IndexerProblem.BUDGET_EXHAUSTED, message(refused)),
-                retry_at=refused.until,
+                _blank(IndexerProblem.BUDGET_EXHAUSTED),
+                retry_at=min((at for at in refused.values() if at is not None), default=None),
+                skipped=skipped,
                 batch=_batch(batches),
             )
+        # 每一站都放得下時不限定站：與沒有預算時問的是同一批（Prowlarr 不帶 `indexerIds` 是全部）。
+        only = tuple(target.indexer_id for target in asked) if refused else ()
+        queries = tuple(SearchQuery(text=text, indexer_ids=only) for text in texts)
         outcomes = await asyncio.gather(
             *(_attempt(client, item, timeout) for item in queries), return_exceptions=False
         )
@@ -309,7 +330,22 @@ async def search_torrents(
         set_aside=tuple(_row(result, snapshot) for result in _take(aside, RESULT_LIMIT)),
         set_aside_total=len(aside),
         attempts=tuple(attempt for attempt, _ in outcomes),
+        skipped=skipped,
         batch=_batch(batches, next_at),
+    )
+
+
+def _skipped(
+    targets: Sequence[SearchSite], refused: dict[str, datetime | None]
+) -> tuple[SkippedSite, ...]:
+    """放不下的站，照站名排；一站背後有幾個索引站時名字併在一起。"""
+    return tuple(
+        SkippedSite(
+            site=site,
+            indexers=tuple(target.name for target in targets if target.site == site),
+            until=until,
+        )
+        for site, until in sorted(refused.items())
     )
 
 
