@@ -41,6 +41,7 @@ from berth.services.routes import build_routes
 from berth.services.search import search_torrents
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_COMPLETE, STEP_INDEXER, complete_setup, read_status
+from berth.services.sources import SourceCache
 from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import (
     arrange,
@@ -118,7 +119,7 @@ async def test_a_torznab_endpoint_is_cleared_and_page_4_waits(
     async with create_session_factory(before)() as session:
         status = await read_status(session)
         indexer = await read_indexer_status(session, factory)
-        searched = await search_torrents(session, factory, media_id="tv:120089")
+        searched = await search_torrents(session, factory, SourceCache(), media_id="tv:120089")
         settings = await read_settings(session, IndexerSettings)
 
     assert status.current_step == STEP_INDEXER

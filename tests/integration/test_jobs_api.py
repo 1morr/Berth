@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -27,9 +28,11 @@ from berth.config import Config
 from berth.domain import HealthStatus, JobState, JobTrigger
 from berth.main import create_app
 from berth.models import Job, Route, TmdbSettings
+from berth.services.jobs import JobSource
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
+from berth.services.sources import SOURCE_TTL_SECONDS, SourceCache
 from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
@@ -139,9 +142,18 @@ def set_threshold(client: TestClient, gigabytes: int) -> None:
     assert response.status_code == 200, response.text
 
 
+def offer(client: TestClient, **fields: Any) -> str:
+    """搜尋結果的一列在伺服器上記下的那一筆（M4 票 79），回瀏覽器拿到的 id。
+
+    搜尋本身在 `test_search_api.py`；這裡驗送單，所以直接記一筆，不繞一次索引站。
+    """
+    sources: SourceCache = client.app.state.sources  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+    return sources.remember(JobSource(**({"url": MAGNET, "title": RELEASE} | fields)))
+
+
 def body(client: TestClient, **overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
-        "source": {"url": MAGNET, "title": RELEASE, "info_hash": ""},
+        "source_id": offer(client),
         "media": SPY_ID,
         "route": route_id(client),
     }
@@ -306,22 +318,16 @@ class TestSubmitting:
         assert job["retryable"] is False
 
     def test_the_publish_date_from_the_indexer_is_kept_on_the_job(self, client: TestClient) -> None:
-        """結果表那一列的 `published_at` 跟著 Job 存下來，規劃時比播出日（M3 票 14）。"""
+        """結果表那一列的 `published_at` 跟著 Job 存下來，規劃時比播出日（M3 票 14）。
+
+        它是伺服器記下的那一份（M4 票 79），不是瀏覽器送回來的。
+        """
         sign_in(client)
-        source = {"url": MAGNET, "title": RELEASE, "info_hash": ""}
+        published = datetime(2026, 9, 24, 13, 1, tzinfo=UTC)
 
-        submit(client, source=source | {"published_at": "2026-09-24T13:01:00Z"})
+        submit(client, source_id=offer(client, published_at=published))
 
-        assert stored_published_at(client) == datetime(2026, 9, 24, 13, 1, tzinfo=UTC)
-
-    def test_a_publish_date_without_a_timezone_is_refused(self, client: TestClient) -> None:
-        """沒有時區就不知道是哪一天：422，不是存的那一刻才炸成 500。"""
-        sign_in(client)
-        source = {"url": MAGNET, "title": RELEASE, "info_hash": ""}
-
-        response = submit(client, source=source | {"published_at": "2026-09-24T13:01:00"})
-
-        assert response.status_code == 422
+        assert stored_published_at(client) == published
 
     def test_a_row_without_a_publish_date_still_submits(self, client: TestClient) -> None:
         sign_in(client)
@@ -440,6 +446,43 @@ class TestRefusals:
 
         assert response.status_code == 409
         assert response.json()["detail"] == {"reason": "job_removed", "detail": MAGNET_HASH}
+
+    def test_an_id_berth_never_handed_out_is_refused_with_a_reason(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """M4 票 79：重啟過、手打的都一樣，畫面說「這筆過期了，再搜一次」。"""
+        sign_in(client, CREW)
+
+        response = submit(client, source_id="not-an-id")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == {"reason": "source_expired", "detail": ""}
+        assert factory.torrent_.requested == []
+        assert listed(client) == []
+
+    def test_an_id_past_its_time_is_refused_the_same_way(self, client: TestClient) -> None:
+        sign_in(client, CREW)
+        clock = [0.0]
+        client.app.state.sources = SourceCache(clock=lambda: clock[0])  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        fresh = offer(client)
+        clock[0] += SOURCE_TTL_SECONDS
+
+        response = submit(client, source_id=fresh)
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "source_expired"
+
+    def test_a_link_is_not_a_source(self, client: TestClient, factory: FakeClientFactory) -> None:
+        """M4 票 79：送單不再收網址——Berth 不替登入的人去抓他指定的任何地方（包括內網）。"""
+        sign_in(client, CREW)
+
+        as_object = submit(client, source_id={"url": "http://192.168.1.1/admin", "title": RELEASE})
+        as_text = submit(client, source_id="http://192.168.1.1/admin")
+
+        assert as_object.status_code == 422
+        assert as_text.status_code == 404
+        assert as_text.json()["detail"]["reason"] == "source_expired"
+        assert factory.torrent_.requested == []
 
     def test_a_missing_job_is_a_404(self, client: TestClient) -> None:
         sign_in(client)

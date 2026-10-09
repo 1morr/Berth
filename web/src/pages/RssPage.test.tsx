@@ -965,8 +965,7 @@ function oneshotItem(guid: string, overrides: Partial<OneshotItem> = {}): Onesho
     guid,
     title: `${KIMI_RELEASE} - ${guid} [WebRip 1080p]`,
     link: `https://mikanani.me/Home/Episode/${guid}`,
-    url: `https://mikanani.me/Download/20260924/${guid}.torrent`,
-    info_hash: guid.padStart(40, '0'),
+    source_id: `source-${guid}`,
     size: 500_000_000,
     published_at: '2026-09-24T08:08:01Z',
     release_kind: 'single',
@@ -1073,20 +1072,14 @@ describe('RSS 頁：一次性 RSS 連結（票 18）', () => {
 
     await waitFor(() => expect(sent(stub, 'POST', '/api/jobs')).toHaveLength(3))
     const jobs = bodies(stub, 'POST', '/api/jobs')
-    expect(jobs.map((body) => body.source.url)).toEqual([
-      ONESHOT[3].url,
-      ONESHOT[2].url,
-      ONESHOT[1].url,
+    // 送的是伺服器記下的那一筆的 id，不是網址（M4 票 79）。
+    expect(jobs.map((body) => body.source_id)).toEqual([
+      ONESHOT[3].source_id,
+      ONESHOT[2].source_id,
+      ONESHOT[1].source_id,
     ])
     expect(jobs[0]).toEqual({
-      source: {
-        url: ONESHOT[3].url,
-        title: ONESHOT[3].title,
-        info_hash: ONESHOT[3].info_hash,
-        published_at: ONESHOT[3].published_at,
-        // 磁碟門檻算在途量用（M4 票 03）。
-        size: ONESHOT[3].size,
-      },
+      source_id: ONESHOT[3].source_id,
       media: 'tv:262000',
       route: 3,
     })

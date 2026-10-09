@@ -27,8 +27,10 @@ from berth.models import Job, Media, Route
 from berth.parser import parse_release, tags_of
 from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
+from berth.services.jobs import JobSource
 from berth.services.rss import RssRejectedError, kind_of, library_copy, parse_items, unread
 from berth.services.search import estimate
+from berth.services.sources import SourceCache
 from berth.services.steps import message
 
 
@@ -40,10 +42,9 @@ class OneshotItem:
     title: str
     #: 單集頁。
     link: str
-    #: 送單時交給 `POST /jobs` 的那一條：`.torrent` 網址，站只給 magnet 時是 magnet。
-    url: str
-    #: 站報的 info hash；不報時空字串（acg.rip，送單時由 `TorrentFetcher` 算）。
-    info_hash: str
+    #: 送單時交給 `POST /jobs` 的 id（`SourceCache`，M4 票 79）：`.torrent` 網址（站只給 magnet 時是
+    #: magnet）、發佈名、站報的 info hash 記在伺服器上。送單只收記下的那一筆，不收網址。
+    source_id: str
     size: int | None
     published_at: datetime | None
     release_kind: ReleaseKind
@@ -73,6 +74,7 @@ class OneshotView:
 async def read_oneshot(
     session: AsyncSession,
     factory: ServiceClientFactory,
+    sources: SourceCache,
     url: str,
     *,
     media_id: str | None = None,
@@ -83,6 +85,9 @@ async def read_oneshot(
     失敗各有各的理由（票 18 驗收：說得出是哪一種）：網址不是認得的來源 `feed_unsupported`、
     抓不到 `feed_unreachable`、抓到的不是 RSS `feed_not_rss`；作品或 Route 不在是 `media_missing` /
     `route_missing`（先檢查，不必為一個送不出去的組合打一次上游）。
+
+    每一筆的下載連結記進 `sources`（M4 票 79）。**那不算改狀態**，所以仍是 `READ`：記在程序
+    記憶體裡、兩小時就忘，資料庫與外部服務一樣都沒動。
     """
     kind = kind_of(url)
     if kind is None:
@@ -100,7 +105,7 @@ async def read_oneshot(
         await fetcher.aclose()
     hashes = [item.info_hash for item in found if item.info_hash]
     jobs = set(await session.scalars(select(Job.hash).where(Job.hash.in_(hashes))))
-    items = [await _item(session, item, media, route, jobs) for item in found]
+    items = [await _item(session, sources, item, media, route, jobs) for item in found]
     return OneshotView(kind=kind, items=tuple(items))
 
 
@@ -124,6 +129,7 @@ async def _route(session: AsyncSession, route_id: int | None) -> Route | None:
 
 async def _item(
     session: AsyncSession,
+    sources: SourceCache,
     item: FeedItem,
     media: Media | None,
     route: Route | None,
@@ -151,8 +157,15 @@ async def _item(
         guid=item.guid,
         title=item.title,
         link=item.link,
-        url=item.torrent_url or item.magnet,
-        info_hash=item.info_hash,
+        source_id=sources.remember(
+            JobSource(
+                url=item.torrent_url or item.magnet,
+                title=item.title,
+                info_hash=item.info_hash,
+                published_at=item.published_at,
+                size=item.size or 0,
+            )
+        ),
         size=item.size,
         published_at=item.published_at,
         release_kind=info.release_kind,

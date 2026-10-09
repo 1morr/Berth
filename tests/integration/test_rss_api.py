@@ -23,6 +23,7 @@ from berth.config import Config
 from berth.domain import JobState, JobTrigger, PlanAction, Tags
 from berth.main import create_app
 from berth.models import Job, LedgerEntry, Media, Route
+from berth.services.sources import SourceCache
 from tests.conftest import FIXTURES
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory, answered
@@ -336,12 +337,7 @@ class TestExclusions:
 def picked_job(row: dict[str, Any], route_id: int) -> dict[str, Any]:
     """一次性清單的一列 → 一般送單的 body（畫面送的就是這一份）。"""
     return {
-        "source": {
-            "url": row["url"],
-            "title": row["title"],
-            "info_hash": row["info_hash"],
-            "published_at": row["published_at"],
-        },
+        "source_id": row["source_id"],
         "media": KIMI_ID,
         "route": route_id,
     }
@@ -376,7 +372,10 @@ class TestOneshot:
             assert sent.json()["created"] is True
 
         jobs = client.get("/api/jobs?filter=all").json()["jobs"]
-        assert {row["hash"] for row in jobs} == {row["info_hash"] for row in picked}
+        sources: SourceCache = client.app.state.sources  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        assert {row["hash"] for row in jobs} == {
+            sources.recall(row["source_id"]).info_hash for row in picked
+        }
         assert {(row["trigger"], row["media_id"]) for row in jobs} == {("manual", KIMI_ID)}
         # 不建 Feed、不長 RSS Series、不寫 Feed Item。
         assert client.get("/api/rss/feeds").json() == []

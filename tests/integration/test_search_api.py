@@ -25,9 +25,11 @@ from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.main import create_app
 from berth.models import TmdbSettings
+from berth.services.jobs import JobSource
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
+from berth.services.sources import SourceCache
 from tests.conftest import TMDB_API_KEY
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory
@@ -35,6 +37,8 @@ from tests.integration.test_media import MOANA as MOANA_DETAIL
 from tests.integration.test_media import MOANA_ID, ORDERING, SEASONS, SPY, SPY_ID
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
+#: `arrange` 寫進 `IndexerSettings` 的那一把：Prowlarr 的代理連結帶的就是它。
+PROWLARR_KEY = "key-prowlarr-0"
 ADMIN = {"username": "skipper", "password": "harbour"}
 CREW = {"username": "deckhand", "password": "rope"}
 
@@ -51,7 +55,8 @@ ANIME = IndexerResult(
     leechers=3,
     info_hash="a" * 40,
     info_url="https://acg.rip/t/344604",
-    download_url="http://prowlarr:9696/2/download?apikey=k",
+    # Prowlarr 的代理連結長這樣：帶著它自己的 API key（`arrange` 寫進設定的那一把，brief §20.7）。
+    download_url=f"http://prowlarr:9696/2/download?apikey={PROWLARR_KEY}&link=bm9uY2U",
     published_at=datetime(2026, 9, 24, 13, 1, tzinfo=UTC),
 )
 #: 同一部作品的西方 scene 命名（形狀抄自錄下來的 The Pirate Bay 那一筆；季號改成這份
@@ -63,6 +68,8 @@ SCENE = IndexerResult(
     seeders=9,
     leechers=1,
     info_hash="b" * 40,
+    # 磁力站沒有 `downloadUrl`，`magnetUrl` 一樣被包成 Prowlarr 的代理網址（brief §20.7）。
+    download_url=f"http://prowlarr:9696/5/download?apikey={PROWLARR_KEY}&link=bWFnbmV0",
 )
 #: **The Pirate Bay 對搜不到的關鍵字會回它的熱門清單。** 這一筆是 2026-09-10 搜
 #: SPY×FAMILY 時真的排在第一的那個東西——六千個做種，與這部作品毫無關係。
@@ -411,20 +418,22 @@ def _skip_indexer(client: TestClient) -> None:
 
 
 class TestInfoHash:
-    def test_a_row_carries_the_indexers_info_hash_separately_from_its_key(
+    """`key` 是「這一列的身分」（info hash **或** guid），而送單要的是真的 hash——兩者混用的話，
+    不報 hash 的站（實測 ACG.RIP）會把一條 guid 當成 hash 送出去。送單的那一份記在伺服器上
+    （M4 票 79），所以這裡讀的是它記下的 hash。"""
+
+    def test_a_row_remembers_the_indexers_info_hash_separately_from_its_key(
         self, client: TestClient
     ) -> None:
-        """`key` 是「這一列的身分」（info hash **或** guid），而送單要的是真的 hash——
-        兩者放同一格的話，不報 hash 的站（實測 ACG.RIP）會把一條 guid 當成 hash 送出去。"""
         sign_in(client)
 
         rows = client.get(f"/api/search?media={SPY_ID}").json()["rows"]
 
         row = next(row for row in rows if row["indexer"] == "ACG.RIP")
-        assert row["info_hash"] == "a" * 40
-        assert row["key"] == row["info_hash"]
+        assert remembered(client, row["source_id"]).info_hash == "a" * 40
+        assert row["key"] == "a" * 40
 
-    def test_a_site_that_reports_no_hash_leaves_the_field_empty(
+    def test_a_site_that_reports_no_hash_leaves_it_empty(
         self, client: TestClient, indexer: FakeIndexerSearch
     ) -> None:
         indexer._results = (replace(ANIME, info_hash="", guid="https://acg.rip/t/344604"),)
@@ -432,5 +441,71 @@ class TestInfoHash:
 
         rows = client.get(f"/api/search?media={SPY_ID}").json()["rows"]
 
-        assert rows[0]["info_hash"] == ""
+        assert remembered(client, rows[0]["source_id"]).info_hash == ""
         assert rows[0]["key"] == "https://acg.rip/t/344604"
+
+
+def remembered(client: TestClient, source_id: str) -> JobSource:
+    sources: SourceCache = client.app.state.sources  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+    return sources.recall(source_id)
+
+
+class TestTheIndexerKeyStaysOnTheServer:
+    """M4 票 79：下載連結是 Prowlarr 的代理網址、帶著它的 API key，而 `/search` 一般使用者也打得到。
+
+    連結記在伺服器上（`services/sources.py`），結果的每一列只帶一個不透明的 `source`，送單收它。
+    """
+
+    def test_an_ordinary_users_search_never_carries_the_prowlarr_key(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        # 前提：索引站真的回了帶 key 的連結，否則下面那行搜不到是理所當然。
+        assert all(PROWLARR_KEY in row.download_url for row in (ANIME, SCENE))
+        sign_in(client, CREW)
+
+        response = client.get(f"/api/search?media={SPY_ID}")
+
+        assert response.status_code == 200
+        assert len(response.json()["rows"]) == 2
+        assert PROWLARR_KEY not in response.text
+        assert "apikey" not in response.text
+        assert all("download_url" not in row for row in response.json()["rows"])
+
+    def test_the_rows_aside_do_not_carry_it_either(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        """收起來的那一份（M4 票 49）也是同一種列。"""
+        indexer._results = (replace(SCENE, title="SPY X FAMILY 1998 1080p WEB H264-OLD"),)
+        sign_in(client, CREW)
+
+        response = client.get(f"/api/search?media={SPY_ID}")
+
+        assert response.json()["set_aside_total"] == 1
+        assert PROWLARR_KEY not in response.text
+
+    def test_an_ordinary_user_submits_a_row_by_its_source(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """送單只帶 id；伺服器換回那一條代理連結去要 torrent，發佈名與 hash 也是它記著的那一份。"""
+        sign_in(client, CREW)
+        row = next(
+            row
+            for row in client.get(f"/api/search?media={SPY_ID}").json()["rows"]
+            if row["indexer"] == "ACG.RIP"
+        )
+        tv = next(
+            route["id"]
+            for route in client.get(f"/api/media/{SPY_ID}").json()["routes"]
+            if route["slug"] == "tv"
+        )
+
+        response = client.post(
+            "/api/jobs",
+            json={"source_id": row["source_id"], "media": SPY_ID, "route": tv},
+            headers=BROWSER,
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["job"]["name"] == ANIME.title
+        # 索引站報了 hash，重複檢查拿它短路；沒有同一筆，所以照樣去要那一份 torrent。
+        assert factory.torrent_.requested == [ANIME.download_url]

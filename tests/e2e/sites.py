@@ -22,6 +22,10 @@
 
 輪次住在 `ROUND` 這個檔案裡（沒有就是第 1 輪）：測試寫它，這一台每個請求讀一次。
 
+M1 那三包（`payload.PACKS`）也在這裡列一條 acg.rip 搜尋 feed（`M1_URL`，M4 票 79）：送單只收搜尋或
+一次性連結記下的結果，e2e 不搜尋，所以先把這一條當一次性連結讀，再照它送。下載連結指到 `torrents`
+那一台（`payload.py` 造的 `.torrent`）。
+
 **只用標準庫**（同 `payload.py`）：容器是 `python:3.13-alpine`。宿主上的測試 import 這一支只為了
 常量與 `RELEASES`。
 """
@@ -45,6 +49,7 @@ try:
     from tests.e2e.payload import (
         ANNOUNCE,
         FIXTURES,
+        PACKS,
         PIECE_LENGTH,
         WORK,
         bencode,
@@ -56,6 +61,7 @@ except ModuleNotFoundError:  # 容器裡：`python /e2e/sites.py`，/e2e 在 sys
     from payload import (  # type: ignore[import-not-found, no-redef]  # 同一支檔案，另一種路徑
         ANNOUNCE,
         FIXTURES,
+        PACKS,
         PIECE_LENGTH,
         WORK,
         bencode,
@@ -86,6 +92,11 @@ AGGREGATE = "/RSS/MyBangumi"
 AGGREGATE_URL = f"https://mikanani.me{AGGREGATE}?token=berth-e2e"
 #: acg.rip 搜尋 feed 的網址（`adapters/rss/acgrip.search_url` 的形狀）。
 REZERO_URL = "https://acg.rip/.xml?term=Re+Zero"
+#: M1 那三包的一次性連結（M4 票 79）。
+M1_TERM = "berth-e2e-m1"
+M1_URL = f"https://acg.rip/.xml?term={M1_TERM}"
+#: compose 網路裡 `torrents` 那台的位址：`.torrent` 由 Berth 的容器去抓。
+TORRENTS = "http://torrents:8000"
 
 KIMI = "tv:285574"
 KAMIINA = "tv:283905"
@@ -283,6 +294,27 @@ def acgrip_feed(term: str, releases: list[tuple[str, Release, int]]) -> bytes:
     ).encode()
 
 
+def m1_feed(fixtures: Path) -> bytes:
+    """M1 那三包，一包一筆：發佈名是語料的 `torrent_name`，下載連結是 `torrents` 那一台的檔案。"""
+    items = []
+    for number, pack in enumerate(PACKS, start=1):
+        spec = json.loads((fixtures / "parser" / pack.fixture).read_text(encoding="utf-8"))
+        page = f"https://acg.rip/t/{900000 + number}"
+        items.append(
+            f"<item><title>{escape(spec['torrent_name'])}</title><description></description>"
+            f"<pubDate>{format_datetime(_acgrip('2024-01-01'))}</pubDate>"
+            f"<link>{page}</link><guid>{page}</guid>"
+            f'<enclosure url="{TORRENTS}/{pack.route_slug}.torrent" '
+            'type="application/x-bittorrent"/></item>'
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" '
+        'xmlns:torrent="http://xmlns.ezrss.it/0.1/">'
+        f"<channel><title>ACG.RIP</title><link>{escape(M1_URL)}</link>"
+        f"{''.join(items)}</channel></rss>"
+    ).encode()
+
+
 def episode_page(bangumi: int, subgroup: int) -> bytes:
     """單集頁上 Berth 只讀那一顆 `a.mikan-rss`（`adapters/rss/mikan.series_key`）。"""
     return (
@@ -339,6 +371,8 @@ class Sites:
     def _acgrip(self, path: str, query: dict[str, list[str]]) -> tuple[int, str, bytes]:
         if path == "/.xml":
             term = query.get("term", [""])[0]
+            if term == M1_TERM:
+                return 200, "application/xml", m1_feed(self.fixtures)
             search = "rezero" if "zero" in term.lower() else "kamiina"
             rows = self.listed(lambda r: r.site == "acgrip" and r.search == search)
             return 200, "application/xml", acgrip_feed(term, rows)

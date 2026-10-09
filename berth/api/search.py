@@ -15,7 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.schemas import StepOut
 from berth.domain import IndexerProblem, MappingStrategy, Source
 from berth.services.search import SearchView, plan_queries, search_torrents
@@ -56,12 +56,12 @@ class SearchResultOut(BaseModel):
     #: `null` = 那個站沒報做種數，與 0 不是同一件事。
     seeders: int | None
     info_url: str
-    #: 票 09 送單時交給 qBittorrent 的那一條。
-    download_url: str
+    #: 送單時放進 `POST /jobs` 的 `source_id`。**不是下載連結**（M4 票 79）：那是 Prowlarr 的
+    #: 代理網址、帶著它的 API key，記在伺服器上；過了 `SOURCE_TTL_SECONDS` 或 Berth 重啟過
+    #: 就換不回來了。
+    source_id: str
     #: 這一列的身分（info hash 或 guid）。畫列表用。
     key: str
-    #: 索引站報的 info hash，**只有真的是 hash 時才有值**。送單拿它短路重複檢查（票 09）。
-    info_hash: str
     tags: TagsOut
     #: 預估季集。`season` 與 `episode_start` 都是 `null` = 判斷不出來（結果表的第三種說法）。
     season: int | None
@@ -71,8 +71,8 @@ class SearchResultOut(BaseModel):
     whole_season: bool
     #: 季集是怎麼算出來的。畫面只讀 `movie`——「這一格沒有季集是因為它是電影」。
     strategy: MappingStrategy | None
-    #: 索引站報的發佈時間（UTC）。結果表的「發佈」欄；送單時原樣帶回來
-    #: （`JobSourceIn.published_at`）。`null` = 那個站沒報，畫面顯示 `—`。
+    #: 索引站報的發佈時間（UTC）。結果表的「發佈」欄；送單時存進 Job 的是伺服器跟著 `source_id`
+    #: 記下的那一份。`null` = 那個站沒報，畫面顯示 `—`。
     published_at: datetime | None
 
 
@@ -185,6 +185,7 @@ async def get_queries(
 async def get_search(
     session: SessionDep,
     factory: ClientFactoryDep,
+    sources: SourceCacheDep,
     media: Annotated[str, Query(description="`tv:<tmdb>` / `movie:<tmdb>`。")],
     q: Annotated[
         str, Query(description="自己打的關鍵字。有值時取代作品的各個標題，只問這一個。")
@@ -198,6 +199,7 @@ async def get_search(
         await search_torrents(
             session,
             factory,
+            sources,
             media_id=media,
             query=q,
             missing=missing,

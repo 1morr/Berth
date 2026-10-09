@@ -1128,6 +1128,9 @@ class JobRefusal(StrEnum):
     ROUTE_UNHEALTHY = "route_unhealthy"
     #: 索引站給不出那一份 torrent（連結過期、站台掛了）。
     SOURCE_UNAVAILABLE = "source_unavailable"
+    #: 送單帶的來源 id 不在 Berth 手上：記著它的那段時間過了，或 Berth 重啟過（M4 票 79，
+    #: `services/sources.py`）。下一步是再搜一次。
+    SOURCE_EXPIRED = "source_expired"
     #: 沒有這個 hash 的 Job。
     JOB_MISSING = "job_missing"
     #: 這個狀態不能重試（plan §3.1 只給 `submit_failed` 與 `import_failed`）。

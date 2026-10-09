@@ -10,9 +10,8 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     size: 0,
     seeders: null,
     info_url: '',
-    download_url: '',
+    source_id: 's',
     key: 'k',
-    info_hash: '',
     tags: {
       source: null,
       resolution: '',

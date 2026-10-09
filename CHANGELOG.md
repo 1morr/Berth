@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### Security
+
+- **搜尋結果不再把 Prowlarr 的 API key 交給瀏覽器**（M4 票 79）：之前搜尋結果的每一列帶著 Prowlarr 的代理下載
+  連結，連結上有 `apikey=<Prowlarr API key>`，任何登入的 Jellyfin 使用者都拿得到；送單時瀏覽器把連結送回來，Berth
+  照著去抓，所以登入的人也能讓 Berth 去抓任何網址（包括內網）。現在連結留在 Berth 裡，結果只帶一個 id，送單只收這個
+  id。**搜尋結果記兩小時**：結果表開著超過兩小時、或 Berth 重啟過之後再送，畫面會說「這一筆過期了」，重新搜一次就好。
+  一次性 RSS 連結讀出來的清單同樣處理。**API 破壞性變更**：`GET /search` 的列拿掉 `download_url` 與 `info_hash`、
+  多 `source_id`；`POST /rss/oneshot` 的列拿掉 `url` 與 `info_hash`、多 `source_id`；`POST /jobs` 的 `source`（物件：
+  `url`、`title`、`info_hash`、`published_at`、`size`）換成 `source_id`（那個 id 字串），換不回來是 404 `source_expired`。
+
 ## [0.2.2] - 2026-10-09
 
 **從 0.2.1 升級**：`docker-compose.yml` 與 `.env` 沒有變，`docker compose pull && docker compose up -d` 就好。

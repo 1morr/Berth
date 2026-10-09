@@ -38,6 +38,7 @@ from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
 from berth.services.jobs import fail_interrupted
 from berth.services.reconcile import ReconcileRunner
+from berth.services.sources import SourceCache
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,8 @@ def create_app(
     app.state.events = EventHub()
     # 替使用者讀 Jellyfin 時的允許清單與帳號狀態，一個程序一份（M1.5 票 03）。
     app.state.jellyfin_access = AccessCache()
+    # 搜尋結果與一次性連結的下載連結記在這裡，瀏覽器只拿 id（M4 票 79）。
+    app.state.sources = SourceCache()
     # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
     app.add_middleware(ApiGate, prefix=API_PREFIX)
     # 前端一整包 JS 七百多 KB、壓縮後約兩百，而 Berth 自己送靜態檔、前面不一定有代理替它壓

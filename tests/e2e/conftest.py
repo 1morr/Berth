@@ -29,7 +29,7 @@ from tests.e2e.harness import (
     GLOBAL_SAVE_PATH,
     PASSWORD,
     QBITTORRENT_CONTAINER,
-    TORRENTS,
+    SITES_CONTAINER,
     TORRENTS_CONTAINER,
     WEB_UI_LOGIN,
     Json,
@@ -45,6 +45,7 @@ from tests.e2e.harness import (
     wait,
 )
 from tests.e2e.payload import PACKS, STAGING, info_name
+from tests.e2e.sites import M1_URL
 
 #: Job 停下來、不會再自己動的狀態。`imported` 以外的都是失敗。
 SETTLED = {
@@ -274,11 +275,18 @@ def _complete_in_page_order(berth: httpx.Client) -> None:
 @pytest.fixture(scope="session")
 def submitted(berth: httpx.Client, configured: None) -> tuple[Submitted, ...]:
     # 送單時 Berth 去 `torrents` 那台抓 `.torrent`。compose 不再等它（冷啟動閘門），這裡等。
-    def payload_ready() -> bool | None:
-        health = docker("inspect", "--format", "{{.State.Health.Status}}", TORRENTS_CONTAINER)
-        return True if health.strip() == "healthy" else None
+    def healthy(container: str) -> Callable[[], bool | None]:
+        def probe() -> bool | None:
+            health = docker("inspect", "--format", "{{.State.Health.Status}}", container)
+            return True if health.strip() == "healthy" else None
 
-    wait("the torrents payload", 300, payload_ready)
+        return probe
+
+    wait("the torrents payload", 300, healthy(TORRENTS_CONTAINER))
+    # 送單只收搜尋或一次性連結記下的結果（M4 票 79）：三包列在 `sites` 冒充的 acg.rip 上，先讀一次。
+    wait("the RSS sites", 300, healthy(SITES_CONTAINER))
+    listed = ok(berth.post("/rss/oneshot", json={"url": M1_URL}))["items"]
+    sources = {row["title"]: row["source_id"] for row in listed}
     out = []
     for pack in PACKS:
         spec = corpus(pack)
@@ -289,11 +297,7 @@ def submitted(berth: httpx.Client, configured: None) -> tuple[Submitted, ...]:
             berth.post(
                 "/jobs",
                 json={
-                    "source": {
-                        "url": f"{TORRENTS}/{pack.route_slug}.torrent",
-                        "title": spec["torrent_name"],
-                        "info_hash": "",
-                    },
+                    "source_id": sources[spec["torrent_name"]],
                     "media": media_id,
                     "route": route["id"],
                 },
