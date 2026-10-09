@@ -4,7 +4,13 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { queriesQueryOptions, searchTorrents, type Batch, type MissingScope } from '../api/search'
+import {
+  queriesQueryOptions,
+  searchTorrents,
+  type Batch,
+  type MissingScope,
+  type SearchResults as SearchOutcome,
+} from '../api/search'
 import { COMPACT_BUTTON, Notice, PrimaryButton } from '../components/controls'
 import { seasonCode } from '../components/episodes'
 import type { SetupStep } from '../api/schemas'
@@ -206,17 +212,16 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           {results.set_aside_total > 0
             ? t('search.onlyAside', { count: results.set_aside_total })
             : results.discarded > 0
-              ? t('search.onlyOthers', { count: results.discarded })
+              ? t('search.onlyOthers')
               : t('search.empty')}
         </p>
       )}
 
-      {/* 丟掉了幾筆不藏起來：索引站對搜不到的關鍵字會回它自己的熱門清單，而使用者
-          有權知道那一千五百筆去了哪裡。主清單是空的而有收起來的（票 49）時也要說——上面那一句只說收起來的。 */}
-      {results && (results.total > 0 || results.set_aside_total > 0) && results.discarded > 0 && (
-        <p className="max-w-prose text-xs text-ink-dim">
-          {t('search.discarded', { count: results.discarded })}
-        </p>
+      {/* 索引站回的每一筆去了哪裡，一行說完（M4 票 69）：丟掉了幾筆不藏起來——索引站對搜不到的關鍵字
+          會回它自己的熱門清單，使用者有權知道那一千五百筆去了哪裡——而且幾個數字要加得起來，審計時
+          「共 262 · 略過 103 · 收起 164」被讀成彼此矛盾。 */}
+      {results && !results.problem && results.returned > 0 && (
+        <p className="max-w-prose text-xs text-ink-dim">{tally(results, t)}</p>
       )}
 
       {rows.length > 0 && (
@@ -498,4 +503,25 @@ function preselected(media: Media): number | null {
 
 function failedCount(results: { attempts: readonly { status: string }[] }): number {
   return results.attempts.filter((attempt) => attempt.status === 'failed').length
+}
+
+/**
+ * 「索引站回了 N 筆：結果表、收起來、略過、重複」，是 0 的那幾份不說。四份加起來就是 N
+ * （後端的 `returned` 照這一條算，`test_the_counts_add_up_to_what_the_indexer_returned` 守著）。
+ */
+function tally(results: SearchOutcome, t: TFunction): string {
+  const parts = (
+    [
+      ['search.tallyShown', results.total],
+      ['search.tallyAside', results.set_aside_total],
+      ['search.tallyDiscarded', results.discarded],
+      ['search.tallyDuplicates', results.duplicates],
+    ] as const
+  )
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => t(key, { count }))
+  return t('search.tally', {
+    count: results.returned,
+    parts: parts.join(t('search.tallySeparator')),
+  })
 }

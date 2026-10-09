@@ -274,6 +274,68 @@ class TestSearch:
         ]
 
 
+NOSFERATU = entry(653, MediaKind.MOVIE, "Nosferatu", year=1922)
+
+
+class TestSearchWithAYear:
+    """「片名 年份」（審計 S3：搜「Nosferatu 1922」是 0 筆，M4 票 69）。
+    `search/multi` 沒有年份參數，所以拆成片名與年份，兩種作品各問一次帶年份的那一支
+    （brief §20.19）；問不到才退回原字串。"""
+
+    @pytest.mark.parametrize("query", ["Nosferatu 1922", "nosferatu (1922)"])
+    async def test_a_trailing_year_is_asked_as_a_year(
+        self, session: AsyncSession, query: str
+    ) -> None:
+        client = tmdb(
+            search={"nosferatu 1922": []},
+            by_year={(MediaKind.MOVIE, "nosferatu", 1922): [NOSFERATU]},
+        )
+
+        result = await search_media(session, await credentialled(session, client), query)
+
+        assert [item.id for item in result.items] == ["movie:653"]
+        assert ("search/movie/nosferatu/1922", "en-US") in client.requests
+        assert ("search/tv/nosferatu/1922", "en-US") in client.requests
+        assert not any(path.startswith("search/nosferatu") for path, _ in client.requests)
+
+    async def test_both_kinds_come_back_interleaved(self, session: AsyncSession) -> None:
+        series = entry(1399, MediaKind.TV, "Nosferatu", year=1922)
+        client = tmdb(
+            by_year={
+                (MediaKind.MOVIE, "nosferatu", 1922): [NOSFERATU],
+                (MediaKind.TV, "nosferatu", 1922): [series],
+            },
+        )
+
+        result = await search_media(session, await credentialled(session, client), "nosferatu 1922")
+
+        assert {item.id for item in result.items} == {"movie:653", "tv:1399"}
+
+    async def test_nothing_that_year_falls_back_to_the_whole_string(
+        self, session: AsyncSession
+    ) -> None:
+        """`Blade Runner 2049`：2049 是片名的一部分，那一年沒有作品，就照原字串問。"""
+        blade = entry(335984, MediaKind.MOVIE, "Blade Runner 2049", year=2017)
+        client = tmdb(search={"blade runner 2049": [blade]})
+
+        result = await search_media(
+            session, await credentialled(session, client), "Blade Runner 2049"
+        )
+
+        assert [item.id for item in result.items] == ["movie:335984"]
+        assert ("search/blade runner 2049", "en-US") in client.requests
+
+    @pytest.mark.parametrize("query", ["1917", "spy x family", "nosferatu 19222"])
+    async def test_without_a_trailing_year_only_the_multi_search_is_asked(
+        self, session: AsyncSession, query: str
+    ) -> None:
+        client = tmdb()
+
+        await search_media(session, await credentialled(session, client), query)
+
+        assert [path for path, _ in client.requests] == [f"search/{query}", f"search/{query}"]
+
+
 class TestProblems:
     async def test_a_missing_credential_is_named_and_costs_no_request(
         self, session: AsyncSession

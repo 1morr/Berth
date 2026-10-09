@@ -216,6 +216,17 @@ class TestResults:
         # 名字對上、年份與類型也對得上的不另收（M4 票 49）。
         assert (body["set_aside"], body["set_aside_total"]) == ([], 0)
 
+    def test_the_counts_on_the_page_add_up(self, client: TestClient) -> None:
+        """畫面上的幾個數字照同一個定義加得起來（M4 票 69，審計 S3）：索引站回的 = 重複合併的
+        + 名字對不上略過的 + 收起來的 + 主表的。"""
+        sign_in(client)
+
+        body = client.get(f"/api/search?media={SPY_ID}").json()
+
+        parts = body["duplicates"] + body["discarded"] + body["set_aside_total"] + body["total"]
+        assert body["returned"] == parts
+        assert body["returned"] > len(body["rows"])
+
     def test_a_typed_keyword_turns_the_filter_off(self, client: TestClient) -> None:
         """自己打字時他要的就是那一串字，不是這部作品——那時 Berth 沒有資格篩。"""
         sign_in(client)
