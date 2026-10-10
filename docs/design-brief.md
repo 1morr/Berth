@@ -1687,4 +1687,29 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **兩種站各認一種寫法**（2026-10-10 實測）：The Pirate Bay（經 Prowlarr）對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆；Mikan 的 RSS 搜尋對 `TIGER & BUNNY` 回 81 筆、對 `TIGER and BUNNY` 回 0 筆（`Spice & Wolf` 與 `Spice and Wolf` 都是 100 筆）。字幕組照官方的拉丁字片名寫 `&`，scene 寫 `and`。
 - **Berth 的做法**（`parser.title.spell_ampersand`、`services/search.py` 的 `_title_order`）：**不照 Sonarr 只送寫開的**——那會丟掉 Mikan 那一邊。有 `&` 的名字原樣問一次、緊接著再問寫成 `and` 的一次，仍在一次五個查詢（`MAX_QUERIES`）之內，擠掉的是排最後的別名，請求預算（§20.13）不因此變大；`Season N` 變體用寫開的（scene 的寫法）。有 CJK 字的名字不換。比對不學 Sonarr 刪掉每一個 `and`（`Pride and Prejudice` 的發佈名照舊要寫出 `and`），只替帶 `&` 的名字多認一種寫開的寫法。
 - **Newznab 的成人分類是 6000–6090**：Prowlarr `NewznabStandardCategory` 的 `XXX = 6000` 與子分類 `XXX/DVD` 6010 到 `XXX/WEB-DL` 6090。搜尋結果的 `categories` 帶站定義映射到的標準碼加 `100000 + 站碼` 的自訂碼（`IndexerCapabilitiesCategories.MapTrackerCatToNewznab`），標準碼是定義檔寫的那一個、不自動補父分類。The Pirate Bay 的定義把 Porn 各類映射到 `XXX`、`XXX/x264`、`XXX/Other` 等（`definitions/v11/thepiratebay.yml`）。【[Prowlarr develop](https://github.com/Prowlarr/Prowlarr/tree/develop/src/NzbDrone.Core/Indexers)、[Prowlarr/Indexers](https://github.com/Prowlarr/Indexers/blob/master/definitions/v11/thepiratebay.yml)，2026-10-10 讀；回應的形狀沒有實際呼叫驗證，錄製的 `search.*.json` 裡沒有成人類】
-- **Berth 的做法**（`services/search.py` 的 `ADULT_CATEGORIES`）：分類碼落在 6000–6999 的收起來（Set Aside），不丟。分類碼不拿來查（plan §8.4：各站映射自訂），拿來收起來是因為收錯了展開救得回來；沒有映射成人類的站（多數動漫站）擋不到，那時只剩發佈名。
+- **Berth 的做法**（`services/search.py` 的 `ADULT_CATEGORIES`）：分類碼落在 6000–6999 的歸成「成人分類」（M4 票 83 起是 Search Verdict 的一類），不丟。分類碼不拿來查（plan §8.4：各站映射自訂），拿來歸類是因為歸錯了按一下就看得到（畫面預設只列「符合」，其他類照樣送）；沒有映射成人類的站（多數動漫站）擋不到，那時只剩發佈名。
+
+### 20.20 搜尋結果怎麼說出「為什麼不像這部作品」：Sonarr 的互動搜尋（2026-10-10 查證，M4 票 83）
+
+- **被拒的發佈照樣列出**：`ReleaseController.GetEpisodeReleases` 把 `EpisodeSearch` 的每一個 decision 都 `MapDecisions` 回傳，
+  不濾掉被拒的；被拒的那一列在 rejected 欄一個紅色圖示，`Popover`（標題 `ReleaseRejected`）逐條列出 `rejections` 字串。後端與
+  畫面都**沒有筆數上限**，上限只在索引站的分頁（Newznab `PageSize = 100`）。
+  【`src/Sonarr.Api.V3/Indexers/ReleaseController.cs`、`frontend/src/InteractiveSearch/InteractiveSearchRow.tsx`、
+  `src/NzbDrone.Core/Indexers/Newznab/NewznabRequestGenerator.cs`，[Sonarr v4.0.20.3014](https://github.com/Sonarr/Sonarr/tree/v4.0.20.3014)，2026-10-10 讀】
+- **預設篩選是「全部」**：預先定義的篩選只有 `all`、`season-pack`、`not-season-pack`（`selectedFilterKey: 'all'`）；要藏起被拒的
+  得自建 `rejectionCount EQUAL 0`。自訂篩選的欄位有 `indexerId`（只看某個站）、`rejectionCount`、`quality`、`seeders` 等。
+  【`frontend/src/Store/Actions/releaseActions.js`，同上】
+- **片名比對是「季集記號前面那一段」清過之後完全相等**：`ParsingService.FindSeries` 在有 `searchCriteria` 時比
+  `searchCriteria.Series.CleanTitle == parsedEpisodeInfo.SeriesTitle.CleanSeriesTitle()`（不是包含），再退到 tvdbId / imdbId；
+  `SeriesTitle` 是 `Parser.ParseTitle` 取季集記號前面那一段。找到的是別部是 `Wrong series`
+  （`DecisionEngine/Specifications/Search/SeriesSpecification.cs`），整庫都找不到是 `Unknown Series`
+  （`DecisionEngine/DownloadDecisionMaker.cs`）。所以搜《Law & Order》回來的 `Law.and.Order.SVU.S28E01` 片名清成
+  `laworder svu` 一類，與 `laworder` 不等而被拒（讀程式推得，沒有實跑）。Radarr 的對應是 `Wrong movie` 與
+  `Unknown Movie. Unable to match to correct movie using release title.`，年份不符沒有獨立的拒絕字串。
+  【`src/NzbDrone.Core/Parser/ParsingService.cs`，同上；[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)】
+- **Berth 的做法**（`services/search.py` 的 `_judge`、`parser.title.misfit` / `partial_title`，`.scratch/m4/search-filter-shape.md`）：
+  照 Sonarr 每一筆都送、每一筆說得出理由；不同的是**一筆一類、一句話**（判斷是排了先後的粗篩：名字對不上 → 成人分類 → 不是電影
+  → 年份不符 → 只對上部分名字 → 符合），**畫面預設只開「符合」**（The Pirate Bay 對查不到的字回熱門清單，全開等於沒篩），
+  每類各有上限（符合 100、其餘 50，逐站輪流取）。「只對上部分名字」照 Sonarr 取第一個記號（季集、字幕組集號、年份）前面那一段，
+  但先照 `/`、`|`、括號與文字系統（CJK／非 CJK）切成一個一個名字再比——字幕組把中文名與拉丁字名寫在一起（`SPY×FAMILY 間諜家家酒 - 05`），
+  整段比的話每一筆都像衍生劇。有一個名字相等就算這一部，沒有相等但有一個包住這部作品的名字才算「部分」；讀不出記號時不判。

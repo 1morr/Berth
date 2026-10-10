@@ -1510,33 +1510,47 @@ const zhHant = {
     // 標頭只說結果表那一份（M4 票 69）：「共 N 筆」曾被讀成索引站回的全部，與底下幾個數字對不上。
     count_one: '結果表 {{count}} 筆',
     count_other: '結果表 {{count}} 筆',
-    countCapped: '結果表 {{total}} 筆 · 逐站列出前 {{shown}} 筆',
-    // 一次搜尋的筆數照同一個定義加得起來（M4 票 69）：回了幾筆 = 結果表 + 收起來 + 略過 + 重複。
-    // 是 0 的那幾份不說，所以各成一個 key，用 `tallySeparator` 接起來。
-    tally_one: '索引站回了 {{count}} 筆：{{parts}}。',
-    tally_other: '索引站回了 {{count}} 筆：{{parts}}。',
-    tallySeparator: '、',
-    tallyShown_one: '{{count}} 筆列在結果表',
-    tallyShown_other: '{{count}} 筆列在結果表',
-    tallyAside_one: '{{count}} 筆年份或類型對不上（收在下面）',
-    tallyAside_other: '{{count}} 筆年份或類型對不上（收在下面）',
-    tallyDiscarded_one: '{{count}} 筆名字對不上（已略過）',
-    tallyDiscarded_other: '{{count}} 筆名字對不上（已略過）',
-    tallyMerged_one: '{{count}} 筆重複（已合併）',
-    tallyMerged_other: '{{count}} 筆重複（已合併）',
+    // 一次搜尋的筆數照同一個定義加得起來（M4 票 69、83）：回了幾筆 = 重複 + 各類的筆數。各類的數字
+    // 在篩選按鈕上，這一行只說回了幾筆與重複的；重複是 0 時不說。
+    returned_one: '索引站回了 {{count}} 筆。',
+    returned_other: '索引站回了 {{count}} 筆。',
+    merged_one: '其中 {{count}} 筆重複、已合併。',
+    merged_other: '其中 {{count}} 筆重複、已合併。',
     empty:
       '這幾個關鍵字在你的索引站上沒有東西。換個寫法自己打一次，或改天再搜——公開站的片源是會變的。',
     // 索引站對搜不到的關鍵字常常回它自己的熱門清單（實測 The Pirate Bay），所以
-    // 「什麼都沒回」與「回了一堆但沒有一筆是這部作品」是兩件事，下一步也不同。
-    // 回了幾筆由 `tally` 那一行說，這一句不再報數字（兩個數字一個含重複一個不含，曾經對不上）。
-    onlyOthers: '沒有一筆對得上這部作品的名字。自己打一個關鍵字試試。',
-    // 名字對上、年份或類型對不上的（M4 票 49）。收著不丟，展開看得到。
-    onlyAside_one:
-      '名字對得上的 {{count}} 筆，年份或類型都對不上這部作品，收在下面。自己打一個關鍵字也行。',
-    onlyAside_other:
-      '名字對得上的 {{count}} 筆，年份或類型都對不上這部作品，收在下面。自己打一個關鍵字也行。',
-    setAside_one: '另有 {{count}} 筆年份或類型對不上這部作品，已經收起來。',
-    setAside_other: '另有 {{count}} 筆年份或類型對不上這部作品，已經收起來。',
+    // 「什麼都沒回」與「回了一堆但沒有一筆符合」是兩件事：後者的東西都在其他類裡，按得到。
+    onlyOthers_one: '沒有符合的結果；其他幾類有 {{count}} 筆，按上面的按鈕看。',
+    onlyOthers_other: '沒有符合的結果；其他幾類有 {{count}} 筆，按上面的按鈕看。',
+    // 每一筆歸到的那一類（M4 票 83）。按鈕上的字與列上的色塊同一個詞。
+    verdict: {
+      fits: '符合',
+      year: '年份不符',
+      // 搜電影卻讀得出集數記號：季集記號或字幕組的集號（使用者 2026-10-10 合成一類）。
+      not_movie: '不是電影',
+      adult: '成人分類',
+      partial_title: '只對上部分名字',
+      unrelated: '名字對不上',
+    },
+    // 不是「符合」的列底下那一句。證據是發佈名裡的那一段字，原樣引用。
+    reason: {
+      year: '發佈名寫 {{evidence}} 年，這部作品是 {{year}} 年。',
+      yearShow: '發佈名寫 {{evidence}} 年，不在這部作品的播出期間。',
+      not_movie: '發佈名有集數記號「{{evidence}}」，這部是電影；多半是劇集，或同名的動畫。',
+      adult: '索引站把它分在成人類（{{evidence}}）。',
+      partial_title:
+        '發佈名的片名是「{{evidence}}」，比這部作品的名字多一段：可能是衍生作品，也可能只是多寫了副標。',
+      unrelated: '發佈名裡沒有這部作品的任何一個名字。',
+    },
+    filter: {
+      label: '要列出哪幾類',
+      site: '站',
+      allSites: '所有站',
+      noneOpen: '沒有選任何一類。',
+      noneHere: '這一站沒有這幾類的結果。',
+    },
+    // 一類送來的筆數比總數少時，那一組底下的一行（後端每類逐站輪流取）。
+    capped: '這一類共 {{total}} 筆，這裡列出 {{shown}} 筆：每站輪流取，站內做種多的先。',
     off: '搜尋沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
     announce_one: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
     announce_other: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
@@ -4751,29 +4765,44 @@ const en: Translations<typeof zhHant> = {
     slow: 'The indexer contacts every tracker it knows, which usually takes about a minute.',
     count_one: '{{count}} in the table',
     count_other: '{{count}} in the table',
-    countCapped: '{{total}} in the table · first {{shown}} listed, taken across the sites',
-    tally_one: 'The indexer returned {{count}} result: {{parts}}.',
-    tally_other: 'The indexer returned {{count}} results: {{parts}}.',
-    tallySeparator: ', ',
-    tallyShown_one: '{{count}} in the table',
-    tallyShown_other: '{{count}} in the table',
-    tallyAside_one: '{{count}} set aside (year or type does not fit)',
-    tallyAside_other: '{{count}} set aside (year or type does not fit)',
-    tallyDiscarded_one: '{{count}} skipped (name does not match)',
-    tallyDiscarded_other: '{{count}} skipped (name does not match)',
-    tallyMerged_one: '{{count}} duplicate merged',
-    tallyMerged_other: '{{count}} duplicates merged',
+    returned_one: 'The indexer returned {{count}} result.',
+    returned_other: 'The indexer returned {{count}} results.',
+    // 接在 `returned` 後面：英文兩句之間要一個空白，中文不要，所以空白寫在字串裡。
+    merged_one: ' {{count}} duplicate merged.',
+    merged_other: ' {{count}} duplicates merged.',
     empty:
       'None of those keywords turned up anything on your indexer. Try wording it yourself, or search again later — what public sites carry changes.',
-    onlyOthers: "None of them carries this title's name. Try typing a keyword yourself.",
-    onlyAside_one:
-      "The {{count}} release carrying this title's name has the wrong year or type; it is set aside below. Try typing a keyword.",
-    onlyAside_other:
-      "All {{count}} releases carrying this title's name have the wrong year or type; they are set aside below. Try typing a keyword.",
-    setAside_one:
-      '{{count}} more release has the wrong year or type for this title and was set aside.',
-    setAside_other:
-      '{{count}} more releases have the wrong year or type for this title and were set aside.',
+    onlyOthers_one:
+      'Nothing matches. The other kinds hold {{count}} result; use the buttons above.',
+    onlyOthers_other:
+      'Nothing matches. The other kinds hold {{count}} results; use the buttons above.',
+    verdict: {
+      fits: 'Matches',
+      year: 'Wrong year',
+      not_movie: 'Not a movie',
+      adult: 'Adult',
+      partial_title: 'Partial title',
+      unrelated: 'Other titles',
+    },
+    reason: {
+      year: 'The release says {{evidence}}; this title is from {{year}}.',
+      yearShow: 'The release says {{evidence}}, outside the years this show aired.',
+      not_movie:
+        'The release carries the episode mark “{{evidence}}”, and this is a movie — most likely a show, or an anime of the same name.',
+      adult: 'The indexer files it as adult ({{evidence}}).',
+      partial_title:
+        'The release is titled “{{evidence}}”, longer than this title’s name: possibly a spin-off, or just a subtitle written out.',
+      unrelated: 'None of this title’s names appears in the release.',
+    },
+    filter: {
+      label: 'Kinds to list',
+      site: 'Site',
+      allSites: 'All sites',
+      noneOpen: 'No kind is selected.',
+      noneHere: 'This site has nothing in the selected kinds.',
+    },
+    capped:
+      '{{total}} in this kind; {{shown}} listed, taken from each site in turn, most seeded first.',
     off: "The search never went out. Berth's own API did not answer; check that it is still running.",
     announce_one: 'Found {{count}} result; {{failed}} keywords went unanswered.',
     announce_other: 'Found {{count}} results; {{failed}} keywords went unanswered.',

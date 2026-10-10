@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -76,8 +76,21 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
     whole_season: false,
     strategy: 'explicit',
     published_at: null,
+    verdict: 'fits',
+    evidence: '',
     ...overrides,
   }
+}
+
+/** 後端的 `counts`：每一類在每一站的總數。替身照送來的列算，要「總數比送來的多」時自己給。 */
+function countsOf(rows: readonly SearchResult[]): SearchResults['counts'] {
+  const tally = new Map<string, SearchResults['counts'][number]>()
+  for (const one of rows) {
+    const id = `${one.verdict}/${one.indexer}`
+    const before = tally.get(id)
+    tally.set(id, { verdict: one.verdict, indexer: one.indexer, total: (before?.total ?? 0) + 1 })
+  }
+  return [...tally.values()]
 }
 
 /** 送單成功時後端回的那一筆。只有畫面讀得到的那幾格才有意義。 */
@@ -115,14 +128,12 @@ function job(): Job {
 }
 
 function results(overrides: Partial<SearchResults> = {}): SearchResults {
+  const rows = overrides.rows ?? [row()]
   return {
-    rows: [row()],
-    total: 1,
-    returned: 1,
+    rows,
+    counts: countsOf(rows),
+    returned: rows.length,
     merged: 0,
-    discarded: 0,
-    set_aside: [],
-    set_aside_total: 0,
     attempts: [{ step: 'SPY x FAMILY', status: 'ok', detail: '1', error: '' }],
     problem: null,
     detail: '',
@@ -233,7 +244,6 @@ describe('搜尋 torrent 與結果表', () => {
               row({ published_at: '2026-09-04T13:01:00Z' }),
               row({ key: 'b'.repeat(40), title: '[Other] SPY x FAMILY - 51', published_at: null }),
             ],
-            total: 2,
           }),
         },
       })
@@ -299,7 +309,6 @@ describe('搜尋 torrent 與結果表', () => {
               strategy: null,
             }),
           ],
-          total: 2,
         }),
       },
     })
@@ -359,7 +368,7 @@ describe('搜尋 torrent 與結果表', () => {
 
     const summary = await within(panel()).findByText('3 個關鍵字都有回應')
     expect(summary).toBeVisible()
-    // 收起來的 `<details>` 仍在 DOM 裡，看不見的是它；全部正常時整塊沒有任何一塊信號色。
+    // 纜繩摘要的 `<details>` 沒展開時仍在 DOM 裡，看不見的是它；全部正常時整塊沒有任何一塊信號色。
     expect(within(panel()).getByText('SPY×FAMILY')).not.toBeVisible()
     for (const done of within(panel()).getAllByText('已完成')) expect(done).not.toBeVisible()
 
@@ -403,7 +412,7 @@ describe('搜尋 torrent 與結果表', () => {
   it('索引站沒接時說得出下一步，而不是一張空清單（票 08 驗收）', async () => {
     render({
       [SEARCH_PATH]: {
-        body: results({ rows: [], total: 0, attempts: [], problem: 'not_configured' }),
+        body: results({ rows: [], attempts: [], problem: 'not_configured' }),
       },
     })
     renderApp('/media/tv:120089')
@@ -422,7 +431,7 @@ describe('搜尋 torrent 與結果表', () => {
     render({
       [QUERIES_PATH]: { body: { queries: ['SPY x FAMILY'], problem: 'not_configured' } },
       [SEARCH_PATH]: {
-        body: results({ rows: [], total: 0, attempts: [], problem: 'not_configured' }),
+        body: results({ rows: [], attempts: [], problem: 'not_configured' }),
       },
     })
     renderApp('/media/tv:120089')
@@ -441,7 +450,7 @@ describe('搜尋 torrent 與結果表', () => {
     render(
       {
         [SEARCH_PATH]: {
-          body: results({ rows: [], total: 0, attempts: [], problem: 'not_configured' }),
+          body: results({ rows: [], attempts: [], problem: 'not_configured' }),
         },
       },
       'user',
@@ -459,7 +468,6 @@ describe('搜尋 torrent 與結果表', () => {
       [SEARCH_PATH]: {
         body: results({
           rows: [],
-          total: 0,
           attempts: [],
           problem: 'unreachable',
           detail: 'GET /api/v1/search: connection refused',
@@ -525,7 +533,6 @@ describe('搜尋 torrent 與結果表', () => {
         [SEARCH_PATH]: {
           body: results({
             rows: [],
-            total: 0,
             attempts: [],
             problem: 'budget_exhausted',
             retry_at: minutes(43),
@@ -557,7 +564,6 @@ describe('搜尋 torrent 與結果表', () => {
         'GET /api/search?media=tv%3A120089&q=law': {
           body: results({
             rows: [],
-            total: 0,
             attempts: [],
             problem: 'budget_exhausted',
             retry_at: minutes(43),
@@ -589,7 +595,7 @@ describe('搜尋 torrent 與結果表', () => {
   })
 
   it('搜到但一筆都沒有不是錯誤', async () => {
-    render({ [SEARCH_PATH]: { body: results({ rows: [], total: 0 }) } })
+    render({ [SEARCH_PATH]: { body: results({ rows: [] }) } })
     renderApp('/media/tv:120089')
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
@@ -597,127 +603,222 @@ describe('搜尋 torrent 與結果表', () => {
     expect(await screen.findByText(/沒有東西/)).toBeVisible()
   })
 
-  it('索引站回了一堆但沒有一筆是這部作品，說得出那一堆去了哪裡', async () => {
-    render({
-      [SEARCH_PATH]: { body: results({ rows: [], total: 0, returned: 1518, discarded: 1518 }) },
+  describe('每一筆歸到一類，用篩選按鈕看（M4 票 83）', () => {
+    const YEAR = row({
+      key: 'year',
+      title: 'SPY x FAMILY 1998 VHS',
+      verdict: 'year',
+      evidence: '1998',
     })
-    renderApp('/media/tv:120089')
-
-    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
-
-    expect(
-      await screen.findByText('索引站回了 1518 筆：1518 筆名字對不上（已略過）。'),
-    ).toBeVisible()
-    expect(screen.getByText(/沒有一筆對得上這部作品的名字/)).toBeVisible()
-  })
-
-  it('幾個筆數照同一個定義加得起來（M4 票 69，審計 S3）', async () => {
-    render({
-      [SEARCH_PATH]: {
-        body: results({
-          returned: 629,
-          merged: 100,
-          discarded: 103,
-          set_aside: [row({ key: 'aside' })],
-          set_aside_total: 164,
-          total: 262,
-        }),
-      },
+    const POPULAR = row({
+      key: 'popular',
+      title: 'Spider-Man: Brand New Day 2026.1080p',
+      indexer: 'The Pirate Bay',
+      verdict: 'unrelated',
     })
-    renderApp('/media/tv:120089')
+    const SPINOFF = row({
+      key: 'spinoff',
+      title: 'SPY.x.FAMILY.CODE.White.S01E01',
+      indexer: 'The Pirate Bay',
+      verdict: 'partial_title',
+      evidence: 'SPY x FAMILY CODE White',
+    })
 
-    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+    async function searched(body: SearchResults) {
+      render({ [SEARCH_PATH]: { body } })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+      return within(await within(panel()).findByRole('group', { name: '要列出哪幾類' }))
+    }
 
-    expect(
-      await screen.findByText(
-        '索引站回了 629 筆：262 筆列在結果表、164 筆年份或類型對不上（收在下面）、' +
-          '103 筆名字對不上（已略過）、100 筆重複（已合併）。',
-      ),
-    ).toBeVisible()
-    // 標頭說的是結果表那一份，不是「共」：審計時「共 262 筆」被讀成全部。
-    expect(screen.getByText('結果表 262 筆 · 逐站列出前 1 筆')).toBeVisible()
-    expect(screen.queryByText(/^共 /)).toBeNull()
-  })
+    it('預設只開「符合」，其他類按了才一起列出，再按一次收回', async () => {
+      const buttons = await searched(results({ rows: [row(), YEAR, POPULAR] }))
 
-  it('是 0 的那幾份不說', async () => {
-    render({ [SEARCH_PATH]: { body: results({ returned: 3, merged: 2, total: 1 }) } })
-    renderApp('/media/tv:120089')
+      const fits = buttons.getByRole('button', { name: '符合 1' })
+      expect(fits).toHaveAttribute('aria-pressed', 'true')
+      expect(buttons.getByRole('button', { name: '年份不符 1' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      )
+      expect(screen.queryByText(YEAR.title)).toBeNull()
 
-    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+      await userEvent.click(buttons.getByRole('button', { name: '年份不符 1' }))
+      expect(screen.getByText(YEAR.title)).toBeVisible()
+      expect(screen.getByText(row().title)).toBeVisible()
 
-    expect(
-      await screen.findByText('索引站回了 3 筆：1 筆列在結果表、2 筆重複（已合併）。'),
-    ).toBeVisible()
-    expect(screen.getByText('結果表 1 筆')).toBeVisible()
-  })
+      await userEvent.click(buttons.getByRole('button', { name: '年份不符 1' }))
+      expect(screen.queryByText(YEAR.title)).toBeNull()
+    })
 
-  it('英文介面照同一個定義說', async () => {
-    await i18next.changeLanguage('en')
-    try {
+    it('是 0 的類沒有按鈕，「符合」例外', async () => {
+      const buttons = await searched(results({ rows: [POPULAR] }))
+
+      expect(buttons.getAllByRole('button').map((button) => button.textContent)).toEqual([
+        '符合 0',
+        '名字對不上 1',
+      ])
+      expect(screen.getByText('沒有符合的結果；其他幾類有 1 筆，按上面的按鈕看。')).toBeVisible()
+    })
+
+    it('不是「符合」的列說出它是哪一類、為什麼；符合的列不標', async () => {
+      const buttons = await searched(results({ rows: [row(), YEAR, SPINOFF] }))
+      await userEvent.click(buttons.getByRole('button', { name: '年份不符 1' }))
+      await userEvent.click(buttons.getByRole('button', { name: '只對上部分名字 1' }))
+
+      const table = within(within(panel()).getByRole('table'))
+      expect(table.getByText('發佈名寫 1998 年，不在這部作品的播出期間。')).toBeVisible()
+      expect(
+        table.getByText(
+          '發佈名的片名是「SPY x FAMILY CODE White」，比這部作品的名字多一段：可能是衍生作品，也可能只是多寫了副標。',
+        ),
+      ).toBeVisible()
+      expect(table.queryByText('符合')).toBeNull()
+      // 依類別分組：「符合」永遠在最上面，其餘照按鈕的順序。
+      const titles = table.getAllByText(/SPY/, { selector: 'p.value' })
+      expect(titles.map((title) => title.textContent)).toEqual([
+        row().title,
+        YEAR.title,
+        SPINOFF.title,
+      ])
+    })
+
+    it('電影的年份那一句說出這部作品是哪一年', async () => {
       render({
+        [MEDIA_PATH]: { body: media({ kind: 'movie', year: 1922 }) },
         [SEARCH_PATH]: {
-          body: results({ returned: 9, merged: 2, discarded: 3, set_aside_total: 3, total: 1 }),
+          body: results({
+            rows: [
+              row({ key: 'remake', title: 'Nosferatu 2024', verdict: 'year', evidence: '2024' }),
+            ],
+          }),
         },
       })
       renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+      await userEvent.click(await screen.findByRole('button', { name: '年份不符 1' }))
 
-      await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+      expect(screen.getByText('發佈名寫 2024 年，這部作品是 1922 年。')).toBeVisible()
+    })
+
+    it('「不是電影」那一句帶出觸發的那一段集數記號', async () => {
+      render({
+        [MEDIA_PATH]: { body: media({ kind: 'movie', year: 1922 }) },
+        [SEARCH_PATH]: {
+          body: results({
+            rows: [
+              row({
+                key: 'laika',
+                title: '[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p)',
+                verdict: 'not_movie',
+                evidence: '- 05',
+              }),
+            ],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+      await userEvent.click(await screen.findByRole('button', { name: '不是電影 1' }))
 
       expect(
-        await screen.findByText(
-          'The indexer returned 9 results: 1 in the table, 3 set aside (year or type does not fit), ' +
-            '3 skipped (name does not match), 2 duplicates merged.',
-        ),
+        screen.getByText('發佈名有集數記號「- 05」，這部是電影；多半是劇集，或同名的動畫。'),
       ).toBeVisible()
-    } finally {
-      await i18next.changeLanguage('zh-Hant')
-    }
-  })
-
-  it('年份或類型對不上的收起來，說出筆數，展開看得到', async () => {
-    const aside = 'SPY x FAMILY 1998 VHS'
-    render({
-      [SEARCH_PATH]: {
-        body: results({ set_aside: [row({ key: 'aside', title: aside })], set_aside_total: 1 }),
-      },
     })
-    renderApp('/media/tv:120089')
 
-    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+    it('英文介面：按鈕與理由', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        render({ [SEARCH_PATH]: { body: results({ rows: [row(), YEAR, SPINOFF] }) } })
+        renderApp('/media/tv:120089')
+        await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+        const buttons = within(await screen.findByRole('group', { name: 'Kinds to list' }))
+        await userEvent.click(buttons.getByRole('button', { name: 'Wrong year 1' }))
+        await userEvent.click(buttons.getByRole('button', { name: 'Partial title 1' }))
 
-    const summary = await screen.findByText('另有 1 筆年份或類型對不上這部作品，已經收起來。')
-    expect(summary).toBeVisible()
-    expect(screen.getByText(aside)).not.toBeVisible()
-    await userEvent.click(summary)
-    expect(screen.getByText(aside)).toBeVisible()
-  })
+        expect(buttons.getByRole('button', { name: 'Matches 1' })).toBeVisible()
+        expect(
+          screen.getByText('The release says 1998, outside the years this show aired.'),
+        ).toBeVisible()
+        expect(
+          screen.getByText(
+            'The release is titled “SPY x FAMILY CODE White”, longer than this title’s name: possibly a spin-off, or just a subtitle written out.',
+          ),
+        ).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
 
-  it('對得上名字的全被收起來時，說的是收起來而不是沒有東西', async () => {
-    render({
-      [SEARCH_PATH]: {
-        body: results({
-          rows: [],
-          total: 0,
-          returned: 41,
-          discarded: 40,
-          set_aside: [row({ key: 'aside' })],
-          set_aside_total: 1,
+    it('只看某個站：表格與按鈕上的數字都只算那一站', async () => {
+      const buttons = await searched(
+        results({
+          rows: [
+            row(),
+            row({ key: 'tpb', title: 'SPY.x.FAMILY.S03E13.1080p', indexer: 'The Pirate Bay' }),
+            POPULAR,
+          ],
         }),
-      },
+      )
+      expect(buttons.getByRole('button', { name: '符合 2' })).toBeVisible()
+
+      await userEvent.selectOptions(screen.getByLabelText('站'), 'The Pirate Bay')
+
+      expect(buttons.getByRole('button', { name: '符合 1' })).toBeVisible()
+      expect(buttons.getByRole('button', { name: '名字對不上 1' })).toBeVisible()
+      expect(screen.getByText('SPY.x.FAMILY.S03E13.1080p')).toBeVisible()
+      expect(screen.queryByText(row().title)).toBeNull()
+
+      await userEvent.selectOptions(screen.getByLabelText('站'), 'ACG.RIP')
+      await userEvent.click(buttons.getByRole('button', { name: '符合 1' }))
+      expect(screen.getByText('沒有選任何一類。')).toBeVisible()
     })
-    renderApp('/media/tv:120089')
 
-    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+    it('一類的總數比送來的多時，那一組底下說清楚只列了幾筆', async () => {
+      await searched(
+        results({
+          rows: [row()],
+          counts: [{ verdict: 'fits', indexer: 'ACG.RIP', total: 262 }],
+          returned: 362,
+          merged: 100,
+        }),
+      )
 
-    expect(await screen.findByText(/年份或類型都對不上/)).toBeVisible()
-    expect(screen.queryByText(/沒有一筆對得上這部作品的名字/)).toBeNull()
-    // 名字對不上的那一份照舊說出來，不被收起來的那一句吞掉。
-    expect(
-      screen.getByText(
-        '索引站回了 41 筆：1 筆年份或類型對不上（收在下面）、40 筆名字對不上（已略過）。',
-      ),
-    ).toBeVisible()
-    expect(screen.getByText('另有 1 筆年份或類型對不上這部作品，已經收起來。')).toBeVisible()
+      expect(
+        screen.getByText('這一類共 262 筆，這裡列出 1 筆：每站輪流取，站內做種多的先。'),
+      ).toBeVisible()
+      expect(screen.getByText('結果表 262 筆')).toBeVisible()
+    })
+
+    it('筆數那一行說回了幾筆與重複的；各類的數字在按鈕上', async () => {
+      await searched(results({ rows: [row(), YEAR, POPULAR], returned: 5, merged: 2 }))
+
+      expect(screen.getByText('索引站回了 5 筆。其中 2 筆重複、已合併。')).toBeVisible()
+    })
+
+    it('自己打關鍵字時不分類：沒有按鈕、列上不標', async () => {
+      render({
+        [`${SEARCH_PATH}&q=Spider-Man`]: {
+          body: results({ rows: [{ ...POPULAR, verdict: 'unjudged' }] }),
+        },
+      })
+      renderApp('/media/tv:120089')
+      await userEvent.type(await screen.findByLabelText('關鍵字'), 'Spider-Man')
+      await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
+
+      expect(await screen.findByText(POPULAR.title)).toBeVisible()
+      expect(screen.queryByRole('group', { name: '要列出哪幾類' })).toBeNull()
+      expect(screen.queryByText('名字對不上')).toBeNull()
+    })
+
+    it('新的一輪搜尋回到只開「符合」', async () => {
+      const buttons = await searched(results({ rows: [row(), YEAR] }))
+      await userEvent.click(buttons.getByRole('button', { name: '年份不符 1' }))
+      expect(screen.getByText(YEAR.title)).toBeVisible()
+
+      await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
+
+      await waitFor(() => expect(screen.queryByText(YEAR.title)).toBeNull())
+    })
   })
 
   it('預設依做種排序，切成大小之後換一列在最前面', async () => {
@@ -728,7 +829,6 @@ describe('搜尋 torrent 與結果表', () => {
             row({ key: 'small', title: '小而多人做種', size: 1, seeders: 99 }),
             row({ key: 'big', title: '大而少人做種', size: 9_000_000_000, seeders: 1 }),
           ],
-          total: 2,
         }),
       },
     })

@@ -186,9 +186,8 @@ class TestResults:
         """中文字幕組與西方 scene 兩種命名都要解得出 Tags（plan T1.2 驗收）。"""
         sign_in(client)
 
-        rows = {
-            row["indexer"]: row for row in client.get(f"/api/search?media={SPY_ID}").json()["rows"]
-        }
+        body = client.get(f"/api/search?media={SPY_ID}").json()
+        rows = {row["indexer"]: row for row in body["rows"] if row["verdict"] == "fits"}
 
         assert rows["ACG.RIP"]["tags"]["subs"] == ["CHT"]
         assert rows["ACG.RIP"]["tags"]["group"] == "ANi"
@@ -201,29 +200,31 @@ class TestResults:
     ) -> None:
         """**The Pirate Bay 對搜不到的關鍵字會回它的熱門清單**（2026-09-10 實跑）。
 
-        那些東西動輒五六千個做種，依做種排序時會把真正的結果整批擠出前 100 筆。丟掉，
-        但把丟掉幾筆說出來——「索引站什麼都沒回」與「回了一堆但沒有一筆是這部作品」
-        的下一步不同。
+        那些東西動輒五六千個做種，依做種排序時會把真正的結果整批擠出前 100 筆。歸成
+        「名字對不上」另成一類（M4 票 83），畫面預設不顯示、按了看得到。
         """
         sign_in(client)
 
         body = client.get(f"/api/search?media={SPY_ID}").json()
 
-        assert [row["title"] for row in body["rows"] if "Spider-Man" in row["title"]] == []
-        assert body["total"] == 2
-        # 電影那一筆與 Spider-Man 都不是這部作品。
-        assert body["discarded"] == 2
-        # 名字對上、年份與類型也對得上的不另收（M4 票 49）。
-        assert (body["set_aside"], body["set_aside_total"]) == ([], 0)
+        verdicts = {row["title"]: row["verdict"] for row in body["rows"]}
+        assert [verdict for title, verdict in verdicts.items() if "Spider-Man" in title] == [
+            "unrelated"
+        ]
+        # 電影那一筆與 Spider-Man 都不是這部作品；名字對上、年份與類型也對得上的沒有別的類。
+        totals: dict[str, int] = {}
+        for one in body["counts"]:
+            totals[one["verdict"]] = totals.get(one["verdict"], 0) + one["total"]
+        assert totals == {"fits": 2, "unrelated": 2}
 
     def test_the_counts_on_the_page_add_up(self, client: TestClient) -> None:
         """畫面上的幾個數字照同一個定義加得起來（M4 票 69，審計 S3）：索引站回的 = 重複合併的
-        + 名字對不上略過的 + 收起來的 + 主表的。"""
+        + 每一類的筆數（M4 票 83）。"""
         sign_in(client)
 
         body = client.get(f"/api/search?media={SPY_ID}").json()
 
-        parts = body["merged"] + body["discarded"] + body["set_aside_total"] + body["total"]
+        parts = body["merged"] + sum(one["total"] for one in body["counts"])
         assert body["returned"] == parts
         assert body["returned"] > len(body["rows"])
 
@@ -234,7 +235,7 @@ class TestResults:
         body = client.get(f"/api/search?media={SPY_ID}&q=Spider-Man").json()
 
         assert [row["title"] for row in body["rows"] if "Spider-Man" in row["title"]] != []
-        assert body["discarded"] == 0
+        assert {row["verdict"] for row in body["rows"]} == {"unjudged"}
 
     def test_the_attempts_name_every_keyword_that_went_out(self, client: TestClient) -> None:
         """逐個查詢的成敗看得見——一個垮了不代表整張表是空的（票 08 驗收）。"""
@@ -277,9 +278,10 @@ class TestResults:
         body = client.get(f"/api/search?media={MOANA_ID}").json()
 
         assert body["problem"] is None
-        assert [row["title"] for row in body["rows"]] == [FILM.title]
-        assert (body["rows"][0]["strategy"], body["rows"][0]["season"]) == ("movie", None)
-        assert body["rows"][0]["tags"]["resolution"] == "1080p"
+        rows = [row for row in body["rows"] if row["verdict"] == "fits"]
+        assert [row["title"] for row in rows] == [FILM.title]
+        assert (rows[0]["strategy"], rows[0]["season"]) == ("movie", None)
+        assert rows[0]["tags"]["resolution"] == "1080p"
 
 
 class TestQueryPreview:
@@ -477,7 +479,7 @@ class TestTheIndexerKeyStaysOnTheServer:
         response = client.get(f"/api/search?media={SPY_ID}")
 
         assert response.status_code == 200
-        assert len(response.json()["rows"]) == 2
+        assert [row["verdict"] for row in response.json()["rows"]].count("fits") == 2
         assert PROWLARR_KEY not in response.text
         assert "apikey" not in response.text
         assert all("download_url" not in row for row in response.json()["rows"])
@@ -485,13 +487,13 @@ class TestTheIndexerKeyStaysOnTheServer:
     def test_the_rows_aside_do_not_carry_it_either(
         self, client: TestClient, indexer: FakeIndexerSearch
     ) -> None:
-        """收起來的那一份（M4 票 49）也是同一種列。"""
+        """不是「符合」的那幾類（M4 票 49、83）也是同一種列。"""
         indexer._results = (replace(SCENE, title="SPY X FAMILY 1998 1080p WEB H264-OLD"),)
         sign_in(client, CREW)
 
         response = client.get(f"/api/search?media={SPY_ID}")
 
-        assert response.json()["set_aside_total"] == 1
+        assert [row["verdict"] for row in response.json()["rows"]] == ["year"]
         assert PROWLARR_KEY not in response.text
 
     def test_an_ordinary_user_submits_a_row_by_its_source(

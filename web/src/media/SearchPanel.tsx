@@ -4,13 +4,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import {
-  queriesQueryOptions,
-  searchTorrents,
-  type Batch,
-  type MissingScope,
-  type SearchResults as SearchOutcome,
-} from '../api/search'
+import { queriesQueryOptions, searchTorrents, type Batch, type MissingScope } from '../api/search'
 import { COMPACT_BUTTON, Notice, PrimaryButton } from '../components/controls'
 import { seasonCode } from '../components/episodes'
 import type { SetupStep } from '../api/schemas'
@@ -19,9 +13,10 @@ import { StepLine } from '../components/StepLine'
 import { Timestamp } from '../components/Timestamp'
 import { IndexerNotice } from './IndexerNotice'
 import { SkippedSites } from './SkippedSites'
+import { FilteredResults } from './FilteredResults'
 import { RoutePicker } from './RoutePicker'
-import { SearchResults } from './SearchResults'
-import { sortRows, type SortKey } from './searchResult'
+import { listedTotal } from './searchFilter'
+import type { SortKey } from './searchResult'
 
 export interface SearchHandle {
   /** 從季表的缺集開始搜：`season` 是 `null` 時整部作品（M1.5 票 10）。 */
@@ -57,7 +52,6 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   const { t } = useTranslation()
   const headingId = useId()
   const keywordId = useId()
-  const sortId = useId()
   const heading = useRef<HTMLHeadingElement>(null)
 
   // `undefined` 是「這一輪還沒動過」，與刻意選「尚未指定」（`null`）不是同一件事。
@@ -92,7 +86,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   }))
 
   const results = search.data
-  const rows = results ? sortRows(results.rows, sort) : []
+  const listed = results ? listedTotal(results) : 0
   const problem = results ? results.problem : planned.data?.problem
 
   return (
@@ -102,12 +96,9 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
         <h2 id={headingId} ref={heading} tabIndex={-1} className="label text-ink">
           {t('search.title')}
         </h2>
-        {results && results.total > 0 && (
-          <p className="value text-xs text-ink-dim">
-            {results.total > rows.length
-              ? t('search.countCapped', { total: results.total, shown: rows.length })
-              : t('search.count', { count: results.total })}
-          </p>
+        {/* 只說總數：送來的比總數少時，表格裡那一組底下說只列了幾筆（M4 票 83），標頭不再說第二次。 */}
+        {listed > 0 && (
+          <p className="value text-xs text-ink-dim">{t('search.count', { count: listed })}</p>
         )}
       </div>
 
@@ -207,69 +198,20 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
         />
       )}
 
-      {results && !results.problem && results.total === 0 && (
-        <p className="max-w-prose text-sm text-ink-dim">
-          {results.set_aside_total > 0
-            ? t('search.onlyAside', { count: results.set_aside_total })
-            : results.discarded > 0
-              ? t('search.onlyOthers')
-              : t('search.empty')}
-        </p>
-      )}
-
-      {/* 索引站回的每一筆去了哪裡，一行說完（M4 票 69）：丟掉了幾筆不藏起來——索引站對搜不到的關鍵字
-          會回它自己的熱門清單，使用者有權知道那一千五百筆去了哪裡——而且幾個數字要加得起來，審計時
-          「共 262 · 略過 103 · 收起 164」被讀成彼此矛盾。 */}
-      {results && !results.problem && results.returned > 0 && (
-        <p className="max-w-prose text-xs text-ink-dim">{tally(results, t)}</p>
-      )}
-
-      {rows.length > 0 && (
-        <>
-          {/* 窄版沒有欄頭，所以排序在這裡。兩個控制項改的是同一個值。 */}
-          <p className="flex items-center gap-3 sm:hidden">
-            <label htmlFor={sortId} className="label text-ink-dim">
-              {t('search.sort.label')}
-            </label>
-            <select
-              id={sortId}
-              value={sort}
-              onChange={(event) => setSort(event.target.value as SortKey)}
-              className="value min-w-0 flex-1 border-2 border-rule-strong bg-hull px-3 py-2 text-sm text-ink focus:border-ink"
-            >
-              <option value="seeders">{t('search.column.seeders')}</option>
-              <option value="size">{t('search.column.size')}</option>
-            </select>
-          </p>
-          <SearchResults rows={rows} sort={sort} onSort={setSort} media={media} route={chosen} />
-        </>
-      )}
-
-      {/* 名字對上、年份或類型對不上的（票 49：電影搜尋裡的 `S04E02`、差了二十年的重拍）。判斷只看發佈名，
-          可能看錯，所以與略過的那一行同一個說法、但收著不丟：展開是同一張表，照樣送得了單。放在主表之後，
-          展開時不把主表往下推。 */}
-      {results && results.set_aside_total > 0 && (
-        <details className="grid gap-3">
-          <summary className="max-w-prose cursor-pointer text-xs text-ink-dim hover:text-ink">
-            {t('search.setAside', { count: results.set_aside_total })}
-          </summary>
-          <div className="mt-3">
-            <SearchResults
-              rows={sortRows(results.set_aside, sort)}
-              sort={sort}
-              onSort={setSort}
-              media={media}
-              route={chosen}
-            />
-          </div>
-        </details>
+      {results && !results.problem && (
+        <FilteredResults
+          key={search.submittedAt}
+          results={results}
+          media={media}
+          route={chosen}
+          sort={sort}
+          onSort={setSort}
+        />
       )}
 
       {/* 整頁只有這一區塊的內容會變，看不見畫面的人得知道按下去發生了什麼。 */}
       <p aria-live="polite" className="sr-only">
-        {results
-          ? t('search.announce', { count: results.total, failed: failedCount(results) })
-          : ''}
+        {results ? t('search.announce', { count: listed, failed: failedCount(results) }) : ''}
       </p>
     </section>
   )
@@ -503,25 +445,4 @@ function preselected(media: Media): number | null {
 
 function failedCount(results: { attempts: readonly { status: string }[] }): number {
   return results.attempts.filter((attempt) => attempt.status === 'failed').length
-}
-
-/**
- * 「索引站回了 N 筆：結果表、收起來、略過、重複」，是 0 的那幾份不說。四份加起來就是 N
- * （後端的 `returned` 照這一條算，`test_the_counts_add_up_to_what_the_indexer_returned` 守著）。
- */
-function tally(results: SearchOutcome, t: TFunction): string {
-  const parts = (
-    [
-      ['search.tallyShown', results.total],
-      ['search.tallyAside', results.set_aside_total],
-      ['search.tallyDiscarded', results.discarded],
-      ['search.tallyMerged', results.merged],
-    ] as const
-  )
-    .filter(([, count]) => count > 0)
-    .map(([key, count]) => t(key, { count }))
-  return t('search.tally', {
-    count: results.returned,
-    parts: parts.join(t('search.tallySeparator')),
-  })
 }

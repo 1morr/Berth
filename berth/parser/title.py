@@ -14,7 +14,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from berth.domain import ItemReason, MediaKind, MediaSnapshot, ReleaseInfo, why
+from berth.domain import ItemReason, MediaKind, MediaSnapshot, ReleaseInfo, SearchVerdict, why
 from berth.domain import ReasonCode as Code
 from berth.parser.seasons import SEASON_CN, SEASON_LATIN, SEASON_ORDINAL
 
@@ -51,19 +51,28 @@ _YEAR = re.compile(r"(?<![0-9A-Za-z])((?:19|20)[0-9]{2})(?![0-9A-Za-z])")
 #: 快照沒有那一格，差一年代替它（brief §20.16）。
 _YEAR_SLACK = 1
 #: 讀得出季集的記號，只給電影用。季名的寫法與 `seasons` 共用（`S01`、`Season 2`、`2nd Season`、
-#: `第2季`），再加集號：`S04E02`、`S01E01E02`、`S01E05v2`、`1x05`、`EP05`、`第05話`、`第01-12话`，
-#: 以及字幕組的集號 `- 05`、`- 07v2`、`- 01 ~ 12`、`[05]`、`[01-12]`、`【12 END】`、`[01-12合集]`
-#: （M4 票 69：同名動畫的各集）。
-#: 字幕組那幾種只認兩到三位數：四位數是年份（`Nosferatu - 1922`、`[1922]`），一位數多半是光碟數或
-#: 續集（`- 2 Disc`、`[3]`，code-review 抓到）——字幕組的集號補零到兩位。
-_EPISODE_MARK = re.compile(
+#: `第2季`），再加集號：`S04E02`、`S01E01E02`、`S01E05v2`、`1x05`、`EP05`、`第05話`、`第01-12话`。
+_SERIES_MARK = re.compile(
     rf"(?<![0-9A-Za-z])(?:{SEASON_LATIN}(?:E[0-9]{{1,4}})*(?:v[0-9])?|{SEASON_ORDINAL}"
     r"|[0-9]{1,2}x[0-9]{2,3}|EP[0-9]{1,4})(?![0-9A-Za-z])"
-    rf"|{SEASON_CN}|第\s*[0-9]{{1,4}}(?:\s*[~-]\s*[0-9]{{1,4}})?\s*[话話集]"
-    r"|(?<=\s)-\s*[0-9]{2,3}(?:v[0-9])?(?:\s*[~-]\s*[0-9]{2,3})?(?=[\s\[(]|\.(?![0-9])|$)"
+    rf"|{SEASON_CN}|第\s*[0-9]{{1,4}}(?:\s*[~-]\s*[0-9]{{1,4}})?\s*[话話集]",
+    re.IGNORECASE,
+)
+#: 字幕組的集號 `- 05`、`- 07v2`、`- 01 ~ 12`、`[05]`、`[01-12]`、`【12 END】`、`[01-12合集]`
+#: （M4 票 69：同名動畫的各集）。只認兩到三位數：四位數是年份（`Nosferatu - 1922`、`[1922]`），
+#: 一位數多半是光碟數或續集（`- 2 Disc`、`[3]`，code-review 抓到）——字幕組的集號補零到兩位。
+_FANSUB_EPISODE = re.compile(
+    r"(?<=\s)-\s*[0-9]{2,3}(?:v[0-9])?(?:\s*[~-]\s*[0-9]{2,3})?(?=[\s\[(]|\.(?![0-9])|$)"
     r"|[\[【][0-9]{2,3}(?:v[0-9])?(?:\s*[~-]\s*[0-9]{2,3})?\s*(?:END|Fin|合集)?[\]】]",
     re.IGNORECASE,
 )
+#: 片名那一段裡分隔不同名字的符號：字幕組把幾個名字寫在一起時用 `/`、`|` 或方括號隔開。`_` 不算：
+#: scene 拿它當空白（`Law_and_Order_SVU`），中文名與拉丁字名之間的 `_` 由 `_SCRIPT_RUN` 切開。
+_NAME_BREAK = re.compile(r"[/|\[\]【】()（）]+")
+#: 一段裡的 CJK 與非 CJK：`SPY×FAMILY 間諜家家酒` 是兩個名字，中間只有一個空白。
+_SCRIPT_RUN = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]+|[^぀-ヿ㐀-䶿一-鿿가-힯]+")
+#: scene 寫法的分隔字，畫面上的證據換成空白。
+_SCENE_SEPARATOR = re.compile(r"[._\s]+")
 
 #: CJK 字。名字裡有它的不寫開 `&`（`spell_ampersand`）。
 _CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]")
@@ -141,28 +150,107 @@ def spell_ampersand(title: str) -> str:
     return _AMPERSAND.sub(" and ", title).strip()
 
 
-def fits(release_name: str, media: MediaSnapshot) -> bool:
-    """名字對上之後，年份與類型也說得過去嗎——`mentions` 之後的第二道粗篩（M4 票 49）。
+@dataclass(frozen=True, slots=True)
+class Misfit:
+    """名字對上了、類型或年份對不上（`misfit`）：哪一條，以及發佈名裡的哪一段字。"""
+
+    verdict: SearchVerdict
+    #: 觸發的那一段字，原樣：`S04E02`、`- 05`、`1990`。畫面上那一句話引它，不翻。
+    evidence: str
+
+
+def misfit(release_name: str, media: MediaSnapshot) -> Misfit | None:
+    """名字對上之後，年份與類型對不上的是哪一條——`mentions` 之後的第二道粗篩（M4 票 49、83）。
 
     同樣**不跑 guessit**，理由與 `mentions` 相同。審計 S6 搜《活死人之夜》（1968）時，主清單
     混進 1990、2006 的重拍與《Below Deck Down Under S04E02 Night of the Living Dead》。
+    說得過去是 `None`。
 
-    - **電影**：讀得出季集記號就不是它。劇集反過來不篩——沒有季集記號的劇集發佈是常態
-      （`Title - 05`、`[01-12]`），`Movie` 又可能是 S00（brief §6.3 的 `special_kind`）。
+    - **電影**：讀得出季集記號或字幕組的集號（多半是同名動畫）就不是它（`NOT_MOVIE`，證據是
+      先讀到的那一種）。
+      劇集反過來不篩——沒有季集記號的劇集發佈是常態（`Title - 05`、`[01-12]`），`Movie` 又可能是
+      S00（brief §6.3 的 `special_kind`）。
     - **年份**照 Radarr：發佈名寫的年份要對上作品的年份，沒寫年份照收（brief §20.16）。
       Radarr 另認一個「第二年份」，Berth 的快照沒有，所以容許差一年（`_YEAR_SLACK`）。
       劇集的年份是整段播出期間（各季首播年），Sonarr 不以年份拒絕，Berth 只擋播出期間之外的。
       寫了好幾個年份時有一個對上就算；片名自己帶的數字（`Blade Runner 2049`）不算年份。
+
+    先說記號再說年份：記號是更硬的證據（看得出這是一集；年份可能是修復版的那一年）。
     """
-    if media.kind is MediaKind.MOVIE and _EPISODE_MARK.search(release_name):
-        return False
+    if media.kind is MediaKind.MOVIE:
+        for pattern in (_SERIES_MARK, _FANSUB_EPISODE):
+            if found := pattern.search(release_name):
+                return Misfit(SearchVerdict.NOT_MOVIE, found.group(0).strip())
     window = _year_window(media)
     if window is None:
-        return True
-    in_titles = {year for known in _known_titles(media) for year in _years(known)}
-    written = _years(release_name) - in_titles
+        return None
+    in_titles = _title_years(media)
+    written = [
+        found for found in _YEAR.finditer(release_name) if int(found.group(1)) not in in_titles
+    ]
     low, high = window
-    return not written or any(low <= year <= high for year in written)
+    if not written or any(low <= int(found.group(1)) <= high for found in written):
+        return None
+    return Misfit(SearchVerdict.YEAR, written[0].group(1))
+
+
+def partial_title(release_name: str, media: MediaSnapshot) -> str:
+    """發佈名的片名那一段只對上這部作品的**一部分**名字時，回那一段（可能是衍生劇，M4 票 83）。
+
+    照 Sonarr（brief §20.20）：片名是**第一個記號前面**那一段——季集記號、字幕組的集號、年份
+    （片名自己帶的年份不算）——比對要**完全相等**才算這一部，不是包含。`Law.and.Order.SVU.S28E01`
+    的片名 `Law and Order SVU` 包住 `Law & Order` 但不等於它。
+
+    那一段先照 `_NAME_BREAK` 與文字系統切成一個一個名字：字幕組常把中文名與拉丁字名寫在一起
+    （`SPY×FAMILY 間諜家家酒`），整段比的話每一筆都像衍生劇。**有一個名字等於**這部作品的某個名字
+    就不是部分；沒有相等、但有一個包住某個名字的，回那一個。讀不出記號（沒有片名那一段）、
+    或片名那一段根本沒有這部作品的名字時不判，回空字串——寧可放進「符合」讓人看見。
+    """
+    lead = release_name[: _lead_end(release_name, media)]
+    if lead == release_name:
+        return ""
+    names = [
+        run.group(0)
+        for piece in _NAME_BREAK.split(lead)
+        for run in _SCRIPT_RUN.finditer(piece)
+        if normalize_title(run.group(0))
+    ]
+    known = {target for target in map(normalize_title, _known_titles(media)) if target}
+    if any(normalize_title(name) in known for name in names):
+        return ""
+    wider = next(
+        (
+            name
+            for name in names
+            if any(
+                len(target) >= _MIN_CONTAINED and target in normalize_title(name)
+                for target in known
+            )
+        ),
+        "",
+    )
+    return _SCENE_SEPARATOR.sub(" ", wider).strip(" -")
+
+
+def _lead_end(release_name: str, media: MediaSnapshot) -> int:
+    """第一個記號的位置；一個都沒有時是整串的長度。"""
+    in_titles = _title_years(media)
+    starts = [
+        found.start()
+        for pattern in (_SERIES_MARK, _FANSUB_EPISODE)
+        if (found := pattern.search(release_name))
+    ]
+    starts += [
+        found.start()
+        for found in _YEAR.finditer(release_name)
+        if int(found.group(1)) not in in_titles
+    ]
+    return min(starts, default=len(release_name))
+
+
+def _title_years(media: MediaSnapshot) -> set[int]:
+    """片名自己帶的數字（`Blade Runner 2049`）：發佈名裡的它不是年份。"""
+    return {year for known in _known_titles(media) for year in _years(known)}
 
 
 def _years(text: str) -> set[int]:

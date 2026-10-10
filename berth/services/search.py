@@ -7,11 +7,12 @@
    聯集 1854 筆——每一個標題都帶來另外兩個問不到的東西（各 391 / 196 / 169 筆）。
 2. **併發**。單一聚合查詢實測 60–85 秒（Prowlarr 要現場去連五個追蹤站），三個查詢併發
    共 35 秒——逐個問會變成三分鐘。一個查詢垮掉時剩下的照樣回得來（票 08 驗收）。
-3. **合併去重，然後把對不上這部作品的丟掉**。去重的鑰匙是 info hash，寫法正規化過
+3. **合併去重，然後每一筆歸到一類**（`_judge`，M4 票 83）。去重的鑰匙是 info hash，寫法正規化過
    （同一個發佈在 Mikan 是十六進位、在 dmhy 是 base32，實測單次查詢的 1200 筆裡有 47 筆是
-   這樣重複的）。丟掉那一步是實跑逼出來的：**The Pirate Bay 對搜不到的關鍵字會回它的熱門
+   這樣重複的）。分類是實跑逼出來的：**The Pirate Bay 對搜不到的關鍵字會回它的熱門
    清單**，而那些東西動輒五六千個做種，會把真正的結果整批擠出前 100 筆（2026-09-10 搜
-   SPY×FAMILY，前六筆是 Spider-Man、Ted Lasso、Reacher）。丟掉幾筆另外報，不藏起來。
+   SPY×FAMILY，前六筆是 Spider-Man、Ted Lasso、Reacher）。對不上的不丟：照 Sonarr 互動搜尋，
+   每一類各自取一份送出去，畫面預設只開「符合」，其他類按了才看。
 4. **逐筆問解析器**。`parse_release` 給 Tags、`map_episode` 給預估季集，兩者都是純函式，
    所以這一步不打任何服務。
 
@@ -22,6 +23,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -38,6 +40,7 @@ from berth.domain import (
     MappingStrategy,
     MediaSnapshot,
     ParseContext,
+    SearchVerdict,
     SeasonSnapshot,
     StepFailure,
     StepStatus,
@@ -45,7 +48,15 @@ from berth.domain import (
     collection_type_for,
 )
 from berth.models import IndexerSettings, SetupSettings
-from berth.parser import fits, map_episode, mentions, parse_release, spell_ampersand, tags_of
+from berth.parser import (
+    map_episode,
+    mentions,
+    misfit,
+    parse_release,
+    partial_title,
+    spell_ampersand,
+    tags_of,
+)
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
 from berth.services.inventory import EpisodeView, SeasonView
@@ -60,9 +71,14 @@ from berth.services.steps import StepView, failure_of, message
 #: 五個涵蓋英文 + 原文 + 兩三個別名，或英文 + 原文 + 顯示用標題 + 兩個季號變體。
 MAX_QUERIES = 5
 
-#: 送給畫面的筆數上限。實測一次搜尋去重後有 1854 筆——全部送出去是一份 1–2 MB 的 JSON，
-#: 而 390px 的手機上沒有人捲得完。取 100 筆，總數另外報（票 08 拍板）。
+#: 送給畫面的筆數上限（「符合」與沒有判斷的那一類）。實測一次搜尋去重後有 1854 筆——全部送出去
+#: 是一份 1–2 MB 的 JSON，而 390px 的手機上沒有人捲得完。取 100 筆，總數另外報（票 08 拍板）。
 RESULT_LIMIT = 100
+
+#: 其餘每一類各送幾筆（M4 票 83，使用者確認 shape）。它們預設不顯示，按了才看；六類全滿最多
+#: 100 + 5 × 50 = 350 列（約 220 KB），解析每筆 14 毫秒，最壞比票 83 之前的 200 列多兩秒。
+#: The Pirate Bay 對查不到的字回的熱門清單常常一百筆，所以「名字對不上」看得到的是做種前 50 筆。
+OTHERS_LIMIT = 50
 
 #: 單一查詢的上限。adapter 自己也有 HTTP 逾時，這一層是**整次搜尋的保證**：
 #: 換一個逾時寬鬆的 adapter 進來時，畫面等待的時間仍然有一個說得出口的上限。
@@ -104,6 +120,30 @@ class SearchResult:
     #: 索引站報的發佈時間（brief §20.11）。結果表的「發佈」欄，送單時跟著 Job 存下來比播出日
     #: （M3 票 14）。那個站沒報是 `None`。
     published_at: datetime | None
+    #: 這一筆歸到哪一類（M4 票 83，`_judge`）。畫面上不是「符合」的那幾類預設不顯示。
+    verdict: SearchVerdict
+    #: 歸到那一類的證據：發佈名裡的那一段字（`S04E02`、`- 05`、`1990`、`Law and Order SVU`）或
+    #: 成人分類的碼（`6040`）。符合、名字對不上、沒有判斷的是空字串。畫面那一句話引它，不翻。
+    evidence: str
+
+
+@dataclass(frozen=True, slots=True)
+class VerdictCount:
+    """一類在一站有幾筆（M4 票 83）。是總數不是送出來的筆數：畫面的按鈕在「只看某個站」時
+    數字跟著變，而送出來的只是每類逐站輪流取的前幾筆。"""
+
+    verdict: SearchVerdict
+    indexer: str
+    total: int
+
+
+@dataclass(frozen=True, slots=True)
+class Judged:
+    """索引站回的一筆與它歸到的那一類（`_judge`）。"""
+
+    result: IndexerResult
+    verdict: SearchVerdict
+    evidence: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,27 +155,21 @@ class SearchView:
     而它們的下一步完全不同。做成 HTTP 錯誤的話畫面只剩一個狀態碼。
     """
 
+    #: 每一類各自逐站輪流取（`_take`）之後合在一起，照 `SearchVerdict` 的順序一類接一類：「符合」與
+    #: 沒有判斷的取 `RESULT_LIMIT` 筆，其餘每類 `OTHERS_LIMIT` 筆。
+    #: **每一類都送、不藏起來**（M4 票 83，照 Sonarr 互動搜尋）：判斷只看發佈名，可能看錯，而
+    #: 「索引站什麼都沒回」與「回了一千八百筆但沒有一筆是這部作品」的下一步不同。
     rows: tuple[SearchResult, ...]
-    #: 主表的總筆數：名字、年份與類型都對得上這部作品的。`rows` 只有其中的前 `RESULT_LIMIT` 筆，
-    #: 逐站輪流取（`_take`）。
-    total: int
     #: 實際問出去的關鍵字與逐個的成敗。形狀與精靈的纜繩一樣——同一件事同一種說法。
     attempts: tuple[StepView, ...]
-    #: 索引站回了、但名字對不上這部作品的筆數。**不藏起來**：「索引站什麼都沒回」與
-    #: 「回了一千八百筆但沒有一筆是這部作品」的下一步不同（前者換關鍵字，後者換索引站）。
-    discarded: int = 0
+    #: 每一類在每一站的總筆數（`VerdictCount`）。是 0 的那一組不列。
+    counts: tuple[VerdictCount, ...] = ()
     #: 每個查詢回的筆數加起來（M4 票 69）。畫面上的幾個數字照這一條加得起來：
-    #: `returned = merged + discarded + set_aside_total + total`。
+    #: `returned = merged + Σ counts.total`。
     returned: int = 0
     #: 不同查詢（或不同站）回了同一個發佈，合併掉的筆數（`_dedupe`）。不叫 duplicates：
     #: CONTEXT.md 的 **Duplicate** 是帳本裡的重複版本。
     merged: int = 0
-    #: 名字對上了、但年份或類型對不上的（M4 票 49）：電影搜尋裡的 `S04E02`、差了二十年的重拍；
-    #: 同名動畫的 `- 05` 與索引站分在成人類的（M4 票 69）。
-    #: **收著不丟**：判斷只看發佈名，可能看錯，所以畫面說出數量、讓人展開。
-    #: 同樣逐站取前 `RESULT_LIMIT` 筆。
-    set_aside: tuple[SearchResult, ...] = ()
-    set_aside_total: int = 0
     problem: IndexerProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
@@ -336,20 +370,16 @@ async def search_torrents(
     next_at = factory.budget.ready_at(sites, len(after)) if after else None
     returned = [row for _, rows in outcomes for row in rows]
     found = _dedupe(returned)
-    # 自己打了關鍵字時不篩：他要的就是那一串字，不是這部作品（票 08）。
-    named = found if typed else [row for row in found if _about(row, snapshot)]
-    results: list[IndexerResult] = []
-    aside: list[IndexerResult] = []
-    for row in named:
-        (results if typed or _fits(row, snapshot) else aside).append(row)
+    # 自己打了關鍵字時不判斷：他要的就是那一串字，不是這部作品（票 08）。
+    judged = [
+        Judged(result, SearchVerdict.UNJUDGED) if typed else _judge(result, snapshot)
+        for result in found
+    ]
     return SearchView(
-        rows=tuple(_row(result, snapshot, sources) for result in _take(results, RESULT_LIMIT)),
-        total=len(results),
-        discarded=len(found) - len(named),
+        rows=_rows(judged, snapshot, sources),
+        counts=_counts(judged),
         returned=len(returned),
         merged=len(returned) - len(found),
-        set_aside=tuple(_row(result, snapshot, sources) for result in _take(aside, RESULT_LIMIT)),
-        set_aside_total=len(aside),
         attempts=tuple(attempt for attempt, _ in outcomes),
         skipped=skipped,
         batch=_batch(batches, next_at),
@@ -370,7 +400,7 @@ def _skipped(
     )
 
 
-def _take(results: Sequence[IndexerResult], limit: int) -> list[IndexerResult]:
+def _take(results: Sequence[Judged], limit: int) -> list[Judged]:
     """上限內盡量讓每個站都出現：逐站輪流取，站內照做種由多到少。
 
     純粹取做種前 100 筆會**把中文字幕組整批刪掉**：2026-09-10 實跑搜 SPY×FAMILY，
@@ -379,40 +409,73 @@ def _take(results: Sequence[IndexerResult], limit: int) -> list[IndexerResult]:
 
     只有一個站在答時它自己填滿一百筆。
     """
-    by_indexer: dict[str, list[IndexerResult]] = {}
-    for result in results:
-        by_indexer.setdefault(result.indexer, []).append(result)
-    taken: list[IndexerResult] = []
+    by_indexer: dict[str, list[Judged]] = {}
+    for judged in results:
+        by_indexer.setdefault(judged.result.indexer, []).append(judged)
+    taken: list[Judged] = []
     for round_ in zip_longest(*by_indexer.values()):
-        for result in round_:
-            if result is not None and len(taken) < limit:
-                taken.append(result)
+        for judged in round_:
+            if judged is not None and len(taken) < limit:
+                taken.append(judged)
         if len(taken) >= limit:
             break
     return taken
 
 
-def _about(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
-    """這一筆是這部作品嗎。
+def _judge(result: IndexerResult, snapshot: MediaSnapshot | None) -> Judged:
+    """這一筆歸到哪一類、證據是哪一段字（M4 票 83）。**先後即判定順序**，證據硬的先：
 
-    粗篩用 `mentions`（純字串），不是 `parse_release` + `matches`——後者實測每筆 14 毫秒，
-    一兩千筆會把事件迴圈卡住半分鐘。精確的那一份判斷留給活下來的一百筆。
+    1. 名字（`mentions`，純字串）——不是 `parse_release` + `matches`：後者實測每筆 14 毫秒，
+       一兩千筆會把事件迴圈卡住半分鐘。精確的解析留給送出去的那幾百筆。
+    2. 索引站分在成人類（M4 票 69，審計 S3）：發佈名說不出這件事，分類說得出。分類碼不拿來**查**
+       （各站映射自訂，plan §8.4），拿來歸類是因為歸錯了按一下就看得到。
+    3. 類型與年份（`parser.misfit`，M4 票 49）：集數記號（不是電影）、年份。
+    4. 只對上部分名字（`parser.partial_title`）：最軟的一條——「可能是衍生作品」，放在最後：
+       同名動畫的 `Tsuki to Laika to Nosferatu - 05` 片名也包住《Nosferatu》，先判它的話這一筆
+       說的會是「名字多一段」，而更硬的證據是 `- 05` 這個集號。
 
-    沒有快照時不篩：那時候 Berth 根本不知道這部作品叫什麼，篩了等於全丟。
-    """
-    return snapshot is None or mentions(result.title, snapshot)
-
-
-def _fits(result: IndexerResult, snapshot: MediaSnapshot | None) -> bool:
-    """名字對上之後，年份與類型也說得過去嗎（`parser.fits`，M4 票 49）。沒有快照時不篩。
-
-    索引站分在成人類的也收起來（M4 票 69，審計 S3）：發佈名說不出這件事，分類說得出。分類碼
-    不拿來**查**（各站映射自訂，plan §8.4），拿來收起來是因為收錯了展開就救得回來。
+    沒有快照時不判斷：那時候 Berth 根本不知道這部作品叫什麼，判了等於全歸成名字對不上。
     """
     if snapshot is None:
-        return True
-    return fits(result.title, snapshot) and not any(
-        category in ADULT_CATEGORIES for category in result.categories
+        return Judged(result, SearchVerdict.UNJUDGED)
+    if not mentions(result.title, snapshot):
+        return Judged(result, SearchVerdict.UNRELATED)
+    adult = next((code for code in result.categories if code in ADULT_CATEGORIES), None)
+    if adult is not None:
+        return Judged(result, SearchVerdict.ADULT, str(adult))
+    if (found := misfit(result.title, snapshot)) is not None:
+        return Judged(result, found.verdict, found.evidence)
+    if lead := partial_title(result.title, snapshot):
+        return Judged(result, SearchVerdict.PARTIAL_TITLE, lead)
+    return Judged(result, SearchVerdict.FITS)
+
+
+def _rows(
+    judged: Sequence[Judged], snapshot: MediaSnapshot | None, sources: SourceCache
+) -> tuple[SearchResult, ...]:
+    """每一類各自逐站輪流取，照 `SearchVerdict` 的順序一類接一類。只有送出去的這幾百筆才解析。"""
+    return tuple(
+        _row(one, snapshot, sources)
+        for verdict in SearchVerdict
+        for one in _take(
+            [one for one in judged if one.verdict is verdict],
+            RESULT_LIMIT if verdict in _LISTED else OTHERS_LIMIT,
+        )
+    )
+
+
+#: 畫面預設就列出來的兩類，送 `RESULT_LIMIT` 筆；其餘按了才看，送 `OTHERS_LIMIT` 筆。
+_LISTED = frozenset({SearchVerdict.FITS, SearchVerdict.UNJUDGED})
+
+
+def _counts(judged: Sequence[Judged]) -> tuple[VerdictCount, ...]:
+    """每一類在每一站的總筆數，照 `SearchVerdict` 的順序、站名照第一次出現的順序。"""
+    tally = Counter((one.verdict, one.result.indexer) for one in judged)
+    return tuple(
+        VerdictCount(verdict=verdict, indexer=indexer, total=tally[(verdict, indexer)])
+        for verdict in SearchVerdict
+        for (seen, indexer) in tally
+        if seen is verdict
     )
 
 
@@ -645,10 +708,9 @@ def estimate(title: str, published_at: datetime | None, snapshot: MediaSnapshot 
     )
 
 
-def _row(
-    result: IndexerResult, snapshot: MediaSnapshot | None, sources: SourceCache
-) -> SearchResult:
+def _row(judged: Judged, snapshot: MediaSnapshot | None, sources: SourceCache) -> SearchResult:
     """索引站回的一列 → 結果表的一列。下載連結留在 `sources`，這一列帶它的 id。"""
+    result = judged.result
     guess = estimate(result.title, result.published_at, snapshot)
     return SearchResult(
         title=result.title,
@@ -673,6 +735,8 @@ def _row(
         whole_season=guess.whole_season,
         strategy=guess.strategy,
         published_at=result.published_at,
+        verdict=judged.verdict,
+        evidence=judged.evidence,
     )
 
 
@@ -712,7 +776,7 @@ def _problem(exc: ServiceError) -> IndexerProblem:
 def _blank(problem: IndexerProblem, detail: str = "") -> SearchView:
     """沒有結果的那幾種。`detail` 只放**服務回的原文**——沒有服務答話的那幾種就是空的，
     畫面上那句話由 `problem` 決定，不靠這一欄拼湊。"""
-    return SearchView(rows=(), total=0, attempts=(), problem=problem, detail=detail)
+    return SearchView(rows=(), attempts=(), problem=problem, detail=detail)
 
 
 def _unique(values: Iterable[str]) -> tuple[str, ...]:

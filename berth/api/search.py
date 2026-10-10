@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.schemas import StepOut
-from berth.domain import IndexerProblem, MappingStrategy, Source
+from berth.domain import IndexerProblem, MappingStrategy, SearchVerdict, Source
 from berth.services.search import SearchView, plan_queries, search_torrents
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -74,6 +74,21 @@ class SearchResultOut(BaseModel):
     #: 索引站報的發佈時間（UTC）。結果表的「發佈」欄；送單時存進 Job 的是伺服器跟著 `source_id`
     #: 記下的那一份。`null` = 那個站沒報，畫面顯示 `—`。
     published_at: datetime | None
+    #: 這一筆歸到哪一類（M4 票 83）。自己打的關鍵字一律 `unjudged`。
+    verdict: SearchVerdict
+    #: 歸到那一類的證據，原樣（`S04E02`、`- 05`、`1990`、`Law and Order SVU`、成人分類碼 `6040`）；
+    #: 畫面那一句話引它、不翻。符合、名字對不上、沒有判斷的是空字串。
+    evidence: str
+
+
+class VerdictCountOut(BaseModel):
+    """一類在一站的總筆數（不是送出來的筆數）。篩選按鈕上的數字，「只看某個站」時跟著變。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    verdict: SearchVerdict
+    indexer: str
+    total: int
 
 
 class SearchOut(BaseModel):
@@ -83,22 +98,15 @@ class SearchOut(BaseModel):
     「憑證被拒」的下一步完全不同，做成 HTTP 錯誤的話前端只剩一個狀態碼分不出來。
     """
 
+    #: 每一類各自逐站輪流取之後合在一起（M4 票 83）：`fits` 與 `unjudged` 至多 100 筆，其餘每類
+    #: 至多 50 筆，照 `verdict` 的列舉順序一類接一類。
     rows: list[SearchResultOut]
-    #: 主表的總筆數（名字、年份、類型都對得上這部作品的）。`rows` 只有其中的前 100 筆，逐站輪流取，
-    #: 畫面用兩個數字說得出差別。
-    total: int
-    #: 每個查詢回的筆數加起來（M4 票 69），畫面照這一條說：
-    #: `returned = merged + discarded + set_aside_total + total`。
+    #: 每一類在每一站的總筆數；是 0 的不列。
+    counts: list[VerdictCountOut]
+    #: 每個查詢回的筆數加起來（M4 票 69），畫面照這一條說：`returned = merged + Σ counts.total`。
     returned: int
     #: 不同查詢或不同站回了同一個發佈，合併掉的筆數。
     merged: int
-    #: 索引站回了、但名字對不上這部作品的筆數。畫面用它說「那一千五百筆不是這部作品」。
-    discarded: int
-    #: 名字對上了、但年份或類型對不上的（M4 票 49；同名劇集的各集、成人分類，M4 票 69），
-    #: 逐站取前 100 筆；畫面收起來，展開看得到。
-    set_aside: list[SearchResultOut]
-    #: 那一份的總筆數。
-    set_aside_total: int
     #: 實際問出去的關鍵字與逐個的成敗。形狀與精靈的纜繩一樣。
     attempts: list[StepOut]
     problem: IndexerProblem | None
@@ -237,12 +245,9 @@ def _refuse_bare_scope(missing: bool, season: int | None, from_season: int) -> N
 def _out(view: SearchView) -> SearchOut:
     return SearchOut(
         rows=[SearchResultOut.model_validate(row) for row in view.rows],
-        total=view.total,
+        counts=[VerdictCountOut.model_validate(count) for count in view.counts],
         returned=view.returned,
         merged=view.merged,
-        discarded=view.discarded,
-        set_aside=[SearchResultOut.model_validate(row) for row in view.set_aside],
-        set_aside_total=view.set_aside_total,
         attempts=[StepOut.model_validate(attempt) for attempt in view.attempts],
         problem=view.problem,
         detail=view.detail,

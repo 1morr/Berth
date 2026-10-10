@@ -4774,18 +4774,12 @@ export interface components {
         SearchOut: {
             /** Rows */
             rows: components["schemas"]["SearchResultOut"][];
-            /** Total */
-            total: number;
+            /** Counts */
+            counts: components["schemas"]["VerdictCountOut"][];
             /** Returned */
             returned: number;
             /** Merged */
             merged: number;
-            /** Discarded */
-            discarded: number;
-            /** Set Aside */
-            set_aside: components["schemas"]["SearchResultOut"][];
-            /** Set Aside Total */
-            set_aside_total: number;
             /** Attempts */
             attempts: components["schemas"]["StepOut"][];
             problem: components["schemas"]["IndexerProblem"] | null;
@@ -4838,6 +4832,9 @@ export interface components {
             strategy: components["schemas"]["MappingStrategy"] | null;
             /** Published At */
             published_at: string | null;
+            verdict: components["schemas"]["SearchVerdict"];
+            /** Evidence */
+            evidence: string;
         };
         /**
          * SearchSubscriptionIn
@@ -4852,6 +4849,17 @@ export interface components {
             /** Term */
             term: string;
         };
+        /**
+         * SearchVerdict
+         * @description 作品搜尋的一筆歸到哪一類（M4 票 83，`.scratch/m4/search-filter-shape.md`）。
+         *
+         *     照 Sonarr 互動搜尋的慣例：被拒的照樣列出、每一筆說得出理由，使用者自己決定抓不抓。一筆只歸
+         *     一類：判斷是排了先後的粗篩（`services/search.py` 的 `_judge`），第一條命中的就是那一筆的歸類——
+         *     證據硬的先（名字、索引站的分類、季集記號、年份），最軟的「只對上部分名字」最後。
+         *     值的順序是畫面上按鈕的順序。
+         * @enum {string}
+         */
+        SearchVerdict: "fits" | "year" | "not_movie" | "adult" | "partial_title" | "unrelated" | "unjudged";
         /**
          * SeasonOut
          * @description 一季。`season_number: 0` 是 Specials。
@@ -5387,6 +5395,17 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VerdictCountOut
+         * @description 一類在一站的總筆數（不是送出來的筆數）。篩選按鈕上的數字，「只看某個站」時跟著變。
+         */
+        VerdictCountOut: {
+            verdict: components["schemas"]["SearchVerdict"];
+            /** Indexer */
+            indexer: string;
+            /** Total */
+            total: number;
         };
         /**
          * VersionGroupOut

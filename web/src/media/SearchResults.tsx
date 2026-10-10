@@ -4,6 +4,7 @@ import { Dot } from '../components/Dot'
 import { Timestamp } from '../components/Timestamp'
 import type { Media } from '../api/media'
 import type { SearchResult } from '../api/search'
+import { reasonOf, type Group } from './searchFilter'
 import { estimate, formatCount, formatSize, tagTokens, type SortKey } from './searchResult'
 import { SubmitAction } from './SubmitAction'
 
@@ -16,15 +17,18 @@ import { SubmitAction } from './SubmitAction'
  *
  * 表格外**不包 `overflow-x`**：窄版根本不是表格，被切掉的發佈名等於沒顯示
  * （The Values Sit On Their Line Rule）。
+ *
+ * **一類一個 `tbody`**（M4 票 83）：開了好幾類時照篩選按鈕的順序一組接一組，「符合」永遠在最上面，
+ * 組內照排序鍵。一類送來的比總數少時，那一組底下一行說清楚只列了哪幾筆。
  */
 export function SearchResults({
-  rows,
+  groups,
   sort,
   onSort,
   media,
   route,
 }: {
-  rows: readonly SearchResult[]
+  groups: readonly Group[]
   sort: SortKey
   onSort: (key: SortKey) => void
   media: Media
@@ -58,11 +62,23 @@ export function SearchResults({
           </th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-rule">
-        {rows.map((row) => (
-          <ResultRow key={row.key} row={row} media={media} route={route} />
-        ))}
-      </tbody>
+      {groups.map((group) => (
+        <tbody
+          key={group.verdict}
+          className="divide-y divide-rule border-t-2 border-rule first-of-type:border-t-0"
+        >
+          {group.rows.map((row) => (
+            <ResultRow key={row.key} row={row} media={media} route={route} />
+          ))}
+          {group.total > group.rows.length && (
+            <tr>
+              <td colSpan={6} className="px-4 py-2.5 text-xs text-ink-dim">
+                {t('search.capped', { total: group.total, shown: group.rows.length })}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      ))}
     </table>
   )
 }
@@ -121,6 +137,7 @@ function ResultRow({
       <td className="px-4 py-3 align-top">
         {/* 發佈名整行換行，不截斷：它是這一列的證據，解析器讀的就是同一串字。 */}
         <p className="value text-sm wrap-anywhere text-ink">{row.title}</p>
+        <VerdictNote row={row} media={media} />
         <TagStrip row={row} />
         {/* 窄版把另外五欄收成一行。桌機上它整行不畫，那五欄自己在右邊。 */}
         <p className="value mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim sm:hidden">
@@ -164,6 +181,25 @@ function ResultRow({
         <Estimate row={row} />
       </td>
     </tr>
+  )
+}
+
+/**
+ * 不是「符合」的列：歸到哪一類（中性小色塊——它是分類不是狀態，The Role Is Not A State Rule）與一句理由。
+ * 「符合」與自己打關鍵字的列不標（The Usual Stays Unpainted Rule，使用者確認 shape）。
+ */
+function VerdictNote({ row, media }: { row: SearchResult; media: Media }) {
+  const { t } = useTranslation()
+  const reason = reasonOf(row, media)
+  if (!reason) return null
+
+  return (
+    <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span className="label bg-deck px-1.5 py-0.5 text-ink">{t(reason.labelKey)}</span>
+      <span className="text-xs text-ink-dim">
+        {t(reason.key, { evidence: reason.evidence, year: reason.year })}
+      </span>
+    </p>
   )
 }
 
