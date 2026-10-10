@@ -539,7 +539,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
   | `size`（近似，只供顯示） | 描述後綴 `[N UNIT]` → N × 1000^k（**不用** `contentlength`：不是位元組） | `e.nyaa_size` → N × 1024^k | `int(e.torrent_contentlength)` |
   | `published_at`（aware UTC） | `fromisoformat(e.published)` 補 **UTC+8**（`published_parsed` 當 UTC 讀，差 8 小時） | `e.published_parsed`（UTC） | `e.published_parsed` |
 
-  **自動綁定**（票 09，brief §15「綁定」）：Series 長出來的那一輪抓一次番組頁（`/Home/Bangumi/<id>`，讀中文名與「放送开始」，研究檔 §2.7），以番組名與發佈名的標題骨幹搜 TMDB（`search/multi`，每個詞取前 3 筆、年份晚於開播的劇集與差一年以上的電影不讀詳情，最多三個詞），讀回快照交給 `parser.binding.judge`。查不到（番組頁或 TMDB）不在之後每一輪重試，理由寫 `lookup_failed`。
+  **自動綁定**（票 09，brief §15「綁定」）：Series 長出來的那一輪抓一次番組頁（`/Home/Bangumi/<id>`，讀中文名與「放送开始」，研究檔 §2.7；同一輪裡同一部的各字幕組共用那一次，讀不到也照同一個結果，M4 票 82），以番組名與發佈名的標題骨幹搜 TMDB（`search/multi`，每個詞取前 3 筆、年份晚於開播的劇集與差一年以上的電影不讀詳情，最多三個詞），讀回快照交給 `parser.binding.judge`。查不到（番組頁或 TMDB）不在之後每一輪重試，理由寫 `lookup_failed`。
   Mikan 的 RSS Series 鍵（番組 id, 字幕組 id）不在 feed 裡：單一 feed 的 URL 帶著；聚合 feed 的每一筆第一次出現時抓一次單集頁，讀 `a.mikan-rss` 的 `href`。Nyaa 的做種數（`nyaa_seeders` 等）不進 `FeedItem`，沒有消費者。
   **非 Mikan 的 RSS Series 鍵**（票 11）：`parser.binding.skeleton` 去掉組名（`parser.cjk` 的讀法）、播出檔期、集號與 tags——組名之後以方括號開頭的，標題就是那一格；區間的 `-` 兩側不許有空白（`Season 3 - 08` 是第三季第 8 集）——`title_key` 再接字幕組。合集照樣長在同一組的 Series 上，由排除條件擋下。這些來源沒有番組頁，自動綁定的線索只有發佈名：`judge` 列出候選、理由 `no_show_page`，一律留給人。
   **第一輪預覽**（票 11，brief §15、`.scratch/m3/preview-shape.md`）：`primed_at` 是 `NULL` 的 Feed 照樣寫 Item、長 Series、看排除條件，但 `_submit_waiting` 只送選過的 Feed——輪詢、綁定、自動綁定三條送單的路一起擋住。「全部下載」寫 `primed_at` 之後當場送綁好的；「只追之後的」**當場再讀一次 feed**，那一刻還沒送的（待綁定、綁好）都改 `passed`，之後才出現的照常送——只看已經寫下的 Item 的話，第一輪沒讀到 feed 或預覽之後才出現的那幾筆下一輪會被當成新的整批送出。

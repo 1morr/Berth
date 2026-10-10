@@ -634,11 +634,12 @@ async def _poll_feed(
         feed.last_polled_at = moment
         feed.last_error = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
         await session.commit()
-        # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。
+        # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。同一部的不同字幕組共用一頁（票 82）。
+        pages = _ShowPages(fetcher)
         for series_id in grown:
             sent = await _prebind(session, factory, feed_id, series_id, moment)
             if sent is None:
-                sent = await _auto_bind(session, factory, fetcher, feed, series_id, moment)
+                sent = await _auto_bind(session, factory, pages, feed, series_id, moment)
             if sent is not None:
                 bound += 1
                 submitted += sent
@@ -652,7 +653,7 @@ async def _poll_feed(
         # 上一輪被請求預算擋下的（M3 票 20）與暫時查不到、重認時間到了的（M4 票 14）：只有它們在
         # 長出來之後的輪詢裡重認。這一輪才長出來的剛認過，不再撞一次。
         for series_id in await _due_lookups(session, feed_id, moment, skip=grown):
-            sent = await _auto_bind(session, factory, fetcher, feed, series_id, moment)
+            sent = await _auto_bind(session, factory, pages, feed, series_id, moment)
             if sent is not None:
                 bound += 1
                 submitted += sent
@@ -1361,7 +1362,7 @@ def _given_up(failed: _LookupError) -> BindReason:
 async def _auto_bind(
     session: AsyncSession,
     factory: ServiceClientFactory,
-    fetcher: FeedFetcher,
+    pages: _ShowPages,
     feed: RssFeed,
     series_id: int,
     moment: datetime,
@@ -1385,7 +1386,7 @@ async def _auto_bind(
     if series is None or series.media_id is not None:
         return None
     try:
-        clues, subgroup = await _clues(fetcher, series)
+        clues, subgroup = await _clues(pages, series)
         # 番組頁已經抓了：名字順手記下（RSS 頁的來源那一格，M4 票 13）。先寫完再去問 TMDB——
         # 握著寫交易打網路會鎖住整個資料庫（M4 票 01）。
         await _remember_names(session, series_id, clues.title, subgroup)
@@ -1449,7 +1450,45 @@ async def _auto_bind(
     return bound.submitted
 
 
-async def _clues(fetcher: FeedFetcher, series: RssSeries) -> tuple[SeriesClues, str]:
+class _ShowPages:
+    """一輪輪詢讀過的 Mikan 番組頁，以 `bangumi_id` 為鍵（M4 票 82）。
+
+    同一部的不同字幕組是不同的 RSS Series，番組頁卻是同一頁：同一輪只抓一次、在預算裡佔一格。
+    「一輪」是一個 Feed 的一輪（`_poll_feed`），MyBangumi 聚合 feed 的各字幕組都在裡面。
+    **讀不到也記下來**：同一輪其他共用這頁的 Series 拿到同一種失敗（`_LookupError` 或被預算擋下），
+    不各自再打一次，被擋下的也不多記一次延後。只活在那一輪，下一輪重新讀。
+    """
+
+    def __init__(self, fetcher: FeedFetcher) -> None:
+        self._fetcher = fetcher
+        self._outcomes: dict[int, str | BudgetExhaustedError | _LookupError] = {}
+
+    async def read(self, bangumi_id: int) -> str:
+        """番組頁的原文；讀不到丟 `_LookupError`，預算放不下丟 `BudgetExhaustedError`。"""
+        if bangumi_id not in self._outcomes:
+            self._outcomes[bangumi_id] = await self._fetch(bangumi_id)
+        outcome = self._outcomes[bangumi_id]
+        if isinstance(outcome, str):
+            return outcome
+        # 同一個例外再丟一次：traceback 不疊上前一次的。
+        raise outcome.with_traceback(None)
+
+    async def _fetch(self, bangumi_id: int) -> str | BudgetExhaustedError | _LookupError:
+        url = mikan.bangumi_url(bangumi_id)
+        try:
+            page = await self._fetcher.fetch(url)
+        except BudgetExhaustedError as refused:
+            return refused
+        except ServiceError as exc:
+            failed = _LookupError(
+                f"bangumi page: {message(exc)}", site=site_of(url), transient=is_transient(exc)
+            )
+            failed.__cause__ = exc
+            return failed
+        return page.decode("utf-8", errors="replace")
+
+
+async def _clues(pages: _ShowPages, series: RssSeries) -> tuple[SeriesClues, str]:
     """番組頁的中文名與開播日期 + 長出它的那一筆發佈名；加上番組頁上這個字幕組的名字（沒有是
     空字串）。
 
@@ -1461,16 +1500,7 @@ async def _clues(fetcher: FeedFetcher, series: RssSeries) -> tuple[SeriesClues, 
             title="", premiere=None, release_title=series.title_raw, show_page=False
         )
         return clues, ""
-    url = mikan.bangumi_url(series.mikan_bangumi_id)
-    try:
-        page = await fetcher.fetch(url)
-    except BudgetExhaustedError:
-        raise
-    except ServiceError as exc:
-        raise _LookupError(
-            f"bangumi page: {message(exc)}", site=site_of(url), transient=is_transient(exc)
-        ) from exc
-    text = page.decode("utf-8", errors="replace")
+    text = await pages.read(series.mikan_bangumi_id)
     found = mikan.bangumi_page(text)
     subgroup = next(
         (row.name for row in mikan.subgroups(text) if row.id == series.mikan_subgroup_id), ""
