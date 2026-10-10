@@ -3,7 +3,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { stubApi } from '../test/fetch'
+import { stubApi, type StubRoute } from '../test/fetch'
 import { boardCells, findBoardCells } from '../test/board'
 import { renderInRoute } from '../test/render'
 import type { SiteFailure, SiteSearch } from '../api/setup'
@@ -91,6 +91,12 @@ async function openAdvanced(user: UserEvent) {
 }
 const existingCard = () => screen.getByRole('radio', { name: /^既有/ })
 
+/** 頁 4 剖面「接法」那一格的值。 */
+async function cutawayKind() {
+  const heading = await screen.findByRole('heading', { level: 3, name: 'Prowlarr' })
+  return within(heading.closest('section')!).getByText('接法').nextElementSibling
+}
+
 const EXISTING_QBITTORRENT = chosen({
   kind: 'qbittorrent',
   origin: 'existing',
@@ -148,6 +154,10 @@ describe('頁 2：qBittorrent', () => {
     expect(bundledCard()).not.toBeChecked()
     expect(existingCard()).not.toBeChecked()
     expect(screen.queryByText('這台 qBittorrent')).not.toBeInTheDocument()
+    // 剖面列出兩種各會做什麼，與頁 4 還沒選時同一個形狀（M4 票 81）。
+    const plans = within(screen.getByText('將會做什麼').closest('section')!)
+    expect(plans.getByText('設定 WebUI 登入 · 只建 Berth 自己的分類')).toBeInTheDocument()
+    expect(plans.getByText('只建 Berth 自己的分類 · 一個全域偏好都不寫')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
@@ -1779,6 +1789,139 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const key = cutaway.getByText('API key').nextElementSibling
     expect(key).not.toHaveTextContent('已取得')
     expect(key).toHaveTextContent('不被接受')
+  })
+
+  /**
+   * M4 票 81：剖面的「接法」只在選了之後說。原本只看清單是不是套件內的，還沒選、選了套件內還在測
+   * （以及回來了、清單還沒重讀）都說成「你自己的 Prowlarr」。還沒選時照頁 2 列出兩種各會做什麼。
+   */
+  it('剖面：還沒選列出兩種各會做什麼；選了套件內，測試中與連上之後都說套件內（M4 票 81）', async () => {
+    let answerChoice: (route: StubRoute) => void = () => {}
+    let answerList: (route: StubRoute) => void = () => {}
+    let chosenYet = false
+    stubApi({
+      [STATUS]: { body: CHOOSING_INDEXER },
+      [INDEXERS]: () =>
+        chosenYet
+          ? new Promise<StubRoute>((resolve) => (answerList = resolve))
+          : { body: indexerSetup({ origin: null, base_url: '', api_key_present: false }) },
+      [CHOOSE_PROWLARR]: () => new Promise<StubRoute>((resolve) => (answerChoice = resolve)),
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    const plans = within((await screen.findByText('將會做什麼')).closest('section')!)
+    expect(plans.getByText('讀它的 API key · 替它加站、設介面登入')).toBeInTheDocument()
+    expect(plans.getByText('用你貼的 API key · 用它已有的站，一站都不移除')).toBeInTheDocument()
+    expect(screen.queryByText('你自己的 Prowlarr')).not.toBeInTheDocument()
+    expect(screen.queryByText('接法')).not.toBeInTheDocument()
+
+    // 點下去、選擇還沒回來：已經是套件內。
+    await user.click(bundledCard())
+    expect(await cutawayKind()).toHaveTextContent('套件內 Prowlarr')
+
+    // 選擇回來了、清單還在重讀：仍是套件內，不閃「你自己的」。
+    chosenYet = true
+    answerChoice({ body: AT_INDEXER })
+    await waitFor(() => expect(existingCard()).toBeEnabled())
+    expect(await cutawayKind()).toHaveTextContent('套件內 Prowlarr')
+
+    // 清單讀回來，連上了。
+    answerList({ body: indexerSetup() })
+    await screen.findByTestId('recommended')
+    expect(await cutawayKind()).toHaveTextContent('套件內 Prowlarr')
+    expect(screen.queryByText('你自己的 Prowlarr')).not.toBeInTheDocument()
+  })
+
+  it('剖面：選了既有，測試中與連上之後都說你自己的（M4 票 81）', async () => {
+    let answerChoice: (route: StubRoute) => void = () => {}
+    let chosenYet = false
+    const existingProwlarr = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://192.168.1.10:9696',
+      reason: 'connected',
+      detail: '0',
+    })
+    stubApi({
+      [STATUS]: { body: CHOOSING_INDEXER },
+      [INDEXERS]: () => ({
+        body: chosenYet
+          ? indexerSetup({ origin: 'existing', base_url: 'http://192.168.1.10:9696' })
+          : indexerSetup({ origin: null, base_url: '', api_key_present: false }),
+      }),
+      [CHOOSE_PROWLARR]: () => new Promise<StubRoute>((resolve) => (answerChoice = resolve)),
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await user.click(existingCard())
+    // 只是展開表單、還沒測：還沒選。
+    expect(screen.getByText('將會做什麼')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('位址'), 'http://192.168.1.10:9696')
+    await user.type(screen.getByLabelText('API key'), 'the-key')
+    await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+    expect(await cutawayKind()).toHaveTextContent('你自己的 Prowlarr')
+
+    chosenYet = true
+    answerChoice({
+      body: setupStatus({
+        ...AT_INDEXER,
+        services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr],
+      }),
+    })
+    await waitFor(() => expect(existingCard()).toBeEnabled())
+    expect(await cutawayKind()).toHaveTextContent('你自己的 Prowlarr')
+    expect(await screen.findByText('http://192.168.1.10:9696')).toBeInTheDocument()
+  })
+
+  it('剖面：從套件內換到既有，確認與測試中照頁 2 說兩種各會做什麼，存下之後說你自己的（M4 票 81）', async () => {
+    let answerChoice: (route: StubRoute) => void = () => {}
+    let chosenYet = false
+    const existingProwlarr = chosen({
+      kind: 'prowlarr',
+      origin: 'existing',
+      base_url: 'http://192.168.1.10:9696',
+      reason: 'connected',
+      detail: '0',
+    })
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: () => ({
+        body: chosenYet
+          ? indexerSetup({ origin: 'existing', base_url: 'http://192.168.1.10:9696' })
+          : indexerSetup(),
+      }),
+      [CHOOSE_PROWLARR]: () => new Promise<StubRoute>((resolve) => (answerChoice = resolve)),
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    expect(await cutawayKind()).toHaveTextContent('套件內 Prowlarr')
+
+    // 換到既有、還沒測：存下的仍是套件內，但畫面已經不說它了。
+    await user.click(existingCard())
+    expect(await screen.findByText('將會做什麼')).toBeInTheDocument()
+    expect(screen.queryByText('接法')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('位址'), 'http://192.168.1.10:9696')
+    await user.type(screen.getByLabelText('API key'), 'the-key')
+    await user.click(screen.getByRole('button', { name: '測試連線' }))
+    await waitFor(() => expect(bundledCard()).toBeDisabled())
+    expect(screen.getByText('將會做什麼')).toBeInTheDocument()
+    expect(screen.queryByText('套件內 Prowlarr')).not.toBeInTheDocument()
+
+    chosenYet = true
+    answerChoice({
+      body: setupStatus({
+        ...AT_INDEXER,
+        services: [...ALL_BUNDLED.slice(0, 2), existingProwlarr],
+      }),
+    })
+    await waitFor(() => expect(bundledCard()).toBeEnabled())
+    expect(await cutawayKind()).toHaveTextContent('你自己的 Prowlarr')
   })
 
   it('索引站可以之後再說，而且跳過之後畫面上看得出來', async () => {

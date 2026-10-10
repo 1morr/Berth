@@ -18,6 +18,7 @@ import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useCarriedLogin, useInterfaceLogin, type CarriedLogin } from './interfaceLogin'
 import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
+import { ChoiceCutaway } from './ChoiceCutaway'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { qbittorrentWeb } from './serviceWeb'
@@ -92,7 +93,19 @@ export function QbittorrentStep({
   const ready = connected(service) && !switching
 
   return (
-    <StepFrame cutaway={setup && ready ? <ServerCutaway setup={setup} /> : <ChoiceCutaway />}>
+    <StepFrame
+      cutaway={
+        setup && ready ? (
+          <ServerCutaway setup={setup} />
+        ) : (
+          // 還沒選或還沒連上：兩種各會做什麼。
+          <ChoiceCutaway
+            bundled={t('qbittorrent.cutaway.bundledPlan')}
+            existing={t('qbittorrent.cutaway.existingPlan')}
+          />
+        )
+      }
+    >
       <h2 className="text-lg font-semibold text-ink">{t(`qbittorrent.title.${mode}`)}</h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{t(`qbittorrent.lede.${mode}`)}</p>
       {note}
@@ -132,18 +145,6 @@ export function QbittorrentStep({
         ))}
       {nav}
     </StepFrame>
-  )
-}
-
-/** 還沒選（或還沒連上）時的剖面：兩種來源各會做什麼。 */
-function ChoiceCutaway() {
-  const { t } = useTranslation()
-
-  return (
-    <Cutaway title={t('owner.cutaway.title')}>
-      <CutawayRow term={t('origin.bundled')} value={t('qbittorrent.cutaway.bundledPlan')} />
-      <CutawayRow term={t('origin.existing')} value={t('qbittorrent.cutaway.existingPlan')} />
-    </Cutaway>
   )
 }
 
