@@ -10,13 +10,14 @@ from datetime import date
 
 import pytest
 
-from berth.domain import MediaKind, MediaSnapshot, ReasonCode, SeasonSnapshot, why
+from berth.domain import MediaKind, MediaSnapshot, ReasonCode, SearchVerdict, SeasonSnapshot, why
 from berth.parser import (
-    fits,
     match_media,
     mentions,
+    misfit,
     normalize_title,
     parse_release,
+    partial_title,
     spell_ampersand,
 )
 
@@ -156,8 +157,14 @@ def show(title_en: str, year: int, *season_years: int) -> MediaSnapshot:
     )
 
 
-class TestFits:
-    """名字對上之後的第二道粗篩：年份與「這是電影」（M4 票 49，審計 S6）。"""
+def verdict(name: str, work: MediaSnapshot) -> tuple[SearchVerdict, str] | None:
+    found = misfit(name, work)
+    return None if found is None else (found.verdict, found.evidence)
+
+
+class TestMisfit:
+    """名字對上之後的第二道粗篩：年份與「這是電影」（M4 票 49，審計 S6）。對不上時說得出是哪一條、
+    發佈名裡哪一段字（M4 票 83）。"""
 
     NIGHT = movie("Night of the Living Dead", 1968)
 
@@ -171,56 +178,85 @@ class TestFits:
         ],
     )
     def test_a_movie_keeps_its_own_year_and_releases_without_one(self, name: str) -> None:
-        assert fits(name, self.NIGHT)
+        assert misfit(name, self.NIGHT) is None
 
     @pytest.mark.parametrize(
-        "name",
+        ("name", "year"),
         [
-            "Night of the Living Dead 1990 1080p BluRay x264",
-            "Night.of.the.Living.Dead.3D.2006.720p",
+            ("Night of the Living Dead 1990 1080p BluRay x264", "1990"),
+            ("Night.of.the.Living.Dead.3D.2006.720p", "2006"),
         ],
     )
-    def test_a_remake_years_away_does_not_fit(self, name: str) -> None:
-        assert not fits(name, self.NIGHT)
+    def test_a_remake_years_away_does_not_fit(self, name: str, year: str) -> None:
+        assert verdict(name, self.NIGHT) == (SearchVerdict.YEAR, year)
 
     @pytest.mark.parametrize(
-        "name",
+        ("name", "mark"),
         [
-            "Below Deck Down Under S04E02 Night of the Living Dead 1080p",
-            "Night of the Living Dead S01 1080p WEB",
-            "Night of the Living Dead Season 2 720p",
-            "[字幕組] Night of the Living Dead 第2季 [1080p]",
-            "[字幕組] Night of the Living Dead 第05話 [1080p]",
-            "Night.of.the.Living.Dead.S01E01E02.1080p",  # 一個檔兩集
-            "Night.of.the.Living.Dead.S01E05v2.1080p",  # 修正版
-            "Night of the Living Dead 2nd Season 720p",
-            "Night of the Living Dead 1x05 HDTV",
-            "[Group] Night of the Living Dead EP05 [1080p]",
+            ("Below Deck Down Under S04E02 Night of the Living Dead 1080p", "S04E02"),
+            ("Night of the Living Dead S01 1080p WEB", "S01"),
+            ("Night of the Living Dead Season 2 720p", "Season 2"),
+            ("[字幕組] Night of the Living Dead 第2季 [1080p]", "第2季"),
+            ("[字幕組] Night of the Living Dead 第05話 [1080p]", "第05話"),
+            ("Night.of.the.Living.Dead.S01E01E02.1080p", "S01E01E02"),  # 一個檔兩集
+            ("Night.of.the.Living.Dead.S01E05v2.1080p", "S01E05v2"),  # 修正版
+            ("Night of the Living Dead 2nd Season 720p", "2nd Season"),
+            ("Night of the Living Dead 1x05 HDTV", "1x05"),
+            ("[Group] Night of the Living Dead EP05 [1080p]", "EP05"),
         ],
     )
-    def test_a_movie_drops_releases_that_read_as_episodes(self, name: str) -> None:
-        assert not fits(name, self.NIGHT)
+    def test_a_movie_drops_releases_that_read_as_episodes(self, name: str, mark: str) -> None:
+        assert verdict(name, self.NIGHT) == (SearchVerdict.NOT_MOVIE, mark)
 
     @pytest.mark.parametrize(
-        "name",
+        ("name", "mark"),
         [
-            "[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p) [8A1C3B2F].mkv",
-            "[ASW] Tsuki to Laika to Nosferatu - 07v2 [1080p HEVC x265 10Bit][AAC]",
-            "[Erai-raws] Tsuki to Laika to Nosferatu - 01 ~ 12 [1080p][Multiple Subtitle]",
-            "[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]",
-            "【喵萌奶茶屋】★10月新番★[月與萊卡與吸血公主 / Tsuki to Laika to Nosferatu][03][1080p]",
-            "[Group] Tsuki to Laika to Nosferatu 【12】[1080p]",
+            ("[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p) [8A1C3B2F].mkv", "- 05"),
+            ("[ASW] Tsuki to Laika to Nosferatu - 07v2 [1080p HEVC x265 10Bit][AAC]", "- 07v2"),
+            (
+                "[Erai-raws] Tsuki to Laika to Nosferatu - 01 ~ 12 [1080p][Multiple Subtitle]",
+                "- 01 ~ 12",
+            ),
+            ("[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]", "[01-12]"),
+            (
+                "【喵萌奶茶屋】★10月新番★[月與萊卡與吸血公主 / Tsuki to Laika to Nosferatu]"
+                "[03][1080p]",
+                "[03]",
+            ),
+            ("[Group] Tsuki to Laika to Nosferatu 【12】[1080p]", "【12】"),
             # 2026-10-10 實跑（The Pirate Bay + Mikan）時還留在主表的寫法（中文片名截掉）：
-            "[千夏字幕组][月亮与莱卡与吸血公主_Tsuki to Laika to Nosferatu][第01-12话][BDRip]",
-            "【幻樱字幕组】【合集】【Tsuki to Laika to Nosferatu】【01-12 END】【GB_MP4】",
-            "【幻樱字幕组】【10月新番】【Tsuki to Laika to Nosferatu】【12 END】【GB_MP4】",
-            "[动漫国字幕组&LoliHouse] Tsuki to Laika to Nosferatu [01-12合集][WebRip 1080p]",
+            (
+                "【幻樱字幕组】【合集】【Tsuki to Laika to Nosferatu】【01-12 END】【GB_MP4】",
+                "【01-12 END】",
+            ),
+            (
+                "【幻樱字幕组】【10月新番】【Tsuki to Laika to Nosferatu】【12 END】【GB_MP4】",
+                "【12 END】",
+            ),
+            (
+                "[动漫国字幕组&LoliHouse] Tsuki to Laika to Nosferatu [01-12合集][WebRip 1080p]",
+                "[01-12合集]",
+            ),
         ],
     )
-    def test_a_movie_drops_a_namesake_shows_episodes(self, name: str) -> None:
+    def test_a_movie_sets_aside_a_namesake_shows_episodes(self, name: str, mark: str) -> None:
         """審計 S3：搜《Nosferatu》(1922) 時同名動畫的各集進了主表——字幕組的集號寫成
-        `- 05`、`[05]`、`[01-12]`，不是 `S01E05`（M4 票 69）。"""
-        assert not fits(name, movie("Nosferatu", 1922))
+        `- 05`、`[05]`、`[01-12]`，不是 `S01E05`（M4 票 69）。與 `S01E05` 同一類（M4 票 83，
+        使用者合成「不是電影」），證據是那一段集號。"""
+        assert verdict(name, movie("Nosferatu", 1922)) == (SearchVerdict.NOT_MOVIE, mark)
+
+    def test_a_chinese_episode_range_reads_as_episodes(self) -> None:
+        """`第01-12话` 是中文的集號，證據是它整段（不是方括號裡的 `01-12`）。"""
+        name = "[千夏字幕组][月亮与莱卡与吸血公主_Tsuki to Laika to Nosferatu][第01-12话][BDRip]"
+
+        assert verdict(name, movie("Nosferatu", 1922)) == (SearchVerdict.NOT_MOVIE, "第01-12话")
+
+    def test_episodes_are_named_before_the_year(self) -> None:
+        """兩條都命中時說季集記號：那是更硬的證據（判斷不出年份是不是首映年，看得出這是一集）。"""
+        assert verdict("Night of the Living Dead 1990 S01E01", self.NIGHT) == (
+            SearchVerdict.NOT_MOVIE,
+            "S01E01",
+        )
 
     @pytest.mark.parametrize(
         "name",
@@ -236,20 +272,20 @@ class TestFits:
         ],
     )
     def test_dashes_and_brackets_around_a_year_still_fit_the_movie(self, name: str) -> None:
-        assert fits(name, movie("Nosferatu", 1922))
+        assert misfit(name, movie("Nosferatu", 1922)) is None
 
     def test_a_show_keeps_the_fansub_episode_numbers(self) -> None:
         laika = show("Tsuki to Laika to Nosferatu", 2021, 2021)
 
-        assert fits("[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p)", laika)
-        assert fits("[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]", laika)
+        assert misfit("[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p)", laika) is None
+        assert misfit("[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]", laika) is None
 
     def test_a_year_that_is_part_of_the_title_is_not_a_release_year(self) -> None:
         """`Blade Runner 2049`（2017）：片名裡的 2049 不是年份。"""
         blade = movie("Blade Runner 2049", 2017)
 
-        assert fits("Blade.Runner.2049.2017.2160p.UHD.BluRay", blade)
-        assert fits("Blade Runner 2049 1080p WEB", blade)
+        assert misfit("Blade.Runner.2049.2017.2160p.UHD.BluRay", blade) is None
+        assert misfit("Blade Runner 2049 1080p WEB", blade) is None
 
     @pytest.mark.parametrize(
         "name",
@@ -260,31 +296,145 @@ class TestFits:
         ],
     )
     def test_codec_and_resolution_tokens_do_not_read_as_episodes(self, name: str) -> None:
-        assert fits(name, self.NIGHT)
+        assert misfit(name, self.NIGHT) is None
 
     def test_resolutions_are_not_years(self) -> None:
-        assert fits("Night of the Living Dead 1920x1080 2160p", self.NIGHT)
+        assert misfit("Night of the Living Dead 1920x1080 2160p", self.NIGHT) is None
 
     def test_a_movie_without_a_year_on_tmdb_keeps_everything_but_episodes(self) -> None:
         unknown = movie("Night of the Living Dead", None)
 
-        assert fits("Night of the Living Dead 1990 1080p", unknown)
-        assert not fits("Night of the Living Dead S01E01", unknown)
+        assert misfit("Night of the Living Dead 1990 1080p", unknown) is None
+        assert verdict("Night of the Living Dead S01E01", unknown) == (
+            SearchVerdict.NOT_MOVIE,
+            "S01E01",
+        )
 
     def test_a_show_keeps_episodes_and_the_years_it_aired(self) -> None:
         """劇集照常收季集；年份看整段播出期間，不只首播年（Sonarr 不以年份拒絕）。"""
         bear = show("The Bear", 2022, 2022, 2023, 2024)
 
-        assert fits("The.Bear.S03E01.1080p.WEB", bear)
-        assert fits("The Bear 2024 S03 1080p", bear)
-        assert fits("The Bear 2025 S04 1080p", bear)  # 新的一季還沒進快照
-        assert fits("The Bear Movie 1080p", bear)  # 沒有季集也照收：`Movie` 可能是 S00
+        assert misfit("The.Bear.S03E01.1080p.WEB", bear) is None
+        assert misfit("The Bear 2024 S03 1080p", bear) is None
+        assert misfit("The Bear 2025 S04 1080p", bear) is None  # 新的一季還沒進快照
+        assert misfit("The Bear Movie 1080p", bear) is None  # 沒有季集也照收：`Movie` 可能是 S00
 
     def test_a_show_drops_a_namesake_from_another_era(self) -> None:
         """《Doctor Who》1963 與 2005 是兩部作品，搜 2005 那一部時 1963 的不收。"""
         who = show("Doctor Who", 2005, 2005, 2006)
 
-        assert not fits("Doctor Who 1963 S01E01 DVDRip", who)
+        assert verdict("Doctor Who 1963 S01E01 DVDRip", who) == (SearchVerdict.YEAR, "1963")
+
+
+class TestPartialTitle:
+    """季集記號或年份前面那一段片名，包住這部作品的名字但不等於它：可能是衍生劇（M4 票 83）。
+
+    照 Sonarr：`Parser.ParseTitle` 取季集記號前面那一段當片名，清過之後與作品的 clean title **完全
+    相等**才算這一部（brief §20.20）。`mentions` 只看包含，`Law.and.Order.SVU` 過得了它。"""
+
+    LAW = MediaSnapshot(
+        tmdb_id=549,
+        kind=MediaKind.TV,
+        title="法網遊龍",
+        title_en="Law & Order",
+        title_original="Law & Order",
+        year=1990,
+        titles=("Law & Order", "法網遊龍"),
+    )
+    SPY = MediaSnapshot(
+        tmdb_id=120089,
+        kind=MediaKind.TV,
+        title="間諜家家酒",
+        title_en="SPY x FAMILY",
+        title_original="SPY×FAMILY",
+        year=2022,
+        titles=("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒"),
+    )
+    NOSFERATU = MediaSnapshot(
+        tmdb_id=653,
+        kind=MediaKind.MOVIE,
+        title="吸血鬼",
+        title_en="Nosferatu",
+        title_original="Nosferatu, eine Symphonie des Grauens",
+        year=1922,
+        titles=("Nosferatu", "Nosferatu, eine Symphonie des Grauens", "吸血鬼"),
+    )
+
+    @pytest.mark.parametrize(
+        ("name", "lead"),
+        [
+            ("Law.and.Order.SVU.S28E01.1080p.WEB.h264-ETHEL", "Law and Order SVU"),
+            (
+                "Law & Order Special Victims Unit S25E01 1080p",
+                "Law & Order Special Victims Unit",
+            ),
+            ("Law.and.Order.UK.S01E01.720p.HDTV", "Law and Order UK"),
+            ("Law_and_Order_SVU_S28E01_720p", "Law and Order SVU"),  # 底線分詞（Spec 審查抓到）
+            ("Law and Order Organized Crime 2021 S01 1080p", "Law and Order Organized Crime"),
+        ],
+    )
+    def test_a_spinoff_is_only_part_of_the_name(self, name: str, lead: str) -> None:
+        assert partial_title(name, self.LAW) == lead
+
+    def test_a_movie_with_a_longer_title_before_its_year(self) -> None:
+        assert (
+            partial_title("Nosferatu.The.Vampyre.1979.1080p.BluRay", self.NOSFERATU)
+            == "Nosferatu The Vampyre"
+        )
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Law.and.Order.S24E01.1080p.WEB.h264",
+            "Law & Order S24E02 1080p WEB",
+            "Law.Order.S20E01",
+            "Law and Order (1990) S01E01 DVDRip",
+            "[Group] Law & Order - S24E01 [1080p]",
+        ],
+    )
+    def test_the_work_itself_is_not_partial(self, name: str) -> None:
+        assert partial_title(name, self.LAW) == ""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Nosferatu (1922) [720p] [BluRay] [YTS.MX]",
+            "Nosferatu.1922.1080p.BluRay.x264-OFT",
+            "Nosferatu - Eine Symphonie des Grauens (1922) 1080p BluRay",  # 原文片名
+        ],
+    )
+    def test_any_known_name_counts_as_the_work(self, name: str) -> None:
+        assert partial_title(name, self.NOSFERATU) == ""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "[ANi] SPY×FAMILY 間諜家家酒 - 05 [1080P][Baha][WEB-DL][AAC AVC][CHT]",
+            "[Lilith-Raws] Spy x Family / 間諜家家酒 - 05 [Baha][WEB-DL][1080p]",
+            "【喵萌奶茶屋】★04月新番★[間諜家家酒 / SPY×FAMILY][05][1080p][繁日雙語]",
+            "[字幕組][間諜家家酒][05][1080p]",
+            "[ANi] 間諜家家酒 第二季 - 05 [1080P]",
+            "[字幕組] 間諜家家酒_SPY x FAMILY - 05 [1080p]",
+        ],
+    )
+    def test_fansub_titles_in_two_scripts_are_each_a_name(self, name: str) -> None:
+        """字幕組把中文名與拉丁字名寫在一起（以空白、`/`、`_` 或方括號隔開）。拆成一段一段比：
+        整段比的話 `spyfamily間諜家家酒` 包住 `spyfamily` 但不等於它，每一筆都會被當成衍生劇。"""
+        assert partial_title(name, self.SPY) == ""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Law and Order SVU 1080p WEB",  # 沒有記號就沒有片名那一段（已知限制）
+            "Below Deck Down Under S04E02 Law and Order 1080p",  # 片名那一段沒有這部作品的名字
+            "Blade.Runner.2049.2017.2160p.UHD.BluRay",
+        ],
+    )
+    def test_without_a_lead_that_wraps_the_name_it_does_not_judge(self, name: str) -> None:
+        blade = movie("Blade Runner 2049", 2017)
+
+        assert partial_title(name, self.LAW) == ""
+        assert partial_title(name, blade) == ""
 
 
 class TestAmpersand:

@@ -652,6 +652,33 @@ class IndexerProblem(StrEnum):
     BUDGET_EXHAUSTED = "budget_exhausted"
 
 
+class SearchVerdict(StrEnum):
+    """作品搜尋的一筆歸到哪一類（M4 票 83，`.scratch/m4/search-filter-shape.md`）。
+
+    照 Sonarr 互動搜尋的慣例：被拒的照樣列出、每一筆說得出理由，使用者自己決定抓不抓。一筆只歸
+    一類：判斷是排了先後的粗篩（`services/search.py` 的 `_judge`），第一條命中的就是那一筆的歸類——
+    證據硬的先（名字、索引站的分類、季集記號、年份），最軟的「只對上部分名字」最後。
+    值的順序是畫面上按鈕的順序。
+    """
+
+    FITS = "fits"
+    #: 發佈名寫的年份對不上這部作品（電影容許差一年，劇集看整段播出期間）。
+    YEAR = "year"
+    #: 電影搜尋裡讀得出集數記號：季集記號（`S04E02`、`Season 2`、`第2季`、`第05話`）或字幕組的集號
+    #: （`- 05`、`[01-12]`、`【12 END】`，多半是同名的動畫）。兩種說的是同一件事，只是證據不同
+    #: （使用者 2026-10-10 把 shape 稿的兩類合成這一類），證據在 `evidence`。
+    NOT_MOVIE = "not_movie"
+    #: 索引站把它分在成人類（Newznab 6000–6999）。
+    ADULT = "adult"
+    #: 季集記號或年份前面那一段片名包住這部作品的名字、但不等於它：可能是衍生劇
+    #: （《Law & Order》搜到 `Law.and.Order.SVU.S28E01`）。
+    PARTIAL_TITLE = "partial_title"
+    #: 發佈名裡沒有這部作品的任何一個名字。
+    UNRELATED = "unrelated"
+    #: 沒有判斷：自己打的關鍵字（票 08），或 Berth 還不知道這部作品叫什麼（沒有快照）。
+    UNJUDGED = "unjudged"
+
+
 class SiteFailure(StrEnum):
     """一個索引站沒通過 Prowlarr 的測試或加不進去時，畫面說得出來的理由（M4 票 09）。
 

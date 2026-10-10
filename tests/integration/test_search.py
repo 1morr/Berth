@@ -24,12 +24,19 @@ from berth.domain import (
     IndexerProblem,
     MappingStrategy,
     MediaKind,
+    SearchVerdict,
     Source,
     StepStatus,
 )
 from berth.models import IndexerSettings, Media, Route
 from berth.models import media_id as build_media_id
-from berth.services.search import RESULT_LIMIT, plan_queries, search_torrents
+from berth.services.search import (
+    OTHERS_LIMIT,
+    RESULT_LIMIT,
+    SearchView,
+    plan_queries,
+    search_torrents,
+)
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
 from tests.integration.factories import FakeClientFactory
@@ -42,6 +49,21 @@ OPPENHEIMER = build_media_id(MediaKind.MOVIE, 872585)
 
 def result(title: str, **kwargs: Any) -> IndexerResult:
     return IndexerResult(title=title, **kwargs)
+
+
+def listed(view: SearchView, verdict: SearchVerdict = SearchVerdict.FITS) -> list[str]:
+    """送出來的列裡歸到這一類的發佈名，照送出來的順序。"""
+    return [row.title for row in view.rows if row.verdict is verdict]
+
+
+def count(view: SearchView, verdict: SearchVerdict = SearchVerdict.FITS) -> int:
+    """這一類在每一站的總筆數加起來。"""
+    return sum(one.total for one in view.counts if one.verdict is verdict)
+
+
+def verdicts(view: SearchView) -> set[SearchVerdict]:
+    """這一次搜尋有哪幾類（`counts` 是每一類每一站一筆）。"""
+    return {one.verdict for one in view.counts}
 
 
 async def arrange_media(session: AsyncSession) -> None:
@@ -142,7 +164,7 @@ async def test_every_known_title_gets_its_own_query_and_the_results_merge(
     assert sorted(query.text for query in indexer.queries) == sorted(
         ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"]
     )
-    assert view.total == 4
+    assert count(view) == 4
     assert view.problem is None
 
 
@@ -167,7 +189,7 @@ async def test_the_same_torrent_from_two_sites_is_one_row(session: AsyncSession)
 
     view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
-    assert view.total == 2
+    assert count(view) == 2
     assert sorted(row.indexer for row in view.rows) == ["ACG.RIP", "Mikan"]
 
 
@@ -186,7 +208,7 @@ async def test_rows_come_back_seeded_first_and_capped(session: AsyncSession) -> 
 
     view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
-    assert view.total == RESULT_LIMIT + 20
+    assert count(view) == RESULT_LIMIT + 20
     assert len(view.rows) == RESULT_LIMIT
     assert [row.seeders for row in view.rows[:3]] == [
         RESULT_LIMIT + 20,
@@ -245,7 +267,7 @@ async def test_one_failing_query_does_not_sink_the_others(session: AsyncSession)
     view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
     assert view.problem is None
-    assert view.total == 1
+    assert count(view) == 1
     failed = [attempt for attempt in view.attempts if attempt.status is StepStatus.FAILED]
     assert [attempt.step for attempt in failed] == ["SPY×FAMILY"]
     assert failed[0].error == "GET /api/v1/search: ReadTimeout"
@@ -388,14 +410,14 @@ async def test_a_release_the_parser_cannot_place_says_nothing_rather_than_guessi
 
 
 @pytest.mark.asyncio
-async def test_releases_that_are_not_this_work_do_not_reach_the_table(
+async def test_releases_that_are_not_this_work_are_sent_under_their_own_verdict(
     session: AsyncSession,
 ) -> None:
     """**索引站對搜不到的關鍵字會回它自己的熱門清單**（2026-09-10 實跑 The Pirate Bay）。
 
-    那些東西動輒五六千個做種，依做種排序時會把真正的結果整批擠出前 100 筆。丟掉，
-    但把丟掉幾筆說出來——「索引站什麼都沒回」與「回了一堆但沒有一筆是這部作品」
-    的下一步不同。
+    那些東西動輒五六千個做種，依做種排序時會把真正的結果整批擠出前 100 筆。歸成「名字對不上」
+    另成一類照樣送（M4 票 83）——「索引站什麼都沒回」與「回了一堆但沒有一筆是這部作品」
+    的下一步不同，而使用者要看得到 Berth 略過了什麼，才判斷得了它是不是判斷錯了。
     """
     await arrange_media(session)
     await arrange_indexer(session)
@@ -409,8 +431,9 @@ async def test_releases_that_are_not_this_work_do_not_reach_the_table(
 
     view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
-    assert [row.title for row in view.rows] == ["SPY x FAMILY S02E01 1080p WEB"]
-    assert (view.total, view.discarded) == (1, 1)
+    assert listed(view) == ["SPY x FAMILY S02E01 1080p WEB"]
+    assert listed(view, SearchVerdict.UNRELATED) == ["Spider-Man: Brand New Day 2026.1080p"]
+    assert (count(view), count(view, SearchVerdict.UNRELATED)) == (1, 1)
 
 
 @pytest.mark.asyncio
@@ -425,8 +448,8 @@ async def test_a_typed_keyword_turns_the_filter_off(session: AsyncSession) -> No
 
     view = await search_torrents(session, factory, SourceCache(), media_id=SPY, query="Spider-Man")
 
-    assert len(view.rows) == 1
-    assert view.discarded == 0
+    assert [row.verdict for row in view.rows] == [SearchVerdict.UNJUDGED]
+    assert [(one.verdict, one.total) for one in view.counts] == [(SearchVerdict.UNJUDGED, 1)]
 
 
 @pytest.mark.asyncio
@@ -817,14 +840,20 @@ async def test_a_movie_search_sets_aside_remakes_and_episodes(session: AsyncSess
 
     view = await search_torrents(session, factory, SourceCache(), media_id=NIGHT)
 
-    shown = [row.title for row in view.rows]
+    shown = listed(view)
     assert shown and all("1968" in title for title in shown)
     assert not any(year in title for title in shown for year in ("1990", "2006", "2022"))
     assert not any("S04E02" in title for title in shown)
-    aside = [row.title for row in view.set_aside]
-    assert "Night of the Living Dead (1990) 1080p BRRip x264 -YTS" in aside
-    assert "Below Deck Down Under S04E02 Night of the Living Dead XviD-AFG" in aside
-    assert (view.total, view.set_aside_total, view.discarded) == (8, 12, 0)
+    year = listed(view, SearchVerdict.YEAR)
+    assert "Night of the Living Dead (1990) 1080p BRRip x264 -YTS" in year
+    episode = listed(view, SearchVerdict.NOT_MOVIE)
+    assert "Below Deck Down Under S04E02 Night of the Living Dead XviD-AFG" in episode
+    # 片名那一段多了一個詞就是「只對上部分名字」（照 Radarr：它解析出的片名也帶著那一段）。
+    assert listed(view, SearchVerdict.PARTIAL_TITLE) == [
+        "Night.Of.The.Living.Dead.Remastered.Collection.1968.2009"
+    ]
+    assert (count(view), len(view.rows) - len(shown)) == (7, 13)
+    assert count(view, SearchVerdict.UNRELATED) == 0
 
 
 @pytest.mark.asyncio
@@ -842,11 +871,11 @@ async def test_a_movie_keeps_its_year_and_releases_without_one(session: AsyncSes
 
     view = await search_torrents(session, factory, SourceCache(), media_id=NIGHT)
 
-    assert [row.title for row in view.rows] == [
+    assert listed(view) == [
         "Night of the Living Dead 1968 720p",
         "Night of the Living Dead 1080p BluRay",
     ]
-    assert [row.title for row in view.set_aside] == ["Night of the Living Dead 1990 1080p"]
+    assert listed(view, SearchVerdict.YEAR) == ["Night of the Living Dead 1990 1080p"]
 
 
 @pytest.mark.asyncio
@@ -866,12 +895,12 @@ async def test_a_show_search_keeps_its_episodes(session: AsyncSession) -> None:
 
     view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
-    assert [row.title for row in view.rows] == [
+    assert listed(view) == [
         "SPY x FAMILY S02E01 1080p WEB",
         "SPY x FAMILY (2022) S01 1080p",
         "[字幕組] SPY x FAMILY - 05 [1080p]",
     ]
-    assert [row.title for row in view.set_aside] == ["SPY x FAMILY 1998 VHS"]
+    assert listed(view, SearchVerdict.YEAR) == ["SPY x FAMILY 1998 VHS"]
 
 
 @pytest.mark.asyncio
@@ -885,7 +914,7 @@ async def test_a_typed_keyword_sets_nothing_aside(session: AsyncSession) -> None
         session, factory, SourceCache(), media_id=NIGHT, query="Night of the Living"
     )
 
-    assert (view.total, view.set_aside_total) == (20, 0)
+    assert (verdicts(view), count(view, SearchVerdict.UNJUDGED)) == ({SearchVerdict.UNJUDGED}, 20)
 
 
 NOSFERATU = build_media_id(MediaKind.MOVIE, 653)
@@ -935,15 +964,15 @@ class TestNosferatu:
 
         view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
 
-        assert [row.title for row in view.rows] == [
+        assert listed(view) == [
             "Nosferatu (1922) [720p] [BluRay] [YTS.MX]",
             "Nosferatu.1922.1080p.BluRay.x264-OFT",
             "Nosferatu - Eine Symphonie des Grauens (1922) 1080p BluRay",
             "Nosferatu 1922 RESTORED 720p BluRay x264",
         ]
-        aside = {row.title for row in view.set_aside}
-        assert "[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p) [8A1C3B2F].mkv" in aside
-        assert "[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]" in aside
+        namesake = listed(view, SearchVerdict.NOT_MOVIE)
+        assert "[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p) [8A1C3B2F].mkv" in namesake
+        assert "[Group] Tsuki to Laika to Nosferatu [01-12][BDRip 1080p]" in namesake
 
     @pytest.mark.asyncio
     async def test_releases_the_indexer_files_as_adult_are_set_aside(
@@ -956,16 +985,16 @@ class TestNosferatu:
 
         view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
 
-        assert not any("XXX" in row.title for row in view.rows)
-        assert {"Nosferatu Parody XXX 720p MP4-WRB", "Nosferatu Nights XXX 1080p WEB"} <= {
-            row.title for row in view.set_aside
-        }
+        assert not any("XXX" in title for title in listed(view))
+        assert {"Nosferatu Parody XXX 720p MP4-WRB", "Nosferatu Nights XXX 1080p WEB"} <= set(
+            listed(view, SearchVerdict.ADULT)
+        )
 
     @pytest.mark.asyncio
     async def test_the_counts_add_up_to_what_the_indexer_returned(
         self, session: AsyncSession
     ) -> None:
-        """回了幾筆 = 重複合併的 + 名字對不上略過的 + 收起來的 + 主表的。三個名字各問一次，
+        """回了幾筆 = 重複合併的 + 每一類的筆數（M4 票 83）。三個名字各問一次，
         替身每一次都回同樣 18 筆，所以 36 筆是重複的。"""
         await arrange_nosferatu(session)
         await arrange_indexer(session)
@@ -975,9 +1004,9 @@ class TestNosferatu:
         view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
 
         assert len(indexer.queries) == 3
-        assert (view.returned, view.merged, view.discarded) == (54, 36, 2)
-        assert (view.set_aside_total, view.total) == (12, 4)
-        assert view.returned == view.merged + view.discarded + view.set_aside_total + view.total
+        assert (view.returned, view.merged, count(view, SearchVerdict.UNRELATED)) == (54, 36, 2)
+        assert count(view) == 4
+        assert view.returned == view.merged + sum(one.total for one in view.counts)
 
     @pytest.mark.asyncio
     async def test_a_typed_keyword_counts_the_same_way(self, session: AsyncSession) -> None:
@@ -989,13 +1018,9 @@ class TestNosferatu:
             session, factory, SourceCache(), media_id=NOSFERATU, query="Nosferatu"
         )
 
-        assert (view.returned, view.merged, view.discarded, view.set_aside_total) == (
-            18,
-            0,
-            0,
-            0,
-        )
-        assert view.total == 18
+        assert (view.returned, view.merged) == (18, 0)
+        assert verdicts(view) == {SearchVerdict.UNJUDGED}
+        assert count(view, SearchVerdict.UNJUDGED) == 18
 
 
 LAW = build_media_id(MediaKind.TV, 549)
@@ -1076,11 +1101,11 @@ class TestAmpersand:
 
         view = await search_torrents(session, factory, SourceCache(), media_id=LAW)
 
-        assert [row.title for row in view.rows] == [
+        assert listed(view) == [
             "Law.and.Order.S24E01.1080p.WEB.h264",
             "Law & Order S24E02 1080p WEB",
         ]
-        assert view.discarded == 1
+        assert count(view, SearchVerdict.UNRELATED) == 1
 
     @pytest.mark.asyncio
     async def test_a_title_without_an_ampersand_is_asked_as_it_is(
@@ -1097,4 +1122,127 @@ class TestAmpersand:
             "SPY x FAMILY",
             "SPY×FAMILY",
             "間諜家家酒",
+        ]
+
+
+class TestVerdicts:
+    """每一筆歸到一類、說得出證據，每一類都送（M4 票 83，`.scratch/m4/search-filter-shape.md`）。"""
+
+    @pytest.mark.asyncio
+    async def test_a_movie_search_sorts_every_release_into_its_verdict(
+        self, session: AsyncSession
+    ) -> None:
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch(
+            results=(
+                result("Nosferatu.1922.1080p.BluRay.x264-OFT", info_hash="1" * 40),
+                result("Nosferatu.2024.2160p.WEB-DL.DDP5.1", info_hash="2" * 40),
+                result("Nosferatu S01E03 1080p WEB", info_hash="3" * 40),
+                result("[SubsPlease] Tsuki to Laika to Nosferatu - 05 (1080p)", info_hash="4" * 40),
+                result("Nosferatu Nights XXX 1080p WEB", info_hash="5" * 40, categories=(6040,)),
+                result("Spider-Man: Brand New Day 2026.1080p", info_hash="6" * 40),
+            )
+        )
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
+
+        assert [(row.verdict, row.evidence) for row in view.rows] == [
+            (SearchVerdict.FITS, ""),
+            (SearchVerdict.YEAR, "2024"),
+            (SearchVerdict.NOT_MOVIE, "S01E03"),
+            (SearchVerdict.NOT_MOVIE, "- 05"),
+            (SearchVerdict.ADULT, "6040"),
+            (SearchVerdict.UNRELATED, ""),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_spinoff_is_only_part_of_the_name(self, session: AsyncSession) -> None:
+        """票 69 留下的：《Law & Order》混進衍生劇《Law & Order: SVU》。照 Sonarr 比片名那一段
+        （brief §20.20），不再硬放進主表，也不硬擋——歸成一類，按了看得到、照樣送得了單。"""
+        await arrange_law(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch(
+            results=(
+                result("Law.and.Order.S24E01.1080p.WEB.h264", info_hash="a" * 40, seeders=9),
+                result("Law.and.Order.SVU.S28E01.1080p.WEB.h264", info_hash="b" * 40, seeders=8),
+            )
+        )
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=LAW)
+
+        assert listed(view) == ["Law.and.Order.S24E01.1080p.WEB.h264"]
+        spinoff = next(row for row in view.rows if row.verdict is SearchVerdict.PARTIAL_TITLE)
+        assert (spinoff.title, spinoff.evidence) == (
+            "Law.and.Order.SVU.S28E01.1080p.WEB.h264",
+            "Law and Order SVU",
+        )
+        assert spinoff.source_id
+
+    @pytest.mark.asyncio
+    async def test_each_verdict_is_capped_on_its_own(self, session: AsyncSession) -> None:
+        """回應的大小有上限：「符合」`RESULT_LIMIT` 筆、其餘每類 `OTHERS_LIMIT` 筆，各自逐站輪流取；
+        總數照實報，筆數照樣加得起來。"""
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        many = RESULT_LIMIT + 20
+        indexer = FakeIndexerSearch(
+            results=(
+                *(
+                    result(f"Nosferatu 1922 Cut {n}", indexer="YTS", info_hash=f"a{n:039x}")
+                    for n in range(many)
+                ),
+                *(
+                    result(
+                        f"Nosferatu 2024 Cut {n}",
+                        indexer="YTS" if n % 2 else "The Pirate Bay",
+                        info_hash=f"b{n:039x}",
+                    )
+                    for n in range(many)
+                ),
+                *(
+                    result(f"Top {n} 2026 1080p", indexer="The Pirate Bay", info_hash=f"c{n:039x}")
+                    for n in range(many)
+                ),
+            )
+        )
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
+
+        assert (len(listed(view)), count(view)) == (RESULT_LIMIT, many)
+        assert (len(listed(view, SearchVerdict.YEAR)), count(view, SearchVerdict.YEAR)) == (
+            OTHERS_LIMIT,
+            many,
+        )
+        year = [row.indexer for row in view.rows if row.verdict is SearchVerdict.YEAR]
+        assert year.count("YTS") == year.count("The Pirate Bay")
+        assert len(listed(view, SearchVerdict.UNRELATED)) == OTHERS_LIMIT
+        assert len(view.rows) == RESULT_LIMIT + 2 * OTHERS_LIMIT
+        assert view.returned == view.merged + sum(one.total for one in view.counts)
+
+    @pytest.mark.asyncio
+    async def test_counts_are_per_site_so_the_buttons_follow_the_site_filter(
+        self, session: AsyncSession
+    ) -> None:
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch(
+            results=(
+                result("Nosferatu 1922 720p", indexer="YTS", info_hash="a" * 40),
+                result("Nosferatu.1922.1080p", indexer="The Pirate Bay", info_hash="b" * 40),
+                result("Nosferatu 1922 2160p", indexer="The Pirate Bay", info_hash="c" * 40),
+                result("Nosferatu 2024 1080p", indexer="YTS", info_hash="d" * 40),
+            )
+        )
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
+
+        assert [(one.verdict, one.indexer, one.total) for one in view.counts] == [
+            (SearchVerdict.FITS, "YTS", 1),
+            (SearchVerdict.FITS, "The Pirate Bay", 2),
+            (SearchVerdict.YEAR, "YTS", 1),
         ]
