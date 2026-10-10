@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **自動綁定：同一輪輪詢裡同一個 Mikan 番組頁只讀一次**（M4 票 82）：同一部動畫的不同字幕組是不同的 RSS Series，
+  之前每一組各讀一次番組頁、各佔一格 Mikan 的請求預算。現在同一輪共用那一次；讀不到（連不上、預算放不下）時
+  這幾組照同一個結果處理，不各自再打一次。下一輪照舊重新讀。
+
 ## [0.2.3] - 2026-10-10
 
 **從 0.2.2 升級**：`docker-compose.yml` 與 `.env` 沒有變，也沒有資料庫 migration，`docker compose pull && docker compose up -d`

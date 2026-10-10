@@ -31,7 +31,7 @@ from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.models import RssSeries, TmdbSettings
 from berth.parser.binding import judge, search_terms
 from berth.services.clients import HttpServiceClientFactory
-from berth.services.rss import _candidates, _clues, _LookupError
+from berth.services.rss import _candidates, _clues, _LookupError, _ShowPages
 from berth.services.settings import write_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -78,7 +78,7 @@ async def measure(session) -> None:  # type: ignore[no-untyped-def]  # 一次性
             )
             print(f"\n== mikan {pair[0]} x {pair[1]}  {item.title}")
             try:
-                clues, _ = await _clues(fetcher, series)
+                clues, _ = await _clues(_ShowPages(fetcher), series)
                 print(f"   mikan: {clues.title!r}  premiere={clues.premiere}")
                 print(f"   search: {search_terms(clues)}")
                 shots, missed = await _candidates(session, factory, clues)
