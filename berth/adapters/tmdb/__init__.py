@@ -144,16 +144,6 @@ class TmdbClient(Protocol):
         """`search/multi`，只留劇集與電影（它也回人物）。"""
         ...
 
-    async def search_year(
-        self, kind: MediaKind, query: str, *, year: int, language: str
-    ) -> tuple[TmdbEntry, ...]:
-        """`search/movie?primary_release_year=` 或 `search/tv?first_air_date_year=`（M4 票 69）。
-
-        `search/multi` 沒有年份參數；這兩個比的是卡片上那個年份（電影的上映日、劇集的首播日），
-        與 Jellyseerr 的 `searchMovies` / `searchTvShows` 同一組參數（brief §20.19）。
-        """
-        ...
-
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
         """`tv/{id}` 或 `movie/{id}`。id 不存在時丟 `NotFoundError`。"""
         ...

@@ -265,10 +265,3 @@ Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 
 | 檔案 | 來源 |
 | --- | --- |
 | `jellyfin/system-configuration.json` | `GET /System/Configuration`（管理員 token），那一台跑過 `/Startup/Configuration` 寫 `zh-TW` / `TW` / `zh-TW` 之後。新媒體庫的 metadata 語言與國家照它的 `PreferredMetadataLanguage`、`MetadataCountryCode` |
-
-2026-10-10（M4 票 69），打真的 `api.themoviedb.org`，帶 v3 key（回應裡沒有 key）：
-
-| 檔案 | 來源 |
-| --- | --- |
-| `tmdb/search-movie.nosferatu-1922.en.json` | `GET /3/search/movie?query=nosferatu&primary_release_year=1922&include_adult=false&language=en-US`，原樣。只有 1922 那一部；同一串字丟給 `search/multi`（`query=nosferatu 1922`）是 0 筆——它沒有年份參數 |
-| `tmdb/search-tv.nosferatu-1922.en.json` | `GET /3/search/tv?query=nosferatu&first_air_date_year=1922&…`，原樣：0 筆。空的結果也是一份證據——帶年份那一支沒有東西時要退回原字串 |
