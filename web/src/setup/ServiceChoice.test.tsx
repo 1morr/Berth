@@ -5,7 +5,7 @@ import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import '../i18n'
-import type { ServiceKind } from '../api/schemas'
+import type { ServiceKind, ServiceOrigin } from '../api/schemas'
 import { chosen, setupStatus } from '../test/fixtures'
 import { stubApi } from '../test/fetch'
 import { renderWithProviders } from '../test/render'
@@ -36,7 +36,7 @@ function Page({
       <ServiceChoice
         kind={kind}
         status={setupStatus({ services })}
-        choosing={false}
+        sending={null}
         retesting={false}
         switchWarning={switchWarning}
         locked={locked}
@@ -369,7 +369,7 @@ describe('套件內那一台不收 Berth 的憑證（M4 票 27）', () => {
 })
 
 /**
- * 請求在路上的那幾秒（M4 票 80）：選擇由頁面送出，`choosing` 由它說；「送完」與「沒送到」兩顆鍵
+ * 請求在路上的那幾秒（M4 票 80）：選擇由頁面送出，`sending` 由它說；「送完」與「沒送到」兩顆鍵
  * 就是 mutation 回來的那一刻。
  */
 function InFlight({
@@ -380,32 +380,32 @@ function InFlight({
   onChoose: (input: ChoiceInput) => void
 }) {
   const draft = useChoiceDraft()
-  const [choosing, setChoosing] = useState(false)
+  const [sending, setSending] = useState<ServiceOrigin | null>(null)
   const [services, setServices] = useState<ReturnType<typeof setupStatus>['services']>([])
   return (
     <>
       <button
         type="button"
         onClick={() => {
-          setChoosing(false)
+          setSending(null)
           setServices([chosen({ kind, origin: 'bundled', reason: 'connected' })])
         }}
       >
         送完
       </button>
-      <button type="button" onClick={() => setChoosing(false)}>
+      <button type="button" onClick={() => setSending(null)}>
         沒送到
       </button>
       <ServiceChoice
         kind={kind}
         status={setupStatus({ services })}
-        choosing={choosing}
+        sending={sending}
         retesting={false}
         refusal={null}
         requestError={null}
         onChoose={(input) => {
           onChoose(input)
-          setChoosing(true)
+          setSending(input.origin)
         }}
         onRetest={vi.fn()}
         {...draft}

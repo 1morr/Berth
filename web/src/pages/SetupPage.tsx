@@ -252,7 +252,8 @@ export function SetupPage() {
     const mine = choose.variables?.kind === kind
     return {
       composeHosts: composeHosts.data,
-      choosing: choose.isPending && choose.variables.kind === kind,
+      sending:
+        choose.isPending && choose.variables.kind === kind ? choose.variables.input.origin : null,
       retesting: retest.isPending && retest.variables.kind === kind && retest.variables.restart,
       refusal: mine ? choiceRefusalOf(choose.error) : null,
       requestError:

@@ -110,8 +110,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 4. Prowlarr 選既有：與頁 1、2 同一份表單（M4 票 39）。先貼錯的 key：測過才存（M4 票 45），錯誤標在
-  // API key 欄、說去哪裡複製，什麼都沒存，右欄仍是「尚未取得」；改對再測，用它已經有的站，試搜；
-  // 沒有介面登入那一格。
+  // API key 欄、說去哪裡複製，什麼都沒存，右欄仍是還沒選時的「將會做什麼」（M4 票 81）；改對再測，
+  // 用它已經有的站，試搜；沒有介面登入那一格。
   await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
   await page.getByRole('radio', { name: /既有/ }).click()
   await main.getByRole('textbox', { name: '位址' }).fill('http://nas:9696')
@@ -121,11 +121,11 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await expect(key).toHaveAttribute('aria-invalid', 'true')
   await expect(key).toHaveAccessibleDescription(/API key 不對：在 Prowlarr 的「設定 → 一般」複製/)
   await expect(main.getByText(/這一組沒有存下/)).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: '將會做什麼' })).toBeVisible()
+  await expect(page.getByText('接法', { exact: true })).toHaveCount(0)
   const cutaway = page.locator('section').filter({
     has: page.getByRole('heading', { level: 3, name: 'Prowlarr' }),
   })
-  await expect(cutaway.getByText('尚未取得', { exact: true })).toBeVisible()
-  await expect(cutaway.getByText('已取得', { exact: true })).toHaveCount(0)
   await shot(page, '4-indexers-wrong-key')
   await main.getByRole('textbox', { name: 'API key' }).fill('0123456789abcdef0123456789abcdef')
   await main.getByRole('button', { name: '測試連線' }).click()

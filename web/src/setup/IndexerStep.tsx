@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { ServiceOrigin } from '../api/schemas'
 import type {
   IndexerSetup,
   InterfaceLogin,
@@ -16,6 +17,7 @@ import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
 import { useCarriedLogin, useInterfaceLogin, type CarriedLogin } from './interfaceLogin'
+import { ChoiceCutaway } from './ChoiceCutaway'
 import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
 import { AdvancedSites, RecommendedSites } from './RecommendedSites'
 import { prowlarrWeb } from './serviceWeb'
@@ -126,6 +128,13 @@ export function IndexerStep({
     !unread &&
     status.current_step >= STEP.indexer &&
     listed !== Number(service?.detail || 0)
+  // 剖面的接法看選定的那一台：存下的，或第一次選、還沒回來的那一格。原本只看清單是不是套件內的，還沒選、
+  // 測試中都說成既有（M4 票 81）。換到另一格還沒存下（確認中或測試中）時照頁 2 退回兩種各會做什麼：
+  // 剖面其他列說的是存下的那一台，主欄已經不畫它了。
+  const leaving =
+    service !== undefined &&
+    [choice.draft, choice.sending].some((origin) => origin !== null && origin !== service.origin)
+  const cutawayOrigin = leaving ? null : (service?.origin ?? choice.sending)
   const resynced = useRef<number | null>(null)
   const { onRetest, retesting } = choice
   useEffect(() => {
@@ -137,8 +146,13 @@ export function IndexerStep({
   return (
     <StepFrame
       cutaway={
-        indexers ? (
-          <IndexerCutaway indexers={indexers} service={service} bundled={mode === 'bundled'} />
+        cutawayOrigin === null ? (
+          <ChoiceCutaway
+            bundled={t('indexer.cutaway.bundledPlan')}
+            existing={t('indexer.cutaway.existingPlan')}
+          />
+        ) : indexers ? (
+          <IndexerCutaway indexers={indexers} service={service} origin={cutawayOrigin} />
         ) : (
           <span aria-hidden />
         )
@@ -473,24 +487,21 @@ export function IndexerActions({
   )
 }
 
-/** 剖面：這個泊位接上的是哪一台 Prowlarr、加了幾站。 */
+/** 剖面：這個泊位接上的是哪一台 Prowlarr、加了幾站。選了之後才畫（還沒選是 `ChoiceCutaway`）。 */
 function IndexerCutaway({
   indexers,
   service,
-  bundled,
+  origin,
 }: {
   indexers: IndexerSetup
   service: SetupService | undefined
-  bundled: boolean
+  origin: ServiceOrigin
 }) {
   const { t } = useTranslation()
 
   return (
     <Cutaway title={t('indexer.cutaway.title')}>
-      <CutawayRow
-        term={t('indexer.cutaway.kind')}
-        value={t(bundled ? 'indexer.cutaway.bundled' : 'indexer.cutaway.existing')}
-      />
+      <CutawayRow term={t('indexer.cutaway.kind')} value={t(`indexer.cutaway.${origin}`)} />
       <CutawayRow term={t('connect.field.baseUrl')} value={indexers.base_url || '—'} />
       <CutawayRow
         term={t('connect.field.apiKey')}

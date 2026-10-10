@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **精靈頁 4 還沒選 Prowlarr 時，右欄不再說「你自己的 Prowlarr」**（M4 票 81）：還沒選（或選既有被拒、什麼都沒存）時
+  與頁 2 一樣列出套件內與既有各會做什麼；點了「套件內」、還在測試時就說套件內。之前這兩種時候都寫成你自己的那一台。
+
 ## [0.2.3] - 2026-10-10
 
 **從 0.2.2 升級**：`docker-compose.yml` 與 `.env` 沒有變，也沒有資料庫 migration，`docker compose pull && docker compose up -d`

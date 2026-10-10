@@ -110,7 +110,7 @@ export function ServiceConnection({
           kind={kind}
           status={status.data}
           {...choiceDraft}
-          choosing={choose.isPending}
+          sending={choose.isPending ? choose.variables.origin : null}
           retesting={retest.isPending}
           refusal={choiceRefusalOf(choose.error)}
           requestError={requestError}

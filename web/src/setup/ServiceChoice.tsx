@@ -62,8 +62,8 @@ export interface ChoiceControls {
    * 給起回來的兩種補法。沒問到（還在問、問失敗、設定頁）就是空的，不說。
    */
   composeHosts?: ComposeHosts
-  /** 選擇送出去還沒回來。 */
-  choosing: boolean
+  /** 選擇送出去還沒回來的那一格；沒有就是 `null`。頁 4 的剖面照它說接法（M4 票 81）。 */
+  sending: ServiceOrigin | null
   retesting: boolean
   /**
    * 上一次選擇沒存下的理由（`choiceRefusalOf`）：擁有者成立之後的 Jellyfin 換到另一台（M4 票 18），或
@@ -100,7 +100,7 @@ export function ServiceChoice({
   kind,
   status,
   composeHosts = {},
-  choosing,
+  sending,
   retesting,
   refusal,
   requestError,
@@ -123,6 +123,7 @@ export function ServiceChoice({
     switchWarning?: string
   }) {
   const { t } = useTranslation()
+  const choosing = sending !== null
   const groupName = useId()
   const warningId = useId()
   const service = status.services.find((row) => row.kind === kind)

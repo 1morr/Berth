@@ -147,7 +147,7 @@ describe('舊結果不留在畫面上', () => {
               }),
             ],
           })}
-          choosing={false}
+          sending={null}
           retesting={false}
           refusal={refusal}
           requestError={null}
