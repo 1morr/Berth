@@ -777,8 +777,8 @@ describe('頁 3 的失敗：既有服務說出怎麼改掛載（M4 票 08）', (
       screen.getByText(/你的 qBittorrent 看不到這個分類路徑：它多半沒掛 \/data/),
     ).toBeInTheDocument()
     expect(screen.getByText(/qbittorrent:\s+volumes:/)).toBeInTheDocument()
-    // 只多加 /data 這一條，原本的 /downloads 留著（M4 票 36，審計 §C2）。
-    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeInTheDocument()
+    // 只多加 /data 這一條，原本的 /downloads 留著（M4 票 36，審計 §C2）；帶著 Berth 的 DATA_ROOT（票 63）。
+    expect(screen.getByText('-v /srv/berth/data:/data')).toBeInTheDocument()
     expect(screen.getByText(/原本的掛載不用動/)).toBeInTheDocument()
     expect(screen.queryByText(/移到它底下/)).not.toBeInTheDocument()
   })

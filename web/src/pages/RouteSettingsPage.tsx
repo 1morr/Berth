@@ -184,7 +184,12 @@ function useExisting(): ExistingServices | undefined {
   if (!status.data) return undefined
   const yours = (kind: 'jellyfin' | 'qbittorrent') =>
     status.data.services.some((row) => row.kind === kind && row.origin === 'existing')
-  return { jellyfin: yours('jellyfin'), qbittorrent: yours('qbittorrent'), root: SHARED_ROOT }
+  return {
+    jellyfin: yours('jellyfin'),
+    qbittorrent: yours('qbittorrent'),
+    root: SHARED_ROOT,
+    host: status.data.host_data_root,
+  }
 }
 
 /**

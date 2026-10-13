@@ -1,30 +1,39 @@
 import { describe, expect, it } from 'vitest'
 
-import { commonRoot, remedyFor } from './routeChecks'
+import {
+  commonRoot,
+  hostSource,
+  mountSnippet,
+  remedyFor,
+  runMount,
+  type Remedy,
+} from './routeChecks'
 
-/** 片段第一行是要改的那一台：`  jellyfin:`。 */
-function serviceOf(commands: readonly string[]): string | null {
-  return commands[0]?.split('\n')[0].trim().replace(/:$/, '') ?? null
+/** 要改的那一台：使用者自己的是 `mount`，其餘是片段的第一行（`  jellyfin:`）。 */
+function serviceOf(remedy: Remedy): string | null {
+  return (
+    remedy.mount?.service ?? remedy.commands[0]?.split('\n')[0].trim().replace(/:$/, '') ?? null
+  )
 }
 
-const EXISTING_JELLYFIN = { jellyfin: true, qbittorrent: false, root: '/data' }
-const EXISTING_QBITTORRENT = { jellyfin: false, qbittorrent: true, root: '/data' }
+/** compose 傳進來的 `DATA_ROOT`（M4 票 63）。 */
+const HOST = { path: '/srv/berth/data', relative: false }
+const EXISTING_JELLYFIN = { jellyfin: true, qbittorrent: false, root: '/data', host: HOST }
+const EXISTING_QBITTORRENT = { jellyfin: false, qbittorrent: true, root: '/data', host: HOST }
 
 describe('remedyFor（M4 票 19：補法指對容器）', () => {
   it('library_path 紅而 Jellyfin 是既有：片段是 Jellyfin 的，說明是既有那一台的版本', () => {
     const remedy = remedyFor('library_path', { existing: EXISTING_JELLYFIN, crossDevice: false })
 
-    expect(serviceOf(remedy.commands)).toBe('jellyfin')
+    expect(serviceOf(remedy)).toBe('jellyfin')
     expect(remedy.fix).toBe('routes.fix.existing.libraryMount')
   })
 
   it('probe_visible 紅：片段是 Jellyfin 的，不是 berth（Berth 早就有 /data）', () => {
     expect(
-      serviceOf(
-        remedyFor('probe_visible', { existing: EXISTING_JELLYFIN, crossDevice: false }).commands,
-      ),
+      serviceOf(remedyFor('probe_visible', { existing: EXISTING_JELLYFIN, crossDevice: false })),
     ).toBe('jellyfin')
-    expect(serviceOf(remedyFor('probe_visible', { crossDevice: false }).commands)).toBe('jellyfin')
+    expect(serviceOf(remedyFor('probe_visible', { crossDevice: false }))).toBe('jellyfin')
   })
 
   it('探針（download_visible）紅：片段是 qBittorrent 的，既有與套件內說法分開', () => {
@@ -34,19 +43,19 @@ describe('remedyFor（M4 票 19：補法指對容器）', () => {
     })
     const bundled = remedyFor('download_visible', { crossDevice: false })
 
-    expect(serviceOf(existing.commands)).toBe('qbittorrent')
-    expect(serviceOf(bundled.commands)).toBe('qbittorrent')
+    expect(serviceOf(existing)).toBe('qbittorrent')
+    expect(serviceOf(bundled)).toBe('qbittorrent')
     expect(existing.fix).toBe('routes.fix.existing.qbittorrentMount')
     expect(bundled.fix).toBe('routes.fix.qbittorrentMount')
   })
 
   it('EXDEV：片段是 berth 自己的；不是 EXDEV 的硬鏈接失敗不給片段', () => {
-    expect(serviceOf(remedyFor('hardlink', { crossDevice: true }).commands)).toBe('berth')
+    expect(serviceOf(remedyFor('hardlink', { crossDevice: true }))).toBe('berth')
     expect(remedyFor('hardlink', { crossDevice: false }).commands).toEqual([])
   })
 
   it('Berth 看不到 qBittorrent 報的路徑（download_path）才是 berth', () => {
-    expect(serviceOf(remedyFor('download_path', { crossDevice: false }).commands)).toBe('berth')
+    expect(serviceOf(remedyFor('download_path', { crossDevice: false }))).toBe('berth')
   })
 
   it('片段的容器路徑跟著 Berth 自己的根目錄，不是寫死 /data', () => {
@@ -55,7 +64,7 @@ describe('remedyFor（M4 票 19：補法指對容器）', () => {
       crossDevice: false,
     })
 
-    expect(remedy.commands[0]).toContain('${DATA_ROOT}:/volume1/media')
+    expect(remedy.mount).toEqual({ service: 'jellyfin', root: '/volume1/media', host: HOST })
     expect(remedy.root).toBe('/volume1/media')
   })
 
@@ -66,6 +75,7 @@ describe('remedyFor（M4 票 19：補法指對容器）', () => {
     })
 
     expect(remedy.commands).toEqual([])
+    expect(remedy.mount).toBeNull()
   })
 
   it('套件內（健康頁、設定頁讀不到來源）用 deploy/ 那一份的 /data', () => {
@@ -73,6 +83,7 @@ describe('remedyFor（M4 票 19：補法指對容器）', () => {
 
     expect(remedy.fix).toBe('routes.fix.libraryMount')
     expect(remedy.commands).toEqual(['  jellyfin:\n    volumes:\n      - ${DATA_ROOT}:/data'])
+    expect(remedy.mount).toBeNull()
   })
 })
 
@@ -92,6 +103,7 @@ describe('remedyFor（M4 票 25：補法照原因，不照檢查項目）', () =
 
         expect(remedy.fix).toBe('routes.fix.berthCannotWrite')
         expect(remedy.commands).toEqual([])
+        expect(remedy.mount).toBeNull()
         expect(remedy.advice).toBeNull()
       }
     },
@@ -99,9 +111,7 @@ describe('remedyFor（M4 票 25：補法照原因，不照檢查項目）', () =
 
   it('另一面：真正是別的容器看不到時，片段仍是那一台的', () => {
     expect(
-      serviceOf(
-        remedyFor('download_visible', { crossDevice: false, failure: 'probe_unseen' }).commands,
-      ),
+      serviceOf(remedyFor('download_visible', { crossDevice: false, failure: 'probe_unseen' })),
     ).toBe('qbittorrent')
     expect(
       serviceOf(
@@ -109,7 +119,7 @@ describe('remedyFor（M4 票 25：補法照原因，不照檢查項目）', () =
           existing: EXISTING_JELLYFIN,
           crossDevice: false,
           failure: 'jellyfin_cannot_see',
-        }).commands,
+        }),
       ),
     ).toBe('jellyfin')
   })
@@ -128,8 +138,9 @@ describe('remedyFor（M4 票 25：補法照原因，不照檢查項目）', () =
 
     expect(deleted.fix).toBe('routes.fix.directoryMissing')
     expect(deleted.commands).toEqual([])
+    expect(deleted.mount).toBeNull()
     expect(outside.fix).toBe('routes.fix.existing.libraryMount')
-    expect(serviceOf(outside.commands)).toBe('jellyfin')
+    expect(serviceOf(outside)).toBe('jellyfin')
   })
 
   it.each([
@@ -156,23 +167,22 @@ describe('commonRoot', () => {
 
 describe('remedyFor（M4 票 36：既有服務只多掛一條 /data）', () => {
   const COMPOSE = (service: string) => `  ${service}:\n    volumes:\n      - \${DATA_ROOT}:/data`
-  const RUN = '-v ${DATA_ROOT}:/data'
 
   it.each([
     ['download_visible', EXISTING_QBITTORRENT, 'qbittorrent'],
     ['library_path', EXISTING_JELLYFIN, 'jellyfin'],
     ['probe_visible', EXISTING_JELLYFIN, 'jellyfin'],
   ] as const)(
-    '%s 紅在你那一台：compose 與 docker run 各一條，都只加 /data',
+    '%s 紅在你那一台：多加的是那一台的 /data，不給套件內的片段',
     (check, existing, service) => {
-      expect(remedyFor(check, { existing, crossDevice: false }).commands).toEqual([
-        COMPOSE(service),
-        RUN,
-      ])
+      const remedy = remedyFor(check, { existing, crossDevice: false })
+
+      expect(remedy.mount).toEqual({ service, root: '/data', host: HOST })
+      expect(remedy.commands).toEqual([])
     },
   )
 
-  it('套件內那一台與 berth 自己的掛載不給 docker run：它們本來就是這套 compose 起的', () => {
+  it('套件內那一台與 berth 自己的掛載是這套 compose 的片段：與 deploy/ 一字不差', () => {
     expect(remedyFor('download_visible', { crossDevice: false }).commands).toEqual([
       COMPOSE('qbittorrent'),
     ])
@@ -182,5 +192,35 @@ describe('remedyFor（M4 票 36：既有服務只多掛一條 /data）', () => {
     expect(
       remedyFor('download_path', { existing: EXISTING_QBITTORRENT, crossDevice: false }).commands,
     ).toEqual([COMPOSE('berth')])
+  })
+})
+
+describe('既有服務的掛載帶 Berth 的 DATA_ROOT 真正的值（M4 票 63，審計 P1-6）', () => {
+  const UNKNOWN = { path: '', relative: false }
+
+  it('compose 與 docker run 都是那個資料夾，不再是 ${DATA_ROOT}', () => {
+    const source = hostSource(HOST)
+
+    expect(mountSnippet('jellyfin', '/data', source)).toBe(
+      '  jellyfin:\n    volumes:\n      - /srv/berth/data:/data',
+    )
+    expect(runMount('/data', source)).toBe('-v /srv/berth/data:/data')
+  })
+
+  it('Windows 的值照後端換好的寫（C:/…），貼進 YAML 不必跳脫', () => {
+    const source = hostSource({ path: 'C:/Berth/data', relative: false })
+
+    expect(mountSnippet('qbittorrent', '/data', source)).toContain('      - C:/Berth/data:/data')
+    expect(runMount('/data', source)).toBe('-v C:/Berth/data:/data')
+  })
+
+  it('不知道值（compose 沒傳進來）時照舊是 ${DATA_ROOT}', () => {
+    expect(hostSource(UNKNOWN)).toBe('${DATA_ROOT}')
+    expect(runMount('/data', hostSource(UNKNOWN))).toBe('-v ${DATA_ROOT}:/data')
+  })
+
+  it('路徑有空白時 docker run 那一段加引號；沒有就不加', () => {
+    expect(runMount('/data', '/mnt/user/My Media')).toBe('-v "/mnt/user/My Media:/data"')
+    expect(runMount('/data', '/mnt/user/media')).toBe('-v /mnt/user/media:/data')
   })
 })

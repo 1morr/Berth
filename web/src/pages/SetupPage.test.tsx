@@ -209,7 +209,8 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(existingCard()).toBeChecked()
     expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
     // 測試那一條寫的是使用者填的那一台，不是 compose 主機名。
-    expect(screen.getByText('nas:8096/System/Info/Public')).toBeInTheDocument()
+    // 帶著 http://：複製下來貼得進瀏覽器（審計 P2-6）。
+    expect(screen.getByText('http://nas:8096/System/Info/Public')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '改位址' }))
     expect(screen.getByRole('textbox', { name: '位址' })).toHaveValue('http://nas:8096')
   })

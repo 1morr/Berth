@@ -37,6 +37,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.services.clients import bundled_targets
+from berth.services.host_mount import host_data_root
 from berth.services.indexer import (
     IndexerNotRemovedError,
     IndexerSetupStatus,
@@ -137,6 +138,17 @@ class JellyfinStartupOut(BaseModel):
     remote_access: bool
 
 
+class HostDataRootOut(BaseModel):
+    """Berth 的 `/data` 在宿主上是哪個資料夾（`host_mount.HostDataRoot`，M4 票 63）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 貼得進另一份 compose、`docker run` 與 Unraid 模板的寫法；compose 沒傳進來是空字串。
+    path: str
+    #: 相對於 Berth 那一份 compose 所在的資料夾：補法說要換成絕對路徑。
+    relative: bool
+
+
 class SetupStatusOut(BaseModel):
     #: 直接從 `SetupStatus` 這個 dataclass 讀，欄位增減不必兩處同步。
     model_config = ConfigDict(from_attributes=True)
@@ -155,6 +167,8 @@ class SetupStatusOut(BaseModel):
     #: 選「套件內」會連的三個 compose 位址（`bundled_targets`）。服務頁照它說「套件內會連哪裡」，
     #: 不在前端寫死 port（票 06h）。
     bundled_targets: dict[ServiceKind, str]
+    #: 既有服務的掛載補法印出的宿主資料夾：部署 `.env` 的 `DATA_ROOT`（M4 票 63）。
+    host_data_root: HostDataRootOut
 
 
 class OwnerIn(BaseModel):
@@ -422,7 +436,11 @@ async def delete_service_leftover_categories(
 
 def _out(result: SetupStatus, config: Config) -> SetupStatusOut:
     return SetupStatusOut.model_validate(
-        {**asdict(result), "bundled_targets": bundled_targets(config)}
+        {
+            **asdict(result),
+            "bundled_targets": bundled_targets(config),
+            "host_data_root": host_data_root(config.host_data_root),
+        }
     )
 
 

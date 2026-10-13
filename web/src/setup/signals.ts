@@ -105,9 +105,12 @@ export function testEndpoint(status: SetupStatus, kind: ServiceKind): string {
   return endpointAt(chosen || status.bundled_targets[kind]!, kind)
 }
 
-/** 某個位址上的那一支：既有表單測不過的那一次沒存下，它的位址不在 `status` 裡（M4 票 45）。 */
+/**
+ * 某個位址上的那一支：既有表單測不過的那一次沒存下，它的位址不在 `status` 裡（M4 票 45）。帶著
+ * `http://`：技術細節是給人複製去查的，少了它貼不進瀏覽器或 curl（審計 P2-6）。
+ */
 export function endpointAt(baseUrl: string, kind: ServiceKind): string {
-  return baseUrl.replace(/^https?:\/\//, '') + TEST_PATH[kind]
+  return baseUrl.replace(/\/+$/, '') + TEST_PATH[kind]
 }
 
 /**

@@ -12,6 +12,11 @@ import { resources, SUPPORTED_LANGUAGES } from './resources'
 const GIVES_EXAMPLE = /例如|e\.g\.|for example|such as/i
 /** 叫人搬下載目錄、拿掉原本的掛載。 */
 const MOVES_MOUNTS = /移到|不要分開掛|\bmove\b|instead of separate/i
+/**
+ * 叫人自己去 Berth 的 `.env` 找值、把 `${DATA_ROOT}` 換掉（審計 P1-6）。片段已經帶著那個值（M4 票 63），
+ * 只有 compose 沒傳進來時 `MountFix` 另說一句（`routes.fix.mount.hostUnknown`），補法本身不再說。
+ */
+const ASKS_FOR_THE_VALUE = /\$\{DATA_ROOT\}/
 /** 說原本的掛載留著。 */
 const KEEPS_MOUNTS = {
   'zh-Hant': /原本的掛載不用動|原本的掛載留著/,
@@ -27,6 +32,10 @@ describe('三個樣式本身（雙向）', () => {
     expect('use one /data mount instead of separate /downloads').toMatch(MOVES_MOUNTS)
     expect('多加一條掛載，舊的換掉。').not.toMatch(KEEPS_MOUNTS['zh-Hant'])
     expect('Add one mount and replace the old ones.').not.toMatch(KEEPS_MOUNTS.en)
+    expect('berth 那一份 .env 的 DATA_ROOT 掛在 /data（${DATA_ROOT} 換成那個值）').toMatch(
+      ASKS_FOR_THE_VALUE,
+    )
+    expect('(replace ${DATA_ROOT} with the value in berth’s .env)').toMatch(ASKS_FOR_THE_VALUE)
   })
 
   it('不誤抓無關的說法', () => {
@@ -36,15 +45,20 @@ describe('三個樣式本身（雙向）', () => {
     expect('原本的掛載留著：/downloads 繼續做種').toMatch(KEEPS_MOUNTS['zh-Hant'])
     expect('Its existing mounts stay as they are.').toMatch(KEEPS_MOUNTS.en)
     expect('Keep your existing mounts: /tv stays.').toMatch(KEEPS_MOUNTS.en)
+    expect('把 Berth 的 DATA_ROOT 那個資料夾也掛在 /data').not.toMatch(ASKS_FOR_THE_VALUE)
+    expect('Berth’s DATA_ROOT folder at {{root}} as well').not.toMatch(ASKS_FOR_THE_VALUE)
   })
 })
 
 describe.each(SUPPORTED_LANGUAGES)('既有服務的條件與補法（%s）', (language) => {
-  const { choice, routes, jellyfin } = resources[language].translation
-  // 頁 3 加不上 Berth 路徑那一句（`AddPathFailures`）與 Route 檢查的補法是同一件事。
+  const { choice, routes, jellyfin, connection } = resources[language].translation
+  // 頁 3 加不上 Berth 路徑那一句（`AddPathFailures`）、頁 1 與頁 2 看不到 /data 那兩句與 Route 檢查的
+  // 補法是同一件事。
   const fixes: [string, string][] = [
     ...Object.entries(routes.fix.existing),
-    ['pathFailed', jellyfin.libraries.pathFailed.jellyfin_cannot_see],
+    ['pathFailed', jellyfin.libraries.pathFailed.unseen],
+    ['dataUnseen', connection.fix.dataUnseen],
+    ['jellyfinDataUnseen', connection.fix.jellyfinDataUnseen],
   ]
 
   it('卡片說容器路徑只能是 /data，條件不舉例', () => {
@@ -65,6 +79,14 @@ describe.each(SUPPORTED_LANGUAGES)('既有服務的條件與補法（%s）', (la
     for (const key of ['qbittorrentMount', 'libraryMount', 'jellyfinMount'] as const) {
       expect(routes.fix.existing[key], key).toMatch(keep)
     }
-    expect(jellyfin.libraries.pathFailed.jellyfin_cannot_see).toMatch(keep)
+    for (const [key, text] of fixes.slice(-3)) {
+      expect(text, key).toMatch(keep)
+    }
+  })
+
+  it('補法不叫人自己去 .env 找值：片段已經帶著它（M4 票 63）', () => {
+    for (const [key, text] of fixes) {
+      expect(text, key).not.toMatch(ASKS_FOR_THE_VALUE)
+    }
   })
 })

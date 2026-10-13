@@ -776,17 +776,86 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
 
     expect(await screen.findByText(error)).toBeInTheDocument()
-    expect(screen.getByText('「影集」沒加上 Berth 路徑')).toBeInTheDocument()
+    expect(screen.getByText('Jellyfin 看不到 /data')).toBeInTheDocument()
+    expect(screen.getByText(/「影集」沒加上 Berth 路徑：.*它沒掛 \/data。/)).toBeInTheDocument()
     expect(
-      screen.getByText(/Jellyfin 看不到 \/data\/library\/影集：它沒掛 \/data。/),
+      screen.getByText(/jellyfin:\s+volumes:\s+- \/srv\/berth\/data:\/data/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/jellyfin:\s+volumes:/)).toBeInTheDocument()
-    // 用 docker run 起的那一台：原本的指令多加一個 -v（M4 票 36）。
-    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeInTheDocument()
+    // 用 docker run 起的那一台：原本的指令多加一個 -v（M4 票 36），帶著 Berth 的 DATA_ROOT（票 63）。
+    expect(screen.getByText('-v /srv/berth/data:/data')).toBeInTheDocument()
     // 不再叫人去 Jellyfin 手動加（同樣會失敗），也不給 Berth 連它用的位址（瀏覽器開不了）。
     expect(screen.queryByText(/手動加/)).not.toBeInTheDocument()
     expect(screen.queryByText(/nas:8096/)).not.toBeInTheDocument()
     expect(writes(fetchStub)).toEqual(['POST /api/setup/jellyfin/libraries/paths'])
+  })
+
+  // 審計 C5：兩個媒體庫原本是兩整段補法、四個複製鍵，其實是整台 Jellyfin 沒掛 /data（M4 票 63）。
+  it('同一台 Jellyfin 看不到 /data：合併成一則、列出受影響的媒體庫，補法只給一次；其他原因照舊逐個說', async () => {
+    const twoLibraries = routeSetup({
+      ...PICKER,
+      libraries: [
+        PICKER.libraries[0],
+        libraryChoice({
+          name: '電影',
+          locations: ['/volume1/media/movies'],
+          berth_path: '/data/library/電影',
+          has_berth_path: false,
+          target_path: '/volume1/media/movies',
+        }),
+        libraryChoice({
+          name: '動畫',
+          locations: ['/volume1/media/anime'],
+          berth_path: '/data/library/動畫',
+          has_berth_path: false,
+          target_path: '/volume1/media/anime',
+        }),
+      ],
+    })
+    const unseen = (library: string) => ({
+      library,
+      path: `/data/library/${library}`,
+      status: 'failed' as const,
+      reason: 'jellyfin_cannot_see' as const,
+      error: `Jellyfin cannot see /data/library/${library}`,
+    })
+    stubPage({
+      [STATUS]: { body: NAS },
+      [JELLYFIN]: { body: CONNECTED },
+      [ROUTES]: { body: twoLibraries },
+      [PATHS]: {
+        body: {
+          ...CONNECTED,
+          steps: [...CONNECTED.steps, step('libraries', 'failed')],
+          berth_paths: [
+            unseen('影集'),
+            unseen('電影'),
+            {
+              library: '動畫',
+              path: '/data/library/動畫',
+              status: 'failed',
+              reason: 'directory',
+              error: 'Permission denied',
+            },
+          ],
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    for (const library of ['影集', '電影', '動畫']) {
+      await user.click(await screen.findByRole('checkbox', { name: library }))
+      await user.click(screen.getByRole('radio', { name: `/data/library/${library}` }))
+    }
+    await user.click(screen.getByRole('button', { name: '建立並檢查' }))
+
+    expect(await screen.findByText('Jellyfin 看不到 /data')).toBeInTheDocument()
+    expect(screen.getByText(/^「影集」、「電影」沒加上 Berth 路徑：/)).toBeInTheDocument()
+    expect(screen.getAllByTestId('mount-fix')).toHaveLength(1)
+    expect(screen.getAllByText('-v /srv/berth/data:/data')).toHaveLength(1)
+    // 那兩個不再各自一則；只關一個媒體庫的原因照舊逐個說。
+    expect(screen.queryByText('「影集」沒加上 Berth 路徑')).not.toBeInTheDocument()
+    expect(screen.getByText('「動畫」沒加上 Berth 路徑')).toBeInTheDocument()
   })
 
   it('勾了媒體庫、還沒選寫入目標：主鈕擋住並說出還差哪一步', async () => {

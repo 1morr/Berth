@@ -22,7 +22,8 @@ import {
 } from '../components/controls'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { RequestFailed } from '../components/RequestFailed'
-import { SHARED_ROOT, remedyFor } from '../components/routeChecks'
+import { MountFix } from '../components/MountFix'
+import { SHARED_ROOT, mountSnippet } from '../components/routeChecks'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { escapeOnly } from '../components/useInPlaceConfirm'
 import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
@@ -577,6 +578,16 @@ export function ExistingForm({
     ? fixOf(t, kind, status, attempt)
     : { lede: undefined, remedy: null }
   const typed = checked ? addressError(t, baseUrl) : undefined
+  // 測不過的那一次（或存下的那一台紅了）補法已經說了 localhost 那一句：位址欄下的提示收起來，不說兩遍
+  // （審計 P2-4）。只看補法是不是那一句——帳密錯、版本太舊時那一句不在補法裡，提示照留。改了一格之後
+  // `service` 是 `undefined`：說的是舊值的那個結論不算。
+  const loopbackSaid = [attempt, service].some(
+    (row) =>
+      row !== null &&
+      row !== undefined &&
+      (row.state === 'failed' || row.state === 'timeout') &&
+      fixOf(t, kind, status, row).lede === t('connect.loopback'),
+  )
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -611,7 +622,7 @@ export function ExistingForm({
         inputMode="url"
         autoFocus={focusFirst}
         placeholder={EXAMPLE_ADDRESS[kind]}
-        hint={pointsAtBerth(baseUrl) ? <LoopbackHint /> : undefined}
+        hint={pointsAtBerth(baseUrl) && !loopbackSaid ? <LoopbackHint /> : undefined}
         onChange={(event) => {
           setBaseUrl(event.target.value)
           onEdit()
@@ -923,17 +934,26 @@ function fixOf(
     // 位址的協定寫錯（M4 票 25）：原本說成連不上、叫人查 port。
     lede = t(scheme)
   } else if (reason === 'data_unseen') {
-    // 頁 2 就問看不看得到 /data（M4 票 46）。片段是頁 3 `download_visible` 那一組（`remedyFor`）：既有的
-    // 只多加一條、compose 與 docker run 各一（M4 票 36），套件內的與 deploy 的 compose 一字不差。路徑是
-    // 後端放探測檔的那一個（`detail`），不寫死。
-    const fix = remedyFor('download_visible', {
-      existing: { qbittorrent: !bundled, jellyfin: false, root: service.detail || SHARED_ROOT },
-      crossDevice: false,
-    })
-    lede = t(bundled ? 'connection.fix.dataUnseenBundled' : 'connection.fix.dataUnseen', {
-      root: fix.root,
-    })
-    remedy = <CopyLines commands={[...fix.commands]} />
+    // 頁 2 就問 qBittorrent、頁 1 成為擁有者之後就問既有 Jellyfin 看不看得到 /data（M4 票 46、63）。路徑是
+    // 後端放探測檔的那一個（`detail`），不寫死。套件內的片段與 deploy 的 compose 一字不差（只有
+    // qBittorrent 會走到：套件內 Jellyfin 不問）；既有的是它原本那一份要多加的一條（`MountFix`）。
+    const root = service.detail || SHARED_ROOT
+    if (bundled) {
+      lede = t('connection.fix.dataUnseenBundled', { root })
+      remedy = <CopyLines commands={[mountSnippet('qbittorrent', root)]} />
+    } else {
+      const jellyfin = kind === 'jellyfin'
+      lede = t(jellyfin ? 'connection.fix.jellyfinDataUnseen' : 'connection.fix.dataUnseen', {
+        root,
+      })
+      remedy = (
+        <MountFix
+          service={jellyfin ? 'jellyfin' : 'qbittorrent'}
+          root={root}
+          host={status.host_data_root}
+        />
+      )
+    }
   } else if (reason === 'data_unreadable') {
     lede = t('connection.fix.dataUnreadable', { root: service.detail || SHARED_ROOT })
   } else if (reason === 'data_unsettled') {

@@ -167,8 +167,78 @@ describe('既有表單的 localhost 提示（M4 票 17）', () => {
       }),
     ])
 
-    // 兩處：欄位下那一句跟著正在改的位址走，補法跟著測過的那一個走（改成別的、還沒重測時仍然說它）。
-    expect(screen.getAllByText(i18next.t('connect.loopback'))).toHaveLength(2)
+    // 只說一次（審計 P2-4）：補法已經是這一句，欄位下的黃色提示收起來。
+    expect(screen.getAllByText(i18next.t('connect.loopback'))).toHaveLength(1)
+    expect(screen.queryByTestId('loopback-hint')).toBeNull()
+  })
+
+  it.each(['zh-Hant', 'en'])(
+    '%s：既有表單測不過的那一次，localhost 那一句只說一次（審計 P2-4）',
+    async (language) => {
+      await i18next.changeLanguage(language)
+      try {
+        const user = userEvent.setup()
+        const { rerender } = mount('qbittorrent')
+        await user.click(
+          screen.getByRole('radio', { name: language === 'en' ? /^Existing/ : /^既有/ }),
+        )
+        await user.type(
+          screen.getByRole('textbox', { name: i18next.t('connect.field.baseUrl') }),
+          'http://localhost:8080',
+        )
+        // 還沒測：黃色提示在。
+        expect(screen.getByTestId('loopback-hint')).toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: i18next.t('connect.submit') }))
+        const attempt = chosen({
+          kind: 'qbittorrent',
+          origin: 'existing',
+          base_url: 'http://localhost:8080',
+          state: 'failed',
+          reason: 'unreachable',
+        })
+        rerender(
+          <Page
+            kind="qbittorrent"
+            services={[]}
+            refusal={{ reason: 'connection_failed', detail: 'unreachable', attempt }}
+            onChoose={vi.fn()}
+          />,
+        )
+
+        expect(screen.getAllByText(i18next.t('connect.loopback'))).toHaveLength(1)
+        expect(screen.queryByTestId('loopback-hint')).toBeNull()
+        // 技術細節的位址帶著 http://，複製下來貼得進瀏覽器（審計 P2-6）。
+        expect(screen.getByText('http://localhost:8080/api/v2/app/version')).toBeInTheDocument()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    },
+  )
+
+  it('localhost 而失敗在帳密：補法不是 localhost 那一句，提示照留', async () => {
+    const user = userEvent.setup()
+    const { rerender } = mount('qbittorrent')
+    await user.click(screen.getByRole('radio', { name: /^既有/ }))
+    await user.type(screen.getByRole('textbox', { name: '位址' }), 'http://localhost:8080')
+    await user.click(screen.getByRole('button', { name: i18next.t('connect.submit') }))
+    const attempt = chosen({
+      kind: 'qbittorrent',
+      origin: 'existing',
+      base_url: 'http://localhost:8080',
+      state: 'failed',
+      reason: 'auth_required',
+    })
+    rerender(
+      <Page
+        kind="qbittorrent"
+        services={[]}
+        refusal={{ reason: 'connection_failed', detail: 'auth_required', attempt }}
+        onChoose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('loopback-hint')).toBeInTheDocument()
+    expect(screen.getAllByText(i18next.t('connect.loopback'))).toHaveLength(1)
   })
 
   it('連不上而位址不是 localhost：一般的補法', () => {
@@ -763,8 +833,9 @@ describe('qBittorrent 看不到 /data：頁 2 就紅（M4 票 46）', () => {
     expect(screen.getByText(said)).toBeVisible()
     expect(said).toContain('/downloads')
     expect(said).not.toContain('移到')
-    expect(screen.getByText(/qbittorrent:\s+volumes:\s+- \$\{DATA_ROOT\}:\/data/)).toBeVisible()
-    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeVisible()
+    // 片段帶著 Berth 的 DATA_ROOT 真正的值（M4 票 63），不再要人自己去 .env 找。
+    expect(screen.getByText(/qbittorrent:\s+volumes:\s+- \/srv\/berth\/data:\/data/)).toBeVisible()
+    expect(screen.getByText('-v /srv/berth/data:/data')).toBeVisible()
     // 不屬於哪一格：位址與帳密都不標。
     expect(screen.getByRole('textbox', { name: '位址' })).not.toHaveAttribute('aria-invalid')
   })
@@ -776,7 +847,30 @@ describe('qBittorrent 看不到 /data：頁 2 就紅（M4 票 46）', () => {
       screen.getByText(i18next.t('connection.fix.dataUnseen', { root: '/data' })),
     ).toBeVisible()
     expect(screen.getByText(i18next.t('reason.data_unseen'))).toBeVisible()
-    expect(screen.getByText('-v ${DATA_ROOT}:/data')).toBeVisible()
+    expect(screen.getByText('-v /srv/berth/data:/data')).toBeVisible()
+  })
+
+  it('既有 Jellyfin 成為擁有者之後看不到 /data（M4 票 63）：頁 1 就說，補法是它那一份多加的一條', () => {
+    mount('jellyfin', [
+      chosen({
+        origin: 'existing',
+        base_url: 'http://nas:8096',
+        state: 'failed',
+        reason: 'data_unseen',
+        detail: '/data',
+        error: 'Jellyfin cannot see /data',
+      }),
+    ])
+
+    expect(
+      screen.getByText(i18next.t('connection.fix.jellyfinDataUnseen', { root: '/data' })),
+    ).toBeVisible()
+    expect(screen.getByText(/jellyfin:\s+volumes:\s+- \/srv\/berth\/data:\/data/)).toBeVisible()
+    expect(screen.getByText('-v /srv/berth/data:/data')).toBeVisible()
+    expect(screen.queryByText(/\$\{DATA_ROOT\}/)).toBeNull()
+    // 那一列的實測值是放探測檔的路徑，不是版本（M4 票 46 起就標錯）。
+    expect(screen.getByText(i18next.t('detail.path'))).toBeVisible()
+    expect(screen.queryByText(i18next.t('detail.version'))).toBeNull()
   })
 
   it('套件內：說 compose 裡那一條掛載，片段與 deploy 的一字不差，沒有 docker run', () => {

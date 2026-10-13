@@ -109,3 +109,48 @@ def test_named_volumes_and_absolute_paths_are_not_violations() -> None:
         data["services"]["berth"]["volumes"] += ["berth-cache:/cache", "/etc/localtime:/x:ro"]
 
     assert violations(_edited(change)) == []
+
+
+# --- berth 知道自己的 `/data` 是宿主上的哪個資料夾（M4 票 63） ---
+#
+# 既有服務的掛載補法印出它（`Config.host_data_root`）。compose 得把**掛在 berth `/data` 的同一個值**
+# 原樣傳進去：傳別的變數、寫死一個值，補法就叫人掛一個不是 Berth 的資料夾。
+
+
+def told_berth(compose: str) -> list[str]:
+    berth = render(compose, ABSOLUTE_ROOTS)["services"]["berth"]
+    mounted = next(
+        str(volume).rsplit(":", 1)[0]
+        for volume in berth.get("volumes", [])
+        if str(volume).endswith(":/data")
+    )
+    told = (berth.get("environment") or {}).get("HOST_DATA_ROOT")
+    return [] if told == mounted else [f"HOST_DATA_ROOT is {told!r}, berth mounts {mounted!r}"]
+
+
+def test_berth_is_told_the_host_folder_it_mounts_at_data() -> None:
+    assert told_berth(COMPOSE.read_text(encoding="utf-8")) == []
+
+
+def test_not_telling_berth_or_telling_it_another_folder_is_caught() -> None:
+    def drop(data: dict[str, Any]) -> None:
+        del data["services"]["berth"]["environment"]["HOST_DATA_ROOT"]
+
+    def fixed(data: dict[str, Any]) -> None:
+        data["services"]["berth"]["environment"]["HOST_DATA_ROOT"] = "/srv/berth/data"
+
+    def other(data: dict[str, Any]) -> None:
+        data["services"]["berth"]["environment"]["HOST_DATA_ROOT"] = "${CONFIG_ROOT}"
+
+    for change in (drop, fixed, other):
+        assert told_berth(_edited(change)) != [], change.__name__
+
+
+def test_spelling_the_same_variable_another_way_is_not_a_violation() -> None:
+    """`${DATA_ROOT:?…}` 與 `${DATA_ROOT}` 展開成同一個值；YAML 重排、註解拿掉也一樣。"""
+
+    def spelled(data: dict[str, Any]) -> None:
+        data["services"]["berth"]["environment"]["HOST_DATA_ROOT"] = "${DATA_ROOT:?set it}"
+
+    assert told_berth(_edited(spelled)) == []
+    assert told_berth(_edited(lambda data: None)) == []

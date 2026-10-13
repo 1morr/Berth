@@ -50,9 +50,10 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 | `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
 | `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |
+| `HOST_DATA_ROOT` | 空 | 部署 `.env` 的 `DATA_ROOT`，照寫的原樣：既有服務沒掛 `/data` 時，補法的掛載印出這個資料夾（M4 票 63）。compose 從同名的 `DATA_ROOT` 傳進來（`tests/unit/test_deploy_mounts.py` 守著兩邊是同一個值）；沒設時補法照舊印 `${DATA_ROOT}` |
 
-**`DATA_ROOT` 不在這張表裡：Berth 不讀它。**它只在 `deploy/.env.example`，給 compose 把宿主目錄掛到容器的
-`/data`（M4 票 93）。incomplete、complete 與媒體庫的路徑來自資料庫 `settings.paths`（`PathSettings` 的預設值，
+**`DATA_ROOT` 不在這張表裡：Berth 不拿它找檔案。**它只在 `deploy/.env.example`，給 compose 把宿主目錄掛到容器的
+`/data`（M4 票 93）；compose 另把同一個值傳成上表的 `HOST_DATA_ROOT`，只用來印在補法裡（M4 票 63）。incomplete、complete 與媒體庫的路徑來自資料庫 `settings.paths`（`PathSettings` 的預設值，
 plan §9.1），不來自環境變數。
 
 ### 後端
@@ -597,6 +598,13 @@ python scripts/experiments/compose_collisions.py --berth-image berth:e2e   # 報
 
 ```bash
 python scripts/experiments/compose_profile_removal.py --berth-image berth:e2e   # 報告寫到 .local/experiments/results/compose-profile-removal.json
+```
+
+既有服務已經把別的資料夾掛在 `/data` 底下（Unraid CA 的 Jellyfin 模板），再照補法多掛一條 `DATA_ROOT:/data` 會怎樣
+（M4 票 63，brief §20.14）：兩個臨時資料夾、`alpine:latest`，幾秒，只印 stdout。Git Bash 上要關掉路徑轉換：
+
+```bash
+MSYS_NO_PATHCONV=1 sh scripts/experiments/nested_data_mount.sh
 ```
 
 qBittorrent 的 preseed 腳本內嵌進 compose（頂層 `configs` 的 `content`，加 `mode: 0555`）之後 linuxserver 的 init

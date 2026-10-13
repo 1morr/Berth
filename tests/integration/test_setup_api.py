@@ -106,7 +106,30 @@ class TestStatus:
                 "qbittorrent": "http://qbittorrent:8080",
                 "prowlarr": "http://prowlarr:9696",
             },
+            # `berth serve` 沒有 compose：不知道宿主上是哪個資料夾，補法照舊印 `${DATA_ROOT}`。
+            "host_data_root": {"path": "", "relative": False},
         }
+
+    @pytest.mark.parametrize(
+        ("written", "shown"),
+        [
+            ("/mnt/user/media/Berth", {"path": "/mnt/user/media/Berth", "relative": False}),
+            (r"C:\Berth\data", {"path": "C:/Berth/data", "relative": False}),
+            ("./data", {"path": "./data", "relative": True}),
+        ],
+        ids=["linux", "windows", "relative"],
+    )
+    def test_the_host_folder_compose_passed_in_is_what_the_mount_fixes_print(
+        self, config: Config, tmp_path: Path, written: str, shown: dict[str, object]
+    ) -> None:
+        """既有服務的補法帶真正的值（M4 票 63，審計 P1-6）：compose 傳進來的 `DATA_ROOT`，
+        Windows 換成貼得進 YAML 的寫法，相對路徑標出來（相對於 Berth 那一份 compose，貼到別處要換成
+        絕對路徑）。"""
+        app = create_app(replace(config, web_root=tmp_path / "never-built", host_data_root=written))
+        with TestClient(app, headers=BROWSER) as running:
+            body = running.get("/api/setup/status").json()
+
+        assert body["host_data_root"] == shown
 
     def test_the_bundled_targets_follow_the_qbittorrent_port_in_env(
         self, config: Config, tmp_path: Path

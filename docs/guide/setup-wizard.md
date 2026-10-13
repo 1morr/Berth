@@ -20,8 +20,8 @@ only after you choose, and tests the choice on the spot.
 | Berth | Page | Bundled | Existing |
 | --- | --- | --- | --- |
 | BTH 1 | 1 Jellyfin | Connects to the bundled server. While it is still starting, the page counts down and retests every 3 seconds on its own (for up to 2 minutes). | Enter its address and press **Test connection**. |
-| | | If that server has not run its own first-time wizard, Berth creates the admin with the username and password you enter and finishes Jellyfin's initial setup; if it already has an admin, you sign in as that admin. Either way Berth creates an API key named "Berth" on it. | After the test, sign in as its admin. Berth creates an API key named "Berth". If it has not run its first-time wizard, Berth creates the admin from what you enter, as with bundled. |
-| BTH 2 | 2 qBittorrent | Set the qBittorrent web UI login (skipped if that qBittorrent already has one). No global preference is written. | Enter its address and web UI login; a passing test completes the page. No global preference is written. |
+| | | If that server has not run its own first-time wizard, Berth creates the admin with the username and password you enter and finishes Jellyfin's initial setup; if it already has an admin, you sign in as that admin. Either way Berth creates an API key named "Berth" on it. | After the test, sign in as its admin. Berth creates an API key named "Berth". If it has not run its first-time wizard, Berth creates the admin from what you enter, as with bundled. Right after that, Berth checks that it can see `/data`; if not, the page says which mount to add. |
+| BTH 2 | 2 qBittorrent | Set the qBittorrent web UI login (skipped if that qBittorrent already has one). No global preference is written. | Enter its address and web UI login; a passing test completes the page. The test also checks that it can see `/data`. No global preference is written. |
 | BTH 3 | 3 Library paths | Creates the libraries on the list (Movies / TV / Anime by default; you can rename, add and remove), then a Route for each library and runs every check on it. On a first visit with an unchanged list this starts as soon as the page opens, and shows which check each Route is on. | Tick the libraries and their write target. **Build and check** adds a Berth path to each ticked library (existing paths are left alone), creates the Routes and runs every check. |
 | BTH 4 | 4 Prowlarr | The API key is read from Prowlarr's config through a read-only mount. One press tests the nine recommended public indexers and adds those that pass (each labelled with its language; any that tested fine but could not be added are listed separately). The web UI login reuses page 1's. Then try a search and remove what you don't want. Picking indexers one by one, and other public indexers, are under **Advanced**. | Paste the API key and use the indexers you already have. You can also test the recommended public indexers and add the ones you tick (yours are never removed). Then try a search. |
 | BTH 5 | 5 TMDB | Paste your own API key and press **Test TMDB**. | Same. |
@@ -31,8 +31,8 @@ only after you choose, and tests the choice on the spot.
 `complete` folder, and the library folder Jellyfin reads. Each Route is created with a real test: Berth writes a
 probe file, hardlinks it, and compares inode numbers as seen from Berth, qBittorrent and Jellyfin. If the three
 containers do not see the same filesystem, the check fails right there and says which container is missing which
-mount. You can only move on when every check is green, so a wrong mount shows up on page 3 — before you go and
-get a TMDB key.
+mount. You can only move on when every check is green, so a wrong mount shows up on page 3 at the latest — before
+you go and get a TMDB key. An existing Jellyfin or qBittorrent without `/data` is caught earlier, on its own page.
 
 Each page stops on its result; press **Next berth** to go on. Berths you have passed on the board can be clicked
 to go back, and each page has **Previous berth**. The page is in the URL (`/setup?step=N`): the browser's back
