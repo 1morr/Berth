@@ -15,7 +15,8 @@ import {
   setupStatusQueryOptions,
   type JellyfinConnectInput,
 } from '../api/setup'
-import { Field, GhostButton, Notice } from '../components/controls'
+import { Field, GhostButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { ServiceConnection } from '../settings/ServiceConnection'
 import { HealthSection } from '../settings/HealthSection'
@@ -85,7 +86,7 @@ function SignIn({ check }: { check: ServiceCheck }) {
       <JellyfinSignIn
         setup={setup.data}
         connecting={signIn.isPending}
-        failed={signIn.isError}
+        error={signIn.error}
         onConnect={(input) => signIn.mutate(input)}
       />
     </SettingsSection>
@@ -150,9 +151,7 @@ function JellyfinAddress() {
           </p>
         </div>
         {save.isError && !rejected && (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('settings.jellyfin.failed')}
-          </Notice>
+          <RequestFailed error={save.error} lead={t('settings.jellyfin.failed')} />
         )}
       </form>
     </SettingsSection>

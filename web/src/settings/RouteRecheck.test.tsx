@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { RouteView } from '../api/schemas'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import {
   ALL_BUNDLED,
   CHECKS_PASSED,
@@ -348,5 +348,24 @@ describe('換了一台 qBittorrent 之後自動重查', () => {
       ),
     )
     expect(rechecks(stub)).toBe(0)
+  })
+
+  // M4 票 90：重查沒走完時，原本一律說「重新檢查沒有走完」再指路，不分 500、401 與離線。
+  it.each(REQUEST_FAILURES)('重查沒走完（%s）：說出對的原因', async (_, failure, expected) => {
+    render({
+      'POST /api/setup/services/qbittorrent': { body: MOVED },
+      [RECHECK_ALL]: failure,
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/qbittorrent')
+
+    await changeAddress(user)
+
+    const section = within(await screen.findByRole('region', { name: 'Route 重新檢查' }))
+    const notice = await section.findByText(
+      /^重新檢查沒有走完，之後到「媒體庫路徑」按「全部重新檢查」。/,
+    )
+    expect(notice).toHaveTextContent(expected)
+    expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
   })
 })

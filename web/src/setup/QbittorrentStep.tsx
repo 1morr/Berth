@@ -43,7 +43,7 @@ import { StepFrame } from './StepFrame'
 export function QbittorrentStep({
   status,
   setup,
-  setupFailed,
+  setupError,
   owner,
   carried,
   applying,
@@ -58,7 +58,8 @@ export function QbittorrentStep({
   status: SetupStatus
   /** 連上之後才讀：選之前一個請求都不發（M4 票 15）。 */
   setup: QbittorrentSetup | undefined
-  setupFailed: boolean
+  /** 讀這一步的狀態為什麼沒成；空就是還在讀。 */
+  setupError: unknown
   /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
   /** 頁 1 帶過來的那一組（只在這個分頁的記憶體裡，M4 票 40）。 */
@@ -139,9 +140,13 @@ export function QbittorrentStep({
             done && <DoneNotice text={t('qbittorrent.doneExisting')} />
           )
         ) : (
-          <p className="mt-6 text-sm text-ink-dim">
-            {setupFailed ? t('qbittorrent.unreachable') : t('health.checking')}
-          </p>
+          <div className="mt-6">
+            {setupError === null || setupError === undefined ? (
+              <p className="text-sm text-ink-dim">{t('health.checking')}</p>
+            ) : (
+              <RequestFailed error={setupError} lead={t('qbittorrent.readFailed')} />
+            )}
+          </div>
         ))}
       {nav}
     </StepFrame>
@@ -288,7 +293,7 @@ function LoginSequence({
     const taken = login.take()
     if (taken === undefined) return
     setSentAt(login.edits)
-    // 請求沒走完的那一句由 `requestFailed` 說；欄位留著，改一個字再按。登入那一條沒過時也留著
+    // 請求沒走完的那一句由 `failed`（`RequestFailed`）說；欄位留著，改一個字再按。登入那一條沒過時也留著
     // （M4 票 26）：收起來就成了「帳號：xxx」，像是已經設好了。
     onApply(taken).then(
       (next) => taken && loginTook(next) && login.reset(taken.username ?? ''),

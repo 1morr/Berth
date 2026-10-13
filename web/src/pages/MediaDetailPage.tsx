@@ -15,6 +15,7 @@ import {
 import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
+import { RequestFailed } from '../components/RequestFailed'
 import { Timestamp } from '../components/Timestamp'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { displayRound } from '../i18n/displayRound'
@@ -75,7 +76,7 @@ export function MediaDetailPage({ id }: { id: string }) {
 
   if (media.isPending) return <Loading />
   // 後端問不到（不是 TMDB 問不到——那是 200 加一個 `problem`）。
-  if (!media.data) return <Offline />
+  if (!media.data) return <Offline error={media.error} />
 
   const found = media.data
   // 一列快照都沒有：整頁只剩下那句理由。有快照時它降級成一條「這是舊的」。
@@ -319,12 +320,12 @@ function Loading() {
   )
 }
 
-function Offline() {
+function Offline({ error }: { error: unknown }) {
   const { t } = useTranslation()
 
   return (
     <div className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
-      <p className="max-w-prose text-sm text-ink-dim">{t('discover.off')}</p>
+      <RequestFailed error={error} lead={t('media.readFailed')} />
     </div>
   )
 }

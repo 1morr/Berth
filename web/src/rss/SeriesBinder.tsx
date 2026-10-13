@@ -7,6 +7,7 @@ import { mediaQueryOptions } from '../api/media'
 import { bindSeries, parseRssRefusal, RSS_KEY, type RssSeries } from '../api/rss'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
@@ -148,7 +149,9 @@ export function SeriesBinder({
         }}
       />
       {found.isFetching && <p className="text-xs text-ink-dim">{t('rss.bind.searching')}</p>}
-      {found.data?.problem ? (
+      {found.isError ? (
+        <RequestFailed error={found.error} lead={t('rss.bind.searchFailed')} />
+      ) : found.data?.problem ? (
         <p role="alert" className="max-w-prose text-xs text-blocked-ink">
           {t('rss.bind.off')}
         </p>
@@ -170,9 +173,7 @@ export function SeriesBinder({
         <p className="text-xs text-ink-dim">{t('rss.bind.reading')}</p>
       )}
       {picked !== null && media.isError && (
-        <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-          {t('rss.bind.mediaOff')}
-        </p>
+        <RequestFailed error={media.error} lead={t('rss.bind.mediaReadFailed')} />
       )}
       {detail && (
         <div className="grid gap-3">
@@ -209,12 +210,16 @@ export function SeriesBinder({
         </GhostButton>
       </div>
 
-      {bind.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {refusal ? t(`rss.refusal.${refusal.reason}`) : t('rss.failed')}
-          {refusal?.detail ? <span className="value block text-xs">{refusal.detail}</span> : null}
-        </Notice>
-      )}
+      {/* 後端說得出理由的拒絕照舊；解析不出來的照請求為什麼沒成說（M4 票 90）。 */}
+      {bind.isError &&
+        (refusal ? (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`rss.refusal.${refusal.reason}`)}
+            {refusal.detail ? <span className="value block text-xs">{refusal.detail}</span> : null}
+          </Notice>
+        ) : (
+          <RequestFailed error={bind.error} lead={t('request.notDone')} />
+        ))}
     </ConfirmPanel>
   )
 }

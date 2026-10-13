@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { InterfaceLogin } from '../api/setup'
 import type { SetupStep } from '../api/schemas'
 import { GhostButton, Notice } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { failureText } from '../components/failures'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useInterfaceLogin, type LoginService } from '../setup/interfaceLogin'
@@ -40,7 +41,7 @@ export function InterfaceLoginSection({
 }) {
   const { t } = useTranslation()
   const form = useInterfaceLogin({ service, current, owner: '', alwaysOpen: true })
-  const [result, setOutcome] = useState<SetupStep | 'failed' | null>(null)
+  const [result, setOutcome] = useState<SetupStep | { rejected: unknown } | null>(null)
   // 送出那一刻的欄位版本：之後改了一格，上一次的結果說的就不是這幾格了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
   const outcome = sentAt === form.edits ? result : null
@@ -57,7 +58,7 @@ export function InterfaceLoginSection({
         setOutcome(step ?? { step: '', status: 'failed', detail: '', error })
         if (step?.status === 'ok' || step?.status === 'skipped') form.reset(login.username ?? '')
       },
-      () => setOutcome('failed'),
+      (error: unknown) => setOutcome({ rejected: error }),
     )
   }
 
@@ -88,10 +89,8 @@ export function InterfaceLoginSection({
           <p className="max-w-prose text-xs text-ink-dim">{t('interfaceLogin.settings.after')}</p>
         </div>
         <div aria-live="polite">
-          {outcome === 'failed' ? (
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t('interfaceLogin.settings.failed')}
-            </Notice>
+          {outcome && 'rejected' in outcome ? (
+            <RequestFailed error={outcome.rejected} lead={t('interfaceLogin.settings.failed')} />
           ) : outcome?.status === 'failed' ? (
             <div>
               <Notice signal="blocked" label={t('common.failed')}>

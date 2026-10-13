@@ -57,7 +57,7 @@ describe('路由', () => {
 
     const { router } = renderApp('/')
 
-    expect(await screen.findAllByText(/讀不到 Berth 後端/)).not.toHaveLength(0)
+    expect(await screen.findAllByText(/讀不到這一份清單/)).not.toHaveLength(0)
     expect(router.state.location.pathname).toBe('/')
   })
 

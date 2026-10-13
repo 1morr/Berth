@@ -12,6 +12,7 @@ import {
 import type { RouteView } from '../api/schemas'
 import { jellyfinAddressQueryOptions } from '../api/settings'
 import { CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 
 /** 建立時會遇到的拒絕。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
@@ -131,18 +132,16 @@ function AddRouteForm({
           <p className="text-xs text-ink-dim">{t('routeSettings.add.loading')}</p>
         )}
 
-        {libraries.isError && (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {reachFailure?.reason === 'jellyfin_unreachable' ? (
-              <>
-                {t('routeSettings.add.unreachable')}{' '}
-                <code className="value text-xs wrap-anywhere">{reachFailure.detail}</code>
-              </>
-            ) : (
-              t('routeSettings.add.failed')
-            )}
-          </Notice>
-        )}
+        {libraries.isError &&
+          (reachFailure?.reason === 'jellyfin_unreachable' ? (
+            <Notice signal="blocked" label={t('common.failed')}>
+              {t('routeSettings.add.unreachable')}{' '}
+              <code className="value text-xs wrap-anywhere">{reachFailure.detail}</code>
+            </Notice>
+          ) : (
+            // 讀媒體庫清單沒成，後端沒給理由（M4 票 90）：照請求為什麼沒成說。
+            <RequestFailed error={libraries.error} lead={t('routeSettings.add.failed')} />
+          ))}
 
         {libraries.data && (
           <form
@@ -222,13 +221,14 @@ function AddRouteForm({
               </GhostButton>
             </div>
 
-            {create.isError && (
-              <Notice signal="blocked" label={t('common.failed')}>
-                {refusal && refusal.reason in CREATE_REFUSAL
-                  ? t(CREATE_REFUSAL[refusal.reason as keyof typeof CREATE_REFUSAL])
-                  : t('routeSettings.add.failed')}
-              </Notice>
-            )}
+            {create.isError &&
+              (refusal && refusal.reason in CREATE_REFUSAL ? (
+                <Notice signal="blocked" label={t('common.failed')}>
+                  {t(CREATE_REFUSAL[refusal.reason as keyof typeof CREATE_REFUSAL])}
+                </Notice>
+              ) : (
+                <RequestFailed error={create.error} lead={t('routeSettings.add.failed')} />
+              ))}
           </form>
         )}
       </div>

@@ -2,8 +2,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { stubApi, type StubRoute } from '../test/fetch'
-import { renderWithProviders } from '../test/render'
+import { REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
+import { renderInRoute } from '../test/render'
 import { JobDelete } from './JobDelete'
 
 const HASH = 'a'.repeat(40)
@@ -36,7 +36,7 @@ function outcome(overrides: Record<string, number | boolean | string[]> = {}) {
   }
 }
 
-function mount(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function mount(routes: StubRoutes = {}) {
   const stub = stubApi({
     [`GET /api/jobs/${HASH}/deletion`]: { body: estimate() },
     [`DELETE /api/jobs/${HASH}?unlink=false&remove_torrent=false&delete_files=false&purge=false`]: {
@@ -44,13 +44,13 @@ function mount(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
     },
     ...routes,
   })
-  renderWithProviders(<JobDelete hash={HASH} />)
+  renderInRoute(<JobDelete hash={HASH} />, '/jobs/delete')
   return stub
 }
 
 /** 打開對話框。**估算在這一刻才問**（展開前不該碰磁碟）。 */
 async function open() {
-  await userEvent.click(screen.getByRole('button', { name: '刪除' }))
+  await userEvent.click(await screen.findByRole('button', { name: '刪除' }))
 }
 
 function tick(name: string | RegExp) {
@@ -86,7 +86,7 @@ describe('JobDelete', () => {
       'fetch',
       vi.fn<typeof fetch>(() => new Promise<Response>(() => {})),
     )
-    renderWithProviders(<JobDelete hash={HASH} />)
+    renderInRoute(<JobDelete hash={HASH} />, '/jobs/delete')
 
     await open()
 
@@ -238,6 +238,36 @@ describe('JobDelete', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/連不上 qBittorrent/)
   })
+
+  // M4 票 90：原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)('刪除沒有成功（%s）時說出對的原因', async (_, failure, expected) => {
+    mount({
+      [`DELETE /api/jobs/${HASH}?unlink=false&remove_torrent=false&delete_files=false&purge=false`]:
+        failure,
+    })
+    await open()
+
+    await userEvent.click(screen.getByRole('button', { name: '確認刪除' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有刪掉。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
+  })
+
+  it.each(REQUEST_FAILURES)(
+    '算不出估算（%s）時說出對的原因，刪除照樣按得下去',
+    async (_, failure, expected) => {
+      mount({ [`GET /api/jobs/${HASH}/deletion`]: failure })
+
+      await open()
+
+      const said = await screen.findByText(/算不出可以空出多少/)
+      expect(said).toHaveTextContent(expected)
+      expect(said).not.toHaveTextContent(/自己的 API/)
+      expect(screen.getByRole('button', { name: '確認刪除' })).toBeEnabled()
+    },
+  )
 
   it('算不出來時仍然刪得下去——估算是參考，不是刪除的前提', async () => {
     mount({ [`GET /api/jobs/${HASH}/deletion`]: { status: 503, body: { detail: 'down' } } })

@@ -7,6 +7,7 @@ import type { Media } from '../api/media'
 import { refusalOf, submitJob } from '../api/jobs'
 import type { SearchResult } from '../api/search'
 import { CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
@@ -141,8 +142,8 @@ class NoRouteError extends Error {}
  * 被擋下來的理由。
  *
  * 每一種各有各的下一步（PRODUCT 原則 4）——「這條 Route 是紅的」要人去健康頁，
- * 「索引站給不出這份 torrent」只能換一列再試。認不得的理由落回一句誠實的通用訊息，
- * 而不是一條 i18n key。
+ * 「索引站給不出這份 torrent」只能換一列再試。認不得的理由交給 `RequestFailed`，
+ * 照請求為什麼沒成說，而不是一條 i18n key。
  *
  * `job_removed` 的 `detail` 是那一筆的 hash（M3 票 04）：下一步在那一筆的詳情頁上，所以原文換成
  * 一條過去的連結，不把 40 個十六進位字貼在畫面上。
@@ -151,14 +152,17 @@ function Refusal({ error }: { error: unknown }) {
   const { t } = useTranslation()
   const refusal = refusalOf(error)
 
+  // 解析不出理由：照請求為什麼沒成說（M4 票 90）。`RequestFailed` 自己帶 `role="alert"`，所以不走下面那個容器。
+  if (!(error instanceof NoRouteError) && !refusal) {
+    return <RequestFailed error={error} lead={t('submit.failed')} />
+  }
+
   return (
     <div role="alert" className="grid gap-1">
       <p className="max-w-prose text-xs text-blocked-ink">
         {error instanceof NoRouteError
           ? t('submit.needRouteError')
-          : refusal
-            ? t(`jobs.refusal.${refusal.reason}`)
-            : t('submit.off')}
+          : refusal && t(`jobs.refusal.${refusal.reason}`)}
       </p>
       {refusal?.reason === 'job_removed' ? (
         <p className="text-xs">

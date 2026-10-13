@@ -501,7 +501,7 @@ const zhHant = {
           '已經建好的媒體庫在這裡改不動：要改名、刪除或換路徑，到 Jellyfin 的「控制台 → 媒體庫」。這裡只加還沒建的，重跑只建新加的那幾個。',
         saving: '儲存中…',
         unsaved: '清單有標紅的格子，改好才會存下來。',
-        saveFailed: '清單沒存下來：請求沒跑完。確認 Berth 後端的狀態，再改一格試試。',
+        saveFailed: '清單沒存下來。',
         refused: '清單沒存下來：{{reason}}',
         refusedRow: '清單沒存下來（第 {{position}} 個）：{{reason}}',
         problem: {
@@ -523,7 +523,7 @@ const zhHant = {
       signIn: '登入並建立 API key',
       signInAgain: '重新登入',
       signingIn: '登入中…',
-      requestFailed: '請求沒跑完。確認位址與 Berth 後端的狀態後再試一次。',
+      requestFailed: '請求沒跑完。',
     },
     libraries: {
       addPath: '加入 Berth 路徑',
@@ -599,7 +599,7 @@ const zhHant = {
       after: '改了之後舊的那一組就不能再用。',
       saved: '已更新。之後用 {{username}} 登入，舊的那一組不能再用。',
       refused: '沒有確認到新的登入生效。用新的那一組試登入一次，不行就再按一次。服務回的原文：',
-      failed: '這一次請求沒有走完，登入沒有變。確認 Berth 後端還在跑，再按一次。',
+      failed: '這一次請求沒有走完，登入沒有變。',
     },
   },
   qbittorrent: {
@@ -608,7 +608,7 @@ const zhHant = {
       bundled: '設定 qBittorrent 的 WebUI 登入',
       existing: '確認你的 qBittorrent',
     },
-    unreachable: '讀不到 qBittorrent 這一步的狀態。確認 Berth 後端還在跑。',
+    readFailed: '讀不到 qBittorrent 這一步的狀態。',
     lede: {
       choose:
         '兩種 Berth 都只用自己的分類，一個全域偏好都不寫；套件內的那一台另外由 Berth 設 WebUI 登入。選了 Berth 才去連它。',
@@ -656,7 +656,7 @@ const zhHant = {
     },
     skip: '之後再說',
     deferred: '之後再說',
-    unreachable: '連不上套件內的 Prowlarr。可以先填自己的位址，或跳過這一步之後再補。',
+    stateFailed: '讀不到索引站這一步的狀態。',
     readFailed: '讀不到這一台 Prowlarr 的站清單，所以說不出它有幾站。',
     rereadLater: '它可能正在重啟或暫時連不上：按「重新讀取」再試一次。',
     rereadKey:
@@ -732,7 +732,7 @@ const zhHant = {
       privateSites:
         '要帳號的站（私站、半私站）在 Prowlarr 自己的介面加，加完 Berth 就認得、可以試搜。',
       openProwlarr: '開啟 Prowlarr 的索引站頁',
-      requestFailed: '測試沒有送到。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      requestFailed: '測試沒有走完。',
       loading: '向 Prowlarr 讀站的清單…',
       login: '替 Prowlarr 介面設登入',
       loginFix:
@@ -768,7 +768,7 @@ const zhHant = {
       count_other: '{{count}} 筆',
       searchFailed: '搜尋失敗',
       disabled: '在 Prowlarr 停用了',
-      failed: '搜尋沒跑完。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+      failed: '搜尋沒跑完。',
       keeps: '要帳號的站 Berth 不移除',
       done_one: '搜完了：{{count}} 站有結果。',
       done_other: '搜完了：{{count}} 站有結果。',
@@ -815,7 +815,7 @@ const zhHant = {
   tmdbStep: {
     title: 'TMDB',
     lede: 'Berth 不內建任何一把 API key，TMDB 的憑證要你自己申請。這一步是必填的：沒有它就沒有標題、季集與封面，探索、命名與入庫全部停擺。',
-    unreachable: '讀不到 TMDB 這一步的狀態。Berth 後端可能沒在跑——確認容器狀態後再試一次。',
+    readFailed: '讀不到 TMDB 這一步的狀態。',
     cutaway: {
       title: 'TMDB',
       credential: '憑證',
@@ -855,7 +855,7 @@ const zhHant = {
     },
     empty:
       '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
-    unreachable: '讀不到媒體庫清單。Berth 後端可能沒在跑——確認容器狀態後重新整理。',
+    readFailed: '讀不到媒體庫清單。',
     docking: '建立並檢查中…',
     list: '這一頁的 Route',
     tally: '{{passed}} / {{total}} 通過',
@@ -1019,7 +1019,7 @@ const zhHant = {
     lede: '五個泊位都走過了。按下完成之後精靈就關閉，之後的修改在設定頁。',
     submit: '完成設定',
     completing: '完成中…',
-    failed: '寫不進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    failed: '寫不進去。',
     needTmdb:
       'TMDB 那一頁（頁 5）還沒完成：TMDB 要一把測得過的 key。沒有它，探索、季集快照與命名全部停擺，所以這一步不能跳。',
     needRoutes:
@@ -1096,7 +1096,7 @@ const zhHant = {
     // Berth 曾為這部作品下載、訂閱或入庫過（`CONTEXT.md` 的 Tracked Media）。
     tracked: '已下載過',
     empty: 'TMDB 這一輪什麼都沒回。過一小時快取到期後會再問一次。',
-    off: '讀不到 Berth 後端。確認程序是否還在執行。',
+    readFailed: '讀不到這一份清單。',
     search: {
       label: '搜尋作品',
       placeholder: '劇名、片名，中文或英文',
@@ -1254,7 +1254,6 @@ const zhHant = {
         item_not_visible: '你在 Jellyfin 看不到這部作品，沒有寫入。',
         jellyfin_unreachable:
           'Berth 問不到 Jellyfin，沒有寫入。到健康頁確認 Jellyfin 還在，再按一次。',
-        other: '沒有寫入。Berth 自己的 API 沒有回應，先確認它還活著，再按一次。',
       },
     },
     jellyfin: {
@@ -1287,9 +1286,10 @@ const zhHant = {
       unknown: '找不到這個媒體庫，或你沒有權限看它。',
       toFirst: '看「{{library}}」',
     },
-    off: '讀不到媒體庫。Berth 自己的 API 沒有回應，先確認它還活著。',
+    readFailed: '讀不到媒體庫。',
   },
   media: {
+    readFailed: '讀不到這部作品。',
     // 身分帶那一行識別值（M1.5 票 08：五列剖面收成一行）。日期與 TMDB id 是值，不是文案。
     aired: '首播 {{date}}',
     released: '上映 {{date}}',
@@ -1376,13 +1376,13 @@ const zhHant = {
       pages: '下載的分頁',
       pagesEnd: '下載清單底的分頁',
       noneOpen: '這部作品沒有還在路上或等你確認的下載。',
-      off: '讀不到這部作品的下載。Berth 自己的 API 沒有回應，先確認它還活著。',
+      readFailed: '讀不到這部作品的下載。',
       retry: '重試',
       files: {
         title: '檔案',
         loading: '正在讀檔案清單…',
         none: 'qBittorrent 還沒給出這個 torrent 的檔案清單。',
-        off: '讀不到檔案清單。Berth 自己的 API 沒有回應。',
+        readFailed: '讀不到檔案清單。',
         // priority 0：qBittorrent 不會下載它，計劃也不看它。
         unwanted: '不下載',
       },
@@ -1583,7 +1583,7 @@ const zhHant = {
     },
     // 一類送來的筆數比總數少時，那一組底下的一行（後端每類逐站輪流取）。
     capped: '這一類共 {{total}} 筆，這裡列出 {{shown}} 筆：每站輪流取，站內做種多的先。',
-    off: '搜尋沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    failed: '搜尋沒有跑完。',
     announce_one: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
     announce_other: '找到 {{count}} 筆，{{failed}} 個關鍵字沒問到。',
     column: {
@@ -2180,7 +2180,7 @@ const zhHant = {
     toFirstPage: '回第一頁',
     empty: '還沒有送過任何下載。到探索頁找一部作品，在它的頁面上搜 torrent 再送單。',
     toDiscover: '回探索頁',
-    off: '讀不到下載列表。Berth 自己的 API 沒有回應，先確認它還活著。',
+    readFailed: '讀不到下載列表。',
     media: '作品',
     hash: 'info hash',
     // 這一列沒有欄頭，所以每一格自己帶標籤。大小與進度都要等票 10 的客戶端輪詢才有值。
@@ -2192,11 +2192,11 @@ const zhHant = {
     retryImport: '再試一次入庫',
     retryingImport: '入庫中…',
     retried: '已重試，現在是{{state}}。',
-    retryOff: '重試沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    retryFailed: '重試沒有成功。',
     // CONTEXT.md 的 Reimport：以 complete 裡那一包重新入庫，不必 torrent 還在（brief §9.3）。
     reimport: '重新入庫',
     reimporting: '重新入庫中…',
-    reimportOff: '重新入庫沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    reimportFailed: '重新入庫沒有成功。',
     reimported: '已排進重新入庫，現在是{{state}}。',
     // 停在待審核的那一列：`user` 按不了審核，只能等（brief §11）。
     waitingForAdmin: '等管理員審核',
@@ -2217,7 +2217,7 @@ const zhHant = {
       loading: '讀取這筆下載…',
       missing: '找不到這筆下載',
       missingHint: '網址可能打錯了，或它已經被刪除並清除了紀錄。',
-      off: '讀不到這筆下載。Berth 自己的 API 沒有回應，先確認它還活著。',
+      readFailed: '讀不到這筆下載。',
     },
     // 十六個狀態一次定義完（`domain.JobState`）：M1 票 09 只走得到前三個，
     // 其餘由票 10 起的迴圈驅動，而它們是同一個封閉集合。
@@ -2276,7 +2276,7 @@ const zhHant = {
     timeline: {
       loading: '讀取時間線…',
       empty: '這一筆還沒有任何事件。',
-      off: '讀不到時間線。',
+      readFailed: '讀不到時間線。',
       // `/jobs` 展開區的摘要只畫最近三段（M2 票 12）。
       earlier_one: '較早的 {{count}} 筆事件在詳情頁。',
       earlier_other: '較早的 {{count}} 筆事件在詳情頁。',
@@ -2382,7 +2382,7 @@ const zhHant = {
     plan: {
       title: '匯入計劃',
       loading: '讀取計劃…',
-      off: '讀不到這一份計劃。',
+      readFailed: '讀不到這一份計劃。',
       planned_one: '{{count}} 個檔案要入庫',
       planned_other: '{{count}} 個檔案要入庫',
       // 抬頭與每一組講同一套信心的詞（票 03 第 10 條）：這裡是「高 / 中 / 低」，
@@ -2532,7 +2532,7 @@ const zhHant = {
       },
       replan: '重新規劃',
       replanning: '規劃中…',
-      replanOff: '重新規劃沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+      replanFailed: '重新規劃沒有成功。',
       replanned: '已重新規劃，現在是{{state}}。',
     },
     // 八種被擋下來的理由，八種下一步（PRODUCT 原則 4）。
@@ -2589,7 +2589,7 @@ const zhHant = {
       estimate: {
         // 「正在算」不是轉圈圈：它說得出正在量什麼、為什麼要等。
         pending: '正在逐一量測這幾個檔案…',
-        off: '算不出可以空出多少。Berth 自己的 API 沒有回應——刪除仍然按得下去。',
+        failed: '算不出可以空出多少；刪除仍然按得下去。',
         links_one: '媒體庫 {{count}} 個鏈接',
         links_other: '媒體庫 {{count}} 個鏈接',
         sources_one: '下載目錄 {{count}} 個檔案',
@@ -2607,7 +2607,7 @@ const zhHant = {
       // 時間線上那一筆列得出是哪幾個；這裡只說有幾個（M3 票 01）。
       kept_one: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪。',
       kept_other: '{{count}} 個媒體庫檔案已經不是 Berth 放的那一個，沒有刪。',
-      off: '刪除沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+      failed: '沒有刪掉。',
     },
   },
   // 送單（票 09）。資料夾名在這裡定下來，所以按下去之前它要出現在畫面上。
@@ -2625,7 +2625,7 @@ const zhHant = {
     already: '這一個已經在了',
     toJobs: '看下載列表',
     toRemovedJob: '看那一筆下載',
-    off: '送單沒有送出去。Berth 自己的 API 沒有回應，先確認它還活著。',
+    failed: '送單沒有成功。',
   },
   // 向 TMDB 要東西沒要到的四種樣子。探索頁與 Media 詳情頁共用同一塊 `TmdbNotice`，
   // 所以文案也在同一個地方——各寫一份的話兩頁遲早會對同一件事說不同的下一步。
@@ -2646,14 +2646,14 @@ const zhHant = {
     deniedChip: '沒有權限',
     denied: '設定只有管理員改得了，所以你被送到這一頁。健康頁是唯讀的診斷，每個人都看得到。',
     checking: '檢查中…',
-    unreachable: '連不上 Berth 後端。確認程序是否還在執行。',
+    readFailed: '讀不到健康檢查。',
     interval: '每 {{minutes}} 分鐘自動檢查一次',
     lastChecked: '上次檢查',
     lastOk: '最後成功',
     never: '沒有紀錄',
     recheck: '立即重測',
     rechecking: '重測中…',
-    recheckFailed: '重測沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    recheckFailed: '重測沒有走完。',
     failures_one: '連續失敗 {{count}} 次',
     failures_other: '連續失敗 {{count}} 次',
     // Jellyfin 專有：媒體庫數量（票 21）。其餘服務沒有這個數字。
@@ -2718,7 +2718,7 @@ const zhHant = {
     go: '前往設定：{{place}}',
     check: '重新檢查',
     checking: '檢查中…',
-    checkFailed: '檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    checkFailed: '檢查沒有走完。',
     health: '健康',
     tabs: {
       label: '設定',
@@ -2765,8 +2765,7 @@ const zhHant = {
           '有 {{count}} 條 Route 沒過：到「媒體庫路徑」看它斷在哪一條。送單到它會被擋下。',
         failed_other:
           '有 {{count}} 條 Route 沒過：到「媒體庫路徑」看它們斷在哪一條。送單到它們會被擋下。',
-        error:
-          '重新檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後到「媒體庫路徑」按「{{recheckAll}}」。',
+        error: '重新檢查沒有走完，之後到「媒體庫路徑」按「{{recheckAll}}」。',
       },
     },
     indexerPage: {
@@ -2778,7 +2777,7 @@ const zhHant = {
       title: 'TMDB 設定',
       lede: '換一把 TMDB API key。新的那一把測得過才換掉舊的；測不過的話舊的照舊在用，探索與入庫不受影響。',
       kept: '這一把測不過，沒有換掉——探索與入庫照舊用原本那一把。',
-      failed: '測試沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      failed: '測試沒有走完。',
     },
     // 深連結的主機（票 13）。它不是連線資訊，所以住在這裡而不是精靈。
     jellyfin: {
@@ -2795,7 +2794,7 @@ const zhHant = {
       saving: '儲存中…',
       saved: '已儲存。',
       invalid: '要是一個 http:// 或 https:// 開頭的網址。',
-      failed: '沒有存進去。Berth 自己的 API 沒有回應，先確認它還活著。',
+      failed: '沒有存進去。',
     },
     // 磁碟空間門檻（M2 票 09c）。形狀照 Sonarr 的 Minimum Free Space，單位不同。
     disk: {
@@ -2808,7 +2807,7 @@ const zhHant = {
       saving: '儲存中…',
       saved: '已儲存，並且立刻重量了一次。',
       invalid: '要是 0 或更大的整數。',
-      failed: '沒有存進去。Berth 自己的 API 沒有回應，先確認它還活著。',
+      failed: '沒有存進去。',
     },
   },
   // Route 設定頁（票 14）。「Route」保留原文：它是 CONTEXT.md 的名詞，精靈與健康頁也這樣寫。
@@ -2839,12 +2838,12 @@ const zhHant = {
       saving: '儲存並檢查中…',
       saved: '已儲存。',
       unhealthy: '纜繩沒有全綠，這條 Route 維持停用。修好下面紅的那一條，再按一次儲存。',
-      failed: '沒有存進去。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      failed: '沒有存進去。',
       nameRequired: '名稱不能空白：媒體庫頁的切換列與送單時的 Route 下拉都顯示它。',
     },
     recheck: '重新檢查',
     rechecking: '檢查中…',
-    recheckFailed: '檢查沒有走完。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+    recheckFailed: '檢查沒有走完。',
     rechecked: '檢查跑完了。',
     // 一次重跑每一條（M4 票 59）：換了一台 qBittorrent 之後不必逐條展開、逐條按。
     recheckAll: '全部重新檢查',
@@ -2867,14 +2866,14 @@ const zhHant = {
         '刪的那一刻發現還有 {{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
       refusedUncounted:
         '刪的那一刻發現還有下載或入庫檔案指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
-      failed: '沒有刪掉。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      failed: '沒有刪掉。',
       done: '已刪除「{{name}}」。',
     },
     disable: {
       label: '停用這條 Route',
       pending: '停用中…',
       done: '已停用「{{name}}」：新的送單不會再選到它。',
-      failed: '沒有停用。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      failed: '沒有停用。',
     },
     add: {
       open: '新增 Route',
@@ -2893,7 +2892,7 @@ const zhHant = {
       createdRed:
         '已建立「{{name}}」，但纜繩沒有全綠，所以維持停用。修好掛載之後在它那一列重新檢查，再勾啟用。',
       unreachable: '問不到 Jellyfin 的媒體庫清單，而新增 Route 要用它回報的路徑。原文：',
-      failed: '沒有建立。Berth 後端可能沒在跑——確認容器狀態後再按一次。',
+      failed: '沒有建立。',
       refusal: {
         library_missing:
           'Jellyfin 上已經沒有這個媒體庫了。取消後重新打開這個區塊，清單會再問一次。',
@@ -2908,7 +2907,7 @@ const zhHant = {
   },
   rss: {
     title: 'RSS',
-    off: '讀不到 RSS 的清單。Berth 自己的 API 沒有回應，先確認它還活著。',
+    readFailed: '讀不到 RSS 的清單。',
     // 一個 RSS Series 的季號與集號偏移（`rss/seriesValues.ts`）：審核的組、計劃、改正之後的那一句共用。
     values: {
       both: '第 {{season}} 季、集號偏移 {{offset}}',
@@ -2929,7 +2928,6 @@ const zhHant = {
         mixed: '讀法不只一種',
       },
     },
-    failed: '沒有做成。重新整理這一頁再試一次；還是不行的話看健康頁。',
     kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
     // 詳情頁的「RSS 訂閱」（M3 票 19，`media/SubscribePanel.tsx`）。
     subscribe: {
@@ -3060,10 +3058,11 @@ const zhHant = {
       search: '搜尋 TMDB',
       searching: '搜尋中…',
       off: 'TMDB 現在搜不到東西。到健康頁看它怎麼了。',
+      searchFailed: '沒有搜成。',
       none: '沒有找到。換一個名字試試（英文名或原文名）。',
       results: '搜尋結果',
       reading: '讀取這部作品…',
-      mediaOff: '讀不到這部作品的詳情，TMDB 可能暫時連不上。',
+      mediaReadFailed: '讀不到這部作品的詳情。',
       willFreeze: '綁定之後資料夾名就定下來，之後 TMDB 改標題也不會動它：',
       alreadyFrozen: '這部作品的資料夾名已經定下來了：',
       willSend_one: '綁定之後會送出 {{count}} 集到 qBittorrent。',
@@ -3110,7 +3109,7 @@ const zhHant = {
       allFinished: '沒有還在追的 RSS Series。',
       items: '它的 Feed Item',
       itemsLoading: '正在讀它的 Feed Item…',
-      itemsOff: '讀不到它的 Feed Item。',
+      itemsReadFailed: '讀不到它的 Feed Item。',
       itemsRetry: '重讀',
       itemsEmpty: '它的 Feed Item 跟著 Feed 刪掉了。',
       advanced: '進階',
@@ -3181,6 +3180,7 @@ const zhHant = {
       lede: '搜尋 feed 第一輪就帶著好幾個月的歷史。選完之前，這個 Feed 一筆都不送。',
       unread:
         '第一輪還沒輪到：背景會在半分鐘內讀它，或在下方 Feed 段按「立即輪詢」。讀到之後這裡會列出每一筆。',
+      readFailed: '讀不到這個 Feed 讀到的內容。',
       unreadFailed: '還沒讀到過，選不了。背景下一輪再讀，或在下方 Feed 段按「立即輪詢」。上一次：',
       tally: {
         send_one: '會送出 {{count}}',
@@ -3244,8 +3244,7 @@ const zhHant = {
       send_one: '送出 {{count}} 筆',
       send_other: '送出 {{count}} 筆',
       sending: '送出中… {{done}}/{{total}}',
-      stopped:
-        '送到一半停下來了（已處理 {{done}} 筆）：Berth 沒有回應。沒送出的那幾筆還勾著，等一下再按一次。',
+      stopped: '送到一半停下來了（已處理 {{done}} 筆），沒送出的那幾筆還勾著。',
       done: '送出 {{sent}} 筆；{{already}} 筆本來就在了；{{refused}} 筆沒有送出。',
       outcome: { sent: '已送出', already: '本來就在了' },
     },
@@ -3813,8 +3812,7 @@ const en: Translations<typeof zhHant> = {
           'Libraries that already exist cannot be changed here: rename, remove or repath them under Dashboard → Libraries in Jellyfin. Here you can only add new ones, and a rerun creates only those.',
         saving: 'Saving…',
         unsaved: 'Fix the fields marked in red and the list will be saved.',
-        saveFailed:
-          'The list was not saved: the request did not finish. Check the Berth backend, then change a field to try again.',
+        saveFailed: 'The list was not saved.',
         refused: 'The list was not saved: {{reason}}',
         refusedRow: 'The list was not saved (library {{position}}): {{reason}}',
         problem: {
@@ -3839,8 +3837,7 @@ const en: Translations<typeof zhHant> = {
       signIn: 'Sign in and create an API key',
       signInAgain: 'Sign in again',
       signingIn: 'Signing in…',
-      requestFailed:
-        'The request did not finish. Check the address and the Berth backend, then retry.',
+      requestFailed: 'The request did not finish.',
     },
     libraries: {
       addPath: 'Add the Berth path',
@@ -3917,8 +3914,7 @@ const en: Translations<typeof zhHant> = {
       saved: 'Updated. Sign in as {{username}} from now on; the old login no longer works.',
       refused:
         'Could not confirm the new login took. Try signing in with it; if that fails, press again. What the service said:',
-      failed:
-        'The request did not finish and the login is unchanged. Check that the Berth backend is running, then press again.',
+      failed: 'The request did not finish and the login is unchanged.',
     },
   },
   qbittorrent: {
@@ -3927,7 +3923,7 @@ const en: Translations<typeof zhHant> = {
       bundled: 'Set the qBittorrent WebUI login',
       existing: 'Check your qBittorrent',
     },
-    unreachable: 'Cannot read the state of this step. Check that the Berth backend is running.',
+    readFailed: 'Cannot read the state of this step.',
     lede: {
       choose:
         'Either way Berth uses only its own categories and writes no global preference; on the bundled one Berth also sets the WebUI login. Berth only connects once you choose.',
@@ -3975,8 +3971,7 @@ const en: Translations<typeof zhHant> = {
     },
     skip: 'Do this later',
     deferred: 'Deferred',
-    unreachable:
-      'Cannot reach the bundled Prowlarr. Point Berth at your own instead, or skip this step and come back.',
+    stateFailed: 'Cannot read the state of the indexer step.',
     readFailed:
       "Could not read this Prowlarr's site list, so Berth cannot tell how many sites it has.",
     rereadLater: 'It may be restarting or briefly unreachable: press Re-read to try again.',
@@ -4055,8 +4050,7 @@ const en: Translations<typeof zhHant> = {
       privateSites:
         'Sites that need an account (private and semi-private) are added in Prowlarr itself; once they are there Berth knows them and can search them.',
       openProwlarr: "Open Prowlarr's indexers page",
-      requestFailed:
-        'The test did not go through. The Berth backend may be down — check the container and try again.',
+      requestFailed: 'The test did not go through.',
       loading: 'Reading the site list from Prowlarr…',
       login: 'Set the Prowlarr interface login',
       loginFix:
@@ -4094,8 +4088,7 @@ const en: Translations<typeof zhHant> = {
       count_other: '{{count}} results',
       searchFailed: 'Search failed',
       disabled: 'Disabled in Prowlarr',
-      failed:
-        'The search did not finish. The Berth backend may be down — check the container and try again.',
+      failed: 'The search did not finish.',
       keeps: 'Berth does not remove sites that need an account',
       done_one: 'Search finished: {{count}} site has results.',
       done_other: 'Search finished: {{count}} sites have results.',
@@ -4145,8 +4138,7 @@ const en: Translations<typeof zhHant> = {
   tmdbStep: {
     title: 'TMDB',
     lede: 'Berth ships no API key of its own, so this credential has to be yours. It is required: without it there are no titles, seasons or artwork, and browsing, naming and importing all stop.',
-    unreachable:
-      'Cannot read the state of the TMDB step. The Berth backend may be down — check the container and try again.',
+    readFailed: 'Cannot read the state of the TMDB step.',
     cutaway: {
       title: 'TMDB',
       credential: 'Credential',
@@ -4187,8 +4179,7 @@ const en: Translations<typeof zhHant> = {
     },
     empty:
       'This Jellyfin has no libraries. Create one in Jellyfin and come back, so Berth has somewhere to write. Berth does not create libraries on your server.',
-    unreachable:
-      'Could not read the library list. The Berth backend may be down — check the container, then reload.',
+    readFailed: 'Could not read the library list.',
     docking: 'Building and checking…',
     list: 'Routes on this page',
     tally: '{{passed}} / {{total}} passed',
@@ -4355,7 +4346,7 @@ const en: Translations<typeof zhHant> = {
     lede: 'All five berths have been visited. Finishing closes the wizard; later changes happen in Settings.',
     submit: 'Finish setup',
     completing: 'Finishing…',
-    failed: 'Could not save. The Berth backend may be down — check the container and press again.',
+    failed: 'Could not save.',
     needTmdb:
       'The TMDB page (page 5) is not finished: TMDB needs an API key that passes its test. Without it discovery, episode snapshots and naming all stop, so this step cannot be skipped.',
     needRoutes:
@@ -4435,7 +4426,7 @@ const en: Translations<typeof zhHant> = {
     noArt: 'NO ART',
     tracked: 'Downloaded before',
     empty: 'TMDB returned nothing this round. Berth asks again once the hour-long cache expires.',
-    off: 'Cannot reach the Berth backend. Check that the process is still running.',
+    readFailed: 'Could not load this list.',
     search: {
       label: 'Search titles',
       placeholder: 'A series or film, in any language',
@@ -4572,8 +4563,6 @@ const en: Translations<typeof zhHant> = {
         item_not_visible: 'You cannot see this title in Jellyfin. Nothing was saved.',
         jellyfin_unreachable:
           'Berth cannot reach Jellyfin. Nothing was saved. Check on the Health page that Jellyfin is up, then press it again.',
-        other:
-          'Nothing was saved. Berth’s own API did not answer — check that it is still running, then press it again.',
       },
     },
     jellyfin: {
@@ -4603,9 +4592,10 @@ const en: Translations<typeof zhHant> = {
       unknown: 'This library does not exist, or you do not have access to it.',
       toFirst: 'Open “{{library}}”',
     },
-    off: 'Cannot read the library. Berth’s own API did not answer — check that it is still running.',
+    readFailed: 'Cannot read the library.',
   },
   media: {
+    readFailed: 'Could not read this title.',
     aired: 'First aired {{date}}',
     released: 'Released {{date}}',
     tmdbId: 'TMDB {{id}}',
@@ -4682,13 +4672,13 @@ const en: Translations<typeof zhHant> = {
       pages: 'Download pages',
       pagesEnd: 'Download pages, end of list',
       noneOpen: 'Nothing for this title is on its way or waiting for you to confirm.',
-      off: 'Can’t read this title’s downloads. Berth’s own API isn’t answering — check that it is still running.',
+      readFailed: 'Can’t read this title’s downloads.',
       retry: 'Retry',
       files: {
         title: 'Files',
         loading: 'Reading the file list…',
         none: 'qBittorrent hasn’t listed this torrent’s files yet.',
-        off: 'Can’t read the file list. Berth’s own API isn’t answering.',
+        readFailed: 'Can’t read the file list.',
         unwanted: 'Not downloaded',
       },
     },
@@ -4867,7 +4857,7 @@ const en: Translations<typeof zhHant> = {
     },
     capped:
       '{{total}} in this kind; {{shown}} listed, taken from each site in turn, most seeded first.',
-    off: "The search never went out. Berth's own API did not answer; check that it is still running.",
+    failed: 'The search did not finish.',
     announce_one: 'Found {{count}} result; {{failed}} keywords went unanswered.',
     announce_other: 'Found {{count}} results; {{failed}} keywords went unanswered.',
     column: {
@@ -5425,7 +5415,7 @@ const en: Translations<typeof zhHant> = {
     empty:
       'Nothing has been sent to download yet. Find a title on the discover page, search it for torrents, and send one.',
     toDiscover: 'Back to discover',
-    off: 'Could not read the download list. Berth’s own API did not answer — check that it is still running.',
+    readFailed: 'Could not read the download list.',
     media: 'Title',
     hash: 'info hash',
     sizeInline: 'Size {{value}}',
@@ -5435,12 +5425,10 @@ const en: Translations<typeof zhHant> = {
     retryImport: 'Retry the import',
     retryingImport: 'Importing…',
     retried: 'Retried; it is now {{state}}.',
-    retryOff:
-      'The retry was not sent. Berth’s own API did not answer — check that it is still running.',
+    retryFailed: 'The retry did not go through.',
     reimport: 'Import again',
     reimporting: 'Importing again…',
-    reimportOff:
-      'The reimport was not sent. Berth’s own API did not answer — check that it is still running.',
+    reimportFailed: 'The reimport did not go through.',
     reimported: 'Queued to import again; it is now {{state}}.',
     waitingForAdmin: 'Waiting for an administrator to review',
     toReview: 'Handle it in the review queue',
@@ -5459,7 +5447,7 @@ const en: Translations<typeof zhHant> = {
       missing: 'No such download',
       missingHint:
         'The address may be mistyped, or the download was deleted along with its records.',
-      off: 'Could not read this download. Berth’s own API did not answer — check that it is still running.',
+      readFailed: 'Could not read this download.',
     },
     state: {
       requested: 'Created',
@@ -5516,7 +5504,7 @@ const en: Translations<typeof zhHant> = {
     timeline: {
       loading: 'Reading the timeline…',
       empty: 'Nothing has happened to this job yet.',
-      off: 'Could not read the timeline.',
+      readFailed: 'Could not read the timeline.',
       earlier_one: 'The {{count}} earlier event is on the details page.',
       earlier_other: 'The {{count}} earlier events are on the details page.',
       retried: 'Back to created, then sent again.',
@@ -5609,7 +5597,7 @@ const en: Translations<typeof zhHant> = {
     plan: {
       title: 'Import plan',
       loading: 'Reading the plan…',
-      off: 'Could not read this plan.',
+      readFailed: 'Could not read this plan.',
       planned_one: '{{count}} file will be imported',
       planned_other: '{{count}} files will be imported',
       files_one: '{{count}} file',
@@ -5756,8 +5744,7 @@ const en: Translations<typeof zhHant> = {
       },
       replan: 'Plan it again',
       replanning: 'Planning…',
-      replanOff:
-        'The replan was not sent. Berth’s own API did not answer — check that it is still running.',
+      replanFailed: 'The replan did not go through.',
       replanned: 'Planned again; it is now {{state}}.',
     },
     refusal: {
@@ -5813,7 +5800,7 @@ const en: Translations<typeof zhHant> = {
       purgeHint: 'Leave it off and the job stays on the list as “Deleted”, timeline and all.',
       estimate: {
         pending: 'Measuring each of these files…',
-        off: 'Could not work out how much this frees. Berth’s own API did not answer — you can still delete.',
+        failed: 'Could not work out how much this frees; you can still delete.',
         links_one: '{{count}} link in the library',
         links_other: '{{count}} links in the library',
         sources_one: '{{count}} file in the download folder',
@@ -5830,7 +5817,7 @@ const en: Translations<typeof zhHant> = {
       kept_one: '{{count}} library file is no longer the one Berth put there and was not deleted.',
       kept_other:
         '{{count}} library files are no longer the ones Berth put there and were not deleted.',
-      off: 'The delete did not go out. Berth’s own API did not answer — check that it is up.',
+      failed: 'It was not deleted.',
     },
   },
   submit: {
@@ -5848,7 +5835,7 @@ const en: Translations<typeof zhHant> = {
     already: 'Already here',
     toJobs: 'See downloads',
     toRemovedJob: 'See that download',
-    off: 'The submission was not sent. Berth’s own API did not answer — check that it is still running.',
+    failed: 'The submission did not go through.',
   },
   tmdb: {
     problem: {
@@ -5872,15 +5859,14 @@ const en: Translations<typeof zhHant> = {
     denied:
       'Only an administrator can change the settings, so you were sent here instead. The health page is read-only diagnostics and everyone can see it.',
     checking: 'Checking…',
-    unreachable: 'Cannot reach the Berth backend. Check that the process is still running.',
+    readFailed: 'Could not read the health checks.',
     interval: 'Checked automatically every {{minutes}} min',
     lastChecked: 'Last checked',
     lastOk: 'Last success',
     never: 'No record',
     recheck: 'Check now',
     rechecking: 'Checking…',
-    recheckFailed:
-      'The check did not go through. The Berth backend may be down — check the container, then try again.',
+    recheckFailed: 'The check did not go through.',
     failures_one: '{{count}} consecutive failure',
     failures_other: '{{count}} consecutive failures',
     // Jellyfin only: library count (ticket 21). No other service has this number.
@@ -5949,8 +5935,7 @@ const en: Translations<typeof zhHant> = {
     go: 'Open {{place}} settings',
     check: 'Check again',
     checking: 'Checking…',
-    checkFailed:
-      'The check did not go through. The Berth backend may be down — check the container, then try again.',
+    checkFailed: 'The check did not go through.',
     health: 'Health',
     tabs: {
       label: 'Settings',
@@ -5995,8 +5980,7 @@ const en: Translations<typeof zhHant> = {
           '{{count}} route did not pass: see where it breaks under Routes. Downloads sent to it are refused.',
         failed_other:
           '{{count}} routes did not pass: see where they break under Routes. Downloads sent to them are refused.',
-        error:
-          'The recheck did not finish. The Berth backend may be down — check the container, then press “{{recheckAll}}” under Routes.',
+        error: 'The recheck did not finish; afterwards press “{{recheckAll}}” under Routes.',
       },
     },
     indexerPage: {
@@ -6008,8 +5992,7 @@ const en: Translations<typeof zhHant> = {
       title: 'TMDB settings',
       lede: 'Swap in another TMDB API key. The new key replaces the old one only once it passes the test; if it fails, the old key stays in use and browsing and imports carry on.',
       kept: 'This key failed the test and was not saved — browsing and imports keep using the one you had.',
-      failed:
-        'The test did not go through. The Berth backend may be down — check the container, then try again.',
+      failed: 'The test did not go through.',
     },
     jellyfin: {
       title: 'Jellyfin public address',
@@ -6024,7 +6007,7 @@ const en: Translations<typeof zhHant> = {
       saving: 'Saving…',
       saved: 'Saved.',
       invalid: 'This needs to be an address starting with http:// or https://.',
-      failed: 'It was not saved. Berth’s own API did not answer — check that it is still running.',
+      failed: 'It was not saved.',
     },
     disk: {
       title: 'Disk space threshold',
@@ -6035,7 +6018,7 @@ const en: Translations<typeof zhHant> = {
       saving: 'Saving…',
       saved: 'Saved, and measured again right away.',
       invalid: 'It has to be a whole number, 0 or more.',
-      failed: 'It was not saved. Berth’s own API did not answer — check that it is still running.',
+      failed: 'It was not saved.',
     },
   },
   routeSettings: {
@@ -6066,15 +6049,13 @@ const en: Translations<typeof zhHant> = {
       saved: 'Saved.',
       unhealthy:
         'Not every check passed, so this route stays disabled. Fix the red one below and press Save again.',
-      failed:
-        'It was not saved. The Berth backend may be down — check the container and press again.',
+      failed: 'It was not saved.',
       nameRequired:
         'The name cannot be blank: the library page’s route bar and the route picker when sending a download both show it.',
     },
     recheck: 'Check again',
     rechecking: 'Checking…',
-    recheckFailed:
-      'The check did not finish. The Berth backend may be down — check the container and press again.',
+    recheckFailed: 'The check did not finish.',
     rechecked: 'The check finished.',
     recheckAll: 'Check all again',
     recheckingAll: 'Checking all…',
@@ -6096,16 +6077,14 @@ const en: Translations<typeof zhHant> = {
         'When it came to deleting, {{jobs}} and {{files}} turned out to point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
       refusedUncounted:
         'Downloads or imported files turned out to point at this route when it was deleted, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
-      failed:
-        'It was not deleted. The Berth backend may be down — check the container and press again.',
+      failed: 'It was not deleted.',
       done: 'Deleted “{{name}}”.',
     },
     disable: {
       label: 'Disable this route',
       pending: 'Disabling…',
       done: 'Disabled “{{name}}”: new downloads will no longer pick it.',
-      failed:
-        'It was not disabled. The Berth backend may be down — check the container and press again.',
+      failed: 'It was not disabled.',
     },
     add: {
       open: 'Add a route',
@@ -6126,8 +6105,7 @@ const en: Translations<typeof zhHant> = {
         'Created “{{name}}”, but not every check passed, so it stays disabled. Fix the mount, check it again in its row, then tick Enabled.',
       unreachable:
         'Could not get the library list from Jellyfin, and a new route needs the paths it reports. Raw message:',
-      failed:
-        'It was not created. The Berth backend may be down — check the container and press again.',
+      failed: 'It was not created.',
       refusal: {
         library_missing:
           'Jellyfin no longer has this library. Cancel and open this section again to ask for the list afresh.',
@@ -6145,7 +6123,7 @@ const en: Translations<typeof zhHant> = {
   },
   rss: {
     title: 'RSS',
-    off: "Can't read the RSS lists. Berth's own API isn't answering — check that it's still running.",
+    readFailed: 'Can’t read the RSS lists.',
     values: {
       both: 'season {{season}}, episode offset {{offset}}',
       season: 'season {{season}}, no episode offset',
@@ -6164,8 +6142,6 @@ const en: Translations<typeof zhHant> = {
         mixed: 'read more than one way',
       },
     },
-    failed:
-      "That didn't go through. Reload the page and try again; if it still fails, look at the health page.",
     kind: { mikan: 'MIKAN', nyaa: 'NYAA', acgrip: 'ACG.RIP' },
     // The detail page's RSS subscription (M3 ticket 19, `media/SubscribePanel.tsx`).
     subscribe: {
@@ -6302,10 +6278,11 @@ const en: Translations<typeof zhHant> = {
       search: 'Search TMDB',
       searching: 'Searching…',
       off: "TMDB isn't returning results right now. Check the health page.",
+      searchFailed: 'The search did not go through.',
       none: 'Nothing found. Try another name (English or original title).',
       results: 'Search results',
       reading: 'Reading this title…',
-      mediaOff: "Can't read this title's details; TMDB may be unreachable.",
+      mediaReadFailed: "Can't read this title's details.",
       willFreeze: "Binding fixes the folder name; later title changes on TMDB won't touch it:",
       alreadyFrozen: "This title's folder name is already fixed:",
       willSend_one: 'Binding sends {{count}} episode to qBittorrent.',
@@ -6349,7 +6326,7 @@ const en: Translations<typeof zhHant> = {
       allFinished: 'No RSS Series is still being followed.',
       items: 'Its feed items',
       itemsLoading: 'Reading its feed items…',
-      itemsOff: "Can't read its feed items.",
+      itemsReadFailed: "Can't read its feed items.",
       itemsRetry: 'Read again',
       itemsEmpty: 'Its feed items went with the feed that was deleted.',
       advanced: 'Advanced',
@@ -6390,6 +6367,7 @@ const en: Translations<typeof zhHant> = {
       lede: 'A search feed brings months of history in its first round. Until you choose, nothing from this feed is sent.',
       unread:
         "The first round hasn't run yet: the background poll reads it within half a minute, or press Poll now in the Feeds section below. Every item shows up here once it's read.",
+      readFailed: 'Could not read what this feed returned.',
       unreadFailed:
         'Nothing has been read from it yet, so there is nothing to choose. The next background poll tries again, or press Poll now in the Feeds section below. Last time:',
       tally: {
@@ -6456,8 +6434,7 @@ const en: Translations<typeof zhHant> = {
       send_one: 'Send {{count}} item',
       send_other: 'Send {{count}} items',
       sending: 'Sending… {{done}}/{{total}}',
-      stopped:
-        "Stopped part way ({{done}} handled): Berth didn't answer. The ones not sent are still ticked; try again in a moment.",
+      stopped: 'Stopped part way ({{done}} handled); the ones not sent are still ticked.',
       done: '{{sent}} sent; {{already}} already there; {{refused}} not sent.',
       outcome: { sent: 'Sent', already: 'Already there' },
     },

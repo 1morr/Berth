@@ -2,7 +2,8 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { RouteView } from '../api/schemas'
-import { GhostButton, Notice } from '../components/controls'
+import { GhostButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { RouteIdentity } from '../components/RouteIdentity'
 import { CheckTally } from '../components/RouteRow'
 import { SettingsSection } from './SettingsFrame'
@@ -76,11 +77,12 @@ export function RouteRecheck({
             ))}
         </div>
         {recheck.isError && (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('settings.qbittorrentPage.recheck.error', {
+          <RequestFailed
+            error={recheck.error}
+            lead={t('settings.qbittorrentPage.recheck.error', {
               recheckAll: t('routeSettings.recheckAll'),
             })}
-          </Notice>
+          />
         )}
         {shown.length > 0 && (
           <ul aria-busy={recheck.isPending} className="grid gap-2">

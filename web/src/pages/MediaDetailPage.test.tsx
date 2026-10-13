@@ -7,7 +7,14 @@ import type { Job, JobFile, JobPage, MediaJobFilter } from '../api/jobs'
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
 import type { Bangumi, Feed, RssSeries } from '../api/rss'
 import type { Batch, QueryPlan, SearchResults } from '../api/search'
-import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
+import {
+  HEALTHY,
+  REQUEST_FAILURES,
+  session,
+  stubApi,
+  type StubRoute,
+  type StubRoutes,
+} from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -230,10 +237,7 @@ function preview(queries: string[], overrides: Partial<QueryPlan> = {}): QueryPl
   }
 }
 
-function render(
-  routes: Record<string, StubRoute | (() => StubRoute)> = {},
-  role: 'admin' | 'user' = 'admin',
-) {
+function render(routes: StubRoutes = {}, role: 'admin' | 'user' = 'admin') {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
@@ -1059,7 +1063,7 @@ describe('Media 詳情頁', () => {
       }
     }
 
-    function gaps(extra: Record<string, StubRoute | (() => StubRoute)> = {}) {
+    function gaps(extra: StubRoutes = {}) {
       return render({
         [SPY_PATH]: { body: gappy() },
         [MISSING_QUERIES]: { body: preview(['SPY x FAMILY S01E02']) },
@@ -1599,7 +1603,7 @@ describe('觀看區（M1.5 票 08）', () => {
     }
   }
 
-  function inJellyfin(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+  function inJellyfin(routes: StubRoutes = {}) {
     return render({
       [WATCH_PATH]: { body: area() },
       [EPISODES(SEASON_TWO)]: {
@@ -1845,6 +1849,19 @@ describe('觀看區（M1.5 票 08）', () => {
     const asked = calls(api, 'GET', WATCH_PATH.slice(4)).length
     await userEvent.click(screen.getByRole('button', { name: '重試' }))
     await waitFor(() => expect(calls(api, 'GET', WATCH_PATH.slice(4)).length).toBe(asked + 1))
+  })
+
+  // M4 票 90：集讀不出來時，原因跟著說（500、401、離線各不同），重試鍵留著。
+  it.each(REQUEST_FAILURES)('讀不到這一季的集（%s）：重試鍵留著', async (_, failure, expected) => {
+    const { queryClient } =
+      (inJellyfin({ [EPISODES(SEASON_TWO)]: failure }), renderApp('/media/tv:120089'))
+    // 送不到會重試三次（`retryUnlessRefused`），預設的間隔加倍要等七秒。
+    queryClient.setQueryDefaults(['episodes'], { retryDelay: 0 })
+
+    const said = await screen.findByText(/^這一季的集讀不出來。/)
+    expect(said).toHaveTextContent(expected)
+    expect(said).not.toHaveTextContent(/自己的 API|還活著/)
+    expect(screen.getByRole('button', { name: '重試' })).toBeVisible()
   })
 
   it('看過的集標為未看先確認：說得出清掉的是這一集的次數與時間', async () => {
@@ -2568,5 +2585,88 @@ describe('下載段（M4 票 12，`.scratch/m4/media-downloads-shape.md`）', ()
     expect(screen.queryByText('這部作品沒有還在路上或等你確認的下載。')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '回第一頁' }))
     expect(await screen.findByText(QUEUED.name)).toBeVisible()
+  })
+})
+
+// M4 票 90：後端沒說理由的失敗，原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+describe('作品頁對 Berth 的請求沒成時說出對的原因（M4 票 90）', () => {
+  /** 一格 `RequestFailed`：前半句在、原因對、沒有舊的那句。 */
+  function expectFailure(alert: HTMLElement, lead: RegExp, expected: RegExp) {
+    expect(alert).toHaveTextContent(lead)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
+  }
+
+  it.each(REQUEST_FAILURES)('讀不到這部作品（%s）', async (_, failure, expected) => {
+    render({ [SPY_PATH]: failure })
+    const { queryClient } = renderApp('/media/tv:120089')
+    // 送不到會重試三次（`retryUnlessRefused`），預設的間隔加倍要等七秒。
+    queryClient.setQueryDefaults(['media'], { retryDelay: 0 })
+
+    expectFailure(await screen.findByRole('alert'), /讀不到這部作品。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)(
+    '讀不到這部作品的下載（%s）：重試鍵留著',
+    async (_, failure, expected) => {
+      render({ [DOWNLOADS]: failure })
+      renderApp('/media/tv:120089')
+
+      const section = (await screen.findByRole('heading', { level: 2, name: '下載' })).closest(
+        'section',
+      )!
+      expectFailure(await within(section).findByRole('alert'), /讀不到這部作品的下載。/, expected)
+      expect(within(section).getByRole('button', { name: '重試' })).toBeVisible()
+    },
+  )
+
+  it.each(REQUEST_FAILURES)('讀不到檔案清單（%s）', async (_, failure, expected) => {
+    const running = downloadJob({
+      hash: 'b'.repeat(40),
+      name: 'Kaiju Girl 02',
+      state: 'downloading',
+    })
+    render({
+      [DOWNLOADS]: jobPage('open', [running], {
+        active: 1,
+        attention: 0,
+        imported: 0,
+        all: 1,
+        open: 1,
+      }),
+      [`GET /api/jobs/${running.hash}/files`]: failure,
+    })
+    renderApp('/media/tv:120089')
+    const section = (await screen.findByRole('heading', { level: 2, name: '下載' })).closest(
+      'section',
+    )!
+
+    await userEvent.click(await within(section).findByText(running.name))
+
+    expectFailure(await within(section).findByRole('alert'), /讀不到檔案清單。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到 RSS 的清單（%s）', async (_, failure, expected) => {
+    render({ [SERIES_PATH]: failure })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    expectFailure(await within(block).findByRole('alert'), /讀不到 RSS 的清單。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('建立搜尋 feed 沒有成功（%s）', async (_, failure, expected) => {
+    render({
+      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [MIKAN_SEARCH]: { body: [] },
+      'POST /api/rss/subscriptions/search': failure,
+    })
+    renderApp('/media/tv:120089')
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+    await userEvent.click(within(block).getByRole('button', { name: /^NYAA/ }))
+
+    await userEvent.click(within(block).getByRole('button', { name: '建立搜尋 feed' }))
+
+    expectFailure(await within(block).findByRole('alert'), /沒有成功。/, expected)
   })
 })

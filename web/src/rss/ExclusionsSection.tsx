@@ -3,7 +3,8 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { RSS_KEY, saveExclusions, type Exclusions } from '../api/rss'
-import { Checkbox, Notice } from '../components/controls'
+import { Checkbox } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { RulesEditor } from './RulesEditor'
 import { SectionHeading } from './SectionHeading'
 
@@ -35,11 +36,7 @@ export function ExclusionsSection({ exclusions }: { exclusions: Exclusions }) {
             if (!toggle.isPending) toggle.mutate(checked)
           }}
         />
-        {toggle.isError && (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('rss.failed')}
-          </Notice>
-        )}
+        {toggle.isError && <RequestFailed error={toggle.error} lead={t('request.notDone')} />}
         <RulesEditor
           rules={exclusions.rules}
           save={(rules) => saveExclusions(exclusions.not_single, rules)}

@@ -8,7 +8,8 @@ import { reviewQueryOptions } from '../api/review'
 import { routesQueryOptions } from '../api/routes'
 import { qbittorrentSetupQueryOptions, setQbittorrentLogin } from '../api/setup'
 import { diskQueryOptions, saveDisk } from '../api/settings'
-import { Field, GhostButton, Notice } from '../components/controls'
+import { Field, GhostButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { ServiceConnection } from '../settings/ServiceConnection'
 import { HealthSection } from '../settings/HealthSection'
@@ -154,9 +155,7 @@ function DiskThreshold() {
           </p>
         </div>
         {save.isError && !invalid && (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('settings.disk.failed')}
-          </Notice>
+          <RequestFailed error={save.error} lead={t('settings.disk.failed')} />
         )}
       </form>
     </SettingsSection>

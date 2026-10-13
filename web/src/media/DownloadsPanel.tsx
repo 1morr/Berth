@@ -18,6 +18,7 @@ import { FILTER, FILTER_ACTIVE, GHOST_LINK, GhostButton } from '../components/co
 import { Dot } from '../components/Dot'
 import { formatEpisode } from '../components/episodes'
 import { Pager, PAGE_LINK } from '../components/Pager'
+import { RequestFailed } from '../components/RequestFailed'
 import { JobSummary } from '../jobs/JobSummary'
 import { jobRowFrame } from '../jobs/jobState'
 import { formatSize } from './searchResult'
@@ -49,7 +50,7 @@ export function DownloadsPanel({ media }: { media: Media }) {
       <section aria-labelledby={headingId} className="grid gap-4">
         <Heading id={headingId} />
         <div className="grid justify-items-start gap-3">
-          <p className="max-w-prose text-sm text-ink-dim">{t('media.downloads.off')}</p>
+          <RequestFailed error={listing.error} lead={t('media.downloads.readFailed')} />
           <GhostButton type="button" onClick={() => void listing.refetch()}>
             {t('media.downloads.retry')}
           </GhostButton>
@@ -252,7 +253,7 @@ function JobFiles({ hash }: { hash: string }) {
     return <p className="text-xs text-ink-dim">{t('media.downloads.files.loading')}</p>
   }
   if (!files.data) {
-    return <p className="text-xs text-ink-dim">{t('media.downloads.files.off')}</p>
+    return <RequestFailed error={files.error} lead={t('media.downloads.files.readFailed')} />
   }
   if (files.data.length === 0) {
     return <p className="max-w-prose text-xs text-ink-dim">{t('media.downloads.files.none')}</p>

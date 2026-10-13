@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type {
   JellyfinConnectInput,
+  JellyfinSetup,
   JellyfinStartup,
   OwnerInput,
   OwnerRefusal,
@@ -22,7 +23,7 @@ import {
 } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
-import { JellyfinSignInForm } from './JellyfinExisting'
+import { ApiKeyFailure, JellyfinSignInForm } from './JellyfinExisting'
 import { JELLYFIN_LOCALES, localeForUi, localeLabel } from './jellyfinStartup'
 import { LOGIN_RULES, reuseUnfit } from './interfaceLogin'
 import { trimUsername, usernameProblem, type UsernameProblem } from './jellyfinUsername'
@@ -34,8 +35,10 @@ import { StepFrame } from './StepFrame'
 /** 擁有者成立之後 Berth 的 key 被撤了：就地重新登入換一把（M4 票 18）。 */
 export interface ReSignIn {
   connecting: boolean
-  /** 沒送到，或 Jellyfin 那一段沒換到 key。 */
-  failed: boolean
+  /** 請求為什麼沒成。 */
+  error: unknown
+  /** 請求跑完了的那一份：Jellyfin 那一段沒換到 key 時由 `ApiKeyFailure` 說原因。 */
+  result: JellyfinSetup | undefined
   onConnect: (input: JellyfinConnectInput) => void
 }
 
@@ -124,7 +127,13 @@ export function OwnerStep({
             {t('owner.reSignIn.title')}
           </h3>
           <p className="mt-1 max-w-prose text-xs text-ink-dim">{t('owner.reSignIn.lede')}</p>
-          <JellyfinSignInForm {...reSignIn} signedIn />
+          <JellyfinSignInForm
+            connecting={reSignIn.connecting}
+            error={reSignIn.error}
+            onConnect={reSignIn.onConnect}
+            signedIn
+          />
+          <ApiKeyFailure setup={reSignIn.result} />
         </section>
       )}
 

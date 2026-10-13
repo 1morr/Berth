@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { parseRssRefusal, RSS_KEY } from '../api/rss'
 import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
+import { problemText } from '../components/requestProblem'
 
 /**
  * 一鍵加入的建議項（brief §15：720p、简体這類，不預設勾）。解析度與字幕語言是最常見的「這一種我不要」；
@@ -52,7 +53,7 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
       : refusal
         ? t(`rss.refusal.${refusal.reason}`)
         : change.isError
-          ? t('rss.failed')
+          ? problemText(t, change.error, t('request.notDone'))
           : undefined
   const suggestions = SUGGESTED_RULES.filter((rule) => !rules.includes(rule))
 

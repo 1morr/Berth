@@ -12,8 +12,10 @@ import {
   type Oneshot,
   type OneshotItem,
 } from '../api/rss'
-import { Field, GhostButton, Notice, PrimaryButton, STICKY_ACTION } from '../components/controls'
+import { Field, GhostButton, PrimaryButton, STICKY_ACTION } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { RequestFailed } from '../components/RequestFailed'
+import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL } from '../components/signal'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { whenText } from '../components/queueText'
@@ -80,7 +82,7 @@ export function OneshotSection() {
       ? t('rss.oneshot.unreachable')
       : t(`rss.refusal.${refusal.reason}`)
     : read.isError
-      ? t('rss.failed')
+      ? problemText(t, read.error, t('request.notDone'))
       : undefined
 
   return (
@@ -122,7 +124,7 @@ export function OneshotSection() {
             setChosen(undefined)
           }}
           media={media}
-          mediaFailed={work !== null && detail.isError}
+          mediaError={work !== null && detail.isError ? detail.error : null}
           route={route}
           onRoute={setChosen}
         />
@@ -136,7 +138,7 @@ function Listing({
   work,
   onWork,
   media,
-  mediaFailed,
+  mediaError,
   route,
   onRoute,
 }: {
@@ -144,7 +146,8 @@ function Listing({
   work: Pickable | null
   onWork: (work: Pickable) => void
   media: Media | undefined
-  mediaFailed: boolean
+  /** 讀作品詳情的失敗（`null` 表示沒失敗）。 */
+  mediaError: unknown
   route: number | null
   onRoute: (route: number | null) => void
 }) {
@@ -232,7 +235,7 @@ function Listing({
         work={work}
         onWork={onWork}
         media={media}
-        mediaFailed={mediaFailed}
+        mediaError={mediaError}
         route={route}
         onRoute={onRoute}
       />
@@ -266,9 +269,7 @@ function Listing({
       </ul>
 
       {send.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('rss.oneshot.stopped', { done: progress })}
-        </Notice>
+        <RequestFailed error={send.error} lead={t('rss.oneshot.stopped', { done: progress })} />
       )}
       {send.data && (
         <p role="status" className="text-sm text-ink">
@@ -316,7 +317,7 @@ function WorkPicker({
   work,
   onWork,
   media,
-  mediaFailed,
+  mediaError,
   route,
   onRoute,
 }: {
@@ -325,7 +326,8 @@ function WorkPicker({
   work: Pickable | null
   onWork: (work: Pickable) => void
   media: Media | undefined
-  mediaFailed: boolean
+  /** 讀作品詳情的失敗（`null` 表示沒失敗）。 */
+  mediaError: unknown
   route: number | null
   onRoute: (route: number | null) => void
 }) {
@@ -356,7 +358,9 @@ function WorkPicker({
         onChange={(event) => setQuery(event.target.value)}
       />
       {found.isFetching && <p className="text-xs text-ink-dim">{t('rss.bind.searching')}</p>}
-      {found.data?.problem ? (
+      {found.isError ? (
+        <RequestFailed error={found.error} lead={t('rss.bind.searchFailed')} />
+      ) : found.data?.problem ? (
         <p role="alert" className="max-w-prose text-xs text-blocked-ink">
           {t('rss.bind.off')}
         </p>
@@ -373,13 +377,11 @@ function WorkPicker({
           aboutOf={aboutOf}
         />
       )}
-      {work !== null && !media && !mediaFailed && (
+      {work !== null && !media && mediaError === null && (
         <p className="text-xs text-ink-dim">{t('rss.bind.reading')}</p>
       )}
-      {mediaFailed && (
-        <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-          {t('rss.bind.mediaOff')}
-        </p>
+      {mediaError !== null && (
+        <RequestFailed error={mediaError} lead={t('rss.bind.mediaReadFailed')} />
       )}
       {media && <RoutePicker media={media} value={route} onChange={onRoute} />}
     </fieldset>

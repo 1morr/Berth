@@ -3,7 +3,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { stubApi, type StubRoute } from '../test/fetch'
+import { REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { boardCells, findBoardCells } from '../test/board'
 import { renderInRoute } from '../test/render'
 import type { SiteFailure, SiteSearch } from '../api/setup'
@@ -938,24 +938,31 @@ describe('頁 4：Prowlarr 與索引站', () => {
     )
   })
 
-  it('測試的請求沒送到：說在摘要那一個 live 區裡，剛才的站回到未測', async () => {
-    stubApi({
-      [STATUS]: { body: AT_INDEXER },
-      [INDEXERS]: { body: indexerSetup() },
-      [TEST_SITES]: { status: 502, body: { detail: 'Bad Gateway' } },
-    })
-    const user = userEvent.setup()
+  // M4 票 90：原本 500、401 與連不上一律說「測試沒有送到」。
+  it.each(REQUEST_FAILURES)(
+    '測試的請求沒成（%s）：說在摘要裡，剛才的站回到未測',
+    async (_, failure, expected) => {
+      stubApi({
+        [STATUS]: { body: AT_INDEXER },
+        [INDEXERS]: { body: indexerSetup() },
+        [TEST_SITES]: failure,
+      })
+      const user = userEvent.setup()
 
-    renderInRoute(<SetupPage />)
-    await openAdvanced(user)
-    await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
+      renderInRoute(<SetupPage />)
+      await openAdvanced(user)
+      await user.click(await screen.findByRole('button', { name: '測試 YTS' }))
 
-    const summary = await screen.findByTestId('check-summary')
-    expect(await within(summary).findByText(/測試沒有送到/)).toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    const yts = within(screen.getByRole('checkbox', { name: 'YTS' }).closest('li')!)
-    expect(yts.getByText('未測')).toBeInTheDocument()
-  })
+      const failed = await screen.findByTestId('request-failed')
+      // `RequestFailed` 是 `alert`，不放進摘要那一個 live 區（DESIGN.md：整段只有這一個 `aria-live`）。
+      expect(within(screen.getByTestId('check-summary')).queryByRole('alert')).toBeNull()
+      expect(failed).toHaveTextContent(/測試沒有走完。/)
+      expect(failed).toHaveTextContent(expected)
+      expect(failed).not.toHaveTextContent(/自己的 API|還活著/)
+      const yts = within(screen.getByRole('checkbox', { name: 'YTS' }).closest('li')!)
+      expect(yts.getByText('未測')).toBeInTheDocument()
+    },
+  )
 
   it('主鈕貼著站清單、不必先填介面登入；加入只送勾的那幾站（M4 票 20）', async () => {
     const fetchStub = stubApi({
@@ -2311,5 +2318,58 @@ describe('只有 Berth 時的套件內卡片', () => {
 
     expect(await screen.findByText('這套 compose 的 Prowlarr 沒在跑。')).toBeVisible()
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr')).toBeVisible()
+  })
+})
+
+// M4 票 90：讀不到某一步的狀態、試搜沒跑完，原本都只說一句「連不上／後端可能沒在跑」。
+describe('精靈對 Berth 的請求沒成時說出對的原因', () => {
+  async function expectFailed(lead: RegExp, expected: RegExp, scope?: HTMLElement) {
+    const failed = await (scope ? within(scope) : screen).findByTestId('request-failed')
+    expect(failed).toHaveTextContent(lead)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/自己的 API|還活著/)
+  }
+
+  it.each(REQUEST_FAILURES)('讀不到 qBittorrent 那一步（%s）', async (_, failure, expected) => {
+    stubApi({ [STATUS]: { body: AT_QBITTORRENT }, [QBITTORRENT]: failure })
+
+    renderInRoute(<SetupPage />)
+
+    await expectFailed(/讀不到 qBittorrent 這一步的狀態。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到索引站那一步（%s）', async (_, failure, expected) => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: failure })
+
+    renderInRoute(<SetupPage />)
+
+    await expectFailed(/讀不到索引站這一步的狀態。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到 TMDB 那一步（%s）', async (_, failure, expected) => {
+    stubApi({ [STATUS]: { body: AT_TMDB }, [TMDB]: failure })
+
+    renderInRoute(<SetupPage />)
+
+    await expectFailed(/讀不到 TMDB 這一步的狀態。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('已加入的站搜尋沒跑完（%s）', async (_, failure, expected) => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: {
+        body: indexerSetup({ sites: [site(RECOMMENDED[1], 1)], candidates: [] }),
+      },
+      [`${SEARCH}?query=Frieren`]: failure,
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const section = await screen.findByTestId('added')
+    const added = within(section)
+    await user.type(added.getByLabelText('關鍵字'), 'Frieren')
+    await user.click(added.getByRole('button', { name: '搜尋全部' }))
+
+    await expectFailed(/搜尋沒跑完。/, expected, section)
   })
 })

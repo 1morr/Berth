@@ -12,7 +12,6 @@ import {
   testIndexers,
   type IndexerSetup,
 } from '../api/setup'
-import { Notice } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { HealthSection } from '../settings/HealthSection'
@@ -90,9 +89,7 @@ export function IndexerSettingsPage() {
             )}
           </div>
         ) : indexers.isError ? (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('indexer.unreachable')}
-          </Notice>
+          <RequestFailed error={indexers.error} lead={t('indexer.stateFailed')} />
         ) : (
           // 進來只讀（M4 票 09）：這一句說的是讀清單，不是檢查。
           <p className="text-sm text-ink-dim">{t('indexer.add.loading')}</p>

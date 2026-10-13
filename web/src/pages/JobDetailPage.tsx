@@ -11,6 +11,7 @@ import { planQueryOptions } from '../api/plans'
 import { AuditChip } from '../components/AuditChip'
 import { CopyLine, GHOST_LINK, PAGE_TITLE } from '../components/controls'
 import { DetailLine } from '../components/QueueRow'
+import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { JobActions } from '../jobs/JobActions'
 import { planHistory } from '../jobs/eventTypes'
@@ -44,7 +45,7 @@ export function JobDetailPage({ hash }: { hash: string }) {
     return (
       <Page>
         <BackLink />
-        <p className="max-w-prose text-sm text-ink-dim">{t('jobs.detail.off')}</p>
+        <RequestFailed error={job.error} lead={t('jobs.detail.readFailed')} />
       </Page>
     )
   }
@@ -123,7 +124,7 @@ function Detail({ job }: { job: Job }) {
             ) : plan.data ? (
               <JobPlan plan={plan.data} />
             ) : (
-              <p className="text-xs text-ink-dim">{t('jobs.plan.off')}</p>
+              <RequestFailed error={plan.error} lead={t('jobs.plan.readFailed')} />
             )}
           </Section>
 
@@ -133,7 +134,7 @@ function Detail({ job }: { job: Job }) {
               {events.isPending ? (
                 <p className="text-xs text-ink-dim">{t('jobs.timeline.loading')}</p>
               ) : !events.data ? (
-                <p className="text-xs text-ink-dim">{t('jobs.timeline.off')}</p>
+                <RequestFailed error={events.error} lead={t('jobs.timeline.readFailed')} />
               ) : history.length === 0 ? (
                 <p className="text-xs text-ink-dim">{t('jobs.detail.historyEmpty')}</p>
               ) : (
@@ -149,7 +150,7 @@ function Detail({ job }: { job: Job }) {
           ) : events.data ? (
             <JobTimeline events={events.data} />
           ) : (
-            <p className="text-xs text-ink-dim">{t('jobs.timeline.off')}</p>
+            <RequestFailed error={events.error} lead={t('jobs.timeline.readFailed')} />
           )}
         </Section>
       </div>

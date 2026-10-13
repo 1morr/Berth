@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { healthDetailQueryOptions } from '../api/health'
 import type { ServiceKind } from '../api/schemas'
 import { GhostButton, Notice } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { ServiceCard } from '../health/ServiceCard'
 import { SettingsSection } from './SettingsFrame'
 import type { ServiceCheck } from './useServiceCheck'
@@ -23,11 +24,8 @@ export function HealthSection({ kind, check }: { kind: ServiceKind; check: Servi
     <SettingsSection id={`health-${kind}`} title={t('settings.health')}>
       {services.isPending ? (
         <p className="text-sm text-ink-dim">{t('health.checking')}</p>
-      ) : !row ? (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('health.unreachable')}
-        </Notice>
-      ) : (
+      ) : row ? (
+        // 先看手上有沒有這一列：背景重抓失敗時上一份還在，卡片與「檢查」鍵照留（M4 票 90 的 code-review）。
         <div className="grid gap-3">
           <ServiceCard
             row={row}
@@ -38,12 +36,15 @@ export function HealthSection({ kind, check }: { kind: ServiceKind; check: Servi
               </GhostButton>
             }
           />
-          {check.isError && (
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t('settings.checkFailed')}
-            </Notice>
-          )}
+          {check.isError && <RequestFailed error={check.error} lead={t('settings.checkFailed')} />}
         </div>
+      ) : services.isError ? (
+        <RequestFailed error={services.error} lead={t('health.readFailed')} />
+      ) : (
+        // 資料回來了卻沒有這一列（不該發生）：沒有請求可以怪，只說讀不到（M4 票 90）。
+        <Notice signal="blocked" label={t('common.failed')}>
+          {t('health.readFailed')}
+        </Notice>
       )}
     </SettingsSection>
   )

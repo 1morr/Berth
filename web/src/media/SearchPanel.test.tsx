@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Job } from '../api/jobs'
 import type { Media } from '../api/media'
 import type { QueryPlan, SearchResults, SearchResult } from '../api/search'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -193,6 +193,17 @@ function render(
     [QUERIES_PATH]: { body: plan() },
     // 同一頁 admin 才有的「RSS 訂閱」段（M3 票 19）。
     'GET /api/rss/series?media=tv%3A120089': { body: [] },
+    // 「下載」段一進頁面就問這部作品的下載；沒替身會是 404，畫出一格 `RequestFailed`（M4 票 90）。
+    'GET /api/jobs?media=tv%3A120089&filter=open&page=1': {
+      body: {
+        filter: 'open',
+        page: 1,
+        page_size: 50,
+        total: 0,
+        jobs: [],
+        counts: { active: 0, attention: 0, imported: 0, all: 0, open: 0 },
+      },
+    },
     ...routes,
   })
 }
@@ -272,6 +283,19 @@ describe('搜尋 torrent 與結果表', () => {
       'https://acg.rip/t/344604',
     )
     expect(within(table).getAllByText('S03E13').length).toBeGreaterThan(0)
+  })
+
+  // M4 票 90：原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)('搜尋沒有跑完（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [SEARCH_PATH]: failure })
+    renderApp('/media/tv:120089')
+
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
+
+    const alert = await within(panel()).findByRole('alert')
+    expect(alert).toHaveTextContent(/搜尋沒有跑完。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 
   describe('發佈欄（M3 票 14）', () => {
@@ -1267,6 +1291,18 @@ describe('搜尋 torrent 與結果表', () => {
       const alert = await screen.findByRole('alert')
       expect(alert).toHaveTextContent(/這一筆過期了/)
       expect(alert).toHaveTextContent(/重新搜一次/)
+    })
+
+    it.each(REQUEST_FAILURES)('送單沒有成功（%s）時說出對的原因', async (_, failure, expected) => {
+      await searched({ 'POST /api/jobs': failure })
+
+      await userEvent.click(screen.getByRole('button', { name: '送單' }))
+      await userEvent.click(screen.getByRole('button', { name: '確認送單' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/送單沒有成功。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API/)
     })
 
     it('磁碟不夠時說的是那個理由與下一步，量到的數字貼在旁邊（M3 票 04）', async () => {

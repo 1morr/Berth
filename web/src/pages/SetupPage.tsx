@@ -84,7 +84,7 @@ import { type ChoiceControls } from '../setup/ServiceChoice'
 import { type ChoiceDraft } from '../setup/choiceDraft'
 import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
-import { requestProblem } from '../components/requestProblem'
+import { problemText, requestProblem } from '../components/requestProblem'
 import { useSignOut } from '../components/useSignOut'
 import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
@@ -554,7 +554,10 @@ export function SetupPage() {
   function librariesFailure(): string | null {
     // 停手存檔的失敗（任何一種）優先；按下之前那一次存檔被擋下來也算——那時 `dock` 失敗的原因就是它。
     const refusal = saveLibraries.isError ? bundledRefusalOf(saveLibraries.error) : dockRefusal
-    if (saveLibraries.isError && !refusal) return t('jellyfin.bundled.list.saveFailed')
+    if (saveLibraries.isError && !refusal) {
+      // 解析不出理由的照請求為什麼沒成說（M4 票 90）。
+      return problemText(t, saveLibraries.error, t('jellyfin.bundled.list.saveFailed'))
+    }
     if (!refusal) return null
     const reason = t(`jellyfin.bundled.list.problem.${refusal.reason}`)
     return refusal.row === undefined
@@ -632,8 +635,8 @@ export function SetupPage() {
           onClaimReset={owner.reset}
           reSignIn={{
             connecting: reSignIn.isPending,
-            failed:
-              reSignIn.isError || (reSignIn.data !== undefined && apiKeyFailed(reSignIn.data)),
+            error: reSignIn.error,
+            result: reSignIn.data,
             onConnect: (input) => reSignIn.mutate(input),
           }}
           note={note}
@@ -643,7 +646,7 @@ export function SetupPage() {
         <QbittorrentStep
           status={current}
           setup={qbittorrent.data}
-          setupFailed={qbittorrent.isError}
+          setupError={qbittorrent.error}
           owner={current.owner}
           carried={carriedFor('qbittorrent')}
           applying={applyPreferences.isPending}
@@ -689,8 +692,8 @@ export function SetupPage() {
           />
         ) : (
           <Waiting
-            failed={routes.isError || jellyfin.isError}
-            message={t('routes.unreachable')}
+            error={routes.error ?? jellyfin.error}
+            message={t('routes.readFailed')}
             nav={nav}
           />
         )
@@ -710,12 +713,13 @@ export function SetupPage() {
             }
             completing={finish.isPending}
             failure={completeFailure(finish.error, tmdb.data, routes.data)}
+            error={finish.error}
             onComplete={() => finish.mutate()}
             onFixTmdb={() => goTo(STEP.tmdb)}
             nav={nav}
           />
         ) : (
-          <Waiting failed={routes.isError} message={t('routes.unreachable')} nav={nav} />
+          <Waiting error={routes.error} message={t('routes.readFailed')} nav={nav} />
         )
       ) : step === STEP.indexer ? (
         // 讀回來才掛：先掛上的話 `StepFrame` 的焦點接手比試搜清單的「移除之後接到下一列」先跑，
@@ -724,7 +728,7 @@ export function SetupPage() {
           <IndexerStep
             status={current}
             indexers={indexers.data}
-            indexersFailed={indexers.isError}
+            indexersError={indexers.error}
             owner={current.owner}
             carried={carriedFor('prowlarr')}
             applying={applySites.isPending}
@@ -751,7 +755,7 @@ export function SetupPage() {
             nav={nav}
           />
         ) : (
-          <Waiting failed={indexers.isError} message={t('indexer.unreachable')} nav={nav} />
+          <Waiting error={indexers.error} message={t('indexer.stateFailed')} nav={nav} />
         )
       ) : tmdb.data ? (
         <TmdbStep
@@ -762,7 +766,7 @@ export function SetupPage() {
           nav={nav}
         />
       ) : (
-        <Waiting failed={tmdb.isError} message={t('tmdbStep.unreachable')} nav={nav} />
+        <Waiting error={tmdb.error} message={t('tmdbStep.readFailed')} nav={nav} />
       )}
     </Shell>
   )
@@ -803,13 +807,17 @@ function NotAdministrator() {
   )
 }
 
-/** 還沒讀到那個泊位的狀態。讀不到與還在讀是兩件事，說法也不一樣。 */
-function Waiting({ failed, message, nav }: { failed: boolean; message: string; nav: ReactNode }) {
+/** 還沒讀到那個泊位的狀態。讀不到與還在讀是兩件事，說法也不一樣；`error` 為空就是還在讀（M4 票 90）。 */
+function Waiting({ error, message, nav }: { error: unknown; message: string; nav: ReactNode }) {
   const { t } = useTranslation()
 
   return (
     <div className="p-6">
-      <p className="text-sm text-ink-dim">{failed ? message : t('health.checking')}</p>
+      {error === null || error === undefined ? (
+        <p className="text-sm text-ink-dim">{t('health.checking')}</p>
+      ) : (
+        <RequestFailed error={error} lead={message} />
+      )}
       {nav}
     </div>
   )
@@ -896,7 +904,7 @@ function completeFailure(
   routes: RouteSetup | undefined,
 ): CompleteFailure | undefined {
   if (error === null || error === undefined) return undefined
-  if (!(error instanceof ApiError) || error.status !== 422) return 'backend'
+  if (!(error instanceof ApiError) || error.status !== 422) return 'request'
   // 是哪一步用手上的兩份狀態答，而不是去解那句英文散文。**兩份都得明確說不行才指名**：
   // 還沒載回來時 `verified` 是 `undefined`，拿它當「沒驗過」會在真正卡住的是 Route 時說錯話
   // （票 03 的 code review）。兩份都說沒問題卻仍被擋，代表我們這一份過期或後端多了一種 422——

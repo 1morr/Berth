@@ -13,6 +13,8 @@ import {
 } from '../api/jobs'
 import { Checkbox, CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
 import { ConfirmPanel } from '../components/ConfirmPanel'
+import { problemText } from '../components/requestProblem'
+import { RequestFailed } from '../components/RequestFailed'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { formatSize } from '../media/searchResult'
 
@@ -107,7 +109,12 @@ export function JobDelete({ hash }: { hash: string }) {
             />
           </div>
 
-          <Estimate estimate={estimate.data} pending={estimate.isPending} scope={scope} />
+          <Estimate
+            estimate={estimate.data}
+            error={estimate.error}
+            pending={estimate.isPending}
+            scope={scope}
+          />
 
           <div className={CONFIRM_ACTIONS}>
             <PrimaryButton type="button" busy={remove.isPending} onClick={() => remove.mutate()}>
@@ -118,11 +125,14 @@ export function JobDelete({ hash }: { hash: string }) {
             </GhostButton>
           </div>
 
-          {remove.isError && (
-            <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-              {refusal ? t(`jobs.refusal.${refusal.reason}`) : t('jobs.delete.off')}
-            </p>
-          )}
+          {remove.isError &&
+            (refusal ? (
+              <p role="alert" className="max-w-prose text-xs text-blocked-ink">
+                {t(`jobs.refusal.${refusal.reason}`)}
+              </p>
+            ) : (
+              <RequestFailed error={remove.error} lead={t('jobs.delete.failed')} />
+            ))}
         </ConfirmPanel>
       ) : (
         /* 打開時重設而不是收起時：收起有「取消」、Esc、刪完三條路，打開只有這一條（票 16 的 audit
@@ -168,10 +178,12 @@ export function JobDelete({ hash }: { hash: string }) {
  */
 function Estimate({
   estimate,
+  error,
   pending,
   scope,
 }: {
   estimate: DeletionEstimate | undefined
+  error: unknown
   pending: boolean
   scope: DeleteScope
 }) {
@@ -186,7 +198,12 @@ function Estimate({
     )
   }
   if (!estimate) {
-    return <p className="max-w-prose text-xs text-ink-dim">{t('jobs.delete.estimate.off')}</p>
+    // 估算只是參考、不擋刪除，所以留輕量的一行而不是 `RequestFailed`；原因照請求為什麼沒成說（M4 票 90）。
+    return (
+      <p className="max-w-prose text-xs text-ink-dim">
+        {problemText(t, error, t('jobs.delete.estimate.failed'))}
+      </p>
+    )
   }
 
   // 來源與所有鏈接都刪掉才算數。其中一邊沒勾就是 0，不是「一半」。

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Discover, DiscoverItem } from '../api/discover'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute, type StubRoutes } from '../test/fetch'
 import { discoverWall as wall } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
@@ -41,10 +41,7 @@ const MOANA = item({
 })
 
 /** 走真正的 route tree：這一頁掛在 `/`，而憑證錯誤裡有一條連到精靈的站內連結。 */
-function render(
-  routes: Record<string, StubRoute | (() => StubRoute)> = {},
-  role: 'admin' | 'user' = 'admin',
-) {
+function render(routes: StubRoutes = {}, role: 'admin' | 'user' = 'admin') {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
@@ -426,5 +423,39 @@ describe('探索頁只放 TMDB 牆', () => {
     expect(screen.queryByRole('region', { name: '繼續觀看' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '下一集' })).not.toBeInTheDocument()
     expect(api.mock.calls.some(([url]) => String(url).includes('watching'))).toBe(false)
+  })
+})
+
+// M4 票 90：一面牆讀不到（不是 TMDB 問不到——那是 200 加 `problem`）原本一律說「Berth 自己的 API 沒有回應」。
+describe('探索頁對 Berth 的請求沒成時說出對的原因（M4 票 90）', () => {
+  it.each(REQUEST_FAILURES)('趨勢牆讀不到（%s），熱門照樣在', async (_, failure, expected) => {
+    render({ [TRENDING]: failure })
+    renderApp('/')
+
+    const trending = await screen.findByRole('region', { name: '本週趨勢' })
+    const alert = await within(trending).findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到這一份清單。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
+    expect(
+      await within(screen.getByRole('region', { name: '熱門' })).findByText('Moana'),
+    ).toBeVisible()
+  })
+
+  it.each(REQUEST_FAILURES)('搜尋結果牆讀不到（%s）', async (_, failure, expected) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render({ 'GET /api/discover/search?q=moana': failure })
+    renderApp('/')
+    await screen.findByRole('region', { name: '本週趨勢' })
+
+    await user.type(screen.getByLabelText('搜尋作品'), 'moana')
+    await vi.advanceTimersByTimeAsync(500)
+
+    const results = await screen.findByRole('region', { name: '「moana」的結果' })
+    const alert = await within(results).findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到這一份清單。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 })

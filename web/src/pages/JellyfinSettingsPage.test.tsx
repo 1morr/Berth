@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { healthDetailQueryOptions } from '../api/health'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import {
   ALL_BUNDLED,
   chosen,
@@ -49,7 +50,7 @@ function existing(overrides: Parameters<typeof chosen>[0] = {}) {
 }
 const EXISTING = existing()
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -367,5 +368,63 @@ describe('設定 → Jellyfin', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       '要是一個 http:// 或 https:// 開頭的網址。',
     )
+  })
+
+  // M4 票 90：後端沒給理由的失敗，原本一律說「後端可能沒在跑」——500 與 401 也是。
+  describe('對 Berth 的請求沒成時說出對的原因', () => {
+    it.each(REQUEST_FAILURES)('讀不到健康卡（%s）', async (_, failure, expected) => {
+      render({ [DETAIL]: failure })
+      renderApp('/settings/jellyfin')
+
+      const notice = await screen.findByText(/^讀不到健康檢查。/)
+      expect(notice).toHaveTextContent(expected)
+      expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+    })
+
+    // 背景重抓失敗時上一份還在：卡片與「檢查」鍵照留，不整塊換成錯誤（code-review）。
+    it('健康卡讀過之後重抓失敗，卡片照留', async () => {
+      let calls = 0
+      render({
+        [DETAIL]: () => {
+          calls += 1
+          return calls === 1
+            ? { body: healthDetail() }
+            : { status: 500, body: { detail: 'Internal Server Error' } }
+        },
+      })
+      const { queryClient } = renderApp('/settings/jellyfin')
+      await screen.findByRole('region', { name: 'Jellyfin' })
+
+      await queryClient.refetchQueries({ queryKey: healthDetailQueryOptions.queryKey })
+
+      await waitFor(() => expect(calls).toBeGreaterThan(1))
+      const card = within(screen.getByRole('region', { name: 'Jellyfin' }))
+      expect(card.getByRole('button', { name: '重新檢查' })).toBeVisible()
+      expect(screen.queryByText(/^讀不到健康檢查。/)).not.toBeInTheDocument()
+    })
+
+    it.each(REQUEST_FAILURES)('「重新檢查」沒走完（%s）', async (_, failure, expected) => {
+      render({ [TEST]: failure })
+      renderApp('/settings/jellyfin')
+
+      const card = within(await screen.findByRole('region', { name: 'Jellyfin' }))
+      await userEvent.click(card.getByRole('button', { name: '重新檢查' }))
+
+      const notice = await screen.findByText(/^檢查沒有走完。/)
+      expect(notice).toHaveTextContent(expected)
+      expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+    })
+
+    it.each(REQUEST_FAILURES)('存對外網址沒存進去（%s）', async (_, failure, expected) => {
+      render({ [SAVE_ADDRESS]: failure })
+      renderApp('/settings/jellyfin')
+
+      await userEvent.type(await screen.findByLabelText('對外網址'), 'https://jf.example.com')
+      await userEvent.click(screen.getByRole('button', { name: '儲存' }))
+
+      const notice = await screen.findByText(/^沒有存進去。/)
+      expect(notice).toHaveTextContent(expected)
+      expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+    })
   })
 })

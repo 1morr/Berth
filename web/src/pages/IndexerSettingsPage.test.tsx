@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { IndexerSetup, SetupService, SiteSearch } from '../api/setup'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import {
   ALL_BUNDLED,
   RECOMMENDED,
@@ -51,7 +51,7 @@ async function loginSection() {
   return section
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -70,6 +70,18 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
 }
 
 describe('設定 → Prowlarr', () => {
+  // M4 票 90：Prowlarr 連不上時後端回 200 加 `reachable: false`；這裡讀不到是 Berth 自己的請求沒成，
+  // 原本卻說「連不上套件內的 Prowlarr」。
+  it.each(REQUEST_FAILURES)('讀不到這一步（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [INDEXERS]: failure })
+    renderApp('/settings/indexers')
+
+    const failed = await screen.findByTestId('request-failed', {}, { timeout: 10_000 })
+    expect(failed).toHaveTextContent(/讀不到索引站這一步的狀態。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/Prowlarr/)
+  })
+
   it('頁標題是這一頁唯一的 h1，健康卡是 Prowlarr 那一張', async () => {
     render()
     renderApp('/settings/indexers')
@@ -249,7 +261,7 @@ describe('站的清單讀不到（M4 票 54：跟上精靈頁 4 的票 27）', (
     const failed = within(await screen.findByTestId('read-failed'))
     expect(failed.getByText(/讀不到這一台 Prowlarr 的站清單/)).toBeInTheDocument()
     expect(failed.getByText(/重讀掛載的 key/)).toBeInTheDocument()
-    expect(screen.queryByText(/連不上套件內的 Prowlarr/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/讀不到索引站這一步的狀態/)).not.toBeInTheDocument()
     expect(screen.queryByText('docker compose ps prowlarr')).not.toBeInTheDocument()
 
     await user.click(failed.getByRole('button', { name: '重新讀取' }))

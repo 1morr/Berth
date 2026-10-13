@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { reimportJob, retryJob, refusalOf, type Job } from '../api/jobs'
 import { replanJob } from '../api/plans'
 import { GhostButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { JobDelete } from './JobDelete'
 
 /**
@@ -41,7 +42,7 @@ export function JobActions({ job, isAdmin }: { job: Job; isAdmin: boolean }) {
             run={replan}
             idle={t('jobs.plan.replan')}
             busy={t('jobs.plan.replanning')}
-            off={t('jobs.plan.replanOff')}
+            lead={t('jobs.plan.replanFailed')}
           />
         )}
         {job.retryable && (
@@ -49,7 +50,7 @@ export function JobActions({ job, isAdmin }: { job: Job; isAdmin: boolean }) {
             run={retry}
             idle={importRetry ? t('jobs.retryImport') : t('jobs.retry')}
             busy={importRetry ? t('jobs.retryingImport') : t('jobs.retrying')}
-            off={t('jobs.retryOff')}
+            lead={t('jobs.retryFailed')}
           />
         )}
         {/* 重新入庫會動媒體庫，只有 admin（M2 票 10）。以 complete 裡那一包為來源，torrent 不在了
@@ -59,7 +60,7 @@ export function JobActions({ job, isAdmin }: { job: Job; isAdmin: boolean }) {
             run={reimport}
             idle={t('jobs.reimport')}
             busy={t('jobs.reimporting')}
-            off={t('jobs.reimportOff')}
+            lead={t('jobs.reimportFailed')}
           />
         )}
       </div>
@@ -84,18 +85,18 @@ export function JobActions({ job, isAdmin }: { job: Job; isAdmin: boolean }) {
  *
  * 重試、重新規劃與重新入庫的形狀一模一樣，所以它們是同一個元件：**按鈕永遠按得下去，只換文字**
  * （票 02b；送出中按了不再送，M3 票 06），失敗時說的是那個封閉集合的理由而不是一句通用的話（PRODUCT 原則 4），
- * 認不得的理由才落回 `off`。
+ * 認不得的理由才交給 `RequestFailed`，照請求為什麼沒成說（M4 票 90）。
  */
 function Action({
   run,
   idle,
   busy,
-  off,
+  lead,
 }: {
   run: UseMutationResult<Job, Error, void, unknown>
   idle: string
   busy: string
-  off: string
+  lead: string
 }) {
   const { t } = useTranslation()
   const refusal = refusalOf(run.error)
@@ -105,11 +106,14 @@ function Action({
       <GhostButton type="button" busy={run.isPending} onClick={() => run.mutate()}>
         {run.isPending ? busy : idle}
       </GhostButton>
-      {run.isError && (
-        <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-          {refusal ? t(`jobs.refusal.${refusal.reason}`) : off}
-        </p>
-      )}
+      {run.isError &&
+        (refusal ? (
+          <p role="alert" className="max-w-prose text-xs text-blocked-ink">
+            {t(`jobs.refusal.${refusal.reason}`)}
+          </p>
+        ) : (
+          <RequestFailed error={run.error} lead={lead} />
+        ))}
     </div>
   )
 }

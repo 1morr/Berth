@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute, type StubRoutes } from '../test/fetch'
 import {
   ALL_BUNDLED,
   chosen,
@@ -83,7 +83,7 @@ async function loginSection(username = 'skipper') {
   return section
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -344,5 +344,38 @@ describe('設定 → qBittorrent', () => {
         ([url, init]) => url === '/api/settings/disk' && init?.method === 'POST',
       ),
     ).toBe(false)
+  })
+
+  // M4 票 90：後端沒給理由的失敗，原本一律說「後端可能沒在跑」——500 與 401 也是。
+  describe('對 Berth 的請求沒成時說出對的原因', () => {
+    it.each(REQUEST_FAILURES)('門檻沒存進去（%s）', async (_, failure, expected) => {
+      render({ [SAVE_DISK]: failure })
+      renderApp('/settings/qbittorrent')
+
+      const field = await screen.findByLabelText('最少剩下（GB）')
+      await waitFor(() => expect(field).toHaveValue('10'))
+      await userEvent.clear(field)
+      await userEvent.type(field, '50')
+      await userEvent.click(screen.getByRole('button', { name: '儲存門檻' }))
+
+      const notice = await screen.findByText(/^沒有存進去。/)
+      expect(notice).toHaveTextContent(expected)
+      expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+    })
+
+    it.each(REQUEST_FAILURES)('改登入沒走完（%s）', async (_, failure, expected) => {
+      render({ [QBITTORRENT]: { body: WITH_LOGIN }, [LOGIN]: failure })
+      const user = userEvent.setup()
+      renderApp('/settings/qbittorrent')
+
+      const login = await loginSection()
+      await user.type(login.getByLabelText('新密碼'), 'hunter2')
+      await user.type(login.getByLabelText('再輸入一次密碼'), 'hunter2')
+      await user.click(login.getByRole('button', { name: '儲存' }))
+
+      const notice = await login.findByText(/^這一次請求沒有走完，登入沒有變。/)
+      expect(notice).toHaveTextContent(expected)
+      expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+    })
   })
 })
