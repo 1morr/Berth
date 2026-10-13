@@ -340,7 +340,6 @@ class TestRequestBudget:
         body = client.get("/api/health/budget").json()
 
         assert body["limit"] == 2
-        assert body["window_seconds"] == 3600
         (site,) = body["sites"]
         assert site["site"] == "mikanani.me"
         assert site["used"] == 2

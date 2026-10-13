@@ -800,7 +800,6 @@ describe('媒體庫頁', () => {
         job_hash: 'b'.repeat(40),
         job_name: 'The.Bear.S03.1080p.WEB',
         path: `/data/torrent/complete/tv/The.Bear.S03.1080p.WEB/${name}`,
-        file_kind: 'video',
         reasons: [{ code: 'own_numbered_special', params: {} }],
       }
     }

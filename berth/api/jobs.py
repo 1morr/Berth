@@ -173,8 +173,6 @@ class JobOut(BaseModel):
     name: str
     state: JobState
     trigger: JobTrigger
-    #: rule id 或重新入庫的來源目錄。`manual` 時是空字串。
-    trigger_ref: str
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     error: str
     media_id: str | None
@@ -185,8 +183,6 @@ class JobOut(BaseModel):
     media_title_en: str
     route_id: int | None
     route_name: str
-    route_slug: str
-    user_id: int | None
     #: 誰按的。RSS 與重新入庫沒有人在場，那時是空字串。
     user_name: str
     #: qBittorrent 報的下載目錄與內容路徑。票 10 的 poller 才填得出來。
@@ -198,8 +194,6 @@ class JobOut(BaseModel):
     #: qBittorrent 自己的狀態字串（`stalledDL`…），原樣。畫面用它說「客戶端那邊怎麼了」。
     client_state: str
     added_at: datetime
-    completed_at: datetime | None
-    imported_at: datetime | None
     #: 這一筆現在按得了重試嗎（plan §3.1）。規則在後端算，前端不重算一份。
     retryable: bool
     #: **這個人**現在按得了重新規劃嗎（票 11）。規則在後端算，前端不重算一份：停在 review 的那一筆
@@ -273,19 +267,16 @@ class JobCreatedOut(BaseModel):
 class DeletionEstimateOut(BaseModel):
     """`services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
 
-    畫面要的那一句在 `reclaimable`：**它不是 `link_bytes + source_bytes`**——來源與它的
-    媒體庫鏈接是同一份資料，兩邊各算一次會把答案說成兩倍。
+    畫面要的那一句在 `reclaimable`：來源與它的媒體庫鏈接是同一份資料，所以不是兩邊大小相加。
     """
 
     #: 帳本上、磁碟上還在的媒體庫鏈接數。
     links: int
     #: 帳本上有、磁碟上已經不在的。畫面拿它說「其中 N 個已經不在了」。
     links_missing: int
-    link_bytes: int
     #: complete 底下還在的來源檔數。**比鏈接多**：沒人要的 readme 也是下載下來的東西。
     sources: int
     sources_missing: int
-    source_bytes: int
     #: 來源與所有鏈接都刪掉時真的會空出來的位元組。
     reclaimable: int
     #: 有別人也握著、刪了也不會空出來的位元組。

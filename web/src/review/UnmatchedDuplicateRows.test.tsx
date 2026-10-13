@@ -35,7 +35,6 @@ function unmatched(overrides: Partial<UnmatchedReviewRow> = {}): UnmatchedReview
     job_hash: HASH,
     job_name: '[Group] SPY×FAMILY S01 [01-03][1080p][CHT]',
     path: OVA,
-    file_kind: 'video',
     reasons: [{ code: 'own_numbered_special', params: {} }],
     ...overrides,
   }
@@ -186,7 +185,7 @@ describe('對不到的檔案', () => {
   })
 
   it('字幕只能忽略', async () => {
-    render({ [QUEUE]: queue([unmatched({ file_kind: 'subtitle', actions: ['skip'] })]) })
+    render({ [QUEUE]: queue([unmatched({ actions: ['skip'] })]) })
     renderApp('/review')
     const row = await screen.findByRole('article')
 

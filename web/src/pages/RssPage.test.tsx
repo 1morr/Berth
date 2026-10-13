@@ -79,7 +79,6 @@ function item(overrides: Partial<FeedItem> = {}): FeedItem {
     title: TITLE,
     link: 'https://mikanani.me/Home/Episode/85c93c23143bbeb98f9c0895d31ab18ceeed4090',
     published_at: '2026-09-24T08:08:01Z',
-    seen_at: '2026-09-25T12:00:00Z',
     series_id: 7,
     status: 'unbound',
     job_hash: '',

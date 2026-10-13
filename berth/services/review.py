@@ -210,7 +210,6 @@ class UnmatchedRow:
     rel_path: str
     #: complete 裡的完整路徑。
     source_path: str
-    file_kind: FileKind
     #: 解析器為什麼對不到（那一列 Plan Item 的理由）。
     reasons: tuple[ItemReason, ...]
     #: 改得成哪幾種（`REMATCH_ACTIONS`，依分類）：影片是指派 / 標記 extra / 忽略，字幕只能忽略。
@@ -682,7 +681,6 @@ def _unmatched_row(
         job_name=job.name,
         rel_path=row.rel_path,
         source_path=str(fs.under(job.save_path, row.rel_path)),
-        file_kind=kind,
         reasons=reasons_of(item),
         actions=REMATCH_ACTIONS[kind],
     )

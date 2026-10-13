@@ -25,15 +25,12 @@ function downloadJob(overrides: Partial<Job> = {}): Job {
     name: 'Kaiju Girl',
     state: 'submitted',
     trigger: 'manual',
-    trigger_ref: '',
     error: '',
     media_id: 'tv:120089',
     media_title: 'SPY×FAMILY 間諜家家酒',
     media_title_en: 'SPY x FAMILY',
     route_id: 2,
     route_name: 'Anime',
-    route_slug: 'anime',
-    user_id: 1,
     user_name: 'skipper',
     save_path: '',
     content_path: '',
@@ -41,8 +38,6 @@ function downloadJob(overrides: Partial<Job> = {}): Job {
     progress: 0,
     client_state: '',
     added_at: '2026-09-26T12:00:00Z',
-    completed_at: null,
-    imported_at: null,
     retryable: false,
     replannable: false,
     reimportable: false,
@@ -2191,7 +2186,6 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
 const BANGUMI: Bangumi = {
   id: 1234,
   title: '间谍过家家',
-  premiere: '2022-04-09',
   subgroups: [
     {
       id: 583,
@@ -2321,7 +2315,6 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
             title: LOLI_TITLE,
             link: 'https://nyaa.si/view/1',
             published_at: '2026-09-24T12:00:00Z',
-            seen_at: '2026-09-26T12:00:00Z',
             series_id: 7,
             status: 'matched',
             job_hash: '',
@@ -2362,7 +2355,6 @@ describe('下載段（M4 票 12，`.scratch/m4/media-downloads-shape.md`）', ()
     name: '[LoliHouse] Kaiju Girl Caramelise - 03 [WebRip 1080p]',
     state: 'submitted',
     trigger: 'rss',
-    trigger_ref: '7',
     series: 'LoliHouse',
   })
   const DOWNLOADING = downloadJob({

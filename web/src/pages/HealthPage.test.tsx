@@ -405,7 +405,6 @@ describe('健康頁', () => {
           [BUDGET]: {
             body: {
               limit: 60,
-              window_seconds: 3600,
               sites: [
                 {
                   site: 'mikanani.me',
@@ -415,7 +414,6 @@ describe('健康頁', () => {
                     { use: 'backfill', count: 1 },
                     { use: 'search', count: 5 },
                   ],
-                  frees_at: null,
                   deferred: [],
                 },
               ],
@@ -440,18 +438,15 @@ describe('健康頁', () => {
           [BUDGET]: {
             body: {
               limit: 10,
-              window_seconds: 3600,
               sites: [
                 {
                   site: 'mikanani.me',
                   used: 10,
                   by_use: [{ use: 'poll', count: 10 }],
-                  frees_at: later,
                   deferred: [
                     {
                       use: 'backfill',
                       refused: 3,
-                      since: new Date().toISOString(),
                       until: later,
                     },
                   ],
@@ -469,10 +464,7 @@ describe('健康頁', () => {
     })
 
     it('這一小時還沒問過任何站時說一句話，不畫空表', async () => {
-      render(
-        { body: healthDetail() },
-        { [BUDGET]: { body: { limit: 60, window_seconds: 3600, sites: [] } } },
-      )
+      render({ body: healthDetail() }, { [BUDGET]: { body: { limit: 60, sites: [] } } })
       renderApp('/health')
 
       const budget = within(await screen.findByRole('region', { name: '請求預算' }))
