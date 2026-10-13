@@ -8,3 +8,7 @@ tests/fixtures/** -text
 
 # 產出的型別檔（pnpm gen:api）：進版控，但 PR 上預設收起來。
 web/src/api/schema.d.ts linguist-generated=true
+
+# progress.md 的 session 紀錄與偏差都是只追加的：平行的票在同一處各加一行，合併時兩邊都留（git 內建 union）。
+# 只對本機 git merge 有效；改同一行舊內容時也會兩版並存、不報衝突。
+docs/progress.md merge=union
