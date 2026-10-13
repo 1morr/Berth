@@ -114,6 +114,8 @@ Berth is a **public beta**.
 - [Troubleshooting](docs/guide/troubleshooting.md): ports, `Unauthorized`, `host.docker.internal`.
 - [Backup, secrets and reinstalling](docs/guide/backup-and-reinstall.md): what Berth stores, starting over,
   rebuilding the ledger.
+- [Uninstalling Berth](docs/guide/uninstalling.md): what to remove from each service, and freeing the space
+  hardlinks hold.
 - [CHANGELOG](CHANGELOG.md): what changed in each version.
 - [Development](docs/development.md) (in Chinese): building, testing and the project layout.
 

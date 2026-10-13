@@ -20,6 +20,13 @@
 
 ### Changed
 
+- **套件內 Prowlarr 的「移除」只給 Berth 加的站**（M4 票 66，審計 P1-10）：之前 Berth 加得回去的公開站都按得到
+  移除，連你自己在 Prowlarr 加的也是。現在只有 Berth 加的那幾站有「移除」，其他的說「Berth 沒有加這一站的紀錄」、
+  要移除請到 Prowlarr。**0.2.0 之前 Berth 加的站沒有紀錄，同樣不能從 Berth 移除**。
+  `DELETE /api/setup/indexers/{id}` 對它們回 422。
+- **新的使用指南〈Uninstalling Berth〉**（M4 票 66，審計 P1-11）：不用 Berth 時 Jellyfin、qBittorrent、Prowlarr
+  各要手動清什麼（API key、裝置、Berth 路徑、`berth-*` 分類與 tag `berth` 的 torrent、Berth 加的站），以及硬鏈接
+  要兩邊都刪才會釋放空間。精靈指南的〈What Berth changes in your services〉補上執行期會做的事。
 - **既有服務沒掛 `/data` 時，補法直接印出你的資料夾**（M4 票 63，審計 P1-6）：原本片段是 `${DATA_ROOT}:/data`，
   要自己去 Berth 的 `.env` 找值。部署的 compose 現在把 `DATA_ROOT` 傳給 Berth（`HOST_DATA_ROOT`），compose、
   `docker run` 兩種片段與新加的 Unraid 模板欄位（Container Path、Host Path）都帶著它；Windows 路徑寫成 `C:/…`，

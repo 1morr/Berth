@@ -1344,22 +1344,14 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(off.queryByText('還沒搜')).not.toBeInTheDocument()
   })
 
-  it('要帳號的站（在 Prowlarr 自己加的）列在已加入、可以搜，但沒有移除', async () => {
+  it('不是 Berth 加的站（在 Prowlarr 自己加的公開站）列在已加入、可以搜，但沒有移除（M4 票 66）', async () => {
     stubApi({
       [STATUS]: { body: AT_INDEXER },
       [INDEXERS]: {
         body: indexerSetup({
           sites: [
             site(RECOMMENDED[1], 1),
-            site(
-              {
-                definition_name: 'AnimeBytes',
-                name: 'AnimeBytes',
-                privacy: 'private',
-                removable: false,
-              },
-              7,
-            ),
+            site({ definition_name: 'Knaben', name: 'Knaben', removable: false }, 7),
           ],
         }),
       },
@@ -1367,10 +1359,14 @@ describe('頁 4：Prowlarr 與索引站', () => {
 
     renderInRoute(<SetupPage />)
 
-    const mine = within(await screen.findByRole('article', { name: 'AnimeBytes' }))
-    expect(mine.getByRole('button', { name: '搜尋 AnimeBytes' })).toBeInTheDocument()
+    const mine = within(await screen.findByRole('article', { name: 'Knaben' }))
+    expect(mine.getByRole('button', { name: '搜尋 Knaben' })).toBeInTheDocument()
     expect(mine.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
-    expect(mine.getByText('要帳號的站 Berth 不移除')).toBeInTheDocument()
+    expect(
+      mine.getByText('Berth 沒有加這一站的紀錄，不從這裡移除；要移除請到 Prowlarr'),
+    ).toBeInTheDocument()
+    const berths = within(await screen.findByRole('article', { name: RECOMMENDED[1].name }))
+    expect(berths.getByRole('button', { name: '移除' })).toBeInTheDocument()
   })
 
   it('既有 Prowlarr：列出它已有的站、可以試搜、沒有移除；加站寫明加進你的 Prowlarr（M4 票 20）', async () => {

@@ -76,10 +76,14 @@ libraries on its list, `berth-*` categories in qBittorrent, and the indexers you
 logins or global preferences, and leaves your existing libraries and indexers alone. The bundled services get one
 more thing each, so you can sign in to them: the Jellyfin admin, and the qBittorrent and Prowlarr web UI logins.
 
-Known exceptions, tracked as open issues: Berth asks Jellyfin to scan all libraries when an import does not show
-up ([62](../../.scratch/m4/issues/62-jellyfin-scan-scope.md)), tags every torrent it sends with `berth`, and
-recreates a `berth-*` category you deleted the next time it sends a torrent
-([66](../../.scratch/m4/issues/66-takeover-list-and-runtime-gate.md)). The tracking notes are in Chinese.
+After the wizard, Berth keeps to the same things: every torrent it sends goes into a `berth-*` category with the
+tag `berth` (removing a download in Berth never asks qBittorrent to delete files; if you tick deleting them,
+Berth deletes them itself), and a `berth-*` category you
+deleted comes back the next time it sends a torrent. After an import it asks Jellyfin to look at the new paths and,
+if they don't show up, to refresh that one library; only while Jellyfin has never listed anything under Berth's
+path yet does it run Jellyfin's **Scan Media Library** task, which scans the whole server. Each person who signs
+in to Berth leaves one "Berth" device in Jellyfin. **Remove** under **Settings → Prowlarr** is offered only on the
+indexers Berth added. To undo all of it when you stop using Berth: [Uninstalling Berth](uninstalling.md).
 
 ## After the wizard
 

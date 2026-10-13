@@ -642,6 +642,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 16.4 既有服務的接入規則【決定】
 
+> **2026-10-14 補（審計 P1-10、P1-11，M4 票 66）**：物件表補上送出的 torrent 與它的 tag `berth`、送單時重建被刪的 `berth-*` 分類、Jellyfin 的裝置紀錄；套件內 Prowlarr 的「移除」只給 Berth 加的站（原本是「Berth 加得回去的」，使用者自己加的公開站也移除得掉）；閘門加一輪執行期。「不用 Berth 了」要手動清的寫在 `docs/guide/uninstalling.md`。已寫進下文。
+
 > **2026-10-14 改（§19「第四輪可用性審計的八項」E1，M4 票 64）**：既有 Jellyfin 也建媒體庫——只建使用者在頁 3 勾了「新建一個媒體庫」的那一個，算 Berth 擁有的物件（推翻下表原本的「既有：不建」）；類型對得上的既有媒體庫預設勾選（審計 C2）。已寫進下文。
 
 > **2026-10-06 改（§19「精靈審計後的八項」D3、D6）**：Prowlarr 不再接受 Torznab 端點（D3，已在 M4 票 37 改寫進下文）；換台時列出舊那台的遺留物（D6，M4 票 47 改寫進下文，表後〈換一台時〉）。（D1 已寫進下文「接管＝只建立與管理 Berth 擁有的物件」那一段，M4 票 33。）
@@ -664,15 +666,17 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | qBittorrent 免密白名單 | 預置（容器啟動前，只放 Berth 的 IP） | 不碰 | — | `qBittorrent.conf` |
 | qBittorrent 全域偏好 | 不寫（D2，M4 票 32） | 不寫 | — | — |
 | qBittorrent WebUI 登入 | 設 | 不碰 | 只能再設一組蓋過 | qBittorrent 偏好 |
-| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 刪 Route 不刪分類；換一台時確認框可一鍵移除舊那台上**空的**（M4 票 47），目錄不刪 | qBittorrent 刪分類 |
+| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建；**送單與 Route 檢查都先 `ensure_category`，你在 qBittorrent 刪掉的會照 Route 的路徑重建**（路徑開在分類上，沒有它 torrent 就落到全域的儲存路徑，M4 票 66） | 刪 Route 不刪分類；換一台時確認框可一鍵移除舊那台上**空的**（M4 票 47），目錄不刪 | 先刪 Route（之後不再重建），再在 qBittorrent 刪分類 |
+| Berth 送出的 torrent，帶 tag `berth`（M4 票 66） | 送單時加 | 同左 | 刪 Job 時勾「從 qBittorrent 移除」：只移除 torrent，**不刪檔**（§9.2） | qBittorrent 刪 torrent；tag 讓你在它的介面上篩出 Berth 放的 |
 | 探測 torrent、探測檔（頁 2 在 `/data`、校驗不完，M4 票 46；頁 3 在分類路徑；頁 1 給既有 Jellyfin 的 `ValidatePath` 看的探測檔在 `/data`，沒有 torrent，M4 票 63） | 暫時，自清 | 同左 | 自清（Berth 中途崩潰、或答完之後移除那一下 qBittorrent 斷線時可能殘留：停住、沒有分類，M4 票 54） | 手動刪 |
-| Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除；既有不移除 | Prowlarr 刪 |
+| Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除 **Berth 加的**（`SetupIndexer.added_sites`；票 47 之前加的沒有紀錄，照實說、不給移除；使用者自己加的公開站也不給，M4 票 66）；既有不移除 | Prowlarr 刪 |
 | Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
+| Jellyfin 的裝置「Berth」（DeviceId `berth-server`，M4 票 66） | 登入過 Berth 的每一位 Jellyfin 使用者一筆：Berth 沒有自己的密碼，登入是交給 Jellyfin 驗，Jellyfin 為每次登入發權杖、記一筆裝置；同一位再登入是換掉自己那一筆（§20.22） | 同左 | 不能 | Jellyfin 控制台「裝置」刪 |
 | TMDB | 不寫 | 不寫 | — | — |
 
 **換一台 qBittorrent / Prowlarr 時**（§19 D6，M4 票 47）：確認框列出 Berth 在原本那一台擁有的物件——`berth-*` 分類各有幾個 torrent、Berth 加進去的站（Berth 加站時記下 `definitionName` 與站名，`SetupIndexer.added_sites`；票 47 之前加的沒記到）、Berth 設的介面登入（只有 Berth 記著雜湊的那一組）。使用者自己的分類與站不列。連不到那一台時列 Berth 記得的（分類取自 Route、站取自那份紀錄），照實說確認不了現況。**能移除的只有空的 `berth-*` 分類**，按下時重數；站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去。移除在確認框裡就做，取消換台也無妨：送單與 Route 檢查都先 `ensure_category`，照 Route 的路徑重建。**換成功之後 Route 自動重查**（M4 票 59，審計 P1-3）：所有 Route 的檢查作廢，健康頁的媒體庫路徑那一格是「要重新檢查」而不是「已繫上」；設定 → qBittorrent 在新那台測過之後自動跑一次「全部重新檢查」（分類建在新那台、探針重問），說「正在重新檢查 N 條 Route」、逐條進度、跑完說幾條過了。結果出來之前送單照舊——還沒檢查完的放行（送單自己建分類），紅了的才擋。探針從沒問過的 Route 同樣不算「已繫上」。
 
-閘門是 `tests/integration/test_setup_owned_writes.py`：整個精靈經 API 跑套件內一輪、既有兩輪（Jellyfin 初始化過與還沒），三台替身收到的每一個寫入都要對得上「Berth 擁有的物件 + 套件內的 bootstrap」那張白名單；既有那一輪的 bootstrap 只放行那台 Jellyfin 還沒初始化，建媒體庫只放行勾了的、在 library root 底下的（M4 票 64，沒勾也建、建在 root 外各有變異測試）。它只看得到 Berth 經三個服務的 adapter 送出的寫入；預置的免密白名單、掛載的 key 與探測檔的自清不在它的範圍。頁 1、頁 3 問 Jellyfin 的 `ValidatePath` 是讀（POST 但不留東西），白名單不放行任何東西；閘門另外斷言既有那一輪頁 1 真的問了 `/data`（M4 票 63）。
+閘門是 `tests/integration/test_setup_owned_writes.py`：整個精靈經 API 跑套件內一輪、既有兩輪（Jellyfin 初始化過與還沒），三台替身收到的每一個寫入都要對得上「Berth 擁有的物件 + 套件內的 bootstrap」那張白名單；既有那一輪的 bootstrap 只放行那台 Jellyfin 還沒初始化，建媒體庫只放行勾了的、在 library root 底下的（M4 票 64，沒勾也建、建在 root 外各有變異測試）。**執行期另一輪**（M4 票 66）經 services 走送單、缺檔按「重新校驗」、下載完成、入庫、反查（全庫掃描與只刷新媒體庫兩條）、六次用完按「重新掃描媒體庫」、刪 Job，同一張白名單：送單只能是 `berth-*` 分類、表單上的 tag 只有 `berth`、路徑交給分類；重新開始、校驗、移除只能對 Berth 送的（或探測的）torrent，移除不刪檔；通知的路徑在 library root 底下、只刷新 Route 的媒體庫、排程任務只能是「掃描媒體庫」；每一條都有紅綠雙向的變異測試，tag 與刪檔另各有一條走完整流程的。套件內 Prowlarr 的移除只放行這一輪 Berth 加的站，不寬於程式（`added_sites`）。它只看得到 Berth 經三個服務的 adapter 送出的寫入，**不在範圍**的：預置的免密白名單、掛載的 key、探測檔的自清與 Berth 對 `/data` 的磁碟操作；Jellyfin 的裝置紀錄（登入是讀）；標已看（使用者自己按、寫他自己的觀看紀錄）；換台時移除空分類那一顆（白名單列只用合成的寫入驗，行為由 `test_setup_leftovers.py` 守）。頁 1、頁 3 問 Jellyfin 的 `ValidatePath` 是讀（POST 但不留東西），白名單不放行任何東西；閘門另外斷言既有那一輪頁 1 真的問了 `/data`（M4 票 63）。
 
 - **唯一的硬規則**：Berth、qBittorrent、Jellyfin 三個容器在**同一台主機**、把同一個宿主父目錄掛在**相同的容器路徑**，且下載目錄與媒體庫目錄都在它底下（TRaSH 的單一 `/data` 掛載，§20.14）。Berth 的 incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`，所以 Berth 與 qBittorrent 的共用掛載要掛在 `/data`（M4 票 22：原本寫「根目錄可設定」，程式從來沒有那個設定）；媒體庫路徑讀自 Jellyfin。**這是既有 qBittorrent 與 Jellyfin 最關鍵的條件**：在另一台 NAS 上的接不上；只掛了 `/downloads`、`/tv` 的，**多加一條 `${DATA_ROOT}:/data` 就好，原本的掛載不動**（M4 票 36，審計 §C2：Berth 只在 `/data` 底下讀寫，叫人把下載目錄搬過去反而讓舊 torrent 找不到檔案）。「既有」選項旁說明這個條件（容器路徑只能是 `/data`、`DATA_ROOT` 要建得了硬鏈接；缺某類型的媒體庫時頁 3 勾了才建，M4 票 64）；媒體庫與路徑泊位的探測檔 / 硬鏈接檢查失敗時，給那一台要多加的那一條（compose、`docker run` 與 Unraid 模板「Add another Path」三種寫法，M4 票 08、36、63），**宿主那一側是 Berth 的 `DATA_ROOT` 真正的值**：compose 把 `.env` 的原字串傳成 `HOST_DATA_ROOT`，Windows 的反斜線換成 `/`，相對路徑（`./data`）說它相對於 Berth 的 docker-compose.yml、要換成絕對路徑（M4 票 63，審計 P1-6：原本是 `${DATA_ROOT}`，要人自己去 `.env` 找）。**少了 `/data` 提早說**：qBittorrent 在頁 2 測連線時（M4 票 46），既有 Jellyfin 在頁 1 成為擁有者、Berth 拿到 key 之後（M4 票 63，與頁 3 同一種探測檔加 `ValidatePath`；不擋頁 2），之後每次重新測試、設定頁換位址也問，看不到就不存新位址——與 qBittorrent 的測過才存同一條（M4 票 45）。
 - **既有服務要給的東西各不相同**（§20.14）：
@@ -1756,3 +1760,8 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **Berth 的做法**（`parser.title.season_tokens`）：照票面「`SNN` 比較少就兩種都留」，**拉丁字名字一季問 `S03` 與 `Season 3`
   兩個**，有 CJK 字的名字問 `第3季`；按搜尋與搜缺的集共用這一個函式。一次搜尋的上限因此從 5 個改成 10 個（使用者 2026-10-13
   拍板）：動畫的英文名、原名配「不指定季」與最新一季是 6 個，再開兩種中文名是 10 個。CJK 那一對兩邊都只有 0–1 筆，樣本太小，只當參考。
+
+### 20.22 Berth 登入 Jellyfin 留下的裝置（2026-10-14 查證，M4 票 66）
+
+- Berth 以 `Authorization: MediaBrowser Client="Berth", Device="Berth", DeviceId="berth-server"` 呼叫 `AuthenticateByName`（`adapters/jellyfin/client.py`）。Jellyfin 的 `SessionManager.GetAuthorizationToken` 先找同一個 `DeviceId` **且同一個使用者**的裝置、逐一登出（刪掉那一列），再建一筆新的、發新的權杖。所以**登入過 Berth 的每一位使用者在 Jellyfin「裝置」頁各一筆 Berth**，同一位再登入是換掉自己那一筆，不會越積越多；別的使用者的那一筆不刪，但同一個 `DeviceId` 的進行中工作階段會被結束。【[SessionManager.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Session/SessionManager.cs)（`AuthenticateNewSessionInternal`、`GetAuthorizationToken`、`Logout(Device)`）】
+- 審計 S3 實跑看到的「`/Devices` 多一筆 Berth」就是這一筆（`docs/research/usability-audit-2026-10-07.md` 附錄 C.1）。
