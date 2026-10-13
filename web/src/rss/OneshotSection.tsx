@@ -22,7 +22,6 @@ import { JobLink } from '../jobs/JobLink'
 import { RoutePicker } from '../media/RoutePicker'
 import { estimate, formatSize, tagTokens } from '../media/searchResult'
 import { freshSingles, sendOrder, tally, type Outcome } from './oneshotBatch'
-import { searchTerm } from './searchTerm'
 import { SectionHeading } from './SectionHeading'
 import { preselect } from './preselect'
 import { Choices, type Pickable } from './WorkChoices'
@@ -229,7 +228,7 @@ function Listing({
       <WorkPicker
         // 送出中不換作品與 Route：送的是按下那一刻的那一組，畫面上的資料夾名要跟它一致。
         locked={send.isPending}
-        seed={searchTerm(items[0].title)}
+        seed={items[0].search_term}
         work={work}
         onWork={onWork}
         media={media}

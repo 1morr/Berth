@@ -11,7 +11,6 @@ import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
 import { RoutePicker } from '../media/RoutePicker'
-import { searchTerm } from './searchTerm'
 import { preselect } from './preselect'
 import { Choices, type Pickable } from './WorkChoices'
 
@@ -44,7 +43,7 @@ export function SeriesBinder({
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
-  const [query, setQuery] = useState(() => searchTerm(series.title_raw))
+  const [query, setQuery] = useState(series.search_term)
   const [picked, setPicked] = useState<Pickable | null>(null)
   // `undefined` 是「還沒選過」：那時用預選（`preselect`）；選了「不選」是 `null`。
   const [chosen, setChosen] = useState<number | null | undefined>(undefined)

@@ -25,6 +25,7 @@ from berth.adapters.rss import FeedItem
 from berth.domain import BudgetUse, FeedKind, MappingStrategy, ReleaseKind, RssRefusal, Tags
 from berth.models import Job, Media, Route
 from berth.parser import parse_release, tags_of
+from berth.parser.binding import search_term
 from berth.services.clients import ServiceClientFactory, feed_fetcher
 from berth.services.commands import Effect, command
 from berth.services.jobs import JobSource
@@ -61,6 +62,8 @@ class OneshotItem:
     job_hash: str
     #: 帳本已有同一個版本：它在媒體庫裡的檔名（`rss.library_copy`）。沒選作品與 Route 時是 `None`。
     known: str | None
+    #: 選作品時搜尋框預填的字：發佈名讀出的作品名（`binding.search_term`，M4 票 88）。
+    search_term: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,4 +180,5 @@ async def _item(
         strategy=strategy,
         job_hash=item.info_hash if item.info_hash in jobs else "",
         known=known,
+        search_term=search_term(item.title),
     )

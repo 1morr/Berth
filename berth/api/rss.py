@@ -227,6 +227,8 @@ class SeriesOut(BaseModel):
     exclusions: list[str]
     #: 第一批確認過了沒（票 13）：還沒的期間每一集入庫之後都等人看一眼。
     confirmed: bool
+    #: 綁定時搜尋框預填的字：發佈名讀出的作品名，季名拿掉、英文或羅馬字優先（M4 票 88）。
+    search_term: str
     #: 從哪一站來的；一筆 Item 都沒有的非 Mikan Series 是 `null`。
     source: FeedKind | None
     #: 發佈名讀出的字幕組。
@@ -344,6 +346,8 @@ class OneshotItemOut(BaseModel):
     job_hash: str
     #: 帳本已有同一個版本：媒體庫裡的檔名。沒給作品與 Route 時是 `null`。
     known: str | None
+    #: 選作品時搜尋框預填的字（`SeriesOut.search_term` 同一個讀法，M4 票 88）。
+    search_term: str
 
 
 class OneshotOut(BaseModel):

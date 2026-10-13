@@ -2172,6 +2172,7 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     candidates: [],
     exclusions: [],
     confirmed: false,
+    search_term: 'SPY x FAMILY',
     source: 'mikan',
     group: 'LoliHouse',
     latest_title: LOLI_TITLE,

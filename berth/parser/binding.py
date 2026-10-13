@@ -89,9 +89,8 @@ class BindVerdict:
 def skeleton(release_title: str) -> tuple[str, ...]:
     """發佈名的標題骨幹：去掉字幕組、集號與 tags，` / ` 分開的每一個名字都留（brief §15）。
 
-    `[組名] 中文名 / 英文或羅馬字名 - 12 [tags…]` 是字幕組最常見的寫法（`web/src/rss/searchTerm.ts`
-    挑的是最後一段，這裡每一段都要：哪一段與 TMDB 相等事先不知道）。組名去掉之後以方括號開頭的，
-    標題就是那一格（`[千夏字幕組][中文名_Romaji][第12話]`、
+    `[組名] 中文名 / 英文或羅馬字名 - 12 [tags…]` 是字幕組最常見的寫法（每一段都要：哪一段與 TMDB
+    相等事先不知道）。組名去掉之後以方括號開頭的，標題就是那一格（`[千夏字幕組][中文名_Romaji][第12話]`、
     `【喵萌奶茶屋】★07月新番★[名 / 名][12]`）。
     組名與播出檔期的認法是解析器的（`parser.cjk`），不另寫一份。
     """
@@ -147,6 +146,16 @@ def search_terms(clues: SeriesClues) -> tuple[str, ...]:
         if key and key not in seen:
             seen[key] = bare
     return tuple(seen.values())[:MAX_SEARCHES]
+
+
+def search_term(release_title: str) -> str:
+    """綁定時搜尋框預填的字（M4 票 88）：只看發佈名的第一個搜尋詞——英文或羅馬字優先、季名拿掉。
+
+    不帶 Mikan 番組名：它常帶著分段名（`Re：从零开始的异世界生活 第四季 夺还篇`），拿掉季名之後
+    仍搜不到。讀不出作品名時給原文：那一格人本來就要核對或改。
+    """
+    terms = search_terms(SeriesClues(title="", premiere=None, release_title=release_title))
+    return terms[0] if terms else release_title.strip()
 
 
 def could_be(kind: MediaKind, year: int | None, premiere: date | None) -> bool:
