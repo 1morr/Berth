@@ -6,6 +6,7 @@ import { approvePlan, planQueryOptions, rejectPlan } from '../api/plans'
 import { reviewQueryOptions, type PlanDecision, type PlanReviewRow } from '../api/review'
 import { ConfirmAction, PrimaryButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { RequestFailed } from '../components/RequestFailed'
 import { JobLink } from '../jobs/JobLink'
 import { whenText } from '../components/queueText'
 import { displayRound } from '../i18n/displayRound'
@@ -107,7 +108,7 @@ export function PlanRow({ row, onDone }: { row: PlanReviewRow; onDone: Said }) {
             onSeries={(said) => onDone(said, true)}
           />
         ) : (
-          <p className="text-xs text-ink-dim">{t('review.plan.off')}</p>
+          <RequestFailed error={plan.error} lead={t('review.plan.readFailed')} />
         )
       }
       details={

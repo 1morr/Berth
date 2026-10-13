@@ -15,6 +15,7 @@ import { ConfirmAction, GhostButton } from '../components/controls'
 import { formatEpisode } from '../components/episodes'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { RematchForm } from '../components/RematchForm'
+import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
 import { fileName, whenText } from '../components/queueText'
 import { displayRound } from '../i18n/displayRound'
@@ -102,7 +103,7 @@ export function AuditRow({
       setRefusal(
         said
           ? [t(`review.audit.refusal.${said.reason}`), said.detail].filter(Boolean).join(' ')
-          : t('review.audit.failed'),
+          : problemText(t, error, t('request.notDone')),
       )
       // 另一個分頁先按了：重問一次，那一列自己消失。
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })

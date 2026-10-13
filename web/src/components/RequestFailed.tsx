@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ApiError } from '../api/client'
 import { healthQueryOptions } from '../api/health'
 import { GhostButton, Notice } from './controls'
-import { PROBLEM_TEXT, requestProblem, SIGN_IN_PROBLEMS } from './requestProblem'
+import { problemText, requestProblem, SIGN_IN_PROBLEMS } from './requestProblem'
 import { TechnicalDetails } from './TechnicalDetails'
 
 /** 技術細節：狀態碼、端點，以及後端的 `detail`（422 是欄位錯誤的清單）。 */
@@ -33,12 +33,11 @@ export function RequestFailed({
 }) {
   const { t } = useTranslation()
   const problem = requestProblem(error, { ownerPending })
-  const text = t(PROBLEM_TEXT[problem])
 
   return (
     <div className="grid gap-1" data-testid="request-failed">
       <Notice signal="blocked" label={t('common.failed')}>
-        {lead ? `${lead} ${text}` : text}
+        {problemText(t, error, lead, { ownerPending })}
       </Notice>
       {SIGN_IN_PROBLEMS.has(problem) && <SignIn />}
       <TechnicalDetails lines={technicalOf(error)} />

@@ -106,7 +106,7 @@ export async function undoAudit(ledgerId: number) {
   return apiPost<AuditUndone>(`/review/audit/${ledgerId}/undo`)
 }
 
-/** 重複版本的一顆。拒絕的形狀與 rematch 相同（`api/files.ts` 的 `rematchRefusalText`）。 */
+/** 重複版本的一顆。拒絕的形狀與 rematch 相同（`components/rematchRefusal.ts` 的 `rematchRefusalText`）。 */
 export async function decideDuplicate(itemId: number, decision: DuplicateDecision) {
   return apiPost<DuplicateDecided>(`/review/duplicate/${itemId}/${decision}`)
 }

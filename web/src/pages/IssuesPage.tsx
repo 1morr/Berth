@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { issuesQueryOptions, reconcileQueryOptions } from '../api/issues'
 import { PAGE_TITLE } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { IssueRow } from '../issues/IssueRow'
 import { LedgerGapNotice } from '../issues/LedgerGapNotice'
@@ -55,7 +56,7 @@ export function IssuesPage() {
       {issues.isPending ? (
         <Loading />
       ) : !issues.data ? (
-        <p className="max-w-prose text-sm text-ink-dim">{t('issues.off')}</p>
+        <RequestFailed error={issues.error} lead={t('issues.readFailed')} />
       ) : issues.data.length === 0 ? (
         <p className="max-w-prose text-sm text-ink-dim">
           {reconcile.data?.last ? t('issues.empty') : t('issues.emptyNeverRun')}

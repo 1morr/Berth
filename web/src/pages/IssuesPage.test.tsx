@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { reconcileQueryOptions, type Issue, type ReconcileStatus } from '../api/issues'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -59,7 +59,7 @@ function finished(overrides: Partial<ReconcileStatus['last'] & object> = {}): Re
   }
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -819,6 +819,71 @@ describe('對帳橫幅', () => {
     expect(await screen.findByRole('button', { name: '對帳中…' })).toBeInTheDocument()
     const banner = screen.getByRole('list', { name: '對帳進度' })
     expect(within(banner).getByText('帳本')).toBeInTheDocument()
+  })
+})
+
+// M4 票 89：拒絕原因解析不出來時，原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+describe('待處理頁對 Berth 的請求沒成時說出對的原因', () => {
+  it.each(REQUEST_FAILURES)('讀不到清單（%s）', async (_, failure, expected) => {
+    render({ [ISSUES]: failure })
+    renderApp('/issues')
+
+    const notice = await screen.findByText(/^讀不到待處理清單。/)
+    expect(notice).toHaveTextContent(expected)
+    expect(notice).not.toHaveTextContent(/自己的 API/)
+  })
+
+  it.each(REQUEST_FAILURES)(
+    '處理一件（%s）：那一列留著，說出原因',
+    async (_, failure, expected) => {
+      render({ [ISSUES]: { body: [issue()] }, 'POST /api/issues/1/resolve': failure })
+      renderApp('/issues')
+      const row = await screen.findByRole('article')
+
+      await userEvent.click(within(row).getByRole('button', { name: '重新鏈接' }))
+
+      const alert = await within(row).findByRole('alert')
+      expect(alert).toHaveTextContent(/沒有成功。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API/)
+    },
+  )
+
+  it.each(REQUEST_FAILURES)('選作品的搜尋（%s）', async (_, failure, expected) => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'orphan_complete',
+            job_hash: '',
+            ledger_id: null,
+            detail: { folder: true },
+            actions: ['adopt'],
+          }),
+        ],
+      },
+      'GET /api/discover/search?q=spy': failure,
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重新入庫' }))
+    await userEvent.type(within(row).getByRole('searchbox'), 'spy')
+
+    const said = await within(row).findByText(/^沒有搜成。/)
+    expect(said).toHaveTextContent(expected)
+  })
+
+  it.each(REQUEST_FAILURES)('立刻對帳（%s）', async (_, failure, expected) => {
+    render({ [START]: failure })
+    renderApp('/issues')
+
+    await userEvent.click(await screen.findByRole('button', { name: '立刻對帳' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/對帳沒有開始。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 })
 

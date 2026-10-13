@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next'
+
 import { ApiError } from '../api/client'
 
 /** 對 Berth 自己的一次請求為什麼沒成（M4 票 21）。後端說得出理由的拒絕由各頁自己說，這裡是其餘的。 */
@@ -45,4 +47,18 @@ export function requestProblem(
   if (error.status === 422) return 'invalid'
   if (error.status === 409) return 'conflict'
   return 'server'
+}
+
+/**
+ * 一句話版：`lead` 是這一處自己說「什麼沒做成」的前半句，後半句照請求為什麼沒成（M4 票 89）。
+ * 給只收字串的那幾格——`QueueRow` 的 `refusal`、各處的拒絕句——能畫元件的地方用 `RequestFailed`。
+ * 原本這些地方解析不出理由就一律說「Berth 自己的 API 沒有回應」，500 與 401 也是。
+ */
+export function problemText(
+  t: TFunction,
+  error: unknown,
+  lead = '',
+  options: { ownerPending?: boolean } = {},
+): string {
+  return [lead, t(PROBLEM_TEXT[requestProblem(error, options)])].filter(Boolean).join(' ')
 }
