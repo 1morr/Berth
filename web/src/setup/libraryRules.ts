@@ -43,7 +43,17 @@ const SPACE_RUN = /[\s-]*\s[\s-]*/g
  */
 export function folderFor(name: string): string {
   if (!PRINTABLE_ASCII.test(name)) return ''
-  return name
+  return slugOf(name)
+}
+
+/**
+ * 後端 `library_slug` 的規則，全被修掉時是空字串（後端會換成 `berth`，那一步由呼叫端決定）。
+ * 控制字元先換成 `/`：它與 `<>:"…` 同一類，一段連著的一起變成一個 `-`，與後端的字元類一致。
+ */
+export function slugOf(name: string): string {
+  return [...name]
+    .map((char) => (char.charCodeAt(0) < 0x20 ? '/' : char))
+    .join('')
     .replace(UNSAFE_IN_NAME, '-')
     .replace(SPACE_RUN, '-')
     .replace(/^[ .-]+|[ .-]+$/g, '')

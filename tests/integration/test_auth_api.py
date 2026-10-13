@@ -400,6 +400,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/setup/jellyfin/bundled"): Access.SETUP,
     ("POST", "/setup/jellyfin/connect"): Access.SETUP,
     ("POST", "/setup/jellyfin/libraries/paths"): Access.SETUP,
+    ("POST", "/setup/jellyfin/libraries"): Access.SETUP,
     ("POST", "/setup/qbittorrent/apply"): Access.SETUP,
     ("PUT", "/setup/qbittorrent/login"): Access.SETUP,
     ("GET", "/setup/qbittorrent/diff"): Access.SETUP,

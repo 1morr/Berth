@@ -12,7 +12,9 @@ import {
   type JellyfinSetup,
   type LibraryChoice,
   type LibraryDraft,
+  type NewLibraryInput,
   type RouteSelectionInput,
+  type BundledRefusal,
   type RouteSetup,
 } from '../api/setup'
 import { type RouteView } from '../api/schemas'
@@ -31,6 +33,14 @@ import { TechnicalDetails } from '../components/TechnicalDetails'
 import { BUILD_REFUSAL, type BuildRefusal } from './buildRefusal'
 import { BundledLibraries } from './BundledLibraries'
 import { AddPathFailures } from './JellyfinExisting'
+import { NewLibraryCard } from './NewLibraryCard'
+import {
+  UNTOUCHED,
+  missingType,
+  newLibraryPath,
+  newLibraryProblem,
+  type NewLibraryState,
+} from './newLibrary'
 import { librariesFailed } from './jellyfinSteps'
 import { previewUnder } from './libraryRules'
 import { StepFrame } from './StepFrame'
@@ -64,10 +74,15 @@ export type DockPlan =
     }
   | {
       origin: 'existing'
+      /** 勾了的「新建一個媒體庫」（M4 票 64）：最先建，建好之後它也一條 Route。 */
+      newLibrary: NewLibraryPlan | null
       /** 按下時先替這幾個媒體庫加 Berth 路徑（plan §9.5）。 */
       newPaths: string[]
       selections: RouteSelectionInput[]
     }
+
+/** 要新建的那一個：送去建的名稱與類型，加上畫面算出來的路徑（`newLibraryPath`），它也是寫入目標。 */
+type NewLibraryPlan = NewLibraryInput & { path: string }
 
 /**
  * 請求沒走完的那一種。後端的拒絕說得出原因就說原因（PRODUCT 原則 4）；其餘照請求的失敗分類說
@@ -75,6 +90,8 @@ export type DockPlan =
  */
 export type DockFailure =
   | { kind: 'route_missing' }
+  /** 新建那一列被後端擋下（M4 票 64）：按之前之間那台多了同名的。 */
+  | { kind: 'newLibrary'; refusal: BundledRefusal }
   | { kind: 'refused'; reason: BuildRefusal; detail: string }
   | { kind: 'request'; error: unknown }
 
@@ -291,11 +308,19 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
   const { t } = useTranslation()
   const { setup } = common
   const [picks, setPicks] = useState<Record<string, LibraryPick>>({})
+  const [draft, setDraft] = useState<NewLibraryState>(UNTOUCHED)
+
+  // 送出去的那一個出現在 Jellyfin 的清單上了：建好了，這一列收回去（shape 拍板 2）。它在上面的清單裡、
+  // 已經有 Route。照「渲染中調整狀態」的寫法，不用 effect：清單是重讀之後才到的，不一定與按鍵同一輪。
+  if (draft.sent !== null && setup.libraries.some((row) => row.name === draft.sent)) {
+    setDraft(UNTOUCHED)
+  }
 
   function pickOf(library: LibraryChoice): LibraryPick {
     return (
       picks[library.name] ?? {
-        selected: library.has_route,
+        // 類型對得上的預設勾（審計 C2，M4 票 64）；規則在後端（`preselected`）。
+        selected: library.has_route || library.preselected,
         target: library.target_path,
       }
     )
@@ -305,12 +330,41 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
     setPicks((was) => ({ ...was, [library.name]: { ...pickOf(library), ...patch } }))
   }
 
-  /** Route 刪掉了：它的媒體庫回到沒勾的樣子，否則下一次「建立並檢查」又把它送出去（M4 票 24）。 */
+  /**
+   * Route 刪掉了：它的媒體庫取消勾選，否則下一次「建立並檢查」又把它送出去（M4 票 24）。明確記成沒勾，
+   * 不是回到預設：類型對得上的預設是勾的（M4 票 64）。
+   */
   function forget(route: RouteView) {
-    setPicks((was) =>
-      Object.fromEntries(Object.entries(was).filter(([name]) => name !== route.library)),
-    )
+    const library = setup.libraries.find((row) => row.name === route.library)
+    setPicks((was) => ({
+      ...was,
+      [route.library]: {
+        target: was[route.library]?.target ?? library?.target_path ?? '',
+        selected: false,
+      },
+    }))
     common.onRouteDeleted(route)
+  }
+
+  /**
+   * 這條新的 Berth 路徑已經是誰的（M4 票 64）：Jellyfin 上別的媒體庫的路徑，或**清單上排在前面**、勾著而且
+   * 也選了它的媒體庫——名字不同、slug 相同的兩個（`TV Shows`、`TV-Shows`）都預設勾、都預設選它，只算前面
+   * 那一個的，否則兩個互相擋住、誰都選不了。
+   */
+  function occupantOf(library: LibraryChoice, location: string): string | null {
+    const earlier = setup.libraries.slice(0, setup.libraries.indexOf(library))
+    return (
+      occupant(setup.libraries, library, location) ??
+      earlier.find(
+        (row) =>
+          row.supported &&
+          !row.has_route &&
+          pickOf(row).selected &&
+          pickOf(row).target === location &&
+          isNewBerthPath(row, location),
+      )?.name ??
+      null
+    )
   }
 
   /**
@@ -331,10 +385,14 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
     (library) => library.supported && !library.has_route && pickOf(library).selected,
   )
   // 送得出去的是「目標是這個媒體庫的路徑之一，或按下時才加的 Berth 路徑」：伺服器用同一條規則擋
-  // （回 422），但那時候畫面只說得出「請求沒走完」。
+  // （回 422），但那時候畫面只說得出「請求沒走完」。新的 Berth 路徑已經是別的媒體庫的也送不出去：
+  // 後端會讓它失敗（`path_taken`，M4 票 64）。
   const ready = ticked.filter((library) => {
     const target = pickOf(library).target
-    return library.locations.includes(target) || isNewBerthPath(library, target)
+    return (
+      library.locations.includes(target) ||
+      (isNewBerthPath(library, target) && occupantOf(library, target) === null)
+    )
   })
   const missing = ticked.find((library) => !ready.includes(library))
   const newPaths = ready.filter((library) => isNewBerthPath(library, pickOf(library).target))
@@ -342,48 +400,94 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
     library: library.name,
     target_path: pickOf(library).target,
   }))
+
+  // 「新建一個媒體庫」那一列（M4 票 64）。類型與名稱沒動過就跟著預設走：重讀之後那台多了電影，預設也跟著換。
+  const type = draft.type ?? missingType(setup.libraries)
+  const name = draft.name ?? t(`routes.newLibrary.defaultName.${type}`)
+  const path = newLibraryPath(setup.library_root, name)
+  const claimed = newPaths.map((library) => ({ library: library.name, path: library.berth_path }))
+  const problem = draft.ticked ? newLibraryProblem(name, path, setup.libraries, claimed) : null
+  const newLibrary: NewLibraryPlan | null =
+    draft.ticked && problem === null ? { name: name.trim(), collection_type: type, path } : null
   return (
     <RoutePage
       {...common}
       onRouteDeleted={forget}
       lede={t('routes.lede.existing')}
-      planned={selections.map((row) => ({ library: row.library, target: row.target_path }))}
-      fresh={selections.length}
-      preview={newPaths.map((library) => (
-        <span key={library.name}>
-          {t('routes.dock.berthPath', { library: library.name, path: library.berth_path })}
-        </span>
-      ))}
+      planned={[
+        ...(newLibrary ? [{ library: newLibrary.name, target: newLibrary.path }] : []),
+        ...selections.map((row) => ({ library: row.library, target: row.target_path })),
+      ]}
+      fresh={selections.length + (newLibrary ? 1 : 0)}
+      preview={[
+        ...(newLibrary
+          ? [
+              <span key="new-library">
+                {t('routes.dock.newLibrary', { name: newLibrary.name, path: newLibrary.path })}
+              </span>,
+            ]
+          : []),
+        ...newPaths.map((library) => (
+          <span key={library.name}>
+            {t('routes.dock.berthPath', { library: library.name, path: library.berth_path })}
+          </span>
+        )),
+      ]}
       blocked={
-        missing
-          ? t('routes.dock.pickTarget', { library: missing.name })
-          : selections.length === 0 && setup.routes.length === 0
-            ? t('routes.dock.pickOne')
-            : null
+        problem
+          ? t('routes.dock.newLibraryBlocked')
+          : missing
+            ? t('routes.dock.pickTarget', { library: missing.name })
+            : selections.length === 0 && !newLibrary && setup.routes.length === 0
+              ? t('routes.dock.pickOne')
+              : null
       }
-      onPress={() =>
+      onPress={() => {
+        if (newLibrary) setDraft({ ...draft, sent: newLibrary.name })
         common.onDock({
           origin: 'existing',
+          newLibrary,
           newPaths: newPaths.map((library) => library.name),
           selections,
         })
-      }
+      }}
     >
       <Reread {...common.reread} count={setup.libraries.length} />
-      {setup.libraries.length === 0 ? (
+      {setup.libraries.length === 0 && (
         <div className="mt-6">
-          {/* Berth 不替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡沒有動作。 */}
           <Notice signal="assigned" label={t('common.warning')}>
             {t('routes.empty')}
           </Notice>
         </div>
-      ) : (
-        <LibraryPicker
-          libraries={setup.libraries}
-          pickOf={pickOf}
-          takenBy={takenBy}
-          onChange={change}
+      )}
+      <LibraryPicker
+        libraries={setup.libraries}
+        pickOf={pickOf}
+        takenBy={takenBy}
+        occupantOf={occupantOf}
+        onChange={change}
+      >
+        <NewLibraryCard
+          type={type}
+          name={name}
+          path={path}
+          ticked={draft.ticked}
+          locked={common.docking}
+          problem={problem}
+          onChange={(patch) => setDraft({ ...draft, ...patch, sent: null })}
         />
+      </LibraryPicker>
+      {/* 新建那一段紅了（送出去的那一個沒出現在清單上）：Jellyfin 的原文就地說（套件內同一條纜繩）。 */}
+      {draft.sent !== null && !common.docking && librariesFailed(jellyfin) && (
+        <ol className="mt-4 grid gap-3">
+          <StepLine
+            label={t('routes.newLibrary.step')}
+            service="Jellyfin"
+            endpoint="POST /Library/VirtualFolders"
+            row={librariesFailed(jellyfin)}
+            fix={t('routes.newLibrary.fix')}
+          />
+        </ol>
       )}
       {/* 加路徑沒加上的那幾個，一個一條：原因與怎麼改掛載（plan §9.5、票 19）。建 Route 那一段沒有送出。 */}
       {/* 只說還選著「新的 Berth 路徑」的那幾個：改選既有資料夾之後，上一次的失敗已經不是這一輪的事。 */}
@@ -464,6 +568,21 @@ function RereadFailed({ error }: { error: Error }) {
   )
 }
 
+/**
+ * 這條新的 Berth 路徑已經是另一個媒體庫的路徑了（兩個名字算出同一個 slug，M4 票 64）：誰。
+ * 加上去的話兩個媒體庫掃同一個資料夾，後端讓它失敗（`path_taken`）；在選之前就說。
+ */
+function occupant(
+  libraries: readonly LibraryChoice[],
+  library: LibraryChoice,
+  location: string,
+): string | null {
+  return (
+    libraries.find((row) => row.name !== library.name && row.locations.includes(location))?.name ??
+    null
+  )
+}
+
 /** 這個目標是還沒加到 Jellyfin 上的 Berth 路徑：按下「建立並檢查」時才加。 */
 function isNewBerthPath(library: LibraryChoice, target: string): boolean {
   return !library.has_berth_path && target === library.berth_path
@@ -540,6 +659,13 @@ function RoutePage({
                 {t(BUILD_REFUSAL[failure.reason])}
               </Notice>
               <TechnicalDetails lines={[failure.detail]} />
+            </div>
+          ) : failure.kind === 'newLibrary' ? (
+            <div className="grid gap-1">
+              <Notice signal="blocked" label={t('common.failed')}>
+                {t('routes.newLibrary.refused')}
+              </Notice>
+              <TechnicalDetails lines={[failure.refusal.detail]} />
             </div>
           ) : (
             <RequestFailed error={failure.error} />
@@ -732,13 +858,19 @@ function LibraryPicker({
   libraries,
   pickOf,
   takenBy,
+  occupantOf,
   onChange,
+  children,
 }: {
   libraries: LibraryChoice[]
   pickOf: (library: LibraryChoice) => LibraryPick
   /** 這條路徑被誰佔著（對這個媒體庫而言）。`null` 代表還空著。 */
   takenBy: (library: LibraryChoice, path: string) => string | null
+  /** 這條新的 Berth 路徑已經是哪個媒體庫的（`ExistingRoutes` 的 `occupantOf`）。 */
+  occupantOf: (library: LibraryChoice, path: string) => string | null
   onChange: (library: LibraryChoice, patch: Partial<LibraryPick>) => void
+  /** 清單最後的「新建一個媒體庫」那一張（M4 票 64）。 */
+  children: ReactNode
 }) {
   const { t } = useTranslation()
 
@@ -791,6 +923,7 @@ function LibraryPicker({
                     library={library}
                     target={pick.target}
                     takenBy={(path) => takenBy(library, path)}
+                    occupantOf={(path) => occupantOf(library, path)}
                     onPick={(target) => onChange(library, { target })}
                   />
                 </div>
@@ -798,6 +931,7 @@ function LibraryPicker({
             </li>
           )
         })}
+        {children}
       </ul>
     </section>
   )
@@ -814,12 +948,15 @@ function Targets({
   library,
   target,
   takenBy,
+  occupantOf,
   onPick,
 }: {
   library: LibraryChoice
   target: string
   /** 路徑 → 佔著它的那條 Route（或同一批裡先選走它的媒體庫）的名字。 */
   takenBy: (path: string) => string | null
+  /** 新的 Berth 路徑 → 已經用著它的另一個媒體庫的名字（M4 票 64）。 */
+  occupantOf: (path: string) => string | null
   onPick: (target: string) => void
 }) {
   const { t } = useTranslation()
@@ -837,7 +974,7 @@ function Targets({
       )}
       {options.map((location, index) => {
         const fresh = isNewBerthPath(library, location)
-        const holder = fresh ? null : takenBy(location)
+        const holder = fresh ? occupantOf(location) : takenBy(location)
         const noteId = `${idBase}-${index}`
         return (
           // 說明不放進 `<label>`：radio 的名字只是那條路徑，說明走 `aria-describedby`。
@@ -860,7 +997,7 @@ function Targets({
                 {t('routeSettings.add.taken', { name: holder })}
               </span>
             )}
-            {fresh && (
+            {fresh && holder === null && (
               <span id={noteId} className="text-xs text-ink-dim">
                 {t('routes.picker.newBerthPath')}
               </span>

@@ -31,8 +31,11 @@ For Jellyfin and qBittorrent (Prowlarr only needs to be reachable):
   Berth adds a `/data/library/<folder>` path to each library you tick.
 - `DATA_ROOT` must be on a filesystem that supports hardlinks (see [Requirements](requirements.md#hardlinks)).
   Your existing media folders don't need to be on the same filesystem; hardlinks only happen inside `DATA_ROOT`.
-- An existing Jellyfin must already have a library of each type you want (films, shows). Berth adds a path to
-  it but does not create libraries on an existing server.
+- Your existing libraries keep their paths: Berth only adds a path to the ones you tick on page 3 (movie and
+  show libraries come ticked). If the server has no library of a type you want — only shows, say, and you want
+  films — tick **Create a new library on this Jellyfin** at the end of the list on page 3. Berth creates it at
+  `/data/library/<name>` when you press **Build and check**, and only then. Every user on that server can see the
+  new library; rename or delete it later in Jellyfin's Dashboard → Libraries.
 
 ### Docker Compose
 

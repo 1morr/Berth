@@ -371,6 +371,11 @@ WRITES: tuple[tuple[str, str, object], ...] = (
     ("PUT", "/api/setup/jellyfin/bundled", {"libraries": []}),
     ("POST", "/api/setup/jellyfin/connect", {"username": "a", "password": "b"}),
     ("POST", "/api/setup/jellyfin/libraries/paths", {"library": "x"}),
+    (
+        "POST",
+        "/api/setup/jellyfin/libraries",
+        {"libraries": [{"name": "x", "collection_type": "movies"}]},
+    ),
     ("POST", "/api/setup/services/qbittorrent", {"origin": "existing", "base_url": "http://x"}),
     ("POST", "/api/setup/services/prowlarr/test", {}),
     ("POST", "/api/setup/qbittorrent/apply", None),
@@ -732,6 +737,17 @@ class TestJellyfin:
         libraries = next(row for row in response.json()["steps"] if row["step"] == "libraries")
         assert libraries["status"] == "failed"
         assert "Nope" in libraries["error"]
+
+    def test_a_bundled_jellyfin_does_not_take_new_libraries(
+        self, client: TestClient, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """套件內照它的清單建（M4 票 64 的新建列只給既有）；別的類型 FastAPI 就擋在門口。"""
+        movies = {"libraries": [{"name": "Films", "collection_type": "movies"}]}
+        music = {"libraries": [{"name": "Music", "collection_type": "music"}]}
+
+        assert client.post("/api/setup/jellyfin/libraries", json=movies).status_code == 422
+        assert client.post("/api/setup/jellyfin/libraries", json=music).status_code == 422
+        assert [row.name for row in jellyfin.created] == []
 
     def test_the_jellyfin_endpoints_close_after_setup(self, client: TestClient) -> None:
         _complete_setup(client)

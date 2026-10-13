@@ -23,7 +23,7 @@ from typing import Any, Protocol
 import pytest
 from fastapi.testclient import TestClient
 
-from berth.adapters.jellyfin import JellyfinClient, JellyfinLibrary
+from berth.adapters.jellyfin import JellyfinClient, JellyfinLibrary, NewLibrary
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
@@ -31,7 +31,7 @@ from berth.adapters.qbittorrent import QbittorrentClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.api.deps import get_bundled_services, get_client_factory
 from berth.config import Config
-from berth.domain import ServiceKind, ServiceOrigin
+from berth.domain import CollectionType, ServiceKind, ServiceOrigin
 from berth.main import create_app
 from berth.services.jellyfin import API_KEY_APP, BUNDLED_SERVER_NAME
 from berth.services.qbittorrent import (
@@ -188,6 +188,8 @@ class Premise:
     ticked: frozenset[str]
     #: 三層路徑的共同父目錄（compose 裡的 `/data`）：頁 2 的探針放在這裡（M4 票 46）。
     shared_root: str = ""
+    #: 既有 Jellyfin 頁 3 勾了要新建的媒體庫名（M4 票 64）。
+    new_libraries: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -277,10 +279,17 @@ ALLOWED: tuple[Allowed, ...] = (
         PROWLARR, "delete_indexer", lambda w, _, made: w.args[0] in made.sites,
         origins=frozenset({ServiceOrigin.BUNDLED}),
     ),
-    # 套件內清單上的媒體庫是 Berth 的；既有那一台只加 Berth 路徑，不建媒體庫（brief §16.4）。
+    # 套件內清單上的媒體庫是 Berth 的。
     Allowed(
         JELLYFIN, "create_library", lambda w, p, _: under(str(w.args[0].path), p.library_root),
         origins=frozenset({ServiceOrigin.BUNDLED}),
+    ),
+    # 既有那一台只建使用者在頁 3 勾了的新媒體庫，而且在 library root 底下（M4 票 64）。
+    Allowed(
+        JELLYFIN, "create_library",
+        lambda w, p, _: w.args[0].name in p.new_libraries
+        and under(str(w.args[0].path), p.library_root),
+        origins=frozenset({ServiceOrigin.EXISTING}),
     ),
     # --- bootstrap：讓那台服務有人登得進去 ---
     # Jellyfin 初始設定。
@@ -382,6 +391,8 @@ THEIR_SITE = ProwlarrIndexer(
 )
 #: 頁 4 測試並勾起來的站：使用者還沒有的兩個公開站。
 TICKED = ("yts", "eztv")
+#: 既有 Jellyfin 的頁 3 勾了新建的媒體庫（M4 票 64）：那台還沒有的類型。
+NEW_LIBRARY = "紀錄片"
 
 
 @dataclass
@@ -486,6 +497,7 @@ def wizard(config: Config, tmp_path: Path) -> Iterator[Callable[[ServiceOrigin, 
                 incomplete_root=str(data / "torrent" / "incomplete"),
                 ticked=frozenset(TICKED),
                 shared_root=str(data),
+                new_libraries=frozenset({NEW_LIBRARY}),
             ),
         )
 
@@ -537,7 +549,7 @@ def walk_existing(
     addresses: Mapping[ServiceKind, str] = ADDRESSES,
 ) -> None:
     """頁 1–6 全選既有：以那台 Jellyfin 的管理員成為擁有者（沒初始化就由擁有者建）、填 qBittorrent
-    的帳密、替第一個媒體庫加 Berth 路徑當寫入目標、貼 Prowlarr 的 key 並加兩站。"""
+    的帳密、新建一個媒體庫、替第一個媒體庫加 Berth 路徑當寫入目標、貼 Prowlarr 的 key 並加兩站。"""
     ok(_choose(client, "jellyfin", base_url=addresses[JELLYFIN]))
     user, password = owner
     ok(
@@ -558,9 +570,16 @@ def walk_existing(
     page = ok(client.post("/api/setup/routes/libraries"))
     first = page["libraries"][0]
     selection = {"library": first["name"], "target_path": first["berth_path"]}
-    # 「建立並檢查」先加 Berth 路徑、再建 Route（`SetupPage` 同一個順序）。
+    # 「建立並檢查」先建勾了的新媒體庫、再加 Berth 路徑、再建 Route（`SetupPage` 同一個順序）。
+    made = ok(
+        client.post(
+            "/api/setup/jellyfin/libraries",
+            json={"libraries": [{"name": NEW_LIBRARY, "collection_type": "tvshows"}]},
+        )
+    )
+    built = {"library": NEW_LIBRARY, "target_path": f"{made['library_root']}/{NEW_LIBRARY}"}
     ok(client.post("/api/setup/jellyfin/libraries/paths", json={"libraries": [first["name"]]}))
-    ok(client.post("/api/setup/routes", json={"selections": [selection]}))
+    ok(client.post("/api/setup/routes", json={"selections": [selection, built]}))
     ok(_choose(client, "prowlarr", base_url=addresses[PROWLARR], api_key=THEIR_PROWLARR_KEY))
     ok(client.post("/api/setup/indexers/test", json={"indexers": list(TICKED)}))
     ok(client.post("/api/setup/indexers/apply", json={"indexers": list(TICKED)}))
@@ -637,6 +656,7 @@ def test_an_existing_wizard_writes_only_owned_objects(
     assert {
         (JELLYFIN, "create_api_key"),
         (JELLYFIN, "add_library_path"),
+        (JELLYFIN, "create_library"),
         (QBITTORRENT, "create_category"),
         (QBITTORRENT, "add_probe"),
         (PROWLARR, "add_indexer"),
@@ -735,6 +755,37 @@ def test_a_probe_on_the_shared_root_has_to_be_one_that_never_finishes() -> None:
     assert violations([probe("/data", unfinished=True)], premise) == []
     # 無關的寫法不紅：結尾多一個斜線還是同一條。
     assert violations([probe("/data/", unfinished=True)], premise) == []
+
+
+def test_a_library_on_an_existing_jellyfin_has_to_be_ticked_and_under_the_root() -> None:
+    """違規要紅：既有 Jellyfin 上沒勾也建、勾了但建在 library root 外（M4 票 64）。
+
+    勾了、在 root 底下的放行；root 多一個結尾斜線、換一個勾了的名字都不紅。
+    """
+
+    def create(name: str, path: str) -> Write:
+        library = NewLibrary(name, CollectionType.MOVIES, path, (), "zh", "TW")
+        return Write(JELLYFIN, "create_library", (library,), {})
+
+    ticked = replace(EXISTING_INITIALIZED, new_libraries=frozenset({"電影"}))
+
+    assert violations([create("電影", "/data/library/電影")], EXISTING_INITIALIZED) != []
+    assert violations([create("電影", "/volume1/電影")], ticked) != []
+    assert violations([create("Films", "/data/library/films")], ticked) != []
+    assert violations([create("電影", "/data/library/電影")], ticked) == []
+    assert (
+        violations(
+            [create("電影", "/data/library/電影")], replace(ticked, library_root="/data/library/")
+        )
+        == []
+    )
+    assert (
+        violations(
+            [create("Films", "/data/library/films")],
+            replace(ticked, new_libraries=frozenset({"Films"})),
+        )
+        == []
+    )
 
 
 def test_removing_a_category_that_is_not_berths_is_refused() -> None:

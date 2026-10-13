@@ -69,6 +69,8 @@ React 19 + TS + Vite + Tailwind v4 + TanStack Router / Query + react-i18next。W
 - **既有 Jellyfin 0 個媒體庫的空狀態**（原本掛在 Open）：不擋、不假裝有東西，直接說「這台
   Jellyfin 一個媒體庫都沒有，先在 Jellyfin 建一個再回來，Berth 才有地方寫入」，配 `assigned`
   色塊。Berth 不會替既有伺服器建媒體庫（brief §16.4 的紅線），所以這裡不能有動作按鈕。
+  **M4 票 64 起**：紅線改成「勾了才建」，空狀態改說「在下面新建一個」，出路是勾選表最後一張「新建一個媒體庫」
+  （`.scratch/m4/existing-new-library-shape.md`）。
 - **兩條路徑的剖面不同**：套件內的剖面列「將會做什麼」（各步驟打哪一支端點），既有的剖面
   列「這台 Jellyfin 現在是什麼樣子」（位址、版本、API key、媒體庫數）。同一個 `Cutaway`
   元件，內容全部是實測值。**票 14b 之後**：序列剩七步（插件與重啟那兩步整段移除），剖面也

@@ -91,21 +91,35 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await shot(page, '2-qbittorrent')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 3. 既有 Jellyfin 不建媒體庫：直接是 Route。進頁不送任何寫入（M4 票 08）。勾「電影」、選「新的 Berth
-  //    路徑」當寫入目標——按下「建立並檢查」時才加到 Jellyfin；「Anime」不交給 Berth。
+  // 3. 既有 Jellyfin：直接是 Route。進頁不送任何寫入（M4 票 08）。電影與劇集類型預設勾好（M4 票 64）；
+  //    「電影」選「新的 Berth 路徑」當寫入目標——按下「建立並檢查」時才加到 Jellyfin；「Anime」取消、不交給
+  //    Berth。最後一張勾起來，在這台 Jellyfin 新建一個劇集媒體庫「紀錄片」（M4 票 64，勾了才建）。
   const arrived = writes.length
   await expect(page.getByRole('heading', { name: '媒體庫路徑' })).toBeVisible()
   await page.waitForLoadState('networkidle')
   expect(writes.slice(arrived)).toEqual([])
   await expect(page.getByText('要建的媒體庫')).toHaveCount(0)
-  await page.getByRole('checkbox', { name: '電影' }).check()
+  await expect(page.getByRole('checkbox', { name: '電影' })).toBeChecked()
+  await page.getByRole('checkbox', { name: 'Anime' }).uncheck()
   await page.getByRole('radio', { name: /data\/library\/電影$/ }).check()
-  await expect(
-    page.getByRole('region', { name: '按下之後會' }).getByText(/在 Jellyfin 的「電影」加入路徑/),
-  ).toBeVisible()
+  await page.getByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }).check()
+  await page.getByRole('radio', { name: '劇集' }).check()
+  await page.getByRole('textbox', { name: '名稱' }).fill('紀錄片')
+  const preview = page.getByRole('region', { name: '按下之後會' })
+  await expect(preview.getByText(/在 Jellyfin 的「電影」加入路徑/)).toBeVisible()
+  await expect(preview.getByText(/在你的 Jellyfin 新建媒體庫「紀錄片」/)).toBeVisible()
   expect(writes.slice(arrived)).toEqual([])
+  await shot(page, '3-routes-new-library')
   await page.getByRole('button', { name: '建立並檢查' }).click()
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
+  // 建好了：那一張收回成沒勾，「紀錄片」在清單上、已經有 Route。
+  await expect(page.getByRole('checkbox', { name: '紀錄片' })).toBeDisabled()
+  await expect(
+    page.getByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+  ).not.toBeChecked()
+  expect(
+    writes.slice(arrived).filter((url) => url.endsWith('/api/setup/jellyfin/libraries')),
+  ).toHaveLength(1)
   await shot(page, '3-routes')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
@@ -153,7 +167,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
 
   // 6. 完成：之後登入用的是那台 Jellyfin 自己的帳號，擁有者就是它的管理員。
   await expect(page.getByRole('heading', { name: '完成設定' })).toBeVisible()
-  await expect(page.getByText('已繫上')).toHaveCount(1)
+  // 兩條 Route：電影的 Berth 路徑、新建的紀錄片（M4 票 64）。
+  await expect(page.getByText('已繫上')).toHaveCount(2)
   await expect(page.getByText(/你是 owner/)).toBeVisible()
   await shot(page, '6-complete')
   await page.getByRole('main').getByRole('button', { name: '完成設定' }).click()

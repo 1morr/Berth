@@ -59,9 +59,11 @@ from berth.services.jellyfin import (
     InterfaceLoginRejectedError,
     JellyfinStartup,
     JellyfinTarget,
+    LibraryRequest,
     add_berth_paths,
     bootstrap_jellyfin,
     connect_jellyfin,
+    create_libraries,
     read_jellyfin_status,
     save_bundled_libraries,
 )
@@ -560,6 +562,17 @@ def bundled_refusal(refusal: BundledLibraryRejectedError) -> HTTPException:
     )
 
 
+class NewLibraryIn(BaseModel):
+    name: str
+    #: Berth 只寫得了電影與劇集；別的類型 FastAPI 就擋在門口。
+    collection_type: CollectionType
+
+
+class NewLibrariesIn(BaseModel):
+    #: 頁 3 勾了要新建的媒體庫（M4 票 64）。資料夾由伺服器算：`<library root>/<slug>`。
+    libraries: list[NewLibraryIn] = Field(min_length=1)
+
+
 class LibraryPathIn(BaseModel):
     #: 要加 Berth 路徑的媒體庫名稱，逐個試、逐個回報（M4 票 19）。路徑由伺服器算，UI 在按之前
     #: 就顯示同一個值。
@@ -608,6 +621,30 @@ async def post_jellyfin_connect(
         result = await connect_jellyfin(
             session, factory, username=body.username, password=body.password
         )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return JellyfinSetupOut.model_validate(result)
+
+
+@router.post(
+    "/jellyfin/libraries", responses=refusal_responses(BundledLibraryRefusalOut, _BUNDLED_STATUS)
+)
+async def post_jellyfin_libraries(
+    session: SessionDep, factory: ClientFactoryDep, body: NewLibrariesIn
+) -> JellyfinSetupOut:
+    """既有路徑的「新建一個媒體庫」：勾了才建（M4 票 64，brief §16.4）。
+
+    與套件內同一條：同名的已經在就略過；Jellyfin 那一段失敗是 `libraries` 那一步變紅，不是 4xx。
+    名稱或資料夾撞到那台已有的是 422（與清單同一種拒絕）；套件內或還沒選來源是 422。
+    """
+    try:
+        result = await create_libraries(
+            session,
+            factory,
+            libraries=[LibraryRequest(row.name, row.collection_type) for row in body.libraries],
+        )
+    except BundledLibraryRejectedError as refusal:
+        raise bundled_refusal(refusal) from refusal
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return JellyfinSetupOut.model_validate(result)
@@ -973,6 +1010,8 @@ class LibraryChoiceOut(BaseModel):
     target_path: str
     #: 套件內清單上的一列：套件內只替這幾個建 Route（M4 票 24）。既有 Jellyfin 一律 `false`。
     listed: bool
+    #: 電影、劇集類型的：既有 Jellyfin 的勾選表預設勾它（M4 票 64）。套件內不讀。
+    preselected: bool
 
 
 class RouteSetupOut(BaseModel):
