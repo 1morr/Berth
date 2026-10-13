@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import datetime, time, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.pipeline.ticks import whole_tick
+from berth.pipeline.ticks import Clock, Sleeper, whole_tick
 from berth.services.reconcile import ReconcileRunner
 from berth.services.setup import is_setup_complete
 
@@ -33,9 +32,6 @@ TICK = timedelta(minutes=1)
 #: 每日排程的時刻，**容器的 `TZ`**（compose 範本預設 `Etc/UTC`，plan §3.2）。
 #: 04:00 是刻意的離峰：那時候沒有人在看媒體庫，而一輪要走過整個媒體庫。
 RECONCILE_AT = time(4, 0)
-
-Sleeper = Callable[[float], Awaitable[None]]
-Clock = Callable[[], datetime]
 
 
 def local_now() -> datetime:

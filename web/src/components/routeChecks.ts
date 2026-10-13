@@ -19,7 +19,7 @@ export const ROUTE_SIGNAL = {
 } as const satisfies Record<HealthStatus, Signal>
 
 /** 同一份判定的文案。查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
-export const ROUTE_HEALTH_LABEL = {
+const ROUTE_HEALTH_LABEL = {
   unknown: 'routes.health.unknown',
   ok: 'routes.health.ok',
   failed: 'routes.health.failed',

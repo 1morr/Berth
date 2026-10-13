@@ -6,7 +6,7 @@ import { SUPPORTED_LANGUAGES, resources, type Language } from './resources'
 const STORAGE_KEY = 'berth.language'
 
 /** 語言檔隨 bundle 一起送，沒有 backend 也沒有非同步載入，所以 init 是同步完成的。 */
-export function detectLanguage(stored: string | null, preferred: readonly string[] = []): Language {
+function detectLanguage(stored: string | null, preferred: readonly string[] = []): Language {
   const candidates = [stored, ...preferred].filter((tag): tag is string => Boolean(tag))
   for (const tag of candidates) {
     // `zh-TW`、`zh-Hant-HK`、`zh` 都算繁體中文；其餘語言目前一律落到 en。

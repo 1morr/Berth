@@ -458,7 +458,7 @@ async def seed_berth(
     （順便量反查在這個規模上的代價）。
     """
     shutil.rmtree(CONFIG, ignore_errors=True)
-    config = load_config({"CONFIG_ROOT": str(CONFIG), "DATA_ROOT": str(DATA)})
+    config = load_config({"CONFIG_ROOT": str(CONFIG)})
     config.config_root.mkdir(parents=True, exist_ok=True)
     engine = create_engine(config)
     await upgrade_to_head(engine)
@@ -543,7 +543,6 @@ def berth_serve() -> Iterator[str]:
     env = {
         **os.environ,
         "CONFIG_ROOT": str(CONFIG),
-        "DATA_ROOT": str(DATA),
         "WEB_ROOT": str(CONFIG / "no-web"),
         "PORT": str(BERTH_PORT),
     }
@@ -628,7 +627,7 @@ async def wall_breakdown(
     """同一程序裡把 `read_wall` 拆開量：Berth 自己的清單（`_survey`）、Jellyfin 的那一頁、
     整份清單，與整支 `read_wall`。和經過 `berth serve` 的數字對照，差的就是 serve 那一層
     （門禁、背景迴圈）。"""
-    config = load_config({"CONFIG_ROOT": str(CONFIG), "DATA_ROOT": str(DATA)})
+    config = load_config({"CONFIG_ROOT": str(CONFIG)})
     engine = create_engine(config)
     client = HttpJellyfinClient(args.jellyfin, token=args.api_key)
     library = BrowsableLibrary(id=library_id, name="TV", collection_type=CollectionType.TVSHOWS)
@@ -678,7 +677,7 @@ class TimedProgress(Progress):
 
 
 async def reconcile_round(profile: cProfile.Profile | None = None) -> dict[str, Any]:
-    config = load_config({"CONFIG_ROOT": str(CONFIG), "DATA_ROOT": str(DATA)})
+    config = load_config({"CONFIG_ROOT": str(CONFIG)})
     engine = create_engine(config)
     progress = TimedProgress()
     try:
@@ -715,7 +714,7 @@ def top_functions(profile: cProfile.Profile, limit: int = 20) -> str:
 
 async def resolve_all() -> dict[str, Any]:
     """一輪反查：12,000 列同時到期（第一次入庫完的樣子放大）。"""
-    config = load_config({"CONFIG_ROOT": str(CONFIG), "DATA_ROOT": str(DATA)})
+    config = load_config({"CONFIG_ROOT": str(CONFIG)})
     engine = create_engine(config)
     try:
         async with create_session_factory(engine)() as session:

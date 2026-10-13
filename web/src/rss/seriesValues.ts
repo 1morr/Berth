@@ -9,7 +9,7 @@ export interface SeriesValues {
 }
 
 /** 偏移帶正負號（`+12`、`-3`）：與後端 `series_corrected` 理由裡的 `offset` 同一種寫法。 */
-export function signedOffset(offset: number): string {
+function signedOffset(offset: number): string {
   return offset > 0 ? `+${offset}` : String(offset)
 }
 

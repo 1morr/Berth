@@ -13,9 +13,6 @@ export type Season = Schemas['SeasonOut']
 /** 一集。 */
 export type Episode = Schemas['EpisodeOut']
 
-/** 下拉裡的一條 Route。後端只回 `collection_type` 相符的那幾條。 */
-export type RouteChoice = Schemas['RouteChoiceOut']
-
 /**
  * 後端已經照 24 小時的規則管快照（plan §8.3），所以前端這一層只為了「切回分頁不要重抓」。
  * 重抓本身多半只讀資料庫、不打 TMDB，但畫面會閃一下。

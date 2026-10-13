@@ -1,6 +1,6 @@
 """執行環境設定：路徑常數與 port，全部可用環境變數覆寫（plan §1.1）。
 
-預設值是容器內的佈局（`/config`、`/data`）；本機開發時覆寫成可寫的目錄。
+預設值是容器內的佈局（`/config`、`/ext`）；本機開發時覆寫成可寫的目錄。
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ PACKAGE_NAME = "berth"
 VERSION = version(PACKAGE_NAME)
 
 DEFAULT_CONFIG_ROOT = Path("/config")
-DEFAULT_DATA_ROOT = Path("/data")
 #: 其他服務唯讀掛進來的設定目錄；目前只有 `prowlarr/config.xml`（plan §9.1）。
 DEFAULT_EXT_ROOT = Path("/ext")
 DEFAULT_PORT = 8383
@@ -37,7 +36,6 @@ class Config:
     """一次載入、之後唯讀；需要它的模組以參數接收，不從全域抓。"""
 
     config_root: Path
-    data_root: Path
     ext_root: Path
     web_root: Path
     port: int
@@ -62,7 +60,6 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
 
     return Config(
         config_root=_path(env, "CONFIG_ROOT", DEFAULT_CONFIG_ROOT),
-        data_root=_path(env, "DATA_ROOT", DEFAULT_DATA_ROOT),
         ext_root=_path(env, "EXT_ROOT", DEFAULT_EXT_ROOT),
         web_root=_path(env, "WEB_ROOT", DEFAULT_WEB_ROOT),
         port=_port(env, "PORT", DEFAULT_PORT),

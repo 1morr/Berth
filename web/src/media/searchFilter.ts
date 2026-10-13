@@ -40,7 +40,7 @@ export function isJudged(results: Pick<SearchResults, 'counts'>): boolean {
  * 預設就列出來、列上不標的那一份：分類時是「符合」，沒分類時是全部。與後端的 `_LISTED` 同一件事
  * （那兩類送 `RESULT_LIMIT` 筆）。
  */
-export function isListed(verdict: Verdict): verdict is 'fits' | 'unjudged' {
+function isListed(verdict: Verdict): verdict is 'fits' | 'unjudged' {
   return verdict === 'fits' || verdict === 'unjudged'
 }
 

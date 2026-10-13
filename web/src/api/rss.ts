@@ -25,9 +25,6 @@ export type FeedItem = Schemas['ItemOut']
 /** 一筆 Item 為什麼沒送出去（`domain.SkipReason`，票 10）：code 加不翻譯的參數。 */
 export type SkipReason = Schemas['SkipReasonOut']
 
-/** `domain.SkipCode`。 */
-export type SkipCode = Schemas['SkipCode']
-
 /** 全域那一層的排除條件（`settings.rss`）。 */
 export type Exclusions = Schemas['ExclusionsOut']
 
@@ -59,7 +56,7 @@ export type Subgroup = Schemas['SubgroupOut']
 export type Subscription = Schemas['SubscriptionOut']
 
 /** `berth/domain/enums.py` 的 `RssRefusal`。 */
-export type RssRefusal = Schemas['RssRefusal']
+type RssRefusal = Schemas['RssRefusal']
 
 /** 執行期認得的那幾種。**少一種或多一種都是編譯錯誤**（同 `api/issues.ts`）。 */
 const REASONS: ReasonSet<RssRefusal> = {

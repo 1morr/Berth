@@ -29,8 +29,6 @@ export const STEP = {
   complete: 6,
 } as const
 
-export const TOTAL_STEPS = STEP.complete
-
 /** 每個泊位是哪一步。泊位板點下去就去這一步。 */
 export const BERTH_STEP = {
   jellyfin: STEP.jellyfin,

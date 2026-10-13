@@ -22,12 +22,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.pipeline.ticks import whole_tick
+from berth.pipeline.ticks import Clock, Sleeper, whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import (
     ACTIVE_INTERVAL,
@@ -47,9 +46,6 @@ logger = logging.getLogger(__name__)
 #: 醒來的間隔。只是「要不要問」的判斷頻率，不是輪詢頻率——而它等於最短的那個間隔，
 #: 因為醒得比最短間隔還慢的話，那個間隔就形同虛設。
 TICK = ACTIVE_INTERVAL
-
-Sleeper = Callable[[float], Awaitable[None]]
-Clock = Callable[[], datetime]
 
 
 class QbitPoller:

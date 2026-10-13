@@ -77,9 +77,7 @@ def test_shutdown_leaves_no_connection_open(
     unraisable: list[object] = []
     monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
 
-    config = load_config(
-        {"CONFIG_ROOT": str(tmp_path / "config"), "DATA_ROOT": str(tmp_path / "data")}
-    )
+    config = load_config({"CONFIG_ROOT": str(tmp_path / "config")})
     leaky = 0
     for _ in range(CYCLES):
         before = len(leaked)

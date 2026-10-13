@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   BERTH_STEP,
   STEP,
-  TOTAL_STEPS,
   advanced,
   berthOf,
   go,
@@ -26,7 +25,6 @@ describe('頁序（plan §9.3，M4 票 15）', () => {
       tmdb: 5,
       complete: 6,
     })
-    expect(TOTAL_STEPS).toBe(6)
   })
 })
 

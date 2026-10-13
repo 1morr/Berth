@@ -711,7 +711,6 @@ SUBMIT_RESULTS = (
         indexer="ACG.RIP",
         size=524_288_000,
         seeders=42,
-        leechers=3,
         info_url="https://acg.rip/t/344604",
         download_url="magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=ANi.SPY",
         info_hash="4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b",
@@ -722,7 +721,6 @@ SUBMIT_RESULTS = (
         indexer="The Pirate Bay",
         size=1_073_741_824,
         seeders=9,
-        leechers=1,
         download_url="magnet:?xt=urn:btih:aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00&dn=SKYANiME",
         info_hash="aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
         published_at=datetime(2025, 10, 11, 2, 30, tzinfo=UTC),
@@ -1880,7 +1878,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config_root = args.config_root or Path(tempfile.mkdtemp(prefix="berth-fake-"))
-    config = load_config({"CONFIG_ROOT": str(config_root), "DATA_ROOT": str(config_root / "data")})
+    config = load_config({"CONFIG_ROOT": str(config_root)})
 
     # 情境裡的下載連結指回這台 server 自己，所以 port 要在建情境之前就定下來。
     global DEMO_PORT, NAS_ROOT
@@ -2014,7 +2012,7 @@ def demo_torrent(release: str) -> Torrent:
 
 async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) -> None:
     """精靈第 7 步會**真的**建目錄、寫探測檔、呼叫 `link()`，所以三層路徑要落在這一輪的
-    暫存 `DATA_ROOT` 底下，而不是容器裡的 `/data`（brief §4.1）。
+    暫存目錄的 `data/` 底下，而不是容器裡的 `/data`（brief §4.1）。
 
     `completed=True` 的情境（`signed-out`）另外把精靈標成跑完：那條路徑要的是登入頁，
     不是再走一次八步，所以不經過 `POST /setup/complete`（它要每個 Route 都綠燈）。
@@ -2026,7 +2024,7 @@ async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) 
     config.config_root.mkdir(parents=True, exist_ok=True)
     # 容器裡的路徑一律是 POSIX 形狀，畫面上顯示的也就是那個形狀。Windows 上開發時把
     # 反斜線換掉，看到的才與正式部署一致（`os` 兩種分隔符都吃）。
-    data = str(config.data_root).replace("\\", "/").rstrip("/")
+    data = str(config.config_root / "data").replace("\\", "/").rstrip("/")
     paths = PathSettings(
         # `poll` 用容器裡的那一組：真的 qBittorrent 只用得了它自己看得到的路徑，而
         # category 的 save path 是送單當下由 `complete_root` 算出來的。library 仍然落在

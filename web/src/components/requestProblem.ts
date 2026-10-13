@@ -12,7 +12,7 @@ export type RequestProblem =
   | 'ownerElsewhere'
   | 'notAdministrator'
 
-export const PROBLEM_TEXT = {
+const PROBLEM_TEXT = {
   offline: 'request.offline',
   invalid: 'request.invalid',
   conflict: 'request.conflict',

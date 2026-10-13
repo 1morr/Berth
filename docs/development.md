@@ -19,7 +19,7 @@
 uv sync                     # 後端依賴與虛擬環境
 pnpm -C web install         # 前端依賴
 uv run pre-commit install   # 啟用 git hook（選用但建議）
-cp .env.example .env        # 本機的 CONFIG_ROOT / DATA_ROOT
+cp .env.example .env        # 本機的 CONFIG_ROOT
 ```
 
 ### 啟動
@@ -38,12 +38,11 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 
 ### 環境變數
 
-`.env.example` 是完整清單；每一個都有預設值，本機開發只需要覆寫前兩個。
+`.env.example` 是完整清單；每一個都有預設值，本機開發只需要覆寫 `CONFIG_ROOT`。
 
 | 變數 | 預設 | 用途 |
 | --- | --- | --- |
 | `CONFIG_ROOT` | `/config` | `berth.db`、設定與 log。啟動時自動建立並套用 migration |
-| `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
 | `PORT` | `8383` | 對外的唯一 port |
 | `JELLYFIN_PORT` | `8096` | 套件內 Jellyfin 在宿主上發佈的 port；「在 Jellyfin 開啟」沒填對外網址時開這個 port。compose 從部署套件 `.env` 的同名變數傳進來 |
 | `PROWLARR_PORT` | `9696` | 套件內 Prowlarr 在宿主上發佈的 port；精靈頁 4 與設定頁「在 Prowlarr 加私站」的連結開這個 port。compose 從部署套件 `.env` 的同名變數傳進來 |
@@ -51,6 +50,10 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 | `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
 | `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |
+
+**`DATA_ROOT` 不在這張表裡：Berth 不讀它。**它只在 `deploy/.env.example`，給 compose 把宿主目錄掛到容器的
+`/data`（M4 票 93）。incomplete、complete 與媒體庫的路徑來自資料庫 `settings.paths`（`PathSettings` 的預設值，
+plan §9.1），不來自環境變數。
 
 ### 後端
 
@@ -184,7 +187,14 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
 uv run pre-commit run --all-files
 ```
 
-CI（`.github/workflows/ci.yml`）在 push 到 `main` 與所有 PR 上跑同一組檢查。
+ruff、mypy、import-linter，加上 `web/` 的 prettier、eslint 與 knip。CI（`.github/workflows/ci.yml`）在 push 到
+`main` 與所有 PR 上跑同一組檢查。
+
+- **knip 擋 `web/` 沒人用的檔案、export 與依賴**（M4 票 93）：`pnpm -C web exec knip` 要 0 條。只在同一個檔裡用到的
+  東西就不要 `export`——刻意不開 `ignoreExportsUsedInFile`，export 面保持最小。`web/knip.json` 只排除兩樣：
+  `gen:api` 叫的外部 `uv`，與產生出來的 `schema.d.ts`；`web/gates/knip.test.ts` 對一個暫存的小專案用這份設定雙向驗它。
+  Python 那一側沒有對應的閘門：vulture 的誤報率 75%–91%，不加（`docs/research/simplification-audit-2026-10-13.md`
+  〈閘門建議〉）。
 
 ### 發版
 

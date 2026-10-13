@@ -32,7 +32,6 @@ const SAVE_ADDRESS = 'POST /api/settings/jellyfin'
 /** 使用者自己的 Jellyfin：精靈頁 1 選了既有、連上了、擁有者在那一台上登入過。 */
 function existing(overrides: Parameters<typeof chosen>[0] = {}) {
   return setupStatus({
-    completed: true,
     current_step: 6,
     owner: 'skipper',
     owner_signs_in: true,
@@ -56,7 +55,6 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
     [DETAIL]: { body: healthDetail() },
     [STATUS]: {
       body: setupStatus({
-        completed: true,
         current_step: 6,
         owner: 'skipper',
         services: ALL_BUNDLED,
@@ -216,7 +214,6 @@ describe('設定 → Jellyfin', () => {
 
   it('套件內那一台的 key 被撤了（M4 票 18）：出現重新登入，換到 key 之後重測連線', async () => {
     const revoked = setupStatus({
-      completed: true,
       owner: 'skipper',
       services: [chosen({ reason: 'auth_required', state: 'failed' })],
     })
@@ -224,7 +221,7 @@ describe('設定 → Jellyfin', () => {
       [STATUS]: { body: revoked },
       [SETUP]: { body: jellyfinSetup({ api_key_present: true }) },
       [SIGN_IN]: { body: jellyfinSetup({ api_key_present: true }) },
-      [RETEST]: { body: setupStatus({ completed: true, owner: 'skipper', services: [chosen()] }) },
+      [RETEST]: { body: setupStatus({ owner: 'skipper', services: [chosen()] }) },
       [TEST]: { body: healthDetail() },
     })
     const user = userEvent.setup()
@@ -285,14 +282,13 @@ describe('設定 → Jellyfin', () => {
 
   it('套件內那一台還在啟動：摘要說等了多久，設定頁照精靈每 3 秒自己重測到連上（M4 票 78）', async () => {
     const starting = setupStatus({
-      completed: true,
       owner: 'skipper',
       window_seconds: 120,
       services: [chosen({ state: 'waiting', reason: 'starting', detail: '', waited_seconds: 9 })],
     })
     const stub = render({
       [STATUS]: { body: starting },
-      [RETEST]: { body: setupStatus({ completed: true, owner: 'skipper', services: [chosen()] }) },
+      [RETEST]: { body: setupStatus({ owner: 'skipper', services: [chosen()] }) },
       [TEST]: { body: healthDetail() },
     })
     renderApp('/settings/jellyfin')

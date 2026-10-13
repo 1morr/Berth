@@ -24,7 +24,7 @@ const LOGOUT = 'POST /api/auth/logout'
 /** 精靈跑完的一台：路由守衛讀 health，精靈頁自己才讀 setup/status。 */
 const DONE = { body: HEALTHY }
 const PENDING = { body: UNCONFIGURED }
-const WIZARD = { body: setupStatus({ completed: true, current_step: 8 }) }
+const WIZARD = { body: setupStatus({ current_step: 8 }) }
 const ADMIN = { body: { name: 'skipper', role: 'admin' } }
 const USER = { body: { name: 'deckhand', role: 'user' } }
 /** 探索頁是 `/`（票 03）。路由測試只是路過它，所以兩個 feed 都給空牆。 */

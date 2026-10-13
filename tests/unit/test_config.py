@@ -1,4 +1,4 @@
-"""環境變數解析：`CONFIG_ROOT`、`DATA_ROOT`、`WEB_ROOT`、`PORT`、`JELLYFIN_PORT`、
+"""環境變數解析：`CONFIG_ROOT`、`EXT_ROOT`、`WEB_ROOT`、`PORT`、`JELLYFIN_PORT`、
 `QBITTORRENT_WEBUI_PORT`、`PROWLARR_PORT` 是對外承諾的介面。"""
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ def test_defaults_match_the_container_layout() -> None:
     config = load_config({})
 
     assert config.config_root == Path("/config")
-    assert config.data_root == Path("/data")
     assert config.port == DEFAULT_PORT == 8383
 
 
@@ -45,7 +44,6 @@ def test_every_path_and_port_can_be_overridden(tmp_path: Path) -> None:
     config = load_config(
         {
             "CONFIG_ROOT": str(tmp_path / "cfg"),
-            "DATA_ROOT": str(tmp_path / "media"),
             "WEB_ROOT": str(tmp_path / "dist"),
             "PORT": "9000",
             "JELLYFIN_PORT": "18096",
@@ -55,7 +53,6 @@ def test_every_path_and_port_can_be_overridden(tmp_path: Path) -> None:
     )
 
     assert config.config_root == tmp_path / "cfg"
-    assert config.data_root == tmp_path / "media"
     assert config.web_root == tmp_path / "dist"
     assert config.port == 9000
     assert config.jellyfin_port == 18096
@@ -96,7 +93,6 @@ def test_load_config_reads_os_environ_by_default(
 def test_config_can_be_built_directly_without_the_environment(tmp_path: Path) -> None:
     config = Config(
         config_root=tmp_path,
-        data_root=tmp_path,
         ext_root=tmp_path,
         web_root=tmp_path,
         port=DEFAULT_PORT,

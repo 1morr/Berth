@@ -95,7 +95,6 @@ class TestStatus:
         assert response.status_code == 200
         body = response.json()
         assert body == {
-            "completed": False,
             "current_step": 1,
             "owner": "",
             "owner_signs_in": False,
@@ -1271,9 +1270,7 @@ class TestRoutes:
         client.post("/api/setup/routes", json={})
         assert client.get("/api/setup/status").json()["current_step"] == 6
 
-        body = client.post("/api/setup/complete").json()
-
-        assert body["completed"] is True
+        assert client.post("/api/setup/complete").status_code == 200
         assert client.get("/api/health").json()["setup_completed"] is True
         # 精靈跑完之後這一組就是設定入口，只有登入的管理員進得來（票 07）。
         assert client.get("/api/setup/status").status_code == 200

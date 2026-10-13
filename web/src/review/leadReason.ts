@@ -27,7 +27,7 @@ const LEADS = [
   'specials_numbering',
 ] as const satisfies readonly ItemReason['code'][]
 
-export type LeadCode = (typeof LEADS)[number]
+type LeadCode = (typeof LEADS)[number]
 
 /** 主要原因那一條：`code` 限於 `LEADS`，句子在 `review.audit.lead.*`。 */
 export type Lead = ItemReason & { code: LeadCode }

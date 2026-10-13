@@ -21,7 +21,7 @@ web/dist/
 .env
 /config/
 /data/
-# 本機開發的 CONFIG_ROOT / DATA_ROOT（.env.example 的預設值）
+# 本機開發的 CONFIG_ROOT（.env.example 的預設值）與實驗腳本的輸出
 /.local/
 # deploy/.env.example 的預設 CONFIG_ROOT / DATA_ROOT
 /deploy/config/

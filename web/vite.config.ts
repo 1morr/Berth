@@ -12,14 +12,27 @@ export default defineConfig({
     proxy: { '/api': BACKEND },
   },
   test: {
-    environment: 'jsdom',
-    // `e2e/` 是 playwright 的（`pnpm e2e`），不是 vitest 的。
-    include: ['src/**/*.test.{ts,tsx}'],
-    setupFiles: ['./src/setupTests.ts'],
-    css: false,
     // 預設 5 s。放寬的代價只有「真的壞掉的測試要多等幾秒才紅」；不放寬的代價是機器忙的時候
     // 偶發紅燈，而偶發紅燈會教人重跑一次而不是去看它（M2 票 02）。
     // **`findBy*` 不看這一個**——它走 testing-library 的 `asyncUtilTimeout`（`src/setupTests.ts`）。
     testTimeout: 15_000,
+    // `e2e/` 是 playwright 的（`pnpm e2e`），不是 vitest 的。
+    projects: [
+      {
+        test: {
+          name: 'web',
+          environment: 'jsdom',
+          include: ['src/**/*.test.{ts,tsx}'],
+          setupFiles: ['./src/setupTests.ts'],
+          css: false,
+        },
+      },
+      // 驗 repo 閘門的設定（knip，M4 票 93）：要 node 的 API，所以不在 `src/`（`tsconfig.app.json` 沒有
+      // node 的型別）。不繼承上面的設定：不要 DOM、`setupTests.ts` 與 React / Tailwind 外掛，逾時各條自己給。
+      {
+        extends: false,
+        test: { name: 'gates', environment: 'node', include: ['gates/**/*.test.ts'] },
+      },
+    ],
   },
 })

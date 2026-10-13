@@ -140,7 +140,6 @@ class SetupStatusOut(BaseModel):
     #: 直接從 `SetupStatus` 這個 dataclass 讀，欄位增減不必兩處同步。
     model_config = ConfigDict(from_attributes=True)
 
-    completed: bool
     current_step: int
     #: 擁有者的 Jellyfin 名字；空字串就是還沒有（頁 1）。
     owner: str
@@ -961,7 +960,6 @@ class RouteSetupOut(BaseModel):
     routes: list[RouteOut]
     #: 至少一個 Route，而且每個都綠燈。完成鍵的前提。
     ready: bool
-    completed: bool
 
 
 class RouteSelectionIn(BaseModel):

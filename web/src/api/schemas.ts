@@ -51,18 +51,9 @@ export type PollerView = Schemas['PollerOut']
 export type QbittorrentSetup = Schemas['QbittorrentOut']
 
 /**
- * 三個服務的顯示順序，泊位板逐格照它畫。
- *
- * 後端把 `StepOut.step` 宣告成 `str`，所以下面這些集合在 OpenAPI 裡不存在——
- * 它們是 UI 的順序，不是 API 的形狀。`satisfies` 讓成員本身仍然受產出型別檢查。
+ * `RouteCheck`：一個 Route 的六條纜繩，順序即檢查順序。後端把 `StepOut.step` 宣告成 `str`，
+ * 所以這個集合在 OpenAPI 裡不存在——它是 UI 的順序，不是 API 的形狀。
  */
-export const SERVICE_KINDS = [
-  'jellyfin',
-  'qbittorrent',
-  'prowlarr',
-] as const satisfies readonly ServiceKind[]
-
-/** `RouteCheck`：一個 Route 的六條纜繩，順序即檢查順序。 */
 export const ROUTE_CHECKS = [
   'category',
   'download_path',

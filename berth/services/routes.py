@@ -193,7 +193,6 @@ class RouteSetupStatus:
     routes: tuple[RouteView, ...]
     #: 至少一個 Route，而且每個都綠燈。第 8 步（完成）的前提。
     ready: bool
-    completed: bool
 
 
 async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
@@ -227,7 +226,6 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
         ),
         routes=views,
         ready=_ready([route.health for route in views if route.enabled]),
-        completed=setup.completed,
     )
 
 

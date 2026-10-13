@@ -14,9 +14,6 @@ export type PlanReviewRow = Schemas['PlanRowOut']
 
 export type AuditReviewRow = Schemas['AuditRowOut']
 
-/** 送出那一列的 RSS Series（M3 票 13）：佇列以它分組；`confirmed = false` 時那一列是它的第一批。 */
-export type AuditSeries = Schemas['AuditSeriesOut']
-
 /** 對不到、留在 complete 原位的檔案。三個動作打 `api/files.ts` 的 `rematch`（帶 `job_file_id`）。 */
 export type UnmatchedReviewRow = Schemas['UnmatchedRowOut']
 
@@ -47,7 +44,7 @@ export type PlanDecision = Schemas['PlanDecision']
 export type AuditAction = Schemas['AuditAction']
 
 /** 確認或撤銷被擋下來的理由（`domain.ReviewRefusal`）。 */
-export type ReviewRefusal = Schemas['ReviewRefusal']
+type ReviewRefusal = Schemas['ReviewRefusal']
 
 /** 執行期認得的那幾種。**少一種或多一種都是編譯錯誤**（同 `api/issues.ts`）。 */
 const REASONS: ReasonSet<ReviewRefusal> = {

@@ -53,7 +53,6 @@ ANIME = IndexerResult(
     indexer="ACG.RIP",
     size=524288000,
     seeders=42,
-    leechers=3,
     info_hash="a" * 40,
     info_url="https://acg.rip/t/344604",
     # Prowlarr 的代理連結長這樣：帶著它自己的 API key（`arrange` 寫進設定的那一把，brief §20.7）。
@@ -67,7 +66,6 @@ SCENE = IndexerResult(
     indexer="The Pirate Bay",
     size=1073741824,
     seeders=9,
-    leechers=1,
     info_hash="b" * 40,
     # 磁力站沒有 `downloadUrl`，`magnetUrl` 一樣被包成 Prowlarr 的代理網址（brief §20.7）。
     download_url=f"http://prowlarr:9696/5/download?apikey={PROWLARR_KEY}&link=bWFnbmV0",
@@ -79,7 +77,6 @@ NOISE = IndexerResult(
     indexer="The Pirate Bay",
     size=3758096384,
     seeders=6055,
-    leechers=120,
     info_hash="c" * 40,
 )
 FILM = IndexerResult(
@@ -87,7 +84,6 @@ FILM = IndexerResult(
     indexer="YTS",
     size=2147483648,
     seeders=120,
-    leechers=8,
     info_hash="d" * 40,
 )
 

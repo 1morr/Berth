@@ -27,7 +27,7 @@
 - **SQLite**（WAL 模式），檔案 `/config/berth.db`；Alembic migration 在啟動時自動套用。
 - **前端 React SPA**，build 產物由 FastAPI 以靜態檔案提供；開發時 Vite dev server 代理 `/api`。回應一律 gzip（Starlette `GZipMiddleware`，M3 票 06：前端一整包 760 KB 傳輸降到約 216 KB，前面不一定有代理替它壓）；SSE 與已壓縮的圖不壓（Starlette 的預設排除，`test_events_api.py` 守著 SSE 那一條）。路由拆分量過（入口 760 → 458 KB）但沒做，理由在 M3 票 06 的 Comments。
 - 對外只有一個 port，預設 `8383`。
-- 路徑常數：`CONFIG_ROOT`（預設 `/config`：DB、設定、log）、`DATA_ROOT`（預設 `/data`：媒體根，brief §4）、`PORT`（預設 `8383`），全部可用環境變數覆寫以便本機開發。
+- 路徑常數：`CONFIG_ROOT`（預設 `/config`：DB、設定、log）、`PORT`（預設 `8383`），全部可用環境變數覆寫以便本機開發。媒體根 `/data` 不是環境變數：三層路徑是 `PathSettings` 的預設值（§9.1），`DATA_ROOT` 只是 compose 掛到 `/data` 的宿主目錄，Berth 不讀（M4 票 93）。
 - 前端產物的位置是第四個變數 `WEB_ROOT`，預設 repo 佈局的 `<repo>/web/dist`；裝成 wheel 之後那個路徑不存在，所以 image 的 Dockerfile（§9.1）指到它自己的複製位置。找不到時只提供 API。
 
 理由：單使用者到單家庭的規模，一個程序足夠；Seerr 與 AutoBangumi 都是這種形態。之後若解析或對帳變重，先把背景迴圈拆成第二個程序，不改架構。

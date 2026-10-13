@@ -32,7 +32,6 @@ const CLEAN = qbittorrentSetup()
 
 /** 精靈跑完、三個都是套件內的一台；擁有者 skipper（介面登入沿用的就是他）。 */
 const BUNDLED = setupStatus({
-  completed: true,
   current_step: 6,
   owner: 'skipper',
   services: ALL_BUNDLED,

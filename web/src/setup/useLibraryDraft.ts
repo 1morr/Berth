@@ -11,7 +11,7 @@ export interface DraftRow extends LibraryDraft {
 }
 
 /** 停手多久才存。每個按鍵存一次沒有必要，但關掉分頁之前要來得及存到。 */
-export const SAVE_DEBOUNCE_MS = 600
+const SAVE_DEBOUNCE_MS = 600
 
 function fromServer(rows: readonly BundledLibrary[]): DraftRow[] {
   return rows.map((row, index) => ({

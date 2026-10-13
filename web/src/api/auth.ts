@@ -3,9 +3,6 @@ import { queryOptions } from '@tanstack/react-query'
 import { apiGet, apiPost } from './client'
 import type { Schemas } from './schemas'
 
-/** 由 Jellyfin 的 `Policy.IsAdministrator` 決定。 */
-export type Role = Schemas['Role']
-
 export type Me = Schemas['MeOut']
 
 export type Credentials = Schemas['LoginIn']

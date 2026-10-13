@@ -568,7 +568,8 @@ def walk_existing(
 
 def walk_tmdb_and_complete(client: TestClient) -> None:
     ok(client.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"}))
-    assert ok(client.post("/api/setup/complete"))["completed"] is True
+    ok(client.post("/api/setup/complete"))
+    assert client.get("/api/health").json()["setup_completed"] is True
 
 
 def methods(writes: list[Write]) -> set[tuple[ServiceKind, str]]:

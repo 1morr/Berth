@@ -4752,8 +4752,6 @@ export interface components {
             routes: components["schemas"]["RouteOut"][];
             /** Ready */
             ready: boolean;
-            /** Completed */
-            completed: boolean;
         };
         /** RoutesIn */
         RoutesIn: {
@@ -5076,8 +5074,6 @@ export interface components {
         };
         /** SetupStatusOut */
         SetupStatusOut: {
-            /** Completed */
-            completed: boolean;
             /** Current Step */
             current_step: number;
             /** Owner */

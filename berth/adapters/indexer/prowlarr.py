@@ -91,7 +91,6 @@ def _result(row: Mapping[str, Any]) -> IndexerResult:
         indexer=str(row.get("indexer", "")),
         size=int(row.get("size") or 0),
         seeders=_count(row.get("seeders")),
-        leechers=_count(row.get("leechers")),
         # 磁力站沒有 `downloadUrl`，Prowlarr 把磁力也包成自己的代理網址；兩者都餵得進
         # qBittorrent（票 09），所以這裡只要一條能用的就好。
         download_url=str(row.get("downloadUrl") or row.get("magnetUrl") or ""),

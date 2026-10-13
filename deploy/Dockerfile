@@ -43,7 +43,6 @@ FROM python:3.13-slim AS runtime
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     CONFIG_ROOT=/config \
-    DATA_ROOT=/data \
     WEB_ROOT=/app/web \
     PORT=8383 \
     PUID=1000 \

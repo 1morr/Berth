@@ -53,7 +53,6 @@ class IndexerResult:
     size: int = 0
     #: `None` = 那個站沒報。與 0 不同：0 是「真的沒有人做種」。
     seeders: int | None = None
-    leechers: int | None = None
     #: 送給 qBittorrent 的那一條（票 09）。Prowlarr 回的是它自己的代理網址，
     #: **每次請求都不一樣**（`link=` 的密文帶 nonce，2026-09-10 實測 1021 筆只有 1 筆重疊），
     #: 所以它不能拿來當身分。

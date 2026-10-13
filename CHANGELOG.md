@@ -20,6 +20,12 @@
   `POST /api/settings/services/{kind}/test` 照舊。
 - **`GET /api/setup/jellyfin` 等精靈 Jellyfin 端點回應裡的 `libraries`**（M4 票 91）：畫面沒有讀它，頁 3 的媒體庫清單
   一直讀 `GET /api/setup/routes` 的 `libraries`，那一份照舊（同樣有 `uses_tvdb`、`berth_path`、`has_berth_path`）。
+- **`GET /api/setup/status`、`GET /api/setup/routes` 等精靈端點回應裡的 `completed`**（M4 票 93）：畫面沒有讀它，
+  精靈跑完了沒一直看 `GET /api/health` 的 `setup_completed`，那一份照舊。`POST /api/setup/complete` 與
+  `/api/setup/routes` 系列回同樣的形狀，也一起少了這個欄位。
+- **Berth 不再讀環境變數 `DATA_ROOT`**（M4 票 93）：它從來沒有作用——incomplete、complete 與媒體庫的路徑來自資料庫的
+  路徑設定，image 的 `ENV DATA_ROOT=/data` 一併拿掉。`.env` 與 `docker-compose.yml` 不用改：`DATA_ROOT` 還是 compose
+  把宿主目錄掛到容器 `/data` 的那個變數。本機開發的 `.env.example` 不再列它。
 
 ### Fixed
 

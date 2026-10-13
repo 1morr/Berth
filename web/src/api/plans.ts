@@ -11,14 +11,8 @@ export type Plan = Schemas['PlanOut']
 /** Plan 裡一個檔案的決定。 */
 export type PlanItem = Schemas['PlanItemOut']
 
-/** `preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`。 */
-export type PlanStatus = Plan['status']
-
 /** `import` / `extra` / `subtitle` / `skip` / `unmatched` / `review`。 */
 export type PlanAction = PlanItem['action']
-
-/** brief §6.5 的三級。 */
-export type Confidence = PlanItem['confidence']
 
 /** 為什麼停下來等人（`domain.ReviewReason`）。`auto` 的 Plan 是 `null`。 */
 export type ReviewReason = NonNullable<Plan['summary']['review_reason']>
@@ -36,7 +30,7 @@ export type PlanEdited = Schemas['PlanEditedOut']
 export type ItemEdit = Schemas['ItemEditIn']
 
 /** 改、核准、拒絕被擋下來的理由（`domain.PlanRefusal`）。 */
-export type PlanRefusal = Schemas['PlanRefusal']
+type PlanRefusal = Schemas['PlanRefusal']
 
 /** 執行期認得的那幾種。**少一種或多一種都是編譯錯誤**（同 `api/review.ts`）。 */
 const REASONS: ReasonSet<PlanRefusal> = {

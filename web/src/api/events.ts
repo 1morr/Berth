@@ -22,7 +22,7 @@ import type { Schemas } from './schemas'
 const JOB_EVENT = 'job'
 
 /** 推播帶的那三格（後端 `api/events.py` 的 `JobSignalOut`）。 */
-export type JobSignal = Schemas['JobSignalOut']
+type JobSignal = Schemas['JobSignalOut']
 
 /**
  * 第一則推播之後等多久才失效（毫秒）。這段時間裡到的都併進同一次：poller 一輪的推播是同一刻

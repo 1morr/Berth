@@ -115,7 +115,6 @@ def test_removing_every_site_does_not_reopen_the_wizard(client: TestClient) -> N
     assert client.delete(f"/api/setup/indexers/{only}", headers=BROWSER).status_code == 200
 
     assert still_complete(client)
-    assert client.get("/api/setup/status").json()["completed"] is True
 
 
 def test_an_administrator_swaps_the_tmdb_key(
