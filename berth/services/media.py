@@ -287,6 +287,7 @@ async def _fetch(
         title=display.title or base.title,
         title_en=base.title,
         title_original=base.original_title,
+        title_zh_cn=base.title_zh_cn,
         year=base.year,
         overview=display.overview or base.overview,
         overview_en=base.overview,

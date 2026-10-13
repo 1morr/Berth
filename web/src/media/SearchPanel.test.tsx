@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job } from '../api/jobs'
 import type { Media } from '../api/media'
-import type { SearchResults, SearchResult } from '../api/search'
+import type { QueryPlan, SearchResults, SearchResult } from '../api/search'
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -82,6 +82,44 @@ function row(overrides: Partial<SearchResult> = {}): SearchResult {
   }
 }
 
+/**
+ * 按下搜尋之前的那一份（`GET /api/search/queries`）：名字與季的 chip 照後端出廠預設開著
+ * （英文名、原名、不指定季加最新一季）。`queries` 由測試自己給——前端不重算，照抄後端回的。
+ */
+function plan(overrides: Partial<QueryPlan> = {}): QueryPlan {
+  return {
+    queries: ['SPY x FAMILY', 'SPY×FAMILY', '間諜家家酒'],
+    problem: null,
+    batch: null,
+    names: [
+      { name: 'SPY x FAMILY', kinds: ['english'], on: true },
+      { name: 'SPY×FAMILY', kinds: ['original'], on: true },
+      { name: '間諜家家酒', kinds: ['chinese'], on: false },
+      { name: '间谍过家家', kinds: ['simplified'], on: false },
+      { name: 'Agent x Ailə', kinds: ['alias'], on: false },
+      { name: 'Spy Familie', kinds: ['alias'], on: false },
+    ],
+    seasons: [
+      { number: 1, on: false },
+      { number: 2, on: false },
+      { number: 3, on: true },
+    ],
+    any_season: true,
+    limit: 10,
+    budget: 60,
+    ...overrides,
+  }
+}
+
+/** 開了這幾個名字與季之後，預覽（與搜尋）帶的參數。順序與 `api/search.ts` 寫的一樣。 */
+function chosen(names: string[], seasons: number[], anySeason = true): string {
+  const params = new URLSearchParams({ media: 'tv:120089' })
+  for (const name of names) params.append('name', name)
+  for (const season of seasons) params.append('in_season', String(season))
+  params.set('any_season', String(anySeason))
+  return params.toString()
+}
+
 /** 後端的 `counts`：每一類在每一站的總數。替身照送來的列算，要「總數比送來的多」時自己給。 */
 function countsOf(rows: readonly SearchResult[]): SearchResults['counts'] {
   const tally = new Map<string, SearchResults['counts'][number]>()
@@ -152,7 +190,7 @@ function render(
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
     [MEDIA_PATH]: { body: media() },
-    [QUERIES_PATH]: { body: { queries: ['SPY x FAMILY', 'SPY×FAMILY', '間諜家家酒'] } },
+    [QUERIES_PATH]: { body: plan() },
     // 同一頁 admin 才有的「RSS 訂閱」段（M3 票 19）。
     'GET /api/rss/series?media=tv%3A120089': { body: [] },
     ...routes,
@@ -179,12 +217,20 @@ function panel() {
   return screen.getByRole('region', { name: '搜尋 torrent' })
 }
 
+/** 預覽列出的那幾個查詢（一個查詢一項，M4 票 84）。 */
+async function asked(): Promise<(string | null)[]> {
+  const list = await screen.findByRole('list', { name: '要送出去的查詢' })
+  return within(list)
+    .getAllByRole('listitem')
+    .map((item) => item.textContent)
+}
+
 describe('搜尋 torrent 與結果表', () => {
   it('待命時先列出會送出去的關鍵字，而且一個索引站都還沒打', async () => {
     const stub = render()
     renderApp('/media/tv:120089')
 
-    expect(await screen.findByText('SPY x FAMILY · SPY×FAMILY · 間諜家家酒')).toBeVisible()
+    expect(await asked()).toEqual(['SPY x FAMILY', 'SPY×FAMILY', '間諜家家酒'])
     expect(screen.getByText(/這通常要一分鐘左右/)).toBeVisible()
     expect(stub.mock.calls.map(([input]) => String(input))).not.toContain(
       '/api/search?media=tv%3A120089',
@@ -196,11 +242,12 @@ describe('搜尋 torrent 與結果表', () => {
     const base = render()
     holdSearch(base)
     renderApp('/media/tv:120089')
-    await screen.findByText('SPY x FAMILY · SPY×FAMILY · 間諜家家酒')
+    await asked()
 
     await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
 
-    const lines = within(panel()).getAllByRole('listitem')
+    // 纜繩是一張有序清單；預覽那一張（`要送出去的查詢`）是另一張。
+    const lines = within(within(panel()).getByRole('list', { name: '' })).getAllByRole('listitem')
     expect(lines.map((line) => line.textContent)).toEqual([
       '進行中SPY x FAMILY',
       '進行中SPY×FAMILY',
@@ -369,12 +416,13 @@ describe('搜尋 torrent 與結果表', () => {
     const summary = await within(panel()).findByText('3 個關鍵字都有回應')
     expect(summary).toBeVisible()
     // 纜繩摘要的 `<details>` 沒展開時仍在 DOM 裡，看不見的是它；全部正常時整塊沒有任何一塊信號色。
-    expect(within(panel()).getByText('SPY×FAMILY')).not.toBeVisible()
+    // 名字 chip 上也有同一串字；纜繩的那一條在清單項裡。
+    expect(within(panel()).getByText('SPY×FAMILY', { selector: 'li *' })).not.toBeVisible()
     for (const done of within(panel()).getAllByText('已完成')) expect(done).not.toBeVisible()
 
     await userEvent.click(summary)
 
-    expect(within(panel()).getByText('SPY×FAMILY')).toBeVisible()
+    expect(within(panel()).getByText('SPY×FAMILY', { selector: 'li *' })).toBeVisible()
     expect(within(panel()).getByText('12')).toBeVisible()
   })
 
@@ -406,7 +454,7 @@ describe('搜尋 torrent 與結果表', () => {
     expect(summary).toBeVisible()
     // 垮掉的那一條在摘要上面（需要你的事浮到摘要層）。
     expect(failed.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(panel()).getByText('SPY x FAMILY')).not.toBeVisible()
+    expect(within(panel()).getByText('SPY x FAMILY', { selector: 'li *' })).not.toBeVisible()
   })
 
   it('索引站沒接時說得出下一步，而不是一張空清單（票 08 驗收）', async () => {
@@ -429,7 +477,7 @@ describe('搜尋 torrent 與結果表', () => {
 
   it('索引站沒接時按下去之前就說，按了之後同一件事只說一次（票 13）', async () => {
     render({
-      [QUERIES_PATH]: { body: { queries: ['SPY x FAMILY'], problem: 'not_configured' } },
+      [QUERIES_PATH]: { body: plan({ queries: ['SPY x FAMILY'], problem: 'not_configured' }) },
       [SEARCH_PATH]: {
         body: results({ rows: [], attempts: [], problem: 'not_configured' }),
       },
@@ -818,6 +866,255 @@ describe('搜尋 torrent 與結果表', () => {
       await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
 
       await waitFor(() => expect(screen.queryByText(YEAR.title)).toBeNull())
+    })
+  })
+
+  describe('搜尋前選名字與季（M4 票 84）', () => {
+    it('名字與季都是 chip，照後端說的預設開著；名字帶種類，別名收在展開區', async () => {
+      render()
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      const names = await within(panel()).findByRole('group', { name: '要問的名字' })
+      expect(within(names).getByRole('button', { name: 'SPY x FAMILY 英文名' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(within(names).getByRole('button', { name: 'SPY×FAMILY 原名' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(within(names).getByRole('button', { name: '間諜家家酒 中文名' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      )
+      expect(within(names).getByRole('button', { name: '间谍过家家 簡體中文名' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      )
+      // 別名三十幾個，不和四種名字擠在一排：收起來，摘要說有幾個。
+      expect(within(panel()).getByText('其他別名 2 個')).toBeVisible()
+      expect(within(panel()).getByRole('button', { name: 'Agent x Ailə 別名' })).not.toBeVisible()
+
+      const seasons = within(panel()).getByRole('group', { name: '要問的季' })
+      expect(
+        within(seasons)
+          .getAllByRole('button')
+          .map((chip) => [chip.textContent, chip.getAttribute('aria-pressed')]),
+      ).toEqual([
+        ['不指定季', 'true'],
+        ['S01', 'false'],
+        ['S02', 'false'],
+        ['S03', 'true'],
+      ])
+    })
+
+    it('開了中文名：記住這一種（每一部作品都開），預覽換成後端照新的選擇算的那一份', async () => {
+      const remembered: unknown[] = []
+      const stub = render({
+        'PUT /api/search/names': () => ({
+          body: { kinds: { english: true, original: true, chinese: true, simplified: false } },
+        }),
+        [`GET /api/search/queries?${chosen(['SPY x FAMILY', 'SPY×FAMILY', '間諜家家酒'], [3])}`]: {
+          body: plan({ queries: ['SPY x FAMILY', '間諜家家酒 第3季'] }),
+        },
+      })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      await userEvent.click(
+        await within(panel()).findByRole('button', { name: '間諜家家酒 中文名' }),
+      )
+
+      await waitFor(async () => expect(await asked()).toEqual(['SPY x FAMILY', '間諜家家酒 第3季']))
+      expect(within(panel()).getByRole('button', { name: '間諜家家酒 中文名' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      for (const [input, init] of stub.mock.calls) {
+        if (String(input) === '/api/search/names') remembered.push(JSON.parse(String(init?.body)))
+      }
+      expect(remembered).toEqual([{ kinds: { chinese: true } }])
+    })
+
+    it('別名開了不記住；季也不記住', async () => {
+      const both = ['SPY x FAMILY', 'SPY×FAMILY', 'Agent x Ailə']
+      const stub = render({
+        [`GET /api/search/queries?${chosen(both, [3])}`]: { body: plan() },
+        [`GET /api/search/queries?${chosen(both, [1, 3])}`]: { body: plan() },
+      })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      await userEvent.click(await within(panel()).findByText('其他別名 2 個'))
+      await userEvent.click(within(panel()).getByRole('button', { name: 'Agent x Ailə 別名' }))
+      await userEvent.click(within(panel()).getByRole('button', { name: 'S01' }))
+
+      expect(within(panel()).getByText('其他別名 2 個，開了 1 個')).toBeVisible()
+      const methods = stub.mock.calls.map(([, init]) => init?.method ?? 'GET')
+      expect(methods).not.toContain('PUT')
+    })
+
+    it('說出會發幾個查詢、每個站佔幾格請求預算', async () => {
+      render()
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      expect(
+        await within(panel()).findByText(
+          '會發 3 個查詢：每個索引站各佔 3 格請求預算（每站每小時 60 格）。',
+        ),
+      ).toBeVisible()
+    })
+
+    it('超過上限時搜尋鍵停用並說原因，按了也不會問', async () => {
+      const over = plan({ queries: Array.from({ length: 12 }, (_, i) => `SPY x FAMILY ${i}`) })
+      const stub = render({ [QUERIES_PATH]: { body: over } })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      const submit = await within(panel()).findByRole('button', { name: '搜尋' })
+      await waitFor(() => expect(submit).toBeDisabled())
+      expect(
+        within(panel()).getByText('開了 12 個查詢，一次最多 10 個：關掉幾個名字或季。'),
+      ).toBeVisible()
+      expect(submit).toHaveAccessibleDescription(
+        '開了 12 個查詢，一次最多 10 個：關掉幾個名字或季。',
+      )
+      await userEvent.click(submit)
+      expect(stub.mock.calls.map(([input]) => String(input))).not.toContain(
+        '/api/search?media=tv%3A120089',
+      )
+    })
+
+    it('一個名字都沒開時也停用，但自己打了關鍵字就照樣能搜', async () => {
+      const none = plan({
+        queries: [],
+        names: plan().names.map((chip) => ({ ...chip, on: false })),
+      })
+      render({ [QUERIES_PATH]: { body: none } })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      const submit = await within(panel()).findByRole('button', { name: '搜尋' })
+      await waitFor(() => expect(submit).toBeDisabled())
+      expect(within(panel()).getByText('至少開一個名字，或自己打一個關鍵字。')).toBeVisible()
+
+      await userEvent.type(within(panel()).getByLabelText('關鍵字'), 'Spy Family BDRip')
+
+      expect(submit).toBeEnabled()
+      expect(
+        within(panel()).getByText(
+          '會發 1 個查詢：每個索引站各佔 1 格請求預算（每站每小時 60 格）。',
+        ),
+      ).toBeVisible()
+    })
+
+    it('快照還沒讀到時不畫空的 chip，搜尋鍵照舊按得下去（由後端說 no_query）', async () => {
+      render({ [QUERIES_PATH]: { body: plan({ queries: [], names: [], seasons: [] }) } })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      const submit = await within(panel()).findByRole('button', { name: '搜尋' })
+      expect(within(panel()).queryByRole('group', { name: '要問的名字' })).toBeNull()
+      expect(submit).toBeEnabled()
+      expect(within(panel()).queryByText('至少開一個名字，或自己打一個關鍵字。')).toBeNull()
+    })
+
+    it('按了 chip、新的預覽還沒回來時搜尋鍵停著：送出去的要是畫面上列的那一份', async () => {
+      render({
+        [`GET /api/search/queries?${chosen(['SPY x FAMILY'], [3])}`]: () => new Promise(() => {}),
+      })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+      const submit = await within(panel()).findByRole('button', { name: '搜尋' })
+      expect(submit).toBeEnabled()
+
+      await userEvent.click(within(panel()).getByRole('button', { name: 'SPY×FAMILY 原名' }))
+
+      await waitFor(() => expect(submit).toBeDisabled())
+    })
+
+    it('按下搜尋送的是預覽的同一份選擇', async () => {
+      const choice = chosen(['SPY x FAMILY'], [3])
+      const stub = render({
+        [`GET /api/search/queries?${choice}`]: { body: plan({ queries: ['SPY x FAMILY'] }) },
+        [`GET /api/search?${choice}`]: { body: results() },
+      })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      await userEvent.click(await within(panel()).findByRole('button', { name: 'SPY×FAMILY 原名' }))
+      await waitFor(async () => expect(await asked()).toEqual(['SPY x FAMILY']))
+      await userEvent.click(within(panel()).getByRole('button', { name: '搜尋' }))
+
+      await within(panel()).findByRole('table')
+      expect(stub.mock.calls.map(([input]) => String(input))).toContain(`/api/search?${choice}`)
+    })
+
+    /** 第一季缺一集的作品：季表上「搜這部作品缺的集」按得下去。 */
+    function gappy(): Media {
+      return media({
+        seasons: [
+          {
+            season_number: 1,
+            name: 'Season 1',
+            episode_count: 1,
+            air_date: '2022-04-09',
+            imported: 0,
+            aired: 1,
+            episodes: [
+              {
+                episode_number: 1,
+                name: 'E1',
+                air_date: '2022-04-09',
+                runtime: 24,
+                absolute_number: null,
+                status: 'missing',
+                job: null,
+              },
+            ],
+          },
+        ],
+      })
+    }
+
+    it('從季表搜缺的集時不畫季 chip——缺的形狀決定問哪幾季', async () => {
+      render({
+        [MEDIA_PATH]: { body: gappy() },
+        'GET /api/search/queries?media=tv%3A120089&missing=true': {
+          body: plan({ queries: ['SPY x FAMILY S01E01'] }),
+        },
+        'GET /api/search?media=tv%3A120089&missing=true': { body: results() },
+      })
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+      await within(panel()).findByRole('group', { name: '要問的季' })
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+      await waitFor(() =>
+        expect(within(panel()).queryByRole('group', { name: '要問的季' })).toBeNull(),
+      )
+      expect(within(panel()).getByRole('group', { name: '要問的名字' })).toBeVisible()
+    })
+
+    it('搜缺的集超過上限時只叫人關名字——那時沒有季可以關', async () => {
+      const over = Array.from({ length: 12 }, (_, i) => `SPY x FAMILY S0${i}`)
+      render({
+        [MEDIA_PATH]: { body: gappy() },
+        'GET /api/search/queries?media=tv%3A120089&missing=true': {
+          body: plan({ queries: over }),
+        },
+        'GET /api/search?media=tv%3A120089&missing=true': { body: results() },
+      })
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+      expect(
+        await within(panel()).findByText('開了 12 個查詢，一次最多 10 個：關掉幾個名字。'),
+      ).toBeVisible()
     })
   })
 

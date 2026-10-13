@@ -1457,10 +1457,30 @@ export interface paths {
         };
         /**
          * Get Queries
-         * @description 不打索引站，只讀快照與這部作品的入庫狀態。
+         * @description 不打索引站，只讀快照、記住的名字種類與這部作品的入庫狀態。
          */
         get: operations["get_queries_api_search_queries_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Names
+         * @description 記住哪幾種名字預設開著（M4 票 84）：全域，任何登入的人按了 chip 都算。
+         */
+        put: operations["put_names_api_search_names_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2984,7 +3004,7 @@ export interface components {
          *     畫面要把人送回精靈第 6 步（「來源」那一格），不是叫他重試。
          * @enum {string}
          */
-        IndexerProblem: "not_configured" | "no_query" | "credential_rejected" | "unreachable" | "budget_exhausted";
+        IndexerProblem: "not_configured" | "no_query" | "credential_rejected" | "unreachable" | "budget_exhausted" | "too_many_queries";
         /** IndexerSearchOut */
         IndexerSearchOut: {
             /** Query */
@@ -3992,6 +4012,28 @@ export interface components {
             subgroup_name?: string;
         };
         /**
+         * NameChipOut
+         * @description 搜尋面板上的一顆名字 chip（M4 票 84）。
+         */
+        NameChipOut: {
+            /** Name */
+            name: string;
+            /** Kinds */
+            kinds: components["schemas"]["NameKind"][];
+            /** On */
+            on: boolean;
+        };
+        /**
+         * NameKind
+         * @description 作品搜尋用的一個名字是哪一種（M4 票 84，`.scratch/m4/search-choose-shape.md`）。
+         *
+         *     搜尋面板上一顆名字 chip 帶它當標記；開關**以種類為單位全域記住**（`SearchSettings`），所以在一部
+         *     作品開了中文名，下一部打開時中文名也開著。別名不記：快照裡的別名沒有語言，記住「別名」等於下一部
+         *     作品的三十幾個別名全開。
+         * @enum {string}
+         */
+        NameKind: "english" | "original" | "chinese" | "simplified" | "alias";
+        /**
          * OneshotIn
          * @description 一次性 RSS 連結（票 18）。網址放在 body：Mikan 聚合 feed 的網址帶 token，不進 query。
          */
@@ -4552,6 +4594,26 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * RememberedNamesIn
+         * @description 要記住的名字種類開關（M4 票 84）：只帶改了的那幾種。
+         */
+        RememberedNamesIn: {
+            /** Kinds */
+            kinds: {
+                [key: string]: boolean;
+            };
+        };
+        /**
+         * RememberedNamesOut
+         * @description 記住之後的整份：每一種名字預設開不開。
+         */
+        RememberedNamesOut: {
+            /** Kinds */
+            kinds: {
+                [key: string]: boolean;
+            };
+        };
         /** RetestIn */
         RetestIn: {
             /**
@@ -4793,13 +4855,23 @@ export interface components {
         };
         /**
          * SearchQueriesOut
-         * @description 搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問。
+         * @description 搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問，以及這要佔多少請求預算。
          */
         SearchQueriesOut: {
             /** Queries */
             queries: string[];
             problem: components["schemas"]["IndexerProblem"] | null;
             batch: components["schemas"]["BatchOut"] | null;
+            /** Names */
+            names: components["schemas"]["NameChipOut"][];
+            /** Seasons */
+            seasons: components["schemas"]["SeasonChipOut"][];
+            /** Any Season */
+            any_season: boolean;
+            /** Limit */
+            limit: number;
+            /** Budget */
+            budget: number;
         };
         /**
          * SearchResultOut
@@ -4860,6 +4932,16 @@ export interface components {
          * @enum {string}
          */
         SearchVerdict: "fits" | "year" | "not_movie" | "adult" | "partial_title" | "unrelated" | "unjudged";
+        /**
+         * SeasonChipOut
+         * @description 一顆逐季 chip（M4 票 84）。第 0 季特別篇不列。
+         */
+        SeasonChipOut: {
+            /** Number */
+            number: number;
+            /** On */
+            on: boolean;
+        };
         /**
          * SeasonOut
          * @description 一季。`season_number: 0` 是 Specials。
@@ -8681,6 +8763,12 @@ export interface operations {
                 season?: number | null;
                 /** @description 缺集搜尋分批時，這一批從哪一季起（M3 票 20）。只在 `missing=true` 時有意義。 */
                 from_season?: number;
+                /** @description 開了的名字，可重複。帶了就照它（與 `in_season`、`any_season` 一起），不帶是預設：記住的名字種類、「不指定季」加最新一季。 */
+                name?: string[] | null;
+                /** @description 開了的逐季 chip，可重複。只在帶了 `name` 時有意義。 */
+                in_season?: number[] | null;
+                /** @description 「不指定季」那一顆開著沒有。只在帶了 `name` 時有意義。 */
+                any_season?: boolean;
             };
             header?: never;
             path?: never;
@@ -8708,6 +8796,39 @@ export interface operations {
             };
         };
     };
+    put_names_api_search_names_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RememberedNamesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RememberedNamesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_search_api_search_get: {
         parameters: {
             query: {
@@ -8721,6 +8842,12 @@ export interface operations {
                 season?: number | null;
                 /** @description 缺集搜尋分批時，這一批從哪一季起（M3 票 20）。只在 `missing=true` 時有意義。 */
                 from_season?: number;
+                /** @description 開了的名字，可重複。帶了就照它（與 `in_season`、`any_season` 一起），不帶是預設：記住的名字種類、「不指定季」加最新一季。 */
+                name?: string[] | null;
+                /** @description 開了的逐季 chip，可重複。只在帶了 `name` 時有意義。 */
+                in_season?: number[] | null;
+                /** @description 「不指定季」那一顆開著沒有。只在帶了 `name` 時有意義。 */
+                any_season?: boolean;
             };
             header?: never;
             path?: never;

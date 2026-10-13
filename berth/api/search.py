@@ -13,12 +13,19 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.schemas import StepOut
-from berth.domain import IndexerProblem, MappingStrategy, SearchVerdict, Source
-from berth.services.search import SearchView, plan_queries, search_torrents
+from berth.domain import IndexerProblem, MappingStrategy, NameKind, SearchVerdict, Source
+from berth.services.search import (
+    QueryPlan,
+    SearchView,
+    plan_queries,
+    remember_names,
+    search_torrents,
+)
+from berth.services.search_queries import QueryChoice
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -147,14 +154,63 @@ class BatchOut(BaseModel):
     next_at: datetime | None
 
 
-class SearchQueriesOut(BaseModel):
-    """搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問。"""
+class NameChipOut(BaseModel):
+    """搜尋面板上的一顆名字 chip（M4 票 84）。"""
 
+    #: 名字原樣，也是開關它時放進 `name` 參數的那一串。
+    name: str
+    #: 它是哪幾種：同一串字可以既是英文名也是原名。別名（`alias`）的開關不記住。
+    kinds: list[NameKind]
+    #: 這一次開著沒有（帶了 `name` 就照它，沒帶是記住的預設）。
+    on: bool
+
+
+class SeasonChipOut(BaseModel):
+    """一顆逐季 chip（M4 票 84）。第 0 季特別篇不列。"""
+
+    number: int
+    on: bool
+
+
+class SearchQueriesOut(BaseModel):
+    """搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問，以及這要佔多少請求預算。"""
+
+    #: 要問的查詢，也是每個索引站各要佔幾格請求預算（一個查詢一格）。
     queries: list[str]
     #: 不必問索引站就知道的問題：只有 `not_configured`（M2 票 13）。其餘要按下去才知道。
     problem: IndexerProblem | None
     #: 缺集搜尋時要問的這一批（M3 票 20）。
     batch: BatchOut | None
+    #: 名字 chip，照問的順序（M4 票 84）。快照還沒讀到時是空的。
+    names: list[NameChipOut]
+    #: 逐季 chip；電影與沒有季的是空的。缺集搜尋不看它（缺的形狀決定問哪幾季）。
+    seasons: list[SeasonChipOut]
+    #: 「不指定季」那一顆開著沒有。
+    any_season: bool
+    #: 一次最多幾個查詢。`queries` 比它多時 `GET /search` 一個都不問，回 `too_many_queries`。
+    limit: int
+    #: 一站一小時的請求預算（格）。一個查詢在索引站背後的每一站各佔一格。
+    budget: int
+
+
+class RememberedNamesIn(BaseModel):
+    """要記住的名字種類開關（M4 票 84）：只帶改了的那幾種。"""
+
+    kinds: dict[NameKind, bool]
+
+    @field_validator("kinds")
+    @classmethod
+    def _no_aliases(cls, value: dict[NameKind, bool]) -> dict[NameKind, bool]:
+        # 別名沒有語言，記住「別名」等於下一部作品三十幾個全開（`remember_names`）。
+        if NameKind.ALIAS in value:
+            raise ValueError("aliases have no language, so they are not remembered")
+        return value
+
+
+class RememberedNamesOut(BaseModel):
+    """記住之後的整份：每一種名字預設開不開。"""
+
+    kinds: dict[NameKind, bool]
 
 
 #: 缺集一鍵搜的兩個參數（M1.5 票 10）。預覽與搜尋收同一組，兩支才問得出同一件事。
@@ -173,6 +229,24 @@ FromSeasonParam = Annotated[
         description="缺集搜尋分批時，這一批從哪一季起（M3 票 20）。只在 `missing=true` 時有意義。",
     ),
 ]
+#: 搜尋面板上開了的 chip（M4 票 84）。預覽與搜尋收同一組。
+NameParam = Annotated[
+    list[str] | None,
+    Query(
+        description=(
+            "開了的名字，可重複。帶了就照它（與 `in_season`、`any_season` 一起），"
+            "不帶是預設：記住的名字種類、「不指定季」加最新一季。"
+        )
+    ),
+]
+InSeasonParam = Annotated[
+    list[int] | None,
+    Query(description="開了的逐季 chip，可重複。只在帶了 `name` 時有意義。"),
+]
+AnySeasonParam = Annotated[
+    bool,
+    Query(description="「不指定季」那一顆開著沒有。只在帶了 `name` 時有意義。"),
+]
 
 
 @router.get("/queries")
@@ -183,17 +257,28 @@ async def get_queries(
     missing: MissingParam = False,
     season: SeasonParam = None,
     from_season: FromSeasonParam = 0,
+    name: NameParam = None,
+    in_season: InSeasonParam = None,
+    any_season: AnySeasonParam = True,
 ) -> SearchQueriesOut:
-    """不打索引站，只讀快照與這部作品的入庫狀態。"""
+    """不打索引站，只讀快照、記住的名字種類與這部作品的入庫狀態。"""
     _refuse_bare_scope(missing, season, from_season)
     plan = await plan_queries(
-        session, factory, media_id=media, missing=missing, season=season, from_season=from_season
+        session,
+        factory,
+        media_id=media,
+        missing=missing,
+        season=season,
+        from_season=from_season,
+        choice=_choice(name, in_season, any_season),
     )
-    return SearchQueriesOut(
-        queries=list(plan.queries),
-        problem=plan.problem,
-        batch=BatchOut.model_validate(plan.batch) if plan.batch is not None else None,
-    )
+    return _plan_out(plan)
+
+
+@router.put("/names")
+async def put_names(session: SessionDep, body: RememberedNamesIn) -> RememberedNamesOut:
+    """記住哪幾種名字預設開著（M4 票 84）：全域，任何登入的人按了 chip 都算。"""
+    return RememberedNamesOut(kinds=await remember_names(session, body.kinds))
 
 
 @router.get("")
@@ -208,6 +293,9 @@ async def get_search(
     missing: MissingParam = False,
     season: SeasonParam = None,
     from_season: FromSeasonParam = 0,
+    name: NameParam = None,
+    in_season: InSeasonParam = None,
+    any_season: AnySeasonParam = True,
 ) -> SearchOut:
     _refuse_bare_scope(missing, season, from_season)
     return _out(
@@ -220,7 +308,35 @@ async def get_search(
             missing=missing,
             season=season,
             from_season=from_season,
+            choice=_choice(name, in_season, any_season),
         )
+    )
+
+
+def _choice(
+    names: list[str] | None, seasons: list[int] | None, any_season: bool
+) -> QueryChoice | None:
+    """帶了 `name` 才是使用者開的那一份；沒帶是 `None`，由 service 取預設。"""
+    if names is None:
+        return None
+    return QueryChoice(names=tuple(names), seasons=tuple(seasons or ()), any_season=any_season)
+
+
+def _plan_out(plan: QueryPlan) -> SearchQueriesOut:
+    on = set(plan.choice.names)
+    seasons = set(plan.choice.seasons)
+    return SearchQueriesOut(
+        queries=list(plan.queries),
+        problem=plan.problem,
+        batch=BatchOut.model_validate(plan.batch) if plan.batch is not None else None,
+        names=[
+            NameChipOut(name=name.text, kinds=list(name.kinds), on=name.text in on)
+            for name in plan.names
+        ],
+        seasons=[SeasonChipOut(number=number, on=number in seasons) for number in plan.seasons],
+        any_season=plan.choice.any_season,
+        limit=plan.limit,
+        budget=plan.budget,
     )
 
 

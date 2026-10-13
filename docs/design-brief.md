@@ -520,7 +520,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | --- | --- | --- |
 | 設定精靈 | 首次啟動（只管第一次，跑完之後導向設定，2026-09-25） | Jellyfin、qBittorrent、Prowlarr 各一頁，每頁由使用者選套件內或既有、選完當場測試（不偵測，2026-09-29）：Jellyfin → 以它的管理員成為擁有者（套件內或還沒初始化的那一台由擁有者建，2026-09-26）→ qBittorrent → 媒體庫路徑與 Route（建立並跑檢查）→ Prowlarr 與索引站 → TMDB → 完成。兩種來源都只建 Berth 擁有的物件（§16.3、§16.4） |
 | 探索（首頁 `/`） | 找東西 | **只放 TMDB 牆**（2026-09-24 拍板、M3 票 06 實作）：趨勢 / 熱門 / 搜尋；繼續觀看與下一集只在媒體庫頁，登入後預設落在媒體庫、媒體庫裡還沒有 Berth 入庫的東西時落在這裡（2026-09-26，M4 票 10；M1.5 票 07 原本把那兩列放在這裡上方）；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
-| Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、**這部作品的下載**（M4 票 12，排在 RSS 訂閱之後、季集之前：每一筆 Job 的狀態、進度、大小、來源與字幕組、Route、時間，展開看它的檔案、大小與計劃對到的季集，連到 Job 詳情；預設只列還沒了結的——在路上的加上已入庫而還有檔案待確認的，其餘在「全部」；從沒送過下載的作品整段不畫；季表的「下載中 / 卡住」連到蓋到那一集的那一筆）、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
+| Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（按搜尋前用 chip 選要問的名字與季、說出會發幾個查詢，M4 票 84；結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、**這部作品的下載**（M4 票 12，排在 RSS 訂閱之後、季集之前：每一筆 Job 的狀態、進度、大小、來源與字幕組、Route、時間，展開看它的檔案、大小與計劃對到的季集，連到 Job 詳情；預設只列還沒了結的——在路上的加上已入庫而還有檔案待確認的，其餘在「全部」；從沒送過下載的作品整段不畫；季表的「下載中 / 卡住」連到蓋到那一集的那一筆）、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
 | 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：待審 / 對不到（只給 admin，M2 票 14）。原本還有一個「有 Issue」，2026-09-24 使用者拍板拿掉：`/issues` 已經是獨立頁（M3 票 01）。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
 | Job 詳情 | 可觀測性 | **獨立頁 `/jobs/:hash`**（M2，2026-09-22 定；M1 只有 `/jobs` 的就地展開區）：**時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
@@ -1685,7 +1685,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **Berth 的做法：不用帶年份的那兩支**（M4 票 85，使用者拍板，推翻票 69 的年份拆分）。探索搜尋與 Jellyseerr 的一般搜尋一樣，打的字整串原樣問 `search/multi`，結尾的數字不拆成年份。理由：使用者搜尋時不加年份，同名不同年的作品看卡片上的年份就認得出來；而拆開問會把片名本身以數字結尾的作品擠掉——票 69 的做法下「Space 1999」拆成 `space` 與 1999 年，帶 1999 年的那兩支回 24 部別的 Space 片、沒有它（它 1975 年首播），票 69 只在那兩支沒有東西時才問原字串，所以找不到它；兩種都問、合併的版本把它排到第 25 筆（2026-10-10 實測）。代價是「Nosferatu 1922」0 筆；搜「Nosferatu」列得出 1922、1979、2024 各年的那幾部。上面兩條事實留著，要做年份篩選時從這裡起。
 - **Sonarr / Radarr 送查詢前把 `&` 換成 `and`**：`SearchCriteriaBase.GetCleanSceneTitle` 是 `cleanTitle.Replace("&", "and")`，再把非字元換成 `+`，所以《Law & Order》送出去是 `Law+and+Order`；**取代**，不另外多問一組。兩邊的這一支逐行相同。比對用的 clean title（`Parser.CleanSeriesTitle` / `CleanTitle`）用 `NormalizeRegex` 把 `a`、`an`、`the`、`and`、`or`、`of`（不在頭尾時）與所有非字元一起刪掉，所以 `Law & Order` 與 `Law and Order` 清成同一串 `laworder`。【`src/NzbDrone.Core/IndexerSearch/Definitions/SearchCriteriaBase.cs`、`Parser/Parser.cs`，[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core)、[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)，2026-10-10 讀】
 - **兩種站各認一種寫法**（2026-10-10 實測）：The Pirate Bay（經 Prowlarr）對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆；Mikan 的 RSS 搜尋對 `TIGER & BUNNY` 回 81 筆、對 `TIGER and BUNNY` 回 0 筆（`Spice & Wolf` 與 `Spice and Wolf` 都是 100 筆）。字幕組照官方的拉丁字片名寫 `&`，scene 寫 `and`。
-- **Berth 的做法**（`parser.title.spell_ampersand`、`services/search.py` 的 `_title_order`）：**不照 Sonarr 只送寫開的**——那會丟掉 Mikan 那一邊。有 `&` 的名字原樣問一次、緊接著再問寫成 `and` 的一次，仍在一次五個查詢（`MAX_QUERIES`）之內，擠掉的是排最後的別名，請求預算（§20.13）不因此變大；`Season N` 變體用寫開的（scene 的寫法）。有 CJK 字的名字不換。比對不學 Sonarr 刪掉每一個 `and`（`Pride and Prejudice` 的發佈名照舊要寫出 `and`），只替帶 `&` 的名字多認一種寫開的寫法。
+- **Berth 的做法**（`parser.title.spell_ampersand`、`services/search_queries.py` 的 `_spellings`）：**不照 Sonarr 只送寫開的**——那會丟掉 Mikan 那一邊。有 `&` 的名字原樣問一次、再問寫成 `and` 的一次，兩者各配開了的季（M4 票 84 起名字與季由人開關，`&` 這一個照舊自動多一個、列在預覽裡，算進一次搜尋的上限 `MAX_QUERIES`）。有 CJK 字的名字不換。比對不學 Sonarr 刪掉每一個 `and`（`Pride and Prejudice` 的發佈名照舊要寫出 `and`），只替帶 `&` 的名字多認一種寫開的寫法。
 - **Newznab 的成人分類是 6000–6090**：Prowlarr `NewznabStandardCategory` 的 `XXX = 6000` 與子分類 `XXX/DVD` 6010 到 `XXX/WEB-DL` 6090。搜尋結果的 `categories` 帶站定義映射到的標準碼加 `100000 + 站碼` 的自訂碼（`IndexerCapabilitiesCategories.MapTrackerCatToNewznab`），標準碼是定義檔寫的那一個、不自動補父分類。The Pirate Bay 的定義把 Porn 各類映射到 `XXX`、`XXX/x264`、`XXX/Other` 等（`definitions/v11/thepiratebay.yml`）。【[Prowlarr develop](https://github.com/Prowlarr/Prowlarr/tree/develop/src/NzbDrone.Core/Indexers)、[Prowlarr/Indexers](https://github.com/Prowlarr/Indexers/blob/master/definitions/v11/thepiratebay.yml)，2026-10-10 讀；回應的形狀沒有實際呼叫驗證，錄製的 `search.*.json` 裡沒有成人類】
 - **Berth 的做法**（`services/search.py` 的 `ADULT_CATEGORIES`）：分類碼落在 6000–6999 的歸成「成人分類」（M4 票 83 起是 Search Verdict 的一類），不丟。分類碼不拿來查（plan §8.4：各站映射自訂），拿來歸類是因為歸錯了按一下就看得到（畫面預設只列「符合」，其他類照樣送）；沒有映射成人類的站（多數動漫站）擋不到，那時只剩發佈名。
 
@@ -1713,3 +1713,31 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   每類各有上限（符合 100、其餘 50，逐站輪流取）。「只對上部分名字」照 Sonarr 取第一個記號（季集、字幕組集號、年份）前面那一段，
   但先照 `/`、`|`、括號與文字系統（CJK／非 CJK）切成一個一個名字再比——字幕組把中文名與拉丁字名寫在一起（`SPY×FAMILY 間諜家家酒 - 05`），
   整段比的話每一筆都像衍生劇。有一個名字相等就算這一部，沒有相等但有一個包住這部作品的名字才算「部分」；讀不出記號時不判。
+
+### 20.21 季的搜尋記號：`Season N` 與 `SNN` 實跑比較（2026-10-13 實測，M4 票 84）
+
+腳本 `scripts/experiments/season_token_compare.py`，隔離的 Prowlarr（The Pirate Bay、Mikan、dmhy；Nyaa 與 YTS 那天從容器連不上），
+每一對查詢逐站數「總筆數 / 發佈名真的含那部作品名字的筆數」（The Pirate Bay 對查不到的字回熱門清單，純筆數會騙人）：
+
+| 查詢 | The Pirate Bay | Mikan | dmhy |
+| --- | --- | --- | --- |
+| `The Bear Season 3` | 23 / 11 | — | — |
+| `The Bear S03` | 6 / 6 | — | — |
+| `Severance Season 2` | 4 / 4 | — | — |
+| `Severance S02` | 11 / 11 | — | — |
+| `SPY x FAMILY Season 2` | 21 / 21 | 189 / 162 | 80 / 56 |
+| `SPY x FAMILY S02` | — | 2 / 2 | 2 / 2 |
+| `Frieren Season 2` | 1 / 1 | 114 / 114 | 75 / 75 |
+| `Frieren S02` | — | 11 / 11 | 11 / 11 |
+| `Oshi no Ko Season 2` | 1 / 1 | 47 / 47 | — |
+| `Oshi no Ko S02` | — | 8 / 7 | — |
+| `间谍过家家 第2季` | 100 / 0 | — | — |
+| `间谍过家家 S02` | — | 1 / 1 | — |
+
+- **美劇 `SNN` 比較準**：The Pirate Bay 對 `The Bear Season 3` 回的名字對得上的 11 筆裡只有 3 筆寫 `S03`，其餘是別季；
+  `The Bear S03` 的 6 筆全是第三季。`Severance S02` 11 筆、`Season 2` 4 筆。
+- **動畫站的 `SNN` 少一個數量級**：Mikan、dmhy 對 `Season 2` 是寬鬆比對，`SPY x FAMILY Season 2` 在 Mikan 回的 162 筆名字對得上
+  的裡有 90 筆發佈名真的寫 `Season 2`（只有 1 筆寫 `S02`），`S02` 只回 2 筆。字幕組寫的是 `Season 2`、`第2季`，不是 scene 的 `S02`。
+- **Berth 的做法**（`parser.title.season_tokens`）：照票面「`SNN` 比較少就兩種都留」，**拉丁字名字一季問 `S03` 與 `Season 3`
+  兩個**，有 CJK 字的名字問 `第3季`；按搜尋與搜缺的集共用這一個函式。一次搜尋的上限因此從 5 個改成 10 個（使用者 2026-10-13
+  拍板）：動畫的英文名、原名配「不指定季」與最新一季是 6 個，再開兩種中文名是 10 個。CJK 那一對兩邊都只有 0–1 筆，樣本太小，只當參考。

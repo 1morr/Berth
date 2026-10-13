@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -47,6 +47,21 @@ describe('ToggleChips', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '符合 13' }))
     expect(screen.getByRole('button', { name: '符合 13' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('機器字串的標籤不被大寫，標記跟在後面、算進名字（票 84 的名字 chip）', () => {
+    render(
+      <ToggleChips
+        label="名字"
+        chips={[{ value: 'SPY x FAMILY', label: 'SPY x FAMILY', machine: true, note: '英文名' }]}
+        selected={new Set<string>()}
+        onToggle={() => {}}
+      />,
+    )
+
+    const chip = screen.getByRole('button', { name: 'SPY x FAMILY 英文名' })
+    // 按鈕本身是 `.label`（英文介面會大寫）；名字是要送出去的那一串，走 `.value` 原樣。
+    expect(within(chip).getByText('SPY x FAMILY')).toHaveClass('value', 'normal-case')
   })
 
   it('toggled 不改原本那一組', () => {

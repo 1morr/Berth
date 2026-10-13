@@ -1490,12 +1490,43 @@ const zhHant = {
     title: '搜尋 torrent',
     indexers: '索引站',
     keyword: '關鍵字',
-    keywordPlaceholder: '留空就用這部作品的各個名字',
+    keywordPlaceholder: '留空就用下面開了的名字',
     // 從季表按進來之後（票 13）：留空問的是缺的那幾集，不是作品名。
     keywordPlaceholderMissing: '留空就問缺的那幾集',
     submit: '搜尋',
     submitting: '搜尋中…',
-    willAsk: 'Berth 會拿這幾個名字各問一次：',
+    willAsk: 'Berth 會問這幾個：',
+    queriesList: '要送出去的查詢',
+    // 按下去之前說出代價（M4 票 84）：一個查詢就是請索引站背後的每一個站搜一次，所以兩個數字相同。
+    cost_one:
+      '會發 {{count}} 個查詢：每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）。',
+    cost_other:
+      '會發 {{count}} 個查詢：每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）。',
+    tooMany: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字或季。',
+    // 搜缺的集沒有季 chip：缺的形狀決定問哪幾季，能關的只有名字。
+    tooManyNames: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字。',
+    noName: '至少開一個名字，或自己打一個關鍵字。',
+    // 搜尋前選名字與季的 chip（M4 票 84）。名字本身是機器字串，不是文案。
+    choose: {
+      names: '名字',
+      namesGroup: '要問的名字',
+      seasons: '季',
+      seasonsGroup: '要問的季',
+      anySeason: '不指定季',
+      aliases_one: '其他別名 {{count}} 個',
+      aliases_other: '其他別名 {{count}} 個',
+      aliasesOn_one: '，開了 {{count}} 個',
+      aliasesOn_other: '，開了 {{count}} 個',
+      aliasesGroup: '要問的別名',
+    },
+    // 名字 chip 上的種類。別名以外的開關全域記住。
+    kind: {
+      english: '英文名',
+      original: '原名',
+      chinese: '中文名',
+      simplified: '簡體中文名',
+      alias: '別名',
+    },
     willAskTyped: 'Berth 只會問這一個：',
     // 從季表按進來的那一種（M1.5 票 10）：問的是缺的那幾集，關鍵字一樣由後端給。
     willAskMissing: '這部作品缺的那幾集，Berth 會這樣問：',
@@ -1604,6 +1635,11 @@ const zhHant = {
         body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
       },
       // M3 票 20：不是壞了，是 Berth 自己先停手。等得到，所以不塗紅。
+      // M4 票 84：畫面在按下去之前就停用了搜尋鍵，這一種只在直接打 API 時出現。
+      too_many_queries: {
+        label: '查詢太多',
+        body: '開了的名字與季組出來的查詢超過一次的上限，一個都沒問。關掉幾個名字或季再搜。',
+      },
       budget_exhausted: {
         label: '等請求預算',
         body: '索引站背後的每一個站這一小時的請求預算都放不下這一批，一個關鍵字都沒問。RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。',
@@ -4749,14 +4785,43 @@ const en: Translations<typeof zhHant> = {
     title: 'Search torrents',
     indexers: 'the indexer',
     keyword: 'Keyword',
-    keywordPlaceholder: "Leave empty to use the title's own names",
+    keywordPlaceholder: 'Leave empty to use the names turned on below',
     keywordPlaceholderMissing: 'Leave empty to ask for the missing episodes',
     submit: 'Search',
     submitting: 'Searching…',
     willAskMissing: 'Berth will ask for the episodes this title is missing:',
     willAskMissingSeason: 'Berth will ask for the episodes {{season}} is missing:',
     missingOff: 'Search by title instead',
-    willAsk: 'Berth will ask for each of these names:',
+    willAsk: 'Berth will ask for these:',
+    queriesList: 'Queries to send',
+    cost_one:
+      "Sends {{count}} query: it takes {{count}} slot of each indexer's request budget ({{budget}} per site an hour).",
+    cost_other:
+      "Sends {{count}} queries: they take {{count}} slots of each indexer's request budget ({{budget}} per site an hour).",
+    tooManyNames:
+      'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names.',
+    tooMany:
+      'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names or seasons.',
+    noName: 'Turn on at least one name, or type a keyword.',
+    choose: {
+      names: 'Names',
+      namesGroup: 'Names to ask for',
+      seasons: 'Seasons',
+      seasonsGroup: 'Seasons to ask for',
+      anySeason: 'Any season',
+      aliases_one: '{{count}} other alias',
+      aliases_other: '{{count}} other aliases',
+      aliasesOn_one: ', {{count}} on',
+      aliasesOn_other: ', {{count}} on',
+      aliasesGroup: 'Aliases to ask for',
+    },
+    kind: {
+      english: 'English',
+      original: 'Original',
+      chinese: 'Chinese',
+      simplified: 'Simplified Chinese',
+      alias: 'Alias',
+    },
     answeredAll_one: '{{count}} keyword answered',
     answeredAll_other: 'All {{count}} keywords answered',
     answeredRest_one: '{{count}} other keyword answered',
@@ -4851,6 +4916,10 @@ const en: Translations<typeof zhHant> = {
       unreachable: {
         label: 'Unreachable',
         body: 'Cannot reach the indexer. Either its container is not running, or the address is wrong.',
+      },
+      too_many_queries: {
+        label: 'Too many queries',
+        body: 'The names and seasons turned on add up to more queries than one search sends, so none were asked. Turn some off and search again.',
       },
       budget_exhausted: {
         label: 'Waiting for the budget',

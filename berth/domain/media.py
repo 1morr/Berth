@@ -69,6 +69,10 @@ class MediaSnapshot(BaseModel):
     #: 英文標題。**檔名與比對用的那一個**（brief §7.5），也是 `en` 介面的顯示用標題。
     title_en: str
     title_original: str
+    #: 簡體中文名（TMDB `translations` 的 `zh-CN`，M4 票 84）。沒有是空字串。
+    #: 搜尋面板的「簡體中文名」讀它：Mikan、dmhy 的字幕組寫的多是這一個。
+    #: 票 84 之前寫下的快照沒有這一欄，下一次刷新（至多 24 小時）補上。
+    title_zh_cn: str = ""
     #: 首播 / 上映年。TMDB 未定檔時是 `None`。
     year: int | None = None
     #: `zh-Hant` 介面的簡介（`zh-TW` 那一輪，缺就是英文）。詳情頁靠它回答「這是不是我要的那部」。

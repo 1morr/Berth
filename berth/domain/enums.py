@@ -650,6 +650,29 @@ class IndexerProblem(StrEnum):
     #: 索引站背後某一站這一小時的請求預算放不下這一批（M3 票 20）。一個查詢都沒問；
     #: 何時放得下在 `retry_at`。
     BUDGET_EXHAUSTED = "budget_exhausted"
+    #: 開了的名字與季組出來的查詢超過 `MAX_QUERIES`（M4 票 84）。一個都沒問：畫面在按下去之前就
+    #: 停用了搜尋鍵，這一條守的是直接打 API 的那一條路。
+    TOO_MANY_QUERIES = "too_many_queries"
+
+
+class NameKind(StrEnum):
+    """作品搜尋用的一個名字是哪一種（M4 票 84，`.scratch/m4/search-choose-shape.md`）。
+
+    搜尋面板上一顆名字 chip 帶它當標記；開關**以種類為單位全域記住**（`SearchSettings`），所以在一部
+    作品開了中文名，下一部打開時中文名也開著。別名不記：快照裡的別名沒有語言，記住「別名」等於下一部
+    作品的三十幾個別名全開。
+    """
+
+    #: `title_en`：檔名用的那一個（brief §7.5）。
+    ENGLISH = "english"
+    #: `title_original`。
+    ORIGINAL = "original"
+    #: `title`（`zh-TW` 顯示名）。等於英文名時不算——那是 TMDB 沒翻譯時的退路。
+    CHINESE = "chinese"
+    #: `title_zh_cn`：Mikan、dmhy 的字幕組寫的多是它。
+    SIMPLIFIED = "simplified"
+    #: `titles` 其餘的別名與翻譯。
+    ALIAS = "alias"
 
 
 class SearchVerdict(StrEnum):

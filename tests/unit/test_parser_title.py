@@ -18,6 +18,7 @@ from berth.parser import (
     normalize_title,
     parse_release,
     partial_title,
+    season_tokens,
     spell_ampersand,
 )
 
@@ -475,3 +476,27 @@ class TestAmpersand:
         pride = movie("Pride and Prejudice", 2005)
 
         assert not mentions("Pride.Prejudice.2005.1080p", pride)
+
+
+class TestSeasonTokens:
+    """一季要拿哪幾個記號去問（M4 票 84）：按搜尋與搜缺的集共用這一個函式。
+
+    2026-10-13 實跑（brief §20.21）：美劇 `S03` 比 `Season 3` 準，而動畫站的 `S02` 少一個數量級，
+    所以拉丁字名字兩種都問；有 CJK 字的名字是字幕組的 `第3季`。
+    """
+
+    @pytest.mark.parametrize(
+        ("name", "number", "tokens"),
+        [
+            ("The Bear", 3, ("S03", "Season 3")),
+            ("SPY×FAMILY", 2, ("S02", "Season 2")),
+            ("Law and Order", 12, ("S12", "Season 12")),
+            ("間諜家家酒", 2, ("第2季",)),
+            ("葬送のフリーレン", 2, ("第2季",)),
+            ("SPY×FAMILY 間諜家家酒", 3, ("第3季",)),
+        ],
+    )
+    def test_latin_names_get_both_and_cjk_names_get_theirs(
+        self, name: str, number: int, tokens: tuple[str, ...]
+    ) -> None:
+        assert season_tokens(name, number) == tokens

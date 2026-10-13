@@ -116,7 +116,9 @@ export function MediaDetailPage({ id }: { id: string }) {
             <WatchDown detail={refusal.detail} onRetry={() => void watch.refetch()} />
           )}
 
-          <SearchPanel media={found} ref={search} />
+          {/* `key`：換一部作品時這一區塊的選擇（開了的名字與季、關鍵字、結果）從頭來，不跟著走（M4 票 84）。
+              帶前綴：同一層的 `SeasonsPanel` 已經用 `found.id` 當 key，同一個 key 兩個兄弟會讓 React 留下兩份。 */}
+          <SearchPanel key={`search:${found.id}`} media={found} ref={search} />
 
           {/* 次要入口的 RSS 訂閱（M3 票 19）：與搜尋同是「怎麼把它弄進來」，所以緊接在後。只有 admin。 */}
           <AdminOnly>

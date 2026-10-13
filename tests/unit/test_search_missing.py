@@ -3,50 +3,24 @@
 季表已經知道缺哪幾集，所以搜尋不必再從作品名開始。**規則只能有一份實作**：畫面上的預覽
 （`GET /search/queries`）與真的送出去的那幾個查詢走同一個函式，前端不重算。
 
-記號放不下 `MAX_QUERIES` 時**分批**（M3 票 20）：每一批是一組季、最多五個查詢，照請求預算
-一批一批問，不再退回作品名。
+名字是使用者在搜尋面板開了的那幾個（M4 票 84），**每一個都問到這一批的每一個記號**。查詢放不下
+`MAX_QUERIES` 時**分批**（M3 票 20）：每一批是一組季，照請求預算一批一批問，不再退回作品名。
 
-輸入是純資料（快照 + 季表那一份 `SeasonView`），所以這裡不碰資料庫也不打索引站。
+輸入是純資料（開了的名字 + 季表那一份 `SeasonView`），所以這裡不碰資料庫也不打索引站。
 """
 
 from __future__ import annotations
 
-from berth.domain import EpisodeStatus, MediaKind, MediaSnapshot, SeasonSnapshot
+from collections.abc import Sequence
+
+from berth.domain import EpisodeStatus
 from berth.services.inventory import EpisodeView, SeasonView
-from berth.services.search import QueryBatch, missing_batches
+from berth.services.search_queries import MAX_QUERIES, QueryBatch, missing_batches
 
-BEAR = MediaSnapshot(
-    tmdb_id=136315,
-    kind=MediaKind.TV,
-    title="熊家餐館",
-    title_en="The Bear",
-    title_original="The Bear",
-    year=2022,
-    titles=("The Bear", "熊家餐館"),
-)
-
-
-SPY = MediaSnapshot(
-    tmdb_id=120089,
-    kind=MediaKind.TV,
-    title="間諜家家酒",
-    title_en="SPY x FAMILY",
-    title_original="SPY×FAMILY",
-    year=2022,
-    titles=("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"),
-)
-
-
+BEAR = ("The Bear", "熊家餐館")
+SPY = ("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒")
 #: 七季都有缺的作品：季記號也放不下一批的那一種（M3 票 20 的驗收）。
-LONG = MediaSnapshot(
-    tmdb_id=1,
-    kind=MediaKind.TV,
-    title="長劇",
-    title_en="Long Show",
-    title_original="Long Show",
-    titles=("Long Show", "長劇"),
-    seasons=tuple(SeasonSnapshot(season_number=number) for number in range(1, 8)),
-)
+LONG = ("Long Show", "長劇")
 
 
 def episode(number: int, status: EpisodeStatus, absolute: int | None = None) -> EpisodeView:
@@ -62,10 +36,10 @@ def episode(number: int, status: EpisodeStatus, absolute: int | None = None) -> 
 
 
 def missing_queries(
-    snapshot: MediaSnapshot, seasons: tuple[SeasonView, ...], *, season: int | None = None
+    names: Sequence[str], seasons: tuple[SeasonView, ...], *, season: int | None = None
 ) -> tuple[str, ...]:
     """放得下一批時的那幾個查詢。沒有缺集是空的。"""
-    batches = missing_batches(snapshot, seasons, season=season)
+    batches = missing_batches(names, seasons, season=season)
     if not batches:
         return ()
     (only,) = batches
@@ -132,15 +106,14 @@ def test_a_season_that_is_missing_every_aired_episode_asks_for_the_season() -> N
         ),
     )
 
-    assert missing_queries(BEAR, seasons) == ("The Bear S02", "熊家餐館 S02")
+    assert missing_queries(BEAR, seasons) == ("The Bear S02", "The Bear Season 2", "熊家餐館 第2季")
 
 
 def test_an_episode_with_an_absolute_number_is_asked_for_by_that_number() -> None:
     """TMDB 給了絕對編號的作品，發佈就是照絕對編號編的——`S02E01` 在那些站上一筆都搜不到。
 
-    **一集只有一個記號**（使用者 2026-09-19 拍板）：兩種寫法都送的話記號數加倍，缺三集就吃掉
-    全部配額，中文字幕組認得的那個標題一次都問不到。取上限之後只剩五個，照標題優先序排——
-    第一個標題先問完它的每一個記號，缺的每一集至少都被問過一次。
+    **一集只有一個記號**（使用者 2026-09-19 拍板）：兩種寫法都送的話記號數加倍，缺幾集就吃掉
+    全部配額。開了的每一個名字都問到每一集（M4 票 84）：中文字幕組認得的那個名字不再被擠掉。
     """
     seasons = (
         season(
@@ -157,12 +130,13 @@ def test_an_episode_with_an_absolute_number_is_asked_for_by_that_number() -> Non
         "SPY×FAMILY 26",
         "SPY×FAMILY 27",
         "間諜家家酒 26",
+        "間諜家家酒 27",
     )
 
 
 def test_too_many_gaps_to_ask_one_by_one_fall_back_to_the_season() -> None:
-    """缺六集就有六個記號，配額只有五個——問前五集等於**默默漏掉一集**，而使用者按的是
-    「搜這一季缺的集」。收成季記號之後那一季的每一個發佈都回得來，逐集由結果表的預估去分。
+    """缺六集、兩個名字就是十二個查詢，放不下 `MAX_QUERIES`——問前幾集等於**默默漏掉幾集**，而使用者
+    按的是「搜這一季缺的集」。收成季記號之後那一季的每一個發佈都回得來，逐集由結果表的預估去分。
     """
     seasons = (
         season(
@@ -172,35 +146,39 @@ def test_too_many_gaps_to_ask_one_by_one_fall_back_to_the_season() -> None:
         ),
     )
 
-    assert missing_queries(BEAR, seasons) == ("The Bear S03", "熊家餐館 S03")
+    assert len(BEAR) * 6 > MAX_QUERIES
+    assert missing_queries(BEAR, seasons) == ("The Bear S03", "The Bear Season 3", "熊家餐館 第3季")
 
 
 def test_gaps_in_more_seasons_than_one_batch_are_asked_in_batches() -> None:
     """連季記號都放不下一批（七季都有缺）：**分批問完每一季**，不退回作品名（M3 票 20）。
 
-    每一批是一組季，第一批先填滿五個；一批裡照舊是標題優先，第一個標題先問完這一批的每一季。
+    一季在兩個名字下是三個查詢（`S01`、`Season 1`、`第1季`），一批先填滿到放不下下一季為止；
+    一批裡名字優先，第一個名字先問完這一批的每一季。
     """
     seasons = tuple(
         season(number, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.IMPORTED))
         for number in range(1, 8)
     )
 
-    assert missing_batches(LONG, seasons) == (
-        QueryBatch(
-            queries=(
-                "Long Show S01",
-                "Long Show S02",
-                "Long Show S03",
-                "Long Show S04",
-                "Long Show S05",
-            ),
-            seasons=(1, 2, 3, 4, 5),
+    batches = missing_batches(LONG, seasons)
+
+    assert [batch.seasons for batch in batches] == [(1, 2, 3), (4, 5, 6), (7,)]
+    assert batches[0] == QueryBatch(
+        queries=(
+            "Long Show S01",
+            "Long Show Season 1",
+            "Long Show S02",
+            "Long Show Season 2",
+            "Long Show S03",
+            "Long Show Season 3",
+            "長劇 第1季",
+            "長劇 第2季",
+            "長劇 第3季",
         ),
-        QueryBatch(
-            queries=("Long Show S06", "Long Show S07", "長劇 S06", "長劇 S07"),
-            seasons=(6, 7),
-        ),
+        seasons=(1, 2, 3),
     )
+    assert all(len(batch.queries) <= MAX_QUERIES for batch in batches)
 
 
 def test_one_batch_names_the_seasons_it_asks_for() -> None:
@@ -234,3 +212,20 @@ def test_nothing_missing_asks_nothing() -> None:
 
     assert missing_batches(BEAR, seasons) == ()
     assert missing_batches(BEAR, ()) == ()
+
+
+def test_no_name_asks_nothing() -> None:
+    """一個名字都沒開：畫面在按下去之前就停用了搜尋鍵，這裡守的是手改網址那一條路。"""
+    seasons = (season(1, episode(1, EpisodeStatus.MISSING)),)
+
+    assert missing_batches((), seasons) == ()
+
+
+def test_an_ampersand_name_asks_both_spellings() -> None:
+    """`&` 照票 69：原樣一個、寫成 `and` 一個，缺的集兩種寫法都問。"""
+    seasons = (season(2, episode(1, EpisodeStatus.MISSING), episode(2, EpisodeStatus.IMPORTED)),)
+
+    assert missing_queries(("Law & Order",), seasons) == (
+        "Law & Order S02E01",
+        "Law and Order S02E01",
+    )

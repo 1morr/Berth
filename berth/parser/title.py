@@ -150,6 +150,19 @@ def spell_ampersand(title: str) -> str:
     return _AMPERSAND.sub(" and ", title).strip()
 
 
+def season_tokens(name: str, number: int) -> tuple[str, ...]:
+    """一個名字找第 `number` 季時接在後面的記號（M4 票 84）。按搜尋與搜缺的集共用這一份。
+
+    拉丁字的名字照 Sonarr 寫 `S03`（brief §20.10），**另加 `Season 3`**：
+    2026-10-13 實跑（brief §20.21）美劇的 `S03` 比較準，但 Mikan、dmhy 對
+    `SPY x FAMILY S02` 回 2 筆、`Season 2` 回 189 筆。
+    有 CJK 字的名字是字幕組的 `第3季`。
+    """
+    if _CJK.search(name):
+        return (f"第{number}季",)
+    return (f"S{number:02d}", f"Season {number}")
+
+
 @dataclass(frozen=True, slots=True)
 class Misfit:
     """名字對上了、類型或年份對不上（`misfit`）：哪一條，以及發佈名裡的哪一段字。"""

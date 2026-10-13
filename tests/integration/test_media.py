@@ -38,6 +38,7 @@ SPY = TmdbDetail(
     overview="A spy, an assassin and a telepath keep house.",
     poster_path="/3zQ6cM3o6NleaR5NrDvHzeaBmM6.jpg",
     titles=("SPY x FAMILY", "SPY×FAMILY", "间谍过家家"),
+    title_zh_cn="间谍过家家",
     seasons=(
         TmdbSeasonEntry(
             season_number=0, name="Specials", episode_count=3, air_date=date(2023, 7, 28)
@@ -172,6 +173,17 @@ class TestSnapshot:
         assert view.title == "SPY×FAMILY 間諜家家酒"
         assert view.title_en == "SPY x FAMILY"
         assert view.title_original == "SPY×FAMILY"
+
+    async def test_the_snapshot_keeps_the_simplified_chinese_name(
+        self, session: AsyncSession
+    ) -> None:
+        """搜尋面板的「簡體中文名」讀快照的這一欄（M4 票 84）；`titles` 裡那一份不帶語言。"""
+        factory = await credentialled(session, tmdb())
+
+        snapshot = await read_snapshot(session, factory, SPY_ID)
+
+        assert snapshot is not None
+        assert snapshot.title_zh_cn == "间谍过家家"
 
     async def test_both_rounds_keep_their_own_overview(self, session: AsyncSession) -> None:
         """顯示用簡介跟著 UI 語言走（brief §7.5）：EN 介面讀 `en-US` 那一輪，所以兩輪都要存。"""

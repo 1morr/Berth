@@ -1,10 +1,21 @@
-import { useId, useImperativeHandle, useRef, useState, type Ref } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { queriesQueryOptions, searchTorrents, type Batch, type MissingScope } from '../api/search'
+import {
+  choiceOf,
+  queriesQueryOptions,
+  rememberNames,
+  searchTorrents,
+  type Batch,
+  type MissingScope,
+  type NameChip,
+  type NameKind,
+  type QueryChoice,
+  type QueryPlan,
+} from '../api/search'
 import { COMPACT_BUTTON, Notice, PrimaryButton } from '../components/controls'
 import { seasonCode } from '../components/episodes'
 import type { SetupStep } from '../api/schemas'
@@ -14,6 +25,7 @@ import { Timestamp } from '../components/Timestamp'
 import { IndexerNotice } from './IndexerNotice'
 import { SkippedSites } from './SkippedSites'
 import { FilteredResults } from './FilteredResults'
+import { QueryChoices } from './QueryChoices'
 import { RoutePicker } from './RoutePicker'
 import { listedTotal } from './searchFilter'
 import type { SortKey } from './searchResult'
@@ -47,6 +59,10 @@ export interface SearchHandle {
  *
  * 缺的季放不下一批時**分批問**（M3 票 20）：一批問完，`BatchLine` 說這一批問了哪幾季、下一批是哪幾季、
  * 請求預算何時放得下它，「問下一批」由人按——結果要人挑，背景自己問完也沒有人看。
+ *
+ * **問哪些名字、哪幾季由人開關**（M4 票 84，`.scratch/m4/search-choose-shape.md`）：`QueryChoices` 的 chip。
+ * 還沒動過時（`choice` 是 `null`）照後端的預設畫；動過之後預覽、搜尋、搜缺的集都帶同一份選擇。名字的種類
+ * 按下去當下就記住（`PUT /api/search/names`），下一部作品打開時照它開；別名與季不記。
  */
 export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandle> }) {
   const { t } = useTranslation()
@@ -61,14 +77,33 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   const [sort, setSort] = useState<SortKey>('seeders')
   // `null` = 照作品名搜（預設）。有值時這一區塊搜的是季表上缺的那幾集。
   const [missing, setMissing] = useState<MissingScope | null>(null)
+  // `null` = 還沒動過 chip：後端照記住的名字種類與預設的季算（M4 票 84）。
+  const [choice, setChoice] = useState<QueryChoice | null>(null)
 
-  const planned = useQuery(queriesQueryOptions(media.id, missing))
-  // 關鍵字與範圍都當**參數**傳，不從 render 的 closure 讀：季表那兩顆按鈕在同一個 tick 裡清掉關鍵字
+  // 換一個選擇時舊的預覽先留著（`keepPreviousData`）：chip 一按整塊就閃成「—」的話，人看不出按了什麼。
+  const planned = useQuery({
+    ...queriesQueryOptions(media.id, missing, choice),
+    placeholderData: keepPreviousData,
+  })
+  const queryClient = useQueryClient()
+  // 記住之後別部作品的預覽（還在快取裡的那幾份）就過時了：照新的種類重算。
+  const remember = useMutation({
+    mutationFn: rememberNames,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['search', 'queries'] }),
+  })
+  // 關鍵字、範圍與開了的 chip 都當**參數**傳，不從 render 的 closure 讀：季表那兩顆按鈕在同一個 tick 裡清掉關鍵字
   // 又送出搜尋，而「清掉」要等下一次 render 才生效——讀 closure 的話送出去的會是上一個關鍵字，
   // 而 `q` 有值時後端只問那一個（票 08），畫面上的預覽就成了謊話。
   const search = useMutation({
-    mutationFn: ({ q, scope }: { q: string; scope: MissingScope | null }) =>
-      searchTorrents({ media: media.id, q, missing: scope }),
+    mutationFn: ({
+      q,
+      scope,
+      picked,
+    }: {
+      q: string
+      scope: MissingScope | null
+      picked: QueryChoice | null
+    }) => searchTorrents({ media: media.id, q, missing: scope, choice: picked }),
   })
 
   // 季表那兩顆按鈕**直接**做這件事（React 的「觸發子元件的動作」逃生口），不繞一圈狀態再用
@@ -78,7 +113,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
       setKeyword('')
       const scope = { season, fromSeason: 0 }
       setMissing(scope)
-      search.mutate({ q: '', scope })
+      search.mutate({ q: '', scope, picked: choice })
       // 結果畫在這一區塊裡，所以焦點也要到這裡來——季表在下面好幾屏（shape §4）。
       // 瀏覽器會把拿到焦點的元素捲進畫面，所以不必自己捲一次。
       heading.current?.focus()
@@ -88,6 +123,12 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   const results = search.data
   const listed = results ? listedTotal(results) : 0
   const problem = results ? results.problem : planned.data?.problem
+  const typed = keyword.trim()
+  const refusal = planned.data && !typed ? refusalOf(planned.data, choice, missing) : null
+  const refusalId = useId()
+  // 送出去的選擇要是畫面上那一份預覽算的那一份：預覽還在換（`isPlaceholderData`）時搜尋鍵停著，
+  // 不然按下去送的是新的選擇、畫面列的卻是舊的查詢（code-review）。
+  const settling = !typed && planned.isPlaceholderData
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
@@ -106,7 +147,8 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
         className="grid gap-3"
         onSubmit={(event) => {
           event.preventDefault()
-          search.mutate({ q: keyword.trim(), scope: missing })
+          if (refusal || settling) return
+          search.mutate({ q: typed, scope: missing, picked: choice })
         }}
       >
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)_auto] lg:items-end">
@@ -128,14 +170,31 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
             />
           </p>
           <RoutePicker media={media} value={chosen} onChange={setRoute} />
-          {/* 按鈕不停用（票 02b 的規則：按鈕永遠按得下去），只換文字；問著的時候按了不再問一次（M3 票 06：一輪
-              35–85 秒、打的是公開站，重按就是整輪查詢再打一次）。 */}
+          {/* 問著的時候只換文字、按了不再問一次（M3 票 06：一輪 35–85 秒、打的是公開站，重按就是整輪查詢再打一次）。
+              **組出來的查詢超過上限、或一個名字都沒開時停用**（M4 票 84 推翻票 02b 的「按鈕永遠按得下去」，
+              票面明訂）：原因就在旁邊那一行，掛成按鈕的描述。 */}
           <span className="lg:w-40">
-            <PrimaryButton type="submit" busy={search.isPending}>
+            <PrimaryButton
+              type="submit"
+              busy={search.isPending}
+              disabled={refusal !== null || settling}
+              aria-describedby={refusal ? refusalId : undefined}
+            >
               {search.isPending ? t('search.submitting') : t('search.submit')}
             </PrimaryButton>
           </span>
         </div>
+
+        {/* 快照還沒讀到時沒有名字可選：不畫一排空的 chip（shape〈狀態與範圍〉）。 */}
+        {planned.data && planned.data.names.length > 0 && (
+          <QueryChoices
+            plan={planned.data}
+            choice={choice ?? choiceOf(planned.data)}
+            seasons={missing === null}
+            onChange={setChoice}
+            onName={(chip, on) => rememberKinds(chip, on, remember.mutate)}
+          />
+        )}
 
         <QueryPreview
           keyword={keyword}
@@ -143,7 +202,15 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           batch={planned.data?.batch ?? null}
           missing={missing}
           onTitles={() => setMissing(null)}
-        />
+        >
+          <QueryCost
+            count={typed ? 1 : (planned.data?.queries.length ?? 0)}
+            limit={planned.data?.limit ?? 0}
+            budget={planned.data?.budget ?? 0}
+            refusal={refusal}
+            refusalId={refusalId}
+          />
+        </QueryPreview>
       </form>
 
       <FolderLine media={media} />
@@ -193,7 +260,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           onNext={(fromSeason) => {
             const scope = { ...missing, fromSeason }
             setMissing(scope)
-            search.mutate({ q: '', scope })
+            search.mutate({ q: '', scope, picked: choice })
           }}
         />
       )}
@@ -231,15 +298,19 @@ function QueryPreview({
   batch,
   missing,
   onTitles,
+  children,
 }: {
   keyword: string
   planned: string[] | undefined
   batch: Batch | null
   missing: MissingScope | null
   onTitles: () => void
+  /** 代價那一行（`QueryCost`）：緊接在查詢底下，與它說的是同一份清單。 */
+  children: ReactNode
 }) {
   const { t } = useTranslation()
   const typed = keyword.trim()
+  const asked = typed ? [typed] : (planned ?? [])
 
   return (
     <div className="grid gap-1">
@@ -265,13 +336,91 @@ function QueryPreview({
           {batch.later > 0 ? t('search.batch.laterPreview', { later: batch.later }) : ''}
         </p>
       )}
-      {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。 */}
-      <p className="value max-w-prose text-xs wrap-anywhere text-ink">
-        {typed || (planned ?? []).join(' · ') || '—'}
-      </p>
+      {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。一個查詢一項（M4 票 84）：開了中文名與季之後一行放不下，
+          串成一段字的話「大熊餐廳 第5季」會從中間斷開，看不出那是一個查詢。 */}
+      {asked.length > 0 ? (
+        <ul
+          aria-label={t('search.queriesList')}
+          className="value flex max-w-prose flex-wrap gap-x-4 gap-y-1 text-xs text-ink"
+        >
+          {asked.map((query) => (
+            <li key={query} className="wrap-anywhere">
+              {query}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="value text-xs text-ink">—</p>
+      )}
+      {children}
       <p className="max-w-prose text-xs text-ink-dim">{t('search.slow')}</p>
     </div>
   )
+}
+
+/**
+ * 為什麼現在不能按搜尋（M4 票 84）：一個名字都沒開，或組出來的查詢超過上限。打了關鍵字時不看它。
+ * 搜缺的集時沒有季 chip，超過上限只能關名字（開了一大堆拉丁字別名時，整季缺的一季就超過）。
+ * 這部作品一個名字都沒有（快照還沒讀到）不算：按下去照舊由後端說 `no_query`。
+ */
+type Refusal = 'noName' | 'tooMany' | 'tooManyNames'
+
+function refusalOf(
+  plan: QueryPlan,
+  choice: QueryChoice | null,
+  missing: MissingScope | null,
+): Refusal | null {
+  if (plan.names.length > 0 && (choice ?? choiceOf(plan)).names.length === 0) return 'noName'
+  if (plan.queries.length <= plan.limit) return null
+  return missing === null ? 'tooMany' : 'tooManyNames'
+}
+
+/**
+ * 按下去之前說出代價（M4 票 84）：會發幾個查詢、每個索引站各佔幾格請求預算——一個查詢就是請索引站背後
+ * 的每一個站現場搜一次，所以兩個數字相同。不能按的時候這一行換成原因，掛在搜尋鍵的描述上。
+ */
+function QueryCost({
+  count,
+  limit,
+  budget,
+  refusal,
+  refusalId,
+}: {
+  count: number
+  limit: number
+  budget: number
+  refusal: Refusal | null
+  refusalId: string
+}) {
+  const { t } = useTranslation()
+
+  if (refusal) {
+    return (
+      <p id={refusalId} className="max-w-prose text-sm text-ink">
+        {refusal === 'noName'
+          ? t('search.noName')
+          : t(refusal === 'tooMany' ? 'search.tooMany' : 'search.tooManyNames', {
+              queries: count,
+              limit,
+            })}
+      </p>
+    )
+  }
+  if (count === 0) return null
+  return <p className="max-w-prose text-xs text-ink-dim">{t('search.cost', { count, budget })}</p>
+}
+
+/**
+ * 按了一顆名字 chip：別名以外的種類照它記住（同一顆兩種時兩種都記）。別名沒有語言，記住「別名」等於
+ * 下一部作品三十幾個全開，所以不記。
+ */
+function rememberKinds(
+  chip: NameChip,
+  on: boolean,
+  remember: (kinds: Partial<Record<NameKind, boolean>>) => void,
+) {
+  const kinds = chip.kinds.filter((kind) => kind !== 'alias')
+  if (kinds.length > 0) remember(Object.fromEntries(kinds.map((kind) => [kind, on])))
 }
 
 /**

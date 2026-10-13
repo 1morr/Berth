@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from itertools import zip_longest
 
@@ -35,10 +35,10 @@ from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery, SearchSite
 from berth.domain import (
     BudgetUse,
-    EpisodeStatus,
     IndexerProblem,
     MappingStrategy,
     MediaSnapshot,
+    NameKind,
     ParseContext,
     SearchVerdict,
     SeasonSnapshot,
@@ -47,29 +47,35 @@ from berth.domain import (
     Tags,
     collection_type_for,
 )
-from berth.models import IndexerSettings, SetupSettings
+from berth.models import IndexerSettings, SearchSettings, SetupSettings
 from berth.parser import (
     map_episode,
     mentions,
     misfit,
     parse_release,
     partial_title,
-    spell_ampersand,
     tags_of,
 )
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
-from berth.services.inventory import EpisodeView, SeasonView
+from berth.services.commands import Effect, command
 from berth.services.jobs import JobSource
 from berth.services.media import read_media, read_snapshot
-from berth.services.settings import read_settings
+from berth.services.search_queries import (
+    MAX_QUERIES,
+    QueryBatch,
+    QueryChoice,
+    SearchName,
+    chosen_names,
+    default_choice,
+    missing_batches,
+    search_names,
+    season_numbers,
+    title_queries,
+)
+from berth.services.settings import read_settings, update_settings
 from berth.services.sources import SourceCache
 from berth.services.steps import StepView, failure_of, message
-
-#: 一次搜尋最多發幾個查詢。每一個都是「請這台索引站現場去連它認得的每一個追蹤站」，
-#: 所以上限不是為了省 Berth 的力氣，是為了不要替使用者把那些公開站打到封 IP。
-#: 五個涵蓋英文 + 原文 + 兩三個別名，或英文 + 原文 + 顯示用標題 + 兩個季號變體。
-MAX_QUERIES = 5
 
 #: 送給畫面的筆數上限（「符合」與沒有判斷的那一類）。實測一次搜尋去重後有 1854 筆——全部送出去
 #: 是一份 1–2 MB 的 JSON，而 390px 的手機上沒有人捲得完。取 100 筆，總數另外報（票 08 拍板）。
@@ -222,6 +228,16 @@ class QueryPlan:
     problem: IndexerProblem | None = None
     #: 缺集搜尋時要問的這一批（M3 票 20）。
     batch: BatchView | None = None
+    #: 名字 chip（M4 票 84）：這部作品的每一個名字與它是哪幾種。快照還沒讀到時是空的。
+    names: tuple[SearchName, ...] = ()
+    #: 逐季 chip 的那幾季（`season_numbers`）。
+    seasons: tuple[int, ...] = ()
+    #: 這一次開著的：呼叫端帶來的那一份，沒帶就是預設（`default_choice`）。
+    choice: QueryChoice = field(default_factory=lambda: QueryChoice(names=()))
+    #: 一次最多幾個查詢；`queries` 比它多時搜尋整次不問（`TOO_MANY_QUERIES`）。
+    limit: int = MAX_QUERIES
+    #: 一站一小時的請求預算（`RequestBudget.limit`）：畫面說「每站每小時 N 格」，一個查詢佔一格。
+    budget: int = 0
 
 
 async def plan_queries(
@@ -232,26 +248,81 @@ async def plan_queries(
     missing: bool = False,
     season: int | None = None,
     from_season: int = 0,
+    choice: QueryChoice | None = None,
 ) -> QueryPlan:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
-    存在的理由是**這條規則只能有一份實作**：`search_titles` 要看快照的標題集合與季數，前端重算
-    一份的話「第二季以後多兩個季號變體」遲早會在兩邊長出不同的答案。不打索引站，只讀快照。
+    存在的理由是**這條規則只能有一份實作**：查詢要看快照的名字與季數（`search_queries`），前端重算
+    一份遲早會在兩邊長出不同的答案。不打索引站，只讀快照與記住的名字種類。
 
-    `missing` 是缺集一鍵搜（M1.5 票 10）：預覽與真的送出去的那幾個查詢走同一個 `_texts`，
-    所以畫面上寫的就是待會兒問出去的。
+    `choice` 是使用者在 chip 上開了的（M4 票 84），沒帶就是預設。`missing` 是缺集一鍵搜
+    （M1.5 票 10）。兩者與真的送出去的那幾個查詢走同一個 `_texts`，所以畫面上寫的就是
+    待會兒問出去的。
 
     **沒接索引站時先說**（M2 票 13）：與 `search_torrents` 同一個判準（`_indexer`）。名字照樣列——
     接上之後會問的就是這幾個。
     """
     snapshot = await read_snapshot(session, factory, media_id)
-    if missing:
-        batches = await _missing(session, factory, media_id, snapshot, season, from_season)
-        queries, view = (batches[0].queries if batches else ()), _batch(batches)
-    else:
-        queries, view = search_titles(snapshot), None
+    chosen = choice or await _default(session, snapshot)
+    batches, queries = await _texts(
+        session, factory, media_id, snapshot, chosen, missing, season, from_season
+    )
     ready = await _indexer(session) is not None
-    return QueryPlan(queries, None if ready else IndexerProblem.NOT_CONFIGURED, view)
+    return QueryPlan(
+        queries,
+        None if ready else IndexerProblem.NOT_CONFIGURED,
+        _batch(batches),
+        names=search_names(snapshot) if snapshot else (),
+        seasons=season_numbers(snapshot) if snapshot else (),
+        choice=chosen,
+        budget=factory.budget.limit,
+    )
+
+
+@command(Effect.REVERSIBLE, inverse="search.remember_names")
+async def remember_names(
+    session: AsyncSession, changes: Mapping[NameKind, bool]
+) -> dict[NameKind, bool]:
+    """記住哪幾種名字預設開著（M4 票 84）：在一部作品按了中文名，之後每一部打開時中文名都開著。
+
+    **全域、在伺服器上**（票面）：換裝置一樣，任何登入的人按了都算——搜尋本來就是一般使用者做的事。
+    只改帶來的那幾種，其餘照舊；回寫回去的整份。別名不記（`NameKind.ALIAS`）：拒絕，不默默丟掉。
+    反向命令是它自己：把那一種按回去。
+    """
+    if NameKind.ALIAS in changes:
+        raise ValueError("aliases have no language, so they are not remembered")
+
+    def apply(settings: SearchSettings) -> None:
+        settings.names = {**settings.names, **changes}
+
+    return (await update_settings(session, SearchSettings, apply)).names
+
+
+async def _default(session: AsyncSession, snapshot: MediaSnapshot | None) -> QueryChoice:
+    """沒帶 `choice` 時開著哪些：記住的名字種類，加上預設的季（`default_choice`）。"""
+    if snapshot is None:
+        return QueryChoice(names=())
+    return default_choice(snapshot, (await read_settings(session, SearchSettings)).names)
+
+
+async def _texts(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    snapshot: MediaSnapshot | None,
+    choice: QueryChoice,
+    missing: bool,
+    season: int | None,
+    from_season: int,
+) -> tuple[tuple[QueryBatch, ...], tuple[str, ...]]:
+    """要問的查詢（與缺集時的每一批）。預覽與搜尋共用**這一份**（票 10、84）。"""
+    if snapshot is None:
+        return (), ()
+    if not missing:
+        return (), title_queries(snapshot, choice)
+    names = chosen_names(snapshot, choice)
+    batches = await _missing(session, factory, media_id, names, season, from_season)
+    return batches, (batches[0].queries if batches else ())
 
 
 async def _indexer(session: AsyncSession) -> IndexerSettings | None:
@@ -267,7 +338,7 @@ async def _missing(
     session: AsyncSession,
     factory: ServiceClientFactory,
     media_id: str,
-    snapshot: MediaSnapshot | None,
+    names: tuple[str, ...],
     season: int | None,
     from_season: int,
 ) -> tuple[QueryBatch, ...]:
@@ -282,7 +353,7 @@ async def _missing(
     # 快照由呼叫端讀過了（那一趟已經套過 24 小時的規則），所以這一趟只讀資料庫，不打 TMDB。
     view = await read_media(session, factory, media_id)
     later = [row for row in view.seasons if row.season_number >= from_season]
-    return missing_batches(snapshot, later, season=season)
+    return missing_batches(names, later, season=season)
 
 
 def _batch(batches: tuple[QueryBatch, ...], next_at: datetime | None = None) -> BatchView | None:
@@ -307,12 +378,15 @@ async def search_torrents(
     missing: bool = False,
     season: int | None = None,
     from_season: int = 0,
+    choice: QueryChoice | None = None,
     timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> SearchView:
     """一部作品現在有哪些發佈可以下載。
 
     `missing` 是從季表的缺集開始搜（M1.5 票 10），`season` 再把範圍收到那一季，`from_season` 是
-    分批時這一批從哪一季起（M3 票 20，`BatchView`）。
+    分批時這一批從哪一季起（M3 票 20，`BatchView`）。`choice` 是開了的名字與季（M4 票 84），
+    沒帶是預設；組出來的查詢比 `MAX_QUERIES` 多時**整次不問**（`TOO_MANY_QUERIES`），
+    不砍尾巴——名字與季是使用者自己開的，默默少問幾個等於替他做了決定。
 
     **問之前先在請求預算裡佔位**（M3 票 20）：一個查詢打到索引站背後的每一個站，所以一批是在每一站
     各佔 `len(queries)` 格。**放不下的站這次不問**（M4 票 77，推翻票 20 的「有一站放不下就一個都
@@ -331,13 +405,15 @@ async def search_torrents(
     batches: tuple[QueryBatch, ...] = ()
     if typed:
         texts: tuple[str, ...] = (typed,)
-    elif missing:
-        batches = await _missing(session, factory, media_id, snapshot, season, from_season)
-        texts = batches[0].queries if batches else ()
     else:
-        texts = search_titles(snapshot)
+        chosen = choice or await _default(session, snapshot)
+        batches, texts = await _texts(
+            session, factory, media_id, snapshot, chosen, missing, season, from_season
+        )
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
+    if len(texts) > MAX_QUERIES:
+        return _blank(IndexerProblem.TOO_MANY_QUERIES)
 
     client = factory.indexer_search(settings.base_url, settings.api_key)
     try:
@@ -479,140 +555,6 @@ def _counts(judged: Sequence[Judged]) -> tuple[VerdictCount, ...]:
     )
 
 
-def search_titles(snapshot: MediaSnapshot | None) -> tuple[str, ...]:
-    """這部作品要用哪幾個名字去問（plan §8.4）。
-
-    順序即優先序，因為 `MAX_QUERIES` 會從尾巴砍：英文標題（檔名用的那一個，brief §7.5）、
-    原文標題、**顯示用標題**，然後才是其餘別名——2026-09-10 實測三個標題各自帶來
-    391 / 196 / 169 筆另外兩個問不到的結果，所以「多一個名字」是真的多一批東西，
-    不是重複發同一個請求。
-
-    顯示用標題要**明確**排在第三而不是跟著 `titles` 走：TMDB 的 `alternative_titles` 沒有
-    順序可言，照收的話由它決定誰進得了前五名。實測 SPY×FAMILY 就是這樣把 `Agent x Ailə`
-    （亞塞拜然語）排到中文標題前面——而使用者的索引站上是中文字幕組（票 08 實跑）。
-    """
-    if snapshot is None:
-        return ()
-    variants = _season_variants(snapshot)
-    titles = _title_order(snapshot)
-    # 季號變體**佔掉的是排最後的別名**，不是額外的配額。上限管的是「那些公開站被問幾次」，
-    # 而找最新一季時「第 N 季」比第四個羅馬拼音別名更可能命中（plan §8.4）。
-    return _unique([*titles[: MAX_QUERIES - len(variants)], *variants])
-
-
-@dataclass(frozen=True, slots=True)
-class QueryBatch:
-    """缺集搜尋的一批：一次按下去問出去的那幾個查詢，與它們問的是哪幾季（M3 票 20）。"""
-
-    queries: tuple[str, ...]
-    #: 這一批的記號歸到哪幾季。畫面用它說「這一批問了 S01–S05」。
-    seasons: tuple[int, ...]
-
-
-def missing_batches(
-    snapshot: MediaSnapshot | None, seasons: Sequence[SeasonView], *, season: int | None = None
-) -> tuple[QueryBatch, ...]:
-    """季表上缺的那幾集要拿哪幾個名字去問，分成幾批（M1.5 票 10、M3 票 20、plan §6、§8.4）。
-
-    季表已經知道缺哪幾集，所以搜尋不必再從作品名開始。查詢是**標題 × 記號**，記號由缺的形狀
-    決定（使用者 2026-09-19 拍板）：
-
-    - **整季缺**（那一季播出了的每一集都缺）→ 一個季記號 `S03`。
-    - **缺幾集 / 缺一集** → 一集一個記號：TMDB 給了絕對編號就用它（兩位數補零，照 Sonarr 的
-      動漫查詢），否則 `S03E05`。有絕對編號的作品，發佈就是照絕對編號編的——`S02E01` 在那些
-      站上一筆都搜不到；反過來也一樣，所以**一集只有一個記號**，兩種都送會讓記號數加倍。
-    - 記號放不下 `MAX_QUERIES` 時先整批收成季記號；季記號也放不下就**分批**（M3 票 20）：
-      每一批是一組季、最多 `MAX_QUERIES` 個查詢，第一批先填滿。何時問下一批由請求預算決定
-      （`adapters/budget.py`），不再退回作品名——退回去的話第六季以後的缺集一次都問不到。
-
-    一批裡**標題優先**：第一個標題先問完這一批的每一個記號，缺的每一集才至少都被問過一次。
-    `season` 有值時只看那一季（展開區那一顆按鈕）。沒有缺集就回空的——不退回作品名，
-    使用者按的是「搜缺的集」。
-    """
-    if snapshot is None:
-        return ()
-    if season is not None:
-        seasons = [row for row in seasons if row.season_number == season]
-    tokens = tuple((row.season_number, token) for row in seasons for token in _season_tokens(row))
-    if len(tokens) > MAX_QUERIES:
-        # 逐集放不下就整批收成季記號：問前五集等於默默漏掉其餘那幾集，而使用者按的是
-        # 「搜缺的集」。收窄到季之後那一季的發佈都回得來，逐集交給結果表的預估去分。
-        tokens = tuple(
-            (row.season_number, f"S{row.season_number:02d}") for row in seasons if _gaps(row)
-        )
-    titles = _title_order(snapshot)
-    return tuple(
-        QueryBatch(
-            queries=_unique(f"{title} {token}" for title in titles for _, token in chunk)[
-                :MAX_QUERIES
-            ],
-            seasons=tuple(dict.fromkeys(number for number, _ in chunk)),
-        )
-        for chunk in (
-            tokens[start : start + MAX_QUERIES] for start in range(0, len(tokens), MAX_QUERIES)
-        )
-    )
-
-
-def _season_tokens(season: SeasonView) -> tuple[str, ...]:
-    """這一季缺的那幾集寫成記號。整季都缺時是一個季記號，否則一集一個。"""
-    gaps = _gaps(season)
-    if not gaps:
-        return ()
-    if len(gaps) == season.aired:
-        return (f"S{season.season_number:02d}",)
-    return tuple(_episode_token(season.season_number, episode) for episode in gaps)
-
-
-def _gaps(season: SeasonView) -> list[EpisodeView]:
-    """這一季缺的那幾集。**判定在後端一處**（`EpisodeStatus.MISSING`：已經播了、沒有任何
-    下載在處理它），季表上的「只看缺集」數的也是它。"""
-    return [episode for episode in season.episodes if episode.status is EpisodeStatus.MISSING]
-
-
-def _episode_token(season_number: int, episode: EpisodeView) -> str:
-    """一集一個記號：有絕對編號就用它（兩位數補零，照 Sonarr 的動漫查詢），否則 `S03E05`。"""
-    if episode.absolute_number is not None:
-        return f"{episode.absolute_number:02d}"
-    return f"S{season_number:02d}E{episode.episode_number:02d}"
-
-
-def _title_order(snapshot: MediaSnapshot) -> tuple[str, ...]:
-    """這部作品的名字，照優先序（理由見 `search_titles`）。作品名搜尋與缺集搜尋共用同一份順序。
-
-    拉丁字名字裡有 `&` 的，**原樣那一個後面緊接寫成 `and` 的那一個**
-    （`spell_ampersand`，M4 票 69）：兩種站各認一種——The Pirate Bay 對 `Law & Order` 一筆都不回、
-    `Law and Order` 回 100 筆，Mikan 對 `TIGER & BUNNY` 回 81 筆、`TIGER and BUNNY` 0 筆
-    （2026-10-10 實測）。Sonarr / Radarr 只送寫開的那一個（brief §20.19），照抄會丟掉字幕組那一邊。
-    多出來的那一個仍在 `MAX_QUERIES` 之內，擠掉的是排最後的別名，請求預算（票 77）不因此變大。
-    """
-    names = [snapshot.title_en, snapshot.title_original, snapshot.title, *snapshot.titles]
-    return _unique(spelled for name in names for spelled in (name, spell_ampersand(name)))
-
-
-def _season_variants(snapshot: MediaSnapshot) -> tuple[str, ...]:
-    """`SPY x FAMILY Season 3` / `間諜家家酒 第3季`。
-
-    只做**最新的一季**，而且只在它不是第一季時做：第一季的發佈幾乎不寫季號，而每多一個變體
-    就是每一個追蹤站再被問一次。使用者要找舊季時自己打字，那條路一直都在。
-
-    **不分動漫**（票 14e，brief §19）：美劇的 `The Bear Season 3` 一樣是真的發佈名。效果沒有量，
-    要打真的索引站才量得到。電影沒有季，自然不產生。
-    """
-    numbers = [season.season_number for season in snapshot.seasons if season.season_number > 0]
-    if len(numbers) < 2:
-        return ()
-    latest = max(numbers)
-    return tuple(
-        variant
-        for title, variant in (
-            (snapshot.title_en, f"{spell_ampersand(snapshot.title_en)} Season {latest}"),
-            (snapshot.title, f"{snapshot.title} 第{latest}季"),
-        )
-        if title
-    )
-
-
 async def _attempt(
     client: IndexerSearch, query: SearchQuery, timeout: float
 ) -> tuple[StepView, tuple[IndexerResult, ...]]:
@@ -656,10 +598,10 @@ async def _attempt(
 def _dedupe(results: Iterable[IndexerResult]) -> list[IndexerResult]:
     """合併去重，然後把做種最多的排到前面。
 
-    同一個 key 保留**先看到的那一筆**：查詢是照 `search_titles` 的優先序發的，所以先看到的
-    來自更可靠的那個名字。做種數相同時保留原順序（`sorted` 穩定，`reverse=True` 不動同分的
-    相對順序），沒有做種數的排最後——「那個站沒報」不該冒充「零個人做種」擠到底，但它也拿不出
-    理由排前面。
+    同一個 key 保留**先看到的那一筆**：查詢是照 chip 的順序發的（`search_queries`，名字優先），
+    所以先看到的來自更可靠的那個名字。做種數相同時保留原順序（`sorted` 穩定，`reverse=True`
+    不動同分的相對順序），沒有做種數的排最後——「那個站沒報」不該冒充「零個人做種」擠到底，
+    但它也拿不出理由排前面。
     """
     seen: dict[str, IndexerResult] = {}
     for result in results:
@@ -777,20 +719,3 @@ def _blank(problem: IndexerProblem, detail: str = "") -> SearchView:
     """沒有結果的那幾種。`detail` 只放**服務回的原文**——沒有服務答話的那幾種就是空的，
     畫面上那句話由 `problem` 決定，不靠這一欄拼湊。"""
     return SearchView(rows=(), attempts=(), problem=problem, detail=detail)
-
-
-def _unique(values: Iterable[str]) -> tuple[str, ...]:
-    """去掉空字串與重複，保留第一次出現的順序與**原樣的大小寫**。
-
-    比對用小寫，送出去用原文：索引站對大小寫多半不敏感，但發佈名裡的 `SPY x FAMILY`
-    才是使用者認得的那一串字，而纜繩上顯示的就是送出去的那一個。
-    """
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for value in values:
-        text = value.strip()
-        if not text or text.casefold() in seen:
-            continue
-        seen.add(text.casefold())
-        ordered.append(text)
-    return tuple(ordered)
