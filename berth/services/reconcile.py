@@ -72,6 +72,7 @@ from berth.services.issues import IssueRejectedError, Recorded, record_issue
 from berth.services.plan import WRITTEN
 from berth.services.qbittorrent import (
     managed,
+    route_categories,
     sign_in,
     unknown_torrent_detail,
     unknown_torrents,
@@ -261,7 +262,7 @@ async def _ask_client(
         await client.aclose()
 
     survey.torrents = statuses
-    ours = managed(statuses, await _categories(session))
+    ours = managed(statuses, await route_categories(session))
     return SideReport(side=ReconcileSide.CLIENT, counted=len(ours))
 
 
@@ -389,10 +390,6 @@ async def _ask_jellyfin(
         logger.info("reconcile refreshed jellyfin items", extra={"count": refreshed.changed})
     survey.verdicts = refreshed.verdicts
     return SideReport(side=ReconcileSide.JELLYFIN, counted=len(resolved))
-
-
-async def _categories(session: AsyncSession) -> set[str]:
-    return {row for row in await session.scalars(select(Route.category)) if row}
 
 
 # --- 寫 Issue -----------------------------------------------------------

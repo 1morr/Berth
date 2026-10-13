@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **`GET /api/settings/services`**（M4 票 87）：回的與 `GET /api/health/detail` 一字不差，設定頁的健康卡改讀後者。
+  之前兩頁各有一份快取，在健康頁按「立即重測」之後，設定頁的卡片要等它自己重抓才會是新的；現在兩頁讀同一份。
+  `POST /api/settings/services/{kind}/test` 照舊。
+
+### Fixed
+
+- **巢狀的 Route，媒體庫裡的檔案歸到較深的那一條**（M4 票 87）：較淺那一條的目標路徑寫得不正規（例如結尾多打了幾個
+  `/`）、字串反而比較長時，媒體庫、反查與刪除 Route 前的引用數會把檔案算給較淺的那一條。現在照路徑段數比，
+  與認領同一支判斷。
+
 ## [0.2.4] - 2026-10-13
 
 **從 0.2.3 升級**：`docker-compose.yml` 與 `.env` 沒有變，也沒有資料庫 migration，`docker compose pull && docker compose up -d`

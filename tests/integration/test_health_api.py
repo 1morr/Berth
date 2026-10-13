@@ -165,6 +165,15 @@ class TestDetail:
         assert body["checked_at"] is not None
         assert body["interval_seconds"] == int(CHECK_INTERVAL.total_seconds())
 
+    def test_it_carries_each_service_address(self, client: TestClient) -> None:
+        # 設定頁的健康卡讀的就是 `/health/detail`（M4 票 87），位址要在裡面。
+        sign_in(client, ADMIN)
+
+        body = client.get("/api/health/detail").json()
+
+        assert services(body)["jellyfin"]["base_url"] == "http://jellyfin:8096"
+        assert services(body)["prowlarr"]["base_url"] == "http://prowlarr:9696"
+
 
 class TestManualCheck:
     def test_it_needs_a_session(self, client: TestClient) -> None:
@@ -191,18 +200,10 @@ class TestServiceSettings:
     def test_only_administrators_get_in(self, client: TestClient) -> None:
         sign_in(client, DECKHAND)
 
-        assert client.get("/api/settings/services").status_code == 403
+        assert post(client, "/api/settings/services/qbittorrent/test").status_code == 403
 
     def test_it_needs_a_session(self, client: TestClient) -> None:
-        assert client.get("/api/settings/services").status_code == 401
-
-    def test_it_lists_the_three_services_with_their_addresses(self, client: TestClient) -> None:
-        sign_in(client, ADMIN)
-
-        body = client.get("/api/settings/services").json()
-
-        assert services(body)["jellyfin"]["base_url"] == "http://jellyfin:8096"
-        assert services(body)["prowlarr"]["base_url"] == "http://prowlarr:9696"
+        assert post(client, "/api/settings/services/qbittorrent/test").status_code == 401
 
     def test_testing_one_service_answers_with_the_fresh_result(
         self, client: TestClient, factory: FakeClientFactory
@@ -239,7 +240,7 @@ class TestRecordsFromBeforeTicket32:
         assert qbittorrent.status_code == 200
         assert [row["step"] for row in qbittorrent.json()["steps"]] == ["web_ui_password"]
         assert client.get("/api/setup/status").status_code == 200
-        health = client.get("/api/settings/services")
+        health = client.get("/api/health/detail")
         assert health.status_code == 200
         assert "drift" not in services(health.json())["qbittorrent"]
         routes = client.get("/api/routes")

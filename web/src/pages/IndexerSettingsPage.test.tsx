@@ -55,7 +55,7 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
-    'GET /api/settings/services': { body: healthDetail() },
+    'GET /api/health/detail': { body: healthDetail() },
     'GET /api/setup/status': {
       body: setupStatus({
         completed: true,

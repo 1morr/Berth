@@ -12,7 +12,6 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 
 from berth.domain import (
-    CollectionType,
     Confidence,
     EpisodeSnapshot,
     FileEntry,
@@ -250,9 +249,7 @@ def _read(
     name: str, snapshot: MediaSnapshot, at: datetime
 ) -> tuple[tuple[int, int, int], ...] | None:
     """真的解析器 + 播出日比對（規劃時的那一份），再問它擔不擔保。"""
-    context = ParseContext(
-        media=snapshot, route_collection_type=CollectionType.TVSHOWS, published_at=at
-    )
+    context = ParseContext(media=snapshot, published_at=at)
     items = plan(name, (FileEntry(rel_path=f"{name}.mkv", size=500_000_000),), context)
     checked = check_airing(items, snapshot, at, from_series=True)
     return vouch_first_batch(name, checked, snapshot, at, season_hint=None, episode_offset=None)

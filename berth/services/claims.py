@@ -73,7 +73,7 @@ from berth.services.media import read_media
 from berth.services.qbittorrent import sign_in, unknown_torrents
 from berth.services.reimport import contents_on_disk
 from berth.services.resolve_schedule import first_resolve_at
-from berth.services.routes import save_path_of
+from berth.services.routes import owning_route, save_path_of
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -440,14 +440,10 @@ async def settle(
 async def _route_of(session: AsyncSession, path: Path) -> Route:
     """這個檔案在哪一條 Route 底下。巢狀的兩條（`…/tv` 與 `…/tv/anime`）取最深的那一條：
     作品資料夾是那一條的第一層。"""
-    routes = [
-        route
-        for route in await session.scalars(select(Route))
-        if fs.is_within(Path(path), Path(route.target_path))
-    ]
-    if not routes:
+    route = owning_route(str(path), list(await session.scalars(select(Route))))
+    if route is None:
         raise UnclaimedError(ClaimMiss.OUTSIDE_ROUTES, path)
-    return max(routes, key=lambda route: len(Path(route.target_path).parts))
+    return route
 
 
 async def _media_of(

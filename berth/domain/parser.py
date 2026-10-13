@@ -14,7 +14,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from berth.domain.enums import CollectionType, ReviewReason
+from berth.domain.enums import ReviewReason
 from berth.domain.media import MediaSnapshot
 
 
@@ -643,8 +643,6 @@ class ParseContext(BaseModel):
     season_hint: int | None = None
     #: RSS Rule 的手動偏移量。有值時**優先且信心可為 high**（plan §4.4）。
     episode_offset: int | None = None
-    #: 這個 Job 要進哪一種媒體庫。劇集不能進 movies（`domain.collection_type_for`）。
-    route_collection_type: CollectionType | None = None
     #: 索引站給的發佈時間（`jobs.published_at`，M3 票 14）。只有集號時拿它推測是哪一輪播出
     #: （plan §4.4，M3 票 16）；`None` = 來源沒給，或根本沒有來源（認領、重新入庫）。
     published_at: datetime | None = None

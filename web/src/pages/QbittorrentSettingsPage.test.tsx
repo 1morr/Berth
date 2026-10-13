@@ -3,14 +3,21 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
-import { ALL_BUNDLED, chosen, healthDetail, qbittorrentSetup, setupStatus } from '../test/fixtures'
+import {
+  ALL_BUNDLED,
+  chosen,
+  healthDetail,
+  qbittorrentSetup,
+  setupStatus,
+  withFailedService,
+} from '../test/fixtures'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const SERVICES = 'GET /api/settings/services'
+const DETAIL = 'GET /api/health/detail'
 /** 頁 2 的同一支讀取：設定頁的介面登入那一區照它畫（M4 票 32 起沒有設定頁專用的那一支）。 */
 const QBITTORRENT = 'GET /api/setup/qbittorrent/diff'
 const TEST_QBIT = 'POST /api/settings/services/qbittorrent/test'
@@ -76,11 +83,11 @@ async function loginSection(username = 'skipper') {
   return section
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
-    [SERVICES]: { body: healthDetail() },
+    [DETAIL]: { body: healthDetail() },
     [STATUS]: { body: BUNDLED },
     [QBITTORRENT]: { body: CLEAN },
     [DISK]: { body: { min_free_gb: 10 } },
@@ -96,6 +103,27 @@ describe('設定 → qBittorrent', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'qBittorrent 設定' })).toBeVisible()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  })
+
+  it('健康頁按了「立即重測」，切到設定頁讀到的就是那一次的結果（M4 票 87：兩頁同一份快取）', async () => {
+    let checked = false
+    render({
+      // 重測之後的重讀卡在半路：設定頁畫得出新結果，只可能是讀了健康頁寫進去的那一份快取。
+      [DETAIL]: () => (checked ? new Promise<StubRoute>(() => {}) : { body: healthDetail() }),
+      'POST /api/health/check': () => {
+        checked = true
+        return { body: withFailedService('qbittorrent', 'connection refused') }
+      },
+    })
+    const user = userEvent.setup()
+    const { router } = renderApp('/health')
+
+    await user.click(await screen.findByRole('button', { name: '立即重測' }))
+    expect(await screen.findByText('connection refused')).toBeInTheDocument()
+    await router.navigate({ to: '/settings/qbittorrent' })
+
+    const health = within(await screen.findByRole('region', { name: '健康' }))
+    expect(health.getByText('connection refused')).toBeInTheDocument()
   })
 
   it('既有 qBittorrent 換帳密：打開表單、送同一支選擇命令帶 existing，然後重測健康（M4 票 15）', async () => {
