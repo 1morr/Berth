@@ -44,15 +44,15 @@ Berth is a public beta. Read [Status](#status) before relying on it.
 
 ## Install
 
-1. Make a folder for Berth and put two files in it: [`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.4/deploy/docker-compose.yml), and
-   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.4/deploy/.env.example) saved as `.env`. Nothing else goes next to them. Both links are this
-   release's copies, so the compose file is never newer than the image. On Unraid, paste the two into Compose Manager
-   instead: see [Unraid](docs/guide/requirements.md#unraid).
+1. Make a folder for Berth and put two files in it: [`docker-compose.yml`](https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml), and
+   [`example.env`](https://github.com/1morr/Berth/releases/latest/download/example.env) saved as `.env`. Nothing else goes next to them. Both links download
+   the files attached to the latest release, so the compose file is never newer than the image. On Unraid, paste the
+   two into Compose Manager instead: see [Unraid](docs/guide/requirements.md#unraid).
 
    ```bash
    mkdir berth && cd berth
-   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/1morr/Berth/v0.2.4/deploy/docker-compose.yml
-   curl -fsSLo .env https://raw.githubusercontent.com/1morr/Berth/v0.2.4/deploy/.env.example
+   curl -fsSLo docker-compose.yml https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml
+   curl -fsSLo .env https://github.com/1morr/Berth/releases/latest/download/example.env
    ```
 
 2. Edit `.env`:

@@ -43,10 +43,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Release 頁只放這一版的說明，不附任何檔案（M4 票 71、brief §19 E4）：部署只要 compose 檔加 `.env`，
-  # README 連到這個 tag 底下的 deploy/ 原始檔。等 image 推完才建，Release 頁出現時 image 一定拉得到。
+  # Release 附上部署的兩個檔（M4 票 97，推翻票 71 的不附檔案）：README 連到 `releases/latest/download/<附件名>`，
+  # 永遠是最新正式版的附件，發版不必換連結。等 image 推完才建，Release 頁出現時 image 一定拉得到。
   # 說明是 CHANGELOG 的 `## [<版本>]` 那一段，相對連結換成這個 tag 底下的 blob（Release 頁上相對連結會壞）。
-  # 預發佈 tag（含 `-`）標成 prerelease。重跑同一個 tag（或 release 已經手動建了）只更新說明。
+  # 預發佈 tag（含 `-`）標成 prerelease，`latest` 不會指到它。重跑同一個 tag（或 release 已經手動建了）只更新說明、
+  # 以 --clobber 覆蓋附件。附件與名字由 tests/unit/test_readme_docs.py 守著。
   release:
     name: release notes
     needs: image
@@ -55,6 +56,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+
+      # 檔案取自這個 tag 的 checkout。GitHub 會改掉開頭是 `.` 的附件名（brief §20.17），
+      # 所以 `.env.example` 照 Immich 叫 `example.env`。
+      - name: stage deploy files
+        run: |
+          mkdir assets
+          cp deploy/docker-compose.yml assets/docker-compose.yml
+          cp deploy/.env.example assets/example.env
 
       - env:
           GH_TOKEN: ${{ github.token }}
@@ -72,8 +81,9 @@ jobs:
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes-file notes.md
+            gh release upload "$TAG" assets/* --clobber
             exit 0
           fi
           flags=(--verify-tag --title "$TAG" --notes-file notes.md)
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$TAG" "${flags[@]}"
+          gh release create "$TAG" "${flags[@]}" assets/*

@@ -4,9 +4,11 @@
   相同（兩份互連的那一條與同檔錨點除外）。改了一份忘了另一份，這裡紅。
 - README 兩份、`docs/guide/`、`docs/development.md` 裡的相對連結都指得到檔案，帶錨點的指得到
   那一份 Markdown 裡的標題（GitHub 的錨點算法）。
-- 同一批文件裡指向部署檔的連結（`raw.githubusercontent.com/1morr/Berth/<ref>/deploy/...`，M4 票 71）
-  一律是 `v<pyproject 的版號>` 這個 tag，不是 `main`：compose 不能比使用者拉到的 image 新。
-  發版改了版號忘了換連結，這裡紅（`docs/development.md`〈發版〉）。程式碼區塊裡的 `curl` 也算。
+- 同一批文件裡指向部署檔的連結一律是最新 Release 的附件（`releases/latest/download/<附件名>`，
+  M4 票 97）：不指 `main`（compose 不能比使用者拉到的 image 新），也不寫死版號（每次發版都要改）。
+  程式碼區塊裡的 `curl` 也算；含 `<version>` 這類佔位的樣板不算。
+- `.github/workflows/release.yml` 建 Release 時附上的正是這兩個附件、取自這兩個 repo 檔：
+  連結指得到東西靠它。
 
 比的是標題層級與連結目標，不是文字——翻譯換句話說、標題改措辭都不影響。
 """
@@ -14,11 +16,13 @@
 from __future__ import annotations
 
 import re
-import tomllib
+import shlex
 from collections import Counter
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
@@ -27,9 +31,17 @@ README_ZH = ROOT / "README.zh-Hant.md"
 _FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 _LINK = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)\)|<img [^>]*src=\"([^\"]+)\"|<(https?://[^>]+)>")
 _HEADING = re.compile(r"^(#{1,6}) +(.+?) *$", re.MULTILINE)
-_DEPLOY_LINK = re.compile(
-    r"https://raw\.githubusercontent\.com/1morr/Berth/([^/\s<>]+)/(deploy/[^\s)>`]+)"
+_BERTH_URL = re.compile(
+    r"https://(?:raw\.githubusercontent\.com|github\.com)/1morr/Berth/[^\s)>`\"']+"
 )
+_LATEST_DOWNLOAD = "https://github.com/1morr/Berth/releases/latest/download/"
+
+#: Release 的部署檔附件名 → 取自 repo 的哪個檔。GitHub 會改掉開頭是 `.` 的附件名（brief §20.17），
+#: 所以 `.env.example` 照 Immich 以 `example.env` 上傳。
+DEPLOY_ASSETS = {
+    "docker-compose.yml": "deploy/docker-compose.yml",
+    "example.env": "deploy/.env.example",
+}
 
 
 def _prose(markdown: str) -> str:
@@ -101,21 +113,14 @@ def broken_links(path: Path, markdown: str) -> list[str]:
     return problems
 
 
-def release_tag() -> str:
-    """這一版的 tag：`v` 加 pyproject 的版號。"""
-    with (ROOT / "pyproject.toml").open("rb") as file:
-        return f"v{tomllib.load(file)['project']['version']}"
-
-
-def deploy_link_violations(markdown: str, tag: str) -> list[str]:
-    """指向部署檔、卻不是 `tag` 或檔案不在 repo 的連結。"""
-    problems = []
-    for ref, path in _DEPLOY_LINK.findall(markdown):
-        if ref != tag:
-            problems.append(f"{ref}/{path}: should be {tag}")
-        elif not (ROOT / path).is_file():
-            problems.append(f"{ref}/{path}: no such file")
-    return problems
+def deploy_link_violations(markdown: str) -> list[str]:
+    """指向部署檔（repo 的 `deploy/` 或 Release 附件）、卻不是最新 Release 那兩個附件的連結。"""
+    allowed = {_LATEST_DOWNLOAD + name for name in DEPLOY_ASSETS}
+    return [
+        f"{url}: should be {_LATEST_DOWNLOAD}{' or '.join(DEPLOY_ASSETS)}"
+        for url in _BERTH_URL.findall(markdown)
+        if ("/deploy/" in url or "/download/" in url) and "<" not in url and url not in allowed
+    ]
 
 
 def user_docs() -> list[Path]:
@@ -138,17 +143,50 @@ def test_relative_links_resolve(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", user_docs(), ids=lambda path: path.relative_to(ROOT).as_posix())
-def test_deploy_file_links_point_at_this_release(path: Path) -> None:
-    assert deploy_link_violations(path.read_text(encoding="utf-8"), release_tag()) == []
-
-
-#: README 的安裝步驟要連到的部署檔：上面那道 tag 閘門守的就是它們。
-DEPLOY_FILES = {"deploy/docker-compose.yml", "deploy/.env.example"}
+def test_deploy_file_links_point_at_the_latest_release(path: Path) -> None:
+    assert deploy_link_violations(path.read_text(encoding="utf-8")) == []
 
 
 def missing_deploy_links(markdown: str) -> set[str]:
-    """`DEPLOY_FILES` 裡這一份沒連到的。"""
-    return DEPLOY_FILES - {path for _, path in _DEPLOY_LINK.findall(markdown)}
+    """`DEPLOY_ASSETS` 裡這一份沒連到的附件。"""
+    linked = {url.removeprefix(_LATEST_DOWNLOAD) for url in _BERTH_URL.findall(markdown)}
+    return set(DEPLOY_ASSETS) - linked
+
+
+RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+_ASSET_COMMANDS = ("cp ", "gh release create ", "gh release upload ")
+
+
+def release_assets(workflow: str) -> dict[str, dict[str, str]]:
+    """release job 的 `gh release create` 與 `gh release upload` 各附上哪些檔。
+
+    回 `{"create": {附件名: 取自 repo 的哪個檔}, "upload": {...}}`。
+
+    附件是先 `cp <repo 檔> <目錄>/<附件名>` 備好的檔，在 `gh` 指令裡寫成那個路徑或 `<目錄>/*`。
+    沒有 `--clobber` 的 `upload` 不算：重跑時附件已經在，同名再傳是 422（brief §20.17）。
+    """
+    steps = yaml.safe_load(workflow)["jobs"]["release"]["steps"]
+    lines = (line.strip() for step in steps for line in step.get("run", "").splitlines())
+    commands = [shlex.split(line) for line in lines if line.startswith(_ASSET_COMMANDS)]
+    staged = {words[-1]: words[-2] for words in commands if words[0] == "cp"}
+    result: dict[str, dict[str, str]] = {}
+    for words in commands:
+        if words[0] != "gh" or (words[2] == "upload" and "--clobber" not in words):
+            continue
+        assets = result.setdefault(words[2], {})
+        for word in words[3:]:
+            for path, source in staged.items():
+                if word == path or (word.endswith("/*") and path.startswith(word[:-1])):
+                    assets[path.rpartition("/")[2]] = source
+    return result
+
+
+def test_the_release_attaches_both_deploy_files() -> None:
+    assets = release_assets(RELEASE_WORKFLOW.read_text(encoding="utf-8"))
+
+    # 新建的 Release 走 create，重跑或手動先建好的走 upload：兩條路附上同樣兩個。
+    assert assets == {"create": DEPLOY_ASSETS, "upload": DEPLOY_ASSETS}
+    assert all((ROOT / source).is_file() for source in DEPLOY_ASSETS.values())
 
 
 @pytest.mark.parametrize("readme", [README, README_ZH], ids=lambda path: path.name)
@@ -223,38 +261,83 @@ class TestTheGatesThemselves:
             "status--known-limitations-1",
         }
 
-    DEPLOY_URL = "https://raw.githubusercontent.com/1morr/Berth/{ref}/deploy/{path}"
+    LATEST = "https://github.com/1morr/Berth/releases/latest/download/{name}"
 
-    def test_a_deploy_link_on_another_ref_is_red(self) -> None:
-        link = self.DEPLOY_URL.format(ref="main", path=".env.example")
+    def test_a_deploy_link_into_the_repo_is_red(self) -> None:
+        link = "https://raw.githubusercontent.com/1morr/Berth/main/deploy/.env.example"
         text = f"```bash\ncurl -fsSLo .env {link}\n```"
 
-        assert deploy_link_violations(text, "v1.2.3") == [
-            "main/deploy/.env.example: should be v1.2.3"
-        ]
+        assert deploy_link_violations(text) != []
+        assert deploy_link_violations(text.replace("main", "v1.2.3")) != []
 
-    def test_a_deploy_link_to_a_missing_file_is_red(self) -> None:
-        link = self.DEPLOY_URL.format(ref="v1.2.3", path="preseed/qbittorrent/10-berth.sh")
+    def test_a_deploy_link_to_one_release_or_another_name_is_red(self) -> None:
+        pinned = "https://github.com/1morr/Berth/releases/download/v1.2.3/docker-compose.yml"
 
-        assert deploy_link_violations(f"[x]({link})", "v1.2.3") == [
-            "v1.2.3/deploy/preseed/qbittorrent/10-berth.sh: no such file"
-        ]
+        assert deploy_link_violations(f"[x]({pinned})") != []
+        assert deploy_link_violations(f"[x]({self.LATEST.format(name='.env.example')})") != []
 
     def test_rewording_around_a_deploy_link_stays_green(self) -> None:
-        link = self.DEPLOY_URL.format(ref="v1.2.3", path="docker-compose.yml")
+        link = self.LATEST.format(name="docker-compose.yml")
 
-        assert deploy_link_violations(f"Get [the compose file]({link}).", "v1.2.3") == []
-        assert deploy_link_violations(f"取得 <{link}>，存檔。", "v1.2.3") == []
-        placeholder = self.DEPLOY_URL.format(ref="v<version>", path="docker-compose.yml")
-        assert deploy_link_violations(f"`{placeholder}`", "v1.2.3") == []
+        assert deploy_link_violations(f"Get [the compose file]({link}).") == []
+        assert deploy_link_violations(f"取得 <{link}>，存檔。") == []
+        assert deploy_link_violations(f'```bash\ncurl -fsSLO "{link}"\n```') == []
+        assert deploy_link_violations(f"```bash\ncurl -fsSLo docker-compose.yml {link}\n```") == []
+        template = "https://github.com/1morr/Berth/releases/download/v<version>/docker-compose.yml"
+        assert deploy_link_violations(f"`{template}`") == []
+        tag_page = "https://github.com/1morr/Berth/releases/tag/v1.2.3"
+        assert deploy_link_violations(f"[v1.2.3]({tag_page})") == []
 
     def test_a_readme_without_the_env_link_is_red(self) -> None:
-        compose = self.DEPLOY_URL.format(ref="v1.2.3", path="docker-compose.yml")
-        env = self.DEPLOY_URL.format(ref="v1.2.3", path=".env.example")
-        both = f"Put [the compose file]({compose}) and [.env.example]({env}) in a folder."
+        compose = self.LATEST.format(name="docker-compose.yml")
+        env = self.LATEST.format(name="example.env")
+        both = f"Put [the compose file]({compose}) and [example.env]({env}) in a folder."
 
         assert missing_deploy_links(both) == set()
-        assert missing_deploy_links(both.replace(f"[.env.example]({env})", ".env.example")) == {
-            "deploy/.env.example"
+        assert missing_deploy_links(both.replace(f"[example.env]({env})", "example.env")) == {
+            "example.env"
         }
         assert missing_deploy_links(f"放進 [compose 檔]({compose}) 與 <{env}>。") == set()
+
+    WORKFLOW = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    BOTH: ClassVar = {"create": DEPLOY_ASSETS, "upload": DEPLOY_ASSETS}
+
+    def test_an_asset_under_another_name_is_red(self) -> None:
+        renamed = self.WORKFLOW.replace("assets/example.env", "assets/.env.example")
+
+        assert release_assets(self.WORKFLOW) == self.BOTH
+        assert release_assets(renamed) != self.BOTH
+
+    def test_an_asset_from_another_file_is_red(self) -> None:
+        swapped = self.WORKFLOW.replace("cp deploy/.env.example", "cp .env.example")
+
+        assert swapped != self.WORKFLOW
+        assert release_assets(swapped) != self.BOTH
+
+    def test_a_rerun_that_uploads_nothing_is_red(self) -> None:
+        bare = self.WORKFLOW.replace(" assets/* --clobber", " --clobber")
+
+        assert bare != self.WORKFLOW
+        assert release_assets(bare)["upload"] == {}
+
+    def test_a_rerun_without_clobber_is_red(self) -> None:
+        strict = self.WORKFLOW.replace(" assets/* --clobber", " assets/*")
+
+        assert strict != self.WORKFLOW
+        assert "upload" not in release_assets(strict)
+
+    def test_quoting_listing_and_renaming_the_step_stay_green(self) -> None:
+        reformatted = (
+            self.WORKFLOW.replace(
+                "cp deploy/.env.example assets/example.env",
+                "cp 'deploy/.env.example'  \"assets/example.env\"",
+            )
+            .replace(
+                '"${flags[@]}" assets/*',
+                '"${flags[@]}" assets/example.env assets/docker-compose.yml',
+            )
+            .replace("name: stage deploy files", "name: copy the two deploy files")
+        )
+
+        assert reformatted.count("assets/docker-compose.yml") == 2
+        assert release_assets(reformatted) == self.BOTH

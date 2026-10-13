@@ -9,6 +9,14 @@
 **升級須知**：這一版有資料庫 migration（`a6c3e9f2b815`，Berth 啟動時自動套用一次），不必做任何事；
 既有的 Job、檔案、計劃與帳本都留著。
 
+### Changed
+
+- **部署的兩個檔改成 Release 的附件，README 的連結不再帶版號**（M4 票 97）：每一版的 Release 附上
+  `docker-compose.yml` 與 `example.env`（就是 repo 的 `deploy/.env.example`；GitHub 會改掉開頭是 `.` 的附件名），
+  README 與 Unraid 那一段連到 `https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml` 與
+  `.../example.env`，永遠是最新正式版的檔案，預發佈不算。0.2.4 已補上這兩個附件。要固定某一版，把 `latest/download`
+  換成 `download/v<版號>`（[docs/guide/upgrading.md](docs/guide/upgrading.md)）。已經在跑的不用改任何東西。
+
 ### Removed
 
 - **API 回應裡畫面沒讀的欄位**（M4 票 94）：`GET /api/jobs` 與各支回 Job 的端點拿掉 `trigger_ref`、`route_slug`、

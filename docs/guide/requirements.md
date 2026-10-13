@@ -68,15 +68,17 @@ Tested on 7.1.4 (with the compose file in a share; the paste-in steps below came
 **Compose Manager** plugin first; it provides `docker compose`. Berth needs only its compose file and `.env`, so both
 are pasted into Compose Manager and nothing is copied to the server:
 
-1. At the bottom of the **Docker** tab, **Add New Stack**, name it `berth`.
-2. From the stack's gear menu, **Edit Stack → Compose File**: paste the whole
-   [`docker-compose.yml`](https://raw.githubusercontent.com/1morr/Berth/v0.2.4/deploy/docker-compose.yml) and
-   **Save Changes**. Paste all of it: qBittorrent's whitelist script is inside it (`qbittorrent-preseed`), and
-   without that Berth cannot get into the bundled qBittorrent.
-3. **Edit Stack → ENV File**: paste
-   [`.env.example`](https://raw.githubusercontent.com/1morr/Berth/v0.2.4/deploy/.env.example), change the values
-   below, **Save Changes**.
-4. **Compose Up**.
+1. On your own computer, download
+   [`docker-compose.yml`](https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml) and
+   [`example.env`](https://github.com/1morr/Berth/releases/latest/download/example.env) (the links download the files
+   attached to the latest release). You only need their text.
+2. At the bottom of the **Docker** tab, **Add New Stack**, name it `berth`.
+3. From the stack's gear menu, **Edit Stack → Compose File**: open the downloaded `docker-compose.yml` in a text
+   editor, select all, copy, paste it over the box's contents, and **Save Changes**. Paste all of it: qBittorrent's
+   whitelist script is inside it (`qbittorrent-preseed`), and without that Berth cannot get into the bundled
+   qBittorrent.
+4. **Edit Stack → ENV File**: paste all of `example.env` the same way, change the values below, **Save Changes**.
+5. **Compose Up**.
 
 Compose Manager keeps both files on the USB flash drive (`/boot/config/plugins/compose.manager/projects/berth/`).
 That should be fine for these two: Compose writes the whitelist script into the container, so nothing runs from
