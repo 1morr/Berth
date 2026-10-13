@@ -737,6 +737,15 @@ const zhHant = {
         testFailed: '沒通過',
       },
       advanced: '進階：逐站測試與挑選、其他公開站',
+      missing_one: 'Prowlarr 裡沒有 {{count}} 個推薦站，沒有測：{{names}}',
+      missing_other: 'Prowlarr 裡沒有 {{count}} 個推薦站，沒有測：{{names}}',
+      unlisted: {
+        label: '沒有推薦站',
+        body: 'Prowlarr 還沒拿到站的清單，推薦的站一個都不在。多半是它連不上 indexers.prowlarr.com：防火牆、DNS 過濾、代理或地區封鎖都會這樣。網路通了之後按「重新讀取」，Prowlarr 會再拿一次，不必重啟；擋在哪裡看 Prowlarr 的 System → Events。也可以之後再說，或在下面的「進階」挑這台 Prowlarr 現有的站。',
+        bodyExisting:
+          '這一台 Prowlarr 還沒有任何站，Berth 什麼都搜不到；它也還沒拿到站的清單，推薦的站一個都不在。多半是它連不上 indexers.prowlarr.com：防火牆、DNS 過濾、代理或地區封鎖都會這樣。網路通了之後按「重新讀取」，Prowlarr 會再拿一次，不必重啟；擋在哪裡看 Prowlarr 的 System → Events。也可以到 Prowlarr 自己加站後按「重新讀取」，或之後再說。',
+        events: '開啟 Prowlarr 的 Events',
+      },
     },
     add: {
       title: '加站',
@@ -4172,6 +4181,16 @@ const en: Translations<typeof zhHant> = {
         testFailed: 'Did not pass',
       },
       advanced: 'Advanced: test and pick sites one by one, other public sites',
+      missing_one: '{{count}} recommended site is not in Prowlarr and was not tested: {{names}}',
+      missing_other:
+        '{{count}} recommended sites are not in Prowlarr and were not tested: {{names}}',
+      unlisted: {
+        label: 'No recommended sites',
+        body: 'Prowlarr has not got its list of sites yet, so none of the recommended sites is there. Most likely it cannot reach indexers.prowlarr.com: a firewall, DNS filtering, a proxy or a regional block all do this. Once the network gets through, press Re-read and Prowlarr fetches the list again, no restart needed; to see what is blocking it, open System → Events in Prowlarr. You can also do this later, or pick from the sites this Prowlarr does have under Advanced below.',
+        bodyExisting:
+          'This Prowlarr has no sites yet, so Berth cannot find anything; it has not got its list of sites either, so none of the recommended sites is there. Most likely it cannot reach indexers.prowlarr.com: a firewall, DNS filtering, a proxy or a regional block all do this. Once the network gets through, press Re-read and Prowlarr fetches the list again, no restart needed; to see what is blocking it, open System → Events in Prowlarr. You can also add sites in Prowlarr yourself and press Re-read, or do this later.',
+        events: 'Open Events in Prowlarr',
+      },
     },
     add: {
       title: 'Add indexers',

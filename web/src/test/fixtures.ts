@@ -210,6 +210,7 @@ export function indexerSetup(overrides: Partial<IndexerSetup> = {}): IndexerSetu
     reachable: true,
     sites,
     candidates: [...RECOMMENDED, ...OTHER_PUBLIC].filter((row) => !added.has(row.definition_name)),
+    unlisted: [],
     checks: [],
     steps: [],
     skipped: false,

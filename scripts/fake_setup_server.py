@@ -58,7 +58,7 @@ from berth.adapters.jellyfin import (
     TypeOption,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
-from berth.adapters.prowlarr import ProwlarrClient, ProwlarrIndexer
+from berth.adapters.prowlarr import IndexerDefinition, ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import (
     QbittorrentClient,
@@ -149,6 +149,7 @@ from berth.services.clients import (
 )
 from berth.services.health import check_health
 from berth.services.health_issues import watch_conditions
+from berth.services.indexer import DEFAULT_INDEXERS
 from berth.services.media import read_media
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
@@ -514,6 +515,29 @@ def key_missing() -> Scenario:
     """Prowlarr 的設定目錄沒有唯讀掛進 Berth：讀不到 API key，選了套件內要使用者貼上。"""
     scenario = bundled()
     scenario.prowlarr_api_key = ""
+    return scenario
+
+
+class UnlistedProwlarr(FakeProwlarrClient):
+    """連不上 `indexers.prowlarr.com` 的套件內 Prowlarr（M4 票 73，票 42 實跑）：
+    `indexer/schema` 只剩磁碟上的定義，推薦清單上的一個都不在。`POST /demo/prowlarr/online` 演網路
+    通了——Prowlarr 每次讀 schema 都現場再拿一次（brief §20.14），所以下一次讀就有。"""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.offline = True
+
+    async def definitions(self) -> tuple[IndexerDefinition, ...]:
+        every = await super().definitions()
+        if not self.offline:
+            return every
+        return tuple(row for row in every if row.definition_name not in DEFAULT_INDEXERS)
+
+
+def unlisted() -> Scenario:
+    """同 `bundled`，但 Prowlarr 拿不到站定義：頁 4 推薦站一個都不在，要說出原因與下一步。"""
+    scenario = bundled()
+    scenario.prowlarr = UnlistedProwlarr(rejects=BLOCKED_SITES, add_rejects=FLAKY_SITES)
     return scenario
 
 
@@ -1776,6 +1800,7 @@ SCENARIOS = {
     "mixed-no-sites": mixed_no_sites,
     "starting": starting,
     "key-missing": key_missing,
+    "unlisted": unlisted,
     "absent": absent,
     "berth-only": berth_only,
     "old-jellyfin": old_jellyfin,
@@ -1991,11 +2016,15 @@ def _mount_demo_accounts(app: FastAPI, jellyfin: FakeJellyfinClient) -> None:
 def _mount_demo_prowlarr(app: FastAPI, prowlarr: FakeProwlarrClient) -> None:
     """`POST /demo/prowlarr/{stop,start}`：把套件內的 Prowlarr 停掉 / 起回來（M4 票 61，審計 S4 的
     `docker compose stop prowlarr`）。停掉時主機名解不到，健康檢查、站的清單與作品頁的搜尋都連不上。
+    `unlisted` 情境另有 `online`：Prowlarr 連得上 `indexers.prowlarr.com` 了（M4 票 73）。
     插在最前面的理由同 `_mount_demo_torrent`。
     """
 
     async def endpoint(request: Request) -> Response:
         action = request.path_params["action"]
+        if action == "online" and isinstance(prowlarr, UnlistedProwlarr):
+            prowlarr.offline = False
+            return Response(status_code=204)
         if action not in ("stop", "start"):
             return Response(status_code=404)
         prowlarr.ping_error = (

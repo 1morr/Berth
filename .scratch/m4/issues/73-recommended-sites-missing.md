@@ -1,6 +1,6 @@
 # 73 — 頁 4：Prowlarr 裡沒有推薦站時說出原因
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（與 67 的頁 4 改動同一區，後做的那張合併）
 
@@ -25,7 +25,23 @@
 
 ## 驗收
 
-- [ ] services 單元測試：schema 裡一個推薦站都沒有 → 結果標明「全部不在」；只有一部分 → 測找得到的、列出不在的（先寫紅燈）
-- [ ] vitest：全部不在時頁 4 顯示原因與下一步，主鍵不消失得無聲無息
-- [ ] playwright 實跑截圖（用演練伺服器或把套件內 Prowlarr 的定義目錄清空造情境）
-- [ ] 全部檢查（`pre-commit run --all-files`）、test 綠燈
+- [x] services 單元測試：schema 裡一個推薦站都沒有 → 結果標明「全部不在」；只有一部分 → 測找得到的、列出不在的（先寫紅燈）
+- [x] vitest：全部不在時頁 4 顯示原因與下一步，主鍵不消失得無聲無息
+- [x] playwright 實跑截圖（用演練伺服器或把套件內 Prowlarr 的定義目錄清空造情境）
+- [x] 全部檢查（`pre-commit run --all-files`）、test 綠燈
+
+## Comments
+
+- 2026-10-14 做法：`IndexerSetup.unlisted`（推薦清單上、`indexer/schema` 與已加入的站裡都找不到的 `definitionName`），`GET /setup/indexers` 與兩顆按鈕的回應都帶。前端在「沒有站、沒有推薦候選、`unlisted` 不空」時把主鍵的位置換成 `Unlisted`：`assigned` 的 Notice（原因、`indexers.prowlarr.com`、下一步）、「重新讀取」（服務頁的重新測試，清單跟著重讀）、到 Prowlarr `/system/events` 的連結；「之後再說」與「進階」照舊。只缺幾站時主鍵照舊，結論摘要下多一行「Prowlarr 裡沒有 N 個推薦站，沒有測：…」。
+- 查證（讀 Prowlarr develop 原始碼，寫進 brief §20.14）：`indexer/schema` 每次呼叫 `IndexerDefinitionUpdateService.All()`，先向 `indexers.prowlarr.com` 拿清單、失敗才讀磁碟，所以網路通了按「重新讀取」就有，不必重啟 Prowlarr。票面寫「System → Logs」：Prowlarr 的選單是 Events 與 Log Files，連到 Events。
+- 實跑：新的演練情境 `unlisted`（`UnlistedProwlarr`，`POST /demo/prowlarr/online` 演網路通了）。截圖 `.playwright-mcp/t73/`：`p4-unlisted-1280.png`、`p4-unlisted-390.png`、`p4-unlisted-en-1280.png`，以及演網路通了、按「重新讀取」之後主鍵回來的 `p4-after-reread-1280.png`。Events 連結實際是 `http://127.0.0.1:9696/system/events`。
+- 第一條驗收的測試放在 `tests/integration/test_indexer_one_key.py`、經 API 測（票 44 對同一個命令的測試在那裡），同時驗了 services 的結論與 API 帶得出來。紅燈先行：`KeyError: 'unlisted'`；vitest 紅燈是找不到 `data-testid="unlisted"`。
+- code-review 已處理：同一作用域裡 boolean 與陣列同名 `unlisted`，前者改成 `nothingToTest`（Standards）；同檔四份一模一樣的 `client` fixture 提到模組層（Standards）；DESIGN.md 補上兩種新狀態（Standards）。
+- code-review 沒處理的：
+  - (1) 既有的 `${webUrl}/#/indexers`、`/#/settings/general`、qBittorrent 的 `/#/settings`（`IndexerStep.tsx`、`IndexerSites.tsx`、`QbittorrentStep.tsx`）。Prowlarr 是 BrowserRouter，`/#/settings/general` 多半會落在首頁（索引站），不是設定頁。這是從原始碼推的，沒有實跑 repro，也不在這張票裡，所以只記下、沒改（Standards）。
+  - (2) `Unlisted` 與既有 Prowlarr 的 `NoSites` 形狀幾乎一樣（Standards，Duplicated Code）。沒抽共用：兩者的外層、文案、連結都不同，抽出來的元件只會剩三個參數的殼。
+  - (3) 回應沒有明確的「全部不在」旗標，畫面由 `unlisted` 加上沒有推薦候選推出來（Spec）。在 `sites` 為空時兩者等價，多一個旗標就是同一件事的兩份說法。
+  - (4) Prowlarr 已經有站、推薦站又全都不在時，不出說明（Spec）：沿用票 44 的「已經有站不給主鍵」，那時頁 4 已經算完成。
+  - (5) 缺的站顯示 `definitionName`（`mikan`）而不是站名（Spec）：沒有定義就拿不到站名。
+  - (6) Spec 軸擔心「進階」加站之後，摘要也會說「沒有測」。不管走哪一條路，不在 Prowlarr 定義裡的站都測不了也加不了，那一句照樣成立。
+- 2026-10-14 合併 main（票 67、65）：票 67 讓既有 Prowlarr 也走 `RecommendedSites` 的主鍵，所以 `unlisted` 的說明兩種來源都適用。**既有的那一台一站都沒有、推薦站又一個都不在時，只畫 `Unlisted` 一段，不畫票 20 的 `NoSites`**。原因有兩個：`NoSites` 叫人「在下面按一次，測試推薦的公開站」，這時下面沒有推薦站可測；兩段疊在一起又各有一顆「重新讀取」。`Unlisted` 對既有的那一台換一份文案（`indexer.quick.unlisted.bodyExisting`），把兩張票要說的都說完：先說這一台沒有站、Berth 什麼都搜不到（票 20：這一頁還沒完），再說推薦站為什麼不在、網路通了按「重新讀取」（本票），最後補上 `NoSites` 原本給的另外兩條路：到 Prowlarr 自己加站後重新讀取，或之後再說。判斷寫成一個函式 `noRecommendedListed`，`RecommendedSites` 與 `IndexerStep` 共用。推薦站都在時照舊是 `NoSites` 加主鍵。vitest 兩條（重疊時只有一段、只有一顆「重新讀取」；推薦站都在時照舊）。拿掉 `NoSites` 的這個條件時，第一條會紅。pytest 一條：既有的那一台拿不到定義時，`unlisted` 照樣帶得出來。

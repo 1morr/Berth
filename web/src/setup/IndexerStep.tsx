@@ -24,7 +24,7 @@ import { prowlarrWeb } from './serviceWeb'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
-import { GAP, modeOf } from './indexerGaps'
+import { GAP, modeOf, noRecommendedListed } from './indexerGaps'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
 
@@ -182,7 +182,7 @@ export function IndexerStep({
       )}
       {indexers && (mode === 'bundled' || mode === 'prowlarr') && !unread && (
         <>
-          {mode === 'prowlarr' && indexers.sites.length === 0 && (
+          {mode === 'prowlarr' && indexers.sites.length === 0 && !noRecommendedListed(indexers) && (
             <NoSites
               indexers={indexers}
               rereading={choice.retesting}
@@ -197,7 +197,9 @@ export function IndexerStep({
             running={recommended.running}
             held={login.saving || applying}
             sticky={sticky}
+            rereading={choice.retesting}
             onRun={recommended.onRun}
+            onReread={() => choice.onRetest(true)}
             onSkip={onSkip}
           />
           <AdvancedSites>

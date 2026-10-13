@@ -7,6 +7,7 @@ import { stubApi, type StubRoute } from '../test/fetch'
 import { renderInRoute } from '../test/render'
 import {
   ALL_BUNDLED,
+  OTHER_PUBLIC,
   RECOMMENDED,
   check,
   chosen,
@@ -32,6 +33,7 @@ const INDEXERS = 'GET /api/setup/indexers'
 const RUN = 'POST /api/setup/indexers/recommended'
 const TEST_SITES = 'POST /api/setup/indexers/test'
 const ADD_INDEXERS = 'POST /api/setup/indexers/apply'
+const RETEST = 'POST /api/setup/services/prowlarr/test'
 
 const AT_INDEXER = setupStatus({ current_step: 4, owner: 'skipper', services: ALL_BUNDLED })
 const CLOUDFLARE = 'Unable to access 1337x.to, blocked by CloudFlare Protection.'
@@ -282,5 +284,139 @@ describe('頁 4 既有 Prowlarr 也有主鍵（M4 票 67，審計 C3、P2-10）'
     } finally {
       await i18next.changeLanguage('zh-Hant')
     }
+  })
+})
+
+/**
+ * Prowlarr 裡沒有推薦站的定義（M4 票 73，實跑 L4）：它連不上 `indexers.prowlarr.com` 時只剩磁碟上的幾個，
+ * 主鍵沒有東西可測。原本整段只剩標題與「之後再說」，主鍵無聲無息地不見。
+ */
+describe('頁 4 推薦站不在 Prowlarr 裡', () => {
+  const ALL_GONE = indexerSetup({
+    web_ui_username: 'skipper',
+    candidates: OTHER_PUBLIC,
+    unlisted: RECOMMENDED.map((row) => row.definition_name),
+  })
+
+  it('一個都不在：說出原因與下一步，「重新讀取」重問 Prowlarr，「之後再說」與「進階」都還在', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: ALL_GONE },
+      [RETEST]: { body: AT_INDEXER },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const block = within(await screen.findByTestId('recommended-sites'))
+    const notice = within(block.getByTestId('unlisted'))
+    expect(notice.getByText(/Prowlarr 還沒拿到站的清單/)).toBeVisible()
+    expect(notice.getByText(/indexers\.prowlarr\.com/)).toBeVisible()
+    expect(notice.getByRole('link', { name: '開啟 Prowlarr 的 Events' })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/:9696\/system\/events$/),
+    )
+    expect(block.queryByRole('button', { name: RUN_LABEL })).not.toBeInTheDocument()
+    expect(block.getByRole('button', { name: '之後再說' })).toBeEnabled()
+    expect(screen.getByText(ADVANCED)).toBeVisible()
+
+    await user.click(notice.getByRole('button', { name: '重新讀取' }))
+    await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr/test')).toBe(true))
+  })
+
+  it('只有一部分在：主鍵照舊，跑完之後列出 Prowlarr 裡沒有的那幾站', async () => {
+    const gone = ['mikan', 'yts']
+    const present = RECOMMENDED.filter((row) => !gone.includes(row.definition_name))
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: {
+        body: indexerSetup({
+          web_ui_username: 'skipper',
+          candidates: [...present, ...OTHER_PUBLIC],
+          unlisted: gone,
+        }),
+      },
+      [RUN]: {
+        body: indexerSetup({
+          web_ui_username: 'skipper',
+          sites: [site(present[0], 1)],
+          candidates: [...present.slice(1), ...OTHER_PUBLIC],
+          unlisted: gone,
+          steps: [step('nyaasi', 'ok')],
+          checks: [check('nyaasi')],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const block = within(await screen.findByTestId('recommended-sites'))
+    expect(block.queryByTestId('unlisted')).not.toBeInTheDocument()
+    expect(block.getByText(/測試推薦的 7 個公開站/)).toBeVisible()
+    await user.click(block.getByRole('button', { name: RUN_LABEL }))
+
+    const outcome = within(await screen.findByTestId('one-key-outcome'))
+    expect(outcome.getByTestId('unlisted-sites')).toHaveTextContent(
+      'Prowlarr 裡沒有 2 個推薦站，沒有測：mikan、yts',
+    )
+  })
+
+  it('英文也說得出來', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: ALL_GONE },
+    })
+
+    await i18next.changeLanguage('en')
+    try {
+      renderInRoute(<SetupPage />)
+      const notice = within(await screen.findByTestId('unlisted'))
+      expect(notice.getByText(/Prowlarr has not got its list of sites yet/)).toBeVisible()
+      expect(notice.getByRole('button', { name: 'Re-read' })).toBeEnabled()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('既有 Prowlarr 一站都沒有、推薦站也一個都不在：一段說完，不另外畫「沒有站」', async () => {
+    // 兩張票疊在一起（M4 票 67 讓既有的那一台也走主鍵）：「沒有站」叫人在下面測推薦站，這時那裡沒有推薦站。
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_EXISTING },
+      [INDEXERS]: {
+        body: indexerSetup({
+          ...EXISTING_EMPTY,
+          candidates: OTHER_PUBLIC,
+          unlisted: RECOMMENDED.map((row) => row.definition_name),
+        }),
+      },
+      [RETEST]: { body: AT_EXISTING },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const notice = within(await screen.findByTestId('unlisted'))
+    expect(notice.getByText(/這一台 Prowlarr 還沒有任何站，Berth 什麼都搜不到/)).toBeVisible()
+    expect(notice.getByText(/推薦的站一個都不在/)).toBeVisible()
+    expect(notice.getByText(/到 Prowlarr 自己加站後按「重新讀取」/)).toBeVisible()
+    expect(notice.getByRole('link', { name: '開啟 Prowlarr 的 Events' })).toHaveAttribute(
+      'href',
+      'http://nas:9696/system/events',
+    )
+    expect(screen.queryByTestId('no-sites')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '重新讀取' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: RUN_LABEL })).not.toBeInTheDocument()
+    expect(screen.getByText(ADVANCED)).toBeVisible()
+
+    await user.click(notice.getByRole('button', { name: '重新讀取' }))
+    await waitFor(() => expect(called(fetchStub, '/api/setup/services/prowlarr/test')).toBe(true))
+  })
+
+  it('既有 Prowlarr 一站都沒有、推薦站都在：照舊是「沒有站」加主鍵', async () => {
+    stubApi({ [STATUS]: { body: AT_EXISTING }, [INDEXERS]: { body: EXISTING_EMPTY } })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByTestId('no-sites')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: RUN_LABEL })).toBeVisible()
+    expect(screen.queryByTestId('unlisted')).not.toBeInTheDocument()
   })
 })
