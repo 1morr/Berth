@@ -380,7 +380,7 @@ async def _advance(
     # 進度門檻比的是**上一輪存下來的值**，所以要在 `_refresh` 蓋掉它之前先拿走。
     # 它已經在資料庫裡，所以這條規則跨得過重啟：Berth 重開之後不會把 25% 那一筆再寫一次。
     was = (job.state, job.progress, job.client_state)
-    _refresh(job, status, now)
+    _refresh(job, status)
     steps = 0
     # 上限是狀態總數：一輪最多把一筆 Job 走完整條主幹，走不動就停。有了它，任何一條
     # 意外自我循環的轉換都會被截斷，而不是把迴圈卡死在一筆 Job 上。
@@ -443,7 +443,7 @@ async def _freeze(session: AsyncSession, job: Job) -> None:
         freeze(media, route)
 
 
-def _refresh(job: Job, status: TorrentStatus, now: datetime) -> None:
+def _refresh(job: Job, status: TorrentStatus) -> None:
     """qBittorrent 現在怎麼說。**不是狀態轉換**，所以不走 CAS——這幾欄沒有「從哪裡到哪裡」。
 
     `total_size` 只在客戶端報得出來時才寫：metadata 還沒到的時候它是 `-1`（5.2.3）或
@@ -455,7 +455,6 @@ def _refresh(job: Job, status: TorrentStatus, now: datetime) -> None:
     job.content_path = status.content_path or job.content_path
     if status.total_size > 0:
         job.total_size = status.total_size
-    job.last_seen_in_client_at = now
 
 
 async def _step(

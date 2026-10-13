@@ -117,7 +117,6 @@ class TestBackfillOnBinding:
                 job_hash=reupload,
                 source_rel_path=name,
                 source_abs_path=f"/data/torrent/complete/anime/{name}",
-                source_inode="1",
                 source_dev="1",
                 target_path=f"{route.target_path}/{media.folder_name}/Season 01/{name}",
                 target_inode="1",

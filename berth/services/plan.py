@@ -558,7 +558,6 @@ async def _measure(session: AsyncSession, job: Job, contents: Contents) -> tuple
         if summary is None:
             continue
         row.mediainfo_json = summary.model_dump(mode="json")
-        row.updated_at = utcnow()
         measured[entry.rel_path] = summary.duration_s
     await session.flush()
     return tuple(

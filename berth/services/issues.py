@@ -376,7 +376,6 @@ async def _relink(session: AsyncSession, row: Issue) -> None:
     except (OSError, fs.PathEscapeError) as exc:
         raise IssueRejectedError(IssueRefusal.RELINK_FAILED, message(exc)) from exc
 
-    entry.source_inode = str(facts.inode)
     entry.source_dev = str(facts.device)
     entry.target_inode = str(fs.stat(target).inode)
     entry.status = LedgerStatus.OK
@@ -472,7 +471,6 @@ async def _replace_with_link(session: AsyncSession, row: Issue) -> None:
             fs.replace_link(source, target, roots=roots)
         except (OSError, fs.PathEscapeError) as exc:
             raise IssueRejectedError(IssueRefusal.RELINK_FAILED, message(exc)) from exc
-    entry.source_inode = str(origin.inode)
     entry.source_dev = str(origin.device)
     entry.target_inode = str(fs.stat(target).inode)
     entry.status = LedgerStatus.OK

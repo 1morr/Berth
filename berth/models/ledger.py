@@ -33,9 +33,6 @@ from berth.domain import LedgerStatus, PlanAction
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
-#: 唯一的鏈接方式。硬鏈接失敗不退回複製（brief §4.4），欄位留著是 plan §2.3 的形狀。
-HARDLINK = "hardlink"
-
 
 class LedgerEntry(Base):
     __tablename__ = "ledger"
@@ -51,10 +48,9 @@ class LedgerEntry(Base):
     #: 相對 `jobs.save_path`，含 torrent 自己的根目錄那一層（與 `job_files.rel_path` 同形）。
     source_rel_path: Mapped[str] = mapped_column(Text)
     source_abs_path: Mapped[str] = mapped_column(Text)
-    source_inode: Mapped[str] = mapped_column(Text)
     source_dev: Mapped[str] = mapped_column(Text)
     target_path: Mapped[str] = mapped_column(Text)
-    #: 鏈接完量到的目標 inode。與 `source_inode` 相等就是硬鏈接成立的定義。
+    #: 鏈接完量到的目標 inode。硬鏈接的兩端是同一個 inode，所以來源不另存一份（M4 票 95）。
     target_inode: Mapped[str] = mapped_column(Text)
     media_id: Mapped[str | None] = mapped_column(
         ForeignKey("media.id", ondelete="SET NULL"), default=None
@@ -78,7 +74,6 @@ class LedgerEntry(Base):
     jellyfin_version_name: Mapped[str] = mapped_column(Text, default="", server_default="")
     resolve_attempts: Mapped[int] = mapped_column(default=0)
     resolve_after: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
-    link_mode: Mapped[str] = mapped_column(Text, default=HARDLINK)
     status: Mapped[LedgerStatus] = mapped_column(enum_column(LedgerStatus), default=LedgerStatus.OK)
     #: medium 自動入庫的旗標，抄自那一列 Plan Item（CONTEXT.md 的 Audit）。
     audit: Mapped[bool] = mapped_column(default=False)

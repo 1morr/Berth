@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+**升級須知**：這一版有資料庫 migration（`a6c3e9f2b815`，Berth 啟動時自動套用一次），不必做任何事；
+既有的 Job、檔案、計劃與帳本都留著。
+
+### Removed
+
+- **四個沒有人讀的資料庫欄位**（M4 票 95）：`jobs.last_seen_in_client_at`、`job_files.updated_at`、
+  `ledger.source_inode`、`ledger.link_mode`。畫面與 API 都沒有用過它們（API 回應本來就不帶）。
+  **資料庫 migration `a6c3e9f2b815`**：原生刪欄，不重建表。降版把欄位加回來：來源 inode 補成目標 inode
+  （硬鏈接兩端相同）、鏈接方式補 `hardlink`、檔案的更新時間補成 Job 加入的時間、最後在客戶端看到的時間留空。
+
 ## [0.2.4] - 2026-10-13
 
 **從 0.2.3 升級**：`docker-compose.yml` 與 `.env` 沒有變，也沒有資料庫 migration，`docker compose pull && docker compose up -d`

@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.domain import EventType, JobRefusal, JobState
 from berth.logs import job_context
 from berth.models import Job, JobFile
-from berth.models.types import utcnow
 from berth.services.jobs import (
     JobRejectedError,
     JobView,
@@ -119,12 +118,10 @@ async def _restate_files(session: AsyncSession, job: Job, files: list[tuple[str,
     for rel_path, row in rows.items():
         if rel_path not in present:
             await session.delete(row)
-    now = utcnow()
     for rel_path, size in files:
         known = rows.get(rel_path)
         if known is None:
             session.add(JobFile(job_hash=job.hash, rel_path=rel_path, size=size, priority=1))
         elif known.size != size:
             known.size = size
-            known.updated_at = now
     await session.flush()

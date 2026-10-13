@@ -370,7 +370,6 @@ def record_link(
     entry.job_hash = job_hash
     entry.source_rel_path = source_rel_path
     entry.source_abs_path = str(source)
-    entry.source_inode = str(source_facts.inode)
     entry.source_dev = str(source_facts.device)
     entry.target_path = target
     entry.target_inode = str(target_facts.inode)

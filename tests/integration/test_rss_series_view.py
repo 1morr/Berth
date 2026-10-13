@@ -210,7 +210,6 @@ async def earlier_episodes(session: AsyncSession, media: Media, through: int) ->
                 job_hash=None,
                 source_rel_path=name,
                 source_abs_path=f"/data/torrent/complete/anime/{name}",
-                source_inode=str(episode),
                 source_dev="1",
                 target_path=f"/data/library/anime/{media.folder_name}/Season 01/{name}",
                 target_inode=str(episode),

@@ -243,7 +243,6 @@ async def already_in_the_library(
         LedgerEntry(
             source_rel_path=f"old/{span}.mkv",
             source_abs_path=f"/data/torrent/complete/anime/old/{span}.mkv",
-            source_inode="1",
             source_dev="1",
             target_path=target,
             target_inode="1",
@@ -388,7 +387,6 @@ class TestSameVersion:
             job_hash=job_hash,
             source_rel_path="old/S01E02.mkv",
             source_abs_path="/data/torrent/complete/anime/old/S01E02.mkv",
-            source_inode="1",
             source_dev="1",
             target_path=str(PurePosixPath(route.target_path) / relative),
             target_inode="1",

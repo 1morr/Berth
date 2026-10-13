@@ -8,7 +8,7 @@ from berth.models.base import Base
 from berth.models.event import Event
 from berth.models.issue import Issue, subject_of
 from berth.models.job import Job, JobFile
-from berth.models.ledger import HARDLINK, LedgerEntry
+from berth.models.ledger import LedgerEntry
 from berth.models.media import (
     Media,
     MediaCard,
@@ -56,7 +56,6 @@ from berth.models.setting import (
 __all__ = [
     "DEFAULT_BUNDLED_LIBRARIES",
     "DEFAULT_INTERVAL_SEC",
-    "HARDLINK",
     "SETTINGS_GROUPS",
     "Base",
     "BerthPathResult",
