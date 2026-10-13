@@ -78,11 +78,17 @@ async def test_an_existing_prowlarr_without_indexers_keeps_its_login(
     assert (await prowlarr.host_config())["username"] == "homeprowlarr"
 
 
+@pytest.mark.parametrize("login", [LOGIN, None], ids=["with-login", "without-login"])
 @pytest.mark.asyncio
 async def test_an_existing_password_free_qbittorrent_gets_no_password(
-    session: AsyncSession,
+    session: AsyncSession, login: InterfaceLogin | None
 ) -> None:
-    """05 的 repro：免密可進的既有 qBittorrent。選了既有，就沒有登入那一格、不寫全域偏好。"""
+    """05 的 repro：免密可進的既有 qBittorrent。選了既有，就沒有登入那一格、不寫全域偏好。
+
+    「套用」對它一律拒絕，連線之前就拒（M4 票 101）：不帶登入也不再連一次——那一條沒有消費點，
+    `PUT /setup/qbittorrent/login` 對它也是一律拒絕。雙向在 `test_a_bundled_choice_is_still_written`
+    與 `test_setup_api.py` 的不帶登入那一條。
+    """
     await owner(session)
     qbittorrent = FakeQbittorrentClient(base_url="http://home-qbittorrent:8080")
     factory = FakeClientFactory(qbittorrent=qbittorrent)
@@ -96,10 +102,12 @@ async def test_an_existing_password_free_qbittorrent_gets_no_password(
         ServiceConnection(base_url="http://home-qbittorrent:8080"),
     )
 
+    tested = (qbittorrent.calls, len(qbittorrent.logins))
+
     with pytest.raises(ValueError, match="existing service"):
-        await apply_qbittorrent(session, factory, login=LOGIN)
-    await apply_qbittorrent(session, factory)
+        await apply_qbittorrent(session, factory, login=login)
     assert qbittorrent.writes == []
+    assert (qbittorrent.calls, len(qbittorrent.logins)) == tested
 
 
 @pytest.mark.asyncio

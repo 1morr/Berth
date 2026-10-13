@@ -1,6 +1,6 @@
 # 101 — `POST /setup/qbittorrent/apply` 對既有那一台一律 422
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -24,7 +24,12 @@
 
 ## 驗收
 
-- [ ] 整合測試（雙向）：既有那一台帶或不帶登入都 422，沒有連線、沒有寫入；套件內不帶登入照舊 200
-- [ ] 前端不必改（確認 `web/src` 沒有對既有那一台呼叫這一支的路徑）
-- [ ] CHANGELOG 已記
-- [ ] 全部檢查（`pre-commit run --all-files`）、test 綠燈；progress.md 已更新
+- [x] 整合測試（雙向）：既有那一台帶或不帶登入都 422，沒有連線、沒有寫入；套件內不帶登入照舊 200
+- [x] 前端不必改（確認 `web/src` 沒有對既有那一台呼叫這一支的路徑）
+- [x] CHANGELOG 已記
+- [x] 全部檢查（`pre-commit run --all-files`）、test 綠燈；progress.md 已更新
+
+## Comments
+
+- code-review（Standards）判斷題，未處理：`apply_qbittorrent` 與 `set_interface_login` 開頭的讀設定 → `qbittorrent_target` → `_refuse_existing` 幾乎同一段，兩個呼叫端還不值得抽 helper；`origin` 在拒絕之後只可能是套件內，照舊傳給 `_status` / `_unreachable`（讀的那一條也用它們）。
+- 「版本太舊」與「連不上」兩條 apply 測試改用套件內那一台：apply 碰不到既有那一台了。既有那一台帳密被拒的覆蓋在 `test_setup_choice.py`（連線測試）。

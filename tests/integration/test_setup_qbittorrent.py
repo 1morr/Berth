@@ -191,21 +191,23 @@ async def test_a_bundled_qbittorrent_without_a_login_holds_the_wizard(
 async def test_existing_service_never_gets_a_password_from_berth(session: AsyncSession) -> None:
     """既有 qBittorrent 是使用者自己的，Berth 不改他的密碼（brief §16.4、M4 票 07）。
 
-    泊位上沒有那一格（`web_ui_login` 是 false）；直接打 API 帶了登入也一個字都不送。
+    泊位上沒有那一格（`web_ui_login` 是 false）；直接打 API 帶不帶登入都在連線之前拒絕（M4 票
+    101）。
     """
     await arrange(session, origin=ServiceOrigin.EXISTING, username="owner", password="s3cret")
     client = FakeQbittorrentClient(base_url="http://nas:8080")
     factory = FakeClientFactory(qbittorrent=client)
 
-    status = await apply_qbittorrent(session, factory)
-    with pytest.raises(ValueError, match="existing service"):
-        await apply_qbittorrent(session, factory, login=SKIPPER)
+    for login in (SKIPPER, None):
+        with pytest.raises(ValueError, match="existing service"):
+            await apply_qbittorrent(session, factory, login=login)
     with pytest.raises(ValueError, match="existing service"):
         await set_interface_login(session, factory, SKIPPER)
+    status = await read_qbittorrent(session, factory)
 
     assert all(WEB_UI_PASSWORD_KEY not in write for write in client.writes)
     assert (status.web_ui_login, status.web_ui_username) == (False, "")
-    # 既有服務要先登入才讀得了偏好；Berth 連它用的那一組不是「WebUI 登入」。
+    # 既有服務要先登入才讀得了偏好；Berth 連它用的那一組不是「WebUI 登入」。只有讀的那一次連了。
     assert client.logins == [("owner", "s3cret")]
     settings = await read_settings(session, QbittorrentSettings)
     assert (settings.username, settings.password) == ("owner", "s3cret")
@@ -230,10 +232,8 @@ async def test_an_existing_service_lists_no_global_preferences(session: AsyncSes
 @pytest.mark.asyncio
 async def test_a_web_api_below_2_8_4_is_refused(session: AsyncSession) -> None:
     """版本低於 4.4（Web API 2.8.4）拒絕接入並提示升級（brief §16.4）。"""
-    await arrange(session, origin=ServiceOrigin.EXISTING)
-    client = FakeQbittorrentClient(
-        base_url="http://nas:8080", version=QbittorrentVersion(app="v4.3.9", webapi="2.8.2")
-    )
+    await arrange(session)
+    client = FakeQbittorrentClient(version=QbittorrentVersion(app="v4.3.9", webapi="2.8.2"))
     factory = FakeClientFactory(qbittorrent=client)
 
     status = await read_qbittorrent(session, factory)
@@ -298,19 +298,17 @@ async def test_a_qbittorrent_that_stopped_after_applying_holds_page_2_again(
 
 
 @pytest.mark.asyncio
-async def test_a_service_that_rejects_the_credentials_fails_the_step_not_the_request(
+async def test_an_unreachable_service_fails_the_step_not_the_request(
     session: AsyncSession,
 ) -> None:
     """失敗要變成一條紅色的纜繩，不是 500——畫面靠它顯示原文與手動步驟。"""
-    await arrange(session, origin=ServiceOrigin.EXISTING, username="owner", password="wrong")
-    client = FakeQbittorrentClient(
-        base_url="http://nas:8080", login_error=AuthFailedError("auth/login: rejected")
-    )
+    await arrange(session)
+    client = FakeQbittorrentClient(error=ServiceUnavailableError("connection refused"))
     factory = FakeClientFactory(qbittorrent=client)
 
     status = await apply_qbittorrent(session, factory)
 
-    assert status.error == "auth/login: rejected"
+    assert status.error == "connection refused"
     assert status.reachable is False
     assert client.writes == []
 

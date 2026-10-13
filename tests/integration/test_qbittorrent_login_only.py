@@ -43,7 +43,8 @@ def foreign_keys(writes: Iterable[Mapping[str, Any]]) -> set[str]:
 async def walk_the_wizard(
     session: AsyncSession, roots: dict[str, Path], origin: ServiceOrigin, login: InterfaceLogin
 ) -> FakeQbittorrentClient:
-    """頁 2 套用、回頭重按，套件內再從設定頁換一次登入；頁 3 建 Route；送一筆單。"""
+    """套件內：頁 2 套用、回頭重按，再從設定頁換一次登入。既有那一台沒有套用（M4 票 38、101）。
+    之後頁 3 建 Route；送一筆單。"""
     await arrange(session, roots)
     base_url = (
         "http://qbittorrent:8080"
@@ -66,9 +67,6 @@ async def walk_the_wizard(
         await set_interface_login(
             session, factory, InterfaceLogin(username=login.username, password="Second-pass-2")
         )
-    else:
-        await apply_qbittorrent(session, factory)
-        await apply_qbittorrent(session, factory)
 
     routes = await build_routes(session, factory, ())
     assert [row.health for row in routes.routes] == [HealthStatus.OK] * 3

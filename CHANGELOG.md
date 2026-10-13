@@ -64,6 +64,9 @@
   所以照舊掃整台；精靈「既有」Jellyfin 的說明與待處理那一件都寫明了。
 - **作品頁不再說「Jellyfin 還在掃描」**（M4 票 62）：入庫當下 Berth 只是通知 Jellyfin，那時它還沒在掃；改說
   「已通知 Jellyfin，等它收錄」，媒體庫的卡片說「等 Jellyfin 收錄」。
+- **API 破壞性變更**：`POST /api/setup/qbittorrent/apply` 對既有的 qBittorrent 一律回 422（M4 票 101），
+  與 `PUT /api/setup/qbittorrent/login` 一致。之前不帶登入時照樣再連一次、記一條沒有人讀的 `skipped`；畫面自
+  M4 票 38 起就不對既有那一台呼叫它，精靈與設定頁不受影響。既有那一台的頁 2 照舊是連線測試通過就做完。
 
 ### Fixed
 
