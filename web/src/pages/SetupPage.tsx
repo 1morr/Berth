@@ -88,7 +88,8 @@ import { problemText, requestProblem } from '../components/requestProblem'
 import { useSignOut } from '../components/useSignOut'
 import { commonRoot } from '../components/routeChecks'
 import { type Signal } from '../components/signal'
-import { WAITING_RETEST_MS, connected, signalOf } from '../setup/signals'
+import { connected, signalOf } from '../setup/signals'
+import { useWaitingRetest } from '../setup/useWaitingRetest'
 
 /**
  * bootstrap 進行中的進度輪詢。後端每一步在做之前就把自己標成 `running` 並存下來，
@@ -507,14 +508,12 @@ export function SetupPage() {
   })
   const tmdb = useQuery({ ...tmdbSetupQueryOptions, enabled: backend >= STEP.tmdb })
 
-  useEffect(() => {
-    if (!waitingKind || retest.isPending || choose.isPending) return
-    const timer = window.setTimeout(
-      () => retest.mutate({ kind: waitingKind, restart: false }),
-      WAITING_RETEST_MS,
-    )
-    return () => window.clearTimeout(timer)
-  }, [waitingKind, retest, choose.isPending])
+  useWaitingRetest({
+    waiting: waitingKind ?? null,
+    busy: retesting || choose.isPending,
+    lastRetest: retest.submittedAt,
+    retest: (kind) => retestNow({ kind, restart: false }),
+  })
 
   if (!current) {
     return (

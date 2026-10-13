@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -14,7 +13,7 @@ import {
 import { RequestFailed } from '../components/RequestFailed'
 import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
-import { WAITING_RETEST_MS } from '../setup/signals'
+import { useWaitingRetest } from '../setup/useWaitingRetest'
 import { JellyfinConnection } from './JellyfinConnection'
 import { SettingsSection } from './SettingsFrame'
 
@@ -64,15 +63,15 @@ export function ServiceConnection({
     },
   })
 
-  // 套件內那一台還在啟動：照精靈每 3 秒重測一次（不重算時窗），直到有結論或後端判逾時（M4 票 78：
+  // 套件內那一台還在啟動：與精靈同一份每 3 秒重測（不重算時窗），直到有結論或後端判逾時（M4 票 78：
   // 這之前設定頁只畫一個不會動的倒數，配一句「每 3 秒再測一次」）。
   const waiting = status.data?.services.find((row) => row.kind === kind)?.state === 'waiting'
-  const { mutate: retestNow, isPending: retesting } = retest
-  useEffect(() => {
-    if (!waiting || retesting || choose.isPending) return
-    const timer = window.setTimeout(() => retestNow(false), WAITING_RETEST_MS)
-    return () => window.clearTimeout(timer)
-  }, [waiting, retesting, choose.isPending, retestNow])
+  useWaitingRetest({
+    waiting: waiting ? kind : null,
+    busy: retest.isPending || choose.isPending,
+    lastRetest: retest.submittedAt,
+    retest: () => retest.mutate(false),
+  })
 
   const requestError =
     choose.isError && !choiceRefusalOf(choose.error)
