@@ -9,11 +9,14 @@ The compose file pulls `ghcr.io/1morr/berth:latest`, which is always the newest 
 has `:<version>` (e.g. `:0.2.0`) and `:<major>.<minor>` (`:0.2`) tags; to stay on one, change the `berth` image in
 `docker-compose.yml` to it. Pre-releases (`-rc1` and so on) only get `:<version>` and never move `:latest`.
 
-The deployment is two files from the repo, `deploy/docker-compose.yml` and `deploy/.env.example`; each release is
-a tag, so a given version's files are at
-`https://raw.githubusercontent.com/1morr/Berth/v<version>/deploy/docker-compose.yml` (and `.env.example` next to
-it). Use the ones from the tag of the version you run, not from `main`: `main` can be ahead of the image. The
-release page has that version's changes and nothing to download.
+The deployment is two files attached to every release: `docker-compose.yml` and `example.env` (the repo's
+`deploy/docker-compose.yml` and `deploy/.env.example` at that release's tag). The links in the README,
+`https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml` and `.../example.env`, always give the
+newest stable release's. To stay on one version, replace `latest/download` with `download/v<version>`:
+`https://github.com/1morr/Berth/releases/download/v<version>/docker-compose.yml` (and `example.env`). Releases before
+0.2.4 have no attachments; take their files from the tag,
+`https://raw.githubusercontent.com/1morr/Berth/v<version>/deploy/docker-compose.yml` (and `.env.example`). Use the
+files of the version you run, not the ones on `main`: `main` can be ahead of the image.
 
 ## Upgrade steps
 
@@ -21,7 +24,7 @@ Upgrade the compose file along with the image. It changes between versions (cont
 tag, the whitelist script inside it, variables in `.env`); pulling a new image alone leaves you with the old file.
 
 1. Replace your `docker-compose.yml` with that version's whole file (on Unraid: **Edit Stack → Compose File**, paste
-   over everything). Compare that version's `.env.example` with your `.env` and copy any new variables across; your
+   over everything). Compare that version's `example.env` with your `.env` and copy any new variables across; your
    `.env` is never replaced.
 2. `docker compose pull && docker compose up -d` (Unraid: the stack's **Update Stack**). Berth applies
    database migrations on start.

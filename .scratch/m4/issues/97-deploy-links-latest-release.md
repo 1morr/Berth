@@ -1,6 +1,6 @@
 # 97 — 部署檔改用固定網址：README 指「最新 Release」的附件，發版不必再改連結
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -29,7 +29,28 @@ README 兩份與 `requirements.md` 的部署檔連結寫死版號（`raw.githubu
 
 ## 驗收
 
-- [ ] 合併後，匿名 `curl -fsSL` 新的兩個連結拿得到 v0.2.4 的那兩個檔，內容與 tag 底下的相同，貼輸出
-- [ ] `test_readme_docs.py` 的新規則有雙向變異驗證；README 兩份標題層級與連結仍一致
-- [ ] brief §20 補上附件命名的查證結果（附來源）；development.md、upgrading.md、requirements.md、CHANGELOG 同步；progress.md「偏差與決定」記一行（推翻票 71）
-- [ ] 全部檢查、pytest 綠
+- [x] 合併後，匿名 `curl -fsSL` 新的兩個連結拿得到 v0.2.4 的那兩個檔，內容與 tag 底下的相同，貼輸出
+- [x] `test_readme_docs.py` 的新規則有雙向變異驗證；README 兩份標題層級與連結仍一致
+- [x] brief §20 補上附件命名的查證結果（附來源）；development.md、upgrading.md、requirements.md、CHANGELOG 同步；progress.md「偏差與決定」記一行（推翻票 71）
+- [x] 全部檢查、pytest 綠
+
+## Comments
+
+- 驗收 1（2026-10-13，v0.2.4 補上附件之後；README 還沒合併也不影響這兩條連結）：
+
+  ```
+  $ curl -fsSLo docker-compose.yml https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml
+  $ curl -fsSLo .env https://github.com/1morr/Berth/releases/latest/download/example.env
+  $ git show v0.2.4:deploy/docker-compose.yml | cmp - docker-compose.yml && echo same
+  same
+  $ git show v0.2.4:deploy/.env.example | cmp - .env && echo same
+  same
+  ```
+
+  `latest/download/example.env` 302 到 `releases/download/v0.2.4/example.env`，最後 `Content-Disposition: attachment;
+  filename=example.env`；playwright 點兩條連結都觸發下載、檔名正確、內容是純文字。在 Unraid Compose Manager 裡貼上那一半
+  沒有實跑（手邊沒有 Unraid），`requirements.md` 段首的「paste-in steps came after that test」照舊成立。
+- code-review 未處理（Standards 軸的判斷題）：`deploy_link_violations` 比對大小寫敏感（`1morr/berth` 會溜過）；
+  `release_assets` 不檢查 `cp` 在 `gh` 之前、`mkdir assets` 也不檢查，指令用 `\` 跨行會誤紅（安全方向）；
+  `missing_deploy_links` 把程式碼區塊裡的 `curl` 也算有連到（與舊版相同）。附件名與 Immich 理由寫在六處，
+  只有測試與 workflow 兩處有閘門。

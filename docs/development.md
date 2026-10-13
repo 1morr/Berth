@@ -198,21 +198,27 @@ ruff、mypy、import-linter，加上 `web/` 的 prettier、eslint 與 knip。CI�
 
 ### 發版
 
-部署只有兩個檔：`deploy/docker-compose.yml` 與 `deploy/.env.example`（M4 票 71、brief §19 E4）。使用者照 README
-從**這一版的 tag** 底下抓原始檔，Release 頁只放說明、不附檔案。發一版（例如 `0.2.1`）：
+部署只有兩個檔：`deploy/docker-compose.yml` 與 `deploy/.env.example`（brief §19 E4）。每一版的 Release 把它們附成
+`docker-compose.yml` 與 `example.env`（M4 票 97；開頭是 `.` 的附件名會被 GitHub 改掉，brief §20.17），README 連到
+`releases/latest/download/<附件名>`，永遠是最新正式版的附件，發版不必改連結；`tests/unit/test_readme_docs.py` 守著
+連結的寫法與 workflow 附上的兩個檔。發一版（例如 `0.2.5`）：
 
-1. `CHANGELOG.md` 的 `[Unreleased]` 改成 `[0.2.1] - <日期>`，寫清楚從上一版升級要注意的；`pyproject.toml` 的
-   `version` 改成 `0.2.1`，`uv lock`。
-2. **把文件裡指向部署檔的連結換成新 tag**：`git grep -n 'raw.githubusercontent.com/1morr/Berth/v'`，README 兩份與
-   `docs/guide/requirements.md`〈Unraid〉都在裡面。指 tag 不指 `main`，compose 才不會比 image 新。
-   `tests/unit/test_readme_docs.py` 守著它們都是 `v<pyproject 的版號>`：改了版號沒換連結就紅。
-3. 合進 `main`、全部檢查與 test 綠燈之後**馬上** `git tag v0.2.1 && git push origin v0.2.1`：tag 推上去之前，`main` 上
-   README 的新連結是 404。預發佈（`v0.3.0-rc1`）一樣要先有 `## [0.3.0-rc1]` 那一段，否則 image 推完、Release 才失敗。
+1. `CHANGELOG.md` 的 `[Unreleased]` 改成 `[0.2.5] - <日期>`，寫清楚從上一版升級要注意的；`pyproject.toml` 的
+   `version` 改成 `0.2.5`，`uv lock`。
+2. 合進 `main`、全部檢查與 test 綠燈之後 `git tag v0.2.5 && git push origin v0.2.5`。預發佈（`v0.3.0-rc1`）一樣要先有
+   `## [0.3.0-rc1]` 那一段，否則 image 推完、Release 才失敗。
 
-`v*` tag 上 `.github/workflows/release.yml` 先推 image 到 GHCR（`:0.2.1`、`:0.2`、`:latest`），再建 Release：
-說明是 CHANGELOG 的 `## [0.2.1]` 那一段（相對連結換成這個 tag 底下的 blob），找不到那一段就失敗。`-rc` 標成
-prerelease，也不動 `:latest`。發完確認 Release run 綠、Release 頁沒有附件，匿名查 GHCR `:latest` 與 `:0.2.1` 是
-同一個 digest。使用者那一面（tag 的意思、升級步驟）在 [`guide/upgrading.md`](guide/upgrading.md)。
+`v*` tag 上 `.github/workflows/release.yml` 先推 image 到 GHCR（`:0.2.5`、`:0.2`、`:latest`），再建 Release：
+說明是 CHANGELOG 的 `## [0.2.5]` 那一段（相對連結換成這個 tag 底下的 blob），找不到那一段就失敗；附件取自這個 tag。
+`-rc` 標成 prerelease，不動 `:latest`，`releases/latest` 也不會指到它。發完確認：
+
+- Release run 綠，Release 頁有 `docker-compose.yml` 與 `example.env` 兩個附件。
+- 匿名 `curl -fsSL https://github.com/1morr/Berth/releases/latest/download/example.env` 拿得到，內容與 tag 底下的
+  `deploy/.env.example` 相同（`docker-compose.yml` 同樣比一次）。預發佈不會是 `latest`，把 `latest/download` 換成
+  `download/v0.3.0-rc1` 再比。
+- 匿名查 GHCR `:latest` 與 `:0.2.5` 是同一個 digest。
+
+使用者那一面（tag 的意思、升級步驟、固定在某一版）在 [`guide/upgrading.md`](guide/upgrading.md)。
 
 ### e2e
 

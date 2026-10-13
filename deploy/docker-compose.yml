@@ -1,9 +1,10 @@
 # Berth's deployment: this file and .env are all it needs, nothing else goes next to them. The same
 # file for Linux, Windows and Unraid's Compose Manager. Needs Docker Compose 2.23.1 or newer.
 #
-#   cp .env.example .env   # fine as is for a trial; for real use set DATA_ROOT and CONFIG_ROOT to
-#                          # absolute paths, PUID / PGID and TZ, and change the five *_PORT values
-#                          # only if they clash
+#   cp example.env .env    # example.env is attached to the release next to this file (in the repo:
+#                          # deploy/.env.example). Fine as is for a trial; for real use set DATA_ROOT
+#                          # and CONFIG_ROOT to absolute paths, PUID / PGID and TZ, and change the
+#                          # five *_PORT values only if they clash
 #   docker compose up -d   # everything else is set in the wizard at http://localhost:8383
 #
 # Already running Jellyfin / qBittorrent / Prowlarr? Remove it from COMPOSE_PROFILES in .env (if it
