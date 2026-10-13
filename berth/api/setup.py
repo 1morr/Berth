@@ -780,6 +780,9 @@ class IndexerSetupOut(BaseModel):
     sites: list[IndexerSiteOut]
     #: 還沒加入、Berth 加得了的站（套件內與既有）。
     candidates: list[IndexerCandidateOut]
+    #: 推薦清單上、這台 Prowlarr 的定義裡沒有的站（`definitionName`，M4 票 73）：全部都在這裡時，
+    #: Prowlarr 多半還沒拿到站的清單（連不上 `indexers.prowlarr.com`），主鍵沒有東西可測。
+    unlisted: list[str]
     #: 上一次「加入」對每一站的結論。
     checks: list[SiteCheckOut]
     steps: list[StepOut]

@@ -20,6 +20,11 @@
 
 ### Changed
 
+- **頁 4 推薦站不在 Prowlarr 裡時說出原因**（M4 票 73，Linux 實跑 L4）：Prowlarr 連不上 `indexers.prowlarr.com`
+  （防火牆、DNS 過濾、代理、地區封鎖）時只剩磁碟上的幾個站定義，推薦的一個都不在，原本「測試推薦站，加入通過的」
+  無聲無息地不見。現在那裡說明原因、給「重新讀取」（網路通了就讀得到，不必重啟 Prowlarr）與 Prowlarr 事件頁的連結，
+  「之後再說」與「進階」照舊；只缺幾站時照常測找得到的，結果多一行缺的是哪幾站。
+  `GET /api/setup/indexers` 等回應多一欄 `unlisted`。
 - **套件內 Prowlarr 的「移除」只給 Berth 加的站**（M4 票 66，審計 P1-10）：之前 Berth 加得回去的公開站都按得到
   移除，連你自己在 Prowlarr 加的也是。現在只有 Berth 加的那幾站有「移除」，其他的說「Berth 沒有加這一站的紀錄」、
   要移除請到 Prowlarr。**0.2.0 之前 Berth 加的站沒有紀錄，同樣不能從 Berth 移除**。

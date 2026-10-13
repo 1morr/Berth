@@ -152,6 +152,10 @@ class IndexerSetupStatus:
     sites: tuple[IndexerSite, ...]
     #: 還沒加入、Berth 加得了的站（套件內與既有都有，M4 票 20）。
     candidates: tuple[IndexerCandidate, ...]
+    #: 推薦清單上、這台 Prowlarr 的定義裡沒有的站（`definitionName`，照 `DEFAULT_INDEXERS` 的順序，
+    #: M4 票 73）。Prowlarr 連不上 `indexers.prowlarr.com` 時只剩磁碟上的定義，推薦的可能一個都不在
+    #: （brief §20.14）：主鍵沒有東西可測，畫面要說出為什麼。已經加入的站不算。
+    unlisted: tuple[str, ...]
     #: 上一次「加入」對每一站的結論（從 `steps` 導出，理由分好了）。
     checks: tuple[SiteCheck, ...]
     steps: tuple[StepView, ...]
@@ -214,7 +218,7 @@ async def read_indexer_status(
     client = factory.prowlarr(base_url, settings.api_key)
     try:
         present = await client.indexers()
-        candidates = _candidates(await client.definitions(), present)
+        definitions = await client.definitions()
         # 既有的那一台的介面登入不是 Berth 的事，連讀都不讀（M4 票 20）。
         instance = instance_login(await client.host_config()) if bundled else ""
     except ServiceError as exc:
@@ -229,7 +233,8 @@ async def read_indexer_status(
         origin,
         base_url,
         sites=_sites(present, setup.indexer.added_sites if bundled else ()),
-        candidates=candidates,
+        candidates=_candidates(definitions, present),
+        unlisted=_unlisted(definitions, present),
         instance_username=instance,
     )
 
@@ -931,6 +936,14 @@ def _candidates(
     )
 
 
+def _unlisted(
+    definitions: tuple[IndexerDefinition, ...], present: list[ProwlarrIndexer]
+) -> tuple[str, ...]:
+    """推薦清單上、定義與已加入的站裡都找不到的（M4 票 73）。"""
+    known = {row.definition_name for row in definitions} | {row.definition_name for row in present}
+    return tuple(name for name in DEFAULT_INDEXERS if name not in known)
+
+
 def _sites(present: list[ProwlarrIndexer], added: Collection[str]) -> tuple[IndexerSite, ...]:
     """`added` 是 Berth 在這一台加的站的 `definitionName`（`added_sites`）；既有那一台傳空的：
     一站都不移除。"""
@@ -977,6 +990,7 @@ def _view(
     *,
     sites: tuple[IndexerSite, ...] = (),
     candidates: tuple[IndexerCandidate, ...] = (),
+    unlisted: tuple[str, ...] = (),
     reachable: bool = True,
     error: Exception | None = None,
     instance_username: str = "",
@@ -988,6 +1002,7 @@ def _view(
         reachable=reachable,
         sites=sites,
         candidates=candidates,
+        unlisted=unlisted,
         checks=_checks(setup.indexer.steps),
         steps=step_views(setup.indexer.steps),
         skipped=setup.indexer.skipped,

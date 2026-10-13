@@ -168,3 +168,81 @@ class TestAlreadyThere:
         assert prowlarr.add_attempts[before:] == list(FLAKY)
         names = [row["definition_name"] for row in body["sites"]]
         assert len(names) == len(set(names))
+
+
+#: Prowlarr 連不上 `indexers.prowlarr.com` 時只剩磁碟上的定義（M4 票 42 實跑：Anidex、Knaben、
+#: SubsPlease、showRSS、TorrentsCSV），推薦清單上的一個都不在。
+DISK_ONLY = tuple(row for row in DEFAULT_DEFINITIONS if row.definition_name not in DEFAULT_INDEXERS)
+
+
+class TestNoRecommendedDefinitions:
+    """推薦清單上的站在 Prowlarr 的定義裡一個都找不到（M4 票 73，實跑 L4）：說得出來，
+    不是空的 `checks`。"""
+
+    @pytest.fixture
+    def prowlarr(self) -> FakeProwlarrClient:
+        return FakeProwlarrClient(definitions=DISK_ONLY)
+
+    @pytest.fixture
+    def client(
+        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
+    ) -> Iterator[TestClient]:
+        with _signed_in(config, tmp_path, prowlarr) as running:
+            assert _choose(running, "prowlarr").status_code == 200
+            yield running
+
+    def test_every_recommended_site_is_named_missing_and_nothing_is_sent(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        body = client.post("/api/setup/indexers/recommended").json()
+
+        assert prowlarr.tested == []
+        assert prowlarr.add_attempts == []
+        assert body["checks"] == []
+        for answer in (body, client.get("/api/setup/indexers").json()):
+            assert answer["unlisted"] == list(DEFAULT_INDEXERS)
+            assert not [row for row in answer["candidates"] if row["recommended"]]
+
+
+class TestSomeRecommendedDefinitions:
+    """只找到一部分：照舊測找得到的那幾站，不在的另外列出來（M4 票 73）。"""
+
+    GONE = ("mikan", "yts")
+
+    @pytest.fixture
+    def prowlarr(self) -> FakeProwlarrClient:
+        return FakeProwlarrClient(
+            definitions=tuple(
+                row for row in DEFAULT_DEFINITIONS if row.definition_name not in self.GONE
+            ),
+            # 已經加了的一站不在定義裡也不算「不在」：它就在 Prowlarr 裡。
+            indexers=[_present("yts", 1)],
+        )
+
+    @pytest.fixture
+    def client(
+        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
+    ) -> Iterator[TestClient]:
+        with _signed_in(config, tmp_path, prowlarr) as running:
+            assert _choose(running, "prowlarr").status_code == 200
+            yield running
+
+    def test_the_found_ones_are_tested_and_the_missing_ones_are_listed(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        body = client.post("/api/setup/indexers/recommended").json()
+
+        assert sorted(prowlarr.tested) == sorted(
+            name for name in DEFAULT_INDEXERS if name not in self.GONE
+        )
+        assert body["unlisted"] == ["mikan"]
+        assert "mikan" not in [row["definition_name"] for row in body["checks"]]
+
+
+def test_a_prowlarr_with_every_definition_lists_none_missing(
+    config: Config, tmp_path: Path
+) -> None:
+    with _signed_in(config, tmp_path, FakeProwlarrClient()) as client:
+        assert _choose(client, "prowlarr").status_code == 200
+
+        assert client.get("/api/setup/indexers").json()["unlisted"] == []

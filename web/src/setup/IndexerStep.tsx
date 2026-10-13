@@ -196,7 +196,9 @@ export function IndexerStep({
                 running={recommended.running}
                 held={login.saving || applying}
                 sticky={sticky}
+                rereading={choice.retesting}
                 onRun={recommended.onRun}
+                onReread={() => choice.onRetest(true)}
                 onSkip={onSkip}
               />
               <AdvancedSites>

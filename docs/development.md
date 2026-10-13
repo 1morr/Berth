@@ -347,6 +347,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（選既有、填任何位址與帳密都測得過；選套件內是「要求帳密」）、Prowlarr 已有索引站。三頁都選既有才走得完。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
 | `starting` | 四個容器同時起來（票 06g 量到的時間線，照測試次數演，前端每 3 秒一次）：選了套件內之後 Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」，約 9 秒後連上；qBittorrent 第一次連不上；Prowlarr 連不上五次，約 15 秒。不必按「重新測試」，之後與 `bundled` 一樣走得完 |
 | `key-missing` | 同 `bundled`，但 Prowlarr 的設定目錄沒有唯讀掛進 Berth：頁 4 選套件內之後讀不到 API key，就地貼上 |
+| `unlisted` | 同 `bundled`，但 Prowlarr 連不上 `indexers.prowlarr.com`（M4 票 73）：頁 4 選套件內之後推薦站一個都不在，主鍵的位置說出原因與下一步。`curl -X POST http://127.0.0.1:8484/demo/prowlarr/online` 演網路通了，按「重新讀取」主鍵就回來 |
 | `absent` | Jellyfin 不在 `COMPOSE_PROFILES` 裡：頁 1 進頁「套件內」卡片就說它沒在跑、給起回來的兩種補法，選了是「主機名解不到」；改選既有、填任何位址就接得上 |
 | `berth-only` | 只有 Berth（`COMPOSE_PROFILES=`）：三個服務頁的「套件內」卡片進頁都說沒在跑；其餘同 `absent` |
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：頁 1 擁有者那一步紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |

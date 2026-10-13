@@ -3027,6 +3027,8 @@ export interface components {
             sites: components["schemas"]["IndexerSiteOut"][];
             /** Candidates */
             candidates: components["schemas"]["IndexerCandidateOut"][];
+            /** Unlisted */
+            unlisted: string[];
             /** Checks */
             checks: components["schemas"]["SiteCheckOut"][];
             /** Steps */
