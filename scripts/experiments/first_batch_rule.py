@@ -34,7 +34,6 @@ from pathlib import Path
 from types import ModuleType
 
 from berth.domain import (
-    CollectionType,
     FileEntry,
     MediaSnapshot,
     ParseContext,
@@ -51,9 +50,7 @@ def _vouch(
     name: str, entries: tuple[FileEntry, ...], snapshot: MediaSnapshot, at: datetime
 ) -> tuple[tuple[PlanItem, ...], tuple[tuple[int, int, int], ...] | None]:
     """規劃時的那一份（解析器 + 播出日比對，RSS Series 送的），再問它擔不擔保。"""
-    context = ParseContext(
-        media=snapshot, route_collection_type=CollectionType.TVSHOWS, published_at=at
-    )
+    context = ParseContext(media=snapshot, published_at=at)
     items = check_airing(plan(name, entries, context), snapshot, at, from_series=True)
     vouched = vouch_first_batch(name, items, snapshot, at, season_hint=None, episode_offset=None)
     return items, vouched
@@ -91,7 +88,7 @@ def _simulated(fixture: Fixture, snapshot: MediaSnapshot) -> datetime | None:
 
 def _as_read(fixture: Fixture, snapshot: MediaSnapshot) -> datetime | None:
     """Berth 不看發佈時間讀成的最後一集播出後一天（對抗的那一輪）。"""
-    context = ParseContext(media=snapshot, route_collection_type=CollectionType.TVSHOWS)
+    context = ParseContext(media=snapshot)
     spans = [
         span
         for item in plan(fixture.torrent_name, fixture.files, context)

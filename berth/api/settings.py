@@ -4,7 +4,8 @@
 同一批 `setup/*` 命令（票 06i：一份命令、一份端點；精靈跑完之後那一組只有管理員打得到）。
 這裡是——
 
-- 「重新檢查」：立刻重測一個服務，結果就是健康頁上那一列。
+- 「重新檢查」：立刻重測一個服務，結果就是健康頁上那一列。讀取只有 `GET /health/detail` 一支
+  （M4 票 87：設定頁與健康頁讀同一份，兩支端點、兩份快取曾經不同步）。
 - Jellyfin 的**對外網址**（票 13）：瀏覽器開深連結用的那一個，不是 Berth 自己連過去的那一條。
   它不是連線資訊——精靈用不到它，填錯也不會讓任何服務斷線——所以住在這裡而不是精靈。
 - **磁碟空間門檻**（M2 票 09c）：低於它就開一件 `low_disk_space`。同上，它不是連線資訊。
@@ -22,7 +23,7 @@ from berth.api.deps import ClientFactoryDep, ConfigDep, SessionDep
 from berth.api.schemas import HealthDetailOut, JellyfinWebOut, health_detail
 from berth.domain import ServiceKind
 from berth.services.deeplink import PublicUrlRejectedError, jellyfin_web, set_public_url
-from berth.services.health import check_service, read_health
+from berth.services.health import check_service
 from berth.services.health_issues import read_min_free, set_min_free
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -40,12 +41,6 @@ class DiskIn(BaseModel):
 
 class DiskOut(BaseModel):
     min_free_gb: int
-
-
-@router.get("/services")
-async def get_services(session: SessionDep) -> HealthDetailOut:
-    """三個服務現在的樣子。與健康頁同一份形狀——同一件事不該有兩種說法。"""
-    return health_detail(await read_health(session))
 
 
 @router.post("/services/{kind}/test")

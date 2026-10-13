@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/r
 
 import { healthDetailQueryOptions, healthQueryOptions, type HealthDetail } from '../api/health'
 import type { ServiceKind } from '../api/schemas'
-import { servicesQueryOptions, testService } from '../api/settings'
+import { testService } from '../api/settings'
 
 export type ServiceCheck = UseMutationResult<HealthDetail, Error, ServiceKind>
 
@@ -15,9 +15,8 @@ export function useServiceCheck(): ServiceCheck {
 
   return useMutation({
     mutationFn: (kind: ServiceKind) => testService(kind),
-    // 健康頁看的是同一份資料，所以兩份快取一起換掉。
+    // 設定頁與健康頁讀同一份快取，換掉它兩頁都是新的。
     onSuccess: (fresh) => {
-      queryClient.setQueryData(servicesQueryOptions.queryKey, fresh)
       queryClient.setQueryData(healthDetailQueryOptions.queryKey, fresh)
       // `void`：匿名的那一支重抓完之前按鈕不必一直轉，回傳的 promise 是刻意不等的。
       void queryClient.invalidateQueries({ queryKey: healthQueryOptions.queryKey, exact: true })

@@ -19,7 +19,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const SERVICES = 'GET /api/settings/services'
+const DETAIL = 'GET /api/health/detail'
 const TEST = 'POST /api/settings/services/jellyfin/test'
 const STATUS = 'GET /api/setup/status'
 const SETUP = 'GET /api/setup/jellyfin'
@@ -53,7 +53,7 @@ function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
-    [SERVICES]: { body: healthDetail() },
+    [DETAIL]: { body: healthDetail() },
     [STATUS]: {
       body: setupStatus({
         completed: true,

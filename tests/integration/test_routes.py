@@ -733,3 +733,19 @@ def ledger_entry(target: str) -> LedgerEntry:
         target_inode="1",
         action=PlanAction.IMPORT,
     )
+
+
+class TestOwningRoute:
+    async def test_the_deeper_route_wins_even_when_the_shallower_one_is_spelled_longer(
+        self,
+    ) -> None:
+        """深度是路徑段數，不是字串長度（M4 票 87）。Route 的目標存檔時不正規化，
+        `…/tv/////////` 字比 `…/tv/anime` 長，卻是較淺的那一條。"""
+        shallow = Route(slug="tv", target_path="/data/library/tv/////////")
+        deep = Route(slug="tv-anime", target_path="/data/library/tv/anime")
+
+        owner = routes_service.owning_route(
+            "/data/library/tv/anime/Show (2024)/Season 01/Show - S01E01.mkv", [shallow, deep]
+        )
+
+        assert owner is deep

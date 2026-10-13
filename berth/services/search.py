@@ -45,7 +45,6 @@ from berth.domain import (
     StepFailure,
     StepStatus,
     Tags,
-    collection_type_for,
 )
 from berth.models import IndexerSettings, SearchSettings, SetupSettings
 from berth.parser import (
@@ -631,7 +630,6 @@ def estimate(title: str, published_at: datetime | None, snapshot: MediaSnapshot 
     """
     context = ParseContext(
         media=snapshot,
-        route_collection_type=collection_type_for(snapshot.kind) if snapshot is not None else None,
         published_at=published_at,
     )
     candidates = map_episode(parse_release(title), StructureHints(), context, release_name=title)

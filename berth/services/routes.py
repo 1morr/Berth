@@ -1359,11 +1359,14 @@ def owning_route(target_path: str, routes: Sequence[Route]) -> Route | None:
 
     帳本只記目標路徑、不記 Route，所以它屬於**目標在它底下**的那一條——有好幾條時是最深的
     那一條（`/data/library/tv` 與 `/data/library/tv/anime` 可以同時是 Route，brief §4.3）。
-    反查（票 12）與媒體庫（票 13）問的是同一件事。
+    反查（票 12）、媒體庫（票 13）與認領（`claims`）問的是同一件事。
+
+    深度量的是路徑段數，不是字串長度：目標存檔時不正規化，`…/tv////` 字比 `…/tv/anime` 長，
+    卻是較淺的那一條（M4 票 87）。
     """
     target = Path(target_path)
     owners = [route for route in routes if is_within(target, Path(route.target_path))]
-    return max(owners, key=lambda route: len(route.target_path), default=None)
+    return max(owners, key=lambda route: len(Path(route.target_path).parts), default=None)
 
 
 def _library_choice(

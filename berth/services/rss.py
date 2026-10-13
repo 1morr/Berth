@@ -1110,7 +1110,7 @@ async def library_copy(
     (guess,) = decide(
         title,
         [FileEntry(rel_path="episode.mkv", size=_EPISODE_SIZE)],
-        parse_context(route, snapshot, series, published=published),
+        parse_context(snapshot, series, published=published),
     )
     span = episode_span(guess)
     if span is None or not guess.target_path:

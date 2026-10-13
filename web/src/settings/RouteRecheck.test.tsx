@@ -225,7 +225,7 @@ describe('換了一台 qBittorrent 之後自動重查', () => {
     return stubApi({
       'GET /api/health': { body: HEALTHY },
       'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
-      'GET /api/settings/services': { body: healthDetail() },
+      'GET /api/health/detail': { body: healthDetail() },
       'POST /api/settings/services/qbittorrent/test': { body: healthDetail() },
       'GET /api/setup/status': { body: EXISTING },
       'GET /api/setup/qbittorrent/diff': {

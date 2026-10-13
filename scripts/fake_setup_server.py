@@ -2611,7 +2611,7 @@ async def _seed_twin(session: AsyncSession, route: Route, save_path: Path) -> No
     snapshot = spy.stored_snapshot()
     assert snapshot is not None
     entries = tuple(FileEntry(rel_path=name, size=1_000_000_000) for name in names)
-    context = ParseContext(media=snapshot, route_collection_type=route.collection_type)
+    context = ParseContext(media=snapshot)
     third = next(item for item in decide(release, entries, context) if item.episode_start == 3)
     old = save_path / "[Old] SPY×FAMILY S01E03" / names[0]
     old.parent.mkdir(parents=True, exist_ok=True)

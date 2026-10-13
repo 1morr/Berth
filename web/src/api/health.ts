@@ -8,7 +8,7 @@ export type Health = Schemas['Health']
 
 export type ServiceHealth = Schemas['ServiceHealthOut']
 
-/** `GET /api/health/detail`。設定頁的 `GET /api/settings/services` 回的是同一份。 */
+/** `GET /api/health/detail`。設定頁的健康卡也讀這一份快取（M4 票 87）。 */
 export type HealthDetail = Schemas['HealthDetailOut']
 
 export const healthQueryOptions = queryOptions({

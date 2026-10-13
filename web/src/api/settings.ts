@@ -11,13 +11,9 @@ import type { Schemas, ServiceKind } from './schemas'
  *
  * 位址、憑證、索引站與 TMDB key 也在設定頁上改（票 06i），但送的是精靈的同一批 `setup/*` 命令
  * （`api/setup.ts`）：一份命令、一份端點，精靈跑完之後那一組只有 admin 打得到。
+ *
+ * 服務狀態的讀取沒有設定頁專用的一支：健康卡讀的是健康頁那一份（`healthDetailQueryOptions`，M4 票 87）。
  */
-
-/** 與健康頁同一份形狀——同一件事不該有兩種說法。 */
-export const servicesQueryOptions = queryOptions({
-  queryKey: ['settings', 'services'],
-  queryFn: () => apiGet<HealthDetail>('/settings/services'),
-})
 
 /** 「重新檢查」：只重測這一個服務，其餘的結果留著。 */
 export function testService(kind: ServiceKind): Promise<HealthDetail> {

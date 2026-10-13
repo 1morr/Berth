@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { healthDetailQueryOptions } from '../api/health'
 import type { ServiceKind } from '../api/schemas'
-import { servicesQueryOptions } from '../api/settings'
 import { GhostButton, Notice } from '../components/controls'
 import { ServiceCard } from '../health/ServiceCard'
 import { SettingsSection } from './SettingsFrame'
@@ -14,7 +14,7 @@ import type { ServiceCheck } from './useServiceCheck'
  */
 export function HealthSection({ kind, check }: { kind: ServiceKind; check: ServiceCheck }) {
   const { t } = useTranslation()
-  const services = useQuery(servicesQueryOptions)
+  const services = useQuery(healthDetailQueryOptions)
   const row = services.data?.services.find((service) => service.kind === kind)
   const checking = check.isPending && check.variables === kind
 

@@ -209,7 +209,7 @@ async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     （`job_files.mediainfo_json`），不重抓也不重量。搬家本身走 rematch，這一支只回答「該在哪」。
     """
     contents, entries, route, snapshot, series = await _stored_facts(session, job)
-    context = parse_context(route, snapshot, series, published=job.published_at)
+    context = parse_context(snapshot, series, published=job.published_at)
     items = _apply_policy(decide(job.name, entries, context), route)
     return {f"{contents.root}{item.rel_path}": item for item in items}
 
@@ -226,7 +226,7 @@ async def held_proposal(
     **程式檢查照常跑**：這幾列還沒入庫，新的值對不上播出日或片長的話要繼續擋著。
     """
     _, entries, route, snapshot, series = await _stored_facts(session, job)
-    context = parse_context(route, snapshot, series, published=job.published_at).model_copy(
+    context = parse_context(snapshot, series, published=job.published_at).model_copy(
         update={"season_hint": season, "episode_offset": offset}
     )
     decided = decide(job.name, entries, context)
@@ -472,7 +472,6 @@ async def _stored(session: AsyncSession, job: Job) -> MediaSnapshot | None:
 
 
 def parse_context(
-    route: Route | None,
     snapshot: MediaSnapshot | None,
     series: RssSeries | None,
     *,
@@ -489,7 +488,6 @@ def parse_context(
         media=snapshot,
         season_hint=series.season if series is not None else None,
         episode_offset=series.episode_offset if series is not None else None,
-        route_collection_type=route.collection_type if route is not None else None,
         published_at=published,
     )
 
@@ -576,9 +574,7 @@ def _decided(
     series: RssSeries | None,
 ) -> tuple[PlannedFile, ...]:
     """解析器的答案，再過程式檢查與 Route 的政策。正式那一份與 pre-plan 走同一條。"""
-    decided = decide(
-        job.name, entries, parse_context(route, snapshot, series, published=job.published_at)
-    )
+    decided = decide(job.name, entries, parse_context(snapshot, series, published=job.published_at))
     return _apply_policy(_program_checks(job, decided, entries, snapshot, series), route)
 
 
