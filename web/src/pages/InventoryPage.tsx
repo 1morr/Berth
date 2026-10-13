@@ -37,6 +37,7 @@ import {
 import { Dot } from '../components/Dot'
 import { FilterBar } from '../components/FilterBar'
 import { PAGE_LINK, Pager } from '../components/Pager'
+import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
 import { SectionHeading } from '../components/SectionHeading'
 import { TilePlaceholder } from '../components/TilePlaceholder'
@@ -612,7 +613,7 @@ function LibraryQueue({
   const [said, setSaid] = useState('')
   const frame = useFocusAfterRemoval()
 
-  if (queue.isPending) return <QueueLoading />
+  if (queue.isPending) return <QueueLoading className="max-w-[80rem]" />
   if (!queue.data) return <RequestFailed error={queue.error} lead={t('review.readFailed')} />
 
   const rest = queue.data.queue_total - rows.length
@@ -651,16 +652,6 @@ function LibraryQueue({
           </Link>
         </p>
       )}
-    </div>
-  )
-}
-
-/** 清單讀取中：兩列靜態方塊，沒有動畫（同 `/review`）。 */
-function QueueLoading() {
-  return (
-    <div className="grid max-w-[80rem] gap-3" aria-hidden="true">
-      <div className="h-24 border-2 border-rule bg-well" />
-      <div className="h-24 border-2 border-rule bg-well" />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { issuesQueryOptions, reconcileQueryOptions } from '../api/issues'
 import { PAGE_TITLE } from '../components/controls'
+import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { IssueRow } from '../issues/IssueRow'
@@ -54,7 +55,7 @@ export function IssuesPage() {
       </p>
 
       {issues.isPending ? (
-        <Loading />
+        <QueueLoading />
       ) : !issues.data ? (
         <RequestFailed error={issues.error} lead={t('issues.readFailed')} />
       ) : issues.data.length === 0 ? (
@@ -70,20 +71,6 @@ export function IssuesPage() {
           ))}
         </ul>
       )}
-    </div>
-  )
-}
-
-/**
- * 讀取中的佔位。**兩列靜態方塊，沒有動畫**——這個世界沒有骨架屏的脈動（DESIGN.md）。
- *
- * 高度與真的一列相近，資料回來時版面不跳（票 12 的 CLS 是同一件事）。
- */
-function Loading() {
-  return (
-    <div className="grid gap-3" aria-hidden="true">
-      <div className="h-24 border-2 border-rule bg-well" />
-      <div className="h-24 border-2 border-rule bg-well" />
     </div>
   )
 }

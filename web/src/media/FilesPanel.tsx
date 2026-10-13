@@ -11,6 +11,7 @@ import { COMPACT_BUTTON, GHOST_LINK, TEXT_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
+import { fileName } from '../components/queueText'
 import { RematchForm } from '../components/RematchForm'
 import { groupRows, type RowGroup } from '../components/rowGroups'
 import { SectionHeading } from '../components/SectionHeading'
@@ -307,7 +308,9 @@ function FileRow({
           )}
           {episode && <span className="value text-xs text-ink">{episode}</span>}
           {/* 檔名整條換行，不截斷：它是使用者認得出這個檔案的東西（票 08 §8 的同一條）。 */}
-          <span className="value min-w-0 text-xs wrap-anywhere text-ink">{baseName(file)}</span>
+          <span className="value min-w-0 text-xs wrap-anywhere text-ink">
+            {fileName(file.target_path)}
+          </span>
           <Facts file={file} summarised={summarised} />
         </>
       }
@@ -318,7 +321,7 @@ function FileRow({
           字幕沒有入口——它跟著它的影片走（`actions` 是空的）。 */}
       {rematching && file.actions.length > 0 && (
         <RematchEntry
-          name={baseName(file)}
+          name={fileName(file.target_path)}
           subject={{ ledger_id: file.id }}
           actions={file.actions}
           linked
@@ -434,11 +437,6 @@ function Labelled({ label, value }: { label: string; value: string }) {
       {value}
     </p>
   )
-}
-
-/** 目標路徑的最後一段。資料夾是整組共用的，所以摘要上只留這一段（票 09 的 Comments）。 */
-function baseName(file: LedgerFile): string {
-  return file.target_path.split('/').pop() || file.target_path
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { SearchResult } from '../api/search'
+import { episodeCode, seasonCode } from '../components/episodes'
 
 /**
  * 結果表那幾格的讀法（`.scratch/m1/search-results-shape.md` §6）。
@@ -59,15 +60,15 @@ export function estimate(
     return { code: '', noteKey: 'search.estimate.unknown' }
   }
 
-  const season = row.season === null ? '' : `S${pad(row.season)}`
+  const season = row.season === null ? '' : seasonCode(row.season)
   if (row.whole_season) return { code: season, noteKey: 'search.estimate.wholeSeason' }
   if (row.episode_start === null) return { code: season, noteKey: '' }
 
-  const start = `E${pad(row.episode_start)}`
+  const start = episodeCode(row.episode_start)
   const end =
     row.episode_end === null || row.episode_end === row.episode_start
       ? ''
-      : `–E${pad(row.episode_end)}`
+      : `–${episodeCode(row.episode_end)}`
   return { code: `${season}${start}${end}`, noteKey: '' }
 }
 
@@ -98,8 +99,4 @@ export function sortRows(rows: readonly SearchResult[], key: SortKey): SearchRes
 function value(row: SearchResult, key: SortKey): number {
   if (key === 'size') return row.size
   return row.seeders ?? -1
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, '0')
 }
