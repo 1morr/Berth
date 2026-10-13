@@ -12,6 +12,7 @@ Job，五個硬鏈接真的在媒體庫裡。
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,7 @@ from berth.services.deletion import DeleteOutcome, DeleteScope, delete_job, esti
 from berth.services.jobs import JobRejectedError
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_importer import importing, ledger_of, run, state_of
-from tests.integration.test_plan import HASH, events_of
+from tests.integration.test_plan import BATCH_FILES, HASH, downloaded_job, events_of, ready
 
 pytestmark = pytest.mark.asyncio
 
@@ -547,3 +548,131 @@ class TestPathsItWillNotTouch:
         )
 
         assert outsider.exists()
+
+
+@dataclass(frozen=True)
+class Downloading:
+    job: Job
+    factory: FakeClientFactory
+    #: 這一包在 incomplete 底下的每一個檔案。
+    files: list[Path]
+    #: 同一個目錄裡別的 torrent 下到一半的檔案。刪這一筆不能碰到它。
+    neighbour: Path
+
+
+#: 單檔的 torrent：`content_path` 直接指著那個檔案（brief §20.7）。
+SINGLE_FILE = (("Some.Movie.2024.1080p.WEB-DL.mkv", 2_000_000_000),)
+
+
+async def downloading(
+    session: AsyncSession,
+    roots: dict[str, Path],
+    *,
+    content_path: str | None = None,
+    state: JobState = JobState.DOWNLOADING,
+    files: tuple[tuple[str, int], ...] = BATCH_FILES,
+) -> Downloading:
+    """一筆還在下載的 Job（M4 票 74）：qBittorrent 把它放在 Route 自己的 incomplete 目錄
+    （`incomplete_path_of`）。`save_path` 已經是 complete 那一個——那是下完要搬去的地方，
+    `content_path` 才是資料現在所在（qBittorrent 的 `torrents/info`）。
+    """
+    media, route, factory = await ready(session, roots)
+    job = await downloaded_job(session, media, route, roots, state=state, files=files)
+    incomplete = roots["incomplete"] / route.slug
+    # `Original` 版面：多檔的內容路徑是根目錄那一層，單檔的就是那個檔案。
+    root = files[0][0].split("/")[0]
+    job.content_path = str(incomplete / root) if content_path is None else content_path
+    job.progress = 0.4
+    await session.commit()
+    paths = [incomplete / rel_path for rel_path, _ in files]
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(path.name.encode())
+    neighbour = incomplete / "Another Release" / "Another Release - 01.mkv"
+    neighbour.parent.mkdir(parents=True)
+    neighbour.write_bytes(b"someone else's download")
+    return Downloading(job, factory, paths, neighbour)
+
+
+DELETE_FILES = DeleteScope(remove_torrent=True, delete_files=True)
+
+
+class TestADownloadStillInProgress:
+    """還沒下完的那一包在 incomplete 底下（M4 票 74）。勾了刪檔，它也要刪得掉、算得出。
+
+    票 42 在 VM 上取消一筆下載到 19.8% 的單：回應說 `freed: 0`，`incomplete/movies/<種子名>/`
+    底下那個 970 MB 的檔案留著，沒有任何東西管它。
+    """
+
+    @pytest.mark.parametrize("files", [BATCH_FILES, SINGLE_FILE], ids=["batch", "single-file"])
+    async def test_deleting_files_removes_the_partial_download(
+        self, session: AsyncSession, roots: dict[str, Path], files: tuple[tuple[str, int], ...]
+    ) -> None:
+        it = await downloading(session, roots, files=files)
+        size = sum(path.stat().st_size for path in it.files)
+
+        outcome = await delete_job(session, it.factory, it.job.hash, DELETE_FILES, actor="user")
+
+        assert alive(it.files) == []
+        assert (outcome.sources, outcome.freed) == (len(files), size)
+        assert it.factory.qbittorrent_.deleted == [(it.job.hash, False)]
+        assert it.neighbour.exists()
+
+    async def test_it_takes_the_emptied_folders_and_nothing_next_to_them(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        it = await downloading(session, roots)
+        content = Path(it.job.content_path)
+
+        await delete_job(session, it.factory, it.job.hash, DELETE_FILES, actor="user")
+
+        assert not content.exists()
+        assert list(content.parent.iterdir()) == [it.neighbour.parent]
+        assert it.neighbour.exists()
+
+    async def test_without_deleting_files_the_partial_download_stays(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        it = await downloading(session, roots)
+
+        await delete_job(
+            session, it.factory, it.job.hash, DeleteScope(remove_torrent=True), actor="user"
+        )
+
+        assert alive(it.files) == it.files
+
+    async def test_the_estimate_counts_the_partial_download(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """估算說的是磁碟上真的在的那幾個：complete 那一側一個都還沒有，不是「缺了六個」。"""
+        it = await downloading(session, roots)
+
+        estimate = await estimate_deletion(session, it.job.hash)
+
+        assert (estimate.sources, estimate.sources_missing) == (SOURCES, 0)
+        assert estimate.reclaimable == sum(path.stat().st_size for path in it.files)
+
+    async def test_without_a_content_path_nothing_in_incomplete_is_guessed_at(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """qBittorrent 從沒報過內容路徑（metadata 還沒到就被移走、`client_removed`）：不照 Route
+        的 slug 去猜那一包在哪裡。"""
+        it = await downloading(session, roots, content_path="", state=JobState.CLIENT_REMOVED)
+
+        outcome = await delete_job(session, it.factory, it.job.hash, DELETE_FILES, actor="user")
+
+        assert alive(it.files) == it.files
+        assert (outcome.sources, outcome.freed) == (0, 0)
+
+    async def test_a_file_list_reaching_outside_the_content_path_is_left_alone(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只刪這一個 torrent 的內容路徑底下的：`job_files` 被改壞、指到隔壁那一包的不刪。"""
+        it = await downloading(session, roots)
+        rel_path = it.neighbour.relative_to(Path(it.job.content_path).parent).as_posix()
+        session.add(JobFile(job_hash=it.job.hash, rel_path=rel_path, size=1))
+        await session.commit()
+
+        await delete_job(session, it.factory, it.job.hash, DELETE_FILES, actor="user")
+
+        assert it.neighbour.exists()

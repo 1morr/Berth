@@ -122,6 +122,43 @@ describe('JobDelete', () => {
     expect(screen.getByText(/這樣刪會空出 1\.4 GB/)).toBeInTheDocument()
   })
 
+  it('還在下載、沒有鏈接時，只勾刪檔就說得出會空出多少（M4 票 74）', async () => {
+    // 下到一半的那一包在 incomplete 底下，只有一個名字：刪掉它就是真的空出來。
+    mount({ [`GET /api/jobs/${HASH}/deletion`]: { body: estimate({ links: 0 }) } })
+    await open()
+    await screen.findByText(/媒體庫 0 個鏈接/)
+
+    await tick('從 qBittorrent 移除這個 torrent')
+    await tick('刪除下載目錄裡的檔案')
+
+    expect(screen.getByText(/這樣刪會空出 1\.4 GB/)).toBeInTheDocument()
+  })
+
+  it('沒有鏈接時不勾刪檔，說的是檔案還在，不是鏈接與檔案要兩邊都刪', async () => {
+    mount({ [`GET /api/jobs/${HASH}/deletion`]: { body: estimate({ links: 0 }) } })
+    await open()
+    await screen.findByText(/媒體庫 0 個鏈接/)
+
+    await tick('從 qBittorrent 移除這個 torrent')
+
+    expect(screen.getByText('這樣刪不會空出空間：下載目錄裡的檔案還在。')).toBeInTheDocument()
+  })
+
+  it('沒有鏈接、勾了刪檔卻拿不回空間時，不說鏈接與檔案要兩邊都刪', async () => {
+    mount({
+      [`GET /api/jobs/${HASH}/deletion`]: {
+        body: estimate({ links: 0, sources: 0, sources_missing: 6, reclaimable: 0 }),
+      },
+    })
+    await open()
+    await screen.findByText(/媒體庫 0 個鏈接/)
+
+    await tick('從 qBittorrent 移除這個 torrent')
+    await tick('刪除下載目錄裡的檔案')
+
+    expect(screen.getByText('這樣刪不會空出空間。')).toBeInTheDocument()
+  })
+
   it('沒勾移除 torrent 時刪檔那一格是鎖住的，而且說得出怎麼解鎖', async () => {
     // 後端那一條是 422（`delete_files_requires_remove_torrent`），這裡是同一條規則的畫面版。
     mount()

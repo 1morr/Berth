@@ -2603,6 +2603,10 @@ const zhHant = {
         // 硬鏈接的規矩：來源與所有鏈接都刪掉，那些位元組才回到磁碟（brief §9.2）。
         freesNothing:
           '這樣刪不會空出空間：媒體庫的鏈接與下載目錄的檔案是同一份資料，要兩邊都刪掉才算數。',
+        // 沒有鏈接（還在下載）時沒有「兩邊」可言，只是檔案沒勾（M4 票 74）。
+        freesNothingKept: '這樣刪不會空出空間：下載目錄裡的檔案還在。',
+        // 沒有鏈接、勾了刪檔，磁碟上卻沒有拿得回來的：不在了（上一行說缺幾個）或有別人握著（下面那一行）。
+        freesNothingBare: '這樣刪不會空出空間。',
         held: '其中 {{size}} 有 Berth 不知道的鏈接握著，怎麼刪都拿不回來。',
       },
       done: '已移除 {{links}} 個鏈接、刪掉 {{sources}} 個檔案，空出 {{size}}。',
@@ -5815,6 +5819,8 @@ const en: Translations<typeof zhHant> = {
         frees: 'This frees {{size}}.',
         freesNothing:
           'This frees nothing: the library links and the downloaded files are the same data, so both sides have to go.',
+        freesNothingKept: 'This frees nothing: the files in the download folder stay.',
+        freesNothingBare: 'This frees nothing.',
         held: '{{size}} of it is held by a link Berth does not know about, and no choice here gets it back.',
       },
       done: 'Removed {{links}} links, deleted {{sources}} files, freed {{size}}.',
