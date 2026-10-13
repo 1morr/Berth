@@ -106,7 +106,7 @@ describe('Route 設定頁', () => {
 
     const second = await row('TV 2')
     expect(await within(second).findByText(/你的 Jellyfin 看不到 Berth 剛寫的檔案/)).toBeVisible()
-    expect(within(second).getByText('-v ${DATA_ROOT}:/data')).toBeInTheDocument()
+    expect(within(second).getByText('-v /srv/berth/data:/data')).toBeInTheDocument()
   })
 
   it('讀不到來源（或套件內）：給 deploy/ 那一份的補法，沒有 docker run', async () => {
@@ -115,7 +115,7 @@ describe('Route 設定頁', () => {
 
     const second = await row('TV 2')
     expect(within(second).getByText(/jellyfin 容器少了這條路徑的掛載/)).toBeVisible()
-    expect(within(second).queryByText('-v ${DATA_ROOT}:/data')).not.toBeInTheDocument()
+    expect(within(second).queryByText(/^-v /)).not.toBeInTheDocument()
   })
 
   it('改名稱與啟用：送出去的就是那兩個欄位', async () => {

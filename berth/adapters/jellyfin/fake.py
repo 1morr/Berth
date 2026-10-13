@@ -202,6 +202,8 @@ class FakeJellyfinClient:
         self.tasks_run: list[str] = []
         #: 每一次 `refresh_library` 刷新的媒體庫 id。
         self.libraries_refreshed: list[str] = []
+        #: 每一次 `validate_path` 問的路徑。頁 1 有沒有問 `/data`（M4 票 63）靠它斷言。
+        self.paths_validated: list[str] = []
         #: 每一次 `user_views` / `user_policy` 問的是誰。快取有沒有擋下重複的問題靠它斷言。
         self.view_queries: list[str] = []
         self.policy_queries: list[str] = []
@@ -366,6 +368,7 @@ class FakeJellyfinClient:
         硬規則成立的樣子；給了清單就是少了掛載的那一台，用來演練檢查三的失敗。
         """
         self._checkpoint()
+        self.paths_validated.append(path)
         if self.visible_roots is None:
             return True
         return any(path.startswith(root) for root in self.visible_roots)

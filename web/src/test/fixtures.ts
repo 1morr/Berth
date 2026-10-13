@@ -34,6 +34,7 @@ export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
       qbittorrent: 'http://qbittorrent:8080',
       prowlarr: 'http://prowlarr:9696',
     },
+    host_data_root: { path: '/srv/berth/data', relative: false },
     ...overrides,
   }
 }

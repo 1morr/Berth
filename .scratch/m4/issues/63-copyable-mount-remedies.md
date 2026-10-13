@@ -1,6 +1,6 @@
 # 63 — 既有服務的補法能照抄：顯示真正的 DATA_ROOT、同一台只說一次、Jellyfin 提早驗
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 55（Unraid 模板的寫法照實跑結果）
 
@@ -28,11 +28,15 @@
 
 ## 驗收
 
-- [ ] 整合測試：補法帶真正的值；相對路徑的提示；頁 1 的 Jellyfin `/data` 探測（雙向，白名單閘門跟著改）
-- [ ] vitest：合併的補法、Unraid 格式、localhost 不重複（zh-Hant 與 en）
-- [ ] 實跑：既有 Jellyfin 與 qBittorrent 都不掛 `/data`，照畫面的補法一次修好，附截圖
-- [ ] 全部檢查、test、前端 e2e 綠燈；README guide（接既有服務）、brief §16.4 同步；progress.md 記一行
+- [x] 整合測試：補法帶真正的值；相對路徑的提示；頁 1 的 Jellyfin `/data` 探測（雙向，白名單閘門跟著改）
+- [x] vitest：合併的補法、Unraid 格式、localhost 不重複（zh-Hant 與 en）
+- [x] 實跑：既有 Jellyfin 與 qBittorrent 都不掛 `/data`，照畫面的補法一次修好，附截圖
+- [x] 全部檢查、test、前端 e2e 綠燈；README guide（接既有服務）、brief §16.4 同步；progress.md 記一行
 
 ## Comments
 
 - 2026-10-08 票 55 補（`docs/research/unraid-trial-2026-10-08.md` §6 U6）：使用者 Unraid 上的模板欄位是 `<Config Name=… Target="容器路徑" Mode="rw" Type="Path">宿主路徑</Config>`，畫面上是「Add another Path, Port, Variable, Label or Device」→ Config Type Path、Name、Container Path、Host Path、Access Mode（Unraid 7.1.4 `dynamix.docker.manager` 的介面字串）。CA 的 `jellyfin/jellyfin` 模板預設把媒體掛在 `/data/tvshows`、`/data/movies`，加 Berth 的 `/data` 之後是巢狀掛載（沒實測），補法要說這種情況。
+- 2026-10-14 實作（commit 見 git log）：
+  - 實跑截圖在 `63-copyable-mount-remedies/`：`p1-jellyfin-no-data.png`（頁 1 擁有者成立後就紅，片段帶 `C:/…/data:/data`，Unraid 欄位展開）、`p2-qbittorrent-no-data.png`、`p3-merged-notice.png`（Jellyfin 還沒修時兩個媒體庫合併一則、一份補法）、`p1-after-fix.png`、`p3-after-fix.png`（兩條 Route 6/6）。環境：Docker Desktop 29.6.2，`deploy/docker-compose.yml` 的隔離副本（`berth-t63`、子網 172.63、image 從工作樹 build），`.env` 的 `DATA_ROOT` 是 Windows 反斜線路徑；既有服務是 Jellyfin 12.1（掛 `/tv`、`/movies`）與 qBittorrent 5.2.3（掛 `/downloads`）。各照畫面多加一行、`docker compose up -d`，同一顆鍵重測就過。跑完全部 `down`、image 刪掉。
+  - code-review 沒處理的：(1) Route 檢查列沒有合併（理由在 progress.md 偏差）；(2) `MountFix` 的巢狀掛載那一句寫成定論，但只在 Docker Desktop 實測、沒在 Unraid 上跑（brief §20.14 寫明）；(3) 判斷題的 smell：`claim_owner` 自己組 `ServiceConnection`（與 `_stored_connection` 相近，多一個位址比對）、五條補法裡「多加一條掛載…」那半句中英各重複、`detailLabel` 與 `fixOf` 各自列 `data_*` 三種、`root` 與 `host` 一起傳；(4) `asked_jellyfin_about_shared_root` 是「不是空轉」的斷言，沒有自己的變異測試。
+  - `tests/integration/test_rss.py::TestTwoRoundsAtOnce::test_only_one_round_runs_and_neither_fails` 在整套 pytest 與前端 e2e、docker build 同時跑時紅一次，單獨跑 3/3 綠；與本票無關，記下給下一次碰到的人。

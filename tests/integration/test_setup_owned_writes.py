@@ -585,6 +585,14 @@ def probed_shared_root(run: Wizard) -> bool:
     )
 
 
+def asked_jellyfin_about_shared_root(run: Wizard, jellyfin: FakeJellyfinClient) -> bool:
+    """頁 1 真的問了既有 Jellyfin 看不看得到共用根目錄（M4 票 63）。`validate_path` 是讀
+    （`READS`）：探測檔是 Berth 在自己的 `/data` 寫的，Jellyfin 那一台什麼都沒多，所以白名單不必
+    放行任何東西。"""
+    shared = Path(run.premise.shared_root)
+    return any(Path(path).parent == shared for path in jellyfin.paths_validated)
+
+
 # --- 閘門 ---
 
 
@@ -620,9 +628,8 @@ def test_a_bundled_wizard_writes_only_owned_objects_and_the_bootstrap(
 def test_an_existing_wizard_writes_only_owned_objects(
     wizard: Callable[[ServiceOrigin, Services], Wizard], tmp_path: Path, initialized: bool
 ) -> None:
-    run = wizard(
-        ServiceOrigin.EXISTING, existing_services(tmp_path / "nas", initialized=initialized)
-    )
+    services = existing_services(tmp_path / "nas", initialized=initialized)
+    run = wizard(ServiceOrigin.EXISTING, services)
 
     walk_existing(run.client)
 
@@ -635,6 +642,7 @@ def test_an_existing_wizard_writes_only_owned_objects(
         (PROWLARR, "add_indexer"),
     } <= methods(run.recorder.writes)
     assert probed_shared_root(run)
+    assert asked_jellyfin_about_shared_root(run, services.jellyfin)
     # 例外只有一個：還沒初始化的那台 Jellyfin 由擁有者跑完它的初始設定。
     assert ((JELLYFIN, "complete_startup") in methods(run.recorder.writes)) is not initialized
 

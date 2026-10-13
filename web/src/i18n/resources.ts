@@ -328,7 +328,10 @@ const zhHant = {
         '套件內那一台要帳密：Berth 的免密白名單沒生效，多半是在它的 WebUI 關掉或改過了。打開它的「選項 → WebUI」，在「驗證」勾回「讓已在白名單中的 IP 子網路略過驗證」，底下清單裡預置的那一行（Berth 的位址，結尾是 /32）要留著，存檔後重新測試。重啟補不回來：預置腳本只補設定檔裡沒有的鍵，不蓋掉你改過的。沒在 WebUI 動過，清單裡也沒有 /32 那一行的話，多半是 compose 檔沒有完整複製：預置腳本寫在 compose 的 qbittorrent-preseed 那一段（連同 qbittorrent 底下的 mode: 0555），缺了它 qBittorrent 的 log 只有一行 is not an executable file，或什麼都沒有。重新完整複製 compose 檔，跑 docker compose up -d --force-recreate qbittorrent（Unraid：在 Edit Stack → Compose File 整份重貼，再 Compose Up）之後重新測試。',
       bundledDown: '容器還沒起來。在宿主上確認它活著、看它的 log：',
       dataUnseen:
-        '你的 qBittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有——它多半沒掛 {{root}}（例如只掛了 /downloads），下載會寫進 Berth 拿不到的地方。在你原本那一份 compose（或 docker run 指令）的 qBittorrent 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值；容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後重新測試：',
+        '你的 qBittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有——它多半沒掛 {{root}}（例如只掛了 /downloads），下載會寫進 Berth 拿不到的地方。在你原本那一份 compose（或 docker run 指令、Unraid 模板）的 qBittorrent 上多加一條掛載：把 Berth 的 DATA_ROOT 那個資料夾也掛在 {{root}}（容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後重新測試：',
+      // 頁 1 成為擁有者之後就問（M4 票 63）：原本要到頁 3 加 Berth 路徑才知道。
+      jellyfinDataUnseen:
+        '你的 Jellyfin 看不到 {{root}}：Berth 在那裡寫了一個檔，問它看不看得到，它說沒有——它多半沒掛 {{root}}（例如只掛了 /movies、/tv），頁 3 會加不上 Berth 路徑。在你原本那一份 compose（或 docker run 指令、Unraid 模板）的 Jellyfin 上多加一條掛載：把 Berth 的 DATA_ROOT 那個資料夾也掛在 {{root}}（容器路徑只能是 {{root}}）。原本的掛載不用動：/movies、/tv 留著，觀看紀錄不受影響。Jellyfin 要與 Berth 在同一台主機；Berth 不做 remote path mapping。重建它之後重新測試：',
       dataUnseenBundled:
         '這套 compose 的 qbittorrent 看不到 {{root}}：Berth 在那裡寫了一個檔，它校驗之後說一點都沒有。compose 裡它的這一條掛載被改掉了；改回來、跑 docker compose up -d qbittorrent 之後重新測試：',
       dataUnreadable:
@@ -381,6 +384,8 @@ const zhHant = {
   detail: {
     version: '版本',
     server: '伺服器',
+    // 看不到 /data 那三種：`detail` 是放探測檔的那條路徑（M4 票 46、63）。
+    path: '路徑',
     indexers: '索引站',
     credential: '憑證',
     verified: '已驗證',
@@ -530,8 +535,10 @@ const zhHant = {
       // 逐個媒體庫的「加入 Berth 路徑」失敗（M4 票 19）。Jellyfin 自己只回 404，原因由 Berth 分辨。
       pathFailed: {
         title: '「{{library}}」沒加上 Berth 路徑',
-        jellyfin_cannot_see:
-          'Jellyfin 看不到 {{path}}：它沒掛 {{root}}。Berth 建好了目錄、在裡面寫了一個檔，Jellyfin 說它看不到；這一次建的目錄已經收回（原本就在的不動）。在你原本那一份 compose（或 docker run 指令）的 Jellyfin 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值）。原本的掛載不用動。重建它之後再按一次：',
+        // 同一台 Jellyfin 沒掛 /data 是整台的事：合併成一則，列出受影響的媒體庫（M4 票 63，審計 C5）。
+        unseenTitle: 'Jellyfin 看不到 {{root}}',
+        unseen:
+          '{{libraries}}沒加上 Berth 路徑：Berth 在 {{root}} 底下建好了目錄、在裡面寫了一個檔，Jellyfin 說它看不到——它沒掛 {{root}}。這一次建的目錄已經收回（原本就在的不動）。在你原本那一份 compose（或 docker run 指令、Unraid 模板）的 Jellyfin 上多加一條掛載：把 Berth 的 DATA_ROOT 那個資料夾也掛在 {{root}}。原本的掛載不用動。重建它之後再按一次：',
         directory:
           'Berth 在自己的容器裡建不出 {{path}}：berth 少了 {{root}} 的掛載，或容器裡的使用者寫不進去。',
         jellyfin:
@@ -990,16 +997,27 @@ const zhHant = {
         '到 Jellyfin 確認這個媒體庫與路徑還在。被刪掉或改了路徑的話，刪掉這條 Route、重新建立。',
       crossDevice:
         '這兩個目錄在 Berth 內是不同掛載（EXDEV）。硬鏈接跨不了掛載點——用一條掛載蓋住整個父目錄，不要 complete 與 library 各掛一條。網路磁碟、exFAT 隨身碟與 mergerfs 也做不到硬鏈接。',
+      // 使用者自己那一台要多加的那一條掛載（`MountFix`，M4 票 63）：片段帶著 Berth 的 DATA_ROOT 真正的值。
+      mount: {
+        hostUnknown: '片段裡的 ${DATA_ROOT} 換成 Berth 那一份 .env 的 DATA_ROOT（要絕對路徑）。',
+        hostRelative:
+          'Berth 的 .env 把 DATA_ROOT 寫成相對路徑 {{path}}：它相對於 Berth 的 docker-compose.yml 所在的資料夾，原樣貼進你自己那一份會指到別的地方。把片段裡的 {{path}} 換成那個資料夾的絕對路徑（例如 /srv/berth/data；Windows 寫成 C:/Berth/data，斜線用 /）。',
+        unraid: '用 Unraid 的模板',
+        unraidSteps:
+          '在 Docker 頁點這個容器 → Edit，按最下面的「Add another Path, Port, Variable, Label or Device」，照下面填好按 Add，再按 Apply（Unraid 會重建它）：',
+        unraidNested:
+          '這個模板已經把別的資料夾掛在 {{root}} 底下（例如 Community Apps 的 Jellyfin 模板的 {{root}}/tvshows、{{root}}/movies）的話，照樣加：兩條並存，原本的照舊看得到；Docker 會在 Berth 的資料夾裡建出同名的空資料夾當掛載點。只有叫 library 或 torrent 的會蓋住 Berth 的目錄，那一條要先換一個容器路徑。',
+      },
       // 既有服務失敗在第 2–5 條時另說的那一句（M4 票 08，brief §16.4）：上面的 compose 片段是套件內那一份。
       existing: {
         qbittorrent:
           '這是你自己的 qBittorrent：它報的是它自己容器裡的路徑。Berth 要看得到同一個字串，兩者得在同一台主機、把同一個宿主目錄掛在容器路徑 /data（只能是 /data）。Berth 不做 remote path mapping——在 qBittorrent 原本的掛載之外多加這一條（原本的不用動），讓這條路徑在兩邊指到同一個地方。',
         qbittorrentMount:
-          '你的 qBittorrent 看不到這個分類路徑：它多半沒掛 {{root}}（例如只掛了 /downloads），Berth 寫的檔在它那邊不存在。在你原本那一份 compose（或 docker run 指令）的 qBittorrent 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值；容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後再按一次：',
+          '你的 qBittorrent 看不到這個分類路徑：它多半沒掛 {{root}}（例如只掛了 /downloads），Berth 寫的檔在它那邊不存在。在你原本那一份 compose（或 docker run 指令、Unraid 模板）的 qBittorrent 上多加一條掛載：把 Berth 的 DATA_ROOT 那個資料夾也掛在 {{root}}（容器路徑只能是 {{root}}）。原本的掛載不用動：/downloads 留著，舊 torrent 照常做種，Berth 只在 {{root}} 底下讀寫。Berth 不做 remote path mapping。重建它（docker compose up -d，或刪掉容器再照新的指令 docker run）之後再按一次：',
         libraryMount:
-          '你的 Jellyfin 把這個媒體庫放在它自己的容器路徑（例如 /movies、/tv），不在 {{root}} 底下，Berth 看不到。在你原本那一份 compose（或 docker run 指令）的 Jellyfin 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在 {{root}}（${DATA_ROOT} 換成那個值）。原本的掛載不用動：/movies、/tv 留著——改了既有項目的路徑等於換成新項目、觀看紀錄歸零。Route 建好之後寫入目標就鎖住了：先刪掉這條 Route，再選「新的 Berth 路徑」當寫入目標。Berth 不做 remote path mapping：',
+          '你的 Jellyfin 把這個媒體庫放在它自己的容器路徑（例如 /movies、/tv），不在 {{root}} 底下，Berth 看不到。在你原本那一份 compose（或 docker run 指令、Unraid 模板）的 Jellyfin 上多加一條掛載：把 Berth 的 DATA_ROOT 那個資料夾也掛在 {{root}}。原本的掛載不用動：/movies、/tv 留著——改了既有項目的路徑等於換成新項目、觀看紀錄歸零。Route 建好之後寫入目標就鎖住了：先刪掉這條 Route，再選「新的 Berth 路徑」當寫入目標。Berth 不做 remote path mapping：',
         jellyfinMount:
-          '你的 Jellyfin 看不到 Berth 剛寫的檔案：它多半沒掛 {{root}}，或在另一台主機。在你原本那一份 compose（或 docker run 指令）的 Jellyfin 上多加一條掛載：berth 那一份 .env 的 DATA_ROOT 掛在同一個容器路徑 {{root}}（${DATA_ROOT} 換成那個值）。原本的掛載不用動。Jellyfin 要與 Berth 在同一台主機；Berth 不做 remote path mapping：',
+          '你的 Jellyfin 看不到 Berth 剛寫的檔案：它多半沒掛 {{root}}，或在另一台主機。在你原本那一份 compose（或 docker run 指令、Unraid 模板）的 Jellyfin 上多加一條掛載：把 Berth 的 DATA_ROOT 那個資料夾也掛在同一個容器路徑 {{root}}。原本的掛載不用動。Jellyfin 要與 Berth 在同一台主機；Berth 不做 remote path mapping：',
         split:
           '硬鏈接要 berth 只用一條掛載蓋住整個 /data：別為了配合你自己的服務，把下載與媒體庫拆成兩條掛進 berth。你的服務原本的 /downloads、/tv 留著，各自多掛一條同一個 /data 就好。',
       },
@@ -3300,6 +3318,8 @@ const zhHant = {
     collapse: '收起',
     // 長清單一段底端的那一顆（M1.5 票 09）：說得出收起的是哪一段。
     collapseNamed: '收起 {{name}}',
+    // 一串名字裡的一個（「節目」、「電影」）：引號照語言（M4 票 63）。
+    quoted: '「{{name}}」',
     audits_one: '{{count}} 個待確認',
     audits_other: '{{count}} 個待確認',
     failed: '失敗',
@@ -3637,7 +3657,9 @@ const en: Translations<typeof zhHant> = {
       bundledDown:
         'The container is not up yet. Check on the host that it is running, and read its log:',
       dataUnseen:
-        'Your qBittorrent cannot see {{root}}: Berth wrote a file there and qBittorrent found none of it after a recheck. It most likely does not mount {{root}} (only /downloads, say), so downloads would land where Berth cannot reach them. Add one mount to the qBittorrent service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env; the container path has to be {{root}}). Leave the mounts it already has: /downloads stays, old torrents keep seeding, and Berth only reads and writes under {{root}}. Berth does not do remote path mapping. Recreate it (docker compose up -d, or remove the container and docker run the new command), then test again:',
+        'Your qBittorrent cannot see {{root}}: Berth wrote a file there and qBittorrent found none of it after a recheck. It most likely does not mount {{root}} (only /downloads, say), so downloads would land where Berth cannot reach them. Add one mount to the qBittorrent service in your own compose file (or its docker run command or Unraid template): Berth’s DATA_ROOT folder at {{root}} as well (the container path has to be {{root}}). Keep its existing mounts: /downloads stays, old torrents keep seeding, and Berth only reads and writes under {{root}}. Berth does not do remote path mapping. Recreate it (docker compose up -d, or remove the container and docker run the new command), then test again:',
+      jellyfinDataUnseen:
+        'Your Jellyfin cannot see {{root}}: Berth wrote a file there and asked whether it can see it, and it says no. It most likely does not mount {{root}} (only /movies and /tv, say), so page 3 would not be able to add a Berth path. Add one mount to the Jellyfin service in your own compose file (or its docker run command or Unraid template): Berth’s DATA_ROOT folder at {{root}} as well (the container path has to be {{root}}). Keep your existing mounts: /movies and /tv stay, and watch history is not affected. Jellyfin has to run on the same host as Berth; Berth does no remote path mapping. Recreate it, then test again:',
       dataUnseenBundled:
         'This compose’s qbittorrent cannot see {{root}}: Berth wrote a file there and qBittorrent found none of it after a recheck. Its mount for that path was changed in compose; put it back, run docker compose up -d qbittorrent, then test again:',
       dataUnreadable:
@@ -3692,6 +3714,7 @@ const en: Translations<typeof zhHant> = {
   detail: {
     version: 'Version',
     server: 'Server',
+    path: 'Path',
     indexers: 'Indexers',
     credential: 'Credential',
     verified: 'Verified',
@@ -3860,8 +3883,9 @@ const en: Translations<typeof zhHant> = {
       addPath: 'Add the Berth path',
       pathFailed: {
         title: 'No Berth path was added to “{{library}}”',
-        jellyfin_cannot_see:
-          'Jellyfin cannot see {{path}}: it does not mount {{root}}. Berth created the directory and wrote a file in it, Jellyfin says it cannot see it; whatever this attempt created has been removed again (anything already there stays). Add one mount to the Jellyfin service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env). Keep your existing mounts. Recreate it, then press again:',
+        unseenTitle: 'Jellyfin cannot see {{root}}',
+        unseen:
+          'No Berth path was added to {{libraries}}: Berth created the directories under {{root}} and wrote a file in them, and Jellyfin says it cannot see it — it does not mount {{root}}. Whatever this attempt created has been removed again (anything already there stays). Add one mount to the Jellyfin service in your own compose file (or its docker run command or Unraid template): Berth’s DATA_ROOT folder at {{root}} as well. Keep your existing mounts. Recreate it, then press again:',
         directory:
           'Berth could not create {{path}} in its own container: berth does not mount {{root}}, or the container user cannot write there.',
         jellyfin:
@@ -4330,15 +4354,26 @@ const en: Translations<typeof zhHant> = {
         'Check in Jellyfin that this library and its path still exist. If it was deleted or its path changed, delete this route and create it again.',
       crossDevice:
         'Those two directories are separate mounts inside Berth (EXDEV). A hard link cannot cross a mount point: use one mount covering the whole parent directory instead of mounting complete and library separately. Network shares, exFAT drives and mergerfs cannot hard-link either.',
+      mount: {
+        hostUnknown:
+          'Replace ${DATA_ROOT} in the snippets with the DATA_ROOT in Berth’s .env (an absolute path).',
+        hostRelative:
+          'Berth’s .env has DATA_ROOT as the relative path {{path}}: it is relative to the folder holding Berth’s docker-compose.yml, so pasted as it is into your own file it points somewhere else. Replace {{path}} in the snippets with that folder’s absolute path (/srv/berth/data, say; on Windows write C:/Berth/data, with forward slashes).',
+        unraid: 'Using an Unraid template',
+        unraidSteps:
+          'On the Docker tab, click this container → Edit, press “Add another Path, Port, Variable, Label or Device” at the bottom, fill it in as below, press Add, then Apply (Unraid recreates the container):',
+        unraidNested:
+          'If the template already mounts other folders under {{root}} ({{root}}/tvshows and {{root}}/movies in the Community Apps Jellyfin template, say), add it anyway: both mounts work side by side and the existing ones stay visible. Docker creates an empty folder of the same name inside Berth’s folder as the mount point. Only a mount named library or torrent would cover Berth’s folders; give that one another container path first.',
+      },
       existing: {
         qbittorrent:
           'This is your own qBittorrent: the path it reports is a path inside its own container. For Berth to see the same string, both must run on the same host and mount the same host directory at the container path /data (it has to be /data). Berth does no remote path mapping — add this one mount to qBittorrent next to its existing ones (keep those as they are), so this path points at the same place in both.',
         qbittorrentMount:
-          'Your qBittorrent cannot see this category path: it most likely does not mount {{root}} (only /downloads, say), so the file Berth wrote does not exist on its side. Add one mount to the qBittorrent service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env; the container path has to be {{root}}). Keep your existing mounts: /downloads stays, your old torrents keep seeding, and Berth only reads and writes under {{root}}. Berth does no remote path mapping. Recreate it (docker compose up -d, or remove the container and docker run the new command), then press again:',
+          'Your qBittorrent cannot see this category path: it most likely does not mount {{root}} (only /downloads, say), so the file Berth wrote does not exist on its side. Add one mount to the qBittorrent service in your own compose file (or its docker run command or Unraid template): Berth’s DATA_ROOT folder at {{root}} as well (the container path has to be {{root}}). Keep your existing mounts: /downloads stays, your old torrents keep seeding, and Berth only reads and writes under {{root}}. Berth does no remote path mapping. Recreate it (docker compose up -d, or remove the container and docker run the new command), then press again:',
         libraryMount:
-          'Your Jellyfin keeps this library at a path of its own (/movies or /tv, say), outside {{root}}, so Berth cannot see it. Add one mount to the Jellyfin service in your own compose file (or to its docker run command): berth’s DATA_ROOT at {{root}} (replace ${DATA_ROOT} with the value in berth’s .env). Keep your existing mounts: /movies and /tv stay — changing the path of existing items turns them into new items and resets watch history. A route’s write target is fixed once it is created: delete this route, then pick “new Berth path” as the write target. Berth does no remote path mapping:',
+          'Your Jellyfin keeps this library at a path of its own (/movies or /tv, say), outside {{root}}, so Berth cannot see it. Add one mount to the Jellyfin service in your own compose file (or its docker run command or Unraid template): Berth’s DATA_ROOT folder at {{root}} as well. Keep your existing mounts: /movies and /tv stay — changing the path of existing items turns them into new items and resets watch history. A route’s write target is fixed once it is created: delete this route, then pick “new Berth path” as the write target. Berth does no remote path mapping:',
         jellyfinMount:
-          'Your Jellyfin cannot see the file Berth just wrote: it most likely does not mount {{root}}, or runs on another host. Add one mount to the Jellyfin service in your own compose file (or to its docker run command): berth’s DATA_ROOT at the same container path {{root}} (replace ${DATA_ROOT} with the value in berth’s .env). Keep your existing mounts. Jellyfin has to run on the same host as Berth; Berth does no remote path mapping:',
+          'Your Jellyfin cannot see the file Berth just wrote: it most likely does not mount {{root}}, or runs on another host. Add one mount to the Jellyfin service in your own compose file (or its docker run command or Unraid template): Berth’s DATA_ROOT folder at the same container path {{root}} as well. Keep your existing mounts. Jellyfin has to run on the same host as Berth; Berth does no remote path mapping:',
         split:
           'A hard link needs berth to cover all of /data with one mount: do not split downloads and media into two mounts in berth to match your own services. Keep your existing mounts on those services (/downloads, /tv) and add the same /data to each.',
       },
@@ -6528,6 +6563,7 @@ const en: Translations<typeof zhHant> = {
     expand: 'Expand',
     collapse: 'Collapse',
     collapseNamed: 'Collapse {{name}}',
+    quoted: '“{{name}}”',
     audits_one: '{{count}} to check',
     audits_other: '{{count}} to check',
     failed: 'Failed',

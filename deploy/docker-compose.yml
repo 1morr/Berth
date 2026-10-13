@@ -153,6 +153,9 @@ services:
       QBITTORRENT_WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
       # The wizard's "add a private indexer in Prowlarr" link (page 4) opens the host port.
       PROWLARR_PORT: ${PROWLARR_PORT:-9696}
+      # The host folder mounted at /data below, as written in .env: when your own Jellyfin or
+      # qBittorrent cannot see /data, the wizard prints the mount to add with this folder in it.
+      HOST_DATA_ROOT: ${DATA_ROOT}
     volumes:
       - ${CONFIG_ROOT:?set CONFIG_ROOT in .env}/berth:/config
       - ${DATA_ROOT:?set DATA_ROOT in .env}:/data

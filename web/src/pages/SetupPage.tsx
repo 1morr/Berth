@@ -667,6 +667,7 @@ export function SetupPage() {
               jellyfin: routes.data.origin === 'existing',
               qbittorrent: qbittorrentChoice?.origin === 'existing',
               root: commonRoot(routes.data.complete_root, routes.data.library_root),
+              host: current.host_data_root,
             }}
             reread={{
               pending: reread.isPending,

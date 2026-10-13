@@ -45,6 +45,10 @@ class Config:
     qbittorrent_webui_port: int
     #: 瀏覽器開套件內 Prowlarr 介面用的 port（加私站的連結，M4 票 09）；容器內永遠在 9696。
     prowlarr_port: int
+    #: 部署 `.env` 的 `DATA_ROOT`，照寫的原樣（compose 傳進來，M4 票 63）：既有服務的掛載補法
+    #: 印出它。Berth 自己的路徑不讀它——容器裡永遠是 `/data`。沒傳（`berth serve`、舊的 compose 檔）
+    #: 是空字串。
+    host_data_root: str = ""
 
     @property
     def database_path(self) -> Path:
@@ -66,6 +70,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         jellyfin_port=_port(env, "JELLYFIN_PORT", DEFAULT_JELLYFIN_PORT),
         qbittorrent_webui_port=_port(env, "QBITTORRENT_WEBUI_PORT", DEFAULT_QBITTORRENT_WEBUI_PORT),
         prowlarr_port=_port(env, "PROWLARR_PORT", DEFAULT_PROWLARR_PORT),
+        host_data_root=env.get("HOST_DATA_ROOT", "").strip(),
     )
 
 

@@ -9,6 +9,7 @@ import {
   probeUnasked,
   remedyFor,
 } from './routeChecks'
+import { MountFix } from './MountFix'
 import { BAN_DEFAULTS } from './services'
 import { StepLine } from './StepLine'
 import { Timestamp } from './Timestamp'
@@ -20,9 +21,10 @@ import { Timestamp } from './Timestamp'
  * 「精靈當時是綠的、現在紅了」在畫面上因此是同一種東西。失敗就地展開一句人話（後端的代碼選的，
  * M4 票 21）、該改哪一台的掛載，以及可以貼回 compose 的片段（`remedyFor`）；原文與端點收進技術細節。
  *
- * **既有服務的補法是那一台自己的版本**（票 08、19、36，brief §16.4）：片段是「你原本那一份」要多加的一條
- * （compose 與 `docker run` 各一種），說明講同一台主機、容器路徑只能是 `/data`、原本的掛載不動。精靈頁 3 與
- * Route 設定頁照選擇給（`existing`）；健康頁不給，用套件內那一份。
+ * **既有服務的補法是那一台自己的版本**（票 08、19、36、63，brief §16.4）：「你原本那一份」要多加的一條
+ * （`MountFix`：compose、`docker run`、Unraid 模板，帶著 Berth 的 `DATA_ROOT` 的值），說明講同一台主機、
+ * 容器路徑只能是 `/data`、原本的掛載不動。精靈頁 3 與 Route 設定頁照選擇給（`existing`）；健康頁不給，
+ * 用套件內那一份。
  */
 export function RouteCheckList({
   route,
@@ -67,6 +69,11 @@ export function RouteCheckList({
               (route.probe_carried ? <Carried route={route} /> : probeUnasked(route) && <Unasked />)
             }
           >
+            {remedy.mount && (
+              <div className="mt-2">
+                <MountFix {...remedy.mount} />
+              </div>
+            )}
             {check === 'hardlink' && route.cross_device && (
               <p className="mt-3 max-w-prose text-xs text-ink-dim">{t('routes.fix.crossDevice')}</p>
             )}

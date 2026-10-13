@@ -1,5 +1,5 @@
 """環境變數解析：`CONFIG_ROOT`、`EXT_ROOT`、`WEB_ROOT`、`PORT`、`JELLYFIN_PORT`、
-`QBITTORRENT_WEBUI_PORT`、`PROWLARR_PORT` 是對外承諾的介面。"""
+`QBITTORRENT_WEBUI_PORT`、`PROWLARR_PORT`、`HOST_DATA_ROOT` 是對外承諾的介面。"""
 
 from __future__ import annotations
 
@@ -31,6 +31,14 @@ def test_bundled_service_ports_default_to_the_ones_the_compose_file_publishes() 
     assert config.jellyfin_port == DEFAULT_JELLYFIN_PORT == 8096
     assert config.qbittorrent_webui_port == DEFAULT_QBITTORRENT_WEBUI_PORT == 8080
     assert config.prowlarr_port == DEFAULT_PROWLARR_PORT == 9696
+
+
+def test_the_host_data_root_is_kept_as_written_and_empty_when_compose_does_not_pass_it() -> None:
+    """compose 把 `.env` 的 `DATA_ROOT` 原樣傳進來（M4 票 63）：相對路徑、反斜線都不動，怎麼讀是
+    `services.host_mount` 的事。沒傳（`berth serve`、舊的 compose 檔）是空字串。"""
+    assert load_config({}).host_data_root == ""
+    assert load_config({"HOST_DATA_ROOT": r"C:\Berth\data"}).host_data_root == r"C:\Berth\data"
+    assert load_config({"HOST_DATA_ROOT": "./data"}).host_data_root == "./data"
 
 
 def test_web_root_defaults_to_the_vite_build_output_next_to_the_package() -> None:

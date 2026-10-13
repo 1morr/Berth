@@ -75,11 +75,19 @@ Press **Add**, then **Apply**; Unraid recreates the container. Field names are f
 [Unraid docs](https://docs.unraid.net/unraid-os/using-unraid-to/run-docker-containers/managing-and-customizing-containers).
 
 Some templates already mount media under `/data` (the Jellyfin template from Community Apps uses `/data/tvshows`
-and `/data/movies`). Adding `/data` on top makes those nested mounts. Berth only uses `/data/torrent` and
-`/data/library`, so it should work, but this has not been tested.
+and `/data/movies`). Add `/data` anyway: both mounts work side by side and `/data/tvshows` still shows your shows.
+Docker creates an empty `tvshows` folder inside Berth's `DATA_ROOT` as the mount point. Only a sub-mount called
+`/data/library` or `/data/torrent` would cover Berth's own folders; give that one another container path first.
+(Tested with Docker Desktop, not yet on Unraid itself.)
 
-If a mount is missing, the wizard's check fails on that service and shows the same fix: qBittorrent on page 2,
-Jellyfin on page 3.
+### If a mount is missing
+
+The wizard checks early and stops on that service: qBittorrent on page 2 when you test it, Jellyfin on page 1 right
+after you sign in (and again on page 3 when Berth adds its library path). The fix it shows is the line to add with
+your `DATA_ROOT` already filled in, as a compose line, a `docker run -v` flag and the Unraid template fields. If
+`DATA_ROOT` in Berth's `.env` is a relative path like `./data`, the wizard says so: it is relative to the folder
+holding Berth's `docker-compose.yml`, so write that folder's absolute path in your own file. On Windows, write it
+with forward slashes (`C:/Berth/data:/data`). After recreating the container, press **Test again**.
 
 ## Prowlarr
 

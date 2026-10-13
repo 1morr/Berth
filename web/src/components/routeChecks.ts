@@ -1,4 +1,5 @@
 import type { HealthStatus, RouteCheck, RouteView, StepFailure } from '../api/schemas'
+import type { SetupStatus } from '../api/setup'
 import type { Signal } from './signal'
 
 /**
@@ -109,12 +110,30 @@ const SERVICE_FAILURES: ReadonlySet<StepFailure> = new Set([
   'ip_banned',
 ])
 
+/**
+ * Berth 的 `/data` 在宿主上是哪個資料夾：部署 `.env` 的 `DATA_ROOT`，compose 傳進來的（M4 票 63）。
+ * `path` 是空字串時不知道（`berth serve`、舊的 compose 檔），片段照舊印 `${DATA_ROOT}`。
+ */
+export type HostDataRoot = SetupStatus['host_data_root']
+
 /** 哪幾個服務是使用者自己的那一台（M4 票 08）。精靈頁 3 與 Route 設定頁給（票 36），健康頁不給。 */
 export interface ExistingServices {
   jellyfin: boolean
   qbittorrent: boolean
   /** Berth 的下載與媒體庫共用的那個容器路徑（`complete_root` 與 `library_root` 的共同父目錄）。 */
   root: string
+  /** 那個容器路徑在宿主上是哪個資料夾（M4 票 63）：補法裡的掛載直接帶它。 */
+  host: HostDataRoot
+}
+
+/**
+ * 使用者自己的那一台要多加的那一條掛載（M4 票 36、63）：compose、`docker run`、Unraid 模板三種寫法由
+ * `MountFix` 畫。原本的掛載不動。
+ */
+export interface ExistingMount {
+  service: 'qbittorrent' | 'jellyfin'
+  root: string
+  host: HostDataRoot
 }
 
 /**
@@ -158,8 +177,10 @@ export interface Remedy {
    * `{{path}}` 帶那一條纜繩的 `params`。
    */
   fix: (typeof FIX)[keyof typeof FIX]
-  /** 修正片段：要改的那一台的 compose `volumes:`。 */
+  /** 修正片段：要改的那一台的 compose `volumes:`。使用者自己的那一台不在這裡，在 `mount`。 */
   commands: readonly string[]
+  /** 要改的是使用者自己的那一台：它要多加的掛載（三種寫法）。不是就是 `null`。 */
+  mount: ExistingMount | null
   /** 既有服務另說的一句，沒有就是 `null`。 */
   advice: (typeof ADVICE)[keyof typeof ADVICE] | null
   /** 片段與說明裡的共用容器路徑。 */
@@ -170,9 +191,9 @@ export interface Remedy {
  * 一條纜繩失敗時的補法（M4 票 19）：說明、要改的那一台的片段、既有服務另說的一句。
  *
  * **片段對著要改的那一台**，套件內與既有分開寫：套件內的片段與 `deploy/docker-compose.yml` 一字不差；
- * 既有的是「你原本那一份」要**多加**的一條，compose 與 `docker run` 各給一種寫法，說明裡叫人把
- * `${DATA_ROOT}` 換成 berth 那一份的值。原本的掛載不動（M4 票 36，審計 §C2）：Berth 只在共用根目錄底下
- * 讀寫，叫人把下載目錄搬過去反而會讓舊 torrent 找不到檔案。
+ * 既有的是「你原本那一份」要**多加**的一條（`mount`），帶著 Berth 的 `DATA_ROOT` 真正的值（M4 票 63）。
+ * 原本的掛載不動（M4 票 36，審計 §C2）：Berth 只在共用根目錄底下讀寫，叫人把下載目錄搬過去反而會讓舊
+ * torrent 找不到檔案。
  */
 export function remedyFor(
   check: RouteCheck,
@@ -191,14 +212,15 @@ export function remedyFor(
     fix,
     // 下載與媒體庫沒有共同父目錄（`/`）時沒有一條掛載修得好，片段照貼反而會把宿主目錄掛到根上。
     commands: service && root !== '/' ? [mountSnippet(service, root)] : [],
+    mount: null,
     advice,
     root,
   })
-  // 要改的是使用者自己的那一台：它不一定是 compose 起的，`docker run` 那一行也給（票 36）。
-  const yours = (fix: Remedy['fix'], service: Service): Remedy => {
-    const base = remedy(fix, service)
-    return { ...base, commands: base.commands.length ? [...base.commands, runMount(root)] : [] }
-  }
+  // 要改的是使用者自己的那一台：它不一定是 compose 起的，`docker run` 與 Unraid 模板也給（票 36、63）。
+  const yours = (fix: Remedy['fix'], service: ExistingMount['service']): Remedy => ({
+    ...remedy(fix, null),
+    mount: existing && root !== '/' ? { service, root, host: existing.host } : null,
+  })
 
   // 先看為什麼：與掛載無關的失敗、或檢查自己說得出不是掛載的那幾種，補法不給片段。
   if (failure === 'ip_banned') return remedy(FIX.banned, null)
@@ -246,18 +268,28 @@ export function remedyFor(
   }
 }
 
+/** `.env` 裡的那個變數：套件內那一份 compose 寫的就是它。 */
+const DATA_ROOT_VARIABLE = '${DATA_ROOT}'
+
 /**
  * 修正片段：該容器的 compose `volumes:`（brief §16.4）。
  *
- * `${DATA_ROOT}` 保持變數形式——使用者的 `.env` 已經有它，把它展開成某個猜出來的宿主路徑反而會貼錯。
+ * 預設是 `${DATA_ROOT}`：套件內那一份與 `deploy/docker-compose.yml` 一字不差。使用者自己的那一份帶
+ * `source`——Berth 的 `DATA_ROOT` 真正的值（`hostSource`，M4 票 63）。
  */
-export function mountSnippet(service: Service, root: string): string {
-  return [`  ${service}:`, '    volumes:', `      - \${DATA_ROOT}:${root}`].join('\n')
+export function mountSnippet(service: Service, root: string, source = DATA_ROOT_VARIABLE): string {
+  return [`  ${service}:`, '    volumes:', `      - ${source}:${root}`].join('\n')
 }
 
-/** 既有服務用 `docker run` 起的：原本那一行指令要多加的參數。`${DATA_ROOT}` 同上，照說明換成值。 */
-export function runMount(root: string): string {
-  return `-v \${DATA_ROOT}:${root}`
+/** 既有服務用 `docker run` 起的：原本那一行指令要多加的參數。路徑有空白時整段加引號，貼進 shell 才不斷開。 */
+export function runMount(root: string, source = DATA_ROOT_VARIABLE): string {
+  const volume = `${source}:${root}`
+  return /\s/.test(volume) ? `-v "${volume}"` : `-v ${volume}`
+}
+
+/** 使用者自己那一份要寫的宿主資料夾：知道就是它，不知道（compose 沒傳進來）是 `${DATA_ROOT}`。 */
+export function hostSource(host: HostDataRoot): string {
+  return host.path || DATA_ROOT_VARIABLE
 }
 
 /** 兩條容器路徑的共同父目錄。`/data/torrent/complete` 與 `/data/library` → `/data`。 */

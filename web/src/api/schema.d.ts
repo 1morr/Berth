@@ -2928,6 +2928,16 @@ export interface components {
          */
         HealthStatus: "unknown" | "ok" | "failed";
         /**
+         * HostDataRootOut
+         * @description Berth 的 `/data` 在宿主上是哪個資料夾（`host_mount.HostDataRoot`，M4 票 63）。
+         */
+        HostDataRootOut: {
+            /** Path */
+            path: string;
+            /** Relative */
+            relative: boolean;
+        };
+        /**
          * ImageSize
          * @description 代理圖片的具名尺寸（M1.5 票 04）。實際像素在 `services/jellyfin_images.py`。
          *
@@ -5061,6 +5071,7 @@ export interface components {
             bundled_targets: {
                 [key: string]: string;
             };
+            host_data_root: components["schemas"]["HostDataRootOut"];
         };
         /**
          * SideOut

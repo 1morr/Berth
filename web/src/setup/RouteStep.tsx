@@ -392,6 +392,7 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
           newPaths.some((library) => library.name === row.library),
         )}
         root={common.existing.root}
+        host={common.existing.host}
       />
     </RoutePage>
   )

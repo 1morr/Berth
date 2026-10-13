@@ -32,6 +32,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
+from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.qbittorrent import (
     IpBannedError,
@@ -337,7 +338,27 @@ async def claim_owner(
     await update_settings(session, SetupSettings, record)
     # 擁有者先落地、session 後發：`open_session` 失敗的話擁有者已成立，從登入頁用同一組帳密進來。
     signed_in = await open_session(session, auth)
-    return ClaimedOwner(status=await _read(session, now=utcnow()), signed_in=signed_in)
+    moment = utcnow()
+    if choice.origin is ServiceOrigin.EXISTING:
+        # 有了 Berth 自己的 key，既有那一台就問得了看不看得到 `/data`（M4 票 63）：再測一次，結論
+        # 留在頁 1 那一條上——看不到就在這裡說，不等到頁 3。只問畫面上那一台（M4 票 28）：連線
+        # 設定已經指到別處時，換來的 key 沒寫進去，手上的那一把不是它的。
+        jellyfin = await read_settings(session, JellyfinSettings)
+        connection = ServiceConnection(
+            base_url=target.base_url,
+            api_key=jellyfin.api_key if jellyfin.base_url == target.base_url else "",
+        )
+        tested = await _test_connection(
+            factory,
+            ServiceKind.JELLYFIN,
+            connection,
+            await read_settings(session, SetupSettings),
+            data_root=await _data_root(session),
+        )
+        await _test_and_record(
+            session, factory, ServiceKind.JELLYFIN, restart=True, now=moment, tested=tested
+        )
+    return ClaimedOwner(status=await _read(session, now=moment), signed_in=signed_in)
 
 
 def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
@@ -690,7 +711,9 @@ async def _test_connection(
     （`_candidate`）。不改那一台的任何設定；qBittorrent 另外請它校驗一次 `data_root` 裡的探測檔
     （`_data_sight`，M4 票 46），探針 torrent 與探測檔當場收掉。"""
     if kind is ServiceKind.JELLYFIN:
-        return await _test_jellyfin(factory, connection.base_url, setup, api_key=connection.api_key)
+        return await _test_jellyfin(
+            factory, connection.base_url, setup, api_key=connection.api_key, data_root=data_root
+        )
 
     if kind is ServiceKind.QBITTORRENT:
         bundled = setup.origin_of(ServiceKind.QBITTORRENT) is ServiceOrigin.BUNDLED
@@ -788,6 +811,25 @@ async def _data_sight(qbittorrent: QbittorrentClient, root: Path) -> ProbeSight 
         )
 
 
+async def _jellyfin_sees(jellyfin: JellyfinClient, root: Path) -> bool:
+    """既有 Jellyfin 看不看得到 Berth 的共用根目錄（M4 票 63）：與頁 3 加 Berth 路徑同一種問法
+    （`jellyfin._add_berth_path`）——寫一個探測檔、以 `Environment/ValidatePath` 問它，當場收掉。
+
+    那一支要管理員的憑證，所以只在擁有者成立、Berth 有自己的 key 之後問。Berth 自己沒有這個目錄、
+    寫不進去、或沒有共同父目錄時不問（同 `_data_sight`），算看得到：那是 Berth 自己這一邊的事。
+    探測檔寫到一半失敗也一樣——擁有者那時已經成立、session 也發了，不讓它把頁 1 的回應弄壞
+    （code-review）。
+    """
+    if root == root.parent or not root.is_dir() or not os.access(root, os.W_OK):
+        return True
+    try:
+        with probe_file(root, roots=[root]) as probe:
+            # 容器路徑一律以 `/` 相接：`str(Path)` 在 Windows 上會換成反斜線。
+            return await jellyfin.validate_path(f"{root.as_posix()}/{probe.name}")
+    except OSError:
+        return True
+
+
 #: 頁 2 的探針沒看到時的理由（M4 票 46）。補法與頁 3 的 `download_visible` 同一套。
 _SIGHT_REASON = {
     ProbeSight.UNSEEN: ConnectionReason.DATA_UNSEEN,
@@ -797,16 +839,23 @@ _SIGHT_REASON = {
 
 
 async def _test_jellyfin(
-    factory: ServiceClientFactory, base_url: str, setup: SetupSettings, *, api_key: str
+    factory: ServiceClientFactory,
+    base_url: str,
+    setup: SetupSettings,
+    *,
+    api_key: str,
+    data_root: Path | None = None,
 ) -> _Outcome:
     """Jellyfin 的測試：它是哪一台、版本夠不夠新（brief §16.4）；擁有者成立之後再問兩件事——是不是
-    擁有者那一台（ServerId，brief §20.15）、Berth 的 key 它還收不收（M4 票 18）。
+    擁有者那一台（ServerId，brief §20.15）、Berth 的 key 它還收不收（M4 票 18）。既有的那一台再多問
+    一件：看不看得到 `data_root`（M4 票 63）。
 
     版本在這裡就擋，不等到登入：10.x 原本在測試時是綠燈、到登入才 502，表單填完才知道白填了。
     """
     client = factory.jellyfin(base_url)
     owned = setup.owner_established()
     recorded = setup.owner.jellyfin_server_id
+    existing = setup.origin_of(ServiceKind.JELLYFIN) is ServiceOrigin.EXISTING
 
     async def test() -> _Outcome:
         info = await client.public_info()
@@ -834,6 +883,16 @@ async def _test_jellyfin(
                     reason=ConnectionReason.AUTH_REQUIRED,
                     detail=info.version,
                     server_id=info.server_id,
+                )
+            # 看不看得到 `/data` 在頁 1 就問（M4 票 63）：原本要到頁 3 加 Berth 路徑才紅。
+            if existing and data_root is not None and not await _jellyfin_sees(client, data_root):
+                return _Outcome(
+                    reason=ConnectionReason.DATA_UNSEEN,
+                    detail=str(data_root),
+                    server_id=info.server_id,
+                    error=f"Jellyfin cannot see {data_root.as_posix()}: POST "
+                    "/Environment/ValidatePath answered 404 for a file Berth had just written "
+                    "there",
                 )
         reason = (
             ConnectionReason.SETUP_COMPLETED
@@ -871,7 +930,9 @@ async def _same_jellyfin(
             raise ChoiceLockedError(ChoiceRefusal.UNVERIFIED, known.reason.value)
         setup.owner = setup.owner.model_copy(update={"jellyfin_server_id": known.server_id})
     api_key = (await read_settings(session, JellyfinSettings)).api_key
-    outcome = await _test_jellyfin(factory, base_url, setup, api_key=api_key)
+    outcome = await _test_jellyfin(
+        factory, base_url, setup, api_key=api_key, data_root=await _data_root(session)
+    )
     if outcome.reason is ConnectionReason.OTHER_SERVER:
         raise ChoiceLockedError(ChoiceRefusal.OTHER_SERVER, outcome.detail)
     return outcome

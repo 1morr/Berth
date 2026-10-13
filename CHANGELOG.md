@@ -8,6 +8,15 @@
 
 ### Changed
 
+- **既有服務沒掛 `/data` 時，補法直接印出你的資料夾**（M4 票 63，審計 P1-6）：原本片段是 `${DATA_ROOT}:/data`，
+  要自己去 Berth 的 `.env` 找值。部署的 compose 現在把 `DATA_ROOT` 傳給 Berth（`HOST_DATA_ROOT`），compose、
+  `docker run` 兩種片段與新加的 Unraid 模板欄位（Container Path、Host Path）都帶著它；Windows 路徑寫成 `C:/…`，
+  相對路徑（預設的 `./data`）會說它相對於 Berth 的 docker-compose.yml、要換成絕對路徑。**沿用舊的 compose 檔時
+  補法照舊是 `${DATA_ROOT}`**：換成這一版附的 `docker-compose.yml` 才有。
+- **既有 Jellyfin 沒掛 `/data` 在頁 1 就說**（M4 票 63，審計 C7）：成為擁有者之後 Berth 立刻問它看不看得到 `/data`，
+  不再等到頁 3。頁 3 兩個以上的媒體庫加不上 Berth 路徑時，合併成一則、列出是哪幾個，補法只給一次。
+- **localhost 的說明只說一次**、技術細節的位址帶上 `http://`（M4 票 63，審計 P2-4、P2-6）。
+
 - **審核頁每一段的標題改用全站同一種區塊標題**（M4 票 99）：計數從標題裡移到標題旁，螢幕閱讀器念段落名時不再
   連著件數（件數照樣念得到，帶單位）；「全部確認」仍在標題列右側。
 - **Jellyfin 掃描收斂成只掃 Berth 寫入的那個媒體庫**（M4 票 62，審計 E2）：反查一直找不到、或在待處理按「重新掃描
