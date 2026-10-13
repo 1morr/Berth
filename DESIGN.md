@@ -557,8 +557,10 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 
 - **Style:** `.label` 模板字 + `padding: 0.375rem 0.5rem`，信號色填滿 + `on-signal` 深墨字。
   中性色塊（角色、語言未選中）用 `deck` + `ink`。
-- **Compact:** 牆卡片標識帶、列內的分類（trigger、處置、計劃狀態、「已追蹤」）用 `0.125rem 0.375rem`
-  的小一號色塊；時間線的事件型別與預估說明是 `0.25rem 0.375rem`。
+- **Compact:** 牆卡片標識帶、列內的分類（trigger、處置、計劃狀態、「已追蹤」）、標題列上的件數塊（待綁定、等你決定）、
+  RSS 與索引站列上的狀態用 `0.125rem 0.375rem` 的小一號色塊；時間線的事件型別與預估說明是 `0.25rem 0.375rem`。
+  **只有這三種內距**：M4 票 92 之前漂出過第四種 `0.25rem 0.5rem`（11 處，使用者 2026-10-13 定為 compact），
+  `src/chips.test.ts` 擋塗了底的 `.label` 出現第四種。
 - **Tag token:** 解析出的 Tags（`WEB`、`1080p`、`CHS+CHT`）是 `deck` 底的 `.value text-xs`，不是 `.label`——
   它們是詞彙表不是文案，`.label` 會把 `1080p` 大寫掉。
 - **一條一格（`RulesEditor`，排除條件，M3 票 10）:** 使用者自己寫的一條規則是一格：`hull` 底 + `border-2 border-rule`，
@@ -593,9 +595,11 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `Dot` `.value text-xs` 的「已用 / 上限」，下一行各用途的次數，再下面每一種被延後的工作一行 `ink` 字 + `ink-dim` 的
   「放得下：」與 `Timestamp`。**延後不是失敗**：那是 Berth 自己先停手，等得到；所以不塗漆也不用 `blocked-ink`，只有整塊框
   變重（The Heavier Line Rule，與下載迴圈落後一輪同一個說法）。讀不到時整塊不畫——它不是服務檢查之一。
-- **區塊標題:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的 `.value text-xs text-ink-dim` 計數，
-  壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby` 接上標題。
-  只有數字的計數，看得見的是數字（`aria-hidden`），聽得見的是帶單位的那一句（`sr-only`）。
+- **區塊標題（`components/SectionHeading`，M4 票 92 收成一份）:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的
+  `.value text-xs text-ink-dim` 計數，壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby`
+  接上標題。只有數字的計數，看得見的是數字（`aria-hidden`），聽得見的是帶單位的那一句（`sr-only`）——`count` 一定帶著那一句，
+  手寫的版本曾經只念出「3」。計數本身是一整句的（搜尋的總數、觀看區的「剩 N 集沒看」）、一塊漆、靠右的連結或篩選列走 `extra`。
+  頁級的 `h1` 不是它；手寫 `.label` 的 `h2`（`deck` 抬頭列除外）由 `SectionHeading.test.tsx` 擋。
 - **空狀態:** `well` 底 + `rule` 框的一塊，一句 `ink` 散文加一條 `GHOST_LINK` 下一步。空不是錯誤。
 
 ### Inputs / Fields
@@ -632,7 +636,8 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   作品頁的名字與季的選擇（票 84）也用它：名字是要送出去的那一串，`machine` 讓它走 `.value` 原樣（方塊本身是 `.label`，英文會大寫，
   The Machine String Rule），`note` 是跟在後面的 `ink-dim` 小字（「英文名」「原名」），一樣算進可存取名稱。單選的篩選列照舊是下面那一種。
 - **篩選列選著的那一個不是連結**，是一段 `aria-current="true"` 的字（`NAV_BOX_ACTIVE` 的外觀）：`Link` 當前時一定掛
-  `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。
+  `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。單選的篩選列
+  （媒體庫、下載列表、作品頁的下載段）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
 - `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
 - 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `deck` 底 + `ink` 字
