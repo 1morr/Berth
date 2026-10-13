@@ -84,7 +84,7 @@ export function HealthPage() {
           <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-xs text-ink-dim">
               <span className="label">{t('health.lastChecked')}</span>{' '}
-              <Timestamp at={report.checked_at} />
+              <Timestamp at={report.checked_at} past />
             </span>
             <GhostButton type="button" busy={recheck.isPending} onClick={() => recheck.mutate()}>
               {recheck.isPending ? t('health.rechecking') : t('health.recheck')}
@@ -195,11 +195,11 @@ function HealthRoute({ route }: { route: RouteView }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
         <dt className="label self-center text-ink-dim">{t('health.lastOk')}</dt>
         <dd className="text-ink">
-          <Timestamp at={route.last_ok_at} />
+          <Timestamp at={route.last_ok_at} past />
         </dd>
         <dt className="label self-center text-ink-dim">{t('health.lastChecked')}</dt>
         <dd className="text-ink">
-          <Timestamp at={route.checked_at} />
+          <Timestamp at={route.checked_at} past />
         </dd>
       </dl>
       <RouteCheckList route={route} />

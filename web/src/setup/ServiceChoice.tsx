@@ -2,14 +2,15 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, typ
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 
-import type {
-  ChoiceInput,
-  ChoiceRefusal,
-  ComposeHosts,
-  ConnectionReason,
-  OwnerRefusal,
-  SetupService,
-  SetupStatus,
+import {
+  refusesCredentials,
+  type ChoiceInput,
+  type ChoiceRefusal,
+  type ComposeHosts,
+  type ConnectionReason,
+  type OwnerRefusal,
+  type SetupService,
+  type SetupStatus,
 } from '../api/setup'
 import type { ServiceKind, ServiceOrigin } from '../api/schemas'
 import {
@@ -417,7 +418,8 @@ export function ServiceChoice({
         </div>
       )}
 
-      {selected === 'existing' && !locked && (
+      {/* 擁有者成立、來源鎖住之後照樣在（審計 P2-20）：套件內那一台還是要停。 */}
+      {selected === 'existing' && (
         <div className="grid gap-2">
           <p className="max-w-prose text-xs text-ink-dim">
             {t('choice.existing.profiles', { kind })}
@@ -635,7 +637,10 @@ export function ExistingForm({
   // 測不過的那一次（沒存下）：標在哪一格、那一句人話（與連線卡的補法同一句）。
   const attempt = refusal?.reason === 'connection_failed' ? (refusal.attempt ?? null) : null
   const signInRefusal = signIn?.refusal ?? null
-  const credentialsRefused = signInRefusal?.reason === 'invalid_credentials'
+  // 不是管理員也標在兩格上（審計 P2-5）：要換的是這一組帳密。
+  const credentialsRefused = refusesCredentials(signInRefusal)
+  // 空著的那一格（M4 票 67）：Jellyfin 拒絕空的帳密時照它說，不說成「不認這組」。
+  const blank = signInRefusal?.reason === 'invalid_credentials' ? blankCredential(sent) : null
   const field = attempt?.reason
     ? connectionField(kind, attempt.reason)
     : credentialsRefused
@@ -644,8 +649,17 @@ export function ExistingForm({
   const { lede: said, remedy } = attempt
     ? fixOf(t, kind, status, attempt)
     : credentialsRefused
-      ? { lede: t(blankCredential(sent) ?? 'owner.refused.invalid_credentials'), remedy: null }
+      ? {
+          lede: t(
+            signInRefusal?.reason === 'not_administrator'
+              ? 'owner.refused.not_administrator'
+              : (blank ?? 'owner.refused.invalid_credentials'),
+          ),
+          remedy: null,
+        }
       : { lede: undefined, remedy: null }
+  // 帳號填了、密碼空著：錯的只有密碼那一格，帳號那一格不標（M4 票 68 critique）。
+  const passwordOnly = blank === 'owner.error.noPassword'
   const typed = checked ? addressError(t, baseUrl) : undefined
   // 測不過的那一次（或存下的那一台紅了）補法已經說了 localhost 那一句：位址欄下的提示收起來，不說兩遍
   // （審計 P2-4）。只看補法是不是那一句——帳密錯、版本太舊時那一句不在補法裡，提示照留。改了一格之後
@@ -720,8 +734,8 @@ export function ExistingForm({
             label={t(signIn ? 'owner.field.username' : 'connect.field.username')}
             value={username}
             autoComplete="off"
-            invalid={field === 'credentials'}
-            describedBy={field === 'credentials' ? credentialError : undefined}
+            invalid={field === 'credentials' && !passwordOnly}
+            describedBy={field === 'credentials' && !passwordOnly ? credentialError : undefined}
             onChange={(event) => {
               setUsername(event.target.value)
               onEdit()
@@ -943,7 +957,7 @@ function TestLine({
             <>
               <dt className="label mt-1 self-center text-ink-dim">{t('connection.testedAt')}</dt>
               <dd className="mt-1 text-sm text-ink">
-                <Timestamp at={service.checked_at} />
+                <Timestamp at={service.checked_at} past />
               </dd>
             </>
           )}

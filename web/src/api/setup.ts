@@ -35,6 +35,14 @@ const OWNER_REASONS: ReasonSet<Schemas['OwnerRefusal']> = {
 }
 
 /**
+ * 頁 1 登入被拒、而且是帳密那兩格的事（審計 P2-5）：帳密不對、不是管理員。套件內的登入表單與既有那一台的
+ * 連線並登入表單都標在兩格上，其餘的不屬於哪一格。
+ */
+export function refusesCredentials(refusal: OwnerRefusal | null): boolean {
+  return refusal?.reason === 'invalid_credentials' || refusal?.reason === 'not_administrator'
+}
+
+/**
  * 服務頁的二選一（plan §9.3〈服務頁的共同形狀〉）。套件內只帶 `origin`（Prowlarr 讀不到掛載時
  * 另帶貼上的 key）；既有帶位址與那個服務要的憑證。
  */

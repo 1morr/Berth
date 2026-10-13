@@ -116,7 +116,7 @@ const zhHant = {
       title: '將會做什麼',
       create: '建立',
       finish: '完成',
-      change: '改動',
+      later: '之後',
       owner: '擁有者',
       form: '建立或登入',
       depends: '連上之後看那一台：已經有管理員就登入，還沒有就建立',
@@ -124,7 +124,7 @@ const zhHant = {
       admin: 'Jellyfin 管理員',
       startup: 'Jellyfin 的初始設定',
       apiKey: 'API key「Berth」',
-      nothing: '不改這台 Jellyfin 的任何設定',
+      libraries: '媒體庫：到頁 3 按「建立並檢查」時才動',
       password: '你的密碼（只交給 Jellyfin）',
       passwordCarried: '你的密碼（交給 Jellyfin；套件內 qBittorrent 與 Prowlarr 的介面也設成它）',
     },
@@ -181,8 +181,9 @@ const zhHant = {
       blank: '帳號與密碼都要填。',
       mismatch: '兩次輸入的密碼不一樣。',
       passwordSpaces: 'Jellyfin 不收只有空白的密碼。',
+      // 先說密碼沒填（審計 P2-20）：多半是漏填，不是那個帳號真的沒有密碼。
       noPassword:
-        'Berth 不收沒有密碼的 Jellyfin 帳號當擁有者：擁有者能改 Berth 的所有設定，沒有密碼等於誰都能。先在 Jellyfin 的「控制台 → 使用者」替這個帳號設一組密碼，再回來登入。',
+        '密碼沒填。Berth 不收沒有密碼的帳號當擁有者：擁有者能改 Berth 的所有設定。要是這個帳號在 Jellyfin 真的沒設密碼，先在「控制台 → 使用者」替它設一組，再回來登入。',
       username:
         "Jellyfin 的帳號只能用文字、數字、空格與 - _ ' . @ + 這幾個符號，也不能只是「.」或「..」。",
     },
@@ -650,6 +651,9 @@ const zhHant = {
     },
     cutaway: {
       server: '這台 qBittorrent',
+      kind: '接法',
+      bundled: '套件內 qBittorrent',
+      existing: '你自己的 qBittorrent',
       webapi: 'Web API',
       password: 'WebUI 登入',
       willSet: '將設為下面填的那一組',
@@ -778,7 +782,8 @@ const zhHant = {
       openProwlarr: '開啟 Prowlarr 的索引站頁',
       requestFailed: '測試沒有走完。',
       loading: '向 Prowlarr 讀站的清單…',
-      login: '替 Prowlarr 介面設登入',
+      // 名詞，與頁 2 的「WebUI 登入」同一種寫法（M4 票 68 critique）。
+      login: 'Prowlarr 介面登入',
       loginFix:
         '帳密沒設成功，Prowlarr 的介面仍然是免登入的。設完它會自行重啟，所以也可能只是還沒回來。可以在它自己的介面上設：',
     },
@@ -943,6 +948,9 @@ const zhHant = {
     },
     waiting: '等待中',
     autoRun: '預設清單沒改過，進這一頁就開始建立並檢查。要多一個媒體庫，等它跑完再展開清單加一列。',
+    // 重裝保留了 Jellyfin 的設定（審計 P2-11）：清單上已經有建好的，這一頁照設計不自己寫入。
+    heldBack:
+      '這台 Jellyfin 不是第一次來：清單上的媒體庫它已經有了（多半是重裝時保留了它的設定），所以這一頁不自己開跑。展開清單看過之後，按「建立並檢查」。',
     listSummary: '媒體庫清單',
     listPending_one: '{{count}} 個要建立',
     listPending_other: '{{count}} 個要建立',
@@ -1092,7 +1100,9 @@ const zhHant = {
       lede: '平常用不到它們：Berth 替你接好了。要看下載細節、管理 Jellyfin 的使用者、在 Prowlarr 加要帳號的站時才開。',
       jellyfin: '用擁有者 {{name}} 登入，與 Berth 同一組。',
       bundledLogin: '帳號 {{name}}，密碼是精靈裡設的那一組。',
-      instanceLogin: '帳號 {{name}}，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。',
+      ownerLogin: '帳號 {{name}}，密碼與 Jellyfin 同一組。',
+      instanceLogin:
+        '帳號 {{name}}，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。忘了的話，到「設定 → {{service}}」的「介面登入」換一組。',
       noLogin: {
         qbittorrent:
           '還沒設 WebUI 登入：只有容器 log 裡每次重啟都換的臨時密碼。到「設定 → qBittorrent」設一組。',
@@ -1118,6 +1128,14 @@ const zhHant = {
       '完成後直接進 Berth。之後登入一律用 Jellyfin 帳號：你是 {{name}}，其他人用自己的 Jellyfin 帳號，是那台的管理員才進得來設定。',
     savePath: 'complete 目錄',
     skippedTitle: '跳過的步驟',
+    // 選了既有的服務，套件內那一台閒著（審計 P2-20）：頁上的那兩行在選的那一頁，這裡再提醒一次。不叫 unused：
+    // 那是 CONTEXT.md 的 Unused service（選了不用 Prowlarr）。
+    idle: {
+      title: '閒著的套件內容器',
+      body: '這幾個接的是你自己的那一台：{{services}}。套件內的用不到了，還沒停的話：把 .env 的 COMPOSE_PROFILES 換成第一行，再用第二行停掉。忘了也不致命，只是多開著沒人用的容器。',
+      // 三個都選了既有：那一行是空的，看起來像少貼了什麼（critique）。
+      onlyBerth: '第一行留空就是只跑 Berth。',
+    },
     cutaway: {
       title: '這一輪的結果',
       routes: 'Route 數',
@@ -1629,7 +1647,7 @@ const zhHant = {
     answeredAll_other: '{{count}} 個關鍵字都有回應',
     answeredRest_one: '其餘 {{count}} 個關鍵字有回應',
     answeredRest_other: '其餘 {{count}} 個關鍵字有回應',
-    slow: '索引站要現場去連它認得的每一個追蹤站，這通常要一分鐘左右。',
+    slow: '索引站要現場去連它認得的每一個追蹤站，通常要幾秒到一分鐘。',
     // 標頭只說結果表那一份（M4 票 69）：「共 N 筆」曾被讀成索引站回的全部，與底下幾個數字對不上。
     count_one: '結果表 {{count}} 筆',
     count_other: '結果表 {{count}} 筆',
@@ -3539,7 +3557,7 @@ const en: Translations<typeof zhHant> = {
       title: 'What happens',
       create: 'Creates',
       finish: 'Finishes',
-      change: 'Changes',
+      later: 'Later',
       owner: 'Owner',
       form: 'Create or sign in',
       depends:
@@ -3548,7 +3566,7 @@ const en: Translations<typeof zhHant> = {
       admin: 'The Jellyfin administrator',
       startup: "Jellyfin's startup setup",
       apiKey: 'API key “Berth”',
-      nothing: 'Nothing on this Jellyfin',
+      libraries: 'Libraries: only when you press Build and check on page 3',
       password: 'Your password (it only goes to Jellyfin)',
       passwordCarried:
         'Your password (it goes to Jellyfin, and becomes the bundled qBittorrent and Prowlarr interface password too)',
@@ -3610,7 +3628,7 @@ const en: Translations<typeof zhHant> = {
       mismatch: 'The two passwords do not match.',
       passwordSpaces: 'Jellyfin does not accept a password made only of spaces.',
       noPassword:
-        'Berth does not take a Jellyfin account without a password as the owner: the owner can change every Berth setting, so no password means anyone can. Give this account a password under Dashboard → Users in Jellyfin, then sign in here.',
+        'The password is empty. Berth does not take an account without a password as the owner: the owner can change every Berth setting. If this account really has no password in Jellyfin, give it one under Dashboard → Users, then sign in here.',
       username:
         "Jellyfin usernames can only use letters, numbers, spaces and - _ ' . @ +, and cannot be just “.” or “..”.",
     },
@@ -4093,6 +4111,9 @@ const en: Translations<typeof zhHant> = {
     },
     cutaway: {
       server: 'This qBittorrent',
+      kind: 'Connection',
+      bundled: 'Bundled qBittorrent',
+      existing: 'Your own qBittorrent',
       webapi: 'Web API',
       password: 'WebUI login',
       willSet: 'Will be set to the one entered below',
@@ -4225,7 +4246,7 @@ const en: Translations<typeof zhHant> = {
       openProwlarr: "Open Prowlarr's indexers page",
       requestFailed: 'The test did not go through.',
       loading: 'Reading the site list from Prowlarr…',
-      login: 'Set the Prowlarr interface login',
+      login: 'Prowlarr interface login',
       loginFix:
         'The credentials did not stick, so the Prowlarr interface is still open. Setting them restarts Prowlarr, so it may simply not be back yet. You can set them there yourself:',
     },
@@ -4392,6 +4413,8 @@ const en: Translations<typeof zhHant> = {
     waiting: 'Waiting',
     autoRun:
       'The default list is unchanged, so building and checking started as you arrived. To add a library, wait for it to finish, then open the list and add a row.',
+    heldBack:
+      'This is not a first visit for this Jellyfin: it already has the libraries on the list (most likely its settings were kept through a reinstall), so this page does not start on its own. Open the list and look it over, then press Build and check.',
     listSummary: 'Library list',
     listPending_one: '{{count}} to create',
     listPending_other: '{{count}} to create',
@@ -4542,8 +4565,9 @@ const en: Translations<typeof zhHant> = {
       lede: 'You will rarely need them: Berth has wired them up. Open them to see download details, manage Jellyfin users, or add sites that need an account in Prowlarr.',
       jellyfin: 'Sign in as the owner, {{name}} — the same account as Berth.',
       bundledLogin: 'Username {{name}}; the password is the one you set in the wizard.',
+      ownerLogin: 'Username {{name}}; the same password as Jellyfin.',
       instanceLogin:
-        'Username {{name}}; the password is the one it already had — this run of the wizard did not set it.',
+        'Username {{name}}; the password is the one it already had — this run of the wizard did not set it. If you have forgotten it, set a new one under Settings → {{service}}, Interface login.',
       noLogin: {
         qbittorrent:
           'No WebUI login yet: only the temporary password in the container log, which changes on every restart. Set one in Settings → qBittorrent.',
@@ -4572,6 +4596,11 @@ const en: Translations<typeof zhHant> = {
       'You go straight into Berth. Signing in always uses a Jellyfin account from now on: you are {{name}}, everyone else uses their own Jellyfin account, and only its administrators reach the settings.',
     savePath: 'Complete directory',
     skippedTitle: 'Skipped steps',
+    idle: {
+      title: 'Bundled containers left idle',
+      body: 'You connected your own for these: {{services}}. The bundled ones are not needed; if they are still running, replace COMPOSE_PROFILES in .env with the first line, then stop them with the second. Forgetting is not fatal; they just keep running unused.',
+      onlyBerth: 'An empty first line means only Berth runs.',
+    },
     cutaway: {
       title: 'What this run produced',
       routes: 'Routes',
@@ -5032,7 +5061,7 @@ const en: Translations<typeof zhHant> = {
     answeredRest_one: '{{count}} other keyword answered',
     answeredRest_other: '{{count}} other keywords answered',
     willAskTyped: 'Berth will ask for this only:',
-    slow: 'The indexer contacts every tracker it knows, which usually takes about a minute.',
+    slow: 'The indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
     count_one: '{{count}} in the table',
     count_other: '{{count}} in the table',
     returned_one: 'The indexer returned {{count}} result.',

@@ -1016,7 +1016,9 @@ describe('頁 6：完成', () => {
     let doors = await doorsOf()
     expect(await doors.findByText('帳號 skipper，密碼是精靈裡設的那一組。')).toBeInTheDocument()
     expect(
-      doors.getByText('帳號 audit，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。'),
+      doors.getByText(
+        '帳號 audit，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。忘了的話，到「設定 → Prowlarr」的「介面登入」換一組。',
+      ),
     ).toBeInTheDocument()
     expect(doors.getAllByText(/精靈裡設的那一組/)).toHaveLength(1)
     first.unmount()

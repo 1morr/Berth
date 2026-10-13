@@ -336,6 +336,9 @@ class SetupQbittorrent(BaseModel):
     #: Berth 自己連它靠免密白名單，用不到這組。帳號在、雜湊空的是「那一台自己就設過了」。
     web_ui_username: str = ""
     web_ui_password_hash: str = ""
+    #: 那一組是勾「沿用 Jellyfin 帳密」寫進去的（M4 票 68）：完成頁說「與 Jellyfin
+    #: 同一組」。Berth 不存擁有者的密碼，事後比不出來，所以寫進去的那一刻記下。
+    web_ui_login_reuses_owner: bool = False
     #: Berth 對這個位址連續幾次帳密不被接受（鍵是位址；歸零就拿掉那一列）。qBittorrent
     #: 預設連錯 5 次封 IP（brief §20.2），畫面第 3 次起預警。**跟著位址、不跟著選擇**
     #: （M4 票 45）：測不過的那一次不存，次數照樣要記。票 45 之前記在
@@ -366,6 +369,8 @@ class SetupIndexer(BaseModel):
     #: 「密碼改過了」（票 06c）。
     web_ui_username: str = ""
     web_ui_password_hash: str = ""
+    #: 那一組是沿用 Jellyfin 帳密寫進去的（M4 票 68），理由同 `SetupQbittorrent`。
+    web_ui_login_reuses_owner: bool = False
     #: Berth 加進現在這一台 Prowlarr 的站：`definitionName` → 站名（M4 票 47）。換台的確認框靠它列出
     #: 「Berth 在舊那台加的站」：纜繩每次加站整份換掉，記不住前一批；連不到那一台時站名也從這裡來。
     #: 在 Berth 移除的站拿掉，換一台整份清掉（`setup._start_over`）。票 47 之前加的站沒有記到。

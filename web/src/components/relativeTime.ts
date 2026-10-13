@@ -26,3 +26,11 @@ export function relative(moment: Date, language: string, now: number = Date.now(
   if (Math.abs(months) < 12) return format.format(months, 'month')
   return format.format(Math.round(value / WEEKS_PER_YEAR) || Math.sign(value), 'year')
 }
+
+/**
+ * 已經發生的時間（`Timestamp` 的 `past`）：落在未來是瀏覽器的時鐘比伺服器慢，說成現在，不說「2 秒後」
+ * （M4 票 55 實測）。
+ */
+export function relativePast(moment: Date, language: string, now: number = Date.now()): string {
+  return relative(new Date(Math.min(moment.getTime(), now)), language, now)
+}

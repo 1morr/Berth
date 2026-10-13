@@ -36,15 +36,22 @@ export type IndexerGap = 'sites' | 'login'
  * 條件照後端的 `_indexer_settled`：Prowlarr（套件內或既有）上至少一站，套件內那一台另外要介面登入
  * 有結論；跳過了就什麼都不差。站數看的是這一次讀到的清單，後端看的是上一次連線測試記的數——兩者
  * 不一致時 `IndexerStep` 自動重新測試一次。連不上、清單讀不到時說不出差什麼，不列。
+ *
+ * `loggingIn`：介面登入正在送（頁 1 帶過來的那一組自動送，或按了「設定介面登入」）。那時不列登入——同一屏
+ * 說著「設定中」，底下卻寫「還差 設定 Prowlarr 介面登入」（審計 P2-2）。
  */
-export function indexerGaps(status: SetupStatus, indexers: IndexerSetup): IndexerGap[] {
+export function indexerGaps(
+  status: SetupStatus,
+  indexers: IndexerSetup,
+  loggingIn: boolean,
+): IndexerGap[] {
   if (status.current_step !== STEP.indexer || indexers.skipped || indexers.error) return []
   const service = status.services.find((row) => row.kind === 'prowlarr')
   const mode = connected(service) ? modeOf(indexers, service?.origin) : null
   if (mode !== 'bundled' && mode !== 'prowlarr') return []
   const gaps: IndexerGap[] = indexers.sites.length === 0 ? ['sites'] : []
   const login = indexers.steps.find((step) => step.step === 'prowlarr_login')
-  if (mode === 'bundled' && login?.status !== 'ok' && login?.status !== 'skipped') {
+  if (mode === 'bundled' && !loggingIn && login?.status !== 'ok' && login?.status !== 'skipped') {
     gaps.push('login')
   }
   return gaps

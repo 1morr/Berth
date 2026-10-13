@@ -238,7 +238,7 @@ describe('搜尋 torrent 與結果表', () => {
     renderApp('/media/tv:120089')
 
     expect(await asked()).toEqual(['SPY x FAMILY', 'SPY×FAMILY', '間諜家家酒'])
-    expect(screen.getByText(/這通常要一分鐘左右/)).toBeVisible()
+    expect(screen.getByText(/通常要幾秒到一分鐘/)).toBeVisible()
     expect(stub.mock.calls.map(([input]) => String(input))).not.toContain(
       '/api/search?media=tv%3A120089',
     )

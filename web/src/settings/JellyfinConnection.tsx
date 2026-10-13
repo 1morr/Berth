@@ -107,7 +107,7 @@ export function JellyfinConnection({
           {service.checked_at && !testing && (
             <Row label={t('connection.testedAt')}>
               <span className="text-sm text-ink">
-                <Timestamp at={service.checked_at} />
+                <Timestamp at={service.checked_at} past />
               </span>
             </Row>
           )}

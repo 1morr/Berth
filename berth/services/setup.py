@@ -612,11 +612,13 @@ def _start_over(setup: SetupSettings, kind: ServiceKind) -> None:
         setup.qbittorrent.steps = []
         setup.qbittorrent.web_ui_username = ""
         setup.qbittorrent.web_ui_password_hash = ""
+        setup.qbittorrent.web_ui_login_reuses_owner = False
     else:
         setup.indexer.steps = []
         setup.indexer.skipped = False
         setup.indexer.web_ui_username = ""
         setup.indexer.web_ui_password_hash = ""
+        setup.indexer.web_ui_login_reuses_owner = False
         setup.indexer.added_sites = {}
 
 

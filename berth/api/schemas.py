@@ -120,6 +120,8 @@ class QbittorrentOut(BaseModel):
     web_ui_username: str
     #: 那一組是這個 Berth 寫進去的；它自己就設過的、還沒設、既有的是 `false`（M4 票 40）。
     web_ui_login_by_berth: bool
+    #: 這個 Berth 寫進去的那一組是沿用 Jellyfin 帳密（M4 票 68）：完成頁說「與 Jellyfin 同一組」。
+    web_ui_login_reuses_owner: bool
     #: 連線本身為什麼失敗（M4 票 21）。連上了是 `null`。
     failure: StepFailure | None
     #: 連線本身的失敗原文（英文），收進「技術細節」。
