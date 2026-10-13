@@ -37,7 +37,7 @@ import { GAP } from './indexerGaps'
  * 頁 4 與設定頁的索引站那一半（M4 票 09，`.scratch/m4/indexer-berth-shape.md`）：
  *
  * - **已加入**（`AddedSites`）：Prowlarr 裡的每一站，一列一顆「搜尋」，段頭一顆「搜尋全部」；
- *   Berth 加得回去的站可以就地移除。既有 Prowlarr 沒有移除：那是它自己介面上的事。
+ *   Berth 加的站（`added_sites`，M4 票 66）可以就地移除。既有 Prowlarr 沒有移除：那是它自己介面上的事。
  * - **加站**（`AddSites`，套件內與既有的 Prowlarr，M4 票 20）：推薦的九站與其他公開站，**先測再勾**——
  *   `indexer/test` 測還沒加入的定義，什麼都不建立（brief §20.7），通過的才勾得起來。沒通過的是中性的一列：紅色只代表阻擋，
  *   而一站沒通過不擋這一頁。
@@ -218,7 +218,7 @@ export function AddedSites({
               key={row.key}
               row={row}
               site={found.get(row.key)}
-              // 使用者自己在 Prowlarr 加的私站：套件內也不移除，說一句為什麼。
+              // 不是 Berth 加的站（使用者自己在 Prowlarr 加的、票 47 之前沒有紀錄的）：套件內也不移除，說一句為什麼。
               unremovable={bundled && !row.removable}
               removing={row.indexerId !== null && controls.removing === row.indexerId}
               onSearch={() => void search([row], row.indexerId)}

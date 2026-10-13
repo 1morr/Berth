@@ -20,7 +20,7 @@ unique`），所以重按時改成 `indexer/test`，結果一樣是「這個站�
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -107,7 +107,7 @@ class IndexerSite:
     language: str
     description: str
     privacy: str
-    #: 可以從 Berth 移除：套件內，而且是 Berth 加得回去的站（`_offered`），反向命令才成立。
+    #: 可以從 Berth 移除：套件內，而且是 Berth 加的站（`added_sites`，M4 票 66）。
     removable: bool
 
 
@@ -228,7 +228,7 @@ async def read_indexer_status(
         settings,
         origin,
         base_url,
-        sites=_sites(present, bundled=bundled),
+        sites=_sites(present, setup.indexer.added_sites if bundled else ()),
         candidates=candidates,
         instance_username=instance,
     )
@@ -498,8 +498,9 @@ async def remove_indexer(
 ) -> IndexerSetupStatus:
     """從套件內的 Prowlarr 移除一站（`DELETE /api/v1/indexer/{id}`，票 06e）。
 
-    **只移除 Berth 加得回去的站**（推薦清單與公開的 torrent 站，`_offered`）：反向命令是再加一次
-    那一站，公開站加回來就是原樣；私站帶帳號，Berth 加不回去，所以不碰——不論是誰加的（M4 票 09）。
+    **只移除 Berth 加的站**（`added_sites`，M4 票 66）：接管只管 Berth 擁有的物件（brief §16.4），
+    使用者自己加的公開站 Berth 雖然加得回去，也不是 Berth 的；票 47 之前加的沒有紀錄，同樣不碰。
+    Berth 只加 `_offered` 的站，所以反向命令（再加一次那一站）對它們都成立。
     那一站的「加入結果」一起拿掉——留著一條綠的等於說它還在；最後一站也移除時，精靈就回到頁 4
     （`_indexer_settled`）。Prowlarr 沒答上來是 `IndexerNotRemovedError`：畫面要分得出是它還是
     Berth。
@@ -515,8 +516,8 @@ async def remove_indexer(
     try:
         present = await client.indexers()
         gone = next((row for row in present if row.id == indexer_id), None)
-        if gone is not None and not _offered(gone):
-            raise ValueError(f"{gone.name}: Berth only removes the public sites it can add back")
+        if gone is not None and gone.definition_name not in setup.indexer.added_sites:
+            raise ValueError(f"{gone.name}: Berth only removes the sites it added")
         if gone is not None:
             await client.delete_indexer(indexer_id)
     except ServiceError as exc:
@@ -930,7 +931,9 @@ def _candidates(
     )
 
 
-def _sites(present: list[ProwlarrIndexer], *, bundled: bool) -> tuple[IndexerSite, ...]:
+def _sites(present: list[ProwlarrIndexer], added: Collection[str]) -> tuple[IndexerSite, ...]:
+    """`added` 是 Berth 在這一台加的站的 `definitionName`（`added_sites`）；既有那一台傳空的：
+    一站都不移除。"""
     return tuple(
         IndexerSite(
             indexer_id=row.id,
@@ -940,7 +943,7 @@ def _sites(present: list[ProwlarrIndexer], *, bundled: bool) -> tuple[IndexerSit
             language=row.language,
             description=row.description,
             privacy=row.privacy,
-            removable=bundled and _offered(row),
+            removable=row.definition_name in added,
         )
         for row in present
     )

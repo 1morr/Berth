@@ -883,7 +883,7 @@ async def test_an_added_site_moves_from_the_candidates_to_the_sites(session: Asy
         ("Knaben", "en-US"),
     ]
     assert {"dmhy", "Knaben"}.isdisjoint(row.definition_name for row in status.candidates)
-    # 兩站都是 Berth 加得回去的（推薦清單、公開 torrent 站），所以都可以從 Berth 移除。
+    # 兩站都是 Berth 加的，所以都可以從 Berth 移除（M4 票 66）。
     assert [row.removable for row in status.sites] == [True, True]
 
 
@@ -988,19 +988,28 @@ async def test_a_single_site_can_be_searched_on_its_own(session: AsyncSession) -
 
 
 @pytest.mark.asyncio
-async def test_a_public_site_the_user_added_in_prowlarr_can_be_removed(
-    session: AsyncSession,
-) -> None:
-    """Berth 加得回去的站（公開的 torrent 站）都可以從 Berth 移除，不論是誰加的：反向命令成立。"""
+async def test_only_the_sites_berth_added_can_be_removed(session: AsyncSession) -> None:
+    """套件內 Prowlarr 的「移除」只給 Berth 加的站（`added_sites`，M4 票 66）。
+
+    使用者自己加的公開站 Berth 也加得回去，但它不是 Berth 的：不列為可移除、按了也不移除。票 47 之前
+    Berth 加的站沒有紀錄，同樣分不出來，所以同樣不給。
+    """
     await arrange(session)
-    client = FakeProwlarrClient(
-        indexers=[
-            ProwlarrIndexer(5, "Knaben", True, "Knaben", privacy="public", protocol="torrent")
-        ]
-    )
+    theirs = ProwlarrIndexer(5, "Knaben", True, "Knaben", privacy="public", protocol="torrent")
+    client = FakeProwlarrClient(indexers=[theirs])
     factory = FakeClientFactory(prowlarr=client)
+    added = await apply_default_indexers(session, factory, ["yts"], sleep=_no_sleep)
+    (yts,) = [row.indexer_id for row in added.sites if row.definition_name == "yts"]
 
-    status = await remove_indexer(session, factory, 5)
+    assert [(row.definition_name, row.removable) for row in added.sites] == [
+        ("Knaben", False),
+        ("yts", True),
+    ]
+    with pytest.raises(ValueError, match="Berth only removes"):
+        await remove_indexer(session, factory, theirs.id)
+    assert client.deleted == []
 
-    assert client.deleted == [5]
-    assert status.sites == ()
+    status = await remove_indexer(session, factory, yts)
+
+    assert client.deleted == [yts]
+    assert [row.definition_name for row in status.sites] == ["Knaben"]

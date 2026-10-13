@@ -1,6 +1,6 @@
 # 66 — 接管清單補齊、閘門延伸到執行期、「移除 Berth」清單
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 62（Jellyfin 掃描的範圍先定，清單才寫得準）
 
@@ -26,7 +26,14 @@
 
 ## 驗收
 
-- [ ] 白名單閘門的執行期那一輪，與它的雙向變異
-- [ ] 整合測試：Prowlarr 移除只給 Berth 加的站（雙向）
-- [ ] brief §16.4、CONTEXT.md、uninstall guide、CHANGELOG 同步
-- [ ] 全部檢查、test 綠燈；progress.md 記一行
+- [x] 白名單閘門的執行期那一輪，與它的雙向變異
+- [x] 整合測試：Prowlarr 移除只給 Berth 加的站（雙向）
+- [x] brief §16.4、CONTEXT.md、uninstall guide、CHANGELOG 同步
+- [x] 全部檢查、test 綠燈；progress.md 記一行
+
+## Comments
+
+- 2026-10-14 實作：閘門的執行期那一輪經 services 走（不經 API）：`test_plan.ready` 起點、`walk_runtime` 走送單 → 缺檔按「重新校驗」→ 下載完成 → 規劃、入庫 → 反查（第一次全庫掃描、之後只刷新媒體庫）→ 六次用完按「重新掃描媒體庫」→ 刪 Job。白名單新列：`add_torrent`（看 adapter 真的送的表單 `add_form`：`berth-*`、tag 只有 `berth`、`autoTMM=true`、沒有 `savepath`，補 R1 G2）、`start`／`recheck`／`delete_torrent` 只對 Berth 這一輪送的或探測的 hash、`notify_paths` 在 library root 底下、`refresh_library` 只 Route 的媒體庫、`run_task` 只「掃描媒體庫」。變異：單筆寫入紅綠各一組，tag 與刪檔另各一條走完整流程。Prowlarr 的移除改看 `added_sites`，閘門的 `delete_indexer` 與程式不再一寬一嚴（G4）。Jellyfin 裝置的行為查 v12.1 原始碼補進 brief §20.22。
+- 驗證：pre-commit 全綠；pytest 3970 passed；vitest 1808 passed；前端 e2e wizard / settings / existing 兩種寬度 6 passed。
+- code-review 沒處理的：(1) 「是不是 Berth 加的站」在 `_sites` 與 `remove_indexer` 各判斷一次（後者還要先擋既有），沒收成一支；(2) 閘門檔從 `test_plan`、`test_downloads` import 起點與 `status`，沒搬進 `factories.py`；(3) 刪檔的那條變異 monkeypatch 私有的 `deletion._remove_torrent`，那裡重構時要跟著改；(4) 兩條走完整流程的變異只驗紅，綠的方向由主測試承擔；(5) `under()` 改成兩種分隔符都認（Windows 的 `tmp_path`），精靈那幾輪也跟著放寬一點（root 後面接反斜線也算在底下），容器路徑不會出現反斜線。
+- 仍不在閘門範圍（brief §16.4 閘門段已寫明）：換台時移除空分類那一顆只用合成寫入驗（R1 G5）、`mark_played`（使用者自己的觀看紀錄）、Jellyfin 的裝置紀錄（登入被當讀，G3）、磁碟（G6）。

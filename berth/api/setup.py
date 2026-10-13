@@ -737,7 +737,7 @@ class IndexerSiteOut(BaseModel):
     #: 定義自帶的英文說明，原樣顯示、不翻。
     description: str
     privacy: str
-    #: 可以從 Berth 移除（套件內、而且 Berth 加得回去）。
+    #: 可以從 Berth 移除（套件內、而且是 Berth 加的站，M4 票 66）。
     removable: bool
 
 

@@ -106,6 +106,7 @@ Berth 是**公開 beta**。
 - [Upgrading](docs/guide/upgrading.md)：image tag、升級步驟、自己 build image。
 - [Troubleshooting](docs/guide/troubleshooting.md)：port、`Unauthorized`、`host.docker.internal`。
 - [Backup, secrets and reinstalling](docs/guide/backup-and-reinstall.md)：Berth 存了什麼、從頭再來、重建帳本。
+- [Uninstalling Berth](docs/guide/uninstalling.md)：不用 Berth 時各服務要手動清什麼、硬鏈接怎麼釋放空間。
 - [CHANGELOG](CHANGELOG.md)：每一版改了什麼。
 - [開發](docs/development.md)：建置、測試與目錄結構。
 
