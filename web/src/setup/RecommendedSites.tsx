@@ -142,7 +142,7 @@ function Outcome({ indexers }: { indexers: IndexerSetup }) {
       {added.length > 0 && (
         <p className="text-sm text-ink-dim">
           {/* 不塗漆：加進去是常態（The Usual Stays Unpainted Rule），沒加進去的才是要看的。 */}
-          <span className={`label mr-3 px-2 py-1 ${SIGNAL_FILL.neutral}`}>
+          <span className={`label mr-3 px-1.5 py-0.5 ${SIGNAL_FILL.neutral}`}>
             {t('indexer.quick.state.added')}
           </span>
           {formatList(added.map(nameOf), i18n.language)}
@@ -193,7 +193,7 @@ function OutcomeRows({
           <li key={row.definition_name} className="border-2 border-rule-strong px-4 py-3">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="text-sm font-semibold text-ink">{nameOf(row)}</span>
-              <span className={`label px-2 py-1 ${SIGNAL_FILL.neutral}`}>{label}</span>
+              <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.neutral}`}>{label}</span>
             </div>
             <p className="mt-2 max-w-prose text-sm text-ink">
               {t(`indexer.failure.${row.reason ?? 'other'}`)}

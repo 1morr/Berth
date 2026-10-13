@@ -10,6 +10,7 @@ import {
   type ReviewRow,
 } from '../api/review'
 import { PAGE_TITLE, TEXT_LINK } from '../components/controls'
+import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { AuditGroup } from '../review/AuditGroup'
@@ -69,7 +70,7 @@ export function ReviewPage() {
       </p>
 
       {queue.isPending ? (
-        <Loading />
+        <QueueLoading />
       ) : !queue.data ? (
         <RequestFailed error={queue.error} lead={t('review.readFailed')} />
       ) : queue.data.rows.length === 0 ? (
@@ -166,14 +167,4 @@ function auditEntries(entries: readonly ReviewEntry[]) {
 
 function entryKey(entry: ReviewEntry) {
   return entry.kind === 'group' ? entry.key : `${entry.row.kind}:${entry.row.ref}`
-}
-
-/** 讀取中的佔位：兩列靜態方塊，沒有動畫（同 `/issues`）。 */
-function Loading() {
-  return (
-    <div className="grid gap-3" aria-hidden="true">
-      <div className="h-24 border-2 border-rule bg-well" />
-      <div className="h-24 border-2 border-rule bg-well" />
-    </div>
-  )
 }

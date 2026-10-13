@@ -467,6 +467,17 @@ describe('Media 詳情頁', () => {
     expect(screen.queryByText(/上面「觀看」/)).not.toBeInTheDocument()
   })
 
+  it('季表標題的計數聽得見單位：念的是「共 2 季」，不是裸的「2」（M4 票 92）', async () => {
+    render()
+    renderApp('/media/tv:120089')
+
+    const seasons = await screen.findByRole('region', { name: '季集與入庫' })
+    const heading = within(seasons).getByRole('heading', { level: 2, name: '季集與入庫' })
+    const row = heading.parentElement!
+    expect(within(row).getByText('共 2 季')).toHaveClass('sr-only')
+    expect(within(row).getByText('2')).toHaveAttribute('aria-hidden', 'true')
+  })
+
   it('沒有 Absolute group 的作品不畫絕對編號那一欄', async () => {
     const plain = media()
     render({

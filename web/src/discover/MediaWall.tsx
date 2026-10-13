@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { Discover } from '../api/discover'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { MediaTile } from './MediaTile'
@@ -43,21 +44,18 @@ export function MediaWall({
 
   return (
     <section aria-labelledby={headingId} className="grid gap-3">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {title}
-        </h2>
-        {result && result.items.length > 0 && (
-          // 光一個「40」唸出來是沒有意義的，所以唸的是帶單位的那一句。`aria-label` 掛在 `<p>`
-          // 上不可靠（它不是一個有名字的角色），改成看得見的數字 + 只給螢幕閱讀器的句子。
-          <p className="value text-xs text-ink-dim">
-            <span aria-hidden="true">{result.items.length}</span>
-            <span className="sr-only">
-              {t('discover.search.count', { count: result.items.length })}
-            </span>
-          </p>
-        )}
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={title}
+        count={
+          result && result.items.length > 0
+            ? {
+                value: result.items.length,
+                spoken: t('discover.search.count', { count: result.items.length }),
+              }
+            : undefined
+        }
+      />
 
       {pending ? (
         <div className={WALL_GRID}>

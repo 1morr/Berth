@@ -20,7 +20,7 @@ import { firstBatchAskText } from './firstBatchAsk'
 import { Grounds } from './GroundsList'
 import { ItemLine } from './ItemLine'
 import { RulesToggle } from './RulesEditor'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 import {
   byWork,
   groupName,
@@ -179,7 +179,7 @@ function SeriesRow({
       {/* 第一批還在等人（M4 票 11）：與作品頁、審核頁那一組說同一句。 */}
       {!row.confirmed && row.ask && (
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-ink">
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.assigned}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
             {t('rss.subscribe.firstBatch')}
           </span>
           <span className="max-w-prose">

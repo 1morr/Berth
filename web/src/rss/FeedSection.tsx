@@ -27,7 +27,7 @@ import { problemText } from '../components/requestProblem'
 import { Timestamp } from '../components/Timestamp'
 import { maskToken } from './maskToken'
 import { RulesToggle } from './RulesEditor'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 
 /**
  * Feed 段（`.scratch/m3/rss-shape.md` §2 第 2 段）：新增表單與每一個 Feed。

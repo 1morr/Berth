@@ -20,6 +20,7 @@ import {
 } from '../components/controls'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { problemText } from '../components/requestProblem'
+import { SectionHeading } from '../components/SectionHeading'
 import { Tile } from '../components/Tile'
 import { WatchToggle } from '../components/WatchToggle'
 import { watchLine } from '../components/watchLine'
@@ -133,18 +134,26 @@ export function WatchSection({ mediaId, area }: { mediaId: string; area: WatchAr
 
   return (
     <section aria-labelledby={headingId} className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {t('watch.title')}
-        </h2>
-        {remaining && <p className="value text-xs text-ink-dim">{remaining}</p>}
-        {seriesUrl && (
-          <a href={seriesUrl} target="_blank" rel="noreferrer" className={`${TEXT_LINK} ms-auto`}>
-            {t('watch.open')}
-            <span className="sr-only">{t('inventory.jellyfin.newTab')}</span>
-          </a>
-        )}
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={t('watch.title')}
+        extra={
+          <>
+            {remaining && <p className="value text-xs text-ink-dim">{remaining}</p>}
+            {seriesUrl && (
+              <a
+                href={seriesUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={`${TEXT_LINK} ms-auto`}
+              >
+                {t('watch.open')}
+                <span className="sr-only">{t('inventory.jellyfin.newTab')}</span>
+              </a>
+            )}
+          </>
+        }
+      />
 
       {area.seasons.length === 0 || seasonId === null ? (
         <p className="max-w-prose text-sm text-ink-dim">{t('watch.noSeasons')}</p>

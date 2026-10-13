@@ -1306,6 +1306,9 @@ const zhHant = {
     tracked: '已下載過',
     // Berth 的季表：TMDB 的季集與它們的入庫狀態（上面觀看區的季是 Jellyfin 的）。
     seasons: '季集與入庫',
+    // 區塊抬頭那個數字給螢幕閱讀器聽的說法（同 `files.total`）。
+    seasonsCount_one: '共 {{count}} 季',
+    seasonsCount_other: '共 {{count}} 季',
     backToDiscover: '回探索頁',
     stale: '快照是舊的',
     fetchedAt: '快照抓取於',
@@ -4611,6 +4614,8 @@ const en: Translations<typeof zhHant> = {
       'This name was fixed when the first download went through; a later TMDB rename will not move it.',
     tracked: 'Downloaded before',
     seasons: 'Seasons and imports',
+    seasonsCount_one: '{{count}} season in total',
+    seasonsCount_other: '{{count}} seasons in total',
     backToDiscover: 'Back to Discover',
     stale: 'Stale snapshot',
     fetchedAt: 'Snapshot taken',

@@ -12,7 +12,7 @@ import {
   watchQueryOptions,
   type Media,
 } from '../api/media'
-import { GHOST_LINK, GhostButton, Notice } from '../components/controls'
+import { GHOST_LINK, GhostButton, Notice, PAGE_TITLE } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { RequestFailed } from '../components/RequestFailed'
@@ -88,7 +88,7 @@ export function MediaDetailPage({ id }: { id: string }) {
     <div className="mx-auto grid w-full max-w-[80rem] gap-8 px-6 py-8">
       {blank ? (
         <section className="grid gap-4">
-          <h1 className="value text-lg font-semibold text-ink">{found.id}</h1>
+          <h1 className={PAGE_TITLE}>{found.id}</h1>
           <TmdbNotice
             problem={found.problem!}
             detail={found.detail}
@@ -346,11 +346,8 @@ function AwaitingReview({ count }: { count: number }) {
   const me = useQuery(meQueryOptions)
   if (!me.data || me.data.role === 'admin') return null
   return (
-    <p className="flex flex-wrap items-start gap-x-3 gap-y-2 border-2 border-rule bg-well px-3 py-2.5">
-      <span className="label bg-deck px-2 py-1.5 text-ink">{t('jobs.state.review')}</span>
-      <span className="min-w-0 flex-1 self-center text-sm text-ink">
-        {t('media.awaitingReview', { count })}
-      </span>
-    </p>
+    <Notice signal="neutral" label={t('jobs.state.review')}>
+      {t('media.awaitingReview', { count })}
+    </Notice>
   )
 }

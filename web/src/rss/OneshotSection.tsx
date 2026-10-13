@@ -24,7 +24,7 @@ import { JobLink } from '../jobs/JobLink'
 import { RoutePicker } from '../media/RoutePicker'
 import { estimate, formatSize, tagTokens } from '../media/searchResult'
 import { freshSingles, sendOrder, tally, type Outcome } from './oneshotBatch'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 import { preselect } from './preselect'
 import { Choices, type Pickable } from './WorkChoices'
 

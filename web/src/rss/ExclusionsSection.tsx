@@ -6,7 +6,7 @@ import { RSS_KEY, saveExclusions, type Exclusions } from '../api/rss'
 import { Checkbox } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { RulesEditor } from './RulesEditor'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 
 /**
  * 全域的排除條件（M3 票 10，brief §15「全部接受，只排除」）：合集預設與全域規則。Feed 與 RSS Series

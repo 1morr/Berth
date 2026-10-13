@@ -19,7 +19,7 @@ import { SIGNAL_FILL } from '../components/signal'
 import { JobLink } from '../jobs/JobLink'
 import { formatSize } from '../media/searchResult'
 import { maskToken } from './maskToken'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 import { skipText } from './skip'
 
 /**
@@ -45,7 +45,7 @@ export function FirstRoundSection({
         id={headingId}
         label={t('rss.first.title')}
         extra={
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.assigned}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
             {t('rss.first.chip', { count: feeds.length })}
           </span>
         }

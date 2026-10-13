@@ -30,6 +30,7 @@ import {
 } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
@@ -64,14 +65,15 @@ export function SubscribePanel({ media }: { media: Media }) {
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {t('rss.subscribe.title')}
-        </h2>
-        <Link to="/rss" className={`${TEXT_LINK} ms-auto`}>
-          {t('rss.subscribe.toRss')}
-        </Link>
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={t('rss.subscribe.title')}
+        extra={
+          <Link to="/rss" className={`${TEXT_LINK} ms-auto`}>
+            {t('rss.subscribe.toRss')}
+          </Link>
+        }
+      />
 
       {series.isError ? (
         <RequestFailed error={series.error} lead={t('rss.readFailed')} />
@@ -106,7 +108,9 @@ function SeriesLine({ row }: { row: RssSeries }) {
     <li className="grid min-w-0 gap-1 bg-hull px-3 py-2">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {row.source && (
-          <span className="label bg-deck px-2 py-1 text-ink">{t(`rss.kind.${row.source}`)}</span>
+          <span className="label bg-deck px-1.5 py-0.5 text-ink">
+            {t(`rss.kind.${row.source}`)}
+          </span>
         )}
         <span className="value min-w-0 text-sm wrap-anywhere text-ink">
           {groupName(row) || row.title_raw}
@@ -115,7 +119,7 @@ function SeriesLine({ row }: { row: RssSeries }) {
         {row.confirmed ? (
           <span className="text-xs text-ink-dim">{t('rss.subscribe.confirmed')}</span>
         ) : (
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.assigned}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
             {t('rss.subscribe.firstBatch')}
           </span>
         )}

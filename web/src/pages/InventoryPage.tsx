@@ -35,8 +35,11 @@ import {
   Notice,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { FilterBar } from '../components/FilterBar'
 import { PAGE_LINK, Pager } from '../components/Pager'
+import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { SEARCH_DEBOUNCE_MS } from '../components/useDebounced'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
@@ -542,17 +545,14 @@ function NotInJellyfin({ cards, inventory }: { cards: InventoryCard[]; inventory
 
   return (
     <section aria-labelledby={titleId} className="grid gap-4">
-      <div className="flex items-baseline gap-3 border-b-2 border-rule-strong pb-2">
-        <h2 id={titleId} className="label text-ink">
-          {t('inventory.notInJellyfin')}
-        </h2>
-        <span aria-hidden="true" className="value text-xs text-ink-dim">
-          {cards.length}
-        </span>
-        <span className="sr-only">
-          {t('inventory.notInJellyfinCount', { count: cards.length })}
-        </span>
-      </div>
+      <SectionHeading
+        id={titleId}
+        label={t('inventory.notInJellyfin')}
+        count={{
+          value: cards.length,
+          spoken: t('inventory.notInJellyfinCount', { count: cards.length }),
+        }}
+      />
       <Tiles cards={cards} inventory={inventory} />
     </section>
   )
@@ -613,7 +613,7 @@ function LibraryQueue({
   const [said, setSaid] = useState('')
   const frame = useFocusAfterRemoval()
 
-  if (queue.isPending) return <QueueLoading />
+  if (queue.isPending) return <QueueLoading className="max-w-[80rem]" />
   if (!queue.data) return <RequestFailed error={queue.error} lead={t('review.readFailed')} />
 
   const rest = queue.data.queue_total - rows.length
@@ -656,16 +656,6 @@ function LibraryQueue({
   )
 }
 
-/** 清單讀取中：兩列靜態方塊，沒有動畫（同 `/review`）。 */
-function QueueLoading() {
-  return (
-    <div className="grid max-w-[80rem] gap-3" aria-hidden="true">
-      <div className="h-24 border-2 border-rule bg-well" />
-      <div className="h-24 border-2 border-rule bg-well" />
-    </div>
-  )
-}
-
 /**
  * 全部 · 待審 N · 對不到 N。數字是後端數的、整個媒體庫的審核佇列件數（與清單同一支查詢），不隨篩選變。
  *
@@ -690,36 +680,32 @@ function Filters({
   const { t } = useTranslation()
   const kept = onPage(page, query)
   const options = [
-    { filter: undefined, label: t('inventory.filter.all') },
-    { filter: 'review' as const, label: t('inventory.filter.review', { count: inventory.review }) },
+    { value: undefined, label: t('inventory.filter.all') },
+    { value: 'review' as const, label: t('inventory.filter.review', { count: inventory.review }) },
     {
-      filter: 'unmatched' as const,
+      value: 'unmatched' as const,
       label: t('inventory.filter.unmatched', { count: inventory.unmatched }),
     },
   ]
 
   return (
-    <nav aria-label={t('inventory.filters')} className="flex flex-wrap gap-2">
-      {options.map((option) =>
-        option.filter === filter ? (
-          <span key={option.label} aria-current="true" className={`${FILTER_ACTIVE} text-ink`}>
-            {option.label}
-          </span>
-        ) : (
-          <Link
-            key={option.label}
-            to="/library/$libraryId"
-            params={{ libraryId: inventory.library.id }}
-            search={option.filter ? { ...kept, filter: option.filter } : kept}
-            // 「全部」的 search 是每一種的子集，模糊比對會讓它在待審頁上也被當成當前、掛上 `aria-current`。
-            activeOptions={{ exact: true }}
-            className={FILTER}
-          >
-            {option.label}
-          </Link>
-        ),
+    <FilterBar
+      label={t('inventory.filters')}
+      options={options}
+      current={filter}
+      renderOption={(value, label) => (
+        <Link
+          to="/library/$libraryId"
+          params={{ libraryId: inventory.library.id }}
+          search={value ? { ...kept, filter: value } : kept}
+          // 「全部」的 search 是每一種的子集，模糊比對會讓它在待審頁上也被當成當前、掛上 `aria-current`。
+          activeOptions={{ exact: true }}
+          className={FILTER}
+        >
+          {label}
+        </Link>
       )}
-    </nav>
+    />
   )
 }
 

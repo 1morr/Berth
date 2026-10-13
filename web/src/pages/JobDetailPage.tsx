@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +12,7 @@ import { AuditChip } from '../components/AuditChip'
 import { CopyLine, GHOST_LINK, PAGE_TITLE } from '../components/controls'
 import { DetailLine } from '../components/QueueRow'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { SIGNAL_FILL } from '../components/signal'
 import { JobActions } from '../jobs/JobActions'
 import { planHistory } from '../jobs/eventTypes'
@@ -174,9 +175,10 @@ function BackLink() {
 
 /** 一段：`.label` 模板字壓在重橫線上（DESIGN.md 的區塊標題），底下是內容。 */
 function Section({ title, children }: { title: string; children: ReactNode }) {
+  const headingId = useId()
   return (
-    <section className="grid min-w-0 content-start gap-3">
-      <h2 className="label border-b-2 border-rule-strong pb-2 text-ink">{title}</h2>
+    <section aria-labelledby={headingId} className="grid min-w-0 content-start gap-3">
+      <SectionHeading id={headingId} label={title} />
       {children}
     </section>
   )

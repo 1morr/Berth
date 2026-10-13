@@ -21,6 +21,7 @@ import { seasonCode } from '../components/episodes'
 import { RequestFailed } from '../components/RequestFailed'
 import type { SetupStep } from '../api/schemas'
 import { ExpandHint } from '../components/ExpandHint'
+import { SectionHeading } from '../components/SectionHeading'
 import { StepLine } from '../components/StepLine'
 import { Timestamp } from '../components/Timestamp'
 import { IndexerNotice } from './IndexerNotice'
@@ -133,16 +134,17 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        {/* `tabIndex={-1}`：程式送得進焦點（季表那兩顆按鈕按下之後），但不進 Tab 順序。 */}
-        <h2 id={headingId} ref={heading} tabIndex={-1} className="label text-ink">
-          {t('search.title')}
-        </h2>
-        {/* 只說總數：送來的比總數少時，表格裡那一組底下說只列了幾筆（M4 票 83），標頭不再說第二次。 */}
-        {listed > 0 && (
-          <p className="value text-xs text-ink-dim">{t('search.count', { count: listed })}</p>
-        )}
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={t('search.title')}
+        headingRef={heading}
+        extra={
+          // 只說總數：送來的比總數少時，表格裡那一組底下說只列了幾筆（M4 票 83），標頭不再說第二次。
+          listed > 0 && (
+            <p className="value text-xs text-ink-dim">{t('search.count', { count: listed })}</p>
+          )
+        }
+      />
 
       <form
         className="grid gap-3"
