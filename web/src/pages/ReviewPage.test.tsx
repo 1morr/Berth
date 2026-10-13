@@ -159,8 +159,12 @@ describe('審核佇列', () => {
     const headings = screen.getAllByRole('heading', { level: 2 })
 
     // 光一個數字念出來沒有意義：聽得見的是帶單位的那一句（M2 票 16 audit P3，M3 票 06）。
+    // 計數在標題旁、不在 `h2` 裡，與全站的 `SectionHeading` 一致（M4 票 99）；段落的名字是標題本身。
     expect(headings).toHaveLength(1)
-    expect(headings[0]).toHaveAccessibleName('已入庫，等你看一眼 2 件')
+    expect(headings[0]).toHaveAccessibleName('已入庫，等你看一眼')
+    const section = within(screen.getByRole('region', { name: '已入庫，等你看一眼' }))
+    expect(section.getByText('2')).toHaveAttribute('aria-hidden', 'true')
+    expect(section.getByText('2 件')).toHaveClass('sr-only')
     expect(screen.queryByText('要你決定')).not.toBeInTheDocument()
   })
 
