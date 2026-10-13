@@ -1645,8 +1645,9 @@ export interface paths {
          * @description 服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
          *
          *     擁有者成立之後改 Jellyfin 的來源、或把位址換到另一台 Jellyfin 是 409（擁有者是那一台上的帳號，
-         *     M4 票 18）；既有服務測不過是 400 `connection_failed`、什麼都不存（M4 票 45）；既有卻沒給位址
-         *     是 422。
+         *     M4 票 18）；既有服務測不過是 400 `connection_failed`、什麼都不存（M4 票 45）；勾了移除空分類而
+         *     原本那一台 qBittorrent 沒答上來是 502 `categories_not_removed`、也不換台（M4 票 65）；既有卻沒給
+         *     位址、或不是 qBittorrent 卻勾了移除是 422。
          */
         post: operations["post_service_api_setup_services__kind__post"];
         delete?: never;
@@ -1691,27 +1692,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/setup/services/qbittorrent/leftovers/categories": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Service Leftover Categories
-         * @description 移除現在這一台 qBittorrent 上空的 `berth-*` 分類（有 torrent 的、別人的都不碰）。
-         *     回傳移除之後的清單；連不到或 qBittorrent 沒收下是 502，帶原文。
-         */
-        delete: operations["delete_service_leftover_categories_api_setup_services_qbittorrent_leftovers_categories_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2535,13 +2515,18 @@ export interface components {
              * @default
              */
             password?: string;
+            /**
+             * Remove Empty Categories
+             * @default false
+             */
+            remove_empty_categories?: boolean;
         };
         /**
          * ChoiceRefusal
          * @description 服務頁的選擇不成立（`services/setup.choose_service`，M4 票 15）。
          * @enum {string}
          */
-        ChoiceRefusal: "jellyfin_owned" | "other_server" | "unverified" | "connection_failed";
+        ChoiceRefusal: "jellyfin_owned" | "other_server" | "unverified" | "connection_failed" | "categories_not_removed";
         /** ChoiceRefusalOut */
         ChoiceRefusalOut: {
             reason: components["schemas"]["ChoiceRefusal"];
@@ -3610,6 +3595,8 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
+            /** Previous Client */
+            previous_client: string;
             /** Retryable */
             retryable: boolean;
             /** Replannable */
@@ -9153,6 +9140,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description `categories_not_removed` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoiceRefusalOut"];
+                };
+            };
         };
     };
     post_service_test_api_setup_services__kind__test_post: {
@@ -9217,26 +9213,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_service_leftover_categories_api_setup_services_qbittorrent_leftovers_categories_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LeftoversOut"];
                 };
             };
         };

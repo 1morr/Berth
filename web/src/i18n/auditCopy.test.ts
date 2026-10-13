@@ -107,4 +107,9 @@ describe.each(SUPPORTED_LANGUAGES)('文件與實作不符的幾句（%s）', (la
     expect(connection.fix.whitelist).not.toMatch(RESTART_RESTORES)
     expect(connection.fix.whitelist).toContain(ALLOWLIST_OPTION[language])
   })
+
+  it('換台框列的白名單照同一個措辭說怎麼關（M4 票 65）', () => {
+    expect(choice.leftovers.allowlistHow).not.toMatch(RESTART_RESTORES)
+    expect(choice.leftovers.allowlistHow).toContain(ALLOWLIST_OPTION[language])
+  })
 })

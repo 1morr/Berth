@@ -661,16 +661,16 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Jellyfin 媒體庫 | 建精靈清單上的 | 只建頁 3 勾了「新建一個媒體庫」的那一個（M4 票 64）：`<library root>/<slug>`，與套件內同一條路徑，同名的已經在就不再建；伺服器上所有使用者都看得到，所以預設不勾。名稱只差大小寫、或資料夾已經是別的媒體庫的路徑時擋下 | 不能；套件內已建的在 Berth 裡鎖住，既有那一台建好之後就是清單上的一個媒體庫 | Jellyfin 刪 |
 | 媒體庫上的 Berth 路徑 | — | 頁 3「建立並檢查」時加；類型對得上的媒體庫（電影、劇集）預設勾選、預設寫入目標是這一條（審計 C2，M4 票 64）。**同一個資料夾不給第二個媒體庫**：兩個名字算出同一個 slug 時（`TV Shows` 與 `TV-Shows`），後加的那個失敗（`path_taken`），slug 規則不改（M4 票 64） | 不能；頁 3 的檢查失敗也留著 | Jellyfin 媒體庫設定移除 |
 | 請 Jellyfin 去看 Berth 寫的路徑（M4 票 62） | 同右 | 入庫後通知那幾條路徑（`POST /Library/Media/Updated`）；反查還沒找到時只刷新那條 Route 的媒體庫；**Berth 的路徑 Jellyfin 還沒列出過任何東西時（空的媒體庫第一次入庫、剛加上 Berth 路徑的媒體庫），跑整台的「掃描媒體庫」排程任務，你其他的媒體庫也會一起被掃**——只有它建得出那個路徑（§20.1）；路徑還沒被列出之前，反查每一次沒找到都會再請一次（它還在跑時再請是空操作）。Issue 的「重新掃描媒體庫」照同一條 | 不留下東西 | — |
-| qBittorrent 免密白名單 | 預置（容器啟動前，只放 Berth 的 IP） | 不碰 | — | `qBittorrent.conf` |
+| qBittorrent 免密白名單 | 預置（容器啟動前，只放 Berth 的 IP） | 不碰 | — ；換走套件內那一台時換台框列出它與關法（M4 票 65） | `qBittorrent.conf`，或它的 WebUI「選項 → WebUI → 驗證」取消勾選（重啟不會再打開：預置腳本只補沒有的鍵，M4 票 53） |
 | qBittorrent 全域偏好 | 不寫（D2，M4 票 32） | 不寫 | — | — |
 | qBittorrent WebUI 登入 | 設 | 不碰 | 只能再設一組蓋過 | qBittorrent 偏好 |
-| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 刪 Route 不刪分類；換一台時確認框可一鍵移除舊那台上**空的**（M4 票 47），目錄不刪 | qBittorrent 刪分類 |
+| `berth-*` 分類與它的 complete / incomplete 目錄 | 建 | 建 | 刪 Route 不刪分類；換一台時換台框可勾選一併移除舊那台上**空的**，確認換台才移除（M4 票 47、65），目錄不刪 | qBittorrent 刪分類 |
 | 探測 torrent、探測檔（頁 2 在 `/data`、校驗不完，M4 票 46；頁 3 在分類路徑；頁 1 給既有 Jellyfin 的 `ValidatePath` 看的探測檔在 `/data`，沒有 torrent，M4 票 63） | 暫時，自清 | 同左 | 自清（Berth 中途崩潰、或答完之後移除那一下 qBittorrent 斷線時可能殘留：停住、沒有分類，M4 票 54） | 手動刪 |
 | Prowlarr 站 | 加勾選的 | 加勾選的 | 套件內可單站移除；既有不移除 | Prowlarr 刪 |
 | Prowlarr 介面登入 | 設 | 不碰 | 只能再設一組蓋過 | Prowlarr 設定 |
 | TMDB | 不寫 | 不寫 | — | — |
 
-**換一台 qBittorrent / Prowlarr 時**（§19 D6，M4 票 47）：確認框列出 Berth 在原本那一台擁有的物件——`berth-*` 分類各有幾個 torrent、Berth 加進去的站（Berth 加站時記下 `definitionName` 與站名，`SetupIndexer.added_sites`；票 47 之前加的沒記到）、Berth 設的介面登入（只有 Berth 記著雜湊的那一組）。使用者自己的分類與站不列。連不到那一台時列 Berth 記得的（分類取自 Route、站取自那份紀錄），照實說確認不了現況。**能移除的只有空的 `berth-*` 分類**，按下時重數；站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去。移除在確認框裡就做，取消換台也無妨：送單與 Route 檢查都先 `ensure_category`，照 Route 的路徑重建。**換成功之後 Route 自動重查**（M4 票 59，審計 P1-3）：所有 Route 的檢查作廢，健康頁的媒體庫路徑那一格是「要重新檢查」而不是「已繫上」；設定 → qBittorrent 在新那台測過之後自動跑一次「全部重新檢查」（分類建在新那台、探針重問），說「正在重新檢查 N 條 Route」、逐條進度、跑完說幾條過了。結果出來之前送單照舊——還沒檢查完的放行（送單自己建分類），紅了的才擋。探針從沒問過的 Route 同樣不算「已繫上」。
+**換一台 qBittorrent / Prowlarr 時**（§19 D6，M4 票 47）：確認框列出 Berth 在原本那一台擁有的物件——`berth-*` 分類各有幾個 torrent、Berth 加進去的站（Berth 加站時記下 `definitionName` 與站名，`SetupIndexer.added_sites`；票 47 之前加的沒記到）、Berth 設的介面登入（只有 Berth 記著雜湊的那一組）。使用者自己的分類與站不列；原本那一台是套件內 qBittorrent 時多列預置的免密白名單，說它在 `qBittorrent.conf`、在 WebUI 怎麼關（M4 票 65）。連不到那一台時列 Berth 記得的（分類取自 Route、站取自那份紀錄），照實說確認不了現況。**分類裡的 torrent 留在原本那一台**（做種的照樣做種、下載中的照樣下載），Berth 換台之後不再追蹤它們、已入庫的檔案不受影響，那一台關掉做種就停——換台框照數目說（連不到時不說數目）；換台之後，送進原本那一台、已入庫的 Job 詳情說「做種的 torrent 在原本那一台」（讀最後一次 `submitted` 事件記下的 `client`，與現在那一台不同才說；不知道的不說，M4 票 65，審計 P1-4）。**能移除的只有空的 `berth-*` 分類**；站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去。**移除是換台框裡的勾選（預設不勾），跟著確認換台一起做**（`POST /setup/services/qbittorrent` 的 `remove_empty_categories`，M4 票 65，審計 P2-9；推翻票 47 的「移除在確認框裡就做」）：在新那一台測過之後、存下之前移除，確認時重數；取消就什麼都不動，換成既有時新那一台測不過也不動（套件內照舊先存再測，選了就換過去）；勾了而原本那一台沒答上來，整個換台不做（502 `categories_not_removed`），取消勾選再換一次就只換台。**換成功之後 Route 自動重查**（M4 票 59，審計 P1-3）：所有 Route 的檢查作廢，健康頁的媒體庫路徑那一格是「要重新檢查」而不是「已繫上」；設定 → qBittorrent 在新那台測過之後自動跑一次「全部重新檢查」（分類建在新那台、探針重問），說「正在重新檢查 N 條 Route」、逐條進度、跑完說幾條過了。結果出來之前送單照舊——還沒檢查完的放行（送單自己建分類），紅了的才擋。探針從沒問過的 Route 同樣不算「已繫上」。
 
 閘門是 `tests/integration/test_setup_owned_writes.py`：整個精靈經 API 跑套件內一輪、既有兩輪（Jellyfin 初始化過與還沒），三台替身收到的每一個寫入都要對得上「Berth 擁有的物件 + 套件內的 bootstrap」那張白名單；既有那一輪的 bootstrap 只放行那台 Jellyfin 還沒初始化，建媒體庫只放行勾了的、在 library root 底下的（M4 票 64，沒勾也建、建在 root 外各有變異測試）。它只看得到 Berth 經三個服務的 adapter 送出的寫入；預置的免密白名單、掛載的 key 與探測檔的自清不在它的範圍。頁 1、頁 3 問 Jellyfin 的 `ValidatePath` 是讀（POST 但不留東西），白名單不放行任何東西；閘門另外斷言既有那一輪頁 1 真的問了 `/data`（M4 票 63）。
 

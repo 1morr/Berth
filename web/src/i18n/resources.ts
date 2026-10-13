@@ -255,6 +255,8 @@ const zhHant = {
         '沒有存：這個位址上回答的是另一台 Jellyfin，不是擁有者所在的那一台。擁有者、Berth 的 API key 與媒體庫都在原本那一台；換一台等於換擁有者，Berth 不支援。',
       unverified:
         '沒有存：這個位址沒有說出它是哪一台 Jellyfin（{{detail}}），認不出是不是同一台。確認位址與 port 再試一次。',
+      categories_not_removed:
+        '沒有換台，也沒有移除任何分類：原本那一台沒答上來。取消勾選「換台時一併移除」再換一次，就只換台。',
     },
     useBundled: '使用套件內的 {{service}}',
     useBundledLede:
@@ -284,10 +286,20 @@ const zhHant = {
       sites: '加入的站',
       separator: '、',
       login: 'Berth 設的介面登入',
-      removeEmpty_one: '移除 {{count}} 個空的 berth- 分類',
-      removeEmpty_other: '移除 {{count}} 個空的 berth- 分類',
-      removed: '空的 berth- 分類已移除。',
-      removeFailed: '沒有移除。',
+      // M4 票 65（審計 P1-4、P2-9）：做種中的 torrent、套件內那一台的免密白名單、移除跟著確認換台走。
+      allowlist: '免密白名單',
+      allowlistValue: '只放行 Berth 的位址（結尾是 /32）',
+      allowlistHow:
+        '在套件內那一台的 qBittorrent.conf 裡，它啟動前預置的。不再用那一台的話，打開它的「選項 → WebUI」，在「驗證」取消勾選「讓已在白名單中的 IP 子網路略過驗證」並存檔；重啟不會再打開它。之後換回套件內，要再勾回來。',
+      seeding_one:
+        '這 {{count}} 個 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
+      seeding_other:
+        '這 {{count}} 個 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
+      seedingUnknown:
+        '這些分類裡的 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
+      removeEmpty_one: '換台時一併移除 {{count}} 個空的 berth- 分類',
+      removeEmpty_other: '換台時一併移除 {{count}} 個空的 berth- 分類',
+      removeEmptyHint: '確認換台才移除，取消就什麼都不動；有 torrent 的分類不碰。',
     },
   },
   connection: {
@@ -2275,6 +2287,10 @@ const zhHant = {
       back: '回下載列表',
       sentBy: '送單的人',
       nobody: '沒有人在場',
+      // M4 票 65（審計 P1-4）：送進的那一台 qBittorrent 已經換掉。
+      seeding: '做種',
+      seedingElsewhere:
+        '做種的 torrent 在原本那一台 qBittorrent（{{client}}），Berth 換台之後不再追蹤它；已入庫的檔案不受影響。',
       error: '服務回的原文',
       files: '檔案與決策',
       noPlan: '還沒有計劃：拿到檔案清單之後 Berth 才算得出一份。',
@@ -3645,6 +3661,8 @@ const en: Translations<typeof zhHant> = {
         'Not saved: another Jellyfin answers at this address, not the one the owner is on. The owner, Berth’s API key and the libraries are all on the original one; another server would mean another owner, which Berth does not support.',
       unverified:
         'Not saved: this address did not say which Jellyfin it is ({{detail}}), so Berth cannot tell whether it is the same one. Check the address and port, then try again.',
+      categories_not_removed:
+        'Not switched, and no category was removed: the old one did not answer. Untick “Also remove … when switching” and switch again to switch only.',
     },
     useBundled: 'Use the bundled {{service}}',
     useBundledLede:
@@ -3675,10 +3693,20 @@ const en: Translations<typeof zhHant> = {
       sites: 'Indexers added',
       separator: ', ',
       login: 'Interface login set by Berth',
-      removeEmpty_one: 'Remove {{count}} empty berth- category',
-      removeEmpty_other: 'Remove {{count}} empty berth- categories',
-      removed: 'The empty berth- categories were removed.',
-      removeFailed: 'Nothing was removed.',
+      allowlist: 'Password-free allowlist',
+      allowlistValue: 'lets only Berth’s address in (ending in /32)',
+      allowlistHow:
+        'Preseeded in the bundled one’s qBittorrent.conf before it starts. If you stop using that one, open its Options → WebUI and, under Authentication, untick “Bypass authentication for clients in whitelisted IP subnets”, then save; a restart does not turn it back on. Switching back to the bundled one later needs it ticked again.',
+      seeding_one:
+        'This {{count}} torrent stays on the old one (seeding or downloading as before); Berth stops tracking it after the switch. Files already imported are not affected. Seeding stops when the old one is shut down.',
+      seeding_other:
+        'These {{count}} torrents stay on the old one (seeding or downloading as before); Berth stops tracking them after the switch. Files already imported are not affected. Seeding stops when the old one is shut down.',
+      seedingUnknown:
+        'Torrents in these categories stay on the old one (seeding or downloading as before); Berth stops tracking them after the switch. Files already imported are not affected. Seeding stops when the old one is shut down.',
+      removeEmpty_one: 'Also remove {{count}} empty berth- category when switching',
+      removeEmpty_other: 'Also remove {{count}} empty berth- categories when switching',
+      removeEmptyHint:
+        'Removed only when you confirm the switch; cancelling leaves everything as it is. Categories with torrents are not touched.',
     },
   },
   connection: {
@@ -5592,6 +5620,9 @@ const en: Translations<typeof zhHant> = {
       back: 'Back to downloads',
       sentBy: 'Sent by',
       nobody: 'Nobody',
+      seeding: 'Seeding',
+      seedingElsewhere:
+        'The seeding torrent is on the previous qBittorrent ({{client}}); Berth stopped tracking it after the switch. The imported files are not affected.',
       error: 'What the service said',
       files: 'Files and decisions',
       noPlan: 'No plan yet: Berth works one out once the file list is in.',

@@ -48,10 +48,14 @@ class FakeClientFactory:
         #: 位址 → 在那個位址上的另一台 Jellyfin（M4 票 18：換位址時認得出是不是同一台）。
         #: 沒列的位址都是 `jellyfin` 那一台。
         elsewhere: dict[str, FakeJellyfinClient] | None = None,
+        #: 位址 → 在那個位址上的另一台 qBittorrent（M4 票 65：換台時移除的是原本那一台的分類）。
+        #: 沒列的位址都是 `qbittorrent` 那一台。
+        qbittorrent_elsewhere: dict[str, FakeQbittorrentClient] | None = None,
     ) -> None:
         self.jellyfin_ = jellyfin or FakeJellyfinClient()
         self.elsewhere = dict(elsewhere or {})
         self.qbittorrent_ = qbittorrent or FakeQbittorrentClient()
+        self.qbittorrent_elsewhere = dict(qbittorrent_elsewhere or {})
         self.prowlarr_ = prowlarr or FakeProwlarrClient()
         self.tmdb_ = tmdb or FakeTmdbClient()
         self.indexer_search_ = indexer_search or FakeIndexerSearch()
@@ -72,8 +76,9 @@ class FakeClientFactory:
         return client
 
     def qbittorrent(self, base_url: str) -> QbittorrentClient:
-        self.qbittorrent_.base_url = base_url
-        return self.qbittorrent_
+        client = self.qbittorrent_elsewhere.get(base_url, self.qbittorrent_)
+        client.base_url = base_url
+        return client
 
     def prowlarr(self, base_url: str, api_key: str) -> ProwlarrClient:
         self.api_keys.append(api_key)

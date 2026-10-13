@@ -100,6 +100,13 @@ function Detail({ job }: { job: Job }) {
           <DetailLine term={t('jobs.detail.sentBy')}>
             {job.user_name || t('jobs.detail.nobody')}
           </DetailLine>
+          {/* 換過 qBittorrent 之後，入庫完的那一筆還在原本那一台做種（M4 票 65）：狀態照舊是已入庫，
+              不說的話看不出 Berth 已經不追蹤它。 */}
+          {job.state === 'imported' && job.previous_client && (
+            <DetailLine term={t('jobs.detail.seeding')}>
+              {t('jobs.detail.seedingElsewhere', { client: job.previous_client })}
+            </DetailLine>
+          )}
           {job.error && (
             <DetailLine term={t('jobs.detail.error')}>
               {/* 服務回的原文，不翻譯（與時間線的 `submit_failed` 同一個規矩）。 */}

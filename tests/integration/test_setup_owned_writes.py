@@ -586,6 +586,12 @@ def walk_existing(
     walk_tmdb_and_complete(client)
 
 
+def switch_qbittorrent_away(client: TestClient) -> None:
+    """跑完之後在設定頁換 qBittorrent，換台框裡勾了移除空分類（M4 票 65）：移除跟著換台這一支走。"""
+    choice = {"origin": "bundled", "remove_empty_categories": True}
+    ok(client.post("/api/setup/services/qbittorrent", json=choice))
+
+
 def walk_tmdb_and_complete(client: TestClient) -> None:
     ok(client.post("/api/setup/tmdb/test", json={"api_key": "the-users-key"}))
     ok(client.post("/api/setup/complete"))
@@ -651,6 +657,7 @@ def test_an_existing_wizard_writes_only_owned_objects(
     run = wizard(ServiceOrigin.EXISTING, services)
 
     walk_existing(run.client)
+    switch_qbittorrent_away(run.client)
 
     assert violations(run.recorder.writes, run.premise) == []
     assert {
@@ -658,6 +665,7 @@ def test_an_existing_wizard_writes_only_owned_objects(
         (JELLYFIN, "add_library_path"),
         (JELLYFIN, "create_library"),
         (QBITTORRENT, "create_category"),
+        (QBITTORRENT, "remove_categories"),
         (QBITTORRENT, "add_probe"),
         (PROWLARR, "add_indexer"),
     } <= methods(run.recorder.writes)
