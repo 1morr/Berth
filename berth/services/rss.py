@@ -85,7 +85,14 @@ from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import plan as decide
 from berth.parser import series_finished
-from berth.parser.binding import SeriesClues, could_be, judge, search_terms, title_key
+from berth.parser.binding import (
+    SeriesClues,
+    could_be,
+    judge,
+    search_term,
+    search_terms,
+    title_key,
+)
 from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
 from berth.parser.planner import episode_span
 from berth.parser.release import parse_release, tags_of
@@ -235,6 +242,8 @@ class SeriesView:
     exclusions: tuple[str, ...]
     #: 第一批確認過了沒（票 13）。
     confirmed: bool
+    #: 綁定時搜尋框預填的字：`title_raw` 讀出的作品名（`binding.search_term`，M4 票 88）。
+    search_term: str
     #: 從哪一站來的：Mikan 看鍵，其他看最近一筆的 Feed。一筆都沒有時是 `None`。
     source: FeedKind | None
     #: 發佈名讀出的字幕組（Mikan 的字幕組名稱 Berth 沒有存）。
@@ -1786,6 +1795,7 @@ async def _series_view(
         candidates=await _candidate_views(session, row.candidates_json or ()),
         exclusions=tuple(row.exclude_json),
         confirmed=row.confirmed,
+        search_term=search_term(row.title_raw),
         source=FeedKind.MIKAN if row.mikan_bangumi_id is not None else latest_kind,
         group=parse_release(row.title_raw).group,
         latest_title=latest.title if latest is not None else "",

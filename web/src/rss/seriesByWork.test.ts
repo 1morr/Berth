@@ -25,6 +25,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     candidates: [],
     exclusions: [],
     confirmed: true,
+    search_term: '与你相恋到生命尽头',
     source: 'mikan',
     group: '喵萌奶茶屋&LoliHouse',
     latest_title: '',

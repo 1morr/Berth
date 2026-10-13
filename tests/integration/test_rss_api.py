@@ -124,6 +124,8 @@ class TestThePageFlow:
         # （票 09、M4 票 14）。
         assert [reason["code"] for reason in pending["reasons"]] == ["lookup_retry"]
         assert pending["candidates"] == []
+        # 綁定框預填的字（M4 票 88）：發佈名讀出的作品名，前端不再自己挑。
+        assert pending["search_term"] == "Kimi ga Shinu made Koi wo Shitai"
 
         bound = client.put(
             f"/api/rss/series/{pending['id']}/binding",
@@ -364,6 +366,8 @@ class TestOneshot:
         assert {row["release_kind"] for row in rows} == {"single"}
         assert {row["tags"]["group"] for row in rows} == {"喵萌奶茶屋&LoliHouse"}
         assert all(row["known"] is None and row["job_hash"] == "" for row in rows)
+        # 選作品的搜尋框預填它（M4 票 88）。
+        assert {row["search_term"] for row in rows} == {"Kimi ga Shinu made Koi wo Shitai"}
 
         picked = [row for row in rows if row["episode_start"] in (1, 2, 3)]
         for row in picked:

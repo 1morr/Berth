@@ -28,6 +28,7 @@ function row(guid: string, overrides: Partial<OneshotItem> = {}): OneshotItem {
     strategy: null,
     job_hash: '',
     known: null,
+    search_term: 'Kamiina Botan',
     ...overrides,
   }
 }

@@ -24,6 +24,7 @@ from berth.parser.binding import (
     SeriesClues,
     could_be,
     judge,
+    search_term,
     search_terms,
     skeleton,
     title_key,
@@ -34,6 +35,9 @@ from tests.conftest import FIXTURES
 KIMI_RELEASE = (
     "[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai - 12 "
     "[WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]"
+)
+REZERO_RELEASE = (
+    "[ANi]  Re：从零开始的异世界生活 第四季 - 18 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
 )
 KIMI = SeriesClues(
     title="与你相恋到生命尽头", premiere=date(2026, 7, 7), release_title=KIMI_RELEASE
@@ -165,6 +169,38 @@ class TestTheSkeleton:
         )
 
         assert search_terms(clues) == ("时光代理人", "Link Click")
+
+
+class TestTheSearchTerm:
+    """綁定框預填的字（M4 票 88）：只看發佈名的第一個搜尋詞，人拿它去搜、核對或改。"""
+
+    @pytest.mark.parametrize(
+        ("release", "expected"),
+        [
+            # 季名拿掉：TMDB 的作品名不帶它，留著要人自己刪。
+            (REZERO_RELEASE, "Re：从零开始的异世界生活"),
+            (
+                "[黒ネズミたち] 时光代理人 第三季 / Link Click Season 3 - 08 (CR 1080p)",
+                "Link Click",
+            ),
+            # 標題在組名後的方括號裡：是那一格，不是整串原文。
+            (
+                "[千夏字幕組][上伊那牡丹，醉姿如百合_Kamiina Botan, Yoeru Sugata wa Yuri no Hana]"
+                "[第12話][1080p_AVC][繁體]",
+                "上伊那牡丹，醉姿如百合_Kamiina Botan, Yoeru Sugata wa Yuri no Hana",
+            ),
+            # 英文或羅馬字那一段在前（多半在最後一段）。
+            (KIMI_RELEASE, "Kimi ga Shinu made Koi wo Shitai"),
+        ],
+    )
+    def test_the_first_term_read_from_the_release(self, release: str, expected: str) -> None:
+        assert search_term(release) == expected
+
+    def test_a_release_with_nothing_but_the_group_and_the_episode_is_given_back_as_it_is(
+        self,
+    ) -> None:
+        """讀不出作品名時給原文：那一格人本來就要核對或改，空白的框什麼都不說。"""
+        assert search_term(" [Group] - 12 ") == "[Group] - 12"
 
 
 def fixture_feeds() -> dict[str, list[str]]:
@@ -414,9 +450,7 @@ class TestTheYearPrefilter:
 REZERO = SeriesClues(
     title="Re：从零开始的异世界生活 第四季 夺还篇",
     premiere=date(2026, 8, 12),
-    release_title=(
-        "[ANi]  Re：从零开始的异世界生活 第四季 - 18 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
-    ),
+    release_title=REZERO_RELEASE,
 )
 
 

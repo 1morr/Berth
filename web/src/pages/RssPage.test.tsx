@@ -56,6 +56,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     candidates: [],
     exclusions: [],
     confirmed: false,
+    search_term: 'Kimi ga Shinu made Koi wo Shitai',
     source: 'mikan',
     group: '喵萌奶茶屋&LoliHouse',
     latest_title: TITLE,
@@ -985,6 +986,7 @@ function oneshotItem(guid: string, overrides: Partial<OneshotItem> = {}): Onesho
     strategy: null,
     job_hash: '',
     known: null,
+    search_term: 'Kimi ga Shinu made Koi wo Shitai',
     ...overrides,
   }
 }
@@ -1053,7 +1055,7 @@ describe('RSS 頁：一次性 RSS 連結（票 18）', () => {
       { url: SINGLE_URL, media: null, route: null },
     ])
 
-    // 搜尋框預填第一筆的作品名；唯一的 Route 預選好，清單照那部作品重讀一次。
+    // 搜尋框預填第一筆的 `search_term`（後端讀的作品名）；唯一的 Route 預選好，清單照那部作品重讀一次。
     expect(within(region).getByRole('searchbox')).toHaveValue('Kimi ga Shinu made Koi wo Shitai')
     await userEvent.click(await within(region).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
     expect(await within(region).findByText(KIMI.folder_name)).toBeInTheDocument()

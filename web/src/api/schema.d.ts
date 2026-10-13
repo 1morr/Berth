@@ -4054,6 +4054,8 @@ export interface components {
             job_hash: string;
             /** Known */
             known: string | null;
+            /** Search Term */
+            search_term: string;
         };
         /** OneshotOut */
         OneshotOut: {
@@ -5002,6 +5004,8 @@ export interface components {
             exclusions: string[];
             /** Confirmed */
             confirmed: boolean;
+            /** Search Term */
+            search_term: string;
             source: components["schemas"]["FeedKind"] | null;
             /** Group */
             group: string;
