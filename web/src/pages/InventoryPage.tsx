@@ -693,7 +693,7 @@ function Filters({
       label={t('inventory.filters')}
       options={options}
       current={filter}
-      option={(value, label) => (
+      renderOption={(value, label) => (
         <Link
           to="/library/$libraryId"
           params={{ libraryId: inventory.library.id }}

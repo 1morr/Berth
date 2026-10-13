@@ -85,7 +85,7 @@ export function DownloadsPanel({ media }: { media: Media }) {
               label: t(`media.downloads.filter.${option}`, { count: shown.counts[option] }),
             }))}
             current={filter}
-            option={(option, label) => (
+            renderOption={(option, label) => (
               <button type="button" className={FILTER} onClick={() => choose(option)}>
                 {label}
               </button>

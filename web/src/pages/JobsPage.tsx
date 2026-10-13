@@ -118,7 +118,7 @@ function Filters({ listing, filter }: { listing: JobPage; filter: ListFilter }) 
         label: t(`jobs.filter.${option}`, { count: listing.counts[option] }),
       }))}
       current={filter}
-      option={(option, label) => (
+      renderOption={(option, label) => (
         <Link to="/jobs" search={onFilter(option)} className={FILTER}>
           {label}
         </Link>
