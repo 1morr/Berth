@@ -128,7 +128,6 @@ class _StillStarting(FakeJellyfinClient):
                         ServiceConnection(base_url=NAS_QBITTORRENT),
                         now=NOW,
                     )
-                    await apply_qbittorrent(other, factory)
                 else:
                     await retest_service(
                         other, FakeClientFactory(), BUNDLED, ServiceKind.PROWLARR, now=NOW
@@ -159,7 +158,8 @@ class _JellyfinUpMeanwhile(FakeQbittorrentClient):
 async def test_a_poll_in_flight_does_not_undo_page_2(
     session: AsyncSession, engine: AsyncEngine
 ) -> None:
-    """L-P2-1：Jellyfin 啟動中的輪詢還在路上時，頁 2 測過、按了確認。輪詢寫完之後頁 2 仍是完成。"""
+    """L-P2-1：Jellyfin 啟動中的輪詢還在路上時，頁 2 選了既有、測試通過（那一台沒有確認鍵，M4 票
+    38）。輪詢寫完之後頁 2 仍是完成。"""
     await arrange(session)
     factory = FakeClientFactory(jellyfin=_StillStarting(engine, "page 2"))
 

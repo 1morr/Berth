@@ -66,14 +66,10 @@ from berth.services.issues import resolve_issue
 from berth.services.jellyfin import API_KEY_APP, BUNDLED_SERVER_NAME
 from berth.services.jobs import JobSource, add_download
 from berth.services.plan import sweep_plans
-from berth.services.qbittorrent import (
-    WEB_UI_PASSWORD_KEY,
-    WEB_UI_USERNAME_KEY,
-    apply_qbittorrent,
-)
+from berth.services.qbittorrent import WEB_UI_PASSWORD_KEY, WEB_UI_USERNAME_KEY
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.resolver import sweep_resolutions
-from berth.services.routes import CATEGORY_PREFIX
+from berth.services.routes import CATEGORY_PREFIX, build_routes
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_downloads import status
 from tests.integration.test_plan import BATCH, BATCH_FILES, HASH, NOW, ready
@@ -627,7 +623,8 @@ def walk_existing(
     addresses: Mapping[ServiceKind, str] = ADDRESSES,
 ) -> None:
     """頁 1–6 全選既有：以那台 Jellyfin 的管理員成為擁有者（沒初始化就由擁有者建）、填 qBittorrent
-    的帳密、新建一個媒體庫、替第一個媒體庫加 Berth 路徑當寫入目標、貼 Prowlarr 的 key 並加兩站。"""
+    的帳密（測試通過就做完頁 2，沒有套用，M4 票 38、101）、新建一個媒體庫、替第一個媒體庫加 Berth
+    路徑當寫入目標、貼 Prowlarr 的 key 並加兩站。"""
     ok(_choose(client, "jellyfin", base_url=addresses[JELLYFIN]))
     user, password = owner
     ok(
@@ -644,7 +641,6 @@ def walk_existing(
             password="adminadmin",
         )
     )
-    ok(client.post("/api/setup/qbittorrent/apply"))
     page = ok(client.post("/api/setup/routes/libraries"))
     first = page["libraries"][0]
     selection = {"library": first["name"], "target_path": first["berth_path"]}
@@ -904,14 +900,14 @@ def test_an_extra_global_preference_on_the_existing_round_is_refused(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """違規要紅：既有那一輪，頁 2 的套用順手改了 qBittorrent 的全域預設儲存路徑。"""
+    """違規要紅：既有那一輪，頁 3 建 Route 時順手改了 qBittorrent 的全域預設儲存路徑。"""
     run = wizard(ServiceOrigin.EXISTING, existing_services(tmp_path / "nas", initialized=True))
 
-    async def also_moves_their_downloads(session: Any, factory: Any, **kwargs: Any) -> Any:
+    async def also_moves_their_downloads(session: Any, factory: Any, *args: Any) -> Any:
         await factory.qbittorrent(ADDRESSES[QBITTORRENT]).set_preferences({"save_path": "/data"})
-        return await apply_qbittorrent(session, factory, **kwargs)
+        return await build_routes(session, factory, *args)
 
-    monkeypatch.setattr("berth.api.setup.apply_qbittorrent", also_moves_their_downloads)
+    monkeypatch.setattr("berth.api.setup.build_routes", also_moves_their_downloads)
 
     walk_existing(run.client)
 

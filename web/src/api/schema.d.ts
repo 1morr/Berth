@@ -1884,7 +1884,8 @@ export interface paths {
          * Post Qbittorrent Apply
          * @description 頁 2 的「套用」：帶了登入就設套件內那一台的 WebUI 登入。全域偏好一個都不寫（M4 票 32）。
          *
-         *     既有的那一台帶登入回 422：Berth 不寫既有服務的帳密（brief §16.4）。
+         *     既有的那一台帶不帶登入都 422（M4 票 101）：Berth 不寫既有服務的帳密（brief §16.4），畫面上也沒有
+         *     這一顆（M4 票 38）。
          */
         post: operations["post_qbittorrent_apply_api_setup_qbittorrent_apply_post"];
         delete?: never;

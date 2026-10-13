@@ -863,6 +863,27 @@ class TestQbittorrent:
         assert [row["status"] for row in body["steps"]] == ["pending"]
 
     @pytest.mark.parametrize(
+        "body",
+        [{"login": {"username": "skipper", "password": "harbour"}}, None],
+        ids=["with-login", "without-login"],
+    )
+    def test_an_existing_qbittorrent_is_refused_with_or_without_a_login(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient, body: dict[str, object] | None
+    ) -> None:
+        """既有的那一台沒有「套用」（M4 票 38、101）：與 `PUT /setup/qbittorrent/login` 同一個說法。
+
+        雙向是上面那一條：套件內那一台不帶登入照舊 200。
+        """
+        assert _choose(client, "qbittorrent", base_url="http://nas:8080").status_code == 200
+        tested = qbittorrent.calls
+
+        response = client.post("/api/setup/qbittorrent/apply", json=body)
+
+        assert response.status_code == 422
+        assert "existing service" in response.json()["detail"]
+        assert (qbittorrent.calls, qbittorrent.writes) == (tested, [])
+
+    @pytest.mark.parametrize(
         "login",
         [{"username": "skipper", "password": ""}, {"username": "   ", "password": "h"}],
         ids=["blank-password", "whitespace-username"],

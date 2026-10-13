@@ -220,8 +220,8 @@ async def apply_qbittorrent(
     那一組不重寫。
 
     既有的那一台什麼都不寫，畫面上也沒有這一顆（M4 票 38）：它的頁 2 測試通過就做完了
-    （`setup._qbittorrent_secured`）。直接打 API 時只是再連一次、記密碼那一條 `skipped`；帶了登入就
-    拒絕（`ValueError`）。
+    （`setup._qbittorrent_secured`）。帶不帶登入都在連線之前拒絕（`ValueError`，M4 票 101），與
+    `set_interface_login` 同一個說法。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
@@ -230,8 +230,8 @@ async def apply_qbittorrent(
     origin, base_url = qbittorrent_target(setup, settings)
     if origin is None:
         raise ValueError("choose where qBittorrent comes from first")
+    _refuse_existing(origin)
     if login is not None:
-        _refuse_existing(origin)
         # 沿用 Jellyfin 帳密要先過 Jellyfin 那一關：在寫任何東西之前（M4 票 15）。
         login = await resolve_interface_login(session, factory, login)
 
@@ -249,7 +249,7 @@ async def apply_qbittorrent(
                 preferences=preferences,
             )
 
-        steps = [await _apply_password(client, setup, origin, login, preferences)]
+        steps = [await _apply_password(client, setup, login, preferences)]
         preferences = dict(await client.preferences())
     except ServiceError as exc:
         return _unreachable(setup, settings, origin, base_url, exc)
@@ -301,7 +301,7 @@ async def set_interface_login(
     client = factory.qbittorrent(base_url)
     try:
         version, preferences = await _connect(client, settings)
-        step = await _apply_password(client, setup, origin, login, preferences)
+        step = await _apply_password(client, setup, login, preferences)
     except ServiceError as exc:
         return _unreachable(setup, settings, origin, base_url, exc)
     finally:
@@ -338,11 +338,10 @@ def _refuse_existing(origin: ServiceOrigin | None) -> None:
 async def _apply_password(
     client: QbittorrentClient,
     setup: SetupSettings,
-    origin: ServiceOrigin | None,
     login: InterfaceLogin | None,
     preferences: Mapping[str, Any],
 ) -> SetupStep:
-    """套件內的那一台另設 WebUI 登入（M4 票 07）。
+    """套件內的那一台另設 WebUI 登入（M4 票 07）。既有的那一台呼叫端先拒絕了（`_refuse_existing`）。
 
     設完的那一組只記帳號與加鹽雜湊（`setup.qbittorrent.web_ui_*`，M4 票 15）：Berth 連它靠免密
     白名單，用不到密碼；雜湊只拿來比出「已經是這一組了」——密碼是這一步唯一讀不回來比對的鍵。
@@ -353,8 +352,6 @@ async def _apply_password(
     記下了（`note_qbittorrent_login`，M4 票 38）。
     """
     key = QbittorrentStep.PASSWORD.value
-    if origin is not ServiceOrigin.BUNDLED:
-        return SetupStep(key=key, status=StepStatus.SKIPPED)
     record = setup.qbittorrent
     if login is None:
         instance = _instance_username(preferences)
