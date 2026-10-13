@@ -2337,8 +2337,6 @@ export interface components {
             id: number;
             /** Title */
             title: string;
-            /** Premiere */
-            premiere: string | null;
             /** Subgroups */
             subgroups: components["schemas"]["SubgroupOut"][];
         };
@@ -2417,8 +2415,6 @@ export interface components {
         BudgetOut: {
             /** Limit */
             limit: number;
-            /** Window Seconds */
-            window_seconds: number;
             /** Sites */
             sites: components["schemas"]["SiteBudgetOut"][];
         };
@@ -2585,11 +2581,6 @@ export interface components {
             use: components["schemas"]["BudgetUse"];
             /** Refused */
             refused: number;
-            /**
-             * Since
-             * Format: date-time
-             */
-            since: string;
             /** Until */
             until: string | null;
         };
@@ -2597,22 +2588,17 @@ export interface components {
          * DeletionEstimateOut
          * @description `services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
          *
-         *     畫面要的那一句在 `reclaimable`：**它不是 `link_bytes + source_bytes`**——來源與它的
-         *     媒體庫鏈接是同一份資料，兩邊各算一次會把答案說成兩倍。
+         *     畫面要的那一句在 `reclaimable`：來源與它的媒體庫鏈接是同一份資料，所以不是兩邊大小相加。
          */
         DeletionEstimateOut: {
             /** Links */
             links: number;
             /** Links Missing */
             links_missing: number;
-            /** Link Bytes */
-            link_bytes: number;
             /** Sources */
             sources: number;
             /** Sources Missing */
             sources_missing: number;
-            /** Source Bytes */
-            source_bytes: number;
             /** Reclaimable */
             reclaimable: number;
             /** Held */
@@ -3331,11 +3317,6 @@ export interface components {
             link: string;
             /** Published At */
             published_at: string | null;
-            /**
-             * Seen At
-             * Format: date-time
-             */
-            seen_at: string;
             /** Series Id */
             series_id: number | null;
             status: components["schemas"]["FeedItemStatus"];
@@ -3566,8 +3547,6 @@ export interface components {
             name: string;
             state: components["schemas"]["JobState"];
             trigger: components["schemas"]["JobTrigger"];
-            /** Trigger Ref */
-            trigger_ref: string;
             /** Error */
             error: string;
             /** Media Id */
@@ -3580,10 +3559,6 @@ export interface components {
             route_id: number | null;
             /** Route Name */
             route_name: string;
-            /** Route Slug */
-            route_slug: string;
-            /** User Id */
-            user_id: number | null;
             /** User Name */
             user_name: string;
             /** Save Path */
@@ -3601,10 +3576,6 @@ export interface components {
              * Format: date-time
              */
             added_at: string;
-            /** Completed At */
-            completed_at: string | null;
-            /** Imported At */
-            imported_at: string | null;
             /** Retryable */
             retryable: boolean;
             /** Replannable */
@@ -5115,8 +5086,6 @@ export interface components {
             used: number;
             /** By Use */
             by_use: components["schemas"]["UseCountOut"][];
-            /** Frees At */
-            frees_at: string | null;
             /** Deferred */
             deferred: components["schemas"]["DeferralOut"][];
         };
@@ -5420,7 +5389,6 @@ export interface components {
             job_name: string;
             /** Path */
             path: string;
-            file_kind: components["schemas"]["FileKind"];
             /** Reasons */
             reasons: components["schemas"]["ItemReasonOut"][];
         };

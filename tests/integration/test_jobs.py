@@ -322,7 +322,9 @@ class TestAddDownload:
             user_id=skipper,
         )
 
-        assert outcome.job.user_id == skipper
+        job = await session.get(Job, outcome.job.hash)
+        assert job is not None
+        assert job.user_id == skipper
         events = await read_job_events(session, MAGNET_HASH)
         assert events[0].actor == str(skipper)
 

@@ -511,11 +511,10 @@ class BudgetView:
     """一個站一份請求預算的現況（M3 票 20）：每站每小時多少、誰用了多少、哪一種工作被延後。"""
 
     limit: int
-    window: timedelta
     sites: tuple[SiteUsage, ...]
 
 
 def read_budget(factory: ServiceClientFactory) -> BudgetView:
     """記在程序記憶體裡的那一份（`adapters.budget`），不讀資料庫、不連任何服務。"""
     budget = factory.budget
-    return BudgetView(limit=budget.limit, window=budget.window, sites=budget.usage())
+    return BudgetView(limit=budget.limit, sites=budget.usage())

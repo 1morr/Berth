@@ -297,7 +297,6 @@ class ItemOut(BaseModel):
     title: str
     link: str
     published_at: datetime | None
-    seen_at: datetime
     series_id: int | None
     status: FeedItemStatus
     job_hash: str
@@ -591,7 +590,6 @@ class BangumiOut(BaseModel):
 
     id: int
     title: str
-    premiere: date | None
     #: 照番組頁左欄的順序。
     subgroups: list[SubgroupOut]
 

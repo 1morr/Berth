@@ -73,8 +73,6 @@ class DeferralOut(BaseModel):
     use: BudgetUse
     #: 擋下了幾個請求。
     refused: int
-    #: 第一次被擋的時刻。
-    since: datetime
     #: 放得下的時刻；`null` 是一次要的比整份預算還多，永遠放不下。
     until: datetime | None
 
@@ -84,8 +82,6 @@ class SiteBudgetOut(BaseModel):
     #: 視窗裡的請求數。
     used: int
     by_use: list[UseCountOut]
-    #: 最早那一個請求滑出視窗的時刻。
-    frees_at: datetime | None
     deferred: list[DeferralOut]
 
 
@@ -94,7 +90,6 @@ class BudgetOut(BaseModel):
 
     #: 每一站在一個視窗裡最多幾個請求。
     limit: int
-    window_seconds: int
     #: 視窗裡問過、或有工作被擋著的站。
     sites: list[SiteBudgetOut]
 
@@ -108,15 +103,13 @@ async def read_request_budget(factory: ClientFactoryDep) -> BudgetOut:
 def _budget(view: BudgetView) -> BudgetOut:
     return BudgetOut(
         limit=view.limit,
-        window_seconds=int(view.window.total_seconds()),
         sites=[
             SiteBudgetOut(
                 site=row.site,
                 used=row.used,
                 by_use=[UseCountOut(use=use, count=count) for use, count in row.by_use],
-                frees_at=row.frees_at,
                 deferred=[
-                    DeferralOut(use=one.use, refused=one.refused, since=one.since, until=one.until)
+                    DeferralOut(use=one.use, refused=one.refused, until=one.until)
                     for one in row.deferred
                 ],
             )

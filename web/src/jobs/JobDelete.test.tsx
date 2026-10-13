@@ -13,10 +13,8 @@ function estimate(overrides: Record<string, number> = {}) {
   return {
     links: 5,
     links_missing: 0,
-    link_bytes: 1_500_000_000,
     sources: 6,
     sources_missing: 0,
-    source_bytes: 1_500_000_000,
     reclaimable: 1_500_000_000,
     held: 0,
     ...overrides,

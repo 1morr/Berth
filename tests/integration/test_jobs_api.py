@@ -307,7 +307,7 @@ class TestSubmitting:
         assert job["error"] == ""
         assert job["state"] == "submitted"
         assert job["trigger"] == "manual"
-        assert job["route_slug"] == "tv"
+        assert job["route_name"] == "TV"
         assert job["media_id"] == SPY_ID
         assert (job["media_title"], job["media_title_en"]) == (
             "SPY×FAMILY 間諜家家酒",

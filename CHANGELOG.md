@@ -11,6 +11,11 @@
 
 ### Removed
 
+- **API 回應裡畫面沒讀的欄位**（M4 票 94）：`GET /api/jobs` 與各支回 Job 的端點拿掉 `trigger_ref`、`route_slug`、
+  `user_id`、`completed_at`、`imported_at`；`GET /api/jobs/{hash}/deletion` 拿掉 `link_bytes`、`source_bytes`
+  （可釋放的量照舊在 `reclaimable`）；`GET /api/health/budget` 拿掉 `window_seconds`、每站的 `frees_at`、延後工作的
+  `since`；RSS 的 Item 拿掉 `seen_at`、`GET /api/rss/mikan/bangumi/{id}` 拿掉 `premiere`；審核佇列對不到的那一列拿掉
+  `file_kind`。資料庫不動。自己寫腳本讀這幾欄的要改；`content_path` 與計劃的 `engine` / `engine_version` 留著。
 - **四個沒有人讀的資料庫欄位**（M4 票 95）：`jobs.last_seen_in_client_at`、`job_files.updated_at`、
   `ledger.source_inode`、`ledger.link_mode`。畫面與 API 都沒有用過它們（API 回應本來就不帶）。
   **資料庫 migration `a6c3e9f2b815`**：原生刪欄，不重建表。降版把欄位加回來：來源 inode 補成目標 inode

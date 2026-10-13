@@ -6,7 +6,6 @@ Berth 代搜（2026-09-26 使用者拍板）：Mikan 的搜尋頁用英文、羅
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -77,7 +76,7 @@ async def test_a_bangumi_lists_its_subgroups_and_which_are_bound(
 
     found = await read_bangumi(session, factory, 4009)
 
-    assert (found.id, found.title, found.premiere) == (4009, "与你相恋到生命尽头", date(2026, 7, 7))
+    assert (found.id, found.title) == (4009, "与你相恋到生命尽头")
     groups = {group.id: group for group in found.subgroups}
     assert len(groups) == 11
     assert groups[370].bound_to == media.id

@@ -471,7 +471,6 @@ class TestTheEstimate:
 
         estimate = await estimate_deletion(session, job.hash)
 
-        assert estimate.source_bytes == on_disk
         assert estimate.reclaimable == on_disk
 
     async def test_a_file_something_else_also_holds_is_not_reclaimable(
@@ -479,6 +478,7 @@ class TestTheEstimate:
     ) -> None:
         """Berth 不知道的第三個鏈接握著它時，刪掉來源與媒體庫那兩個名字也不會釋放。"""
         job, _, _ = await imported(session, roots)
+        on_disk = sum(path.stat().st_size for path in await sources(session))
         held = (await sources(session))[0]
         elsewhere = roots["complete"] / "kept-by-someone-else.mkv"
         fs.link(held, elsewhere, roots=[roots["complete"]])
@@ -486,7 +486,7 @@ class TestTheEstimate:
         estimate = await estimate_deletion(session, job.hash)
 
         assert estimate.held == held.stat().st_size
-        assert estimate.reclaimable == estimate.source_bytes - held.stat().st_size
+        assert estimate.reclaimable == on_disk - held.stat().st_size
 
     async def test_a_target_that_is_already_gone_is_counted_as_missing(
         self, session: AsyncSession, roots: dict[str, Path]

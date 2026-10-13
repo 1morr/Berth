@@ -276,7 +276,6 @@ class JobView:
     name: str
     state: JobState
     trigger: JobTrigger
-    trigger_ref: str
     error: str
     media_id: str | None
     #: 作品名的兩輪（brief §7.5）：`zh-Hant` 介面用 `media_title`（`zh-TW` 那一輪，缺就是英文），
@@ -285,8 +284,6 @@ class JobView:
     media_title_en: str
     route_id: int | None
     route_name: str
-    route_slug: str
-    user_id: int | None
     user_name: str
     save_path: str
     content_path: str
@@ -294,8 +291,6 @@ class JobView:
     progress: float
     client_state: str
     added_at: datetime
-    completed_at: datetime | None
-    imported_at: datetime | None
     #: 這一筆現在按得了「重試」嗎（plan §3.1 的 `submit_failed` → `requested`）。
     #: 規則在後端算好：前端重算一份的話，票 10 加進來的其他可重試狀態會漏掉一邊。
     retryable: bool
@@ -1409,15 +1404,12 @@ def _view(job: Job, related: _Related) -> JobView:
         name=job.name,
         state=job.state,
         trigger=job.trigger,
-        trigger_ref=job.trigger_ref,
         error=job.error,
         media_id=job.media_id,
         media_title=media.snapshot().title if media is not None else "",
         media_title_en=media.title_en if media is not None else "",
         route_id=job.route_id,
         route_name=route.name if route is not None else "",
-        route_slug=route.slug if route is not None else "",
-        user_id=job.user_id,
         user_name=user.name if user is not None else "",
         save_path=job.save_path,
         content_path=job.content_path,
@@ -1425,8 +1417,6 @@ def _view(job: Job, related: _Related) -> JobView:
         progress=job.progress,
         client_state=job.client_state,
         added_at=job.added_at,
-        completed_at=job.completed_at,
-        imported_at=job.imported_at,
         retryable=job.state in RETRYABLE,
         reimportable=reimportable(job),
         plan_id=plan_id,

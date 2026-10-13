@@ -88,12 +88,9 @@ class DeletionEstimate:
     links: int
     #: 帳本上有、磁碟上已經不在的（有人在 Jellyfin 或檔案總管裡刪掉了）。
     links_missing: int
-    #: 那幾個鏈接的大小合計。**不是可釋放的量**：它們與來源是同一份資料。
-    link_bytes: int
     #: complete 底下還在的來源檔數。
     sources: int
     sources_missing: int
-    source_bytes: int
     #: 來源與所有鏈接都刪掉時真的會空出來的位元組。
     reclaimable: int
     #: Berth 不知道的第三個名字握著、刪了也不會空出來的位元組。
@@ -133,10 +130,8 @@ async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEst
     return DeletionEstimate(
         links=len(links.found),
         links_missing=len(placed) - len(links.found),
-        link_bytes=links.bytes,
         sources=len(sources.found),
         sources_missing=len(paths.sources) - len(sources.found),
-        source_bytes=sources.bytes,
         reclaimable=facts.reclaimable,
         held=facts.bytes - facts.reclaimable,
     )

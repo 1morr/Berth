@@ -1,6 +1,6 @@
 # 94 — 簡化：刪掉前端沒讀的 API 回應欄位
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -24,7 +24,13 @@
 
 ## 驗收
 
-- [ ] 上列欄位已從回應拿掉；`gen:api` 重跑；後端斷言與前端 fixture 跟著改（審計列了位置）
-- [ ] 留下的兩組在 plan 寫明理由
-- [ ] plan 的 API 段（`GET /health/budget` 的「放得下的時刻」、番組的 `premiere`）同步；CHANGELOG 記在 Removed（對外 API 回應形狀變了）
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+- [x] 上列欄位已從回應拿掉；`gen:api` 重跑；後端斷言與前端 fixture 跟著改（審計列了位置）
+- [x] 留下的兩組在 plan 寫明理由
+- [x] plan 的 API 段（`GET /health/budget` 的「放得下的時刻」、番組的 `premiere`）同步；CHANGELOG 記在 Removed（對外 API 回應形狀變了）
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+
+## Comments
+
+- 2026-10-13 收尾 code-review（Standards、Spec 兩軸）唯一的發現是 plan 的 review 列還寫著 `file_kind`，已改。未處理的兩條（都不是這張票造成的）：
+  - `adapters/budget.SiteUsage` 的 `limit`、`window` 沒有讀者（`window_seconds` 讀的是 `BudgetView.window`，已刪）。
+  - `deletion.estimate_deletion` 拿掉兩個位元組數之後，`_measure(placed)`、`_measure(paths.sources)` 只剩 `.found` 有人讀，每個檔案仍 `stat` 兩次。

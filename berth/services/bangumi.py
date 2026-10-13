@@ -37,7 +37,6 @@ class SubgroupView:
 class BangumiView:
     id: int
     title: str
-    premiere: date | None
     subgroups: tuple[SubgroupView, ...]
 
 
@@ -52,7 +51,7 @@ async def search_bangumi(factory: ServiceClientFactory, term: str) -> tuple[mika
 async def read_bangumi(
     session: AsyncSession, factory: ServiceClientFactory, bangumi_id: int
 ) -> BangumiView:
-    """一個番組的中文名、開播日期與字幕組，每一組說出它是不是已經綁在某部作品上。"""
+    """一個番組的中文名與字幕組，每一組說出它是不是已經綁在某部作品上。"""
     page = await _fetch(factory, mikan.bangumi_url(bangumi_id))
     about = mikan.bangumi_page(page)
     rows = await session.execute(
@@ -64,7 +63,6 @@ async def read_bangumi(
     return BangumiView(
         id=bangumi_id,
         title=about.title,
-        premiere=about.premiere,
         subgroups=tuple(
             SubgroupView(
                 id=group.id,

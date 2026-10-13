@@ -31,7 +31,6 @@ from berth.domain import (
     AuditReason,
     DuplicateDecision,
     DuplicateReason,
-    FileKind,
     MediaKind,
     PlanAction,
     PlanDecision,
@@ -209,7 +208,6 @@ class UnmatchedRowOut(BaseModel):
     job_name: str
     #: complete 裡的完整路徑。
     path: str
-    file_kind: FileKind
     #: 解析器為什麼對不到（那一列 Plan Item 的理由）。
     reasons: list[ItemReasonOut]
 
@@ -465,7 +463,6 @@ def _unmatched_out(row: UnmatchedRow) -> UnmatchedRowOut:
         job_hash=row.job_hash,
         job_name=row.job_name,
         path=row.source_path,
-        file_kind=row.file_kind,
         reasons=[ItemReasonOut.model_validate(reason) for reason in row.reasons],
     )
 

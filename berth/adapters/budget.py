@@ -64,8 +64,6 @@ class SiteUsage:
     used: int
     #: 照誰用掉的拆開（`BudgetUse` 的順序，零的不列）。
     by_use: tuple[tuple[BudgetUse, int], ...]
-    #: 最早那一個請求滑出視窗的時刻；視窗是空的時是 `None`。
-    frees_at: datetime | None
     deferred: tuple[Deferral, ...]
 
 
@@ -143,7 +141,6 @@ class RequestBudget:
                     window=self.window,
                     used=len(log),
                     by_use=tuple((use, counts[use]) for use in BudgetUse if counts[use]),
-                    frees_at=log[0][0] + self.window if log else None,
                     deferred=deferred,
                 )
             )
