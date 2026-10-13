@@ -6,8 +6,13 @@
 
 ## [Unreleased]
 
-**升級須知**：這一版有資料庫 migration（`a6c3e9f2b815`，Berth 啟動時自動套用一次），不必做任何事；
-既有的 Job、檔案、計劃與帳本都留著。
+## [0.2.5] - 2026-10-13
+
+**從 0.2.4 升級**：`docker compose pull && docker compose up -d` 就好，`.env` 不用改；`docker-compose.yml` 只改了開頭的
+註解，不換也可以。image 是 `ghcr.io/1morr/berth:0.2.5`，同時是 `:0.2` 與 `:latest`。**這一版有資料庫 migration**
+（`a6c3e9f2b815`，Berth 啟動時自動套用一次），不必做任何事；既有的 Job、檔案、計劃與帳本都留著。下面〈Removed〉的
+API 欄位與 `GET /api/settings/services` 只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可。從這一版起，
+部署檔附在每一版的 Release 上，README 的連結固定指向最新一版。
 
 ### Changed
 
