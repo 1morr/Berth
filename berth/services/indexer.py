@@ -339,25 +339,29 @@ async def apply_default_indexers(
 async def add_recommended_indexers(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
-    """套件內頁 4 的主鍵（M4 票 44，審計 E-5）：測推薦清單上還沒加入的站，通過的加進去，一次做完。
+    """頁 4 的主鍵（M4 票 44，審計 E-5）：測推薦清單上還沒加入的站，通過的加進去，一次做完。
 
-    原本是測 → 勾 → 加三個動作；套件內的使用者沒有理由不要已經通過測試的推薦站。逐站的清單與
-    其他公開站照舊走 `verify_sites` 與 `apply_default_indexers`（畫面上的「進階」）。
+    原本是測 → 勾 → 加三個動作；使用者沒有理由不要已經通過測試的推薦站。逐站的清單與其他公開站照舊
+    走 `verify_sites` 與 `apply_default_indexers`（畫面上的「進階」）。
 
     **已經在 Prowlarr 裡的站不測也不加**：重跑、重裝保留設定時主鍵不重複加。結論逐站記成纜繩：
     加進去的 `ok`；測試就沒過的 `failed`、標上是測試那一支（`SiteStage.TEST`），不送去新增；測過而
     新增被拒的 `failed`、是新增那一支——Prowlarr 加之前自己再連一次，那一次沒連上（審計實測 Internet
-    Archive），它不算已加入。介面登入與「加入」同一個結論（不設，`_apply_password`）。
+    Archive），它不算已加入。
 
-    只給套件內：既有的那一台加站要人看過加哪幾站、按一次確認（M4 票 20）。
+    **既有的那一台也是**（M4 票 67，審計 C3）：加的是同一份推薦清單、只加測過的，與票 20「人看過加
+    哪幾站」不衝突——清單就在按鈕旁邊。套件內那一台的介面登入與「加入」同一個結論（不設，
+    `_apply_password`）；既有的那一台不讀也不寫 `config/host`，同 `apply_default_indexers`。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
     origin, base_url = _target(setup, settings)
-    _refuse_existing(origin)
+    _refuse_unchosen(origin)
+    bundled = origin is ServiceOrigin.BUNDLED
 
     client = factory.prowlarr(base_url, settings.api_key)
     steps: list[SetupStep] = []
+    instance = ""
     try:
         definitions = _by_definition(await client.definitions())
         present = {row.definition_name for row in await client.indexers()}
@@ -379,8 +383,9 @@ async def add_recommended_indexers(
             else:
                 steps.append(_test_failed_step(check))
         sites = len(await client.indexers())
-        instance = instance_login(await client.host_config())
-        steps.append(await _apply_password(client, setup, None, instance, sleep=asyncio.sleep))
+        if bundled:
+            instance = instance_login(await client.host_config())
+            steps.append(await _apply_password(client, setup, None, instance, sleep=asyncio.sleep))
     except ServiceError as exc:
         return _view(setup, settings, origin, base_url, reachable=False, error=exc)
     finally:
@@ -391,7 +396,7 @@ async def add_recommended_indexers(
         base_url,
         steps,
         sites=sites,
-        bundled=True,
+        bundled=bundled,
         instance=instance,
         added=_newly_added(steps, definitions),
     )

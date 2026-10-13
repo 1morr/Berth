@@ -7,6 +7,7 @@ import type {
   ChoiceRefusal,
   ComposeHosts,
   ConnectionReason,
+  OwnerRefusal,
   SetupService,
   SetupStatus,
 } from '../api/setup'
@@ -30,6 +31,7 @@ import { escapeOnly } from '../components/useInPlaceConfirm'
 import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
 import { addressError } from './address'
+import { trimUsername } from './jellyfinUsername'
 import { LeftoverList } from './LeftoverList'
 import type { ChoiceDraft } from './choiceDraft'
 import { pointsAtBerth } from './loopback'
@@ -81,6 +83,12 @@ export interface ChoiceControls {
   onChoose: (input: ChoiceInput, done?: () => void) => void
   /** `restart`：使用者按的「重新測試」，2 分鐘重新算。 */
   onRetest: (restart: boolean) => void
+  /**
+   * 頁 1 既有 Jellyfin、還沒有擁有者（M4 票 67，審計 C1）：既有那一張表單多管理員帳密兩格，按一次就是連線並
+   * 登入（`onChoose` 收到的 `username`、`password` 是那兩格）。`refusal` 是登入那一段被拒的理由（位址那一段
+   * 被拒走上面的 `refusal`）。不是這種表單時沒有。
+   */
+  signIn?: { refusal: OwnerRefusal | null }
 }
 
 /**
@@ -113,6 +121,7 @@ export function ServiceChoice({
   onDraft,
   onChoose,
   onRetest,
+  signIn,
 }: ChoiceControls &
   ChoiceDraft & {
     kind: ServiceKind
@@ -243,9 +252,12 @@ export function ServiceChoice({
         : `${name} ${t(STATE_LABEL[service.state])}`
       : ''
 
-  // 鎖住的是來源，不是位址：同一個來源換位址照舊可以（設定頁的連線區就是做這件事）。
+  // 鎖住的是來源，不是位址：同一個來源換位址照舊可以（設定頁的連線區就是做這件事）。連上了、那一台也已經有
+  // 管理員，而登入還沒成（帳密被拒、或重新整理過）：表單照留，帳密在它裡面（M4 票 67）。
+  const signsIn = Boolean(signIn) && status.owner_signs_in
   const showExistingForm =
-    selected === 'existing' && (draft === 'existing' || editing || service?.state !== 'ok')
+    selected === 'existing' &&
+    (draft === 'existing' || editing || service?.state !== 'ok' || signsIn)
   const form = showExistingForm && (
     <ExistingForm
       kind={kind}
@@ -255,6 +267,7 @@ export function ServiceChoice({
       inUse={service?.state === 'ok'}
       choosing={choosing}
       refusal={edited ? null : refusal}
+      signIn={signIn && { refusal: edited ? null : signIn.refusal }}
       focusFirst={editing}
       onEdit={() => setEdited(true)}
       onSubmit={chooseExisting}
@@ -551,6 +564,7 @@ export function ExistingForm({
   inUse,
   choosing,
   refusal,
+  signIn,
   focusFirst,
   onEdit,
   onSubmit,
@@ -565,6 +579,11 @@ export function ExistingForm({
   inUse: boolean
   choosing: boolean
   refusal: ChoiceRefusal | null
+  /**
+   * 頁 1 既有 Jellyfin、還沒有擁有者（M4 票 67）：多管理員帳密兩格，送出鍵是「連線並登入」。`refusal` 是
+   * 登入那一段被拒的理由：帳密不對標在兩格上，其餘（不是管理員、Jellyfin 那一段失敗）在表單裡。
+   */
+  signIn?: ChoiceControls['signIn']
   /** 按「改位址或憑證」打開的：那顆鈕自己卸下了，焦點交給位址欄（audit）。 */
   focusFirst: boolean
   /** 任何一格改了：上一次的結果與拒絕不再對得上這些值。 */
@@ -577,14 +596,24 @@ export function ExistingForm({
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [checked, setChecked] = useState(false)
-  const fields = connectFields(kind)
+  const fields = signIn ? (['credentials'] as const) : connectFields(kind)
   const credentialError = useId()
+  // 送出那一刻的帳密（M4 票 67）：Jellyfin 拒絕空的那一組時，照空的是哪一格說，不說成「不認這組」。
+  const [sent, setSent] = useState({ username: '', password: '' })
   // 測不過的那一次（沒存下）：標在哪一格、那一句人話（與連線卡的補法同一句）。
   const attempt = refusal?.reason === 'connection_failed' ? (refusal.attempt ?? null) : null
-  const field = attempt?.reason ? connectionField(kind, attempt.reason) : null
+  const signInRefusal = signIn?.refusal ?? null
+  const credentialsRefused = signInRefusal?.reason === 'invalid_credentials'
+  const field = attempt?.reason
+    ? connectionField(kind, attempt.reason)
+    : credentialsRefused
+      ? 'credentials'
+      : null
   const { lede: said, remedy } = attempt
     ? fixOf(t, kind, status, attempt)
-    : { lede: undefined, remedy: null }
+    : credentialsRefused
+      ? { lede: t(blankCredential(sent) ?? 'owner.refused.invalid_credentials'), remedy: null }
+      : { lede: undefined, remedy: null }
   const typed = checked ? addressError(t, baseUrl) : undefined
   // 測不過的那一次（或存下的那一台紅了）補法已經說了 localhost 那一句：位址欄下的提示收起來，不說兩遍
   // （審計 P2-4）。只看補法是不是那一句——帳密錯、版本太舊時那一句不在補法裡，提示照留。改了一格之後
@@ -601,6 +630,7 @@ export function ExistingForm({
     event.preventDefault()
     setChecked(true)
     if (addressError(t, baseUrl)) return
+    setSent({ username, password })
     onSubmit({
       origin: 'existing',
       base_url: baseUrl.trim(),
@@ -616,7 +646,9 @@ export function ExistingForm({
       noValidate
       className="grid gap-4 border-2 border-rule-strong bg-hull px-4 py-4"
     >
-      <p className="max-w-prose text-xs text-ink-dim">{t(`connect.hint.${kind}`)}</p>
+      <p className="max-w-prose text-xs text-ink-dim">
+        {signIn ? t('connect.hint.jellyfinSignIn') : t(`connect.hint.${kind}`)}
+      </p>
       {kind === 'qbittorrent' && (
         // 測試會放一個探針（M4 票 46）。說法沿用頁 3「按下之後會」（M4 票 19、31）：只有使用者自己那一台
         // 可能設了執行外部程式，套件內不提。
@@ -653,7 +685,7 @@ export function ExistingForm({
         <>
           {/* 帳密錯是兩格的事：兩格都標，那一句寫一次、兩格都指到它（M4 票 45）。 */}
           <Field
-            label={t('connect.field.username')}
+            label={t(signIn ? 'owner.field.username' : 'connect.field.username')}
             value={username}
             autoComplete="off"
             invalid={field === 'credentials'}
@@ -667,7 +699,7 @@ export function ExistingForm({
             label={t('connect.field.password')}
             value={password}
             autoComplete="off"
-            hint={banWarning(t, attempt ?? service)}
+            hint={signIn ? t('jellyfin.existing.passwordHint') : banWarning(t, attempt ?? service)}
             invalid={field === 'credentials'}
             describedBy={field === 'credentials' ? credentialError : undefined}
             onChange={(event) => {
@@ -689,10 +721,25 @@ export function ExistingForm({
           {remedy && <div className="mt-2">{remedy}</div>}
         </Notice>
       )}
+      {signInRefusal && !credentialsRefused && (
+        <div className="grid gap-1">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`owner.refused.${signInRefusal.reason}`)}
+          </Notice>
+          {/* Jellyfin 那一步的原文收進技術細節（M4 票 21）。 */}
+          <TechnicalDetails lines={[signInRefusal.detail]} />
+        </div>
+      )}
       {attempt && (
         <div className="grid gap-1">
           <p className="max-w-prose text-xs text-ink-dim">
-            {t(inUse ? 'connect.notSavedInUse' : 'connect.notSaved')}
+            {t(
+              inUse
+                ? 'connect.notSavedInUse'
+                : signIn
+                  ? 'connect.notSavedSignIn'
+                  : 'connect.notSaved',
+            )}
           </p>
           <TechnicalDetails lines={[endpointAt(attempt.base_url, kind), attempt.error]} />
         </div>
@@ -706,11 +753,26 @@ export function ExistingForm({
       )}
       <div>
         <PrimaryButton type="submit" busy={choosing}>
-          {choosing ? t('connect.submitting') : t('connect.submit')}
+          {signIn
+            ? t(choosing ? 'connect.signingIn' : 'connect.signIn')
+            : t(choosing ? 'connect.submitting' : 'connect.submit')}
         </PrimaryButton>
       </div>
     </form>
   )
+}
+
+/**
+ * 送出時空著的那一格（M4 票 67）：Jellyfin 拒絕空的帳密，但「不認這組」說錯了原因。帳號填了、密碼空著時說
+ * Berth 不收沒有密碼的擁有者（同頁 1 登入表單，M4 票 31）。
+ */
+function blankCredential(sent: {
+  username: string
+  password: string
+}): 'owner.error.blank' | 'owner.error.noPassword' | null {
+  if (!trimUsername(sent.username)) return 'owner.error.blank'
+  if (!sent.password) return 'owner.error.noPassword'
+  return null
 }
 
 /**

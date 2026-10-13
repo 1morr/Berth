@@ -372,6 +372,47 @@ def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
     return bool(tested) and (choice.base_url, tested) == (target.base_url, target.server_id)
 
 
+async def sign_in_existing_owner(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    bundled: BundledServices,
+    *,
+    base_url: str,
+    username: str,
+    password: str,
+) -> ClaimedOwner | SetupStatus:
+    """頁 1 既有 Jellyfin：位址與管理員帳密一次送出（M4 票 67，審計 C1）。
+
+    照 Seerr（伺服器位址與管理員帳密同一頁、一顆 Sign In，R2 §2.3）：先照服務頁的規則選既有、測過才
+    存（`choose_service`，測不過是 `ConnectionFailedError`），那一台已經有管理員就接著
+    `claim_owner`——目標是剛測過的那一台，所以「帳密只送到測過的那一台」（M4 票 28）照舊成立。
+
+    **還沒初始化的那一台不登入**，回 `SetupStatus`：選擇存下了，`owner_signs_in` 是假的，頁 1 換成
+    建立管理員的表單（語言、遠端存取要在畫面上問，M4 票 18）。帳密到那一刻才檢查是不是空的：
+    位址錯先說位址。
+    """
+    if (await read_settings(session, SetupSettings)).owner_established():
+        raise OwnerRejectedError(OwnerRefusal.OWNER_EXISTS)
+    status = await choose_service(
+        session,
+        factory,
+        bundled,
+        ServiceKind.JELLYFIN,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url=base_url),
+    )
+    if not status.owner_signs_in:
+        return status
+    jellyfin = next(row for row in status.services if row.kind is ServiceKind.JELLYFIN)
+    return await claim_owner(
+        session,
+        factory,
+        target=JellyfinTarget(base_url=jellyfin.base_url, server_id=jellyfin.server_id),
+        username=username,
+        password=password,
+    )
+
+
 async def is_owner_established(session: AsyncSession) -> bool:
     return (await read_settings(session, SetupSettings)).owner_established()
 

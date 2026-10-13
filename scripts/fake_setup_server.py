@@ -412,6 +412,14 @@ def mixed() -> Scenario:
     )
 
 
+def mixed_no_sites() -> Scenario:
+    """同 `mixed`，但使用者自己那台 Prowlarr 一個站都沒有：頁 4 是待處理，
+    主鍵「測試推薦站，加入通過的」加進它（M4 票 67，審計 C3）。"""
+    scenario = mixed()
+    scenario.connect_indexers = []
+    return scenario
+
+
 #: 既有 qBittorrent 收的那一組 WebUI 帳密（`web/e2e/existing.spec.ts`）。
 NAS_QBITTORRENT_LOGIN = ("admin", "adminadmin")
 
@@ -1765,6 +1773,7 @@ SCENARIOS = {
     "outdated": outdated,
     "signed-out": signed_out,
     "mixed": mixed,
+    "mixed-no-sites": mixed_no_sites,
     "starting": starting,
     "key-missing": key_missing,
     "absent": absent,
@@ -1796,6 +1805,9 @@ class FakeClientFactory:
         self.budget = RequestBudget() if limit is None else RequestBudget(limit=limit)
         for site, count in scenario.budget_spent.items():
             self.budget.take(site, count, BudgetUse.POLL)
+        #: 使用者自己那台 Prowlarr，一個位址一台：加進去的站之後再讀要看得到
+        #: （M4 票 67 的一鍵加站）。
+        self._existing_prowlarr: dict[str, FakeProwlarrClient] = {}
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         if self._scenario.jellyfin.error is not None and base_url != BUNDLED_JELLYFIN_URL:
@@ -1825,9 +1837,12 @@ class FakeClientFactory:
         if base_url == self._scenario.prowlarr.base_url:
             # 套件內的那一台要回同一份實例：索引站加進去之後再讀要看得到。
             return self._scenario.prowlarr
-        client = FakeProwlarrClient(
-            base_url=base_url, indexers=list(self._scenario.connect_indexers)
-        )
+        client = self._existing_prowlarr.get(base_url)
+        if client is None:
+            client = FakeProwlarrClient(
+                base_url=base_url, indexers=list(self._scenario.connect_indexers)
+            )
+            self._existing_prowlarr[base_url] = client
         expected = self._scenario.connect_api_key
         client.key_rejected = bool(expected) and api_key != expected
         return client

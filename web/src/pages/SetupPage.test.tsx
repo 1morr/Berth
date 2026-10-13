@@ -18,6 +18,7 @@ const STATUS = 'GET /api/setup/status'
 const OWNER = 'POST /api/setup/owner'
 const CHOOSE = 'POST /api/setup/services/jellyfin'
 const RETEST = 'POST /api/setup/services/jellyfin/test'
+const SIGN_IN = 'POST /api/setup/owner/existing'
 
 type FetchStub = ReturnType<typeof stubApi>
 
@@ -154,10 +155,17 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(screen.queryAllByText('http://jellyfin:8096')).toHaveLength(before - 1)
   })
 
-  it('點「既有」只展開表單不送出，按「測試連線」才送位址；那一台有管理員就是登入', async () => {
+  it('點「既有」只展開表單不送出；位址與管理員帳密同一張表單，按「連線並登入」一次送出（M4 票 67）', async () => {
     const fetchStub = stubApi({
       [STATUS]: { body: setupStatus() },
-      [CHOOSE]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+      [SIGN_IN]: {
+        body: setupStatus({
+          current_step: 2,
+          owner: 'captain',
+          owner_signs_in: true,
+          services: [EXISTING_JELLYFIN],
+        }),
+      },
     })
     const user = userEvent.setup()
 
@@ -179,50 +187,65 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(requestsOf(fetchStub).some((request) => request.startsWith('POST'))).toBe(false)
 
     await user.type(address, 'http://nas:8096')
-    await user.click(screen.getByRole('button', { name: '測試連線' }))
+    await user.type(screen.getByLabelText('Jellyfin 帳號'), 'captain')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
     await waitFor(() =>
-      expect(bodiesOf(fetchStub, '/api/setup/services/jellyfin')).toEqual([
-        {
-          origin: 'existing',
-          base_url: 'http://nas:8096',
-          api_key: '',
-          username: '',
-          password: '',
-        },
+      expect(bodiesOf(fetchStub, '/api/setup/owner/existing')).toEqual([
+        { base_url: 'http://nas:8096', username: 'captain', password: 'harbour' },
       ]),
     )
-    expect(
-      await screen.findByRole('heading', { level: 2, name: '用你的 Jellyfin 管理員登入' }),
-    ).toBeVisible()
-    expect(screen.queryByLabelText('再輸入一次密碼')).not.toBeInTheDocument()
-    expect(screen.getByText('不改這台 Jellyfin 的任何設定')).toBeInTheDocument()
+    // 一次就成立：沒有另外的選擇與登入兩支。
+    expect(bodiesOf(fetchStub, '/api/setup/services/jellyfin')).toEqual([])
+    expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([])
+    expect(await screen.findByRole('heading', { level: 2, name: '擁有者：captain' })).toBeVisible()
   })
 
-  it('連上既有的那一台之後位址表單收起來，測試那一條寫的是使用者填的那一台，要改再打開', async () => {
+  it('Connect and sign in is one form in English too', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      stubApi({ [STATUS]: { body: setupStatus() } })
+      const user = userEvent.setup()
+
+      renderInRoute(<SetupPage />)
+      await user.click(await screen.findByRole('radio', { name: /^Existing/ }))
+
+      expect(screen.getByRole('textbox', { name: 'Address' })).toBeVisible()
+      expect(screen.getByLabelText('Jellyfin username')).toBeVisible()
+      expect(screen.getByLabelText('Password')).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Connect and sign in' })).toBeVisible()
+      expect(screen.queryByRole('button', { name: 'Test connection' })).not.toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('連上了、那一台有管理員而登入還沒成：同一張表單照留，位址帶回來，測試那一條寫的是使用者填的那一台', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
     })
-    const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
 
     expect(await screen.findByLabelText('Jellyfin 帳號')).toBeInTheDocument()
     expect(existingCard()).toBeChecked()
-    expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '位址' })).toHaveValue('http://nas:8096')
+    expect(screen.getByRole('button', { name: '連線並登入' })).toBeInTheDocument()
+    // 另一張登入表單不再出現（M4 票 67）。
+    expect(screen.queryByRole('button', { name: '登入' })).not.toBeInTheDocument()
     // 測試那一條寫的是使用者填的那一台，不是 compose 主機名。
     // 帶著 http://：複製下來貼得進瀏覽器（審計 P2-6）。
     expect(screen.getByText('http://nas:8096/System/Info/Public')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '改位址' }))
-    expect(screen.getByRole('textbox', { name: '位址' })).toHaveValue('http://nas:8096')
   })
 
   /** audit（票 15）：原本一送出就清掉 draft，請求還在路上時表單卸下、兩格都沒勾、焦點掉回標題。 */
-  it('送出既有之後、回應回來之前：表單與勾選都留著，按鈕說測試中', async () => {
+  it('送出既有之後、回應回來之前：表單與勾選都留著，按鈕說連線並登入中', async () => {
     let answer: (route: { body: unknown }) => void = () => {}
     stubApi({
       [STATUS]: { body: setupStatus() },
-      [CHOOSE]: () => new Promise((resolve) => (answer = resolve)),
+      [SIGN_IN]: () => new Promise((resolve) => (answer = resolve)),
     })
     const user = userEvent.setup()
 
@@ -230,21 +253,35 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     await screen.findByRole('heading', { level: 2, name: '先選 Jellyfin 是哪一台' })
     await user.click(existingCard())
     await user.type(screen.getByRole('textbox', { name: '位址' }), 'http://nas:8096')
-    await user.click(screen.getByRole('button', { name: '測試連線' }))
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
-    expect(await screen.findByRole('button', { name: '測試中…' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '連線並登入中…' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '位址' })).toHaveValue('http://nas:8096')
     expect(existingCard()).toBeChecked()
+    expect(bundledCard()).toBeDisabled()
 
-    answer({ body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) })
-    expect(await screen.findByLabelText('Jellyfin 帳號')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '測試連線' })).not.toBeInTheDocument()
+    // 還沒初始化的那一台：連上了、沒有擁有者，換成建立管理員的表單（照原本的分支）。
+    answer({
+      body: setupStatus({
+        services: [chosen({ origin: 'existing', base_url: 'http://nas:8096' })],
+      }),
+    })
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '建立 Jellyfin 管理員' }),
+    ).toBeVisible()
+    expect(screen.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '連線並登入' })).not.toBeInTheDocument()
   })
 
   /** audit（票 15）：按鈕自己卸下之後，焦點原本交給 StepFrame 的兜底，越過剛打開的表單。 */
   it('按「改位址」之後焦點進到位址欄', async () => {
+    // 還沒初始化的那一台連上之後是建立表單：位址表單收起來，要改再打開。
     stubApi({
-      [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+      [STATUS]: {
+        body: setupStatus({
+          services: [chosen({ origin: 'existing', base_url: 'http://nas:8096' })],
+        }),
+      },
     })
     const user = userEvent.setup()
 
@@ -521,32 +558,94 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
   })
 
-  it('登入既有 Jellyfin 時密碼空著：說 Berth 不收沒有密碼的擁有者，不只說都要填（M4 票 31）', async () => {
-    const fetchStub = stubApi({
+  it('登入既有 Jellyfin 時密碼空著：說 Berth 不收沒有密碼的擁有者，不只說「不認這組」（M4 票 31、67）', async () => {
+    stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+      [SIGN_IN]: { status: 401, body: { detail: { reason: 'invalid_credentials', detail: '' } } },
     })
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
     await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
-    await user.click(screen.getByRole('button', { name: '登入' }))
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
     expect(await screen.findByText(/不收沒有密碼的 Jellyfin 帳號當擁有者/)).toBeVisible()
-    expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
+    expect(screen.getByLabelText('密碼')).toHaveAttribute('aria-invalid', 'true')
   })
 
-  it('不是管理員就地說明被拒的原因', async () => {
+  it('帳密不對標在帳密兩格上，位址那一格不標；改一格就收起來（M4 票 67）', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
-      [OWNER]: { status: 403, body: { detail: { reason: 'not_administrator', detail: '' } } },
+      [SIGN_IN]: { status: 401, body: { detail: { reason: 'invalid_credentials', detail: '' } } },
     })
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
     await fill(user, '')
-    await user.click(screen.getByRole('button', { name: '登入' }))
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
+
+    expect(await screen.findByText('Jellyfin 不認這組帳號或密碼。')).toBeVisible()
+    expect(screen.getByLabelText('Jellyfin 帳號')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('密碼')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: '位址' })).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+    await user.type(screen.getByLabelText('密碼'), 'x')
+    expect(screen.queryByText('Jellyfin 不認這組帳號或密碼。')).not.toBeInTheDocument()
+  })
+
+  it('位址連不上標在位址那一格，什麼都沒存（M4 票 67）', async () => {
+    stubApi({
+      [STATUS]: { body: setupStatus() },
+      [SIGN_IN]: {
+        status: 400,
+        body: {
+          detail: {
+            reason: 'connection_failed',
+            detail: 'unreachable',
+            attempt: chosen({
+              origin: 'existing',
+              base_url: 'http://nas:8096',
+              state: 'failed',
+              reason: 'unreachable',
+              detail: '',
+              server_id: '',
+              error: 'connection refused',
+            }),
+          },
+        },
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await user.click(await screen.findByRole('radio', { name: /^既有/ }))
+    await user.type(screen.getByRole('textbox', { name: '位址' }), 'http://nas:8096')
+    await user.type(screen.getByLabelText('Jellyfin 帳號'), 'captain')
+    await user.type(screen.getByLabelText('密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
+
+    expect(await screen.findByText(/位址測得過才存/)).toBeVisible()
+    expect(screen.getByRole('textbox', { name: '位址' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('密碼')).not.toHaveAttribute('aria-invalid', 'true')
+    // 打的字留著，改一格再按。
+    expect(screen.getByLabelText('Jellyfin 帳號')).toHaveValue('captain')
+  })
+
+  it('不是管理員就地說明被拒的原因，在表單層級', async () => {
+    stubApi({
+      [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
+      [SIGN_IN]: { status: 403, body: { detail: { reason: 'not_administrator', detail: '' } } },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await fill(user, '')
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
     expect(await screen.findByText(/不是管理員/)).toBeVisible()
+    expect(screen.getByLabelText('密碼')).not.toHaveAttribute('aria-invalid', 'true')
   })
 
   it('Jellyfin 那一段沒做完時說出來，它的原文收進技術細節', async () => {
@@ -725,7 +824,7 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
           owner_signs_in: true,
         }),
       },
-      [OWNER]: { body: setupStatus({ current_step: 2, owner: 'skipper' }) },
+      [SIGN_IN]: { body: setupStatus({ current_step: 2, owner: 'skipper' }) },
     })
     const user = userEvent.setup()
 
@@ -734,16 +833,11 @@ describe('頁 1：替還沒初始化的既有 Jellyfin 建立擁有者（M4 票 
     await user.type(screen.getByLabelText('密碼'), 'harbour')
     expect(screen.queryByLabelText('語言與地區')).toBeNull()
     expect(screen.queryByLabelText('開啟遠端存取')).toBeNull()
-    await user.click(screen.getByRole('button', { name: '登入' }))
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
     await waitFor(() =>
-      expect(bodiesOf(fetchStub, '/api/setup/owner')).toEqual([
-        {
-          base_url: 'http://jellyfin:8096',
-          server_id: chosen().server_id,
-          username: 'skipper',
-          password: 'harbour',
-        },
+      expect(bodiesOf(fetchStub, '/api/setup/owner/existing')).toEqual([
+        { base_url: 'http://jellyfin:8096', username: 'skipper', password: 'harbour' },
       ]),
     )
   })

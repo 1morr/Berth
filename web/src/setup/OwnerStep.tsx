@@ -49,6 +49,10 @@ export interface ReSignIn {
  * 那一台的狀態走：還沒跑過初始精靈就建立管理員（選既有也一樣），已經有管理員就登入（套件內重裝
  * 保留 config 也一樣）。帳密只交給 Jellyfin，不存下來。擁有者成立之後這一頁的選擇鎖住。
  *
+ * **既有的那一台位址與管理員帳密同一張表單、一顆「連線並登入」**（M4 票 67，審計 C1；Seerr 也是同一頁、
+ * 一顆 Sign In）：原本先測連線、通過之後才長出登入表單再按一次。那一張在 `ServiceChoice` 裡（`signIn`），
+ * 還沒初始化的那一台連上之後照舊換成這裡的建立表單。
+ *
  * **建立套件內那一台的管理員時多一個勾選**（M4 票 40，brief §19 D4），預設勾：套件內 qBittorrent 與
  * Prowlarr 的介面也用這組。勾著的話密碼隨 `onClaim` 交給 `SetupPage` 留在記憶體裡，頁 2、頁 4 自動帶入；
  * 登入既有的管理員、或選既有那一台時不提——前者沒有「設一組」，後者 Jellyfin 不是 Berth 的。
@@ -137,7 +141,9 @@ export function OwnerStep({
         </section>
       )}
 
-      {(mode === 'create' || mode === 'signIn') && jellyfin && (
+      {/* 既有那一台的登入在選擇的表單裡，位址與帳密一次送出（M4 票 67）；這裡只剩建立管理員，與套件內那一台
+          的登入（重裝保留 config）。 */}
+      {(mode === 'create' || (mode === 'signIn' && jellyfin?.origin === 'bundled')) && jellyfin && (
         <OwnerForm
           // 畫面上的那一台換了（重讀到別人改的位址）就是另一張表單：打好的帳密不留給新的那一台
           // （M4 票 28）。

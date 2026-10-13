@@ -94,6 +94,7 @@ from berth.services.setup import (
     read_status,
     resolve_bundled,
     retest_service,
+    sign_in_existing_owner,
 )
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 
@@ -327,6 +328,60 @@ async def post_owner(
         raise owner_refusal(refusal) from refusal
     issue_cookie(response, claimed.signed_in.token)
     return _out(claimed.status, config)
+
+
+class ExistingOwnerIn(BaseModel):
+    """頁 1 既有 Jellyfin 的那一張表單：位址與它的管理員帳密（M4 票 67）。帳密不加約束，理由同
+    `OwnerIn`。"""
+
+    base_url: str
+    username: str = ""
+    password: str = ""
+
+
+@router.post(
+    "/owner/existing",
+    responses={
+        **refusal_responses(OwnerRefusalOut, _OWNER_STATUS),
+        **refusal_responses(
+            ChoiceRefusalOut,
+            {ChoiceRefusal.CONNECTION_FAILED: _CHOICE_STATUS[ChoiceRefusal.CONNECTION_FAILED]},
+        ),
+    },
+)
+async def post_owner_existing(
+    session: SessionDep,
+    config: ConfigDep,
+    factory: ClientFactoryDep,
+    bundled: BundledServicesDep,
+    body: ExistingOwnerIn,
+    response: Response,
+) -> SetupStatusOut:
+    """頁 1 既有 Jellyfin：連線並登入，一次呼叫（M4 票 67，照 Seerr 的 Sign In）。
+
+    位址測不過是 400 `connection_failed`（與 `POST /services/jellyfin` 同形狀，什麼都不存）；帳密與
+    其餘拒絕同 `POST /owner`。成立擁有者時發 cookie；那一台還沒初始化時只存下選擇、不發——回應的
+    `owner_signs_in` 是假的，畫面換成建立管理員的表單（它送 `POST /owner`）。
+    """
+    try:
+        result = await sign_in_existing_owner(
+            session,
+            factory,
+            bundled,
+            base_url=body.base_url.strip().rstrip("/"),
+            username=body.username,
+            password=body.password,
+        )
+    except OwnerRejectedError as refusal:
+        raise owner_refusal(refusal) from refusal
+    except ConnectionFailedError as refusal:
+        raise connection_failed(refusal) from refusal
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    if isinstance(result, SetupStatus):
+        return _out(result, config)
+    issue_cookie(response, result.signed_in.token)
+    return _out(result.status, config)
 
 
 @router.post("/services/{kind}", responses=refusal_responses(ChoiceRefusalOut, _CHOICE_STATUS))
@@ -888,10 +943,10 @@ async def post_indexers_apply(
 async def post_indexers_recommended(
     session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
 ) -> IndexerSetupOut:
-    """套件內頁 4 的主鍵（M4 票 44）：測推薦清單上還沒加入的站，通過的加進去，逐站回報。
+    """頁 4 的主鍵（M4 票 44；既有的那一台也有，M4 票 67）：測推薦清單上還沒加入的站，通過的加
+    進去，逐站回報。
 
-    已經在 Prowlarr 裡的站不測也不加。既有的那一台與還沒選來源回 422：既有的加站走
-    `/indexers/apply`，要人看過加哪幾站（M4 票 20）。
+    已經在 Prowlarr 裡的站不測也不加。還沒選來源回 422。既有的那一台的介面登入不碰。
     """
     try:
         result = await add_recommended_indexers(session, factory)

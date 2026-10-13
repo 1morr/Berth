@@ -19,7 +19,7 @@ import { SetupPage } from './SetupPage'
 
 const STATUS = 'GET /api/setup/status'
 const OWNER = 'POST /api/setup/owner'
-const CHOOSE_JELLYFIN = 'POST /api/setup/services/jellyfin'
+const SIGN_IN = 'POST /api/setup/owner/existing'
 const RETEST_JELLYFIN = 'POST /api/setup/services/jellyfin/test'
 
 afterEach(() => {
@@ -61,7 +61,7 @@ describe('舊結果不留在畫面上', () => {
           detail: { reason: 'jellyfin_failed', detail: 'Jellyfin 10.10.7 is older than 12.0' },
         },
       },
-      [CHOOSE_JELLYFIN]: { body: elsewhere },
+      [SIGN_IN]: { body: elsewhere },
     })
     const user = userEvent.setup()
     renderInRoute(<SetupPage />)
@@ -74,7 +74,8 @@ describe('舊結果不留在畫面上', () => {
 
     await user.click(existingCard())
     await user.type(await screen.findByLabelText('位址'), 'http://nas:8096')
-    await user.click(screen.getByRole('button', { name: '測試連線' }))
+    // 還沒初始化的既有那一台：帳密留空，連上之後換成建立表單（M4 票 67）。
+    await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
     // 表單回來了，說的是新的那一台：上一台的失敗不在。
     expect(await screen.findByRole('button', { name: '建立管理員並登入' })).toBeVisible()
@@ -295,14 +296,14 @@ describe('頁 2 的連線卡跟著最新的失敗（M4 票 25，實測 B9-04～0
   })
 })
 
+// 既有那一台的位址與帳密一起送（M4 票 67），送的就是畫面上那一台；這裡守的是另外那張登入表單：套件內重裝
+// 保留了 config、那一台已經有管理員。
 describe('擁有者成立前目標被換（M4 票 28，實測 E12）', () => {
   const tested = chosen({
-    origin: 'existing',
     base_url: 'http://localhost:58097',
     reason: 'setup_completed',
   })
   const swapped = chosen({
-    origin: 'existing',
     base_url: 'http://localhost:48096',
     reason: 'setup_completed',
     server_id: '548d38d28268441f8d4bd0b0b7a6c1e2',

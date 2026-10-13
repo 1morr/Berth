@@ -228,7 +228,7 @@ const zhHant = {
           '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）；你在頁 3 勾了「新建一個媒體庫」才替你建那一個。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。入庫之後 Berth 會請它去看那條路徑：平常只刷新那個媒體庫，但它還沒在那條路徑底下列出過任何東西時（第一次入庫），會跑整台的「掃描媒體庫」，你其他的媒體庫也會一起被掃。',
         qbittorrent:
           '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
-        prowlarr: '只加你在頁 4 勾起來的站；原本的站不動。',
+        prowlarr: '只加你在頁 4 要它加的站；原本的站不動。',
       },
       sameHost:
         '條件：它與 Berth 在同一台主機，而且把 Berth 的 DATA_ROOT 也掛在容器路徑 /data——只能是 /data，Berth 的下載與媒體庫目錄固定在它底下。原本的掛載不用動，多加這一條就好。DATA_ROOT 要在建得了硬鏈接的檔案系統上（exFAT、網路磁碟、mergerfs 不行）；另一台 NAS 上的接不上。',
@@ -460,6 +460,8 @@ const zhHant = {
     },
     hint: {
       jellyfin: '這裡只確認位址連得到、版本夠新。',
+      jellyfinSignIn:
+        '這台 Jellyfin 的位址與它的一個管理員帳號。Berth 先確認位址連得到、版本夠新，再用帳密登入。還沒跑過初始設定的那一台帳密留空：連上之後這裡換成建立管理員。',
       qbittorrent: '免密的話帳密留空。',
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
@@ -467,7 +469,10 @@ const zhHant = {
       '測試時 Berth 會在 {{root}} 寫一個探測檔、請 qBittorrent 停住校驗一次，看它看不看得到 {{root}}，隨即移除（校驗不會跑完，不觸發「torrent 完成時執行外部程式」；你的 qBittorrent 設了「torrent 加入時執行外部程式」的話，會觸發一次），檔案也刪掉。',
     submit: '測試連線',
     submitting: '測試中…',
+    signIn: '連線並登入',
+    signingIn: '連線並登入中…',
     notSaved: '這一組沒有存下：測得過才存。改好再按一次「測試連線」。',
+    notSavedSignIn: '這一組沒有存下：位址測得過才存。改好再按一次「連線並登入」。',
     notSavedInUse: '這一組沒有存下：測得過才存，Berth 照舊用原本那一台。',
     error: {
       blank: '位址要填。',
@@ -666,7 +671,7 @@ const zhHant = {
       bundled:
         '索引站決定 Berth 找得到什麼。按一次，Berth 測試推薦的站、把通過的加進去；加入之後試搜，不要的就地移除。要逐站挑選或加其他公開站，展開「進階」。這一步可以之後再說。',
       existing:
-        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；也可以測試推薦的公開站、勾選通過的加進去。Berth 不移除你的站。這一步可以之後再說。',
+        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；一站都沒有時，按一次就測試推薦的公開站、把通過的加進去，要逐站挑選展開「進階」。Berth 不移除你的站。這一步可以之後再說。',
     },
     skip: '之後再說',
     deferred: '之後再說',
@@ -699,6 +704,10 @@ const zhHant = {
         '按一次，Berth 測試推薦的 {{count}} 個公開站，把通過的加進 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態，不影響其他站。',
       lede_other:
         '按一次，Berth 測試推薦的 {{count}} 個公開站，把通過的加進 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態，不影響其他站。',
+      ledeExisting_one:
+        '按一次，Berth 測試推薦的公開站（{{names}}），通過就加進你在 {{host}} 的 Prowlarr。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+      ledeExisting_other:
+        '按一次，Berth 測試推薦的 {{count}} 個公開站（{{names}}），把通過的加進你在 {{host}} 的 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
       run: '測試推薦站，加入通過的',
       running: '測試並加入中…',
       requestFailed: '測試與加入沒做完。',
@@ -754,7 +763,7 @@ const zhHant = {
     },
     empty: {
       label: '待處理',
-      body: '這一台 Prowlarr 還沒有任何站，Berth 什麼都搜不到。到 Prowlarr 加站後按「重新讀取」，或在下面測試推薦的公開站、勾起來加進去；也可以之後再說。',
+      body: '這一台 Prowlarr 還沒有任何站，Berth 什麼都搜不到。到 Prowlarr 加站後按「重新讀取」，或在下面按一次，測試推薦的公開站、把通過的加進去；也可以之後再說。',
       reread: '重新讀取',
       rereading: '讀取中…',
     },
@@ -3618,7 +3627,7 @@ const en: Translations<typeof zhHant> = {
           'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay); it creates a library only if you tick “Create a new library” on page 3. If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth asks it to look at that path: normally by refreshing just that library, but while it has never listed anything under the path (the first import), by running its whole-server Scan Media Library, which scans your other libraries too.',
         qbittorrent:
           'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
-        prowlarr: 'only adds the sites you tick on page 4; the sites already there stay.',
+        prowlarr: 'only adds the sites you ask for on page 4; the sites already there stay.',
       },
       sameHost:
         'Condition: it runs on the same host as Berth and also mounts Berth’s DATA_ROOT at the container path /data — it has to be /data, since Berth’s download and library folders sit underneath it. Its existing mounts stay as they are; adding this one is enough. DATA_ROOT has to be on a file system that supports hard links (not exFAT, a network share or mergerfs); one on another NAS cannot be connected.',
@@ -3861,6 +3870,8 @@ const en: Translations<typeof zhHant> = {
     },
     hint: {
       jellyfin: 'This only confirms the address answers and the version is new enough.',
+      jellyfinSignIn:
+        'The address of this Jellyfin and one of its administrator accounts. Berth first checks the address answers and the version is new enough, then signs in. If this Jellyfin has not been through its initial setup, leave the credentials empty: once it answers, this becomes the form that creates its administrator.',
       qbittorrent: 'Leave the credentials empty if the WebUI has no password.',
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
@@ -3868,8 +3879,12 @@ const en: Translations<typeof zhHant> = {
       'The test writes a probe file in {{root}} and asks qBittorrent to check it once, stopped, to see whether it can see {{root}}, then removes it (the check never finishes, so “Run external program on torrent finished” does not fire; if your qBittorrent has “Run external program on torrent added” set, that fires once) and deletes the file.',
     submit: 'Test connection',
     submitting: 'Testing…',
+    signIn: 'Connect and sign in',
+    signingIn: 'Connecting and signing in…',
     notSaved:
       'Nothing was saved: a connection is saved only once it passes. Fix it and test again.',
+    notSavedSignIn:
+      'Nothing was saved: the address is saved only once it passes. Fix it and press Connect and sign in again.',
     notSavedInUse:
       'Nothing was saved: a connection is saved only once it passes. Berth keeps using the one it had.',
     error: {
@@ -4074,7 +4089,7 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'Indexers decide what Berth can find. One press tests the recommended sites and adds the ones that pass; then run a trial search and remove the ones you do not want. To pick sites one by one or add other public sites, open Advanced. This step can wait.',
       existing:
-        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; you can also test the recommended public sites and add the ones you tick. Berth never removes your sites. This step can wait.',
+        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; if it has none, one press tests the recommended public sites and adds the ones that pass, and Advanced lets you pick them one by one. Berth never removes your sites. This step can wait.',
     },
     skip: 'Do this later',
     deferred: 'Deferred',
@@ -4108,6 +4123,10 @@ const en: Translations<typeof zhHant> = {
         'One press: Berth tests the recommended public site and adds it to Prowlarr if it passes. Prowlarr reaches the site live, which can take a moment.',
       lede_other:
         'One press: Berth tests the {{count}} recommended public sites and adds the ones that pass to Prowlarr. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal and does not affect the rest.',
+      ledeExisting_one:
+        'One press: Berth tests the recommended public site ({{names}}) and adds it to your Prowlarr at {{host}} if it passes. Berth does not remove sites — do that in Prowlarr itself.',
+      ledeExisting_other:
+        'One press: Berth tests the {{count}} recommended public sites ({{names}}) and adds the ones that pass to your Prowlarr at {{host}}. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal. Berth does not remove sites — do that in Prowlarr itself.',
       run: 'Test recommended sites and add the ones that pass',
       running: 'Testing and adding…',
       requestFailed: 'Testing and adding did not finish.',

@@ -54,10 +54,11 @@ export interface LoginControls {
  * - **套件內 Prowlarr**：「已加入」（`IndexerSites`）與主鍵「測試推薦站，加入通過的」（`RecommendedSites`，
  *   M4 票 44）；逐站測試與勾選、其他公開站收在「進階」。介面登入是自己的一區（`ProwlarrLogin`，M4 票 20），
  *   必填。
- * - **既有 Prowlarr**：同樣的「已加入」與「加站」，加的是使用者自己那一台，Berth 不移除（M4 票 20，
- *   使用者拍板：按一次確認）。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr 加站後重新讀取、
- *   在這裡加推薦的公開站，或之後再說。位址與 key 的表單、測試那一條與補法是頁 1、2 那一份
- *   （`ServiceChoice`，M4 票 39）：送的是同一支 `POST /setup/services/prowlarr`。
+ * - **既有 Prowlarr**：同樣的「已加入」、主鍵與「進階」，加的是使用者自己那一台，Berth 不移除（M4 票 20）。
+ *   主鍵原本只給套件內、既有的要「測試全部 → 勾 → 加入」（M4 票 67，審計 C3）；票 20 要的「看得到加哪幾站」
+ *   由主鍵上方那一句列出站名與那一台的位址。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr
+ *   加站後重新讀取、在這裡加推薦的公開站，或之後再說。位址與 key 的表單、測試那一條與補法是頁 1、2
+ *   那一份（`ServiceChoice`，M4 票 39）：送的是同一支 `POST /setup/services/prowlarr`。
  *
  * 整頁可以「之後再說」，連選都還沒選也可以。
  *
@@ -189,38 +190,27 @@ export function IndexerStep({
             />
           )}
           {indexers.sites.length > 0 && <AddedSites indexers={indexers} controls={sites} />}
-          {mode === 'bundled' ? (
-            <>
-              <RecommendedSites
-                indexers={indexers}
-                running={recommended.running}
-                held={login.saving || applying}
-                sticky={sticky}
-                onRun={recommended.onRun}
-                onSkip={onSkip}
-              />
-              <AdvancedSites>
-                <AddSites
-                  indexers={indexers}
-                  applying={applying}
-                  controls={sites}
-                  onApply={onApply}
-                  held={login.saving || recommended.running}
-                  sticky={false}
-                  advanced
-                />
-              </AdvancedSites>
-            </>
-          ) : (
+          {/* 既有的那一台也是同一顆主鍵（M4 票 67，審計 C3）：條件與套件內相同，Prowlarr 已經有站時
+              只剩「進階」。 */}
+          <RecommendedSites
+            indexers={indexers}
+            running={recommended.running}
+            held={login.saving || applying}
+            sticky={sticky}
+            onRun={recommended.onRun}
+            onSkip={onSkip}
+          />
+          <AdvancedSites>
             <AddSites
               indexers={indexers}
               applying={applying}
               controls={sites}
               onApply={onApply}
-              onSkip={onSkip}
-              sticky={sticky}
+              held={login.saving || recommended.running}
+              sticky={false}
+              advanced
             />
-          )}
+          </AdvancedSites>
           {mode === 'bundled' && (
             <ProwlarrLogin
               indexers={indexers}
