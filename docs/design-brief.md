@@ -388,7 +388,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 - `jobs`：hash、名稱、trigger、user、media、route、狀態、qBittorrent 的 save/content path、時間戳。
 - `job_files`：hash + 相對路徑、大小、分類、ReleaseInfo、mediainfo 摘要。
 - `plans` / `plan_items`：job 或 import source、引擎（rules/ai/user）、版本、每檔決策、confidence、reasons、審核狀態與審核者。
-- `ledger`：來源（hash、相對路徑、inode、device）、目標路徑、目標 inode、media/季/集、tags、plan item、Jellyfin item id、狀態（ok / target_missing / source_missing / inode_mismatch）。
+- `ledger`：來源（hash、相對路徑、device）、目標路徑、目標 inode（硬鏈接兩端同一個 inode，來源不另存，M4 票 95）、media/季/集、tags、plan item、Jellyfin item id、狀態（ok / target_missing / source_missing / inode_mismatch）。
 - `events`：job、類型、時間、actor、payload。
 - `rss_feeds` / `rss_rules` / `rss_items`：見 §15。
 - `issues`：孤兒與斷鏈清單，見 §9。

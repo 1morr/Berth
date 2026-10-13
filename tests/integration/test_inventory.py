@@ -251,7 +251,6 @@ async def linked(
         job_hash=of.hash if of is not None else None,
         source_rel_path=f"release/{where}.mkv",
         source_abs_path=f"/data/torrent/complete/{under.slug}/release/{where}.mkv",
-        source_inode="1",
         source_dev="1",
         target_path=target,
         target_inode="1",

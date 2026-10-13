@@ -62,7 +62,6 @@ from berth.models import (
     Route,
 )
 from berth.models import media_id as build_media_id
-from berth.models.ledger import HARDLINK
 from berth.models.types import utcnow
 from berth.naming import read_target
 from berth.parser import kind_by_extension
@@ -231,7 +230,6 @@ async def claim_torrent(
             total_size=found.total_size,
             progress=found.progress,
             client_state=found.state,
-            last_seen_in_client_at=utcnow(),
         )
         session.add(job)
         await record_event(
@@ -356,7 +354,6 @@ async def claim_file(
         job_hash=job_hash,
         source_rel_path=source_rel_path,
         source_abs_path=str(source),
-        source_inode=str(placed.inode),
         source_dev=str(placed.device),
         target_path=target,
         target_inode=str(placed.inode),
@@ -367,7 +364,6 @@ async def claim_file(
         tags_json=reading.tags.model_dump(mode="json"),
         plan_item_id=None,
         action=reading.action,
-        link_mode=HARDLINK,
         status=LedgerStatus.OK,
         audit=False,
         created_at=moment,

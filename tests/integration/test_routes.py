@@ -728,7 +728,6 @@ def ledger_entry(target: str) -> LedgerEntry:
     return LedgerEntry(
         source_rel_path="release/Show - S01E01.mkv",
         source_abs_path="/data/torrent/complete/tv/release/Show - S01E01.mkv",
-        source_inode="1",
         source_dev="1",
         target_path=target,
         target_inode="1",

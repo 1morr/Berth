@@ -67,8 +67,6 @@ class Job(Base):
     added_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     imported_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
-    #: 上一次在 qBittorrent 的清單裡看到它。torrent 從客戶端消失時要拿它說「最後一次是何時」。
-    last_seen_in_client_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
 
 
 class JobFile(Base):
@@ -93,4 +91,3 @@ class JobFile(Base):
     priority: Mapped[int] = mapped_column(default=1)
     kind: Mapped[FileKind | None] = mapped_column(enum_column(FileKind), default=None)
     mediainfo_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)
-    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

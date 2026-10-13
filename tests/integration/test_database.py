@@ -830,6 +830,112 @@ async def test_rss_jobs_take_their_published_time_from_the_feed_item(config: Con
 
 BEFORE_PUBLISHED = "a4f7c2e9d168"
 
+#: M4 票 95 刪掉四個只寫不讀的欄位的那一版，與它的前一版。
+WRITE_ONLY_DROPPED = "a6c3e9f2b815"
+BEFORE_WRITE_ONLY_DROPPED = "d71e4b9a3c58"
+DROPPED_COLUMNS = {
+    "jobs": ("last_seen_in_client_at",),
+    "job_files": ("updated_at",),
+    "ledger": ("source_inode", "link_mode"),
+}
+
+
+def _seed_link(db: sqlite3.Connection) -> None:
+    """一個 Job、它的一個檔案、一份計劃，與入庫那一列帳本；計劃項另指著帳本當重複對象。"""
+    added, linked = "2026-09-17T00:00:00.000000+00:00", "2026-09-18T00:00:00.000000+00:00"
+    db.execute(
+        "INSERT INTO jobs (hash, name, source_url, trigger, trigger_ref, state, error, save_path,"
+        " content_path, total_size, progress, client_state, added_at, last_seen_in_client_at)"
+        " VALUES ('a', 'Show - 01', '', 'manual', '', 'imported', '', '/dl', '/dl/Show', 10, 1.0,"
+        " 'pausedUP', ?, ?)",
+        (added, linked),
+    )
+    db.execute(
+        "INSERT INTO job_files (id, job_hash, rel_path, size, priority, kind, updated_at)"
+        " VALUES (7, 'a', 'Show/Show - 01.mkv', 10, 1, 'video', ?)",
+        (linked,),
+    )
+    db.execute(
+        "INSERT INTO ledger (id, job_hash, source_rel_path, source_abs_path, source_inode,"
+        " source_dev, target_path, target_inode, action, jellyfin_item_id, resolve_attempts,"
+        " link_mode, status, audit, created_at)"
+        " VALUES (3, 'a', 'Show/Show - 01.mkv', '/dl/Show/Show - 01.mkv', '42', '9',"
+        " '/lib/Show/S01E01.mkv', '42', 'import', '', 0, 'hardlink', 'ok', 0, ?)",
+        (linked,),
+    )
+    db.execute(
+        "INSERT INTO plans (id, job_hash, source_path, engine, engine_version, status, created_at,"
+        " decided_by) VALUES (1, 'a', '', 'rules', '1', 'applied', ?, '')",
+        (added,),
+    )
+    db.execute(
+        "INSERT INTO plan_items (id, plan_id, job_file_id, rel_path, action, target_path,"
+        " confidence, audit, error, duplicate_of)"
+        " VALUES (5, 1, 7, 'Show/Show - 01.mkv', 'import', 'Show/S01E01.mkv', 'high', 0, '', 3)"
+    )
+
+
+def _dropped_columns_of(database_path: Path) -> set[str]:
+    columns = _columns_of(database_path)
+    return {
+        f"{table}.{name}"
+        for table, names in DROPPED_COLUMNS.items()
+        for name in names
+        if name in columns[table]
+    }
+
+
+async def test_dropping_write_only_columns_keeps_every_row(config: Config) -> None:
+    """M4 票 95：四個沒有人讀的欄位拿掉，帶資料的資料庫升上去每一列都在；降回去欄位加回來
+    （硬鏈接的來源 inode 就是目標 inode、鏈接方式只有 `hardlink`、檔案的更新時間取 Job 加入的
+    時間），重建表不可以把計劃項指向它們的那兩條線清成 `NULL`；再升一次照樣過。"""
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_WRITE_ONLY_DROPPED)
+        with _sqlite(config.database_path) as db:
+            _seed_link(db)
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, WRITE_ONLY_DROPPED)
+        upgraded = _dropped_columns_of(config.database_path)
+        with _sqlite(config.database_path) as db:
+            kept = db.execute(
+                "SELECT j.state, f.rel_path, l.target_inode, i.job_file_id, i.duplicate_of"
+                " FROM jobs j JOIN job_files f ON f.job_hash = j.hash"
+                " JOIN ledger l ON l.job_hash = j.hash JOIN plan_items i ON i.id = 5"
+            ).fetchall()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_WRITE_ONLY_DROPPED)
+        restored = _dropped_columns_of(config.database_path)
+        with _sqlite(config.database_path) as db:
+            back = db.execute(
+                "SELECT j.last_seen_in_client_at, f.updated_at, l.source_inode, l.link_mode,"
+                " i.job_file_id, i.duplicate_of"
+                " FROM jobs j JOIN job_files f ON f.job_hash = j.hash"
+                " JOIN ledger l ON l.job_hash = j.hash JOIN plan_items i ON i.id = 5"
+            ).fetchall()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, WRITE_ONLY_DROPPED)
+        again = _dropped_columns_of(config.database_path)
+    finally:
+        await engine.dispose()
+
+    assert upgraded == set()
+    assert kept == [("imported", "Show/Show - 01.mkv", "42", 7, 3)]
+    assert restored == {
+        "jobs.last_seen_in_client_at",
+        "job_files.updated_at",
+        "ledger.source_inode",
+        "ledger.link_mode",
+    }
+    assert back == [(None, "2026-09-17T00:00:00.000000+00:00", "42", "hardlink", 7, 3)]
+    assert again == set()
+
 
 def _upgrade_to(connection: Connection, revision: str) -> None:
     config = alembic_config()

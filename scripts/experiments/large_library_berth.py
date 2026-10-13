@@ -431,7 +431,6 @@ def ledger_entry(work: Work, episode: int, job_hash: str, now: datetime) -> Ledg
         job_hash=job_hash,
         source_rel_path=f"{work.release}/{source.name}",
         source_abs_path=str(source),
-        source_inode=str(facts.st_ino),
         source_dev=str(facts.st_dev),
         target_path=str(target),
         target_inode=str(target.stat().st_ino),

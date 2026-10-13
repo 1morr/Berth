@@ -226,11 +226,9 @@ class TestLedger:
             assert entry.media_id == item.media_id
             assert Path(entry.source_abs_path) == source
             assert entry.source_rel_path.endswith(item.rel_path)
-            assert entry.source_inode == str(source.stat().st_ino)
             assert entry.source_dev == str(source.stat().st_dev)
-            assert entry.target_inode == entry.source_inode
+            assert entry.target_inode == str(source.stat().st_ino)
             assert entry.status is LedgerStatus.OK
-            assert entry.link_mode == "hardlink"
 
     async def test_only_the_features_wait_for_a_jellyfin_item(
         self, session: AsyncSession, roots: dict[str, Path]
