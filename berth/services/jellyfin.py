@@ -718,7 +718,8 @@ async def resolve_interface_login(
 ) -> InterfaceLogin:
     """「沿用 Jellyfin 帳密」（brief §16.3，M4 票 15）：帳號換成擁有者，密碼先向 Jellyfin 驗過。
 
-    沒勾就原樣回。驗不過就拒絕（`InterfaceLoginRejectedError`），呼叫端在寫任何東西之前呼叫它，
+    沒勾就原樣回；勾了回的是填好帳號的那一組，`reuse_owner` 照舊是真。驗不過就拒絕
+    （`InterfaceLoginRejectedError`），呼叫端在寫任何東西之前呼叫它，
     所以密碼打錯時兩台都不會被寫。Berth 仍然不存擁有者的密碼（票 06）：寫進那兩台之後只記雜湊。
     """
     if not login.reuse_owner:
@@ -738,7 +739,11 @@ async def resolve_interface_login(
         ) from exc
     finally:
         await client.aclose()
-    return InterfaceLogin(username=auth.name or setup.owner.name, password=login.password)
+    # `reuse_owner` 留著：寫進去的那一刻記下它是擁有者那一組（M4 票 68）。帳號已經填好，
+    # 不會再解析一次。
+    return InterfaceLogin(
+        username=auth.name or setup.owner.name, password=login.password, reuse_owner=True
+    )
 
 
 # --- 序列 ---------------------------------------------------------------

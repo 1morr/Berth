@@ -558,7 +558,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(fetchStub.mock.calls.some(([url]) => url === '/api/setup/owner')).toBe(false)
   })
 
-  it('登入既有 Jellyfin 時密碼空著：說 Berth 不收沒有密碼的擁有者，不只說「不認這組」（M4 票 31、67）', async () => {
+  it('登入既有 Jellyfin 時密碼空著：先說密碼沒填，不說「不認這組」（M4 票 31、67、68）', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
       [SIGN_IN]: { status: 401, body: { detail: { reason: 'invalid_credentials', detail: '' } } },
@@ -569,7 +569,8 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     await user.type(await screen.findByLabelText('Jellyfin 帳號'), 'skipper')
     await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
-    expect(await screen.findByText(/不收沒有密碼的 Jellyfin 帳號當擁有者/)).toBeVisible()
+    // 多半是漏填（審計 P2-20）：先說沒填，再說 Berth 為什麼不收沒有密碼的帳號。
+    expect(await screen.findByText(/^密碼沒填。Berth 不收沒有密碼的帳號當擁有者/)).toBeVisible()
     expect(screen.getByLabelText('密碼')).toHaveAttribute('aria-invalid', 'true')
   })
 
@@ -633,7 +634,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     expect(screen.getByLabelText('Jellyfin 帳號')).toHaveValue('captain')
   })
 
-  it('不是管理員就地說明被拒的原因，在表單層級', async () => {
+  it('不是管理員標在帳密兩格上，位址那一格不標（審計 P2-5）', async () => {
     stubApi({
       [STATUS]: { body: setupStatus({ services: [EXISTING_JELLYFIN], owner_signs_in: true }) },
       [SIGN_IN]: { status: 403, body: { detail: { reason: 'not_administrator', detail: '' } } },
@@ -645,7 +646,12 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     await user.click(screen.getByRole('button', { name: '連線並登入' }))
 
     expect(await screen.findByText(/不是管理員/)).toBeVisible()
-    expect(screen.getByLabelText('密碼')).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Jellyfin 帳號')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('密碼')).toHaveAccessibleDescription(/不是管理員/)
+    expect(screen.getByRole('textbox', { name: '位址' })).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
   })
 
   it('Jellyfin 那一段沒做完時說出來，它的原文收進技術細節', async () => {

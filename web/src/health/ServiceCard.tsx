@@ -72,11 +72,11 @@ export function ServiceCard({
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 py-3 text-xs">
           <dt className="label self-center text-ink-dim">{t('health.lastOk')}</dt>
           <dd className="text-ink">
-            <Timestamp at={row.last_ok_at} />
+            <Timestamp at={row.last_ok_at} past />
           </dd>
           <dt className="label self-center text-ink-dim">{t('health.lastChecked')}</dt>
           <dd className="text-ink">
-            <Timestamp at={row.checked_at} />
+            <Timestamp at={row.checked_at} past />
             {row.failures > 0 && (
               <span className="ml-3 text-blocked-ink">
                 {t('health.failures', { count: row.failures })}

@@ -388,3 +388,58 @@ async def test_a_qbittorrent_login_it_already_had_or_none_is_not_berths(
     assert not (await read_qbittorrent(session, kept)).web_ui_login_by_berth
     assert not (await apply_qbittorrent(session, kept)).web_ui_login_by_berth
     assert not (await read_qbittorrent(session, factory())).web_ui_login_by_berth
+
+
+# --- 是不是沿用 Jellyfin 那一組（M4 票 68：完成頁直接說「與 Jellyfin 同一組」）---
+
+OWN = InterfaceLogin(username="deckhand", password="their-own-1")
+
+
+@pytest.mark.asyncio
+async def test_a_reused_jellyfin_login_is_said_to_be_the_owners_on_both(
+    session: AsyncSession,
+) -> None:
+    """加站以「不帶登入」重算登入那一條，沿用與否照樣留著。"""
+    await bundled_pair(session)
+    clients = factory()
+
+    qbittorrent = await apply_qbittorrent(session, clients, login=REUSED)
+    await set_prowlarr_login(session, clients, REUSED, sleep=_no_sleep)
+    indexers = await apply_default_indexers(session, clients, ["nyaasi"], sleep=_no_sleep)
+
+    assert qbittorrent.web_ui_login_reuses_owner
+    assert (await read_qbittorrent(session, clients)).web_ui_login_reuses_owner
+    assert indexers.web_ui_login_reuses_owner
+    assert (await read_indexer_status(session, clients)).web_ui_login_reuses_owner
+
+
+@pytest.mark.asyncio
+async def test_a_pair_of_their_own_after_reusing_is_not_the_owners(
+    session: AsyncSession,
+) -> None:
+    await bundled_pair(session)
+    clients = factory()
+
+    await apply_qbittorrent(session, clients, login=REUSED)
+    await set_prowlarr_login(session, clients, REUSED, sleep=_no_sleep)
+    qbittorrent = await set_qbittorrent_login(session, clients, OWN)
+    await set_prowlarr_login(session, clients, OWN, sleep=_no_sleep)
+
+    assert not qbittorrent.web_ui_login_reuses_owner
+    assert not (await read_qbittorrent(session, clients)).web_ui_login_reuses_owner
+    assert not (await read_indexer_status(session, clients)).web_ui_login_reuses_owner
+
+
+@pytest.mark.asyncio
+async def test_a_login_it_already_had_is_not_the_owners(session: AsyncSession) -> None:
+    await bundled_pair(session)
+    kept = factory(
+        qbittorrent=FakeQbittorrentClient(preferences={"web_ui_username": "keeper"}),
+        prowlarr=FakeProwlarrClient(
+            host_config={"authenticationMethod": "forms", "username": "keeper", "password": "x"}
+        ),
+    )
+
+    assert not (await apply_qbittorrent(session, kept)).web_ui_login_reuses_owner
+    indexers = await apply_default_indexers(session, kept, ["nyaasi"], sleep=_no_sleep)
+    assert not indexers.web_ui_login_reuses_owner

@@ -59,6 +59,7 @@ import { BerthBoard, type BerthSignals } from '../setup/BerthBoard'
 import { BerthNav, RevisitNote } from '../setup/BerthNav'
 import { CompleteStep, type CompleteFailure } from '../setup/CompleteStep'
 import { ServiceDoors } from '../setup/ServiceDoors'
+import { IdleBundled } from '../setup/IdleBundled'
 import { IndexerStep } from '../setup/IndexerStep'
 import { GAP, indexerGaps } from '../setup/indexerGaps'
 import { OwnerStep } from '../setup/OwnerStep'
@@ -522,7 +523,12 @@ export function SetupPage() {
   // 服務頁進頁問一次套件內的主機名解不解得到（M4 票 30），每次測完再問（票 35）：只查 DNS，不對服務發請求（brief §19）。
   const composeHosts = useQuery({
     ...composeQueryOptions,
-    enabled: step === STEP.jellyfin || step === STEP.qbittorrent || step === STEP.indexer,
+    // 完成頁也問：選了既有的服務，套件內那一台還在跑才提醒停掉它（`UnusedBundled`）。
+    enabled:
+      step === STEP.jellyfin ||
+      step === STEP.qbittorrent ||
+      step === STEP.indexer ||
+      step === STEP.complete,
   })
   // 泊位板要畫得出走過的每一格，所以這三份跟著後端走到哪裡，不跟著畫面停在哪裡。
   const routes = useQuery({
@@ -598,7 +604,10 @@ export function SetupPage() {
   const previous = previousOf(step)
   const next = nextOf(step)
   // 頁 4 還差什麼，說在前進鍵的位置（M4 票 27）。
-  const gaps = step === STEP.indexer && indexers.data ? indexerGaps(current, indexers.data) : []
+  const gaps =
+    step === STEP.indexer && indexers.data
+      ? indexerGaps(current, indexers.data, prowlarrLogin.isPending)
+      : []
   // 頁 5 的前進鍵送出 key 表單：還沒驗過的先測、過了才走（M4 票 67，審計 C4）。表單讀回來才在。
   const advancesByForm = step === STEP.tmdb && tmdb.data !== undefined
   const nav = (
@@ -776,12 +785,15 @@ export function SetupPage() {
             indexers={indexers.data}
             owner={current.owner}
             doors={
-              <ServiceDoors
-                owner={current.owner}
-                jellyfin={jellyfinAddress.data}
-                qbittorrent={qbittorrent.data}
-                indexers={indexers.data}
-              />
+              <>
+                <ServiceDoors
+                  owner={current.owner}
+                  jellyfin={jellyfinAddress.data}
+                  qbittorrent={qbittorrent.data}
+                  indexers={indexers.data}
+                />
+                <IdleBundled status={current} composeHosts={composeHosts.data} />
+              </>
             }
             completing={finish.isPending}
             failure={completeFailure(finish.error, tmdb.data, routes.data)}

@@ -36,7 +36,7 @@ export function PollerCard({ poller }: { poller: PollerView }) {
           term={t('health.poller.lastRound')}
           value={
             <>
-              <Timestamp at={poller.checked_at} />
+              <Timestamp at={poller.checked_at} past />
               {' · '}
               {t('health.poller.every', { seconds: poller.interval_seconds })}
             </>

@@ -171,6 +171,8 @@ class QbittorrentSetupStatus:
     #: config）、還沒設、既有的都是 `False`。完成頁照它說密碼是哪一組（M4 票 40）——登入
     #: 那一條纜繩分不出來：同一組再送一次也是 `skipped`。
     web_ui_login_by_berth: bool
+    #: 這個 Berth 寫進去的那一組是沿用 Jellyfin 帳密（M4 票 68）：完成頁說「與 Jellyfin 同一組」。
+    web_ui_login_reuses_owner: bool
     #: 連線本身為什麼失敗（M4 票 21）：UI 照它說人話。連上了是 `None`。
     failure: StepFailure | None
     #: 連線本身的失敗原文（英文）。UI 收進「技術細節」。
@@ -358,6 +360,7 @@ async def _apply_password(
         if not record.web_ui_username and instance:
             record.web_ui_username = instance
             record.web_ui_password_hash = ""
+            record.web_ui_login_reuses_owner = False
         if not record.web_ui_username:
             return SetupStep(key=key, status=StepStatus.PENDING)
         return SetupStep(key=key, status=StepStatus.SKIPPED, detail=record.web_ui_username)
@@ -383,6 +386,7 @@ async def _apply_password(
     # 兩個鍵都進去了才記（M4 票 26）。
     record.web_ui_username = login.username
     record.web_ui_password_hash = hash_password(login.password)
+    record.web_ui_login_reuses_owner = login.reuse_owner
     return SetupStep(key=key, status=StepStatus.OK, detail=login.username)
 
 
@@ -398,13 +402,19 @@ def _still_chosen(latest: SetupSettings, chosen: ServiceChoice | None) -> bool:
 def _keep_login(latest: SetupSettings, before: SetupQbittorrent, after: SetupQbittorrent) -> None:
     """`_apply_password` 這一次改了介面登入的紀錄才搬到重讀的那一份上（M4 票 23）。沒改的話不寫：
     開頭讀到的那一組可能已經被別的命令換掉了。"""
-    if (after.web_ui_username, after.web_ui_password_hash) == (
+    if (
+        after.web_ui_username,
+        after.web_ui_password_hash,
+        after.web_ui_login_reuses_owner,
+    ) == (
         before.web_ui_username,
         before.web_ui_password_hash,
+        before.web_ui_login_reuses_owner,
     ):
         return
     latest.qbittorrent.web_ui_username = after.web_ui_username
     latest.qbittorrent.web_ui_password_hash = after.web_ui_password_hash
+    latest.qbittorrent.web_ui_login_reuses_owner = after.web_ui_login_reuses_owner
 
 
 def note_qbittorrent_login(setup: SetupSettings, instance: str) -> None:
@@ -423,6 +433,7 @@ def note_qbittorrent_login(setup: SetupSettings, instance: str) -> None:
     if not setup.qbittorrent.web_ui_username:
         setup.qbittorrent.web_ui_username = instance
         setup.qbittorrent.web_ui_password_hash = ""
+        setup.qbittorrent.web_ui_login_reuses_owner = False
     step = SetupStep(key=key, status=StepStatus.SKIPPED, detail=setup.qbittorrent.web_ui_username)
     setup.qbittorrent.steps = [*(row for row in setup.qbittorrent.steps if row.key != key), step]
 
@@ -502,6 +513,8 @@ def _status(
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, preferences),
         web_ui_login_by_berth=_login_by_berth(setup, origin),
+        web_ui_login_reuses_owner=_login_by_berth(setup, origin)
+        and setup.qbittorrent.web_ui_login_reuses_owner,
         failure=None,
         error="",
     )
@@ -527,6 +540,8 @@ def _unreachable(
         web_ui_login=origin is ServiceOrigin.BUNDLED,
         web_ui_username=_web_ui_username(setup, origin, {}),
         web_ui_login_by_berth=_login_by_berth(setup, origin),
+        web_ui_login_reuses_owner=_login_by_berth(setup, origin)
+        and setup.qbittorrent.web_ui_login_reuses_owner,
         failure=failure,
         error=message(exc),
     )

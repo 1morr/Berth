@@ -2,13 +2,12 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { Checkbox, Field, GhostButton, Notice, PasswordField } from '../components/controls'
-import type { InterfaceLoginForm, LoginProblems, LoginService } from './interfaceLogin'
-
-/** 產品名不翻譯：人話裡的 `{{service}}`。 */
-const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const satisfies Record<
-  LoginService,
-  string
->
+import {
+  LOGIN_PRODUCT,
+  type InterfaceLoginForm,
+  type LoginProblems,
+  type LoginService,
+} from './interfaceLogin'
 
 /**
  * 精靈的介面登入欄位（M4 票 07、15）：頁 2、頁 4 共用。設定頁沒有沿用，只用下面的 `NewLoginFields`（M4 票 78）。
@@ -27,7 +26,7 @@ function InterfaceLoginFields({
   const { t } = useTranslation()
   const { draft, problems, owner, rules, ownerUnfit } = form
   const rule = {
-    service: PRODUCT[service],
+    service: LOGIN_PRODUCT[service],
     owner,
     usernameMin: rules?.usernameMin ?? 0,
     passwordMin: rules?.passwordMin ?? 0,
@@ -90,7 +89,7 @@ export function NewLoginFields({
   const { t } = useTranslation()
   const { draft, problems, rules } = form
   const rule = {
-    service: PRODUCT[service],
+    service: LOGIN_PRODUCT[service],
     usernameMin: rules?.usernameMin ?? 0,
     passwordMin: rules?.passwordMin ?? 0,
   }

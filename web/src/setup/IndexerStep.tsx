@@ -16,7 +16,12 @@ import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { AddedSites, AddSites, type SiteControls } from './IndexerSites'
-import { useCarriedLogin, useInterfaceLogin, type CarriedLogin } from './interfaceLogin'
+import {
+  loginStatus,
+  useCarriedLogin,
+  useInterfaceLogin,
+  type CarriedLogin,
+} from './interfaceLogin'
 import { ChoiceCutaway } from './ChoiceCutaway'
 import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
 import { AdvancedSites, RecommendedSites } from './RecommendedSites'
@@ -107,7 +112,8 @@ export function IndexerStep({
   const service = status.services.find((row) => row.kind === 'prowlarr')
   // 標題與 lede 跟著畫面上選著的那一格：換另一格還在確認時就說那一格的事（票 15 critique）。
   const switching = choice.draft !== null && choice.draft !== service?.origin
-  const origin = choice.draft ?? service?.origin
+  // 第一次選、請求還在路上的那一格也算（M4 票 68，票 81 留下的）：剖面已經說了接法，lede 不再問「先選」。
+  const origin = choice.draft ?? choice.sending ?? service?.origin
   const ready = connected(service) && !switching
   // 畫哪一種看這一份清單自己說的來源：剛選下去、清單還沒重讀回來時兩者不一致，那幾秒什麼都不畫，
   // 不閃另一種的文案（M4 票 20）。
@@ -389,9 +395,12 @@ function ProwlarrLogin({
     >
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="label text-ink-dim">{t('interfaceLogin.prowlarr.legend')}</h3>
-        <span className="label border-2 border-rule px-2 py-1 text-ink-dim">
-          {t('indexer.login.required')}
-        </span>
+        {/* 設好了就不再說必填（M4 票 68 critique）：頁 2 設好之後也沒有這個標。 */}
+        {!indexers.web_ui_username && (
+          <span className="label border-2 border-rule px-2 py-1 text-ink-dim">
+            {t('indexer.login.required')}
+          </span>
+        )}
       </div>
       <div className="mt-4">
         {carriedLogin.applying ? (
@@ -433,6 +442,7 @@ function ProwlarrLogin({
             endpoint="PUT /api/v1/config/host"
             summary={row.detail}
             row={row}
+            status={loginStatus(t, row, indexers.web_ui_login_by_berth)}
             fix={t('indexer.add.loginFix')}
             commands={webUrl ? [`${webUrl}/#/settings/general`] : []}
           />

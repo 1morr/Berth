@@ -3070,6 +3070,8 @@ export interface components {
             web_ui_username: string;
             /** Web Ui Login By Berth */
             web_ui_login_by_berth: boolean;
+            /** Web Ui Login Reuses Owner */
+            web_ui_login_reuses_owner: boolean;
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
@@ -4467,6 +4469,8 @@ export interface components {
             web_ui_username: string;
             /** Web Ui Login By Berth */
             web_ui_login_by_berth: boolean;
+            /** Web Ui Login Reuses Owner */
+            web_ui_login_reuses_owner: boolean;
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;

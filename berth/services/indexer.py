@@ -168,6 +168,8 @@ class IndexerSetupStatus:
     #: 那一組是這個 Berth 寫進去的（記著它的密碼雜湊），完成頁照它說密碼是哪一組（M4 票 40）。
     #: 登入那一條纜繩分不出來：「加入」每次以不帶登入重算它，Berth 設好的也記成 `skipped`。
     web_ui_login_by_berth: bool
+    #: 這個 Berth 寫進去的那一組是沿用 Jellyfin 帳密（M4 票 68）。
+    web_ui_login_reuses_owner: bool
     #: 讀清單那一次為什麼失敗（M4 票 21）：UI 照它說人話。讀到了是 `None`。
     failure: StepFailure | None
     #: 讀清單那一次的失敗原文（英文），收進「技術細節」。
@@ -704,9 +706,11 @@ def _record_login(
     if login is not None and step.status is StepStatus.OK:
         setup.indexer.web_ui_username = login.username
         setup.indexer.web_ui_password_hash = hash_password(login.password)
+        setup.indexer.web_ui_login_reuses_owner = login.reuse_owner
     elif login is None and not setup.indexer.web_ui_username and instance:
         setup.indexer.web_ui_username = instance
         setup.indexer.web_ui_password_hash = ""
+        setup.indexer.web_ui_login_reuses_owner = False
 
 
 def note_instance_login(setup: SetupSettings, instance: str) -> None:
@@ -1017,6 +1021,9 @@ def _view(
         else "",
         web_ui_login_by_berth=origin is ServiceOrigin.BUNDLED
         and bool(setup.indexer.web_ui_password_hash),
+        web_ui_login_reuses_owner=origin is ServiceOrigin.BUNDLED
+        and bool(setup.indexer.web_ui_password_hash)
+        and setup.indexer.web_ui_login_reuses_owner,
         failure=failure_of_error(error)[0] if error is not None else None,
         error=message(error) if error is not None else "",
     )

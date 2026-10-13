@@ -1,14 +1,15 @@
 import { useEffect, useEffectEvent, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type {
-  JellyfinConnectInput,
-  JellyfinSetup,
-  JellyfinStartup,
-  OwnerInput,
-  OwnerRefusal,
-  SetupService,
-  SetupStatus,
+import {
+  refusesCredentials,
+  type JellyfinConnectInput,
+  type JellyfinSetup,
+  type JellyfinStartup,
+  type OwnerInput,
+  type OwnerRefusal,
+  type SetupService,
+  type SetupStatus,
 } from '../api/setup'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { ORIGIN_LABEL } from '../components/services'
@@ -265,6 +266,13 @@ function OwnerForm({
   const [edits, setEdits] = useState(0)
   const [sentAt, setSentAt] = useState<number | null>(null)
   const current = sentAt === edits
+  // 帳密不對、不是管理員：是那兩格的事，兩格都標、那一句寫一次（審計 P2-5，與既有那一台的登入表單同一個
+  // 做法，`ExistingForm`）。其餘的拒絕不屬於哪一格，照舊在送出鈕上方。
+  const shown = refusal && (current || refusal.reason === 'target_changed') ? refusal : null
+  const onFields = shown !== null && refusesCredentials(shown)
+  // 不屬於哪一格的拒絕（Jellyfin 那一段失敗、目標被換了…）在送出鈕上方。
+  const formRefusal = onFields ? null : shown
+  const credentialError = useId()
   function edit(change: () => void) {
     change()
     setEdits((was) => was + 1)
@@ -311,6 +319,8 @@ function OwnerForm({
         autoComplete="username"
         onChange={(event) => editCredentials({ username: event.target.value })}
         error={checked && nameProblem ? t(USERNAME_ERROR[nameProblem]) : undefined}
+        invalid={onFields}
+        describedBy={onFields ? credentialError : undefined}
       />
       <PasswordField
         label={t('owner.field.password')}
@@ -318,7 +328,14 @@ function OwnerForm({
         autoComplete={signsIn ? 'current-password' : 'new-password'}
         onChange={(event) => editCredentials({ password: event.target.value })}
         error={checked && passwordProblem ? t(passwordProblem) : undefined}
+        invalid={onFields}
+        describedBy={onFields ? credentialError : undefined}
       />
+      {onFields && (
+        <span id={credentialError} role="alert" className="-mt-2 text-xs text-blocked-ink">
+          {t(`owner.refused.${shown.reason}`)}
+        </span>
+      )}
       {!signsIn && (
         <PasswordField
           label={t('owner.field.confirm')}
@@ -378,12 +395,12 @@ function OwnerForm({
         </>
       )}
       {/* 拒絕的那一句在送出鈕上方：窄版的送出鈕吸在底部，放在它下面要捲才看得到（critique）。 */}
-      {refusal && (current || refusal.reason === 'target_changed') ? (
+      {formRefusal ? (
         <div>
           <Notice signal="blocked" label={t('common.failed')}>
-            {t(`owner.refused.${refusal.reason}`)}
+            {t(`owner.refused.${formRefusal.reason}`)}
           </Notice>
-          {refusal.reason === 'target_changed' && (
+          {formRefusal.reason === 'target_changed' && (
             <p className="mt-3">
               <GhostButton type="button" busy={retesting} onClick={onRetest}>
                 {retesting ? t('connection.retesting') : t('connection.retest')}
@@ -391,9 +408,10 @@ function OwnerForm({
             </p>
           )}
           {/* Jellyfin 那一步的原文（例如版本太舊的英文句子）收進技術細節（M4 票 21）。 */}
-          <TechnicalDetails lines={[refusal.detail]} />
+          <TechnicalDetails lines={[formRefusal.detail]} />
         </div>
       ) : (
+        shown === null &&
         // 這張表單只在還沒有擁有者時送出：門禁要求登入就是別處搶先成立了（M4 票 25，實測 E12-11）。
         current &&
         claimError !== null &&
@@ -452,13 +470,15 @@ function OwnerCutaway({
       {mode === 'choose' && (
         <CutawayRow term={t('owner.cutaway.form')} value={t('owner.cutaway.depends')} />
       )}
-      {mode === 'signIn' && (
-        <CutawayRow term={t('owner.cutaway.change')} value={t('owner.cutaway.nothing')} />
-      )}
       {mode === 'owned' ? (
         <CutawayRow term={t('owner.cutaway.owner')} value={status.owner} />
       ) : (
         <CutawayRow term={t('owner.cutaway.create')} value={t('owner.cutaway.apiKey')} />
+      )}
+      {/* 只列會動的（審計 P2-16）：原本「不改這台 Jellyfin 的任何設定」與上一行的「建立 API key」打架，
+          而媒體庫在頁 3 會動。 */}
+      {mode === 'signIn' && (
+        <CutawayRow term={t('owner.cutaway.later')} value={t('owner.cutaway.libraries')} />
       )}
       <CutawayRow
         term={t('owner.cutaway.stored')}

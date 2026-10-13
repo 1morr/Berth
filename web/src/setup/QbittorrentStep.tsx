@@ -8,14 +8,19 @@ import {
   type QbittorrentStep as QbittorrentStepKey,
   type SetupStatus,
 } from '../api/setup'
-import { type QbittorrentSetup, type SetupStep } from '../api/schemas'
+import { type QbittorrentSetup, type ServiceOrigin, type SetupStep } from '../api/schemas'
 import { STICKY_ACTION, CopyLine, Notice, PrimaryButton } from '../components/controls'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
 import { failureText } from '../components/failures'
 import { RequestFailed } from '../components/RequestFailed'
 import { StepLine } from '../components/StepLine'
 import { TechnicalDetails } from '../components/TechnicalDetails'
-import { useCarriedLogin, useInterfaceLogin, type CarriedLogin } from './interfaceLogin'
+import {
+  loginStatus,
+  useCarriedLogin,
+  useInterfaceLogin,
+  type CarriedLogin,
+} from './interfaceLogin'
 import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 import { ChoiceCutaway } from './ChoiceCutaway'
@@ -90,20 +95,26 @@ export function QbittorrentStep({
   const switching = draft !== null
   // 照選下的來源說，不照那一台讀不讀得回來：既有的那一台連不上時，原本標題變成套件內那一句
   // （M4 票 21）。
-  const mode = draft ?? service?.origin ?? 'choose'
+  const mode = draft ?? choice.sending ?? service?.origin ?? 'choose'
   const ready = connected(service) && !switching
+  // 剖面的接法看選定的那一台，與頁 4 同一條（M4 票 81、68）：存下的，或第一次選、請求還在路上的那一格。
+  // 換到另一格還沒存下時退回兩種各會做什麼。
+  const leaving =
+    service !== undefined &&
+    [choice.draft, choice.sending].some((origin) => origin !== null && origin !== service.origin)
+  const cutawayOrigin = leaving ? null : (service?.origin ?? choice.sending)
 
   return (
     <StepFrame
       cutaway={
-        setup && ready ? (
-          <ServerCutaway setup={setup} />
-        ) : (
-          // 還沒選或還沒連上：兩種各會做什麼。
+        cutawayOrigin === null ? (
           <ChoiceCutaway
             bundled={t('qbittorrent.cutaway.bundledPlan')}
             existing={t('qbittorrent.cutaway.existingPlan')}
           />
+        ) : (
+          // 還沒連上、還沒讀回來：照選定的來源說接法，其餘是「—」。
+          <ServerCutaway setup={ready ? setup : undefined} origin={cutawayOrigin} />
         )
       }
     >
@@ -153,27 +164,42 @@ export function QbittorrentStep({
   )
 }
 
-/** 連上之後的剖面：那一台是誰、介面登入由誰管（direction contract：值貼在它那一行）。 */
-function ServerCutaway({ setup }: { setup: QbittorrentSetup }) {
+/**
+ * 選了之後的剖面：接法、那一台是誰、介面登入由誰管（direction contract：值貼在它那一行）。還沒連上或還沒讀回來
+ * （`setup` 是 `undefined`）時只說得出接法，其餘是「—」。
+ */
+function ServerCutaway({
+  setup,
+  origin,
+}: {
+  setup: QbittorrentSetup | undefined
+  origin: ServiceOrigin
+}) {
   const { t } = useTranslation()
+  const username = setup?.web_ui_username ?? ''
 
   return (
     <Cutaway title={t('qbittorrent.cutaway.server')}>
-      <CutawayRow term={t('connect.field.baseUrl')} value={setup.base_url || '—'} />
-      <CutawayRow term={t('detail.version')} value={setup.version || '—'} muted={!setup.version} />
+      <CutawayRow term={t('qbittorrent.cutaway.kind')} value={t(`qbittorrent.cutaway.${origin}`)} />
+      <CutawayRow term={t('connect.field.baseUrl')} value={setup?.base_url || '—'} />
+      <CutawayRow
+        term={t('detail.version')}
+        value={setup?.version || '—'}
+        muted={!setup?.version}
+      />
       <CutawayRow
         term={t('qbittorrent.cutaway.webapi')}
-        value={setup.webapi_version || '—'}
-        muted={!setup.webapi_version}
+        value={setup?.webapi_version || '—'}
+        muted={!setup?.webapi_version}
       />
       <CutawayRow
         term={t('qbittorrent.cutaway.password')}
         value={
-          !setup.web_ui_login
+          origin === 'existing'
             ? t('qbittorrent.cutaway.existingLogin')
-            : setup.web_ui_username || t('qbittorrent.cutaway.willSet')
+            : username || t('qbittorrent.cutaway.willSet')
         }
-        muted={!setup.web_ui_username}
+        muted={!username}
       />
     </Cutaway>
   )
@@ -333,7 +359,13 @@ function LoginSequence({
         data-testid="sequence"
       >
         {QBITTORRENT_STEPS.map((step) => (
-          <QbittorrentLine key={step} step={step} row={byStep.get(step)} webUrl={webUrl} />
+          <QbittorrentLine
+            key={step}
+            step={step}
+            row={byStep.get(step)}
+            webUrl={webUrl}
+            byBerth={setup.web_ui_login_by_berth}
+          />
         ))}
       </ol>
 
@@ -382,10 +414,13 @@ function QbittorrentLine({
   step,
   row,
   webUrl,
+  byBerth,
 }: {
   step: QbittorrentStepKey
   row: SetupStep | undefined
   webUrl: string | null
+  /** 登入是這個 Berth 設的（`web_ui_login_by_berth`）：`skipped` 也說「已完成」（`loginStatus`）。 */
+  byBerth: boolean
 }) {
   const { t } = useTranslation()
   const rejected = row?.failure === 'login_rejected'
@@ -397,6 +432,7 @@ function QbittorrentLine({
       endpoint={step}
       summary={row?.detail}
       row={row}
+      status={loginStatus(t, row, byBerth)}
       fix={rejected ? t('qbittorrent.fix.loginRejected') : t(STEP_FIX[step])}
       commands={!rejected && webUrl ? [`${webUrl}/#/settings`] : []}
     />

@@ -45,6 +45,7 @@ import { librariesFailed } from './jellyfinSteps'
 import { previewUnder } from './libraryRules'
 import { StepFrame } from './StepFrame'
 import { useLibraryDraft } from './useLibraryDraft'
+import { heldBack } from './autoDock'
 
 /**
  * 頁 3「媒體庫與路徑」（plan §9.3 頁 3、§9.5；M4 票 08，`.scratch/m4/route-berth-shape.md`）。
@@ -197,6 +198,7 @@ function BundledRoutes({
   return (
     <RoutePage
       {...common}
+      heldBack={heldBack(jellyfin, setup)}
       lede={t('routes.lede.bundled')}
       planned={[
         ...unrouted.map((library) => ({
@@ -595,6 +597,7 @@ function RoutePage({
   existing,
   docking,
   startedOnItsOwn,
+  heldBack = false,
   failure,
   onRouteDeleted,
   note,
@@ -615,11 +618,19 @@ function RoutePage({
   preview: ReactNode[]
   /** 還差哪一步，說得出來就擋住主鈕。 */
   blocked: string | null
+  /** 套件內重裝、清單上已經有建好的：這一頁照設計不自己開跑，說一句為什麼、按哪裡（`autoDock.heldBack`）。 */
+  heldBack?: boolean
   onPress: () => void
   children: ReactNode
 }) {
   const { t } = useTranslation()
   const [announcement, setAnnouncement] = useFadingNote()
+  // 進頁那一刻為什麼自己開跑了，或為什麼沒有（M4 票 43、68）。
+  const entryNote = startedOnItsOwn
+    ? t('routes.autoRun')
+    : heldBack && !docking
+      ? t('routes.heldBack')
+      : ''
   const total = setup.routes.length + fresh
   // 做完了：主要動作是前往下一個泊位，這一顆（重驗、或回頭補建）是次要的
   // （每屏一顆 `assigned`，票 15 的 critique）。
@@ -731,7 +742,7 @@ function RoutePage({
 
       {/* 先在畫面上、內容再換：`aria-live` 區塊要在變化之前就存在，螢幕閱讀器才念得到。 */}
       <p aria-live="polite" className="mt-4 max-w-prose text-sm text-ink">
-        {announcement || (startedOnItsOwn ? t('routes.autoRun') : '')}
+        {announcement || entryNote}
       </p>
       {/* 做完了（全過、沒有新的）：結果在前，重新檢查是次要的、排在後面。還有事要做時，動作在前。 */}
       {quiet ? (

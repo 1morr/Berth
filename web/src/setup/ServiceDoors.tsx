@@ -5,7 +5,7 @@ import type { JellyfinWeb } from '../api/jellyfin'
 import type { QbittorrentSetup } from '../api/schemas'
 import type { IndexerSetup } from '../api/setup'
 import { jellyfinBase } from '../inventory/jellyfinLink'
-import type { LoginService } from './interfaceLogin'
+import { LOGIN_PRODUCT, type LoginService } from './interfaceLogin'
 import { prowlarrWeb, qbittorrentWeb } from './serviceWeb'
 
 interface Door {
@@ -100,17 +100,27 @@ export function ServiceDoors({
   )
 }
 
-/** 套件內那一台的介面登入：還沒設、這個 Berth 設的，或它原本就有的（`web_ui_login_by_berth`）。 */
+/**
+ * 套件內那一台的介面登入：還沒設、這個 Berth 設的，或它原本就有的（`web_ui_login_by_berth`）。這個 Berth 設的
+ * 是沿用 Jellyfin 帳密時直接說「與 Jellyfin 同一組」；原本就有的說忘了去哪裡換（審計 P2-3、P2-21）。
+ */
 function bundledLogin(
   t: TFunction,
   service: LoginService,
-  setup: { web_ui_username: string; web_ui_login_by_berth: boolean },
+  setup: {
+    web_ui_username: string
+    web_ui_login_by_berth: boolean
+    web_ui_login_reuses_owner: boolean
+  },
 ): string {
   const name = setup.web_ui_username
   if (!name) return t(`complete.doors.noLogin.${service}`)
-  return setup.web_ui_login_by_berth
-    ? t('complete.doors.bundledLogin', { name })
-    : t('complete.doors.instanceLogin', { name })
+  if (!setup.web_ui_login_by_berth) {
+    return t('complete.doors.instanceLogin', { name, service: LOGIN_PRODUCT[service] })
+  }
+  return setup.web_ui_login_reuses_owner
+    ? t('complete.doors.ownerLogin', { name })
+    : t('complete.doors.bundledLogin', { name })
 }
 
 function jellyfinDoor(jellyfin: JellyfinWeb | undefined): string | null {

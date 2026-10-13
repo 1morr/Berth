@@ -20,6 +20,21 @@ export function startsOnItsOwn(jellyfin: JellyfinSetup, routes: RouteSetup): boo
   )
 }
 
+/**
+ * 套件內、一條 Route 都還沒有，清單上卻已經有建好的媒體庫，而這個 Berth 從沒跑過建媒體庫那一步：是重裝保留了
+ * Jellyfin 的設定（審計 P2-11）。照設計不自己開跑（`startsOnItsOwn`：那一台上已經有東西，寫入前讓人先看過
+ * 清單），頁上說一句為什麼、按哪一顆。這一輪自己建到一半停下的不算——那時說的是那一步的失敗。
+ */
+export function heldBack(jellyfin: JellyfinSetup, routes: RouteSetup): boolean {
+  return (
+    jellyfin.origin === 'bundled' &&
+    routes.origin === 'bundled' &&
+    routes.routes.length === 0 &&
+    jellyfin.bundled.some((row) => row.built) &&
+    !jellyfin.steps.some((row) => row.step === 'libraries' && row.status !== 'pending')
+  )
+}
+
 /** 存下來的清單照原樣送回去：自動那一次沒有草稿可讀，送的就是伺服器上那一份。 */
 export function storedList(jellyfin: JellyfinSetup): LibraryDraft[] {
   return jellyfin.bundled.map(({ name, collection_type, folder }) => ({

@@ -1,5 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
 
+import type { SetupStep } from '../api/schemas'
 import type { InterfaceLogin } from '../api/setup'
 
 /**
@@ -18,6 +20,12 @@ export interface LoginDraft {
 
 /** 哪一個服務的介面：文案說得出是誰的登入、打開哪個網址，也決定照哪一份規則擋。 */
 export type LoginService = 'qbittorrent' | 'prowlarr'
+
+/** 產品名不翻譯：人話裡的 `{{service}}`。 */
+export const LOGIN_PRODUCT = {
+  qbittorrent: 'qBittorrent',
+  prowlarr: 'Prowlarr',
+} as const satisfies Record<LoginService, string>
 
 /** 那個服務自己收什麼樣的帳密。沒有規則的服務（Prowlarr）只要兩格都填。 */
 export interface LoginRules {
@@ -262,4 +270,18 @@ export function useInterfaceLogin({
     },
     edits,
   }
+}
+
+/**
+ * 介面登入那一條的狀態字（審計 P2-2）：這個 Berth 設的那一組（`byBerth`，`web_ui_login_by_berth`）是 `skipped`
+ * 時也說「已完成」。頁 4 加站時以不帶登入重算它，剛設好的那一組就從「已完成」變成「已經是這樣」，頁 2 同一件事
+ * 卻是「已完成」。那一台原本就有的（重裝）照舊是「已經是這樣」：完成頁說的是「這一輪精靈沒有設它」。其餘照
+ * `StepLine` 的預設（`undefined`）。
+ */
+export function loginStatus(
+  t: TFunction,
+  row: SetupStep | undefined,
+  byBerth: boolean,
+): string | undefined {
+  return row?.status === 'skipped' && byBerth ? t('status.ok') : undefined
 }
