@@ -155,6 +155,34 @@ describe('既有表單的 localhost 提示（M4 票 17）', () => {
     expect(screen.queryByTestId('loopback-hint')).toBeNull()
   })
 
+  // rootless Docker 上 host.docker.internal 解得到、連不到宿主上任何東西，只有區網 IP 會通（票 42 實跑）。
+  it.each([
+    ['zh-Hant', /^既有/, /區網 IP 或 host\.docker\.internal.*rootless Docker 上只有區網 IP 會通/],
+    [
+      'en',
+      /^Existing/,
+      /LAN IP or host\.docker\.internal.*On rootless Docker only the LAN IP works/,
+    ],
+  ])(
+    '%s：區網 IP 與 host.docker.internal 並列，說 rootless 只有區網 IP 會通（M4 票 72）',
+    async (language, existing, said) => {
+      await i18next.changeLanguage(language)
+      try {
+        const user = userEvent.setup()
+        mount('jellyfin')
+        await user.click(screen.getByRole('radio', { name: existing }))
+        await user.type(
+          screen.getByRole('textbox', { name: i18next.t('connect.field.baseUrl') }),
+          'http://localhost:8096',
+        )
+
+        expect(screen.getByTestId('loopback-hint')).toHaveTextContent(said)
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    },
+  )
+
   it('測過的 localhost 連不上時，補法說的是同一句', () => {
     mount('qbittorrent', [
       chosen({

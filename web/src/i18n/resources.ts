@@ -474,7 +474,7 @@ const zhHant = {
       scheme: '位址要以 http:// 或 https:// 開頭，例如 http://192.168.1.10:8080。',
     },
     loopback:
-      'Berth 在容器裡，這個位址指的是 Berth 自己，不是你的主機。改填 host.docker.internal（Docker Desktop 內建；Linux 由 compose 的 extra_hosts 提供，服務要監聽 0.0.0.0）或它的區網 IP。用 network_mode: host 部署的話，照填沒關係。',
+      'Berth 在容器裡，這個位址指的是 Berth 自己，不是你的主機。改填主機的區網 IP 或 host.docker.internal（Docker Desktop 內建；Linux 由 compose 的 extra_hosts 提供），服務要監聽 0.0.0.0；rootless Docker 上只有區網 IP 會通。用 network_mode: host 部署的話，照填沒關係。',
     fix: {
       title: '手動步驟',
       unreachable: '在宿主上確認容器活著，再確認 port 沒有被改掉：',
@@ -1013,7 +1013,7 @@ const zhHant = {
       libraryMount:
         'Jellyfin 報的這條媒體庫路徑不在三個容器共用的 {{root}} 底下，Berth 看不到。媒體庫要放在 {{root}} 底下，jellyfin 容器掛同一個宿主目錄。Route 建好之後寫入目標就鎖住了：在 Jellyfin 改好路徑之後，先刪掉這條 Route 再重新建立。改完 compose 之後跑 docker compose up -d：',
       berthCannotWrite:
-        'Berth 自己寫不進 {{path}}：berth 容器裡的使用者（.env 的 PUID / PGID）沒有這個目錄的寫入權限，與別的容器的掛載無關。讓 berth 與 qBittorrent、Jellyfin 用同一組 PUID / PGID，或在宿主上把這個目錄的擁有者改成那一組（chown），再按「重新檢查」。',
+        'Berth 自己寫不進 {{path}}：berth 容器裡的使用者（.env 的 PUID / PGID）沒有這個目錄的寫入權限，與別的容器的掛載無關。讓 berth 與 qBittorrent、Jellyfin 用同一組 PUID / PGID，或在宿主上把這個目錄 chown 給那一組（rootless Docker 不要 chown，改填 PUID=0、PGID=0），再按「重新檢查」。',
       directoryMissing:
         'Berth 的容器裡沒有 {{path}}：掛載是好的（它在 Berth 掛著的 {{root}} 底下），是這個目錄被刪了或改了名。在宿主上把它建回來（擁有者是 berth 的 PUID / PGID），或到 {{service}} 改回原本的路徑，再按「重新檢查」。{{service}} 那邊仍看得到它的話，是兩邊的 {{root}} 掛的不是同一個宿主目錄。',
       hardlink:
@@ -3878,7 +3878,7 @@ const en: Translations<typeof zhHant> = {
         'The address has to start with http:// or https://, for example http://192.168.1.10:8080.',
     },
     loopback:
-      'Berth runs in a container, so this address points at Berth itself, not your host. Use host.docker.internal (built into Docker Desktop; on Linux the compose extra_hosts line provides it, and the service must listen on 0.0.0.0) or its LAN IP. If you deploy with network_mode: host, this is fine as it is.',
+      'Berth runs in a container, so this address points at Berth itself, not your host. Use your host’s LAN IP or host.docker.internal (built into Docker Desktop; on Linux the compose extra_hosts line provides it), with the service listening on 0.0.0.0. On rootless Docker only the LAN IP works. If you deploy with network_mode: host, this is fine as it is.',
     fix: {
       title: 'Manual steps',
       unreachable:
@@ -4428,7 +4428,7 @@ const en: Translations<typeof zhHant> = {
       libraryMount:
         'Jellyfin reports a library path outside {{root}}, the directory all three containers share, so Berth cannot see it. Keep libraries under {{root}} and mount the same host directory in the jellyfin container. A route’s write target is fixed once it is created: after changing the path in Jellyfin, delete this route and create it again. After editing compose, run docker compose up -d:',
       berthCannotWrite:
-        'Berth itself cannot write to {{path}}: the user inside the berth container (PUID / PGID in .env) has no write permission on that folder. The other containers’ mounts have nothing to do with it. Give berth the same PUID / PGID as qBittorrent and Jellyfin, or make that PUID / PGID the owner of the folder on the host (chown), then press “Check again”.',
+        'Berth itself cannot write to {{path}}: the user inside the berth container (PUID / PGID in .env) has no write permission on that folder. The other containers’ mounts have nothing to do with it. Give berth the same PUID / PGID as qBittorrent and Jellyfin, or chown the folder to that PUID / PGID on the host (on rootless Docker, skip the chown and set PUID=0 and PGID=0), then press “Check again”.',
       directoryMissing:
         'Berth’s container has no {{path}}: the mount is fine (it is under {{root}}, which Berth mounts), this folder was deleted or renamed. Create it again on the host (owned by berth’s PUID / PGID), or change {{service}} back to the original path, then press “Check again”. If {{service}} can still see it, the two sides mount different host directories at {{root}}.',
       hardlink:

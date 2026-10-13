@@ -59,7 +59,9 @@ rebinding.
 Use `host.docker.internal` as the address, not `localhost`: inside Berth's container `localhost` is Berth itself.
 Docker Desktop provides that name; on Linux the compose file adds it to `berth` with
 `extra_hosts: host.docker.internal:host-gateway`. On Linux the service must also listen on `0.0.0.0`; one listening
-only on `127.0.0.1` cannot be reached from a container. Check that the name resolves:
+only on `127.0.0.1` cannot be reached from a container. On rootless Docker the name resolves but reaches nothing on
+the host: use the host's LAN IP instead (see [Rootless Docker](requirements.md#rootless-docker)). Check that the
+name resolves:
 
 ```bash
 docker compose exec berth getent hosts host.docker.internal
