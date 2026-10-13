@@ -34,6 +34,7 @@ import {
   searchIndexers,
   setIndexerLogin,
   setupStatusQueryOptions,
+  signInExistingOwner,
   skipIndexers,
   testIndexers,
   testTmdb,
@@ -67,7 +68,7 @@ import { librariesFailed } from '../setup/jellyfinSteps'
 import { librariesRunning, routesRunning, startsOnItsOwn, storedList } from '../setup/autoDock'
 import { RouteStep, type DockFailure, type DockPlan } from '../setup/RouteStep'
 import { BUILD_REFUSAL, type BuildRefusal } from '../setup/buildRefusal'
-import { TmdbStep } from '../setup/TmdbStep'
+import { TMDB_FORM, TmdbStep } from '../setup/TmdbStep'
 import {
   BERTH_STEP,
   STEP,
@@ -199,12 +200,15 @@ export function SetupPage() {
     mutationFn: claimOwner,
     onSuccess: (next) => {
       absorb(next)
-      queryClient.setQueryData(healthQueryOptions.queryKey, (old) =>
-        old ? { ...old, owner_established: true } : old,
-      )
-      void queryClient.invalidateQueries({ queryKey: meQueryOptions.queryKey })
+      ownerClaimed()
     },
   })
+  function ownerClaimed() {
+    queryClient.setQueryData(healthQueryOptions.queryKey, (old) =>
+      old ? { ...old, owner_established: true } : old,
+    )
+    void queryClient.invalidateQueries({ queryKey: meQueryOptions.queryKey })
+  }
   /** 那個服務的頁自己讀的那一份：選擇換了，它說的就是另一台。 */
   function invalidateBerthOf(kind: ServiceKind) {
     const options = {
@@ -236,6 +240,26 @@ export function SetupPage() {
       reaskHosts()
     },
   })
+  // 頁 1 既有 Jellyfin、還沒有擁有者：連線並登入一次送出（M4 票 67，審計 C1）。那一台還沒初始化時
+  // 回來的沒有擁有者，頁 1 換成建立管理員的表單（`owner` 那一支）。
+  const ownerExisting = useMutation({
+    mutationKey: CLAIM_OWNER_KEY,
+    mutationFn: signInExistingOwner,
+    onMutate: () => {
+      choose.reset()
+      owner.reset()
+      reSignIn.reset()
+    },
+    onSuccess: (next) => {
+      absorb(next)
+      invalidateBerthOf('jellyfin')
+      reaskHosts()
+      if (next.owner) ownerClaimed()
+    },
+    // 帳密那一段被拒時，位址已經測過、存下了（測過才存）：重讀，測試那一條跟著畫。
+    onError: () =>
+      void queryClient.invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey }),
+  })
   // 重測：紅燈上的「重新測試」（`restart`），以及套件內那一台還在啟動時的輪詢。
   const retest = useMutation({
     mutationFn: ({ kind, restart }: { kind: ServiceKind; restart: boolean }) =>
@@ -252,7 +276,7 @@ export function SetupPage() {
   })
   function choiceOf(kind: ServiceKind): ChoiceControls & ChoiceDraft {
     const mine = choose.variables?.kind === kind
-    return {
+    const controls = {
       composeHosts: composeHosts.data,
       sending:
         choose.isPending && choose.variables.kind === kind ? choose.variables.input.origin : null,
@@ -267,8 +291,36 @@ export function SetupPage() {
       draft: draftOf(kind),
       onDraft: (origin) => setDraft(origin === null ? null : { step, kind, origin }),
       onChoose: (input, done) => choose.mutate({ kind, input }, { onSuccess: done }),
-      onRetest: (restart) => {
+      onRetest: (restart: boolean) => {
         retest.mutate({ kind, restart })
+      },
+    } satisfies ChoiceControls & ChoiceDraft
+    if (kind !== 'jellyfin' || status.data?.owner !== '') return controls
+    // 頁 1 還沒有擁有者：選既有的那一張表單多管理員帳密，送出就是連線並登入（M4 票 67）。
+    const signInRefusal = ownerRefusalOf(ownerExisting.error)
+    const signInConnection = choiceRefusalOf(ownerExisting.error)
+    return {
+      ...controls,
+      sending: ownerExisting.isPending ? 'existing' : controls.sending,
+      refusal: signInConnection ?? controls.refusal,
+      requestError:
+        ownerExisting.isError && !signInRefusal && !signInConnection
+          ? ownerExisting.error
+          : controls.requestError,
+      signIn: { refusal: signInRefusal },
+      onChoose: (input, done) => {
+        if (input.origin !== 'existing') {
+          controls.onChoose(input, done)
+          return
+        }
+        ownerExisting.mutate(
+          {
+            base_url: input.base_url ?? '',
+            username: input.username ?? '',
+            password: input.password ?? '',
+          },
+          { onSuccess: done },
+        )
       },
     }
   }
@@ -380,6 +432,7 @@ export function SetupPage() {
   function forgetResults(kind: ServiceKind) {
     if (kind === 'jellyfin') {
       owner.reset()
+      ownerExisting.reset()
       reSignIn.reset()
     } else if (kind === 'qbittorrent') {
       applyPreferences.reset()
@@ -546,10 +599,14 @@ export function SetupPage() {
   const next = nextOf(step)
   // 頁 4 還差什麼，說在前進鍵的位置（M4 票 27）。
   const gaps = step === STEP.indexer && indexers.data ? indexerGaps(current, indexers.data) : []
+  // 頁 5 的前進鍵送出 key 表單：還沒驗過的先測、過了才走（M4 票 67，審計 C4）。表單讀回來才在。
+  const advancesByForm = step === STEP.tmdb && tmdb.data !== undefined
   const nav = (
     <BerthNav
       onPrevious={previous !== null ? () => goTo(previous) : undefined}
       onNext={next !== null && advanced(step, backend) ? () => goTo(next) : undefined}
+      nextForm={advancesByForm ? TMDB_FORM : undefined}
+      nextBusy={advancesByForm && tmdbTest.isPending}
       missing={gaps.map((gap) => ({ label: t(GAP[gap].label), target: GAP[gap].target }))}
     />
   )
@@ -777,6 +834,21 @@ export function SetupPage() {
           tmdb={tmdb.data}
           testing={tmdbTest.isPending}
           onTest={(apiKey) => tmdbTest.mutate(apiKey)}
+          onAdvance={(apiKey) => {
+            if (apiKey === null) {
+              goTo(STEP.complete)
+              return
+            }
+            tmdbTest.mutate(apiKey, {
+              // 測過了才走。完成頁要等後端重算過頁序：`goTo` 照手上的進度擋，所以先重讀再換網址。
+              onSuccess: (next) => {
+                if (!next.verified) return
+                void queryClient
+                  .invalidateQueries({ queryKey: setupStatusQueryOptions.queryKey })
+                  .then(() => navigate({ to: '/setup', search: { step: STEP.complete } }))
+              },
+            })
+          }}
           note={note}
           nav={nav}
         />

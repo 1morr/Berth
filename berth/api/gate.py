@@ -63,6 +63,8 @@ SETUP_OPENING_PATHS: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/setup/services/jellyfin"),
         ("POST", "/setup/services/jellyfin/test"),
         ("POST", "/setup/owner"),
+        # 既有 Jellyfin 的連線並登入（M4 票 67）：上面兩支（選、成為擁有者）合成一次。
+        ("POST", "/setup/owner/existing"),
     }
 )
 

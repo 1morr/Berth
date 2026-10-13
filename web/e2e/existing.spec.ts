@@ -22,22 +22,26 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   // 精靈的頁在網址上（M4 票 30）：讀回狀態之後補上 `?step=1`。
   await expect(page).toHaveURL(/\/setup(\?step=1)?$/)
 
-  // 1. Jellyfin 選既有：說出同主機、同容器路徑的條件與要從 COMPOSE_PROFILES 拿掉哪一個；填位址才測。
+  // 1. Jellyfin 選既有：說出同主機、同容器路徑的條件與要從 COMPOSE_PROFILES 拿掉哪一個。位址與那一台的
+  //    管理員帳密同一張表單、一顆「連線並登入」（M4 票 67，審計 C1）。帳密錯標在帳密兩格，位址那一格不標。
   await page.getByRole('radio', { name: /既有/ }).click()
   await expect(page.getByText(/同一台主機/).first()).toBeVisible()
   await expect(page.getByText('COMPOSE_PROFILES=qbittorrent,prowlarr')).toBeVisible()
-  await page.getByRole('textbox', { name: '位址' }).fill('http://nas:8096')
-  await page.getByRole('button', { name: '測試連線' }).click()
-  // 那一台跑過自己的精靈：用它的管理員登入。不是這組密碼被拒並說明原因（M4 票 06）。
-  await expect(page.getByRole('heading', { name: '用你的 Jellyfin 管理員登入' })).toBeVisible()
-  await expect(page.getByRole('textbox', { name: '再輸入一次密碼' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '測試連線' })).toHaveCount(0)
+  const jellyfinAddress = page.getByRole('textbox', { name: '位址' })
+  const ownerPassword = page.getByRole('textbox', { name: '密碼', exact: true })
+  await jellyfinAddress.fill('http://nas:8096')
   await page.getByRole('textbox', { name: 'Jellyfin 帳號' }).fill(OWNER.user)
-  await page.getByRole('textbox', { name: '密碼', exact: true }).fill('not-the-password')
-  await page.getByRole('button', { name: '登入', exact: true }).click()
-  await expect(page.getByText('Jellyfin 不認這組帳號或密碼。')).toBeVisible()
-  await page.getByRole('textbox', { name: '密碼', exact: true }).fill(OWNER.password)
+  await ownerPassword.fill('not-the-password')
+  await page.getByRole('button', { name: '連線並登入' }).click()
+  await expect(ownerPassword).toHaveAttribute('aria-invalid', 'true')
+  await expect(ownerPassword).toHaveAccessibleDescription(/Jellyfin 不認這組帳號或密碼/)
+  await expect(jellyfinAddress).not.toHaveAttribute('aria-invalid')
+  await expect(page.getByRole('textbox', { name: '再輸入一次密碼' })).toHaveCount(0)
+  await shot(page, '1-owner-wrong-password')
+  await ownerPassword.fill(OWNER.password)
   await shot(page, '1-owner')
-  await page.getByRole('button', { name: '登入', exact: true }).click()
+  await page.getByRole('button', { name: '連線並登入' }).click()
   await expect(page.getByRole('heading', { name: '擁有者：owner' })).toBeVisible()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
@@ -160,9 +164,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   await shot(page, '4-indexers')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 5. TMDB
+  // 5. TMDB：貼上 key 直接按「前往下一個泊位」，先測、過了才走（M4 票 67，審計 C4）。
   await page.getByRole('textbox', { name: '你的 TMDB API key' }).fill('0'.repeat(31) + '1')
-  await page.getByRole('button', { name: '測試 TMDB' }).click()
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
   // 6. 完成：之後登入用的是那台 Jellyfin 自己的帳號，擁有者就是它的管理員。

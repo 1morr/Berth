@@ -9,14 +9,18 @@ import { SIGNAL_FILL } from '../components/signal'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { formatList } from '../i18n/list'
 import { GAP } from './indexerGaps'
+import { hostOf } from './signals'
 import { useSiteChecks, withChecks } from './siteChecks'
 
 /**
- * 套件內頁 4 的主鍵（M4 票 44，審計 E-5）：「測試推薦站，加入通過的」一次做完，結果逐站列在下面。
+ * 頁 4 的主鍵（M4 票 44，審計 E-5）：「測試推薦站，加入通過的」一次做完，結果逐站列在下面。
  *
- * 原本是測 → 勾 → 加三個動作；套件內的使用者沒有理由不要已經通過測試的推薦站。**Prowlarr 已經有站時
- * 不給這顆鍵**（重跑、重裝保留設定）：後端也只碰還沒加入的推薦站，不會重複加。逐站的清單與其他公開站
- * 收在下面的「進階」（`AdvancedSites`）。
+ * 原本是測 → 勾 → 加三個動作；使用者沒有理由不要已經通過測試的推薦站。**Prowlarr 已經有站時不給這顆鍵**
+ * （重跑、重裝保留設定，或使用者自己那一台本來就有站）：後端也只碰還沒加入的推薦站，不會重複加。逐站的清單與
+ * 其他公開站收在下面的「進階」（`AdvancedSites`）。
+ *
+ * **既有的 Prowlarr 也有**（M4 票 67，審計 C3）：加進的是使用者自己那一台，所以那一句列出會測哪幾站、加進
+ * 哪一台（M4 票 20 要「看得到加哪幾站」），也說 Berth 不移除。
  *
  * 結果照後端記下的結論畫（`IndexerSetup.checks`），重新整理之後還在。三種分開說：加進去了、測過而加不進去
  * （Prowlarr 加之前自己再連一次，那一次沒連上；審計實測 Internet Archive）、測試就沒過。
@@ -41,7 +45,7 @@ export function RecommendedSites({
   onRun: () => Promise<IndexerSetup>
   onSkip: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const titleId = useId()
   // 「進階」的逐站清單記著同一份測試結論：主鍵跑完，那裡也要看得到哪幾站沒過、為什麼。
   const [, setChecks] = useSiteChecks(indexers)
@@ -82,7 +86,16 @@ export function RecommendedSites({
       </div>
       {offered && (
         <p className="mt-2 max-w-prose text-sm text-ink-dim">
-          {t('indexer.quick.lede', { count: recommended.length })}
+          {indexers.origin === 'existing'
+            ? t('indexer.quick.ledeExisting', {
+                count: recommended.length,
+                names: formatList(
+                  recommended.map((row) => row.name),
+                  i18n.language,
+                ),
+                host: hostOf(indexers.base_url),
+              })
+            : t('indexer.quick.lede', { count: recommended.length })}
         </p>
       )}
 

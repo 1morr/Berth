@@ -70,6 +70,18 @@ export function claimOwner(body: OwnerInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>('/setup/owner', body)
 }
 
+/**
+ * 頁 1 既有 Jellyfin：位址與它的管理員帳密一次送出（M4 票 67，照 Seerr 的 Sign In）。位址測不過是 400
+ * `connection_failed`（`choiceRefusalOf`，什麼都不存），帳密與其餘拒絕同 `claimOwner`（`ownerRefusalOf`）。
+ * 那一台還沒初始化時只存下選擇、回來的 `owner` 是空的：頁 1 換成建立管理員的表單。用 `CLAIM_OWNER_KEY`：
+ * 帳密不對的 401 同樣不是 session 過期。
+ */
+export type ExistingOwnerInput = Schemas['ExistingOwnerIn']
+
+export function signInExistingOwner(body: ExistingOwnerInput): Promise<SetupStatus> {
+  return apiPost<SetupStatus>('/setup/owner/existing', body)
+}
+
 /** 頁 1 被拒的理由。認不得的（或根本不是拒絕，例如連不上 Berth）是 `null`。 */
 export function ownerRefusalOf(error: unknown): OwnerRefusal | null {
   return parseRefusal(error, OWNER_REASONS)

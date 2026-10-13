@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi, type StubRoute } from '../test/fetch'
@@ -8,6 +9,7 @@ import {
   ALL_BUNDLED,
   RECOMMENDED,
   check,
+  chosen,
   indexerSetup,
   setupStatus,
   site,
@@ -190,5 +192,95 @@ describe('頁 4 套件內的主鍵', () => {
     const block = within(screen.getByTestId('recommended-sites'))
     expect(await block.findByTestId('request-failed')).toHaveTextContent(/測試與加入沒做完/)
     expect(block.getByRole('button', { name: RUN_LABEL })).toBeEnabled()
+  })
+})
+
+/** 既有 Prowlarr、一站都沒有：連得上、0 站。 */
+const EXISTING_PROWLARR = chosen({
+  kind: 'prowlarr',
+  origin: 'existing',
+  base_url: 'http://nas:9696',
+  reason: 'connected',
+  detail: '0',
+})
+const AT_EXISTING = setupStatus({
+  ...AT_INDEXER,
+  services: [...ALL_BUNDLED.slice(0, 2), EXISTING_PROWLARR],
+})
+const EXISTING_EMPTY = indexerSetup({
+  origin: 'existing',
+  base_url: 'http://nas:9696',
+  web_ui_login: false,
+  web_port: null,
+  steps: [step('prowlarr', 'pending', '0')],
+})
+
+describe('頁 4 既有 Prowlarr 也有主鍵（M4 票 67，審計 C3、P2-10）', () => {
+  it('一站都沒有：同一顆鍵，說出會測哪幾站、加進哪一台；一支做完，沒有介面登入', async () => {
+    const fetchStub = stubApi({
+      [STATUS]: { body: AT_EXISTING },
+      [INDEXERS]: { body: EXISTING_EMPTY },
+      [RUN]: {
+        body: indexerSetup({
+          ...EXISTING_EMPTY,
+          sites: RECOMMENDED.filter((row) => ADDED_NAMES.includes(row.definition_name)).map(
+            (row, index) => site(row, index + 1),
+          ),
+          steps: [step('prowlarr', 'ok', '6'), ...ADDED_NAMES.map((name) => step(name, 'ok'))],
+          checks: ADDED_NAMES.map((name) => check(name)),
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const block = within(await screen.findByTestId('recommended-sites'))
+    const lede = block.getByText(/加進你在 nas:9696 的 Prowlarr/)
+    expect(lede).toHaveTextContent('測試推薦的 9 個公開站（Nyaa.si、')
+    expect(lede).toHaveTextContent('Berth 不移除站')
+    expect(screen.queryByTestId('prowlarr-login')).not.toBeInTheDocument()
+    await user.click(block.getByRole('button', { name: RUN_LABEL }))
+
+    await waitFor(() => expect(called(fetchStub, '/api/setup/indexers/recommended')).toBe(true))
+    expect(called(fetchStub, '/api/setup/indexers/test')).toBe(false)
+    expect(called(fetchStub, '/api/setup/indexers/apply')).toBe(false)
+    const outcome = within(await screen.findByTestId('one-key-outcome'))
+    expect(outcome.getByText('加入 6 站')).toBeVisible()
+  })
+
+  it('已經有站：沒有主鍵，逐站加站收在「進階」', async () => {
+    stubApi({
+      [STATUS]: { body: AT_EXISTING },
+      [INDEXERS]: {
+        body: indexerSetup({ ...EXISTING_EMPTY, sites: [site(RECOMMENDED[1], 1)] }),
+      },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByTestId('added')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: RUN_LABEL })).not.toBeInTheDocument()
+    const advanced = screen.getByTestId('advanced-sites')
+    expect(advanced).not.toHaveAttribute('open')
+    expect(within(advanced).getByRole('region', { name: '加站' })).toBeInTheDocument()
+  })
+
+  it('In English the one key names the sites and your Prowlarr', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      stubApi({ [STATUS]: { body: AT_EXISTING }, [INDEXERS]: { body: EXISTING_EMPTY } })
+
+      renderInRoute(<SetupPage />)
+      const block = within(await screen.findByTestId('recommended-sites'))
+
+      expect(
+        block.getByText(/adds the ones that pass to your Prowlarr at nas:9696/),
+      ).toHaveTextContent('Berth does not remove sites')
+      expect(
+        block.getByRole('button', { name: 'Test recommended sites and add the ones that pass' }),
+      ).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 })

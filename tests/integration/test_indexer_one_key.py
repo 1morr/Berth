@@ -120,11 +120,44 @@ class TestOneKey:
         ]
         assert prowlarr.restarts == 0
 
-    def test_an_existing_prowlarr_is_refused(self, client: TestClient) -> None:
-        """既有的那一台加站要按一次確認、看得到會加哪幾站（M4 票 20），沒有主鍵。"""
-        _choose(client, "prowlarr", base_url="http://nas:9696", api_key="theirs")
 
-        assert client.post("/api/setup/indexers/recommended").status_code == 422
+class TestExisting:
+    """既有 Prowlarr 也有同一顆主鍵（M4 票 67，審計 C3、P2-10）：原本要「測試全部 → 勾 → 加入」。
+    加什麼與套件內同一份推薦清單；它的介面登入照舊不讀不寫（M4 票 20）。"""
+
+    @pytest.fixture
+    def prowlarr(self) -> FakeProwlarrClient:
+        return FakeProwlarrClient(rejects=BLOCKED, add_rejects=FLAKY)
+
+    @pytest.fixture
+    def client(
+        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
+    ) -> Iterator[TestClient]:
+        with _signed_in(config, tmp_path, prowlarr) as running:
+            chosen = _choose(running, "prowlarr", base_url="http://nas:9696", api_key="theirs")
+            assert chosen.status_code == 200, chosen.text
+            yield running
+
+    def test_one_request_adds_the_recommended_sites_that_pass(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        response = client.post("/api/setup/indexers/recommended")
+
+        assert response.status_code == 200, response.text
+        assert sorted(prowlarr.tested) == sorted(DEFAULT_INDEXERS)
+        assert prowlarr.add_attempts == [name for name in DEFAULT_INDEXERS if name not in BLOCKED]
+        assert [row["definition_name"] for row in response.json()["sites"]] == PASSING
+
+    def test_its_login_is_not_berths_business(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        """頁 4 的結論是連線那一條（加完之後的站數），沒有介面登入那一條，Prowlarr 不重啟。"""
+        body = client.post("/api/setup/indexers/recommended").json()
+
+        steps = {row["step"]: row for row in body["steps"]}
+        assert "prowlarr_login" not in steps
+        assert steps["prowlarr"]["status"] == "ok"
+        assert prowlarr.restarts == 0
 
 
 class TestAlreadyThere:

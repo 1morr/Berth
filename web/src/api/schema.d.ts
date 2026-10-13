@@ -1631,6 +1631,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/owner/existing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Owner Existing
+         * @description 頁 1 既有 Jellyfin：連線並登入，一次呼叫（M4 票 67，照 Seerr 的 Sign In）。
+         *
+         *     位址測不過是 400 `connection_failed`（與 `POST /services/jellyfin` 同形狀，什麼都不存）；帳密與
+         *     其餘拒絕同 `POST /owner`。成立擁有者時發 cookie；那一台還沒初始化時只存下選擇、不發——回應的
+         *     `owner_signs_in` 是假的，畫面換成建立管理員的表單（它送 `POST /owner`）。
+         */
+        post: operations["post_owner_existing_api_setup_owner_existing_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/services/{kind}": {
         parameters: {
             query?: never;
@@ -1985,10 +2009,10 @@ export interface paths {
         put?: never;
         /**
          * Post Indexers Recommended
-         * @description 套件內頁 4 的主鍵（M4 票 44）：測推薦清單上還沒加入的站，通過的加進去，逐站回報。
+         * @description 頁 4 的主鍵（M4 票 44；既有的那一台也有，M4 票 67）：測推薦清單上還沒加入的站，通過的加
+         *     進去，逐站回報。
          *
-         *     已經在 Prowlarr 裡的站不測也不加。既有的那一台與還沒選來源回 422：既有的加站走
-         *     `/indexers/apply`，要人看過加哪幾站（M4 票 20）。
+         *     已經在 Prowlarr 裡的站不測也不加。還沒選來源回 422。既有的那一台的介面登入不碰。
          */
         post: operations["post_indexers_recommended_api_setup_indexers_recommended_post"];
         delete?: never;
@@ -2802,6 +2826,25 @@ export interface components {
             not_single: boolean;
             /** Rules */
             rules: string[];
+        };
+        /**
+         * ExistingOwnerIn
+         * @description 頁 1 既有 Jellyfin 的那一張表單：位址與它的管理員帳密（M4 票 67）。帳密不加約束，理由同
+         *     `OwnerIn`。
+         */
+        ExistingOwnerIn: {
+            /** Base Url */
+            base_url: string;
+            /**
+             * Username
+             * @default
+             */
+            username?: string;
+            /**
+             * Password
+             * @default
+             */
+            password?: string;
         };
         /** FeedDeletedOut */
         FeedDeletedOut: {
@@ -9053,6 +9096,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+            /** @description `invalid_credentials` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
+            /** @description `not_administrator` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
+            /** @description `jellyfin_unresolved` · `owner_exists` · `target_changed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `jellyfin_failed` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRefusalOut"];
+                };
+            };
+        };
+    };
+    post_owner_existing_api_setup_owner_existing_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExistingOwnerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+            /** @description `connection_failed` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoiceRefusalOut"];
                 };
             };
             /** @description `invalid_credentials` */
