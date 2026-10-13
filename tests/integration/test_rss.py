@@ -51,6 +51,8 @@ from berth.models import (
 )
 from berth.naming import folder_name
 from berth.pipeline import RssPoller
+from berth.services import rss
+from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import poll_downloads
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
@@ -609,12 +611,35 @@ class TestTwoRoundsAtOnce:
     好好做完了。後到的不另輪，拿正在跑的那一輪的結果（M4 票 13c）。"""
 
     async def test_only_one_round_runs_and_neither_fails(
-        self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
+        self,
+        engine: AsyncEngine,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """「立即輪詢」先到、背景那一輪後到。兩邊要確實重疊：背景那一輪若在「立即輪詢」寫下
+        `last_polled_at` 之後才看 Feed 到期沒，Feed 已經不到期、`poll_due` 輪 0 個，那是對的
+        排程（M4 票 100：只用 `gather` 一起起兩邊時全套 pytest 偶爾撞到）。"""
         _, _, factory = await harbour(session, roots)
+        gate = _GatedFetcher(factory.rss_.pages, hold=FEED_URL)
+        factory.rss_ = gate
         feed = await add_feed(session, url=FEED_URL, name="Mikan")
         await session.commit()
         sessions = create_session_factory(engine)
+        joined = asyncio.Event()
+
+        async def joining(
+            mine: AsyncSession,
+            clients: ServiceClientFactory,
+            feed_id: int,
+            *,
+            now: datetime | None = None,
+        ) -> PollOutcome:
+            # 背景那一輪判定到期、走進 poll_feed；接著不經 await 就停在等正在跑的那一輪。
+            joined.set()
+            return await poll_feed(mine, clients, feed_id, now=now)
+
+        monkeypatch.setattr(rss, "poll_feed", joining)
 
         async def by_hand() -> PollOutcome:
             async with sessions() as mine:
@@ -624,10 +649,16 @@ class TestTwoRoundsAtOnce:
             async with sessions() as mine:
                 return await poll_due(mine, factory, now=NOW)
 
-        outcome, polled = await asyncio.gather(by_hand(), in_background())
+        pressed = asyncio.create_task(by_hand())
+        await _until(gate.entered, pressed)
+        background = asyncio.create_task(in_background())
+        # 背景那一輪若判定不到期就不會走進 poll_feed：那時等它結束、讓斷言說話。
+        await _until(joined, background)
+        gate.release.set()
+        outcome, polled = await asyncio.gather(pressed, background)
 
         assert (outcome.items, polled) == (12, 1)
-        assert factory.rss_.requested.count(FEED_URL) == 1
+        assert gate.requested.count(FEED_URL) == 1
         row = await session.get(RssFeed, feed.id, populate_existing=True)
         assert row is not None
         assert row.last_error == ""
@@ -678,6 +709,14 @@ class _GatedFetcher(FakeFeedFetcher):
             self.entered.set()
             await self.release.wait()
         return await super().fetch(url)
+
+
+async def _until(event: asyncio.Event, task: asyncio.Task[object]) -> None:
+    """等到 `event` 或 `task` 先結束：該停下來的那一邊沒停（閘沒擋住、背景那一輪判定不到期）時
+    測試照樣往下走到斷言，不卡住。"""
+    waiting = asyncio.create_task(event.wait())
+    await asyncio.wait((waiting, task), return_when=asyncio.FIRST_COMPLETED)
+    waiting.cancel()
 
 
 class TestSchedule:
