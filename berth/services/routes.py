@@ -78,7 +78,6 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.jellyfin import (
-    TVDB_MARKER,
     berth_path,
     is_listed,
     library_slug,
@@ -204,10 +203,6 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
     routes = await _existing_routes(session)
     views = tuple(_route_view(route, paths.complete_root) for route in routes.values())
     bundled = _jellyfin_origin(setup) is ServiceOrigin.BUNDLED
-    by_library = {
-        _library_key(route.jellyfin_library_id, route.jellyfin_library_name): route
-        for route in routes.values()
-    }
     return RouteSetupStatus(
         origin=_jellyfin_origin(setup),
         library_root=paths.library_root,
@@ -216,7 +211,16 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
             _library_choice(
                 library,
                 paths.library_root,
-                by_library.get(_library_key(library.item_id, library.name)),
+                next(
+                    (
+                        route
+                        for route in routes.values()
+                        if route_library_matches(
+                            library, route.jellyfin_library_id, route.jellyfin_library_name
+                        )
+                    ),
+                    None,
+                ),
                 listed=bundled and is_listed(library, setup.jellyfin.bundled, paths.library_root),
             )
             for library in setup.jellyfin.libraries
@@ -856,9 +860,7 @@ def _plan(
     planned: list[_Planned] = []
     taken = {route.slug for route in existing}
     targets = {route.target_path for route in existing}
-    routed = {
-        _library_key(route.jellyfin_library_id, route.jellyfin_library_name) for route in existing
-    }
+    routed = [(route.jellyfin_library_id, route.jellyfin_library_name) for route in existing]
     for selection in chosen:
         library = libraries.get(selection.library)
         if library is None:
@@ -866,10 +868,9 @@ def _plan(
                 RouteRefusal.LIBRARY_MISSING,
                 f"no library named {selection.library!r} on this Jellyfin",
             )
-        key = _library_key(library.item_id, library.name)
-        if key in routed:
+        if any(route_library_matches(library, *known) for known in routed):
             continue
-        routed.add(key)
+        routed.append((library.item_id, library.name))
         collection_type = SUPPORTED_TYPES.get(library.collection_type)
         if collection_type is None:
             raise RouteRejectedError(
@@ -1124,7 +1125,14 @@ class _Checker:
         舊路徑原地不動、另加一條 Berth 路徑（brief §16.4）時，舊的 `/movies` Berth 看不到並不礙事。
         """
         libraries = await self._jellyfin.libraries()
-        library = next((row for row in libraries if _is_library(row, self._plan)), None)
+        library = next(
+            (
+                row
+                for row in libraries
+                if route_library_matches(row, self._plan.library_item_id, self._plan.library_name)
+            ),
+            None,
+        )
         if library is None:
             raise StepFailedError(
                 StepFailure.LIBRARY_GONE,
@@ -1224,20 +1232,18 @@ def _probe_carried(health: RouteHealth) -> bool:
     return health.probe is not None and _concluded(row) and health.probed_at != health.checked_at
 
 
-def _library_key(item_id: str, name: str) -> str:
-    """認一個 Jellyfin 媒體庫：`ItemId`，沒有才用名字（票 09 之前存下的設定沒有 id）。
+def route_library_matches(
+    library: JellyfinLibrary | SetupLibrary, library_id: str, library_name: str
+) -> bool:
+    """Jellyfin 報的這一個，是不是 Route 記下的那個媒體庫：比 `ItemId`，Route 沒記才比名字
+    （票 09 之前存下的設定沒有 id）。
 
     一庫多條之後名字認不準（票 14 code-review）：在 Jellyfin 改個名不是換了一個媒體庫，
-    同名的兩個也是兩個。
+    同名的兩個也是兩個。建 Route、重跑檢查、健康檢查的 TVDB 都用這一條。
     """
-    return item_id or name
-
-
-def _is_library(library: JellyfinLibrary, plan_row: _Planned) -> bool:
-    """Jellyfin 現在報的這一個，是不是這條 Route 的媒體庫。"""
-    if plan_row.library_item_id:
-        return library.item_id == plan_row.library_item_id
-    return library.name == plan_row.library_name
+    if library_id:
+        return library.item_id == library_id
+    return library.name == library_name
 
 
 def _normalise_path(path: str) -> str:
@@ -1380,7 +1386,7 @@ def _library_choice(
         locations=tuple(library.locations),
         berth_path=path,
         has_berth_path=path in library.locations,
-        uses_tvdb=any(TVDB_MARKER in name.lower() for name in library.metadata_fetchers),
+        uses_tvdb=bool(tvdb_fetchers(library)),
         supported=library.collection_type in SUPPORTED_TYPES,
         has_route=route is not None,
         # 還沒選過的預選 Berth 路徑，加過沒加過都是（M4 票 19）：其餘路徑是使用者自己的，

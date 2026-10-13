@@ -13,12 +13,12 @@ from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import ServiceError
-from berth.domain import StepFailure, StepStatus
+from berth.adapters.http import AuthFailedError, ServiceError
+from berth.domain import StepFailure, StepStatus, TmdbProblem
 from berth.models import SetupSettings, SetupStep, TmdbSettings
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, update_settings
-from berth.services.steps import StepView, failed_step, step_views
+from berth.services.steps import StepView, failed_step, message, step_views
 
 #: 這一步唯一的那條纜繩，也是它打的端點。
 TMDB_STEP = "configuration"
@@ -111,6 +111,20 @@ async def _test(factory: ServiceClientFactory, settings: TmdbSettings) -> tuple[
 def credential(settings: TmdbSettings) -> str:
     """憑證只有一個來源。之後的里程碑也從這一支拿，不要各自判斷一次。"""
     return settings.api_key.strip()
+
+
+def tmdb_problem(exc: ServiceError | None) -> tuple[TmdbProblem, str]:
+    """探索頁與 Media 詳情共用的三種要不到：`None` 是沒有憑證（連線都沒發），其餘照例外分。
+
+    `NotFoundError` 也是 `ServiceError`：這裡把它當 `unreachable`。只有詳情頁那一支說得出
+    「這個 id 不存在」，它在呼叫這一支之前自己接走（探索頁的 404 是清單端點，不是哪一部作品）。
+    """
+    if exc is None:
+        # 憑證是精靈第 7 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。
+        return TmdbProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL
+    if isinstance(exc, AuthFailedError):
+        return TmdbProblem.CREDENTIAL_REJECTED, message(exc)
+    return TmdbProblem.UNREACHABLE, message(exc)
 
 
 def tmdb_verified(setup: SetupSettings) -> bool:

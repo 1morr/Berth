@@ -142,8 +142,6 @@ export function removeEmptyCategories(): Promise<Leftovers> {
   return apiDelete<Leftovers>('/setup/services/qbittorrent/leftovers/categories')
 }
 
-export type JellyfinLibrary = Schemas['LibraryOut']
-
 export type JellyfinSetup = Schemas['JellyfinSetupOut']
 
 /** 既有 Jellyfin：以管理員帳密換 API key。 */

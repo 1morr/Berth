@@ -31,13 +31,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
-from berth.adapters.jellyfin import JellyfinLibrary
 from berth.domain import IssueStatus, IssueType
 from berth.models import DiskSettings, Issue, JellyfinSettings, PathSettings, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.issues import record_issue
 from berth.services.jellyfin import tvdb_fetchers
+from berth.services.routes import route_library_matches
 from berth.services.settings import read_settings, write_settings
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ async def read_min_free(session: AsyncSession) -> int:
 async def _tvdb(session: AsyncSession, factory: ServiceClientFactory) -> Finding | None:
     """每一條 Route 的媒體庫掛不掛 TVDB。**Jellyfin 問不到就回 `None`**：整種不動。
 
-    媒體庫以 `ItemId` 認，沒有才用名字（`services/routes._is_library` 的同一條規則）。
+    媒體庫照 `services/routes.route_library_matches` 認。
     Jellyfin 上已經找不到那個媒體庫的 Route 不算有問題——那是 Route 的纜繩要報的事。
     """
     settings = await read_settings(session, JellyfinSettings)
@@ -109,7 +109,16 @@ async def _tvdb(session: AsyncSession, factory: ServiceClientFactory) -> Finding
 
     flagged: dict[str, dict[str, Any]] = {}
     for route in await session.scalars(select(Route)):
-        library = next((row for row in libraries if _is_library(row, route)), None)
+        library = next(
+            (
+                row
+                for row in libraries
+                if route_library_matches(
+                    row, route.jellyfin_library_id, route.jellyfin_library_name
+                )
+            ),
+            None,
+        )
         fetchers = tvdb_fetchers(library) if library is not None else ()
         if library is not None and fetchers:
             flagged[route.target_path] = {
@@ -118,12 +127,6 @@ async def _tvdb(session: AsyncSession, factory: ServiceClientFactory) -> Finding
                 "fetchers": list(fetchers),
             }
     return Finding(flagged=flagged)
-
-
-def _is_library(library: JellyfinLibrary, route: Route) -> bool:
-    if route.jellyfin_library_id:
-        return library.item_id == route.jellyfin_library_id
-    return library.name == route.jellyfin_library_name
 
 
 async def _disk(session: AsyncSession) -> Finding:

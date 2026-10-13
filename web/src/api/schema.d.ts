@@ -3407,8 +3407,6 @@ export interface components {
             api_key_present: boolean;
             /** Steps */
             steps: components["schemas"]["StepOut"][];
-            /** Libraries */
-            libraries: components["schemas"]["LibraryOut"][];
             /** Version */
             version: string;
             /** Version Supported */
@@ -3806,23 +3804,6 @@ export interface components {
             supported: boolean;
             /** Uses Tvdb */
             uses_tvdb: boolean;
-        };
-        /** LibraryOut */
-        LibraryOut: {
-            /** Name */
-            name: string;
-            /** Collection Type */
-            collection_type: string;
-            /** Locations */
-            locations: string[];
-            /** Metadata Fetchers */
-            metadata_fetchers: string[];
-            /** Uses Tvdb */
-            uses_tvdb: boolean;
-            /** Berth Path */
-            berth_path: string;
-            /** Has Berth Path */
-            has_berth_path: boolean;
         };
         /** LibraryPathIn */
         LibraryPathIn: {

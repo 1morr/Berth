@@ -535,7 +535,6 @@ class TestJellyfin:
                     ("api_key", "Berth"),
                 )
             ],
-            "libraries": [],
             "version": "12.1.0",
             # 還沒問過就不是紅燈：那一格是「尚未取得」。
             "version_supported": True,
@@ -626,7 +625,8 @@ class TestJellyfin:
         assert body["origin"] == "bundled"
         assert body["api_key_present"] is True
         assert (body["version"], body["version_supported"]) == ("12.1.0", True)
-        assert [row["name"] for row in body["libraries"]] == ["Movies", "TV", "Anime"]
+        libraries = client.get("/api/setup/routes").json()["libraries"]
+        assert [row["name"] for row in libraries] == ["Movies", "TV", "Anime"]
         assert jellyfin.admin == ("skipper", "harbour")
 
     def test_the_status_endpoint_replays_the_last_run(self, client: TestClient) -> None:
@@ -689,9 +689,10 @@ class TestJellyfin:
         ).json()
 
         assert body["api_key_present"] is True
-        assert body["libraries"][0]["uses_tvdb"] is True
-        assert body["libraries"][0]["berth_path"].endswith("/films")
-        assert body["libraries"][0]["has_berth_path"] is False
+        [films] = client.get("/api/setup/routes").json()["libraries"]
+        assert films["uses_tvdb"] is True
+        assert films["berth_path"].endswith("/films")
+        assert films["has_berth_path"] is False
 
     def test_a_path_that_cannot_be_added_comes_back_as_a_failed_step(
         self, client: TestClient, jellyfin: FakeJellyfinClient

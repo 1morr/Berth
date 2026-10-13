@@ -24,7 +24,7 @@ from berth.api.deps import (
     SessionDep,
 )
 from berth.api.errors import refusal_responses
-from berth.api.gate import current_user
+from berth.api.gate import current_actor
 from berth.api.schemas import SeriesCorrectedOut
 from berth.domain import (
     Confidence,
@@ -37,7 +37,6 @@ from berth.domain import (
     PlanSummary,
     ReasonCode,
 )
-from berth.services.jobs import actor_of
 from berth.services.plan_review import (
     ItemEdit,
     PlanRejectedError,
@@ -244,10 +243,10 @@ async def put_items(
     edits = [ItemEdit(**edit.model_dump()) for edit in body.items]
     try:
         if not body.apply_to_series:
-            view = await edit_items(session, plan_id, edits, actor=_actor(request))
+            view = await edit_items(session, plan_id, edits, actor=current_actor(request))
             return PlanEditedOut.model_validate(view)
         corrected = await correct_series_from_plan(
-            session, factory, hub, plan_id, edits[0], actor=_actor(request)
+            session, factory, hub, plan_id, edits[0], actor=current_actor(request)
         )
     except PlanRejectedError as refusal:
         raise plan_refusal(refusal) from refusal
@@ -274,7 +273,7 @@ async def post_approve(
 ) -> PlanOut:
     """核准＝照提案入庫：`review → importing`，然後叫醒 importer（plan §3.1）。"""
     try:
-        view = await approve_plan(session, hub, plan_id, actor=_actor(request))
+        view = await approve_plan(session, hub, plan_id, actor=current_actor(request))
     except PlanRejectedError as refusal:
         raise plan_refusal(refusal) from refusal
     imports.nudge()
@@ -289,15 +288,10 @@ async def post_reject(
 ) -> None:
     """拒絕：`review → completed`，規劃器整份重算（plan §3.1）。204：這一份馬上會被換掉。"""
     try:
-        await reject_plan(session, hub, plan_id, actor=_actor(request))
+        await reject_plan(session, hub, plan_id, actor=current_actor(request))
     except PlanRejectedError as refusal:
         raise plan_refusal(refusal) from refusal
     plans.nudge()
-
-
-def _actor(request: Request) -> str:
-    user = current_user(request)
-    return actor_of(user.id if user is not None else None)
 
 
 def plan_refusal(refusal: PlanRejectedError) -> HTTPException:

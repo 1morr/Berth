@@ -204,7 +204,9 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 對 torrent 名與每個檔名解析出結構化欄位（缺就留空，不猜）：
 
-`title_candidates[]`、`season`（顯式）/`season_end`（多季一包 `S01 + S02` 的最後一季）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`video_codec`、`bit_depth`、`audio`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`air_date`（檔名寫的播出日，§6.4）、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
+`title_candidates[]`、`season`（顯式）/`season_end`（多季一包 `S01 + S02` 的最後一季）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`air_date`（檔名寫的播出日，§6.4）、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
+
+編碼、位深、音軌不從名字解析（M4 票 91 拿掉）：沒有消費者，留著容易被誤認成「已支援依編碼挑版本」。檔案本身的這些屬性由 mediainfo 量（plan §8.7）。
 
 - 沒有現成庫能處理中文字幕組命名（§20.4）。【決定】解析分兩段：先用本系統維護的 **CJK 字幕組詞典**（簡繁/繁日/簡日/BIG5/GB/CHT/CHS/內嵌/內封/外掛/第 N 話/第 N 集/全集/合集/第 N 季/劇場版/番外/重製/★前綴/招募廣告/地區限制…，起點是 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 的規則）做正規化與 CJK 欄位抽取，再把剩餘字串交給成熟的西方命名解析庫（Python 用 guessit，TS 用 @ctrl/video-filename-parser）。
 - 欄位定義對齊 AutoBangumi 的 `ParsedRelease`（含 `media_type` 與 `release_kind = single | range | batch | collection`），讓 benchmark 可以互相比較。

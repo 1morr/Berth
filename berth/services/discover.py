@@ -14,13 +14,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from itertools import zip_longest
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ServiceError
+from berth.adapters.http import ServiceError
 from berth.adapters.tmdb import (
     BASE_LANGUAGE,
     DISPLAY_LANGUAGE,
@@ -29,10 +29,10 @@ from berth.adapters.tmdb import (
 )
 from berth.domain import MediaKind, TmdbProblem
 from berth.models import MediaCard, TmdbCache, TmdbSettings, dump_cards, load_cards
+from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings, write_settings
-from berth.services.steps import message
-from berth.services.tmdb import MISSING_CREDENTIAL, credential
+from berth.services.tmdb import credential, tmdb_problem
 from berth.services.tracking import tracked_media
 
 #: 探索與搜尋的快取壽命（plan §8.3）。Media 快照另有 24 小時的規則，不走這裡。
@@ -159,16 +159,13 @@ async def _feed(
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
     if not key_in_hand:
-        # 憑證是精靈第 7 步的必填閘門（票 02b），所以「沒有 key」有一句自己的話。
-        return DiscoverResult((), TmdbProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL)
+        return DiscoverResult((), *tmdb_problem(None))
 
     client = factory.tmdb(key_in_hand)
     try:
         cards = await fetch(client, await image_base(session, client))
-    except AuthFailedError as exc:
-        return DiscoverResult((), TmdbProblem.CREDENTIAL_REJECTED, message(exc))
     except ServiceError as exc:
-        return DiscoverResult((), TmdbProblem.UNREACHABLE, message(exc))
+        return DiscoverResult((), *tmdb_problem(exc))
     finally:
         await client.aclose()
 
@@ -244,15 +241,13 @@ async def image_base(session: AsyncSession, client: TmdbClient) -> str:
 
 async def _read_cache(session: AsyncSession, key: str) -> tuple[MediaCard, ...] | None:
     row = await session.get(TmdbCache, key)
-    if row is None or datetime.now(UTC) - row.fetched_at >= CACHE_TTL:
+    if row is None or utcnow() - row.fetched_at >= CACHE_TTL:
         return None
     return load_cards(row.value_json)
 
 
 async def _write_cache(session: AsyncSession, key: str, cards: tuple[MediaCard, ...]) -> None:
-    await session.merge(
-        TmdbCache(key=key, value_json=dump_cards(cards), fetched_at=datetime.now(UTC))
-    )
+    await session.merge(TmdbCache(key=key, value_json=dump_cards(cards), fetched_at=utcnow()))
 
 
 async def _wall(session: AsyncSession, cards: tuple[MediaCard, ...]) -> DiscoverResult:

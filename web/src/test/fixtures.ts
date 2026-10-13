@@ -3,7 +3,6 @@ import type {
   IndexerSetup,
   IndexerSite,
   SiteCheck,
-  JellyfinLibrary,
   JellyfinSetup,
   LibraryChoice,
   RouteSetup,
@@ -81,7 +80,6 @@ export function jellyfinSetup(overrides: Partial<JellyfinSetup> = {}): JellyfinS
     base_url: 'http://jellyfin:8096',
     api_key_present: false,
     steps: [],
-    libraries: [],
     version: '',
     version_supported: true,
     bundled: [
@@ -110,19 +108,6 @@ export const SEQUENCE_DONE: SetupStep[] = [
   step('complete', 'ok'),
   step('api_key', 'ok', 'Berth'),
 ]
-
-export function library(overrides: Partial<JellyfinLibrary> = {}): JellyfinLibrary {
-  return {
-    name: 'Films',
-    collection_type: 'movies',
-    locations: ['/volume1/media/films'],
-    metadata_fetchers: ['TheMovieDb'],
-    uses_tvdb: false,
-    berth_path: '/data/library/films',
-    has_berth_path: false,
-    ...overrides,
-  }
-}
 
 /** 頁 2 狀態的測試建構子。預設是「套件內、乾淨實例、介面登入還沒設過」。 */
 export function qbittorrentSetup(overrides: Partial<QbittorrentSetup> = {}): QbittorrentSetup {

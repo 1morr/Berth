@@ -10,6 +10,7 @@ from enum import StrEnum
 from typing import Any, Protocol
 
 from berth.adapters.http import AuthFailedError, ProtocolMismatchError, ServiceError
+from berth.adapters.versions import parse_version
 
 #: 支援下限（brief §16.4）。低於它的 Web API 缺少 Berth 要用的端點，精靈拒絕接入。
 MIN_WEBAPI = (2, 8, 4)
@@ -78,12 +79,12 @@ class QbittorrentVersion:
 
     @property
     def supported(self) -> bool:
-        return _parse(self.webapi) >= MIN_WEBAPI
+        return parse_version(self.webapi) >= MIN_WEBAPI
 
     @property
     def pause_parameter(self) -> str:
         """加入 torrent 時要送的那個「先別下載」參數。"""
-        return "stopped" if _parse(self.webapi) >= STOPPED_SINCE_WEBAPI else "paused"
+        return "stopped" if parse_version(self.webapi) >= STOPPED_SINCE_WEBAPI else "paused"
 
     @property
     def start_endpoint(self) -> str:
@@ -91,7 +92,9 @@ class QbittorrentVersion:
         `torrents/resume` 改成 `torrents/start`，與 `paused` → `stopped` 是同一版（brief §20.2）。
         """
         return (
-            "torrents/start" if _parse(self.webapi) >= STOPPED_SINCE_WEBAPI else "torrents/resume"
+            "torrents/start"
+            if parse_version(self.webapi) >= STOPPED_SINCE_WEBAPI
+            else "torrents/resume"
         )
 
 
@@ -582,17 +585,6 @@ async def _await_sight(client: QbittorrentClient, info_hash: str, deadline: floa
 
 def _normalise(path: str) -> str:
     return path.rstrip("/") or "/"
-
-
-def _parse(version: str) -> tuple[int, ...]:
-    """`2.8.5` → `(2, 8, 5)`。認不得的字串當成 0，也就是「太舊」。"""
-    parts: list[int] = []
-    for chunk in version.strip().split("."):
-        digits = "".join(char for char in chunk if char.isdigit())
-        if not digits:
-            break
-        parts.append(int(digits))
-    return tuple(parts)
 
 
 __all__ = [

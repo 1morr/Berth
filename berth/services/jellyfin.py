@@ -131,18 +131,18 @@ DEFAULT_METADATA_FETCHERS: dict[CollectionType, tuple[str, ...]] = {
 TVDB_MARKER = "tvdb"
 
 
-def tvdb_fetchers(library: JellyfinLibrary) -> tuple[str, ...]:
+def tvdb_fetchers(library: JellyfinLibrary | SetupLibrary) -> tuple[str, ...]:
     """這個媒體庫掛著的 TVDB metadata fetcher（逐型別攤平、去重，順序照 Jellyfin 回報的）。
 
-    空的就是沒掛。Route 設定頁的那一行字與 `health_checker` 的 Issue 問的是同一件事（票 09c）。
+    空的就是沒掛。Route 設定頁的那一行字與 `health_checker` 的 Issue 問的是同一件事（票 09c）；
+    現查的與精靈快照（已經攤平）都走這一支，「有沒有 TVDB」只判斷一次。
     """
-    found = (
-        fetcher
-        for option in library.type_options
-        for fetcher in option.metadata_fetchers
-        if TVDB_MARKER in fetcher.lower()
+    names = (
+        library.metadata_fetchers
+        if isinstance(library, SetupLibrary)
+        else (fetcher for option in library.type_options for fetcher in option.metadata_fetchers)
     )
-    return tuple(dict.fromkeys(found))
+    return tuple(dict.fromkeys(name for name in names if TVDB_MARKER in name.lower()))
 
 
 class BundledLibraryRejectedError(Exception):
@@ -182,19 +182,6 @@ class BundledLibraryView:
 
 
 @dataclass(frozen=True, slots=True)
-class LibraryView:
-    name: str
-    collection_type: str
-    locations: tuple[str, ...]
-    metadata_fetchers: tuple[str, ...]
-    #: 這個媒體庫掛了 TVDB 的 metadata fetcher（brief §16.4 的警告，不阻擋）。
-    uses_tvdb: bool
-    #: 「加入 Berth 路徑」會加的那一條。按之前就顯示它（剖面即預覽）。
-    berth_path: str
-    has_berth_path: bool
-
-
-@dataclass(frozen=True, slots=True)
 class JellyfinSetupStatus:
     """`GET /api/setup/jellyfin` 的整份形狀。兩條路徑共用。"""
 
@@ -202,7 +189,6 @@ class JellyfinSetupStatus:
     base_url: str
     api_key_present: bool
     steps: tuple[StepView, ...]
-    libraries: tuple[LibraryView, ...]
     #: 這台 Jellyfin 上一次報的版本號（`public_info` 那一步的實測值）。還沒問過就是空字串。
     version: str
     #: 版本夠不夠新（brief §16.4）。**還沒問過時是 `True`**：那一格是「尚未取得」而不是紅燈。
@@ -231,7 +217,6 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
         base_url=base_url,
         api_key_present=bool(jellyfin.api_key),
         steps=step_views(setup.jellyfin.steps),
-        libraries=tuple(_library_view(row, paths.library_root) for row in setup.jellyfin.libraries),
         version=version,
         version_supported=not version or version_supported(version),
         bundled=tuple(
@@ -1102,19 +1087,6 @@ def berth_path(library_name: str, library_root: str, locations: Sequence[str] = 
     if f"{root}/{spaced}" in locations:
         return f"{root}/{spaced}"
     return f"{root}/{library_slug(library_name)}"
-
-
-def _library_view(library: SetupLibrary, library_root: str) -> LibraryView:
-    path = berth_path(library.name, library_root, library.locations)
-    return LibraryView(
-        name=library.name,
-        collection_type=library.collection_type,
-        locations=tuple(library.locations),
-        metadata_fetchers=tuple(library.metadata_fetchers),
-        uses_tvdb=any(TVDB_MARKER in name.lower() for name in library.metadata_fetchers),
-        berth_path=path,
-        has_berth_path=path in library.locations,
-    )
 
 
 def _message(exc: BaseException) -> str:

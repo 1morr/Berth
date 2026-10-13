@@ -58,26 +58,22 @@ class TestSubtitleKind:
     def test_hardsub(self) -> None:
         hints = normalize_cjk("[三明治摆烂组] Show - 08 - [繁日内嵌][AVC 8bit 1080P]")[1]
 
-        assert hints.hardsub is True
         assert hints.subtitle_kind is SubtitleKind.HARDSUB
 
     def test_softsub(self) -> None:
         hints = normalize_cjk("[LoliHouse] Show - 81 v2 [WebRip 1080p][简繁内封字幕]")[1]
 
-        assert hints.hardsub is False
         assert hints.subtitle_kind is SubtitleKind.SOFTSUB
 
     def test_external(self) -> None:
         hints = normalize_cjk("[DBD-Raws][不死者之王 第二季][01-13TV全集+SP][简繁外挂]")[1]
 
-        assert hints.hardsub is False
         assert hints.subtitle_kind is SubtitleKind.EXTERNAL
 
     def test_a_release_that_does_not_say_leaves_it_unknown(self) -> None:
         """不猜（brief §6.3）：`[繁體]` 只說了語言，沒說字幕怎麼放。"""
         hints = normalize_cjk("【楓葉字幕組】[寶可夢][135][繁體][1080P][MP4]")[1]
 
-        assert hints.hardsub is None
         assert hints.subtitle_kind is SubtitleKind.UNKNOWN
 
 

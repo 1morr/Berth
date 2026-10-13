@@ -29,6 +29,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from berth.domain import Role
 from berth.services.auth import AuthenticatedUser, read_session
+from berth.services.jobs import actor_of
 from berth.services.setup import is_owner_established
 
 #: 不改狀態的方法不必帶 CSRF 標頭。
@@ -285,6 +286,12 @@ def current_user(request: Request) -> AuthenticatedUser | None:
     """這個請求背後的使用者。門禁跑過之後才有值。"""
     user: AuthenticatedUser | None = getattr(request.state, "user", None)
     return user
+
+
+def current_actor(request: Request) -> str:
+    """寫進 `events.actor` 的那個人：登入的 user id，沒有人就是 `system`（plan §2.3）。"""
+    user = current_user(request)
+    return actor_of(user.id if user is not None else None)
 
 
 def _no_store(send: Send) -> Send:

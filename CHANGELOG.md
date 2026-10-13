@@ -18,6 +18,8 @@
 - **`GET /api/settings/services`**（M4 票 87）：回的與 `GET /api/health/detail` 一字不差，設定頁的健康卡改讀後者。
   之前兩頁各有一份快取，在健康頁按「立即重測」之後，設定頁的卡片要等它自己重抓才會是新的；現在兩頁讀同一份。
   `POST /api/settings/services/{kind}/test` 照舊。
+- **`GET /api/setup/jellyfin` 等精靈 Jellyfin 端點回應裡的 `libraries`**（M4 票 91）：畫面沒有讀它，頁 3 的媒體庫清單
+  一直讀 `GET /api/setup/routes` 的 `libraries`，那一份照舊（同樣有 `uses_tvdb`、`berth_path`、`has_berth_path`）。
 
 ### Fixed
 

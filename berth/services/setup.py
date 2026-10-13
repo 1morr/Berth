@@ -15,7 +15,7 @@ import asyncio
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -66,6 +66,7 @@ from berth.models import (
     SetupSettings,
     SetupStep,
 )
+from berth.models.types import utcnow
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, HostResolver, ServiceClientFactory
 from berth.services.commands import Effect, command
@@ -202,7 +203,7 @@ async def is_setup_complete(session: AsyncSession) -> bool:
 
 async def read_status(session: AsyncSession) -> SetupStatus:
     """目前的頁與每個服務的選擇。不做任何測試。"""
-    return await _read(session, now=_utcnow())
+    return await _read(session, now=utcnow())
 
 
 async def complete_setup(session: AsyncSession, *, now: datetime | None = None) -> SetupStatus:
@@ -213,7 +214,7 @@ async def complete_setup(session: AsyncSession, *, now: datetime | None = None) 
     在這裡再問一次，因為使用者回得去把它們弄壞，另一個分頁也改得了（plan §9.3、票 02b、M4 票 31）。
     問過的那些結論同時寫進健康紀錄（`health.record_setup_results`，M4 票 59）：健康頁一打開就有。
     """
-    moment = now or _utcnow()
+    moment = now or utcnow()
     setup = await read_settings(session, SetupSettings)
     berthed = await _berthed(session, setup)
     # 照頁序問：好幾頁沒做完時，先把人送回最前面那一頁。
@@ -337,7 +338,7 @@ async def claim_owner(
     await update_settings(session, SetupSettings, record)
     # 擁有者先落地、session 後發：`open_session` 失敗的話擁有者已成立，從登入頁用同一組帳密進來。
     signed_in = await open_session(session, auth)
-    return ClaimedOwner(status=await _read(session, now=_utcnow()), signed_in=signed_in)
+    return ClaimedOwner(status=await _read(session, now=utcnow()), signed_in=signed_in)
 
 
 def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
@@ -378,7 +379,7 @@ async def choose_service(
     但新位址要先回答它是**同一台**（`_same_jellyfin`，M4 票 18）——那一頁因此不重做。設定頁的連線區
     走的也是這一支。
     """
-    moment = now or _utcnow()
+    moment = now or utcnow()
     connection = connection or ServiceConnection()
     setup = await read_settings(session, SetupSettings)
     previous = setup.choices.get(kind)
@@ -452,7 +453,7 @@ async def retest_service(
             indexer.api_key = mounted
 
         await update_settings(session, IndexerSettings, remount)
-    return await _test_and_record(session, factory, kind, restart=restart, now=now or _utcnow())
+    return await _test_and_record(session, factory, kind, restart=restart, now=now or utcnow())
 
 
 @command(Effect.READ)
@@ -1125,7 +1126,3 @@ def _view(
         else 0,
         waited_seconds=max(int(waited.total_seconds()), 0),
     )
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)

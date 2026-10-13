@@ -11,7 +11,6 @@ import {
   chosen,
   indexerSetup,
   jellyfinSetup,
-  library,
   libraryChoice,
   qbittorrentSetup,
   routeSetup,
@@ -623,7 +622,6 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     api_key_present: true,
     version: '12.0.0',
     steps: [step('public_info', 'ok', '12.0.0'), step('api_key', 'ok', 'Berth')],
-    libraries: [library()],
   })
 
   const PICKER = routeSetup({
