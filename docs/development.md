@@ -43,7 +43,7 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | 變數 | 預設 | 用途 |
 | --- | --- | --- |
 | `CONFIG_ROOT` | `/config` | `berth.db`、設定與 log。啟動時自動建立並套用 migration |
-| `DATA_ROOT` | `/data` | 媒體根：incomplete、complete 與媒體庫路徑都在它底下 |
+| `DATA_ROOT` | `/data` | 只給 compose 掛載用：宿主上哪個目錄掛到容器的 `/data`（部署套件 `.env` 的同名變數）。Berth 沒有地方用它的值——incomplete / complete 根與 `library_root` 固定在 `/data` 底下（`PathSettings` 的預設值，plan §9.5），本機 `berth serve` 設不設都一樣 |
 | `PORT` | `8383` | 對外的唯一 port |
 | `JELLYFIN_PORT` | `8096` | 套件內 Jellyfin 在宿主上發佈的 port；「在 Jellyfin 開啟」沒填對外網址時開這個 port。compose 從部署套件 `.env` 的同名變數傳進來 |
 | `PROWLARR_PORT` | `9696` | 套件內 Prowlarr 在宿主上發佈的 port；精靈頁 4 與設定頁「在 Prowlarr 加私站」的連結開這個 port。compose 從部署套件 `.env` 的同名變數傳進來 |

@@ -415,8 +415,8 @@ def _clashing(item: PlanItem, ends: dict[tuple[int, int], set[int]]) -> PlanItem
 def episode_span(item: PlanItem) -> tuple[int, int, int] | None:
     """這一列蓋到的（季, 起始集, 結束集）。不是正片、或說不出季集的回 `None`。
 
-    **比帳本的那一半也用它**（`services/plan.py`）：判準一分岔，同一份檔案在兩條路徑上
-    就會得到兩個答案。
+    **比帳本的那一半也拿它算這一列**（`services/plan._duplicate_of`；帳本那一側照同一個慣例
+    行內攤開）：判準一分岔，同一份檔案在兩條路徑上就會得到兩個答案。
 
     **目標路徑留著**：兩個檔案各有各的路徑，都寫得出去，停下來只是因為該由人挑一份
     （與 `_apply_policy` 同一個道理）。

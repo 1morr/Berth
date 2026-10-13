@@ -60,7 +60,7 @@ class EventHub:
 
     @property
     def subscribers(self) -> int:
-        """現在有幾條連線開著。健康頁與測試靠它確認訂閱真的收掉了。"""
+        """現在有幾條連線開著。只給測試：確認訂閱真的收掉了。"""
         return len(self._queues)
 
     def publish(self, signal: JobSignal) -> None:

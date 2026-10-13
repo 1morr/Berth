@@ -1008,7 +1008,7 @@ class PlanEngine(StrEnum):
     """這一份 Plan 是誰算的（plan §2.3 的 `plans.engine`、brief §5.2）。"""
 
     RULES = "rules"
-    #: AI fallback（M4；介面在 plan §4.5，M1 的實作永遠沒有意見）。
+    #: AI 解析（M5；介面在 plan §4.5，M1 的實作永遠沒有意見）。
     AI = "ai"
     #: 使用者在 Review Queue 逐列改過（M2）。
     USER = "user"
