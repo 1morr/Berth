@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SetupStatus } from '../api/setup'
@@ -287,6 +288,92 @@ describe('每個泊位做完都停在結果上', () => {
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(await heading()).toHaveTextContent('完成設定')
+  })
+})
+
+describe('頁 5：前往下一個泊位自己會先測（M4 票 67，審計 C4）', () => {
+  it('貼了 key 直接按前往下一個泊位：先測、過了就到完成頁，一按', async () => {
+    const { fetchStub } = wizard(5)
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    await user.type(await screen.findByLabelText(/TMDB API key/), '0'.repeat(32))
+    await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
+
+    expect(await heading()).toHaveTextContent('完成設定')
+    expect(posts(fetchStub)).toEqual(['/api/setup/tmdb/test'])
+  })
+
+  it('測不過就留在原地，說為什麼', async () => {
+    const failed = tmdbSetup({
+      api_key_present: false,
+      steps: [step('configuration', 'failed', '', 'GET /configuration: 401')],
+    })
+    wizard(5, { 'POST /api/setup/tmdb/test': () => ({ body: failed }) })
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    await user.type(await screen.findByLabelText(/TMDB API key/), '0'.repeat(32))
+    await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
+
+    expect(await screen.findByText('GET /configuration: 401')).toBeInTheDocument()
+    expect(await heading()).toHaveTextContent('TMDB')
+  })
+
+  it('欄位空著、還沒驗過：欄位說要一把 key，不送', async () => {
+    const { fetchStub } = wizard(5)
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    await user.click(await screen.findByRole('button', { name: '前往下一個泊位' }))
+
+    expect(await screen.findByText(/這一步要一把 key 才走得下去/)).toBeVisible()
+    expect(posts(fetchStub)).toEqual([])
+    expect(await heading()).toHaveTextContent('TMDB')
+  })
+
+  it('測試 TMDB 照留、降成次要：只測不走', async () => {
+    const { fetchStub } = wizard(5)
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    await user.type(await screen.findByLabelText(/TMDB API key/), '0'.repeat(32))
+    await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
+
+    await waitFor(() => expect(posts(fetchStub)).toEqual(['/api/setup/tmdb/test']))
+    expect(await heading()).toHaveTextContent('TMDB')
+  })
+
+  it('先按測試 TMDB 綠了，再按前往下一個泊位：不再測同一把', async () => {
+    const { fetchStub } = wizard(5)
+    const user = userEvent.setup()
+    renderInRoute(<SetupPage />)
+
+    await user.type(await screen.findByLabelText(/TMDB API key/), '0'.repeat(32))
+    await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
+    await screen.findByText('image.tmdb.org')
+    await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
+
+    expect(await heading()).toHaveTextContent('完成設定')
+    expect(posts(fetchStub)).toEqual(['/api/setup/tmdb/test'])
+  })
+
+  it('In English, Next berth tests an untested key first', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      const { fetchStub } = wizard(5)
+      const user = userEvent.setup()
+      renderInRoute(<SetupPage />)
+
+      await user.type(await screen.findByLabelText(/TMDB API key/), '0'.repeat(32))
+      expect(screen.getByRole('button', { name: 'Test TMDB' })).toBeVisible()
+      await user.click(screen.getByRole('button', { name: 'Next berth' }))
+
+      expect(await heading()).toHaveTextContent('Finish setup')
+      expect(posts(fetchStub)).toEqual(['/api/setup/tmdb/test'])
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 })
 

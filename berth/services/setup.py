@@ -12,6 +12,7 @@ Prowlarr 各一頁，使用者選「套件內」或「既有」，選擇存在 `
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -68,6 +69,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.models.types import utcnow
+from berth.services import leftovers
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, HostResolver, ServiceClientFactory
 from berth.services.commands import Effect, command
@@ -91,6 +93,8 @@ from berth.services.routes import forget_route_checks, routes_ready, shared_root
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
 from berth.services.tmdb import tmdb_verified
+
+logger = logging.getLogger(__name__)
 
 #: 套件內那一台還在啟動時的輪詢上限（plan §9.3〈服務頁的共同形狀〉）。逾時後使用者可重測，
 #: 不是永遠轉圈。
@@ -372,6 +376,47 @@ def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
     return bool(tested) and (choice.base_url, tested) == (target.base_url, target.server_id)
 
 
+async def sign_in_existing_owner(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    bundled: BundledServices,
+    *,
+    base_url: str,
+    username: str,
+    password: str,
+) -> ClaimedOwner | SetupStatus:
+    """頁 1 既有 Jellyfin：位址與管理員帳密一次送出（M4 票 67，審計 C1）。
+
+    照 Seerr（伺服器位址與管理員帳密同一頁、一顆 Sign In，R2 §2.3）：先照服務頁的規則選既有、測過才
+    存（`choose_service`，測不過是 `ConnectionFailedError`），那一台已經有管理員就接著
+    `claim_owner`——目標是剛測過的那一台，所以「帳密只送到測過的那一台」（M4 票 28）照舊成立。
+
+    **還沒初始化的那一台不登入**，回 `SetupStatus`：選擇存下了，`owner_signs_in` 是假的，頁 1 換成
+    建立管理員的表單（語言、遠端存取要在畫面上問，M4 票 18）。帳密到那一刻才檢查是不是空的：
+    位址錯先說位址。
+    """
+    if (await read_settings(session, SetupSettings)).owner_established():
+        raise OwnerRejectedError(OwnerRefusal.OWNER_EXISTS)
+    status = await choose_service(
+        session,
+        factory,
+        bundled,
+        ServiceKind.JELLYFIN,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url=base_url),
+    )
+    if not status.owner_signs_in:
+        return status
+    jellyfin = next(row for row in status.services if row.kind is ServiceKind.JELLYFIN)
+    return await claim_owner(
+        session,
+        factory,
+        target=JellyfinTarget(base_url=jellyfin.base_url, server_id=jellyfin.server_id),
+        username=username,
+        password=password,
+    )
+
+
 async def is_owner_established(session: AsyncSession) -> bool:
     return (await read_settings(session, SetupSettings)).owner_established()
 
@@ -384,6 +429,7 @@ async def choose_service(
     origin: ServiceOrigin,
     connection: ServiceConnection | None = None,
     *,
+    remove_empty_categories: bool = False,
     now: datetime | None = None,
 ) -> SetupStatus:
     """服務頁的二選一：存下選擇與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
@@ -397,10 +443,16 @@ async def choose_service(
     原本那一台。Berth 寫進原本那一台的東西不撤回。qBittorrent 換了，所有 Route 的檢查一起作廢：
     分類建在原本那一台上（`routes.forget_route_checks`）。
 
+    **換 qBittorrent 時一併移除原本那一台空的 `berth-*` 分類**（`remove_empty_categories`，換台框的
+    勾選，M4 票 65）：在新那一台測過之後、存下之前做，所以換不成就不移除；原本那一台沒答上來是
+    `CategoriesNotRemovedError`，也不換台。沒有換台（同一台）時勾選不作數。
+
     **擁有者成立之後的 Jellyfin**（`ChoiceLockedError`，什麼都不存）：來源換不了；位址換得了，
     但新位址要先回答它是**同一台**（`_same_jellyfin`，M4 票 18）——那一頁因此不重做。設定頁的連線區
     走的也是這一支。
     """
+    if remove_empty_categories and kind is not ServiceKind.QBITTORRENT:
+        raise ValueError(f"{kind}: only qbittorrent removes empty categories on a switch")
     moment = now or utcnow()
     connection = connection or ServiceConnection()
     setup = await read_settings(session, SetupSettings)
@@ -435,6 +487,10 @@ async def choose_service(
         # 套件內那一台的 compose 位址換了（改了 `.env` 的 port）而新位址不回答：認不出是不是同一台。
         # 既有的走不到這裡——沒回答 ServerId 的測試都不是 `ok`，上面就拒了。
         raise ChoiceLockedError(ChoiceRefusal.UNVERIFIED, tested.reason.value)
+    if moved and remove_empty_categories:
+        # 存下新那一台之前：存著的那一台還是原本那一台。
+        removed = await leftovers.remove_empty_categories(session, factory)
+        logger.info("empty categories removed on the old qbittorrent", extra={"removed": removed})
     if moved and kind is ServiceKind.QBITTORRENT:
         await forget_route_checks(session)
     await _remember_connection(session, kind, origin, base_url, connection, bundled)

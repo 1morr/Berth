@@ -67,11 +67,7 @@ from berth.services.jellyfin import (
     read_jellyfin_status,
     save_bundled_libraries,
 )
-from berth.services.leftovers import (
-    CategoriesNotRemovedError,
-    read_leftovers,
-    remove_empty_categories,
-)
+from berth.services.leftovers import CategoriesNotRemovedError, read_leftovers
 from berth.services.qbittorrent import apply_qbittorrent, read_qbittorrent
 from berth.services.qbittorrent import set_interface_login as set_qbittorrent_login
 from berth.services.routes import (
@@ -94,6 +90,7 @@ from berth.services.setup import (
     read_status,
     resolve_bundled,
     retest_service,
+    sign_in_existing_owner,
 )
 from berth.services.tmdb import read_tmdb_status, verify_tmdb
 
@@ -230,6 +227,8 @@ def owner_refusal(refusal: OwnerRejectedError) -> HTTPException:
 _CHOICE_STATUS: dict[ChoiceRefusal, int] = {
     **dict.fromkeys(ChoiceRefusal, status.HTTP_409_CONFLICT),
     ChoiceRefusal.CONNECTION_FAILED: status.HTTP_400_BAD_REQUEST,
+    # 原本那一台沒答上來：與票 47 的移除同一個 502（M4 票 65）。
+    ChoiceRefusal.CATEGORIES_NOT_REMOVED: status.HTTP_502_BAD_GATEWAY,
 }
 
 
@@ -240,10 +239,10 @@ class ChoiceRefusalOut(BaseModel):
     attempt: ServiceOut | None = None
 
 
-def choice_refusal(refusal: ChoiceLockedError) -> HTTPException:
-    body = ChoiceRefusalOut(reason=refusal.reason, detail=refusal.detail)
+def choice_refusal(reason: ChoiceRefusal, detail: str) -> HTTPException:
+    body = ChoiceRefusalOut(reason=reason, detail=detail)
     return HTTPException(
-        _CHOICE_STATUS[refusal.reason], detail=body.model_dump(mode="json", exclude_none=True)
+        _CHOICE_STATUS[reason], detail=body.model_dump(mode="json", exclude_none=True)
     )
 
 
@@ -270,6 +269,9 @@ class ChoiceIn(BaseModel):
     #: 既有 qBittorrent 的 WebUI 帳密。留空代表那台是免密的。
     username: str = ""
     password: str = ""
+    #: 換 qBittorrent 時一併移除原本那一台空的 `berth-*` 分類（換台框的勾選，M4 票 65）。只給
+    #: qBittorrent；沒有換台時不作數。
+    remove_empty_categories: bool = False
 
 
 class RetestIn(BaseModel):
@@ -329,6 +331,60 @@ async def post_owner(
     return _out(claimed.status, config)
 
 
+class ExistingOwnerIn(BaseModel):
+    """頁 1 既有 Jellyfin 的那一張表單：位址與它的管理員帳密（M4 票 67）。帳密不加約束，理由同
+    `OwnerIn`。"""
+
+    base_url: str
+    username: str = ""
+    password: str = ""
+
+
+@router.post(
+    "/owner/existing",
+    responses={
+        **refusal_responses(OwnerRefusalOut, _OWNER_STATUS),
+        **refusal_responses(
+            ChoiceRefusalOut,
+            {ChoiceRefusal.CONNECTION_FAILED: _CHOICE_STATUS[ChoiceRefusal.CONNECTION_FAILED]},
+        ),
+    },
+)
+async def post_owner_existing(
+    session: SessionDep,
+    config: ConfigDep,
+    factory: ClientFactoryDep,
+    bundled: BundledServicesDep,
+    body: ExistingOwnerIn,
+    response: Response,
+) -> SetupStatusOut:
+    """頁 1 既有 Jellyfin：連線並登入，一次呼叫（M4 票 67，照 Seerr 的 Sign In）。
+
+    位址測不過是 400 `connection_failed`（與 `POST /services/jellyfin` 同形狀，什麼都不存）；帳密與
+    其餘拒絕同 `POST /owner`。成立擁有者時發 cookie；那一台還沒初始化時只存下選擇、不發——回應的
+    `owner_signs_in` 是假的，畫面換成建立管理員的表單（它送 `POST /owner`）。
+    """
+    try:
+        result = await sign_in_existing_owner(
+            session,
+            factory,
+            bundled,
+            base_url=body.base_url.strip().rstrip("/"),
+            username=body.username,
+            password=body.password,
+        )
+    except OwnerRejectedError as refusal:
+        raise owner_refusal(refusal) from refusal
+    except ConnectionFailedError as refusal:
+        raise connection_failed(refusal) from refusal
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    if isinstance(result, SetupStatus):
+        return _out(result, config)
+    issue_cookie(response, result.signed_in.token)
+    return _out(result.status, config)
+
+
 @router.post("/services/{kind}", responses=refusal_responses(ChoiceRefusalOut, _CHOICE_STATUS))
 async def post_service(
     session: SessionDep,
@@ -341,8 +397,9 @@ async def post_service(
     """服務頁的二選一：存下來源與連線資訊，然後測一次（plan §9.3〈服務頁的共同形狀〉）。
 
     擁有者成立之後改 Jellyfin 的來源、或把位址換到另一台 Jellyfin 是 409（擁有者是那一台上的帳號，
-    M4 票 18）；既有服務測不過是 400 `connection_failed`、什麼都不存（M4 票 45）；既有卻沒給位址
-    是 422。
+    M4 票 18）；既有服務測不過是 400 `connection_failed`、什麼都不存（M4 票 45）；勾了移除空分類而
+    原本那一台 qBittorrent 沒答上來是 502 `categories_not_removed`、也不換台（M4 票 65）；既有卻沒給
+    位址、或不是 qBittorrent 卻勾了移除是 422。
     """
     try:
         result = await choose_service(
@@ -357,11 +414,14 @@ async def post_service(
                 username=body.username,
                 password=body.password,
             ),
+            remove_empty_categories=body.remove_empty_categories,
         )
     except ChoiceLockedError as refusal:
-        raise choice_refusal(refusal) from refusal
+        raise choice_refusal(refusal.reason, refusal.detail) from refusal
     except ConnectionFailedError as refusal:
         raise connection_failed(refusal) from refusal
+    except CategoriesNotRemovedError as exc:
+        raise choice_refusal(ChoiceRefusal.CATEGORIES_NOT_REMOVED, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return _out(result, config)
@@ -423,19 +483,6 @@ async def get_service_leftovers(
         result = await read_leftovers(session, factory, kind)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    return LeftoversOut.model_validate(result)
-
-
-@router.delete("/services/qbittorrent/leftovers/categories")
-async def delete_service_leftover_categories(
-    session: SessionDep, factory: ClientFactoryDep
-) -> LeftoversOut:
-    """移除現在這一台 qBittorrent 上空的 `berth-*` 分類（有 torrent 的、別人的都不碰）。
-    回傳移除之後的清單；連不到或 qBittorrent 沒收下是 502，帶原文。"""
-    try:
-        result = await remove_empty_categories(session, factory)
-    except CategoriesNotRemovedError as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
     return LeftoversOut.model_validate(result)
 
 
@@ -891,10 +938,10 @@ async def post_indexers_apply(
 async def post_indexers_recommended(
     session: SessionDep, config: ConfigDep, factory: ClientFactoryDep
 ) -> IndexerSetupOut:
-    """套件內頁 4 的主鍵（M4 票 44）：測推薦清單上還沒加入的站，通過的加進去，逐站回報。
+    """頁 4 的主鍵（M4 票 44；既有的那一台也有，M4 票 67）：測推薦清單上還沒加入的站，通過的加
+    進去，逐站回報。
 
-    已經在 Prowlarr 裡的站不測也不加。既有的那一台與還沒選來源回 422：既有的加站走
-    `/indexers/apply`，要人看過加哪幾站（M4 票 20）。
+    已經在 Prowlarr 裡的站不測也不加。還沒選來源回 422。既有的那一台的介面登入不碰。
     """
     try:
         result = await add_recommended_indexers(session, factory)

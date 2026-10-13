@@ -50,6 +50,7 @@ from berth.models import (
     PathSettings,
     Plan,
     PlanItem,
+    QbittorrentSettings,
     Route,
     RssSeries,
     User,
@@ -59,6 +60,7 @@ from berth.services.jobs import (
     JobPage,
     JobRejectedError,
     JobSource,
+    JobView,
     add_download,
     list_jobs,
     read_job,
@@ -131,6 +133,20 @@ async def _ready(
     media = await _media(session)
     route = await _route(session, roots, **route_kwargs)  # type: ignore[arg-type]
     return media, route, factory_for(roots)
+
+
+async def _read(session: AsyncSession, job_hash: str) -> JobView:
+    view = await read_job(session, job_hash)
+    assert view is not None
+    return view
+
+
+async def _point_qbittorrent_at(session: AsyncSession, base_url: str) -> None:
+    """換一台 qBittorrent：存下的連線指到別處（`choose_service` 存的就是這一份）。"""
+    settings = await read_settings(session, QbittorrentSettings)
+    settings.base_url = base_url
+    await write_settings(session, settings)
+    await session.commit()
 
 
 @contextmanager
@@ -1046,6 +1062,43 @@ class TestReading:
             assert len((await list_jobs(session, shown=JobFilter.IMPORTED)).jobs) == 10
 
         assert len(ten) == len(one)
+
+    async def test_a_job_on_a_qbittorrent_berth_switched_away_from_names_that_one(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """換台之後做種的 torrent 留在原本那一台（M4 票 65，審計 P1-4）：Job 說得出是哪一台；
+        換回去就不說了。"""
+        media, route, factory = await _ready(session, roots)
+        await add_download(
+            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        )
+        sent_to = (await read_settings(session, QbittorrentSettings)).base_url
+        assert (await _read(session, MAGNET_HASH)).previous_client == ""
+
+        await _point_qbittorrent_at(session, "http://host.docker.internal:48080")
+
+        assert (await _read(session, MAGNET_HASH)).previous_client == sent_to
+        (listed,) = (await list_jobs(session)).jobs
+        assert listed.previous_client == sent_to
+
+        await _point_qbittorrent_at(session, sent_to)
+
+        assert (await _read(session, MAGNET_HASH)).previous_client == ""
+
+    async def test_a_job_never_sent_to_qbittorrent_names_none(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """沒有送單紀錄（重新入庫、重建帳本來的）：不知道在哪一台，就不說。"""
+        media, route, _ = await _ready(session, roots)
+        user = User(jellyfin_user_id="jf-1", name="skipper", role=Role.ADMIN)
+        session.add(user)
+        await session.commit()
+        await _plan_backed_jobs(session, media, route, user, count=1)
+        await _point_qbittorrent_at(session, "http://host.docker.internal:48080")
+
+        (row,) = (await list_jobs(session, shown=JobFilter.ALL)).jobs
+
+        assert row.previous_client == ""
 
     async def test_one_job_reads_back_by_hash(
         self, session: AsyncSession, roots: dict[str, Path]

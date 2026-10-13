@@ -4,12 +4,14 @@
   加進去的站、Berth 設的介面登入。使用者自己的分類、自己在 Prowlarr 加的站不出現。
 - 舊那台連不到時列「Berth 記得建過的」：分類來自 Route、站來自加站時記下的那一份，torrent 數
   說不出來。
-- 一鍵移除只刪 **`berth-*` 而且裡面沒有 torrent** 的分類（雙向）；站與登入只列出。
+- 移除只刪 **`berth-*` 而且裡面沒有 torrent** 的分類（雙向）；站與登入只列出。
+- 移除是換台框裡的勾選，**跟著確認換台一起做**（M4 票 65）：打開換台框、取消、換不成都不動任何
+  分類；勾了而原本那一台沒答上來，整個換台不做。
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Awaitable, Iterator
 from dataclasses import replace
 from pathlib import Path
 
@@ -30,20 +32,22 @@ from berth.main import create_app
 from berth.models import SetupSettings
 from berth.services.clients import BundledServices
 from berth.services.indexer import apply_default_indexers, remove_indexer
-from berth.services.leftovers import (
-    CategoriesNotRemovedError,
-    read_leftovers,
-    remove_empty_categories,
-)
+from berth.services.leftovers import CategoriesNotRemovedError, read_leftovers
 from berth.services.qbittorrent import route_categories
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
-from berth.services.setup import ServiceConnection, choose_service
+from berth.services.setup import (
+    ConnectionFailedError,
+    ServiceConnection,
+    SetupStatus,
+    choose_service,
+)
 from tests.integration.arrange import arrange, factory_for, sign_in_owner
 from tests.integration.factories import COMPOSE, FakeClientFactory
 
 BUNDLED = BundledServices(targets=COMPOSE, prowlarr_api_key="")
 HOME = "http://host.docker.internal:48080"
+QBT = ServiceKind.QBITTORRENT
 
 
 def category(name: str) -> QbittorrentCategory:
@@ -156,48 +160,135 @@ class TestQbittorrentList:
         assert leftovers.login == "skipper"
 
 
+def switch_to_existing(
+    session: AsyncSession, factory: FakeClientFactory, *, remove_empty_categories: bool
+) -> Awaitable[SetupStatus]:
+    """確認換台：換到 `HOME` 那一台既有的 qBittorrent（測過才存）。"""
+    return choose_service(
+        session,
+        factory,
+        BUNDLED,
+        ServiceKind.QBITTORRENT,
+        ServiceOrigin.EXISTING,
+        ServiceConnection(base_url=HOME, username="admin", password="adminadmin"),
+        remove_empty_categories=remove_empty_categories,
+    )
+
+
+async def chosen_qbittorrent(session: AsyncSession) -> tuple[ServiceOrigin, str]:
+    choice = (await read_settings(session, SetupSettings)).choices[ServiceKind.QBITTORRENT]
+    return choice.origin, choice.base_url
+
+
 @pytest.mark.asyncio
-class TestRemoveEmptyCategories:
-    async def test_removes_only_empty_berth_categories(
+class TestRemoveEmptyCategoriesOnSwitch:
+    """「移除空分類」跟著確認換台一起做（M4 票 65，審計 P2-9）：打開換台框、取消、換不成都不動。"""
+
+    async def test_confirming_the_switch_removes_the_old_ones_empty_berth_categories(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        qbittorrent = old_qbittorrent()
-        factory = await ready(session, roots, qbittorrent)
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+        new = FakeQbittorrentClient()
+        factory.qbittorrent_elsewhere[HOME] = new
         # Route 檢查建的那幾個也都是空的 `berth-*`：一起移除。
-        created = {row.name for row in qbittorrent.created_categories}
+        created = {row.name for row in old.created_categories}
 
-        leftovers = await remove_empty_categories(session, factory)
+        await switch_to_existing(session, factory, remove_empty_categories=True)
 
-        assert set(qbittorrent.removed_categories) == {"berth-shows"} | created
-        names = {row.name for row in await qbittorrent.categories()}
+        assert set(old.removed_categories) == {"berth-shows"} | created
+        names = {row.name for row in await old.categories()}
         # 有 torrent 的 `berth-*`、使用者自己的（空的也一樣）都留著。
         assert {"berth-movies", "mine", "mine-empty"} <= names
-        assert "berth-shows" not in names
-        assert [(row.name, row.torrents) for row in leftovers.categories] == [("berth-movies", 2)]
+        assert new.removed_categories == []
+        assert await chosen_qbittorrent(session) == (ServiceOrigin.EXISTING, HOME)
+
+    async def test_switching_without_the_box_ticked_removes_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+        factory.qbittorrent_elsewhere[HOME] = FakeQbittorrentClient()
+
+        await switch_to_existing(session, factory, remove_empty_categories=False)
+
+        assert old.removed_categories == []
+        assert await chosen_qbittorrent(session) == (ServiceOrigin.EXISTING, HOME)
+
+    async def test_opening_the_switch_box_and_cancelling_removes_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """取消換台不送任何請求：打開換台框時讀的那一份清單是唯一碰到原本那一台的。"""
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+
+        await read_leftovers(session, factory, ServiceKind.QBITTORRENT)
+
+        assert old.removed_categories == []
+        assert await chosen_qbittorrent(session) == (ServiceOrigin.BUNDLED, COMPOSE[QBT])
+
+    async def test_a_switch_the_new_one_fails_removes_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """新那一台測不過就沒有換台（測過才存，M4 票 45）：勾了也不移除。"""
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+        failing = FakeQbittorrentClient()
+        failing.error = ServiceUnavailableError("qbittorrent: connection refused")
+        factory.qbittorrent_elsewhere[HOME] = failing
+
+        with pytest.raises(ConnectionFailedError):
+            await switch_to_existing(session, factory, remove_empty_categories=True)
+
+        assert old.removed_categories == []
+        assert await chosen_qbittorrent(session) == (ServiceOrigin.BUNDLED, COMPOSE[QBT])
+
+    async def test_staying_on_the_same_one_removes_nothing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """沒有換台（再點一次同一格）就沒有「原本那一台」：勾選不作數，現在這一台的分類不碰。"""
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+
+        await choose_service(
+            session,
+            factory,
+            BUNDLED,
+            ServiceKind.QBITTORRENT,
+            ServiceOrigin.BUNDLED,
+            remove_empty_categories=True,
+        )
+
+        assert old.removed_categories == []
 
     async def test_a_torrent_added_before_the_press_keeps_its_category(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """清單畫出來之後才有 torrent 進來：按下時重數，那一個不刪。"""
-        qbittorrent = old_qbittorrent()
-        factory = await ready(session, roots, qbittorrent)
-        qbittorrent.torrents = (*qbittorrent.torrents, torrent("d", "berth-shows"))
+        """換台框畫出來之後才有 torrent 進來：按下確認時重數，那一個不刪。"""
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+        factory.qbittorrent_elsewhere[HOME] = FakeQbittorrentClient()
+        old.torrents = (*old.torrents, torrent("d", "berth-shows"))
 
-        await remove_empty_categories(session, factory)
+        await switch_to_existing(session, factory, remove_empty_categories=True)
 
-        assert "berth-shows" not in qbittorrent.removed_categories
+        assert "berth-shows" not in old.removed_categories
 
-    async def test_an_unreachable_qbittorrent_removes_nothing_and_says_so(
+    async def test_an_old_one_that_stopped_answering_refuses_the_whole_switch(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        qbittorrent = old_qbittorrent()
-        factory = await ready(session, roots, qbittorrent)
-        qbittorrent.error = ServiceUnavailableError("qbittorrent: connection refused")
+        """勾了移除、原本那一台卻沒答上來：沒有移除，也不換台——一起做的就一起不做，畫面說得出
+        取消勾選再換一次。"""
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+        factory.qbittorrent_elsewhere[HOME] = FakeQbittorrentClient()
+        old.error = ServiceUnavailableError("qbittorrent: connection refused")
 
         with pytest.raises(CategoriesNotRemovedError, match="connection refused"):
-            await remove_empty_categories(session, factory)
+            await switch_to_existing(session, factory, remove_empty_categories=True)
 
-        assert qbittorrent.removed_categories == []
+        assert old.removed_categories == []
+        assert await chosen_qbittorrent(session) == (ServiceOrigin.BUNDLED, COMPOSE[QBT])
 
 
 @pytest.mark.asyncio
@@ -279,7 +370,9 @@ class TestApi:
         self, config: Config, tmp_path: Path, qbittorrent: FakeQbittorrentClient
     ) -> Iterator[TestClient]:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
-        factory = FakeClientFactory(qbittorrent=qbittorrent)
+        factory = FakeClientFactory(
+            qbittorrent=qbittorrent, qbittorrent_elsewhere={HOME: FakeQbittorrentClient()}
+        )
         app.dependency_overrides[get_bundled_services] = lambda: BUNDLED
         app.dependency_overrides[get_client_factory] = lambda: factory
         with TestClient(app, headers={CSRF_HEADER: "XMLHttpRequest"}) as running:
@@ -289,7 +382,7 @@ class TestApi:
             ).status_code == 200
             yield running
 
-    def test_lists_and_removes_through_the_api(
+    def test_lists_then_removes_on_the_switch_through_the_api(
         self, client: TestClient, qbittorrent: FakeQbittorrentClient
     ) -> None:
         listed = client.get("/api/setup/services/qbittorrent/leftovers")
@@ -300,12 +393,45 @@ class TestApi:
             "berth-shows": 0,
             "berth-movies": 2,
         }
+        assert qbittorrent.removed_categories == []
 
-        removed = client.delete("/api/setup/services/qbittorrent/leftovers/categories")
+        switched = client.post(
+            "/api/setup/services/qbittorrent",
+            json={
+                "origin": "existing",
+                "base_url": HOME,
+                "username": "admin",
+                "password": "adminadmin",
+                "remove_empty_categories": True,
+            },
+        )
 
-        assert removed.status_code == 200, removed.text
+        assert switched.status_code == 200, switched.text
         assert qbittorrent.removed_categories == ["berth-shows"]
-        assert [row["name"] for row in removed.json()["categories"]] == ["berth-movies"]
+
+    def test_an_old_one_that_stopped_answering_is_a_502_refusal(
+        self, client: TestClient, qbittorrent: FakeQbittorrentClient
+    ) -> None:
+        qbittorrent.error = ServiceUnavailableError("qbittorrent: connection refused")
+
+        refused = client.post(
+            "/api/setup/services/qbittorrent",
+            json={"origin": "existing", "base_url": HOME, "remove_empty_categories": True},
+        )
+
+        assert refused.status_code == 502, refused.text
+        detail = refused.json()["detail"]
+        assert detail["reason"] == "categories_not_removed"
+        assert "connection refused" in detail["detail"]
+        assert qbittorrent.removed_categories == []
+
+    def test_only_qbittorrent_takes_the_box(self, client: TestClient) -> None:
+        refused = client.post(
+            "/api/setup/services/prowlarr",
+            json={"origin": "bundled", "remove_empty_categories": True},
+        )
+
+        assert refused.status_code == 422, refused.text
 
     def test_jellyfin_has_no_leftovers_list(self, client: TestClient) -> None:
         assert client.get("/api/setup/services/jellyfin/leftovers").status_code == 422

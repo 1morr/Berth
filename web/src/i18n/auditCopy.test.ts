@@ -8,6 +8,8 @@ import { resources, SUPPORTED_LANGUAGES } from './resources'
  * - 既有 Jellyfin 卡片只說頁 3 加路徑，沒說頁 1 會在它上面建 API key「Berth」。
  * - 頁 4 還沒選時的 lede 說你自己的 Prowlarr「用你已經有的站」，卡片與選了之後的 lede 都說也能加站（M4 票 20）；
  *   選了之後的 lede 與回頭看的說明又說「按一次加進去」，實際是測過、勾選、確認才加（卡片說「勾起來的站」）。
+ *   M4 票 67 起既有的那一台一站都沒有時也有那一顆主鍵：lede 的「按一次」要帶著這個條件說，回頭看（做完了就有站、
+ *   只剩「進階」）照舊不說。
  * - 套件內 qBittorrent 不收 Berth 時叫人重啟、說預置腳本會補上白名單；預置腳本只補設定檔裡**沒有**的鍵
  *   （部署用 compose 的 `configs.qbittorrent-preseed`），在 WebUI 關掉白名單之後重啟補不回來（票 53 實跑）。
  * - 頁 5 回頭看的說明說測不過的 TMDB key 照樣存下；票 45 之後測過才存（票 58 發佈後實跑看到）。
@@ -19,6 +21,8 @@ const NAMES_THE_KEY = /API key\s*[「“"]?Berth|key (named|called) Berth/i
 const EXISTING_ADDS_SITES = /也(可以|能)加|can also add|may also add/i
 /** 說按一次就加進去（既有那一台是勾選之後才加）。 */
 const ONE_PRESS = /按一次加|in one press/i
+/** 把「按一次」限定在一站都沒有的時候（M4 票 67：主鍵只在那時出現）。 */
+const ONE_PRESS_WHEN_EMPTY = /一站都沒有時[^。；]{0,4}按一次|if it has none, one press/i
 /** 說重啟會把白名單補回來。 */
 const RESTART_RESTORES =
   /重啟[^。；]{0,15}(補上|補回來)|restart[^.]{0,40}\b(adds|restores|brings back|puts back)\b/i
@@ -57,6 +61,11 @@ describe('四個樣式本身（雙向）', () => {
     expect('test the recommended public sites and add them in one press').toMatch(ONE_PRESS)
     expect('也可以測試推薦的公開站、勾選通過的加進去').not.toMatch(ONE_PRESS)
     expect('按一次，Berth 測試推薦的站').not.toMatch(ONE_PRESS)
+    expect('一站都沒有時，按一次就測試推薦的公開站').toMatch(ONE_PRESS_WHEN_EMPTY)
+    expect('一站都沒有時按一次，測試推薦的公開站').toMatch(ONE_PRESS_WHEN_EMPTY)
+    expect('if it has none, one press tests the recommended public sites').toMatch(
+      ONE_PRESS_WHEN_EMPTY,
+    )
     expect('重啟它，預置腳本會補上白名單。').toMatch(RESTART_RESTORES)
     expect('Restart it and the preseed script restores the allowlist.').toMatch(RESTART_RESTORES)
     expect('頁 1 建一把名為 Berth 的 API key').not.toMatch(NAMES_THE_KEY)
@@ -72,6 +81,8 @@ describe('四個樣式本身（雙向）', () => {
     expect('creates an API key named Berth on it').toMatch(NAMES_THE_KEY)
     expect('creates a key called Berth').toMatch(NAMES_THE_KEY)
     expect('用它已經有的站，也可以加推薦的公開站').toMatch(EXISTING_ADDS_SITES)
+    expect('按一次就測試推薦的公開站、把通過的加進去').not.toMatch(ONE_PRESS_WHEN_EMPTY)
+    expect('one press tests the recommended public sites').not.toMatch(ONE_PRESS_WHEN_EMPTY)
     expect('用它已經有的站，也能加公開站').toMatch(EXISTING_ADDS_SITES)
     expect('and you can also add recommended public sites').toMatch(EXISTING_ADDS_SITES)
     expect('重啟補不回來：預置腳本不蓋掉你改過的。').not.toMatch(RESTART_RESTORES)
@@ -94,9 +105,11 @@ describe.each(SUPPORTED_LANGUAGES)('文件與實作不符的幾句（%s）', (la
     expect(indexer.lede.choose).toMatch(EXISTING_ADDS_SITES)
   })
 
-  it('既有 Prowlarr 的加站不說成按一次', () => {
+  it('既有 Prowlarr 的「按一次」只說在一站都沒有的時候', () => {
     expect(indexer.lede.existing).not.toMatch(ONE_PRESS)
+    expect(indexer.lede.existing).toMatch(ONE_PRESS_WHEN_EMPTY)
     expect(setup.revisit.indexer.existing.can).not.toMatch(ONE_PRESS)
+    expect(setup.revisit.indexer.existing.can).not.toMatch(ONE_PRESS_WHEN_EMPTY)
   })
 
   it('頁 5 回頭看不說測不過的 key 也存下', () => {
@@ -106,5 +119,10 @@ describe.each(SUPPORTED_LANGUAGES)('文件與實作不符的幾句（%s）', (la
   it('白名單的補法說 WebUI 那一格，不說重啟會補回來', () => {
     expect(connection.fix.whitelist).not.toMatch(RESTART_RESTORES)
     expect(connection.fix.whitelist).toContain(ALLOWLIST_OPTION[language])
+  })
+
+  it('換台框列的白名單照同一個措辭說怎麼關（M4 票 65）', () => {
+    expect(choice.leftovers.allowlistHow).not.toMatch(RESTART_RESTORES)
+    expect(choice.leftovers.allowlistHow).toContain(ALLOWLIST_OPTION[language])
   })
 })

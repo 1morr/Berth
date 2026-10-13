@@ -14,6 +14,19 @@ export function modeOf(indexers: IndexerSetup, chosen: string | undefined): Inde
   return 'prowlarr'
 }
 
+/**
+ * 一站都沒有、推薦清單上的站也一個都不在 Prowlarr 的定義裡（M4 票 73）：主鍵沒有東西可測，它的位置換成
+ * `RecommendedSites` 的 `Unlisted`。既有 Prowlarr 的「沒有站」（`IndexerStep` 的 `NoSites`）這時不畫：它要人「在下面測推薦站」，
+ * 而那裡沒有推薦站，兩段又各有一顆「重新讀取」，所以由 `Unlisted` 一段把兩件事說完。
+ */
+export function noRecommendedListed(indexers: IndexerSetup): boolean {
+  return (
+    indexers.sites.length === 0 &&
+    !indexers.candidates.some((row) => row.recommended) &&
+    indexers.unlisted.length > 0
+  )
+}
+
 /** 頁 4 還差的事，前進鍵的位置照它列（`BerthNav` 的 `missing`）。 */
 export type IndexerGap = 'sites' | 'login'
 

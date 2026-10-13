@@ -70,6 +70,18 @@ export function claimOwner(body: OwnerInput): Promise<SetupStatus> {
   return apiPost<SetupStatus>('/setup/owner', body)
 }
 
+/**
+ * 頁 1 既有 Jellyfin：位址與它的管理員帳密一次送出（M4 票 67，照 Seerr 的 Sign In）。位址測不過是 400
+ * `connection_failed`（`choiceRefusalOf`，什麼都不存），帳密與其餘拒絕同 `claimOwner`（`ownerRefusalOf`）。
+ * 那一台還沒初始化時只存下選擇、回來的 `owner` 是空的：頁 1 換成建立管理員的表單。用 `CLAIM_OWNER_KEY`：
+ * 帳密不對的 401 同樣不是 session 過期。
+ */
+export type ExistingOwnerInput = Schemas['ExistingOwnerIn']
+
+export function signInExistingOwner(body: ExistingOwnerInput): Promise<SetupStatus> {
+  return apiPost<SetupStatus>('/setup/owner/existing', body)
+}
+
 /** 頁 1 被拒的理由。認不得的（或根本不是拒絕，例如連不上 Berth）是 `null`。 */
 export function ownerRefusalOf(error: unknown): OwnerRefusal | null {
   return parseRefusal(error, OWNER_REASONS)
@@ -85,12 +97,14 @@ const CHOICE_REASONS: ReasonSet<Schemas['ChoiceRefusal']> = {
   other_server: true,
   unverified: true,
   connection_failed: true,
+  categories_not_removed: true,
 }
 
 /**
  * 選擇沒存下的理由。409 是擁有者成立之後的 Jellyfin——改來源、換到另一台、新位址認不出是哪一台
  * （M4 票 18）；400 `connection_failed` 是既有服務測不過（測過才存，M4 票 45），那一次的結論在
- * `attempt`，表單照它把錯誤標在欄位上。認不得的是 `null`。
+ * `attempt`，表單照它把錯誤標在欄位上；502 `categories_not_removed` 是換 qBittorrent 時勾了移除空分類、
+ * 原本那一台沒答上來，沒有移除也沒有換台（M4 票 65）。認不得的是 `null`。
  */
 export function choiceRefusalOf(error: unknown): ChoiceRefusal | null {
   const refusal = parseRefusal(error, CHOICE_REASONS)
@@ -130,16 +144,11 @@ export type LeftoverKind = Exclude<ServiceKind, 'jellyfin'>
 export function leftoversQueryOptions(kind: LeftoverKind) {
   return queryOptions({
     queryKey: ['setup', 'leftovers', kind],
-    // 確認框收起就丟掉：換台之後再打開時，說的是另一台。畫出上一次的清單會讓移除鍵對著現在這一台、
+    // 確認框收起就丟掉：換台之後再打開時，說的是另一台。畫出上一次的清單會讓移除的勾選對著現在這一台、
     // 卻寫著原本那一台的分類。
     gcTime: 0,
     queryFn: ({ signal }) => apiGet<Leftovers>(`/setup/services/${kind}/leftovers`, { signal }),
   })
-}
-
-/** 只移除空的 `berth-*` 分類（後端按下時重數）；回的是移除之後的清單。 */
-export function removeEmptyCategories(): Promise<Leftovers> {
-  return apiDelete<Leftovers>('/setup/services/qbittorrent/leftovers/categories')
 }
 
 export type JellyfinSetup = Schemas['JellyfinSetupOut']

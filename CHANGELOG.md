@@ -42,6 +42,18 @@
 - **localhost 的說明只說一次**、技術細節的位址帶上 `http://`（M4 票 63，審計 P2-4、P2-6）。
 - **既有 Jellyfin 的電影與劇集媒體庫在精靈頁 3 預設勾好**（M4 票 64，審計 C2）：寫入目標照舊預設新的 Berth 路徑，
   不要的取消勾選。`GET /api/setup/routes` 的每個媒體庫多一格 `preselected`。
+- **精靈再省幾按**（M4 票 67，審計 C1、C3、C4）：既有 Jellyfin 的位址與管理員帳密同一張表單，一顆「連線並登入」
+  （原本先「測試連線」、通過之後才長出登入表單再按「登入」）；位址錯標在位址欄、帳密錯標在帳密兩格，還沒跑過初始設定的
+  那一台帳密留空，連上之後換成建立管理員的表單。既有 Prowlarr 一站都沒有時也有「測試推薦站，加入通過的」，那一句列出
+  會測哪幾站、加進哪一台，逐站挑選收進「進階」。TMDB 貼上 key 直接按「前往下一個泊位」就先測、過了才走，「測試 TMDB」照留。
+  API：新增 `POST /api/setup/owner/existing`；`POST /api/setup/indexers/recommended` 也收既有的 Prowlarr（之前 422）。
+- **換 qBittorrent 時說清楚留下了什麼，移除空分類改成跟著換台走**（M4 票 65，審計 P1-4、P2-9）：換台框說分類裡的
+  torrent 會留在原本那一台繼續做種、換台之後 Berth 不再追蹤（已入庫的檔案不受影響）；從套件內那一台換走時，多列它預置的
+  免密白名單與在 WebUI 怎麼關。「移除空的 berth- 分類」從按下就生效的按鈕改成換台框裡的勾選（預設不勾），確認換台才移除，
+  取消就什麼都不動；勾了而原本那一台沒答上來時整個換台不做，取消勾選再換一次就只換台。換台之後，送進原本那一台、已入庫的
+  下載在詳情頁說「做種的 torrent 在原本那一台」。API：`POST /api/setup/services/qbittorrent` 多一格
+  `remove_empty_categories`（失敗是 502 `categories_not_removed`）、`JobOut` 多一格 `previous_client`；
+  **刪掉** `DELETE /api/setup/services/qbittorrent/leftovers/categories`。
 
 - **審核頁每一段的標題改用全站同一種區塊標題**（M4 票 99）：計數從標題裡移到標題旁，螢幕閱讀器念段落名時不再
   連著件數（件數照樣念得到，帶單位）；「全部確認」仍在標題列右側。

@@ -383,6 +383,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/health"): Access.ANONYMOUS,
     # 精靈的開場：擁有者成立之前匿名，之後只有管理員（M4 票 06，`test_setup_api.py::TestGate`）。
     ("POST", "/setup/owner"): Access.SETUP_OPENING,
+    ("POST", "/setup/owner/existing"): Access.SETUP_OPENING,
     ("GET", "/setup/status"): Access.SETUP_OPENING,
     ("GET", "/setup/compose"): Access.SETUP_OPENING,
     # 精靈其餘的：擁有者成立之前誰都不行，之後只有管理員（`TestSettingsAreAdminOnly`）。
@@ -412,9 +413,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 兩邊的門在 `test_setup_api.py::TestGate` 各有一條。
     ("POST", "/setup/services/*"): Access.SETUP,
     ("POST", "/setup/services/*/test"): Access.SETUP,
-    # 換台確認框的遺留物清單與移除空分類（M4 票 47）。
+    # 換台確認框的遺留物清單（M4 票 47）。移除空分類跟著換台走 `POST /setup/services/*`
+    # （M4 票 65）。
     ("GET", "/setup/services/*/leftovers"): Access.SETUP,
-    ("DELETE", "/setup/services/qbittorrent/leftovers/categories"): Access.SETUP,
     ("GET", "/setup/tmdb"): Access.SETUP,
     ("POST", "/setup/tmdb/test"): Access.SETUP,
     # M2 驗收第四條點名的六組（plan §11.3、票 16）：審核、Issue、rematch、對帳、刪除、重新入庫。

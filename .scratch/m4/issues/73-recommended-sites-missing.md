@@ -44,3 +44,4 @@
   - (4) Prowlarr 已經有站、推薦站又全都不在時，不出說明（Spec）：沿用票 44 的「已經有站不給主鍵」，那時頁 4 已經算完成。
   - (5) 缺的站顯示 `definitionName`（`mikan`）而不是站名（Spec）：沒有定義就拿不到站名。
   - (6) Spec 軸擔心「進階」加站之後，摘要也會說「沒有測」。不管走哪一條路，不在 Prowlarr 定義裡的站都測不了也加不了，那一句照樣成立。
+- 2026-10-14 合併 main（票 67、65）：票 67 讓既有 Prowlarr 也走 `RecommendedSites` 的主鍵，所以 `unlisted` 的說明兩種來源都適用。**既有的那一台一站都沒有、推薦站又一個都不在時，只畫 `Unlisted` 一段，不畫票 20 的 `NoSites`**。原因有兩個：`NoSites` 叫人「在下面按一次，測試推薦的公開站」，這時下面沒有推薦站可測；兩段疊在一起又各有一顆「重新讀取」。`Unlisted` 對既有的那一台換一份文案（`indexer.quick.unlisted.bodyExisting`），把兩張票要說的都說完：先說這一台沒有站、Berth 什麼都搜不到（票 20：這一頁還沒完），再說推薦站為什麼不在、網路通了按「重新讀取」（本票），最後補上 `NoSites` 原本給的另外兩條路：到 Prowlarr 自己加站後重新讀取，或之後再說。判斷寫成一個函式 `noRecommendedListed`，`RecommendedSites` 與 `IndexerStep` 共用。推薦站都在時照舊是 `NoSites` 加主鍵。vitest 兩條（重疊時只有一段、只有一顆「重新讀取」；推薦站都在時照舊）。拿掉 `NoSites` 的這個條件時，第一條會紅。pytest 一條：既有的那一台拿不到定義時，`unlisted` 照樣帶得出來。

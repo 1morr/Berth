@@ -20,26 +20,37 @@ import { STEP } from './navigation'
  * **還沒做完時，前進鍵的位置說還差什麼**（`missing`，M4 票 27）：每一件是一顆連結樣式的按鈕，按了把
  * 焦點送到那一區（`target` 是它的 `id`，那一區要 `tabIndex={-1}`）。只在桌機固定：窄版的底部是那一頁
  * 自己的主要動作（`STICKY_ACTION`）。
+ *
+ * **前進鍵也可以是那一頁表單的送出鍵**（`nextForm`，M4 票 67，審計 C4）：還差的那一件一按就做得完時
+ * （TMDB 只差測一次 key），按「前往下一個泊位」就是送出那張表單，表單照送出者（帶 `data-berth-next`）
+ * 先做完再走，沒做成就留在原地說為什麼——前進仍然只能靠把事做完，只是同一按。
  */
 export function BerthNav({
   onPrevious,
   onNext,
+  nextForm,
+  nextBusy = false,
   missing = [],
 }: {
   onPrevious?: () => void
   onNext?: () => void
+  /** 前進鍵送出的表單 `id`。與 `onNext` 都給時送出表單優先：做完了也照樣經過那張表單（欄位裡可能有新的值）。 */
+  nextForm?: string
+  /** 那張表單送出去還沒回來。 */
+  nextBusy?: boolean
   missing?: readonly { label: string; target: string }[]
 }) {
   const { t } = useTranslation()
-  const pending = !onNext && missing.length > 0
-  if (!onPrevious && !onNext && !pending) return null
+  const advances = Boolean(onNext || nextForm)
+  const pending = !advances && missing.length > 0
+  if (!onPrevious && !advances && !pending) return null
 
   return (
     <nav
       aria-label={t('setup.nav.label')}
       // 窄版也排成一列：固定在底部的一條要矮，上一個縮成它自己的寬度，下一個佔滿剩下的。
       className={`mt-8 grid grid-cols-[auto_minmax(0,1fr)] gap-3 sm:grid-cols-[auto_minmax(0,18rem)] sm:justify-between ${
-        onNext ? STICKY_BAR : pending ? STICKY_WIDE : ''
+        advances ? STICKY_BAR : pending ? STICKY_WIDE : ''
       }`}
     >
       {onPrevious ? (
@@ -49,11 +60,17 @@ export function BerthNav({
       ) : (
         <span aria-hidden />
       )}
-      {onNext && (
-        // `StepFrame` 在焦點掉回 body 時把它接到這一顆（票 06h）。
-        <PrimaryButton type="button" data-berth-next onClick={onNext}>
+      {/* `StepFrame` 在焦點掉回 body 時把它接到這一顆（票 06h）。 */}
+      {nextForm ? (
+        <PrimaryButton type="submit" form={nextForm} data-berth-next busy={nextBusy}>
           {t('setup.nav.next')}
         </PrimaryButton>
+      ) : (
+        onNext && (
+          <PrimaryButton type="button" data-berth-next onClick={onNext}>
+            {t('setup.nav.next')}
+          </PrimaryButton>
+        )
       )}
       {pending && (
         <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 self-center text-sm text-ink-dim">

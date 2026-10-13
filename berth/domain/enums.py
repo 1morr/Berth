@@ -1302,6 +1302,9 @@ class ChoiceRefusal(StrEnum):
     #: 既有服務那一次測不過，什麼都沒存（測過才存，M4 票 45）。`detail` 是那一次的
     #: `ConnectionReason`，整份結論另外帶在 `attempt`：畫面照它把錯誤標在位址或憑證欄。
     CONNECTION_FAILED = "connection_failed"
+    #: 換 qBittorrent 時勾了移除空分類，原本那一台卻沒答上來或沒收下（M4 票 65）：沒有移除，也沒有
+    #: 換台。`detail` 是原文。
+    CATEGORIES_NOT_REMOVED = "categories_not_removed"
 
 
 class InterfaceLoginRefusal(StrEnum):

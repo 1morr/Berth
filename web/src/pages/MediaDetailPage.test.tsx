@@ -51,6 +51,7 @@ function downloadJob(overrides: Partial<Job> = {}): Job {
     plan_id: null,
     audits: 0,
     series: '',
+    previous_client: '',
     ...overrides,
   }
 }

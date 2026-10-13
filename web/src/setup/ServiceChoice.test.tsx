@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
@@ -62,7 +62,7 @@ function mount(
     switchWarning?: string
     locked?: string
     refusal?: ChoiceRefusal | null
-    onChoose?: () => void
+    onChoose?: (input: ChoiceInput) => void
   } = {},
 ) {
   return renderWithProviders(
@@ -953,11 +953,10 @@ describe('qBittorrent 看不到 /data：頁 2 就紅（M4 票 46）', () => {
   })
 })
 
-describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 票 47）', () => {
+describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 票 47、65）', () => {
   const bundled = () => screen.getByRole('radio', { name: /^套件內/ })
   const existing = () => screen.getByRole('radio', { name: /^既有/ })
   const LEFTOVERS = 'GET /api/setup/services/qbittorrent/leftovers'
-  const REMOVE = 'DELETE /api/setup/services/qbittorrent/leftovers/categories'
 
   function leftovers(overrides: Partial<Leftovers> = {}): Leftovers {
     return {
@@ -989,7 +988,7 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
     return { user, panel: screen.getByRole('group', { name: /換一台/ }) }
   }
 
-  it('列出 berth- 分類與裡面幾個 torrent、Berth 設的登入，給移除空分類的鍵', async () => {
+  it('列出 berth- 分類與裡面幾個 torrent、Berth 設的登入；做種的 torrent 留在原本那一台', async () => {
     stubApi({ [LEFTOVERS]: { body: leftovers({ login: 'skipper' }) } })
     const { panel } = await openSwitch()
 
@@ -998,58 +997,143 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
     expect(within(list).getByText('berth-shows').closest('li')).toHaveTextContent('空的')
     expect(list).toHaveTextContent('Berth 設的介面登入skipper')
     expect(panel).toHaveTextContent('Berth 在原本那一台建的，換了之後留在那裡')
-    expect(within(panel).getByRole('button', { name: '移除 1 個空的 berth- 分類' })).toBeEnabled()
+    expect(panel).toHaveTextContent(
+      '這 2 個 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
+    )
   })
 
-  it('移除時鍵停用，移除之後清單換成後端回的那一份並宣告', async () => {
-    let release!: () => void
-    const removed = new Promise<void>((resolve) => (release = resolve))
-    const api = stubApi({
-      [LEFTOVERS]: { body: leftovers() },
-      [REMOVE]: async () => {
-        await removed
-        return { body: leftovers({ categories: [{ name: 'berth-movies', torrents: 2 }] }) }
-      },
+  it('移除空分類是預設不勾的勾選，不是立即執行的按鈕', async () => {
+    const api = stubApi({ [LEFTOVERS]: { body: leftovers() } })
+    const { panel } = await openSwitch()
+
+    const box = await within(panel).findByRole('checkbox', {
+      name: '換台時一併移除 1 個空的 berth- 分類',
     })
-    const { user, panel } = await openSwitch()
-
-    const button = await within(panel).findByRole('button', { name: /移除 1 個空的/ })
-    await user.click(button)
-    expect(button).toHaveAttribute('aria-disabled', 'true')
-    expect(api.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true)
-
-    release()
-    await waitFor(() => expect(within(panel).queryByText('berth-shows')).toBeNull())
-    expect(within(panel).getByText('berth-movies')).toBeInTheDocument()
+    expect(box).not.toBeChecked()
     expect(within(panel).queryByRole('button', { name: /移除/ })).toBeNull()
-    expect(within(panel).getByRole('status')).toHaveTextContent('空的 berth- 分類已移除')
+    expect(panel).toHaveTextContent('確認換台才移除，取消就什麼都不動')
+    expect(api.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
   })
 
-  it('移除時連不到：說沒有移除，清單不動', async () => {
-    stubApi({
-      [LEFTOVERS]: { body: leftovers() },
-      [REMOVE]: { status: 502, body: { detail: 'qbittorrent: connection refused' } },
-    })
-    const { user, panel } = await openSwitch()
+  it('勾了再確認換台：移除跟著換台一起送', async () => {
+    stubApi({ [LEFTOVERS]: { body: leftovers() } })
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    mount(
+      'qbittorrent',
+      [chosen({ kind: 'qbittorrent', origin: 'existing', base_url: 'http://nas:8080' })],
+      {
+        switchWarning: i18next.t('choice.switchWarning.qbittorrent'),
+        onChoose,
+      },
+    )
+    await user.click(bundled())
+    const panel = screen.getByRole('group', { name: /換一台/ })
 
-    await user.click(await within(panel).findByRole('button', { name: /移除 1 個空的/ }))
+    await user.click(await within(panel).findByRole('checkbox', { name: /一併移除/ }))
+    await user.click(
+      within(panel).getByRole('button', { name: i18next.t('choice.switchToBundled') }),
+    )
 
-    expect(await within(panel).findByTestId('request-failed')).toHaveTextContent('沒有移除。')
-    expect(within(panel).getByText('berth-shows')).toBeInTheDocument()
-    expect(within(panel).getByRole('status')).toHaveTextContent('')
+    expect(onChoose).toHaveBeenCalledWith(
+      { origin: 'bundled', remove_empty_categories: true },
+      expect.any(Function),
+    )
   })
 
-  it('沒有空的分類就沒有移除鍵', async () => {
+  it('沒勾就只換台；勾了又取消換台，什麼都不送、勾選也收回', async () => {
+    const api = stubApi({ [LEFTOVERS]: { body: leftovers() } })
+    const onChoose = vi.fn()
+    const user = userEvent.setup()
+    mount(
+      'qbittorrent',
+      [chosen({ kind: 'qbittorrent', origin: 'existing', base_url: 'http://nas:8080' })],
+      {
+        switchWarning: i18next.t('choice.switchWarning.qbittorrent'),
+        onChoose,
+      },
+    )
+    await user.click(bundled())
+    let panel = screen.getByRole('group', { name: /換一台/ })
+    await user.click(await within(panel).findByRole('checkbox', { name: /一併移除/ }))
+
+    await user.click(within(panel).getByRole('button', { name: '取消' }))
+
+    expect(onChoose).not.toHaveBeenCalled()
+    expect(api.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
+
+    await user.click(bundled())
+    panel = screen.getByRole('group', { name: /換一台/ })
+    expect(await within(panel).findByRole('checkbox', { name: /一併移除/ })).not.toBeChecked()
+    await user.click(
+      within(panel).getByRole('button', { name: i18next.t('choice.switchToBundled') }),
+    )
+
+    expect(onChoose).toHaveBeenCalledWith({ origin: 'bundled' }, expect.any(Function))
+  })
+
+  it('原本那一台沒答上來：就地說沒有換台也沒有移除，原文在技術細節', async () => {
+    stubApi({ [LEFTOVERS]: { body: leftovers() } })
+    const user = userEvent.setup()
+    mount(
+      'qbittorrent',
+      [chosen({ kind: 'qbittorrent', origin: 'existing', base_url: 'http://nas:8080' })],
+      {
+        switchWarning: i18next.t('choice.switchWarning.qbittorrent'),
+        refusal: { reason: 'categories_not_removed', detail: 'qbittorrent: connection refused' },
+      },
+    )
+    await user.click(bundled())
+    const panel = screen.getByRole('group', { name: /換一台/ })
+
+    expect(within(panel).getByRole('alert')).toHaveTextContent(
+      '沒有換台，也沒有移除任何分類：原本那一台沒答上來。',
+    )
+    expect(within(panel).getByTestId('technical-details')).toHaveTextContent(
+      'qbittorrent: connection refused',
+    )
+  })
+
+  it('從套件內換走：列出它預置的免密白名單，說在哪裡、怎麼關', async () => {
+    stubApi({ [LEFTOVERS]: { body: leftovers({ categories: [] }) } })
+    const user = userEvent.setup()
+    mount(
+      'qbittorrent',
+      [chosen({ kind: 'qbittorrent', origin: 'bundled', base_url: 'http://qbittorrent:8080' })],
+      {
+        switchWarning: i18next.t('choice.switchWarning.qbittorrent'),
+      },
+    )
+    await user.click(existing())
+    const panel = screen.getByRole('group', { name: /換一台/ })
+
+    const row = (await within(panel).findByText('免密白名單')).closest('li')
+    expect(row).toHaveTextContent('只放行 Berth 的位址（結尾是 /32）')
+    expect(row).toHaveTextContent('qBittorrent.conf')
+    // 與 WebUI 上那一格逐字相同（票 53 的措辭，`auditCopy.test.ts` 的 ALLOWLIST_OPTION）。
+    expect(row).toHaveTextContent('取消勾選「讓已在白名單中的 IP 子網路略過驗證」')
+    expect(panel).not.toHaveTextContent('原本那一台上沒有 Berth 建的東西')
+  })
+
+  it('從既有換走：Berth 沒預置白名單，不列', async () => {
+    stubApi({ [LEFTOVERS]: { body: leftovers() } })
+    const { panel } = await openSwitch()
+
+    await within(panel).findByText('berth-movies')
+    expect(within(panel).queryByText('免密白名單')).toBeNull()
+  })
+
+  it('沒有空的分類就沒有移除的勾選', async () => {
     stubApi({
       [LEFTOVERS]: { body: leftovers({ categories: [{ name: 'berth-movies', torrents: 2 }] }) },
     })
     const { panel } = await openSwitch()
 
     await within(panel).findByText('berth-movies')
-    expect(within(panel).queryByRole('button', { name: /移除/ })).toBeNull()
+    expect(within(panel).queryByRole('checkbox')).toBeNull()
   })
 
-  it('連不到原本那一台：說是 Berth 記得的、確認不了，沒有數目也沒有移除鍵', async () => {
+  it('連不到原本那一台：說是 Berth 記得的、確認不了，沒有數目也沒有勾選；torrent 照樣留在那裡', async () => {
     stubApi({
       [LEFTOVERS]: {
         body: leftovers({
@@ -1066,10 +1150,42 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
     expect(row).not.toHaveTextContent('空的')
     expect(panel).toHaveTextContent('連不到原本那一台')
     expect(panel).toHaveTextContent('沒辦法確認現在還在不在')
-    expect(within(panel).queryByRole('button', { name: /移除/ })).toBeNull()
+    expect(panel).toHaveTextContent('這些分類裡的 torrent 會留在原本那一台（做種的照樣做種')
+    expect(within(panel).queryByRole('checkbox')).toBeNull()
     expect(within(panel).getByTestId('technical-details')).toHaveTextContent(
       'qbittorrent: connection refused',
     )
+  })
+
+  it('英文介面：做種、白名單與勾選', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      stubApi({ [LEFTOVERS]: { body: leftovers() } })
+      const user = userEvent.setup()
+      mount(
+        'qbittorrent',
+        [chosen({ kind: 'qbittorrent', origin: 'bundled', base_url: 'http://qbittorrent:8080' })],
+        {
+          switchWarning: i18next.t('choice.switchWarning.qbittorrent'),
+        },
+      )
+      await user.click(screen.getByRole('radio', { name: /^Existing/ }))
+      const panel = screen.getByRole('group', { name: /Switching qBittorrent/ })
+
+      expect(
+        await within(panel).findByRole('checkbox', {
+          name: 'Also remove 1 empty berth- category when switching',
+        }),
+      ).not.toBeChecked()
+      expect(panel).toHaveTextContent(
+        'These 2 torrents stay on the old one (seeding or downloading as before); Berth stops tracking them after the switch.',
+      )
+      expect(within(panel).getByText('Password-free allowlist').closest('li')).toHaveTextContent(
+        'untick “Bypass authentication for clients in whitelisted IP subnets”',
+      )
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 
   it('Prowlarr 列出 Berth 加的站，站只列出、不給移除', async () => {
