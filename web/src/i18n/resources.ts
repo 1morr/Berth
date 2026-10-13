@@ -225,7 +225,7 @@ const zhHant = {
       // 照實說會加什麼、什麼時候加。
       adds: {
         jellyfin:
-          '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。',
+          '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。入庫之後 Berth 會請它去看那條路徑：平常只刷新那個媒體庫，但它還沒在那條路徑底下列出過任何東西時（第一次入庫），會跑整台的「掃描媒體庫」，你其他的媒體庫也會一起被掃。',
         qbittorrent:
           '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
         prowlarr: '只加你在頁 4 勾起來的站；原本的站不動。',
@@ -1270,7 +1270,7 @@ const zhHant = {
       itemNewTab: '{{name}}（開新分頁）',
       // 看不見的那一半：連結會開新分頁。
       newTab: '（開新分頁）',
-      searching: 'Jellyfin 還在掃描',
+      searching: '等 Jellyfin 收錄',
       lost: 'Jellyfin 找不到它',
       noAddress: '不知道 Jellyfin 開在哪裡',
       downLabel: '問不到 Jellyfin',
@@ -1438,13 +1438,13 @@ const zhHant = {
       jellyfin: {
         found: 'Jellyfin 已收錄',
         // 後面接 resolver 下一次排在什麼時候。作品頁打開時已經先問過一次（M4 票 51），所以排程是 Berth 的，
-        // 不是 Jellyfin 的。
-        searching: 'Jellyfin 還在掃描，Berth 下一次確認在',
+        // 不是 Jellyfin 的。不說「還在掃描」（M4 票 62）：入庫當下只是通知它，Berth 要等反查沒找到才請它掃。
+        searching: '已通知 Jellyfin，等它收錄；Berth 下一次確認在',
         // 一組檔案的摘要，只算正片（M1.5 票 09）。
         foundCount_one: 'Jellyfin 已收錄 {{count}}',
         foundCount_other: 'Jellyfin 已收錄 {{count}}',
-        searchingCount_one: 'Jellyfin 掃描中 {{count}}',
-        searchingCount_other: 'Jellyfin 掃描中 {{count}}',
+        searchingCount_one: '等 Jellyfin 收錄 {{count}}',
+        searchingCount_other: '等 Jellyfin 收錄 {{count}}',
         lostCount_one: 'Jellyfin 找不到 {{count}}',
         lostCount_other: 'Jellyfin 找不到 {{count}}',
         lost_one: 'Jellyfin 試了 {{count}} 次都沒找到',
@@ -1696,6 +1696,9 @@ const zhHant = {
     nextTvdb:
       '到 Jellyfin 的媒體庫設定把 TVDB 的 metadata fetcher 拿掉。Berth 照 TMDB 命名，TVDB 的季集編排可能對不上。拿掉之後下一輪健康檢查（最多 5 分鐘）這一件會自己收掉；是故意掛的就按忽略，之後不會再問。',
     nextDisk: '清出空間，或到服務設定調整門檻。空間回來之後下一輪健康檢查這一件會自己收掉。',
+    // 「重新掃描媒體庫」的範圍（M4 票 62，brief §20.1）：會掃整台的那一種要先說。
+    nextUnresolved:
+      '到 Jellyfin 的媒體庫裡找找看，修好之後按「重新反查」。「重新掃描媒體庫」平常只刷新這條 Route 的媒體庫；Jellyfin 還沒在這條路徑底下列出過任何東西時，只有掃整台伺服器建得出它，那時你其他的媒體庫也會一起被掃。',
     // Jellyfin 回驗（M3 票 17）：兩邊各自認成什麼。季集與 TMDB id 是機器字串，原樣顯示。
     differs: '不同的是',
     differsJoin: '、',
@@ -3532,7 +3535,7 @@ const en: Translations<typeof zhHant> = {
       lede: 'The {{service}} you already run. Berth leaves your settings alone and {{adds}}',
       adds: {
         jellyfin:
-          'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay). If it has not run its own startup wizard yet, page 1 runs it with the account you enter.',
+          'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay). If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth asks it to look at that path: normally by refreshing just that library, but while it has never listed anything under the path (the first import), by running its whole-server Scan Media Library, which scans your other libraries too.',
         qbittorrent:
           'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
         prowlarr: 'only adds the sites you tick on page 4; the sites already there stay.',
@@ -4589,7 +4592,7 @@ const en: Translations<typeof zhHant> = {
       openNamed: 'Open in Jellyfin: {{title}} (opens in a new tab)',
       itemNewTab: '{{name}} (opens in a new tab)',
       newTab: ' (opens in a new tab)',
-      searching: 'Jellyfin is still scanning',
+      searching: 'Waiting for Jellyfin',
       lost: 'Jellyfin cannot find it',
       noAddress: 'Jellyfin’s address is unknown',
       downLabel: 'Jellyfin unreachable',
@@ -4738,11 +4741,11 @@ const en: Translations<typeof zhHant> = {
       },
       jellyfin: {
         found: 'In Jellyfin',
-        searching: 'Jellyfin is still scanning; Berth checks again',
+        searching: 'Jellyfin has been told; waiting for it to pick this up. Berth checks again',
         foundCount_one: '{{count}} in Jellyfin',
         foundCount_other: '{{count}} in Jellyfin',
-        searchingCount_one: '{{count}} still scanning',
-        searchingCount_other: '{{count}} still scanning',
+        searchingCount_one: '{{count}} waiting for Jellyfin',
+        searchingCount_other: '{{count}} waiting for Jellyfin',
         lostCount_one: '{{count}} not found by Jellyfin',
         lostCount_other: '{{count}} not found by Jellyfin',
         lost_one: 'Jellyfin did not show it after {{count}} try',
@@ -4970,6 +4973,8 @@ const en: Translations<typeof zhHant> = {
       'Remove the TVDB metadata fetcher in the Jellyfin library settings. Berth names files after TMDB, and TVDB may number seasons and episodes differently. Once it is gone, the next health check (within 5 minutes) closes this on its own; if you use TVDB on purpose, press Ignore and it will not ask again.',
     nextDisk:
       'Free up space, or change the threshold in the service settings. Once there is room again, the next health check closes this on its own.',
+    nextUnresolved:
+      'Look for it in the Jellyfin library, then press Look it up again once it is fixed. Scan the library normally refreshes only this Route’s library; while Jellyfin has never listed anything under this path, only a scan of the whole server can create it, and then your other libraries are scanned too.',
     differs: 'What differs',
     differsJoin: ', ',
     differsWhat: { season: 'season', episode: 'episode', tmdb: 'title' },

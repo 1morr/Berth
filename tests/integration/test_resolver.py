@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path, PurePosixPath
 
@@ -86,6 +87,11 @@ async def scanned(session: AsyncSession, route: Route, factory: FakeClientFactor
     ]
 
 
+def _series_in(folder: str) -> JellyfinItem:
+    """媒體庫裡另一部、與這一筆無關的劇。"""
+    return JellyfinItem(id="other-series", type="Series", name="Other", path=folder, tmdb_id="1")
+
+
 async def resolve(
     session: AsyncSession, factory: FakeClientFactory, after: timedelta
 ) -> ResolveOutcome:
@@ -108,7 +114,7 @@ class TestSchedule:
     async def test_it_retries_on_the_schedule_and_gives_up_after_six_tries(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """30 秒 → 2 分 → 10 分 → 1 小時 ×3，共 6 次（plan §3.2）。"""
+        """30 秒 → 1 分 → 10 分 → 1 小時 ×3，共 6 次（plan §3.2）。"""
         _, factory = await imported(session, roots)
         waits: list[timedelta] = []
         at = FIRST
@@ -167,25 +173,76 @@ class TestSchedule:
 
         assert factory.jellyfin_.notified == []
 
-    async def test_a_second_miss_asks_jellyfin_to_scan_its_libraries(
+    async def test_a_folder_jellyfin_never_listed_is_scanned_on_the_first_miss(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """從來沒掃到過內容的媒體庫，路徑通知靜靜地什麼都不做（brief §20.1、12.0.0 實測）。
+        """空的媒體庫第一次入庫（M4 票 62）：路徑通知與只刷新媒體庫都找不到第一次全庫掃描時
+        還空著的路徑，只有全庫掃描建得出它（brief §20.1，12.1.0 實測）——所以不等第二次沒找到。
 
-        第一次沒找到多半只是通知的延遲還沒過，所以不掃；第二次還沒有，才請 Jellyfin 掃描——
-        一輪一次，不是一個檔案一次。
+        一輪一次，不是一個檔案一次；之後一分鐘就再看（S1、S3 等了 2.5 分鐘，Unraid 等了 12 分鐘）。
         """
         _, factory = await imported(session, roots)
         factory.jellyfin_.tasks_ = [LIBRARY_SCAN_TASK]
 
         await resolve(session, factory, FIRST)
-        assert factory.jellyfin_.tasks_run == []
+
+        assert factory.jellyfin_.tasks_run == [LIBRARY_SCAN_TASK.id]
+        assert factory.jellyfin_.libraries_refreshed == []
+        upcoming = (await features(session))[0].resolve_after
+        assert upcoming == NOW + FIRST + timedelta(minutes=1)
+
+    async def test_a_listed_folder_gets_only_its_library_refreshed_after_two_misses(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Jellyfin 已經在 Route 的路徑底下列出過東西：路徑通知照理就夠，第一次沒找到多半只是
+        它的 60 秒延遲還沒過。第二次還沒有，只刷新這一個媒體庫，不掃整台（審計 E2）。"""
+        route, factory = await imported(session, roots)
+        factory.jellyfin_.tasks_ = [LIBRARY_SCAN_TASK]
+        factory.jellyfin_.items_ = [_series_in(f"{route.target_path}/Another Show (2020)")]
+
+        await resolve(session, factory, FIRST)
+        assert factory.jellyfin_.libraries_refreshed == []
 
         second = (await features(session))[0].resolve_after
         assert second is not None
         await resolve(session, factory, second - NOW)
 
+        assert factory.jellyfin_.libraries_refreshed == [route.jellyfin_library_id]
+        assert factory.jellyfin_.tasks_run == []
+
+    async def test_a_library_listing_only_its_other_paths_still_gets_the_full_scan(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """既有 Jellyfin 的媒體庫加上 Berth 的路徑（brief §16.4）：媒體庫裡有使用者原本的東西，
+        但 Berth 那個路徑第一次全庫掃描時是空的，只刷新媒體庫一樣看不到它（12.1.0 實測）。"""
+        route, factory = await imported(session, roots)
+        factory.jellyfin_.tasks_ = [LIBRARY_SCAN_TASK]
+        old = f"{route.target_path}-old"
+        factory.jellyfin_.libraries_ = [
+            replace(library, locations=(*library.locations, old))
+            for library in factory.jellyfin_.libraries_
+        ]
+        factory.jellyfin_.items_ = [_series_in(f"{old}/Old Show (2010)")]
+        assert await factory.jellyfin_.items(route.jellyfin_library_id, ("Series",))
+
+        await resolve(session, factory, FIRST)
+
         assert factory.jellyfin_.tasks_run == [LIBRARY_SCAN_TASK.id]
+        assert factory.jellyfin_.libraries_refreshed == []
+
+    async def test_a_lookup_that_failed_asks_for_no_scan(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """問不到媒體庫裡有什麼，就說不出該掃多大：這一輪只通知，下一輪再決定。"""
+        _, factory = await imported(session, roots)
+        factory.jellyfin_.tasks_ = [LIBRARY_SCAN_TASK]
+        factory.jellyfin_.items_error = ServiceUnavailableError("GET /Items: 503")
+
+        await resolve(session, factory, FIRST)
+
+        assert factory.jellyfin_.notified
+        assert factory.jellyfin_.tasks_run == []
+        assert factory.jellyfin_.libraries_refreshed == []
 
     async def test_after_asking_for_a_scan_it_looks_again_within_ten_minutes(
         self, session: AsyncSession, roots: dict[str, Path]

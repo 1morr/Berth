@@ -254,6 +254,11 @@ function Measured({ issue }: { issue: Issue }) {
       </>
     )
   }
+  if (issue.type === 'jellyfin_item_unresolved') {
+    // 「重新掃描媒體庫」掃多大由後端照 Jellyfin 的現況決定（M4 票 62）：會掃整台的那一種，按下去之前
+    // 就要說（審計 E2）。
+    return <DetailLine term={t('issues.next')}>{t('issues.nextUnresolved')}</DetailLine>
+  }
   if (issue.type === 'low_disk_space') {
     const size = (value: unknown) =>
       typeof value === 'number' ? formatSize(value, i18n.language) : ''

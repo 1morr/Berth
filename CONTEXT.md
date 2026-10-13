@@ -113,6 +113,7 @@ _Avoid_: managed, built-in, ours
 **Existing service**（UI 顯示「既有」）:
 使用者選「既有」的服務：使用者自己的那一台，填位址與憑證接進來。Berth 接管它＝**只建立與管理 Berth 擁有的物件**：
 Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、`berth-*` 分類與它的目錄、使用者勾選加入的站、檢查用的暫時探測 torrent 與探測檔。
+入庫之後 Berth 也會請 Jellyfin 去看它寫的路徑：通知路徑、只刷新那個媒體庫；Berth 的路徑 Jellyfin 還沒列出過任何東西時是整台的全庫掃描（brief §16.4、§20.1，M4 票 62）。
 帳密、全域偏好、使用者原有的媒體庫與站都不碰；唯一例外是那台 Jellyfin 還沒跑過初始精靈時，由擁有者建它的管理員、跑完它的初始設定（語言、地區、遠端存取；不給伺服器名稱，brief §16.4、§19 D1）。
 Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、把同一個父目錄掛在 `/data`。
 _Avoid_: external, remote, byo

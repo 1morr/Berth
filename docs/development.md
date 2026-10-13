@@ -487,6 +487,13 @@ python scripts/experiments/jellyfin_permissions.py --record   # 另外重錄 tes
 python scripts/experiments/jellyfin_permissions.py --record --only items.tv.series.page.json   # 只加錄這幾個，其餘不動
 ```
 
+Jellyfin 能不能只刷新一個媒體庫、對空的媒體庫有沒有效（M4 票 62）：同樣自己起停一次性 Jellyfin，約 8 分鐘。結果見
+brief §20.1：
+
+```bash
+python scripts/experiments/jellyfin_scan_scope.py   # 報告寫到 .local/experiments/results/jellyfin-scan-scope.json
+```
+
 Jellyfin 的圖經 Berth 代理要不要另存一份（M1.5 票 04）：同樣自己起停一次性 Jellyfin，另外起一個 `berth serve`
 量經過代理的延遲，所以要用 `uv run`。結果見 [`docs/research/library-browsing.md`](research/library-browsing.md) §6.1：
 

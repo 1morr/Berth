@@ -1368,6 +1368,24 @@ async def test_jellyfin_lists_its_own_library_scan_task() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_jellyfin_refreshes_one_library_the_way_its_scan_button_does() -> None:
+    """只刷新一個媒體庫：對它的 item 送 `Refresh`，兩個模式都是 `Default`（brief §20.1，票 62）。"""
+    route = respx.post(f"{JELLYFIN_URL}/Items/library-tv/Refresh").respond(204)
+
+    client = jellyfin_client("key")
+    try:
+        await client.refresh_library("library-tv")
+    finally:
+        await client.aclose()
+
+    assert dict(route.calls.last.request.url.params) == {
+        "metadataRefreshMode": "Default",
+        "imageRefreshMode": "Default",
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_jellyfin_is_told_about_each_new_path_not_asked_to_rescan_everything() -> None:
     """路徑級的通知（brief §20.1）：一條路徑一個 `Created`，不是 `POST /Library/Refresh`。"""
     route = respx.post(f"{JELLYFIN_URL}/Library/Media/Updated").respond(204)
