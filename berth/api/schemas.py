@@ -164,6 +164,8 @@ class ServiceHealthOut(BaseModel):
     unsupported: bool
     #: Jellyfin 的媒體庫數量（票 21）。前端拿它組 i18n 複數句子；其餘服務是 `None`。
     library_count: int | None
+    #: 管理員選了不用它（「不用 Prowlarr」，M4 票 61）：不算阻擋，畫面說「沒有使用」。
+    unused: bool
 
 
 class UnknownTorrentOut(BaseModel):

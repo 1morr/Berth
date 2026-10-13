@@ -118,6 +118,12 @@ Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、`berth-*` 分�
 Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、把同一個父目錄掛在 `/data`。
 _Avoid_: external, remote, byo
 
+**Unused service**（UI 顯示「沒有使用」，設定頁的動作叫「不用 Prowlarr」）:
+管理員選了不用的服務；目前只有 Prowlarr 可以（M4 票 61，審計 E3）。與精靈頁 4 的「之後再說」是同一個狀態，
+存在 `setup.indexer.skipped`、API 的健康那一列是 `unused`。可逆；不用時健康不檢查它、不算阻擋，搜尋說沒有接索引站。
+Berth 不動它上面的站與容器。**與 Step status 的 `skipped` 無關**——那一個是「已經是這樣」。
+_Avoid_: disabled, removed, off
+
 **Step status**（UI 顯示於每一條纜繩）:
 精靈裡一個步驟的結果，五種：`ok`（已完成，這一次真的做了）、`skipped`（已經是這樣，沒動它）、
 `running`（進行中，做之前就寫進設定所以輪詢看得到）、`failed`（失敗）、`pending`（尚未執行）。

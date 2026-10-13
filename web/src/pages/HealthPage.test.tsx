@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
@@ -284,6 +285,61 @@ describe('健康頁', () => {
 
     expect(card('Prowlarr').getByText('尚未接上')).toBeInTheDocument()
     expect(screen.queryByText('阻擋')).not.toBeInTheDocument()
+  })
+
+  it('選了不用 Prowlarr：泊位板與卡片都說「沒有使用」，不是阻擋（M4 票 61）', async () => {
+    const base = healthDetail()
+    render({
+      body: {
+        ...base,
+        // 紀錄還是選不用之前那一輪的紅燈：畫面照「不用」說，不照紀錄。
+        services: base.services.map((row) =>
+          row.kind === 'prowlarr'
+            ? {
+                ...row,
+                status: 'failed' as const,
+                failures: 3,
+                error: 'host does not resolve',
+                unused: true,
+              }
+            : row,
+        ),
+      },
+    })
+    renderApp('/health')
+
+    const board = await screen.findByRole('region', { name: '泊位板' })
+    const bth4 = within(board).getByText('BTH 4').closest('li')!
+    expect(within(bth4).getByText('沒有使用')).toBeInTheDocument()
+    expect(bth4.className).not.toMatch(/bg-blocked/)
+    expect(card('Prowlarr').getByText('沒有使用')).toBeInTheDocument()
+    expect(card('Prowlarr').getByText(/管理員在設定裡選了不用 Prowlarr/)).toBeVisible()
+    expect(card('Prowlarr').getByRole('link', { name: '前往設定：Prowlarr' })).toBeVisible()
+    expect(card('Prowlarr').queryByText('連續失敗 3 次')).not.toBeInTheDocument()
+    expect(screen.queryByText('阻擋')).not.toBeInTheDocument()
+    expect(screen.queryByText('docker compose up -d prowlarr')).not.toBeInTheDocument()
+  })
+
+  it('「沒有使用」在 en 也說得出是管理員選的', async () => {
+    const base = healthDetail()
+    render({
+      body: {
+        ...base,
+        services: base.services.map((row) =>
+          row.kind === 'prowlarr' ? { ...row, unused: true } : row,
+        ),
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/health')
+
+      await screen.findByRole('region', { name: 'Prowlarr' })
+      expect(card('Prowlarr').getByText('Not used')).toBeInTheDocument()
+      expect(card('Prowlarr').getByText(/An administrator chose not to use Prowlarr/)).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 
   it('綠燈的 Route 收起來，紅燈的就地展開每一條纜繩', async () => {

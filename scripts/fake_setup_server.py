@@ -1838,6 +1838,9 @@ class FakeClientFactory:
         return self._scenario.tmdb
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
+        if self._scenario.prowlarr.ping_error is not None:
+            # Prowlarr 停了（`degraded`、`/demo/prowlarr/stop`）：搜尋與健康檢查看到的是同一件事。
+            return FakeIndexerSearch(base_url=base_url, error=self._scenario.prowlarr.ping_error)
         if self._scenario.indexer_url:
             return ProwlarrSearch(self._scenario.indexer_url, self._scenario.indexer_key)
         if not self._scenario.indexer_results:
@@ -1907,6 +1910,7 @@ def main(argv: list[str] | None = None) -> int:
     if scenario.library_demo:
         _mount_demo_accounts(app, scenario.jellyfin)
     _mount_demo_qbittorrent(app, scenario.qbittorrent)
+    _mount_demo_prowlarr(app, scenario.prowlarr)
 
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
@@ -1966,6 +1970,28 @@ def _mount_demo_accounts(app: FastAPI, jellyfin: FakeJellyfinClient) -> None:
 
     app.router.routes.insert(
         0, StarletteRoute("/demo/jellyfin/{action:str}", endpoint, methods=["POST"])
+    )
+
+
+def _mount_demo_prowlarr(app: FastAPI, prowlarr: FakeProwlarrClient) -> None:
+    """`POST /demo/prowlarr/{stop,start}`：把套件內的 Prowlarr 停掉 / 起回來（M4 票 61，審計 S4 的
+    `docker compose stop prowlarr`）。停掉時主機名解不到，健康檢查、站的清單與作品頁的搜尋都連不上。
+    插在最前面的理由同 `_mount_demo_torrent`。
+    """
+
+    async def endpoint(request: Request) -> Response:
+        action = request.path_params["action"]
+        if action not in ("stop", "start"):
+            return Response(status_code=404)
+        prowlarr.ping_error = (
+            ServiceUnavailableError("GET /api/v1/indexer: host does not resolve")
+            if action == "stop"
+            else None
+        )
+        return Response(status_code=204)
+
+    app.router.routes.insert(
+        0, StarletteRoute("/demo/prowlarr/{action:str}", endpoint, methods=["POST"])
     )
 
 

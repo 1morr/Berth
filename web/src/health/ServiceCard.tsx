@@ -50,7 +50,8 @@ export function ServiceCard({
         <Heading id={`service-${row.kind}`} className="value text-sm font-semibold text-ink">
           {t(SERVICE_LABEL[row.kind])}
         </Heading>
-        {row.detail && (
+        {/* 不用的那一台不檢查，舊的實測值與時間一樣說的是選不用之前的事（M4 票 61）。 */}
+        {row.detail && state !== 'unused' && (
           <span className="value text-xs text-ink">
             <span className="label text-ink-dim">{t(detailLabel(row.kind))}</span> {row.detail}
             {/* 媒體庫數量是數字，不是寫死進 `detail` 的英文句子（票 21）——i18n 複數在這裡組。 */}
@@ -66,21 +67,24 @@ export function ServiceCard({
         )}
       </div>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 py-3 text-xs">
-        <dt className="label self-center text-ink-dim">{t('health.lastOk')}</dt>
-        <dd className="text-ink">
-          <Timestamp at={row.last_ok_at} />
-        </dd>
-        <dt className="label self-center text-ink-dim">{t('health.lastChecked')}</dt>
-        <dd className="text-ink">
-          <Timestamp at={row.checked_at} />
-          {row.failures > 0 && (
-            <span className="ml-3 text-blocked-ink">
-              {t('health.failures', { count: row.failures })}
-            </span>
-          )}
-        </dd>
-      </dl>
+      {/* 不用的那一台不檢查，上一次的時間說的是選不用之前的事（M4 票 61）。 */}
+      {state !== 'unused' && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 py-3 text-xs">
+          <dt className="label self-center text-ink-dim">{t('health.lastOk')}</dt>
+          <dd className="text-ink">
+            <Timestamp at={row.last_ok_at} />
+          </dd>
+          <dt className="label self-center text-ink-dim">{t('health.lastChecked')}</dt>
+          <dd className="text-ink">
+            <Timestamp at={row.checked_at} />
+            {row.failures > 0 && (
+              <span className="ml-3 text-blocked-ink">
+                {t('health.failures', { count: row.failures })}
+              </span>
+            )}
+          </dd>
+        </dl>
+      )}
 
       {failed && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
@@ -107,6 +111,20 @@ export function ServiceCard({
       {state === 'unconfigured' && (
         <div className="border-t-2 border-rule bg-hull px-4 py-4">
           <p className="max-w-prose text-xs text-ink">{t('health.fix.unconfigured')}</p>
+        </div>
+      )}
+
+      {/* 選了不用（M4 票 61）：說是誰選的、在哪裡改回來。不是修正——沒有東西壞了。 */}
+      {state === 'unused' && (
+        <div className="grid gap-3 border-t-2 border-rule bg-hull px-4 py-4">
+          <p className="max-w-prose text-xs text-ink">
+            {t('health.unused', { service: t(SERVICE_LABEL[row.kind]) })}
+          </p>
+          {settingsLink && (
+            <div className="grid">
+              <SettingsHint slot={row.kind} fallback={t('health.fix.askAdmin')} />
+            </div>
+          )}
         </div>
       )}
 

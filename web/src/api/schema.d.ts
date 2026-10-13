@@ -5006,6 +5006,8 @@ export interface components {
             unsupported: boolean;
             /** Library Count */
             library_count: number | null;
+            /** Unused */
+            unused: boolean;
         };
         /**
          * ServiceKind
@@ -5043,6 +5045,8 @@ export interface components {
             auth_failures: number;
             /** Waited Seconds */
             waited_seconds: number;
+            /** Checked At */
+            checked_at: string | null;
         };
         /** SetupStatusOut */
         SetupStatusOut: {

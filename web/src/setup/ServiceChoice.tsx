@@ -24,6 +24,7 @@ import { ConfirmPanel } from '../components/ConfirmPanel'
 import { RequestFailed } from '../components/RequestFailed'
 import { SHARED_ROOT, remedyFor } from '../components/routeChecks'
 import { TechnicalDetails } from '../components/TechnicalDetails'
+import { Timestamp } from '../components/Timestamp'
 import { escapeOnly } from '../components/useInPlaceConfirm'
 import { BAN_DEFAULTS, BAN_WARNING_FROM, SERVICE_LABEL, detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
@@ -106,6 +107,7 @@ export function ServiceChoice({
   requestError,
   locked,
   switchWarning,
+  testOutdated = false,
   draft,
   onDraft,
   onChoose,
@@ -121,6 +123,11 @@ export function ServiceChoice({
      * 原本那一台留下的東西（`LeftoverList`，M4 票 47）。從既有換走時說法不同（`choice.switchAway`）。
      */
     switchWarning?: string
+    /**
+     * 設定頁：測試通過之後健康檢查又連不上了（`settings/staleTest`，M4 票 61）。是的時候測試那一列不再
+     * 說「連上了」。精靈不給——那時候還沒有健康檢查。
+     */
+    testOutdated?: boolean
   }) {
   const { t } = useTranslation()
   const choosing = sending !== null
@@ -449,6 +456,7 @@ export function ServiceChoice({
           service={service}
           testing={testing}
           retesting={retesting}
+          testOutdated={testOutdated}
           onRetest={onRetest}
           onPasteKey={(apiKey) => choose({ origin: 'bundled', api_key: apiKey })}
           onEdit={
@@ -768,6 +776,7 @@ function TestLine({
   service,
   testing,
   retesting,
+  testOutdated,
   onRetest,
   onPasteKey,
   onEdit,
@@ -778,6 +787,7 @@ function TestLine({
   service: SetupService
   testing: boolean
   retesting: boolean
+  testOutdated: boolean
   onRetest: (restart: boolean) => void
   /** 套件內 Prowlarr 讀不到掛載的 key：就地貼上（plan §9.2）。 */
   onPasteKey?: (apiKey: string) => void
@@ -788,7 +798,9 @@ function TestLine({
 }) {
   const { t } = useTranslation()
   const state = service.state
-  const signal = testing && state !== 'waiting' ? 'working' : signalOf(service)
+  // 測試之後健康檢查又連不上（M4 票 61）：舊的「連上了」換成中性的「過時」，補法在健康卡，這裡不重複。
+  const stale = !testing && testOutdated
+  const signal = testing && state !== 'waiting' ? 'working' : stale ? 'neutral' : signalOf(service)
   const failed = state === 'failed' || state === 'timeout'
 
   return (
@@ -797,9 +809,11 @@ function TestLine({
         <span className={`label px-2 py-1.5 ${SIGNAL_FILL[signal]}`}>
           {testing && state !== 'waiting'
             ? t('connection.testing')
-            : state
-              ? t(STATE_LABEL[state])
-              : t('connection.untested')}
+            : stale
+              ? t('connection.stale')
+              : state
+                ? t(STATE_LABEL[state])
+                : t('connection.untested')}
         </span>
         <span className="value text-sm font-semibold text-ink">{t(SERVICE_LABEL[kind])}</span>
         <span className="value min-w-0 text-xs wrap-anywhere text-ink-dim">
@@ -814,7 +828,17 @@ function TestLine({
       {service.reason && !testing && (
         <dl className="grid grid-cols-1 gap-x-4 gap-y-1 border-t-2 border-rule px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <dt className="label self-center text-ink-dim">{t('connection.result')}</dt>
-          <dd className="text-sm text-ink">{t(reasonLabel(kind, service.reason, state))}</dd>
+          <dd className="text-sm text-ink">
+            {stale ? t('connection.staleResult') : t(reasonLabel(kind, service.reason, state))}
+          </dd>
+          {service.checked_at && (
+            <>
+              <dt className="label mt-1 self-center text-ink-dim">{t('connection.testedAt')}</dt>
+              <dd className="mt-1 text-sm text-ink">
+                <Timestamp at={service.checked_at} />
+              </dd>
+            </>
+          )}
           {service.detail && (
             <>
               <dt className="label mt-1 self-center text-ink-dim">
@@ -851,9 +875,9 @@ function TestLine({
         <PasteKey choosing={testing} onPaste={onPasteKey} />
       )}
 
-      {(failed || onEdit) && (
+      {(failed || stale || onEdit) && (
         <div className="flex flex-wrap gap-3 border-t-2 border-rule px-4 py-3">
-          {failed && (
+          {(failed || stale) && (
             <GhostButton type="button" busy={retesting} onClick={() => onRetest(true)}>
               {retesting ? t('connection.retesting') : t('connection.retest')}
             </GhostButton>

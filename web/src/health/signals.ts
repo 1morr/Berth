@@ -9,13 +9,15 @@ import type { Signal } from '../components/signal'
  *
  * - `secured` 已繫上——連得上。
  * - `blocked` 阻擋——連不上、憑證不對、版本太舊。紅色只代表阻擋。
- * - `neutral` 尚未檢查 / 尚未接上——索引站那一步可以跳過（plan §9.3），跳過的人
- *   不該永遠看到一盞紅燈。
+ * - `neutral` 尚未檢查 / 尚未接上 / 沒有使用——索引站那一步可以跳過（plan §9.3），跳過的人
+ *   不該永遠看到一盞紅燈；選了「不用 Prowlarr」的人也是（M4 票 61）。
  */
 
-export type HealthState = 'ok' | 'failed' | 'unknown' | 'unconfigured'
+export type HealthState = 'ok' | 'failed' | 'unknown' | 'unconfigured' | 'unused'
 
 export function serviceState(row: ServiceHealth): HealthState {
+  // 不用就不檢查：排第一，紀錄還是紅的、或從沒檢查過都一樣（M4 票 61）。
+  if (row.unused) return 'unused'
   // **順序有意義**：迴圈第一輪跑之前每一項都還沒被檢查過，而那時候 `configured` 也還是預設的
   // `false`——先判 `configured` 會對三個已經接好的服務說「到設定精靈接它」。
   if (row.checked_at === null) return 'unknown'
@@ -30,6 +32,7 @@ export const STATE_SIGNAL = {
   failed: 'blocked',
   unknown: 'neutral',
   unconfigured: 'neutral',
+  unused: 'neutral',
 } as const satisfies Record<HealthState, Signal>
 
 export const STATE_LABEL = {
@@ -37,6 +40,7 @@ export const STATE_LABEL = {
   failed: 'health.state.failed',
   unknown: 'health.state.unknown',
   unconfigured: 'health.state.unconfigured',
+  unused: 'health.state.unused',
 } as const satisfies Record<HealthState, string>
 
 /**

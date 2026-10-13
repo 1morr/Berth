@@ -51,6 +51,7 @@ export function chosen(overrides: Partial<SetupService> = {}): SetupService {
     error: '',
     auth_failures: 0,
     waited_seconds: 0,
+    checked_at: CHECKED_AT,
     ...overrides,
   }
 }
@@ -336,6 +337,7 @@ function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHealth {
     unsupported: false,
     // 只有 Jellyfin 有這個數字（票 21）；其餘服務覆寫成 `null`。
     library_count: 3,
+    unused: false,
     ...overrides,
   }
 }

@@ -6,6 +6,8 @@
 **醒得比檢查頻繁**：每 30 秒醒一次，但只有上一輪已經滿 5 分鐘才真的跑（`is_due`）。
 兩層的理由是精靈剛跑完的那一刻——迴圈在 Berth 啟動時就已經在轉，那時候還沒有東西可檢查，
 如果醒來的間隔就是檢查的間隔，使用者按完「完成」會對著一個空的健康頁等五分鐘。
+另一個理由是提早重測（M4 票 61）：連不上 Prowlarr 時，還沒到整輪的那幾次醒來只重測它
+（`recheck_due`）。
 
 **例外只記 log**：迴圈死掉的話健康頁會永遠停在舊值，而那正是它要回答的問題。
 """
@@ -18,9 +20,10 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from berth.domain import ServiceKind
 from berth.pipeline.ticks import Clock, Sleeper, whole_tick
 from berth.services.clients import ServiceClientFactory
-from berth.services.health import CHECK_INTERVAL, check_health, is_due
+from berth.services.health import CHECK_INTERVAL, check_health, check_service, is_due, recheck_due
 from berth.services.setup import is_setup_complete
 
 logger = logging.getLogger(__name__)
@@ -64,7 +67,7 @@ class HealthChecker:
                 logger.exception("health checker tick failed")
 
     async def check_once(self) -> bool:
-        """該檢查就檢查一輪，回傳這一次有沒有真的跑。
+        """該檢查就檢查一輪（或只提早重測 Prowlarr），回傳這一次有沒有真的跑。
 
         精靈跑完之前不跑：那時候正在接的服務被打只會得到假的紅燈，而精靈自己就在做
         這些檢查（plan §9.3、§9.5）。
@@ -73,7 +76,10 @@ class HealthChecker:
             if not await is_setup_complete(session):
                 return False
             moment = self._now()
-            if not await is_due(session, now=moment, interval=self._interval):
+            if await is_due(session, now=moment, interval=self._interval):
+                await check_health(session, self._clients, now=moment)
+                return True
+            if not await recheck_due(session, now=moment):
                 return False
-            await check_health(session, self._clients, now=moment)
+            await check_service(session, self._clients, ServiceKind.PROWLARR, now=moment)
             return True

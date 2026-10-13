@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { IndexerSetup, SetupService, SiteSearch } from '../api/setup'
@@ -14,6 +15,7 @@ import {
   setupStatus,
   site,
   step,
+  withFailedService,
 } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
@@ -454,5 +456,138 @@ describe('既有 Prowlarr 的連線區（M4 票 39）', () => {
 
     expect(await screen.findByText(/換一台 Prowlarr/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '改用套件內的那一台' })).toBeInTheDocument()
+  })
+})
+
+describe('不用 Prowlarr（M4 票 61）', () => {
+  const SKIP = 'POST /api/setup/indexers/skip'
+  const CHECK = 'POST /api/settings/services/prowlarr/test'
+
+  function unusedHealth(unused: boolean) {
+    return withFailedService('prowlarr', 'GET /api/v1/indexer: host does not resolve', { unused })
+  }
+
+  it('在用時頁尾一區：就地確認之後才送，整頁收成「沒有使用」、不再讀站的清單', async () => {
+    let unused = false
+    const stub = render({
+      'GET /api/health/detail': () => ({ body: unusedHealth(unused) }),
+      [SKIP]: () => {
+        unused = true
+        return { body: indexerSetup({ skipped: true }) }
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    const section = within(await screen.findByRole('region', { name: '不用 Prowlarr' }))
+    await user.click(section.getByRole('button', { name: '不用 Prowlarr' }))
+    expect(stub.mock.calls.some(([url]) => url === '/api/setup/indexers/skip')).toBe(false)
+    expect(section.getByRole('group')).toHaveTextContent(/Prowlarr 上的站與它的容器 Berth 都不動/)
+    await user.click(section.getByRole('button', { name: '確定不用' }))
+
+    const notice = await screen.findByRole('region', { name: '沒有使用 Prowlarr' })
+    expect(within(notice).getByText('沒有使用')).toBeInTheDocument()
+    const call = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/skip')!
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ skipped: true })
+    // 健康卡、連線、站都不畫：它們在這個狀態下只會是一排紅字。
+    expect(screen.queryByRole('region', { name: '位址與憑證' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '站' })).not.toBeInTheDocument()
+    expect(screen.queryByText('阻擋')).not.toBeInTheDocument()
+  })
+
+  it('不用時進來不問 Prowlarr；改回使用之後重測健康、各區畫回來', async () => {
+    let unused = true
+    const stub = render({
+      'GET /api/health/detail': () => ({ body: unusedHealth(unused) }),
+      [SKIP]: () => {
+        unused = false
+        return { body: withSites() }
+      },
+      [CHECK]: { body: healthDetail() },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    await user.click(await screen.findByRole('button', { name: '改回使用 Prowlarr' }))
+
+    expect(await screen.findByRole('region', { name: '站' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Prowlarr' })).toBeInTheDocument()
+    const skip = stub.mock.calls.find(([url]) => url === '/api/setup/indexers/skip')!
+    expect(JSON.parse(String(skip[1]?.body))).toEqual({ skipped: false })
+    expect(stub.mock.calls.some(([url]) => url === '/api/settings/services/prowlarr/test')).toBe(
+      true,
+    )
+    // 不用的那段時間沒有讀過站的清單：那要現場問 Prowlarr。
+    const reads = stub.mock.calls.map(([url]) => url)
+    expect(reads.indexOf('/api/setup/indexers')).toBeGreaterThan(
+      reads.indexOf('/api/setup/indexers/skip'),
+    )
+  })
+
+  it('「沒有使用」在 en 也說得出 Berth 沒動什麼', async () => {
+    render({ 'GET /api/health/detail': { body: unusedHealth(true) } })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/settings/indexers')
+
+      expect(await screen.findByRole('region', { name: 'Prowlarr not in use' })).toBeVisible()
+      expect(
+        screen.getByText(/Berth did not touch Prowlarr’s sites or its container/),
+      ).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Use Prowlarr again' })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('改不成時說出原因，頁面照原樣', async () => {
+    render({ [SKIP]: { status: 500, body: { detail: 'Internal Server Error' } } })
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+
+    const section = within(await screen.findByRole('region', { name: '不用 Prowlarr' }))
+    await user.click(section.getByRole('button', { name: '不用 Prowlarr' }))
+    await user.click(section.getByRole('button', { name: '確定不用' }))
+
+    expect(await section.findByTestId('request-failed')).toHaveTextContent(/沒有切換成功。/)
+    expect(screen.getByRole('region', { name: '位址與憑證' })).toBeInTheDocument()
+  })
+})
+
+describe('連線那一列的測試時間（M4 票 61，審計 S4）', () => {
+  it('測試之後健康檢查連不上：不再畫舊的「連上了」，說「過時」並給重新測試', async () => {
+    const tested = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const failedAt = new Date(Date.now() - 60 * 1000).toISOString()
+    render({
+      'GET /api/setup/status': {
+        body: setupStatus({
+          current_step: 6,
+          owner: 'skipper',
+          services: [...ALL_BUNDLED.slice(0, 2), { ...ALL_BUNDLED[2], checked_at: tested }],
+        }),
+      },
+      'GET /api/health/detail': {
+        body: withFailedService('prowlarr', 'host does not resolve', { checked_at: failedAt }),
+      },
+    })
+    renderApp('/settings/indexers')
+
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    expect(await connection.findByText('過時')).toBeInTheDocument()
+    expect(connection.queryByText('連上了')).not.toBeInTheDocument()
+    expect(connection.getByText(/上次測試是通過的，但之後的健康檢查連不上/)).toBeVisible()
+    expect(connection.getByText('測試於')).toBeInTheDocument()
+    expect(connection.getByText('10 分鐘前')).toBeInTheDocument()
+    expect(connection.getByRole('button', { name: '重新測試' })).toBeVisible()
+  })
+
+  it('健康是綠的：照舊說「連上了」，帶測試時間', async () => {
+    render()
+    renderApp('/settings/indexers')
+
+    const connection = within(await screen.findByRole('region', { name: '位址與憑證' }))
+    expect(await connection.findByText('連上了')).toBeInTheDocument()
+    expect(connection.getByText('測試於')).toBeInTheDocument()
+    expect(connection.queryByText('過時')).not.toBeInTheDocument()
   })
 })

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -125,6 +126,8 @@ class ServiceOut(BaseModel):
     auth_failures: int
     #: 套件內那一台還在啟動時，這一輪已經等了幾秒。
     waited_seconds: int
+    #: 這一次測試的時間；還沒測過是 `null`。設定頁拿它與健康檢查比新舊（M4 票 61）。
+    checked_at: datetime | None
 
 
 class JellyfinStartupOut(BaseModel):

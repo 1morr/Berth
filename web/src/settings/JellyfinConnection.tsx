@@ -6,6 +6,7 @@ import { GhostButton } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { detailLabel } from '../components/services'
 import { SIGNAL_FILL } from '../components/signal'
+import { Timestamp } from '../components/Timestamp'
 import { ExistingForm, Fix } from '../setup/ServiceChoice'
 import { STATE_LABEL, reasonLabel, signalOf, testTarget } from '../setup/signals'
 
@@ -24,6 +25,7 @@ export function JellyfinConnection({
   retesting,
   refusal,
   requestError,
+  testOutdated = false,
   onChoose,
   onRetest,
 }: {
@@ -32,6 +34,8 @@ export function JellyfinConnection({
   retesting: boolean
   refusal: ChoiceRefusal | null
   requestError: unknown
+  /** 測試通過之後健康檢查又連不上了（`staleTest`，M4 票 61）：狀態那一格不再說「連上了」。 */
+  testOutdated?: boolean
   /** `done`：存下來了才叫——被拒或沒送到時表單留著。 */
   onChoose: (input: ChoiceInput, done: () => void) => void
   onRetest: (restart: boolean) => void
@@ -49,7 +53,8 @@ export function JellyfinConnection({
   const existing = service.origin === 'existing'
   const testing = choosing || retesting
   const failed = service.state === 'failed' || service.state === 'timeout'
-  const signal = testing ? 'working' : signalOf(service)
+  const stale = !testing && testOutdated
+  const signal = testing ? 'working' : stale ? 'neutral' : signalOf(service)
   const version =
     service.detail && detailLabel('jellyfin', service.reason) === 'detail.version'
       ? service.detail
@@ -84,17 +89,28 @@ export function JellyfinConnection({
               <span className={`label px-2 py-1.5 ${SIGNAL_FILL[signal]}`}>
                 {testing
                   ? t('connection.testing')
-                  : service.state
-                    ? t(STATE_LABEL[service.state])
-                    : t('connection.untested')}
+                  : stale
+                    ? t('connection.stale')
+                    : service.state
+                      ? t(STATE_LABEL[service.state])
+                      : t('connection.untested')}
               </span>
               {service.reason && !testing && (
                 <span className="text-sm text-ink">
-                  {t(reasonLabel('jellyfin', service.reason, service.state))}
+                  {stale
+                    ? t('connection.staleResult')
+                    : t(reasonLabel('jellyfin', service.reason, service.state))}
                 </span>
               )}
             </span>
           </Row>
+          {service.checked_at && !testing && (
+            <Row label={t('connection.testedAt')}>
+              <span className="text-sm text-ink">
+                <Timestamp at={service.checked_at} />
+              </span>
+            </Row>
+          )}
           {service.state === 'waiting' && (
             // 還在啟動：等了多久、上限多少（同精靈測試那一條的倒數；重測由 `ServiceConnection` 照精靈的節奏打）。
             <Row label={t('connection.waitingLabel')}>
@@ -122,9 +138,9 @@ export function JellyfinConnection({
 
         {failed && !testing && <Fix kind="jellyfin" status={status} service={service} />}
 
-        {(failed || (existing && !editing)) && (
+        {(failed || stale || (existing && !editing)) && (
           <div className="flex flex-wrap gap-3 border-t-2 border-rule px-4 py-3">
-            {failed && (
+            {(failed || stale) && (
               <GhostButton type="button" busy={retesting} onClick={() => onRetest(true)}>
                 {retesting ? t('connection.retesting') : t('connection.retest')}
               </GhostButton>

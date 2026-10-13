@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { healthDetailQueryOptions } from '../api/health'
 import type { ServiceKind } from '../api/schemas'
 import {
   chooseService,
@@ -15,6 +16,7 @@ import { useChoiceDraft } from '../setup/choiceDraft'
 import { ServiceChoice } from '../setup/ServiceChoice'
 import { useWaitingRetest } from '../setup/useWaitingRetest'
 import { JellyfinConnection } from './JellyfinConnection'
+import { staleTest } from './staleTest'
 import { SettingsSection } from './SettingsFrame'
 
 /**
@@ -40,6 +42,12 @@ export function ServiceConnection({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const status = useQuery(setupStatusQueryOptions)
+  const health = useQuery(healthDetailQueryOptions)
+  // 測試之後健康檢查又連不上（M4 票 61）：連線那一列不再說舊的「連上了」。
+  const stale = staleTest(
+    status.data?.services.find((row) => row.kind === kind),
+    health.data?.services.find((row) => row.kind === kind),
+  )
   const choiceDraft = useChoiceDraft()
 
   function absorb(next: SetupStatus) {
@@ -101,6 +109,7 @@ export function ServiceConnection({
           retesting={retest.isPending}
           refusal={choiceRefusalOf(choose.error)}
           requestError={requestError}
+          testOutdated={stale}
           onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
           onRetest={(restart) => retest.mutate(restart)}
         />
@@ -113,6 +122,7 @@ export function ServiceConnection({
           retesting={retest.isPending}
           refusal={choiceRefusalOf(choose.error)}
           requestError={requestError}
+          testOutdated={stale}
           onChoose={(input, done) => choose.mutate(input, { onSuccess: done })}
           onRetest={(restart) => retest.mutate(restart)}
           // 換來源會清掉那一頁的結果（`_start_over`），先確認。
