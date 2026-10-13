@@ -299,6 +299,11 @@ const zhHant = {
     },
     testing: '測試中',
     untested: '還沒測',
+    // M4 票 61：設定頁的連線那一列說它是什麼時候測的；之後的健康檢查連不上時不再畫舊的「連上了」。
+    testedAt: '測試於',
+    stale: '過時',
+    staleResult:
+      '上次測試是通過的，但之後的健康檢查連不上。原因與補法在上面的健康卡；修好之後重新測試。',
     result: '測試結果',
     waitingLabel: '等待中',
     waiting: '{{waited}} / {{window}} 秒',
@@ -1647,9 +1652,10 @@ const zhHant = {
     },
     // 五種樣子，五種下一步。索引站是精靈裡唯一可以跳過的一步，所以「沒接」不是失敗。
     problem: {
+      // M4 票 61：精靈頁 4 說了之後再說，或設定裡選了不用 Prowlarr。是選擇不是故障，所以給兩條路。
       not_configured: {
-        label: '還沒接',
-        body: '設定精靈的第 6 步跳過了 Prowlarr，所以 Berth 沒有地方可以搜。接上 Prowlarr 之後這一區塊就會動。',
+        label: '沒有接索引站',
+        body: 'Berth 沒有接索引站，所以這裡搜不到東西。可以接上 Prowlarr，或替這部作品加一個 RSS 訂閱，有新的發佈就自動下載。',
       },
       no_query: {
         label: '無法搜尋',
@@ -1675,6 +1681,8 @@ const zhHant = {
       },
       retryAt: '最早有一站放得下：',
       askAdmin: '請管理員到設定接上索引站。',
+      askAdminUnconnected: '請管理員接上 Prowlarr，或替這部作品加一個 RSS 訂閱。',
+      toSubscribe: '到 RSS 訂閱',
     },
     // M4 票 77：預算放不下的站跳過，其他站照問。
     skipped: {
@@ -2678,6 +2686,9 @@ const zhHant = {
   health: {
     title: '健康',
     failedLine: '這一輪的健康檢查沒通過：{{service}} 沒有回應，或回了錯誤。',
+    // M4 票 61：管理員選了不用它。不是故障，所以不在「修正」底下。
+    unused:
+      '管理員在設定裡選了不用 {{service}}：健康檢查不連它，作品頁的搜尋改說可以用 RSS 訂閱。要用的時候到同一頁改回來。',
     deniedChip: '沒有權限',
     denied: '設定只有管理員改得了，所以你被送到這一頁。健康頁是唯讀的診斷，每個人都看得到。',
     checking: '檢查中…',
@@ -2699,6 +2710,7 @@ const zhHant = {
       failed: '阻擋',
       unknown: '尚未檢查',
       unconfigured: '尚未接上',
+      unused: '沒有使用',
     },
     // M3 票 20：一個站一份，三個使用者共用。延後不是壞了，所以不用「錯誤」的字。
     budget: {
@@ -2806,7 +2818,27 @@ const zhHant = {
     indexerPage: {
       sites: '站',
       title: 'Prowlarr 設定',
-      lede: '加站、試搜、移除；接的是你自己的 Prowlarr 時，在這裡換網址或 key。',
+      lede: '加站、試搜、移除；接的是你自己的 Prowlarr 時，在這裡換網址或 key。也可以不用它。',
+      // M4 票 61：與精靈頁 4 的「之後再說」同一個狀態，可逆。
+      setAside: {
+        title: '不用 Prowlarr',
+        lede: '只靠 RSS 訂閱下載時可以不用索引站。選了之後健康檢查不再連它，作品頁的搜尋改說可以用 RSS 訂閱；隨時改得回來。',
+        action: '不用 Prowlarr',
+        confirm: '確定不用',
+        warning:
+          'Berth 不再拿 Prowlarr 搜尋，也不再檢查它。Prowlarr 上的站與它的容器 Berth 都不動；要停掉套件內的那一台，把 prowlarr 從 .env 的 COMPOSE_PROFILES 拿掉，再執行 docker compose stop prowlarr。',
+      },
+      unused: {
+        title: '沒有使用 Prowlarr',
+        body: '你選了不用 Prowlarr：健康檢查不連它，作品頁的搜尋改說可以用 RSS 訂閱。Prowlarr 上的站與它的容器 Berth 都沒動，改回來就照原本的設定接上。',
+        resume: '改回使用 Prowlarr',
+      },
+      // 還不知道用不用 Prowlarr 時（讀健康那一份）。
+      reading: '讀取中…',
+      usage: {
+        pending: '切換中',
+        failed: '沒有切換成功。',
+      },
     },
     tmdbPage: {
       title: 'TMDB 設定',
@@ -3630,6 +3662,10 @@ const en: Translations<typeof zhHant> = {
     },
     testing: 'Testing',
     untested: 'Not tested',
+    testedAt: 'Tested',
+    stale: 'Out of date',
+    staleResult:
+      'The last test passed, but a later health check could not connect. The cause and the fix are in the health card above; test again once it is fixed.',
     result: 'Test result',
     waitingLabel: 'Waiting',
     waiting: '{{waited}} of {{window}} seconds',
@@ -4950,8 +4986,8 @@ const en: Translations<typeof zhHant> = {
     },
     problem: {
       not_configured: {
-        label: 'Not connected',
-        body: 'Step 6 of the setup wizard skipped Prowlarr, so Berth has nowhere to search. Connect Prowlarr and this section comes alive.',
+        label: 'No indexer',
+        body: 'Berth has no indexer connected, so there is nothing to search here. Connect Prowlarr, or add an RSS subscription for this title so new releases download on their own.',
       },
       no_query: {
         label: 'Nothing to ask',
@@ -4975,6 +5011,9 @@ const en: Translations<typeof zhHant> = {
       },
       retryAt: 'The first site fits again:',
       askAdmin: 'Ask an administrator to connect an indexer in Settings.',
+      askAdminUnconnected:
+        'Ask an administrator to connect Prowlarr, or to add an RSS subscription for this title.',
+      toSubscribe: 'Go to RSS subscriptions',
     },
     skipped: {
       label: 'Not asked this time',
@@ -5918,6 +5957,8 @@ const en: Translations<typeof zhHant> = {
     title: 'Health',
     failedLine:
       'This round’s health check did not pass: {{service}} did not answer, or answered with an error.',
+    unused:
+      'An administrator chose not to use {{service}} in Settings: health checks leave it alone, and title pages say searches can go through RSS subscriptions instead. Switch it back on the same page when you need it.',
     deniedChip: 'Not allowed',
     denied:
       'Only an administrator can change the settings, so you were sent here instead. The health page is read-only diagnostics and everyone can see it.',
@@ -5940,6 +5981,7 @@ const en: Translations<typeof zhHant> = {
       failed: 'Blocked',
       unknown: 'Not checked',
       unconfigured: 'Not connected',
+      unused: 'Not used',
     },
     budget: {
       title: 'Request budget',
@@ -6049,7 +6091,25 @@ const en: Translations<typeof zhHant> = {
     indexerPage: {
       sites: 'Sites',
       title: 'Prowlarr settings',
-      lede: 'Add sites, try a search, remove what you do not want; when you run your own Prowlarr, change its address or key here.',
+      lede: 'Add sites, try a search, remove what you do not want; when you run your own Prowlarr, change its address or key here. You can also stop using it.',
+      setAside: {
+        title: 'Stop using Prowlarr',
+        lede: 'If you only download through RSS subscriptions, you do not need an indexer. Once you stop using it, health checks leave it alone and title pages say searches can go through RSS subscriptions instead. You can switch back any time.',
+        action: 'Stop using Prowlarr',
+        confirm: 'Stop using it',
+        warning:
+          'Berth stops searching Prowlarr and stops checking it. Berth leaves Prowlarr’s sites and its container alone; to stop the bundled one, remove prowlarr from COMPOSE_PROFILES in .env, then run docker compose stop prowlarr.',
+      },
+      unused: {
+        title: 'Prowlarr not in use',
+        body: 'You chose not to use Prowlarr: health checks leave it alone, and title pages say searches can go through RSS subscriptions instead. Berth did not touch Prowlarr’s sites or its container; switching back connects with the settings you had.',
+        resume: 'Use Prowlarr again',
+      },
+      reading: 'Loading…',
+      usage: {
+        pending: 'Switching',
+        failed: 'The switch did not go through.',
+      },
     },
     tmdbPage: {
       title: 'TMDB settings',

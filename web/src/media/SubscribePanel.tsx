@@ -44,6 +44,9 @@ import { RoutePicker } from './RoutePicker'
 type FeedKind = Schemas['FeedKind']
 const SOURCES: readonly FeedKind[] = ['mikan', 'nyaa', 'acgrip']
 
+/** 這一段在作品頁上的錨點。 */
+export const SUBSCRIBE_ANCHOR = 'media-subscribe'
+
 /**
  * 詳情頁的「RSS 訂閱」（M3 票 19、`.scratch/m3/subscribe-shape.md`、brief §15「從 Media 頁訂閱」）。
  *
@@ -64,7 +67,8 @@ export function SubscribePanel({ media }: { media: Media }) {
   const [said, setSaid] = useState('')
 
   return (
-    <section className="grid gap-4" aria-labelledby={headingId}>
+    // 固定的 id：搜尋區在沒有接索引站時連過來（`IndexerNotice`，M4 票 61）。
+    <section id={SUBSCRIBE_ANCHOR} className="grid gap-4" aria-labelledby={headingId}>
       <SectionHeading
         id={headingId}
         label={t('rss.subscribe.title')}

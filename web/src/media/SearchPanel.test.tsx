@@ -476,7 +476,7 @@ describe('搜尋 torrent 與結果表', () => {
     expect(within(panel()).getByText('SPY x FAMILY', { selector: 'li *' })).not.toBeVisible()
   })
 
-  it('索引站沒接時說得出下一步，而不是一張空清單（票 08 驗收）', async () => {
+  it('沒有接索引站時說得出兩條路：接 Prowlarr，或這一頁的 RSS 訂閱（票 08、M4 票 61）', async () => {
     render({
       [SEARCH_PATH]: {
         body: results({ rows: [], attempts: [], problem: 'not_configured' }),
@@ -486,15 +486,43 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText(/設定精靈的第 6 步跳過了 Prowlarr/)).toBeVisible()
+    expect(await screen.findByText(/Berth 沒有接索引站，所以這裡搜不到東西/)).toBeVisible()
+    // 是選擇不是故障：中性色塊，不是「阻擋」。
+    expect(within(panel()).getByText('沒有接索引站')).toBeVisible()
+    expect(within(panel()).queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '前往設定：Prowlarr' })).toHaveAttribute(
       'href',
       '/settings/indexers',
     )
+    expect(screen.getByRole('link', { name: '到 RSS 訂閱' })).toHaveAttribute(
+      'href',
+      '#media-subscribe',
+    )
+    expect(document.getElementById('media-subscribe')).toHaveAccessibleName('RSS 訂閱')
     expect(within(panel()).queryByRole('table')).not.toBeInTheDocument()
   })
 
-  it('索引站沒接時按下去之前就說，按了之後同一件事只說一次（票 13）', async () => {
+  it('沒有接索引站的說明在 en 也是兩條路', async () => {
+    render({
+      [SEARCH_PATH]: {
+        body: results({ rows: [], attempts: [], problem: 'not_configured' }),
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+
+      expect(await screen.findByText(/Berth has no indexer connected/)).toBeVisible()
+      expect(screen.getByRole('link', { name: 'Open Prowlarr settings' })).toBeVisible()
+      expect(screen.getByRole('link', { name: 'Go to RSS subscriptions' })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('沒有接索引站時按下去之前就說，按了之後同一件事只說一次（票 13）', async () => {
     render({
       [QUERIES_PATH]: { body: plan({ queries: ['SPY x FAMILY'], problem: 'not_configured' }) },
       [SEARCH_PATH]: {
@@ -504,16 +532,16 @@ describe('搜尋 torrent 與結果表', () => {
     renderApp('/media/tv:120089')
 
     // 還沒按：一個索引站都沒打，畫面已經說得出下一步。
-    expect(await screen.findByText(/設定精靈的第 6 步跳過了 Prowlarr/)).toBeVisible()
+    expect(await screen.findByText(/Berth 沒有接索引站/)).toBeVisible()
     expect(within(panel()).getByRole('link', { name: '前往設定：Prowlarr' })).toBeVisible()
 
     await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
 
     expect(await screen.findByText('找到 0 筆，0 個關鍵字沒問到。')).toBeInTheDocument()
-    expect(screen.getAllByText(/設定精靈的第 6 步跳過了 Prowlarr/)).toHaveLength(1)
+    expect(screen.getAllByText(/Berth 沒有接索引站/)).toHaveLength(1)
   })
 
-  it('一般使用者看到的是「請管理員…」而不是一條進不去的連結', async () => {
+  it('一般使用者看到的是「請管理員…」而不是兩條進不去的連結', async () => {
     render(
       {
         [SEARCH_PATH]: {
@@ -526,18 +554,21 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-    expect(await screen.findByText('請管理員到設定接上索引站。')).toBeVisible()
+    expect(
+      await screen.findByText('請管理員接上 Prowlarr，或替這部作品加一個 RSS 訂閱。'),
+    ).toBeVisible()
     expect(screen.queryByRole('link', { name: '前往設定：Prowlarr' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '到 RSS 訂閱' })).not.toBeInTheDocument()
   })
 
-  it('連不上索引站時也給得出「去哪裡改位址」', async () => {
+  it('連不上索引站時說人話、給「去哪裡改位址」，原文收進技術細節（M4 票 61，審計 P2-7）', async () => {
     render({
       [SEARCH_PATH]: {
         body: results({
           rows: [],
           attempts: [],
           problem: 'unreachable',
-          detail: 'GET /api/v1/search: connection refused',
+          detail: 'GET /api/v1/indexer: host does not resolve',
         }),
       },
     })
@@ -546,8 +577,36 @@ describe('搜尋 torrent 與結果表', () => {
     await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
     expect(await screen.findByText(/連不上索引站/)).toBeVisible()
-    expect(screen.getByText('GET /api/v1/search: connection refused')).toBeVisible()
+    const raw = screen.getByText('GET /api/v1/indexer: host does not resolve')
+    expect(raw).not.toBeVisible()
+    await userEvent.click(within(panel()).getByText('技術細節'))
+    expect(raw).toBeVisible()
     expect(screen.getByRole('link', { name: '前往設定：Prowlarr' })).toBeVisible()
+  })
+
+  it('連不上索引站的分層在 en 也一樣', async () => {
+    render({
+      [SEARCH_PATH]: {
+        body: results({
+          rows: [],
+          attempts: [],
+          problem: 'unreachable',
+          detail: 'GET /api/v1/indexer: host does not resolve',
+        }),
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/media/tv:120089')
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
+
+      expect(await screen.findByText(/Cannot reach the indexer/)).toBeVisible()
+      expect(screen.getByText('GET /api/v1/indexer: host does not resolve')).not.toBeVisible()
+      expect(screen.getByText('Technical details')).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 
   describe('請求預算放不下的站（M4 票 77）', () => {

@@ -86,7 +86,8 @@ file) or **Existing** (one you already run); Berth tests each choice on the spot
 3. **Library paths**: each library gets a *Route* (the path from download to library), and Berth proves with
    a real file that hardlinks work. Bundled Jellyfin starts with Movies, TV and Anime; with your own, you tick
    which libraries Berth may write to.
-4. **Prowlarr**: add the recommended public indexers with one press, or use your own. You can skip this.
+4. **Prowlarr**: add the recommended public indexers with one press, or use your own. You can skip this, and
+   you can stop using Prowlarr later under Settings → Prowlarr (RSS subscriptions keep working).
 5. **TMDB**: paste your key. It must pass the test.
 6. **Finish**: what you skipped and where to finish it.
 

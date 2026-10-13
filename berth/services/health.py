@@ -63,6 +63,11 @@ logger = logging.getLogger(__name__)
 #: 是那條驗收的上限——調大就違約了。
 CHECK_INTERVAL = timedelta(minutes=5)
 
+#: 連不上 Prowlarr 時，下一次只重測它的間隔（M4 票 61，審計 P1-2）。迴圈每 30 秒醒一次，所以實際是
+#: 30 到 60 秒。只給 Prowlarr：另外兩台牽動 Route 那一項，qBittorrent 重試登入還會重算封鎖時間
+#: （brief §20.2）；理由在票 61 的 Comments。
+RECHECK_INTERVAL = timedelta(seconds=30)
+
 Status = Literal["ok", "degraded"]
 
 
@@ -90,6 +95,9 @@ class ServiceHealthView:
     unsupported: bool
     #: Jellyfin 的媒體庫數量（票 21）。其餘服務沒有這個數字，一律是 `None`。
     library_count: int | None
+    #: 管理員選了不用它（Prowlarr 的「不用 Prowlarr」，就是精靈頁 4 的「之後再說」，M4 票 61）。
+    #: 讀的時候從選擇算，不看紀錄：選下去的那一刻就不阻擋，不必等下一輪蓋掉那一格的紅燈。
+    unused: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +158,7 @@ async def read_health(session: AsyncSession) -> HealthReport:
         ServiceKind.PROWLARR: (await read_settings(session, IndexerSettings)).base_url,
     }
     return HealthReport(
-        degraded=_degraded(health, routes_status),
+        degraded=_degraded(health, routes_status, setup),
         checked_at=health.checked_at,
         services=tuple(
             _view(kind, health.services.get(kind) or ServiceHealth(), setup, urls[kind])
@@ -186,7 +194,8 @@ async def overall_status(session: AsyncSession) -> Status:
     為它去連四個地方。**還沒檢查過不是降級**——降級的意思是有東西已知壞了。
     """
     health = await read_settings(session, HealthSettings)
-    return "degraded" if _degraded(health, await routes_health(session)) else "ok"
+    setup = await read_settings(session, SetupSettings)
+    return "degraded" if _degraded(health, await routes_health(session), setup) else "ok"
 
 
 async def is_due(
@@ -197,6 +206,22 @@ async def is_due(
     if health.checked_at is None:
         return True
     return (now or utcnow()) - health.checked_at >= interval
+
+
+async def recheck_due(session: AsyncSession, *, now: datetime) -> bool:
+    """還沒到整輪、但該先重測 Prowlarr 了（M4 票 61）：上一次連不上、而且已經過了
+    `RECHECK_INTERVAL`。不用它的不算——它不該被連。"""
+    health = await read_settings(session, HealthSettings)
+    setup = await read_settings(session, SetupSettings)
+    row = health.services.get(ServiceKind.PROWLARR)
+    if (
+        row is None
+        or row.status is not HealthStatus.FAILED
+        or row.checked_at is None
+        or _unused(ServiceKind.PROWLARR, setup)
+    ):
+        return False
+    return now - row.checked_at >= RECHECK_INTERVAL
 
 
 async def check_health(
@@ -446,12 +471,14 @@ async def _check_qbittorrent(session: AsyncSession, factory: ServiceClientFactor
 
 
 async def _check_indexer(session: AsyncSession, factory: ServiceClientFactory) -> _Outcome:
-    """索引站還搜得動、Prowlarr 夠新。第 6 步可以跳過，所以沒填位址是 `unknown` 而不是紅燈。
+    """索引站還搜得動、Prowlarr 夠新。頁 4 可以跳過，所以沒填位址是 `unknown` 而不是紅燈；
+    選了不用它（M4 票 61）也是，而且不連它——它可能根本沒在跑。
 
     版本太舊與精靈同一句（`indexer.outdated_step`，M4 票 17）：原文說出目前版本與下限。
     """
     settings = await read_settings(session, IndexerSettings)
-    if not settings.base_url:
+    setup = await read_settings(session, SetupSettings)
+    if not settings.base_url or _unused(ServiceKind.PROWLARR, setup):
         return _Outcome(HealthStatus.UNKNOWN, configured=False)
 
     step = await probe_indexer(factory, settings.base_url, settings.api_key)
@@ -496,13 +523,20 @@ def _view(
         banned=health.banned,
         unsupported=health.unsupported,
         library_count=health.library_count,
+        unused=_unused(kind, setup),
     )
 
 
-def _degraded(health: HealthSettings, routes: HealthStatus) -> bool:
-    """任何一項**已知**壞了就是降級；`unknown` 不算（還沒檢查過、要重新檢查、或跳過了那一步）。"""
+def _unused(kind: ServiceKind, setup: SetupSettings) -> bool:
+    return kind is ServiceKind.PROWLARR and setup.indexer.skipped
+
+
+def _degraded(health: HealthSettings, routes: HealthStatus, setup: SetupSettings) -> bool:
+    """任何一項**已知**壞了就是降級；`unknown` 不算（還沒檢查過、要重新檢查、或跳過了那一步）。
+    不用的那一項也不算，紀錄還是紅的也一樣（M4 票 61）。"""
     return routes is HealthStatus.FAILED or any(
-        row.status is HealthStatus.FAILED for row in health.services.values()
+        row.status is HealthStatus.FAILED and not _unused(kind, setup)
+        for kind, row in health.services.items()
     )
 
 

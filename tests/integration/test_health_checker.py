@@ -17,7 +17,7 @@ from berth.db import create_session_factory
 from berth.domain import HealthStatus, ServiceKind
 from berth.models import HealthSettings
 from berth.pipeline.health import HealthChecker
-from berth.services.health import CHECK_INTERVAL, check_health
+from berth.services.health import CHECK_INTERVAL, RECHECK_INTERVAL, check_health
 from berth.services.settings import read_settings
 from berth.services.setup import complete_setup
 from tests.integration.arrange import NOW
@@ -128,6 +128,25 @@ class TestWhenItRuns:
 
         stored = await read_settings(session, HealthSettings)
         assert stored.services[ServiceKind.PROWLARR].status is HealthStatus.FAILED
+
+    async def test_a_prowlarr_that_came_back_turns_green_without_waiting_out_the_round(
+        self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 61（審計 P1-2）：連不上 Prowlarr 之後只重測它，不等滿 5 分鐘、也不重跑整輪。"""
+        factory = await ready(session, roots)
+        await finish(session)
+        clock = Clock(NOW)
+        loop = await checker(engine, factory, clock=clock)
+        factory.prowlarr_.ping_error = ServiceUnavailableError("connection refused")
+        await loop.check_once()
+
+        factory.prowlarr_.ping_error = None
+        clock.now = NOW + RECHECK_INTERVAL
+        assert await loop.check_once() is True
+
+        stored = await read_settings(session, HealthSettings)
+        assert stored.services[ServiceKind.PROWLARR].status is HealthStatus.OK
+        assert stored.checked_at == NOW, "整輪的時間不動：Route 與另外兩台沒有重跑"
 
 
 class TestTheLoop:

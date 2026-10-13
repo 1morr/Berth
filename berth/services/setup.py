@@ -137,6 +137,8 @@ class ServiceView:
     auth_failures: int
     #: 套件內那一台還在啟動時，這一輪已經等了幾秒。
     waited_seconds: int
+    #: 這一次測試的時間（`ServiceTest.checked_at`）；還沒測過是 `None`。
+    checked_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,7 +430,7 @@ async def choose_service(
             factory, kind, candidate, setup, data_root=await _data_root(session)
         )
     if origin is ServiceOrigin.EXISTING and tested is not None and not _accepted(kind, tested):
-        raise await _refused(session, kind, base_url, tested)
+        raise await _refused(session, kind, base_url, tested, moment)
     if moved and owned_jellyfin and tested is not None and not tested.server_id:
         # 套件內那一台的 compose 位址換了（改了 `.env` 的 port）而新位址不回答：認不出是不是同一台。
         # 既有的走不到這裡——沒回答 ServerId 的測試都不是 `ok`，上面就拒了。
@@ -579,7 +581,7 @@ def _accepted(kind: ServiceKind, outcome: _Outcome) -> bool:
 
 
 async def _refused(
-    session: AsyncSession, kind: ServiceKind, base_url: str, outcome: _Outcome
+    session: AsyncSession, kind: ServiceKind, base_url: str, outcome: _Outcome, now: datetime
 ) -> ConnectionFailedError:
     """測不過的那一次：只記連錯的次數，結論跟著拒絕回去（`ConnectionFailedError`）。"""
     failures = 0
@@ -602,6 +604,7 @@ async def _refused(
             error=outcome.error,
             auth_failures=failures,
             waited_seconds=0,
+            checked_at=now,
         )
     )
 
@@ -1184,4 +1187,5 @@ def _view(
         if kind is ServiceKind.QBITTORRENT
         else 0,
         waited_seconds=max(int(waited.total_seconds()), 0),
+        checked_at=test.checked_at if test is not None else None,
     )

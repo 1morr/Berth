@@ -269,6 +269,8 @@ class TestChoice:
 
         assert response.status_code == 200
         row = next(r for r in response.json()["services"] if r["kind"] == "qbittorrent")
+        # 測試時間是那一刻的時鐘（M4 票 61），只看它有。
+        assert row.pop("checked_at")
         assert row == {
             "kind": "qbittorrent",
             "origin": "bundled",

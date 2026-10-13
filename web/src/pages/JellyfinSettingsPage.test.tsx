@@ -150,13 +150,14 @@ describe('設定 → Jellyfin', () => {
     renderApp('/settings/jellyfin')
 
     const connection = within(await screen.findByRole('region', { name: '連線' }))
-    // 來源、位址、版本、狀態四列；選不了的卡片不畫。
+    // 來源、位址、版本、狀態與測試時間（M4 票 61）；選不了的卡片不畫。
     const summary = within((await connection.findByText('來源')).closest('dl')!)
     expect(summary.getAllByRole('term').map((term) => term.textContent)).toEqual([
       '來源',
       '位址',
       '版本',
       '狀態',
+      '測試於',
     ])
     expect(summary.getByText('套件內')).toBeInTheDocument()
     expect(summary.getByText('jellyfin:8096')).toBeInTheDocument()
