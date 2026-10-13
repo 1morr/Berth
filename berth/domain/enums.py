@@ -1258,6 +1258,9 @@ class BerthPathFailure(StrEnum):
     JELLYFIN_CANNOT_SEE = "jellyfin_cannot_see"
     #: Jellyfin 連不上或拒絕了這一支。原文在 `error`。
     JELLYFIN = "jellyfin"
+    #: 那條路徑已經是另一個媒體庫的（兩個名字算出同一個 slug，M4 票 64）：同一個資料夾給兩個媒體庫，
+    #: 兩邊會掃到同一批檔案。佔著它的媒體庫名在 `error`。
+    PATH_TAKEN = "path_taken"
 
 
 class BundledLibraryRefusal(StrEnum):

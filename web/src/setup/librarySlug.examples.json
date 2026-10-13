@@ -1,0 +1,26 @@
+{
+  "_comment": "媒體庫名 → slug 的例子（M4 票 64）。後端 `library_slug`（tests/unit/test_library_slug.py）與前端 `librarySlug`（newLibrary.test.ts）讀同一份；放在 web/src 底下是因為 vite 不讓測試讀前端根目錄以外的檔：前端算的是畫面上的資料夾，兩邊一分岔，按下去建的就不是畫面上那一條。",
+  "cases": [
+    ["TV Shows", "tv-shows"],
+    ["Kids  TV", "kids-tv"],
+    ["Anime / Old", "anime-old"],
+    ["TV: Kids ", "tv-kids"],
+    ["動畫　劇集", "動畫-劇集"],
+    ["電視劇（華語）", "電視劇（華語）"],
+    ["節目", "節目"],
+    ["アニメ", "アニメ"],
+    ["ドラマ 2024", "ドラマ-2024"],
+    ["AC/DC", "ac-dc"],
+    ["電影:4K", "電影-4k"],
+    ["a\u0001b", "a-b"],
+    ["Movies", "movies"],
+    ["a--b", "a--b"],
+    ["", "berth"],
+    ["...", "berth"]
+  ],
+  "collisions": [
+    ["TV Shows", "tv-shows", "TV-Shows"],
+    ["Movies", "Movies?"],
+    ["/", "?", "..."]
+  ]
+}

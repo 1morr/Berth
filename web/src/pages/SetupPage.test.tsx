@@ -171,9 +171,11 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     // 再 up -d 停不掉它（M4 票 36，brief §20.14）。
     expect(screen.getByText('COMPOSE_PROFILES=qbittorrent,prowlarr')).toBeInTheDocument()
     expect(screen.getByText('docker compose stop jellyfin')).toBeInTheDocument()
-    // 條件：只能是 /data；既有 Jellyfin 要先有媒體庫（Berth 不替它建）。
+    // 條件：只能是 /data；缺的媒體庫頁 3 勾了才建（M4 票 64）。
     expect(screen.getByText(/只能是 \/data/)).toBeInTheDocument()
-    expect(screen.getByText(/它要先有對應類型的媒體庫/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/缺電影或劇集媒體庫的話，頁 3 可以勾「新建一個媒體庫」/),
+    ).toBeInTheDocument()
     expect(requestsOf(fetchStub).some((request) => request.startsWith('POST'))).toBe(false)
 
     await user.type(address, 'http://nas:8096')

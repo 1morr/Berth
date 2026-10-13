@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -288,6 +288,53 @@ def check_bundled_libraries(
     return cleaned
 
 
+@dataclass(frozen=True, slots=True)
+class LibraryRequest:
+    """既有 Jellyfin 頁 3 勾了要新建的一個媒體庫（M4 票 64）。
+
+    資料夾不給選：`<library root>/<slug>`，與「加入 Berth 路徑」同一個算法。
+    """
+
+    name: str
+    collection_type: CollectionType
+
+
+def check_new_libraries(
+    rows: Sequence[LibraryRequest], libraries: Sequence[SetupLibrary], library_root: str
+) -> tuple[BundledLibrary, ...]:
+    """既有 Jellyfin 新建媒體庫的規則（M4 票 64）。不成立就丟 `BundledLibraryRejectedError`。
+
+    **與那台已有的同名就是它**，交給 `_already_built` 略過（重按不長出 `電影2`）；只差大小寫的擋下，
+    Jellyfin 會建出兩個看起來一樣的。**資料夾已經是別的媒體庫的路徑也擋**：名字不同、slug 相同
+    （`Movies?` 與 `Movies`）時兩個媒體庫會掃同一批檔案。前端的新建列照同一組規則擋。
+    """
+    names: set[str] = set()
+    folders: set[str] = set()
+    cleaned: list[BundledLibrary] = []
+    for index, row in enumerate(rows):
+        name = row.name.strip()
+        folder = library_slug(name)
+        path = bundled_path(folder, library_root)
+        reason: BundledLibraryRefusal | None = None
+        if not name:
+            reason = BundledLibraryRefusal.NAME_MISSING
+        elif name.casefold() in names or any(
+            library.name != name and library.name.casefold() == name.casefold()
+            for library in libraries
+        ):
+            reason = BundledLibraryRefusal.NAME_TAKEN
+        elif folder.casefold() in folders or path_holder(libraries, name, path) is not None:
+            reason = BundledLibraryRefusal.FOLDER_TAKEN
+        if reason is not None:
+            raise BundledLibraryRejectedError(reason, f"{name!r} → {path!r}", row=index)
+        names.add(name.casefold())
+        folders.add(folder.casefold())
+        cleaned.append(
+            BundledLibrary(name=name, collection_type=row.collection_type, folder=folder)
+        )
+    return tuple(cleaned)
+
+
 #: 資料夾要是 `library_root` 底下的一層（票 06f）：有分隔符號、或整個是 `.` / `..`，就跳出去
 #: 或往下鑽了。往下鑽也擋：`tv` 與 `tv/anime` 兩個媒體庫會重複掃到同一批檔案。
 _OUTSIDE_ROOT = re.compile(r"[/\\]|^\.{1,2}$")
@@ -323,7 +370,8 @@ def _on_jellyfin(setup: SetupSettings, library_root: str) -> tuple[BundledLibrar
 
 
 def libraries_built(setup: SetupSettings, library_root: str) -> bool:
-    """套件內清單的每一列都在 Jellyfin 上了：頁 3 的前半（M4 票 24）。既有的那一台不建媒體庫。
+    """套件內清單的每一列都在 Jellyfin 上了：頁 3 的前半（M4 票 24）。既有的那一台沒有清單
+    （它只建頁 3 勾了的那一個，`create_libraries`，不算這一頁的前提）。
 
     **看快照，不看「建媒體庫那一步有沒有跑過」**：保留 Jellyfin、只清 Berth 重跑時清單全部已建立，
     前端照剖面的「已建立」（`_on_jellyfin`，同一條）不呼叫 bootstrap，那一步就永遠沒有結果。
@@ -454,14 +502,35 @@ async def bootstrap_jellyfin(
 ) -> JellyfinSetupStatus:
     """套件內路徑的媒體庫與路徑頁：建使用者列的媒體庫。重按只補建還沒建的那幾個。
 
-    **只對選了套件內的那一台**（`ValueError`）：既有 Jellyfin 絕不自動建媒體庫（brief §16.4）。
+    **只對選了套件內的那一台**（`ValueError`）：既有 Jellyfin 只建頁 3 勾了的那一個
+    （`create_libraries`，brief §16.4）。
     """
     setup = await read_settings(session, SetupSettings)
     if setup.origin_of(ServiceKind.JELLYFIN) is not ServiceOrigin.BUNDLED:
         raise ValueError(
-            "this Jellyfin is an existing service; Berth does not create libraries on it"
+            "this Jellyfin is an existing service; Berth creates only the library ticked on page 3"
         )
     status, _ = await _run(session, factory, BERTH_STEPS)
+    return status
+
+
+async def create_libraries(
+    session: AsyncSession, factory: ServiceClientFactory, *, libraries: Sequence[LibraryRequest]
+) -> JellyfinSetupStatus:
+    """既有 Jellyfin 的「新建一個媒體庫」：使用者在頁 3 勾了才建（M4 票 64，brief §19 E1）。
+
+    新建的媒體庫是獨立物件，刪掉它不動使用者原有的任何東西，所以算 Berth 擁有的物件（brief §16.4）。
+    與套件內建清單**同一條路徑**（`_Runner._libraries`）：同名的已經在就略過，`libraries` 那一步的
+    成敗照樣記，前端照它決定往不往下走。規則不成立是 `BundledLibraryRejectedError`；套件內那一台
+    （它照清單建，`bootstrap_jellyfin`）或還沒選來源是 `ValueError`。
+    """
+    setup = await read_settings(session, SetupSettings)
+    _require_choice(setup)
+    if setup.origin_of(ServiceKind.JELLYFIN) is ServiceOrigin.BUNDLED:
+        raise ValueError("this Jellyfin is bundled; Berth builds the libraries on its list")
+    paths = await read_settings(session, PathSettings)
+    rows = check_new_libraries(libraries, setup.jellyfin.libraries, paths.library_root)
+    status, _ = await _run(session, factory, (JellyfinStep.LIBRARIES,), libraries=rows)
     return status
 
 
@@ -510,7 +579,11 @@ async def add_berth_paths(
     try:
         libraries = await client.libraries()
         for name in library_names:
-            results.append(await _add_berth_path(client, libraries, name, paths.library_root))
+            result = await _add_berth_path(client, libraries, name, paths.library_root)
+            results.append(result)
+            if result.status is StepStatus.OK:
+                # 這一輪後面的媒體庫要看得到它：slug 相同的兩個不會都拿到這一條（M4 票 64）。
+                libraries = _with_location(libraries, name, result.path)
         libraries = await client.libraries()
     except ServiceError as exc:
         # 一開始就問不到媒體庫：沒試到的每一個都記成同一個原因，畫面照樣逐個說。
@@ -573,6 +646,12 @@ async def _add_berth_path(
             library=library_name, path=path, status=StepStatus.FAILED, reason=reason, error=error
         )
 
+    # 同一個資料夾不給第二個媒體庫（M4 票 64）：「TV Shows」與「TV-Shows」的 slug 一樣，兩個都加上
+    # 的話兩邊掃同一批檔案。在建目錄之前擋，那個目錄是佔著它的媒體庫的。
+    holder = path_holder(libraries, library_name, path)
+    if holder is not None:
+        return failed(BerthPathFailure.PATH_TAKEN, f"{path} is already a path of {holder!r}")
+
     directory = Path(path)
     created = missing_directories(directory)
     try:
@@ -601,6 +680,28 @@ async def _add_berth_path(
             "for a file Berth had just written there",
         )
     return BerthPathResult(library=library_name, path=path, status=StepStatus.OK)
+
+
+def path_holder(
+    libraries: Sequence[SetupLibrary | JellyfinLibrary], name: str, path: str
+) -> str | None:
+    """這條路徑已經是哪一個**別的**媒體庫的（M4 票 64）；沒有是 `None`。
+
+    同一個資料夾不給第二個媒體庫：兩邊會掃到同一批檔案。
+    """
+    return next((row.name for row in libraries if row.name != name and path in row.locations), None)
+
+
+def _with_location(
+    libraries: Sequence[JellyfinLibrary], name: str, path: str
+) -> tuple[JellyfinLibrary, ...]:
+    """快照上這個媒體庫多了一條路徑（已經有就原樣）。"""
+    return tuple(
+        replace(row, locations=(*row.locations, path))
+        if row.name == name and path not in row.locations
+        else row
+        for row in libraries
+    )
 
 
 class InterfaceLoginRejectedError(Exception):
@@ -651,7 +752,9 @@ async def _run(
     credentials: tuple[str, str] | None = None,
     startup: JellyfinStartup = DEFAULT_STARTUP,
     target: JellyfinTarget | None = None,
+    libraries: Sequence[BundledLibrary] | None = None,
 ) -> tuple[JellyfinSetupStatus, _Runner]:
+    """`libraries` 是建媒體庫那一步要建的；沒給就是套件內存下的清單。"""
     setup = await read_settings(session, SetupSettings)
     jellyfin = await read_settings(session, JellyfinSettings)
     paths = await read_settings(session, PathSettings)
@@ -663,7 +766,7 @@ async def _run(
         client,
         jellyfin,
         paths,
-        setup.jellyfin.bundled,
+        setup.jellyfin.bundled if libraries is None else libraries,
         server_name=BUNDLED_SERVER_NAME if origin is ServiceOrigin.BUNDLED else None,
         credentials=credentials,
         startup=startup,

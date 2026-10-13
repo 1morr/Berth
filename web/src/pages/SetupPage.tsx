@@ -18,6 +18,7 @@ import {
   claimOwner,
   completeSetup,
   composeQueryOptions,
+  createLibraries,
   apiKeyFailed,
   connectJellyfin,
   indexerSetupQueryOptions,
@@ -301,11 +302,25 @@ export function SetupPage() {
         if (unbuilt && !(await stepThrough(bootstrapJellyfin()))) return null
         return buildRoutes([])
       }
+      // 勾了的新媒體庫先建（M4 票 64），它的 Route 要等它在 Jellyfin 上了才建得出來。
+      const { newLibrary } = plan
+      if (
+        newLibrary &&
+        !(await stepThrough(
+          createLibraries([{ name: newLibrary.name, collection_type: newLibrary.collection_type }]),
+        ))
+      ) {
+        return null
+      }
       // 一次送全部：後端逐個試、逐個回報（M4 票 19），有一個沒加上就不建 Route。
       if (plan.newPaths.length > 0 && !(await stepThrough(addLibraryPaths(plan.newPaths)))) {
         return null
       }
-      return buildRoutes(plan.selections)
+      // 新媒體庫的寫入目標就是畫面上那一條（`<library root>/<slug>`）。Jellyfin 上的對不上（例如按下之前那台
+      // 冒出一個同名的、Berth 照「同名就是它」略過），建 Route 那一步就退回 `target_not_in_library`，不會
+      // 寫進別人的資料夾。
+      const built = newLibrary ? [{ library: newLibrary.name, target_path: newLibrary.path }] : []
+      return buildRoutes([...plan.selections, ...built])
     },
     onSuccess: async (next) => {
       // 輪詢進度的那一支可能還在路上（M4 票 43）：它讀到的是跑完之前的樣子，晚到就會蓋掉結果。
@@ -675,7 +690,7 @@ export function SetupPage() {
             }}
             docking={dock.isPending}
             startedOnItsOwn={dock.variables?.origin === 'bundled' && !!dock.variables.onItsOwn}
-            failure={dockFailure(dock.error)}
+            failure={dockFailure(dock.error, routes.data.origin)}
             onDock={(plan) => dock.mutate(plan)}
             onSaveLibraries={(libraries) => saveLibraries.mutate(libraries)}
             savingLibraries={saveLibraries.isPending}
@@ -826,8 +841,14 @@ function Waiting({ error, message, nav }: { error: unknown; message: string; nav
  * 「建立並檢查」沒走完的那一種。清單被擋下來不算（清單自己說，`librariesFailure`）；建 Route 途中有一條
  * 被另一個分頁刪掉說得出原因（M2 票 01）；其餘是請求沒走完。
  */
-function dockFailure(error: unknown): DockFailure | null {
-  if (error === null || error === undefined || bundledRefusalOf(error)) return null
+function dockFailure(error: unknown, origin: ServiceOrigin): DockFailure | null {
+  if (error === null || error === undefined) return null
+  const listRefusal = bundledRefusalOf(error)
+  if (listRefusal) {
+    // 既有 Jellyfin 的新建那一列被擋（M4 票 64）：畫面按之前就用同一組規則擋過，到得了這裡的是那台
+    // 在這之間多了同名的。套件內的清單自己說（`librariesFailure`）。
+    return origin === 'existing' ? { kind: 'newLibrary', refusal: listRefusal } : null
+  }
   const refusal = routeRefusalOf(error)
   if (refusal?.reason === 'route_missing') return { kind: 'route_missing' }
   if (refusal && refusal.reason in BUILD_REFUSAL) {

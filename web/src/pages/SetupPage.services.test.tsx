@@ -215,7 +215,9 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.getByText('COMPOSE_PROFILES=jellyfin,prowlarr')).toBeInTheDocument()
     expect(screen.getByText('docker compose stop qbittorrent')).toBeInTheDocument()
     // 媒體庫那一條只對 Jellyfin 說。
-    expect(screen.queryByText(/它要先有對應類型的媒體庫/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/缺電影或劇集媒體庫的話，頁 3 可以勾「新建一個媒體庫」/),
+    ).not.toBeInTheDocument()
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
     expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
 

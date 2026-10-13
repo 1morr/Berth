@@ -225,7 +225,7 @@ const zhHant = {
       // 照實說會加什麼、什麼時候加。
       adds: {
         jellyfin:
-          '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。入庫之後 Berth 會請它去看那條路徑：平常只刷新那個媒體庫，但它還沒在那條路徑底下列出過任何東西時（第一次入庫），會跑整台的「掃描媒體庫」，你其他的媒體庫也會一起被掃。',
+          '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）；你在頁 3 勾了「新建一個媒體庫」才替你建那一個。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。入庫之後 Berth 會請它去看那條路徑：平常只刷新那個媒體庫，但它還沒在那條路徑底下列出過任何東西時（第一次入庫），會跑整台的「掃描媒體庫」，你其他的媒體庫也會一起被掃。',
         qbittorrent:
           '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
         prowlarr: '只加你在頁 4 勾起來的站；原本的站不動。',
@@ -233,7 +233,7 @@ const zhHant = {
       sameHost:
         '條件：它與 Berth 在同一台主機，而且把 Berth 的 DATA_ROOT 也掛在容器路徑 /data——只能是 /data，Berth 的下載與媒體庫目錄固定在它底下。原本的掛載不用動，多加這一條就好。DATA_ROOT 要在建得了硬鏈接的檔案系統上（exFAT、網路磁碟、mergerfs 不行）；另一台 NAS 上的接不上。',
       library:
-        '它要先有對應類型的媒體庫（電影、劇集）：Berth 不替你的 Jellyfin 建媒體庫，只在頁 3 替勾選的媒體庫加一條路徑。',
+        '原本的媒體庫 Berth 只在頁 3 替勾選的加一條路徑。缺電影或劇集媒體庫的話，頁 3 可以勾「新建一個媒體庫」讓 Berth 建一個——它在你的伺服器上，所有使用者都看得到，不勾就不建。',
       profiles:
         '選了既有，套件內那一台用不到了：把 .env 的 COMPOSE_PROFILES 換成第一行（{{kind}} 不在裡面），再用第二行停掉已經在跑的那一台——只改 COMPOSE_PROFILES 再 docker compose up -d 停不掉它。忘了也不致命。',
       floor: {
@@ -538,6 +538,8 @@ const zhHant = {
           'Jellyfin 沒有收下這一條（原文在上面）。確認它還連得上、Berth 的 API key 還有效，再按一次。',
         library_missing:
           'Jellyfin 上已經沒有「{{library}}」這個媒體庫了。按「重新讀取 Jellyfin 媒體庫」看它現在有哪些。',
+        path_taken:
+          '{{path}} 已經是另一個媒體庫的資料夾了（它的名字算出同一個資料夾，是誰寫在技術細節裡）。同一個資料夾給兩個媒體庫，兩邊會掃到同一批檔案，所以沒加。替「{{library}}」改選它原本的一條路徑當寫入目標，或在 Jellyfin 改一個名字再回來。',
       },
     },
     fix: {
@@ -854,10 +856,33 @@ const zhHant = {
       bundled:
         '你列的每一個媒體庫各成為一條 Route：下載完成後硬鏈接到它的寫入目標。建好之後實際鏈接一個檔案，確認三個容器看到同一個檔案系統。第一次來、清單還是預設的時候，進這一頁就建立並檢查；改過清單就等你按「建立並檢查」。',
       existing:
-        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標。Berth 只往你選的那一條寫，同一個媒體庫的其他路徑維持唯讀；不想讓它寫進你既有的資料夾，選「新的 Berth 路徑」，按「建立並檢查」時才加到 Jellyfin。進這一頁不會動任何東西。',
+        '勾選要交給 Berth 寫入的媒體庫，每個選一條寫入目標；電影與劇集類型的已經先勾好，不要的取消。Berth 只往你選的那一條寫，同一個媒體庫的其他路徑維持唯讀；不想讓它寫進你既有的資料夾，選「新的 Berth 路徑」，按「建立並檢查」時才加到 Jellyfin。缺某一種媒體庫，可以在清單最後新建一個。進這一頁不會動任何東西。',
     },
-    empty:
-      '這台 Jellyfin 一個媒體庫都沒有。先在 Jellyfin 建一個再回來，Berth 才有地方寫入。Berth 不會替你的伺服器建媒體庫。',
+    empty: '這台 Jellyfin 一個媒體庫都沒有。在下面新建一個，Berth 才有地方寫入。',
+    // 既有 Jellyfin 的「新建一個媒體庫」（M4 票 64）：勾了才建，建在使用者的伺服器上。
+    newLibrary: {
+      tick: '在這台 Jellyfin 新建一個媒體庫',
+      badge: '新建',
+      when: '這台 Jellyfin 還沒有合適的媒體庫（例如只有劇集、你要下載電影）時，勾這裡讓 Berth 建一個。',
+      visible:
+        '這個媒體庫建在你的 Jellyfin 上，伺服器上所有使用者都看得到。之後要改名或刪除，到 Jellyfin 的「控制台 → 媒體庫」做；刪掉它不會動到你原有的媒體庫。',
+      defaultName: {
+        movies: '電影',
+        tvshows: '劇集',
+      },
+      folderHint: '跟著名稱算，Berth 只往這裡寫。',
+      problem: {
+        name_missing: '名稱要填。',
+        name_taken:
+          '這台 Jellyfin 已經有「{{holder}}」了（不分大小寫）：在上面勾它就好，或換一個名稱。',
+        folder_taken:
+          '{{path}} 已經是「{{holder}}」的資料夾：兩個媒體庫會掃到同一批檔案。換一個名稱。',
+      },
+      refused:
+        '沒有新建：按下去的那一刻，這台 Jellyfin 已經有只差大小寫的同名媒體庫、或那個資料夾已經是別的媒體庫的（多半是在 Jellyfin 那邊剛改過）。按「重新讀取 Jellyfin 媒體庫」再看一次。',
+      step: '在 Jellyfin 新建媒體庫',
+      fix: '確認 Jellyfin 還連得上、Berth 的 API key 還有效，再按一次「建立並檢查」；已經建好的不會建第二次。也可以自己到 Jellyfin 的「控制台 → 媒體庫」建，回來按「重新讀取 Jellyfin 媒體庫」。',
+    },
     readFailed: '讀不到媒體庫清單。',
     docking: '建立並檢查中…',
     list: '這一頁的 Route',
@@ -901,6 +926,9 @@ const zhHant = {
       listBlocked: '清單有標紅的格子，改好才能建立。',
       pickOne: '還差一步：勾一個媒體庫。',
       pickTarget: '還差一步：替「{{library}}」選一條寫入目標。',
+      newLibrary:
+        '在你的 Jellyfin 新建媒體庫「{{name}}」，資料夾 {{path}}（伺服器上所有使用者都看得到）',
+      newLibraryBlocked: '還差一步：新建的媒體庫有標紅的格子。',
       retryHint: '手動做完之後再按一次「建立並檢查」，已經建好的不會建第二次。',
     },
     recheck_one: '重新檢查 {{count}} 條 Route',
@@ -3535,7 +3563,7 @@ const en: Translations<typeof zhHant> = {
       lede: 'The {{service}} you already run. Berth leaves your settings alone and {{adds}}',
       adds: {
         jellyfin:
-          'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay). If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth asks it to look at that path: normally by refreshing just that library, but while it has never listed anything under the path (the first import), by running its whole-server Scan Media Library, which scans your other libraries too.',
+          'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay); it creates a library only if you tick “Create a new library” on page 3. If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth asks it to look at that path: normally by refreshing just that library, but while it has never listed anything under the path (the first import), by running its whole-server Scan Media Library, which scans your other libraries too.',
         qbittorrent:
           'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
         prowlarr: 'only adds the sites you tick on page 4; the sites already there stay.',
@@ -3543,7 +3571,7 @@ const en: Translations<typeof zhHant> = {
       sameHost:
         'Condition: it runs on the same host as Berth and also mounts Berth’s DATA_ROOT at the container path /data — it has to be /data, since Berth’s download and library folders sit underneath it. Its existing mounts stay as they are; adding this one is enough. DATA_ROOT has to be on a file system that supports hard links (not exFAT, a network share or mergerfs); one on another NAS cannot be connected.',
       library:
-        'It needs libraries of the matching types (movies, shows) already: Berth does not create libraries on your Jellyfin, it only adds a path to the ones you tick on page 3.',
+        'On your existing libraries Berth only adds one path, to the ones you tick on page 3. Missing a movie or show library? Tick “Create a new library” on page 3 and Berth creates one — on your server, visible to every user, and only if you tick it.',
       profiles:
         'With an existing one, the bundled one is not needed: replace COMPOSE_PROFILES in .env with the first line ({{kind}} is left out), then stop the one already running with the second — changing COMPOSE_PROFILES and running docker compose up -d does not stop it. Forgetting is not fatal.',
       floor: {
@@ -3868,6 +3896,8 @@ const en: Translations<typeof zhHant> = {
           'Jellyfin did not take this path (its reply is above). Check that it is still reachable and that Berth’s API key is still valid, then press again.',
         library_missing:
           'Jellyfin no longer has a library named “{{library}}”. Press “Read the Jellyfin libraries again” to see what it has now.',
+        path_taken:
+          '{{path}} is already the folder of another library (its name works out to the same folder; which one is in the technical details). Two libraries on one folder both scan the same files, so it was not added. Pick one of “{{library}}”’s own paths as the write target, or rename it in Jellyfin and come back.',
       },
     },
     fix: {
@@ -4194,10 +4224,32 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'Each library you list becomes a route: finished downloads are hard-linked into its write target. Once built, a real file is linked to prove all three containers see one file system. On your first visit with the default list, building and checking starts as you arrive; once you change the list, it waits for “Build and check”.',
       existing:
-        'Tick the libraries Berth may write into and pick one write target for each. Berth writes only to the path you pick; the library’s other paths stay read-only. To keep Berth out of your existing folders, pick “new Berth path” — it is added to Jellyfin when you press “Build and check”. Arriving here changes nothing.',
+        'Tick the libraries Berth may write into and pick one write target for each; movie and show libraries come ticked, untick any you do not want. Berth writes only to the path you pick; the library’s other paths stay read-only. To keep Berth out of your existing folders, pick “new Berth path” — it is added to Jellyfin when you press “Build and check”. Missing a kind of library? Create one at the end of the list. Arriving here changes nothing.',
     },
-    empty:
-      'This Jellyfin has no libraries. Create one in Jellyfin and come back, so Berth has somewhere to write. Berth does not create libraries on your server.',
+    empty: 'This Jellyfin has no libraries. Create one below so Berth has somewhere to write.',
+    newLibrary: {
+      tick: 'Create a new library on this Jellyfin',
+      badge: 'New',
+      when: 'When this Jellyfin has no library that fits (only shows, say, and you want movies), tick this and Berth creates one.',
+      visible:
+        'This library is created on your Jellyfin and every user on the server can see it. Rename or delete it later under Jellyfin’s Dashboard → Libraries; deleting it leaves your other libraries alone.',
+      defaultName: {
+        movies: 'Movies',
+        tvshows: 'Shows',
+      },
+      folderHint: 'Follows the name. Berth writes only here.',
+      problem: {
+        name_missing: 'Give it a name.',
+        name_taken:
+          'This Jellyfin already has “{{holder}}” (case does not matter): tick it above, or pick another name.',
+        folder_taken:
+          '{{path}} is already the folder of “{{holder}}”: both libraries would scan the same files. Pick another name.',
+      },
+      refused:
+        'Nothing was created: by the time you pressed, this Jellyfin had a library whose name differs only in case, or that folder belonged to another library (probably just changed in Jellyfin). Press “Read the Jellyfin libraries again” and look once more.',
+      step: 'Create the library in Jellyfin',
+      fix: 'Check that Jellyfin is still reachable and Berth’s API key is still valid, then press “Build and check” again; what is already built is not built twice. Or create it yourself under Jellyfin’s Dashboard → Libraries and press “Read the Jellyfin libraries again”.',
+    },
     readFailed: 'Could not read the library list.',
     docking: 'Building and checking…',
     list: 'Routes on this page',
@@ -4241,6 +4293,9 @@ const en: Translations<typeof zhHant> = {
       listBlocked: 'Fix the fields marked in red before building.',
       pickOne: 'One step left: tick a library.',
       pickTarget: 'One step left: pick a write target for “{{library}}”.',
+      newLibrary:
+        'Create the library “{{name}}” on your Jellyfin, folder {{path}} (every user on the server can see it)',
+      newLibraryBlocked: 'One step left: the new library has fields marked in red.',
       retryHint:
         'Once you have done it by hand, press “Build and check” again; what is already built is not built twice.',
     },

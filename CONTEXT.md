@@ -72,7 +72,7 @@ _Avoid_: next up（指這一顆時）, resume point, up next
 
 **Jellyfin Library**（UI 顯示「Jellyfin 媒體庫」）:
 Jellyfin 那一端的 virtual folder：一個名字、一個 collection type、**一到多條**路徑。Berth 不擁有它——
-套件內的 Jellyfin 由 Berth 建使用者在精靈列的那幾個（預設 Movies / TV / Anime，每個是內容類型 + 名稱 + `<library root>` 底下一層的資料夾），建好之後改名與刪除在 Jellyfin 做；既有的一律只讀，最多加一條路徑。
+套件內的 Jellyfin 由 Berth 建使用者在精靈列的那幾個（預設 Movies / TV / Anime，每個是內容類型 + 名稱 + `<library root>` 底下一層的資料夾），建好之後改名與刪除在 Jellyfin 做；既有的一律只讀，最多加一條路徑。既有 Jellyfin 缺某類型的媒體庫時，使用者在頁 3 勾了「新建一個媒體庫」Berth 才建那一個（`<library root>/<slug>`，M4 票 64），之後與其他媒體庫一樣。
 一個 Library Route 指向它的其中一條路徑。程式碼中的 `library` 指的就是這個。
 _Avoid_: virtual folder（對使用者時）, folder, collection
 
@@ -112,7 +112,7 @@ _Avoid_: managed, built-in, ours
 
 **Existing service**（UI 顯示「既有」）:
 使用者選「既有」的服務：使用者自己的那一台，填位址與憑證接進來。Berth 接管它＝**只建立與管理 Berth 擁有的物件**：
-Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、`berth-*` 分類與它的目錄、使用者勾選加入的站、檢查用的暫時探測 torrent 與探測檔。
+Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、使用者在頁 3 勾選後新建的媒體庫（M4 票 64）、`berth-*` 分類與它的目錄、使用者勾選加入的站、檢查用的暫時探測 torrent 與探測檔。
 入庫之後 Berth 也會請 Jellyfin 去看它寫的路徑：通知路徑、只刷新那個媒體庫；Berth 的路徑 Jellyfin 還沒列出過任何東西時是整台的全庫掃描（brief §16.4、§20.1，M4 票 62）。
 帳密、全域偏好、使用者原有的媒體庫與站都不碰；唯一例外是那台 Jellyfin 還沒跑過初始精靈時，由擁有者建它的管理員、跑完它的初始設定（語言、地區、遠端存取；不給伺服器名稱，brief §16.4、§19 D1）。
 Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、把同一個父目錄掛在 `/data`。

@@ -686,10 +686,13 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     expect(await screen.findByRole('checkbox', { name: '影集' })).toBeVisible()
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('媒體庫路徑')
     expect(screen.queryByLabelText('Jellyfin 管理員帳號')).not.toBeInTheDocument()
-    // 紅線：既有 Jellyfin 上不會出現任何「建立媒體庫」的動作——套件內那一份清單也不在。
+    // 套件內那一份清單不在：既有 Jellyfin 只有勾了才建的那一張（M4 票 64），預設沒勾。
     expect(screen.queryByText('要建的媒體庫')).not.toBeInTheDocument()
     expect(screen.queryByText(/個媒體庫：/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '加一個媒體庫' })).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+    ).not.toBeChecked()
   })
 
   // 使用者拍板：Berth 路徑併進「建立並檢查」——選它不送任何東西，按下時先加路徑、再建 Route。
@@ -715,7 +718,8 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await user.click(await screen.findByRole('checkbox', { name: '影集' }))
+    // 電影與劇集預設勾好（M4 票 64）。
+    expect(await screen.findByRole('checkbox', { name: '影集' })).toBeChecked()
     const fresh = screen.getByRole('radio', { name: '/data/library/影集' })
     expect(fresh).toHaveAccessibleDescription(/按「建立並檢查」時加到這個媒體庫/)
     await user.click(fresh)
@@ -771,7 +775,8 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await user.click(await screen.findByRole('checkbox', { name: '影集' }))
+    // 電影與劇集預設勾好（M4 票 64）。
+    expect(await screen.findByRole('checkbox', { name: '影集' })).toBeChecked()
     await user.click(screen.getByRole('radio', { name: '/data/library/影集' }))
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
 
@@ -789,7 +794,7 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     expect(writes(fetchStub)).toEqual(['POST /api/setup/jellyfin/libraries/paths'])
   })
 
-  it('勾了媒體庫、還沒選寫入目標：主鈕擋住並說出還差哪一步', async () => {
+  it('勾著的媒體庫還沒選寫入目標：主鈕擋住並說出還差哪一步', async () => {
     stubPage({
       [STATUS]: { body: NAS },
       [JELLYFIN]: { body: CONNECTED },
@@ -811,10 +816,8 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    expect(await screen.findByText('還差一步：勾一個媒體庫。')).toBeInTheDocument()
-    await user.click(screen.getByRole('checkbox', { name: '影集' }))
-
-    expect(screen.getByText('還差一步：替「影集」選一條寫入目標。')).toBeInTheDocument()
+    // 預設勾好了（M4 票 64），寫入目標還沒選。
+    expect(await screen.findByText('還差一步：替「影集」選一條寫入目標。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
     await user.click(screen.getByRole('radio', { name: '/volume2/tv' }))
     expect(screen.getByRole('button', { name: '建立並檢查' })).toBeEnabled()
@@ -839,15 +842,50 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
         }),
       },
     })
-    const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await user.click(await screen.findByRole('checkbox', { name: 'TV Shows' }))
+    expect(await screen.findByRole('checkbox', { name: 'TV Shows' })).toBeChecked()
 
     // id 用名字拼的話，`aria-describedby="target-TV Shows-…"` 會斷成兩個 id，說明就掛不上。
     expect(
       screen.getByRole('radio', { name: '/data/library/tv-shows' }),
     ).toHaveAccessibleDescription(/按「建立並檢查」時加到這個媒體庫/)
+  })
+
+  // M4 票 64（code-review）：名字不同、slug 相同的兩個都預設勾、都預設選同一條新的 Berth 路徑。只算前面
+  // 那一個的，後面那一個要另選；不然按下去後端讓第二個 `path_taken`，整段停下、一條 Route 都沒建。
+  it('同一條新的 Berth 路徑只給清單上前面那一個，後面那一個要另選', async () => {
+    const twin = (name: string, location: string) =>
+      libraryChoice({
+        name,
+        locations: [location],
+        berth_path: '/data/library/tv-shows',
+        has_berth_path: false,
+        target_path: '/data/library/tv-shows',
+      })
+    stubPage({
+      [STATUS]: { body: NAS },
+      [JELLYFIN]: { body: CONNECTED },
+      [ROUTES]: {
+        body: routeSetup({
+          origin: 'existing',
+          libraries: [twin('TV Shows', '/volume1/tv'), twin('TV-Shows', '/volume1/tv2')],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    expect(await screen.findByRole('checkbox', { name: 'TV-Shows' })).toBeChecked()
+    const fresh = screen.getAllByRole('radio', { name: '/data/library/tv-shows' })
+    expect(fresh[0]).toBeEnabled()
+    expect(fresh[1]).toBeDisabled()
+    expect(fresh[1]).toHaveAccessibleDescription('已是「TV Shows」')
+    expect(screen.getByText('還差一步：替「TV-Shows」選一條寫入目標。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
+
+    await user.click(screen.getByRole('radio', { name: '/volume1/tv2' }))
+    expect(screen.getByRole('button', { name: '建立並檢查' })).toBeEnabled()
   })
 
   it('已經有 Berth 路徑的媒體庫不再多一個「新的」選項', async () => {
@@ -868,10 +906,10 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
         }),
       },
     })
-    const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await user.click(await screen.findByRole('checkbox', { name: '影集' }))
+    // 電影與劇集預設勾好（M4 票 64）。
+    expect(await screen.findByRole('checkbox', { name: '影集' })).toBeChecked()
 
     expect(screen.getAllByRole('radio')).toHaveLength(2)
     expect(screen.queryByText(/時加到這個媒體庫/)).not.toBeInTheDocument()
@@ -918,7 +956,188 @@ describe('頁 3：既有 Jellyfin 直接是 Route', () => {
 
     renderInRoute(<SetupPage />)
 
-    expect(await screen.findByText(/先在 Jellyfin 建一個再回來/)).toBeInTheDocument()
+    expect(await screen.findByText(/在下面新建一個/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
+    // 出路就在同一頁：新建那一張照樣在（M4 票 64）。
+    expect(screen.getByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' })).toBeEnabled()
+  })
+
+  // M4 票 64（審計 E1）：只有劇集媒體庫的那一台，在頁 3 勾一下就有電影媒體庫。勾了才建。
+  describe('新建一個媒體庫', () => {
+    const MADE = routeSetup({
+      ...PICKER,
+      libraries: [
+        ...PICKER.libraries,
+        libraryChoice({
+          name: '電影',
+          collection_type: 'movies',
+          locations: ['/data/library/電影'],
+          berth_path: '/data/library/電影',
+          target_path: '/data/library/電影',
+        }),
+      ],
+    })
+
+    it('勾了才展開：類型預設那台沒有的電影、名稱預填、資料夾跟著名稱算，並說所有人都看得到', async () => {
+      const fetchStub = stubPage({
+        [STATUS]: { body: NAS },
+        [JELLYFIN]: { body: CONNECTED },
+        [ROUTES]: { body: PICKER },
+      })
+      const user = userEvent.setup()
+
+      renderInRoute(<SetupPage />)
+      const tick = await screen.findByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' })
+      expect(tick).not.toBeChecked()
+      expect(screen.queryByLabelText('名稱')).not.toBeInTheDocument()
+      await user.click(tick)
+
+      expect(screen.getByRole('radio', { name: '電影' })).toBeChecked()
+      expect(screen.getByLabelText('名稱')).toHaveValue('電影')
+      // 卡片上一次、剖面的「將建立」一次。
+      expect(screen.getAllByText('/data/library/電影')).toHaveLength(2)
+      expect(
+        screen.getByText(/這個媒體庫建在你的 Jellyfin 上，伺服器上所有使用者都看得到/),
+      ).toBeInTheDocument()
+      expect(
+        within(screen.getByRole('region', { name: '按下之後會' })).getByText(
+          /在你的 Jellyfin 新建媒體庫「電影」，資料夾 \/data\/library\/電影/,
+        ),
+      ).toBeInTheDocument()
+
+      // 名稱改了資料夾跟著改；中日文照留、空白換成 -。
+      await user.clear(screen.getByLabelText('名稱'))
+      await user.type(screen.getByLabelText('名稱'), '紀錄 片')
+      // 卡片上一次、剖面的「將建立」一次。
+      expect(screen.getAllByText('/data/library/紀錄-片')).toHaveLength(2)
+      // 勾、填都不送任何寫入：按「建立並檢查」才建。
+      await quietFor(50)
+      expect(writes(fetchStub)).toEqual([])
+    })
+
+    it('按下：先建媒體庫、再建 Route；它的寫入目標是 Jellyfin 回報的那一條', async () => {
+      let made = false
+      const fetchStub = stubPage({
+        [STATUS]: { body: NAS },
+        [JELLYFIN]: { body: CONNECTED },
+        [ROUTES]: () => ({ body: made ? MADE : PICKER }),
+        'POST /api/setup/jellyfin/libraries': () => {
+          made = true
+          return {
+            body: { ...CONNECTED, steps: [...CONNECTED.steps, step('libraries', 'ok', '電影')] },
+          }
+        },
+        [BUILD]: { body: MADE },
+      })
+      const user = userEvent.setup()
+
+      renderInRoute(<SetupPage />)
+      await user.click(
+        await screen.findByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+      )
+      await user.click(screen.getByRole('button', { name: '建立並檢查' }))
+
+      await waitFor(() =>
+        expect(writes(fetchStub)).toEqual([
+          'POST /api/setup/jellyfin/libraries',
+          'POST /api/setup/routes',
+        ]),
+      )
+      const [createCall, buildCall] = fetchStub.mock.calls.filter(
+        ([url, init]) => (init?.method ?? 'GET') !== 'GET' && `POST ${String(url)}` !== REREAD,
+      )
+      expect(JSON.parse(String(createCall[1]?.body))).toEqual({
+        libraries: [{ name: '電影', collection_type: 'movies' }],
+      })
+      expect(JSON.parse(String(buildCall[1]?.body))).toEqual({
+        selections: [
+          { library: '影集', target_path: '/volume1/media/tv' },
+          { library: '電影', target_path: '/data/library/電影' },
+        ],
+      })
+      // 建好了：那一張收回成沒勾，新的媒體庫出現在上面的清單裡。
+      await waitFor(() =>
+        expect(
+          screen.getByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+        ).not.toBeChecked(),
+      )
+      expect(screen.getByRole('checkbox', { name: '電影' })).toBeInTheDocument()
+    })
+
+    it('名稱與那台已有的撞了（不分大小寫）就地說，主鈕擋住', async () => {
+      stubPage({
+        [STATUS]: { body: NAS },
+        [JELLYFIN]: { body: CONNECTED },
+        [ROUTES]: { body: PICKER },
+      })
+      const user = userEvent.setup()
+
+      renderInRoute(<SetupPage />)
+      await user.click(
+        await screen.findByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+      )
+      await user.clear(screen.getByLabelText('名稱'))
+      await user.type(screen.getByLabelText('名稱'), '影集')
+
+      expect(screen.getByLabelText('名稱')).toHaveAccessibleDescription(
+        /這台 Jellyfin 已經有「影集」了/,
+      )
+      expect(screen.getByText('還差一步：新建的媒體庫有標紅的格子。')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
+    })
+
+    it('資料夾已經是別的媒體庫的：說是誰的', async () => {
+      const films = routeSetup({
+        ...PICKER,
+        libraries: [
+          ...PICKER.libraries,
+          libraryChoice({
+            name: 'Films',
+            collection_type: 'movies',
+            locations: ['/volume1/films', '/data/library/電影'],
+          }),
+        ],
+      })
+      stubPage({
+        [STATUS]: { body: NAS },
+        [JELLYFIN]: { body: CONNECTED },
+        [ROUTES]: { body: films },
+      })
+      const user = userEvent.setup()
+
+      renderInRoute(<SetupPage />)
+      await user.click(
+        await screen.findByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+      )
+      await user.click(screen.getByRole('radio', { name: '電影' }))
+
+      expect(screen.getByText(/\/data\/library\/電影 已經是「Films」的資料夾/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
+    })
+
+    it('Jellyfin 沒建成：不建 Route，就地說原文', async () => {
+      const fetchStub = stubPage({
+        [STATUS]: { body: NAS },
+        [JELLYFIN]: { body: CONNECTED },
+        [ROUTES]: { body: PICKER },
+        'POST /api/setup/jellyfin/libraries': {
+          body: {
+            ...CONNECTED,
+            steps: [...CONNECTED.steps, step('libraries', 'failed', '', 'connection refused')],
+          },
+        },
+      })
+      const user = userEvent.setup()
+
+      renderInRoute(<SetupPage />)
+      await user.click(
+        await screen.findByRole('checkbox', { name: '在這台 Jellyfin 新建一個媒體庫' }),
+      )
+      await user.click(screen.getByRole('button', { name: '建立並檢查' }))
+
+      expect(await screen.findByText('在 Jellyfin 新建媒體庫')).toBeInTheDocument()
+      expect(screen.getByText(/connection refused/)).toBeInTheDocument()
+      expect(writes(fetchStub)).toEqual(['POST /api/setup/jellyfin/libraries'])
+    })
   })
 })

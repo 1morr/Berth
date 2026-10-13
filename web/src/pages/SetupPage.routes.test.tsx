@@ -444,7 +444,8 @@ describe('頁 3 的前進條件跟畫面一致（M4 票 24）', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await user.click(await screen.findByRole('checkbox', { name: '影集' }))
+    // 劇集類型預設勾好（M4 票 64）。
+    expect(await screen.findByRole('checkbox', { name: '影集' })).toBeChecked()
     await user.click(screen.getByRole('button', { name: '建立並檢查' }))
     await user.click(await screen.findByRole('button', { name: '刪除這條 Route' }))
     await user.click(screen.getByRole('button', { name: '確定刪除' }))
@@ -842,15 +843,19 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     ],
   })
 
-  it('一個都沒勾時建立鍵按不下去', async () => {
-    stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: NAS } })
+  it('電影與劇集預設勾好；全部取消時建立鍵按不下去（審計 C2，M4 票 64）', async () => {
+    stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: { ...NAS, libraries: [NAS.libraries[0]] } } })
 
     renderInRoute(<SetupPage />)
+    const box = await screen.findByRole('checkbox', { name: '影集' })
+    expect(box).toBeChecked()
+    await userEvent.click(box)
 
-    expect(await screen.findByRole('button', { name: '建立並檢查' })).toBeDisabled()
+    expect(screen.getByText('還差一步：勾一個媒體庫。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '建立並檢查' })).toBeDisabled()
   })
 
-  it('勾了媒體庫再選一條路徑，送出去的就是那一條', async () => {
+  it('選一條路徑，送出去的就是那一條', async () => {
     const fetch = stubPage({
       ...EXISTING_PAGE,
       [ROUTES]: { body: NAS },
@@ -858,7 +863,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     })
 
     renderInRoute(<SetupPage />)
-    await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
+    expect(await screen.findByRole('checkbox', { name: '影集' })).toBeChecked()
     await userEvent.click(screen.getByRole('radio', { name: '/data/library/影集' }))
     await userEvent.click(screen.getByRole('button', { name: '建立並檢查' }))
 
@@ -902,7 +907,7 @@ describe('頁 3：媒體庫路徑（既有 Jellyfin）', () => {
     stubPage({ ...EXISTING_PAGE, [ROUTES]: { body: shared } })
 
     renderInRoute(<SetupPage />)
-    await userEvent.click(await screen.findByRole('checkbox', { name: '影集' }))
+    expect(await screen.findByRole('checkbox', { name: '影集' })).toBeChecked()
 
     const taken = screen.getByRole('radio', { name: /\/volume1\/media\/tv/ })
     expect(taken).toBeDisabled()

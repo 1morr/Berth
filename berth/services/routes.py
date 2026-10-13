@@ -180,6 +180,9 @@ class LibraryChoice:
     #: 套件內清單上的一列（`jellyfin.is_listed`）：套件內只替這幾個建 Route（M4 票 24）。
     #: 既有 Jellyfin 沒有清單，一律 `False`。
     listed: bool
+    #: 類型對得上 Route 用途（電影、劇集）：既有 Jellyfin 的勾選表預設勾它（審計 C2，M4 票 64），
+    #: 寫入目標照舊預設 Berth 路徑；不要的由使用者取消。套件內沒有勾選表，不讀它。
+    preselected: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -1391,6 +1394,7 @@ def _library_choice(
         # 旁邊的說明也叫人別讓 Berth 寫進既有的資料夾。要寫進去，使用者自己選。
         target_path=route.target_path if route is not None else path,
         listed=listed,
+        preselected=library.collection_type in SUPPORTED_TYPES,
     )
 
 

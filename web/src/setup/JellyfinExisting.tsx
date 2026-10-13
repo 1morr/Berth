@@ -22,6 +22,7 @@ const PATH_FAILED = {
   directory: 'jellyfin.libraries.pathFailed.directory',
   jellyfin: 'jellyfin.libraries.pathFailed.jellyfin',
   library_missing: 'jellyfin.libraries.pathFailed.library_missing',
+  path_taken: 'jellyfin.libraries.pathFailed.path_taken',
 } as const satisfies Record<BerthPathFailure, string>
 
 /**

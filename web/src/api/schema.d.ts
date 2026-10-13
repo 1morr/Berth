@@ -1799,6 +1799,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/jellyfin/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Jellyfin Libraries
+         * @description 既有路徑的「新建一個媒體庫」：勾了才建（M4 票 64，brief §16.4）。
+         *
+         *     與套件內同一條：同名的已經在就略過；Jellyfin 那一段失敗是 `libraries` 那一步變紅，不是 4xx。
+         *     名稱或資料夾撞到那台已有的是 422（與清單同一種拒絕）；套件內或還沒選來源是 422。
+         */
+        post: operations["post_jellyfin_libraries_api_setup_jellyfin_libraries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/jellyfin/libraries/paths": {
         parameters: {
             query?: never;
@@ -2365,7 +2388,7 @@ export interface components {
          *     這幾種是 Berth 自己分得出來的。
          * @enum {string}
          */
-        BerthPathFailure: "library_missing" | "directory" | "jellyfin_cannot_see" | "jellyfin";
+        BerthPathFailure: "library_missing" | "directory" | "jellyfin_cannot_see" | "jellyfin" | "path_taken";
         /**
          * BerthPathOut
          * @description 一個媒體庫加 Berth 路徑的結果。`reason` 給畫面挑句子，`error` 是原文（M4 票 19）。
@@ -3758,6 +3781,8 @@ export interface components {
             target_path: string;
             /** Listed */
             listed: boolean;
+            /** Preselected */
+            preselected: boolean;
         };
         /**
          * LibraryOptionOut
@@ -3966,6 +3991,17 @@ export interface components {
          * @enum {string}
          */
         NameKind: "english" | "original" | "chinese" | "simplified" | "alias";
+        /** NewLibrariesIn */
+        NewLibrariesIn: {
+            /** Libraries */
+            libraries: components["schemas"]["NewLibraryIn"][];
+        };
+        /** NewLibraryIn */
+        NewLibraryIn: {
+            /** Name */
+            name: string;
+            collection_type: components["schemas"]["CollectionType"];
+        };
         /**
          * OneshotIn
          * @description 一次性 RSS 連結（票 18）。網址放在 body：Mikan 聚合 feed 的網址帶 token，不進 query。
@@ -9292,6 +9328,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_jellyfin_libraries_api_setup_jellyfin_libraries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewLibrariesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JellyfinSetupOut"];
+                };
+            };
+            /** @description `empty` · `name_missing` · `name_taken` · `folder_missing` · `folder_taken` · `folder_outside_root` · `folder_characters` · `built_changed` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundledLibraryRefusalOut"];
                 };
             };
         };

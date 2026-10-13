@@ -217,6 +217,19 @@ export function addLibraryPaths(libraries: string[]): Promise<JellyfinSetup> {
   } satisfies Schemas['LibraryPathIn'])
 }
 
+/** 既有 Jellyfin 頁 3 勾了要新建的一個媒體庫（M4 票 64）：名稱與類型，資料夾由伺服器算。 */
+export type NewLibraryInput = Schemas['NewLibraryIn']
+
+/**
+ * 在既有 Jellyfin 新建媒體庫（M4 票 64）。與套件內同一條：同名的已經在就略過；Jellyfin 那一段失敗是
+ * `libraries` 那一步變紅，名稱或資料夾撞到那台已有的是 422（`bundledRefusalOf`）。
+ */
+export function createLibraries(libraries: NewLibraryInput[]): Promise<JellyfinSetup> {
+  return apiPost<JellyfinSetup>('/setup/jellyfin/libraries', {
+    libraries,
+  } satisfies Schemas['NewLibrariesIn'])
+}
+
 /** 一個媒體庫加 Berth 路徑的結果。 */
 export type BerthPath = Schemas['BerthPathOut']
 export type BerthPathFailure = Schemas['BerthPathFailure']

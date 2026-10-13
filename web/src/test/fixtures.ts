@@ -257,6 +257,8 @@ export function libraryChoice(overrides: Partial<LibraryChoice> = {}): LibraryCh
     has_route: false,
     target_path: `/data/library/${slug}`,
     listed: true,
+    // 後端：類型對得上（`supported`）就預設勾（M4 票 64）。
+    preselected: overrides.supported ?? true,
     ...overrides,
   }
 }
