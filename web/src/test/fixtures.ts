@@ -23,7 +23,6 @@ const CHECKED_AT = '2026-09-08T12:00:00Z'
 /** 精靈狀態的測試建構子。預設是乾淨安裝的頁 1：什麼都還沒選。 */
 export function setupStatus(overrides: Partial<SetupStatus> = {}): SetupStatus {
   return {
-    completed: false,
     current_step: 1,
     owner: '',
     owner_signs_in: false,
@@ -153,7 +152,7 @@ export const OTHER_PUBLIC: IndexerCandidate[] = [
   candidate('tokyotosho', 'Tokyo Toshokan', { recommended: false }),
 ]
 
-export function candidate(
+function candidate(
   definition_name: string,
   name: string,
   overrides: Partial<IndexerCandidate> = {},
@@ -240,7 +239,6 @@ export function routeSetup(overrides: Partial<RouteSetup> = {}): RouteSetup {
     ],
     routes: [],
     ready: false,
-    completed: false,
     ...overrides,
   }
 }
@@ -322,7 +320,7 @@ export const CHECKS_PASSED: SetupStep[] = [
 
 /** --- 健康檢查（票 10）--- */
 
-export function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHealth {
+function serviceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHealth {
   return {
     kind: 'jellyfin',
     origin: 'bundled',

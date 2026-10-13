@@ -142,7 +142,6 @@ class ServiceView:
 class SetupStatus:
     """`GET /api/setup/status` 的整份形狀。"""
 
-    completed: bool
     current_step: int
     #: 擁有者的 Jellyfin 名字。空字串就是還沒有擁有者（頁 1）。
     owner: str
@@ -1093,7 +1092,6 @@ def _owner_signs_in(setup: SetupSettings) -> bool:
 
 def _status(setup: SetupSettings, *, now: datetime, berthed: bool) -> SetupStatus:
     return SetupStatus(
-        completed=setup.completed,
         current_step=_current_step(setup, berthed=berthed),
         owner=setup.owner.name,
         owner_signs_in=_owner_signs_in(setup),

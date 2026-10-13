@@ -49,7 +49,7 @@ export function inventoryKey(libraryId: string) {
 }
 
 /** 牆的排序鍵（Jellyfin `ItemSortBy` 的名字）。每個媒體庫開哪幾個在 `InventoryLibrary.sorts`。 */
-export type LibrarySort = Schemas['LibrarySort']
+type LibrarySort = Schemas['LibrarySort']
 
 export type SortOrder = Schemas['SortOrder']
 

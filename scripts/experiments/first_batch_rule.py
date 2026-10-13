@@ -232,7 +232,7 @@ async def online() -> None:
         return
     lag = _load_lag()
     with tempfile.TemporaryDirectory() as root:
-        config = load_config({"CONFIG_ROOT": f"{root}/config", "DATA_ROOT": f"{root}/data"})
+        config = load_config({"CONFIG_ROOT": f"{root}/config"})
         config.config_root.mkdir(parents=True)
         engine = create_engine(config)
         await upgrade_to_head(engine)

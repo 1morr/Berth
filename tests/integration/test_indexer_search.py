@@ -41,7 +41,6 @@ async def test_prowlarr_search_reads_the_columns_the_results_table_needs() -> No
     assert first.indexer == "ACG.RIP"
     assert first.size == 5153960755
     assert first.seeders == 1
-    assert first.leechers == 1
     assert first.info_url == "https://acg.rip/t/351871"
     assert first.published_at == datetime(2026, 4, 14, 14, 51, 24, tzinfo=UTC)
     # ACG.RIP 一列都不報 info hash，所以這一筆的身分只剩 guid。

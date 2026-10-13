@@ -14,7 +14,6 @@ Berth 重開的那一刻它們就不見了，資料庫裡那一列 `completed` �
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -30,8 +29,6 @@ logger = logging.getLogger(__name__)
 
 #: 沒有人叫醒它時多久自己看一次（plan §3.2）。
 TICK = timedelta(seconds=60)
-
-Waiter = Callable[[float], Awaitable[bool]]
 
 
 class PlannerRunner:

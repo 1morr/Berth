@@ -56,3 +56,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^web/
+
+      # Unused files, exports and dependencies in web/. Settings in web/knip.json;
+      # web/gates/knip.test.ts checks them both ways.
+      - id: web-knip
+        name: knip (web)
+        entry: pnpm -C web exec knip
+        language: system
+        pass_filenames: false
+        files: ^web/

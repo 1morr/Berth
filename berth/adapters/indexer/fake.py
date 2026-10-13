@@ -37,7 +37,6 @@ class FakeIndexerSearch:
         self._indexer_errors = dict(indexer_errors or {})
         #: 收到過的查詢，順序即呼叫順序。
         self.queries: list[SearchQuery] = []
-        self.closed = False
         #: 一個查詢打到哪幾站（請求預算的鍵，M3 票 20）。預設沒有：不關心預算的測試不受它影響。
         self.sites_ = tuple(sites)
 
@@ -62,4 +61,4 @@ class FakeIndexerSearch:
         return self.sites_
 
     async def aclose(self) -> None:
-        self.closed = True
+        return None

@@ -1296,9 +1296,8 @@ class TestCompletion:
         await arrange(session, roots)
         await build_routes(session, factory_for(roots), ())
 
-        status = await complete_setup(session)
+        await complete_setup(session)
 
-        assert status.completed is True
         assert (await read_settings(session, SetupSettings)).completed is True
 
     @pytest.mark.asyncio

@@ -44,7 +44,7 @@ async def main() -> int:
         print("set TMDB_API_KEY to a TMDB v3 key or v4 token", file=sys.stderr)
         return 2
     with tempfile.TemporaryDirectory() as root:
-        config = load_config({"CONFIG_ROOT": f"{root}/config", "DATA_ROOT": f"{root}/data"})
+        config = load_config({"CONFIG_ROOT": f"{root}/config"})
         config.config_root.mkdir(parents=True)
         engine = create_engine(config)
         await upgrade_to_head(engine)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 /** 「已刪除」這類完成通知在畫面上留多久。夠念完、夠看一眼，之後不再冒充現況。 */
-export const NOTE_MS = 8000
+const NOTE_MS = 8000
 
 /**
  * 做完之後說一聲、過一會兒自己收掉的那一句（M4 票 21）：刪掉 Route 之後的「已刪除 X」原本一直掛著，

@@ -58,7 +58,6 @@ function render(routes: StubRoutes = {}) {
     'GET /api/health/detail': { body: healthDetail() },
     'GET /api/setup/status': {
       body: setupStatus({
-        completed: true,
         current_step: 6,
         owner: 'skipper',
         services: ALL_BUNDLED,
@@ -251,7 +250,7 @@ describe('站的清單讀不到（M4 票 54：跟上精靈頁 4 的票 27）', (
       }),
       'POST /api/setup/services/prowlarr/test': () => {
         rotated = false
-        return { body: setupStatus({ completed: true, current_step: 6, services: ALL_BUNDLED }) }
+        return { body: setupStatus({ current_step: 6, services: ALL_BUNDLED }) }
       },
       'POST /api/settings/services/prowlarr/test': { body: healthDetail() },
     })
@@ -320,7 +319,6 @@ describe('既有 Prowlarr 測不過時的補法（M4 票 17；票 39 起是連�
     render({
       'GET /api/setup/status': {
         body: setupStatus({
-          completed: true,
           current_step: 6,
           owner: 'skipper',
           services: [...ALL_BUNDLED.slice(0, 2), failed(overrides as Partial<SetupService>)],
@@ -365,7 +363,6 @@ describe('既有 Prowlarr 的連線區（M4 票 39）', () => {
 
   function statusWith(prowlarr: SetupService) {
     return setupStatus({
-      completed: true,
       current_step: 6,
       owner: 'skipper',
       services: [...ALL_BUNDLED.slice(0, 2), prowlarr],

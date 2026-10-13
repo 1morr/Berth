@@ -15,7 +15,7 @@ export type RematchResult = Schemas['RematchOut']
 export type SeriesCorrected = Schemas['SeriesCorrectedOut']
 
 /** 擋下來的理由（`domain.RematchRefusal`）。重複版本的三顆也回這一種。 */
-export type RematchRefusal = Schemas['RematchRefusal']
+type RematchRefusal = Schemas['RematchRefusal']
 
 /** 執行期認得的那幾種。**少一種或多一種都是編譯錯誤**（同 `api/review.ts`）。 */
 const REASONS: ReasonSet<RematchRefusal> = {

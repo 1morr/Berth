@@ -7,9 +7,6 @@ import type { Schemas } from './schemas'
 /** 清單上的一件（`berth/api/issues.py` 的 `IssueOut`）。 */
 export type Issue = Schemas['IssueOut']
 
-/** 十四種型別的封閉集合（brief §9.1）。畫面逐種說一句話。 */
-export type IssueType = Issue['type']
-
 /**
  * 一列按得了哪幾顆（brief §9.1 的「預設建議動作」那一欄）。
  *
@@ -27,11 +24,8 @@ export type ReconcileStatus = Schemas['ReconcileStatusOut']
 /** 一輪裡的一方（帳本 / 客戶端 / complete / 媒體庫 / Jellyfin）。 */
 export type ReconcileSideReport = Schemas['SideOut']
 
-/** 對帳比的各方（四方加上票 09 的 Jellyfin）。 */
-export type ReconcileSide = ReconcileSideReport['side']
-
 /** 動作被擋下來的理由（`berth/domain/enums.py` 的 `IssueRefusal`）。 */
-export type IssueRefusal = Schemas['IssueRefusal']
+type IssueRefusal = Schemas['IssueRefusal']
 
 /**
  * 執行期認得的那幾種。**少一種或多一種都是編譯錯誤**（同 `api/jobs.ts`）：

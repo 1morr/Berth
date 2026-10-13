@@ -18,9 +18,7 @@ from berth.db import create_engine, create_session_factory, upgrade_to_head
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
     """指向空目錄的設定；`config_root` 尚未建立，讓啟動流程自己建。"""
-    return load_config(
-        {"CONFIG_ROOT": str(tmp_path / "config"), "DATA_ROOT": str(tmp_path / "data")}
-    )
+    return load_config({"CONFIG_ROOT": str(tmp_path / "config")})
 
 
 async def migrate(config: Config) -> None:

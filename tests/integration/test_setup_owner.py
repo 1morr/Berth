@@ -94,7 +94,7 @@ async def stored_setup(session: AsyncSession) -> str:
 async def test_a_clean_install_starts_at_the_owner(session: AsyncSession) -> None:
     status = await read_status(session)
 
-    assert (status.completed, status.current_step, status.owner) == (False, STEP_JELLYFIN, "")
+    assert (status.current_step, status.owner) == (STEP_JELLYFIN, "")
     assert status.services == ()
 
 

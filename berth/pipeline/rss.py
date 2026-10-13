@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.pipeline.ticks import whole_tick
+from berth.pipeline.ticks import Clock, Sleeper, whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.rss import poll_due
 from berth.services.setup import is_setup_complete
@@ -23,9 +22,6 @@ logger = logging.getLogger(__name__)
 
 #: 醒來的間隔。只是「有沒有 Feed 到時間」的判斷頻率，不是輪詢頻率。
 TICK = timedelta(seconds=30)
-
-Sleeper = Callable[[float], Awaitable[None]]
-Clock = Callable[[], datetime]
 
 
 class RssPoller:

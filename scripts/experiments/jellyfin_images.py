@@ -164,7 +164,7 @@ def batch(fetch: Callable[[str], Response], ids: list[str]) -> dict[str, Any]:
 
 async def seed_berth(config_root: Path, jellyfin: str) -> None:
     """精靈跑完、Jellyfin 位址填好的一台 Berth。登入走真的 `POST /api/auth/login`。"""
-    config = load_config({"CONFIG_ROOT": str(config_root), "DATA_ROOT": str(config_root / "data")})
+    config = load_config({"CONFIG_ROOT": str(config_root)})
     config.config_root.mkdir(parents=True, exist_ok=True)
     engine = create_engine(config)
     await upgrade_to_head(engine)
@@ -183,7 +183,6 @@ def berth_serve(config_root: Path, port: int) -> Iterator[str]:
     env = {
         **os.environ,
         "CONFIG_ROOT": str(config_root),
-        "DATA_ROOT": str(config_root / "data"),
         "WEB_ROOT": str(config_root / "no-web"),
         "PORT": str(port),
     }

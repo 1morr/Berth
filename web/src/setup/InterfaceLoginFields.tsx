@@ -17,7 +17,7 @@ const PRODUCT = { qbittorrent: 'qBittorrent', prowlarr: 'Prowlarr' } as const sa
  * 密碼、再一次密碼。擁有者的名字不合那個服務的規則時勾不起來，說明句說為什麼（M4 票 80：原本勾了才紅）。
  * 說明句先講這是**那個服務自己的登入**：Berth 用不到它。
  */
-export function InterfaceLoginFields({
+function InterfaceLoginFields({
   service,
   form,
 }: {

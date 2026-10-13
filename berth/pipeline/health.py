@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.pipeline.ticks import whole_tick
+from berth.pipeline.ticks import Clock, Sleeper, whole_tick
 from berth.services.clients import ServiceClientFactory
 from berth.services.health import CHECK_INTERVAL, check_health, is_due
 from berth.services.setup import is_setup_complete
@@ -28,9 +27,6 @@ logger = logging.getLogger(__name__)
 
 #: 醒來的間隔。只是「要不要跑」的判斷頻率，不是檢查頻率。
 TICK = timedelta(seconds=30)
-
-Sleeper = Callable[[float], Awaitable[None]]
-Clock = Callable[[], datetime]
 
 
 class HealthChecker:

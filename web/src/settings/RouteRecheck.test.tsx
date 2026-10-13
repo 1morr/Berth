@@ -162,7 +162,7 @@ describe('Route 設定頁的全部重新檢查', () => {
       'GET /api/health': { body: HEALTHY },
       'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
       'GET /api/routes': { body: routes },
-      'GET /api/setup/status': { body: setupStatus({ completed: true, services: ALL_BUNDLED }) },
+      'GET /api/setup/status': { body: setupStatus({ services: ALL_BUNDLED }) },
       [RECHECK_ALL]: { body: routes.map((row) => row.route) },
     })
   }
@@ -193,7 +193,6 @@ describe('Route 設定頁的全部重新檢查', () => {
 
 describe('換了一台 qBittorrent 之後自動重查', () => {
   const EXISTING = setupStatus({
-    completed: true,
     current_step: 6,
     owner: 'skipper',
     services: ALL_BUNDLED.map((row) =>

@@ -62,7 +62,7 @@ async def record(credential: str, *, force: bool) -> int:
     SNAPSHOTS.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        config = load_config({"CONFIG_ROOT": str(root / "config"), "DATA_ROOT": str(root / "data")})
+        config = load_config({"CONFIG_ROOT": str(root / "config")})
         config.config_root.mkdir(parents=True, exist_ok=True)
         engine = create_engine(config)
         try:

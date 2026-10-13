@@ -112,7 +112,7 @@ export function reuseUnfit(
 }
 
 /** 只看擁有者的名字時（密碼還沒打）只會是帳號那兩種。 */
-export type OwnerUnfit = Exclude<ReuseUnfit, 'passwordShort'>
+type OwnerUnfit = Exclude<ReuseUnfit, 'passwordShort'>
 
 function ownerUnfitFor(service: LoginService, owner: string): OwnerUnfit | null {
   const unfit = owner ? reuseUnfit(service, owner, '') : null
@@ -158,7 +158,7 @@ export function useCarriedLogin({
 }
 
 /** 送出時拿到的：要設的那一組、登入照舊（`null`），或欄位還有問題（`undefined`）。 */
-export type TakenLogin = InterfaceLogin | null | undefined
+type TakenLogin = InterfaceLogin | null | undefined
 
 export interface InterfaceLoginForm {
   draft: LoginDraft

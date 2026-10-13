@@ -1180,7 +1180,7 @@ describe('頁 6：完成', () => {
       [TMDB]: { body: tmdbSetup() },
       [COMPLETE]: () => {
         completed = true
-        return { body: { ...AT_THE_END, completed: true } }
+        return { body: AT_THE_END }
       },
       'GET /api/auth/me': () => backend.me(),
       'GET /api/discover/trending': discoverWall(),

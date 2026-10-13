@@ -1,6 +1,6 @@
 # 93 — 簡化：清掉沒人用的東西，knip 加進 pre-commit
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -25,7 +25,12 @@
 
 ## 驗收
 
-- [ ] `pnpm -C web exec knip` 在現在的樹上 0 條
-- [ ] 閘門的雙向驗證寫成測試（例如在暫存目錄造一個沒人用的 export，斷言 knip 報它；改一次無關的命名，斷言它不報），不只是手動驗證
-- [ ] S20、S22 的變動 CHANGELOG 有記（S22 是設定項的變動，行為不變）；`gen:api` 重跑
-- [ ] 全部檢查（含新的 knip）、pytest、vitest 綠；progress.md 已更新
+- [x] `pnpm -C web exec knip` 在現在的樹上 0 條
+- [x] 閘門的雙向驗證寫成測試（例如在暫存目錄造一個沒人用的 export，斷言 knip 報它；改一次無關的命名，斷言它不報），不只是手動驗證
+- [x] S20、S22 的變動 CHANGELOG 有記（S22 是設定項的變動，行為不變）；`gen:api` 重跑
+- [x] 全部檢查（含新的 knip）、pytest、vitest 綠；progress.md 已更新
+
+## Comments
+
+- code-review（Standards）建議 `pipeline/ticks.py` 的 `Sleeper` 改從 `services/indexer.py` 取，少一份定義：沒採用。pipeline 依賴 services 是允許的，但為了一個型別別名讓四個迴圈都 import 索引站的 service，耦合方向不對；`ticks.py` 的註解寫明另外兩份為什麼不能反過來 import。
+- knip 鎖精確版本 `6.41.0`（其他依賴是 `^`）：票面要「鎖當前 stable」；報什麼由 knip 的版本決定，用 `^` 的話重新裝依賴就可能換版，閘門在沒人改程式碼時變紅。升級時改版號並重跑 `web/gates/knip.test.ts`。

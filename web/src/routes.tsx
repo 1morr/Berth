@@ -39,7 +39,7 @@ import { SetupPage } from './pages/SetupPage'
 import { stepOf } from './setup/navigation'
 import { TmdbSettingsPage } from './pages/TmdbSettingsPage'
 
-export interface RouterContext {
+interface RouterContext {
   queryClient: QueryClient
 }
 

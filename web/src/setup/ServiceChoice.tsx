@@ -720,7 +720,7 @@ function refusedDetail(refusal: ChoiceRefusal, t: TFunction): string {
  * 既有服務的位址指到 Berth 自己（`pointsAtBerth`）時，位址欄下的那一句（M4 票 17）。只提示、不擋：
  * `network_mode: host` 的部署填 localhost 是對的。呼叫端先判斷，這裡只畫。
  */
-export function LoopbackHint() {
+function LoopbackHint() {
   const { t } = useTranslation()
   return (
     <span
@@ -762,7 +762,7 @@ function PendingLine({ kind, status }: { kind: ServiceKind; status: SetupStatus 
  * 測試那一條：信號、服務、連哪裡、結果與實測值。紅燈就地說出補法（PRODUCT.md 原則 4），
  * 「重新測試」只在出問題的這一條上（取代原本的「重新偵測這個服務」）。
  */
-export function TestLine({
+function TestLine({
   kind,
   status,
   service,

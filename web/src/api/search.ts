@@ -9,9 +9,6 @@ export type SearchResults = Schemas['SearchOut']
 /** 結果表的一列（`CONTEXT.md` 的 Search Result）。 */
 export type SearchResult = Schemas['SearchResultOut']
 
-/** 會進檔名的那幾格（brief §6.8）。 */
-export type Tags = Schemas['TagsOut']
-
 /** 索引站那邊沒搜到東西的幾種樣子。與 `TmdbProblem` 一樣，每一種的下一步都不同。 */
 export type IndexerProblem = NonNullable<Schemas['IndexerProblem']>
 

@@ -211,7 +211,6 @@ class TestRebuildLedger:
     ) -> None:
         """全新的資料庫（schema 由 CLI 自己升）、沒有 Route：什麼都沒有配，離開碼 0。"""
         monkeypatch.setenv("CONFIG_ROOT", str(tmp_path / "config"))
-        monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
         (tmp_path / "config").mkdir()
 
         assert main(["rebuild-ledger"]) == 0
