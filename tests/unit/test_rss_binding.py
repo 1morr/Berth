@@ -36,6 +36,11 @@ KIMI_RELEASE = (
     "[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai - 12 "
     "[WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]"
 )
+#: 標題中間有括號註記（版本名），後面還有三個名字（M4 票 98，Mikan 的真實標題）。
+YANI_RELEASE = (
+    "[LoliHouse] 尼古喵喵 (邪竜解放版) / ヤニねこ / Yani Neko / Chainsmoker Cat - 11 "
+    "[WebRip 1080p HEVC-10bit AAC][简繁内封字幕]"
+)
 REZERO_RELEASE = (
     "[ANi]  Re：从零开始的异世界生活 第四季 - 18 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
 )
@@ -132,6 +137,21 @@ class TestTheSkeleton:
                 "[79C53144].mkv",
                 ("Kamiina Botan, Yoeru Sugata wa Yuri no Hana",),
             ),
+            # 括號後面還接著 ` / ` 與下一個名字：那一格是註記，丟掉，後面的名字照讀（M4 票 98）。
+            (YANI_RELEASE, ("尼古喵喵", "ヤニねこ", "Yani Neko", "Chainsmoker Cat")),
+            # 全形括號也是（`undecorate` 轉半形）；最後一個名字後面的註記照舊截斷。
+            (
+                "[黒ネズミたち] 令和妖神斑小姐（放送版） / Reiwa no Dara-san (On-air version) - 13 "
+                "(ABEMA 1920x1080 AVC AAC MKV)",
+                ("令和妖神斑小姐", "Reiwa no Dara-san"),
+            ),
+            # 後面沒有名字的括號照舊是標題的結尾：集號區間、解析度、註記都一樣。
+            ("[LoliHouse] 尼古喵喵 (邪竜解放版) - 11 [1080p]", ("尼古喵喵",)),
+            ("[Group] Some Movie (2019) BDRip 1080p", ("Some Movie",)),
+            (
+                "[SubsPlease] Kamiina Botan, Yoeru Sugata wa Yuri no Hana (01-12) (1080p) [Batch]",
+                ("Kamiina Botan, Yoeru Sugata wa Yuri no Hana",),
+            ),
             # 季號是標題的一部分：第三季是另一個 RSS Series。
             (
                 "[黒ネズミたち] 时光代理人 第三季 / Link Click Season 3 - 08 "
@@ -191,6 +211,8 @@ class TestTheSearchTerm:
             ),
             # 英文或羅馬字那一段在前（多半在最後一段）。
             (KIMI_RELEASE, "Kimi ga Shinu made Koi wo Shitai"),
+            # 標題中間的括號註記不截斷後面的名字（M4 票 98）。
+            (YANI_RELEASE, "Chainsmoker Cat"),
         ],
     )
     def test_the_first_term_read_from_the_release(self, release: str, expected: str) -> None:
@@ -277,6 +299,11 @@ class TestTheTitleKey:
         keys = [next(iter(keys)) for keys in by_group.values()]
         assert None not in keys
         assert len(set(keys)) == len(keys)
+
+    def test_a_note_in_the_middle_of_the_title_leaves_the_key_as_it_was(self) -> None:
+        """鍵存在資料庫裡：骨幹讀過括號註記之後（M4 票 98），鍵仍只到註記為止——改了它，既有的
+        Series 下一輪會另長一個新的。"""
+        assert title_key(YANI_RELEASE) == "title:尼古喵喵:lolihouse"
 
     def test_a_title_with_nothing_left_has_no_key(self) -> None:
         assert title_key("[Group] - 12 [1080p]") is None
