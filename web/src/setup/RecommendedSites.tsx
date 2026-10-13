@@ -65,7 +65,7 @@ export function RecommendedSites({
   const recommended = indexers.candidates.filter((row) => row.recommended)
   const offered = indexers.sites.length === 0 && recommended.length > 0
   // Prowlarr 還沒拿到站的清單（實跑 L4）：原本主鍵無聲無息地不見，只剩標題與「之後再說」。
-  const unlisted =
+  const nothingToTest =
     indexers.sites.length === 0 && recommended.length === 0 && indexers.unlisted.length > 0
 
   function run() {
@@ -103,7 +103,7 @@ export function RecommendedSites({
           {t('indexer.quick.lede', { count: recommended.length })}
         </p>
       )}
-      {unlisted && <Unlisted indexers={indexers} rereading={rereading} onReread={onReread} />}
+      {nothingToTest && <Unlisted indexers={indexers} rereading={rereading} onReread={onReread} />}
 
       <Outcome indexers={indexers} />
       {failed !== null && (

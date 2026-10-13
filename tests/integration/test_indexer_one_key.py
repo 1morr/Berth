@@ -69,18 +69,18 @@ def _signed_in(
         yield running
 
 
+@pytest.fixture
+def client(config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient) -> Iterator[TestClient]:
+    """選了套件內 Prowlarr 的一台；`prowlarr` 由各組自己給。"""
+    with _signed_in(config, tmp_path, prowlarr) as running:
+        assert _choose(running, "prowlarr").status_code == 200
+        yield running
+
+
 class TestOneKey:
     @pytest.fixture
     def prowlarr(self) -> FakeProwlarrClient:
         return FakeProwlarrClient(rejects=BLOCKED, add_rejects=FLAKY)
-
-    @pytest.fixture
-    def client(
-        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
-    ) -> Iterator[TestClient]:
-        with _signed_in(config, tmp_path, prowlarr) as running:
-            assert _choose(running, "prowlarr").status_code == 200
-            yield running
 
     def test_one_request_tests_every_recommended_site_and_adds_only_the_ones_that_pass(
         self, client: TestClient, prowlarr: FakeProwlarrClient
@@ -138,14 +138,6 @@ class TestAlreadyThere:
             add_rejects=FLAKY,
         )
 
-    @pytest.fixture
-    def client(
-        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
-    ) -> Iterator[TestClient]:
-        with _signed_in(config, tmp_path, prowlarr) as running:
-            assert _choose(running, "prowlarr").status_code == 200
-            yield running
-
     def test_sites_already_in_prowlarr_are_left_alone(
         self, client: TestClient, prowlarr: FakeProwlarrClient
     ) -> None:
@@ -183,14 +175,6 @@ class TestNoRecommendedDefinitions:
     def prowlarr(self) -> FakeProwlarrClient:
         return FakeProwlarrClient(definitions=DISK_ONLY)
 
-    @pytest.fixture
-    def client(
-        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
-    ) -> Iterator[TestClient]:
-        with _signed_in(config, tmp_path, prowlarr) as running:
-            assert _choose(running, "prowlarr").status_code == 200
-            yield running
-
     def test_every_recommended_site_is_named_missing_and_nothing_is_sent(
         self, client: TestClient, prowlarr: FakeProwlarrClient
     ) -> None:
@@ -218,14 +202,6 @@ class TestSomeRecommendedDefinitions:
             # 已經加了的一站不在定義裡也不算「不在」：它就在 Prowlarr 裡。
             indexers=[_present("yts", 1)],
         )
-
-    @pytest.fixture
-    def client(
-        self, config: Config, tmp_path: Path, prowlarr: FakeProwlarrClient
-    ) -> Iterator[TestClient]:
-        with _signed_in(config, tmp_path, prowlarr) as running:
-            assert _choose(running, "prowlarr").status_code == 200
-            yield running
 
     def test_the_found_ones_are_tested_and_the_missing_ones_are_listed(
         self, client: TestClient, prowlarr: FakeProwlarrClient
