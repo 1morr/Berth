@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiGet } from './client'
+import { apiGet, apiPut } from './client'
 import type { Schemas } from './schemas'
 
 /** 一次搜尋的整份回應（`berth/api/search.py` 的 `SearchOut`）。 */
@@ -21,6 +21,34 @@ export type SkippedSite = Schemas['SkippedOut']
 /** 缺集搜尋的這一批（M3 票 20）：問了哪幾季、下一批是哪幾季、請求預算何時放得下它。 */
 export type Batch = Schemas['BatchOut']
 
+/** 按下搜尋之前畫面要說的：會問哪幾個、名字與季的 chip、上限（M4 票 84）。 */
+export type QueryPlan = Schemas['SearchQueriesOut']
+
+/** 一顆名字 chip：名字原樣、它是哪幾種、這一次開著沒有。 */
+export type NameChip = Schemas['NameChipOut']
+
+/** 名字的種類（英文名、原名、中文名、簡體中文名、別名）。別名以外的開關全域記住。 */
+export type NameKind = Schemas['NameKind']
+
+/**
+ * 使用者在搜尋面板上開了的名字與季（M4 票 84）。`null` 是「還沒動過」：後端照記住的名字種類與
+ * 預設的季（不指定季加最新一季）算。帶了就照它——預覽與搜尋收同一份，問的才是同一件事。
+ */
+export interface QueryChoice {
+  names: readonly string[]
+  seasons: readonly number[]
+  anySeason: boolean
+}
+
+/** 這一份預覽開著哪些：還沒動過 chip 時，畫面照後端回的預設畫。 */
+export function choiceOf(plan: QueryPlan): QueryChoice {
+  return {
+    names: plan.names.filter((chip) => chip.on).map((chip) => chip.name),
+    seasons: plan.seasons.filter((one) => one.on).map((one) => one.number),
+    anySeason: plan.any_season,
+  }
+}
+
 /**
  * 索引站搜尋。**這一支很慢**——實測 35–85 秒，因為 Prowlarr 收到請求之後要現場去連它認得的
  * 每一個追蹤站。所以它是使用者按下去才發生的事（`useMutation`），不是進頁面就跑的查詢。
@@ -29,14 +57,24 @@ export async function searchTorrents({
   media,
   q = '',
   missing = null,
+  choice = null,
 }: {
   media: string
   q?: string
   missing?: MissingScope | null
+  choice?: QueryChoice | null
 }) {
   const params = new URLSearchParams({ media })
   if (q) params.set('q', q)
-  return apiGet<SearchResults>(`/search?${missingParams(params, missing)}`)
+  return apiGet<SearchResults>(`/search?${choiceParams(missingParams(params, missing), choice)}`)
+}
+
+/**
+ * 記住哪幾種名字預設開著（`PUT /api/search/names`）：只帶這一次改了的那幾種。全域、在伺服器上，
+ * 所以在這部作品開了中文名，下一部打開時中文名也開著。
+ */
+export async function rememberNames(kinds: Partial<Record<NameKind, boolean>>) {
+  return apiPut<Schemas['RememberedNamesOut']>('/search/names', { kinds })
 }
 
 /**
@@ -60,14 +98,28 @@ function missingParams(params: URLSearchParams, missing: MissingScope | null) {
   return params
 }
 
+/** 開了的 chip 寫成參數：`name` 與 `in_season` 可重複。沒動過（`null`）就不帶，後端取預設。 */
+function choiceParams(params: URLSearchParams, choice: QueryChoice | null) {
+  if (choice) {
+    for (const name of choice.names) params.append('name', name)
+    for (const season of choice.seasons) params.append('in_season', String(season))
+    params.set('any_season', String(choice.anySeason))
+  }
+  return params
+}
+
 /**
- * 按下搜尋之前會送出去的那幾個關鍵字（`GET /api/search/queries`）。不打索引站，只讀快照。
+ * 按下搜尋之前會送出去的那幾個關鍵字與 chip（`GET /api/search/queries`）。不打索引站，只讀快照。
  *
- * 規則在後端一份（`search_titles`）：第二季以後多出來的 `第N季` / `Season N` 變體要看得見，
- * 而前端重算一份遲早會與真的搜尋長出不同的答案。
+ * 規則在後端一份（`services/search_queries.py`）：開了哪些名字與季、組出哪幾個查詢，前端重算一份
+ * 遲早會與真的搜尋長出不同的答案。
  */
-export function queriesQueryOptions(media: string, missing: MissingScope | null = null) {
-  const params = missingParams(new URLSearchParams({ media }), missing)
+export function queriesQueryOptions(
+  media: string,
+  missing: MissingScope | null = null,
+  choice: QueryChoice | null = null,
+) {
+  const params = choiceParams(missingParams(new URLSearchParams({ media }), missing), choice)
 
   return queryOptions({
     queryKey: [
@@ -76,8 +128,9 @@ export function queriesQueryOptions(media: string, missing: MissingScope | null 
       media,
       missing ? (missing.season ?? 'all') : 'titles',
       missing?.fromSeason ?? 0,
+      choice,
     ],
-    queryFn: () => apiGet<Schemas['SearchQueriesOut']>(`/search/queries?${params}`),
+    queryFn: () => apiGet<QueryPlan>(`/search/queries?${params}`),
     staleTime: 5 * 60 * 1000,
   })
 }

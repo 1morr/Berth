@@ -11,7 +11,8 @@ import { Timestamp } from '../components/Timestamp'
  * 與 `TmdbNotice` 同一個道理，每一種理由的**下一步不同**：`not_configured` 是精靈第 6 步跳過了
  * ——那不是失敗，是還沒接，所以它用 `assigned`（需要你）而不是 `blocked`（走不下去）。
  * `budget_exhausted`（M3 票 20）是 Berth 自己先停手、等得到，配 `neutral`（不需要你，也還沒完成）。
- * 其餘三種都是真的問不動，配 `blocked`。
+ * `too_many_queries`（M4 票 84）是開了太多名字與季，要你關掉幾個，配 `assigned`；畫面在按下去之前就停用了
+ * 搜尋鍵，它只在直接打 API 時出現。其餘三種都是真的問不動，配 `blocked`。
  */
 export function IndexerNotice({
   problem,
@@ -23,11 +24,12 @@ export function IndexerNotice({
   retryAt?: string | null
 }) {
   const { t } = useTranslation()
-  const pending = problem === 'not_configured'
+  const pending = problem === 'not_configured' || problem === 'too_many_queries'
   const waiting = problem === 'budget_exhausted'
   // 位址與憑證都在設定的索引站那一頁改，所以索引站的問題都連得過去；`no_query` 例外——
-  // 那是這部作品的 TMDB 快照還沒抓到，與索引站無關，去設定也修不了；預算用完也是，等就好。
-  const toSettings = problem !== 'no_query' && !waiting
+  // 那是這部作品的 TMDB 快照還沒抓到，與索引站無關，去設定也修不了；預算用完也是，等就好；
+  // 查詢太多是這一區塊的 chip 開太多，關掉就好。
+  const toSettings = problem !== 'no_query' && problem !== 'too_many_queries' && !waiting
 
   return (
     <div className="grid max-w-prose gap-3">

@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -294,13 +295,99 @@ class TestQueryPreview:
 
         body = client.get(f"/api/search/queries?media={SPY_ID}").json()
 
-        assert body["queries"][:2] == ["SPY x FAMILY", "SPY×FAMILY"]
-        # 季號變體與真的搜尋同一份規則（`search_titles`），不看 Route（票 14e）。
-        assert "SPY x FAMILY Season 2" in body["queries"]
+        assert body["queries"][:3] == ["SPY x FAMILY", "SPY x FAMILY S02", "SPY x FAMILY Season 2"]
+        assert indexer.queries == []
+
+    def test_it_lists_the_chips_and_which_are_on(self, client: TestClient) -> None:
+        """名字與季的 chip、預設開哪幾顆、上限（M4 票 84）。
+
+        預設：英文名與原名、不指定季加最新一季。"""
+        sign_in(client)
+
+        body = client.get(f"/api/search/queries?media={SPY_ID}").json()
+
+        assert body["names"][:2] == [
+            {"name": "SPY x FAMILY", "kinds": ["english"], "on": True},
+            {"name": "SPY×FAMILY", "kinds": ["original"], "on": True},
+        ]
+        assert not [chip for chip in body["names"][2:] if chip["on"]]
+        assert body["seasons"] == [{"number": 1, "on": False}, {"number": 2, "on": True}]
+        # 代價那一行要說的「每站每小時 N 格」是這一台的請求預算，不是寫死的。
+        assert (body["any_season"], body["limit"], body["budget"]) == (True, 10, 60)
+
+    def test_the_chosen_names_and_seasons_are_what_both_ask(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        """帶了 `name` 就照開了的問；預覽與搜尋收同一組參數，問的是同一份。"""
+        sign_in(client)
+        chosen = f"media={SPY_ID}&name=SPY%20x%20FAMILY&in_season=1&any_season=false"
+
+        preview = client.get(f"/api/search/queries?{chosen}").json()
+        client.get(f"/api/search?{chosen}")
+
+        assert preview["queries"] == ["SPY x FAMILY S01", "SPY x FAMILY Season 1"]
+        assert [query.text for query in indexer.queries] == preview["queries"]
+        assert [chip["on"] for chip in preview["names"][:2]] == [True, False]
+        assert preview["seasons"] == [{"number": 1, "on": True}, {"number": 2, "on": False}]
+        assert preview["any_season"] is False
+
+    def test_a_search_over_the_limit_asks_nothing(
+        self, client: TestClient, indexer: FakeIndexerSearch
+    ) -> None:
+        sign_in(client)
+        names = "&".join(f"name={chip['name']}" for chip in _names(client))
+        chosen = f"media={SPY_ID}&{names}&in_season=1&in_season=2"
+
+        preview = client.get(f"/api/search/queries?{chosen}").json()
+        body = client.get(f"/api/search?{chosen}").json()
+
+        assert len(preview["queries"]) > preview["limit"]
+        assert body["problem"] == "too_many_queries"
         assert indexer.queries == []
 
     def test_it_needs_a_session(self, client: TestClient) -> None:
         assert client.get(f"/api/search/queries?media={SPY_ID}").status_code == 401
+
+
+class TestRememberedNames:
+    """名字種類全域記住（M4 票 84）：在一部作品開了，之後每一部打開時都開著。"""
+
+    def test_a_remembered_kind_is_on_next_time(self, client: TestClient) -> None:
+        sign_in(client)
+        before = _names(client)
+        chinese = [chip for chip in before if "chinese" in chip["kinds"]]
+
+        stored = client.put("/api/search/names", json={"kinds": {"chinese": True}}, headers=BROWSER)
+        after = _names(client)
+
+        assert stored.status_code == 200
+        assert stored.json()["kinds"] == {
+            "english": True,
+            "original": True,
+            "chinese": True,
+            "simplified": False,
+        }
+        assert chinese and not chinese[0]["on"]
+        assert [chip["on"] for chip in after if "chinese" in chip["kinds"]] == [True]
+
+    def test_aliases_are_refused(self, client: TestClient) -> None:
+        sign_in(client)
+
+        refusal = client.put("/api/search/names", json={"kinds": {"alias": True}}, headers=BROWSER)
+
+        assert refusal.status_code == 422
+
+    def test_it_needs_a_session(self, client: TestClient) -> None:
+        refusal = client.put(
+            "/api/search/names", json={"kinds": {"chinese": True}}, headers=BROWSER
+        )
+
+        assert refusal.status_code == 401
+
+
+def _names(client: TestClient) -> list[dict[str, Any]]:
+    chips: list[dict[str, Any]] = client.get(f"/api/search/queries?media={SPY_ID}").json()["names"]
+    return chips
 
 
 class TestMissingEpisodes:
@@ -318,8 +405,8 @@ class TestMissingEpisodes:
 
         assert body["queries"][:3] == [
             "SPY x FAMILY S00",
+            "SPY x FAMILY Season 0",
             "SPY x FAMILY S01",
-            "SPY x FAMILY S02",
         ]
         assert indexer.queries == []
 
@@ -365,17 +452,14 @@ class TestMissingEpisodes:
     def test_the_search_says_which_batch_it_asked(
         self, client: TestClient, indexer: FakeIndexerSearch
     ) -> None:
-        """三季都缺、放得下一批：一共一批，沒有下一批（M3 票 20）。"""
+        """三季都缺，兩個拉丁字名字各配兩種季記號是 12 個，放不下一批：這一批問 S00、S01，
+        下一批 S02（M3 票 20）。"""
         sign_in(client)
 
         body = client.get(f"/api/search?media={SPY_ID}&missing=true").json()
 
-        assert body["batch"] == {
-            "seasons": [0, 1, 2],
-            "later": 0,
-            "next_seasons": [],
-            "next_at": None,
-        }
+        batch = body["batch"]
+        assert (batch["seasons"], batch["later"], batch["next_seasons"]) == ([0, 1], 1, [2])
         assert body["retry_at"] is None
 
 
@@ -403,7 +487,7 @@ class TestProblems:
         body = client.get(f"/api/search/queries?media={SPY_ID}").json()
 
         assert body["problem"] == "not_configured"
-        assert body["queries"][:2] == ["SPY x FAMILY", "SPY×FAMILY"]
+        assert body["queries"][0] == "SPY x FAMILY"
         assert indexer.queries == []
 
     def test_a_configured_indexer_has_no_problem_in_the_preview(self, client: TestClient) -> None:

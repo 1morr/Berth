@@ -24,6 +24,7 @@ from berth.domain import (
     IndexerProblem,
     MappingStrategy,
     MediaKind,
+    NameKind,
     SearchVerdict,
     Source,
     StepStatus,
@@ -35,8 +36,10 @@ from berth.services.search import (
     RESULT_LIMIT,
     SearchView,
     plan_queries,
+    remember_names,
     search_torrents,
 )
+from berth.services.search_queries import MAX_QUERIES, QueryChoice
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
 from tests.integration.factories import FakeClientFactory
@@ -142,13 +145,11 @@ def season_of(number: int, episodes: int) -> dict[str, Any]:
 async def test_every_known_title_gets_its_own_query_and_the_results_merge(
     session: AsyncSession,
 ) -> None:
-    """英文、原文與各語言別名各發一次：實測三個標題的聯集比任何一個都大得多（票 08）。
-
-    只有一季，所以沒有季號變體佔掉排最後的別名。
-    """
+    """開了的名字各發一次：實測三個標題的聯集比任何一個都大得多（票 08）。"""
     await arrange_media(session)
     await arrange_indexer(session)
     await restyle(session, seasons=[season_of(1, 12)])
+    every = QueryChoice(names=("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"))
     indexer = FakeIndexerSearch(
         by_query={
             "SPY x FAMILY": (result("SPY x FAMILY S03E01 1080p WEB", info_hash="a" * 40),),
@@ -159,7 +160,7 @@ async def test_every_known_title_gets_its_own_query_and_the_results_merge(
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY, choice=every)
 
     assert sorted(query.text for query in indexer.queries) == sorted(
         ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"]
@@ -453,13 +454,13 @@ async def test_a_typed_keyword_turns_the_filter_off(session: AsyncSession) -> No
 
 
 @pytest.mark.asyncio
-async def test_a_show_past_its_first_season_adds_the_season_variants(
+async def test_a_show_past_its_first_season_opens_the_latest_season(
     session: AsyncSession,
 ) -> None:
-    """發佈名常常只寫得出 `第3季` / `Season 3`，光靠作品名搜不到那一季（plan §8.4）。
+    """發佈名常常只寫得出 `S03` / `Season 3`，光靠作品名搜不到那一季（plan §8.4）。
 
     **不分動漫**（票 14e，brief §19）：Route 上已經沒有東西說得出「這是動漫」，而美劇的
-    `The Bear Season 3` 一樣是真的發佈名。
+    `The Bear Season 3` 一樣是真的發佈名。預設只開英文名與原名（M4 票 84），所以中文名不問。
     """
     await arrange_media(session)
     await arrange_indexer(session)
@@ -476,34 +477,144 @@ async def test_a_show_past_its_first_season_adds_the_season_variants(
 
     await search_torrents(session, factory, SourceCache(), media_id=SPY)
 
-    texts = [query.text for query in indexer.queries]
-    assert "The Bear Season 3" in texts
-    assert "熊家餐館 第3季" in texts
+    assert [query.text for query in indexer.queries] == [
+        "The Bear",
+        "The Bear S03",
+        "The Bear Season 3",
+    ]
 
 
-@pytest.mark.asyncio
-async def test_the_display_title_beats_a_random_alias(session: AsyncSession) -> None:
-    """TMDB 的別名沒有順序可言，所以顯示用標題明確排第三——不然由 TMDB 決定誰進前五名。
+class TestRememberedNames:
+    """名字的開關以種類為單位全域記住（M4 票 84，`.scratch/m4/search-choose-shape.md`）。"""
 
-    實跑抓到的樣子：`Agent x Ailə`（亞塞拜然語）排在中文標題前面，而使用者的索引站上
-    是中文字幕組（票 08）。
-    """
-    await arrange_media(session)
-    await arrange_indexer(session)
-    row = await session.get(Media, SPY)
-    assert row is not None
-    row.tmdb_snapshot_json = {
-        **(row.tmdb_snapshot_json or {}),
-        "titles": ["SPY x FAMILY", "Agent x Ailə", "Spy Familie", "間諜家家酒", "间谍过家家"],
-    }
-    await session.commit()
-    indexer = FakeIndexerSearch()
-    factory = FakeClientFactory(indexer_search=indexer)
+    @pytest.mark.asyncio
+    async def test_a_kind_turned_on_for_one_work_is_on_for_the_next(
+        self, session: AsyncSession
+    ) -> None:
+        """在一部作品開了中文名，另一部打開時中文名就開著；關掉也一樣。"""
+        await arrange_media(session)
+        await arrange_nosferatu(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory()
 
-    await search_torrents(session, factory, SourceCache(), media_id=SPY)
+        before = await plan_queries(session, factory, media_id=NOSFERATU)
+        await remember_names(session, {NameKind.CHINESE: True})
+        turned_on = await plan_queries(session, factory, media_id=SPY)
+        await remember_names(session, {NameKind.CHINESE: False})
+        turned_off = await plan_queries(session, factory, media_id=NOSFERATU)
 
-    texts = [query.text for query in indexer.queries]
-    assert texts[:3] == ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒"]
+        assert "吸血鬼" not in before.choice.names
+        assert "間諜家家酒" in turned_on.choice.names
+        assert "吸血鬼" not in turned_off.choice.names
+
+    @pytest.mark.asyncio
+    async def test_the_search_uses_the_remembered_kinds_too(self, session: AsyncSession) -> None:
+        """沒帶 `choice` 的搜尋與預覽同一個預設：按下去問的就是畫面上開著的。"""
+        await arrange_media(session)
+        await arrange_indexer(session)
+        await remember_names(session, {NameKind.SIMPLIFIED: True, NameKind.ORIGINAL: False})
+        await restyle(session, title_zh_cn="间谍过家家", seasons=[season_of(1, 12)])
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+
+        preview = await plan_queries(session, factory, media_id=SPY)
+        await search_torrents(session, factory, SourceCache(), media_id=SPY)
+
+        assert preview.queries == ("SPY x FAMILY", "间谍过家家")
+        assert [query.text for query in indexer.queries] == list(preview.queries)
+
+    @pytest.mark.asyncio
+    async def test_only_the_kinds_sent_change(self, session: AsyncSession) -> None:
+        stored = await remember_names(session, {NameKind.CHINESE: True})
+
+        assert stored == {
+            NameKind.ENGLISH: True,
+            NameKind.ORIGINAL: True,
+            NameKind.CHINESE: True,
+            NameKind.SIMPLIFIED: False,
+        }
+
+    @pytest.mark.asyncio
+    async def test_aliases_are_not_remembered(self, session: AsyncSession) -> None:
+        """別名沒有語言：記住「別名」等於下一部作品三十幾個全開。拒絕，不默默丟掉。"""
+        with pytest.raises(ValueError, match="aliases"):
+            await remember_names(session, {NameKind.ALIAS: True})
+
+
+class TestChosenNamesAndSeasons:
+    """使用者在 chip 上開了的名字與季（M4 票 84）：預覽與搜尋同一份，超過上限整次不問。"""
+
+    @pytest.mark.asyncio
+    async def test_the_preview_and_the_search_ask_the_chosen_ones(
+        self, session: AsyncSession
+    ) -> None:
+        await arrange_media(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+        choice = QueryChoice(names=("間諜家家酒", "SPY x FAMILY"), seasons=(1,), any_season=False)
+
+        preview = await plan_queries(session, factory, media_id=SPY, choice=choice)
+        await search_torrents(session, factory, SourceCache(), media_id=SPY, choice=choice)
+
+        assert preview.queries == ("SPY x FAMILY S01", "SPY x FAMILY Season 1", "間諜家家酒 第1季")
+        assert [query.text for query in indexer.queries] == list(preview.queries)
+        assert preview.choice == choice
+
+    @pytest.mark.asyncio
+    async def test_the_preview_lists_every_name_and_season_to_choose_from(
+        self, session: AsyncSession
+    ) -> None:
+        await arrange_media(session)
+
+        plan = await plan_queries(session, FakeClientFactory(), media_id=SPY)
+
+        assert [(name.text, name.kinds) for name in plan.names] == [
+            ("SPY x FAMILY", (NameKind.ENGLISH,)),
+            ("SPY×FAMILY", (NameKind.ORIGINAL,)),
+            ("間諜家家酒", (NameKind.CHINESE,)),
+            ("间谍过家家", (NameKind.ALIAS,)),
+        ]
+        assert plan.seasons == (1, 3)
+        assert plan.limit == MAX_QUERIES
+
+    @pytest.mark.asyncio
+    async def test_more_queries_than_the_limit_asks_nothing(self, session: AsyncSession) -> None:
+        """超過上限不砍尾巴：名字與季是使用者自己開的，默默少問幾個等於替他做了決定。"""
+        await arrange_media(session)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+        every = QueryChoice(
+            names=("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"), seasons=(1, 3)
+        )
+
+        preview = await plan_queries(session, factory, media_id=SPY, choice=every)
+        view = await search_torrents(session, factory, SourceCache(), media_id=SPY, choice=every)
+
+        assert len(preview.queries) > MAX_QUERIES
+        assert view.problem is IndexerProblem.TOO_MANY_QUERIES
+        assert indexer.queries == []
+
+    @pytest.mark.asyncio
+    async def test_the_missing_search_asks_every_chosen_name(self, session: AsyncSession) -> None:
+        """搜缺的集也用開了的名字：中文名開著時，缺的那一集中文名也問到。"""
+        tv = await route(session)
+        spy = await title(session, name_zh="間諜家家酒", seasons=(season_snapshot(1, aired=2),))
+        await linked(session, spy, tv, episode=1)
+        await arrange_indexer(session)
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
+        choice = QueryChoice(names=("SPY x FAMILY", "間諜家家酒"))
+
+        await search_torrents(
+            session, factory, SourceCache(), media_id=spy.id, missing=True, choice=choice
+        )
+
+        assert [query.text for query in indexer.queries] == [
+            "SPY x FAMILY S01E02",
+            "間諜家家酒 S01E02",
+        ]
 
 
 @pytest.mark.asyncio
@@ -555,7 +666,7 @@ async def test_a_movie_does_not_add_them(session: AsyncSession) -> None:
 
     await search_torrents(session, factory, SourceCache(), media_id=OPPENHEIMER)
 
-    assert [query.text for query in indexer.queries] == ["Oppenheimer", "奧本海默"]
+    assert [query.text for query in indexer.queries] == ["Oppenheimer"]
     assert season_queries(indexer) == []
 
 
@@ -631,7 +742,10 @@ class TestMissingEpisodes:
             session, factory, SourceCache(), media_id=spy.id, missing=True, season=2
         )
 
-        assert [query.text for query in indexer.queries] == ["SPY x FAMILY S02"]
+        assert [query.text for query in indexer.queries] == [
+            "SPY x FAMILY S02",
+            "SPY x FAMILY Season 2",
+        ]
 
     @pytest.mark.asyncio
     async def test_the_preview_and_the_search_ask_the_same_thing(
@@ -683,12 +797,12 @@ class TestMissingEpisodes:
         assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
 
     @pytest.mark.asyncio
-    async def test_gaps_in_seven_seasons_are_asked_batch_by_batch(
+    async def test_gaps_in_twelve_seasons_are_asked_batch_by_batch(
         self, session: AsyncSession
     ) -> None:
-        """M3 票 20 驗收第二條：七季都有缺，季記號放不下一批——**分批問完每一季**，一次也不退回
+        """M3 票 20 驗收第二條：十二季都有缺，季記號放不下一批——**分批問完每一季**，一次也不退回
         作品名。每一批說得出問了哪幾季、下一批是哪幾季、預算何時放得下它。"""
-        long = await seven_seasons(session)
+        long = await many_seasons(session)
         indexer = FakeIndexerSearch(
             sites=(SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),)
         )
@@ -711,17 +825,21 @@ class TestMissingEpisodes:
         )
 
         asked = [query.text for query in indexer.queries]
-        assert asked[:5] == [f"SPY x FAMILY S{number:02d}" for number in range(1, 6)]
-        # 第二批只剩兩季、兩集缺：記號放得下逐集，就問那兩集（收成季記號只在放不下時才做）。
-        assert asked[5:7] == ["SPY x FAMILY S06E02", "SPY x FAMILY S07E02"]
+        assert asked[:10] == [
+            f"SPY x FAMILY {token}"
+            for number in range(1, 6)
+            for token in (f"S{number:02d}", f"Season {number}")
+        ]
+        # 第二批只剩七季、七集缺：放得下逐集，就問那幾集（收成季記號只在放不下時才做）。
+        assert asked[10:] == [f"SPY x FAMILY S{number:02d}E02" for number in range(6, 13)]
         assert "SPY x FAMILY" not in asked
-        assert (first.batch.seasons, first.batch.later) == ((1, 2, 3, 4, 5), 1)
-        assert first.batch.next_seasons == (6, 7)
-        # 預算還寬：下一批現在就問得（這一批用掉 5 格，60 格還剩很多）。
+        assert (first.batch.seasons, first.batch.later) == ((1, 2, 3, 4, 5), 2)
+        assert first.batch.next_seasons == (6, 7, 8, 9, 10)
+        # 預算還寬：下一批現在就問得（這一批用掉 10 格，60 格還剩很多）。
         assert first.batch.next_at == clock
         assert second.batch is not None
         assert (second.batch.seasons, second.batch.later, second.batch.next_seasons) == (
-            (6, 7),
+            tuple(range(6, 13)),
             0,
             (),
         )
@@ -733,7 +851,7 @@ class TestMissingEpisodes:
     ) -> None:
         """問完第一批、從結果送了幾季之後季表就變了：下一批照季定位，S06、S07 照樣問得到
         （以序號定位時 S02 補上之後第二批只剩 S07，code review 抓到）。"""
-        long = await seven_seasons(session)
+        long = await many_seasons(session)
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
         first = await search_torrents(
@@ -762,7 +880,7 @@ class TestMissingEpisodes:
     @pytest.mark.asyncio
     async def test_the_preview_names_the_batch_it_will_ask(self, session: AsyncSession) -> None:
         """預覽與搜尋同一份：第二批的預覽就是第二批真的問出去的那幾個。"""
-        long = await seven_seasons(session)
+        long = await many_seasons(session)
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
@@ -775,16 +893,16 @@ class TestMissingEpisodes:
 
         assert list(preview.queries) == [query.text for query in indexer.queries]
         assert preview.batch is not None
-        assert (preview.batch.seasons, preview.batch.later) == ((6, 7), 0)
+        assert (preview.batch.seasons, preview.batch.later) == (tuple(range(6, 13)), 0)
 
 
-async def seven_seasons(session: AsyncSession) -> Media:
-    """七季、每季播了兩集、每季只入庫第一集：七個季都缺一集，季記號放不下一批。"""
+async def many_seasons(session: AsyncSession) -> Media:
+    """十二季、每季播了兩集、每季只入庫第一集：十二季都缺一集，逐集放不下一批、季記號也放不下。"""
     tv = await route(session)
     long = await title(
-        session, seasons=tuple(season_snapshot(number, aired=2) for number in range(1, 8))
+        session, seasons=tuple(season_snapshot(number, aired=2) for number in range(1, 13))
     )
-    for number in range(1, 8):
+    for number in range(1, 13):
         await linked(session, long, tv, season_number=number, episode=1)
     await arrange_indexer(session)
     return long
@@ -994,8 +1112,8 @@ class TestNosferatu:
     async def test_the_counts_add_up_to_what_the_indexer_returned(
         self, session: AsyncSession
     ) -> None:
-        """回了幾筆 = 重複合併的 + 每一類的筆數（M4 票 83）。三個名字各問一次，
-        替身每一次都回同樣 18 筆，所以 36 筆是重複的。"""
+        """回了幾筆 = 重複合併的 + 每一類的筆數（M4 票 83）。預設的兩個名字各問一次，
+        替身每一次都回同樣 18 筆，所以 18 筆是重複的。"""
         await arrange_nosferatu(session)
         await arrange_indexer(session)
         indexer = FakeIndexerSearch(results=nosferatu_results())
@@ -1003,8 +1121,8 @@ class TestNosferatu:
 
         view = await search_torrents(session, factory, SourceCache(), media_id=NOSFERATU)
 
-        assert len(indexer.queries) == 3
-        assert (view.returned, view.merged, count(view, SearchVerdict.UNRELATED)) == (54, 36, 2)
+        assert len(indexer.queries) == 2
+        assert (view.returned, view.merged, count(view, SearchVerdict.UNRELATED)) == (36, 18, 2)
         assert count(view) == 4
         assert view.returned == view.merged + sum(one.total for one in view.counts)
 
@@ -1058,7 +1176,7 @@ async def arrange_law(session: AsyncSession) -> None:
 class TestAmpersand:
     """《Law & Order》：The Pirate Bay 對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆，
     Mikan 反過來（`TIGER & BUNNY` 81 筆、`TIGER and BUNNY` 0 筆；2026-10-10 實測，M4 票 69）。
-    所以兩種都問：原樣的那一個後面緊接寫開的那一個，仍在 `MAX_QUERIES` 之內。"""
+    所以兩種都問：原樣的那一個問完它的每一季，再換寫開的那一個。"""
 
     @pytest.mark.asyncio
     async def test_the_spelled_out_title_follows_the_original(self, session: AsyncSession) -> None:
@@ -1071,10 +1189,11 @@ class TestAmpersand:
 
         assert [query.text for query in indexer.queries] == [
             "Law & Order",
+            "Law & Order S24",
+            "Law & Order Season 24",
             "Law and Order",
-            "法網遊龍",
+            "Law and Order S24",
             "Law and Order Season 24",
-            "法網遊龍 第24季",
         ]
 
     @pytest.mark.asyncio
@@ -1084,7 +1203,7 @@ class TestAmpersand:
 
         planned = await plan_queries(session, FakeClientFactory(), media_id=LAW)
 
-        assert planned.queries[:2] == ("Law & Order", "Law and Order")
+        assert "Law and Order" in planned.queries
 
     @pytest.mark.asyncio
     async def test_releases_spelled_either_way_reach_the_table(self, session: AsyncSession) -> None:
@@ -1120,9 +1239,10 @@ class TestAmpersand:
 
         assert [query.text for query in indexer.queries][:3] == [
             "SPY x FAMILY",
-            "SPY×FAMILY",
-            "間諜家家酒",
+            "SPY x FAMILY S03",
+            "SPY x FAMILY Season 3",
         ]
+        assert not [query for query in indexer.queries if " and " in query.text]
 
 
 class TestVerdicts:

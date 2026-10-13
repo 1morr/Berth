@@ -54,6 +54,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `rootless_host_probe.sh` | M4 票 42：rootless Docker 上容器 root 與容器 uid 1000 寫的檔在宿主上是誰的；`berth` 容器以 `host.docker.internal` 與宿主區網 IP 各打監聽 `0.0.0.0` / `127.0.0.1` 的程式與既有服務的 port。只讀，跑在宿主上；結論在 brief §20.14 |
 | `jellyfin_stream_probe.py` | M4 票 55：入庫的那一部片 Jellyfin 認不認得、播不播得到（Unraid 上 mover 前後各問一次）。在 `berth` 容器裡以 stdin 餵進 `docker exec -i berth python - <item id>` 跑（指令在根 README），用 Berth 存的 API key、不印出；只用標準庫。結論在 `docs/research/unraid-trial-2026-10-08.md` |
 | `inline_preseed.py` | M4 票 70：qBittorrent 的 preseed 腳本寫進 compose 頂層 `configs` 的 `content`（`$` 寫成 `$$`）放到 `/custom-cont-init.d/10-berth.sh`（Compose 建容器時寫進去，不是掛載），非 swarm 下 `mode` 有沒有效（linuxserver 的 init 只跑 `-x` 的檔）、內容逐位元組是否等於原腳本、init 的 log 與 tamper 警告、兩個白名單鍵各一行、宿主 / `BERTH_IP` / 同網段別的位址打 API 的狀態碼，`restart` 與 `up -d --force-recreate` 之後再量一次；不寫 `mode` 的對照組、qbittorrent 的 profile 關掉時 `up -d` 報不報錯也一起跑。`--compose-bin` 換獨立的 Compose 二進位；只用標準庫，連同 `lib.py` 與 `deploy/docker-compose.yml`（腳本取自它的 `configs.qbittorrent-preseed`）照相對位置搬到 Linux 宿主就能跑。自己起停 compose project `berth-t70`（容器 `berth-t70-qbittorrent`，名字是協調者為了與票 42 並行指定的，不是 `berth-exp-*`）；結論在 brief §20.18 |
+| `season_token_compare.py` | M4 票 84：搜尋季的記號寫 `Season N` 還是 `SNN`（CJK 比 `第N季`），真的 Prowlarr 加公開站（The Pirate Bay、Mikan、dmhy）各回幾筆、其中發佈名真的含作品名的幾筆（TPB 查不到會回熱門清單），以及這些命中自己寫 `SNN` 還是 `Season N`（站有沒有做模糊比對）。需要一台 Prowlarr（URL 與 API key 由 argv 或 `PROWLARR_URL` / `PROWLARR_API_KEY` 給）；14 次查詢、每次間隔 3.5 秒，公開站會封 IP；結果 `.local/experiments/results/season_token_compare.json` |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方

@@ -629,7 +629,8 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `border-rule-strong`，誰贏看 CSS 的產生順序。按鈕（`aria-pressed` 的季切換、只看缺集）照舊二選一 `NAV_BOX` / `NAV_BOX_ACTIVE`。
 - **可多選的切換鍵（`ToggleChips`，M4 票 83）:** 同一個 `FILTER` / `FILTER_ACTIVE` 方塊，每一顆 `aria-pressed`、整組 `role="group"`
   以 `sr-only` 的一句命名；可帶筆數（`.value text-xs`，與標籤之間一個空白，可存取名稱才是「符合 13」）。搜尋結果的類別篩選用它，
-  作品頁的名字與季的選擇（票 84）也用它。單選的篩選列照舊是下面那一種。
+  作品頁的名字與季的選擇（票 84）也用它：名字是要送出去的那一串，`machine` 讓它走 `.value` 原樣（方塊本身是 `.label`，英文會大寫，
+  The Machine String Rule），`note` 是跟在後面的 `ink-dim` 小字（「英文名」「原名」），一樣算進可存取名稱。單選的篩選列照舊是下面那一種。
 - **篩選列選著的那一個不是連結**，是一段 `aria-current="true"` 的字（`NAV_BOX_ACTIVE` 的外觀）：`Link` 當前時一定掛
   `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
@@ -806,6 +807,10 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   旁邊一句 `ink-dim` 的理由，引號裡是發佈名裡觸發的那一段字；「符合」的列不標（The Usual Stays Unpainted Rule）。
 - **搜尋結果的篩選（`FilteredResults`，M4 票 83）:** 筆數一行（回了幾筆與重複的）→ 一排 `ToggleChips`（每一類一顆、帶總數，是 0 的不畫，
   「符合」永遠在第一格、預設只開它）＋ 有兩個站以上時一個「站」下拉 → 表格。每一次搜尋回到只開「符合」。
+- **搜尋前選名字與季（`QueryChoices`，M4 票 84）:** 關鍵字列底下兩行，左邊 `.label ink-dim` 的「名字」「季」（`sm` 以下疊在 chip 上面），
+  右邊 `ToggleChips`。名字 chip 是名字本身（`.value`）加種類小字；別名收在一個 `<details>`（摘要「其他別名 N 個，開了 M 個」＋ `ExpandHint`），
+  不和四種名字擠一排。季 chip 是「不指定季」加 `S01`…，搜缺的集時不畫。再下面是預覽（`.value` 的查詢）與代價一行
+  （「會發 N 個查詢：每個索引站各佔 N 格請求預算」，`ink-dim text-xs`）；不能搜時那一行換成原因（`ink text-sm`），掛在停用的搜尋鍵的描述上。
 - **送單（`SubmitAction`）:** 住在發佈名那一格。Ghost「送單」→ 就地展開 `border-2 border-rule-strong` 的確認區塊：
   送到哪一條 Route、會被寫死的資料夾名（`.value wrap-anywhere`）、「這一按就定了」或「它已經是」，加主要 / 取消兩顆鍵。
   被擋下時在同一塊裡以 `role="alert"` 的 `blocked-ink` 說封閉集合的理由，原文接在下面。成功時整塊換成

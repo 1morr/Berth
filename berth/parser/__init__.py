@@ -24,6 +24,7 @@ from berth.parser.title import (
     misfit,
     normalize_title,
     partial_title,
+    season_tokens,
     spell_ampersand,
 )
 
@@ -64,6 +65,7 @@ __all__ = [
     "plan",
     "promote",
     "revise",
+    "season_tokens",
     "series_finished",
     "spell_ampersand",
     "structure_hints",

@@ -504,6 +504,13 @@ uv run python scripts/experiments/rss_subscribe_timing.py --settle 30     # 先�
 uv run python scripts/experiments/rss_subscribe_timing.py --profile       # 同一個行程起 server，cProfile 包住預覽
 ```
 
+搜尋季的記號（M4 票 84）：對一台有公開站的 Prowlarr 實搜 `Season N` 與 `SNN` 各一組，逐站數筆數與名字對得上的筆數。
+不用容器；查詢間隔 3.5 秒、共 14 次，別連跑：
+
+```bash
+python scripts/experiments/season_token_compare.py http://127.0.0.1:19784 <Prowlarr API key>   # 或設 PROWLARR_URL / PROWLARR_API_KEY；Windows 主控台加 PYTHONIOENCODING=utf-8
+```
+
 1,000 部的媒體庫上量 Berth（M2 票 11，plan §11.3 決定 2 的門檻）：自己 build Berth 的 image（只有 backend 那一層）、
 起一次性的 Jellyfin 與 qBittorrent、造 1,000 部 × 12 集的媒體樹（掃描約 6 分鐘），量完連容器、volume、network、image
 一起刪。宿主只要 Python 標準庫與 docker；量測本身在 Berth 的 image 裡跑。結果見

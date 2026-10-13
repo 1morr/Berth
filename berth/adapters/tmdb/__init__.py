@@ -102,6 +102,9 @@ class TmdbDetail:
     runtime: int | None = None
     #: 比對用的標題集合：標題、原文、各國別名、各語言翻譯，去重（plan §4.3）。
     titles: tuple[str, ...] = ()
+    #: `translations` 裡 `zh` / `CN` 那一筆的名字（M4 票 84），沒有是空字串。
+    #: `titles` 也有它，但不帶語言。
+    title_zh_cn: str = ""
     seasons: tuple[TmdbSeasonEntry, ...] = ()
     #: Absolute episode group 的 id，沒有那種 group 時是空字串（brief §20.3）。
     absolute_group_id: str = ""
@@ -246,6 +249,7 @@ def parse_detail(payload: Any, kind: MediaKind) -> TmdbDetail:
         # 劇集的 `episode_run_time` 是一份各集片長的清單，不是作品片長；片長在每一集上。
         runtime=None if series else _int(payload.get("runtime")),
         titles=_titles(title, original, payload),
+        title_zh_cn=_translation(payload, "zh", "CN"),
         seasons=_seasons(payload.get("seasons")) if series else (),
         absolute_group_id=_absolute_group_id(payload.get("episode_groups")),
         ended=series and _text(payload, "status") in ENDED_STATUSES,
@@ -356,6 +360,22 @@ def _titles(title: str, original: str, payload: dict[str, Any]) -> tuple[str, ..
             if isinstance(data, dict):
                 found += [_text(data, "name"), _text(data, "title")]
     return unique_titles(found)
+
+
+def _translation(payload: dict[str, Any], language: str, country: str) -> str:
+    """`translations` 裡那一個語言與地區的名字；沒有那一筆或沒翻譯是空字串。"""
+    translations = payload.get("translations")
+    rows = translations.get("translations", []) if isinstance(translations, dict) else []
+    for row in rows:
+        if (
+            isinstance(row, dict)
+            and row.get("iso_639_1") == language
+            and row.get("iso_3166_1") == country
+        ):
+            data = row.get("data")
+            if isinstance(data, dict):
+                return _text(data, "name") or _text(data, "title")
+    return ""
 
 
 def unique_titles(values: Iterable[str]) -> tuple[str, ...]:

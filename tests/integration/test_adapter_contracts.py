@@ -2960,6 +2960,32 @@ async def test_tmdb_tv_detail_collects_every_title_it_can_match_against() -> Non
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_tmdb_detail_reads_the_simplified_chinese_name_from_the_translations() -> None:
+    """簡體中文名是 `translations` 裡 `zh` / `CN` 那一筆（M4 票 84）：Mikan、dmhy 的字幕組寫的是它。
+
+    它與其他翻譯一樣也在 `titles` 裡，但那一份不帶語言，搜尋面板認不出哪一個是簡體中文名。
+    """
+    respx.get(f"{TMDB_URL}/tv/120089").respond(
+        200, text=read_fixture("http/tmdb/tv-detail.spy-x-family.en.json")
+    )
+    respx.get(f"{TMDB_URL}/movie/1241982").respond(
+        200, text=read_fixture("http/tmdb/movie-detail.moana-2.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        show = await client.detail(MediaKind.TV, 120089, language="en-US")
+        film = await client.detail(MediaKind.MOVIE, 1241982, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert show.title_zh_cn == "间谍过家家"
+    # 錄下來的這一份沒有中文翻譯：沒有就是空字串，不拿別的語言頂。
+    assert film.title_zh_cn == ""
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_tmdb_movie_detail_reads_the_film_fields() -> None:
     """電影用 `title` / `release_date` / `runtime`，而且沒有季。"""
     respx.get(f"{TMDB_URL}/movie/1241982").respond(

@@ -93,10 +93,10 @@ async def test_the_poller_the_backfill_and_the_search_share_one_budget(
 ) -> None:
     """票 20 驗收第一條：三者在同一站上加起來不超過。
 
-    預算 10：缺集搜尋一批 5 個、輪一輪 4 個、綁定時補舊集 1 個，正好用完；15 分鐘後的下一輪
-    一個請求都沒出去，延後的是輪詢。
+    預算 8：缺集搜尋一批 3 個（預設開的英文名與原名問整季：`S01`、`Season 1`、`第1季`，M4 票 84）、
+    輪一輪 4 個、綁定時補舊集 1 個，正好用完；15 分鐘後的下一輪一個請求都沒出去，延後的是輪詢。
     """
-    factory, indexer, clock, route_id = await mikan_on_both_sides(session, roots, limit=10)
+    factory, indexer, clock, route_id = await mikan_on_both_sides(session, roots, limit=8)
     media_id = "tv:262000"
     searched = await search_torrents(
         session, factory, SourceCache(), media_id=media_id, missing=True
@@ -111,12 +111,12 @@ async def test_the_poller_the_backfill_and_the_search_share_one_budget(
     clock.now = NOW + timedelta(minutes=16)
     later = await poll_feed(session, factory, feed.id, now=clock.now)
 
-    assert searched.problem is None and len(indexer.queries) == 5
+    assert searched.problem is None and len(indexer.queries) == 3
     # 每一站都放得下時不限定站：與沒有預算時問的是同一批。
     assert {query.indexer_ids for query in indexer.queries} == {()}
     assert searched.skipped == ()
-    assert used(factory) == {BudgetUse.POLL: 4, BudgetUse.BACKFILL: 1, BudgetUse.SEARCH: 5}
-    assert went_out(factory, indexer) == 10
+    assert used(factory) == {BudgetUse.POLL: 4, BudgetUse.BACKFILL: 1, BudgetUse.SEARCH: 3}
+    assert went_out(factory, indexer) == 8
     assert later.failed and MIKAN in later.failed
     assert deferred(factory) == {BudgetUse.POLL}
 
@@ -125,8 +125,10 @@ async def test_a_search_skips_the_site_out_of_budget_and_asks_the_rest(
     session: AsyncSession, roots: dict[str, Path]
 ) -> None:
     """M4 票 77：輪詢用掉 Mikan 大半，搜尋的一批在 Mikan 放不下、在 Nyaa 放得下——只問 Nyaa，
-    結果說出 Mikan 這次沒問、何時放得下。Mikan 一格都不多佔。"""
-    factory, indexer, clock, _ = await mikan_on_both_sides(session, roots, limit=8)
+    結果說出 Mikan 這次沒問、何時放得下。Mikan 一格都不多佔。
+
+    預算 6：輪一輪用掉 4 格，剩 2 格放不下一批 3 個查詢。"""
+    factory, indexer, clock, _ = await mikan_on_both_sides(session, roots, limit=6)
     indexer.sites_ = (MIKAN_SITE, NYAA_SITE)
     feed = await add_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
@@ -137,11 +139,11 @@ async def test_a_search_skips_the_site_out_of_budget_and_asks_the_rest(
     )
 
     assert view.problem is None
-    assert [query.indexer_ids for query in indexer.queries] == [(NYAA_SITE.indexer_id,)] * 5
+    assert [query.indexer_ids for query in indexer.queries] == [(NYAA_SITE.indexer_id,)] * 3
     assert view.skipped == (
         SkippedSite(site=MIKAN, indexers=("Mikan",), until=NOW + timedelta(hours=1)),
     )
-    assert used(factory, NYAA) == {BudgetUse.SEARCH: 5}
+    assert used(factory, NYAA) == {BudgetUse.SEARCH: 3}
     assert BudgetUse.SEARCH not in used(factory)
     assert deferred(factory) == {BudgetUse.SEARCH}
 
@@ -150,8 +152,9 @@ async def test_a_search_that_fits_nowhere_asks_nothing_and_says_when(
     session: AsyncSession, roots: dict[str, Path]
 ) -> None:
     """每一站都放不下才整批等：一個查詢都不問，說得出最早何時放得下（最早空出來的那一站），
-    不帶後端的原文（M4 票 77：畫面自己說）。"""
-    factory, indexer, clock, _ = await mikan_on_both_sides(session, roots, limit=8)
+    不帶後端的原文（M4 票 77：畫面自己說）。預算 6：Mikan 輪完剩 2 格、Nyaa 被佔滿，
+    都放不下 3 個。"""
+    factory, indexer, clock, _ = await mikan_on_both_sides(session, roots, limit=6)
     indexer.sites_ = (MIKAN_SITE, NYAA_SITE)
     feed = await add_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
@@ -171,7 +174,7 @@ async def test_a_search_that_fits_nowhere_asks_nothing_and_says_when(
         MIKAN: NOW + timedelta(hours=1),
         NYAA: NOW + timedelta(minutes=10, hours=1),
     }
-    assert went_out(factory, indexer) <= 8
+    assert went_out(factory, indexer) <= 6
     assert deferred(factory) == {BudgetUse.SEARCH}
 
 

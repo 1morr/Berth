@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Job, JobFile, JobPage, MediaJobFilter } from '../api/jobs'
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
 import type { Bangumi, Feed, RssSeries } from '../api/rss'
-import type { Batch, SearchResults } from '../api/search'
+import type { Batch, QueryPlan, SearchResults } from '../api/search'
 import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -212,6 +212,24 @@ const TWO_VERSIONS = {
 }
 
 /** 走真正的 route tree：這一頁掛在 `/media/$mediaId`，而錯誤裡有站內連結。 */
+/**
+ * 搜尋區塊按下去之前的那一份（`GET /api/search/queries`）。這一頁的測試只讀它的 `queries` 與 `batch`；
+ * 名字與季的 chip 在 `media/SearchPanel.test.tsx` 測。
+ */
+function preview(queries: string[], overrides: Partial<QueryPlan> = {}): QueryPlan {
+  return {
+    queries,
+    problem: null,
+    batch: null,
+    names: [{ name: 'SPY x FAMILY', kinds: ['english', 'original'], on: true }],
+    seasons: [],
+    any_season: true,
+    limit: 10,
+    budget: 60,
+    ...overrides,
+  }
+}
+
 function render(
   routes: Record<string, StubRoute | (() => StubRoute)> = {},
   role: 'admin' | 'user' = 'admin',
@@ -221,7 +239,7 @@ function render(
     'GET /api/auth/me': { body: { name: 'skipper', role } },
     [SPY_PATH]: { body: media() },
     // 票 08 的搜尋區塊待命時就會問一次「會用哪幾個關鍵字」（不打索引站，只讀快照）。
-    'GET /api/search/queries?media=tv%3A120089': { body: { queries: ['SPY x FAMILY'] } },
+    'GET /api/search/queries?media=tv%3A120089': { body: preview(['SPY x FAMILY']) },
     // admin 才有的「RSS 訂閱」段（M3 票 19）一進頁面就問綁在這部作品上的 RSS Series。
     [SERIES_PATH]: { body: [] },
     // 「下載」段（M4 票 12）一進頁面就問這部作品的下載；預設是從沒送過。
@@ -951,7 +969,7 @@ describe('Media 詳情頁', () => {
       render({
         [SPY_PATH]: { body: gappy() },
         'GET /api/media/tv%3A136315': { body: bear },
-        'GET /api/search/queries?media=tv%3A136315': { body: { queries: ['The Bear'] } },
+        'GET /api/search/queries?media=tv%3A136315': { body: preview(['The Bear']) },
       })
       // 先去一趟把 The Bear 放進快取：**它已經在快取裡**才是這個 bug 的重現條件——沒有讀取中的
       // 空檔，季表就不會卸掉重掛，篩選會原封不動跟著過去。
@@ -1044,7 +1062,7 @@ describe('Media 詳情頁', () => {
     function gaps(extra: Record<string, StubRoute | (() => StubRoute)> = {}) {
       return render({
         [SPY_PATH]: { body: gappy() },
-        [MISSING_QUERIES]: { body: { queries: ['SPY x FAMILY S01E02'] } },
+        [MISSING_QUERIES]: { body: preview(['SPY x FAMILY S01E02']) },
         [MISSING_SEARCH]: { body: found('[ANi] SPY x FAMILY - 02 [1080P][Baha][CHT]') },
         ...extra,
       })
@@ -1093,13 +1111,13 @@ describe('Media 詳情頁', () => {
       const keyword = await within(
         await screen.findByRole('region', { name: '搜尋 torrent' }),
       ).findByRole('textbox')
-      expect(keyword).toHaveAttribute('placeholder', '留空就用這部作品的各個名字')
+      expect(keyword).toHaveAttribute('placeholder', '留空就用下面開了的名字')
 
       await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
 
       expect(keyword).toHaveAttribute('placeholder', '留空就問缺的那幾集')
       await userEvent.click(within(panel()).getByRole('button', { name: '改回作品名搜尋' }))
-      expect(keyword).toHaveAttribute('placeholder', '留空就用這部作品的各個名字')
+      expect(keyword).toHaveAttribute('placeholder', '留空就用下面開了的名字')
     })
 
     it('按下去焦點落在搜尋區塊的標題上（結果畫在那裡，shape §4）', async () => {
@@ -1114,7 +1132,7 @@ describe('Media 詳情頁', () => {
     it('一季的入口住在展開區裡、只搜那一季（The Summary Is One Button Rule）', async () => {
       const stub = gaps({
         'GET /api/search/queries?media=tv%3A120089&missing=true&season=1': {
-          body: { queries: ['SPY x FAMILY S01E02'] },
+          body: preview(['SPY x FAMILY S01E02']),
         },
         'GET /api/search?media=tv%3A120089&missing=true&season=1': {
           body: found('[ANi] SPY x FAMILY - 02 [1080P][Baha][CHT]'),
@@ -1161,7 +1179,10 @@ describe('Media 詳情頁', () => {
 
       await userEvent.click(screen.getByRole('button', { name: '改回作品名搜尋' }))
 
-      expect(await within(panel()).findByText('SPY x FAMILY')).toBeVisible()
+      const list = await within(panel()).findByRole('list', { name: '要送出去的查詢' })
+      await waitFor(() =>
+        expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent(/^SPY x FAMILY$/),
+      )
       expect(screen.queryByRole('button', { name: '改回作品名搜尋' })).not.toBeInTheDocument()
     })
 
@@ -1177,13 +1198,13 @@ describe('Media 詳情頁', () => {
       function batched(nextAt: string | null) {
         return gaps({
           [MISSING_QUERIES]: {
-            body: { queries: ['SPY x FAMILY S01'], problem: null, batch: FIRST },
+            body: preview(['SPY x FAMILY S01'], { batch: FIRST }),
           },
           [MISSING_SEARCH]: {
             body: { ...found('[ANi] SPY x FAMILY - 02'), batch: { ...FIRST, next_at: nextAt } },
           },
           'GET /api/search/queries?media=tv%3A120089&missing=true&from_season=6': {
-            body: { queries: ['SPY x FAMILY S06', 'SPY x FAMILY S07'], problem: null, batch: LAST },
+            body: preview(['SPY x FAMILY S06', 'SPY x FAMILY S07'], { batch: LAST }),
           },
           'GET /api/search?media=tv%3A120089&missing=true&from_season=6': {
             body: { ...found('[ANi] SPY x FAMILY - 70'), batch: LAST },
@@ -1766,7 +1787,7 @@ describe('觀看區（M1.5 票 08）', () => {
           seasons: [],
         }),
       },
-      'GET /api/search/queries?media=movie%3A1241982': { body: { queries: ['Moana 2'] } },
+      'GET /api/search/queries?media=movie%3A1241982': { body: preview(['Moana 2']) },
     })
     renderApp('/media/movie:1241982')
 
@@ -1861,7 +1882,7 @@ describe('觀看區（M1.5 票 08）', () => {
       [MOVIE_WATCH_PATH]: {
         body: area({ item_id: FILM, kind: 'movie', watch: UNWATCHED, carry_on: null, seasons: [] }),
       },
-      'GET /api/search/queries?media=movie%3A1241982': { body: { queries: ['Moana 2'] } },
+      'GET /api/search/queries?media=movie%3A1241982': { body: preview(['Moana 2']) },
     })
     renderApp('/media/movie:1241982')
 
@@ -1877,7 +1898,7 @@ describe('觀看區（M1.5 票 08）', () => {
       'GET /api/health': { body: HEALTHY },
       'GET /api/auth/me': account.me,
       [SPY_PATH]: { body: media() },
-      'GET /api/search/queries?media=tv%3A120089': { body: { queries: ['SPY x FAMILY'] } },
+      'GET /api/search/queries?media=tv%3A120089': { body: preview(['SPY x FAMILY']) },
       [WATCH_PATH]: () => {
         account.signOut()
         return { status: 401, body: { detail: { reason: 'account_disabled', detail: '' } } }

@@ -512,6 +512,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/plans/*"): Access.SIGNED_IN,
     ("GET", "/search"): Access.SIGNED_IN,
     ("GET", "/search/queries"): Access.SIGNED_IN,
+    # 搜尋面板的名字種類全域記住（M4 票 84）：搜尋是一般使用者做的事，按 chip 的也是他。
+    ("PUT", "/search/names"): Access.SIGNED_IN,
 }
 
 #: M2 驗收第四條點名的六組，照票 16 的寫法：整塊是 admin 的四個前綴，加上 `/jobs` 上的兩個動詞。

@@ -402,9 +402,12 @@ function SearchFeedPicker({
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  // 與搜尋區塊同一份標題集合（`search_titles`，後端算）。
+  // 與搜尋區塊同一份名字（後端算）：英文名、原名、中文名、簡體中文名，不含三十幾個別名，也不含季記號——
+  // 訂閱的是一個搜尋詞，`第3季` 那幾個是一次搜尋的查詢，不是名字（M4 票 84）。
   const planned = useQuery(queriesQueryOptions(media.id))
-  const titles = planned.data?.queries ?? []
+  const titles = (planned.data?.names ?? [])
+    .filter((chip) => !chip.kinds.includes('alias'))
+    .map((chip) => chip.name)
   // `null` 是還沒動過：用標題集合的第一個。
   const [typed, setTyped] = useState<string | null>(null)
   const term = typed ?? titles[0] ?? media.title_en

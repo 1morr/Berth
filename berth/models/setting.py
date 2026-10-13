@@ -18,6 +18,7 @@ from berth.domain import (
     ConnectionReason,
     ConnectionState,
     HealthStatus,
+    NameKind,
     QbittorrentStep,
     ServiceKind,
     ServiceOrigin,
@@ -74,6 +75,34 @@ class RssSettings(SettingsGroup):
     exclude_not_single: bool = True
     #: 全域的排除條件（`parser.exclusion` 的格式），與 Feed、RSS Series 那兩層取聯集。
     exclude: list[str] = []
+
+
+#: 搜尋面板記住的名字種類與它們的出廠值（`SearchSettings`）。
+FACTORY_NAMES: dict[NameKind, bool] = {
+    NameKind.ENGLISH: True,
+    NameKind.ORIGINAL: True,
+    NameKind.CHINESE: False,
+    NameKind.SIMPLIFIED: False,
+}
+
+
+class SearchSettings(SettingsGroup):
+    """作品搜尋面板記住的名字種類（M4 票 84，`.scratch/m4/search-choose-shape.md`）。
+
+    **全域、在伺服器上**：換裝置、換一部作品都一樣，在一部作品開了中文名之後每一部都預設開著。
+    別名（`NameKind.ALIAS`）不在這裡——快照的別名沒有語言，記住「別名」等於下一部作品三十幾個全開。
+    """
+
+    KEY = "search"
+
+    #: 出廠值是英文名與原名開、兩種中文名關（使用者 2026-10-10）。
+    names: dict[NameKind, bool] = Field(default_factory=lambda: dict(FACTORY_NAMES))
+
+    @field_validator("names")
+    @classmethod
+    def _every_kind(cls, value: dict[NameKind, bool]) -> dict[NameKind, bool]:
+        """存下來的那一份缺的種類補出廠值（之後多一種名字時舊資料讀得回來），別名丟掉。"""
+        return {kind: value.get(kind, default) for kind, default in FACTORY_NAMES.items()}
 
 
 class QbittorrentSettings(SettingsGroup):
@@ -498,4 +527,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     HealthSettings,
     PollerSettings,
     DiskSettings,
+    SearchSettings,
 )
