@@ -2033,7 +2033,8 @@ export interface paths {
          * Delete Indexer
          * @description 從套件內的 Prowlarr 移除一站（票 06e）。已經不在的站照樣回 200：結果就是它不在了。
          *
-         *     對既有的索引站、與 Berth 加不回去的站（私站）回 422（brief §16.4）。
+         *     對既有的索引站、與 Berth 加不回去的站（私站）回 422（brief §16.4）；Prowlarr 沒答上來或拒絕了是
+         *     502，帶原文（與移除空分類同一種，M4 票 99）。
          */
         delete: operations["delete_indexer_api_setup_indexers__indexer_id__delete"];
         options?: never;
