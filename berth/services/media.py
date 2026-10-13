@@ -18,12 +18,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, NotFoundError, ServiceError
+from berth.adapters.http import NotFoundError, ServiceError
 from berth.adapters.tmdb import (
     BASE_LANGUAGE,
     DISPLAY_LANGUAGE,
@@ -43,6 +43,7 @@ from berth.domain import (
 )
 from berth.models import Media, Route, TmdbSettings, parse_media_id
 from berth.models import media_id as build_media_id
+from berth.models.types import utcnow
 from berth.naming import folder_name
 from berth.services.clients import ServiceClientFactory
 from berth.services.discover import POSTER_SIZE, image_base
@@ -55,7 +56,7 @@ from berth.services.inventory import (
 )
 from berth.services.settings import read_settings
 from berth.services.steps import message
-from berth.services.tmdb import MISSING_CREDENTIAL, credential
+from berth.services.tmdb import credential, tmdb_problem
 from berth.services.tracking import is_tracked
 
 #: Media 快照的壽命（plan §8.3）。探索牆另有一小時的規則，不走這裡。
@@ -209,21 +210,15 @@ async def _load(
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
     if not key_in_hand:
-        return await _problem(
-            session, row, TmdbProblem.CREDENTIAL_MISSING, MISSING_CREDENTIAL, kind, tmdb_id
-        )
+        return await _problem(session, row, *tmdb_problem(None), kind, tmdb_id)
 
     client = factory.tmdb(key_in_hand)
     try:
         snapshot = await _fetch(session, client, kind, tmdb_id)
     except NotFoundError as exc:
         return await _problem(session, row, TmdbProblem.NOT_FOUND, message(exc), kind, tmdb_id)
-    except AuthFailedError as exc:
-        return await _problem(
-            session, row, TmdbProblem.CREDENTIAL_REJECTED, message(exc), kind, tmdb_id
-        )
     except ServiceError as exc:
-        return await _problem(session, row, TmdbProblem.UNREACHABLE, message(exc), kind, tmdb_id)
+        return await _problem(session, row, *tmdb_problem(exc), kind, tmdb_id)
     finally:
         await client.aclose()
 
@@ -333,7 +328,7 @@ def _fresh(row: Media, ttl: timedelta = SNAPSHOT_TTL) -> bool:
     return (
         row.tmdb_snapshot_json is not None
         and row.tmdb_fetched_at is not None
-        and datetime.now(UTC) - row.tmdb_fetched_at < ttl
+        and utcnow() - row.tmdb_fetched_at < ttl
     )
 
 
@@ -362,7 +357,7 @@ async def _store(session: AsyncSession, row: Media | None, snapshot: MediaSnapsh
         if not row.folder_frozen:
             row.folder_name = folder_name(snapshot)
     row.tmdb_snapshot_json = snapshot.model_dump(mode="json")
-    row.tmdb_fetched_at = datetime.now(UTC)
+    row.tmdb_fetched_at = utcnow()
     await session.commit()
     return row
 

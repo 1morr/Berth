@@ -23,7 +23,7 @@ from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import BindReasonCode, BudgetUse, IndexerProblem
 from berth.models import RssFeed, RssSeries
 from berth.services.rss import add_feed, bind_series, list_series, poll_feed
-from berth.services.search import SkippedSite, search_torrents
+from berth.services.search import QueryScope, SkippedSite, search_torrents
 from berth.services.sources import SourceCache
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, series_by_key
@@ -99,7 +99,7 @@ async def test_the_poller_the_backfill_and_the_search_share_one_budget(
     factory, indexer, clock, route_id = await mikan_on_both_sides(session, roots, limit=8)
     media_id = "tv:262000"
     searched = await search_torrents(
-        session, factory, SourceCache(), media_id=media_id, missing=True
+        session, factory, SourceCache(), media_id=media_id, scope=QueryScope(missing=True)
     )
     feed = await add_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
@@ -135,7 +135,7 @@ async def test_a_search_skips_the_site_out_of_budget_and_asks_the_rest(
 
     clock.now = NOW + timedelta(minutes=5)
     view = await search_torrents(
-        session, factory, SourceCache(), media_id="tv:262000", missing=True
+        session, factory, SourceCache(), media_id="tv:262000", scope=QueryScope(missing=True)
     )
 
     assert view.problem is None
@@ -163,7 +163,7 @@ async def test_a_search_that_fits_nowhere_asks_nothing_and_says_when(
 
     clock.now = NOW + timedelta(minutes=15)
     view = await search_torrents(
-        session, factory, SourceCache(), media_id="tv:262000", missing=True
+        session, factory, SourceCache(), media_id="tv:262000", scope=QueryScope(missing=True)
     )
 
     assert indexer.queries == []

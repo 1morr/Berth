@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +23,7 @@ from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.jellyfin import JellyfinAuth
 from berth.domain import Role
 from berth.models import JellyfinSettings, SetupSettings, User, UserSession
+from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.settings import read_settings
 
@@ -103,7 +104,7 @@ async def open_session(session: AsyncSession, auth: JellyfinAuth) -> SignedIn:
     token = secrets.token_urlsafe(TOKEN_BYTES)
     session.add(
         UserSession(
-            user_id=user.id, token_hash=token_digest(token), expires_at=_utcnow() + SESSION_TTL
+            user_id=user.id, token_hash=token_digest(token), expires_at=utcnow() + SESSION_TTL
         )
     )
     await session.commit()
@@ -123,7 +124,7 @@ async def read_session(session: AsyncSession, token: str | None) -> Authenticate
     )
     if row is None:
         return None
-    if row.expires_at <= _utcnow():
+    if row.expires_at <= utcnow():
         await session.delete(row)
         return None
 
@@ -193,7 +194,7 @@ async def _mirror_user(session: AsyncSession, auth: JellyfinAuth) -> Authenticat
     row = await _find_mirror(session, auth.user_id) or await _insert_mirror(session, auth, role)
     row.name = auth.name
     row.role = role
-    row.last_login_at = _utcnow()
+    row.last_login_at = utcnow()
     # id 要在建 session 之前拿得到。
     await session.flush()
     return _view(row)
@@ -229,10 +230,6 @@ def _view(user: User) -> AuthenticatedUser:
     return AuthenticatedUser(
         id=user.id, name=user.name, role=user.role, jellyfin_user_id=user.jellyfin_user_id
     )
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 #: 唯一的拒絕訊息。「帳號不存在」與「密碼錯誤」用同一句（票 07 驗收）。

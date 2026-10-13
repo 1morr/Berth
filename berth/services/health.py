@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +47,7 @@ from berth.models import (
     ServiceHealth,
     SetupSettings,
 )
+from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
@@ -195,14 +196,14 @@ async def is_due(
     health = await read_settings(session, HealthSettings)
     if health.checked_at is None:
         return True
-    return (now or _utcnow()) - health.checked_at >= interval
+    return (now or utcnow()) - health.checked_at >= interval
 
 
 async def check_health(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> HealthReport:
     """跑完四項並記下結果（`health_checker` 每 5 分鐘一次，畫面上也有一顆按鈕）。"""
-    moment = now or _utcnow()
+    moment = now or utcnow()
     for kind in ServiceKind:
         await _record(session, kind, await _run(kind, session, factory), moment)
 
@@ -227,7 +228,7 @@ async def check_service(
     **不順便重跑 Route 的檢查**：那一組會在 qBittorrent 上建 category、在媒體庫裡寫探測檔，
     使用者按的是「測一下這台連不連得上」，不是「再跑一次第 5 步」。
     """
-    await _record(session, kind, await _run(kind, session, factory), now or _utcnow())
+    await _record(session, kind, await _run(kind, session, factory), now or utcnow())
     await session.commit()
     return await read_health(session)
 
@@ -245,7 +246,7 @@ async def record_setup_results(
     迴圈在精靈跑到一半時已經跑過、而且比那一頁的測試新的那一格留著（`_newer`）：新的結論不該被舊的
     蓋掉。在寫鎖裡改（`update_settings`）：迴圈可能正好寫同一列。
     """
-    moment = now or _utcnow()
+    moment = now or utcnow()
 
     def record(health: HealthSettings) -> None:
         services = dict(health.services)
@@ -503,10 +504,6 @@ def _degraded(health: HealthSettings, routes: HealthStatus) -> bool:
     return routes is HealthStatus.FAILED or any(
         row.status is HealthStatus.FAILED for row in health.services.values()
     )
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 @dataclass(frozen=True, slots=True)

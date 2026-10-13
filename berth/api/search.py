@@ -20,6 +20,7 @@ from berth.api.schemas import StepOut
 from berth.domain import IndexerProblem, MappingStrategy, NameKind, SearchVerdict, Source
 from berth.services.search import (
     QueryPlan,
+    QueryScope,
     SearchView,
     plan_queries,
     remember_names,
@@ -262,15 +263,11 @@ async def get_queries(
     any_season: AnySeasonParam = True,
 ) -> SearchQueriesOut:
     """不打索引站，只讀快照、記住的名字種類與這部作品的入庫狀態。"""
-    _refuse_bare_scope(missing, season, from_season)
     plan = await plan_queries(
         session,
         factory,
         media_id=media,
-        missing=missing,
-        season=season,
-        from_season=from_season,
-        choice=_choice(name, in_season, any_season),
+        scope=_scope(missing, season, from_season, _choice(name, in_season, any_season)),
     )
     return _plan_out(plan)
 
@@ -297,7 +294,6 @@ async def get_search(
     in_season: InSeasonParam = None,
     any_season: AnySeasonParam = True,
 ) -> SearchOut:
-    _refuse_bare_scope(missing, season, from_season)
     return _out(
         await search_torrents(
             session,
@@ -305,10 +301,7 @@ async def get_search(
             sources,
             media_id=media,
             query=q,
-            missing=missing,
-            season=season,
-            from_season=from_season,
-            choice=_choice(name, in_season, any_season),
+            scope=_scope(missing, season, from_season, _choice(name, in_season, any_season)),
         )
     )
 
@@ -340,8 +333,10 @@ def _plan_out(plan: QueryPlan) -> SearchQueriesOut:
     )
 
 
-def _refuse_bare_scope(missing: bool, season: int | None, from_season: int) -> None:
-    """`season` 與 `from_season` 單獨帶著沒有意義——它們是缺集搜尋的參數。
+def _scope(
+    missing: bool, season: int | None, from_season: int, choice: QueryChoice | None
+) -> QueryScope:
+    """查詢參數 → `QueryScope`。`season` 與 `from_season` 單獨帶著沒有意義——它們是缺集搜尋的參數。
 
     默默當成整部作品搜的話，手改網址的人會拿到他沒有要的那一份，而畫面上沒有任何地方說得出
     差別。照實拒絕，形狀與其餘的拒絕一樣（`{reason, detail}`）。
@@ -356,6 +351,7 @@ def _refuse_bare_scope(missing: bool, season: int | None, from_season: int) -> N
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             {"reason": "from_season_without_missing", "detail": "from_season needs missing=true"},
         )
+    return QueryScope(choice=choice, missing=missing, season=season, from_season=from_season)
 
 
 def _out(view: SearchView) -> SearchOut:

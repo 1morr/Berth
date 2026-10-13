@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.files import LANDING_REFUSALS, rematch_refusal, rematch_responses
-from berth.api.gate import current_user
+from berth.api.gate import current_actor
 from berth.api.plans import ItemReasonOut
 from berth.api.schemas import FirstBatchAskOut
 from berth.domain import (
@@ -44,7 +44,6 @@ from berth.domain import (
 )
 from berth.services.duplicates import decide_duplicate
 from berth.services.issues import count_open
-from berth.services.jobs import actor_of
 from berth.services.rematch import RematchRejectedError
 from berth.services.review import (
     AuditRow,
@@ -328,11 +327,8 @@ async def post_confirm(session: SessionDep, request: Request, ledger_id: int) ->
 
     204 而不是回那一列：確認完它就不在佇列上了，畫面要的是重問一次佇列。
     """
-    user = current_user(request)
     try:
-        await confirm_audit(
-            session, ledger_id, actor=actor_of(user.id if user is not None else None)
-        )
+        await confirm_audit(session, ledger_id, actor=current_actor(request))
     except ReviewRejectedError as refusal:
         raise review_refusal(refusal) from refusal
 
@@ -346,10 +342,7 @@ async def post_confirm_many(
     已經被別處確認或撤銷的列跳過、算進 `skipped`，不是 409：按下去的人要的是「這幾列不再等我」，
     而它們已經不等了。所以這一支沒有拒絕的回應。
     """
-    user = current_user(request)
-    outcome = await confirm_audits(
-        session, body.ledger_ids, actor=actor_of(user.id if user is not None else None)
-    )
+    outcome = await confirm_audits(session, body.ledger_ids, actor=current_actor(request))
     return AuditsConfirmedOut(confirmed=outcome.confirmed, skipped=outcome.skipped)
 
 
@@ -360,9 +353,8 @@ async def post_confirm_series(
     """一個 RSS Series 的「全部確認」（M3 票 13）：送來的那幾列逐列確認，再把 Series 標成確認過——
     之後它的 medium 入庫不再進 audit 清單。跳過規則同 `/audit/confirm`，所以同樣沒有拒絕的回應。
     """
-    user = current_user(request)
     outcome = await confirm_series(
-        session, series_id, body.ledger_ids, actor=actor_of(user.id if user is not None else None)
+        session, series_id, body.ledger_ids, actor=current_actor(request)
     )
     return AuditsConfirmedOut(confirmed=outcome.confirmed, skipped=outcome.skipped)
 
@@ -374,11 +366,8 @@ async def post_undo(session: SessionDep, request: Request, ledger_id: int) -> Au
     回的是**那個檔案怎麼了**而不是 204（M3 票 01）：那條路徑上的已經不是 Berth 放的那一個時
     不拆它，畫面要說得出「那個檔案沒有動」。
     """
-    user = current_user(request)
     try:
-        undone = await undo_audit(
-            session, ledger_id, actor=actor_of(user.id if user is not None else None)
-        )
+        undone = await undo_audit(session, ledger_id, actor=current_actor(request))
     except ReviewRejectedError as refusal:
         raise review_refusal(refusal) from refusal
     return AuditUndoneOut(unlinked=undone.unlinked, unmanaged=undone.unmanaged)
@@ -394,14 +383,13 @@ async def post_duplicate(
 ) -> DuplicateDecidedOut:
     """取代舊版 / 保留兩者 / 跳過（brief §7.8）。前兩顆走 rematch 的同一條路：建新鏈接 → 拆舊鏈接
     → 改帳本 → 通知掃描，一律經過 Plan。"""
-    user = current_user(request)
     try:
         outcome = await decide_duplicate(
             session,
             factory,
             item_id,
             decision,
-            actor=actor_of(user.id if user is not None else None),
+            actor=current_actor(request),
         )
     except RematchRejectedError as refusal:
         raise rematch_refusal(refusal) from refusal

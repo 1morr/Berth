@@ -16,10 +16,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from berth.api.deps import ClientFactoryDep, EventHubDep, ImportHintsDep, SessionDep
 from berth.api.errors import refusal_responses
-from berth.api.gate import current_user
+from berth.api.gate import current_actor
 from berth.api.schemas import SeriesCorrectedOut
 from berth.domain import PlanAction, RematchRefusal
-from berth.services.jobs import actor_of
 from berth.services.rematch import (
     Assignment,
     RematchOutcome,
@@ -143,14 +142,13 @@ async def post_rematch(
     帶 `apply_to_series` 時同一件事之後再寫回 RSS Series 並重算（`series_review.correct_series`）；
     重新規劃過的那幾筆叫醒 importer——它平常 60 秒才醒一次，而按下去的人要的是現在。
     """
-    user = current_user(request)
     to = Assignment(
         action=body.action,
         season=body.season,
         episode_start=body.episode_start,
         episode_end=body.episode_end,
     )
-    actor = actor_of(user.id if user is not None else None)
+    actor = current_actor(request)
     try:
         if body.apply_to_series:
             assert body.ledger_id is not None  # `RematchIn` 擋掉了

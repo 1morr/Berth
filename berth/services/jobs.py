@@ -1011,10 +1011,11 @@ async def check_disk(session: AsyncSession, route: Route) -> None:
         )
 
 
-#: 在途：已經交給 qBittorrent、還會在 incomplete 裡長大的那幾個狀態（M4 票 03）。`stalled` 也在裡面
-#: ——它停住了但沒放棄，追蹤站回來就接著長。`requested` 不在：它還沒進 qBittorrent，而且正是
-#: 在問門檻的那一筆。
-IN_FLIGHT = frozenset(
+#: 已經交給 qBittorrent、還沒下完：那個 torrent 現在應該在客戶端裡，還會在 incomplete 裡長大。
+#: 下載輪詢拿它判斷 `client_removed`（plan §3.1），送單門檻拿它算在途的位元組（M4 票 03）。
+#: `stalled` 也在裡面——它停住了但沒放棄，追蹤站回來就接著長。`requested` 不在：`torrents/add`
+#: 都還沒回來，而且正是在問門檻的那一筆。
+IN_CLIENT_STATES = frozenset(
     {JobState.SUBMITTED, JobState.METADATA_READY, JobState.DOWNLOADING, JobState.STALLED}
 )
 
@@ -1028,7 +1029,9 @@ async def _in_flight(session: AsyncSession) -> tuple[int, int]:
     會讓門檻說出一句不是真的話。
     """
     rows = (
-        await session.execute(select(Job.total_size, Job.progress).where(Job.state.in_(IN_FLIGHT)))
+        await session.execute(
+            select(Job.total_size, Job.progress).where(Job.state.in_(IN_CLIENT_STATES))
+        )
     ).all()
     sized = [(size, progress) for size, progress in rows if size > 0]
     if len(sized) < len(rows):

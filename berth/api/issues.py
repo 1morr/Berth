@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from berth.api.deps import ClientFactoryDep, PlanHintsDep, ReconcilerDep, SessionDep
 from berth.api.errors import refusal_responses
-from berth.api.gate import current_user
+from berth.api.gate import current_actor
 from berth.domain import (
     ClaimMiss,
     IssueAction,
@@ -34,7 +34,6 @@ from berth.services.issues import (
     list_issues,
     resolve_issue,
 )
-from berth.services.jobs import actor_of
 from berth.services.ledger_rebuild import RebuildReport, read_ledger_gap, rebuild_ledger
 from berth.services.reconcile import ReconcileReport, SideReport
 
@@ -232,14 +231,13 @@ async def post_resolve(
     **做得到才記成 resolved**：重新鏈接失敗時那一筆仍然是 `open`，清單上還看得到它——
     畫面說修好了而媒體庫沒變，是這一票最糟的結果。
     """
-    user = current_user(request)
     try:
         view = await resolve_issue(
             session,
             factory,
             issue_id,
             body.action,
-            actor=actor_of(user.id if user is not None else None),
+            actor=current_actor(request),
             plans=plans,
             media=body.media,
         )
@@ -255,11 +253,8 @@ async def post_ignore(session: SessionDep, request: Request, issue_id: int) -> I
     那個檔案仍然不在，所以**下一輪對帳會再開一筆新的**（`services/issues.ignore_issue`）。
     真的要它安靜下來，按的是「承認刪除並清帳本」。
     """
-    user = current_user(request)
     try:
-        view = await ignore_issue(
-            session, issue_id, actor=actor_of(user.id if user is not None else None)
-        )
+        view = await ignore_issue(session, issue_id, actor=current_actor(request))
     except IssueRejectedError as refusal:
         raise issue_refusal(refusal) from refusal
     return issue_out(view)

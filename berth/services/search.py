@@ -96,6 +96,24 @@ ADULT_CATEGORIES = range(6000, 7000)
 
 
 @dataclass(frozen=True, slots=True)
+class QueryScope:
+    """要問哪些：開了的名字與季，與缺集搜尋的範圍。預覽與搜尋拿同一份組查詢（票 10、84）。"""
+
+    #: 使用者在 chip 上開了的（M4 票 84）。`None` 是沒帶：取預設（`default_choice`）。
+    choice: QueryChoice | None = None
+    #: 從季表的缺集開始搜（M1.5 票 10）。
+    missing: bool = False
+    #: 缺集搜尋再收到這一季。
+    season: int | None = None
+    #: 缺集分批時這一批從哪一季起（M3 票 20，`BatchView`）。
+    from_season: int = 0
+
+
+#: 沒帶 `scope`：記住的名字種類與預設的季，整部作品搜。
+DEFAULT_SCOPE = QueryScope()
+
+
+@dataclass(frozen=True, slots=True)
 class SearchResult:
     """結果表的一列（brief §13：大小、做種、來源、解析出的 tags、預估匹配）。"""
 
@@ -244,28 +262,21 @@ async def plan_queries(
     factory: ServiceClientFactory,
     *,
     media_id: str,
-    missing: bool = False,
-    season: int | None = None,
-    from_season: int = 0,
-    choice: QueryChoice | None = None,
+    scope: QueryScope = DEFAULT_SCOPE,
 ) -> QueryPlan:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
     存在的理由是**這條規則只能有一份實作**：查詢要看快照的名字與季數（`search_queries`），前端重算
     一份遲早會在兩邊長出不同的答案。不打索引站，只讀快照與記住的名字種類。
 
-    `choice` 是使用者在 chip 上開了的（M4 票 84），沒帶就是預設。`missing` 是缺集一鍵搜
-    （M1.5 票 10）。兩者與真的送出去的那幾個查詢走同一個 `_texts`，所以畫面上寫的就是
-    待會兒問出去的。
+    `scope` 與真的送出去的那幾個查詢走同一個 `_texts`，所以畫面上寫的就是待會兒問出去的。
 
     **沒接索引站時先說**（M2 票 13）：與 `search_torrents` 同一個判準（`_indexer`）。名字照樣列——
     接上之後會問的就是這幾個。
     """
     snapshot = await read_snapshot(session, factory, media_id)
-    chosen = choice or await _default(session, snapshot)
-    batches, queries = await _texts(
-        session, factory, media_id, snapshot, chosen, missing, season, from_season
-    )
+    chosen = scope.choice or await _default(session, snapshot)
+    batches, queries = await _texts(session, factory, media_id, snapshot, scope, chosen)
     ready = await _indexer(session) is not None
     return QueryPlan(
         queries,
@@ -309,18 +320,19 @@ async def _texts(
     factory: ServiceClientFactory,
     media_id: str,
     snapshot: MediaSnapshot | None,
-    choice: QueryChoice,
-    missing: bool,
-    season: int | None,
-    from_season: int,
+    scope: QueryScope,
+    chosen: QueryChoice,
 ) -> tuple[tuple[QueryBatch, ...], tuple[str, ...]]:
-    """要問的查詢（與缺集時的每一批）。預覽與搜尋共用**這一份**（票 10、84）。"""
+    """要問的查詢（與缺集時的每一批）。預覽與搜尋共用**這一份**（票 10、84）。
+
+    `chosen` 是 `scope.choice` 補上預設之後的那一份：呼叫端自己也要它（預覽回給畫面）。
+    """
     if snapshot is None:
         return (), ()
-    if not missing:
-        return (), title_queries(snapshot, choice)
-    names = chosen_names(snapshot, choice)
-    batches = await _missing(session, factory, media_id, names, season, from_season)
+    if not scope.missing:
+        return (), title_queries(snapshot, chosen)
+    names = chosen_names(snapshot, chosen)
+    batches = await _missing(session, factory, media_id, names, scope.season, scope.from_season)
     return batches, (batches[0].queries if batches else ())
 
 
@@ -374,18 +386,14 @@ async def search_torrents(
     *,
     media_id: str,
     query: str = "",
-    missing: bool = False,
-    season: int | None = None,
-    from_season: int = 0,
-    choice: QueryChoice | None = None,
+    scope: QueryScope = DEFAULT_SCOPE,
     timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> SearchView:
     """一部作品現在有哪些發佈可以下載。
 
-    `missing` 是從季表的缺集開始搜（M1.5 票 10），`season` 再把範圍收到那一季，`from_season` 是
-    分批時這一批從哪一季起（M3 票 20，`BatchView`）。`choice` 是開了的名字與季（M4 票 84），
-    沒帶是預設；組出來的查詢比 `MAX_QUERIES` 多時**整次不問**（`TOO_MANY_QUERIES`），
-    不砍尾巴——名字與季是使用者自己開的，默默少問幾個等於替他做了決定。
+    `query` 有值時取代 `scope`，只問這一個。`scope` 組出來的查詢比 `MAX_QUERIES` 多時
+    **整次不問**（`TOO_MANY_QUERIES`），不砍尾巴——名字與季是使用者自己開的，默默少問幾個
+    等於替他做了決定。
 
     **問之前先在請求預算裡佔位**（M3 票 20）：一個查詢打到索引站背後的每一個站，所以一批是在每一站
     各佔 `len(queries)` 格。**放不下的站這次不問**（M4 票 77，推翻票 20 的「有一站放不下就一個都
@@ -405,10 +413,8 @@ async def search_torrents(
     if typed:
         texts: tuple[str, ...] = (typed,)
     else:
-        chosen = choice or await _default(session, snapshot)
-        batches, texts = await _texts(
-            session, factory, media_id, snapshot, chosen, missing, season, from_season
-        )
+        chosen = scope.choice or await _default(session, snapshot)
+        batches, texts = await _texts(session, factory, media_id, snapshot, scope, chosen)
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
     if len(texts) > MAX_QUERIES:

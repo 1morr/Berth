@@ -56,7 +56,14 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
 from berth.services.issues import close_settled, record_issue
-from berth.services.jobs import freeze, job_locks, record_event, restart_state, transition
+from berth.services.jobs import (
+    IN_CLIENT_STATES,
+    freeze,
+    job_locks,
+    record_event,
+    restart_state,
+    transition,
+)
 from berth.services.qbittorrent import unknown_torrent_detail, unknown_torrents
 from berth.services.settings import read_settings, write_settings
 
@@ -86,17 +93,6 @@ PROGRESS_STEPS = 4
 ACTIVE_STATES = frozenset(
     {
         JobState.REQUESTED,
-        JobState.SUBMITTED,
-        JobState.METADATA_READY,
-        JobState.DOWNLOADING,
-        JobState.STALLED,
-    }
-)
-
-#: 這些狀態代表「那個 torrent 現在應該在客戶端裡」。不在就是 `client_removed`（plan §3.1）。
-#: `requested` 不在其中：那時候 `torrents/add` 都還沒回來。
-IN_CLIENT_STATES = frozenset(
-    {
         JobState.SUBMITTED,
         JobState.METADATA_READY,
         JobState.DOWNLOADING,

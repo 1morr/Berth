@@ -26,14 +26,13 @@ from berth.api.deps import (
     SourceCacheDep,
 )
 from berth.api.errors import refusal_responses
-from berth.api.gate import current_user
+from berth.api.gate import current_actor, current_user
 from berth.domain import JobFilter, JobRefusal, JobState, JobTrigger, PlanAction, Role
 from berth.services import deletion
 from berth.services.deletion import DeleteScope
 from berth.services.jobs import (
     JobRejectedError,
     JobView,
-    actor_of,
     add_download,
     list_jobs,
     read_job,
@@ -436,11 +435,8 @@ async def post_reimport(
     回的是退回 `completed` 的那一筆；算與鏈是規劃器與 importer 照常的一輪，所以這裡叫醒規劃器
     而不是自己算——不另開一條入庫的路。
     """
-    user = current_user(request)
     try:
-        job = await reimport_job(
-            session, job_hash, actor=actor_of(user.id if user is not None else None)
-        )
+        job = await reimport_job(session, job_hash, actor=current_actor(request))
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal
     plans.nudge()
@@ -501,7 +497,6 @@ async def delete_job(
     回的是**真的發生了什麼**而不是 204：勾了「移除鏈接」而那幾個檔案早就被人在 Jellyfin 裡
     刪掉時，畫面要說得出「0 個鏈接」而不是一句「刪好了」。
     """
-    user = current_user(request)
     try:
         outcome = await deletion.delete_job(
             session,
@@ -513,7 +508,7 @@ async def delete_job(
                 delete_files=delete_files,
                 purge=purge,
             ),
-            actor=actor_of(user.id if user is not None else None),
+            actor=current_actor(request),
         )
     except JobRejectedError as refusal:
         raise _refuse(refusal) from refusal

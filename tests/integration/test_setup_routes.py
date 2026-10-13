@@ -560,6 +560,28 @@ class TestExisting:
         assert [row.target_path for row in status.routes] == [berth]
 
     @pytest.mark.asyncio
+    async def test_a_route_without_an_item_id_is_known_by_its_library_name(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """沒有 `ItemId` 的舊 Route 以名字認媒體庫，即使快照上的媒體庫有 id（M4 票 91）：
+        勾選表與健康檢查走同一條 `route_library_matches`，勾選表不會把它當成還沒有 Route。"""
+        berth = berth_path(roots, "影集")
+        Path(berth).mkdir()
+        libraries = (existing_library(berth),)
+        await arrange(session, roots, origin=ServiceOrigin.EXISTING, libraries=libraries)
+        await build_routes(
+            session,
+            factory_for(roots, libraries=libraries),
+            (RouteSelection(library="影集", target_path=berth),),
+        )
+        (await session.scalars(select(Route))).one().jellyfin_library_id = ""
+        await session.commit()
+
+        [choice] = (await read_route_status(session)).libraries
+
+        assert choice.has_route is True
+
+    @pytest.mark.asyncio
     async def test_a_library_name_with_spaces_gets_a_hyphenated_slug(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

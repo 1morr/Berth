@@ -451,18 +451,6 @@ _LOGIN_RESPONSES = refusal_responses(InterfaceLoginRefusalOut, _LOGIN_STATUS)
 # --- Jellyfin（頁 1 之後的媒體庫與設定頁，plan §9.4、§9.5）---
 
 
-class LibraryOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    name: str
-    collection_type: str
-    locations: list[str]
-    metadata_fetchers: list[str]
-    uses_tvdb: bool
-    berth_path: str
-    has_berth_path: bool
-
-
 class BundledLibraryOut(BaseModel):
     """套件內要建的一個媒體庫（票 06f）。"""
 
@@ -495,7 +483,6 @@ class JellyfinSetupOut(BaseModel):
     base_url: str
     api_key_present: bool
     steps: list[StepOut]
-    libraries: list[LibraryOut]
     #: 這台 Jellyfin 上一次報的版本號。還沒問過就是空字串。
     version: str
     #: 版本是不是 12.0 以上（brief §16.4）。還沒問過時是 `true`。

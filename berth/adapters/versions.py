@@ -1,4 +1,7 @@
-"""服務自報的版號字串 → 可以比大小的 tuple。Jellyfin 與 Prowlarr 的版本下限共用（brief §16.4）。"""
+"""服務自報的版號字串 → 可以比大小的 tuple。
+
+Jellyfin、Prowlarr 的版本下限與 qBittorrent 的 WebAPI 版本共用（brief §16.4）。
+"""
 
 from __future__ import annotations
 

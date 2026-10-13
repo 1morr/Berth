@@ -34,6 +34,7 @@ from berth.models import media_id as build_media_id
 from berth.services.search import (
     OTHERS_LIMIT,
     RESULT_LIMIT,
+    QueryScope,
     SearchView,
     plan_queries,
     remember_names,
@@ -160,7 +161,9 @@ async def test_every_known_title_gets_its_own_query_and_the_results_merge(
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
-    view = await search_torrents(session, factory, SourceCache(), media_id=SPY, choice=every)
+    view = await search_torrents(
+        session, factory, SourceCache(), media_id=SPY, scope=QueryScope(choice=every)
+    )
 
     assert sorted(query.text for query in indexer.queries) == sorted(
         ["SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"]
@@ -554,8 +557,12 @@ class TestChosenNamesAndSeasons:
         factory = FakeClientFactory(indexer_search=indexer)
         choice = QueryChoice(names=("間諜家家酒", "SPY x FAMILY"), seasons=(1,), any_season=False)
 
-        preview = await plan_queries(session, factory, media_id=SPY, choice=choice)
-        await search_torrents(session, factory, SourceCache(), media_id=SPY, choice=choice)
+        preview = await plan_queries(
+            session, factory, media_id=SPY, scope=QueryScope(choice=choice)
+        )
+        await search_torrents(
+            session, factory, SourceCache(), media_id=SPY, scope=QueryScope(choice=choice)
+        )
 
         assert preview.queries == ("SPY x FAMILY S01", "SPY x FAMILY Season 1", "間諜家家酒 第1季")
         assert [query.text for query in indexer.queries] == list(preview.queries)
@@ -589,8 +596,10 @@ class TestChosenNamesAndSeasons:
             names=("SPY x FAMILY", "SPY×FAMILY", "間諜家家酒", "间谍过家家"), seasons=(1, 3)
         )
 
-        preview = await plan_queries(session, factory, media_id=SPY, choice=every)
-        view = await search_torrents(session, factory, SourceCache(), media_id=SPY, choice=every)
+        preview = await plan_queries(session, factory, media_id=SPY, scope=QueryScope(choice=every))
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=SPY, scope=QueryScope(choice=every)
+        )
 
         assert len(preview.queries) > MAX_QUERIES
         assert view.problem is IndexerProblem.TOO_MANY_QUERIES
@@ -608,7 +617,11 @@ class TestChosenNamesAndSeasons:
         choice = QueryChoice(names=("SPY x FAMILY", "間諜家家酒"))
 
         await search_torrents(
-            session, factory, SourceCache(), media_id=spy.id, missing=True, choice=choice
+            session,
+            factory,
+            SourceCache(),
+            media_id=spy.id,
+            scope=QueryScope(choice=choice, missing=True),
         )
 
         assert [query.text for query in indexer.queries] == [
@@ -723,7 +736,9 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        await search_torrents(session, factory, SourceCache(), media_id=spy.id, missing=True)
+        await search_torrents(
+            session, factory, SourceCache(), media_id=spy.id, scope=QueryScope(missing=True)
+        )
 
         assert [query.text for query in indexer.queries] == ["SPY x FAMILY S01E03"]
 
@@ -739,7 +754,11 @@ class TestMissingEpisodes:
         factory = FakeClientFactory(indexer_search=indexer)
 
         await search_torrents(
-            session, factory, SourceCache(), media_id=spy.id, missing=True, season=2
+            session,
+            factory,
+            SourceCache(),
+            media_id=spy.id,
+            scope=QueryScope(missing=True, season=2),
         )
 
         assert [query.text for query in indexer.queries] == [
@@ -759,8 +778,12 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        preview = (await plan_queries(session, factory, media_id=spy.id, missing=True)).queries
-        await search_torrents(session, factory, SourceCache(), media_id=spy.id, missing=True)
+        preview = (
+            await plan_queries(session, factory, media_id=spy.id, scope=QueryScope(missing=True))
+        ).queries
+        await search_torrents(
+            session, factory, SourceCache(), media_id=spy.id, scope=QueryScope(missing=True)
+        )
 
         assert list(preview) == [query.text for query in indexer.queries]
         assert preview == ("SPY x FAMILY S01E02", "SPY x FAMILY S01E03")
@@ -775,7 +798,9 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
 
-        view = await search_torrents(session, factory, SourceCache(), media_id=spy.id, missing=True)
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=spy.id, scope=QueryScope(missing=True)
+        )
 
         assert indexer.queries == []
         assert view.problem is IndexerProblem.NO_QUERY
@@ -791,7 +816,12 @@ class TestMissingEpisodes:
         factory = FakeClientFactory(indexer_search=indexer)
 
         await search_torrents(
-            session, factory, SourceCache(), media_id=spy.id, query="Spy Family BDRip", missing=True
+            session,
+            factory,
+            SourceCache(),
+            media_id=spy.id,
+            query="Spy Family BDRip",
+            scope=QueryScope(missing=True),
         )
 
         assert [query.text for query in indexer.queries] == ["Spy Family BDRip"]
@@ -812,7 +842,7 @@ class TestMissingEpisodes:
         )
 
         first = await search_torrents(
-            session, factory, SourceCache(), media_id=long.id, missing=True
+            session, factory, SourceCache(), media_id=long.id, scope=QueryScope(missing=True)
         )
         assert first.batch is not None
         second = await search_torrents(
@@ -820,8 +850,7 @@ class TestMissingEpisodes:
             factory,
             SourceCache(),
             media_id=long.id,
-            missing=True,
-            from_season=first.batch.next_seasons[0],
+            scope=QueryScope(missing=True, from_season=first.batch.next_seasons[0]),
         )
 
         asked = [query.text for query in indexer.queries]
@@ -855,7 +884,7 @@ class TestMissingEpisodes:
         indexer = FakeIndexerSearch()
         factory = FakeClientFactory(indexer_search=indexer)
         first = await search_torrents(
-            session, factory, SourceCache(), media_id=long.id, missing=True
+            session, factory, SourceCache(), media_id=long.id, scope=QueryScope(missing=True)
         )
         assert first.batch is not None
         tv = await session.scalar(select(Route).where(Route.slug == "tv"))
@@ -868,8 +897,7 @@ class TestMissingEpisodes:
             factory,
             SourceCache(),
             media_id=long.id,
-            missing=True,
-            from_season=first.batch.next_seasons[0],
+            scope=QueryScope(missing=True, from_season=first.batch.next_seasons[0]),
         )
 
         assert [query.text for query in indexer.queries][:2] == [
@@ -885,10 +913,14 @@ class TestMissingEpisodes:
         factory = FakeClientFactory(indexer_search=indexer)
 
         preview = await plan_queries(
-            session, factory, media_id=long.id, missing=True, from_season=6
+            session, factory, media_id=long.id, scope=QueryScope(missing=True, from_season=6)
         )
         await search_torrents(
-            session, factory, SourceCache(), media_id=long.id, missing=True, from_season=6
+            session,
+            factory,
+            SourceCache(),
+            media_id=long.id,
+            scope=QueryScope(missing=True, from_season=6),
         )
 
         assert list(preview.queries) == [query.text for query in indexer.queries]

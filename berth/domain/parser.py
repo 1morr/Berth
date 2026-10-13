@@ -446,8 +446,6 @@ class CjkHints(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     subs: frozenset[Lang] = frozenset()
-    #: `None` = 檔名沒說。`True` = 內嵌，`False` = 內封或外掛。
-    hardsub: bool | None = None
     subtitle_kind: SubtitleKind = SubtitleKind.UNKNOWN
     #: `第N季` / `第N期` / 羅馬數字 / `Nnd Season`。
     season: int | None = None
@@ -536,9 +534,6 @@ class ReleaseInfo(BaseModel):
     group: str = ""
     source: Source | None = None
     resolution: str = ""
-    video_codec: str = ""
-    bit_depth: str = ""
-    audio: str = ""
     subtitle_langs: tuple[Lang, ...] = ()
     subtitle_kind: SubtitleKind = SubtitleKind.UNKNOWN
     edition: str = ""

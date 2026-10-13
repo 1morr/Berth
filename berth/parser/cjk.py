@@ -141,7 +141,7 @@ def normalize_cjk(name: str) -> tuple[str, CjkHints]:
 
     group = _take_group(text)
     subs = _take_subs(text, matched)
-    hardsub, subtitle_kind = _take_subtitle_kind(text, matched)
+    subtitle_kind = _take_subtitle_kind(text, matched)
     season, text = _take_season(text, matched)
     part = _take_part(text, matched)
     episode, episode_end = _take_episode(text, matched)
@@ -152,7 +152,6 @@ def normalize_cjk(name: str) -> tuple[str, CjkHints]:
 
     hints = CjkHints(
         subs=subs,
-        hardsub=hardsub,
         subtitle_kind=subtitle_kind,
         season=season,
         part=part,
@@ -229,15 +228,15 @@ def _take_subs(text: str, matched: list[str]) -> frozenset[Lang]:
     return frozenset(langs)
 
 
-def _take_subtitle_kind(text: str, matched: list[str]) -> tuple[bool | None, SubtitleKind]:
-    """內嵌 / 內封 / 外掛。三個都沒說時是 `None` + `UNKNOWN`——不猜（brief §6.3）。"""
+def _take_subtitle_kind(text: str, matched: list[str]) -> SubtitleKind:
+    """內嵌 / 內封 / 外掛。三個都沒說時是 `UNKNOWN`——不猜（brief §6.3）。"""
     if _take(text, _HARDSUB, matched):
-        return True, SubtitleKind.HARDSUB
+        return SubtitleKind.HARDSUB
     if _take(text, _EXTERNAL, matched):
-        return False, SubtitleKind.EXTERNAL
+        return SubtitleKind.EXTERNAL
     if _take(text, _SOFTSUB, matched):
-        return False, SubtitleKind.SOFTSUB
-    return None, SubtitleKind.UNKNOWN
+        return SubtitleKind.SOFTSUB
+    return SubtitleKind.UNKNOWN
 
 
 def _take_season(text: str, matched: list[str]) -> tuple[int | None, str]:

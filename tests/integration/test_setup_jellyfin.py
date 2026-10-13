@@ -52,7 +52,7 @@ from berth.services.jellyfin import (
     read_jellyfin_status,
     save_bundled_libraries,
 )
-from berth.services.routes import read_route_status
+from berth.services.routes import LibraryChoice, read_route_status
 from berth.services.settings import read_settings, write_settings
 from berth.services.setup import STEP_INDEXER, STEP_ROUTES, read_status
 from tests.integration.arrange import chosen, own
@@ -114,6 +114,11 @@ async def dock(
         session, factory, username="skipper", password="harbour", target=SEEN, startup=startup
     )
     return await bootstrap_jellyfin(session, factory)
+
+
+async def choices(session: AsyncSession) -> tuple[LibraryChoice, ...]:
+    """頁 3 讀的媒體庫清單：連線與加 Berth 路徑存下的快照，攤成畫面的形狀。"""
+    return (await read_route_status(session)).libraries
 
 
 def step(status: JellyfinSetupStatus, which: JellyfinStep) -> StepStatus:
@@ -298,10 +303,11 @@ async def test_the_bundled_paths_match_what_the_berth_path_rule_computes(
     await seed(session, library_root=root)
     jellyfin = FakeJellyfinClient()
 
-    status = await dock(session, FakeClientFactory(jellyfin=jellyfin))
+    await dock(session, FakeClientFactory(jellyfin=jellyfin))
 
-    assert [row.has_berth_path for row in status.libraries] == [True, True, True]
-    assert [row.berth_path for row in status.libraries] == [
+    libraries = await choices(session)
+    assert [row.has_berth_path for row in libraries] == [True, True, True]
+    assert [row.berth_path for row in libraries] == [
         f"{root}/movies",
         f"{root}/tv",
         f"{root}/anime",
@@ -703,12 +709,13 @@ async def test_connecting_to_an_existing_jellyfin_lists_its_libraries(
 
     assert status.origin is ServiceOrigin.EXISTING
     assert status.api_key_present is True
-    assert [(row.name, row.locations) for row in status.libraries] == [
+    libraries = await choices(session)
+    assert [(row.name, row.locations) for row in libraries] == [
         ("電影", ("/volume1/media/movies",)),
         ("Anime", ("/volume1/media/anime",)),
     ]
     # 掛 TVDB 插件的媒體庫要顯示警告（brief §16.4）。
-    assert [row.uses_tvdb for row in status.libraries] == [False, True]
+    assert [row.uses_tvdb for row in libraries] == [False, True]
     # 絕不自動建立媒體庫。
     assert jellyfin.created == []
 
@@ -768,9 +775,9 @@ async def test_adding_a_berth_path_leaves_the_old_paths_alone(
     factory = FakeClientFactory(jellyfin=jellyfin)
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_paths(session, factory, library_names=["電影"])
+    await add_berth_paths(session, factory, library_names=["電影"])
 
-    movies = next(row for row in status.libraries if row.name == "電影")
+    movies = next(row for row in await choices(session) if row.name == "電影")
     assert movies.locations == ("/volume1/media/movies", f"{library_root}/電影")
     assert movies.has_berth_path is True
     assert (tmp_path / "library" / "電影").is_dir()
@@ -801,14 +808,12 @@ async def test_a_berth_path_added_under_the_spaced_slug_still_counts(
     factory = FakeClientFactory(jellyfin=nas_jellyfin(libraries=(shows,)))
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_paths(session, factory, library_names=["TV Shows"])
+    await add_berth_paths(session, factory, library_names=["TV Shows"])
 
-    [view] = status.libraries
-    assert view.locations == ("/volume1/media/tv", legacy)
-    assert (view.berth_path, view.has_berth_path) == (legacy, True)
-    assert not (tmp_path / "library" / "tv-shows").exists()
-    [choice] = (await read_route_status(session)).libraries
+    [choice] = await choices(session)
+    assert choice.locations == ("/volume1/media/tv", legacy)
     assert (choice.berth_path, choice.has_berth_path, choice.target_path) == (legacy, True, legacy)
+    assert not (tmp_path / "library" / "tv-shows").exists()
 
 
 @pytest.mark.asyncio
@@ -833,9 +838,9 @@ async def test_a_new_library_with_spaces_gets_the_hyphenated_berth_path(
     factory = FakeClientFactory(jellyfin=nas_jellyfin(libraries=(shows,)))
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
 
-    status = await add_berth_paths(session, factory, library_names=["TV Shows"])
+    await add_berth_paths(session, factory, library_names=["TV Shows"])
 
-    [view] = status.libraries
+    [view] = await choices(session)
     assert view.locations == ("/volume1/media/tv", f"{library_root}/tv-shows")
     assert view.has_berth_path is True
 
@@ -856,9 +861,9 @@ async def test_adding_the_same_berth_path_twice_does_not_duplicate_it(
     await connect_jellyfin(session, factory, username="owner", password="s3cret")
     await add_berth_paths(session, factory, library_names=["電影"])
 
-    status = await add_berth_paths(session, factory, library_names=["電影"])
+    await add_berth_paths(session, factory, library_names=["電影"])
 
-    movies = next(row for row in status.libraries if row.name == "電影")
+    movies = next(row for row in await choices(session) if row.name == "電影")
     assert len(movies.locations) == 2
 
 
@@ -883,7 +888,7 @@ async def test_adding_a_path_that_fails_becomes_a_step_not_an_exception(
     failure = next(row for row in status.steps if row.step == JellyfinStep.LIBRARIES.value)
     assert "Nope" in failure.error
     # 既有的媒體庫清單沒有被這次失敗清掉。
-    assert [row.name for row in status.libraries] == ["電影", "Anime"]
+    assert [row.name for row in await choices(session)] == ["電影", "Anime"]
 
 
 @pytest.mark.asyncio
@@ -916,7 +921,7 @@ async def test_a_jellyfin_that_cannot_see_the_berth_path_says_so_and_leaves_no_d
     assert result.path in result.error
     assert step(status, JellyfinStep.LIBRARIES) is StepStatus.FAILED
     assert not (tmp_path / "library").exists()
-    assert next(row for row in status.libraries if row.name == "電影").locations == (
+    assert next(row for row in await choices(session) if row.name == "電影").locations == (
         "/volume1/media/movies",
     )
 
@@ -976,7 +981,7 @@ async def test_every_library_is_tried_and_reported_on_its_own(
     assert not (library_root / "電影").exists()
     assert (library_root / "anime").is_dir()
     assert library_root.is_dir()
-    anime = next(row for row in status.libraries if row.name == "Anime")
+    anime = next(row for row in await choices(session) if row.name == "Anime")
     assert f"{library_root}/anime" in anime.locations
     # 有一個沒加上：`libraries` 那一步紅，精靈不往下建 Route。
     assert step(status, JellyfinStep.LIBRARIES) is StepStatus.FAILED
