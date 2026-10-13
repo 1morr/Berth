@@ -1,0 +1,42 @@
+Unlisted binaries (1)
+uv  package.json
+Unused exports (14)
+parseRematchRefusal   function  src/api/files.ts:43:17
+SERVICE_KINDS                   src/api/schemas.ts:59:14
+ROUTE_HEALTH_LABEL              src/components/routeChecks.ts:22:14
+NOTE_MS                         src/components/useFadingNote.ts:4:14
+detectLanguage        function  src/i18n/index.ts:9:17
+isListed              function  src/media/searchFilter.ts:43:17
+signedOffset          function  src/rss/seriesValues.ts:12:17
+InterfaceLoginFields  function  src/setup/InterfaceLoginFields.tsx:20:17
+LoopbackHint          function  src/setup/ServiceChoice.tsx:723:17
+TestLine              function  src/setup/ServiceChoice.tsx:765:17
+SAVE_DEBOUNCE_MS                src/setup/useLibraryDraft.ts:14:14
+stubJsonResponse      function  src/test/fetch.ts:6:17
+candidate             function  src/test/fixtures.ts:171:17
+serviceHealth         function  src/test/fixtures.ts:340:17
+Unused exported types (24)
+Role            type       src/api/auth.ts:7:13
+JobSignal       type       src/api/events.ts:25:13
+RematchRefusal  type       src/api/files.ts:20:13
+LibrarySort     type       src/api/inventory.ts:52:13
+IssueType       type       src/api/issues.ts:11:13
+ReconcileSide   type       src/api/issues.ts:31:13
+IssueRefusal    type       src/api/issues.ts:34:13
+RouteChoice     type       src/api/media.ts:17:13
+PlanStatus      type       src/api/plans.ts:15:13
+Confidence      type       src/api/plans.ts:21:13
+PlanRefusal     type       src/api/plans.ts:39:13
+AuditSeries     type       src/api/review.ts:18:13
+ReviewRefusal   type       src/api/review.ts:50:13
+SkipCode        type       src/api/rss.ts:29:13
+RssRefusal      type       src/api/rss.ts:62:13
+paths           interface  src/api/schema.d.ts:6:18
+webhooks        type       src/api/schema.d.ts:2212:13
+$defs           type       src/api/schema.d.ts:5629:13
+operations      interface  src/api/schema.d.ts:5630:18
+Tags            type       src/api/search.ts:13:13
+LeadCode        type       src/review/leadReason.ts:30:13
+RouterContext   interface  src/routes.tsx:42:18
+OwnerUnfit      type       src/setup/interfaceLogin.ts:115:13
+TakenLogin      type       src/setup/interfaceLogin.ts:161:13
