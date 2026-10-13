@@ -45,7 +45,7 @@ export function FirstRoundSection({
         id={headingId}
         label={t('rss.first.title')}
         extra={
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.assigned}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
             {t('rss.first.chip', { count: feeds.length })}
           </span>
         }

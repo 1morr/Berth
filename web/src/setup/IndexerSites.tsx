@@ -272,7 +272,9 @@ function AddedSiteRow({
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-sm font-semibold text-ink">{row.name}</span>
             {row.language && <span className="text-xs text-ink-dim">{row.language}</span>}
-            <span className={`label px-2 py-1 ${SIGNAL_FILL[searching ? 'working' : 'neutral']}`}>
+            <span
+              className={`label px-1.5 py-0.5 ${SIGNAL_FILL[searching ? 'working' : 'neutral']}`}
+            >
               {!row.enabled
                 ? t('indexer.added.disabled')
                 : searching
@@ -775,7 +777,7 @@ function CandidateRow({
                 {languageName(candidate.language, i18n.language)}
               </span>
             )}
-            <span className={`label px-2 py-1 ${SIGNAL_FILL[signal]}`}>{state}</span>
+            <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL[signal]}`}>{state}</span>
           </div>
           <p id={`${id}-hint`} className="mt-1 text-xs text-ink-dim">
             {[

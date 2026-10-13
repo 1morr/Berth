@@ -64,7 +64,7 @@ function ItemChip({ row }: { row: FeedItem }) {
   const stuck = row.status === 'matched' && row.error !== ''
   const key = stuck ? 'stuck' : row.status
   return (
-    <span className={`label px-2 py-1 ${stuck ? SIGNAL_FILL.assigned : SIGNAL_FILL.neutral}`}>
+    <span className={`label px-1.5 py-0.5 ${stuck ? SIGNAL_FILL.assigned : SIGNAL_FILL.neutral}`}>
       {t(`rss.items.status.${key}`)}
     </span>
   )

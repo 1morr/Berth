@@ -100,7 +100,7 @@ function Pending({ rows, onDone }: { rows: RssSeries[]; onDone: (said: string) =
         label={t('rss.pending.title')}
         extra={
           // 整頁唯一的一塊漆：它就是這一頁要你做的事（Needs-You Floats Up）。
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.assigned}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
             {t('rss.pending.chip', { count: rows.length })}
           </span>
         }

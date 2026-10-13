@@ -108,7 +108,9 @@ function SeriesLine({ row }: { row: RssSeries }) {
     <li className="grid min-w-0 gap-1 bg-hull px-3 py-2">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {row.source && (
-          <span className="label bg-deck px-2 py-1 text-ink">{t(`rss.kind.${row.source}`)}</span>
+          <span className="label bg-deck px-1.5 py-0.5 text-ink">
+            {t(`rss.kind.${row.source}`)}
+          </span>
         )}
         <span className="value min-w-0 text-sm wrap-anywhere text-ink">
           {groupName(row) || row.title_raw}
@@ -117,7 +119,7 @@ function SeriesLine({ row }: { row: RssSeries }) {
         {row.confirmed ? (
           <span className="text-xs text-ink-dim">{t('rss.subscribe.confirmed')}</span>
         ) : (
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.assigned}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.assigned}`}>
             {t('rss.subscribe.firstBatch')}
           </span>
         )}

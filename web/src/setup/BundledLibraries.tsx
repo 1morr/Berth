@@ -217,7 +217,7 @@ function BuiltRow({ row, libraryRoot }: { row: DraftRow; libraryRoot: string }) 
     <li className="grid gap-1 px-4 py-3">
       <article tabIndex={-1} aria-label={row.name} className="grid gap-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={`label px-2 py-1 ${SIGNAL_FILL.neutral}`}>
+          <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.neutral}`}>
             {t('jellyfin.bundled.list.built')}
           </span>
           <span className="value text-sm font-semibold text-ink">{row.name}</span>
