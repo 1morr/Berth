@@ -5,7 +5,15 @@ import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AuditReviewRow, DuplicateReviewRow, ReviewQueue } from '../api/review'
-import { HEALTHY, UNAUTHORIZED, session, stubApi, type StubRoute } from '../test/fetch'
+import {
+  HEALTHY,
+  REQUEST_FAILURES,
+  UNAUTHORIZED,
+  session,
+  stubApi,
+  type StubRoute,
+  type StubRoutes,
+} from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -75,7 +83,7 @@ function queue(rows: ReviewQueue['rows'], total = rows.length, issuesOpen = 0): 
   return { body: { rows, total, queue_total: total, issues_open: issuesOpen } }
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -968,5 +976,47 @@ describe('session 在頁面上失效', () => {
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
     expect(router.state.location.search).toEqual({ redirect: '/review', expired: true })
+  })
+})
+
+// M4 票 89：拒絕原因解析不出來時，原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+describe('審核頁對 Berth 的請求沒成時說出對的原因', () => {
+  it.each(REQUEST_FAILURES)('讀不到佇列（%s）', async (_, failure, expected) => {
+    render({ [QUEUE]: failure })
+    renderApp('/review')
+
+    const notice = await screen.findByText(/^讀不到審核佇列。/)
+    expect(notice).toHaveTextContent(expected)
+    expect(notice).not.toHaveTextContent(/自己的 API/)
+  })
+
+  it.each(REQUEST_FAILURES)('撤銷（%s）：那一列留著，說出原因', async (_, failure, expected) => {
+    render({ [QUEUE]: queue([audit()]), 'POST /api/review/audit/7/undo': failure })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '撤銷' }))
+    await userEvent.click(within(row).getByRole('button', { name: '確定撤銷' }))
+
+    const alert = await within(row).findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有成功。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
+  })
+
+  it.each(REQUEST_FAILURES)('一組全部確認（%s）', async (_, failure, expected) => {
+    render({
+      [QUEUE]: queue([audit(), audit({ ref: 8, episode_start: 2 })]),
+      'POST /api/review/audit/confirm': failure,
+    })
+    renderApp('/review')
+    const [group] = await screen.findAllByRole('article')
+
+    await userEvent.click(within(group).getByRole('button', { name: '全部確認' }))
+
+    const alert = await within(group).findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有成功。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 })

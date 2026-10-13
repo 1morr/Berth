@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Plan, PlanItem } from '../api/plans'
 import type { AuditReviewRow, PlanReviewRow, ReviewQueue } from '../api/review'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -124,7 +124,7 @@ function queue(rows: ReviewQueue['rows']): StubRoute {
   return { body: { rows, total: rows.length } }
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -288,6 +288,29 @@ describe('審核佇列的 plan 那一類（M2 票 07）', () => {
     expect(await within(row).findByRole('alert')).toHaveTextContent(
       '還有列沒有決定，先改成入庫、略過或對不到： theme.mkv',
     )
+  })
+
+  // M4 票 89：原本解析不出理由就說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)('讀不到計劃（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [PLAN]: failure })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    const said = await within(row).findByText(/^讀不到這一份計劃。/)
+    expect(said).toHaveTextContent(expected)
+  })
+
+  it.each(REQUEST_FAILURES)('核准沒成（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ 'POST /api/plans/11/approve': failure })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '核准並入庫' }))
+
+    const alert = await within(row).findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有成功。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 
   // M3 票 06：改到一半的列不會隨核准送出去（`approve` 不帶表單上的值），照原樣核准的是改之前的那一份。

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DuplicateReviewRow, ReviewQueue, UnmatchedReviewRow } from '../api/review'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 /**
@@ -69,7 +69,7 @@ function queue(rows: ReviewQueue['rows']): StubRoute {
   return { body: { rows, total: rows.length } }
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -300,5 +300,34 @@ describe('重複版本', () => {
     await userEvent.click(within(row).getByRole('button', { name: '跳過' }))
 
     expect(await within(row).findByText(/多半是另一個分頁先決定了/)).toBeInTheDocument()
+  })
+})
+
+// M4 票 89：原本解析不出理由就說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+describe('對不到與重複版本的請求沒成時說出對的原因', () => {
+  it.each(REQUEST_FAILURES)('指派（%s）', async (_, failure, expected) => {
+    render({ [QUEUE]: queue([unmatched()]), 'POST /api/files/rematch': failure })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.type(within(row).getByRole('spinbutton', { name: '季' }), '1')
+    await userEvent.type(within(row).getByRole('spinbutton', { name: '起集' }), '2')
+    await userEvent.click(within(row).getByRole('button', { name: '套用' }))
+
+    const said = await within(row).findByText(/^沒有成功。/)
+    expect(said).toHaveTextContent(expected)
+    expect(said).not.toHaveTextContent(/自己的 API/)
+  })
+
+  it.each(REQUEST_FAILURES)('跳過重複版本（%s）', async (_, failure, expected) => {
+    render({ [QUEUE]: queue([duplicate()]), 'POST /api/review/duplicate/21/skip': failure })
+    renderApp('/review')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '跳過' }))
+
+    const said = await within(row).findByText(/^沒有成功。/)
+    expect(said).toHaveTextContent(expected)
+    expect(said).not.toHaveTextContent(/自己的 API/)
   })
 })

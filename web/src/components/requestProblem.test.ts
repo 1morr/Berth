@@ -1,7 +1,9 @@
+import i18next from 'i18next'
 import { describe, expect, it } from 'vitest'
 
+import '../i18n'
 import { ApiError } from '../api/client'
-import { requestProblem } from './requestProblem'
+import { problemText, requestProblem } from './requestProblem'
 
 /**
  * 對 Berth 自己的請求為什麼沒成（M4 票 21）。原本一律說「Berth 後端可能沒在跑」——選擇無效的 422
@@ -33,5 +35,29 @@ describe('requestProblem', () => {
     expect(requestProblem(refused, { ownerPending: true })).toBe('ownerElsewhere')
     expect(requestProblem(refused)).toBe('signedOut')
     expect(requestProblem(refused, { ownerPending: false })).toBe('signedOut')
+  })
+})
+
+/** 只收字串的那幾格（M4 票 89）：前半句是呼叫端的，後半句照請求為什麼沒成。 */
+describe('problemText', () => {
+  const t = i18next.getFixedT('zh-Hant')
+
+  it('前半句接在前面，中間一個空白', () => {
+    expect(problemText(t, new ApiError(500, 'x'), '沒有成功。')).toBe(
+      '沒有成功。 Berth 的後端出錯了。再試一次；還是不行的話看 berth 容器的 log。',
+    )
+  })
+
+  it('500、401、送不到各說各的原因', () => {
+    const texts = [
+      new ApiError(500, 'x'),
+      new ApiError(401, 'x'),
+      new TypeError('Failed to fetch'),
+    ].map((error) => problemText(t, error))
+    expect(texts).toEqual([t('request.server'), t('request.signedOut'), t('request.offline')])
+  })
+
+  it('沒有前半句時只剩原因', () => {
+    expect(problemText(t, new TypeError('Failed to fetch'))).toBe(t('request.offline'))
   })
 })

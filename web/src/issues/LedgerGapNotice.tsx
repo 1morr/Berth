@@ -10,6 +10,7 @@ import {
   type RebuildReport,
 } from '../api/issues'
 import { GhostButton, Notice } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 
 /**
@@ -69,11 +70,14 @@ export function LedgerGapNotice({
         </>
       )}
 
-      {rebuild.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {refusal ? t(`issues.refusal.${refusal.reason}`) : t('ledgerGap.failed')}
-        </Notice>
-      )}
+      {rebuild.isError &&
+        (refusal ? (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`issues.refusal.${refusal.reason}`)}
+          </Notice>
+        ) : (
+          <RequestFailed error={rebuild.error} lead={t('ledgerGap.failed')} />
+        ))}
 
       {/* live region 要一直在才唸得到後來長進去的結果；空的時候 `absolute`，不佔 grid 的一格與間距
           （`hidden` 會把它拿出無障礙樹）。 */}

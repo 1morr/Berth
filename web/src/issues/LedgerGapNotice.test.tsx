@@ -4,7 +4,7 @@ import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Issue, LedgerGap, RebuildReport, ReconcileStatus } from '../api/issues'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -29,7 +29,7 @@ function report(overrides: Partial<RebuildReport> = {}): RebuildReport {
   }
 }
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -180,6 +180,20 @@ describe('待處理頁的「從媒體庫重建帳本」', () => {
 
     expect(await within(notice()).findByText('上一輪對帳還在跑。等它跑完再按。')).toBeVisible()
     expect(within(notice()).getByRole('button', { name: '從媒體庫重建帳本' })).toBeVisible()
+  })
+
+  // M4 票 89：原本解析不出理由就說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)('沒有重建（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [GAP]: { body: { unknown: 6 } }, [REBUILD]: failure })
+    renderApp('/issues')
+    const region = await screen.findByRole('region', { name: '帳本不認得的檔案' })
+
+    await userEvent.click(within(region).getByRole('button', { name: '從媒體庫重建帳本' }))
+
+    const alert = await within(notice()).findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有重建。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 
   it('英文介面', async () => {

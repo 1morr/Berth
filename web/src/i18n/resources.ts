@@ -400,6 +400,7 @@ const zhHant = {
       '擁有者已經在別處成立了：另一個瀏覽器或分頁先完成了這一步。用那個 Jellyfin 管理員登入，從目前的進度繼續。',
     notAdministrator: '只有 Jellyfin 管理員做得了這件事：你登入的帳號不是這台 Jellyfin 的管理員。',
     signIn: '前往登入',
+    notDone: '沒有成功。',
   },
   failure: {
     not_deployed: '{{service}} 的主機名解不到：它的容器沒在跑、不在這套 compose 裡，或位址打錯了。',
@@ -1666,7 +1667,7 @@ const zhHant = {
     // 這一頁最好的狀態是沒有東西。空的時候說的是「都對得上」，不是「沒有資料」。
     empty: '沒有要決定的事。上一次對帳時帳本與磁碟對得上。',
     emptyNeverRun: '沒有要決定的事。這個程序起來之後還沒有對過帳。',
-    off: '讀不到待處理清單。Berth 自己的 API 沒有回應，先確認它還活著。',
+    readFailed: '讀不到待處理清單。',
     detectedAt: '偵測於 {{value}}',
     // 展開區的欄名。路徑是機器字串，走 .value 不走 .label（The Machine String Rule）。
     target: '媒體庫路徑',
@@ -1807,12 +1808,12 @@ const zhHant = {
       searching: '搜尋中…',
       none: '沒有找到。換一個名字試試。',
       off: '搜不到 TMDB。先到健康頁確認 TMDB 的憑證還能用。',
+      failed: '沒有搜成。',
       confirm: '入庫到《{{title}}》',
       cancel: '取消',
       tv: '劇集',
       movie: '電影',
     },
-    failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
   },
   review: {
     title: '審核',
@@ -1822,7 +1823,7 @@ const zhHant = {
     truncated: '只列出最舊的 {{shown}} 件，共 {{total}} 件。',
     // 這一頁最好的狀態是沒有東西。
     empty: '沒有事在等你。',
-    off: '讀不到審核佇列。Berth 自己的 API 沒有回應，先確認它還活著。',
+    readFailed: '讀不到審核佇列。',
     // 兩段：需要人動手的排前面（`.scratch/m2/review-shape.md`）。Issue 不在這一頁（M3 票 05），
     // 原位一行連到 `/issues`，0 件時不出現。
     section: {
@@ -1846,7 +1847,7 @@ const zhHant = {
       },
       waitingSince: '等候於 {{value}}',
       job: '下載',
-      off: '讀不到這一份計劃。',
+      readFailed: '讀不到這一份計劃。',
       held_one: '{{count}} 列要你看',
       held_other: '{{count}} 列要你看',
       rest_one: '其餘 {{count}} 個檔案',
@@ -1876,7 +1877,6 @@ const zhHant = {
       working: '處理中…',
       approved: '已核准，開始入庫。',
       rejected: '已拒絕，Berth 重新規劃中。',
-      failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
       // 十三種擋下來的理由，各一個下一步。`detail`（檔名或路徑）接在後面。
       refusal: {
         plan_missing: '這份計劃已經不在了，多半是重新規劃把它換掉了。',
@@ -1977,7 +1977,6 @@ const zhHant = {
         not_audited: '這一列已經被確認過了，多半是另一個分頁先按了。',
         unlink_failed: '媒體庫裡那個檔案拿不掉，所以什麼都沒改。',
       },
-      failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
       // 動作結果給看不見畫面的人（那一列會直接消失）。
       confirmed: '已確認，這一列從佇列上收掉了。',
       undone: '已撤銷，這一筆下載回到待審核。',
@@ -2074,7 +2073,6 @@ const zhHant = {
       left_other: '{{count}} 集搬不過去，留在原處等你看。',
       nothingElse: '沒有其他還沒確認的集數要跟著改。',
     },
-    failed: '沒有成功。Berth 自己的 API 沒有回應，先確認它還活著。',
     // 十四種擋下來的理由，各一個下一步。`detail`（檔名、路徑或系統原文）接在後面。
     refusal: {
       ledger_missing: '這個檔案的帳本已經不在了，多半是另一個分頁先改了。',
@@ -2122,7 +2120,7 @@ const zhHant = {
     // **問不到不是「不見了」**（brief §16.2）：那一方跳過並說出原因。
     unavailable: '問不到',
     skipped: '跳過了 {{value}}',
-    failed: '對帳沒有開始。Berth 自己的 API 沒有回應，先確認它還活著。',
+    failed: '對帳沒有開始。',
   },
   // 從媒體庫重建帳本（M4 票 60）：待處理頁最上面與精靈完成頁。就是 `berth rebuild-ledger`。
   ledgerGap: {
@@ -2145,7 +2143,7 @@ const zhHant = {
       '{{count}} 個說不出有沒有來源：complete 有地方讀不到，這一次沒有判。修好之後再按一次。',
     nothing: '沒有要找回的檔案：帳本已經認得媒體庫裡的每一個檔案。',
     unread: '有地方讀不到，那裡的檔案這一次沒有比。修好掛載之後再按一次。',
-    failed: '沒有重建。Berth 自己的 API 沒有回應，先確認它還活著。',
+    failed: '沒有重建。',
   },
   jobs: {
     title: '下載',
@@ -3702,6 +3700,7 @@ const en: Translations<typeof zhHant> = {
     notAdministrator:
       'Only a Jellyfin administrator can do this: the account you signed in with is not an administrator on this Jellyfin.',
     signIn: 'Go to sign-in',
+    notDone: 'That did not go through.',
   },
   failure: {
     not_deployed:
@@ -4944,7 +4943,7 @@ const en: Translations<typeof zhHant> = {
     count_other: '{{count}} issues',
     empty: 'Nothing to decide. At the last reconcile the ledger and the disk agreed.',
     emptyNeverRun: 'Nothing to decide. No reconcile has run since this process started.',
-    off: 'Could not read the issue list. Berth’s own API did not answer — check that it is still running.',
+    readFailed: 'Could not read the issue list.',
     detectedAt: 'Found {{value}}',
     target: 'Library path',
     completePath: 'Complete path',
@@ -5076,13 +5075,12 @@ const en: Translations<typeof zhHant> = {
       searching: 'Searching…',
       none: 'Nothing found. Try another name.',
       off: 'TMDB could not be searched. Check on the health page that its credential still works.',
+      failed: 'The search did not go through.',
       confirm: 'Import into {{title}}',
       cancel: 'Cancel',
       tv: 'Series',
       movie: 'Film',
     },
-    failed:
-      'That did not go through. Berth’s own API did not answer — check that it is still running.',
   },
   review: {
     title: 'Review',
@@ -5090,7 +5088,7 @@ const en: Translations<typeof zhHant> = {
     count_other: '{{count}} items',
     truncated: 'Showing the oldest {{shown}} of {{total}}.',
     empty: 'Nothing is waiting for you.',
-    off: 'Could not read the review queue. Berth’s own API did not answer — check that it is still running.',
+    readFailed: 'Could not read the review queue.',
     section: {
       decide: 'Needs a decision',
       look: 'In the library, awaiting a look',
@@ -5112,7 +5110,7 @@ const en: Translations<typeof zhHant> = {
       },
       waitingSince: 'Waiting since {{value}}',
       job: 'Download',
-      off: 'Could not read this plan.',
+      readFailed: 'Could not read this plan.',
       held_one: '{{count}} row needs you',
       held_other: '{{count}} rows need you',
       rest_one: 'The other {{count}} file',
@@ -5142,8 +5140,6 @@ const en: Translations<typeof zhHant> = {
       working: 'Working…',
       approved: 'Approved; importing now.',
       rejected: 'Rejected; Berth is planning it again.',
-      failed:
-        'That did not go through. Berth’s own API did not answer — check that it is still running.',
       refusal: {
         plan_missing: 'This plan is gone — most likely a replan replaced it.',
         not_pending:
@@ -5238,8 +5234,6 @@ const en: Translations<typeof zhHant> = {
         not_audited: 'This one has already been confirmed — most likely from another tab.',
         unlink_failed: 'The file in the library could not be removed, so nothing changed.',
       },
-      failed:
-        'That did not go through. Berth’s own API did not answer — check that it is still running.',
       confirmed: 'Confirmed; it is off the queue.',
       undone: 'Undone; the download is back in review.',
       undoneUnmanaged:
@@ -5329,8 +5323,6 @@ const en: Translations<typeof zhHant> = {
       left_other: '{{count}} episodes could not be moved and stay where they are for you to check.',
       nothingElse: 'No other unconfirmed episodes needed to follow.',
     },
-    failed:
-      'That did not go through. Berth’s own API did not answer — check that it is still running.',
     refusal: {
       ledger_missing: 'This file’s ledger row is gone — most likely changed from another tab.',
       file_missing: 'This file is no longer part of that download.',
@@ -5373,8 +5365,7 @@ const en: Translations<typeof zhHant> = {
     counted_other: '{{count}} checked',
     unavailable: 'Could not ask',
     skipped: 'Skipped {{value}}',
-    failed:
-      'The run did not start. Berth’s own API did not answer — check that it is still running.',
+    failed: 'The run did not start.',
   },
   ledgerGap: {
     title: 'Files the ledger does not know',
@@ -5399,8 +5390,7 @@ const en: Translations<typeof zhHant> = {
     nothing: 'Nothing to recover: the ledger already knows every file in the library.',
     unread:
       'Some folders could not be read, so the files in them were not compared this time. Fix the mount and press it again.',
-    failed:
-      'The ledger was not rebuilt. Berth’s own API did not answer — check that it is still running.',
+    failed: 'The ledger was not rebuilt.',
   },
   jobs: {
     title: 'Downloads',

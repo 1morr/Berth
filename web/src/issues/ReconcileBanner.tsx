@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -12,6 +12,7 @@ import {
 } from '../api/issues'
 import { GhostButton, Notice } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { RequestFailed } from '../components/RequestFailed'
 import { whenText } from '../components/queueText'
 
 /**
@@ -26,7 +27,6 @@ import { whenText } from '../components/queueText'
 export function ReconcileBanner() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [failed, setFailed] = useState<string | null>(null)
   // 跑的時候才輪詢（`reconcileQueryOptions` 的 `refetchInterval`）：對帳一天一輪，
   // 平常每秒問一次是在問一個不會變的答案。
   const state = useQuery(reconcileQueryOptions())
@@ -35,19 +35,17 @@ export function ReconcileBanner() {
 
   const start = useMutation({
     mutationFn: startReconcile,
-    onMutate: () => setFailed(null),
     onSuccess: (run) => {
       // 立刻把它畫成「跑的時候」，不等下一次輪詢——按下去要馬上看得到反應。
       queryClient.setQueryData(reconcileQueryOptions().queryKey, { current: run, last })
     },
-    onError: (error) => {
-      const said = parseIssueRefusal(error)
-      setFailed(said ? t(`issues.refusal.${said.reason}`) : t('reconcile.failed'))
+    onError: () => {
       void queryClient.invalidateQueries({ queryKey: reconcileQueryOptions().queryKey })
     },
   })
 
   const running = current !== null
+  const refusal = start.isError ? parseIssueRefusal(start.error) : null
   // **一輪跑完就重問清單一次**：那一輪開出來的 Issue 要出現在下面。
   //
   // 掛在 `useEffect` 而不是寫在 render 裡：render 期間 invalidate 會讓 refetch → 重繪 →
@@ -86,11 +84,14 @@ export function ReconcileBanner() {
         </GhostButton>
       </div>
 
-      {failed !== null && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {failed}
-        </Notice>
-      )}
+      {start.isError &&
+        (refusal ? (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`issues.refusal.${refusal.reason}`)}
+          </Notice>
+        ) : (
+          <RequestFailed error={start.error} lead={t('reconcile.failed')} />
+        ))}
 
       {/* 跑的時候逐方填進來；跑完之後留著上一輪的四方，那是「它問到了嗎」的答案。 */}
       <Sides run={current ?? last} live={running} />

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { MIN_QUERY_LENGTH, searchQueryOptions, type DiscoverItem } from '../api/discover'
 import { ConfirmPanel } from '../components/ConfirmPanel'
 import { CONFIRM_ACTIONS, Field, GhostButton, PrimaryButton } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SEARCH_DEBOUNCE_MS, useDebounced } from '../components/useDebounced'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
@@ -78,7 +79,9 @@ export function WorkPicker({
         }}
       />
       {found.isFetching && <p className="text-xs text-ink-dim">{t('issues.pick.searching')}</p>}
-      {found.data?.problem ? (
+      {found.isError ? (
+        <RequestFailed error={found.error} lead={t('issues.pick.failed')} />
+      ) : found.data?.problem ? (
         <p role="alert" className="max-w-prose text-xs text-blocked-ink">
           {t('issues.pick.off')}
         </p>

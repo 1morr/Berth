@@ -10,6 +10,7 @@ import {
   type ReviewRow,
 } from '../api/review'
 import { PAGE_TITLE, TEXT_LINK } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { AuditGroup } from '../review/AuditGroup'
 import { AuditSectionConfirm } from '../review/AuditSectionConfirm'
@@ -70,7 +71,7 @@ export function ReviewPage() {
       {queue.isPending ? (
         <Loading />
       ) : !queue.data ? (
-        <p className="max-w-prose text-sm text-ink-dim">{t('review.off')}</p>
+        <RequestFailed error={queue.error} lead={t('review.readFailed')} />
       ) : queue.data.rows.length === 0 ? (
         <p className="max-w-prose text-sm text-ink-dim">{t('review.empty')}</p>
       ) : (

@@ -9,6 +9,7 @@ import {
   type AuditReviewRow,
   type AuditsConfirmed,
 } from '../api/review'
+import { problemText } from '../components/requestProblem'
 
 /** 按完之後要說的那一句。`shown`：整組或整段一次消失時，結果要看得見，不只念給螢幕閱讀器聽。 */
 export type Said = (said: string, shown?: boolean) => void
@@ -46,8 +47,8 @@ export function useConfirmAudits(onDone: Said) {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] })
       void queryClient.invalidateQueries({ queryKey: ['media'] })
     },
-    onError: () => {
-      setFailed(t('review.audit.failed'))
+    onError: (error) => {
+      setFailed(problemText(t, error, t('request.notDone')))
       void queryClient.invalidateQueries({ queryKey: reviewQueryOptions().queryKey })
     },
   })

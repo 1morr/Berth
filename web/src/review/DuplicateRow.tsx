@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { rematchRefusalText } from '../api/files'
+import { rematchRefusalText } from '../components/rematchRefusal'
 import {
   decideDuplicate,
   reviewQueryOptions,

@@ -19,9 +19,10 @@ export interface StubRoute {
  * 依路徑分派的 fetch 替身。精靈一頁會打好幾支 API，一份固定回應不夠用。
  * key 是 `GET /api/setup/status` 這種 `<method> <path>`；找不到就回 404。
  */
-export function stubApi(
-  routes: Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)>,
-) {
+/** `stubApi` 的路由表：固定回應，或每次叫用時才算的替身（回 Promise 的能停在半路或丟出送不到）。 */
+export type StubRoutes = Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)>
+
+export function stubApi(routes: StubRoutes) {
   const stub = vi.fn<typeof fetch>(async (input, init) => {
     const method = init?.method ?? 'GET'
     const path = typeof input === 'string' ? input : String(input)
@@ -51,6 +52,24 @@ export const HEALTHY = {
 export const UNCONFIGURED = { ...HEALTHY, setup_completed: false, owner_established: false }
 
 export const UNAUTHORIZED: StubRoute = { status: 401, body: { detail: 'sign in to use this API' } }
+
+/**
+ * 對 Berth 自己的請求沒成的三種，各配畫面該說的那半句（`request.*`，M4 票 89）：原本這三種一律說
+ * 「Berth 自己的 API 沒有回應」。給 `it.each` 用，每一格是 `[名字, 路由替身, 那半句]`。
+ */
+export const REQUEST_FAILURES = [
+  [
+    '500',
+    (): StubRoute => ({ status: 500, body: { detail: 'Internal Server Error' } }),
+    /看 berth 容器的 log/,
+  ],
+  ['401', (): StubRoute => UNAUTHORIZED, /登入已失效：重新登入 Berth/],
+  [
+    '離線',
+    (): Promise<StubRoute> => Promise.reject(new TypeError('Failed to fetch')),
+    /沒有回應：它可能沒在跑，或網路斷了/,
+  ],
+] as const
 
 /**
  * 記得「現在有沒有人登入」的假後端。門禁每一次導航都真的去問 `GET /auth/me`

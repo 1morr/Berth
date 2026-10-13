@@ -36,6 +36,7 @@ import {
 } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { PAGE_LINK, Pager } from '../components/Pager'
+import { RequestFailed } from '../components/RequestFailed'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { SEARCH_DEBOUNCE_MS } from '../components/useDebounced'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
@@ -613,7 +614,7 @@ function LibraryQueue({
   const frame = useFocusAfterRemoval()
 
   if (queue.isPending) return <QueueLoading />
-  if (!queue.data) return <p className="max-w-prose text-sm text-ink-dim">{t('review.off')}</p>
+  if (!queue.data) return <RequestFailed error={queue.error} lead={t('review.readFailed')} />
 
   const rest = queue.data.queue_total - rows.length
   const done = (text: string) => {

@@ -2,12 +2,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { rematch, rematchRefusalText, type RematchBody } from '../api/files'
+import { rematch, type RematchBody } from '../api/files'
 import { reviewQueryOptions } from '../api/review'
 import type { PlanAction } from '../api/plans'
 import { seriesCorrectedText } from '../rss/seriesValues'
 import { ConfirmPanel } from './ConfirmPanel'
 import { Checkbox, CONFIRM_ACTIONS, Field, GhostButton, Notice, PrimaryButton } from './controls'
+import { rematchRefusalText } from './rematchRefusal'
 import { useInPlaceConfirm } from './useInPlaceConfirm'
 
 /** 修正得成的那三種（`domain.REMATCH_ACTIONS`）：指派到某一集、標記為特典、忽略。 */

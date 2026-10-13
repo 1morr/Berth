@@ -13,6 +13,7 @@ import {
 import { reviewQueryOptions } from '../api/review'
 import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { fileName, whenText } from '../components/queueText'
@@ -64,7 +65,11 @@ export function IssueRow({
     },
     onError: (error) => {
       const said = parseIssueRefusal(error)
-      setRefusal(said ? refusalText(t, said.reason, said.detail) : t('issues.failed'))
+      setRefusal(
+        said
+          ? refusalText(t, said.reason, said.detail)
+          : problemText(t, error, t('request.notDone')),
+      )
       // 另一個分頁先按了、或那一顆已經不適用：重問一次，清單才說得出現在的樣子。
       refresh()
     },
