@@ -27,7 +27,7 @@
 - **SQLite**（WAL 模式），檔案 `/config/berth.db`；Alembic migration 在啟動時自動套用。
 - **前端 React SPA**，build 產物由 FastAPI 以靜態檔案提供；開發時 Vite dev server 代理 `/api`。回應一律 gzip（Starlette `GZipMiddleware`，M3 票 06：前端一整包 760 KB 傳輸降到約 216 KB，前面不一定有代理替它壓）；SSE 與已壓縮的圖不壓（Starlette 的預設排除，`test_events_api.py` 守著 SSE 那一條）。路由拆分量過（入口 760 → 458 KB）但沒做，理由在 M3 票 06 的 Comments。
 - 對外只有一個 port，預設 `8383`。
-- 路徑常數：`CONFIG_ROOT`（預設 `/config`：DB、設定、log）、`DATA_ROOT`（預設 `/data`：媒體根，brief §4）、`PORT`（預設 `8383`），全部可用環境變數覆寫以便本機開發。
+- 路徑常數：`CONFIG_ROOT`（預設 `/config`：DB、設定、log）、`DATA_ROOT`、`PORT`（預設 `8383`），可用環境變數覆寫以便本機開發。`DATA_ROOT` 是例外：Berth 沒有地方用它的值，它是 compose 把哪個宿主目錄掛到容器的 `/data`；Berth 自己的路徑固定在 `/data` 底下（incomplete / complete 根與 `library_root`，`PathSettings` 的預設值，§9.5）。
 - 前端產物的位置是第四個變數 `WEB_ROOT`，預設 repo 佈局的 `<repo>/web/dist`；裝成 wheel 之後那個路徑不存在，所以 image 的 Dockerfile（§9.1）指到它自己的複製位置。找不到時只提供 API。
 
 理由：單使用者到單家庭的規模，一個程序足夠；Seerr 與 AutoBangumi 都是這種形態。之後若解析或對帳變重，先把背景迴圈拆成第二個程序，不改架構。
@@ -49,7 +49,7 @@ berth/
   pipeline/            背景迴圈：qbit_poller、planner_runner、importer、jellyfin_resolver、reconciler、rss_poller、health_checker
   api/                 FastAPI routers：auth、setup、settings、routes、discover、media、search、jobs、plans、review、files、rss、issues、health、events
   events.py            Event 寫入與 SSE 廣播
-  cli.py               `berth bench`、`berth reconcile`、`berth rebuild-ledger`
+  cli.py               `berth serve`、`berth openapi`、`berth bench`、`berth rebuild-ledger`（手動對帳沒有 CLI，走 `POST /reconcile`，§6）
 web/                   前端（§7）
 tests/
   fixtures/parser/     benchmark 語料（§4.6）

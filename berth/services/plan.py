@@ -707,7 +707,11 @@ def _duplicate_of(
     job_hash: str,
     own: set[str],
 ) -> tuple[LedgerEntry, ItemReason] | None:
-    """這一列與帳本上的哪一列重複、為什麼。判準與同一包那一半共用（`parser.episode_span`）。"""
+    """這一列與帳本上的哪一列重複、為什麼。
+
+    這一列的季集用同一包那一半的 `parser.episode_span`；帳本那一側是 `LedgerEntry` 不是
+    `PlanItem`，所以在這裡行內照同一個慣例攤開（`episode_end` 空就是單集）。
+    """
     if item.action is not PlanAction.IMPORT or not item.target_path:
         return None
     folder = str((root / item.target_path).parent)
