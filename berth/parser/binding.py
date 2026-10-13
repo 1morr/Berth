@@ -55,6 +55,10 @@ _TITLE_END = re.compile(
     r"|第\s*\d{1,4}\s*(?:-\s*\d{1,4}\s*)?[话話集]",
     re.IGNORECASE,
 )
+#: 標題中間的括號註記（`尼古喵喵 (邪竜解放版) / ヤニねこ / Chainsmoker Cat`，M4 票 98）：後面緊接
+#: ` / ` 與下一個名字的那一格不是標題的結尾，整格丟掉、後面的名字照讀。後面沒有名字的括號照舊由
+#: `_TITLE_END` 截斷。
+_NOTE = re.compile(r"\s*\([^()]*\)(?=\s+/\s)")
 #: 一個發佈名裡的幾個名字之間：` / `（兩側要有空白：`Fate/Zero` 是一個名字）。
 _NAMES = re.compile(r"\s+/\s+")
 #: 名字前後的分隔符殘渣（`[Doomdos] - Botan…` 的破折號）。
@@ -92,8 +96,14 @@ def skeleton(release_title: str) -> tuple[str, ...]:
     `[組名] 中文名 / 英文或羅馬字名 - 12 [tags…]` 是字幕組最常見的寫法（每一段都要：哪一段與 TMDB
     相等事先不知道）。組名去掉之後以方括號開頭的，標題就是那一格（`[千夏字幕組][中文名_Romaji][第12話]`、
     `【喵萌奶茶屋】★07月新番★[名 / 名][12]`）。
-    組名與播出檔期的認法是解析器的（`parser.cjk`），不另寫一份。
+    組名與播出檔期的認法是解析器的（`parser.cjk`），不另寫一份。標題中間的括號註記丟掉，後面的名字照讀
+    （`_NOTE`）。
     """
+    return _skeleton(release_title, drop_notes=True)
+
+
+def _skeleton(release_title: str, *, drop_notes: bool) -> tuple[str, ...]:
+    """`skeleton` 的本體。`drop_notes=False` 是 `title_key` 的讀法：骨幹讀到第一個括號為止。"""
     text = undecorate(release_title)
     group = normalize_cjk(release_title)[1].group
     if group:
@@ -111,6 +121,8 @@ def skeleton(release_title: str) -> tuple[str, ...]:
     else:
         # 前面補一格空白：`[Group] - 12` 去掉組名之後是 `- 12`，那也是集號。
         text = f" {text}"
+        if drop_notes:
+            text = _NOTE.sub("", text)
         found = _TITLE_END.search(text)
         name = text[: found.start()] if found is not None else text
     return tuple(
@@ -125,8 +137,12 @@ def title_key(release_title: str) -> str | None:
     （`与你相恋到生命尽头` / `與妳相戀到生命盡頭`），羅馬字那一段相同——它們是同一個 Series。
     沒有羅馬字的名字時整串一起用。組名照解析器讀（開頭的方括號，或結尾的 `-GROUP`），讀不出是空的。
     什麼都不剩（只有組名與集號）是 `None`。
+
+    **骨幹讀到第一個括號為止，不讀過中間的註記**（M4 票 98）：鍵存在資料庫裡，`skeleton`
+    改讀過註記之後 `尼古喵喵 (邪竜解放版) / … / Chainsmoker Cat` 的鍵會從 `尼古喵喵` 變成
+    `chainsmokercat`，既有的 Series 下一輪就另長一個。要換讀法得連同 migration 重算既有的鍵。
     """
-    names = [normalize_title(name) for name in skeleton(release_title)]
+    names = [normalize_title(name) for name in _skeleton(release_title, drop_notes=False)]
     names = [name for name in names if name]
     if not names:
         return None
