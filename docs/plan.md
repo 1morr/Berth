@@ -743,7 +743,7 @@ services:
 
 **選了既有之後停掉套件內那一台**：從 `COMPOSE_PROFILES` 拿掉只讓之後的 `up -d` 不再起它，停不掉已經在跑的容器（brief §20.14 實測），所以精靈「選了既有」那一段、`docs/guide/existing-services.md` 與 `deploy/.env.example` 都另給 `docker compose stop <服務>`。
 
-**連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1，而且宿主上的服務要監聽 `0.0.0.0`）或區網 IP（brief §20.14，票 16、17）。
+**連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成宿主的區網 IP 或 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1），宿主上的服務要監聽 `0.0.0.0`；rootless Docker 上只有區網 IP 會通（brief §20.14，票 16、17、72）。
 
 **既有 Jellyfin**
 
@@ -782,7 +782,7 @@ services:
 5. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
 6. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
 7. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附**要改的那一台**的 compose `volumes:` 修正片段（`routeChecks.remedyFor`，M4 票 19）：`download_path` 與 `hardlink` 的 `EXDEV` 是 berth；`download_visible` 是 qbittorrent；`library_path` 與 `probe_visible` 是 jellyfin（Berth 早就掛著共用目錄，叫人改 berth 是白改）；不是 `EXDEV` 的硬鏈接失敗不附片段。`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 對既有服務給那一台自己的版本**（票 08、19，`RouteCheckList` 的 `existing`）：片段是「你原本那一份」要**多加**的一條（`Remedy.mount` → `MountFix`）：compose、`docker run -v`、Unraid 模板「Add another Path」的欄位三種寫法，宿主那一側是 `host_data_root` 的值（M4 票 63：原本是 `${DATA_ROOT}`，要人自己去 `.env` 找；相對路徑說它相對於 Berth 的 docker-compose.yml、要換成絕對路徑；不知道值時照舊 `${DATA_ROOT}`），容器路徑是 Berth 的 `complete_root` 與 `library_root` 的共同父目錄，也就是 `/data`，說明講原本的掛載不動、不做 remote path mapping（M4 票 36：原本叫人把下載目錄移到 `/data` 底下，照做舊 torrent 會找不到檔案）；`download_path`（既有 qBittorrent）另說同一個字串的條件，`hardlink` 的 `EXDEV`（任一既有）另說 berth 只能用一條掛載蓋住 `/data`、你的服務原本的掛載留著。Route 設定頁照 `GET /setup/status` 的選擇給同一份（票 36）；健康頁給套件內那一份。
-8. **補法先看原因、再看是哪一條**（M4 票 25，實測 B5、E12）：與掛載無關的原因不給任何片段——`berth_cannot_write`（Berth 在自己的容器裡建不了目錄、寫不進探測檔，第 1、3、5 條都會撞上）說 PUID / PGID 與目錄權限；`directory_missing`（`_visible` 讀到 `FileNotFoundError` 而那條路徑在 Berth 自己的共用根目錄底下——`complete_root` 與 `library_root` 的共同父目錄，Berth 掛著它：目錄被刪或改名；不看「上面幾層在不在」，image 本來就有 `/media`、`/mnt`）說把它建回來或改回原路徑，與不在共用根目錄底下的 `path_not_visible`（沒掛進 Berth）分開；位址的協定寫錯與連不上、帳密、被封同一類。`library_path` 的掛載補法說 Route 建好之後寫入目標就鎖住了，要先刪掉這條 Route 再選新的路徑。
+8. **補法先看原因、再看是哪一條**（M4 票 25，實測 B5、E12）：與掛載無關的原因不給任何片段——`berth_cannot_write`（Berth 在自己的容器裡建不了目錄、寫不進探測檔，第 1、3、5 條都會撞上）說 PUID / PGID 與目錄權限，rootless Docker 另說填 `PUID=0`、`PGID=0`（票 72）；`directory_missing`（`_visible` 讀到 `FileNotFoundError` 而那條路徑在 Berth 自己的共用根目錄底下——`complete_root` 與 `library_root` 的共同父目錄，Berth 掛著它：目錄被刪或改名；不看「上面幾層在不在」，image 本來就有 `/media`、`/mnt`）說把它建回來或改回原路徑，與不在共用根目錄底下的 `path_not_visible`（沒掛進 Berth）分開；位址的協定寫錯與連不上、帳密、被封同一類。`library_path` 的掛載補法說 Route 建好之後寫入目標就鎖住了，要先刪掉這條 Route 再選新的路徑。
 
 **套件內的 Route 範圍**（M4 票 24 定案）：套件內 Jellyfin 只替**清單上的媒體庫**建 Route（`jellyfin.is_listed`：名稱相同，或它的路徑之一是那一列的資料夾——與「已建立」同一條比對；`LibraryChoice.listed` 讓剖面照同一條列「將建立」）。使用者自己在那台 Jellyfin 加的媒體庫（重裝時保留下來的、路徑不在 `/data` 的）不自動建 Route：原本照樣建、紅著擋住頁 3，刪掉之後下一次「建立並檢查」又長回來（實測 R-04～06）。沒選另一個做法「記下使用者刪過的媒體庫」：要多存一份墓碑，而且第一次照樣先建出一條紅的。代價：清單上的媒體庫刪了 Route 會在下一次按下時再建——要它不再出現就在 Jellyfin 刪掉媒體庫、重讀之後從清單拿掉那一列；精靈跑完之後在 `/settings/routes` 逐條管理。
 

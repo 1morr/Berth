@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import '../i18n'
 import { CHECKS_PASSED, routeView, step } from '../test/fixtures'
+import type { SetupStep } from '../api/schemas'
 import { RouteCheckList } from './RouteCheckList'
 
 const PROBED_AT = '2026-09-08T09:00:00Z'
@@ -59,6 +60,34 @@ describe('RouteCheckList 的探針沿用（M4 票 50）', () => {
 
       expect(screen.getByText(/Carried over from the last probe/)).toBeInTheDocument()
       expect(screen.getByText(/press “Check again” in route settings/)).toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+})
+
+describe('Berth 自己寫不進的補法（M4 票 72）', () => {
+  /** 第一項就撞上 Berth 寫不進，其餘沒跑。 */
+  const CANNOT_WRITE: SetupStep[] = CHECKS_PASSED.map((row) =>
+    row.step === 'category'
+      ? {
+          ...step('category', 'failed', '', "[Errno 13] Permission denied: '/data/torrent'"),
+          failure: 'berth_cannot_write',
+          params: { path: '/data/torrent' },
+        }
+      : step(row.step, 'pending'),
+  )
+
+  // rootless 上把資料夾 chown 給那組 PUID / PGID 要 sudo，做了宿主上的帳號又寫不進去（票 42 實跑）。
+  it.each([
+    ['zh-Hant', /rootless Docker 不要 chown，改填 PUID=0、PGID=0/],
+    ['en', /on rootless Docker, skip the chown and set PUID=0 and PGID=0/],
+  ])('%s：補法多說 rootless Docker 填 PUID=0、PGID=0', async (language, said) => {
+    await i18next.changeLanguage(language)
+    try {
+      render(<RouteCheckList route={routeView({ checks: CANNOT_WRITE, health: 'failed' })} />)
+
+      expect(screen.getByText(said)).toHaveTextContent('/data/torrent')
     } finally {
       await i18next.changeLanguage('zh-Hant')
     }
