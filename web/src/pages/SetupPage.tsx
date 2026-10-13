@@ -670,7 +670,7 @@ export function SetupPage() {
             }}
             reread={{
               pending: reread.isPending,
-              failed: reread.isError,
+              error: reread.error,
               onReread: () => reread.mutate(),
             }}
             docking={dock.isPending}
@@ -747,7 +747,7 @@ export function SetupPage() {
               onTest: testIndexers,
               onSearch: searchIndexers,
               removing: removeSite.isPending ? removeSite.variables : null,
-              removeFailed: removeSite.isError,
+              removeError: removeSite.error,
               onRemove: (id) => removeSite.mutate(id),
             }}
             note={note}

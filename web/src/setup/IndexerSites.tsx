@@ -3,14 +3,15 @@ import { useTranslation } from 'react-i18next'
 
 import { formatList } from '../i18n/list'
 
-import type {
-  IndexerCandidate,
-  IndexerSetup,
-  IndexerSite,
-  SiteCheck,
-  SiteFailure,
-  SiteSearch,
-  TrialSearchResult,
+import {
+  prowlarrRemoveFailure,
+  type IndexerCandidate,
+  type IndexerSetup,
+  type IndexerSite,
+  type SiteCheck,
+  type SiteFailure,
+  type SiteSearch,
+  type TrialSearchResult,
 } from '../api/setup'
 import {
   STICKY_ACTION,
@@ -51,7 +52,8 @@ export interface SiteControls {
   onSearch: (query: string, indexerId: number | null) => Promise<TrialSearchResult>
   /** 正在移除哪一站。 */
   removing: number | null
-  removeFailed: boolean
+  /** 上一次移除為什麼沒成；沒有失敗是 `null`。 */
+  removeError: Error | null
   onRemove: (indexerId: number) => void
 }
 
@@ -203,11 +205,9 @@ export function AddedSites({
       <p aria-live="polite" className="sr-only">
         {gone ? t('indexer.remove.done', { name: removed }) : announce}
       </p>
-      {controls.removeFailed && (
+      {controls.removeError !== null && (
         <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('indexer.remove.failed')}
-          </Notice>
+          <RemoveFailed error={controls.removeError} />
         </div>
       )}
 
@@ -235,6 +235,25 @@ export function AddedSites({
         </ul>
       )}
     </section>
+  )
+}
+
+/**
+ * 移除沒成：Prowlarr 沒答上來或拒絕了就說它，原文收進技術細節；其餘照請求為什麼沒成說（M4 票 99）。原本一律說
+ * 「Prowlarr 可能正在重啟」，500 與 401 也是。
+ */
+function RemoveFailed({ error }: { error: Error }) {
+  const { t } = useTranslation()
+  const prowlarr = prowlarrRemoveFailure(error)
+
+  if (prowlarr === null) return <RequestFailed error={error} lead={t('indexer.remove.failed')} />
+  return (
+    <div className="grid gap-1">
+      <Notice signal="blocked" label={t('common.failed')}>
+        {t('indexer.remove.prowlarrFailed')}
+      </Notice>
+      <TechnicalDetails lines={[prowlarr]} />
+    </div>
   )
 }
 

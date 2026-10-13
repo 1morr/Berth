@@ -507,8 +507,8 @@ function NarrowPanel({
       ) : filters.isPending ? (
         <p className="text-sm text-ink-dim">{t('inventory.narrow.loading')}</p>
       ) : filters.isError ? (
-        <div className="grid justify-items-start gap-2">
-          <p className="text-sm text-ink">{t('inventory.narrow.failed')}</p>
+        <div className="grid w-full justify-items-start gap-2">
+          <NarrowFailed error={filters.error} />
           <GhostButton type="button" onClick={() => void filters.refetch()}>
             {t('inventory.narrow.retry')}
           </GhostButton>
@@ -520,6 +520,36 @@ function NarrowPanel({
         <GhostButton type="button" onClick={() => change([])}>
           {t(`inventory.narrow.clear.${kind}`)}
         </GhostButton>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 篩選選項讀不到：問不到 Jellyfin 就說它並貼原文（同 `Trouble`）；牆讀到之後才被收走看這個媒體庫的權限，
+ * 說與 `UnknownLibrary` 同一句；其餘照請求為什麼沒成說（M4 票 99）。原本只說「讀不到篩選選項」，不說為什麼。
+ */
+function NarrowFailed({ error }: { error: Error }) {
+  const { t } = useTranslation()
+  const refusal = accessRefusal(error)
+
+  if (refusal?.reason === 'library_not_visible') {
+    return (
+      <Notice signal="blocked" label={t('common.failed')}>
+        {t('inventory.empty.unknown')}
+      </Notice>
+    )
+  }
+  if (refusal?.reason !== 'jellyfin_unreachable') {
+    return <RequestFailed error={error} lead={t('inventory.narrow.failed')} />
+  }
+  return (
+    <div className="grid gap-1">
+      <Notice signal="blocked" label={t('common.failed')}>
+        {t('inventory.narrow.jellyfinDown')}
+      </Notice>
+      {refusal.detail && (
+        <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
       )}
     </div>
   )

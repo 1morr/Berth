@@ -809,7 +809,10 @@ const zhHant = {
       pending: '移除中…',
       warning: '從 Prowlarr 移除 {{name}}。之後要用，回到這裡測試通過再加入就好。',
       done: '已從 Prowlarr 移除 {{name}}。',
-      failed: '移除沒成功。Prowlarr 可能正在重啟——等一下再按一次。',
+      // 後半句照請求為什麼沒成（M4 票 99）；Prowlarr 沒答上來或拒絕了的那一種是 `prowlarrFailed`。
+      failed: '移除沒成功。',
+      prowlarrFailed:
+        'Prowlarr 沒有做成這一次移除：它沒答上來，或拒絕了 Berth，原文在技術細節裡。它可能正在重啟——等一下再按一次。',
     },
   },
   tmdbStep: {
@@ -905,7 +908,9 @@ const zhHant = {
     // 頁 3 進頁時向 Jellyfin 重讀媒體庫（M4 票 19）：頁 1 之後在 Jellyfin 改的掛載與路徑要看得到。
     reread: '重新讀取 Jellyfin 媒體庫',
     rereading: '讀取中…',
-    rereadFailed: '讀不到 Jellyfin 現在的媒體庫，下面是上一次讀到的那一份。',
+    // 前半句，後半句照請求為什麼沒成；問不到 Jellyfin（`jellyfin_unreachable`）的那一種是 `rereadJellyfinDown`（M4 票 99）。
+    rereadFailed: '沒有重新讀取，下面是上一次讀到的那一份。',
+    rereadJellyfinDown: '問不到 Jellyfin，讀不到它現在的媒體庫；下面是上一次讀到的那一份。',
     rereadDone_one: '已重新讀取：Jellyfin 上現在有 {{count}} 個媒體庫。',
     rereadDone_other: '已重新讀取：Jellyfin 上現在有 {{count}} 個媒體庫。',
     refused: {
@@ -1182,7 +1187,9 @@ const zhHant = {
         genres: '這個媒體庫的作品沒有類型資料。',
         years: '這個媒體庫的作品沒有年份資料。',
       },
+      // 後半句照請求為什麼沒成；問不到 Jellyfin 的那一種是 `jellyfinDown`（M4 票 99）。
       failed: '讀不到這個媒體庫的篩選選項。',
+      jellyfinDown: '問不到 Jellyfin，讀不到這個媒體庫的篩選選項。',
       retry: '重試',
       clear: {
         genres: '清除類型',
@@ -4135,7 +4142,9 @@ const en: Translations<typeof zhHant> = {
       warning:
         'Remove {{name}} from Prowlarr. To use it again later, come back here, test it and add it.',
       done: 'Removed {{name}} from Prowlarr.',
-      failed: 'Removing it did not work. Prowlarr may be restarting — press again in a moment.',
+      failed: 'Removing it did not work.',
+      prowlarrFailed:
+        'Prowlarr did not carry out the removal: it did not answer or it refused Berth; its reply is under technical details. It may be restarting — press again in a moment.',
     },
   },
   tmdbStep: {
@@ -4232,8 +4241,9 @@ const en: Translations<typeof zhHant> = {
     recheck_other: 'Check {{count}} routes again',
     reread: 'Read the Jellyfin libraries again',
     rereading: 'Reading…',
-    rereadFailed:
-      'Could not read the libraries Jellyfin has now; below is the list Berth read last time.',
+    rereadFailed: 'The libraries were not read again; below is the list Berth read last time.',
+    rereadJellyfinDown:
+      'Jellyfin did not answer, so Berth could not read its libraries; below is the list Berth read last time.',
     rereadDone_one: 'Re-read: Jellyfin now has {{count}} library.',
     rereadDone_other: 'Re-read: Jellyfin now has {{count}} libraries.',
     refused: {
@@ -4505,6 +4515,8 @@ const en: Translations<typeof zhHant> = {
         years: 'No title in this library has a year.',
       },
       failed: 'Cannot read the filter options for this library.',
+      jellyfinDown:
+        'Jellyfin did not answer, so the filter options for this library cannot be read.',
       retry: 'Retry',
       clear: {
         genres: 'Clear genres',

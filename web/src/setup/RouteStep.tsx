@@ -22,6 +22,7 @@ import { RouteCheckList } from '../components/RouteCheckList'
 import { checking, type ExistingServices } from '../components/routeChecks'
 import { RouteDelete } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
+import { routeRefusalOf } from '../api/routes'
 import { jellyfinAddressQueryOptions } from '../api/settings'
 import { jellyfinLibrariesUrl } from '../inventory/jellyfinLink'
 import { SIGNAL_FILL } from '../components/signal'
@@ -100,7 +101,7 @@ interface Common {
   /** 一條 Route 被明確地刪掉了（票 14）：這一步的清單與精靈的進度要重讀（M4 票 24）。 */
   onRouteDeleted: (route: RouteView) => void
   /** 進頁時向 Jellyfin 重讀媒體庫（M4 票 19；套件內也是，票 24）。重讀中、讀不到時說出來。 */
-  reread: { pending: boolean; failed: boolean; onReread: () => void }
+  reread: { pending: boolean; error: Error | null; onReread: () => void }
   /** 回頭看的說明（`RevisitNote`），這一頁做完了才有。 */
   note?: ReactNode
   /** 上一個 / 下一個泊位（`BerthNav`）。 */
@@ -404,10 +405,11 @@ function ExistingRoutes({ jellyfin, ...common }: Common & { jellyfin: JellyfinSe
  * 「重新讀取」。讀到了也說一聲（M4 票 31，實測 #33：清單沒變時按下去像沒反應）：只在人按的那一次說，
  * 進頁自動的那一次不說。`count` 是讀回來之後清單上的媒體庫數。
  */
-function Reread({ pending, failed, onReread, count }: Common['reread'] & { count: number }) {
+function Reread({ pending, error, onReread, count }: Common['reread'] & { count: number }) {
   const { t } = useTranslation()
   const [note, setNote] = useFadingNote()
   const pressed = useRef(false)
+  const failed = error !== null
 
   useEffect(() => {
     if (pending || !pressed.current) return
@@ -428,10 +430,35 @@ function Reread({ pending, failed, onReread, count }: Common['reread'] & { count
       >
         {pending ? t('routes.rereading') : t('routes.reread')}
       </GhostButton>
-      {failed && <p className="text-xs text-blocked-ink">{t('routes.rereadFailed')}</p>}
       <p aria-live="polite" className="text-xs text-ink-dim">
         {note}
       </p>
+      {failed && (
+        <div className="basis-full">
+          <RereadFailed error={error} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 重讀沒成：問不到 Jellyfin 就說它，原文收進技術細節；其餘照請求為什麼沒成說（M4 票 99）。原本一律說
+ * 「讀不到 Jellyfin 現在的媒體庫」，500 與 401 也是。兩種都說清單是上一次讀到的那一份：它還在，照樣用得了。
+ */
+function RereadFailed({ error }: { error: Error }) {
+  const { t } = useTranslation()
+  const refusal = routeRefusalOf(error)
+
+  if (refusal?.reason !== 'jellyfin_unreachable') {
+    return <RequestFailed error={error} lead={t('routes.rereadFailed')} />
+  }
+  return (
+    <div className="grid gap-1">
+      <Notice signal="blocked" label={t('common.failed')}>
+        {t('routes.rereadJellyfinDown')}
+      </Notice>
+      <TechnicalDetails lines={[refusal.detail]} />
     </div>
   )
 }
