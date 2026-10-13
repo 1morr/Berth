@@ -23,6 +23,7 @@ import {
   PrimaryButton,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { RequestFailed } from '../components/RequestFailed'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { SHARED_ROOT, type ExistingServices } from '../components/routeChecks'
 import { RouteDelete, type RouteChange } from '../components/RouteDelete'
@@ -57,9 +58,7 @@ export function RouteSettingsPage() {
   if (!routes.data) {
     return (
       <div className="px-6 py-8">
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('health.unreachable')}
-        </Notice>
+        <RequestFailed error={routes.error} lead={t('routes.readFailed')} />
       </div>
     )
   }
@@ -125,9 +124,7 @@ function RecheckAll({
         {recheck.isSuccess ? t('routeSettings.recheckedAll', { count }) : ''}
       </p>
       {recheck.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('routeSettings.recheckFailed')}
-        </Notice>
+        <RequestFailed error={recheck.error} lead={t('routeSettings.recheckFailed')} />
       )}
     </div>
   )
@@ -216,9 +213,7 @@ function RouteChecks({ route }: { route: RouteView }) {
         {recheck.isSuccess ? t('routeSettings.rechecked') : ''}
       </p>
       {recheck.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('routeSettings.recheckFailed')}
-        </Notice>
+        <RequestFailed error={recheck.error} lead={t('routeSettings.recheckFailed')} />
       )}
     </div>
   )
@@ -297,13 +292,15 @@ function RouteEditor({ route }: { route: RouteView }) {
         {save.isSuccess ? t('routeSettings.edit.saved') : ''}
       </p>
 
-      {save.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {refusal?.reason === 'route_unhealthy'
-            ? t('routeSettings.edit.unhealthy')
-            : t('routeSettings.edit.failed')}
-        </Notice>
-      )}
+      {save.isError &&
+        (refusal?.reason === 'route_unhealthy' ? (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('routeSettings.edit.unhealthy')}
+          </Notice>
+        ) : (
+          // 後端沒給理由的那一支（M4 票 90）：照請求為什麼沒成說。
+          <RequestFailed error={save.error} lead={t('routeSettings.edit.failed')} />
+        ))}
     </form>
   )
 }

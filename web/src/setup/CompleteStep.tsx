@@ -7,6 +7,7 @@ import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components
 import { SIGNAL_FILL } from '../components/signal'
 import { ROUTE_SIGNAL } from '../components/routeChecks'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { RequestFailed } from '../components/RequestFailed'
 import { LedgerGapNotice } from '../issues/LedgerGapNotice'
 import { StepFrame } from './StepFrame'
 
@@ -25,16 +26,17 @@ import { StepFrame } from './StepFrame'
  * 把兩者都講成「後端可能沒在跑」會把使用者送去看容器 log，而真正要做的事在精靈裡面
  * （票 03 第 5 條；PRODUCT.md 原則 4：失敗要說得出下一步）。
  *
- * `unfinished` 是「知道還沒做完、但指不出是哪一步」：寧可說這句，也不要指錯一步。
+ * `unfinished` 是「知道還沒做完、但指不出是哪一步」：寧可說這句，也不要指錯一步。`request` 是其餘：
+ * 請求本身沒成，照它為什麼沒成說（`RequestFailed`，M4 票 90）。
  */
-export type CompleteFailure = 'tmdb' | 'routes' | 'unfinished' | 'backend'
+export type CompleteFailure = 'tmdb' | 'routes' | 'unfinished' | 'request'
 
 /** 查表而不是動態組 key——動態組過不了 `strictKeyChecks`（票 06）。 */
 const FAILURE_MESSAGE = {
   tmdb: 'complete.needTmdb',
   routes: 'complete.needRoutes',
   unfinished: 'complete.unfinished',
-  backend: 'complete.failed',
+  request: 'complete.failed',
 } as const satisfies Record<CompleteFailure, string>
 
 export function CompleteStep({
@@ -44,6 +46,7 @@ export function CompleteStep({
   doors,
   completing,
   failure,
+  error,
   onComplete,
   onFixTmdb,
   nav,
@@ -59,6 +62,8 @@ export function CompleteStep({
   doors: ReactNode
   completing: boolean
   failure?: CompleteFailure
+  /** `failure` 是 `request` 時，請求為什麼沒成照它說（`RequestFailed`，M4 票 90）。 */
+  error?: unknown
   onComplete: () => void
   /** 回到第 7 步（TMDB 閘門）。缺憑證時真正的出路。 */
   onFixTmdb: () => void
@@ -127,9 +132,13 @@ export function CompleteStep({
 
       {failure && (
         <div className="mt-6 grid gap-3">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t(FAILURE_MESSAGE[failure])}
-          </Notice>
+          {failure === 'request' ? (
+            <RequestFailed error={error} lead={t(FAILURE_MESSAGE.request)} />
+          ) : (
+            <Notice signal="blocked" label={t('common.failed')}>
+              {t(FAILURE_MESSAGE[failure])}
+            </Notice>
+          )}
           {failure === 'tmdb' && (
             <div>
               <GhostButton type="button" onClick={onFixTmdb}>

@@ -21,8 +21,8 @@ export interface Refusal<R extends string> {
 /**
  * 這一次失敗是「後端說不行」還是「網路壞了」。
  *
- * **認不得的理由回 `null`**，畫面落回一句誠實的通用訊息：後端跑在前面（升級了後端還沒重新整理
- * 分頁）時，使用者該看到的是一句話，不是一條沒翻譯到的 i18n key。
+ * **認不得的理由回 `null`**，畫面照請求為什麼沒成說（`RequestFailed` / `problemText`，M4 票 89、90）：
+ * 後端跑在前面（升級了後端還沒重新整理分頁）時，使用者該看到的是一句話，不是一條沒翻譯到的 i18n key。
  */
 export function parseRefusal<R extends string>(
   error: unknown,

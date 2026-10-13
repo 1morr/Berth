@@ -29,6 +29,7 @@ import {
   TEXT_LINK,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
@@ -73,9 +74,7 @@ export function SubscribePanel({ media }: { media: Media }) {
       </div>
 
       {series.isError ? (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('rss.off')}
-        </Notice>
+        <RequestFailed error={series.error} lead={t('rss.readFailed')} />
       ) : series.data && series.data.length > 0 ? (
         <ul className="grid gap-px border-2 border-rule bg-rule">
           {series.data.map((row) => (
@@ -534,14 +533,15 @@ function Refusal({ error }: { error: unknown }) {
   const { t } = useTranslation()
   const refusal = parseRssRefusal(error)
 
+  // 後端沒說理由：照請求為什麼沒成說（M4 票 90）。
+  if (refusal === null) return <RequestFailed error={error} lead={t('request.notDone')} />
+
   return (
     <Notice signal="blocked" label={t('common.failed')}>
-      {refusal === null
-        ? t('rss.failed')
-        : refusal.reason === 'feed_unreachable'
-          ? t('rss.subscribe.unreachable')
-          : t(`rss.refusal.${refusal.reason}`)}
-      {refusal?.detail ? (
+      {refusal.reason === 'feed_unreachable'
+        ? t('rss.subscribe.unreachable')
+        : t(`rss.refusal.${refusal.reason}`)}
+      {refusal.detail ? (
         <span className="value block text-xs wrap-anywhere">{refusal.detail}</span>
       ) : null}
     </Notice>

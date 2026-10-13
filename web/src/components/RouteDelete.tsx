@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { routeRefusalOf, type RouteUsage } from '../api/routes'
 import type { RouteView } from '../api/schemas'
 import { ConfirmAction, GhostButton, Notice } from './controls'
+import { RequestFailed } from './RequestFailed'
 
 /**
  * 這條 Route 剛剛怎麼了。說出來的是頁面那一層（票 14a）：刪掉的那一列連同這個元件一起卸載，
@@ -75,9 +76,7 @@ export function RouteDelete({
           </div>
         )}
         {disable.isError && (
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('routeSettings.disable.failed')}
-          </Notice>
+          <RequestFailed error={disable.error} lead={t('routeSettings.disable.failed')} />
         )}
       </div>
     )
@@ -93,15 +92,17 @@ export function RouteDelete({
         pendingLabel={t('routeSettings.delete.pending')}
         onConfirm={() => remove.mutate()}
       />
-      {remove.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {refusal?.reason !== 'route_in_use'
-            ? t('routeSettings.delete.failed')
-            : refusal.usage
+      {remove.isError &&
+        (refusal?.reason !== 'route_in_use' ? (
+          // 後端沒給理由的那一支（M4 票 90）：照請求為什麼沒成說。
+          <RequestFailed error={remove.error} lead={t('routeSettings.delete.failed')} />
+        ) : (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {refusal.usage
               ? t('routeSettings.delete.refused', usageCounts(t, refusal.usage))
               : t('routeSettings.delete.refusedUncounted')}
-        </Notice>
-      )}
+          </Notice>
+        ))}
     </div>
   )
 }

@@ -36,7 +36,7 @@ export interface RouteRefusalDetail {
 }
 
 /**
- * 這一次失敗是「後端說不行」還是別的。認不得的理由回 `null`，畫面落回一句通用的話。
+ * 這一次失敗是「後端說不行」還是別的。認不得的理由回 `null`，畫面照請求為什麼沒成說（`RequestFailed`）。
  *
  * 理由與原文的解析與另外兩組共用（`api/refusal.ts`）；這裡多讀的是 `route_in_use` 才有的
  * 那兩個數字，它們在後端是 `RouteRefusalOut` 上兩格可有可無的欄位。

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import { healthDetail, pollerView, routeView, step, withFailedService } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
@@ -14,7 +14,7 @@ const DETAIL = 'GET /api/health/detail'
 const CHECK = 'POST /api/health/check'
 
 /** 走真正的 route tree：這一頁掛在 `/health`，而修正步驟裡有一個站內連結。 */
-function render(detail: StubRoute, extra: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(detail: StubRoutes[string], extra: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -485,6 +485,46 @@ describe('健康頁', () => {
     renderApp('/health')
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+  })
+
+  // M4 票 90：讀不到、重測沒走完時，原本一律說「後端可能沒在跑」——500 與 401 也是。
+  describe('對 Berth 的請求沒成時說出對的原因', () => {
+    it.each(REQUEST_FAILURES)('讀不到健康檢查（%s）', async (_, failure, expected) => {
+      render(failure)
+      renderApp('/health')
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/讀不到健康檢查。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
+    })
+
+    it.each(REQUEST_FAILURES)('立即重測沒走完（%s）', async (_, failure, expected) => {
+      render({ body: healthDetail() }, { [CHECK]: failure })
+      renderApp('/health')
+
+      await userEvent.click(await screen.findByRole('button', { name: '立即重測' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/重測沒有走完。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
+    })
+
+    it.each(REQUEST_FAILURES)('全部重新檢查沒走完（%s）', async (_, failure, expected) => {
+      render(
+        { body: healthDetail({ routes_status: 'unknown' }) },
+        { 'POST /api/routes/check': failure },
+      )
+      renderApp('/health')
+
+      await userEvent.click(await screen.findByRole('button', { name: '全部重新檢查' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/檢查沒有走完。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
+    })
   })
 
   it('還沒有 Route 時說明要去哪裡建，而不是報錯', async () => {

@@ -66,7 +66,7 @@ export interface LoginControls {
 export function IndexerStep({
   status,
   indexers,
-  indexersFailed,
+  indexersError,
   owner,
   carried,
   applying,
@@ -82,7 +82,8 @@ export function IndexerStep({
   status: SetupStatus
   /** 選之前也讀得到：後端還沒選時不去連 Prowlarr（`indexer.read_indexer_status`）。 */
   indexers: IndexerSetup | undefined
-  indexersFailed: boolean
+  /** 重讀清單失敗（手上還有上一份）；沒失敗是 `null`。 */
+  indexersError: unknown
   /** 擁有者的名字：沿用 Jellyfin 帳密時的帳號，取消勾選時預填它。 */
   owner: string
   /** 頁 1 帶過來的那一組（只在這個分頁的記憶體裡，M4 票 40）。 */
@@ -231,7 +232,11 @@ export function IndexerStep({
           )}
         </>
       )}
-      {indexersFailed && <p className="mt-6 text-sm text-ink-dim">{t('indexer.unreachable')}</p>}
+      {indexersError != null && (
+        <div className="mt-6">
+          <RequestFailed error={indexersError} lead={t('indexer.stateFailed')} />
+        </div>
+      )}
 
       {/* 選之前、或讀不到清單時，「之後再說」在這裡；Prowlarr 的在「加入」旁邊。 */}
       {((mode !== 'bundled' && mode !== 'prowlarr') || unread) && (

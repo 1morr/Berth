@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { jobEventsQueryOptions, type Job } from '../api/jobs'
 import { CopyLine, GHOST_LINK } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { JobSummary } from './JobSummary'
 import { jobRowFrame, mediaTitleOf } from './jobState'
 import { JobTimeline } from './JobTimeline'
@@ -63,7 +64,7 @@ export function JobRow({ job }: { job: Job }) {
         ) : events.data ? (
           <JobTimeline events={events.data} latest={LATEST_RUNS} />
         ) : (
-          <p className="text-xs text-ink-dim">{t('jobs.timeline.off')}</p>
+          <RequestFailed error={events.error} lead={t('jobs.timeline.readFailed')} />
         )}
 
         <div className="grid min-w-0 gap-1">

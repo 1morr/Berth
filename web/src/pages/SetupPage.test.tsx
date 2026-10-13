@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { stubApi } from '../test/fetch'
+import { REQUEST_FAILURES, stubApi } from '../test/fetch'
 import { findBoardCells } from '../test/board'
 import { renderInRoute } from '../test/render'
 import { ALL_BUNDLED, chosen, jellyfinSetup, setupStatus } from '../test/fixtures'
@@ -882,6 +882,87 @@ describe('頁 1：擁有者成立之後 Berth 的 key 被撤了（M4 票 18）',
       ),
     )
     expect(bodiesOf(fetchStub, '/api/setup/services/jellyfin/test')).toEqual([{ restart: true }])
+  })
+})
+
+// M4 票 90：換 key 的請求沒成，原本 500、401 與連不上一律說「請求沒跑完」。
+describe('頁 1：重新登入換 key 的請求沒成', () => {
+  it.each(REQUEST_FAILURES)('說出對的原因（%s）', async (_, failure, expected) => {
+    stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          current_step: 2,
+          owner: 'skipper',
+          services: [
+            chosen({
+              origin: 'existing',
+              base_url: 'http://nas:8096',
+              state: 'failed',
+              reason: 'auth_required',
+            }),
+          ],
+        }),
+      },
+      'POST /api/setup/jellyfin/connect': failure,
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await user.click(within(screen.getByText('BTH 1').closest('li')!).getByRole('button'))
+    await user.type(await screen.findByLabelText('Jellyfin 管理員帳號'), 'skipper')
+    await user.type(screen.getByLabelText('Jellyfin 管理員密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: /登入/ }))
+
+    const failed = await screen.findByTestId('request-failed')
+    expect(failed).toHaveTextContent(/請求沒跑完。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/自己的 API|還活著/)
+  })
+
+  // 請求跑完了、換 key 那一步紅了：說 Jellyfin 那一段的原因（同頁 3），不說「請求沒跑完」。
+  it('請求跑完而 Jellyfin 沒給 key 時，說那一步為什麼沒成', async () => {
+    stubApi({
+      [STATUS]: {
+        body: setupStatus({
+          current_step: 2,
+          owner: 'skipper',
+          services: [
+            chosen({
+              origin: 'existing',
+              base_url: 'http://nas:8096',
+              state: 'failed',
+              reason: 'auth_required',
+            }),
+          ],
+        }),
+      },
+      'POST /api/setup/jellyfin/connect': {
+        body: jellyfinSetup({
+          origin: 'existing',
+          steps: [
+            {
+              step: 'api_key',
+              status: 'failed',
+              detail: '',
+              error: '401 Unauthorized',
+              failure: 'auth_rejected',
+            },
+          ],
+        }),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    await screen.findByRole('heading', { level: 2, name: '先選 qBittorrent 是哪一台' })
+    await user.click(within(screen.getByText('BTH 1').closest('li')!).getByRole('button'))
+    await user.type(await screen.findByLabelText('Jellyfin 管理員帳號'), 'skipper')
+    await user.type(screen.getByLabelText('Jellyfin 管理員密碼'), 'harbour')
+    await user.click(screen.getByRole('button', { name: /登入/ }))
+
+    expect(await screen.findByText('Jellyfin 不接受 Berth 的 API key。')).toBeVisible()
+    expect(screen.queryByText(/請求沒跑完/)).not.toBeInTheDocument()
   })
 })
 

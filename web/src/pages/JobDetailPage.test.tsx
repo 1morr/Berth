@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job, JobEvent } from '../api/jobs'
 import type { Plan } from '../api/plans'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -215,12 +215,48 @@ describe('Job 詳情頁（M2 票 12）', () => {
     expect(screen.getByRole('link', { name: '回下載列表' })).toHaveAttribute('href', '/jobs')
   })
 
-  it('後端問不到時說的是 Berth 自己，不當成找不到', async () => {
-    render({ [JOB]: { status: 500, body: { detail: 'boom' } } })
-    renderApp(`/jobs/${HASH}`)
+  // M4 票 90：原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)(
+    '讀不到這一筆（%s）時說出對的原因，不當成找不到',
+    async (_, failure, expected) => {
+      render({ [JOB]: failure })
+      const { queryClient } = renderApp(`/jobs/${HASH}`)
+      // 送不到會重試三次（`jobQueryOptions`），預設的間隔加倍要等七秒才輪到畫面說話。
+      queryClient.setQueryDefaults(['jobs'], { retryDelay: 0 })
 
-    expect(await screen.findByText(/讀不到這筆下載/)).toBeInTheDocument()
-    expect(screen.queryByText('找不到這筆下載')).toBeNull()
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/讀不到這筆下載。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API/)
+      expect(screen.queryByText('找不到這筆下載')).toBeNull()
+    },
+  )
+
+  it.each(REQUEST_FAILURES)('讀不到計劃（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [PLAN]: failure })
+    const { queryClient } = renderApp(`/jobs/${HASH}`)
+    queryClient.setQueryDefaults(['jobs'], { retryDelay: 0 })
+
+    const files = await section('檔案與決策')
+    const alert = await within(files).findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到這一份計劃。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到時間線（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [EVENTS]: failure })
+    const { queryClient } = renderApp(`/jobs/${HASH}`)
+    queryClient.setQueryDefaults(['jobs'], { retryDelay: 0 })
+
+    // 歷史與時間線兩段各說一次。
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts).toHaveLength(2)
+    for (const alert of alerts) {
+      expect(alert).toHaveTextContent(/讀不到時間線。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
+    }
   })
 })
 
@@ -380,6 +416,40 @@ describe('詳情頁的動作', () => {
     await userEvent.click(await screen.findByRole('button', { name: '重新入庫' }))
 
     expect(await screen.findByText(/complete 裡已經沒有這一包了/)).toBeInTheDocument()
+  })
+
+  // M4 票 90：後端沒說理由的失敗，照請求為什麼沒成說；說了理由的（上面兩條）照舊。
+  describe.each([
+    [
+      '重新規劃',
+      { state: 'review', replannable: true },
+      'replan',
+      '重新規劃',
+      /重新規劃沒有成功。/,
+    ],
+    ['重試', { state: 'submit_failed', retryable: true }, 'retry', '重新送單', /重試沒有成功。/],
+    [
+      '重新入庫',
+      { state: 'imported', reimportable: true },
+      'reimport',
+      '重新入庫',
+      /重新入庫沒有成功。/,
+    ],
+  ] as const)('%s沒說出理由地失敗', (_, overrides, action, label, lead) => {
+    it.each(REQUEST_FAILURES)('（%s）說出對的原因', async (__, failure, expected) => {
+      render({
+        [JOB]: { body: job(overrides) },
+        [`POST /api/jobs/${HASH}/${action}`]: failure,
+      })
+      renderApp(`/jobs/${HASH}`)
+
+      await userEvent.click(await screen.findByRole('button', { name: label }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(lead)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API/)
+    })
   })
 
   it('admin 在待審核的那一筆看到去處理它的路', async () => {

@@ -965,7 +965,7 @@ function Trouble({ error, retry }: { error: Error | null; retry: () => void }) {
       </div>
     )
   }
-  return <p className="max-w-prose text-sm text-ink-dim">{t('inventory.off')}</p>
+  return <RequestFailed error={error} lead={t('inventory.readFailed')} />
 }
 
 /** 讀取中：不動的空位格。這個世界沒有骨架屏動畫。 */

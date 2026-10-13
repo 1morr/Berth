@@ -14,6 +14,7 @@ import {
 import { PAGE_TITLE } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { DetailLine, QueueRow } from '../components/QueueRow'
+import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { ExclusionsSection } from '../rss/ExclusionsSection'
@@ -66,7 +67,10 @@ export function RssPage() {
       {loading ? (
         <Loading />
       ) : off ? (
-        <p className="max-w-prose text-sm text-ink-dim">{t('rss.off')}</p>
+        <RequestFailed
+          error={[feeds, series, items, exclusions].find((query) => query.isError)?.error}
+          lead={t('rss.readFailed')}
+        />
       ) : (
         <>
           {undecided.length > 0 && <FirstRoundSection feeds={undecided} onDone={setSaid} />}

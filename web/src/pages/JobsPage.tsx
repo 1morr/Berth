@@ -6,6 +6,7 @@ import { useJobStream } from '../api/events'
 import { JOB_FILTERS, jobsQueryOptions, type JobPage, type ListFilter } from '../api/jobs'
 import { FILTER, FILTER_ACTIVE, GHOST_LINK, PAGE_TITLE } from '../components/controls'
 import { PAGE_LINK, Pager } from '../components/Pager'
+import { RequestFailed } from '../components/RequestFailed'
 import { JobRow } from '../jobs/JobRow'
 
 /**
@@ -55,7 +56,7 @@ export function JobsPage() {
       {jobs.isPending ? (
         <Loading />
       ) : !listing ? (
-        <p className="max-w-prose text-sm text-ink-dim">{t('jobs.off')}</p>
+        <RequestFailed error={jobs.error} lead={t('jobs.readFailed')} />
       ) : listing.counts.all === 0 ? (
         <Empty />
       ) : (

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { stubApi } from '../test/fetch'
+import { REQUEST_FAILURES, stubApi } from '../test/fetch'
 import { boardCells, findBoardCells } from '../test/board'
 import { renderInRoute } from '../test/render'
 import {
@@ -575,6 +575,42 @@ describe('頁 3：套件內 Jellyfin 的媒體庫清單（票 06f）', () => {
         { timeout: 3000 },
       ),
     ).toBeInTheDocument()
+  })
+})
+
+// M4 票 90：清單存不下來而後端沒給理由時，原本 500、401 與連不上一律說「請求沒跑完」。
+describe('頁 3：清單存不下來而後端沒說理由', () => {
+  it.each(REQUEST_FAILURES)('說出對的原因（%s）', async (_, failure, expected) => {
+    stubPage({
+      [STATUS]: { body: AT_PAGE_THREE },
+      [JELLYFIN]: { body: jellyfinSetup() },
+      [SAVE]: failure,
+      [ROUTES]: { body: routeSetup() },
+    })
+    const user = userEvent.setup()
+
+    renderInRoute(<SetupPage />)
+    const anime = await screen.findByRole('group', { name: 'Anime' })
+    await user.click(within(anime).getByRole('button', { name: '移除「Anime」' }))
+
+    const said = await screen.findByText(/^清單沒存下來。/, {}, { timeout: 3000 })
+    expect(said).toHaveTextContent(expected)
+    expect(said).not.toHaveTextContent(/自己的 API|還活著/)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到媒體庫清單（%s）：頁 3', async (_, failure, expected) => {
+    stubPage({
+      [STATUS]: { body: AT_PAGE_THREE },
+      [JELLYFIN]: { body: jellyfinSetup() },
+      [ROUTES]: failure,
+    })
+
+    renderInRoute(<SetupPage />)
+
+    const failed = await screen.findByTestId('request-failed')
+    expect(failed).toHaveTextContent(/讀不到媒體庫清單。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/自己的 API|還活著/)
   })
 })
 

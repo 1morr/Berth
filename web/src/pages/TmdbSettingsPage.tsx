@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { healthDetailQueryOptions } from '../api/health'
 import { testTmdb, tmdbSetupQueryOptions } from '../api/setup'
 import { Notice } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SettingsFrame } from '../settings/SettingsFrame'
 import { TmdbKey } from '../setup/TmdbStep'
 
@@ -35,9 +36,7 @@ export function TmdbSettingsPage() {
           <TmdbKey tmdb={tmdb.data} testing={test.isPending} onTest={(key) => test.mutate(key)} />
         </div>
       ) : tmdb.isError ? (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('tmdbStep.unreachable')}
-        </Notice>
+        <RequestFailed error={tmdb.error} lead={t('tmdbStep.readFailed')} />
       ) : (
         <p className="text-sm text-ink-dim">{t('health.checking')}</p>
       )}
@@ -48,11 +47,7 @@ export function TmdbSettingsPage() {
           {t('settings.tmdbPage.kept')}
         </Notice>
       )}
-      {test.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('settings.tmdbPage.failed')}
-        </Notice>
-      )}
+      {test.isError && <RequestFailed error={test.error} lead={t('settings.tmdbPage.failed')} />}
     </SettingsFrame>
   )
 }

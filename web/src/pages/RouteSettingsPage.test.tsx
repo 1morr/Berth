@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import {
   CHECKS_PASSED,
   chosen,
@@ -49,7 +49,7 @@ const ANIME_FULL = libraryOption({
 /** TV：3 筆下載與 12 個入庫檔案指著它，刪不得。 */
 const IN_USE_TV = managedRoute({ jobs: 3, ledger_entries: 12, in_use: true })
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}, role = 'admin') {
+function render(routes: StubRoutes = {}, role = 'admin') {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
@@ -479,5 +479,96 @@ describe('Route 設定頁', () => {
     const { router } = renderApp('/settings/routes')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
+  })
+})
+
+// M4 票 90：後端沒給理由的失敗，原本一律說「後端可能沒在跑」——500 與 401 也是。
+describe('Route 設定頁對 Berth 的請求沒成時說出對的原因', () => {
+  /** 一格：前半句在、對的原因在、舊的「API 沒回應」不在。 */
+  function expectSaid(notice: HTMLElement, expected: RegExp) {
+    expect(notice).toHaveTextContent(expected)
+    expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+  }
+
+  it.each(REQUEST_FAILURES)('讀不到清單（%s）', async (_, failure, expected) => {
+    render({ [ROUTES]: failure })
+    renderApp('/settings/routes')
+
+    expectSaid(await screen.findByText(/^讀不到媒體庫清單。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('改名稱沒存進去（%s）', async (_, failure, expected) => {
+    render({ 'PUT /api/routes/2': failure })
+    renderApp('/settings/routes')
+
+    const tv = within(await row('TV'))
+    await userEvent.type(tv.getByRole('textbox', { name: '名稱' }), '2')
+    await userEvent.click(tv.getByRole('button', { name: '儲存' }))
+
+    expectSaid(await tv.findByText(/^沒有存進去。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('這一條重新檢查沒走完（%s）', async (_, failure, expected) => {
+    render({ 'POST /api/routes/2/check': failure })
+    renderApp('/settings/routes')
+
+    const tv = within(await row('TV'))
+    await userEvent.click(tv.getByRole('button', { name: '重新檢查' }))
+
+    expectSaid(await tv.findByText(/^檢查沒有走完。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('全部重新檢查沒走完（%s）', async (_, failure, expected) => {
+    render({ 'POST /api/routes/check': failure })
+    renderApp('/settings/routes')
+
+    await row('TV')
+    await userEvent.click(screen.getByRole('button', { name: '全部重新檢查' }))
+
+    expectSaid(await screen.findByText(/^檢查沒有走完。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('刪除沒刪掉（%s）', async (_, failure, expected) => {
+    render({ 'DELETE /api/routes/4': failure })
+    renderApp('/settings/routes')
+
+    const second = within(await row('TV 2'))
+    await userEvent.click(second.getByRole('button', { name: '刪除這條 Route' }))
+    await userEvent.click(second.getByRole('button', { name: '確定刪除' }))
+
+    expectSaid(await second.findByText(/^沒有刪掉。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('停用沒停用成（%s）', async (_, failure, expected) => {
+    render({ 'PUT /api/routes/2': failure })
+    renderApp('/settings/routes')
+
+    const tv = within(await row('TV'))
+    await userEvent.click(tv.getByRole('button', { name: '停用這條 Route' }))
+
+    expectSaid(await tv.findByText(/^沒有停用。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到 Jellyfin 的媒體庫清單（%s）', async (_, failure, expected) => {
+    render({ [LIBRARIES]: failure })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+
+    expectSaid(await form.findByText(/^沒有建立。/), expected)
+  })
+
+  it.each(REQUEST_FAILURES)('新增沒建立成（%s）', async (_, failure, expected) => {
+    render({ [LIBRARIES]: { body: [libraryOption()] }, 'POST /api/routes': failure })
+    renderApp('/settings/routes')
+
+    await userEvent.click(await screen.findByRole('button', { name: '新增 Route' }))
+    const form = within(await screen.findByRole('region', { name: '新增 Route' }))
+    await userEvent.click(await form.findByRole('radio', { name: 'TV' }))
+    await userEvent.click(form.getByRole('radio', { name: '/mnt/disk2/tv' }))
+    await userEvent.click(form.getByRole('button', { name: '建立並檢查' }))
+
+    expectSaid(await form.findByText(/^沒有建立。/), expected)
   })
 })

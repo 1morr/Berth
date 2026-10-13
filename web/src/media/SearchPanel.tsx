@@ -16,8 +16,9 @@ import {
   type QueryChoice,
   type QueryPlan,
 } from '../api/search'
-import { COMPACT_BUTTON, Notice, PrimaryButton } from '../components/controls'
+import { COMPACT_BUTTON, PrimaryButton } from '../components/controls'
 import { seasonCode } from '../components/episodes'
+import { RequestFailed } from '../components/RequestFailed'
 import type { SetupStep } from '../api/schemas'
 import { ExpandHint } from '../components/ExpandHint'
 import { StepLine } from '../components/StepLine'
@@ -215,11 +216,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
       <FolderLine media={media} />
 
-      {search.isError && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('search.off')}
-        </Notice>
-      )}
+      {search.isError && <RequestFailed error={search.error} lead={t('search.failed')} />}
 
       {/* 一次搜尋要 35–85 秒。那段時間裡畫面上要有東西在動，而這塊板子沒有 spinner——
           動的是纜繩：先鋪出要問的那幾個關鍵字（`working`），一有結果就換成筆數

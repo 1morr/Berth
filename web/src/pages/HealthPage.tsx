@@ -7,6 +7,7 @@ import { healthDetailQueryOptions, healthQueryOptions, runHealthCheck } from '..
 import type { RouteView } from '../api/schemas'
 import { PAGE_TITLE, GhostButton, Notice } from '../components/controls'
 import { ROUTE_SIGNAL, routesNeedRecheck, routesSummaryLabel } from '../components/routeChecks'
+import { RequestFailed } from '../components/RequestFailed'
 import { RouteCheckList } from '../components/RouteCheckList'
 import { RouteRow } from '../components/RouteRow'
 import { UNPAINTED_FILL } from '../components/signal'
@@ -59,9 +60,7 @@ export function HealthPage() {
   if (!detail.data) {
     return (
       <div className="px-6 py-8">
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('health.unreachable')}
-        </Notice>
+        <RequestFailed error={detail.error} lead={t('health.readFailed')} />
       </div>
     )
   }
@@ -103,9 +102,7 @@ export function HealthPage() {
 
         {recheck.isError && (
           <div className="mt-4">
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t('health.recheckFailed')}
-            </Notice>
+            <RequestFailed error={recheck.error} lead={t('health.recheckFailed')} />
           </div>
         )}
 
@@ -160,9 +157,7 @@ export function HealthPage() {
           )}
           {recheckRoutes.isError && (
             <div className="mt-3">
-              <Notice signal="blocked" label={t('common.failed')}>
-                {t('routeSettings.recheckFailed')}
-              </Notice>
+              <RequestFailed error={recheckRoutes.error} lead={t('routeSettings.recheckFailed')} />
             </div>
           )}
 

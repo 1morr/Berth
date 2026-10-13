@@ -69,6 +69,7 @@ export function DiscoverPage() {
           // 標題說的是**畫面上那批卡片**屬於哪個查詢，不是輸入框裡現在打到哪。
           title={t('discover.results', { query: shown })}
           result={results.data}
+          error={results.error}
           pending={results.isPending}
           empty={t('discover.search.none', { query: shown })}
           emptyAction={
@@ -85,6 +86,7 @@ export function DiscoverPage() {
           <MediaWall
             title={t('discover.trending')}
             result={trending.data}
+            error={trending.error}
             pending={trending.isPending}
             empty={t('discover.empty')}
             onRetry={retry}
@@ -92,6 +94,7 @@ export function DiscoverPage() {
           <MediaWall
             title={t('discover.popular')}
             result={popular.data}
+            error={popular.error}
             pending={popular.isPending}
             empty={t('discover.empty')}
             onRetry={retry}

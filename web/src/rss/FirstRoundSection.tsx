@@ -13,6 +13,7 @@ import {
 } from '../api/rss'
 import { ConfirmAction, GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { RequestFailed } from '../components/RequestFailed'
 import { whenText } from '../components/queueText'
 import { SIGNAL_FILL } from '../components/signal'
 import { JobLink } from '../jobs/JobLink'
@@ -149,9 +150,7 @@ export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string
       ) : preview.isPending ? (
         <div className="h-24 border-2 border-rule bg-hull" aria-hidden="true" />
       ) : preview.isError ? (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('rss.failed')}
-        </Notice>
+        <RequestFailed error={preview.error} lead={t('rss.first.readFailed')} />
       ) : (
         <>
           <p className="value text-sm text-ink">
@@ -170,19 +169,24 @@ export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string
               </Fragment>
             ))}
           </p>
-          {refusal?.reason === 'feed_unreachable' ? (
-            <Notice signal="blocked" label={t('common.failed')}>
-              {t('rss.refusal.feed_unreachable')}{' '}
-              <span className="value text-xs wrap-anywhere">{refusal.detail}</span>
-            </Notice>
-          ) : (
-            prime.isError &&
-            refusal?.reason !== 'feed_primed' && (
-              <Notice signal="blocked" label={t('common.failed')}>
-                {t('rss.failed')}
-              </Notice>
-            )
-          )}
+          {/* 後端說得出理由的拒絕一律畫出來（feed_primed 例外：清單重讀後這一塊自己消失）；
+              解析不出來的照請求為什麼沒成說（M4 票 90）。 */}
+          {prime.isError &&
+            (refusal ? (
+              refusal.reason !== 'feed_primed' && (
+                <Notice signal="blocked" label={t('common.failed')}>
+                  {t(`rss.refusal.${refusal.reason}`)}
+                  {refusal.reason === 'feed_unreachable' && (
+                    <>
+                      {' '}
+                      <span className="value text-xs wrap-anywhere">{refusal.detail}</span>
+                    </>
+                  )}
+                </Notice>
+              )
+            ) : (
+              <RequestFailed error={prime.error} lead={t('request.notDone')} />
+            ))}
 
           <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-start">
             <div className="sm:w-auto sm:min-w-64">

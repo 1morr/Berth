@@ -5,7 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Inventory, InventoryCard, InventoryLibrary } from '../api/inventory'
 import type { PlanReviewRow, ReviewQueue, UnmatchedReviewRow } from '../api/review'
 import type { Watching, WatchingCard } from '../api/watching'
-import { HEALTHY, session, stubApi, type StubRoute } from '../test/fetch'
+import {
+  HEALTHY,
+  REQUEST_FAILURES,
+  session,
+  stubApi,
+  type StubRoute,
+  type StubRoutes,
+} from '../test/fetch'
 import { expectCurrentByStateOnly } from '../test/navState'
 import { renderApp } from '../test/render'
 
@@ -134,10 +141,7 @@ const LIBRARIES = [
   library({ id: MOVIES, name: 'Movies', collection_type: 'movies', sorts: MOVIE_SORTS }),
 ]
 
-function render(
-  routes: Record<string, StubRoute | (() => StubRoute)> = {},
-  role: 'admin' | 'user' = 'admin',
-) {
+function render(routes: StubRoutes = {}, role: 'admin' | 'user' = 'admin') {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role } },
@@ -384,7 +388,7 @@ describe('媒體庫頁', () => {
     })
     const PLAYED = (id: string) => `/api/jellyfin/items/${id}/played`
 
-    function watching(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+    function watching(routes: StubRoutes = {}) {
       return render({
         [`GET /api/inventory/${TV}`]: {
           body: wall({
@@ -550,6 +554,20 @@ describe('媒體庫頁', () => {
       expect(sent(api, 'DELETE', PLAYED(GOLF.jellyfin_item_id))).toHaveLength(1)
       // 送出之後焦點回到同一顆鍵（現在是「標為已看」），不掉回頁首（playwright 實跑抓到）。
       expect(within(golf).getByRole('button', { name: /^標為已看/ })).toHaveFocus()
+    })
+
+    // M4 票 90：後端沒說理由的失敗，原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+    it.each(REQUEST_FAILURES)('標記沒有成功（%s）時說出對的原因', async (_, failure, expected) => {
+      watching({ [`POST ${PLAYED(FOXTROT.jellyfin_item_id)}`]: failure })
+      renderApp(`/library/${TV}`)
+      const foxtrot = await findTile('Foxtrot Movie')
+
+      await userEvent.click(within(foxtrot).getByRole('button', { name: /^標為已看/ }))
+
+      const alert = await within(foxtrot).findByRole('alert')
+      expect(alert).toHaveTextContent(/沒有成功。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API/)
     })
 
     it('寫不進去時就在那一格說原因，狀態不變', async () => {
@@ -812,10 +830,7 @@ describe('媒體庫頁', () => {
     }
     const COUNTED = wall({ review: 1, unmatched: 2 })
 
-    function renderQueue(
-      routes: Record<string, StubRoute | (() => StubRoute)> = {},
-      role: 'admin' | 'user' = 'admin',
-    ) {
+    function renderQueue(routes: StubRoutes = {}, role: 'admin' | 'user' = 'admin') {
       return render(
         {
           [`GET /api/inventory/${TV}`]: { body: COUNTED },
@@ -1440,6 +1455,22 @@ describe('媒體庫頁', () => {
 
       expect(await screen.findByRole('navigation', { name: '媒體庫' })).toBeVisible()
     })
+
+    // 401 在這一頁是另一條路（門禁把人送去登入，這裡留空位格），不在這一格說話；其餘兩種說原因。
+    it.each(REQUEST_FAILURES.filter(([name]) => name !== '401'))(
+      '媒體庫清單讀不到（%s）時說出對的原因',
+      async (_, failure, expected) => {
+        render({ 'GET /api/inventory': failure })
+        const { queryClient } = renderApp(`/library/${TV}`)
+        // 送不到會重試三次（`retryUnlessRefused`），預設的間隔加倍要等七秒。
+        queryClient.setQueryDefaults(['inventory'], { retryDelay: 0 })
+
+        const alert = await screen.findByRole('alert')
+        expect(alert).toHaveTextContent(/讀不到媒體庫。/)
+        expect(alert).toHaveTextContent(expected)
+        expect(alert).not.toHaveTextContent(/自己的 API/)
+      },
+    )
 
     it('一般使用者沒有電影或劇集媒體庫時，下一步是請管理員', async () => {
       render({ 'GET /api/inventory': { body: [] } }, 'user')

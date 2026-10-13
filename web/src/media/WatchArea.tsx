@@ -19,6 +19,7 @@ import {
   TEXT_LINK,
 } from '../components/controls'
 import { formatJellyfinEpisode } from '../components/episodes'
+import { problemText } from '../components/requestProblem'
 import { Tile } from '../components/Tile'
 import { WatchToggle } from '../components/WatchToggle'
 import { watchLine } from '../components/watchLine'
@@ -226,7 +227,12 @@ function Episodes({
     )
   }
   if (episodes.isError) {
-    return <RetryLine message={t('watch.failed')} onRetry={() => void episodes.refetch()} />
+    return (
+      <RetryLine
+        message={problemText(t, episodes.error, t('watch.failed'))}
+        onRetry={() => void episodes.refetch()}
+      />
+    )
   }
   if (episodes.data.length === 0) {
     return <p className="max-w-prose text-sm text-ink-dim">{t('watch.emptySeason')}</p>

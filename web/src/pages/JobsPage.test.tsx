@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job, JobEvent, JobPage } from '../api/jobs'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -217,11 +217,15 @@ describe('下載列表頁', () => {
     expect(screen.getByRole('link', { name: '回探索頁' })).toBeInTheDocument()
   })
 
-  it('後端不可達時說的是 Berth 自己，不是索引站', async () => {
-    render({ [JOBS]: { status: 500, body: { detail: 'boom' } } })
+  // M4 票 90：原本一律說「Berth 自己的 API 沒有回應」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)('讀不到清單（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [JOBS]: failure })
     renderApp('/jobs')
 
-    expect(await screen.findByText(/讀不到下載列表/)).toBeInTheDocument()
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到下載列表。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(/自己的 API/)
   })
 
   describe('就地展開只剩狀態與時間線摘要（M2 票 12）', () => {
@@ -237,6 +241,18 @@ describe('下載列表頁', () => {
       await userEvent.click(screen.getByText(/SPY×FAMILY - 13/))
 
       expect(await screen.findByText('route=anime')).toBeInTheDocument()
+    })
+
+    it.each(REQUEST_FAILURES)('讀不到時間線（%s）時說出對的原因', async (_, failure, expected) => {
+      render({ [EVENTS]: failure })
+      renderApp('/jobs')
+
+      await userEvent.click(await screen.findByText(/SPY×FAMILY - 13/))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/讀不到時間線。/)
+      expect(alert).toHaveTextContent(expected)
+      expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
     })
 
     it('展開區有一條到詳情頁的路', async () => {

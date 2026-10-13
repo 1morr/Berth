@@ -10,6 +10,7 @@ import {
   PasswordField,
   PrimaryButton,
 } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { failureText } from '../components/failures'
 import { mountSnippet, runMount } from '../components/routeChecks'
 import { TechnicalDetails } from '../components/TechnicalDetails'
@@ -68,47 +69,53 @@ export function AddPathFailures({ results, root }: { results: BerthPath[]; root:
 export function JellyfinSignIn({
   setup,
   connecting,
-  failed,
+  error,
   onConnect,
 }: {
   setup: JellyfinSetup
   connecting: boolean
-  failed: boolean
+  error: unknown
   onConnect: (input: JellyfinConnectInput) => void
 }) {
-  const { t } = useTranslation()
-  const apiKeyStep = setup.steps.find((row) => row.step === 'api_key')
-
   return (
     <>
       <JellyfinSignInForm
         connecting={connecting}
-        failed={failed}
+        error={error}
         onConnect={onConnect}
         signedIn={setup.api_key_present}
       />
-
-      {apiKeyStep?.status === 'failed' && (
-        <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {failureText(t, apiKeyStep, 'Jellyfin')}
-          </Notice>
-          <TechnicalDetails lines={[apiKeyStep.error]} />
-        </div>
-      )}
+      <ApiKeyFailure setup={setup} />
     </>
+  )
+}
+
+/** 請求跑完了、換 key 那一步紅了：說 Jellyfin 那一段為什麼沒成（帳密不對、不是管理員…）。 */
+export function ApiKeyFailure({ setup }: { setup: JellyfinSetup | undefined }) {
+  const { t } = useTranslation()
+  const apiKeyStep = setup?.steps.find((row) => row.step === 'api_key')
+  if (apiKeyStep?.status !== 'failed') return null
+
+  return (
+    <div className="mt-4">
+      <Notice signal="blocked" label={t('common.failed')}>
+        {failureText(t, apiKeyStep, 'Jellyfin')}
+      </Notice>
+      <TechnicalDetails lines={[apiKeyStep.error]} />
+    </div>
   )
 }
 
 /** 管理員帳密那一格。頁 1 在 Berth 的 key 被撤掉時也用它（M4 票 18）。 */
 export function JellyfinSignInForm({
   connecting,
-  failed,
+  error,
   signedIn,
   onConnect,
 }: {
   connecting: boolean
-  failed: boolean
+  /** 請求為什麼沒成（`RequestFailed`，M4 票 90）；請求跑完而換 key 那一步紅了是 `ApiKeyFailure` 的事。 */
+  error: unknown
   signedIn: boolean
   onConnect: (input: JellyfinConnectInput) => void
 }) {
@@ -145,10 +152,8 @@ export function JellyfinSignInForm({
         error={blank && !password ? t('owner.error.blank') : undefined}
         onChange={(event) => setPassword(event.target.value)}
       />
-      {failed && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('jellyfin.existing.requestFailed')}
-        </Notice>
+      {error !== null && error !== undefined && (
+        <RequestFailed error={error} lead={t('jellyfin.existing.requestFailed')} />
       )}
       <div className={STICKY_ACTION}>
         <PrimaryButton type="submit" busy={connecting}>

@@ -22,6 +22,8 @@ import {
   PrimaryButton,
 } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { RequestFailed } from '../components/RequestFailed'
+import { problemText } from '../components/requestProblem'
 import { Timestamp } from '../components/Timestamp'
 import { maskToken } from './maskToken'
 import { RulesToggle } from './RulesEditor'
@@ -106,7 +108,11 @@ function AddFeed({ routes }: { routes: RouteRow[] }) {
         required
         value={url}
         error={
-          refusal ? t(`rss.refusal.${refusal.reason}`) : add.isError ? t('rss.failed') : undefined
+          refusal
+            ? t(`rss.refusal.${refusal.reason}`)
+            : add.isError
+              ? problemText(t, add.error, t('request.notDone'))
+              : undefined
         }
         onChange={(event) => setUrl(event.target.value)}
       />
@@ -248,9 +254,7 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
               }))}
       </p>
       {(poll.isError || remove.isError) && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t('rss.failed')}
-        </Notice>
+        <RequestFailed error={poll.error ?? remove.error} lead={t('request.notDone')} />
       )}
       <RulesToggle
         rules={feed.exclusions}

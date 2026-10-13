@@ -9,10 +9,11 @@ import {
   unbindSeries,
   type RssSeries,
 } from '../api/rss'
-import { ConfirmAction, GhostButton, Notice } from '../components/controls'
+import { ConfirmAction, GhostButton } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { episodeCode } from '../components/episodes'
 import { ExpandHint } from '../components/ExpandHint'
+import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { firstBatchAskText } from './firstBatchAsk'
@@ -221,11 +222,7 @@ function SeriesRow({
               </p>
             )}
             <SeriesRules row={row} />
-            {unbind.isError && (
-              <Notice signal="blocked" label={t('common.failed')}>
-                {t('rss.failed')}
-              </Notice>
-            )}
+            {unbind.isError && <RequestFailed error={unbind.error} lead={t('request.notDone')} />}
             <div className="flex flex-wrap items-start gap-2">
               <ConfirmAction
                 label={t('rss.bound.unbind')}
@@ -295,7 +292,7 @@ function SeriesItems({ series, enabled }: { series: number; enabled: boolean }) 
         <p className="text-sm text-ink-dim">{t('rss.bound.itemsLoading')}</p>
       ) : items.isError ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-ink-dim">{t('rss.bound.itemsOff')}</p>
+          <RequestFailed error={items.error} lead={t('rss.bound.itemsReadFailed')} />
           <GhostButton type="button" onClick={() => void items.refetch()}>
             {t('rss.bound.itemsRetry')}
           </GhostButton>

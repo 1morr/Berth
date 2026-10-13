@@ -21,6 +21,7 @@ import {
   PrimaryButton,
   TEXT_LINK,
 } from '../components/controls'
+import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
@@ -83,7 +84,8 @@ export function AddedSites({
     ['indexer-search', indexers.base_url],
     () => new Map(),
   )
-  const [failed, setFailed] = useState(false)
+  // 試搜的請求為什麼沒成（M4 票 90）；null 是沒失敗。
+  const [failure, setFailure] = useState<unknown>(null)
   const [listError, setListError] = useState('')
   const [announce, setAnnounce] = useState('')
   // 最後按下確認移除的那一站。它從清單上消失了，就是移除成了——畫面上已經沒有東西說「成了」。
@@ -104,7 +106,7 @@ export function AddedSites({
     searchable.length > 0 && searchable.every((row) => found.get(row.key) === 'searching')
 
   async function search(targets: AddedRow[], indexerId: number | null) {
-    setFailed(false)
+    setFailure(null)
     setListError('')
     setAnnounce('')
     setFound((was) => new Map([...was, ...targets.map((row) => [row.key, 'searching'] as const)]))
@@ -123,8 +125,8 @@ export function AddedSites({
       setAnnounce(
         t('indexer.added.done', { count: result.sites.filter((site) => site.count > 0).length }),
       )
-    } catch {
-      setFailed(true)
+    } catch (error) {
+      setFailure(error)
       setFound((was) => {
         const next = new Map(was)
         for (const row of targets) next.delete(row.key)
@@ -185,11 +187,9 @@ export function AddedSites({
         <p className="mt-4 text-sm text-ink">{t('indexer.added.none')}</p>
       )}
 
-      {failed && (
+      {failure !== null && (
         <div className="mt-4">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {t('indexer.added.failed')}
-          </Notice>
+          <RequestFailed error={failure} lead={t('indexer.added.failed')} />
         </div>
       )}
       {listError && (
@@ -370,7 +370,7 @@ export function AddSites({
   const titleId = useId()
   const [checks, setChecks] = useSiteChecks(indexers)
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
-  const [requestFailed, setRequestFailed] = useState(false)
+  const [requestError, setRequestError] = useState<unknown>(null)
   const candidates = indexers.candidates
   const passed = (name: string) => {
     const state = checks.get(name)
@@ -388,14 +388,14 @@ export function AddSites({
 
   async function test(names: string[]) {
     if (names.length === 0) return
-    setRequestFailed(false)
+    setRequestError(null)
     const before = checks
     setChecks((was) => new Map([...was, ...names.map((name) => [name, 'testing'] as const)]))
     try {
       const answers = await controls.onTest(names)
       setChecks((was) => withChecks(was, answers))
-    } catch {
-      setRequestFailed(true)
+    } catch (error) {
+      setRequestError(error)
       setChecks((was) => {
         const next = new Map(was)
         for (const name of names) {
@@ -466,7 +466,7 @@ export function AddSites({
         {t(existing ? 'indexer.add.ledeExisting' : 'indexer.add.lede')}
       </p>
 
-      <CheckSummary candidates={candidates} checks={checks} requestFailed={requestFailed} />
+      <CheckSummary candidates={candidates} checks={checks} requestError={requestError} />
 
       {recommended.length > 0 && (
         <div className="mt-6">
@@ -570,12 +570,12 @@ const FAILURE_ORDER: readonly SiteFailure[] = ['cloudflare', 'no_results', 'unre
 function CheckSummary({
   candidates,
   checks,
-  requestFailed,
+  requestError,
 }: {
   candidates: IndexerCandidate[]
   checks: ReadonlyMap<string, CheckState>
-  /** 測試的請求本身沒送到（Berth 後端）：說在同一個 live 區裡，不另開一個 `alert`。 */
-  requestFailed: boolean
+  /** 測試的請求為什麼沒成（Berth 後端，M4 票 90）；null 是沒失敗。畫在摘要的 live 區外面。 */
+  requestError: unknown
 }) {
   const { t } = useTranslation()
   const settled = candidates.flatMap((row) => {
@@ -590,35 +590,39 @@ function CheckSummary({
   })
 
   return (
-    <div aria-live="polite" className="mt-4 grid gap-2" data-testid="check-summary">
-      {requestFailed && (
-        // 請求沒送到就是擋住了：這一頁的測試在後端回來之前一站都做不了。
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink">
-          <span className={`label px-2 py-1.5 ${SIGNAL_FILL.blocked}`}>{t('common.failed')}</span>
-          <span>{t('indexer.add.requestFailed')}</span>
-        </p>
+    <>
+      {requestError !== null && (
+        // 請求沒成就是擋住了：這一頁的測試在後端回來之前一站都做不了。放在摘要的 live 區外面——
+        // `RequestFailed` 自己是 `alert`，兩個不巢狀；請求沒成時摘要是空的，念到的仍只有一句。
+        <div className="mt-4">
+          <RequestFailed error={requestError} lead={t('indexer.add.requestFailed')} />
+        </div>
       )}
-      {settled.length > 0 && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink">
-          {failed.length > 0 && (
-            <span className={`label px-2 py-1.5 ${SIGNAL_FILL.assigned}`}>
-              {t('indexer.summary.failed', { count: failed.length })}
+      <div aria-live="polite" className="mt-4 grid gap-2" data-testid="check-summary">
+        {settled.length > 0 && (
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink">
+            {failed.length > 0 && (
+              <span className={`label px-2 py-1.5 ${SIGNAL_FILL.assigned}`}>
+                {t('indexer.summary.failed', { count: failed.length })}
+              </span>
+            )}
+            <span>
+              {[
+                ...reasons.map(([reason, count]) =>
+                  t(`indexer.summary.reason.${reason}`, { count }),
+                ),
+                passedCount > 0 ? t('indexer.summary.passed', { count: passedCount }) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </span>
-          )}
-          <span>
-            {[
-              ...reasons.map(([reason, count]) => t(`indexer.summary.reason.${reason}`, { count })),
-              passedCount > 0 ? t('indexer.summary.passed', { count: passedCount }) : '',
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-          {failed.length > 0 && (
-            <span className="text-xs text-ink-dim">{t('indexer.summary.hint')}</span>
-          )}
-        </p>
-      )}
-    </div>
+            {failed.length > 0 && (
+              <span className="text-xs text-ink-dim">{t('indexer.summary.hint')}</span>
+            )}
+          </p>
+        )}
+      </div>
+    </>
   )
 }
 

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { session, stubApi } from '../test/fetch'
+import { REQUEST_FAILURES, session, stubApi } from '../test/fetch'
 import { boardCells, findBoardCells } from '../test/board'
 import { renderApp, renderInRoute } from '../test/render'
 import {
@@ -1125,19 +1125,39 @@ describe('頁 6：完成', () => {
     ).toBeVisible()
   })
 
-  it('後端真的掛了時才說是後端', async () => {
+  // M4 票 90：原本 500、401 與連不上一律說「後端可能沒在跑」。
+  it.each(REQUEST_FAILURES)('完成沒寫進去（%s）：說出對的原因', async (_, failure, expected) => {
     stubPage({
       [STATUS]: { body: AT_THE_END },
       [ROUTES]: { body: BUILT },
       [INDEXERS]: { body: indexerSetup() },
       [TMDB]: { body: tmdbSetup({ api_key_present: true, verified: true }) },
-      [COMPLETE]: { status: 500, body: { detail: 'boom' } },
+      [COMPLETE]: failure,
     })
 
     renderInRoute(<SetupPage />)
     await userEvent.click(await screen.findByRole('button', { name: '完成設定' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/後端/)
+    const failed = await screen.findByTestId('request-failed')
+    expect(failed).toHaveTextContent(/寫不進去。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/自己的 API|還活著/)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到媒體庫清單（%s）：頁 6', async (_, failure, expected) => {
+    stubPage({
+      [STATUS]: { body: AT_THE_END },
+      [ROUTES]: failure,
+      [INDEXERS]: { body: indexerSetup() },
+      [TMDB]: { body: tmdbSetup() },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    const failed = await screen.findByTestId('request-failed')
+    expect(failed).toHaveTextContent(/讀不到媒體庫清單。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/自己的 API|還活著/)
   })
 
   // M4 票 06：擁有者從第 1 步起就登入著，精靈跑完直接落在探索（媒體庫這時必然是空的，

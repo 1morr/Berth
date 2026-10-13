@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import { step, tmdbSetup } from '../test/fixtures'
 import { renderApp } from '../test/render'
 
@@ -23,7 +23,7 @@ const VERIFIED = tmdbSetup({
   steps: [step('configuration', 'ok', 'images: https://image.tmdb.org/t/p/')],
 })
 
-function render(routes: Record<string, StubRoute | (() => StubRoute)> = {}) {
+function render(routes: StubRoutes = {}) {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
@@ -109,5 +109,28 @@ describe('設定 → TMDB', () => {
     expect(
       await screen.findByText('這一把測不過，沒有換掉——探索與入庫照舊用原本那一把。'),
     ).toBeInTheDocument()
+  })
+
+  // M4 票 90：後端沒給理由的失敗，原本一律說「後端可能沒在跑」——500 與 401 也是。
+  it.each(REQUEST_FAILURES)('讀不到 TMDB 的狀態（%s）', async (_, failure, expected) => {
+    render({ [TMDB]: failure })
+    renderApp('/settings/tmdb')
+
+    const notice = await screen.findByText(/^讀不到 TMDB 這一步的狀態。/)
+    expect(notice).toHaveTextContent(expected)
+    expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
+  })
+
+  it.each(REQUEST_FAILURES)('測試沒走完（%s）', async (_, failure, expected) => {
+    render({ [TEST]: failure })
+    const user = userEvent.setup()
+    renderApp('/settings/tmdb')
+
+    await user.type(await screen.findByLabelText('你的 TMDB API key'), NEW_KEY)
+    await user.click(screen.getByRole('button', { name: '測試 TMDB' }))
+
+    const notice = await screen.findByText(/^測試沒有走完。/)
+    expect(notice).toHaveTextContent(expected)
+    expect(notice).not.toHaveTextContent(/自己的 API|還活著/)
   })
 })

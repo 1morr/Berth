@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Media } from '../api/media'
 import type { Feed, FeedItem, OneshotItem, RssSeries } from '../api/rss'
 import type { ManagedRoute } from '../api/routes'
-import { HEALTHY, stubApi, type StubRoute } from '../test/fetch'
+import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
 afterEach(() => {
@@ -912,7 +912,7 @@ describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {
     const row = await screen.findByRole('article', { name: 'LoliHouse' })
     await userEvent.click(within(row).getByText('展開'))
 
-    expect(await within(row).findByText('讀不到它的 Feed Item。')).toBeInTheDocument()
+    expect(await within(row).findByRole('alert')).toHaveTextContent(/讀不到它的 Feed Item。/)
     expect(within(row).getByRole('button', { name: '重讀' })).toBeInTheDocument()
   })
 
@@ -1159,5 +1159,254 @@ describe('RSS 頁：一次性 RSS 連結（票 18）', () => {
     renderApp('/rss')
 
     expect(await screen.findByRole('region', { name: '一次性 RSS 連結' })).toBeInTheDocument()
+  })
+})
+
+// M4 票 90：RSS 頁各處的請求解析不出拒絕原因時，原本一律說「沒有做成」或「Berth 的 API 沒回應」——500 與 401 也是。
+describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
+  const NOT_DONE = /沒有成功。/
+  // 離線那一句本身就說「它可能沒在跑」，所以舊句只認「後端可能沒在跑」那個尾巴。
+  const NOT_THE_OLD = /自己的 API|後端可能沒在跑|還活著/
+
+  function expectCause(element: HTMLElement, lead: RegExp, expected: RegExp) {
+    expect(element).toHaveTextContent(lead)
+    expect(element).toHaveTextContent(expected)
+    expect(element).not.toHaveTextContent(NOT_THE_OLD)
+  }
+
+  it.each(REQUEST_FAILURES)('整頁讀不到清單（%s）', async (_, failure, expected) => {
+    render({ 'GET /api/rss/feeds': failure })
+    renderApp('/rss')
+
+    expectCause(await screen.findByRole('alert'), /讀不到 RSS 的清單。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('加 Feed（%s）：欄位下說出原因', async (_, failure, expected) => {
+    render({ 'POST /api/rss/feeds': failure })
+    renderApp('/rss')
+
+    await userEvent.type(await screen.findByLabelText(/RSS 網址/), 'https://example.com/rss')
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    const field = await screen.findByLabelText(/RSS 網址/)
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'))
+    expectCause(field.closest('form')!, NOT_DONE, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('立即輪詢（%s）', async (_, failure, expected) => {
+    render({ 'POST /api/rss/feeds/1/poll': failure })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+
+    await userEvent.click(within(row).getByRole('button', { name: '立即輪詢' }))
+
+    expectCause(await within(row).findByRole('alert'), NOT_DONE, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('全域排除條件的開關（%s）', async (_, failure, expected) => {
+    render({ 'PUT /api/rss/exclusions': failure })
+    renderApp('/rss')
+    const section = await screen.findByRole('region', { name: '排除條件' })
+
+    await userEvent.click(within(section).getByRole('checkbox', { name: /不自動下載合集/ }))
+
+    expectCause(await within(section).findByRole('alert'), NOT_DONE, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('加一條排除規則（%s）', async (_, failure, expected) => {
+    render({ 'PUT /api/rss/exclusions': failure })
+    renderApp('/rss')
+    const section = await screen.findByRole('region', { name: '排除條件' })
+
+    await userEvent.type(within(section).getByLabelText('加一條排除條件'), '720p')
+    await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
+
+    const field = within(section).getByLabelText('加一條排除條件')
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'))
+    expectCause(field.parentElement!.parentElement!, NOT_DONE, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('綁定（%s）', async (_, failure, expected) => {
+    render({
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: KIMI },
+      'PUT /api/rss/series/7/binding': failure,
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+    await userEvent.click(await within(row).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+    await within(row).findByText(KIMI.folder_name)
+    await userEvent.click(within(row).getByRole('button', { name: '綁定並送出' }))
+
+    expectCause(await within(row).findByRole('alert'), NOT_DONE, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('解除綁定（%s）', async (_, failure, expected) => {
+    render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'DELETE /api/rss/series/7/binding': failure,
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: 'LoliHouse' })
+
+    await userEvent.click(within(row).getByRole('button', { name: '解除綁定' }))
+    await userEvent.click(within(row).getByRole('button', { name: '解除綁定' }))
+
+    expectCause(await within(row).findByRole('alert'), NOT_DONE, expected)
+  })
+
+  // 排除舊句：離線那一句本身含「可能沒在跑」，所以只認舊句獨有的字。
+  const NOT_THE_OLD_API = /自己的 API|還活著/
+
+  it.each(REQUEST_FAILURES)('綁定時搜不到作品（%s）', async (_, failure, expected) => {
+    render({ 'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': failure })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+
+    const alert = await within(row).findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有搜成。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(NOT_THE_OLD_API)
+  })
+
+  it.each(REQUEST_FAILURES)('綁定時讀不到作品詳情（%s）', async (_, failure, expected) => {
+    render({
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: FOUND },
+      'GET /api/media/tv%3A262000': failure,
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+    await userEvent.click(await within(row).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+
+    const alert = await within(row).findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到這部作品的詳情。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(NOT_THE_OLD_API)
+  })
+
+  it.each(REQUEST_FAILURES)('一次性連結搜不到作品（%s）', async (_, failure, expected) => {
+    render({
+      'POST /api/rss/oneshot': { body: { kind: 'mikan', items: ONESHOT } },
+      [KIMI_SEARCH]: failure,
+    })
+    renderApp('/rss')
+    const region = await readLink()
+
+    const alert = await within(region).findByRole('alert')
+    expect(alert).toHaveTextContent(/沒有搜成。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(NOT_THE_OLD_API)
+  })
+
+  it.each(REQUEST_FAILURES)('一次性連結讀不到作品詳情（%s）', async (_, failure, expected) => {
+    render({
+      'POST /api/rss/oneshot': { body: { kind: 'mikan', items: ONESHOT } },
+      [KIMI_SEARCH]: { body: FOUND },
+      'GET /api/media/tv%3A262000': failure,
+    })
+    renderApp('/rss')
+    const region = await readLink()
+    await userEvent.click(await within(region).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+
+    const alert = await within(region).findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到這部作品的詳情。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(NOT_THE_OLD_API)
+  })
+
+  it.each(REQUEST_FAILURES)('讀不到已綁定那一列的 Item（%s）', async (_, failure, expected) => {
+    render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'GET /api/rss/series/7/items': failure,
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: 'LoliHouse' })
+
+    await userEvent.click(within(row).getByText('展開'))
+
+    const alert = await within(row).findByRole('alert')
+    expect(alert).toHaveTextContent(/讀不到它的 Feed Item。/)
+    expect(alert).toHaveTextContent(expected)
+    expect(alert).not.toHaveTextContent(NOT_THE_OLD_API)
+    expect(within(row).getByRole('button', { name: '重讀' })).toBeVisible()
+  })
+
+  it.each(REQUEST_FAILURES)('第一輪讀不到預覽（%s）', async (_, failure, expected) => {
+    render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': failure,
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    expectCause(await within(block).findByRole('alert'), /讀不到這個 Feed 讀到的內容。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('第一輪送出選擇（%s）', async (_, failure, expected) => {
+    render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+      'POST /api/rss/feeds/2/prime': failure,
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    await userEvent.click(await within(block).findByRole('button', { name: '只追之後的' }))
+
+    expectCause(await within(block).findByRole('alert'), NOT_DONE, expected)
+  })
+
+  it('第一輪送出被拒：後端說得出理由的一律畫出來，不再落回通用句', async () => {
+    render({
+      'GET /api/rss/feeds': { body: [feed(), ACGRIP] },
+      'GET /api/rss/feeds/2/preview': { body: PREVIEW },
+      'POST /api/rss/feeds/2/prime': {
+        status: 409,
+        body: { detail: { reason: 'feed_unread', detail: '' } },
+      },
+    })
+    renderApp('/rss')
+    const block = await firstRound()
+
+    await userEvent.click(await within(block).findByRole('button', { name: '只追之後的' }))
+
+    expect(await within(block).findByRole('alert')).toHaveTextContent(/這個 Feed 還沒讀過/)
+  })
+
+  it.each(REQUEST_FAILURES)(
+    '一次性連結讀不到（%s）：欄位下說出原因',
+    async (_, failure, expected) => {
+      render({ 'POST /api/rss/oneshot': failure })
+      renderApp('/rss')
+      const region = await readLink()
+
+      const field = within(region).getByLabelText(/要讀的網址/)
+      await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'))
+      expectCause(field.closest('form')!, NOT_DONE, expected)
+    },
+  )
+
+  it.each(REQUEST_FAILURES)('一次性連結送到一半停下（%s）', async (_, failure, expected) => {
+    render({
+      'POST /api/rss/oneshot': { body: { kind: 'mikan', items: ONESHOT } },
+      [KIMI_SEARCH]: { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: KIMI },
+      'POST /api/jobs': failure,
+    })
+    renderApp('/rss')
+    const region = await readLink()
+    await userEvent.click(await within(region).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+    await within(region).findByText(KIMI.folder_name)
+    const list = within(region).getByRole('list', { name: '勾選要送出的' })
+    await userEvent.click(episodeBox(list, '01'))
+    await userEvent.click(within(region).getByRole('button', { name: '送出 1 筆' }))
+
+    expectCause(await within(region).findByRole('alert'), /送到一半停下來了/, expected)
   })
 })

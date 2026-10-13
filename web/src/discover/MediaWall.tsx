@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Discover } from '../api/discover'
+import { RequestFailed } from '../components/RequestFailed'
 import { TmdbNotice } from '../components/TmdbNotice'
 import { TilePlaceholder } from '../components/TilePlaceholder'
 import { MediaTile } from './MediaTile'
@@ -19,6 +20,7 @@ const PLACEHOLDERS = 12
 export function MediaWall({
   title,
   result,
+  error,
   pending,
   empty,
   emptyAction,
@@ -26,6 +28,8 @@ export function MediaWall({
 }: {
   title: string
   result: Discover | undefined
+  /** 這一面牆的查詢讀失敗的原因（沒失敗是 `null`）；沒有 `result` 又不在讀取中時才用到。 */
+  error: unknown
   pending: boolean
   /** 沒有結果時說什麼。搜尋與趨勢的空手而歸不是同一句話。 */
   empty: string
@@ -72,11 +76,14 @@ export function MediaWall({
             </li>
           ))}
         </ul>
-      ) : (
+      ) : result ? (
         <div className="grid justify-items-start gap-3 py-2">
-          <p className="max-w-prose text-sm text-ink-dim">{result ? empty : t('discover.off')}</p>
-          {result && emptyAction}
+          <p className="max-w-prose text-sm text-ink-dim">{empty}</p>
+          {emptyAction}
         </div>
+      ) : (
+        // 後端問不到：照請求為什麼沒成說（M4 票 90）。
+        <RequestFailed error={error} lead={t('discover.readFailed')} />
       )}
     </section>
   )

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { accessRefusal, markPlayed, type WatchState } from '../api/jellyfin'
 import { ConfirmPanel } from './ConfirmPanel'
 import { COMPACT_BUTTON, GhostButton, Notice, PrimaryButton } from './controls'
+import { RequestFailed } from './RequestFailed'
 import { useInPlaceConfirm } from './useInPlaceConfirm'
 
 /** 標記的是什麼：確認的文案說得出清掉的範圍（研究 §5）。 */
@@ -126,11 +127,14 @@ export function WatchToggle({
       {/* 失敗就在那一格說原因與下一步，Jellyfin 問不到時貼服務原文（PRODUCT 原則 4）。再按一次就是重試。 */}
       {mark.isError && refusal?.reason !== 'account_disabled' && (
         <div className="grid basis-full gap-1.5">
-          <Notice signal="blocked" label={t('common.failed')}>
-            {refusal?.reason === 'item_not_visible' || refusal?.reason === 'jellyfin_unreachable'
-              ? t(`inventory.watch.refused.${refusal.reason}`)
-              : t('inventory.watch.refused.other')}
-          </Notice>
+          {refusal?.reason === 'item_not_visible' || refusal?.reason === 'jellyfin_unreachable' ? (
+            <Notice signal="blocked" label={t('common.failed')}>
+              {t(`inventory.watch.refused.${refusal.reason}`)}
+            </Notice>
+          ) : (
+            // 其餘照請求為什麼沒成說（M4 票 90）。
+            <RequestFailed error={mark.error} lead={t('request.notDone')} />
+          )}
           {refusal?.reason === 'jellyfin_unreachable' && refusal.detail && (
             <p className="value text-xs wrap-anywhere text-ink-dim">{refusal.detail}</p>
           )}
