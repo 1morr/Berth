@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-13
+
+**從 0.2.3 升級**：`docker-compose.yml` 與 `.env` 沒有變，也沒有資料庫 migration，`docker compose pull && docker compose up -d`
+就好。image 是 `ghcr.io/1morr/berth:0.2.4`，同時是 `:0.2` 與 `:latest`。升級之後，升級前開著的作品頁要重新整理一次，
+搜尋區才會出現名字與季的按鈕；作品的簡體中文名在下一次快照刷新（至多 24 小時）補上。
+
 ### Changed
 
 - **作品搜尋改成自己選名字與季**（M4 票 84）：按搜尋之前，名字與季都是一顆一顆的按鈕。名字帶它是哪一種
