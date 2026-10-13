@@ -767,8 +767,8 @@ describe('Media 詳情頁', () => {
     // 對得上的那一列什麼都不必說；對不上的那一列自己說。
     expect(within(rows[0]).queryByText(/對得上|對不上/)).not.toBeInTheDocument()
     expect(within(rows[1]).getByText('媒體庫裡的檔案不見了')).toBeVisible()
-    // 「還在掃描」帶的是下一次什麼時候查——組的計數說不出這個，所以留在列上。
-    expect(within(rows[2]).getByText(/Jellyfin 還在掃描/)).toBeVisible()
+    // 「等它收錄」帶的是下一次什麼時候查——組的計數說不出這個，所以留在列上。
+    expect(within(rows[2]).getByText(/已通知 Jellyfin，等它收錄/)).toBeVisible()
     expect(within(rows[2]).getByText(/3 分鐘/)).toBeVisible()
   })
 
@@ -786,7 +786,7 @@ describe('Media 詳情頁', () => {
     const files = await screen.findByRole('region', { name: '檔案與版本' })
     await userEvent.click(within(files).getByText('1 個檔案'))
 
-    expect(within(files).getByText(/Jellyfin 還在掃描/)).toBeVisible()
+    expect(within(files).getByText(/已通知 Jellyfin，等它收錄/)).toBeVisible()
     expect(within(files).getByText(/3 分鐘/)).toBeVisible()
   })
 
@@ -804,7 +804,7 @@ describe('Media 詳情頁', () => {
       )
     }
 
-    it('Jellyfin 已經列出：檔案與版本不再說還在掃描', async () => {
+    it('Jellyfin 已經列出：檔案與版本不再說等它收錄', async () => {
       const api = render({
         [SPY_PATH]: { body: media({ files: [waiting()] }) },
         [RESOLVE]: { body: media({ files: [ledgerFile()] }) },
@@ -813,11 +813,11 @@ describe('Media 詳情頁', () => {
 
       const files = await screen.findByRole('region', { name: '檔案與版本' })
       expect(await within(files).findByText('Jellyfin 已收錄 1')).toBeVisible()
-      expect(within(files).queryByText(/掃描/)).not.toBeInTheDocument()
+      expect(within(files).queryByText(/等.*收錄/)).not.toBeInTheDocument()
       expect(resolves(api)).toHaveLength(1)
     })
 
-    it('Jellyfin 真的還沒有：照舊說還在掃描，下一次是 Berth 確認', async () => {
+    it('Jellyfin 真的還沒有：照舊說已通知、等它收錄，下一次是 Berth 確認', async () => {
       const api = render({
         [SPY_PATH]: { body: media({ files: [waiting()] }) },
         [RESOLVE]: { body: media({ files: [waiting()] }) },
@@ -828,7 +828,9 @@ describe('Media 詳情頁', () => {
       await waitFor(() => expect(resolves(api)).toHaveLength(1))
       await userEvent.click(within(files).getByText('1 個檔案'))
 
-      expect(within(files).getByText(/^Jellyfin 還在掃描，Berth 下一次確認在/)).toBeVisible()
+      expect(
+        within(files).getByText(/^已通知 Jellyfin，等它收錄；Berth 下一次確認在/),
+      ).toBeVisible()
       expect(within(files).getByText('9 分鐘後')).toBeVisible()
       expect(resolves(api)).toHaveLength(1)
     })
@@ -845,7 +847,7 @@ describe('Media 詳情頁', () => {
       const files = await screen.findByRole('region', { name: '檔案與版本' })
       expect(await within(files).findByText('Jellyfin 已收錄 1')).toBeVisible()
       await userEvent.click(screen.getByRole('button', { name: '立即重抓' }))
-      expect(await within(files).findByText('Jellyfin 掃描中 1')).toBeVisible()
+      expect(await within(files).findByText('等 Jellyfin 收錄 1')).toBeVisible()
 
       expect(resolves(api)).toHaveLength(1)
     })
@@ -863,7 +865,9 @@ describe('Media 詳情頁', () => {
         await userEvent.click(within(files).getByText('1 file'))
 
         expect(
-          within(files).getByText(/^Jellyfin is still scanning; Berth checks again/),
+          within(files).getByText(
+            /^Jellyfin has been told; waiting for it to pick this up\. Berth checks again/,
+          ),
         ).toBeVisible()
         expect(within(files).getByText('in 9 minutes')).toBeVisible()
       } finally {
@@ -1389,7 +1393,7 @@ describe('Media 詳情頁', () => {
       expect(within(first).getByText('S02 E01–E03')).toBeVisible()
       expect(within(first).getByText('1 個帳本對不上')).toBeVisible()
       expect(within(first).getByText('Jellyfin 已收錄 1')).toBeVisible()
-      expect(within(first).getByText('Jellyfin 掃描中 1')).toBeVisible()
+      expect(within(first).getByText('等 Jellyfin 收錄 1')).toBeVisible()
       expect(within(first).getByText('Jellyfin 找不到 1')).toBeVisible()
     })
 

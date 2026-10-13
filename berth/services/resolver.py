@@ -1,7 +1,7 @@
 """`jellyfin_resolver`：入庫的檔案在 Jellyfin 裡是哪一個 item（plan §3.2、brief §20.1、票 12）。
 
 `POST /Library/Media/Updated` 只是「去看看」：Jellyfin 收下之後自己排程去掃，掃完才有 item。
-所以反查是**延遲的、會重試的**——第一次在入庫 30 秒後，之後隔 2 分、10 分、1 小時、1 小時、
+所以反查是**延遲的、會重試的**——第一次在入庫 30 秒後，之後隔 1 分、10 分、1 小時、1 小時、
 1 小時，共 6 次（plan §3.2）。排程存在帳本那一列上（`resolve_after`），重啟不會把它忘掉。
 
 **兩段查詢，都以媒體庫為 parent**（brief §20.1）：`GET /Items` 沒有路徑篩選，而
@@ -15,6 +15,11 @@
 **沒找到的那幾條再通知一次**（plan §3.3「resolver 之後會再嘗試」）：入庫當下那一次通知可能沒
 送到，或 Berth 在狀態落地與通知之間被關掉——那兩種情況下 Jellyfin 根本不知道要去掃。路徑級的
 通知是冪等的，多送一次的代價只是一個請求。
+
+**通知不夠時請它掃，範圍越小越好**（M4 票 62，brief §20.1）：Jellyfin 已經在 Route 的路徑底下
+列出過東西時，只刷新那一個媒體庫，而且等第二次沒找到——第一次多半只是通知的 60 秒延遲還沒過。
+還沒列出過時（空的媒體庫第一次入庫、既有媒體庫剛加上 Berth 的路徑），通知與只刷新媒體庫都找不到
+它，只有整台的全庫掃描建得出那個路徑，所以**第一次沒找到就掃**。
 
 **找到的那一刻順手記下版本名**（brief §7.7）：12.0 起劇集也原生合併，而版本選單上的名字是
 Jellyfin 自己算的（去掉各版本檔名的共同前綴，算法連 12.0 與 12.1 都不一樣）。存進帳本之後，
@@ -49,6 +54,8 @@ from berth.adapters.jellyfin import (
     ITEM_SERIES,
     JellyfinClient,
     JellyfinItem,
+    ScanTarget,
+    lists_under,
     scan_libraries,
 )
 from berth.domain import CollectionType, EventType, IssueStatus, IssueType, PlanAction
@@ -65,14 +72,15 @@ from berth.services.steps import message
 
 logger = logging.getLogger(__name__)
 
-#: 沒找到幾次之後改請 Jellyfin 掃描媒體庫（brief §20.1）。第一次沒找到多半只是路徑通知的 60 秒延遲
-#: 還沒過；第二次還沒有，就是通知沒起作用——從來沒掃到過內容的媒體庫，通知往上找不到任何 item，
-#: 靜靜地什麼都不做（2026-09-15 對 12.0.0 實測、查核 `FileRefresher.GetAffectedBaseItem`）。
+#: Jellyfin 已經在 Route 的路徑底下列出過東西時，沒找到幾次之後改請它刷新那個媒體庫（brief §20.1）。
+#: 第一次沒找到多半只是路徑通知的 60 秒延遲還沒過；第二次還沒有，就是通知沒起作用。還沒列出過的
+#: 路徑不等這個數：通知往上找不到任何 item、靜靜地什麼都不做（2026-09-15 對 12.0.0 實測、查核
+#: `FileRefresher.GetAffectedBaseItem`），第一次沒找到就全庫掃描（M4 票 62）。
 SCAN_AFTER_MISSES = 2
 
 #: 請 Jellyfin 掃描之後、或它正在認的時候，下一次最晚多久再看。原本的間隔到後面是一小時，那是
 #: 在等它自己的排程；已經開口請它掃了、或它已經列出檔案只差認完，就不必等那麼久。還在認的六次
-#: 因此在入庫後約 43 分鐘內問完（M4 票 02）：季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，
+#: 因此在入庫後約 42 分鐘內問完（M4 票 02）：季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，
 #: 都不必連網，認不完的就是認不出。
 SCAN_SETTLE = timedelta(minutes=10)
 
@@ -130,12 +138,14 @@ async def sweep_resolutions(
     client = factory.jellyfin(settings.base_url, token=settings.api_key)
     found: list[LedgerEntry] = []
     waiting: list[LedgerEntry] = []
+    misses: list[_Misses] = []
     identifying: list[LedgerEntry] = []
     given_up: list[LedgerEntry] = []
     verdicts: list[Verdict] = []
     try:
         for route, entries in _by_route(due, routes):
             lookup = await _look_up(session, client, route, entries)
+            missed = _Misses(route=route, listed=lookup.listed)
             for entry in entries:
                 item = locate(entry.target_path, lookup.items)
                 if item is None:
@@ -143,6 +153,7 @@ async def sweep_resolutions(
                         given_up.append(entry)
                     else:
                         waiting.append(entry)
+                        missed.entries.append(entry)
                     continue
                 # 還沒認完的照「還沒找到」的節奏再問（`_reschedule` 排下一次，最晚 10 分鐘），但不
                 # 提醒 Jellyfin：它已經列出這個檔案，再請它掃一次只會讓它從頭認起。`_reschedule`
@@ -153,7 +164,8 @@ async def sweep_resolutions(
                 _found(entry, item)
                 found.append(entry)
                 verdicts.append(lookup.verdict(entry, item))
-        settling = [*identifying, *waiting] if await _remind(client, waiting) else identifying
+            misses.append(missed)
+        settling = [*identifying, *waiting] if await _remind(client, misses) else identifying
         for entry in settling:
             if entry.resolve_after is not None:
                 entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
@@ -459,11 +471,14 @@ async def _items_for(
     works = await _ledger_tmdb(session, entries)
     if route.collection_type is CollectionType.MOVIES:
         movies = await client.items(route.jellyfin_library_id, (ITEM_MOVIE,))
-        return _Lookup(items=movies, ledger_tmdb=works)
+        return _Lookup(
+            items=movies, ledger_tmdb=works, listed=lists_under(movies, route.target_path)
+        )
     series = await client.items(route.jellyfin_library_id, (ITEM_SERIES,))
+    listed = lists_under(series, route.target_path)
     folders = _scanned_folders(route, entries, series, set(works.values()))
     if not folders:
-        return _Lookup(ledger_tmdb=works)
+        return _Lookup(ledger_tmdb=works, listed=listed)
     episodes = await client.items(route.jellyfin_library_id, (ITEM_EPISODE,))
     return _Lookup(
         items=tuple(
@@ -473,6 +488,7 @@ async def _items_for(
         ),
         series_tmdb={item.id: item.tmdb_id for item in series},
         ledger_tmdb=works,
+        listed=listed,
     )
 
 
@@ -486,6 +502,9 @@ class _Lookup:
     series_tmdb: Mapping[str, str] = field(default_factory=dict)
     #: 帳本那一邊：media id → TMDB id。
     ledger_tmdb: Mapping[str, str] = field(default_factory=dict)
+    #: Jellyfin 是不是已經在 Route 的路徑底下列出過東西（`lists_under`），`None` 是沒問到。
+    #: 要它掃的時候掃多大看這個（brief §20.1）。
+    listed: bool | None = None
 
     def verdict(self, entry: LedgerEntry, item: JellyfinItem) -> Verdict:
         ours, theirs = self._tmdb_ids(entry, item)
@@ -535,21 +554,48 @@ def _scanned_folders(
     }
 
 
-async def _remind(client: JellyfinClient, entries: Sequence[LedgerEntry]) -> bool:
-    """還沒找到的那幾條再通知一次；沒找到兩次以上就請 Jellyfin 掃描媒體庫。回傳「請它掃了沒」。
+@dataclass(slots=True)
+class _Misses:
+    """一條 Route 這一輪還沒找到的那幾條，與決定掃多大要的那一個答案。"""
+
+    route: Route | None
+    listed: bool | None
+    entries: list[LedgerEntry] = field(default_factory=list)
+
+    def scan_target(self) -> ScanTarget | None:
+        """這一輪要不要請 Jellyfin 掃這條 Route 的路徑（brief §20.1，M4 票 62）。
+
+        **沒列出過就掃**，第一次沒找到也掃；**列出過的等 `SCAN_AFTER_MISSES` 次**。問不到媒體庫
+        裡有什麼（`listed` 是 `None`）、Route 被刪了，就說不出該掃多大，這一輪只通知。
+        """
+        if self.route is None or self.listed is None or not self.entries:
+            return None
+        if self.listed and all(
+            entry.resolve_attempts < SCAN_AFTER_MISSES for entry in self.entries
+        ):
+            return None
+        return ScanTarget(library_id=self.route.jellyfin_library_id, listed=self.listed)
+
+
+async def _remind(client: JellyfinClient, misses: Sequence[_Misses]) -> bool:
+    """還沒找到的那幾條再通知一次；需要的話請 Jellyfin 掃描（`_Misses.scan_target`）。
+    回傳「請它掃了沒」。
 
     **失敗只記 log**：這一次反查已經算過一次了。
     """
+    entries = [entry for missed in misses for entry in missed.entries]
     if not entries:
         return False
     try:
         await client.notify_paths([entry.target_path for entry in entries])
-        if all(entry.resolve_attempts < SCAN_AFTER_MISSES for entry in entries):
+        targets = [target for missed in misses if (target := missed.scan_target()) is not None]
+        if not targets:
             return False
-        if not await scan_libraries(client):
+        scope = await scan_libraries(client, targets)
+        if scope is None:
             logger.warning("jellyfin has no library scan task")
             return False
-        logger.info("asked jellyfin to scan its libraries")
+        logger.info("asked jellyfin to scan", extra={"scope": scope.value})
         return True
     except ServiceError as exc:
         logger.warning("jellyfin could not be reminded", extra={"error": message(exc)})

@@ -37,7 +37,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
-from berth.adapters.jellyfin import scan_libraries
+from berth.adapters.jellyfin import (
+    ITEM_MOVIE,
+    ITEM_SERIES,
+    ScanTarget,
+    lists_under,
+    scan_libraries,
+)
 from berth.domain import (
     ISSUE_ACTIONS,
     NEEDS_MEDIA,
@@ -76,6 +82,7 @@ from berth.services.jobs import (
     transition,
 )
 from berth.services.qbittorrent import sign_in
+from berth.services.routes import owning_route
 from berth.services.settings import read_settings
 from berth.services.steps import message
 
@@ -549,21 +556,33 @@ async def _relook(session: AsyncSession, row: Issue) -> None:
 
 
 async def _rescan(session: AsyncSession, factory: ServiceClientFactory, row: Issue) -> None:
-    """先請 Jellyfin 跑「重新掃描媒體庫」，再重新反查（brief §20.1：路徑通知對從沒掃到過
-    內容的媒體庫無效）。
+    """先請 Jellyfin 掃描，再重新反查（brief §20.1：路徑通知對從沒掃到過內容的媒體庫無效）。
+
+    **只掃這一件的媒體庫**（M4 票 62，審計 E2）：Jellyfin 已經在 Route 的路徑底下列出過東西時
+    只刷新那一個媒體庫；還沒列出過、或 Route 已經不在時跑全庫掃描——只有它建得出那個路徑
+    （`scan_libraries`）。
 
     **Jellyfin 問不到就整顆不做**，那一列不重排——畫面上它還在，旁邊說為什麼。
     """
     entry = await _entry_of(session, row)
+    route = owning_route(entry.target_path, list(await session.scalars(select(Route))))
     settings = await read_settings(session, JellyfinSettings)
     client = factory.jellyfin(settings.base_url, token=settings.api_key)
     try:
-        scanned = await scan_libraries(client)
+        if route is None:
+            target = ScanTarget(library_id=None, listed=False)
+        else:
+            listed = await client.items(route.jellyfin_library_id, (ITEM_SERIES, ITEM_MOVIE))
+            target = ScanTarget(
+                library_id=route.jellyfin_library_id,
+                listed=lists_under(listed, route.target_path),
+            )
+        scanned = await scan_libraries(client, [target])
     except ServiceError as exc:
         raise IssueRejectedError(IssueRefusal.JELLYFIN_UNREACHABLE, message(exc)) from exc
     finally:
         await client.aclose()
-    if not scanned:
+    if scanned is None:
         raise IssueRejectedError(
             IssueRefusal.JELLYFIN_UNREACHABLE, "Jellyfin has no library scan task"
         )

@@ -8,8 +8,8 @@
 4. 等 Berth 自己走完 completed → planning → importing → imported，再等 Jellyfin 反查
 
 斷言都拿外面的事實對 Berth 說的話：季集對語料、inode 在容器裡 `stat`、item id 在 Jellyfin 裡查。
-套件內的媒體庫一開始是空的，所以反查要等 resolver 請 Jellyfin 掃描之後那一輪（`services/resolver.py`
-的 `SCAN_AFTER_MISSES`）。
+套件內的媒體庫一開始是空的，所以反查要等 resolver 請 Jellyfin 全庫掃描之後那一輪（第一次沒找到就請，
+`services/resolver.py` 的 `_Misses.scan_target`，M4 票 62）。
 
 **Prowlarr 在跑但沒被測到**：精靈偵測得到它，第 6 步按「之後再說」，送單直接帶 `.torrent` 的網址。
 索引站搜尋有自己的契約測試（`tests/integration/test_indexer_search.py`）。

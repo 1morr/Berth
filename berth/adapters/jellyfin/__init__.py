@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Protocol
 
 from berth.adapters.versions import parse_version
@@ -430,6 +431,15 @@ class JellyfinClient(Protocol):
         """`POST /ScheduledTasks/Running/{id}`。用 `Id` 不是 `Key`（brief §20.7）。"""
         ...
 
+    async def refresh_library(self, library_id: str) -> None:
+        """`POST /Items/{媒體庫 ItemId}/Refresh`，兩個模式 `Default`：只掃這一個媒體庫。
+
+        brief §20.1。控制台媒體庫卡片的「掃描媒體庫」送的就是這一支。收下就回，掃描排進
+        Jellyfin 的刷新佇列。**只掃得到 Jellyfin 已經有的實體資料夾**：第一次全庫掃描時是空的
+        路徑不在其中。
+        """
+        ...
+
     # --- 入庫之後（plan §8.2、票 12）---
 
     async def notify_paths(self, paths: Sequence[str]) -> None:
@@ -596,24 +606,64 @@ class JellyfinClient(Protocol):
     async def aclose(self) -> None: ...
 
 
-async def scan_libraries(client: JellyfinClient) -> bool:
-    """跑 Jellyfin 的「重新掃描媒體庫」排程任務。回傳「真的請它掃了沒」（沒有那個任務時 False）。
+class ScanScope(StrEnum):
+    """`scan_libraries` 實際請 Jellyfin 掃了多大的範圍。"""
 
-    **不用 `POST /Library/Refresh`**：它在請求裡等整次掃描做完（`LibraryController.RefreshLibrary`，
-    2026-09-15 查核 master），大的媒體庫會讓呼叫端卡上好幾分鐘；排程任務收下就回。
-    **也不用 `POST /Items/{id}/Refresh`**：master 上它沒有 `Recursive`，只刷新那一個 item 的中繼
-    資料，不會去找新的子資料夾（同日查核，對 12.0.0 實測兩分鐘後仍是 0 個 item）。
+    #: 只刷新那幾個媒體庫（`POST /Items/{id}/Refresh`）。
+    LIBRARY = "library"
+    #: 內建「重新掃描媒體庫」排程任務：整台伺服器的每一個媒體庫。
+    SERVER = "server"
 
-    任務 id 每一台不同，以 `Key` 找（brief §20.1）——那是協定的事，所以住在 adapter（同
-    qBittorrent 的 `ensure_category`）。兩個呼叫端：`jellyfin_resolver` 沒找到兩次之後、
-    Issue 的「重新掃描媒體庫」那一顆（M2 票 09）。
+
+@dataclass(frozen=True, slots=True)
+class ScanTarget:
+    """一條要 Jellyfin 去看的路徑：它在哪個媒體庫，Jellyfin 是不是已經在它底下列出過東西。"""
+
+    #: `None` 是說不出在哪個媒體庫（Route 已經被刪了）：只剩全庫掃描找得到它。
+    library_id: str | None
+    #: `lists_under` 的答案。是 False 時只刷新媒體庫找不到它（brief §20.1）。
+    listed: bool
+
+
+def lists_under(items: Sequence[JellyfinItem], folder: str) -> bool:
+    """Jellyfin 已經在 `folder` 底下列出過 item（媒體庫的 Series 或 Movie）。
+
+    列過就代表 Jellyfin 有那個實體資料夾，只刷新媒體庫就看得到裡面的新檔；沒列過的話，
+    它可能是全庫掃描時還空著、被略過的路徑——那種路徑只有全庫掃描建得出來（brief §20.1，
+    2026-10-13 對 12.1.0 實測）。
     """
+    prefix = f"{folder.rstrip('/')}/"
+    return any(item.path.startswith(prefix) for item in items)
+
+
+async def scan_libraries(client: JellyfinClient, targets: Sequence[ScanTarget]) -> ScanScope | None:
+    """請 Jellyfin 掃這幾條路徑。回傳掃了多大的範圍；沒有要掃的、或沒有排程任務可跑時回 `None`。
+
+    **都列過的話只刷新它們的媒體庫**，一個媒體庫一次，同控制台媒體庫卡片上的「掃描媒體庫」；
+    別的媒體庫一個都不碰（M4 票 62，審計 E2）。**有一條沒列過就跑一次全庫掃描**：只有它建得出
+    那個路徑，而它本來就涵蓋其餘的媒體庫，所以不再另外刷新。
+
+    全庫掃描**不用 `POST /Library/Refresh`**：它在請求裡等整次掃描做完
+    （`LibraryController.RefreshLibrary`，2026-09-15 查核 master），大的媒體庫會讓呼叫端卡上好幾
+    分鐘；排程任務收下就回，還在跑時再送一次是空操作（brief §20.1）。任務 id 每一台不同，
+    以 `Key` 找——那是協定的事，所以住在 adapter（同 qBittorrent 的 `ensure_category`）。兩個
+    呼叫端：`jellyfin_resolver` 與 Issue 的「重新掃描媒體庫」那一顆（M2 票 09）。
+    """
+    if not targets:
+        return None
+    libraries = [
+        target.library_id for target in targets if target.listed and target.library_id is not None
+    ]
+    if len(libraries) == len(targets):
+        for library_id in dict.fromkeys(libraries):
+            await client.refresh_library(library_id)
+        return ScanScope.LIBRARY
     tasks = await client.scheduled_tasks()
     task = next((task for task in tasks if task.key == LIBRARY_SCAN_TASK_KEY), None)
     if task is None:
-        return False
+        return None
     await client.run_task(task.id)
-    return True
+    return ScanScope.SERVER
 
 
 __all__ = [
@@ -641,7 +691,10 @@ __all__ = [
     "JellyfinView",
     "NewLibrary",
     "ParentImage",
+    "ScanScope",
+    "ScanTarget",
     "TypeOption",
+    "lists_under",
     "scan_libraries",
     "unsupported_message",
     "version_supported",

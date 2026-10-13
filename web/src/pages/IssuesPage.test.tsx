@@ -326,6 +326,25 @@ describe('待處理頁', () => {
     await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
   })
 
+  it('反查失敗說出重新掃描掃多大，會掃整台的那一種照實說（M4 票 62）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'jellyfin_item_unresolved',
+            detail: { attempts: 6 },
+            actions: ['relook', 'rescan'],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText(/只刷新這條 Route 的媒體庫/)).toBeInTheDocument()
+    expect(within(row).getByText(/整台伺服器/)).toBeInTheDocument()
+  })
+
   it('回驗不符說出兩邊各自認成什麼、差在哪，並給重新反查（M3 票 17）', async () => {
     const stub = render({
       [ISSUES]: {

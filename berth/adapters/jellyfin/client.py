@@ -245,6 +245,13 @@ class HttpJellyfinClient:
     async def run_task(self, task_id: str) -> None:
         await self._session.request("POST", f"/ScheduledTasks/Running/{task_id}")
 
+    async def refresh_library(self, library_id: str) -> None:
+        await self._session.request(
+            "POST",
+            f"/Items/{library_id}/Refresh",
+            params={"metadataRefreshMode": "Default", "imageRefreshMode": "Default"},
+        )
+
     # --- 入庫之後 ---
 
     async def notify_paths(self, paths: Sequence[str]) -> None:

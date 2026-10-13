@@ -380,16 +380,35 @@ class TestRescan:
     async def test_jellyfin_is_asked_to_scan_and_the_row_is_looked_up_again(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """Route 的路徑底下 Jellyfin 還沒列出過任何東西：只有全庫掃描建得出它（brief §20.1）。"""
         issue, entry, route, factory = await unresolved(session, roots)
         factory.jellyfin_.tasks_ = [LIBRARY_SCAN_TASK]
 
         await press(session, factory, issue, IssueAction.RESCAN)
 
         assert factory.jellyfin_.tasks_run == [LIBRARY_SCAN_TASK.id]
+        assert factory.jellyfin_.libraries_refreshed == []
         factory.jellyfin_.items_ = scanned(route, await features(session), tmdb_id=SPY)
         await sweep_resolutions(session, factory, now=utcnow() + timedelta(hours=1))
         await session.refresh(entry)
         assert entry.jellyfin_item_id == f"episode-{entry.episode_start}"
+
+    async def test_a_path_jellyfin_already_lists_rescans_only_its_library(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """只掃這一件的媒體庫，不掃整台（M4 票 62，審計 E2）。"""
+        issue, entry, route, factory = await unresolved(session, roots)
+        factory.jellyfin_.tasks_ = [LIBRARY_SCAN_TASK]
+        others = scanned(route, await features(session), tmdb_id=SPY)
+        factory.jellyfin_.items_ = [item for item in others if item.type == "Series"]
+
+        await press(session, factory, issue, IssueAction.RESCAN)
+
+        assert factory.jellyfin_.libraries_refreshed == [route.jellyfin_library_id]
+        assert factory.jellyfin_.tasks_run == []
+        await session.refresh(entry)
+        assert entry.resolve_attempts == 0
+        assert entry.resolve_after is not None
 
     async def test_a_jellyfin_that_is_down_leaves_it_open(
         self, session: AsyncSession, roots: dict[str, Path]

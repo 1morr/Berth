@@ -61,6 +61,7 @@ WRITES: dict[ServiceKind, frozenset[str]] = {
             "create_library",
             "add_library_path",
             "run_task",
+            "refresh_library",
             "notify_paths",
             "mark_played",
         }

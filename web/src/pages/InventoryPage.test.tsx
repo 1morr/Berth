@@ -658,7 +658,7 @@ describe('媒體庫頁', () => {
       await findTile('Alpha Show')
       const frieren = tile('葬送的芙莉蓮', band())
 
-      expect(within(frieren).getByText('Jellyfin 還在掃描')).toBeVisible()
+      expect(within(frieren).getByText('等 Jellyfin 收錄')).toBeVisible()
       expect(
         within(frieren).queryByRole('link', { name: /在 Jellyfin 開啟/ }),
       ).not.toBeInTheDocument()

@@ -60,7 +60,7 @@ export function MediaDetailPage({ id }: { id: string }) {
     onSuccess: (updated) => queryClient.setQueryData(['media', id], updated),
   })
   // 檔案清單讀的是 resolver 的排程，退避中最多要等 10 分鐘；觀看區與媒體庫頁直接問 Jellyfin。還在等的檔案
-  // 先問一次，Jellyfin 已經列出的就不再說「還在掃描」（M4 票 51）。**一部作品一次**（`asked`）：重抓詳情、
+  // 先問一次，Jellyfin 已經列出的就不再說還在等它（M4 票 51）。**一部作品一次**（`asked`）：重抓詳情、
   // StrictMode 重跑 effect 都不再送——同時兩支會各自寫一次「全部找到」。失敗不說：清單照帳本畫，排程照常。
   const { mutate: resolveFiles } = useMutation({
     mutationFn: () => resolveEarly(id),

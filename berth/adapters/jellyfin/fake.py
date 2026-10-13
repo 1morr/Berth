@@ -159,6 +159,8 @@ class FakeJellyfinClient:
         items: tuple[JellyfinItem, ...] = (),
         #: 只有 `POST /Library/Media/Updated` 丟這個例外。「通知失敗不擋入庫」要它才測得出來。
         notify_error: Exception | None = None,
+        #: 只有 `GET /Items` 丟這個例外。「問不到媒體庫裡有什麼就不掃」要它才測得出來。
+        items_error: Exception | None = None,
         #: `(item id, 圖片類型)` → 那張圖。沒列的是 404。
         images: dict[tuple[str, str], JellyfinImage] | None = None,
         #: 帳號 → 他看過的集與電影的 item id。Series 的紀錄由它的集算出來，不在這裡。
@@ -186,6 +188,7 @@ class FakeJellyfinClient:
         self.visible_roots = visible_roots
         self.items_ = list(items)
         self.notify_error = notify_error
+        self.items_error = items_error
         self.images = dict(images or {})
         self.played = {name: set(ids) for name, ids in (played or {}).items()}
         self.positions = {name: dict(rows) for name, rows in (positions or {}).items()}
@@ -197,6 +200,8 @@ class FakeJellyfinClient:
         self.item_queries: list[tuple[str, tuple[str, ...]]] = []
         #: 每一次 `run_task` 觸發的任務 id。
         self.tasks_run: list[str] = []
+        #: 每一次 `refresh_library` 刷新的媒體庫 id。
+        self.libraries_refreshed: list[str] = []
         #: 每一次 `user_views` / `user_policy` 問的是誰。快取有沒有擋下重複的問題靠它斷言。
         self.view_queries: list[str] = []
         self.policy_queries: list[str] = []
@@ -377,6 +382,10 @@ class FakeJellyfinClient:
             raise ProtocolMismatchError(f"POST /ScheduledTasks/Running/{task_id}: 404")
         self.tasks_run.append(task_id)
 
+    async def refresh_library(self, library_id: str) -> None:
+        self._checkpoint(always=True)
+        self.libraries_refreshed.append(library_id)
+
     # --- 入庫之後 ---
 
     async def notify_paths(self, paths: Sequence[str]) -> None:
@@ -389,6 +398,8 @@ class FakeJellyfinClient:
         """照媒體庫的路徑篩——`parentId=<library>&recursive=true` 在真的 Jellyfin 就是這個意思。"""
         self._checkpoint()
         self.item_queries.append((library_id, tuple(item_types)))
+        if self.items_error is not None:
+            raise self.items_error
         library = next((row for row in self.libraries_ if row.item_id == library_id), None)
         if library is None:
             return ()

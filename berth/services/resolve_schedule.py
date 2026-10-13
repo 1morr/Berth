@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-#: 第 n 次反查之前要等多久（plan §3.2）。長度就是總次數：6 次。
+#: 第 n 次反查之前要等多久（plan §3.2）。長度就是總次數：6 次。第二次是一分鐘（M4 票 62）：空的
+#: 媒體庫第一次沒找到就請 Jellyfin 全庫掃描，小的套件內那一台幾秒就跑完（Unraid 12 秒、12.1.0
+#: 實測 4 秒）；有內容的媒體庫，路徑通知的 60 秒延遲到時也過了。
 RESOLVE_DELAYS: tuple[timedelta, ...] = (
     timedelta(seconds=30),
-    timedelta(minutes=2),
+    timedelta(minutes=1),
     timedelta(minutes=10),
     timedelta(hours=1),
     timedelta(hours=1),
