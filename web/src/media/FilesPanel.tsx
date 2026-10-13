@@ -13,6 +13,7 @@ import { formatCoverage, formatEpisode } from '../components/episodes'
 import { FileEntry } from '../components/FileEntry'
 import { RematchForm } from '../components/RematchForm'
 import { groupRows, type RowGroup } from '../components/rowGroups'
+import { SectionHeading } from '../components/SectionHeading'
 import { Timestamp } from '../components/Timestamp'
 import { JobDelete } from '../jobs/JobDelete'
 
@@ -53,18 +54,18 @@ export function FilesPanel({ media, inJellyfin }: { media: Media; inJellyfin: bo
 
   return (
     <section aria-labelledby={headingId} className="grid gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {t('media.files.title')}
-        </h2>
-        {media.files.length > 0 && (
-          // 光一個「10」唸出來沒有意義：看得見的是數字，聽得見的是「共 10 個檔案」。
-          <p className="value text-xs text-ink-dim">
-            <span aria-hidden="true">{media.files.length}</span>
-            <span className="sr-only">{t('media.files.total', { count: media.files.length })}</span>
-          </p>
-        )}
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={t('media.files.title')}
+        count={
+          media.files.length > 0
+            ? {
+                value: media.files.length,
+                spoken: t('media.files.total', { count: media.files.length }),
+              }
+            : undefined
+        }
+      />
 
       <p aria-live="polite" className="sr-only">
         {said}

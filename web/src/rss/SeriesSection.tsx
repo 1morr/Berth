@@ -20,7 +20,7 @@ import { firstBatchAskText } from './firstBatchAsk'
 import { Grounds } from './GroundsList'
 import { ItemLine } from './ItemLine'
 import { RulesToggle } from './RulesEditor'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 import {
   byWork,
   groupName,

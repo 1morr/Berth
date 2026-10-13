@@ -30,6 +30,7 @@ import {
 } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
@@ -64,14 +65,15 @@ export function SubscribePanel({ media }: { media: Media }) {
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {t('rss.subscribe.title')}
-        </h2>
-        <Link to="/rss" className={`${TEXT_LINK} ms-auto`}>
-          {t('rss.subscribe.toRss')}
-        </Link>
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={t('rss.subscribe.title')}
+        extra={
+          <Link to="/rss" className={`${TEXT_LINK} ms-auto`}>
+            {t('rss.subscribe.toRss')}
+          </Link>
+        }
+      />
 
       {series.isError ? (
         <RequestFailed error={series.error} lead={t('rss.readFailed')} />

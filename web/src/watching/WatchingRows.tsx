@@ -10,6 +10,7 @@ import { COMPACT_BUTTON, NAV_BOX } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatJellyfinEpisode } from '../components/episodes'
 import { KIND_CODE } from '../components/kind'
+import { SectionHeading } from '../components/SectionHeading'
 import { WALL_GRID, fitsOneRowFrom, oneRowOnly } from '../components/wallGrid'
 import { jellyfinDetailsUrl } from '../inventory/jellyfinLink'
 import { rememberRows, rememberedRows, type RowShape } from './rememberedRows'
@@ -175,28 +176,25 @@ function WatchingRow({
 
   return (
     <section aria-labelledby={headingId} className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {title}
-        </h2>
-        {/* 光一個數字唸出來沒有意義：看得見的是數字，聽得見的是帶單位的那一句。 */}
-        <p className="value text-xs text-ink-dim">
-          <span aria-hidden="true">{cards.length}</span>
-          <span className="sr-only">{t('watching.count', { count: cards.length })}</span>
-        </p>
-        {fits !== null && (
-          // 開關在標題列而不是清單下方：展開之後下一個 Tab 從第一格往下走，新出現的格子不會落在焦點後面。
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls={listId}
-            onClick={() => setExpanded(!expanded)}
-            className={`${COMPACT_BUTTON} ms-auto ${fits}`}
-          >
-            {expanded ? t('watching.showFewer') : t('watching.showAll', { count: cards.length })}
-          </button>
-        )}
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={title}
+        count={{ value: cards.length, spoken: t('watching.count', { count: cards.length }) }}
+        extra={
+          fits !== null && (
+            // 開關在標題列而不是清單下方：展開之後下一個 Tab 從第一格往下走，新出現的格子不會落在焦點後面。
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={listId}
+              onClick={() => setExpanded(!expanded)}
+              className={`${COMPACT_BUTTON} ms-auto ${fits}`}
+            >
+              {expanded ? t('watching.showFewer') : t('watching.showAll', { count: cards.length })}
+            </button>
+          )
+        }
+      />
       <ul id={listId} className={WALL_GRID}>
         {cards.map((card, index) => (
           <li key={card.item_id} className={expanded ? '' : oneRowOnly(index)}>

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
@@ -14,11 +14,13 @@ import {
   type MediaJobFilter,
 } from '../api/jobs'
 import type { Media } from '../api/media'
-import { FILTER, FILTER_ACTIVE, GHOST_LINK, GhostButton } from '../components/controls'
+import { FILTER, GHOST_LINK, GhostButton } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { formatEpisode } from '../components/episodes'
+import { FilterBar } from '../components/FilterBar'
 import { Pager, PAGE_LINK } from '../components/Pager'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { JobSummary } from '../jobs/JobSummary'
 import { jobRowFrame } from '../jobs/jobState'
 import { formatSize } from './searchResult'
@@ -48,7 +50,7 @@ export function DownloadsPanel({ media }: { media: Media }) {
   if (!listing.data) {
     return (
       <section aria-labelledby={headingId} className="grid gap-4">
-        <Heading id={headingId} />
+        <SectionHeading id={headingId} label={t('media.downloads.title')} />
         <div className="grid justify-items-start gap-3">
           <RequestFailed error={listing.error} lead={t('media.downloads.readFailed')} />
           <GhostButton type="button" onClick={() => void listing.refetch()}>
@@ -72,22 +74,26 @@ export function DownloadsPanel({ media }: { media: Media }) {
   return (
     <section aria-labelledby={headingId} className="grid gap-4">
       <LiveJobs />
-      <Heading id={headingId}>
-        <nav aria-label={t('media.downloads.filters')} className="flex flex-wrap gap-2">
-          {FILTERS.map((option) => {
-            const label = t(`media.downloads.filter.${option}`, { count: shown.counts[option] })
-            return option === filter ? (
-              <span key={option} aria-current="true" className={`${FILTER_ACTIVE} text-ink`}>
-                {label}
-              </span>
-            ) : (
-              <button key={option} type="button" className={FILTER} onClick={() => choose(option)}>
+      <SectionHeading
+        id={headingId}
+        label={t('media.downloads.title')}
+        extra={
+          <FilterBar
+            label={t('media.downloads.filters')}
+            options={FILTERS.map((option) => ({
+              value: option,
+              label: t(`media.downloads.filter.${option}`, { count: shown.counts[option] }),
+            }))}
+            current={filter}
+            option={(option, label) => (
+              <button type="button" className={FILTER} onClick={() => choose(option)}>
                 {label}
               </button>
-            )
-          })}
-        </nav>
-      </Heading>
+            )}
+            className="ms-auto"
+          />
+        }
+      />
 
       {current && <DownloadsPager listing={shown} onPage={setPage} />}
 
@@ -164,18 +170,6 @@ function useSeasonsFollow(mediaId: string, listing: JobPage | undefined) {
 /** 季表在乎的那兩件：狀態與有沒有計劃。進度不在裡面。 */
 function standing(job: Job): string {
   return `${job.state}:${job.plan_id ?? ''}`
-}
-
-function Heading({ id, children }: { id: string; children?: ReactNode }) {
-  const { t } = useTranslation()
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 border-b-2 border-rule-strong pb-2">
-      <h2 id={id} className="label text-ink">
-        {t('media.downloads.title')}
-      </h2>
-      {children}
-    </div>
-  )
 }
 
 /** 共用的 `Pager`（媒體庫的牆、下載列表）；這裡的鍵是按鈕，頁碼不進網址。 */

@@ -19,7 +19,7 @@ import { SIGNAL_FILL } from '../components/signal'
 import { JobLink } from '../jobs/JobLink'
 import { formatSize } from '../media/searchResult'
 import { maskToken } from './maskToken'
-import { SectionHeading } from './SectionHeading'
+import { SectionHeading } from '../components/SectionHeading'
 import { skipText } from './skip'
 
 /**

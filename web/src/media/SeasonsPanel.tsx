@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
 import { COMPACT_BUTTON, NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
+import { SectionHeading } from '../components/SectionHeading'
 import { missingOf } from './missing'
 import { SeasonList } from './SeasonList'
 
@@ -38,14 +39,18 @@ export function SeasonsPanel({
 
   return (
     <section aria-labelledby={headingId} className="grid gap-3">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
-        <h2 id={headingId} className="label text-ink">
-          {t('media.seasons')}
-        </h2>
-        {media.seasons.length > 0 && (
-          <p className="value text-xs text-ink-dim">{media.seasons.length}</p>
-        )}
-      </div>
+      <SectionHeading
+        id={headingId}
+        label={t('media.seasons')}
+        count={
+          media.seasons.length > 0
+            ? {
+                value: media.seasons.length,
+                spoken: t('media.seasonsCount', { count: media.seasons.length }),
+              }
+            : undefined
+        }
+      />
       {/* 這一頁有四套集數（M2 票 14，M1.5 critique P3）：觀看區是 Jellyfin 的、這一份與檔案是 TMDB 的、絕對編號欄是
           TMDB 的 Absolute group、媒體庫卡片數的是播出了的正片。從「對不到」進來的人正要找哪裡不對，一句話都不說
           的話，合理的讀法是 Berth 算錯了。 */}

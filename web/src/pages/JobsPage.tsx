@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 
 import { useJobStream } from '../api/events'
 import { JOB_FILTERS, jobsQueryOptions, type JobPage, type ListFilter } from '../api/jobs'
-import { FILTER, FILTER_ACTIVE, GHOST_LINK, PAGE_TITLE } from '../components/controls'
+import { FILTER, GHOST_LINK, PAGE_TITLE } from '../components/controls'
+import { FilterBar } from '../components/FilterBar'
 import { PAGE_LINK, Pager } from '../components/Pager'
 import { RequestFailed } from '../components/RequestFailed'
 import { JobRow } from '../jobs/JobRow'
@@ -110,20 +111,19 @@ function Filters({ listing, filter }: { listing: JobPage; filter: ListFilter }) 
   const { t } = useTranslation()
 
   return (
-    <nav aria-label={t('jobs.filters')} className="flex flex-wrap gap-2">
-      {JOB_FILTERS.map((option) => {
-        const label = t(`jobs.filter.${option}`, { count: listing.counts[option] })
-        return option === filter ? (
-          <span key={option} aria-current="true" className={`${FILTER_ACTIVE} text-ink`}>
-            {label}
-          </span>
-        ) : (
-          <Link key={option} to="/jobs" search={onFilter(option)} className={FILTER}>
-            {label}
-          </Link>
-        )
-      })}
-    </nav>
+    <FilterBar
+      label={t('jobs.filters')}
+      options={JOB_FILTERS.map((option) => ({
+        value: option,
+        label: t(`jobs.filter.${option}`, { count: listing.counts[option] }),
+      }))}
+      current={filter}
+      option={(option, label) => (
+        <Link to="/jobs" search={onFilter(option)} className={FILTER}>
+          {label}
+        </Link>
+      )}
+    />
   )
 }
 
