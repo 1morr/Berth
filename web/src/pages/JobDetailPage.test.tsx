@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job, JobEvent } from '../api/jobs'
@@ -41,6 +42,7 @@ function job(overrides: Partial<Job> = {}): Job {
     plan_id: 7,
     audits: 0,
     series: '',
+    previous_client: '',
     ...overrides,
   }
 }
@@ -249,6 +251,47 @@ describe('Job 詳情頁（M2 票 12）', () => {
       expect(alert).toHaveTextContent(/讀不到時間線。/)
       expect(alert).toHaveTextContent(expected)
       expect(alert).not.toHaveTextContent(/自己的 API|還活著/)
+    }
+  })
+})
+
+describe('換過 qBittorrent 之後，做種的 torrent 在原本那一台（M4 票 65，審計 P1-4）', () => {
+  const PREVIOUS = 'http://qbittorrent:8080'
+
+  it('已入庫的那一筆說做種的 torrent 在哪一台，Berth 不再追蹤它', async () => {
+    render({ [JOB]: { body: job({ previous_client: PREVIOUS }) } })
+    renderApp(`/jobs/${HASH}`)
+
+    const line = (await screen.findByText('做種')).closest('div')
+    expect(line).toHaveTextContent(
+      `做種的 torrent 在原本那一台 qBittorrent（${PREVIOUS}），Berth 換台之後不再追蹤它；已入庫的檔案不受影響。`,
+    )
+  })
+
+  it('還在現在這一台、或不是已入庫的那一筆不說', async () => {
+    render({ [JOB]: { body: job({ previous_client: '' }) } })
+    const { unmount } = renderApp(`/jobs/${HASH}`)
+    await screen.findByRole('heading', { level: 1, name: /SPY×FAMILY - 13/ })
+    expect(screen.queryByText('做種')).toBeNull()
+    unmount()
+
+    render({ [JOB]: { body: job({ state: 'review', previous_client: PREVIOUS }) } })
+    renderApp(`/jobs/${HASH}`)
+    await screen.findByRole('heading', { level: 1, name: /SPY×FAMILY - 13/ })
+    expect(screen.queryByText('做種')).toBeNull()
+  })
+
+  it('英文介面', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      render({ [JOB]: { body: job({ previous_client: PREVIOUS }) } })
+      renderApp(`/jobs/${HASH}`)
+
+      expect((await screen.findByText('Seeding')).closest('div')).toHaveTextContent(
+        `The seeding torrent is on the previous qBittorrent (${PREVIOUS}); Berth stopped tracking it after the switch.`,
+      )
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
     }
   })
 })

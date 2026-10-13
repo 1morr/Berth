@@ -1,6 +1,6 @@
 # 65 — 換台時說清楚留下了什麼：做種中的 torrent、白名單、移除的時機
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 59（換台後自動重查那一段先做好，這張只管換台框與舊那台）
 
@@ -24,7 +24,20 @@
 
 ## 驗收
 
-- [ ] 整合測試：取消換台不移除任何分類；確認換台才移除勾選的空分類（雙向）
-- [ ] vitest：換台框的新文案與勾選（zh-Hant 與 en）
-- [ ] 實跑：有做種中的 torrent 時換台 → 取消一次 → 確認一次，舊那台的分類與 torrent 狀態，附截圖
-- [ ] 全部檢查、test、前端 e2e 綠燈；brief §16.4 同步；progress.md 記一行
+- [x] 整合測試：取消換台不移除任何分類；確認換台才移除勾選的空分類（雙向）（`test_setup_leftovers.py::TestRemoveEmptyCategoriesOnSwitch`：勾了換台、沒勾、只開框、新那台測不過、同一台、確認前進來的 torrent、原本那台沒答上來；API 一輪含 502；白名單閘門的既有那一輪加上換台並勾選，`remove_categories` 第一次經真實路徑被記到）
+- [x] vitest：換台框的新文案與勾選（zh-Hant 與 en）（`ServiceChoice.test.tsx` 換台那一組、`JobDetailPage.test.tsx`、`auditCopy.test.ts` 的白名單措辭）
+- [x] 實跑：有做種中的 torrent 時換台 → 取消一次 → 確認一次，舊那台的分類與 torrent 狀態，附截圖（演練情境 `import`：`.playwright-mcp/t65-1-switch-box.png`、`t65-2-after-cancel.png`、`t65-3-switched.png`、`t65-4-job-detail.png`，目錄不進版控；限制見 Comments）
+- [x] 全部檢查、test、前端 e2e 綠燈；brief §16.4 同步；progress.md 記一行
+
+## Comments
+
+**實跑**（演練情境 `import`、設定 → qBittorrent）：送單入庫後 torrent 在 `berth-anime` 做種（`stalledUP`）。換台框列出 `berth-anime` 1 個 torrent、`berth-movies` / `berth-tv` 空的、免密白名單與關法、「這 1 個 torrent 會留在原本那一台…」、預設不勾的「換台時一併移除 2 個空的 berth- 分類」。勾了再取消：沒有任何非 GET 的 `/api` 請求，三個分類都在，重開時勾選已收回。勾了並以 `http://192.168.1.10:8080` 確認：請求帶 `remove_empty_categories: true`、200；之後那一台只剩 `berth-anime`（1 個 torrent，仍 `stalledUP`）；Job 的 `previous_client` 是 `http://qbittorrent:8080`，詳情頁說「做種的 torrent 在原本那一台」。**限制**：演練伺服器上新舊兩台是同一個替身物件，畫面分不出「舊那台」與新那台；「移除的是舊那台、新那台不動」由整合測試以兩個替身守（`qbittorrent_elsewhere`）。
+
+code-review（2026-10-14）已處理：CHANGELOG 補一條（含刪掉的 `DELETE …/leftovers/categories`）；brief「測不過什麼都不動」只對換成既有成立（套件內照舊先存再測）；做種文案涵蓋下載中的 torrent（「做種的照樣做種、下載中的照樣下載」）；移除了哪幾個寫進 log；`JobOut.previous_client` 註解寫明每個狀態都填、畫面只對已入庫說。
+
+未處理（記著）：
+
+- **設定頁「改位址」從一台既有換到另一台既有**：後端照樣算換台（Route 檢查作廢），但不走換台框，看不到做種說明、也勾不了移除。票 47 起就是這樣。
+- **換台後還在下載中的 Job**：torrent 留在原本那一台，新那一台上找不到，poller 會開 `client_removed`；換台框只說「下載中的照樣下載」，沒說那幾筆之後會變成待處理。
+- **「改位址」到同一台 qBittorrent 的另一個位址**（IP 換了）：Berth 也當成換台，Job 詳情會說「在原本那一台」——與 Route 檢查作廢是同一個判斷。
+- 判斷題沒動：`ServiceChoice` 收起換台區的三處重設（各帶不同的額外狀態）；`categories_not_removed` 在 `ExistingForm` 排除、在換台區接住兩處判斷；`seeding_*` 與 `seedingUnknown` 後半句相同。

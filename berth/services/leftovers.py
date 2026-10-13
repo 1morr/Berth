@@ -8,8 +8,8 @@ Prowlarr 的站、Berth 設的介面登入。使用者自己的分類與站不�
 分類是 Route 的、站是加站時記下的（`SetupIndexer.added_sites`），torrent 數說不出來。
 
 **能移除的只有空的 `berth-*` 分類**：站與登入只列出——站可能有人在用、登入拿掉就沒人登得進去，
-而 Berth 分不出來；空的分類刪掉不影響任何 torrent。移除在確認框裡就做（不等換台送出）：按了移除
-卻取消換台也無妨，送單與 Route 檢查都先 `ensure_category`，要用時照 Route 的路徑重建。
+而 Berth 分不出來；空的分類刪掉不影響任何 torrent。移除是換台框裡的勾選，**跟著確認換台一起做**
+（`setup.choose_service`，M4 票 65，審計 P2-9）：原本按下就刪，之後取消換台，分類已經沒了。
 """
 
 from __future__ import annotations
@@ -76,11 +76,12 @@ async def read_leftovers(
 @command(Effect.IRREVERSIBLE)
 async def remove_empty_categories(
     session: AsyncSession, factory: ServiceClientFactory
-) -> Leftovers:
-    """移除現在這一台 qBittorrent 上空的 `berth-*` 分類，回傳移除之後的清單。
+) -> tuple[str, ...]:
+    """移除現在存著的這一台 qBittorrent 上空的 `berth-*` 分類，回傳移除了哪幾個。換台時在存下
+    新那一台之前呼叫（`setup.choose_service`）。
 
-    **按下時重數**：清單畫出來之後可能有 torrent 進了某個分類，刪掉它會讓那個 torrent 變成沒有分類。
-    連不到或刪不掉是 `CategoriesNotRemovedError`：按了移除要說得出沒有移除，不能看起來像刪完了。
+    **確認時重數**：清單畫出來之後可能有 torrent 進了某個分類，刪掉它會讓那個 torrent 變成沒有分類。
+    連不到或刪不掉是 `CategoriesNotRemovedError`：勾了移除要說得出沒有移除，不能看起來像刪完了。
     """
     settings = await read_settings(session, QbittorrentSettings)
     client = factory.qbittorrent(settings.base_url)
@@ -93,7 +94,7 @@ async def remove_empty_categories(
         raise CategoriesNotRemovedError(message(exc)) from exc
     finally:
         await client.aclose()
-    return await _qbittorrent_leftovers(session, factory)
+    return tuple(empty)
 
 
 async def _qbittorrent_leftovers(session: AsyncSession, factory: ServiceClientFactory) -> Leftovers:

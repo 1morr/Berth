@@ -307,6 +307,10 @@ class JobView:
     #: RSS 送的那一筆是哪個 RSS Series：發佈名讀出的字幕組，讀不出時是 Series 的原始標題（作品頁
     #: 「下載」段的來源那一格，M4 票 12）。不是 RSS 送的、或 Series 不在了是空字串。
     series: str
+    #: 這一筆送進的那一台 qBittorrent 已經不是 Berth 現在用的那一台時，是它的位址（M4 票 65，
+    #: 審計 P1-4）：torrent 留在那裡做種，Berth 換台之後不再追蹤它。還是現在這一台、或沒有送單紀錄
+    #: （重新入庫、重建帳本來的）是空字串。讀的是最後一次 `submitted` 事件記下的 `client`。
+    previous_client: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -1334,6 +1338,10 @@ class _Related:
     plans: dict[str, tuple[int, int]]
     #: 送出它們的 RSS Series（`trigger_ref` 是 id）。沒有 RSS 送的就不問。
     series: dict[int, RssSeries]
+    #: job hash → 最後一次送進的那一台 qBittorrent 的位址；沒有送單紀錄的不在裡面。
+    clients: dict[str, str]
+    #: Berth 現在用的那一台 qBittorrent。
+    current_client: str
 
 
 async def _related(session: AsyncSession, jobs: Sequence[Job]) -> _Related:
@@ -1344,7 +1352,26 @@ async def _related(session: AsyncSession, jobs: Sequence[Job]) -> _Related:
         users=await _by_id(session, User, User.id, {j.user_id for j in jobs}),
         plans=await _plans_of(session, [job.hash for job in jobs]),
         series=await _by_id(session, RssSeries, RssSeries.id, {series_id_of(j) for j in jobs}),
+        clients=await _clients_of(session, [job.hash for job in jobs]),
+        current_client=(await read_settings(session, QbittorrentSettings)).base_url,
     )
+
+
+async def _clients_of(session: AsyncSession, job_hashes: Sequence[str]) -> dict[str, str]:
+    """每一筆最後一次送進的那一台 qBittorrent：`submitted` 事件記下的 `client`（送單與認領都記）。
+    舊的在前，後面的蓋掉前面的——重試換過台的那一筆說的是最後那一台。"""
+    if not job_hashes:
+        return {}
+    rows = await session.execute(
+        select(Event.job_hash, Event.payload_json)
+        .where(Event.job_hash.in_(list(job_hashes)), Event.type == EventType.SUBMITTED.value)
+        .order_by(Event.created_at, Event.id)
+    )
+    return {
+        job_hash: str(payload["client"])
+        for job_hash, payload in rows
+        if job_hash and payload and payload.get("client")
+    }
 
 
 def series_id_of(job: Job) -> int | None:
@@ -1399,6 +1426,7 @@ def _view(job: Job, related: _Related) -> JobView:
     user = related.users.get(job.user_id) if job.user_id is not None else None
     plan_id, audits = related.plans.get(job.hash, (None, 0))
     series_id = series_id_of(job)
+    sent_to = related.clients.get(job.hash, "")
     return JobView(
         hash=job.hash,
         name=job.name,
@@ -1422,4 +1450,5 @@ def _view(job: Job, related: _Related) -> JobView:
         plan_id=plan_id,
         audits=audits,
         series=_series_name(related.series.get(series_id) if series_id is not None else None),
+        previous_client=sent_to if sent_to != related.current_client else "",
     )

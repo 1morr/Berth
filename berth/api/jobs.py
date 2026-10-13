@@ -193,6 +193,10 @@ class JobOut(BaseModel):
     #: qBittorrent 自己的狀態字串（`stalledDL`…），原樣。畫面用它說「客戶端那邊怎麼了」。
     client_state: str
     added_at: datetime
+    #: 送進的那一台 qBittorrent 已經換掉時是它的位址：torrent 留在那裡，Berth 不再追蹤（M4 票 65）。
+    #: 還是現在這一台、或不知道是空字串。每個狀態都填；畫面只對已入庫的那一筆說「做種的在
+    #: 原本那一台」。
+    previous_client: str
     #: 這一筆現在按得了重試嗎（plan §3.1）。規則在後端算，前端不重算一份。
     retryable: bool
     #: **這個人**現在按得了重新規劃嗎（票 11）。規則在後端算，前端不重算一份：停在 review 的那一筆

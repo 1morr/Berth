@@ -161,6 +161,8 @@ export function ServiceChoice({
   const panel = useRef<HTMLDivElement>(null)
   // 點下去開的確認才把焦點送進去；方向鍵瀏覽時焦點留在 radio 上，才走得回另一格。
   const [focusPanel, setFocusPanel] = useState(false)
+  // 換台框裡「一併移除空的 berth- 分類」的勾選（M4 票 65）：跟著確認換台一起送，不另外按。
+  const [removeEmpty, setRemoveEmpty] = useState(false)
   const selected = sent ?? draft ?? service?.origin ?? null
   const switching = draft !== null && service !== undefined && draft !== service.origin
   // 這一頁有結果時換另一格：先確認。從既有換走，Berth 沒寫過那一台，說的只有這一頁要重做。
@@ -174,10 +176,11 @@ export function ServiceChoice({
     if (focusPanel && draft !== null) panel.current?.focus()
   }, [focusPanel, draft])
 
-  /** 送出一個選擇：回來之前那一格就是選中的、另一格停用。 */
-  function choose(...args: Parameters<typeof onChoose>) {
-    setSent(args[0].origin)
-    onChoose(...args)
+  /** 送出一個選擇：回來之前那一格就是選中的、另一格停用。換台時帶上移除空分類的勾選。 */
+  function choose(...[input, ...done]: Parameters<typeof onChoose>) {
+    setSent(input.origin)
+    const removing = confirming && kind === 'qbittorrent' && removeEmpty
+    onChoose(removing ? { ...input, remove_empty_categories: true } : input, ...done)
   }
 
   function pick(origin: ServiceOrigin) {
@@ -211,18 +214,28 @@ export function ServiceChoice({
     setFocusPanel(clicked && Boolean(service && switchWarning))
   }
 
-  /** 不換了：回到原本那一格，焦點也回去。 */
+  /** 不換了：回到原本那一格，焦點也回去。什麼都沒送，勾選也收回。 */
   function cancel() {
     onDraft(null)
     setFocusPanel(false)
+    setRemoveEmpty(false)
     const back = service?.origin ?? draft
     if (back) radios.current[back]?.focus()
   }
 
   function chooseBundled() {
-    onDraft(null)
-    setFocusPanel(false)
-    choose({ origin: 'bundled' })
+    function settle() {
+      onDraft(null)
+      setFocusPanel(false)
+      setRemoveEmpty(false)
+    }
+    if (!confirming) {
+      settle()
+      choose({ origin: 'bundled' })
+      return
+    }
+    // 換台的確認區留到存下來：勾了移除而原本那一台沒答上來時（M4 票 65），理由要掛在勾選旁邊。
+    choose({ origin: 'bundled' }, settle)
   }
 
   function chooseExisting(input: ChoiceInput) {
@@ -232,6 +245,7 @@ export function ServiceChoice({
     choose(input, () => {
       onDraft(null)
       setEditing(false)
+      setRemoveEmpty(false)
     })
   }
 
@@ -272,6 +286,24 @@ export function ServiceChoice({
       onEdit={() => setEdited(true)}
       onSubmit={chooseExisting}
     />
+  )
+  const leftovers = kind !== 'jellyfin' && (
+    <>
+      <LeftoverList
+        kind={kind}
+        bundled={service?.origin === 'bundled'}
+        removeEmpty={removeEmpty}
+        onRemoveEmpty={setRemoveEmpty}
+      />
+      {refusal?.reason === 'categories_not_removed' && (
+        <div className="grid gap-1">
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t('choice.refused.categories_not_removed')}
+          </Notice>
+          <TechnicalDetails lines={[refusal.detail]} />
+        </div>
+      )}
+    </>
   )
   const cancelButton = (
     <div>
@@ -405,7 +437,7 @@ export function ServiceChoice({
           <p id={warningId} className="max-w-prose text-xs text-ink">
             {confirming ? warning : t('choice.useBundledLede', { service: name })}
           </p>
-          {confirming && kind !== 'jellyfin' && <LeftoverList kind={kind} />}
+          {confirming && leftovers}
           <div className={CONFIRM_ACTIONS}>
             <PrimaryButton type="button" busy={choosing} onClick={chooseBundled}>
               {confirming ? t('choice.switchToBundled') : t('choice.useBundled', { service: name })}
@@ -427,7 +459,7 @@ export function ServiceChoice({
           <p id={warningId} className="max-w-prose text-xs text-ink">
             {warning}
           </p>
-          {kind !== 'jellyfin' && <LeftoverList kind={kind} />}
+          {leftovers}
           {form}
           {cancelButton}
         </ConfirmPanel>
@@ -744,13 +776,16 @@ export function ExistingForm({
           <TechnicalDetails lines={[endpointAt(attempt.base_url, kind), attempt.error]} />
         </div>
       )}
-      {refusal && refusal.reason !== 'connection_failed' && (
-        <Notice signal="blocked" label={t('common.failed')}>
-          {t(`choice.refused.${refusal.reason}`, {
-            detail: refusedDetail(refusal, t),
-          })}
-        </Notice>
-      )}
+      {/* 移除空分類沒成是換台區的事，由勾選旁邊說（M4 票 65）。 */}
+      {refusal &&
+        refusal.reason !== 'connection_failed' &&
+        refusal.reason !== 'categories_not_removed' && (
+          <Notice signal="blocked" label={t('common.failed')}>
+            {t(`choice.refused.${refusal.reason}`, {
+              detail: refusedDetail(refusal, t),
+            })}
+          </Notice>
+        )}
       <div>
         <PrimaryButton type="submit" busy={choosing}>
           {signIn
