@@ -316,7 +316,7 @@ _Avoid_: foreign, external, legacy
 _Avoid_: adopt（只當 `IssueAction.ADOPT` 這個按鈕值，函式一律叫 reimport）, import（那是 importer 的事）
 
 **Delete Scope**:
-刪除時可組合的四個旗標：移除 library 鏈接（`unlink`）、從 qBittorrent 移除 torrent（`remove_torrent`）、刪除 complete 檔案（`delete_files`）、清除帳本與 Job 紀錄（`purge`）。預設全不勾。
+刪除時可組合的四個旗標：移除 library 鏈接（`unlink`）、從 qBittorrent 移除 torrent（`remove_torrent`）、刪除下載目錄裡的檔案（`delete_files`；complete，或還沒下完時的 incomplete）、清除帳本與 Job 紀錄（`purge`）。預設全不勾。
 _Avoid_: purge level, cleanup mode
 
 **Health Check**:

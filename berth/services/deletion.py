@@ -8,8 +8,9 @@
 1. **從 qBittorrent 移除 torrent**。排第一是因為它是唯一可能失敗的一步——問不到那一台時
    整次刪除不做，而不是刪到一半才發現。
 2. **移除 library 硬鏈接**。
-3. **刪除 complete 檔案**。要求先移除 torrent（否則拒絕）：qBittorrent 還握著那個 torrent
-   時把檔案抽走，它會報 `missingFiles` 然後在重新檢查時把整包再抓一遍。
+3. **刪除下載目錄裡的檔案**：下完的在 complete，還沒下完的在 Route 自己的 incomplete 目錄
+   （M4 票 74）。要求先移除 torrent（否則拒絕）：qBittorrent 還握著那個 torrent 時把檔案抽走，
+   它會報 `missingFiles` 然後在重新檢查時把整包再抓一遍。
 4. **清除帳本與 Job 紀錄**。不勾的話那一筆留著當歷史，狀態是 `removed`。
 
 **檔案由 Berth 自己逐檔刪，不交給 `torrents/delete?deleteFiles=true`**。兩個理由：那一筆
@@ -69,7 +70,7 @@ class DeleteScope:
     unlink: bool = False
     #: 從 qBittorrent 移除 torrent，不刪檔。
     remove_torrent: bool = False
-    #: 刪除 complete 檔案。要求 `remove_torrent`。
+    #: 刪除下載目錄（complete，或還沒下完時的 incomplete）裡的檔案。要求 `remove_torrent`。
     delete_files: bool = False
     #: 清除帳本與 Job 紀錄。不勾的話留為歷史。
     purge: bool = False
@@ -88,7 +89,7 @@ class DeletionEstimate:
     links: int
     #: 帳本上有、磁碟上已經不在的（有人在 Jellyfin 或檔案總管裡刪掉了）。
     links_missing: int
-    #: complete 底下還在的來源檔數。
+    #: 下載目錄裡還在的來源檔數。
     sources: int
     sources_missing: int
     #: 來源與所有鏈接都刪掉時真的會空出來的位元組。
@@ -202,7 +203,7 @@ async def _apply(
         raise JobRejectedError(JobRefusal.MOVED_ON, job.state.value)
 
     unlinked = _unlink_all(paths.links, roots=paths.route_targets) if scope.unlink else {}
-    sources = _remove_all(paths.sources, roots=[paths.complete_root]) if scope.delete_files else 0
+    sources = _remove_all(paths.sources, roots=paths.download_roots) if scope.delete_files else 0
     await _restate_ledger(session, job, scope, unlinked)
 
     outcome = DeleteOutcome(
@@ -258,11 +259,12 @@ class _ScopePaths:
     links: dict[str, Placed]
     sources: list[Path]
     route_targets: list[Path]
-    complete_root: Path
+    #: complete 與 incomplete 兩個根。刪來源只刪得到它們底下的東西。
+    download_roots: list[Path]
 
 
 async def _scope_paths(session: AsyncSession, job: Job) -> _ScopePaths:
-    """媒體庫那一側讀帳本，complete 那一側讀 `job_files` 與帳本的來源。
+    """媒體庫那一側讀帳本，下載目錄那一側讀 `job_files` 與帳本的來源。
 
     兩邊都讀是因為它們各自會少一半：`job_files` 是 qBittorrent 報的完整內容（包含沒有進
     Plan 的那幾個，例如 readme 與被跳過的樣本檔），而帳本的 `source_abs_path` 認得重新入庫
@@ -273,15 +275,38 @@ async def _scope_paths(session: AsyncSession, job: Job) -> _ScopePaths:
     )
     files = list(await session.scalars(select(JobFile).where(JobFile.job_hash == job.hash)))
     paths = await read_settings(session, PathSettings)
+    incomplete_root = Path(paths.incomplete_root)
     return _ScopePaths(
         links={row.target_path: Placed.of(row) for row in entries},
         sources=_unique(
             [Path(row.source_abs_path) for row in entries]
-            + [fs.under(job.save_path, row.rel_path) for row in files if job.save_path]
+            + _where_files_are(job, files, incomplete_root=incomplete_root)
         ),
         route_targets=await route_targets(session),
-        complete_root=Path(paths.complete_root),
+        download_roots=[Path(paths.complete_root), incomplete_root],
     )
+
+
+def _where_files_are(job: Job, files: Sequence[JobFile], *, incomplete_root: Path) -> list[Path]:
+    """`job_files` 現在在磁碟上的哪裡。
+
+    **還沒下完時不在 `save_path` 底下**（M4 票 74）：qBittorrent 把它放在 Route 自己的 incomplete
+    目錄（category 的 `downloadPath`），`save_path` 報的卻已經是下完要搬去的 complete 那一個；
+    那時說得出資料現在所在的是 `content_path`。`contentLayout` 固定是 `Original`
+    （`adapters.qbittorrent.CONTENT_LAYOUT`），所以內容路徑的上一層就是 `torrents/files[].name`
+    相對的那一層（brief §20.7）。
+
+    incomplete 那一側**只收落在內容路徑底下的**：那個目錄裡還有別的 torrent 下到一半的東西。
+    qBittorrent 從沒報過內容路徑的（metadata 還沒到就被移走）不照 Route 的 slug 去猜。
+    """
+    content = Path(job.content_path) if job.content_path else None
+    if content is not None and fs.is_within(content, incomplete_root):
+        base = str(content.parent)
+        found = (fs.under(base, row.rel_path) for row in files)
+        return [path for path in found if fs.is_within(path, content)]
+    if not job.save_path:
+        return []
+    return [fs.under(job.save_path, row.rel_path) for row in files]
 
 
 @dataclass(frozen=True, slots=True)
@@ -421,9 +446,10 @@ def _unlink_all(links: dict[str, Placed], *, roots: Sequence[Path]) -> dict[str,
 
 
 def _remove_all(paths: Sequence[Path], *, roots: Sequence[Path]) -> int:
-    """complete 那一側逐條刪，回傳真的刪掉幾個。空掉的目錄跟著收。失敗的那一條同 `_unlink_all`。
+    """下載目錄那一側逐條刪，回傳真的刪掉幾個。空掉的目錄跟著收。失敗的那一條同 `_unlink_all`。
 
-    這一側不認人：complete 是 Berth 的下載目錄，不是使用者會換檔案的地方（brief §5.3）。
+    這一側不認人：complete 與 incomplete 是 Berth 的下載目錄，不是使用者會換檔案的地方
+    （brief §5.3）。
     """
     removed = 0
     for path in paths:

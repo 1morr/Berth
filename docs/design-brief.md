@@ -436,7 +436,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 - 移除 library 硬鏈接（Jellyfin 會在下次掃描少掉它）
 - 從 qBittorrent 移除 torrent（不刪檔）
-- 刪除 complete 檔案（要求先移除 torrent，否則拒絕）
+- 刪除下載目錄裡的檔案（要求先移除 torrent，否則拒絕）：下完的在 complete；還沒下完的在 Route 自己的 incomplete 目錄，只刪 qBittorrent 報的內容路徑（`content_path`）底下屬於這個 torrent 的檔案，沒報過內容路徑的不照 slug 猜（M4 票 74）
 - 清除帳本與 Job 紀錄（否則保留為歷史）
 
 顯示「預估可釋放空間」：只有當來源與所有鏈接都刪掉時才真的釋放，UI 要說清楚。
@@ -1411,6 +1411,7 @@ thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` �
 - **交一條 http 網址給 `torrents/add` 是背景抓取**：5.2.3 回 `202` + `pending_count: 1`，抓失敗之後**永遠沒有下文**——torrent 不會出現，而用戶端已經回過 2xx 了。所以 Berth 自己先把 torrent 抓下來（`adapters/torrent.py`），交出去的一律是磁力連結或位元組，這樣「收不收」當場就有答案（票 09）。
 - **`paused` 與 `stopped` 各版本只認一個，送錯的那個會靜默地開始下載**：4.4.5 `paused=true` → `pausedDL`、`stopped=true` → `queuedDL`（沒暫停）；5.2.3 `paused=true` → `stalledDL`（沒暫停）、`stopped=true` → `stoppedDL`。`torrents/add` 一律回 200，不認得的參數不報錯。plan §8.1 的版本判斷是必要條件，不是最佳化。
 - **`torrents/files[].name` 相對 `save_path`**（多檔會含 torrent 根目錄那一層），四種 `contentLayout` 組合都成立；`content_path` = save_path + 根目錄，單檔時指向檔案、多檔時指向目錄。單檔 + `Subfolder` 的子資料夾名是去掉副檔名的 torrent 名。**`save_path` 的尾斜線兩版不同**（4.4.5 `/downloads/`、5.2.3 `/downloads`），組路徑前要正規化。
+- **還沒下完時 `content_path` 落在分類的未完成目錄，`save_path` 已經是下完要搬去的那一個**（2026-10-13 M4 票 74 對 5.2.4 實測，e2e 套件內那一台）：`berth-tv` 分類底下停在 `stalledDL` 的一包，`torrents/info` 回 `save_path=/data/torrent/complete/tv`、`download_path=/data/torrent/incomplete/tv`、`content_path=/data/torrent/incomplete/tv/<根目錄>`。`torrents/files[].name` 照樣相對那一層（同上一條，只是那一層換成未完成目錄）。所以刪掉下到一半的那一包看的是 `content_path`，不是 `save_path`（`services/deletion._where_files_are`）。
 - `torrents/files` 的鍵兩版相同：`index`、`name`、`size`、`progress`、`priority`、`is_seed`、`piece_range`、`availability`。
 - **`torrents/categories` 兩版都回 `savePath`**（駝峰），沒有出現 `save_path`；5.2.3 另有 `download_path`、`ratio_limit`、`seeding_time_limit`、`inactive_seeding_time_limit`、`share_limit_action`。
 - **Host 檢查除了網域還比對 port**：`ServerDomains=*` 也擋 port 不符的 Host（實測 `Host: localhost:18080` → 401，容器 log 寫 `Invalid Host header, port mismatch`）。設成 `qbittorrent` 之後 `localhost:8080` 與 `127.0.0.1:8080` 全被擋。沒有 port 的 Host 一律放行。偏好鍵是 `web_ui_host_header_validation_enabled`（兩版都有）。實驗改的是 Web API 的 runtime 偏好 `web_ui_domain_list`，它對應設定檔的 `WebUI\ServerDomains`（同一個設定的兩種寫法），沒有另外測「預置 ini 鍵」那條路徑。→ compose 的 qBittorrent **發佈 port 只能內外兩側一起改**（只改外側，使用者就開不了 WebUI）：M3 票 06b 以 `QBITTORRENT_WEBUI_PORT` 同時設兩側與 `WEBUI_PORT`（plan §9.2）。

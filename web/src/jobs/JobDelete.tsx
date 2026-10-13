@@ -206,8 +206,7 @@ function Estimate({
     )
   }
 
-  // 來源與所有鏈接都刪掉才算數。其中一邊沒勾就是 0，不是「一半」。
-  const frees = scope.unlink && scope.deleteFiles ? estimate.reclaimable : 0
+  const line = freesLine(estimate, scope)
   const missing = estimate.links_missing + estimate.sources_missing
 
   return (
@@ -224,9 +223,9 @@ function Estimate({
         </p>
       )}
       <p className="max-w-prose text-xs text-ink">
-        {frees > 0
-          ? t('jobs.delete.estimate.frees', { size: formatSize(frees, i18n.language) })
-          : t('jobs.delete.estimate.freesNothing')}
+        {line.key === 'frees'
+          ? t('jobs.delete.estimate.frees', { size: formatSize(line.size, i18n.language) })
+          : t(`jobs.delete.estimate.${line.key}`)}
       </p>
       {estimate.held > 0 && (
         <p className="max-w-prose text-xs text-ink-dim">
@@ -235,6 +234,27 @@ function Estimate({
       )}
     </div>
   )
+}
+
+type FreesLine =
+  { key: 'frees'; size: number } | { key: 'freesNothing' | 'freesNothingKept' | 'freesNothingBare' }
+
+/**
+ * 「會空出多少」那一句說哪一種。
+ *
+ * 有鏈接時來源與所有鏈接都刪掉才算數，其中一邊沒勾就是 0，不是「一半」。**沒有鏈接時**（還在下載、或媒體庫
+ * 那一側早就不在了）只刪檔就是刪掉最後一個名字，也就沒有「兩邊」可言（M4 票 74）。
+ */
+function freesLine(estimate: DeletionEstimate, scope: DeleteScope): FreesLine {
+  if (estimate.links > 0) {
+    return scope.unlink && scope.deleteFiles && estimate.reclaimable > 0
+      ? { key: 'frees', size: estimate.reclaimable }
+      : { key: 'freesNothing' }
+  }
+  if (!scope.deleteFiles) return { key: 'freesNothingKept' }
+  return estimate.reclaimable > 0
+    ? { key: 'frees', size: estimate.reclaimable }
+    : { key: 'freesNothingBare' }
 }
 
 /** 刪完那一句。說的是**真的**做掉了什麼——後端回的那一份，不是勾選的回聲。 */
