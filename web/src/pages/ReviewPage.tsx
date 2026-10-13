@@ -12,6 +12,7 @@ import {
 import { PAGE_TITLE, TEXT_LINK } from '../components/controls'
 import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
+import { SectionHeading } from '../components/SectionHeading'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { AuditGroup } from '../review/AuditGroup'
 import { AuditSectionConfirm } from '../review/AuditSectionConfirm'
@@ -85,25 +86,23 @@ export function ReviewPage() {
               aria-labelledby={`review-${section.name}`}
               className="grid gap-3"
             >
-              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b-2 border-rule-strong pb-1.5">
-                <h2
-                  id={`review-${section.name}`}
-                  className="flex flex-wrap items-baseline gap-x-2 self-center"
-                >
-                  <span className="label text-ink">{t(`review.section.${section.name}`)}</span>{' '}
-                  {/* 光一個數字念出來沒有意義：看得見的是數字，聽得見的是帶單位的那一句（同 `WatchingRow`）。 */}
-                  <span aria-hidden="true" className="value text-xs text-ink-dim">
-                    {section.rows.length}
-                  </span>
-                  <span className="sr-only">
-                    {t('review.count', { count: section.rows.length })}
-                  </span>
-                </h2>
-                {/* 整段確認只在它比一組多做了事的時候給：audit 全在同一組裡時，那一組的鍵就是它。 */}
-                {audits.length > 1 && auditEntries(entries) > 1 && (
-                  <AuditSectionConfirm rows={audits} onDone={done} />
-                )}
-              </div>
+              <SectionHeading
+                id={`review-${section.name}`}
+                label={t(`review.section.${section.name}`)}
+                count={{
+                  value: section.rows.length,
+                  spoken: t('review.count', { count: section.rows.length }),
+                }}
+                extra={
+                  // 整段確認只在它比一組多做了事的時候給：audit 全在同一組裡時，那一組的鍵就是它。
+                  audits.length > 1 &&
+                  auditEntries(entries) > 1 && (
+                    <div className="ms-auto">
+                      <AuditSectionConfirm rows={audits} onDone={done} />
+                    </div>
+                  )
+                }
+              />
               <ul className="grid gap-3">
                 {entries.map((entry) => (
                   <li key={entryKey(entry)} className="min-w-0">

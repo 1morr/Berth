@@ -1141,6 +1141,65 @@ describe('媒體庫頁', () => {
       await waitFor(() => expect(router.state.location.search).toEqual({ years: [2022] }))
     })
 
+    // M4 票 99：原本只說「讀不到篩選選項」，不說為什麼。
+    it.each(REQUEST_FAILURES)(
+      '篩選選項讀不到（%s）時說出對的原因',
+      async (_, failure, expected) => {
+        render({ [`GET /api/inventory/${TV}/filters`]: failure })
+        const { queryClient } = renderApp(`/library/${TV}`)
+        // 送不到會重試三次（`retryUnlessRefused`），預設的間隔加倍要等七秒。
+        queryClient.setQueryDefaults(['inventoryFilters'], { retryDelay: 0 })
+
+        await userEvent.click(await findToggle('類型'))
+
+        const failed = await screen.findByTestId('request-failed')
+        expect(failed).toHaveTextContent(/讀不到這個媒體庫的篩選選項。/)
+        expect(failed).toHaveTextContent(expected)
+        expect(failed).not.toHaveTextContent(/Jellyfin/)
+        expect(screen.getByRole('button', { name: '重試' })).toBeVisible()
+      },
+    )
+
+    it('篩選選項讀不到是因為問不到 Jellyfin：怪 Jellyfin，貼原文', async () => {
+      render({
+        [`GET /api/inventory/${TV}/filters`]: {
+          status: 503,
+          body: {
+            detail: { reason: 'jellyfin_unreachable', detail: 'GET /Genres: connection refused' },
+          },
+        },
+      })
+      renderApp(`/library/${TV}`)
+
+      await userEvent.click(await findToggle('類型'))
+
+      const panel = within(await screen.findByRole('group', { name: '類型' }))
+      expect(await panel.findByText(/問不到 Jellyfin，讀不到這個媒體庫的篩選選項/)).toBeVisible()
+      expect(panel.getByText('GET /Genres: connection refused')).toBeVisible()
+      expect(panel.queryByTestId('request-failed')).not.toBeInTheDocument()
+      expect(panel.getByRole('button', { name: '重試' })).toBeVisible()
+    })
+
+    it('篩選選項讀到一半被收走看這個媒體庫的權限：照實說，不說後端出錯', async () => {
+      render({
+        [`GET /api/inventory/${TV}/filters`]: {
+          status: 404,
+          body: {
+            detail: { reason: 'library_not_visible', detail: `library ${TV} is not visible` },
+          },
+        },
+      })
+      renderApp(`/library/${TV}`)
+
+      await userEvent.click(await findToggle('類型'))
+
+      const panel = within(await screen.findByRole('group', { name: '類型' }))
+      expect(await panel.findByRole('alert')).toHaveTextContent(
+        /找不到這個媒體庫，或你沒有權限看它/,
+      )
+      expect(panel.queryByText(/後端出錯了/)).not.toBeInTheDocument()
+    })
+
     it('網址上選著、這個媒體庫卻沒有的類型照樣列出來，取消得了', async () => {
       render({
         [`GET /api/inventory/${TV}?genres=Mecha`]: { body: wall() },

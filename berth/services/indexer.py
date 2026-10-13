@@ -488,6 +488,10 @@ async def search_indexers(
     return IndexerSearchResult(query=query, sites=tuple(sites), error="")
 
 
+class IndexerNotRemovedError(Exception):
+    """移除時 Prowlarr 沒答上來或沒收下：什麼都沒記下，訊息是原文（M4 票 99）。"""
+
+
 @command(Effect.REVERSIBLE, inverse="indexer.apply_default_indexers")
 async def remove_indexer(
     session: AsyncSession, factory: ServiceClientFactory, indexer_id: int
@@ -497,7 +501,8 @@ async def remove_indexer(
     **只移除 Berth 加得回去的站**（推薦清單與公開的 torrent 站，`_offered`）：反向命令是再加一次
     那一站，公開站加回來就是原樣；私站帶帳號，Berth 加不回去，所以不碰——不論是誰加的（M4 票 09）。
     那一站的「加入結果」一起拿掉——留著一條綠的等於說它還在；最後一站也移除時，精靈就回到頁 4
-    （`_indexer_settled`）。
+    （`_indexer_settled`）。Prowlarr 沒答上來是 `IndexerNotRemovedError`：畫面要分得出是它還是
+    Berth。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)
@@ -514,6 +519,8 @@ async def remove_indexer(
             raise ValueError(f"{gone.name}: Berth only removes the public sites it can add back")
         if gone is not None:
             await client.delete_indexer(indexer_id)
+    except ServiceError as exc:
+        raise IndexerNotRemovedError(message(exc)) from exc
     finally:
         await client.aclose()
 

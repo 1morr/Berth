@@ -21,6 +21,8 @@ API 欄位與 `GET /api/settings/services` 只有 Berth 自己的畫面在用，
   README 與 Unraid 那一段連到 `https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml` 與
   `.../example.env`，永遠是最新正式版的檔案，預發佈不算。0.2.4 已補上這兩個附件。要固定某一版，把 `latest/download`
   換成 `download/v<版號>`（[docs/guide/upgrading.md](docs/guide/upgrading.md)）。已經在跑的不用改任何東西。
+- **審核頁每一段的標題改用全站同一種區塊標題**（M4 票 99）：計數從標題裡移到標題旁，螢幕閱讀器念段落名時不再
+  連著件數（件數照樣念得到，帶單位）；「全部確認」仍在標題列右側。
 
 ### Removed
 
@@ -69,6 +71,10 @@ API 欄位與 `GET /api/settings/services` 只有 Berth 自己的畫面在用，
   不再說「連不上套件內的 Prowlarr」（這兩種外部服務問不到時，Berth 本來就會回一句它們自己的原因）。RSS 綁定與一次性連結
   的 TMDB 搜尋沒成時，之前什麼都不說。精靈頁 1 重新登入換 key 時，Jellyfin 沒給 key 改說那一步為什麼沒成，不再說
   「請求沒跑完」。
+- **最後三處也照原因說，不再一律怪外部服務**（M4 票 99）：移除 Prowlarr 的站沒成功時，之前一律說「Prowlarr 可能正在重啟」，
+  媒體庫路徑那一頁的重新讀取沒成時一律說「讀不到 Jellyfin 現在的媒體庫」，媒體庫的類型、年份選項讀不到時不說原因。
+  現在 Prowlarr、Jellyfin 真的沒答上來（或 Prowlarr 拒絕了）才怪它們，原文附上；看不到這個媒體庫時照實說；其餘照請求為什麼沒成說。
+  API：`DELETE /api/setup/indexers/{id}` 在 Prowlarr 沒答上來或拒絕時回 502 帶原文，之前是不帶原因的 500。
 - **巢狀的 Route，媒體庫裡的檔案歸到較深的那一條**（M4 票 87）：較淺那一條的目標路徑寫得不正規（例如結尾多打了幾個
   `/`）、字串反而比較長時，媒體庫、反查與刪除 Route 前的引用數會把檔案算給較淺的那一條。現在照路徑段數比，
   與認領同一支判斷。

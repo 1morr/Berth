@@ -76,7 +76,7 @@ export function IndexerSettingsPage() {
                 onTest: testIndexers,
                 onSearch: searchIndexers,
                 removing: remove.isPending ? remove.variables : null,
-                removeFailed: remove.isError,
+                removeError: remove.error,
                 onRemove: (id) => remove.mutate(id),
               }}
               rereading={reread.isPending}

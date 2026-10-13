@@ -38,6 +38,7 @@ from berth.domain import (
 )
 from berth.services.clients import bundled_targets
 from berth.services.indexer import (
+    IndexerNotRemovedError,
     IndexerSetupStatus,
     add_recommended_indexers,
     apply_default_indexers,
@@ -881,12 +882,15 @@ async def delete_indexer(
 ) -> IndexerSetupOut:
     """從套件內的 Prowlarr 移除一站（票 06e）。已經不在的站照樣回 200：結果就是它不在了。
 
-    對既有的索引站、與 Berth 加不回去的站（私站）回 422（brief §16.4）。
+    對既有的索引站、與 Berth 加不回去的站（私站）回 422（brief §16.4）；Prowlarr 沒答上來或拒絕了是
+    502，帶原文（與移除空分類同一種，M4 票 99）。
     """
     try:
         result = await remove_indexer(session, factory, indexer_id)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    except IndexerNotRemovedError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
     return IndexerSetupOut.of(result, config)
 
 

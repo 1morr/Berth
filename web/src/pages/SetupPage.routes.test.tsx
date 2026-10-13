@@ -652,6 +652,42 @@ describe('頁 3 的失敗', () => {
     expect(screen.getByText(/'Movies' without a path/)).toBeInTheDocument()
   })
 
+  // M4 票 99：原本不管錯誤是什麼都說「讀不到 Jellyfin 現在的媒體庫」。
+  it.each(REQUEST_FAILURES)('進頁的重讀沒成（%s）：說出對的原因', async (_, failure, expected) => {
+    stubPage({ ...BUNDLED_PAGE, [ROUTES]: { body: routeSetup() }, [REREAD]: failure })
+
+    renderInRoute(<SetupPage />)
+
+    const failed = await screen.findByTestId('request-failed')
+    expect(failed).toHaveTextContent(/沒有重新讀取，下面是上一次讀到的那一份。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/Jellyfin/)
+    // 上一次讀到的那一份照樣在。
+    expect(screen.getByRole('button', { name: '重新讀取 Jellyfin 媒體庫' })).toBeEnabled()
+  })
+
+  it('進頁的重讀問不到 Jellyfin（503）：怪 Jellyfin，原文收進技術細節', async () => {
+    stubPage({
+      ...BUNDLED_PAGE,
+      [ROUTES]: { body: routeSetup() },
+      [REREAD]: {
+        status: 503,
+        body: {
+          detail: {
+            reason: 'jellyfin_unreachable',
+            detail: 'GET /Library/VirtualFolders: connection refused',
+          },
+        },
+      },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByText(/問不到 Jellyfin，讀不到它現在的媒體庫/)).toBeVisible()
+    expect(screen.queryByTestId('request-failed')).not.toBeInTheDocument()
+    expect(screen.getByText('GET /Library/VirtualFolders: connection refused')).toBeInTheDocument()
+  })
+
   it('認不得的失敗仍落回那句通用的話：只有說得出原因時才換掉它', async () => {
     stubPage({
       ...BUNDLED_PAGE,

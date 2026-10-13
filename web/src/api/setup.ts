@@ -350,6 +350,16 @@ export function removeIndexer(id: number): Promise<IndexerSetup> {
   return apiDelete<IndexerSetup>(`/setup/indexers/${id}`)
 }
 
+/**
+ * 移除時 Prowlarr 沒答上來或拒絕了的原文（502，M4 票 99），其餘是 `null`——照請求為什麼沒成說。
+ * 前置代理回的 502 不是 JSON、沒有原文，那是 Berth 自己沒回應，不算在這裡。
+ */
+export function prowlarrRemoveFailure(error: unknown): string | null {
+  return error instanceof ApiError && error.status === 502 && typeof error.detail === 'string'
+    ? error.detail
+    : null
+}
+
 /** TMDB 頁沒有 `skip`：憑證是使用者自備的必填項，測得過才走得到完成（票 02b）。 */
 export function testTmdb(api_key: string): Promise<TmdbSetup> {
   return apiPost<TmdbSetup>('/setup/tmdb/test', { api_key } satisfies Schemas['TmdbTestIn'])

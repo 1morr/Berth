@@ -1053,6 +1053,19 @@ class TestSource:
         assert [row["definition_name"] for row in after.json()["sites"]] == ["dmhy"]
         assert prowlarr.deleted == [ids["yts"]]
 
+    def test_removing_a_site_while_prowlarr_is_down_says_so(
+        self, client: TestClient, prowlarr: FakeProwlarrClient
+    ) -> None:
+        """Prowlarr 沒答上來是 502 帶原文，不是一聲 500（M4 票 99）：畫面要分得出是它還是 Berth。"""
+        added = client.post("/api/setup/indexers/apply", json={"indexers": ["yts"]}).json()
+        prowlarr.indexers_error = ServiceUnavailableError("GET /api/v1/indexer: connection refused")
+
+        after = client.delete(f"/api/setup/indexers/{added['sites'][0]['indexer_id']}")
+
+        assert after.status_code == 502
+        assert after.json() == {"detail": "GET /api/v1/indexer: connection refused"}
+        assert prowlarr.deleted == []
+
     def test_only_the_indexer_half_can_be_skipped_and_unskipped(self, client: TestClient) -> None:
         """跳過是可以反悔的。TMDB 那一半根本沒有這一支（票 02b）。"""
         assert client.post("/api/setup/indexers/skip", json={}).json()["skipped"] is True

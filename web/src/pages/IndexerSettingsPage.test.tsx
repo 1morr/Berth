@@ -170,6 +170,46 @@ describe('設定 → Prowlarr', () => {
     expect(screen.getByRole('checkbox', { name: 'YTS' })).not.toBeChecked()
   })
 
+  /** 移除 YTS，回傳移除那一區說的話（`Notice` 是 `alert`）。 */
+  async function removeYts() {
+    const user = userEvent.setup()
+    renderApp('/settings/indexers')
+    const trial = await screen.findByTestId('trial')
+    const yts = within(within(trial).getByText('YTS').closest('li')!)
+    await user.click(yts.getByRole('button', { name: '移除' }))
+    await user.click(yts.getByRole('button', { name: '確定移除' }))
+    return (await screen.findByRole('alert')).parentElement!
+  }
+
+  // M4 票 99：原本不管錯誤是什麼都說「Prowlarr 可能正在重啟」。
+  it.each(REQUEST_FAILURES)('移除沒成功（%s）時說出對的原因', async (_, failure, expected) => {
+    render({ [REMOVE_YTS]: failure })
+
+    const failed = await removeYts()
+    expect(failed).toHaveTextContent(/移除沒成功。/)
+    expect(failed).toHaveTextContent(expected)
+    expect(failed).not.toHaveTextContent(/Prowlarr/)
+  })
+
+  it('移除時 Prowlarr 沒答上來或拒絕了（502）：怪 Prowlarr，原文收進技術細節', async () => {
+    render({
+      [REMOVE_YTS]: { status: 502, body: { detail: 'GET /api/v1/indexer: connection refused' } },
+    })
+
+    const failed = await removeYts()
+    expect(failed).toHaveTextContent(/Prowlarr 沒有做成這一次移除/)
+    expect(failed).not.toHaveTextContent(/berth 容器的 log/)
+    expect(within(failed).getByText('GET /api/v1/indexer: connection refused')).toBeInTheDocument()
+  })
+
+  it('前置代理回的 502 沒有原文：那是 Berth 沒回應，不怪 Prowlarr', async () => {
+    render({ [REMOVE_YTS]: { status: 502, body: '<html>Bad Gateway</html>' } })
+
+    const failed = await removeYts()
+    expect(failed).not.toHaveTextContent(/Prowlarr/)
+    expect(failed).toHaveTextContent(/移除沒成功。/)
+  })
+
   it('改 Prowlarr 介面登入：帳號預填目前那一個、新密碼兩次，只送登入那一支（M4 票 07、78）', async () => {
     const stub = render({
       [INDEXERS]: { body: { ...withSites(), web_ui_username: 'skipper' } },
