@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-10-14
+
+**從 0.2.6 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變，也沒有
+資料庫 migration。image 是 `ghcr.io/1morr/berth:0.2.7`，同時是 `:0.2` 與 `:latest`。下面改到的 API（多一個欄位）
+只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可。
+
 ### Changed
 
 - **換 qBittorrent 時說出還沒下完的那幾筆**（M4 票 102）：它們的 torrent 留在原本那一台，換台之後新那一台上找不到，
