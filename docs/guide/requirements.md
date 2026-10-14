@@ -79,7 +79,7 @@ are pasted into Compose Manager and nothing is copied to the server:
    qBittorrent.
 4. **Edit Stack → ENV File**: paste all of `example.env` the same way, change the values below, **Save Changes**.
 5. **Update Stack**, not **Compose Up**. Compose Up starts only the images already on the server; if this machine
-   ever ran Berth before, it brings up that old version (this happened: 0.2.2). Update Stack pulls first, then
+   ever ran Berth before, it brings up that old version. Update Stack pulls first, then
    starts. Use it for the first start on any server that might hold an older image.
 
 Compose Manager keeps both files on the USB flash drive (`/boot/config/plugins/compose.manager/projects/berth/`).

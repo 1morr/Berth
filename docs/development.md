@@ -766,4 +766,4 @@ docs/             設計綱要、實作計劃、進度、本檔
 - `uv sync` 出現 `failed to hardlink ... (os error 396)`：repo 放在雲端同步目錄（OneDrive 之類）時硬鏈接不可用，改用 `UV_LINK_MODE=copy uv sync`，或在使用者層級的 `uv.toml` 設 `link-mode = "copy"`。
 - 本機（目前開發用的 Windows 機器）偶發原生崩潰：退出碼 `3221225477`（0xC0000005，access violation）或
   `3221225501`（0xC000001D，illegal instruction），出現在 eslint、prettier、pytest、e2e 的 web server。同一指令
-  重跑會過，與改動無關，是這台機器的硬體問題（同期有多次藍屏），不是測試偶發，也不要為它開票。重跑一次仍崩才當真的失敗。
+  重跑會過，與改動無關，多半是這台機器的硬體不穩（同期有多次藍屏，待送修），不是測試偶發，也不要為它開票。重跑一次仍崩才當真的失敗。
