@@ -289,6 +289,29 @@ describe.each(LANGUAGES)('%s', (language) => {
       expect(within(login).queryByText(t('indexer.login.required'))).not.toBeInTheDocument()
     })
 
+    it('登入沒設成的補法連到 Prowlarr 的一般設定頁：它是 BrowserRouter，`/#/…` 會落在首頁（M4 票 102）', async () => {
+      await speak()
+      stubApi({
+        [STATUS]: {
+          body: setupStatus({ current_step: 5, owner: 'skipper', services: ALL_BUNDLED }),
+        },
+        [INDEXERS]: {
+          body: indexerSetup({
+            sites: [site(RECOMMENDED[0], 1)],
+            steps: [step('prowlarr_login', 'failed', 'skipper')],
+          }),
+        },
+        [TMDB]: { body: tmdbSetup() },
+      })
+
+      renderInRoute(<SetupPage />, '/setup?step=4')
+
+      const login = await screen.findByTestId('prowlarr-login')
+      expect(
+        await within(login).findByText(`http://${window.location.hostname}:9696/settings/general`),
+      ).toBeVisible()
+    })
+
     it.each([
       [true, 'status.ok'],
       [false, 'status.skipped'],

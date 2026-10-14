@@ -331,6 +331,9 @@ def _measure(paths: Sequence[Path]) -> _Measured:
     （帳本記的來源與 `job_files` 組出來的，qBittorrent 搬過家之後就會分岔）它仍然只是一個
     名字。當成兩個算的話，只刪來源看起來就像連最後一個名字都刪掉了——畫面於是報出一個根本
     不會發生的釋放量，而媒體庫那一半明明還在。
+
+    量的是**實際佔用**（`PathFacts.allocated`），不是表觀大小（M4 票 102）：下到一半的
+    sparse 檔表觀上已經是整個檔案。complete 那一側同一條規則，所以數字以區塊取整。
     """
     names: dict[tuple[int, int], set[str]] = defaultdict(set)
     facts: dict[tuple[int, int], fs.PathFacts] = {}
@@ -347,8 +350,10 @@ def _measure(paths: Sequence[Path]) -> _Measured:
         found.append(path)
     return _Measured(
         found=found,
-        bytes=sum(info.size for info in facts.values()),
-        reclaimable=sum(info.size for key, info in facts.items() if len(names[key]) >= info.links),
+        bytes=sum(info.allocated for info in facts.values()),
+        reclaimable=sum(
+            info.allocated for key, info in facts.items() if len(names[key]) >= info.links
+        ),
     )
 
 

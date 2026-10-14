@@ -14,7 +14,8 @@ import { TechnicalDetails } from '../components/TechnicalDetails'
  * 預置的免密白名單——它不經 Berth 的 API、清單問不到，所以由呼叫端說那一台是不是套件內的。連不到時
  * 列 Berth 記得建過的，照實說確認不了現況。
  *
- * **分類裡的 torrent 會留在原本那一台做種**，Berth 換台之後不再追蹤（M4 票 65，審計 P1-4）。
+ * **分類裡的 torrent 會留在原本那一台做種**，Berth 換台之後不再追蹤（M4 票 65，審計 P1-4）。還沒下完的那幾筆
+ * Job 例外：poller 在新那一台上找不到它們，各開一件 `client_removed`，所以照實說並列出名字（M4 票 102）。
  * **能移除的只有空的 `berth-*` 分類**，而且是勾選、不是按鈕：跟著確認換台一起送（`ServiceChoice`），
  * 取消就什麼都不動（審計 P2-9）。連不到時沒有勾選。
  */
@@ -104,6 +105,26 @@ export function LeftoverList({
           data.categories.length > 0 && (
             <p className="max-w-prose text-xs text-ink">{t('choice.leftovers.seedingUnknown')}</p>
           )}
+      {/* 讀的是 Berth 自己的 Job，連不到原本那一台也說得出（M4 票 102）。 */}
+      {data.in_flight.length > 0 && (
+        <div data-testid="in-flight" className="grid gap-1">
+          <p className="max-w-prose text-xs text-ink">
+            {t('choice.leftovers.inFlight', {
+              count: data.in_flight.length,
+              issue: t('issues.type.client_removed'),
+              resubmit: t('issues.action.resubmit'),
+              accept: t('issues.action.accept_removal'),
+            })}
+          </p>
+          <ul className="grid gap-1 text-xs text-ink">
+            {data.in_flight.map((job) => (
+              <li key={job.hash} className="value wrap-anywhere">
+                {job.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {!data.reachable && <TechnicalDetails lines={[data.base_url, data.error]} />}
       {kind === 'qbittorrent' && empty.length > 0 && (
         <Checkbox

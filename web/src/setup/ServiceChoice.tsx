@@ -164,10 +164,24 @@ export function ServiceChoice({
   const [focusPanel, setFocusPanel] = useState(false)
   // 換台框裡「一併移除空的 berth- 分類」的勾選（M4 票 65）：跟著確認換台一起送，不另外按。
   const [removeEmpty, setRemoveEmpty] = useState(false)
+  // 「改位址」表單裡現在打的位址；沒打開或還沒改是 `null`。
+  const [address, setAddress] = useState<string | null>(null)
   const selected = sent ?? draft ?? service?.origin ?? null
   const switching = draft !== null && service !== undefined && draft !== service.origin
   // 這一頁有結果時換另一格：先確認。從既有換走，Berth 沒寫過那一台，說的只有這一頁要重做。
   const confirming = switching && Boolean(switchWarning)
+  // 「改位址」打的是另一台（M4 票 102）：後端照樣算換台（`choose_service` 的 `moved`），所以同一份換台說明與
+  // 留下的東西就地加在表單裡，「測試連線」就是確認。只改憑證、打回原本那一個都不是。位址照後端存之前的樣子比
+  // （`api/setup.py` 去掉頭尾空白與結尾的 `/`）。
+  const typedAddress = address?.trim().replace(/\/+$/, '') ?? ''
+  const readdressing =
+    editing &&
+    !switching &&
+    kind !== 'jellyfin' &&
+    Boolean(switchWarning) &&
+    service?.origin === 'existing' &&
+    typedAddress !== '' &&
+    typedAddress !== service.base_url
   const warning = service?.origin === 'existing' ? t(`choice.switchAway.${kind}`) : switchWarning
   const name = t(SERVICE_LABEL[kind])
   // 只有 Berth 或容器停了時（M4 票 30、35）：照常列出、不預選、不停用，只說它沒在跑與怎麼起回來。
@@ -180,7 +194,7 @@ export function ServiceChoice({
   /** 送出一個選擇：回來之前那一格就是選中的、另一格停用。換台時帶上移除空分類的勾選。 */
   function choose(...[input, ...done]: Parameters<typeof onChoose>) {
     setSent(input.origin)
-    const removing = confirming && kind === 'qbittorrent' && removeEmpty
+    const removing = (confirming || readdressing) && kind === 'qbittorrent' && removeEmpty
     onChoose(removing ? { ...input, remove_empty_categories: true } : input, ...done)
   }
 
@@ -246,6 +260,7 @@ export function ServiceChoice({
     choose(input, () => {
       onDraft(null)
       setEditing(false)
+      setAddress(null)
       setRemoveEmpty(false)
     })
   }
@@ -273,21 +288,6 @@ export function ServiceChoice({
   const showExistingForm =
     selected === 'existing' &&
     (draft === 'existing' || editing || service?.state !== 'ok' || signsIn)
-  const form = showExistingForm && (
-    <ExistingForm
-      kind={kind}
-      status={status}
-      service={service?.origin === 'existing' && !edited ? service : undefined}
-      initialUrl={service?.origin === 'existing' ? service.base_url : ''}
-      inUse={service?.state === 'ok'}
-      choosing={choosing}
-      refusal={edited ? null : refusal}
-      signIn={signIn && { refusal: edited ? null : signIn.refusal }}
-      focusFirst={editing}
-      onEdit={() => setEdited(true)}
-      onSubmit={chooseExisting}
-    />
-  )
   const leftovers = kind !== 'jellyfin' && (
     <>
       <LeftoverList
@@ -305,6 +305,30 @@ export function ServiceChoice({
         </div>
       )}
     </>
+  )
+  const form = showExistingForm && (
+    <ExistingForm
+      kind={kind}
+      status={status}
+      service={service?.origin === 'existing' && !edited ? service : undefined}
+      initialUrl={service?.origin === 'existing' ? service.base_url : ''}
+      inUse={service?.state === 'ok'}
+      choosing={choosing}
+      refusal={edited ? null : refusal}
+      signIn={signIn && { refusal: edited ? null : signIn.refusal }}
+      focusFirst={editing}
+      onEdit={() => setEdited(true)}
+      onAddress={setAddress}
+      aside={
+        readdressing && (
+          <div className="grid gap-2">
+            <p className="max-w-prose text-xs text-ink">{warning}</p>
+            {leftovers}
+          </div>
+        )
+      }
+      onSubmit={chooseExisting}
+    />
   )
   const cancelButton = (
     <div>
@@ -478,6 +502,8 @@ export function ServiceChoice({
                 onClick={() => {
                   setEditing(false)
                   setEdited(false)
+                  setAddress(null)
+                  setRemoveEmpty(false)
                   // 焦點回到「改位址」（DESIGN〈The Focus Follows The Confirm Rule〉）：它要等表單收起、
                   // 測試列重新畫出來才在，所以記一筆，由測試列掛上時接手。
                   setRefocusEdit(true)
@@ -601,6 +627,8 @@ export function ExistingForm({
   signIn,
   focusFirst,
   onEdit,
+  onAddress,
+  aside,
   onSubmit,
 }: {
   kind: ServiceKind
@@ -622,6 +650,10 @@ export function ExistingForm({
   focusFirst: boolean
   /** 任何一格改了：上一次的結果與拒絕不再對得上這些值。 */
   onEdit: () => void
+  /** 位址欄改了，帶現在的值：「改位址」打的是不是另一台由呼叫端判斷（M4 票 102）。 */
+  onAddress?: (baseUrl: string) => void
+  /** 送出鍵上方多說的：「改位址」換到另一台時的換台說明與留下的東西。 */
+  aside?: ReactNode
   onSubmit: (input: ChoiceInput) => void
 }) {
   const { t } = useTranslation()
@@ -712,6 +744,7 @@ export function ExistingForm({
         onChange={(event) => {
           setBaseUrl(event.target.value)
           onEdit()
+          onAddress?.(event.target.value)
         }}
         error={typed ?? (field === 'address' ? said : undefined)}
       />
@@ -800,6 +833,7 @@ export function ExistingForm({
             })}
           </Notice>
         )}
+      {aside}
       <div>
         <PrimaryButton type="submit" busy={choosing}>
           {signIn

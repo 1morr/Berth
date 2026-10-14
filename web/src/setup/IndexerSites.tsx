@@ -28,7 +28,7 @@ import { TechnicalDetails } from '../components/TechnicalDetails'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { languageName } from './languageName'
 import { useRemembered } from './remembered'
-import { prowlarrWeb } from './serviceWeb'
+import { PROWLARR_PAGE, prowlarrWeb } from './serviceWeb'
 import { useSiteChecks, withChecks, type CheckState } from './siteChecks'
 import { hostOf } from './signals'
 import { GAP } from './indexerGaps'
@@ -158,7 +158,7 @@ export function AddedSites({
         {bundled ? t('indexer.added.lede') : t('indexer.added.existingLede')}{' '}
         {!bundled && webUrl && (
           <a
-            href={`${webUrl}/#/indexers`}
+            href={`${webUrl}${PROWLARR_PAGE.indexers}`}
             target="_blank"
             rel="noreferrer noopener"
             className={TEXT_LINK}
@@ -568,7 +568,7 @@ export function AddSites({
         {t('indexer.add.privateSites')}{' '}
         {webUrl && (
           <a
-            href={`${webUrl}/#/indexers`}
+            href={`${webUrl}${PROWLARR_PAGE.indexers}`}
             target="_blank"
             rel="noreferrer noopener"
             className={TEXT_LINK}

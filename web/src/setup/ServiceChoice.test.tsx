@@ -971,6 +971,7 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
       login: '',
       failure: null,
       error: '',
+      in_flight: [],
       ...overrides,
     }
   }
@@ -999,6 +1000,55 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
     expect(panel).toHaveTextContent('Berth 在原本那一台建的，換了之後留在那裡')
     expect(panel).toHaveTextContent(
       '這 2 個 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
+    )
+  })
+
+  it('還在下載的 Job：照實說換台之後會各變成一件待處理、能在那裡重新送單，並列出是哪幾筆（M4 票 102）', async () => {
+    stubApi({
+      [LEFTOVERS]: {
+        body: leftovers({
+          in_flight: [
+            { hash: 'a', name: '[ANi] SPY×FAMILY - 13' },
+            { hash: 'b', name: 'Some.Movie.2024.1080p' },
+          ],
+        }),
+      },
+    })
+    const { panel } = await openSwitch()
+
+    const pending = await within(panel).findByTestId('in-flight')
+    expect(pending).toHaveTextContent(
+      '還沒下完的 2 筆例外，Berth 仍記著它們：換台之後新那一台上找不到，各會變成一件待處理（torrent 已經不在 qBittorrent 上）',
+    )
+    expect(pending).toHaveTextContent('「重新送單」')
+    expect(within(pending).getByRole('list')).toHaveTextContent('[ANi] SPY×FAMILY - 13')
+    expect(within(pending).getByRole('list')).toHaveTextContent('Some.Movie.2024.1080p')
+  })
+
+  it('沒有還在下載的 Job 就不說', async () => {
+    stubApi({ [LEFTOVERS]: { body: leftovers() } })
+    const { panel } = await openSwitch()
+
+    await within(panel).findByText('berth-movies')
+    expect(within(panel).queryByTestId('in-flight')).toBeNull()
+  })
+
+  it('連不到原本那一台也列得出還在下載的 Job：讀的是 Berth 自己記的', async () => {
+    stubApi({
+      [LEFTOVERS]: {
+        body: leftovers({
+          reachable: false,
+          categories: [{ name: 'berth-shows', torrents: null }],
+          failure: 'unreachable',
+          error: 'qbittorrent: connection refused',
+          in_flight: [{ hash: 'a', name: '[ANi] SPY×FAMILY - 13' }],
+        }),
+      },
+    })
+    const { panel } = await openSwitch()
+
+    expect(await within(panel).findByTestId('in-flight')).toHaveTextContent(
+      '還沒下完的 1 筆例外，Berth 仍記著它',
     )
   })
 
@@ -1157,10 +1207,12 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
     )
   })
 
-  it('英文介面：做種、白名單與勾選', async () => {
+  it('英文介面：做種、還在下載的、白名單與勾選', async () => {
     await i18next.changeLanguage('en')
     try {
-      stubApi({ [LEFTOVERS]: { body: leftovers() } })
+      stubApi({
+        [LEFTOVERS]: { body: leftovers({ in_flight: [{ hash: 'a', name: 'Some.Movie.2024' }] }) },
+      })
       const user = userEvent.setup()
       mount(
         'qbittorrent',
@@ -1179,6 +1231,9 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
       ).not.toBeChecked()
       expect(panel).toHaveTextContent(
         'These 2 torrents stay on the old one (seeding or downloading as before); Berth stops tracking them after the switch.',
+      )
+      expect(within(panel).getByTestId('in-flight')).toHaveTextContent(
+        'The exception is one download that has not finished, which Berth still tracks: the new one will not find it after the switch, so it becomes an issue (The torrent is no longer in qBittorrent).',
       )
       expect(within(panel).getByText('Password-free allowlist').closest('li')).toHaveTextContent(
         'untick “Bypass authentication for clients in whitelisted IP subnets”',
@@ -1203,6 +1258,125 @@ describe('換台的確認框列出 Berth 在原本那一台留下的東西（M4 
 
     expect(await within(panel).findByText('Nyaa.si、dmhy')).toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: /移除/ })).toBeNull()
+  })
+
+  describe('「改位址」從一台既有換到另一台既有，也走換台（M4 票 102，票 65 留下的）', () => {
+    async function openEdit(onChoose = vi.fn()) {
+      const user = userEvent.setup()
+      mount(
+        'qbittorrent',
+        [
+          chosen({
+            kind: 'qbittorrent',
+            origin: 'existing',
+            base_url: 'http://nas:8080',
+            reason: 'connected',
+            detail: '5.2.3',
+          }),
+        ],
+        { switchWarning: i18next.t('choice.switchWarning.qbittorrent'), onChoose },
+      )
+      await user.click(screen.getByRole('button', { name: '改位址或憑證' }))
+      const address = screen.getByRole('textbox', { name: '位址' })
+      return { user, address }
+    }
+
+    it('打了另一個位址：就地說這是換台、列出原本那一台留下的，勾了移除就跟著「測試連線」一起送', async () => {
+      stubApi({ [LEFTOVERS]: { body: leftovers() } })
+      const onChoose = vi.fn()
+      const { user, address } = await openEdit(onChoose)
+      expect(screen.queryByText(i18next.t('choice.switchAway.qbittorrent'))).toBeNull()
+
+      await user.clear(address)
+      await user.type(address, 'http://nas2:8080')
+
+      expect(screen.getByText(i18next.t('choice.switchAway.qbittorrent'))).toBeVisible()
+      expect(await screen.findByText('berth-movies')).toBeVisible()
+      // 位址欄還是同一個元素、焦點沒有被搶走：說明是加在表單旁邊，不是把表單換掉。
+      expect(address).toHaveFocus()
+      await user.click(screen.getByRole('checkbox', { name: /一併移除/ }))
+      await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+      expect(onChoose).toHaveBeenCalledWith(
+        expect.objectContaining({
+          origin: 'existing',
+          base_url: 'http://nas2:8080',
+          remove_empty_categories: true,
+        }),
+        expect.any(Function),
+      )
+    })
+
+    it('位址沒變（只改憑證、或打回原本那一個）：不是換台，不說、不列、不帶移除', async () => {
+      const api = stubApi({ [LEFTOVERS]: { body: leftovers() } })
+      const onChoose = vi.fn()
+      const { user, address } = await openEdit(onChoose)
+
+      await user.clear(address)
+      await user.type(address, 'http://nas2:8080')
+      await user.click(await screen.findByRole('checkbox', { name: /一併移除/ }))
+      await user.clear(address)
+      // 後端存之前去掉頭尾空白與結尾的 `/`（`api/setup.py`），所以這也是原本那一台。
+      await user.type(address, ' http://nas:8080/ ')
+
+      expect(screen.queryByText(i18next.t('choice.switchAway.qbittorrent'))).toBeNull()
+      expect(screen.queryByRole('checkbox', { name: /一併移除/ })).toBeNull()
+      await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+      expect(onChoose).toHaveBeenCalledWith(
+        expect.not.objectContaining({ remove_empty_categories: expect.anything() }),
+        expect.any(Function),
+      )
+      expect(api.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
+    })
+
+    it('Prowlarr 也一樣：打了另一個位址就說是換台、列出 Berth 加的站，沒有移除的勾選', async () => {
+      stubApi({
+        'GET /api/setup/services/prowlarr/leftovers': {
+          body: leftovers({ kind: 'prowlarr', categories: [], sites: ['Nyaa.si'] }),
+        },
+      })
+      const user = userEvent.setup()
+      mount(
+        'prowlarr',
+        [
+          chosen({
+            kind: 'prowlarr',
+            origin: 'existing',
+            base_url: 'http://nas:9696',
+            reason: 'connected',
+            detail: '2.6.5',
+          }),
+        ],
+        { switchWarning: i18next.t('choice.switchWarning.prowlarr') },
+      )
+      await user.click(screen.getByRole('button', { name: '改位址或憑證' }))
+      const address = screen.getByRole('textbox', { name: '位址' })
+      await user.clear(address)
+      await user.type(address, 'http://nas2:9696')
+
+      expect(screen.getByText(i18next.t('choice.switchAway.prowlarr'))).toBeVisible()
+      expect(await screen.findByText('Nyaa.si')).toBeVisible()
+      expect(screen.queryByRole('checkbox')).toBeNull()
+    })
+
+    it('取消「改位址」：勾選收回，再打開時是沒勾的', async () => {
+      stubApi({ [LEFTOVERS]: { body: leftovers() } })
+      const onChoose = vi.fn()
+      const { user, address } = await openEdit(onChoose)
+      await user.clear(address)
+      await user.type(address, 'http://nas2:8080')
+      await user.click(await screen.findByRole('checkbox', { name: /一併移除/ }))
+
+      await user.click(screen.getByRole('button', { name: '取消' }))
+      await user.click(screen.getByRole('button', { name: '改位址或憑證' }))
+      const again = screen.getByRole('textbox', { name: '位址' })
+      await user.clear(again)
+      await user.type(again, 'http://nas2:8080')
+
+      expect(await screen.findByRole('checkbox', { name: /一併移除/ })).not.toBeChecked()
+      expect(onChoose).not.toHaveBeenCalled()
+    })
   })
 
   it('原本那一台上沒有 Berth 建的東西時照實說', async () => {

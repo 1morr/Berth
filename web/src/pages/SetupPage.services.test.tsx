@@ -800,7 +800,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     renderInRoute(<SetupPage />)
     const sequence = await screen.findByTestId('sequence')
 
-    expect(await within(sequence).findByText('http://localhost:18080/#/settings')).toBeVisible()
+    expect(await within(sequence).findByText('http://localhost:18080')).toBeVisible()
     expect(within(sequence).queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
   })
 })
@@ -936,7 +936,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     expect(document.body.innerHTML).not.toContain('prowlarr:9696/#')
     expect(add.getByRole('link', { name: '開啟 Prowlarr 的索引站頁' })).toHaveAttribute(
       'href',
-      `http://${window.location.hostname}:9696/#/indexers`,
+      `http://${window.location.hostname}:9696/`,
     )
   })
 
@@ -1429,7 +1429,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     // 要移除它的站到它自己的介面：連結是使用者填的位址。
     expect(added.getByRole('link', { name: '開啟 Prowlarr 的索引站頁' })).toHaveAttribute(
       'href',
-      'http://nas:9696/#/indexers',
+      'http://nas:9696/',
     )
 
     await user.click(added.getByRole('button', { name: '搜尋全部' }))
@@ -1486,7 +1486,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     // 連結用瀏覽器開得了的位址：host.docker.internal 換成瀏覽器現在的主機名。
     expect(notice.getByRole('link', { name: '開啟 Prowlarr 的索引站頁' })).toHaveAttribute(
       'href',
-      `http://${window.location.hostname}:48696/#/indexers`,
+      `http://${window.location.hostname}:48696/`,
     )
     // 「已加入」那一段不畫空的；加站那一段照樣在，「之後再說」在它旁邊。
     expect(screen.queryByTestId('added')).not.toBeInTheDocument()

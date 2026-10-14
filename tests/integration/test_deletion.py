@@ -12,6 +12,7 @@ Job，五個硬鏈接真的在媒體庫裡。
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -372,7 +373,7 @@ class TestTheTimelineSaysWhatWasDeleted:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         job, _, factory = await imported(session, roots)
-        size = sum(path.stat().st_size for path in await sources(session))
+        size = sum(fs.stat(path).allocated for path in await sources(session))
 
         await delete_job(
             session,
@@ -388,7 +389,7 @@ class TestTheTimelineSaysWhatWasDeleted:
 def _readme_size(roots: dict[str, Path]) -> int:
     """那一包裡唯一沒有被鏈接出去的檔案。它只有一個名字，所以刪掉它是真的釋放。"""
     readme = next(roots["complete"].rglob("readme.txt"))
-    return readme.stat().st_size
+    return fs.stat(readme).allocated
 
 
 class TestWhenQbittorrentCannotBeReached:
@@ -468,7 +469,7 @@ class TestTheEstimate:
         """`job_files` 上那幾個大小是 qBittorrent 報的（1.4 GB 一集）；磁碟上這幾個是
         測試寫進去的幾十個位元組。估算說的是後者——那才是刪掉之後真的會空出來的。"""
         job, _, _ = await imported(session, roots)
-        on_disk = sum(path.stat().st_size for path in await sources(session))
+        on_disk = sum(fs.stat(path).allocated for path in await sources(session))
 
         estimate = await estimate_deletion(session, job.hash)
 
@@ -479,15 +480,15 @@ class TestTheEstimate:
     ) -> None:
         """Berth 不知道的第三個鏈接握著它時，刪掉來源與媒體庫那兩個名字也不會釋放。"""
         job, _, _ = await imported(session, roots)
-        on_disk = sum(path.stat().st_size for path in await sources(session))
+        on_disk = sum(fs.stat(path).allocated for path in await sources(session))
         held = (await sources(session))[0]
         elsewhere = roots["complete"] / "kept-by-someone-else.mkv"
         fs.link(held, elsewhere, roots=[roots["complete"]])
 
         estimate = await estimate_deletion(session, job.hash)
 
-        assert estimate.held == held.stat().st_size
-        assert estimate.reclaimable == on_disk - held.stat().st_size
+        assert estimate.held == fs.stat(held).allocated
+        assert estimate.reclaimable == on_disk - fs.stat(held).allocated
 
     async def test_a_target_that_is_already_gone_is_counted_as_missing(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -609,7 +610,7 @@ class TestADownloadStillInProgress:
         self, session: AsyncSession, roots: dict[str, Path], files: tuple[tuple[str, int], ...]
     ) -> None:
         it = await downloading(session, roots, files=files)
-        size = sum(path.stat().st_size for path in it.files)
+        size = sum(fs.stat(path).allocated for path in it.files)
 
         outcome = await delete_job(session, it.factory, it.job.hash, DELETE_FILES, actor="user")
 
@@ -650,7 +651,29 @@ class TestADownloadStillInProgress:
         estimate = await estimate_deletion(session, it.job.hash)
 
         assert (estimate.sources, estimate.sources_missing) == (SOURCES, 0)
-        assert estimate.reclaimable == sum(path.stat().st_size for path in it.files)
+        assert estimate.reclaimable == sum(fs.stat(path).allocated for path in it.files)
+
+    @pytest.mark.skipif(
+        not hasattr(os.stat_result, "st_blocks"),
+        reason="Windows 的 os.stat 沒有 st_blocks，量不出 sparse 檔；Berth 只在 Linux 容器裡跑",
+    )
+    async def test_a_sparse_partial_download_counts_what_it_really_occupies(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """qBittorrent 預設不預先配置，下到一半的檔是 sparse 檔（M4 票 102）：票 42 那一筆
+        表觀 970 MB、實際約 192 MB。估算與 `freed` 說的是後者——刪掉之後真的回到檔案系統的。"""
+        it = await downloading(session, roots)
+        for path in it.files:
+            with path.open("r+b") as file:
+                file.truncate(64 * 1024 * 1024)
+        apparent = sum(path.stat().st_size for path in it.files)
+        occupied = sum(fs.stat(path).allocated for path in it.files)
+        assert occupied < apparent // 10
+
+        estimate = await estimate_deletion(session, it.job.hash)
+        outcome = await delete_job(session, it.factory, it.job.hash, DELETE_FILES, actor="user")
+
+        assert (estimate.reclaimable, outcome.freed) == (occupied, occupied)
 
     async def test_without_a_content_path_nothing_in_incomplete_is_guessed_at(
         self, session: AsyncSession, roots: dict[str, Path]

@@ -434,7 +434,9 @@ function QbittorrentLine({
       row={row}
       status={loginStatus(t, row, byBerth)}
       fix={rejected ? t('qbittorrent.fix.loginRejected') : t(STEP_FIX[step])}
-      commands={!rejected && webUrl ? [`${webUrl}/#/settings`] : []}
+      // qBittorrent 的 WebUI 沒有通往「選項」的網址（`client.js` 只讀 `#download=`，M4 票 102 實開 5.2.4）：
+      // 給介面本身，補法那一句說在哪個選單。
+      commands={!rejected && webUrl ? [webUrl] : []}
     />
   )
 }
