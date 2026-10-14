@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-10-14
+
+**從 0.2.5 升級**：`docker compose pull && docker compose up -d` 就好，`.env` 不用改，也沒有資料庫 migration。
+image 是 `ghcr.io/1morr/berth:0.2.6`，同時是 `:0.2` 與 `:latest`。**建議換成這一版附的 `docker-compose.yml`**
+（[下載](https://github.com/1morr/Berth/releases/latest/download/docker-compose.yml)）：它多把 `.env` 的
+`DATA_ROOT` 傳給 Berth，既有服務沒掛 `/data` 時補法才印得出你的資料夾；不換也能跑，補法照舊寫 `${DATA_ROOT}`。
+下面〈Changed〉裡改到的 API 只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可。
+從套件內 Prowlarr 移除站，現在只限 Berth 自己加的站；你自己加的站請在 Prowlarr 刪。
+
 ### Added
 
 - **可以不用 Prowlarr**（M4 票 61，審計 E3）：設定 → Prowlarr 頁尾多一區「不用 Prowlarr」，就地確認之後生效，
