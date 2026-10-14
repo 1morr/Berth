@@ -32,7 +32,7 @@ TORRENTS_CONTAINER = "berth-e2e-torrents"
 SITES_CONTAINER = "berth-e2e-sites"
 
 ADMIN = "skipper"
-#: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的 WebUI 登入是另一組（`WEB_UI_LOGIN`）。
+#: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的介面登入是另一組（`WEB_UI_LOGIN`）。
 PASSWORD = "harbour-e2e"
 
 JELLYFIN_CLIENT = 'MediaBrowser Client="Berth e2e", Device="ci", DeviceId="berth-e2e", Version="1"'
@@ -116,12 +116,12 @@ def docker(*command: str) -> str:
 #: 底下、寫得進去，只是沒有任何一條 Route 用它：Berth 送的每一筆都走分類自己的路徑。
 GLOBAL_SAVE_PATH = "/data/not-berth"
 
-#: 精靈頁 2 替套件內 qBittorrent 設的 WebUI 登入（M4 票 07：泊位上必填，帳號預填擁有者）。
+#: 精靈頁 2 替套件內 qBittorrent 設的介面登入（M4 票 07：泊位上必填，帳號預填擁有者）。
 WEB_UI_LOGIN = {"username": ADMIN, "password": "harbour-webui"}
 
 
 def qbittorrent_webui() -> httpx.Client:
-    """以 WebUI 登入套件內的 qBittorrent，測試才看得到、改得到它的 torrent 與偏好。
+    """用介面登入的那一組登入套件內的 qBittorrent，測試才看得到、改得到它的 torrent 與偏好。
 
     用的是精靈頁 2 在泊位上設的那一組（M4 票 07）——這也順便驗了「泊位上設的帳密之後能登入
     qBittorrent WebUI」。同 `jellyfin_client`，收尾要 `closing()`。

@@ -175,15 +175,12 @@ describe('頁 1：Jellyfin 與擁有者', () => {
 
     const address = screen.getByRole('textbox', { name: '位址' })
     expect(address).toHaveAttribute('placeholder', 'http://192.168.1.10:8096')
-    // 選了既有，就說出套件內那一台怎麼從 compose 拿掉、怎麼停掉已經在跑的那一台：只改 COMPOSE_PROFILES
-    // 再 up -d 停不掉它（M4 票 36，brief §20.14）。
-    expect(screen.getByText('COMPOSE_PROFILES=qbittorrent,prowlarr')).toBeInTheDocument()
-    expect(screen.getByText('docker compose stop jellyfin')).toBeInTheDocument()
+    // 選了既有，說套件內那一台用不到了；停掉它的 COMPOSE_PROFILES 與 stop 只在完成頁給（M4 票 103）。
+    expect(screen.getByText(/最後一頁的「閒著的套件內容器」/)).toBeInTheDocument()
+    expect(screen.queryByText(/COMPOSE_PROFILES=/)).not.toBeInTheDocument()
     // 條件：只能是 /data；缺的媒體庫頁 3 勾了才建（M4 票 64）。
     expect(screen.getByText(/只能是 \/data/)).toBeInTheDocument()
-    expect(
-      screen.getByText(/缺電影或劇集媒體庫的話，頁 3 可以勾「新建一個媒體庫」/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/勾了才新建媒體庫/)).toBeInTheDocument()
     expect(requestsOf(fetchStub).some((request) => request.startsWith('POST'))).toBe(false)
 
     await user.type(address, 'http://nas:8096')

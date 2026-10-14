@@ -913,11 +913,11 @@ class RouteCheck(StrEnum):
 class QbittorrentStep(StrEnum):
     """頁 2 的纜繩（plan §9.3、§8.1）。值是 `app/setPreferences` 的鍵名。
 
-    **只剩 WebUI 登入**（M4 票 32，brief §19 D2）：Berth 不寫任何全域偏好。送單逐個 torrent 帶
+    **只剩介面登入**（M4 票 32，brief §19 D2）：Berth 不寫任何全域偏好。送單逐個 torrent 帶
     分類與 `autoTMM=true`，路徑與未完成目錄都開在 Berth 的分類上，全域的哪一個鍵都不影響它。
     """
 
-    #: 套件內那一台的 WebUI 登入；既有的那一台記成 `skipped`。`web_ui_password` 只寫不讀。
+    #: 套件內那一台的介面登入；既有的那一台記成 `skipped`。`web_ui_password` 只寫不讀。
     PASSWORD = "web_ui_password"
 
 

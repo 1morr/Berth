@@ -329,9 +329,9 @@ class SetupQbittorrent(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    #: 頁 2 的纜繩；`key` 是 `QbittorrentStep`，現在只有 WebUI 登入那一條。
+    #: 頁 2 的纜繩；`key` 是 `QbittorrentStep`，現在只有介面登入那一條。
     steps: list[SetupStep] = []
-    #: Berth 替套件內那一台設下的 WebUI 登入（M4 票 07、15）。**只記帳號與加鹽雜湊**
+    #: Berth 替套件內那一台設下的介面登入（M4 票 07、15）。**只記帳號與加鹽雜湊**
     #: （`services.steps.hash_password`）：勾了「沿用 Jellyfin 帳密」時那就是擁有者的密碼。
     #: Berth 自己連它靠免密白名單，用不到這組。帳號在、雜湊空的是「那一台自己就設過了」。
     web_ui_username: str = ""

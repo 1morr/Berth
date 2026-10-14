@@ -4,7 +4,7 @@
 `autoTMM=true`，分類建立時帶自己的 save path 與未完成目錄（M4 票 22），全域的哪一個鍵都不影響
 Berth——與 Sonarr / Radarr 對下載器的做法相同。套件內與既有因此只差一件事：
 
-- **WebUI 登入只給套件內的那一台**：頁上填的那一組跟著「套用」送進來（M4 票 07），設定頁改它走
+- **介面登入只給套件內的那一台**：頁上填的那一組跟著「套用」送進來（M4 票 07），設定頁改它走
   `set_interface_login`。既有 qBittorrent 是他自己的服務，Berth 不改它的密碼（brief §16.4），帶了
   登入就拒絕。**Berth 只記帳號與雜湊**，自己連它靠免密白名單（M4 票 15）。
 - **還沒選來源就什麼都不寫**（M4 票 15）：寫入的命令一律拒絕。
@@ -162,7 +162,7 @@ class QbittorrentSetupStatus:
     blocked: bool
     reachable: bool
     steps: tuple[StepView, ...]
-    #: 泊位上有 WebUI 登入那一格：只有套件內的那一台（M4 票 07）。
+    #: 泊位上有介面登入那一格：只有套件內的那一台（M4 票 07）。
     web_ui_login: bool
     #: 套件內那一台的 WebUI 帳號：Berth 設下的，或那一台自己就設過的（不是 `admin`）。還沒設過、
     #: 或是既有的那一台是空字串。
@@ -216,9 +216,9 @@ async def apply_qbittorrent(
     *,
     login: InterfaceLogin | None = None,
 ) -> QbittorrentSetupStatus:
-    """頁 2 的「套用」：套件內那一台設 WebUI 登入，全域偏好一個都不寫（M4 票 32）。
+    """頁 2 的「套用」：套件內那一台設介面登入，全域偏好一個都不寫（M4 票 32）。
 
-    `login` 是泊位上填的 WebUI 登入（M4 票 07）。不帶就是「登入照舊」：回頭重按時不帶，已經設過的
+    `login` 是泊位上填的介面登入（M4 票 07）。不帶就是「登入照舊」：回頭重按時不帶，已經設過的
     那一組不重寫。
 
     既有的那一台什麼都不寫，畫面上也沒有這一顆（M4 票 38）：它的頁 2 測試通過就做完了
@@ -287,7 +287,7 @@ async def apply_qbittorrent(
 async def set_interface_login(
     session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
 ) -> QbittorrentSetupStatus:
-    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入。
+    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的介面登入。
 
     與頁 2 的密碼那一條是同一段（`_apply_password`），結果換掉那一條纜繩。可逆的方式就是
     再設一組。既有的那一台拒絕（`ValueError`）。
@@ -343,7 +343,7 @@ async def _apply_password(
     login: InterfaceLogin | None,
     preferences: Mapping[str, Any],
 ) -> SetupStep:
-    """套件內的那一台另設 WebUI 登入（M4 票 07）。既有的那一台呼叫端先拒絕了（`_refuse_existing`）。
+    """套件內的那一台另設介面登入（M4 票 07）。既有的那一台呼叫端先拒絕了（`_refuse_existing`）。
 
     設完的那一組只記帳號與加鹽雜湊（`setup.qbittorrent.web_ui_*`，M4 票 15）：Berth 連它靠免密
     白名單，用不到密碼；雜湊只拿來比出「已經是這一組了」——密碼是這一步唯一讀不回來比對的鍵。

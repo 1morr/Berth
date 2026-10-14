@@ -121,7 +121,7 @@ const AT_EXISTING_QBITTORRENT = setupStatus({
   services: [ALL_BUNDLED[0], EXISTING_QBITTORRENT],
 })
 
-/** 自己的 qBittorrent：一個鍵都不寫、沒有 WebUI 登入那一格（M4 票 05、07）。 */
+/** 自己的 qBittorrent：一個鍵都不寫、沒有介面登入那一格（M4 票 05、07）。 */
 const EXISTING_SETUP = qbittorrentSetup({
   origin: 'existing',
   base_url: 'http://nas:8080',
@@ -156,7 +156,7 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.queryByText('這台 qBittorrent')).not.toBeInTheDocument()
     // 剖面列出兩種各會做什麼，與頁 4 還沒選時同一個形狀（M4 票 81）。
     const plans = within(screen.getByText('將會做什麼').closest('section')!)
-    expect(plans.getByText('設定 WebUI 登入 · 只建 Berth 自己的分類')).toBeInTheDocument()
+    expect(plans.getByText('設定介面登入 · 只建 Berth 自己的分類')).toBeInTheDocument()
     expect(plans.getByText('只建 Berth 自己的分類 · 一個全域偏好都不寫')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
@@ -192,7 +192,7 @@ describe('頁 2：qBittorrent', () => {
     )
     expect(await screen.findByText('這台 qBittorrent')).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 2, name: '設定 qBittorrent 的 WebUI 登入' }),
+      screen.getByRole('heading', { level: 2, name: '設定 qBittorrent 的介面登入' }),
     ).toBeVisible()
     expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(true)
   })
@@ -212,12 +212,11 @@ describe('頁 2：qBittorrent', () => {
     const address = screen.getByRole('textbox', { name: '位址' })
     // 位址的範例是 qBittorrent 自己的 port，不是 Jellyfin 的 8096（票 06h）。
     expect(address).toHaveAttribute('placeholder', 'http://192.168.1.10:8080')
-    expect(screen.getByText('COMPOSE_PROFILES=jellyfin,prowlarr')).toBeInTheDocument()
-    expect(screen.getByText('docker compose stop qbittorrent')).toBeInTheDocument()
+    // 停掉套件內那一台的指令只在完成頁給（M4 票 103）。
+    expect(screen.getByText(/最後一頁的「閒著的套件內容器」/)).toBeInTheDocument()
+    expect(screen.queryByText(/COMPOSE_PROFILES=/)).not.toBeInTheDocument()
     // 媒體庫那一條只對 Jellyfin 說。
-    expect(
-      screen.queryByText(/缺電影或劇集媒體庫的話，頁 3 可以勾「新建一個媒體庫」/),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/勾了才新建媒體庫/)).not.toBeInTheDocument()
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
     expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
 
@@ -284,7 +283,7 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.getByRole('button', { name: '設定介面登入' })).toBeInTheDocument()
   })
 
-  it('WebUI 登入勾起沿用 Jellyfin 帳密：只有一格密碼，套用之後留下那一條的結果', async () => {
+  it('介面登入勾起沿用 Jellyfin 帳密：只有一格密碼，套用之後留下那一條的結果', async () => {
     const applied = qbittorrentSetup({
       steps: [step('web_ui_password', 'ok', 'skipper')],
       web_ui_username: 'skipper',
@@ -297,7 +296,7 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    const legend = await screen.findByText('qBittorrent WebUI 登入')
+    const legend = await screen.findByText('qBittorrent 介面登入')
     const fields = within(legend.closest('fieldset')!)
     // 頁 1 沒帶一組過來：一開始是自設的三格（M4 票 80）。
     expect(fields.getByRole('checkbox', { name: REUSE })).not.toBeChecked()
@@ -315,14 +314,14 @@ describe('頁 2：qBittorrent', () => {
     await waitFor(() => {
       expect(within(sequence).getAllByText('已完成')).toHaveLength(1)
     })
-    expect(within(sequence).getByText('WebUI 登入')).toBeInTheDocument()
+    expect(within(sequence).getByText('介面登入')).toBeInTheDocument()
     expect(within(sequence).getAllByRole('listitem')).toHaveLength(1)
     // 沿用時帳號留空：後端填成擁有者。
     expect(bodyOf(stub, '/api/setup/qbittorrent/apply')).toEqual({
       login: { username: '', password: 'harbour', reuse_owner: true },
     })
     // 設好之後欄位收起來，只說帳號是誰。
-    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
+    expect(await screen.findByText('qBittorrent 介面的帳號：')).toBeInTheDocument()
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     // 頁序還沒重讀回來（這裡的 status 一直是頁 2）時主鍵也不再冒出來：登入那一條已經過了（M4 票 38）。
     expect(screen.queryByRole('button', { name: '設定介面登入' })).not.toBeInTheDocument()
@@ -343,7 +342,7 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByText('qBittorrent WebUI 的帳號：')
+    await screen.findByText('qBittorrent 介面的帳號：')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
 
     await waitFor(() =>
@@ -379,7 +378,7 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    const legend = await screen.findByText('qBittorrent WebUI 登入')
+    const legend = await screen.findByText('qBittorrent 介面登入')
     const fields = within(legend.closest('fieldset')!)
 
     expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
@@ -435,8 +434,8 @@ describe('頁 2：qBittorrent', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />, '/setup?step=2')
-    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toHaveTextContent(
-      'qBittorrent WebUI 的帳號： deckhand',
+    expect(await screen.findByText('qBittorrent 介面的帳號：')).toHaveTextContent(
+      'qBittorrent 介面的帳號： deckhand',
     )
     expect(screen.getByText(/這個泊位的事做完了/)).toBeInTheDocument()
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
@@ -571,8 +570,8 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.queryByText('將會寫入的鍵')).not.toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /套用|確認/ })).not.toBeInTheDocument()
-    // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
-    expect(screen.queryByText('qBittorrent WebUI 登入')).not.toBeInTheDocument()
+    // 既有的那一台沒有介面登入那一格（M4 票 07）。
+    expect(screen.queryByText('qBittorrent 介面登入')).not.toBeInTheDocument()
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
   })
 
@@ -603,7 +602,7 @@ describe('頁 2：qBittorrent', () => {
  * 6 字元。實測（第 3、20 條）：沿用 4 字元的 Jellyfin 密碼卡在頁 2，畫面說「回應的不是 qBittorrent」、
  * 補法連到瀏覽器開不了的內部位址；失敗後表單收回成「帳號：xxx」，取消沿用後舊錯誤還在。
  */
-describe('頁 2：WebUI 登入的規則', () => {
+describe('頁 2：介面登入的規則', () => {
   /** 套用回來：qBittorrent 不收這組帳密。 */
   const REJECTED = qbittorrentSetup({
     steps: [
@@ -623,7 +622,7 @@ describe('頁 2：WebUI 登入的規則', () => {
   })
 
   async function loginFields() {
-    const legend = await screen.findByText('qBittorrent WebUI 登入')
+    const legend = await screen.findByText('qBittorrent 介面登入')
     return within(legend.closest('fieldset')!)
   }
 
@@ -721,7 +720,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     await i18next.changeLanguage('en')
     try {
       renderInRoute(<SetupPage />)
-      const legend = await screen.findByText('qBittorrent WebUI login')
+      const legend = await screen.findByText('qBittorrent interface login')
       const fields = within(legend.closest('fieldset')!)
       await reuseOwner(user, 'Reuse the Jellyfin login (skipper)')
       await user.type(fields.getByLabelText("skipper's Jellyfin password"), 'abcd')
@@ -761,7 +760,7 @@ describe('頁 2：WebUI 登入的規則', () => {
     expect(within(sequence).queryByText(/qbittorrent:8080/)).not.toBeInTheDocument()
     // 沒有設好：欄位還開著、打過的還在，沒有收成「帳號：skipper」。
     expect(fields.getByLabelText(OWNER_PASSWORD)).toHaveValue('Harbour-1')
-    expect(screen.queryByText('qBittorrent WebUI 的帳號：')).not.toBeInTheDocument()
+    expect(screen.queryByText('qBittorrent 介面的帳號：')).not.toBeInTheDocument()
   })
 
   it('換了沿用與否之後，上一次的失敗不再掛著；登入照舊的那一條也不是失敗', async () => {

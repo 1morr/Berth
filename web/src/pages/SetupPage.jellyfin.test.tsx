@@ -308,7 +308,7 @@ describe('GET /api/setup/jellyfin 只在頁 3 讀', () => {
       2,
       setupStatus({ current_step: 2, owner: 'skipper', services: ALL_BUNDLED.slice(0, 2) }),
       { 'GET /api/setup/qbittorrent/diff': { body: qbittorrentSetup() } },
-      '設定 qBittorrent 的 WebUI 登入',
+      '設定 qBittorrent 的介面登入',
     ],
     [
       4,

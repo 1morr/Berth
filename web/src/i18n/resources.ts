@@ -70,7 +70,7 @@ const zhHant = {
         elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
       },
       qbittorrent: {
-        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的 WebUI 登入。一個全域偏好都不寫。',
+        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的介面登入。一個全域偏好都不寫。',
         elsewhere:
           '全域偏好（預設儲存路徑、自動管理…）都在 qBittorrent 自己的介面上改，Berth 不寫也不看——它的下載只走自己的 berth-* 分類。',
       },
@@ -226,17 +226,14 @@ const zhHant = {
       // 照實說會加什麼、什麼時候加。
       adds: {
         jellyfin:
-          '只在頁 1 用你的管理員登入、在它上面建一把 API key「Berth」，並在頁 3 你按下時替媒體庫多加一條 Berth 寫入用的路徑（原本的路徑不動）；你在頁 3 勾了「新建一個媒體庫」才替你建那一個。它還沒跑過自己的初始精靈的話，頁 1 會用你填的帳密替它跑完。入庫之後 Berth 會請它去看那條路徑：平常只刷新那個媒體庫，但它還沒在那條路徑底下列出過任何東西時（第一次入庫），會跑整台的「掃描媒體庫」，你其他的媒體庫也會一起被掃。',
+          '只在頁 1 建一把 API key「Berth」，頁 3 你按下時替媒體庫加一條 Berth 寫入的路徑（原本的路徑不動），勾了才新建媒體庫（所有使用者都看得到）。還沒跑過初始精靈的話，頁 1 替它跑完。入庫之後 Berth 平常只請它刷新那個媒體庫；那條路徑還沒列出過東西時（第一次入庫）是掃描整台，其他媒體庫也會被掃。',
         qbittorrent:
           '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
         prowlarr: '只加你在頁 4 要它加的站；原本的站不動。',
       },
       sameHost:
-        '條件：它與 Berth 在同一台主機，而且把 Berth 的 DATA_ROOT 也掛在容器路徑 /data——只能是 /data，Berth 的下載與媒體庫目錄固定在它底下。原本的掛載不用動，多加這一條就好。DATA_ROOT 要在建得了硬鏈接的檔案系統上（exFAT、網路磁碟、mergerfs 不行）；另一台 NAS 上的接不上。',
-      library:
-        '原本的媒體庫 Berth 只在頁 3 替勾選的加一條路徑。缺電影或劇集媒體庫的話，頁 3 可以勾「新建一個媒體庫」讓 Berth 建一個——它在你的伺服器上，所有使用者都看得到，不勾就不建。',
-      profiles:
-        '選了既有，套件內那一台用不到了：把 .env 的 COMPOSE_PROFILES 換成第一行（{{kind}} 不在裡面），再用第二行停掉已經在跑的那一台——只改 COMPOSE_PROFILES 再 docker compose up -d 停不掉它。忘了也不致命。',
+        '條件：與 Berth 同一台主機，把 Berth 的 DATA_ROOT 多掛一條到容器的 /data（只能是 /data，原本的掛載不用動）；DATA_ROOT 要在建得了硬鏈接的檔案系統上（exFAT、網路磁碟、mergerfs 不行）。',
+      idle: '選了既有，套件內那一台就用不到了；它還開著的話，精靈最後一頁的「{{section}}」會給停掉它的指令。',
       floor: {
         jellyfin: '版本下限：Jellyfin 12.0。從 10.x 升級是單向的，先看升級注意。',
         qbittorrent: '版本下限：qBittorrent 4.4（Web API 2.8.4）。',
@@ -579,9 +576,9 @@ const zhHant = {
   },
   interfaceLogin: {
     qbittorrent: {
-      legend: 'qBittorrent WebUI 登入',
-      lede: '這是 qBittorrent 自己的登入，給你之後打開它的 WebUI 用。Berth 自己用不到它（靠免密白名單進得去）；不設的話，WebUI 只剩容器 log 裡每次重啟都換的臨時密碼。',
-      set: 'qBittorrent WebUI 的帳號：',
+      legend: 'qBittorrent 介面登入',
+      lede: '這是 qBittorrent 自己的登入，給你之後打開它的介面用。Berth 自己用不到它（靠免密白名單進得去）；不設的話，它的介面只剩容器 log 裡每次重啟都換的臨時密碼。',
+      set: 'qBittorrent 介面的帳號：',
     },
     prowlarr: {
       legend: 'Prowlarr 介面登入',
@@ -637,15 +634,15 @@ const zhHant = {
   qbittorrent: {
     title: {
       choose: '先選 qBittorrent 是哪一台',
-      bundled: '設定 qBittorrent 的 WebUI 登入',
+      bundled: '設定 qBittorrent 的介面登入',
       existing: '確認你的 qBittorrent',
     },
     readFailed: '讀不到 qBittorrent 這一步的狀態。',
     lede: {
       choose:
-        '兩種 Berth 都只用自己的分類，一個全域偏好都不寫；套件內的那一台另外由 Berth 設 WebUI 登入。選了 Berth 才去連它。',
+        '兩種 Berth 都只用自己的分類，一個全域偏好都不寫；套件內的那一台另外由 Berth 設介面登入。選了 Berth 才去連它。',
       bundled:
-        '這台 qBittorrent 是套件內的，Berth 只替它設 WebUI 登入，全域偏好一個都不寫。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你在它的介面上改預設儲存路徑不影響 Berth。',
+        '這台 qBittorrent 是套件內的，Berth 只替它設介面登入，全域偏好一個都不寫。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你在它的介面上改預設儲存路徑不影響 Berth。',
       existing:
         '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。',
     },
@@ -655,14 +652,14 @@ const zhHant = {
       bundled: '套件內 qBittorrent',
       existing: '你自己的 qBittorrent',
       webapi: 'Web API',
-      password: 'WebUI 登入',
+      password: '介面登入',
       willSet: '將設為下面填的那一組',
       existingLogin: '不改（這台是你自己的）',
-      bundledPlan: '設定 WebUI 登入 · 只建 Berth 自己的分類',
+      bundledPlan: '設定介面登入 · 只建 Berth 自己的分類',
       existingPlan: '只建 Berth 自己的分類 · 一個全域偏好都不寫',
     },
     step: {
-      web_ui_password: 'WebUI 登入',
+      web_ui_password: '介面登入',
     },
     fix: {
       web_ui_password: '在「選項 → Web UI」自己設定帳號與密碼：',
@@ -675,7 +672,7 @@ const zhHant = {
     },
     setLogin: '設定介面登入',
     settingLogin: '設定中…',
-    done: '這個泊位的事做完了。WebUI 登入設好了；Berth 沒有改這台 qBittorrent 的全域偏好，它的下載走自己的分類。',
+    done: '這個泊位的事做完了。介面登入設好了；Berth 沒有改這台 qBittorrent 的全域偏好，它的下載走自己的分類。',
     doneExisting:
       '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
   },
@@ -782,7 +779,7 @@ const zhHant = {
       openProwlarr: '開啟 Prowlarr 的索引站頁',
       requestFailed: '測試沒有走完。',
       loading: '向 Prowlarr 讀站的清單…',
-      // 名詞，與頁 2 的「WebUI 登入」同一種寫法（M4 票 68 critique）。
+      // 名詞，與頁 2 的「介面登入」同一種寫法（M4 票 68 critique）。
       login: 'Prowlarr 介面登入',
       loginFix:
         '帳密沒設成功，Prowlarr 的介面仍然是免登入的。設完它會自行重啟，所以也可能只是還沒回來。可以在它自己的介面上設：',
@@ -1105,7 +1102,7 @@ const zhHant = {
         '帳號 {{name}}，密碼是這一台原本就有的那一組：這一輪精靈沒有設它。忘了的話，到「設定 → {{service}}」的「介面登入」換一組。',
       noLogin: {
         qbittorrent:
-          '還沒設 WebUI 登入：只有容器 log 裡每次重啟都換的臨時密碼。到「設定 → qBittorrent」設一組。',
+          '還沒設介面登入：只有容器 log 裡每次重啟都換的臨時密碼。到「設定 → qBittorrent」設一組。',
         prowlarr: '還沒設介面登入：第一次打開它會要你設一組，或到「設定 → Prowlarr」設。',
       },
       yours: '用你原本的登入。',
@@ -1539,6 +1536,8 @@ const zhHant = {
         // 後面接 resolver 下一次排在什麼時候。作品頁打開時已經先問過一次（M4 票 51），所以排程是 Berth 的，
         // 不是 Jellyfin 的。不說「還在掃描」（M4 票 62）：入庫當下只是通知它，Berth 要等反查沒找到才請它掃。
         searching: '已通知 Jellyfin，等它收錄；Berth 下一次確認在',
+        // 排定的時間已經過了、排程那一輪還沒跑到（M4 票 103）：不說「4 秒前」。
+        searchingDue: '已通知 Jellyfin，等它收錄；Berth 即將再確認',
         // 一組檔案的摘要，只算正片（M1.5 票 09）。
         foundCount_one: 'Jellyfin 已收錄 {{count}}',
         foundCount_other: 'Jellyfin 已收錄 {{count}}',
@@ -3508,7 +3507,7 @@ const en: Translations<typeof zhHant> = {
           'See who the owner is. Once there is an owner the source is locked; the bundled one’s address comes from compose, so there is nothing to change.',
       },
       qbittorrent: {
-        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s WebUI login. No global preference is written.',
+        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s interface login. No global preference is written.',
         elsewhere:
           'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself; Berth neither writes nor reads them — its downloads only go through its own berth-* categories.',
       },
@@ -3667,17 +3666,14 @@ const en: Translations<typeof zhHant> = {
       lede: 'The {{service}} you already run. Berth leaves your settings alone and {{adds}}',
       adds: {
         jellyfin:
-          'only creates an API key named Berth on page 1 (signing in as your administrator) and adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay); it creates a library only if you tick “Create a new library” on page 3. If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth asks it to look at that path: normally by refreshing just that library, but while it has never listed anything under the path (the first import), by running its whole-server Scan Media Library, which scans your other libraries too.',
+          'only creates an API key named Berth on page 1, adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay) and creates a library only if you tick it there (every user sees it). If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth normally asks it to refresh just that library; while it has never listed anything under the path (the first import), it scans the whole server, so your other libraries get scanned too.',
         qbittorrent:
           'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
         prowlarr: 'only adds the sites you ask for on page 4; the sites already there stay.',
       },
       sameHost:
-        'Condition: it runs on the same host as Berth and also mounts Berth’s DATA_ROOT at the container path /data — it has to be /data, since Berth’s download and library folders sit underneath it. Its existing mounts stay as they are; adding this one is enough. DATA_ROOT has to be on a file system that supports hard links (not exFAT, a network share or mergerfs); one on another NAS cannot be connected.',
-      library:
-        'On your existing libraries Berth only adds one path, to the ones you tick on page 3. Missing a movie or show library? Tick “Create a new library” on page 3 and Berth creates one — on your server, visible to every user, and only if you tick it.',
-      profiles:
-        'With an existing one, the bundled one is not needed: replace COMPOSE_PROFILES in .env with the first line ({{kind}} is left out), then stop the one already running with the second — changing COMPOSE_PROFILES and running docker compose up -d does not stop it. Forgetting is not fatal.',
+        'Condition: it runs on the same host as Berth and also mounts Berth’s DATA_ROOT at the container path /data (only /data; its existing mounts stay as they are). DATA_ROOT has to be on a file system that supports hard links, not exFAT, a network share or mergerfs.',
+      idle: 'With an existing one, the bundled one is not needed; if it is still running, the wizard’s last page gives the commands to stop it under “{{section}}”.',
       floor: {
         jellyfin:
           'Oldest supported: Jellyfin 12.0. Upgrading from 10.x is one-way, so read the upgrade notes first.',
@@ -4037,9 +4033,9 @@ const en: Translations<typeof zhHant> = {
   },
   interfaceLogin: {
     qbittorrent: {
-      legend: 'qBittorrent WebUI login',
-      lede: "This is qBittorrent's own login, for when you open its WebUI yourself. Berth does not need it (it gets in through the no-password allowlist); without it, the WebUI only has the temporary password in the container log, which changes on every restart.",
-      set: 'qBittorrent WebUI username:',
+      legend: 'qBittorrent interface login',
+      lede: "This is qBittorrent's own login, for when you open its interface yourself. Berth does not need it (it gets in through the no-password allowlist); without it, its interface only has the temporary password in the container log, which changes on every restart.",
+      set: 'qBittorrent interface username:',
     },
     prowlarr: {
       legend: 'Prowlarr interface login',
@@ -4097,15 +4093,15 @@ const en: Translations<typeof zhHant> = {
   qbittorrent: {
     title: {
       choose: 'First, which qBittorrent?',
-      bundled: 'Set the qBittorrent WebUI login',
+      bundled: 'Set the qBittorrent interface login',
       existing: 'Check your qBittorrent',
     },
     readFailed: 'Cannot read the state of this step.',
     lede: {
       choose:
-        'Either way Berth uses only its own categories and writes no global preference; on the bundled one Berth also sets the WebUI login. Berth only connects once you choose.',
+        'Either way Berth uses only its own categories and writes no global preference; on the bundled one Berth also sets the interface login. Berth only connects once you choose.',
       bundled:
-        'This qBittorrent came with the bundle. Berth only sets its WebUI login and writes no global preference. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; changing the default save path in its own UI does not affect Berth.',
+        'This qBittorrent came with the bundle. Berth only sets its interface login and writes no global preference. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; changing the default save path in its own UI does not affect Berth.',
       existing:
         'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
     },
@@ -4115,14 +4111,14 @@ const en: Translations<typeof zhHant> = {
       bundled: 'Bundled qBittorrent',
       existing: 'Your own qBittorrent',
       webapi: 'Web API',
-      password: 'WebUI login',
+      password: 'Interface login',
       willSet: 'Will be set to the one entered below',
       existingLogin: 'Left alone (this one is yours)',
-      bundledPlan: 'Sets the WebUI login · only creates Berth’s own categories',
+      bundledPlan: 'Sets the interface login · only creates Berth’s own categories',
       existingPlan: 'Only creates Berth’s own categories · writes no global preference',
     },
     step: {
-      web_ui_password: 'WebUI login',
+      web_ui_password: 'Interface login',
     },
     fix: {
       web_ui_password: 'Set the username and password yourself under Options → Web UI:',
@@ -4135,7 +4131,7 @@ const en: Translations<typeof zhHant> = {
     },
     setLogin: 'Set interface login',
     settingLogin: 'Setting…',
-    done: 'This berth is done. The WebUI login is set; Berth changed none of this qBittorrent’s global preferences, and its downloads go through its own categories.',
+    done: 'This berth is done. The interface login is set; Berth changed none of this qBittorrent’s global preferences, and its downloads go through its own categories.',
     doneExisting:
       'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
   },
@@ -4570,7 +4566,7 @@ const en: Translations<typeof zhHant> = {
         'Username {{name}}; the password is the one it already had — this run of the wizard did not set it. If you have forgotten it, set a new one under Settings → {{service}}, Interface login.',
       noLogin: {
         qbittorrent:
-          'No WebUI login yet: only the temporary password in the container log, which changes on every restart. Set one in Settings → qBittorrent.',
+          'No interface login yet: only the temporary password in the container log, which changes on every restart. Set one in Settings → qBittorrent.',
         prowlarr:
           'No interface login yet: it asks you to set one the first time you open it, or set one in Settings → Prowlarr.',
       },
@@ -4963,6 +4959,8 @@ const en: Translations<typeof zhHant> = {
       jellyfin: {
         found: 'In Jellyfin',
         searching: 'Jellyfin has been told; waiting for it to pick this up. Berth checks again',
+        searchingDue:
+          'Jellyfin has been told; waiting for it to pick this up. Berth checks again shortly',
         foundCount_one: '{{count}} in Jellyfin',
         foundCount_other: '{{count}} in Jellyfin',
         searchingCount_one: '{{count}} waiting for Jellyfin',

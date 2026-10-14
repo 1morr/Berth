@@ -375,7 +375,7 @@ ALLOWED: tuple[Allowed, ...] = (
             "complete_startup",
         )
     ),
-    # qBittorrent 的 WebUI 登入。
+    # qBittorrent 的介面登入。
     Allowed(
         QBITTORRENT, "set_preferences",
         lambda w, _p, _m: set(w.args[0]) <= {WEB_UI_USERNAME_KEY, WEB_UI_PASSWORD_KEY},

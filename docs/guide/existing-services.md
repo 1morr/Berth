@@ -122,10 +122,11 @@ Removing a service from `COMPOSE_PROFILES` and running `docker compose up -d` do
 that is already running (Compose leaves services outside the active profiles alone, and `--remove-orphans` does
 not count them). Two steps:
 
-1. Remove the services you chose **Existing** for from `COMPOSE_PROFILES` in `.env` (the wizard page prints the
-   whole line for your choices, e.g. `COMPOSE_PROFILES=prowlarr`), so later `up -d` runs don't start them.
-2. Stop the ones already running (the wizard page prints this line too). Stopped services are not started again by
-   later `up -d` runs:
+1. Remove the services you chose **Existing** for from `COMPOSE_PROFILES` in `.env` (the wizard's last page
+   prints the whole line for your choices, e.g. `COMPOSE_PROFILES=prowlarr`), so later `up -d` runs don't start
+   them.
+2. Stop the ones already running (the wizard's last page prints this line too). Stopped services are not started
+   again by later `up -d` runs:
 
    ```bash
    docker compose stop jellyfin qbittorrent

@@ -40,7 +40,7 @@ import { StepFrame } from './StepFrame'
  * `autoTMM=true`，全域的哪一個鍵都不影響它。
  *
  * **測試通過就做完，沒有不寫入的確認鍵**（M4 票 38，brief §19 D5）：既有的那一台連上即完成；套件內的
- * 那一台多一組 WebUI 登入（`web_ui_login`，M4 票 07），必填、可「沿用 Jellyfin 帳密」（M4 票 15），
+ * 那一台多一組介面登入（`web_ui_login`，M4 票 07），必填、可「沿用 Jellyfin 帳密」（M4 票 15），
  * 只有要寫它的時候才有「設定介面登入」那一顆。那一台自己就設過的不強迫再設（後端在連線測試時記下）。
  * 頁 1 勾了「也用這組」時不問，自動沿用那一組（`carried`，M4 票 40），設好之後只說沿用了誰的（M4 票 80）。
  * 做完了沒照後端的頁序（`done`），與前進鍵同一個來源。
@@ -75,7 +75,7 @@ export function QbittorrentStep({
   /** 沿用 Jellyfin 帳密而 Jellyfin 那一關沒過：什麼都沒寫。 */
   loginRefusal: InterfaceLoginRefusal | null
   /**
-   * `login` 是頁上填的 WebUI 登入；`null` 是登入照舊（設過了、沒按「更換」）。
+   * `login` 是頁上填的介面登入；`null` 是登入照舊（設過了、沒按「更換」）。
    * 回傳的是套用之後的那一份；登入那一條過了，欄位才清掉密碼、收起來。
    */
   onApply: (login: InterfaceLogin | null) => Promise<QbittorrentSetup>
@@ -394,7 +394,7 @@ function LoginSequence({
   )
 }
 
-/** WebUI 登入那一條（後端的 `QbittorrentStep.PASSWORD`）。 */
+/** 介面登入那一條（後端的 `QbittorrentStep.PASSWORD`）。 */
 const PASSWORD_STEP = 'web_ui_password' satisfies QbittorrentStepKey
 
 /** 登入那一條過了：寫進去了，或已經是這一組。 */

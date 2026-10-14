@@ -381,7 +381,7 @@ def _probe(origin: str, reason: str, base_url: str, **extra: object) -> dict[str
 async def test_a_finished_wizard_keeps_its_sources_as_choices(config: Config) -> None:
     """M4 票 15：精靈跑完的舊資料庫，每個服務的判定就是那時候的來源。
 
-    套件內 qBittorrent 的 WebUI 登入（票 07 存在連線帳密裡的明文）換成帳號加雜湊，連線帳密清空
+    套件內 qBittorrent 的介面登入（票 07 存在連線帳密裡的明文）換成帳號加雜湊，連線帳密清空
     ——Berth 連套件內那一台靠免密白名單；Prowlarr 的介面密碼同樣換成雜湊。資料庫裡不剩明文。
     """
     rows = {

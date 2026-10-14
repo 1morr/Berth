@@ -876,6 +876,39 @@ describe('Media 詳情頁', () => {
       }
     })
 
+    // 票 103：`resolve_after` 已經過了、排程那一輪（15 秒一次）還沒跑到時，原本說「Berth 下一次確認在 4 秒前」。
+    it.each([
+      ['zh-Hant', '檔案與版本', '1 個檔案', /^已通知 Jellyfin，等它收錄；Berth 即將再確認$/, /前/],
+      ['en', 'Files and versions', '1 file', /\. Berth checks again shortly$/, /ago/],
+    ])(
+      '預約的時間已經過了：說即將確認，不說過去的時間（%s）',
+      async (language, region, count, due, past) => {
+        const overdue = () =>
+          ledgerFile({
+            presence: 'searching',
+            resolve_after: new Date(Date.now() - 4 * 1000).toISOString(),
+            resolve_attempts: 1,
+          })
+        render({
+          [SPY_PATH]: { body: media({ files: [overdue()] }) },
+          [RESOLVE]: { body: media({ files: [overdue()] }) },
+        })
+        await i18next.changeLanguage(language)
+        try {
+          renderApp('/media/tv:120089')
+
+          const files = await screen.findByRole('region', { name: region })
+          await userEvent.click(within(files).getByText(count))
+
+          const line = within(files).getByText(due)
+          expect(line).toBeVisible()
+          expect(line).not.toHaveTextContent(past)
+        } finally {
+          await i18next.changeLanguage('zh-Hant')
+        }
+      },
+    )
+
     it('沒有在等 Jellyfin 的檔案就不問', async () => {
       const api = render({ [SPY_PATH]: { body: media({ files: [ledgerFile()] }) } })
       renderApp('/media/tv:120089')

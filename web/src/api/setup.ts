@@ -253,7 +253,7 @@ export type BerthPathFailure = Schemas['BerthPathFailure']
 
 /** --- 頁 2：qBittorrent（plan §9.3、§8.1）--- */
 
-/** `QbittorrentStep`：值就是 `app/setPreferences` 的鍵名。只剩 WebUI 登入（M4 票 32）。 */
+/** `QbittorrentStep`：值就是 `app/setPreferences` 的鍵名。只剩介面登入（M4 票 32）。 */
 export const QBITTORRENT_STEPS = ['web_ui_password'] as const
 export type QbittorrentStep = (typeof QBITTORRENT_STEPS)[number]
 
@@ -280,14 +280,14 @@ export function loginRefusalOf(error: unknown): InterfaceLoginRefusal | null {
   return parseRefusal(error, LOGIN_REASONS)
 }
 
-/** `login` 是泊位上填的 WebUI 登入；`null` 是登入照舊。 */
+/** `login` 是泊位上填的介面登入；`null` 是登入照舊。 */
 export function applyQbittorrent(login: InterfaceLogin | null): Promise<QbittorrentSetup> {
   return apiPost<QbittorrentSetup>('/setup/qbittorrent/apply', {
     login,
   } satisfies Schemas['QbittorrentApplyIn'])
 }
 
-/** 設定頁的「更新登入」：只換套件內那一台的 WebUI 登入。 */
+/** 設定頁的「更新登入」：只換套件內那一台的介面登入。 */
 export function setQbittorrentLogin(login: InterfaceLogin): Promise<QbittorrentSetup> {
   return apiPut<QbittorrentSetup>('/setup/qbittorrent/login', login)
 }

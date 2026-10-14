@@ -130,7 +130,7 @@ async function toProwlarr(user: UserEvent, router: ReturnType<typeof renderInRou
 
 /** 頁 2 的介面登入是自設的三格，「沿用」在、但不勾（M4 票 80）。 */
 async function expectOwnFields() {
-  const legend = await screen.findByText('qBittorrent WebUI 登入')
+  const legend = await screen.findByText('qBittorrent 介面登入')
   const fields = within(legend.closest('fieldset')!)
   expect(fields.getByRole('checkbox', { name: REUSE })).not.toBeChecked()
   expect(fields.getByLabelText('帳號')).toHaveValue('skipper')
@@ -156,7 +156,7 @@ describe('密碼只問一次（M4 票 40）', () => {
     // 帶過來而且設好了：只說沿用了誰的，給一顆「改用另一組」（M4 票 80）。
     expect(await screen.findByText(CARRIED)).toBeVisible()
     expect(screen.getByRole('button', { name: ANOTHER })).toBeVisible()
-    expect(screen.queryByText('qBittorrent WebUI 的帳號：')).not.toBeInTheDocument()
+    expect(screen.queryByText('qBittorrent 介面的帳號：')).not.toBeInTheDocument()
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '設定介面登入' })).not.toBeInTheDocument()
 
@@ -344,7 +344,7 @@ describe('密碼只問一次（M4 票 40）', () => {
     await user.type(screen.getByLabelText('再輸入一次密碼'), 'another-one')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
     await waitFor(() => expect(bodiesOf(stub, '/api/setup/qbittorrent/apply')).toHaveLength(2))
-    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeVisible()
+    expect(await screen.findByText('qBittorrent 介面的帳號：')).toBeVisible()
     expect(screen.queryByText(CARRIED)).not.toBeInTheDocument()
   })
 
@@ -424,7 +424,7 @@ describe('密碼只問一次（M4 票 40）', () => {
 
     await user.type(screen.getByLabelText(OWNER_PASSWORD), 'changed-in-jellyfin')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
-    expect(await screen.findByText('qBittorrent WebUI 的帳號：')).toBeInTheDocument()
+    expect(await screen.findByText('qBittorrent 介面的帳號：')).toBeInTheDocument()
 
     await toProwlarr(user, router)
     const login = within(await screen.findByTestId('prowlarr-login'))

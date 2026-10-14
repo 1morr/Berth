@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **精靈的文案收尾**（M4 票 103）：套件內 qBittorrent 與 Prowlarr 自己的登入都叫「介面登入」（原本 qBittorrent 那一頁叫
+  「WebUI 登入」）；頁 1、頁 2「既有」卡片少了約三分之一的字，會動到什麼、不動什麼照樣說；選了既有之後，停掉套件內那一台的
+  `COMPOSE_PROFILES` 與 `docker compose stop` 只在完成頁「閒著的套件內容器」照整份選擇給一次，選的那一頁只指過去
+  （原本頁 1、2、4 各給一次）。
+- **作品頁不再說「Berth 下一次確認在 4 秒前」**（M4 票 103）：排定的時間過了、那一輪還沒跑到時說「Berth 即將再確認」。
+
 ## [0.2.6] - 2026-10-14
 
 **從 0.2.5 升級**：`docker compose pull && docker compose up -d` 就好，`.env` 不用改，也沒有資料庫 migration。

@@ -57,6 +57,9 @@ async function cutaway(title: string) {
   return within(heading.closest('section')!)
 }
 
+/** 選了既有那一頁的提示：指到完成頁「閒著的套件內容器」那一段。 */
+const idlePointer = () => t('choice.existing.idle', { section: t('complete.idle.title') })
+
 const EXISTING_JELLYFIN = chosen({
   origin: 'existing',
   base_url: 'http://nas:8096',
@@ -169,7 +172,7 @@ describe.each(LANGUAGES)('%s', (language) => {
       )
     })
 
-    it('擁有者成立之後，選了既有的那一台照樣說要停掉套件內那一台（審計 P2-20）', async () => {
+    it('擁有者成立之後，選了既有的那一台照樣說套件內那一台閒著（審計 P2-20）', async () => {
       await speak()
       stubApi({
         [STATUS]: {
@@ -179,11 +182,27 @@ describe.each(LANGUAGES)('%s', (language) => {
 
       renderInRoute(<SetupPage />, '/setup?step=1')
 
-      expect(
-        await screen.findByText(t('choice.existing.profiles', { kind: 'jellyfin' })),
-      ).toBeVisible()
-      expect(screen.getByText('COMPOSE_PROFILES=qbittorrent,prowlarr')).toBeInTheDocument()
-      expect(screen.getByText('docker compose stop jellyfin')).toBeInTheDocument()
+      expect(await screen.findByText(idlePointer())).toBeVisible()
+    })
+  })
+
+  describe('選了既有：停掉套件內那一台的指令只在完成頁給（票 103）', () => {
+    it.each([
+      [1, EXISTING_JELLYFIN],
+      [2, { ...ALL_BUNDLED[1], origin: 'existing' as const }],
+      [4, { ...ALL_BUNDLED[2], origin: 'existing' as const }],
+    ])('頁 %i 只指到完成頁那一段，不給 COMPOSE_PROFILES', async (page, row) => {
+      await speak()
+      stubApi({
+        [STATUS]: { body: setupStatus({ current_step: 5, owner: 'skipper', services: [row] }) },
+        // 頁 4 讀不到清單時整頁換成錯誤，連選擇都不畫。
+        [INDEXERS]: { body: indexerSetup({ origin: 'existing' }) },
+      })
+
+      renderInRoute(<SetupPage />, `/setup?step=${page}`)
+
+      expect(await screen.findByText(idlePointer())).toBeVisible()
+      expect(document.body).not.toHaveTextContent(/COMPOSE_PROFILES|docker compose stop/)
     })
   })
 

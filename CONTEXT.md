@@ -120,6 +120,10 @@ Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、使用者在頁
 Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、把同一個父目錄掛在 `/data`。
 _Avoid_: external, remote, byo
 
+**Interface login**（UI 顯示「介面登入」）:
+套件內 qBittorrent / Prowlarr 自己的登入：給使用者打開那一台的網頁介面用，Berth 自己用不到（qBittorrent 靠免密白名單、Prowlarr 靠 API key）。精靈頁 2、頁 4 設，之後在「設定 → 該服務」換。既有的那一台 Berth 不碰。兩個服務同一個叫法（M4 票 103）。
+_Avoid_: WebUI 登入、WebUI login（`web/src/i18n/interfaceLoginName.test.ts` 守 `web/src`）。照留的：qBittorrent 自己的選單路徑「選項 → WebUI」，以及後端與文件裡指它的偏好鍵 `web_ui_username`、既有那一台連線帳密的「WebUI 帳號／帳密」——那是 qBittorrent 的東西，不是這個登入
+
 **Unused service**（UI 顯示「沒有使用」，設定頁的動作叫「不用 Prowlarr」）:
 管理員選了不用的服務；目前只有 Prowlarr 可以（M4 票 61，審計 E3）。與精靈頁 4 的「之後再說」是同一個狀態，
 存在 `setup.indexer.skipped`、API 的健康那一列是 `unused`。可逆；不用時健康不檢查它、不算阻擋，搜尋說沒有接索引站。
