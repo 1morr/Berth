@@ -219,6 +219,10 @@ function holdSearch(base: ReturnType<typeof stubApi>) {
   )
 }
 
+/** 只問一個查詢時，代價與等待那一句（M4 票 84b）。 */
+const COST_ONE =
+  '每個索引站各佔 1 格請求預算（每站每小時 60 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。'
+
 /** 這一頁的搜尋區塊。其餘區塊的測試在 `pages/MediaDetailPage.test.tsx`。 */
 function panel() {
   return screen.getByRole('region', { name: '搜尋 torrent' })
@@ -1118,18 +1122,6 @@ describe('搜尋 torrent 與結果表', () => {
       expect(methods).not.toContain('PUT')
     })
 
-    it('說出會發幾個查詢、每個站佔幾格請求預算', async () => {
-      render()
-      renderApp('/media/tv:120089')
-      await screen.findByRole('region', { name: '搜尋 torrent' })
-
-      expect(
-        await within(panel()).findByText(
-          '會發 3 個查詢：每個索引站各佔 3 格請求預算（每站每小時 60 格）。',
-        ),
-      ).toBeVisible()
-    })
-
     it('超過上限時搜尋鍵停用並說原因，按了也不會問', async () => {
       const over = plan({ queries: Array.from({ length: 12 }, (_, i) => `SPY x FAMILY ${i}`) })
       const stub = render({ [QUERIES_PATH]: { body: over } })
@@ -1144,6 +1136,8 @@ describe('搜尋 torrent 與結果表', () => {
       expect(submit).toHaveAccessibleDescription(
         '開了 12 個查詢，一次最多 10 個：關掉幾個名字或季。',
       )
+      // 不能搜時整句換成原因：等多久那半句不出現（M4 票 84b）。
+      expect(within(panel()).queryByText(/幾秒到一分鐘/)).toBeNull()
       await userEvent.click(submit)
       expect(stub.mock.calls.map(([input]) => String(input))).not.toContain(
         '/api/search?media=tv%3A120089',
@@ -1162,15 +1156,13 @@ describe('搜尋 torrent 與結果表', () => {
       const submit = await within(panel()).findByRole('button', { name: '搜尋' })
       await waitFor(() => expect(submit).toBeDisabled())
       expect(within(panel()).getByText('至少開一個名字，或自己打一個關鍵字。')).toBeVisible()
+      expect(submit).toHaveAccessibleDescription('至少開一個名字，或自己打一個關鍵字。')
+      expect(within(panel()).queryByText(/幾秒到一分鐘/)).toBeNull()
 
       await userEvent.type(within(panel()).getByLabelText('關鍵字'), 'Spy Family BDRip')
 
       expect(submit).toBeEnabled()
-      expect(
-        within(panel()).getByText(
-          '會發 1 個查詢：每個索引站各佔 1 格請求預算（每站每小時 60 格）。',
-        ),
-      ).toBeVisible()
+      expect(within(panel()).getByText(COST_ONE)).toBeVisible()
     })
 
     it('快照還沒讀到時不畫空的 chip，搜尋鍵照舊按得下去（由後端說 no_query）', async () => {
@@ -1182,6 +1174,9 @@ describe('搜尋 torrent 與結果表', () => {
       expect(within(panel()).queryByRole('group', { name: '要問的名字' })).toBeNull()
       expect(submit).toBeEnabled()
       expect(within(panel()).queryByText('至少開一個名字，或自己打一個關鍵字。')).toBeNull()
+      // 一個查詢都沒有時代價那一句不畫（M4 票 84b）。
+      expect(within(panel()).getByText('會問 · 0 個查詢')).toBeVisible()
+      expect(within(panel()).queryByText(/幾秒到一分鐘/)).toBeNull()
     })
 
     it('按了 chip、新的預覽還沒回來時搜尋鍵停著：送出去的要是畫面上列的那一份', async () => {
@@ -1278,6 +1273,61 @@ describe('搜尋 torrent 與結果表', () => {
       expect(
         await within(panel()).findByText('開了 12 個查詢，一次最多 10 個：關掉幾個名字。'),
       ).toBeVisible()
+      expect(within(panel()).getByRole('button', { name: '搜尋' })).toHaveAccessibleDescription(
+        '開了 12 個查詢，一次最多 10 個：關掉幾個名字。',
+      )
+      expect(within(panel()).queryByText(/幾秒到一分鐘/)).toBeNull()
+    })
+  })
+
+  describe('預覽是一個帶查詢數的欄位，代價與等待一句（M4 票 84b）', () => {
+    it('標籤的查詢數與清單項數相同；不再另說一句「Berth 會問這幾個」', async () => {
+      render()
+      renderApp('/media/tv:120089')
+
+      expect(await asked()).toHaveLength(3)
+      expect(within(panel()).getByText('會問 · 3 個查詢')).toBeVisible()
+      expect(within(panel()).queryByText(/Berth 會問/)).toBeNull()
+    })
+
+    it('會佔幾格請求預算與要等多久是同一句', async () => {
+      render()
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      expect(
+        await within(panel()).findByText(
+          '每個索引站各佔 3 格請求預算（每站每小時 60 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+        ),
+      ).toBeVisible()
+    })
+
+    it('英文介面：標籤照單複數說查詢數，代價與等待同一句', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        render()
+        renderApp('/media/tv:120089')
+        const region = await screen.findByRole('region', { name: 'Search torrents' })
+
+        expect(await within(region).findByText('Will ask · 3 queries')).toBeVisible()
+        expect(
+          within(region).getByText(
+            "Uses 3 slots of each indexer's request budget (60 per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+          ),
+        ).toBeVisible()
+        expect(within(region).queryByText(/Berth will ask/)).toBeNull()
+
+        await userEvent.type(within(region).getByLabelText('Keyword'), 'Spy Family BDRip')
+
+        expect(within(region).getByText('Will ask · 1 query')).toBeVisible()
+        expect(
+          within(region).getByText(
+            "Uses 1 slot of each indexer's request budget (60 per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+          ),
+        ).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
     })
   })
 
@@ -1317,7 +1367,9 @@ describe('搜尋 torrent 與結果表', () => {
 
     await userEvent.type(await screen.findByLabelText('關鍵字'), 'Spy Family BDRip')
 
-    expect(screen.getByText('Berth 只會問這一個：')).toBeVisible()
+    expect(await asked()).toEqual(['Spy Family BDRip'])
+    expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
+    expect(within(panel()).queryByText(/Berth 只會問/)).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
     expect(await within(panel()).findByRole('table')).toBeVisible()
     expect(stub.mock.calls.map(([input]) => String(input))).toContain(

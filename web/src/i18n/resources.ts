@@ -1609,13 +1609,16 @@ const zhHant = {
     keywordPlaceholderMissing: '留空就問缺的那幾集',
     submit: '搜尋',
     submitting: '搜尋中…',
-    willAsk: 'Berth 會問這幾個：',
+    // 預覽欄位的標籤，查詢數寫在標籤裡（M4 票 84b）。
+    willAskCount_one: '會問 · {{count}} 個查詢',
+    willAskCount_other: '會問 · {{count}} 個查詢',
     queriesList: '要送出去的查詢',
-    // 按下去之前說出代價（M4 票 84）：一個查詢就是請索引站背後的每一個站搜一次，所以兩個數字相同。
-    cost_one:
-      '會發 {{count}} 個查詢：每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）。',
-    cost_other:
-      '會發 {{count}} 個查詢：每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）。',
+    // 按下去之前說出代價與要等多久（M4 票 84、84b）：一個查詢就是請索引站背後的每一個站搜一次，
+    // 所以格數就是查詢數。
+    costWait_one:
+      '每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+    costWait_other:
+      '每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
     tooMany: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字或季。',
     // 搜缺的集沒有季 chip：缺的形狀決定問哪幾季，能關的只有名字。
     tooManyNames: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字。',
@@ -1641,7 +1644,6 @@ const zhHant = {
       simplified: '簡體中文名',
       alias: '別名',
     },
-    willAskTyped: 'Berth 只會問這一個：',
     // 從季表按進來的那一種（M1.5 票 10）：問的是缺的那幾集，關鍵字一樣由後端給。
     willAskMissing: '這部作品缺的那幾集，Berth 會這樣問：',
     willAskMissingSeason: '{{season}} 缺的那幾集，Berth 會這樣問：',
@@ -1651,7 +1653,6 @@ const zhHant = {
     answeredAll_other: '{{count}} 個關鍵字都有回應',
     answeredRest_one: '其餘 {{count}} 個關鍵字有回應',
     answeredRest_other: '其餘 {{count}} 個關鍵字有回應',
-    slow: '索引站要現場去連它認得的每一個追蹤站，通常要幾秒到一分鐘。',
     // 標頭只說結果表那一份（M4 票 69）：「共 N 筆」曾被讀成索引站回的全部，與底下幾個數字對不上。
     count_one: '結果表 {{count}} 筆',
     count_other: '結果表 {{count}} 筆',
@@ -5041,12 +5042,13 @@ const en: Translations<typeof zhHant> = {
     willAskMissing: 'Berth will ask for the episodes this title is missing:',
     willAskMissingSeason: 'Berth will ask for the episodes {{season}} is missing:',
     missingOff: 'Search by title instead',
-    willAsk: 'Berth will ask for these:',
+    willAskCount_one: 'Will ask · {{count}} query',
+    willAskCount_other: 'Will ask · {{count}} queries',
     queriesList: 'Queries to send',
-    cost_one:
-      "Sends {{count}} query: it takes {{count}} slot of each indexer's request budget ({{budget}} per site an hour).",
-    cost_other:
-      "Sends {{count}} queries: they take {{count}} slots of each indexer's request budget ({{budget}} per site an hour).",
+    costWait_one:
+      "Uses {{count}} slot of each indexer's request budget ({{budget}} per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+    costWait_other:
+      "Uses {{count}} slots of each indexer's request budget ({{budget}} per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
     tooManyNames:
       'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names.',
     tooMany:
@@ -5075,8 +5077,6 @@ const en: Translations<typeof zhHant> = {
     answeredAll_other: 'All {{count}} keywords answered',
     answeredRest_one: '{{count}} other keyword answered',
     answeredRest_other: '{{count}} other keywords answered',
-    willAskTyped: 'Berth will ask for this only:',
-    slow: 'The indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
     count_one: '{{count}} in the table',
     count_other: '{{count}} in the table',
     returned_one: 'The indexer returned {{count}} result.',

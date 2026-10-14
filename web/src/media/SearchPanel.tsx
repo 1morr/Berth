@@ -147,7 +147,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
       />
 
       <form
-        className="grid gap-3"
+        className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault()
           if (refusal || settling) return
@@ -285,12 +285,16 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 }
 
 /**
- * 按下去之前先給看：Berth 會拿哪幾個名字去問，以及這要花多久。
+ * 按下去之前先給看：Berth 會拿哪幾個查詢去問，以及這要花多少、多久。
  *
- * 自己打了關鍵字時就只問那一個——他比 TMDB 更知道自己在找什麼，所以清單換成那一句。
+ * 它是一個欄位（M4 票 84b）：標籤與關鍵字、名字、資料夾名同一種，查詢數寫在標籤裡。沒有季的時候清單與開著的
+ * 名字 chip 是同一組字，所以不再另起一句「Berth 會問這幾個」；清單照留——開了季之後它與 chip 不同。
  *
- * 從季表按進來時（`missing`）問的是缺的那幾集，而那幾個關鍵字**也是後端給的**（票 10）：
- * 這一行因此照實說範圍，旁邊留一條回作品名的路——按進來之後沒有出口的話，只剩重整這一招。
+ * 自己打了關鍵字時就只問那一個——他比 TMDB 更知道自己在找什麼，所以清單換成那一句、標籤說 1 個。
+ *
+ * 從季表按進來時（`missing`）問的是缺的那幾集，而那幾個關鍵字**也是後端給的**（票 10）：清單本身看不出
+ * 問的是缺的集，所以標籤底下照實說範圍，旁邊留一條回作品名的路——按進來之後沒有出口的話，只剩重整這一招。
+ * 打了關鍵字時那一句不說（問的是打的那一個，不是缺的集），出口照留：清掉關鍵字之後問的又是缺的集。
  */
 function QueryPreview({
   keyword,
@@ -305,7 +309,7 @@ function QueryPreview({
   batch: Batch | null
   missing: MissingScope | null
   onTitles: () => void
-  /** 代價那一行（`QueryCost`）：緊接在查詢底下，與它說的是同一份清單。 */
+  /** 代價與等待那一句（`QueryCost`）：緊接在查詢底下，與它說的是同一份清單。 */
   children: ReactNode
 }) {
   const { t } = useTranslation()
@@ -313,47 +317,50 @@ function QueryPreview({
   const asked = typed ? [typed] : (planned ?? [])
 
   return (
-    <div className="grid gap-1">
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="max-w-prose text-xs text-ink-dim">
-          {typed
-            ? t('search.willAskTyped')
-            : missing === null
-              ? t('search.willAsk')
-              : missing.season === null
-                ? t('search.willAskMissing')
-                : t('search.willAskMissingSeason', { season: seasonCode(missing.season) })}
-        </span>
-        {missing !== null && (
-          <button type="button" onClick={onTitles} className={COMPACT_BUTTON}>
-            {t('search.missingOff')}
-          </button>
-        )}
+    <div className="grid gap-2">
+      {/* 數字照 The Tabular Rule：標籤在 zh-Hant 是無襯線，等寬數字要另外開。 */}
+      <p className="label text-ink-dim tabular-nums">
+        {t('search.willAskCount', { count: asked.length })}
       </p>
-      {!typed && batch && isBatched(batch, missing) && (
-        <p className="max-w-prose text-xs text-ink-dim">
-          {t('search.batch.preview', { seasons: seasonList(t, batch.seasons) })}
-          {batch.later > 0 ? t('search.batch.laterPreview', { later: batch.later }) : ''}
-        </p>
-      )}
-      {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。一個查詢一項（M4 票 84）：開了中文名與季之後一行放不下，
-          串成一段字的話「大熊餐廳 第5季」會從中間斷開，看不出那是一個查詢。 */}
-      {asked.length > 0 ? (
-        <ul
-          aria-label={t('search.queriesList')}
-          className="value flex max-w-prose flex-wrap gap-x-4 gap-y-1 text-xs text-ink"
-        >
-          {asked.map((query) => (
-            <li key={query} className="wrap-anywhere">
-              {query}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="value text-xs text-ink">—</p>
-      )}
-      {children}
-      <p className="max-w-prose text-xs text-ink-dim">{t('search.slow')}</p>
+      <div className="grid gap-1">
+        {missing !== null && (
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {!typed && (
+              <span className="max-w-prose text-xs text-ink-dim">
+                {missing.season === null
+                  ? t('search.willAskMissing')
+                  : t('search.willAskMissingSeason', { season: seasonCode(missing.season) })}
+              </span>
+            )}
+            <button type="button" onClick={onTitles} className={COMPACT_BUTTON}>
+              {t('search.missingOff')}
+            </button>
+          </p>
+        )}
+        {!typed && batch && isBatched(batch, missing) && (
+          <p className="max-w-prose text-xs text-ink-dim">
+            {t('search.batch.preview', { seasons: seasonList(t, batch.seasons) })}
+            {batch.later > 0 ? t('search.batch.laterPreview', { later: batch.later }) : ''}
+          </p>
+        )}
+        {/* 關鍵字是機器字串（送出去的就是它），走 `.value`。一個查詢一項（M4 票 84）：開了中文名與季之後一行放不下，
+            串成一段字的話「大熊餐廳 第5季」會從中間斷開，看不出那是一個查詢。 */}
+        {asked.length > 0 ? (
+          <ul
+            aria-label={t('search.queriesList')}
+            className="value flex max-w-prose flex-wrap gap-x-4 gap-y-1 text-xs text-ink"
+          >
+            {asked.map((query) => (
+              <li key={query} className="wrap-anywhere">
+                {query}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="value text-xs text-ink">—</p>
+        )}
+        {children}
+      </div>
     </div>
   )
 }
@@ -376,8 +383,9 @@ function refusalOf(
 }
 
 /**
- * 按下去之前說出代價（M4 票 84）：會發幾個查詢、每個索引站各佔幾格請求預算——一個查詢就是請索引站背後
- * 的每一個站現場搜一次，所以兩個數字相同。不能按的時候這一行換成原因，掛在搜尋鍵的描述上。
+ * 按下去之前說出代價（M4 票 84）：每個索引站各佔幾格請求預算——一個查詢就是請索引站背後的每一個站現場搜
+ * 一次，所以格數就是標籤上的查詢數——與要等多久，併成一句（票 84b）。不能按的時候整句換成原因，掛在搜尋鍵
+ * 的描述上，等多久那半句不說。一個查詢都沒有時不畫。
  */
 function QueryCost({
   count,
@@ -407,7 +415,9 @@ function QueryCost({
     )
   }
   if (count === 0) return null
-  return <p className="max-w-prose text-xs text-ink-dim">{t('search.cost', { count, budget })}</p>
+  return (
+    <p className="max-w-prose text-xs text-ink-dim">{t('search.costWait', { count, budget })}</p>
+  )
 }
 
 /**

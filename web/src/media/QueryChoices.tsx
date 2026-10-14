@@ -75,7 +75,7 @@ export function QueryChoices({
   })
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <ChoiceRow label={t('search.choose.names')}>
         <ToggleChips
           label={t('search.choose.namesGroup')}
@@ -123,11 +123,14 @@ export function QueryChoices({
   )
 }
 
-/** 一行：左邊是這一組叫什麼，右邊是 chip。窄版疊成兩行。 */
+/**
+ * 一組：標籤在上、chip 在下，所有寬度都一樣（M4 票 84b 推翻票 84 的左欄標籤）：關鍵字、預覽、資料夾名的
+ * 標籤都在欄位上方，左欄那一條軸讓 chip 從一個跟上下都對不齊的 x 起跑。
+ */
 function ChoiceRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-[6rem_minmax(0,1fr)] sm:items-start">
-      <p className="label text-ink-dim sm:pt-2.5">{label}</p>
+    <div className="grid gap-2">
+      <p className="label text-ink-dim">{label}</p>
       <div className="grid min-w-0 gap-2">{children}</div>
     </div>
   )

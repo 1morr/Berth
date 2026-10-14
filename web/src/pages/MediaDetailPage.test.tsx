@@ -1147,6 +1147,9 @@ describe('Media 詳情頁', () => {
 
       // 預覽的那幾個字由後端給（`/search/queries` 收同一組參數），不是前端自己拼的。
       expect(await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')).toBeVisible()
+      // 範圍那一句在帶查詢數的標籤底下（M4 票 84b）：「問的是缺的集」從清單本身看不出來。
+      expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
+      expect(within(panel()).getByRole('button', { name: '改回作品名搜尋' })).toBeVisible()
       expect(asked(stub)).toContain('/api/search/queries?media=tv%3A120089&missing=true')
       expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true')
       // 結果照舊畫在這一區塊裡，不在季表那邊另開一張表（shape §4）。
@@ -1194,6 +1197,9 @@ describe('Media 詳情頁', () => {
       await userEvent.click(entry)
 
       expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true&season=1')
+      expect(await within(panel()).findByText('S01 缺的那幾集，Berth 會這樣問：')).toBeVisible()
+      expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
+      expect(within(panel()).getByRole('button', { name: '改回作品名搜尋' })).toBeVisible()
     })
 
     it('沒有缺集的那一季展開之後也沒有這顆按鈕', async () => {
@@ -1232,6 +1238,19 @@ describe('Media 詳情頁', () => {
         expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent(/^SPY x FAMILY$/),
       )
       expect(screen.queryByRole('button', { name: '改回作品名搜尋' })).not.toBeInTheDocument()
+    })
+
+    it('搜缺的集之後又打了關鍵字：範圍那一句不說，出口照留（M4 票 84b）', async () => {
+      gaps()
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+      await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')
+
+      await userEvent.type(within(panel()).getByLabelText('關鍵字'), 'BDRip')
+
+      expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
+      expect(within(panel()).queryByText('這部作品缺的那幾集，Berth 會這樣問：')).toBeNull()
+      expect(within(panel()).getByRole('button', { name: '改回作品名搜尋' })).toBeVisible()
     })
 
     describe('分批（M3 票 20）', () => {

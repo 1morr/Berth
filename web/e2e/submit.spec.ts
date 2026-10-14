@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
 import { signIn } from './login.ts'
 
@@ -9,6 +9,14 @@ test('從作品頁送單，一路走到已入庫', async ({ page }) => {
   await signIn(page, '/media/tv:120089')
 
   const search = page.getByRole('region', { name: '搜尋 torrent' })
+  // 名字 chip 與查詢清單跟關鍵字框共用一條左緣（M4 票 84b：標籤一律在欄位上方，沒有左欄；DESIGN.md `QueryChoices`）。
+  const firstName = search.getByRole('group', { name: '要問的名字' }).getByRole('button').first()
+  await expect(firstName).toBeVisible()
+  const left = async (target: Locator) => (await target.boundingBox())?.x ?? Number.NaN
+  const edge = await left(search.getByRole('textbox', { name: '關鍵字' }))
+  for (const target of [firstName, search.getByRole('list', { name: '要送出去的查詢' })]) {
+    expect(Math.abs((await left(target)) - edge)).toBeLessThanOrEqual(1)
+  }
   await search.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
   await search.getByRole('button', { name: '搜尋' }).click()
 

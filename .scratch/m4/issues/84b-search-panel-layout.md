@@ -1,6 +1,6 @@
 # 84b — 搜尋區塊：名字與季的標籤移到上方，預覽與代價收成一塊
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -73,11 +73,34 @@ Infernal Affairs II (2003) [tmdbid-11647]
 
 ## 驗收
 
-- [ ] 1280 寬：「名字」「季」標籤在 chip 上方；第一顆名字 chip、別名摘要與關鍵字輸入框的左緣 x 相同（playwright 量 `getBoundingClientRect`，差 ≤ 1px）
-- [ ] 預覽標籤帶查詢數，與清單項數相同；照作品名搜時畫面上沒有「Berth 會問這幾個」那一句；vitest（zh-Hant 與 en）
-- [ ] 打了關鍵字、搜缺的整部、搜缺的某一季、分批、`noName`、`tooMany`、`tooManyNames` 七種狀態各有 vitest，說出原本說的那件事（範圍句、改回作品名鍵、拒絕原因掛在搜尋鍵描述上）
-- [ ] 代價與等待是同一個元素；拒絕時只有原因、沒有等待那半句；`SetupPage.consistency.test.tsx` 的「幾秒到一分鐘」改看新的 key，仍兩語言都守
-- [ ] 不再使用的 i18n key（`willAsk`、`willAskTyped`、`slow` 或其併入後的舊 key）兩語言都刪掉，沒有殘留引用
-- [ ] playwright 實跑 1280 與 390 寬截圖：電影（只有名字）、劇集（名字＋季＋別名展開）、搜缺的集；390 寬無橫向捲動
-- [ ] `/impeccable critique` 前後分數記在 Comments
-- [ ] `DESIGN.md` 條目已改；全部檢查、vitest、前端 e2e 綠；progress.md 已更新
+- [x] 1280 寬：「名字」「季」標籤在 chip 上方；第一顆名字 chip、別名摘要與關鍵字輸入框的左緣 x 相同（playwright 量 `getBoundingClientRect`，差 ≤ 1px）
+- [x] 預覽標籤帶查詢數，與清單項數相同；照作品名搜時畫面上沒有「Berth 會問這幾個」那一句；vitest（zh-Hant 與 en）
+- [x] 打了關鍵字、搜缺的整部、搜缺的某一季、分批、`noName`、`tooMany`、`tooManyNames` 七種狀態各有 vitest，說出原本說的那件事（範圍句、改回作品名鍵、拒絕原因掛在搜尋鍵描述上）
+- [x] 代價與等待是同一個元素；拒絕時只有原因、沒有等待那半句；`SetupPage.consistency.test.tsx` 的「幾秒到一分鐘」改看新的 key，仍兩語言都守
+- [x] 不再使用的 i18n key（`willAsk`、`willAskTyped`、`slow` 或其併入後的舊 key）兩語言都刪掉，沒有殘留引用
+- [x] playwright 實跑 1280 與 390 寬截圖：電影（只有名字）、劇集（名字＋季＋別名展開）、搜缺的集；390 寬無橫向捲動
+- [x] `/impeccable critique` 前後分數記在 Comments
+- [x] `DESIGN.md` 條目已改；全部檢查、vitest、前端 e2e 綠；progress.md 已更新
+
+## Comments
+
+### 2026-10-14 實作
+
+- **推翻 shape 的左標籤**：84b 推翻了 `.scratch/m4/search-choose-shape.md` 版面草圖裡「名字」「季」的左欄標籤（`sm:grid-cols-[6rem_…]`）；草圖照留，那是當時的 shape。
+- **i18n**：新 key `search.willAskCount`（「會問 · N 個查詢」／"Will ask · N query/queries"）、`search.costWait`（代價與等待一句）；刪 `willAsk`、`willAskTyped`、`slow`、`cost` 兩語言。
+- **使用者拍板（Spec 軸點名的停下回報項）**：英文標籤照 `_one`/`_other` 慣例分單複數；查詢數是 0 或超過上限被拒時，標籤照實寫數字（「會問 · 0 個查詢」＋「—」、「會問 · 12 個查詢」＋拒絕原因）。
+- **自己定的、照舊行為**：搜缺的集之後又打了關鍵字，範圍句不畫（問的是打的那一個），「改回作品名搜尋」照留（舊版就有這顆鍵；code-review 前一版連鍵一起拿掉，改回）。
+- **欄位間距** form 與 `QueryChoices` 由 `gap-3` 改 `gap-4`（標籤到內容 `gap-2`）：第一版截圖裡「季」貼在別名底下，欄位之間只比標籤到 chip 多 4px。
+- **閘門**：`web/e2e/submit.spec.ts` 量第一顆名字 chip、查詢清單與關鍵字框的左緣差 ≤ 1px。反向變異：把 `sm:grid-cols-[6rem_minmax(0,1fr)]` 加回 `ChoiceRow` → 紅（差 104px）；還原 → 綠。vitest「搜缺的集之後又打了關鍵字」：把出口包回 `!typed` → 紅。
+- **實跑**（`fake_setup_server.py --scenario search --port 8594`，真 TMDB、替身索引站，不碰 docker、不碰 `berth-local`）：《無間道II》（`movie:11647`）與 The Bear（`tv:136315`）。1280 寬量 `getBoundingClientRect().left`：關鍵字框、第一顆名字 chip、別名摘要、查詢清單、資料夾名全是 24。390 寬 `scrollWidth ≤ innerWidth`。截圖在 `.playwright-mcp/t84b/`：`movie-1280`、`movie-390`、`tv-1280`、`tv-390`（名字＋季＋別名展開）、`missing-1280`、`missing-390`（搜缺的集）；改版前 `before-movie-1280`、`before-tv-1280`。
+- **`/impeccable critique`**（雙子代理）：**前 28/40 → 後 30/40**。#4 Consistency 2→3、#8 Aesthetic 2→3，其餘同分；偵測器 CLI 與瀏覽器 overlay 都是 0 條。快照 `.impeccable/critique/2026-10-14T08-47-32Z__web-src-media-searchpanel-tsx.md`。
+- **全部檢查**：`pre-commit run --all-files` 綠；vitest 104 檔 1971 條綠；前端 e2e 35 條，第一次全跑時 `rss-subscribe` 在 RSS 訂閱段等「第一批待確認」逾時 5 秒，單獨跑兩次都過（與搜尋區塊無關，並行三十幾台替身時的時序）；收尾時再全跑一次 35 條全過。
+
+### 未處理（critique 與 code-review 提到、不在本票）
+
+- 停用的搜尋鍵在最上排，原因在 chip 與清單底下（390 寬展開別名時在第一屏外）：要動關鍵字列，另外拍板（兩版都有）。
+- 打了關鍵字時名字 chip 仍是可按的樣子、按了不影響查詢（舊版靠「只會問這一個」一句；本票照票面刪掉了它）。
+- 缺集模式按進來、搜尋中時預覽與纜繩可能還是作品名那一份（`missing-390` 截圖看得到；`searchMissing` 不經 `settling`）。兩版都有，先寫 repro 再修。
+- 預覽沒有 `aria-live`：按 chip 後查詢數的變化聽不到（兩版都有）。
+- 缺集範圍句「Berth 會這樣問：」與標籤都說「會問」；代價句在 `max-w-prose` 處把「追蹤站」拆行。
+- Standards 軸：數字寫在 `.label` 裡只加 `tabular-nums`，與 The Tabular Rule「數字走 `.value`」字面不同（Spec 軸判為合理折衷，留著）；`QueryCost` 現在也說等待，名字只說一半；測試裡「拒絕原因＋按鈕描述＋沒有等待半句」三組斷言重複。
