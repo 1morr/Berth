@@ -67,10 +67,11 @@ Berth is a public beta. Read [Status](#status) before relying on it.
      change its `*_PORT` to run both. Otherwise `up -d` stops at `port is already allocated`. See
      [Connecting services you already run](docs/guide/existing-services.md).
 
-3. Start it, and wait until `berth` shows `(healthy)` (about a minute on the first pull):
+3. Start it, and wait until `berth` shows `(healthy)` (about a minute on the first pull). The `pull` matters if this
+   machine ran Berth before: `up` alone starts the old image it already has.
 
    ```bash
-   docker compose up -d
+   docker compose pull && docker compose up -d
    docker compose ps
    ```
 

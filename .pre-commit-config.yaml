@@ -5,6 +5,9 @@
 # of, so the whitespace hooks skip that tree. See tests/fixtures/http/README.md.
 exclude: ^tests/fixtures/
 
+# `pre-commit install` also installs the commit-msg hook below.
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -65,3 +68,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^web/
+
+      # Conventional Commits subject, <= 72 characters. Tested by tests/unit/test_commit_msg.py.
+      - id: commit-msg
+        name: commit message
+        entry: python scripts/check_commit_msg.py
+        language: python
+        stages: [commit-msg]

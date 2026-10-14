@@ -62,10 +62,11 @@ Berth 是公開 beta。依賴它之前先讀〈[現況](#現況)〉。
      就改它的 `*_PORT`。否則 `up -d` 會停在 `port is already allocated`。見
      [Connecting services you already run](docs/guide/existing-services.md)（英文）。
 
-3. 啟動，等 `berth` 顯示 `(healthy)`（第一次拉 image 約一分鐘）：
+3. 啟動，等 `berth` 顯示 `(healthy)`（第一次拉 image 約一分鐘）。這台機器以前跑過 Berth 的話，`pull` 不能省：
+   只 `up` 會起本機已有的舊 image。
 
    ```bash
-   docker compose up -d
+   docker compose pull && docker compose up -d
    docker compose ps
    ```
 
