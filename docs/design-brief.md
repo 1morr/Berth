@@ -1736,6 +1736,14 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   每類各有上限（符合 100、其餘 50，逐站輪流取）。「只對上部分名字」照 Sonarr 取第一個記號（季集、字幕組集號、年份）前面那一段，
   但先照 `/`、`|`、括號與文字系統（CJK／非 CJK）切成一個一個名字再比——字幕組把中文名與拉丁字名寫在一起（`SPY×FAMILY 間諜家家酒 - 05`），
   整段比的話每一筆都像衍生劇。有一個名字相等就算這一部，沒有相等但有一個包住這部作品的名字才算「部分」；讀不出記號時不判。
+- **自己打關鍵字的搜尋**（2026-10-14 補查，M4 票 83b）：Prowlarr 的手動搜尋頁就是打字搜，預先定義的篩選只有 `all`
+  （`selectedFilterKey: 'all'`），自訂篩選的欄位有 `title`（使用者自己填的字串比較）、`indexerId`、`seeders` 等，**沒有拿發佈名比對
+  查詢的判斷**——The Pirate Bay 的熱門清單在它那裡一樣全列。【`frontend/src/Store/Actions/releaseActions.js`，
+  [Prowlarr develop](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/Store/Actions/releaseActions.js)，2026-10-14 讀】
+  Berth 推翻票 83 的「自己打的關鍵字一律 `unjudged`、不分類」：只分**對得上**（`typed_match`：正規化後發佈名含打的那串字，或含這部作品的
+  某個名字——後者補繁簡，專案沒有轉換）與**對不上**（`typed_miss`），預設只開對得上；仍不判是不是這部作品（票 08 的理由）。有 CJK 的字串
+  不設長度下限，不到四個字的拉丁字要整詞相等（`parser.typed_fits`，`.scratch/m4/search-typed-filter-shape.md`）。`unjudged` 拿掉：
+  沒有快照時只看打的字，照作品名搜沒有快照時根本沒有查詢。
 
 ### 20.21 季的搜尋記號：`Season N` 與 `SNN` 實跑比較（2026-10-13 實測，M4 票 84）
 

@@ -268,6 +268,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
         <FilteredResults
           key={search.submittedAt}
           results={results}
+          typed={search.variables?.q ?? ''}
           media={media}
           route={chosen}
           sort={sort}

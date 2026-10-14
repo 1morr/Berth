@@ -26,6 +26,7 @@ from berth.parser.title import (
     partial_title,
     season_tokens,
     spell_ampersand,
+    typed_fits,
 )
 
 __all__ = [
@@ -70,6 +71,7 @@ __all__ = [
     "spell_ampersand",
     "structure_hints",
     "tags_of",
+    "typed_fits",
     "vouch_first_batch",
     "written_episode",
 ]

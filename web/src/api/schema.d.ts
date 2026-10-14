@@ -4953,10 +4953,10 @@ export interface components {
          *     照 Sonarr 互動搜尋的慣例：被拒的照樣列出、每一筆說得出理由，使用者自己決定抓不抓。一筆只歸
          *     一類：判斷是排了先後的粗篩（`services/search.py` 的 `_judge`），第一條命中的就是那一筆的歸類——
          *     證據硬的先（名字、索引站的分類、季集記號、年份），最軟的「只對上部分名字」最後。
-         *     值的順序是畫面上按鈕的順序。
+         *     值的順序是畫面上按鈕的順序。自己打關鍵字的搜尋只有最後兩類（M4 票 83b）。
          * @enum {string}
          */
-        SearchVerdict: "fits" | "year" | "not_movie" | "adult" | "partial_title" | "unrelated" | "unjudged";
+        SearchVerdict: "fits" | "year" | "not_movie" | "adult" | "partial_title" | "unrelated" | "typed_match" | "typed_miss";
         /**
          * SeasonChipOut
          * @description 一顆逐季 chip（M4 票 84）。第 0 季特別篇不列。

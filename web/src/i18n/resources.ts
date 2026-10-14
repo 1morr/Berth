@@ -1667,6 +1667,9 @@ const zhHant = {
     // 「什麼都沒回」與「回了一堆但沒有一筆符合」是兩件事：後者的東西都在其他類裡，按得到。
     onlyOthers_one: '沒有符合的結果；其他幾類有 {{count}} 筆，按上面的按鈕看。',
     onlyOthers_other: '沒有符合的結果；其他幾類有 {{count}} 筆，按上面的按鈕看。',
+    // 自己打關鍵字的那一種（M4 票 83b）：只有「對不上」一類可開。
+    onlyTypedMiss_one: '沒有對得上的結果；對不上的有 {{count}} 筆，按上面的按鈕看。',
+    onlyTypedMiss_other: '沒有對得上的結果；對不上的有 {{count}} 筆，按上面的按鈕看。',
     // 每一筆歸到的那一類（M4 票 83）。按鈕上的字與列上的色塊同一個詞。
     verdict: {
       fits: '符合',
@@ -1676,6 +1679,9 @@ const zhHant = {
       adult: '成人分類',
       partial_title: '只對上部分名字',
       unrelated: '名字對不上',
+      // 自己打關鍵字的兩類（M4 票 83b）：發佈名含打的字或這部作品的某個名字，不判是不是這部作品。
+      typed_match: '對得上',
+      typed_miss: '對不上',
     },
     // 不是「符合」的列底下那一句。證據是發佈名裡的那一段字，原樣引用。
     reason: {
@@ -1686,6 +1692,8 @@ const zhHant = {
       partial_title:
         '發佈名的片名是「{{evidence}}」，比這部作品的名字多一段：可能是衍生作品，也可能只是多寫了副標。',
       unrelated: '發佈名裡沒有這部作品的任何一個名字。',
+      // 證據是打的那串字，原樣引用。
+      typed_miss: '發佈名裡沒有「{{evidence}}」，也沒有這部作品的名字。',
     },
     filter: {
       label: '要列出哪幾類',
@@ -5082,6 +5090,9 @@ const en: Translations<typeof zhHant> = {
       'Nothing matches. The other kinds hold {{count}} result; use the buttons above.',
     onlyOthers_other:
       'Nothing matches. The other kinds hold {{count}} results; use the buttons above.',
+    onlyTypedMiss_one: 'Nothing matches. “No match” holds {{count}} result; use the buttons above.',
+    onlyTypedMiss_other:
+      'Nothing matches. “No match” holds {{count}} results; use the buttons above.',
     verdict: {
       fits: 'Matches',
       year: 'Wrong year',
@@ -5089,6 +5100,8 @@ const en: Translations<typeof zhHant> = {
       adult: 'Adult',
       partial_title: 'Partial title',
       unrelated: 'Other titles',
+      typed_match: 'Matches',
+      typed_miss: 'No match',
     },
     reason: {
       year: 'The release says {{evidence}}; this title is from {{year}}.',
@@ -5099,6 +5112,7 @@ const en: Translations<typeof zhHant> = {
       partial_title:
         'The release is titled “{{evidence}}”, longer than this title’s name: possibly a spin-off, or just a subtitle written out.',
       unrelated: 'None of this title’s names appears in the release.',
+      typed_miss: 'The release contains neither “{{evidence}}” nor any of this title’s names.',
     },
     filter: {
       label: 'Kinds to list',

@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **作品頁自己打關鍵字搜尋，也分得出哪些是你要的**（M4 票 83b）：結果分「對得上」（發佈名含你打的字，或含這部作品的某個名字，
+  例如打「無間道」時簡體的「无间道」與英文名也算）與「對不上」，預設只列對得上的——The Pirate Bay 對搜不到的字回的熱門清單
+  不再壓在真正的結果上面。對不上的照樣送來，按按鈕就看得到、送得了單。API：`GET /api/search` 的 `verdict` 多 `typed_match`、
+  `typed_miss`，拿掉 `unjudged`（只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可）。
+
 ## [0.2.7] - 2026-10-14
 
 **從 0.2.6 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變，也沒有

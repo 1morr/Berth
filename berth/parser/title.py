@@ -138,6 +138,38 @@ def mentions(release_name: str, media: MediaSnapshot) -> bool:
     )
 
 
+def typed_fits(release_name: str, typed: str, media: MediaSnapshot | None) -> bool:
+    """自己打關鍵字時，這串發佈名對得上使用者問的東西嗎（M4 票 83b）。
+
+    兩條任一成立：含打的那串字，或含這部作品的某個名字。第二條是為了繁簡——打「無間道」時
+    `[心叶荐] 无间道_Infernal Affairs` 只靠簡體名與英文名對得上，專案沒有繁簡轉換。不判
+    「是不是這部作品」：打字多半是 TMDB 的名字搜不到，那樣判的話幾乎每一筆都對不上（票 08）。
+    沒有快照時只看第一條。
+
+    兩條用同一個「含」（`_contains_words`），**不是 `mentions`**：它的長度下限會把三個字的中文名
+    整個略過，而照作品名搜的判斷這張票不動。
+    """
+    names = _known_titles(media) if media is not None else ()
+    return any(_contains_words(release_name, words) for words in (typed, *names))
+
+
+def _contains_words(release_name: str, words: str) -> bool:
+    """正規化之後發佈名含這串字。有 CJK 的不設長度下限；不到 `_MIN_CONTAINED` 的拉丁字要整詞
+    相等——打 `Up` 對得上 `Up.2009`，對不上 `Setup`。"""
+    target = normalize_title(words)
+    if not target:
+        return False
+    if _CJK.search(target) or len(target) >= _MIN_CONTAINED:
+        return target in normalize_title(release_name)
+    return f" {_word_run(words)} " in f" {_word_run(release_name)} "
+
+
+def _word_run(text: str) -> str:
+    """拉丁字的詞照原順序、以空白接起來（`_WORD` 切開）：比整詞用。不像 `_words` 丟掉短詞——
+    要比的正是短詞。"""
+    return " ".join(_WORD.split(unicodedata.normalize("NFKC", text).casefold())).strip()
+
+
 def spell_ampersand(title: str) -> str:
     """`Law & Order` → `Law and Order`：拉丁字的名字裡，`&` 寫成 `and`（M4 票 69）。
 

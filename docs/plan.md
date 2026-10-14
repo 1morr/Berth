@@ -516,8 +516,9 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
   （`verdict` 與 `evidence`：觸發的那一段字），畫面預設只開「符合」。判定順序是證據硬的先：名字對不上（`parser.title.mentions`）
   → 成人分類（Newznab 6000–6999，brief §20.19）→ 不是電影（`parser.misfit`：電影搜尋讀得出季集記號或字幕組的 `- 05`、`[01-12]`）
   → 年份不符（同一支，M4 票 49、brief §20.16：電影差超過一年、劇集看整段播出期間）→ 只對上部分名字（`parser.partial_title`：
-  第一個記號前面的片名包住這部作品的名字但不等於它，可能是衍生作品）→ 符合。自己打的關鍵字與沒有快照時一律 `unjudged`，不分類。
-  每類各自逐站輪流取：符合與 `unjudged` 100 筆（`RESULT_LIMIT`），其餘每類 50 筆（`OTHERS_LIMIT`）；`counts` 報每一類在每一站的總數。
+  第一個記號前面的片名包住這部作品的名字但不等於它，可能是衍生作品）→ 符合。**自己打的關鍵字**只分兩類（M4 票 83b，`parser.typed_fits`）：
+  `typed_match`（發佈名含打的字，或含這部作品的某個名字；沒有快照時只看打的字）與 `typed_miss`，不判年份、類型、成人、部分名字。
+  每類各自逐站輪流取：符合與 `typed_match` 100 筆（`RESULT_LIMIT`），其餘每類 50 筆（`OTHERS_LIMIT`）；`counts` 報每一類在每一站的總數。
   **筆數的定義**（M4 票 69、83）：`returned`＝每個查詢回的筆數加總＝`merged`（`_dedupe` 合併掉的）＋Σ`counts.total`；
   畫面一行說回了幾筆與重複的，各類的數字在篩選按鈕上，標頭只說「符合」那一份（「結果表 N 筆」）。
   **解析只跑在送出去的那幾百筆上**（最多 100＋5×50）：`parse_release` 實測每筆 14 毫秒（1200 筆 17.4 秒），

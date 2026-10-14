@@ -225,14 +225,16 @@ class TestResults:
         assert body["returned"] == parts
         assert body["returned"] > len(body["rows"])
 
-    def test_a_typed_keyword_turns_the_filter_off(self, client: TestClient) -> None:
-        """自己打字時他要的就是那一串字，不是這部作品——那時 Berth 沒有資格篩。"""
+    def test_a_typed_keyword_sorts_by_the_typed_words(self, client: TestClient) -> None:
+        """自己打字時只分對得上與對不上（M4 票 83b）：含打的字或作品的名字的對得上，其餘對不上。"""
         sign_in(client)
 
         body = client.get(f"/api/search?media={SPY_ID}&q=Spider-Man").json()
 
-        assert [row["title"] for row in body["rows"] if "Spider-Man" in row["title"]] != []
-        assert {row["verdict"] for row in body["rows"]} == {"unjudged"}
+        verdicts = {row["title"].split(" ")[0]: row["verdict"] for row in body["rows"]}
+        assert verdicts["Spider-Man:"] == "typed_match"
+        assert verdicts["Moana"] == "typed_miss"
+        assert {one["verdict"] for one in body["counts"]} == {"typed_match", "typed_miss"}
 
     def test_the_attempts_name_every_keyword_that_went_out(self, client: TestClient) -> None:
         """逐個查詢的成敗看得見——一個垮了不代表整張表是空的（票 08 驗收）。"""

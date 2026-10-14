@@ -440,20 +440,133 @@ async def test_releases_that_are_not_this_work_are_sent_under_their_own_verdict(
     assert (count(view), count(view, SearchVerdict.UNRELATED)) == (1, 1)
 
 
-@pytest.mark.asyncio
-async def test_a_typed_keyword_turns_the_filter_off(session: AsyncSession) -> None:
-    """自己打字時他要的就是那一串字，不是這部作品——那時 Berth 沒有資格篩。"""
-    await arrange_media(session)
-    await arrange_indexer(session)
-    indexer = FakeIndexerSearch(
-        results=(result("Spider-Man: Brand New Day 2026.1080p", info_hash="b" * 40),)
+INFERNAL = build_media_id(MediaKind.MOVIE, 10775)
+#: 2026-10-14 使用者在《無間道》自己打「無間道」：104 筆裡 96 筆是 The Pirate Bay 的熱門清單
+#: （M4 票 83b）。
+INFERNAL_RESULTS = (
+    result("Avira Antivirus Pro 2026 Multi", info_hash="1" * 40, seeders=5210, indexer="TPB"),
+    result("Spider-Man Brand New Day 2026 1080p", info_hash="2" * 40, seeders=4801, indexer="TPB"),
+    result("Slow Horses S05E01 1080p WEB", info_hash="3" * 40, seeders=3120, indexer="TPB"),
+    result("無間道 III [国语中字]", info_hash="4" * 40, seeders=2, indexer="dmhy"),
+    result("[心叶荐] 无间道_Infernal Affairs", info_hash="5" * 40, seeders=1, indexer="dmhy"),
+)
+
+
+async def arrange_infernal(session: AsyncSession) -> None:
+    session.add(
+        Media(
+            id=INFERNAL,
+            tmdb_id=10775,
+            kind=MediaKind.MOVIE,
+            title_en="Infernal Affairs",
+            title_original="無間道",
+            year=2002,
+            folder_name="Infernal Affairs (2002) [tmdbid-10775]",
+            tmdb_snapshot_json={
+                "tmdb_id": 10775,
+                "kind": "movie",
+                "title": "無間道",
+                "title_en": "Infernal Affairs",
+                "title_original": "無間道",
+                "title_zh_cn": "无间道",
+                "year": 2002,
+                "titles": ["Infernal Affairs", "無間道", "无间道"],
+            },
+            tmdb_fetched_at=datetime.now(UTC),
+        )
     )
-    factory = FakeClientFactory(indexer_search=indexer)
+    await session.commit()
 
-    view = await search_torrents(session, factory, SourceCache(), media_id=SPY, query="Spider-Man")
 
-    assert [row.verdict for row in view.rows] == [SearchVerdict.UNJUDGED]
-    assert [(one.verdict, one.total) for one in view.counts] == [(SearchVerdict.UNJUDGED, 1)]
+class TestTypedKeyword:
+    """自己打關鍵字時分「對得上」與「對不上」（M4 票 83b）：只判發佈名對不對得上使用者問的東西，
+    不判是不是這部作品（票 08）。熱門清單不再壓在那幾筆真正的結果上面。"""
+
+    @pytest.mark.asyncio
+    async def test_the_popular_list_does_not_match_the_typed_words(
+        self, session: AsyncSession
+    ) -> None:
+        await arrange_infernal(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=INFERNAL_RESULTS))
+
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=INFERNAL, query="無間道"
+        )
+
+        # 第二筆只靠作品的簡體名與英文名對得上：專案沒有繁簡轉換。
+        assert listed(view, SearchVerdict.TYPED_MATCH) == [
+            "無間道 III [国语中字]",
+            "[心叶荐] 无间道_Infernal Affairs",
+        ]
+        assert set(listed(view, SearchVerdict.TYPED_MISS)) == {
+            "Avira Antivirus Pro 2026 Multi",
+            "Spider-Man Brand New Day 2026 1080p",
+            "Slow Horses S05E01 1080p WEB",
+        }
+        assert verdicts(view) == {SearchVerdict.TYPED_MATCH, SearchVerdict.TYPED_MISS}
+
+    @pytest.mark.asyncio
+    async def test_without_a_snapshot_only_the_typed_words_count(
+        self, session: AsyncSession
+    ) -> None:
+        """Berth 還不知道這部作品叫什麼（TMDB 讀不到、沒存過）：只看打的字。"""
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=INFERNAL_RESULTS))
+
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=INFERNAL, query="無間道"
+        )
+
+        assert listed(view, SearchVerdict.TYPED_MATCH) == ["無間道 III [国语中字]"]
+        assert count(view, SearchVerdict.TYPED_MISS) == 4
+
+    @pytest.mark.asyncio
+    async def test_a_typed_keyword_judges_neither_year_nor_kind(
+        self, session: AsyncSession
+    ) -> None:
+        """年份與類型照舊不判：重拍與真人秀的那一集只要含打的字就對得上。"""
+        await arrange_night(session)
+        await arrange_indexer(session)
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=night_results()))
+
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=NIGHT, query="Night of the Living"
+        )
+
+        assert (verdicts(view), count(view, SearchVerdict.TYPED_MATCH)) == (
+            {SearchVerdict.TYPED_MATCH},
+            20,
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_counts_add_up_and_each_kind_is_capped(self, session: AsyncSession) -> None:
+        """對得上送 `RESULT_LIMIT` 筆、對不上送 `OTHERS_LIMIT` 筆；總數另外報，加得起來。"""
+        await arrange_infernal(session)
+        await arrange_indexer(session)
+        rows = (
+            *(
+                result(f"無間道 {n:03d} 1080p", info_hash=f"{n:040x}", seeders=n)
+                for n in range(RESULT_LIMIT + 7)
+            ),
+            *(
+                result(f"Popular Thing {n:03d} 1080p", info_hash=f"{1000 + n:040x}", seeders=n)
+                for n in range(OTHERS_LIMIT + 9)
+            ),
+        )
+        factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=rows))
+
+        view = await search_torrents(
+            session, factory, SourceCache(), media_id=INFERNAL, query="無間道"
+        )
+
+        assert len(listed(view, SearchVerdict.TYPED_MATCH)) == RESULT_LIMIT
+        assert len(listed(view, SearchVerdict.TYPED_MISS)) == OTHERS_LIMIT
+        assert (count(view, SearchVerdict.TYPED_MATCH), count(view, SearchVerdict.TYPED_MISS)) == (
+            RESULT_LIMIT + 7,
+            OTHERS_LIMIT + 9,
+        )
+        assert view.returned == view.merged + sum(one.total for one in view.counts)
 
 
 @pytest.mark.asyncio
@@ -1053,20 +1166,6 @@ async def test_a_show_search_keeps_its_episodes(session: AsyncSession) -> None:
     assert listed(view, SearchVerdict.YEAR) == ["SPY x FAMILY 1998 VHS"]
 
 
-@pytest.mark.asyncio
-async def test_a_typed_keyword_sets_nothing_aside(session: AsyncSession) -> None:
-    """自己打字時 Berth 沒有資格篩，年份與類型也一樣。"""
-    await arrange_night(session)
-    await arrange_indexer(session)
-    factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=night_results()))
-
-    view = await search_torrents(
-        session, factory, SourceCache(), media_id=NIGHT, query="Night of the Living"
-    )
-
-    assert (verdicts(view), count(view, SearchVerdict.UNJUDGED)) == ({SearchVerdict.UNJUDGED}, 20)
-
-
 NOSFERATU = build_media_id(MediaKind.MOVIE, 653)
 #: 審計 S3 搜《Nosferatu》(1922)：主表混進同名動畫《Tsuki to Laika to Nosferatu》的各集與成人內容
 #: （M4 票 69）。發佈名照各站的寫法造，分類照 Prowlarr 回的 `categories`（標準碼加站自己的碼）。
@@ -1169,8 +1268,7 @@ class TestNosferatu:
         )
 
         assert (view.returned, view.merged) == (18, 0)
-        assert verdicts(view) == {SearchVerdict.UNJUDGED}
-        assert count(view, SearchVerdict.UNJUDGED) == 18
+        assert view.returned == sum(one.total for one in view.counts)
 
 
 LAW = build_media_id(MediaKind.TV, 549)

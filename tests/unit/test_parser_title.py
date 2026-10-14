@@ -20,6 +20,7 @@ from berth.parser import (
     partial_title,
     season_tokens,
     spell_ampersand,
+    typed_fits,
 )
 
 
@@ -476,6 +477,71 @@ class TestAmpersand:
         pride = movie("Pride and Prejudice", 2005)
 
         assert not mentions("Pride.Prejudice.2005.1080p", pride)
+
+
+class TestTypedFits:
+    """自己打的關鍵字：發佈名對不對得上使用者問的東西（M4 票 83b，
+    `.scratch/m4/search-typed-filter-shape.md`）。
+
+    兩條任一成立就對得上：含打的那串字，或含這部作品的某個名字。不判「是不是這部作品」（票 08）。
+    """
+
+    INFERNAL = MediaSnapshot(
+        tmdb_id=10775,
+        kind=MediaKind.MOVIE,
+        title="無間道",
+        title_en="Infernal Affairs",
+        title_original="無間道",
+        year=2002,
+        titles=("Infernal Affairs", "無間道", "无间道"),
+    )
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # 含打的字。
+            "無間道 III [国语中字]",
+            # 只靠作品的簡體名或英文名：專案沒有繁簡轉換。
+            "[心叶荐] 无间道_Infernal Affairs",
+            # 三個字的簡體名也算：中文名不套 `_MIN_CONTAINED`。
+            "[字幕组] 无间道 [1080p]",
+        ],
+    )
+    def test_the_typed_words_or_a_name_of_the_work_fit(self, name: str) -> None:
+        assert typed_fits(name, "無間道", self.INFERNAL)
+
+    @pytest.mark.parametrize(
+        "name", ["Avira Antivirus Pro 2026 Multilingual", "Spider-Man Brand New Day 2026 1080p"]
+    )
+    def test_the_popular_list_does_not_fit(self, name: str) -> None:
+        assert not typed_fits(name, "無間道", self.INFERNAL)
+
+    def test_the_typed_words_fit_on_their_own(self) -> None:
+        """打的字不是作品的名字（續集的片名）：只有第一條對得上。"""
+        assert typed_fits("[字幕組] 無間序曲 [1080p]", "無間序曲", self.INFERNAL)
+
+    def test_without_a_snapshot_only_the_typed_words_count(self) -> None:
+        assert typed_fits("無間道 III [国语中字]", "無間道", None)
+        assert not typed_fits("[心叶荐] 无间道_Infernal Affairs", "無間道", None)
+
+    @pytest.mark.parametrize(
+        ("name", "fits"),
+        [
+            ("Up.2009.1080p.BluRay.x264", True),
+            ("Pixar Up (2009) 720p", True),
+            ("Setup.Wizard.2020.1080p", False),
+            ("Pickup.Artist.S01E01", False),
+        ],
+    )
+    def test_short_latin_words_must_be_whole_words(self, name: str, fits: bool) -> None:
+        """`Up` 出現在半數發佈名裡（`_MIN_CONTAINED` 的理由）：不到四個字的拉丁字要整詞相等。"""
+        assert typed_fits(name, "Up", None) is fits
+
+    def test_longer_latin_words_are_contained(self) -> None:
+        assert typed_fits("InfernalAffairs.2002.1080p", "Infernal", None)
+
+    def test_words_that_normalise_to_nothing_fit_nothing(self) -> None:
+        assert not typed_fits("無間道 III [国语中字]", "!!", None)
 
 
 class TestSeasonTokens:

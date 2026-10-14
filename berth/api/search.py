@@ -82,10 +82,10 @@ class SearchResultOut(BaseModel):
     #: 索引站報的發佈時間（UTC）。結果表的「發佈」欄；送單時存進 Job 的是伺服器跟著 `source_id`
     #: 記下的那一份。`null` = 那個站沒報，畫面顯示 `—`。
     published_at: datetime | None
-    #: 這一筆歸到哪一類（M4 票 83）。自己打的關鍵字一律 `unjudged`。
+    #: 這一筆歸到哪一類（M4 票 83）。自己打的關鍵字只有 `typed_match` 與 `typed_miss`（M4 票 83b）。
     verdict: SearchVerdict
     #: 歸到那一類的證據，原樣（`S04E02`、`- 05`、`1990`、`Law and Order SVU`、成人分類碼 `6040`）；
-    #: 畫面那一句話引它、不翻。符合、名字對不上、沒有判斷的是空字串。
+    #: 畫面那一句話引它、不翻。符合、名字對不上與自己打字的兩類是空字串。
     evidence: str
 
 
@@ -106,7 +106,7 @@ class SearchOut(BaseModel):
     「憑證被拒」的下一步完全不同，做成 HTTP 錯誤的話前端只剩一個狀態碼分不出來。
     """
 
-    #: 每一類各自逐站輪流取之後合在一起（M4 票 83）：`fits` 與 `unjudged` 至多 100 筆，其餘每類
+    #: 每一類各自逐站輪流取之後合在一起（M4 票 83）：`fits` 與 `typed_match` 至多 100 筆，其餘每類
     #: 至多 50 筆，照 `verdict` 的列舉順序一類接一類。
     rows: list[SearchResultOut]
     #: 每一類在每一站的總筆數；是 0 的不列。

@@ -922,21 +922,6 @@ describe('搜尋 torrent 與結果表', () => {
       expect(screen.getByText('索引站回了 5 筆。其中 2 筆重複、已合併。')).toBeVisible()
     })
 
-    it('自己打關鍵字時不分類：沒有按鈕、列上不標', async () => {
-      render({
-        [`${SEARCH_PATH}&q=Spider-Man`]: {
-          body: results({ rows: [{ ...POPULAR, verdict: 'unjudged' }] }),
-        },
-      })
-      renderApp('/media/tv:120089')
-      await userEvent.type(await screen.findByLabelText('關鍵字'), 'Spider-Man')
-      await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
-
-      expect(await screen.findByText(POPULAR.title)).toBeVisible()
-      expect(screen.queryByRole('group', { name: '要列出哪幾類' })).toBeNull()
-      expect(screen.queryByText('名字對不上')).toBeNull()
-    })
-
     it('新的一輪搜尋回到只開「符合」', async () => {
       const buttons = await searched(results({ rows: [row(), YEAR] }))
       await userEvent.click(buttons.getByRole('button', { name: '年份不符 1' }))
@@ -945,6 +930,105 @@ describe('搜尋 torrent 與結果表', () => {
       await userEvent.click(screen.getByRole('button', { name: '搜尋' }))
 
       await waitFor(() => expect(screen.queryByText(YEAR.title)).toBeNull())
+    })
+  })
+
+  describe('自己打關鍵字：分對得上與對不上（M4 票 83b）', () => {
+    const MATCH = row({
+      key: 'match',
+      title: 'Spider-Man: Brand New Day 2026.1080p',
+      indexer: 'The Pirate Bay',
+      verdict: 'typed_match',
+    })
+    const MISS = row({
+      key: 'miss',
+      title: 'Avira Antivirus Pro 2026 Multi',
+      indexer: 'The Pirate Bay',
+      verdict: 'typed_miss',
+    })
+    const ELSEWHERE = row({ key: 'elsewhere', verdict: 'typed_match' })
+
+    async function typedSearch(
+      body: SearchResults,
+      labels = { keyword: '關鍵字', search: '搜尋' },
+    ) {
+      render({ [`${SEARCH_PATH}&q=Spider-Man`]: { body } })
+      renderApp('/media/tv:120089')
+      await userEvent.type(await screen.findByLabelText(labels.keyword), 'Spider-Man')
+      await userEvent.click(screen.getByRole('button', { name: labels.search }))
+    }
+
+    it('只有兩顆按鈕，預設只開「對得上」；對得上的列不標', async () => {
+      await typedSearch(results({ rows: [MATCH, MISS] }))
+
+      const buttons = within(await within(panel()).findByRole('group', { name: '要列出哪幾類' }))
+      expect(buttons.getAllByRole('button').map((button) => button.textContent)).toEqual([
+        '對得上 1',
+        '對不上 1',
+      ])
+      expect(buttons.getByRole('button', { name: '對得上 1' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(screen.getByText(MATCH.title)).toBeVisible()
+      expect(screen.queryByText(MISS.title)).toBeNull()
+      expect(screen.queryByText('對得上', { selector: 'span' })).toBeNull()
+      expect(screen.getByText('結果表 1 筆')).toBeVisible()
+    })
+
+    it('按了「對不上」才列出，那一句說出打的字', async () => {
+      await typedSearch(results({ rows: [MATCH, MISS] }))
+      const buttons = within(await within(panel()).findByRole('group', { name: '要列出哪幾類' }))
+
+      await userEvent.click(buttons.getByRole('button', { name: '對不上 1' }))
+
+      const table = within(within(panel()).getByRole('table'))
+      expect(table.getByText(MISS.title)).toBeVisible()
+      expect(table.getByText('發佈名裡沒有「Spider-Man」，也沒有這部作品的名字。')).toBeVisible()
+    })
+
+    it('對得上是 0、對不上有東西時，指向按鈕', async () => {
+      await typedSearch(results({ rows: [MISS] }))
+
+      const buttons = within(await within(panel()).findByRole('group', { name: '要列出哪幾類' }))
+      expect(buttons.getAllByRole('button').map((button) => button.textContent)).toEqual([
+        '對得上 0',
+        '對不上 1',
+      ])
+      expect(screen.getByText('沒有對得上的結果；對不上的有 1 筆，按上面的按鈕看。')).toBeVisible()
+    })
+
+    it('只看某個站時按鈕的數字與表格跟著變', async () => {
+      await typedSearch(results({ rows: [MATCH, MISS, ELSEWHERE] }))
+      const buttons = within(await within(panel()).findByRole('group', { name: '要列出哪幾類' }))
+      expect(buttons.getByRole('button', { name: '對得上 2' })).toBeVisible()
+
+      await userEvent.selectOptions(screen.getByLabelText('站'), 'The Pirate Bay')
+
+      expect(buttons.getByRole('button', { name: '對得上 1' })).toBeVisible()
+      expect(screen.queryByText(ELSEWHERE.title)).toBeNull()
+      expect(screen.getByText(MATCH.title)).toBeVisible()
+    })
+
+    it('英文介面', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        await typedSearch(results({ rows: [MISS] }), { keyword: 'Keyword', search: 'Search' })
+
+        const region = await screen.findByRole('region', { name: 'Search torrents' })
+        const buttons = within(await within(region).findByRole('group', { name: 'Kinds to list' }))
+        expect(
+          screen.getByText('Nothing matches. “No match” holds 1 result; use the buttons above.'),
+        ).toBeVisible()
+        await userEvent.click(buttons.getByRole('button', { name: 'No match 1' }))
+        expect(
+          screen.getByText(
+            'The release contains neither “Spider-Man” nor any of this title’s names.',
+          ),
+        ).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
     })
   })
 
@@ -1224,7 +1308,11 @@ describe('搜尋 torrent 與結果表', () => {
   })
 
   it('自己打了關鍵字就只問那一個', async () => {
-    const stub = render({ [`${SEARCH_PATH}&q=Spy+Family+BDRip`]: { body: results() } })
+    const stub = render({
+      [`${SEARCH_PATH}&q=Spy+Family+BDRip`]: {
+        body: results({ rows: [row({ verdict: 'typed_match' })] }),
+      },
+    })
     renderApp('/media/tv:120089')
 
     await userEvent.type(await screen.findByLabelText('關鍵字'), 'Spy Family BDRip')

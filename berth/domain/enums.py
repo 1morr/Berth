@@ -681,7 +681,7 @@ class SearchVerdict(StrEnum):
     照 Sonarr 互動搜尋的慣例：被拒的照樣列出、每一筆說得出理由，使用者自己決定抓不抓。一筆只歸
     一類：判斷是排了先後的粗篩（`services/search.py` 的 `_judge`），第一條命中的就是那一筆的歸類——
     證據硬的先（名字、索引站的分類、季集記號、年份），最軟的「只對上部分名字」最後。
-    值的順序是畫面上按鈕的順序。
+    值的順序是畫面上按鈕的順序。自己打關鍵字的搜尋只有最後兩類（M4 票 83b）。
     """
 
     FITS = "fits"
@@ -698,8 +698,12 @@ class SearchVerdict(StrEnum):
     PARTIAL_TITLE = "partial_title"
     #: 發佈名裡沒有這部作品的任何一個名字。
     UNRELATED = "unrelated"
-    #: 沒有判斷：自己打的關鍵字（票 08），或 Berth 還不知道這部作品叫什麼（沒有快照）。
-    UNJUDGED = "unjudged"
+    #: 自己打的關鍵字（M4 票 83b，`parser.typed_fits`）：發佈名含打的那串字，或含這部作品的
+    #: 某個名字。只判「對不對得上使用者問的東西」，不判是不是這部作品（票 08），所以與上面六類
+    #: 不會出現在同一次搜尋。
+    TYPED_MATCH = "typed_match"
+    #: 自己打的關鍵字：兩條都沒有。
+    TYPED_MISS = "typed_miss"
 
 
 class SiteFailure(StrEnum):

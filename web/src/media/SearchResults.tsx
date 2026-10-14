@@ -23,12 +23,15 @@ import { SubmitAction } from './SubmitAction'
  */
 export function SearchResults({
   groups,
+  typed,
   sort,
   onSort,
   media,
   route,
 }: {
   groups: readonly Group[]
+  /** 這一次送出去的關鍵字：「對不上」那一句引它。照作品名搜是空字串。 */
+  typed: string
   sort: SortKey
   onSort: (key: SortKey) => void
   media: Media
@@ -68,7 +71,7 @@ export function SearchResults({
           className="divide-y divide-rule border-t-2 border-rule first-of-type:border-t-0"
         >
           {group.rows.map((row) => (
-            <ResultRow key={row.key} row={row} media={media} route={route} />
+            <ResultRow key={row.key} row={row} typed={typed} media={media} route={route} />
           ))}
           {group.total > group.rows.length && (
             <tr>
@@ -121,10 +124,12 @@ function SortableHeader({
 
 function ResultRow({
   row,
+  typed,
   media,
   route,
 }: {
   row: SearchResult
+  typed: string
   media: Media
   route: number | null
 }) {
@@ -137,7 +142,7 @@ function ResultRow({
       <td className="px-4 py-3 align-top">
         {/* 發佈名整行換行，不截斷：它是這一列的證據，解析器讀的就是同一串字。 */}
         <p className="value text-sm wrap-anywhere text-ink">{row.title}</p>
-        <VerdictNote row={row} media={media} />
+        <VerdictNote row={row} typed={typed} media={media} />
         <TagStrip row={row} />
         {/* 窄版把另外五欄收成一行。桌機上它整行不畫，那五欄自己在右邊。 */}
         <p className="value mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim sm:hidden">
@@ -185,12 +190,12 @@ function ResultRow({
 }
 
 /**
- * 不是「符合」的列：歸到哪一類（中性小色塊——它是分類不是狀態，The Role Is Not A State Rule）與一句理由。
- * 「符合」與自己打關鍵字的列不標（The Usual Stays Unpainted Rule，使用者確認 shape）。
+ * 不是預設列出那一類的列：歸到哪一類（中性小色塊——它是分類不是狀態，The Role Is Not A State Rule）與一句理由。
+ * 「符合」與「對得上」的列不標（The Usual Stays Unpainted Rule，使用者確認 shape）。
  */
-function VerdictNote({ row, media }: { row: SearchResult; media: Media }) {
+function VerdictNote({ row, typed, media }: { row: SearchResult; typed: string; media: Media }) {
   const { t } = useTranslation()
-  const reason = reasonOf(row, media)
+  const reason = reasonOf(row, media, typed)
   if (!reason) return null
 
   return (

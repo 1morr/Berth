@@ -12,7 +12,8 @@
    這樣重複的）。分類是實跑逼出來的：**The Pirate Bay 對搜不到的關鍵字會回它的熱門
    清單**，而那些東西動輒五六千個做種，會把真正的結果整批擠出前 100 筆（2026-09-10 搜
    SPY×FAMILY，前六筆是 Spider-Man、Ted Lasso、Reacher）。對不上的不丟：照 Sonarr 互動搜尋，
-   每一類各自取一份送出去，畫面預設只開「符合」，其他類按了才看。
+   每一類各自取一份送出去，畫面預設只開「符合」，其他類按了才看。自己打的關鍵字只分「對得上」與
+   「對不上」（`_judge_typed`，M4 票 83b）：熱門清單照樣會淹掉那幾筆真正的結果。
 4. **逐筆問解析器**。`parse_release` 給 Tags、`map_episode` 給預估季集，兩者都是純函式，
    所以這一步不打任何服務。
 
@@ -24,9 +25,10 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from functools import partial
 from itertools import zip_longest
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +56,7 @@ from berth.parser import (
     parse_release,
     partial_title,
     tags_of,
+    typed_fits,
 )
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
@@ -76,7 +79,7 @@ from berth.services.settings import read_settings, update_settings
 from berth.services.sources import SourceCache
 from berth.services.steps import StepView, failure_of, message
 
-#: 送給畫面的筆數上限（「符合」與沒有判斷的那一類）。實測一次搜尋去重後有 1854 筆——全部送出去
+#: 送給畫面的筆數上限（「符合」與自己打字時的「對得上」）。實測一次搜尋去重後有 1854 筆——全部送出去
 #: 是一份 1–2 MB 的 JSON，而 390px 的手機上沒有人捲得完。取 100 筆，總數另外報（票 08 拍板）。
 RESULT_LIMIT = 100
 
@@ -146,7 +149,8 @@ class SearchResult:
     #: 這一筆歸到哪一類（M4 票 83，`_judge`）。畫面上不是「符合」的那幾類預設不顯示。
     verdict: SearchVerdict
     #: 歸到那一類的證據：發佈名裡的那一段字（`S04E02`、`- 05`、`1990`、`Law and Order SVU`）或
-    #: 成人分類的碼（`6040`）。符合、名字對不上、沒有判斷的是空字串。畫面那一句話引它，不翻。
+    #: 成人分類的碼（`6040`）。符合、名字對不上與自己打字的兩類是空字串：打的字不是發佈名裡的一段，
+    #: 畫面用它自己送出的那串字。畫面那一句話引它，不翻。
     evidence: str
 
 
@@ -179,7 +183,7 @@ class SearchView:
     """
 
     #: 每一類各自逐站輪流取（`_take`）之後合在一起，照 `SearchVerdict` 的順序一類接一類：「符合」與
-    #: 沒有判斷的取 `RESULT_LIMIT` 筆，其餘每類 `OTHERS_LIMIT` 筆。
+    #: 「對得上」取 `RESULT_LIMIT` 筆，其餘每類 `OTHERS_LIMIT` 筆。
     #: **每一類都送、不藏起來**（M4 票 83，照 Sonarr 互動搜尋）：判斷只看發佈名，可能看錯，而
     #: 「索引站什麼都沒回」與「回了一千八百筆但沒有一筆是這部作品」的下一步不同。
     rows: tuple[SearchResult, ...]
@@ -410,11 +414,18 @@ async def search_torrents(
     snapshot = await read_snapshot(session, factory, media_id)
     typed = query.strip()
     batches: tuple[QueryBatch, ...] = ()
+    judge: Callable[[IndexerResult], Judged]
     if typed:
         texts: tuple[str, ...] = (typed,)
+        # 自己打了關鍵字時只判對不對得上那串字，不判是不是這部作品（票 08、M4 票 83b）。
+        judge = partial(_judge_typed, typed=typed, snapshot=snapshot)
+    elif snapshot is None:
+        # Berth 還不知道這部作品叫什麼：沒有名字可問。
+        return _blank(IndexerProblem.NO_QUERY)
     else:
         chosen = scope.choice or await _default(session, snapshot)
         batches, texts = await _texts(session, factory, media_id, snapshot, scope, chosen)
+        judge = partial(_judge, snapshot=snapshot)
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
     if len(texts) > MAX_QUERIES:
@@ -451,11 +462,7 @@ async def search_torrents(
     next_at = factory.budget.ready_at(sites, len(after)) if after else None
     returned = [row for _, rows in outcomes for row in rows]
     found = _dedupe(returned)
-    # 自己打了關鍵字時不判斷：他要的就是那一串字，不是這部作品（票 08）。
-    judged = [
-        Judged(result, SearchVerdict.UNJUDGED) if typed else _judge(result, snapshot)
-        for result in found
-    ]
+    judged = [judge(result) for result in found]
     return SearchView(
         rows=_rows(judged, snapshot, sources),
         counts=_counts(judged),
@@ -503,7 +510,7 @@ def _take(results: Sequence[Judged], limit: int) -> list[Judged]:
     return taken
 
 
-def _judge(result: IndexerResult, snapshot: MediaSnapshot | None) -> Judged:
+def _judge(result: IndexerResult, snapshot: MediaSnapshot) -> Judged:
     """這一筆歸到哪一類、證據是哪一段字（M4 票 83）。**先後即判定順序**，證據硬的先：
 
     1. 名字（`mentions`，純字串）——不是 `parse_release` + `matches`：後者實測每筆 14 毫秒，
@@ -514,11 +521,7 @@ def _judge(result: IndexerResult, snapshot: MediaSnapshot | None) -> Judged:
     4. 只對上部分名字（`parser.partial_title`）：最軟的一條——「可能是衍生作品」，放在最後：
        同名動畫的 `Tsuki to Laika to Nosferatu - 05` 片名也包住《Nosferatu》，先判它的話這一筆
        說的會是「名字多一段」，而更硬的證據是 `- 05` 這個集號。
-
-    沒有快照時不判斷：那時候 Berth 根本不知道這部作品叫什麼，判了等於全歸成名字對不上。
     """
-    if snapshot is None:
-        return Judged(result, SearchVerdict.UNJUDGED)
     if not mentions(result.title, snapshot):
         return Judged(result, SearchVerdict.UNRELATED)
     adult = next((code for code in result.categories if code in ADULT_CATEGORIES), None)
@@ -529,6 +532,13 @@ def _judge(result: IndexerResult, snapshot: MediaSnapshot | None) -> Judged:
     if lead := partial_title(result.title, snapshot):
         return Judged(result, SearchVerdict.PARTIAL_TITLE, lead)
     return Judged(result, SearchVerdict.FITS)
+
+
+def _judge_typed(result: IndexerResult, *, typed: str, snapshot: MediaSnapshot | None) -> Judged:
+    """自己打的關鍵字：只分對得上與對不上（M4 票 83b，`parser.typed_fits`）。年份、類型、成人、
+    部分名字一律不判——使用者問的就是那串字。沒有快照時只看打的字。"""
+    fits = typed_fits(result.title, typed, snapshot)
+    return Judged(result, SearchVerdict.TYPED_MATCH if fits else SearchVerdict.TYPED_MISS)
 
 
 def _rows(
@@ -545,8 +555,9 @@ def _rows(
     )
 
 
-#: 畫面預設就列出來的兩類，送 `RESULT_LIMIT` 筆；其餘按了才看，送 `OTHERS_LIMIT` 筆。
-_LISTED = frozenset({SearchVerdict.FITS, SearchVerdict.UNJUDGED})
+#: 畫面預設就列出來的那一類（照作品名搜是「符合」，自己打字是「對得上」），送 `RESULT_LIMIT` 筆；
+#: 其餘按了才看，送 `OTHERS_LIMIT` 筆。
+_LISTED = frozenset({SearchVerdict.FITS, SearchVerdict.TYPED_MATCH})
 
 
 def _counts(judged: Sequence[Judged]) -> tuple[VerdictCount, ...]:
