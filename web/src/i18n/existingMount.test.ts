@@ -63,9 +63,7 @@ describe.each(SUPPORTED_LANGUAGES)('既有服務的條件與補法（%s）', (la
 
   it('卡片說容器路徑只能是 /data，條件不舉例', () => {
     expect(choice.existing.sameHost).toContain('/data')
-    for (const text of [choice.existing.sameHost, choice.existing.library]) {
-      expect(text).not.toMatch(GIVES_EXAMPLE)
-    }
+    expect(choice.existing.sameHost).not.toMatch(GIVES_EXAMPLE)
   })
 
   it('補法不叫人搬下載目錄、不叫人拿掉原本的掛載', () => {

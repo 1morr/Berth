@@ -20,7 +20,7 @@ import { RouteRecheck } from '../settings/RouteRecheck'
 
 /**
  * 設定 → qBittorrent（票 06i）。健康與重新檢查、既有 qBittorrent 的位址與帳密（精靈第 2 步的
- * 同一條纜繩）、套件內那一台的 WebUI 登入（M4 票 07），以及磁碟空間門檻。Berth 不寫也不看它的
+ * 同一條纜繩）、套件內那一台的介面登入（M4 票 07），以及磁碟空間門檻。Berth 不寫也不看它的
  * 全域偏好（M4 票 32），所以這一頁沒有「建議設定」。
  *
  * **換了一台之後自動重查每一條 Route**（M4 票 59，審計 S4）：分類建在原本那一台，健康頁的 Route 那一格

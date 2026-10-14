@@ -8,9 +8,9 @@ import { formatList } from '../i18n/list'
 import { composeProfiles } from './signals'
 
 /**
- * 完成頁再提醒一次：選了既有的服務，套件內那一台閒著（審計 P2-20）。不叫「Unused」：CONTEXT.md 的
- * **Unused service** 是管理員選了不用的服務（不用 Prowlarr），這裡說的是選了既有之後還開著的套件內容器。那兩行原本只在選的那一頁，Jellyfin 的
- * 在擁有者成立之後就看不到了。
+ * 選了既有的服務，套件內那一台閒著（審計 P2-20）：停掉它的兩行只在這裡給（M4 票 103）。選的那一頁各給一次時
+ * `COMPOSE_PROFILES` 一頁比一頁短，三份說法不同；那幾頁現在只指到這一段。不叫「Unused」：CONTEXT.md 的
+ * **Unused service** 是管理員選了不用的服務（不用 Prowlarr），這裡說的是選了既有之後還開著的套件內容器。
  *
  * 只列套件內那一台還解得到主機名的（`composeHosts`，M4 票 30）：已經停掉或不在 `COMPOSE_PROFILES` 裡的不再叫人
  * 停。沒問到的照列——多說一次無害，漏說了容器就一直開著。

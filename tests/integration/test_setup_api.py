@@ -835,7 +835,7 @@ class TestQbittorrent:
         assert body["version"] == "v5.2.3"
         assert body["webapi_version"] == "2.15.1"
         assert body["supported"] is True
-        # 套件內的那一台有 WebUI 登入那一格，還沒設過（M4 票 07）。
+        # 套件內的那一台有介面登入那一格，還沒設過（M4 票 07）。
         assert (body["web_ui_login"], body["web_ui_username"]) == (True, "")
 
     def test_applying_writes_only_the_login(

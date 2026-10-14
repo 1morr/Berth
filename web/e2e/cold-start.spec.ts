@@ -45,7 +45,7 @@ test('冷啟動：服務還在啟動時選套件內，不按重新測試就連�
   // 2. qBittorrent 第一次連不上：說成啟動中，不是失敗、不是既有；起來之後給那一台的剖面。
   await expect(page.getByRole('heading', { name: '先選 qBittorrent 是哪一台' })).toBeVisible()
   await page.getByRole('radio', { name: /套件內/ }).click()
-  await expect(page.getByRole('heading', { name: '設定 qBittorrent 的 WebUI 登入' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: '設定 qBittorrent 的介面登入' })).toBeVisible({
     timeout: 60_000,
   })
   await expect(page.getByText('連上了').first()).toBeVisible()

@@ -22,11 +22,12 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   // 精靈的頁在網址上（M4 票 30）：讀回狀態之後補上 `?step=1`。
   await expect(page).toHaveURL(/\/setup(\?step=1)?$/)
 
-  // 1. Jellyfin 選既有：說出同主機、同容器路徑的條件與要從 COMPOSE_PROFILES 拿掉哪一個。位址與那一台的
+  // 1. Jellyfin 選既有：說出同主機、同容器路徑的條件；停掉套件內那一台的指令只指到完成頁（M4 票 103）。位址與那一台的
   //    管理員帳密同一張表單、一顆「連線並登入」（M4 票 67，審計 C1）。帳密錯標在帳密兩格，位址那一格不標。
   await page.getByRole('radio', { name: /既有/ }).click()
   await expect(page.getByText(/同一台主機/).first()).toBeVisible()
-  await expect(page.getByText('COMPOSE_PROFILES=qbittorrent,prowlarr')).toBeVisible()
+  await expect(page.getByText(/最後一頁的「閒著的套件內容器」/)).toBeVisible()
+  await expect(page.getByText(/COMPOSE_PROFILES=/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: '測試連線' })).toHaveCount(0)
   const jellyfinAddress = page.getByRole('textbox', { name: '位址' })
   const ownerPassword = page.getByRole('textbox', { name: '密碼', exact: true })
@@ -86,8 +87,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   // 偏好表整張收起，也不警告未完成目錄：它的全域偏好沒有一個影響 Berth（M4 票 22）。
   await expect(page.getByRole('table')).toHaveCount(0)
   await expect(page.getByText(/沒有啟用未完成目錄/)).toHaveCount(0)
-  // 既有的那一台沒有 WebUI 登入那一格（M4 票 07）。
-  await expect(page.getByRole('group', { name: 'qBittorrent WebUI 登入' })).toHaveCount(0)
+  // 既有的那一台沒有介面登入那一格（M4 票 07）。
+  await expect(page.getByRole('group', { name: 'qBittorrent 介面登入' })).toHaveCount(0)
   await expect(page.getByText(/這個泊位的事做完了/)).toBeVisible()
   await expect(page.getByRole('button', { name: /確認|套用/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()

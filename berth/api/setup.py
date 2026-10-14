@@ -738,7 +738,7 @@ async def get_qbittorrent_diff(
 
 
 class QbittorrentApplyIn(BaseModel):
-    #: 泊位上填的 WebUI 登入（M4 票 07）。不帶就是登入照舊；套件內那一台沒設過時精靈停在這一步。
+    #: 泊位上填的介面登入（M4 票 07）。不帶就是登入照舊；套件內那一台沒設過時精靈停在這一步。
     login: InterfaceLoginIn | None = None
 
 
@@ -749,7 +749,7 @@ async def post_qbittorrent_apply(
     factory: ClientFactoryDep,
     body: QbittorrentApplyIn | None = None,
 ) -> QbittorrentOut:
-    """頁 2 的「套用」：帶了登入就設套件內那一台的 WebUI 登入。全域偏好一個都不寫（M4 票 32）。
+    """頁 2 的「套用」：帶了登入就設套件內那一台的介面登入。全域偏好一個都不寫（M4 票 32）。
 
     既有的那一台帶不帶登入都 422（M4 票 101）：Berth 不寫既有服務的帳密（brief §16.4），畫面上也沒有
     這一顆（M4 票 38）。
@@ -768,7 +768,7 @@ async def post_qbittorrent_apply(
 async def put_qbittorrent_login(
     session: SessionDep, config: ConfigDep, factory: ClientFactoryDep, body: InterfaceLoginIn
 ) -> QbittorrentOut:
-    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的 WebUI 登入。既有的那一台 422。"""
+    """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的介面登入。既有的那一台 422。"""
     try:
         result = await set_qbittorrent_login(session, factory, body.value())
     except InterfaceLoginRejectedError as refusal:

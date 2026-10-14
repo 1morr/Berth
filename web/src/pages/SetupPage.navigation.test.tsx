@@ -177,7 +177,7 @@ describe('每個泊位做完都停在結果上', () => {
     expect(await heading()).toHaveTextContent('擁有者：skipper')
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
-    expect(await heading()).toHaveTextContent('設定 qBittorrent 的 WebUI 登入')
+    expect(await heading()).toHaveTextContent('設定 qBittorrent 的介面登入')
   })
 
   it('頁 2：套用完停在結果上，前往下一個是頁 3 的媒體庫與路徑', async () => {
@@ -189,7 +189,7 @@ describe('每個泊位做完都停在結果上', () => {
     await user.click(await screen.findByRole('button', { name: '設定介面登入' }))
 
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
-    expect(await heading()).toHaveTextContent('設定 qBittorrent 的 WebUI 登入')
+    expect(await heading()).toHaveTextContent('設定 qBittorrent 的介面登入')
 
     await user.click(screen.getByRole('button', { name: '前往下一個泊位' }))
     expect(await heading()).toHaveTextContent('媒體庫路徑')
@@ -379,8 +379,8 @@ describe('頁 5：前往下一個泊位自己會先測（M4 票 67，審計 C4�
 
 describe('上一個泊位', () => {
   it.each([
-    [2, '設定 qBittorrent 的 WebUI 登入', '擁有者：skipper'],
-    [3, '媒體庫路徑', '設定 qBittorrent 的 WebUI 登入'],
+    [2, '設定 qBittorrent 的介面登入', '擁有者：skipper'],
+    [3, '媒體庫路徑', '設定 qBittorrent 的介面登入'],
     [4, 'Prowlarr', '媒體庫路徑'],
     [5, 'TMDB', 'Prowlarr'],
     [6, '完成設定', 'TMDB'],
@@ -525,7 +525,7 @@ describe('網址上的那一頁', () => {
     wizard(6)
     renderInRoute(<SetupPage />, '/setup?step=2')
 
-    await shows('設定 qBittorrent 的 WebUI 登入')
+    await shows('設定 qBittorrent 的介面登入')
     expect(screen.getByText(/回頭看：BTH 2/)).toBeVisible()
   })
 
@@ -541,7 +541,7 @@ describe('網址上的那一頁', () => {
 
     // 後端已經在頁 3；重新整理是以同一條網址重開。
     renderInRoute(<SetupPage />, href)
-    expect(await heading()).toHaveTextContent('設定 qBittorrent 的 WebUI 登入')
+    expect(await heading()).toHaveTextContent('設定 qBittorrent 的介面登入')
     expect(await screen.findByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   })
 
@@ -552,7 +552,7 @@ describe('網址上的那一頁', () => {
     wizard(2)
     const { router } = renderInRoute(<SetupPage />, path)
 
-    expect(await heading()).toHaveTextContent('設定 qBittorrent 的 WebUI 登入')
+    expect(await heading()).toHaveTextContent('設定 qBittorrent 的介面登入')
     await waitFor(() => expect(urlStep(router)).toBe(2))
   })
 
@@ -560,7 +560,7 @@ describe('網址上的那一頁', () => {
     wizard(2)
     const { router } = renderInRoute(<SetupPage />, '/setup?step=3')
 
-    expect(await heading()).toHaveTextContent('設定 qBittorrent 的 WebUI 登入')
+    expect(await heading()).toHaveTextContent('設定 qBittorrent 的介面登入')
     await waitFor(() => expect(urlStep(router)).toBe(2))
     expect(within(board()).queryByRole('button', { name: /BTH 3/ })).not.toBeInTheDocument()
   })
@@ -608,7 +608,7 @@ describe('回頭看的泊位說出能改什麼', () => {
     // 兩種都不寫全域偏好（M4 票 32）；來源可以改選（M4 票 15）。
     [
       'BTH 2',
-      /改選套件內或既有.*更換套件內那一台的 WebUI 登入.*一個全域偏好都不寫/,
+      /改選套件內或既有.*更換套件內那一台的介面登入.*一個全域偏好都不寫/,
       /qBittorrent 自己的介面/,
     ],
     ['BTH 3', /只新增.*清單.*重驗/, /改名.*停用.*設定.*媒體庫路徑/],

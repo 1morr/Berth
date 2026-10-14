@@ -82,7 +82,7 @@ Six pages. On the Jellyfin, qBittorrent and Prowlarr pages you first choose **Bu
 file) or **Existing** (one you already run); Berth tests each choice on the spot.
 
 1. **Jellyfin**: create the Jellyfin admin, or sign in as one. This account is also how you sign in to Berth.
-2. **qBittorrent**: set its web UI login, or enter your existing one's address and login.
+2. **qBittorrent**: set its interface login, or enter your existing one's address and login.
 3. **Library paths**: each library gets a *Route* (the path from download to library), and Berth proves with
    a real file that hardlinks work. Bundled Jellyfin starts with Movies, TV and Anime; with your own, you tick
    which libraries Berth may write to.

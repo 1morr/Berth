@@ -35,7 +35,7 @@ class PreferencesRejectedError(ProtocolMismatchError):
     """`app/setPreferences` 回 400：qBittorrent 不收其中一個值（M4 票 26，brief §20.2）。
 
     5.2.0 起它驗 WebUI 帳密（帳號至少 3 字元、不含冒號，密碼至少 6 字元），body 是一行英文原文，
-    `reason` 留著它。是 `ProtocolMismatchError` 的子類：除了 WebUI 登入那一條，其他鍵被拒時照舊
+    `reason` 留著它。是 `ProtocolMismatchError` 的子類：除了介面登入那一條，其他鍵被拒時照舊
     當成「回的東西對不上」——那幾個鍵的值是 Berth 算的，被拒就是兩邊對不上。
     """
 
@@ -341,7 +341,7 @@ class QbittorrentClient(Protocol):
         ...
 
     async def set_preferences(self, values: Mapping[str, Any]) -> None:
-        """`app/setPreferences`。只送要改的鍵，其餘不動。Berth 只拿它設 WebUI 登入（M4 票 32）。"""
+        """`app/setPreferences`。只送要改的鍵，其餘不動。Berth 只拿它設介面登入（M4 票 32）。"""
         ...
 
     async def categories(self) -> tuple[QbittorrentCategory, ...]: ...

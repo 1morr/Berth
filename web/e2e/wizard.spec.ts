@@ -59,11 +59,11 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   await shot(page, '1-owned')
   await page.getByRole('button', { name: '前往下一個泊位' }).click()
 
-  // 2. qBittorrent：選之前不讀差異；選了套件內，WebUI 登入自動沿用頁 1 那一組（M4 票 40），不問密碼。
+  // 2. qBittorrent：選之前不讀差異；選了套件內，介面登入自動沿用頁 1 那一組（M4 票 40），不問密碼。
   await expect(page.getByRole('heading', { name: '先選 qBittorrent 是哪一台' })).toBeVisible()
   expect(probed.filter((url) => /qbittorrent/.test(url))).toEqual([])
   await page.getByRole('radio', { name: /套件內/ }).click()
-  await expect(page.getByRole('heading', { name: '設定 qBittorrent 的 WebUI 登入' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '設定 qBittorrent 的介面登入' })).toBeVisible()
   // 帶過來而且設好了：只說沿用了誰的（M4 票 80）。
   await expect(page.getByText('已沿用 Jellyfin 帳密（skipper）')).toBeVisible()
   await expect(page.getByLabel('skipper 的 Jellyfin 密碼')).toHaveCount(0)

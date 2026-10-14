@@ -27,7 +27,7 @@ const STATUS = 'GET /api/setup/status'
 const CONNECT = 'POST /api/setup/services/qbittorrent'
 const LOGIN = 'PUT /api/setup/qbittorrent/login'
 
-/** 套件內那一台，還沒設過 WebUI 登入。 */
+/** 套件內那一台，還沒設過介面登入。 */
 const CLEAN = qbittorrentSetup()
 
 /** 精靈跑完、三個都是套件內的一台；擁有者 skipper（介面登入沿用的就是他）。 */
@@ -61,7 +61,7 @@ const EXISTING_QBITTORRENT = qbittorrentSetup({
   web_ui_username: '',
 })
 
-/** 設過 WebUI 登入（帳號 skipper）的套件內那一台。 */
+/** 設過介面登入（帳號 skipper）的套件內那一台。 */
 const WITH_LOGIN = qbittorrentSetup({ ...CLEAN, web_ui_username: 'skipper' })
 
 /** 「儲存」寫進去了：帳號是 `username`。 */
@@ -161,7 +161,7 @@ describe('設定 → qBittorrent', () => {
     })
   })
 
-  it('套件內的 qBittorrent 沒有連線表單，只有它自己的 WebUI 登入（M4 票 07、15）', async () => {
+  it('套件內的 qBittorrent 沒有連線表單，只有它自己的介面登入（M4 票 07、15）', async () => {
     render({ [QBITTORRENT]: { body: WITH_LOGIN } })
     renderApp('/settings/qbittorrent')
 
@@ -176,7 +176,7 @@ describe('設定 → qBittorrent', () => {
     expect(login.getByText('目前的帳號：')).toHaveTextContent('目前的帳號： skipper')
   })
 
-  it('改 WebUI 登入是一般的改帳密表單：沒有沿用，帳號預填、新密碼兩次、儲存（M4 票 78）', async () => {
+  it('改介面登入是一般的改帳密表單：沒有沿用，帳號預填、新密碼兩次、儲存（M4 票 78）', async () => {
     const stub = render({
       [QBITTORRENT]: { body: WITH_LOGIN },
       [LOGIN]: { body: loginSet('deckhand') },

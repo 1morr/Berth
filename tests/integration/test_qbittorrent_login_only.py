@@ -1,4 +1,4 @@
-"""Berth 對 qBittorrent 的全域偏好只寫 WebUI 登入（M4 票 32，brief §19 D2）。
+"""Berth 對 qBittorrent 的全域偏好只寫介面登入（M4 票 32，brief §19 D2）。
 
 審計 S5：套件內那一台被寫了三個全域鍵（`save_path`、`auto_tmm_enabled`、
 `category_changed_tmm_enabled`），Route 檢查又回頭現查全域 `save_path`，使用者一改它送單就被擋。
@@ -36,7 +36,7 @@ MAGNET = "magnet:?xt=urn:btih:4bd0f6ef1d3b1e3cbb1e1b6b6c2a9c7d8e5f0a1b&dn=Show"
 
 
 def foreign_keys(writes: Iterable[Mapping[str, Any]]) -> set[str]:
-    """送進 `setPreferences` 的鍵裡，不是 WebUI 登入的那幾個。閘門要它是空的。"""
+    """送進 `setPreferences` 的鍵裡，不是介面登入的那幾個。閘門要它是空的。"""
     return {key for write in writes for key in write} - LOGIN_KEYS
 
 

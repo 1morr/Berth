@@ -43,7 +43,7 @@ from tests.integration.factories import COMPOSE, FakeClientFactory
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
 BUNDLED = BundledServices(targets=COMPOSE, prowlarr_api_key="")
 
-#: 泊位上填的 WebUI 登入（M4 票 07）。
+#: 泊位上填的介面登入（M4 票 07）。
 SKIPPER = InterfaceLogin(username="skipper", password="harbour")
 
 
@@ -95,7 +95,7 @@ async def test_reading_connects_and_writes_nothing(session: AsyncSession) -> Non
 
 @pytest.mark.asyncio
 async def test_apply_sets_the_web_ui_login_typed_on_the_berth(session: AsyncSession) -> None:
-    """套件內那一台的 WebUI 登入跟著「套用」送進來（M4 票 07），設完之後拿它登得進去。"""
+    """套件內那一台的介面登入跟著「套用」送進來（M4 票 07），設完之後拿它登得進去。"""
     await arrange(session)
     client = FakeQbittorrentClient()
     factory = FakeClientFactory(qbittorrent=client)
@@ -207,7 +207,7 @@ async def test_existing_service_never_gets_a_password_from_berth(session: AsyncS
 
     assert all(WEB_UI_PASSWORD_KEY not in write for write in client.writes)
     assert (status.web_ui_login, status.web_ui_username) == (False, "")
-    # 既有服務要先登入才讀得了偏好；Berth 連它用的那一組不是「WebUI 登入」。只有讀的那一次連了。
+    # 既有服務要先登入才讀得了偏好；Berth 連它用的那一組不是「介面登入」。只有讀的那一次連了。
     assert client.logins == [("owner", "s3cret")]
     settings = await read_settings(session, QbittorrentSettings)
     assert (settings.username, settings.password) == ("owner", "s3cret")

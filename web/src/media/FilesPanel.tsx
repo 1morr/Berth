@@ -451,6 +451,14 @@ function saysPresence(file: LedgerFile, summarised: boolean): boolean {
   return !(summarised && file.presence === 'found')
 }
 
+/**
+ * 下一次反查的時間已經過了、排程那一輪（15 秒一次）還沒跑到。這時說成「4 秒前」是過去式（M4 票 103）：
+ * 那一輪就要來了，說即將。
+ */
+function overdue(file: LedgerFile): boolean {
+  return file.resolve_after !== null && new Date(file.resolve_after).getTime() <= Date.now()
+}
+
 /** Jellyfin 找到這個檔案了沒（要不要說由 `saysPresence` 決定）。 */
 function Presence({ file, summarised }: { file: LedgerFile; summarised: boolean }) {
   const { t } = useTranslation()
@@ -463,7 +471,13 @@ function Presence({ file, summarised }: { file: LedgerFile; summarised: boolean 
         <span className="text-ink">{t('media.files.jellyfin.found')}</span>
       ) : file.presence === 'searching' ? (
         <span className="text-ink-dim">
-          {t('media.files.jellyfin.searching')} <Timestamp at={file.resolve_after} />
+          {overdue(file) ? (
+            t('media.files.jellyfin.searchingDue')
+          ) : (
+            <>
+              {t('media.files.jellyfin.searching')} <Timestamp at={file.resolve_after} />
+            </>
+          )}
         </span>
       ) : (
         <span className="text-ink">
