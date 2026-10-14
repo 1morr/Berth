@@ -18,9 +18,12 @@
 ```bash
 uv sync                     # 後端依賴與虛擬環境
 pnpm -C web install         # 前端依賴
-uv run pre-commit install   # 啟用 git hook（選用但建議）
+uv run pre-commit install   # 啟用 git hook（選用但建議；一併裝 commit-msg hook）
 cp .env.example .env        # 本機的 CONFIG_ROOT
 ```
+
+`.pre-commit-config.yaml` 的 `default_install_hook_types` 讓這一行同時裝 pre-commit 與 commit-msg 兩種 hook。
+先前裝過的人要重跑一次，才會有 commit-msg hook。
 
 ### 啟動
 
@@ -196,6 +199,15 @@ ruff、mypy、import-linter，加上 `web/` 的 prettier、eslint 與 knip。CI�
   `gen:api` 叫的外部 `uv`，與產生出來的 `schema.d.ts`；`web/gates/knip.test.ts` 對一個暫存的小專案用這份設定雙向驗它。
   Python 那一側沒有對應的閘門：vulture 的誤報率 75%–91%，不加（`docs/research/simplification-audit-2026-10-13.md`
   〈閘門建議〉）。
+- **commit-msg hook 擋格式不對的 subject**：`scripts/check_commit_msg.py` 要求 Conventional Commits 的 type
+  與小寫開頭，subject ≤ 72 字元；`Merge `、`Revert "`、`fixup!`、`squash!`、`amend!` 開頭的放行。
+  `tests/unit/test_commit_msg.py` 雙向驗它。歷史上有幾條超長的 commit，不回溯。
+- **CI hygiene 的 `SKIP` 跟 `language: system` 的 hook 一致**：`tests/unit/test_hygiene_skip.py` 比
+  `.pre-commit-config.yaml` 裡會在 pre-commit 階段跑的 `language: system` hook 與 ci.yml hygiene 那一步的
+  `SKIP`；新增這類 hook 忘了加進 `SKIP`，這裡紅（不然 CI 的 hygiene 才紅）。
+- **CHANGELOG 已發版的段落不准改**：`tests/unit/test_changelog_released.py` 拿最近的 `v*` tag 上的
+  `CHANGELOG.md` 對工作目錄的，tag 裡有的版本段必須原封不動；新條目寫在 `[Unreleased]`。找不到 git 或 tag
+  時測試失敗而不是跳過，所以 CI 的 backend job 用 `fetch-depth: 0` 取回 tag。
 
 ### 發版
 
@@ -218,6 +230,10 @@ ruff、mypy、import-linter，加上 `web/` 的 prettier、eslint 與 knip。CI�
   `deploy/.env.example` 相同（`docker-compose.yml` 同樣比一次）。預發佈不會是 `latest`，把 `latest/download` 換成
   `download/v0.3.0-rc1` 再比。
 - 匿名查 GHCR `:latest` 與 `:0.2.5` 是同一個 digest。
+
+發版那次 push 到 `main` 的 CI，以及 tag 的 release run 還在跑時，不要再 push `main`：ci.yml 的 `concurrency`
+（`cancel-in-progress: true`，同一個 ref 一組）會取消 `main` 上進行中的 CI run，那一版就少了一次完整的綠燈。
+release.yml 沒有 `concurrency`，不會被取消，但等它綠了再動 `main` 比較清楚。
 
 使用者那一面（tag 的意思、升級步驟、固定在某一版）在 [`guide/upgrading.md`](guide/upgrading.md)。
 
@@ -748,3 +764,6 @@ docs/             設計綱要、實作計劃、進度、本檔
 ## 疑難排解
 
 - `uv sync` 出現 `failed to hardlink ... (os error 396)`：repo 放在雲端同步目錄（OneDrive 之類）時硬鏈接不可用，改用 `UV_LINK_MODE=copy uv sync`，或在使用者層級的 `uv.toml` 設 `link-mode = "copy"`。
+- 本機（目前開發用的 Windows 機器）偶發原生崩潰：退出碼 `3221225477`（0xC0000005，access violation）或
+  `3221225501`（0xC000001D，illegal instruction），出現在 eslint、prettier、pytest、e2e 的 web server。同一指令
+  重跑會過，與改動無關，是這台機器的硬體問題（同期有多次藍屏），不是測試偶發，也不要為它開票。重跑一次仍崩才當真的失敗。
