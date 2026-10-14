@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # tests/unit/test_changelog_released.py compares against the latest v* tag.
+          fetch-depth: 0
 
       - uses: astral-sh/setup-uv@v10.0.1
         with:
