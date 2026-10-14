@@ -56,3 +56,4 @@
 - Standards（判斷）：後端 docstring 的改名沒有閘門守（`interfaceLoginName.test.ts` 只掃 `web/src`）；後端指偏好鍵的「WebUI 帳號」照留。
 - Spec（提醒）：resolver 長時間停擺時，作品頁會一直說「即將再確認」；票面沒要求處理。
 - critique A 實跑時看到：`docs/development.md` 說 `mixed` 的既有 qBittorrent「填任何位址與帳密都測得過」，`scripts/fake_setup_server.py` 的 `NAS_QBITTORRENT_LOGIN` 其實只收 `admin` / `adminadmin`（或留空）。
+- 2026-10-14 使用者決定：P1 與 P2 一致性開成票 104；頁 4 孤立的「之後再說」、頁 2／4 沿用頁 1 的主機、完成頁的峰終這一輪不做；指向句維持頁 1、2、4 各說一次。
