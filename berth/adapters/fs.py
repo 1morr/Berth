@@ -39,15 +39,20 @@ class PathEscapeError(Exception):
 class PathFacts:
     """`stat` 的結果。硬鏈接檢查要的就是 `device` 與 `inode` 這一對。
 
-    `size` 與 `links` 是刪除範圍的空間估算要的（brief §9.2）：**一次 `stat` 拿四個值**，
+    `allocated` 與 `links` 是刪除範圍的空間估算要的（brief §9.2）：**一次 `stat` 拿齊**，
     而不是為了 `st_nlink` 再摸一次磁碟——那會讓同一個檔案的四個數字來自兩個不同的時刻。
     `links` 是這份資料現在有幾個名字，只有最後一個消失時那些位元組才回到檔案系統。
+
+    `size` 是表觀大小，`allocated` 是實際佔用（`st_blocks` × 512，POSIX 的單位）。兩者在
+    sparse 檔上差很多：qBittorrent 預設不預先配置，下到一半的檔表觀上已經是整個檔案
+    （M4 票 102）。刪掉之後空出來的是後者。
     """
 
     device: int
     inode: int
     size: int
     links: int
+    allocated: int
 
 
 def ensure_directory(path: Path) -> bool:
@@ -75,8 +80,15 @@ def is_within(path: Path, root: Path) -> bool:
 def stat(path: Path) -> PathFacts:
     """這條路徑在 Berth 這個容器裡看得到嗎，看得到的話它是誰。看不到就丟 `OSError`。"""
     facts = path.stat()
+    # Windows 的 `os.stat` 沒有 `st_blocks`（Berth 只在 Linux 容器裡跑，那是開發機）：
+    # 拿表觀大小，偏大但不會是 0。
+    blocks = getattr(facts, "st_blocks", None)
     return PathFacts(
-        device=facts.st_dev, inode=facts.st_ino, size=facts.st_size, links=facts.st_nlink
+        device=facts.st_dev,
+        inode=facts.st_ino,
+        size=facts.st_size,
+        links=facts.st_nlink,
+        allocated=facts.st_size if blocks is None else blocks * 512,
     )
 
 

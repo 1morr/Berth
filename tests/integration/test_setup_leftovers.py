@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceUnavailableError
@@ -27,12 +28,15 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.api.deps import get_bundled_services, get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import ServiceKind, ServiceOrigin
+from berth.domain import IssueType, JobState, JobTrigger, ServiceKind, ServiceOrigin
 from berth.main import create_app
-from berth.models import SetupSettings
+from berth.models import Issue, Job, SetupSettings
 from berth.services.clients import BundledServices
+from berth.services.downloads import poll_downloads
+from berth.services.events import EventHub
+from berth.services.hints import JobHints
 from berth.services.indexer import apply_default_indexers, remove_indexer
-from berth.services.leftovers import CategoriesNotRemovedError, read_leftovers
+from berth.services.leftovers import CategoriesNotRemovedError, LeftoverJob, read_leftovers
 from berth.services.qbittorrent import route_categories
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
@@ -203,6 +207,32 @@ class TestRemoveEmptyCategoriesOnSwitch:
         assert new.removed_categories == []
         assert await chosen_qbittorrent(session) == (ServiceOrigin.EXISTING, HOME)
 
+    async def test_changing_the_address_from_one_existing_to_another_is_a_switch_too(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """設定頁的「改位址」（M4 票 102）：既有換到另一台既有一樣是換台，勾了移除就移除
+        原本那一台的。"""
+        old = old_qbittorrent()
+        factory = await ready(session, roots, old)
+        # 沒列在 `qbittorrent_elsewhere` 的位址都是 `old` 那一台：先把它改成以既有的位址連。
+        await choose_service(
+            session,
+            factory,
+            BUNDLED,
+            QBT,
+            ServiceOrigin.EXISTING,
+            ServiceConnection(base_url="http://nas:8080", username="admin", password="adminadmin"),
+        )
+        new = FakeQbittorrentClient()
+        factory.qbittorrent_elsewhere[HOME] = new
+
+        await switch_to_existing(session, factory, remove_empty_categories=True)
+
+        assert "berth-shows" in old.removed_categories
+        assert "berth-movies" not in old.removed_categories
+        assert new.removed_categories == []
+        assert await chosen_qbittorrent(session) == (ServiceOrigin.EXISTING, HOME)
+
     async def test_switching_without_the_box_ticked_removes_nothing(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
@@ -289,6 +319,89 @@ class TestRemoveEmptyCategoriesOnSwitch:
 
         assert old.removed_categories == []
         assert await chosen_qbittorrent(session) == (ServiceOrigin.BUNDLED, COMPOSE[QBT])
+
+
+def job(info_hash: str, state: JobState) -> Job:
+    return Job(
+        hash=info_hash,
+        name=f"release-{info_hash}",
+        source_url=f"magnet:?xt=urn:btih:{info_hash}",
+        trigger=JobTrigger.MANUAL,
+        state=state,
+    )
+
+
+@pytest.mark.asyncio
+class TestDownloadsStillOnTheOldOne:
+    """換台之後還在下載的那幾筆（M4 票 102，票 65 留下的）：torrent 留在原本那一台，新那一台上
+    找不到，poller 照 plan §3.1 把它們變成 `client_removed`。換台框照實說出是哪幾筆。"""
+
+    async def test_after_the_switch_the_poller_opens_client_removed_for_them(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """重現：原本那一台上下到一半的那一筆，換台後的第一輪就成了待處理。"""
+        old = old_qbittorrent()
+        old.torrents = (*old.torrents, replace(torrent("d", "berth-shows"), state="downloading"))
+        factory = await ready(session, roots, old)
+        session.add(job("d", JobState.DOWNLOADING))
+        await session.commit()
+        factory.qbittorrent_elsewhere[HOME] = FakeQbittorrentClient()
+
+        await switch_to_existing(session, factory, remove_empty_categories=False)
+        await poll_downloads(session, factory.qbittorrent(HOME), EventHub(), JobHints())
+
+        found = await session.get(Job, "d")
+        assert found is not None and found.state is JobState.CLIENT_REMOVED
+        issue = await session.scalar(select(Issue).where(Issue.job_hash == "d"))
+        assert issue is not None and issue.type is IssueType.CLIENT_REMOVED
+
+    async def test_the_list_names_the_ones_that_will_become_issues(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """poller 盯著的那幾種狀態才算：入庫了的、已經是待處理的、送單失敗的都不在
+        qBittorrent 的清單上等著。"""
+        factory = await ready(session, roots, old_qbittorrent())
+        for info_hash, state in [
+            ("d", JobState.DOWNLOADING),
+            ("e", JobState.STALLED),
+            ("f", JobState.SUBMITTED),
+            ("g", JobState.IMPORTED),
+            ("h", JobState.CLIENT_REMOVED),
+            ("i", JobState.SUBMIT_FAILED),
+        ]:
+            session.add(job(info_hash, state))
+        await session.commit()
+
+        leftovers = await read_leftovers(session, factory, ServiceKind.QBITTORRENT)
+
+        assert leftovers.in_flight == (
+            LeftoverJob(hash="d", name="release-d"),
+            LeftoverJob(hash="e", name="release-e"),
+            LeftoverJob(hash="f", name="release-f"),
+        )
+
+    async def test_an_unreachable_old_one_still_names_them(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """清單讀的是 Berth 自己的 Job，連不到原本那一台照樣說得出。"""
+        factory = await ready(session, roots, old_qbittorrent())
+        session.add(job("d", JobState.DOWNLOADING))
+        await session.commit()
+        factory.qbittorrent_.error = ServiceUnavailableError("qbittorrent: connection refused")
+
+        leftovers = await read_leftovers(session, factory, ServiceKind.QBITTORRENT)
+
+        assert not leftovers.reachable
+        assert leftovers.in_flight == (LeftoverJob(hash="d", name="release-d"),)
+
+    async def test_prowlarr_has_none(self, session: AsyncSession, roots: dict[str, Path]) -> None:
+        factory = await ready(session, roots, FakeQbittorrentClient())
+        session.add(job("d", JobState.DOWNLOADING))
+        await session.commit()
+
+        leftovers = await read_leftovers(session, factory, ServiceKind.PROWLARR)
+
+        assert leftovers.in_flight == ()
 
 
 @pytest.mark.asyncio

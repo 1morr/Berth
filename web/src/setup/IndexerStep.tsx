@@ -25,7 +25,7 @@ import {
 import { ChoiceCutaway } from './ChoiceCutaway'
 import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
 import { AdvancedSites, RecommendedSites } from './RecommendedSites'
-import { prowlarrWeb } from './serviceWeb'
+import { PROWLARR_PAGE, prowlarrWeb } from './serviceWeb'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
 import type { ChoiceDraft } from './choiceDraft'
 import { STEP } from './navigation'
@@ -277,7 +277,7 @@ function NoSites({
         </GhostButton>
         {webUrl && (
           <a
-            href={`${webUrl}/#/indexers`}
+            href={`${webUrl}${PROWLARR_PAGE.indexers}`}
             target="_blank"
             rel="noreferrer noopener"
             className={`${TEXT_LINK} text-sm`}
@@ -444,7 +444,7 @@ function ProwlarrLogin({
             row={row}
             status={loginStatus(t, row, indexers.web_ui_login_by_berth)}
             fix={t('indexer.add.loginFix')}
-            commands={webUrl ? [`${webUrl}/#/settings/general`] : []}
+            commands={webUrl ? [`${webUrl}${PROWLARR_PAGE.general}`] : []}
           />
         </ol>
       )}

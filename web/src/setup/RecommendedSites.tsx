@@ -15,7 +15,7 @@ import { SIGNAL_FILL } from '../components/signal'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { formatList } from '../i18n/list'
 import { GAP, noRecommendedListed } from './indexerGaps'
-import { prowlarrWeb } from './serviceWeb'
+import { PROWLARR_PAGE, prowlarrWeb } from './serviceWeb'
 import { hostOf } from './signals'
 import { useSiteChecks, withChecks } from './siteChecks'
 
@@ -174,10 +174,8 @@ function Unlisted({
           {rereading ? t('indexer.empty.rereading') : t('indexer.empty.reread')}
         </GhostButton>
         {webUrl && (
-          // Prowlarr 的介面是 BrowserRouter（`frontend/src/bootstrap.tsx` 的 `createBrowserHistory`）：
-          // 路徑直接接在後面，不走 `#/`。
           <a
-            href={`${webUrl}/system/events`}
+            href={`${webUrl}${PROWLARR_PAGE.events}`}
             target="_blank"
             rel="noreferrer noopener"
             className={`${TEXT_LINK} text-sm`}

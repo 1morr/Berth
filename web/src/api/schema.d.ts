@@ -3784,6 +3784,13 @@ export interface components {
             /** Torrents */
             torrents: number | null;
         };
+        /** LeftoverJobOut */
+        LeftoverJobOut: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+        };
         /**
          * LeftoversOut
          * @description 換 qBittorrent / Prowlarr 的確認框列出的、Berth 在現在這一台留下的東西（M4 票 47）。
@@ -3803,6 +3810,8 @@ export interface components {
             failure: components["schemas"]["StepFailure"] | null;
             /** Error */
             error: string;
+            /** In Flight */
+            in_flight: components["schemas"]["LeftoverJobOut"][];
         };
         /** LibraryChoiceOut */
         LibraryChoiceOut: {

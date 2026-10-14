@@ -298,6 +298,11 @@ const zhHant = {
         '這 {{count}} 個 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
       seedingUnknown:
         '這些分類裡的 torrent 會留在原本那一台（做種的照樣做種、下載中的照樣下載），換台之後 Berth 不再追蹤；已經入庫的檔案不受影響。原本那一台關掉，做種就停。',
+      // M4 票 102：還在下載的 Job 換台之後會變成 client_removed，用待處理那一頁的同一組詞。
+      inFlight_one:
+        '還沒下完的 {{count}} 筆例外，Berth 仍記著它：換台之後新那一台上找不到它，會變成一件待處理（{{issue}}）：在那裡按「{{resubmit}}」就送到新那一台重新下載，或「{{accept}}」。',
+      inFlight_other:
+        '還沒下完的 {{count}} 筆例外，Berth 仍記著它們：換台之後新那一台上找不到，各會變成一件待處理（{{issue}}）：在那裡按「{{resubmit}}」就送到新那一台重新下載，或「{{accept}}」。',
       removeEmpty_one: '換台時一併移除 {{count}} 個空的 berth- 分類',
       removeEmpty_other: '換台時一併移除 {{count}} 個空的 berth- 分類',
       removeEmptyHint: '確認換台才移除，取消就什麼都不動；有 torrent 的分類不碰。',
@@ -665,7 +670,7 @@ const zhHant = {
       web_ui_password: 'WebUI 登入',
     },
     fix: {
-      web_ui_password: '在「選項 → Web UI」自己設定帳號與密碼：',
+      web_ui_password: '在「工具 → 選項 → Web UI」自己設定帳號與密碼：',
       loginRejected:
         '照上面的規則改一組帳密，或取消「沿用 Jellyfin 帳密」另設一組，再按一次「設定介面登入」。',
     },
@@ -3739,6 +3744,10 @@ const en: Translations<typeof zhHant> = {
         'These {{count}} torrents stay on the old one (seeding or downloading as before); Berth stops tracking them after the switch. Files already imported are not affected. Seeding stops when the old one is shut down.',
       seedingUnknown:
         'Torrents in these categories stay on the old one (seeding or downloading as before); Berth stops tracking them after the switch. Files already imported are not affected. Seeding stops when the old one is shut down.',
+      inFlight_one:
+        'The exception is one download that has not finished, which Berth still tracks: the new one will not find it after the switch, so it becomes an issue ({{issue}}). From there, “{{resubmit}}” sends it to the new one to download again, or “{{accept}}” lets it go.',
+      inFlight_other:
+        'The exception is {{count}} downloads that have not finished, which Berth still tracks: the new one will not find them after the switch, so each becomes an issue ({{issue}}). From there, “{{resubmit}}” sends it to the new one to download again, or “{{accept}}” lets it go.',
       removeEmpty_one: 'Also remove {{count}} empty berth- category when switching',
       removeEmpty_other: 'Also remove {{count}} empty berth- categories when switching',
       removeEmptyHint:
@@ -4125,7 +4134,7 @@ const en: Translations<typeof zhHant> = {
       web_ui_password: 'WebUI login',
     },
     fix: {
-      web_ui_password: 'Set the username and password yourself under Options → Web UI:',
+      web_ui_password: 'Set the username and password yourself under Tools → Options → WebUI:',
       loginRejected:
         'Change the login to fit the rules above, or untick “Reuse the Jellyfin login” and set one of its own, then press “Set interface login” again.',
     },

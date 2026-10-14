@@ -91,6 +91,37 @@ class TestFileFacts:
 
         assert stat(source).links == 2
 
+    @pytest.mark.skipif(
+        not hasattr(os.stat_result, "st_blocks"),
+        reason="Windows 的 os.stat 沒有 st_blocks；Berth 只在 Linux 容器裡跑，這裡走表觀大小",
+    )
+    def test_a_sparse_file_occupies_only_what_was_written(self, tmp_path: Path) -> None:
+        """qBittorrent 預設不預先配置：下到一半的檔是 sparse 檔，表觀大小是整個檔案（M4 票 102）。
+
+        票 42 那一筆表觀 970 MB、實際約 192 MB。刪掉它空出來的是後者。
+        """
+        path = tmp_path / "partial.mkv"
+        with path.open("wb") as file:
+            file.write(os.urandom(64 * 1024))
+            file.truncate(64 * 1024 * 1024)
+
+        facts = stat(path)
+
+        assert facts.size == 64 * 1024 * 1024
+        assert 64 * 1024 <= facts.allocated < 1024 * 1024
+
+    def test_without_block_counts_the_allocation_is_the_apparent_size(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """沒有 `st_blocks`（Windows）就說不出實際佔用，拿表觀大小——偏大，但不會說成 0。"""
+        path = tmp_path / "solo.mkv"
+        path.write_bytes(b"berth")
+        real = path.stat()
+        bare = os.stat_result(tuple(real)[:10])
+        monkeypatch.setattr(Path, "stat", lambda self, **_: bare)
+
+        assert stat(path).allocated == 5
+
 
 class TestSameInode:
     def test_a_hard_link_is_the_same_inode(self, tmp_path: Path) -> None:

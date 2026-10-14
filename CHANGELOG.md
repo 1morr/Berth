@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **換 qBittorrent 時說出還沒下完的那幾筆**（M4 票 102）：它們的 torrent 留在原本那一台，換台之後新那一台上找不到，
+  會各變成一件待處理「torrent 已經不在 qBittorrent 上」，在那裡「重新送單」就送到新那一台。換台框現在照實說，並列出是哪幾筆
+  （連不到原本那一台也列得出）。API：`GET /api/setup/services/{kind}/leftovers` 多 `in_flight`。
+- **設定 → qBittorrent / Prowlarr 的「改位址」換到另一台既有，也走換台**（M4 票 102）：打了不同的位址，表單裡就地出現換台說明、
+  Berth 在原本那一台留下的東西（qBittorrent 多一個「一併移除空的 berth- 分類」勾選），「測試連線」就是確認。只改帳密、打回原本那個位址都不是換台。
+- **刪除的「可空出空間」改量實際佔用**（M4 票 102）：還在下載的檔是 sparse 檔，原本照表觀大小算會多報（例如表觀 970 MB、
+  實際約 192 MB）。現在量的是磁碟上真的佔的區塊，已下完的檔也以區塊取整，時間線上的「空出了多少」同一條規則。
+
+### Fixed
+
+- **Prowlarr 與 qBittorrent 的連結落在對的頁面**（M4 票 102）：「開啟 Prowlarr 的索引站頁」連到它的首頁（就是索引站清單）、
+  介面登入沒設成的補法連到 `/settings/general`——原本的 `/#/settings/general` 落在首頁。qBittorrent 沒有通往「選項」的網址，
+  補法改成給 WebUI 本身，說在「工具 → 選項 → Web UI」。
+
 ## [0.2.6] - 2026-10-14
 
 **從 0.2.5 升級**：`docker compose pull && docker compose up -d` 就好，`.env` 不用改，也沒有資料庫 migration。

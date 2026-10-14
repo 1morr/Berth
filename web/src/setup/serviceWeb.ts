@@ -61,3 +61,16 @@ export function qbittorrentWeb(
 ): string | null {
   return serviceWeb(setup, 'qbittorrent', page)
 }
+
+/**
+ * Prowlarr 介面裡 Berth 會連過去的幾頁。**路由形狀只寫在這裡**（同 `inventory/jellyfinLink.ts`）。
+ *
+ * Prowlarr 是 BrowserRouter（`frontend/src/bootstrap.tsx` 的 `createBrowserHistory`、`App/AppRoutes.tsx`）：
+ * 路徑直接接在介面位址後面。`/#/settings/general` 這種寫法落在首頁（2026-10-14 對 2.6.5 實開，brief §20.14）；
+ * 索引站清單就是首頁 `/`，`/indexers` 是找不到頁。
+ */
+export const PROWLARR_PAGE = {
+  indexers: '/',
+  general: '/settings/general',
+  events: '/system/events',
+} as const

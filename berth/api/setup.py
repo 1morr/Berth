@@ -455,6 +455,13 @@ class LeftoverCategoryOut(BaseModel):
     torrents: int | None
 
 
+class LeftoverJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    hash: str
+    name: str
+
+
 class LeftoversOut(BaseModel):
     """換 qBittorrent / Prowlarr 的確認框列出的、Berth 在現在這一台留下的東西（M4 票 47）。"""
 
@@ -472,6 +479,9 @@ class LeftoversOut(BaseModel):
     login: str
     failure: StepFailure | None
     error: str
+    #: 還在下載的 Job（qBittorrent）：新那一台上找不到它們的 torrent 時會變成
+    #: `client_removed`（M4 票 102）。
+    in_flight: list[LeftoverJobOut]
 
 
 @router.get("/services/{kind}/leftovers")
