@@ -1,10 +1,15 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import i18next from 'i18next'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { JobEvent } from '../api/jobs'
 import { renderWithProviders } from '../test/render'
 import { JobTimeline } from './JobTimeline'
+
+afterEach(async () => {
+  await i18next.changeLanguage('zh-Hant')
+})
 
 /**
  * 時間線逐型別的那幾格（brief §5.2、`.scratch/m1/live-jobs-shape.md` §6）。
@@ -201,14 +206,24 @@ describe('Job 時間線', () => {
     expect(line.getByText('from_the_future')).toBeInTheDocument()
   })
 
-  it('核准與拒絕各說誰決定了什麼（M2 票 07）', () => {
+  it('核准與重新規劃各說誰決定了什麼（M2 票 07）', () => {
     const line = render([
       event({ id: 1, type: 'review_decided', payload: { decision: 'approved', files: 2 } }),
       event({ id: 2, type: 'review_decided', payload: { decision: 'rejected' } }),
     ])
 
     expect(line.getByText('管理員核准了，2 個檔案要入庫')).toBeInTheDocument()
-    expect(line.getByText('管理員拒絕了這份計劃，Berth 重新規劃')).toBeInTheDocument()
+    expect(line.getByText('管理員丟掉這份計劃，Berth 重新規劃')).toBeInTheDocument()
+  })
+
+  // 票 106：審核頁那一顆改叫「重新規劃」，時間線跟著說同一件事，不說「拒絕」。
+  it('en：重新規劃那一筆也不說 reject', async () => {
+    await i18next.changeLanguage('en')
+    const line = render([event({ type: 'review_decided', payload: { decision: 'rejected' } })])
+
+    expect(
+      line.getByText('An administrator threw this plan away; Berth plans it again'),
+    ).toBeInTheDocument()
   })
 
   it('刪除那一筆說得出真的刪了哪幾樣、空出多少', () => {

@@ -1,10 +1,15 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import i18next from 'i18next'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Plan, PlanItem } from '../api/plans'
 import { renderWithProviders } from '../test/render'
 import { JobPlan } from './JobPlan'
+
+afterEach(async () => {
+  await i18next.changeLanguage('zh-Hant')
+})
 
 function item(overrides: Partial<PlanItem> = {}): PlanItem {
   return {
@@ -238,6 +243,17 @@ describe('匯入計劃', () => {
     // 計劃自己與那一組都說「待審核」：一個說整份停下來了，一個說是哪幾個檔案讓它停的。
     expect(screen.getAllByText('待審核')).toHaveLength(2)
     expect(screen.getByText(/不讓中信心的檔案自己入庫/)).toBeInTheDocument()
+  })
+
+  // 票 106：審核頁的「拒絕」改叫「重新規劃」，被換掉的那一份的狀態說同一件事。
+  it.each([
+    ['zh-Hant', '已重新規劃'],
+    ['en', 'Planned again'],
+  ])('%s：退回重算的那一份狀態說「重新規劃」，不說「拒絕」', async (language, label) => {
+    await i18next.changeLanguage(language)
+    renderWithProviders(<JobPlan plan={plan({ status: 'rejected' })} />)
+
+    expect(screen.getByText(label)).toBeInTheDocument()
   })
 
   it('下載中的那一份說得出它只是預估', () => {

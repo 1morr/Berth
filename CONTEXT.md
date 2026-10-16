@@ -232,7 +232,7 @@ _Avoid_: mapping, import job, rename plan
 _Avoid_: draft plan, preview
 
 **Review Reason**（停下來的理由）:
-一份 Plan 停在 review 的七種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`、入庫途中目標上已經有別人的檔案的 `target_exists`、管理員撤銷了一個 Audit 的 `audit_undone`，發佈時間與換算出的那一集的播出日對不上的 `air_date_conflict`（**播出日比對**，M3 票 14），以及量到的片長與 TMDB 那一集差太多的 `runtime_conflict`（**片長驗證**，M3 票 15）。七種的下一步不同，所以是封閉集合而不是一句話。停在 review 的 Plan 由管理員**核准**（照提案入庫）或**拒絕**（丟掉這一份、重新規劃）。
+一份 Plan 停在 review 的七種理由：`low_confidence`、`medium_not_allowed`、`nothing_to_import`、入庫途中目標上已經有別人的檔案的 `target_exists`、管理員撤銷了一個 Audit 的 `audit_undone`，發佈時間與換算出的那一集的播出日對不上的 `air_date_conflict`（**播出日比對**，M3 票 14），以及量到的片長與 TMDB 那一集差太多的 `runtime_conflict`（**片長驗證**，M3 票 15）。七種的下一步不同，所以是封閉集合而不是一句話。停在 review 的 Plan 由管理員**核准**（照提案入庫）或**重新規劃**（丟掉這一份、照目前的 TMDB 資料與設定重算；票 106 之前 UI 叫「拒絕」，端點、`PlanStatus.REJECTED` 與事件仍叫 reject / rejected）。
 _Avoid_: error, message
 
 **Air-date check**（UI 顯示「播出日比對」）:

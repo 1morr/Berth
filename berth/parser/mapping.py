@@ -286,6 +286,22 @@ def _from_hint(
     known = _exists(season, span.start) and _exists(season, span.end)
     reasons: tuple[ItemReason, ...] = (hint.reason,)
     if not known:
+        counted = _cumulative(_regular(media), span)
+        if counted is not None and counted.season == season.season_number:
+            # 季號明說、集號從第一季一路數下來（ANi 的 `Season 2 - 171`，票 106）：累加換算正好落在
+            # 提示的那一季，兩者互相印證。落在別季時不採用，照字面交給人。換算仍是推論，檔名明說
+            # 的播出日對不上時降到 low，與只有集號的累加換算同一條（`_date_doubt`）。
+            doubt = _date_doubt(media, info, counted)
+            return (
+                _from_mapped(
+                    counted,
+                    MappingStrategy.ABSOLUTE_CUMULATIVE,
+                    Confidence.LOW if doubt else Confidence.MEDIUM,
+                    span,
+                    check,
+                    (*reasons, *doubt),
+                ),
+            )
         reasons = (
             *reasons,
             why(Code.EPISODE_NOT_ON_TMDB, season=season.season_number, number=span.start),

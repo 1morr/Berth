@@ -150,6 +150,68 @@ class TestExplicit:
         assert (candidates[0].episode_start, candidates[0].episode_end) == (1, 2)
 
 
+class TestExplicitSeasonWithCumulativeNumber:
+    """季號明說、集號卻從第一季一路數下來（ANi 的 `Season 2 - 171`，票 106）。
+
+    Black Clover 在 TMDB 上第 1 季 170 集、第 2 季 26 集：171 是 S02E01。
+    """
+
+    black_clover = show(season(1, 170), season(2, 26), title="Black Clover")
+    name = "[ANi] Black Clover Season 2 - {number} [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4"
+
+    def test_a_number_counted_from_the_first_season_lands_in_the_named_season(self) -> None:
+        candidates = run(self.name.format(number=171), self.black_clover)
+
+        assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.MEDIUM
+        assert why(ReasonCode.SEASON_FROM_RELEASE, season=2) in candidates[0].reasons
+        assert (
+            why(ReasonCode.ABSOLUTE_CUMULATIVE, number=171, episode="S02E01")
+            in candidates[0].reasons
+        )
+
+    def test_an_air_date_the_converted_episode_did_not_air_on_is_only_reviewed(self) -> None:
+        """換算是推論，檔名的播出日是明說的：對不上就交給人，與其他累加換算同一條（`_date_doubt`）。"""
+        dated = show(
+            season(1, 25, start=date(2020, 1, 5)),
+            season(2, 12, start=date(2021, 1, 3)),
+            title="Show",
+        )
+
+        candidates = run("Show.S02E26.2021-01-04.1080p.WEB.mkv", dated)
+
+        assert best(candidates) == (2, 1, MappingStrategy.ABSOLUTE_CUMULATIVE)
+        assert candidates[0].confidence is Confidence.LOW
+        assert (
+            why(
+                ReasonCode.AIR_DATE_MISMATCH,
+                aired="2021-01-04",
+                episode="S02E01",
+                tmdb_aired="2021-01-03",
+            )
+            in candidates[0].reasons
+        )
+
+    def test_a_number_that_counts_into_another_season_stays_literal(self) -> None:
+        """換算落在別季就不是「這一季的第幾集」，照字面讀、交給人。"""
+        candidates = run(
+            self.name.format(number=200), show(*self.black_clover.seasons, season(3, 20))
+        )
+
+        assert best(candidates) == (2, 200, MappingStrategy.EXPLICIT)
+        assert candidates[0].confidence is Confidence.LOW
+        assert why(ReasonCode.EPISODE_NOT_ON_TMDB, season=2, number=200) in candidates[0].reasons
+
+    def test_a_number_the_named_season_has_is_read_literally(self) -> None:
+        """第 2 季比第 1 季長時，`- 13` 累加也落在第 2 季（S02E01），但字面那一集存在就照字面。"""
+        candidates = run(
+            self.name.format(number=13), show(season(1, 12), season(2, 24), title="Black Clover")
+        )
+
+        assert best(candidates) == (2, 13, MappingStrategy.EXPLICIT)
+        assert candidates[0].confidence is Confidence.HIGH
+
+
 class TestFolder:
     def test_a_season_folder_plus_an_episode_in_the_file(self) -> None:
         candidates = run(

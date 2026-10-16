@@ -23,6 +23,16 @@
   （缺必填的是 422 `route_required`，類型不符是 422 `route_kind_mismatch`）；新增 `PUT /api/rss/feeds/{id}/routes`；
   `FeedOut` 的 `route_id` 換成 `tv_route_id`、`movie_route_id`，多 `route_kinds`、`awaiting_route`；`SeriesOut` 多 `feed_routes`
   （只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可）。
+- **季號明寫、集號從第一季一路數下來的發佈，換算成那一季的集**（票 106）：ANi 的 `黑色五葉草 Season 2 - 171`（TMDB 第 1 季
+  170 集）現在計劃成 S02E01、medium，理由多一句「累加換算」；原本照字面讀成 TMDB 沒有的 S02E171、停在審核，直接核准會寫出
+  Jellyfin 對不上的集。換算落在別季、或那一季本來就有那一集時照舊。**已經停在審核的計劃不會自動重算**：在審核頁按「重新規劃」
+  就會套用新規則。
+- **審核頁的「拒絕」改叫「重新規劃」**（票 106）：它做的事與下載詳情頁的「重新規劃」相同——照目前的 TMDB 資料與設定重算、
+  丟掉逐列改過的、檔案不動；確認句把這三件說清楚。時間線與計劃狀態跟著改說法。API 不變（仍是 `POST /api/plans/{id}/reject`）。
+
+### Added
+
+- **設定頁底部顯示 Berth 版本**（票 106）：每一個分頁都看得到「Berth 0.2.7」這一行，不必再自己打 `/api/health`。
 
 ## [0.2.7] - 2026-10-14
 
