@@ -169,9 +169,10 @@ Mikan 下載 `.torrent` 解出檔案清單（單檔 torrent，infohash 與 Mikan
 | `anime/spy-x-family-s3-dynamis` | **重複寫的 `Season 3 / … Season 3 - 47`**：索引站標題是被讀成區間的那一種，而**檔名只寫一次**，所以同一筆同時蓋到兩種寫法（`merge_release` 檔名說了算，修之前一樣是 high 的 S03E04）。正確答案 **S03E10** `Austin's Troubles \| A Normal Mixer \| Moon Landing`，播出日 2025-12-07 與發佈時間同一天 |
 
 - **兩筆都沒有 `min_confidence`**：與 v2 / v3 的四筆同一個理由——明說的季號配上跨季累加的集號該不該
-  自動入庫，正是這兩筆要量的問題。修完之後它們落在 `review`（`auto_wrong` 2 → 0，`auto_correct` 不動）：
-  集號 50 在只有 13 集的第三季裡不存在，而「季號明說時要不要改走絕對編號」現在沒有規則回答，
-  所以交給人比猜一個好。
+  自動入庫，正是這兩筆要量的問題。M2 票 01 修完之後它們落在 `review`（`auto_wrong` 2 → 0，`auto_correct`
+  不動）：集號 50 在只有 13 集的第三季裡不存在，當時沒有規則回答「季號明說時要不要改走絕對編號」。
+  **票 106 補上那條規則**（plan §4.4「季號明寫、集號跨季累計」）：字面那一集不在提示的那一季、而累加
+  換算正好落在那一季時採用換算，medium。兩筆因此以 medium 自動入庫成 S03E13 / S03E10（`review` → `auto_correct`）。
 - 集名裡的 `|` 進不了檔名（`naming.sanitize`），所以 `target` 上是
   `Austin's Troubles A Normal Mixer Moon Landing`。
 
