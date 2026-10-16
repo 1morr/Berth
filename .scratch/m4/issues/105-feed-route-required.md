@@ -50,6 +50,6 @@
 ## Comments
 
 - 2026-10-17 code-review 沒處理的發現：
-  - **Spec 軸（待使用者拍板）**：從 Media 頁訂閱建的搜尋 Feed 一律以 `_prebind` 綁到它那一部，另一種的那一格用不到；但另一種有兩條以上 Route 時那一格是 `NULL`，Feed 列照樣標「要選 Route」，「改 Route」也要求替它選一條（`route_required`）。要排除 `media_id` 有值的 Feed，`FeedOut` 得多帶一個欄位。預設安裝電影只有一條，碰不到。
+  - **Spec 軸——已處理（2026-10-17 使用者拍板排除）**：從 Media 頁訂閱建的搜尋 Feed 一律以 `_prebind` 綁到它那一部，另一種的那一格用不到。後端 `_route_kinds` 判斷它只用得到作品那一種，`FeedOut.route_kinds` 帶給畫面：另一格不標「要選 Route」、`PUT /rss/feeds/{id}/routes` 不要求（給了也存 `NULL`）、自動綁定不讀、`awaiting_route` 不算它；建 Feed 時那一格留空。測試：`test_rss_subscribe.py::test_only_the_works_kind_needs_a_route`、`test_rss_api.py::test_a_search_feed_of_a_series_asks_for_no_movie_route`、`RssPage.test.tsx`「從作品頁訂閱一部劇集的 Feed」。
   - **Standards 軸（判斷題，沒改）**：`FeedSection` 的 `AddFeed` 與 `FeedRoutes` 各有一份「動過的格子 ?? 預填」的合併，兩處只差 `FeedRoutes` 多一層 Feed 現值；tv/movie 的分支在 `_check_routes`、`_subscribed_routes` 各寫一次。
   - 真服務 e2e `tests/e2e/test_4_m3_rss.py` 改了加 Feed 的請求形狀（`tv_route`、`movie_route`），沒有跑（要整套服務，約 20 分鐘）。

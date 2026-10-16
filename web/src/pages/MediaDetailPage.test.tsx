@@ -2388,6 +2388,7 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       primed_at: null,
       tv_route_id: 2,
       movie_route_id: null,
+      route_kinds: ['tv'],
       ever_read: true,
       awaiting_route: { tv: 0, movie: 0 },
     }

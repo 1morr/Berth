@@ -144,6 +144,10 @@ class FeedOut(BaseModel):
     #: 或票 105 之前加的 Feed 推不出來（畫面標「要選 Route」，`PUT /rss/feeds/{id}/routes`）。
     tv_route_id: int | None
     movie_route_id: int | None
+    #: 這個 Feed 用得到哪幾種的 Route：從作品頁訂閱建的搜尋 feed 只有那部作品那一種——另一格不
+    #: 提示「要選 Route」、`PUT /rss/feeds/{id}/routes` 不要求、自動綁定不讀；其他的是
+    #: `["tv", "movie"]`。
+    route_kinds: list[MediaKind]
     #: 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。`false` 時第一輪不給選「全部下載」
     #: （`POST /rss/feeds/{id}/prime` 回 409 `feed_unread`，M3 票 21）。
     ever_read: bool
@@ -166,7 +170,8 @@ class FeedIn(BaseModel):
 
 
 class FeedRoutesIn(BaseModel):
-    """選或改 Feed 的兩條 Route；檢查同 `POST /rss/feeds`。"""
+    """選或改 Feed 的兩條 Route；檢查同 `POST /rss/feeds`，只看 Feed 的 `route_kinds`（用不到的
+    那一格不要求，給了也存 `null`）。"""
 
     tv_route: int | None = None
     movie_route: int | None = None

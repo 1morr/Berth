@@ -162,14 +162,17 @@ function KindRoutePickers({
   routes,
   value,
   onChange,
+  kinds = KINDS,
 }: {
   routes: RouteView[]
   value: KindRoutes
   onChange: (kind: MediaKind, route: number) => void
+  /** 這個 Feed 用得到的那幾種（`Feed.route_kinds`）；新 Feed 兩種都用得到。 */
+  kinds?: readonly MediaKind[]
 }) {
   return (
     <>
-      {KINDS.map((kind) => (
+      {kinds.map((kind) => (
         <KindRoutePicker
           key={kind}
           kind={kind}
@@ -279,6 +282,7 @@ function FeedRoutes({
           <KindRoutePickers
             routes={routes}
             value={chosen}
+            kinds={feed.route_kinds}
             onChange={(kind, route) => setPicked((now) => ({ ...now, [kind]: route }))}
           />
           {binds > 0 && (
@@ -290,7 +294,7 @@ function FeedRoutes({
             <PrimaryButton
               type="button"
               busy={save.isPending}
-              disabled={!complete(chosen, routes)}
+              disabled={!complete(chosen, routes, feed.route_kinds)}
               onClick={() => save.mutate()}
             >
               {save.isPending
@@ -351,7 +355,7 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
   })
   const remove = useMutation({ mutationFn: () => deleteFeed(feed.id), onSuccess: refresh })
   const own = routesOf(feed, routes)
-  const named = KINDS.flatMap((kind) => {
+  const named = feed.route_kinds.flatMap((kind) => {
     const name = routes.find((row) => row.id === own[kind])?.name
     return name === undefined ? [] : [{ kind, name }]
   })

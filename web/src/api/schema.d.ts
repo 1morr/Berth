@@ -2919,13 +2919,16 @@ export interface components {
             tv_route_id: number | null;
             /** Movie Route Id */
             movie_route_id: number | null;
+            /** Route Kinds */
+            route_kinds: components["schemas"]["MediaKind"][];
             /** Ever Read */
             ever_read: boolean;
             awaiting_route: components["schemas"]["KindCountsOut"];
         };
         /**
          * FeedRoutesIn
-         * @description 選或改 Feed 的兩條 Route；檢查同 `POST /rss/feeds`。
+         * @description 選或改 Feed 的兩條 Route；檢查同 `POST /rss/feeds`，只看 Feed 的 `route_kinds`（用不到的
+         *     那一格不要求，給了也存 `null`）。
          */
         FeedRoutesIn: {
             /** Tv Route */

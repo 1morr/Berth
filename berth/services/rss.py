@@ -243,6 +243,9 @@ class FeedView:
     #: 之前加的 Feed 推不出來（畫面標「要選 Route」）。
     tv_route_id: int | None
     movie_route_id: int | None
+    #: 這個 Feed 用得到哪幾種的 Route（`_route_kinds`）：從作品頁訂閱建的只有那部作品那一種，
+    #: 另一格不提示、不要求、自動綁定也不讀。
+    route_kinds: tuple[MediaKind, ...]
     #: 至少讀到過一次（`_ever_read`）：第一輪的「全部下載」只在它為真時給。
     ever_read: bool
     #: 它長出的、因為 Route 不只一條而停在待綁定的，照認出來的種類數（M4 票 105）：選了那一種的
@@ -463,13 +466,20 @@ async def set_feed_routes(
     （`system`），不重新上網查。那一種的 Route 是 `None` 的不綁；其他理由停著的不動；已經綁上的
     不搬家。
 
+    從作品頁訂閱建的 Feed 只看那部作品那一種（`_route_kinds`）：另一種不要求，給了也存 `None`。
+
     沒有單一的反向命令：Route 再改一次是同一支，當場綁上的由 `unbind_series` 一個一個拆。
     """
     row = await session.get(RssFeed, feed_id)
     if row is None:
         raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
-    chosen = KindRoutes(tv=tv_route_id, movie=movie_route_id)
-    await _check_routes(session, chosen)
+    kinds = _route_kinds(row)
+    # 用不到的那一種不收：存 `None`，不檢查、不要求。
+    chosen = KindRoutes(
+        tv=tv_route_id if MediaKind.TV in kinds else None,
+        movie=movie_route_id if MediaKind.MOVIE in kinds else None,
+    )
+    await _check_routes(session, chosen, kinds)
     _set_routes(row, chosen)
     await session.commit()
     bound = submitted = 0
@@ -488,9 +498,15 @@ async def set_feed_routes(
     )
 
 
-async def _check_routes(session: AsyncSession, routes: KindRoutes) -> None:
-    """Feed 的兩格：給了的要在、啟用中、收得下那一種；沒給的那一種不能有啟用中的 Route。"""
-    for kind, route_id in ((MediaKind.TV, routes.tv), (MediaKind.MOVIE, routes.movie)):
+async def _check_routes(
+    session: AsyncSession,
+    routes: KindRoutes,
+    kinds: tuple[MediaKind, ...] = (MediaKind.TV, MediaKind.MOVIE),
+) -> None:
+    """Feed 用得到的那幾種（`kinds`）的格子：給了的要在、啟用中、收得下那一種；沒給的那一種不能有
+    啟用中的 Route。"""
+    for kind in kinds:
+        route_id = routes.of(kind)
         if route_id is None:
             if await _routes_for(session, kind):
                 raise RssRejectedError(RssRefusal.ROUTE_REQUIRED, kind.value)
@@ -504,6 +520,13 @@ async def _check_routes(session: AsyncSession, routes: KindRoutes) -> None:
             raise RssRejectedError(
                 RssRefusal.ROUTE_KIND_MISMATCH, f"{route.slug} holds {route.collection_type.value}"
             )
+
+
+def _route_kinds(feed: RssFeed) -> tuple[MediaKind, ...]:
+    """這個 Feed 用得到哪幾種的 Route。從作品頁訂閱建的（`media_id` 有值）長出的每一個都綁到那一部
+    （`_prebind`），另一種那一格永遠用不到；其他的兩種都用得到。"""
+    parsed = parse_media_id(feed.media_id) if feed.media_id is not None else None
+    return (parsed[0],) if parsed is not None else (MediaKind.TV, MediaKind.MOVIE)
 
 
 async def _grown_by(session: AsyncSession, series_id: int | None = None) -> dict[int, int]:
@@ -622,6 +645,11 @@ def _default_name(url: str) -> str:
 
 
 def _feed_view(row: RssFeed, items: int, awaiting: KindCounts) -> FeedView:
+    kinds = _route_kinds(row)
+    awaiting = KindCounts(
+        tv=awaiting.tv if MediaKind.TV in kinds else 0,
+        movie=awaiting.movie if MediaKind.MOVIE in kinds else 0,
+    )
     return FeedView(
         id=row.id,
         name=row.name,
@@ -635,6 +663,7 @@ def _feed_view(row: RssFeed, items: int, awaiting: KindCounts) -> FeedView:
         primed_at=row.primed_at,
         tv_route_id=row.tv_route_id,
         movie_route_id=row.movie_route_id,
+        route_kinds=kinds,
         ever_read=_ever_read(row, items),
         awaiting_route=awaiting,
     )
@@ -1647,7 +1676,9 @@ async def _auto_bind(
         await _note(session, series_id, verdict.reasons, ids)
         return None
     routes = await _routes_for(session, verdict.media.kind)
-    chosen = _chosen_route(routes, KindRoutes.of_feed(feed).of(verdict.media.kind))
+    kind = verdict.media.kind
+    feed_route = KindRoutes.of_feed(feed).of(kind) if kind in _route_kinds(feed) else None
+    chosen = _chosen_route(routes, feed_route)
     if chosen is None:
         await _note(session, series_id, (*verdict.reasons, _route_reason(routes)), ids)
         return None
@@ -2233,7 +2264,7 @@ async def subscribe_mikan(
             primed_at=moment,
             last_polled_at=moment,
         )
-        _set_routes(feed, await _subscribed_routes(session, media_id, route_id))
+        _set_routes(feed, await _subscribed_routes(session, media_id, route_id, others=True))
         session.add(feed)
         if series is None:
             series = RssSeries(
@@ -2308,23 +2339,27 @@ async def subscribe_search(
         media_id=media_id,
         user_id=user_id,
     )
-    _set_routes(feed, await _subscribed_routes(session, media_id, route_id))
+    # 它只用得到作品那一種（`_route_kinds`）：另一格留空。
+    _set_routes(feed, await _subscribed_routes(session, media_id, route_id, others=False))
     session.add(feed)
     await session.commit()
     await poll_feed(session, factory, feed.id, now=now)
     return await _feed_view_of(session, feed.id)
 
 
-async def _subscribed_routes(session: AsyncSession, media_id: str, route_id: int) -> KindRoutes:
-    """從 Media 頁訂閱建的 Feed 的兩格（M4 票 105）：選的那一條寫在作品那一種的那一欄；另一種
-    只有一條啟用中的 Route 時填它（同 migration 的「能推就推」），否則留 `None`。"""
+async def _subscribed_routes(
+    session: AsyncSession, media_id: str, route_id: int, *, others: bool
+) -> KindRoutes:
+    """從 Media 頁訂閱建的 Feed 的兩格（M4 票 105）：選的那一條寫在作品那一種的那一欄。`others` 時
+    另一種只有一條啟用中的 Route 就填它（同 migration 的「能推就推」），否則留 `None`——Mikan 的單一
+    feed 不預先綁定作品，兩種都用得到；搜尋 feed 只用得到作品那一種，另一格一律空著。"""
     # 作品 id 讀得出來才走到這裡：`_target` 已經讀到了那一列 Media。
     parsed = parse_media_id(media_id)
     assert parsed is not None
     kind = parsed[0]
     other = MediaKind.MOVIE if kind is MediaKind.TV else MediaKind.TV
-    others = await _routes_for(session, other)
-    rest = others[0].id if len(others) == 1 else None
+    candidates = await _routes_for(session, other) if others else []
+    rest = candidates[0].id if len(candidates) == 1 else None
     if kind is MediaKind.TV:
         return KindRoutes(tv=route_id, movie=rest)
     return KindRoutes(tv=rest, movie=route_id)

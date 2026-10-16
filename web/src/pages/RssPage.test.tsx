@@ -31,6 +31,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     primed_at: '2026-09-25T11:00:00Z',
     tv_route_id: null,
     movie_route_id: null,
+    route_kinds: ['tv', 'movie'],
     ever_read: true,
     awaiting_route: { tv: 0, movie: 0 },
     ...overrides,
@@ -717,6 +718,25 @@ describe('RSS 頁', () => {
     expect(JSON.parse(String(init?.body))).toEqual({ tv_route: 3, movie_route: 5 })
     expect(await within(row).findByText('存下了：當場綁上 1 部、送出 12 筆。')).toBeInTheDocument()
     await waitFor(() => expect(within(row).queryByText('要選 Route')).not.toBeInTheDocument())
+  })
+
+  it('從作品頁訂閱一部劇集的 Feed：兩條電影 Route 也不標要選，改 Route 只問劇集', async () => {
+    const MOVIES_TWO = [...ROUTES, managed(7, 'Cinema', 'movies')]
+    render({
+      'GET /api/routes': { body: MOVIES_TWO },
+      'GET /api/rss/feeds': {
+        body: [feed({ tv_route_id: 3, movie_route_id: null, route_kinds: ['tv'] })],
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    expect(await within(row).findByText('Anime')).toBeInTheDocument()
+    expect(within(row).queryByText('要選 Route')).not.toBeInTheDocument()
+    expect(within(row).queryByText(/電影送進/)).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: '改 Route' }))
+    expect(within(row).queryByRole('combobox', { name: '電影送進' })).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '存下 Route' })).toBeEnabled()
   })
 
   it('英文：要選 Route 與改 Route 的句子', async () => {

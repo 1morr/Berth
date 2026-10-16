@@ -116,16 +116,16 @@ def in_session[T](client: TestClient, work: Callable[[AsyncSession], Awaitable[T
     return asyncio.run(run())
 
 
-def movies_route(client: TestClient, roots: dict[str, Path]) -> int:
+def movies_route(client: TestClient, roots: dict[str, Path], slug: str = "movies") -> int:
     async def make(session: AsyncSession) -> int:
         route: Route = await anime_route(
             session,
             roots,
-            slug="movies",
-            name="Movies",
-            jellyfin_library_id="item-3",
+            slug=slug,
+            name=slug.title(),
+            jellyfin_library_id=f"item-{slug}",
             collection_type=CollectionType.MOVIES,
-            category="berth-movies",
+            category=f"berth-{slug}",
         )
         return route.id
 
@@ -771,3 +771,33 @@ class TestSubscribeFromTheDetailPage:
         preview = client.get(f"/api/rss/feeds/{feed['id']}/preview").json()
         assert "matched" in {row["status"] for row in preview}
         assert "unbound" not in {row["status"] for row in preview}
+
+    def test_a_search_feed_of_a_series_asks_for_no_movie_route(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        """M4 票 105：兩條電影 Route，從作品頁訂閱一部劇集的搜尋 feed——它只用得到劇集那一格，
+        電影那一格不算要選，`PUT /rss/feeds/{id}/routes` 也不要求它。"""
+        route_id = seed(client, roots)
+        movies_route(client, roots)
+        movies_route(client, roots, slug="cinema")
+        sign_in(client)
+        factory.rss_.pages[acgrip.search_url("Kimi ga Shinu made")] = ACGRIP
+
+        made = client.post(
+            "/api/rss/subscriptions/search",
+            json={
+                "media": KIMI_ID,
+                "route": route_id,
+                "kind": "acgrip",
+                "term": "Kimi ga Shinu made",
+            },
+            headers=BROWSER,
+        ).json()
+        chosen = client.put(
+            f"/api/rss/feeds/{made['id']}/routes", json={"tv_route": route_id}, headers=BROWSER
+        )
+
+        listed = client.get("/api/rss/feeds").json()[0]
+        assert (listed["route_kinds"], listed["movie_route_id"]) == (["tv"], None)
+        assert chosen.status_code == 200, chosen.text
+        assert chosen.json()["feed"]["route_kinds"] == ["tv"]

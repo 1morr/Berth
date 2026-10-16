@@ -12,6 +12,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
   return {
     tv_route_id: null,
     movie_route_id: null,
+    route_kinds: ['tv', 'movie'],
     awaiting_route: { tv: 2, movie: 1 },
     ...overrides,
   } as Feed
@@ -38,6 +39,13 @@ describe('Feed 的兩條 Route（M4 票 105）', () => {
     expect(unsetKinds(feed({ movie_route_id: 5 }), ROUTES)).toEqual(['tv'])
     expect(unsetKinds(feed({ tv_route_id: 3, movie_route_id: 5 }), ROUTES)).toEqual([])
     expect(unsetKinds(feed(), [route(3, 'tvshows')])).toEqual(['tv'])
+  })
+
+  it('從作品頁訂閱建的只看它用得到的那一種（後端的 route_kinds）', () => {
+    const series = feed({ tv_route_id: 3, route_kinds: ['tv'] })
+    expect(unsetKinds(series, ROUTES)).toEqual([])
+    expect(bindsNow(series, ROUTES)).toBe(2)
+    expect(complete({ tv: 3, movie: null }, ROUTES, series.route_kinds)).toBe(true)
   })
 
   it('指著停用的那一條也算空著：自動綁定不看它', () => {

@@ -37,15 +37,22 @@ export function routesOf(feed: Feed, routes: RouteView[]): KindRoutes {
   return { tv: live('tv', feed.tv_route_id), movie: live('movie', feed.movie_route_id) }
 }
 
-/** 要人選的那幾種：那一種有啟用中的 Route，這一格卻空著或指著停用的那條（票 105 之前加的 Feed）。 */
+/**
+ * 要人選的那幾種：這個 Feed 用得到（後端的 `route_kinds`：從作品頁訂閱建的只有作品那一種）、那一種有
+ * 啟用中的 Route，這一格卻空著或指著停用的那條（票 105 之前加的 Feed）。
+ */
 export function unsetKinds(feed: Feed, routes: RouteView[]): MediaKind[] {
   const own = routesOf(feed, routes)
-  return KINDS.filter((kind) => own[kind] === null && routesFor(routes, kind).length > 0)
+  return feed.route_kinds.filter((kind) => own[kind] === null && routesFor(routes, kind).length > 0)
 }
 
-/** 那幾格都選好了沒：有 Route 的那一種要有值。 */
-export function complete(chosen: KindRoutes, routes: RouteView[]): boolean {
-  return KINDS.every((kind) => chosen[kind] !== null || routesFor(routes, kind).length === 0)
+/** `kinds` 那幾格都選好了沒：有 Route 的那一種要有值。 */
+export function complete(
+  chosen: KindRoutes,
+  routes: RouteView[],
+  kinds: readonly MediaKind[] = KINDS,
+): boolean {
+  return kinds.every((kind) => chosen[kind] !== null || routesFor(routes, kind).length === 0)
 }
 
 /**
@@ -53,7 +60,7 @@ export function complete(chosen: KindRoutes, routes: RouteView[]): boolean {
  * 存得下（`complete`），所以還沒選時說的也是存下那一刻的數字。
  */
 export function bindsNow(feed: Feed, routes: RouteView[]): number {
-  return KINDS.reduce(
+  return feed.route_kinds.reduce(
     (sum, kind) => sum + (routesFor(routes, kind).length === 0 ? 0 : feed.awaiting_route[kind]),
     0,
   )
