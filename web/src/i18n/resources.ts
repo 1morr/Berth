@@ -1999,16 +1999,18 @@ const zhHant = {
       // 核准不帶表單上的值：改到一半的列擋住核准（M3 票 06）。`files` 是那幾列的檔名（`Intl.ListFormat` 串好）。
       unapplied: '還有改動沒有套用，先按「{{apply}}」或「{{cancel}}」：{{files}}',
       approve: '核准並入庫',
-      reject: '拒絕',
-      confirmReject: '丟掉這份計劃（包括逐列改過的），Berth 會重新規劃一次。檔案不動。',
-      confirmRejectAction: '確定拒絕',
+      // 端點仍是 `reject`；畫面說它真正做的事（票 106）：與下載詳情頁的「重新規劃」是同一件。
+      reject: '重新規劃',
+      confirmReject:
+        '照目前的 TMDB 資料與設定重新算一次。這份計劃連同逐列改過的都會丟掉；檔案不動。',
+      confirmRejectAction: '確定重新規劃',
       working: '處理中…',
       approved: '已核准，開始入庫。',
-      rejected: '已拒絕，Berth 重新規劃中。',
+      rejected: '已丟掉這份計劃，Berth 重新規劃中。',
       // 十三種擋下來的理由，各一個下一步。`detail`（檔名或路徑）接在後面。
       refusal: {
         plan_missing: '這份計劃已經不在了，多半是重新規劃把它換掉了。',
-        not_pending: '這份計劃已經不在等人了，多半是另一個分頁先核准或拒絕了。',
+        not_pending: '這份計劃已經不在等人了，多半是另一個分頁先核准或重新規劃了。',
         item_missing: '這一列已經不在這份計劃裡了。',
         item_applied: '這一列已經在媒體庫裡；要改它得用重新匹配。',
         action_not_allowed: '這個處置與檔案的分類矛盾。',
@@ -2451,10 +2453,10 @@ const zhHant = {
         air_date_conflict: '發佈時間與播出日對不上',
         runtime_conflict: '片長與 TMDB 那一集對不上',
       },
-      // 核准與拒絕（M2 票 07）。拒絕之後規劃器整份重算，所以下一筆就是新的那一份。
+      // 核准與重新規劃（M2 票 07、票 106）。重新規劃是規劃器整份重算，所以下一筆就是新的那一份。
       reviewApproved_one: '管理員核准了，{{count}} 個檔案要入庫',
       reviewApproved_other: '管理員核准了，{{count}} 個檔案要入庫',
-      reviewRejected: '管理員拒絕了這份計劃，Berth 重新規劃',
+      reviewRejected: '管理員丟掉這份計劃，Berth 重新規劃',
       // audit 的兩顆（M2 票 06）。目標路徑是機器字串，接在後面。
       auditConfirmed: '管理員看過這個 medium 自動入庫的檔案，說它是對的',
       // M4 票 11：第一批證據夠強，系統替人確認了那個 RSS Series。擔保的集數與 Series 名各另起一行。
@@ -2532,7 +2534,7 @@ const zhHant = {
         auto: '自動入庫',
         pending_review: '待審核',
         approved: '已核准',
-        rejected: '已拒絕',
+        rejected: '已重新規劃',
         applied: '已套用',
         failed: '失敗',
       },
@@ -2863,6 +2865,8 @@ const zhHant = {
     tabs: {
       label: '設定',
     },
+    // 每一個分頁底部那一行：跑的是哪一版（票 106）。
+    version: 'Berth {{version}}',
     connection: {
       title: '位址與憑證',
       lede: '換來源或位址：按下去就存，然後真的連一次。上面那張卡會跟著重新檢查。',
@@ -5416,17 +5420,17 @@ const en: Translations<typeof zhHant> = {
       unapplied:
         'Some changes aren’t applied yet — press “{{apply}}” or “{{cancel}}” first: {{files}}',
       approve: 'Approve and import',
-      reject: 'Reject',
+      reject: 'Plan it again',
       confirmReject:
-        'This throws the plan away, including rows you changed, and Berth plans it again. No file is touched.',
-      confirmRejectAction: 'Reject it',
+        'Berth works this plan out again from the current TMDB data and settings. The plan is thrown away, including rows you changed; no file is touched.',
+      confirmRejectAction: 'Yes, plan it again',
       working: 'Working…',
       approved: 'Approved; importing now.',
-      rejected: 'Rejected; Berth is planning it again.',
+      rejected: 'Thrown away; Berth is planning it again.',
       refusal: {
         plan_missing: 'This plan is gone — most likely a replan replaced it.',
         not_pending:
-          'This plan is no longer waiting — most likely another tab approved or rejected it.',
+          'This plan is no longer waiting — most likely another tab approved it or planned it again.',
         item_missing: 'That row is no longer in this plan.',
         item_applied: 'That row is already in the library; changing it takes a rematch.',
         action_not_allowed: 'That decision contradicts what kind of file this is.',
@@ -5839,7 +5843,7 @@ const en: Translations<typeof zhHant> = {
       },
       reviewApproved_one: 'An administrator approved it; {{count}} file will be imported',
       reviewApproved_other: 'An administrator approved it; {{count}} files will be imported',
-      reviewRejected: 'An administrator rejected this plan; Berth plans it again',
+      reviewRejected: 'An administrator threw this plan away; Berth plans it again',
       auditConfirmed: 'An administrator looked at this medium-confidence import and confirmed it',
       seriesConfirmed:
         'The first batch was strong enough evidence, so Berth confirmed this RSS Series: every episode maps straight from the number in its file name, had just aired when it was released, and matches its air date. Later episodes import on the usual confidence rules.',
@@ -5908,7 +5912,7 @@ const en: Translations<typeof zhHant> = {
         auto: 'Importing by itself',
         pending_review: 'Needs review',
         approved: 'Approved',
-        rejected: 'Rejected',
+        rejected: 'Planned again',
         applied: 'Applied',
         failed: 'Failed',
       },
@@ -6241,6 +6245,7 @@ const en: Translations<typeof zhHant> = {
     tabs: {
       label: 'Settings',
     },
+    version: 'Berth {{version}}',
     connection: {
       title: 'Address and credentials',
       lede: 'Changing the source or address saves it, then really connects once. The card above checks again right after.',

@@ -32,6 +32,7 @@ import { SettingsTabs } from '../components/SettingsTabs'
 import { AddRoute } from '../settings/AddRoute'
 import { PROGRESS_INTERVAL_MS, refreshRoutes, useRecheckRoutes } from '../settings/recheckRoutes'
 import { RecheckAllButton } from '../settings/RouteRecheck'
+import { BerthVersion } from '../settings/SettingsFrame'
 
 /**
  * Route 設定頁 `/settings/routes`（票 14、`.scratch/m1/route-settings-shape.md`）。只有 admin 進得來。
@@ -98,6 +99,7 @@ export function RouteSettingsPage() {
       )}
 
       <AddRoute onCreated={() => refreshRoutes(queryClient)} />
+      <BerthVersion />
     </div>
   )
 }

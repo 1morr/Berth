@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Plan, PlanItem } from '../api/plans'
@@ -7,8 +8,9 @@ import type { AuditReviewRow, PlanReviewRow, ReviewQueue } from '../api/review'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
+  await i18next.changeLanguage('zh-Hant')
 })
 
 const QUEUE = 'GET /api/review'
@@ -373,22 +375,49 @@ describe('審核佇列的 plan 那一類（M2 票 07）', () => {
     )
   })
 
-  it('拒絕要就地確認一次，說出它會丟掉改過的列', async () => {
-    const stub = render({ 'POST /api/plans/11/reject': { status: 204, body: null } })
-    renderApp('/review')
-    const row = await screen.findByRole('article')
+  /**
+   * 票 106：這一顆原本叫「拒絕」，會被讀成「不要這筆」；它做的是與下載詳情頁同一件「重新規劃」。
+   * 確認句說得出三件事：照目前的 TMDB 資料與設定重算、改過的列丟掉、檔案不動。
+   */
+  it.each([
+    {
+      language: 'zh-Hant',
+      button: '重新規劃',
+      confirm: '確定重新規劃',
+      facts: [/目前的 TMDB 資料與設定/, /逐列改過的/, /檔案不動/],
+      done: '已丟掉這份計劃，Berth 重新規劃中。',
+      reject: /拒絕/,
+    },
+    {
+      language: 'en',
+      button: 'Plan it again',
+      confirm: 'Yes, plan it again',
+      facts: [/current TMDB data and settings/, /rows you changed/, /no file is touched/],
+      done: 'Thrown away; Berth is planning it again.',
+      reject: /reject/i,
+    },
+  ])(
+    '$language：重新規劃要就地確認一次，說出它會重算、丟掉改過的列、不動檔案',
+    async ({ language, button, confirm, facts, done, reject }) => {
+      await i18next.changeLanguage(language)
+      const stub = render({ 'POST /api/plans/11/reject': { status: 204, body: null } })
+      renderApp('/review')
+      const row = await screen.findByRole('article')
 
-    await userEvent.click(within(row).getByRole('button', { name: '拒絕' }))
+      await userEvent.click(within(row).getByRole('button', { name: button }))
 
-    expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/reject')).toBe(false)
-    expect(within(row).getByText(/包括逐列改過的/)).toBeInTheDocument()
+      expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/reject')).toBe(false)
+      for (const fact of facts) expect(within(row).getByText(fact)).toBeInTheDocument()
+      expect(row).not.toHaveTextContent(reject)
 
-    await userEvent.click(within(row).getByRole('button', { name: '確定拒絕' }))
+      await userEvent.click(within(row).getByRole('button', { name: confirm }))
 
-    await waitFor(() =>
-      expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/reject')).toBe(true),
-    )
-  })
+      await waitFor(() =>
+        expect(stub.mock.calls.some(([url]) => url === '/api/plans/11/reject')).toBe(true),
+      )
+      expect(await screen.findByText(done)).toBeInTheDocument()
+    },
+  )
 })
 
 describe('從審核裡套用到 RSS Series（M3 票 14b）', () => {

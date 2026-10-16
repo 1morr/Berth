@@ -1,5 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
+import { healthQueryOptions } from '../api/health'
 import { PAGE_TITLE } from '../components/controls'
 import { SettingsTabs } from '../components/SettingsTabs'
 
@@ -27,7 +30,23 @@ export function SettingsFrame({
       {note && <p className="mt-2 max-w-prose text-sm text-ink">{note}</p>}
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{lede}</p>
       <div className="mt-6 grid gap-8">{children}</div>
+      <BerthVersion />
     </div>
+  )
+}
+
+/**
+ * 每一個分頁底部的「Berth 0.2.7」（票 106）：回報問題時要說得出跑的是哪一版。讀路由守衛已經
+ * 快取的那一份 `GET /api/health`，不另開端點。Route 頁不走 `SettingsFrame`，自己掛這一行。
+ */
+export function BerthVersion() {
+  const { t } = useTranslation()
+  const health = useQuery(healthQueryOptions)
+  if (!health.data) return null
+  return (
+    <p className="value mt-10 text-xs text-ink-dim">
+      {t('settings.version', { version: health.data.version })}
+    </p>
   )
 }
 
