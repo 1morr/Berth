@@ -35,7 +35,7 @@ from berth.services.importer import sweep_imports
 from berth.services.plan_review import ItemEdit, PlanRejectedError, approve_plan, edit_items
 from berth.services.rematch import Assignment, RematchRejectedError
 from berth.services.review import AuditRow, PlanRow, review_queue, undo_audit
-from berth.services.rss import add_feed, bind_series, poll_feed
+from berth.services.rss import bind_series, poll_feed
 from berth.services.series_review import (
     confirm_series,
     correct_series,
@@ -54,6 +54,7 @@ from tests.integration.test_rss import (
     episode_pages,
     kimi,
     kimi_snapshot,
+    routed_feed,
     run_pipeline,
     series_by_key,
     torrents,
@@ -118,7 +119,7 @@ async def delivered(
     factory = factory_for(roots)
     factory.rss_ = FakeFeedFetcher({FEED_URL: FEED, **episode_pages()})
     factory.torrent_ = torrents()
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=NOW)
     series = await series_by_key(session, KIMI_KEY)
     series.season = season

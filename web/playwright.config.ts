@@ -45,7 +45,15 @@ const FLOWS = [
   },
   { name: 'issues', spec: 'issues', scenario: 'issues', port: 8494 },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
-  { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss', port: 8516 },
+  // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
+  { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },
+  {
+    name: 'rss-auto-bind-390',
+    spec: 'rss-auto-bind',
+    scenario: 'rss-legacy-feed',
+    port: 8521,
+    viewport: NARROW,
+  },
   { name: 'rss-390', spec: 'rss', scenario: 'rss', port: 8508, viewport: NARROW },
   { name: 'rss-exclusions', spec: 'rss-exclusions', scenario: 'rss', port: 8499 },
   {
@@ -56,11 +64,11 @@ const FLOWS = [
     viewport: NARROW,
   },
   { name: 'rss-preview', spec: 'rss-preview', scenario: 'rss', port: 8488 },
-  { name: 'rss-backfill', spec: 'rss-backfill', scenario: 'rss', port: 8486 },
+  { name: 'rss-backfill', spec: 'rss-backfill', scenario: 'rss-legacy-feed', port: 8486 },
   {
     name: 'rss-backfill-390',
     spec: 'rss-backfill',
-    scenario: 'rss',
+    scenario: 'rss-legacy-feed',
     port: 8487,
     viewport: NARROW,
   },

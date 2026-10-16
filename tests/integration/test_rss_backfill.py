@@ -28,9 +28,9 @@ from berth.domain import (
     Tags,
 )
 from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSeries
-from berth.services.rss import add_feed, bind_series, poll_feed
+from berth.services.rss import bind_series, poll_feed
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, series_by_key
+from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, routed_feed, series_by_key
 from tests.integration.test_rss_auto_bind import moored
 from tests.integration.test_rss_screen import (
     SINGLE,
@@ -75,7 +75,7 @@ async def subscribed(
     """
     media, route, factory = await harbour(session, roots)
     serve_single(factory)
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=NOW)
     series = await series_by_key(session, KIMI_KEY)
     return media, route, factory, feed.id, series.id
@@ -196,7 +196,7 @@ class TestBackfillOnBinding:
         """自動綁定（票 09）照預設全補：長出來的那一輪綁上、同一輪補齊。"""
         _, factory = await moored(session, roots)
         serve_single(factory)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         polled = await poll_feed(session, factory, feed.id, now=NOW)
 

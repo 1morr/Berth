@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { Media } from '../api/media'
@@ -28,11 +29,39 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     items: 12,
     exclusions: [],
     primed_at: '2026-09-25T11:00:00Z',
-    route_id: null,
+    tv_route_id: null,
+    movie_route_id: null,
+    route_kinds: ['tv', 'movie'],
     ever_read: true,
+    awaiting_route: { tv: 0, movie: 0 },
     ...overrides,
   }
 }
+
+function managed(
+  id: number,
+  name: string,
+  collection_type: 'tvshows' | 'movies',
+  enabled = true,
+): ManagedRoute {
+  return {
+    route: { id, name, enabled, collection_type },
+    jobs: 0,
+    ledger_entries: 0,
+    in_use: false,
+  } as ManagedRoute
+}
+
+/** 預設安裝的三條（TV 與 Anime 都收劇集），加一條停用的。 */
+const ROUTES = [
+  managed(3, 'Anime', 'tvshows'),
+  managed(4, 'TV', 'tvshows'),
+  managed(5, 'Movies', 'movies'),
+  managed(6, 'Old', 'tvshows', false),
+]
+
+/** 票 105 之前加的 Feed：劇集 Route 不只一條，migration 推不出來；它長出的一部停在待綁定。 */
+const OLD = feed({ tv_route_id: null, movie_route_id: 5, awaiting_route: { tv: 1, movie: 0 } })
 
 function series(overrides: Partial<RssSeries> = {}): RssSeries {
   return {
@@ -48,6 +77,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     media_title_en: '',
     route_id: null,
     route_name: '',
+    feed_routes: { tv: null, movie: null },
     season: null,
     episode_offset: null,
     bound_by: '',
@@ -616,36 +646,178 @@ describe('RSS 頁', () => {
     expect(await screen.findByText(/這一版收 Mikan/)).toBeInTheDocument()
   })
 
-  it('兩條以上的 Route：加 Feed 時選自動綁定送進哪一條，Feed 那一列說出它（票 21）', async () => {
-    const route = (id: number, name: string, enabled = true) =>
-      ({ route: { id, name, enabled }, jobs: 0, ledger_entries: 0, in_use: false }) as ManagedRoute
+  it('加 Feed：劇集兩條要選、電影一條就預填，沒有「不指定」，Feed 那一列說出兩條（M4 票 105）', async () => {
     const stub = render({
-      'GET /api/routes': { body: [route(3, 'Anime'), route(4, 'TV'), route(5, 'Old', false)] },
-      'GET /api/rss/feeds': { body: [feed({ route_id: 3 })] },
-      'POST /api/rss/feeds': { status: 201, body: feed({ id: 2, route_id: 4 }) },
+      'GET /api/routes': { body: ROUTES },
+      'GET /api/rss/feeds': { body: [feed({ tv_route_id: 3, movie_route_id: 5 })] },
+      'POST /api/rss/feeds': { status: 201, body: feed({ id: 2, tv_route_id: 4 }) },
     })
     renderApp('/rss')
 
     const row = await screen.findByRole('article', { name: 'Mikan' })
     expect(await within(row).findByText('Anime')).toBeInTheDocument()
-    const picker = await screen.findByLabelText('自動綁定送進')
-    // 停用的那一條自動綁定本來就不看，不列。
-    expect(within(picker).queryByRole('option', { name: 'Old' })).not.toBeInTheDocument()
+    expect(within(row).getByText('Movies')).toBeInTheDocument()
+    expect(within(row).queryByText('要選 Route')).not.toBeInTheDocument()
+    const series = screen.getByRole('combobox', { name: '劇集送進' })
+    // 停用的那一條自動綁定本來就不看，不列；還沒選時是選不到的提示，不是「不指定」。
+    expect(within(series).queryByRole('option', { name: 'Old' })).not.toBeInTheDocument()
+    expect(within(series).queryByRole('option', { name: '不指定' })).not.toBeInTheDocument()
+    expect(within(series).getByRole('option', { name: '選一條 Route' })).toBeDisabled()
+    expect(screen.getByRole('combobox', { name: '電影送進' })).toHaveValue('5')
     await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
-    await userEvent.selectOptions(picker, 'TV')
+    expect(screen.getByRole('button', { name: '加入' })).toBeDisabled()
+    await userEvent.selectOptions(series, 'TV')
     await userEvent.click(screen.getByRole('button', { name: '加入' }))
 
     await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
     const [[, init]] = sent(stub, 'POST', '/api/rss/feeds')
-    expect(JSON.parse(String(init?.body))).toEqual({ url: FEED_URL, name: '', route: 4 })
+    expect(JSON.parse(String(init?.body))).toEqual({
+      url: FEED_URL,
+      name: '',
+      tv_route: 4,
+      movie_route: 5,
+    })
   })
 
-  it('只有一條啟用中的 Route 時不問送進哪一條', async () => {
-    render()
+  it('只有一條時預填它，一條都沒有的那一種不出現', async () => {
+    render({ 'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] } })
     renderApp('/rss')
 
-    await screen.findByRole('article', { name: 'Mikan' })
-    expect(screen.queryByLabelText('自動綁定送進')).not.toBeInTheDocument()
+    expect(await screen.findByRole('combobox', { name: '劇集送進' })).toHaveValue('3')
+    expect(screen.queryByRole('combobox', { name: '電影送進' })).not.toBeInTheDocument()
+  })
+
+  it('舊 Feed 沒有劇集 Route：標「要選 Route」，改 Route 說出會當場綁上幾部', async () => {
+    let feeds = [OLD]
+    const stub = render({
+      'GET /api/routes': { body: ROUTES },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'PUT /api/rss/feeds/1/routes': () => {
+        feeds = [feed({ tv_route_id: 3, movie_route_id: 5 })]
+        return { body: { feed: feeds[0], bound: 1, submitted: 12 } }
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    expect(await within(row).findByText('要選 Route')).toBeInTheDocument()
+    expect(within(row).getByText(/沒說劇集送進哪一條/)).toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: '改 Route' }))
+    const panel = within(row).getByRole('group', { name: /自動綁定到這裡/ })
+    expect(within(panel).getByText(/停在待綁定的 1 部會當場綁上/)).toBeInTheDocument()
+    expect(within(panel).getByRole('combobox', { name: '電影送進' })).toHaveValue('5')
+    expect(within(panel).getByRole('button', { name: '存下並綁上 1 部' })).toBeDisabled()
+    await userEvent.selectOptions(
+      within(panel).getByRole('combobox', { name: '劇集送進' }),
+      'Anime',
+    )
+    await userEvent.click(within(panel).getByRole('button', { name: '存下並綁上 1 部' }))
+
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/feeds/1/routes')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'PUT', '/api/rss/feeds/1/routes')
+    expect(JSON.parse(String(init?.body))).toEqual({ tv_route: 3, movie_route: 5 })
+    expect(await within(row).findByText('存下了：當場綁上 1 部、送出 12 筆。')).toBeInTheDocument()
+    await waitFor(() => expect(within(row).queryByText('要選 Route')).not.toBeInTheDocument())
+  })
+
+  it('從作品頁訂閱一部劇集的 Feed：兩條電影 Route 也不標要選，改 Route 只問劇集', async () => {
+    const MOVIES_TWO = [...ROUTES, managed(7, 'Cinema', 'movies')]
+    render({
+      'GET /api/routes': { body: MOVIES_TWO },
+      'GET /api/rss/feeds': {
+        body: [feed({ tv_route_id: 3, movie_route_id: null, route_kinds: ['tv'] })],
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    expect(await within(row).findByText('Anime')).toBeInTheDocument()
+    expect(within(row).queryByText('要選 Route')).not.toBeInTheDocument()
+    expect(within(row).queryByText(/電影送進/)).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: '改 Route' }))
+    expect(within(row).queryByRole('combobox', { name: '電影送進' })).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '存下 Route' })).toBeEnabled()
+  })
+
+  it('英文：要選 Route 與改 Route 的句子', async () => {
+    render({ 'GET /api/routes': { body: ROUTES }, 'GET /api/rss/feeds': { body: [OLD] } })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(await within(row).findByText(/doesn't say which route series go into/)).toBeVisible()
+      await userEvent.click(within(row).getByRole('button', { name: 'Change routes' }))
+      expect(
+        within(row).getByText(/the 1 title it grew that waits in unbound .* is bound on the spot/),
+      ).toBeInTheDocument()
+      expect(within(row).getByRole('button', { name: 'Save and bind 1 title' })).toBeDisabled()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('手動綁定：Feed 說劇集送進 Anime，作品沒認出來的那一列選好作品後「入庫到」預選 Anime', async () => {
+    const TWO_ROUTES = {
+      ...KIMI,
+      routes: [
+        { id: 4, name: 'TV', slug: 'tv', collection_type: 'tvshows' },
+        { id: 3, name: 'Anime', slug: 'anime', collection_type: 'tvshows' },
+      ],
+    } as Media
+    render({
+      'GET /api/rss/series': { body: [series({ feed_routes: { tv: 3, movie: 5 } })] },
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: FOUND },
+      'GET /api/media/tv%3A262000': { body: TWO_ROUTES },
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+    await userEvent.click(await within(row).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+
+    expect(await within(row).findByRole('combobox', { name: '入庫到' })).toHaveValue('3')
+  })
+
+  it('手動綁定：選了電影作品就照 Feed 的電影那一格', async () => {
+    const MOVIE = {
+      ...KIMI,
+      id: 'movie:900',
+      kind: 'movie',
+      routes: [
+        { id: 5, name: 'Movies', slug: 'movies', collection_type: 'movies' },
+        { id: 7, name: 'Cinema', slug: 'cinema', collection_type: 'movies' },
+      ],
+    } as Media
+    const found = {
+      ...FOUND,
+      items: [{ ...FOUND.items[0], id: 'movie:900', tmdb_id: 900, kind: 'movie' }],
+    }
+    render({
+      'GET /api/rss/series': { body: [series({ feed_routes: { tv: 3, movie: 7 } })] },
+      'GET /api/discover/search?q=Kimi%20ga%20Shinu%20made%20Koi%20wo%20Shitai': { body: found },
+      'GET /api/media/movie%3A900': { body: MOVIE },
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: TITLE })
+
+    await userEvent.click(within(row).getByRole('button', { name: '綁定' }))
+    await userEvent.click(await within(row).findByRole('button', { name: /與妳相戀到生命盡頭/ }))
+
+    expect(await within(row).findByRole('combobox', { name: '入庫到' })).toHaveValue('7')
+  })
+
+  it('Feed 那一條被停用了也標「要選 Route」，改 Route 不沿用它', async () => {
+    render({
+      'GET /api/routes': { body: [...ROUTES.slice(1), managed(3, 'Anime', 'tvshows', false)] },
+      'GET /api/rss/feeds': { body: [feed({ tv_route_id: 3, movie_route_id: 5 })] },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    expect(await within(row).findByText('要選 Route')).toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: '改 Route' }))
+    expect(within(row).getByRole('combobox', { name: '劇集送進' })).toHaveValue('4')
   })
 
   it('送不出去的那一筆塗阻擋色，帶著原文', async () => {

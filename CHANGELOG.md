@@ -14,6 +14,15 @@
   `typed_miss`，拿掉 `unjudged`（只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可）。
 - **作品頁搜尋區塊排整齊了**（M4 票 84b）：「名字」「季」的標籤移到 chip 上方，chip 與關鍵字框對齊；按下去之前的預覽變成
   「會問 · N 個查詢」一個欄位，不再把開著的名字再印一次；會佔幾格請求預算與要等多久併成一句。
+- **Feed 的 Route 必填，劇集、電影各一條**（M4 票 105）：加 Feed 時「劇集送進」「電影送進」那一種有 Route 就要選、只有一條時
+  預填，拿掉「不指定」——Route 不只一條時認出來的作品直接自動綁進 Feed 說的那一條，不再停在待綁定等你多按一次；Mikan 的劇場版
+  照「電影送進」那一格。升級時 migration 能推就推：某一種的啟用中 Route 只有一條就填它；推不出來的那一格在 Feed 列上標
+  「要選 Route」，按「改 Route」選好之後，那個 Feed 長出、因為 Route 不只一條而停在待綁定的作品當場綁上並送單。從作品頁訂閱建的
+  搜尋 Feed 只問那部作品那一種，另一種不標也不要求。手動綁定的
+  「入庫到」也先預選長出它的 Feed 那一種的 Route。API：`POST /api/rss/feeds` 的 `route` 換成 `tv_route`、`movie_route`
+  （缺必填的是 422 `route_required`，類型不符是 422 `route_kind_mismatch`）；新增 `PUT /api/rss/feeds/{id}/routes`；
+  `FeedOut` 的 `route_id` 換成 `tv_route_id`、`movie_route_id`，多 `route_kinds`、`awaiting_route`；`SeriesOut` 多 `feed_routes`
+  （只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可）。
 
 ## [0.2.7] - 2026-10-14
 

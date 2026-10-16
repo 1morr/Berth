@@ -21,9 +21,9 @@ from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode, TmdbSeason, 
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import BindReasonCode, MediaKind
 from berth.models import RssItem, RssSeries
-from berth.services.rss import LOOKUP_RETRIES, SeriesView, add_feed, list_series, poll_feed
+from berth.services.rss import LOOKUP_RETRIES, SeriesView, list_series, poll_feed
 from tests.integration.factories import answered
-from tests.integration.test_rss import FEED_URL, ITEMS, KIMI_ID, KIMI_KEY, NOW
+from tests.integration.test_rss import FEED_URL, ITEMS, KIMI_ID, KIMI_KEY, NOW, routed_feed
 from tests.integration.test_rss_auto_bind import KIMI_TMDB, codes, kimi_tmdb, moored
 
 pytestmark = pytest.mark.asyncio
@@ -47,7 +47,7 @@ class TestTransientFailureIsRetried:
         tmdb = kimi_tmdb()
         tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)] = answered(status, TMDB_DETAIL)
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
         assert (await view_of(session, KIMI_KEY)).media_id is None
@@ -65,7 +65,7 @@ class TestTransientFailureIsRetried:
         tmdb = kimi_tmdb()
         tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)] = answered(502, TMDB_DETAIL)
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -85,7 +85,7 @@ class TestTransientFailureIsRetried:
         tmdb = kimi_tmdb()
         tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)] = answered(502, TMDB_DETAIL)
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         del tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)]
         factory.rss_.requested.clear()
@@ -103,7 +103,7 @@ class TestTransientFailureIsRetried:
         _, factory = await moored(session, roots)
         factory.budget = RequestBudget(limit=100_000, window=timedelta(days=30))
         del factory.rss_.pages[bangumi_url(4009)]
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         for quarter in range(4 * 36):
             await poll_feed(session, factory, feed.id, now=NOW + timedelta(minutes=15 * quarter))
@@ -122,7 +122,7 @@ class TestTransientFailureIsRetried:
     ) -> None:
         """404 再問幾次都一樣：當場落到 `lookup_failed`。"""
         _, factory = await moored(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         page = bangumi_url(4009)
         factory.rss_.page_errors[page] = answered(404, f"GET {page}")
 
@@ -163,7 +163,7 @@ class TestOneBrokenCandidate:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         _, factory = await moored(session, roots, tmdb=self.with_a_stranger(kimi_tmdb()))
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         polled = await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -176,7 +176,7 @@ class TestOneBrokenCandidate:
         tmdb = self.with_a_stranger(kimi_tmdb())
         tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)] = answered(502, TMDB_DETAIL)
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -192,7 +192,7 @@ class TestOneBrokenCandidate:
         del tmdb.detail_errors[(MediaKind.TV, 999)]
         del tmdb.details[(MediaKind.TV, KIMI_TMDB)]
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -205,7 +205,7 @@ class TestOneBrokenCandidate:
         tmdb = self.readable_stranger(self.with_a_stranger(kimi_tmdb()))
         tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)] = answered(502, TMDB_DETAIL)
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -219,7 +219,7 @@ class TestOneBrokenCandidate:
         tmdb = self.readable_stranger(self.with_a_stranger(kimi_tmdb()))
         tmdb.detail_errors[(MediaKind.TV, KIMI_TMDB)] = answered(502, TMDB_DETAIL)
         _, factory = await moored(session, roots, tmdb=tmdb)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         moment = NOW
         await poll_feed(session, factory, feed.id, now=moment)
@@ -307,7 +307,7 @@ class TestSeasonName:
         index = next(i for i, item in enumerate(ITEMS) if item.title.startswith(REZERO_TITLE))
         # `episode_pages()` 把第 i 筆的番組 id 合成成 5000 + i。
         factory.rss_.pages[bangumi_url(5000 + index)] = rezero_show_page()
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 

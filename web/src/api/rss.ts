@@ -7,6 +7,12 @@ import type { Schemas } from './schemas'
 /** 一個 Feed（`berth/api/rss.py` 的 `FeedOut`）。 */
 export type Feed = Schemas['FeedOut']
 
+/** 劇集、電影各一條 Route 的 id（M4 票 105）：Feed 的兩格、RSS Series 的 `feed_routes`。 */
+export type KindRoutes = Schemas['KindRoutesOut']
+
+/** 選或改 Feed 的兩條 Route 的結果：那一列，與當場綁上的數量。 */
+export type FeedRoutesOutcome = Schemas['FeedRoutesOut']
+
 /** 一個 RSS Series。`media_id` 是 `null` 就是待綁定。 */
 export type RssSeries = Schemas['SeriesOut']
 
@@ -69,6 +75,7 @@ const REASONS: ReasonSet<RssRefusal> = {
   route_missing: true,
   route_disabled: true,
   route_kind_mismatch: true,
+  route_required: true,
   rule_invalid: true,
   feed_primed: true,
   feed_unreachable: true,
@@ -186,8 +193,15 @@ export function primeFeed(id: number, mode: PrimeMode) {
   return apiPost<PrimeOutcome>(`/rss/feeds/${id}/prime`, { mode })
 }
 
-export function addFeed(url: string, name: string, route: number | null) {
-  return apiPost<Feed>('/rss/feeds', { url, name, route })
+export function addFeed(url: string, name: string, routes: KindRoutes) {
+  return apiPost<Feed>('/rss/feeds', { url, name, tv_route: routes.tv, movie_route: routes.movie })
+}
+
+export function setFeedRoutes(id: number, routes: KindRoutes) {
+  return apiPut<FeedRoutesOutcome>(`/rss/feeds/${id}/routes`, {
+    tv_route: routes.tv,
+    movie_route: routes.movie,
+  })
 }
 
 export function deleteFeed(id: number) {

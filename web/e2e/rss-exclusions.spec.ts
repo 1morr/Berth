@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
 
+import { addFeed } from './feed.ts'
 import { signIn } from './login.ts'
 import { shot } from './shot.ts'
 
 // 排除條件三層與去重（M3 票 10），`rss` 情境。全域擋 ANi（`Baha` 是它的片源）、寫壞的正則存不進去、
-// 建議項一鍵加入；綁好《与你相恋》（整季補齊）之後在那個 RSS Series 上擋掉 1–10 集，再加它的單一 feed：
+// 建議項一鍵加入；《与你相恋》自動綁好（整季補齊）之後在那個 RSS Series 上擋掉 1–10 集，再加它的單一 feed：
 // 排除條件在寫下那一刻就看，1–10 被 RSS Series 那一層擋下；11、12 過得了，送單時與聚合 feed 同一個
 // hash，是重複。每一筆都說得出為什麼。
 test('三層排除與重複：清單上每一筆都說得出為什麼沒下載', async ({ page }) => {
@@ -26,8 +27,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   await expect(rules.getByRole('button', { name: '拿掉「720p」' })).toBeVisible()
   await expect(rules.getByRole('button', { name: '加入「720p」' })).toHaveCount(0)
 
-  await page.getByLabel(/RSS 網址/).fill('https://mikanani.me/RSS/MyBangumi?token=REDACTED')
-  await page.getByRole('button', { name: '加入', exact: true }).click()
+  await addFeed(page, 'https://mikanani.me/RSS/MyBangumi?token=REDACTED')
   const aggregate = page.getByRole('article', { name: 'mikanani.me' })
   await aggregate.getByRole('button', { name: '立即輪詢' }).click()
   await expect(aggregate.getByRole('status')).toContainText('新 12 筆')
@@ -37,11 +37,8 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   await expect(items.getByText('全域的排除條件「Baha」擋下')).toHaveCount(5)
   await shot(page, '2-global-rule')
 
-  const pending = page.getByRole('region', { name: '待綁定' })
-  const row = pending.getByRole('article', { name: /与你相恋到生命尽头/ })
-  await row.getByRole('button', { name: /選《與妳相戀到生命盡頭》/ }).click()
-  await row.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  await row.getByRole('button', { name: '綁定並送出' }).click()
+  // 加 Feed 時說了劇集送進 Anime（M4 票 105）：《与你相恋》輪詢時就自動綁上、整季補齊。
+  await expect(aggregate.getByRole('status')).toContainText('（自動綁定 1 個）、送出 12 筆')
 
   const bound = page
     .getByRole('region', { name: 'RSS Series' })
@@ -53,11 +50,9 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   await bound.getByRole('button', { name: '加入規則' }).click()
   await expect(bound.getByRole('button', { name: '排除條件（1 條）' })).toBeVisible()
 
-  await page
-    .getByLabel(/RSS 網址/)
-    .fill('https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370')
-  await page.getByLabel(/名稱/).fill('与你相恋 單一')
-  await page.getByRole('button', { name: '加入', exact: true }).click()
+  await addFeed(page, 'https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370', {
+    name: '与你相恋 單一',
+  })
   const single = page.getByRole('article', { name: '与你相恋 單一' })
   await single.getByRole('button', { name: '立即輪詢' }).click()
   await expect(single.getByRole('status')).toHaveText(

@@ -22,11 +22,11 @@ from berth.adapters.indexer import SearchSite
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import BindReasonCode, BudgetUse, IndexerProblem
 from berth.models import RssFeed, RssSeries
-from berth.services.rss import add_feed, bind_series, list_series, poll_feed
+from berth.services.rss import bind_series, list_series, poll_feed
 from berth.services.search import QueryScope, SkippedSite, search_torrents
 from berth.services.sources import SourceCache
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, series_by_key
+from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, routed_feed, series_by_key
 from tests.integration.test_rss_auto_bind import moored
 from tests.integration.test_rss_screen import release, serve, serve_single
 from tests.integration.test_search import arrange_indexer
@@ -101,7 +101,7 @@ async def test_the_poller_the_backfill_and_the_search_share_one_budget(
     searched = await search_torrents(
         session, factory, SourceCache(), media_id=media_id, scope=QueryScope(missing=True)
     )
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
     series = await series_by_key(session, KIMI_KEY)
     await bind_series(
@@ -130,7 +130,7 @@ async def test_a_search_skips_the_site_out_of_budget_and_asks_the_rest(
     預算 6：輪一輪用掉 4 格，剩 2 格放不下一批 3 個查詢。"""
     factory, indexer, clock, _ = await mikan_on_both_sides(session, roots, limit=6)
     indexer.sites_ = (MIKAN_SITE, NYAA_SITE)
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
 
     clock.now = NOW + timedelta(minutes=5)
@@ -156,7 +156,7 @@ async def test_a_search_that_fits_nowhere_asks_nothing_and_says_when(
     都放不下 3 個。"""
     factory, indexer, clock, _ = await mikan_on_both_sides(session, roots, limit=6)
     indexer.sites_ = (MIKAN_SITE, NYAA_SITE)
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
     clock.now = NOW + timedelta(minutes=10)
     factory.budget.take(NYAA, 6, BudgetUse.POLL)
@@ -183,7 +183,7 @@ async def test_a_backfill_that_does_not_fit_waits_for_the_next_round(
 ) -> None:
     """每日補漏被擋：`backfilled_at` 不動（下一輪再試），Feed 上說得出是預算。"""
     factory, _, clock, route_id = await mikan_on_both_sides(session, roots, limit=6)
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=clock.now)
     series = await series_by_key(session, KIMI_KEY)
     await bind_series(
@@ -220,7 +220,7 @@ async def test_a_lookup_that_does_not_fit_is_tried_again_rather_than_given_up(
     clock = Clock(NOW)
     factory.budget = RequestBudget(limit=3, now=clock)
     serve(factory, FEED_URL, RELEASES)
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
     await poll_feed(session, factory, feed.id, now=clock.now)
 

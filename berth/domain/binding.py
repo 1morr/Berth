@@ -33,7 +33,8 @@ class BindReasonCode(StrEnum):
     SEASON_AIRING = "season_airing"
     #: 收得下這種作品的啟用中 Route 只有 `{route}`。
     ONLY_ROUTE = "only_route"
-    #: 收得下這種作品的 Route 不只一條，長出它的 Feed 說送進 `{route}`（M3 票 21）。
+    #: 長出它的 Feed 說這一種送進 `{route}`（M3 票 21；M4 票 105 起 Feed 說了就是它，不只是 Route
+    #: 不只一條的時候）。
     FEED_ROUTE = "feed_route"
 
     # --- 為什麼沒綁 -------------------------------------------------------------------
@@ -58,7 +59,8 @@ class BindReasonCode(StrEnum):
     #: 原文，`{site}` 是那一站、同請求預算的鍵）。第 `{attempt}` 次重認排在 `{at}`（ISO 8601），
     #: 次數有上限，用完是 `lookup_failed`（M4 票 14）。
     LOOKUP_RETRY = "lookup_retry"
-    #: 作品認出來了，但收得下它的 Route 有好幾條（`{routes}`），要人選。
+    #: 作品認出來了，但收得下它的 Route 有好幾條（`{routes}`），Feed 又沒說這一種送進哪一條（票 105
+    #: 之前加的 Feed，或它那一條被停用、刪掉了），要人選。
     ROUTE_AMBIGUOUS = "route_ambiguous"
     #: 作品認出來了，但沒有一條啟用中的 Route 收得下它。
     NO_ROUTE = "no_route"

@@ -37,13 +37,13 @@ from berth.services.jobs import (
     retry_job,
 )
 from berth.services.routes import incomplete_path_of
-from berth.services.rss import add_feed, bind_series, list_items, poll_feed
+from berth.services.rss import bind_series, list_items, poll_feed
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
 from tests.integration.arrange import factory_for
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_jobs import MAGNET, MAGNET_HASH, OTHER_HASH, OTHER_MAGNET, _ready
-from tests.integration.test_rss import FEED_URL, KIMI, KIMI_KEY, harbour, series_by_key
+from tests.integration.test_rss import FEED_URL, KIMI, KIMI_KEY, harbour, routed_feed, series_by_key
 
 pytestmark = pytest.mark.asyncio
 
@@ -446,7 +446,7 @@ class TestAnOutageOfQbittorrent:
         重送的次數；服務回來的那一輪一起接上，不需要人按。"""
         media, route, factory = await harbour(session, roots)
         await complete_setup(session)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         now = datetime.now(UTC)
         await poll_feed(session, factory, feed.id, now=now)
         down = ServiceUnavailableError("POST /api/v2/auth/login: connection refused")

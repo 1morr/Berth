@@ -1,6 +1,6 @@
 # 105 — Feed 的 Route 必填（劇集、電影各一條），待綁定的手動綁定沿用它
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -38,11 +38,18 @@
 
 ## 驗收
 
-- [ ] migration：兩種類型各只有一條啟用中的 Route 時兩欄都補上；某一種有兩條時那一欄留 `NULL`；`alembic upgrade`／`downgrade` 都跑得過（測試）
-- [ ] `POST /rss/feeds`：缺必填的那一格是 422 `route_required`，類型不符是 422 `route_kind_mismatch`，某一種類型零條 Route 時不要求（integration 測試）
-- [ ] 自動綁定：劇集照 `tv_route_id`、劇場版照 `movie_route_id`，依據各是 `feed_route`（services 測試，含兩條電影 Route 的情況）
-- [ ] `PUT /rss/feeds/{id}/routes`：舊 Feed 選了 Route 之後，原本 `route_ambiguous` 的待綁定列當場綁上並送單，其他理由的列不動（integration 測試）
-- [ ] 手動綁定：Feed 指定 Anime 時，作品沒認出來的那一列選好作品，「入庫到」預選 Anime；選了電影作品就照電影那一格（vitest）
-- [ ] 前端：新增表單沒有「不指定」，只有一條時預填；Feed 列的「要選 Route」與「改 Route」（vitest，zh-Hant 與 en）
-- [ ] e2e：`rss.spec.ts` 那一條改成「加 Feed 選 Route → 輪詢 → 那一部自動綁定」不再有一鍵候選這一步；另加一條「舊 Feed 沒有 Route → 改 Route → 當場綁上」，或改既有的；playwright 實跑截圖 1280 與 390 寬
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；`pnpm -C web gen:api` 的產出一起提交；progress.md 已更新
+- [x] migration：兩種類型各只有一條啟用中的 Route 時兩欄都補上；某一種有兩條時那一欄留 `NULL`；`alembic upgrade`／`downgrade` 都跑得過（測試）
+- [x] `POST /rss/feeds`：缺必填的那一格是 422 `route_required`，類型不符是 422 `route_kind_mismatch`，某一種類型零條 Route 時不要求（integration 測試）
+- [x] 自動綁定：劇集照 `tv_route_id`、劇場版照 `movie_route_id`，依據各是 `feed_route`（services 測試，含兩條電影 Route 的情況）
+- [x] `PUT /rss/feeds/{id}/routes`：舊 Feed 選了 Route 之後，原本 `route_ambiguous` 的待綁定列當場綁上並送單，其他理由的列不動（integration 測試）
+- [x] 手動綁定：Feed 指定 Anime 時，作品沒認出來的那一列選好作品，「入庫到」預選 Anime；選了電影作品就照電影那一格（vitest）
+- [x] 前端：新增表單沒有「不指定」，只有一條時預填；Feed 列的「要選 Route」與「改 Route」（vitest，zh-Hant 與 en）
+- [x] e2e：`rss.spec.ts` 那一條改成「加 Feed 選 Route → 輪詢 → 那一部自動綁定」不再有一鍵候選這一步；另加一條「舊 Feed 沒有 Route → 改 Route → 當場綁上」，或改既有的；playwright 實跑截圖 1280 與 390 寬
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；`pnpm -C web gen:api` 的產出一起提交；progress.md 已更新
+
+## Comments
+
+- 2026-10-17 code-review 沒處理的發現：
+  - **Spec 軸——已處理（2026-10-17 使用者拍板排除）**：從 Media 頁訂閱建的搜尋 Feed 一律以 `_prebind` 綁到它那一部，另一種的那一格用不到。後端 `_route_kinds` 判斷它只用得到作品那一種，`FeedOut.route_kinds` 帶給畫面：另一格不標「要選 Route」、`PUT /rss/feeds/{id}/routes` 不要求（給了也存 `NULL`）、自動綁定不讀、`awaiting_route` 不算它；建 Feed 時那一格留空。測試：`test_rss_subscribe.py::test_only_the_works_kind_needs_a_route`、`test_rss_api.py::test_a_search_feed_of_a_series_asks_for_no_movie_route`、`RssPage.test.tsx`「從作品頁訂閱一部劇集的 Feed」。
+  - **Standards 軸（判斷題，沒改）**：`FeedSection` 的 `AddFeed` 與 `FeedRoutes` 各有一份「動過的格子 ?? 預填」的合併，兩處只差 `FeedRoutes` 多一層 Feed 現值；tv/movie 的分支在 `_check_routes`、`_subscribed_routes` 各寫一次。
+  - 真服務 e2e `tests/e2e/test_4_m3_rss.py` 改了加 Feed 的請求形狀（`tv_route`、`movie_route`），沒有跑（要整套服務，約 20 分鐘）。

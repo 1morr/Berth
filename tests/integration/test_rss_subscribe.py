@@ -20,21 +20,38 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
-from berth.domain import FeedItemStatus, FeedKind, JobTrigger, Role, RssRefusal
+from berth.domain import (
+    CollectionType,
+    FeedItemStatus,
+    FeedKind,
+    JobTrigger,
+    MediaKind,
+    Role,
+    RssRefusal,
+)
 from berth.models import Job, Route, RssFeed, RssSeries, User
 from berth.parser import release
 from berth.services.rss import (
     RssRejectedError,
-    add_feed,
     bind_series,
+    list_feeds,
     list_series,
     poll_feed,
     preview_feed,
+    set_feed_routes,
     subscribe_mikan,
     subscribe_search,
 )
 from tests.conftest import FIXTURES
-from tests.integration.test_rss import KIMI_KEY, NOW, count, harbour, series_by_key
+from tests.integration.test_rss import (
+    KIMI_KEY,
+    NOW,
+    anime_route,
+    count,
+    harbour,
+    routed_feed,
+    series_by_key,
+)
 from tests.integration.test_rss_backfill import SEASON, rss_jobs, subscribed
 from tests.integration.test_rss_screen import SINGLE_URL, serve_single
 
@@ -308,7 +325,7 @@ class TestSearchFeed:
         other = "https://acg.rip/.xml?term=Kimi+ga+Shinu"
         factory.rss_.pages[other] = ACGRIP_FEED
         factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
-        earlier = await add_feed(session, url=other)
+        earlier = await routed_feed(session, url=other)
         await poll_feed(session, factory, earlier.id, now=NOW)
         assert {row.media_id for row in await session.scalars(select(RssSeries))} == {None}
 
@@ -392,6 +409,56 @@ class TestSearchFeed:
 
         grown = list(await session.scalars(select(RssSeries)))
         assert grown and {row.media_id for row in grown} == {None}
+
+    async def test_only_the_works_kind_needs_a_route(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 105：它長出的都綁到那一部劇集，電影那一格永遠用不到——兩條電影 Route 也不要它選：
+        不算進要選的、不要求、存 `None`。"""
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        for slug in ("movies", "cinema"):
+            await anime_route(
+                session,
+                roots,
+                slug=slug,
+                name=slug.title(),
+                jellyfin_library_id=f"item-{slug}",
+                collection_type=CollectionType.MOVIES,
+                category=f"berth-{slug}",
+            )
+
+        feed = await subscribe_search(
+            session,
+            factory,
+            kind=FeedKind.ACGRIP,
+            term=TERM,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            now=NOW,
+        )
+        chosen = await set_feed_routes(
+            session, factory, feed.id, tv_route_id=route.id, movie_route_id=None, now=NOW
+        )
+
+        assert (feed.route_kinds, feed.tv_route_id, feed.movie_route_id) == (
+            (MediaKind.TV,),
+            route.id,
+            None,
+        )
+        assert (chosen.feed.route_kinds, chosen.feed.movie_route_id) == ((MediaKind.TV,), None)
+        (listed,) = await list_feeds(session)
+        assert listed.route_kinds == (MediaKind.TV,)
+
+    async def test_a_general_feed_uses_both_kinds(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, route, _ = await harbour(session, roots)
+
+        feed = await routed_feed(session)
+
+        assert (feed.route_kinds, feed.tv_route_id) == ((MediaKind.TV, MediaKind.MOVIE), route.id)
 
 
 class TestSeriesOfAWork:

@@ -48,6 +48,7 @@ from berth.services.rss import (
     read_exclusions,
     set_exclusions,
     set_feed_exclusions,
+    set_feed_routes,
     set_series_exclusions,
     subscribe_mikan,
     subscribe_search,
@@ -69,6 +70,8 @@ _STATUS: dict[RssRefusal, int] = {
     #: 與送單的 `route_disabled` 同一個判斷：Route 在，只是現在不收。
     RssRefusal.ROUTE_DISABLED: status.HTTP_409_CONFLICT,
     RssRefusal.ROUTE_KIND_MISMATCH: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    #: 那一種有啟用中的 Route，Feed 卻沒說送進哪一條：選一條再送（M4 票 105）。
+    RssRefusal.ROUTE_REQUIRED: status.HTTP_422_UNPROCESSABLE_CONTENT,
     #: 規則寫壞了：`detail` 是 `<規則>: <原因>`，什麼都沒存。
     RssRefusal.RULE_INVALID: status.HTTP_422_UNPROCESSABLE_CONTENT,
     #: 另一個分頁先選了。重讀清單就看得到選了哪一個。
@@ -101,6 +104,24 @@ def rss_refusal(refusal: RssRejectedError) -> HTTPException:
     return HTTPException(status_code=_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
 
 
+class KindCountsOut(BaseModel):
+    """劇集、電影各幾個。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    tv: int
+    movie: int
+
+
+class KindRoutesOut(BaseModel):
+    """劇集、電影各一條 Route 的 id；`null` 是沒有。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    tv: int | None
+    movie: int | None
+
+
 class FeedOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -119,11 +140,20 @@ class FeedOut(BaseModel):
     #: 第一輪預覽選過的那一刻。`null` 是還沒選：這個 Feed 一筆都不送，畫面列出預覽（票 11）。
     #: Mikan 加的那一刻就有值。
     primed_at: datetime | None
-    #: 自動綁定送進的 Route：收得下那部作品的 Route 不只一條時用它（M3 票 21）。`null` 是沒選。
-    route_id: int | None
+    #: 自動綁定送進的 Route，劇集與電影各一條（M4 票 105）。`null` 是那一種沒有啟用中的 Route，
+    #: 或票 105 之前加的 Feed 推不出來（畫面標「要選 Route」，`PUT /rss/feeds/{id}/routes`）。
+    tv_route_id: int | None
+    movie_route_id: int | None
+    #: 這個 Feed 用得到哪幾種的 Route：從作品頁訂閱建的搜尋 feed 只有那部作品那一種——另一格不
+    #: 提示「要選 Route」、`PUT /rss/feeds/{id}/routes` 不要求、自動綁定不讀；其他的是
+    #: `["tv", "movie"]`。
+    route_kinds: list[MediaKind]
     #: 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。`false` 時第一輪不給選「全部下載」
     #: （`POST /rss/feeds/{id}/prime` 回 409 `feed_unread`，M3 票 21）。
     ever_read: bool
+    #: 它長出的、因為 Route 不只一條而停在待綁定的，照認出來的種類數：選了那一種的 Route 會當場
+    #: 綁上幾部（M4 票 105）。
+    awaiting_route: KindCountsOut
 
 
 class FeedIn(BaseModel):
@@ -132,9 +162,29 @@ class FeedIn(BaseModel):
     url: str = Field(min_length=1)
     #: 選填，空的就用網址的主機名。
     name: str = ""
-    #: 選填：自動綁定送進的 Route（照 Sonarr Import List 的 Root Folder）。收得下那部作品的
-    #: Route 只有一條時用不到它；不只一條又沒選，那部就留在待綁定（`route_ambiguous`）。
-    route: int | None = None
+    #: 自動綁定送進的 Route，劇集與電影各一條（照 Sonarr Import List 的 Root Folder，M4 票 105）。
+    #: 那一種有啟用中的 Route 就必填（422 `route_required`），給的要收那一種（422
+    #: `route_kind_mismatch`）；那一種一條啟用中的 Route 都沒有時不收、存 `null`。
+    tv_route: int | None = None
+    movie_route: int | None = None
+
+
+class FeedRoutesIn(BaseModel):
+    """選或改 Feed 的兩條 Route；檢查同 `POST /rss/feeds`，只看 Feed 的 `route_kinds`（用不到的
+    那一格不要求，給了也存 `null`）。"""
+
+    tv_route: int | None = None
+    movie_route: int | None = None
+
+
+class FeedRoutesOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feed: FeedOut
+    #: 當場綁上的 RSS Series：這個 Feed 長出的、因為 Route 不只一條而停在待綁定的那幾部。
+    bound: int
+    #: 綁上之後送出去的。
+    submitted: int
 
 
 class FeedDeletedOut(BaseModel):
@@ -214,6 +264,9 @@ class SeriesOut(BaseModel):
     media_title_en: str
     route_id: int | None
     route_name: str
+    #: 長出它的 Feed（它最早那一筆 Feed Item 的 Feed）的兩條 Route：手動綁定的「入庫到」先預選作品
+    #: 那一種的這一條（M4 票 105）。那個 Feed 被刪了是兩個 `null`。
+    feed_routes: KindRoutesOut
     season: int | None
     episode_offset: int | None
     bound_by: str
@@ -393,16 +446,56 @@ async def get_feeds(session: SessionDep) -> list[FeedOut]:
     "/feeds",
     status_code=status.HTTP_201_CREATED,
     responses=_responses(
-        RssRefusal.FEED_UNSUPPORTED, RssRefusal.FEED_DUPLICATE, RssRefusal.ROUTE_MISSING
+        RssRefusal.FEED_UNSUPPORTED,
+        RssRefusal.FEED_DUPLICATE,
+        RssRefusal.ROUTE_MISSING,
+        RssRefusal.ROUTE_DISABLED,
+        RssRefusal.ROUTE_KIND_MISMATCH,
+        RssRefusal.ROUTE_REQUIRED,
     ),
 )
 async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
     """記下這個 Feed。不當場輪詢——背景迴圈在半分鐘內輪到它，畫面上也有「立即輪詢」。"""
     try:
-        view = await add_feed(session, url=body.url, name=body.name, route_id=body.route)
+        view = await add_feed(
+            session,
+            url=body.url,
+            name=body.name,
+            tv_route_id=body.tv_route,
+            movie_route_id=body.movie_route,
+        )
         return FeedOut.model_validate(view)
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
+
+
+@router.put(
+    "/feeds/{feed_id}/routes",
+    responses=_responses(
+        RssRefusal.FEED_MISSING,
+        RssRefusal.ROUTE_MISSING,
+        RssRefusal.ROUTE_DISABLED,
+        RssRefusal.ROUTE_KIND_MISMATCH,
+        RssRefusal.ROUTE_REQUIRED,
+    ),
+)
+async def put_feed_routes(
+    session: SessionDep, factory: ClientFactoryDep, feed_id: int, body: FeedRoutesIn
+) -> FeedRoutesOut:
+    """選或改 Feed 的兩條 Route（M4 票 105）。存下之後當場綁上它長出的、因為 Route 不只一條而停在
+    待綁定的那幾部（用自動綁定判出來的那一部，不重新上網查），送出它們留著的 Item；已經綁上的
+    不搬家。送單被拒不讓它失敗（同 `PUT /rss/series/{id}/binding`）。"""
+    try:
+        outcome = await set_feed_routes(
+            session,
+            factory,
+            feed_id,
+            tv_route_id=body.tv_route,
+            movie_route_id=body.movie_route,
+        )
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return FeedRoutesOut.model_validate(outcome)
 
 
 @router.delete("/feeds/{feed_id}", responses=_responses(RssRefusal.FEED_MISSING))

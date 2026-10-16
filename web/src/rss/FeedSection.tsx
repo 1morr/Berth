@@ -9,11 +9,17 @@ import {
   pollFeed,
   RSS_KEY,
   saveFeedExclusions,
+  setFeedRoutes,
   type Feed,
+  type FeedRoutesOutcome,
+  type KindRoutes,
   type PollOutcome,
 } from '../api/rss'
-import { routesQueryOptions, type ManagedRoute } from '../api/routes'
+import { routesQueryOptions } from '../api/routes'
+import type { MediaKind, RouteView } from '../api/schemas'
+import { ConfirmPanel } from '../components/ConfirmPanel'
 import {
+  CONFIRM_ACTIONS,
   ConfirmAction,
   Field,
   GHOST_LINK,
@@ -25,6 +31,8 @@ import { Dot } from '../components/Dot'
 import { RequestFailed } from '../components/RequestFailed'
 import { problemText } from '../components/requestProblem'
 import { Timestamp } from '../components/Timestamp'
+import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
+import { bindsNow, complete, KINDS, prefilled, routesFor, routesOf, unsetKinds } from './feedRoutes'
 import { maskToken } from './maskToken'
 import { RulesToggle } from './RulesEditor'
 import { SectionHeading } from '../components/SectionHeading'
@@ -38,7 +46,7 @@ import { SectionHeading } from '../components/SectionHeading'
 export function FeedSection({ feeds }: { feeds: Feed[] }) {
   const { t } = useTranslation()
   const headingId = useId()
-  // 自動綁定送進哪一條（M3 票 21）：Feed 列說出它、新增表單讓人選。
+  // 自動綁定送進哪一條，劇集、電影各一條（M3 票 21、M4 票 105）：Feed 列說出它們、新增表單讓人選。
   const routes = (useQuery(routesQueryOptions).data ?? []).map((row) => row.route)
 
   return (
@@ -71,28 +79,30 @@ export function FeedSection({ feeds }: { feeds: Feed[] }) {
   )
 }
 
-type RouteRow = ManagedRoute['route']
-
-function AddFeed({ routes }: { routes: RouteRow[] }) {
+function AddFeed({ routes }: { routes: RouteView[] }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
-  const [route, setRoute] = useState<number | null>(null)
+  // `undefined` 是那一格還沒動過：用預填（只有一條時就是它）。Route 清單晚到時預填跟著到。
+  const [picked, setPicked] = useState<Partial<KindRoutes>>({})
+  const defaults = prefilled(routes)
+  const chosen: KindRoutes = { tv: picked.tv ?? defaults.tv, movie: picked.movie ?? defaults.movie }
   const add = useMutation({
-    mutationFn: () => addFeed(url.trim(), name.trim(), route),
+    mutationFn: () => addFeed(url.trim(), name.trim(), chosen),
     onSuccess: async () => {
       setUrl('')
       setName('')
-      setRoute(null)
+      setPicked({})
       await queryClient.invalidateQueries({ queryKey: RSS_KEY })
     },
   })
   const refusal = add.isError ? parseRssRefusal(add.error) : null
+  const ready = url.trim() !== '' && complete(chosen, routes)
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (url.trim() !== '') add.mutate()
+    if (ready) add.mutate()
   }
 
   return (
@@ -122,9 +132,13 @@ function AddFeed({ routes }: { routes: RouteRow[] }) {
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <FeedRoutePicker routes={routes} value={route} onChange={setRoute} />
+      <KindRoutePickers
+        routes={routes}
+        value={chosen}
+        onChange={(kind, route) => setPicked((now) => ({ ...now, [kind]: route }))}
+      />
       <div className="sm:max-w-xs">
-        <PrimaryButton type="submit" busy={add.isPending} disabled={url.trim() === ''}>
+        <PrimaryButton type="submit" busy={add.isPending} disabled={!ready}>
           {add.isPending ? t('rss.feeds.adding') : t('rss.feeds.addAction')}
         </PrimaryButton>
       </div>
@@ -140,61 +154,197 @@ function bringBack(element: HTMLElement | null) {
 }
 
 /**
- * 自動綁定送進的 Route（M3 票 21，照 Sonarr Import List 的 Root Folder）。只列啟用中的：停用的
- * 那一條自動綁定本來就不看。只有一條啟用中的 Route 時不必選，這一欄不出現。
+ * 自動綁定送進的 Route，劇集、電影各一格（M4 票 105，照 Sonarr Import List 的 Root Folder 必填）。
+ * 那一種有啟用中的 Route 才有那一格；沒有「不指定」：還沒選時是一個選不到的提示，表單送不出去。
+ * 只列啟用中的：停用的那一條自動綁定本來就不看。
  */
-function FeedRoutePicker({
+function KindRoutePickers({
   routes,
   value,
   onChange,
+  kinds = KINDS,
 }: {
-  routes: RouteRow[]
+  routes: RouteView[]
+  value: KindRoutes
+  onChange: (kind: MediaKind, route: number) => void
+  /** 這個 Feed 用得到的那幾種（`Feed.route_kinds`）；新 Feed 兩種都用得到。 */
+  kinds?: readonly MediaKind[]
+}) {
+  return (
+    <>
+      {kinds.map((kind) => (
+        <KindRoutePicker
+          key={kind}
+          kind={kind}
+          choices={routesFor(routes, kind)}
+          value={value[kind]}
+          onChange={(route) => onChange(kind, route)}
+        />
+      ))}
+    </>
+  )
+}
+
+function KindRoutePicker({
+  kind,
+  choices,
+  value,
+  onChange,
+}: {
+  kind: MediaKind
+  choices: RouteView[]
   value: number | null
-  onChange: (route: number | null) => void
+  onChange: (route: number) => void
 }) {
   const { t } = useTranslation()
   const id = useId()
-  const enabled = routes.filter((row) => row.enabled)
-  if (enabled.length < 2) return null
+  if (choices.length === 0) return null
 
   return (
     <p className="grid gap-2">
       <label htmlFor={id} className="label text-ink-dim">
-        {t('rss.feeds.route')}
+        {t(`rss.feeds.routeFor.${kind}`)}
       </label>
       <select
         id={id}
+        required
         aria-describedby={`${id}-hint`}
         value={value ?? ''}
-        onChange={(event) =>
-          onChange(event.target.value === '' ? null : Number(event.target.value))
-        }
+        onChange={(event) => onChange(Number(event.target.value))}
         className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
       >
-        <option value="">{t('rss.feeds.routeNone')}</option>
-        {enabled.map((row) => (
+        {value === null && (
+          <option value="" disabled>
+            {t('rss.feeds.routePick')}
+          </option>
+        )}
+        {choices.map((row) => (
           <option key={row.id} value={row.id}>
             {row.name}
           </option>
         ))}
       </select>
       <span id={`${id}-hint`} className="text-xs text-ink-dim">
-        {t('rss.feeds.routeHint')}
+        {t(`rss.feeds.routeHint.${kind}`)}
       </span>
     </p>
   )
 }
 
-function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
+/**
+ * 「改 Route」（M4 票 105）：就地展開，不是 dialog（同 `SeriesBinder` 的確認區）。確認區說出存下之後
+ * 會當場綁上幾部——這個 Feed 長出、因為 Route 不只一條而停在待綁定的（`awaiting_route`）。
+ */
+function FeedRoutes({
+  feed,
+  routes,
+  onSaved,
+}: {
+  feed: Feed
+  routes: RouteView[]
+  /** 結果句在這一列的狀態句裡（與輪詢的同一個 live region）：存下之後確認區收起，那一句留著。 */
+  onSaved: (outcome: FeedRoutesOutcome | null) => void
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
+  const ledeId = useId()
+  const [picked, setPicked] = useState<Partial<KindRoutes>>({})
+  const own = routesOf(feed, routes)
+  const defaults = prefilled(routes)
+  const chosen: KindRoutes = {
+    tv: picked.tv ?? own.tv ?? defaults.tv,
+    movie: picked.movie ?? own.movie ?? defaults.movie,
+  }
+  const binds = bindsNow(feed, routes)
+  const save = useMutation({
+    mutationFn: () => setFeedRoutes(feed.id, chosen),
+    onMutate: () => onSaved(null),
+    onSuccess: async (outcome) => {
+      onSaved(outcome)
+      setPicked({})
+      close()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: RSS_KEY }),
+        queryClient.invalidateQueries({ queryKey: ['jobs'] }),
+      ])
+    },
+  })
+  const refusal = save.isError ? parseRssRefusal(save.error) : null
+
+  return (
+    <>
+      {asked ? (
+        <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={ledeId}>
+          <p id={ledeId} className="max-w-prose text-xs text-ink">
+            {t('rss.feeds.routesLede')}
+          </p>
+          <KindRoutePickers
+            routes={routes}
+            value={chosen}
+            kinds={feed.route_kinds}
+            onChange={(kind, route) => setPicked((now) => ({ ...now, [kind]: route }))}
+          />
+          {binds > 0 && (
+            <p className="max-w-prose text-xs text-ink">
+              {t('rss.feeds.routesBinds', { count: binds })}
+            </p>
+          )}
+          <div className={CONFIRM_ACTIONS}>
+            <PrimaryButton
+              type="button"
+              busy={save.isPending}
+              disabled={!complete(chosen, routes, feed.route_kinds)}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending
+                ? t('rss.feeds.routesSaving')
+                : binds > 0
+                  ? t('rss.feeds.routesSaveBind', { count: binds })
+                  : t('rss.feeds.routesSave')}
+            </PrimaryButton>
+            <GhostButton type="button" onClick={close}>
+              {t('common.cancel')}
+            </GhostButton>
+          </div>
+          {save.isError &&
+            (refusal ? (
+              <Notice signal="blocked" label={t('common.failed')}>
+                {t(`rss.refusal.${refusal.reason}`)}
+                {refusal.detail ? (
+                  <span className="value block text-xs">{refusal.detail}</span>
+                ) : null}
+              </Notice>
+            ) : (
+              <RequestFailed error={save.error} lead={t('request.notDone')} />
+            ))}
+        </ConfirmPanel>
+      ) : (
+        <div>
+          <GhostButton ref={trigger} type="button" onClick={open}>
+            {t('rss.feeds.changeRoutes')}
+          </GhostButton>
+        </div>
+      )}
+    </>
+  )
+}
+
+function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const headingId = useId()
+  // 一列一個狀態句：最近一次輪詢、或最近一次改 Route 的結果，後做的那一件蓋掉前一件。
   const [polled, setPolled] = useState<PollOutcome | null>(null)
+  const [saved, setSaved] = useState<FeedRoutesOutcome | null>(null)
   const self = useRef<HTMLElement>(null)
   const refresh = () => queryClient.invalidateQueries({ queryKey: RSS_KEY })
   const poll = useMutation({
     mutationFn: () => pollFeed(feed.id),
-    onMutate: () => setPolled(null),
+    onMutate: () => {
+      setPolled(null)
+      setSaved(null)
+    },
     onSuccess: async (outcome) => {
       setPolled(outcome)
       await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: ['jobs'] })])
@@ -204,7 +354,12 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
     },
   })
   const remove = useMutation({ mutationFn: () => deleteFeed(feed.id), onSuccess: refresh })
-  const routeName = routes.find((row) => row.id === feed.route_id)?.name
+  const own = routesOf(feed, routes)
+  const named = feed.route_kinds.flatMap((kind) => {
+    const name = routes.find((row) => row.id === own[kind])?.name
+    return name === undefined ? [] : [{ kind, name }]
+  })
+  const unset = unsetKinds(feed, routes)
 
   return (
     <article
@@ -227,13 +382,19 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
         {t('rss.feeds.every', { minutes: Math.round(feed.interval_sec / 60) })} <Dot />{' '}
         {t('rss.feeds.polled')} <Timestamp at={feed.last_polled_at} /> <Dot />{' '}
         <span className="value">{t('rss.feeds.items', { count: feed.items })}</span>
-        {routeName !== undefined && (
-          <>
+        {named.map(({ kind, name }) => (
+          <span key={kind}>
             {' '}
-            <Dot /> {t('rss.feeds.sendsTo')} <span className="value">{routeName}</span>
-          </>
-        )}
+            <Dot /> {t(`rss.feeds.routeFor.${kind}`)} <span className="value">{name}</span>
+          </span>
+        ))}
       </p>
+      {/* 票 105 之前加的 Feed：那一種有 Route，這一格卻空著——認出來的作品會停在待綁定。 */}
+      {unset.map((kind) => (
+        <Notice key={kind} signal="assigned" label={t('rss.feeds.routeUnset')}>
+          {t(`rss.feeds.routeUnsetWhy.${kind}`)}
+        </Notice>
+      ))}
       {/* 第一輪還沒選：決定在頁首那一段（票 11），這裡只說一聲為什麼一筆都沒送。 */}
       {feed.primed_at === null && <p className="text-xs text-ink">{t('rss.feeds.undecided')}</p>}
       {feed.last_error && (
@@ -252,10 +413,22 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteRow[] }) {
                 bound: polled.bound,
                 sent: polled.submitted,
               }))}
+        {saved &&
+          (saved.bound > 0
+            ? t('rss.feeds.routesSavedBound', { count: saved.bound, sent: saved.submitted })
+            : t('rss.feeds.routesSaved'))}
       </p>
       {(poll.isError || remove.isError) && (
         <RequestFailed error={poll.error ?? remove.error} lead={t('request.notDone')} />
       )}
+      <FeedRoutes
+        feed={feed}
+        routes={routes}
+        onSaved={(outcome) => {
+          setPolled(null)
+          setSaved(outcome)
+        }}
+      />
       <RulesToggle
         rules={feed.exclusions}
         save={(rules) => saveFeedExclusions(feed.id, rules)}

@@ -2244,6 +2244,7 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     media_title_en: 'SPY x FAMILY',
     route_id: 2,
     route_name: 'Anime',
+    feed_routes: { tv: null, movie: null },
     season: null,
     episode_offset: null,
     bound_by: '1',
@@ -2385,8 +2386,11 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       items: 1,
       exclusions: [],
       primed_at: null,
-      route_id: 2,
+      tv_route_id: 2,
+      movie_route_id: null,
+      route_kinds: ['tv'],
       ever_read: true,
+      awaiting_route: { tv: 0, movie: 0 },
     }
     const stub = render({
       [SPY_PATH]: { body: media({ default_route_id: 2 }) },

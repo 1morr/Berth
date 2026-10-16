@@ -11,7 +11,7 @@ import contextlib
 import json
 import sqlite3
 import threading
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
@@ -989,3 +989,103 @@ def _schema_of(database_path: Path) -> set[str]:
             "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name != 'alembic_version'"
         )
         return {sql for (sql,) in rows}
+
+
+#: M4 票 105 把 Feed 的 Route 拆成劇集、電影各一欄的那一版，與它的前一版。
+FEED_ROUTES = "bec5947663f5"
+BEFORE_FEED_ROUTES = WRITE_ONLY_DROPPED
+
+
+def _seed_route(db: sqlite3.Connection, route: int, name: str, kind: str, enabled: bool) -> None:
+    db.execute(
+        "INSERT INTO routes (id, slug, name, jellyfin_library_id, jellyfin_library_name,"
+        " collection_type, target_path, category, medium_auto_import, enabled, health_status,"
+        " created_at) VALUES (?, ?, ?, '', '', ?, '', '', 1, ?, 'unknown', ?)",
+        (route, name.lower(), name, kind, enabled, "2026-09-20T00:00:00.000000+00:00"),
+    )
+
+
+def _seed_feed(db: sqlite3.Connection, feed: int, route: int | None, media: str | None) -> None:
+    if media is not None:
+        db.execute(
+            "INSERT INTO media (id, kind, tmdb_id, title_en, title_original, folder_name,"
+            " folder_frozen) VALUES (?, ?, 1, '', '', '', 0)",
+            (media, media.partition(":")[0]),
+        )
+    db.execute(
+        "INSERT INTO rss_feeds (id, name, url, kind, interval_sec, last_error, exclude_json,"
+        " route_id, media_id, created_at) VALUES (?, '', ?, 'mikan', 900, '', '[]', ?, ?, ?)",
+        (feed, f"u{feed}", route, media, "2026-09-20T00:00:00.000000+00:00"),
+    )
+
+
+async def _migrate_feed_routes(
+    config: Config, routes: Sequence[tuple[int, str, str, bool]]
+) -> tuple[dict[int, tuple[int | None, int | None]], dict[int, int | None]]:
+    """升上票 105 那一版再降回去：回（升版後每個 Feed 的兩欄, 降版後每個 Feed 的 `route_id`）。
+
+    三個 Feed：沒選過 Route 的、選了 Anime 的（票 21）、從 Media 頁訂閱的電影（票 19，Route 是
+    Movies）。
+    """
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_FEED_ROUTES)
+        with _sqlite(config.database_path) as db:
+            for route in routes:
+                _seed_route(db, *route)
+            _seed_feed(db, 1, None, None)
+            _seed_feed(db, 2, 2, None)
+            _seed_feed(db, 3, 3, "movie:1")
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, FEED_ROUTES)
+        with _sqlite(config.database_path) as db:
+            rows = db.execute("SELECT id, tv_route_id, movie_route_id FROM rss_feeds").fetchall()
+            upgraded = {feed: (tv, movie) for feed, tv, movie in rows}
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_FEED_ROUTES)
+        with _sqlite(config.database_path) as db:
+            downgraded = dict(db.execute("SELECT id, route_id FROM rss_feeds").fetchall())
+    finally:
+        await engine.dispose()
+    return upgraded, downgraded
+
+
+async def test_feed_routes_are_filled_where_only_one_route_takes_that_kind(
+    config: Config,
+) -> None:
+    """M4 票 105：劇集與電影各只有一條啟用中的 Route 時兩欄都補上（停用的不算）；原本選的那一條
+    寫進它那一種的那一欄。降版把那一條放回 `route_id`。"""
+    upgraded, downgraded = await _migrate_feed_routes(
+        config,
+        (
+            (1, "TV", "tvshows", False),
+            (2, "Anime", "tvshows", True),
+            (3, "Movies", "movies", True),
+        ),
+    )
+
+    assert upgraded == {1: (2, 3), 2: (2, 3), 3: (2, 3)}
+    # 降版：一般的 Feed 取劇集那一欄（票 21 之前只有 Route 不只一條時才用得到它），訂閱的電影取
+    # 電影那一欄。
+    assert downgraded == {1: 2, 2: 2, 3: 3}
+
+
+async def test_a_kind_with_two_routes_is_left_for_you(config: Config) -> None:
+    """某一種有兩條啟用中的 Route 時那一欄留 `NULL`（畫面標「要選 Route」），選過的照舊。"""
+    upgraded, downgraded = await _migrate_feed_routes(
+        config,
+        (
+            (1, "TV", "tvshows", True),
+            (2, "Anime", "tvshows", True),
+            (3, "Movies", "movies", True),
+        ),
+    )
+
+    assert upgraded == {1: (None, 3), 2: (2, 3), 3: (None, 3)}
+    # 劇集那一欄空著時取電影那一欄：舊版本先看「只有一條」，Movies 只有一條時放它也一樣。
+    assert downgraded == {1: 3, 2: 2, 3: 3}
