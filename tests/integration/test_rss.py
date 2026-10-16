@@ -59,6 +59,7 @@ from berth.services.hints import JobHints
 from berth.services.importer import sweep_imports
 from berth.services.plan import sweep_plans
 from berth.services.rss import (
+    FeedView,
     PollOutcome,
     RssRejectedError,
     add_feed,
@@ -188,6 +189,30 @@ async def anime_route(session: AsyncSession, roots: dict[str, Path], **overrides
     return row
 
 
+async def routed_feed(
+    session: AsyncSession, *, url: str = FEED_URL, name: str = "Mikan"
+) -> FeedView:
+    """加 Feed，每一種送進它唯一的那一條啟用中 Route——畫面在只有一條時預填（M4 票 105）。
+
+    那一種有兩條以上時不替人挑：`add_feed` 照樣拒絕（`route_required`），測試要自己說送進哪一條。
+    """
+    chosen: dict[CollectionType, int | None] = {}
+    for kind in CollectionType:
+        rows = list(
+            await session.scalars(
+                select(Route.id).where(Route.enabled.is_(True), Route.collection_type == kind)
+            )
+        )
+        chosen[kind] = rows[0] if len(rows) == 1 else None
+    return await add_feed(
+        session,
+        url=url,
+        name=name,
+        tv_route_id=chosen[CollectionType.TVSHOWS],
+        movie_route_id=chosen[CollectionType.MOVIES],
+    )
+
+
 async def harbour(
     session: AsyncSession, roots: dict[str, Path]
 ) -> tuple[Media, Route, FakeClientFactory]:
@@ -269,7 +294,7 @@ class TestTheTracer:
         """加 feed → 輪詢一輪 → 長出待綁定的 RSS Series → 綁定 → 送單 → 下載完 → 規劃 → 入庫。"""
         media, route, factory = await harbour(session, roots)
 
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         polled = await poll_feed(session, factory, feed.id, now=NOW)
 
         assert polled.items == 12
@@ -300,7 +325,7 @@ class TestTheTracer:
     ) -> None:
         """時間線的 actor 是 `rss:<series>`（plan §2.3）：沒有人按，是那個 RSS Series 送的。"""
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
 
@@ -317,7 +342,7 @@ class TestGuidDedup:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await bind_series(
@@ -341,7 +366,7 @@ class TestGuidDedup:
     ) -> None:
         """單集頁一筆只抓一次（plan §8.5）：聚合 feed 每 15 分鐘一輪，抓 12 頁是 12 個請求。"""
         _, _, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         fetcher = factory.rss_
         fetcher.requested.clear()
@@ -357,7 +382,7 @@ class TestGuidDedup:
         _, _, factory = await harbour(session, roots)
         missing = KIMI[0].link
         page = factory.rss_.pages.pop(missing)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         first = await poll_feed(session, factory, feed.id, now=NOW)
         factory.rss_.pages[missing] = page
@@ -374,7 +399,7 @@ class TestBinding:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         _, _, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -390,7 +415,7 @@ class TestBinding:
         """第一次通向磁碟的那一刻（plan §2.2）。凍下去的是綁定當下的那一串，之後改標題不動它。"""
         media, route, factory = await harbour(session, roots)
         before = media.folder_name
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         frozen_before = media.folder_frozen
@@ -408,7 +433,7 @@ class TestBinding:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
 
@@ -425,7 +450,7 @@ class TestBinding:
     ) -> None:
         """綁定本身成立；送單被拒的那幾筆留在 `matched` 帶著原文，下一輪再送（shape §3）。"""
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         factory.torrent_.error = ServiceUnavailableError("GET mikanani.me: connection refused")
@@ -466,7 +491,7 @@ class TestBinding:
         for name, value in change.items():
             setattr(route, name, value)
         await session.commit()
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
 
@@ -485,7 +510,7 @@ class TestBinding:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         _, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
 
@@ -500,7 +525,7 @@ class TestBinding:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await bind_series(
@@ -518,7 +543,7 @@ class TestBinding:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         factory.torrent_.error = ServiceUnavailableError("down")
@@ -536,15 +561,15 @@ class TestBinding:
 class TestFeeds:
     async def test_a_url_from_elsewhere_is_refused(self, session: AsyncSession) -> None:
         with pytest.raises(RssRejectedError) as refused:
-            await add_feed(session, url="https://example.com/rss.xml", name="")
+            await routed_feed(session, url="https://example.com/rss.xml", name="")
 
         assert refused.value.reason is RssRefusal.FEED_UNSUPPORTED
 
     async def test_the_same_url_twice_is_refused(self, session: AsyncSession) -> None:
-        await add_feed(session, url=FEED_URL, name="Mikan")
+        await routed_feed(session, url=FEED_URL, name="Mikan")
 
         with pytest.raises(RssRejectedError) as refused:
-            await add_feed(session, url=FEED_URL, name="again")
+            await routed_feed(session, url=FEED_URL, name="again")
 
         assert refused.value.reason is RssRefusal.FEED_DUPLICATE
 
@@ -553,7 +578,7 @@ class TestFeeds:
     ) -> None:
         """Series 是「作品 × 字幕組」，不屬於某個 Feed（shape §4）。"""
         _, _, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await count(session, RssSeries)
 
@@ -571,7 +596,7 @@ class TestFeeds:
         那一筆 Job 就是這個 RSS Series 送的，所以重新長出的 Item 認回成已送單，不是重複（票 10）。
         """
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await bind_series(
@@ -579,7 +604,7 @@ class TestFeeds:
         )
         await delete_feed(session, feed.id)
 
-        again = await add_feed(session, url=FEED_URL, name="Mikan")
+        again = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, again.id, now=NOW + timedelta(hours=1))
 
         assert await count(session, Job) == 2
@@ -593,7 +618,7 @@ class TestFeeds:
     ) -> None:
         _, _, factory = await harbour(session, roots)
         factory.rss_.error = ServiceUnavailableError(f"GET {FEED_URL}: connection refused")
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         polled = await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -623,7 +648,7 @@ class TestTwoRoundsAtOnce:
         _, _, factory = await harbour(session, roots)
         gate = _GatedFetcher(factory.rss_.pages, hold=FEED_URL)
         factory.rss_ = gate
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await session.commit()
         sessions = create_session_factory(engine)
         joined = asyncio.Event()
@@ -672,7 +697,7 @@ class TestTwoRoundsAtOnce:
         _, _, factory = await harbour(session, roots)
         gate = _GatedFetcher(factory.rss_.pages, hold=FEED_URL)
         factory.rss_ = gate
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await session.commit()
         sessions = create_session_factory(engine)
 
@@ -724,7 +749,7 @@ class TestSchedule:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         _, _, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
         assert await poll_due(session, factory, now=NOW) == 1
         assert await poll_due(session, factory, now=NOW + timedelta(minutes=14)) == 0
@@ -738,7 +763,7 @@ class TestSchedule:
     ) -> None:
         """`arrange` 停在精靈的第 5 步：那時候連 Route 都還沒定，送出去的東西沒有地方去。"""
         _, _, factory = await harbour(session, roots)
-        await add_feed(session, url=FEED_URL, name="Mikan")
+        await routed_feed(session, url=FEED_URL, name="Mikan")
         poller = RssPoller(create_session_factory(engine), factory, now=lambda: NOW)
 
         assert await poller.poll_once() == 0
@@ -775,7 +800,7 @@ class TestSeasonAndOffset:
         factory = factory_for(roots)
         factory.rss_ = FakeFeedFetcher({FEED_URL: FEED, **episode_pages()})
         factory.torrent_ = torrents()
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         series.season = season

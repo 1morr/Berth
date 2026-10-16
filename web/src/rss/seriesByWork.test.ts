@@ -17,6 +17,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     media_title_en: 'Kimishinu',
     route_id: 3,
     route_name: 'Anime',
+    feed_routes: { tv: null, movie: null },
     season: null,
     episode_offset: null,
     bound_by: 'system',

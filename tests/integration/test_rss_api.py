@@ -7,24 +7,27 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
 from berth.adapters.rss.mikan import bangumi_url, parse_feed, search_url
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import JobState, JobTrigger, PlanAction, Tags
+from berth.domain import CollectionType, FeedKind, JobState, JobTrigger, PlanAction, Tags
 from berth.main import create_app
-from berth.models import Job, LedgerEntry, Media, Route
+from berth.models import Job, LedgerEntry, Media, Route, RssFeed, TmdbSettings
+from berth.models.types import utcnow
+from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
-from tests.conftest import FIXTURES
+from tests.conftest import FIXTURES, TMDB_API_KEY
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory, answered
 from tests.integration.test_rss import (
@@ -33,11 +36,13 @@ from tests.integration.test_rss import (
     KIMI,
     KIMI_ID,
     KIMI_KEY,
+    MIKAN,
     anime_route,
     episode_pages,
     kimi,
     torrents,
 )
+from tests.integration.test_rss_auto_bind import kimi_tmdb
 from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL
 from tests.integration.test_rss_screen import (
     KIMI_NAME,
@@ -94,6 +99,39 @@ def sign_in(client: TestClient) -> None:
     assert client.post("/api/auth/login", json=ADMIN, headers=BROWSER).status_code == 200
 
 
+def add(client: TestClient, route_id: int, url: str = FEED_URL) -> dict[str, Any]:
+    """加一個劇集送進 `route_id` 的 Feed（電影沒有 Route，不問）。"""
+    added = client.post("/api/rss/feeds", json={"url": url, "tv_route": route_id}, headers=BROWSER)
+    assert added.status_code == 201, added.text
+    feed: dict[str, Any] = added.json()
+    return feed
+
+
+def in_session[T](client: TestClient, work: Callable[[AsyncSession], Awaitable[T]]) -> T:
+    async def run() -> T:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with sessions() as session:
+            return await work(session)
+
+    return asyncio.run(run())
+
+
+def movies_route(client: TestClient, roots: dict[str, Path]) -> int:
+    async def make(session: AsyncSession) -> int:
+        route: Route = await anime_route(
+            session,
+            roots,
+            slug="movies",
+            name="Movies",
+            jellyfin_library_id="item-3",
+            collection_type=CollectionType.MOVIES,
+            category="berth-movies",
+        )
+        return route.id
+
+    return in_session(client, make)
+
+
 class TestThePageFlow:
     def test_add_poll_bind_and_see_the_jobs(
         self, client: TestClient, roots: dict[str, Path]
@@ -101,11 +139,18 @@ class TestThePageFlow:
         route_id = seed(client, roots)
         sign_in(client)
 
-        added = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER)
+        added = client.post(
+            "/api/rss/feeds", json={"url": FEED_URL, "tv_route": route_id}, headers=BROWSER
+        )
         assert added.status_code == 201, added.text
         feed = added.json()
         assert (feed["kind"], feed["name"], feed["items"]) == ("mikan", "mikanani.me", 0)
-        assert (feed["route_id"], feed["ever_read"]) == (None, False)
+        assert (feed["tv_route_id"], feed["movie_route_id"], feed["ever_read"]) == (
+            route_id,
+            None,
+            False,
+        )
+        assert feed["awaiting_route"] == {"tv": 0, "movie": 0}
 
         polled = client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
         assert client.get("/api/rss/feeds").json()[0]["ever_read"] is True
@@ -126,6 +171,8 @@ class TestThePageFlow:
         assert pending["candidates"] == []
         # 綁定框預填的字（M4 票 88）：發佈名讀出的作品名，前端不再自己挑。
         assert pending["search_term"] == "Kimi ga Shinu made Koi wo Shitai"
+        # 長出它的 Feed 的兩條 Route：手動綁定的「入庫到」先預選它（M4 票 105）。
+        assert pending["feed_routes"] == {"tv": route_id, "movie": None}
 
         bound = client.put(
             f"/api/rss/series/{pending['id']}/binding",
@@ -159,9 +206,9 @@ class TestThePageFlow:
     def test_deleting_a_feed_says_how_many_items_went(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:
-        seed(client, roots)
+        route_id = seed(client, roots)
         sign_in(client)
-        feed = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER).json()
+        feed = add(client, route_id)
         client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
 
         deleted = client.delete(f"/api/rss/feeds/{feed['id']}", headers=BROWSER)
@@ -194,12 +241,48 @@ class TestRefusals:
         sign_in(client)
 
         refused = client.post(
-            "/api/rss/feeds", json={"url": FEED_URL, "route": 999}, headers=BROWSER
+            "/api/rss/feeds", json={"url": FEED_URL, "tv_route": 999}, headers=BROWSER
         )
 
         assert refused.status_code == 422
         assert refused.json()["detail"] == {"reason": "route_missing", "detail": "999"}
         assert client.get("/api/rss/feeds").json() == []
+
+    def test_a_kind_with_routes_requires_one(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 105：劇集有啟用中的 Route，沒說送進哪一條是 422；電影一條都沒有，不問。"""
+        seed(client, roots)
+        sign_in(client)
+
+        refused = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER)
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == {"reason": "route_required", "detail": "tv"}
+        assert client.get("/api/rss/feeds").json() == []
+
+    def test_a_route_of_the_other_kind_is_422(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        movies = movies_route(client, roots)
+        sign_in(client)
+
+        refused = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "movie_route": route_id},
+            headers=BROWSER,
+        )
+        added = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "movie_route": movies},
+            headers=BROWSER,
+        )
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"]["reason"] == "route_kind_mismatch"
+        assert added.status_code == 201, added.text
+        assert (added.json()["tv_route_id"], added.json()["movie_route_id"]) == (route_id, movies)
 
     def test_binding_a_missing_series_is_404(
         self, client: TestClient, roots: dict[str, Path]
@@ -222,7 +305,7 @@ class TestRefusals:
         """補舊集讀不到單一 feed（替身上沒有）不擋綁定：只送聚合 feed 帶到的兩集（票 12）。"""
         route_id = seed(client, roots)
         sign_in(client)
-        feed = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER).json()
+        feed = add(client, route_id)
         client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
         pending = next(
             row for row in client.get("/api/rss/series").json() if row["key"] == "mikan:4009:370"
@@ -238,17 +321,83 @@ class TestRefusals:
         assert bound.json()["submitted"] == 2
 
 
+class TestChoosingRoutesLater:
+    """M4 票 105：舊 Feed（劇集 Route 不只一條，migration 推不出來）選了 Route 之後，它長出的、因為
+    Route 不只一條而停在待綁定的那一列當場綁上並送單；其他理由停著的不動。"""
+
+    def test_the_ambiguous_series_binds_and_sends_on_the_spot(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        factory.tmdb_ = kimi_tmdb()
+        factory.rss_.pages[bangumi_url(4009)] = (MIKAN / "home-bangumi.4009.html").read_bytes()
+
+        async def arrange_old_feed(session: AsyncSession) -> int:
+            await write_settings(session, TmdbSettings(api_key=TMDB_API_KEY))
+            await anime_route(
+                session,
+                roots,
+                slug="tv",
+                name="TV",
+                jellyfin_library_id="item-1",
+                category="berth-tv",
+            )
+            feed = RssFeed(name="Mikan", url=FEED_URL, kind=FeedKind.MIKAN, primed_at=utcnow())
+            session.add(feed)
+            await session.commit()
+            return feed.id
+
+        feed_id = in_session(client, arrange_old_feed)
+        sign_in(client)
+        client.post(f"/api/rss/feeds/{feed_id}/poll", headers=BROWSER)
+        listed = client.get("/api/rss/feeds").json()[0]
+        assert (listed["tv_route_id"], listed["awaiting_route"]) == (None, {"tv": 1, "movie": 0})
+        before = {row["key"]: row for row in client.get("/api/rss/series").json()}
+        assert [one["code"] for one in before[KIMI_KEY]["reasons"]][-1] == "route_ambiguous"
+
+        chosen = client.put(
+            f"/api/rss/feeds/{feed_id}/routes", json={"tv_route": route_id}, headers=BROWSER
+        )
+
+        assert chosen.status_code == 200, chosen.text
+        body = chosen.json()
+        assert (body["bound"], body["submitted"]) == (1, 2)
+        assert (body["feed"]["tv_route_id"], body["feed"]["awaiting_route"]["tv"]) == (route_id, 0)
+        after = {row["key"]: row for row in client.get("/api/rss/series").json()}
+        assert (after[KIMI_KEY]["media_id"], after[KIMI_KEY]["bound_by"]) == (KIMI_ID, "system")
+        assert {key: row["reasons"] for key, row in after.items() if key != KIMI_KEY} == {
+            key: row["reasons"] for key, row in before.items() if key != KIMI_KEY
+        }
+        jobs = client.get("/api/jobs?filter=all").json()["jobs"]
+        assert {row["hash"] for row in jobs} == {item.info_hash for item in KIMI}
+
+    def test_the_same_refusals_as_adding(self, client: TestClient, roots: dict[str, Path]) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        feed = add(client, route_id)
+
+        required = client.put(f"/api/rss/feeds/{feed['id']}/routes", json={}, headers=BROWSER)
+        missing = client.put(
+            "/api/rss/feeds/999/routes", json={"tv_route": route_id}, headers=BROWSER
+        )
+
+        assert required.status_code == 422
+        assert required.json()["detail"] == {"reason": "route_required", "detail": "tv"}
+        assert missing.status_code == 404
+        assert missing.json()["detail"]["reason"] == "feed_missing"
+
+
 class TestTheFirstRound:
     """新搜尋 feed 的第一輪預覽（票 11）：預覽 → 選「只追之後的」→ 再選一次是 409。"""
 
     def test_preview_then_follow_from_now(
         self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
     ) -> None:
-        seed(client, roots)
+        route_id = seed(client, roots)
         sign_in(client)
         factory.rss_.pages[ACGRIP_URL] = ACGRIP
 
-        added = client.post("/api/rss/feeds", json={"url": ACGRIP_URL}, headers=BROWSER).json()
+        added = add(client, route_id, ACGRIP_URL)
         assert (added["kind"], added["primed_at"]) == ("acgrip", None)
         feed = added["id"]
         assert client.post(f"/api/rss/feeds/{feed}/poll", headers=BROWSER).status_code == 200
@@ -273,9 +422,9 @@ class TestTheFirstRound:
     def test_follow_from_now_on_a_feed_that_cannot_be_read_is_502(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:
-        seed(client, roots)
+        route_id = seed(client, roots)
         sign_in(client)
-        feed = client.post("/api/rss/feeds", json={"url": ACGRIP_URL}, headers=BROWSER).json()
+        feed = add(client, route_id, ACGRIP_URL)
 
         refused = client.post(
             f"/api/rss/feeds/{feed['id']}/prime", json={"mode": "later"}, headers=BROWSER
@@ -292,14 +441,14 @@ class TestExclusions:
     def test_the_three_layers_round_trip_and_the_items_say_why(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:
-        seed(client, roots)
+        route_id = seed(client, roots)
         sign_in(client)
         assert client.get("/api/rss/exclusions").json() == {"not_single": True, "rules": []}
         saved = client.put(
             "/api/rss/exclusions", json={"not_single": True, "rules": ["Baha"]}, headers=BROWSER
         )
         assert saved.json() == {"not_single": True, "rules": ["Baha"]}
-        feed = client.post("/api/rss/feeds", json={"url": FEED_URL}, headers=BROWSER).json()
+        feed = add(client, route_id)
         ruled = client.put(
             f"/api/rss/feeds/{feed['id']}/exclusions", json={"rules": [" 720p "]}, headers=BROWSER
         )

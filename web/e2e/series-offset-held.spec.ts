@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { addFeed } from './feed.ts'
 import { signIn } from './login.ts'
 import { shot } from './shot.ts'
 
@@ -17,8 +18,7 @@ test('連載中的 split-cour：整批擋在審核 → 改一列套用到 RSS Se
   test.setTimeout(420_000)
   await signIn(page, '/rss')
 
-  await page.getByLabel(/RSS 網址/).fill('https://mikanani.me/RSS/MyBangumi?token=REDACTED')
-  await page.getByRole('button', { name: '加入', exact: true }).click()
+  await addFeed(page, 'https://mikanani.me/RSS/MyBangumi?token=REDACTED')
   const feed = page.getByRole('article', { name: 'mikanani.me' })
   await feed.getByRole('button', { name: '立即輪詢' }).click()
   await expect(feed.getByRole('status')).toContainText('新 12 筆')

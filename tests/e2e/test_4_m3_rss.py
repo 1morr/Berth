@@ -161,8 +161,15 @@ def first_round(
         row["id"] for row in ok(berth.get(f"/media/{KIMI}"))["routes"] if row["slug"] == "anime"
     )
 
-    # Mikan 聚合 feed，說了自動綁定送進 Anime（預設安裝有 TV 與 Anime 兩條收劇集的 Route）。
-    aggregate = ok(berth.post("/rss/feeds", json={"url": AGGREGATE_URL, "route": route}))["id"]
+    # 加 Feed 時兩格都要給（M4 票 105）：劇集送進 Anime（預設安裝有 TV 與 Anime 兩條收劇集的
+    # Route），電影送進唯一的 Movies。
+    movies = next(
+        row["route"]["id"]
+        for row in ok(berth.get("/routes"))
+        if row["route"]["collection_type"] == "movies" and row["route"]["enabled"]
+    )
+    routes = {"tv_route": route, "movie_route": movies}
+    aggregate = ok(berth.post("/rss/feeds", json={"url": AGGREGATE_URL, **routes}))["id"]
     polled = _poll(berth, aggregate)
     assert (polled["bound"], polled["submitted"]) == (1, 4), polled
 
@@ -178,7 +185,7 @@ def first_round(
     assert primed["submitted"] == 1, primed
 
     # 一般的 acg.rip 搜尋 feed：沒有番組頁，長出來的留在待綁定，由人綁。
-    rezero = ok(berth.post("/rss/feeds", json={"url": REZERO_URL}))["id"]
+    rezero = ok(berth.post("/rss/feeds", json={"url": REZERO_URL, **routes}))["id"]
     _poll(berth, rezero)
     ok(berth.post(f"/rss/feeds/{rezero}/prime", json={"mode": "all"}))
     pending = [

@@ -1576,6 +1576,9 @@ class RssRefusal(StrEnum):
     ROUTE_DISABLED = "route_disabled"
     #: 劇集只進得了 tvshows 媒體庫、電影只進得了 movies（`collection_type_for`）。
     ROUTE_KIND_MISMATCH = "route_kind_mismatch"
+    #: Feed 的這一種（`detail` 是 `tv` / `movie`）有啟用中的 Route，卻沒說送進哪一條（M4 票 105，
+    #: 照 Sonarr Import List 的 Root Folder 必填）。
+    ROUTE_REQUIRED = "route_required"
     #: 一條排除條件寫壞了（空白、正則編譯不過、不認得的旗標）。`detail` 是 `<規則>: <原因>`，
     #: 原因是 Python `re` 的原文。儲存時就擋，不等到輪詢時才炸（M3 票 10）。
     RULE_INVALID = "rule_invalid"

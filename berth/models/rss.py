@@ -7,7 +7,8 @@ Series。所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與它�
 
 欄位只建用得到的（M3 票 08 起）：排除條件（`exclude_json`）與跳過理由（`skip_json`）在票 10；
 第一輪預覽（`primed_at`）與大小（`size`）在票 11；補舊集（`backfilled_at`）在票 12；第一批確認
-（`confirmed`）在票 13；Feed 預先綁定的作品（`rss_feeds.media_id` 等）在票 19。
+（`confirmed`）在票 13；Feed 預先綁定的作品（`rss_feeds.media_id` 等）在票 19；劇集、電影各一條
+自動綁定的 Route（`tv_route_id`、`movie_route_id`）在 M4 票 105。
 """
 
 from __future__ import annotations
@@ -46,12 +47,18 @@ class RssFeed(Base):
     #: 第一輪預覽選過的那一刻（brief §15）。`None` 是還沒選：這個 Feed 的 Item 一筆都不送。
     #: Mikan 加的那一刻就寫（聚合 feed 只有最近的集數，沒有歷史要選）。
     primed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
-    #: 從 Media 頁建的搜尋 feed（票 19）預先綁定的作品與 Route：它長出的每一個 RSS Series 直接以
-    #: `user_id` 的身分綁上，不去認作品。一般的 Feed 是 `None`。
+    #: 從 Media 頁建的搜尋 feed（票 19）預先綁定的作品：它長出的每一個 RSS Series 直接以 `user_id`
+    #: 的身分綁上它那一種的 Route，不去認作品。一般的 Feed 是 `None`。
     media_id: Mapped[str | None] = mapped_column(
         ForeignKey("media.id", ondelete="SET NULL"), default=None
     )
-    route_id: Mapped[int | None] = mapped_column(
+    #: 下面兩欄是自動綁定送進的 Route，劇集與電影各一條（M4 票 105，照 Sonarr Import List 的
+    #: Root Folder）。那一種有啟用中的 Route 時加 Feed 就要給；`None` 是那一種沒有 Route、票 105
+    #: 之前留下的、或那條 Route 被刪了，自動綁定退回「只有一條」。
+    tv_route_id: Mapped[int | None] = mapped_column(
+        ForeignKey("routes.id", ondelete="SET NULL"), default=None
+    )
+    movie_route_id: Mapped[int | None] = mapped_column(
         ForeignKey("routes.id", ondelete="SET NULL"), default=None
     )
     user_id: Mapped[int | None] = mapped_column(

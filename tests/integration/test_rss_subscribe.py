@@ -25,7 +25,6 @@ from berth.models import Job, Route, RssFeed, RssSeries, User
 from berth.parser import release
 from berth.services.rss import (
     RssRejectedError,
-    add_feed,
     bind_series,
     list_series,
     poll_feed,
@@ -34,7 +33,7 @@ from berth.services.rss import (
     subscribe_search,
 )
 from tests.conftest import FIXTURES
-from tests.integration.test_rss import KIMI_KEY, NOW, count, harbour, series_by_key
+from tests.integration.test_rss import KIMI_KEY, NOW, count, harbour, routed_feed, series_by_key
 from tests.integration.test_rss_backfill import SEASON, rss_jobs, subscribed
 from tests.integration.test_rss_screen import SINGLE_URL, serve_single
 
@@ -308,7 +307,7 @@ class TestSearchFeed:
         other = "https://acg.rip/.xml?term=Kimi+ga+Shinu"
         factory.rss_.pages[other] = ACGRIP_FEED
         factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
-        earlier = await add_feed(session, url=other)
+        earlier = await routed_feed(session, url=other)
         await poll_feed(session, factory, earlier.id, now=NOW)
         assert {row.media_id for row in await session.scalars(select(RssSeries))} == {None}
 

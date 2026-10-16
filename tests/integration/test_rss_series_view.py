@@ -21,7 +21,6 @@ from berth.parser import QUIET_AFTER, SETTLED_AFTER
 from berth.services.rss import (
     RssRejectedError,
     SeriesView,
-    add_feed,
     bind_series,
     list_series,
     list_series_items,
@@ -38,6 +37,7 @@ from tests.integration.test_rss import (
     episode_pages,
     harbour,
     kimi_snapshot,
+    routed_feed,
     run_pipeline,
     series_by_key,
 )
@@ -92,7 +92,7 @@ class TestLatest:
         """驗收：Item 發佈順序與長出順序不同時，「最近」是發佈最新的那一筆。"""
         _, _, factory = await harbour(session, roots)
         # 一輪裡舊的先寫（`_unseen`）：這個 Series 由 11 長出來，12 才是最近發佈的。
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
 
         row = await the_row(session)
@@ -110,7 +110,7 @@ class TestCounts:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await set_series_exclusions(session, series.id, [" - 11 "])
@@ -132,7 +132,7 @@ class TestFinished:
     ) -> None:
         """驗收：有新 Item 時回到清單。紀錄不刪，完結只是照現況算出來的。"""
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await bind_series(
@@ -161,7 +161,7 @@ class TestFinished:
             kimi_snapshot().model_copy(update={"ended": True}).model_dump(mode="json")
         )
         await session.commit()
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await bind_series(
@@ -187,7 +187,7 @@ class TestFinished:
             kimi_snapshot().model_copy(update={"ended": True}).model_dump(mode="json")
         )
         await session.commit()
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await bind_series(
@@ -227,7 +227,7 @@ class TestItemsOfASeries:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         await set_series_exclusions(session, series.id, [" - 11 "])
@@ -257,7 +257,7 @@ class TestMikanNames:
     ) -> None:
         """自動綁定讀過番組頁：番組名與這個字幕組的名字記下來，不為了顯示多打 Mikan。"""
         _, factory = await moored(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
 
         row = await the_row(session)
@@ -272,7 +272,7 @@ class TestMikanNames:
     ) -> None:
         _, _, factory = await harbour(session, roots)
         factory.rss_ = FakeFeedFetcher({FEED_URL: FEED, **episode_pages()})
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
 
         row = await the_row(session)
@@ -288,7 +288,7 @@ class TestMikanNames:
         media, route, factory = await harbour(session, roots)
         factory.rss_ = FakeFeedFetcher({FEED_URL: FEED, **episode_pages()})
         serve_single(factory)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         await poll_feed(session, factory, feed.id, now=NOW)
         series = await series_by_key(session, KIMI_KEY)
         assert (await the_row(session)).mikan_bangumi_name == ""

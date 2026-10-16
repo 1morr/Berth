@@ -19,10 +19,10 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.rss.mikan import bangumi_url
 from berth.domain import BindReasonCode, BudgetUse
 from berth.models import RssSeries
-from berth.services.rss import LOOKUP_RETRIES, add_feed, list_series, poll_feed
+from berth.services.rss import LOOKUP_RETRIES, list_series, poll_feed
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_request_budget import Clock, used
-from tests.integration.test_rss import FEED_URL, KIMI_ID, NOW
+from tests.integration.test_rss import FEED_URL, KIMI_ID, NOW, routed_feed
 from tests.integration.test_rss_auto_bind import moored
 from tests.integration.test_rss_screen import release, serve
 
@@ -40,7 +40,7 @@ async def two_groups(
     clock = Clock(NOW)
     factory.budget = RequestBudget(limit=limit, now=clock)
     serve(factory, FEED_URL, RELEASES)
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     return factory, clock, feed.id
 
 
@@ -144,7 +144,7 @@ async def test_a_new_group_and_a_due_lookup_share_the_page_in_one_round(
     # 2 格：Feed 與一頁單集頁，番組頁放不下，LoliHouse 那一組延後。
     factory.budget = RequestBudget(limit=2, now=clock)
     serve(factory, FEED_URL, RELEASES[:1])
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     assert await round_at(session, factory, feed.id, clock.now) == 0
     assert await codes_by_group(session) == {370: [BindReasonCode.LOOKUP_DEFERRED]}
 

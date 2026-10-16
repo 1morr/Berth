@@ -81,7 +81,7 @@ export function SeriesBinder({
   }, [asked])
 
   const detail = media.data
-  const route = chosen === undefined ? preselect(detail) : chosen
+  const route = chosen === undefined ? preselect(detail, series.feed_routes) : chosen
   const candidates = series.candidates
   const pick = (item: Pickable) => {
     setPicked(item)

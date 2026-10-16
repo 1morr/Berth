@@ -1140,6 +1140,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/feeds/{feed_id}/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Feed Routes
+         * @description 選或改 Feed 的兩條 Route（M4 票 105）。存下之後當場綁上它長出的、因為 Route 不只一條而停在
+         *     待綁定的那幾部（用自動綁定判出來的那一部，不重新上網查），送出它們留著的 Item；已經綁上的
+         *     不搬家。送單被拒不讓它失敗（同 `PUT /rss/series/{id}/binding`）。
+         */
+        put: operations["put_feed_routes_api_rss_feeds__feed_id__routes_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/feeds/{feed_id}": {
         parameters: {
             query?: never;
@@ -2849,8 +2871,10 @@ export interface components {
              * @default
              */
             name?: string;
-            /** Route */
-            route?: number | null;
+            /** Tv Route */
+            tv_route?: number | null;
+            /** Movie Route */
+            movie_route?: number | null;
         };
         /**
          * FeedItemStatus
@@ -2891,10 +2915,31 @@ export interface components {
             exclusions: string[];
             /** Primed At */
             primed_at: string | null;
-            /** Route Id */
-            route_id: number | null;
+            /** Tv Route Id */
+            tv_route_id: number | null;
+            /** Movie Route Id */
+            movie_route_id: number | null;
             /** Ever Read */
             ever_read: boolean;
+            awaiting_route: components["schemas"]["KindCountsOut"];
+        };
+        /**
+         * FeedRoutesIn
+         * @description 選或改 Feed 的兩條 Route；檢查同 `POST /rss/feeds`。
+         */
+        FeedRoutesIn: {
+            /** Tv Route */
+            tv_route?: number | null;
+            /** Movie Route */
+            movie_route?: number | null;
+        };
+        /** FeedRoutesOut */
+        FeedRoutesOut: {
+            feed: components["schemas"]["FeedOut"];
+            /** Bound */
+            bound: number;
+            /** Submitted */
+            submitted: number;
         };
         /**
          * FileKind
@@ -3730,6 +3775,26 @@ export interface components {
          * @enum {string}
          */
         JobTrigger: "manual" | "rss" | "reimport";
+        /**
+         * KindCountsOut
+         * @description 劇集、電影各幾個。
+         */
+        KindCountsOut: {
+            /** Tv */
+            tv: number;
+            /** Movie */
+            movie: number;
+        };
+        /**
+         * KindRoutesOut
+         * @description 劇集、電影各一條 Route 的 id；`null` 是沒有。
+         */
+        KindRoutesOut: {
+            /** Tv */
+            tv: number | null;
+            /** Movie */
+            movie: number | null;
+        };
         /**
          * LedgerFileOut
          * @description 檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。
@@ -4833,7 +4898,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "budget_exhausted";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "budget_exhausted";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -5031,6 +5096,7 @@ export interface components {
             route_id: number | null;
             /** Route Name */
             route_name: string;
+            feed_routes: components["schemas"]["KindRoutesOut"];
             /** Season */
             season: number | null;
             /** Episode Offset */
@@ -8052,7 +8118,7 @@ export interface operations {
                     "application/json": components["schemas"]["FeedOut"];
                 };
             };
-            /** @description `feed_duplicate` */
+            /** @description `feed_duplicate` · `route_disabled` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8061,7 +8127,60 @@ export interface operations {
                     "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
-            /** @description `feed_unsupported` · `route_missing` */
+            /** @description `feed_unsupported` · `route_missing` · `route_kind_mismatch` · `route_required` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    put_feed_routes_api_rss_feeds__feed_id__routes_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedRoutesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedRoutesOut"];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `route_disabled` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `route_missing` · `route_kind_mismatch` · `route_required` */
             422: {
                 headers: {
                     [name: string]: unknown;

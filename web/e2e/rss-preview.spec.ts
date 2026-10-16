@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { addFeed } from './feed.ts'
 import { signIn } from './login.ts'
 import { shot } from './shot.ts'
 
@@ -9,8 +10,7 @@ import { shot } from './shot.ts'
 test('新 acg.rip feed：預覽看得到合集被排除，只追之後的略過整份歷史', async ({ page }) => {
   await signIn(page, '/rss')
 
-  await page.getByLabel(/RSS 網址/).fill('https://acg.rip/.xml?term=Kamiina+Botan')
-  await page.getByRole('button', { name: '加入', exact: true }).click()
+  await addFeed(page, 'https://acg.rip/.xml?term=Kamiina+Botan')
   const feed = page.getByRole('region', { name: /^Feed/ }).getByRole('article', { name: 'acg.rip' })
   await expect(feed).toContainText('第一輪還沒決定，一筆都不送')
   const first = page.getByRole('region', { name: /等你決定/ })

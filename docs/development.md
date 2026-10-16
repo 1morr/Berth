@@ -147,7 +147,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑十七條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑十八條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -300,7 +300,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十七條流程（除了送單、審核、待處理與自動綁定那四條，各有 1280 與 390 兩份，共三十個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十八條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十三個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -313,11 +313,11 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | `/review` 確認一筆 audit | `review` | 8493 |
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
-| `/rss` 加 Mikan feed、輪詢、綁定待綁定的那一部，下載列表上兩集都已入庫 | `rss` | 8498 / 8508 |
-| `/rss` 加 Feed 時選自動綁定送進 Anime：輪詢之後那一部自動綁定並補舊集，下載列表上已入庫 | `rss` | 8516 |
+| `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
+| `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
 | `/rss` 新的 acg.rip 搜尋 feed：第一輪停在預覽、合集在「排除」那一組，選「只追之後的」之後整份歷史略過 | `rss` | 8488 / 8489 |
-| `/rss` 綁定 Mikan 的 RSS Series 時補舊集，之後每日補漏 | `rss` | 8486 / 8487 |
+| `/rss` 綁定 Mikan 的 RSS Series 時補舊集，之後每日補漏 | `rss-legacy-feed` | 8486 / 8487 |
 | split-cour 的第一批已入庫：在 `/review` 改一集並套用到 RSS Series，其餘 11 集跟著搬，全部確認 | `rss-split-cour` | 8484 / 8485 |
 | 連載中的 split-cour 第一批整批擋在審核：改一份計劃的一列並套用到 RSS Series，其餘 11 份重新規劃、自動入庫，改的那一份核准 | `rss-split-cour-airing` | 8510 / 8511 |
 | 一次性 RSS 連結：讀單一 feed 勾三集送單、acg.rip 那一份標出合集 | `rss` | 8512 / 8513 |
@@ -370,7 +370,8 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：頁 1 擁有者那一步紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
-| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）、按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個待綁定的 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；在《与你相恋到生命尽头》那一列綁到它與 Anime（整季補齊，M4 票 78 起沒有不補的選項），12 集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上 12 筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
+| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）；TV 與 Anime 都收劇集，所以「劇集送進」要選（M4 票 105，選 Anime），「電影送進」預填 Movies。按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；《与你相恋到生命尽头》的番組頁在，輪詢時就自動綁到它與 Feed 說的 Anime（整季補齊，M4 票 78 起沒有不補的選項），其餘 10 個番組頁查不到、留在待綁定。12 集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上 12 筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
+| `rss-legacy-feed` | 舊 Feed 選 Route（M4 票 105）：同 `rss`，但聚合 feed 已經在了，是票 105 之前加的——劇集那一格是空的（TV 與 Anime 兩條，migration 推不出來），電影那一格是 Movies。Feed 列標「要選 Route」；輪詢之後《与你相恋》認出來了、停在待綁定（`route_ambiguous`，作品預填成候選，也是手動綁定與補舊集的演練起點）；按「改 Route」選 Anime，確認區說會當場綁上 1 部，存下之後它綁上、補齊整季 12 集 |
 | `rss-split-cour` | 改正並套用到 RSS Series（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季 24 集。綁定時補舊集，12 集全部落在 S01E01–E12（錯的：字幕組的第二 cour 從 01 重數），在 `/review` 是這個 RSS Series 的第一批、一組；把第 1 集改成 S01E13 並勾「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24，再按「全部確認」 |
 | `rss-split-cour-airing` | 從審核裡套用到 RSS Series（M3 票 14b）：同 `rss-split-cour`，但第二 cour 正在播（2026-07-02 起）。綁定時補舊集，12 集照字面對到一月播出的 S01E01–E12，播出日比對把 12 份計劃整批擋在 `/review` 的「要你決定」、一集都沒入庫；在第 1 集那一份按「改」、起集填 13、勾著「套用到這個 RSS Series」套用，其餘 11 份重新規劃、自動入庫（第一批，等全部確認），改的那一份等你核准 |
 | `rss-runtime` | 片長驗證（M3 票 15）：同 `rss`，但 mediainfo 是替身——檔名第 11 集的量到 12:05，其餘 24 分鐘（TMDB 每集 24 分鐘）。綁定《与你相恋》之後第 11 集那一份停在 `/review` 的「要你決定」，理由說出兩個片長；其餘 11 集照常入庫（第一批） |

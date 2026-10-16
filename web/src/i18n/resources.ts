@@ -3151,6 +3151,7 @@ const zhHant = {
       route_missing: '那條 Route 已經不在了。',
       route_disabled: '那條 Route 停用中。到設定的媒體庫路徑把它啟用，或換一條。',
       route_kind_mismatch: '那條 Route 收的不是這種作品（劇集只進得了劇集媒體庫）。',
+      route_required: '有 Route 收得下這一種作品，要選一條送進哪裡。',
       rule_invalid: '這條排除條件寫壞了，什麼都沒存。',
       feed_primed: '這個 Feed 的第一輪已經選過了，多半是另一個分頁剛選的。',
       feed_unreachable:
@@ -3171,11 +3172,32 @@ const zhHant = {
         'Mikan「我的番組」的 RSS（/RSS/MyBangumi?token=…）或單一番組的 RSS；Nyaa 或 acg.rip 的搜尋 RSS。',
       name: '名稱（選填）',
       nameHint: '空著就用網址的主機名。',
-      route: '自動綁定送進',
-      routeNone: '不指定',
-      routeHint:
-        '認出來的作品有不只一條 Route 收得下時送進這一條。不指定時那幾部留在待綁定，由你選。',
-      sendsTo: '自動綁定送進',
+      // Feed 的兩條 Route（M4 票 105）：劇集、電影各一條，那一種有 Route 就要選。
+      routeFor: { tv: '劇集送進', movie: '電影送進' },
+      routeHint: {
+        tv: '認出來是劇集的作品自動綁定到這一條。',
+        movie: '認出來是電影的作品（例如劇場版）自動綁定到這一條。',
+      },
+      routePick: '選一條 Route',
+      routeUnset: '要選 Route',
+      routeUnsetWhy: {
+        tv: '這個 Feed 沒說劇集送進哪一條：收得下的 Route 不只一條時，認出來的劇集會停在待綁定。',
+        movie:
+          '這個 Feed 沒說電影送進哪一條：收得下的 Route 不只一條時，認出來的電影會停在待綁定。',
+      },
+      changeRoutes: '改 Route',
+      routesLede: '這個 Feed 長出的作品自動綁定到這裡。已經綁上的不會搬家。',
+      routesBinds_one:
+        '存下之後，它長出、因為 Route 不只一條而停在待綁定的 {{count}} 部會當場綁上並送出留著的集數。',
+      routesBinds_other:
+        '存下之後，它長出、因為 Route 不只一條而停在待綁定的 {{count}} 部會當場綁上並送出留著的集數。',
+      routesSave: '存下 Route',
+      routesSaveBind_one: '存下並綁上 {{count}} 部',
+      routesSaveBind_other: '存下並綁上 {{count}} 部',
+      routesSaving: '存下中…',
+      routesSaved: '存下了。',
+      routesSavedBound_one: '存下了：當場綁上 {{count}} 部、送出 {{sent}} 筆。',
+      routesSavedBound_other: '存下了：當場綁上 {{count}} 部、送出 {{sent}} 筆。',
       addAction: '加入',
       count_one: '{{count}} 個 Feed',
       count_other: '{{count}} 個 Feed',
@@ -3289,7 +3311,7 @@ const zhHant = {
       season_airing:
         '名字寫第 {{season}} 季；Mikan 寫 {{premiere}} 開播，那時 TMDB 的這一季正在播（{{episode}} 在 {{aired}} 播出）',
       only_route: '收得下它的 Route 只有 {{route}}',
-      feed_route: '收得下它的 Route 不只一條，這個 Feed 設定送進 {{route}}',
+      feed_route: '這個 Feed 設定送進 {{route}}',
       no_candidate: 'TMDB 搜不到同名的作品',
       premiere_far: '同名的 {{title}} 沒有一季在 {{premiere}}（Mikan 寫的開播日）前後首播',
       several_candidates: '同名、開播日期也對得上的有 {{number}} 部',
@@ -6507,6 +6529,7 @@ const en: Translations<typeof zhHant> = {
         'That route is disabled. Enable it under Settings → Library paths, or pick another.',
       route_kind_mismatch:
         "That route doesn't hold this kind of title (series only go into a TV library).",
+      route_required: 'Routes can take this kind of title: pick which one it goes into.',
       rule_invalid: 'That exclusion rule is broken; nothing was saved.',
       feed_primed: "This feed's first round has already been decided — probably from another tab.",
       feed_unreachable:
@@ -6528,11 +6551,33 @@ const en: Translations<typeof zhHant> = {
         "Mikan's My Bangumi RSS (/RSS/MyBangumi?token=…) or a single show's RSS; a Nyaa or acg.rip search RSS.",
       name: 'Name (optional)',
       nameHint: "Left blank, the address's host name is used.",
-      route: 'Auto-bind into',
-      routeNone: 'Not set',
-      routeHint:
-        'When more than one route takes a recognised title, it goes into this one. Not set, those titles wait in unbound for you to pick.',
-      sendsTo: 'auto-binds into',
+      routeFor: { tv: 'Series go into', movie: 'Movies go into' },
+      routeHint: {
+        tv: 'Titles recognised as series are bound into this route automatically.',
+        movie:
+          'Titles recognised as movies (a theatrical release, say) are bound into this route automatically.',
+      },
+      routePick: 'Pick a route',
+      routeUnset: 'Pick a route',
+      routeUnsetWhy: {
+        tv: "This feed doesn't say which route series go into. While more than one can take them, recognised series wait in unbound.",
+        movie:
+          "This feed doesn't say which route movies go into. While more than one can take them, recognised movies wait in unbound.",
+      },
+      changeRoutes: 'Change routes',
+      routesLede:
+        "Titles this feed grows are bound here automatically. Ones already bound don't move.",
+      routesBinds_one:
+        'Once saved, the {{count}} title it grew that waits in unbound because more than one route could take it is bound on the spot, and its waiting episodes are sent.',
+      routesBinds_other:
+        'Once saved, the {{count}} titles it grew that wait in unbound because more than one route could take them are bound on the spot, and their waiting episodes are sent.',
+      routesSave: 'Save routes',
+      routesSaveBind_one: 'Save and bind {{count}} title',
+      routesSaveBind_other: 'Save and bind {{count}} titles',
+      routesSaving: 'Saving…',
+      routesSaved: 'Saved.',
+      routesSavedBound_one: 'Saved: {{count}} title bound on the spot, {{sent}} sent.',
+      routesSavedBound_other: 'Saved: {{count}} titles bound on the spot, {{sent}} sent.',
       addAction: 'Add',
       count_one: '{{count}} feed',
       count_other: '{{count}} feeds',
@@ -6641,7 +6686,7 @@ const en: Translations<typeof zhHant> = {
       season_airing:
         'the name says season {{season}}; Mikan says it started on {{premiere}}, while that season was airing on TMDB ({{episode}} aired on {{aired}})',
       only_route: 'the only route that takes it is {{route}}',
-      feed_route: 'more than one route takes it; this feed sends to {{route}}',
+      feed_route: 'this feed sends it to {{route}}',
       no_candidate: 'nothing on TMDB has the same name',
       premiere_far:
         '{{title}} has the same name, but none of its seasons premiered near {{premiere}} (the start date on Mikan)',

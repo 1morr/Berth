@@ -37,7 +37,6 @@ from berth.models import Job, Route, RssItem, RssSeries
 from berth.parser.binding import title_key
 from berth.services.rss import (
     RssRejectedError,
-    add_feed,
     bind_series,
     list_feeds,
     poll_feed,
@@ -48,7 +47,7 @@ from tests.conftest import FIXTURES
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import FEED_URL as MIKAN_URL
-from tests.integration.test_rss import NOW, anime_route, kimi
+from tests.integration.test_rss import NOW, anime_route, kimi, routed_feed
 
 pytestmark = pytest.mark.asyncio
 
@@ -135,8 +134,8 @@ def job_count(factory: FakeClientFactory) -> int:
 
 class TestTheSources:
     async def test_the_hosts_are_recognised(self, session: AsyncSession) -> None:
-        acgrip = await add_feed(session, url=ACGRIP_URL, name="")
-        nyaa = await add_feed(session, url=NYAA_URL, name="")
+        acgrip = await routed_feed(session, url=ACGRIP_URL, name="")
+        nyaa = await routed_feed(session, url=NYAA_URL, name="")
 
         assert (acgrip.kind, nyaa.kind) == (FeedKind.ACGRIP, FeedKind.NYAA)
         assert (acgrip.name, nyaa.name) == ("acg.rip", "nyaa.si")
@@ -145,7 +144,7 @@ class TestTheSources:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
 
         polled = await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -160,7 +159,7 @@ class TestTheSources:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {NYAA_URL: NYAA})
-        feed = await add_feed(session, url=NYAA_URL, name="")
+        feed = await routed_feed(session, url=NYAA_URL, name="")
 
         await poll_feed(session, factory, feed.id, now=NOW)
 
@@ -173,7 +172,7 @@ class TestTheSources:
 class TestTheFirstRound:
     async def test_a_mikan_feed_needs_no_preview(self, session: AsyncSession) -> None:
         """Mikan 聚合 feed 只有最近的集數（brief §15）：加的那一刻就算選過了。"""
-        feed = await add_feed(session, url=MIKAN_URL, name="Mikan")
+        feed = await routed_feed(session, url=MIKAN_URL, name="Mikan")
 
         assert feed.primed_at is not None
 
@@ -181,7 +180,7 @@ class TestTheFirstRound:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         assert feed.primed_at is None
 
         await poll_feed(session, factory, feed.id, now=NOW)
@@ -200,7 +199,7 @@ class TestTheFirstRound:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
         await bind_lolihouse(session, factory)
 
@@ -216,7 +215,7 @@ class TestTheFirstRound:
     ) -> None:
         """「只追之後的」之後，第一輪的舊集不送；第二輪多出來的第 13 集送。"""
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
         await bind_lolihouse(session, factory)
 
@@ -243,7 +242,7 @@ class TestTheFirstRound:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
         await bind_lolihouse(session, factory)
 
@@ -262,7 +261,7 @@ class TestTheFirstRound:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
         await prime_feed(session, factory, feed.id, mode=PrimeMode.ALL)
 
@@ -274,7 +273,7 @@ class TestTheFirstRound:
         """「只追之後的」要重讀 feed，那幾秒裡另一個分頁先選了「全部下載」：後到的這一個是 409，
         不把對方留給綁定之後送的那幾筆改成略過。"""
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
         sessions = async_sessionmaker(session.bind, expire_on_commit=False)
         fetch = factory.rss_.fetch
@@ -298,7 +297,7 @@ class TestTheFirstRound:
     ) -> None:
         """沒看過的東西不讓人選「全部下載」（shape §2）：畫面不給按，命令本身也不收。"""
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
 
         with pytest.raises(RssRejectedError) as refused:
             await prime_feed(session, factory, feed.id, mode=PrimeMode.ALL)
@@ -313,7 +312,7 @@ class TestTheFirstRound:
         """輪過、但一次都沒讀到（連不上、請求預算用完）也是沒看過：預覽是空的，選了「全部下載」
         的話下一次讀到的整份歷史照送（M3 票 21 的 critique P0）。"""
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         factory.rss_.error = ServiceUnavailableError("acg.rip: connection refused")
         polled = await poll_feed(session, factory, feed.id)
         assert polled.failed
@@ -329,7 +328,7 @@ class TestTheFirstRound:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
         await prime_feed(session, factory, feed.id, mode=PrimeMode.LATER)
 
@@ -344,7 +343,7 @@ class TestTheFirstRound:
         """「只追之後的」要知道「之前」是哪幾筆：當場再讀一次 feed。讀不到就不決定——否則下一輪
         讀到的整份歷史都會被當成新的。"""
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
         factory.rss_.error = ServiceUnavailableError("acg.rip: connection refused")
 
         with pytest.raises(RssRejectedError) as refused:
@@ -358,7 +357,7 @@ class TestTheFirstRound:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         factory = await harbour(session, roots, {ACGRIP_URL: ACGRIP})
-        feed = await add_feed(session, url=ACGRIP_URL, name="")
+        feed = await routed_feed(session, url=ACGRIP_URL, name="")
 
         primed = await prime_feed(session, factory, feed.id, mode=PrimeMode.LATER)
 
@@ -372,7 +371,7 @@ class TestWhatThePreviewShows:
     ) -> None:
         """M3 驗收「合集被排除」：搜尋 feed 30 筆裡夾著 8 筆合集（研究檔 §6）。"""
         factory = await harbour(session, roots, {KAMIINA_URL: KAMIINA})
-        feed = await add_feed(session, url=KAMIINA_URL, name="")
+        feed = await routed_feed(session, url=KAMIINA_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
 
         preview = await preview_feed(session, feed.id)
@@ -402,7 +401,7 @@ class TestWhatThePreviewShows:
             )
         )
         await session.commit()
-        feed = await add_feed(session, url=NYAA_URL, name="")
+        feed = await routed_feed(session, url=NYAA_URL, name="")
         await poll_feed(session, factory, feed.id, now=NOW)
 
         preview = await preview_feed(session, feed.id)

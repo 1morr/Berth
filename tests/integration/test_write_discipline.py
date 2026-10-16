@@ -42,14 +42,14 @@ from berth.services.jobs import (
     transition,
 )
 from berth.services.plan import plan_id_of, sweep_plans
-from berth.services.rss import add_feed, bind_series, poll_feed
+from berth.services.rss import bind_series, poll_feed
 from berth.services.settings import read_settings, write_settings
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.test_deletion import imported
 from tests.integration.test_downloads import status
 from tests.integration.test_jobs import MAGNET_HASH, _media, _route, _source
 from tests.integration.test_plan import HASH, NOW, downloaded_job, ready
-from tests.integration.test_rss import FEED_URL, harbour
+from tests.integration.test_rss import FEED_URL, harbour, routed_feed
 from tests.integration.test_rss_auto_bind import moored
 from tests.integration.test_rss_backfill import subscribed
 from tests.integration.test_rss_screen import SINGLE_URL
@@ -314,7 +314,7 @@ class TestNetworkOutsideTheWriteTransaction:
     ) -> None:
         """Mikan 的單集頁一筆一個請求、逾時 30 秒：寫下第一筆之後才抓第二頁的話，整輪都握著寫鎖。"""
         _, _, factory = await harbour(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         seen = watch(factory.rss_, "fetch", config.database_path)
 
         polled = await poll_feed(session, factory, feed.id, now=NOW)
@@ -429,7 +429,7 @@ class TestNetworkOutsideTheWriteTransaction:
         """自動綁定讀番組頁時順手記下番組名與字幕組名（M4 票 13），要在問 TMDB 之前寫完
         commit。"""
         _, factory = await moored(session, roots)
-        feed = await add_feed(session, url=FEED_URL, name="Mikan")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
         searched = watch(factory.tmdb_, "search", config.database_path)
         detailed = watch(factory.tmdb_, "detail", config.database_path)
 

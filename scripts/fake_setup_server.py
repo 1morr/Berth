@@ -96,10 +96,12 @@ from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
     BudgetUse,
+    CollectionType,
     Confidence,
     ConnectionReason,
     ConnectionState,
     EpisodeSnapshot,
+    FeedKind,
     FileEntry,
     HealthStatus,
     JobState,
@@ -133,6 +135,7 @@ from berth.models import (
     PlanItem,
     QbittorrentSettings,
     Route,
+    RssFeed,
     ServiceChoice,
     ServiceTest,
     SetupLibrary,
@@ -141,6 +144,7 @@ from berth.models import (
     TmdbSettings,
     media_id,
 )
+from berth.models.types import utcnow
 from berth.parser import plan as decide
 from berth.services.clients import (
     BUNDLED_JELLYFIN_URL,
@@ -319,6 +323,9 @@ class Scenario:
     review_demo: bool = False
     #: 作品頁的「下載」段（M4 票 12）。見 `_seed_downloads`。
     downloads_demo: bool = False
+    #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
+    #: 那一格是空的。見 `_seed_legacy_feed`。
+    legacy_feed: bool = False
     #: 重裝之後（M4 票 60）：Berth 的資料庫是新的，三個服務與磁碟上的東西還是上一次的樣子。
     #: 見 `_restore_services`。
     reinstalled: bool = False
@@ -1483,6 +1490,17 @@ KIMI_SPLIT_COUR = _split_cour(date(2025, 1, 9), date(2025, 7, 3))
 KIMI_SPLIT_COUR_AIRING = _split_cour(date(2026, 1, 8), date(2026, 7, 2))
 
 
+def rss_legacy_feed_scenario() -> Scenario:
+    """舊 Feed 選 Route（M4 票 105）：同 `rss`，但聚合 feed 已經在了，是票 105 之前加的那種——TV 與
+    Anime 兩條都收劇集，migration 推不出劇集那一格（電影只有 Movies，補上了）。Feed 列標「要選
+    Route」；輪詢之後《与你相恋》停在待綁定（`route_ambiguous`），按「改 Route」選 Anime，當場綁上並
+    補齊整季。
+    """
+    scenario = rss_scenario()
+    scenario.legacy_feed = True
+    return scenario
+
+
 def rss_split_cour_scenario() -> Scenario:
     """改正並套用到 RSS Series（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季。
 
@@ -1784,6 +1802,7 @@ SCENARIOS = {
     "tmdb-down": tmdb_down,
     "healthy": healthy,
     "rss": rss_scenario,
+    "rss-legacy-feed": rss_legacy_feed_scenario,
     "rss-split-cour": rss_split_cour_scenario,
     "rss-split-cour-airing": rss_split_cour_airing_scenario,
     "rss-runtime": rss_runtime_scenario,
@@ -2231,6 +2250,25 @@ async def _moor(
         await _seed_review(session, paths)
     if scenario.downloads_demo:
         await _seed_downloads(session, scenario, factory)
+    if scenario.legacy_feed:
+        await _seed_legacy_feed(session)
+
+
+async def _seed_legacy_feed(session: AsyncSession) -> None:
+    """票 105 之前加的聚合 feed：劇集那一格空著，電影那一格是唯一的那一條（migration 補的）。"""
+    movies = await session.scalar(
+        select(Route.id).where(Route.collection_type == CollectionType.MOVIES)
+    )
+    session.add(
+        RssFeed(
+            name="mikanani.me",
+            url=RSS_FEED_URL,
+            kind=FeedKind.MIKAN,
+            primed_at=utcnow(),
+            movie_route_id=movies,
+        )
+    )
+    await session.commit()
 
 
 async def _seed_issues(session: AsyncSession, paths: PathSettings) -> None:

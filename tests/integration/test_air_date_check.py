@@ -39,7 +39,7 @@ from berth.domain import (
 from berth.models import Event, Job, LedgerEntry, PlanItem, RssItem
 from berth.services.jobs import JobSource, add_download
 from berth.services.review import PlanRow, review_queue
-from berth.services.rss import add_feed, bind_series, poll_feed
+from berth.services.rss import bind_series, poll_feed
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import (
@@ -53,6 +53,7 @@ from tests.integration.test_rss import (
     harbour,
     kimi,
     kimi_snapshot,
+    routed_feed,
     run_pipeline,
     series_by_key,
     torrents,
@@ -128,7 +129,7 @@ async def delivered_by_rss(
     factory = factory_for(roots)
     factory.rss_ = FakeFeedFetcher({FEED_URL: FEED, **episode_pages()})
     factory.torrent_ = torrents()
-    feed = await add_feed(session, url=FEED_URL, name="Mikan")
+    feed = await routed_feed(session, url=FEED_URL, name="Mikan")
     await poll_feed(session, factory, feed.id, now=NOW)
     series = await series_by_key(session, KIMI_KEY)
     series.season = season
@@ -288,7 +289,7 @@ class TestPublishedRun:
         again = Release(370, KIMI[0].title)
         assert again.hash != KIMI[0].info_hash
         serve(factory, FEED_URL + "&again=1", [again])
-        feed = await add_feed(session, url=FEED_URL + "&again=1", name="Again")
+        feed = await routed_feed(session, url=FEED_URL + "&again=1", name="Again")
 
         await poll_feed(session, factory, feed.id, now=NOW + timedelta(hours=1))
 
