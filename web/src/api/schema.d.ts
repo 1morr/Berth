@@ -1368,6 +1368,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/items/{item_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Item Release
+         * @description 放行一筆被排除的 Item，當場送出（M4 票 111）。回這一筆的新狀態：`downloaded` 帶 Job 的
+         *     hash、`duplicate` 帶理由；送單被拒時留在 `excluded`，原文在 `error`。
+         */
+        post: operations["post_item_release_api_rss_items__item_id__release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/mikan/search": {
         parameters: {
             query?: never;
@@ -3397,6 +3418,7 @@ export interface components {
             size: number | null;
             /** Episode */
             episode: number | null;
+            release_blocked: components["schemas"]["RssRefusal"] | null;
         };
         /**
          * ItemReasonOut
@@ -4854,7 +4876,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "item_missing" | "item_not_excluded" | "series_unbound" | "feed_unprimed";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -8586,6 +8608,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemOut"][];
+                };
+            };
+        };
+    };
+    post_item_release_api_rss_items__item_id__release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description `item_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `item_not_excluded` · `series_unbound` · `feed_unprimed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

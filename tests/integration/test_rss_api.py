@@ -517,6 +517,43 @@ class TestExclusions:
         assert body["detail"].startswith("/[简繁/: unterminated character set")
         assert client.get("/api/rss/exclusions").json()["rules"] == []
 
+    def test_an_excluded_item_is_released_and_sent_on_the_spot(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 111：逐筆放行，回這一筆的新狀態；拒絕走 `RssRefusalOut`。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["- 11 "]}, headers=BROWSER
+        )
+        feed = add(client, route_id)
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        held = next(
+            row for row in client.get("/api/rss/items").json() if row["title"] == KIMI[1].title
+        )
+        assert (held["status"], held["release_blocked"]) == ("excluded", "series_unbound")
+
+        early = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+        assert early.status_code == 409
+        assert early.json()["detail"]["reason"] == "series_unbound"
+
+        client.put(
+            f"/api/rss/series/{held['series_id']}/binding",
+            json={"media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+        released = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+
+        assert released.status_code == 200, released.text
+        assert (released.json()["status"], released.json()["job_hash"]) == (
+            "downloaded",
+            KIMI[1].info_hash,
+        )
+        again = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+        assert again.status_code == 409
+        assert again.json()["detail"] == {"reason": "item_not_excluded", "detail": "downloaded"}
+        assert client.post("/api/rss/items/404/release", headers=BROWSER).status_code == 404
+
 
 def picked_job(row: dict[str, Any], route_id: int) -> dict[str, Any]:
     """一次性清單的一列 → 一般送單的 body（畫面送的就是這一份）。"""

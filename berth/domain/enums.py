@@ -1575,3 +1575,13 @@ class RssRefusal(StrEnum):
     #: 讀得到，但回的不是 RSS（站上的網頁、登入頁、Cloudflare 的錯誤頁）。多半是貼了頁面的網址而
     #: 不是它的 RSS 連結。`detail` 是原文（M3 票 18）。
     FEED_NOT_RSS = "feed_not_rss"
+    #: 沒有這個 id 的 Feed Item。多半是它的 Feed 被刪了（M4 票 111）。
+    ITEM_MISSING = "item_missing"
+    #: 只放行 `excluded` 的那一筆（M4 票 111）：已送出、重複、等著送的都不必或不能放行。
+    #: `detail` 是它現在的狀態。
+    ITEM_NOT_EXCLUDED = "item_not_excluded"
+    #: 這一筆的 RSS Series 還沒綁定作品，放行了也不知道送到哪裡（M4 票 111）。
+    SERIES_UNBOUND = "series_unbound"
+    #: 這一筆的 Feed 還在第一輪預覽（`primed_at` 是 `NULL`）：先選「全部下載」或「只追之後的」
+    #: （M4 票 111）。
+    FEED_UNPRIMED = "feed_unprimed"

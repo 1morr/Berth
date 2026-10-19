@@ -81,6 +81,10 @@ const REASONS: ReasonSet<RssRefusal> = {
   feed_unreachable: true,
   feed_unread: true,
   feed_not_rss: true,
+  item_missing: true,
+  item_not_excluded: true,
+  series_unbound: true,
+  feed_unprimed: true,
 }
 
 export function parseRssRefusal(error: unknown) {
@@ -220,6 +224,14 @@ export function pollFeed(id: number) {
 /** Mikan 的 RSS Series 綁定時一律讀單一 feed 補舊集（票 12、M4 票 78）。 */
 export function bindSeries(id: number, media: string, route: number) {
   return apiPut<RssSeries>(`/rss/series/${id}/binding`, { media, route })
+}
+
+/**
+ * 「仍然下載」一筆被排除的 Item（M4 票 111），當場送出。回這一筆的新狀態：送不出時仍是 `excluded`，
+ * 原文在 `error`。
+ */
+export function releaseItem(id: number) {
+  return apiPost<FeedItem>(`/rss/items/${id}/release`)
 }
 
 export function unbindSeries(id: number) {

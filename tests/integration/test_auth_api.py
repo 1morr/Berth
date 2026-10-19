@@ -465,6 +465,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/rss/series/*/binding"): Access.ADMIN,
     ("DELETE", "/rss/series/*/binding"): Access.ADMIN,
     ("GET", "/rss/items"): Access.ADMIN,
+    ("POST", "/rss/items/*/release"): Access.ADMIN,
     ("POST", "/rss/oneshot"): Access.ADMIN,
     # 排除條件（票 10）：三層都是 admin，同一組的理由。
     ("GET", "/rss/exclusions"): Access.ADMIN,

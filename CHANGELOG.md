@@ -11,6 +11,11 @@
 
 ### Added
 
+- **被排除的 Feed Item 可以「仍然下載」**（M4 票 111）：/rss 的「最近的 Feed Item」與 RSS Series 展開的清單裡，被排除
+  的那一筆（例如被「不自動下載合集」擋下的 `[01-12 合集]`）多一顆「仍然下載」，按了當場送出，那一列換成送出去的
+  下載；同一個 torrent 已經送過就標成重複。RSS Series 還沒綁定、Feed 還在等第一輪決定時按鈕停用並說原因；送不出去
+  （Route 紅燈、磁碟門檻）時那一筆留在排除、說出原因。一次一筆，改規則照舊不會把之前擋下的整批放回來。API：
+  `POST /api/rss/items/{id}/release`，`GET /api/rss/items` 每一筆多 `release_blocked`。
 - **加 Feed 時就能設排除條件**（M4 票 110）：新增表單多一格「排除條件」，與 Feed 卡片上的一樣（建議項、規則格式說明），
   跟著「加入」一起存。Mikan 的 Feed 不先預覽、加入後半分鐘內就自動綁定送單，加完再到卡片上設的擋不到已經送出的——要排除
   的現在就加。API：`POST /api/rss/feeds` 多選填的 `exclusions`，寫壞的回 422 `rule_invalid`、Feed 不加。
