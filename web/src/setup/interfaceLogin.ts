@@ -90,11 +90,6 @@ export function takenLogin(draft: LoginDraft, reuse: boolean): InterfaceLogin {
 export interface CarriedLogin {
   /** 還留在這個分頁記憶體裡的擁有者密碼；沒帶、重新整理過、或 Jellyfin 不再收它就是 `null`。 */
   password: string | null
-  /**
-   * 那一台現在的登入就是它：這個分頁最後一次替那一台設下的是沿用這一組。帳號是擁有者不夠——按「改用另一組」
-   * 只換密碼時帳號一樣。
-   */
-  inUse: boolean
 }
 
 /** 擁有者的 Jellyfin 帳密哪裡不合一個服務的規則：帳號太短、帳號有冒號、密碼太短。 */

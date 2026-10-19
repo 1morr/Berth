@@ -21,7 +21,7 @@ import {
   useInterfaceLogin,
   type CarriedLogin,
 } from './interfaceLogin'
-import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
+import { BerthLogin, CarriedApplying, LoginRow } from './InterfaceLoginFields'
 import { STEP_FIX, STEP_LABEL } from './qbittorrentSteps'
 import { ChoiceCutaway } from './ChoiceCutaway'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
@@ -192,15 +192,7 @@ function ServerCutaway({
         value={setup?.webapi_version || '—'}
         muted={!setup?.webapi_version}
       />
-      <CutawayRow
-        term={t('qbittorrent.cutaway.password')}
-        value={
-          origin === 'existing'
-            ? t('qbittorrent.cutaway.existingLogin')
-            : username || t('qbittorrent.cutaway.willSet')
-        }
-        muted={!username}
-      />
+      <LoginRow origin={origin} username={username} />
     </Cutaway>
   )
 }
@@ -346,7 +338,7 @@ function LoginSequence({
           <BerthLogin
             service="qbittorrent"
             current={setup.web_ui_username}
-            carried={carried.inUse}
+            carried={setup.web_ui_login_reuses_owner}
             form={login}
           />
         )}
@@ -368,8 +360,6 @@ function LoginSequence({
           />
         ))}
       </ol>
-
-      {settled && !applying && <DoneNotice text={t('qbittorrent.done')} />}
 
       {failed && (
         <div className="mt-4">

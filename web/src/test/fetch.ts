@@ -11,8 +11,14 @@ export interface StubRoute {
  * 依路徑分派的 fetch 替身。精靈一頁會打好幾支 API，一份固定回應不夠用。
  * key 是 `GET /api/setup/status` 這種 `<method> <path>`；找不到就回 404。
  */
-/** `stubApi` 的路由表：固定回應，或每次叫用時才算的替身（回 Promise 的能停在半路或丟出送不到）。 */
-export type StubRoutes = Record<string, StubRoute | (() => StubRoute | Promise<StubRoute>)>
+/**
+ * `stubApi` 的路由表：固定回應，或每次叫用時才算的替身（回 Promise 的能停在半路或丟出送不到）。替身拿得到
+ * 那一次請求的 `init`：記得自己狀態的假後端照送來的內容回（例如沿用與否）。
+ */
+export type StubRoutes = Record<
+  string,
+  StubRoute | ((init?: RequestInit) => StubRoute | Promise<StubRoute>)
+>
 
 export function stubApi(routes: StubRoutes) {
   const stub = vi.fn<typeof fetch>(async (input, init) => {
@@ -21,7 +27,7 @@ export function stubApi(routes: StubRoutes) {
     const route = routes[`${method} ${path}`]
     if (!route) return new Response(JSON.stringify({ detail: 'Not Found' }), { status: 404 })
     // 回 Promise 的替身讓請求停在半路：測「送出中」那一段用得到。
-    const resolved = typeof route === 'function' ? await route() : route
+    const resolved = typeof route === 'function' ? await route(init) : route
     const status = resolved.status ?? 200
     // 204 不能帶 body：`new Response('null', { status: 204 })` 會丟 TypeError，替身自己炸掉、
     // 呼叫端走進失敗分支——票 14 的刪除測試因此從來沒看到過「刪掉了」（票 14a）。

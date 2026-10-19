@@ -948,8 +948,11 @@ describe('qBittorrent 看不到 /data：頁 2 就紅（M4 票 46）', () => {
 
     const hint = screen.getByText(i18next.t('connect.probe', { root: '/data' }))
     expect(hint).toBeVisible()
-    expect(hint).toHaveTextContent('不觸發「torrent 完成時執行外部程式」')
-    expect(hint).toHaveTextContent('「torrent 加入時執行外部程式」')
+    expect(hint).toHaveTextContent('「torrent 完成時執行外部程式」不會觸發')
+    // 要使用者自己留意的那一件獨立一行（M4 票 104）。
+    expect(screen.getByText(i18next.t('connect.externalProgram'))).toHaveTextContent(
+      '「torrent 加入時執行外部程式」',
+    )
   })
 })
 

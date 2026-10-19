@@ -119,7 +119,9 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   //    九個裡有四個測試就沒過（替身的 `BLOCKED_SITES`），ACG.RIP 測過而加不進去（`FLAKY_SITES`，審計實測的
   //    Internet Archive）：結果逐站列出、兩種分開說。加入之後逐站 / 全部試搜，不要的移除；替身的 Mikan 演「搜尋時
   //    連不上」。再從「進階」的其他公開站加一個不在推薦清單上的。
-  await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: '先選 Prowlarr 是哪一台', level: 2 }),
+  ).toBeVisible()
   const atIndexers = writes.length
   await page.getByRole('radio', { name: /套件內/ }).click()
   const quick = page.getByTestId('recommended-sites')

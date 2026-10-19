@@ -157,7 +157,7 @@ describe('頁 2：qBittorrent', () => {
     // 剖面列出兩種各會做什麼，與頁 4 還沒選時同一個形狀（M4 票 81）。
     const plans = within(screen.getByText('將會做什麼').closest('section')!)
     expect(plans.getByText('設定介面登入 · 只建 Berth 自己的分類')).toBeInTheDocument()
-    expect(plans.getByText('只建 Berth 自己的分類 · 一個全域偏好都不寫')).toBeInTheDocument()
+    expect(plans.getByText('只建 Berth 自己的分類')).toBeInTheDocument()
     expect(called(stub, '/api/setup/qbittorrent/diff')).toBe(false)
     expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
@@ -325,7 +325,8 @@ describe('頁 2：qBittorrent', () => {
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     // 頁序還沒重讀回來（這裡的 status 一直是頁 2）時主鍵也不再冒出來：登入那一條已經過了（M4 票 38）。
     expect(screen.queryByRole('button', { name: '設定介面登入' })).not.toBeInTheDocument()
-    expect(screen.getByText(/這個泊位的事做完了/)).toBeInTheDocument()
+    // 做完了由登入那一條的「已完成」說，不再疊一則同樣是綠章的完成提示（M4 票 104）。
+    expect(screen.queryByText(/這個泊位的事做完了/)).not.toBeInTheDocument()
   })
 
   it('讀得到那一台的帳號、後端卻還沒記那一條時，主鍵送「登入照舊」把它記下（M4 票 38）', async () => {
@@ -437,7 +438,7 @@ describe('頁 2：qBittorrent', () => {
     expect(await screen.findByText('qBittorrent 介面的帳號：')).toHaveTextContent(
       'qBittorrent 介面的帳號： deckhand',
     )
-    expect(screen.getByText(/這個泊位的事做完了/)).toBeInTheDocument()
+    expect(screen.queryByText(/這個泊位的事做完了/)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(OWNER_PASSWORD)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^套用/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '設定介面登入' })).not.toBeInTheDocument()
@@ -1714,7 +1715,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await screen.findByRole('heading', { level: 2, name: '先選 Prowlarr 是哪一台' })
     await user.click(existingCard())
     // 頁 1、2 的 `ExistingForm`：它自己的那一句提示（M4 票 39）。
     expect(
@@ -1772,7 +1773,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await screen.findByRole('heading', { level: 2, name: '先選 Prowlarr 是哪一台' })
     await user.click(existingCard())
     await user.type(screen.getByLabelText('位址'), 'http://192.168.1.10:9696')
     await user.type(screen.getByLabelText('API key'), 'wrong')
@@ -1814,7 +1815,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await screen.findByRole('heading', { level: 2, name: '先選 Prowlarr 是哪一台' })
     const plans = within((await screen.findByText('將會做什麼')).closest('section')!)
     expect(plans.getByText('讀它的 API key · 替它加站、設介面登入')).toBeInTheDocument()
     expect(plans.getByText('用你貼的 API key · 用它已有的站，一站都不移除')).toBeInTheDocument()
@@ -1860,7 +1861,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await screen.findByRole('heading', { level: 2, name: '先選 Prowlarr 是哪一台' })
     await user.click(existingCard())
     // 只是展開表單、還沒測：還沒選。
     expect(screen.getByText('將會做什麼')).toBeInTheDocument()
@@ -1965,7 +1966,7 @@ describe('頁 4：Prowlarr 與索引站', () => {
     const user = userEvent.setup()
 
     renderInRoute(<SetupPage />)
-    await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+    await screen.findByRole('heading', { level: 2, name: '先選 Prowlarr 是哪一台' })
     await user.click(existingCard())
 
     const indexerKey = screen.getByLabelText('API key')

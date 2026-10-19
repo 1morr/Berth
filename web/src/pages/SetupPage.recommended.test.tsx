@@ -239,7 +239,8 @@ describe('頁 4 既有 Prowlarr 也有主鍵（M4 票 67，審計 C3、P2-10）'
     const block = within(await screen.findByTestId('recommended-sites'))
     const lede = block.getByText(/加進你在 nas:9696 的 Prowlarr/)
     expect(lede).toHaveTextContent('測試推薦的 9 個公開站（Nyaa.si、')
-    expect(lede).toHaveTextContent('Berth 不移除站')
+    // 「原本的站不動」由卡片說一次，這裡不再說（M4 票 104）。
+    expect(lede).not.toHaveTextContent('不移除')
     expect(screen.queryByTestId('prowlarr-login')).not.toBeInTheDocument()
     await user.click(block.getByRole('button', { name: RUN_LABEL }))
 
@@ -277,7 +278,7 @@ describe('頁 4 既有 Prowlarr 也有主鍵（M4 票 67，審計 C3、P2-10）'
 
       expect(
         block.getByText(/adds the ones that pass to your Prowlarr at nas:9696/),
-      ).toHaveTextContent('Berth does not remove sites')
+      ).not.toHaveTextContent('remove')
       expect(
         block.getByRole('button', { name: 'Test recommended sites and add the ones that pass' }),
       ).toBeVisible()
