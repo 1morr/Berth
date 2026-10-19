@@ -472,6 +472,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/rss/exclusions"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/exclusions"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/routes"): Access.ADMIN,
+    ("PUT", "/rss/feeds/*/interval"): Access.ADMIN,
     ("PUT", "/rss/series/*/exclusions"): Access.ADMIN,
     # 從 Media 頁訂閱（票 19）：詳情頁的「RSS 訂閱」整段只給 admin，同一組的理由。
     ("GET", "/rss/mikan/search"): Access.ADMIN,
