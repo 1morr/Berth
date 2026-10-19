@@ -940,11 +940,11 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   `border-2 border-rule` 的 `article`，標題帶 `deck` 底：作品名 `h3`（跟著 UI 語言）+ 右側 Route（`.value text-xs ink-dim`）；
   塊內的列 `well` 底、`gap-px` 透出 `rule`。一列：字幕組 `h4`（`.value`）+ 來源連結（`text-xs ink-dim` 底線，字是 Mikan 的
   番組名）→ 一行 `Dot` 分隔的件數（已入庫 · 在路上 · 排除，`.value`、中性；「在路上」與 `/jobs` 同一組）與「最近 E12 · `Timestamp`」（最近**發佈**的那一筆，
-  不是長出它的那一筆）· 自動綁定 → 第一批待確認時一塊 `assigned` 加那一句（與作品頁同一句）→ 原生 `<details>`（摘要是
+  不是長出它的那一筆）· 自動綁定 · Mikan 的才有補漏那一項（「上次補漏：3 小時前」的 `<time>` / 「尚未補漏」/ 完結的「已完結，不再補漏」，M4 票 108）→ 第一批待確認時一塊 `assigned` 加那一句（與作品頁同一句）→ 原生 `<details>`（摘要是
   `ExpandHint`，名字接字幕組）。展開：自動綁定的依據（`Grounds`，lead「依據」）→ 它的每一筆 Item（展開才讀，同「最近的
   Feed Item」的列、不帶來源那一行）→ `border-t-2` 隔開的 `.label`「進階」：季號 / 偏移、Series 層排除條件、就地確認的「解除
   綁定」——多半只想要 Feed 層的，所以收在這裡。**完結的**（後端照現況算的 `finished`）收在段尾預設收起的 `<details>`「已完結
-  N 個」，展開後是同一種作品塊；上面一個都不剩時一句「沒有還在追的 RSS Series」。已完結不塗漆。
+  N 個」，展開後是同一種作品塊；上面一個都不剩時一句「沒有還在追的 RSS Series」。已完結不塗漆。段落標題下一行 `text-sm ink-dim` 說每日補漏補什麼、完結就停，與訂閱 / 綁定確認那一句同一個 key。
 - **Feed 列（`FeedRow`）:** `well` 底 `article`，框平常 `rule`、這一輪讀不到時 `rule-strong`。來源中性色塊 + 名稱 `h3` →
   遮掉 token 的網址 → 一行 `text-xs ink-dim`：每 N 分鐘 · 上次輪詢 `Timestamp` · N 筆 ·（有指定時）送進 Route 名 →
   第一輪還沒選時一句 `ink`「第一輪還沒決定，一筆都不送」→ 讀不到時一塊 **`assigned`** 的 `Notice` 帶原文（卡住了、下一輪會再試，不是

@@ -186,7 +186,7 @@ export function SeriesBinder({
             <p className="value text-xs wrap-anywhere text-ink">{detail.folder_name || '—'}</p>
             <p className="max-w-prose text-xs text-ink-dim">
               {mikan
-                ? `${t('rss.bind.willSendSeason')} ${t('rss.bound.backfillLede')}`
+                ? t('rss.bind.willSendSeason')
                 : t('rss.bind.willSend', { count: series.waiting })}
             </p>
           </div>

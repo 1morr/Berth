@@ -289,7 +289,8 @@ function Latest({ row }: { row: RssSeries }) {
 
 /**
  * 每日補漏到哪了（plan §3.2、M4 票 108）：只有 Mikan 的有補漏。完結的停了，不說它多久沒補——
- * 那是停下來的結果，不是出了問題。
+ * 那是停下來的結果，不是出了問題。時間要嵌進翻好的句子（`{{when}}`），所以不用 `Timestamp`，
+ * 照它 `past` 的做法自己畫 `<time>`。
  */
 function Backfill({ row }: { row: RssSeries }) {
   const { t, i18n } = useTranslation()
@@ -297,7 +298,11 @@ function Backfill({ row }: { row: RssSeries }) {
   if (row.backfilled_at === null) return <>{t('rss.bound.backfillNever')}</>
   const moment = new Date(row.backfilled_at)
   return (
-    <time dateTime={row.backfilled_at} title={moment.toLocaleString(i18n.language)}>
+    <time
+      dateTime={row.backfilled_at}
+      title={moment.toLocaleString(i18n.language)}
+      className="value"
+    >
       {t('rss.bound.backfilled', { when: relativePast(moment, i18n.language) })}
     </time>
   )

@@ -1269,6 +1269,15 @@ describe('RSS 頁：每日補漏看得見（M4 票 108）', () => {
     expect(nyaa).not.toHaveTextContent(/補漏/)
   })
 
+  it.each(['zh-Hant', 'en'])('%s：訂閱與綁定確認句尾就是段落那一句（巢狀展開）', (lng) => {
+    const lede = i18next.t('rss.bound.backfillLede', { lng })
+    for (const key of ['rss.subscribe.season', 'rss.bind.willSendSeason'] as const) {
+      const text = i18next.t(key, { lng })
+      expect(text.endsWith(lede)).toBe(true)
+      expect(text).not.toContain('$t(')
+    }
+  })
+
   it('英文介面同樣三種，段落說明也是英文', async () => {
     render({
       'GET /api/rss/series': {
@@ -1287,16 +1296,16 @@ describe('RSS 頁：每日補漏看得見（M4 票 108）', () => {
       const region = await screen.findByRole('region', { name: /RSS Series/ })
       expect(within(region).getByText(/whole season list read again once a day/)).toBeVisible()
       expect(within(region).getByRole('article', { name: 'LoliHouse' })).toHaveTextContent(
-        `Last catch-up: ${relativePast(new Date(at), 'en')}`,
+        `Last daily backfill: ${relativePast(new Date(at), 'en')}`,
       )
       expect(within(region).getByRole('article', { name: 'ANi' })).toHaveTextContent(
-        'Not caught up yet',
+        'No daily backfill yet',
       )
       expect(within(region).getByRole('article', { name: 'Done' })).toHaveTextContent(
-        'Finished, no more catch-ups',
+        'Finished, no more daily backfills',
       )
       expect(within(region).getByRole('article', { name: 'SubsPlease' })).not.toHaveTextContent(
-        /catch-up|caught up/,
+        /backfill/,
       )
     } finally {
       await i18next.changeLanguage('zh-Hant')

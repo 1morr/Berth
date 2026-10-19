@@ -27,8 +27,8 @@ from berth.domain import (
     SkipReason,
     Tags,
 )
-from berth.parser import QUIET_AFTER
 from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSeries
+from berth.parser import QUIET_AFTER
 from berth.services.rss import bind_series, list_series, poll_feed
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, routed_feed, series_by_key
