@@ -80,6 +80,8 @@ from berth.domain import (
     collection_type_for,
     skipped,
 )
+from berth.models import DEFAULT_INTERVAL_SEC as DEFAULT_INTERVAL_SEC
+from berth.models import FEED_INTERVALS as FEED_INTERVALS
 from berth.models import (
     Job,
     LedgerEntry,
@@ -91,8 +93,6 @@ from berth.models import (
     RssSettings,
     parse_media_id,
 )
-from berth.models import DEFAULT_INTERVAL_SEC as DEFAULT_INTERVAL_SEC
-from berth.models import FEED_INTERVALS as FEED_INTERVALS
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import plan as decide

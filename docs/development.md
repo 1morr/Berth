@@ -313,7 +313,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | `/review` 確認一筆 audit | `review` | 8493 |
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
-| `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
+| `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
 | `/rss` 新的 acg.rip 搜尋 feed：第一輪停在預覽、合集在「排除」那一組，選「只追之後的」之後整份歷史略過 | `rss` | 8488 / 8489 |
