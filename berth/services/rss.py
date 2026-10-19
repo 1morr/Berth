@@ -91,6 +91,8 @@ from berth.models import (
     RssSettings,
     parse_media_id,
 )
+from berth.models import DEFAULT_INTERVAL_SEC as DEFAULT_INTERVAL_SEC
+from berth.models import FEED_INTERVALS as FEED_INTERVALS
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import plan as decide
@@ -424,8 +426,11 @@ async def add_feed(
     tv_route_id: int | None = None,
     movie_route_id: int | None = None,
     exclusions: Sequence[str] = (),
+    interval_sec: int = DEFAULT_INTERVAL_SEC,
 ) -> FeedView:
     """加一個 Feed。不當場輪詢——畫面上那一顆「立即輪詢」與背景迴圈會做，這一支只記下來。
+
+    間隔只收 `FEED_INTERVALS` 的檔位（`interval_unsupported`，M4 票 109）。
 
     排除條件可以一起給（M4 票 110）：Mikan 不預覽、第一輪就自動綁定送單，
     加完再設的擋不到已經送出的。
@@ -441,12 +446,14 @@ async def add_feed(
         raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    _check_interval(interval_sec)
     await _check_routes(session, KindRoutes(tv=tv_route_id, movie=movie_route_id))
     rules = _normalized_rules(exclusions)
     row = RssFeed(
         name=name.strip() or _default_name(url),
         url=url,
         kind=kind,
+        interval_sec=interval_sec,
         primed_at=utcnow() if kind in _NO_PREVIEW else None,
         tv_route_id=tv_route_id,
         movie_route_id=movie_route_id,
@@ -459,6 +466,24 @@ async def add_feed(
         await session.rollback()
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url) from exc
     return _feed_view(row, 0, KindCounts())
+
+
+def _check_interval(interval_sec: int) -> None:
+    if interval_sec not in FEED_INTERVALS:
+        raise RssRejectedError(RssRefusal.INTERVAL_UNSUPPORTED, str(interval_sec))
+
+
+@command(Effect.REVERSIBLE)
+async def set_feed_interval(session: AsyncSession, feed_id: int, interval_sec: int) -> FeedView:
+    """改這個 Feed 的輪詢間隔（M4 票 109）。不當場輪：下一輪照 `poll_due` 的算法，是上一輪
+    （`last_polled_at`）加上新的間隔。"""
+    row = await session.get(RssFeed, feed_id)
+    if row is None:
+        raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
+    _check_interval(interval_sec)
+    row.interval_sec = interval_sec
+    await session.commit()
+    return await _feed_view_of(session, feed_id)
 
 
 @command(Effect.REVERSIBLE)

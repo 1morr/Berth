@@ -1142,6 +1142,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/feeds/{feed_id}/interval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Feed Interval
+         * @description 改這個 Feed 的輪詢間隔（M4 票 109）。不當場輪：下一輪是上一輪加上新的間隔。
+         */
+        put: operations["put_feed_interval_api_rss_feeds__feed_id__interval_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/feeds/{feed_id}": {
         parameters: {
             query?: never;
@@ -2855,6 +2875,23 @@ export interface components {
             movie_route?: number | null;
             /** Exclusions */
             exclusions?: string[];
+            /**
+             * Interval Sec
+             * @default 900
+             * @enum {integer}
+             */
+            interval_sec?: 900 | 1800 | 3600 | 10800 | 21600 | 43200 | 86400;
+        };
+        /**
+         * FeedIntervalIn
+         * @description 改 Feed 的輪詢間隔；檔位同 `POST /rss/feeds`。
+         */
+        FeedIntervalIn: {
+            /**
+             * Interval Sec
+             * @enum {integer}
+             */
+            interval_sec: 900 | 1800 | 3600 | 10800 | 21600 | 43200 | 86400;
         };
         /**
          * FeedItemStatus
@@ -4882,7 +4919,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "item_missing" | "item_not_excluded" | "series_unbound" | "feed_unprimed";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "item_missing" | "item_not_excluded" | "series_unbound" | "feed_unprimed" | "interval_unsupported";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -8053,7 +8090,7 @@ export interface operations {
                     "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
-            /** @description `feed_unsupported` · `route_missing` · `route_kind_mismatch` · `route_required` · `rule_invalid` */
+            /** @description `feed_unsupported` · `route_missing` · `route_kind_mismatch` · `route_required` · `rule_invalid` · `interval_unsupported` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8107,6 +8144,50 @@ export interface operations {
                 };
             };
             /** @description `route_missing` · `route_kind_mismatch` · `route_required` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    put_feed_interval_api_rss_feeds__feed_id__interval_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feed_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedIntervalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description `feed_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description `interval_unsupported` */
             422: {
                 headers: {
                     [name: string]: unknown;

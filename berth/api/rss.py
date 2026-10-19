@@ -10,10 +10,10 @@ plan 原本那一組 `rss/rules` 在 2026-09-24 改成 RSS Series（brief §15�
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.errors import refusal_responses
@@ -34,6 +34,8 @@ from berth.domain import (
 from berth.services.bangumi import read_bangumi, search_bangumi
 from berth.services.oneshot import read_oneshot
 from berth.services.rss import (
+    DEFAULT_INTERVAL_SEC,
+    FEED_INTERVALS,
     RssRejectedError,
     add_feed,
     bind_series,
@@ -49,6 +51,7 @@ from berth.services.rss import (
     release_item,
     set_exclusions,
     set_feed_exclusions,
+    set_feed_interval,
     set_feed_routes,
     set_series_exclusions,
     subscribe_mikan,
@@ -90,6 +93,7 @@ _STATUS: dict[RssRefusal, int] = {
     RssRefusal.SERIES_UNBOUND: status.HTTP_409_CONFLICT,
     #: 先選第一輪再放行。
     RssRefusal.FEED_UNPRIMED: status.HTTP_409_CONFLICT,
+    RssRefusal.INTERVAL_UNSUPPORTED: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -162,6 +166,11 @@ class FeedOut(BaseModel):
     awaiting_route: KindCountsOut
 
 
+#: 輪詢間隔的秒數，只收固定檔位（M4 票 109）。檔位寫進 schema 的 `enum`，畫面的型別跟著它；
+#: 檢查在命令裡（422 `interval_unsupported`），拒絕的形狀才與其他 `/rss` 的一樣。
+FeedInterval = Annotated[int, WithJsonSchema({"type": "integer", "enum": list(FEED_INTERVALS)})]
+
+
 class FeedIn(BaseModel):
     """加一個 Feed。來源種類由網址的主機認出來：Mikan、Nyaa、acg.rip。"""
 
@@ -176,6 +185,14 @@ class FeedIn(BaseModel):
     #: 選填，與 Feed 一起存（M4 票 110）：Mikan 不預覽、第一輪就送單，要排除的得在這裡給。
     #: 寫壞的那一條讓整個 Feed 都不加（422 `rule_invalid`，同 `PUT /rss/feeds/{id}/exclusions`）。
     exclusions: list[str] = Field(default_factory=list)
+    #: 選填，預設 15 分鐘。
+    interval_sec: FeedInterval = DEFAULT_INTERVAL_SEC
+
+
+class FeedIntervalIn(BaseModel):
+    """改 Feed 的輪詢間隔；檔位同 `POST /rss/feeds`。"""
+
+    interval_sec: FeedInterval
 
 
 class FeedRoutesIn(BaseModel):
@@ -467,6 +484,7 @@ async def get_feeds(session: SessionDep) -> list[FeedOut]:
         RssRefusal.ROUTE_KIND_MISMATCH,
         RssRefusal.ROUTE_REQUIRED,
         RssRefusal.RULE_INVALID,
+        RssRefusal.INTERVAL_UNSUPPORTED,
     ),
 )
 async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
@@ -479,6 +497,7 @@ async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
             tv_route_id=body.tv_route,
             movie_route_id=body.movie_route,
             exclusions=body.exclusions,
+            interval_sec=body.interval_sec,
         )
         return FeedOut.model_validate(view)
     except RssRejectedError as refusal:
@@ -512,6 +531,18 @@ async def put_feed_routes(
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
     return FeedRoutesOut.model_validate(outcome)
+
+
+@router.put(
+    "/feeds/{feed_id}/interval",
+    responses=_responses(RssRefusal.FEED_MISSING, RssRefusal.INTERVAL_UNSUPPORTED),
+)
+async def put_feed_interval(session: SessionDep, feed_id: int, body: FeedIntervalIn) -> FeedOut:
+    """改這個 Feed 的輪詢間隔（M4 票 109）。不當場輪：下一輪是上一輪加上新的間隔。"""
+    try:
+        return FeedOut.model_validate(await set_feed_interval(session, feed_id, body.interval_sec))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
 
 
 @router.delete("/feeds/{feed_id}", responses=_responses(RssRefusal.FEED_MISSING))
