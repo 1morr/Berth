@@ -389,6 +389,66 @@ class TestChoosingRoutesLater:
         assert missing.json()["detail"]["reason"] == "feed_missing"
 
 
+class TestPollInterval:
+    """M4 票 109：每個 Feed 自己的輪詢間隔，只收固定檔位（照 FreshRSS，單一 Feed 下限 15 分鐘）。"""
+
+    def test_adding_takes_a_choice_and_defaults_to_fifteen_minutes(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        plain = add(client, route_id)
+        hourly = client.post(
+            "/api/rss/feeds",
+            json={"url": ACGRIP_URL, "tv_route": route_id, "interval_sec": 3600},
+            headers=BROWSER,
+        )
+
+        assert plain["interval_sec"] == 900
+        assert hourly.status_code == 201, hourly.text
+        assert hourly.json()["interval_sec"] == 3600
+
+    def test_adding_off_the_choices_is_422_and_adds_nothing(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        refused = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "interval_sec": 60},
+            headers=BROWSER,
+        )
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == {"reason": "interval_unsupported", "detail": "60"}
+        assert client.get("/api/rss/feeds").json() == []
+
+    def test_changing_it_later(self, client: TestClient, roots: dict[str, Path]) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        feed = add(client, route_id)
+
+        changed = client.put(
+            f"/api/rss/feeds/{feed['id']}/interval", json={"interval_sec": 86400}, headers=BROWSER
+        )
+        refused = client.put(
+            f"/api/rss/feeds/{feed['id']}/interval", json={"interval_sec": 1000}, headers=BROWSER
+        )
+        missing = client.put(
+            "/api/rss/feeds/999/interval", json={"interval_sec": 900}, headers=BROWSER
+        )
+
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["interval_sec"] == 86400
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == {"reason": "interval_unsupported", "detail": "1000"}
+        assert missing.status_code == 404
+        assert missing.json()["detail"]["reason"] == "feed_missing"
+        assert client.get("/api/rss/feeds").json()[0]["interval_sec"] == 86400
+
+
 class TestTheFirstRound:
     """新搜尋 feed 的第一輪預覽（票 11）：預覽 → 選「只追之後的」→ 再選一次是 409。"""
 

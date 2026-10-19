@@ -1585,3 +1585,5 @@ class RssRefusal(StrEnum):
     #: 這一筆的 Feed 還在第一輪預覽（`primed_at` 是 `NULL`）：先選「全部下載」或「只追之後的」
     #: （M4 票 111）。
     FEED_UNPRIMED = "feed_unprimed"
+    #: 輪詢間隔不在固定檔位裡（`models.rss.FEED_INTERVALS`，M4 票 109）。`detail` 是給的秒數。
+    INTERVAL_UNSUPPORTED = "interval_unsupported"

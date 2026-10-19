@@ -7,6 +7,9 @@ import type { Schemas } from './schemas'
 /** 一個 Feed（`berth/api/rss.py` 的 `FeedOut`）。 */
 export type Feed = Schemas['FeedOut']
 
+/** 輪詢間隔的一個檔位（秒）：後端 `models.rss.FEED_INTERVALS` 經 OpenAPI 的 `enum` 到這裡（M4 票 109）。 */
+export type FeedInterval = Schemas['FeedIntervalIn']['interval_sec']
+
 /** 劇集、電影各一條 Route 的 id（M4 票 105）：Feed 的兩格、RSS Series 的 `feed_routes`。 */
 export type KindRoutes = Schemas['KindRoutesOut']
 
@@ -86,6 +89,7 @@ const REASONS: ReasonSet<RssRefusal> = {
   item_not_excluded: true,
   series_unbound: true,
   feed_unprimed: true,
+  interval_unsupported: true,
 }
 
 export function parseRssRefusal(error: unknown) {
@@ -197,14 +201,26 @@ export function primeFeed(id: number, mode: PrimeMode) {
   return apiPost<PrimeOutcome>(`/rss/feeds/${id}/prime`, { mode })
 }
 
-export function addFeed(url: string, name: string, routes: KindRoutes, exclusions: string[]) {
+export function addFeed(
+  url: string,
+  name: string,
+  routes: KindRoutes,
+  exclusions: string[],
+  interval: FeedInterval,
+) {
   return apiPost<Feed>('/rss/feeds', {
     url,
     name,
     tv_route: routes.tv,
     movie_route: routes.movie,
     exclusions,
+    interval_sec: interval,
   })
+}
+
+/** 改輪詢間隔（M4 票 109）。不當場輪：下一輪是上一輪加上新的間隔。 */
+export function setFeedInterval(id: number, interval: FeedInterval) {
+  return apiPut<Feed>(`/rss/feeds/${id}/interval`, { interval_sec: interval })
 }
 
 export function setFeedRoutes(id: number, routes: KindRoutes) {
