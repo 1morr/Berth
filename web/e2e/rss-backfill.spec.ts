@@ -29,6 +29,10 @@ test('中途訂閱的一部：綁定時補舊集，整季都進下載列表', as
   // 補下來的寫成聚合 Feed 的 Item：最近的 Feed Item 裡 01–12 都送出去了。
   const items = page.getByRole('region', { name: '最近的 Feed Item' })
   await expect(items.getByRole('link', { name: '看這一筆下載' })).toHaveCount(12)
+  // 補漏看得見（M4 票 108）：段落說明每天補什麼，那一列說上次補漏是什麼時候。
+  const series = page.getByRole('region', { name: /RSS Series/ })
+  await expect(series.getByText(/每天再讀一次它在 Mikan 上的整季清單/)).toBeVisible()
+  await expect(series.getByRole('article', { name: /LoliHouse/ })).toContainText('上次補漏：')
   await shot(page, '2-bound')
 
   // 入庫了的不在預設的「在路上」（M4 票 04）：看全部。

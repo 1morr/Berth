@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,8 @@ from berth.domain import (
     Tags,
 )
 from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssItem, RssSeries
-from berth.services.rss import bind_series, poll_feed
+from berth.parser import QUIET_AFTER
+from berth.services.rss import bind_series, list_series, poll_feed
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import FEED_URL, KIMI_KEY, NOW, harbour, routed_feed, series_by_key
 from tests.integration.test_rss_auto_bind import moored
@@ -36,6 +37,7 @@ from tests.integration.test_rss_screen import (
     SINGLE,
     SINGLE_URL,
     Release,
+    mikan_feed,
     release,
     serve,
     serve_single,
@@ -260,3 +262,54 @@ class TestDailyBackfill:
         assert KIMI_KEY in row.last_error
         series = await session.get(RssSeries, series_id)
         assert series is not None and series.backfilled_at == NOW
+
+
+def published_on(releases: list[Release], moment: datetime) -> bytes:
+    """`mikan_feed` 那一份，發佈時間改成 `moment`（Mikan 寫的是沒有時區的本地時間）。"""
+    stamp = moment.strftime("%Y-%m-%dT%H:%M:%S")
+    return mikan_feed(releases).replace(b"2026-09-24T16:08:01", stamp.encode())
+
+
+class TestFinishedStopsBackfill:
+    """完結的 RSS Series 不再每天讀單一 feed（M4 票 108）；完結照現況算，新的一筆出現就恢復。"""
+
+    async def test_a_finished_series_is_not_read_until_a_new_release_appears(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
+        )
+        # 最近一筆之後 30 天沒有新的：完結（`QUIET_AFTER`）。
+        quiet = NOW + QUIET_AFTER + timedelta(days=1)
+        factory.rss_.requested.clear()
+        await poll_feed(session, factory, feed_id, now=quiet)
+        assert feeds_read(factory) == [FEED_URL]
+        series = await session.get(RssSeries, series_id)
+        assert series is not None and series.backfilled_at == NOW
+        # 畫面看得到它停了：完結、上次補漏停在最後一次。
+        (view,) = [one for one in await list_series(session, now=quiet) if one.id == series_id]
+        assert (view.finished, view.backfilled_at) == (True, NOW)
+
+        # 新的一筆出現在聚合 feed：不再完結，同一輪就補漏。
+        thirteen = release(370, "喵萌奶茶屋&LoliHouse", "13")
+        serve(factory, FEED_URL, [thirteen])
+        factory.rss_.pages[FEED_URL] = published_on([thirteen], quiet)
+        factory.rss_.requested.clear()
+        await poll_feed(session, factory, feed_id, now=quiet + timedelta(hours=1))
+        # 新的那一筆的單集頁也會讀（認它屬於哪個 Series），補漏讀的是最後那一個單一 feed。
+        assert feeds_read(factory)[-1] == SINGLE_URL
+        await session.refresh(series)
+        assert series.backfilled_at == quiet + timedelta(hours=1)
+
+    async def test_an_unfinished_series_a_day_later_is_still_read(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """變異的另一面：還沒安靜滿 `QUIET_AFTER` 的照舊每天補。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
+        )
+        factory.rss_.requested.clear()
+        await poll_feed(session, factory, feed_id, now=NOW + timedelta(days=2))
+        assert feeds_read(factory) == [FEED_URL, SINGLE_URL]

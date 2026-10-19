@@ -3094,7 +3094,7 @@ const zhHant = {
       boundElsewhere: '已經綁在另一部作品上（{{id}}）',
       // 整季一律補（M4 票 78）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
       season:
-        '訂閱之後讀這個字幕組在 Mikan 上的整季，一起送到 qBittorrent；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+        '訂閱之後讀這個字幕組在 Mikan 上的整季，一起送到 qBittorrent；媒體庫已經有、或已經下載過的跳過。$t(rss.bound.backfillLede)',
       confirm: '訂閱並送出',
       subscribing: '訂閱中…',
       subscribed_one: '已訂閱，送出 {{count}} 集。',
@@ -3245,7 +3245,7 @@ const zhHant = {
       confirm_other: '綁定並送出 {{count}} 集',
       // Mikan 的 RSS Series 一律補舊集（票 12、M4 票 78）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
       willSendSeason:
-        '綁定之後讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+        '綁定之後讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。$t(rss.bound.backfillLede)',
       confirmSeason: '綁定並送出',
       binding: '綁定中…',
       kind: { tv: '劇集', movie: '電影' },
@@ -3281,6 +3281,12 @@ const zhHant = {
       finished_other: '已完結 {{count}} 個',
       finishedLede: '播完而且都入庫了，或 30 天沒有新的一筆。紀錄留著，新的一筆出現時回到上面。',
       allFinished: '沒有還在追的 RSS Series。',
+      // 每日補漏（plan §3.2、M4 票 108）：段落說明與訂閱 / 綁定確認（`$t()` 巢狀）共用這一句，說法不會分岔。
+      backfillLede:
+        '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。',
+      backfilled: '上次補漏：{{when}}',
+      backfillNever: '尚未補漏',
+      backfillStopped: '已完結，不再補漏',
       items: '它的 Feed Item',
       itemsLoading: '正在讀它的 Feed Item…',
       itemsReadFailed: '讀不到它的 Feed Item。',
@@ -6470,7 +6476,7 @@ const en: Translations<typeof zhHant> = {
       boundHere: 'Already subscribed for this title',
       boundElsewhere: 'Already bound to another title ({{id}})',
       season:
-        "Subscribing reads this group's whole season on Mikan and sends it to qBittorrent; episodes already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+        "Subscribing reads this group's whole season on Mikan and sends it to qBittorrent; episodes already in the library or already downloaded are skipped. $t(rss.bound.backfillLede)",
       confirm: 'Subscribe and send',
       subscribing: 'Subscribing…',
       subscribed_one: 'Subscribed; sent {{count}} episode.',
@@ -6628,7 +6634,7 @@ const en: Translations<typeof zhHant> = {
       confirm_one: 'Bind and send {{count}} episode',
       confirm_other: 'Bind and send {{count}} episodes',
       willSendSeason:
-        "Binding reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+        "Binding reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. $t(rss.bound.backfillLede)",
       confirmSeason: 'Bind and send',
       binding: 'Binding…',
       kind: { tv: 'Series', movie: 'Film' },
@@ -6662,6 +6668,11 @@ const en: Translations<typeof zhHant> = {
       finishedLede:
         'Aired out and all in the library, or nothing new for 30 days. The record stays; a new item brings it back up.',
       allFinished: 'No RSS Series is still being followed.',
+      backfillLede:
+        "Each bound Mikan group has its whole season list read again once a day, to catch episodes the feed polling missed (while Berth was down, for example); this stops once it's finished.",
+      backfilled: 'Last daily backfill: {{when}}',
+      backfillNever: 'No daily backfill yet',
+      backfillStopped: 'Finished, no more daily backfills',
       items: 'Its feed items',
       itemsLoading: 'Reading its feed items…',
       itemsReadFailed: "Can't read its feed items.",

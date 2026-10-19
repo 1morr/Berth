@@ -14,6 +14,7 @@ import { Dot } from '../components/Dot'
 import { episodeCode } from '../components/episodes'
 import { ExpandHint } from '../components/ExpandHint'
 import { RequestFailed } from '../components/RequestFailed'
+import { relativePast } from '../components/relativeTime'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { firstBatchAskText } from './firstBatchAsk'
@@ -57,6 +58,7 @@ export function SeriesSection({
         label={t('rss.bound.title')}
         count={{ value: following, spoken: t('rss.bound.count', { count: following }) }}
       />
+      <p className="max-w-prose text-sm text-ink-dim">{t('rss.bound.backfillLede')}</p>
       {active.length === 0 ? (
         <p className="max-w-prose text-sm text-ink-dim">{t('rss.bound.allFinished')}</p>
       ) : (
@@ -174,6 +176,12 @@ function SeriesRow({
             <Dot /> {t('rss.bound.automatic')}
           </>
         )}
+        {row.mikan_bangumi_id !== null && (
+          <>
+            {' '}
+            <Dot /> <Backfill row={row} />
+          </>
+        )}
       </p>
 
       {/* 第一批還在等人（M4 票 11）：與作品頁、審核頁那一組說同一句。 */}
@@ -276,6 +284,27 @@ function Latest({ row }: { row: RssSeries }) {
         </>
       )}
     </span>
+  )
+}
+
+/**
+ * 每日補漏到哪了（plan §3.2、M4 票 108）：只有 Mikan 的有補漏。完結的停了，不說它多久沒補——
+ * 那是停下來的結果，不是出了問題。時間要嵌進翻好的句子（`{{when}}`），所以不用 `Timestamp`，
+ * 照它 `past` 的做法自己畫 `<time>`。
+ */
+function Backfill({ row }: { row: RssSeries }) {
+  const { t, i18n } = useTranslation()
+  if (row.finished) return <>{t('rss.bound.backfillStopped')}</>
+  if (row.backfilled_at === null) return <>{t('rss.bound.backfillNever')}</>
+  const moment = new Date(row.backfilled_at)
+  return (
+    <time
+      dateTime={row.backfilled_at}
+      title={moment.toLocaleString(i18n.language)}
+      className="value"
+    >
+      {t('rss.bound.backfilled', { when: relativePast(moment, i18n.language) })}
+    </time>
   )
 }
 

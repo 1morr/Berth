@@ -18,6 +18,8 @@ test('詳情頁訂閱 Mikan 番組 × 字幕組，再建 acg.rip 搜尋 feed 看
   await block.getByRole('button', { name: /LoliHouse/ }).click()
   await block.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
   await expect(block.getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeVisible()
+  // 每日補漏說得出補什麼、完結就停（M4 票 108），與 /rss 的 RSS Series 段落同一句。
+  await expect(block.getByText(/讀這個字幕組在 Mikan 上的整季/)).toContainText('完結之後就不再讀')
   await shot(page, '1-mikan-picked')
   await block.getByRole('button', { name: '訂閱並送出' }).click()
 

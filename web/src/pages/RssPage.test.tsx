@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Media } from '../api/media'
 import type { Feed, FeedItem, OneshotItem, RssSeries } from '../api/rss'
 import type { ManagedRoute } from '../api/routes'
+import { relativePast } from '../components/relativeTime'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -96,6 +97,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     active: 0,
     excluded: 0,
     finished: false,
+    backfilled_at: null,
     submitted: 0,
     ask: null,
     ...overrides,
@@ -406,7 +408,8 @@ describe('RSS 頁', () => {
     expect(within(row).getByRole('combobox')).toHaveValue('3')
     // Mikan 的 RSS Series 一律補舊集（票 12、M4 票 78）：沒有勾選；幾集要讀了才知道，鍵上不說總數。
     expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument()
-    expect(within(row).getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeInTheDocument()
+    // 每日補漏與 RSS Series 段落的說明同一句（M4 票 108）。
+    expect(within(row).getByText(/讀這個字幕組在 Mikan 上的整季/)).toHaveTextContent(BACKFILL_LEDE)
     await userEvent.click(within(row).getByRole('button', { name: '綁定並送出' }))
 
     await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
@@ -1214,6 +1217,100 @@ const ANI = boundKimi({
   active: 0,
   excluded: 2,
   latest_episode: 4,
+})
+
+/** 每日補漏的說明（M4 票 108）：RSS Series 段落、綁定確認、作品頁的訂閱確認說同一句。 */
+const BACKFILL_LEDE =
+  '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。'
+
+/** 綁好的非 Mikan RSS Series：沒有單一 feed，也就沒有補漏。 */
+const NYAA = boundKimi({
+  id: 10,
+  key: 'nyaa:subsplease kimi',
+  mikan_bangumi_id: null,
+  mikan_subgroup_id: null,
+  mikan_bangumi_name: '',
+  mikan_subgroup_name: '',
+  source: 'nyaa',
+  group: 'SubsPlease',
+})
+
+describe('RSS 頁：每日補漏看得見（M4 票 108）', () => {
+  const at = new Date(Date.now() - 3 * 3600_000).toISOString()
+
+  it('Mikan 的一列說上次補漏、尚未補漏、已完結不再補漏；非 Mikan 的不說', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          boundKimi({ backfilled_at: at }),
+          { ...ANI, backfilled_at: null },
+          boundKimi({
+            id: 11,
+            key: 'mikan:4009:1',
+            mikan_subgroup_name: 'Done',
+            finished: true,
+            backfilled_at: at,
+          }),
+          NYAA,
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    const region = await screen.findByRole('region', { name: /RSS Series/ })
+    expect(within(region).getByText(BACKFILL_LEDE)).toBeVisible()
+    const loli = within(region).getByRole('article', { name: 'LoliHouse' })
+    expect(loli).toHaveTextContent(`上次補漏：${relativePast(new Date(at), 'zh-Hant')}`)
+    expect(within(region).getByRole('article', { name: 'ANi' })).toHaveTextContent('尚未補漏')
+    const done = within(region).getByRole('article', { name: 'Done' })
+    expect(done).toHaveTextContent('已完結，不再補漏')
+    expect(done).not.toHaveTextContent('上次補漏')
+    const nyaa = within(region).getByRole('article', { name: 'SubsPlease' })
+    expect(nyaa).not.toHaveTextContent(/補漏/)
+  })
+
+  it.each(['zh-Hant', 'en'])('%s：訂閱與綁定確認句尾就是段落那一句（巢狀展開）', (lng) => {
+    const lede = i18next.t('rss.bound.backfillLede', { lng })
+    for (const key of ['rss.subscribe.season', 'rss.bind.willSendSeason'] as const) {
+      const text = i18next.t(key, { lng })
+      expect(text.endsWith(lede)).toBe(true)
+      expect(text).not.toContain('$t(')
+    }
+  })
+
+  it('英文介面同樣三種，段落說明也是英文', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          boundKimi({ backfilled_at: at }),
+          { ...ANI, backfilled_at: null },
+          boundKimi({ id: 11, key: 'mikan:4009:1', mikan_subgroup_name: 'Done', finished: true }),
+          NYAA,
+        ],
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const region = await screen.findByRole('region', { name: /RSS Series/ })
+      expect(within(region).getByText(/whole season list read again once a day/)).toBeVisible()
+      expect(within(region).getByRole('article', { name: 'LoliHouse' })).toHaveTextContent(
+        `Last daily backfill: ${relativePast(new Date(at), 'en')}`,
+      )
+      expect(within(region).getByRole('article', { name: 'ANi' })).toHaveTextContent(
+        'No daily backfill yet',
+      )
+      expect(within(region).getByRole('article', { name: 'Done' })).toHaveTextContent(
+        'Finished, no more daily backfills',
+      )
+      expect(within(region).getByRole('article', { name: 'SubsPlease' })).not.toHaveTextContent(
+        /backfill/,
+      )
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
 })
 
 describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {

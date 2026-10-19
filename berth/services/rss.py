@@ -316,6 +316,9 @@ class SeriesView:
     #: 完結了（`parser.series_finished`）：RSS 頁收進「已完結」。紀錄照舊，新的一筆出現時自己
     #: 變回 `False`。
     finished: bool
+    #: 上一次讀它的 Mikan 單一 feed 補舊集或補漏的那一刻；還沒補過、或不是 Mikan 的是 `None`
+    #: （M4 票 108）。
+    backfilled_at: datetime | None
     #: 這一次呼叫送出去了幾筆。只有 `bind_series` 回的那一份有意義，清單上一律是 0。
     submitted: int = 0
     #: 還沒確認時，第一批在問人什麼（M4 票 11，`first_batch.asks`）：作品頁的「第一批待確認」帶
@@ -1141,8 +1144,9 @@ async def _backfill(
 async def _backfill_due(
     session: AsyncSession, factory: ServiceClientFactory, feed_id: int, moment: datetime
 ) -> None:
-    """每日補漏：這個 Feed 是 home 的、綁好的 Mikan RSS Series，上次補過滿一天（或還沒補過）的各讀
-    一次單一 feed（plan §3.2）。
+    """每日補漏：這個 Feed 是 home 的、綁好的 Mikan RSS Series，上次補過滿一天（或還沒補過）、
+    而且還沒完結的各讀一次單一 feed（plan §3.2、M4 票 108）。完結照現況算（`_finished`），
+    新的一筆出現時條件自己不成立，補漏也就恢復。
 
     讀不到的那一個記在這個 Feed 的 `last_error`、`backfilled_at` 不動，下一輪再試；一個讀不到不拖累
     其他的。補下來的由 `poll_feed` 最後那一次 `_submit_waiting` 送出。
@@ -1166,7 +1170,7 @@ async def _backfill_due(
     failures: list[str] = []
     for series in list(due):
         home = await _home_feed(session, series)
-        if home is None or home.id != feed_id:
+        if home is None or home.id != feed_id or await _finished_now(session, series, moment):
             continue
         season = await _read_season(factory, series)
         if isinstance(season, str):
@@ -2105,6 +2109,7 @@ async def _series_view(
         active=tally.active,
         excluded=tally.excluded,
         finished=finished,
+        backfilled_at=row.backfilled_at,
         ask=asked.get(row.id),
     )
 
@@ -2146,6 +2151,13 @@ async def _tally(session: AsyncSession, series_id: int) -> _Tally:
         elif state in _ACTIVE_JOBS:
             active += number
     return _Tally(waiting=waiting, imported=imported, active=active, excluded=excluded)
+
+
+async def _finished_now(session: AsyncSession, row: RssSeries, moment: datetime) -> bool:
+    """`_finished` 自己讀作品與各狀態的筆數：畫面以外（每日補漏）要問完結了沒時用。"""
+    media = await session.get(Media, row.media_id) if row.media_id is not None else None
+    snapshot = media.snapshot() if media is not None else None
+    return await _finished(session, row, snapshot, await _tally(session, row.id), moment)
 
 
 async def _finished(

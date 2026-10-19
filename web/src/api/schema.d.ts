@@ -5110,6 +5110,8 @@ export interface components {
             excluded: number;
             /** Finished */
             finished: boolean;
+            /** Backfilled At */
+            backfilled_at: string | null;
             /** Submitted */
             submitted: number;
             ask: components["schemas"]["FirstBatchAskOut"] | null;
