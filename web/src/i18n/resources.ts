@@ -3133,6 +3133,11 @@ const zhHant = {
       feed_unread: '這個 Feed 還沒讀過。先按「立即輪詢」看過第一輪再選。',
       feed_not_rss:
         '讀到了，但那不是 RSS。多半是貼了網頁的網址：到站上找它的 RSS 連結（Mikan 番組頁字幕組旁的 RSS 圖示、Nyaa 搜尋結果頁的 RSS 鍵）。',
+      // 「仍然下載」（M4 票 111）：後兩句也是按鈕停用時說的原因。
+      item_missing: '這一筆已經不在了，多半是它的 Feed 剛被刪掉。',
+      item_not_excluded: '這一筆已經不是被排除的了，多半是另一個分頁剛放行。',
+      series_unbound: '它的 RSS Series 還沒綁定作品：先綁定，才知道要送進哪裡。',
+      feed_unprimed: '它的 Feed 還在等第一輪的決定：先選「全部下載」或「只追之後的」。',
     },
     feeds: {
       title: 'Feed',
@@ -3426,6 +3431,10 @@ const zhHant = {
       from: '來自',
       work: '{{work}} × {{group}}',
       unbound: '待綁定',
+      // 被排除的那一筆逐筆放行，當場送出（M4 票 111）。
+      release: '仍然下載',
+      releasing: '送出中…',
+      releaseFailed: '仍然下載沒送出，這一筆還是排除：',
       status: {
         unbound: '待綁定',
         matched: '待送出',
@@ -6490,6 +6499,12 @@ const en: Translations<typeof zhHant> = {
         "This feed hasn't been read yet. Press Poll now to see its first round before choosing.",
       feed_not_rss:
         "Got an answer, but it isn't RSS. This is usually a web page address: find the site's RSS link instead (the RSS icon next to a fansub on a Mikan show page, the RSS button on a Nyaa search).",
+      item_missing: 'This item is gone — its feed was probably just deleted.',
+      item_not_excluded: 'This item is no longer excluded — probably released from another tab.',
+      series_unbound:
+        "Its RSS Series isn't bound to a title yet: bind it first so Berth knows where it goes.",
+      feed_unprimed:
+        'Its feed is still waiting on the first-round choice: pick Download everything or Only what comes next first.',
     },
     feeds: {
       title: 'Feeds',
@@ -6780,6 +6795,9 @@ const en: Translations<typeof zhHant> = {
       from: 'From',
       work: '{{work}} × {{group}}',
       unbound: 'Not bound yet',
+      release: 'Download anyway',
+      releasing: 'Sending…',
+      releaseFailed: "Download anyway didn't go through; this item stays excluded:",
       status: {
         unbound: 'To bind',
         matched: 'To send',

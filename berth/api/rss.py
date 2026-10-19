@@ -46,6 +46,7 @@ from berth.services.rss import (
     preview_feed,
     prime_feed,
     read_exclusions,
+    release_item,
     set_exclusions,
     set_feed_exclusions,
     set_feed_routes,
@@ -82,6 +83,13 @@ _STATUS: dict[RssRefusal, int] = {
     RssRefusal.FEED_UNREAD: status.HTTP_409_CONFLICT,
     #: 上游回了東西，但不是 RSS：與 `feed_unreachable` 同樣是上游那一頭的事。
     RssRefusal.FEED_NOT_RSS: status.HTTP_502_BAD_GATEWAY,
+    RssRefusal.ITEM_MISSING: status.HTTP_404_NOT_FOUND,
+    #: 另一個分頁先放行了、或這一筆本來就不是被排除的：重讀清單看它現在的狀態。
+    RssRefusal.ITEM_NOT_EXCLUDED: status.HTTP_409_CONFLICT,
+    #: 先綁定 RSS Series 再放行。
+    RssRefusal.SERIES_UNBOUND: status.HTTP_409_CONFLICT,
+    #: 先選第一輪再放行。
+    RssRefusal.FEED_UNPRIMED: status.HTTP_409_CONFLICT,
 }
 
 
@@ -363,6 +371,9 @@ class ItemOut(BaseModel):
     size: int | None
     #: 發佈名讀出的集數；讀不出是 `null`（M4 票 13）。
     episode: int | None
+    #: 「仍然下載」（`POST /rss/items/{id}/release`）現在會怎麼被拒：`series_unbound`、
+    #: `feed_unprimed`，不是 `excluded` 的一律 `item_not_excluded`；放行得了是 `null`（M4 票 111）。
+    release_blocked: RssRefusal | None
 
 
 class OneshotIn(BaseModel):
@@ -652,6 +663,26 @@ async def put_series_exclusions(session: SessionDep, series_id: int, body: Rules
 async def get_items(session: SessionDep) -> list[ItemOut]:
     """最近看到的 50 筆，新的在前。"""
     return [ItemOut.model_validate(row) for row in await list_items(session)]
+
+
+@router.post(
+    "/items/{item_id}/release",
+    responses=_responses(
+        RssRefusal.ITEM_MISSING,
+        RssRefusal.ITEM_NOT_EXCLUDED,
+        RssRefusal.SERIES_UNBOUND,
+        RssRefusal.FEED_UNPRIMED,
+    ),
+)
+async def post_item_release(
+    session: SessionDep, factory: ClientFactoryDep, item_id: int
+) -> ItemOut:
+    """放行一筆被排除的 Item，當場送出（M4 票 111）。回這一筆的新狀態：`downloaded` 帶 Job 的
+    hash、`duplicate` 帶理由；送單被拒時留在 `excluded`，原文在 `error`。"""
+    try:
+        return ItemOut.model_validate(await release_item(session, factory, item_id))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
 
 
 # --- 從 Media 頁訂閱（票 19） ---------------------------------------------

@@ -340,6 +340,9 @@ class ItemView:
     size: int | None
     #: 發佈名讀出的集數（M4 票 13，Series 展開的清單）；讀不出是 `None`。
     episode: int | None
+    #: 「仍然下載」現在會怎麼被拒（`release_item`，M4 票 111）；放行得了是 `None`。不是
+    #: `excluded` 的一律 `item_not_excluded`。
+    release_blocked: RssRefusal | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -712,7 +715,7 @@ async def preview_feed(session: AsyncSession, feed_id: int) -> tuple[ItemView, .
     )
     views: list[ItemView] = []
     for row in rows:
-        view = _item_view(row)
+        view = await _item_view(session, row)
         series = await session.get(RssSeries, row.series_id) if row.series_id else None
         if row.status in _WAITING and series is not None:
             held = await _held_back(session, row, series)
@@ -1197,8 +1200,55 @@ async def _submit_waiting(
     return sent
 
 
+@command(Effect.REVERSIBLE)
+async def release_item(
+    session: AsyncSession, factory: ServiceClientFactory, item_id: int
+) -> ItemView:
+    """放行一筆 `excluded` 的 Item，**當場送出**（brief §15「全部接受，只排除」、M4 票 111）。
+
+    逐筆、人按的例外，不違反「只往前看」：那一條防的是改規則時批次放回。照 Sonarr 互動搜尋的
+    「照樣下載」：理由看得到，仍可以逐筆送。
+
+    走 `_submit_waiting` 同一支 `_submit`（`trigger = rss`、帶 RSS Series id），送單時的去重照常：
+    同一個 torrent 已送過、帳本已有就成 `duplicate`。**送不出就留在 `excluded`**，帶著送單那一頭的
+    原文（`error`）；不放回 `matched` 等下一輪——下次改規則時 `_rescreen` 不看已排除的，也不另記
+    「人放行過」。
+
+    只放行 RSS Series 已綁定、Feed 已選過第一輪的；其他在改任何東西之前就拒絕。
+
+    **沒有單一的反向命令**：送成的那一筆是 Job，撤銷是刪 Job（它有自己的刪除範圍），Item 不回到
+    `excluded`——與 `subscribe_mikan` 同一種標法。
+    """
+    item = await session.get(RssItem, item_id)
+    if item is None:
+        raise RssRejectedError(RssRefusal.ITEM_MISSING, str(item_id))
+    blocked = await _release_block(session, item)
+    if blocked is not None:
+        raise blocked
+    await _submit(session, factory, item)
+    row = await session.get(RssItem, item_id, populate_existing=True)
+    assert row is not None
+    logger.info("rss item released", extra={"item": item_id, "status": row.status.value})
+    return await _item_view(session, row)
+
+
+async def _release_block(session: AsyncSession, item: RssItem) -> RssRejectedError | None:
+    """`release_item` 現在會怎麼拒絕這一筆；放行得了是 `None`。清單照它的 `reason` 把按鈕停用、
+    說出原因。"""
+    if item.status is not FeedItemStatus.EXCLUDED:
+        return RssRejectedError(RssRefusal.ITEM_NOT_EXCLUDED, item.status.value)
+    series = await session.get(RssSeries, item.series_id) if item.series_id is not None else None
+    if series is None or series.media_id is None:
+        return RssRejectedError(RssRefusal.SERIES_UNBOUND, str(item.series_id))
+    feed = await session.get(RssFeed, item.feed_id)
+    if feed is None or feed.primed_at is None:
+        return RssRejectedError(RssRefusal.FEED_UNPRIMED, str(item.feed_id))
+    return None
+
+
 async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: RssItem) -> int:
-    """送一筆。成了是 `downloaded` 加 Job 的 hash；被拒留在 `matched` 帶著原文。回 1 或 0。"""
+    """送一筆。成了是 `downloaded` 加 Job 的 hash；被拒留在原本的狀態（`matched`，或放行的
+    `excluded`）帶著原文。回 1 或 0。"""
     series = await session.get(RssSeries, item.series_id) if item.series_id is not None else None
     item_id = item.id
     if series is None or series.media_id is None:
@@ -2384,7 +2434,7 @@ async def list_series_items(session: AsyncSession, series_id: int) -> tuple[Item
         .where(RssItem.series_id == series_id)
         .order_by(RssItem.published_at.desc(), RssItem.seen_at.desc(), RssItem.id.desc())
     )
-    return tuple(_item_view(row) for row in rows)
+    return tuple([await _item_view(session, row) for row in rows])
 
 
 @command(Effect.READ)
@@ -2393,10 +2443,10 @@ async def list_items(session: AsyncSession) -> tuple[ItemView, ...]:
     rows = await session.scalars(
         select(RssItem).order_by(RssItem.seen_at.desc(), RssItem.id.desc()).limit(RECENT_ITEMS)
     )
-    return tuple(_item_view(row) for row in rows)
+    return tuple([await _item_view(session, row) for row in rows])
 
 
-def _item_view(row: RssItem) -> ItemView:
+async def _item_view(session: AsyncSession, row: RssItem) -> ItemView:
     return ItemView(
         id=row.id,
         feed_id=row.feed_id,
@@ -2411,4 +2461,5 @@ def _item_view(row: RssItem) -> ItemView:
         skip=_skip_of(row),
         size=row.size,
         episode=parse_release(row.title).episode,
+        release_blocked=blocked.reason if (blocked := await _release_block(session, row)) else None,
     )

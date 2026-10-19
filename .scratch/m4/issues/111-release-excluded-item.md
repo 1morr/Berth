@@ -1,6 +1,6 @@
 # 111 — 被排除的 Feed Item 可以「仍然下載」
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -30,12 +30,17 @@
 
 ## 驗收
 
-- [ ] 已綁定、已選過第一輪的 `excluded` Item 放行後送出成 Job（`trigger = rss`、帶 Series id），Item 變 `downloaded`（pytest）
-- [ ] 同一個 torrent 已送過時放行得到 `duplicate`，不重送（pytest）
-- [ ] 還沒綁定、還在預覽、不是 `excluded` 各回各的拒絕，Item 不變（pytest，各做變異驗證）
-- [ ] 送單被拒時 Item 留在 `excluded`、回送單的理由（pytest）
-- [ ] 兩處清單都看得到按鈕；停用時說原因；送出後列換成 Job（vitest，zh-Hant 與 en）
-- [ ] playwright 實跑放行一筆合集，附截圖（1280 與 390）
-- [ ] 全部檢查、pytest、vitest 綠；brief、plan、CHANGELOG、progress.md 已更新
+- [x] 已綁定、已選過第一輪的 `excluded` Item 放行後送出成 Job（`trigger = rss`、帶 Series id），Item 變 `downloaded`（pytest）
+- [x] 同一個 torrent 已送過時放行得到 `duplicate`，不重送（pytest）
+- [x] 還沒綁定、還在預覽、不是 `excluded` 各回各的拒絕，Item 不變（pytest，各做變異驗證）
+- [x] 送單被拒時 Item 留在 `excluded`、回送單的理由（pytest）
+- [x] 兩處清單都看得到按鈕；停用時說原因；送出後列換成 Job（vitest，zh-Hant 與 en）
+- [x] playwright 實跑放行一筆合集，附截圖（1280 與 390）
+- [x] 全部檢查、pytest、vitest 綠；brief、plan、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-19 實作：`services.rss.release_item` 與 `_release_block`（命令與清單共用同一個判斷）。票面沒說畫面怎麼知道停用的原因：`ItemOut` 多 `release_blocked`（`RssRefusal | null`，非 `excluded` 一律 `item_not_excluded`），三支回 Item 的端點都帶。多一種拒絕 `item_missing`（404）。
+- 變異驗證（手動，逐條拿掉 `_release_block` 的一個分支）：拿掉 `excluded` 檢查只紅 `test_an_item_not_excluded`、拿掉綁定檢查只紅 `test_a_series_not_bound_yet`、拿掉預覽檢查只紅 `test_a_feed_still_in_its_preview`。
+- playwright（`rss` 演練情境，API 加 acg.rip《上伊那牡丹》→ 只追之後的 → 千夏字幕組（繁）綁到《与你相恋》）：`[第01-12話][合集]` 按「仍然下載」→ 已送單、帶 Job 連結；簡體那一組沒綁定、按鈕停用並說原因。截圖在本目錄（1280、390）。
+- code-review 未處理（判斷題）：(1) 清單每一列 `await _release_block`，查詢數上限是不同 Series 加不同 Feed 數（identity map），沒做批次預載；(2) 兩個分頁同時放行同一筆：都過了檢查再進 `_submit`，靠 `_sent_before` 認回成已送單，沒有專屬測試；(3) Series 綁了但 Route 被清掉（`route_id` 空）時按鈕仍可按，送單走 `_submit` 的 `route_missing` 留下原文——沒另加一種停用原因；(4) 送單被拒的 pytest 用 `source_unavailable`，Route 紅燈與磁碟門檻同一條 `JobRejectedError` 路徑，沒逐種寫。

@@ -116,6 +116,8 @@ function item(overrides: Partial<FeedItem> = {}): FeedItem {
     skip: null,
     size: null,
     episode: 12,
+    // 後端只對 `excluded` 判斷放不放得行；其他狀態一律 `item_not_excluded`（M4 票 111）。
+    release_blocked: overrides.status === 'excluded' ? null : 'item_not_excluded',
     ...overrides,
   }
 }
@@ -1797,5 +1799,154 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
     await userEvent.click(within(region).getByRole('button', { name: '送出 1 筆' }))
 
     expectCause(await within(region).findByRole('alert'), /送到一半停下來了/, expected)
+  })
+})
+
+describe('RSS 頁：被排除的那一筆仍然下載（M4 票 111）', () => {
+  const COLLECTION = TITLE.replace(' - 12 ', ' [01-12 合集] ')
+  const HELD = item({
+    id: 21,
+    title: COLLECTION,
+    episode: null,
+    status: 'excluded',
+    skip: { code: 'not_single', params: {} },
+  })
+  const SENT = { ...HELD, status: 'downloaded', skip: null, job_hash: 'c'.repeat(40) } as const
+
+  /** 放行之後重問的那一份換成已送單。 */
+  function releasing(answer: StubRoute = { body: SENT }) {
+    let items: FeedItem[] = [HELD]
+    return render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'GET /api/rss/items': () => ({ body: items }),
+      'GET /api/rss/series/7/items': () => ({ body: items }),
+      'POST /api/rss/items/21/release': () => {
+        if (answer.status === undefined) items = [answer.body as FeedItem]
+        return answer
+      },
+    })
+  }
+
+  async function recent() {
+    const region = await screen.findByRole('region', { name: /最近的 Feed Item|Recent feed items/ })
+    return within(region).findByRole('listitem')
+  }
+
+  it('最近的 Feed Item：按下去當場送出，那一列換成送出去的 Job', async () => {
+    const stub = releasing()
+    renderApp('/rss')
+    const line = await recent()
+    expect(line).toHaveTextContent('已排除')
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/items/21/release')).toHaveLength(1))
+    const after = await recent()
+    await waitFor(() => expect(after).toHaveTextContent('已送單'))
+    expect(within(after).getByRole('link', { name: '看這一筆下載' })).toHaveAttribute(
+      'href',
+      `/jobs/${'c'.repeat(40)}`,
+    )
+    expect(within(after).queryByRole('button', { name: '仍然下載' })).not.toBeInTheDocument()
+  })
+
+  it('RSS Series 展開的清單也有，英文介面同一顆', async () => {
+    const stub = releasing()
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+      const row = await screen.findByRole('article', { name: 'LoliHouse' })
+      await userEvent.click(within(row).getByText('Expand'))
+      const list = await within(row).findByRole('list')
+
+      await userEvent.click(within(list).getByRole('button', { name: 'Download anyway' }))
+
+      await waitFor(() => expect(sent(stub, 'POST', '/api/rss/items/21/release')).toHaveLength(1))
+      await waitFor(() => expect(within(list).getByRole('listitem')).toHaveTextContent('Sent'))
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it.each([
+    ['zh-Hant', 'series_unbound', '仍然下載', /還沒綁定作品/],
+    ['zh-Hant', 'feed_unprimed', '仍然下載', /還在等第一輪的決定/],
+    ['en', 'series_unbound', 'Download anyway', /isn't bound to a title yet/],
+    ['en', 'feed_unprimed', 'Download anyway', /still waiting on the first-round choice/],
+  ] as const)('%s：放行不了（%s）時停用並說原因，按了不送', async (lang, blocked, name, why) => {
+    const stub = render({
+      'GET /api/rss/items': { body: [{ ...HELD, release_blocked: blocked }] },
+    })
+    await i18next.changeLanguage(lang)
+    try {
+      renderApp('/rss')
+      const line = await recent()
+      const button = within(line).getByRole('button', { name })
+
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      expect(button).toHaveAccessibleDescription(why)
+      await userEvent.click(button)
+      expect(sent(stub, 'POST', '/api/rss/items/21/release')).toHaveLength(0)
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('被拒時就地說原因', async () => {
+    releasing({
+      status: 409,
+      body: { detail: { reason: 'item_not_excluded', detail: 'downloaded' } },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    expect(await within(line).findByRole('alert')).toHaveTextContent(/已經不是被排除的了/)
+  })
+
+  it('同一個 torrent 送過了：按下去那一列換成重複的理由', async () => {
+    releasing({
+      body: { ...HELD, status: 'duplicate', skip: { code: 'same_torrent', params: {} } },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() => expect(line).toHaveTextContent('重複'))
+    expect(within(line).queryByRole('button', { name: '仍然下載' })).not.toBeInTheDocument()
+  })
+
+  it('按下去送單被拒：還是排除，說出送單那一頭的原文', async () => {
+    releasing({
+      body: { ...HELD, error: 'route_unhealthy: the route is red' },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() =>
+      expect(line).toHaveTextContent(
+        '仍然下載沒送出，這一筆還是排除： route_unhealthy: the route is red',
+      ),
+    )
+    expect(line).toHaveTextContent('已排除')
+  })
+
+  it('送單被拒時這一筆還是排除，說出送單那一頭的原文', async () => {
+    render({
+      'GET /api/rss/items': {
+        body: [{ ...HELD, error: 'source_unavailable: GET mikanani.me: connection refused' }],
+      },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    expect(line).toHaveTextContent('已排除')
+    expect(line).toHaveTextContent(
+      '仍然下載沒送出，這一筆還是排除： source_unavailable: GET mikanani.me: connection refused',
+    )
   })
 })
