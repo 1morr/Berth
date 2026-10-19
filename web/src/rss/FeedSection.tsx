@@ -29,12 +29,12 @@ import {
 } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { RequestFailed } from '../components/RequestFailed'
-import { problemText } from '../components/requestProblem'
 import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { bindsNow, complete, KINDS, prefilled, routesFor, routesOf, unsetKinds } from './feedRoutes'
 import { maskToken } from './maskToken'
-import { RulesToggle } from './RulesEditor'
+import { RulesFields, RulesToggle } from './RulesEditor'
+import { rssProblem } from './rssProblem'
 import { SectionHeading } from '../components/SectionHeading'
 
 /**
@@ -79,25 +79,42 @@ export function FeedSection({ feeds }: { feeds: Feed[] }) {
   )
 }
 
+/**
+ * 新增 Feed 的表單。排除條件也在這裡（M4 票 110）：Mikan 不預覽、加入後半分鐘內第一輪就綁定送單，
+ * 加完再到卡片上設的擋不到已經送出的。規則先記在表單裡，跟著 `POST /rss/feeds` 一起送。
+ *
+ * 規則那一塊有自己的 `<form>`（Enter 加一條），所以放在主表單外面，「加入」以 `form` 屬性接回主表單。
+ */
 function AddFeed({ routes }: { routes: RouteView[] }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const formId = useId()
+  const rulesId = useId()
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
+  const [rules, setRules] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  // 打了沒按「加入規則」的那一條也算：Mikan 加入後很快就送單，漏掉它就擋不到了。
+  const typed = draft.trim()
+  const sentRules = typed === '' || rules.includes(typed) ? rules : [...rules, typed]
   // `undefined` 是那一格還沒動過：用預填（只有一條時就是它）。Route 清單晚到時預填跟著到。
   const [picked, setPicked] = useState<Partial<KindRoutes>>({})
   const defaults = prefilled(routes)
   const chosen: KindRoutes = { tv: picked.tv ?? defaults.tv, movie: picked.movie ?? defaults.movie }
   const add = useMutation({
-    mutationFn: () => addFeed(url.trim(), name.trim(), chosen),
+    mutationFn: () => addFeed(url.trim(), name.trim(), chosen, sentRules),
     onSuccess: async () => {
       setUrl('')
       setName('')
+      setRules([])
+      setDraft('')
       setPicked({})
       await queryClient.invalidateQueries({ queryKey: RSS_KEY })
     },
   })
   const refusal = add.isError ? parseRssRefusal(add.error) : null
+  // 寫壞的規則說在規則欄下，其他的說在網址欄下。
+  const rulesRefused = refusal?.reason === 'rule_invalid'
   const ready = url.trim() !== '' && complete(chosen, routes)
 
   const submit = (event: FormEvent) => {
@@ -106,43 +123,58 @@ function AddFeed({ routes }: { routes: RouteView[] }) {
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-3 border-2 border-rule bg-well px-4 py-3">
-      <p className="label text-ink-dim">{t('rss.feeds.add')}</p>
-      <Field
-        label={t('rss.feeds.url')}
-        hint={t('rss.feeds.urlHint')}
-        type="url"
-        inputMode="url"
-        autoComplete="off"
-        spellCheck={false}
-        required
-        value={url}
-        error={
-          refusal
-            ? t(`rss.refusal.${refusal.reason}`)
-            : add.isError
-              ? problemText(t, add.error, t('request.notDone'))
-              : undefined
-        }
-        onChange={(event) => setUrl(event.target.value)}
-      />
-      <Field
-        label={t('rss.feeds.name')}
-        hint={t('rss.feeds.nameHint')}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <KindRoutePickers
-        routes={routes}
-        value={chosen}
-        onChange={(kind, route) => setPicked((now) => ({ ...now, [kind]: route }))}
-      />
+    <div className="grid gap-3 border-2 border-rule bg-well px-4 py-3">
+      <form id={formId} onSubmit={submit} className="grid gap-3">
+        <p className="label text-ink-dim">{t('rss.feeds.add')}</p>
+        <Field
+          label={t('rss.feeds.url')}
+          hint={t('rss.feeds.urlHint')}
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          spellCheck={false}
+          required
+          value={url}
+          error={add.isError && !rulesRefused ? rssProblem(t, add.error) : undefined}
+          onChange={(event) => setUrl(event.target.value)}
+        />
+        <Field
+          label={t('rss.feeds.name')}
+          hint={t('rss.feeds.nameHint')}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <KindRoutePickers
+          routes={routes}
+          value={chosen}
+          onChange={(kind, route) => setPicked((now) => ({ ...now, [kind]: route }))}
+        />
+      </form>
+      {/* `group` 不是 `region`：頁上已有一段叫「排除條件」的全域那一層。 */}
+      <div role="group" aria-labelledby={rulesId} className="grid gap-2">
+        <p id={rulesId} className="label text-ink-dim">
+          {t('rss.rules.title')}
+        </p>
+        <RulesFields
+          rules={rules}
+          draft={draft}
+          setDraft={setDraft}
+          lede={t('rss.rules.addLede')}
+          // 送出中不改：送出的是按下那一刻的那一組，成功之後表單清空。
+          busy={add.isPending}
+          error={rulesRefused ? rssProblem(t, add.error) : undefined}
+          commit={(next, done) => {
+            setRules(next)
+            done()
+          }}
+        />
+      </div>
       <div className="sm:max-w-xs">
-        <PrimaryButton type="submit" busy={add.isPending} disabled={!ready}>
+        <PrimaryButton form={formId} type="submit" busy={add.isPending} disabled={!ready}>
           {add.isPending ? t('rss.feeds.adding') : t('rss.feeds.addAction')}
         </PrimaryButton>
       </div>
-    </form>
+    </div>
   )
 }
 

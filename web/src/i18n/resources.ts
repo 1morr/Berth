@@ -3313,6 +3313,9 @@ const zhHant = {
       toggle_one: '排除條件（{{count}} 條）',
       toggle_other: '排除條件（{{count}} 條）',
       feedLede: '只對這個 Feed，與全域的規則一起算。',
+      // 新增 Feed 表單上那一格（M4 票 110）：前半句與 `feedLede` 同一句。
+      addLede:
+        '只對這個 Feed，與全域的規則一起算。Mikan 加入之後很快就會開始下載，要排除的現在就加；加入後再改只擋還沒送出的。',
       seriesLede: '只對這個 RSS Series，與全域、Feed 的規則一起算。',
     },
     // 一筆 Item 為什麼沒下載（`domain.SkipCode`，票 10）。參數是原文，不翻譯；
@@ -6739,6 +6742,8 @@ const en: Translations<typeof zhHant> = {
       toggle_one: 'Exclusions ({{count}})',
       toggle_other: 'Exclusions ({{count}})',
       feedLede: 'For this feed only, on top of the global rules.',
+      addLede:
+        'For this feed only, on top of the global rules. A Mikan feed starts downloading soon after it is added, so add what to leave out now; later changes only reach items not sent yet.',
       seriesLede: 'For this RSS Series only, on top of the global and feed rules.',
     },
     skip: {

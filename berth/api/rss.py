@@ -165,6 +165,9 @@ class FeedIn(BaseModel):
     #: `route_kind_mismatch`）；那一種一條啟用中的 Route 都沒有時不收、存 `null`。
     tv_route: int | None = None
     movie_route: int | None = None
+    #: 選填，與 Feed 一起存（M4 票 110）：Mikan 不預覽、第一輪就送單，要排除的得在這裡給。
+    #: 寫壞的那一條讓整個 Feed 都不加（422 `rule_invalid`，同 `PUT /rss/feeds/{id}/exclusions`）。
+    exclusions: list[str] = Field(default_factory=list)
 
 
 class FeedRoutesIn(BaseModel):
@@ -449,6 +452,7 @@ async def get_feeds(session: SessionDep) -> list[FeedOut]:
         RssRefusal.ROUTE_DISABLED,
         RssRefusal.ROUTE_KIND_MISMATCH,
         RssRefusal.ROUTE_REQUIRED,
+        RssRefusal.RULE_INVALID,
     ),
 )
 async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
@@ -460,6 +464,7 @@ async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
             name=body.name,
             tv_route_id=body.tv_route,
             movie_route_id=body.movie_route,
+            exclusions=body.exclusions,
         )
         return FeedOut.model_validate(view)
     except RssRejectedError as refusal:

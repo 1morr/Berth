@@ -192,8 +192,14 @@ export function primeFeed(id: number, mode: PrimeMode) {
   return apiPost<PrimeOutcome>(`/rss/feeds/${id}/prime`, { mode })
 }
 
-export function addFeed(url: string, name: string, routes: KindRoutes) {
-  return apiPost<Feed>('/rss/feeds', { url, name, tv_route: routes.tv, movie_route: routes.movie })
+export function addFeed(url: string, name: string, routes: KindRoutes, exclusions: string[]) {
+  return apiPost<Feed>('/rss/feeds', {
+    url,
+    name,
+    tv_route: routes.tv,
+    movie_route: routes.movie,
+    exclusions,
+  })
 }
 
 export function setFeedRoutes(id: number, routes: KindRoutes) {

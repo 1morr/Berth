@@ -2,9 +2,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { parseRssRefusal, RSS_KEY } from '../api/rss'
+import { RSS_KEY } from '../api/rss'
 import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
-import { problemText } from '../components/requestProblem'
+import { rssProblem } from './rssProblem'
 
 /**
  * 一鍵加入的建議項（brief §15：720p、简体這類，不預設勾）。解析度與字幕語言是最常見的「這一種我不要」；
@@ -30,40 +30,73 @@ interface RulesProps {
 export function RulesEditor({ rules, save, lede }: RulesProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const listId = useId()
-  const input = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState('')
   const change = useMutation({
     mutationFn: (next: string[]) => save(next),
-    onSuccess: async (_, sent) => {
-      if (sent.length > rules.length) {
+    // 規則一改，還沒送的 Item 可能被擋下：三份清單一起重問。
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: RSS_KEY }),
+  })
+
+  return (
+    <RulesFields
+      rules={rules}
+      draft={draft}
+      setDraft={setDraft}
+      lede={lede}
+      busy={change.isPending}
+      error={change.isError ? rssProblem(t, change.error) : undefined}
+      commit={(next, done) => change.mutate(next, { onSuccess: done })}
+    />
+  )
+}
+
+/**
+ * 規則的畫面本身，不管存到哪裡：`RulesEditor` 一改就送後端；新增 Feed 的表單先記在表單裡，
+ * 跟著 `POST /rss/feeds` 一起送（M4 票 110）。`commit` 存好之後呼叫 `done`，加入欄才清空。
+ * 加入欄打的字由呼叫端持有：新增 Feed 送出時，打了沒按「加入規則」的那一條也要帶上。
+ *
+ * 加入欄自己是一個 `<form>`（Enter 加一條）：放進別的表單時要放在那個 `<form>` 元素外面。
+ */
+export function RulesFields({
+  rules,
+  draft,
+  setDraft,
+  commit,
+  busy = false,
+  error,
+  lede,
+}: {
+  rules: readonly string[]
+  draft: string
+  setDraft: (draft: string) => void
+  commit: (next: string[], done: () => void) => void
+  busy?: boolean
+  error?: string
+  lede?: string
+}) {
+  const { t } = useTranslation()
+  const listId = useId()
+  const input = useRef<HTMLInputElement>(null)
+  const suggestions = SUGGESTED_RULES.filter((rule) => !rules.includes(rule))
+
+  const change = (next: string[]) => {
+    const added = next.length > rules.length
+    commit(next, () => {
+      if (added) {
         setDraft('')
       } else {
         // 拿掉的那一格連同它的按鈕一起消失：焦點落回加入欄，不掉回 body。
         input.current?.focus()
       }
-      // 規則一改，還沒送的 Item 可能被擋下：三份清單一起重問。
-      await queryClient.invalidateQueries({ queryKey: RSS_KEY })
-    },
-  })
-  const refusal = change.isError ? parseRssRefusal(change.error) : null
-  const error =
-    refusal?.reason === 'rule_invalid'
-      ? t('rss.rules.invalid', { detail: refusal.detail })
-      : refusal
-        ? t(`rss.refusal.${refusal.reason}`)
-        : change.isError
-          ? problemText(t, change.error, t('request.notDone'))
-          : undefined
-  const suggestions = SUGGESTED_RULES.filter((rule) => !rules.includes(rule))
-
+    })
+  }
   const add = (rule: string) => {
     const trimmed = rule.trim()
     if (trimmed === '' || rules.includes(trimmed)) {
       setDraft('')
       return
     }
-    change.mutate([...rules, trimmed])
+    change([...rules, trimmed])
   }
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -86,9 +119,9 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
               <button
                 type="button"
                 aria-label={t('rss.rules.remove', { rule })}
-                aria-disabled={change.isPending || undefined}
+                aria-disabled={busy || undefined}
                 onClick={() => {
-                  if (!change.isPending) change.mutate(rules.filter((one) => one !== rule))
+                  if (!busy) change(rules.filter((one) => one !== rule))
                 }}
                 className="label flex min-h-6 min-w-6 items-center justify-center self-stretch border-l-2 border-rule px-2 text-ink-dim hover:text-ink"
               >
@@ -110,8 +143,8 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
           onChange={(event) => setDraft(event.target.value)}
         />
         <div className="sm:pt-7">
-          <GhostButton type="submit" busy={change.isPending} disabled={draft.trim() === ''}>
-            {change.isPending ? t('rss.rules.saving') : t('rss.rules.addAction')}
+          <GhostButton type="submit" busy={busy} disabled={draft.trim() === ''}>
+            {busy ? t('rss.rules.saving') : t('rss.rules.addAction')}
           </GhostButton>
         </div>
       </form>
@@ -123,9 +156,9 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
               key={rule}
               type="button"
               aria-label={t('rss.rules.suggest', { rule })}
-              aria-disabled={change.isPending || undefined}
+              aria-disabled={busy || undefined}
               onClick={() => {
-                if (!change.isPending) add(rule)
+                if (!busy) add(rule)
               }}
               className={COMPACT_BUTTON}
             >
