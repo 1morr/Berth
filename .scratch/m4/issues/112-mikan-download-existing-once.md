@@ -1,6 +1,6 @@
 # 112 — 作品頁 Mikan 可以「只下載現有的（一次性）」
 
-**Status:** needs-info
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -34,8 +34,9 @@
 
 ## Comments
 
-- **待決（2026-10-19）**：「訂閱的回報」需要讀得到被擋下幾筆、什麼理由，票、plan、brief 都沒寫資料從哪裡來。這一版做成 `POST /rss/subscriptions/mikan` 的回應多 `excluded: [{code, count}]`（算整個 RSS Series 被排除的，照 `SkipCode` 分），屬新 API 欄位，等拍板。另一個做法是前端訂閱後再打既有的 `GET /rss/series/{id}/items` 自己數，不加欄位、多一次請求。
+- **已決（使用者 2026-10-19 選 A：保留欄位）**：「訂閱的回報」需要讀得到被擋下幾筆、什麼理由，票、plan、brief 都沒寫資料從哪裡來。這一版做成 `POST /rss/subscriptions/mikan` 的回應多 `excluded: [{code, count}]`（算整個 RSS Series 被排除的，照 `SkipCode` 分），屬新 API 欄位，等拍板。另一個做法是前端訂閱後再打既有的 `GET /rss/series/{id}/items` 自己數，不加欄位、多一次請求。
 - 回報的筆數算整個 RSS Series：就地綁定聚合 feed 長出的 Series 時，含之前就擋下的；英文句因此說「Of this group’s releases」，不說「讀到的」（code-review Spec 軸）。
 - 規則擋下的三層合成「N 筆對上排除條件」，不說哪一層哪一條：作品頁上沒有放規則的地方，細節在 RSS 頁。
 - code-review Standards 軸已處理：拒絕畫面抽成 `rss/RssRefusalNotice`（訂閱與只下載現有的共用）、`Subscription.excluded` 拿掉預設值、`onDone` 收一個 `Said`。未處理：`excludedText` 與 `i18n/list.ts` 各有一個 `startsWith('zh')`（中文兩段之間要用逗號，`formatList` 用頓號），只有一處用，不值得為它加參數。
 - playwright 實跑：e2e `rss-existing`（1280 / 390），截圖在 `112-mikan-download-existing-once/`。容器的 chromium 是 1194、playwright 要 1243，在 `/opt/pw-browsers` 接 symlink 跑（不動 repo）。
+- 使用者 2026-10-19 選 A：保留 `SubscriptionOut.excluded`，計數範圍維持整個 RSS Series，英文句維持「Of this group’s releases」。
