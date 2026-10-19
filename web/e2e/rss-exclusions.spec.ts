@@ -11,7 +11,7 @@ import { shot } from './shot.ts'
 test('三層排除與重複：清單上每一筆都說得出為什麼沒下載', async ({ page }) => {
   await signIn(page, '/rss')
 
-  const rules = page.getByRole('region', { name: '排除條件' })
+  const rules = page.getByRole('region', { name: '全域排除條件' })
   await expect(rules.getByRole('checkbox', { name: /不自動下載合集/ })).toBeChecked()
   const field = rules.getByLabel('加一條排除條件')
   await field.fill('/[简繁/')
@@ -50,6 +50,20 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   await bound.getByRole('button', { name: '加入規則' }).click()
   await expect(bound.getByRole('button', { name: '排除條件（1 條）' })).toBeVisible()
 
+  // 合集只在全域那一段、是內建判斷（M4 票 113）：Feed 與 RSS Series 那兩層說出它的目前值、連回去。
+  await expect(rules.getByRole('group', { name: '內建判斷' })).toContainText(
+    '看解析結果，不是關鍵字',
+  )
+  await aggregate.getByRole('button', { name: '排除條件（0 條）' }).click()
+  for (const layer of [aggregate, bound]) {
+    await expect(layer.getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
+  }
+  await shot(page, '2b-three-layers')
+  await bound.getByRole('link', { name: '改全域設定' }).click()
+  await expect(page).toHaveURL(/#global-exclusions$/)
+  await expect(rules.getByRole('heading', { name: '全域排除條件' })).toBeInViewport()
+  await shot(page, '2c-to-global')
+
   // 新增表單上先寫 Feed 那一層（M4 票 110）：跟著「加入」一起存，第一輪寫下的那一刻就看。
   const onAdd = page.getByRole('group', { name: '排除條件' })
   await onAdd.getByLabel('加一條排除條件').fill('/ - 12 \\[/')
@@ -61,7 +75,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
   })
   const single = page.getByRole('article', { name: '与你相恋 單一' })
   await expect(single.getByRole('button', { name: '排除條件（1 條）' })).toBeVisible()
-  await expect(onAdd.getByText('沒有排除條件。')).toBeVisible()
+  await expect(onAdd.getByText('沒有標題規則。')).toBeVisible()
   await single.getByRole('button', { name: '立即輪詢' }).click()
   await expect(single.getByRole('status')).toHaveText(
     '這一輪：新 12 筆、長出 0 個 RSS Series（自動綁定 0 個）、送出 0 筆。',

@@ -1,9 +1,9 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { RSS_KEY } from '../api/rss'
-import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
+import { RSS_KEY, exclusionsQueryOptions } from '../api/rss'
+import { COMPACT_BUTTON, Field, GhostButton, TEXT_LINK } from '../components/controls'
 import { rssProblem } from './rssProblem'
 
 /**
@@ -12,12 +12,13 @@ import { rssProblem } from './rssProblem'
  */
 const SUGGESTED_RULES: readonly string[] = ['720p', '简体', '简日', '繁體', '繁日']
 
+/** 全域那一段的錨點：Feed 與 RSS Series 那兩層的合集那一行連到這裡（M4 票 113）。 */
+export const GLOBAL_EXCLUSIONS_ANCHOR = 'global-exclusions'
+
 interface RulesProps {
   rules: readonly string[]
   /** 整組覆寫這一層。寫壞的那一條讓整組不存（422 `rule_invalid`）。 */
   save: (rules: string[]) => Promise<unknown>
-  /** 這一層與其他層的關係，一句話。 */
-  lede?: string
 }
 
 /**
@@ -27,7 +28,7 @@ interface RulesProps {
  * 寫壞的正則由後端擋（Python 的 `re` 才是比對的那一個，瀏覽器的 RegExp 語法不同），原因印在欄位下方，
  * 打的字留著讓人改。
  */
-export function RulesEditor({ rules, save, lede }: RulesProps) {
+export function RulesEditor({ rules, save }: RulesProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
@@ -42,7 +43,6 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
       rules={rules}
       draft={draft}
       setDraft={setDraft}
-      lede={lede}
       busy={change.isPending}
       error={change.isError ? rssProblem(t, change.error) : undefined}
       commit={(next, done) => change.mutate(next, { onSuccess: done })}
@@ -64,7 +64,6 @@ export function RulesFields({
   commit,
   busy = false,
   error,
-  lede,
 }: {
   rules: readonly string[]
   draft: string
@@ -72,7 +71,6 @@ export function RulesFields({
   commit: (next: string[], done: () => void) => void
   busy?: boolean
   error?: string
-  lede?: string
 }) {
   const { t } = useTranslation()
   const listId = useId()
@@ -105,7 +103,6 @@ export function RulesFields({
 
   return (
     <div className="grid gap-3">
-      {lede && <p className="max-w-prose text-xs text-ink-dim">{lede}</p>}
       <p id={listId} className="sr-only">
         {t('rss.rules.list')}
       </p>
@@ -175,7 +172,7 @@ export function RulesFields({
 /**
  * Feed 與 RSS Series 那一列上的排除條件：平常收起來只說有幾條，展開才是編輯區（它不是那一列的主要事）。
  */
-export function RulesToggle({ rules, save, lede }: RulesProps) {
+export function RulesToggle({ rules, save, lede }: RulesProps & { lede: string }) {
   const { t } = useTranslation()
   const regionId = useId()
   const [open, setOpen] = useState(false)
@@ -197,9 +194,42 @@ export function RulesToggle({ rules, save, lede }: RulesProps) {
           </span>
         </button>
       </div>
-      <div id={regionId} hidden={!open}>
-        {open && <RulesEditor rules={rules} save={save} lede={lede} />}
+      <div id={regionId} hidden={!open} className="grid gap-3">
+        {open && (
+          <>
+            <LayerLede lede={lede} />
+            <RulesEditor rules={rules} save={save} />
+          </>
+        )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Feed 與 RSS Series 那一層的說明：這一層與其他層的關係，加上全域的合集設定。
+ *
+ * 這兩層沒有合集開關（brief §15 定在全域，2026-10-19 使用者確認不加）：第二行說出全域那一項的目前值、
+ * 連回全域那一段，免得看起來像這一層漏了（M4 票 113）。讀的是全域那一段同一個查詢，切換全域開關後
+ * 一起重問、跟著變。
+ */
+export function LayerLede({ lede }: { lede: string }) {
+  const { t } = useTranslation()
+  const global = useQuery(exclusionsQueryOptions())
+
+  return (
+    <div className="grid max-w-prose gap-1 text-xs text-ink-dim">
+      <p>{lede}</p>
+      {global.data && (
+        <p className="flex flex-wrap items-center gap-x-2">
+          <span>
+            {global.data.not_single ? t('rss.rules.batchesOff') : t('rss.rules.batchesOn')}
+          </span>
+          <a href={`#${GLOBAL_EXCLUSIONS_ANCHOR}`} className={TEXT_LINK}>
+            {t('rss.rules.toGlobal')}
+          </a>
+        </p>
+      )}
     </div>
   )
 }

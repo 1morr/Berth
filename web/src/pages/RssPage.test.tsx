@@ -696,6 +696,8 @@ describe('RSS 頁', () => {
     expect(
       within(rules).getByText(/Mikan 加入之後很快就會開始下載，要排除的現在就加/),
     ).toBeVisible()
+    // 新增表單也是 Feed 那一層：合集照全域（M4 票 113）。
+    expect(within(rules).getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
     await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
     await userEvent.click(within(rules).getByRole('button', { name: '加入「简体」' }))
     await userEvent.type(within(rules).getByLabelText('加一條排除條件'), '/v2$/{Enter}')
@@ -722,7 +724,7 @@ describe('RSS 頁', () => {
     await userEvent.click(within(row).getByRole('button', { name: /排除條件（2 條）/ }))
     expect(within(row).getByText('720p')).toBeVisible()
     expect(within(row).getByText('/v2$/')).toBeVisible()
-    expect(within(rules).getByText('沒有排除條件。')).toBeInTheDocument()
+    expect(within(rules).getByText('沒有標題規則。')).toBeInTheDocument()
   })
 
   it('加 Feed 時打了規則沒按「加入規則」：那一條也跟著送，送完表單清空', async () => {
@@ -743,7 +745,7 @@ describe('RSS 頁', () => {
       ['720p', '简体'],
     )
     await waitFor(() => expect(within(rules).getByLabelText('加一條排除條件')).toHaveValue(''))
-    expect(within(rules).getByText('沒有排除條件。')).toBeInTheDocument()
+    expect(within(rules).getByText('沒有標題規則。')).toBeInTheDocument()
   })
 
   it('加 Feed 時規則寫壞：原因說在規則欄下，網址欄沒事，規則留著讓人改', async () => {
@@ -1005,8 +1007,8 @@ describe('RSS 頁', () => {
     })
     renderApp('/rss')
 
-    const section = await screen.findByRole('region', { name: '排除條件' })
-    expect(within(section).getByText('沒有排除條件。')).toBeInTheDocument()
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
+    expect(within(section).getByText('沒有標題規則。')).toBeInTheDocument()
     const collections = within(section).getByRole('checkbox', { name: /不自動下載合集/ })
     expect(collections).toBeChecked()
 
@@ -1039,7 +1041,7 @@ describe('RSS 頁', () => {
     })
     renderApp('/rss')
 
-    const section = await screen.findByRole('region', { name: '排除條件' })
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
     const field = within(section).getByLabelText('加一條排除條件')
     // user-event 的 `[` 是按鍵描述的開頭，`[[` 才是字面上的一個。
     await userEvent.type(field, '/[[简繁/')
@@ -1091,6 +1093,91 @@ describe('RSS 頁', () => {
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['简体'] })
+  })
+})
+
+describe('RSS 頁：排除條件分清全域與內建（M4 票 113）', () => {
+  it('全域那一段：合集是內建判斷、與規則分開，建議項是關鍵字', async () => {
+    render()
+    renderApp('/rss')
+
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
+    const builtin = within(section).getByRole('group', { name: '內建判斷' })
+    expect(builtin).toHaveAccessibleDescription('看解析結果，不是關鍵字')
+    expect(within(builtin).getByRole('checkbox', { name: /不自動下載合集/ })).toBeChecked()
+    const rules = within(section).getByRole('group', { name: '標題規則' })
+    expect(within(rules).queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(rules).getByText('建議關鍵字')).toBeVisible()
+  })
+
+  it('全域那一段的英文', async () => {
+    render()
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const section = await screen.findByRole('region', { name: 'Global exclusions' })
+      const builtin = within(section).getByRole('group', { name: 'Built-in check' })
+      expect(within(builtin).getByText('Reads the parsed release, not keywords')).toBeVisible()
+      expect(within(builtin).getByRole('checkbox', { name: /batches/ })).toBeChecked()
+      const rules = within(section).getByRole('group', { name: 'Title rules' })
+      expect(within(rules).getByText('Suggested keywords')).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('Feed 與 RSS Series 那兩層說出全域的合集設定，切換全域開關後跟著變', async () => {
+    let notSingle = true
+    render({
+      'GET /api/rss/exclusions': () => ({ body: { not_single: notSingle, rules: [] } }),
+      'PUT /api/rss/exclusions': () => {
+        notSingle = false
+        return { body: { not_single: false, rules: [] } }
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: /排除條件（0 條）/ }))
+    const pending = screen.getByRole('region', { name: '待綁定' })
+    await userEvent.click(within(pending).getByRole('button', { name: /排除條件（0 條）/ }))
+    for (const layer of [row, pending]) {
+      expect(within(layer).getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
+      expect(within(layer).getByRole('link', { name: '改全域設定' })).toHaveAttribute(
+        'href',
+        '#global-exclusions',
+      )
+    }
+    expect(screen.getByRole('region', { name: '全域排除條件' })).toHaveAttribute(
+      'id',
+      'global-exclusions',
+    )
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /不自動下載合集/ }))
+
+    for (const layer of [row, pending]) {
+      expect(await within(layer).findByText('合集由全域設定：目前會自動下載。')).toBeVisible()
+    }
+  })
+
+  it('兩層的合集那一行的英文', async () => {
+    render({ 'GET /api/rss/exclusions': { body: { not_single: false, rules: [] } } })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      await userEvent.click(within(row).getByRole('button', { name: /Exclusions \(0\)/ }))
+      expect(
+        within(row).getByText(
+          'Batches follow the global setting: currently downloaded automatically.',
+        ),
+      ).toBeVisible()
+      expect(within(row).getByRole('link', { name: 'Change the global setting' })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 })
 
@@ -1508,7 +1595,7 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
   it.each(REQUEST_FAILURES)('全域排除條件的開關（%s）', async (_, failure, expected) => {
     render({ 'PUT /api/rss/exclusions': failure })
     renderApp('/rss')
-    const section = await screen.findByRole('region', { name: '排除條件' })
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
 
     await userEvent.click(within(section).getByRole('checkbox', { name: /不自動下載合集/ }))
 
@@ -1518,7 +1605,7 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
   it.each(REQUEST_FAILURES)('加一條排除規則（%s）', async (_, failure, expected) => {
     render({ 'PUT /api/rss/exclusions': failure })
     renderApp('/rss')
-    const section = await screen.findByRole('region', { name: '排除條件' })
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
 
     await userEvent.type(within(section).getByLabelText('加一條排除條件'), '720p')
     await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
