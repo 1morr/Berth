@@ -41,6 +41,9 @@ _YEAR_PENALTY = 0.5
 THRESHOLD = 0.6
 #: 短到不能用「包含」判定的長度。`Up` 出現在半數發佈名裡。
 _MIN_CONTAINED = 4
+#: 含 CJK 的名字的同一個下限（M4 票 83c）：三個字的「無間道」要比得到；一個字的「她」幾乎什麼
+#: 發佈名都含。只給搜尋的粗篩（`mentions`、`partial_title`），`_compare` 照舊用 `_MIN_CONTAINED`。
+_MIN_CONTAINED_CJK = 2
 
 #: 切詞用。CJK 沒有空白，所以詞比對只對拉丁字有意義——中文標題走「包含」那一條。
 _WORD = re.compile(r"[^0-9a-z]+")
@@ -126,16 +129,22 @@ def mentions(release_name: str, media: MediaSnapshot) -> bool:
     14 毫秒（2026-09-10，1200 筆 17.4 秒）。一次索引站搜尋回一兩千筆，全部解析會把事件
     迴圈卡住半分鐘，所以粗篩只做字串包含，解析留給篩完的那一百筆。
 
-    判準與 `_compare` 的 `_CONTAINED` 那一條相同：正規化之後 TMDB 的某個名字整串出現在
-    發佈名裡。太短的名字不算——`Up` 出現在半數發佈名裡。
+    判準與 `_compare` 的 `_CONTAINED` 那一條相近：正規化之後 TMDB 的某個名字整串出現在
+    發佈名裡。太短的名字不算（`_long_enough`）——`Up` 出現在半數發佈名裡。
     """
     haystack = normalize_title(release_name)
     if not haystack:
         return False
     return any(
-        len(target) >= _MIN_CONTAINED and target in haystack
+        _long_enough(target) and target in haystack
         for target in (normalize_title(known) for known in _known_titles(media))
     )
+
+
+def _long_enough(target: str) -> bool:
+    """正規化過的名字夠不夠長、能拿來比「包含」：含 CJK 的兩個字起，拉丁字照 `_MIN_CONTAINED`。"""
+    floor = _MIN_CONTAINED_CJK if _CJK.search(target) else _MIN_CONTAINED
+    return len(target) >= floor
 
 
 def typed_fits(release_name: str, typed: str, media: MediaSnapshot | None) -> bool:
@@ -146,8 +155,8 @@ def typed_fits(release_name: str, typed: str, media: MediaSnapshot | None) -> bo
     「是不是這部作品」：打字多半是 TMDB 的名字搜不到，那樣判的話幾乎每一筆都對不上（票 08）。
     沒有快照時只看第一條。
 
-    兩條用同一個「含」（`_contains_words`），**不是 `mentions`**：它的長度下限會把三個字的中文名
-    整個略過，而照作品名搜的判斷這張票不動。
+    兩條用同一個「含」（`_contains_words`），**不是 `mentions`**：打的字有 CJK 時不設長度下限
+    （一個字也照打的比），`mentions` 的中文名要兩個字起（票 83c）。
     """
     names = _known_titles(media) if media is not None else ()
     return any(_contains_words(release_name, words) for words in (typed, *names))
@@ -267,10 +276,7 @@ def partial_title(release_name: str, media: MediaSnapshot) -> str:
         (
             name
             for name in names
-            if any(
-                len(target) >= _MIN_CONTAINED and target in normalize_title(name)
-                for target in known
-            )
+            if any(_long_enough(target) and target in normalize_title(name) for target in known)
         ),
         "",
     )

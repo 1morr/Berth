@@ -41,3 +41,31 @@
 - [ ] `berth bench` 前後比較寫在 Comments，`auto_wrong` 不上升
 
 ## Comments
+
+### 進度（2026-10-19，停在第 5 點，待決）
+
+已做第 1–4 點：`_long_enough`（含 CJK 兩個字起、拉丁字照 `_MIN_CONTAINED`）給 `mentions` 與 `partial_title` 共用；
+`_compare`、`_contains_words` 沒動。測試：`test_parser_title.py::TestShortChineseNames`（三字、兩字、一字、短拉丁字、
+兩條衍生劇、自己不算部分）與 `test_search.py::test_a_three_character_chinese_name_fits_a_title_search`，改動前都紅（stash 驗過）。
+
+**berth bench**：改動前後輸出逐字相同——`overall 904 files · auto_correct 255 · auto_wrong 0 · review 84`；
+high 0/112、medium 0/143 wrong（`mentions`、`partial_title` 不在 bench 的路徑上）。
+
+### 語料抽查（第 5 點）：兩字名誤判明顯偏多，照票面停下
+
+做法：dmhy RSS（`share.dmhy.org/topics/rss/rss.xml?keyword=`，每個查詢 3 頁）＋ TPB（apibay，電影類）的真實發佈名，
+查詢照預設的英文名與原名，去重後逐筆丟 `services.search._judge`，改動前後各跑一次比歸類。沒經 Prowlarr，分類是同一支。
+
+| 作品 | 改動前「符合」 | 改動後「符合」 | 新進「符合」的 | 其中是這部作品的 |
+| --- | --- | --- | --- | --- |
+| 《無間道》（三字） | 2 | 4 | 2 | 2（`無間道 III [国语中字.高清无水印]`、`[无间道I][国语中字…]`） |
+| 《英雄》2002（兩字） | 60 | 81 | 21 | 0 |
+| 《活著》1994（兩字） | 4 | 8 | 4 | 0 |
+
+《英雄》新進「符合」的例子：`[VCB-Studio] 英雄教室 / Eiyuu Kyoushitsu …[Fin]`、`剧场版 我的英雄学院：You're Next [1080p]`、
+`[時雨初空] 落第骑士英雄谭 BDRip …`、`[沸班亚马制作组] 龙珠超 超级英雄 […]`、`【ASMR】救救我，英雄先生…♪`。
+《活著》：`[The ARC-V Project][遊戲王ARC-V][SCALE.6 活著的真實感]`、`[假面骑士Saber][第43章][激战 活着的意义]…`、
+`(一般コミック) [Tiv] ぼくラはミンナ生きテイル！/我们都还活着 全3卷`。
+
+`partial_title` 擋不下它們：多半沒有季集記號或年份（沒有片名那一段就不判），有的英雄二字在片名中段。
+另外《英雄》有 262 筆從「名字對不上」移到「不是電影」（預設看不到，但按鈕上的數字會變）。
