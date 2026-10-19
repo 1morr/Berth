@@ -28,10 +28,12 @@ from berth.domain import (
     MediaKind,
     Role,
     RssRefusal,
+    SkipCode,
 )
 from berth.models import Job, Route, RssFeed, RssSeries, User
 from berth.parser import release
 from berth.services.rss import (
+    ExcludedCount,
     RssRejectedError,
     bind_series,
     list_feeds,
@@ -53,7 +55,8 @@ from tests.integration.test_rss import (
     series_by_key,
 )
 from tests.integration.test_rss_backfill import SEASON, rss_jobs, subscribed
-from tests.integration.test_rss_screen import SINGLE_URL, serve_single
+from tests.integration.test_rss_screen import SINGLE_URL, serve, serve_single
+from tests.integration.test_rss_screen import release as synthetic
 
 pytestmark = pytest.mark.asyncio
 
@@ -105,8 +108,31 @@ class TestMikan:
         assert series.title_raw == SEASON[-1].title
         assert await rss_jobs(session) == {item.info_hash for item in SEASON}
         assert (done.feed.id, done.series.id, done.series.submitted) == (feed.id, series.id, 12)
+        assert done.excluded == ()
         # 鍵從網址就知道：一頁單集頁都不必抓。
         assert factory.rss_.requested == [SINGLE_URL]
+
+    async def test_what_the_season_left_excluded_is_counted_by_reason(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 112：字幕組只出了合集，全域預設擋下它。回報說得出幾筆、哪一種理由。"""
+        media, route, factory = await harbour(session, roots)
+        group = "喵萌奶茶屋&LoliHouse"
+        serve(factory, SINGLE_URL, [synthetic(370, group, "[01-12 合集]")])
+
+        done = await subscribe_mikan(
+            session,
+            factory,
+            bangumi_id=4009,
+            subgroup_id=370,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=1,
+            now=NOW,
+        )
+
+        assert done.series.submitted == 0
+        assert done.excluded == (ExcludedCount(code=SkipCode.NOT_SINGLE, count=1),)
 
     async def test_the_next_round_of_the_single_feed_lands_in_the_same_series(
         self, session: AsyncSession, roots: dict[str, Path]

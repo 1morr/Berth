@@ -48,6 +48,7 @@ export type Oneshot = Schemas['OneshotOut']
 
 /** 一次性 RSS 連結的一筆：送單要的那幾格，加上解析結果與「已經有了」。 */
 export type OneshotItem = Schemas['OneshotItemOut']
+export type ExcludedCount = Schemas['ExcludedCountOut']
 
 /** Mikan 搜尋頁上的一個番組（票 19）。 */
 export type BangumiHit = Schemas['BangumiHitOut']

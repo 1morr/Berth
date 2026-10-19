@@ -709,6 +709,9 @@ class SubgroupOut(BaseModel):
     latest: str
     #: 這一組的 RSS Series 已經綁在哪一部作品上；沒有是 `null`。
     bound_to: str | None
+    #: 番組 × 這一組的單一 feed（M4 票 112）：「只下載現有的」拿它走 `POST /rss/oneshot`，
+    #: 網址格式只住在後端。
+    feed_url: str
 
 
 class BangumiOut(BaseModel):
@@ -734,12 +737,22 @@ class MikanSubscriptionIn(BaseModel):
     subgroup_name: str = ""
 
 
+class ExcludedCountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: SkipCode
+    count: int
+
+
 class SubscriptionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     feed: FeedOut
     #: `submitted` 是這一次送出去的（整季）。
     series: SeriesOut
+    #: 這個 RSS Series 被排除條件擋下、沒有自動下載的，照理由分（M4 票 112）；沒有是空的。
+    #: 畫面說出幾筆、為什麼，指向「只下載現有的」（`POST /rss/oneshot`）。
+    excluded: list[ExcludedCountOut]
 
 
 class SearchSubscriptionIn(BaseModel):

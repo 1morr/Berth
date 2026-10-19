@@ -95,6 +95,14 @@ const FLOWS = [
   },
   { name: 'rss-oneshot', spec: 'rss-oneshot', scenario: 'rss', port: 8512 },
   { name: 'rss-subscribe', spec: 'rss-subscribe', scenario: 'rss', port: 8514 },
+  { name: 'rss-existing', spec: 'rss-existing', scenario: 'rss', port: 8522 },
+  {
+    name: 'rss-existing-390',
+    spec: 'rss-existing',
+    scenario: 'rss',
+    port: 8523,
+    viewport: NARROW,
+  },
   {
     name: 'rss-subscribe-390',
     spec: 'rss-subscribe',
