@@ -1224,12 +1224,7 @@ async def release_item(
         raise RssRejectedError(RssRefusal.ITEM_MISSING, str(item_id))
     blocked = await _release_block(session, item)
     if blocked is not None:
-        detail = {
-            RssRefusal.ITEM_NOT_EXCLUDED: item.status.value,
-            RssRefusal.SERIES_UNBOUND: str(item.series_id or ""),
-            RssRefusal.FEED_UNPRIMED: str(item.feed_id),
-        }[blocked]
-        raise RssRejectedError(blocked, detail)
+        raise blocked
     await _submit(session, factory, item)
     row = await session.get(RssItem, item_id, populate_existing=True)
     assert row is not None
@@ -1237,21 +1232,23 @@ async def release_item(
     return await _item_view(session, row)
 
 
-async def _release_block(session: AsyncSession, item: RssItem) -> RssRefusal | None:
-    """`release_item` 現在會怎麼拒絕這一筆；放行得了是 `None`。清單照它把按鈕停用、說出原因。"""
+async def _release_block(session: AsyncSession, item: RssItem) -> RssRejectedError | None:
+    """`release_item` 現在會怎麼拒絕這一筆；放行得了是 `None`。清單照它的 `reason` 把按鈕停用、
+    說出原因。"""
     if item.status is not FeedItemStatus.EXCLUDED:
-        return RssRefusal.ITEM_NOT_EXCLUDED
+        return RssRejectedError(RssRefusal.ITEM_NOT_EXCLUDED, item.status.value)
     series = await session.get(RssSeries, item.series_id) if item.series_id is not None else None
     if series is None or series.media_id is None:
-        return RssRefusal.SERIES_UNBOUND
+        return RssRejectedError(RssRefusal.SERIES_UNBOUND, str(item.series_id))
     feed = await session.get(RssFeed, item.feed_id)
     if feed is None or feed.primed_at is None:
-        return RssRefusal.FEED_UNPRIMED
+        return RssRejectedError(RssRefusal.FEED_UNPRIMED, str(item.feed_id))
     return None
 
 
 async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: RssItem) -> int:
-    """送一筆。成了是 `downloaded` 加 Job 的 hash；被拒留在 `matched` 帶著原文。回 1 或 0。"""
+    """送一筆。成了是 `downloaded` 加 Job 的 hash；被拒留在原本的狀態（`matched`，或放行的
+    `excluded`）帶著原文。回 1 或 0。"""
     series = await session.get(RssSeries, item.series_id) if item.series_id is not None else None
     item_id = item.id
     if series is None or series.media_id is None:
@@ -2464,5 +2461,5 @@ async def _item_view(session: AsyncSession, row: RssItem) -> ItemView:
         skip=_skip_of(row),
         size=row.size,
         episode=parse_release(row.title).episode,
-        release_blocked=await _release_block(session, row),
+        release_blocked=blocked.reason if (blocked := await _release_block(session, row)) else None,
     )

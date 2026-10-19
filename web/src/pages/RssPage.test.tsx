@@ -1821,7 +1821,7 @@ describe('RSS 頁：被排除的那一筆仍然下載（M4 票 111）', () => {
       'GET /api/rss/items': () => ({ body: items }),
       'GET /api/rss/series/7/items': () => ({ body: items }),
       'POST /api/rss/items/21/release': () => {
-        if (answer.status === undefined) items = [SENT]
+        if (answer.status === undefined) items = [answer.body as FeedItem]
         return answer
       },
     })
@@ -1903,6 +1903,36 @@ describe('RSS 頁：被排除的那一筆仍然下載（M4 票 111）', () => {
     await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
 
     expect(await within(line).findByRole('alert')).toHaveTextContent(/已經不是被排除的了/)
+  })
+
+  it('同一個 torrent 送過了：按下去那一列換成重複的理由', async () => {
+    releasing({
+      body: { ...HELD, status: 'duplicate', skip: { code: 'same_torrent', params: {} } },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() => expect(line).toHaveTextContent('重複'))
+    expect(within(line).queryByRole('button', { name: '仍然下載' })).not.toBeInTheDocument()
+  })
+
+  it('按下去送單被拒：還是排除，說出送單那一頭的原文', async () => {
+    releasing({
+      body: { ...HELD, error: 'route_unhealthy: the route is red' },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() =>
+      expect(line).toHaveTextContent(
+        '仍然下載沒送出，這一筆還是排除： route_unhealthy: the route is red',
+      ),
+    )
+    expect(line).toHaveTextContent('已排除')
   })
 
   it('送單被拒時這一筆還是排除，說出送單那一頭的原文', async () => {

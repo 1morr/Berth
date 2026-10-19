@@ -63,7 +63,7 @@ export function ItemLine({ row, source }: { row: FeedItem; source?: ReactNode })
 }
 
 /**
- * 「仍然下載」（M4 票 111）：被排除的那一筆逐筆放行，當場送出。送出之後三份清單一起重問，這一列就換成
+ * 「仍然下載」（M4 票 111）：被排除的那一筆逐筆放行，當場送出。送出（或被拒）之後三份清單一起重問，這一列就換成
  * 送出去的 Job（或重複的理由）；送單被拒時它留在排除，原文在 `error`。
  *
  * 放行不了時（還沒綁定、還在預覽）照後端的 `release_blocked` 停用並說原因。用 `aria-disabled` 不用
@@ -75,7 +75,8 @@ function Release({ row }: { row: FeedItem }) {
   const whyId = useId()
   const release = useMutation({
     mutationFn: () => releaseItem(row.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: RSS_KEY }),
+    // 被拒也重問：另一個分頁可能剛解除綁定或先放行了，按鈕要照新的 `release_blocked`。
+    onSettled: () => queryClient.invalidateQueries({ queryKey: RSS_KEY }),
   })
   const blocked = row.release_blocked
   const locked = blocked !== null || release.isPending
