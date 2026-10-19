@@ -2497,7 +2497,7 @@ describe('作品頁：Mikan「只下載現有的」（M4 票 112）', () => {
     ],
     [
       'en',
-      'Subscribed; sent 0 episodes. Of what was read, 1 is a collection, range or season pack; it was not downloaded automatically. To download it, use “Download existing only”.',
+      'Subscribed; sent 0 episodes. Of this group’s releases, 1 is a collection, range or season pack; it was not downloaded automatically. To download it, use “Download existing only”.',
       'Download existing only',
       'Tick what to send',
     ],

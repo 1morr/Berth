@@ -2245,8 +2245,9 @@ class Subscription:
     feed: FeedView
     series: SeriesView
     #: 這個 RSS Series 被排除條件擋下、沒有自動下載的，照理由分（M4 票 112）：畫面說出幾筆、
-    #: 為什麼，指向「只下載現有的」。照 `SkipCode` 的宣告順序，沒有的不列。
-    excluded: tuple[ExcludedCount, ...] = ()
+    #: 為什麼，指向「只下載現有的」。算的是整個 Series（就地綁定時含聚合 feed 之前擋下的），
+    #: 不只這一次讀到的。照 `SkipCode` 的宣告順序，沒有的不列。
+    excluded: tuple[ExcludedCount, ...]
 
 
 @command(Effect.REVERSIBLE)

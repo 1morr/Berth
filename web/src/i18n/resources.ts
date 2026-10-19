@@ -6476,9 +6476,9 @@ const en: Translations<typeof zhHant> = {
       subscribed_one: 'Subscribed; sent {{count}} episode.',
       subscribed_other: 'Subscribed; sent {{count}} episodes.',
       excluded_one:
-        'Of what was read, {{what}}; it was not downloaded automatically. To download it, use “Download existing only”.',
+        'Of this group’s releases, {{what}}; it was not downloaded automatically. To download it, use “Download existing only”.',
       excluded_other:
-        'Of what was read, {{what}}; they were not downloaded automatically. To download them, use “Download existing only”.',
+        'Of this group’s releases, {{what}}; they were not downloaded automatically. To download them, use “Download existing only”.',
       excludedNotSingle_one: '{{count}} is a collection, range or season pack',
       excludedNotSingle_other: '{{count}} are collections, ranges or season packs',
       excludedRule_one: '{{count}} matched an exclusion',

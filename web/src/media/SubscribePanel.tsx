@@ -7,7 +7,6 @@ import type { Media } from '../api/media'
 import {
   bangumiQueryOptions,
   bangumiSearchQueryOptions,
-  parseRssRefusal,
   RSS_KEY,
   subscribeMikan,
   subscribeSearch,
@@ -24,7 +23,6 @@ import {
   CONFIRM_ACTIONS,
   Field,
   GhostButton,
-  Notice,
   PrimaryButton,
   TEXT_LINK,
 } from '../components/controls'
@@ -41,6 +39,7 @@ import { FirstRound } from '../rss/FirstRoundSection'
 import { preselect } from '../rss/preselect'
 import { ExistingDownload, type ExistingTarget } from './ExistingDownload'
 import { excludedText, sentences } from './excludedText'
+import { RssRefusalNotice } from '../rss/RssRefusalNotice'
 import { RoutePicker } from './RoutePicker'
 
 type FeedKind = Schemas['FeedKind']
@@ -95,7 +94,7 @@ export function SubscribePanel({ media }: { media: Media }) {
         series.data && <p className="max-w-prose text-sm text-ink-dim">{t('rss.subscribe.none')}</p>
       )}
 
-      <Subscriber media={media} onDone={(text, existing = null) => setSaid({ text, existing })} />
+      <Subscriber media={media} onDone={setSaid} />
       {/* 看得見的一句（訂閱之後表單收起，列表多一列；送出幾集只在這裡說），也念給螢幕閱讀器。 */}
       <p aria-live="polite" className="max-w-prose text-sm text-ink empty:hidden">
         {said.text}
@@ -114,7 +113,7 @@ interface Said {
   existing: ExistingTarget | null
 }
 
-type OnDone = (said: string, existing?: ExistingTarget | null) => void
+type OnDone = (said: Said) => void
 
 /**
  * 一個綁在這部作品上的 RSS Series：來源、字幕組、第一批確認了沒、最近一集。第一批還在等人時，標籤下面說它在問
@@ -174,8 +173,8 @@ function Subscriber({ media, onDone }: { media: Media; onDone: OnDone }) {
   // 建好的搜尋 feed：這一塊換成它的第一輪預覽。
   const [made, setMade] = useState<Feed | null>(null)
 
-  const finish: OnDone = (said, existing) => {
-    onDone(said, existing)
+  const finish: OnDone = (said) => {
+    onDone(said)
     setMade(null)
     close()
   }
@@ -196,10 +195,13 @@ function Subscriber({ media, onDone }: { media: Media; onDone: OnDone }) {
         <p id={headingId} className="max-w-prose text-sm text-ink">
           {t('rss.subscribe.made', { name: made.name })}
         </p>
-        <FirstRound feed={made} onDone={finish} />
+        <FirstRound feed={made} onDone={(text) => finish({ text, existing: null })} />
         <div className={CONFIRM_ACTIONS}>
           <span />
-          <GhostButton type="button" onClick={() => finish(t('rss.subscribe.later'))}>
+          <GhostButton
+            type="button"
+            onClick={() => finish({ text: t('rss.subscribe.later'), existing: null })}
+          >
             {t('rss.subscribe.decideLater')}
           </GhostButton>
         </div>
@@ -283,14 +285,14 @@ function MikanPicker({
     },
     onSuccess: async ({ done, target }) => {
       const excluded = excludedText(t, done.excluded, i18n.language)
-      onDone(
-        sentences(
+      onDone({
+        text: sentences(
           [t('rss.subscribe.subscribed', { count: done.series.submitted }), excluded],
           i18n.language,
         ),
         // 有被擋下的：回報指向「只下載現有的」，讀的是按下訂閱那一刻的那一組。
-        excluded ? target : null,
-      )
+        existing: excluded ? target : null,
+      })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: RSS_KEY }),
         queryClient.invalidateQueries({ queryKey: ['mikan'] }),
@@ -574,19 +576,5 @@ function Options<T>({
 
 function Refusal({ error }: { error: unknown }) {
   const { t } = useTranslation()
-  const refusal = parseRssRefusal(error)
-
-  // 後端沒說理由：照請求為什麼沒成說（M4 票 90）。
-  if (refusal === null) return <RequestFailed error={error} lead={t('request.notDone')} />
-
-  return (
-    <Notice signal="blocked" label={t('common.failed')}>
-      {refusal.reason === 'feed_unreachable'
-        ? t('rss.subscribe.unreachable')
-        : t(`rss.refusal.${refusal.reason}`)}
-      {refusal.detail ? (
-        <span className="value block text-xs wrap-anywhere">{refusal.detail}</span>
-      ) : null}
-    </Notice>
-  )
+  return <RssRefusalNotice error={error} unreachable={t('rss.subscribe.unreachable')} />
 }

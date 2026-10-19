@@ -3,10 +3,10 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
-import { oneshotQueryOptions, parseRssRefusal } from '../api/rss'
-import { GhostButton, Notice } from '../components/controls'
-import { RequestFailed } from '../components/RequestFailed'
+import { oneshotQueryOptions } from '../api/rss'
+import { GhostButton } from '../components/controls'
 import { OneshotList } from '../rss/OneshotList'
+import { RssRefusalNotice } from '../rss/RssRefusalNotice'
 
 /** 「只下載現有的」要讀的那一條：番組 × 字幕組的單一 feed（後端給的網址）與送到的 Route。 */
 export interface ExistingTarget {
@@ -62,22 +62,14 @@ function Listing({ media, target }: { media: Media; target: ExistingTarget }) {
     return <OneshotList key={target.url} read={read.data} media={media} route={target.route} />
   }
   if (read.isError) {
-    const refusal = parseRssRefusal(read.error)
-    if (refusal === null) return <RequestFailed error={read.error} lead={t('request.notDone')} />
     return (
-      <Notice signal="blocked" label={t('common.failed')}>
-        {refusal.reason === 'feed_unreachable'
-          ? t('rss.subscribe.existing.unreachable')
-          : t(`rss.refusal.${refusal.reason}`)}
-        {refusal.detail ? (
-          <span className="value block text-xs wrap-anywhere">{refusal.detail}</span>
-        ) : null}
+      <RssRefusalNotice error={read.error} unreachable={t('rss.subscribe.existing.unreachable')}>
         <span className="mt-2 block">
           <GhostButton type="button" busy={read.isFetching} onClick={() => void read.refetch()}>
             {t('rss.subscribe.existing.retry')}
           </GhostButton>
         </span>
-      </Notice>
+      </RssRefusalNotice>
     )
   }
   return <p className="text-xs text-ink-dim">{t('rss.subscribe.existing.reading')}</p>
