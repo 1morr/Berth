@@ -501,6 +501,19 @@ async def arrange_infernal(session: AsyncSession) -> None:
     await session.commit()
 
 
+@pytest.mark.asyncio
+async def test_a_three_character_chinese_name_fits_a_title_search(session: AsyncSession) -> None:
+    """照作品名搜《無間道》：只寫中文名的 dmhy 發佈不再歸「名字對不上」（M4 票 83c）。"""
+    await arrange_infernal(session)
+    await arrange_indexer(session)
+    factory = FakeClientFactory(indexer_search=FakeIndexerSearch(results=INFERNAL_RESULTS))
+
+    view = await search_torrents(session, factory, SourceCache(), media_id=INFERNAL)
+
+    assert listed(view) == ["無間道 III [国语中字]", "[心叶荐] 无间道_Infernal Affairs"]
+    assert "無間道 III [国语中字]" not in listed(view, SearchVerdict.UNRELATED)
+
+
 class TestTypedKeyword:
     """自己打關鍵字時分「對得上」與「對不上」（M4 票 83b）：只判發佈名對不對得上使用者問的東西，
     不判是不是這部作品（票 08）。熱門清單不再壓在那幾筆真正的結果上面。"""

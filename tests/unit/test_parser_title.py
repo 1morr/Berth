@@ -439,6 +439,69 @@ class TestPartialTitle:
         assert partial_title(name, blade) == ""
 
 
+def chinese_movie(name: str) -> MediaSnapshot:
+    """只有中文名對得上的電影：英文名是一串發佈名裡不會出現的字。"""
+    return MediaSnapshot(
+        tmdb_id=1,
+        kind=MediaKind.MOVIE,
+        title=name,
+        title_en="Some Latin Title",
+        title_original=name,
+        year=2013,
+        titles=("Some Latin Title", name),
+    )
+
+
+class TestShortChineseNames:
+    """照作品名搜時，含 CJK 的名字三個字起就拿來比（M4 票 83c，使用者 2026-10-19 選三字）。
+
+    `_MIN_CONTAINED` 是為了拉丁字的 `Up`；三個字的「無間道」被它略過，只寫中文名的發佈全歸
+    「名字對不上」。兩個字的照舊略過：抽查《英雄》新進「符合」的 21 筆全是 `英雄教室`、
+    `我的英雄学院` 這類（票 83c 的 Comments）。"""
+
+    INFERNAL = MediaSnapshot(
+        tmdb_id=10775,
+        kind=MediaKind.MOVIE,
+        title="無間道",
+        title_en="Infernal Affairs",
+        title_original="無間道",
+        year=2002,
+        titles=("Infernal Affairs", "無間道", "无间道"),
+    )
+
+    @pytest.mark.parametrize(
+        "name", ["無間道 III [国语中字.高清无水印]", "[无间道I][国语中字][1080p]"]
+    )
+    def test_a_three_character_name_is_mentioned(self, name: str) -> None:
+        assert mentions(name, self.INFERNAL)
+
+    @pytest.mark.parametrize(
+        ("name", "title"),
+        [
+            ("[VCB-Studio] 英雄教室 / Eiyuu Kyoushitsu 10-bit 1080p HEVC BDRip [Fin]", "英雄"),
+            ("[字幕組][英雄][1080p]", "英雄"),
+            ("[字幕組] 她 [1080p]", "她"),
+        ],
+    )
+    def test_a_name_of_one_or_two_characters_is_not(self, name: str, title: str) -> None:
+        assert not mentions(name, chinese_movie(title))
+
+    def test_short_latin_names_still_need_the_minimum(self) -> None:
+        """拉丁字照舊不到四字不比：`Up` 出現在半數發佈名裡。"""
+        assert not mentions("Up.2009.1080p.BluRay", movie("Up", 2009))
+
+    def test_a_wider_three_character_name_is_partial(self) -> None:
+        """`mentions` 放得進來的，`partial_title` 也要認得出「多一段」，否則衍生劇直接混進正片。"""
+        assert partial_title("無間道前傳 (2003) 1080p", self.INFERNAL) == "無間道前傳"
+
+    def test_a_two_character_name_is_not_judged_partial(self) -> None:
+        """兩個字的名字 `mentions` 不放進來，`partial_title` 也不拿它比——兩處同一個下限。"""
+        assert partial_title("英雄教室 2002 1080p", chinese_movie("英雄")) == ""
+
+    def test_the_short_chinese_name_itself_is_not_partial(self) -> None:
+        assert partial_title("無間道 (2002) 1080p", self.INFERNAL) == ""
+
+
 class TestAmpersand:
     """片名裡的 `&` 與 `and` 是同一個字（M4 票 69）：Sonarr / Radarr 送查詢前把 `&` 換成 `and`
     （`GetCleanSceneTitle`），比對時兩者都清掉（`CleanSeriesTitle`）。發佈名照 scene 的寫法是
