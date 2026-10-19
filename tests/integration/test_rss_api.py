@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
-from berth.adapters.rss.mikan import bangumi_url, parse_feed, search_url
+from berth.adapters.rss.mikan import bangumi_feed_url, bangumi_url, parse_feed, search_url
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
@@ -772,6 +772,8 @@ class TestSubscribeFromTheDetailPage:
             "2026-09-24",
             None,
         )
+        # 單一 feed 的網址格式只住在後端（M4 票 112）：一次性下載直接讀它。
+        assert loli["feed_url"] == bangumi_feed_url(4009, 370)
 
         done = client.post(
             "/api/rss/subscriptions/mikan",
@@ -789,6 +791,7 @@ class TestSubscribeFromTheDetailPage:
         assert done.status_code == 201, done.text
         assert done.json()["feed"]["url"] == SINGLE_URL
         assert done.json()["series"]["submitted"] == len(parse_feed(SINGLE))
+        assert done.json()["excluded"] == []
         (listed,) = client.get("/api/rss/series", params={"media": KIMI_ID}).json()
         assert (listed["source"], listed["group"], listed["confirmed"]) == (
             "mikan",

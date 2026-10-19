@@ -147,7 +147,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑十八條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑十九條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -300,7 +300,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十八條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十三個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十九條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十五個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -322,6 +322,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 連載中的 split-cour 第一批整批擋在審核：改一份計劃的一列並套用到 RSS Series，其餘 11 份重新規劃、自動入庫，改的那一份核准 | `rss-split-cour-airing` | 8510 / 8511 |
 | 一次性 RSS 連結：讀單一 feed 勾三集送單、acg.rip 那一份標出合集 | `rss` | 8512 / 8513 |
 | 詳情頁訂閱：Mikan 搜番組、選字幕組、整季進下載列表；再以標題建 acg.rip 搜尋 feed，第一輪就地預覽 | `rss` | 8514 / 8515 |
+| 作品頁「只下載現有的」：訂閱只出合集的 Nix-Raws，回報說出擋下的合集，從「只下載現有的」勾合集送出 | `rss` | 8522 / 8523 |
 
 精靈、設定頁與 RSS 那幾條在兩種寬度各走一次（`playwright.config.ts` 的 `NARROW`），每一格都留一張整頁截圖在
 `web/test-results/<那一條>/`，通過的那一輪也留著。

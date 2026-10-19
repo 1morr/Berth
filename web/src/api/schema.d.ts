@@ -2790,6 +2790,12 @@ export interface components {
          * @enum {string}
          */
         EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
+        /** ExcludedCountOut */
+        ExcludedCountOut: {
+            code: components["schemas"]["SkipCode"];
+            /** Count */
+            count: number;
+        };
         /**
          * ExclusionsIn
          * @description 全域那一層：規則加上合集預設。
@@ -5344,11 +5350,15 @@ export interface components {
             latest: string;
             /** Bound To */
             bound_to: string | null;
+            /** Feed Url */
+            feed_url: string;
         };
         /** SubscriptionOut */
         SubscriptionOut: {
             feed: components["schemas"]["FeedOut"];
             series: components["schemas"]["SeriesOut"];
+            /** Excluded */
+            excluded: components["schemas"]["ExcludedCountOut"][];
         };
         /**
          * TagsOut

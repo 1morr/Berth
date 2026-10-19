@@ -3099,6 +3099,21 @@ const zhHant = {
       subscribing: '訂閱中…',
       subscribed_one: '已訂閱，送出 {{count}} 集。',
       subscribed_other: '已訂閱，送出 {{count}} 集。',
+      // 訂閱之後被排除條件擋下的（M4 票 112）：`what` 是下面兩段接起來的。
+      excluded_one: '{{what}}，沒有自動下載。要下載，用「只下載現有的」。',
+      excluded_other: '{{what}}，沒有自動下載。要下載，用「只下載現有的」。',
+      excludedNotSingle_one: '{{count}} 筆是合集、區間或季包',
+      excludedNotSingle_other: '{{count}} 筆是合集、區間或季包',
+      excludedRule_one: '{{count}} 筆對上排除條件',
+      excludedRule_other: '{{count}} 筆對上排除條件',
+      // 不訂閱，讀一次這一組現有的、勾幾筆送出（M4 票 112，`media/ExistingDownload.tsx`）。
+      existing: {
+        open: '只下載現有的',
+        hint: '讀一次這個字幕組在 Mikan 上現有的，勾幾筆送出，不建 Feed。合集也勾得了。',
+        reading: '讀這個字幕組現有的…',
+        unreachable: '現在讀不到 Mikan，什麼都沒送。等一下再讀一次。原文：',
+        retry: '再讀一次',
+      },
       titles: '這部作品的名字',
       term: '搜尋詞',
       termHint: {
@@ -6460,6 +6475,22 @@ const en: Translations<typeof zhHant> = {
       subscribing: 'Subscribing…',
       subscribed_one: 'Subscribed; sent {{count}} episode.',
       subscribed_other: 'Subscribed; sent {{count}} episodes.',
+      excluded_one:
+        'Of what was read, {{what}}; it was not downloaded automatically. To download it, use “Download existing only”.',
+      excluded_other:
+        'Of what was read, {{what}}; they were not downloaded automatically. To download them, use “Download existing only”.',
+      excludedNotSingle_one: '{{count}} is a collection, range or season pack',
+      excludedNotSingle_other: '{{count}} are collections, ranges or season packs',
+      excludedRule_one: '{{count}} matched an exclusion',
+      excludedRule_other: '{{count}} matched exclusions',
+      existing: {
+        open: 'Download existing only',
+        hint: 'Read what this group has on Mikan once and send the items you tick, without creating a feed. Collections can be ticked too.',
+        reading: 'Reading what this group has…',
+        unreachable:
+          "Mikan can't be reached right now, so nothing was sent. Read again shortly. Original message:",
+        retry: 'Read again',
+      },
       titles: 'Names of this title',
       term: 'Search term',
       termHint: {

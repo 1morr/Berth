@@ -71,6 +71,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher, acgrip
 from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.rss.fake import FakeFeedFetcher
+from berth.adapters.rss.mikan import bangumi_feed_url as mikan_feed_url
 from berth.adapters.rss.mikan import bangumi_url, parse_feed
 from berth.adapters.rss.mikan import search_url as mikan_search_url
 from berth.adapters.tmdb import (
@@ -1361,6 +1362,39 @@ RSS_PACKS = dict(_rss_pack(item.title) for item in RSS_SEASON)
 DEMO_PACKS.update(RSS_PACKS)
 
 
+#: 只出了合集的字幕組（M4 票 112）：番組頁上的 Nix-Raws（1256），單一 feed 只有一筆 01–12 合集。
+#: 訂閱它時全域的「不自動下載合集」擋下那一筆；作品頁的「只下載現有的」照樣勾得了。
+RSS_BATCH_SUBGROUP = 1256
+RSS_BATCH_URL = mikan_feed_url(4009, RSS_BATCH_SUBGROUP)
+RSS_BATCH_RELEASE = "[Nix-Raws] Kimi ga Shinu made Koi wo Shitai [01-12] [1080p]"
+RSS_BATCH_PACKS = {
+    RSS_BATCH_RELEASE: tuple(
+        (f"{RSS_BATCH_RELEASE}/Kimi ga Shinu made Koi wo Shitai - {number:02d} [1080p].mkv", 4000)
+        for number in range(1, 13)
+    )
+}
+DEMO_PACKS.update(RSS_BATCH_PACKS)
+
+
+def _batch_feed(info_hash: str) -> bytes:
+    """Mikan 單一 feed 的形狀（同 `test_rss_screen.mikan_feed`），只有一筆合集。"""
+    title = escape(
+        "[Nix-Raws] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai "
+        "[01-12 合集][CR WEB-DL 1080p AVC AAC]"
+    )
+    return (
+        '<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel>'
+        "<title>Mikan Project - 与你相恋到生命尽头</title>"
+        f'<item><guid isPermaLink="false">{title}</guid>'
+        f"<link>https://mikanani.me/Home/Episode/{info_hash}</link><title>{title}</title>"
+        '<torrent xmlns="https://mikanani.me/0.1/"><contentLength>6000000000</contentLength>'
+        "<pubDate>2026-09-24T16:08:01</pubDate></torrent>"
+        '<enclosure type="application/x-bittorrent" length="6000000000" '
+        f'url="https://mikanani.me/Download/20260924/{info_hash}.torrent" /></item>'
+        "</channel></rss>"
+    ).encode()
+
+
 #: Mikan 搜尋頁裡搜尋結果那一格（票 19）：真的一頁上 MB，演練只要那一格（形狀照 fixture
 #: `home-search.frieren.html`）。
 KIMI_MIKAN_SEARCH = (
@@ -1403,8 +1437,11 @@ def rss_scenario(
     票 19 從詳情頁（`/media/tv:262000`）訂閱：以這部作品的任何一個名字搜 Mikan 都是《与你相恋》
     那一個番組（搜尋頁是合成的，只有結果那一格），番組頁與單一 feed 同上——訂閱喵萌奶茶屋&LoliHouse
     就是整季 12 筆；以任何一個名字建 acg.rip 搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。
+
+    M4 票 112：Nix-Raws 的單一 feed 只有一筆 01–12 合集——作品頁的「只下載現有的」勾它送出。
     """
-    scenario = _planning(healthy(), RSS_PACKS)
+    batch = demo_torrent(RSS_BATCH_RELEASE)
+    scenario = _planning(healthy(), {**RSS_PACKS, **RSS_BATCH_PACKS})
     scenario.indexer_results = ()
     scenario.tmdb_credential = "00000000000000000000000000000010"
     scenario.tmdb = FakeTmdbClient(
@@ -1432,6 +1469,7 @@ def rss_scenario(
         bangumi_url(4009): (RSS_MIKAN / "home-bangumi.4009.html").read_bytes(),
         RSS_SINGLE_URL: RSS_SINGLE,
         RSS_KAMIINA_URL: RSS_KAMIINA,
+        RSS_BATCH_URL: _batch_feed(batch.info_hash),
     }
     for item in parse_feed(RSS_SINGLE):
         scenario.feed_pages.setdefault(
@@ -1446,6 +1484,9 @@ def rss_scenario(
         )
         for item, release in zip(RSS_SEASON, RSS_PACKS, strict=True)
     }
+    scenario.torrent_sources[f"https://mikanani.me/Download/20260924/{batch.info_hash}.torrent"] = (
+        TorrentSource(info_hash=batch.info_hash, content=batch.raw)
+    )
     return scenario
 
 

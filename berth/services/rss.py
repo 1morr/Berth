@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -2230,11 +2231,22 @@ async def _candidate_views(session: AsyncSession, ids: Sequence[str]) -> tuple[C
 
 
 @dataclass(frozen=True, slots=True)
+class ExcludedCount:
+    """一種排除理由擋下了幾筆。"""
+
+    code: SkipCode
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
 class Subscription:
     """訂閱 Mikan 番組 × 字幕組的結果：它所在的 Feed 與綁好的 RSS Series（`submitted` 含整季）。"""
 
     feed: FeedView
     series: SeriesView
+    #: 這個 RSS Series 被排除條件擋下、沒有自動下載的，照理由分（M4 票 112）：畫面說出幾筆、
+    #: 為什麼，指向「只下載現有的」。照 `SkipCode` 的宣告順序，沒有的不列。
+    excluded: tuple[ExcludedCount, ...] = ()
 
 
 @command(Effect.REVERSIBLE)
@@ -2290,6 +2302,7 @@ async def subscribe_mikan(
         return Subscription(
             feed=await _feed_view_of(session, home.id),
             series=replace(await _series_view(session, named), submitted=bound.submitted),
+            excluded=await _excluded_counts(session, series.id),
         )
 
     url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
@@ -2345,7 +2358,18 @@ async def subscribe_mikan(
     return Subscription(
         feed=await _feed_view_of(session, feed.id),
         series=replace(await _series_view(session, row), submitted=bound.submitted + submitted),
+        excluded=await _excluded_counts(session, series.id),
     )
+
+
+async def _excluded_counts(session: AsyncSession, series_id: int) -> tuple[ExcludedCount, ...]:
+    rows = await session.scalars(
+        select(RssItem).where(
+            RssItem.series_id == series_id, RssItem.status == FeedItemStatus.EXCLUDED
+        )
+    )
+    counts = Counter(skip.code for row in rows if (skip := _skip_of(row)) is not None)
+    return tuple(ExcludedCount(code=code, count=counts[code]) for code in SkipCode if counts[code])
 
 
 @command(Effect.REVERSIBLE, inverse="rss.delete_feed")

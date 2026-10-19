@@ -39,6 +39,8 @@ import { firstBatchAskText } from '../rss/firstBatchAsk'
 import { groupName } from '../rss/seriesByWork'
 import { FirstRound } from '../rss/FirstRoundSection'
 import { preselect } from '../rss/preselect'
+import { ExistingDownload, type ExistingTarget } from './ExistingDownload'
+import { excludedText, sentences } from './excludedText'
 import { RoutePicker } from './RoutePicker'
 
 type FeedKind = Schemas['FeedKind']
@@ -55,6 +57,8 @@ export const SUBSCRIBE_ANCHOR = 'media-subscribe'
  *
  * - **Mikan**：Berth 代搜番組（2026-09-26 拍板；搜尋框預填原文標題，Mikan 的番組名來自 bgm.tv，日文原名
  *   最穩）→ 選字幕組 → 訂閱。它的單一 feed 當場讀完，整季補齊（同綁定的補舊集，一律補）。
+ *   選好字幕組之後也可以不訂閱、「只下載現有的」（M4 票 112）：已完結、字幕組只出合集的作品，訂閱建的
+ *   Feed 擋下合集、之後也不會再有新的；訂閱之後有被擋下的，回報那一句也指向它。
  * - **Nyaa / acg.rip**：以這部作品的標題（與搜尋區塊同一份）建搜尋 feed，它長出的 RSS Series 都綁到這部作品
  *   （2026-09-26 拍板）。第一輪照樣等人選，建好之後就地畫 `/rss` 那一塊第一輪預覽。
  *
@@ -64,7 +68,7 @@ export function SubscribePanel({ media }: { media: Media }) {
   const { t } = useTranslation()
   const headingId = useId()
   const series = useQuery(workSeriesQueryOptions(media.id))
-  const [said, setSaid] = useState('')
+  const [said, setSaid] = useState<Said>({ text: '', existing: null })
 
   return (
     // 固定的 id：搜尋區在沒有接索引站時連過來（`IndexerNotice`，M4 票 61）。
@@ -91,14 +95,26 @@ export function SubscribePanel({ media }: { media: Media }) {
         series.data && <p className="max-w-prose text-sm text-ink-dim">{t('rss.subscribe.none')}</p>
       )}
 
-      <Subscriber media={media} onDone={setSaid} />
+      <Subscriber media={media} onDone={(text, existing = null) => setSaid({ text, existing })} />
       {/* 看得見的一句（訂閱之後表單收起，列表多一列；送出幾集只在這裡說），也念給螢幕閱讀器。 */}
       <p aria-live="polite" className="max-w-prose text-sm text-ink empty:hidden">
-        {said}
+        {said.text}
       </p>
+      {said.existing && (
+        // 換一條網址（再訂閱另一組）就是另一份清單。
+        <ExistingDownload key={said.existing.url} media={media} target={said.existing} />
+      )}
     </section>
   )
 }
+
+/** 訂閱之後的那一句；有被排除條件擋下的時候帶著「只下載現有的」要讀的那一條。 */
+interface Said {
+  text: string
+  existing: ExistingTarget | null
+}
+
+type OnDone = (said: string, existing?: ExistingTarget | null) => void
 
 /**
  * 一個綁在這部作品上的 RSS Series：來源、字幕組、第一批確認了沒、最近一集。第一批還在等人時，標籤下面說它在問
@@ -147,7 +163,7 @@ function SeriesLine({ row }: { row: RssSeries }) {
 }
 
 /** 「新增訂閱」：就地展開的確認區塊（同 `SeriesBinder`），不是 dialog。 */
-function Subscriber({ media, onDone }: { media: Media; onDone: (said: string) => void }) {
+function Subscriber({ media, onDone }: { media: Media; onDone: OnDone }) {
   const { t } = useTranslation()
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
   const headingId = useId()
@@ -158,8 +174,8 @@ function Subscriber({ media, onDone }: { media: Media; onDone: (said: string) =>
   // 建好的搜尋 feed：這一塊換成它的第一輪預覽。
   const [made, setMade] = useState<Feed | null>(null)
 
-  const finish = (said: string) => {
-    onDone(said)
+  const finish: OnDone = (said, existing) => {
+    onDone(said, existing)
     setMade(null)
     close()
   }
@@ -236,10 +252,10 @@ function MikanPicker({
 }: {
   media: Media
   route: number | null
-  onDone: (said: string) => void
+  onDone: OnDone
   onCancel: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const initial = media.title_original || media.title_en || media.title
   const [term, setTerm] = useState(initial)
@@ -250,9 +266,11 @@ function MikanPicker({
   const hits = useQuery({ ...bangumiSearchQueryOptions(searched), enabled: searched !== '' })
   const detail = useQuery({ ...bangumiQueryOptions(bangumi?.id ?? 0), enabled: bangumi !== null })
   const subscribe = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (bangumi === null || group === null || route === null) throw new Error('nothing picked')
-      return subscribeMikan({
+      // 「只下載現有的」要讀的那一條，記下按下那一刻的那一組（不讀之後才變的 state）。
+      const target: ExistingTarget = { url: group.feed_url, route }
+      const done = await subscribeMikan({
         media: media.id,
         route,
         bangumi: bangumi.id,
@@ -261,9 +279,18 @@ function MikanPicker({
         // 挑的時候讀過的字幕組名：RSS 頁的來源那一格說它，不說 id（M4 票 13）。番組名單一 feed 自己帶。
         subgroup_name: group.name,
       })
+      return { done, target }
     },
-    onSuccess: async (done) => {
-      onDone(t('rss.subscribe.subscribed', { count: done.series.submitted }))
+    onSuccess: async ({ done, target }) => {
+      const excluded = excludedText(t, done.excluded, i18n.language)
+      onDone(
+        sentences(
+          [t('rss.subscribe.subscribed', { count: done.series.submitted }), excluded],
+          i18n.language,
+        ),
+        // 有被擋下的：回報指向「只下載現有的」，讀的是按下訂閱那一刻的那一組。
+        excluded ? target : null,
+      )
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: RSS_KEY }),
         queryClient.invalidateQueries({ queryKey: ['mikan'] }),
@@ -348,6 +375,14 @@ function MikanPicker({
           <FolderLine media={media} />
           <p className="max-w-prose text-xs text-ink-dim">{t('rss.subscribe.season')}</p>
         </>
+      )}
+      {group !== null && route !== null && (
+        // 換字幕組就是另一份清單，收起來從頭來。
+        <ExistingDownload
+          key={group.feed_url}
+          media={media}
+          target={{ url: group.feed_url, route }}
+        />
       )}
 
       <div className={CONFIRM_ACTIONS}>
