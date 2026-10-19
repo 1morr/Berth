@@ -401,9 +401,7 @@ function QueryCost({
     )
   }
   if (count === 0) return null
-  return (
-    <p className="max-w-prose text-xs text-ink-dim">{t('search.costWait', { count })}</p>
-  )
+  return <p className="max-w-prose text-xs text-ink-dim">{t('search.costWait', { count })}</p>
 }
 
 /**

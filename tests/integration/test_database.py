@@ -1101,7 +1101,7 @@ async def test_series_held_back_by_the_budget_are_due_next_round(config: Config)
     """M4 票 107：帶 `lookup_deferred` 的 Series 改成升版那一刻到期的 `lookup_retry`，`attempt` 0
     （不算一次失敗）；被擋之前已經在重認的留那一條、`attempt` 照舊、`at` 提前。降版換回去。"""
     deferred = {"code": "lookup_deferred", "params": {"site": "mikanani.me"}}
-    retrying = {
+    retrying: dict[str, Any] = {
         "code": "lookup_retry",
         "params": {
             "site": "api.themoviedb.org",

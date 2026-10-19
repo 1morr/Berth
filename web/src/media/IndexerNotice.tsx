@@ -29,13 +29,7 @@ export function IndexerNotice({ problem, detail }: { problem: IndexerProblem; de
   return (
     <div className="grid max-w-prose gap-3">
       <Notice
-        signal={
-          unconnected
-            ? 'neutral'
-            : problem === 'too_many_queries'
-              ? 'assigned'
-              : 'blocked'
-        }
+        signal={unconnected ? 'neutral' : problem === 'too_many_queries' ? 'assigned' : 'blocked'}
         label={t(`search.problem.${problem}.label`)}
       >
         {t(`search.problem.${problem}.body`)}

@@ -21,7 +21,7 @@ from berth.services.inventory import EpisodeView, SeasonView
 #: 所以上限不是為了省 Berth 的力氣，是為了不要替使用者把那些公開站打到封 IP。
 #: 超過時不砍尾巴、整次不問（畫面停用搜尋鍵）：名字與季是使用者自己開的，默默少問幾個
 #: 等於替他做了決定。10 個放得下動畫的英文名、原名、兩種中文名各配「不指定季」與最新一季
-#: （拉丁字名字一季兩個記號，`season_tokens`）（使用者 2026-10-13 拍板）。
+#: （拉丁字名字一季兩個記號，`season_tokens`；使用者 2026-10-13 拍板）。
 MAX_QUERIES = 10
 
 

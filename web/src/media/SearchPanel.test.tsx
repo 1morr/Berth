@@ -217,8 +217,7 @@ function holdSearch(base: ReturnType<typeof stubApi>) {
 }
 
 /** 只問一個查詢時，代價與等待那一句（M4 票 84b）。 */
-const COST_ONE =
-  '會問 1 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。'
+const COST_ONE = '會問 1 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。'
 
 /** 這一頁的搜尋區塊。其餘區塊的測試在 `pages/MediaDetailPage.test.tsx`。 */
 function panel() {
