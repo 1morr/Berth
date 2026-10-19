@@ -20,8 +20,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-#: 迴圈等待與讀時間的接縫，測試換成假的。`adapters/budget.py` 的 `Clock`、`services/indexer.py` 的
-#: `Sleeper` 另有一份：依賴方向不准它們 import pipeline。
+#: 迴圈等待與讀時間的接縫，測試換成假的。`services/indexer.py` 的 `Sleeper` 另有
+#: 一份：依賴方向不准它 import pipeline。
 Sleeper = Callable[[float], Awaitable[None]]
 Clock = Callable[[], datetime]
 

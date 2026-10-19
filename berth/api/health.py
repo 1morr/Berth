@@ -7,21 +7,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.schemas import HealthDetailOut, health_detail
 from berth.config import VERSION
-from berth.domain import BudgetUse
 from berth.services.health import (
-    BudgetView,
     Status,
     check_health,
     overall_status,
-    read_budget,
     read_health,
 )
 from berth.services.setup import is_owner_established, is_setup_complete
@@ -60,59 +55,3 @@ async def read_detail(session: SessionDep) -> HealthDetailOut:
 async def post_check(session: SessionDep, factory: ClientFactoryDep) -> HealthDetailOut:
     """立刻重跑四項檢查（plan §3.2 的「+ 手動」）。迴圈跑的是同一支命令。"""
     return health_detail(await check_health(session, factory))
-
-
-class UseCountOut(BaseModel):
-    use: BudgetUse
-    count: int
-
-
-class DeferralOut(BaseModel):
-    """被預算擋下、還沒過得去的一種工作。"""
-
-    use: BudgetUse
-    #: 擋下了幾個請求。
-    refused: int
-    #: 放得下的時刻；`null` 是一次要的比整份預算還多，永遠放不下。
-    until: datetime | None
-
-
-class SiteBudgetOut(BaseModel):
-    site: str
-    #: 視窗裡的請求數。
-    used: int
-    by_use: list[UseCountOut]
-    deferred: list[DeferralOut]
-
-
-class BudgetOut(BaseModel):
-    """一個站一份請求預算（M3 票 20、plan §3.2）。記在程序的記憶體裡，重啟歸零。"""
-
-    #: 每一站在一個視窗裡最多幾個請求。
-    limit: int
-    #: 視窗裡問過、或有工作被擋著的站。
-    sites: list[SiteBudgetOut]
-
-
-@router.get("/health/budget")
-async def read_request_budget(factory: ClientFactoryDep) -> BudgetOut:
-    """輪詢、補漏、搜尋共用的那一份。**不連任何服務**。"""
-    return _budget(read_budget(factory))
-
-
-def _budget(view: BudgetView) -> BudgetOut:
-    return BudgetOut(
-        limit=view.limit,
-        sites=[
-            SiteBudgetOut(
-                site=row.site,
-                used=row.used,
-                by_use=[UseCountOut(use=use, count=count) for use, count in row.by_use],
-                deferred=[
-                    DeferralOut(use=one.use, refused=one.refused, until=one.until)
-                    for one in row.deferred
-                ],
-            )
-            for row in view.sites
-        ],
-    )

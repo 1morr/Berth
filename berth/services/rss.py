@@ -54,14 +54,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
-from berth.adapters.budget import BudgetExhaustedError, site_of
 from berth.adapters.http import ServiceError, is_transient
 from berth.adapters.rss import FeedFetcher, FeedItem, acgrip, mikan, nyaa
 from berth.adapters.tmdb import BASE_URL as TMDB_BASE_URL
 from berth.domain import (
     BindReason,
     BindReasonCode,
-    BudgetUse,
     FeedItemStatus,
     FeedKind,
     FileEntry,
@@ -107,7 +105,7 @@ from berth.parser.binding import (
 from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
 from berth.parser.planner import episode_span
 from berth.parser.release import parse_release, tags_of
-from berth.services.clients import ServiceClientFactory, feed_fetcher
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.discover import search_media
 from berth.services.first_batch import FirstBatchAsk
@@ -139,8 +137,15 @@ SEARCH_DEPTH = 3
 #: 同日稍後就讀得到，而壞掉的番組頁也不會每 15 分鐘被打一次（brief §15「綁定」原本的顧慮）。
 LOOKUP_RETRIES = (timedelta(hours=1), timedelta(hours=4), timedelta(hours=12))
 
-#: TMDB 在重認理由裡的站名，與請求預算同一種鍵（`site_of`）。
-_TMDB_SITE = site_of(TMDB_BASE_URL)
+
+def _site_of(url: str) -> str:
+    """重認理由裡的站名：小寫主機名，`www.` 去掉（`nyaa.si` 與 `www.nyaa.si` 是同一站）。"""
+    host = (urlsplit(url).hostname or "").lower()
+    return host.removeprefix("www.")
+
+
+#: TMDB 在重認理由裡的站名。
+_TMDB_SITE = _site_of(TMDB_BASE_URL)
 
 #: 正在跑的那一輪（`poll_feed`）：Feed id → 做完時放進結果（沒做完就結束是 `None`）。
 _rounds: dict[int, asyncio.Future[PollOutcome | None]] = {}
@@ -179,15 +184,8 @@ class RssRejectedError(Exception):
 
 
 def unread(exc: ServiceError) -> RssRejectedError:
-    """人在畫面上按的讀取沒讀到：請求預算用完（`budget_exhausted`，等一下）與那一站讀不到
-    （`feed_unreachable`）是兩件事（M3 票 20）。`BudgetExhaustedError` 是 `ServiceError`，
-    所以一律經過這裡分，不在每一個呼叫端各排一次 `except` 的順序。"""
-    reason = (
-        RssRefusal.BUDGET_EXHAUSTED
-        if isinstance(exc, BudgetExhaustedError)
-        else RssRefusal.FEED_UNREACHABLE
-    )
-    return RssRejectedError(reason, message(exc))
+    """人在畫面上按的讀取沒讀到（`feed_unreachable`，`detail` 是原文）。"""
+    return RssRejectedError(RssRefusal.FEED_UNREACHABLE, message(exc))
 
 
 @dataclass(frozen=True, slots=True)
@@ -675,8 +673,8 @@ def _feed_view(row: RssFeed, items: int, awaiting: KindCounts) -> FeedView:
 def _ever_read(feed: RssFeed, items: int) -> bool:
     """這個 Feed 至少讀到過一次：輪過、而且不是「一筆都沒有又失敗」。
 
-    讀不到的那一輪照樣寫 `last_polled_at`（輪詢的間隔靠它），所以光看它不夠——連不上、請求預算
-    用完的 Feed 預覽是空的，「全部下載」等於替沒看過的整份歷史做決定（M3 票 21）。畫面讀
+    讀不到的那一輪照樣寫 `last_polled_at`（輪詢的間隔靠它），所以光看它不夠——連不上的
+    Feed 預覽是空的，「全部下載」等於替沒看過的整份歷史做決定（M3 票 21）。畫面讀
     `FeedView.ever_read`，不自己再算一次。
     """
     return feed.last_polled_at is not None and (not feed.last_error or items > 0)
@@ -840,7 +838,7 @@ async def poll_feed(
     做法）：人按「立即輪詢」時背景 poller 也可能正挑到它（剛加的 Feed 從沒輪過，兩邊同時到）。兩輪
     一起跑會各長一次同一個 RSS Series、撞 `rss_series.key` 的 unique（2026-09-27 真服務 e2e）；
     排隊再輪一次則讀到的全是看過的 Item，畫面說「新 0 筆」而那幾筆剛被前一輪收下（M4 票 13c），
-    還多花一個請求預算。後到的拿的是前一輪的 `now` 算出的結果；前一輪沒做完就結束（例外、被
+    也多打那一站一次。後到的拿的是前一輪的 `now` 算出的結果；前一輪沒做完就結束（例外、被
     cancel）時，後到的自己再輪。
     """
     while (running := _rounds.get(feed_id)) is not None:
@@ -869,7 +867,7 @@ async def _poll_feed(
     feed = await session.get(RssFeed, feed_id)
     if feed is None:
         raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
-    fetcher = feed_fetcher(factory, BudgetUse.POLL)
+    fetcher = factory.rss()
     bound = submitted = 0
     try:
         try:
@@ -906,8 +904,8 @@ async def _poll_feed(
             if sent is not None:
                 bound += 1
                 submitted += sent
-        # 上一輪被請求預算擋下的（M3 票 20）與暫時查不到、重認時間到了的（M4 票 14）：只有它們在
-        # 長出來之後的輪詢裡重認。這一輪才長出來的剛認過，不再撞一次。
+        # 暫時查不到、重認時間到了的（M4 票 14）：只有它們在長出來之後的輪詢裡重認。
+        # 這一輪才長出來的剛認過，不再撞一次。
         for series_id in await _due_lookups(session, feed_id, moment, skip=grown):
             sent = await _auto_bind(session, factory, pages, feed, series_id, moment)
             if sent is not None:
@@ -1097,7 +1095,7 @@ async def _read_season(factory: ServiceClientFactory, series: RssSeries) -> mika
     """
     assert series.mikan_bangumi_id is not None and series.mikan_subgroup_id is not None
     url = mikan.bangumi_feed_url(series.mikan_bangumi_id, series.mikan_subgroup_id)
-    fetcher = feed_fetcher(factory, BudgetUse.BACKFILL)
+    fetcher = factory.rss()
     try:
         return mikan.parse_single_feed(await fetcher.fetch(url))
     except ServiceError as exc:
@@ -1563,7 +1561,7 @@ class _LookupError(Exception):
 
     def __init__(self, detail: str, *, site: str, transient: bool) -> None:
         super().__init__(detail)
-        #: 哪一站，請求預算的鍵。
+        #: 哪一站（`_site_of`）。
         self.site = site
         #: 等一下再問可能就好了（`adapters.http.is_transient`）。
         self.transient = transient
@@ -1572,8 +1570,8 @@ class _LookupError(Exception):
 async def _due_lookups(
     session: AsyncSession, feed_id: int, moment: datetime, *, skip: Sequence[int] = ()
 ) -> list[int]:
-    """這個 Feed 帶到、該再認一次的 RSS Series：上一次被請求預算擋下的（`lookup_deferred`，
-    M3 票 20），與暫時查不到、重認的時間到了的（`lookup_retry`，M4 票 14）。"""
+    """這個 Feed 帶到、該再認一次的 RSS Series：暫時查不到、重認的時間到了的（`lookup_retry`，
+    M4 票 14）。"""
     rows = await session.scalars(
         select(RssSeries)
         .where(
@@ -1586,8 +1584,6 @@ async def _due_lookups(
 
 
 def _due(reasons: Sequence[BindReason], moment: datetime) -> bool:
-    if any(reason.code is BindReasonCode.LOOKUP_DEFERRED for reason in reasons):
-        return True
     retrying = _retrying(reasons)
     return retrying is not None and datetime.fromisoformat(str(retrying.params["at"])) <= moment
 
@@ -1627,10 +1623,10 @@ async def _auto_bind(
     """第一次見到的 RSS Series 去 TMDB 認作品（brief §15「綁定」、票 09）。
 
     綁上了回送出幾筆，沒綁是 `None`。**在長出來的那一輪做**，之後不在每一輪重認——那會讓一個壞掉的
-    番組頁每 15 分鐘打一次，人拆掉的自動綁定也會被綁回去。例外兩種（`_due_lookups`）：被請求預算
-    擋下的，與**暫時**查不到的（連不上、逾時、限流、5xx，M4 票 14）——後者照 `LOOKUP_RETRIES`
-    退避、有上限地重認；用完了、或再問也一樣的（404、回的不是那個服務）留在待綁定、理由寫
-    `lookup_failed`，人手上有搜尋。
+    番組頁每 15 分鐘打一次，人拆掉的自動綁定也會被綁回去。例外是**暫時**查不到的（`_due_lookups`；
+    連不上、逾時、限流、5xx，M4 票 14）：照 `LOOKUP_RETRIES` 退避、有上限地重認；
+    用完了、或再問也一樣的（404、回的不是那個服務）留在待綁定、理由寫 `lookup_failed`，
+    人手上有搜尋。
 
     **一部候選讀不到不拖垮整次**：其餘的照判，判得出來就綁；判不出來而缺的那幾部是暫時讀不到的，
     照暫時的失敗晚點再認（缺的那一部可能正是它）；一部都沒讀到才是查不到。
@@ -1648,13 +1644,6 @@ async def _auto_bind(
         # 握著寫交易打網路會鎖住整個資料庫（M4 票 01）。
         await _remember_names(session, series_id, clues.title, subgroup)
         shots, missed = await _candidates(session, factory, clues)
-    except BudgetExhaustedError as refused:
-        # 預算擋下的不是「查不到」：記成延後，下一輪輪到這個 Feed 時再認（`_due_lookups`）。
-        # 已經在重認的留著那一條：次數照舊算，不因為被擋一次就從頭數。
-        retrying = _retrying(_reasons(series))
-        deferred = because(BindReasonCode.LOOKUP_DEFERRED, site=refused.site)
-        await _note(session, series_id, (deferred, *([retrying] if retrying else [])))
-        return None
     except _LookupError as failed:
         logger.info("rss series lookup failed", extra={"series": series_id, "error": str(failed)})
         await _note(session, series_id, (_retry(series, failed, moment) or _given_up(failed),))
@@ -1712,18 +1701,18 @@ async def _auto_bind(
 class _ShowPages:
     """一輪輪詢讀過的 Mikan 番組頁，以 `bangumi_id` 為鍵（M4 票 82）。
 
-    同一部的不同字幕組是不同的 RSS Series，番組頁卻是同一頁：同一輪只抓一次、在預算裡佔一格。
+    同一部的不同字幕組是不同的 RSS Series，番組頁卻是同一頁：同一輪只抓一次。
     「一輪」是一個 Feed 的一輪（`_poll_feed`），MyBangumi 聚合 feed 的各字幕組都在裡面。
-    **讀不到也記下來**：同一輪其他共用這頁的 Series 拿到同一種失敗（`_LookupError` 或被預算擋下），
-    不各自再打一次，被擋下的也不多記一次延後。只活在那一輪，下一輪重新讀。
+    **讀不到也記下來**：同一輪其他共用這頁的 Series 拿到同一種失敗（`_LookupError`），
+    不各自再打一次。只活在那一輪，下一輪重新讀。
     """
 
     def __init__(self, fetcher: FeedFetcher) -> None:
         self._fetcher = fetcher
-        self._outcomes: dict[int, str | BudgetExhaustedError | _LookupError] = {}
+        self._outcomes: dict[int, str | _LookupError] = {}
 
     async def read(self, bangumi_id: int) -> str:
-        """番組頁的原文；讀不到丟 `_LookupError`，預算放不下丟 `BudgetExhaustedError`。"""
+        """番組頁的原文；讀不到丟 `_LookupError`。"""
         if bangumi_id not in self._outcomes:
             self._outcomes[bangumi_id] = await self._fetch(bangumi_id)
         outcome = self._outcomes[bangumi_id]
@@ -1732,15 +1721,13 @@ class _ShowPages:
         # 同一個例外再丟一次：traceback 不疊上前一次的。
         raise outcome.with_traceback(None)
 
-    async def _fetch(self, bangumi_id: int) -> str | BudgetExhaustedError | _LookupError:
+    async def _fetch(self, bangumi_id: int) -> str | _LookupError:
         url = mikan.bangumi_url(bangumi_id)
         try:
             page = await self._fetcher.fetch(url)
-        except BudgetExhaustedError as refused:
-            return refused
         except ServiceError as exc:
             failed = _LookupError(
-                f"bangumi page: {message(exc)}", site=site_of(url), transient=is_transient(exc)
+                f"bangumi page: {message(exc)}", site=_site_of(url), transient=is_transient(exc)
             )
             failed.__cause__ = exc
             return failed
@@ -2251,7 +2238,7 @@ async def subscribe_mikan(
     url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
-    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
+    fetcher = factory.rss()
     try:
         try:
             season = mikan.parse_single_feed(await fetcher.fetch(url))

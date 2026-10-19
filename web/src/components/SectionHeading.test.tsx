@@ -99,7 +99,7 @@ describe('section headings live in one place', () => {
     expect(
       handWrittenSectionHeadings(
         [
-          '<h2 id="health-budget" className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink">',
+          '<h2 id="health-poller" className="label border-b-2 border-rule bg-deck px-4 py-2.5 text-ink">',
           '<h2 id={id} className="value text-sm font-semibold text-ink">',
           '<h2 className="text-lg font-semibold text-ink">',
           '<h2 className="labelled-row text-ink">',

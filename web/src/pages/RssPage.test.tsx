@@ -337,7 +337,7 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
       'GET /api/rss/feeds': {
         body: [
           feed(),
-          { ...ACGRIP, items: 0, last_error: 'acg.rip: budget exhausted', ever_read: false },
+          { ...ACGRIP, items: 0, last_error: 'acg.rip: connection refused', ever_read: false },
         ],
       },
     })
@@ -345,7 +345,7 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
     const block = await firstRound()
 
     expect(within(block).getByText(/還沒讀到過，選不了/)).toBeInTheDocument()
-    expect(within(block).getByText('acg.rip: budget exhausted')).toBeInTheDocument()
+    expect(within(block).getByText('acg.rip: connection refused')).toBeInTheDocument()
     expect(within(block).queryByRole('button', { name: '全部下載' })).not.toBeInTheDocument()
     expect(sent(stub, 'GET', '/api/rss/feeds/2/preview')).toHaveLength(0)
   })
@@ -570,7 +570,7 @@ describe('RSS 頁', () => {
   it('這一輪沒讀到 Feed 時不說「新 0 筆」', async () => {
     render({
       'GET /api/rss/feeds': () => ({
-        body: [feed({ last_error: 'mikanani.me: budget exhausted' })],
+        body: [feed({ last_error: 'mikanani.me: connection refused' })],
       }),
       'POST /api/rss/feeds/1/poll': {
         body: {
@@ -578,7 +578,7 @@ describe('RSS 頁', () => {
           series: 0,
           bound: 0,
           submitted: 0,
-          failed: 'mikanani.me: budget exhausted',
+          failed: 'mikanani.me: connection refused',
         },
       },
     })

@@ -6,7 +6,6 @@ HTTP 錯誤。
 
 from __future__ import annotations
 
-from berth.adapters.budget import RequestBudget
 from berth.adapters.http import ServiceError, raise_for_status
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
@@ -44,7 +43,6 @@ class FakeClientFactory:
         indexer_search: FakeIndexerSearch | None = None,
         torrent: FakeTorrentFetcher | None = None,
         rss: FakeFeedFetcher | None = None,
-        budget: RequestBudget | None = None,
         #: 位址 → 在那個位址上的另一台 Jellyfin（M4 票 18：換位址時認得出是不是同一台）。
         #: 沒列的位址都是 `jellyfin` 那一台。
         elsewhere: dict[str, FakeJellyfinClient] | None = None,
@@ -61,8 +59,6 @@ class FakeClientFactory:
         self.indexer_search_ = indexer_search or FakeIndexerSearch()
         self.torrent_ = torrent or FakeTorrentFetcher()
         self.rss_ = rss or FakeFeedFetcher()
-        #: 一個站一份請求預算（M3 票 20）。預設就是正式的那一份形狀，測試要擋時傳一份小的。
-        self.budget = budget or RequestBudget()
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []

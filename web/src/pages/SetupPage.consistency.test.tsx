@@ -581,7 +581,7 @@ describe.each(LANGUAGES)('%s', (language) => {
 
   it('搜尋的時間照實際範圍說：幾秒到一分鐘（審計 P2-12）', async () => {
     await speak()
-    expect(t('search.costWait', { count: 1, budget: 60 })).toMatch(
+    expect(t('search.costWait', { count: 1 })).toMatch(
       language === 'en' ? /a few seconds to a minute/ : /幾秒到一分鐘/,
     )
   })

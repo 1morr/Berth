@@ -212,26 +212,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/health/budget": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read Request Budget
-         * @description 輪詢、補漏、搜尋共用的那一份。**不連任何服務**。
-         */
-        get: operations["read_request_budget_api_health_budget_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/inventory": {
         parameters: {
             query?: never;
@@ -2393,7 +2373,7 @@ export interface components {
         };
         /**
          * BatchOut
-         * @description 缺集搜尋分批時的這一批（M3 票 20）：「這一批問了哪幾季，下一批何時問」。
+         * @description 缺集搜尋分批時的這一批（M3 票 20）：「這一批問了哪幾季，下一批是哪幾季」。
          *
          *     下一批以季定位：帶 `from_season=<next_seasons[0]>` 再問一次，照那一刻的季表重切。
          */
@@ -2404,8 +2384,6 @@ export interface components {
             later: number;
             /** Next Seasons */
             next_seasons: number[];
-            /** Next At */
-            next_at: string | null;
         };
         /**
          * BerthPathFailure
@@ -2435,7 +2413,7 @@ export interface components {
          * @description 一條綁定理由是哪一種。
          * @enum {string}
          */
-        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "season_airing" | "only_route" | "feed_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "lookup_deferred" | "lookup_retry" | "route_ambiguous" | "no_route";
+        BindReasonCode: "title_equal" | "premiere_near" | "release_near" | "season_airing" | "only_route" | "feed_route" | "no_candidate" | "premiere_far" | "several_candidates" | "no_premiere" | "no_show_page" | "lookup_failed" | "lookup_retry" | "route_ambiguous" | "no_route";
         /**
          * BindReasonOut
          * @description 自動綁定的一條理由：封閉集合的 code 加參數，句子由前端照 code 挑（`rss.grounds.*`，票 09）。
@@ -2459,22 +2437,6 @@ export interface components {
             /** Route */
             route: number;
         };
-        /**
-         * BudgetOut
-         * @description 一個站一份請求預算（M3 票 20、plan §3.2）。記在程序的記憶體裡，重啟歸零。
-         */
-        BudgetOut: {
-            /** Limit */
-            limit: number;
-            /** Sites */
-            sites: components["schemas"]["SiteBudgetOut"][];
-        };
-        /**
-         * BudgetUse
-         * @description 誰用掉一個站的請求預算（M3 票 20、plan §3.2）。健康頁照它拆「這一小時是誰問的」。
-         * @enum {string}
-         */
-        BudgetUse: "poll" | "backfill" | "search" | "manual";
         /** BundledLibrariesIn */
         BundledLibrariesIn: {
             /** Libraries */
@@ -2629,17 +2591,6 @@ export interface components {
          * @enum {string}
          */
         ConnectionState: "ok" | "failed" | "waiting" | "timeout";
-        /**
-         * DeferralOut
-         * @description 被預算擋下、還沒過得去的一種工作。
-         */
-        DeferralOut: {
-            use: components["schemas"]["BudgetUse"];
-            /** Refused */
-            refused: number;
-            /** Until */
-            until: string | null;
-        };
         /**
          * DeletionEstimateOut
          * @description `services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
@@ -3081,7 +3032,7 @@ export interface components {
          *     畫面要把人送回精靈第 6 步（「來源」那一格），不是叫他重試。
          * @enum {string}
          */
-        IndexerProblem: "not_configured" | "no_query" | "credential_rejected" | "unreachable" | "budget_exhausted" | "too_many_queries";
+        IndexerProblem: "not_configured" | "no_query" | "credential_rejected" | "unreachable" | "too_many_queries";
         /** IndexerSearchOut */
         IndexerSearchOut: {
             /** Query */
@@ -4901,7 +4852,7 @@ export interface components {
          *     下一輪輪詢再送（`.scratch/m3/rss-shape.md` §3）。
          * @enum {string}
          */
-        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss" | "budget_exhausted";
+        RssRefusal: "feed_missing" | "feed_unsupported" | "feed_duplicate" | "series_missing" | "series_bound" | "media_missing" | "route_missing" | "route_disabled" | "route_kind_mismatch" | "route_required" | "rule_invalid" | "feed_primed" | "feed_unreachable" | "feed_unread" | "feed_not_rss";
         /**
          * RssRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文或那一個 id。
@@ -4940,15 +4891,11 @@ export interface components {
             problem: components["schemas"]["IndexerProblem"] | null;
             /** Detail */
             detail: string;
-            /** Retry At */
-            retry_at: string | null;
-            /** Skipped */
-            skipped: components["schemas"]["SkippedOut"][];
             batch: components["schemas"]["BatchOut"] | null;
         };
         /**
          * SearchQueriesOut
-         * @description 搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問，以及這要佔多少請求預算。
+         * @description 搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問。
          */
         SearchQueriesOut: {
             /** Queries */
@@ -4963,8 +4910,6 @@ export interface components {
             any_season: boolean;
             /** Limit */
             limit: number;
-            /** Budget */
-            budget: number;
         };
         /**
          * SearchResultOut
@@ -5241,17 +5186,6 @@ export interface components {
             /** Skipped */
             skipped: string[];
         };
-        /** SiteBudgetOut */
-        SiteBudgetOut: {
-            /** Site */
-            site: string;
-            /** Used */
-            used: number;
-            /** By Use */
-            by_use: components["schemas"]["UseCountOut"][];
-            /** Deferred */
-            deferred: components["schemas"]["DeferralOut"][];
-        };
         /** SiteCheckOut */
         SiteCheckOut: {
             /** Definition Name */
@@ -5321,18 +5255,6 @@ export interface components {
             params: {
                 [key: string]: string | number;
             };
-        };
-        /**
-         * SkippedOut
-         * @description 這次沒問的一站：主機名、索引站裡的名字、何時放得下這一批（`null` 是永遠放不下）。
-         */
-        SkippedOut: {
-            /** Site */
-            site: string;
-            /** Indexers */
-            indexers: string[];
-            /** Until */
-            until: string | null;
         };
         /**
          * SortOrder
@@ -5554,12 +5476,6 @@ export interface components {
             path: string;
             /** Reasons */
             reasons: components["schemas"]["ItemReasonOut"][];
-        };
-        /** UseCountOut */
-        UseCountOut: {
-            use: components["schemas"]["BudgetUse"];
-            /** Count */
-            count: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -5994,26 +5910,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthDetailOut"];
-                };
-            };
-        };
-    };
-    read_request_budget_api_health_budget_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BudgetOut"];
                 };
             };
         };
@@ -8059,15 +7955,6 @@ export interface operations {
                     "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
-            /** @description `budget_exhausted` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RssRefusalOut"];
-                };
-            };
             /** @description `feed_unreachable` · `feed_not_rss` */
             502: {
                 headers: {
@@ -8730,15 +8617,6 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description `budget_exhausted` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RssRefusalOut"];
-                };
-            };
             /** @description `feed_unreachable` */
             502: {
                 headers: {
@@ -8777,15 +8655,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description `budget_exhausted` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
             /** @description `feed_unreachable` */
@@ -8832,15 +8701,6 @@ export interface operations {
             };
             /** @description `media_missing` · `route_missing` · `route_kind_mismatch` */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RssRefusalOut"];
-                };
-            };
-            /** @description `budget_exhausted` */
-            429: {
                 headers: {
                     [name: string]: unknown;
                 };

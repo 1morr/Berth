@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -16,9 +17,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.budget import RequestBudget
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
-from berth.adapters.indexer import IndexerResult, SearchSite
+from berth.adapters.indexer import IndexerResult, SearchQuery
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
     IndexerProblem,
@@ -302,6 +302,29 @@ async def test_an_unreachable_indexer_says_which_way_it_failed(session: AsyncSes
 
     assert view.problem is IndexerProblem.CREDENTIAL_REJECTED
     assert view.detail == "GET /api/v1/search: 401"
+
+
+@pytest.mark.asyncio
+async def test_every_query_timing_out_is_said_on_the_cables_not_as_unreachable(
+    session: AsyncSession,
+) -> None:
+    """M4 票 107：`sites()` 拿掉之後，「整台問不動」由每一個查詢都被索引站拒絕來判；逾時不算——
+    索引站在、是它背後的站慢，畫面照舊是逐查詢的纜繩。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+
+    class Slow(FakeIndexerSearch):
+        async def search(self, query: SearchQuery) -> tuple[IndexerResult, ...]:
+            await asyncio.sleep(1)
+            return ()
+
+    factory = FakeClientFactory(indexer_search=Slow())
+
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY, timeout=0.01)
+
+    assert view.problem is None
+    assert view.attempts
+    assert {attempt.status for attempt in view.attempts} == {StepStatus.FAILED}
 
 
 @pytest.mark.asyncio
@@ -944,15 +967,11 @@ class TestMissingEpisodes:
         self, session: AsyncSession
     ) -> None:
         """M3 票 20 驗收第二條：十二季都有缺，季記號放不下一批——**分批問完每一季**，一次也不退回
-        作品名。每一批說得出問了哪幾季、下一批是哪幾季、預算何時放得下它。"""
+        作品名。每一批說得出問了哪幾季、下一批是哪幾季。每一個查詢都問全部的站（M4 票 107 刪掉
+        請求預算之後不再只帶部分 `indexerIds`）。"""
         long = await many_seasons(session)
-        indexer = FakeIndexerSearch(
-            sites=(SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),)
-        )
-        clock = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
-        factory = FakeClientFactory(
-            indexer_search=indexer, budget=RequestBudget(limit=60, now=lambda: clock)
-        )
+        indexer = FakeIndexerSearch()
+        factory = FakeClientFactory(indexer_search=indexer)
 
         first = await search_torrents(
             session, factory, SourceCache(), media_id=long.id, scope=QueryScope(missing=True)
@@ -975,17 +994,15 @@ class TestMissingEpisodes:
         # 第二批只剩七季、七集缺：放得下逐集，就問那幾集（收成季記號只在放不下時才做）。
         assert asked[10:] == [f"SPY x FAMILY S{number:02d}E02" for number in range(6, 13)]
         assert "SPY x FAMILY" not in asked
+        assert {query.indexer_ids for query in indexer.queries} == {()}
         assert (first.batch.seasons, first.batch.later) == ((1, 2, 3, 4, 5), 2)
         assert first.batch.next_seasons == (6, 7, 8, 9, 10)
-        # 預算還寬：下一批現在就問得（這一批用掉 10 格，60 格還剩很多）。
-        assert first.batch.next_at == clock
         assert second.batch is not None
         assert (second.batch.seasons, second.batch.later, second.batch.next_seasons) == (
             tuple(range(6, 13)),
             0,
             (),
         )
-        assert second.batch.next_at is None
 
     @pytest.mark.asyncio
     async def test_the_next_batch_still_asks_its_seasons_after_some_were_sent(

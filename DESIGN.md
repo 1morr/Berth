@@ -588,13 +588,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   標題層級由 `level` 屬性決定（預設 `3`）：精靈裡它在步驟的 `h2` 底下，Media 詳情裡它緊接著 `h1`，
   所以那裡傳 `level={2}`——標題層級跟著它所在的頁面，不跳級（票 15 audit）。
   機器字串在 `dd` 而 term 是角色名的列（「資料夾名」）照樣用 `.label` term。
-- **健康頁的卡片（`ServiceCard` / `PollerCard` / `BudgetCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
+- **健康頁的卡片（`ServiceCard` / `PollerCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
   `rule-strong`。**標題層級跟著所在的頁面**：`ServiceCard` 收數字的 `level?: 2 | 3`（預設 `3`，與 `Cutaway` 同一個形狀），健康頁上它直接在
   `h1` 底下所以傳 `level={2}`，設定頁的「連線狀態」區塊有自己的 `h2`，卡片留在 `h3`（同 `Cutaway` 的 `level`）。
-  **請求預算（`BudgetCard`，M3 票 20）** 一個站一條 `border-l-2 border-rule` 的內縮列：主機名 `.value text-sm`（機器字串）
-  `Dot` `.value text-xs` 的「已用 / 上限」，下一行各用途的次數，再下面每一種被延後的工作一行 `ink` 字 + `ink-dim` 的
-  「放得下：」與 `Timestamp`。**延後不是失敗**：那是 Berth 自己先停手，等得到；所以不塗漆也不用 `blocked-ink`，只有整塊框
-  變重（The Heavier Line Rule，與下載迴圈落後一輪同一個說法）。讀不到時整塊不畫——它不是服務檢查之一。
 - **區塊標題（`components/SectionHeading`，M4 票 92 收成一份）:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的
   `.value text-xs text-ink-dim` 計數，壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby`
   接上標題。只有數字的計數，看得見的是數字（`aria-hidden`），聽得見的是帶單位的那一句（`sr-only`）——`count` 一定帶著那一句，
@@ -825,7 +821,7 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   （摘要「其他別名 N 個，開了 M 個」＋ `ExpandHint`），不和四種名字擠一排。「季」是「不指定季」加 `S01`…，搜缺的集時不畫。
   再下面是預覽欄位：標籤帶查詢數（「會問 · N 個查詢」，`tabular-nums`），底下是 `.value` 的查詢清單（一個查詢一項）——沒有季時它與開著的名字是同一組字，
   所以不另起一句「Berth 會問這幾個」；搜缺的集時標籤底下多一句範圍與「改回作品名搜尋」。最後是代價與等待併成的一句（`ink-dim text-xs`，
-  「每個索引站各佔 N 格請求預算…；…通常要幾秒到一分鐘」），一個查詢都沒有時不畫；不能搜時整句換成原因（`ink text-sm`），掛在停用的搜尋鍵的描述上。
+  「會問 N 個查詢；…通常要幾秒到一分鐘」），一個查詢都沒有時不畫；不能搜時整句換成原因（`ink text-sm`），掛在停用的搜尋鍵的描述上。
 - **送單（`SubmitAction`）:** 住在發佈名那一格。Ghost「送單」→ 就地展開 `border-2 border-rule-strong` 的確認區塊：
   送到哪一條 Route、會被寫死的資料夾名（`.value wrap-anywhere`）、「這一按就定了」或「它已經是」，加主要 / 取消兩顆鍵。
   被擋下時在同一塊裡以 `role="alert"` 的 `blocked-ink` 說封閉集合的理由，原文接在下面。成功時整塊換成
@@ -1073,7 +1069,7 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 - **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
 - **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
 - **Do** 讓 `Cutaway` 與 `ServiceCard` 的 `level` 跟著它所在頁面的標題層級，不跳級。
-- **Do** 讓等得到的事（請求預算用完而延後、Feed 這一輪讀不到、送單卡住）走線變重或 `assigned`，不走 `blocked`：
+- **Do** 讓等得到的事（Feed 這一輪讀不到、自動綁定排著重認、送單卡住）走線變重或 `assigned`，不走 `blocked`：
   Berth 自己會再試的不是阻擋（The One Meaning Rule）。
 - **Do** 在會讓頁首需要你的段落長高的動作之後，把使用者剛按的那一列捲回畫面（只在它已經被推出去時）。
 - **Do** 把使用者自己寫的規則、關鍵字畫成一條一格的 `.value`，不是色塊、不走 `.label`。

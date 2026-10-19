@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
 from itertools import zip_longest
@@ -34,9 +34,8 @@ from itertools import zip_longest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceError
-from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery, SearchSite
+from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
-    BudgetUse,
     IndexerProblem,
     MappingStrategy,
     MediaSnapshot,
@@ -200,29 +199,13 @@ class SearchView:
     problem: IndexerProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
-    #: `BUDGET_EXHAUSTED` 時最早有一站放得下這一批的時刻（M3 票 20）；每一站都永遠放不下是 `None`。
-    retry_at: datetime | None = None
-    #: 請求預算放不下這一批、這次沒問的站（M4 票 77）。`BUDGET_EXHAUSTED` 時是每一站。
-    skipped: tuple[SkippedSite, ...] = ()
     #: 缺集搜尋時問的這一批。作品名與自己打的關鍵字沒有批次，是 `None`。
     batch: BatchView | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class SkippedSite:
-    """請求預算放不下這一批、這次沒問的一站（M4 票 77）。"""
-
-    #: 預算的鍵（主機名）。
-    site: str
-    #: 索引站裡打到這一站的那幾個（通常一個）。
-    indexers: tuple[str, ...]
-    #: 放得下這一批的時刻；`None` 是永遠放不下（一批比整份預算還大）。
-    until: datetime | None
-
-
-@dataclass(frozen=True, slots=True)
 class BatchView:
-    """缺集搜尋的這一批（M3 票 20）：畫面說得出「這一批問了哪幾季，下一批何時問」。
+    """缺集搜尋的這一批（M3 票 20）：畫面說得出「這一批問了哪幾季，下一批是哪幾季」。
 
     **批次以季定位，不以序號**：下一批是「從 `next_seasons[0]` 那一季起還缺的」，照那一刻的
     季表重切。以序號定位的話，問完第一批、從結果送了幾季之後季表就變了，第二批會落到別的季、甚至漏掉一季
@@ -234,10 +217,6 @@ class BatchView:
     later: int = 0
     #: 下一批問哪幾季；這是最後一批時是空的。
     next_seasons: tuple[int, ...] = ()
-    #: 請求預算最早有一站放得下下一批的時刻（M4 票 77 起：有一站放得下就問得了，放不下的跳過）。
-    #: 只有問完這一批才算得出（要知道索引站背後是哪幾站）；
-    #: 預覽、最後一批、下一批比整份預算還大時是 `None`。
-    next_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,8 +236,6 @@ class QueryPlan:
     choice: QueryChoice = field(default_factory=lambda: QueryChoice(names=()))
     #: 一次最多幾個查詢；`queries` 比它多時搜尋整次不問（`TOO_MANY_QUERIES`）。
     limit: int = MAX_QUERIES
-    #: 一站一小時的請求預算（`RequestBudget.limit`）：畫面說「每站每小時 N 格」，一個查詢佔一格。
-    budget: int = 0
 
 
 async def plan_queries(
@@ -289,7 +266,6 @@ async def plan_queries(
         names=search_names(snapshot) if snapshot else (),
         seasons=season_numbers(snapshot) if snapshot else (),
         choice=chosen,
-        budget=factory.budget.limit,
     )
 
 
@@ -371,7 +347,7 @@ async def _missing(
     return missing_batches(names, later, season=season)
 
 
-def _batch(batches: tuple[QueryBatch, ...], next_at: datetime | None = None) -> BatchView | None:
+def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
     """畫面上那一行：這一批（第一個）問哪幾季、之後還有幾批、下一批是哪幾季。"""
     if not batches:
         return None
@@ -379,7 +355,6 @@ def _batch(batches: tuple[QueryBatch, ...], next_at: datetime | None = None) -> 
         seasons=batches[0].seasons,
         later=len(batches) - 1,
         next_seasons=batches[1].seasons if len(batches) > 1 else (),
-        next_at=next_at if len(batches) > 1 else None,
     )
 
 
@@ -399,11 +374,8 @@ async def search_torrents(
     **整次不問**（`TOO_MANY_QUERIES`），不砍尾巴——名字與季是使用者自己開的，默默少問幾個
     等於替他做了決定。
 
-    **問之前先在請求預算裡佔位**（M3 票 20）：一個查詢打到索引站背後的每一個站，所以一批是在每一站
-    各佔 `len(queries)` 格。**放不下的站這次不問**（M4 票 77，推翻票 20 的「有一站放不下就一個都
-    不問」）：查詢只帶放得下的站的 `indexer_ids`，結果的 `skipped` 說出哪幾站沒問、何時放得下——
-    Mikan 被 RSS 用完時，搜一部美劇照樣問得到 Nyaa。每一站都放不下才回 `BUDGET_EXHAUSTED` 與最早
-    放得下的時刻。
+    **不限定站**：查詢問 Prowlarr 啟用中的每一站；各站多久能問幾次是 Prowlarr 的 Query Limit 的事
+    （M4 票 107 刪掉 Berth 自己那一份請求預算）。
 
     **每一列的下載連結記進 `sources`**（M4 票 79）：送出去的列只帶換得回它的 id。
     """
@@ -433,34 +405,17 @@ async def search_torrents(
 
     client = factory.indexer_search(settings.base_url, settings.api_key)
     try:
-        targets = await client.sites()
-        sites = {target.site for target in targets if target.site}
-        refused = factory.budget.take_each(sites, len(texts), BudgetUse.SEARCH)
-        skipped = _skipped(targets, refused)
-        asked = tuple(target for target in targets if target.site not in refused)
-        if targets and not asked:
-            return replace(
-                _blank(IndexerProblem.BUDGET_EXHAUSTED),
-                retry_at=min((at for at in refused.values() if at is not None), default=None),
-                skipped=skipped,
-                batch=_batch(batches),
-            )
-        # 每一站都放得下時不限定站：與沒有預算時問的是同一批（Prowlarr 不帶 `indexerIds` 是全部）。
-        only = tuple(target.indexer_id for target in asked) if refused else ()
-        queries = tuple(SearchQuery(text=text, indexer_ids=only) for text in texts)
-        outcomes = await asyncio.gather(
-            *(_attempt(client, item, timeout) for item in queries), return_exceptions=False
-        )
-    except ServiceError as exc:
-        # `sites()` 垮掉是「這台 Prowlarr 現在整個問不動」，與逐查詢的失敗不同：
-        # 那時候一個關鍵字都還沒問出去，所以畫面要說的是連線，不是搜尋結果。
-        return _blank(_problem(exc), message(exc))
+        queries = tuple(SearchQuery(text=text) for text in texts)
+        outcomes = await asyncio.gather(*(_attempt(client, item, timeout) for item in queries))
     finally:
         await client.aclose()
 
-    after = batches[1].queries if len(batches) > 1 else ()
-    next_at = factory.budget.ready_at(sites, len(after)) if after else None
-    returned = [row for _, rows in outcomes for row in rows]
+    errors = [error for _, _, error in outcomes if error is not None]
+    if len(errors) == len(outcomes):
+        # 每一個查詢都被索引站本身拒絕（連不上、憑證被拒）：這台 Prowlarr 現在整個問不動，畫面要說的
+        # 是連線，不是一排紅色的纜繩。逾時不算——那是索引站在、背後的站慢。
+        return _blank(_problem(errors[0]), message(errors[0]))
+    returned = [row for _, rows, _ in outcomes for row in rows]
     found = _dedupe(returned)
     judged = [judge(result) for result in found]
     return SearchView(
@@ -468,23 +423,8 @@ async def search_torrents(
         counts=_counts(judged),
         returned=len(returned),
         merged=len(returned) - len(found),
-        attempts=tuple(attempt for attempt, _ in outcomes),
-        skipped=skipped,
-        batch=_batch(batches, next_at),
-    )
-
-
-def _skipped(
-    targets: Sequence[SearchSite], refused: dict[str, datetime | None]
-) -> tuple[SkippedSite, ...]:
-    """放不下的站，照站名排；一站背後有幾個索引站時名字併在一起。"""
-    return tuple(
-        SkippedSite(
-            site=site,
-            indexers=tuple(target.name for target in targets if target.site == site),
-            until=until,
-        )
-        for site, until in sorted(refused.items())
+        attempts=tuple(attempt for attempt, _, _ in outcomes),
+        batch=_batch(batches),
     )
 
 
@@ -573,8 +513,8 @@ def _counts(judged: Sequence[Judged]) -> tuple[VerdictCount, ...]:
 
 async def _attempt(
     client: IndexerSearch, query: SearchQuery, timeout: float
-) -> tuple[StepView, tuple[IndexerResult, ...]]:
-    """一個查詢，一條纜繩。
+) -> tuple[StepView, tuple[IndexerResult, ...], ServiceError | None]:
+    """一個查詢，一條纜繩；第三格是索引站丟的例外（逾時與成功是 `None`）。
 
     **失敗不往上冒**：十個公開站裡有幾個連不上是常態（brief §20.7），一個關鍵字問不動時
     另外四個的結果仍然值得看。垮掉的那一個變成一條紅色的纜繩，不是一片空白。
@@ -593,6 +533,7 @@ async def _attempt(
                 failure=StepFailure.UNREACHABLE,
             ),
             (),
+            None,
         )
     except ServiceError as exc:
         failure, params = failure_of(exc)
@@ -604,10 +545,11 @@ async def _attempt(
             failure=failure,
             params=params,
         )
-        return (failed, ())
+        return (failed, (), exc)
     return (
         StepView(step=step, status=StepStatus.OK, detail=str(len(rows)), error=""),
         rows,
+        None,
     )
 
 

@@ -13,7 +13,6 @@ import { RouteRow } from '../components/RouteRow'
 import { UNPAINTED_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { HealthBoard } from '../health/HealthBoard'
-import { BudgetCard } from '../health/BudgetCard'
 import { PollerCard } from '../health/PollerCard'
 import { ServiceCard } from '../health/ServiceCard'
 import { PROGRESS_INTERVAL_MS, useRecheckRoutes } from '../settings/recheckRoutes'
@@ -116,11 +115,6 @@ export function HealthPage() {
             比 Route 的每一條纜繩上游（`.scratch/m1/live-jobs-shape.md` §6）。 */}
         <div className="mt-8">
           <PollerCard poller={report.poller} />
-        </div>
-
-        {/* 請求預算（M3 票 20）緊跟在下載迴圈之後：兩塊問的都是 Berth 自己的迴圈，不是外部服務。 */}
-        <div className="mt-8">
-          <BudgetCard />
         </div>
 
         <section className="mt-8" aria-labelledby="health-routes">

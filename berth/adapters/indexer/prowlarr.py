@@ -13,7 +13,6 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from berth.adapters.budget import site_of
 from berth.adapters.http import (
     HttpSession,
     ProtocolMismatchError,
@@ -22,7 +21,6 @@ from berth.adapters.http import (
 from berth.adapters.indexer import (
     IndexerResult,
     SearchQuery,
-    SearchSite,
     normalise_info_hash,
 )
 
@@ -58,31 +56,8 @@ class ProwlarrSearch:
             raise ProtocolMismatchError("/api/v1/search: expected a list")
         return tuple(_result(row) for row in payload if isinstance(row, dict) and "title" in row)
 
-    async def sites(self) -> tuple[SearchSite, ...]:
-        """`GET /api/v1/indexer` 裡啟用中的每一個站：`/api/v1/search` 不帶 `indexerIds` 時
-        Prowlarr 每一站都問。站的網址是它設定的 Base Url，沒設就是定義的第一個（鏡像站換過
-        Base Url 時打的是那一個）。"""
-        payload = json_body(await self._session.request("GET", "/api/v1/indexer"))
-        if not isinstance(payload, list):
-            raise ProtocolMismatchError("/api/v1/indexer: expected a list")
-        return tuple(
-            SearchSite(indexer_id=row["id"], name=str(row.get("name") or ""), site=site_of(url))
-            for row in payload
-            if isinstance(row, dict) and row.get("enable") and isinstance(row.get("id"), int)
-            for url in (_base_url(row),)
-        )
-
     async def aclose(self) -> None:
         await self._session.aclose()
-
-
-def _base_url(row: Mapping[str, Any]) -> str:
-    """一個索引站實際打的網址：設定的 `baseUrl` 欄，沒設就是 `indexerUrls` 的第一個。"""
-    for field in row.get("fields") or ():
-        if isinstance(field, dict) and field.get("name") == "baseUrl" and field.get("value"):
-            return str(field["value"])
-    urls = row.get("indexerUrls") or ()
-    return str(urls[0]) if urls else ""
 
 
 def _result(row: Mapping[str, Any]) -> IndexerResult:

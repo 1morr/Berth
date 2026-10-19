@@ -1615,10 +1615,8 @@ const zhHant = {
     queriesList: '要送出去的查詢',
     // 按下去之前說出代價與要等多久（M4 票 84、84b）：一個查詢就是請索引站背後的每一個站搜一次，
     // 所以格數就是查詢數。
-    costWait_one:
-      '每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
-    costWait_other:
-      '每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+    costWait_one: '會問 {{count}} 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+    costWait_other: '會問 {{count}} 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
     tooMany: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字或季。',
     // 搜缺的集沒有季 chip：缺的形狀決定問哪幾季，能關的只有名字。
     tooManyNames: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字。',
@@ -1734,9 +1732,7 @@ const zhHant = {
       asked: '這一批問了 {{seasons}}。',
       next: '還有 {{later}} 批，下一批問 {{seasons}}。',
       last: '這是最後一批。',
-      pending: '這一批要問 {{seasons}}，一個都還沒問。',
       ask: '問下一批',
-      wait: '請求預算要到這時候才放得下它：',
       join: '、',
     },
     // 五種樣子，五種下一步。索引站是精靈裡唯一可以跳過的一步，所以「沒接」不是失敗。
@@ -1758,29 +1754,14 @@ const zhHant = {
         label: '連不上',
         body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
       },
-      // M3 票 20：不是壞了，是 Berth 自己先停手。等得到，所以不塗紅。
       // M4 票 84：畫面在按下去之前就停用了搜尋鍵，這一種只在直接打 API 時出現。
       too_many_queries: {
         label: '查詢太多',
         body: '開了的名字與季組出來的查詢超過一次的上限，一個都沒問。關掉幾個名字或季再搜。',
       },
-      budget_exhausted: {
-        label: '等請求預算',
-        body: '索引站背後的每一個站這一小時的請求預算都放不下這一批，一個關鍵字都沒問。RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。',
-      },
-      retryAt: '最早有一站放得下：',
       askAdmin: '請管理員到設定接上索引站。',
       askAdminUnconnected: '請管理員接上 Prowlarr，或替這部作品加一個 RSS 訂閱。',
       toSubscribe: '到 RSS 訂閱',
-    },
-    // M4 票 77：預算放不下的站跳過，其他站照問。
-    skipped: {
-      label: '這次沒問',
-      // 中文只有 other 一種複數形，兩格同一句、不帶單複數的代名詞（實跑時「這 1 個站……沒問它們」）。
-      body_one: '{{count}} 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
-      body_other: '{{count}} 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
-      fitsAt: '放得下：',
-      never: '這一批比整份預算還大，放不下',
     },
   },
   // 下載列表頁與送單（票 09、`.scratch/m1/jobs-shape.md`）。發佈名、hash、路徑、category
@@ -2807,17 +2788,6 @@ const zhHant = {
       unconfigured: '尚未接上',
       unused: '沒有使用',
     },
-    // M3 票 20：一個站一份，三個使用者共用。延後不是壞了，所以不用「錯誤」的字。
-    budget: {
-      title: '請求預算',
-      help: '每一站每小時最多 {{limit}} 個請求：RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。重啟 Berth 會歸零。',
-      idle: '這一小時還沒有問過任何站。',
-      useCount: '{{use}} {{value}}',
-      use: { poll: 'RSS 輪詢', backfill: '每日補漏', search: '搜尋', manual: '手動讀取' },
-      deferred: '延後：{{use}}（擋下 {{value}} 個請求）',
-      until: '放得下：',
-      never: '一次要的比整份預算還多，放不下。',
-    },
     poller: {
       title: '下載迴圈',
       lastRound: '上次輪詢',
@@ -3163,8 +3133,6 @@ const zhHant = {
       feed_unread: '這個 Feed 還沒讀過。先按「立即輪詢」看過第一輪再選。',
       feed_not_rss:
         '讀到了，但那不是 RSS。多半是貼了網頁的網址：到站上找它的 RSS 連結（Mikan 番組頁字幕組旁的 RSS 圖示、Nyaa 搜尋結果頁的 RSS 鍵）。',
-      budget_exhausted:
-        '那一站這一小時的請求預算用完了，這一次沒有送出去。等預算放得下再試（健康頁看得到何時）。原文：',
     },
     feeds: {
       title: 'Feed',
@@ -3322,7 +3290,6 @@ const zhHant = {
       no_premiere: 'Mikan 的番組頁沒寫開播日期，年份無從確認',
       no_show_page: '這個來源沒有番組頁，年份無從確認：候選只從標題來，要你確認',
       lookup_failed: 'Mikan 番組頁或 TMDB 查不到（{{detail}}），留給你綁定',
-      lookup_deferred: '{{site}} 這一小時的請求預算用完了，番組頁下一輪再讀',
       lookup_retry: '{{site}} 這一次讀不到（{{detail}}），{{at}} 再認一次（第 {{attempt}} 次重試）',
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
@@ -5072,9 +5039,9 @@ const en: Translations<typeof zhHant> = {
     willAskCount_other: 'Will ask · {{count}} queries',
     queriesList: 'Queries to send',
     costWait_one:
-      "Uses {{count}} slot of each indexer's request budget ({{budget}} per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+      'Sends {{count}} query; the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
     costWait_other:
-      "Uses {{count}} slots of each indexer's request budget ({{budget}} per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+      'Sends {{count}} queries; the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
     tooManyNames:
       'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names.',
     tooMany:
@@ -5176,9 +5143,7 @@ const en: Translations<typeof zhHant> = {
       asked: 'This batch asked for {{seasons}}.',
       next: ' {{later}} more to go; the next asks for {{seasons}}.',
       last: ' This was the last batch.',
-      pending: 'This batch asks for {{seasons}}; nothing has been asked yet.',
       ask: 'Ask the next batch',
-      wait: 'The request budget has room for it again:',
       join: ', ',
     },
     problem: {
@@ -5202,24 +5167,10 @@ const en: Translations<typeof zhHant> = {
         label: 'Too many queries',
         body: 'The names and seasons turned on add up to more queries than one search sends, so none were asked. Turn some off and search again.',
       },
-      budget_exhausted: {
-        label: 'Waiting for the budget',
-        body: "This hour's request budget for every site behind the indexer can't fit this batch, so not a single keyword was asked. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites.",
-      },
-      retryAt: 'The first site fits again:',
       askAdmin: 'Ask an administrator to connect an indexer in Settings.',
       askAdminUnconnected:
         'Ask an administrator to connect Prowlarr, or to add an RSS subscription for this title.',
       toSubscribe: 'Go to RSS subscriptions',
-    },
-    skipped: {
-      label: 'Not asked this time',
-      body_one:
-        "This hour's request budget for this site can't fit this batch, so it wasn't asked this time. The other sites were.",
-      body_other:
-        "This hour's request budget for these {{count}} sites can't fit this batch, so they weren't asked this time. The other sites were.",
-      fitsAt: 'Fits again:',
-      never: 'This batch is larger than the whole budget, so it never fits',
     },
   },
   issues: {
@@ -6183,21 +6134,6 @@ const en: Translations<typeof zhHant> = {
       unconfigured: 'Not connected',
       unused: 'Not used',
     },
-    budget: {
-      title: 'Request budget',
-      help: "At most {{limit}} requests per site per hour. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites. Restarting Berth resets it.",
-      idle: 'No site has been asked this hour.',
-      useCount: '{{use}} {{value}}',
-      use: {
-        poll: 'RSS polling',
-        backfill: 'Daily backfill',
-        search: 'Search',
-        manual: 'Manual reads',
-      },
-      deferred: 'Deferred: {{use}} ({{value}} requests held back)',
-      until: 'Fits again:',
-      never: 'It asks for more than the whole budget, so it never fits.',
-    },
     poller: {
       title: 'Download loop',
       lastRound: 'Last poll',
@@ -6543,8 +6479,6 @@ const en: Translations<typeof zhHant> = {
         "This feed hasn't been read yet. Press Poll now to see its first round before choosing.",
       feed_not_rss:
         "Got an answer, but it isn't RSS. This is usually a web page address: find the site's RSS link instead (the RSS icon next to a fansub on a Mikan show page, the RSS button on a Nyaa search).",
-      budget_exhausted:
-        "This hour's request budget for that site is used up, so nothing was sent. Try again once it has room (the health page says when). Original error:",
     },
     feeds: {
       title: 'Feeds',
@@ -6700,8 +6634,6 @@ const en: Translations<typeof zhHant> = {
       no_show_page:
         'this source has no show page, so the year cannot be checked: the candidates come from the title alone and need you to confirm',
       lookup_failed: 'the Mikan show page or TMDB could not be read ({{detail}}); bind it yourself',
-      lookup_deferred:
-        'the request budget for {{site}} is used up for this hour; the show page is read next round',
       lookup_retry:
         '{{site}} could not be read this time ({{detail}}); looking it up again at {{at}} (retry {{attempt}})',
       route_ambiguous: 'the title was recognised, but {{routes}} can all take it',

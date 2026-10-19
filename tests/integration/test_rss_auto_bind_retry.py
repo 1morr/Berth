@@ -15,14 +15,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.budget import RequestBudget, site_of
 from berth.adapters.rss.mikan import bangumi_url
 from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode, TmdbSeason, TmdbSeasonEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.domain import BindReasonCode, MediaKind
 from berth.models import RssItem, RssSeries
 from berth.services.rss import LOOKUP_RETRIES, SeriesView, list_series, poll_feed
-from tests.integration.factories import answered
+from tests.integration.factories import FakeClientFactory, answered
 from tests.integration.test_rss import FEED_URL, ITEMS, KIMI_ID, KIMI_KEY, NOW, routed_feed
 from tests.integration.test_rss_auto_bind import KIMI_TMDB, codes, kimi_tmdb, moored
 
@@ -99,9 +98,8 @@ class TestTransientFailureIsRetried:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """番組頁一直連不上：照退避重認，用完落到 `lookup_failed` 等人。一天半、每 15 分鐘一輪，
-        那一頁只被問 1 + 重試次數那麼多次，每一次都在 Mikan 的請求預算裡佔一格。"""
+        那一頁只被問 1 + 重試次數那麼多次。"""
         _, factory = await moored(session, roots)
-        factory.budget = RequestBudget(limit=100_000, window=timedelta(days=30))
         del factory.rss_.pages[bangumi_url(4009)]
         feed = await routed_feed(session, url=FEED_URL, name="Mikan")
 
@@ -110,9 +108,6 @@ class TestTransientFailureIsRetried:
 
         page = bangumi_url(4009)
         assert factory.rss_.requested.count(page) == 1 + len(LOOKUP_RETRIES)
-        mikan = [url for url in factory.rss_.requested if site_of(url) == "mikanani.me"]
-        (usage,) = [row for row in factory.budget.usage() if row.site == "mikanani.me"]
-        assert usage.used == len(mikan)
         view = await view_of(session, KIMI_KEY)
         assert codes(view.reasons) == [BindReasonCode.LOOKUP_FAILED]
         assert "connection refused" in str(view.reasons[0].params["detail"])
@@ -131,6 +126,62 @@ class TestTransientFailureIsRetried:
 
         assert factory.rss_.requested.count(page) == 1
         assert codes((await view_of(session, KIMI_KEY)).reasons) == [BindReasonCode.LOOKUP_FAILED]
+
+
+class TestHeldBackByTheBudget:
+    """票 107 的 migration 把被請求預算擋下的（`lookup_deferred`）改成 `attempt` 0、升版那一刻到期的
+    `lookup_retry`：下一輪就重認，而且那一次不算進重認的上限。"""
+
+    async def migrated(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> tuple[int, FakeClientFactory]:
+        """番組頁第一輪讀不到，然後把理由改成 migration 寫的那個樣子。回（Feed id、替身）。"""
+        _, factory = await moored(session, roots)
+        page = bangumi_url(4009)
+        factory.rss_.page_errors[page] = answered(503, f"GET {page}")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
+        await poll_feed(session, factory, feed.id, now=NOW)
+        row = await session.scalar(select(RssSeries).where(RssSeries.key == KIMI_KEY))
+        assert row is not None
+        row.reasons_json = [
+            {
+                "code": "lookup_retry",
+                "params": {
+                    "site": "mikanani.me",
+                    "attempt": 0,
+                    "at": (NOW + timedelta(minutes=1)).isoformat(),
+                    "detail": "deferred by the request budget, which was removed",
+                },
+            }
+        ]
+        await session.commit()
+        return feed.id, factory
+
+    async def test_it_is_looked_up_again_on_the_next_round(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        feed_id, factory = await self.migrated(session, roots)
+        del factory.rss_.page_errors[bangumi_url(4009)]
+
+        polled = await poll_feed(session, factory, feed_id, now=NOW + timedelta(minutes=15))
+
+        assert polled.bound == 1
+        assert (await view_of(session, KIMI_KEY)).media_id == KIMI_ID
+
+    async def test_a_failure_after_it_is_the_first_counted_one(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        feed_id, factory = await self.migrated(session, roots)
+        moment = NOW + timedelta(minutes=15)
+
+        await poll_feed(session, factory, feed_id, now=moment)
+
+        (retry,) = (await view_of(session, KIMI_KEY)).reasons
+        assert retry.code is BindReasonCode.LOOKUP_RETRY
+        assert (retry.params["attempt"], retry.params["at"]) == (
+            1,
+            (moment + LOOKUP_RETRIES[0]).isoformat(),
+        )
 
 
 class TestOneBrokenCandidate:
