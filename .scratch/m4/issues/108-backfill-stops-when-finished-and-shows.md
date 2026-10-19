@@ -1,6 +1,6 @@
 # 108 — 完結的 RSS Series 停止每日補漏；補漏在畫面上看得見
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -32,10 +32,19 @@
 
 ## 驗收
 
-- [ ] 完結的 Series 輪到它的 Feed 時不讀單一 feed；有新的一筆之後恢復補漏；未完結的照舊（pytest，做變異驗證）
-- [ ] Series 列看得到上次補漏時間、尚未補漏、已完結不再補漏三種；非 Mikan 的不顯示（vitest，zh-Hant 與 en）
-- [ ] RSS Series 標題下的說明與訂閱 / 綁定確認的文案說法一致（vitest）
-- [ ] playwright 實跑 RSS 頁與作品頁的訂閱區塊，附截圖（1280 與 390）
-- [ ] 全部檢查、pytest、vitest 綠；plan、CHANGELOG、progress.md 已更新
+- [x] 完結的 Series 輪到它的 Feed 時不讀單一 feed；有新的一筆之後恢復補漏；未完結的照舊（pytest，做變異驗證）
+- [x] Series 列看得到上次補漏時間、尚未補漏、已完結不再補漏三種；非 Mikan 的不顯示（vitest，zh-Hant 與 en）
+- [x] RSS Series 標題下的說明與訂閱 / 綁定確認的文案說法一致（vitest）
+- [x] playwright 實跑 RSS 頁與作品頁的訂閱區塊，附截圖（1280 與 390）
+- [x] 全部檢查、pytest、vitest 綠；plan、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 截圖：`108-backfill-stops-when-finished-and-shows/` 的 `rss-bound-{1280,390}.png`（/rss 綁好之後，RSS Series 段落說明與「上次補漏」）、`subscribe-confirm-{1280,390}.png`（作品頁訂閱確認的同一句）。
+- code-review 已改：英文文案不用 catch-up（CONTEXT.md 列為避免）；確認句不在元件裡拼字串，改 `$t()` 巢狀；`Backfill` 的 `<time>` 加 `.value`；DESIGN.md 補列；補英文的文案一致斷言。
+- code-review 未改：
+  - `Backfill` 沒用 `Timestamp`：時間要嵌進翻好的句子（`{{when}}`），照 `Timestamp past` 的做法自己畫 `<time>`；要共用得改用 `<Trans>`，專案還沒用過它。
+  - 「尚未補漏」與 DESIGN.md §時間的「沒有紀錄」說法不同：這裡說的是狀態（還沒補過），不是時間點沒有值。
+  - 測試裡 `BACKFILL_LEDE` 字面寫了兩份（RssPage、MediaDetailPage）：寫死字面才抓得到 zh-Hant 文案本身的變動；測試檔互相 import 會把另一檔的測試也跑一遍。
+  - pytest 只走了 `QUIET_AFTER` 那條完結路；TMDB 說完結那條與畫面共用同一支 `_finished`，已由既有的完結測試守著。
+  - 說明在 RSS Series 段落無條件顯示，整段沒有 Mikan Series 時也在；票沒有規定，維持。
