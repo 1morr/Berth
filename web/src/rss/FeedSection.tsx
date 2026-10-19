@@ -33,6 +33,7 @@ import { Timestamp } from '../components/Timestamp'
 import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { bindsNow, complete, KINDS, prefilled, routesFor, routesOf, unsetKinds } from './feedRoutes'
 import { maskToken } from './maskToken'
+import { LayerLede } from './LayerLede'
 import { RulesFields, RulesToggle } from './RulesEditor'
 import { rssProblem } from './rssProblem'
 import { SectionHeading } from '../components/SectionHeading'
@@ -150,16 +151,16 @@ function AddFeed({ routes }: { routes: RouteView[] }) {
           onChange={(kind, route) => setPicked((now) => ({ ...now, [kind]: route }))}
         />
       </form>
-      {/* `group` 不是 `region`：頁上已有一段叫「排除條件」的全域那一層。 */}
+      {/* `group` 不是 `region`：頁上已有一段叫「全域排除條件」的 region。 */}
       <div role="group" aria-labelledby={rulesId} className="grid gap-2">
         <p id={rulesId} className="label text-ink-dim">
           {t('rss.rules.title')}
         </p>
+        <LayerLede lede={t('rss.rules.addLede')} />
         <RulesFields
           rules={rules}
           draft={draft}
           setDraft={setDraft}
-          lede={t('rss.rules.addLede')}
           // 送出中不改：送出的是按下那一刻的那一組，成功之後表單清空。
           busy={add.isPending}
           error={rulesRefused ? rssProblem(t, add.error) : undefined}

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { RSS_KEY } from '../api/rss'
 import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
+import { LayerLede } from './LayerLede'
 import { rssProblem } from './rssProblem'
 
 /**
@@ -16,8 +17,6 @@ interface RulesProps {
   rules: readonly string[]
   /** 整組覆寫這一層。寫壞的那一條讓整組不存（422 `rule_invalid`）。 */
   save: (rules: string[]) => Promise<unknown>
-  /** 這一層與其他層的關係，一句話。 */
-  lede?: string
 }
 
 /**
@@ -27,7 +26,7 @@ interface RulesProps {
  * 寫壞的正則由後端擋（Python 的 `re` 才是比對的那一個，瀏覽器的 RegExp 語法不同），原因印在欄位下方，
  * 打的字留著讓人改。
  */
-export function RulesEditor({ rules, save, lede }: RulesProps) {
+export function RulesEditor({ rules, save }: RulesProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
@@ -42,7 +41,6 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
       rules={rules}
       draft={draft}
       setDraft={setDraft}
-      lede={lede}
       busy={change.isPending}
       error={change.isError ? rssProblem(t, change.error) : undefined}
       commit={(next, done) => change.mutate(next, { onSuccess: done })}
@@ -64,7 +62,6 @@ export function RulesFields({
   commit,
   busy = false,
   error,
-  lede,
 }: {
   rules: readonly string[]
   draft: string
@@ -72,7 +69,6 @@ export function RulesFields({
   commit: (next: string[], done: () => void) => void
   busy?: boolean
   error?: string
-  lede?: string
 }) {
   const { t } = useTranslation()
   const listId = useId()
@@ -105,7 +101,6 @@ export function RulesFields({
 
   return (
     <div className="grid gap-3">
-      {lede && <p className="max-w-prose text-xs text-ink-dim">{lede}</p>}
       <p id={listId} className="sr-only">
         {t('rss.rules.list')}
       </p>
@@ -175,7 +170,7 @@ export function RulesFields({
 /**
  * Feed 與 RSS Series 那一列上的排除條件：平常收起來只說有幾條，展開才是編輯區（它不是那一列的主要事）。
  */
-export function RulesToggle({ rules, save, lede }: RulesProps) {
+export function RulesToggle({ rules, save, lede }: RulesProps & { lede: string }) {
   const { t } = useTranslation()
   const regionId = useId()
   const [open, setOpen] = useState(false)
@@ -197,8 +192,13 @@ export function RulesToggle({ rules, save, lede }: RulesProps) {
           </span>
         </button>
       </div>
-      <div id={regionId} hidden={!open}>
-        {open && <RulesEditor rules={rules} save={save} lede={lede} />}
+      <div id={regionId} hidden={!open} className="grid gap-3">
+        {open && (
+          <>
+            <LayerLede lede={lede} />
+            <RulesEditor rules={rules} save={save} />
+          </>
+        )}
       </div>
     </div>
   )

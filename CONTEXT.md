@@ -370,7 +370,7 @@ _Avoid_: catch-up, sync（sync 是 qBittorrent 的 `sync/maindata`）
 _Avoid_: import feed, quick feed（它不是 Feed）
 
 **排除條件**（exclusion rule）:
-Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式），比對整個標題。分全域、Feed、RSS Series 三層，三層取聯集；全域另有「不自動下載合集」的開關，預設開。Berth 全部接受、只排除（brief §15），沒有白名單。
+Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式），比對整個標題。分全域、Feed、RSS Series 三層，三層取聯集；畫面上叫**標題規則**（title rule）。全域另有「不自動下載合集」的開關，預設開：它看解析器的 `release_kind`、不是規則，畫面上叫**內建判斷**（built-in check），只在全域那一層，Feed 與 RSS Series 那兩層只說出它目前的值。Berth 全部接受、只排除（brief §15），沒有白名單。
 _Avoid_: filter（「篩選」是清單上的顯示操作）, blacklist
 _Avoid_: entry, post
 
