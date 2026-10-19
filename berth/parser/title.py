@@ -41,9 +41,10 @@ _YEAR_PENALTY = 0.5
 THRESHOLD = 0.6
 #: 短到不能用「包含」判定的長度。`Up` 出現在半數發佈名裡。
 _MIN_CONTAINED = 4
-#: 含 CJK 的名字的同一個下限（M4 票 83c）：三個字的「無間道」要比得到；一個字的「她」幾乎什麼
-#: 發佈名都含。只給搜尋的粗篩（`mentions`、`partial_title`），`_compare` 照舊用 `_MIN_CONTAINED`。
-_MIN_CONTAINED_CJK = 2
+#: 含 CJK 的名字的同一個下限（M4 票 83c）：三個字的「無間道」要比得到；兩個字的「英雄」抽查時
+#: 放進來的全是 `英雄教室`、`我的英雄学院` 這類。只給搜尋的粗篩（`mentions`、`partial_title`），
+#: `_compare` 照舊用 `_MIN_CONTAINED`。
+_MIN_CONTAINED_CJK = 3
 
 #: 切詞用。CJK 沒有空白，所以詞比對只對拉丁字有意義——中文標題走「包含」那一條。
 _WORD = re.compile(r"[^0-9a-z]+")
@@ -142,7 +143,7 @@ def mentions(release_name: str, media: MediaSnapshot) -> bool:
 
 
 def _long_enough(target: str) -> bool:
-    """正規化過的名字夠不夠長、能拿來比「包含」：含 CJK 的兩個字起，拉丁字照 `_MIN_CONTAINED`。"""
+    """正規化過的名字夠不夠長、能拿來比「包含」：含 CJK 的三個字起，拉丁字照 `_MIN_CONTAINED`。"""
     floor = _MIN_CONTAINED_CJK if _CJK.search(target) else _MIN_CONTAINED
     return len(target) >= floor
 
@@ -156,7 +157,7 @@ def typed_fits(release_name: str, typed: str, media: MediaSnapshot | None) -> bo
     沒有快照時只看第一條。
 
     兩條用同一個「含」（`_contains_words`），**不是 `mentions`**：打的字有 CJK 時不設長度下限
-    （一個字也照打的比），`mentions` 的中文名要兩個字起（票 83c）。
+    （一個字也照打的比），`mentions` 的中文名要三個字起（票 83c）。
     """
     names = _known_titles(media) if media is not None else ()
     return any(_contains_words(release_name, words) for words in (typed, *names))

@@ -453,10 +453,11 @@ def chinese_movie(name: str) -> MediaSnapshot:
 
 
 class TestShortChineseNames:
-    """照作品名搜時，含 CJK 的名字兩個字起就拿來比（M4 票 83c，使用者 2026-10-19 拍板）。
+    """照作品名搜時，含 CJK 的名字三個字起就拿來比（M4 票 83c，使用者 2026-10-19 選三字）。
 
     `_MIN_CONTAINED` 是為了拉丁字的 `Up`；三個字的「無間道」被它略過，只寫中文名的發佈全歸
-    「名字對不上」。一個字的中文名（「她」）幾乎什麼發佈名都含，照舊略過。"""
+    「名字對不上」。兩個字的照舊略過：抽查《英雄》新進「符合」的 21 筆全是 `英雄教室`、
+    `我的英雄学院` 這類（票 83c 的 Comments）。"""
 
     INFERNAL = MediaSnapshot(
         tmdb_id=10775,
@@ -474,28 +475,28 @@ class TestShortChineseNames:
     def test_a_three_character_name_is_mentioned(self, name: str) -> None:
         assert mentions(name, self.INFERNAL)
 
-    def test_a_two_character_name_is_mentioned(self) -> None:
-        assert mentions("[字幕組][寄生][1080p]", chinese_movie("寄生"))
-
-    def test_a_one_character_name_is_not(self) -> None:
-        assert not mentions("[字幕組] 她 [1080p]", chinese_movie("她"))
+    @pytest.mark.parametrize(
+        ("name", "title"),
+        [
+            ("[VCB-Studio] 英雄教室 / Eiyuu Kyoushitsu 10-bit 1080p HEVC BDRip [Fin]", "英雄"),
+            ("[字幕組][英雄][1080p]", "英雄"),
+            ("[字幕組] 她 [1080p]", "她"),
+        ],
+    )
+    def test_a_name_of_one_or_two_characters_is_not(self, name: str, title: str) -> None:
+        assert not mentions(name, chinese_movie(title))
 
     def test_short_latin_names_still_need_the_minimum(self) -> None:
         """拉丁字照舊不到四字不比：`Up` 出現在半數發佈名裡。"""
         assert not mentions("Up.2009.1080p.BluRay", movie("Up", 2009))
 
-    @pytest.mark.parametrize(
-        ("name", "media", "lead"),
-        [
-            ("無間道前傳 (2003) 1080p", INFERNAL, "無間道前傳"),
-            ("[字幕組] 寄生前傳 2013 1080p", chinese_movie("寄生"), "寄生前傳"),
-        ],
-    )
-    def test_a_wider_short_chinese_name_is_partial(
-        self, name: str, media: MediaSnapshot, lead: str
-    ) -> None:
+    def test_a_wider_three_character_name_is_partial(self) -> None:
         """`mentions` 放得進來的，`partial_title` 也要認得出「多一段」，否則衍生劇直接混進正片。"""
-        assert partial_title(name, media) == lead
+        assert partial_title("無間道前傳 (2003) 1080p", self.INFERNAL) == "無間道前傳"
+
+    def test_a_two_character_name_is_not_judged_partial(self) -> None:
+        """兩個字的名字 `mentions` 不放進來，`partial_title` 也不拿它比——兩處同一個下限。"""
+        assert partial_title("英雄教室 2002 1080p", chinese_movie("英雄")) == ""
 
     def test_the_short_chinese_name_itself_is_not_partial(self) -> None:
         assert partial_title("無間道 (2002) 1080p", self.INFERNAL) == ""
