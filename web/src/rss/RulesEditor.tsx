@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { RSS_KEY, exclusionsQueryOptions } from '../api/rss'
-import { COMPACT_BUTTON, Field, GhostButton, TEXT_LINK } from '../components/controls'
+import { RSS_KEY } from '../api/rss'
+import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
+import { LayerLede } from './LayerLede'
 import { rssProblem } from './rssProblem'
 
 /**
@@ -11,9 +12,6 @@ import { rssProblem } from './rssProblem'
  * 兩種字形都列，讓看繁體或看簡體的人都有得挑。
  */
 const SUGGESTED_RULES: readonly string[] = ['720p', '简体', '简日', '繁體', '繁日']
-
-/** 全域那一段的錨點：Feed 與 RSS Series 那兩層的合集那一行連到這裡（M4 票 113）。 */
-export const GLOBAL_EXCLUSIONS_ANCHOR = 'global-exclusions'
 
 interface RulesProps {
   rules: readonly string[]
@@ -202,34 +200,6 @@ export function RulesToggle({ rules, save, lede }: RulesProps & { lede: string }
           </>
         )}
       </div>
-    </div>
-  )
-}
-
-/**
- * Feed 與 RSS Series 那一層的說明：這一層與其他層的關係，加上全域的合集設定。
- *
- * 這兩層沒有合集開關（brief §15 定在全域，2026-10-19 使用者確認不加）：第二行說出全域那一項的目前值、
- * 連回全域那一段，免得看起來像這一層漏了（M4 票 113）。讀的是全域那一段同一個查詢，切換全域開關後
- * 一起重問、跟著變。
- */
-export function LayerLede({ lede }: { lede: string }) {
-  const { t } = useTranslation()
-  const global = useQuery(exclusionsQueryOptions())
-
-  return (
-    <div className="grid max-w-prose gap-1 text-xs text-ink-dim">
-      <p>{lede}</p>
-      {global.data && (
-        <p className="flex flex-wrap items-center gap-x-2">
-          <span>
-            {global.data.not_single ? t('rss.rules.batchesOff') : t('rss.rules.batchesOn')}
-          </span>
-          <a href={`#${GLOBAL_EXCLUSIONS_ANCHOR}`} className={TEXT_LINK}>
-            {t('rss.rules.toGlobal')}
-          </a>
-        </p>
-      )}
     </div>
   )
 }

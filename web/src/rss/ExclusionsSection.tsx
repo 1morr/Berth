@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { RSS_KEY, saveExclusions, type Exclusions } from '../api/rss'
 import { Checkbox } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
-import { GLOBAL_EXCLUSIONS_ANCHOR, RulesEditor } from './RulesEditor'
+import { GLOBAL_EXCLUSIONS_ANCHOR } from './LayerLede'
+import { RulesEditor } from './RulesEditor'
 import { SectionHeading } from '../components/SectionHeading'
 
 /**
