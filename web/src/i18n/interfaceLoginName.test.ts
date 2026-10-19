@@ -52,7 +52,7 @@ describe('介面登入只有一個叫法', () => {
       expect(interfaceLogin.qbittorrent.legend).toMatch(term)
       expect(interfaceLogin.prowlarr.legend).toMatch(term)
       expect(qbittorrent.title.bundled).toMatch(term)
-      expect(qbittorrent.cutaway.password).toMatch(term)
+      expect(interfaceLogin.cutaway.term).toMatch(term)
       expect(qbittorrent.step.web_ui_password).toMatch(term)
       expect(qbittorrent.setLogin).toMatch(term)
     })

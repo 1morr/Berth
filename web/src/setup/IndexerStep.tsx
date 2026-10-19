@@ -23,7 +23,7 @@ import {
   type CarriedLogin,
 } from './interfaceLogin'
 import { ChoiceCutaway } from './ChoiceCutaway'
-import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
+import { BerthLogin, CarriedApplying, LoginRow } from './InterfaceLoginFields'
 import { AdvancedSites, RecommendedSites } from './RecommendedSites'
 import { PROWLARR_PAGE, prowlarrWeb } from './serviceWeb'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
@@ -166,7 +166,10 @@ export function IndexerStep({
         )
       }
     >
-      <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
+      {/* 還沒選時與頁 1、頁 2 同一個形狀（M4 票 104）。 */}
+      <h2 className="text-lg font-semibold text-ink">
+        {t(origin ? 'indexer.title.chosen' : 'indexer.title.choose')}
+      </h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">
         {t(`indexer.lede.${origin ?? 'choose'}`)}
       </p>
@@ -409,7 +412,7 @@ function ProwlarrLogin({
           <BerthLogin
             service="prowlarr"
             current={indexers.web_ui_username}
-            carried={carried.inUse}
+            carried={indexers.web_ui_login_reuses_owner}
             form={form}
           />
         )}
@@ -520,6 +523,7 @@ function IndexerCutaway({
         value={String(indexers.sites.length)}
         muted={indexers.sites.length === 0}
       />
+      <LoginRow origin={origin} username={indexers.web_ui_username} />
     </Cutaway>
   )
 }

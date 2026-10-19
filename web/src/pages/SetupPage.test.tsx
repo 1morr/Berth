@@ -706,7 +706,7 @@ describe('頁 1：Jellyfin 與擁有者', () => {
     // 只列畫面上真的有的動作（M4 票 18）：套件內這一格沒有「重新測試」鈕，也沒有「改位址」。
     expect(within(revisit).getByText(/看擁有者是誰/)).toBeVisible()
     expect(within(revisit).queryByText(/重新測試/)).toBeNull()
-    expect(within(revisit).getByText(/Berth 不支援/)).toBeVisible()
+    expect(within(revisit).getByText(/密碼在 Jellyfin 裡改/)).toBeVisible()
     expect(screen.queryByRole('button', { name: '重新測試' })).toBeNull()
     expect(screen.queryByLabelText('Jellyfin 帳號')).not.toBeInTheDocument()
     expect(existingCard()).toBeDisabled()

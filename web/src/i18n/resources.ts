@@ -64,15 +64,13 @@ const zhHant = {
       can: '這裡能做',
       elsewhere: '不在這裡做',
       jellyfin: {
-        can: '看擁有者是誰。擁有者成立之後來源鎖住；既有的那一台換了位址（例如改了 port）按測試結果上的「改位址」，只收同一台伺服器。',
-        bundledCan:
-          '看擁有者是誰。擁有者成立之後來源鎖住；套件內的那一台位址由 compose 決定，不用改。',
-        elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
+        can: '看擁有者是誰。既有的那一台換了位址（例如改了 port）按測試結果上的「改位址」，只收同一台伺服器。',
+        bundledCan: '看擁有者是誰。套件內的那一台位址由 compose 決定，不用改。',
+        elsewhere: '擁有者的密碼在 Jellyfin 裡改。',
       },
       qbittorrent: {
-        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的介面登入。一個全域偏好都不寫。',
-        elsewhere:
-          '全域偏好（預設儲存路徑、自動管理…）都在 qBittorrent 自己的介面上改，Berth 不寫也不看——它的下載只走自己的 berth-* 分類。',
+        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的介面登入。',
+        elsewhere: '全域偏好（預設儲存路徑、自動管理…）在 qBittorrent 自己的介面上改。',
       },
       routes: {
         can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的每一條纜繩。選錯的那一條在它底下刪掉。',
@@ -85,8 +83,7 @@ const zhHant = {
         },
         existing: {
           can: '改選套件內或既有、重新讀取站的清單、試搜；也可以測試公開站、勾選通過的加進它。加過的站不會被加第二次。',
-          elsewhere:
-            '移除站、加要帳號的站、改介面登入，都在你那一台自己的介面上做；Berth 不移除你的站，也不碰它的登入。',
+          elsewhere: '移除站、加要帳號的站、改介面登入，都在你那一台自己的介面上做。',
         },
       },
       tmdb: {
@@ -110,7 +107,7 @@ const zhHant = {
       signIn:
         'Berth 沒有自己的帳號，登入一律交給 Jellyfin。用這台 Jellyfin 的管理員登入，你就是 Berth 的擁有者；其他人用自己的 Jellyfin 帳號登入，角色由 Jellyfin 決定。',
       owned:
-        '{{name}} 是這台 Jellyfin 的管理員，也是 Berth 的擁有者。之後登入 Berth 就用這個 Jellyfin 帳號；密碼在 Jellyfin 裡改。',
+        '{{name}} 是這台 Jellyfin 的管理員，也是 Berth 的擁有者。之後登入 Berth 就用這個 Jellyfin 帳號。',
     },
     cutaway: {
       title: '將會做什麼',
@@ -126,6 +123,8 @@ const zhHant = {
       apiKey: 'API key「Berth」',
       libraries: '媒體庫：到頁 3 按「建立並檢查」時才動',
       password: '你的密碼（只交給 Jellyfin）',
+      // 擁有者成立之後：頁 1 勾了「也用這組」的話密碼也交給了套件內那兩台，重新整理之後 Berth 已經說不出來（M4 票 104）。
+      passwordOwned: '你的密碼',
       passwordCarried: '你的密碼（交給 Jellyfin；套件內 qBittorrent 與 Prowlarr 的介面也設成它）',
     },
     carry: {
@@ -163,8 +162,7 @@ const zhHant = {
       target_changed:
         'Jellyfin 的位址在你填表時被換過，帳密沒有送出去。重新測試，確認上面的位址是你要的那一台，再送一次。',
     },
-    locked:
-      '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以來源鎖住了。同一台換了位址可以改，另一台伺服器會被擋下。',
+    locked: '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以來源鎖住了。',
     startup: {
       language: '語言與地區',
       languageHint:
@@ -227,8 +225,7 @@ const zhHant = {
       adds: {
         jellyfin:
           '只在頁 1 建一把 API key「Berth」，頁 3 你按下時替媒體庫加一條 Berth 寫入的路徑（原本的路徑不動），勾了才新建媒體庫（所有使用者都看得到）。還沒跑過初始精靈的話，頁 1 替它跑完。入庫之後 Berth 平常只請它刷新那個媒體庫；那條路徑還沒列出過東西時（第一次入庫）是掃描整台，其他媒體庫也會被掃。',
-        qbittorrent:
-          '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
+        qbittorrent: '只在頁 3 你按下時建 berth- 開頭的分類。',
         prowlarr: '只加你在頁 4 要它加的站；原本的站不動。',
       },
       sameHost:
@@ -481,7 +478,10 @@ const zhHant = {
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
     probe:
-      '測試時 Berth 會在 {{root}} 寫一個探測檔、請 qBittorrent 停住校驗一次，看它看不看得到 {{root}}，隨即移除（校驗不會跑完，不觸發「torrent 完成時執行外部程式」；你的 qBittorrent 設了「torrent 加入時執行外部程式」的話，會觸發一次），檔案也刪掉。',
+      '測試時 Berth 在 {{root}} 寫一個探測檔、加一個停住的探測 torrent 請 qBittorrent 校驗一次，看它看不看得到 {{root}}，隨即移除、檔案也刪掉。校驗不會跑完，「torrent 完成時執行外部程式」不會觸發。',
+    // 唯一要使用者自己留意的副作用，獨立一行、貼在測試鍵旁（M4 票 104）。
+    externalProgram:
+      '你的 qBittorrent 設了「torrent 加入時執行外部程式」的話，每測試一次會觸發它一次。',
     submit: '測試連線',
     submitting: '測試中…',
     signIn: '連線並登入',
@@ -580,6 +580,12 @@ const zhHant = {
     },
   },
   interfaceLogin: {
+    // 頁 2、頁 4 剖面的「介面登入」那一列：兩頁同一套列、同一組值（M4 票 104）。
+    cutaway: {
+      term: '介面登入',
+      willSet: '將設為下面填的那一組',
+      existing: '在它自己的介面上管',
+    },
     qbittorrent: {
       legend: 'qBittorrent 介面登入',
       lede: '這是 qBittorrent 自己的登入，給你之後打開它的介面用。Berth 自己用不到它（靠免密白名單進得去）；不設的話，它的介面只剩容器 log 裡每次重啟都換的臨時密碼。',
@@ -649,7 +655,7 @@ const zhHant = {
       bundled:
         '這台 qBittorrent 是套件內的，Berth 只替它設介面登入，全域偏好一個都不寫。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你在它的介面上改預設儲存路徑不影響 Berth。',
       existing:
-        '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。',
+        '這台 qBittorrent 是你自己的。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你自己加的 torrent 照舊落在你自己的預設路徑。',
     },
     cutaway: {
       server: '這台 qBittorrent',
@@ -657,11 +663,8 @@ const zhHant = {
       bundled: '套件內 qBittorrent',
       existing: '你自己的 qBittorrent',
       webapi: 'Web API',
-      password: '介面登入',
-      willSet: '將設為下面填的那一組',
-      existingLogin: '不改（這台是你自己的）',
       bundledPlan: '設定介面登入 · 只建 Berth 自己的分類',
-      existingPlan: '只建 Berth 自己的分類 · 一個全域偏好都不寫',
+      existingPlan: '只建 Berth 自己的分類',
     },
     step: {
       web_ui_password: '介面登入',
@@ -677,19 +680,20 @@ const zhHant = {
     },
     setLogin: '設定介面登入',
     settingLogin: '設定中…',
-    done: '這個泊位的事做完了。介面登入設好了；Berth 沒有改這台 qBittorrent 的全域偏好，它的下載走自己的分類。',
-    doneExisting:
-      '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
+    doneExisting: '這個泊位的事做完了。',
   },
   indexer: {
-    title: 'Prowlarr',
+    title: {
+      choose: '先選 Prowlarr 是哪一台',
+      chosen: 'Prowlarr',
+    },
     lede: {
       choose:
-        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用它已經有的站，也可以加推薦的公開站。',
+        '套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用它已經有的站，也可以加推薦的公開站。',
       bundled:
         '索引站決定 Berth 找得到什麼。按一次，Berth 測試推薦的站、把通過的加進去；加入之後試搜，不要的就地移除。要逐站挑選或加其他公開站，展開「進階」。這一步可以之後再說。',
       existing:
-        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；一站都沒有時，按一次就測試推薦的公開站、把通過的加進去，要逐站挑選展開「進階」。Berth 不移除你的站。這一步可以之後再說。',
+        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；一站都沒有時，按一次就測試推薦的公開站、把通過的加進去，要逐站挑選展開「進階」。這一步可以之後再說。',
     },
     skip: '之後再說',
     deferred: '之後再說',
@@ -723,9 +727,9 @@ const zhHant = {
       lede_other:
         '按一次，Berth 測試推薦的 {{count}} 個公開站，把通過的加進 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態，不影響其他站。',
       ledeExisting_one:
-        '按一次，Berth 測試推薦的公開站（{{names}}），通過就加進你在 {{host}} 的 Prowlarr。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+        '按一次，Berth 測試推薦的公開站（{{names}}），通過就加進你在 {{host}} 的 Prowlarr。',
       ledeExisting_other:
-        '按一次，Berth 測試推薦的 {{count}} 個公開站（{{names}}），把通過的加進你在 {{host}} 的 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+        '按一次，Berth 測試推薦的 {{count}} 個公開站（{{names}}），把通過的加進你在 {{host}} 的 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態。',
       run: '測試推薦站，加入通過的',
       running: '測試並加入中…',
       requestFailed: '測試與加入沒做完。',
@@ -757,7 +761,7 @@ const zhHant = {
       title: '加站',
       lede: '按「測試」時 Prowlarr 會現場連一次那個站，什麼都不建立；通過的才勾得起來。公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
       ledeExisting:
-        '這裡加的站會加進你自己的 Prowlarr。按「測試」時它會現場連一次那個站，什麼都不建立；通過的才勾得起來，按「加入」才真的加。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+        '這裡加的站會加進你自己的 Prowlarr。按「測試」時它會現場連一次那個站，什麼都不建立；通過的才勾得起來，按「加入」才真的加。',
       intoYours_one: '按下去會把這 {{count}} 站加進你的 Prowlarr（{{host}}）：{{names}}。',
       intoYours_other: '按下去會把這 {{count}} 站加進你的 Prowlarr（{{host}}）：{{names}}。',
       recommended: '推薦的站',
@@ -806,7 +810,7 @@ const zhHant = {
       sites_one: '{{count}} 站',
       sites_other: '{{count}} 站',
       lede: 'Prowlarr 只搜得到已經加入的站。每一列可以單獨搜，也可以一次搜全部；關鍵字留白就是問各站最新的發佈。',
-      existingLede: '你那一台上已經有的站。Berth 用它們搜尋，不移除——要移除請到它自己的介面。',
+      existingLede: '你那一台上已經有的站，Berth 用它們搜尋。',
       none: '這一台上還沒有任何站。',
       field: '關鍵字',
       placeholder: '留白＝各站最新的發佈',
@@ -3563,16 +3567,15 @@ const en: Translations<typeof zhHant> = {
       can: 'You can do here',
       elsewhere: 'Not here',
       jellyfin: {
-        can: 'See who the owner is. Once there is an owner the source is locked; if your existing Jellyfin moved (a new port, say), use “Change address” on the test result — only the same server is accepted.',
-        elsewhere:
-          'The owner’s password is changed in Jellyfin. Moving to another Jellyfin would mean another owner, which Berth does not support.',
+        can: 'See who the owner is. If your existing Jellyfin moved (a new port, say), use “Change address” on the test result — only the same server is accepted.',
+        elsewhere: 'The owner’s password is changed in Jellyfin.',
         bundledCan:
-          'See who the owner is. Once there is an owner the source is locked; the bundled one’s address comes from compose, so there is nothing to change.',
+          'See who the owner is. The bundled one’s address comes from compose, so there is nothing to change.',
       },
       qbittorrent: {
-        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s interface login. No global preference is written.',
+        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s interface login.',
         elsewhere:
-          'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself; Berth neither writes nor reads them — its downloads only go through its own berth-* categories.',
+          'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself.',
       },
       routes: {
         can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every check on every route runs again. Delete a wrong one underneath it.',
@@ -3588,7 +3591,7 @@ const en: Translations<typeof zhHant> = {
         existing: {
           can: 'Switch between bundled and existing, re-read the site list, run a trial search; you can also test public sites and add the ones you tick. Indexers already added are not added twice.',
           elsewhere:
-            'Removing sites, adding ones that need an account and changing the interface login all happen in your instance’s own interface; Berth does not remove your sites or touch its login.',
+            'Removing sites, adding ones that need an account and changing the interface login all happen in your instance’s own interface.',
         },
       },
       tmdb: {
@@ -3613,7 +3616,7 @@ const en: Translations<typeof zhHant> = {
       signIn:
         'Berth has no accounts of its own; every sign-in goes through Jellyfin. Sign in with an administrator of this Jellyfin and you become the owner of Berth. Everyone else signs in with their own Jellyfin account, and Jellyfin decides their role.',
       owned:
-        '{{name}} administers this Jellyfin and owns Berth. Sign in to Berth with this Jellyfin account from now on; its password is changed in Jellyfin.',
+        '{{name}} administers this Jellyfin and owns Berth. Sign in to Berth with this Jellyfin account from now on.',
     },
     cutaway: {
       title: 'What happens',
@@ -3630,6 +3633,7 @@ const en: Translations<typeof zhHant> = {
       apiKey: 'API key “Berth”',
       libraries: 'Libraries: only when you press Build and check on page 3',
       password: 'Your password (it only goes to Jellyfin)',
+      passwordOwned: 'Your password',
       passwordCarried:
         'Your password (it goes to Jellyfin, and becomes the bundled qBittorrent and Prowlarr interface password too)',
     },
@@ -3672,7 +3676,7 @@ const en: Translations<typeof zhHant> = {
         'The Jellyfin address was changed while you were filling in the form, so your password was not sent. Test again, check that the address above is the one you mean, then send it again.',
     },
     locked:
-      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the source is locked. A new address for the same server is fine; another server is refused.',
+      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the source is locked.',
     startup: {
       language: 'Language and region',
       languageHint:
@@ -3730,8 +3734,7 @@ const en: Translations<typeof zhHant> = {
       adds: {
         jellyfin:
           'only creates an API key named Berth on page 1, adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay) and creates a library only if you tick it there (every user sees it). If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth normally asks it to refresh just that library; while it has never listed anything under the path (the first import), it scans the whole server, so your other libraries get scanned too.',
-        qbittorrent:
-          'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
+        qbittorrent: 'only creates berth- categories when you press the button on page 3.',
         prowlarr: 'only adds the sites you ask for on page 4; the sites already there stay.',
       },
       sameHost:
@@ -3994,7 +3997,9 @@ const en: Translations<typeof zhHant> = {
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
     probe:
-      'The test writes a probe file in {{root}} and asks qBittorrent to check it once, stopped, to see whether it can see {{root}}, then removes it (the check never finishes, so “Run external program on torrent finished” does not fire; if your qBittorrent has “Run external program on torrent added” set, that fires once) and deletes the file.',
+      'The test writes a probe file in {{root}} and adds one paused probe torrent for qBittorrent to check, to see whether it can see {{root}}, then removes both. The check never finishes, so “Run external program on torrent finished” does not fire.',
+    externalProgram:
+      'If your qBittorrent has “Run external program on torrent added” set, it fires once per test.',
     submit: 'Test connection',
     submitting: 'Testing…',
     signIn: 'Connect and sign in',
@@ -4099,6 +4104,11 @@ const en: Translations<typeof zhHant> = {
     },
   },
   interfaceLogin: {
+    cutaway: {
+      term: 'Interface login',
+      willSet: 'Will be set to the one entered below',
+      existing: 'Managed in its own interface',
+    },
     qbittorrent: {
       legend: 'qBittorrent interface login',
       lede: "This is qBittorrent's own login, for when you open its interface yourself. Berth does not need it (it gets in through the no-password allowlist); without it, its interface only has the temporary password in the container log, which changes on every restart.",
@@ -4170,7 +4180,7 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'This qBittorrent came with the bundle. Berth only sets its interface login and writes no global preference. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; changing the default save path in its own UI does not affect Berth.',
       existing:
-        'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
+        'This qBittorrent is yours. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
     },
     cutaway: {
       server: 'This qBittorrent',
@@ -4178,11 +4188,8 @@ const en: Translations<typeof zhHant> = {
       bundled: 'Bundled qBittorrent',
       existing: 'Your own qBittorrent',
       webapi: 'Web API',
-      password: 'Interface login',
-      willSet: 'Will be set to the one entered below',
-      existingLogin: 'Left alone (this one is yours)',
       bundledPlan: 'Sets the interface login · only creates Berth’s own categories',
-      existingPlan: 'Only creates Berth’s own categories · writes no global preference',
+      existingPlan: 'Only creates Berth’s own categories',
     },
     step: {
       web_ui_password: 'Interface login',
@@ -4198,19 +4205,20 @@ const en: Translations<typeof zhHant> = {
     },
     setLogin: 'Set interface login',
     settingLogin: 'Setting…',
-    done: 'This berth is done. The interface login is set; Berth changed none of this qBittorrent’s global preferences, and its downloads go through its own categories.',
-    doneExisting:
-      'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
+    doneExisting: 'This berth is done.',
   },
   indexer: {
-    title: 'Prowlarr',
+    title: {
+      choose: 'First, which Prowlarr?',
+      chosen: 'Prowlarr',
+    },
     lede: {
       choose:
-        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one, paste its API key; Berth uses the indexers it already has, and you can also add recommended public sites.',
+        'On the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one, paste its API key; Berth uses the indexers it already has, and you can also add recommended public sites.',
       bundled:
         'Indexers decide what Berth can find. One press tests the recommended sites and adds the ones that pass; then run a trial search and remove the ones you do not want. To pick sites one by one or add other public sites, open Advanced. This step can wait.',
       existing:
-        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; if it has none, one press tests the recommended public sites and adds the ones that pass, and Advanced lets you pick them one by one. Berth never removes your sites. This step can wait.',
+        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; if it has none, one press tests the recommended public sites and adds the ones that pass, and Advanced lets you pick them one by one. This step can wait.',
     },
     skip: 'Do this later',
     deferred: 'Deferred',
@@ -4245,9 +4253,9 @@ const en: Translations<typeof zhHant> = {
       lede_other:
         'One press: Berth tests the {{count}} recommended public sites and adds the ones that pass to Prowlarr. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal and does not affect the rest.',
       ledeExisting_one:
-        'One press: Berth tests the recommended public site ({{names}}) and adds it to your Prowlarr at {{host}} if it passes. Berth does not remove sites — do that in Prowlarr itself.',
+        'One press: Berth tests the recommended public site ({{names}}) and adds it to your Prowlarr at {{host}} if it passes.',
       ledeExisting_other:
-        'One press: Berth tests the {{count}} recommended public sites ({{names}}) and adds the ones that pass to your Prowlarr at {{host}}. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal. Berth does not remove sites — do that in Prowlarr itself.',
+        'One press: Berth tests the {{count}} recommended public sites ({{names}}) and adds the ones that pass to your Prowlarr at {{host}}. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal.',
       run: 'Test recommended sites and add the ones that pass',
       running: 'Testing and adding…',
       requestFailed: 'Testing and adding did not finish.',
@@ -4280,7 +4288,7 @@ const en: Translations<typeof zhHant> = {
       title: 'Add indexers',
       lede: "Test asks Prowlarr to reach the site right now and creates nothing; only sites that pass can be ticked. A few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",
       ledeExisting:
-        'Sites added here go into your own Prowlarr. Test asks it to reach the site right now and creates nothing; only sites that pass can be ticked, and nothing is added until you press Add. Berth does not remove sites — do that in Prowlarr itself.',
+        'Sites added here go into your own Prowlarr. Test asks it to reach the site right now and creates nothing; only sites that pass can be ticked, and nothing is added until you press Add.',
       intoYours_one: 'Pressing Add puts this site into your Prowlarr ({{host}}): {{names}}.',
       intoYours_other:
         'Pressing Add puts these {{count}} sites into your Prowlarr ({{host}}): {{names}}.',
@@ -4331,8 +4339,7 @@ const en: Translations<typeof zhHant> = {
       sites_one: '{{count}} site',
       sites_other: '{{count}} sites',
       lede: 'Prowlarr only searches sites that have been added. Search one row at a time or all of them at once; leave the keywords blank to ask each site for its latest releases.',
-      existingLede:
-        'The sites your instance already has. Berth searches with them and never removes any — remove them in its own interface.',
+      existingLede: 'The sites your instance already has; Berth searches with them.',
       none: 'This instance has no sites yet.',
       field: 'Keywords',
       placeholder: 'Blank = latest releases on each site',

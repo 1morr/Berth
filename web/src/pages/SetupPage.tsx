@@ -64,7 +64,7 @@ import { IndexerStep } from '../setup/IndexerStep'
 import { GAP, indexerGaps } from '../setup/indexerGaps'
 import { OwnerStep } from '../setup/OwnerStep'
 import { QbittorrentStep } from '../setup/QbittorrentStep'
-import type { CarriedLogin, LoginService } from '../setup/interfaceLogin'
+import type { CarriedLogin } from '../setup/interfaceLogin'
 import { librariesFailed } from '../setup/jellyfinSteps'
 import { librariesRunning, routesRunning, startsOnItsOwn, storedList } from '../setup/autoDock'
 import { RouteStep, type DockFailure, type DockPlan } from '../setup/RouteStep'
@@ -137,30 +137,15 @@ export function SetupPage() {
   // 頁 1 勾了「也用這組」時的擁有者密碼（M4 票 40，brief §19 D4）：**只在這個分頁的記憶體裡**——不寫
   // storage、不送給 Berth 存——到頁 2、頁 4 自動帶入。重新整理或離開精靈就沒了，那時照舊問一次。
   const [carriedPassword, setCarriedPassword] = useState<string | null>(null)
+  // 「已沿用 Jellyfin 帳密」那一句照後端記的（`web_ui_login_reuses_owner`），不照這個分頁記得的：重新整理前後
+  // 同一個狀態要說同一句（M4 票 104）。
+  const carried: CarriedLogin = { password: carriedPassword }
   /** Jellyfin 不再收帶過來的那一組（在 Jellyfin 改過密碼）：丟掉，下一頁不再自動送它。 */
   function dropCarried(error: unknown, login: InterfaceLogin | null) {
     if (loginRefusalOf(error)?.reason === 'owner_password' && login?.reuse_owner) {
       setCarriedPassword((was) => (was === login.password ? null : was))
     }
   }
-  // 這個分頁最後一次替哪幾台設下的就是帶過來的那一組（M4 票 80）：頁 2、頁 4 照它說「已沿用」。看帳號
-  // 認不出來——「改用另一組」只換密碼時帳號照舊是擁有者。
-  const [carriedTo, setCarriedTo] = useState<ReadonlySet<LoginService>>(new Set())
-  function noteLogin(service: LoginService, login: InterfaceLogin | null) {
-    // 登入照舊：那一台的登入沒變。
-    if (login === null) return
-    const took = login.reuse_owner && login.password === carriedPassword
-    setCarriedTo((was) => {
-      const next = new Set(was)
-      if (took) next.add(service)
-      else next.delete(service)
-      return next
-    })
-  }
-  function carriedFor(service: LoginService): CarriedLogin {
-    return { password: carriedPassword, inUse: carriedPassword !== null && carriedTo.has(service) }
-  }
-
   const current = status.data
   const backend = current?.current_step ?? STEP.jellyfin
   const step = shownStep(backend, requested)
@@ -392,10 +377,7 @@ export function SetupPage() {
   }
   const applyPreferences = useMutation({
     mutationFn: applyQbittorrent,
-    onSuccess: (next, login) => {
-      absorbBerth(qbittorrentSetupQueryOptions.queryKey, next)
-      noteLogin('qbittorrent', login)
-    },
+    onSuccess: (next) => absorbBerth(qbittorrentSetupQueryOptions.queryKey, next),
     onError: dropCarried,
   })
   const applySites = useMutation({
@@ -410,10 +392,7 @@ export function SetupPage() {
   // 套件內 Prowlarr 的介面登入是自己的一顆按鈕（M4 票 20），不跟著「加入」送。
   const prowlarrLogin = useMutation({
     mutationFn: setIndexerLogin,
-    onSuccess: (next, login) => {
-      absorbBerth(indexerSetupQueryOptions.queryKey, next)
-      noteLogin('prowlarr', login)
-    },
+    onSuccess: (next) => absorbBerth(indexerSetupQueryOptions.queryKey, next),
     onError: dropCarried,
   })
   const skipSites = useMutation({
@@ -728,7 +707,7 @@ export function SetupPage() {
           setup={qbittorrent.data}
           setupError={qbittorrent.error}
           owner={current.owner}
-          carried={carriedFor('qbittorrent')}
+          carried={carried}
           applying={applyPreferences.isPending}
           requestError={applyPreferences.error}
           loginRefusal={loginRefusalOf(applyPreferences.error)}
@@ -814,7 +793,7 @@ export function SetupPage() {
             indexers={indexers.data}
             indexersError={indexers.error}
             owner={current.owner}
-            carried={carriedFor('prowlarr')}
+            carried={carried}
             applying={applySites.isPending}
             recommended={{
               running: addRecommended.isPending,

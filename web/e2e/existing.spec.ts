@@ -90,6 +90,8 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   // 既有的那一台沒有介面登入那一格（M4 票 07）。
   await expect(page.getByRole('group', { name: 'qBittorrent 介面登入' })).toHaveCount(0)
   await expect(page.getByText(/這個泊位的事做完了/)).toBeVisible()
+  // 要使用者自己留意的那一件獨立一行，貼在測試結果旁（M4 票 104）。
+  await expect(page.getByText(/torrent 加入時執行外部程式/)).toBeVisible()
   await expect(page.getByRole('button', { name: /確認|套用/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '前往下一個泊位' })).toBeVisible()
   expect(writes.filter((url) => url.endsWith('/api/setup/qbittorrent/apply'))).toEqual([])
@@ -131,7 +133,9 @@ test('既有服務：三頁都選既有、選寫入目標，完成後用那台 J
   // 4. Prowlarr 選既有：與頁 1、2 同一份表單（M4 票 39）。先貼錯的 key：測過才存（M4 票 45），錯誤標在
   // API key 欄、說去哪裡複製，什麼都沒存，右欄仍是還沒選時的「將會做什麼」（M4 票 81）；改對再測，
   // 用它已經有的站，試搜；沒有介面登入那一格。
-  await expect(page.getByRole('heading', { name: 'Prowlarr', level: 2 })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: '先選 Prowlarr 是哪一台', level: 2 }),
+  ).toBeVisible()
   await page.getByRole('radio', { name: /既有/ }).click()
   await main.getByRole('textbox', { name: '位址' }).fill('http://nas:9696')
   await main.getByRole('textbox', { name: 'API key' }).fill('not-the-key')

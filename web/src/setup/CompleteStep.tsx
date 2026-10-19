@@ -4,9 +4,8 @@ import type { TFunction } from 'i18next'
 
 import type { IndexerSetup, RouteSetup } from '../api/setup'
 import { STICKY_ACTION, GhostButton, Notice, PrimaryButton } from '../components/controls'
-import { SIGNAL_FILL } from '../components/signal'
-import { ROUTE_SIGNAL } from '../components/routeChecks'
 import { Cutaway, CutawayRow } from '../components/Cutaway'
+import { RouteIdentity } from '../components/RouteIdentity'
 import { RequestFailed } from '../components/RequestFailed'
 import { LedgerGapNotice } from '../issues/LedgerGapNotice'
 import { StepFrame } from './StepFrame'
@@ -98,12 +97,9 @@ export function CompleteStep({
         {routes.routes.map((route) => (
           <li key={route.slug} className="min-w-0 border-2 border-rule bg-well px-4 py-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              {/* 狀態讀的是那條 Route 自己的健康，不是「這一頁只會在全綠時出現」的假設。 */}
-              <span className={`label px-2 py-1.5 ${SIGNAL_FILL[ROUTE_SIGNAL[route.health]]}`}>
-                {t(`routes.health.${route.health}`)}
-              </span>
-              <span className="value text-sm font-semibold text-ink">{route.name}</span>
-              <span className="value text-xs text-ink-dim">{route.category}</span>
+              {/* 狀態讀的是那條 Route 自己的健康，不是「這一頁只會在全綠時出現」的假設。與頁 3 同一條身分帶
+                  （M4 票 104）：「已繫上」是常態、不塗漆，泊位板已經是綠的。 */}
+              <RouteIdentity route={route} />
             </div>
             <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
               <dt className="label self-center text-ink-dim">{t('routes.cutaway.target')}</dt>

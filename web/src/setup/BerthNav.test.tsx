@@ -24,7 +24,7 @@ describe('頁 4 的回頭看', () => {
     const note = screen.getByRole('note', { name: '回頭看' })
     expect(note).not.toHaveTextContent('移除不要的站')
     expect(note).toHaveTextContent('重新讀取站的清單')
-    expect(note).toHaveTextContent('Berth 不移除你的站，也不碰它的登入')
+    expect(note).toHaveTextContent('都在你那一台自己的介面上做')
   })
 
   it('其他頁不看來源', () => {
