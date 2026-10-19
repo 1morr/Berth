@@ -682,6 +682,7 @@ describe('RSS 頁', () => {
       tv_route: 4,
       movie_route: 5,
       exclusions: [],
+      interval_sec: 900,
     })
   })
 
@@ -1098,6 +1099,128 @@ describe('RSS 頁', () => {
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['简体'] })
+  })
+})
+
+describe('RSS 頁：每個 Feed 的輪詢間隔（M4 票 109）', () => {
+  const CASES = [
+    {
+      lng: 'zh-Hant',
+      url: /RSS 網址/,
+      add: '加入',
+      interval: '輪詢間隔',
+      every15: /^每 15 分鐘/,
+      every6h: /^每 6 小時/,
+      every1d: /^每 24 小時/,
+      sixHours: '6 小時',
+      oneDay: '24 小時',
+      change: '改輪詢間隔',
+      save: '存下間隔',
+      saved: '存下了：之後每 24 小時輪詢一次。',
+      lede: /不會馬上輪詢/,
+    },
+    {
+      lng: 'en',
+      url: /RSS address/,
+      add: 'Add',
+      interval: 'Poll interval',
+      every15: /^Every 15 minutes/,
+      every6h: /^Every 6 hours/,
+      every1d: /^Every 24 hours/,
+      sixHours: '6 hours',
+      oneDay: '24 hours',
+      change: 'Change poll interval',
+      save: 'Save interval',
+      saved: 'Saved: polled every 24 hours from now on.',
+      lede: /does not poll right away/,
+    },
+  ] as const
+
+  it.each(CASES)('$lng：新增表單選檔位，預設 15 分鐘，存完 Feed 列說出新值', async (copy) => {
+    let feeds: Feed[] = []
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'POST /api/rss/feeds': () => {
+        feeds = [feed({ tv_route_id: 3, interval_sec: 21600 })]
+        return { status: 201, body: feeds[0] }
+      },
+    })
+    await i18next.changeLanguage(copy.lng)
+    try {
+      renderApp('/rss')
+
+      const interval = await screen.findByRole('combobox', { name: copy.interval })
+      expect(interval).toHaveValue('900')
+      expect(within(interval).getAllByRole('option')).toHaveLength(7)
+      await userEvent.selectOptions(interval, copy.sixHours)
+      await userEvent.type(screen.getByLabelText(copy.url), FEED_URL)
+      await userEvent.click(screen.getByRole('button', { name: copy.add }))
+
+      await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+      expect(
+        JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).interval_sec,
+      ).toBe(21600)
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(within(row).getByText(copy.every6h)).toBeInTheDocument()
+      // 送完表單回到預設。
+      await waitFor(() => expect(interval).toHaveValue('900'))
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it.each(CASES)('$lng：Feed 列就地改間隔，存完收起、那一列說出新值', async (copy) => {
+    let feeds: Feed[] = [feed()]
+    const stub = render({
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'PUT /api/rss/feeds/1/interval': () => {
+        feeds = [feed({ interval_sec: 86400 })]
+        return { body: feeds[0] }
+      },
+    })
+    await i18next.changeLanguage(copy.lng)
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(within(row).getByText(copy.every15)).toBeInTheDocument()
+      await userEvent.click(within(row).getByRole('button', { name: copy.change }))
+      expect(within(row).getByText(copy.lede)).toBeVisible()
+      const picker = within(row).getByRole('combobox', { name: copy.interval })
+      expect(picker).toHaveValue('900')
+      await userEvent.selectOptions(picker, copy.oneDay)
+      await userEvent.click(within(row).getByRole('button', { name: copy.save }))
+
+      await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/feeds/1/interval')).toHaveLength(1))
+      expect(
+        JSON.parse(String(sent(stub, 'PUT', '/api/rss/feeds/1/interval')[0][1]?.body)),
+      ).toEqual({ interval_sec: 86400 })
+      expect(await within(row).findByText(copy.every1d)).toBeInTheDocument()
+      expect(within(row).getByRole('status')).toHaveTextContent(copy.saved)
+      expect(within(row).queryByRole('combobox', { name: copy.interval })).not.toBeInTheDocument()
+      expect(within(row).getByRole('button', { name: copy.change })).toHaveFocus()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('改間隔被拒時說出原因，選的留著', async () => {
+    render({
+      'PUT /api/rss/feeds/1/interval': {
+        status: 422,
+        body: { detail: { reason: 'interval_unsupported', detail: '600' } },
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: '改輪詢間隔' }))
+    await userEvent.selectOptions(within(row).getByRole('combobox', { name: '輪詢間隔' }), '1 小時')
+    await userEvent.click(within(row).getByRole('button', { name: '存下間隔' }))
+
+    expect(await within(row).findByText('只能選清單上的間隔，什麼都沒存。')).toBeInTheDocument()
+    expect(within(row).getByRole('combobox', { name: '輪詢間隔' })).toHaveValue('3600')
   })
 })
 
