@@ -375,7 +375,9 @@ function MikanPicker({
       {group !== null && (
         <>
           <FolderLine media={media} />
-          <p className="max-w-prose text-xs text-ink-dim">{t('rss.subscribe.season')}</p>
+          <p className="max-w-prose text-xs text-ink-dim">
+            {t('rss.subscribe.season')} {t('rss.bound.backfillLede')}
+          </p>
         </>
       )}
       {group !== null && route !== null && (

@@ -17,6 +17,10 @@ import {
 } from '../test/fetch'
 import { renderApp } from '../test/render'
 
+/** 每日補漏的說明（M4 票 108）：與 RSS 頁 RSS Series 段落那一句相同（`RssPage.test.tsx`）。 */
+const BACKFILL_LEDE =
+  '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。'
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -2223,6 +2227,7 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     active: 0,
     excluded: 0,
     finished: false,
+    backfilled_at: null,
     submitted: 0,
     ask: null,
     ...overrides,
@@ -2320,6 +2325,10 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     // 整季一律補（M4 票 78）：沒有勾選，說的是整季。
     expect(within(block).queryByRole('checkbox')).not.toBeInTheDocument()
     expect(within(block).getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeVisible()
+    // 每日補漏與 RSS 頁 RSS Series 段落的說明同一句（M4 票 108）。
+    expect(within(block).getByText(/讀這個字幕組在 Mikan 上的整季/)).toHaveTextContent(
+      BACKFILL_LEDE,
+    )
 
     await userEvent.click(within(block).getByRole('button', { name: '訂閱並送出' }))
 

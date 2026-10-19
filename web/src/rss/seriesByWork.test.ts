@@ -36,6 +36,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     active: 0,
     excluded: 0,
     finished: false,
+    backfilled_at: null,
     submitted: 0,
     ask: null,
     ...overrides,

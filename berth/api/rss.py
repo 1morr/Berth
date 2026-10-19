@@ -309,6 +309,9 @@ class SeriesOut(BaseModel):
     #: 或最近一筆發佈之後 30 天沒有新的（`parser.series_finished`）。RSS 頁收進「已完結」；
     #: 新的一筆出現時自己變回 `false`。
     finished: bool
+    #: 上一次讀它的 Mikan 單一 feed 補舊集或補漏的那一刻（M4 票 108）；還沒補過、或不是 Mikan
+    #: 的是 `null`。完結的不再補漏（`finished`），這一格停在最後一次。
+    backfilled_at: datetime | None
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
     #: 還沒確認時第一批在問什麼（M4 票 11）；確認過、或還沒有已入庫的集數在等人是 `null`。

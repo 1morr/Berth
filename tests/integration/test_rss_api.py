@@ -173,6 +173,8 @@ class TestThePageFlow:
         assert pending["search_term"] == "Kimi ga Shinu made Koi wo Shitai"
         # 長出它的 Feed 的兩條 Route：手動綁定的「入庫到」先預選它（M4 票 105）。
         assert pending["feed_routes"] == {"tv": route_id, "movie": None}
+        # 還沒補過（M4 票 108）。
+        assert pending["backfilled_at"] is None
 
         bound = client.put(
             f"/api/rss/series/{pending['id']}/binding",
