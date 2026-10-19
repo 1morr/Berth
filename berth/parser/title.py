@@ -41,7 +41,7 @@ _YEAR_PENALTY = 0.5
 THRESHOLD = 0.6
 #: 短到不能用「包含」判定的長度。`Up` 出現在半數發佈名裡。
 _MIN_CONTAINED = 4
-#: 含 CJK 的名字的同一個下限（M4 票 83c）：三個字的「無間道」要比得到；兩個字的「英雄」抽查時
+#: 含 CJK 的名字的另一個下限（M4 票 83c）：三個字的「無間道」要比得到；兩個字的「英雄」抽查時
 #: 放進來的全是 `英雄教室`、`我的英雄学院` 這類。只給搜尋的粗篩（`mentions`、`partial_title`），
 #: `_compare` 照舊用 `_MIN_CONTAINED`。
 _MIN_CONTAINED_CJK = 3
