@@ -60,4 +60,3 @@
     `ServiceUnavailableError`，要分開得拆例外類別，超出這張票。
   - Standards：commit type 用了 `refactor:`，但它拿掉了對外 API 欄位（CHANGELOG 已寫明）；已提交，不改寫歷史。
   - 判斷題（不改）：`services.rss._site_of` 與同檔 `kind_of` / `_default_name` 各自去 `www.`；`_attempt` 回三元組。
-
