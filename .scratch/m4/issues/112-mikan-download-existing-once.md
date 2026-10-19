@@ -39,4 +39,3 @@
 - 規則擋下的三層合成「N 筆對上排除條件」，不說哪一層哪一條：作品頁上沒有放規則的地方，細節在 RSS 頁。
 - code-review Standards 軸已處理：拒絕畫面抽成 `rss/RssRefusalNotice`（訂閱與只下載現有的共用）、`Subscription.excluded` 拿掉預設值、`onDone` 收一個 `Said`。未處理：`excludedText` 與 `i18n/list.ts` 各有一個 `startsWith('zh')`（中文兩段之間要用逗號，`formatList` 用頓號），只有一處用，不值得為它加參數。
 - playwright 實跑：e2e `rss-existing`（1280 / 390），截圖在 `112-mikan-download-existing-once/`。容器的 chromium 是 1194、playwright 要 1243，在 `/opt/pw-browsers` 接 symlink 跑（不動 repo）。
-
