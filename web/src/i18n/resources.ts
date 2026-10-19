@@ -583,7 +583,7 @@ const zhHant = {
     // 頁 2、頁 4 剖面的「介面登入」那一列：兩頁同一套列、同一組值（M4 票 104）。
     cutaway: {
       term: '介面登入',
-      willSet: '將設為下面填的那一組',
+      willSet: '將設為表單裡填的那一組',
       existing: '在它自己的介面上管',
     },
     qbittorrent: {
@@ -4106,7 +4106,7 @@ const en: Translations<typeof zhHant> = {
   interfaceLogin: {
     cutaway: {
       term: 'Interface login',
-      willSet: 'Will be set to the one entered below',
+      willSet: 'Will be set to the one entered in the form',
       existing: 'Managed in its own interface',
     },
     qbittorrent: {

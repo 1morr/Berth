@@ -150,7 +150,12 @@ describe.each(LANGUAGES)('%s', (language) => {
       expect(placesSaying(KEEPS_YOURS[language])).toHaveLength(1)
       expect(placesSaying(PROBE[language])).toHaveLength(1)
       // 一個元件只裝這一句：沒有夾在括號裡、沒有和探針那一句黏在一起。
-      expect(screen.getByText(t('connect.externalProgram'))).toBeVisible()
+      const external = screen.getByText(t('connect.externalProgram'))
+      expect(external).toBeVisible()
+      // 表單收著：貼在測試結果（「改位址或憑證」）的正下方。
+      expect(external.parentElement?.previousElementSibling).toContainElement(
+        screen.getByRole('button', { name: t('connection.edit') }),
+      )
     })
 
     it('頁 2 既有、還沒測：探針與外部程式那一句在測試鍵旁，探針照樣只說一次', async () => {
@@ -327,7 +332,9 @@ describe.each(LANGUAGES)('%s', (language) => {
       })
       await screen.findByText(t('interfaceLogin.qbittorrent.set'))
       const work = heading.parentElement!
-      expect(work.querySelectorAll('.bg-secured').length).toBeLessThanOrEqual(2)
+      // 連線那一列的「連上了」與登入那一條的「已完成」各一顆，說的是兩件事；不再多一則完成提示（M4 票 104）。
+      const painted = [...work.querySelectorAll('.bg-secured')].map((chip) => chip.textContent)
+      expect(painted).toEqual([t('connection.state.ok'), t('status.ok')])
     })
 
     it.each([

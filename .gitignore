@@ -45,3 +45,5 @@ Thumbs.db
 .impeccable/config.local.json
 .impeccable/hook.cache.json
 .impeccable/questions/
+.impeccable/live/
+web/.impeccable/live/
