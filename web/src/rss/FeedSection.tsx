@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState, type FormEvent } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -331,8 +332,7 @@ function FeedIntervalEditor({
   const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
   const ledeId = useId()
   const [picked, setPicked] = useState<FeedInterval | null>(null)
-  const chosen =
-    picked ?? (isFeedInterval(feed.interval_sec) ? feed.interval_sec : DEFAULT_FEED_INTERVAL)
+  const chosen = picked ?? feed.interval_sec
   const save = useMutation({
     mutationFn: () => setFeedInterval(feed.id, chosen),
     onMutate: () => onSaved(null),
@@ -472,25 +472,49 @@ function FeedRoutes({
   )
 }
 
+/** Feed 列狀態句說的那一件事。 */
+type RowNote =
+  | { kind: 'polled'; outcome: PollOutcome }
+  | { kind: 'routes'; outcome: FeedRoutesOutcome }
+  | { kind: 'retimed'; interval: FeedInterval }
+
+function noteText(t: TFunction, note: RowNote): string {
+  switch (note.kind) {
+    case 'polled':
+      // 這一輪抓不到 Feed 時不說「新 0 筆」：那是沒讀到，不是讀到了沒有新的。原文在上面那一塊。
+      return note.outcome.failed
+        ? t('rss.feeds.polledFailed')
+        : t('rss.feeds.polledNow', {
+            items: note.outcome.items,
+            series: note.outcome.series,
+            bound: note.outcome.bound,
+            sent: note.outcome.submitted,
+          })
+    case 'routes':
+      return note.outcome.bound > 0
+        ? t('rss.feeds.routesSavedBound', {
+            count: note.outcome.bound,
+            sent: note.outcome.submitted,
+          })
+        : t('rss.feeds.routesSaved')
+    case 'retimed':
+      return t('rss.feeds.interval.saved', { interval: intervalLabel(t, note.interval) })
+  }
+}
+
 function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const headingId = useId()
   // 一列一個狀態句：最近一次輪詢、改 Route 或改間隔的結果，後做的那一件蓋掉前一件。
-  const [polled, setPolled] = useState<PollOutcome | null>(null)
-  const [saved, setSaved] = useState<FeedRoutesOutcome | null>(null)
-  const [retimed, setRetimed] = useState<FeedInterval | null>(null)
+  const [note, setNote] = useState<RowNote | null>(null)
   const self = useRef<HTMLElement>(null)
   const refresh = () => queryClient.invalidateQueries({ queryKey: RSS_KEY })
   const poll = useMutation({
     mutationFn: () => pollFeed(feed.id),
-    onMutate: () => {
-      setPolled(null)
-      setSaved(null)
-      setRetimed(null)
-    },
+    onMutate: () => setNote(null),
     onSuccess: async (outcome) => {
-      setPolled(outcome)
+      setNote({ kind: 'polled', outcome })
       await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: ['jobs'] })])
       // 需要人的那幾段浮在頁首（第一輪、待綁定），這一輪長出來的會把這一列連同結果句推出畫面
       // （M3 票 21 的 audit：390px 上從 y 356 推到 2443）。重畫之後捲回來。
@@ -547,21 +571,7 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
         </Notice>
       )}
       <p role="status" className="text-xs text-ink">
-        {/* 這一輪抓不到 Feed 時不說「新 0 筆」：那是沒讀到，不是讀到了沒有新的。原文在上面那一塊。 */}
-        {polled &&
-          (polled.failed
-            ? t('rss.feeds.polledFailed')
-            : t('rss.feeds.polledNow', {
-                items: polled.items,
-                series: polled.series,
-                bound: polled.bound,
-                sent: polled.submitted,
-              }))}
-        {saved &&
-          (saved.bound > 0
-            ? t('rss.feeds.routesSavedBound', { count: saved.bound, sent: saved.submitted })
-            : t('rss.feeds.routesSaved'))}
-        {retimed !== null && t('rss.feeds.interval.saved', { interval: intervalLabel(t, retimed) })}
+        {note && noteText(t, note)}
       </p>
       {(poll.isError || remove.isError) && (
         <RequestFailed error={poll.error ?? remove.error} lead={t('request.notDone')} />
@@ -569,20 +579,12 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
       {/* 間隔與 Route 放在同一處：都是「這個 Feed 怎麼跑」的設定（M4 票 109）。 */}
       <FeedIntervalEditor
         feed={feed}
-        onSaved={(interval) => {
-          setPolled(null)
-          setSaved(null)
-          setRetimed(interval)
-        }}
+        onSaved={(interval) => setNote(interval === null ? null : { kind: 'retimed', interval })}
       />
       <FeedRoutes
         feed={feed}
         routes={routes}
-        onSaved={(outcome) => {
-          setPolled(null)
-          setRetimed(null)
-          setSaved(outcome)
-        }}
+        onSaved={(outcome) => setNote(outcome === null ? null : { kind: 'routes', outcome })}
       />
       <RulesToggle
         rules={feed.exclusions}

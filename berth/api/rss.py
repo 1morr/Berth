@@ -132,6 +132,11 @@ class KindRoutesOut(BaseModel):
     movie: int | None
 
 
+#: 輪詢間隔的秒數，只收固定檔位（M4 票 109）。檔位寫進 schema 的 `enum`，畫面的型別跟著它；
+#: 檢查在命令裡（422 `interval_unsupported`），拒絕的形狀才與其他 `/rss` 的一樣。
+FeedInterval = Annotated[int, WithJsonSchema({"type": "integer", "enum": list(FEED_INTERVALS)})]
+
+
 class FeedOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -139,7 +144,8 @@ class FeedOut(BaseModel):
     name: str
     url: str
     kind: FeedKind
-    interval_sec: int
+    #: 檔位同 `FeedIn`：寫得進來的只有這幾個，舊的列是預設的 900。
+    interval_sec: FeedInterval
     last_polled_at: datetime | None
     #: 上一輪失敗的原文（英文）。空字串是上一輪好好的。
     last_error: str
@@ -164,11 +170,6 @@ class FeedOut(BaseModel):
     #: 它長出的、因為 Route 不只一條而停在待綁定的，照認出來的種類數：選了那一種的 Route 會當場
     #: 綁上幾部（M4 票 105）。
     awaiting_route: KindCountsOut
-
-
-#: 輪詢間隔的秒數，只收固定檔位（M4 票 109）。檔位寫進 schema 的 `enum`，畫面的型別跟著它；
-#: 檢查在命令裡（422 `interval_unsupported`），拒絕的形狀才與其他 `/rss` 的一樣。
-FeedInterval = Annotated[int, WithJsonSchema({"type": "integer", "enum": list(FEED_INTERVALS)})]
 
 
 class FeedIn(BaseModel):

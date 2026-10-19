@@ -2920,8 +2920,11 @@ export interface components {
             /** Url */
             url: string;
             kind: components["schemas"]["FeedKind"];
-            /** Interval Sec */
-            interval_sec: number;
+            /**
+             * Interval Sec
+             * @enum {integer}
+             */
+            interval_sec: 900 | 1800 | 3600 | 10800 | 21600 | 43200 | 86400;
             /** Last Polled At */
             last_polled_at: string | null;
             /** Last Error */
