@@ -676,7 +676,136 @@ describe('RSS 頁', () => {
       name: '',
       tv_route: 4,
       movie_route: 5,
+      exclusions: [],
     })
+  })
+
+  it('加 Feed 時就設排除條件：先記在表單裡、跟著加入一起送，卡片上是同一組（M4 票 110）', async () => {
+    let feeds: Feed[] = []
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'POST /api/rss/feeds': () => {
+        feeds = [feed({ tv_route_id: 3, exclusions: ['720p', '/v2$/'] })]
+        return { status: 201, body: feeds[0] }
+      },
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    expect(
+      within(rules).getByText(/Mikan 加入之後很快就會開始下載，要排除的現在就加/),
+    ).toBeVisible()
+    await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
+    await userEvent.click(within(rules).getByRole('button', { name: '加入「简体」' }))
+    await userEvent.type(within(rules).getByLabelText('加一條排除條件'), '/v2$/{Enter}')
+    expect(within(rules).getByLabelText('加一條排除條件')).toHaveValue('')
+    await userEvent.click(within(rules).getByRole('button', { name: '拿掉「简体」' }))
+    expect(
+      within(rules)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual(['720p×', '/v2$/×'])
+    // 送出前不另打 API：規則只在表單裡。
+    expect(stub.mock.calls.filter(([, init]) => init?.method === 'PUT')).toEqual([])
+
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body))).toMatchObject({
+      url: FEED_URL,
+      tv_route: 3,
+      exclusions: ['720p', '/v2$/'],
+    })
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: /排除條件（2 條）/ }))
+    expect(within(row).getByText('720p')).toBeVisible()
+    expect(within(row).getByText('/v2$/')).toBeVisible()
+    expect(within(rules).getByText('沒有排除條件。')).toBeInTheDocument()
+  })
+
+  it('加 Feed 時打了規則沒按「加入規則」：那一條也跟著送，送完表單清空', async () => {
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'POST /api/rss/feeds': { status: 201, body: feed({ tv_route_id: 3, exclusions: ['720p'] }) },
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
+    await userEvent.type(within(rules).getByLabelText('加一條排除條件'), ' 简体 ')
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).exclusions).toEqual(
+      ['720p', '简体'],
+    )
+    await waitFor(() => expect(within(rules).getByLabelText('加一條排除條件')).toHaveValue(''))
+    expect(within(rules).getByText('沒有排除條件。')).toBeInTheDocument()
+  })
+
+  it('加 Feed 時規則寫壞：原因說在規則欄下，網址欄沒事，規則留著讓人改', async () => {
+    render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'POST /api/rss/feeds': {
+        status: 422,
+        body: {
+          detail: {
+            reason: 'rule_invalid',
+            detail: '/[简繁/: unterminated character set at position 0',
+          },
+        },
+      },
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    await userEvent.type(within(rules).getByLabelText('加一條排除條件'), '/[[简繁/{Enter}')
+    const url = screen.getByLabelText(/RSS 網址/)
+    await userEvent.type(url, FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    expect(
+      await within(rules).findByText('存不進去：/[简繁/: unterminated character set at position 0'),
+    ).toBeInTheDocument()
+    expect(url).not.toHaveAttribute('aria-invalid', 'true')
+    expect(url).toHaveValue(FEED_URL)
+    expect(within(rules).getByText('/[简繁/')).toBeInTheDocument()
+  })
+
+  it('英文：加 Feed 時的排除條件', async () => {
+    let feeds: Feed[] = []
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'POST /api/rss/feeds': () => {
+        feeds = [feed({ tv_route_id: 3, exclusions: ['720p'] })]
+        return { status: 201, body: feeds[0] }
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const rules = await screen.findByRole('group', { name: 'Exclusions' })
+      expect(
+        within(rules).getByText(/A Mikan feed starts downloading soon after it is added/),
+      ).toBeVisible()
+      await userEvent.click(within(rules).getByRole('button', { name: 'Add “720p”' }))
+      await userEvent.type(screen.getByLabelText(/RSS address/), FEED_URL)
+      await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+      expect(
+        JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).exclusions,
+      ).toEqual(['720p'])
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(within(row).getByRole('button', { name: /Exclusions \(1\)/ })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 
   it('只有一條時預填它，一條都沒有的那一種不出現', async () => {

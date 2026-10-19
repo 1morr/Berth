@@ -416,8 +416,13 @@ async def add_feed(
     name: str = "",
     tv_route_id: int | None = None,
     movie_route_id: int | None = None,
+    exclusions: Sequence[str] = (),
 ) -> FeedView:
     """加一個 Feed。不當場輪詢——畫面上那一顆「立即輪詢」與背景迴圈會做，這一支只記下來。
+
+    排除條件可以一起給（M4 票 110）：Mikan 不預覽、第一輪就自動綁定送單，
+    加完再設的擋不到已經送出的。
+    寫壞的整個 Feed 都不加（`rule_invalid`，與 `set_feed_exclusions` 同一個檢查）。
 
     兩條 Route 是自動綁定送進的地方（M4 票 105，照 Sonarr Import List 的 Root Folder 必填）：
     那一種有啟用中的 Route 就要給（`route_required`），一條都沒有時那一格存 `None`
@@ -430,6 +435,7 @@ async def add_feed(
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
     await _check_routes(session, KindRoutes(tv=tv_route_id, movie=movie_route_id))
+    rules = _normalized_rules(exclusions)
     row = RssFeed(
         name=name.strip() or _default_name(url),
         url=url,
@@ -437,6 +443,7 @@ async def add_feed(
         primed_at=utcnow() if kind in _NO_PREVIEW else None,
         tv_route_id=tv_route_id,
         movie_route_id=movie_route_id,
+        exclude_json=list(rules),
     )
     session.add(row)
     try:

@@ -468,6 +468,39 @@ class TestExclusions:
             ("global_rule", "Baha")
         }
 
+    def test_a_feed_takes_its_rules_when_it_is_added(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 110：與 Feed 一起存，卡片讀回來的是同一組。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        added = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "exclusions": [" 720p ", "/简体/"]},
+            headers=BROWSER,
+        )
+
+        assert added.status_code == 201, added.text
+        assert added.json()["exclusions"] == ["720p", "/简体/"]
+        assert client.get("/api/rss/feeds").json()[0]["exclusions"] == ["720p", "/简体/"]
+
+    def test_a_broken_rule_on_adding_is_422_and_adds_no_feed(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        refused = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "exclusions": ["/[简繁/"]},
+            headers=BROWSER,
+        )
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"]["reason"] == "rule_invalid"
+        assert client.get("/api/rss/feeds").json() == []
+
     def test_a_broken_regex_is_422_and_says_why(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:

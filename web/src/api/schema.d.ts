@@ -2826,6 +2826,8 @@ export interface components {
             tv_route?: number | null;
             /** Movie Route */
             movie_route?: number | null;
+            /** Exclusions */
+            exclusions?: string[];
         };
         /**
          * FeedItemStatus
@@ -8017,7 +8019,7 @@ export interface operations {
                     "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
-            /** @description `feed_unsupported` · `route_missing` · `route_kind_mismatch` · `route_required` */
+            /** @description `feed_unsupported` · `route_missing` · `route_kind_mismatch` · `route_required` · `rule_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
