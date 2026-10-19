@@ -22,11 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ProtocolMismatchError, ServiceError
 from berth.adapters.rss import FeedItem
-from berth.domain import BudgetUse, FeedKind, MappingStrategy, ReleaseKind, RssRefusal, Tags
+from berth.domain import FeedKind, MappingStrategy, ReleaseKind, RssRefusal, Tags
 from berth.models import Job, Media, Route
 from berth.parser import parse_release, tags_of
 from berth.parser.binding import search_term
-from berth.services.clients import ServiceClientFactory, feed_fetcher
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.jobs import JobSource
 from berth.services.rss import RssRejectedError, kind_of, library_copy, parse_items, unread
@@ -97,7 +97,7 @@ async def read_oneshot(
         raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
     media = await _media(session, media_id)
     route = await _route(session, route_id)
-    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
+    fetcher = factory.rss()
     try:
         found = parse_items(kind, await fetcher.fetch(url.strip()))
     except ProtocolMismatchError as exc:

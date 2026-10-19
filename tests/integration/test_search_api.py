@@ -310,8 +310,9 @@ class TestQueryPreview:
         ]
         assert not [chip for chip in body["names"][2:] if chip["on"]]
         assert body["seasons"] == [{"number": 1, "on": False}, {"number": 2, "on": True}]
-        # 代價那一行要說的「每站每小時 N 格」是這一台的請求預算，不是寫死的。
-        assert (body["any_season"], body["limit"], body["budget"]) == (True, 10, 60)
+        assert (body["any_season"], body["limit"]) == (True, 10)
+        # M4 票 107：請求預算刪了，預覽不再帶它。
+        assert "budget" not in body
 
     def test_the_chosen_names_and_seasons_are_what_both_ask(
         self, client: TestClient, indexer: FakeIndexerSearch
@@ -458,7 +459,9 @@ class TestMissingEpisodes:
 
         batch = body["batch"]
         assert (batch["seasons"], batch["later"], batch["next_seasons"]) == ([0, 1], 1, [2])
-        assert body["retry_at"] is None
+        # M4 票 107：沒有請求預算，也就沒有「何時放得下」與「這次沒問的站」。
+        assert not {"retry_at", "skipped"} & body.keys()
+        assert "next_at" not in batch
 
 
 class TestProblems:

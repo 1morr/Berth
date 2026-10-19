@@ -32,7 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
-from berth.adapters.budget import RequestBudget
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -40,7 +39,7 @@ from berth.adapters.http import (
     ServiceNotDeployedError,
     ServiceUnavailableError,
 )
-from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchSite
+from berth.adapters.indexer import IndexerResult, IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import (
@@ -95,7 +94,6 @@ from berth.api.deps import get_bundled_services, get_client_factory, get_host_re
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
-    BudgetUse,
     CollectionType,
     Confidence,
     ConnectionReason,
@@ -337,12 +335,6 @@ class Scenario:
     #: mediainfo 的替身（M3 票 15）：檔名含 ` - <集號> ` 的影片量到幾秒。演練寫到磁碟上的不是真的
     #: 影片，真的 libmediainfo 一律說不出片長；空的話走真的那一支。
     measured: dict[str, int] = field(default_factory=dict)
-    #: 一個站一份請求預算的上限（M3 票 20）。`None` 是正式的那一份（每站每小時 60 個）。
-    budget_limit: int | None = None
-    #: 替身索引站的一個查詢打到哪幾站（請求預算的鍵）。空的話不記帳。
-    indexer_sites: tuple[SearchSite, ...] = ()
-    #: 起來時各站已經被輪詢用掉幾個（M4 票 77）：重現「RSS 先把 Mikan 用完」。
-    budget_spent: dict[str, int] = field(default_factory=dict)
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1533,68 +1525,6 @@ def rss_runtime_scenario() -> Scenario:
     return scenario
 
 
-def budget_scenario() -> Scenario:
-    """一個站一份請求預算（M3 票 20、M4 票 77）：同 `rss`，但每站的預算只有 6 個，索引站背後是
-    Mikan 與 Nyaa，而 Mikan 起來時已經被輪詢用掉 5 個。
-
-    TMDB 上《与你相恋》有七季、每季兩集都播完了，媒體庫一集都沒有：詳情頁按「搜這部作品缺的集」，
-    季記號放不下一批，分兩批（S01–S05、S06–S07）。第一批 5 個在 Mikan 放不下、在 Nyaa 放得下：
-    只問 Nyaa，結果下面說 Mikan 這次沒問、何時放得下。下一批也是 5 個，兩站都放不下——那一行
-    說出何時放得下，照樣按「問下一批」是「等請求預算」。之後到 `/rss` 加 Mikan 聚合 feed、按
-    「立即輪詢」：Feed 本身用掉 Mikan 最後一個，單集頁全部被擋、下一輪再試；健康頁的「請求預算」
-    列出 mikanani.me 6 / 6、nyaa.si 5 / 6，被延後的是哪幾種。
-    """
-    seasons = tuple(
-        TmdbSeason(
-            season_number=number,
-            name=f"Season {number}",
-            air_date=date(2018 + number, 1, 5),
-            episodes=tuple(
-                TmdbEpisode(
-                    season_number=number,
-                    episode_number=episode,
-                    name=f"Episode {episode}",
-                    air_date=date(2018 + number, 1, 5) + timedelta(days=7 * (episode - 1)),
-                    runtime=24,
-                )
-                for episode in (1, 2)
-            ),
-        )
-        for number in range(1, 8)
-    )
-    detail = replace(
-        KIMI_DETAIL,
-        first_air_date=seasons[0].air_date,
-        seasons=tuple(
-            TmdbSeasonEntry(
-                season_number=season.season_number,
-                name=season.name,
-                episode_count=len(season.episodes),
-                air_date=season.air_date,
-            )
-            for season in seasons
-        ),
-    )
-    scenario = rss_scenario(detail=detail, seasons=seasons)
-    scenario.budget_limit = 6
-    scenario.indexer_sites = (
-        SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),
-        SearchSite(indexer_id=7, name="Nyaa.si", site="nyaa.si"),
-    )
-    scenario.budget_spent = {"mikanani.me": 5}
-    scenario.indexer_results = tuple(
-        IndexerResult(
-            title=f"[LoliHouse] Kimi ga Shinu made Koi wo Shitai S{number:02d} [1080p]",
-            indexer="Nyaa.si",
-            size=4000,
-            seeders=3,
-            download_url=demo_url(f"/demo/torrent?release=s{number:02d}"),
-        )
-        for number in range(1, 8)
-    )
-    return scenario
-
-
 def _split_cour_scenario(season: TmdbSeason) -> Scenario:
     assert season.air_date is not None
     detail = replace(
@@ -1806,7 +1736,6 @@ SCENARIOS = {
     "rss-split-cour": rss_split_cour_scenario,
     "rss-split-cour-airing": rss_split_cour_airing_scenario,
     "rss-runtime": rss_runtime_scenario,
-    "budget": budget_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "downloads": downloads_scenario,
@@ -1845,10 +1774,6 @@ class FakeClientFactory:
 
     def __init__(self, scenario: Scenario) -> None:
         self._scenario = scenario
-        limit = scenario.budget_limit
-        self.budget = RequestBudget() if limit is None else RequestBudget(limit=limit)
-        for site, count in scenario.budget_spent.items():
-            self.budget.take(site, count, BudgetUse.POLL)
         #: 使用者自己那台 Prowlarr，一個位址一台：加進去的站之後再讀要看得到
         #: （M4 票 67 的一鍵加站）。
         self._existing_prowlarr: dict[str, FakeProwlarrClient] = {}
@@ -1907,7 +1832,6 @@ class FakeClientFactory:
         return FakeIndexerSearch(
             base_url=base_url,
             results=self._scenario.indexer_results,
-            sites=self._scenario.indexer_sites,
         )
 
     def torrent(self) -> TorrentFetcher:

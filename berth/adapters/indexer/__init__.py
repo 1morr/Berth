@@ -2,7 +2,7 @@
 
 `ProwlarrClient` 是**精靈**用的：它回答「這台 Prowlarr 還通不通、有哪些站」。這一支回答的是
 另一個問題——「這部作品現在有哪些發佈可以下載」。分成兩個介面而不是替既有的 client 多加一個
-方法，是因為搜尋要的逾時、記帳（請求預算）與替身都和精靈那一支不同。Prowlarr 刻意不提供跨站
+方法，是因為搜尋要的逾時與替身都和精靈那一支不同。Prowlarr 刻意不提供跨站
 聚合的 Torznab，所以搜尋走 REST（brief §20.7）。
 
 **一次呼叫一個查詢**（推翻 plan §8.4 原本的 `search(queries, categories)`）：多標題展開、
@@ -27,18 +27,6 @@ class SearchQuery:
     #: 只問這幾個站（Prowlarr 的 `indexerIds`）。空的是全部。精靈的試搜逐站問（票 06e），
     #: 一站連不上才不會把其他站一起拖下水。
     indexer_ids: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class SearchSite:
-    """一個查詢會打到的一站（M3 票 20、M4 票 77）。"""
-
-    #: 索引站裡的 id（Prowlarr 的 `indexerIds`）。預算放不下某一站時，查詢只帶其他站的 id。
-    indexer_id: int
-    #: 索引站裡的名字（`Mikan`），畫面說「這次沒問」時用。
-    name: str
-    #: 請求預算的鍵（`adapters.budget.site_of`）。索引站說不出網址時是空字串，那一站不記帳。
-    site: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,11 +78,6 @@ class IndexerSearch(Protocol):
         的子類。"""
         ...
 
-    async def sites(self) -> tuple[SearchSite, ...]:
-        """不帶 `indexer_ids` 的查詢會打到哪幾個站。請求預算照它記帳（M3 票 20）：Prowlarr 預設的
-        Mikan、Nyaa、ACG.RIP 與 RSS 是同一批站。"""
-        ...
-
     async def aclose(self) -> None: ...
 
 
@@ -123,6 +106,5 @@ __all__ = [
     "IndexerResult",
     "IndexerSearch",
     "SearchQuery",
-    "SearchSite",
     "normalise_info_hash",
 ]

@@ -23,9 +23,7 @@ import type { SetupStep } from '../api/schemas'
 import { ExpandHint } from '../components/ExpandHint'
 import { SectionHeading } from '../components/SectionHeading'
 import { StepLine } from '../components/StepLine'
-import { Timestamp } from '../components/Timestamp'
 import { IndexerNotice } from './IndexerNotice'
-import { SkippedSites } from './SkippedSites'
 import { FilteredResults } from './FilteredResults'
 import { QueryChoices } from './QueryChoices'
 import { RoutePicker } from './RoutePicker'
@@ -59,8 +57,8 @@ export interface SearchHandle {
  * 季表上的缺集也從這裡搜（M1.5 票 10）：那兩顆按鈕呼叫 `SearchHandle.searchMissing`，結果照舊畫在這一區塊，
  * 照舊送單。**查詢仍然由後端產生**——換成缺的那幾集之後，預覽與真的送出去的那幾個還是同一份。
  *
- * 缺的季放不下一批時**分批問**（M3 票 20）：一批問完，`BatchLine` 說這一批問了哪幾季、下一批是哪幾季、
- * 請求預算何時放得下它，「問下一批」由人按——結果要人挑，背景自己問完也沒有人看。
+ * 缺的季放不下一批時**分批問**（M3 票 20）：一批問完，`BatchLine` 說這一批問了哪幾季、下一批是哪幾季，
+ * 「問下一批」由人按——結果要人挑，背景自己問完也沒有人看。
  *
  * **問哪些名字、哪幾季由人開關**（M4 票 84，`.scratch/m4/search-choose-shape.md`）：`QueryChoices` 的 chip。
  * 還沒動過時（`choice` 是 `null`）照後端的預設畫；動過之後預覽、搜尋、搜缺的集都帶同一份選擇。名字的種類
@@ -209,7 +207,6 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           <QueryCost
             count={typed ? 1 : (planned.data?.queries.length ?? 0)}
             limit={planned.data?.limit ?? 0}
-            budget={planned.data?.budget ?? 0}
             refusal={refusal}
             refusalId={refusalId}
           />
@@ -241,21 +238,12 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
       {/* 沒接索引站在按下去之前就說（票 13，`/search/queries` 先帶 `problem`）：不然畫面一直說「會拿這幾個
           名字去問」，按下去才知道根本沒有地方可問。搜過之後以那一次的結果為準，同一件事只說一次。 */}
-      {problem && (
-        <IndexerNotice
-          problem={problem}
-          detail={results?.detail ?? ''}
-          retryAt={results?.retry_at ?? null}
-        />
-      )}
-
-      {results && !results.problem && <SkippedSites skipped={results.skipped} />}
+      {problem && <IndexerNotice problem={problem} detail={results?.detail ?? ''} />}
 
       {results?.batch && isBatched(results.batch, missing) && missing && (
         <BatchLine
           key={missing.fromSeason}
           batch={results.batch}
-          refused={results.problem === 'budget_exhausted'}
           onNext={(fromSeason) => {
             const scope = { ...missing, fromSeason }
             setMissing(scope)
@@ -383,20 +371,18 @@ function refusalOf(
 }
 
 /**
- * 按下去之前說出代價（M4 票 84）：每個索引站各佔幾格請求預算——一個查詢就是請索引站背後的每一個站現場搜
- * 一次，所以格數就是標籤上的查詢數——與要等多久，併成一句（票 84b）。不能按的時候整句換成原因，掛在搜尋鍵
+ * 按下去之前說出代價（M4 票 84）：要問幾個查詢——一個查詢就是請索引站背後的每一個站現場搜一次——與要等
+ * 多久，併成一句（票 84b）。不能按的時候整句換成原因，掛在搜尋鍵
  * 的描述上，等多久那半句不說。一個查詢都沒有時不畫。
  */
 function QueryCost({
   count,
   limit,
-  budget,
   refusal,
   refusalId,
 }: {
   count: number
   limit: number
-  budget: number
   refusal: Refusal | null
   refusalId: string
 }) {
@@ -416,7 +402,7 @@ function QueryCost({
   }
   if (count === 0) return null
   return (
-    <p className="max-w-prose text-xs text-ink-dim">{t('search.costWait', { count, budget })}</p>
+    <p className="max-w-prose text-xs text-ink-dim">{t('search.costWait', { count })}</p>
   )
 }
 
@@ -434,30 +420,11 @@ function rememberKinds(
 }
 
 /**
- * 缺集搜尋分批時，問完一批之後的那一行（M3 票 20）：這一批問了哪幾季、下一批是哪幾季、何時放得下。
- *
- * 「問下一批」**永遠按得下去**（票 02b）：預算還放不下時後端照實拒絕（`budget_exhausted`），那一句話由
- * `IndexerNotice` 說；這裡先把時間說在前面，免得人按了才知道。被拒的那一批（`refused`）只說它要問
- * 哪幾季——它一個都還沒問。
+ * 缺集搜尋分批時，問完一批之後的那一行（M3 票 20）：這一批問了哪幾季、下一批是哪幾季。
  */
-function BatchLine({
-  batch,
-  refused,
-  onNext,
-}: {
-  batch: Batch
-  refused: boolean
-  onNext: (fromSeason: number) => void
-}) {
+function BatchLine({ batch, onNext }: { batch: Batch; onNext: (fromSeason: number) => void }) {
   const { t } = useTranslation()
-  // 這一行畫出來的那一刻（每一批各掛一次，`key` 是批次）：`next_at` 在它之後才是「要等」。
-  const [shownAt] = useState(() => Date.now())
-  const waiting = batch.next_at !== null && new Date(batch.next_at).getTime() > shownAt
   const seasons = seasonList(t, batch.seasons)
-
-  if (refused) {
-    return <p className="max-w-prose text-sm text-ink">{t('search.batch.pending', { seasons })}</p>
-  }
 
   return (
     <div className="grid max-w-prose gap-1">
@@ -481,11 +448,6 @@ function BatchLine({
           </button>
         )}
       </p>
-      {waiting && (
-        <p className="text-xs text-ink-dim">
-          {t('search.batch.wait')} <Timestamp at={batch.next_at} />
-        </p>
-      )}
     </div>
   )
 }

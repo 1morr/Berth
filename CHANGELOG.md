@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+**這一版有資料庫 migration**（`c1d7e4a9b302`，Berth 啟動時自動套用一次）：之前因為請求預算用完而停在待綁定、
+等下一輪再認的 RSS Series，改成下一輪就重認，那一次不算進重認的次數上限。
+
+### Removed
+
+- **站點請求預算**（M4 票 107，推翻 M3 票 20 與 M4 票 77）：RSS 輪詢、每日補漏、搜尋與 `/rss` 上人按的讀取不再共用
+  「每站每小時 60 個」。這個數字不是量出來的，實際擋到的只有 Berth 自己——例如訂閱 MyBangumi 之後 Mikan 的額度被輪詢
+  用完，搜尋就跳過 Mikan。搜尋經過 Prowlarr，各站要不要限次數請在 Prowlarr 索引站的 Query Limit 設定；站點真的回
+  429 / 5xx 時照舊下一輪再試。健康頁拿掉「請求預算」那一張卡，搜尋區塊拿掉「這次沒問」「等請求預算」與下一批的等待時間。
+  API（只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可）：拿掉 `GET /api/health/budget`；`GET /api/search`
+  拿掉 `skipped`、`retry_at` 與 `batch.next_at`，`problem` 不再有 `budget_exhausted`；`GET /api/search/queries` 拿掉
+  `budget`；`/api/rss` 的讀取不再回 429 `budget_exhausted`；RSS Series 的綁定理由不再有 `lookup_deferred`。
+
 ## [0.2.8] - 2026-10-19
 
 **從 0.2.7 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。

@@ -15,9 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
 from berth.adapters.rss import mikan
-from berth.domain import BudgetUse
 from berth.models import RssSeries
-from berth.services.clients import ServiceClientFactory, feed_fetcher
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.rss import unread
 
@@ -78,7 +77,7 @@ async def read_bangumi(
 
 
 async def _fetch(factory: ServiceClientFactory, url: str) -> str:
-    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
+    fetcher = factory.rss()
     try:
         return (await fetcher.fetch(url)).decode("utf-8", errors="replace")
     except ServiceError as exc:
