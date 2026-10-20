@@ -77,3 +77,37 @@ describe('StepFrame 的焦點', () => {
     expect(document.activeElement).toBe(document.body)
   })
 })
+
+/**
+ * 第二件事放在剖面底下（M4 票 119）：桌機頁 4 套件內的介面登入。DOM 在工作面之後、剖面之前不行——剖面
+ * 是唯讀的、Tab 到它之前先到要填的那一區；所以它在剖面那一欄、接在剖面後面，而那一欄不再固定。
+ */
+describe('StepFrame 的 aside', () => {
+  it('在剖面那一欄、剖面之後；那一欄不固定（剖面固定時會蓋住它）', () => {
+    render(
+      <StepFrame cutaway={<h3>剖面</h3>} aside={<section aria-label="第二件事" />}>
+        <h2>工作</h2>
+      </StepFrame>,
+    )
+
+    const cutaway = screen.getByRole('heading', { name: '剖面' })
+    const aside = screen.getByRole('region', { name: '第二件事' })
+    const column = cutaway.closest('[data-frame-column]')
+    expect(column).not.toBeNull()
+    expect(column).toContainElement(aside)
+    expect(column).not.toContainElement(screen.getByRole('heading', { name: '工作' }))
+    expect(cutaway.compareDocumentPosition(aside) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(column?.querySelector('[class*="sticky"]')).toBeNull()
+  })
+
+  it('沒有 aside 時剖面照舊固定', () => {
+    render(
+      <StepFrame cutaway={<h3>剖面</h3>}>
+        <h2>工作</h2>
+      </StepFrame>,
+    )
+
+    const column = screen.getByRole('heading', { name: '剖面' }).closest('[data-frame-column]')
+    expect(column?.querySelector('[class*="lg:sticky"]')).not.toBeNull()
+  })
+})

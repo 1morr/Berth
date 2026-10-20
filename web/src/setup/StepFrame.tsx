@@ -6,7 +6,8 @@ import { useEffect, useRef, type ReactNode } from 'react'
  * **DOM 裡工作面在前**（票 06h 的 critique 與 audit）：窄版第一屏是這一步的標題與動作，剖面
  * 接在後面——原本剖面在前，390 寬時標題要捲到 800–1500px 才出現；標題順序也因此是 h2（這一步）
  * → h3（剖面），不再是 h1 直接跳 h3。桌機用 grid 把剖面放回左欄，看起來與原本一樣。剖面只放
- * 讀的東西：要填要按的（例如套件內 Jellyfin 的媒體庫清單）放工作面，Tab 順序才與視覺一致。
+ * 讀的東西：要填要按的（例如套件內 Jellyfin 的媒體庫清單）放工作面，Tab 順序才與視覺一致。唯一的例外是
+ * `aside`（M4 票 119）：這一步的第二件事，桌機時接在剖面底下、Tab 排在工作面之後。
  *
  * **焦點不掉回 `body`**（同一輪 audit，WCAG 2.4.3）：換步時舊的一頁整個卸下、按下的動作做完
  * 那顆鍵被換掉，焦點都會掉到 `body`，鍵盤的人得從頁首重新 Tab。這一步掛上時焦點給它的 h2；
@@ -16,7 +17,20 @@ import { useEffect, useRef, type ReactNode } from 'react'
  * 自己的 state 裡、StepFrame 沒有重繪時也接得回來（code review 抓到原本靠重繪檢查接不到）。
  * 清單逐列移除時 `useFocusAfterRemoval` 的 observer 先建立、先跑，它把焦點給了下一列，這裡就不動。
  */
-export function StepFrame({ cutaway, children }: { cutaway: ReactNode; children: ReactNode }) {
+export function StepFrame({
+  cutaway,
+  aside,
+  children,
+}: {
+  cutaway: ReactNode
+  /**
+   * 這一步的第二件事，桌機時接在剖面底下（M4 票 119：頁 4 套件內的介面登入）。工作面一屏半、剖面三分之一屏時
+   * 拿它平衡兩欄；窄版只有一欄，呼叫端自己把它放回工作面（`useWideScreen`），所以這裡不分寬窄。給了它，
+   * 剖面就不固定：固定的剖面捲動時會蓋住它。
+   */
+  aside?: ReactNode
+  children: ReactNode
+}) {
   const work = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,11 +60,22 @@ export function StepFrame({ cutaway, children }: { cutaway: ReactNode; children:
 
   return (
     <div className="grid flex-1 gap-px bg-rule lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div ref={work} className="min-w-0 bg-hull p-6 lg:col-start-2 lg:row-start-1">
+      <div
+        ref={work}
+        data-frame-column
+        className="min-w-0 bg-hull p-6 lg:col-start-2 lg:row-start-1"
+      >
         {children}
       </div>
-      <div className="min-w-0 bg-hull p-6 lg:col-start-1 lg:row-start-1">
-        <div className="lg:sticky lg:top-6">{cutaway}</div>
+      <div data-frame-column className="min-w-0 bg-hull p-6 lg:col-start-1 lg:row-start-1">
+        {aside ? (
+          <>
+            {cutaway}
+            {aside}
+          </>
+        ) : (
+          <div className="lg:sticky lg:top-6">{cutaway}</div>
+        )}
       </div>
     </div>
   )

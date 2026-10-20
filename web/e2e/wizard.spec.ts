@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { ADMIN, signIn } from './login.ts'
+import { blankAndOverflow, frameColumns } from './layout.ts'
 import { narrow, shot } from './shot.ts'
 
 // `bundled`：乾淨的 compose（plan §9.3）。三個服務頁都選「套件內」，六頁走完、中途回頭再往前、關掉
@@ -137,6 +138,17 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   ])
   // 逐站清單收在「進階」裡，預設收起。
   await expect(page.getByTestId('recommended')).toBeHidden()
+  // 加站與介面登入兩件必填同時在這一頁（M4 票 119）：桌機時登入接在剖面底下，高的那一欄不到矮的 1.5 倍
+  // （原本工作面 960px、剖面 309px）；390 寬只有一欄，不溢出、沒有一屏以上的空白。
+  if (narrow(page)) {
+    const { viewport, blank, overflow } = await blankAndOverflow(page)
+    expect(overflow).toBe(false)
+    expect(blank).toBeLessThan(viewport)
+  } else {
+    const heights = await frameColumns(page)
+    expect(heights).toHaveLength(2)
+    expect(Math.max(...heights)).toBeLessThan(1.5 * Math.min(...heights))
+  }
   await shot(page, '4-indexers-one-key')
   await quick.getByRole('button', { name: '測試推薦站，加入通過的' }).click()
   const outcome = page.getByTestId('one-key-outcome')
