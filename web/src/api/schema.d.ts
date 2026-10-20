@@ -1007,7 +1007,8 @@ export interface paths {
         post?: never;
         /**
          * Delete Route Endpoint
-         * @description 明確的刪除（二次確認在前端）。被 Job、帳本或 RSS 綁定引用：409 `route_in_use`，出路是停用。
+         * @description 明確的刪除（二次確認在前端）。被 Job、帳本或 RSS 綁定引用：409 `route_in_use`，
+         *     出路是停用。
          */
         delete: operations["delete_route_endpoint_api_routes__route_id__delete"];
         options?: never;
