@@ -1170,7 +1170,7 @@ async def _backfill_due(
     session: AsyncSession, factory: ServiceClientFactory, feed_id: int, moment: datetime
 ) -> None:
     """每日補漏：這個 Feed 是 home 的、綁好的 Mikan RSS Series，上次補過滿一天（或還沒補過）的各讀
-    一次單一 feed（plan §3.2、M4 票 108）。**完結之後再補最後一次才停**（`_finished_both`，M4 票
+    一次單一 feed（plan §3.2、M4 票 108）。**完結之後再補最後一次才停**（`_backfill_settled`，M4 票
     116）：停機跨過 `QUIET_AFTER` 時，被聚合 feed 捲掉的最後幾集靠這一次接住。完結照現況算，新的
     一筆出現時條件自己不成立，補漏也就恢復。
 
@@ -1196,7 +1196,7 @@ async def _backfill_due(
     failures: list[str] = []
     for series in list(due):
         home = await _home_feed(session, series)
-        if home is None or home.id != feed_id or await _finished_both(session, series, moment):
+        if home is None or home.id != feed_id or await _backfill_settled(session, series, moment):
             continue
         season = await _read_season(factory, series)
         if isinstance(season, str):
@@ -2189,10 +2189,13 @@ async def _finished_now(session: AsyncSession, row: RssSeries, moment: datetime)
     return await _finished(session, row, snapshot, await _tally(session, row.id), moment)
 
 
-async def _finished_both(session: AsyncSession, row: RssSeries, moment: datetime) -> bool:
+async def _backfill_settled(session: AsyncSession, row: RssSeries, moment: datetime) -> bool:
     """每日補漏跳過它的條件：現在已完結，**而且**上次補漏那一刻也已完結（M4 票 116）。只看現在的話，
     停機期間播完、重啟時已安靜滿 `QUIET_AFTER` 的 Series 一次都不補，最後幾集就永遠漏了。兩個時間
-    點用同一支 `_finished_now`；還沒補過的（`backfilled_at` 是 `None`）照讀。"""
+    點用同一支 `_finished_now`；還沒補過的（`backfilled_at` 是 `None`）照讀。
+
+    上次那一刻是拿**現在**的 Item 與帳本回推的：安靜那條路只會偏保守（最多多讀一次）；TMDB 完結那條
+    路可能把當時還沒入庫完的判成已完結，但那條路成立時每一集都已在庫，跳過也不漏。"""
     if row.backfilled_at is None:
         return False
     return await _finished_now(session, row, moment) and await _finished_now(

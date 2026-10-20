@@ -1,6 +1,6 @@
 # 116 — 完結之後再補最後一次漏
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -23,6 +23,12 @@
 
 ## 驗收
 
-- [ ] 上次補漏時還沒完結、現在已完結的 Series：這一輪讀一次單一 feed，`backfilled_at` 更新；下一輪起不再讀（pytest，改 `test_a_finished_series_is_not_read_until_a_new_release_appears`）
-- [ ] 兩個時間點都已完結的不讀（pytest，做變異驗證：拿掉第二個條件會紅）
-- [ ] 全部檢查、pytest、vitest 綠；plan、brief、CONTEXT.md、CHANGELOG、progress.md 已更新
+- [x] 上次補漏時還沒完結、現在已完結的 Series：這一輪讀一次單一 feed，`backfilled_at` 更新；下一輪起不再讀（pytest，改 `test_a_finished_series_is_not_read_until_a_new_release_appears`）
+- [x] 兩個時間點都已完結的不讀（pytest，做變異驗證：拿掉第二個條件會紅）
+- [x] 全部檢查、pytest、vitest 綠；plan、brief、CONTEXT.md、CHANGELOG、progress.md 已更新
+
+## Comments
+
+- 2026-10-20 實作：跳過條件是 `rss._backfill_settled`（code-review 建議從 `_finished_both` 改名：它答的是「補漏可以停了沒」）。
+- 驗收第 2 條的變異：「拿掉第二個條件（上次那一刻）」紅的是第一條測試（最後一次補漏不讀）；第二條測試守的是「整個不跳過」。拿掉「現在已完結」測不紅：同一份現況下完結對時間單調，上次那一刻已完結就蘊含現在已完結。照票保留，代價是多一次查詢、沒有閘門。
+- code-review 未處理：(1) 上次那一刻用現況回推，TMDB 完結那條路可能把當時沒入庫完的判成已完結——那時每一集都已在庫，不漏，只補了 docstring；(2) 判為完結到最後一次補漏之間，畫面已說「已完結，不再補漏」而還會再讀一次，票明訂文案不改；(3) 同一條規則在 docstring 與文件重複出現，維持（各處讀者不同）。
