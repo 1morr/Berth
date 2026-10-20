@@ -4139,7 +4139,7 @@ const en: Translations<typeof zhHant> = {
     },
     carried: {
       applying: 'Reusing the Jellyfin login from page 1 ({{owner}})…',
-      set: 'Reusing the Jellyfin login ({{owner}})',
+      set: 'Set to your Jellyfin login ({{owner}})',
       another: 'Use a different login',
     },
     error: {
