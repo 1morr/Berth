@@ -64,6 +64,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    Base,
     BundledLibrary,
     JellyfinSettings,
     Job,
@@ -570,10 +571,10 @@ async def _usages(session: AsyncSession, routes: Sequence[Route]) -> dict[int, R
     )
     return {
         route.id: RouteUsage(
-            jobs=jobs.get(route.id, 0),
+            jobs=jobs[route.id],
             ledger_entries=owned[route.id],
             rss_feeds=feeds[route.id],
-            rss_series=series.get(route.id, 0),
+            rss_series=series[route.id],
         )
         for route in routes
     }
@@ -581,12 +582,13 @@ async def _usages(session: AsyncSession, routes: Sequence[Route]) -> dict[int, R
 
 async def _count_by(
     session: AsyncSession, column: InstrumentedAttribute[int | None]
-) -> dict[int, int]:
+) -> Counter[int]:
     """`column` 的每個非 NULL 值有幾列。"""
     counted = await session.execute(
         select(column, func.count()).where(column.is_not(None)).group_by(column)
     )
-    return {key: count for key, count in counted.tuples() if key is not None}
+    # SQL 已濾掉 NULL；這一層只是讓型別從 `int | None` 收窄成 `int`。
+    return Counter({key: count for key, count in counted.tuples() if key is not None})
 
 
 async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]) -> RouteUsage:
@@ -595,11 +597,11 @@ async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]
     前綴粗篩（`target_prefix`）再用 `owning_route` 精判，與媒體庫頁同一條規則；前綴不正規化的話
     目標寫法不正規的 Route 會少算、被引用了還刪得掉。
     """
-    jobs = await _count_where(session, Job.route_id == route.id)
+    jobs = await _count_where(session, Job, Job.route_id == route.id)
     feeds = await _count_where(
-        session, or_(RssFeed.tv_route_id == route.id, RssFeed.movie_route_id == route.id)
+        session, RssFeed, or_(RssFeed.tv_route_id == route.id, RssFeed.movie_route_id == route.id)
     )
-    series = await _count_where(session, RssSeries.route_id == route.id)
+    series = await _count_where(session, RssSeries, RssSeries.route_id == route.id)
     candidates = await session.scalars(
         select(LedgerEntry.target_path).where(
             LedgerEntry.target_path.startswith(target_prefix(route), autoescape=True)
@@ -609,9 +611,11 @@ async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]
     return RouteUsage(jobs=jobs, ledger_entries=owned, rss_feeds=feeds, rss_series=series)
 
 
-async def _count_where(session: AsyncSession, condition: ColumnElement[bool]) -> int:
-    """`condition` 那張表有幾列符合（表從條件推得）。"""
-    return await session.scalar(select(func.count()).where(condition)) or 0
+async def _count_where(
+    session: AsyncSession, table: type[Base], condition: ColumnElement[bool]
+) -> int:
+    """`table` 有幾列符合 `condition`。"""
+    return await session.scalar(select(func.count()).select_from(table).where(condition)) or 0
 
 
 async def delete_route(session: AsyncSession, route_id: int) -> None:

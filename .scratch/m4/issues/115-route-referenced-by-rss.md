@@ -1,6 +1,6 @@
 # 115 — Route 被 RSS 綁著時：放行要擋、刪除要拒
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -21,7 +21,13 @@
 
 ## 驗收
 
-- [ ] Route 被清掉的 Series：清單的 `release_blocked` 是 `route_missing`、放行回 422 `route_missing`、Item 不變（pytest，做變異驗證）
-- [ ] 有 RSS Feed 或 Series 綁著的 Route 刪除被拒（`route_in_use`），計數正確；沒人綁的照舊刪得掉（pytest）
-- [ ] Route 頁的刪除被拒畫面說出 RSS 綁定的數量（vitest，zh-Hant 與 en）
-- [ ] 全部檢查、pytest、vitest 綠；plan（Route 刪除規則）、CHANGELOG、progress.md 已更新
+- [x] Route 被清掉的 Series：清單的 `release_blocked` 是 `route_missing`、放行回 422 `route_missing`、Item 不變（pytest，做變異驗證）
+- [x] 有 RSS Feed 或 Series 綁著的 Route 刪除被拒（`route_in_use`），計數正確；沒人綁的照舊刪得掉（pytest）
+- [x] Route 頁的刪除被拒畫面說出 RSS 綁定的數量（vitest，zh-Hant 與 en）
+- [x] 全部檢查、pytest、vitest 綠；plan（Route 刪除規則）、CHANGELOG、progress.md 已更新
+
+## Comments
+
+- code-review（2026-10-20）未處理的發現：
+  - `Media.default_route_id` 也是 `ondelete="SET NULL"`，刪 Route 時無聲清掉，`RouteUsage` 沒算它。票面沒要求，留給之後的票決定要不要算成引用。
+  - 四個引用數（`jobs`、`ledger_entries`、`rss_feeds`、`rss_series`）在 `ManagedRouteOut`、`RouteRefusalOut`、`route_refusal`、前端 `usageOf` 逐欄重寫（Data Clumps）。收成一個巢狀 `usage` 物件會改對外 API 形狀，沒做。

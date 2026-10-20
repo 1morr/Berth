@@ -377,6 +377,7 @@ def _bind_rss(client: TestClient, route: int) -> None:
     """一個自動綁定送進這條 Route 的 Feed、一個綁著它的 RSS Series。RSS 有自己的測試。"""
 
     async def run() -> None:
+        # `app.state` 是 Starlette 的動態屬性，型別上看不到 lifespan 掛上去的 session factory。
         sessions = client.app.state.session_factory  # type: ignore[attr-defined]
         async with sessions() as session:
             session.add_all([rss_feed("tv", tv_route_id=route), rss_series("a", route)])
