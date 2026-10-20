@@ -58,6 +58,14 @@ class ServiceUnavailableError(ServiceError):
     """
 
 
+class ServiceTimeoutError(ServiceUnavailableError):
+    """連上了，但在 HTTP 逾時內沒答完（讀、寫、連線池；連線逾時不算）。
+
+    子類而不是另一種失敗（M4 票 114）：對 `failure_of`、重試判斷它就是「這一次答不出來」；只有
+    搜尋要分得出來——每個查詢都逾時是索引站在、背後的站慢，不是整台連不上。
+    """
+
+
 class AuthFailedError(ServiceError):
     """服務要求憑證（401 / 403）。"""
 
@@ -163,6 +171,8 @@ class HttpSession:
             if is_plain_http_answer(exc):
                 raise SchemeMismatchError(f"{method} {path}: TLS handshake got no answer") from exc
             raise ServiceUnavailableError(f"{method} {path}: ConnectTimeout") from exc
+        except httpx.TimeoutException as exc:
+            raise ServiceTimeoutError(f"{method} {path}: {type(exc).__name__}") from exc
         except httpx.HTTPError as exc:
             raise ServiceUnavailableError(f"{method} {path}: {type(exc).__name__}") from exc
 

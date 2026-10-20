@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 import respx
 
+from berth.adapters.http import ServiceTimeoutError, ServiceUnavailableError
 from berth.adapters.indexer import SearchQuery
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from tests.conftest import read_fixture
@@ -125,3 +127,21 @@ async def test_prowlarr_search_asks_only_the_sites_it_is_given() -> None:
     params = route.calls.last.request.url.params
     assert params.get_list("indexerIds") == ["3"]
     assert params["query"] == ""
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_prowlarr_search_read_timeout_is_a_timeout_and_still_unavailable() -> None:
+    """M4 票 114：HTTP 層的逾時有自己的型別，搜尋才分得出「慢」與「整台連不上」；仍是
+    `ServiceUnavailableError`，`failure_of` 與重試判斷照舊。"""
+    respx.get(f"{PROWLARR_URL}/api/v1/search").mock(side_effect=httpx.ReadTimeout("timed out"))
+
+    search = ProwlarrSearch(PROWLARR_URL, API_KEY)
+    try:
+        with pytest.raises(ServiceTimeoutError) as caught:
+            await search.search(SearchQuery(text="SPY x FAMILY"))
+    finally:
+        await search.aclose()
+
+    assert isinstance(caught.value, ServiceUnavailableError)
+    assert str(caught.value).endswith(": ReadTimeout")

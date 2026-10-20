@@ -1756,7 +1756,7 @@ const zhHant = {
       },
       unreachable: {
         label: '連不上',
-        body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
+        body: '連不上索引站：容器可能沒起來、位址填錯了，或這一次答不出來。',
       },
       // M4 票 84：畫面在按下去之前就停用了搜尋鍵，這一種只在直接打 API 時出現。
       too_many_queries: {
@@ -5224,7 +5224,7 @@ const en: Translations<typeof zhHant> = {
       },
       unreachable: {
         label: 'Unreachable',
-        body: 'Cannot reach the indexer. Either its container is not running, or the address is wrong.',
+        body: 'Cannot reach the indexer: its container may not be running, the address may be wrong, or it could not answer this time.',
       },
       too_many_queries: {
         label: 'Too many queries',

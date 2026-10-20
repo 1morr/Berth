@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ServiceUnavailableError
+from berth.adapters.http import AuthFailedError, ServiceTimeoutError, ServiceUnavailableError
 from berth.adapters.indexer import IndexerResult, SearchQuery
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.domain import (
@@ -27,6 +27,7 @@ from berth.domain import (
     NameKind,
     SearchVerdict,
     Source,
+    StepFailure,
     StepStatus,
 )
 from berth.models import IndexerSettings, Media, Route
@@ -325,6 +326,48 @@ async def test_every_query_timing_out_is_said_on_the_cables_not_as_unreachable(
     assert view.problem is None
     assert view.attempts
     assert {attempt.status for attempt in view.attempts} == {StepStatus.FAILED}
+
+
+@pytest.mark.asyncio
+async def test_every_query_hitting_the_http_timeout_is_said_on_the_cables_not_as_unreachable(
+    session: AsyncSession,
+) -> None:
+    """M4 票 114：HTTP 層的逾時（`SEARCH_TIMEOUT_SECONDS`，比 service 層的先到）與 service 層的
+    一樣不算「整台問不動」：Prowlarr 冷啟動慢時每個查詢都可能超過它。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    factory = FakeClientFactory(
+        indexer_search=FakeIndexerSearch(
+            error=ServiceTimeoutError("GET /api/v1/search: ReadTimeout")
+        )
+    )
+
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
+
+    assert view.problem is None
+    assert view.attempts
+    assert {attempt.status for attempt in view.attempts} == {StepStatus.FAILED}
+    assert {attempt.failure for attempt in view.attempts} == {StepFailure.UNREACHABLE}
+    assert {attempt.error for attempt in view.attempts} == {"GET /api/v1/search: ReadTimeout"}
+
+
+@pytest.mark.asyncio
+async def test_every_query_refused_a_connection_is_still_unreachable(
+    session: AsyncSession,
+) -> None:
+    """票 114 的反面：連線失敗（非逾時）時照舊是整台連不上。"""
+    await arrange_media(session)
+    await arrange_indexer(session)
+    factory = FakeClientFactory(
+        indexer_search=FakeIndexerSearch(
+            error=ServiceUnavailableError("GET /api/v1/search: connection refused")
+        )
+    )
+
+    view = await search_torrents(session, factory, SourceCache(), media_id=SPY)
+
+    assert view.problem is IndexerProblem.UNREACHABLE
+    assert view.detail == "GET /api/v1/search: connection refused"
 
 
 @pytest.mark.asyncio
