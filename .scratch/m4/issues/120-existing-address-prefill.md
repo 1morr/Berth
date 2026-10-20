@@ -49,4 +49,3 @@
 
 - Standards（判斷）：`not.toMatch(/Feed指/)` 被「後面接標點」那條蘊含，照票的驗收字面留著。
 - Standards（不在範圍）：`resources.ts` 的 `{{libraries}}沒加上…` 是同一種插值後直接接中文的結構；`libraries` 若是「」括住的名字就沒事，沒查。
-
