@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { stubApi } from '../test/fetch'
 import { renderInRoute } from '../test/render'
-import { ALL_BUNDLED, indexerSetup, setupStatus } from '../test/fixtures'
+import { ALL_BUNDLED, RECOMMENDED, indexerSetup, setupStatus, site } from '../test/fixtures'
 import { SetupPage } from './SetupPage'
 
 /**
@@ -27,10 +27,10 @@ function screenWidth(wide: boolean) {
   }))
 }
 
-async function page4() {
+async function page4(indexers = indexerSetup()) {
   stubApi({
     'GET /api/setup/status': { body: AT_INDEXER },
-    'GET /api/setup/indexers': { body: indexerSetup() },
+    'GET /api/setup/indexers': { body: indexers },
   })
   renderInRoute(<SetupPage />)
   const login = await screen.findByTestId('prowlarr-login')
@@ -71,5 +71,30 @@ describe('頁 4 套件內的介面登入放在哪一欄', () => {
     const { login, work } = await page4()
 
     expect(work).toContainElement(login)
+  })
+})
+
+/**
+ * 先後（M4 票 119 的 critique）：還沒加站時「測試推薦站」是這一頁唯一的調度黃，登入的送出鍵是次要的；
+ * 兩顆黃鍵左右並排時看不出先做哪一件。加了站之後登入才是「現在需要你」的那一件。
+ */
+describe('頁 4 套件內：一屏只有一顆調度黃', () => {
+  const ASSIGNED = 'bg-assigned'
+
+  it('還沒加站：登入的送出鍵不是主鍵', async () => {
+    screenWidth(true)
+
+    await page4()
+
+    expect(screen.getByRole('button', { name: '測試推薦站，加入通過的' })).toHaveClass(ASSIGNED)
+    expect(screen.getByRole('button', { name: '設定介面登入' })).not.toHaveClass(ASSIGNED)
+  })
+
+  it('加了站：登入的送出鍵是主鍵', async () => {
+    screenWidth(true)
+
+    await page4(indexerSetup({ sites: [site(RECOMMENDED[0], 1)] }))
+
+    expect(screen.getByRole('button', { name: '設定介面登入' })).toHaveClass(ASSIGNED)
   })
 })

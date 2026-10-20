@@ -367,6 +367,11 @@ function ProwlarrLogin({
   // 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串：那一條不是站。
   const row = indexers.steps.find((step) => step.step === 'prowlarr_login')
   const webUrl = prowlarrWeb(indexers)
+  // 還沒加站、主鍵「測試推薦站」還在時，它是這一頁唯一的調度黃：兩顆黃鍵並排看不出先做哪一件（M4 票 119
+  // 的 critique）。加了站，這一顆才是「現在需要你」的那一件。
+  const sitesFirst =
+    indexers.sites.length === 0 && indexers.candidates.some((row) => row.recommended)
+  const SaveButton = sitesFirst ? GhostButton : PrimaryButton
   // 送出那一刻的欄位版本：之後改了一格，上一次的拒絕就不畫了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
   // 請求本身沒走完（Berth 停著、5xx）：原本這一支的 reject 被吞掉，按下去什麼都沒發生（M4 票 31，
@@ -437,9 +442,9 @@ function ProwlarrLogin({
       )}
       {form.open && !carriedLogin.applying && (
         <div className="mt-4">
-          <PrimaryButton type="button" busy={controls.saving} disabled={held} onClick={save}>
+          <SaveButton type="button" busy={controls.saving} disabled={held} onClick={save}>
             {controls.saving ? t('indexer.login.saving') : t('indexer.login.save')}
-          </PrimaryButton>
+          </SaveButton>
         </div>
       )}
       {/* 設下去的成敗要看得到（brief §16.3）；沒設過時是一條待處理。 */}
