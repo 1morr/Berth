@@ -192,12 +192,19 @@ class TestRefusalShapes:
 
         assert state["$ref"] == "#/components/schemas/JobState"
 
-    def test_the_route_refusal_carries_the_two_counts(self, document: dict[str, Any]) -> None:
-        """`route_in_use` 才有的兩格（票 14a）：畫面照它說「N 筆下載、M 個入庫檔案」，
-        不該去解析 `detail`。它們是選填——其餘理由根本不送。"""
+    def test_the_route_refusal_carries_the_usage_counts(self, document: dict[str, Any]) -> None:
+        """`route_in_use` 才有的引用數（票 14a、115）：畫面照它說「N 筆下載、M 個入庫檔案、
+        K 個 RSS Feed」，不該去解析 `detail`。它們是選填——其餘理由根本不送。"""
         schema = document["components"]["schemas"]["RouteRefusalOut"]
 
-        assert set(schema["properties"]) == {"reason", "detail", "jobs", "ledger_entries"}
+        assert set(schema["properties"]) == {
+            "reason",
+            "detail",
+            "jobs",
+            "ledger_entries",
+            "rss_feeds",
+            "rss_series",
+        }
         assert set(schema["required"]) == {"reason", "detail"}
 
 
