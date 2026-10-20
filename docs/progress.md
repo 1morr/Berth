@@ -266,6 +266,7 @@
 | 2026-10-20 | M4 116 完結之後再補最後一次漏 | **後端**：`_backfill_due` 改看 `_backfill_settled`：`backfilled_at` 為 `None` 照讀，否則現在與上次補漏那一刻都 `_finished_now` 才跳過。**測試**：`TestFinishedStopsBackfill` 第一條改成完結後讀一次、下一輪不讀、新的一筆恢復，新加兩個時間點都完結不讀；變異三向手跑過（拿掉「上次那一刻」、整個不跳過各紅一條；拿掉「現在」不紅，理由寫在測試 docstring）。**文件**：plan §3.2 拿掉「停機少於 30 天」、brief §15、CONTEXT〈補舊集〉、CHANGELOG（票 108 那一條）。code-review 兩軸無阻擋項，改名與回推說明已採納、其餘記在票的 Comments。|
 | 2026-10-20 | M4 117 排除條件編輯器說「標題規則」；送出中鎖住輸入框 | 只改前端與文案。`rss.rules.toggle_*` → 「標題規則（N 條）」／`Title rules (N)`，`add` → 「加一條標題規則」／`Add a title rule`，`list`（sr-only）→ 「標題規則」／`Title rules`；`rss.rules.title`、「全域排除條件」、skip 理由不動。`RulesFields` 的加入欄 `readOnly={busy}`（`Field` 本來就傳到 input）。vitest 新 describe 三條（zh-Hant、en、送出中 readOnly 且多打的字進不去），舊的字串跟著改；e2e `rss-exclusions` 1280 / 390 綠。DESIGN.md、CHANGELOG（Changed 一條、Fixed 一條）同步。code-review 採納測試改用 role 查、註解與 CHANGELOG 拆條，其餘記在票的 Comments | 下一張 M4 票 |
 | 2026-10-20 | M4 118 精靈介面登入的兩個小尾巴 | 只改前端與文案。`useInterfaceLogin` 的帳號預填改看 `prefill`：擁有者名字不合這個服務的規則（`ownerUnfit`）時是空字串，`reset` 同一個；頁 4 Prowlarr 沒有規則、設定頁傳空的擁有者，都照舊。en `interfaceLogin.carried.set` → `Set to your Jellyfin login ({{owner}})`，zh-Hant 不動。vitest 七條（頁 2 預填 zh-Hant／en 各三種擁有者、en 完成式）；e2e `wizard`、`wizard-390`、`existing` 綠。CHANGELOG Fixed 一條。驗證：pre-commit 全過、vitest 2075、pytest 4102 passed / 24 deselected（b85a126）。code-review 兩軸無阻擋項，補了 `reset` 註解，其餘記在票的 Comments | 下一張 M4 票 |
+| 2026-10-20 | M4 119 精靈頁 4 套件內：加站與介面登入的版面 | 只改前端。`StepFrame` 多 `aside`（桌機接在剖面底下、那一欄不 sticky），頁 4 套件內的 `ProwlarrLogin` 在桌機交給它、窄版照舊在加站之後導覽之前（`setup/useWideScreen`，`matchMedia` 量 `lg`）；推薦站主鍵還在時登入送出鍵是 Ghost，一屏一顆調度黃。1280×720 改前工作面 960／剖面 309，改後 752／540（表單打開 752／909）。390 的留白是 fullPage 截圖的 sticky 假象，版面沒改。e2e `wizard` 量欄高比例、`wizard-390` 量溢出與最大空白（`e2e/layout.ts`）；vitest 新檔 `SetupPage.layout.test.tsx`＋`StepFrame` 兩條。critique 28 → 28/40。DESIGN.md〈工作面〉、plan §9.3、CHANGELOG 同步。驗證：pre-commit 全過、vitest 2082、e2e 38、pytest 全綠 | 下一張票 |
 
 ## 偏差與決定
 - 2026-10-19 M4 票 108：**推翻 plan §3.2 的「季末之後照樣讀」**：完結（`parser.series_finished`）就不補，新的一筆出現時恢復；理由在 plan §3.2。brief §15、CONTEXT.md 的每日補漏同步（票面只列 plan）。
@@ -1573,3 +1574,6 @@
 
 - 2026-10-20 M4 票 116：**每日補漏完結之後再補最後一次才停**，推翻票 108 的「完結就停」與 plan §3.2「停機少於 `QUIET_AFTER` 時重啟之後還沒完結」（30 天從最近一筆算、不是從停機算）：停機跨過它時最後幾集原本永遠補不回來。「現在已完結」照票保留，但它被「上次那一刻已完結」蘊含（完結對時間單調），沒有測試守得住它。
 - 2026-10-20 M4 票 117：**送出中鎖住加入欄也套到改了就存的三層**（票面只說新增 Feed）：`readOnly` 加在共用的 `RulesFields`，`RulesEditor` 成功之後同樣清空加入欄，理由相同。
+- 2026-10-20 M4 票 119：**驗收「沒有一欄比另一欄高出 1.5 倍視窗高」量成比例（高的一欄 < 1.5 倍矮的一欄），只量推薦站跑之前**：讀成高差的話改前（差 651px，720 高的 90%）就過，閘門擋不到東西；跑完推薦站之後 1947／917 是結果清單撐的，不量（數字在票的 Comments）。
+- 2026-10-20 M4 票 119：**剖面欄多一個例外 `aside`**，推翻 `StepFrame`／DESIGN.md「剖面只放讀的東西」的無例外：桌機的 Tab 順序因此是工作面 → 導覽 → 左欄登入，與 PRODUCT「Tab 順序符合視覺順序」有出入；前進鍵只在兩件都做完才出現、「還差」連結會送焦點到登入，所以接受。
+- 2026-10-20 M4 票 119：**推薦站主鍵還在時登入的送出鍵降成 Ghost**（票面沒列，改後 critique A 的 P2：沒沿用時兩顆黃鍵並排看不出先後）。

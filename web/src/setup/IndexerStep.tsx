@@ -370,7 +370,7 @@ function ProwlarrLogin({
   // 還沒加站、主鍵「測試推薦站」還在時，它是這一頁唯一的調度黃：兩顆黃鍵並排看不出先做哪一件（M4 票 119
   // 的 critique）。加了站，這一顆才是「現在需要你」的那一件。
   const sitesFirst =
-    indexers.sites.length === 0 && indexers.candidates.some((row) => row.recommended)
+    indexers.sites.length === 0 && indexers.candidates.some((candidate) => candidate.recommended)
   const SaveButton = sitesFirst ? GhostButton : PrimaryButton
   // 送出那一刻的欄位版本：之後改了一格，上一次的拒絕就不畫了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
