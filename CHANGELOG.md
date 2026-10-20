@@ -59,6 +59,12 @@
   拿掉 `skipped`、`retry_at` 與 `batch.next_at`，`problem` 不再有 `budget_exhausted`；`GET /api/search/queries` 拿掉
   `budget`；`/api/rss` 的讀取不再回 429 `budget_exhausted`；RSS Series 的綁定理由不再有 `lookup_deferred`。
 
+### Fixed
+
+- **搜尋時每個查詢都逾時，不再整頁說「連不上索引站」**（M4 票 114，票 107 帶進來的退化）：Prowlarr 冷啟動或背後的站
+  慢、每個查詢都超過 120 秒時，畫面照舊是逐查詢的失敗列，說得出是哪一個查詢沒答上來；真的連不上（拒絕連線、主機
+  不在）照舊是「連不上」。「連不上索引站」那一句補上「或這一次答不出來」。
+
 ## [0.2.8] - 2026-10-19
 
 **從 0.2.7 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。

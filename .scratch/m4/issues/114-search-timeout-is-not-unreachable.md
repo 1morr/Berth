@@ -1,6 +1,6 @@
 # 114 — 搜尋：HTTP 逾時不算「整台連不上」
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -22,7 +22,22 @@
 
 ## 驗收
 
-- [ ] 所有查詢都拋 `ServiceTimeoutError` 時 `problem is None`，而且每條逐查詢列都是失敗（pytest，做變異驗證：拿掉第 2 點的分支會紅）
-- [ ] `httpx.ReadTimeout` 經 adapter 變成 `ServiceTimeoutError`，而且仍是 `ServiceUnavailableError`（pytest）
-- [ ] 所有查詢都是連線失敗（非逾時）時照舊回 `unreachable`（既有測試維持綠）
-- [ ] 全部檢查、pytest、vitest 綠；CHANGELOG、progress.md 已更新
+- [x] 所有查詢都拋 `ServiceTimeoutError` 時 `problem is None`，而且每條逐查詢列都是失敗（pytest，做變異驗證：拿掉第 2 點的分支會紅）
+- [x] `httpx.ReadTimeout` 經 adapter 變成 `ServiceTimeoutError`，而且仍是 `ServiceUnavailableError`（pytest）
+- [x] 所有查詢都是連線失敗（非逾時）時照舊回 `unreachable`（既有測試維持綠）
+- [x] 全部檢查、pytest、vitest 綠；CHANGELOG、progress.md 已更新
+
+## Comments
+
+code-review（2026-10-20）未處理的發現：
+
+- Standards（判斷題，不改）：依例外型別分類散在 `steps.failure_of`、`search._problem` 與 `_attempt` 的
+  `isinstance(exc, ServiceTimeoutError)` 三處（Repeated Switches）。`_attempt` 另開一個 `except ServiceTimeoutError`
+  要重複組那條失敗纜繩，收成 helper 只有一個呼叫端，維持現狀。
+- Standards（判斷題，不改）：補上「或這一次答不出來」之後，走到整頁「連不上」的只剩拒絕連線、主機不在與 5xx / 429；
+  後半句對 5xx / 429 成立，文案是票面第 3 點要求的。5xx / 429 的分類照票面不在本票範圍。
+- Spec（記一筆）：`adapters/torrent.py` 自己把 httpx 例外對應成 `ServiceUnavailableError`、不經 `HttpSession`，
+  `.torrent` 下載的逾時不會是 `ServiceTimeoutError`；沒有呼叫端需要分，不改。
+- 已修：`_attempt` docstring 第三格的語意寫清楚、拿掉沒有閘門守著的「`SEARCH_TIMEOUT_SECONDS` 比 `timeout`
+  短」；`ServiceTimeoutError` docstring 不再點名 services 層的消費者；`test_one_failing_query_does_not_sink_the_others`
+  的假錯誤改成真實會出現的 `ServiceTimeoutError`。

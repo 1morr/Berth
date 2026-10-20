@@ -33,7 +33,7 @@ from itertools import zip_longest
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import AuthFailedError, ServiceError
+from berth.adapters.http import AuthFailedError, ServiceError, ServiceTimeoutError
 from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
     IndexerProblem,
@@ -413,7 +413,8 @@ async def search_torrents(
     errors = [error for _, _, error in outcomes if error is not None]
     if len(errors) == len(outcomes):
         # 每一個查詢都被索引站本身拒絕（連不上、憑證被拒）：這台 Prowlarr 現在整個問不動，畫面要說的
-        # 是連線，不是一排紅色的纜繩。逾時不算——那是索引站在、背後的站慢。
+        # 是連線，不是一排紅色的纜繩。逾時不算，service 層與 HTTP 層的都不算（`_attempt` 給 `None`）
+        # ——那是索引站在、背後的站慢（M4 票 114）。
         return _blank(_problem(errors[0]), message(errors[0]))
     returned = [row for _, rows, _ in outcomes for row in rows]
     found = _dedupe(returned)
@@ -514,7 +515,10 @@ def _counts(judged: Sequence[Judged]) -> tuple[VerdictCount, ...]:
 async def _attempt(
     client: IndexerSearch, query: SearchQuery, timeout: float
 ) -> tuple[StepView, tuple[IndexerResult, ...], ServiceError | None]:
-    """一個查詢，一條纜繩；第三格是索引站丟的例外（逾時與成功是 `None`）。
+    """一個查詢，一條纜繩；第三格是算進「整台問不動」的拒絕，成功與逾時是 `None`。
+
+    逾時有兩層：這裡的 `asyncio.timeout` 與 adapter 的 HTTP 逾時（`ServiceTimeoutError`）。
+    兩者的纜繩都是失敗，都不算進「整台問不動」（M4 票 114）。
 
     **失敗不往上冒**：十個公開站裡有幾個連不上是常態（brief §20.7），一個關鍵字問不動時
     另外四個的結果仍然值得看。垮掉的那一個變成一條紅色的纜繩，不是一片空白。
@@ -545,7 +549,7 @@ async def _attempt(
             failure=failure,
             params=params,
         )
-        return (failed, (), exc)
+        return (failed, (), None if isinstance(exc, ServiceTimeoutError) else exc)
     return (
         StepView(step=step, status=StepStatus.OK, detail=str(len(rows)), error=""),
         rows,
