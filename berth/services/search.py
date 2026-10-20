@@ -515,11 +515,10 @@ def _counts(judged: Sequence[Judged]) -> tuple[VerdictCount, ...]:
 async def _attempt(
     client: IndexerSearch, query: SearchQuery, timeout: float
 ) -> tuple[StepView, tuple[IndexerResult, ...], ServiceError | None]:
-    """一個查詢，一條纜繩；第三格是索引站丟的例外（成功與逾時是 `None`）。
+    """一個查詢，一條纜繩；第三格是算進「整台問不動」的拒絕，成功與逾時是 `None`。
 
-    逾時有兩層：這裡的 `asyncio.timeout` 與 adapter 的 HTTP 逾時（`ServiceTimeoutError`，
-    `SEARCH_TIMEOUT_SECONDS` 比 `timeout` 短，通常是它先到）。兩者的纜繩都是失敗，都不算進
-    「整台問不動」（M4 票 114）。
+    逾時有兩層：這裡的 `asyncio.timeout` 與 adapter 的 HTTP 逾時（`ServiceTimeoutError`）。
+    兩者的纜繩都是失敗，都不算進「整台問不動」（M4 票 114）。
 
     **失敗不往上冒**：十個公開站裡有幾個連不上是常態（brief §20.7），一個關鍵字問不動時
     另外四個的結果仍然值得看。垮掉的那一個變成一條紅色的纜繩，不是一片空白。

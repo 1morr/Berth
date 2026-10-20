@@ -265,7 +265,7 @@ async def test_one_failing_query_does_not_sink_the_others(session: AsyncSession)
     await arrange_indexer(session)
     indexer = FakeIndexerSearch(
         by_query={"SPY x FAMILY": (result("SPY x FAMILY S03E01", info_hash="a" * 40),)},
-        errors={"SPY×FAMILY": ServiceUnavailableError("GET /api/v1/search: ReadTimeout")},
+        errors={"SPY×FAMILY": ServiceTimeoutError("GET /api/v1/search: ReadTimeout")},
     )
     factory = FakeClientFactory(indexer_search=indexer)
 
