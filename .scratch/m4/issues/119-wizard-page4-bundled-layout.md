@@ -29,6 +29,7 @@
 
 - **不採用桌機把介面登入搬到剖面欄**（`f6387f0` 的 `StepFrame` `aside`、`useWideScreen`、1280 的欄高比例閘門）：critique 28 → 28 沒有進步，換來 Tab 順序與視覺順序不一致、跨 `lg` 斷點重新掛載會丟打到一半的表單、`64rem` 斷點三處重複、`StepFrame` 多一個例外。以新 commit 撤回，不改寫歷史。
 - **保留**：推薦站主鍵還在時登入的送出鍵是 Ghost（一屏一顆調度黃，測試移到 `SetupPage.recommended.test.tsx`，手動變異「恆為主鍵」時紅）；390 寬不溢出、沒有一屏以上空白的 e2e 與它在測試檔內的雙向變異。
+- 撤回後的驗證：vitest 109 檔 2077 passed；前端 e2e `wizard`、`wizard-390`、`existing` 3 passed；`pre-commit run --all-files` 全部 Passed；pytest 4102 passed / 24 deselected（ac9b41f，乾淨工作樹）。
 - 下面〈做了什麼〉到〈code-review 未處理的發現〉是撤回前的紀錄，關於 `aside`、Tab 順序、斷點、重新掛載、1280 比例閘門的段落已不適用。
 
 
