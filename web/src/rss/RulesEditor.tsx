@@ -134,7 +134,7 @@ export function RulesFields({
           autoComplete="off"
           spellCheck={false}
           value={draft}
-          // 送出中鎖住（M4 票 110、117）：多打的字會在成功之後被清掉。`readOnly` 不是 `disabled`，焦點留著。
+          // 送出中鎖住（M4 票 110、117），否則多打的字在成功之後被清掉。`readOnly` 不是 `disabled`，焦點留著。
           readOnly={busy}
           error={error}
           onChange={(event) => setDraft(event.target.value)}

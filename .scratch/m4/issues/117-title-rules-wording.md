@@ -1,6 +1,6 @@
 # 117 — 排除條件編輯器：每層說「標題規則」；送出中鎖住輸入框
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -25,7 +25,17 @@
 
 ## 驗收
 
-- [ ] Feed 列與 RSS Series 的展開鍵、加入欄 label 照上面的字串（vitest，zh-Hant 與 en）
-- [ ] 新增 Feed 送出中規則輸入框是 readOnly（vitest）
-- [ ] 前端 e2e `rss-exclusions` 兩種寬度綠
-- [ ] 全部檢查、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
+- [x] Feed 列與 RSS Series 的展開鍵、加入欄 label 照上面的字串（vitest，zh-Hant 與 en）
+- [x] 新增 Feed 送出中規則輸入框是 readOnly（vitest）
+- [x] 前端 e2e `rss-exclusions` 兩種寬度綠
+- [x] 全部檢查、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
+
+## Comments
+
+- 2026-10-20 實作：`Field` 本來就把其餘 prop 傳到 input，只在 `RulesFields` 加 `readOnly={busy}`。它也蓋到 `RulesEditor`
+  （全域、Feed、RSS Series 改了就存的那三處）：存檔途中同樣鎖住，理由相同（成功之後 `setDraft('')`）。那條路沒有 vitest
+  守，驗收沒要求。`rss.rules.add` 三層共用，全域那一段的加入欄也跟著叫「加一條標題規則」（符合 CONTEXT.md:373）。
+- code-review Standards 軸留下的（不處理）：清單上的 skip 理由（「全域的排除條件「720p」擋下」、`feed_rule`、`series_rule`、
+  `excludedRule_*`）照舊說「排除條件」——票面明寫 skip 理由的「排除條件」是領域詞、不動。
+- e2e：第一次兩種寬度同跑時 `rss-exclusions-390` 紅過一次（沒留下錯誤內容），之後單跑兩次、同跑一次都綠。容器的
+  chromium 是 1194、playwright 要 1243，在 `/opt/pw-browsers` 建 symlink 跑（只動容器）。

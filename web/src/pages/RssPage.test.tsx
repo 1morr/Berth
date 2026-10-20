@@ -1227,14 +1227,14 @@ describe('RSS 頁：每個 Feed 的輪詢間隔（M4 票 109）', () => {
 })
 
 describe('RSS 頁：Feed 與 RSS Series 那一層說「標題規則」（M4 票 117）', () => {
-  it('展開鍵、加入欄、清單名都說標題規則；合集那一項不算進條數', async () => {
-    render()
+  it('展開鍵、加入欄、清單名都說標題規則；全域擋著合集也只數這一層的規則', async () => {
+    render({ 'GET /api/rss/feeds': { body: [feed({ exclusions: ['720p'] })] } })
     renderApp('/rss')
 
     const row = await screen.findByRole('article', { name: 'Mikan' })
-    await userEvent.click(within(row).getByRole('button', { name: '標題規則（0 條）' }))
+    await userEvent.click(within(row).getByRole('button', { name: '標題規則（1 條）' }))
     expect(within(row).getByLabelText('加一條標題規則')).toBeVisible()
-    expect(within(row).getByText('標題規則', { selector: '.sr-only' })).toBeInTheDocument()
+    expect(within(row).getByRole('list', { name: '標題規則' })).toBeVisible()
     const pending = screen.getByRole('region', { name: '待綁定' })
     await userEvent.click(within(pending).getByRole('button', { name: '標題規則（0 條）' }))
     expect(within(pending).getByLabelText('加一條標題規則')).toBeVisible()
