@@ -35,7 +35,7 @@
 
 - 照字面讀成「高差 ≤ 1.5 個視窗高」的話，改前就會過（1280×720：工作面 960px、剖面 309px，差 651px＝90%），閘門擋不到任何東西。所以 e2e（`wizard.spec.ts`、`e2e/layout.ts` 的 `frameColumns`）量的是比例：**高的那一欄 < 1.5 倍矮的那一欄**。這比字面嚴，不是放寬。
 - 量的是推薦站還沒跑、兩件必填同時在畫面上的狀態：改後 752／540（1.39）。登入表單打開（「改用另一組」）是 752／909，手動量過、沒有寫進 e2e（流程接著要跑推薦站，表單開著會擋住後面的步驟）。**推薦站跑完之後不量**：1947／917（2.1），撐高工作面的是逐站結果清單，不是兩件必填的分配；overlay 在這個狀態仍報 `first-viewport-column-overflow`。
-- 變異驗證（手動）：`wide` 恆為 false 重 build，1280 那一條紅（Received 960、Expected < 463.5）。窄版那個變異已經由 `SetupPage.layout.test.tsx` 的單元測試編碼守著。
+- 雙向變異寫在 `wizard.spec.ts` 裡（`e2e/layout.ts` 的量尺收 `DomChange`，在同一個同步 evaluate 裡改、量、改回）：1280 把登入搬回工作面、導覽之前，比例 ≥ 1.5；390 插一塊兩屏高的空白、一個兩倍寬的段落，量得出空白與溢出；兩種寬度改一處無關的字距都不變。另外手動驗過整個版面退回（`wide` 恆為 false 重 build）：1280 那一條紅（Received 960、Expected < 463.5）。
 
 **截圖**：改前、改後的 1280／390 截圖在 session scratchpad 的 `probe/before`、`probe/after`、`probe/final`（a-before 已選、a2-form 表單打開、b-outcome 跑完推薦站、p390-scroll-* 逐屏）；e2e `wizard`／`wizard-390` 的 `4-indexers-one-key.png`。
 
