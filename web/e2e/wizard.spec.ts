@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { ADMIN, signIn } from './login.ts'
+import { blankAndOverflow } from './layout.ts'
 import { narrow, shot } from './shot.ts'
 
 // `bundled`：乾淨的 compose（plan §9.3）。三個服務頁都選「套件內」，六頁走完、中途回頭再往前、關掉
@@ -137,6 +138,29 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   ])
   // 逐站清單收在「進階」裡，預設收起。
   await expect(page.getByTestId('recommended')).toBeHidden()
+  // 390 寬只有一欄（M4 票 119）：不溢出、沒有一屏以上的空白。量尺雙向驗一次：造一個違規要量得出來，
+  // 改一處無關的字距不能變。
+  if (narrow(page)) {
+    const { viewport, blank, overflow } = await blankAndOverflow(page)
+    expect(overflow).toBe(false)
+    expect(blank).toBeLessThan(viewport)
+    const gap = await blankAndOverflow(page, {
+      apply: `const gap = document.createElement('div'); gap.style.height = (innerHeight * 2) + 'px'; document.querySelector('[data-testid=recommended-sites]').after(gap)`,
+      undo: `gap.remove()`,
+    })
+    expect(gap.blank).toBeGreaterThanOrEqual(viewport)
+    const wide = await blankAndOverflow(page, {
+      apply: `const wide = document.createElement('p'); wide.textContent = 'x'; wide.style.width = (innerWidth * 2) + 'px'; document.querySelector('[data-testid=recommended-sites]').append(wide)`,
+      undo: `wide.remove()`,
+    })
+    expect(wide.overflow).toBe(true)
+    const restyled = await blankAndOverflow(page, {
+      apply: `const sites = document.querySelector('[data-testid=recommended-sites]'); sites.style.letterSpacing = '0.02em'`,
+      undo: `sites.style.letterSpacing = ''`,
+    })
+    expect(restyled.overflow).toBe(false)
+    expect(restyled.blank).toBeLessThan(viewport)
+  }
   await shot(page, '4-indexers-one-key')
   await quick.getByRole('button', { name: '測試推薦站，加入通過的' }).click()
   const outcome = page.getByTestId('one-key-outcome')
