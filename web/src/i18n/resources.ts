@@ -3002,10 +3002,10 @@ const zhHant = {
       warning:
         '刪除之後這條 Route 的設定就不在了。qBittorrent 的分類與 complete 子目錄留著不動；之後用同一個名字重建時，分類檢查認得它們。',
       inUse:
-        '{{usage}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
-      inUseDisabled: '{{usage}}指著這條 Route，所以它刪不得。它已經停用，新的送單不會選到它。',
+        '這條 Route 還有 {{usage}}，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
+      inUseDisabled: '這條 Route 還有 {{usage}}，所以它刪不得。它已經停用，新的送單不會選到它。',
       refused:
-        '刪的那一刻發現還有 {{usage}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+        '刪的那一刻發現這條 Route 還有 {{usage}}，所以它刪不得。停用它，新的送單就不會再選到它。',
       refusedUncounted:
         '刪的那一刻發現還有下載、入庫檔案或 RSS 綁著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
       failed: '沒有刪掉。',
