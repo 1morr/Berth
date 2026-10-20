@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test'
  * React 沒有機會在中間重繪。閘門用它在測試裡做雙向變異：造一個違規證明量尺會紅，改一次無關的樣式證明它不會。
  */
 
-export interface DomChange {
+interface DomChange {
   /** 在頁面裡跑的敘述；宣告的變數 `undo` 看得到。 */
   apply: string
   undo: string
