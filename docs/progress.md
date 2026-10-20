@@ -267,6 +267,7 @@
 | 2026-10-20 | M4 117 排除條件編輯器說「標題規則」；送出中鎖住輸入框 | 只改前端與文案。`rss.rules.toggle_*` → 「標題規則（N 條）」／`Title rules (N)`，`add` → 「加一條標題規則」／`Add a title rule`，`list`（sr-only）→ 「標題規則」／`Title rules`；`rss.rules.title`、「全域排除條件」、skip 理由不動。`RulesFields` 的加入欄 `readOnly={busy}`（`Field` 本來就傳到 input）。vitest 新 describe 三條（zh-Hant、en、送出中 readOnly 且多打的字進不去），舊的字串跟著改；e2e `rss-exclusions` 1280 / 390 綠。DESIGN.md、CHANGELOG（Changed 一條、Fixed 一條）同步。code-review 採納測試改用 role 查、註解與 CHANGELOG 拆條，其餘記在票的 Comments | 下一張 M4 票 |
 | 2026-10-20 | M4 118 精靈介面登入的兩個小尾巴 | 只改前端與文案。`useInterfaceLogin` 的帳號預填改看 `prefill`：擁有者名字不合這個服務的規則（`ownerUnfit`）時是空字串，`reset` 同一個；頁 4 Prowlarr 沒有規則、設定頁傳空的擁有者，都照舊。en `interfaceLogin.carried.set` → `Set to your Jellyfin login ({{owner}})`，zh-Hant 不動。vitest 七條（頁 2 預填 zh-Hant／en 各三種擁有者、en 完成式）；e2e `wizard`、`wizard-390`、`existing` 綠。CHANGELOG Fixed 一條。驗證：pre-commit 全過、vitest 2075、pytest 4102 passed / 24 deselected（b85a126）。code-review 兩軸無阻擋項，補了 `reset` 註解，其餘記在票的 Comments | 下一張 M4 票 |
 | 2026-10-20 | M4 119 精靈頁 4 套件內：加站與介面登入的版面 | 只改前端。推薦站主鍵還在時套件內 Prowlarr 登入的送出鍵是 Ghost，一屏一顆調度黃（vitest 兩條在 `SetupPage.recommended.test.tsx`）。390 寬的「留白」是 fullPage 截圖把 sticky 主鍵畫錯位置，版面沒改；e2e `wizard-390` 量溢出與最大空白（`e2e/layout.ts`，測試檔內雙向變異）。曾把登入在桌機搬到剖面欄（`StepFrame` 的 `aside`），協調者驗收時撤回（見偏差）。critique 28 → 28/40。DESIGN.md、plan §9.3、CHANGELOG 同步。驗證：pre-commit 全過、vitest 2077、e2e wizard／wizard-390／existing 綠、pytest 4102 passed（ac9b41f） | 下一張票 |
+| 2026-10-20 | M4 120 Route 刪除被拒的中文排版 | 只改前端文案。zh-Hant `routeSettings.delete.{inUse,inUseDisabled,refused}` 改成「這條 Route 還有 {{usage}}，所以它刪不得…」，數量結尾是「RSS Feed」時不再黏字；`RouteDelete.test.tsx` 掃整組帶 `{{usage}}` 的句子斷言後面接標點。第 1 點（頁 2／4 位址 placeholder 跟著頁 1 主機）使用者決定不做。vitest 2081、pytest 4102（8ccf62f）、e2e 38 passed | 協調者開 PR |
 
 ## 偏差與決定
 - 2026-10-19 M4 票 108：**推翻 plan §3.2 的「季末之後照樣讀」**：完結（`parser.series_finished`）就不補，新的一筆出現時恢復；理由在 plan §3.2。brief §15、CONTEXT.md 的每日補漏同步（票面只列 plan）。
@@ -1576,3 +1577,4 @@
 - 2026-10-20 M4 票 117：**送出中鎖住加入欄也套到改了就存的三層**（票面只說新增 Feed）：`readOnly` 加在共用的 `RulesFields`，`RulesEditor` 成功之後同樣清空加入欄，理由相同。
 - 2026-10-20 M4 票 119：**推薦站主鍵還在時登入的送出鍵降成 Ghost**（票面沒列，改後 critique A 的 P2：沒沿用時兩顆黃鍵並排看不出先後）。
 - 協調者 2026-10-20 M4 票 119：**1280 兩欄平衡不採用**（critique 28→28，換來 Tab 順序與視覺不一致、跨 `lg` 斷點重新掛載丟輸入、`64rem` 斷點三處重複、`StepFrame` 多一個 `aside` 例外），只保留一屏一顆主鍵；驗收第 1 條因此不做。
+- 2026-10-20 M4 票 120：**第 1 點（頁 2、頁 4 位址 placeholder 跟著頁 1 的主機）不做**，使用者決定：設定只走一次，價值低。票改名為「Route 刪除被拒的中文排版」，只做第 2 點。
