@@ -421,3 +421,31 @@ describe('頁 4 推薦站不在 Prowlarr 裡', () => {
     expect(screen.queryByTestId('unlisted')).not.toBeInTheDocument()
   })
 })
+
+/**
+ * 先後（M4 票 119 的 critique）：還沒加站時「測試推薦站」是這一頁唯一的調度黃，登入的送出鍵是次要的；
+ * 兩顆黃鍵並排時看不出先做哪一件。加了站之後登入才是「現在需要你」的那一件。
+ */
+describe('頁 4 套件內：一屏只有一顆調度黃', () => {
+  const ASSIGNED = 'bg-assigned'
+
+  it('還沒加站：登入的送出鍵不是主鍵', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: RUN_LABEL })).toHaveClass(ASSIGNED)
+    expect(screen.getByRole('button', { name: '設定介面登入' })).not.toHaveClass(ASSIGNED)
+  })
+
+  it('加了站：登入的送出鍵是主鍵', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ sites: [site(RECOMMENDED[0], 1)] }) },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '設定介面登入' })).toHaveClass(ASSIGNED)
+  })
+})

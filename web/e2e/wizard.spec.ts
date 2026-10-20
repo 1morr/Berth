@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { ADMIN, signIn } from './login.ts'
-import { blankAndOverflow, frameColumns } from './layout.ts'
+import { blankAndOverflow } from './layout.ts'
 import { narrow, shot } from './shot.ts'
 
 // `bundled`：乾淨的 compose（plan §9.3）。三個服務頁都選「套件內」，六頁走完、中途回頭再往前、關掉
@@ -138,13 +138,8 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
   ])
   // 逐站清單收在「進階」裡，預設收起。
   await expect(page.getByTestId('recommended')).toBeHidden()
-  // 加站與介面登入兩件必填同時在這一頁（M4 票 119）：桌機時登入接在剖面底下，高的那一欄不到矮的 1.5 倍
-  // （原本工作面 960px、剖面 309px）；390 寬只有一欄，不溢出、沒有一屏以上的空白。每一把量尺都雙向驗一次：
-  // 造一個違規要量得出來，改一處無關的字距不能變。
-  const restyle = {
-    apply: `const sites = document.querySelector('[data-testid=recommended-sites]'); sites.style.letterSpacing = '0.02em'`,
-    undo: `sites.style.letterSpacing = ''`,
-  }
+  // 390 寬只有一欄（M4 票 119）：不溢出、沒有一屏以上的空白。量尺雙向驗一次：造一個違規要量得出來，
+  // 改一處無關的字距不能變。
   if (narrow(page)) {
     const { viewport, blank, overflow } = await blankAndOverflow(page)
     expect(overflow).toBe(false)
@@ -159,22 +154,12 @@ test('精靈六頁走完，之後以同一組帳密登入', async ({ page }) => 
       undo: `wide.remove()`,
     })
     expect(wide.overflow).toBe(true)
-    const restyled = await blankAndOverflow(page, restyle)
+    const restyled = await blankAndOverflow(page, {
+      apply: `const sites = document.querySelector('[data-testid=recommended-sites]'); sites.style.letterSpacing = '0.02em'`,
+      undo: `sites.style.letterSpacing = ''`,
+    })
     expect(restyled.overflow).toBe(false)
     expect(restyled.blank).toBeLessThan(viewport)
-  } else {
-    const ratio = (heights: number[]) => Math.max(...heights) / Math.min(...heights)
-    const heights = await frameColumns(page)
-    expect(heights).toHaveLength(2)
-    expect(ratio(heights)).toBeLessThan(1.5)
-    // 登入搬回工作面、導覽之前（改前的位置）。
-    const before = await frameColumns(page, {
-      apply: `const login = document.querySelector('[data-testid=prowlarr-login]'); const home = login.parentElement; const after = login.nextSibling; document.querySelector('nav[aria-label="泊位導覽"]').before(login)`,
-      undo: `home.insertBefore(login, after)`,
-    })
-    expect(ratio(before)).toBeGreaterThanOrEqual(1.5)
-    expect(ratio(await frameColumns(page, restyle))).toBeLessThan(1.5)
-    expect(await frameColumns(page)).toEqual(heights)
   }
   await shot(page, '4-indexers-one-key')
   await quick.getByRole('button', { name: '測試推薦站，加入通過的' }).click()

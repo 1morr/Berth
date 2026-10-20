@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 /**
  * 版面的量尺（M4 票 119）。函式本體是字串：e2e 的 tsconfig 沒有 DOM 型別，這幾行在瀏覽器裡跑。
  *
- * 每一把都收一段選填的 `change`：`apply` 改 DOM、量完 `undo` 改回去，三步在同一個同步的 evaluate 裡，
+ * 量尺收一段選填的 `change`：`apply` 改 DOM、量完 `undo` 改回去，三步在同一個同步的 evaluate 裡，
  * React 沒有機會在中間重繪。閘門用它在測試裡做雙向變異：造一個違規證明量尺會紅，改一次無關的樣式證明它不會。
  */
 
@@ -14,23 +14,6 @@ interface DomChange {
 }
 
 const NO_CHANGE: DomChange = { apply: '', undo: '' }
-
-/**
- * `StepFrame` 兩欄各自的內容高度（px）。grid 會把兩欄拉成一樣高，所以量的是欄裡最後一個子元素的
- * 底邊加上欄的下內距，不是欄本身。
- */
-export async function frameColumns(page: Page, change = NO_CHANGE): Promise<number[]> {
-  return page.evaluate(`(() => {
-    ${change.apply}
-    const heights = [...document.querySelectorAll('[data-frame-column]')].map((column) => {
-      const top = column.getBoundingClientRect().top
-      const bottom = Math.max(...[...column.children].map((child) => child.getBoundingClientRect().bottom))
-      return Math.round(bottom - top + parseFloat(getComputedStyle(column).paddingBottom))
-    })
-    ${change.undo}
-    return heights
-  })()`)
-}
 
 /**
  * 頁面捲到頂時，`main` 裡上下相鄰兩樣看得到的東西（有字的元素、控制項）之間最大的空白（px），與頁面有沒有

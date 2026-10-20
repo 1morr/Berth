@@ -32,7 +32,6 @@ import { STEP } from './navigation'
 import { GAP, modeOf, noRecommendedListed } from './indexerGaps'
 import { connected } from './signals'
 import { StepFrame } from './StepFrame'
-import { useWideScreen } from './useWideScreen'
 
 export type { SiteControls } from './IndexerSites'
 
@@ -59,7 +58,7 @@ export interface LoginControls {
  *
  * - **套件內 Prowlarr**：「已加入」（`IndexerSites`）與主鍵「測試推薦站，加入通過的」（`RecommendedSites`，
  *   M4 票 44）；逐站測試與勾選、其他公開站收在「進階」。介面登入是自己的一區（`ProwlarrLogin`，M4 票 20），
- *   必填；桌機時接在剖面底下（`StepFrame` 的 `aside`，M4 票 119），窄版在加站之後、導覽之前。
+ *   必填。
  * - **既有 Prowlarr**：同樣的「已加入」、主鍵與「進階」，加的是使用者自己那一台，Berth 不移除（M4 票 20）。
  *   主鍵原本只給套件內、既有的要「測試全部 → 勾 → 加入」（M4 票 67，審計 C3）；票 20 要的「看得到加哪幾站」
  *   由主鍵上方那一句列出站名與那一台的位址。**一站都沒有時這一頁待處理**（`NoSites`）：到 Prowlarr
@@ -144,18 +143,6 @@ export function IndexerStep({
     service !== undefined &&
     [choice.draft, choice.sending].some((origin) => origin !== null && origin !== service.origin)
   const cutawayOrigin = leaving ? null : (service?.origin ?? choice.sending)
-  // 套件內的介面登入是第二件必填（M4 票 119）：桌機時接在剖面底下，兩欄才不會一欄一屏半、一欄三分之一屏；
-  // 窄版照舊接在加站後面、導覽之前。
-  const wide = useWideScreen()
-  const prowlarrLogin = indexers && mode === 'bundled' && !unread && (
-    <ProwlarrLogin
-      indexers={indexers}
-      owner={owner}
-      carried={carried}
-      controls={login}
-      held={recommended.running || applying}
-    />
-  )
   const resynced = useRef<number | null>(null)
   const { onRetest, retesting } = choice
   useEffect(() => {
@@ -166,7 +153,6 @@ export function IndexerStep({
 
   return (
     <StepFrame
-      aside={wide && prowlarrLogin ? prowlarrLogin : undefined}
       cutaway={
         cutawayOrigin === null ? (
           <ChoiceCutaway
@@ -236,7 +222,15 @@ export function IndexerStep({
               advanced
             />
           </AdvancedSites>
-          {!wide && prowlarrLogin}
+          {mode === 'bundled' && (
+            <ProwlarrLogin
+              indexers={indexers}
+              owner={owner}
+              carried={carried}
+              controls={login}
+              held={recommended.running || applying}
+            />
+          )}
         </>
       )}
       {indexersError != null && (
