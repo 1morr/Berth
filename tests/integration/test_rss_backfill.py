@@ -271,36 +271,70 @@ def published_on(releases: list[Release], moment: datetime) -> bytes:
 
 
 class TestFinishedStopsBackfill:
-    """完結的 RSS Series 不再每天讀單一 feed（M4 票 108）；完結照現況算，新的一筆出現就恢復。"""
+    """完結的 RSS Series 補最後一次之後不再每天讀單一 feed（M4 票 108、116）；完結照現況算，新的一筆
+    出現就恢復。
 
-    async def test_a_finished_series_is_not_read_until_a_new_release_appears(
+    跳過的條件是「現在已完結」而且「上次補漏那一刻也已完結」。拿掉「上次那一刻」→ 第一條測試的
+    最後一次補漏不讀；整個不跳過 → 第二條測試讀了。拿掉「現在」測不紅：完結對時間單調（同一份現況、
+    較早的那一刻已完結，現在一定也完結），新的一筆出現時兩個時間點一起不成立。
+    """
+
+    async def test_a_finished_series_is_read_once_more_then_not_until_a_new_release_appears(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, route, factory, feed_id, series_id = await subscribed(session, roots)
         await bind_series(
             session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
         )
-        # 最近一筆之後 30 天沒有新的：完結（`QUIET_AFTER`）。
+        # 最近一筆之後 30 天沒有新的：完結（`QUIET_AFTER`）。上次補漏那一刻（綁定時）還沒完結：
+        # 停機期間被聚合 feed 捲掉的最後幾集靠這一次接住，讀一次單一 feed。
         quiet = NOW + QUIET_AFTER + timedelta(days=1)
         factory.rss_.requested.clear()
         await poll_feed(session, factory, feed_id, now=quiet)
-        assert feeds_read(factory) == [FEED_URL]
+        assert feeds_read(factory) == [FEED_URL, SINGLE_URL]
         series = await session.get(RssSeries, series_id)
-        assert series is not None and series.backfilled_at == NOW
+        assert series is not None and series.backfilled_at == quiet
+
+        # 下一輪起兩個時間點都已完結：不再讀。
+        later = quiet + timedelta(days=2)
+        factory.rss_.requested.clear()
+        await poll_feed(session, factory, feed_id, now=later)
+        assert feeds_read(factory) == [FEED_URL]
+        await session.refresh(series)
+        assert series.backfilled_at == quiet
         # 畫面看得到它停了：完結、上次補漏停在最後一次。
-        (view,) = [one for one in await list_series(session, now=quiet) if one.id == series_id]
-        assert (view.finished, view.backfilled_at) == (True, NOW)
+        (view,) = [one for one in await list_series(session, now=later) if one.id == series_id]
+        assert (view.finished, view.backfilled_at) == (True, quiet)
 
         # 新的一筆出現在聚合 feed：不再完結，同一輪就補漏。
         thirteen = release(370, "喵萌奶茶屋&LoliHouse", "13")
         serve(factory, FEED_URL, [thirteen])
-        factory.rss_.pages[FEED_URL] = published_on([thirteen], quiet)
+        factory.rss_.pages[FEED_URL] = published_on([thirteen], later)
         factory.rss_.requested.clear()
-        await poll_feed(session, factory, feed_id, now=quiet + timedelta(hours=1))
+        await poll_feed(session, factory, feed_id, now=later + timedelta(hours=1))
         # 新的那一筆的單集頁也會讀（認它屬於哪個 Series），補漏讀的是最後那一個單一 feed。
         assert feeds_read(factory)[-1] == SINGLE_URL
         await session.refresh(series)
-        assert series.backfilled_at == quiet + timedelta(hours=1)
+        assert series.backfilled_at == later + timedelta(hours=1)
+
+    async def test_a_series_finished_at_both_moments_is_not_read(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """上次補漏那一刻已完結、現在也完結：不讀（整個不跳過的變異會紅）。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
+        )
+        quiet = NOW + QUIET_AFTER + timedelta(days=1)
+        series = await session.get(RssSeries, series_id)
+        assert series is not None
+        series.backfilled_at = quiet
+        await session.commit()
+        factory.rss_.requested.clear()
+        await poll_feed(session, factory, feed_id, now=quiet + timedelta(days=2))
+        assert feeds_read(factory) == [FEED_URL]
+        await session.refresh(series)
+        assert series.backfilled_at == quiet
 
     async def test_an_unfinished_series_a_day_later_is_still_read(
         self, session: AsyncSession, roots: dict[str, Path]
