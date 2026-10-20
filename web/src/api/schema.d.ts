@@ -1007,7 +1007,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Route Endpoint
-         * @description 明確的刪除（二次確認在前端）。被 Job 或帳本引用：409 `route_in_use`，出路是停用。
+         * @description 明確的刪除（二次確認在前端）。被 Job、帳本或 RSS 綁定引用：409 `route_in_use`，出路是停用。
          */
         delete: operations["delete_route_endpoint_api_routes__route_id__delete"];
         options?: never;
@@ -3998,6 +3998,10 @@ export interface components {
             jobs: number;
             /** Ledger Entries */
             ledger_entries: number;
+            /** Rss Feeds */
+            rss_feeds: number;
+            /** Rss Series */
+            rss_series: number;
             /** In Use */
             in_use: boolean;
         };
@@ -4881,6 +4885,10 @@ export interface components {
             jobs?: number | null;
             /** Ledger Entries */
             ledger_entries?: number | null;
+            /** Rss Feeds */
+            rss_feeds?: number | null;
+            /** Rss Series */
+            rss_series?: number | null;
         };
         /**
          * RouteSelectionIn
@@ -8746,13 +8754,13 @@ export interface operations {
                     "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description `route_missing` */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
         };

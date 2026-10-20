@@ -64,6 +64,12 @@
 - **搜尋時每個查詢都逾時，不再整頁說「連不上索引站」**（M4 票 114，票 107 帶進來的退化）：Prowlarr 冷啟動或背後的站
   慢、每個查詢都超過 120 秒時，畫面照舊是逐查詢的失敗列，說得出是哪一個查詢沒答上來；真的連不上（拒絕連線、主機
   不在）照舊是「連不上」。「連不上索引站」那一句補上「或這一次答不出來」。
+- **有 RSS 綁著的 Route 刪不掉了**（M4 票 115）：Feed 的自動綁定送進它、或有 RSS Series 綁著它的 Route，刪除會被拒，
+  說出「N 個 RSS Feed、M 個 RSS Series 指著這條 Route」，出路照舊是停用；之前這樣的 Route 刪得掉，Feed 與 Series 會
+  無聲失去 Route，之後每一集都送不出。Route 設定頁的那一列也多說 RSS 的數量（是 0 不說）。之前已經失去 Route 的 RSS
+  Series，「仍然下載」改成停用並說「沒有 Route」，不再每按一次都失敗；到 /rss 重選 Route 即可。API：`GET /api/routes`
+  每一列與 `DELETE /api/routes/{id}`、`DELETE /api/setup/routes/{id}` 的 409 `route_in_use` 多 `rss_feeds`、
+  `rss_series`；`POST /api/rss/items/{id}/release` 多一種 422 `route_missing`。
 
 ## [0.2.8] - 2026-10-19
 

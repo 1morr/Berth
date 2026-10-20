@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -28,6 +28,7 @@ import { RouteCheckList } from '../components/RouteCheckList'
 import { SHARED_ROOT, type ExistingServices } from '../components/routeChecks'
 import { RouteDelete, type RouteChange } from '../components/RouteDelete'
 import { RouteRow } from '../components/RouteRow'
+import { usageParts } from '../components/routeUsage'
 import { SettingsTabs } from '../components/SettingsTabs'
 import { AddRoute } from '../settings/AddRoute'
 import { PROGRESS_INTERVAL_MS, refreshRoutes, useRecheckRoutes } from '../settings/recheckRoutes'
@@ -153,11 +154,12 @@ function ManagedRouteRow({
       collapseLabel={t('routeSettings.collapse')}
       extra={
         <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-dim">
-          <span className="value">{t('routeSettings.usage.jobs', { count: row.jobs })}</span>
-          <Dot />
-          <span className="value">
-            {t('routeSettings.usage.files', { count: row.ledger_entries })}
-          </span>
+          {usageParts(t, row).map((part, index) => (
+            <Fragment key={part}>
+              {index > 0 && <Dot />}
+              <span className="value">{part}</span>
+            </Fragment>
+          ))}
         </span>
       }
     >

@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next'
 
 import { routeRefusalOf, type RouteUsage } from '../api/routes'
 import type { RouteView } from '../api/schemas'
+import { formatList } from '../i18n/list'
 import { ConfirmAction, GhostButton, Notice } from './controls'
 import { RequestFailed } from './RequestFailed'
+import { usageParts } from './routeUsage'
 
 /**
  * 這條 Route 剛剛怎麼了。說出來的是頁面那一層（票 14a）：刪掉的那一列連同這個元件一起卸載，
@@ -13,12 +15,8 @@ import { RequestFailed } from './RequestFailed'
  */
 export type RouteChange = 'deleted' | 'disabled'
 
-/** 「N 筆下載」「M 個入庫檔案」兩段，刪不得的說明與 409 的拒絕都嵌它們。 */
-function usageCounts(t: TFunction, usage: RouteUsage) {
-  return {
-    jobs: t('routeSettings.usage.jobs', { count: usage.jobs }),
-    files: t('routeSettings.usage.files', { count: usage.ledger_entries }),
-  }
+function usageCounts(t: TFunction, language: string, usage: RouteUsage) {
+  return { usage: formatList(usageParts(t, usage), language) }
 }
 
 /**
@@ -46,7 +44,7 @@ export function RouteDelete({
   onDisable?: () => Promise<unknown>
   onChanged: (change: RouteChange) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const remove = useMutation({ mutationFn: onDelete, onSuccess: () => onChanged('deleted') })
   const disable = useMutation({
     // `?.`：hook 不能放在條件裡，而 `onDisable` 是選填的；按鈕只在它存在時才畫。
@@ -58,7 +56,7 @@ export function RouteDelete({
   const refusal = routeRefusalOf(remove.error)
 
   if (usage?.in_use) {
-    const counts = usageCounts(t, usage)
+    const counts = usageCounts(t, i18n.language, usage)
     return (
       <div className="grid gap-3 sm:max-w-md">
         <p className="max-w-prose text-xs text-ink-dim">
@@ -99,7 +97,7 @@ export function RouteDelete({
         ) : (
           <Notice signal="blocked" label={t('common.failed')}>
             {refusal.usage
-              ? t('routeSettings.delete.refused', usageCounts(t, refusal.usage))
+              ? t('routeSettings.delete.refused', usageCounts(t, i18n.language, refusal.usage))
               : t('routeSettings.delete.refusedUncounted')}
           </Notice>
         ))}

@@ -35,6 +35,7 @@ from tests.integration.arrange import (
     with_second_disk,
 )
 from tests.integration.factories import FakeClientFactory
+from tests.integration.test_routes import rss_feed, rss_series
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
@@ -279,6 +280,27 @@ class TestCommands:
         )
         assert (routes(client)["tv"]["jobs"], routes(client)["tv"]["in_use"]) == (1, True)
 
+    def test_a_route_only_rss_is_bound_to_is_409_with_the_counts(self, client: TestClient) -> None:
+        """票 115：沒有 Job、沒有帳本，只有 RSS 綁著。拒絕帶 `rss_feeds`、`rss_series`，
+        清單同一組數字。"""
+        sign_in(client, ADMIN)
+        tv = route_id(client, "tv")
+        _bind_rss(client, tv)
+
+        response = client.delete(f"/api/routes/{tv}")
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert (
+            detail["reason"],
+            detail["jobs"],
+            detail["ledger_entries"],
+            detail["rss_feeds"],
+            detail["rss_series"],
+        ) == ("route_in_use", 0, 0, 1, 1)
+        row = routes(client)["tv"]
+        assert (row["rss_feeds"], row["rss_series"], row["in_use"]) == (1, 1, True)
+
     def test_an_unused_route_is_deleted(self, client: TestClient, roots: dict[str, Path]) -> None:
         sign_in(client, ADMIN)
         _, disk = with_second_disk(roots)
@@ -347,6 +369,18 @@ def _seed(
             await build_routes(session, factory, ())
             if complete:
                 await complete_setup(session)
+
+    asyncio.run(run())
+
+
+def _bind_rss(client: TestClient, route: int) -> None:
+    """一個自動綁定送進這條 Route 的 Feed、一個綁著它的 RSS Series。RSS 有自己的測試。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with sessions() as session:
+            session.add_all([rss_feed("tv", tv_route_id=route), rss_series("a", route)])
+            await session.commit()
 
     asyncio.run(run())
 

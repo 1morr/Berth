@@ -171,6 +171,27 @@ class TestRefused:
         assert await snapshot(session, row.id) == before
         assert factory.qbittorrent_.added == []
 
+    async def test_a_series_whose_route_was_deleted(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 115：Route 被刪之前（外鍵 `SET NULL`）留下的 Series。按鈕要停用、說出原因，
+        不是每按一次都送進 `_submit` 再失敗。"""
+        row, series, factory, _, _ = await held(session, roots)
+        await session.execute(
+            update(RssSeries).where(RssSeries.id == series.id).values(route_id=None)
+        )
+        await session.commit()
+        sent = len(factory.qbittorrent_.added)
+        before = await snapshot(session, row.id)
+
+        with pytest.raises(RssRejectedError) as refused:
+            await release_item(session, factory, row.id)
+
+        assert refused.value.reason is RssRefusal.ROUTE_MISSING
+        assert await blocked(session, row.id) is RssRefusal.ROUTE_MISSING
+        assert await snapshot(session, row.id) == before
+        assert len(factory.qbittorrent_.added) == sent
+
     async def test_a_feed_still_in_its_preview(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

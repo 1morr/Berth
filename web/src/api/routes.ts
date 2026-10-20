@@ -25,13 +25,13 @@ const REASONS: ReasonSet<RouteRefusal> = {
 }
 
 /** 有多少東西指著一條 Route。與清單那一列（`ManagedRoute`）同一組詞。 */
-export type RouteUsage = Pick<ManagedRoute, 'jobs' | 'ledger_entries'>
+export type RouteUsage = Pick<ManagedRoute, 'jobs' | 'ledger_entries' | 'rss_feeds' | 'rss_series'>
 
 /** 拒絕的完整形狀：封閉集合的理由，加上服務回的原文。 */
 export interface RouteRefusalDetail {
   reason: RouteRefusal
   detail: string
-  /** `route_in_use` 帶的兩個數字（票 14a），畫面照它說「N 筆下載、M 個入庫檔案」。 */
+  /** `route_in_use` 帶的引用數（票 14a、115），畫面照它說「N 筆下載、M 個入庫檔案、K 個 RSS Feed」。 */
   usage?: RouteUsage
 }
 
@@ -39,7 +39,7 @@ export interface RouteRefusalDetail {
  * 這一次失敗是「後端說不行」還是別的。認不得的理由回 `null`，畫面照請求為什麼沒成說（`RequestFailed`）。
  *
  * 理由與原文的解析與另外兩組共用（`api/refusal.ts`）；這裡多讀的是 `route_in_use` 才有的
- * 那兩個數字，它們在後端是 `RouteRefusalOut` 上兩格可有可無的欄位。
+ * 那幾個數字，它們在後端是 `RouteRefusalOut` 上可有可無的欄位。
  */
 export function routeRefusalOf(error: unknown): RouteRefusalDetail | null {
   const refusal = parseRefusal(error, REASONS)
@@ -47,16 +47,22 @@ export function routeRefusalOf(error: unknown): RouteRefusalDetail | null {
   // ——不然這裡只能對 `error` 裸 cast 一次。
   if (refusal === null || !(error instanceof ApiError)) return refusal
   // `detail` 在 `ApiError` 上是 `unknown`（它裝得下驗證錯誤那種陣列），而理由已經確認是
-  // Route 的那一組，所以這一份 body 就是 `RouteRefusalOut`；兩格是選填，所以是 `Partial`。
-  const { jobs, ledger_entries: ledgerEntries } = error.detail as Partial<
-    Schemas['RouteRefusalOut']
-  >
-  return {
-    ...refusal,
-    ...(typeof jobs === 'number' && typeof ledgerEntries === 'number'
-      ? { usage: { jobs, ledger_entries: ledgerEntries } }
-      : {}),
-  }
+  // Route 的那一組，所以這一份 body 就是 `RouteRefusalOut`；那幾格是選填，所以是 `Partial`。
+  const usage = usageOf(error.detail as Partial<Schemas['RouteRefusalOut']>)
+  return { ...refusal, ...(usage ? { usage } : {}) }
+}
+
+/** 四格都在才算數；少一格就當沒帶（畫面說「刪不得」但不說數字）。 */
+function usageOf(body: Partial<Schemas['RouteRefusalOut']>): RouteUsage | null {
+  const { jobs, ledger_entries: ledgerEntries, rss_feeds: rssFeeds, rss_series: rssSeries } = body
+  if (
+    typeof jobs !== 'number' ||
+    typeof ledgerEntries !== 'number' ||
+    typeof rssFeeds !== 'number' ||
+    typeof rssSeries !== 'number'
+  )
+    return null
+  return { jobs, ledger_entries: ledgerEntries, rss_feeds: rssFeeds, rss_series: rssSeries }
 }
 
 /**
