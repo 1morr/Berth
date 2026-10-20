@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '../api/client'
 
+import { resources } from '../i18n/resources'
 import { routeView } from '../test/fixtures'
 import { renderWithProviders } from '../test/render'
 import { RouteDelete } from './RouteDelete'
@@ -58,10 +59,7 @@ describe('RouteDelete', () => {
 
   // 票 115：只有 RSS 綁著的 Route，下載與檔案都是 0，說明要說出 RSS 的數字，不然看不出為什麼刪不得。
   it.each([
-    [
-      'zh-Hant',
-      '這條 Route 還有 0 筆下載、0 個入庫檔案、1 個 RSS Feed、2 個 RSS Series，所以它刪不得',
-    ],
+    ['zh-Hant', '還有 0 筆下載、0 個入庫檔案、1 個 RSS Feed、2 個 RSS Series'],
     ['en', '0 downloads, 0 imported files, 1 RSS feed, and 2 RSS Series point at this route'],
   ])('%s：RSS 綁著時說出 Feed 與 Series 的數量', async (language, said) => {
     await i18next.changeLanguage(language)
@@ -91,15 +89,12 @@ describe('RouteDelete', () => {
       />,
     )
 
-    expect(screen.getByText(/刪不得/)).toHaveTextContent('還有 1 筆下載、0 個入庫檔案，所以')
+    expect(screen.getByText(/刪不得/)).toHaveTextContent('還有 1 筆下載、0 個入庫檔案')
     expect(screen.getByText(/刪不得/)).not.toHaveTextContent('RSS')
   })
 
   it.each([
-    [
-      'zh-Hant',
-      '刪的那一刻發現這條 Route 還有 0 筆下載、0 個入庫檔案、1 個 RSS Feed，所以它刪不得',
-    ],
+    ['zh-Hant', '刪的那一刻發現這條 Route 還有 0 筆下載、0 個入庫檔案、1 個 RSS Feed'],
     ['en', 'When it came to deleting, 0 downloads, 0 imported files, and 1 RSS feed turned out'],
   ])('%s：409 帶的 RSS 數字也照說', async (language, said) => {
     await i18next.changeLanguage(language)
@@ -134,12 +129,20 @@ describe('RouteDelete', () => {
     }
   })
 
-  // 票 120：usage 結尾是拉丁字（「RSS Feed」）時，後面直接接中文字會少一個空格。三句都讓它接標點。
-  it.each(['inUse', 'inUseDisabled', 'refused'])('zh-Hant 的 %s：{{usage}} 後面接標點', (key) => {
-    const said = i18next.t(`routeSettings.delete.${key}`, {
-      lng: 'zh-Hant',
-      usage: '1 個 RSS Feed',
-    })
+  // 票 120：usage 結尾是拉丁字（「RSS Feed」）時，後面直接接中文字會少一個空格。刪除那一組裡帶
+  // {{usage}} 的每一句都讓它接標點；之後新加的句子自動被掃到。
+  const usageCopy: Array<[string, string]> = Object.entries(
+    resources['zh-Hant'].translation.routeSettings.delete,
+  ).filter(([, text]) => text.includes('{{usage}}'))
+
+  it('掃得到帶 {{usage}} 的句子', () => {
+    expect(usageCopy.map(([key]) => key)).toEqual(
+      expect.arrayContaining(['inUse', 'inUseDisabled', 'refused']),
+    )
+  })
+
+  it.each(usageCopy)('zh-Hant 的 %s：{{usage}} 後面接標點', (_key, text) => {
+    const said = text.replace('{{usage}}', '1 個 RSS Feed')
 
     expect(said).toMatch(/1 個 RSS Feed[，。]/)
     expect(said).not.toMatch(/Feed指/)
