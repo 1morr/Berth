@@ -13,7 +13,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
 
   const rules = page.getByRole('region', { name: '全域排除條件' })
   await expect(rules.getByRole('checkbox', { name: /不自動下載合集/ })).toBeChecked()
-  const field = rules.getByLabel('加一條排除條件')
+  const field = rules.getByLabel('加一條標題規則')
   await field.fill('/[简繁/')
   await rules.getByRole('button', { name: '加入規則' }).click()
   await expect(rules).toContainText('存不進去：/[简繁/: unterminated character set')
@@ -45,16 +45,16 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
     .getByRole('article', { name: '與妳相戀到生命盡頭' })
   // Series 層的排除條件在字幕組那一列展開後的「進階」裡（M4 票 13）。
   await bound.getByRole('article', { name: 'LoliHouse' }).locator('summary').click()
-  await bound.getByRole('button', { name: '排除條件（0 條）' }).click()
-  await bound.getByLabel('加一條排除條件').fill('/ - (0\\d|10) \\[/')
+  await bound.getByRole('button', { name: '標題規則（0 條）' }).click()
+  await bound.getByLabel('加一條標題規則').fill('/ - (0\\d|10) \\[/')
   await bound.getByRole('button', { name: '加入規則' }).click()
-  await expect(bound.getByRole('button', { name: '排除條件（1 條）' })).toBeVisible()
+  await expect(bound.getByRole('button', { name: '標題規則（1 條）' })).toBeVisible()
 
   // 合集只在全域那一段、是內建判斷（M4 票 113）：Feed 與 RSS Series 那兩層說出它的目前值、連回去。
   await expect(rules.getByRole('group', { name: '內建判斷' })).toContainText(
     '看解析結果，不是關鍵字',
   )
-  await aggregate.getByRole('button', { name: '排除條件（0 條）' }).click()
+  await aggregate.getByRole('button', { name: '標題規則（0 條）' }).click()
   for (const layer of [aggregate, bound]) {
     await expect(layer.getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
   }
@@ -66,7 +66,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
 
   // 新增表單上先寫 Feed 那一層（M4 票 110）：跟著「加入」一起存，第一輪寫下的那一刻就看。
   const onAdd = page.getByRole('group', { name: '排除條件' })
-  await onAdd.getByLabel('加一條排除條件').fill('/ - 12 \\[/')
+  await onAdd.getByLabel('加一條標題規則').fill('/ - 12 \\[/')
   await onAdd.getByRole('button', { name: '加入規則' }).click()
   await expect(onAdd.getByRole('button', { name: '拿掉「/ - 12 \\[/」' })).toBeVisible()
   await shot(page, '3-rules-on-add')
@@ -74,7 +74,7 @@ test('三層排除與重複：清單上每一筆都說得出為什麼沒下載',
     name: '与你相恋 單一',
   })
   const single = page.getByRole('article', { name: '与你相恋 單一' })
-  await expect(single.getByRole('button', { name: '排除條件（1 條）' })).toBeVisible()
+  await expect(single.getByRole('button', { name: '標題規則（1 條）' })).toBeVisible()
   await expect(onAdd.getByText('沒有標題規則。')).toBeVisible()
   await single.getByRole('button', { name: '立即輪詢' }).click()
   await expect(single.getByRole('status')).toHaveText(
