@@ -55,6 +55,16 @@ const bundledCard = () => screen.getByRole('radio', { name: /^套件內/ })
 /** 選了套件內 Jellyfin、連上了、還沒跑過初始精靈：建立管理員。 */
 const CREATING = setupStatus({ services: [chosen()] })
 
+/** 後端照送來的那一組記「與 Jellyfin 同一組」（`web_ui_login_reuses_owner`，M4 票 68）。 */
+function reusesOwner(init: RequestInit | undefined): boolean {
+  // 頁 2 的套用包一層 `{ login }`，頁 4 的設登入直接是那一組。
+  const sent = JSON.parse(String(init?.body)) as {
+    login?: { reuse_owner: boolean } | null
+    reuse_owner?: boolean
+  }
+  return (sent.login ?? sent).reuse_owner ?? false
+}
+
 /**
  * 一個記得自己狀態的假後端：頁 1 建擁有者 → 頁 2 選套件內 qBittorrent → 頁 4 選套件內 Prowlarr。
  * 兩個服務一開始都還沒設介面登入；套用之後記下帳號。
@@ -63,7 +73,7 @@ function journey(initial: SetupStatus = CREATING) {
   let status = initial
   let qbittorrent: QbittorrentSetup = qbittorrentSetup()
   let indexers: IndexerSetup = indexerSetup()
-  const routes: Record<string, () => StubRoute | Promise<StubRoute>> = {
+  const routes: Record<string, (init?: RequestInit) => StubRoute | Promise<StubRoute>> = {
     [STATUS]: () => ({ body: status }),
     [OWNER]: () => {
       status = setupStatus({ current_step: 2, owner: 'skipper', services: [chosen()] })
@@ -74,11 +84,12 @@ function journey(initial: SetupStatus = CREATING) {
       return { body: status }
     },
     [QBITTORRENT]: () => ({ body: qbittorrent }),
-    [APPLY]: () => {
+    [APPLY]: (init) => {
       qbittorrent = qbittorrentSetup({
         steps: [step('web_ui_password', 'ok', 'skipper')],
         web_ui_username: 'skipper',
         web_ui_login_by_berth: true,
+        web_ui_login_reuses_owner: reusesOwner(init),
       })
       // 頁 2 做完了；頁 3 由測試直接跳過（它與密碼無關）。
       status = setupStatus({ ...status, current_step: 4 })
@@ -89,11 +100,12 @@ function journey(initial: SetupStatus = CREATING) {
       return { body: status }
     },
     [INDEXERS]: () => ({ body: indexers }),
-    [SET_LOGIN]: () => {
+    [SET_LOGIN]: (init) => {
       indexers = indexerSetup({
         steps: [step('prowlarr_login', 'ok', 'skipper')],
         web_ui_username: 'skipper',
         web_ui_login_by_berth: true,
+        web_ui_login_reuses_owner: reusesOwner(init),
       })
       return { body: indexers }
     },
@@ -124,7 +136,7 @@ async function toQbittorrent(user: UserEvent) {
 async function toProwlarr(user: UserEvent, router: ReturnType<typeof renderInRoute>['router']) {
   // 頁 3 與密碼無關：直接走到頁 4（泊位板上點 BTH 4 也是同一個網址）。
   await router.navigate({ to: '/setup', search: { step: 4 } })
-  await screen.findByRole('heading', { level: 2, name: 'Prowlarr' })
+  await screen.findByRole('heading', { level: 2, name: '先選 Prowlarr 是哪一台' })
   await user.click(bundledCard())
 }
 
@@ -370,9 +382,9 @@ describe('密碼只問一次（M4 票 40）', () => {
     const routes = journey()
     const finish = routes[SET_LOGIN]!
     let release: () => void = () => undefined
-    routes[SET_LOGIN] = () =>
+    routes[SET_LOGIN] = (init) =>
       new Promise<StubRoute>((resolve) => {
-        release = () => resolve(finish())
+        release = () => resolve(finish(init))
       })
     const stub = stubApi(routes)
     const user = userEvent.setup()
@@ -404,8 +416,8 @@ describe('密碼只問一次（M4 票 40）', () => {
     const accept = routes[APPLY]!
     let refused = false
     // 第一次（帶過來的那一組）被拒；改好之後手動送的那一次照常寫進去。
-    routes[APPLY] = () => {
-      if (refused) return accept()
+    routes[APPLY] = (init) => {
+      if (refused) return accept(init)
       refused = true
       return { status: 422, body: { detail: { reason: 'owner_password', detail: '' } } }
     }
@@ -424,7 +436,8 @@ describe('密碼只問一次（M4 票 40）', () => {
 
     await user.type(screen.getByLabelText(OWNER_PASSWORD), 'changed-in-jellyfin')
     await user.click(screen.getByRole('button', { name: '設定介面登入' }))
-    expect(await screen.findByText('qBittorrent 介面的帳號：')).toBeInTheDocument()
+    // 手動送的也是沿用 Jellyfin 帳密：照後端記的說「已沿用」（M4 票 104），不看是不是頁 1 帶過來的那一組。
+    expect(await screen.findByText(CARRIED)).toBeInTheDocument()
 
     await toProwlarr(user, router)
     const login = within(await screen.findByTestId('prowlarr-login'))

@@ -147,7 +147,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑十八條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑十九條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -300,7 +300,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十八條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十三個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十九條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十五個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -313,7 +313,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | `/review` 確認一筆 audit | `review` | 8493 |
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
-| `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
+| `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
 | `/rss` 新的 acg.rip 搜尋 feed：第一輪停在預覽、合集在「排除」那一組，選「只追之後的」之後整份歷史略過 | `rss` | 8488 / 8489 |
@@ -322,6 +322,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 連載中的 split-cour 第一批整批擋在審核：改一份計劃的一列並套用到 RSS Series，其餘 11 份重新規劃、自動入庫，改的那一份核准 | `rss-split-cour-airing` | 8510 / 8511 |
 | 一次性 RSS 連結：讀單一 feed 勾三集送單、acg.rip 那一份標出合集 | `rss` | 8512 / 8513 |
 | 詳情頁訂閱：Mikan 搜番組、選字幕組、整季進下載列表；再以標題建 acg.rip 搜尋 feed，第一輪就地預覽 | `rss` | 8514 / 8515 |
+| 作品頁「只下載現有的」：訂閱只出合集的 Nix-Raws，回報說出擋下的合集，從「只下載現有的」勾合集送出 | `rss` | 8522 / 8523 |
 
 精靈、設定頁與 RSS 那幾條在兩種寬度各走一次（`playwright.config.ts` 的 `NARROW`），每一格都留一張整頁截圖在
 `web/test-results/<那一條>/`，通過的那一輪也留著。
@@ -375,7 +376,6 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `rss-split-cour` | 改正並套用到 RSS Series（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季 24 集。綁定時補舊集，12 集全部落在 S01E01–E12（錯的：字幕組的第二 cour 從 01 重數），在 `/review` 是這個 RSS Series 的第一批、一組；把第 1 集改成 S01E13 並勾「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24，再按「全部確認」 |
 | `rss-split-cour-airing` | 從審核裡套用到 RSS Series（M3 票 14b）：同 `rss-split-cour`，但第二 cour 正在播（2026-07-02 起）。綁定時補舊集，12 集照字面對到一月播出的 S01E01–E12，播出日比對把 12 份計劃整批擋在 `/review` 的「要你決定」、一集都沒入庫；在第 1 集那一份按「改」、起集填 13、勾著「套用到這個 RSS Series」套用，其餘 11 份重新規劃、自動入庫（第一批，等全部確認），改的那一份等你核准 |
 | `rss-runtime` | 片長驗證（M3 票 15）：同 `rss`，但 mediainfo 是替身——檔名第 11 集的量到 12:05，其餘 24 分鐘（TMDB 每集 24 分鐘）。綁定《与你相恋》之後第 11 集那一份停在 `/review` 的「要你決定」，理由說出兩個片長；其餘 11 集照常入庫（第一批） |
-| `budget` | 一個站一份請求預算（M3 票 20、M4 票 77）：同 `rss`，但每站的預算只有 6 個，替身索引站背後是 Mikan 與 Nyaa，Mikan 起來時已被輪詢用掉 5 個。TMDB 上《与你相恋》有七季、每季兩集都播完了：詳情頁（`/media/tv:262000`）按「搜這部作品缺的集」，預覽說分批、這一批問 S01–S05、之後還有 1 批；第一批在 Mikan 放不下、在 Nyaa 放得下，只問 Nyaa，結果下面「這次沒問」列出 Mikan 與多久之後放得下；下一批也是 5 個、兩站都放不下，那一行說出何時放得下，照樣按「問下一批」是「等請求預算」。之後到 `/rss` 加 Mikan 聚合 feed、按「立即輪詢」：Feed 本身用掉 Mikan 最後一個，12 個單集頁全被擋（那一列的原文說是預算）；健康頁的「請求預算」列出 `mikanani.me 6 / 6`、`nyaa.si 5 / 6`、被延後的是哪幾種。帳號同 `signed-out` |
 | `healthy` | 精靈已跑完、三條 Route 綠燈、四項健康檢查全綠：健康頁 `/health` 與設定頁 `/settings/*`（五個分頁：換 TMDB key、加站試搜移除都在這裡演得出來）的起點。帳號同 `signed-out` |
 | `degraded` | 同上，但索引站在第一輪檢查之後掛掉：按「立即重測」就會看到那一項變紅、其餘三項不動，以及「最後成功」還留著。每個情境都有 `curl -X POST http://127.0.0.1:8484/demo/prowlarr/stop`（`start` 起回來）演 `docker compose stop prowlarr`：健康檢查、站的清單與作品頁的搜尋都連不上（M4 票 61 的「不用 Prowlarr」實跑用它） |
 | `review` | 審核佇列 `/review`（M2 票 06）：同 `issues`，另外 SPY×FAMILY 第二季兩集（只寫絕對集號 26、27，累計換算成 S02E01、S02E02，信心 medium）真的硬鏈接進媒體庫、帳本與 Plan Item 都掛 audit。按「確認」清旗標；按「撤銷」真的把那一條鏈接拆掉，那一筆下載回到待審核——之後以 `deckhand` / `rope` 登入，`/jobs` 與 SPY×FAMILY 的詳情頁說「等管理員審核」。這兩集是同一筆下載，收成一組、收起時說出為什麼是 medium，按「全部確認」一次清掉（M3 票 05）。Issue 不在這一頁（M3 票 05），頁尾一行「另有 N 件待處理」連到 `/issues`。另有一筆 `- 05` 下載完成（M2 票 07）：只寫集號、沒超過第一季的 25 集，規劃器算成低信心、提案 S01E05，停在「要你決定」那一段——逐列改季集看目標路徑當場換掉，按「核准並入庫」真的硬鏈接進媒體庫；按「拒絕」就重新規劃。再一筆 S01E03 + OVA 下載完成（M2 票 08）：媒體庫裡已經有一份一模一樣的 S01E03（路徑與 Tags 照解析器算），所以規劃器略過它、佇列上一列「重複」（取代 / 保留兩者 / 跳過，都真的動磁碟）；OVA 2 對不到任何一集，佇列上一列「對不到」，指派到 S00E02 真的建硬鏈接。伺服器起來約 60 秒後規劃器第一輪才算出這兩列 |

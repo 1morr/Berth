@@ -25,7 +25,6 @@ const CODES: ReasonSet<BindReasonCode> = {
   no_premiere: true,
   no_show_page: true,
   lookup_failed: true,
-  lookup_deferred: true,
   lookup_retry: true,
   route_ambiguous: true,
   no_route: true,

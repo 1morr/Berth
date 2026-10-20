@@ -26,6 +26,18 @@ from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 #: 一個 Feed 預設多久輪詢一次（plan §3.2）。
 DEFAULT_INTERVAL_SEC = 15 * 60
 
+#: 輪詢間隔只收這幾個檔位（M4 票 109）：15 分、30 分、1、3、6、12、24 小時。照 FreshRSS，單一 Feed
+#: 的下限是 15 分鐘，免得把來源站打到封 IP；不開放自由輸入，也沒有「停用」。
+FEED_INTERVALS: tuple[int, ...] = (
+    DEFAULT_INTERVAL_SEC,
+    30 * 60,
+    60 * 60,
+    3 * 60 * 60,
+    6 * 60 * 60,
+    12 * 60 * 60,
+    24 * 60 * 60,
+)
+
 
 class RssFeed(Base):
     """一個 RSS 來源（`CONTEXT.md` 的 Feed）。"""

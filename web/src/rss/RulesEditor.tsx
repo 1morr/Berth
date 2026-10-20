@@ -2,9 +2,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { parseRssRefusal, RSS_KEY } from '../api/rss'
+import { RSS_KEY } from '../api/rss'
 import { COMPACT_BUTTON, Field, GhostButton } from '../components/controls'
-import { problemText } from '../components/requestProblem'
+import { LayerLede } from './LayerLede'
+import { rssProblem } from './rssProblem'
 
 /**
  * 一鍵加入的建議項（brief §15：720p、简体這類，不預設勾）。解析度與字幕語言是最常見的「這一種我不要」；
@@ -16,8 +17,6 @@ interface RulesProps {
   rules: readonly string[]
   /** 整組覆寫這一層。寫壞的那一條讓整組不存（422 `rule_invalid`）。 */
   save: (rules: string[]) => Promise<unknown>
-  /** 這一層與其他層的關係，一句話。 */
-  lede?: string
 }
 
 /**
@@ -27,43 +26,73 @@ interface RulesProps {
  * 寫壞的正則由後端擋（Python 的 `re` 才是比對的那一個，瀏覽器的 RegExp 語法不同），原因印在欄位下方，
  * 打的字留著讓人改。
  */
-export function RulesEditor({ rules, save, lede }: RulesProps) {
+export function RulesEditor({ rules, save }: RulesProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const listId = useId()
-  const input = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState('')
   const change = useMutation({
     mutationFn: (next: string[]) => save(next),
-    onSuccess: async (_, sent) => {
-      if (sent.length > rules.length) {
+    // 規則一改，還沒送的 Item 可能被擋下：三份清單一起重問。
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: RSS_KEY }),
+  })
+
+  return (
+    <RulesFields
+      rules={rules}
+      draft={draft}
+      setDraft={setDraft}
+      busy={change.isPending}
+      error={change.isError ? rssProblem(t, change.error) : undefined}
+      commit={(next, done) => change.mutate(next, { onSuccess: done })}
+    />
+  )
+}
+
+/**
+ * 規則的畫面本身，不管存到哪裡：`RulesEditor` 一改就送後端；新增 Feed 的表單先記在表單裡，
+ * 跟著 `POST /rss/feeds` 一起送（M4 票 110）。`commit` 存好之後呼叫 `done`，加入欄才清空。
+ * 加入欄打的字由呼叫端持有：新增 Feed 送出時，打了沒按「加入規則」的那一條也要帶上。
+ *
+ * 加入欄自己是一個 `<form>`（Enter 加一條）：放進別的表單時要放在那個 `<form>` 元素外面。
+ */
+export function RulesFields({
+  rules,
+  draft,
+  setDraft,
+  commit,
+  busy = false,
+  error,
+}: {
+  rules: readonly string[]
+  draft: string
+  setDraft: (draft: string) => void
+  commit: (next: string[], done: () => void) => void
+  busy?: boolean
+  error?: string
+}) {
+  const { t } = useTranslation()
+  const listId = useId()
+  const input = useRef<HTMLInputElement>(null)
+  const suggestions = SUGGESTED_RULES.filter((rule) => !rules.includes(rule))
+
+  const change = (next: string[]) => {
+    const added = next.length > rules.length
+    commit(next, () => {
+      if (added) {
         setDraft('')
       } else {
         // 拿掉的那一格連同它的按鈕一起消失：焦點落回加入欄，不掉回 body。
         input.current?.focus()
       }
-      // 規則一改，還沒送的 Item 可能被擋下：三份清單一起重問。
-      await queryClient.invalidateQueries({ queryKey: RSS_KEY })
-    },
-  })
-  const refusal = change.isError ? parseRssRefusal(change.error) : null
-  const error =
-    refusal?.reason === 'rule_invalid'
-      ? t('rss.rules.invalid', { detail: refusal.detail })
-      : refusal
-        ? t(`rss.refusal.${refusal.reason}`)
-        : change.isError
-          ? problemText(t, change.error, t('request.notDone'))
-          : undefined
-  const suggestions = SUGGESTED_RULES.filter((rule) => !rules.includes(rule))
-
+    })
+  }
   const add = (rule: string) => {
     const trimmed = rule.trim()
     if (trimmed === '' || rules.includes(trimmed)) {
       setDraft('')
       return
     }
-    change.mutate([...rules, trimmed])
+    change([...rules, trimmed])
   }
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -72,7 +101,6 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
 
   return (
     <div className="grid gap-3">
-      {lede && <p className="max-w-prose text-xs text-ink-dim">{lede}</p>}
       <p id={listId} className="sr-only">
         {t('rss.rules.list')}
       </p>
@@ -86,9 +114,9 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
               <button
                 type="button"
                 aria-label={t('rss.rules.remove', { rule })}
-                aria-disabled={change.isPending || undefined}
+                aria-disabled={busy || undefined}
                 onClick={() => {
-                  if (!change.isPending) change.mutate(rules.filter((one) => one !== rule))
+                  if (!busy) change(rules.filter((one) => one !== rule))
                 }}
                 className="label flex min-h-6 min-w-6 items-center justify-center self-stretch border-l-2 border-rule px-2 text-ink-dim hover:text-ink"
               >
@@ -106,12 +134,14 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
           autoComplete="off"
           spellCheck={false}
           value={draft}
+          // 送出中鎖住（M4 票 110、117），否則多打的字在成功之後被清掉。`readOnly` 不是 `disabled`，焦點留著。
+          readOnly={busy}
           error={error}
           onChange={(event) => setDraft(event.target.value)}
         />
         <div className="sm:pt-7">
-          <GhostButton type="submit" busy={change.isPending} disabled={draft.trim() === ''}>
-            {change.isPending ? t('rss.rules.saving') : t('rss.rules.addAction')}
+          <GhostButton type="submit" busy={busy} disabled={draft.trim() === ''}>
+            {busy ? t('rss.rules.saving') : t('rss.rules.addAction')}
           </GhostButton>
         </div>
       </form>
@@ -123,9 +153,9 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
               key={rule}
               type="button"
               aria-label={t('rss.rules.suggest', { rule })}
-              aria-disabled={change.isPending || undefined}
+              aria-disabled={busy || undefined}
               onClick={() => {
-                if (!change.isPending) add(rule)
+                if (!busy) add(rule)
               }}
               className={COMPACT_BUTTON}
             >
@@ -140,9 +170,9 @@ export function RulesEditor({ rules, save, lede }: RulesProps) {
 }
 
 /**
- * Feed 與 RSS Series 那一列上的排除條件：平常收起來只說有幾條，展開才是編輯區（它不是那一列的主要事）。
+ * Feed 與 RSS Series 那一列上的標題規則：平常收起來只說有幾條（合集那一項由全域管，不算進去），展開才是編輯區（它不是那一列的主要事）。
  */
-export function RulesToggle({ rules, save, lede }: RulesProps) {
+export function RulesToggle({ rules, save, lede }: RulesProps & { lede: string }) {
   const { t } = useTranslation()
   const regionId = useId()
   const [open, setOpen] = useState(false)
@@ -164,8 +194,13 @@ export function RulesToggle({ rules, save, lede }: RulesProps) {
           </span>
         </button>
       </div>
-      <div id={regionId} hidden={!open}>
-        {open && <RulesEditor rules={rules} save={save} lede={lede} />}
+      <div id={regionId} hidden={!open} className="grid gap-3">
+        {open && (
+          <>
+            <LayerLede lede={lede} />
+            <RulesEditor rules={rules} save={save} />
+          </>
+        )}
       </div>
     </div>
   )

@@ -69,6 +69,7 @@ from berth.services.rss import (
     list_series,
     poll_due,
     poll_feed,
+    set_feed_interval,
     unbind_series,
 )
 from tests.conftest import FIXTURES
@@ -757,6 +758,41 @@ class TestSchedule:
         row = await session.get(RssFeed, feed.id)
         assert row is not None
         assert row.last_polled_at == NOW + timedelta(minutes=15)
+
+    async def test_a_changed_interval_counts_from_the_last_round(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 109：改間隔不當場輪，下一輪是 `last_polled_at` 加上新的間隔。"""
+        _, _, factory = await harbour(session, roots)
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
+        assert await poll_due(session, factory, now=NOW) == 1
+
+        changed = await set_feed_interval(session, feed.id, 3600)
+
+        assert changed.interval_sec == 3600
+        assert await poll_due(session, factory, now=NOW + timedelta(minutes=15)) == 0
+        assert await poll_due(session, factory, now=NOW + timedelta(minutes=59)) == 0
+        assert await poll_due(session, factory, now=NOW + timedelta(minutes=60)) == 1
+
+    async def test_an_interval_off_the_choices_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await harbour(session, roots)
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
+
+        with pytest.raises(RssRejectedError) as refused:
+            await set_feed_interval(session, feed.id, 600)
+        with pytest.raises(RssRejectedError) as missing:
+            await set_feed_interval(session, 999, 3600)
+
+        assert (refused.value.reason, refused.value.detail) == (
+            RssRefusal.INTERVAL_UNSUPPORTED,
+            "600",
+        )
+        assert missing.value.reason is RssRefusal.FEED_MISSING
+        row = await session.get(RssFeed, feed.id)
+        assert row is not None
+        assert row.interval_sec == 900
 
     async def test_nothing_is_polled_before_the_wizard_is_done(
         self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]

@@ -1,6 +1,6 @@
 # 109 — 每個 Feed 可以設定輪詢間隔
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -33,10 +33,14 @@
 
 ## 驗收
 
-- [ ] 新增 Feed 可以帶檔位內的間隔；不帶是 900；檔位外的回 422（pytest）
-- [ ] `PUT /feeds/{id}/interval` 改了之後，`poll_due` 照新間隔判斷到期（pytest）
-- [ ] 新增表單與 Feed 列都能選間隔，存完畫面顯示新值（vitest，zh-Hant 與 en）
-- [ ] playwright 實跑新增與修改，附截圖（1280 與 390）
-- [ ] 全部檢查、pytest、vitest 綠；plan、CHANGELOG、progress.md 已更新
+- [x] 新增 Feed 可以帶檔位內的間隔；不帶是 900；檔位外的回 422（pytest）
+- [x] `PUT /feeds/{id}/interval` 改了之後，`poll_due` 照新間隔判斷到期（pytest）
+- [x] 新增表單與 Feed 列都能選間隔，存完畫面顯示新值（vitest，zh-Hant 與 en）
+- [x] playwright 實跑新增與修改，附截圖（1280 與 390）
+- [x] 全部檢查、pytest、vitest 綠；plan、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 截圖：`109-feed-poll-interval/` 的 `add-form-{1280,390}.png`（新增表單選 1 小時）、`change-interval-{1280,390}.png`（Feed 列就地改成 24 小時）、`interval-saved-{1280,390}.png`（存下之後那一列說「每 24 小時」與結果句）。由 e2e `rss` 的 1280 與 390 兩個 project 拍下。
+- code-review（開工 commit `82e436d`）已處理：Feed 列三個互斥的狀態句 state 改成一個 `RowNote` union；`FeedOut.interval_sec` 也帶檔位 `enum`，改間隔的編輯器不再有「不在檔位裡就預選 15 分鐘」的分支。
+- code-review 未處理：前端 `DEFAULT_FEED_INTERVAL = 900` 與後端 `DEFAULT_INTERVAL_SEC` 沒有閘門鎖住（檔位有 `Record<FeedInterval, true>` 鎖著，預設值沒有）；要鎖得把預設值也放進 OpenAPI（例如 `FeedIn.interval_sec` 的 `default`），型別產生器不產出執行期的值，代價比它防的大，先記著。`services.rss` 轉手 `FEED_INTERVALS`、`DEFAULT_INTERVAL_SEC` 給 API 是 import-linter 的分層要求（api 不得 import models），不是多餘的中間層。偏差兩條記在 progress.md「偏差與決定」。

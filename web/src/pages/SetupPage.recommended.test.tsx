@@ -239,7 +239,8 @@ describe('頁 4 既有 Prowlarr 也有主鍵（M4 票 67，審計 C3、P2-10）'
     const block = within(await screen.findByTestId('recommended-sites'))
     const lede = block.getByText(/加進你在 nas:9696 的 Prowlarr/)
     expect(lede).toHaveTextContent('測試推薦的 9 個公開站（Nyaa.si、')
-    expect(lede).toHaveTextContent('Berth 不移除站')
+    // 「原本的站不動」由卡片說一次，這裡不再說（M4 票 104）。
+    expect(lede).not.toHaveTextContent('不移除')
     expect(screen.queryByTestId('prowlarr-login')).not.toBeInTheDocument()
     await user.click(block.getByRole('button', { name: RUN_LABEL }))
 
@@ -277,7 +278,7 @@ describe('頁 4 既有 Prowlarr 也有主鍵（M4 票 67，審計 C3、P2-10）'
 
       expect(
         block.getByText(/adds the ones that pass to your Prowlarr at nas:9696/),
-      ).toHaveTextContent('Berth does not remove sites')
+      ).not.toHaveTextContent('remove')
       expect(
         block.getByRole('button', { name: 'Test recommended sites and add the ones that pass' }),
       ).toBeVisible()
@@ -418,5 +419,33 @@ describe('頁 4 推薦站不在 Prowlarr 裡', () => {
     expect(await screen.findByTestId('no-sites')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: RUN_LABEL })).toBeVisible()
     expect(screen.queryByTestId('unlisted')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * 先後（M4 票 119 的 critique）：還沒加站時「測試推薦站」是這一頁唯一的調度黃，登入的送出鍵是次要的；
+ * 兩顆黃鍵並排時看不出先做哪一件。加了站之後登入才是「現在需要你」的那一件。
+ */
+describe('頁 4 套件內：一屏只有一顆調度黃', () => {
+  const ASSIGNED = 'bg-assigned'
+
+  it('還沒加站：登入的送出鍵不是主鍵', async () => {
+    stubApi({ [STATUS]: { body: AT_INDEXER }, [INDEXERS]: { body: indexerSetup() } })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: RUN_LABEL })).toHaveClass(ASSIGNED)
+    expect(screen.getByRole('button', { name: '設定介面登入' })).not.toHaveClass(ASSIGNED)
+  })
+
+  it('加了站：登入的送出鍵是主鍵', async () => {
+    stubApi({
+      [STATUS]: { body: AT_INDEXER },
+      [INDEXERS]: { body: indexerSetup({ sites: [site(RECOMMENDED[0], 1)] }) },
+    })
+
+    renderInRoute(<SetupPage />)
+
+    expect(await screen.findByRole('button', { name: '設定介面登入' })).toHaveClass(ASSIGNED)
   })
 })

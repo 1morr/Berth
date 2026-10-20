@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job, JobFile, JobPage, MediaJobFilter } from '../api/jobs'
 import type { Media, WatchArea, WatchEpisode } from '../api/media'
-import type { Bangumi, Feed, RssSeries } from '../api/rss'
+import type { Bangumi, Feed, OneshotItem, RssSeries } from '../api/rss'
 import type { Batch, QueryPlan, SearchResults } from '../api/search'
 import {
   HEALTHY,
@@ -16,6 +16,10 @@ import {
   type StubRoutes,
 } from '../test/fetch'
 import { renderApp } from '../test/render'
+
+/** 每日補漏的說明（M4 票 108）：與 RSS 頁 RSS Series 段落那一句相同（`RssPage.test.tsx`）。 */
+const BACKFILL_LEDE =
+  '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -228,7 +232,6 @@ function preview(queries: string[], overrides: Partial<QueryPlan> = {}): QueryPl
     seasons: [],
     any_season: true,
     limit: 10,
-    budget: 60,
     ...overrides,
   }
 }
@@ -1101,8 +1104,6 @@ describe('Media 詳情頁', () => {
         attempts: [{ step: 'SPY x FAMILY S01E02', status: 'ok', detail: '1', error: '' }],
         problem: null,
         detail: '',
-        retry_at: null,
-        skipped: [],
         batch: null,
       }
     }
@@ -1258,17 +1259,16 @@ describe('Media 詳情頁', () => {
         seasons: [1, 2, 3, 4, 5],
         later: 1,
         next_seasons: [6, 7],
-        next_at: '2026-09-26T12:00:00Z',
       }
-      const LAST: Batch = { seasons: [6, 7], later: 0, next_seasons: [], next_at: null }
+      const LAST: Batch = { seasons: [6, 7], later: 0, next_seasons: [] }
 
-      function batched(nextAt: string | null) {
+      function batched() {
         return gaps({
           [MISSING_QUERIES]: {
             body: preview(['SPY x FAMILY S01'], { batch: FIRST }),
           },
           [MISSING_SEARCH]: {
-            body: { ...found('[ANi] SPY x FAMILY - 02'), batch: { ...FIRST, next_at: nextAt } },
+            body: { ...found('[ANi] SPY x FAMILY - 02'), batch: FIRST },
           },
           'GET /api/search/queries?media=tv%3A120089&missing=true&from_season=6': {
             body: preview(['SPY x FAMILY S06', 'SPY x FAMILY S07'], { batch: LAST }),
@@ -1280,7 +1280,7 @@ describe('Media 詳情頁', () => {
       }
 
       it('預覽說得出這一批問哪幾季、之後還有幾批', async () => {
-        batched(null)
+        batched()
         renderApp('/media/tv:120089')
 
         await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
@@ -1293,7 +1293,7 @@ describe('Media 詳情頁', () => {
       })
 
       it('問完一批說出問了哪幾季、下一批是哪幾季；「問下一批」從下一批的第一季問起（票 20 驗收）', async () => {
-        const stub = batched('2026-09-26T12:00:00Z')
+        const stub = batched()
         renderApp('/media/tv:120089')
         await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
 
@@ -1311,50 +1311,12 @@ describe('Media 詳情頁', () => {
         expect(within(panel()).queryByRole('button', { name: '問下一批' })).not.toBeInTheDocument()
       })
 
-      it('下一批要等預算時說出何時放得下；按鈕照樣按得下去（票 02b）', async () => {
-        const later = new Date(Date.now() + 25 * 60 * 1000).toISOString()
-        batched(later)
-        renderApp('/media/tv:120089')
-        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
-
-        expect(await within(panel()).findByText(/請求預算要到/)).toBeVisible()
-        expect(within(panel()).getByText('25 分鐘後')).toBeVisible()
-        expect(within(panel()).getByRole('button', { name: '問下一批' })).toBeEnabled()
-      })
-
-      it('預算放不下這一批時一個關鍵字都沒問，說得出是哪幾季、何時放得下（票 20 驗收）', async () => {
-        const later = new Date(Date.now() + 40 * 60 * 1000).toISOString()
-        gaps({
-          [MISSING_SEARCH]: {
-            body: {
-              ...found(''),
-              rows: [],
-              counts: [],
-              attempts: [],
-              problem: 'budget_exhausted',
-              detail: '',
-              retry_at: later,
-              batch: FIRST,
-            },
-          },
-        })
-        renderApp('/media/tv:120089')
-
-        await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
-
-        expect(await within(panel()).findByText('等請求預算')).toBeVisible()
-        expect(within(panel()).getByText('40 分鐘後')).toBeVisible()
-        expect(
-          within(panel()).getByText('這一批要問 S01、S02、S03、S04、S05，一個都還沒問。'),
-        ).toBeVisible()
-      })
-
       it('只有一批時不說「批」', async () => {
         gaps({
           [MISSING_SEARCH]: {
             body: {
               ...found('[ANi] SPY x FAMILY - 02'),
-              batch: { seasons: [1], later: 0, next_seasons: [], next_at: null },
+              batch: { seasons: [1], later: 0, next_seasons: [] },
             },
           },
         })
@@ -2229,6 +2191,8 @@ function sent(stub: ReturnType<typeof stubApi>, method: string, path: string) {
 }
 
 const LOLI_TITLE = '[LoliHouse] SPY x FAMILY - 12 [WebRip 1080p HEVC-10bit AAC]'
+/** 番組 × 字幕組的單一 feed：後端給（`SubgroupOut.feed_url`），前端不拼。 */
+const LOLI_FEED = 'https://mikanani.me/RSS/Bangumi?bangumiId=1234&subgroupid=370'
 
 function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
   return {
@@ -2263,6 +2227,7 @@ function boundSeries(overrides: Partial<RssSeries> = {}): RssSeries {
     active: 0,
     excluded: 0,
     finished: false,
+    backfilled_at: null,
     submitted: 0,
     ask: null,
     ...overrides,
@@ -2280,6 +2245,7 @@ const BANGUMI: Bangumi = {
       releases: 12,
       latest: '[ANi] SPY x FAMILY - 12 [1080P][Baha][WEB-DL]',
       bound_to: 'tv:999',
+      feed_url: 'https://mikanani.me/RSS/Bangumi?bangumiId=1234&subgroupid=583',
     },
     {
       id: 370,
@@ -2288,6 +2254,7 @@ const BANGUMI: Bangumi = {
       releases: 12,
       latest: LOLI_TITLE,
       bound_to: null,
+      feed_url: LOLI_FEED,
     },
   ],
 }
@@ -2340,7 +2307,7 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       'GET /api/rss/mikan/bangumi/1234': { body: BANGUMI },
       'POST /api/rss/subscriptions/mikan': {
         status: 201,
-        body: { feed: {}, series: boundSeries({ submitted: 12 }) },
+        body: { feed: {}, series: boundSeries({ submitted: 12 }), excluded: [] },
       },
     })
     renderApp('/media/tv:120089')
@@ -2358,6 +2325,10 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     // 整季一律補（M4 票 78）：沒有勾選，說的是整季。
     expect(within(block).queryByRole('checkbox')).not.toBeInTheDocument()
     expect(within(block).getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeVisible()
+    // 每日補漏與 RSS 頁 RSS Series 段落的說明同一句（M4 票 108）。
+    expect(within(block).getByText(/讀這個字幕組在 Mikan 上的整季/)).toHaveTextContent(
+      BACKFILL_LEDE,
+    )
 
     await userEvent.click(within(block).getByRole('button', { name: '訂閱並送出' }))
 
@@ -2372,6 +2343,9 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       subgroup_name: 'LoliHouse',
     })
     expect(await within(block).findByText('已訂閱，送出 12 集。')).toBeVisible()
+    // 全部送出時不提排除，也沒有「只下載現有的」。
+    expect(within(block).queryByText(/沒有自動下載/)).not.toBeInTheDocument()
+    expect(within(block).queryByRole('button', { name: '只下載現有的' })).not.toBeInTheDocument()
   })
 
   it('Nyaa：以標題集合的第一個建搜尋 feed，建好之後就地畫第一輪預覽', async () => {
@@ -2435,6 +2409,207 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     })
     expect(await within(block).findByRole('button', { name: '只追之後的' })).toBeVisible()
     expect(within(block).getByText(LOLI_TITLE)).toBeVisible()
+  })
+})
+
+const LOLI_BATCH: OneshotItem = {
+  guid: 'batch',
+  title: '[LoliHouse] SPY x FAMILY [01-12 合集][WebRip 1080p HEVC-10bit AAC]',
+  link: 'https://mikanani.me/Home/Episode/batch',
+  source_id: 'source-batch',
+  size: 6_000_000_000,
+  published_at: '2026-09-24T08:08:01Z',
+  release_kind: 'collection',
+  tags: {
+    source: 'WEB',
+    resolution: '1080p',
+    subs: [],
+    hardsub: false,
+    group: 'LoliHouse',
+    version: '',
+    edition: '',
+  },
+  season: 1,
+  episode_start: 1,
+  episode_end: 12,
+  whole_season: true,
+  strategy: 'explicit',
+  job_hash: '',
+  known: null,
+  search_term: 'SPY x FAMILY',
+}
+
+/** 選到 LoliHouse、Route 2 的那一刻。 */
+async function pickLoliHouse(block: HTMLElement) {
+  await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+  await userEvent.click(await within(block).findByRole('button', { name: '间谍过家家' }))
+  await userEvent.click(await within(block).findByRole('button', { name: /LoliHouse/ }))
+  await userEvent.selectOptions(within(block).getByRole('combobox'), '2')
+}
+
+describe('作品頁：Mikan「只下載現有的」（M4 票 112）', () => {
+  const MIKAN = {
+    [MIKAN_SEARCH]: { body: [{ id: 1234, title: '间谍过家家' }] },
+    'GET /api/rss/mikan/bangumi/1234': { body: BANGUMI },
+  }
+
+  it('選字幕組 → 只下載現有的：清單帶好作品與 Route，勾合集送出成一般送單，不建 Feed', async () => {
+    const stub = render({
+      ...MIKAN,
+      'POST /api/rss/oneshot': { body: { kind: 'mikan', items: [LOLI_BATCH] } },
+      'POST /api/jobs': { body: { job: { hash: 'e'.repeat(40) }, created: true } },
+    })
+    renderApp('/media/tv:120089')
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await pickLoliHouse(block)
+
+    const existing = within(block).getByRole('button', { name: '只下載現有的' })
+    expect(existing).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(existing)
+    expect(existing).toHaveAttribute('aria-expanded', 'true')
+
+    const list = await within(block).findByRole('list', { name: '勾選要送出的' })
+    // 網址是後端給的那一條；作品與 Route 帶好，不必再選。
+    await waitFor(() =>
+      expect(
+        sent(stub, 'POST', '/api/rss/oneshot').map(([, init]) => JSON.parse(String(init?.body))),
+      ).toEqual([{ url: LOLI_FEED, media: 'tv:120089', route: 2 }]),
+    )
+    expect(within(block).queryByRole('searchbox', { name: '搜尋作品' })).not.toBeInTheDocument()
+    expect(within(list).getByText('合集')).toBeInTheDocument()
+    // 「勾選全部單集」不勾合集：沒有單集時不出現；合集照樣勾得了。
+    expect(within(block).queryByRole('button', { name: /勾選全部單集/ })).not.toBeInTheDocument()
+    await userEvent.click(within(list).getByRole('checkbox', { name: LOLI_BATCH.title }))
+    await userEvent.click(within(block).getByRole('button', { name: '送出 1 筆' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/jobs')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/jobs')
+    expect(JSON.parse(String(init?.body))).toEqual({
+      source_id: 'source-batch',
+      media: 'tv:120089',
+      route: 2,
+    })
+    expect(
+      await within(block).findByText('送出 1 筆；0 筆本來就在了；0 筆沒有送出。'),
+    ).toBeVisible()
+    // 一次性：沒有訂閱，也沒有加 Feed。
+    expect(sent(stub, 'POST', '/api/rss/subscriptions/mikan')).toHaveLength(0)
+    expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(0)
+  })
+
+  it.each([
+    [
+      'zh-Hant',
+      '已訂閱，送出 0 集。1 筆是合集、區間或季包，沒有自動下載。要下載，用「只下載現有的」。',
+      '只下載現有的',
+      '勾選要送出的',
+    ],
+    [
+      'en',
+      'Subscribed; sent 0 episodes. Of this group’s releases, 1 is a collection, range or season pack; it was not downloaded automatically. To download it, use “Download existing only”.',
+      'Download existing only',
+      'Tick what to send',
+    ],
+  ])(
+    '訂閱後有被排除的：說出筆數與理由，指向只下載現有的（%s）',
+    async (language, said, button, list) => {
+      await i18next.changeLanguage(language)
+      try {
+        const stub = render({
+          ...MIKAN,
+          'POST /api/rss/subscriptions/mikan': {
+            status: 201,
+            body: {
+              feed: {},
+              series: boundSeries({ submitted: 0 }),
+              excluded: [{ code: 'not_single', count: 1 }],
+            },
+          },
+          'POST /api/rss/oneshot': { body: { kind: 'mikan', items: [LOLI_BATCH] } },
+        })
+        renderApp('/media/tv:120089')
+        const block = await screen.findByRole('region', { name: /RSS/ })
+        await userEvent.click(
+          within(block).getByRole('button', { name: /^(新增訂閱|Add a subscription)$/ }),
+        )
+        await userEvent.click(await within(block).findByRole('button', { name: '间谍过家家' }))
+        await userEvent.click(await within(block).findByRole('button', { name: /LoliHouse/ }))
+        await userEvent.selectOptions(within(block).getByRole('combobox'), '2')
+        await userEvent.click(
+          within(block).getByRole('button', { name: /^(訂閱並送出|Subscribe and send)$/ }),
+        )
+
+        expect(await within(block).findByText(said)).toBeVisible()
+        await userEvent.click(within(block).getByRole('button', { name: button }))
+        expect(await within(block).findByRole('list', { name: list })).toBeVisible()
+        expect(
+          sent(stub, 'POST', '/api/rss/oneshot').map(([, init]) => JSON.parse(String(init?.body))),
+        ).toEqual([{ url: LOLI_FEED, media: 'tv:120089', route: 2 }])
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    },
+  )
+
+  it.each([
+    ['zh-Hant', '已訂閱，送出 12 集。', '只下載現有的'],
+    ['en', 'Subscribed; sent 12 episodes.', 'Download existing only'],
+  ])('全部送出時不提排除（%s）', async (language, said, button) => {
+    await i18next.changeLanguage(language)
+    try {
+      render({
+        ...MIKAN,
+        'POST /api/rss/subscriptions/mikan': {
+          status: 201,
+          body: { feed: {}, series: boundSeries({ submitted: 12 }), excluded: [] },
+        },
+      })
+      renderApp('/media/tv:120089')
+      const block = await screen.findByRole('region', { name: /RSS/ })
+      await userEvent.click(
+        within(block).getByRole('button', { name: /^(新增訂閱|Add a subscription)$/ }),
+      )
+      await userEvent.click(await within(block).findByRole('button', { name: '间谍过家家' }))
+      await userEvent.click(await within(block).findByRole('button', { name: /LoliHouse/ }))
+      await userEvent.selectOptions(within(block).getByRole('combobox'), '2')
+      await userEvent.click(
+        within(block).getByRole('button', { name: /^(訂閱並送出|Subscribe and send)$/ }),
+      )
+
+      // 整句就是送出幾集，沒有接上排除那一句；表單收起，也就沒有「只下載現有的」。
+      expect(await within(block).findByText(said)).toBeVisible()
+      expect(within(block).queryByRole('button', { name: button })).not.toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('規則擋下的與合集分開說，規則的三層合成一句', async () => {
+    render({
+      ...MIKAN,
+      'POST /api/rss/subscriptions/mikan': {
+        status: 201,
+        body: {
+          feed: {},
+          series: boundSeries({ submitted: 3 }),
+          excluded: [
+            { code: 'not_single', count: 2 },
+            { code: 'global_rule', count: 1 },
+            { code: 'series_rule', count: 1 },
+          ],
+        },
+      },
+    })
+    renderApp('/media/tv:120089')
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await pickLoliHouse(block)
+    await userEvent.click(within(block).getByRole('button', { name: '訂閱並送出' }))
+
+    expect(
+      await within(block).findByText(
+        '已訂閱，送出 3 集。2 筆是合集、區間或季包，2 筆對上排除條件，沒有自動下載。要下載，用「只下載現有的」。',
+      ),
+    ).toBeVisible()
   })
 })
 

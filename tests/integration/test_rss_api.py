@@ -14,16 +14,17 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
-from berth.adapters.rss.mikan import bangumi_url, parse_feed, search_url
+from berth.adapters.rss.mikan import bangumi_feed_url, bangumi_url, parse_feed, search_url
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.domain import CollectionType, FeedKind, JobState, JobTrigger, PlanAction, Tags
 from berth.main import create_app
-from berth.models import Job, LedgerEntry, Media, Route, RssFeed, TmdbSettings
+from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssSeries, TmdbSettings
 from berth.models.types import utcnow
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
@@ -173,6 +174,8 @@ class TestThePageFlow:
         assert pending["search_term"] == "Kimi ga Shinu made Koi wo Shitai"
         # 長出它的 Feed 的兩條 Route：手動綁定的「入庫到」先預選它（M4 票 105）。
         assert pending["feed_routes"] == {"tv": route_id, "movie": None}
+        # 還沒補過（M4 票 108）。
+        assert pending["backfilled_at"] is None
 
         bound = client.put(
             f"/api/rss/series/{pending['id']}/binding",
@@ -387,6 +390,66 @@ class TestChoosingRoutesLater:
         assert missing.json()["detail"]["reason"] == "feed_missing"
 
 
+class TestPollInterval:
+    """M4 票 109：每個 Feed 自己的輪詢間隔，只收固定檔位（照 FreshRSS，單一 Feed 下限 15 分鐘）。"""
+
+    def test_adding_takes_a_choice_and_defaults_to_fifteen_minutes(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        plain = add(client, route_id)
+        hourly = client.post(
+            "/api/rss/feeds",
+            json={"url": ACGRIP_URL, "tv_route": route_id, "interval_sec": 3600},
+            headers=BROWSER,
+        )
+
+        assert plain["interval_sec"] == 900
+        assert hourly.status_code == 201, hourly.text
+        assert hourly.json()["interval_sec"] == 3600
+
+    def test_adding_off_the_choices_is_422_and_adds_nothing(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        refused = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "interval_sec": 60},
+            headers=BROWSER,
+        )
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == {"reason": "interval_unsupported", "detail": "60"}
+        assert client.get("/api/rss/feeds").json() == []
+
+    def test_changing_it_later(self, client: TestClient, roots: dict[str, Path]) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        feed = add(client, route_id)
+
+        changed = client.put(
+            f"/api/rss/feeds/{feed['id']}/interval", json={"interval_sec": 86400}, headers=BROWSER
+        )
+        refused = client.put(
+            f"/api/rss/feeds/{feed['id']}/interval", json={"interval_sec": 1000}, headers=BROWSER
+        )
+        missing = client.put(
+            "/api/rss/feeds/999/interval", json={"interval_sec": 900}, headers=BROWSER
+        )
+
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["interval_sec"] == 86400
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == {"reason": "interval_unsupported", "detail": "1000"}
+        assert missing.status_code == 404
+        assert missing.json()["detail"]["reason"] == "feed_missing"
+        assert client.get("/api/rss/feeds").json()[0]["interval_sec"] == 86400
+
+
 class TestTheFirstRound:
     """新搜尋 feed 的第一輪預覽（票 11）：預覽 → 選「只追之後的」→ 再選一次是 409。"""
 
@@ -468,6 +531,39 @@ class TestExclusions:
             ("global_rule", "Baha")
         }
 
+    def test_a_feed_takes_its_rules_when_it_is_added(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 110：與 Feed 一起存，卡片讀回來的是同一組。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        added = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "exclusions": [" 720p ", "/简体/"]},
+            headers=BROWSER,
+        )
+
+        assert added.status_code == 201, added.text
+        assert added.json()["exclusions"] == ["720p", "/简体/"]
+        assert client.get("/api/rss/feeds").json()[0]["exclusions"] == ["720p", "/简体/"]
+
+    def test_a_broken_rule_on_adding_is_422_and_adds_no_feed(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+
+        refused = client.post(
+            "/api/rss/feeds",
+            json={"url": FEED_URL, "tv_route": route_id, "exclusions": ["/[简繁/"]},
+            headers=BROWSER,
+        )
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"]["reason"] == "rule_invalid"
+        assert client.get("/api/rss/feeds").json() == []
+
     def test_a_broken_regex_is_422_and_says_why(
         self, client: TestClient, roots: dict[str, Path]
     ) -> None:
@@ -483,6 +579,81 @@ class TestExclusions:
         assert body["reason"] == "rule_invalid"
         assert body["detail"].startswith("/[简繁/: unterminated character set")
         assert client.get("/api/rss/exclusions").json()["rules"] == []
+
+    def test_an_excluded_item_is_released_and_sent_on_the_spot(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """M4 票 111：逐筆放行，回這一筆的新狀態；拒絕走 `RssRefusalOut`。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["- 11 "]}, headers=BROWSER
+        )
+        feed = add(client, route_id)
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        held = next(
+            row for row in client.get("/api/rss/items").json() if row["title"] == KIMI[1].title
+        )
+        assert (held["status"], held["release_blocked"]) == ("excluded", "series_unbound")
+
+        early = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+        assert early.status_code == 409
+        assert early.json()["detail"]["reason"] == "series_unbound"
+
+        client.put(
+            f"/api/rss/series/{held['series_id']}/binding",
+            json={"media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+        released = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+
+        assert released.status_code == 200, released.text
+        assert (released.json()["status"], released.json()["job_hash"]) == (
+            "downloaded",
+            KIMI[1].info_hash,
+        )
+        again = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+        assert again.status_code == 409
+        assert again.json()["detail"] == {"reason": "item_not_excluded", "detail": "downloaded"}
+        assert client.post("/api/rss/items/404/release", headers=BROWSER).status_code == 404
+
+    def test_releasing_into_a_series_without_a_route_is_422(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """票 115：Route 在綁定之後被清掉（票 115 之前刪得掉）。拒絕在送單之前，Item 不變。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["- 11 "]}, headers=BROWSER
+        )
+        feed = add(client, route_id)
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        held = next(
+            row for row in client.get("/api/rss/items").json() if row["title"] == KIMI[1].title
+        )
+        client.put(
+            f"/api/rss/series/{held['series_id']}/binding",
+            json={"media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+
+        async def orphan(session: AsyncSession) -> None:
+            await session.execute(
+                update(RssSeries).where(RssSeries.id == held["series_id"]).values(route_id=None)
+            )
+            await session.commit()
+
+        in_session(client, orphan)
+        refused = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+        after = next(row for row in client.get("/api/rss/items").json() if row["id"] == held["id"])
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"]["reason"] == "route_missing"
+        assert (after["status"], after["job_hash"], after["release_blocked"]) == (
+            "excluded",
+            "",
+            "route_missing",
+        )
 
 
 def picked_job(row: dict[str, Any], route_id: int) -> dict[str, Any]:
@@ -702,6 +873,8 @@ class TestSubscribeFromTheDetailPage:
             "2026-09-24",
             None,
         )
+        # 單一 feed 的網址格式只住在後端（M4 票 112）：一次性下載直接讀它。
+        assert loli["feed_url"] == bangumi_feed_url(4009, 370)
 
         done = client.post(
             "/api/rss/subscriptions/mikan",
@@ -719,6 +892,7 @@ class TestSubscribeFromTheDetailPage:
         assert done.status_code == 201, done.text
         assert done.json()["feed"]["url"] == SINGLE_URL
         assert done.json()["series"]["submitted"] == len(parse_feed(SINGLE))
+        assert done.json()["excluded"] == []
         (listed,) = client.get("/api/rss/series", params={"media": KIMI_ID}).json()
         assert (listed["source"], listed["group"], listed["confirmed"]) == (
             "mikan",

@@ -1,7 +1,9 @@
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
+import type { ServiceOrigin } from '../api/schemas'
 import { Checkbox, Field, GhostButton, Notice, PasswordField } from '../components/controls'
+import { CutawayRow } from '../components/Cutaway'
 import {
   LOGIN_PRODUCT,
   type InterfaceLoginForm,
@@ -145,8 +147,8 @@ function usernameError(
 }
 
 /**
- * 泊位上的那一塊：還沒設過就是三格（必填）；設過了說出帳號，按「更換」才打開，不按就是照舊。頁 1 帶過來而
- * 且設好了（`carried`）說沿用了誰的帳密，按「改用另一組」打開的是自設的三格（M4 票 80）。
+ * 泊位上的那一塊：還沒設過就是三格（必填）；設過了說出帳號，按「更換」才打開，不按就是照舊。沿用 Jellyfin
+ * 帳密設的（`carried`）說沿用了誰的帳密，按「改用另一組」打開的是自設的三格（M4 票 80）。
  */
 export function BerthLogin({
   service,
@@ -157,7 +159,9 @@ export function BerthLogin({
   service: LoginService
   /** 那一台的帳號（Berth 設下的，或它自己就設過的），空字串是還沒設過。 */
   current: string
-  /** 那一台的登入就是頁 1 帶過來的那一組。 */
+  /**
+   * 那一台的登入是沿用 Jellyfin 帳密設的（後端的 `web_ui_login_reuses_owner`）：重新整理前後說同一句（M4 票 104）。
+   */
   carried?: boolean
   form: InterfaceLoginForm
 }) {
@@ -204,5 +208,25 @@ export function CarriedApplying({ owner }: { owner: string }) {
         {t('interfaceLogin.carried.applying', { owner })}
       </Notice>
     </div>
+  )
+}
+
+/**
+ * 剖面的「介面登入」那一列：頁 2、頁 4 同一列、同一組值（M4 票 104）。既有的那一台 Berth 不碰（CONTEXT.md
+ * **Interface login**），只說在哪裡管；「不改你原本的設定」由卡片說一次，這裡不再說。
+ */
+export function LoginRow({ origin, username }: { origin: ServiceOrigin; username: string }) {
+  const { t } = useTranslation()
+
+  return (
+    <CutawayRow
+      term={t('interfaceLogin.cutaway.term')}
+      value={
+        origin === 'existing'
+          ? t('interfaceLogin.cutaway.existing')
+          : username || t('interfaceLogin.cutaway.willSet')
+      }
+      muted={origin === 'existing' || !username}
+    />
   )
 }

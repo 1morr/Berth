@@ -11,8 +11,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
-from berth.adapters.budget import BudgetedFetcher, RequestBudget
-
 # `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
 from berth.adapters.dns import HostResolver as HostResolver
 from berth.adapters.dns import SystemHostResolver
@@ -31,14 +29,11 @@ from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.config import Config
-from berth.domain import BudgetUse, ServiceKind
+from berth.domain import ServiceKind
 
 
 class ServiceClientFactory(Protocol):
     """依位址造 client。套件內的那三台也走這裡，位址是 compose 主機名（`bundled_targets`）。"""
-
-    #: 一個站一份請求預算（M3 票 20）。一個程序一份：它造的每一個 client 都打同一批公開站。
-    budget: RequestBudget
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient: ...
 
@@ -59,11 +54,7 @@ class ServiceClientFactory(Protocol):
         ...
 
     def rss(self) -> FeedFetcher:
-        """抓 RSS Feed 與 Mikan 單集頁（M3 票 08）。沒有位址參數：網址是 Feed 與 Item 自己帶的。
-
-        **命令模組不直接呼叫它**，走 `feed_fetcher`：每一個請求要先在那一站的預算裡佔一格
-        （`tests/unit/test_feed_fetcher_gate.py` 守著）。
-        """
+        """抓 RSS Feed 與 Mikan 單集頁（M3 票 08）。沒有位址參數：網址是 Feed 與 Item 自己帶的。"""
         ...
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
@@ -117,16 +108,8 @@ def host_resolver() -> HostResolver:
     return SystemHostResolver()
 
 
-def feed_fetcher(factory: ServiceClientFactory, use: BudgetUse) -> FeedFetcher:
-    """抓 RSS 一律走這一支：每一個請求先在那一站的預算裡佔一格，記下是誰用的（M3 票 20）。"""
-    return BudgetedFetcher(factory.rss(), factory.budget, use)
-
-
 class HttpServiceClientFactory:
     """正式的那一份：位址由呼叫端給，套件內是 compose 主機名、既有是使用者填的。"""
-
-    def __init__(self) -> None:
-        self.budget = RequestBudget()
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         return HttpJellyfinClient(base_url, token=token)

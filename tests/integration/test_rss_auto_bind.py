@@ -26,12 +26,16 @@ from berth.domain import (
     BindReasonCode,
     CollectionType,
     EventType,
+    FeedItemStatus,
     FeedKind,
     JobTrigger,
     MediaKind,
     RssRefusal,
+    SkipCode,
+    SkipReason,
+    skipped,
 )
-from berth.models import Event, Job, LedgerEntry, Route, RssFeed, TmdbSettings
+from berth.models import Event, Job, LedgerEntry, Route, RssFeed, RssItem, TmdbSettings
 from berth.services.rss import (
     RssRejectedError,
     add_feed,
@@ -512,6 +516,45 @@ class TestFeedRouteRefusals:
             await add_feed(session, url=FEED_URL, name="Mikan", tv_route_id=route.id)
 
         assert refused.value.reason is RssRefusal.ROUTE_DISABLED
+
+
+class TestExclusionsOnAdd:
+    """加 Feed 時就帶排除條件（M4 票 110）：Mikan 不預覽，第一輪就自動綁定送單，
+    事後才加的擋不住。"""
+
+    async def test_the_first_round_is_screened_by_them(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route, factory = await moored(session, roots)
+        feed = await add_feed(
+            session, url=FEED_URL, name="Mikan", tv_route_id=route.id, exclusions=[" - 11 "]
+        )
+        assert feed.exclusions == ("- 11",)
+
+        polled = await poll_feed(session, factory, feed.id, now=NOW)
+
+        assert (polled.bound, polled.submitted) == (1, 1)
+        (eleven,) = [item for item in KIMI if " - 11 " in item.title]
+        (twelve,) = [item for item in KIMI if item is not eleven]
+        held = await session.scalar(select(RssItem).where(RssItem.title == eleven.title))
+        assert held is not None
+        assert held.status is FeedItemStatus.EXCLUDED
+        assert SkipReason.model_validate(held.skip_json) == skipped(SkipCode.FEED_RULE, rule="- 11")
+        assert {job.hash for job in await session.scalars(select(Job))} == {twelve.info_hash}
+
+    async def test_a_broken_rule_leaves_no_feed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route, _ = await moored(session, roots)
+
+        with pytest.raises(RssRejectedError) as refused:
+            await add_feed(
+                session, url=FEED_URL, tv_route_id=route.id, exclusions=["720p", "/[简繁/"]
+            )
+
+        assert refused.value.reason is RssRefusal.RULE_INVALID
+        assert refused.value.detail.startswith("/[简繁/: ")
+        assert await count(session, RssFeed) == 0
 
 
 class TestChoosingRoutesLater:

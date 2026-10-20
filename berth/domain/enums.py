@@ -647,9 +647,6 @@ class IndexerProblem(StrEnum):
     CREDENTIAL_REJECTED = "credential_rejected"
     #: 連不上、逾時，或回的東西不像索引站。
     UNREACHABLE = "unreachable"
-    #: 索引站背後某一站這一小時的請求預算放不下這一批（M3 票 20）。一個查詢都沒問；
-    #: 何時放得下在 `retry_at`。
-    BUDGET_EXHAUSTED = "budget_exhausted"
     #: 開了的名字與季組出來的查詢超過 `MAX_QUERIES`（M4 票 84）。一個都沒問：畫面在按下去之前就
     #: 停用了搜尋鍵，這一條守的是直接打 API 的那一條路。
     TOO_MANY_QUERIES = "too_many_queries"
@@ -734,19 +731,6 @@ class SiteStage(StrEnum):
     TEST = "test"
     #: 新增那一支（「加入」）。
     ADD = "add"
-
-
-class BudgetUse(StrEnum):
-    """誰用掉一個站的請求預算（M3 票 20、plan §3.2）。健康頁照它拆「這一小時是誰問的」。"""
-
-    #: `rss_poller` 的一輪：Feed 本身、Mikan 的單集頁與番組頁。
-    POLL = "poll"
-    #: 讀 Mikan 的單一 feed：綁定時補舊集與每日補漏。
-    BACKFILL = "backfill"
-    #: 索引站搜尋（作品名與缺集），一個查詢打到索引站背後的每一個站。
-    SEARCH = "search"
-    #: 人在畫面上按的：一次性 RSS 連結、Mikan 代搜、從 Media 頁訂閱。
-    MANUAL = "manual"
 
 
 class HealthStatus(StrEnum):
@@ -1591,6 +1575,15 @@ class RssRefusal(StrEnum):
     #: 讀得到，但回的不是 RSS（站上的網頁、登入頁、Cloudflare 的錯誤頁）。多半是貼了頁面的網址而
     #: 不是它的 RSS 連結。`detail` 是原文（M3 票 18）。
     FEED_NOT_RSS = "feed_not_rss"
-    #: 那一站這一小時的請求預算用完了，這一次沒有打出去（M3 票 20）。`detail` 是原文，
-    #: 含放得下的時刻。
-    BUDGET_EXHAUSTED = "budget_exhausted"
+    #: 沒有這個 id 的 Feed Item。多半是它的 Feed 被刪了（M4 票 111）。
+    ITEM_MISSING = "item_missing"
+    #: 只放行 `excluded` 的那一筆（M4 票 111）：已送出、重複、等著送的都不必或不能放行。
+    #: `detail` 是它現在的狀態。
+    ITEM_NOT_EXCLUDED = "item_not_excluded"
+    #: 這一筆的 RSS Series 還沒綁定作品，放行了也不知道送到哪裡（M4 票 111）。
+    SERIES_UNBOUND = "series_unbound"
+    #: 這一筆的 Feed 還在第一輪預覽（`primed_at` 是 `NULL`）：先選「全部下載」或「只追之後的」
+    #: （M4 票 111）。
+    FEED_UNPRIMED = "feed_unprimed"
+    #: 輪詢間隔不在固定檔位裡（`models.rss.FEED_INTERVALS`，M4 票 109）。`detail` 是給的秒數。
+    INTERVAL_UNSUPPORTED = "interval_unsupported"

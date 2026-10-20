@@ -177,15 +177,8 @@ _Avoid_: title variant, alias（只指「別名」那一種）, 標題變體
 **Missing Episode Search**（UI 顯示「搜這部作品缺的集」/「搜 S01 缺的集」）:
 從季表上缺的那幾集開始的搜尋：查詢由後端依缺的季集產生（整季缺問季包、缺幾集逐集問、有絕對編號的用絕對編號），
 配上開了的 Search Name，不是作品名本身。範圍是整部作品或一季。季記號放不下一次搜尋的查詢上限時**分批**（batch）：每一批是一組季，
-問完一批由人按「問下一批」，何時問得了由請求預算決定（M3 票 20）。
+問完一批由人按「問下一批」（M3 票 20）。
 _Avoid_: gap search, 補集, 一鍵補齊
-
-**請求預算**（request budget）:
-一個公開站（以主機名認，`mikanani.me`、`nyaa.si`…）在滾動的一小時裡最多收 Berth 幾個請求。RSS 輪詢、補舊集與
-每日補漏、索引站搜尋（一個查詢算索引站背後的每一站一次）、人按的 RSS 讀取共用一份；用完的那一個不送、說得出
-何時放得下，被擋下的工作照它自己的規矩延後（輪詢下一輪；搜尋這次不問放不下的站——UI 顯示「這次沒問」——每一站
-都放不下才把時間給畫面，M4 票 77）。健康頁列出誰用了多少、誰在等。
-_Avoid_: rate limit（那是每秒幾個的節流，Berth 沒做）, quota（Prowlarr 的叫法，畫面不用）
 
 ### 入庫
 
@@ -369,7 +362,7 @@ Feed 中的一筆項目及其結果：unbound（待綁定）/ matched（綁好�
 _Avoid_: dry-run, backfill（backfill 是 Mikan 的補舊集）
 
 **補舊集**（backfill）:
-Mikan 的 RSS Series 綁定時讀它的**單一 feed**（番組 × 字幕組的 `/RSS/Bangumi?bangumiId=&subgroupid=`，整季都在），聚合 feed 沒帶到的舊集寫成 Feed Item 一起送，一律補、沒有開關；之後每天再讀一次，叫**每日補漏**，接住停機期間被聚合 feed 捲掉的集數。補下來的與一般 Feed Item 走同一條路（排除條件、去重、`trigger = rss`）。
+Mikan 的 RSS Series 綁定時讀它的**單一 feed**（番組 × 字幕組的 `/RSS/Bangumi?bangumiId=&subgroupid=`，整季都在），聚合 feed 沒帶到的舊集寫成 Feed Item 一起送，一律補、沒有開關；之後每天再讀一次，叫**每日補漏**，接住停機期間被聚合 feed 捲掉的集數；RSS Series 完結之後再補最後一次就停，新的一筆出現時恢復（M4 票 108、116）。補下來的與一般 Feed Item 走同一條路（排除條件、去重、`trigger = rss`）。
 _Avoid_: catch-up, sync（sync 是 qBittorrent 的 `sync/maindata`）
 
 **一次性 RSS 連結**（one-shot link）:
@@ -377,7 +370,7 @@ _Avoid_: catch-up, sync（sync 是 qBittorrent 的 `sync/maindata`）
 _Avoid_: import feed, quick feed（它不是 Feed）
 
 **排除條件**（exclusion rule）:
-Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式），比對整個標題。分全域、Feed、RSS Series 三層，三層取聯集；全域另有「不自動下載合集」的開關，預設開。Berth 全部接受、只排除（brief §15），沒有白名單。
+Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式），比對整個標題。分全域、Feed、RSS Series 三層，三層取聯集；畫面上叫**標題規則**（title rule）。全域另有「不自動下載合集」的開關，預設開：它看解析器的 `release_kind`、不是規則，畫面上叫**內建判斷**（built-in check），只在全域那一層，Feed 與 RSS Series 那兩層只說出它目前的值。Berth 全部接受、只排除（brief §15），沒有白名單。
 _Avoid_: filter（「篩選」是清單上的顯示操作）, blacklist
 _Avoid_: entry, post
 

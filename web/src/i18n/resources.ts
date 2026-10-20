@@ -64,15 +64,13 @@ const zhHant = {
       can: '這裡能做',
       elsewhere: '不在這裡做',
       jellyfin: {
-        can: '看擁有者是誰。擁有者成立之後來源鎖住；既有的那一台換了位址（例如改了 port）按測試結果上的「改位址」，只收同一台伺服器。',
-        bundledCan:
-          '看擁有者是誰。擁有者成立之後來源鎖住；套件內的那一台位址由 compose 決定，不用改。',
-        elsewhere: '擁有者的密碼在 Jellyfin 裡改。換成另一台 Jellyfin 等於換擁有者，Berth 不支援。',
+        can: '看擁有者是誰。既有的那一台換了位址（例如改了 port）按測試結果上的「改位址」，只收同一台伺服器。',
+        bundledCan: '看擁有者是誰。套件內的那一台位址由 compose 決定，不用改。',
+        elsewhere: '擁有者的密碼在 Jellyfin 裡改。',
       },
       qbittorrent: {
-        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的介面登入。一個全域偏好都不寫。',
-        elsewhere:
-          '全域偏好（預設儲存路徑、自動管理…）都在 qBittorrent 自己的介面上改，Berth 不寫也不看——它的下載只走自己的 berth-* 分類。',
+        can: '改選套件內或既有（這一頁要重做）、改既有那一台的位址或憑證、更換套件內那一台的介面登入。',
+        elsewhere: '全域偏好（預設儲存路徑、自動管理…）在 qBittorrent 自己的介面上改。',
       },
       routes: {
         can: '精靈只新增：套件內可以在清單上加還沒建的媒體庫；補上新勾的媒體庫，並重驗每一條 Route 的每一條纜繩。選錯的那一條在它底下刪掉。',
@@ -85,8 +83,7 @@ const zhHant = {
         },
         existing: {
           can: '改選套件內或既有、重新讀取站的清單、試搜；也可以測試公開站、勾選通過的加進它。加過的站不會被加第二次。',
-          elsewhere:
-            '移除站、加要帳號的站、改介面登入，都在你那一台自己的介面上做；Berth 不移除你的站，也不碰它的登入。',
+          elsewhere: '移除站、加要帳號的站、改介面登入，都在你那一台自己的介面上做。',
         },
       },
       tmdb: {
@@ -110,7 +107,7 @@ const zhHant = {
       signIn:
         'Berth 沒有自己的帳號，登入一律交給 Jellyfin。用這台 Jellyfin 的管理員登入，你就是 Berth 的擁有者；其他人用自己的 Jellyfin 帳號登入，角色由 Jellyfin 決定。',
       owned:
-        '{{name}} 是這台 Jellyfin 的管理員，也是 Berth 的擁有者。之後登入 Berth 就用這個 Jellyfin 帳號；密碼在 Jellyfin 裡改。',
+        '{{name}} 是這台 Jellyfin 的管理員，也是 Berth 的擁有者。之後登入 Berth 就用這個 Jellyfin 帳號。',
     },
     cutaway: {
       title: '將會做什麼',
@@ -126,6 +123,8 @@ const zhHant = {
       apiKey: 'API key「Berth」',
       libraries: '媒體庫：到頁 3 按「建立並檢查」時才動',
       password: '你的密碼（只交給 Jellyfin）',
+      // 擁有者成立之後：頁 1 勾了「也用這組」的話密碼也交給了套件內那兩台，重新整理之後 Berth 已經說不出來（M4 票 104）。
+      passwordOwned: '你的密碼',
       passwordCarried: '你的密碼（交給 Jellyfin；套件內 qBittorrent 與 Prowlarr 的介面也設成它）',
     },
     carry: {
@@ -163,8 +162,7 @@ const zhHant = {
       target_changed:
         'Jellyfin 的位址在你填表時被換過，帳密沒有送出去。重新測試，確認上面的位址是你要的那一台，再送一次。',
     },
-    locked:
-      '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以來源鎖住了。同一台換了位址可以改，另一台伺服器會被擋下。',
+    locked: '擁有者是這一台 Jellyfin 上的帳號，換一台等於換擁有者，所以來源鎖住了。',
     startup: {
       language: '語言與地區',
       languageHint:
@@ -227,8 +225,7 @@ const zhHant = {
       adds: {
         jellyfin:
           '只在頁 1 建一把 API key「Berth」，頁 3 你按下時替媒體庫加一條 Berth 寫入的路徑（原本的路徑不動），勾了才新建媒體庫（所有使用者都看得到）。還沒跑過初始精靈的話，頁 1 替它跑完。入庫之後 Berth 平常只請它刷新那個媒體庫；那條路徑還沒列出過東西時（第一次入庫）是掃描整台，其他媒體庫也會被掃。',
-        qbittorrent:
-          '只在頁 3 你按下時建 berth- 開頭的分類；檢查時暫時加一個停住的探測 torrent、隨即移除。偏好一個鍵都不寫。',
+        qbittorrent: '只在頁 3 你按下時建 berth- 開頭的分類。',
         prowlarr: '只加你在頁 4 要它加的站；原本的站不動。',
       },
       sameHost:
@@ -481,7 +478,10 @@ const zhHant = {
       prowlarr: '在 Prowlarr 的「設定 → 一般 → 安全性」找得到 API key。',
     },
     probe:
-      '測試時 Berth 會在 {{root}} 寫一個探測檔、請 qBittorrent 停住校驗一次，看它看不看得到 {{root}}，隨即移除（校驗不會跑完，不觸發「torrent 完成時執行外部程式」；你的 qBittorrent 設了「torrent 加入時執行外部程式」的話，會觸發一次），檔案也刪掉。',
+      '測試時 Berth 在 {{root}} 寫一個探測檔、加一個停住的探測 torrent 請 qBittorrent 校驗一次，看它看不看得到 {{root}}，隨即移除、檔案也刪掉。校驗不會跑完，「torrent 完成時執行外部程式」不會觸發。',
+    // 唯一要使用者自己留意的副作用，獨立一行、貼在測試鍵旁（M4 票 104）。
+    externalProgram:
+      '你的 qBittorrent 設了「torrent 加入時執行外部程式」的話，每測試一次會觸發它一次。',
     submit: '測試連線',
     submitting: '測試中…',
     signIn: '連線並登入',
@@ -580,6 +580,12 @@ const zhHant = {
     },
   },
   interfaceLogin: {
+    // 頁 2、頁 4 剖面的「介面登入」那一列：兩頁同一套列、同一組值（M4 票 104）。
+    cutaway: {
+      term: '介面登入',
+      willSet: '將設為表單裡填的那一組',
+      existing: '在它自己的介面上管',
+    },
     qbittorrent: {
       legend: 'qBittorrent 介面登入',
       lede: '這是 qBittorrent 自己的登入，給你之後打開它的介面用。Berth 自己用不到它（靠免密白名單進得去）；不設的話，它的介面只剩容器 log 裡每次重啟都換的臨時密碼。',
@@ -649,7 +655,7 @@ const zhHant = {
       bundled:
         '這台 qBittorrent 是套件內的，Berth 只替它設介面登入，全域偏好一個都不寫。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你在它的介面上改預設儲存路徑不影響 Berth。',
       existing:
-        '這台 qBittorrent 是你自己的，Berth 不改它的任何偏好，也不碰你既有的 torrent。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你不經 Berth 加的 torrent 照舊落在你自己的預設路徑。',
+        '這台 qBittorrent 是你自己的。Berth 送出的 torrent 放進自己的 berth-* 分類（分類帶自己的完成與未完成目錄）、逐個開自動管理；你自己加的 torrent 照舊落在你自己的預設路徑。',
     },
     cutaway: {
       server: '這台 qBittorrent',
@@ -657,11 +663,8 @@ const zhHant = {
       bundled: '套件內 qBittorrent',
       existing: '你自己的 qBittorrent',
       webapi: 'Web API',
-      password: '介面登入',
-      willSet: '將設為下面填的那一組',
-      existingLogin: '不改（這台是你自己的）',
       bundledPlan: '設定介面登入 · 只建 Berth 自己的分類',
-      existingPlan: '只建 Berth 自己的分類 · 一個全域偏好都不寫',
+      existingPlan: '只建 Berth 自己的分類',
     },
     step: {
       web_ui_password: '介面登入',
@@ -677,19 +680,20 @@ const zhHant = {
     },
     setLogin: '設定介面登入',
     settingLogin: '設定中…',
-    done: '這個泊位的事做完了。介面登入設好了；Berth 沒有改這台 qBittorrent 的全域偏好，它的下載走自己的分類。',
-    doneExisting:
-      '這個泊位的事做完了。Berth 沒有改這台 qBittorrent 的任何偏好，它的下載走自己的分類。',
+    doneExisting: '這個泊位的事做完了。',
   },
   indexer: {
-    title: 'Prowlarr',
+    title: {
+      choose: '先選 Prowlarr 是哪一台',
+      chosen: 'Prowlarr',
+    },
     lede: {
       choose:
-        '先選 Prowlarr 是哪一台：套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用它已經有的站，也可以加推薦的公開站。',
+        '套件內的那一台 Berth 讀得到它的 API key、替它加站與設介面登入；你自己的那一台貼 API key，用它已經有的站，也可以加推薦的公開站。',
       bundled:
         '索引站決定 Berth 找得到什麼。按一次，Berth 測試推薦的站、把通過的加進去；加入之後試搜，不要的就地移除。要逐站挑選或加其他公開站，展開「進階」。這一步可以之後再說。',
       existing:
-        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；一站都沒有時，按一次就測試推薦的公開站、把通過的加進去，要逐站挑選展開「進階」。Berth 不移除你的站。這一步可以之後再說。',
+        '索引站決定 Berth 找得到什麼。Berth 用你那一台已經有的站，可以試搜；一站都沒有時，按一次就測試推薦的公開站、把通過的加進去，要逐站挑選展開「進階」。這一步可以之後再說。',
     },
     skip: '之後再說',
     deferred: '之後再說',
@@ -723,9 +727,9 @@ const zhHant = {
       lede_other:
         '按一次，Berth 測試推薦的 {{count}} 個公開站，把通過的加進 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態，不影響其他站。',
       ledeExisting_one:
-        '按一次，Berth 測試推薦的公開站（{{names}}），通過就加進你在 {{host}} 的 Prowlarr。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+        '按一次，Berth 測試推薦的公開站（{{names}}），通過就加進你在 {{host}} 的 Prowlarr。',
       ledeExisting_other:
-        '按一次，Berth 測試推薦的 {{count}} 個公開站（{{names}}），把通過的加進你在 {{host}} 的 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+        '按一次，Berth 測試推薦的 {{count}} 個公開站（{{names}}），把通過的加進你在 {{host}} 的 Prowlarr。Prowlarr 要現場連每一站，可能要一分鐘；有幾站連不上是常態。',
       run: '測試推薦站，加入通過的',
       running: '測試並加入中…',
       requestFailed: '測試與加入沒做完。',
@@ -757,7 +761,7 @@ const zhHant = {
       title: '加站',
       lede: '按「測試」時 Prowlarr 會現場連一次那個站，什麼都不建立；通過的才勾得起來。公開站有幾個連不上是常態，不影響其他站。每一站的說明是 Prowlarr 定義自帶的原文。',
       ledeExisting:
-        '這裡加的站會加進你自己的 Prowlarr。按「測試」時它會現場連一次那個站，什麼都不建立；通過的才勾得起來，按「加入」才真的加。Berth 不移除站，要移除請到 Prowlarr 自己的介面。',
+        '這裡加的站會加進你自己的 Prowlarr。按「測試」時它會現場連一次那個站，什麼都不建立；通過的才勾得起來，按「加入」才真的加。',
       intoYours_one: '按下去會把這 {{count}} 站加進你的 Prowlarr（{{host}}）：{{names}}。',
       intoYours_other: '按下去會把這 {{count}} 站加進你的 Prowlarr（{{host}}）：{{names}}。',
       recommended: '推薦的站',
@@ -806,7 +810,7 @@ const zhHant = {
       sites_one: '{{count}} 站',
       sites_other: '{{count}} 站',
       lede: 'Prowlarr 只搜得到已經加入的站。每一列可以單獨搜，也可以一次搜全部；關鍵字留白就是問各站最新的發佈。',
-      existingLede: '你那一台上已經有的站。Berth 用它們搜尋，不移除——要移除請到它自己的介面。',
+      existingLede: '你那一台上已經有的站，Berth 用它們搜尋。',
       none: '這一台上還沒有任何站。',
       field: '關鍵字',
       placeholder: '留白＝各站最新的發佈',
@@ -1615,10 +1619,8 @@ const zhHant = {
     queriesList: '要送出去的查詢',
     // 按下去之前說出代價與要等多久（M4 票 84、84b）：一個查詢就是請索引站背後的每一個站搜一次，
     // 所以格數就是查詢數。
-    costWait_one:
-      '每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
-    costWait_other:
-      '每個索引站各佔 {{count}} 格請求預算（每站每小時 {{budget}} 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+    costWait_one: '會問 {{count}} 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+    costWait_other: '會問 {{count}} 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
     tooMany: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字或季。',
     // 搜缺的集沒有季 chip：缺的形狀決定問哪幾季，能關的只有名字。
     tooManyNames: '開了 {{queries}} 個查詢，一次最多 {{limit}} 個：關掉幾個名字。',
@@ -1734,9 +1736,7 @@ const zhHant = {
       asked: '這一批問了 {{seasons}}。',
       next: '還有 {{later}} 批，下一批問 {{seasons}}。',
       last: '這是最後一批。',
-      pending: '這一批要問 {{seasons}}，一個都還沒問。',
       ask: '問下一批',
-      wait: '請求預算要到這時候才放得下它：',
       join: '、',
     },
     // 五種樣子，五種下一步。索引站是精靈裡唯一可以跳過的一步，所以「沒接」不是失敗。
@@ -1756,31 +1756,16 @@ const zhHant = {
       },
       unreachable: {
         label: '連不上',
-        body: '連不上索引站。可能是那個容器沒起來，或位址填錯了。',
+        body: '連不上索引站：容器可能沒起來、位址填錯了，或這一次答不出來。',
       },
-      // M3 票 20：不是壞了，是 Berth 自己先停手。等得到，所以不塗紅。
       // M4 票 84：畫面在按下去之前就停用了搜尋鍵，這一種只在直接打 API 時出現。
       too_many_queries: {
         label: '查詢太多',
         body: '開了的名字與季組出來的查詢超過一次的上限，一個都沒問。關掉幾個名字或季再搜。',
       },
-      budget_exhausted: {
-        label: '等請求預算',
-        body: '索引站背後的每一個站這一小時的請求預算都放不下這一批，一個關鍵字都沒問。RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。',
-      },
-      retryAt: '最早有一站放得下：',
       askAdmin: '請管理員到設定接上索引站。',
       askAdminUnconnected: '請管理員接上 Prowlarr，或替這部作品加一個 RSS 訂閱。',
       toSubscribe: '到 RSS 訂閱',
-    },
-    // M4 票 77：預算放不下的站跳過，其他站照問。
-    skipped: {
-      label: '這次沒問',
-      // 中文只有 other 一種複數形，兩格同一句、不帶單複數的代名詞（實跑時「這 1 個站……沒問它們」）。
-      body_one: '{{count}} 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
-      body_other: '{{count}} 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
-      fitsAt: '放得下：',
-      never: '這一批比整份預算還大，放不下',
     },
   },
   // 下載列表頁與送單（票 09、`.scratch/m1/jobs-shape.md`）。發佈名、hash、路徑、category
@@ -2807,17 +2792,6 @@ const zhHant = {
       unconfigured: '尚未接上',
       unused: '沒有使用',
     },
-    // M3 票 20：一個站一份，三個使用者共用。延後不是壞了，所以不用「錯誤」的字。
-    budget: {
-      title: '請求預算',
-      help: '每一站每小時最多 {{limit}} 個請求：RSS 輪詢、每日補漏與搜尋共用這一份，為的是不替你把公開站打到封 IP。重啟 Berth 會歸零。',
-      idle: '這一小時還沒有問過任何站。',
-      useCount: '{{use}} {{value}}',
-      use: { poll: 'RSS 輪詢', backfill: '每日補漏', search: '搜尋', manual: '手動讀取' },
-      deferred: '延後：{{use}}（擋下 {{value}} 個請求）',
-      until: '放得下：',
-      never: '一次要的比整份預算還多，放不下。',
-    },
     poller: {
       title: '下載迴圈',
       lastRound: '上次輪詢',
@@ -2977,7 +2951,7 @@ const zhHant = {
   // Route 設定頁（票 14）。「Route」保留原文：它是 CONTEXT.md 的名詞，精靈與健康頁也這樣寫。
   routeSettings: {
     title: '媒體庫路徑',
-    lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載或入庫檔案指著它時，它刪不得。',
+    lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載、入庫檔案或 RSS 綁著它時，它刪不得。',
     empty: '還沒有 Route。用下面的「新增 Route」建一條，Berth 才有地方寫入。',
     disabled: '停用',
     manage: '管理',
@@ -2988,6 +2962,11 @@ const zhHant = {
       jobs_other: '{{count}} 筆下載',
       files_one: '{{count}} 個入庫檔案',
       files_other: '{{count}} 個入庫檔案',
+      // 綁著它的 RSS（M4 票 115）。是 0 就不說，清單那一列與刪不得的說明都是。
+      rssFeeds_one: '{{count}} 個 RSS Feed',
+      rssFeeds_other: '{{count}} 個 RSS Feed',
+      rssSeries_one: '{{count}} 個 RSS Series',
+      rssSeries_other: '{{count}} 個 RSS Series',
     },
     edit: {
       name: '名稱',
@@ -3023,13 +3002,12 @@ const zhHant = {
       warning:
         '刪除之後這條 Route 的設定就不在了。qBittorrent 的分類與 complete 子目錄留著不動；之後用同一個名字重建時，分類檢查認得它們。',
       inUse:
-        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
-      inUseDisabled:
-        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。它已經停用，新的送單不會選到它。',
+        '這條 Route 還有 {{usage}}，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
+      inUseDisabled: '這條 Route 還有 {{usage}}，所以它刪不得。它已經停用，新的送單不會選到它。',
       refused:
-        '刪的那一刻發現還有 {{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+        '刪的那一刻發現這條 Route 還有 {{usage}}，所以它刪不得。停用它，新的送單就不會再選到它。',
       refusedUncounted:
-        '刪的那一刻發現還有下載或入庫檔案指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+        '刪的那一刻發現還有下載、入庫檔案或 RSS 綁著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
       failed: '沒有刪掉。',
       done: '已刪除「{{name}}」。',
     },
@@ -3124,11 +3102,26 @@ const zhHant = {
       boundElsewhere: '已經綁在另一部作品上（{{id}}）',
       // 整季一律補（M4 票 78）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
       season:
-        '訂閱之後讀這個字幕組在 Mikan 上的整季，一起送到 qBittorrent；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+        '訂閱之後讀這個字幕組在 Mikan 上的整季，一起送到 qBittorrent；媒體庫已經有、或已經下載過的跳過。$t(rss.bound.backfillLede)',
       confirm: '訂閱並送出',
       subscribing: '訂閱中…',
       subscribed_one: '已訂閱，送出 {{count}} 集。',
       subscribed_other: '已訂閱，送出 {{count}} 集。',
+      // 訂閱之後被排除條件擋下的（M4 票 112）：`what` 是下面兩段接起來的。
+      excluded_one: '{{what}}，沒有自動下載。要下載，用「只下載現有的」。',
+      excluded_other: '{{what}}，沒有自動下載。要下載，用「只下載現有的」。',
+      excludedNotSingle_one: '{{count}} 筆是合集、區間或季包',
+      excludedNotSingle_other: '{{count}} 筆是合集、區間或季包',
+      excludedRule_one: '{{count}} 筆對上排除條件',
+      excludedRule_other: '{{count}} 筆對上排除條件',
+      // 不訂閱，讀一次這一組現有的、勾幾筆送出（M4 票 112，`media/ExistingDownload.tsx`）。
+      existing: {
+        open: '只下載現有的',
+        hint: '讀一次這個字幕組在 Mikan 上現有的，勾幾筆送出，不建 Feed。合集也勾得了。',
+        reading: '讀這個字幕組現有的…',
+        unreachable: '現在讀不到 Mikan，什麼都沒送。等一下再讀一次。原文：',
+        retry: '再讀一次',
+      },
       titles: '這部作品的名字',
       term: '搜尋詞',
       termHint: {
@@ -3163,8 +3156,12 @@ const zhHant = {
       feed_unread: '這個 Feed 還沒讀過。先按「立即輪詢」看過第一輪再選。',
       feed_not_rss:
         '讀到了，但那不是 RSS。多半是貼了網頁的網址：到站上找它的 RSS 連結（Mikan 番組頁字幕組旁的 RSS 圖示、Nyaa 搜尋結果頁的 RSS 鍵）。',
-      budget_exhausted:
-        '那一站這一小時的請求預算用完了，這一次沒有送出去。等預算放得下再試（健康頁看得到何時）。原文：',
+      // 「仍然下載」（M4 票 111）：後兩句也是按鈕停用時說的原因。
+      item_missing: '這一筆已經不在了，多半是它的 Feed 剛被刪掉。',
+      item_not_excluded: '這一筆已經不是被排除的了，多半是另一個分頁剛放行。',
+      series_unbound: '它的 RSS Series 還沒綁定作品：先綁定，才知道要送進哪裡。',
+      feed_unprimed: '它的 Feed 還在等第一輪的決定：先選「全部下載」或「只追之後的」。',
+      interval_unsupported: '只能選清單上的間隔，什麼都沒存。',
     },
     feeds: {
       title: 'Feed',
@@ -3207,7 +3204,21 @@ const zhHant = {
       count_other: '{{count}} 個 Feed',
       toMikan: '打開 Mikan',
       adding: '加入中…',
-      every: '每 {{minutes}} 分鐘',
+      every: '每 {{interval}}',
+      // 輪詢間隔（M4 票 109）：固定檔位，照 FreshRSS 單一 Feed 最短 15 分鐘。
+      interval: {
+        label: '輪詢間隔',
+        hint: '多久讀一次這個 Feed。最短 15 分鐘，讀得太勤來源站會封鎖 Berth 的 IP。',
+        minutes_one: '{{count}} 分鐘',
+        minutes_other: '{{count}} 分鐘',
+        hours_one: '{{count}} 小時',
+        hours_other: '{{count}} 小時',
+        change: '改輪詢間隔',
+        lede: '存下之後不會馬上輪詢：下一輪是上次輪詢再過新的間隔。',
+        save: '存下間隔',
+        saving: '存下中…',
+        saved: '存下了：之後每 {{interval}}輪詢一次。',
+      },
       polled: '上次輪詢',
       items_one: '{{count}} 筆',
       items_other: '{{count}} 筆',
@@ -3257,7 +3268,7 @@ const zhHant = {
       confirm_other: '綁定並送出 {{count}} 集',
       // Mikan 的 RSS Series 一律補舊集（票 12、M4 票 78）：補幾集要讀了單一 feed 才知道，鍵上不說總數。
       willSendSeason:
-        '綁定之後讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。之後每天再補一次漏掉的。',
+        '綁定之後讀這個字幕組在 Mikan 上的整季，Feed 沒帶到的集數一起送出；媒體庫已經有、或已經下載過的跳過。$t(rss.bound.backfillLede)',
       confirmSeason: '綁定並送出',
       binding: '綁定中…',
       kind: { tv: '劇集', movie: '電影' },
@@ -3293,6 +3304,12 @@ const zhHant = {
       finished_other: '已完結 {{count}} 個',
       finishedLede: '播完而且都入庫了，或 30 天沒有新的一筆。紀錄留著，新的一筆出現時回到上面。',
       allFinished: '沒有還在追的 RSS Series。',
+      // 每日補漏（plan §3.2、M4 票 108）：段落說明與訂閱 / 綁定確認（`$t()` 巢狀）共用這一句，說法不會分岔。
+      backfillLede:
+        '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。',
+      backfilled: '上次補漏：{{when}}',
+      backfillNever: '尚未補漏',
+      backfillStopped: '已完結，不再補漏',
       items: '它的 Feed Item',
       itemsLoading: '正在讀它的 Feed Item…',
       itemsReadFailed: '讀不到它的 Feed Item。',
@@ -3322,7 +3339,6 @@ const zhHant = {
       no_premiere: 'Mikan 的番組頁沒寫開播日期，年份無從確認',
       no_show_page: '這個來源沒有番組頁，年份無從確認：候選只從標題來，要你確認',
       lookup_failed: 'Mikan 番組頁或 TMDB 查不到（{{detail}}），留給你綁定',
-      lookup_deferred: '{{site}} 這一小時的請求預算用完了，番組頁下一輪再讀',
       lookup_retry: '{{site}} 這一次讀不到（{{detail}}），{{at}} 再認一次（第 {{attempt}} 次重試）',
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
@@ -3330,23 +3346,34 @@ const zhHant = {
     // 排除條件（票 10）：三層共用一組字。
     rules: {
       title: '排除條件',
+      globalTitle: '全域排除條件',
       lede: 'Feed 裡的項目預設全部下載，只擋這裡寫的。全域、Feed、RSS Series 三層取聯集，放在哪一層都擋。改了之後只影響還沒送出去的；拿掉一條不會把之前被它擋下的放回來。',
       notSingle: '不自動下載合集（不是單集的：合集、區間、季包）',
       notSingleHint: '合集照樣可以從搜尋或一次性 RSS 連結手動送單。',
-      none: '沒有排除條件。',
-      list: '排除條件',
-      add: '加一條排除條件',
+      // 合集那一項看解析結果，不是一條規則（brief §15，M4 票 113）。
+      builtin: '內建判斷',
+      builtinHint: '看解析結果，不是關鍵字',
+      titleRules: '標題規則',
+      notSingleOn: '合集由全域設定：目前不自動下載。',
+      notSingleOff: '合集由全域設定：目前會自動下載。',
+      toGlobal: '改全域設定',
+      none: '沒有標題規則。',
+      list: '標題規則',
+      add: '加一條標題規則',
       hint: '一般字詞不分大小寫、比對整個標題；用 /…/ 包起來是正則（/…/i 不分大小寫）。',
       addAction: '加入規則',
       saving: '儲存中…',
       remove: '拿掉「{{rule}}」',
-      suggestions: '建議',
+      suggestions: '建議關鍵字',
       suggest: '加入「{{rule}}」',
       invalid: '存不進去：{{detail}}',
-      toggle_one: '排除條件（{{count}} 條）',
-      toggle_other: '排除條件（{{count}} 條）',
-      feedLede: '只對這個 Feed，與全域的規則一起算。',
-      seriesLede: '只對這個 RSS Series，與全域、Feed 的規則一起算。',
+      toggle_one: '標題規則（{{count}} 條）',
+      toggle_other: '標題規則（{{count}} 條）',
+      feedLede: '只對這個 Feed，與全域的規則取聯集。',
+      // 新增 Feed 表單上那一格（M4 票 110）：前半句與 `feedLede` 同一句。
+      addLede:
+        '只對這個 Feed，與全域的規則取聯集。Mikan 加入之後很快就會開始下載，要排除的現在就加；加入後再改只擋還沒送出的。',
+      seriesLede: '只對這個 RSS Series，與全域、Feed 的規則取聯集。',
     },
     // 一筆 Item 為什麼沒下載（`domain.SkipCode`，票 10）。參數是原文，不翻譯；
     // 佔位符由 `tests/unit/test_skip_reasons.py` 對後端的參數表逐句比對。
@@ -3448,6 +3475,10 @@ const zhHant = {
       from: '來自',
       work: '{{work}} × {{group}}',
       unbound: '待綁定',
+      // 被排除的那一筆逐筆放行，當場送出（M4 票 111）。
+      release: '仍然下載',
+      releasing: '送出中…',
+      releaseFailed: '仍然下載沒送出，這一筆還是排除：',
       status: {
         unbound: '待綁定',
         matched: '待送出',
@@ -3540,16 +3571,15 @@ const en: Translations<typeof zhHant> = {
       can: 'You can do here',
       elsewhere: 'Not here',
       jellyfin: {
-        can: 'See who the owner is. Once there is an owner the source is locked; if your existing Jellyfin moved (a new port, say), use “Change address” on the test result — only the same server is accepted.',
-        elsewhere:
-          'The owner’s password is changed in Jellyfin. Moving to another Jellyfin would mean another owner, which Berth does not support.',
+        can: 'See who the owner is. If your existing Jellyfin moved (a new port, say), use “Change address” on the test result — only the same server is accepted.',
+        elsewhere: 'The owner’s password is changed in Jellyfin.',
         bundledCan:
-          'See who the owner is. Once there is an owner the source is locked; the bundled one’s address comes from compose, so there is nothing to change.',
+          'See who the owner is. The bundled one’s address comes from compose, so there is nothing to change.',
       },
       qbittorrent: {
-        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s interface login. No global preference is written.',
+        can: 'Switch between bundled and existing (this page starts over), change the existing one’s address or credentials, or change the bundled one’s interface login.',
         elsewhere:
-          'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself; Berth neither writes nor reads them — its downloads only go through its own berth-* categories.',
+          'qBittorrent’s global preferences (default save path, automatic management…) are changed in qBittorrent itself.',
       },
       routes: {
         can: 'The wizard only adds: a bundled Jellyfin can take more libraries on the list; newly ticked libraries get a route, and every check on every route runs again. Delete a wrong one underneath it.',
@@ -3565,7 +3595,7 @@ const en: Translations<typeof zhHant> = {
         existing: {
           can: 'Switch between bundled and existing, re-read the site list, run a trial search; you can also test public sites and add the ones you tick. Indexers already added are not added twice.',
           elsewhere:
-            'Removing sites, adding ones that need an account and changing the interface login all happen in your instance’s own interface; Berth does not remove your sites or touch its login.',
+            'Removing sites, adding ones that need an account and changing the interface login all happen in your instance’s own interface.',
         },
       },
       tmdb: {
@@ -3590,7 +3620,7 @@ const en: Translations<typeof zhHant> = {
       signIn:
         'Berth has no accounts of its own; every sign-in goes through Jellyfin. Sign in with an administrator of this Jellyfin and you become the owner of Berth. Everyone else signs in with their own Jellyfin account, and Jellyfin decides their role.',
       owned:
-        '{{name}} administers this Jellyfin and owns Berth. Sign in to Berth with this Jellyfin account from now on; its password is changed in Jellyfin.',
+        '{{name}} administers this Jellyfin and owns Berth. Sign in to Berth with this Jellyfin account from now on.',
     },
     cutaway: {
       title: 'What happens',
@@ -3607,6 +3637,7 @@ const en: Translations<typeof zhHant> = {
       apiKey: 'API key “Berth”',
       libraries: 'Libraries: only when you press Build and check on page 3',
       password: 'Your password (it only goes to Jellyfin)',
+      passwordOwned: 'Your password',
       passwordCarried:
         'Your password (it goes to Jellyfin, and becomes the bundled qBittorrent and Prowlarr interface password too)',
     },
@@ -3649,7 +3680,7 @@ const en: Translations<typeof zhHant> = {
         'The Jellyfin address was changed while you were filling in the form, so your password was not sent. Test again, check that the address above is the one you mean, then send it again.',
     },
     locked:
-      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the source is locked. A new address for the same server is fine; another server is refused.',
+      'The owner is an account on this Jellyfin, so another Jellyfin would mean another owner — the source is locked.',
     startup: {
       language: 'Language and region',
       languageHint:
@@ -3707,8 +3738,7 @@ const en: Translations<typeof zhHant> = {
       adds: {
         jellyfin:
           'only creates an API key named Berth on page 1, adds one path for Berth to write to on a library when you press the button on page 3 (the existing paths stay) and creates a library only if you tick it there (every user sees it). If it has not run its own startup wizard yet, page 1 runs it with the account you enter. After an import Berth normally asks it to refresh just that library; while it has never listed anything under the path (the first import), it scans the whole server, so your other libraries get scanned too.',
-        qbittorrent:
-          'only creates berth- categories when you press the button on page 3; the checks add one paused probe torrent and remove it right away. No preference is written.',
+        qbittorrent: 'only creates berth- categories when you press the button on page 3.',
         prowlarr: 'only adds the sites you ask for on page 4; the sites already there stay.',
       },
       sameHost:
@@ -3971,7 +4001,9 @@ const en: Translations<typeof zhHant> = {
       prowlarr: 'The API key is under Settings → General → Security in Prowlarr.',
     },
     probe:
-      'The test writes a probe file in {{root}} and asks qBittorrent to check it once, stopped, to see whether it can see {{root}}, then removes it (the check never finishes, so “Run external program on torrent finished” does not fire; if your qBittorrent has “Run external program on torrent added” set, that fires once) and deletes the file.',
+      'The test writes a probe file in {{root}} and adds one paused probe torrent for qBittorrent to check, to see whether it can see {{root}}, then removes both. The check never finishes, so “Run external program on torrent finished” does not fire.',
+    externalProgram:
+      'If your qBittorrent has “Run external program on torrent added” set, it fires once per test.',
     submit: 'Test connection',
     submitting: 'Testing…',
     signIn: 'Connect and sign in',
@@ -4076,6 +4108,11 @@ const en: Translations<typeof zhHant> = {
     },
   },
   interfaceLogin: {
+    cutaway: {
+      term: 'Interface login',
+      willSet: 'Will be set to the one entered in the form',
+      existing: 'Managed in its own interface',
+    },
     qbittorrent: {
       legend: 'qBittorrent interface login',
       lede: "This is qBittorrent's own login, for when you open its interface yourself. Berth does not need it (it gets in through the no-password allowlist); without it, its interface only has the temporary password in the container log, which changes on every restart.",
@@ -4102,7 +4139,7 @@ const en: Translations<typeof zhHant> = {
     },
     carried: {
       applying: 'Reusing the Jellyfin login from page 1 ({{owner}})…',
-      set: 'Reusing the Jellyfin login ({{owner}})',
+      set: 'Set to your Jellyfin login ({{owner}})',
       another: 'Use a different login',
     },
     error: {
@@ -4147,7 +4184,7 @@ const en: Translations<typeof zhHant> = {
       bundled:
         'This qBittorrent came with the bundle. Berth only sets its interface login and writes no global preference. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; changing the default save path in its own UI does not affect Berth.',
       existing:
-        'This qBittorrent is yours. Berth changes none of its preferences and none of your existing torrents. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
+        'This qBittorrent is yours. Torrents Berth sends go into its own berth-* categories (each with its own completed and incomplete folders) with automatic management switched on per torrent; anything you add yourself still lands in your own default folder.',
     },
     cutaway: {
       server: 'This qBittorrent',
@@ -4155,11 +4192,8 @@ const en: Translations<typeof zhHant> = {
       bundled: 'Bundled qBittorrent',
       existing: 'Your own qBittorrent',
       webapi: 'Web API',
-      password: 'Interface login',
-      willSet: 'Will be set to the one entered below',
-      existingLogin: 'Left alone (this one is yours)',
       bundledPlan: 'Sets the interface login · only creates Berth’s own categories',
-      existingPlan: 'Only creates Berth’s own categories · writes no global preference',
+      existingPlan: 'Only creates Berth’s own categories',
     },
     step: {
       web_ui_password: 'Interface login',
@@ -4175,19 +4209,20 @@ const en: Translations<typeof zhHant> = {
     },
     setLogin: 'Set interface login',
     settingLogin: 'Setting…',
-    done: 'This berth is done. The interface login is set; Berth changed none of this qBittorrent’s global preferences, and its downloads go through its own categories.',
-    doneExisting:
-      'This berth is done. Berth changed none of this qBittorrent’s preferences; its downloads go through its own categories.',
+    doneExisting: 'This berth is done.',
   },
   indexer: {
-    title: 'Prowlarr',
+    title: {
+      choose: 'First, which Prowlarr?',
+      chosen: 'Prowlarr',
+    },
     lede: {
       choose:
-        'First, which Prowlarr: on the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one, paste its API key; Berth uses the indexers it already has, and you can also add recommended public sites.',
+        'On the bundled one Berth reads its API key, adds indexers and sets its interface login; for your own one, paste its API key; Berth uses the indexers it already has, and you can also add recommended public sites.',
       bundled:
         'Indexers decide what Berth can find. One press tests the recommended sites and adds the ones that pass; then run a trial search and remove the ones you do not want. To pick sites one by one or add other public sites, open Advanced. This step can wait.',
       existing:
-        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; if it has none, one press tests the recommended public sites and adds the ones that pass, and Advanced lets you pick them one by one. Berth never removes your sites. This step can wait.',
+        'Indexers decide what Berth can find. Berth uses the indexers your instance already has and you can search them; if it has none, one press tests the recommended public sites and adds the ones that pass, and Advanced lets you pick them one by one. This step can wait.',
     },
     skip: 'Do this later',
     deferred: 'Deferred',
@@ -4222,9 +4257,9 @@ const en: Translations<typeof zhHant> = {
       lede_other:
         'One press: Berth tests the {{count}} recommended public sites and adds the ones that pass to Prowlarr. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal and does not affect the rest.',
       ledeExisting_one:
-        'One press: Berth tests the recommended public site ({{names}}) and adds it to your Prowlarr at {{host}} if it passes. Berth does not remove sites — do that in Prowlarr itself.',
+        'One press: Berth tests the recommended public site ({{names}}) and adds it to your Prowlarr at {{host}} if it passes.',
       ledeExisting_other:
-        'One press: Berth tests the {{count}} recommended public sites ({{names}}) and adds the ones that pass to your Prowlarr at {{host}}. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal. Berth does not remove sites — do that in Prowlarr itself.',
+        'One press: Berth tests the {{count}} recommended public sites ({{names}}) and adds the ones that pass to your Prowlarr at {{host}}. Prowlarr reaches each site live, which can take a minute; a few being unreachable is normal.',
       run: 'Test recommended sites and add the ones that pass',
       running: 'Testing and adding…',
       requestFailed: 'Testing and adding did not finish.',
@@ -4257,7 +4292,7 @@ const en: Translations<typeof zhHant> = {
       title: 'Add indexers',
       lede: "Test asks Prowlarr to reach the site right now and creates nothing; only sites that pass can be ticked. A few public sites being unreachable is normal and does not affect the rest. Each site's description is the text from its Prowlarr definition.",
       ledeExisting:
-        'Sites added here go into your own Prowlarr. Test asks it to reach the site right now and creates nothing; only sites that pass can be ticked, and nothing is added until you press Add. Berth does not remove sites — do that in Prowlarr itself.',
+        'Sites added here go into your own Prowlarr. Test asks it to reach the site right now and creates nothing; only sites that pass can be ticked, and nothing is added until you press Add.',
       intoYours_one: 'Pressing Add puts this site into your Prowlarr ({{host}}): {{names}}.',
       intoYours_other:
         'Pressing Add puts these {{count}} sites into your Prowlarr ({{host}}): {{names}}.',
@@ -4308,8 +4343,7 @@ const en: Translations<typeof zhHant> = {
       sites_one: '{{count}} site',
       sites_other: '{{count}} sites',
       lede: 'Prowlarr only searches sites that have been added. Search one row at a time or all of them at once; leave the keywords blank to ask each site for its latest releases.',
-      existingLede:
-        'The sites your instance already has. Berth searches with them and never removes any — remove them in its own interface.',
+      existingLede: 'The sites your instance already has; Berth searches with them.',
       none: 'This instance has no sites yet.',
       field: 'Keywords',
       placeholder: 'Blank = latest releases on each site',
@@ -5072,9 +5106,9 @@ const en: Translations<typeof zhHant> = {
     willAskCount_other: 'Will ask · {{count}} queries',
     queriesList: 'Queries to send',
     costWait_one:
-      "Uses {{count}} slot of each indexer's request budget ({{budget}} per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+      'Sends {{count}} query; the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
     costWait_other:
-      "Uses {{count}} slots of each indexer's request budget ({{budget}} per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+      'Sends {{count}} queries; the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
     tooManyNames:
       'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names.',
     tooMany:
@@ -5176,9 +5210,7 @@ const en: Translations<typeof zhHant> = {
       asked: 'This batch asked for {{seasons}}.',
       next: ' {{later}} more to go; the next asks for {{seasons}}.',
       last: ' This was the last batch.',
-      pending: 'This batch asks for {{seasons}}; nothing has been asked yet.',
       ask: 'Ask the next batch',
-      wait: 'The request budget has room for it again:',
       join: ', ',
     },
     problem: {
@@ -5196,30 +5228,16 @@ const en: Translations<typeof zhHant> = {
       },
       unreachable: {
         label: 'Unreachable',
-        body: 'Cannot reach the indexer. Either its container is not running, or the address is wrong.',
+        body: 'Cannot reach the indexer: its container may not be running, the address may be wrong, or it could not answer this time.',
       },
       too_many_queries: {
         label: 'Too many queries',
         body: 'The names and seasons turned on add up to more queries than one search sends, so none were asked. Turn some off and search again.',
       },
-      budget_exhausted: {
-        label: 'Waiting for the budget',
-        body: "This hour's request budget for every site behind the indexer can't fit this batch, so not a single keyword was asked. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites.",
-      },
-      retryAt: 'The first site fits again:',
       askAdmin: 'Ask an administrator to connect an indexer in Settings.',
       askAdminUnconnected:
         'Ask an administrator to connect Prowlarr, or to add an RSS subscription for this title.',
       toSubscribe: 'Go to RSS subscriptions',
-    },
-    skipped: {
-      label: 'Not asked this time',
-      body_one:
-        "This hour's request budget for this site can't fit this batch, so it wasn't asked this time. The other sites were.",
-      body_other:
-        "This hour's request budget for these {{count}} sites can't fit this batch, so they weren't asked this time. The other sites were.",
-      fitsAt: 'Fits again:',
-      never: 'This batch is larger than the whole budget, so it never fits',
     },
   },
   issues: {
@@ -6183,21 +6201,6 @@ const en: Translations<typeof zhHant> = {
       unconfigured: 'Not connected',
       unused: 'Not used',
     },
-    budget: {
-      title: 'Request budget',
-      help: "At most {{limit}} requests per site per hour. RSS polling, the daily backfill and search share it, so Berth doesn't get your IP banned from public sites. Restarting Berth resets it.",
-      idle: 'No site has been asked this hour.',
-      useCount: '{{use}} {{value}}',
-      use: {
-        poll: 'RSS polling',
-        backfill: 'Daily backfill',
-        search: 'Search',
-        manual: 'Manual reads',
-      },
-      deferred: 'Deferred: {{use}} ({{value}} requests held back)',
-      until: 'Fits again:',
-      never: 'It asks for more than the whole budget, so it never fits.',
-    },
     poller: {
       title: 'Download loop',
       lastRound: 'Last poll',
@@ -6347,7 +6350,7 @@ const en: Translations<typeof zhHant> = {
   },
   routeSettings: {
     title: 'Routes',
-    lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads or imported files still point at cannot be deleted.',
+    lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads, imported files or RSS still point at cannot be deleted.',
     empty: 'No routes yet. Create one with “Add route” below, so Berth has somewhere to write.',
     disabled: 'Disabled',
     manage: 'Manage',
@@ -6358,6 +6361,10 @@ const en: Translations<typeof zhHant> = {
       jobs_other: '{{count}} downloads',
       files_one: '{{count}} imported file',
       files_other: '{{count}} imported files',
+      rssFeeds_one: '{{count}} RSS feed',
+      rssFeeds_other: '{{count}} RSS feeds',
+      rssSeries_one: '{{count}} RSS Series',
+      rssSeries_other: '{{count}} RSS Series',
     },
     edit: {
       name: 'Name',
@@ -6394,13 +6401,13 @@ const en: Translations<typeof zhHant> = {
       warning:
         'Deleting removes this route from Berth. The qBittorrent category and the complete subdirectory stay where they are; rebuilding a route with the same name picks them up again.',
       inUse:
-        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it; the ones already on their way still import.',
+        '{{usage}} point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it; the ones already on their way still import.',
       inUseDisabled:
-        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. It is disabled, so new downloads will not pick it.',
+        '{{usage}} point at this route, so it cannot be deleted. It is disabled, so new downloads will not pick it.',
       refused:
-        'When it came to deleting, {{jobs}} and {{files}} turned out to point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
+        'When it came to deleting, {{usage}} turned out to point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
       refusedUncounted:
-        'Downloads or imported files turned out to point at this route when it was deleted, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
+        'Downloads, imported files or RSS turned out to point at this route when it was deleted, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
       failed: 'It was not deleted.',
       done: 'Deleted “{{name}}”.',
     },
@@ -6499,11 +6506,27 @@ const en: Translations<typeof zhHant> = {
       boundHere: 'Already subscribed for this title',
       boundElsewhere: 'Already bound to another title ({{id}})',
       season:
-        "Subscribing reads this group's whole season on Mikan and sends it to qBittorrent; episodes already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+        "Subscribing reads this group's whole season on Mikan and sends it to qBittorrent; episodes already in the library or already downloaded are skipped. $t(rss.bound.backfillLede)",
       confirm: 'Subscribe and send',
       subscribing: 'Subscribing…',
       subscribed_one: 'Subscribed; sent {{count}} episode.',
       subscribed_other: 'Subscribed; sent {{count}} episodes.',
+      excluded_one:
+        'Of this group’s releases, {{what}}; it was not downloaded automatically. To download it, use “Download existing only”.',
+      excluded_other:
+        'Of this group’s releases, {{what}}; they were not downloaded automatically. To download them, use “Download existing only”.',
+      excludedNotSingle_one: '{{count}} is a collection, range or season pack',
+      excludedNotSingle_other: '{{count}} are collections, ranges or season packs',
+      excludedRule_one: '{{count}} matched an exclusion',
+      excludedRule_other: '{{count}} matched exclusions',
+      existing: {
+        open: 'Download existing only',
+        hint: 'Read what this group has on Mikan once and send the items you tick, without creating a feed. Collections can be ticked too.',
+        reading: 'Reading what this group has…',
+        unreachable:
+          "Mikan can't be reached right now, so nothing was sent. Read again shortly. Original message:",
+        retry: 'Read again',
+      },
       titles: 'Names of this title',
       term: 'Search term',
       termHint: {
@@ -6543,8 +6566,13 @@ const en: Translations<typeof zhHant> = {
         "This feed hasn't been read yet. Press Poll now to see its first round before choosing.",
       feed_not_rss:
         "Got an answer, but it isn't RSS. This is usually a web page address: find the site's RSS link instead (the RSS icon next to a fansub on a Mikan show page, the RSS button on a Nyaa search).",
-      budget_exhausted:
-        "This hour's request budget for that site is used up, so nothing was sent. Try again once it has room (the health page says when). Original error:",
+      item_missing: 'This item is gone — its feed was probably just deleted.',
+      item_not_excluded: 'This item is no longer excluded — probably released from another tab.',
+      series_unbound:
+        "Its RSS Series isn't bound to a title yet: bind it first so Berth knows where it goes.",
+      feed_unprimed:
+        'Its feed is still waiting on the first-round choice: pick Download everything or Only what comes next first.',
+      interval_unsupported: 'Only the intervals on the list are allowed; nothing was saved.',
     },
     feeds: {
       title: 'Feeds',
@@ -6588,7 +6616,20 @@ const en: Translations<typeof zhHant> = {
       count_other: '{{count}} feeds',
       toMikan: 'Open Mikan',
       adding: 'Adding…',
-      every: 'Every {{minutes}} min',
+      every: 'Every {{interval}}',
+      interval: {
+        label: 'Poll interval',
+        hint: 'How often Berth reads this feed. 15 minutes at the shortest: poll a site too often and it bans Berth’s IP.',
+        minutes_one: '{{count}} minute',
+        minutes_other: '{{count}} minutes',
+        hours_one: '{{count}} hour',
+        hours_other: '{{count}} hours',
+        change: 'Change poll interval',
+        lede: 'Saving does not poll right away: the next round comes the new interval after the last one.',
+        save: 'Save interval',
+        saving: 'Saving…',
+        saved: 'Saved: polled every {{interval}} from now on.',
+      },
       polled: 'Last polled',
       items_one: '{{count}} item',
       items_other: '{{count}} items',
@@ -6637,7 +6678,7 @@ const en: Translations<typeof zhHant> = {
       confirm_one: 'Bind and send {{count}} episode',
       confirm_other: 'Bind and send {{count}} episodes',
       willSendSeason:
-        "Binding reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. Missed episodes are picked up once a day after that.",
+        "Binding reads this group's whole season on Mikan and sends the episodes the feed didn't carry; ones already in the library or already downloaded are skipped. $t(rss.bound.backfillLede)",
       confirmSeason: 'Bind and send',
       binding: 'Binding…',
       kind: { tv: 'Series', movie: 'Film' },
@@ -6671,6 +6712,11 @@ const en: Translations<typeof zhHant> = {
       finishedLede:
         'Aired out and all in the library, or nothing new for 30 days. The record stays; a new item brings it back up.',
       allFinished: 'No RSS Series is still being followed.',
+      backfillLede:
+        "Each bound Mikan group has its whole season list read again once a day, to catch episodes the feed polling missed (while Berth was down, for example); this stops once it's finished.",
+      backfilled: 'Last daily backfill: {{when}}',
+      backfillNever: 'No daily backfill yet',
+      backfillStopped: 'Finished, no more daily backfills',
       items: 'Its feed items',
       itemsLoading: 'Reading its feed items…',
       itemsReadFailed: "Can't read its feed items.",
@@ -6700,8 +6746,6 @@ const en: Translations<typeof zhHant> = {
       no_show_page:
         'this source has no show page, so the year cannot be checked: the candidates come from the title alone and need you to confirm',
       lookup_failed: 'the Mikan show page or TMDB could not be read ({{detail}}); bind it yourself',
-      lookup_deferred:
-        'the request budget for {{site}} is used up for this hour; the show page is read next round',
       lookup_retry:
         '{{site}} could not be read this time ({{detail}}); looking it up again at {{at}} (retry {{attempt}})',
       route_ambiguous: 'the title was recognised, but {{routes}} can all take it',
@@ -6790,24 +6834,33 @@ const en: Translations<typeof zhHant> = {
     },
     rules: {
       title: 'Exclusions',
+      globalTitle: 'Global exclusions',
       lede: 'Everything in a feed is downloaded unless a rule here blocks it. Global, feed and RSS Series rules add up: a rule blocks on whichever level it sits. Changes only reach items not sent yet; removing a rule does not bring back what it already blocked.',
       notSingle:
         "Don't download batches automatically (anything but a single episode: batches, ranges, season packs)",
       notSingleHint: 'Batches can still be sent by hand from search or a one-off RSS link.',
-      none: 'No exclusions.',
-      list: 'Exclusions',
-      add: 'Add an exclusion',
+      builtin: 'Built-in check',
+      builtinHint: 'Reads the parsed release, not keywords',
+      titleRules: 'Title rules',
+      notSingleOn: 'Batches follow the global setting: currently not downloaded automatically.',
+      notSingleOff: 'Batches follow the global setting: currently downloaded automatically.',
+      toGlobal: 'Change the global setting',
+      none: 'No title rules.',
+      list: 'Title rules',
+      add: 'Add a title rule',
       hint: 'Plain words match anywhere in the title, ignoring case; wrap in /…/ for a regex (/…/i ignores case).',
       addAction: 'Add rule',
       saving: 'Saving…',
       remove: 'Remove “{{rule}}”',
-      suggestions: 'Suggestions',
+      suggestions: 'Suggested keywords',
       suggest: 'Add “{{rule}}”',
       invalid: 'Not saved: {{detail}}',
-      toggle_one: 'Exclusions ({{count}})',
-      toggle_other: 'Exclusions ({{count}})',
-      feedLede: 'For this feed only, on top of the global rules.',
-      seriesLede: 'For this RSS Series only, on top of the global and feed rules.',
+      toggle_one: 'Title rules ({{count}})',
+      toggle_other: 'Title rules ({{count}})',
+      feedLede: 'For this feed only; adds up with the global rules.',
+      addLede:
+        'For this feed only; adds up with the global rules. A Mikan feed starts downloading soon after it is added, so add what to leave out now; later changes only reach items not sent yet.',
+      seriesLede: 'For this RSS Series only; adds up with the global and feed rules.',
     },
     skip: {
       not_single:
@@ -6828,6 +6881,9 @@ const en: Translations<typeof zhHant> = {
       from: 'From',
       work: '{{work}} × {{group}}',
       unbound: 'Not bound yet',
+      release: 'Download anyway',
+      releasing: 'Sending…',
+      releaseFailed: "Download anyway didn't go through; this item stays excluded:",
       status: {
         unbound: 'To bind',
         matched: 'To send',

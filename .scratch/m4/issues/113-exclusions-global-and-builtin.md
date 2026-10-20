@@ -1,6 +1,6 @@
 # 113 — 排除條件分清全域與內建
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 110（同改 `RulesEditor` 與 /rss 的排除條件畫面，避免衝突；邏輯上不互擋）
 
@@ -30,9 +30,13 @@
 
 ## 驗收
 
-- [ ] 全域那一段的標題、合集那一項、建議那一列照上面的文案顯示（vitest，zh-Hant 與 en）
-- [ ] Feed 與 RSS Series 的排除條件編輯器說出全域合集設定的目前值，切換全域開關後跟著變（vitest）
-- [ ] playwright 實跑 /rss 三層排除條件，附截圖（1280 與 390）
-- [ ] 全部檢查、vitest 綠；CHANGELOG、progress.md 已更新
+- [x] 全域那一段的標題、合集那一項、建議那一列照上面的文案顯示（vitest，zh-Hant 與 en）
+- [x] Feed 與 RSS Series 的排除條件編輯器說出全域合集設定的目前值，切換全域開關後跟著變（vitest）
+- [x] playwright 實跑 /rss 三層排除條件，附截圖（1280 與 390）
+- [x] 全部檢查、vitest 綠；CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-19 實作：新增 Feed 表單也加了合集那一行（它也是 Feed 那一層）；`/impeccable critique`（detector 0 發現）之後空狀態改「沒有標題規則。」（原句與合集那一行矛盾），內建判斷組的說明進 `aria-describedby`。截圖在 e2e `rss-exclusions`／`rss-exclusions-390` 的 `2b-three-layers`、`2c-to-global`。
+- critique 未處理：(1) 兩層的 toggle 仍叫「排除條件（N 條）」，全域那一段叫「標題規則」——要不要改成「本層標題規則（N 條）」待定，牽動 e2e 與 skip 理由的用詞；(2)「改全域設定」是原生錨點，只捲動、不移焦點（與 `SUBSCRIBE_ANCHOR` 同做法）；(3) 390 寬新增 Feed 的說明連同合集那一行共四行，偏密；(4) en 的連結走 `TEXT_LINK` 的 `.label` 大寫字距，比旁邊的句子重。
+- code-review 未處理：全域查詢載入中或失敗時兩層的合集那一行不顯示（那時全域那一段也畫不出來，整頁顯示讀取失敗）；切換全域開關時兩層等重問回來才變，不像全域那一格樂觀顯示；兩個英文測試各寫一次 `changeLanguage` 的 try/finally（檔案裡原本就這樣寫）。

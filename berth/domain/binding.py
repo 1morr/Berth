@@ -52,12 +52,10 @@ class BindReasonCode(StrEnum):
     #: 番組頁或 TMDB 查不到（`{detail}` 是原文）：再問也一樣（404、回的不是那個服務），或重認的次數
     #: 用完了。留給人。
     LOOKUP_FAILED = "lookup_failed"
-    #: `{site}` 這一小時的請求預算用完了，番組頁下一輪再讀（M3 票 20）。不是查不到：
-    #: 只有它會在之後的輪詢裡重認。
-    LOOKUP_DEFERRED = "lookup_deferred"
     #: 番組頁或 TMDB 這一次查不到，但等一下再問可能就好了（連不上、逾時、限流、5xx；`{detail}` 是
-    #: 原文，`{site}` 是那一站、同請求預算的鍵）。第 `{attempt}` 次重認排在 `{at}`（ISO 8601），
-    #: 次數有上限，用完是 `lookup_failed`（M4 票 14）。
+    #: 原文，`{site}` 是那一站的主機名）。第 `{attempt}` 次重認排在 `{at}`（ISO 8601），
+    #: 次數有上限，用完是 `lookup_failed`（M4 票 14）。`attempt` 是已經算進上限的失敗次數：
+    #: 票 107 的 migration 把被請求預算擋下的那幾個改成 `attempt` 0（不算一次失敗）、下一輪到期。
     LOOKUP_RETRY = "lookup_retry"
     #: 作品認出來了，但收得下它的 Route 有好幾條（`{routes}`），Feed 又沒說這一種送進哪一條（票 105
     #: 之前加的 Feed，或它那一條被停用、刪掉了），要人選。
@@ -83,7 +81,6 @@ BIND_PARAMS: dict[BindReasonCode, frozenset[str]] = {
     _C.NO_PREMIERE: frozenset(),
     _C.NO_SHOW_PAGE: frozenset(),
     _C.LOOKUP_FAILED: frozenset({"detail"}),
-    _C.LOOKUP_DEFERRED: frozenset({"site"}),
     _C.LOOKUP_RETRY: frozenset({"site", "attempt", "at", "detail"}),
     _C.ROUTE_AMBIGUOUS: frozenset({"routes"}),
     _C.NO_ROUTE: frozenset(),

@@ -465,12 +465,14 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/rss/series/*/binding"): Access.ADMIN,
     ("DELETE", "/rss/series/*/binding"): Access.ADMIN,
     ("GET", "/rss/items"): Access.ADMIN,
+    ("POST", "/rss/items/*/release"): Access.ADMIN,
     ("POST", "/rss/oneshot"): Access.ADMIN,
     # 排除條件（票 10）：三層都是 admin，同一組的理由。
     ("GET", "/rss/exclusions"): Access.ADMIN,
     ("PUT", "/rss/exclusions"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/exclusions"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/routes"): Access.ADMIN,
+    ("PUT", "/rss/feeds/*/interval"): Access.ADMIN,
     ("PUT", "/rss/series/*/exclusions"): Access.ADMIN,
     # 從 Media 頁訂閱（票 19）：詳情頁的「RSS 訂閱」整段只給 admin，同一組的理由。
     ("GET", "/rss/mikan/search"): Access.ADMIN,
@@ -489,7 +491,6 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/events/stream"): Access.SIGNED_IN,
     ("POST", "/health/check"): Access.SIGNED_IN,
     ("GET", "/health/detail"): Access.SIGNED_IN,
-    ("GET", "/health/budget"): Access.SIGNED_IN,
     ("GET", "/inventory"): Access.SIGNED_IN,
     ("GET", "/inventory/*"): Access.SIGNED_IN,
     ("GET", "/inventory/*/filters"): Access.SIGNED_IN,

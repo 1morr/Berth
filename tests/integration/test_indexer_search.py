@@ -6,13 +6,14 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 import respx
 
-from berth.adapters.indexer import SearchQuery, SearchSite
+from berth.adapters.http import ServiceTimeoutError, ServiceUnavailableError
+from berth.adapters.indexer import SearchQuery
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from tests.conftest import read_fixture
 
@@ -130,42 +131,17 @@ async def test_prowlarr_search_asks_only_the_sites_it_is_given() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_prowlarr_search_reaches_the_sites_of_its_enabled_indexers() -> None:
-    """一個查詢打到 Prowlarr 上每一個啟用中的站（M3 票 20）：請求預算以站的主機名記帳，
-    與 RSS 打 `mikanani.me` 的是同一份。停用的站不算。帶著 indexer id 與名字：預算放不下的站
-    這次不問，靠 `indexerIds` 只問其他站（M4 票 77）。"""
-    rows = json.loads(read_fixture("http/prowlarr/indexer.defaults-added.json"))
-    rows[-1]["enable"] = False  # yts
-    respx.get(f"{PROWLARR_URL}/api/v1/indexer").respond(200, json=rows)
+async def test_prowlarr_search_read_timeout_is_a_timeout_and_still_unavailable() -> None:
+    """M4 票 114：HTTP 層的逾時有自己的型別，搜尋才分得出「慢」與「整台連不上」；仍是
+    `ServiceUnavailableError`，`failure_of` 與重試判斷照舊。"""
+    respx.get(f"{PROWLARR_URL}/api/v1/search").mock(side_effect=httpx.ReadTimeout("timed out"))
 
     search = ProwlarrSearch(PROWLARR_URL, API_KEY)
     try:
-        sites = await search.sites()
+        with pytest.raises(ServiceTimeoutError) as caught:
+            await search.search(SearchQuery(text="SPY x FAMILY"))
     finally:
         await search.aclose()
 
-    assert sites == (
-        SearchSite(indexer_id=2, name="ACG.RIP", site="acg.rip"),
-        SearchSite(indexer_id=6, name="dmhy", site="share.dmhy.org"),
-        SearchSite(indexer_id=3, name="Mikan", site="mikanani.me"),
-        SearchSite(indexer_id=5, name="The Pirate Bay", site="thepiratebay.org"),
-    )
-
-
-@respx.mock
-@pytest.mark.asyncio
-async def test_prowlarr_search_reaches_the_base_url_the_indexer_was_set_to() -> None:
-    """換過 Base Url 的站（鏡像）打的是那一個，不是清單上的第一個。"""
-    rows = json.loads(read_fixture("http/prowlarr/indexer.defaults-added.json"))
-    tpb = next(row for row in rows if row["definitionName"] == "thepiratebay")
-    base = next(field for field in tpb["fields"] if field["name"] == "baseUrl")
-    base["value"] = "https://tpb.party/"
-    respx.get(f"{PROWLARR_URL}/api/v1/indexer").respond(200, json=[tpb])
-
-    search = ProwlarrSearch(PROWLARR_URL, API_KEY)
-    try:
-        sites = await search.sites()
-    finally:
-        await search.aclose()
-
-    assert [site.site for site in sites] == ["tpb.party"]
+    assert isinstance(caught.value, ServiceUnavailableError)
+    assert str(caught.value).endswith(": ReadTimeout")

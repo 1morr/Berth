@@ -296,7 +296,15 @@ export function routeView(overrides: Partial<RouteView> = {}): RouteView {
 
 /** 設定頁上的一列：Route 本身與有多少東西指著它。預設沒有人用，刪得掉。 */
 export function managedRoute(overrides: Partial<ManagedRoute> = {}): ManagedRoute {
-  return { route: routeView(), jobs: 0, ledger_entries: 0, in_use: false, ...overrides }
+  return {
+    route: routeView(),
+    jobs: 0,
+    ledger_entries: 0,
+    rss_feeds: 0,
+    rss_series: 0,
+    in_use: false,
+    ...overrides,
+  }
 }
 
 /** Jellyfin 現查回來的一個媒體庫。預設是掛了兩顆碟、第一顆已經是 TV 的那一個。 */

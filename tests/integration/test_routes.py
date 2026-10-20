@@ -21,8 +21,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin import JellyfinLibrary
 from berth.db import create_session_factory
-from berth.domain import CollectionType, HealthStatus, JobTrigger, PlanAction, StepStatus
-from berth.models import Job, LedgerEntry, Route, SetupLibrary
+from berth.domain import (
+    CollectionType,
+    FeedKind,
+    HealthStatus,
+    JobTrigger,
+    PlanAction,
+    StepStatus,
+)
+from berth.models import Job, LedgerEntry, Route, RssFeed, RssSeries, SetupLibrary
 from berth.services import routes as routes_service
 from berth.services.routes import (
     LibraryPath,
@@ -331,6 +338,60 @@ class TestDelete:
             await delete_route(session, route_id)
 
         assert refusal.value.reason == "route_in_use"
+
+    async def test_a_route_rss_feeds_send_into_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """票 115：Feed 的自動綁定送進它（劇集或電影那一欄都算）。一個只有被排除合集、從沒送過單的
+        Feed 也是引用：外鍵 `SET NULL` 會讓它無聲失去 Route。"""
+        route_id, _ = await red_second_route(session, roots)
+        session.add_all(
+            [
+                rss_feed("tv", tv_route_id=route_id),
+                rss_feed("movie", movie_route_id=route_id),
+                rss_feed("elsewhere"),
+            ]
+        )
+        await session.commit()
+        listed = {row.route.id: row.usage for row in await list_routes(session)}
+
+        with pytest.raises(RouteInUseError) as refusal:
+            await delete_route(session, route_id)
+
+        assert refusal.value.reason == "route_in_use"
+        assert refusal.value.usage == RouteUsage(
+            jobs=0, ledger_entries=0, rss_feeds=2, rss_series=0
+        )
+        assert listed[route_id] == refusal.value.usage
+        assert listed[route_id].in_use
+
+    async def test_a_route_an_rss_series_is_bound_to_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route_id, _ = await red_second_route(session, roots)
+        session.add_all([rss_series("a", route_id), rss_series("b", route_id), rss_series("c")])
+        await session.commit()
+        listed = {row.route.id: row.usage for row in await list_routes(session)}
+
+        with pytest.raises(RouteInUseError) as refusal:
+            await delete_route(session, route_id)
+
+        assert refusal.value.usage == RouteUsage(
+            jobs=0, ledger_entries=0, rss_feeds=0, rss_series=2
+        )
+        assert listed[route_id] == refusal.value.usage
+
+    async def test_rss_bound_to_another_route_does_not_hold_this_one(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route_id, _ = await red_second_route(session, roots)
+        tv = next(row for row in (await read_route_status(session)).routes if row.slug == "tv")
+        session.add_all([rss_feed("tv", tv_route_id=tv.id), rss_series("a", tv.id)])
+        await session.commit()
+
+        await delete_route(session, route_id)
+
+        assert len((await read_route_status(session)).routes) == 3
 
     async def test_nested_routes_count_the_same_one_by_one_as_in_the_list(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -721,6 +782,24 @@ def nested_route(roots: dict[str, Path]) -> Route:
         target_path=target,
         category="berth-tv-anime",
     )
+
+
+def rss_feed(
+    name: str, *, tv_route_id: int | None = None, movie_route_id: int | None = None
+) -> RssFeed:
+    """一個 Feed。這裡只有它的自動綁定送進哪條 Route 重要。"""
+    return RssFeed(
+        name=name,
+        url=f"https://mikanani.me/RSS/{name}",
+        kind=FeedKind.MIKAN,
+        tv_route_id=tv_route_id,
+        movie_route_id=movie_route_id,
+    )
+
+
+def rss_series(key: str, route_id: int | None = None) -> RssSeries:
+    """一個 RSS Series。這裡只有它綁的 Route 重要。"""
+    return RssSeries(key=f"title:{key}:group", title_raw=key, route_id=route_id)
 
 
 def ledger_entry(target: str) -> LedgerEntry:

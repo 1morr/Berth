@@ -1,12 +1,15 @@
-import type { ReactNode } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { FeedItem } from '../api/rss'
+import { releaseItem, RSS_KEY, type FeedItem } from '../api/rss'
+import { COMPACT_BUTTON } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { episodeCode } from '../components/episodes'
 import { whenText } from '../components/queueText'
 import { SIGNAL_FILL } from '../components/signal'
 import { JobLink } from '../jobs/JobLink'
+import { rssProblem } from './rssProblem'
 import { skipText } from './skip'
 
 /**
@@ -48,8 +51,60 @@ export function ItemLine({ row, source }: { row: FeedItem; source?: ReactNode })
       {row.skip && (
         <p className="max-w-prose text-xs wrap-anywhere text-ink-dim">{skipText(t, row.skip)}</p>
       )}
-      {row.error && <p className="value text-xs wrap-anywhere text-ink">{row.error}</p>}
+      {row.status === 'excluded' && <Release row={row} />}
+      {row.error && (
+        <p className="value text-xs wrap-anywhere text-ink">
+          {row.status === 'excluded' && <>{t('rss.items.releaseFailed')} </>}
+          {row.error}
+        </p>
+      )}
     </li>
+  )
+}
+
+/**
+ * 「仍然下載」（M4 票 111）：被排除的那一筆逐筆放行，當場送出。送出（或被拒）之後三份清單一起重問，這一列就換成
+ * 送出去的 Job（或重複的理由）；送單被拒時它留在排除，原文在 `error`。
+ *
+ * 放行不了時（還沒綁定、還在預覽）照後端的 `release_blocked` 停用並說原因。用 `aria-disabled` 不用
+ * `disabled`：停用的那一顆仍接得住焦點，原因由 `aria-describedby` 念出來（DESIGN.md 送出中同理）。
+ */
+function Release({ row }: { row: FeedItem }) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const whyId = useId()
+  const release = useMutation({
+    mutationFn: () => releaseItem(row.id),
+    // 被拒也重問：另一個分頁可能剛解除綁定或先放行了，按鈕要照新的 `release_blocked`。
+    onSettled: () => queryClient.invalidateQueries({ queryKey: RSS_KEY }),
+  })
+  const blocked = row.release_blocked
+  const locked = blocked !== null || release.isPending
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <button
+        type="button"
+        className={`${COMPACT_BUTTON} aria-disabled:cursor-not-allowed`}
+        aria-disabled={locked || undefined}
+        aria-describedby={blocked !== null ? whyId : undefined}
+        onClick={() => {
+          if (!locked) release.mutate()
+        }}
+      >
+        {release.isPending ? t('rss.items.releasing') : t('rss.items.release')}
+      </button>
+      {blocked !== null && (
+        <p id={whyId} className="max-w-prose text-xs text-ink-dim">
+          {t(`rss.refusal.${blocked}`)}
+        </p>
+      )}
+      {release.isError && (
+        <p role="alert" className="max-w-prose text-xs wrap-anywhere text-ink">
+          {rssProblem(t, release.error)}
+        </p>
+      )}
+    </div>
   )
 }
 

@@ -23,7 +23,7 @@ import {
   type CarriedLogin,
 } from './interfaceLogin'
 import { ChoiceCutaway } from './ChoiceCutaway'
-import { BerthLogin, CarriedApplying } from './InterfaceLoginFields'
+import { BerthLogin, CarriedApplying, LoginRow } from './InterfaceLoginFields'
 import { AdvancedSites, RecommendedSites } from './RecommendedSites'
 import { PROWLARR_PAGE, prowlarrWeb } from './serviceWeb'
 import { ServiceChoice, type ChoiceControls } from './ServiceChoice'
@@ -166,7 +166,10 @@ export function IndexerStep({
         )
       }
     >
-      <h2 className="text-lg font-semibold text-ink">{t('indexer.title')}</h2>
+      {/* 還沒選時與頁 1、頁 2 同一個形狀（M4 票 104）。 */}
+      <h2 className="text-lg font-semibold text-ink">
+        {t(origin ? 'indexer.title.chosen' : 'indexer.title.choose')}
+      </h2>
       <p className="mt-2 max-w-prose text-sm text-ink-dim">
         {t(`indexer.lede.${origin ?? 'choose'}`)}
       </p>
@@ -358,6 +361,11 @@ function ProwlarrLogin({
   // 與後端的 `PROWLARR_LOGIN_STEP` 同一個字串：那一條不是站。
   const row = indexers.steps.find((step) => step.step === 'prowlarr_login')
   const webUrl = prowlarrWeb(indexers)
+  // 還沒加站、主鍵「測試推薦站」還在時，它是這一頁唯一的調度黃：兩顆黃鍵並排看不出先做哪一件（M4 票 119
+  // 的 critique）。加了站，這一顆才是「現在需要你」的那一件。
+  const sitesFirst =
+    indexers.sites.length === 0 && indexers.candidates.some((candidate) => candidate.recommended)
+  const SaveButton = sitesFirst ? GhostButton : PrimaryButton
   // 送出那一刻的欄位版本：之後改了一格，上一次的拒絕就不畫了（M4 票 21）。
   const [sentAt, setSentAt] = useState<number | null>(null)
   // 請求本身沒走完（Berth 停著、5xx）：原本這一支的 reject 被吞掉，按下去什麼都沒發生（M4 票 31，
@@ -409,7 +417,7 @@ function ProwlarrLogin({
           <BerthLogin
             service="prowlarr"
             current={indexers.web_ui_username}
-            carried={carried.inUse}
+            carried={indexers.web_ui_login_reuses_owner}
             form={form}
           />
         )}
@@ -428,9 +436,9 @@ function ProwlarrLogin({
       )}
       {form.open && !carriedLogin.applying && (
         <div className="mt-4">
-          <PrimaryButton type="button" busy={controls.saving} disabled={held} onClick={save}>
+          <SaveButton type="button" busy={controls.saving} disabled={held} onClick={save}>
             {controls.saving ? t('indexer.login.saving') : t('indexer.login.save')}
-          </PrimaryButton>
+          </SaveButton>
         </div>
       )}
       {/* 設下去的成敗要看得到（brief §16.3）；沒設過時是一條待處理。 */}
@@ -520,6 +528,7 @@ function IndexerCutaway({
         value={String(indexers.sites.length)}
         muted={indexers.sites.length === 0}
       />
+      <LoginRow origin={origin} username={indexers.web_ui_username} />
     </Cutaway>
   )
 }

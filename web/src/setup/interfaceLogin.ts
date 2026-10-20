@@ -90,11 +90,6 @@ export function takenLogin(draft: LoginDraft, reuse: boolean): InterfaceLogin {
 export interface CarriedLogin {
   /** 還留在這個分頁記憶體裡的擁有者密碼；沒帶、重新整理過、或 Jellyfin 不再收它就是 `null`。 */
   password: string | null
-  /**
-   * 那一台現在的登入就是它：這個分頁最後一次替那一台設下的是沿用這一組。帳號是擁有者不夠——按「改用另一組」
-   * 只換密碼時帳號一樣。
-   */
-  inUse: boolean
 }
 
 /** 擁有者的 Jellyfin 帳密哪裡不合一個服務的規則：帳號太短、帳號有冒號、密碼太短。 */
@@ -198,8 +193,8 @@ export interface InterfaceLoginForm {
 /**
  * @param service 哪一個服務的登入：照它的規則擋（`LOGIN_RULES`）。
  * @param current 那一台的帳號（Berth 設下的，或它自己就設過的），空字串是還沒設過。
- * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）。設定頁傳空字串：
- *   那裡沒有沿用，帳號只預填目前那一個（M4 票 78）。
+ * @param owner 擁有者的名字：沿用時的帳號，取消勾選時預填它（票 07 shape 時使用者拍板）；不合這個服務的規則時
+ *   不預填（M4 票 118）。設定頁傳空字串：那裡沒有沿用，帳號只預填目前那一個（M4 票 78）。
  * @param alwaysOpen 設定頁：那一區本來就是改帳密的表單，沒有收起來的狀態。
  * @param reuse 一開始勾不勾沿用（預設不勾）。
  */
@@ -220,8 +215,11 @@ export function useInterfaceLogin({
    */
   reuse?: boolean
 }): InterfaceLoginForm {
+  const ownerUnfit = ownerUnfitFor(service, owner)
+  // 不合規則的名字不預填：送出才被擋，等於預填了一個錯的帳號（M4 票 118）。
+  const prefill = ownerUnfit === null ? owner : ''
   const [draft, setDraft] = useState<LoginDraft>({
-    username: current || owner,
+    username: current || prefill,
     password: '',
     confirm: '',
   })
@@ -230,7 +228,6 @@ export function useInterfaceLogin({
   const [checked, setChecked] = useState(false)
   const [edits, setEdits] = useState(0)
   const open = alwaysOpen || changing || !current
-  const ownerUnfit = ownerUnfitFor(service, owner)
   const reusing = reuse && Boolean(owner) && ownerUnfit === null
   const rules = LOGIN_RULES[service]
   const problemsNow = () => loginProblems(draft, { reuse: reusing, rules })
@@ -263,8 +260,8 @@ export function useInterfaceLogin({
       return takenLogin(draft, reusing)
     },
     reset: (username) => {
-      // 沿用時送出去的帳號是空的（後端填成擁有者），留下來的是擁有者的名字。
-      setDraft({ username: username || owner, password: '', confirm: '' })
+      // 沿用時送出去的帳號是空的（後端填成擁有者），留下來的是擁有者的名字（名字不合規則時本來就沿用不了）。
+      setDraft({ username: username || prefill, password: '', confirm: '' })
       setChanging(false)
       setChecked(false)
     },

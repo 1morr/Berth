@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Media } from '../api/media'
 import type { Feed, FeedItem, OneshotItem, RssSeries } from '../api/rss'
 import type { ManagedRoute } from '../api/routes'
+import { relativePast } from '../components/relativeTime'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -48,6 +49,8 @@ function managed(
     route: { id, name, enabled, collection_type },
     jobs: 0,
     ledger_entries: 0,
+    rss_feeds: 0,
+    rss_series: 0,
     in_use: false,
   } as ManagedRoute
 }
@@ -96,6 +99,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     active: 0,
     excluded: 0,
     finished: false,
+    backfilled_at: null,
     submitted: 0,
     ask: null,
     ...overrides,
@@ -116,6 +120,8 @@ function item(overrides: Partial<FeedItem> = {}): FeedItem {
     skip: null,
     size: null,
     episode: 12,
+    // 後端只對 `excluded` 判斷放不放得行；其他狀態一律 `item_not_excluded`（M4 票 111）。
+    release_blocked: overrides.status === 'excluded' ? null : 'item_not_excluded',
     ...overrides,
   }
 }
@@ -337,7 +343,7 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
       'GET /api/rss/feeds': {
         body: [
           feed(),
-          { ...ACGRIP, items: 0, last_error: 'acg.rip: budget exhausted', ever_read: false },
+          { ...ACGRIP, items: 0, last_error: 'acg.rip: connection refused', ever_read: false },
         ],
       },
     })
@@ -345,7 +351,7 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
     const block = await firstRound()
 
     expect(within(block).getByText(/還沒讀到過，選不了/)).toBeInTheDocument()
-    expect(within(block).getByText('acg.rip: budget exhausted')).toBeInTheDocument()
+    expect(within(block).getByText('acg.rip: connection refused')).toBeInTheDocument()
     expect(within(block).queryByRole('button', { name: '全部下載' })).not.toBeInTheDocument()
     expect(sent(stub, 'GET', '/api/rss/feeds/2/preview')).toHaveLength(0)
   })
@@ -404,7 +410,8 @@ describe('RSS 頁', () => {
     expect(within(row).getByRole('combobox')).toHaveValue('3')
     // Mikan 的 RSS Series 一律補舊集（票 12、M4 票 78）：沒有勾選；幾集要讀了才知道，鍵上不說總數。
     expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument()
-    expect(within(row).getByText(/讀這個字幕組在 Mikan 上的整季/)).toBeInTheDocument()
+    // 每日補漏與 RSS Series 段落的說明同一句（M4 票 108）。
+    expect(within(row).getByText(/讀這個字幕組在 Mikan 上的整季/)).toHaveTextContent(BACKFILL_LEDE)
     await userEvent.click(within(row).getByRole('button', { name: '綁定並送出' }))
 
     await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/binding')).toHaveLength(1))
@@ -570,7 +577,7 @@ describe('RSS 頁', () => {
   it('這一輪沒讀到 Feed 時不說「新 0 筆」', async () => {
     render({
       'GET /api/rss/feeds': () => ({
-        body: [feed({ last_error: 'mikanani.me: budget exhausted' })],
+        body: [feed({ last_error: 'mikanani.me: connection refused' })],
       }),
       'POST /api/rss/feeds/1/poll': {
         body: {
@@ -578,7 +585,7 @@ describe('RSS 頁', () => {
           series: 0,
           bound: 0,
           submitted: 0,
-          failed: 'mikanani.me: budget exhausted',
+          failed: 'mikanani.me: connection refused',
         },
       },
     })
@@ -676,7 +683,139 @@ describe('RSS 頁', () => {
       name: '',
       tv_route: 4,
       movie_route: 5,
+      exclusions: [],
+      interval_sec: 900,
     })
+  })
+
+  it('加 Feed 時就設排除條件：先記在表單裡、跟著加入一起送，卡片上是同一組（M4 票 110）', async () => {
+    let feeds: Feed[] = []
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'POST /api/rss/feeds': () => {
+        feeds = [feed({ tv_route_id: 3, exclusions: ['720p', '/v2$/'] })]
+        return { status: 201, body: feeds[0] }
+      },
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    expect(
+      within(rules).getByText(/Mikan 加入之後很快就會開始下載，要排除的現在就加/),
+    ).toBeVisible()
+    // 新增表單也是 Feed 那一層：合集照全域（M4 票 113）。
+    expect(within(rules).getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
+    await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
+    await userEvent.click(within(rules).getByRole('button', { name: '加入「简体」' }))
+    await userEvent.type(within(rules).getByLabelText('加一條標題規則'), '/v2$/{Enter}')
+    expect(within(rules).getByLabelText('加一條標題規則')).toHaveValue('')
+    await userEvent.click(within(rules).getByRole('button', { name: '拿掉「简体」' }))
+    expect(
+      within(rules)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual(['720p×', '/v2$/×'])
+    // 送出前不另打 API：規則只在表單裡。
+    expect(stub.mock.calls.filter(([, init]) => init?.method === 'PUT')).toEqual([])
+
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body))).toMatchObject({
+      url: FEED_URL,
+      tv_route: 3,
+      exclusions: ['720p', '/v2$/'],
+    })
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: /標題規則（2 條）/ }))
+    expect(within(row).getByText('720p')).toBeVisible()
+    expect(within(row).getByText('/v2$/')).toBeVisible()
+    expect(within(rules).getByText('沒有標題規則。')).toBeInTheDocument()
+  })
+
+  it('加 Feed 時打了規則沒按「加入規則」：那一條也跟著送，送完表單清空', async () => {
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'POST /api/rss/feeds': { status: 201, body: feed({ tv_route_id: 3, exclusions: ['720p'] }) },
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
+    await userEvent.type(within(rules).getByLabelText('加一條標題規則'), ' 简体 ')
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).exclusions).toEqual(
+      ['720p', '简体'],
+    )
+    await waitFor(() => expect(within(rules).getByLabelText('加一條標題規則')).toHaveValue(''))
+    expect(within(rules).getByText('沒有標題規則。')).toBeInTheDocument()
+  })
+
+  it('加 Feed 時規則寫壞：原因說在規則欄下，網址欄沒事，規則留著讓人改', async () => {
+    render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'POST /api/rss/feeds': {
+        status: 422,
+        body: {
+          detail: {
+            reason: 'rule_invalid',
+            detail: '/[简繁/: unterminated character set at position 0',
+          },
+        },
+      },
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    await userEvent.type(within(rules).getByLabelText('加一條標題規則'), '/[[简繁/{Enter}')
+    const url = screen.getByLabelText(/RSS 網址/)
+    await userEvent.type(url, FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    expect(
+      await within(rules).findByText('存不進去：/[简繁/: unterminated character set at position 0'),
+    ).toBeInTheDocument()
+    expect(url).not.toHaveAttribute('aria-invalid', 'true')
+    expect(url).toHaveValue(FEED_URL)
+    expect(within(rules).getByText('/[简繁/')).toBeInTheDocument()
+  })
+
+  it('英文：加 Feed 時的排除條件', async () => {
+    let feeds: Feed[] = []
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'POST /api/rss/feeds': () => {
+        feeds = [feed({ tv_route_id: 3, exclusions: ['720p'] })]
+        return { status: 201, body: feeds[0] }
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const rules = await screen.findByRole('group', { name: 'Exclusions' })
+      expect(
+        within(rules).getByText(/A Mikan feed starts downloading soon after it is added/),
+      ).toBeVisible()
+      await userEvent.click(within(rules).getByRole('button', { name: 'Add “720p”' }))
+      await userEvent.type(screen.getByLabelText(/RSS address/), FEED_URL)
+      await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+      expect(
+        JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).exclusions,
+      ).toEqual(['720p'])
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(within(row).getByRole('button', { name: /Title rules \(1\)/ })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 
   it('只有一條時預填它，一條都沒有的那一種不出現', async () => {
@@ -876,8 +1015,8 @@ describe('RSS 頁', () => {
     })
     renderApp('/rss')
 
-    const section = await screen.findByRole('region', { name: '排除條件' })
-    expect(within(section).getByText('沒有排除條件。')).toBeInTheDocument()
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
+    expect(within(section).getByText('沒有標題規則。')).toBeInTheDocument()
     const collections = within(section).getByRole('checkbox', { name: /不自動下載合集/ })
     expect(collections).toBeChecked()
 
@@ -910,8 +1049,8 @@ describe('RSS 頁', () => {
     })
     renderApp('/rss')
 
-    const section = await screen.findByRole('region', { name: '排除條件' })
-    const field = within(section).getByLabelText('加一條排除條件')
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
+    const field = within(section).getByLabelText('加一條標題規則')
     // user-event 的 `[` 是按鍵描述的開頭，`[[` 才是字面上的一個。
     await userEvent.type(field, '/[[简繁/')
     await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
@@ -933,7 +1072,7 @@ describe('RSS 頁', () => {
     renderApp('/rss')
 
     const row = await screen.findByRole('article', { name: 'Mikan' })
-    const toggle = within(row).getByRole('button', { name: /排除條件（2 條）/ })
+    const toggle = within(row).getByRole('button', { name: /標題規則（2 條）/ })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -944,7 +1083,7 @@ describe('RSS 頁', () => {
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/feeds/1/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['/v2$/i'] })
-    await waitFor(() => expect(within(row).getByLabelText('加一條排除條件')).toHaveFocus())
+    await waitFor(() => expect(within(row).getByLabelText('加一條標題規則')).toHaveFocus())
   })
 
   it('RSS Series 那一層：待綁定的也編得到', async () => {
@@ -954,14 +1093,280 @@ describe('RSS 頁', () => {
     renderApp('/rss')
 
     const pending = await screen.findByRole('region', { name: '待綁定' })
-    await userEvent.click(within(pending).getByRole('button', { name: /排除條件（0 條）/ }))
-    await userEvent.type(within(pending).getByLabelText('加一條排除條件'), ' 简体 ')
+    await userEvent.click(within(pending).getByRole('button', { name: /標題規則（0 條）/ }))
+    await userEvent.type(within(pending).getByLabelText('加一條標題規則'), ' 简体 ')
     await userEvent.click(within(pending).getByRole('button', { name: '加入規則' }))
 
     await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/exclusions')).toHaveLength(1))
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['简体'] })
+  })
+})
+
+describe('RSS 頁：每個 Feed 的輪詢間隔（M4 票 109）', () => {
+  const CASES = [
+    {
+      lng: 'zh-Hant',
+      url: /RSS 網址/,
+      add: '加入',
+      interval: '輪詢間隔',
+      every15: /^每 15 分鐘/,
+      every6h: /^每 6 小時/,
+      every1d: /^每 24 小時/,
+      sixHours: '6 小時',
+      oneDay: '24 小時',
+      change: '改輪詢間隔',
+      save: '存下間隔',
+      saved: '存下了：之後每 24 小時輪詢一次。',
+      lede: /不會馬上輪詢/,
+    },
+    {
+      lng: 'en',
+      url: /RSS address/,
+      add: 'Add',
+      interval: 'Poll interval',
+      every15: /^Every 15 minutes/,
+      every6h: /^Every 6 hours/,
+      every1d: /^Every 24 hours/,
+      sixHours: '6 hours',
+      oneDay: '24 hours',
+      change: 'Change poll interval',
+      save: 'Save interval',
+      saved: 'Saved: polled every 24 hours from now on.',
+      lede: /does not poll right away/,
+    },
+  ] as const
+
+  it.each(CASES)('$lng：新增表單選檔位，預設 15 分鐘，存完 Feed 列說出新值', async (copy) => {
+    let feeds: Feed[] = []
+    const stub = render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'POST /api/rss/feeds': () => {
+        feeds = [feed({ tv_route_id: 3, interval_sec: 21600 })]
+        return { status: 201, body: feeds[0] }
+      },
+    })
+    await i18next.changeLanguage(copy.lng)
+    try {
+      renderApp('/rss')
+
+      const interval = await screen.findByRole('combobox', { name: copy.interval })
+      expect(interval).toHaveValue('900')
+      expect(within(interval).getAllByRole('option')).toHaveLength(7)
+      await userEvent.selectOptions(interval, copy.sixHours)
+      await userEvent.type(screen.getByLabelText(copy.url), FEED_URL)
+      await userEvent.click(screen.getByRole('button', { name: copy.add }))
+
+      await waitFor(() => expect(sent(stub, 'POST', '/api/rss/feeds')).toHaveLength(1))
+      expect(
+        JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).interval_sec,
+      ).toBe(21600)
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(within(row).getByText(copy.every6h)).toBeInTheDocument()
+      // 送完表單回到預設。
+      await waitFor(() => expect(interval).toHaveValue('900'))
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it.each(CASES)('$lng：Feed 列就地改間隔，存完收起、那一列說出新值', async (copy) => {
+    let feeds: Feed[] = [feed()]
+    const stub = render({
+      'GET /api/rss/feeds': () => ({ body: feeds }),
+      'PUT /api/rss/feeds/1/interval': () => {
+        feeds = [feed({ interval_sec: 86400 })]
+        return { body: feeds[0] }
+      },
+    })
+    await i18next.changeLanguage(copy.lng)
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      expect(within(row).getByText(copy.every15)).toBeInTheDocument()
+      await userEvent.click(within(row).getByRole('button', { name: copy.change }))
+      expect(within(row).getByText(copy.lede)).toBeVisible()
+      const picker = within(row).getByRole('combobox', { name: copy.interval })
+      expect(picker).toHaveValue('900')
+      await userEvent.selectOptions(picker, copy.oneDay)
+      await userEvent.click(within(row).getByRole('button', { name: copy.save }))
+
+      await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/feeds/1/interval')).toHaveLength(1))
+      expect(
+        JSON.parse(String(sent(stub, 'PUT', '/api/rss/feeds/1/interval')[0][1]?.body)),
+      ).toEqual({ interval_sec: 86400 })
+      expect(await within(row).findByText(copy.every1d)).toBeInTheDocument()
+      expect(within(row).getByRole('status')).toHaveTextContent(copy.saved)
+      expect(within(row).queryByRole('combobox', { name: copy.interval })).not.toBeInTheDocument()
+      expect(within(row).getByRole('button', { name: copy.change })).toHaveFocus()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('改間隔被拒時說出原因，選的留著', async () => {
+    render({
+      'PUT /api/rss/feeds/1/interval': {
+        status: 422,
+        body: { detail: { reason: 'interval_unsupported', detail: '600' } },
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: '改輪詢間隔' }))
+    await userEvent.selectOptions(within(row).getByRole('combobox', { name: '輪詢間隔' }), '1 小時')
+    await userEvent.click(within(row).getByRole('button', { name: '存下間隔' }))
+
+    expect(await within(row).findByText('只能選清單上的間隔，什麼都沒存。')).toBeInTheDocument()
+    expect(within(row).getByRole('combobox', { name: '輪詢間隔' })).toHaveValue('3600')
+  })
+})
+
+describe('RSS 頁：Feed 與 RSS Series 那一層說「標題規則」（M4 票 117）', () => {
+  it('展開鍵、加入欄、清單名都說標題規則；全域擋著合集也只數這一層的規則', async () => {
+    render({ 'GET /api/rss/feeds': { body: [feed({ exclusions: ['720p'] })] } })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: '標題規則（1 條）' }))
+    expect(within(row).getByLabelText('加一條標題規則')).toBeVisible()
+    expect(within(row).getByRole('list', { name: '標題規則' })).toBeVisible()
+    const pending = screen.getByRole('region', { name: '待綁定' })
+    await userEvent.click(within(pending).getByRole('button', { name: '標題規則（0 條）' }))
+    expect(within(pending).getByLabelText('加一條標題規則')).toBeVisible()
+    expect(screen.queryByText(/排除條件（/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('加一條排除條件')).not.toBeInTheDocument()
+  })
+
+  it('英文', async () => {
+    render({ 'GET /api/rss/feeds': { body: [feed({ exclusions: ['720p'] })] } })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      await userEvent.click(within(row).getByRole('button', { name: 'Title rules (1)' }))
+      expect(within(row).getByLabelText('Add a title rule')).toBeVisible()
+      expect(within(row).getByRole('list', { name: 'Title rules' })).toBeVisible()
+      const awaiting = screen.getByRole('region', { name: 'Waiting to bind' })
+      await userEvent.click(within(awaiting).getByRole('button', { name: 'Title rules (0)' }))
+      expect(within(awaiting).getByLabelText('Add a title rule')).toBeVisible()
+      expect(screen.queryByText(/Exclusions \(/)).not.toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('新增 Feed 送出中規則輸入框鎖住：多打的字進不去', async () => {
+    let answer: (route: StubRoute) => void = () => {}
+    render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'POST /api/rss/feeds': () => new Promise((resolve) => (answer = resolve)),
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    const field = within(rules).getByLabelText('加一條標題規則')
+    expect(field).not.toHaveAttribute('readonly')
+    await userEvent.type(field, '720p')
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(field).toHaveAttribute('readonly'))
+    await userEvent.type(field, 'x')
+    expect(field).toHaveValue('720p')
+
+    answer({ status: 201, body: feed({ tv_route_id: 3, exclusions: ['720p'] }) })
+    await waitFor(() => expect(field).not.toHaveAttribute('readonly'))
+  })
+})
+
+describe('RSS 頁：排除條件分清全域與內建（M4 票 113）', () => {
+  it('全域那一段：合集是內建判斷、與規則分開，建議項是關鍵字', async () => {
+    render()
+    renderApp('/rss')
+
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
+    const builtin = within(section).getByRole('group', { name: '內建判斷' })
+    expect(builtin).toHaveAccessibleDescription('看解析結果，不是關鍵字')
+    expect(within(builtin).getByRole('checkbox', { name: /不自動下載合集/ })).toBeChecked()
+    const rules = within(section).getByRole('group', { name: '標題規則' })
+    expect(within(rules).queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(rules).getByText('建議關鍵字')).toBeVisible()
+  })
+
+  it('全域那一段的英文', async () => {
+    render()
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const section = await screen.findByRole('region', { name: 'Global exclusions' })
+      const builtin = within(section).getByRole('group', { name: 'Built-in check' })
+      expect(within(builtin).getByText('Reads the parsed release, not keywords')).toBeVisible()
+      expect(within(builtin).getByRole('checkbox', { name: /batches/ })).toBeChecked()
+      const rules = within(section).getByRole('group', { name: 'Title rules' })
+      expect(within(rules).getByText('Suggested keywords')).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('Feed 與 RSS Series 那兩層說出全域的合集設定，切換全域開關後跟著變', async () => {
+    let notSingle = true
+    render({
+      'GET /api/rss/exclusions': () => ({ body: { not_single: notSingle, rules: [] } }),
+      'PUT /api/rss/exclusions': () => {
+        notSingle = false
+        return { body: { not_single: false, rules: [] } }
+      },
+    })
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: /標題規則（0 條）/ }))
+    const pending = screen.getByRole('region', { name: '待綁定' })
+    await userEvent.click(within(pending).getByRole('button', { name: /標題規則（0 條）/ }))
+    for (const layer of [row, pending]) {
+      expect(within(layer).getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
+      expect(within(layer).getByRole('link', { name: '改全域設定' })).toHaveAttribute(
+        'href',
+        '#global-exclusions',
+      )
+    }
+    expect(screen.getByRole('region', { name: '全域排除條件' })).toHaveAttribute(
+      'id',
+      'global-exclusions',
+    )
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /不自動下載合集/ }))
+
+    for (const layer of [row, pending]) {
+      expect(await within(layer).findByText('合集由全域設定：目前會自動下載。')).toBeVisible()
+    }
+  })
+
+  it('兩層的合集那一行的英文', async () => {
+    render({ 'GET /api/rss/exclusions': { body: { not_single: false, rules: [] } } })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      await userEvent.click(within(row).getByRole('button', { name: /Title rules \(0\)/ }))
+      expect(
+        within(row).getByText(
+          'Batches follow the global setting: currently downloaded automatically.',
+        ),
+      ).toBeVisible()
+      expect(within(row).getByRole('link', { name: 'Change the global setting' })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 })
 
@@ -996,6 +1401,100 @@ const ANI = boundKimi({
   active: 0,
   excluded: 2,
   latest_episode: 4,
+})
+
+/** 每日補漏的說明（M4 票 108）：RSS Series 段落、綁定確認、作品頁的訂閱確認說同一句。 */
+const BACKFILL_LEDE =
+  '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。'
+
+/** 綁好的非 Mikan RSS Series：沒有單一 feed，也就沒有補漏。 */
+const NYAA = boundKimi({
+  id: 10,
+  key: 'nyaa:subsplease kimi',
+  mikan_bangumi_id: null,
+  mikan_subgroup_id: null,
+  mikan_bangumi_name: '',
+  mikan_subgroup_name: '',
+  source: 'nyaa',
+  group: 'SubsPlease',
+})
+
+describe('RSS 頁：每日補漏看得見（M4 票 108）', () => {
+  const at = new Date(Date.now() - 3 * 3600_000).toISOString()
+
+  it('Mikan 的一列說上次補漏、尚未補漏、已完結不再補漏；非 Mikan 的不說', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          boundKimi({ backfilled_at: at }),
+          { ...ANI, backfilled_at: null },
+          boundKimi({
+            id: 11,
+            key: 'mikan:4009:1',
+            mikan_subgroup_name: 'Done',
+            finished: true,
+            backfilled_at: at,
+          }),
+          NYAA,
+        ],
+      },
+    })
+    renderApp('/rss')
+
+    const region = await screen.findByRole('region', { name: /RSS Series/ })
+    expect(within(region).getByText(BACKFILL_LEDE)).toBeVisible()
+    const loli = within(region).getByRole('article', { name: 'LoliHouse' })
+    expect(loli).toHaveTextContent(`上次補漏：${relativePast(new Date(at), 'zh-Hant')}`)
+    expect(within(region).getByRole('article', { name: 'ANi' })).toHaveTextContent('尚未補漏')
+    const done = within(region).getByRole('article', { name: 'Done' })
+    expect(done).toHaveTextContent('已完結，不再補漏')
+    expect(done).not.toHaveTextContent('上次補漏')
+    const nyaa = within(region).getByRole('article', { name: 'SubsPlease' })
+    expect(nyaa).not.toHaveTextContent(/補漏/)
+  })
+
+  it.each(['zh-Hant', 'en'])('%s：訂閱與綁定確認句尾就是段落那一句（巢狀展開）', (lng) => {
+    const lede = i18next.t('rss.bound.backfillLede', { lng })
+    for (const key of ['rss.subscribe.season', 'rss.bind.willSendSeason'] as const) {
+      const text = i18next.t(key, { lng })
+      expect(text.endsWith(lede)).toBe(true)
+      expect(text).not.toContain('$t(')
+    }
+  })
+
+  it('英文介面同樣三種，段落說明也是英文', async () => {
+    render({
+      'GET /api/rss/series': {
+        body: [
+          boundKimi({ backfilled_at: at }),
+          { ...ANI, backfilled_at: null },
+          boundKimi({ id: 11, key: 'mikan:4009:1', mikan_subgroup_name: 'Done', finished: true }),
+          NYAA,
+        ],
+      },
+    })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const region = await screen.findByRole('region', { name: /RSS Series/ })
+      expect(within(region).getByText(/whole season list read again once a day/)).toBeVisible()
+      expect(within(region).getByRole('article', { name: 'LoliHouse' })).toHaveTextContent(
+        `Last daily backfill: ${relativePast(new Date(at), 'en')}`,
+      )
+      expect(within(region).getByRole('article', { name: 'ANi' })).toHaveTextContent(
+        'No daily backfill yet',
+      )
+      expect(within(region).getByRole('article', { name: 'Done' })).toHaveTextContent(
+        'Finished, no more daily backfills',
+      )
+      expect(within(region).getByRole('article', { name: 'SubsPlease' })).not.toHaveTextContent(
+        /backfill/,
+      )
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
 })
 
 describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {
@@ -1070,7 +1569,7 @@ describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {
     expect(lines[1]).toHaveTextContent('已排除')
     expect(lines[1]).toHaveTextContent('E11')
     expect(within(row).getByText('進階')).toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: /排除條件（0 條）/ })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: /標題規則（0 條）/ })).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: '解除綁定' })).toBeInTheDocument()
   })
 
@@ -1379,7 +1878,7 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
   it.each(REQUEST_FAILURES)('全域排除條件的開關（%s）', async (_, failure, expected) => {
     render({ 'PUT /api/rss/exclusions': failure })
     renderApp('/rss')
-    const section = await screen.findByRole('region', { name: '排除條件' })
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
 
     await userEvent.click(within(section).getByRole('checkbox', { name: /不自動下載合集/ }))
 
@@ -1389,12 +1888,12 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
   it.each(REQUEST_FAILURES)('加一條排除規則（%s）', async (_, failure, expected) => {
     render({ 'PUT /api/rss/exclusions': failure })
     renderApp('/rss')
-    const section = await screen.findByRole('region', { name: '排除條件' })
+    const section = await screen.findByRole('region', { name: '全域排除條件' })
 
-    await userEvent.type(within(section).getByLabelText('加一條排除條件'), '720p')
+    await userEvent.type(within(section).getByLabelText('加一條標題規則'), '720p')
     await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
 
-    const field = within(section).getByLabelText('加一條排除條件')
+    const field = within(section).getByLabelText('加一條標題規則')
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'))
     expectCause(field.parentElement!.parentElement!, NOT_DONE, expected)
   })
@@ -1581,5 +2080,154 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
     await userEvent.click(within(region).getByRole('button', { name: '送出 1 筆' }))
 
     expectCause(await within(region).findByRole('alert'), /送到一半停下來了/, expected)
+  })
+})
+
+describe('RSS 頁：被排除的那一筆仍然下載（M4 票 111）', () => {
+  const COLLECTION = TITLE.replace(' - 12 ', ' [01-12 合集] ')
+  const HELD = item({
+    id: 21,
+    title: COLLECTION,
+    episode: null,
+    status: 'excluded',
+    skip: { code: 'not_single', params: {} },
+  })
+  const SENT = { ...HELD, status: 'downloaded', skip: null, job_hash: 'c'.repeat(40) } as const
+
+  /** 放行之後重問的那一份換成已送單。 */
+  function releasing(answer: StubRoute = { body: SENT }) {
+    let items: FeedItem[] = [HELD]
+    return render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'GET /api/rss/items': () => ({ body: items }),
+      'GET /api/rss/series/7/items': () => ({ body: items }),
+      'POST /api/rss/items/21/release': () => {
+        if (answer.status === undefined) items = [answer.body as FeedItem]
+        return answer
+      },
+    })
+  }
+
+  async function recent() {
+    const region = await screen.findByRole('region', { name: /最近的 Feed Item|Recent feed items/ })
+    return within(region).findByRole('listitem')
+  }
+
+  it('最近的 Feed Item：按下去當場送出，那一列換成送出去的 Job', async () => {
+    const stub = releasing()
+    renderApp('/rss')
+    const line = await recent()
+    expect(line).toHaveTextContent('已排除')
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/items/21/release')).toHaveLength(1))
+    const after = await recent()
+    await waitFor(() => expect(after).toHaveTextContent('已送單'))
+    expect(within(after).getByRole('link', { name: '看這一筆下載' })).toHaveAttribute(
+      'href',
+      `/jobs/${'c'.repeat(40)}`,
+    )
+    expect(within(after).queryByRole('button', { name: '仍然下載' })).not.toBeInTheDocument()
+  })
+
+  it('RSS Series 展開的清單也有，英文介面同一顆', async () => {
+    const stub = releasing()
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+      const row = await screen.findByRole('article', { name: 'LoliHouse' })
+      await userEvent.click(within(row).getByText('Expand'))
+      const list = await within(row).findByRole('list')
+
+      await userEvent.click(within(list).getByRole('button', { name: 'Download anyway' }))
+
+      await waitFor(() => expect(sent(stub, 'POST', '/api/rss/items/21/release')).toHaveLength(1))
+      await waitFor(() => expect(within(list).getByRole('listitem')).toHaveTextContent('Sent'))
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it.each([
+    ['zh-Hant', 'series_unbound', '仍然下載', /還沒綁定作品/],
+    ['zh-Hant', 'feed_unprimed', '仍然下載', /還在等第一輪的決定/],
+    ['en', 'series_unbound', 'Download anyway', /isn't bound to a title yet/],
+    ['en', 'feed_unprimed', 'Download anyway', /still waiting on the first-round choice/],
+  ] as const)('%s：放行不了（%s）時停用並說原因，按了不送', async (lang, blocked, name, why) => {
+    const stub = render({
+      'GET /api/rss/items': { body: [{ ...HELD, release_blocked: blocked }] },
+    })
+    await i18next.changeLanguage(lang)
+    try {
+      renderApp('/rss')
+      const line = await recent()
+      const button = within(line).getByRole('button', { name })
+
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      expect(button).toHaveAccessibleDescription(why)
+      await userEvent.click(button)
+      expect(sent(stub, 'POST', '/api/rss/items/21/release')).toHaveLength(0)
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('被拒時就地說原因', async () => {
+    releasing({
+      status: 409,
+      body: { detail: { reason: 'item_not_excluded', detail: 'downloaded' } },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    expect(await within(line).findByRole('alert')).toHaveTextContent(/已經不是被排除的了/)
+  })
+
+  it('同一個 torrent 送過了：按下去那一列換成重複的理由', async () => {
+    releasing({
+      body: { ...HELD, status: 'duplicate', skip: { code: 'same_torrent', params: {} } },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() => expect(line).toHaveTextContent('重複'))
+    expect(within(line).queryByRole('button', { name: '仍然下載' })).not.toBeInTheDocument()
+  })
+
+  it('按下去送單被拒：還是排除，說出送單那一頭的原文', async () => {
+    releasing({
+      body: { ...HELD, error: 'route_unhealthy: the route is red' },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    await userEvent.click(within(line).getByRole('button', { name: '仍然下載' }))
+
+    await waitFor(() =>
+      expect(line).toHaveTextContent(
+        '仍然下載沒送出，這一筆還是排除： route_unhealthy: the route is red',
+      ),
+    )
+    expect(line).toHaveTextContent('已排除')
+  })
+
+  it('送單被拒時這一筆還是排除，說出送單那一頭的原文', async () => {
+    render({
+      'GET /api/rss/items': {
+        body: [{ ...HELD, error: 'source_unavailable: GET mikanani.me: connection refused' }],
+      },
+    })
+    renderApp('/rss')
+    const line = await recent()
+
+    expect(line).toHaveTextContent('已排除')
+    expect(line).toHaveTextContent(
+      '仍然下載沒送出，這一筆還是排除： source_unavailable: GET mikanani.me: connection refused',
+    )
   })
 })

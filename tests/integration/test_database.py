@@ -13,6 +13,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -1089,3 +1090,72 @@ async def test_a_kind_with_two_routes_is_left_for_you(config: Config) -> None:
     assert upgraded == {1: (None, 3), 2: (2, 3), 3: (None, 3)}
     # 劇集那一欄空著時取電影那一欄：舊版本先看「只有一條」，Movies 只有一條時放它也一樣。
     assert downgraded == {1: 3, 2: 2, 3: 3}
+
+
+#: M4 票 107 刪掉請求預算的那一版，與它的前一版。
+BUDGET_DROPPED = "c1d7e4a9b302"
+BEFORE_BUDGET_DROPPED = FEED_ROUTES
+
+
+async def test_series_held_back_by_the_budget_are_due_next_round(config: Config) -> None:
+    """M4 票 107：帶 `lookup_deferred` 的 Series 改成升版那一刻到期的 `lookup_retry`，`attempt` 0
+    （不算一次失敗）；被擋之前已經在重認的留那一條、`attempt` 照舊、`at` 提前。降版換回去。"""
+    deferred = {"code": "lookup_deferred", "params": {"site": "mikanani.me"}}
+    retrying: dict[str, Any] = {
+        "code": "lookup_retry",
+        "params": {
+            "site": "api.themoviedb.org",
+            "attempt": 2,
+            "at": "2099-01-01T00:00:00+00:00",
+            "detail": "503",
+        },
+    }
+    other = [{"code": "no_candidate", "params": {}}]
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BEFORE_BUDGET_DROPPED)
+        with _sqlite(config.database_path) as db:
+            for key, reasons in (
+                ("mikan:1:1", [deferred]),
+                ("mikan:2:1", [deferred, retrying]),
+                ("mikan:3:1", other),
+            ):
+                db.execute(
+                    "INSERT INTO rss_series (key, title_raw, bound_by, reasons_json, created_at)"
+                    " VALUES (?, '', '', ?, '2026-10-01T00:00:00.000000+00:00')",
+                    (key, json.dumps(reasons)),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, BUDGET_DROPPED)
+        with _sqlite(config.database_path) as db:
+            upgraded = {
+                key: json.loads(raw)
+                for key, raw in db.execute("SELECT key, reasons_json FROM rss_series")
+            }
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, BEFORE_BUDGET_DROPPED)
+        with _sqlite(config.database_path) as db:
+            downgraded = {
+                key: json.loads(raw)
+                for key, raw in db.execute("SELECT key, reasons_json FROM rss_series")
+            }
+    finally:
+        await engine.dispose()
+
+    (fresh,) = upgraded["mikan:1:1"]
+    assert fresh["code"] == "lookup_retry"
+    assert fresh["params"]["site"] == "mikanani.me"
+    assert fresh["params"]["attempt"] == 0
+    assert datetime.fromisoformat(fresh["params"]["at"]) <= datetime.now(UTC)
+    (kept,) = upgraded["mikan:2:1"]
+    assert kept["params"] == {**retrying["params"], "at": fresh["params"]["at"]}
+    assert upgraded["mikan:3:1"] == other
+
+    assert downgraded["mikan:1:1"] == [deferred]
+    assert downgraded["mikan:2:1"] == upgraded["mikan:2:1"]
+    assert downgraded["mikan:3:1"] == other

@@ -58,10 +58,12 @@ class RouteRefusalOut(BaseModel):
 
     reason: RouteRefusal
     detail: str
-    #: 只有 `route_in_use` 帶這兩個（票 14a）：畫面要說「N 筆下載、M 個入庫檔案」，
-    #: 不該去解析 `detail`。其餘理由根本不送這兩格。
+    #: 只有 `route_in_use` 帶這四個（票 14a、115）：畫面要說「N 筆下載、M 個入庫檔案、K 個 RSS
+    #: Feed / Series 綁著」，不該去解析 `detail`。其餘理由根本不送這幾格。
     jobs: int | None = None
     ledger_entries: int | None = None
+    rss_feeds: int | None = None
+    rss_series: int | None = None
 
 
 def route_responses(*reasons: RouteRefusal) -> dict[int | str, dict[str, Any]]:
@@ -93,6 +95,10 @@ class ManagedRouteOut(BaseModel):
     jobs: int
     #: 目標落在它底下的帳本（帳本不記 Route，以目標路徑認它）。
     ledger_entries: int
+    #: 自動綁定送進它的 RSS Feed（票 115）。
+    rss_feeds: int
+    #: 綁著它的 RSS Series（票 115）。
+    rss_series: int
     #: 刪不得。規則只在後端一份（`RouteUsage.in_use`），畫面照它決定給不給刪除鍵。
     in_use: bool
 
@@ -146,6 +152,8 @@ async def get_routes(session: SessionDep) -> list[ManagedRouteOut]:
             route=RouteOut.model_validate(row.route),
             jobs=row.usage.jobs,
             ledger_entries=row.usage.ledger_entries,
+            rss_feeds=row.usage.rss_feeds,
+            rss_series=row.usage.rss_series,
             in_use=row.usage.in_use,
         )
         for row in await list_routes(session)
@@ -193,7 +201,8 @@ async def put_route(
     responses=REFUSAL_RESPONSES,
 )
 async def delete_route_endpoint(session: SessionDep, route_id: int) -> None:
-    """明確的刪除（二次確認在前端）。被 Job 或帳本引用：409 `route_in_use`，出路是停用。"""
+    """明確的刪除（二次確認在前端）。被 Job、帳本或 RSS 綁定引用：409 `route_in_use`，
+    出路是停用。"""
     try:
         await delete_route(session, route_id)
     except RouteRejectedError as refusal:
@@ -235,7 +244,8 @@ async def get_jellyfin_libraries(
 def route_refusal(refusal: RouteRejectedError) -> HTTPException:
     """與送單的拒絕同形（`api/jobs.py`）：`reason` 給畫面挑句子，`detail` 是原文。
 
-    刪除被拒時另帶 `jobs`、`ledger_entries`（與 `GET /routes` 同一組詞），畫面說得出數字。
+    刪除被拒時另帶 `jobs`、`ledger_entries`、`rss_feeds`、`rss_series`（與 `GET /routes`
+    同一組詞），畫面說得出數字。
     精靈的刪除（`api/setup.py`）走同一支，兩個入口的拒絕長得一樣。
     """
     usage = refusal.usage if isinstance(refusal, RouteInUseError) else None
@@ -244,9 +254,11 @@ def route_refusal(refusal: RouteRejectedError) -> HTTPException:
         detail=refusal.detail,
         jobs=usage.jobs if usage else None,
         ledger_entries=usage.ledger_entries if usage else None,
+        rss_feeds=usage.rss_feeds if usage else None,
+        rss_series=usage.rss_series if usage else None,
     )
     return HTTPException(
         status_code=_STATUS[refusal.reason],
-        # 沒有引用數的拒絕根本不送那兩格，而不是送兩個 `null`（plan §6 routes 群組）。
+        # 沒有引用數的拒絕根本不送那幾格，而不是送一串 `null`（plan §6 routes 群組）。
         detail=body.model_dump(mode="json", exclude_none=True),
     )

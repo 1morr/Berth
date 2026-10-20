@@ -382,7 +382,8 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 而不是第五個顏色，因為四塊漆上的字色本來就是為了在那塊漆上讀得出來而選的。
 
 **工作面。** 精靈每一步是 `lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]` 的兩欄（左剖面、右纜繩），
-`gap-px` 上鋪 `bg-rule` 讓縫隙自己變成分隔線；`lg` 以下疊成單欄。健康頁內文是 `max-w-3xl` 置中。
+`gap-px` 上鋪 `bg-rule` 讓縫隙自己變成分隔線；`lg` 以下疊成單欄。一頁有兩件必填時，先後由調度黃說（M4 票 119）：同一屏只有一顆 `assigned` 主鍵，第一件還沒做完時
+第二件的送出鍵是 Ghost（頁 4 套件內：推薦站的主鍵還在時，介面登入的送出鍵）。健康頁內文是 `max-w-3xl` 置中。
 登入頁是 `max-w-[26rem]` 的單一登船口窗格，用 `my-auto` 而不是 `items-center` 置中——矮螢幕
 （手機橫放且開了鍵盤）上 flex 置中會把上緣切掉且捲不回去。
 
@@ -569,7 +570,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   可存取名稱是「拿掉「720p」」這種帶著規則本身的一句（`aria-label`）。格與格 `flex-wrap gap-2`，清單以 `sr-only` 的一句命名。
   **它不是色塊**：沒有塗裝、不走 `.label`——規則是使用者的字，不是狀態也不是分類。改了就存（整組覆寫），不另外按儲存；
   拿掉一格時焦點回到加入欄（那一格連同它的鍵一起消失）。建議項（`720p`、`简体`…）是 `COMPACT_BUTTON`，裡面的規則走
-  `.value normal-case`；Feed 與 RSS Series 那一列上平常收成一顆 `COMPACT_BUTTON`「排除條件（N 條）」（`aria-expanded`）。
+  `.value normal-case`；Feed 與 RSS Series 那一列上平常收成一顆 `COMPACT_BUTTON`「標題規則（N 條）」（`aria-expanded`；
+  N 只算這一層的標題規則，合集由全域管，M4 票 117），加入欄的 label 是「加一條標題規則」。送出中加入欄 `readOnly`
+  （不是 `disabled`，焦點留著）。
   移除鍵與這兩處用的是字元，見 Known contradictions。
 - **分類 vs 狀態:** 事件型別、trigger、處置、信心、計劃狀態、停用都是分類，一律中性；
   「判斷不出來」是一句話不是分類，不給色塊，免得看起來像個結論。
@@ -588,13 +591,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   標題層級由 `level` 屬性決定（預設 `3`）：精靈裡它在步驟的 `h2` 底下，Media 詳情裡它緊接著 `h1`，
   所以那裡傳 `level={2}`——標題層級跟著它所在的頁面，不跳級（票 15 audit）。
   機器字串在 `dd` 而 term 是角色名的列（「資料夾名」）照樣用 `.label` term。
-- **健康頁的卡片（`ServiceCard` / `PollerCard` / `BudgetCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
+- **健康頁的卡片（`ServiceCard` / `PollerCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
   `rule-strong`。**標題層級跟著所在的頁面**：`ServiceCard` 收數字的 `level?: 2 | 3`（預設 `3`，與 `Cutaway` 同一個形狀），健康頁上它直接在
   `h1` 底下所以傳 `level={2}`，設定頁的「連線狀態」區塊有自己的 `h2`，卡片留在 `h3`（同 `Cutaway` 的 `level`）。
-  **請求預算（`BudgetCard`，M3 票 20）** 一個站一條 `border-l-2 border-rule` 的內縮列：主機名 `.value text-sm`（機器字串）
-  `Dot` `.value text-xs` 的「已用 / 上限」，下一行各用途的次數，再下面每一種被延後的工作一行 `ink` 字 + `ink-dim` 的
-  「放得下：」與 `Timestamp`。**延後不是失敗**：那是 Berth 自己先停手，等得到；所以不塗漆也不用 `blocked-ink`，只有整塊框
-  變重（The Heavier Line Rule，與下載迴圈落後一輪同一個說法）。讀不到時整塊不畫——它不是服務檢查之一。
 - **區塊標題（`components/SectionHeading`，M4 票 92 收成一份）:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的
   `.value text-xs text-ink-dim` 計數，壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby`
   接上標題。只有數字的計數，看得見的是數字（`aria-hidden`），聽得見的是帶單位的那一句（`sr-only`）——`count` 一定帶著那一句，
@@ -825,7 +824,7 @@ Thumb / Backdrop / 劇照），下方同一條標識帶，框與底同牆卡片�
   （摘要「其他別名 N 個，開了 M 個」＋ `ExpandHint`），不和四種名字擠一排。「季」是「不指定季」加 `S01`…，搜缺的集時不畫。
   再下面是預覽欄位：標籤帶查詢數（「會問 · N 個查詢」，`tabular-nums`），底下是 `.value` 的查詢清單（一個查詢一項）——沒有季時它與開著的名字是同一組字，
   所以不另起一句「Berth 會問這幾個」；搜缺的集時標籤底下多一句範圍與「改回作品名搜尋」。最後是代價與等待併成的一句（`ink-dim text-xs`，
-  「每個索引站各佔 N 格請求預算…；…通常要幾秒到一分鐘」），一個查詢都沒有時不畫；不能搜時整句換成原因（`ink text-sm`），掛在停用的搜尋鍵的描述上。
+  「會問 N 個查詢；…通常要幾秒到一分鐘」），一個查詢都沒有時不畫；不能搜時整句換成原因（`ink text-sm`），掛在停用的搜尋鍵的描述上。
 - **送單（`SubmitAction`）:** 住在發佈名那一格。Ghost「送單」→ 就地展開 `border-2 border-rule-strong` 的確認區塊：
   送到哪一條 Route、會被寫死的資料夾名（`.value wrap-anywhere`）、「這一按就定了」或「它已經是」，加主要 / 取消兩顆鍵。
   被擋下時在同一塊裡以 `role="alert"` 的 `blocked-ink` 說封閉集合的理由，原文接在下面。成功時整塊換成
@@ -944,11 +943,11 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   `border-2 border-rule` 的 `article`，標題帶 `deck` 底：作品名 `h3`（跟著 UI 語言）+ 右側 Route（`.value text-xs ink-dim`）；
   塊內的列 `well` 底、`gap-px` 透出 `rule`。一列：字幕組 `h4`（`.value`）+ 來源連結（`text-xs ink-dim` 底線，字是 Mikan 的
   番組名）→ 一行 `Dot` 分隔的件數（已入庫 · 在路上 · 排除，`.value`、中性；「在路上」與 `/jobs` 同一組）與「最近 E12 · `Timestamp`」（最近**發佈**的那一筆，
-  不是長出它的那一筆）· 自動綁定 → 第一批待確認時一塊 `assigned` 加那一句（與作品頁同一句）→ 原生 `<details>`（摘要是
+  不是長出它的那一筆）· 自動綁定 · Mikan 的才有補漏那一項（「上次補漏：3 小時前」的 `<time>` / 「尚未補漏」/ 完結的「已完結，不再補漏」，M4 票 108）→ 第一批待確認時一塊 `assigned` 加那一句（與作品頁同一句）→ 原生 `<details>`（摘要是
   `ExpandHint`，名字接字幕組）。展開：自動綁定的依據（`Grounds`，lead「依據」）→ 它的每一筆 Item（展開才讀，同「最近的
   Feed Item」的列、不帶來源那一行）→ `border-t-2` 隔開的 `.label`「進階」：季號 / 偏移、Series 層排除條件、就地確認的「解除
   綁定」——多半只想要 Feed 層的，所以收在這裡。**完結的**（後端照現況算的 `finished`）收在段尾預設收起的 `<details>`「已完結
-  N 個」，展開後是同一種作品塊；上面一個都不剩時一句「沒有還在追的 RSS Series」。已完結不塗漆。
+  N 個」，展開後是同一種作品塊；上面一個都不剩時一句「沒有還在追的 RSS Series」。已完結不塗漆。段落標題下一行 `text-sm ink-dim` 說每日補漏補什麼、完結就停，與訂閱 / 綁定確認那一句同一個 key。
 - **Feed 列（`FeedRow`）:** `well` 底 `article`，框平常 `rule`、這一輪讀不到時 `rule-strong`。來源中性色塊 + 名稱 `h3` →
   遮掉 token 的網址 → 一行 `text-xs ink-dim`：每 N 分鐘 · 上次輪詢 `Timestamp` · N 筆 ·（有指定時）送進 Route 名 →
   第一輪還沒選時一句 `ink`「第一輪還沒決定，一筆都不送」→ 讀不到時一塊 **`assigned`** 的 `Notice` 帶原文（卡住了、下一輪會再試，不是
@@ -961,8 +960,11 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   → `gap-px` 的清單，每一列原生勾選框 + 發佈名 label，下面 `pl-7` 對齊勾選框的解析結果（季集、Tags 用 `.value`）、「已經有了」
   與逐筆結果（被拒是 `blocked-ink` 的一句 + 原文，成功是一塊 `secured` 小色塊 + 下載連結——這一格是剛做完的事，不是常態）。
   最底下是 `STICKY_ACTION`：資料夾名重述在送出鍵正上方，鍵上是「送出 N 筆」與送出中的「N / M」；還沒選作品時只有一句話。
-- **排除條件（`ExclusionsSection`）:** 全域那一層是一塊 `well` 框：lede 說三層取聯集 → 「不自動下載合集」原生勾選框 → 一條一格
-  的規則（見 Chips）。**不塗漆**：排除條件是設定，不是要你現在做的事。
+- **排除條件（`ExclusionsSection`）:** 全域那一層（標題「全域排除條件」、錨點 `#global-exclusions`）是一塊 `well` 框：lede 說三層取聯集 →
+  「內建判斷」組（`.label` + `text-xs ink-dim` 的「看解析結果，不是關鍵字」，下面是「不自動下載合集」原生勾選框）→ `border-t-2 rule`
+  分隔 →「標題規則」組（一條一格，見 Chips；建議那一列標「建議關鍵字」）。合集不是規則，所以不跟規則排在一起。Feed、RSS Series 兩層
+  與新增 Feed 表單沒有合集開關，`LayerLede` 在本層說明下多一行「合集由全域設定：目前…」+ `TEXT_LINK`「改全域設定」連回錨點。
+  **不塗漆**：排除條件是設定，不是要你現在做的事。
 - **最近的 Feed Item:** `gap-px` 的清單，一列一個狀態色塊 + 發佈名。**常態不塗漆**：已送單、已排除、重複都是中性色塊；只有
   送不出去（`matched` 帶著原文）塗 `assigned`。被排除或去重擋下的多一行 `ink-dim` 的「為什麼沒下載」，那不是錯誤；
   送不出去的原文是 `.value text-xs ink`。事實行開頭是集數（`E12`，`.value ink`）；另一行說來自哪裡：「來自 Feed 名 · 作品名
@@ -1073,7 +1075,7 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 - **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
 - **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
 - **Do** 讓 `Cutaway` 與 `ServiceCard` 的 `level` 跟著它所在頁面的標題層級，不跳級。
-- **Do** 讓等得到的事（請求預算用完而延後、Feed 這一輪讀不到、送單卡住）走線變重或 `assigned`，不走 `blocked`：
+- **Do** 讓等得到的事（Feed 這一輪讀不到、自動綁定排著重認、送單卡住）走線變重或 `assigned`，不走 `blocked`：
   Berth 自己會再試的不是阻擋（The One Meaning Rule）。
 - **Do** 在會讓頁首需要你的段落長高的動作之後，把使用者剛按的那一列捲回畫面（只在它已經被推出去時）。
 - **Do** 把使用者自己寫的規則、關鍵字畫成一條一格的 `.value`，不是色塊、不走 `.label`。

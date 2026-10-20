@@ -482,7 +482,15 @@ function OwnerCutaway({
       )}
       <CutawayRow
         term={t('owner.cutaway.stored')}
-        value={t(carried ? 'owner.cutaway.passwordCarried' : 'owner.cutaway.password')}
+        // 擁有者成立之後不再說交給了誰（M4 票 104）：勾了「也用這組」時套件內那兩台也拿到它，重新整理之後
+        // 這個分頁已經不記得勾過沒有。
+        value={t(
+          mode === 'owned'
+            ? 'owner.cutaway.passwordOwned'
+            : carried
+              ? 'owner.cutaway.passwordCarried'
+              : 'owner.cutaway.password',
+        )}
         muted
       />
     </Cutaway>

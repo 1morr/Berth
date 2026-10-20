@@ -1,6 +1,6 @@
 # 107 — 刪除站點請求預算
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -32,10 +32,31 @@
 
 ## 驗收
 
-- [ ] `rg -i "budget|BudgetUse|lookup_deferred|budget_exhausted" berth web/src tests` 只剩 AI 月預算那類無關的命中（貼輸出）
-- [ ] 帶 `lookup_deferred` 的 Series 經 migration 後，下一輪輪詢會重認（pytest；alembic upgrade / downgrade 都跑過）
-- [ ] 搜尋不再跳過任何站，也不再回 `budget_exhausted`（pytest、vitest）
-- [ ] 健康頁不再出現請求預算卡（vitest；playwright 實跑截圖）
-- [ ] 全部檢查、pytest、vitest 綠；plan、brief、CONTEXT.md、CHANGELOG、progress.md 已更新
+- [x] `rg -i "budget|BudgetUse|lookup_deferred|budget_exhausted" berth web/src tests` 只剩 AI 月預算那類無關的命中（貼輸出）
+- [x] 帶 `lookup_deferred` 的 Series 經 migration 後，下一輪輪詢會重認（pytest；alembic upgrade / downgrade 都跑過）
+- [x] 搜尋不再跳過任何站，也不再回 `budget_exhausted`（pytest、vitest）
+- [x] 健康頁不再出現請求預算卡（vitest；playwright 實跑截圖）
+- [x] 全部檢查、pytest、vitest 綠；plan、brief、CONTEXT.md、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-19 實作（`35f5719` 與收尾 commit）。驗證：
+  - `rg -i "budget|BudgetUse|lookup_deferred|budget_exhausted" berth web/src tests` 剩下的命中：migration
+    `c1d7e4a9b302` 本身與它的兩組測試（`test_database.py`、`test_rss_auto_bind_retry.py::TestHeldBackByTheBudget`）、
+    `test_search_api.py` 的反向斷言 `"budget" not in body`，以及無關的 `wizardCopy.test.ts` 的 `CARD_BUDGET`（卡片字數上限）
+    和 TMDB fixture 的電影 `budget` 欄。
+  - alembic：空資料庫 `upgrade head` → `downgrade -1`（`bec5947663f5`）→ `upgrade head`（`c1d7e4a9b302 (head)`）；
+    資料轉換在 `test_series_held_back_by_the_budget_are_due_next_round` 升降都跑。下一輪重認：
+    `TestHeldBackByTheBudget` 兩條（綁上；再失敗記成第 1 次）。
+  - 搜尋：`test_gaps_in_twelve_seasons_are_asked_batch_by_batch` 斷言每個查詢 `indexer_ids == ()`；`test_search_api` 斷言
+    回應沒有 `retry_at` / `skipped` / `next_at` / `budget`；vitest `搜尋問的是全部的站…`。
+  - 健康頁：vitest `沒有請求預算那一張卡`；playwright 對 `healthy` 情境實跑 `/health`：標題 健康 / Jellyfin / qBittorrent /
+    Prowlarr / 下載迴圈 / 媒體庫路徑，請求預算 region 0 個、沒有任何 `/health/budget` 請求（截圖留在 session scratchpad）。
+  - `uv run pre-commit run --all-files` 全過；pytest 4057 passed（唯一失敗是 clone 沒有 `v*` tag 的
+    `test_changelog_released`，抓 tag 後重跑通過）；vitest 107 檔 1994 passed。
+- code-review 未處理的發現：
+  - Spec：每個查詢都以 `ServiceError` 失敗時一律回 `unreachable`（認證錯是 `credential_rejected`），Prowlarr 在、但查詢全回
+    5xx / 429 也會說「連不上」。舊的 `sites()` 預檢遇到同樣的錯也是 `unreachable`；連不上與 5xx 在 `adapters.http` 都是
+    `ServiceUnavailableError`，要分開得拆例外類別，超出這張票。
+  - Standards：commit type 用了 `refactor:`，但它拿掉了對外 API 欄位（CHANGELOG 已寫明）；已提交，不改寫歷史。
+  - 判斷題（不改）：`services.rss._site_of` 與同檔 `kind_of` / `_default_name` 各自去 `www.`；`_attempt` 回三元組。

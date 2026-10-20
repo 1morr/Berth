@@ -106,7 +106,6 @@ function plan(overrides: Partial<QueryPlan> = {}): QueryPlan {
     ],
     any_season: true,
     limit: 10,
-    budget: 60,
     ...overrides,
   }
 }
@@ -171,8 +170,6 @@ function results(overrides: Partial<SearchResults> = {}): SearchResults {
     attempts: [{ step: 'SPY x FAMILY', status: 'ok', detail: '1', error: '' }],
     problem: null,
     detail: '',
-    retry_at: null,
-    skipped: [],
     batch: null,
     ...overrides,
   }
@@ -220,8 +217,7 @@ function holdSearch(base: ReturnType<typeof stubApi>) {
 }
 
 /** 只問一個查詢時，代價與等待那一句（M4 票 84b）。 */
-const COST_ONE =
-  '每個索引站各佔 1 格請求預算（每站每小時 60 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。'
+const COST_ONE = '會問 1 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。'
 
 /** 這一頁的搜尋區塊。其餘區塊的測試在 `pages/MediaDetailPage.test.tsx`。 */
 function panel() {
@@ -614,115 +610,15 @@ describe('搜尋 torrent 與結果表', () => {
     }
   })
 
-  describe('請求預算放不下的站（M4 票 77）', () => {
-    const minutes = (count: number) => new Date(Date.now() + count * 60 * 1000).toISOString()
+  it('搜尋問的是全部的站：沒有「這次沒問」，也沒有「等請求預算」（M4 票 107）', async () => {
+    render({ [SEARCH_PATH]: { body: results() } })
+    renderApp('/media/tv:120089')
 
-    it('放不下的站這次沒問，其他站的結果照常列出；說出是哪一站、多久之後放得下', async () => {
-      render({
-        [SEARCH_PATH]: {
-          body: results({
-            skipped: [{ site: 'mikanani.me', indexers: ['Mikan'], until: minutes(43) }],
-          }),
-        },
-      })
-      renderApp('/media/tv:120089')
+    await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
 
-      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
-
-      const list = await within(panel()).findByRole('list', { name: '這次沒問' })
-      const site = within(list).getByRole('listitem')
-      expect(within(site).getByText('Mikan')).toBeVisible()
-      expect(within(site).getByText('mikanani.me')).toBeVisible()
-      expect(within(site).getByText('43 分鐘後')).toBeVisible()
-      // 中文沒有單數形：一站時也不說「它們」（實跑時抓到）。
-      expect(
-        within(panel()).getByText(
-          '1 個站這一小時的請求預算放不下這一批，這次沒問；其他站照常問了。',
-        ),
-      ).toBeVisible()
-      expect(within(panel()).getByRole('table')).toBeInTheDocument()
-      expect(within(panel()).queryByText('等請求預算')).not.toBeInTheDocument()
-    })
-
-    it('一批比整份預算還大的站說永遠放不下，不給一個不會到的時間', async () => {
-      render({
-        [SEARCH_PATH]: {
-          body: results({ skipped: [{ site: 'nyaa.si', indexers: ['Nyaa.si'], until: null }] }),
-        },
-      })
-      renderApp('/media/tv:120089')
-
-      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
-
-      const list = await within(panel()).findByRole('list', { name: '這次沒問' })
-      const site = within(list).getByRole('listitem')
-      expect(within(site).getByText(/這一批比整份預算還大/)).toBeVisible()
-    })
-
-    it('每一站都放不下才整批等，說最早多久之後放得下', async () => {
-      render({
-        [SEARCH_PATH]: {
-          body: results({
-            rows: [],
-            attempts: [],
-            problem: 'budget_exhausted',
-            retry_at: minutes(43),
-            skipped: [
-              { site: 'mikanani.me', indexers: ['Mikan'], until: minutes(43) },
-              { site: 'nyaa.si', indexers: ['Nyaa.si'], until: minutes(50) },
-            ],
-          }),
-        },
-      })
-      renderApp('/media/tv:120089')
-
-      await userEvent.click(await screen.findByRole('button', { name: '搜尋' }))
-
-      expect(await within(panel()).findByText('等請求預算')).toBeVisible()
-      expect(within(panel()).getByText(/每一個站/)).toBeVisible()
-      expect(within(panel()).getByText('43 分鐘後')).toBeVisible()
-      // 整批等的時候不再逐站列一次：同一件事只說一次。
-      expect(within(panel()).queryByText('這次沒問')).not.toBeInTheDocument()
-    })
-
-    it('英文介面兩種狀態各有自己的說法，時間照樣是相對的', async () => {
-      render({
-        [SEARCH_PATH]: {
-          body: results({
-            skipped: [{ site: 'mikanani.me', indexers: ['Mikan'], until: minutes(43) }],
-          }),
-        },
-        'GET /api/search?media=tv%3A120089&q=law': {
-          body: results({
-            rows: [],
-            attempts: [],
-            problem: 'budget_exhausted',
-            retry_at: minutes(43),
-          }),
-        },
-      })
-      await i18next.changeLanguage('en')
-      try {
-        renderApp('/media/tv:120089')
-
-        await userEvent.click(await screen.findByRole('button', { name: 'Search' }))
-
-        expect(await screen.findByRole('list', { name: 'Not asked this time' })).toBeVisible()
-        expect(
-          screen.getByText(/for this site can't fit this batch, so it wasn't asked/),
-        ).toBeVisible()
-        expect(screen.getByText('in 43 minutes')).toBeVisible()
-
-        await userEvent.type(screen.getByRole('textbox'), 'law')
-        await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-
-        expect(await screen.findByText('Waiting for the budget')).toBeVisible()
-        expect(screen.getByText(/every site behind the indexer/)).toBeVisible()
-        expect(screen.getByText('in 43 minutes')).toBeVisible()
-      } finally {
-        await i18next.changeLanguage('zh-Hant')
-      }
-    })
+    expect(await within(panel()).findByRole('table')).toBeInTheDocument()
+    expect(within(panel()).queryByText('這次沒問')).not.toBeInTheDocument()
+    expect(within(panel()).queryByText(/請求預算/)).not.toBeInTheDocument()
   })
 
   it('搜到但一筆都沒有不是錯誤', async () => {
@@ -1290,14 +1186,14 @@ describe('搜尋 torrent 與結果表', () => {
       expect(within(panel()).queryByText(/Berth 會問/)).toBeNull()
     })
 
-    it('會佔幾格請求預算與要等多久是同一句', async () => {
+    it('會問幾個查詢與要等多久是同一句', async () => {
       render()
       renderApp('/media/tv:120089')
       await screen.findByRole('region', { name: '搜尋 torrent' })
 
       expect(
         await within(panel()).findByText(
-          '每個索引站各佔 3 格請求預算（每站每小時 60 格）；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
+          '會問 3 個查詢；索引站要現場去連每一個追蹤站，通常要幾秒到一分鐘。',
         ),
       ).toBeVisible()
     })
@@ -1312,7 +1208,7 @@ describe('搜尋 torrent 與結果表', () => {
         expect(await within(region).findByText('Will ask · 3 queries')).toBeVisible()
         expect(
           within(region).getByText(
-            "Uses 3 slots of each indexer's request budget (60 per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+            'Sends 3 queries; the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
           ),
         ).toBeVisible()
         expect(within(region).queryByText(/Berth will ask/)).toBeNull()
@@ -1322,7 +1218,7 @@ describe('搜尋 torrent 與結果表', () => {
         expect(within(region).getByText('Will ask · 1 query')).toBeVisible()
         expect(
           within(region).getByText(
-            "Uses 1 slot of each indexer's request budget (60 per site an hour); the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.",
+            'Sends 1 query; the indexer contacts every tracker it knows, which usually takes a few seconds to a minute.',
           ),
         ).toBeVisible()
       } finally {

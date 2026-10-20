@@ -120,26 +120,12 @@ class SearchOut(BaseModel):
     problem: IndexerProblem | None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str
-    #: `budget_exhausted` 時最早有一站放得下這一批的時刻（M3 票 20）；永遠放不下是 `null`。
-    retry_at: datetime | None
-    #: 請求預算放不下這一批、這次沒問的站（M4 票 77）；`budget_exhausted` 時是每一站。
-    skipped: list[SkippedOut]
     #: 缺集搜尋的這一批。作品名與自己打的關鍵字沒有批次。
     batch: BatchOut | None
 
 
-class SkippedOut(BaseModel):
-    """這次沒問的一站：主機名、索引站裡的名字、何時放得下這一批（`null` 是永遠放不下）。"""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    site: str
-    indexers: list[str]
-    until: datetime | None
-
-
 class BatchOut(BaseModel):
-    """缺集搜尋分批時的這一批（M3 票 20）：「這一批問了哪幾季，下一批何時問」。
+    """缺集搜尋分批時的這一批（M3 票 20）：「這一批問了哪幾季，下一批是哪幾季」。
 
     下一批以季定位：帶 `from_season=<next_seasons[0]>` 再問一次，照那一刻的季表重切。
     """
@@ -151,8 +137,6 @@ class BatchOut(BaseModel):
     later: int
     #: 下一批問哪幾季；最後一批是空的。
     next_seasons: list[int]
-    #: 請求預算最早有一站放得下下一批的時刻（M4 票 77）。預覽、最後一批是 `null`。
-    next_at: datetime | None
 
 
 class NameChipOut(BaseModel):
@@ -174,9 +158,9 @@ class SeasonChipOut(BaseModel):
 
 
 class SearchQueriesOut(BaseModel):
-    """搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問，以及這要佔多少請求預算。"""
+    """搜尋**之前**畫面要說的那句話：Berth 會拿這幾個名字去問。"""
 
-    #: 要問的查詢，也是每個索引站各要佔幾格請求預算（一個查詢一格）。
+    #: 要問的查詢。
     queries: list[str]
     #: 不必問索引站就知道的問題：只有 `not_configured`（M2 票 13）。其餘要按下去才知道。
     problem: IndexerProblem | None
@@ -190,8 +174,6 @@ class SearchQueriesOut(BaseModel):
     any_season: bool
     #: 一次最多幾個查詢。`queries` 比它多時 `GET /search` 一個都不問，回 `too_many_queries`。
     limit: int
-    #: 一站一小時的請求預算（格）。一個查詢在索引站背後的每一站各佔一格。
-    budget: int
 
 
 class RememberedNamesIn(BaseModel):
@@ -329,7 +311,6 @@ def _plan_out(plan: QueryPlan) -> SearchQueriesOut:
         seasons=[SeasonChipOut(number=number, on=number in seasons) for number in plan.seasons],
         any_season=plan.choice.any_season,
         limit=plan.limit,
-        budget=plan.budget,
     )
 
 
@@ -363,7 +344,5 @@ def _out(view: SearchView) -> SearchOut:
         attempts=[StepOut.model_validate(attempt) for attempt in view.attempts],
         problem=view.problem,
         detail=view.detail,
-        retry_at=view.retry_at,
-        skipped=[SkippedOut.model_validate(one) for one in view.skipped],
         batch=BatchOut.model_validate(view.batch) if view.batch is not None else None,
     )

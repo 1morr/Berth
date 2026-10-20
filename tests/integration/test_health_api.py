@@ -16,12 +16,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from berth.adapters.budget import BudgetExhaustedError, RequestBudget
 from berth.adapters.http import ServiceUnavailableError
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import BudgetUse
 from berth.main import create_app
 from berth.models import Route, Setting
 from berth.services.health import CHECK_INTERVAL, check_health
@@ -319,36 +317,3 @@ def _check(client: TestClient, factory: FakeClientFactory) -> None:
             await check_health(session, factory, now=NOW + CHECK_INTERVAL)
 
     asyncio.run(run())
-
-
-class TestRequestBudget:
-    """一個站一份請求預算（M3 票 20）：健康頁說得出這一小時誰用了多少、哪一種工作被延後。"""
-
-    def test_it_needs_a_session(self, client: TestClient) -> None:
-        assert client.get("/api/health/budget").status_code == 401
-
-    def test_it_lists_what_each_site_used_and_what_waits(
-        self, client: TestClient, factory: FakeClientFactory
-    ) -> None:
-        factory.budget = RequestBudget(limit=2)
-        factory.budget.take("mikanani.me", 1, BudgetUse.POLL)
-        factory.budget.take("mikanani.me", 1, BudgetUse.BACKFILL)
-        with pytest.raises(BudgetExhaustedError):
-            factory.budget.take("mikanani.me", 5, BudgetUse.SEARCH)
-        sign_in(client, DECKHAND)
-
-        body = client.get("/api/health/budget").json()
-
-        assert body["limit"] == 2
-        (site,) = body["sites"]
-        assert site["site"] == "mikanani.me"
-        assert site["used"] == 2
-        assert site["by_use"] == [
-            {"use": "poll", "count": 1},
-            {"use": "backfill", "count": 1},
-        ]
-        (waiting,) = site["deferred"]
-        assert waiting["use"] == "search"
-        assert waiting["refused"] == 5
-        # 五個比整份預算（2）還多：永遠放不下，不說一個到不了的時間。
-        assert waiting["until"] is None

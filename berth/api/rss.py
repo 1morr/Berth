@@ -10,10 +10,10 @@ plan 原本那一組 `rss/rules` 在 2026-09-24 改成 RSS Series（brief §15�
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
 from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.errors import refusal_responses
@@ -34,6 +34,8 @@ from berth.domain import (
 from berth.services.bangumi import read_bangumi, search_bangumi
 from berth.services.oneshot import read_oneshot
 from berth.services.rss import (
+    DEFAULT_INTERVAL_SEC,
+    FEED_INTERVALS,
     RssRejectedError,
     add_feed,
     bind_series,
@@ -46,8 +48,10 @@ from berth.services.rss import (
     preview_feed,
     prime_feed,
     read_exclusions,
+    release_item,
     set_exclusions,
     set_feed_exclusions,
+    set_feed_interval,
     set_feed_routes,
     set_series_exclusions,
     subscribe_mikan,
@@ -82,8 +86,14 @@ _STATUS: dict[RssRefusal, int] = {
     RssRefusal.FEED_UNREAD: status.HTTP_409_CONFLICT,
     #: 上游回了東西，但不是 RSS：與 `feed_unreachable` 同樣是上游那一頭的事。
     RssRefusal.FEED_NOT_RSS: status.HTTP_502_BAD_GATEWAY,
-    #: 請求預算用完（M3 票 20）：不是上游的錯，是 Berth 自己先停手；等 `detail` 說的時刻再試。
-    RssRefusal.BUDGET_EXHAUSTED: status.HTTP_429_TOO_MANY_REQUESTS,
+    RssRefusal.ITEM_MISSING: status.HTTP_404_NOT_FOUND,
+    #: 另一個分頁先放行了、或這一筆本來就不是被排除的：重讀清單看它現在的狀態。
+    RssRefusal.ITEM_NOT_EXCLUDED: status.HTTP_409_CONFLICT,
+    #: 先綁定 RSS Series 再放行。
+    RssRefusal.SERIES_UNBOUND: status.HTTP_409_CONFLICT,
+    #: 先選第一輪再放行。
+    RssRefusal.FEED_UNPRIMED: status.HTTP_409_CONFLICT,
+    RssRefusal.INTERVAL_UNSUPPORTED: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -122,6 +132,11 @@ class KindRoutesOut(BaseModel):
     movie: int | None
 
 
+#: 輪詢間隔的秒數，只收固定檔位（M4 票 109）。檔位寫進 schema 的 `enum`，畫面的型別跟著它；
+#: 檢查在命令裡（422 `interval_unsupported`），拒絕的形狀才與其他 `/rss` 的一樣。
+FeedInterval = Annotated[int, WithJsonSchema({"type": "integer", "enum": list(FEED_INTERVALS)})]
+
+
 class FeedOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -129,7 +144,8 @@ class FeedOut(BaseModel):
     name: str
     url: str
     kind: FeedKind
-    interval_sec: int
+    #: 檔位同 `FeedIn`：寫得進來的只有這幾個，舊的列是預設的 900。
+    interval_sec: FeedInterval
     last_polled_at: datetime | None
     #: 上一輪失敗的原文（英文）。空字串是上一輪好好的。
     last_error: str
@@ -167,6 +183,17 @@ class FeedIn(BaseModel):
     #: `route_kind_mismatch`）；那一種一條啟用中的 Route 都沒有時不收、存 `null`。
     tv_route: int | None = None
     movie_route: int | None = None
+    #: 選填，與 Feed 一起存（M4 票 110）：Mikan 不預覽、第一輪就送單，要排除的得在這裡給。
+    #: 寫壞的那一條讓整個 Feed 都不加（422 `rule_invalid`，同 `PUT /rss/feeds/{id}/exclusions`）。
+    exclusions: list[str] = Field(default_factory=list)
+    #: 選填，預設 15 分鐘。
+    interval_sec: FeedInterval = DEFAULT_INTERVAL_SEC
+
+
+class FeedIntervalIn(BaseModel):
+    """改 Feed 的輪詢間隔；檔位同 `POST /rss/feeds`。"""
+
+    interval_sec: FeedInterval
 
 
 class FeedRoutesIn(BaseModel):
@@ -300,6 +327,9 @@ class SeriesOut(BaseModel):
     #: 或最近一筆發佈之後 30 天沒有新的（`parser.series_finished`）。RSS 頁收進「已完結」；
     #: 新的一筆出現時自己變回 `false`。
     finished: bool
+    #: 上一次讀它的 Mikan 單一 feed 補舊集或補漏的那一刻（M4 票 108）；還沒補過、或不是 Mikan
+    #: 的是 `null`。完結的不再補漏（`finished`），這一格停在最後一次。
+    backfilled_at: datetime | None
     #: 只有綁定回的那一份有值：這一次送出去了幾筆。
     submitted: int
     #: 還沒確認時第一批在問什麼（M4 票 11）；確認過、或還沒有已入庫的集數在等人是 `null`。
@@ -362,6 +392,9 @@ class ItemOut(BaseModel):
     size: int | None
     #: 發佈名讀出的集數；讀不出是 `null`（M4 票 13）。
     episode: int | None
+    #: 「仍然下載」（`POST /rss/items/{id}/release`）現在會怎麼被拒：`series_unbound`、
+    #: `feed_unprimed`，不是 `excluded` 的一律 `item_not_excluded`；放行得了是 `null`（M4 票 111）。
+    release_blocked: RssRefusal | None
 
 
 class OneshotIn(BaseModel):
@@ -416,7 +449,6 @@ class OneshotOut(BaseModel):
         RssRefusal.FEED_UNSUPPORTED,
         RssRefusal.FEED_UNREACHABLE,
         RssRefusal.FEED_NOT_RSS,
-        RssRefusal.BUDGET_EXHAUSTED,
         RssRefusal.MEDIA_MISSING,
         RssRefusal.ROUTE_MISSING,
     ),
@@ -452,6 +484,8 @@ async def get_feeds(session: SessionDep) -> list[FeedOut]:
         RssRefusal.ROUTE_DISABLED,
         RssRefusal.ROUTE_KIND_MISMATCH,
         RssRefusal.ROUTE_REQUIRED,
+        RssRefusal.RULE_INVALID,
+        RssRefusal.INTERVAL_UNSUPPORTED,
     ),
 )
 async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
@@ -463,6 +497,8 @@ async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
             name=body.name,
             tv_route_id=body.tv_route,
             movie_route_id=body.movie_route,
+            exclusions=body.exclusions,
+            interval_sec=body.interval_sec,
         )
         return FeedOut.model_validate(view)
     except RssRejectedError as refusal:
@@ -496,6 +532,18 @@ async def put_feed_routes(
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
     return FeedRoutesOut.model_validate(outcome)
+
+
+@router.put(
+    "/feeds/{feed_id}/interval",
+    responses=_responses(RssRefusal.FEED_MISSING, RssRefusal.INTERVAL_UNSUPPORTED),
+)
+async def put_feed_interval(session: SessionDep, feed_id: int, body: FeedIntervalIn) -> FeedOut:
+    """改這個 Feed 的輪詢間隔（M4 票 109）。不當場輪：下一輪是上一輪加上新的間隔。"""
+    try:
+        return FeedOut.model_validate(await set_feed_interval(session, feed_id, body.interval_sec))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
 
 
 @router.delete("/feeds/{feed_id}", responses=_responses(RssRefusal.FEED_MISSING))
@@ -652,6 +700,27 @@ async def get_items(session: SessionDep) -> list[ItemOut]:
     return [ItemOut.model_validate(row) for row in await list_items(session)]
 
 
+@router.post(
+    "/items/{item_id}/release",
+    responses=_responses(
+        RssRefusal.ITEM_MISSING,
+        RssRefusal.ITEM_NOT_EXCLUDED,
+        RssRefusal.SERIES_UNBOUND,
+        RssRefusal.ROUTE_MISSING,
+        RssRefusal.FEED_UNPRIMED,
+    ),
+)
+async def post_item_release(
+    session: SessionDep, factory: ClientFactoryDep, item_id: int
+) -> ItemOut:
+    """放行一筆被排除的 Item，當場送出（M4 票 111）。回這一筆的新狀態：`downloaded` 帶 Job 的
+    hash、`duplicate` 帶理由；送單被拒時留在 `excluded`，原文在 `error`。"""
+    try:
+        return ItemOut.model_validate(await release_item(session, factory, item_id))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
 # --- 從 Media 頁訂閱（票 19） ---------------------------------------------
 
 
@@ -676,6 +745,9 @@ class SubgroupOut(BaseModel):
     latest: str
     #: 這一組的 RSS Series 已經綁在哪一部作品上；沒有是 `null`。
     bound_to: str | None
+    #: 番組 × 這一組的單一 feed（M4 票 112）：「只下載現有的」拿它走 `POST /rss/oneshot`，
+    #: 網址格式只住在後端。
+    feed_url: str
 
 
 class BangumiOut(BaseModel):
@@ -701,12 +773,22 @@ class MikanSubscriptionIn(BaseModel):
     subgroup_name: str = ""
 
 
+class ExcludedCountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: SkipCode
+    count: int
+
+
 class SubscriptionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     feed: FeedOut
     #: `submitted` 是這一次送出去的（整季）。
     series: SeriesOut
+    #: 這個 RSS Series 被排除條件擋下、沒有自動下載的，照理由分（M4 票 112）；沒有是空的。
+    #: 畫面說出幾筆、為什麼，指向「只下載現有的」（`POST /rss/oneshot`）。
+    excluded: list[ExcludedCountOut]
 
 
 class SearchSubscriptionIn(BaseModel):
@@ -728,7 +810,7 @@ _BINDING_REFUSALS = (
 
 @router.get(
     "/mikan/search",
-    responses=_responses(RssRefusal.FEED_UNREACHABLE, RssRefusal.BUDGET_EXHAUSTED),
+    responses=_responses(RssRefusal.FEED_UNREACHABLE),
 )
 async def get_mikan_search(
     factory: ClientFactoryDep, q: str = Query(min_length=1)
@@ -742,7 +824,7 @@ async def get_mikan_search(
 
 @router.get(
     "/mikan/bangumi/{bangumi_id}",
-    responses=_responses(RssRefusal.FEED_UNREACHABLE, RssRefusal.BUDGET_EXHAUSTED),
+    responses=_responses(RssRefusal.FEED_UNREACHABLE),
 )
 async def get_mikan_bangumi(
     session: SessionDep, factory: ClientFactoryDep, bangumi_id: int
@@ -761,7 +843,6 @@ async def get_mikan_bangumi(
         RssRefusal.SERIES_BOUND,
         RssRefusal.FEED_DUPLICATE,
         RssRefusal.FEED_UNREACHABLE,
-        RssRefusal.BUDGET_EXHAUSTED,
         *_BINDING_REFUSALS,
     ),
 )

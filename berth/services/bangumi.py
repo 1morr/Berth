@@ -15,9 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
 from berth.adapters.rss import mikan
-from berth.domain import BudgetUse
 from berth.models import RssSeries
-from berth.services.clients import ServiceClientFactory, feed_fetcher
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.rss import unread
 
@@ -31,6 +30,8 @@ class SubgroupView:
     latest: str
     #: 這一組的 RSS Series 已經綁在哪一部作品上；沒綁（或還沒長出來）是 `None`。
     bound_to: str | None
+    #: 番組 × 這一組的單一 feed（M4 票 112）：「只下載現有的」拿它走一次性連結。
+    feed_url: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +72,7 @@ async def read_bangumi(
                 releases=group.releases,
                 latest=group.latest,
                 bound_to=bound.get(group.id),
+                feed_url=mikan.bangumi_feed_url(bangumi_id, group.id),
             )
             for group in mikan.subgroups(page)
         ),
@@ -78,7 +80,7 @@ async def read_bangumi(
 
 
 async def _fetch(factory: ServiceClientFactory, url: str) -> str:
-    fetcher = feed_fetcher(factory, BudgetUse.MANUAL)
+    fetcher = factory.rss()
     try:
         return (await fetcher.fetch(url)).decode("utf-8", errors="replace")
     except ServiceError as exc:

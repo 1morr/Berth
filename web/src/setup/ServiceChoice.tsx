@@ -534,6 +534,11 @@ export function ServiceChoice({
           }}
         />
       )}
+      {/* 表單收著時貼在測試結果（「改位址或憑證」）底下；打開時在表單的測試鍵上方，兩處不同時畫。 */}
+      {kind === 'qbittorrent' &&
+        service?.origin === 'existing' &&
+        !switching &&
+        !showExistingForm && <ProbeNote />}
     </section>
   )
 }
@@ -718,13 +723,6 @@ export function ExistingForm({
       <p className="max-w-prose text-xs text-ink-dim">
         {signIn ? t('connect.hint.jellyfinSignIn') : t(`connect.hint.${kind}`)}
       </p>
-      {kind === 'qbittorrent' && (
-        // 測試會放一個探針（M4 票 46）。說法沿用頁 3「按下之後會」（M4 票 19、31）：只有使用者自己那一台
-        // 可能設了執行外部程式，套件內不提。
-        <p className="-mt-2 max-w-prose text-xs text-ink-dim">
-          {t('connect.probe', { root: SHARED_ROOT })}
-        </p>
-      )}
       <Field
         label={t('connect.field.baseUrl')}
         value={baseUrl}
@@ -825,6 +823,7 @@ export function ExistingForm({
           </Notice>
         )}
       {aside}
+      {kind === 'qbittorrent' && <ProbeNote />}
       <div>
         <PrimaryButton type="submit" busy={choosing}>
           {signIn
@@ -833,6 +832,24 @@ export function ExistingForm({
         </PrimaryButton>
       </div>
     </form>
+  )
+}
+
+/**
+ * 測試會放一個探針（M4 票 46）：怎麼放的一句，與唯一要使用者自己留意的副作用（M4 票 104：獨立一行、貼在
+ * 測試鍵旁，不再夾在括號裡）。只有使用者自己那一台可能設了執行外部程式，套件內不提。卡片不再說探針——
+ * 一件事只在一處說。
+ */
+function ProbeNote() {
+  const { t } = useTranslation()
+
+  return (
+    <div className="grid gap-1">
+      <p className="max-w-prose text-xs text-ink-dim">
+        {t('connect.probe', { root: SHARED_ROOT })}
+      </p>
+      <p className="max-w-prose text-xs font-semibold text-ink">{t('connect.externalProgram')}</p>
+    </div>
   )
 }
 
