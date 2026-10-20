@@ -708,8 +708,8 @@ describe('RSS 頁', () => {
     expect(within(rules).getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
     await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
     await userEvent.click(within(rules).getByRole('button', { name: '加入「简体」' }))
-    await userEvent.type(within(rules).getByLabelText('加一條排除條件'), '/v2$/{Enter}')
-    expect(within(rules).getByLabelText('加一條排除條件')).toHaveValue('')
+    await userEvent.type(within(rules).getByLabelText('加一條標題規則'), '/v2$/{Enter}')
+    expect(within(rules).getByLabelText('加一條標題規則')).toHaveValue('')
     await userEvent.click(within(rules).getByRole('button', { name: '拿掉「简体」' }))
     expect(
       within(rules)
@@ -729,7 +729,7 @@ describe('RSS 頁', () => {
       exclusions: ['720p', '/v2$/'],
     })
     const row = await screen.findByRole('article', { name: 'Mikan' })
-    await userEvent.click(within(row).getByRole('button', { name: /排除條件（2 條）/ }))
+    await userEvent.click(within(row).getByRole('button', { name: /標題規則（2 條）/ }))
     expect(within(row).getByText('720p')).toBeVisible()
     expect(within(row).getByText('/v2$/')).toBeVisible()
     expect(within(rules).getByText('沒有標題規則。')).toBeInTheDocument()
@@ -744,7 +744,7 @@ describe('RSS 頁', () => {
 
     const rules = await screen.findByRole('group', { name: '排除條件' })
     await userEvent.click(within(rules).getByRole('button', { name: '加入「720p」' }))
-    await userEvent.type(within(rules).getByLabelText('加一條排除條件'), ' 简体 ')
+    await userEvent.type(within(rules).getByLabelText('加一條標題規則'), ' 简体 ')
     await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
     await userEvent.click(screen.getByRole('button', { name: '加入' }))
 
@@ -752,7 +752,7 @@ describe('RSS 頁', () => {
     expect(JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).exclusions).toEqual(
       ['720p', '简体'],
     )
-    await waitFor(() => expect(within(rules).getByLabelText('加一條排除條件')).toHaveValue(''))
+    await waitFor(() => expect(within(rules).getByLabelText('加一條標題規則')).toHaveValue(''))
     expect(within(rules).getByText('沒有標題規則。')).toBeInTheDocument()
   })
 
@@ -772,7 +772,7 @@ describe('RSS 頁', () => {
     renderApp('/rss')
 
     const rules = await screen.findByRole('group', { name: '排除條件' })
-    await userEvent.type(within(rules).getByLabelText('加一條排除條件'), '/[[简繁/{Enter}')
+    await userEvent.type(within(rules).getByLabelText('加一條標題規則'), '/[[简繁/{Enter}')
     const url = screen.getByLabelText(/RSS 網址/)
     await userEvent.type(url, FEED_URL)
     await userEvent.click(screen.getByRole('button', { name: '加入' }))
@@ -812,7 +812,7 @@ describe('RSS 頁', () => {
         JSON.parse(String(sent(stub, 'POST', '/api/rss/feeds')[0][1]?.body)).exclusions,
       ).toEqual(['720p'])
       const row = await screen.findByRole('article', { name: 'Mikan' })
-      expect(within(row).getByRole('button', { name: /Exclusions \(1\)/ })).toBeVisible()
+      expect(within(row).getByRole('button', { name: /Title rules \(1\)/ })).toBeVisible()
     } finally {
       await i18next.changeLanguage('zh-Hant')
     }
@@ -1050,7 +1050,7 @@ describe('RSS 頁', () => {
     renderApp('/rss')
 
     const section = await screen.findByRole('region', { name: '全域排除條件' })
-    const field = within(section).getByLabelText('加一條排除條件')
+    const field = within(section).getByLabelText('加一條標題規則')
     // user-event 的 `[` 是按鍵描述的開頭，`[[` 才是字面上的一個。
     await userEvent.type(field, '/[[简繁/')
     await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
@@ -1072,7 +1072,7 @@ describe('RSS 頁', () => {
     renderApp('/rss')
 
     const row = await screen.findByRole('article', { name: 'Mikan' })
-    const toggle = within(row).getByRole('button', { name: /排除條件（2 條）/ })
+    const toggle = within(row).getByRole('button', { name: /標題規則（2 條）/ })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -1083,7 +1083,7 @@ describe('RSS 頁', () => {
     expect(
       JSON.parse(String(sent(stub, 'PUT', '/api/rss/feeds/1/exclusions')[0][1]?.body)),
     ).toEqual({ rules: ['/v2$/i'] })
-    await waitFor(() => expect(within(row).getByLabelText('加一條排除條件')).toHaveFocus())
+    await waitFor(() => expect(within(row).getByLabelText('加一條標題規則')).toHaveFocus())
   })
 
   it('RSS Series 那一層：待綁定的也編得到', async () => {
@@ -1093,8 +1093,8 @@ describe('RSS 頁', () => {
     renderApp('/rss')
 
     const pending = await screen.findByRole('region', { name: '待綁定' })
-    await userEvent.click(within(pending).getByRole('button', { name: /排除條件（0 條）/ }))
-    await userEvent.type(within(pending).getByLabelText('加一條排除條件'), ' 简体 ')
+    await userEvent.click(within(pending).getByRole('button', { name: /標題規則（0 條）/ }))
+    await userEvent.type(within(pending).getByLabelText('加一條標題規則'), ' 简体 ')
     await userEvent.click(within(pending).getByRole('button', { name: '加入規則' }))
 
     await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/exclusions')).toHaveLength(1))
@@ -1226,6 +1226,65 @@ describe('RSS 頁：每個 Feed 的輪詢間隔（M4 票 109）', () => {
   })
 })
 
+describe('RSS 頁：Feed 與 RSS Series 那一層說「標題規則」（M4 票 117）', () => {
+  it('展開鍵、加入欄、清單名都說標題規則；合集那一項不算進條數', async () => {
+    render()
+    renderApp('/rss')
+
+    const row = await screen.findByRole('article', { name: 'Mikan' })
+    await userEvent.click(within(row).getByRole('button', { name: '標題規則（0 條）' }))
+    expect(within(row).getByLabelText('加一條標題規則')).toBeVisible()
+    expect(within(row).getByText('標題規則', { selector: '.sr-only' })).toBeInTheDocument()
+    const pending = screen.getByRole('region', { name: '待綁定' })
+    await userEvent.click(within(pending).getByRole('button', { name: '標題規則（0 條）' }))
+    expect(within(pending).getByLabelText('加一條標題規則')).toBeVisible()
+    expect(screen.queryByText(/排除條件（/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('加一條排除條件')).not.toBeInTheDocument()
+  })
+
+  it('英文', async () => {
+    render({ 'GET /api/rss/feeds': { body: [feed({ exclusions: ['720p'] })] } })
+    await i18next.changeLanguage('en')
+    try {
+      renderApp('/rss')
+
+      const row = await screen.findByRole('article', { name: 'Mikan' })
+      await userEvent.click(within(row).getByRole('button', { name: 'Title rules (1)' }))
+      expect(within(row).getByLabelText('Add a title rule')).toBeVisible()
+      expect(within(row).getByRole('list', { name: 'Title rules' })).toBeVisible()
+      const awaiting = screen.getByRole('region', { name: 'Waiting to bind' })
+      await userEvent.click(within(awaiting).getByRole('button', { name: 'Title rules (0)' }))
+      expect(within(awaiting).getByLabelText('Add a title rule')).toBeVisible()
+      expect(screen.queryByText(/Exclusions \(/)).not.toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('新增 Feed 送出中規則輸入框鎖住：多打的字進不去', async () => {
+    let answer: (route: StubRoute) => void = () => {}
+    render({
+      'GET /api/routes': { body: [managed(3, 'Anime', 'tvshows')] },
+      'POST /api/rss/feeds': () => new Promise((resolve) => (answer = resolve)),
+    })
+    renderApp('/rss')
+
+    const rules = await screen.findByRole('group', { name: '排除條件' })
+    const field = within(rules).getByLabelText('加一條標題規則')
+    expect(field).not.toHaveAttribute('readonly')
+    await userEvent.type(field, '720p')
+    await userEvent.type(screen.getByLabelText(/RSS 網址/), FEED_URL)
+    await userEvent.click(screen.getByRole('button', { name: '加入' }))
+
+    await waitFor(() => expect(field).toHaveAttribute('readonly'))
+    await userEvent.type(field, 'x')
+    expect(field).toHaveValue('720p')
+
+    answer({ status: 201, body: feed({ tv_route_id: 3, exclusions: ['720p'] }) })
+    await waitFor(() => expect(field).not.toHaveAttribute('readonly'))
+  })
+})
+
 describe('RSS 頁：排除條件分清全域與內建（M4 票 113）', () => {
   it('全域那一段：合集是內建判斷、與規則分開，建議項是關鍵字', async () => {
     render()
@@ -1269,9 +1328,9 @@ describe('RSS 頁：排除條件分清全域與內建（M4 票 113）', () => {
     renderApp('/rss')
 
     const row = await screen.findByRole('article', { name: 'Mikan' })
-    await userEvent.click(within(row).getByRole('button', { name: /排除條件（0 條）/ }))
+    await userEvent.click(within(row).getByRole('button', { name: /標題規則（0 條）/ }))
     const pending = screen.getByRole('region', { name: '待綁定' })
-    await userEvent.click(within(pending).getByRole('button', { name: /排除條件（0 條）/ }))
+    await userEvent.click(within(pending).getByRole('button', { name: /標題規則（0 條）/ }))
     for (const layer of [row, pending]) {
       expect(within(layer).getByText('合集由全域設定：目前不自動下載。')).toBeVisible()
       expect(within(layer).getByRole('link', { name: '改全域設定' })).toHaveAttribute(
@@ -1298,7 +1357,7 @@ describe('RSS 頁：排除條件分清全域與內建（M4 票 113）', () => {
       renderApp('/rss')
 
       const row = await screen.findByRole('article', { name: 'Mikan' })
-      await userEvent.click(within(row).getByRole('button', { name: /Exclusions \(0\)/ }))
+      await userEvent.click(within(row).getByRole('button', { name: /Title rules \(0\)/ }))
       expect(
         within(row).getByText(
           'Batches follow the global setting: currently downloaded automatically.',
@@ -1510,7 +1569,7 @@ describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {
     expect(lines[1]).toHaveTextContent('已排除')
     expect(lines[1]).toHaveTextContent('E11')
     expect(within(row).getByText('進階')).toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: /排除條件（0 條）/ })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: /標題規則（0 條）/ })).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: '解除綁定' })).toBeInTheDocument()
   })
 
@@ -1831,10 +1890,10 @@ describe('RSS 頁對 Berth 的請求沒成時說出對的原因', () => {
     renderApp('/rss')
     const section = await screen.findByRole('region', { name: '全域排除條件' })
 
-    await userEvent.type(within(section).getByLabelText('加一條排除條件'), '720p')
+    await userEvent.type(within(section).getByLabelText('加一條標題規則'), '720p')
     await userEvent.click(within(section).getByRole('button', { name: '加入規則' }))
 
-    const field = within(section).getByLabelText('加一條排除條件')
+    const field = within(section).getByLabelText('加一條標題規則')
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'))
     expectCause(field.parentElement!.parentElement!, NOT_DONE, expected)
   })

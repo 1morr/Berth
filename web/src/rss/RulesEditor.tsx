@@ -134,6 +134,8 @@ export function RulesFields({
           autoComplete="off"
           spellCheck={false}
           value={draft}
+          // 送出中鎖住（M4 票 110、117）：多打的字會在成功之後被清掉。`readOnly` 不是 `disabled`，焦點留著。
+          readOnly={busy}
           error={error}
           onChange={(event) => setDraft(event.target.value)}
         />
@@ -168,7 +170,7 @@ export function RulesFields({
 }
 
 /**
- * Feed 與 RSS Series 那一列上的排除條件：平常收起來只說有幾條，展開才是編輯區（它不是那一列的主要事）。
+ * Feed 與 RSS Series 那一列上的標題規則：平常收起來只說有幾條（合集那一項由全域管，不算進去），展開才是編輯區（它不是那一列的主要事）。
  */
 export function RulesToggle({ rules, save, lede }: RulesProps & { lede: string }) {
   const { t } = useTranslation()

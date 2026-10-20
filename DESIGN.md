@@ -569,7 +569,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   可存取名稱是「拿掉「720p」」這種帶著規則本身的一句（`aria-label`）。格與格 `flex-wrap gap-2`，清單以 `sr-only` 的一句命名。
   **它不是色塊**：沒有塗裝、不走 `.label`——規則是使用者的字，不是狀態也不是分類。改了就存（整組覆寫），不另外按儲存；
   拿掉一格時焦點回到加入欄（那一格連同它的鍵一起消失）。建議項（`720p`、`简体`…）是 `COMPACT_BUTTON`，裡面的規則走
-  `.value normal-case`；Feed 與 RSS Series 那一列上平常收成一顆 `COMPACT_BUTTON`「排除條件（N 條）」（`aria-expanded`）。
+  `.value normal-case`；Feed 與 RSS Series 那一列上平常收成一顆 `COMPACT_BUTTON`「標題規則（N 條）」（`aria-expanded`；
+  N 只算這一層的標題規則，合集由全域管，M4 票 117），加入欄的 label 是「加一條標題規則」。送出中加入欄 `readOnly`
+  （不是 `disabled`，焦點留著）。
   移除鍵與這兩處用的是字元，見 Known contradictions。
 - **分類 vs 狀態:** 事件型別、trigger、處置、信心、計劃狀態、停用都是分類，一律中性；
   「判斷不出來」是一句話不是分類，不給色塊，免得看起來像個結論。
