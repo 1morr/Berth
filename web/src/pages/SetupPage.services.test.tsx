@@ -675,6 +675,42 @@ describe('頁 2：介面登入的規則', () => {
     expect(fields.getByLabelText('再輸入一次密碼')).toBeInTheDocument()
   })
 
+  it.each([
+    ['zh-Hant', 'j:o', '', 'qBittorrent 介面登入', '帳號'],
+    ['zh-Hant', 'jo', '', 'qBittorrent 介面登入', '帳號'],
+    ['zh-Hant', 'skipper', 'skipper', 'qBittorrent 介面登入', '帳號'],
+    ['en', 'j:o', '', 'qBittorrent interface login', 'Username'],
+    ['en', 'jo', '', 'qBittorrent interface login', 'Username'],
+    ['en', 'skipper', 'skipper', 'qBittorrent interface login', 'Username'],
+  ] as const)(
+    '%s：擁有者是 %s 時帳號欄預填「%s」——不合 qBittorrent 的規則就空著（M4 票 118）',
+    async (language, owner, prefilled, legend, label) => {
+      stubApi({
+        [STATUS]: { body: setupStatus({ ...AT_QBITTORRENT, owner }) },
+        [QBITTORRENT]: { body: qbittorrentSetup() },
+      })
+      await i18next.changeLanguage(language)
+      try {
+        renderInRoute(<SetupPage />)
+        const fields = within((await screen.findByText(legend)).closest('fieldset')!)
+        expect(fields.getByLabelText(label)).toHaveValue(prefilled)
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    },
+  )
+
+  it('英文的「已沿用」是完成式：說設成了 Jellyfin 帳密，不說正在沿用（M4 票 118）', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      expect(i18next.t('interfaceLogin.carried.set', { owner: 'skipper' })).toBe(
+        'Set to your Jellyfin login (skipper)',
+      )
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
   it('自設的帳號與密碼照規則逐格擋，改對了才送', async () => {
     const stub = stubApi({
       [STATUS]: { body: AT_QBITTORRENT },
