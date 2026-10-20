@@ -260,7 +260,7 @@ export function useInterfaceLogin({
       return takenLogin(draft, reusing)
     },
     reset: (username) => {
-      // 沿用時送出去的帳號是空的（後端填成擁有者），留下來的是擁有者的名字。
+      // 沿用時送出去的帳號是空的（後端填成擁有者），留下來的是擁有者的名字（名字不合規則時本來就沿用不了）。
       setDraft({ username: username || prefill, password: '', confirm: '' })
       setChanging(false)
       setChecked(false)
