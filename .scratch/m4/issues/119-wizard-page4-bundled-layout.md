@@ -41,7 +41,7 @@
 
 **critique（雙子代理）**：**28 → 28/40**（trend 24 → 26 → 27 → 28 → 28；快照 `.impeccable/critique/2026-10-20T08-58-30Z__web-src-pages-setuppage-tsx.md`）。H8 有升有降：兩欄平衡了，但左欄「介面登入」字樣三到四次；H4 多一個不一致：介面登入在頁 2 是工作面、頁 4 桌機是剖面欄。detector CLI 0 筆。新的優先問題（不在這張票）：左欄「介面登入」四處重複（distill）、頁 1 既有卡太長（distill）、沒勾「沿用」時帳號已預填（polish）。
 
-**驗證**：vitest 110 檔 2082 passed；前端 e2e 38 passed；pytest（見 progress.md）；`pre-commit run --all-files` 全部 Passed。
+**驗證**：vitest 110 檔 2082 passed；前端 e2e 38 passed；pytest 4102 passed / 24 deselected（675b131）；`pre-commit run --all-files` 全部 Passed。
 
 **code-review 已處理**
 
