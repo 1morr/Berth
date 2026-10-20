@@ -1270,6 +1270,9 @@ async def _release_block(session: AsyncSession, item: RssItem) -> RssRejectedErr
     series = await session.get(RssSeries, item.series_id) if item.series_id is not None else None
     if series is None or series.media_id is None:
         return RssRejectedError(RssRefusal.SERIES_UNBOUND, str(item.series_id))
+    if series.route_id is None:
+        # Route 刪除時外鍵 `SET NULL` 留下的（票 115 之後刪不掉被綁著的 Route，舊的還在）。
+        return RssRejectedError(RssRefusal.ROUTE_MISSING, str(series.id))
     feed = await session.get(RssFeed, item.feed_id)
     if feed is None or feed.primed_at is None:
         return RssRejectedError(RssRefusal.FEED_UNPRIMED, str(item.feed_id))

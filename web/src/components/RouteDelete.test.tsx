@@ -1,11 +1,15 @@
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { describe, expect, it } from 'vitest'
+
+import { ApiError } from '../api/client'
 
 import { routeView } from '../test/fixtures'
 import { renderWithProviders } from '../test/render'
 import { RouteDelete } from './RouteDelete'
 
-const IN_USE = { jobs: 1, ledger_entries: 0, in_use: true }
+const IN_USE = { jobs: 1, ledger_entries: 0, rss_feeds: 0, rss_series: 0, in_use: true }
 
 /** 刪除元件本身的契約（票 14a）。畫面上的流程在 `RouteSettingsPage.test.tsx` 與 `SetupPage.routes.test.tsx`。 */
 describe('RouteDelete', () => {
@@ -50,5 +54,77 @@ describe('RouteDelete', () => {
 
     expect(screen.getByText(/已經停用/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '停用這條 Route' })).not.toBeInTheDocument()
+  })
+
+  // 票 115：只有 RSS 綁著的 Route，下載與檔案都是 0，說明要說出 RSS 的數字，不然看不出為什麼刪不得。
+  it.each([
+    ['zh-Hant', '0 筆下載、0 個入庫檔案、1 個 RSS Feed、2 個 RSS Series指著這條 Route'],
+    ['en', '0 downloads, 0 imported files, 1 RSS feed, and 2 RSS Series point at this route'],
+  ])('%s：RSS 綁著時說出 Feed 與 Series 的數量', async (language, said) => {
+    await i18next.changeLanguage(language)
+    try {
+      renderWithProviders(
+        <RouteDelete
+          route={routeView()}
+          usage={{ jobs: 0, ledger_entries: 0, rss_feeds: 1, rss_series: 2, in_use: true }}
+          onDelete={async () => {}}
+          onChanged={() => {}}
+        />,
+      )
+
+      expect(screen.getByText(new RegExp(said))).toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+
+  it('沒有 RSS 綁著就不說 RSS', () => {
+    renderWithProviders(
+      <RouteDelete
+        route={routeView()}
+        usage={IN_USE}
+        onDelete={async () => {}}
+        onChanged={() => {}}
+      />,
+    )
+
+    expect(screen.getByText(/刪不得/)).toHaveTextContent('1 筆下載、0 個入庫檔案指著')
+    expect(screen.getByText(/刪不得/)).not.toHaveTextContent('RSS')
+  })
+
+  it.each([
+    ['zh-Hant', '刪的那一刻發現還有 0 筆下載、0 個入庫檔案、1 個 RSS Feed指著這條 Route'],
+    ['en', 'When it came to deleting, 0 downloads, 0 imported files, and 1 RSS feed turned out'],
+  ])('%s：409 帶的 RSS 數字也照說', async (language, said) => {
+    await i18next.changeLanguage(language)
+    try {
+      const body = {
+        reason: 'route_in_use',
+        detail: 'jobs=0 · ledger_entries=0 · rss_feeds=1 · rss_series=0',
+        jobs: 0,
+        ledger_entries: 0,
+        rss_feeds: 1,
+        rss_series: 0,
+      }
+      renderWithProviders(
+        <RouteDelete
+          route={routeView()}
+          onDelete={async () => {
+            throw new ApiError(409, 'route_in_use', body)
+          }}
+          onChanged={() => {}}
+        />,
+      )
+      await userEvent.click(
+        screen.getByRole('button', { name: i18next.t('routeSettings.delete.label') }),
+      )
+      await userEvent.click(
+        screen.getByRole('button', { name: i18next.t('routeSettings.delete.confirm') }),
+      )
+
+      expect(await screen.findByText(new RegExp(said))).toBeInTheDocument()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
   })
 })

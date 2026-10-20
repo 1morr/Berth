@@ -269,9 +269,11 @@ describe('Route 設定頁', () => {
         body: {
           detail: {
             reason: 'route_in_use',
-            detail: 'jobs=1 · ledger_entries=0',
+            detail: 'jobs=1 · ledger_entries=0 · rss_feeds=0 · rss_series=0',
             jobs: 1,
             ledger_entries: 0,
+            rss_feeds: 0,
+            rss_series: 0,
           },
         },
       },

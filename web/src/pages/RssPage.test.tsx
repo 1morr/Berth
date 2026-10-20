@@ -49,6 +49,8 @@ function managed(
     route: { id, name, enabled, collection_type },
     jobs: 0,
     ledger_entries: 0,
+    rss_feeds: 0,
+    rss_series: 0,
     in_use: false,
   } as ManagedRoute
 }

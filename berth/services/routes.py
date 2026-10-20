@@ -28,9 +28,10 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import TypeGuard
 
-from sqlalchemy import func, select, text
+from sqlalchemy import ColumnElement, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.orm.exc import StaleDataError
 
 from berth.adapters.fs import (
@@ -63,6 +64,7 @@ from berth.domain import (
     StepStatus,
 )
 from berth.models import (
+    Base,
     BundledLibrary,
     JellyfinSettings,
     Job,
@@ -71,6 +73,8 @@ from berth.models import (
     QbittorrentSettings,
     Route,
     RouteHealth,
+    RssFeed,
+    RssSeries,
     SetupLibrary,
     SetupSettings,
     SetupStep,
@@ -118,7 +122,8 @@ class RouteInUseError(RouteRejectedError):
     def __init__(self, usage: RouteUsage) -> None:
         super().__init__(
             RouteRefusal.ROUTE_IN_USE,
-            f"jobs={usage.jobs} · ledger_entries={usage.ledger_entries}",
+            f"jobs={usage.jobs} · ledger_entries={usage.ledger_entries}"
+            f" · rss_feeds={usage.rss_feeds} · rss_series={usage.rss_series}",
         )
         self.usage = usage
 
@@ -468,10 +473,15 @@ class RouteUsage:
     jobs: int
     #: 目標落在它底下的帳本（`owning_route`）。帳本不記 Route，Job 不在了檔案也還在。
     ledger_entries: int
+    #: 自動綁定送進它的 Feed（劇集或電影那一欄，票 115）。外鍵是 `SET NULL`，刪了它們就無聲退回
+    #: 「只有一條」或沒有 Route，所以綁定也算引用。
+    rss_feeds: int
+    #: 綁著它的 RSS Series（票 115）。Route 沒了，那部作品之後每一集都送不出（`route_missing`）。
+    rss_series: int
 
     @property
     def in_use(self) -> bool:
-        return self.jobs > 0 or self.ledger_entries > 0
+        return any((self.jobs, self.ledger_entries, self.rss_feeds, self.rss_series))
 
 
 @dataclass(frozen=True, slots=True)
@@ -543,20 +553,42 @@ async def list_libraries(
 
 
 async def _usages(session: AsyncSession, routes: Sequence[Route]) -> dict[int, RouteUsage]:
-    """每條 Route 被多少 Job 與帳本指著。帳本不記 Route，所以逐筆問 `owning_route`。"""
-    counted = await session.execute(
-        select(Job.route_id, func.count()).where(Job.route_id.is_not(None)).group_by(Job.route_id)
-    )
-    jobs = dict(counted.tuples().all())
+    """每條 Route 被多少 Job、帳本與 RSS 綁定指著。帳本不記 Route，所以逐筆問 `owning_route`。"""
+    jobs = await _count_by(session, Job.route_id)
+    series = await _count_by(session, RssSeries.route_id)
     owned = Counter(
         owner.id
         for target in await session.scalars(select(LedgerEntry.target_path))
         if (owner := owning_route(target, routes)) is not None
     )
+    # 一個 Feed 兩欄指同一條只算一次（兩欄的 Route 類型不同，正常不會發生）。
+    feeds = Counter(
+        route_id
+        for tv, movie in (
+            await session.execute(select(RssFeed.tv_route_id, RssFeed.movie_route_id))
+        ).tuples()
+        for route_id in {tv, movie} - {None}
+    )
     return {
-        route.id: RouteUsage(jobs=jobs.get(route.id, 0), ledger_entries=owned[route.id])
+        route.id: RouteUsage(
+            jobs=jobs[route.id],
+            ledger_entries=owned[route.id],
+            rss_feeds=feeds[route.id],
+            rss_series=series[route.id],
+        )
         for route in routes
     }
+
+
+async def _count_by(
+    session: AsyncSession, column: InstrumentedAttribute[int | None]
+) -> Counter[int]:
+    """`column` 的每個非 NULL 值有幾列。"""
+    counted = await session.execute(
+        select(column, func.count()).where(column.is_not(None)).group_by(column)
+    )
+    # SQL 已濾掉 NULL；這一層只是讓型別從 `int | None` 收窄成 `int`。
+    return Counter({key: count for key, count in counted.tuples() if key is not None})
 
 
 async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]) -> RouteUsage:
@@ -565,16 +597,25 @@ async def _usage_of(session: AsyncSession, route: Route, routes: Sequence[Route]
     前綴粗篩（`target_prefix`）再用 `owning_route` 精判，與媒體庫頁同一條規則；前綴不正規化的話
     目標寫法不正規的 Route 會少算、被引用了還刪得掉。
     """
-    jobs = await session.scalar(
-        select(func.count()).select_from(Job).where(Job.route_id == route.id)
+    jobs = await _count_where(session, Job, Job.route_id == route.id)
+    feeds = await _count_where(
+        session, RssFeed, or_(RssFeed.tv_route_id == route.id, RssFeed.movie_route_id == route.id)
     )
+    series = await _count_where(session, RssSeries, RssSeries.route_id == route.id)
     candidates = await session.scalars(
         select(LedgerEntry.target_path).where(
             LedgerEntry.target_path.startswith(target_prefix(route), autoescape=True)
         )
     )
     owned = sum(1 for target in candidates if owning_route(target, routes) is route)
-    return RouteUsage(jobs=jobs or 0, ledger_entries=owned)
+    return RouteUsage(jobs=jobs, ledger_entries=owned, rss_feeds=feeds, rss_series=series)
+
+
+async def _count_where(
+    session: AsyncSession, table: type[Base], condition: ColumnElement[bool]
+) -> int:
+    """`table` 有幾列符合 `condition`。"""
+    return await session.scalar(select(func.count()).select_from(table).where(condition)) or 0
 
 
 async def delete_route(session: AsyncSession, route_id: int) -> None:

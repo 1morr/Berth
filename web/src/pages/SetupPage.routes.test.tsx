@@ -305,9 +305,11 @@ describe('頁 3：媒體庫路徑（套件內）', () => {
         body: {
           detail: {
             reason: 'route_in_use',
-            detail: 'jobs=1 · ledger_entries=0',
+            detail: 'jobs=1 · ledger_entries=0 · rss_feeds=0 · rss_series=0',
             jobs: 1,
             ledger_entries: 0,
+            rss_feeds: 0,
+            rss_series: 0,
           },
         },
       },

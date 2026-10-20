@@ -46,7 +46,25 @@ describe('拒絕的解析', () => {
 })
 
 describe('Route 的拒絕', () => {
-  it('`route_in_use` 另外帶引用數，畫面照它說 N 筆下載、M 個入庫檔案', () => {
+  it('`route_in_use` 另外帶引用數，畫面照它說 N 筆下載、M 個入庫檔案、K 個 RSS Feed', () => {
+    const error = refused(409, {
+      reason: 'route_in_use',
+      detail: 'jobs=2 · ledger_entries=3 · rss_feeds=1 · rss_series=4',
+      jobs: 2,
+      ledger_entries: 3,
+      rss_feeds: 1,
+      rss_series: 4,
+    })
+
+    expect(routeRefusalOf(error)?.usage).toEqual({
+      jobs: 2,
+      ledger_entries: 3,
+      rss_feeds: 1,
+      rss_series: 4,
+    })
+  })
+
+  it('少一格引用數就當沒帶，不拿一半的數字說話', () => {
     const error = refused(409, {
       reason: 'route_in_use',
       detail: 'jobs=2 · ledger_entries=3',
@@ -54,7 +72,7 @@ describe('Route 的拒絕', () => {
       ledger_entries: 3,
     })
 
-    expect(routeRefusalOf(error)?.usage).toEqual({ jobs: 2, ledger_entries: 3 })
+    expect(routeRefusalOf(error)?.usage).toBe(undefined)
   })
 
   it('其餘理由沒有引用數', () => {

@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
@@ -23,7 +24,7 @@ from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.domain import CollectionType, FeedKind, JobState, JobTrigger, PlanAction, Tags
 from berth.main import create_app
-from berth.models import Job, LedgerEntry, Media, Route, RssFeed, TmdbSettings
+from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssSeries, TmdbSettings
 from berth.models.types import utcnow
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
@@ -615,6 +616,44 @@ class TestExclusions:
         assert again.status_code == 409
         assert again.json()["detail"] == {"reason": "item_not_excluded", "detail": "downloaded"}
         assert client.post("/api/rss/items/404/release", headers=BROWSER).status_code == 404
+
+    def test_releasing_into_a_series_without_a_route_is_422(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        """票 115：Route 在綁定之後被清掉（票 115 之前刪得掉）。拒絕在送單之前，Item 不變。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["- 11 "]}, headers=BROWSER
+        )
+        feed = add(client, route_id)
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        held = next(
+            row for row in client.get("/api/rss/items").json() if row["title"] == KIMI[1].title
+        )
+        client.put(
+            f"/api/rss/series/{held['series_id']}/binding",
+            json={"media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+
+        async def orphan(session: AsyncSession) -> None:
+            await session.execute(
+                update(RssSeries).where(RssSeries.id == held["series_id"]).values(route_id=None)
+            )
+            await session.commit()
+
+        in_session(client, orphan)
+        refused = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+        after = next(row for row in client.get("/api/rss/items").json() if row["id"] == held["id"])
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"]["reason"] == "route_missing"
+        assert (after["status"], after["job_hash"], after["release_blocked"]) == (
+            "excluded",
+            "",
+            "route_missing",
+        )
 
 
 def picked_job(row: dict[str, Any], route_id: int) -> dict[str, Any]:

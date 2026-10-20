@@ -2951,7 +2951,7 @@ const zhHant = {
   // Route 設定頁（票 14）。「Route」保留原文：它是 CONTEXT.md 的名詞，精靈與健康頁也這樣寫。
   routeSettings: {
     title: '媒體庫路徑',
-    lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載或入庫檔案指著它時，它刪不得。',
+    lede: '每條 Route 是一個 Jellyfin 媒體庫加上一條寫入目標；同一個媒體庫可以有好幾條，例如兩顆碟各一條。停用的 Route 不收新的送單；還有下載、入庫檔案或 RSS 綁著它時，它刪不得。',
     empty: '還沒有 Route。用下面的「新增 Route」建一條，Berth 才有地方寫入。',
     disabled: '停用',
     manage: '管理',
@@ -2962,6 +2962,11 @@ const zhHant = {
       jobs_other: '{{count}} 筆下載',
       files_one: '{{count}} 個入庫檔案',
       files_other: '{{count}} 個入庫檔案',
+      // 綁著它的 RSS（M4 票 115）。是 0 就不說，清單那一列與刪不得的說明都是。
+      rssFeeds_one: '{{count}} 個 RSS Feed',
+      rssFeeds_other: '{{count}} 個 RSS Feed',
+      rssSeries_one: '{{count}} 個 RSS Series',
+      rssSeries_other: '{{count}} 個 RSS Series',
     },
     edit: {
       name: '名稱',
@@ -2997,13 +3002,12 @@ const zhHant = {
       warning:
         '刪除之後這條 Route 的設定就不在了。qBittorrent 的分類與 complete 子目錄留著不動；之後用同一個名字重建時，分類檢查認得它們。',
       inUse:
-        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
-      inUseDisabled:
-        '{{jobs}}、{{files}}指著這條 Route，所以它刪不得。它已經停用，新的送單不會選到它。',
+        '{{usage}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它；已經在路上的下載照常入庫。',
+      inUseDisabled: '{{usage}}指著這條 Route，所以它刪不得。它已經停用，新的送單不會選到它。',
       refused:
-        '刪的那一刻發現還有 {{jobs}}、{{files}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+        '刪的那一刻發現還有 {{usage}}指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
       refusedUncounted:
-        '刪的那一刻發現還有下載或入庫檔案指著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
+        '刪的那一刻發現還有下載、入庫檔案或 RSS 綁著這條 Route，所以它刪不得。停用它，新的送單就不會再選到它。',
       failed: '沒有刪掉。',
       done: '已刪除「{{name}}」。',
     },
@@ -6346,7 +6350,7 @@ const en: Translations<typeof zhHant> = {
   },
   routeSettings: {
     title: 'Routes',
-    lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads or imported files still point at cannot be deleted.',
+    lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads, imported files or RSS still point at cannot be deleted.',
     empty: 'No routes yet. Create one with “Add route” below, so Berth has somewhere to write.',
     disabled: 'Disabled',
     manage: 'Manage',
@@ -6357,6 +6361,10 @@ const en: Translations<typeof zhHant> = {
       jobs_other: '{{count}} downloads',
       files_one: '{{count}} imported file',
       files_other: '{{count}} imported files',
+      rssFeeds_one: '{{count}} RSS feed',
+      rssFeeds_other: '{{count}} RSS feeds',
+      rssSeries_one: '{{count}} RSS Series',
+      rssSeries_other: '{{count}} RSS Series',
     },
     edit: {
       name: 'Name',
@@ -6393,13 +6401,13 @@ const en: Translations<typeof zhHant> = {
       warning:
         'Deleting removes this route from Berth. The qBittorrent category and the complete subdirectory stay where they are; rebuilding a route with the same name picks them up again.',
       inUse:
-        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it; the ones already on their way still import.',
+        '{{usage}} point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it; the ones already on their way still import.',
       inUseDisabled:
-        '{{jobs}} and {{files}} point at this route, so it cannot be deleted. It is disabled, so new downloads will not pick it.',
+        '{{usage}} point at this route, so it cannot be deleted. It is disabled, so new downloads will not pick it.',
       refused:
-        'When it came to deleting, {{jobs}} and {{files}} turned out to point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
+        'When it came to deleting, {{usage}} turned out to point at this route, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
       refusedUncounted:
-        'Downloads or imported files turned out to point at this route when it was deleted, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
+        'Downloads, imported files or RSS turned out to point at this route when it was deleted, so it cannot be deleted. Disable it instead and new downloads will no longer pick it.',
       failed: 'It was not deleted.',
       done: 'Deleted “{{name}}”.',
     },

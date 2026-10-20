@@ -706,6 +706,7 @@ async def get_items(session: SessionDep) -> list[ItemOut]:
         RssRefusal.ITEM_MISSING,
         RssRefusal.ITEM_NOT_EXCLUDED,
         RssRefusal.SERIES_UNBOUND,
+        RssRefusal.ROUTE_MISSING,
         RssRefusal.FEED_UNPRIMED,
     ),
 )
