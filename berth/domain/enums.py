@@ -1602,10 +1602,15 @@ class Language(StrEnum):
 
 
 class NotificationKind(StrEnum):
-    """待送表上一則的種類。票 126、127、131 各加一種。"""
+    """待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
+
+    票 127、131 各加一種。
+    """
 
     #: 「可以看了」：一筆 Job 的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
     READY = "ready"
+    #: 「正在下載」：RSS 一輪送出的、人手按的下載（票 126 排）。票 125 先讓人勾、存下訂閱。
+    DOWNLOADING = "downloading"
 
 
 class NotificationStatus(StrEnum):

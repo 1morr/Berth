@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './api/client'
 import { CLAIM_OWNER_KEY } from './api/setup'
+import type { MyNotify } from './api/notify'
 import { HEALTHY, UNAUTHORIZED, UNCONFIGURED, session, stubApi } from './test/fetch'
 import { expectCurrentByStateOnly } from './test/navState'
 import { renderApp } from './test/render'
@@ -27,6 +28,15 @@ const PENDING = { body: UNCONFIGURED }
 const WIZARD = { body: setupStatus({ current_step: 8 }) }
 const ADMIN = { body: { name: 'skipper', role: 'admin' } }
 const USER = { body: { name: 'deckhand', role: 'user' } }
+const MY_NOTIFY: MyNotify = {
+  bot_configured: false,
+  bot_name: '',
+  discord_user_id: '',
+  language: 'zh-Hant',
+  kinds: ['ready'],
+  unreachable_at: null,
+  unreachable_detail: '',
+}
 /** 探索頁是 `/`（票 03）。路由測試只是路過它，所以兩個 feed 都給空牆。 */
 const DISCOVER = {
   'GET /api/discover/trending': discoverWall(),
@@ -187,14 +197,26 @@ describe('角色', () => {
     expectCurrentByStateOnly(current, other)
   })
 
-  it('非 admin 看不到設定入口，但看得到自己是什麼角色（票 07 驗收）', async () => {
+  it('非 admin 看得到自己是什麼角色（票 07 驗收）', async () => {
     stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 
     renderApp('/')
 
     expect(await screen.findByText('deckhand')).toBeInTheDocument()
     expect(screen.getByText('使用者')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '設定' })).not.toBeInTheDocument()
+  })
+
+  it('非 admin 的設定入口通到他自己的通知（M4 票 125）：其他分頁他進不去', async () => {
+    stubApi({
+      [HEALTH]: DONE,
+      [ME]: USER,
+      ...DISCOVER,
+      'GET /api/me/notifications': { body: MY_NOTIFY },
+    })
+
+    const { router } = renderApp('/settings')
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/notifications'))
   })
 
   it('精靈跑完之後管理員打開 /setup 被帶到設定頁：精靈只管第一次（票 06i）', async () => {
@@ -246,7 +268,7 @@ describe('角色', () => {
 describe('一般使用者看不到修正與對帳的入口', () => {
   const NAV = {
     admin: ['探索', '媒體庫', '下載', '審核', '待處理', 'RSS', '健康', '設定'],
-    user: ['探索', '媒體庫', '下載', '健康'],
+    user: ['探索', '媒體庫', '下載', '健康', '設定'],
   }
 
   it.each([
@@ -270,7 +292,6 @@ describe('一般使用者看不到修正與對帳的入口', () => {
     '/settings/routes',
     '/settings/indexers',
     '/settings/tmdb',
-    '/settings/notifications',
   ])('user 直接開 %s 會被送到健康頁並說他被擋下來了', async (path) => {
     stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 

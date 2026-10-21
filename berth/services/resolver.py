@@ -170,7 +170,7 @@ async def sweep_resolutions(
         for entry in settling:
             if entry.resolve_after is not None:
                 entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
-        await _announce(session, found, given_up, moment)
+        await _announce(session, found, given_up, moment, ready_at=now or utcnow())
         await settle_verdicts(session, verdicts, moment)
     finally:
         await client.aclose()
@@ -239,7 +239,7 @@ async def resolve_early(
                 _found(entry, item)
                 found.append(entry)
                 verdicts.append(lookup.verdict(entry, item))
-        await _announce(session, found, (), moment)
+        await _announce(session, found, (), moment, ready_at=now or utcnow())
         await settle_verdicts(session, verdicts, moment)
     finally:
         await client.aclose()
@@ -613,6 +613,8 @@ async def _announce(
     found: Sequence[LedgerEntry],
     given_up: Sequence[LedgerEntry],
     moment: datetime,
+    *,
+    ready_at: datetime,
 ) -> None:
     """一筆 Job 一行，不是一個檔案一行：一季 24 集的時間線不該被 24 行「找到了」淹沒。
 
@@ -620,7 +622,9 @@ async def _announce(
     M4 的「可以看了」讀它。之後再反查（新版本改了版本名、重新反查）找到的不再寫——試跑一筆
     Job 寫了 5–7 筆，`count` 每輪不同，`record_event` 一分鐘的去重擋不住。
 
-    「可以看了」的通知與這一筆事件寫在同一筆交易（`notify.queue_ready`，M4 票 123）。
+    「可以看了」的通知與這一筆事件寫在同一筆交易（`notify.queue_ready`，M4 票 123）。**它的時間是
+    `ready_at`，不是這一輪開頭的 `moment`**（M4 票 125）：中間問過 Jellyfin，`moment` 可能已經舊了
+    幾十秒，拿它判斷「那一則還在合併時間裡」會併進送出迴圈剛撿走、正在送的那一則。
     """
     for job, _ in await _by_job(session, found):
         features = await _all_found(session, job)
@@ -633,7 +637,7 @@ async def _announce(
             actor=actor_of(None),
             payload={"count": features},
         )
-        await queue_ready(session, job, now=moment)
+        await queue_ready(session, job, now=ready_at)
     for job, entries in await _by_job(session, given_up):
         # 事件是**一筆 Job 一行**（時間線不該被 24 集淹沒），Issue 是**一列帳本一件**
         # ——它的冪等鍵是 `ledger_id`（plan §2.4）：同一筆 Job 的兩集各自反查、各自放棄，

@@ -1,7 +1,7 @@
 """管道故障：重試、放棄、健康頁（M4 票 128，plan §11.5〈通知〉的「故障」）。
 
 待送表上直接擺好要送的那幾則，斷言只看兩個公開的接縫：送出的一輪（`send_due`）之後待送表、
-收件人與管道各記下什麼，以及畫面讀的兩份（`read_notify`、`read_channel`）怎麼說。
+收件人與管道各記下什麼，以及畫面讀的兩份（`read_mine`、`read_bot`、`read_channel`）怎麼說。
 
 429 那一組吃票 121 錄下來的回應（`tests/fixtures/http/discord/`），走真的 `HttpDiscordBot`；
 其餘用替身排好每一則的結果。
@@ -20,6 +20,8 @@ import respx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.jellyfin import JellyfinLibrary
+from berth.adapters.jellyfin.fake import FakeJellyfinClient, account_id
 from berth.adapters.notify import Delivery, DiscordBot
 from berth.adapters.notify.discord import HttpDiscordBot
 from berth.config import DEFAULT_DISCORD_API_URL
@@ -36,12 +38,13 @@ from berth.services import notify
 from berth.services.notify import (
     GIVE_UP_AFTER,
     backoff,
+    read_bot,
     read_channel,
-    read_notify,
+    read_mine,
     send_due,
     send_test,
     set_bot_token,
-    set_discord_id,
+    set_mine,
 )
 from berth.services.settings import write_settings
 from tests.conftest import read_fixture
@@ -62,6 +65,7 @@ CONTENT: dict[str, Any] = {
     "title": "SPY×FAMILY 間諜家家酒",
     "title_en": "SPY x FAMILY",
     "route": "Anime",
+    "library": "item-2",
     "episodes": [[1, 1, 3]],
 }
 
@@ -81,7 +85,7 @@ async def with_bot(session: AsyncSession, token: str = TOKEN) -> None:
 
 async def person(session: AsyncSession, name: str, discord: str) -> User:
     user = User(
-        jellyfin_user_id=f"jf-{name}",
+        jellyfin_user_id=account_id(name),
         name=name,
         role=Role.ADMIN,
         discord_user_id=discord,
@@ -90,6 +94,27 @@ async def person(session: AsyncSession, name: str, discord: str) -> User:
     session.add(user)
     await session.flush()
     return user
+
+
+def crew() -> FakeJellyfinClient:
+    """`person` 擺的人都是這台 Jellyfin 的帳號、看得到全部媒體庫（`CONTENT` 的 `item-2` 在裡面）：
+    這一檔講的是管道，收件人的權限在 `test_notify.py`（M4 票 125）。"""
+    jellyfin = FakeJellyfinClient(
+        startup_wizard_completed=True,
+        users={"skipper": "harbour", "bosun": "rope"},
+        libraries=(
+            JellyfinLibrary(
+                name="Anime",
+                item_id="item-2",
+                collection_type="tvshows",
+                locations=("/data/library/anime",),
+                type_options=(),
+            ),
+        ),
+    )
+    # 送出迴圈帶 `JellyfinSettings.api_key` 問；這一檔沒寫設定，替身先拿著一把。
+    jellyfin.use_token("key")
+    return jellyfin
 
 
 async def queued(
@@ -159,7 +184,7 @@ class TestRateLimit:
         sent = discord_answers(
             recorded("channels-messages.rate-limited"), recorded("channels-messages.embed")
         )
-        factory = HttpFactory()
+        factory = HttpFactory(jellyfin=crew())
 
         await send_due(session, factory, now=NOW)
         row = await fresh(session, row)
@@ -188,7 +213,7 @@ class TestRateLimit:
             recorded("channels-messages.embed"),
             recorded("channels-messages.embed"),
         )
-        factory = HttpFactory()
+        factory = HttpFactory(jellyfin=crew())
 
         await send_due(session, factory, now=NOW)
         await send_due(session, factory, now=NOW + timedelta(seconds=4))
@@ -207,7 +232,7 @@ class TestOutage:
     async def test_an_outage_backs_off_the_whole_channel(self, session: AsyncSession) -> None:
         await with_bot(session)
         row = await queued(session, await person(session, "skipper", ADMIN_ID))
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.failures.extend([OUTAGE, OUTAGE])
 
         await send_due(session, factory, now=NOW)
@@ -243,7 +268,7 @@ class TestOutage:
     ) -> None:
         await with_bot(session)
         row = await queued(session, await person(session, "skipper", ADMIN_ID))
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.failures.append(OUTAGE)
 
         await send_due(session, factory, now=NOW)
@@ -260,7 +285,7 @@ class TestOutage:
     ) -> None:
         await with_bot(session)
         row = await queued(session, await person(session, "skipper", ADMIN_ID))
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.failures.append(OUTAGE)
 
         await send_due(session, factory, now=NOW)
@@ -274,7 +299,7 @@ class TestOutage:
         """票 123 的 code-review 留下的：沒設 token 時寫下的那幾則，隔了幾天才設好，
         不該一次全送出去。"""
         stale = await queued(session, await person(session, "skipper", ADMIN_ID))
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         await send_due(session, factory, now=NOW)
 
         await with_bot(session)
@@ -298,7 +323,7 @@ class TestRecipient:
         bosun = await person(session, "bosun", SECOND_ADMIN_ID)
         lost = await queued(session, skipper)
         await queued(session, bosun)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.unreachable.add(ADMIN_ID)
 
         await send_due(session, factory, now=NOW)
@@ -308,10 +333,10 @@ class TestRecipient:
         assert "50278" in lost.error
         assert recipients(factory) == [SECOND_ADMIN_ID]
 
-        view = await read_notify(session, skipper.id)
+        view = await read_mine(session, skipper.id)
         assert view.unreachable_at == NOW
         assert "50278" in view.unreachable_detail
-        assert (await read_notify(session, bosun.id)).unreachable_at is None
+        assert (await read_mine(session, bosun.id)).unreachable_at is None
         # 不是管道的事：其他人照送，健康頁不變。
         assert (await read_channel(session)).failures == 0
 
@@ -323,7 +348,7 @@ class TestRecipient:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.unreachable.add(ADMIN_ID)
         await send_due(session, factory, now=NOW)
 
@@ -331,21 +356,21 @@ class TestRecipient:
         await queued(session, skipper, at=NOW + timedelta(hours=1))
         await send_due(session, factory, now=NOW + timedelta(hours=1))
 
-        assert (await read_notify(session, skipper.id)).unreachable_at is None
+        assert (await read_mine(session, skipper.id)).unreachable_at is None
 
     async def test_a_delivered_test_message_clears_the_note(self, session: AsyncSession) -> None:
         """補好之後按「測試」就是驗證：送到了，那一句就收掉。"""
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.unreachable.add(ADMIN_ID)
         await send_due(session, factory, now=NOW)
 
         factory.discord_.unreachable.clear()
         assert (await send_test(session, factory, skipper.id)).delivered
 
-        assert (await read_notify(session, skipper.id)).unreachable_at is None
+        assert (await read_mine(session, skipper.id)).unreachable_at is None
 
     async def test_an_undelivered_test_message_leaves_the_same_note(
         self, session: AsyncSession
@@ -353,26 +378,28 @@ class TestRecipient:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         await session.commit()
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.unreachable.add(ADMIN_ID)
 
         await send_test(session, factory, skipper.id)
 
-        assert (await read_notify(session, skipper.id)).unreachable_at is not None
+        assert (await read_mine(session, skipper.id)).unreachable_at is not None
 
     async def test_a_new_discord_id_clears_the_note(self, session: AsyncSession) -> None:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.unreachable.add(ADMIN_ID)
         await send_due(session, factory, now=NOW)
 
-        await set_discord_id(session, skipper.id, ADMIN_ID, Language.ZH_HANT)
-        assert (await read_notify(session, skipper.id)).unreachable_at is not None, "同一個 ID"
+        await set_mine(session, skipper.id, ADMIN_ID, Language.ZH_HANT, [NotificationKind.READY])
+        assert (await read_mine(session, skipper.id)).unreachable_at is not None, "同一個 ID"
 
-        await set_discord_id(session, skipper.id, SECOND_ADMIN_ID, Language.ZH_HANT)
-        assert (await read_notify(session, skipper.id)).unreachable_at is None
+        await set_mine(
+            session, skipper.id, SECOND_ADMIN_ID, Language.ZH_HANT, [NotificationKind.READY]
+        )
+        assert (await read_mine(session, skipper.id)).unreachable_at is None
 
     async def test_a_rejected_message_is_given_up_at_once(self, session: AsyncSession) -> None:
         """`400` / `50035`（超長）再送也一樣：當場放棄，不擋下一則。"""
@@ -380,7 +407,7 @@ class TestRecipient:
         skipper = await person(session, "skipper", ADMIN_ID)
         rejected = await queued(session, skipper)
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.failures.append(
             Delivery(failure=DeliveryFailure.REJECTED, detail="400 code=50035 Invalid Form Body")
         )
@@ -391,7 +418,7 @@ class TestRecipient:
         assert rejected.status is NotificationStatus.ABANDONED
         assert "50035" in rejected.error
         assert recipients(factory) == [ADMIN_ID]
-        assert (await read_notify(session, skipper.id)).unreachable_at is None
+        assert (await read_mine(session, skipper.id)).unreachable_at is None
 
 
 # --- token 失效 ---------------------------------------------------------------
@@ -404,21 +431,21 @@ class TestToken:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         row = await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.rejected_tokens.add(TOKEN)
 
         await send_due(session, factory, now=NOW)
         channel = await read_channel(session)
         assert channel.token_rejected
         assert "401" in channel.error
-        assert (await read_notify(session, skipper.id)).token_rejected
+        assert (await read_bot(session)).token_rejected
 
         # 暫停中一個請求都不發（替身這時已經不拒了，送得出去的話就會送）。
         factory.discord_.rejected_tokens.clear()
         await send_due(session, factory, now=NOW + timedelta(hours=1))
         assert factory.discord_.sent == []
 
-        await set_bot_token(session, factory, NEW_TOKEN, user_id=skipper.id)
+        await set_bot_token(session, factory, NEW_TOKEN)
         assert not (await read_channel(session)).token_rejected
 
         await send_due(session, factory, now=NOW + timedelta(hours=2))
@@ -432,7 +459,7 @@ class TestToken:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
 
         class SwappedMidSend:
             async def send(self, recipient: str, message: object) -> Delivery:
@@ -453,7 +480,7 @@ class TestToken:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
         await session.commit()
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         factory.discord_.rejected_tokens.add(TOKEN)
 
         await send_test(session, factory, skipper.id)
@@ -487,9 +514,9 @@ class TestIsolation:
     ) -> None:
         await with_bot(session)
         skipper = await person(session, "skipper", ADMIN_ID)
-        broken = await queued(session, skipper, content={"kind": "tv"})
+        broken = await queued(session, skipper, content={"kind": "tv", "library": "item-2"})
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
 
         await send_due(session, factory, now=NOW)
 
@@ -506,7 +533,7 @@ class TestIsolation:
         skipper = await person(session, "skipper", ADMIN_ID)
         first = await queued(session, skipper)
         await queued(session, skipper)
-        factory = FakeClientFactory()
+        factory = FakeClientFactory(jellyfin=crew())
         real = factory.discord_
         calls = 0
 

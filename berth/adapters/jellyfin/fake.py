@@ -740,7 +740,7 @@ class FakeJellyfinClient:
 
     def _account(self, user_id: str) -> str | None:
         accounts = [*self.users, *([self.admin[0]] if self.admin else [])]
-        return next((name for name in accounts if _user_id(name) == user_id), None)
+        return next((name for name in accounts if account_id(name) == user_id), None)
 
     def _username(self, user_id: str) -> str:
         """id 反查帳號名。不認得的 id 在真的 Jellyfin 是 4xx，client 翻成協定不符。"""
@@ -770,7 +770,7 @@ def _auth(username: str, *, is_administrator: bool) -> JellyfinAuth:
     """每個帳號一個穩定的假 id，兩個人登入才會是 `users` 表的兩列。"""
     return JellyfinAuth(
         token=f"token-for-{username}",
-        user_id=_user_id(username),
+        user_id=account_id(username),
         name=username,
         server_id=SERVER_ID,
         is_administrator=is_administrator,
@@ -782,5 +782,6 @@ def _under(item: JellyfinItem, library: JellyfinLibrary) -> bool:
     return any(item.path.startswith(f"{location}/") for location in library.locations)
 
 
-def _user_id(username: str) -> str:
+def account_id(username: str) -> str:
+    """這台替身給這個帳號的 Jellyfin user id。測試直接擺 `users` 的列時用它對上替身的帳號。"""
     return hashlib.sha256(username.encode()).hexdigest()[:32]

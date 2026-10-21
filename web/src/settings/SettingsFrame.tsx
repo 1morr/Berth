@@ -15,8 +15,11 @@ export function SettingsFrame({
   title,
   lede,
   note,
+  tabs = true,
   children,
 }: {
+  /** 分頁列。一般使用者的通知頁不帶：其他分頁他進不去（M4 票 125）。 */
+  tabs?: boolean
   title: string
   lede: string
   /** lede 之前多說的一句：精靈跑完之後打開 `/setup` 被帶到這裡時（M4 票 60）。 */
@@ -25,8 +28,8 @@ export function SettingsFrame({
 }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
-      <SettingsTabs />
-      <h1 className={`mt-6 ${PAGE_TITLE}`}>{title}</h1>
+      {tabs && <SettingsTabs />}
+      <h1 className={`${tabs ? 'mt-6' : ''} ${PAGE_TITLE}`}>{title}</h1>
       {note && <p className="mt-2 max-w-prose text-sm text-ink">{note}</p>}
       <p className="mt-2 max-w-prose text-sm text-ink-dim">{lede}</p>
       <div className="mt-6 grid gap-8">{children}</div>

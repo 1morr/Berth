@@ -790,23 +790,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/notifications/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Put Me */
-        put: operations["put_me_api_settings_notifications_me_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/settings/notifications/berth-url": {
         parameters: {
             query?: never;
@@ -827,7 +810,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/notifications/test": {
+    "/api/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mine */
+        get: operations["get_mine_api_me_notifications_get"];
+        /** Put Mine */
+        put: operations["put_mine_api_me_notifications_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/notifications/test": {
         parameters: {
             query?: never;
             header?: never;
@@ -840,7 +841,7 @@ export interface paths {
          * Post Test
          * @description 送一則測試訊息給按的人。Discord 拒絕也是 200：那是「測試的結果」，不是請求錯了。
          */
-        post: operations["post_test_api_settings_notifications_test_post"];
+        post: operations["post_test_api_me_notifications_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2766,12 +2767,6 @@ export interface components {
          * @enum {string}
          */
         DeliveryFailure: "unauthorized" | "recipient_unreachable" | "rate_limited" | "rejected" | "unavailable";
-        /** DiscordIdIn */
-        DiscordIdIn: {
-            /** Discord User Id */
-            discord_user_id: string;
-            language: components["schemas"]["Language"];
-        };
         /**
          * DiscoverItemOut
          * @description 牆上的一格。
@@ -4246,6 +4241,33 @@ export interface components {
              */
             subgroup_name?: string;
         };
+        /** MyNotifyIn */
+        MyNotifyIn: {
+            /** Discord User Id */
+            discord_user_id: string;
+            language: components["schemas"]["Language"];
+            /** Kinds */
+            kinds: components["schemas"]["NotificationKind"][];
+        };
+        /**
+         * MyNotifyOut
+         * @description 「我的通知」：登入的這個人自己的那一份（M4 票 125）。
+         */
+        MyNotifyOut: {
+            /** Bot Configured */
+            bot_configured: boolean;
+            /** Bot Name */
+            bot_name: string;
+            /** Discord User Id */
+            discord_user_id: string;
+            language: components["schemas"]["Language"];
+            /** Kinds */
+            kinds: components["schemas"]["NotificationKind"][];
+            /** Unreachable At */
+            unreachable_at: string | null;
+            /** Unreachable Detail */
+            unreachable_detail: string;
+        };
         /**
          * NameChipOut
          * @description 搜尋面板上的一顆名字 chip（M4 票 84）。
@@ -4280,6 +4302,30 @@ export interface components {
             collection_type: components["schemas"]["CollectionType"];
         };
         /**
+         * NotificationKind
+         * @description 待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
+         *
+         *     票 127、131 各加一種。
+         * @enum {string}
+         */
+        NotificationKind: "ready" | "downloading";
+        /**
+         * NotifyBotOut
+         * @description 管理員那一半。
+         */
+        NotifyBotOut: {
+            /** Bot Configured */
+            bot_configured: boolean;
+            /** Bot Name */
+            bot_name: string;
+            /** Invite Url */
+            invite_url: string | null;
+            /** Token Rejected */
+            token_rejected: boolean;
+            /** Berth Url */
+            berth_url: string;
+        };
+        /**
          * NotifyChannelOut
          * @description 通知管道上一輪之後的樣子（`services.notify.read_channel`、M4 票 128）。
          */
@@ -4300,26 +4346,6 @@ export interface components {
             last_sent_at: string | null;
             /** Pending */
             pending: number;
-        };
-        /** NotifyOut */
-        NotifyOut: {
-            /** Bot Configured */
-            bot_configured: boolean;
-            /** Bot Name */
-            bot_name: string;
-            /** Invite Url */
-            invite_url: string | null;
-            /** Token Rejected */
-            token_rejected: boolean;
-            /** Discord User Id */
-            discord_user_id: string;
-            language: components["schemas"]["Language"];
-            /** Berth Url */
-            berth_url: string;
-            /** Unreachable At */
-            unreachable_at: string | null;
-            /** Unreachable Detail */
-            unreachable_detail: string;
         };
         /**
          * NotifyRefusal
@@ -7475,7 +7501,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotifyOut"];
+                    "application/json": components["schemas"]["NotifyBotOut"];
                 };
             };
         };
@@ -7499,7 +7525,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotifyOut"];
+                    "application/json": components["schemas"]["NotifyBotOut"];
                 };
             };
             /** @description `token_rejected` */
@@ -7513,39 +7539,6 @@ export interface operations {
             };
             /** @description `discord_unreachable` */
             502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NotifyRefusalOut"];
-                };
-            };
-        };
-    };
-    put_me_api_settings_notifications_me_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DiscordIdIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NotifyOut"];
-                };
-            };
-            /** @description `discord_id_invalid` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7574,7 +7567,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotifyOut"];
+                    "application/json": components["schemas"]["NotifyBotOut"];
                 };
             };
             /** @description `berth_url_invalid` */
@@ -7588,7 +7581,60 @@ export interface operations {
             };
         };
     };
-    post_test_api_settings_notifications_test_post: {
+    get_mine_api_me_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyNotifyOut"];
+                };
+            };
+        };
+    };
+    put_mine_api_me_notifications_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyNotifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyNotifyOut"];
+                };
+            };
+            /** @description `discord_id_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyRefusalOut"];
+                };
+            };
+        };
+    };
+    post_test_api_me_notifications_test_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -90,14 +90,15 @@ function Identity() {
         <NavLink to="/">{t('nav.discover')}</NavLink>
         <NavLink to="/library">{t('nav.inventory')}</NavLink>
         <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
-        {/* 審核、待處理與設定同一個規則：審核與修正是 admin 的事（plan §6），後端同時回 403。 */}
+        {/* 審核與待處理同一個規則：審核與修正是 admin 的事（plan §6），後端同時回 403。 */}
         {me.data.role === 'admin' && <NavLink to="/review">{t('nav.review')}</NavLink>}
         {me.data.role === 'admin' && <NavLink to="/issues">{t('nav.issues')}</NavLink>}
         {/* RSS 同一個規則（M3 票 08）：聚合 feed 的網址帶 token，綁定會替整個家送單。 */}
         {me.data.role === 'admin' && <NavLink to="/rss">{t('nav.rss')}</NavLink>}
         <NavLink to="/health">{t('nav.health')}</NavLink>
-        {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。 */}
-        {me.data.role === 'admin' && <NavLink to="/settings">{t('nav.settings')}</NavLink>}
+        {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。
+            每個人都有：一般使用者的設定只有通知那一頁，`/settings` 把他帶到那裡（M4 票 125）。 */}
+        <NavLink to="/settings">{t('nav.settings')}</NavLink>
       </nav>
       <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}

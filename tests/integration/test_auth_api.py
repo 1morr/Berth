@@ -445,12 +445,11 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/settings/disk"): Access.ADMIN,
     ("GET", "/settings/jellyfin"): Access.ADMIN,
     ("POST", "/settings/jellyfin"): Access.ADMIN,
-    # 通知設定（M4 票 123）。票 125 把「我的 Discord」與測試開放給每個人時，`bot` 以外的要改分類。
+    # 通知設定（M4 票 123、124）：bot token 與 Berth 的網址是管理員的。每個人自己的那一半在
+    # `/me/notifications`（票 125，下面「登入就行」那一段）。
     ("GET", "/settings/notifications"): Access.ADMIN,
     ("PUT", "/settings/notifications/bot"): Access.ADMIN,
-    ("PUT", "/settings/notifications/me"): Access.ADMIN,
     ("PUT", "/settings/notifications/berth-url"): Access.ADMIN,
-    ("POST", "/settings/notifications/test"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,
@@ -491,6 +490,10 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 門禁只看方法與路徑，這一條要看狀態，所以守在命令裡（403 `review_needs_admin`，
     # `test_plans_api.py` 的 `TestReplanInReviewIsAdmins`）；這張表上它仍然是 SIGNED_IN。
     ("GET", "/auth/me"): Access.SIGNED_IN,
+    # 每個人自己的通知（M4 票 125）：Discord ID、種類、測試。收件人取自 session。
+    ("GET", "/me/notifications"): Access.SIGNED_IN,
+    ("PUT", "/me/notifications"): Access.SIGNED_IN,
+    ("POST", "/me/notifications/test"): Access.SIGNED_IN,
     ("GET", "/discover/popular"): Access.SIGNED_IN,
     ("GET", "/discover/search"): Access.SIGNED_IN,
     ("GET", "/discover/trending"): Access.SIGNED_IN,

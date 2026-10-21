@@ -132,7 +132,8 @@ class WallQuery:
 class AccountDisabledError(Exception):
     """這個人的 Jellyfin 帳號被停用或刪除了（刪除與停用同一種處置，M2 票 11）。
 
-    丟出之前，他在 Berth 的每一張 session 都已經刪掉並 commit。
+    從 `jellyfin_access` 丟出之前，他在 Berth 的每一張 session 都已經刪掉並 commit；
+    `visible_libraries`（不在這個人的請求裡）不動 session。
     """
 
 
@@ -405,29 +406,48 @@ async def jellyfin_access(
         await client.aclose()
 
 
+async def visible_libraries(client: JellyfinClient, jellyfin_user_id: str) -> frozenset[str]:
+    """這個人在 Jellyfin 看得到的每一個媒體庫的 id（`UserViews`，不限 Berth 瀏覽得了的類型）。
+
+    給不在請求裡的讀者：通知的收件人（M4 票 125）。**不經 session、不快取、不結束 session**——
+    送出迴圈不是這個人，他下一次打開 Berth 時 `jellyfin_access` 自己會結束。帳號停用或刪除丟
+    `AccountDisabledError`，問不到丟 `JellyfinUnreachableError`。
+    """
+    return frozenset(view.id for view in await _views(client, jellyfin_user_id))
+
+
 async def _grant(
     session: AsyncSession, client: JellyfinClient, user: AuthenticatedUser
 ) -> tuple[BrowsableLibrary, ...]:
+    try:
+        views = await _views(client, user.jellyfin_user_id)
+    except AccountDisabledError:
+        await end_sessions(session, user.id)
+        raise
+    return tuple(_browsable(view) for view in views if view.collection_type in _TYPES)
+
+
+async def _views(client: JellyfinClient, jellyfin_user_id: str) -> tuple[JellyfinView, ...]:
+    """`UserViews`，連同帳號還在不在、有沒有被停用：**停用的帳號 `UserViews` 照樣讀得到**
+    （研究 library-browsing.md §2），只有 `Policy` 說得出來，所以兩支一起問。"""
     with reachable():
         policy, views = await asyncio.gather(
-            client.user_policy(user.jellyfin_user_id),
-            client.user_views(user.jellyfin_user_id),
+            client.user_policy(jellyfin_user_id),
+            client.user_views(jellyfin_user_id),
             return_exceptions=True,
         )
         # **只有 `Users/{id}` 的 404 算「帳號被刪掉」**（M2 票 11 實測）：刪掉的帳號 `UserViews`
         # 也是 404，但那一支的 404 也可能是位址設錯，不該拿它把人登出。與停用同一種處置
         # （使用者拍板）——當成「問不到」的話 session 會活到期滿，畫面一直說 Jellyfin 連不上。
         if isinstance(policy, NotFoundError):
-            await end_sessions(session, user.id)
             raise AccountDisabledError("this Jellyfin account is gone")
         if isinstance(policy, BaseException):
             raise policy
         if isinstance(views, BaseException):
             raise views
     if policy.is_disabled:
-        await end_sessions(session, user.id)
         raise AccountDisabledError("this Jellyfin account is disabled")
-    return tuple(_browsable(view) for view in views if view.collection_type in _TYPES)
+    return views
 
 
 _TYPES = {kind.value for kind in BROWSABLE}

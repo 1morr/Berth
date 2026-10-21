@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Notify, NotifyTest } from '../api/notify'
+import type { MyNotify, NotifyBot, NotifyTest } from '../api/notify'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -13,9 +13,13 @@ afterEach(() => {
 
 const READ = 'GET /api/settings/notifications'
 const BOT = 'PUT /api/settings/notifications/bot'
-const ME = 'PUT /api/settings/notifications/me'
-const TEST = 'POST /api/settings/notifications/test'
+const MINE = 'GET /api/me/notifications'
+const ME = 'PUT /api/me/notifications'
+const TEST = 'POST /api/me/notifications/test'
 const BERTH_URL = 'PUT /api/settings/notifications/berth-url'
+
+/** 測試裡一次擺好兩半：`render` 拆成管理員那一份（`NotifyBot`）與「我的」那一份（`MyNotify`）。 */
+type Notify = NotifyBot & MyNotify
 
 const INVITE = 'https://discord.com/oauth2/authorize?client_id=1000000000000000001&scope=bot'
 
@@ -28,6 +32,7 @@ const UNSET: Notify = {
   unreachable_detail: '',
   discord_user_id: '',
   language: 'zh-Hant',
+  kinds: ['ready'],
   berth_url: '',
 }
 
@@ -40,6 +45,7 @@ const BOT_SET: Notify = {
   unreachable_detail: '',
   discord_user_id: '',
   language: 'zh-Hant',
+  kinds: ['ready'],
   berth_url: '',
 }
 
@@ -49,11 +55,31 @@ function refusal(status: number, reason: string, detail = '') {
   return { status, body: { detail: { reason, detail } } }
 }
 
-function render(routes: StubRoutes = {}, notify: Notify = UNSET) {
+function botOf(notify: Notify): NotifyBot {
+  const { bot_configured, bot_name, invite_url, token_rejected, berth_url } = notify
+  return { bot_configured, bot_name, invite_url, token_rejected, berth_url }
+}
+
+function mineOf(notify: Notify): MyNotify {
+  const { bot_configured, bot_name, discord_user_id, language, kinds } = notify
+  const { unreachable_at, unreachable_detail } = notify
+  return {
+    bot_configured,
+    bot_name,
+    discord_user_id,
+    language,
+    kinds,
+    unreachable_at,
+    unreachable_detail,
+  }
+}
+
+function render(routes: StubRoutes = {}, notify: Notify = UNSET, role: 'admin' | 'user' = 'admin') {
   return stubApi({
     'GET /api/health': { body: HEALTHY },
-    'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
-    [READ]: { body: notify },
+    'GET /api/auth/me': { body: { name: role === 'admin' ? 'skipper' : 'deckhand', role } },
+    [READ]: { body: botOf(notify) },
+    [MINE]: { body: mineOf(notify) },
     ...routes,
   })
 }
@@ -108,7 +134,7 @@ describe('設定 → 通知', () => {
   })
 
   it('存 token：送出、欄位清空、快取換成回來的狀態', async () => {
-    const stub = render({ [BOT]: { body: BOT_SET } })
+    const stub = render({ [BOT]: { body: botOf(BOT_SET) } })
     const user = userEvent.setup()
     renderApp('/settings/notifications')
 
@@ -123,7 +149,7 @@ describe('設定 → 通知', () => {
   })
 
   it('token 空著按儲存不送出（空字串在後端是清掉）', async () => {
-    const stub = render({ [BOT]: { body: UNSET } }, BOT_SET)
+    const stub = render({ [BOT]: { body: botOf(UNSET) } }, BOT_SET)
     const user = userEvent.setup()
     renderApp('/settings/notifications')
 
@@ -164,7 +190,7 @@ describe('設定 → 通知', () => {
   })
 
   it('移除 token：就地二次確認，確認才送空字串', async () => {
-    const stub = render({ [BOT]: { body: UNSET } }, BOT_SET)
+    const stub = render({ [BOT]: { body: botOf(UNSET) } }, BOT_SET)
     const user = userEvent.setup()
     renderApp('/settings/notifications')
 
@@ -182,7 +208,7 @@ describe('設定 → 通知', () => {
     // 假後端照送來的 token 回：空字串是清掉。
     render({
       [BOT]: (init) => ({
-        body: JSON.parse(String(init?.body)).token ? BOT_SET : UNSET,
+        body: botOf(JSON.parse(String(init?.body)).token ? BOT_SET : UNSET),
       }),
     })
     const user = userEvent.setup()
@@ -201,7 +227,7 @@ describe('設定 → 通知', () => {
   })
 
   it('存 ID：送出當下的介面語言', async () => {
-    const stub = render({ [ME]: { body: READY } }, BOT_SET)
+    const stub = render({ [ME]: { body: mineOf(READY) } }, BOT_SET)
     const user = userEvent.setup()
     renderApp('/settings/notifications')
 
@@ -219,13 +245,14 @@ describe('設定 → 通知', () => {
     expect(sent(stub, ME)).toEqual({
       discord_user_id: '1000000000000000001',
       language: 'zh-Hant',
+      kinds: ['ready'],
     })
   })
 
   it('英文介面：說通知用英文寫，存下去的語言是 en', async () => {
     await i18next.changeLanguage('en')
     try {
-      const stub = render({ [ME]: { body: { ...READY, language: 'en' } } }, BOT_SET)
+      const stub = render({ [ME]: { body: mineOf({ ...READY, language: 'en' }) } }, BOT_SET)
       const user = userEvent.setup()
       renderApp('/settings/notifications')
 
@@ -248,6 +275,7 @@ describe('設定 → 通知', () => {
         expect(sent(stub, ME)).toEqual({
           discord_user_id: '1000000000000000001',
           language: 'en',
+          kinds: ['ready'],
         }),
       )
     } finally {
@@ -297,7 +325,7 @@ describe('設定 → 通知', () => {
     })
 
     it('儲存：送出欄位的值、換成回來的狀態', async () => {
-      const saved = { ...UNSET, berth_url: 'https://berth.example.com' }
+      const saved = botOf({ ...UNSET, berth_url: 'https://berth.example.com' })
       const stub = render({ [BERTH_URL]: { body: saved } })
       const user = userEvent.setup()
       renderApp('/settings/notifications')
@@ -522,7 +550,7 @@ describe('設定 → 通知', () => {
       render({}, UNREACHABLE)
       renderApp('/settings/notifications')
 
-      const me = within(await screen.findByRole('region', { name: '我的 Discord' }))
+      const me = within(await screen.findByRole('region', { name: '我的通知' }))
       expect(await me.findByText('送不到')).toBeVisible()
       expect(me.getByText(/上次送給你的通知沒送到/)).toBeVisible()
       expect(me.getByText(/把 bot 加進你所在的伺服器/)).toBeVisible()
@@ -546,7 +574,7 @@ describe('設定 → 通知', () => {
       let reads = 0
       const stub = render(
         {
-          [READ]: () => ({ body: reads++ === 0 ? UNREACHABLE : READY }),
+          [MINE]: () => ({ body: mineOf(reads++ === 0 ? UNREACHABLE : READY) }),
           [TEST]: { body: DELIVERED },
         },
         READY,
@@ -559,9 +587,7 @@ describe('設定 → 通知', () => {
 
       await waitFor(() => expect(screen.queryByText('送不到')).not.toBeInTheDocument())
       expect(screen.getByText('已送出')).toBeVisible()
-      const reread = stub.mock.calls.filter(
-        ([input]) => String(input) === '/api/settings/notifications',
-      )
+      const reread = stub.mock.calls.filter(([input]) => String(input) === '/api/me/notifications')
       expect(reread).toHaveLength(2)
     })
   })
@@ -569,11 +595,111 @@ describe('設定 → 通知', () => {
   it.each(REQUEST_FAILURES)(
     '讀取失敗（%s）：說這一次請求為什麼沒成',
     async (_name, failure, text) => {
-      render({ [READ]: failure })
+      render({ [MINE]: failure })
       renderApp('/settings/notifications')
 
       expect(await screen.findByText(text)).toBeVisible()
       expect(screen.getByText(/讀不到通知設定/)).toBeVisible()
     },
   )
+})
+
+describe('要收的通知（M4 票 125）', () => {
+  it('勾選照存的那一份，與 ID 同一個儲存鍵送出', async () => {
+    const stub = render({ [ME]: { body: mineOf({ ...READY, kinds: ['downloading'] }) } }, READY)
+    const user = userEvent.setup()
+    renderApp('/settings/notifications')
+
+    const kinds = within(await screen.findByRole('group', { name: '要收的通知' }))
+    expect(kinds.getByRole('checkbox', { name: '可以看了' })).toBeChecked()
+    expect(kinds.getByRole('checkbox', { name: '正在下載' })).not.toBeChecked()
+    expect(kinds.getByRole('checkbox', { name: '可以看了' })).toHaveAccessibleDescription(
+      /同一部作品 5 分鐘內的幾批合成一則/,
+    )
+
+    await user.click(kinds.getByRole('checkbox', { name: '正在下載' }))
+    await user.click(kinds.getByRole('checkbox', { name: '可以看了' }))
+    const form = screen.getByLabelText('Discord 使用者 ID').closest('form')!
+    await user.click(within(form).getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText('已儲存。')).toBeVisible()
+    expect(sent(stub, ME)).toEqual({
+      discord_user_id: '1000000000000000001',
+      language: 'zh-Hant',
+      kinds: ['downloading'],
+    })
+    expect(kinds.getByRole('checkbox', { name: '正在下載' })).toBeChecked()
+  })
+
+  it('en：兩種的名字', async () => {
+    await i18next.changeLanguage('en')
+    try {
+      render({}, READY)
+      renderApp('/settings/notifications')
+
+      const kinds = within(await screen.findByRole('group', { name: 'Notify me about' }))
+      expect(kinds.getByRole('checkbox', { name: 'Ready to watch' })).toBeChecked()
+      expect(kinds.getByRole('checkbox', { name: 'Downloading' })).not.toBeChecked()
+      expect(screen.getByRole('region', { name: 'My notifications' })).toBeVisible()
+    } finally {
+      await i18next.changeLanguage('zh-Hant')
+    }
+  })
+})
+
+describe('一般使用者（M4 票 125）', () => {
+  it('只看得到自己的那一半：沒有分頁列、bot、Berth 的網址，也不讀管理員那一份', async () => {
+    const stub = render({}, READY, 'user')
+    renderApp('/settings/notifications')
+
+    expect(await screen.findByRole('region', { name: '我的通知' })).toBeVisible()
+    expect(screen.getByRole('region', { name: '測試' })).toBeVisible()
+    expect(screen.getByText(/勾要收的通知，再按測試/)).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: '設定' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Discord bot' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Bot token')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Berth 的網址')).not.toBeInTheDocument()
+    expect(screen.queryByText(INVITE)).not.toBeInTheDocument()
+    expect(stub.mock.calls.some(([input]) => String(input) === '/api/settings/notifications')).toBe(
+      false,
+    )
+  })
+
+  it('私訊從哪一個 bot 來', async () => {
+    render({}, READY, 'user')
+    renderApp('/settings/notifications')
+
+    expect(await screen.findByText('私訊會從 Discord 上的 berth-demo 傳來。')).toBeVisible()
+  })
+
+  it('bot 還沒設定：測試鍵說管理員還沒設，不叫他自己去設', async () => {
+    render({}, { ...UNSET, discord_user_id: '1000000000000000001' }, 'user')
+    renderApp('/settings/notifications')
+
+    const button = await screen.findByRole('button', { name: '送一則測試訊息給我' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).toHaveAccessibleDescription('管理員還沒設定 Discord bot，設好之後才測得了。')
+  })
+
+  it.each([
+    ['recipient_unreachable', /請管理員把 bot 加進你所在的伺服器/],
+    ['unauthorized', /請管理員到 Developer Portal 換一個新的 token/],
+  ] as const)('%s：補法說找管理員', async (failure, fix) => {
+    render(
+      {
+        [TEST]: {
+          body: { delivered: false, failure, detail: 'x', retry_after: null } satisfies NotifyTest,
+        },
+      },
+      READY,
+      'user',
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/notifications')
+
+    await user.click(await screen.findByRole('button', { name: '送一則測試訊息給我' }))
+
+    expect(await screen.findByText(fix)).toBeVisible()
+    expect(screen.queryByText(/用邀請連結/)).not.toBeInTheDocument()
+  })
 })

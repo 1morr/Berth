@@ -10,9 +10,9 @@ from datetime import datetime
 from sqlalchemy import ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import Language, Role
+from berth.domain import Language, NotificationKind, Role
 from berth.models.base import Base
-from berth.models.types import UtcDateTime, enum_column, utcnow
+from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
 
 class User(Base):
@@ -36,6 +36,11 @@ class User(Base):
     notify_unreachable_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     #: 那一次 Discord 的原文（狀態碼、代碼、訊息），給「技術細節」。
     notify_unreachable_detail: Mapped[str] = mapped_column(Text, default="", server_default="")
+    #: 要收哪幾種通知（`NotificationKind` 的值，M4 票 125）。預設只有「可以看了」：填了 Discord ID
+    #: 就收得到最主要的那一種，「正在下載」每一輪一則、要自己勾。
+    notify_kinds_json: Mapped[list[str]] = mapped_column(
+        JsonText, default=lambda: [NotificationKind.READY.value], server_default='["ready"]'
+    )
 
 
 class UserSession(Base):
