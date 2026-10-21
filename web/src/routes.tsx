@@ -32,6 +32,7 @@ import { IndexerSettingsPage } from './pages/IndexerSettingsPage'
 import { JellyfinSettingsPage } from './pages/JellyfinSettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
+import { NotifySettingsPage } from './pages/NotifySettingsPage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { RssPage } from './pages/RssPage'
@@ -471,7 +472,7 @@ const settingsIndexRoute = createRoute({
 
 /**
  * 改設定是管理員的事（brief §11，後端同時回 403）；這裡的導向只是讓一般使用者不必看到一頁 403。
- * 五個分頁同一道門（票 06i），所以寫一次。
+ * 六個分頁同一道門（票 06i），所以寫一次。
  */
 function settingsRoute(path: `/settings/${string}`, Page: () => React.JSX.Element) {
   return createRoute({
@@ -498,6 +499,8 @@ const qbittorrentSettingsRoute = settingsRoute('/settings/qbittorrent', Qbittorr
 const routeSettingsRoute = settingsRoute('/settings/routes', RouteSettingsPage)
 const indexerSettingsRoute = settingsRoute('/settings/indexers', IndexerSettingsPage)
 const tmdbSettingsRoute = settingsRoute('/settings/tmdb', TmdbSettingsPage)
+/** 通知不是泊位，不進 `BERTHS`；門禁與五個泊位分頁相同。 */
+const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySettingsPage)
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -516,6 +519,7 @@ export const routeTree = rootRoute.addChildren([
   routeSettingsRoute,
   indexerSettingsRoute,
   tmdbSettingsRoute,
+  notifySettingsRoute,
   settingsIndexRoute,
   setupRoute,
 ])

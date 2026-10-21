@@ -57,6 +57,8 @@ from berth.adapters.jellyfin import (
     TypeOption,
 )
 from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
+from berth.adapters.notify import BotIdentity, DiscordBot
+from berth.adapters.notify.fake import FakeDiscordBot
 from berth.adapters.prowlarr import IndexerDefinition, ProwlarrClient, ProwlarrIndexer
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import (
@@ -1818,6 +1820,13 @@ class FakeClientFactory:
         #: 使用者自己那台 Prowlarr，一個位址一台：加進去的站之後再讀要看得到
         #: （M4 票 67 的一鍵加站）。
         self._existing_prowlarr: dict[str, FakeProwlarrClient] = {}
+        #: 通知的 Discord（M4 票 123）：token `rejected` 不被接受、收件人 `1000000000000000404`
+        #: 到不了，畫面上演得出兩種失敗；其餘一律送到，記在 `sent`。
+        self._discord = FakeDiscordBot(
+            identity=BotIdentity(application_id="1000000000000000001", name="berth-demo"),
+            rejected_tokens={"rejected"},
+            unreachable={"1000000000000000404"},
+        )
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         if self._scenario.jellyfin.error is not None and base_url != BUNDLED_JELLYFIN_URL:
@@ -1861,6 +1870,10 @@ class FakeClientFactory:
         if self._scenario.real_tmdb:
             return HttpTmdbClient(credential)
         return self._scenario.tmdb
+
+    def discord(self, token: str) -> DiscordBot:
+        self._discord.token = token
+        return self._discord
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.prowlarr.ping_error is not None:

@@ -270,6 +270,7 @@ describe('一般使用者看不到修正與對帳的入口', () => {
     '/settings/routes',
     '/settings/indexers',
     '/settings/tmdb',
+    '/settings/notifications',
   ])('user 直接開 %s 會被送到健康頁並說他被擋下來了', async (path) => {
     stubApi({ [HEALTH]: DONE, [ME]: USER, ...DISCOVER })
 

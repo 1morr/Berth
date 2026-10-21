@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.notify import DiscordBot
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher
@@ -73,6 +74,9 @@ class OneJellyfin:
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         raise AssertionError("login never searches an indexer")
+
+    def discord(self, token: str) -> DiscordBot:
+        raise AssertionError("login never talks to Discord")
 
 
 @pytest.fixture

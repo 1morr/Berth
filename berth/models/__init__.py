@@ -18,6 +18,7 @@ from berth.models.media import (
     media_id,
     parse_media_id,
 )
+from berth.models.notification import Notification
 from berth.models.plan import Plan, PlanItem
 from berth.models.route import Route, RouteHealth
 from berth.models.rss import DEFAULT_INTERVAL_SEC, FEED_INTERVALS, RssFeed, RssItem, RssSeries
@@ -30,6 +31,7 @@ from berth.models.setting import (
     HealthSettings,
     IndexerSettings,
     JellyfinSettings,
+    NotifySettings,
     PathSettings,
     PollerSettings,
     QbittorrentSettings,
@@ -72,6 +74,8 @@ __all__ = [
     "LedgerEntry",
     "Media",
     "MediaCard",
+    "Notification",
+    "NotifySettings",
     "PathSettings",
     "Plan",
     "PlanItem",

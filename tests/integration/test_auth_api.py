@@ -445,6 +445,11 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/settings/disk"): Access.ADMIN,
     ("GET", "/settings/jellyfin"): Access.ADMIN,
     ("POST", "/settings/jellyfin"): Access.ADMIN,
+    # 通知設定（M4 票 123）。票 125 把「我的 Discord」與測試開放給每個人時，`bot` 以外的要改分類。
+    ("GET", "/settings/notifications"): Access.ADMIN,
+    ("PUT", "/settings/notifications/bot"): Access.ADMIN,
+    ("PUT", "/settings/notifications/me"): Access.ADMIN,
+    ("POST", "/settings/notifications/test"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,

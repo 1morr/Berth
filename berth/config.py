@@ -30,6 +30,9 @@ DEFAULT_WEB_ROOT = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 DATABASE_FILENAME = "berth.db"
 
+#: Discord API 的位址（M4 票 123）。只有票 133 的 e2e 會換：指到記下私訊的假伺服器。
+DEFAULT_DISCORD_API_URL = "https://discord.com/api/v10"
+
 
 @dataclass(frozen=True, slots=True)
 class Config:
@@ -49,6 +52,8 @@ class Config:
     #: 印出它。Berth 自己的路徑不讀它——容器裡永遠是 `/data`。沒傳（`berth serve`、舊的 compose 檔）
     #: 是空字串。
     host_data_root: str = ""
+    #: 通知送去的 Discord API（`DISCORD_API_URL`）。
+    discord_api_url: str = DEFAULT_DISCORD_API_URL
 
     @property
     def database_path(self) -> Path:
@@ -71,6 +76,8 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         qbittorrent_webui_port=_port(env, "QBITTORRENT_WEBUI_PORT", DEFAULT_QBITTORRENT_WEBUI_PORT),
         prowlarr_port=_port(env, "PROWLARR_PORT", DEFAULT_PROWLARR_PORT),
         host_data_root=env.get("HOST_DATA_ROOT", "").strip(),
+        discord_api_url=env.get("DISCORD_API_URL", "").strip().rstrip("/")
+        or DEFAULT_DISCORD_API_URL,
     )
 
 

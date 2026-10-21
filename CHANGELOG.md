@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **「可以看了」送到管理員的 Discord**（M4 票 123）：一筆下載在 Jellyfin 全部認出來之後，每一位填了 Discord ID 的
+  管理員收到一則私訊，說出作品、季集與 Route（電影只說作品）。設定 → 通知：貼上自己建的 Discord bot 的 token
+  （存的時候向 Discord 驗一次，之後畫面只說「已設定」，token 不回到瀏覽器）、用邀請連結把 bot 加進你所在的伺服器、
+  填自己的 Discord user ID、按「送一則測試訊息給我」，失敗時當場說出原因與補法。通知用存 ID 那一刻的介面語言寫。
+  Discord 暫時連不上時，沒送到的那幾則留著下一輪再送。API：`GET /api/settings/notifications`、
+  `PUT /api/settings/notifications/bot`、`PUT /api/settings/notifications/me`、`POST /api/settings/notifications/test`。
+  **這一版有資料庫 migration**（`d5e8a2c7f914`）：新的待送表，使用者多兩欄（Discord ID、通知語言）。
+
 ### Fixed
 
 - **忽略的 Jellyfin 認錯不再每天重開**（M4 票 122）：按「忽略」之後，每日對帳又比到同樣的不一致不會再開一筆；

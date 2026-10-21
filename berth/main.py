@@ -27,6 +27,7 @@ from berth.pipeline import (
     HealthChecker,
     Importer,
     JellyfinResolver,
+    NotifySender,
     PlannerRunner,
     QbitPoller,
     Reconciler,
@@ -52,6 +53,7 @@ IMPORTER_TASK = "importer"
 JELLYFIN_RESOLVER_TASK = "jellyfin_resolver"
 RECONCILER_TASK = "reconciler"
 RSS_POLLER_TASK = "rss_poller"
+NOTIFY_SENDER_TASK = "notify_sender"
 
 #: mount 掛在 `/`，所以 StaticFiles 收到的 path 沒有開頭的斜線。
 _API_SEGMENT = API_PREFIX.lstrip("/")
@@ -97,7 +99,9 @@ def create_app(
 
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
     app.state.config = resolved
-    app.state.clients = clients or HttpServiceClientFactory()
+    app.state.clients = clients or HttpServiceClientFactory(
+        discord_api_url=resolved.discord_api_url
+    )
     # 一個程序一個 hub：發佈的是背景迴圈，訂閱的是這個程序裡開著的 SSE 連線（票 10）。
     app.state.events = EventHub()
     # 替使用者讀 Jellyfin 時的允許清單與帳號狀態，一個程序一份（M1.5 票 03）。
@@ -154,6 +158,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         app.state.reconciler = runner
         reconciler = Reconciler(sessions, runner)
         rss = RssPoller(sessions, clients)
+        notifier = NotifySender(sessions, clients)
         # 背景迴圈（plan §3.2）。每一個都先睡一個間隔，所以啟動本身不會慢。
         tasks = [
             asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
@@ -163,6 +168,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             asyncio.create_task(resolver.run(), name=JELLYFIN_RESOLVER_TASK),
             asyncio.create_task(reconciler.run(), name=RECONCILER_TASK),
             asyncio.create_task(rss.run(), name=RSS_POLLER_TASK),
+            asyncio.create_task(notifier.run(), name=NOTIFY_SENDER_TASK),
         ]
         try:
             yield

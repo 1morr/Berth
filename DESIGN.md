@@ -626,7 +626,7 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   標出（`border-rule-strong`），不靠顏色——狀態不只靠顏色是產品層級的無障礙底線。
 - 導覽包在 `<nav aria-label>` 裡，是一個地標；頁首之前有 skip link（見 Layout）。
 - 同一個方塊（`NAV_BOX` / `NAV_BOX_ACTIVE`，不含內距）也是設定的子分頁列（`SettingsTabs`，`0.5rem 0.75rem`，
-  自己一個 `<nav>`）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`，`FILTER` / `FILTER_ACTIVE`；下載列表的四組篩選同一種，M4 票 04）。內距由呼叫端給一次。
+  自己一個 `<nav>`；前五格是泊位、順序照泊位板，之後的「通知」不是泊位，前面隔一條 `rule` 的直線，M4 票 123）、媒體庫的 Route 切換列與篩選列（篩選小一號，`0.375rem 0.75rem`，`FILTER` / `FILTER_ACTIVE`；下載列表的四組篩選同一種，M4 票 04）。內距由呼叫端給一次。
 - **路由的 `Link` 用 `NAV_LINK`**（M2 票 13）：當前那一格由 TanStack 自己掛的 `data-status="active"` 換漆
   （`data-[status=active]:`），不用 `activeProps`——它的 class 是**接在後面**的，當前那一格同時帶 `border-rule` 與
   `border-rule-strong`，誰贏看 CSS 的產生順序。按鈕（`aria-pressed` 的季切換、只看缺集）照舊二選一 `NAV_BOX` / `NAV_BOX_ACTIVE`。

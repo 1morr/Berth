@@ -40,6 +40,7 @@ from berth.api import files as files_api
 from berth.api import issues as issues_api
 from berth.api import jellyfin as jellyfin_api
 from berth.api import jobs as jobs_api
+from berth.api import notify as notify_api
 from berth.api import plans as plans_api
 from berth.api import review as review_api
 from berth.api import routes as routes_api
@@ -80,6 +81,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "PlanRefusal": plans_api._STATUS,
     "RematchRefusal": files_api._STATUS,
     "RssRefusal": rss_api._STATUS,
+    "NotifyRefusal": notify_api._STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
     "OwnerRefusal": setup_api._OWNER_STATUS,
     "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
@@ -100,6 +102,7 @@ MODELS = (
     "OwnerRefusalOut",
     "InterfaceLoginRefusalOut",
     "ChoiceRefusalOut",
+    "NotifyRefusalOut",
     "JobSignalOut",
 )
 
@@ -460,6 +463,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "choice_refusal": "ChoiceRefusalOut",
             "connection_failed": "ChoiceRefusalOut",
             "rss_refusal": "RssRefusalOut",
+            "notify_refusal": "NotifyRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

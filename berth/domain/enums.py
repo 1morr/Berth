@@ -1587,3 +1587,63 @@ class RssRefusal(StrEnum):
     FEED_UNPRIMED = "feed_unprimed"
     #: 輪詢間隔不在固定檔位裡（`models.rss.FEED_INTERVALS`，M4 票 109）。`detail` 是給的秒數。
     INTERVAL_UNSUPPORTED = "interval_unsupported"
+
+
+# --- 通知（plan §11.5〈通知〉、M4 票 123） ---
+class Language(StrEnum):
+    """通知用哪個語言寫（使用者 2026-10-21 選「每人一個」）。
+
+    值與前端 i18next 的語言碼相同：存 Discord ID 的那一刻，前端把當下的介面語言一起送來。
+    收件人不在瀏覽器上，所以這是後端第一個自己組人話的地方（`services.notify`）。
+    """
+
+    ZH_HANT = "zh-Hant"
+    EN = "en"
+
+
+class NotificationKind(StrEnum):
+    """待送表上一則的種類。票 126、127、131 各加一種。"""
+
+    #: 「可以看了」：一筆 Job 的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
+    READY = "ready"
+
+
+class NotificationStatus(StrEnum):
+    #: 還沒送到。送出迴圈每一輪撿到時間的這一種。
+    PENDING = "pending"
+    SENT = "sent"
+
+
+class DeliveryFailure(StrEnum):
+    """送一則給一位收件人失敗的分類（brief §20.23，M4 票 121 實測）。
+
+    分得這麼細是因為下一步不同：token 錯要管理員換、收件人到不了要收件人自己補、限速與連不上
+    等一下就好、被拒（長度）是 Berth 自己的錯。
+    """
+
+    #: `401`：token 錯或被重設。
+    UNAUTHORIZED = "unauthorized"
+    #: `403` / `50278`（沒有共同伺服器，或收件人在共同伺服器關了私訊——Discord 分不出來）、
+    #: `50007`（不能傳訊息給這位使用者，沒量到過）。
+    RECIPIENT_UNREACHABLE = "recipient_unreachable"
+    #: `429`。
+    RATE_LIMITED = "rate_limited"
+    #: 其餘的 4xx：`400` / `50035`（超長）、收件人 ID 不存在。
+    REJECTED = "rejected"
+    #: 連不上、逾時、5xx。
+    UNAVAILABLE = "unavailable"
+
+
+class NotifyRefusal(StrEnum):
+    """通知設定的命令不做的理由（`services.notify`）。"""
+
+    #: Discord 不接受這個 bot token（`GET /applications/@me` 回 401）。
+    TOKEN_REJECTED = "token_rejected"
+    #: 問不到 Discord（連不上、逾時、5xx）。
+    DISCORD_UNREACHABLE = "discord_unreachable"
+    #: Discord user ID 不是 17–20 位的數字。
+    DISCORD_ID_INVALID = "discord_id_invalid"
+    #: 測試時還沒有 bot token。
+    BOT_MISSING = "bot_missing"
+    #: 測試時按的人還沒填 Discord ID。
+    DISCORD_ID_MISSING = "discord_id_missing"
