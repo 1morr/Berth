@@ -22,6 +22,9 @@ const UNSET: Notify = {
   bot_configured: false,
   bot_name: '',
   invite_url: null,
+  token_rejected: false,
+  unreachable_at: null,
+  unreachable_detail: '',
   discord_user_id: '',
   language: 'zh-Hant',
 }
@@ -30,6 +33,9 @@ const BOT_SET: Notify = {
   bot_configured: true,
   bot_name: 'berth-demo',
   invite_url: INVITE,
+  token_rejected: false,
+  unreachable_at: null,
+  unreachable_detail: '',
   discord_user_id: '',
   language: 'zh-Hant',
 }
@@ -408,6 +414,78 @@ describe('設定 → 通知', () => {
       await user.click(await screen.findByRole('button', { name: '送一則測試訊息給我' }))
 
       expect(await screen.findByText('還沒設定 Discord bot。')).toBeVisible()
+    })
+  })
+
+  it('token_rejected：bot 區塊說通知暫停、要換新 token', async () => {
+    render({}, { ...BOT_SET, token_rejected: true })
+    renderApp('/settings/notifications')
+
+    const bot = within(await screen.findByRole('region', { name: 'Discord bot' }))
+    expect(await bot.findByText('已暫停')).toBeVisible()
+    expect(bot.getByText(/Discord 不再接受存著的這個 token，通知暫停送出/)).toBeVisible()
+  })
+
+  it('token 沒被拒：沒有暫停那一句', async () => {
+    render({}, BOT_SET)
+    renderApp('/settings/notifications')
+
+    await screen.findByText('berth-demo')
+    expect(screen.queryByText('已暫停')).not.toBeInTheDocument()
+  })
+
+  describe('收件人到不了（票 128）', () => {
+    const UNREACHABLE: Notify = {
+      ...READY,
+      unreachable_at: '2026-10-21T08:00:00Z',
+      unreachable_detail: '403 Forbidden: Cannot send messages to this user (50278)',
+    }
+
+    it('我的 Discord 說出原因、兩個補法、重試那一句（含測試鍵的名字），原文收進技術細節', async () => {
+      render({}, UNREACHABLE)
+      renderApp('/settings/notifications')
+
+      const me = within(await screen.findByRole('region', { name: '我的 Discord' }))
+      expect(await me.findByText('送不到')).toBeVisible()
+      expect(me.getByText(/上次送給你的通知沒送到/)).toBeVisible()
+      expect(me.getByText(/把 bot 加進你所在的伺服器/)).toBeVisible()
+      expect(me.getByText(/打開「私人訊息」/)).toBeVisible()
+      expect(
+        me.getByText('補好之後按下面的「送一則測試訊息給我」：送到了，這一句就會收掉。'),
+      ).toBeVisible()
+      expect(me.getByText(/50278/)).toBeInTheDocument()
+      expect(me.getByTestId('technical-details')).not.toHaveAttribute('open')
+    })
+
+    it('沒有 unreachable_at：不說', async () => {
+      render({}, READY)
+      renderApp('/settings/notifications')
+
+      await screen.findByText('berth-demo')
+      expect(screen.queryByText('送不到')).not.toBeInTheDocument()
+    })
+
+    it('按測試送到了：重讀 notify，那一句消失', async () => {
+      let reads = 0
+      const stub = render(
+        {
+          [READ]: () => ({ body: reads++ === 0 ? UNREACHABLE : READY }),
+          [TEST]: { body: DELIVERED },
+        },
+        READY,
+      )
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      expect(await screen.findByText('送不到')).toBeVisible()
+      await user.click(screen.getByRole('button', { name: '送一則測試訊息給我' }))
+
+      await waitFor(() => expect(screen.queryByText('送不到')).not.toBeInTheDocument())
+      expect(screen.getByText('已送出')).toBeVisible()
+      const reread = stub.mock.calls.filter(
+        ([input]) => String(input) === '/api/settings/notifications',
+      )
+      expect(reread).toHaveLength(2)
     })
   })
 

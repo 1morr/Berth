@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -62,10 +63,17 @@ class NotifyOut(BaseModel):
     bot_name: str
     #: 邀請 bot 進伺服器的連結（`scope=bot&permissions=0`）；沒設定是 `null`。
     invite_url: str | None
+    #: Discord 不再接受存著的那一把 token（之後被重設了）：通知暫停到換一把（M4 票 128）。
+    token_rejected: bool
     #: 這個人的 Discord user ID；沒填是空字串。
     discord_user_id: str
     #: 通知用哪個語言寫給這個人。
     language: Language
+    #: 上一次送給這個人時 Discord 說他到不了（`403` / `50278`）；`null` 是沒有。
+    #: 送到一則或換 ID 就清掉。
+    unreachable_at: datetime | None
+    #: 那一次 Discord 的原文，給「技術細節」。
+    unreachable_detail: str
 
 
 class BotTokenIn(BaseModel):

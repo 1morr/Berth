@@ -13,6 +13,7 @@ import { RouteRow } from '../components/RouteRow'
 import { UNPAINTED_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import { HealthBoard } from '../health/HealthBoard'
+import { NotifyCard } from '../health/NotifyCard'
 import { PollerCard } from '../health/PollerCard'
 import { ServiceCard } from '../health/ServiceCard'
 import { PROGRESS_INTERVAL_MS, useRecheckRoutes } from '../settings/recheckRoutes'
@@ -115,6 +116,11 @@ export function HealthPage() {
             比 Route 的每一條纜繩上游（`.scratch/m1/live-jobs-shape.md` §6）。 */}
         <div className="mt-8">
           <PollerCard poller={report.poller} />
+        </div>
+
+        {/* 通知管道（M4 票 128）：不是泊位，不算進上面的總體判定。 */}
+        <div className="mt-8">
+          <NotifyCard notify={report.notify} admin={admin} />
         </div>
 
         <section className="mt-8" aria-labelledby="health-routes">

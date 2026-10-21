@@ -113,6 +113,22 @@ async def test_rate_limiting_says_when_to_come_back() -> None:
 
     assert delivery.failure is DeliveryFailure.RATE_LIMITED
     assert delivery.retry_after == pytest.approx(0.3)
+    assert not delivery.whole_channel
+
+
+@respx.mock
+async def test_a_global_rate_limit_is_said_to_hold_the_whole_channel() -> None:
+    """`global: true`（Discord 文件 Rate Limits；票 121 沒量到，從錄的那一份翻 `global`）。"""
+    respx.post(OPEN).mock(return_value=recorded("users-me-channels.created"))
+    limited = recorded("channels-messages.rate-limited")
+    body = {**json.loads(limited.content), "global": True}
+    headers = {k: v for k, v in limited.headers.items() if k.lower() not in _TRANSPORT}
+    respx.post(SEND).mock(return_value=httpx.Response(429, json=body, headers=headers))
+
+    delivery = await bot().send(RECIPIENT, MESSAGE)
+
+    assert delivery.failure is DeliveryFailure.RATE_LIMITED
+    assert delivery.whole_channel
 
 
 @pytest.mark.parametrize(
