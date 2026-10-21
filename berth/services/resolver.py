@@ -65,6 +65,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.issues import Recorded, clear_by_system, note_cleared, record_issue
 from berth.services.jobs import actor_of, record_event
+from berth.services.notify import queue_ready
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.routes import owning_route
 from berth.services.settings import read_settings
@@ -169,7 +170,7 @@ async def sweep_resolutions(
         for entry in settling:
             if entry.resolve_after is not None:
                 entry.resolve_after = min(entry.resolve_after, moment + SCAN_SETTLE)
-        await _announce(session, found, given_up)
+        await _announce(session, found, given_up, moment)
         await settle_verdicts(session, verdicts, moment)
     finally:
         await client.aclose()
@@ -238,7 +239,7 @@ async def resolve_early(
                 _found(entry, item)
                 found.append(entry)
                 verdicts.append(lookup.verdict(entry, item))
-        await _announce(session, found, ())
+        await _announce(session, found, (), moment)
         await settle_verdicts(session, verdicts, moment)
     finally:
         await client.aclose()
@@ -608,13 +609,18 @@ async def _remind(client: JellyfinClient, misses: Sequence[_Misses]) -> bool:
 
 
 async def _announce(
-    session: AsyncSession, found: Sequence[LedgerEntry], given_up: Sequence[LedgerEntry]
+    session: AsyncSession,
+    found: Sequence[LedgerEntry],
+    given_up: Sequence[LedgerEntry],
+    moment: datetime,
 ) -> None:
     """一筆 Job 一行，不是一個檔案一行：一季 24 集的時間線不該被 24 行「找到了」淹沒。
 
     **`jellyfin_item_resolved` 是「這一筆的正片全部找到了」，一筆 Job 只寫一次**（M4 票 02）：
     M4 的「可以看了」讀它。之後再反查（新版本改了版本名、重新反查）找到的不再寫——試跑一筆
     Job 寫了 5–7 筆，`count` 每輪不同，`record_event` 一分鐘的去重擋不住。
+
+    「可以看了」的通知與這一筆事件寫在同一筆交易（`notify.queue_ready`，M4 票 123）。
     """
     for job, _ in await _by_job(session, found):
         features = await _all_found(session, job)
@@ -627,6 +633,7 @@ async def _announce(
             actor=actor_of(None),
             payload={"count": features},
         )
+        await queue_ready(session, job, now=moment)
     for job, entries in await _by_job(session, given_up):
         # 事件是**一筆 Job 一行**（時間線不該被 24 集淹沒），Issue 是**一列帳本一件**
         # ——它的冪等鍵是 `ledger_id`（plan §2.4）：同一筆 Job 的兩集各自反查、各自放棄，

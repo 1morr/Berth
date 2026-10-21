@@ -33,6 +33,9 @@ const FLOWS = [
   },
   { name: 'settings', spec: 'settings', scenario: 'healthy', port: 8497 },
   { name: 'settings-390', spec: 'settings', scenario: 'healthy', port: 8507, viewport: NARROW },
+  // 通知設定（M4 票 123）：Discord 替身拒絕 token `rejected`、到不了收件人 `...404`。
+  { name: 'notify', spec: 'notify', scenario: 'healthy', port: 8524 },
+  { name: 'notify-390', spec: 'notify', scenario: 'healthy', port: 8525, viewport: NARROW },
   { name: 'submit', spec: 'submit', scenario: 'import', port: 8492 },
   { name: 'review', spec: 'review', scenario: 'review', port: 8493 },
   { name: 'media-downloads', spec: 'media-downloads', scenario: 'downloads', port: 8517 },

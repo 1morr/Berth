@@ -18,6 +18,8 @@ from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.jellyfin.client import HttpJellyfinClient
+from berth.adapters.notify import DiscordBot
+from berth.adapters.notify.discord import HttpDiscordBot
 from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.prowlarr.client import HttpProwlarrClient
 from berth.adapters.prowlarr.config_file import read_api_key
@@ -28,7 +30,7 @@ from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
-from berth.config import Config
+from berth.config import DEFAULT_DISCORD_API_URL, Config
 from berth.domain import ServiceKind
 
 
@@ -55,6 +57,10 @@ class ServiceClientFactory(Protocol):
 
     def rss(self) -> FeedFetcher:
         """抓 RSS Feed 與 Mikan 單集頁（M3 票 08）。沒有位址參數：網址是 Feed 與 Item 自己帶的。"""
+        ...
+
+    def discord(self, token: str) -> DiscordBot:
+        """通知的 Discord bot（M4 票 123）。位址是設定（`DISCORD_API_URL`），可變的是 token。"""
         ...
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
@@ -111,6 +117,9 @@ def host_resolver() -> HostResolver:
 class HttpServiceClientFactory:
     """正式的那一份：位址由呼叫端給，套件內是 compose 主機名、既有是使用者填的。"""
 
+    def __init__(self, *, discord_api_url: str = DEFAULT_DISCORD_API_URL) -> None:
+        self._discord_api_url = discord_api_url
+
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         return HttpJellyfinClient(base_url, token=token)
 
@@ -131,3 +140,6 @@ class HttpServiceClientFactory:
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         return ProwlarrSearch(base_url, api_key)
+
+    def discord(self, token: str) -> DiscordBot:
+        return HttpDiscordBot(token, base_url=self._discord_api_url)

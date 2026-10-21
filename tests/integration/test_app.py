@@ -16,7 +16,13 @@ from starlette.types import Message, Receive, Scope, Send
 from berth.api.deps import get_bundled_services, get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.main import HEALTH_CHECKER_TASK, QBIT_POLLER_TASK, RSS_POLLER_TASK, create_app
+from berth.main import (
+    HEALTH_CHECKER_TASK,
+    NOTIFY_SENDER_TASK,
+    QBIT_POLLER_TASK,
+    RSS_POLLER_TASK,
+    create_app,
+)
 from berth.models import SetupSettings
 from berth.services.clients import BundledServices
 from tests.integration.factories import COMPOSE, FakeClientFactory
@@ -228,6 +234,7 @@ class TestBackgroundLoops:
             assert _running(HEALTH_CHECKER_TASK), "迴圈沒起來的話健康頁永遠是空的"
             assert _running(QBIT_POLLER_TASK), "迴圈沒起來的話下載列表永遠停在送單那一刻"
             assert _running(RSS_POLLER_TASK), "迴圈沒起來的話 Feed 只在按「立即輪詢」時才動"
+            assert _running(NOTIFY_SENDER_TASK), "迴圈沒起來的話待送表上的通知永遠不送"
 
     @pytest.mark.asyncio
     async def test_shutting_down_leaves_no_pending_task(self, config: Config) -> None:
@@ -240,6 +247,7 @@ class TestBackgroundLoops:
         assert not _running(HEALTH_CHECKER_TASK)
         assert not _running(QBIT_POLLER_TASK)
         assert not _running(RSS_POLLER_TASK)
+        assert not _running(NOTIFY_SENDER_TASK)
 
 
 def _running(name: str) -> list[asyncio.Task[None]]:

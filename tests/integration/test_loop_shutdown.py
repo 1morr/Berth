@@ -29,6 +29,7 @@ from berth.pipeline import (
     HealthChecker,
     Importer,
     JellyfinResolver,
+    NotifySender,
     PlannerRunner,
     QbitPoller,
     Reconciler,
@@ -71,6 +72,7 @@ LOOPS: dict[type[Loop], Callable[[Sessions], Loop]] = {
         s, ReconcileRunner(s, FakeClientFactory()), sleep=at_once, now=day_later()
     ),
     RssPoller: lambda s: RssPoller(s, FakeClientFactory(), sleep=at_once),
+    NotifySender: lambda s: NotifySender(s, FakeClientFactory(), tick=timedelta()),
 }
 
 

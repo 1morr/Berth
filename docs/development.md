@@ -53,6 +53,7 @@ pnpm -C web dev                                     # 前端，開 Vite 印出�
 | `WEB_ROOT` | `<repo>/web/dist` | 前端 build 產物。找不到時只提供 API |
 | `EXT_ROOT` | `/ext` | 其他服務唯讀掛進來的設定目錄。目前只讀 `${EXT_ROOT}/prowlarr/config.xml` 的 `<ApiKey>` |
 | `PROWLARR__AUTH__APIKEY` | 無 | Prowlarr 的 API key。用這個環境變數部署 Prowlarr 的人把同一個值也給 Berth，就不必唯讀掛它的設定目錄；有值時蓋過 `config.xml` |
+| `DISCORD_API_URL` | `https://discord.com/api/v10` | 通知送去的 Discord API。只有 e2e 會改：指到記下私訊的假伺服器（M4 票 133）；正式部署不要設 |
 | `HOST_DATA_ROOT` | 空 | 部署 `.env` 的 `DATA_ROOT`，照寫的原樣：既有服務沒掛 `/data` 時，補法的掛載印出這個資料夾（M4 票 63）。compose 從同名的 `DATA_ROOT` 傳進來（`tests/unit/test_deploy_mounts.py` 守著兩邊是同一個值）；沒設時補法照舊印 `${DATA_ROOT}` |
 
 **`DATA_ROOT` 不在這張表裡：Berth 不拿它找檔案。**它只在 `deploy/.env.example`，給 compose 把宿主目錄掛到容器的
@@ -147,7 +148,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑十九條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑二十條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -300,7 +301,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑十九條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十五個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十七個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -309,6 +310,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、位址與既有 Jellyfin 的管理員帳密一次「連線並登入」成為擁有者（打錯密碼標在帳密兩格）、填 qBittorrent 帳密（測試通過就做完、沒有確認鍵）、頁 3 電影與劇集預設勾好（取消一個）、加 Berth 路徑並選它當寫入目標、勾「新建一個媒體庫」建一個劇集媒體庫、貼 Prowlarr 的 key（先貼錯的：與頁 1、2 同一個錯誤版面、右欄不寫「已取得」）、TMDB 貼上 key 直接按「前往下一個泊位」（先測再走）；完成之後設定頁的 Jellyfin 連線是摘要、改位址打開又收回 | `mixed` | 8495 / 8505 |
 | 冷啟動：服務還在啟動時選套件內，Jellyfin 與 qBittorrent 各自每 3 秒重測到連上，不按重新測試 | `starting` | 8496 / 8506 |
 | 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、改兩個介面登入、看 Jellyfin 的連線摘要、換 TMDB key | `healthy` | 8497 / 8507 |
+| 設定 → 通知：被拒的 bot token 就地標在欄位上、貼正常的 token 存下（說出 bot 的名字與邀請連結）、收件人到不了時兩個補法一起說、換成送得到的 ID 後測試送出 | `healthy` | 8524 / 8525 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |
 | `/review` 確認一筆 audit | `review` | 8493 |
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |

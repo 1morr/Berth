@@ -105,6 +105,21 @@ class SearchSettings(SettingsGroup):
         return {kind: value.get(kind, default) for kind, default in FACTORY_NAMES.items()}
 
 
+class NotifySettings(SettingsGroup):
+    """通知管道（plan §11.5〈通知〉、M4 票 123）。M4 唯一的管道是 Discord bot 私訊。
+
+    **token 只寫不讀**：API 只回「已設定」，原文不回到瀏覽器、不進 log（Berth 不記標頭）。
+    application id 與名字是存 token 那一刻向 Discord 問來的（`GET /applications/@me`），邀請連結
+    與「已設定 · <名字>」照它組，不必每次打開頁面都問一次 Discord。
+    """
+
+    KEY = "notify"
+
+    discord_bot_token: str = ""
+    discord_application_id: str = ""
+    discord_bot_name: str = ""
+
+
 class QbittorrentSettings(SettingsGroup):
     KEY = "services.qbittorrent"
 
@@ -533,4 +548,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     PollerSettings,
     DiskSettings,
     SearchSettings,
+    NotifySettings,
 )

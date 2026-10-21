@@ -11,6 +11,8 @@ from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.jellyfin import JellyfinClient
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
+from berth.adapters.notify import DiscordBot
+from berth.adapters.notify.fake import FakeDiscordBot
 from berth.adapters.prowlarr import ProwlarrClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent import QbittorrentClient
@@ -43,6 +45,7 @@ class FakeClientFactory:
         indexer_search: FakeIndexerSearch | None = None,
         torrent: FakeTorrentFetcher | None = None,
         rss: FakeFeedFetcher | None = None,
+        discord: FakeDiscordBot | None = None,
         #: 位址 → 在那個位址上的另一台 Jellyfin（M4 票 18：換位址時認得出是不是同一台）。
         #: 沒列的位址都是 `jellyfin` 那一台。
         elsewhere: dict[str, FakeJellyfinClient] | None = None,
@@ -59,6 +62,7 @@ class FakeClientFactory:
         self.indexer_search_ = indexer_search or FakeIndexerSearch()
         self.torrent_ = torrent or FakeTorrentFetcher()
         self.rss_ = rss or FakeFeedFetcher()
+        self.discord_ = discord or FakeDiscordBot()
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []
@@ -90,6 +94,10 @@ class FakeClientFactory:
 
     def rss(self) -> FeedFetcher:
         return self.rss_
+
+    def discord(self, token: str) -> DiscordBot:
+        self.discord_.token = token
+        return self.discord_
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         self.api_keys.append(api_key)

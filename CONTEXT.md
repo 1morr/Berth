@@ -377,11 +377,15 @@ _Avoid_: entry, post
 ### AI 與通知（M4–M7，2026-09-22 定名、09-24 改）
 
 **Notification**（通知）:
-`events` 的一則事件送到人不在 Berth 頁面上時看得到的地方（聊天軟體）。不是 SSE 推給瀏覽器的那一種。
-_Avoid_: alert, push（push 是瀏覽器推播）
+送給某一個人、在他不在 Berth 頁面上時看得到的一則（M4 是 Discord 私訊）。種類有「可以看了」（一筆 Job 的正片在 Jellyfin 全部認出來，M4 票 123）、「正在下載」「有 N 件等你處理」、週報。用收件人自己的語言寫（存 Discord ID 那一刻的介面語言）。不是 SSE 推給瀏覽器的那一種，也不是 `events` 的一筆：事件一定掛在一筆 Job 上。
+_Avoid_: alert, push（push 是瀏覽器推播）, message（message 是管道上送出去的那一則）
+
+**Notification Outbox**（待送表）:
+`notifications` 表：還沒送與送過的每一則，一列一位收件人。與觸發它的狀態變更寫在同一筆交易，由送出迴圈（`notify_sender`，每 10 秒）送；沒送到的留著下一輪再送。存的是事實（作品、季集、Route），句子在送出那一刻組。
+_Avoid_: queue（佇列是程序內的東西，這一張活過重啟）, outbox table
 
 **Channel**（管道）:
-送通知與收訊息的外部服務（Telegram、Discord…），一個 `adapters/notify/` 的 adapter。同一個管道在 M7 也收使用者的話。
+送通知與收訊息的外部服務，一個 `adapters/notify/` 的 adapter。M4 唯一的是 Discord bot 私訊（不做頻道 webhook，2026-10-21）。同一個管道在 M7 也收使用者的話。
 _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 
 **AI Task**（AI 任務）:

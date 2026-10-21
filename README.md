@@ -100,7 +100,8 @@ Back up `${CONFIG_ROOT}/berth` (`./config/berth` by default); that folder is eve
 Berth is a **public beta**.
 
 - It works with **Jellyfin 12.0 or newer** and **Prowlarr** only. No Emby, Plex or Jackett.
-- No notifications yet: open Berth to see what needs you.
+- Notifications are just starting: admins can get a Discord DM when a download is ready to watch
+  (Settings → Notifications). Everything else still means opening Berth to see what needs you.
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.
