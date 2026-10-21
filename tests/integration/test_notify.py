@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.notify import Delivery
+from berth.adapters.notify import Delivery, Link
 from berth.domain import DeliveryFailure, JobState, JobTrigger, Language, MediaKind, Role
-from berth.models import Job, Media, NotifySettings, User, media_id
+from berth.models import BerthSettings, Job, Media, NotifySettings, User, media_id
 from berth.services.notify import queue_ready, send_due
 from berth.services.settings import write_settings
 from tests.integration.factories import FakeClientFactory
@@ -125,6 +125,38 @@ class TestReady:
 
         await deliver(session, factory)
         assert factory.discord_.sent == []
+
+
+class TestLink:
+    """「可以看了」連到作品頁（M4 票 124）：Berth 的網址存了才有，沒存照送、不附。"""
+
+    async def test_the_message_links_to_the_media_page_on_the_saved_address(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await with_bot(session)
+        await person(session, "skipper", discord=ADMIN_ID)
+        factory = await found(session, roots)
+        # 寫進待送表之後才存：連結在送出時組，已經排著的那幾則也帶得到。
+        await write_settings(session, BerthSettings(public_url="https://berth.example.com"))
+        await session.commit()
+
+        await deliver(session, factory)
+
+        ((_, message),) = factory.discord_.sent
+        assert message.link == Link("在 Berth 打開", "https://berth.example.com/media/tv:120089")
+
+    async def test_without_an_address_the_message_is_sent_without_a_link(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await with_bot(session)
+        await person(session, "skipper", discord=ADMIN_ID)
+        factory = await found(session, roots)
+
+        await deliver(session, factory)
+
+        ((_, message),) = factory.discord_.sent
+        assert message.link is None
+        assert "SPY×FAMILY 間諜家家酒" in message.title
 
 
 class TestMovie:

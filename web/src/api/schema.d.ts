@@ -807,6 +807,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/notifications/berth-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Berth Url
+         * @description 存 Berth 從外面看的網址：不是 http(s) 的絕對網址回 422 `berth_url_invalid`（M4 票 124）。
+         */
+        put: operations["put_berth_url_api_settings_notifications_berth_url_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/notifications/test": {
         parameters: {
             query?: never;
@@ -2523,6 +2543,11 @@ export interface components {
             reason: components["schemas"]["BerthPathFailure"] | null;
             /** Error */
             error: string;
+        };
+        /** BerthUrlIn */
+        BerthUrlIn: {
+            /** Berth Url */
+            berth_url: string;
         };
         /**
          * BindReasonCode
@@ -4264,13 +4289,15 @@ export interface components {
             /** Discord User Id */
             discord_user_id: string;
             language: components["schemas"]["Language"];
+            /** Berth Url */
+            berth_url: string;
         };
         /**
          * NotifyRefusal
          * @description 通知設定的命令不做的理由（`services.notify`）。
          * @enum {string}
          */
-        NotifyRefusal: "token_rejected" | "discord_unreachable" | "discord_id_invalid" | "bot_missing" | "discord_id_missing";
+        NotifyRefusal: "token_rejected" | "discord_unreachable" | "discord_id_invalid" | "bot_missing" | "discord_id_missing" | "berth_url_invalid";
         /**
          * NotifyRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是 Discord 的原文（沒有就是空字串）。
@@ -4280,7 +4307,10 @@ export interface components {
             /** Detail */
             detail: string;
         };
-        /** NotifyTestOut */
+        /**
+         * NotifyTestOut
+         * @description `adapters.notify.Delivery` 的線上形狀。
+         */
         NotifyTestOut: {
             /** Delivered */
             delivered: boolean;
@@ -7486,6 +7516,39 @@ export interface operations {
                 };
             };
             /** @description `discord_id_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyRefusalOut"];
+                };
+            };
+        };
+    };
+    put_berth_url_api_settings_notifications_berth_url_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BerthUrlIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyOut"];
+                };
+            };
+            /** @description `berth_url_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -15,6 +15,11 @@
   Discord 暫時連不上時，沒送到的那幾則留著下一輪再送。API：`GET /api/settings/notifications`、
   `PUT /api/settings/notifications/bot`、`PUT /api/settings/notifications/me`、`POST /api/settings/notifications/test`。
   **這一版有資料庫 migration**（`d5e8a2c7f914`）：新的待送表，使用者多兩欄（Discord ID、通知語言）。
+- **通知裡的連結**（M4 票 124）：設定 → 通知多一格「Berth 的網址」，填你在手機上、家外面打開 Berth 用的那一個
+  （反向代理、Tailscale、NAS 的網域）。沒存過時預填你現在開著 Berth 的網址，按儲存才算數；不是 `http://` 或
+  `https://` 開頭的完整網址會被擋下並說原因。存了之後「可以看了」帶作品頁的連結；沒存照送、不附連結。
+  Jellyfin 的對外網址同一條規則，兩者都不再收帶 `?` 或 `#` 的網址（接上路徑之後開不到那一頁）。
+  API：`PUT /api/settings/notifications/berth-url`，`GET /api/settings/notifications` 多一格 `berth_url`。
 
 ### Fixed
 

@@ -21,6 +21,7 @@ from berth.services.notify import (
     NotifyRefusedError,
     read_notify,
     send_test,
+    set_berth_url,
     set_bot_token,
     set_discord_id,
 )
@@ -31,6 +32,7 @@ _STATUS: dict[NotifyRefusal, int] = {
     NotifyRefusal.TOKEN_REJECTED: status.HTTP_422_UNPROCESSABLE_CONTENT,
     NotifyRefusal.DISCORD_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
     NotifyRefusal.DISCORD_ID_INVALID: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    NotifyRefusal.BERTH_URL_INVALID: status.HTTP_422_UNPROCESSABLE_CONTENT,
     #: 測試的前提還沒齊：先設 token、先填 ID。
     NotifyRefusal.BOT_MISSING: status.HTTP_409_CONFLICT,
     NotifyRefusal.DISCORD_ID_MISSING: status.HTTP_409_CONFLICT,
@@ -66,6 +68,8 @@ class NotifyOut(BaseModel):
     discord_user_id: str
     #: 通知用哪個語言寫給這個人。
     language: Language
+    #: Berth 從外面看的網址，通知裡的連結照它組；沒存過是空字串（不附連結）。
+    berth_url: str
 
 
 class BotTokenIn(BaseModel):
@@ -78,6 +82,11 @@ class DiscordIdIn(BaseModel):
     discord_user_id: str
     #: 送出這一刻的介面語言：通知用它寫。
     language: Language
+
+
+class BerthUrlIn(BaseModel):
+    #: `https://berth.example.com`。空字串是清掉。
+    berth_url: str
 
 
 class NotifyTestOut(BaseModel):
@@ -125,6 +134,16 @@ async def put_bot(
 async def put_me(session: SessionDep, request: Request, body: DiscordIdIn) -> NotifyOut:
     try:
         view = await set_discord_id(session, _user_id(request), body.discord_user_id, body.language)
+    except NotifyRefusedError as exc:
+        raise notify_refusal(exc) from exc
+    return NotifyOut.model_validate(view)
+
+
+@router.put("/berth-url", responses=_responses(NotifyRefusal.BERTH_URL_INVALID))
+async def put_berth_url(session: SessionDep, request: Request, body: BerthUrlIn) -> NotifyOut:
+    """存 Berth 從外面看的網址：不是 http(s) 的絕對網址回 422 `berth_url_invalid`（M4 票 124）。"""
+    try:
+        view = await set_berth_url(session, body.berth_url, user_id=_user_id(request))
     except NotifyRefusedError as exc:
         raise notify_refusal(exc) from exc
     return NotifyOut.model_validate(view)

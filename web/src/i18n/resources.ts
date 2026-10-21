@@ -2948,6 +2948,18 @@ const zhHant = {
         removed: 'token 已移除。',
         failed: 'token 沒有存下來。',
       },
+      berth: {
+        title: '通知裡的連結',
+        lede: '通知裡的連結從這個網址打開 Berth。填你在手機上、家外面打開 Berth 用的那一個：反向代理、Tailscale 或 NAS 的網域。',
+        label: 'Berth 的網址',
+        placeholder: 'https://berth.example.com',
+        unsaved: '還沒儲存：預填的是你現在開著 Berth 的網址，按儲存才算數。在那之前通知不附連結。',
+        set: '通知裡的連結開在 {{url}}。',
+        save: '儲存',
+        saving: '儲存中…',
+        saved: '已儲存。',
+        failed: '網址沒有存下來。',
+      },
       me: {
         title: '我的 Discord',
         idLabel: 'Discord 使用者 ID',
@@ -3002,6 +3014,8 @@ const zhHant = {
         discord_id_invalid: '要是 17 到 20 位數字的 Discord 使用者 ID。',
         bot_missing: '還沒設定 Discord bot。',
         discord_id_missing: '還沒填你的 Discord ID。',
+        berth_url_invalid:
+          '要是 http:// 或 https:// 開頭、不帶 ? 或 # 的完整網址，例如 https://berth.example.com。',
       },
       languageName: {
         'zh-Hant': '中文',
@@ -3022,7 +3036,7 @@ const zhHant = {
       save: '儲存',
       saving: '儲存中…',
       saved: '已儲存。',
-      invalid: '要是一個 http:// 或 https:// 開頭的網址。',
+      invalid: '要是一個 http:// 或 https:// 開頭、不帶 ? 或 # 的網址。',
       failed: '沒有存進去。',
     },
     // 磁碟空間門檻（M2 票 09c）。形狀照 Sonarr 的 Minimum Free Space，單位不同。
@@ -6443,6 +6457,19 @@ const en: Translations<typeof zhHant> = {
         removed: 'Token removed.',
         failed: 'The token was not saved.',
       },
+      berth: {
+        title: 'Links in notifications',
+        lede: 'Links in notifications open Berth at this address. Use the one you open Berth with on your phone or away from home: a reverse proxy, Tailscale, or your NAS’s domain.',
+        label: 'Berth address',
+        placeholder: 'https://berth.example.com',
+        unsaved:
+          'Not saved yet: this is the address you have Berth open at now, and it only counts once you save it. Until then notifications carry no link.',
+        set: 'Links in notifications open at {{url}}.',
+        save: 'Save',
+        saving: 'Saving…',
+        saved: 'Saved.',
+        failed: 'The address was not saved.',
+      },
       me: {
         title: 'My Discord',
         idLabel: 'Discord user ID',
@@ -6499,6 +6526,8 @@ const en: Translations<typeof zhHant> = {
         discord_id_invalid: 'A Discord user ID is 17 to 20 digits.',
         bot_missing: 'The Discord bot is not set up yet.',
         discord_id_missing: 'Your Discord ID is not entered yet.',
+        berth_url_invalid:
+          'Use a full address starting with http:// or https://, without ? or #, for example https://berth.example.com.',
       },
       languageName: {
         'zh-Hant': '中文',
@@ -6517,7 +6546,7 @@ const en: Translations<typeof zhHant> = {
       save: 'Save',
       saving: 'Saving…',
       saved: 'Saved.',
-      invalid: 'This needs to be an address starting with http:// or https://.',
+      invalid: 'This needs to be an address starting with http:// or https://, without ? or #.',
       failed: 'It was not saved.',
     },
     disk: {

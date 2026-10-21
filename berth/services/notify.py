@@ -24,7 +24,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceError
-from berth.adapters.notify import Delivery, Message
+from berth.adapters.notify import Delivery, Link, Message
 from berth.adapters.notify.discord import invite_url
 from berth.domain import (
     DeliveryFailure,
@@ -36,10 +36,25 @@ from berth.domain import (
     PlanAction,
     Role,
 )
-from berth.models import Job, LedgerEntry, Media, Notification, NotifySettings, Route, User
+from berth.models import (
+    BerthSettings,
+    Job,
+    LedgerEntry,
+    Media,
+    Notification,
+    NotifySettings,
+    Route,
+    User,
+)
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
+from berth.services.deeplink import (
+    MEDIA_PAGE,
+    PublicUrlRejectedError,
+    berth_link,
+    normalized_public_url,
+)
 from berth.services.settings import read_settings, update_settings
 
 logger = logging.getLogger(__name__)
@@ -50,11 +65,13 @@ _SNOWFLAKE = re.compile(r"\d{17,20}")
 _TEXT: dict[Language, dict[str, str]] = {
     Language.ZH_HANT: {
         "ready": "可以看了：{title}",
+        "open": "在 Berth 打開",
         "test_title": "Berth 測試訊息",
         "test_body": "收到這一則，Berth 的通知就接通了。",
     },
     Language.EN: {
         "ready": "Ready to watch: {title}",
+        "open": "Open in Berth",
         "test_title": "Berth test message",
         "test_body": "If you can read this, Berth notifications are working.",
     },
@@ -87,6 +104,8 @@ class NotifyView:
     invite_url: str | None
     discord_user_id: str
     language: Language
+    #: Berth 從外面看的網址（`BerthSettings`）；沒存過是空字串，通知不附連結。
+    berth_url: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +132,7 @@ async def read_notify(session: AsyncSession, user_id: int) -> NotifyView:
         ),
         discord_user_id=user.discord_user_id if user else "",
         language=user.notify_language if user else Language.ZH_HANT,
+        berth_url=(await read_settings(session, BerthSettings)).public_url,
     )
 
 
@@ -166,6 +186,24 @@ async def set_discord_id(
     user.discord_user_id = discord_id
     user.notify_language = language
     await session.commit()
+    return await read_notify(session, user_id)
+
+
+# 同上：再存一次原本的網址，或空字串清掉。
+@command(Effect.REVERSIBLE)
+async def set_berth_url(session: AsyncSession, value: str, *, user_id: int) -> NotifyView:
+    """存 Berth 從外面看的網址（`deeplink.normalized_public_url`：http(s) 的絕對網址、拿掉結尾
+    的 `/`）。空字串是清掉，之後的通知不附連結。已經寫進待送表的那幾則也照新的組：
+    連結在送出時才組。"""
+    try:
+        url = normalized_public_url(value)
+    except PublicUrlRejectedError as exc:
+        raise NotifyRefusedError(NotifyRefusal.BERTH_URL_INVALID, str(exc)) from exc
+
+    def change(settings: BerthSettings) -> None:
+        settings.public_url = url
+
+    await update_settings(session, BerthSettings, change)
     return await read_notify(session, user_id)
 
 
@@ -294,6 +332,7 @@ async def send_due(
     settings = await read_settings(session, NotifySettings)
     if not settings.discord_bot_token:
         return SendOutcome(sent=0, failed=0)
+    berth_url = (await read_settings(session, BerthSettings)).public_url
     rows = list(
         (
             await session.execute(
@@ -315,7 +354,8 @@ async def send_due(
     bot = factory.discord(settings.discord_bot_token)
     sent = failed = 0
     for notification, user in rows:
-        delivery = await bot.send(user.discord_user_id, _render(notification, user.notify_language))
+        message = _render(notification, user.notify_language, berth_url)
+        delivery = await bot.send(user.discord_user_id, message)
         if delivery.delivered:
             notification.status = NotificationStatus.SENT
             notification.sent_at = moment
@@ -340,13 +380,17 @@ async def send_due(
     return SendOutcome(sent=sent, failed=failed)
 
 
-def _render(notification: Notification, language: Language) -> Message:
+def _render(notification: Notification, language: Language, berth_url: str) -> Message:
+    """`berth_url` 是 `BerthSettings.public_url`：連結在送出時照當下存的那一個組。"""
     content = notification.content_json
     text = _TEXT[language]
     title = content["title_en"] if language is Language.EN else content["title"]
     route = content.get("route") or ""
+    media = content.get("media")
+    url = berth_link(berth_url, MEDIA_PAGE.format(media_id=media)) if media else None
     return Message(
         title=text["ready"].format(title=title),
         description=describe_spans(content.get("episodes") or []),
         fields=((_ROUTE, route),) if route else (),
+        link=Link(text["open"], url) if url else None,
     )

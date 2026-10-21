@@ -365,7 +365,7 @@ describe('設定 → Jellyfin', () => {
     await userEvent.click(screen.getByRole('button', { name: '儲存' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '要是一個 http:// 或 https:// 開頭的網址。',
+      '要是一個 http:// 或 https:// 開頭、不帶 ? 或 # 的網址。',
     )
   })
 

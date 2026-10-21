@@ -25,6 +25,7 @@ const REASONS: ReasonSet<NotifyRefusal> = {
   discord_id_invalid: true,
   bot_missing: true,
   discord_id_missing: true,
+  berth_url_invalid: true,
 }
 
 /** 認不得的理由是 `null`，畫面照請求為什麼沒成說（`RequestFailed`）。 */
@@ -51,6 +52,13 @@ export function saveDiscordId(
     discord_user_id: discordUserId,
     language,
   } satisfies Schemas['DiscordIdIn'])
+}
+
+/** 存下 Berth 從外面看的網址：通知裡的連結照它組。不是 http(s) 的完整網址回 422 `berth_url_invalid`。 */
+export function saveBerthUrl(berthUrl: string): Promise<Notify> {
+  return apiPut<Notify>('/settings/notifications/berth-url', {
+    berth_url: berthUrl,
+  } satisfies Schemas['BerthUrlIn'])
 }
 
 /** 送一則測試私訊給自己。Discord 拒絕也是 200，結果在 `delivered` 與 `failure`。 */

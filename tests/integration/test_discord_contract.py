@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -14,7 +15,7 @@ import pytest
 import respx
 
 from berth.adapters.http import AuthFailedError
-from berth.adapters.notify import Message
+from berth.adapters.notify import Link, Message
 from berth.adapters.notify.discord import HttpDiscordBot, invite_url
 from berth.config import DEFAULT_DISCORD_API_URL as DEFAULT_API_URL
 from berth.domain import DeliveryFailure
@@ -64,6 +65,58 @@ async def test_a_message_reaches_the_recipient_in_two_steps() -> None:
     assert embed["title"] == MESSAGE.title
     assert embed["description"] == "S02E05"
     assert embed["fields"] == [{"name": "Route", "value": "Anime", "inline": True}]
+
+
+@respx.mock
+async def test_a_link_is_written_into_the_description_not_the_embed_url() -> None:
+    """embed 的 `url` 遇到沒有點的主機名（`http://berth:8000`，NAS 的機器名）整則 400
+    `URL_TYPE_INVALID_URL`；寫成 description 裡的 Markdown 連結九種形狀都收（M4 票 124 實測，
+    brief §20.23）。連結不可以讓通知送不出去。"""
+    respx.post(OPEN).mock(return_value=recorded("users-me-channels.created"))
+    sent = respx.post(SEND).mock(return_value=recorded("channels-messages.embed"))
+    message = replace(MESSAGE, link=Link("在 Berth 打開", "http://berth:8000/media/tv:120089"))
+
+    delivery = await bot().send(RECIPIENT, message)
+
+    assert delivery.delivered
+    (embed,) = json.loads(sent.calls.last.request.content)["embeds"]
+    assert "url" not in embed
+    assert embed["description"] == "S02E05\n\n[在 Berth 打開](http://berth:8000/media/tv:120089)"
+
+
+@respx.mock
+async def test_a_description_cut_to_the_limit_keeps_the_link_whole() -> None:
+    respx.post(OPEN).mock(return_value=recorded("users-me-channels.created"))
+    sent = respx.post(SEND).mock(return_value=recorded("channels-messages.embed"))
+    message = Message(
+        title="可以看了",
+        description="E" * 5000,
+        link=Link("在 Berth 打開", "https://berth.example.com/media/tv:120089"),
+    )
+
+    await bot().send(RECIPIENT, message)
+
+    (embed,) = json.loads(sent.calls.last.request.content)["embeds"]
+    assert len(embed["description"]) == 4096
+    assert embed["description"].endswith(
+        "E\n\n[在 Berth 打開](https://berth.example.com/media/tv:120089)"
+    )
+
+
+@respx.mock
+async def test_a_link_alone_is_the_whole_description() -> None:
+    """電影沒有季集那一行：description 只有連結。"""
+    respx.post(OPEN).mock(return_value=recorded("users-me-channels.created"))
+    sent = respx.post(SEND).mock(return_value=recorded("channels-messages.embed"))
+    message = Message(
+        title="可以看了：Inception",
+        link=Link("Open in Berth", "https://b.example/media/movie:27205"),
+    )
+
+    await bot().send(RECIPIENT, message)
+
+    (embed,) = json.loads(sent.calls.last.request.content)["embeds"]
+    assert embed["description"] == "[Open in Berth](https://b.example/media/movie:27205)"
 
 
 @respx.mock

@@ -15,6 +15,7 @@ const READ = 'GET /api/settings/notifications'
 const BOT = 'PUT /api/settings/notifications/bot'
 const ME = 'PUT /api/settings/notifications/me'
 const TEST = 'POST /api/settings/notifications/test'
+const BERTH_URL = 'PUT /api/settings/notifications/berth-url'
 
 const INVITE = 'https://discord.com/oauth2/authorize?client_id=1000000000000000001&scope=bot'
 
@@ -24,6 +25,7 @@ const UNSET: Notify = {
   invite_url: null,
   discord_user_id: '',
   language: 'zh-Hant',
+  berth_url: '',
 }
 
 const BOT_SET: Notify = {
@@ -32,6 +34,7 @@ const BOT_SET: Notify = {
   invite_url: INVITE,
   discord_user_id: '',
   language: 'zh-Hant',
+  berth_url: '',
 }
 
 const READY: Notify = { ...BOT_SET, discord_user_id: '1000000000000000001' }
@@ -264,6 +267,80 @@ describe('設定 → 通知', () => {
 
     expect(await screen.findByText('要是 17 到 20 位數字的 Discord 使用者 ID。')).toBeVisible()
     expect(field).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  describe('Berth 的網址', () => {
+    it('沒存過：預填現在開著的網址，並說按儲存才算數', async () => {
+      const stub = render()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      expect(field).toHaveValue(window.location.origin)
+      expect(screen.getByText(/還沒儲存/)).toBeVisible()
+      // 預填不是存：打開頁面不送任何寫入。
+      expect(stub.mock.calls.some(([input]) => String(input).endsWith('/berth-url'))).toBe(false)
+    })
+
+    it('存過：顯示存的值，說通知的連結開在那裡', async () => {
+      render({}, { ...UNSET, berth_url: 'https://berth.example.com' })
+      renderApp('/settings/notifications')
+
+      expect(await screen.findByLabelText('Berth 的網址')).toHaveValue('https://berth.example.com')
+      expect(screen.getByText(/通知裡的連結開在 https:\/\/berth\.example\.com/)).toBeVisible()
+      expect(screen.queryByText(/還沒儲存/)).not.toBeInTheDocument()
+    })
+
+    it('儲存：送出欄位的值、換成回來的狀態', async () => {
+      const saved = { ...UNSET, berth_url: 'https://berth.example.com' }
+      const stub = render({ [BERTH_URL]: { body: saved } })
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      await user.clear(field)
+      await user.type(field, 'https://berth.example.com/')
+      await user.click(within(field.closest('form')!).getByRole('button', { name: '儲存' }))
+
+      expect(
+        await screen.findByText(/通知裡的連結開在 https:\/\/berth\.example\.com/),
+      ).toBeVisible()
+      expect(sent(stub, BERTH_URL)).toEqual({ berth_url: 'https://berth.example.com/' })
+      expect(field).toHaveValue('https://berth.example.com')
+    })
+
+    it('不是 http(s) 的完整網址（422）：欄位下說原因', async () => {
+      render({
+        [BERTH_URL]: refusal(422, 'berth_url_invalid', "'berth.local' is not an http(s) address"),
+      })
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      await user.clear(field)
+      await user.type(field, 'berth.local')
+      await user.click(within(field.closest('form')!).getByRole('button', { name: '儲存' }))
+
+      expect(
+        await screen.findByText(
+          '要是 http:// 或 https:// 開頭、不帶 ? 或 # 的完整網址，例如 https://berth.example.com。',
+        ),
+      ).toBeVisible()
+      expect(field).toHaveAttribute('aria-invalid', 'true')
+      expect(field).toHaveValue('berth.local')
+    })
+
+    it('en：預填的說明', async () => {
+      await i18next.changeLanguage('en')
+      try {
+        render()
+        renderApp('/settings/notifications')
+
+        expect(await screen.findByLabelText('Berth address')).toHaveValue(window.location.origin)
+        expect(screen.getByText(/Not saved yet/)).toBeVisible()
+      } finally {
+        await i18next.changeLanguage('zh-Hant')
+      }
+    })
   })
 
   describe('測試鍵', () => {
