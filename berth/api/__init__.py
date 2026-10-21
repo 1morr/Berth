@@ -24,6 +24,7 @@ from berth.api import (
     search,
     settings,
     setup,
+    weekly,
 )
 
 #: 掛在 `/api` 之下（plan §6）。
@@ -47,5 +48,6 @@ router.include_router(rss.router)
 router.include_router(search.router)
 router.include_router(settings.router)
 router.include_router(setup.router)
+router.include_router(weekly.router)
 
 __all__ = ["router"]

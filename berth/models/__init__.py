@@ -58,6 +58,7 @@ from berth.models.setting import (
     TmdbSettings,
     UnknownTorrent,
 )
+from berth.models.weekly import WeeklyReport
 
 __all__ = [
     "DEFAULT_BUNDLED_LIBRARIES",
@@ -115,6 +116,7 @@ __all__ = [
     "UnknownTorrent",
     "User",
     "UserSession",
+    "WeeklyReport",
     "dump_cards",
     "load_cards",
     "media_id",

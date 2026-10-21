@@ -280,6 +280,19 @@ class IssueType(StrEnum):
     SERIES_EPISODES_COLLIDE = "series_episodes_collide"
 
 
+#: 每日巡檢（`sweeper`）開的那幾種（M4 票 129、130）。週報的「還有什麼等人」另外點出它們
+#: （M4 票 131）：別的 Issue 是管線或對帳撞到的，這幾種是巡檢事後量出來的。
+SWEPT_ISSUE_TYPES = frozenset(
+    {
+        IssueType.FIRST_BATCH_STUCK,
+        IssueType.FEED_POLL_FAILING,
+        IssueType.FEED_BACKFILL_FAILING,
+        IssueType.SERIES_EPISODES_MISSING,
+        IssueType.SERIES_EPISODES_COLLIDE,
+    }
+)
+
+
 class IssueStatus(StrEnum):
     """一件 Issue 還要不要人決定（plan §2.4）。
 
@@ -1649,7 +1662,7 @@ class Language(StrEnum):
 class NotificationKind(StrEnum):
     """待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
 
-    票 131 再加一種（週報）。
+    管理員專屬的兩種（`ADMIN_ONLY_KINDS`）說的是只有管理員進得去的頁面。
     """
 
     #: 「可以看了」：一筆 Job 的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
@@ -1659,18 +1672,21 @@ class NotificationKind(StrEnum):
     #: 「有 N 件等你處理」：待審核、開著的 Issue、待綁定的 RSS Series 有新的一件（M4 票 127）。
     #: 只送管理員（`ADMIN_ONLY_KINDS`）。
     WAITING = "waiting"
+    #: 週報的摘要：每週一產生一份之後，連到週報頁那一週（M4 票 131）。只送管理員。
+    WEEKLY = "weekly"
 
 
-#: 只有管理員收、也只有管理員勾得到的種類（M4 票 127）：說的是只有管理員進得去的頁面。
-ADMIN_ONLY_KINDS = frozenset({NotificationKind.WAITING})
+#: 只有管理員收、也只有管理員勾得到的種類（M4 票 127、131）：說的是只有管理員進得去的頁面。
+ADMIN_ONLY_KINDS = frozenset({NotificationKind.WAITING, NotificationKind.WEEKLY})
 
 
 def default_notify_kinds(role: Role) -> list[str]:
-    """新的一列 `users` 預設訂閱哪幾種（`users.notify_kinds_json`）。管理員多「等你處理」：Berth
-    平常不必打開的前提就是有事時它會說（plan §11.5），那一則不該要人先找到勾選才收得到。"""
+    """新的一列 `users` 預設訂閱哪幾種（`users.notify_kinds_json`）。管理員多「等你處理」與
+    「週報」：Berth 平常不必打開的前提就是有事時它會說（plan §11.5），這兩則不該要人先找到勾選才
+    收得到。"""
     kinds = [NotificationKind.READY.value]
     if role is Role.ADMIN:
-        kinds.append(NotificationKind.WAITING.value)
+        kinds += [NotificationKind.WAITING.value, NotificationKind.WEEKLY.value]
     return kinds
 
 

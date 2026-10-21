@@ -2356,6 +2356,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reports
+         * @description 每一份一列，最新的一週在前。
+         */
+        get: operations["get_reports_api_weekly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/weekly/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Report */
+        get: operations["get_report_api_weekly__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3116,6 +3153,21 @@ export interface components {
             /** End */
             end: number;
         };
+        /** FixedOut */
+        FixedOut: {
+            /** Approved */
+            approved: number;
+            /** Rematched */
+            rematched: number;
+            /** Resolved */
+            resolved: {
+                [key: string]: number;
+            };
+            /** Cleared */
+            cleared: {
+                [key: string]: number;
+            };
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3184,6 +3236,22 @@ export interface components {
          * @enum {string}
          */
         ImageSize: "poster" | "poster_large" | "wide" | "wide_large";
+        /** ImportedWorkOut */
+        ImportedWorkOut: {
+            /** Media */
+            media: string | null;
+            kind: components["schemas"]["MediaKind"] | null;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Episodes */
+            episodes: [
+                number,
+                number,
+                number
+            ][];
+        };
         /** IndexerApplyIn */
         IndexerApplyIn: {
             /**
@@ -4309,10 +4377,10 @@ export interface components {
          * NotificationKind
          * @description 待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
          *
-         *     票 131 再加一種（週報）。
+         *     管理員專屬的兩種（`ADMIN_ONLY_KINDS`）說的是只有管理員進得去的頁面。
          * @enum {string}
          */
-        NotificationKind: "ready" | "downloading" | "waiting";
+        NotificationKind: "ready" | "downloading" | "waiting" | "weekly";
         /**
          * NotifyBotOut
          * @description 管理員那一半。
@@ -5616,6 +5684,21 @@ export interface components {
          * @enum {string}
          */
         StepStatus: "ok" | "skipped" | "failed" | "running" | "pending";
+        /** StillWaitingOut */
+        StillWaitingOut: {
+            /** Review */
+            review: number;
+            /** Issues */
+            issues: {
+                [key: string]: number;
+            };
+            /** Rss */
+            rss: number;
+            /** Swept */
+            swept: {
+                [key: string]: number;
+            };
+        };
         /** SubgroupOut */
         SubgroupOut: {
             /** Id */
@@ -5944,6 +6027,56 @@ export interface components {
             resume: components["schemas"]["WatchingCardOut"][];
             /** Next Up */
             next_up: components["schemas"]["WatchingCardOut"][];
+        };
+        /**
+         * WeeklyLineOut
+         * @description 歷史清單的一列。
+         */
+        WeeklyLineOut: {
+            /** Id */
+            id: number;
+            /**
+             * First Day
+             * Format: date
+             */
+            first_day: string;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /** Works */
+            works: number;
+            /** Episodes */
+            episodes: number;
+            /** Fixed */
+            fixed: number;
+            /** Waiting */
+            waiting: number;
+        };
+        /** WeeklyReportOut */
+        WeeklyReportOut: {
+            /** Id */
+            id: number;
+            /**
+             * First Day
+             * Format: date
+             */
+            first_day: string;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Imported */
+            imported: components["schemas"]["ImportedWorkOut"][];
+            fixed: components["schemas"]["FixedOut"];
+            waiting: components["schemas"]["StillWaitingOut"];
         };
     };
     responses: never;
@@ -10647,6 +10780,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+        };
+    };
+    get_reports_api_weekly_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyLineOut"][];
+                };
+            };
+        };
+    };
+    get_report_api_weekly__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -29,7 +29,7 @@ import logging
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -69,6 +69,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.deeplink import (
     MEDIA_PAGE,
+    WEEKLY_PAGE,
     PublicUrlRejectedError,
     berth_link,
     normalized_public_url,
@@ -79,6 +80,7 @@ from berth.services.jellyfin_access import (
     JellyfinUnreachableError,
     visible_libraries,
 )
+from berth.services.recipients import subscribers
 from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.waiting import LIST_PAGE, Waiting, WaitingSource, waiting_now
 
@@ -110,6 +112,9 @@ _TEXT: dict[Language, dict[str, str]] = {
         "issue_list": "打開 Issue",
         "rss_list": "打開 RSS",
         "lingering": "有一件等了 {days} 天",
+        "weekly": "週報：{first} – {last}",
+        "weekly_body": "入庫 {works} 部（{episodes} 集）· 修了 {fixed} 件 · 等你處理 {waiting} 件",
+        "weekly_open": "打開週報",
     },
     Language.EN: {
         "ready": "Ready to watch: {title}",
@@ -133,6 +138,11 @@ _TEXT: dict[Language, dict[str, str]] = {
         "issue_list": "Open issues",
         "rss_list": "Open RSS",
         "lingering": "Waiting for {days} days",
+        "weekly": "Weekly report: {first} – {last}",
+        "weekly_body": (
+            "{works} titles imported ({episodes} episodes) · {fixed} fixed · {waiting} waiting"
+        ),
+        "weekly_open": "Open the weekly report",
     },
 }
 
@@ -519,13 +529,7 @@ async def queue_ready(session: AsyncSession, job: Job, *, now: datetime) -> int:
                 with job_context(job.hash):
                     logger.warning("ready notification not queued: the job has no route")
                 return 0
-            recipients = [
-                user
-                for user in await session.scalars(
-                    select(User).where(User.discord_user_id != "").order_by(User.id)
-                )
-                if NotificationKind.READY.value in user.notify_kinds_json
-            ]
+            recipients = await subscribers(session, NotificationKind.READY)
             if not recipients:
                 return 0
             content = await _ready_content(session, job, route)
@@ -661,21 +665,8 @@ async def watch_waiting(session: AsyncSession, *, now: datetime | None = None) -
     return queued
 
 
-async def _waiting_recipients(session: AsyncSession) -> list[User]:
-    """訂閱了「等你處理」、有 Discord ID 的管理員。"""
-    return [
-        user
-        for user in await session.scalars(
-            select(User)
-            .where(User.discord_user_id != "", User.role == Role.ADMIN)
-            .order_by(User.id)
-        )
-        if NotificationKind.WAITING.value in user.notify_kinds_json
-    ]
-
-
 async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: datetime) -> int:
-    recipients = await _waiting_recipients(session)
+    recipients = await subscribers(session, NotificationKind.WAITING)
     if not recipients:
         return 0
     gathering = {
@@ -718,7 +709,7 @@ async def queue_lingering(session: AsyncSession, key: str, *, days: int, now: da
     `_settled_wave` 放棄；合併鍵不同（`_LINGER_KEY`），不併進、也不被併進那一則「有新的一件」。
     立刻送：巡檢一天一次，等它的人不必再多等 10 分鐘。**不 commit**。
     """
-    recipients = await _waiting_recipients(session)
+    recipients = await subscribers(session, NotificationKind.WAITING)
     for user in recipients:
         session.add(
             Notification(
@@ -804,6 +795,9 @@ async def send_due(
     bot = factory.discord(token)
     sent = failed = 0
     for notification, user in rows:
+        if notification.kind in ADMIN_ONLY_KINDS and _not_admin(notification, user):
+            await session.commit()
+            continue
         if notification.kind in _BY_LIBRARY and _withheld(notification, libraries, unreachable):
             await session.commit()
             continue
@@ -890,14 +884,20 @@ def _withheld(
     return False
 
 
+def _not_admin(notification: Notification, user: User) -> bool:
+    """管理員專屬的那幾種（`ADMIN_ONLY_KINDS`），收件人在送出那一刻已經不是管理員（角色每次登入照
+    Jellyfin 重寫）：放棄、記下原因，回 `True`。它說的頁面他進不去了。"""
+    if user.role is Role.ADMIN:
+        return False
+    notification.status = NotificationStatus.ABANDONED
+    notification.error = "withheld: the recipient is no longer an admin"
+    return True
+
+
 def _settled_wave(notification: Notification, user: User, current: dict[str, Waiting]) -> bool:
     """「等你處理」這一則不送了就放棄它、記下原因，回 `True`（M4 票 127）：這一波新增的在送出前
-    都已經處理掉（總數是 0 也在這裡：那時候一件都不剩），或收件人已經不是管理員（角色每次登入照
-    Jellyfin 重寫）。前者不是「現在還有幾件」的提醒：沒有新的一件要說，人多半正在 Berth 上處理。"""
-    if user.role is not Role.ADMIN:
-        notification.status = NotificationStatus.ABANDONED
-        notification.error = "withheld: the recipient is no longer an admin"
-        return True
+    都已經處理掉（總數是 0 也在這裡：那時候一件都不剩）。這不是「現在還有幾件」的提醒：沒有新的
+    一件要說，人多半正在 Berth 上處理。"""
     if not any(key in current for key in notification.content_json.get(_NEW) or ()):
         notification.status = NotificationStatus.ABANDONED
         notification.error = "withheld: everything in this batch was handled before it was sent"
@@ -917,6 +917,8 @@ async def _deliver(
     try:
         if notification.kind is NotificationKind.WAITING:
             message = _render_waiting(notification, user.notify_language, berth_url, current)
+        elif notification.kind is NotificationKind.WEEKLY:
+            message = _render_weekly(notification, user.notify_language, berth_url)
         else:
             message = _render(notification, user.notify_language, berth_url)
     except Exception as exc:
@@ -1123,6 +1125,26 @@ def _render_lingering(
             (text[f"{source.value}_field"], str(count)) for source, count in totals.items() if count
         ),
         links=(Link(text["open"], url),) if url else (),
+    )
+
+
+def _render_weekly(notification: Notification, language: Language, berth_url: str) -> Message:
+    """週報的摘要（M4 票 131，`services.weekly`）：哪一週、三段各幾件，連到週報頁那一週。日期兩種
+    語言都寫 `10-19`：月日的數字不必翻。"""
+    content = notification.content_json
+    text = _TEXT[language]
+    first = date.fromisoformat(content["week_of"])
+    last = first + timedelta(days=6)
+    url = berth_link(berth_url, WEEKLY_PAGE.format(report_id=content["report"]))
+    return Message(
+        title=text["weekly"].format(first=f"{first:%m-%d}", last=f"{last:%m-%d}"),
+        description=text["weekly_body"].format(
+            works=content["works"],
+            episodes=content["episodes"],
+            fixed=content["fixed"],
+            waiting=content["waiting"],
+        ),
+        links=(Link(text["weekly_open"], url),) if url else (),
     )
 
 

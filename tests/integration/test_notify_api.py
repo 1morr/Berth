@@ -202,8 +202,8 @@ class TestMine:
 
     def test_ready_is_subscribed_before_anything_is_saved(self, client: TestClient) -> None:
         """填了 Discord ID 就收得到最主要的那一種；「正在下載」要自己勾。管理員多「等你處理」
-        （M4 票 127）。"""
-        assert client.get(MINE).json()["kinds"] == ["ready", "waiting"]
+        （M4 票 127）與「週報」（M4 票 131）。"""
+        assert client.get(MINE).json()["kinds"] == ["ready", "waiting", "weekly"]
 
     def test_an_admin_can_turn_waiting_off(self, client: TestClient) -> None:
         assert save_id(client, kinds=("ready",)).json()["kinds"] == ["ready"]
@@ -242,14 +242,14 @@ class TestCrew:
         assert press_test(client).json()["delivered"] is True
         assert [recipient for recipient, _ in factory.discord_.sent] == ["100000000000000009"]
 
-    def test_a_crew_member_starts_with_ready_and_cannot_add_waiting(
+    def test_a_crew_member_starts_with_ready_and_cannot_add_admin_kinds(
         self, client: TestClient
     ) -> None:
-        """「等你處理」只給管理員（M4 票 127）：送來了也不存。"""
+        """「等你處理」與「週報」只給管理員（M4 票 127、131）：送來了也不存。"""
         sign_in_crew(client)
 
         assert client.get(MINE).json()["kinds"] == ["ready"]
-        saved = save_id(client, "100000000000000009", kinds=("ready", "waiting"))
+        saved = save_id(client, "100000000000000009", kinds=("ready", "waiting", "weekly"))
         assert saved.json()["kinds"] == ["ready"]
 
     def test_the_bot_half_stays_behind_the_admin_gate(self, client: TestClient) -> None:
