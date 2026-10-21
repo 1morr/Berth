@@ -4280,7 +4280,10 @@ export interface components {
             /** Detail */
             detail: string;
         };
-        /** NotifyTestOut */
+        /**
+         * NotifyTestOut
+         * @description `adapters.notify.Delivery` 的線上形狀。
+         */
         NotifyTestOut: {
             /** Delivered */
             delivered: boolean;
