@@ -3517,11 +3517,11 @@ export interface components {
          * IssueType
          * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
          *
-         *     **十八種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-         *     各加一種，M4 票 130 加三種）：
+         *     **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+         *     各加一種，M4 票 130 加四種）：
          *     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
          *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-         *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再四種是每日巡檢
+         *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
          *     （`sweeper`）。各邊共用同一個
          *     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
          *     與 `ISSUE_ACTIONS` 那兩條閘門。
@@ -3531,7 +3531,7 @@ export interface components {
          *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
-        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing";
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide";
         /**
          * ItemEditIn
          * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。

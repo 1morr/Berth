@@ -16,7 +16,7 @@ import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
-import { formatCoverage, formatJellyfinEpisode } from '../components/episodes'
+import { formatCoverage, formatEpisode, formatJellyfinEpisode } from '../components/episodes'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
 import { WorkPicker } from './WorkPicker'
@@ -304,14 +304,34 @@ function Measured({ issue }: { issue: Issue }) {
       </>
     )
   }
-  if (issue.type === 'series_episodes_missing') {
-    // RSS Series 缺集（M4 票 130）：缺哪幾集；搜缺的集在作品頁，連過去。
+  if (issue.type === 'series_episodes_missing' || issue.type === 'series_episodes_collide') {
+    // RSS Series 缺集與同一集意外多份（M4 票 130）：哪幾集，連到作品頁（搜缺的集、檔案與版本的「修正」
+    // 都在那裡）。
     const media = text(issue.detail.media)
+    const collisions = Array.isArray(issue.detail.collisions)
+      ? issue.detail.collisions.map(record)
+      : []
     return (
       <>
-        <DetailLine term={t('issues.missingEpisodes')}>
-          {missingText(issue.detail.missing)}
-        </DetailLine>
+        {issue.type === 'series_episodes_missing' ? (
+          <DetailLine term={t('issues.missingEpisodes')}>
+            {missingText(issue.detail.missing)}
+          </DetailLine>
+        ) : (
+          collisions.map((one) => {
+            const code = formatEpisode({
+              season: numeric(one.season),
+              episode_start: numeric(one.episode),
+              episode_end: null,
+            })
+            const releases = Array.isArray(one.releases) ? one.releases.map(text) : []
+            return (
+              <DetailLine key={code} term={`${t('issues.collisions')} ${code}`}>
+                {releases.join(' · ')}
+              </DetailLine>
+            )
+          })
+        )}
         {media !== '' && (
           <DetailLine term={t('issues.work')}>
             <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
@@ -319,7 +339,9 @@ function Measured({ issue }: { issue: Issue }) {
             </Link>
           </DetailLine>
         )}
-        <DetailLine term={t('issues.next')}>{t('issues.nextGap')}</DetailLine>
+        <DetailLine term={t('issues.next')}>
+          {t(issue.type === 'series_episodes_missing' ? 'issues.nextGap' : 'issues.nextCollide')}
+        </DetailLine>
       </>
     )
   }

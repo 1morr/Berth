@@ -1827,7 +1827,11 @@ const zhHant = {
     work: '作品',
     nextGap:
       '這個字幕組送來的集數中間少了幾集，而且晚發的寬限已經過了。到作品頁，季表上標著「缺」的就是這幾集，按「搜這部作品缺的集」或那一季的「搜 … 缺的集」。補上之後，下一次每日巡檢會自己收掉這一件。',
-    // 十八種型別各一句（brief §9.1）。
+    // 同一集意外多份（M4 票 130）：哪一集、撞在一起的發佈名。
+    collisions: '撞在同一集',
+    nextCollide:
+      '同一個字幕組的兩個發佈寫的是不同集，卻都入庫成了這一集，多半是集號換算或 offset 錯了，其中一份其實是別集。看發佈名認出放錯的那一份，到作品頁的「檔案與版本」按它的「修正」，指派到正確的集。改好之後，下一次每日巡檢會自己收掉這一件。',
+    // 十九種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -1847,6 +1851,7 @@ const zhHant = {
       feed_poll_failing: '這個 Feed 輪詢一直失敗，超過一天了',
       feed_backfill_failing: '這個 Feed 的每日補漏一直讀不到，超過一天了',
       series_episodes_missing: '這個 RSS Series 已入庫的集數中間缺了幾集',
+      series_episodes_collide: '這個 RSS Series 有兩個不同的發佈被入庫成同一集',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -1867,6 +1872,7 @@ const zhHant = {
       feed_poll_failing: '輪詢一直失敗',
       feed_backfill_failing: '補漏一直失敗',
       series_episodes_missing: '缺集',
+      series_episodes_collide: '同一集多份',
     },
     action: {
       relink: '重新鏈接',
@@ -5471,6 +5477,9 @@ const en: Translations<typeof zhHant> = {
     work: 'Title',
     nextGap:
       'Episodes are missing between the ones this group sent, and the grace period for late releases has passed. On the title page they are marked missing in the season list; press Search for the missing episodes there. Once they are filled, the next daily sweep closes this on its own.',
+    collisions: 'Landed as one episode',
+    nextCollide:
+      'Two releases from the same group name different episodes but were both imported as this one, usually because an episode conversion or offset went wrong and one of them is really another episode. Use the release names to spot the misplaced one, then press Fix on it under Files and versions on the title page and assign the right episode. Once fixed, the next daily sweep closes this on its own.',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -5490,6 +5499,7 @@ const en: Translations<typeof zhHant> = {
       feed_poll_failing: 'This feed has kept failing to poll for over a day',
       feed_backfill_failing: 'This feed’s daily backfill has kept failing for over a day',
       series_episodes_missing: 'Episodes are missing between the ones this RSS series imported',
+      series_episodes_collide: 'Two different releases from this RSS series landed as one episode',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -5510,6 +5520,7 @@ const en: Translations<typeof zhHant> = {
       feed_poll_failing: 'FEED KEEPS FAILING',
       feed_backfill_failing: 'BACKFILL KEEPS FAILING',
       series_episodes_missing: 'EPISODES MISSING',
+      series_episodes_collide: 'EPISODES COLLIDE',
     },
     action: {
       relink: 'Link it again',

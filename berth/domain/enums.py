@@ -207,11 +207,11 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十八種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-    各加一種，M4 票 130 加三種）：
+    **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+    各加一種，M4 票 130 加四種）：
     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再四種是每日巡檢
+    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
     （`sweeper`）。各邊共用同一個
     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
     與 `ISSUE_ACTIONS` 那兩條閘門。
@@ -274,6 +274,10 @@ class IssueType(StrEnum):
     #: 播了、沒有下載在處理），而且洞之後那一集入庫已滿 `sweep.GAP_GRACE`——給字幕組晚發的時間。
     #: 一個 Series 一件，列出缺哪幾集；補上、或 Series 解除綁定了，下一輪巡檢由系統收掉。
     SERIES_EPISODES_MISSING = "series_episodes_missing"
+    #: 每日巡檢（M4 票 130）：同一集意外多份——同一個 RSS Series 兩筆以上的 Job 入庫成同一集，而
+    #: 它們的發佈名寫的集號不同（兩個不同的發佈被對到同一集）。版本並存（brief §7.7、§7.8）不算。
+    #: 一個 Series 一件；改正了或刪掉了，下一輪巡檢由系統收掉。
+    SERIES_EPISODES_COLLIDE = "series_episodes_collide"
 
 
 class IssueStatus(StrEnum):
@@ -346,6 +350,7 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     IssueType.FEED_BACKFILL_FAILING: IssueSubject.RSS_FEED,
     # 缺集也是**一個 Series 一件**：缺的那幾集列在 `detail_json`，補上一集是同一件變短。
     IssueType.SERIES_EPISODES_MISSING: IssueSubject.RSS_SERIES,
+    IssueType.SERIES_EPISODES_COLLIDE: IssueSubject.RSS_SERIES,
 }
 
 
@@ -442,8 +447,10 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     # 修法在那一站或 Feed 的網址（M4 票 130）：列上說最後的原因，連到 RSS 頁的那一個 Feed。
     IssueType.FEED_POLL_FAILING: (),
     IssueType.FEED_BACKFILL_FAILING: (),
-    # 出路在作品頁：缺的那幾集在季表上標著「缺」，搜尋區塊有「搜缺的集」（M4 票 130）。
+    # 出路在作品頁：缺的那幾集在季表上標著「缺」，旁邊有「搜這部作品缺的集」（M4 票 130）。
     IssueType.SERIES_EPISODES_MISSING: (),
+    # 改正在作品頁的檔案與版本（「修正」走 rematch）；哪一份放錯要人看發佈名才知道。
+    IssueType.SERIES_EPISODES_COLLIDE: (),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：

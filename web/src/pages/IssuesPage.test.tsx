@@ -683,6 +683,55 @@ describe('待處理頁', () => {
     expect(within(row).getByText(/搜這部作品缺的集/)).toBeInTheDocument()
   })
 
+  it('同一集意外多份說出哪一集、撞在一起的發佈名，連到作品頁（M4 票 130）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'series_episodes_collide',
+            subject: '7',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              series: 7,
+              name: '[LoliHouse] Kimi to Koishitai - 06',
+              media: 'tv:120089',
+              title: '与你相恋',
+              collisions: [
+                {
+                  season: 1,
+                  episode: 5,
+                  releases: ['[LoliHouse] Kimi - 05 [1080p]', '[LoliHouse] Kimi - 06 [1080p]'],
+                },
+              ],
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('同一集多份')).toBeInTheDocument()
+    expect(
+      within(row).getByText('這個 RSS Series 有兩個不同的發佈被入庫成同一集'),
+    ).toBeInTheDocument()
+    await userEvent.click(
+      within(row).getByRole('heading', { name: '[LoliHouse] Kimi to Koishitai - 06' }),
+    )
+    expect(within(row).getByText('撞在同一集 S01E05')).toBeInTheDocument()
+    expect(
+      within(row).getByText('[LoliHouse] Kimi - 05 [1080p] · [LoliHouse] Kimi - 06 [1080p]'),
+    ).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: '与你相恋' })).toHaveAttribute(
+      'href',
+      '/media/tv%3A120089',
+    )
+    expect(within(row).getByText(/指派到正確的集/)).toBeInTheDocument()
+  })
+
   it('重新入庫先選作品，送出去的是選的那一部（M2 票 10）', async () => {
     const FOLDER = '/data/torrent/complete/anime/[Group] SPY×FAMILY S01'
     const stub = render({

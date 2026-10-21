@@ -996,6 +996,7 @@ STAYS_IGNORED = frozenset(
         IssueType.FEED_POLL_FAILING,
         IssueType.FEED_BACKFILL_FAILING,
         IssueType.SERIES_EPISODES_MISSING,
+        IssueType.SERIES_EPISODES_COLLIDE,
     }
 )
 #: 條件解除過的記號，寫在被忽略的那一筆的 `detail_json` 上（`note_cleared`）。

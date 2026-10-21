@@ -82,6 +82,7 @@ class Sweeper:
                 "stuck": outcome.stuck,
                 "failing": outcome.failing,
                 "missing": outcome.missing,
+                "colliding": outcome.colliding,
                 "cleared": outcome.cleared,
                 "reminded": outcome.reminded,
                 "elapsed_ms": round((time.perf_counter() - started) * 1000),

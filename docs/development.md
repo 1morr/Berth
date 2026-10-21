@@ -552,8 +552,9 @@ uv run python scripts/experiments/rss_subscribe_timing.py --profile       # 同�
 uv run python scripts/experiments/rss_subscribe_timing.py --watch 15      # 之後 15 秒看預覽跟著補舊集的入庫變
 ```
 
-每日巡檢一輪佔用事件迴圈多久（M4 票 129）：暫時的資料庫上灌一份資料、跑 `sweep_once` 三輪，另一個 coroutine
-每 1 ms 醒一次記下晚了多少。不連網；結果記在 `.scratch/m4/issues/129-daily-patrol.md`：
+每日巡檢一輪佔用事件迴圈多久（M4 票 129；票 130 加上帳本、作品快照與 Feed，量 RSS 那三項）：暫時的資料庫上灌
+一份資料、跑 `sweep_once` 三輪，另一個 coroutine 每 1 ms 醒一次記下晚了多少。不連網；結果記在
+`.scratch/m4/issues/129-daily-patrol.md` 與 `130-rss-patrol.md`。第 1 輪多出的 ~400 ms 是行程裡第一次解析發佈名：
 
 ```bash
 uv run python scripts/experiments/sweep_loop_lag.py                                  # 400 個 Series × 12 筆 Job
