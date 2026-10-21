@@ -1,6 +1,6 @@
 # 123 — Tracer：「可以看了」送到管理員的 Discord
 
-**Status:** ready-for-human（只剩真 bot 的手動驗收）
+**Status:** done
 
 **Blocked by:** 121
 
@@ -29,12 +29,13 @@ M4 本體的第一條端到端：一筆 Job 在 Jellyfin 認出來，管理員�
 - [x] 契約測試對票 121 錄的成功與失敗回應綠
 - [x] bot token 不出現在任何 API 回應與 log（pytest 捕 log 斷言；變異：在 log 印一次 token 會紅）
 - [x] 通知設定頁：設 token、填 ID、按測試（vitest；playwright 實跑附截圖）
-- [ ] 使用者用真的 bot 收到一則「可以看了」與一則測試訊息（手動，記在 Comments）
+- [x] 使用者用真的 bot 收到一則「可以看了」與一則測試訊息（手動，記在 Comments）
 - [x] 全部檢查、pytest、vitest 綠；import-linter 依賴方向沒破；CHANGELOG、CONTEXT.md、development.md、progress.md 已更新
 
 ## Comments
 
-- 2026-10-21 實作（session 紀錄見 progress.md）。驗收第 7 條（真的 bot 收到「可以看了」與測試訊息）要使用者動手：設定 → 通知貼 token、用邀請連結把 bot 加進伺服器、填 ID、按測試；「可以看了」要一筆真的入庫走到 Jellyfin 認出來。截圖在本票目錄（演練後端，1280 / 390 各五格）。
+- 2026-10-21 實作（session 紀錄見 progress.md）。截圖在本票目錄（演練後端，1280 / 390 各五格）。
+- 2026-10-21 **驗收第 7 條（手動）通過**：本分支在 `tests/e2e/compose.yml` 那一套（真的 qBittorrent 5.2、Jellyfin 12.1、本分支 build 的 Berth）上，精靈走完、使用者在設定 → 通知貼上 berth-exp-121（Reset 後的新 token，bot 已在 berth-test 伺服器）、填自己的 ID、按測試，手機收到「Berth 測試訊息」。之後觸發 Frieren 7ACG BD 合集入庫（17:28:53 放進下載路徑並 recheck），Job `imported`、Jellyfin 認完全部正片，17:30:51 待送表那一則 `sent`（`attempts` 0），使用者確認手機收到「可以看了：葬送的芙莉蓮」，季集 `S00E01–E11, S01E01–E28`（合集附的 11 支特典歸第 0 季）、`Route: Anime`。從 Berth 容器打 Discord 要帶 `DiscordBot (…)` 的 User-Agent：urllib 預設的 UA 被回 403（Cloudflare），Berth 的 adapter 本來就帶。驗收完 `down -v` 拆掉。
 - **log 的 token 檢查捕的是 Berth 實際寫出的等級（INFO）**：DEBUG 底下 aiosqlite 會印 SQL 參數，`settings` 那一列的整份 JSON（每一種憑證都在裡面）就在其中。root level 固定 INFO、沒有開關，所以不寫出去；之後若加「調 log 等級」的開關，要先處理這件事。不是這張票特有的。
 - `GET /applications/@me` 沒有錄製回應（回應裡有 application 擁有者的帳號，票 121 不存），契約測試只用文件上的 `id`、`name`（brief §20.23 補了來源）。
 - code-review 已改：README 兩份「還沒有通知」、brief 決定列少一欄、plan §6 的 settings 列欄位錯置、`send` 在 200 缺 channel id 時會丟 `KeyError`、一輪遇到管道層級的失敗（401、429、連不上）不停下、先存再移除 token 時狀態句還說「已儲存」、API 手抄欄位改 `from_attributes`、`DEFAULT_API_URL` 別名、補電影只說作品的測試。
