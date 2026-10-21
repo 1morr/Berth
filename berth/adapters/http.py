@@ -38,8 +38,9 @@ class ServiceError(Exception):
     """與某個外部服務往來時的失敗。
 
     **訊息裡網址的 query 值在這裡就遮掉**（M4 票 76）：訊息常帶整條網址（`HttpSession` 的
-    「GET <url>: ...」、`.torrent` 下載連結），而它會寫進資料庫（`rss_feeds.last_error`、
-    `Job.error`）、回給畫面、進 log。遮在建構子而不是每一個寫出去的地方：寫出去的地方有幾十個。
+    「GET <url>: ...」、`.torrent` 下載連結），而它會寫進資料庫（`rss_feeds.poll_error` /
+    `backfill_error`、`Job.error`）、回給畫面、進 log。遮在建構子而不是每一個寫出去的地方：寫出去的
+    地方有幾十個。
     """
 
     def __init__(self, *args: object) -> None:

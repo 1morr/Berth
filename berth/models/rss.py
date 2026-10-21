@@ -52,8 +52,16 @@ class RssFeed(Base):
     kind: Mapped[FeedKind] = mapped_column(enum_column(FeedKind))
     interval_sec: Mapped[int] = mapped_column(default=DEFAULT_INTERVAL_SEC)
     last_polled_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
-    #: 上一輪失敗的原文（英文）。成功的那一輪清空。
-    last_error: Mapped[str] = mapped_column(Text, default="")
+    #: 上一輪輪詢失敗的原文（英文）。成功的那一輪清空；有幾筆認不出 Series 而略過也寫在這裡。
+    poll_error: Mapped[str] = mapped_column(Text, default="")
+    #: 輪詢從什麼時候開始一直失敗（`poll_error` 由空變成不空的那一輪）；成功的那一輪清掉。巡檢的
+    #: 「一直失敗的 Feed」看它（M4 票 130）。
+    poll_failing_since: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    #: 上一次每日補漏讀不到的那幾個 RSS Series 與原文（`backfill <key>: <原文>`，以 `; ` 接）。
+    #: 該補的那幾個都讀到了就清空；輪詢抓不到 Feed 的那幾輪補漏沒跑，這一欄不動（M4 票 130 拆欄）。
+    backfill_error: Mapped[str] = mapped_column(Text, default="", server_default="")
+    #: 補漏從什麼時候開始一直失敗；同 `poll_failing_since`。
+    backfill_failing_since: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     #: 這一層的排除條件（`parser.exclusion` 的格式），與全域、RSS Series 那兩層取聯集（brief §15）。
     exclude_json: Mapped[list[str]] = mapped_column(JsonText, default=list, server_default="[]")
     #: 第一輪預覽選過的那一刻（brief §15）。`None` 是還沒選：這個 Feed 的 Item 一筆都不送。

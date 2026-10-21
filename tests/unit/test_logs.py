@@ -204,8 +204,8 @@ class TestSecretsInUrls:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_the_error_that_reaches_last_error_carries_no_token(self) -> None:
-        """抓不到 Feed 時錯誤的原文寫進 `rss_feeds.last_error`，畫面與 API 都讀它。"""
+    async def test_the_error_that_reaches_poll_error_carries_no_token(self) -> None:
+        """抓不到 Feed 時錯誤的原文寫進 `rss_feeds.poll_error`，畫面與 API 都讀它。"""
         respx.get(MIKAN_FEED).mock(side_effect=httpx.ConnectError("refused"))
         fetcher = HttpFeedFetcher()
         try:

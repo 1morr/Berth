@@ -147,8 +147,11 @@ class FeedOut(BaseModel):
     #: 檔位同 `FeedIn`：寫得進來的只有這幾個，舊的列是預設的 900。
     interval_sec: FeedInterval
     last_polled_at: datetime | None
-    #: 上一輪失敗的原文（英文）。空字串是上一輪好好的。
-    last_error: str
+    #: 上一輪輪詢失敗的原文（英文）。空字串是上一輪好好的。
+    poll_error: str
+    #: 上一次每日補漏讀不到的那幾個 RSS Series 與原文（Mikan，M4 票 130 從輪詢那一欄拆出來）。
+    #: 空字串是該補的都讀到了；輪詢抓不到 Feed 的那幾輪補漏沒跑，這一欄停在之前的樣子。
+    backfill_error: str
     #: 這個 Feed 長出了幾筆 Item；刪除的確認說出會刪掉幾筆。
     items: int
     #: 這一層的排除條件（一般字詞不分大小寫；`/…/` 是正則，`/…/i` 不分大小寫）。
@@ -227,7 +230,7 @@ class PollOut(BaseModel):
     #: 新長出的 Series 裡自動綁上的（票 09）。
     bound: int
     submitted: int
-    #: Feed 本身抓不到時的原文（同那一列的 `last_error`）；抓到了是空字串。畫面照它說「這一輪
+    #: Feed 本身抓不到時的原文（同那一列的 `poll_error`）；抓到了是空字串。畫面照它說「這一輪
     #: 沒讀到」，而不是「新 0 筆」（M3 票 21 的 critique）。
     failed: str
 
@@ -556,7 +559,7 @@ async def delete_one_feed(session: SessionDep, feed_id: int) -> FeedDeletedOut:
 
 @router.post("/feeds/{feed_id}/poll", responses=_responses(RssRefusal.FEED_MISSING))
 async def post_poll(session: SessionDep, factory: ClientFactoryDep, feed_id: int) -> PollOut:
-    """立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `last_error`，畫面重讀清單就看得到。"""
+    """立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `poll_error`，畫面重讀清單就看得到。"""
     try:
         return PollOut.model_validate(await poll_feed(session, factory, feed_id))
     except RssRejectedError as refusal:
@@ -880,7 +883,7 @@ async def post_search_subscription(
     session: SessionDep, factory: ClientFactoryDep, request: Request, body: SearchSubscriptionIn
 ) -> FeedOut:
     """建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
-    仍是 201，原文在 `last_error`。"""
+    仍是 201，原文在 `poll_error`。"""
     user = current_user(request)
     try:
         feed = await subscribe_search(

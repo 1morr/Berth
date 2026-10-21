@@ -1222,3 +1222,57 @@ async def test_existing_admins_are_subscribed_to_waiting(config: Config) -> None
     }
     assert downgraded == {1: ["ready"], 2: ["ready", "downloading"], 3: [], 4: ["ready"]}
     assert left == 0
+
+
+FEED_ERRORS_SPLIT = "c5f2a8e4d917"
+
+
+async def test_the_old_feed_error_moves_to_the_poll_column(config: Config) -> None:
+    """M4 票 130：`last_error` 整串搬到輪詢那一欄，舊值不是空的從上一次輪詢起算「一直失敗」；補漏
+    那一欄從空的開始。降版照舊的格式把兩欄併回去。"""
+    polled = "2026-10-20T00:00:00.000000+00:00"
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, WAITING_FOR_ADMINS)
+        with _sqlite(config.database_path) as db:
+            for feed, error in ((1, "GET https://mikan/: timed out"), (2, "")):
+                db.execute(
+                    "INSERT INTO rss_feeds (id, name, url, kind, interval_sec, last_error,"
+                    " last_polled_at, exclude_json, created_at)"
+                    " VALUES (?, '', ?, 'mikan', 900, ?, ?, '[]', ?)",
+                    (feed, f"u{feed}", error, polled, polled),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, FEED_ERRORS_SPLIT)
+        with _sqlite(config.database_path) as db:
+            upgraded = db.execute(
+                "SELECT id, poll_error, poll_failing_since, backfill_error, backfill_failing_since"
+                " FROM rss_feeds ORDER BY id"
+            ).fetchall()
+            db.execute(
+                "UPDATE rss_feeds SET backfill_error = 'backfill mikan:1:2: 404' WHERE id = 1"
+            )
+            db.execute(
+                "UPDATE rss_feeds SET backfill_error = 'backfill mikan:3:4: 404' WHERE id = 2"
+            )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, WAITING_FOR_ADMINS)
+        with _sqlite(config.database_path) as db:
+            downgraded = db.execute("SELECT id, last_error FROM rss_feeds ORDER BY id").fetchall()
+    finally:
+        await engine.dispose()
+
+    assert upgraded == [
+        (1, "GET https://mikan/: timed out", polled, "", None),
+        (2, "", None, "", None),
+    ]
+    assert downgraded == [
+        (1, "GET https://mikan/: timed out; backfill mikan:1:2: 404"),
+        (2, "backfill mikan:3:4: 404"),
+    ]

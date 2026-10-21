@@ -1286,7 +1286,7 @@ export interface paths {
         put?: never;
         /**
          * Post Poll
-         * @description 立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `last_error`，畫面重讀清單就看得到。
+         * @description 立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `poll_error`，畫面重讀清單就看得到。
          */
         post: operations["post_poll_api_rss_feeds__feed_id__poll_post"];
         delete?: never;
@@ -1578,7 +1578,7 @@ export interface paths {
         /**
          * Post Search Subscription
          * @description 建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
-         *     仍是 201，原文在 `last_error`。
+         *     仍是 201，原文在 `poll_error`。
          */
         post: operations["post_search_subscription_api_rss_subscriptions_search_post"];
         delete?: never;
@@ -3042,8 +3042,10 @@ export interface components {
             interval_sec: 900 | 1800 | 3600 | 10800 | 21600 | 43200 | 86400;
             /** Last Polled At */
             last_polled_at: string | null;
-            /** Last Error */
-            last_error: string;
+            /** Poll Error */
+            poll_error: string;
+            /** Backfill Error */
+            backfill_error: string;
             /** Items */
             items: number;
             /** Exclusions */

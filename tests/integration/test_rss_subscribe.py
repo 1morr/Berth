@@ -424,7 +424,7 @@ class TestSearchFeed:
             user_id=user_id,
             now=NOW,
         )
-        assert feed.last_error and feed.items == 0
+        assert feed.poll_error and feed.items == 0
         row = await session.get(Route, route.id)
         assert row is not None
         row.enabled = False

@@ -535,7 +535,7 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
       tabIndex={-1}
       aria-labelledby={headingId}
       className={`grid gap-2 border-2 bg-well px-4 py-3 ${
-        feed.last_error ? 'border-rule-strong' : 'border-rule'
+        feed.poll_error || feed.backfill_error ? 'border-rule-strong' : 'border-rule'
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -565,9 +565,15 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
       ))}
       {/* 第一輪還沒選：決定在頁首那一段（票 11），這裡只說一聲為什麼一筆都沒送。 */}
       {feed.primed_at === null && <p className="text-xs text-ink">{t('rss.feeds.undecided')}</p>}
-      {feed.last_error && (
+      {/* 輪詢與每日補漏分開說（M4 票 130）：前者是整個 Feed 讀不到，後者是某幾個字幕組的整季清單讀不到。 */}
+      {feed.poll_error && (
         <Notice signal="assigned" label={t('rss.feeds.failed')}>
-          <span className="value text-xs wrap-anywhere">{feed.last_error}</span>
+          <span className="value text-xs wrap-anywhere">{feed.poll_error}</span>
+        </Notice>
+      )}
+      {feed.backfill_error && (
+        <Notice signal="assigned" label={t('rss.feeds.backfillFailed')}>
+          <span className="value text-xs wrap-anywhere">{feed.backfill_error}</span>
         </Notice>
       )}
       <p role="status" className="text-xs text-ink">

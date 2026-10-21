@@ -392,7 +392,7 @@ class TestGuidDedup:
         assert (first.items, second.items) == (11, 1)
         row = await session.get(RssFeed, feed.id)
         assert row is not None
-        assert row.last_error == ""
+        assert row.poll_error == ""
 
 
 class TestBinding:
@@ -626,14 +626,34 @@ class TestFeeds:
         assert polled.items == 0
         row = await session.get(RssFeed, feed.id)
         assert row is not None
-        assert "connection refused" in row.last_error
+        assert "connection refused" in row.poll_error
         assert row.last_polled_at == NOW
+        assert row.poll_failing_since == NOW
+        assert row.backfill_error == ""
+
+    async def test_a_feed_keeps_failing_from_the_first_round_and_clears_when_it_reads(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """一直失敗的起算是由好轉壞的那一輪，之後的失敗不往後推；讀到了就清掉（M4 票 130）。"""
+        _, _, factory = await harbour(session, roots)
+        factory.rss_.error = ServiceUnavailableError(f"GET {FEED_URL}: connection refused")
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
+        await poll_feed(session, factory, feed.id, now=NOW)
+        await poll_feed(session, factory, feed.id, now=NOW + timedelta(hours=1))
+
+        row = await session.get(RssFeed, feed.id)
+        assert row is not None and row.poll_failing_since == NOW
+
+        factory.rss_.error = None
+        await poll_feed(session, factory, feed.id, now=NOW + timedelta(hours=2))
+
+        assert row.poll_error == "" and row.poll_failing_since is None
 
 
 class TestTwoRoundsAtOnce:
     """「立即輪詢」與背景 poller 同時輪同一個 Feed（真服務 e2e 2026-09-27 撞到：剛加的 Feed
     從沒輪過，背景那一輪也挑到它）。兩邊一起輪會各長一次同一個 RSS Series，後寫的撞
-    `rss_series.key` 的 unique，而 `poll_due` 把那個例外寫進 Feed 的 `last_error`——前一輪其實
+    `rss_series.key` 的 unique，而 `poll_due` 把那個例外寫進 Feed 的 `poll_error`——前一輪其實
     好好做完了。後到的不另輪，拿正在跑的那一輪的結果（M4 票 13c）。"""
 
     async def test_only_one_round_runs_and_neither_fails(
@@ -687,7 +707,7 @@ class TestTwoRoundsAtOnce:
         assert gate.requested.count(FEED_URL) == 1
         row = await session.get(RssFeed, feed.id, populate_existing=True)
         assert row is not None
-        assert row.last_error == ""
+        assert row.poll_error == ""
         assert await count(session, RssSeries) == 11
 
     async def test_the_later_one_reports_the_round_it_waited_for(

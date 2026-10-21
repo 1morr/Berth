@@ -3385,7 +3385,9 @@ const zhHant = {
       items_one: '{{count}} 筆',
       items_other: '{{count}} 筆',
       // 上一輪抓不到 Feed，或有幾筆的單集頁抓不到（那幾筆下一輪再試）。
-      failed: '上一輪有問題',
+      // 輪詢與每日補漏各自的失敗（M4 票 130 拆欄）：同一個 Feed 可能只壞了其中一種。
+      failed: '上一輪輪詢有問題',
+      backfillFailed: '上次補漏有讀不到的',
       undecided: '第一輪還沒決定，一筆都不送：在頁首選「只追之後的」或「全部下載」。',
       polledFailed: '這一輪沒讀到這個 Feed，什麼都沒改。原因在上面；背景下一輪會再讀。',
       polledNow:
@@ -6963,7 +6965,8 @@ const en: Translations<typeof zhHant> = {
       polled: 'Last polled',
       items_one: '{{count}} item',
       items_other: '{{count}} items',
-      failed: 'Last round had problems',
+      failed: 'Last poll had problems',
+      backfillFailed: 'Last daily backfill could not read some',
       undecided:
         "The first round isn't decided yet, so nothing is sent: choose Only what comes next or Download everything at the top of the page.",
       polledFailed:
