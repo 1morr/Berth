@@ -6,7 +6,11 @@
 
 ## [Unreleased]
 
-**這一版有資料庫 migration**（`c1d7e4a9b302`，Berth 啟動時自動套用一次）：之前因為請求預算用完而停在待綁定、
+## [0.2.9] - 2026-10-21
+
+**從 0.2.8 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。
+image 是 `ghcr.io/1morr/berth:0.2.9`，同時是 `:0.2` 與 `:latest`。下面改到的 API 只有 Berth 自己的畫面在用，升級之後
+重新整理一次頁面即可。**這一版有資料庫 migration**（`c1d7e4a9b302`，Berth 啟動時自動套用一次）：之前因為請求預算用完而停在待綁定、
 等下一輪再認的 RSS Series，改成下一輪就重認，那一次不算進重認的次數上限。
 
 ### Added
