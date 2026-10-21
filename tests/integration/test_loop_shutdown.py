@@ -34,6 +34,7 @@ from berth.pipeline import (
     QbitPoller,
     Reconciler,
     RssPoller,
+    Sweeper,
     resolving,
 )
 from berth.services.events import EventHub
@@ -73,6 +74,7 @@ LOOPS: dict[type[Loop], Callable[[Sessions], Loop]] = {
     ),
     RssPoller: lambda s: RssPoller(s, FakeClientFactory(), sleep=at_once),
     NotifySender: lambda s: NotifySender(s, FakeClientFactory(), tick=timedelta()),
+    Sweeper: lambda s: Sweeper(s, sleep=at_once, now=day_later()),
 }
 
 

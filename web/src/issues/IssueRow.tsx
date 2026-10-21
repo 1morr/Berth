@@ -259,6 +259,25 @@ function Measured({ issue }: { issue: Issue }) {
     // 就要說（審計 E2）。
     return <DetailLine term={t('issues.next')}>{t('issues.nextUnresolved')}</DetailLine>
   }
+  if (issue.type === 'first_batch_stuck') {
+    // 每日巡檢（M4 票 129）：出路在 Job 頁與審核頁，不在這一列上，所以下一步寫在列上；「下載」那一格
+    // 連到停得最久的那一筆。
+    const state = jobState(issue.detail.state)
+    const since = text(issue.detail.since)
+    const error = text(issue.detail.error)
+    return (
+      <>
+        {state !== null && (
+          <DetailLine term={t('issues.stoppedAt')}>{t(`jobs.state.${state}`)}</DetailLine>
+        )}
+        {since !== '' && (
+          <DetailLine term={t('issues.stoppedSince')}>{whenText(since, i18n.language)}</DetailLine>
+        )}
+        {error !== '' && <DetailLine term={t('issues.stoppedError')}>{error}</DetailLine>}
+        <DetailLine term={t('issues.next')}>{t('issues.nextFirstBatch')}</DetailLine>
+      </>
+    )
+  }
   if (issue.type === 'low_disk_space') {
     const size = (value: unknown) =>
       typeof value === 'number' ? formatSize(value, i18n.language) : ''
@@ -285,6 +304,13 @@ const DIFFERS = ['season', 'episode', 'tmdb'] as const
 
 function isDiffer(value: unknown): value is (typeof DIFFERS)[number] {
   return DIFFERS.some((what) => what === value)
+}
+
+/** 讓第一批停住的那兩種狀態（後端 `sweep._STUCK_STATES`）。 */
+const STUCK_STATES = ['submit_failed', 'client_error'] as const
+
+function jobState(value: unknown): (typeof STUCK_STATES)[number] | null {
+  return STUCK_STATES.find((state) => state === value) ?? null
 }
 
 function text(value: unknown): string {

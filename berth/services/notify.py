@@ -109,6 +109,7 @@ _TEXT: dict[Language, dict[str, str]] = {
         "review_list": "打開審核",
         "issue_list": "打開 Issue",
         "rss_list": "打開 RSS",
+        "lingering": "有一件等了 {days} 天",
     },
     Language.EN: {
         "ready": "Ready to watch: {title}",
@@ -131,6 +132,7 @@ _TEXT: dict[Language, dict[str, str]] = {
         "review_list": "Open review",
         "issue_list": "Open issues",
         "rss_list": "Open RSS",
+        "lingering": "Waiting for {days} days",
     },
 }
 
@@ -152,6 +154,7 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.JELLYFIN_ITEM_MISMATCH: "回驗不符",
         IssueType.LIBRARY_USES_TVDB: "TVDB",
         IssueType.LOW_DISK_SPACE: "空間不足",
+        IssueType.FIRST_BATCH_STUCK: "第一批卡住",
     },
     Language.EN: {
         IssueType.LIBRARY_LINK_MISSING: "link missing",
@@ -168,6 +171,7 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.JELLYFIN_ITEM_MISMATCH: "Jellyfin disagrees",
         IssueType.LIBRARY_USES_TVDB: "TVDB",
         IssueType.LOW_DISK_SPACE: "low disk",
+        IssueType.FIRST_BATCH_STUCK: "first batch stuck",
     },
 }
 
@@ -200,6 +204,10 @@ _WAITING_KEY = NotificationKind.WAITING.value
 
 #: 「等你處理」那一則的內容只有一格：這一波新出現的那幾件的鍵（`waiting` 的形狀）。
 _NEW = "new"
+
+#: 「放太久」的提醒（M4 票 129）：同一種、自己的合併鍵；內容多一格等了幾天。
+_LINGER_KEY = f"{NotificationKind.WAITING.value}:lingering"
+_DAYS = "days"
 
 #: 一則從最早送出時間（`not_before`）起，滿這麼久還沒送到就放棄（M4 票 128，plan §11.5）。
 #: 用時間不用次數：次數管不到「沒設 token」「token 壞了」這種一次都沒送的情況，而這幾種正是
@@ -621,7 +629,11 @@ async def watch_waiting(session: AsyncSession, *, now: datetime | None = None) -
     moment = now or utcnow()
     current = await waiting_now(session)
     watched = await read_settings(session, NotifyWatchSettings)
-    if watched.seen is not None and set(watched.seen) == set(current):
+    if (
+        watched.seen is not None
+        and set(watched.seen) == set(current)
+        and set(watched.since) == set(current)
+    ):
         return 0
     seen = set(watched.seen or ())
     appeared = [] if watched.seen is None else [key for key in current if key not in seen]
@@ -636,12 +648,14 @@ async def watch_waiting(session: AsyncSession, *, now: datetime | None = None) -
     ]
     queued = await _queue_waiting(session, fresh, moment) if fresh else 0
     watched.seen = sorted(current)
+    watched.since = {key: watched.since.get(key, moment) for key in current}
     await write_settings(session, watched)
     return queued
 
 
-async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: datetime) -> int:
-    recipients = [
+async def _waiting_recipients(session: AsyncSession) -> list[User]:
+    """訂閱了「等你處理」、有 Discord ID 的管理員。"""
+    return [
         user
         for user in await session.scalars(
             select(User)
@@ -650,6 +664,10 @@ async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: dateti
         )
         if NotificationKind.WAITING.value in user.notify_kinds_json
     ]
+
+
+async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: datetime) -> int:
+    recipients = await _waiting_recipients(session)
     if not recipients:
         return 0
     gathering = {
@@ -677,6 +695,31 @@ async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: dateti
                 merge_key=_WAITING_KEY,
                 not_before=moment + WAIT_WINDOW,
                 created_at=moment,
+            )
+        )
+    return len(recipients)
+
+
+# 送出去的訊息收不回來。
+@command(Effect.IRREVERSIBLE)
+async def queue_lingering(session: AsyncSession, key: str, *, days: int, now: datetime) -> int:
+    """「放太久」的提醒（M4 票 129，每日巡檢排）：`key`（`waiting` 的鍵）那一件已經等了 `days` 天，
+    給每一位訂閱了「等你處理」、有 Discord ID 的管理員排一則，回排了幾則。
+
+    同一種訂閱、同一條送出的路：內容是只有那一件的一波（`_NEW`），所以送出前它處理掉了就照
+    `_settled_wave` 放棄；合併鍵不同（`_LINGER_KEY`），不併進、也不被併進那一則「有新的一件」。
+    立刻送：巡檢一天一次，等它的人不必再多等 10 分鐘。**不 commit**。
+    """
+    recipients = await _waiting_recipients(session)
+    for user in recipients:
+        session.add(
+            Notification(
+                user_id=user.id,
+                kind=NotificationKind.WAITING,
+                content_json={_NEW: [key], _DAYS: days},
+                merge_key=_LINGER_KEY,
+                not_before=now,
+                created_at=now,
             )
         )
     return len(recipients)
@@ -1021,6 +1064,8 @@ def _render_waiting(
 ) -> Message:
     """「有 N 件等你處理」（M4 票 127）：標題是現在的總數，內文是這一波新增、還沒處理掉的那幾件
     （種類與數量），每一種現在幾件放在欄位。只剩一件時連到那一件，否則每一種一條清單連結。"""
+    if notification.merge_key == _LINGER_KEY:
+        return _render_lingering(notification, language, berth_url, current)
     text = _TEXT[language]
     still = [current[key] for key in notification.content_json.get(_NEW) or () if key in current]
     by_source = {source: [one for one in still if one.source is source] for source in WaitingSource}
@@ -1047,6 +1092,29 @@ def _render_waiting(
             (text[f"{source.value}_field"], str(count)) for source, count in totals.items() if count
         ),
         links=links,
+    )
+
+
+def _render_lingering(
+    notification: Notification, language: Language, berth_url: str, current: dict[str, Waiting]
+) -> Message:
+    """「有一件等了 3 天」（M4 票 129）：說出是哪一種、連到那一件，每一種現在幾件放在欄位。
+    呼叫之前 `_settled_wave` 已經確定它還在。"""
+    text = _TEXT[language]
+    (key,) = notification.content_json[_NEW]
+    one = current[key]
+    url = berth_link(berth_url, one.path)
+    totals = {
+        source: sum(1 for each in current.values() if each.source is source)
+        for source in WaitingSource
+    }
+    return Message(
+        title=text["lingering"].format(days=notification.content_json[_DAYS]),
+        description=_part(text, language, one.source, [one]),
+        fields=tuple(
+            (text[f"{source.value}_field"], str(count)) for source, count in totals.items() if count
+        ),
+        links=(Link(text["open"], url),) if url else (),
     )
 
 
