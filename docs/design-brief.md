@@ -785,7 +785,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Feed 的 Route 必填，劇集、電影各一條（2026-10-16，使用者以兩台 `rss` 演練情境對照後拍板；M4 票 105） | 「不指定」只多一次摩擦：同類型有兩條以上 Route 收得下的作品停在待綁定（`route_ambiguous`），使用者按一鍵候選再選 Route，結果與自動綁定一樣——Sonarr 的 Import List 本來就把 Root Folder 列為必填，票 21 抄它時多留了一個「不指定」。**Feed 帶劇集、電影各一條 Route**（Route 分類型，一條只收一種；Mikan 的劇場版不會因為有兩條電影 Route 而停住），那一種有啟用中的 Route 就必填、只有一條時畫面預填，零條時那一格不收。自動綁定**先看 Feed 那一種的那一條**（依據 `feed_route`），那一格是空的或那條停用了才退回「只有一條」。舊資料能推就推：migration 在某一種只有一條啟用中的 Route 時填它，推不出來的 Feed 列標「要選 Route」；選了或改了 Route 當場綁上那個 Feed 長出（它最早那一筆 Feed Item 的 Feed）、理由含 `route_ambiguous` 的待綁定列，用存著的候選，不重新上網查；已綁定的不搬家。手動綁定的「入庫到」先預選長出它的 Feed 那一種的 Route，再來才是作品上次用的、只有一條。**從作品頁訂閱建的搜尋 Feed 只看那部作品那一種**（2026-10-17 使用者拍板）：它長出的都綁到那一部，另一格永遠用不到——不標「要選 Route」、選 Route 時不要求、自動綁定不讀；標成待處理是假提示，還逼人選一條沒用的 Route。 | §15「綁定」、plan §2.4 `rss_feeds`、§6 rss |
 | 部署檔改成最新 Release 的附件（2026-10-13，使用者；M4 票 97） | 每一版的 Release 附上 `docker-compose.yml` 與 `example.env`（取自那一版的 tag），README 連 `releases/latest/download/<附件名>`，發版不必改連結；要固定某一版把 `latest/download` 換成 `download/v<版號>`。推翻票 71 的「Release 頁只放說明、不附檔案」：使用者先前在意的是 zip，兩個純文字附件不在此限。Immich 的慣例（§20.17） | §20.17；plan §9.1；`docs/development.md`〈發版〉 |
 | 刪除站點請求預算（2026-10-19，使用者；M4 票 107） | 推翻 M3 票 20 與 M4 票 77：輪詢、補漏、搜尋與人按的讀取不再共用「每站每小時 60 個」，`GET /health/budget`、健康頁那一張卡、搜尋的 `skipped` / `retry_at` / `next_at` / `budget_exhausted`、自動綁定的 `lookup_deferred` 都拿掉。理由：60 不是量出來的（§20.13 三站沒有公開的限速紀錄）；擋到人的只有 Berth 自己的計數；搜尋經過 Prowlarr，它每站有使用者調得了的 Query Limit，Berth 再管一層是雙重限制。站點真的回 429 / 5xx 時照既有退路：讀不到記 `last_error` 下一輪再試、自動綁定 `lookup_retry`。升版的 migration 把 `lookup_deferred` 改成到期的 `lookup_retry`、不算一次失敗 | plan §3.2、§8.4 |
-| 通知的第一個管道是 Discord（2026-10-21，使用者） | M4 先做 Discord，不做 Telegram。要定的在 plan §11.5：送到每位使用者那裡是 bot 私訊還是頻道 webhook（webhook 只能送、對的是頻道不是人）；M7 要同一個 bot 收訊息時 Discord 要維持 gateway 長連線。Discord 的端點與限制先查證寫進 §20 再用 | §14、§17、plan §11.5 |
+| 通知的管道是 Discord bot 私訊（2026-10-21，使用者） | M4 只做 Discord，不做 Telegram，也不做頻道 webhook：頻道裡每個人看得到全部，破壞媒體庫權限；M7 要收訊息與按鈕非 bot 不可。代價是管理員要在 Discord 開發者後台建一個 bot、每人填自己的 user ID。事實在 §20.23 與 `docs/research/discord-notifications.md` | §14、§17、plan §11.5 |
+| 「Issue 新增」併進「有 N 件等你處理」（2026-10-21，使用者） | 新的 Issue 本來就算進等你處理，分開推同一件事會收到兩則；那一則說出這一波新增了什麼 | plan §11.5 |
 | M4 不改號（2026-10-21，使用者） | 票 01–120 是「M4 之前先做的修補」，以 v0.2.9 結案；巡檢與通知（M4 本體）仍叫 M4、從票 121 起編，M5–M7 不動。理由：程式碼註解、舊票與已發版的 CHANGELOG 有數千處「M4 票 NN」、數百處指 AI 的「M5」，改號之後分不清 | plan §11.5、progress.md |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
@@ -1781,3 +1782,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 - Berth 以 `Authorization: MediaBrowser Client="Berth", Device="Berth", DeviceId="berth-server"` 呼叫 `AuthenticateByName`（`adapters/jellyfin/client.py`）。Jellyfin 的 `SessionManager.GetAuthorizationToken` 先找同一個 `DeviceId` **且同一個使用者**的裝置、逐一登出（刪掉那一列），再建一筆新的、發新的權杖。所以**登入過 Berth 的每一位使用者在 Jellyfin「裝置」頁各一筆 Berth**，同一位再登入是換掉自己那一筆，不會越積越多；別的使用者的那一筆不刪，但同一個 `DeviceId` 的進行中工作階段會被結束。【[SessionManager.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Session/SessionManager.cs)（`AuthenticateNewSessionInternal`、`GetAuthorizationToken`、`Logout(Device)`）】
 - 審計 S3 實跑看到的「`/Devices` 多一筆 Berth」就是這一筆（`docs/research/usability-audit-2026-10-07.md` 附錄 C.1）。
+
+### 20.23 Discord bot 私訊（2026-10-21 查證，M4 拆票；實測待 M4 票 121）
+
+全文與來源在 [`docs/research/discord-notifications.md`](research/discord-notifications.md)。拆票時用到的：
+
+- 私訊是 `POST /users/@me/channels`（`recipient_id`）再 `POST /channels/{id}/messages`，純 REST、不需要 intent；bot 與收件人要有共同伺服器（`50278`），`50007` 是「不能傳訊息給這位使用者」。「bot 要先連過一次 gateway 才能發訊息」官方文件沒寫，**待票 121 實測**。
+- 互動（按鈕、slash command）只有兩條路且互斥：gateway 的 `INTERACTION_CREATE`，或公開的 Interactions Endpoint URL（要回 PING、驗 Ed25519 簽章、3 秒內回應）。家用伺服器沒有公開網址時只能 gateway——M7 的事。
+- 頻道 webhook 只綁頻道、不能私訊，使用者手動建的不能帶互動按鈕。Overseerr、Jellyseerr、Sonarr 都用它（Overseerr 系另有選填的 Discord ID 用來 @mention）。
+- 429 的 body 有 `retry_after`（秒、浮點）與 `global`，header 有 `Retry-After`、`X-RateLimit-*`；`content` ≤ 2000 字元、一則最多 10 個 embed、所有 embed 文字合計 ≤ 6000。
