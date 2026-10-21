@@ -5,9 +5,14 @@ acg.rip 搜尋 feed → 讀第一輪預覽），每一步計時。`--settle` 秒
 對照得出搜尋 feed 慢是在等補舊集，還是自己就慢。`--profile` 改在同一個行程裡起 server，以 cProfile
 包住 `preview_feed`，印出累計時間最多的函式（有 profiler 的額外開銷，只看比例）。
 
+M4 票 121b：`--watch` 秒數讓建好搜尋 feed 之後在那段時間裡反覆讀預覽與 `/jobs`，預覽的各狀態筆數、
+重複的是哪幾筆（理由）或 Mikan 送出的入庫了幾集一有變化就印一行（自訂閱送出起算的秒數）。看得出
+預覽裡的「重複」是不是跟著補舊集的入庫變。
+
 import `berth`（`--profile` 要換掉它的函式）與 httpx，要在 repo 根目錄以 `uv run` 跑：
 
     uv run python scripts/experiments/rss_subscribe_timing.py [--settle 0] [--port 8620] [--profile]
+        [--watch 0]
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
@@ -33,10 +39,13 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8620)
     parser.add_argument("--settle", type=float, default=0.0)
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--watch", type=float, default=0.0)
     args = parser.parse_args()
+    if isinstance(sys.stdout, io.TextIOWrapper):  # 繁中 Windows 的主控台預設 cp950，印不出簡體字
+        sys.stdout.reconfigure(encoding="utf-8")
     base = f"http://127.0.0.1:{args.port}/api"
     if args.profile:
-        profiled(args.port, base, args.settle)
+        profiled(args.port, base, args.settle, args.watch)
         return
     server = subprocess.Popen(
         [
@@ -49,13 +58,13 @@ def main() -> None:
         ]
     )
     try:
-        run(base, args.settle)
+        run(base, args.settle, args.watch)
     finally:
         server.terminate()
         server.wait()
 
 
-def profiled(port: int, base: str, settle: float) -> None:
+def profiled(port: int, base: str, settle: float, watch: float) -> None:
     sys.path[:0] = ["scripts"]
     import fake_setup_server
     import uvicorn
@@ -81,7 +90,7 @@ def profiled(port: int, base: str, settle: float) -> None:
 
     vars(uvicorn)["run"] = serve
     fake_setup_server.main(["--scenario", "rss", "--port", str(port)])
-    run(base, settle)
+    run(base, settle, watch)
     out = io.StringIO()
     pstats.Stats(profile, stream=out).sort_stats("cumulative").print_stats(30)
     print(out.getvalue())
@@ -94,7 +103,7 @@ def timed(label: str, call: Callable[[], httpx.Response]) -> httpx.Response:
     return response
 
 
-def run(base: str, settle: float) -> None:
+def run(base: str, settle: float, watch: float) -> None:
     with httpx.Client(
         base_url=base, timeout=60, headers={"X-Requested-With": "XMLHttpRequest"}
     ) as client:
@@ -114,6 +123,7 @@ def run(base: str, settle: float) -> None:
             "GET /rss/mikan/bangumi/4009", lambda: client.get("/rss/mikan/bangumi/4009")
         )
         subgroup = next(g for g in bangumi.json()["subgroups"] if "LoliHouse" in g["name"])
+        subscribed = time.perf_counter()
         timed(
             "POST /rss/subscriptions/mikan",
             lambda: client.post(
@@ -143,6 +153,34 @@ def run(base: str, settle: float) -> None:
         preview = f"/rss/feeds/{feed.json()['id']}/preview"
         for _ in range(3):
             timed(f"GET {preview}", lambda: client.get(preview))
+        watched(client, preview, subscribed, watch)
+
+
+def watched(client: httpx.Client, preview: str, since: float, seconds: float) -> None:
+    """`seconds` 秒內反覆讀預覽與下載列表，有變化才印。"""
+    last: tuple[dict[str, int], tuple[str, ...], int, int] | None = None
+    until = time.perf_counter() + seconds
+    while time.perf_counter() < until:
+        items = client.get(preview).json()
+        jobs = client.get("/jobs", params={"filter": "all", "media": MEDIA}).json()["jobs"]
+        states = dict(sorted(Counter(item["status"] for item in items).items()))
+        duplicates = tuple(
+            f"{item['title'][:60]} <- {item['skip']['code']} {item['skip']['params']}"
+            for item in items
+            if item["status"] == "duplicate"
+        )
+        imported = sum(job["state"] == "imported" for job in jobs)
+        now = (states, duplicates, imported, len(jobs))
+        if now != last:
+            print(
+                f"t={time.perf_counter() - since:5.1f}s preview={states} "
+                f"mikan jobs imported {imported}/{len(jobs)}",
+                flush=True,
+            )
+            for line in duplicates:
+                print(f"    duplicate: {line}", flush=True)
+            last = now
+        time.sleep(0.5)
 
 
 if __name__ == "__main__":
