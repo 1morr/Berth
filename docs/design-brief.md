@@ -553,7 +553,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 里程碑 | 內容 | 為什麼在這個位置 |
 | --- | --- | --- |
-| **M4 巡檢與通知** | 每日程式檢查 + 每週週報；`events` 的訂閱者 + channel adapter（Telegram / Discord 擇一先做）+ 每人的訂閱設定；「可以看了」「有 N 件等你處理」 | 不需要 AI；平常不打開 Berth 的前提是有事時它會說（2026-09-24 排到 AI 之前） |
+| **M4 巡檢與通知** | 每日程式檢查 + 每週週報；`events` 的訂閱者 + channel adapter（第一個是 Discord，2026-10-21）+ 每人的訂閱設定；「可以看了」「有 N 件等你處理」 | 不需要 AI；平常不打開 Berth 的前提是有事時它會說（2026-09-24 排到 AI 之前） |
 | **M5 AI 核心** | provider、預算與記帳、命令登錄表當工具、AI 任務與背景迴圈、影子模式、AI 活動頁與撤銷。第一批任務：規則層 low 的 Plan、Unmatched 與待綁定猜作品、offset 修正、audit 確認或撤銷、程式檢查標出的可疑入庫 | M2 的命令面與 M3 的 RSS Series 是它的工具與收件匣；交給人的事走 M4 的通知 |
 | **M6 Issue 與側面板** | Issue 交給 AI（可逆的動作自動、不可逆的做成 Proposal）；側面板對話，工具同一份命令登錄表 | 核心在 M4 已經有了，這裡只多任務型別與一個介面 |
 | **M7 外部對話與 MCP** | M4 的管道接上同一個核心：同一個 bot 既推通知也收訊息，Proposal 是帶按鈕的訊息，身分用個人 API token（§16.2）；命令登錄表另外包成 MCP server | 只多兩個介面，核心與 Proposal 共用 |
@@ -704,7 +704,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | **M1.5 媒體庫瀏覽** | 媒體庫與 Media 詳情像 Jellyfin 那樣瀏覽（§12、§13）：整個 Jellyfin 媒體庫疊上 Berth 狀態、繼續觀看、下一集、已看 / 未看與切換、類型與年份排序、Jellyfin 的圖、選季選集；播放深連結到 Jellyfin | 以一般使用者登入，不開 Jellyfin Web 就能找到要看的那一集、看到自己的進度並標記已看，按播放落在 Jellyfin 的那一集；Jellyfin 不讓這位使用者看的媒體庫，在 Berth 也看不到 |
 | **M2 修正與對帳** | Review Queue、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`berth rebuild-ledger`（§16.2 的災難復原指令）、Job 詳情頁 | 刪掉 library 後可一鍵重建；Issue 表對三種人為破壞都能偵測；medium 自動入庫可一鍵撤銷；`user` 看不到也按不到審核與刪除 |
 | **M3 RSS** | Mikan、Nyaa、acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結 | 聚合 feed 加一個搜尋 feed 全自動追完，中途訂閱的補齊舊集（§15） |
-| **M4 巡檢與通知**（2026-09-22 加、09-24 改並排到 AI 之前） | 每日程式檢查、每週週報；`events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」；進審核的事推出「等你處理」；週報說得出這週入庫與修正了什麼 |
+| **M4 巡檢與通知**（2026-09-22 加、09-24 改並排到 AI 之前） | 每日程式檢查、每週週報；`events` 訂閱者、channel adapter（Discord）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」；進審核的事推出「等你處理」；週報說得出這週入庫與修正了什麼 |
 | **M5 AI 核心**（2026-09-24 改） | provider、預算、命令登錄表、AI 任務與影子模式、AI 活動與撤銷（§6.10、§14） | 影子模式一週與人一致率達標；benchmark `auto_wrong` 不升、review 比例下降；AI 不能在沒人確認下執行不可逆的命令；關掉 AI 時與 M4 相同 |
 | **M6 Issue 與側面板**（2026-09-22 加、09-24 改） | Issue 交給 AI、側面板對話、Proposal（§14） | 一件 `library_link_missing` 不經人修好；側面板說「這部作品缺的集搜一下」做得到；刪 complete 的請求停在 Proposal |
 | **M7 外部對話與 MCP**（2026-09-22 加、09-24 改） | M4 的管道接上同一個核心、Proposal 帶按鈕、個人 API token、MCP server（§14、§16.2） | 手機上收到通知、回一句話、按確認之後完成；Claude Code 經 MCP 查得到本週入庫 |
@@ -785,6 +785,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | Feed 的 Route 必填，劇集、電影各一條（2026-10-16，使用者以兩台 `rss` 演練情境對照後拍板；M4 票 105） | 「不指定」只多一次摩擦：同類型有兩條以上 Route 收得下的作品停在待綁定（`route_ambiguous`），使用者按一鍵候選再選 Route，結果與自動綁定一樣——Sonarr 的 Import List 本來就把 Root Folder 列為必填，票 21 抄它時多留了一個「不指定」。**Feed 帶劇集、電影各一條 Route**（Route 分類型，一條只收一種；Mikan 的劇場版不會因為有兩條電影 Route 而停住），那一種有啟用中的 Route 就必填、只有一條時畫面預填，零條時那一格不收。自動綁定**先看 Feed 那一種的那一條**（依據 `feed_route`），那一格是空的或那條停用了才退回「只有一條」。舊資料能推就推：migration 在某一種只有一條啟用中的 Route 時填它，推不出來的 Feed 列標「要選 Route」；選了或改了 Route 當場綁上那個 Feed 長出（它最早那一筆 Feed Item 的 Feed）、理由含 `route_ambiguous` 的待綁定列，用存著的候選，不重新上網查；已綁定的不搬家。手動綁定的「入庫到」先預選長出它的 Feed 那一種的 Route，再來才是作品上次用的、只有一條。**從作品頁訂閱建的搜尋 Feed 只看那部作品那一種**（2026-10-17 使用者拍板）：它長出的都綁到那一部，另一格永遠用不到——不標「要選 Route」、選 Route 時不要求、自動綁定不讀；標成待處理是假提示，還逼人選一條沒用的 Route。 | §15「綁定」、plan §2.4 `rss_feeds`、§6 rss |
 | 部署檔改成最新 Release 的附件（2026-10-13，使用者；M4 票 97） | 每一版的 Release 附上 `docker-compose.yml` 與 `example.env`（取自那一版的 tag），README 連 `releases/latest/download/<附件名>`，發版不必改連結；要固定某一版把 `latest/download` 換成 `download/v<版號>`。推翻票 71 的「Release 頁只放說明、不附檔案」：使用者先前在意的是 zip，兩個純文字附件不在此限。Immich 的慣例（§20.17） | §20.17；plan §9.1；`docs/development.md`〈發版〉 |
 | 刪除站點請求預算（2026-10-19，使用者；M4 票 107） | 推翻 M3 票 20 與 M4 票 77：輪詢、補漏、搜尋與人按的讀取不再共用「每站每小時 60 個」，`GET /health/budget`、健康頁那一張卡、搜尋的 `skipped` / `retry_at` / `next_at` / `budget_exhausted`、自動綁定的 `lookup_deferred` 都拿掉。理由：60 不是量出來的（§20.13 三站沒有公開的限速紀錄）；擋到人的只有 Berth 自己的計數；搜尋經過 Prowlarr，它每站有使用者調得了的 Query Limit，Berth 再管一層是雙重限制。站點真的回 429 / 5xx 時照既有退路：讀不到記 `last_error` 下一輪再試、自動綁定 `lookup_retry`。升版的 migration 把 `lookup_deferred` 改成到期的 `lookup_retry`、不算一次失敗 | plan §3.2、§8.4 |
+| 通知的第一個管道是 Discord（2026-10-21，使用者） | M4 先做 Discord，不做 Telegram。要定的在 plan §11.5：送到每位使用者那裡是 bot 私訊還是頻道 webhook（webhook 只能送、對的是頻道不是人）；M7 要同一個 bot 收訊息時 Discord 要維持 gateway 長連線。Discord 的端點與限制先查證寫進 §20 再用 | §14、§17、plan §11.5 |
+| M4 不改號（2026-10-21，使用者） | 票 01–120 是「M4 之前先做的修補」，以 v0.2.9 結案；巡檢與通知（M4 本體）仍叫 M4、從票 121 起編，M5–M7 不動。理由：程式碼註解、舊票與已發版的 CHANGELOG 有數千處「M4 票 NN」、數百處指 AI 的「M5」，改號之後分不清 | plan §11.5、progress.md |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
@@ -821,7 +823,7 @@ M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M
 
 **多版本**
 
-- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含**方括號與 `+` 已實測可用**（§20.6）；**標籤內含中文仍未證實** —— 實驗用的 tag 全是 ASCII，而 §6.8 的 group token 保留字幕組原文，中文組名會落在這個未測範圍。
+- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含**方括號與 `+` 已實測可用**（§20.6）；**標籤內含中文在 12.x 已實測是純 tag**（中文組名 `喵萌奶茶屋`，`docs/research/jellyfin-12.md`；10.10 / 10.11 未測，本系統只支援 12 以上）。
 - **劇集原生多版本在 10.x 不可靠**（12.0 起原生支援，§20.9）：10.8 起要求每集自己一個子資料夾才會視為版本，且社群回報同一集兩個檔案通常變成重複條目而非版本選單（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[discussion#16063](https://github.com/orgs/jellyfin/discussions/16063)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論（10.x）：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
 - MergeVersions 插件持續維護到 10.11 與 12.0（12.0.0 版 `targetAbi 12.0`；12.x 上對本系統的樹是空跑、不裝，§20.9），透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統用 Jellyfin 的排程任務 API 觸發（任務名已實測，§20.7）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
 
@@ -1236,9 +1238,9 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
   **都通過**（`hardlink.sh`：NTFS 9p bind mount 與 ext4 bind mount 皆 nlink=2、inode 相同；
   分成兩個 volume 則回 `Cross-device link` 並退出 1）。**但 ext4 那一輪跑的是 Docker Desktop
   自己的 Linux VM（`docker-desktop` 發行版）**，是 daemon 端的檔案系統，不是另一台實體 Linux
-  宿主。**剩下：一台原生 Linux 宿主與至少一台 NAS**（Synology / QNAP / TrueNAS 其一），
+  宿主。原生 Linux 已在 2026-10-09 跑過（M4 票 42，§20.14）；**剩下：至少一台 NAS**（Synology / QNAP / TrueNAS 其一），
   `sh hardlink.sh /volume1/<share>` 即可。Unraid 7.1.4 的 user share 已在 2026-10-08 跑過（M4 票 55，§20.14）。
-- **標籤內含中文**（中文字幕組名）未測：實驗用的 tag 全是 ASCII，見 §20.1「多版本」。
+- ~~標籤內含中文~~ **12.x 已實測是純 tag**（`docs/research/jellyfin-12.md`），見 §20.1「多版本」。
 - ~~qBittorrent 4.4 與 5.x 的參數相容測試~~ **完成**，見 §20.7「qBittorrent 版本矩陣」。
 - ~~Jellyfin 10.10/10.11 的命名實測~~ **完成**，見 §20.7「Jellyfin 命名實測」。§7.2 的電影範例與
   §7.7 的版本標籤說法已據此更正；plan §5 的模板凍結。
