@@ -742,6 +742,7 @@ uv run python scripts/experiments/discord_dm.py send dm-closed
 uv run python scripts/experiments/discord_dm.py send no-mutual-guild
 uv run python scripts/experiments/discord_dm.py send too-long-no-mutual-guild --length 2001  # 長度檢查先於共同伺服器
 uv run python scripts/experiments/discord_dm.py fixtures                # 遮掉 id 與名字，寫 tests/fixtures/http/discord/
+uv run python scripts/experiments/discord_dm.py embed-url               # 票 124：embed url 與 Markdown 連結收哪些主機
 ```
 
 ## 目錄結構
