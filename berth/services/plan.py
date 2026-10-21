@@ -492,6 +492,30 @@ def parse_context(
     )
 
 
+#: 只看發佈名猜季集時那一個（中性的）檔案的大小：夠大才不會被分類成 sample（`parser.classify`）。
+_EPISODE_SIZE = 1 << 30
+
+
+def guess_from_title(
+    title: str,
+    *,
+    snapshot: MediaSnapshot | None,
+    series: RssSeries | None,
+    published: datetime | None,
+) -> PlannedFile:
+    """還沒有檔案清單時，照規劃時的算法猜這個發佈名是哪一季哪一集（同一份 `parse_context`、
+    同一支 `plan`，發佈名當 torrent 名、配一個中性的檔名）。
+
+    RSS 送單前比帳本（`services/rss.library_copy`）與「正在下載」說季集（`services/downloading`）
+    共用：兩處說的季集才會與之後規劃時算的一樣。"""
+    (guess,) = decide(
+        title,
+        [FileEntry(rel_path="episode.mkv", size=_EPISODE_SIZE)],
+        parse_context(snapshot, series, published=published),
+    )
+    return guess
+
+
 async def series_of(session: AsyncSession, job: Job) -> RssSeries | None:
     """送出這一筆的 RSS Series（`trigger_ref` 是它的 id）。
 

@@ -90,6 +90,7 @@ _SNOWFLAKE = re.compile(r"\d{17,20}")
 _TEXT: dict[Language, dict[str, str]] = {
     Language.ZH_HANT: {
         "ready": "可以看了：{title}",
+        "downloading": "正在下載：{title}",
         "open": "在 Berth 打開",
         "test_title": "Berth 測試訊息",
         "test_body": "收到這一則，Berth 的通知就接通了。",
@@ -112,6 +113,7 @@ _TEXT: dict[Language, dict[str, str]] = {
     },
     Language.EN: {
         "ready": "Ready to watch: {title}",
+        "downloading": "Downloading: {title}",
         "open": "Open in Berth",
         "test_title": "Berth test message",
         "test_body": "If you can read this, Berth notifications are working.",
@@ -187,7 +189,7 @@ _CHANNEL_DOWN = frozenset(
 )
 
 #: 說的是某個媒體庫裡的作品：只送給 Jellyfin 上看得到那個媒體庫的人（M4 票 125）。
-_BY_LIBRARY = frozenset({NotificationKind.READY})
+_BY_LIBRARY = frozenset({NotificationKind.READY, NotificationKind.DOWNLOADING})
 
 #: 再送也一樣的：那一則當場放棄。
 _FINAL = frozenset({DeliveryFailure.RECIPIENT_UNREACHABLE, DeliveryFailure.REJECTED})
@@ -1048,7 +1050,8 @@ async def _give_up_stale(session: AsyncSession, moment: datetime) -> None:
 
 
 def _render(notification: Notification, language: Language, berth_url: str) -> Message:
-    """`berth_url` 是 `BerthSettings.public_url`：連結在送出時照當下存的那一個組。"""
+    """「可以看了」與「正在下載」（M4 票 126，`services.downloading`）：同一個形狀，標題照種類。
+    `berth_url` 是 `BerthSettings.public_url`：連結在送出時照當下存的那一個組。"""
     content = notification.content_json
     text = _TEXT[language]
     title = content["title_en"] if language is Language.EN else content["title"]
@@ -1056,8 +1059,9 @@ def _render(notification: Notification, language: Language, berth_url: str) -> M
     media = content.get("media")
     url = berth_link(berth_url, MEDIA_PAGE.format(media_id=media)) if media else None
     return Message(
-        title=text["ready"].format(title=title),
-        description=describe_spans(content.get("episodes") or []),
+        title=text[notification.kind.value].format(title=title),
+        # 「正在下載」存的是逐筆猜到的季集，在這裡才合成連續的範圍。
+        description=describe_spans(_collapse(content.get("episodes") or [])),
         fields=((_ROUTE, route),) if route else (),
         links=(Link(text["open"], url),) if url else (),
     )

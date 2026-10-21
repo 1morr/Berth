@@ -377,7 +377,7 @@ _Avoid_: entry, post
 ### AI 與通知（M4–M7，2026-09-22 定名、09-24 改）
 
 **Notification**（通知）:
-送給某一個人、在他不在 Berth 頁面上時看得到的一則（M4 是 Discord 私訊）。種類有「可以看了」（一筆 Job 的正片在 Jellyfin 全部認出來，M4 票 123）、「正在下載」、「有 N 件等你處理」（待審核、開著的 Issue、待綁定的 RSS Series 有新的一件，只送管理員，M4 票 127）、週報。用收件人自己的語言寫（存 Discord ID 那一刻的介面語言）。**收件人**是訂閱了那一種（每個人自己勾，`users.notify_kinds_json`）、有 Discord ID 的人；說的是某個媒體庫裡的作品時，還要 Jellyfin 的 `UserViews` 看得到那個媒體庫——送出那一刻問，問不到就延後（M4 票 125）。不是 SSE 推給瀏覽器的那一種，也不是 `events` 的一筆：事件一定掛在一筆 Job 上。
+送給某一個人、在他不在 Berth 頁面上時看得到的一則（M4 是 Discord 私訊）。種類有「可以看了」（一筆 Job 的正片在 Jellyfin 全部認出來，M4 票 123）、「正在下載」（RSS 一輪、一部作品一則；人手按的不送給按的人，M4 票 126）、「有 N 件等你處理」（待審核、開著的 Issue、待綁定的 RSS Series 有新的一件，只送管理員，M4 票 127）、週報。用收件人自己的語言寫（存 Discord ID 那一刻的介面語言）。**收件人**是訂閱了那一種（每個人自己勾，`users.notify_kinds_json`）、有 Discord ID 的人；說的是某個媒體庫裡的作品時，還要 Jellyfin 的 `UserViews` 看得到那個媒體庫——送出那一刻問，問不到就延後（M4 票 125）。不是 SSE 推給瀏覽器的那一種，也不是 `events` 的一筆：事件一定掛在一筆 Job 上。
 _Avoid_: alert, push（push 是瀏覽器推播）, message（message 是管道上送出去的那一則）
 
 **Notification Outbox**（待送表）:
