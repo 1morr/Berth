@@ -61,6 +61,13 @@ from berth.services.rss import (
 
 router = APIRouter(prefix="/rss", tags=["rss"])
 
+
+def _user_id(request: Request) -> int | None:
+    """按下去的人：他送出的那一輪「正在下載」不告訴他自己（M4 票 126）。"""
+    user = current_user(request)
+    return user.id if user is not None else None
+
+
 #: 拒絕理由 → 狀態碼。**每一種都要在這裡**（`tests/unit/test_openapi_contract.py` 守著）。
 _STATUS: dict[RssRefusal, int] = {
     RssRefusal.FEED_MISSING: status.HTTP_404_NOT_FOUND,
@@ -516,7 +523,11 @@ async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
     ),
 )
 async def put_feed_routes(
-    session: SessionDep, factory: ClientFactoryDep, feed_id: int, body: FeedRoutesIn
+    session: SessionDep,
+    factory: ClientFactoryDep,
+    request: Request,
+    feed_id: int,
+    body: FeedRoutesIn,
 ) -> FeedRoutesOut:
     """選或改 Feed 的兩條 Route（M4 票 105）。存下之後當場綁上它長出的、因為 Route 不只一條而停在
     待綁定的那幾部（用自動綁定判出來的那一部，不重新上網查），送出它們留著的 Item；已經綁上的
@@ -528,6 +539,7 @@ async def put_feed_routes(
             feed_id,
             tv_route_id=body.tv_route,
             movie_route_id=body.movie_route,
+            user_id=_user_id(request),
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
@@ -555,10 +567,13 @@ async def delete_one_feed(session: SessionDep, feed_id: int) -> FeedDeletedOut:
 
 
 @router.post("/feeds/{feed_id}/poll", responses=_responses(RssRefusal.FEED_MISSING))
-async def post_poll(session: SessionDep, factory: ClientFactoryDep, feed_id: int) -> PollOut:
+async def post_poll(
+    session: SessionDep, factory: ClientFactoryDep, request: Request, feed_id: int
+) -> PollOut:
     """立刻輪這一個。抓不到 Feed 仍是 200：失敗記在那一列的 `last_error`，畫面重讀清單就看得到。"""
     try:
-        return PollOut.model_validate(await poll_feed(session, factory, feed_id))
+        polled = await poll_feed(session, factory, feed_id, user_id=_user_id(request))
+        return PollOut.model_validate(polled)
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 
@@ -585,12 +600,15 @@ async def get_preview(session: SessionDep, feed_id: int) -> list[ItemOut]:
     ),
 )
 async def post_prime(
-    session: SessionDep, factory: ClientFactoryDep, feed_id: int, body: PrimeIn
+    session: SessionDep, factory: ClientFactoryDep, request: Request, feed_id: int, body: PrimeIn
 ) -> PrimeOut:
     """選第一輪。`later` 當場再讀一次 feed（讀不到是 502 `feed_unreachable`，什麼都沒改）；
     還沒讀過的 Feed 不收 `all`（409 `feed_unread`）。"""
     try:
-        return PrimeOut.model_validate(await prime_feed(session, factory, feed_id, mode=body.mode))
+        primed = await prime_feed(
+            session, factory, feed_id, mode=body.mode, user_id=_user_id(request)
+        )
+        return PrimeOut.model_validate(primed)
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 
@@ -659,7 +677,6 @@ async def put_binding(
 ) -> SeriesOut:
     """綁定並把留著的 Item 送出去，Mikan 的同時補舊集。送單被拒的那幾筆不讓這一支失敗：它們留在
     `matched` 帶著原文。"""
-    user = current_user(request)
     try:
         view = await bind_series(
             session,
@@ -667,7 +684,7 @@ async def put_binding(
             series_id,
             media_id=body.media,
             route_id=body.route,
-            user_id=user.id if user is not None else None,
+            user_id=_user_id(request),
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
@@ -711,12 +728,13 @@ async def get_items(session: SessionDep) -> list[ItemOut]:
     ),
 )
 async def post_item_release(
-    session: SessionDep, factory: ClientFactoryDep, item_id: int
+    session: SessionDep, factory: ClientFactoryDep, request: Request, item_id: int
 ) -> ItemOut:
     """放行一筆被排除的 Item，當場送出（M4 票 111）。回這一筆的新狀態：`downloaded` 帶 Job 的
     hash、`duplicate` 帶理由；送單被拒時留在 `excluded`，原文在 `error`。"""
     try:
-        return ItemOut.model_validate(await release_item(session, factory, item_id))
+        released = await release_item(session, factory, item_id, user_id=_user_id(request))
+        return ItemOut.model_validate(released)
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 
@@ -851,7 +869,6 @@ async def post_mikan_subscription(
 ) -> SubscriptionOut:
     """建單一 feed、綁上它的 RSS Series、送出整季（或只追之後的）。那個 Series 已經在待綁定時
     就地綁它，不多開 Feed。讀不到單一 feed 是 502，什麼都沒加。"""
-    user = current_user(request)
     try:
         done = await subscribe_mikan(
             session,
@@ -860,7 +877,7 @@ async def post_mikan_subscription(
             subgroup_id=body.subgroup,
             media_id=body.media,
             route_id=body.route,
-            user_id=user.id if user is not None else None,
+            user_id=_user_id(request),
             name=body.name,
             subgroup_name=body.subgroup_name,
         )
@@ -881,7 +898,6 @@ async def post_search_subscription(
 ) -> FeedOut:
     """建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
     仍是 201，原文在 `last_error`。"""
-    user = current_user(request)
     try:
         feed = await subscribe_search(
             session,
@@ -890,7 +906,7 @@ async def post_search_subscription(
             term=body.term,
             media_id=body.media,
             route_id=body.route,
-            user_id=user.id if user is not None else None,
+            user_id=_user_id(request),
         )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal

@@ -63,7 +63,6 @@ from berth.domain import (
     BindReasonCode,
     FeedItemStatus,
     FeedKind,
-    FileEntry,
     JobFilter,
     JobState,
     JobTrigger,
@@ -95,7 +94,6 @@ from berth.models import (
 )
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
-from berth.parser import plan as decide
 from berth.parser import series_finished
 from berth.parser.binding import (
     SeriesClues,
@@ -111,6 +109,7 @@ from berth.parser.release import parse_release, tags_of
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.discover import search_media
+from berth.services.downloading import DownloadRound, download_round
 from berth.services.first_batch import FirstBatchAsk
 from berth.services.first_batch import asks as first_batch_asks
 from berth.services.jobs import (
@@ -122,7 +121,7 @@ from berth.services.jobs import (
     freeze,
 )
 from berth.services.media import read_snapshot_checked
-from berth.services.plan import parse_context
+from berth.services.plan import guess_from_title
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import message
 
@@ -155,9 +154,6 @@ _rounds: dict[int, asyncio.Future[PollOutcome | None]] = {}
 
 #: 自動綁定的 `bound_by`（`events.actor` 的 `system`）。
 SYSTEM = actor_of(None)
-
-#: 帳本那一層猜季集時那一個（中性的）檔案的大小：夠大才不會被分類成 sample（`parser.classify`）。
-_EPISODE_SIZE = 1 << 30
 
 #: 綁好的 Mikan RSS Series 多久讀一次單一 feed 補漏（plan §3.2）。實際的間隔再加上聚合 Feed 的
 #: 輪詢間隔：補漏是輪到那個 Feed 時順手做的。
@@ -494,6 +490,7 @@ async def set_feed_routes(
     *,
     tv_route_id: int | None,
     movie_route_id: int | None,
+    user_id: int | None = None,
     now: datetime | None = None,
 ) -> FeedRoutesOutcome:
     """選或改 Feed 的兩條 Route（M4 票 105），檢查同 `add_feed`。
@@ -506,6 +503,8 @@ async def set_feed_routes(
     從作品頁訂閱建的 Feed 只看那部作品那一種（`_route_kinds`）：另一種不要求，給了也存 `None`。
 
     沒有單一的反向命令：Route 再改一次是同一支，當場綁上的由 `unbind_series` 一個一個拆。
+
+    當場綁上送出的是一輪「正在下載」，不告訴改 Route 的人（`user_id`，M4 票 126）。
     """
     row = await session.get(RssFeed, feed_id)
     if row is None:
@@ -520,16 +519,18 @@ async def set_feed_routes(
     _set_routes(row, chosen)
     await session.commit()
     bound = submitted = 0
-    for one in await _awaiting_route(session):
-        route_id = chosen.of(one.kind)
-        if one.feed_id != feed_id or route_id is None:
-            continue
-        sent = await _bind_to_feed_route(
-            session, factory, one.series_id, one.media_id, route_id, now
-        )
-        if sent is not None:
-            bound += 1
-            submitted += sent
+    moment = now or utcnow()
+    async with download_round(session, presser=user_id, now=moment) as batch:
+        for one in await _awaiting_route(session):
+            route_id = chosen.of(one.kind)
+            if one.feed_id != feed_id or route_id is None:
+                continue
+            sent = await _bind_to_feed_route(
+                session, factory, one.series_id, one.media_id, route_id, moment, batch
+            )
+            if sent is not None:
+                bound += 1
+                submitted += sent
     return FeedRoutesOutcome(
         feed=await _feed_view_of(session, feed_id), bound=bound, submitted=submitted
     )
@@ -628,7 +629,8 @@ async def _bind_to_feed_route(
     series_id: int,
     media_id: str,
     route_id: int,
-    now: datetime | None,
+    moment: datetime,
+    batch: DownloadRound,
 ) -> int | None:
     """Feed 選了 Route 之後綁上一個停在 `route_ambiguous` 的：理由那一條換成依據再綁（送單把它帶進
     時間線，同 `_auto_bind`）。綁不上（作品不在了、另一個分頁先綁了）收回原本的理由，回 `None`。"""
@@ -642,8 +644,15 @@ async def _bind_to_feed_route(
     kept = tuple(one for one in before if one.code is not BindReasonCode.ROUTE_AMBIGUOUS)
     await _note(session, series_id, (*kept, ground), candidates)
     try:
-        bound = await bind_series(
-            session, factory, series_id, media_id=media_id, route_id=route_id, user_id=None, now=now
+        bound = await _bind(
+            session,
+            factory,
+            series_id,
+            media_id=media_id,
+            route_id=route_id,
+            user_id=None,
+            moment=moment,
+            batch=batch,
         )
     except RssRejectedError as refusal:
         await _note(session, series_id, before, candidates)
@@ -762,6 +771,7 @@ async def prime_feed(
     feed_id: int,
     *,
     mode: PrimeMode,
+    user_id: int | None = None,
     now: datetime | None = None,
 ) -> PrimeOutcome:
     """新 Feed 的第一輪選「全部下載」或「只追之後的」，寫下 `primed_at`（brief §15、票 11）。
@@ -786,7 +796,7 @@ async def prime_feed(
     if mode is PrimeMode.ALL and not _ever_read(feed, await _items_of(session, feed_id)):
         raise RssRejectedError(RssRefusal.FEED_UNREAD, str(feed_id))
     if mode is PrimeMode.LATER:
-        polled = await poll_feed(session, factory, feed_id, now=now)
+        polled = await poll_feed(session, factory, feed_id, user_id=user_id, now=now)
         if polled.failed:
             raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, polled.failed)
     won = await session.execute(
@@ -810,7 +820,8 @@ async def prime_feed(
 
     submitted = 0
     if mode is PrimeMode.ALL:
-        submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed_id)
+        async with download_round(session, presser=user_id, now=now or utcnow()) as batch:
+            submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed_id, batch)
     excluded = await session.scalar(
         select(func.count())
         .select_from(RssItem)
@@ -867,9 +878,12 @@ async def poll_feed(
     factory: ServiceClientFactory,
     feed_id: int,
     *,
+    user_id: int | None = None,
     now: datetime | None = None,
 ) -> PollOutcome:
     """一個 Feed 的一輪。抓不到 Feed 時失敗記在那一列，不丟例外（畫面上的「立即輪詢」照樣回 200）。
+
+    `user_id` 是按「立即輪詢」的人：這一輪送出的「正在下載」不告訴他（M4 票 126）；背景輪詢沒有。
 
     可逆但沒有單一反向命令：它長出的 Item 與 Series 是紀錄，送出去的 Job 有自己的刪除範圍。
 
@@ -888,7 +902,7 @@ async def poll_feed(
     _rounds[feed_id] = running
     outcome = None
     try:
-        outcome = await _poll_feed(session, factory, feed_id, now=now)
+        outcome = await _poll_feed(session, factory, feed_id, user_id=user_id, now=now)
         return outcome
     finally:
         del _rounds[feed_id]
@@ -900,12 +914,26 @@ async def _poll_feed(
     factory: ServiceClientFactory,
     feed_id: int,
     *,
+    user_id: int | None,
     now: datetime | None,
 ) -> PollOutcome:
     moment = now or utcnow()
     feed = await session.get(RssFeed, feed_id)
     if feed is None:
         raise RssRejectedError(RssRefusal.FEED_MISSING, str(feed_id))
+    # 這一輪送出的（自動綁定、預先綁定的補送也算）合成「正在下載」（M4 票 126）。
+    async with download_round(session, presser=user_id, now=moment) as batch:
+        return await _poll_round(session, factory, feed, moment, batch)
+
+
+async def _poll_round(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    feed: RssFeed,
+    moment: datetime,
+    batch: DownloadRound,
+) -> PollOutcome:
+    feed_id = feed.id
     fetcher = factory.rss()
     bound = submitted = 0
     try:
@@ -930,30 +958,30 @@ async def _poll_feed(
         # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。同一部的不同字幕組共用一頁（票 82）。
         pages = _ShowPages(fetcher)
         for series_id in grown:
-            sent = await _prebind(session, factory, feed_id, series_id, moment)
+            sent = await _prebind(session, factory, feed_id, series_id, moment, batch)
             if sent is None:
-                sent = await _auto_bind(session, factory, pages, feed, series_id, moment)
+                sent = await _auto_bind(session, factory, pages, feed, series_id, moment, batch)
             if sent is not None:
                 bound += 1
                 submitted += sent
         # 從 Media 頁建的 Feed 也帶到別的 Feed 先長出、還在待綁定的 Series（同一個字幕組）：
         # 一樣綁上。
         for series_id in await _waiting_series(session, feed_id):
-            sent = await _prebind(session, factory, feed_id, series_id, moment)
+            sent = await _prebind(session, factory, feed_id, series_id, moment, batch)
             if sent is not None:
                 bound += 1
                 submitted += sent
         # 暫時查不到、重認時間到了的（M4 票 14）：只有它們在長出來之後的輪詢裡重認。
         # 這一輪才長出來的剛認過，不再撞一次。
         for series_id in await _due_lookups(session, feed_id, moment, skip=grown):
-            sent = await _auto_bind(session, factory, pages, feed, series_id, moment)
+            sent = await _auto_bind(session, factory, pages, feed, series_id, moment, batch)
             if sent is not None:
                 bound += 1
                 submitted += sent
     finally:
         await fetcher.aclose()
     await _backfill_due(session, factory, feed_id, moment)
-    submitted += await _submit_waiting(session, factory, RssItem.feed_id == feed_id)
+    submitted += await _submit_waiting(session, factory, RssItem.feed_id == feed_id, batch)
     return PollOutcome(items=items, series=len(grown), bound=bound, submitted=submitted)
 
 
@@ -1210,7 +1238,10 @@ async def _backfill_due(
 
 
 async def _submit_waiting(
-    session: AsyncSession, factory: ServiceClientFactory, scope: ColumnElement[bool]
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    scope: ColumnElement[bool],
+    batch: DownloadRound,
 ) -> int:
     """把 `scope` 裡綁好而還沒送的 Item（`matched`）送出去，舊的先。回送成了幾筆。
 
@@ -1227,13 +1258,17 @@ async def _submit_waiting(
     )
     sent = 0
     for item in rows:
-        sent += await _submit(session, factory, item)
+        sent += await _submit(session, factory, item, batch)
     return sent
 
 
 @command(Effect.REVERSIBLE)
 async def release_item(
-    session: AsyncSession, factory: ServiceClientFactory, item_id: int
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    item_id: int,
+    *,
+    user_id: int | None = None,
 ) -> ItemView:
     """放行一筆 `excluded` 的 Item，**當場送出**（brief §15「全部接受，只排除」、M4 票 111）。
 
@@ -1256,7 +1291,8 @@ async def release_item(
     blocked = await _release_block(session, item)
     if blocked is not None:
         raise blocked
-    await _submit(session, factory, item)
+    async with download_round(session, presser=user_id, now=utcnow()) as batch:
+        await _submit(session, factory, item, batch)
     row = await session.get(RssItem, item_id, populate_existing=True)
     assert row is not None
     logger.info("rss item released", extra={"item": item_id, "status": row.status.value})
@@ -1280,7 +1316,9 @@ async def _release_block(session: AsyncSession, item: RssItem) -> RssRejectedErr
     return None
 
 
-async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: RssItem) -> int:
+async def _submit(
+    session: AsyncSession, factory: ServiceClientFactory, item: RssItem, batch: DownloadRound
+) -> int:
     """送一筆。成了是 `downloaded` 加 Job 的 hash；被拒留在原本的狀態（`matched`，或放行的
     `excluded`）帶著原文。回 1 或 0。"""
     series = await session.get(RssSeries, item.series_id) if item.series_id is not None else None
@@ -1325,6 +1363,7 @@ async def _submit(session: AsyncSession, factory: ServiceClientFactory, item: Rs
             await session.commit()
         logger.info("rss item not sent", extra={"item": item_id, "reason": refusal.reason.value})
         return 0
+    batch.note(outcome)
     row = await session.get(RssItem, item_id)
     if row is None:
         return 0
@@ -1440,9 +1479,9 @@ async def library_copy(
     RSS 送單前（`_in_library`）與一次性 RSS 連結（`services/oneshot`，M3 票 18）共用；後者沒有
     RSS Series——它送的是手動的 Job，規劃時也不讀季號與 offset。
 
-    季集照規劃時的算法猜（同一份 `parse_context`、同一支 `plan`，發佈名當 torrent 名、配一個中性的
-    檔名）；猜不到、或信心不夠自動入庫的不擋——規劃時那一層（`services/plan._against_ledger`）照樣
-    會比，漏在這裡只是多下載一次，擋錯了卻是少一集。比的範圍與那一層相同：同一個資料夾。
+    季集照規劃時的算法猜（`plan.guess_from_title`）；猜不到、或信心不夠自動入庫的不擋——規劃時
+    那一層（`services/plan._against_ledger`）照樣會比，漏在這裡只是多下載一次，擋錯了卻是少一集。
+    比的範圍與那一層相同：同一個資料夾。
 
     **Tags 比兩處**：帳本那一列的 Tags 是從 torrent 裡的**檔名**讀的，字幕組常在檔名寫另一個組名
     （發佈名 `[喵萌奶茶屋&LoliHouse]`、檔名 `[LoliHouse]`），只比它的話同一個發佈換個 hash
@@ -1452,11 +1491,7 @@ async def library_copy(
     snapshot = media.stored_snapshot()
     if snapshot is None:
         return None
-    (guess,) = decide(
-        title,
-        [FileEntry(rel_path="episode.mkv", size=_EPISODE_SIZE)],
-        parse_context(snapshot, series, published=published),
-    )
+    guess = guess_from_title(title, snapshot=snapshot, series=series, published=published)
     span = episode_span(guess)
     if span is None or not guess.target_path:
         return None
@@ -1600,6 +1635,7 @@ async def _prebind(
     feed_id: int,
     series_id: int,
     moment: datetime,
+    batch: DownloadRound,
 ) -> int | None:
     """從 Media 頁建的搜尋 feed（票 19）帶著作品，Route 是那一種的那一格：人在建 Feed 時就說了
     「這是那一部」，它帶到的 RSS Series 直接以他的身分綁，不去認。綁上了回送出幾筆；不是這種 Feed、
@@ -1613,14 +1649,15 @@ async def _prebind(
     if route_id is None:
         return None
     try:
-        bound = await bind_series(
+        bound = await _bind(
             session,
             factory,
             series_id,
             media_id=feed.media_id,
             route_id=route_id,
             user_id=feed.user_id,
-            now=moment,
+            moment=moment,
+            batch=batch,
         )
     except RssRejectedError as refusal:
         logger.info(
@@ -1710,6 +1747,7 @@ async def _auto_bind(
     feed: RssFeed,
     series_id: int,
     moment: datetime,
+    batch: DownloadRound,
 ) -> int | None:
     """第一次見到的 RSS Series 去 TMDB 認作品（brief §15「綁定」、票 09）。
 
@@ -1766,14 +1804,15 @@ async def _auto_bind(
     await _note(session, series_id, (*verdict.reasons, ground), ids)
     try:
         # 自動綁定照預設補舊集（brief §15）。
-        bound = await bind_series(
+        bound = await _bind(
             session,
             factory,
             series_id,
             media_id=ids[0],
             route_id=route.id,
             user_id=None,
-            now=moment,
+            moment=moment,
+            batch=batch,
         )
     except RssRejectedError as refusal:
         # 認到與綁之間 Route 被停用、另一個分頁先綁了：留給人，不是整輪的失敗。依據要先寫下
@@ -2002,7 +2041,35 @@ async def bind_series(
     `backfilled_at` 留空、下一輪輪詢再補。
 
     反向命令 `unbind_series` 不收回已經送出去的 Job（同一般送單）。
+
+    送出的那幾筆是一輪「正在下載」（M4 票 126）；人按的綁定不告訴按的人（`user_id`）。
     """
+    moment = now or utcnow()
+    async with download_round(session, presser=user_id, now=moment) as batch:
+        return await _bind(
+            session,
+            factory,
+            series_id,
+            media_id=media_id,
+            route_id=route_id,
+            user_id=user_id,
+            moment=moment,
+            batch=batch,
+        )
+
+
+async def _bind(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    series_id: int,
+    *,
+    media_id: str,
+    route_id: int,
+    user_id: int | None,
+    moment: datetime,
+    batch: DownloadRound,
+) -> SeriesView:
+    """`bind_series` 的本體，送出的記在呼叫端那一輪（輪詢裡的自動綁定、訂閱）。"""
     series = await session.get(RssSeries, series_id)
     if series is None:
         raise RssRejectedError(RssRefusal.SERIES_MISSING, str(series_id))
@@ -2010,7 +2077,6 @@ async def bind_series(
         raise RssRejectedError(RssRefusal.SERIES_BOUND, series.media_id)
     media, route = await _target(session, media_id, route_id)
 
-    moment = now or utcnow()
     home = await _home_feed(session, series)
     # 補舊集的單一 feed 在改任何東西之前讀（plan §3.3）：下面第一個查詢就會把綁定的改動 flush
     # 出去，之後才讀的話 Mikan 那幾秒（逾時 30 秒）都握著寫鎖。
@@ -2032,7 +2098,7 @@ async def bind_series(
     await _rescreen(session, RssItem.series_id == series_id)
     logger.info("rss series bound", extra={"series": series_id, "media": media_id})
 
-    submitted = await _submit_waiting(session, factory, RssItem.series_id == series_id)
+    submitted = await _submit_waiting(session, factory, RssItem.series_id == series_id, batch)
     row = await session.get(RssSeries, series_id)
     assert row is not None
     return replace(await _series_view(session, row), submitted=submitted)
@@ -2346,22 +2412,54 @@ async def subscribe_mikan(
     **沒有單一的反向命令**：新建 Feed 那一條是 `delete_feed`（綁定留著），就地綁定那一條是
     `unbind_series`——拿前者撤銷後者會刪掉使用者的聚合 feed。已經送出的 Job 有自己的刪除範圍。
     """
-    await _target(session, media_id, route_id)
     moment = now or utcnow()
+    # 綁定與補舊集送出的是同一輪「正在下載」，不告訴按的人（M4 票 126）。
+    async with download_round(session, presser=user_id, now=moment) as batch:
+        return await _subscribe(
+            session,
+            factory,
+            bangumi_id=bangumi_id,
+            subgroup_id=subgroup_id,
+            media_id=media_id,
+            route_id=route_id,
+            user_id=user_id,
+            name=name,
+            subgroup_name=subgroup_name,
+            moment=moment,
+            batch=batch,
+        )
+
+
+async def _subscribe(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    *,
+    bangumi_id: int,
+    subgroup_id: int,
+    media_id: str,
+    route_id: int,
+    user_id: int | None,
+    name: str,
+    subgroup_name: str,
+    moment: datetime,
+    batch: DownloadRound,
+) -> Subscription:
+    await _target(session, media_id, route_id)
     key = f"mikan:{bangumi_id}:{subgroup_id}"
     series = await session.scalar(select(RssSeries).where(RssSeries.key == key))
     if series is not None and series.media_id is not None:
         raise RssRejectedError(RssRefusal.SERIES_BOUND, series.media_id)
     home = await _home_feed(session, series) if series is not None else None
     if series is not None and home is not None:
-        bound = await bind_series(
+        bound = await _bind(
             session,
             factory,
             series.id,
             media_id=media_id,
             route_id=route_id,
             user_id=user_id,
-            now=moment,
+            moment=moment,
+            batch=batch,
         )
         await _remember_names(session, series.id, "", subgroup_name)
         named = await session.get(RssSeries, series.id, populate_existing=True)
@@ -2400,14 +2498,15 @@ async def subscribe_mikan(
             session.add(series)
         await session.flush()
         try:
-            bound = await bind_series(
+            bound = await _bind(
                 session,
                 factory,
                 series.id,
                 media_id=media_id,
                 route_id=route_id,
                 user_id=user_id,
-                now=moment,
+                moment=moment,
+                batch=batch,
             )
         except RssRejectedError:
             # 另一個分頁在這幾秒裡先綁了：剛加的 Feed 與 Series 都還沒 commit。
@@ -2418,7 +2517,7 @@ async def subscribe_mikan(
         await session.commit()
     finally:
         await fetcher.aclose()
-    submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed.id)
+    submitted = await _submit_waiting(session, factory, RssItem.feed_id == feed.id, batch)
     await _remember_names(session, series.id, "", subgroup_name)
     row = await session.get(RssSeries, series.id)
     assert row is not None
@@ -2478,7 +2577,7 @@ async def subscribe_search(
     _set_routes(feed, await _subscribed_routes(session, media_id, route_id, others=False))
     session.add(feed)
     await session.commit()
-    await poll_feed(session, factory, feed.id, now=now)
+    await poll_feed(session, factory, feed.id, user_id=user_id, now=now)
     return await _feed_view_of(session, feed.id)
 
 
