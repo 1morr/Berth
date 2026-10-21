@@ -331,8 +331,13 @@ function Measured({ issue }: { issue: Issue }) {
           })
           const releases = Array.isArray(one.releases) ? one.releases.map(text) : []
           return (
+            // 一行一個發佈名：接成一串時窄版換行之後分不出第二個從哪裡開始（M4 票 130 實跑）。
             <DetailLine key={code} term={`${t('issues.collisions')} ${code}`}>
-              {releases.join(' · ')}
+              {releases.map((release) => (
+                <span key={release} className="block">
+                  {release}
+                </span>
+              ))}
             </DetailLine>
           )
         })}

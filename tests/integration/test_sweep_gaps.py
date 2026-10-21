@@ -85,7 +85,11 @@ async def bound_series(session: AsyncSession, *, key: str = "mikan:3600:583") ->
             )
         )
     series = RssSeries(
-        key=key, title_raw=f"[{key}] Kimi to Koishitai", reasons_json=[], media_id=MEDIA
+        key=key,
+        title_raw=f"[{key}] Kimi to Koishitai - 01",
+        mikan_subgroup_name="LoliHouse" if key.endswith(":583") else "",
+        reasons_json=[],
+        media_id=MEDIA,
     )
     session.add(series)
     await session.commit()
@@ -157,6 +161,8 @@ class TestEpisodesMissing:
         assert issue.detail["series"] == series.id
         assert issue.detail["media"] == MEDIA
         assert issue.detail["title"] == "与你相恋"
+        # 標題是「作品 × 字幕組」：長出它的那一筆發佈名寫著第 1 集，拿它當標題會被讀成在說第 1 集。
+        assert issue.detail["name"] == "与你相恋 × LoliHouse"
         assert issue.detail["missing"] == [
             {"season": 1, "episode": 3},
             {"season": 1, "episode": 4},

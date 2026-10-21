@@ -722,9 +722,9 @@ describe('待處理頁', () => {
       within(row).getByRole('heading', { name: '[LoliHouse] Kimi to Koishitai - 06' }),
     )
     expect(within(row).getByText('撞在同一集 S01E05')).toBeInTheDocument()
-    expect(
-      within(row).getByText('[LoliHouse] Kimi - 05 [1080p] · [LoliHouse] Kimi - 06 [1080p]'),
-    ).toBeInTheDocument()
+    // 一行一個：窄版上分得出第二個從哪裡開始。
+    expect(within(row).getByText('[LoliHouse] Kimi - 05 [1080p]')).toHaveClass('block')
+    expect(within(row).getByText('[LoliHouse] Kimi - 06 [1080p]')).toHaveClass('block')
     expect(within(row).getByRole('link', { name: '与你相恋' })).toHaveAttribute(
       'href',
       '/media/tv%3A120089',

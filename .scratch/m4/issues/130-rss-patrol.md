@@ -67,3 +67,14 @@
   - `IssueRow.tsx` 又抄了一份 `INLINE_LINK` 的 class（Standards）：同一串在 `JobLink`、`SearchResults`、
     `SubmitAction` 已各有一份，抽共用元件留給 M4 UI 收尾。
   - `Job.trigger_ref` 對 Series id 的 join 多了兩處（`sweep`；`first_batch`、`review` 原本就有）。
+- **合併前實跑**（協調者要求，2026-10-22）：`scripts/fake_setup_server.py --scenario rss-sweep`（新情境，development.md
+  有一列）＋ playwright，截圖在 `130-rss-patrol/`（`rss-feeds-1280/390`、`issues-1280/390`、`rss-anchor-1280`）。
+  - `/rss`：Mikan 那一列只說「上次補漏有讀不到的」、Nyaa 那一列只說「上一輪輪詢有問題」，各帶原文；390 寬沒有橫向捲動。
+  - `/issues`：四件的標籤、一句話、展開後的失敗起於 / 最後的原因 / 缺 `S01 E03` / 撞在同一集 `S01E05` 與下一步都對；
+    Feed 那兩件的連結是 `/rss#feed-2`、`/rss#feed-1`，站內點與直接開網址都捲到那一列、焦點落在它上面；作品頁
+    連結開得到，季表第 1 季 4 / 12 集入庫，「檔案與版本」展開之後每個檔案都有「修正」（撞集下一步說的那一顆）。
+  - **修了兩處**：①缺集與同一集多份的標題原本是長出 Series 的那一筆發佈名（`… SPY×FAMILY - 01 …`），看起來像在說
+    第 1 集——改成「作品 × 字幕組」（`sweep._about`，同審核頁第一批的說法；pytest 守）。②撞集的幾個發佈名原本以
+    ` · ` 接成一串，390 寬換行之後分不出第二個從哪裡開始——改成一行一個（vitest 守）。
+  - 沒改的：Notice 在 390 寬把原文擠在右側一欄（既有元件，其他提示也一樣）；撞集的下一步要人從作品頁「檔案與版本」
+    的檔名認出是哪一份，檔案列上沒有發佈名（帳本只記目標檔名與 Tags），要對照得點進下載。

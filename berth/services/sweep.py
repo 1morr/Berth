@@ -430,15 +430,21 @@ async def _series_imports(session: AsyncSession) -> list[_Landed]:
 
 
 async def _about(session: AsyncSession, series_id: int) -> dict[str, Any]:
-    """巡檢開在 Series 上的那幾件共用的 `detail`：哪一個 Series、哪一部作品（列上連到作品頁）。"""
+    """巡檢開在 Series 上的那幾件共用的 `detail`：哪一個 Series、哪一部作品（列上連到作品頁）。
+
+    `name`（清單上那一列的標題）是「作品 × 字幕組」，同審核頁的第一批（M4 票 11）：長出 Series 的
+    那一筆發佈名寫著某一集，拿它當標題，缺第 3 集的那一件會被讀成在說第 1 集（M4 票 130 實跑）。
+    """
     series = await session.get(RssSeries, series_id)
     assert series is not None  # 剛從 `_series_imports` 讀到它
     media = await session.get(Media, series.media_id) if series.media_id is not None else None
+    title = media.snapshot().title if media is not None else ""
+    group = series.mikan_subgroup_name or parse_release(series.title_raw).group
     return {
         "series": series.id,
-        "name": series.title_raw,
+        "name": " × ".join(part for part in (title, group) if part) or series.title_raw,
         "media": series.media_id,
-        "title": media.snapshot().title if media is not None else "",
+        "title": title,
     }
 
 
