@@ -45,12 +45,12 @@
 
 | 事實 | 結論 | 來源 |
 |---|---|---|
-| 純 REST 能否送訊息 | 官方 bots 概覽寫「Connect to the API using the Gateway for real-time events, the HTTP API for REST operations, or both」，即 REST 是獨立的合法用法。**「bot 必須至少連過一次 gateway 才能發訊息」這個要求，在官方文件中未查到**（Gateway 文件只說 Identify 是「sending or receiving most Gateway events」的前置，談的是 gateway 事件，不是 REST）。要確認就需實測，不能由文件斷言 | https://discord.com/developers/docs/bots/overview 、Gateway〈Identifying〉 |
+| 純 REST 能否送訊息 | 官方 bots 概覽寫「Connect to the API using the Gateway for real-time events, the HTTP API for REST operations, or both」，即 REST 是獨立的合法用法。**「bot 必須至少連過一次 gateway 才能發訊息」這個要求，在官方文件中未查到**（Gateway 文件只說 Identify 是「sending or receiving most Gateway events」的前置，談的是 gateway 事件，不是 REST）。要確認就需實測，不能由文件斷言。**2026-10-21 實測（M4 票 121）：從沒連過 gateway 的 bot 照樣私訊得到**（brief §20.23） | https://discord.com/developers/docs/bots/overview 、Gateway〈Identifying〉 |
 | 開 DM channel | `POST /users/@me/channels`，body `{"recipient_id": "<snowflake>"}`；已存在就回傳既有的 DM channel | User Resource〈Create DM〉 |
 | 開 DM 的限制 | 官方警告：不要用來對伺服器所有人群發 DM；「DMs should generally be initiated by a user action」；太快開太多 DM，bot 可能被 rate limit 或封鎖開新 DM。`40003` = "You are opening direct messages too fast" | 同上、Opcodes and Status Codes |
 | 送訊息 | `POST /channels/{channel.id}/messages`，對 DM channel 同樣適用（"Post a message to a guild text or DM channel"）；`content` ≤ 2000、`embeds` ≤ 10 且總和 ≤ 6000 字元、`components`、`allowed_mentions`；標頭 `Authorization: Bot <token>` | Message Resource〈Create Message〉 |
 | 私訊的前提 | 官方 API 文件沒有一句話列出前提。能查到的：錯誤碼 `50278` = "Cannot send messages to this user due to having no mutual guilds"（無共同伺服器）、`50007` = "Cannot send messages to this user"、`40002` = 需驗證帳號。Help Center 對一般使用者 DM 失敗列的原因：無共同伺服器、在共同伺服器關閉 DM、未完成 membership screening、對方只接受好友 DM、被封鎖 | Opcodes and Status Codes；Help Center「Why isn't my DM going through?」https://support.discord.com/hc/en-us/articles/360060145013-Why-isn-t-my-DM-going-through |
-| `50007` 是否專指「使用者關閉允許伺服器成員私訊」 | 官方碼表只有 "Cannot send messages to this user"，沒有進一步說明對應哪個隱私設定（未查到）。實作上應把 `50007`、`50278` 都當作「無法私訊該使用者」處理，並提示使用者檢查共同伺服器與 DM 隱私設定 | Opcodes and Status Codes |
+| `50007` 是否專指「使用者關閉允許伺服器成員私訊」 | 官方碼表只有 "Cannot send messages to this user"，沒有進一步說明對應哪個隱私設定（未查到）。實作上應把 `50007`、`50278` 都當作「無法私訊該使用者」處理，並提示使用者檢查共同伺服器與 DM 隱私設定。**2026-10-21 實測（M4 票 121）：收件人在唯一的共同伺服器關掉「私人訊息」時回的是 `50278`，不是 `50007`**，與沒有共同伺服器分不出（brief §20.23） | Opcodes and Status Codes |
 | user-installed app 能否主動私訊 | 文件描述 user install：app 對授權者的 servers、DMs、GDMs 可見，且受使用者權限約束；**未查到**「user-installed app 能不經互動主動對使用者開 DM 並發訊息」的明文 | Application Resource〈User Context〉 |
 | 權限與 intent | 發送 DM 不需 guild 權限（`SEND_MESSAGES` 只針對 guild channel）；送到 guild channel 時需要該頻道的 `SEND_MESSAGES`（以及 View Channel，後者此處未在 Create Message 條文中列出，未逐字查到）。送 REST 不需要任何 gateway intent；intent 只影響 gateway 收事件 | Message Resource〈Create Message〉〈Limitations〉、Gateway〈Intents〉 |
 
@@ -121,7 +121,7 @@
 
 ### B. Bot 私訊（`POST /users/@me/channels` + `POST /channels/{id}/messages`）
 
-- **M4**：技術上可行，純 REST、帶 `Authorization: Bot <token>`；不需要任何 intent。前提與風險：使用者必須與 bot 有共同伺服器（`50278`），並允許該來源 DM（`50007`），所以仍需要使用者建伺服器並邀請 bot；使用者需要自建 Discord application、取得 bot token、邀請 bot，設定步驟比 webhook 多；使用者還要提供自己的 user ID（可用 Developer Mode 複製）。「純 REST 不連過 gateway 是否能送」官方文件未查到明文要求，需要實測驗證才能納入設計。DM 的 mention 不是必須，直接收到私訊即推播（推播偏好取決於使用者）。
+- **M4**：技術上可行，純 REST、帶 `Authorization: Bot <token>`；不需要任何 intent。前提與風險：使用者必須與 bot 有共同伺服器（`50278`），並允許該來源 DM（`50007`），所以仍需要使用者建伺服器並邀請 bot；使用者需要自建 Discord application、取得 bot token、邀請 bot，設定步驟比 webhook 多；使用者還要提供自己的 user ID（可用 Developer Mode 複製）。「純 REST 不連過 gateway 是否能送」官方文件未查到明文要求；2026-10-21 實測可以（brief §20.23）。DM 的 mention 不是必須，直接收到私訊即推播（推播偏好取決於使用者）。
 - **M7**：按鈕互動與收訊息都需要互動通道：無公開網址時只能 gateway（`INTERACTION_CREATE` 不需 intent；收 DM 訊息內容不需要 `MESSAGE_CONTENT`，需要 `DIRECT_MESSAGES` intent）。有公開 HTTPS 網址時可改走 Interactions Endpoint URL（需簽章驗證，3 秒內回應）。兩條路互斥。
 - **代價**：M4 的資料格式要存 bot token + user ID；M7 要引入 gateway client（自寫或套件，Berth 目前沒有 discord.py 依賴）與常駐連線的生命週期管理；使用者要持有 bot。bot token 是高權限 secret。DM 有濫發保護（`40003`），Berth 的量級（個位數使用者）不太可能觸及。
 
@@ -136,7 +136,7 @@
 | | A. 頻道 webhook | B. bot 私訊 | C. bot 頻道訊息 |
 |---|---|---|---|
 | 使用者設定 | 建 webhook、貼 URL（+ 選填 user ID） | 建 application / bot、邀請、貼 token + user ID | 同 B，另需指定頻道 |
-| M4 需 gateway | 否 | 官方文件未查到要求，需實測 | 同 B |
+| M4 需 gateway | 否 | 否（2026-10-21 實測） | 同 B |
 | M4 需公開網址 | 否 | 否 | 否 |
 | 手機推播 | mention 觸發，取決於使用者通知設定 | 私訊本身觸發，取決於使用者通知設定 | 同 A |
 | 隱私 | 頻道成員可見 | 僅收件人 | 頻道成員可見 |
@@ -147,9 +147,11 @@
 
 ### 需要實測才能定案的未查到項目
 
-1. 純 REST（從未連 gateway）的 bot 是否能成功 `POST /users/@me/channels` 與送訊息。
-2. user-installed app 是否能主動對授權者開 DM。
-3. Link button 能否經由手動建立的 webhook 發送（`with_components=true`）。
-4. webhook 的實際速率限制數字（以 response header 為準）。
-5. Interactions Endpoint URL 是否硬性要求 HTTPS（文件稱 "public endpoint"）。
-6. OAuth2 redirect URI 可否用 localhost 作身分綁定。
+2026-10-21 更新（M4 票 121）：管道定為 bot 私訊、不做頻道 webhook（brief §19）之後，逐條的狀態如下。實測細節在 brief §20.23。
+
+1. **已實測：可以。** 從沒連過 gateway 的 bot 開 DM channel 與送訊息都回 `200`（API v10）。
+2. 未測，M4 用不到：通知走一般的 bot（guild install），不是 user-installed app。M7 若要讓使用者不必邀請 bot 進伺服器再回頭量。
+3. 不再追：不做頻道 webhook（brief §19）。
+4. 不再追：理由同上。bot 私訊的速率限制已實測（送訊息的 bucket 一次 5 則，開 DM channel 100）。
+5. 未測，M7 的事：只有走 Interactions Endpoint URL 時才需要知道；沒有公開網址時 M7 走 gateway。
+6. 未測，M4 用不到：身分綁定定為使用者手動填 user ID（plan §11.5）。

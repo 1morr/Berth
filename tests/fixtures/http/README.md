@@ -265,3 +265,23 @@ Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 
 | 檔案 | 來源 |
 | --- | --- |
 | `jellyfin/system-configuration.json` | `GET /System/Configuration`（管理員 token），那一台跑過 `/Startup/Configuration` 寫 `zh-TW` / `TW` / `zh-TW` 之後。新媒體庫的 metadata 語言與國家照它的 `PreferredMetadataLanguage`、`MetadataCountryCode` |
+
+2026-10-21（M4 票 121），`scripts/experiments/discord_dm.py fixtures` 對真的 Discord（API v10）錄的。bot 是新建、
+從沒連過 gateway 的那一個，伺服器只有使用者與 bot；結論在 brief §20.23。每份是 `{status, headers, body}`。
+**不含個人資訊**：snowflake（使用者、bot、DM channel、message 的 id）依首次出現的順序換成 `000000000000000001` 起的
+十八位數，同一個 id 在每一份裡換成同一個值（收件人固定是 `…001`、DM channel 是 `…002`）；使用者物件的 `username` /
+`global_name` 換成 `berth-test-user` / `berth-test-bot`，頭像這類雜湊與 `discriminator` 換成同長度的 `0`，`null` 照留。header 拿掉
+`Set-Cookie` 與瀏覽器回報設定（`Content-Security-Policy`、`Report-To`、`Reporting-Endpoints`、`Nel`），其餘原樣。
+腳本寫檔前會檢查 token 與真的 id、名字都不在輸出裡，有就一個檔都不寫：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `discord/users-me-channels.created.json` | `POST /users/@me/channels`（`recipient_id`）的 **200**：DM channel（`type: 1`、`recipients`）。開 channel 的 bucket 是 `X-RateLimit-Limit: 100`；沒有共同伺服器、關了私訊、bot 被踢出時也都是 200 |
+| `discord/users-me-channels.unauthorized.json` | 同一支端點、錯的 bot token：**401** `{"message": "401: Unauthorized", "code": 0}`，沒有 `X-RateLimit-*` |
+| `discord/channels-messages.created.json` | `POST /channels/{id}/messages` 純文字 `content` 的 **200**：完整的 message 物件（`author.bot: true`） |
+| `discord/channels-messages.embed.json` | 同上，一個帶 `fields`、`footer`、`color` 的 embed，`allowed_mentions: {"parse": []}` |
+| `discord/channels-messages.content-too-long.json` | `content` 2001 字元：**400** `50035`，`errors.content._errors[].code = "BASE_TYPE_MAX_LENGTH"` |
+| `discord/channels-messages.embeds-too-long.json` | 兩個 embed 的 description 4096 + 1905 = 6001 字元：**400** `50035`，`errors.embeds._errors[].code = "MAX_EMBED_SIZE_EXCEEDED"` |
+| `discord/channels-messages.dm-closed.json` | 收件人在唯一的共同伺服器關掉「私人訊息」之後（之前已經私訊過）：**403** `50278`（no mutual guilds），**不是** `50007` |
+| `discord/channels-messages.no-mutual-guild.json` | 把 bot 踢出伺服器之後：**403** `50278`，與上一份同一個 body |
+| `discord/channels-messages.rate-limited.json` | 不間隔連續送的第 7 則：**429**，body `retry_after: 0.3`、`global: false`、**沒有 `code`**；header `Retry-After: 5`、`X-RateLimit-Scope: user` |

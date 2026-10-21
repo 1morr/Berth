@@ -1783,11 +1783,22 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - Berth 以 `Authorization: MediaBrowser Client="Berth", Device="Berth", DeviceId="berth-server"` 呼叫 `AuthenticateByName`（`adapters/jellyfin/client.py`）。Jellyfin 的 `SessionManager.GetAuthorizationToken` 先找同一個 `DeviceId` **且同一個使用者**的裝置、逐一登出（刪掉那一列），再建一筆新的、發新的權杖。所以**登入過 Berth 的每一位使用者在 Jellyfin「裝置」頁各一筆 Berth**，同一位再登入是換掉自己那一筆，不會越積越多；別的使用者的那一筆不刪，但同一個 `DeviceId` 的進行中工作階段會被結束。【[SessionManager.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Session/SessionManager.cs)（`AuthenticateNewSessionInternal`、`GetAuthorizationToken`、`Logout(Device)`）】
 - 審計 S3 實跑看到的「`/Devices` 多一筆 Berth」就是這一筆（`docs/research/usability-audit-2026-10-07.md` 附錄 C.1）。
 
-### 20.23 Discord bot 私訊（2026-10-21 查證，M4 拆票；實測待 M4 票 121）
+### 20.23 Discord bot 私訊（2026-10-21 查證，M4 拆票；同日 M4 票 121 實測）
 
 全文與來源在 [`docs/research/discord-notifications.md`](research/discord-notifications.md)。拆票時用到的：
 
-- 私訊是 `POST /users/@me/channels`（`recipient_id`）再 `POST /channels/{id}/messages`，純 REST、不需要 intent；bot 與收件人要有共同伺服器（`50278`），`50007` 是「不能傳訊息給這位使用者」。「bot 要先連過一次 gateway 才能發訊息」官方文件沒寫，**待票 121 實測**。
+- 私訊是 `POST /users/@me/channels`（`recipient_id`）再 `POST /channels/{id}/messages`，純 REST、不需要 intent；bot 與收件人要有共同伺服器（`50278`），`50007` 是「不能傳訊息給這位使用者」。「bot 要先連過一次 gateway 才能發訊息」官方文件沒寫，實測不需要（下面）。
 - 互動（按鈕、slash command）只有兩條路且互斥：gateway 的 `INTERACTION_CREATE`，或公開的 Interactions Endpoint URL（要回 PING、驗 Ed25519 簽章、3 秒內回應）。家用伺服器沒有公開網址時只能 gateway——M7 的事。
 - 頻道 webhook 只綁頻道、不能私訊，使用者手動建的不能帶互動按鈕。Overseerr、Jellyseerr、Sonarr 都用它（Overseerr 系另有選填的 Discord ID 用來 @mention）。
 - 429 的 body 有 `retry_after`（秒、浮點）與 `global`，header 有 `Retry-After`、`X-RateLimit-*`；`content` ≤ 2000 字元、一則最多 10 個 embed、所有 embed 文字合計 ≤ 6000。
+
+**實測**（2026-10-21，M4 票 121，API v10，`scripts/experiments/discord_dm.py`；回應錄在 `tests/fixtures/http/discord/`）。兩個新建的 bot、一個只有使用者與 bot 的測試伺服器；第二個 bot 從頭到尾沒連過 gateway：
+
+- **從沒連過 gateway 的 bot 私訊得到**：開 DM channel `200`、純文字與帶 embed 的訊息都 `200`，回完整的 message 物件。沒有任何 intent。
+- **開 DM channel 什麼情況都回 `200`**（沒有共同伺服器、收件人關了私訊、bot 被踢出之後都是），擋下來的是送訊息那一步。所以「按測試」要真的送一則，只開 channel 證明不了什麼。
+- **沒有共同伺服器與關了私訊回的是同一個錯**：`403`、`{"code": 50278, "message": "Cannot send messages to this user due to having no mutual guilds"}`。三種情況都量到這一個：bot 還沒被邀請、使用者在唯一的共同伺服器關掉「私人訊息」（已經聊過也一樣）、bot 被踢出伺服器。`50007` 一次都沒出現。Discord 算共同伺服器時只算開著私訊的那幾個，Berth 分不出是哪一種，提示要把兩個補法一起說：把 bot 加進同一個伺服器、在那個伺服器的隱私設定打開「私人訊息」。
+- **伺服器的「私人訊息」預設可能是關的**：它跟著使用者的全域設定（使用者設定 → 私訊權限 →「加入伺服器後允許私訊」）。這次的測試帳號全域是關的，新建的伺服器也就是關的，第一次私訊就是 `50278`。打開後訊息直接進私訊清單；同時開著的「訊息請求」沒有把它攔下。
+- **超過長度是 `400` / `50035` `Invalid Form Body`**，`errors` 指出欄位：`content` 2001 字元是 `errors.content._errors[].code = "BASE_TYPE_MAX_LENGTH"`（`Must be 2000 or fewer in length.`）；兩個 embed 的 description 合計 6001 字元是 `errors.embeds._errors[].code = "MAX_EMBED_SIZE_EXCEEDED"`（`Embed size exceeds maximum size of 6000`）。長度檢查在共同伺服器檢查之前：bot 被踢出之後送 2001 字元照樣先回 `400`，同一刻的純文字回 `403` / `50278`（`send too-long-no-mutual-guild --length 2001`）。
+- **token 錯是 `401`**、`{"message": "401: Unauthorized", "code": 0}`，沒有 `X-RateLimit-*` header。
+- **送訊息的 bucket 一次 5 則**（`X-RateLimit-Limit: 5`；兩個 bot、兩個 channel 的 `X-RateLimit-Bucket` 是同一個 hash，這次每個 bot 只量了一個 channel，分不出是按 channel 還是按 bot 算），失敗的請求（`400`、`403`）也扣額度；`X-RateLimit-Reset` 每送一則往後推約 1 秒，額度是一則一則補回來的，不是 5 秒整批重置。baseline 送完 4 則之後接著連續送、不間隔，第 7 則遇到 `429`。`429` 的 body 是 `{"message": "You are being rate limited.", "retry_after": 0.3, "global": false}`（**沒有 `code`**），header 有 `Retry-After: 5`（整數秒）、`X-RateLimit-Scope: user`、`X-RateLimit-Remaining: 0`、`X-RateLimit-Reset-After: 4.177`。body 的 `retry_after` 是下一個空位（浮點），header 的 `Retry-After` 是整個 bucket 重置、無條件進位成整數。開 DM channel 是另一個 bucket，`X-RateLimit-Limit: 100`。
+- **只私訊的邀請連結**是 `https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=0`：`bot` scope 才會讓 bot 進伺服器（共同伺服器），私訊不需要任何伺服器權限。application id 由 `GET /applications/@me` 以 bot token 取得。新建的 application `bot_public` 預設 `true`、`bot_require_code_grant` 預設 `false`。

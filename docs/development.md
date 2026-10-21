@@ -719,6 +719,26 @@ AnimeTosho 的公開端點查，不需要任何憑證、不連 TMDB（讀本地 
 python scripts/experiments/runtime_gap.py                  # Windows 主控台加 PYTHONUTF8=1 PYTHONIOENCODING=utf-8
 ```
 
+Discord bot 私訊（M4 票 121）對真的 Discord 量。事前使用者要在 Developer Portal 建一個**新的** application、
+Bot 頁 Reset Token（intents 都不開），建一個只有自己的測試伺服器，在那個伺服器的隱私設定打開「私人訊息」，並以開發者模式
+複製自己的 user ID。token 只放環境變數；`#` 後面的「使用者：」是兩步之間要在 Discord 上做的事。坑見
+`scripts/experiments/README.md`，結論在 brief §20.23：
+
+```bash
+export DISCORD_BOT_TOKEN=... DISCORD_USER_ID=...
+uv run python scripts/experiments/discord_dm.py invite                  # 只私訊的邀請連結（scope=bot、permissions=0）
+uv run python scripts/experiments/discord_dm.py send no-guild-fresh     # 還沒邀請：沒有共同伺服器
+# 使用者：點邀請連結，把 bot 加進測試伺服器
+uv run python scripts/experiments/discord_dm.py baseline                # 純文字、embed、超長、錯 token
+uv run python scripts/experiments/discord_dm.py ratelimit               # 連續送到第一個 429 就停
+# 使用者：在測試伺服器的隱私設定關掉「私人訊息」
+uv run python scripts/experiments/discord_dm.py send dm-closed
+# 使用者：打開回來，把 bot 踢出伺服器
+uv run python scripts/experiments/discord_dm.py send no-mutual-guild
+uv run python scripts/experiments/discord_dm.py send too-long-no-mutual-guild --length 2001  # 長度檢查先於共同伺服器
+uv run python scripts/experiments/discord_dm.py fixtures                # 遮掉 id 與名字，寫 tests/fixtures/http/discord/
+```
+
 ## 目錄結構
 
 ```

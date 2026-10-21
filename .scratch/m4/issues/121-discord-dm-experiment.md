@@ -1,6 +1,6 @@
 # 121 — Discord bot 私訊實測【實驗】
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（**需要使用者動手**：建一個 Discord application＋bot、一個測試伺服器）
 
@@ -25,7 +25,17 @@ M4 的通知走 Discord bot 私訊（brief §19 2026-10-21）。查證（`docs/r
 
 ## 驗收
 
-- [ ] brief §20.23 寫出上面七項的實測結果（日期、API 版本），研究檔〈未查到〉已更新
-- [ ] `scripts/experiments/discord_dm.py` 用環境變數就能重跑，repo 裡沒有真的 token 或 id
-- [ ] `tests/fixtures/http/discord/` 有成功、無共同伺服器、關私訊、401、429 五種回應
-- [ ] 全部檢查綠；progress.md 有 session 紀錄
+- [x] brief §20.23 寫出上面七項的實測結果（日期、API 版本），研究檔〈未查到〉已更新
+- [x] `scripts/experiments/discord_dm.py` 用環境變數就能重跑，repo 裡沒有真的 token 或 id
+- [x] `tests/fixtures/http/discord/` 有成功、無共同伺服器、關私訊、401、429 五種回應
+- [x] 全部檢查綠；progress.md 有 session 紀錄
+
+## Comments
+
+- 2026-10-21 實測（API v10）：結論在 brief §20.23，原始回應在 `.local/experiments/results/discord_dm/`（不進版控）。
+- **第一個 bot 一路回 `50278`，原因是收件人的私訊開關，不是 gateway**：測試帳號的全域「加入伺服器後允許私訊」是關的，新伺服器跟著關。排查時第一個 bot 跑了 `gateway-once`（連一次再斷開）仍是 `50278`，使用者看了隱私設定才找到原因。因為第一個 bot 已經連過 gateway，「從沒連過 gateway」那一題改用新建的第二個 bot 量（成功）；fixture 全部取自第二個 bot。
+- **關私訊回的是 `50278` 不是 `50007`**：票 128 照「收件人層一種錯」寫，提示同時說兩個補法；已在票 128 第 2 點與 plan §11.5 補註。
+- **腳本用 `lib.py`（標準庫）而不是票面寫的 httpx**：`scripts/experiments/README.md` 的規則是實驗腳本只用標準庫、不需要專案虛擬環境；票面的意思是不加依賴，標準庫更少。例外是 `gateway-once` 用虛擬環境既有的 `websockets`（uvicorn[standard] 帶的），排查時加的，留著給下次重量時對照。
+- 使用者把兩個 bot 的 token 貼進了對話；已提醒實驗後到 Developer Portal Reset Token。repo 裡沒有 token 與真的 id（`fixtures` 寫檔前檢查、另以 grep 掃過）。
+- code-review 已處理：`discriminator` 遮掉；「長度檢查先於共同伺服器」原本的原始檔被 baseline 覆蓋，補量並加 `send --length`；README 例外清單補上本腳本；執行順序收進 development.md（指令單一來源）；`Scrubber.personal` 改名 `scrub_personal`。
+- code-review 未處理（判斷題，一次性腳本不值得）：`USER_AGENT` 的版本號寫死 `0.2.9`（UA 版本不影響 Discord 的行為）；`/users/@me/channels` 路徑與「寫 JSON 檔」各重複兩、三處；`cmd_ratelimit` 不走 `send()`（它要逐則記 header）；`token, user_id` 一起傳過每個 `cmd_*`。`bot_public` 預設值只印在終端、不存檔（`invite` 每次重跑都會印）。
