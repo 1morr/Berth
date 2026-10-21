@@ -30,10 +30,10 @@ from berth.api.gate import current_actor, current_user
 from berth.domain import JobFilter, JobRefusal, JobState, JobTrigger, PlanAction, Role
 from berth.services import deletion
 from berth.services.deletion import DeleteScope
+from berth.services.downloading import add_manual_download
 from berth.services.jobs import (
     JobRejectedError,
     JobView,
-    add_download,
     list_jobs,
     read_job,
     read_job_events,
@@ -338,7 +338,7 @@ async def post_job(
     """
     user = current_user(request)
     try:
-        outcome = await add_download(
+        outcome = await add_manual_download(
             session,
             factory,
             source=sources.recall(body.source_id),

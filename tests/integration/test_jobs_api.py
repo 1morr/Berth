@@ -19,15 +19,16 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import NotATorrentError
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import HealthStatus, JobState, JobTrigger
+from berth.domain import HealthStatus, JobState, JobTrigger, NotificationKind
 from berth.main import create_app
-from berth.models import Job, Route, TmdbSettings
+from berth.models import Job, Notification, Route, TmdbSettings, User
 from berth.services.jobs import JobSource
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
@@ -373,6 +374,60 @@ class TestSubmitting:
         items = client.get("/api/discover/trending").json()["items"]
 
         assert all("tracked" in item for item in items)
+
+
+def subscribe_everyone(client: TestClient) -> None:
+    """登入過的每一位都填了 Discord ID、訂了「正在下載」（M4 票 126）。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        async with sessions() as session:
+            for index, user in enumerate(await session.scalars(select(User))):
+                user.discord_user_id = f"10000000000000000{index}"
+                user.notify_kinds_json = [NotificationKind.DOWNLOADING.value]
+            await session.commit()
+
+    asyncio.run(run())
+
+
+def downloading_for(client: TestClient) -> list[str]:
+    """待送表上「正在下載」的收件人（名字）。"""
+
+    async def run() -> list[str]:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        async with sessions() as session:
+            rows = await session.scalars(
+                select(User.name)
+                .join(Notification, Notification.user_id == User.id)
+                .where(Notification.kind == NotificationKind.DOWNLOADING)
+            )
+            return list(rows)
+
+    return asyncio.run(run())
+
+
+class TestDownloadingNotice:
+    """人手按的下載告訴其他訂閱者，不告訴按的人（M4 票 126）。"""
+
+    def test_the_one_who_pressed_is_not_told_and_the_others_are(self, client: TestClient) -> None:
+        sign_in(client)
+        sign_in(client, CREW)
+        subscribe_everyone(client)
+
+        assert submit(client).status_code == 200
+
+        assert downloading_for(client) == [ADMIN["username"]]
+
+    def test_a_job_already_there_tells_nobody(self, client: TestClient) -> None:
+        sign_in(client)
+        sign_in(client, CREW)
+        subscribe_everyone(client)
+        submit(client)
+        sign_in(client)
+
+        assert submit(client).json()["created"] is False
+
+        assert downloading_for(client) == [ADMIN["username"]]
 
 
 class TestRefusals:

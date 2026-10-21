@@ -5,7 +5,7 @@ i18n 閘門管不到它，所以在這裡守——少一種語言、少一個 Is
 from __future__ import annotations
 
 from berth.domain import IssueType, Language
-from berth.services.notify import _ISSUE_LABEL, _TEXT
+from berth.services.notify import _BY_LIBRARY, _ISSUE_LABEL, _TEXT
 from berth.services.waiting import WaitingSource
 
 
@@ -32,3 +32,10 @@ def test_every_list_has_its_sentences() -> None:
     }
 
     assert needed <= set(_TEXT[Language.ZH_HANT])
+
+
+def test_every_kind_about_a_work_has_its_title() -> None:
+    """「可以看了」與「正在下載」共用 `_render`，標題照種類取（M4 票 126）：說作品的種類多一種
+    少一句，送出那一刻才會壞。"""
+    for text in _TEXT.values():
+        assert {kind.value for kind in _BY_LIBRARY} <= set(text)
