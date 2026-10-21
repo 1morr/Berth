@@ -539,12 +539,15 @@ uv run --env-file .env python scripts/experiments/first_batch_rule.py --online  
 ```
 
 前端 e2e `rss-subscribe` 的第一輪預覽為什麼慢（M4 票 13b）：起一台 `rss` 情境的演練 server，打那條 spec 同一串 API、
-逐步計時；不連網。結果記在 `.scratch/m4/issues/13b-rss-subscribe-e2e-preview.md`：
+逐步計時；不連網。結果記在 `.scratch/m4/issues/13b-rss-subscribe-e2e-preview.md`。預覽裡的「重複」為什麼時有時無
+（M4 票 121b）用 `--watch`：建好 feed 之後反覆讀預覽與 `/jobs`，各狀態筆數、重複的理由或入庫集數一變就印一行，
+結果記在 `.scratch/m4/issues/121b-rss-subscribe-duplicate-count.md`：
 
 ```bash
 uv run python scripts/experiments/rss_subscribe_timing.py                 # 訂閱 Mikan 之後馬上建 acg.rip 搜尋 feed
 uv run python scripts/experiments/rss_subscribe_timing.py --settle 30     # 先等補舊集跑完 30 秒再建
 uv run python scripts/experiments/rss_subscribe_timing.py --profile       # 同一個行程起 server，cProfile 包住預覽
+uv run python scripts/experiments/rss_subscribe_timing.py --watch 15      # 之後 15 秒看預覽跟著補舊集的入庫變
 ```
 
 搜尋季的記號（M4 票 84）：對一台有公開站的 Prowlarr 實搜 `Season N` 與 `SNN` 各一組，逐站數筆數與名字對得上的筆數。
