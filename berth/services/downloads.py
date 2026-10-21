@@ -39,10 +39,11 @@ from berth.adapters.qbittorrent import (
     TorrentFile,
     TorrentStatus,
 )
-from berth.domain import EventType, IssueType, JobState
+from berth.domain import EventType, IssueStatus, IssueType, JobState
 from berth.logs import job_context
 from berth.models import (
     Event,
+    Issue,
     Job,
     JobFile,
     Media,
@@ -55,7 +56,7 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
-from berth.services.issues import close_settled, record_issue
+from berth.services.issues import close_settled, note_cleared, record_issue
 from berth.services.jobs import (
     IN_CLIENT_STATES,
     freeze,
@@ -737,11 +738,24 @@ async def _record_unknown(
 
     事件**一個 hash 只寫一次**：這個迴圈每 5 秒跑一輪，每輪一筆的話一天就是一萬七千筆。
     「現在還在不在」由 `settings.poller` 那份清單回答（每一輪重寫）。
+
+    **被忽略的那幾筆，這一輪不再無主就記下解除過了**（`issues.note_cleared`，M4 票 122）：
+    `sync` 是整份客戶端，不在這一輪的無主清單上的就是真的不是了——移除了、被認領了、換了分類。
+    之後再出現才重開。對帳那一個生產者不記：它一天一輪，這裡 5 秒一輪已經量得到。
     """
-    if not statuses:
-        return []
-    orphans = await unknown_torrents(session, statuses.values())
+    orphans = await unknown_torrents(session, statuses.values()) if statuses else []
+    note_cleared(
+        await session.scalars(
+            select(Issue).where(
+                Issue.type == IssueType.UNKNOWN_TORRENT,
+                Issue.status == IssueStatus.IGNORED,
+                Issue.subject.not_in([row.hash for row in orphans]),
+            )
+        ),
+        now,
+    )
     if not orphans:
+        await session.flush()
         return []
 
     reported = set(

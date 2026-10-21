@@ -981,7 +981,7 @@ M1.5 帶過來的一條（票 10，2026-09-22 從 §11.3 移來）：缺集散�
 
 驗收：一個 RSS 命中 → 下載 → 入庫 → Jellyfin 可見的全程，使用者的手機收到「正在下載」與「可以看了」兩則，內容說得出作品、季集與 Route；一件進審核的事推出「等你處理」並連到那一件；週報說得出這週入庫、修了什麼、還有什麼等人；管道掛掉時 Berth 不阻塞任何管線、健康頁說得出來。
 
-M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是補漏失敗還是輪詢失敗——現在拼在同一個 `rss_feeds.last_error`（M3 票 12，拆欄）；`jellyfin_item_mismatch` 被「忽略」之後，第二天對帳會重開，通知的「Issue 新增」等於每天推一次，改用健康檢查的「條件持續期間忽略有效」（`health_issues._still_ignored`，M3 票 17）。**2026-09-26 補**：`_still_ignored` 讀的 `cleared_at` 只有 `health_issues._settle` 會寫，`resolver.settle_verdicts` 不寫，要搬過去；而且它只解「忽略之後又重開」，試跑量到的主因是下面修補清單第 2 條的誤報。
+M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是補漏失敗還是輪詢失敗——現在拼在同一個 `rss_feeds.last_error`（M3 票 12，拆欄）；`jellyfin_item_mismatch` 被「忽略」之後，第二天對帳會重開，通知的「Issue 新增」等於每天推一次，改用健康檢查的「條件持續期間忽略有效」（`health_issues._still_ignored`，M3 票 17）。**2026-09-26 補**：`_still_ignored` 讀的 `cleared_at` 只有 `health_issues._settle` 會寫，`resolver.settle_verdicts` 不寫，要搬過去；而且它只解「忽略之後又重開」，試跑量到的主因是下面修補清單第 2 條的誤報。**票 122 做完**（後一條）：規則在 `issues.record_issue`（`STAYS_IGNORED`）與 `issues.note_cleared`，`unknown_torrent` 一起套（poller 每 5 秒重開）。
 
 **M4 之前先做的修補**（2026-09-26 M3 後的全面審查，使用者拍板「先修再拆 M4」；審查紀錄見 progress.md 同日）：試跑環境（main `82d9cd7`）一個 Mikan MyBangumi 綁定後 11 分鐘送出 144 個 torrent，下面幾條在這一輪都真的發生了，而 M4 的通知會把它們放大成推播。票已開在 `.scratch/m4/issues/01–04`，同日第二輪試跑回饋再開 05–14（清單最後一條），`/to-tickets` 拆 M4 時從 15 接著編（**2026-10-21 更正**：修補段實際開到 120，以 v0.2.9 結案；M4 不改號，M4 本體從 121 起編，brief §19）。
 
@@ -995,7 +995,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 
 **修補段結案時票 Comments 的遺留**（2026-10-21 審查 01–120 與 M0–M3 全部票的 Comments，使用者同意這樣分）：
 
-- **併進 M4 本體**（與通知、巡檢直接相關）：上面「M3 收尾帶過來的兩條」至今都沒做（`rss_feeds.last_error` 仍是一欄、`resolver.settle_verdicts` 不寫 `cleared_at`）；同一個 Series 有 Job 卡在 `submit_failed` / `client_error` 時第一批一直等人按確認（M4 票 11），歸巡檢的「卡住的 Job」；規劃與輪詢的解析 CPU 跑在事件迴圈上，一批規劃時其他請求慢 340–520 ms（M4 票 13b），巡檢跑在同一個迴圈，先量再決定要不要移出去。
+- **併進 M4 本體**（與通知、巡檢直接相關）：上面「M3 收尾帶過來的兩條」至今都沒做（`rss_feeds.last_error` 仍是一欄；`resolver.settle_verdicts` 不寫 `cleared_at` 那一條票 122 做完）；同一個 Series 有 Job 卡在 `submit_failed` / `client_error` 時第一批一直等人按確認（M4 票 11），歸巡檢的「卡住的 Job」；規劃與輪詢的解析 CPU 跑在事件迴圈上，一批規劃時其他請求慢 340–520 ms（M4 票 13b），巡檢跑在同一個迴圈，先量再決定要不要移出去。
 - **M4 UI 收尾一張票**（使用者看得到）：390 寬精靈的 sticky 主鍵遮住下方欄位（M4 票 06）；搜尋區塊 critique 沒處理的五條（M4 票 84b）；英文 `Settings → Library paths` 三處，設定頁已不叫這個（`web/src/i18n/resources.ts`，M2 票 03）；作品頁季表不隨背景入庫更新，SSE 只失效 `['jobs']`（M4 票 12、M3 票 06）；票 31 留給「M4 收尾 polish」的五項；`.impeccable/design.json` 從 2026-09-26 起落後 `DESIGN.md`（`/impeccable document`）；`docs/development.md` 說 `mixed` 情境的 qBittorrent 填什麼都測得過，實際只收 `admin` / `adminadmin`（M4 票 103）。
 - **不排里程碑，有 repro 或使用者要求再開票**：預填標題不切底線（M4 票 88、98）；5xx / 429 時搜尋說「連不上」（票 107、114）；`Media.default_route_id` 不算 Route 的引用（票 115）；票 113 的錨點焦點與兩層合集那一行的載入態；`estimate_deletion` 每檔 stat 多次（票 94）；票 97 部署連結閘門的大小寫與順序；`{{libraries}}` 插值黏字（票 120）；前後端輪詢間隔預設值、`PROXY_WIDTHS` / `IMAGE_SIZES`、`LEADS` 與解析器理由之間沒有閘門（票 109、M2 票 13、M3 票 05）；送出中用 `busy` 沒有掃描式閘門（M3 票 06）；`?page=1e20` 回 500、下載列消失時焦點掉回 `body`（票 04）；移除分類與送單之間沒有共用鎖（票 47）；多季合集預覽不顯示季範圍（票 48）；作品頁訂閱的 Feed 網址照印、`latest_episode` 不套 offset（票 13）；反方向的 http / https 錯配認不出（票 25）；精靈中途被殺時 Route 檢查的 `running` 殘留（票 43）；`read_oneshot` 不看 Route 類型（M3 票 18）；M1.5 驗收 e2e 的兩條弱斷言（M1.5 票 11）；票 22 舊分類沒有 `downloadPath` 仍待使用者確認；log 遮罩只遮網址的 query、不遮路徑與 userinfo（M4 票 76）——原排進 M4 本體是因為 Discord webhook 的 token 在路徑上，改定 bot 私訊之後 token 在標頭、Berth 不記標頭，M4 沒有失效條件。
 

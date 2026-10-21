@@ -11,7 +11,8 @@ M0 起這兩件事只是畫面上的一行字（Route 設定頁的 TVDB 提示�
 - **忽略在條件持續期間有效**（2026-09-23 使用者拍板）。其餘幾種的「忽略」是「這一次不處理」，
   下一次偵測到就開新的一筆；對 5 分鐘量一次的東西那等於忽略無效，而故意掛 TVDB 的使用者
   會被每 5 分鐘問一次。所以最後一筆是 `ignored` 的就不重開；條件解除過一次（在那一筆的
-  `detail_json.cleared_at` 記下來），之後再發生才重開。
+  `detail_json.cleared_at` 記下來），之後再發生才重開。規則本身在 `services/issues`
+  （`STAYS_IGNORED`），回驗與 `unknown_torrent` 也照它（M4 票 122）。
 
 **問不到就不判**（brief §16.2）：Jellyfin 問不到時 TVDB 那一種整種不動，某個根目錄量不到時
 那一條不動——「問不到」不是「好了」。
@@ -35,15 +36,12 @@ from berth.domain import IssueStatus, IssueType
 from berth.models import DiskSettings, Issue, JellyfinSettings, PathSettings, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.issues import record_issue
+from berth.services.issues import clear_by_system, note_cleared, record_issue
 from berth.services.jellyfin import tvdb_fetchers
 from berth.services.routes import route_library_matches
 from berth.services.settings import read_settings, write_settings
 
 logger = logging.getLogger(__name__)
-
-#: 條件解除時收掉那一件的人（plan §2.4 的 `resolved_by`，與 poller 的事件同一個字）。
-SYSTEM = "system"
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,10 +163,8 @@ async def _disk(session: AsyncSession) -> Finding:
 
 
 async def _settle(session: AsyncSession, kind: IssueType, finding: Finding, now: datetime) -> None:
-    """有問題的寫下（忽略過的除外），其餘開著的收掉、忽略過的記下「解除過了」。"""
+    """有問題的寫下（忽略過的由 `record_issue` 擋下），其餘開著的收掉、忽略過的記下「解除過了」。"""
     for subject, detail in finding.flagged.items():
-        if await _still_ignored(session, kind, subject):
-            continue
         await record_issue(session, kind, path=subject, detail=detail, now=now)
 
     rows = await session.scalars(
@@ -176,29 +172,11 @@ async def _settle(session: AsyncSession, kind: IssueType, finding: Finding, now:
             Issue.type == kind, Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED))
         )
     )
-    for row in rows:
-        if row.subject in finding.flagged or row.subject in finding.unknown:
-            continue
-        if row.status is IssueStatus.OPEN:
-            row.status = IssueStatus.RESOLVED
-            row.resolved_at = now
-            row.resolved_by = SYSTEM
-            logger.info("issue cleared", extra={"issue": kind.value, "subject": row.subject})
-        elif "cleared_at" not in (row.detail_json or {}):
-            row.detail_json = {**(row.detail_json or {}), "cleared_at": now.isoformat()}
+    cleared = [
+        row
+        for row in rows
+        if row.subject not in finding.flagged and row.subject not in finding.unknown
+    ]
+    clear_by_system([row for row in cleared if row.status is IssueStatus.OPEN], now)
+    note_cleared(cleared, now)
     await session.flush()
-
-
-async def _still_ignored(session: AsyncSession, kind: IssueType, subject: str) -> bool:
-    """這件事最後一次是被忽略的，而且從那之後條件一直沒解除過。"""
-    last = await session.scalar(
-        select(Issue)
-        .where(Issue.type == kind, Issue.subject == subject)
-        .order_by(Issue.id.desc())
-        .limit(1)
-    )
-    return (
-        last is not None
-        and last.status is IssueStatus.IGNORED
-        and "cleared_at" not in (last.detail_json or {})
-    )

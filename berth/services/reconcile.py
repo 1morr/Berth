@@ -146,13 +146,16 @@ class _Tally:
 
     **數的是 `record_issue` 真的做了什麼**，不是從帳本的舊狀態推：被忽略過的那一列帳本仍然是
     `target_missing`，而這一輪開的是新的一筆（`ignore` 的意思是「這一次不想處理」，不是「這件
-    事不存在」）——推出來的答案在那一格會說謊。
+    事不存在」）——推出來的答案在那一格會說謊。`STAYS_IGNORED` 那幾種被忽略的那一筆擋下來的
+    （`held`）兩邊都不算：什麼都沒寫。
     """
 
     opened: int = 0
     updated: int = 0
 
     def add(self, recorded: Recorded) -> None:
+        if recorded.held:
+            return
         if recorded.opened:
             self.opened += 1
         else:

@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **忽略的 Jellyfin 認錯不再每天重開**（M4 票 122）：按「忽略」之後，每日對帳又比到同樣的不一致不會再開一筆；
+  Jellyfin 認對過一輪之後又認錯才重開，問不到 Jellyfin 的那一輪不算認對。qBittorrent 上 Berth 不認得的 torrent
+  同樣：按「忽略」之後原本 5 秒內就重開，現在它還掛在 qBittorrent 上就不再問，移除之後又出現才重開。
+
 ## [0.2.9] - 2026-10-21
 
 **從 0.2.8 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。

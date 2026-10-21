@@ -3,7 +3,8 @@
 三件事在這裡：**寫下一件**（`record_issue`，冪等）、**攤給畫面**（`list_issues`）、
 **按下去**（`resolve_issue` / `ignore_issue`）。偵測本身不在這裡——對帳在
 `services/reconcile.py`，管線那四種在 `services/downloads.py` 與 `services/resolver.py`，
-健康檢查那兩種在 `services/health_issues.py`，它們都只呼叫 `record_issue`。
+健康檢查那兩種在 `services/health_issues.py`，它們寫下一律呼叫 `record_issue`，量到條件解除時
+呼叫 `note_cleared`（`STAYS_IGNORED` 那幾種）。
 
 **冪等是這一支的全部重點**。`qbit_poller` 每 5 秒醒一次、對帳每天跑一輪，同一件事會被說很多
 遍；清單上要是一件一列，不是一天一萬七千列。所以寫入是「同一個 `(type, subject)` 只有一筆
@@ -26,7 +27,7 @@ Issue，而使用者剛剛才決定過它。
 from __future__ import annotations
 
 import logging
-from collections.abc import Coroutine, Sequence
+from collections.abc import Coroutine, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -115,8 +116,10 @@ class Recorded:
     """
 
     issue: Issue
-    #: 這一次是新開的（`False` 代表更新了一筆本來就開著的）。
+    #: 這一次是新開的（`False` 代表更新了一筆本來就開著的，或 `held`）。
     opened: bool
+    #: 被忽略的那一筆還算數，什麼都沒寫（`STAYS_IGNORED`）；`issue` 是那一筆。
+    held: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +155,10 @@ async def record_issue(
 ) -> Recorded:
     """偵測到一件事。已經有一筆 `open` 的同一件事就更新它（plan §2.4 的冪等鍵）。
 
+    `STAYS_IGNORED` 那幾種多一條：最後一筆是被忽略的、而且從那之後條件沒解除過（`note_cleared`
+    沒記過 `cleared_at`），就什麼都不寫（`held`）。規則放在這裡而不是各個生產者，是因為同一種
+    有兩個生產者（`unknown_torrent` 的 poller 與對帳）——放在生產者那邊遲早有一個忘了。
+
     **不 commit**：呼叫端多半在一個迴圈裡寫好幾筆，交易的邊界是它的事。
     """
     subject = subject_of(kind, path=path, job_hash=job_hash, ledger_id=ledger_id)
@@ -171,6 +178,19 @@ async def record_issue(
         existing.detected_at = moment
         await session.flush()
         return Recorded(issue=existing, opened=False)
+    if kind in STAYS_IGNORED:
+        last = await session.scalar(
+            select(Issue)
+            .where(Issue.type == kind, Issue.subject == subject)
+            .order_by(Issue.id.desc())
+            .limit(1)
+        )
+        if (
+            last is not None
+            and last.status is IssueStatus.IGNORED
+            and CLEARED_AT not in (last.detail_json or {})
+        ):
+            return Recorded(issue=last, opened=False, held=True)
 
     row = Issue(
         type=kind,
@@ -221,6 +241,8 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     與 resolve 分開是因為它們對下一輪對帳的意思不同：ignore 之後那個檔案**仍然不在**，
     所以下一輪會再開一筆新的 Issue。這是刻意的——忽略的是「這一次不想處理」，不是
     「這件事不存在」。真的要它安靜下來，按的是「承認刪除並清帳本」。
+
+    `STAYS_IGNORED` 那幾種例外：週期量測的，忽略在條件持續期間有效（`record_issue`）。
     """
     row = await _open_issue(session, issue_id)
     row.status = IssueStatus.IGNORED
@@ -337,6 +359,17 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
     clear_by_system(settled, now)
     await session.flush()
     return len(settled)
+
+
+def note_cleared(rows: Iterable[Issue], now: datetime) -> None:
+    """這幾件說的條件這一輪量到已經不在了：被忽略的那幾筆記下 `cleared_at`，之後再發生才重開
+    （`STAYS_IGNORED`）。其他狀態的不動——開著的要不要收是呼叫端的事。不 flush、不 commit。
+
+    **只傳真的量到的**：問不到、量不到的那幾個不是「解除了」（brief §16.2）。
+    """
+    for row in rows:
+        if row.status is IssueStatus.IGNORED and CLEARED_AT not in (row.detail_json or {}):
+            row.detail_json = {**(row.detail_json or {}), CLEARED_AT: now.isoformat()}
 
 
 def clear_by_system(rows: Sequence[Issue], now: datetime) -> None:
@@ -886,6 +919,20 @@ STANDS_WHILE: dict[IssueType, frozenset[JobState]] = {
     IssueType.CLIENT_ERROR: frozenset({JobState.CLIENT_ERROR}),
     IssueType.CLIENT_REMOVED: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
 }
+#: 「忽略」在條件持續期間有效的幾種（brief §9.1，`record_issue` 與 `note_cleared`）：週期量測的
+#: 那幾種，其餘的忽略是「這一次不處理」。健康檢查那兩種 5 分鐘量一次（2026-09-23 拍板）；回驗
+#: 每天對帳比一次、`unknown_torrent` 的 poller 每 5 秒寫一次（M4 票 122）——照「這一次」的話
+#: 忽略等於無效，而「等你處理」的通知會為同一件事每天推一次。
+STAYS_IGNORED = frozenset(
+    {
+        IssueType.LIBRARY_USES_TVDB,
+        IssueType.LOW_DISK_SPACE,
+        IssueType.JELLYFIN_ITEM_MISMATCH,
+        IssueType.UNKNOWN_TORRENT,
+    }
+)
+#: 條件解除過的記號，寫在被忽略的那一筆的 `detail_json` 上（`note_cleared`）。
+CLEARED_AT = "cleared_at"
 _BROKEN_BY: dict[IssueAction, frozenset[JobState]] = {
     action: states for kind, states in STANDS_WHILE.items() for action in ISSUE_ACTIONS[kind]
 }
