@@ -27,12 +27,22 @@ from berth.db import create_session_factory
 from berth.domain import (
     CollectionType,
     HealthStatus,
+    IssueStatus,
     IssueType,
     JobState,
     JobTrigger,
     MediaKind,
 )
-from berth.models import Event, Job, JobFile, Media, PollerSettings, QbittorrentSettings, Route
+from berth.models import (
+    Event,
+    Issue,
+    Job,
+    JobFile,
+    Media,
+    PollerSettings,
+    QbittorrentSettings,
+    Route,
+)
 from berth.services.downloads import (
     ACTIVE_INTERVAL,
     IDLE_INTERVAL,
@@ -44,6 +54,7 @@ from berth.services.downloads import (
 )
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
+from berth.services.issues import ignore_issue
 from berth.services.jobs import held_locks, job_lock, transition
 from berth.services.settings import read_settings, write_settings
 from tests.integration.arrange import arrange, factory_for
@@ -583,6 +594,69 @@ class TestUnknownTorrents:
         await run(session, client)
 
         assert (await read_settings(session, PollerSettings)).unknown_torrents == []
+
+
+async def open_unknown(session: AsyncSession) -> list[Issue]:
+    return list(
+        await session.scalars(
+            select(Issue).where(
+                Issue.type == IssueType.UNKNOWN_TORRENT, Issue.status == IssueStatus.OPEN
+            )
+        )
+    )
+
+
+class TestIgnoringAnUnknownTorrent:
+    """忽略在它還掛在 qBittorrent 上的期間有效（M4 票 122）：poller 每 5 秒寫一次，照「這一次
+    不處理」的話按下忽略 5 秒後就重開一筆。"""
+
+    async def test_the_next_round_stays_quiet(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await setup_job(session, roots, state=JobState.COMPLETED)
+        client = FakeQbittorrentClient(torrents=(status(info_hash="f" * 40, category=CATEGORY),))
+        await run(session, client)
+        (issue,) = await open_unknown(session)
+        await ignore_issue(session, issue.id, actor="7")
+
+        await run(session, client, now=NOW + timedelta(seconds=5))
+
+        assert await open_unknown(session) == []
+
+    async def test_it_comes_back_once_it_left_the_client_and_returned(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        await setup_job(session, roots, state=JobState.COMPLETED)
+        orphan = status(info_hash="f" * 40, category=CATEGORY)
+        client = FakeQbittorrentClient(torrents=(orphan,))
+        await run(session, client)
+        (issue,) = await open_unknown(session)
+        await ignore_issue(session, issue.id, actor="7")
+
+        client.torrents = ()
+        await run(session, client, now=NOW + timedelta(seconds=5))
+        client.torrents = (orphan,)
+        await run(session, client, now=NOW + timedelta(seconds=10))
+
+        assert len(await open_unknown(session)) == 1
+
+    async def test_a_round_that_cannot_ask_the_client_is_not_a_clearing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """問不到 qBittorrent 不是「它不在了」（brief §16.2）：那一輪之後照樣安靜。"""
+        await setup_job(session, roots, state=JobState.COMPLETED)
+        client = FakeQbittorrentClient(torrents=(status(info_hash="f" * 40, category=CATEGORY),))
+        await run(session, client)
+        (issue,) = await open_unknown(session)
+        await ignore_issue(session, issue.id, actor="7")
+
+        client.sync_error = AuthFailedError("app/version: 403")
+        with pytest.raises(AuthFailedError):
+            await run(session, client, now=NOW + timedelta(seconds=5))
+        client.sync_error = None
+        await run(session, client, now=NOW + timedelta(seconds=10))
+
+        assert await open_unknown(session) == []
 
 
 class TestPollerLoop:

@@ -23,7 +23,7 @@ from berth.adapters.jellyfin import JellyfinItem, JellyfinSource
 from berth.domain import IssueAction, IssueStatus, IssueType
 from berth.models import Issue, LedgerEntry, Route
 from berth.models.types import utcnow
-from berth.services.issues import list_issues, resolve_issue
+from berth.services.issues import ignore_issue, list_issues, resolve_issue
 from berth.services.reconcile import reconcile_once
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.resolver import sweep_resolutions
@@ -421,6 +421,59 @@ class TestTheReconcilerUsesTheSameCheck:
         await reconcile_once(session, factory, now=NOW + timedelta(days=1))
 
         assert len(await open_mismatches(session)) == 1
+
+
+class TestIgnoringIt:
+    """忽略在條件持續期間有效（M4 票 122，與健康檢查那兩種同一條規則）：每日對帳又比到同樣的
+    不一致時不重開；比到一致一輪（條件解除過）之後再不一致才重開。"""
+
+    async def test_the_next_reconcile_with_the_same_mismatch_stays_quiet(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", season_two)
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+        (view,) = [row for row in await list_issues(session) if row.type is MISMATCH]
+        await ignore_issue(session, view.id, actor="7")
+
+        report = await reconcile_once(session, factory, now=NOW + timedelta(days=1))
+
+        assert await open_mismatches(session) == []
+        assert (report.opened, report.updated) == (0, 0)
+
+    async def test_it_comes_back_once_jellyfin_agreed_and_then_disagreed_again(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        route, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", season_two)
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+        (view,) = [row for row in await list_issues(session) if row.type is MISMATCH]
+        await ignore_issue(session, view.id, actor="7")
+
+        await scanned(session, route, factory)  # 一致了一輪
+        await reconcile_once(session, factory, now=NOW + timedelta(days=1))
+        jellyfin_reads(factory, f"episode-{first.episode_start}", season_two)
+        await reconcile_once(session, factory, now=NOW + timedelta(days=2))
+
+        (issue,) = await open_mismatches(session)
+        assert issue.ledger_id == first.id
+
+    async def test_jellyfin_being_down_is_not_a_clearing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """問不到不是「一致了」（brief §16.2）：那一輪不算條件解除，之後照樣安靜。"""
+        _, factory, first = await looked_up(session, roots)
+        jellyfin_reads(factory, f"episode-{first.episode_start}", season_two)
+        await sweep_resolutions(session, factory, now=NOW + FIRST)
+        (view,) = [row for row in await list_issues(session) if row.type is MISMATCH]
+        await ignore_issue(session, view.id, actor="7")
+
+        factory.jellyfin_.error = ServiceUnavailableError("GET /Items: connection refused")
+        await reconcile_once(session, factory, now=NOW + timedelta(days=1))
+        factory.jellyfin_.error = None
+        await reconcile_once(session, factory, now=NOW + timedelta(days=2))
+
+        assert await open_mismatches(session) == []
 
 
 class TestTheButtons:

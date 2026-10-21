@@ -20,7 +20,7 @@ from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.domain import IssueStatus, IssueType
 from berth.models import Issue, PathSettings, Route
 from berth.services.health import check_health
-from berth.services.health_issues import SYSTEM, set_min_free, watch_conditions
+from berth.services.health_issues import set_min_free, watch_conditions
 from berth.services.issues import ignore_issue
 from berth.services.settings import read_settings, write_settings
 from tests.integration.arrange import factory_for
@@ -92,7 +92,7 @@ class TestTvdb:
 
         (issue,) = await rows_of(session, IssueType.LIBRARY_USES_TVDB)
         assert issue.status is IssueStatus.RESOLVED
-        assert issue.resolved_by == SYSTEM
+        assert issue.resolved_by == "system"
 
     async def test_a_deleted_route_takes_its_issue_with_it(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -181,7 +181,7 @@ class TestDiskSpace:
 
         (issue,) = await rows_of(session, IssueType.LOW_DISK_SPACE)
         assert issue.status is IssueStatus.RESOLVED
-        assert issue.resolved_by == SYSTEM
+        assert issue.resolved_by == "system"
 
     async def test_a_root_it_cannot_see_is_not_a_fix(
         self, session: AsyncSession, roots: dict[str, Path]

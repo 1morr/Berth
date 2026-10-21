@@ -306,7 +306,7 @@ _Avoid_: re-run, resync
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:
-Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）與 Jellyfin 回驗的一種（jellyfin_item_mismatch）；`issues.type` 與 `issue_detected` 事件共用這十四種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種與回驗那一種條件解除時由系統收掉。
+Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）與 Jellyfin 回驗的一種（jellyfin_item_mismatch）；`issues.type` 與 `issue_detected` 事件共用這十四種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種與回驗那一種條件解除時由系統收掉。健康檢查那兩種、回驗那一種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 
 **Jellyfin 回驗**:

@@ -270,6 +270,7 @@
 | 2026-10-20 | M4 120 Route 刪除被拒的中文排版 | 只改前端文案。zh-Hant `routeSettings.delete.{inUse,inUseDisabled,refused}` 改成「這條 Route 還有 {{usage}}，所以它刪不得…」，數量結尾是「RSS Feed」時不再黏字；`RouteDelete.test.tsx` 掃整組帶 `{{usage}}` 的句子斷言後面接標點。第 1 點（頁 2／4 位址 placeholder 跟著頁 1 主機）使用者決定不做。vitest 2081、pytest 4102（8ccf62f）、e2e 38 passed | 協調者開 PR |
 | 2026-10-21 | M4 修補段結案審查 | 220 張票全是 done，沒打勾的 4 條都是劃掉或有條件；遠端分支全合進 main。全部檢查全過、pytest 4100 passed / 2 skipped、vitest 2081 passed，CI 與每日 e2e 綠。子代理逐張過 M0–M4 票的 Comments，沒人接的約 40 條按使用者同意的三類寫進 plan §11.5。brief 補兩條決定（Discord、不改號），§20 兩處過時的「未測」改正。發 v0.2.9 | 開新 session：`/to-tickets docs/plan.md` 拆 M4 本體（從 121 起編） |
 | 2026-10-21 | M4 本體拆票 | 設計題 Q1–Q8 與管道（Discord bot 私訊、不做 webhook、「Issue 新增」併進等你處理）定案，寫進 plan §11.5〈通知〉〈巡檢〉與 brief §19、§20.23；Discord 查證在 `docs/research/discord-notifications.md`。開出 121–133 | 票 121（先請使用者建 Discord 測試 bot 與伺服器）；122 可並行 |
+| 2026-10-21 | M4 122 忽略的 Issue 在條件持續期間不再重開 | 規則收進 `services/issues`：`record_issue` 對 `STAYS_IGNORED`（兩種健康檢查、`jellyfin_item_mismatch`、`unknown_torrent`）在最後一筆被忽略且沒有 `cleared_at` 時回 `held`、不寫；`note_cleared` 寫 `cleared_at`，健康檢查、`resolver.settle_verdicts`、poller 的 `_record_unknown` 三處呼叫。`health_issues._still_ignored`、`SYSTEM` 刪掉；對帳的 `_Tally` 不數 `held`。測試：回驗三條、poller 三條（含問不到不算解除），變異手跑過。brief §9.1、CONTEXT.md、plan §11.5、CHANGELOG 同步。盤點與 code-review 未處理的見票的 Comments | 下一張 M4 票（開新 session） |
 
 ## 偏差與決定
 - 2026-10-21 M4 修補段結案：**M4 不改號、M4 本體從 121 起編**（使用者，brief §19）；**第一個通知管道改定 Discord**（plan §11.5 原寫 Telegram 或 Discord 擇一；brief §19）。
@@ -1581,3 +1582,4 @@
 - 2026-10-20 M4 票 119：**推薦站主鍵還在時登入的送出鍵降成 Ghost**（票面沒列，改後 critique A 的 P2：沒沿用時兩顆黃鍵並排看不出先後）。
 - 協調者 2026-10-20 M4 票 119：**1280 兩欄平衡不採用**（critique 28→28，換來 Tab 順序與視覺不一致、跨 `lg` 斷點重新掛載丟輸入、`64rem` 斷點三處重複、`StepFrame` 多一個 `aside` 例外），只保留一屏一顆主鍵；驗收第 1 條因此不做。
 - 2026-10-20 M4 票 120：**第 1 點（頁 2、頁 4 位址 placeholder 跟著頁 1 的主機）不做**，使用者決定：設定只走一次，價值低。票改名為「Route 刪除被拒的中文排版」，只做第 2 點。
+- 2026-10-21 M4 票 122：**`unknown_torrent` 也照「條件持續期間忽略有效」**（票面只點名 `jellyfin_item_mismatch`，第 2 點盤點出來、使用者拍板）：poller 每 5 秒寫一次，按忽略 5 秒內就重開。對帳其餘六種維持 brief §9.1 的「這一次不處理」，每天重開要不要推留給票 127。

@@ -63,7 +63,7 @@ from berth.models import Event, Issue, JellyfinSettings, Job, LedgerEntry, Media
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
-from berth.services.issues import Recorded, clear_by_system, record_issue
+from berth.services.issues import Recorded, clear_by_system, note_cleared, record_issue
 from berth.services.jobs import actor_of, record_event
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.routes import owning_route
@@ -355,7 +355,9 @@ def still_identifying(item: JellyfinItem, *, ledger_tmdb: str, jellyfin_tmdb: st
 async def settle_verdicts(
     session: AsyncSession, verdicts: Sequence[Verdict], now: datetime
 ) -> list[Recorded]:
-    """不一致的寫下（冪等鍵是帳本那一列），一致的那幾列上開著的由系統收掉。回傳寫下了什麼。
+    """不一致的寫下（冪等鍵是帳本那一列），一致的那幾列上開著的由系統收掉、被忽略的記下條件
+    解除過了（`issues.note_cleared`：忽略在不一致持續期間有效，M4 票 122）。回傳 `record_issue`
+    的結果。
 
     **只看這一次比到的**：找不到 item 的那幾列不在 `verdicts` 裡，它們開著的那一件照舊——
     Jellyfin 可能正在重掃，「沒列出來」不是「一致了」。**不 commit**。
@@ -375,14 +377,17 @@ async def settle_verdicts(
     ]
     agreed = [verdict.entry.id for verdict in verdicts if verdict.detail is None]
     if agreed:
-        cleared = await session.scalars(
-            select(Issue).where(
-                Issue.type == IssueType.JELLYFIN_ITEM_MISMATCH,
-                Issue.status == IssueStatus.OPEN,
-                Issue.ledger_id.in_(agreed),
+        cleared = list(
+            await session.scalars(
+                select(Issue).where(
+                    Issue.type == IssueType.JELLYFIN_ITEM_MISMATCH,
+                    Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
+                    Issue.ledger_id.in_(agreed),
+                )
             )
         )
-        clear_by_system(list(cleared), now)
+        clear_by_system([row for row in cleared if row.status is IssueStatus.OPEN], now)
+        note_cleared(cleared, now)
     await session.flush()
     return recorded
 
