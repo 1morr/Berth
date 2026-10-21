@@ -166,6 +166,22 @@ class NotifyWatchSettings(SettingsGroup):
 
     #: `None` 是還沒看過：第一次看到的那幾件當底，不算新的（升級那一刻已經在等的不一次湧出來）。
     seen: list[str] | None = None
+    #: 現在等著的每一件從什麼時候開始等：看守第一次看到它的那一刻（M4 票 129，巡檢的「放太久」
+    #: 讀它）。一件處理掉又回到清單上重新算；升級之前就在的從升級後第一次看起算。
+    since: dict[str, datetime] = {}
+
+
+class SweepSettings(SettingsGroup):
+    """每日巡檢自己的紀錄（M4 票 129，`services.sweep`）。
+
+    自己一列，理由同 `NotifyWatchSettings`：這是巡檢的紀錄，不是誰的設定。
+    """
+
+    KEY = "sweep"
+
+    #: 「放太久」提醒過的那幾件與提醒的時刻：同一件 `sweep.REMIND_EVERY` 內不再提醒。
+    #: 只留現在還等著的。
+    reminded: dict[str, datetime] = {}
 
 
 class QbittorrentSettings(SettingsGroup):
@@ -599,4 +615,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     NotifySettings,
     BerthSettings,
     NotifyWatchSettings,
+    SweepSettings,
 )

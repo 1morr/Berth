@@ -1808,7 +1808,13 @@ const zhHant = {
     noTmdb: '沒有 TMDB id',
     nextMismatch:
       '到 Jellyfin 修正它：作品認錯了用「識別」選回帳本那一部，兩份不同範圍的正片被併成一集就把其中一份移出去。修好之後按「重新反查」；下一次對帳比到一致時這一件也會自己收掉。',
-    // 十四種型別各一句（brief §9.1）。
+    // 第一批卡住（M4 票 129）：停住的那一筆在哪個狀態、從什麼時候、原文。
+    stoppedAt: '停在',
+    stoppedSince: '停住於',
+    stoppedError: '原因',
+    nextFirstBatch:
+      '這個 RSS Series 的第一批要整批到齊，Berth 才會替你確認；停住的這一筆讓它一直等著。打開上面那一筆下載，重試或刪掉它；已經入庫的那幾集也可以在審核頁直接確認整個 Series。處理之後，下一次每日巡檢會自己收掉這一件。',
+    // 十五種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -1824,6 +1830,7 @@ const zhHant = {
       jellyfin_item_mismatch: 'Jellyfin 認到的季集或作品與帳本不同',
       library_uses_tvdb: '這條 Route 的媒體庫掛著 TVDB',
       low_disk_space: '磁碟剩下的空間低於門檻',
+      first_batch_stuck: 'RSS Series 的第一批卡住了，一直等人確認',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -1840,6 +1847,7 @@ const zhHant = {
       jellyfin_item_mismatch: '回驗不符',
       library_uses_tvdb: 'TVDB',
       low_disk_space: '空間不足',
+      first_batch_stuck: '第一批卡住',
     },
     action: {
       relink: '重新鏈接',
@@ -5426,6 +5434,11 @@ const en: Translations<typeof zhHant> = {
     noTmdb: 'no TMDB id',
     nextMismatch:
       'Fix it in Jellyfin: if it matched the wrong title, use Identify to pick the one the ledger has; if two files covering different episodes were merged into one, move one of them out. Then press Look it up again; the next reconcile also closes this on its own once they agree.',
+    stoppedAt: 'Stopped at',
+    stoppedSince: 'Stopped since',
+    stoppedError: 'Reason',
+    nextFirstBatch:
+      'Berth confirms this RSS series for you only once its whole first batch has arrived, and this stopped download keeps it waiting. Open the download above and retry or delete it; you can also confirm the whole series from the review page using the episodes already imported. Once it is handled, the next daily sweep closes this on its own.',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -5441,6 +5454,7 @@ const en: Translations<typeof zhHant> = {
       jellyfin_item_mismatch: 'Jellyfin reads a different episode or title than the ledger',
       library_uses_tvdb: 'This route’s library uses TVDB',
       low_disk_space: 'Free disk space is below the threshold',
+      first_batch_stuck: 'An RSS series’ first batch is stuck waiting for you',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -5457,6 +5471,7 @@ const en: Translations<typeof zhHant> = {
       jellyfin_item_mismatch: 'JELLYFIN DISAGREES',
       library_uses_tvdb: 'TVDB',
       low_disk_space: 'LOW DISK',
+      first_batch_stuck: 'FIRST BATCH STUCK',
     },
     action: {
       relink: 'Link it again',

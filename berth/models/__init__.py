@@ -54,6 +54,7 @@ from berth.models.setting import (
     SetupStartup,
     SetupStep,
     SetupTmdb,
+    SweepSettings,
     TmdbSettings,
     UnknownTorrent,
 )
@@ -108,6 +109,7 @@ __all__ = [
     "SetupStartup",
     "SetupStep",
     "SetupTmdb",
+    "SweepSettings",
     "TmdbCache",
     "TmdbSettings",
     "UnknownTorrent",

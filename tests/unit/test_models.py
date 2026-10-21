@@ -146,6 +146,8 @@ def test_every_settings_group_has_a_distinct_key() -> None:
         "services.qbittorrent",
         "services.tmdb",
         "setup",
+        # 每日巡檢記下「放太久」提醒過哪幾件（M4 票 129），只有巡檢寫。
+        "sweep",
     ]
 
 

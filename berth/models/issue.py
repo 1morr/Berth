@@ -33,7 +33,12 @@ from berth.models.types import JsonText, UtcDateTime, enum_column, utcnow
 
 
 def subject_of(
-    kind: IssueType, *, path: str = "", job_hash: str | None = None, ledger_id: int | None = None
+    kind: IssueType,
+    *,
+    path: str = "",
+    job_hash: str | None = None,
+    ledger_id: int | None = None,
+    series_id: int | None = None,
 ) -> str:
     """這一件的冪等鍵取哪一格的值（plan §2.4 的 `SUBJECT_OF`）。
 
@@ -45,6 +50,8 @@ def subject_of(
         return path
     if column is IssueSubject.JOB_HASH:
         return job_hash or ""
+    if column is IssueSubject.RSS_SERIES:
+        return "" if series_id is None else str(series_id)
     return "" if ledger_id is None else str(ledger_id)
 
 
@@ -66,7 +73,7 @@ class Issue(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     type: Mapped[IssueType] = mapped_column(enum_column(IssueType))
-    #: 冪等鍵的後半，由 `subject_of()` 依型別從下面三欄之一取。
+    #: 冪等鍵的後半，由 `subject_of()` 依型別從下面三欄之一取；RSS Series 那一種是 Series 的 id。
     subject: Mapped[str] = mapped_column(Text)
     #: 弱引用（沒有外鍵）。管線那四種一定有，對帳那幾種看情況。
     job_hash: Mapped[str | None] = mapped_column(Text, default=None)

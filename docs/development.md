@@ -552,6 +552,14 @@ uv run python scripts/experiments/rss_subscribe_timing.py --profile       # 同�
 uv run python scripts/experiments/rss_subscribe_timing.py --watch 15      # 之後 15 秒看預覽跟著補舊集的入庫變
 ```
 
+每日巡檢一輪佔用事件迴圈多久（M4 票 129）：暫時的資料庫上灌一份資料、跑 `sweep_once` 三輪，另一個 coroutine
+每 1 ms 醒一次記下晚了多少。不連網；結果記在 `.scratch/m4/issues/129-daily-patrol.md`：
+
+```bash
+uv run python scripts/experiments/sweep_loop_lag.py                                  # 400 個 Series × 12 筆 Job
+uv run python scripts/experiments/sweep_loop_lag.py --series 2000 --issues 1000      # 放大五倍
+```
+
 搜尋季的記號（M4 票 84）：對一台有公開站的 Prowlarr 實搜 `Season N` 與 `SNN` 各一組，逐站數筆數與名字對得上的筆數。
 不用容器；查詢間隔 3.5 秒、共 14 次，別連跑：
 
