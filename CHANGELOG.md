@@ -13,7 +13,7 @@
   （存的時候向 Discord 驗一次，之後畫面只說「已設定」，token 不回到瀏覽器）、用邀請連結把 bot 加進你所在的伺服器、
   填自己的 Discord user ID、按「送一則測試訊息給我」，失敗時當場說出原因與補法。通知用存 ID 那一刻的介面語言寫。
   Discord 暫時連不上時，沒送到的那幾則留著下一輪再送。API：`GET /api/settings/notifications`、
-  `PUT /api/settings/notifications/bot`、`PUT /api/settings/notifications/me`、`POST /api/settings/notifications/test`。
+  `PUT /api/settings/notifications/bot`；自己的 Discord ID 與測試在 `/api/me/notifications`（下一條）。
   **這一版有資料庫 migration**（`d5e8a2c7f914`）：新的待送表，使用者多兩欄（Discord ID、通知語言）。
 - **通知裡的連結**（M4 票 124）：設定 → 通知多一格「Berth 的網址」，填你在手機上、家外面打開 Berth 用的那一個
   （反向代理、Tailscale、NAS 的網域）。沒存過時預填你現在開著 Berth 的網址，按儲存才算數；不是 `http://` 或
@@ -26,8 +26,17 @@
   bot 傳不到某個人（沒有共同伺服器或關了私訊）時，那一則不再重試，那個人的設定 → 通知上說出原因與兩個補法，
   補好之後按測試、送到了那一句就收掉。**送不出去的通知最多留 24 小時就放棄**，修好之後不會一次湧出一大堆舊的。
   通知寫不成或送出出錯都不會讓下載、入庫失敗。API：`GET /api/health/detail` 多 `notify`，
-  `GET /api/settings/notifications` 多 `token_rejected`、`unreachable_at`、`unreachable_detail`。
+  `GET /api/settings/notifications` 多 `token_rejected`，`GET /api/me/notifications` 有 `unreachable_at`、
+  `unreachable_detail`。
   **這一版有資料庫 migration**（`e3a9c6f1b207`）：使用者多兩欄（上次收不到通知的時間與原文）。
+- **每個人都收得到通知，只收自己看得到的**（M4 票 125）：一般使用者也有設定 → 通知（頁首的「設定」帶他到這一頁），
+  填自己的 Discord ID、勾要收哪幾種（「可以看了」預設勾著；「正在下載」可以先勾，這一則還沒開始送）、按測試；
+  bot token 與 Berth 的網址仍只有管理員看得到。「可以看了」只送給在 Jellyfin 看得到那個媒體庫的人，
+  帳號被停用的不送；Jellyfin 暫時問不到時那一則等它回來再送，不猜。同一部作品 5 分鐘內入庫的幾批合成一則、
+  季集範圍合起來，所以每一則「可以看了」會在認出來之後約 5 分鐘到。API：「我的」那一半從
+  `/api/settings/notifications/me`、`/test` 搬到 `GET|PUT /api/me/notifications`（多 `kinds`）、
+  `POST /api/me/notifications/test`；`GET /api/settings/notifications` 只剩 bot 與 Berth 的網址。
+  **這一版有資料庫 migration**（`f4b8d2e6a913`）：使用者多一欄（要收的通知種類，既有的人是「可以看了」）。
 
 ### Fixed
 

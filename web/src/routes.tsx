@@ -465,16 +465,23 @@ const healthRoute = createRoute({
 const settingsIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  beforeLoad: () => {
-    throw redirect({ to: '/settings/jellyfin' })
+  // 一般使用者的設定只有通知那一頁（M4 票 125）。
+  beforeLoad: async ({ context, location }) => {
+    const me = await requireSignedInPage(context.queryClient, location)
+    throw redirect({ to: me?.role === 'admin' ? '/settings/jellyfin' : '/settings/notifications' })
   },
 })
 
 /**
  * 改設定是管理員的事（brief §11，後端同時回 403）；這裡的導向只是讓一般使用者不必看到一頁 403。
- * 六個分頁同一道門（票 06i），所以寫一次。
+ * 五個泊位分頁同一道門（票 06i），所以寫一次。**通知例外**（M4 票 125）：每個人都有自己的那一半
+ * （Discord ID、要收的種類），bot 那一半由頁面照角色收起來、後端的 `/settings/notifications` 照樣 403。
  */
-function settingsRoute(path: `/settings/${string}`, Page: () => React.JSX.Element) {
+function settingsRoute(
+  path: `/settings/${string}`,
+  Page: () => React.JSX.Element,
+  { everyone = false }: { everyone?: boolean } = {},
+) {
   return createRoute({
     getParentRoute: () => rootRoute,
     path,
@@ -482,7 +489,7 @@ function settingsRoute(path: `/settings/${string}`, Page: () => React.JSX.Elemen
       search.from === 'setup' ? { from: 'setup' } : {},
     beforeLoad: async ({ context, location }) => {
       const me = await requireSignedInPage(context.queryClient, location)
-      if (me !== null && me.role !== 'admin')
+      if (!everyone && me !== null && me.role !== 'admin')
         throw redirect({ to: '/health', search: { denied: true } })
     },
     component: () => (
@@ -499,8 +506,10 @@ const qbittorrentSettingsRoute = settingsRoute('/settings/qbittorrent', Qbittorr
 const routeSettingsRoute = settingsRoute('/settings/routes', RouteSettingsPage)
 const indexerSettingsRoute = settingsRoute('/settings/indexers', IndexerSettingsPage)
 const tmdbSettingsRoute = settingsRoute('/settings/tmdb', TmdbSettingsPage)
-/** 通知不是泊位，不進 `BERTHS`；門禁與五個泊位分頁相同。 */
-const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySettingsPage)
+/** 通知不是泊位，不進 `BERTHS`；每一位登入的人都進得來（M4 票 125）。 */
+const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySettingsPage, {
+  everyone: true,
+})
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,

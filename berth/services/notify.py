@@ -7,7 +7,9 @@
 上。所以待送表存事實（作品、季集、Route），送出那一刻照收件人自己的語言（`users.notify_language`，
 存 Discord ID 那一刻的介面語言）組字。兩種語言的句子都在 `_TEXT`，與前端一樣 zh-Hant 與 en 並列。
 
-這一張只送管理員；照媒體庫權限送給每個人、同一部作品 5 分鐘內合成一則是票 125。
+**收件人**（M4 票 125）：訂閱了那一種、有 Discord ID、而且 Jellyfin 的 `UserViews` 看得到那個媒體庫
+的人。前兩條在寫入時看（`queue_ready`），媒體庫在送出時問（`send_due`）：寫入在別人的寫交易裡，不能打
+網路；Jellyfin 問不到時那一則延後，不猜。同一個人、同一部作品 5 分鐘內的幾筆在寫入時合成一則。
 
 **故障**（M4 票 128，plan §11.5）分三層，因為下一步不同：
 
@@ -44,11 +46,11 @@ from berth.domain import (
     NotificationStatus,
     NotifyRefusal,
     PlanAction,
-    Role,
 )
 from berth.logs import job_context
 from berth.models import (
     BerthSettings,
+    JellyfinSettings,
     Job,
     LedgerEntry,
     Media,
@@ -66,6 +68,11 @@ from berth.services.deeplink import (
     PublicUrlRejectedError,
     berth_link,
     normalized_public_url,
+)
+from berth.services.jellyfin_access import (
+    AccountDisabledError,
+    JellyfinUnreachableError,
+    visible_libraries,
 )
 from berth.services.settings import read_settings, update_settings
 
@@ -94,8 +101,20 @@ _CHANNEL_DOWN = frozenset(
     {DeliveryFailure.UNAUTHORIZED, DeliveryFailure.RATE_LIMITED, DeliveryFailure.UNAVAILABLE}
 )
 
+#: 說的是某個媒體庫裡的作品：只送給 Jellyfin 上看得到那個媒體庫的人（M4 票 125）。
+_BY_LIBRARY = frozenset({NotificationKind.READY})
+
 #: 再送也一樣的：那一則當場放棄。
 _FINAL = frozenset({DeliveryFailure.RECIPIENT_UNREACHABLE, DeliveryFailure.REJECTED})
+
+#: 寫入之後等多久才送（M4 票 125）：這段時間裡同一個收件人、同一部作品的下一筆併進同一則，
+#: 一次入庫一整季時不是一集一則。
+MERGE_WINDOW = timedelta(minutes=5)
+
+#: 離最早送出時間不到這麼久的那一則不再併進去，另起一則（M4 票 125 code-review）。送出迴圈讀完
+#: 就放開交易、接著打 Discord：併進一則已經被撿走的，新的季集就跟著舊內容一起被標成已送。
+#: 判斷到 commit 之間要等寫鎖，30 秒遠大於它，代價只是相隔 4 分半到 5 分鐘的兩筆分成兩則。
+_MERGE_GUARD = timedelta(seconds=30)
 
 #: 一則從最早送出時間（`not_before`）起，滿這麼久還沒送到就放棄（M4 票 128，plan §11.5）。
 #: 用時間不用次數：次數管不到「沒設 token」「token 壞了」這種一次都沒送的情況，而這幾種正是
@@ -123,18 +142,30 @@ class NotifyRefusedError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class NotifyView:
-    """通知設定頁讀的那一份。**沒有 token**：只說設定了沒。"""
+class BotView:
+    """通知設定頁管理員那一半：bot 與 Berth 的網址（M4 票 125 起與「我的通知」分開）。
+    **沒有 token**：只說設定了沒。"""
 
     bot_configured: bool
     bot_name: str
     invite_url: str | None
     #: Discord 不再接受存著的那一把 token（M4 票 128）：通知暫停到換一把。
     token_rejected: bool
-    discord_user_id: str
-    language: Language
     #: Berth 從外面看的網址（`BerthSettings`）；沒存過是空字串，通知不附連結。
     berth_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class MyNotifyView:
+    """「我的通知」：每一位登入的人讀自己的那一份（M4 票 125）。bot 只說有沒有、叫什麼：
+    測試鍵與「私訊會從誰來」要用，token 與邀請連結是管理員那一半。"""
+
+    bot_configured: bool
+    bot_name: str
+    discord_user_id: str
+    language: Language
+    #: 訂閱的種類，照 `NotificationKind` 的順序。
+    kinds: tuple[NotificationKind, ...]
     #: 上一次送給這個人時他到不了（`User.notify_unreachable_at`）；`None` 是沒有。
     unreachable_at: datetime | None
     unreachable_detail: str
@@ -169,12 +200,11 @@ class SendOutcome:
 
 
 @command(Effect.READ)
-async def read_notify(session: AsyncSession, user_id: int) -> NotifyView:
+async def read_bot(session: AsyncSession) -> BotView:
     settings = await read_settings(session, NotifySettings)
     sender = await read_settings(session, NotifySenderSettings)
-    user = await session.get(User, user_id)
     configured = bool(settings.discord_bot_token)
-    return NotifyView(
+    return BotView(
         bot_configured=configured,
         bot_name=settings.discord_bot_name if configured else "",
         invite_url=(
@@ -183,12 +213,32 @@ async def read_notify(session: AsyncSession, user_id: int) -> NotifyView:
             else None
         ),
         token_rejected=_rejected(settings, sender),
-        discord_user_id=user.discord_user_id if user else "",
-        language=user.notify_language if user else Language.ZH_HANT,
         berth_url=(await read_settings(session, BerthSettings)).public_url,
-        unreachable_at=user.notify_unreachable_at if user else None,
-        unreachable_detail=user.notify_unreachable_detail if user else "",
     )
+
+
+@command(Effect.READ)
+async def read_mine(session: AsyncSession, user_id: int) -> MyNotifyView:
+    settings = await read_settings(session, NotifySettings)
+    user = await session.get(User, user_id)
+    if user is None:
+        raise LookupError(f"user {user_id} is gone")
+    configured = bool(settings.discord_bot_token)
+    return MyNotifyView(
+        bot_configured=configured,
+        bot_name=settings.discord_bot_name if configured else "",
+        discord_user_id=user.discord_user_id,
+        language=user.notify_language,
+        kinds=_kinds_of(user),
+        unreachable_at=user.notify_unreachable_at,
+        unreachable_detail=user.notify_unreachable_detail,
+    )
+
+
+def _kinds_of(user: User) -> tuple[NotificationKind, ...]:
+    """存的那一份照 `NotificationKind` 的順序；不認得的值（之後拿掉的種類）略過。"""
+    stored = set(user.notify_kinds_json)
+    return tuple(kind for kind in NotificationKind if kind.value in stored)
 
 
 @command(Effect.READ)
@@ -226,15 +276,15 @@ def _rejected(settings: NotifySettings, sender: NotifySenderSettings) -> bool:
 # 同一個命令就是自己的反向：換回原本的 token，或傳空字串清掉。
 @command(Effect.REVERSIBLE)
 async def set_bot_token(
-    session: AsyncSession, factory: ServiceClientFactory, token: str, *, user_id: int
-) -> NotifyView:
+    session: AsyncSession, factory: ServiceClientFactory, token: str
+) -> BotView:
     """存 bot token。**先問 Discord 它是哪一個 bot**，問得到才存（順手記下 application id 與名字，
     邀請連結照它組）；空字串是清掉。網路在寫交易之前（plan §3.3）。"""
     token = token.strip()
     if not token:
         await update_settings(session, NotifySettings, _clear_bot)
         logger.info("discord bot token cleared")
-        return await read_notify(session, user_id)
+        return await read_bot(session)
     try:
         identity = await factory.discord(token).identify()
     except AuthFailedError as exc:
@@ -249,7 +299,7 @@ async def set_bot_token(
 
     await update_settings(session, NotifySettings, change)
     logger.info("discord bot token saved", extra={"bot": identity.name})
-    return await read_notify(session, user_id)
+    return await read_bot(session)
 
 
 def _clear_bot(settings: NotifySettings) -> None:
@@ -258,12 +308,19 @@ def _clear_bot(settings: NotifySettings) -> None:
     settings.discord_bot_name = ""
 
 
-# 同上：再存一次原本的 ID，或空字串清掉。
+# 同上：再存一次原本的那一份。
 @command(Effect.REVERSIBLE)
-async def set_discord_id(
-    session: AsyncSession, user_id: int, discord_id: str, language: Language
-) -> NotifyView:
-    """存這個人的 Discord user ID 與通知語言（存的那一刻的介面語言）。空字串是不收。"""
+async def set_mine(
+    session: AsyncSession,
+    user_id: int,
+    discord_id: str,
+    language: Language,
+    kinds: Iterable[NotificationKind],
+) -> MyNotifyView:
+    """存這個人的 Discord user ID、通知語言（存的那一刻的介面語言）與要收的種類。空 ID 是不收。
+
+    **已經排著的不跟著改**（M4 票 125）：取消訂閱之後，合併時間裡那一則照送——那是訂閱時發生的事。
+    """
     discord_id = discord_id.strip()
     if discord_id and not _SNOWFLAKE.fullmatch(discord_id):
         raise NotifyRefusedError(NotifyRefusal.DISCORD_ID_INVALID)
@@ -275,13 +332,15 @@ async def set_discord_id(
         _clear_unreachable(user)
     user.discord_user_id = discord_id
     user.notify_language = language
+    chosen = set(kinds)
+    user.notify_kinds_json = [kind.value for kind in NotificationKind if kind in chosen]
     await session.commit()
-    return await read_notify(session, user_id)
+    return await read_mine(session, user_id)
 
 
 # 同上：再存一次原本的網址，或空字串清掉。
 @command(Effect.REVERSIBLE)
-async def set_berth_url(session: AsyncSession, value: str, *, user_id: int) -> NotifyView:
+async def set_berth_url(session: AsyncSession, value: str) -> BotView:
     """存 Berth 從外面看的網址（`deeplink.normalized_public_url`：http(s) 的絕對網址、拿掉結尾
     的 `/`）。空字串是清掉，之後的通知不附連結。已經寫進待送表的那幾則也照新的組：
     連結在送出時才組。"""
@@ -294,7 +353,7 @@ async def set_berth_url(session: AsyncSession, value: str, *, user_id: int) -> N
         settings.public_url = url
 
     await update_settings(session, BerthSettings, change)
-    return await read_notify(session, user_id)
+    return await read_bot(session)
 
 
 # 送出去的訊息收不回來。
@@ -337,46 +396,83 @@ async def send_test(session: AsyncSession, factory: ServiceClientFactory, user_i
 async def queue_ready(session: AsyncSession, job: Job, *, now: datetime) -> int:
     """「可以看了」：這一筆的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
 
-    給每一位有 Discord ID 的管理員各排一則，回排了幾則。**不 commit**：與寫事件的那一筆交易同生死。
+    給每一位訂閱了、有 Discord ID 的人各排一則，回排了（或併進）幾則。**不 commit**：與寫事件的
+    那一筆交易同生死。**看不看得到那個媒體庫在送出時才問 Jellyfin**（`send_due`）：這裡在寫交易裡，
+    不打網路（plan §3.3）；而且送出那一刻的權限才是準的。
+
+    **合併**（M4 票 125）：最早送出時間是 `MERGE_WINDOW` 之後；同一個收件人、同一部作品、同一條
+    Route 還在那段時間裡的一則存在時，這一筆的季集併進它，不另起一列。Route 也要相同：媒體庫看
+    Route，兩條 Route 的同一部作品可能一個人看得到一半。
 
     **寫不成也不讓那一筆交易失敗**（M4 票 128）：讀不出內容時記 log、不排，回 0。這裡的查詢不
     autoflush：呼叫端還沒 flush 的改動要是有錯，在它自己 commit 時爆，不在這裡被吞掉。
     """
     try:
         with session.no_autoflush:
-            admins = list(
-                await session.scalars(
-                    select(User)
-                    .where(User.role == Role.ADMIN, User.discord_user_id != "")
-                    .order_by(User.id)
-                )
-            )
-            if not admins:
+            route = await session.get(Route, job.route_id) if job.route_id else None
+            if route is None:
+                # 不知道在哪個媒體庫，就問不了誰看得到；入庫過的 Job 一定有 Route，這是防回的。
+                with job_context(job.hash):
+                    logger.warning("ready notification not queued: the job has no route")
                 return 0
-            content = await _ready_content(session, job)
+            recipients = [
+                user
+                for user in await session.scalars(
+                    select(User).where(User.discord_user_id != "").order_by(User.id)
+                )
+                if NotificationKind.READY.value in user.notify_kinds_json
+            ]
+            if not recipients:
+                return 0
+            content = await _ready_content(session, job, route)
+            key = f"{job.media_id}@{route.id}" if job.media_id else job.hash
+            gathering = {
+                row.user_id: row
+                for row in await session.scalars(
+                    select(Notification).where(
+                        Notification.kind == NotificationKind.READY,
+                        Notification.merge_key == key,
+                        Notification.status == NotificationStatus.PENDING,
+                        # 送出迴圈只撿 `not_before` 已到的；留 `_MERGE_GUARD` 給「判斷之後、commit
+                        # 之前」那段時間，不改到送到一半的那一則。
+                        Notification.not_before > now + _MERGE_GUARD,
+                    )
+                )
+            }
     except Exception:
         # job id 由上下文蓋上去（`berth.logs`）；`extra={"job": …}` 會撞到它。
         with job_context(job.hash):
             logger.exception("ready notification not queued")
         return 0
-    for admin in admins:
+    for user in recipients:
+        row = gathering.get(user.id)
+        if row is not None:
+            row.content_json = _merged(row.content_json, content)
+            continue
         session.add(
             Notification(
-                user_id=admin.id,
+                user_id=user.id,
                 kind=NotificationKind.READY,
                 content_json=content,
-                merge_key=job.media_id or job.hash,
-                not_before=now,
+                merge_key=key,
+                not_before=now + MERGE_WINDOW,
                 created_at=now,
             )
         )
-    return len(admins)
+    return len(recipients)
 
 
-async def _ready_content(session: AsyncSession, job: Job) -> dict[str, Any]:
-    """事實，不是句子：作品的兩種標題、季集範圍、Route 名。組字在送出時（`_render`）。"""
+def _merged(gathered: dict[str, Any], content: dict[str, Any]) -> dict[str, Any]:
+    """同一部作品、同一條 Route 的兩份事實：季集範圍合起來，其餘取新的那一份（作品名可能
+    剛改過）。"""
+    spans = _collapse([*(gathered.get("episodes") or []), *(content.get("episodes") or [])])
+    return {**content, "episodes": [list(span) for span in spans]}
+
+
+async def _ready_content(session: AsyncSession, job: Job, route: Route) -> dict[str, Any]:
+    """事實，不是句子：作品的兩種標題、季集範圍、Route 名與它的媒體庫。組字在送出時（`_render`），
+    誰看得到也在送出時問（`library`，`send_due`）。"""
     media = await session.get(Media, job.media_id) if job.media_id else None
-    route = await session.get(Route, job.route_id) if job.route_id else None
     snapshot = media.snapshot() if media else None
     features = await session.scalars(
         select(LedgerEntry).where(
@@ -389,20 +485,25 @@ async def _ready_content(session: AsyncSession, job: Job) -> dict[str, Any]:
         "kind": snapshot.kind.value if snapshot else None,
         "title": snapshot.title if snapshot else job.name,
         "title_en": snapshot.title_en if snapshot else job.name,
-        "route": route.name if route else "",
+        "route": route.name,
+        "library": route.jellyfin_library_id,
         "episodes": [] if movie else [list(span) for span in episode_spans(features)],
     }
 
 
 def episode_spans(entries: Iterable[LedgerEntry]) -> list[tuple[int, int, int]]:
     """帳本的季集收成連續的範圍：E01、E02、E03 是一段，E05 另一段。沒有季集的（電影）不算。"""
-    points = sorted(
+    return _collapse(
         (entry.season, entry.episode_start, entry.episode_end or entry.episode_start)
         for entry in entries
         if entry.season is not None and entry.episode_start is not None
     )
+
+
+def _collapse(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
+    """`(季, 起, 迄)` 排好、接得上（重疊或相鄰）的併成一段。"""
     spans: list[tuple[int, int, int]] = []
-    for season, start, end in points:
+    for season, start, end in sorted((point[0], point[1], point[2]) for point in points):
         if spans and spans[-1][0] == season and start <= spans[-1][2] + 1:
             spans[-1] = (season, spans[-1][1], max(spans[-1][2], end))
         else:
@@ -444,6 +545,7 @@ async def send_due(
         await session.commit()
         return SendOutcome(sent=0, failed=0)
     berth_url = (await read_settings(session, BerthSettings)).public_url
+    jellyfin = await read_settings(session, JellyfinSettings)
     rows = list(
         (
             await session.execute(
@@ -462,9 +564,21 @@ async def send_due(
     await session.commit()
     if not rows:
         return SendOutcome(sent=0, failed=0)
+    libraries, unreachable = await _libraries_of(
+        factory,
+        jellyfin,
+        {
+            user.id: user.jellyfin_user_id
+            for notification, user in rows
+            if notification.kind in _BY_LIBRARY
+        },
+    )
     bot = factory.discord(token)
     sent = failed = 0
     for notification, user in rows:
+        if notification.kind in _BY_LIBRARY and _withheld(notification, libraries, unreachable):
+            await session.commit()
+            continue
         delivery = await _deliver(bot, notification, user, berth_url)
         if delivery is None:
             failed += 1
@@ -489,6 +603,58 @@ async def send_due(
             # （失敗的請求也算，brief §20.23）。剩下的留給下一輪。
             break
     return SendOutcome(sent=sent, failed=failed)
+
+
+async def _libraries_of(
+    factory: ServiceClientFactory, settings: JellyfinSettings, people: dict[int, str]
+) -> tuple[dict[int, frozenset[str] | None], str]:
+    """每一位收件人（`users.id` → Jellyfin user id）現在看得到的媒體庫；帳號停用或刪掉的是 `None`。
+
+    **網路在讀交易之外**（呼叫端已經 commit）。問不到 Jellyfin 就停在那一位：剩下的人這一輪也
+    問不到，逐一等逾時只會拖住整輪。沒問到的人不在回的 dict 裡，第二格是問不到的原文。
+    """
+    if not people:
+        return {}, ""
+    client = factory.jellyfin(settings.base_url, token=settings.api_key)
+    found: dict[int, frozenset[str] | None] = {}
+    try:
+        for user_id, jellyfin_user_id in people.items():
+            try:
+                found[user_id] = await visible_libraries(client, jellyfin_user_id)
+            except AccountDisabledError:
+                found[user_id] = None
+            except JellyfinUnreachableError as exc:
+                logger.warning(
+                    "notification recipients unknown: jellyfin unreachable",
+                    extra={"detail": exc.detail},
+                )
+                return found, exc.detail
+    finally:
+        await client.aclose()
+    return found, ""
+
+
+def _withheld(
+    notification: Notification, libraries: dict[int, frozenset[str] | None], unreachable: str
+) -> bool:
+    """收件人看不到這一則說的那個媒體庫時擋下它、記下原因，回 `True`（M4 票 125）。
+
+    看不到、帳號停用或刪掉的當場放棄；Jellyfin 問不到的**不猜**：不送、也不丟，原因記在 `error`，
+    下一輪再問（滿 `GIVE_UP_AFTER` 照樣放棄）。
+    """
+    if notification.user_id not in libraries:
+        notification.error = f"jellyfin: {unreachable}"
+        return True
+    visible = libraries[notification.user_id]
+    if visible is None:
+        notification.status = NotificationStatus.ABANDONED
+        notification.error = "withheld: the recipient's jellyfin account is disabled or gone"
+        return True
+    if notification.content_json.get("library") not in visible:
+        notification.status = NotificationStatus.ABANDONED
+        notification.error = "withheld: the recipient cannot see this library in jellyfin"
+        return True
+    return False
 
 
 async def _deliver(

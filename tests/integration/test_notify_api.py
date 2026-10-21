@@ -1,4 +1,4 @@
-"""通知設定的端點（M4 票 123）：存 token、填 Discord ID、按測試。
+"""通知設定的端點（M4 票 123、125）：管理員存 token；每個人填自己的 Discord ID、勾種類、按測試。
 
 **bot token 只進不出**：這一份裡的每一個回應與這期間的每一行 log 都不可以帶著它
 （`assert_no_token`，檔尾自己驗它真的抓得到洩漏）。
@@ -15,13 +15,16 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.http import ServiceUnavailableError
+from berth.adapters.jellyfin import JellyfinAuth
 from berth.api.deps import get_client_factory
-from berth.api.gate import CSRF_HEADER
+from berth.api.gate import CSRF_HEADER, SESSION_COOKIE
 from berth.config import Config
 from berth.logs import configure_logging, json_line
 from berth.main import create_app
+from berth.services.auth import open_session
 from tests.integration.arrange import sign_in_owner
 from tests.integration.factories import FakeClientFactory
 
@@ -29,6 +32,7 @@ BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 TOKEN = "MTAwMDAwMDAwMDAwMDAwMDAx.secret-part.do-not-leak"
 DISCORD_ID = "100000000000000001"
 BASE = "/api/settings/notifications"
+MINE = "/api/me/notifications"
 #: Berth 寫出去的等級：`configure_logging` 的預設值，讀它而不是抄一份。
 LOGGED: int = inspect.signature(configure_logging).parameters["level"].default
 
@@ -62,12 +66,32 @@ def save_token(client: TestClient, token: str = TOKEN) -> httpx.Response:
 
 
 def save_id(
-    client: TestClient, discord_id: str = DISCORD_ID, language: str = "zh-Hant"
+    client: TestClient,
+    discord_id: str = DISCORD_ID,
+    language: str = "zh-Hant",
+    kinds: tuple[str, ...] = ("ready",),
 ) -> httpx.Response:
     response: httpx.Response = client.put(
-        f"{BASE}/me", json={"discord_user_id": discord_id, "language": language}, headers=BROWSER
+        MINE,
+        json={"discord_user_id": discord_id, "language": language, "kinds": list(kinds)},
+        headers=BROWSER,
     )
     return response
+
+
+def sign_in_crew(client: TestClient, name: str = "deckhand") -> None:
+    """換成一位 `user` 角色的人登入（擁有者已經在 `client` fixture 成立）。"""
+
+    async def seat() -> str:
+        sessions: async_sessionmaker[AsyncSession] = client.app.state.session_factory  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+        async with sessions() as session:
+            auth = JellyfinAuth(
+                token="", user_id=f"id-{name}", name=name, server_id="", is_administrator=False
+            )
+            return (await open_session(session, auth)).token
+
+    assert client.portal is not None
+    client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
 
 
 def save_berth_url(client: TestClient, url: str) -> httpx.Response:
@@ -78,7 +102,7 @@ def save_berth_url(client: TestClient, url: str) -> httpx.Response:
 
 
 def press_test(client: TestClient) -> httpx.Response:
-    response: httpx.Response = client.post(f"{BASE}/test", headers=BROWSER)
+    response: httpx.Response = client.post(f"{MINE}/test", headers=BROWSER)
     return response
 
 
@@ -97,11 +121,7 @@ class TestBotToken:
                 "?client_id=1000000000000000001&scope=bot&permissions=0"
             ),
             "token_rejected": False,
-            "discord_user_id": "",
-            "language": "zh-Hant",
             "berth_url": "",
-            "unreachable_at": None,
-            "unreachable_detail": "",
         }
         assert factory.discord_.token == TOKEN
         assert client.get(BASE).json()["bot_configured"] is True
@@ -147,7 +167,13 @@ class TestBotToken:
         # Berth 寫出去的等級（`configure_logging` 的 root 是 INFO，沒有開關調低）。DEBUG 底下
         # aiosqlite 會印出 SQL 參數——整份設定的 JSON，每一種憑證都在裡面——那一行從來不寫出去。
         caplog.set_level(LOGGED)
-        responses = [save_token(client), client.get(BASE), save_id(client), press_test(client)]
+        responses = [
+            save_token(client),
+            client.get(BASE),
+            save_id(client),
+            client.get(MINE),
+            press_test(client),
+        ]
         factory.discord_.unreachable.add(DISCORD_ID)
         responses.append(press_test(client))
         factory.discord_.rejected_tokens.add(TOKEN)
@@ -157,13 +183,13 @@ class TestBotToken:
         assert leaks(TOKEN, responses, caplog.records) == []
 
 
-class TestDiscordId:
+class TestMine:
     def test_an_id_is_kept_with_the_language_it_was_saved_in(self, client: TestClient) -> None:
         saved = save_id(client, language="en")
 
         assert saved.status_code == 200
         assert (saved.json()["discord_user_id"], saved.json()["language"]) == (DISCORD_ID, "en")
-        assert client.get(BASE).json()["discord_user_id"] == DISCORD_ID
+        assert client.get(MINE).json()["discord_user_id"] == DISCORD_ID
 
     @pytest.mark.parametrize("wrong", ["skipper#0001", "12345", "1" * 21])
     def test_something_that_is_not_a_snowflake_is_refused(
@@ -173,6 +199,61 @@ class TestDiscordId:
 
         assert refused.status_code == 422
         assert refused.json()["detail"]["reason"] == "discord_id_invalid"
+
+    def test_ready_is_subscribed_before_anything_is_saved(self, client: TestClient) -> None:
+        """填了 Discord ID 就收得到最主要的那一種；「正在下載」要自己勾。"""
+        assert client.get(MINE).json()["kinds"] == ["ready"]
+
+    def test_the_chosen_kinds_are_kept(self, client: TestClient) -> None:
+        save_id(client, kinds=("downloading", "ready"))
+        assert client.get(MINE).json()["kinds"] == ["ready", "downloading"]
+
+        save_id(client, kinds=())
+        assert client.get(MINE).json()["kinds"] == []
+
+    def test_a_kind_that_does_not_exist_is_refused(self, client: TestClient) -> None:
+        assert save_id(client, kinds=("weekly-gossip",)).status_code == 422
+
+
+class TestCrew:
+    """一般使用者（`user` 角色）：自己的那一半看得到、改得了、測得了；bot 那一半一個字都碰不到
+    （M4 票 125）。"""
+
+    def test_a_crew_member_sets_up_their_own_discord(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        save_token(client)
+        sign_in_crew(client)
+
+        page = client.get(MINE)
+        assert page.status_code == 200
+        assert page.json()["bot_configured"] is True
+        assert page.json()["discord_user_id"] == ""
+        assert "invite_url" not in page.json()
+
+        assert save_id(client, "100000000000000009", kinds=("ready", "downloading")).json()[
+            "kinds"
+        ] == ["ready", "downloading"]
+        assert press_test(client).json()["delivered"] is True
+        assert [recipient for recipient, _ in factory.discord_.sent] == ["100000000000000009"]
+
+    def test_the_bot_half_stays_behind_the_admin_gate(self, client: TestClient) -> None:
+        save_token(client)
+        sign_in_crew(client)
+
+        assert client.get(BASE).status_code == 403
+        assert save_token(client, "crew-token").status_code == 403
+        assert save_berth_url(client, "https://evil.example.com").status_code == 403
+
+    def test_each_person_reads_and_writes_only_their_own(self, client: TestClient) -> None:
+        save_id(client)
+        sign_in_crew(client)
+
+        assert client.get(MINE).json()["discord_user_id"] == ""
+        save_id(client, "100000000000000009")
+
+        sign_in_crew(client, "lookout")
+        assert client.get(MINE).json()["discord_user_id"] == ""
 
 
 class TestBerthUrl:
@@ -278,13 +359,13 @@ class TestTestButton:
         factory.discord_.unreachable.add(DISCORD_ID)
         press_test(client)
 
-        page = client.get(BASE).json()
+        page = client.get(MINE).json()
         assert page["unreachable_at"] is not None
         assert "50278" in page["unreachable_detail"]
 
         factory.discord_.unreachable.clear()
         press_test(client)
-        assert client.get(BASE).json()["unreachable_at"] is None
+        assert client.get(MINE).json()["unreachable_at"] is None
 
     def test_a_token_reset_in_discord_is_said_after_the_test(
         self, client: TestClient, factory: FakeClientFactory

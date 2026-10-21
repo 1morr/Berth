@@ -2944,6 +2944,8 @@ const zhHant = {
       title: '通知設定',
       readFailed: '讀不到通知設定。',
       lede: 'Berth 用你自己的 Discord bot 傳私訊給你。接上 bot、填自己的 Discord ID，再按測試確認手機收得到。',
+      userLede:
+        'Berth 用 Discord 私訊通知你。填自己的 Discord ID、勾要收的通知，再按測試確認手機收得到。',
       bot: {
         title: 'Discord bot',
         lede: '到 Discord Developer Portal 建一個 application、加上 bot，把它的 token 貼回這裡。',
@@ -2985,7 +2987,7 @@ const zhHant = {
         failed: '網址沒有存下來。',
       },
       me: {
-        title: '我的 Discord',
+        title: '我的通知',
         unreachableChip: '送不到',
         unreachable: '上次送給你的通知沒送到。',
         unreachableRetry: '補好之後按下面的「{{button}}」：送到了，這一句就會收掉。',
@@ -2995,10 +2997,22 @@ const zhHant = {
           '怎麼找：Discord 使用者設定 → 進階 → 開啟開發者模式，然後在自己的頭像上按右鍵 → 複製使用者 ID。',
         language: '通知用目前的介面語言（{{language}}）寫；切換介面語言後再按一次儲存就換。',
         savedLanguage: '現在存的是 {{language}}。',
+        from: '私訊會從 Discord 上的 {{bot}} 傳來。',
+        kinds: '要收的通知',
+        kind: {
+          ready: {
+            label: '可以看了',
+            hint: '入庫之後、Jellyfin 認出來的那一刻。同一部作品 5 分鐘內的幾批合成一則。',
+          },
+          downloading: {
+            label: '正在下載',
+            hint: 'RSS 每一輪、每部作品一則，人手按的下載也算；你自己按的不通知你。',
+          },
+        },
         save: '儲存',
         saving: '儲存中…',
         saved: '已儲存。',
-        failed: 'ID 沒有存下來。',
+        failed: '沒有存下來。',
       },
       test: {
         title: '測試',
@@ -3007,6 +3021,7 @@ const zhHant = {
         missingBot: '要先設定 Discord bot。',
         missingId: '要先填你的 Discord ID 並儲存。',
         missingBoth: '要先設定 Discord bot，並填你的 Discord ID。',
+        missingBotUser: '管理員還沒設定 Discord bot，設好之後才測得了。',
         delivered: '已送出',
         deliveredBody: '看看 Discord 的私訊。',
         failed: '測試沒有走完。',
@@ -3014,10 +3029,13 @@ const zhHant = {
           unauthorized: {
             what: 'Discord 不接受這個 bot token（被拒，或已經重設過）。',
             fix: '到 Developer Portal 取得新的 token，貼在上面的 Bot token 再儲存。',
+            userFix: '請管理員到 Developer Portal 換一個新的 token。',
           },
           recipient_unreachable: {
             what: 'bot 傳不到你。Discord 分不出原因：可能 bot 和你沒有共同的伺服器，也可能你在那個伺服器關了私人訊息。',
             fix: '兩件事都確認：用邀請連結把 bot 加進你所在的伺服器；在那個伺服器的隱私設定打開「私人訊息」。',
+            userFix:
+              '兩件事都確認：請管理員把 bot 加進你所在的伺服器；在那個伺服器的隱私設定打開「私人訊息」。',
           },
           rate_limited: {
             what: 'Discord 要 Berth 慢一點。',
@@ -6482,6 +6500,8 @@ const en: Translations<typeof zhHant> = {
       title: 'Notification settings',
       readFailed: 'The notification settings could not be read.',
       lede: 'Berth sends you Discord direct messages through your own bot. Connect the bot, add your Discord ID, then run the test to confirm your phone gets it.',
+      userLede:
+        'Berth notifies you by Discord direct message. Add your Discord ID, choose what to receive, then run the test to confirm your phone gets it.',
       bot: {
         title: 'Discord bot',
         lede: 'Create an application with a bot in the Discord Developer Portal, then paste its token here.',
@@ -6525,7 +6545,7 @@ const en: Translations<typeof zhHant> = {
         failed: 'The address was not saved.',
       },
       me: {
-        title: 'My Discord',
+        title: 'My notifications',
         unreachableChip: 'Not delivered',
         unreachable: 'The last notification to you did not arrive.',
         unreachableRetry:
@@ -6537,10 +6557,22 @@ const en: Translations<typeof zhHant> = {
         language:
           'Notifications are written in the current interface language ({{language}}); switch the interface language and save again to change it.',
         savedLanguage: 'Currently saved as {{language}}.',
+        from: 'Messages come from {{bot}} on Discord.',
+        kinds: 'Notify me about',
+        kind: {
+          ready: {
+            label: 'Ready to watch',
+            hint: 'When an import is recognised by Jellyfin. Batches of the same title within 5 minutes become one message.',
+          },
+          downloading: {
+            label: 'Downloading',
+            hint: 'One message per title for each RSS round, manual downloads included; never for the downloads you start yourself.',
+          },
+        },
         save: 'Save',
         saving: 'Saving…',
         saved: 'Saved.',
-        failed: 'The ID was not saved.',
+        failed: 'Not saved.',
       },
       test: {
         title: 'Test',
@@ -6549,6 +6581,7 @@ const en: Translations<typeof zhHant> = {
         missingBot: 'Set up the Discord bot first.',
         missingId: 'Enter and save your Discord ID first.',
         missingBoth: 'Set up the Discord bot and enter your Discord ID first.',
+        missingBotUser: 'An admin has not set up the Discord bot yet; the test works once they do.',
         delivered: 'Sent',
         deliveredBody: 'Check your Discord direct messages.',
         failed: 'The test did not go through.',
@@ -6556,10 +6589,13 @@ const en: Translations<typeof zhHant> = {
           unauthorized: {
             what: 'Discord does not accept this bot token (it was rejected or has been reset).',
             fix: 'Get a new token from the Developer Portal, paste it into Bot token above and save.',
+            userFix: 'Ask an admin to get a new token from the Developer Portal.',
           },
           recipient_unreachable: {
             what: 'The bot cannot reach you. Discord cannot say why: the bot and you may share no server, or you may have direct messages turned off in that server.',
             fix: 'Check both: add the bot to a server you are in with the invite link, and turn on “Direct Messages” in that server’s privacy settings.',
+            userFix:
+              'Check both: ask an admin to add the bot to a server you are in, and turn on “Direct Messages” in that server’s privacy settings.',
           },
           rate_limited: {
             what: 'Discord asked Berth to slow down.',
