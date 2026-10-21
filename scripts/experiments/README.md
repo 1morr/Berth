@@ -12,8 +12,8 @@ brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7 / §20.8。原始 JSON 落
 stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
-或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`、`jellyfin_images.py` 與 `rss_subscribe_timing.py`**：它們量的就是 Berth
-自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`discord_dm.py` 不 import `berth`，但 `gateway-once` 那一步要虛擬環境裡的 `websockets`，所以也一律 `uv run`；`large_library_berth.py`
+或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`、`jellyfin_images.py`、`rss_subscribe_timing.py` 與 `sweep_loop_lag.py`**：它們量的就是 Berth
+自己（解析器、圖片代理、巡檢一輪佔住事件迴圈多久），搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`discord_dm.py` 不 import `berth`，但 `gateway-once` 那一步要虛擬環境裡的 `websockets`，所以也一律 `uv run`；`large_library_berth.py`
 也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境；`jellyfin_stream_probe.py` 同樣
 跑在 `berth` 容器裡，讀的是那一套 Berth 的資料庫與 compose 內網的 `jellyfin`，不 import `berth`）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
@@ -45,6 +45,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `runtime_gap.py` | M3 票 15：片長驗證的門檻（`RUNTIME_SLACK`、`RUNTIME_RATIO`）：真的 mediainfo 片長（AnimeTosho）對語料的 TMDB 快照，量對得上的正片比例與秒數差落在哪；兩集合併檔以相鄰兩集的真實片長相加模擬，NCOP / SP 沒有量到。不用容器、不需要憑證，只讀本地 `tests/fixtures/`，不下載任何影片內容；結果記在 `.scratch/m3/issues/15-runtime-check.md` 的 Comments |
 | `first_batch_rule.py` | M4 票 11：第一批「證據夠強」（`parser.vouch_first_batch`）擔保了幾筆、有沒有擔保錯。語料（期望答案在手，沒有發佈時間的模擬成那一集播出後一天）、split-cour 模擬（TMDB 併成一季、第二輪從 01 重數）、`air_date_lag.py` 那一套真的 RSS fixture（沒有標準答案，列出不擔保的那幾筆）。import `berth`，要用 `uv run`；`--online` 才連網 |
 | `rss_subscribe_timing.py` | M4 票 13b：前端 e2e `rss-subscribe` 的第一輪預覽 5 秒內沒回，是在等鎖、等背景的補舊集，還是自己就慢。對 `rss` 情境的演練 server（`scripts/fake_setup_server.py`，子程序）打同一串 API 逐步計時，`--settle` 先等補舊集跑完，`--profile` 改在同一個行程起 server、cProfile 包住 `preview_feed`；M4 票 121b 加 `--watch`：建好 feed 之後反覆讀預覽與 `/jobs`，看預覽的「重複」跟著 Mikan 補舊集的入庫變。import `berth` 與 httpx（量的是 Berth 自己），要在 repo 根目錄以 `uv run` 跑；不連網；結果記在票的 Comments |
+| `sweep_loop_lag.py` | M4 票 129：每日巡檢一輪（`services.sweep.sweep_once`）佔住事件迴圈最久多少毫秒——巡檢與 API 跑在同一個迴圈，M4 票 13b 量過解析 CPU 會拖慢別的請求。暫時的資料庫上灌 RSS Series、Job、事件、開著的 Issue，跑三輪，另一個 coroutine 每 1 ms 醒一次記下晚了多少。import `berth`，要用 `uv run`；不連網；結果記在票的 Comments |
 | `qbittorrent_category_download_path.py` | M4 票 22：分類帶 `downloadPathEnabled` + `downloadPath` 時，autoTMM 的 torrent 下載中落在哪、完成後搬到哪；全域 temp path 開、關、分類明說停用各一包，另記讀回來的鍵名。一台做種的 5.2.3 以 `addPeers` 直連、全域限速讓「下載中」看得到；torrent 是 private 而且關掉 DHT / LSD / PeX，不會連到公網的 peer。4.4.5 的 image 是 busybox，列檔不能用 `find -printf`。自己起停一次性容器；結論在 brief §20.2 |
 | `qbittorrent_visibility_probe.py` | M4 票 19：Berth 怎麼證明 qBittorrent 看得到分類路徑——寫一個小檔、做成單檔 torrent、停住加入、recheck，看 `progress`。看得到、看不到、同名空目錄、權限不足、開了 temp path、`useDownloadPath=false` 各一包；另記移除之後留下什麼。自己起停一次性容器；結論在 brief §20.2 |
 | `qbittorrent_webui_login_rules.py` | M4 票 26：`setPreferences` 收什麼樣的 WebUI 帳密——帳號 2 / 3 字元、含冒號，密碼 5 / 6 字元、六個中文字，帳號與密碼一起送時密碼太短（兩種鍵序），各記狀態碼、原文與帳號有沒有被寫進去。4.4.5 什麼都收；5.2.3 擋三條、帳號先寫。自己起停一次性容器（網段固定 172.24.0.0/16）；結論在 brief §20.2 |

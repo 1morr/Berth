@@ -540,6 +540,50 @@ describe('待處理頁', () => {
     expect(within(row).getByText('門檻')).toBeInTheDocument()
   })
 
+  it('第一批卡住以 Series 認，說出停在哪、為什麼，下一步連到那一筆下載（M4 票 129）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'first_batch_stuck',
+            subject: '7',
+            path: '',
+            job_hash: HASH,
+            ledger_id: null,
+            detail: {
+              series: 7,
+              name: '[LoliHouse] Kimi to Koishitai - 11',
+              job: '[LoliHouse] Kimi to Koishitai - 11 [WebRip 1080p]',
+              state: 'submit_failed',
+              error: 'qBittorrent refused the torrent',
+              since: '2026-10-20T03:00:00+00:00',
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(
+      within(row).getByRole('heading', { name: '[LoliHouse] Kimi to Koishitai - 11' }),
+    ).toBeInTheDocument()
+    expect(within(row).getByText('RSS Series 的第一批卡住了，一直等人確認')).toBeInTheDocument()
+    expect(within(row).getByText('第一批卡住')).toBeInTheDocument()
+    await userEvent.click(within(row).getByText('[LoliHouse] Kimi to Koishitai - 11'))
+    expect(within(row).getByText('送單失敗')).toBeInTheDocument()
+    expect(within(row).getByText('qBittorrent refused the torrent')).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: HASH })).toHaveAttribute('href', `/jobs/${HASH}`)
+    expect(within(row).getByText(/重試或刪掉它/)).toBeInTheDocument()
+    // 出路不在這一列上：只剩忽略。
+    expect(
+      within(row)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['忽略'])
+  })
+
   it('重新入庫先選作品，送出去的是選的那一部（M2 票 10）', async () => {
     const FOLDER = '/data/torrent/complete/anime/[Group] SPY×FAMILY S01'
     const stub = render({

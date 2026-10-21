@@ -8,6 +8,7 @@ from berth.pipeline.planning import PlannerRunner
 from berth.pipeline.reconciling import Reconciler
 from berth.pipeline.resolving import JellyfinResolver
 from berth.pipeline.rss import RssPoller
+from berth.pipeline.sweeping import Sweeper
 
 __all__ = [
     "TICK",
@@ -19,4 +20,5 @@ __all__ = [
     "QbitPoller",
     "Reconciler",
     "RssPoller",
+    "Sweeper",
 ]

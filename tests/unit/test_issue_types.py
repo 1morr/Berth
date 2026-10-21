@@ -1,4 +1,5 @@
-"""十四種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17）。
+"""十五種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
+M4 票 129）。
 
 `IssueType` 有兩個呼叫端：管線寫 `issue_detected` 事件時用它，對帳寫 `issues` 表時也用它。
 **共用一個集合**是票 05 的驗收條件之一，而共用的代價是「加一種型別」要回答兩個問題——
@@ -50,15 +51,22 @@ FROM_HEALTH_CHECKS = {
 #: Jellyfin 回驗（M3 票 17）：反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`。
 FROM_JELLYFIN_VERIFY = {IssueType.JELLYFIN_ITEM_MISMATCH}
 
+#: 每日巡檢（M4 票 129）：每天量一次，條件解除時由系統收掉。
+FROM_SWEEP = {IssueType.FIRST_BATCH_STUCK}
+
 
 class TestTheClosedSet:
     def test_it_is_the_union_of_the_three_producers(self) -> None:
-        """十四種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種（plan §2.4）。
+        """十五種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的一種（plan §2.4）。
 
-        分別列一次而不是數 14：多一種而各邊都沒登記它時，說得出少的是哪一種。
+        分別列一次而不是數 15：多一種而各邊都沒登記它時，說得出少的是哪一種。
         """
         assert set(IssueType) == (
-            FROM_RECONCILING | FROM_THE_PIPELINE | FROM_HEALTH_CHECKS | FROM_JELLYFIN_VERIFY
+            FROM_RECONCILING
+            | FROM_THE_PIPELINE
+            | FROM_HEALTH_CHECKS
+            | FROM_JELLYFIN_VERIFY
+            | FROM_SWEEP
         )
 
     def test_the_three_groups_do_not_overlap(self) -> None:
@@ -67,6 +75,7 @@ class TestTheClosedSet:
         assert not FROM_THE_PIPELINE & FROM_HEALTH_CHECKS
         others = FROM_RECONCILING | FROM_THE_PIPELINE | FROM_HEALTH_CHECKS
         assert not FROM_JELLYFIN_VERIFY & others
+        assert not FROM_SWEEP & (others | FROM_JELLYFIN_VERIFY)
 
 
 class TestTheIdempotencyKey:
@@ -111,6 +120,14 @@ class TestTheIdempotencyKey:
         }
 
         assert by_ledger == {IssueType.JELLYFIN_ITEM_UNRESOLVED, IssueType.JELLYFIN_ITEM_MISMATCH}
+
+    def test_the_stuck_first_batch_is_one_series(self) -> None:
+        """等人的是那一批，不是哪一筆下載：同一批停了三筆也是一件（M4 票 129）。"""
+        by_series = {
+            kind for kind, column in SUBJECT_OF.items() if column is IssueSubject.RSS_SERIES
+        }
+
+        assert by_series == {IssueType.FIRST_BATCH_STUCK}
 
 
 class TestWhatEachTypeCanBeResolvedWith:

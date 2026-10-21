@@ -207,10 +207,12 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十四種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17 加一種）：
+    **十五種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+    各加一種）：
     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`）。各邊共用同一個
+    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再一種是每日巡檢
+    （`sweeper`）。各邊共用同一個
     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
     與 `ISSUE_ACTIONS` 那兩條閘門。
 
@@ -256,6 +258,11 @@ class IssueType(StrEnum):
     #: 涵蓋範圍不同的正片被併成一集（brief §7.8、§20.9）、作品被認成別的；Berth 自己算錯的集數
     #: 它抓不到（檔名就是 Berth 取的，brief §6.10）。下一次比到一致時系統收掉。
     JELLYFIN_ITEM_MISMATCH = "jellyfin_item_mismatch"
+    #: 每日巡檢（M4 票 129，plan §11.5〈巡檢〉）：一個還沒確認的 RSS Series 有 Job 停在
+    #: `submit_failed` / `client_error` 超過 `sweep.STUCK_AFTER`，而且沒有別的 Issue 管著——第一批
+    #: 要整批落地才由系統確認（`services.first_batch`），所以那一批一直等人。一個 Series 一件；
+    #: 那幾筆 Job 走開了（重試成功、被刪）或 Series 確認了，下一輪巡檢由系統收掉。
+    FIRST_BATCH_STUCK = "first_batch_stuck"
 
 
 class IssueStatus(StrEnum):
@@ -280,6 +287,9 @@ class IssueSubject(StrEnum):
     PATH = "path"
     JOB_HASH = "job_hash"
     LEDGER_ID = "ledger_id"
+    #: RSS Series 的 id（M4 票 129）。`issues` 沒有 Series 那一欄：id 就是 subject 本身，
+    #: `detail_json.series` 另存一份整數。
+    RSS_SERIES = "rss_series"
 
 
 #: 逐型別的冪等鍵來源（plan §2.4 那一段逐型別寫死了取哪一欄）。
@@ -316,6 +326,8 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     IssueType.LIBRARY_USES_TVDB: IssueSubject.PATH,
     # 量的那個根目錄（incomplete 或 complete）。兩者在同一個檔案系統上時只量一次，只有一件。
     IssueType.LOW_DISK_SPACE: IssueSubject.PATH,
+    # **一個 Series 一件**（M4 票 129）：等人的是那一批，不是哪一筆下載；同一批停了三筆也是一件事。
+    IssueType.FIRST_BATCH_STUCK: IssueSubject.RSS_SERIES,
 }
 
 
@@ -406,6 +418,9 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.JELLYFIN_ITEM_MISMATCH: (IssueAction.RELOOK,),
     IssueType.LIBRARY_USES_TVDB: (),
     IssueType.LOW_DISK_SPACE: (),
+    # 出路有三條，都不在這一列上：到 Job 頁重試或刪掉停住的那一筆，或到審核頁確認整個 Series。
+    # 哪一條對要看那一筆為什麼停，畫面把三條說出來、連到那一筆（M4 票 129）。
+    IssueType.FIRST_BATCH_STUCK: (),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：
