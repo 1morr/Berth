@@ -79,7 +79,7 @@ export function AuditGroup({ rows, onDone }: { rows: readonly AuditReviewRow[]; 
       members={
         <ul className="mt-2 grid gap-2">
           {rows.map((row) => (
-            <li key={row.ref} className="min-w-0">
+            <li key={row.ref} id={`audit-${row.ref}`} className="min-w-0">
               <AuditRow
                 row={row}
                 onDone={onDone}

@@ -154,6 +154,20 @@ class NotifySenderSettings(SettingsGroup):
     last_sent_at: datetime | None = None
 
 
+class NotifyWatchSettings(SettingsGroup):
+    """「有 N 件等你處理」上一輪看到的那幾件（M4 票 127，`services.notify.watch_waiting`）。
+
+    **存身分不存數字**：同一輪裡處理掉一件、又進來一件，總數不變，可是有一件是新的。鍵的形狀在
+    `services.waiting`（`review:audit:12`、`issue:5`、`rss:7`）。自己一列，理由同
+    `NotifySenderSettings`：這是送出迴圈的紀錄，不是誰的設定。
+    """
+
+    KEY = "notify_waiting"
+
+    #: `None` 是還沒看過：第一次看到的那幾件當底，不算新的（升級那一刻已經在等的不一次湧出來）。
+    seen: list[str] | None = None
+
+
 class QbittorrentSettings(SettingsGroup):
     KEY = "services.qbittorrent"
 
@@ -584,4 +598,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     SearchSettings,
     NotifySettings,
     BerthSettings,
+    NotifyWatchSettings,
 )

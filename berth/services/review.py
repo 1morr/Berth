@@ -287,6 +287,25 @@ async def review_total(session: AsyncSession) -> int:
 
 
 @command(Effect.READ)
+async def queue_keys(session: AsyncSession) -> list[tuple[ReviewKind, int]]:
+    """整份佇列每一列是誰：那一類與它的 id（`PlanRow.plan_id`、`AuditRow.ledger_id`、
+    `UnmatchedRow.job_file_id`、`DuplicateRow.item_id`），不拿內容。「有 N 件等你處理」靠它認出
+    哪一件是新的（M4 票 127）；與 `review_queue` 是同一組查詢，所以這裡有的就是佇列上看得到的，
+    數量就是 `review_total`。"""
+    ids = {
+        ReviewKind.PLAN: _held_plans().with_only_columns(Plan.id),
+        ReviewKind.UNMATCHED: _unmatched().with_only_columns(JobFile.id),
+        ReviewKind.AUDIT: select(LedgerEntry.id).where(LedgerEntry.audit),
+        ReviewKind.DUPLICATE: _duplicates().with_only_columns(PlanItem.id),
+    }
+    return [
+        (kind, int(found))
+        for kind in sorted(ids, key=lambda kind: REVIEW_PRIORITY[kind])
+        for found in await session.scalars(ids[kind])
+    ]
+
+
+@command(Effect.READ)
 async def library_queue(
     session: AsyncSession, library_id: str, *, limit: int = QUEUE_LIMIT
 ) -> ReviewQueue:

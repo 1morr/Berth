@@ -1970,6 +1970,17 @@ async def list_series(
     return tuple([await _series_view(session, row, asked=asked, now=moment) for row in rows])
 
 
+@command(Effect.READ)
+async def unbound_series(session: AsyncSession) -> list[int]:
+    """待綁定的 RSS Series 的 id，小的在前：RSS 頁待綁定段列的就是這幾個（`media_id` 是空的）。
+    「有 N 件等你處理」靠它認出哪一件是新的（M4 票 127）。"""
+    return list(
+        await session.scalars(
+            select(RssSeries.id).where(RssSeries.media_id.is_(None)).order_by(RssSeries.id)
+        )
+    )
+
+
 @command(Effect.REVERSIBLE, inverse="rss.unbind_series")
 async def bind_series(
     session: AsyncSession,

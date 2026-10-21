@@ -83,9 +83,16 @@ const KIND_TEXT = {
     label: 'settings.notifyPage.me.kind.downloading.label',
     hint: 'settings.notifyPage.me.kind.downloading.hint',
   },
+  waiting: {
+    label: 'settings.notifyPage.me.kind.waiting.label',
+    hint: 'settings.notifyPage.me.kind.waiting.hint',
+  },
 } as const satisfies Record<NotificationKind, { label: Key; hint: Key }>
 
 const KINDS = Object.keys(KIND_TEXT) as NotificationKind[]
+
+/** 只有管理員收得到的種類（後端也會把一般使用者的 `waiting` 剝掉）。 */
+const ADMIN_ONLY_KINDS: ReadonlySet<NotificationKind> = new Set(['waiting'])
 
 /** 每一種拒絕理由的一句話。少一種是編譯錯誤。 */
 const REFUSAL_TEXT = {
@@ -439,12 +446,13 @@ function MySection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
   const language = useUiLanguage()
   const [id, setId] = useState(mine.discord_user_id)
   const [kinds, setKinds] = useState<ReadonlySet<NotificationKind>>(() => new Set(mine.kinds))
+  const shownKinds = KINDS.filter((kind) => admin || !ADMIN_ONLY_KINDS.has(kind))
   const save = useMutation({
     mutationFn: () =>
       saveMine({
         discord_user_id: id.trim(),
         language,
-        kinds: KINDS.filter((kind) => kinds.has(kind)),
+        kinds: shownKinds.filter((kind) => kinds.has(kind)),
       }),
     onSuccess: (next) => queryClient.setQueryData(myNotifyQueryOptions.queryKey, next),
   })
@@ -519,7 +527,7 @@ function MySection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
         </div>
         <fieldset className="grid gap-3">
           <legend className="label mb-2 text-ink-dim">{t('settings.notifyPage.me.kinds')}</legend>
-          {KINDS.map((kind) => (
+          {shownKinds.map((kind) => (
             <Checkbox
               key={kind}
               label={t(KIND_TEXT[kind].label)}

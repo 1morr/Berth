@@ -2,7 +2,7 @@ import { focusManager } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { AuditReviewRow, DuplicateReviewRow, ReviewQueue } from '../api/review'
 import {
@@ -1022,5 +1022,60 @@ describe('審核頁對 Berth 的請求沒成時說出對的原因', () => {
     expect(alert).toHaveTextContent(/沒有成功。/)
     expect(alert).toHaveTextContent(expected)
     expect(alert).not.toHaveTextContent(/自己的 API/)
+  })
+})
+
+describe('通知連結的片段（M4 票 127）', () => {
+  it('#audit-8 單獨的一列：焦點落在它', async () => {
+    render({ [QUEUE]: queue([audit({ ref: 7 }), audit({ ref: 8, job_hash: OTHER })]) })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/review#audit-8')
+
+    await screen.findAllByRole('article')
+
+    await waitFor(() => expect(document.activeElement?.id).toBe('audit-8'))
+    expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('#duplicate-40：用 kind 當前綴', async () => {
+    render({ [QUEUE]: queue([audit(), duplicate()]) })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/review#duplicate-40')
+
+    await screen.findAllByRole('article')
+
+    await waitFor(() => expect(document.activeElement?.id).toBe('duplicate-40'))
+  })
+
+  it('目標是一組裡的成員：先把那一組攤開，焦點落在成員', async () => {
+    render({
+      [QUEUE]: queue(
+        [7, 8].map((ref) =>
+          audit({ ref, series: series(), reason: { code: 'first_batch', params: {} } }),
+        ),
+      ),
+    })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/review#audit-8')
+
+    await screen.findAllByRole('article')
+
+    await waitFor(() => expect(document.activeElement?.id).toBe('audit-8'))
+    expect(document.getElementById('audit-8')?.closest('details')).toHaveAttribute('open')
   })
 })

@@ -161,6 +161,19 @@ class TestSignIn:
 
         assert again.user.role is Role.USER
 
+    async def test_a_new_admin_is_subscribed_to_what_waits_for_them(
+        self, session: AsyncSession, factory: OneJellyfin
+    ) -> None:
+        """M4 票 127：管理員預設多訂「有 N 件等你處理」；一般使用者只有「可以看了」。"""
+        skipper = await sign_in(session, factory, username="skipper", password="harbour")
+        deckhand = await sign_in(session, factory, username="deckhand", password="rope")
+
+        admin_row = await session.get(User, skipper.user.id)
+        crew_row = await session.get(User, deckhand.user.id)
+        assert admin_row is not None and crew_row is not None
+        assert admin_row.notify_kinds_json == ["ready", "waiting"]
+        assert crew_row.notify_kinds_json == ["ready"]
+
     async def test_two_people_get_two_rows(
         self, session: AsyncSession, factory: OneJellyfin
     ) -> None:

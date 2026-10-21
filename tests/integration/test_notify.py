@@ -355,7 +355,9 @@ class TestLink:
         await deliver(session, factory)
 
         ((_, message),) = factory.discord_.sent
-        assert message.link == Link("在 Berth 打開", "https://berth.example.com/media/tv:120089")
+        assert message.links == (
+            Link("在 Berth 打開", "https://berth.example.com/media/tv:120089"),
+        )
 
     async def test_without_an_address_the_message_is_sent_without_a_link(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -367,7 +369,7 @@ class TestLink:
         await deliver(session, factory)
 
         ((_, message),) = factory.discord_.sent
-        assert message.link is None
+        assert message.links == ()
         assert "SPY×FAMILY 間諜家家酒" in message.title
 
 

@@ -17,6 +17,7 @@ import { DetailLine, QueueRow } from '../components/QueueRow'
 import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
+import { useHashTarget } from '../components/useHashTarget'
 import { ExclusionsSection } from '../rss/ExclusionsSection'
 import { FeedSection } from '../rss/FeedSection'
 import { FirstRoundSection } from '../rss/FirstRoundSection'
@@ -51,6 +52,7 @@ export function RssPage() {
   const bound = (series.data ?? []).filter((row) => row.media_id !== null)
   const loading = feeds.isPending || series.isPending || items.isPending || exclusions.isPending
   const off = !loading && (!feeds.data || !series.data || !items.data || !exclusions.data)
+  useHashTarget(!loading && !off)
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-8 px-6 py-8">
@@ -108,7 +110,7 @@ function Pending({ rows, onDone }: { rows: RssSeries[]; onDone: (said: string) =
       <p className="max-w-prose text-sm text-ink-dim">{t('rss.pending.lede')}</p>
       <ul className="grid gap-3">
         {rows.map((row) => (
-          <li key={row.id} className="min-w-0">
+          <li key={row.id} id={`series-${row.id}`} className="min-w-0">
             <QueueRow
               label={t('rss.pending.label')}
               title={row.title_raw}

@@ -37,6 +37,12 @@
   `/api/settings/notifications/me`、`/test` 搬到 `GET|PUT /api/me/notifications`（多 `kinds`）、
   `POST /api/me/notifications/test`；`GET /api/settings/notifications` 只剩 bot 與 Berth 的網址。
   **這一版有資料庫 migration**（`f4b8d2e6a913`）：使用者多一欄（要收的通知種類，既有的人是「可以看了」）。
+- **「有 N 件等你處理」**（M4 票 127）：待審核、Issue 或待綁定的 RSS Series 有新的一件時，管理員收到一則 Discord
+  私訊；10 分鐘內接著出現的併進同一則。訊息說出這一波新增了什麼（「新增 3 件：1 件待審核、1 個 Issue（無主目錄）、
+  1 個 RSS Series 待綁定」）與現在各有幾件；只有一件時連到那一列（頁面打開後捲到那裡），多件時連到各自的清單。
+  送出前都已經處理掉的就不送；被忽略、隔天對帳又開的 Issue 算進總數但不再推。原本規劃的「Issue 新增」通知併進這一則。
+  只有管理員收得到、在設定 → 通知勾得到；管理員預設就勾著。Discord 的連結好幾條時寫在同一行。
+  **這一版有資料庫 migration**（`b7d1e5a3c820`）：既有的管理員補上這一種通知的訂閱。
 
 ### Fixed
 

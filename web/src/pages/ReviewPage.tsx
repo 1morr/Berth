@@ -14,6 +14,7 @@ import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
 import { SectionHeading } from '../components/SectionHeading'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
+import { useHashTarget } from '../components/useHashTarget'
 import { AuditGroup } from '../review/AuditGroup'
 import { AuditSectionConfirm } from '../review/AuditSectionConfirm'
 import { groupAudits, type ReviewEntry } from '../review/auditGroups'
@@ -44,6 +45,7 @@ export function ReviewPage() {
   const [said, setSaid] = useState({ text: '', shown: false })
   const done: Said = (text, shown = false) => setSaid({ text, shown })
   const frame = useFocusAfterRemoval()
+  useHashTarget(queue.data !== undefined)
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-6 px-6 py-8">
@@ -105,7 +107,12 @@ export function ReviewPage() {
               />
               <ul className="grid gap-3">
                 {entries.map((entry) => (
-                  <li key={entryKey(entry)} className="min-w-0">
+                  <li
+                    key={entryKey(entry)}
+                    // 組沒有自己的片段：成員的 `<li>` 才有（`AuditGroup`）。
+                    id={entry.kind === 'row' ? `${entry.row.kind}-${entry.row.ref}` : undefined}
+                    className="min-w-0"
+                  >
                     {entry.kind === 'group' ? (
                       <AuditGroup rows={entry.rows} onDone={done} />
                     ) : (

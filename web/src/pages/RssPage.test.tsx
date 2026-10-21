@@ -2231,3 +2231,21 @@ describe('RSS 頁：被排除的那一筆仍然下載（M4 票 111）', () => {
     )
   })
 })
+
+describe('通知連結的片段（M4 票 127）', () => {
+  it('#series-8 在資料回來之後捲到那一個待綁定、焦點落在它', async () => {
+    render({ 'GET /api/rss/series': { body: [series(), series({ id: 8, key: 'mikan:1:2' })] } })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/rss#series-8')
+
+    await screen.findAllByRole('article')
+
+    await waitFor(() => expect(document.activeElement?.id).toBe('series-8'))
+    expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
+  })
+})

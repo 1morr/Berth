@@ -4305,10 +4305,10 @@ export interface components {
          * NotificationKind
          * @description 待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
          *
-         *     票 127、131 各加一種。
+         *     票 131 再加一種（週報）。
          * @enum {string}
          */
-        NotificationKind: "ready" | "downloading";
+        NotificationKind: "ready" | "downloading" | "waiting";
         /**
          * NotifyBotOut
          * @description 管理員那一半。

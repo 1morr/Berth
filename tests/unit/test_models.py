@@ -135,6 +135,8 @@ def test_every_settings_group_has_a_distinct_key() -> None:
         "disk",
         "health",
         "notify",
+        # 「等你處理」的看守記下上一輪看到的那幾件（M4 票 127），同上一列一個寫者。
+        "notify_waiting",
         "paths",
         # 兩個背景迴圈各寫自己那一列：整組覆寫是 `write_settings` 的常態，共用一列會互相蓋掉。
         "poller",

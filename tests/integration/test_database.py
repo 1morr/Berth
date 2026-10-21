@@ -1159,3 +1159,66 @@ async def test_series_held_back_by_the_budget_are_due_next_round(config: Config)
     assert downgraded["mikan:1:1"] == [deferred]
     assert downgraded["mikan:2:1"] == upgraded["mikan:2:1"]
     assert downgraded["mikan:3:1"] == other
+
+
+NOTIFY_KINDS = "f4b8d2e6a913"
+WAITING_FOR_ADMINS = "b7d1e5a3c820"
+
+
+async def test_existing_admins_are_subscribed_to_waiting(config: Config) -> None:
+    """M4 票 127：升版之前就在的管理員補上「等你處理」，一般使用者不動；自己勾過的種類照留。
+    降版拿掉它，連同排著的那幾則（舊版認不得這個種類）。"""
+    people = (
+        ("1", "admin", '["ready"]'),
+        ("2", "admin", '["ready", "downloading"]'),
+        ("3", "admin", "[]"),
+        ("4", "user", '["ready"]'),
+    )
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, NOTIFY_KINDS)
+        with _sqlite(config.database_path) as db:
+            for id_, role, kinds in people:
+                db.execute(
+                    "INSERT INTO users (id, jellyfin_user_id, name, role, created_at,"
+                    " notify_kinds_json) VALUES (?, ?, ?, ?, ?, ?)",
+                    (id_, f"jf-{id_}", f"p{id_}", role, "2026-10-01T00:00:00.000000+00:00", kinds),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, WAITING_FOR_ADMINS)
+        with _sqlite(config.database_path) as db:
+            upgraded = {
+                id_: json.loads(raw)
+                for id_, raw in db.execute("SELECT id, notify_kinds_json FROM users")
+            }
+            db.execute(
+                "INSERT INTO notifications (user_id, kind, content_json, merge_key, not_before,"
+                " status, attempts, error, created_at) VALUES (1, 'waiting', '{}', 'waiting',"
+                " '2026-10-01T00:00:00.000000+00:00', 'pending', 0, '',"
+                " '2026-10-01T00:00:00.000000+00:00')"
+            )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, NOTIFY_KINDS)
+        with _sqlite(config.database_path) as db:
+            downgraded = {
+                id_: json.loads(raw)
+                for id_, raw in db.execute("SELECT id, notify_kinds_json FROM users")
+            }
+            (left,) = db.execute("SELECT count(*) FROM notifications").fetchone()
+    finally:
+        await engine.dispose()
+
+    assert upgraded == {
+        1: ["ready", "waiting"],
+        2: ["ready", "downloading", "waiting"],
+        3: ["waiting"],
+        4: ["ready"],
+    }
+    assert downgraded == {1: ["ready"], 2: ["ready", "downloading"], 3: [], 4: ["ready"]}
+    assert left == 0

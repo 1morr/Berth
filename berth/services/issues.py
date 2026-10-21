@@ -27,7 +27,7 @@ Issue，而使用者剛剛才決定過它。
 from __future__ import annotations
 
 import logging
-from collections.abc import Coroutine, Iterable, Sequence
+from collections.abc import Collection, Coroutine, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +35,7 @@ from typing import Any, assert_never
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
@@ -233,6 +234,59 @@ async def count_open(session: AsyncSession) -> int:
     `/issues`。"""
     counted = select(func.count(Issue.id)).where(Issue.status == IssueStatus.OPEN)
     return int(await session.scalar(counted) or 0)
+
+
+@command(Effect.READ)
+async def open_issues(session: AsyncSession) -> list[tuple[int, IssueType]]:
+    """開著的每一件（id 與型別），id 小的在前。「有 N 件等你處理」靠它認出哪一件是新的
+    （M4 票 127）。"""
+    rows = await session.execute(
+        select(Issue.id, Issue.type).where(Issue.status == IssueStatus.OPEN).order_by(Issue.id)
+    )
+    return list(rows.tuples())
+
+
+@command(Effect.READ)
+async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> set[int]:
+    """這幾件開著的裡面，同一件事（型別與鍵都相同）的上一筆被忽略、而且之後條件沒解除過的
+    （沒有 `cleared_at`）：條件一直都在，是下一輪偵測又開了一筆（`STAYS_IGNORED` 以外那幾種，
+    brief §9.1 的「這一次不處理」）。「有 N 件等你處理」不把它們算成新增（M4 票 127）——人說過這一件
+    不用管，每天推一次是噪音；解除過再發生的是新的一件。
+
+    只問給的那幾件：看守每一輪只拿剛出現的來問，歷史再長也不必每 10 秒掃一次。
+    """
+    if not issue_ids:
+        return set()
+    earlier = aliased(Issue)
+    last_before = (
+        select(earlier.id)
+        .where(
+            earlier.type == Issue.type,
+            earlier.subject == Issue.subject,
+            earlier.id < Issue.id,
+        )
+        .order_by(earlier.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    pairs = list(
+        (
+            await session.execute(select(Issue.id, last_before).where(Issue.id.in_(issue_ids)))
+        ).tuples()
+    )
+    before = {
+        row.id: row
+        for row in await session.scalars(
+            select(Issue).where(Issue.id.in_([prior for _, prior in pairs if prior is not None]))
+        )
+    }
+    return {
+        id_
+        for id_, prior in pairs
+        if (row := before.get(prior)) is not None
+        and row.status is IssueStatus.IGNORED
+        and CLEARED_AT not in (row.detail_json or {})
+    }
 
 
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:

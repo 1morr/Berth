@@ -74,7 +74,7 @@ async def test_a_link_is_written_into_the_description_not_the_embed_url() -> Non
     brief §20.23）。連結不可以讓通知送不出去。"""
     respx.post(OPEN).mock(return_value=recorded("users-me-channels.created"))
     sent = respx.post(SEND).mock(return_value=recorded("channels-messages.embed"))
-    message = replace(MESSAGE, link=Link("在 Berth 打開", "http://berth:8000/media/tv:120089"))
+    message = replace(MESSAGE, links=(Link("在 Berth 打開", "http://berth:8000/media/tv:120089"),))
 
     delivery = await bot().send(RECIPIENT, message)
 
@@ -91,7 +91,7 @@ async def test_a_description_cut_to_the_limit_keeps_the_link_whole() -> None:
     message = Message(
         title="可以看了",
         description="E" * 5000,
-        link=Link("在 Berth 打開", "https://berth.example.com/media/tv:120089"),
+        links=(Link("在 Berth 打開", "https://berth.example.com/media/tv:120089"),),
     )
 
     await bot().send(RECIPIENT, message)
@@ -110,13 +110,35 @@ async def test_a_link_alone_is_the_whole_description() -> None:
     sent = respx.post(SEND).mock(return_value=recorded("channels-messages.embed"))
     message = Message(
         title="可以看了：Inception",
-        link=Link("Open in Berth", "https://b.example/media/movie:27205"),
+        links=(Link("Open in Berth", "https://b.example/media/movie:27205"),),
     )
 
     await bot().send(RECIPIENT, message)
 
     (embed,) = json.loads(sent.calls.last.request.content)["embeds"]
     assert embed["description"] == "[Open in Berth](https://b.example/media/movie:27205)"
+
+
+@respx.mock
+async def test_several_links_share_the_last_line() -> None:
+    """「有 N 件等你處理」一波跨好幾種時每一種一條清單連結（M4 票 127）。"""
+    respx.post(OPEN).mock(return_value=recorded("users-me-channels.created"))
+    sent = respx.post(SEND).mock(return_value=recorded("channels-messages.embed"))
+    message = Message(
+        title="有 2 件等你處理",
+        description="新增 2 件",
+        links=(
+            Link("打開審核", "http://berth:8000/review"),
+            Link("打開 Issue", "http://berth:8000/issues"),
+        ),
+    )
+
+    await bot().send(RECIPIENT, message)
+
+    (embed,) = json.loads(sent.calls.last.request.content)["embeds"]
+    assert embed["description"] == (
+        "新增 2 件\n\n[打開審核](http://berth:8000/review) · [打開 Issue](http://berth:8000/issues)"
+    )
 
 
 @respx.mock
