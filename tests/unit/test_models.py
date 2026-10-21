@@ -131,6 +131,7 @@ def test_every_settings_group_has_a_distinct_key() -> None:
     keys = [group.KEY for group in SETTINGS_GROUPS]
 
     assert sorted(keys) == [
+        "berth",
         "disk",
         "health",
         "notify",

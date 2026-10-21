@@ -20,6 +20,7 @@ body 與 header，以及只私訊時邀請連結要哪些 scope 與 permissions�
     uv run python scripts/experiments/discord_dm.py ratelimit       # 連續送到第一個 429 就停
     uv run python scripts/experiments/discord_dm.py gateway-once    # 連一次 gateway（對照用）
     uv run python scripts/experiments/discord_dm.py fixtures        # 遮掉 id 與名字，寫進 fixture
+    uv run python scripts/experiments/discord_dm.py embed-url       # 票 124：embed url 收哪些主機
 
 原始回應（含真的 id，不含 token）落在 .local/experiments/results/discord_dm/，不進版控。
 """
@@ -31,6 +32,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -250,6 +252,57 @@ def cmd_ratelimit(token: str, user_id: str) -> None:
     print(f"→ {summary.relative_to(REPO)}")
 
 
+#: 票 124：自架的 Berth 從外面看可能是這幾種形狀。Discord 對 embed `url` 的檢查文件沒寫。
+EMBED_URLS = (
+    ("domain", "https://berth.example.com/media/tv:120089"),
+    ("subpath", "https://example.com/berth/media/tv:120089"),
+    ("tailscale", "https://berth.tail1234.ts.net/media/tv:120089"),
+    ("mdns", "http://nas.local:8000/media/tv:120089"),
+    ("lan-ip", "http://192.168.1.10:8000/media/tv:120089"),
+    ("loopback-ip", "http://127.0.0.1:8000/media/tv:120089"),
+    ("localhost", "http://localhost:8000/media/tv:120089"),
+    ("single-label", "http://berth:8000/media/tv:120089"),
+    ("ipv6", "http://[::1]:8000/media/tv:120089"),
+)
+#: 一則一則補回額度（約 1 秒一則，brief §20.23），間隔大於它就不會碰到 429。
+EMBED_URL_GAP = 1.5
+
+
+def cmd_embed_url(token: str, user_id: str) -> None:
+    """每一種網址各送兩則：放在 embed 的 `url`（標題變成連結），與寫成 description 裡的 Markdown
+    連結（`[text](url)`）。印出哪幾種被拒、拒在哪個欄位。"""
+    channel = open_dm("users-me-channels.embed-url", token, user_id)
+    if channel is None:
+        sys.exit("開 DM channel 失敗，停在這裡")
+    rows: list[dict[str, Any]] = []
+    for label, url in EMBED_URLS:
+        for place, embed in (
+            ("url", {"title": f"票 124 embed url：{label}", "url": url}),
+            ("markdown", {"title": f"票 124 markdown：{label}", "description": f"[打開]({url})"}),
+        ):
+            payload = {"embeds": [embed], "allowed_mentions": {"parse": []}}
+            resp = send(f"embed-url.{label}.{place}", token, channel, payload, note=url)
+            body = resp.json() if resp.status != 200 else None
+            rows.append(
+                {
+                    "label": label,
+                    "place": place,
+                    "url": url,
+                    "status": resp.status,
+                    "errors": body.get("errors") if isinstance(body, dict) else None,
+                }
+            )
+            time.sleep(EMBED_URL_GAP)
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    summary = RESULTS / "embed-url-summary.json"
+    summary.write_text(
+        json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n"
+    )
+    print(f"→ {summary.relative_to(REPO)}")
+    for row in rows:
+        print(f"{row['status']} {row['place']:8} {row['label']:12} {json.dumps(row['errors'])}")
+
+
 GATEWAY = "wss://gateway.discord.gg/?v=10&encoding=json"
 
 
@@ -372,6 +425,7 @@ def main() -> None:
     sub.add_parser("baseline")
     sub.add_parser("ratelimit")
     sub.add_parser("fixtures")
+    sub.add_parser("embed-url")
     args = parser.parse_args()
 
     token = env("DISCORD_BOT_TOKEN")
@@ -388,6 +442,8 @@ def main() -> None:
         cmd_baseline(token, user_id)
     elif args.step == "ratelimit":
         cmd_ratelimit(token, user_id)
+    elif args.step == "embed-url":
+        cmd_embed_url(token, user_id)
     else:
         cmd_fixtures(token, user_id)
 

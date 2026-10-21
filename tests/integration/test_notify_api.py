@@ -70,6 +70,13 @@ def save_id(
     return response
 
 
+def save_berth_url(client: TestClient, url: str) -> httpx.Response:
+    response: httpx.Response = client.put(
+        f"{BASE}/berth-url", json={"berth_url": url}, headers=BROWSER
+    )
+    return response
+
+
 def press_test(client: TestClient) -> httpx.Response:
     response: httpx.Response = client.post(f"{BASE}/test", headers=BROWSER)
     return response
@@ -92,6 +99,7 @@ class TestBotToken:
             "token_rejected": False,
             "discord_user_id": "",
             "language": "zh-Hant",
+            "berth_url": "",
             "unreachable_at": None,
             "unreachable_detail": "",
         }
@@ -165,6 +173,51 @@ class TestDiscordId:
 
         assert refused.status_code == 422
         assert refused.json()["detail"]["reason"] == "discord_id_invalid"
+
+
+class TestBerthUrl:
+    """Berth 從外面看的網址：通知裡的連結照它組（M4 票 124）。"""
+
+    def test_a_saved_address_comes_back_without_the_trailing_slash(
+        self, client: TestClient
+    ) -> None:
+        saved = save_berth_url(client, " https://berth.example.com/ ")
+
+        assert saved.status_code == 200
+        assert saved.json()["berth_url"] == "https://berth.example.com"
+        assert client.get(BASE).json()["berth_url"] == "https://berth.example.com"
+
+    @pytest.mark.parametrize(
+        "wrong",
+        [
+            "berth.example.com",
+            "ftp://berth.example.com",
+            "/media",
+            "https://",
+            # 連結是接著路徑組的：`?x=1/media/...` 開不到作品頁。
+            "https://berth.example.com?x=1",
+            "https://berth.example.com/#top",
+        ],
+    )
+    def test_something_that_is_not_an_http_address_is_refused_and_not_kept(
+        self, client: TestClient, wrong: str
+    ) -> None:
+        save_berth_url(client, "http://192.168.1.10:8000")
+
+        refused = save_berth_url(client, wrong)
+
+        assert refused.status_code == 422
+        assert refused.json()["detail"]["reason"] == "berth_url_invalid"
+        assert wrong in refused.json()["detail"]["detail"]
+        assert client.get(BASE).json()["berth_url"] == "http://192.168.1.10:8000"
+
+    def test_an_empty_address_clears_it(self, client: TestClient) -> None:
+        save_berth_url(client, "https://berth.example.com")
+
+        cleared = save_berth_url(client, "")
+
+        assert cleared.status_code == 200
+        assert cleared.json()["berth_url"] == ""
 
 
 class TestTestButton:

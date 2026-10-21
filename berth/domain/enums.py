@@ -1650,3 +1650,5 @@ class NotifyRefusal(StrEnum):
     BOT_MISSING = "bot_missing"
     #: 測試時按的人還沒填 Discord ID。
     DISCORD_ID_MISSING = "discord_id_missing"
+    #: Berth 的網址不是 http(s) 的絕對網址（M4 票 124）。
+    BERTH_URL_INVALID = "berth_url_invalid"

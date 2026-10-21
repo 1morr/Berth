@@ -94,7 +94,7 @@ Berth 是公開 beta。依賴它之前先讀〈[現況](#現況)〉。
 Berth 是**公開 beta**。
 
 - 只支援 **Jellyfin 12.0 以上**與 **Prowlarr**。不支援 Emby、Plex、Jackett。
-- 通知剛開始做：管理員可以在一筆下載可以看了的時候收到 Discord 私訊（設定 → 通知）。其餘的事仍要打開 Berth 才看得到哪裡需要你。
+- 通知剛開始做：管理員可以在一筆下載可以看了的時候收到 Discord 私訊（設定 → 通知），在那裡存了 Berth 的網址，私訊就帶作品頁的連結。其餘的事仍要打開 Berth 才看得到哪裡需要你。
 - 實測過 **Windows 的 Docker Desktop** 與 **Unraid 7.1**；Ubuntu 的 rootless Docker 測過一部分。其他系統還沒實測。
 - **不要把 Berth 直接開到公網。** 從區網或 VPN 連。
 

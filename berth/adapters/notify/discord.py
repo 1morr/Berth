@@ -42,6 +42,8 @@ _DESCRIPTION_MAX = 4096
 _FIELD_NAME_MAX = 256
 _FIELD_VALUE_MAX = 1024
 _FOOTER = "Berth"
+#: 內文與連結之間空一行。
+_PARAGRAPH = "\n\n"
 
 
 def invite_url(application_id: str) -> str:
@@ -93,8 +95,8 @@ class HttpDiscordBot:
 
 def _payload(message: Message) -> dict[str, Any]:
     embed: dict[str, Any] = {"title": message.title[:_TITLE_MAX], "footer": {"text": _FOOTER}}
-    if message.description:
-        embed["description"] = message.description[:_DESCRIPTION_MAX]
+    if description := _description(message):
+        embed["description"] = description
     if message.fields:
         embed["fields"] = [
             {"name": name[:_FIELD_NAME_MAX], "value": value[:_FIELD_VALUE_MAX], "inline": True}
@@ -102,6 +104,19 @@ def _payload(message: Message) -> dict[str, Any]:
         ]
     # 內容裡有作品名這種別人寫的字：一個 mention 都不解析。
     return {"embeds": [embed], "allowed_mentions": {"parse": []}}
+
+
+def _description(message: Message) -> str:
+    """內文，連結接在最後一行。**連結不放 embed 的 `url`**：沒有點的主機名（`http://berth:8000`）
+    在那一格是整則 `400` `URL_TYPE_INVALID_URL`，寫成 Markdown 連結就收（M4 票 124 實測，
+    brief §20.23）。截的是內文，連結整條留著。"""
+    if message.link is None:
+        return message.description[:_DESCRIPTION_MAX]
+    link = f"[{message.link.label}]({message.link.url})"
+    if not message.description:
+        return link
+    room = _DESCRIPTION_MAX - len(link) - len(_PARAGRAPH)
+    return f"{message.description[:room]}{_PARAGRAPH}{link}"
 
 
 def _channel_id(body: Any) -> str:

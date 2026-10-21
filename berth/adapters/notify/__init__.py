@@ -17,12 +17,22 @@ from berth.domain import DeliveryFailure
 
 
 @dataclass(frozen=True, slots=True)
+class Link:
+    """點了開到哪：Berth 的那一頁（`deeplink.berth_link`）。`label` 照收件人的語言組好。"""
+
+    label: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
 class Message:
     """一則通知：標題、一段內文、幾格「名稱 → 值」。句子已經照收件人的語言組好。"""
 
     title: str
     description: str = ""
     fields: tuple[tuple[str, str], ...] = ()
+    #: `None` 是沒有連結（Berth 的網址沒存）。怎麼放是管道的事。
+    link: Link | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,4 +72,4 @@ class DiscordBot(NotifyChannel, Protocol):
         ...
 
 
-__all__ = ["BotIdentity", "Delivery", "DiscordBot", "Message", "NotifyChannel"]
+__all__ = ["BotIdentity", "Delivery", "DiscordBot", "Link", "Message", "NotifyChannel"]

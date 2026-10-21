@@ -1,4 +1,5 @@
-"""Jellyfin 深連結開在哪一台主機上（brief §12、§20.1、票 13）。
+"""對外的網址：Jellyfin 深連結開在哪一台主機上（brief §12、§20.1、票 13），與通知裡連回 Berth
+的連結（M4 票 124，檔尾）。
 
 播放一律交給 Jellyfin（brief §12），Berth 給的是一條連到那個項目詳細頁的網址。難的不是網址的
 形狀，是**主機**：Berth 存的 `base_url` 是它自己連過去的那一條，套件內是 compose 內網的
@@ -40,6 +41,20 @@ class PublicUrlRejectedError(ValueError):
     """填進來的對外網址不是一個 http(s) 位址。原文照樣帶著，畫面貼在欄位下面。"""
 
 
+def normalized_public_url(value: str) -> str:
+    """管理員填的對外網址存成什麼：空白是清掉（`""`），尾巴的斜線拿掉——網址是接著路徑組的。
+    不是 http(s) 的絕對網址丟 `PublicUrlRejectedError`；帶 `?` 或 `#` 的也是，接上路徑之後
+    （`https://host?x=1/media/…`）開不到那一頁（M4 票 124）。"""
+    text = value.strip().rstrip("/")
+    if text:
+        parts = urlsplit(text)
+        if parts.scheme not in {"http", "https"} or not parts.netloc:
+            raise PublicUrlRejectedError(f"{value.strip()!r} is not an http(s) address")
+        if "?" in text or "#" in text:
+            raise PublicUrlRejectedError(f"{value.strip()!r} has a query or fragment")
+    return text
+
+
 async def jellyfin_web(session: AsyncSession, *, published_port: int) -> JellyfinWeb:
     """`published_port` 是 `Config.jellyfin_port`：只有第 3 條用得到它。"""
     settings = await read_settings(session, JellyfinSettings)
@@ -53,14 +68,24 @@ async def jellyfin_web(session: AsyncSession, *, published_port: int) -> Jellyfi
 
 
 async def set_public_url(session: AsyncSession, value: str, *, published_port: int) -> JellyfinWeb:
-    """存下對外網址。空白就是清掉，回到推導。尾巴的斜線拿掉——網址是接著 `/web/` 組的。"""
-    text = value.strip().rstrip("/")
-    if text:
-        parts = urlsplit(text)
-        if parts.scheme not in {"http", "https"} or not parts.netloc:
-            raise PublicUrlRejectedError(f"{value.strip()!r} is not an http(s) address")
+    """存下對外網址。空白就是清掉，回到推導（`normalized_public_url`）。"""
+    text = normalized_public_url(value)
     settings = await read_settings(session, JellyfinSettings)
     settings.public_url = text
     await write_settings(session, settings)
     await session.commit()
     return await jellyfin_web(session, published_port=published_port)
+
+
+# --- Berth 自己 -------------------------------------------------------------
+
+#: 作品頁。與前端的路由表（`web/src/routes.tsx` 的 `/media/$mediaId`）同一條路徑。
+MEDIA_PAGE = "/media/{media_id}"
+
+
+def berth_link(public_url: str, path: str) -> str | None:
+    """Berth 內的一條路徑（`/media/tv:1234`）從外面怎麼開。`public_url` 是 `BerthSettings` 存的
+    那一個；空的就是沒有連結——Berth 猜不出自己從外面看是什麼網址，不給一條開不了的。"""
+    if not public_url:
+        return None
+    return f"{public_url}{path}"

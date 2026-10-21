@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import {
   notifyQueryOptions,
   notifyRefusalOf,
+  saveBerthUrl,
   saveBotToken,
   saveDiscordId,
   sendTestMessage,
@@ -66,6 +67,7 @@ const REFUSAL_TEXT = {
   discord_id_invalid: 'settings.notifyPage.refusal.discord_id_invalid',
   bot_missing: 'settings.notifyPage.refusal.bot_missing',
   discord_id_missing: 'settings.notifyPage.refusal.discord_id_missing',
+  berth_url_invalid: 'settings.notifyPage.refusal.berth_url_invalid',
 } as const satisfies Record<NotifyRefusal, Key>
 
 /** 這一頁是用哪個語言在看（通知就用它寫）。 */
@@ -76,7 +78,7 @@ function useUiLanguage(): Language {
 
 /**
  * 設定 → 通知（M4 票 123，`.scratch/m4/notify-settings-shape.md`）。它不是泊位：沒有泊位號、不在泊位板上。
- * 三段：Discord bot（管理員一次性的設定）、我的 Discord、測試。
+ * 四段：Discord bot 與 Berth 的網址（管理員一次性的設定）、我的 Discord、測試。
  */
 export function NotifySettingsPage() {
   const { t } = useTranslation()
@@ -87,6 +89,7 @@ export function NotifySettingsPage() {
       {notify.data ? (
         <>
           <BotSection notify={notify.data} />
+          <BerthUrlSection notify={notify.data} />
           <MySection notify={notify.data} />
           <TestSection notify={notify.data} />
         </>
@@ -295,6 +298,78 @@ function Invite({ url }: { url: string }) {
       </div>
       <p className="max-w-prose text-xs text-ink-dim">{t('settings.notifyPage.bot.inviteHint')}</p>
     </div>
+  )
+}
+
+/**
+ * Berth 從外面看的網址（M4 票 124）：通知裡的連結照它組。容器裡猜不出來，所以沒存過時預填瀏覽器
+ * 現在開著的 origin——那是管理員打得開 Berth 的一個網址——但按了儲存才算數，在那之前通知不附連結。
+ * 不是 http(s) 的完整網址由後端擋（422），說不行的是欄位自己。
+ */
+function BerthUrlSection({ notify }: { notify: Notify }) {
+  const { t } = useTranslation()
+  const cache = useNotifyCache()
+  // `null` 是「這一輪還沒動過」，那時欄位跟著存的值走（同 Jellyfin 的對外網址）。
+  const [draft, setDraft] = useState<string | null>(null)
+  const value = draft ?? (notify.berth_url || window.location.origin)
+  const save = useMutation({
+    mutationFn: () => saveBerthUrl(value),
+    onSuccess: (next) => {
+      cache(next)
+      setDraft(null)
+    },
+  })
+  const invalid = notifyRefusalOf(save.error)?.reason === 'berth_url_invalid'
+
+  return (
+    <SettingsSection
+      id="notify-berth-url"
+      title={t('settings.notifyPage.berth.title')}
+      lede={t('settings.notifyPage.berth.lede')}
+    >
+      <form
+        noValidate
+        className="grid gap-3 sm:max-w-md"
+        onSubmit={(event) => {
+          event.preventDefault()
+          save.mutate()
+        }}
+      >
+        <Field
+          label={t('settings.notifyPage.berth.label')}
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          value={value}
+          placeholder={t('settings.notifyPage.berth.placeholder')}
+          hint={
+            notify.berth_url
+              ? t('settings.notifyPage.berth.set', { url: notify.berth_url })
+              : t('settings.notifyPage.berth.unsaved')
+          }
+          error={invalid ? t(REFUSAL_TEXT.berth_url_invalid) : undefined}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            save.reset()
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <GhostButton type="submit" busy={save.isPending}>
+            {t(
+              save.isPending
+                ? 'settings.notifyPage.berth.saving'
+                : 'settings.notifyPage.berth.save',
+            )}
+          </GhostButton>
+          <p aria-live="polite" className="text-xs text-ink-dim">
+            {save.isSuccess ? t('settings.notifyPage.berth.saved') : ''}
+          </p>
+        </div>
+        {save.isError && !invalid && (
+          <Failed error={save.error} lead={t('settings.notifyPage.berth.failed')} />
+        )}
+      </form>
+    </SettingsSection>
   )
 }
 

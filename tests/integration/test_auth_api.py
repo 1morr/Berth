@@ -449,6 +449,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/settings/notifications"): Access.ADMIN,
     ("PUT", "/settings/notifications/bot"): Access.ADMIN,
     ("PUT", "/settings/notifications/me"): Access.ADMIN,
+    ("PUT", "/settings/notifications/berth-url"): Access.ADMIN,
     ("POST", "/settings/notifications/test"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,

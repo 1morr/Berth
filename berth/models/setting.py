@@ -120,6 +120,17 @@ class NotifySettings(SettingsGroup):
     discord_bot_name: str = ""
 
 
+class BerthSettings(SettingsGroup):
+    """Berth 自己（M4 票 124）。"""
+
+    KEY = "berth"
+
+    #: Berth 從外面看的網址：通知裡的連結照它組（`services/deeplink.berth_link`）。容器裡猜不出來
+    #: （反向代理、Tailscale、NAS 的網域），所以由管理員在通知設定頁存一次；空的是不附連結。
+    #: 存的時候拿掉結尾的 `/`，同 `JellyfinSettings.public_url`。
+    public_url: str = ""
+
+
 class NotifySenderSettings(SettingsGroup):
     """`notify_sender` 記下的管道狀態（plan §3.2、§11.5〈通知〉的「故障」、M4 票 128）。
 
@@ -572,4 +583,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     DiskSettings,
     SearchSettings,
     NotifySettings,
+    BerthSettings,
 )
