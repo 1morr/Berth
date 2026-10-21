@@ -20,6 +20,14 @@
   `https://` 開頭的完整網址會被擋下並說原因。存了之後「可以看了」帶作品頁的連結；沒存照送、不附連結。
   Jellyfin 的對外網址同一條規則，兩者都不再收帶 `?` 或 `#` 的網址（接上路徑之後開不到那一頁）。
   API：`PUT /api/settings/notifications/berth-url`，`GET /api/settings/notifications` 多一格 `berth_url`。
+- **通知送不出去時看得見、不拖累別的**（M4 票 128）：健康頁多一張「通知」卡，說出上次送出、等著送幾則；
+  Discord 不再接受 bot token（例如在 Developer Portal 重設過）時它變紅、通知全部暫停，設定 → 通知貼上新的
+  token 就自動恢復。Discord 連不上時自動退避再試（30 秒起，最長隔一小時），被限速時照 Discord 說的秒數等。
+  bot 傳不到某個人（沒有共同伺服器或關了私訊）時，那一則不再重試，那個人的設定 → 通知上說出原因與兩個補法，
+  補好之後按測試、送到了那一句就收掉。**送不出去的通知最多留 24 小時就放棄**，修好之後不會一次湧出一大堆舊的。
+  通知寫不成或送出出錯都不會讓下載、入庫失敗。API：`GET /api/health/detail` 多 `notify`，
+  `GET /api/settings/notifications` 多 `token_rejected`、`unreachable_at`、`unreachable_detail`。
+  **這一版有資料庫 migration**（`e3a9c6f1b207`）：使用者多兩欄（上次收不到通知的時間與原文）。
 
 ### Fixed
 

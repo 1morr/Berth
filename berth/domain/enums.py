@@ -1612,6 +1612,9 @@ class NotificationStatus(StrEnum):
     #: 還沒送到。送出迴圈每一輪撿到時間的這一種。
     PENDING = "pending"
     SENT = "sent"
+    #: 不再送（M4 票 128）：收件人到不了、Discord 拒收這一則、組不成句子，
+    #: 或滿 `notify.GIVE_UP_AFTER` 還沒送到。原因在 `error`。
+    ABANDONED = "abandoned"
 
 
 class DeliveryFailure(StrEnum):

@@ -117,6 +117,23 @@ class TestDetail:
         assert body["routes_status"] == "ok"
         assert len(body["routes"]) == 3
 
+    def test_it_says_whether_notifications_can_go_out(self, client: TestClient) -> None:
+        """M4 票 128：通知卡。沒設 bot 是「沒設定」，不是壞了，也不算進 `status`。"""
+        sign_in(client, ADMIN)
+
+        body = client.get("/api/health/detail").json()
+
+        assert body["notify"] == {
+            "configured": False,
+            "token_rejected": False,
+            "failures": 0,
+            "error": "",
+            "failed_at": None,
+            "resume_at": None,
+            "last_sent_at": None,
+            "pending": 0,
+        }
+
     def test_each_service_carries_its_last_success(self, client: TestClient) -> None:
         sign_in(client, ADMIN)
 

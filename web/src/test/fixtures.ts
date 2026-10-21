@@ -380,7 +380,25 @@ export function healthDetail(overrides: Partial<HealthDetail> = {}): HealthDetai
     routes_status: 'ok',
     routes: [routeView()],
     poller: pollerView(),
+    notify: notifyChannel(),
     tmdb_verified: true,
+    ...overrides,
+  }
+}
+
+/** 還沒設定 Discord bot 的通知管道（票 128）。 */
+export function notifyChannel(
+  overrides: Partial<HealthDetail['notify']> = {},
+): HealthDetail['notify'] {
+  return {
+    configured: false,
+    token_rejected: false,
+    failures: 0,
+    error: '',
+    failed_at: null,
+    resume_at: null,
+    last_sent_at: null,
+    pending: 0,
     ...overrides,
   }
 }

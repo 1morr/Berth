@@ -131,6 +131,29 @@ class BerthSettings(SettingsGroup):
     public_url: str = ""
 
 
+class NotifySenderSettings(SettingsGroup):
+    """`notify_sender` 記下的管道狀態（plan §3.2、§11.5〈通知〉的「故障」、M4 票 128）。
+
+    **自己一列，不寫進 `settings.notify`**：那一列是管理員的設定，這一列是送出迴圈每一輪的結果
+    （與 `PollerSettings` 不寫進 `settings.health` 同一個理由）。健康頁的「通知」卡讀它。
+    """
+
+    KEY = "notify_sender"
+
+    #: Discord 回 `401` 的那一把 token 的指紋（`services.notify._fingerprint`），空字串是沒有。
+    #: **存指紋不存旗標**：現在的 token 指紋相同才算被拒，所以換了 token 就自己恢復，送的那幾秒裡
+    #: 管理員換了新的也不會被舊的那一次 `401` 蓋成被拒。
+    rejected_token: str = ""
+    #: 連續幾輪 Discord 連不上（逾時、5xx）。送到一則就歸零，退避的長度由它決定。
+    failures: int = 0
+    #: 管道在這之前不送（連不上的退避、整個管道的限速）；`None` 是不等。
+    resume_at: datetime | None = None
+    #: 最後一次管道層級失敗的原文（英文）。送到一則就清空。
+    error: str = ""
+    failed_at: datetime | None = None
+    last_sent_at: datetime | None = None
+
+
 class QbittorrentSettings(SettingsGroup):
     KEY = "services.qbittorrent"
 

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.notify import Delivery, Link
 from berth.domain import DeliveryFailure, JobState, JobTrigger, Language, MediaKind, Role
 from berth.models import BerthSettings, Job, Media, NotifySettings, User, media_id
-from berth.services.notify import queue_ready, send_due
+from berth.services.notify import backoff, queue_ready, send_due
 from berth.services.settings import write_settings
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_plan import NOW, ready
@@ -65,8 +66,10 @@ async def found(session: AsyncSession, roots: dict[str, Path]) -> FakeClientFact
     return factory
 
 
-async def deliver(session: AsyncSession, factory: FakeClientFactory) -> None:
-    await send_due(session, factory, now=NOW + FIRST)
+async def deliver(
+    session: AsyncSession, factory: FakeClientFactory, *, later: timedelta = timedelta()
+) -> None:
+    await send_due(session, factory, now=NOW + FIRST + later)
 
 
 class TestReady:
@@ -213,7 +216,8 @@ class TestSending:
         await deliver(session, factory)
         assert factory.discord_.sent == []
 
-        await deliver(session, factory)
+        # 管道退避過去之後（票 128）。
+        await deliver(session, factory, later=backoff(1))
         assert [recipient for recipient, _ in factory.discord_.sent] == [ADMIN_ID]
 
     async def test_a_channel_failure_stops_the_round(
@@ -232,7 +236,8 @@ class TestSending:
         await deliver(session, factory)
         assert factory.discord_.sent == []
 
-        await deliver(session, factory)
+        # `retry_after` 過去之後（票 128）。
+        await deliver(session, factory, later=timedelta(seconds=1))
         assert {recipient for recipient, _ in factory.discord_.sent} == {ADMIN_ID, SECOND_ADMIN_ID}
 
     async def test_an_unreachable_recipient_does_not_hold_up_the_next_one(

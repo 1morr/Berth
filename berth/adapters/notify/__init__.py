@@ -42,8 +42,10 @@ class Delivery:
     failure: DeliveryFailure | None = None
     #: 管道回的原文（狀態碼、錯誤代碼與訊息），給「技術細節」與 `notifications.error`。不含憑證。
     detail: str = ""
-    #: 限速時管道說的「幾秒後再來」。票 128 照它延後。
+    #: 限速時管道說的「幾秒後再來」。送出迴圈照它延後（M4 票 128）。
     retry_after: float | None = None
+    #: 限速是整個管道的（Discord 的 `global`），不是這一則的 bucket：等的是後面每一則。
+    whole_channel: bool = False
 
     @property
     def delivered(self) -> bool:

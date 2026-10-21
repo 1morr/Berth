@@ -381,7 +381,7 @@ _Avoid_: entry, post
 _Avoid_: alert, push（push 是瀏覽器推播）, message（message 是管道上送出去的那一則）
 
 **Notification Outbox**（待送表）:
-`notifications` 表：還沒送與送過的每一則，一列一位收件人。與觸發它的狀態變更寫在同一筆交易，由送出迴圈（`notify_sender`，每 10 秒）送；沒送到的留著下一輪再送。存的是事實（作品、季集、Route），句子在送出那一刻組。
+`notifications` 表：還沒送與送過的每一則，一列一位收件人。與觸發它的狀態變更寫在同一筆交易，由送出迴圈（`notify_sender`，每 10 秒）送；沒送到的留著下一輪再送，滿 24 小時還沒送到、收件人到不了或 Discord 拒收的是**放棄**（`abandoned`，原因留在那一列，M4 票 128）。存的是事實（作品、季集、Route），句子在送出那一刻組。
 _Avoid_: queue（佇列是程序內的東西，這一張活過重啟）, outbox table
 
 **Channel**（管道）:

@@ -198,6 +198,27 @@ class PollerOut(BaseModel):
     unknown_torrents: list[UnknownTorrentOut]
 
 
+class NotifyChannelOut(BaseModel):
+    """通知管道上一輪之後的樣子（`services.notify.read_channel`、M4 票 128）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 設了 bot token 沒有。沒設是不送，不是壞了。
+    configured: bool
+    #: Discord 不再接受存著的那一把 token：整個管道暫停，換一把就恢復。
+    token_rejected: bool
+    #: 連續幾輪連不上 Discord（逾時、5xx）。0 是上一則送到了或還沒失敗過。
+    failures: int
+    #: 最後一次管道層級失敗時 Discord 回的原文（英文）。
+    error: str
+    failed_at: datetime | None
+    #: 退避或整個管道的限速：在這之前不送。
+    resume_at: datetime | None
+    last_sent_at: datetime | None
+    #: 還沒送、也還沒放棄的則數。
+    pending: int
+
+
 class HealthDetailOut(BaseModel):
     """四項檢查的明細。健康頁與設定頁讀的是同一份——同一件事不該有兩種說法。"""
 
@@ -218,6 +239,8 @@ class HealthDetailOut(BaseModel):
     poller: PollerOut
     #: 精靈第 7 步的 TMDB 憑證測過了沒。不是第五項檢查：不連 TMDB，讀的是那一次的結果。
     tmdb_verified: bool
+    #: 通知管道。不算進 `status`：通知送不出去不擋任何管線。
+    notify: NotifyChannelOut
 
 
 class JellyfinWebOut(BaseModel):
@@ -244,6 +267,7 @@ def health_detail(report: HealthReport) -> HealthDetailOut:
         routes=[RouteOut.model_validate(row) for row in report.routes],
         poller=PollerOut.model_validate(report.poller),
         tmdb_verified=report.tmdb_verified,
+        notify=NotifyChannelOut.model_validate(report.notify),
     )
 
 
