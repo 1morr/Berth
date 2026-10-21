@@ -2792,6 +2792,27 @@ const zhHant = {
       unconfigured: '尚未接上',
       unused: '沒有使用',
     },
+    notify: {
+      title: '通知',
+      status: '狀態',
+      unconfigured: '還沒設定 Discord bot，不送通知。',
+      settingsLink: '通知設定',
+      lastSent: '上次送出',
+      pending: '等著送',
+      pendingCount_one: '{{count}} 則',
+      pendingCount_other: '{{count}} 則',
+      rejectedChip: '已暫停',
+      rejected:
+        'Discord 不再接受這個 bot token（被拒，或在 Developer Portal 重設過），通知全部暫停送出。',
+      rejectedFix: '到設定 → 通知貼上新的 token。存好之後自動恢復送出，24 小時內的通知照送。',
+      rejectedAskAdmin: '請管理員到設定 → 通知換一個 bot token。',
+      error: '最後的錯誤',
+      unavailable: '連不上 Discord，Berth 會自己再試。',
+      rateLimited: 'Discord 要 Berth 先等一下（整個 bot 被限速），時間到自動再送。',
+      resumeAt: '下次嘗試',
+      failures: '連續失敗',
+      giveUp: '送不出去的通知最多留 24 小時，過了就放棄，不會之後一次補送一大堆。',
+    },
     poller: {
       title: '下載迴圈',
       lastRound: '上次輪詢',
@@ -2930,6 +2951,9 @@ const zhHant = {
         status: '狀態',
         configured: '已設定',
         unconfigured: '還沒設定',
+        rejectedChip: '已暫停',
+        rejected:
+          'Discord 不再接受存著的這個 token，通知暫停送出。到 Developer Portal 取得新的 token 貼在下面儲存，之後自動恢復。',
         tokenLabel: 'Bot token',
         placeholder: '貼上 bot token',
         placeholderSet: '已設定，貼上新的就換掉',
@@ -2950,6 +2974,9 @@ const zhHant = {
       },
       me: {
         title: '我的 Discord',
+        unreachableChip: '送不到',
+        unreachable: '上次送給你的通知沒送到。',
+        unreachableRetry: '補好之後按下面的「{{button}}」：送到了，這一句就會收掉。',
         idLabel: 'Discord 使用者 ID',
         idPlaceholder: '17 到 20 位數字',
         howTo:
@@ -6292,6 +6319,30 @@ const en: Translations<typeof zhHant> = {
       unconfigured: 'Not connected',
       unused: 'Not used',
     },
+    notify: {
+      title: 'Notifications',
+      status: 'Status',
+      unconfigured: 'No Discord bot set up, so no notifications go out.',
+      settingsLink: 'Notification settings',
+      lastSent: 'Last sent',
+      pending: 'Waiting to send',
+      pendingCount_one: '{{count}} notification',
+      pendingCount_other: '{{count}} notifications',
+      rejectedChip: 'Paused',
+      rejected:
+        'Discord no longer accepts this bot token (rejected, or reset in the Developer Portal). All notifications are paused.',
+      rejectedFix:
+        'Paste a new token under Settings → Notifications. Sending resumes once it is saved; anything from the last 24 hours still goes out.',
+      rejectedAskAdmin: 'Ask an admin to replace the bot token under Settings → Notifications.',
+      error: 'Last error',
+      unavailable: 'Discord cannot be reached. Berth will try again on its own.',
+      rateLimited:
+        'Discord asked Berth to wait (the whole bot is rate limited). Sending resumes on its own.',
+      resumeAt: 'Next try',
+      failures: 'Consecutive failures',
+      giveUp:
+        'Notifications that cannot be sent are kept for 24 hours, then given up, so they never arrive in one burst later.',
+    },
     poller: {
       title: 'Download loop',
       lastRound: 'Last poll',
@@ -6424,6 +6475,9 @@ const en: Translations<typeof zhHant> = {
         status: 'Status',
         configured: 'Configured',
         unconfigured: 'Not set up',
+        rejectedChip: 'Paused',
+        rejected:
+          'Discord no longer accepts the saved token, so notifications are paused. Get a new token from the Developer Portal and save it below; sending resumes on its own.',
         tokenLabel: 'Bot token',
         placeholder: 'Paste the bot token',
         placeholderSet: 'Already set — paste a new one to replace it',
@@ -6445,6 +6499,10 @@ const en: Translations<typeof zhHant> = {
       },
       me: {
         title: 'My Discord',
+        unreachableChip: 'Not delivered',
+        unreachable: 'The last notification to you did not arrive.',
+        unreachableRetry:
+          'Once fixed, press “{{button}}” below. When it arrives, this note goes away.',
         idLabel: 'Discord user ID',
         idPlaceholder: '17 to 20 digits',
         howTo:

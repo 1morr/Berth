@@ -31,6 +31,11 @@ class User(Base):
     notify_language: Mapped[Language] = mapped_column(
         enum_column(Language), default=Language.ZH_HANT, server_default=Language.ZH_HANT.value
     )
+    #: 上一次送給這個人時 Discord 說他到不了（`403` / `50278`，M4 票 128）；`None` 是沒有。
+    #: 他的通知設定頁照它說原因與補法。送到一則（含測試）或換了 Discord ID 就清掉。
+    notify_unreachable_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    #: 那一次 Discord 的原文（狀態碼、代碼、訊息），給「技術細節」。
+    notify_unreachable_detail: Mapped[str] = mapped_column(Text, default="", server_default="")
 
 
 class UserSession(Base):

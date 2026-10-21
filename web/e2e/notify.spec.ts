@@ -50,6 +50,13 @@ test('通知設定：被拒的 token、接上 bot、到不了的收件人、再�
   await expect(test_.getByText(/打開「私人訊息」/)).toBeVisible()
   await shot(page, '4-recipient-unreachable')
 
+  // 原因記在這個人身上（票 128）：測試結果與「我的 Discord」各說一次，重新整理之後後者還在。
+  await expect(me.getByText('送不到', { exact: true })).toBeVisible()
+  await expect(me.getByText(/上次送給你的通知沒送到/)).toBeVisible()
+  await page.reload()
+  await expect(me.getByText('送不到', { exact: true })).toBeVisible()
+  await shot(page, '4b-unreachable-persisted')
+
   // 換成送得到的 ID，再測一次。
   await me.getByLabel('Discord 使用者 ID').fill('1000000000000000001')
   await me.getByRole('button', { name: '儲存' }).click()
@@ -57,5 +64,6 @@ test('通知設定：被拒的 token、接上 bot、到不了的收件人、再�
   await test_.getByRole('button', { name: '送一則測試訊息給我' }).click()
   await expect(test_.getByText('已送出', { exact: true })).toBeVisible()
   await expect(test_.getByText('看看 Discord 的私訊。')).toBeVisible()
+  await expect(me.getByText('送不到', { exact: true })).toHaveCount(0)
   await shot(page, '5-delivered')
 })

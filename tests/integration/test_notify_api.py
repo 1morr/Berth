@@ -89,8 +89,11 @@ class TestBotToken:
                 "https://discord.com/oauth2/authorize"
                 "?client_id=1000000000000000001&scope=bot&permissions=0"
             ),
+            "token_rejected": False,
             "discord_user_id": "",
             "language": "zh-Hant",
+            "unreachable_at": None,
+            "unreachable_detail": "",
         }
         assert factory.discord_.token == TOKEN
         assert client.get(BASE).json()["bot_configured"] is True
@@ -212,6 +215,36 @@ class TestTestButton:
         assert result.json()["delivered"] is False
         assert result.json()["failure"] == "recipient_unreachable"
         assert "50278" in result.json()["detail"]
+
+    def test_an_unreachable_recipient_stays_said_on_the_page_until_a_delivery(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """M4 票 128：重新整理之後照樣說得出來，補好之後按一次測試就收掉。"""
+        save_token(client)
+        save_id(client)
+        factory.discord_.unreachable.add(DISCORD_ID)
+        press_test(client)
+
+        page = client.get(BASE).json()
+        assert page["unreachable_at"] is not None
+        assert "50278" in page["unreachable_detail"]
+
+        factory.discord_.unreachable.clear()
+        press_test(client)
+        assert client.get(BASE).json()["unreachable_at"] is None
+
+    def test_a_token_reset_in_discord_is_said_after_the_test(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        save_token(client)
+        save_id(client)
+        assert client.get(BASE).json()["token_rejected"] is False
+        factory.discord_.rejected_tokens.add(TOKEN)
+
+        press_test(client)
+
+        assert client.get(BASE).json()["token_rejected"] is True
+        assert client.get("/api/health/detail").json()["notify"]["token_rejected"] is True
 
 
 class TestTheLeakCheckItself:

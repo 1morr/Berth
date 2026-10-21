@@ -3135,6 +3135,7 @@ export interface components {
             poller: components["schemas"]["PollerOut"];
             /** Tmdb Verified */
             tmdb_verified: boolean;
+            notify: components["schemas"]["NotifyChannelOut"];
         };
         /**
          * HealthStatus
@@ -4253,6 +4254,28 @@ export interface components {
             name: string;
             collection_type: components["schemas"]["CollectionType"];
         };
+        /**
+         * NotifyChannelOut
+         * @description 通知管道上一輪之後的樣子（`services.notify.read_channel`、M4 票 128）。
+         */
+        NotifyChannelOut: {
+            /** Configured */
+            configured: boolean;
+            /** Token Rejected */
+            token_rejected: boolean;
+            /** Failures */
+            failures: number;
+            /** Error */
+            error: string;
+            /** Failed At */
+            failed_at: string | null;
+            /** Resume At */
+            resume_at: string | null;
+            /** Last Sent At */
+            last_sent_at: string | null;
+            /** Pending */
+            pending: number;
+        };
         /** NotifyOut */
         NotifyOut: {
             /** Bot Configured */
@@ -4261,9 +4284,15 @@ export interface components {
             bot_name: string;
             /** Invite Url */
             invite_url: string | null;
+            /** Token Rejected */
+            token_rejected: boolean;
             /** Discord User Id */
             discord_user_id: string;
             language: components["schemas"]["Language"];
+            /** Unreachable At */
+            unreachable_at: string | null;
+            /** Unreachable Detail */
+            unreachable_detail: string;
         };
         /**
          * NotifyRefusal

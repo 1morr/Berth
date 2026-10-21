@@ -26,6 +26,7 @@ import {
 } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
+import { Timestamp } from '../components/Timestamp'
 import type { Language } from '../i18n/resources'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 
@@ -175,6 +176,13 @@ function BotSection({ notify }: { notify: Notify }) {
           </dd>
         </dl>
 
+        {/* 管道因 token 被拒而停著（票 128）：換好 token 之後後端自己清掉，這一句跟著消失。 */}
+        {notify.token_rejected && (
+          <Notice signal="blocked" label={t('settings.notifyPage.bot.rejectedChip')}>
+            {t('settings.notifyPage.bot.rejected')}
+          </Notice>
+        )}
+
         {/* 空著按儲存不送：空字串在後端是「清掉」，那件事只走下面的「移除 token」。 */}
         <form
           noValidate
@@ -304,6 +312,31 @@ function MySection({ notify }: { notify: Notify }) {
 
   return (
     <SettingsSection id="notify-me" title={t('settings.notifyPage.me.title')}>
+      {/* 上一則送給你的通知到不了（票 128）：原因記在這個人身上，補好後按測試送到了就收掉。 */}
+      {notify.unreachable_at !== null && (
+        <div className="mb-4">
+          <Notice signal="blocked" label={t('settings.notifyPage.me.unreachableChip')}>
+            <span className="grid gap-1">
+              <span>
+                {t('settings.notifyPage.me.unreachable')}
+                {/* 時間與句子之間隔一個點：「沒送到」直接接「1 秒前」會黏成一句。 */}
+                <span className="text-ink-dim">
+                  {' · '}
+                  <Timestamp at={notify.unreachable_at} past />
+                </span>
+              </span>
+              <span>{t(FAILURE_TEXT.recipient_unreachable.what)}</span>
+              <span>{t(FAILURE_TEXT.recipient_unreachable.fix)}</span>
+              <span>
+                {t('settings.notifyPage.me.unreachableRetry', {
+                  button: t('settings.notifyPage.test.send'),
+                })}
+              </span>
+            </span>
+          </Notice>
+          <TechnicalDetails lines={[notify.unreachable_detail]} />
+        </div>
+      )}
       <form
         noValidate
         className="grid gap-3"
@@ -358,7 +391,12 @@ function TestSection({ notify }: { notify: Notify }) {
     : missingId
       ? 'settings.notifyPage.test.missingId'
       : null
-  const test = useMutation({ mutationFn: sendTestMessage })
+  const queryClient = useQueryClient()
+  // 成敗都重讀：送到了，「我的 Discord」上那一句要收掉；送不到，它要出現（後端在測試時設上或清掉）。
+  const test = useMutation({
+    mutationFn: sendTestMessage,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: notifyQueryOptions.queryKey }),
+  })
   const missingText = useId()
 
   return (

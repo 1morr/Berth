@@ -126,6 +126,7 @@ def _failed(response: httpx.Response) -> Delivery:
             failure=DeliveryFailure.RATE_LIMITED,
             detail=detail,
             retry_after=float(retry) if isinstance(retry, int | float) else None,
+            whole_channel=body.get("global") is True,
         )
     if status == 403 and code in _UNREACHABLE_CODES:
         return Delivery(failure=DeliveryFailure.RECIPIENT_UNREACHABLE, detail=detail)

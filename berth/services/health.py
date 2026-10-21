@@ -51,6 +51,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
+from berth.services.notify import ChannelView, read_channel
 from berth.services.routes import RouteView, check_routes, read_route_status, routes_health
 from berth.services.settings import read_settings, update_settings, write_settings
 from berth.services.steps import message
@@ -143,6 +144,9 @@ class HealthReport:
     #: 精靈第 7 步的 TMDB 憑證測過了沒（票 06e：健康頁的泊位板有 TMDB 那一格）。**不是第五項
     #: 檢查**：不連 TMDB，讀的是那一次測試的結果——健康頁要看的是繫著沒，不是額度。
     tmdb_verified: bool
+    #: 通知管道（M4 票 128）。與下載迴圈一樣讀的是送出迴圈自己的紀錄，**不算進 `degraded`**：
+    #: 通知送不出去不擋任何管線，而 `degraded` 是 compose 健康檢查與「請求失敗」說明讀的那一個字。
+    notify: ChannelView
 
 
 async def read_health(session: AsyncSession) -> HealthReport:
@@ -167,6 +171,7 @@ async def read_health(session: AsyncSession) -> HealthReport:
         routes_status=routes_status,
         poller=await _poller(session),
         tmdb_verified=tmdb_verified(setup),
+        notify=await read_channel(session),
     )
 
 
