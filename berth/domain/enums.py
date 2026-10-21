@@ -1604,13 +1604,29 @@ class Language(StrEnum):
 class NotificationKind(StrEnum):
     """待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
 
-    票 127、131 各加一種。
+    票 131 再加一種（週報）。
     """
 
     #: 「可以看了」：一筆 Job 的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
     READY = "ready"
     #: 「正在下載」：RSS 一輪送出的、人手按的下載（票 126 排）。票 125 先讓人勾、存下訂閱。
     DOWNLOADING = "downloading"
+    #: 「有 N 件等你處理」：待審核、開著的 Issue、待綁定的 RSS Series 有新的一件（M4 票 127）。
+    #: 只送管理員（`ADMIN_ONLY_KINDS`）。
+    WAITING = "waiting"
+
+
+#: 只有管理員收、也只有管理員勾得到的種類（M4 票 127）：說的是只有管理員進得去的頁面。
+ADMIN_ONLY_KINDS = frozenset({NotificationKind.WAITING})
+
+
+def default_notify_kinds(role: Role) -> list[str]:
+    """新的一列 `users` 預設訂閱哪幾種（`users.notify_kinds_json`）。管理員多「等你處理」：Berth
+    平常不必打開的前提就是有事時它會說（plan §11.5），那一則不該要人先找到勾選才收得到。"""
+    kinds = [NotificationKind.READY.value]
+    if role is Role.ADMIN:
+        kinds.append(NotificationKind.WAITING.value)
+    return kinds
 
 
 class NotificationStatus(StrEnum):

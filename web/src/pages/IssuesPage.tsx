@@ -7,6 +7,7 @@ import { PAGE_TITLE } from '../components/controls'
 import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
+import { useHashTarget } from '../components/useHashTarget'
 import { IssueRow } from '../issues/IssueRow'
 import { LedgerGapNotice } from '../issues/LedgerGapNotice'
 import { ReconcileBanner } from '../issues/ReconcileBanner'
@@ -28,6 +29,7 @@ export function IssuesPage() {
   const issues = useQuery(issuesQueryOptions())
   const reconcile = useQuery(reconcileQueryOptions())
   const frame = useFocusAfterRemoval()
+  useHashTarget(issues.data !== undefined)
   // 按完那一件就從清單上消失了（The Focus Takes The Next Row Rule）：這一句給看不見畫面的人。
   // M3 票 05 之前它住在 `/review`，Issue 只留在這一頁之後搬過來。
   const [said, setSaid] = useState('')
@@ -65,7 +67,7 @@ export function IssuesPage() {
       ) : (
         <ul className="grid gap-3">
           {issues.data.map((issue) => (
-            <li key={issue.id} className="min-w-0">
+            <li key={issue.id} id={`issue-${issue.id}`} className="min-w-0">
               <IssueRow issue={issue} onDone={setSaid} />
             </li>
           ))}

@@ -5,6 +5,9 @@
 **每 10 秒醒一次**，問一句帶索引的「有沒有到時間的」：「可以看了」在 Jellyfin 認出來之後最多晚
 這麼久，而沒有東西要送的那幾輪一個請求都不發。沒有提示：寫入的那一刻多半在 resolver 的交易裡，
 叫醒它省下的不到 10 秒。
+
+**每一輪先看守「等你處理」**（`watch_waiting`，M4 票 127）：三份清單的身分各問一次，與上一輪一樣
+就不寫任何東西。
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.pipeline.ticks import whole_tick
 from berth.services.clients import ServiceClientFactory
-from berth.services.notify import SendOutcome, send_due
+from berth.services.notify import SendOutcome, send_due, watch_waiting
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +51,8 @@ class NotifySender:
 
     async def tick(self) -> SendOutcome:
         async with self._sessions() as session:
+            # 看守不 commit：它寫的與 `send_due` 開頭那一次 commit 一起落地，一輪只借一次連線。
+            await watch_waiting(session)
             outcome = await send_due(session, self._clients)
         if outcome.sent or outcome.failed:
             logger.info(

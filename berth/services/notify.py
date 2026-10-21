@@ -39,13 +39,16 @@ from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.notify import Delivery, Link, Message, NotifyChannel
 from berth.adapters.notify.discord import invite_url
 from berth.domain import (
+    ADMIN_ONLY_KINDS,
     DeliveryFailure,
+    IssueType,
     Language,
     MediaKind,
     NotificationKind,
     NotificationStatus,
     NotifyRefusal,
     PlanAction,
+    Role,
 )
 from berth.logs import job_context
 from berth.models import (
@@ -57,6 +60,7 @@ from berth.models import (
     Notification,
     NotifySenderSettings,
     NotifySettings,
+    NotifyWatchSettings,
     Route,
     User,
 )
@@ -69,12 +73,14 @@ from berth.services.deeplink import (
     berth_link,
     normalized_public_url,
 )
+from berth.services.issues import still_ignored
 from berth.services.jellyfin_access import (
     AccountDisabledError,
     JellyfinUnreachableError,
     visible_libraries,
 )
-from berth.services.settings import read_settings, update_settings
+from berth.services.settings import read_settings, update_settings, write_settings
+from berth.services.waiting import LIST_PAGE, Waiting, WaitingSource, waiting_now
 
 logger = logging.getLogger(__name__)
 
@@ -87,12 +93,79 @@ _TEXT: dict[Language, dict[str, str]] = {
         "open": "在 Berth 打開",
         "test_title": "Berth 測試訊息",
         "test_body": "收到這一則，Berth 的通知就接通了。",
+        "waiting": "有 {count} 件等你處理",
+        "waiting_new": "新增 {count} 件：{parts}",
+        "waiting_gap": "、",
+        "review_one": "{count} 件待審核",
+        "review_many": "{count} 件待審核",
+        "issue_one": "{count} 個 Issue（{types}）",
+        "issue_many": "{count} 個 Issue（{types}）",
+        "rss_one": "{count} 個 RSS Series 待綁定",
+        "rss_many": "{count} 個 RSS Series 待綁定",
+        "review_field": "待審核",
+        "issue_field": "Issue",
+        "rss_field": "待綁定",
+        "review_list": "打開審核",
+        "issue_list": "打開 Issue",
+        "rss_list": "打開 RSS",
     },
     Language.EN: {
         "ready": "Ready to watch: {title}",
         "open": "Open in Berth",
         "test_title": "Berth test message",
         "test_body": "If you can read this, Berth notifications are working.",
+        "waiting": "{count} waiting for you",
+        "waiting_new": "{count} new: {parts}",
+        "waiting_gap": ", ",
+        "review_one": "{count} to review",
+        "review_many": "{count} to review",
+        "issue_one": "{count} issue ({types})",
+        "issue_many": "{count} issues ({types})",
+        "rss_one": "{count} RSS series to bind",
+        "rss_many": "{count} RSS series to bind",
+        "review_field": "To review",
+        "issue_field": "Issues",
+        "rss_field": "To bind",
+        "review_list": "Open review",
+        "issue_list": "Open issues",
+        "rss_list": "Open RSS",
+    },
+}
+
+#: 「1 個 Issue（檔案遺失）」括號裡那幾個字：前端 `issues.typeLabel` 的同一組詞（英文那邊前端是
+#: 全大寫的標籤，句子裡用小寫）。每一種型別都要有，`tests/unit/test_notify_text.py` 守。
+_ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
+    Language.ZH_HANT: {
+        IssueType.LIBRARY_LINK_MISSING: "鏈接遺失",
+        IssueType.SOURCE_MISSING: "來源遺失",
+        IssueType.INODE_MISMATCH: "INODE 不符",
+        IssueType.ORPHAN_COMPLETE: "無主目錄",
+        IssueType.UNKNOWN_TORRENT: "無主 torrent",
+        IssueType.UNMANAGED_LIBRARY_FILE: "非受管檔案",
+        IssueType.JOB_WITHOUT_FILES: "帳本為空",
+        IssueType.MISSING_FILES: "檔案遺失",
+        IssueType.CLIENT_ERROR: "客戶端錯誤",
+        IssueType.CLIENT_REMOVED: "已被移除",
+        IssueType.JELLYFIN_ITEM_UNRESOLVED: "反查失敗",
+        IssueType.JELLYFIN_ITEM_MISMATCH: "回驗不符",
+        IssueType.LIBRARY_USES_TVDB: "TVDB",
+        IssueType.LOW_DISK_SPACE: "空間不足",
+    },
+    Language.EN: {
+        IssueType.LIBRARY_LINK_MISSING: "link missing",
+        IssueType.SOURCE_MISSING: "source missing",
+        IssueType.INODE_MISMATCH: "inode mismatch",
+        IssueType.ORPHAN_COMPLETE: "orphan folder",
+        IssueType.UNKNOWN_TORRENT: "unknown torrent",
+        IssueType.UNMANAGED_LIBRARY_FILE: "unmanaged file",
+        IssueType.JOB_WITHOUT_FILES: "empty ledger",
+        IssueType.MISSING_FILES: "files missing",
+        IssueType.CLIENT_ERROR: "client error",
+        IssueType.CLIENT_REMOVED: "removed",
+        IssueType.JELLYFIN_ITEM_UNRESOLVED: "not in Jellyfin",
+        IssueType.JELLYFIN_ITEM_MISMATCH: "Jellyfin disagrees",
+        IssueType.LIBRARY_USES_TVDB: "TVDB",
+        IssueType.LOW_DISK_SPACE: "low disk",
     },
 }
 
@@ -115,6 +188,16 @@ MERGE_WINDOW = timedelta(minutes=5)
 #: 就放開交易、接著打 Discord：併進一則已經被撿走的，新的季集就跟著舊內容一起被標成已送。
 #: 判斷到 commit 之間要等寫鎖，30 秒遠大於它，代價只是相隔 4 分半到 5 分鐘的兩筆分成兩則。
 _MERGE_GUARD = timedelta(seconds=30)
+
+#: 「有 N 件等你處理」第一件出現之後等多久才送（M4 票 127，plan §11.5）：這段時間裡再出現的併進
+#: 同一則。比「可以看了」長：一次對帳、一批 RSS 長出來的那幾件常常隔幾分鐘才一一落地。
+WAIT_WINDOW = timedelta(minutes=10)
+
+#: 「等你處理」一個人一則，合併鍵就是種類本身。
+_WAITING_KEY = NotificationKind.WAITING.value
+
+#: 「等你處理」那一則的內容只有一格：這一波新出現的那幾件的鍵（`waiting` 的形狀）。
+_NEW = "new"
 
 #: 一則從最早送出時間（`not_before`）起，滿這麼久還沒送到就放棄（M4 票 128，plan §11.5）。
 #: 用時間不用次數：次數管不到「沒設 token」「token 壞了」這種一次都沒送的情況，而這幾種正是
@@ -333,6 +416,9 @@ async def set_mine(
     user.discord_user_id = discord_id
     user.notify_language = language
     chosen = set(kinds)
+    if user.role is not Role.ADMIN:
+        # 一般使用者看不到、也收不到這幾種（M4 票 127）：存下來的就是他實際會收的。
+        chosen -= ADMIN_ONLY_KINDS
     user.notify_kinds_json = [kind.value for kind in NotificationKind if kind in chosen]
     await session.commit()
     return await read_mine(session, user_id)
@@ -511,6 +597,89 @@ def _collapse(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
     return spans
 
 
+@command(Effect.IRREVERSIBLE)
+async def watch_waiting(session: AsyncSession, *, now: datetime | None = None) -> int:
+    """「有 N 件等你處理」的看守一輪（M4 票 127）：現在等著的（`waiting.waiting_now`）與上一輪看到的
+    （`NotifyWatchSettings.seen`）比，新出現的排給每一位訂閱了、有 Discord ID 的管理員，回排了
+    （或併進）幾則。送出迴圈每一輪先跑它。
+
+    - **第一次看**（`seen` 是 `None`）只記下來不排：升級那一刻已經在等的不是「新的一件」。
+    - **被忽略、條件仍在而又開的 Issue** 記下來、不排（`issues.still_ignored`）。
+    - **合併**：最早送出時間是第一件出現之後 `WAIT_WINDOW`；那段時間裡（離送出還有 `_MERGE_GUARD`
+      以上）再出現的併進同一則，理由同 `queue_ready`。
+    - 一件處理掉、之後又回到清單上（解除綁定、撤銷之後回審核）就是新的一件：比的是上一輪，不是歷史。
+
+    送什麼在送出時才算（`_render_waiting`）：這裡只記這一波有哪幾件。
+
+    **不 commit**：排下的那幾則與看過的那一份一起落地，由呼叫端 commit（送出迴圈接著跑的
+    `send_due` 一開頭就 commit）。一輪只借一次連線：中間多 commit 一次，關機時 cancel 落在兩次之間
+    就漏一條連線（`test_loop_shutdown`）。只有這個迴圈寫 `settings.notify_waiting`，不必
+    `update_settings` 的寫鎖重讀。
+    """
+    moment = now or utcnow()
+    current = await waiting_now(session)
+    watched = await read_settings(session, NotifyWatchSettings)
+    if watched.seen is not None and set(watched.seen) == set(current):
+        return 0
+    seen = set(watched.seen or ())
+    appeared = [] if watched.seen is None else [key for key in current if key not in seen]
+    quiet = await still_ignored(
+        session,
+        [current[key].ref for key in appeared if current[key].source is WaitingSource.ISSUE],
+    )
+    fresh = [
+        key
+        for key in appeared
+        if not (current[key].source is WaitingSource.ISSUE and current[key].ref in quiet)
+    ]
+    queued = await _queue_waiting(session, fresh, moment) if fresh else 0
+    watched.seen = sorted(current)
+    await write_settings(session, watched)
+    return queued
+
+
+async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: datetime) -> int:
+    recipients = [
+        user
+        for user in await session.scalars(
+            select(User)
+            .where(User.discord_user_id != "", User.role == Role.ADMIN)
+            .order_by(User.id)
+        )
+        if NotificationKind.WAITING.value in user.notify_kinds_json
+    ]
+    if not recipients:
+        return 0
+    gathering = {
+        row.user_id: row
+        for row in await session.scalars(
+            select(Notification).where(
+                Notification.kind == NotificationKind.WAITING,
+                Notification.merge_key == _WAITING_KEY,
+                Notification.status == NotificationStatus.PENDING,
+                Notification.not_before > moment + _MERGE_GUARD,
+            )
+        )
+    }
+    for user in recipients:
+        row = gathering.get(user.id)
+        if row is not None:
+            before = list(row.content_json.get(_NEW) or [])
+            row.content_json = {_NEW: before + [key for key in fresh if key not in before]}
+            continue
+        session.add(
+            Notification(
+                user_id=user.id,
+                kind=NotificationKind.WAITING,
+                content_json={_NEW: list(fresh)},
+                merge_key=_WAITING_KEY,
+                not_before=moment + WAIT_WINDOW,
+                created_at=moment,
+            )
+        )
+    return len(recipients)
+
+
 def describe_spans(spans: Sequence[Sequence[int]]) -> str:
     """`S01E01–E03, E05, S02E01`：同一季接著寫集，換季才再寫季。"""
     parts: list[str] = []
@@ -561,6 +730,12 @@ async def send_due(
             )
         ).tuples()
     )
+    # 「等你處理」送出時重算還剩哪幾件：一輪問一次，在讀的交易裡。
+    current = (
+        await waiting_now(session)
+        if any(notification.kind is NotificationKind.WAITING for notification, _ in rows)
+        else {}
+    )
     await session.commit()
     if not rows:
         return SendOutcome(sent=0, failed=0)
@@ -579,7 +754,12 @@ async def send_due(
         if notification.kind in _BY_LIBRARY and _withheld(notification, libraries, unreachable):
             await session.commit()
             continue
-        delivery = await _deliver(bot, notification, user, berth_url)
+        if notification.kind is NotificationKind.WAITING and _settled_wave(
+            notification, user, current
+        ):
+            await session.commit()
+            continue
+        delivery = await _deliver(bot, notification, user, berth_url, current)
         if delivery is None:
             failed += 1
             await session.commit()
@@ -657,13 +837,35 @@ def _withheld(
     return False
 
 
+def _settled_wave(notification: Notification, user: User, current: dict[str, Waiting]) -> bool:
+    """「等你處理」這一則不送了就放棄它、記下原因，回 `True`（M4 票 127）：這一波新增的在送出前
+    都已經處理掉（總數是 0 也在這裡：那時候一件都不剩），或收件人已經不是管理員（角色每次登入照
+    Jellyfin 重寫）。前者不是「現在還有幾件」的提醒：沒有新的一件要說，人多半正在 Berth 上處理。"""
+    if user.role is not Role.ADMIN:
+        notification.status = NotificationStatus.ABANDONED
+        notification.error = "withheld: the recipient is no longer an admin"
+        return True
+    if not any(key in current for key in notification.content_json.get(_NEW) or ()):
+        notification.status = NotificationStatus.ABANDONED
+        notification.error = "withheld: everything in this batch was handled before it was sent"
+        return True
+    return False
+
+
 async def _deliver(
-    bot: NotifyChannel, notification: Notification, user: User, berth_url: str
+    bot: NotifyChannel,
+    notification: Notification,
+    user: User,
+    berth_url: str,
+    current: dict[str, Waiting],
 ) -> Delivery | None:
     """組字、送出。出了例外記在那一則上、回 `None`：組不成句子的再組也一樣，當場放棄；管道丟出來的
     （說好不丟）不知道送到了沒，留著下一輪再送，滿 `GIVE_UP_AFTER` 才放棄。"""
     try:
-        message = _render(notification, user.notify_language, berth_url)
+        if notification.kind is NotificationKind.WAITING:
+            message = _render_waiting(notification, user.notify_language, berth_url, current)
+        else:
+            message = _render(notification, user.notify_language, berth_url)
     except Exception as exc:
         logger.exception("notification cannot be rendered", extra={"notification": notification.id})
         notification.status = NotificationStatus.ABANDONED
@@ -806,5 +1008,60 @@ def _render(notification: Notification, language: Language, berth_url: str) -> M
         title=text["ready"].format(title=title),
         description=describe_spans(content.get("episodes") or []),
         fields=((_ROUTE, route),) if route else (),
-        link=Link(text["open"], url) if url else None,
+        links=(Link(text["open"], url),) if url else (),
     )
+
+
+def _render_waiting(
+    notification: Notification, language: Language, berth_url: str, current: dict[str, Waiting]
+) -> Message:
+    """「有 N 件等你處理」（M4 票 127）：標題是現在的總數，內文是這一波新增、還沒處理掉的那幾件
+    （種類與數量），每一種現在幾件放在欄位。只剩一件時連到那一件，否則每一種一條清單連結。"""
+    text = _TEXT[language]
+    still = [current[key] for key in notification.content_json.get(_NEW) or () if key in current]
+    by_source = {source: [one for one in still if one.source is source] for source in WaitingSource}
+    parts = [_part(text, language, source, found) for source, found in by_source.items() if found]
+    totals = {
+        source: sum(1 for one in current.values() if one.source is source)
+        for source in WaitingSource
+    }
+    if len(still) == 1:
+        paths = [(text["open"], still[0].path)]
+    else:
+        paths = [
+            (text[f"{source.value}_list"], LIST_PAGE[source])
+            for source, found in by_source.items()
+            if found
+        ]
+    links = tuple(Link(label, url) for label, path in paths if (url := berth_link(berth_url, path)))
+    return Message(
+        title=text["waiting"].format(count=len(current)),
+        description=text["waiting_new"].format(
+            count=len(still), parts=text["waiting_gap"].join(parts)
+        ),
+        fields=tuple(
+            (text[f"{source.value}_field"], str(count)) for source, count in totals.items() if count
+        ),
+        links=links,
+    )
+
+
+def _part(
+    text: dict[str, str], language: Language, source: WaitingSource, found: list[Waiting]
+) -> str:
+    """一種的那一段：「2 件待審核」「1 個 Issue（檔案遺失）」。Issue 的括號裡照型別數，多的在前，
+    同一型別兩件以上寫「×2」。"""
+    count = len(found)
+    template = text[f"{source.value}_{'one' if count == 1 else 'many'}"]
+    if source is not WaitingSource.ISSUE:
+        return template.format(count=count)
+    tally: dict[IssueType, int] = {}
+    for one in found:
+        if one.issue_type is not None:
+            tally[one.issue_type] = tally.get(one.issue_type, 0) + 1
+    labels = _ISSUE_LABEL[language]
+    types = text["waiting_gap"].join(
+        labels[kind] if times == 1 else f"{labels[kind]} ×{times}"
+        for kind, times in sorted(tally.items(), key=lambda pair: -pair[1])
+    )
+    return template.format(count=count, types=types)

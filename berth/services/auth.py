@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceError
 from berth.adapters.jellyfin import JellyfinAuth
-from berth.domain import Role
+from berth.domain import Role, default_notify_kinds
 from berth.models import JellyfinSettings, SetupSettings, User, UserSession
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
@@ -205,7 +205,13 @@ async def _insert_mirror(session: AsyncSession, auth: JellyfinAuth, role: Role) 
 
     回滾掉的只有這一次 insert：`sign_in` 走到這裡為止只讀過東西，session 沒有別的待寫。
     """
-    row = User(jellyfin_user_id=auth.user_id, name=auth.name, role=role)
+    row = User(
+        jellyfin_user_id=auth.user_id,
+        name=auth.name,
+        role=role,
+        # 照第一次登入時的角色（M4 票 127）；之後角色變了不改訂閱，那是他自己的選擇。
+        notify_kinds_json=default_notify_kinds(role),
+    )
     session.add(row)
     try:
         await session.flush()

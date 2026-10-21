@@ -31,8 +31,9 @@ class Message:
     title: str
     description: str = ""
     fields: tuple[tuple[str, str], ...] = ()
-    #: `None` 是沒有連結（Berth 的網址沒存）。怎麼放是管道的事。
-    link: Link | None = None
+    #: 空的是沒有連結（Berth 的網址沒存）。「有 N 件等你處理」一波跨好幾種時每一種一條
+    #: （M4 票 127）。怎麼放是管道的事。
+    links: tuple[Link, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

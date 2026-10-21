@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { reconcileQueryOptions, type Issue, type ReconcileStatus } from '../api/issues'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoutes } from '../test/fetch'
@@ -931,3 +931,37 @@ function sent(stub: ReturnType<typeof stubApi>, key: string) {
     ([input, init]) => (init?.method ?? 'GET') === method && String(input) === path,
   ).length
 }
+
+describe('通知連結的片段（M4 票 127）', () => {
+  it('#issue-2 在資料回來之後捲到那一件、焦點落在它', async () => {
+    render({ [ISSUES]: { body: [issue(), issue({ id: 2, path: `${TARGET}.2` })] } })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/issues#issue-2')
+
+    await screen.findAllByRole('article')
+
+    await waitFor(() => expect(document.activeElement?.id).toBe('issue-2'))
+    expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('那一件已經處理掉了：不動焦點', async () => {
+    render({ [ISSUES]: { body: [issue()] } })
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/issues#issue-99')
+
+    await screen.findByRole('article')
+
+    expect(scrolled).not.toHaveBeenCalledWith({ block: 'center' })
+    expect(document.body).toHaveFocus()
+  })
+})

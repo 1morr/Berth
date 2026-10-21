@@ -3008,6 +3008,10 @@ const zhHant = {
             label: '正在下載',
             hint: 'RSS 每一輪、每部作品一則，人手按的下載也算；你自己按的不通知你。',
           },
+          waiting: {
+            label: '有 N 件等你處理',
+            hint: '待審核、Issue 或待綁定的 RSS Series 有新的一件時，等 10 分鐘收齊再送一則。只有管理員收得到。',
+          },
         },
         save: '儲存',
         saving: '儲存中…',
@@ -6567,6 +6571,10 @@ const en: Translations<typeof zhHant> = {
           downloading: {
             label: 'Downloading',
             hint: 'One message per title for each RSS round, manual downloads included; never for the downloads you start yourself.',
+          },
+          waiting: {
+            label: 'Waiting for you',
+            hint: 'When something new lands in review, issues or RSS series to bind, one message after 10 minutes gathers the rest. Admins only.',
           },
         },
         save: 'Save',

@@ -81,6 +81,11 @@ async def set_public_url(session: AsyncSession, value: str, *, published_port: i
 
 #: 作品頁。與前端的路由表（`web/src/routes.tsx` 的 `/media/$mediaId`）同一條路徑。
 MEDIA_PAGE = "/media/{media_id}"
+#: 「有 N 件等你處理」的三份清單（M4 票 127），同樣是前端路由表的路徑。只有一件時後面接那一列的
+#: 錨點（`services.waiting`），頁面載入後捲到那一列、把焦點放上去。
+REVIEW_PAGE = "/review"
+ISSUES_PAGE = "/issues"
+RSS_PAGE = "/rss"
 
 
 def berth_link(public_url: str, path: str) -> str | None:
