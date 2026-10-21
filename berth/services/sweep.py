@@ -7,6 +7,14 @@
 - **卡住的**（`_stuck_first_batches`）：還沒確認的 RSS Series 有 Job 停在 `submit_failed` /
   `client_error` 超過 `STUCK_AFTER`。第一批要整批落地才由系統確認（`services.first_batch`），
   停住的那一筆讓整批一直等人（M4 票 11 的遺留）。
+- **一直失敗的 Feed**（`_failing_feeds`，M4 票 130）：輪詢或每日補漏從由好轉壞的那一輪起一直失敗
+  超過 `FAILING_AFTER`（`rss_feeds.poll_failing_since` / `backfill_failing_since`，`services.rss`
+  寫），兩種各一件。
+- **RSS Series 缺集**（`_missing_episodes`，M4 票 130）：綁好的 Series 已入庫的集數之間，作品頁說
+  「缺」的那幾集（`inventory.read_holdings`：播了、沒有下載在處理），洞之後的集數入庫滿
+  `GAP_GRACE` 才算。
+- **同一集意外多份**（`_colliding_episodes`，M4 票 130）：同一個 Series 兩個發佈名寫的集號不同的 Job
+  入庫成同一集。版本並存（別的字幕組、v2、简繁）不算。
 - **放太久**（`_remind_lingering`）：「等你處理」裡最舊的一件等了超過 `LINGER_AFTER`，給訂閱了
   「等你處理」的管理員再提醒一則（`notify.queue_lingering`）；同一件 `REMIND_EVERY` 內只提醒一次。
   一件從什麼時候開始等是送出迴圈的看守第一次看到它的那一刻（`NotifyWatchSettings.since`）：
@@ -15,18 +23,42 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Integer
 
-from berth.domain import EventType, IssueStatus, IssueType, JobState, JobTrigger
-from berth.models import Event, Issue, Job, NotifyWatchSettings, RssSeries, SweepSettings
+from berth.domain import (
+    EpisodeStatus,
+    EventType,
+    IssueStatus,
+    IssueType,
+    JobState,
+    JobTrigger,
+    LedgerStatus,
+    PlanAction,
+)
+from berth.models import (
+    Event,
+    Issue,
+    Job,
+    LedgerEntry,
+    Media,
+    NotifyWatchSettings,
+    RssFeed,
+    RssSeries,
+    SweepSettings,
+)
 from berth.models.types import utcnow
+from berth.parser import parse_release
 from berth.services.commands import Effect, command
+from berth.services.inventory import read_holdings
 from berth.services.issues import (
     STANDS_WHILE,
     clear_by_system,
@@ -51,6 +83,22 @@ _STUCK_STATES = (JobState.SUBMIT_FAILED, JobState.CLIENT_ERROR)
 #: Job 停下來那一刻寫的事件：送單失敗寫 `submit_failed`，客戶端報錯寫 `issue_detected`。
 _STOPPED_BY = (EventType.SUBMIT_FAILED.value, EventType.ISSUE_DETECTED.value)
 
+#: 輪詢或補漏一直失敗多久開 Issue（M4 票 130 票面 24 小時）。補漏一天才讀一次，但讀不到的那一個
+#: 每一輪輪詢都會再試（`backfilled_at` 不動），所以一天裡試過幾十次。
+FAILING_AFTER = timedelta(hours=24)
+
+#: 每一種失敗讀 Feed 的哪兩欄：（原文, 從什麼時候開始一直失敗）。
+_FAILURES: tuple[tuple[IssueType, Callable[[RssFeed], tuple[str, datetime | None]]], ...] = (
+    (IssueType.FEED_POLL_FAILING, lambda feed: (feed.poll_error, feed.poll_failing_since)),
+    (
+        IssueType.FEED_BACKFILL_FAILING,
+        lambda feed: (feed.backfill_error, feed.backfill_failing_since),
+    ),
+)
+
+#: 洞之後的集數入庫滿多久才算缺（M4 票 130 票面 7 天）：字幕組常晚幾天補發前一集。
+GAP_GRACE = timedelta(days=7)
+
 #: 「等你處理」裡的一件等了多久算放太久（票面 3 天）。
 LINGER_AFTER = timedelta(days=3)
 
@@ -64,7 +112,13 @@ class SweepOutcome:
 
     #: 這一輪開著（新開或還在）的「第一批卡住」。
     stuck: int
-    #: 這一輪由系統收掉的。
+    #: 這一輪開著的「一直失敗的 Feed」（輪詢與補漏各算一件）。
+    failing: int
+    #: 這一輪開著的「RSS Series 缺集」。
+    missing: int
+    #: 這一輪開著的「同一集意外多份」。
+    colliding: int
+    #: 這一輪由系統收掉的（每一種加起來）。
     cleared: int
     #: 「放太久」排了幾則提醒（每位收件人一則）。
     reminded: int
@@ -76,9 +130,19 @@ async def sweep_once(session: AsyncSession, *, now: datetime | None = None) -> S
     """巡檢一輪，最後 commit。"""
     moment = now or utcnow()
     stuck, cleared = await _stuck_first_batches(session, moment)
+    failing, recovered = await _failing_feeds(session, moment)
+    missing, filled = await _missing_episodes(session, moment)
+    colliding, untangled = await _colliding_episodes(session, moment)
     reminded = await _remind_lingering(session, moment)
     await session.commit()
-    return SweepOutcome(stuck=stuck, cleared=cleared, reminded=reminded)
+    return SweepOutcome(
+        stuck=stuck,
+        failing=failing,
+        missing=missing,
+        colliding=colliding,
+        cleared=cleared + recovered + filled + untangled,
+        reminded=reminded,
+    )
 
 
 async def _stuck_first_batches(session: AsyncSession, moment: datetime) -> tuple[int, int]:
@@ -130,19 +194,311 @@ async def _stuck_first_batches(session: AsyncSession, moment: datetime) -> tuple
         # 停得最久的那一筆換了（前一筆走開了）：清單上那一格連到現在這一筆。
         recorded.issue.job_hash = job.hash
 
+    cleared = await _settle(
+        session,
+        (IssueType.FIRST_BATCH_STUCK,),
+        {(IssueType.FIRST_BATCH_STUCK, str(series_id)) for series_id in flagged},
+        moment,
+    )
+    return len(flagged), cleared
+
+
+async def _failing_feeds(session: AsyncSession, moment: datetime) -> tuple[int, int]:
+    """每一個輪詢或補漏一直失敗超過 `FAILING_AFTER` 的 Feed 開（或更新）一件，說出最後的原因；
+    恢復了或 Feed 被刪了的收掉。回（開著的件數，收掉的件數）。"""
+    flagged: set[tuple[IssueType, str]] = set()
+    for feed in await session.scalars(select(RssFeed).order_by(RssFeed.id)):
+        for kind, read in _FAILURES:
+            error, since = read(feed)
+            if not error or since is None or moment - since < FAILING_AFTER:
+                continue
+            await record_issue(
+                session,
+                kind,
+                feed_id=feed.id,
+                detail={
+                    "feed": feed.id,
+                    "name": feed.name,
+                    "error": error,
+                    "since": since.isoformat(),
+                },
+                now=moment,
+            )
+            flagged.add((kind, str(feed.id)))
+    cleared = await _settle(session, [kind for kind, _ in _FAILURES], flagged, moment)
+    return len(flagged), cleared
+
+
+async def _missing_episodes(session: AsyncSession, moment: datetime) -> tuple[int, int]:
+    """每一個有洞的綁好的 RSS Series 開（或更新）一件，列出缺哪幾集；補上了或解除綁定了的收掉。
+    回（開著的件數，收掉的件數）。
+
+    **缺不缺看作品頁那一份**（`read_holdings` 的 `missing`）：另一個字幕組或手動送的入庫了那一集
+    就不缺，下載中、卡住、等審核的那一集已經有人在管。**洞在這個 Series 自己入庫過的集數之間**：
+    中途訂閱的第一集之前、最新一集之後都不算。第 0 季不看：特別篇的編號本來就不連續。
+
+    `read_holdings` 一部作品要幾十 ms，所以先從這個 Series 自己的集數找出過了寬限的候選，有候選的
+    作品才問它（`scripts/experiments/sweep_loop_lag.py`）。
+    """
+    landed: dict[int, dict[tuple[int, int], datetime]] = {}
+    media_of: dict[int, str] = {}
+    for row in await _series_imports(session):
+        if row.season == 0:
+            continue
+        media_of[row.series] = row.media
+        mine = landed.setdefault(row.series, {})
+        for number in range(row.start, row.end + 1):
+            pair = (row.season, number)
+            mine[pair] = min(mine.get(pair, row.at), row.at)
+
+    missing_in: dict[str, set[tuple[int, int]]] = {}
+    flagged: dict[int, list[tuple[int, int]]] = {}
+    for series_id, mine in landed.items():
+        candidates = _gaps(mine, moment)
+        if not candidates:
+            continue
+        media_id = media_of[series_id]
+        if media_id not in missing_in:
+            missing_in[media_id] = await _missing_in(session, media_id)
+        holes = [pair for pair in candidates if pair in missing_in[media_id]]
+        if holes:
+            flagged[series_id] = holes
+
+    for series_id, holes in flagged.items():
+        await record_issue(
+            session,
+            IssueType.SERIES_EPISODES_MISSING,
+            series_id=series_id,
+            detail={
+                **await _about(session, series_id),
+                "missing": [{"season": season, "episode": number} for season, number in holes],
+            },
+            now=moment,
+        )
+    cleared = await _settle(
+        session,
+        (IssueType.SERIES_EPISODES_MISSING,),
+        {(IssueType.SERIES_EPISODES_MISSING, str(series_id)) for series_id in flagged},
+        moment,
+    )
+    return len(flagged), cleared
+
+
+async def _colliding_episodes(session: AsyncSession, moment: datetime) -> tuple[int, int]:
+    """每一個有「同一集意外多份」的 RSS Series 開（或更新）一件；改正了、刪掉了的收掉。回（開著的
+    件數，收掉的件數）。
+
+    **意外**（2026-10-22 協調者確認，票 130 的 Comments）：同一個 Series 的兩筆以上不同的 Job 入庫成
+    同一集（帳本 `ok`、同季同起始集），而它們的發佈名寫的集號不同（合集看範圍：有兩個範圍不相交，
+    `_apart`）——兩個不同的發佈被對到同一集（offset、絕對編號換算、季名讀錯）。發佈名讀不出集號的
+    那一筆不參與比較。**版本並存不算**
+    （brief §7.7、§7.8）：別的 Series 的同一集、發佈名寫同一集的 v2 / 简繁 / 不同解析度 / `[2]`。
+    比 Tags 分不出這兩種：Tags 全同的第二份在規劃時就被擋成 `duplicate`，進得了帳本的 Tags 一定
+    不同。
+    """
+    names: dict[int, dict[tuple[int, int], dict[str, str]]] = {}
+    for row in await _series_imports(session):
+        if row.ok:
+            at = names.setdefault(row.series, {}).setdefault((row.season, row.start), {})
+            at[row.job_hash] = row.release
+
+    flagged: dict[int, list[dict[str, Any]]] = {}
+    for series_id, episodes in names.items():
+        hits = [
+            {"season": season, "episode": start, "releases": sorted(jobs.values())}
+            for (season, start), jobs in sorted(episodes.items())
+            if len(jobs) > 1 and _apart(await _written_spans(jobs.values()))
+        ]
+        if hits:
+            flagged[series_id] = hits
+
+    for series_id, hits in flagged.items():
+        await record_issue(
+            session,
+            IssueType.SERIES_EPISODES_COLLIDE,
+            series_id=series_id,
+            detail={**await _about(session, series_id), "collisions": hits},
+            now=moment,
+        )
+    cleared = await _settle(
+        session,
+        (IssueType.SERIES_EPISODES_COLLIDE,),
+        {(IssueType.SERIES_EPISODES_COLLIDE, str(series_id)) for series_id in flagged},
+        moment,
+    )
+    return len(flagged), cleared
+
+
+async def _written_spans(names: Iterable[str]) -> list[tuple[int, int]]:
+    """這幾個發佈名各自寫的集數範圍（單集是同一集起迄）；讀不出集號的不算。
+
+    **一個名字讓出一次迴圈**：解析一個發佈名約 15 ms（guessit），同一集有簡繁兩版的 Series 每一集
+    都要解析，連著解析一整輪會佔住迴圈好幾秒（`scripts/experiments/sweep_loop_lag.py`）。
+    """
+    spans: list[tuple[int, int]] = []
+    for name in names:
+        info = parse_release(name)
+        if info.episode is not None:
+            spans.append((info.episode, info.episode_end or info.episode))
+        await asyncio.sleep(0)
+    return spans
+
+
+def _apart(spans: list[tuple[int, int]]) -> bool:
+    """有兩個範圍不相交：兩個寫著不同集的發佈。季末的合集 `[01-12]` 蓋到每週的那一集，是同一集的
+    版本（M4 票 130 code-review）。"""
+    return any(
+        first[1] < second[0] or second[1] < first[0]
+        for index, first in enumerate(spans)
+        for second in spans[index + 1 :]
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Landed:
+    """一個 RSS Series 送來、入庫成它那部作品正片的帳本一列（`_series_imports`）。"""
+
+    series: int
+    media: str
+    season: int
+    start: int
+    end: int
+    #: 入庫的那一刻。
+    at: datetime
+    #: 帳本那一列現在對得上磁碟（`LedgerStatus.OK`）。
+    ok: bool
+    job_hash: str
+    #: 那一筆 Job 的發佈名。
+    release: str
+
+
+#: `_series_imports` 一次組幾列就讓出迴圈。
+_PARTITION = 500
+
+
+async def _series_imports(session: AsyncSession) -> list[_Landed]:
+    """每一個綁好的 RSS Series 送來、入庫成它那部作品的正片（帳本 `import`、有季集）的每一列。缺集與
+    意外多份都從這一份看「這個 Series 自己入庫過什麼」。
+
+    **只選用得到的欄位、分批組列**：整份組成 ORM 物件時一次佔住迴圈近 200 ms（400 個 Series ×
+    12 集，`scripts/experiments/sweep_loop_lag.py`）。
+    """
+    result = await session.stream(
+        select(
+            RssSeries.id,
+            RssSeries.media_id,
+            LedgerEntry.season,
+            LedgerEntry.episode_start,
+            LedgerEntry.episode_end,
+            LedgerEntry.created_at,
+            LedgerEntry.status,
+            Job.hash,
+            Job.name,
+        )
+        .join(
+            Job,
+            (Job.trigger == JobTrigger.RSS) & (cast(Job.trigger_ref, Integer) == RssSeries.id),
+        )
+        .join(LedgerEntry, LedgerEntry.job_hash == Job.hash)
+        .where(
+            RssSeries.media_id.is_not(None),
+            LedgerEntry.media_id == RssSeries.media_id,
+            LedgerEntry.action == PlanAction.IMPORT,
+            LedgerEntry.season.is_not(None),
+            LedgerEntry.episode_start.is_not(None),
+        )
+    )
+    rows: list[_Landed] = []
+    async for partition in result.partitions(_PARTITION):
+        for series, media, season, start, end, at, status, job_hash, release in partition:
+            # 上面的 where 擋掉了這三格是 NULL 的列，查詢結果的型別上看不出來。
+            assert media is not None and season is not None and start is not None
+            rows.append(
+                _Landed(
+                    series=series,
+                    media=media,
+                    season=season,
+                    start=start,
+                    end=end or start,
+                    at=at,
+                    ok=status is LedgerStatus.OK,
+                    job_hash=job_hash,
+                    release=release,
+                )
+            )
+    return rows
+
+
+async def _about(session: AsyncSession, series_id: int) -> dict[str, Any]:
+    """巡檢開在 Series 上的那幾件共用的 `detail`：哪一個 Series、哪一部作品（列上連到作品頁）。
+
+    `name`（清單上那一列的標題）是「作品 × 字幕組」，同審核頁的第一批（M4 票 11）：長出 Series 的
+    那一筆發佈名寫著某一集，拿它當標題，缺第 3 集的那一件會被讀成在說第 1 集（M4 票 130 實跑）。
+    """
+    series = await session.get(RssSeries, series_id)
+    assert series is not None  # 剛從 `_series_imports` 讀到它
+    media = await session.get(Media, series.media_id) if series.media_id is not None else None
+    title = media.snapshot().title if media is not None else ""
+    group = series.mikan_subgroup_name or parse_release(series.title_raw).group
+    return {
+        "series": series.id,
+        "name": " × ".join(part for part in (title, group) if part) or series.title_raw,
+        "media": series.media_id,
+        "title": title,
+    }
+
+
+async def _missing_in(session: AsyncSession, media_id: str) -> set[tuple[int, int]]:
+    """作品頁說「缺」的那幾集。沒有 TMDB 快照的作品說不出哪幾集播了，一集都不算。"""
+    media = await session.get(Media, media_id)
+    snapshot = media.stored_snapshot() if media is not None else None
+    if media is None or snapshot is None:
+        return set()
+    holdings = await read_holdings(session, media, snapshot)
+    return {
+        (season.season_number, episode.episode_number)
+        for season in holdings.seasons
+        for episode in season.episodes
+        if episode.status is EpisodeStatus.MISSING
+    }
+
+
+def _gaps(landed: dict[tuple[int, int], datetime], moment: datetime) -> list[tuple[int, int]]:
+    """這個 Series 入庫過的集數之間它自己沒有的那幾集；洞之後它最早入庫的一集已滿 `GAP_GRACE`
+    的才算。缺不缺還要看媒體庫（`_missing_in`）：別人可能補上了。"""
+    gaps: list[tuple[int, int]] = []
+    for season in sorted({season for season, _ in landed}):
+        mine = {number: at for (this, number), at in landed.items() if this == season}
+        for number in range(min(mine) + 1, max(mine)):
+            if number in mine:
+                continue
+            after = min(at for later, at in mine.items() if later > number)
+            if moment - after >= GAP_GRACE:
+                gaps.append((season, number))
+    return gaps
+
+
+async def _settle(
+    session: AsyncSession,
+    kinds: Collection[IssueType],
+    flagged: Collection[tuple[IssueType, str]],
+    moment: datetime,
+) -> int:
+    """`kinds` 裡這一輪沒再量到的（型別, subject）由系統收掉：開著的收成 `resolved`，被忽略的記下
+    條件解除過（`note_cleared`，之後再發生是新的一件）。回收掉的件數。"""
     known = list(
         await session.scalars(
             select(Issue).where(
-                Issue.type == IssueType.FIRST_BATCH_STUCK,
+                Issue.type.in_(kinds),
                 Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
             )
         )
     )
-    gone = [row for row in known if int(row.subject) not in flagged]
+    gone = [row for row in known if (row.type, row.subject) not in flagged]
     clear_by_system([row for row in gone if row.status is IssueStatus.OPEN], moment)
     note_cleared(gone, moment)
     await session.flush()
-    return len(flagged), sum(1 for row in gone if row.status is IssueStatus.RESOLVED)
+    return sum(1 for row in gone if row.status is IssueStatus.RESOLVED)
 
 
 async def _remind_lingering(session: AsyncSession, moment: datetime) -> int:

@@ -1,5 +1,5 @@
-"""十五種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
-M4 票 129）。
+"""十九種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
+M4 票 129、130）。
 
 `IssueType` 有兩個呼叫端：管線寫 `issue_detected` 事件時用它，對帳寫 `issues` 表時也用它。
 **共用一個集合**是票 05 的驗收條件之一，而共用的代價是「加一種型別」要回答兩個問題——
@@ -51,15 +51,21 @@ FROM_HEALTH_CHECKS = {
 #: Jellyfin 回驗（M3 票 17）：反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`。
 FROM_JELLYFIN_VERIFY = {IssueType.JELLYFIN_ITEM_MISMATCH}
 
-#: 每日巡檢（M4 票 129）：每天量一次，條件解除時由系統收掉。
-FROM_SWEEP = {IssueType.FIRST_BATCH_STUCK}
+#: 每日巡檢（M4 票 129、130）：每天量一次，條件解除時由系統收掉。
+FROM_SWEEP = {
+    IssueType.FIRST_BATCH_STUCK,
+    IssueType.FEED_POLL_FAILING,
+    IssueType.FEED_BACKFILL_FAILING,
+    IssueType.SERIES_EPISODES_MISSING,
+    IssueType.SERIES_EPISODES_COLLIDE,
+}
 
 
 class TestTheClosedSet:
     def test_it_is_the_union_of_the_three_producers(self) -> None:
-        """十五種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的一種（plan §2.4）。
+        """十九種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的五種（plan §2.4）。
 
-        分別列一次而不是數 15：多一種而各邊都沒登記它時，說得出少的是哪一種。
+        分別列一次而不是數 19：多一種而各邊都沒登記它時，說得出少的是哪一種。
         """
         assert set(IssueType) == (
             FROM_RECONCILING
@@ -127,7 +133,17 @@ class TestTheIdempotencyKey:
             kind for kind, column in SUBJECT_OF.items() if column is IssueSubject.RSS_SERIES
         }
 
-        assert by_series == {IssueType.FIRST_BATCH_STUCK}
+        assert by_series == {
+            IssueType.FIRST_BATCH_STUCK,
+            IssueType.SERIES_EPISODES_MISSING,
+            IssueType.SERIES_EPISODES_COLLIDE,
+        }
+
+    def test_a_failing_feed_is_one_feed(self) -> None:
+        """壞的是那一條網址或那一站（M4 票 130）：輪詢與補漏各一種，各自一個 Feed 一件。"""
+        by_feed = {kind for kind, column in SUBJECT_OF.items() if column is IssueSubject.RSS_FEED}
+
+        assert by_feed == {IssueType.FEED_POLL_FAILING, IssueType.FEED_BACKFILL_FAILING}
 
 
 class TestWhatEachTypeCanBeResolvedWith:

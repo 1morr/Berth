@@ -306,7 +306,7 @@ _Avoid_: re-run, resync
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:
-Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）、Jellyfin 回驗的一種（jellyfin_item_mismatch）與巡檢的一種（first_batch_stuck：RSS Series 的第一批被停住的 Job 卡住，M4 票 129）；`issues.type` 與 `issue_detected` 事件共用這十五種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種、回驗那一種與巡檢那一種條件解除時由系統收掉。健康檢查那兩種、回驗那一種、巡檢那一種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。
+Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）、Jellyfin 回驗的一種（jellyfin_item_mismatch）與巡檢的五種（first_batch_stuck：RSS Series 的第一批被停住的 Job 卡住，M4 票 129；feed_poll_failing、feed_backfill_failing：Feed 的輪詢或每日補漏一直失敗超過一天；series_episodes_missing：RSS Series 已入庫的集數中間缺了幾集；series_episodes_collide：同一集意外多份，同一個 RSS Series 兩個發佈名寫不同集的發佈被入庫成同一集，M4 票 130）；`issues.type` 與 `issue_detected` 事件共用這十九種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種、回驗那一種與巡檢那五種條件解除時由系統收掉。健康檢查那兩種、回驗那一種、巡檢那五種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 
 **Jellyfin 回驗**:
@@ -405,7 +405,7 @@ AI 做過的每一件事、理由、花費，逐筆可撤銷。
 _Avoid_: log, history
 
 **Sweep**（巡檢）:
-每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M5 起標出來的交給 AI 任務。每日那一輪由 `sweeper` 迴圈在 05:00 跑（M4 票 129）：要人動手的寫成 Issue（例如第一批卡住），「等你處理」最舊的一件等滿 3 天再提醒管理員一次（**放太久**，同一件 3 天內一次）。
+每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M5 起標出來的交給 AI 任務。每日那一輪由 `sweeper` 迴圈在 05:00 跑（M4 票 129）：要人動手的寫成 Issue（第一批卡住；M4 票 130 起還有一直失敗的 Feed、RSS Series 缺集、同一集意外多份——版本並存不算），「等你處理」最舊的一件等滿 3 天再提醒管理員一次（**放太久**，同一件 3 天內一次）。
 _Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳比的是帳本與磁碟）
 
 **Assistant**（助理）:

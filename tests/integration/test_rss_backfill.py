@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.rss.mikan import parse_feed
 from berth.domain import (
     FeedItemStatus,
@@ -242,26 +243,69 @@ class TestDailyBackfill:
         # 只讀綁好的那一個 RSS Series 的單一 feed：其餘十個待綁定，不補。
         assert feeds_read(factory) == [FEED_URL, SINGLE_URL]
         row = await session.get(RssFeed, feed_id)
-        assert row is not None and row.last_error == ""
+        assert row is not None and row.poll_error == "" and row.backfill_error == ""
 
     async def test_a_single_feed_that_fails_is_reported_on_the_feed(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """每日補漏讀不到單一 feed：記在那個聚合 Feed 的 `last_error`（`/rss` 看得到），
-        下一輪再試。"""
+        """每日補漏讀不到單一 feed：記在那個聚合 Feed 的 `backfill_error`（`/rss` 看得到），輪詢
+        那一欄不受牽連（M4 票 130 拆欄）；下一輪再試，從第一次讀不到起算「一直失敗」。"""
         media, route, factory, feed_id, series_id = await subscribed(session, roots)
         await bind_series(
             session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
         )
         del factory.rss_.pages[SINGLE_URL]
 
-        await poll_feed(session, factory, feed_id, now=NOW + timedelta(days=1))
+        first = NOW + timedelta(days=1)
+        await poll_feed(session, factory, feed_id, now=first)
+        await poll_feed(session, factory, feed_id, now=first + timedelta(hours=1))
 
         row = await session.get(RssFeed, feed_id)
-        assert row is not None and "connection refused" in row.last_error
-        assert KIMI_KEY in row.last_error
+        assert row is not None and row.poll_error == "" and row.poll_failing_since is None
+        assert "connection refused" in row.backfill_error
+        assert KIMI_KEY in row.backfill_error
+        assert row.backfill_failing_since == first
         series = await session.get(RssSeries, series_id)
         assert series is not None and series.backfilled_at == NOW
+
+    async def test_a_feed_that_cannot_be_read_leaves_the_backfill_error_alone(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """抓不到聚合 Feed 的那幾輪補漏沒跑：補漏那一欄停在之前的樣子，不算恢復也不算又失敗一次。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
+        )
+        del factory.rss_.pages[SINGLE_URL]
+        first = NOW + timedelta(days=1)
+        await poll_feed(session, factory, feed_id, now=first)
+        before = await session.get(RssFeed, feed_id)
+        assert before is not None
+        kept = before.backfill_error
+
+        factory.rss_.error = ServiceUnavailableError(f"GET {FEED_URL}: connection refused")
+        await poll_feed(session, factory, feed_id, now=first + timedelta(hours=1))
+
+        row = await session.get(RssFeed, feed_id)
+        assert row is not None and row.poll_error != ""
+        assert row.backfill_error == kept and row.backfill_failing_since == first
+
+    async def test_a_single_feed_that_reads_again_clears_the_backfill_error(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """讀不到的那一個下一輪讀到了：補漏那一欄與它的起算時間一起清掉。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=1, now=NOW
+        )
+        single = factory.rss_.pages.pop(SINGLE_URL)
+        await poll_feed(session, factory, feed_id, now=NOW + timedelta(days=1))
+        factory.rss_.pages[SINGLE_URL] = single
+
+        await poll_feed(session, factory, feed_id, now=NOW + timedelta(days=1, hours=1))
+
+        row = await session.get(RssFeed, feed_id)
+        assert row is not None and row.backfill_error == "" and row.backfill_failing_since is None
 
 
 def published_on(releases: list[Release], moment: datetime) -> bytes:

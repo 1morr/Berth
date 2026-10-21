@@ -142,7 +142,7 @@ def settle(berth: httpx.Client, qbittorrent: httpx.Client) -> Callable[[], dict[
 def _poll(berth: httpx.Client, feed: int) -> Json:
     polled: Json = ok(berth.post(f"/rss/feeds/{feed}/poll"))
     feeds = {row["id"]: row for row in ok(berth.get("/rss/feeds"))}
-    assert feeds[feed]["last_error"] == "", feeds[feed]
+    assert feeds[feed]["poll_error"] == "", feeds[feed]
     return polled
 
 
@@ -180,7 +180,7 @@ def first_round(
             json={"media": KAMIINA, "route": route, "kind": "acgrip", "term": "Kamiina Botan"},
         )
     )
-    assert kamiina["last_error"] == "", kamiina
+    assert kamiina["poll_error"] == "", kamiina
     primed = ok(berth.post(f"/rss/feeds/{kamiina['id']}/prime", json={"mode": "all"}))
     assert primed["submitted"] == 1, primed
 

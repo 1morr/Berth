@@ -137,6 +137,7 @@ from berth.models import (
     QbittorrentSettings,
     Route,
     RssFeed,
+    RssSeries,
     ServiceChoice,
     ServiceTest,
     SetupLibrary,
@@ -158,6 +159,7 @@ from berth.services.indexer import DEFAULT_INDEXERS
 from berth.services.media import read_media
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
+from berth.services.sweep import sweep_once
 
 # `poll` 情境要現生一份 `.torrent`。bencode 與 pieces 的計算已經在實驗腳本的共用工具裡，
 # 而它只用標準庫——為了一個演練情境在產品程式碼裡加一個編碼器不值得。
@@ -171,6 +173,7 @@ from tests.e2e.payload import info_name
 
 # 替身 TMDB 的 SPY×FAMILY（詳情、季、絕對編號）與整合測試同一份：`issues` 情境的認領與反解
 # 要的正是測試裡那一部，另抄一份的話兩邊的季集遲早對不上（M2 票 10）。
+from tests.integration.test_media import SEASONS as SPY_SEASONS
 from tests.integration.test_media import tmdb as demo_tmdb
 from tests.integration.test_rss import FEED as RSS_FEED
 from tests.integration.test_rss import FEED_URL as RSS_FEED_URL
@@ -324,6 +327,8 @@ class Scenario:
     review_demo: bool = False
     #: 作品頁的「下載」段（M4 票 12）。見 `_seed_downloads`。
     downloads_demo: bool = False
+    #: 每日巡檢的 RSS 三項（M4 票 130）。見 `_seed_rss_sweep`。
+    rss_sweep_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
     #: 那一格是空的。見 `_seed_legacy_feed`。
     legacy_feed: bool = False
@@ -655,6 +660,46 @@ class RecoveringQbittorrent(FakeQbittorrentClient):
             replace(row, state="downloading") if row.hash == info_hash else row
             for row in self.torrents
         )
+
+
+def rss_sweep_scenario() -> Scenario:
+    """每日巡檢的 RSS 三項（M4 票 130）：`/rss` 的 Feed 列分開說輪詢與補漏的失敗，`/issues` 上
+    一直失敗的 Feed（兩種）、缺集、同一集多份各一件。
+
+    同 `healthy`，加上 `_seed_rss_sweep`，最後由產品自己的 `sweep_once` 跑一輪開出 Issue。替身 TMDB
+    答得出 SPY×FAMILY（作品頁的連結開得到）；Feed 的替身一個網址都不認，按「立即輪詢」是讀不到。
+    """
+    scenario = healthy()
+    scenario.tmdb_credential = "00000000000000000000000000000010"
+    # 第一季每一集都在（其他情境的替身只有第 1、25 集）：缺集看的是作品頁的「缺」，快照裡沒有的
+    # 那一集說不上缺。
+    first = date(2022, 4, 9)
+    scenario.tmdb = demo_tmdb(
+        search={"spy": [SPY_ENTRY], "SPY": [SPY_ENTRY]},
+        seasons={
+            120089: [
+                *(row for row in SPY_SEASONS[120089] if row.season_number != 1),
+                TmdbSeason(
+                    season_number=1,
+                    name="Season 1",
+                    air_date=first,
+                    episodes=tuple(
+                        TmdbEpisode(
+                            season_number=1,
+                            episode_number=number,
+                            name=f"MISSION:{number}",
+                            air_date=first + timedelta(weeks=number - 1),
+                            runtime=24,
+                        )
+                        for number in range(1, 13)
+                    ),
+                ),
+            ]
+        },
+    )
+    scenario.feed_pages = {"https://demo.invalid/unused": b""}
+    scenario.rss_sweep_demo = True
+    return scenario
 
 
 def review_scenario() -> Scenario:
@@ -1782,6 +1827,7 @@ SCENARIOS = {
     "issues": issues_scenario,
     "review": review_scenario,
     "downloads": downloads_scenario,
+    "rss-sweep": rss_sweep_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "global-path": global_path,
@@ -2230,6 +2276,119 @@ async def _moor(
         await _seed_downloads(session, scenario, factory)
     if scenario.legacy_feed:
         await _seed_legacy_feed(session)
+    if scenario.rss_sweep_demo:
+        await _seed_rss_sweep(session, factory)
+
+
+#: `rss-sweep` 情境的兩個 Feed 壞了多久：過了巡檢的 24 小時。
+_FAILING_FOR = timedelta(days=2)
+
+
+async def _seed_rss_sweep(session: AsyncSession, factory: FakeClientFactory) -> None:
+    """每日巡檢的 RSS 三項（M4 票 130）的材料，最後跑一輪 `sweep_once`。
+
+    - Mikan 聚合 feed 讀得到、但每日補漏讀不到一個字幕組的整季清單；Nyaa 的搜尋 feed 整個讀不到。
+      兩個都壞了兩天，`last_polled_at` 是現在、間隔 24 小時，poller 不會當場去輪而蓋掉它們。
+    - 一個綁在 SPY×FAMILY 的 RSS Series：第 1、2、4、5 集十天前入庫（第 3 集是洞），第 5 集另有一個
+      寫著 `- 06` 的發佈也被對到這一集（同一集多份）。帳本只是列，媒體庫裡沒有檔案——這一情境看的是
+      巡檢寫出的 Issue，不是對帳。
+    """
+    now = utcnow()
+    anime = await session.scalar(select(Route).where(Route.slug == "anime"))
+    movies = await session.scalar(select(Route).where(Route.slug == "movies"))
+    assert anime is not None and movies is not None
+    for name, url, kind, poll, backfill in (
+        (
+            "Mikan",
+            "https://mikanani.me/RSS/MyBangumi?token=demo",
+            FeedKind.MIKAN,
+            "",
+            "backfill mikan:2353:583: GET https://mikanani.me/RSS/Bangumi?bangumiId=2353"
+            "&subgroupid=583: 404 Not Found",
+        ),
+        (
+            "nyaa.si · SPY×FAMILY",
+            "https://nyaa.si/?page=rss&q=SPY+FAMILY",
+            FeedKind.NYAA,
+            "GET https://nyaa.si/?page=rss&q=SPY+FAMILY: connection refused",
+            "",
+        ),
+    ):
+        session.add(
+            RssFeed(
+                name=name,
+                url=url,
+                kind=kind,
+                interval_sec=24 * 60 * 60,
+                last_polled_at=now,
+                primed_at=now - timedelta(days=30),
+                poll_error=poll,
+                poll_failing_since=now - _FAILING_FOR if poll else None,
+                backfill_error=backfill,
+                backfill_failing_since=now - _FAILING_FOR if backfill else None,
+                tv_route_id=anime.id,
+                movie_route_id=movies.id,
+            )
+        )
+
+    tv = media_id(MediaKind.TV, 120089)
+    await read_media(session, factory, tv)
+    route = anime
+    series = RssSeries(
+        key="mikan:2353:583",
+        title_raw="[喵萌奶茶屋&LoliHouse] SPY×FAMILY - 01 [WebRip 1080p][简繁内封字幕]",
+        mikan_bangumi_id=2353,
+        mikan_subgroup_id=583,
+        mikan_bangumi_name="SPY×FAMILY",
+        mikan_subgroup_name="喵萌奶茶屋&LoliHouse",
+        reasons_json=[],
+        media_id=tv,
+        route_id=route.id,
+        confirmed=True,
+        bound_by="system",
+    )
+    session.add(series)
+    await session.flush()
+    folder = f"{route.target_path}/SPY x FAMILY (2022) [tmdbid-120089]/Season 01"
+    landed = now - timedelta(days=10)
+    for written, episode in ((1, 1), (2, 2), (4, 4), (5, 5), (6, 5)):
+        release = (
+            f"[喵萌奶茶屋&LoliHouse] SPY×FAMILY - {written:02d} "
+            "[WebRip 1080p HEVC-10bit AAC][简繁内封字幕]"
+        )
+        job_hash = hashlib.sha1(release.encode()).hexdigest()
+        session.add(
+            Job(
+                hash=job_hash,
+                name=release,
+                source_url="",
+                trigger=JobTrigger.RSS,
+                trigger_ref=str(series.id),
+                media_id=tv,
+                route_id=route.id,
+                state=JobState.IMPORTED,
+                added_at=landed,
+            )
+        )
+        session.add(
+            LedgerEntry(
+                job_hash=job_hash,
+                source_rel_path=f"{release}.mkv",
+                source_abs_path=f"/data/torrent/complete/anime/{release}.mkv",
+                source_dev="1",
+                target_path=f"{folder}/SPY x FAMILY (2022) - S01E{episode:02d} [{written}].mkv",
+                target_inode="1",
+                media_id=tv,
+                season=1,
+                episode_start=episode,
+                episode_end=episode,
+                tags_json={},
+                action=PlanAction.IMPORT,
+                created_at=landed,
+            )
+        )
+    await session.commit()
+    await sweep_once(session)
 
 
 async def _seed_legacy_feed(session: AsyncSession) -> None:

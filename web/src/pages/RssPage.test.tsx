@@ -26,7 +26,8 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     kind: 'mikan',
     interval_sec: 900,
     last_polled_at: '2026-09-25T12:00:00Z',
-    last_error: '',
+    poll_error: '',
+    backfill_error: '',
     items: 12,
     exclusions: [],
     primed_at: '2026-09-25T11:00:00Z',
@@ -343,7 +344,7 @@ describe('RSS 頁：新 Feed 的第一輪（票 11）', () => {
       'GET /api/rss/feeds': {
         body: [
           feed(),
-          { ...ACGRIP, items: 0, last_error: 'acg.rip: connection refused', ever_read: false },
+          { ...ACGRIP, items: 0, poll_error: 'acg.rip: connection refused', ever_read: false },
         ],
       },
     })
@@ -574,10 +575,37 @@ describe('RSS 頁', () => {
     expect(within(row).queryByText(/自動綁定/)).not.toBeInTheDocument()
   })
 
+  it('輪詢與每日補漏的失敗分開說（M4 票 130）', async () => {
+    render({
+      'GET /api/rss/feeds': () => ({
+        body: [
+          feed({ id: 1, name: 'Mikan', backfill_error: 'backfill mikan:4009:370: 404' }),
+          feed({
+            id: 2,
+            name: 'Nyaa',
+            url: 'https://nyaa.si/?page=rss&q=frieren',
+            poll_error: 'nyaa.si: connection refused',
+          }),
+        ],
+      }),
+    })
+    renderApp('/rss')
+
+    const mikan = await screen.findByRole('article', { name: 'Mikan' })
+    expect(within(mikan).getByText('上次補漏有讀不到的')).toBeInTheDocument()
+    expect(within(mikan).getByText('backfill mikan:4009:370: 404')).toBeInTheDocument()
+    expect(within(mikan).queryByText('上一輪輪詢有問題')).not.toBeInTheDocument()
+
+    const nyaa = screen.getByRole('article', { name: 'Nyaa' })
+    expect(within(nyaa).getByText('上一輪輪詢有問題')).toBeInTheDocument()
+    expect(within(nyaa).getByText('nyaa.si: connection refused')).toBeInTheDocument()
+    expect(within(nyaa).queryByText('上次補漏有讀不到的')).not.toBeInTheDocument()
+  })
+
   it('這一輪沒讀到 Feed 時不說「新 0 筆」', async () => {
     render({
       'GET /api/rss/feeds': () => ({
-        body: [feed({ last_error: 'mikanani.me: connection refused' })],
+        body: [feed({ poll_error: 'mikanani.me: connection refused' })],
       }),
       'POST /api/rss/feeds/1/poll': {
         body: {

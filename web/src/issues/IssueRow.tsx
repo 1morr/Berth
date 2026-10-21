@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -15,7 +16,7 @@ import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
-import { formatJellyfinEpisode } from '../components/episodes'
+import { formatCoverage, formatEpisode, formatJellyfinEpisode } from '../components/episodes'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
 import { WorkPicker } from './WorkPicker'
@@ -278,6 +279,73 @@ function Measured({ issue }: { issue: Issue }) {
       </>
     )
   }
+  if (issue.type === 'feed_poll_failing' || issue.type === 'feed_backfill_failing') {
+    // 一直失敗的 Feed（M4 票 130）：修法在那一站或 Feed 的網址，不在這一列上；連到 RSS 頁的那一個 Feed。
+    const feed = numeric(issue.detail.feed)
+    const since = text(issue.detail.since)
+    return (
+      <>
+        {since !== '' && (
+          <DetailLine term={t('issues.failingSince')}>{whenText(since, i18n.language)}</DetailLine>
+        )}
+        <DetailLine term={t('issues.lastError')}>{text(issue.detail.error)}</DetailLine>
+        {feed !== null && (
+          <DetailLine term={t('issues.feed')}>
+            <Link to="/rss" hash={`feed-${feed}`} className={INLINE_LINK}>
+              {text(issue.detail.name)}
+            </Link>
+          </DetailLine>
+        )}
+        <DetailLine term={t('issues.next')}>
+          {t(
+            issue.type === 'feed_poll_failing' ? 'issues.nextFeedPoll' : 'issues.nextFeedBackfill',
+          )}
+        </DetailLine>
+      </>
+    )
+  }
+  if (issue.type === 'series_episodes_missing') {
+    // RSS Series 缺集（M4 票 130）：缺哪幾集；季表的「搜這部作品缺的集」在作品頁。
+    return (
+      <>
+        <DetailLine term={t('issues.missingEpisodes')}>
+          {missingText(issue.detail.missing)}
+        </DetailLine>
+        <WorkLine issue={issue} />
+        <DetailLine term={t('issues.next')}>{t('issues.nextGap')}</DetailLine>
+      </>
+    )
+  }
+  if (issue.type === 'series_episodes_collide') {
+    // 同一集意外多份（M4 票 130）：撞在哪一集、哪幾個發佈名；改正在作品頁檔案與版本的「修正」。
+    const collisions = Array.isArray(issue.detail.collisions)
+      ? issue.detail.collisions.map(record)
+      : []
+    return (
+      <>
+        {collisions.map((one) => {
+          const code = formatEpisode({
+            season: numeric(one.season),
+            episode_start: numeric(one.episode),
+            episode_end: null,
+          })
+          const releases = Array.isArray(one.releases) ? one.releases.map(text) : []
+          return (
+            // 一行一個發佈名：接成一串時窄版換行之後分不出第二個從哪裡開始（M4 票 130 實跑）。
+            <DetailLine key={code} term={`${t('issues.collisions')} ${code}`}>
+              {releases.map((release) => (
+                <span key={release} className="block">
+                  {release}
+                </span>
+              ))}
+            </DetailLine>
+          )
+        })}
+        <WorkLine issue={issue} />
+        <DetailLine term={t('issues.next')}>{t('issues.nextCollide')}</DetailLine>
+      </>
+    )
+  }
   if (issue.type === 'low_disk_space') {
     const size = (value: unknown) =>
       typeof value === 'number' ? formatSize(value, i18n.language) : ''
@@ -311,6 +379,42 @@ const STUCK_STATES = ['submit_failed', 'client_error'] as const
 
 function jobState(value: unknown): (typeof STUCK_STATES)[number] | null {
   return STUCK_STATES.find((state) => state === value) ?? null
+}
+
+/** 巡檢開在 RSS Series 上的那幾件（M4 票 130）：連到作品頁，名字是作品名、沒有就是 id。 */
+function WorkLine({ issue }: { issue: Issue }) {
+  const { t } = useTranslation()
+  const media = text(issue.detail.media)
+  if (media === '') return null
+  return (
+    <DetailLine term={t('issues.work')}>
+      <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
+        {text(issue.detail.title) || media}
+      </Link>
+    </DetailLine>
+  )
+}
+
+/** 連結的底線：散文裡的一個名字，不是一顆按鈕（同 `JobLink`）。 */
+const INLINE_LINK = 'underline decoration-rule-strong underline-offset-4 hover:decoration-ink'
+
+/** 缺集的 `detail.missing`（`[{season, episode}]`）照季寫成 `S01 E03–E04, E06`，季與季以 `; ` 隔開。 */
+function missingText(value: unknown): string {
+  const bySeason = new Map<number, number[]>()
+  for (const one of Array.isArray(value) ? value.map(record) : []) {
+    const season = numeric(one.season)
+    const episode = numeric(one.episode)
+    if (season === null || episode === null) continue
+    bySeason.set(season, [...(bySeason.get(season) ?? []), episode])
+  }
+  return [...bySeason]
+    .map(([season, episodes]) =>
+      formatCoverage(
+        season,
+        episodes.map((episode) => ({ episode_start: episode, episode_end: episode })),
+      ),
+    )
+    .join('; ')
 }
 
 function text(value: unknown): string {

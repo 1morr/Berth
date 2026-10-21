@@ -229,7 +229,9 @@ class FeedView:
     kind: FeedKind
     interval_sec: int
     last_polled_at: datetime | None
-    last_error: str
+    #: 上一輪輪詢與每日補漏各自失敗的原文（M4 票 130 拆欄）；成功是空字串。
+    poll_error: str
+    backfill_error: str
     #: 這個 Feed 長出了幾筆 Item。刪除的確認要說出會刪掉幾筆（shape §4）。
     items: int
     #: 這一層的排除條件。
@@ -366,7 +368,7 @@ class PollOutcome:
     bound: int
     #: 這一輪送出去的。
     submitted: int
-    #: Feed 本身抓不到時的原文（也寫進那一列的 `last_error`）；抓到了是空字串。
+    #: Feed 本身抓不到時的原文（也寫進那一列的 `poll_error`）；抓到了是空字串。
     failed: str = ""
 
 
@@ -703,7 +705,8 @@ def _feed_view(row: RssFeed, items: int, awaiting: KindCounts) -> FeedView:
         kind=row.kind,
         interval_sec=row.interval_sec,
         last_polled_at=row.last_polled_at,
-        last_error=row.last_error,
+        poll_error=row.poll_error,
+        backfill_error=row.backfill_error,
         items=items,
         exclusions=tuple(row.exclude_json),
         primed_at=row.primed_at,
@@ -725,7 +728,7 @@ def _ever_read(feed: RssFeed, items: int) -> bool:
     Feed 預覽是空的，「全部下載」等於替沒看過的整份歷史做決定（M3 票 21）。畫面讀
     `FeedView.ever_read`，不自己再算一次。
     """
-    return feed.last_polled_at is not None and (not feed.last_error or items > 0)
+    return feed.last_polled_at is not None and (not feed.poll_error or items > 0)
 
 
 async def _items_of(session: AsyncSession, feed_id: int) -> int:
@@ -844,7 +847,7 @@ async def poll_due(
 ) -> int:
     """到時間的每一個 Feed 各輪一次（`rss_poller` 的一輪，plan §3.2）。回輪了幾個。
 
-    **一個 Feed 爆掉不拖累其他的**：非預期的例外記 log、寫進那一列的 `last_error`，接著輪下一個。
+    **一個 Feed 爆掉不拖累其他的**：非預期的例外記 log、寫進那一列的 `poll_error`，接著輪下一個。
     """
     moment = now or utcnow()
     polled = 0
@@ -868,8 +871,21 @@ async def _note_failure(session: AsyncSession, feed_id: int, moment: datetime, d
     if row is None:
         return
     row.last_polled_at = moment
-    row.last_error = detail
+    _note_poll(row, detail, moment)
     await session.commit()
+
+
+def _note_poll(feed: RssFeed, error: str, moment: datetime) -> None:
+    """記這一輪輪詢的結果：`error` 空的是成功。由成功轉失敗的那一輪起算「一直失敗」，成功就清掉
+    （巡檢的「一直失敗的 Feed」讀它，M4 票 130）。"""
+    feed.poll_error = error
+    feed.poll_failing_since = (feed.poll_failing_since or moment) if error else None
+
+
+def _note_backfill(feed: RssFeed, error: str, moment: datetime) -> None:
+    """記這一輪每日補漏的結果，同 `_note_poll`。"""
+    feed.backfill_error = error
+    feed.backfill_failing_since = (feed.backfill_failing_since or moment) if error else None
 
 
 @command(Effect.REVERSIBLE)
@@ -941,19 +957,22 @@ async def _poll_round(
             found = parse_items(feed.kind, await fetcher.fetch(feed.url))
         except ServiceError as exc:
             feed.last_polled_at = moment
-            feed.last_error = message(exc)
+            _note_poll(feed, message(exc), moment)
             await session.commit()
             logger.warning(
-                "rss feed could not be fetched", extra={"feed": feed.id, "error": feed.last_error}
+                "rss feed could not be fetched", extra={"feed": feed.id, "error": feed.poll_error}
             )
-            return PollOutcome(items=0, series=0, bound=0, submitted=0, failed=feed.last_error)
+            return PollOutcome(items=0, series=0, bound=0, submitted=0, failed=feed.poll_error)
         fresh = await _unseen(session, feed.id, found)
         # 單集頁在寫之前抓完（plan §3.3）：一頁一個請求、逾時 30 秒，寫下第一筆之後才抓第二頁的話，
         # 整輪都握著寫鎖。
         keys, unkeyed = await _series_keys(fetcher, feed.kind, fresh)
         items, grown = await _record(session, feed, fresh, moment, keys=keys)
         feed.last_polled_at = moment
-        feed.last_error = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
+        # 讀到了：略過幾筆認不出 Series 的照寫原因，但不算輪詢失敗（巡檢的「輪詢一直失敗」說的是
+        # 整個 Feed 讀不到，M4 票 130）。
+        _note_poll(feed, "", moment)
+        feed.poll_error = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
         await session.commit()
         # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。同一部的不同字幕組共用一頁（票 82）。
         pages = _ShowPages(fetcher)
@@ -1202,8 +1221,9 @@ async def _backfill_due(
     116）：停機跨過 `QUIET_AFTER` 時，被聚合 feed 捲掉的最後幾集靠這一次接住。完結照現況算，新的
     一筆出現時條件自己不成立，補漏也就恢復。
 
-    讀不到的那一個記在這個 Feed 的 `last_error`、`backfilled_at` 不動，下一輪再試；一個讀不到不拖累
-    其他的。補下來的由 `poll_feed` 最後那一次 `_submit_waiting` 送出。
+    讀不到的那一個記在這個 Feed 的 `backfill_error`、`backfilled_at` 不動，下一輪再試；一個讀不到
+    不拖累其他的。該補的都讀到了（或沒有該補的）就清掉那一欄：讀不到的那一個每一輪都還在該補的
+    清單上。補下來的由 `poll_feed` 最後那一次 `_submit_waiting` 送出。
     """
     feed = await session.get(RssFeed, feed_id)
     assert feed is not None
@@ -1232,9 +1252,8 @@ async def _backfill_due(
             continue
         await _backfill(session, feed, series, season, moment)
         await session.commit()
-    if failures:
-        feed.last_error = "; ".join(one for one in (feed.last_error, *failures) if one)
-        await session.commit()
+    _note_backfill(feed, "; ".join(failures), moment)
+    await session.commit()
 
 
 async def _submit_waiting(
@@ -2554,7 +2573,7 @@ async def subscribe_search(
 
     Feed 記下作品、Route 與這個人：它長出的每一個 RSS Series（一個字幕組一個）直接綁上
     （`_bind_grown`）。**當場讀一輪**，第一輪預覽（票 11）馬上有東西可看；讀不到照一般 Feed 記在
-    `last_error`，之後的輪詢再讀。第一輪照樣等人選「全部下載」或「只追之後的」。
+    `poll_error`，之後的輪詢再讀。第一輪照樣等人選「全部下載」或「只追之後的」。
     """
     await _target(session, media_id, route_id)
     match kind:

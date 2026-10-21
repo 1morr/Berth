@@ -1814,7 +1814,24 @@ const zhHant = {
     stoppedError: '原因',
     nextFirstBatch:
       '這個 RSS Series 的第一批要整批到齊，Berth 才會替你確認；停住的這一筆讓它一直等著。打開上面那一筆下載，重試或刪掉它；已經入庫的那幾集也可以在審核頁直接確認整個 Series。處理之後，下一次每日巡檢會自己收掉這一件。',
-    // 十五種型別各一句（brief §9.1）。
+    // 一直失敗的 Feed（M4 票 130）：從什麼時候、最後的原因、連到 RSS 頁的那一個 Feed。
+    failingSince: '失敗起於',
+    lastError: '最後的原因',
+    feed: 'Feed',
+    nextFeedPoll:
+      '這個 Feed 一直讀不到。先看上面的原因：網址或 token 失效了就到 RSS 頁刪掉它、重新加一次；是那一站連不上，等它恢復就好。下一輪輪詢讀到之後，下一次每日巡檢會自己收掉這一件。',
+    nextFeedBackfill:
+      'Feed 本身讀得到，但每日補漏讀不到某幾個字幕組在 Mikan 上的整季清單（原因裡的 mikan:番組:字幕組），Berth 停機期間被捲掉的集數接不回來。多半是 Mikan 下架了那個番組或字幕組；確定不再需要就到 RSS 頁解除那個 Series 的綁定。讀到之後，下一次每日巡檢會自己收掉這一件。',
+    // RSS Series 缺集（M4 票 130）：缺哪幾集、哪一部作品；搜缺的集在作品頁。
+    missingEpisodes: '缺',
+    work: '作品',
+    nextGap:
+      '這個字幕組送來的集數中間少了幾集，而且晚發的寬限已經過了。到作品頁，季表上標著「缺」的就是這幾集，按「搜這部作品缺的集」或那一季的「搜 … 缺的集」。補上之後，下一次每日巡檢會自己收掉這一件。',
+    // 同一集意外多份（M4 票 130）：哪一集、撞在一起的發佈名。
+    collisions: '撞在同一集',
+    nextCollide:
+      '同一個字幕組的兩個發佈寫的是不同集，卻都入庫成了這一集，多半是集號換算或 offset 錯了，其中一份其實是別集。看發佈名認出放錯的那一份，到作品頁的「檔案與版本」按它的「修正」，指派到正確的集。改好之後，下一次每日巡檢會自己收掉這一件。',
+    // 十九種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -1831,6 +1848,10 @@ const zhHant = {
       library_uses_tvdb: '這條 Route 的媒體庫掛著 TVDB',
       low_disk_space: '磁碟剩下的空間低於門檻',
       first_batch_stuck: 'RSS Series 的第一批卡住了，一直等人確認',
+      feed_poll_failing: '這個 Feed 輪詢一直失敗，超過一天了',
+      feed_backfill_failing: '這個 Feed 的每日補漏一直讀不到，超過一天了',
+      series_episodes_missing: '這個 RSS Series 已入庫的集數中間缺了幾集',
+      series_episodes_collide: '這個 RSS Series 有兩個不同的發佈被入庫成同一集',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -1848,6 +1869,10 @@ const zhHant = {
       library_uses_tvdb: 'TVDB',
       low_disk_space: '空間不足',
       first_batch_stuck: '第一批卡住',
+      feed_poll_failing: '輪詢一直失敗',
+      feed_backfill_failing: '補漏一直失敗',
+      series_episodes_missing: '缺集',
+      series_episodes_collide: '同一集多份',
     },
     action: {
       relink: '重新鏈接',
@@ -3385,7 +3410,9 @@ const zhHant = {
       items_one: '{{count}} 筆',
       items_other: '{{count}} 筆',
       // 上一輪抓不到 Feed，或有幾筆的單集頁抓不到（那幾筆下一輪再試）。
-      failed: '上一輪有問題',
+      // 輪詢與每日補漏各自的失敗（M4 票 130 拆欄）：同一個 Feed 可能只壞了其中一種。
+      failed: '上一輪輪詢有問題',
+      backfillFailed: '上次補漏有讀不到的',
       undecided: '第一輪還沒決定，一筆都不送：在頁首選「只追之後的」或「全部下載」。',
       polledFailed: '這一輪沒讀到這個 Feed，什麼都沒改。原因在上面；背景下一輪會再讀。',
       polledNow:
@@ -5439,6 +5466,20 @@ const en: Translations<typeof zhHant> = {
     stoppedError: 'Reason',
     nextFirstBatch:
       'Berth confirms this RSS series for you only once its whole first batch has arrived, and this stopped download keeps it waiting. Open the download above and retry or delete it; you can also confirm the whole series from the review page using the episodes already imported. Once it is handled, the next daily sweep closes this on its own.',
+    failingSince: 'Failing since',
+    lastError: 'Last reason',
+    feed: 'Feed',
+    nextFeedPoll:
+      'This feed cannot be read. Check the reason above: if the address or token no longer works, delete the feed on the RSS page and add it again; if the site is down, wait for it to come back. Once a poll reads it, the next daily sweep closes this on its own.',
+    nextFeedBackfill:
+      'The feed itself reads fine, but the daily backfill cannot read some groups’ season lists on Mikan (the mikan:show:group in the reason), so episodes missed while Berth was down are not caught. Mikan has usually taken that show or group down; if you no longer need it, unbind that series on the RSS page. Once it reads, the next daily sweep closes this on its own.',
+    missingEpisodes: 'Missing',
+    work: 'Title',
+    nextGap:
+      'Episodes are missing between the ones this group sent, and the grace period for late releases has passed. On the title page they are marked missing in the season list; press Search for the missing episodes there. Once they are filled, the next daily sweep closes this on its own.',
+    collisions: 'Landed as one episode',
+    nextCollide:
+      'Two releases from the same group name different episodes but were both imported as this one, usually because an episode conversion or offset went wrong and one of them is really another episode. Use the release names to spot the misplaced one, then press Fix on it under Files and versions on the title page and assign the right episode. Once fixed, the next daily sweep closes this on its own.',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -5455,6 +5496,10 @@ const en: Translations<typeof zhHant> = {
       library_uses_tvdb: 'This route’s library uses TVDB',
       low_disk_space: 'Free disk space is below the threshold',
       first_batch_stuck: 'An RSS series’ first batch is stuck waiting for you',
+      feed_poll_failing: 'This feed has kept failing to poll for over a day',
+      feed_backfill_failing: 'This feed’s daily backfill has kept failing for over a day',
+      series_episodes_missing: 'Episodes are missing between the ones this RSS series imported',
+      series_episodes_collide: 'Two different releases from this RSS series landed as one episode',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -5472,6 +5517,10 @@ const en: Translations<typeof zhHant> = {
       library_uses_tvdb: 'TVDB',
       low_disk_space: 'LOW DISK',
       first_batch_stuck: 'FIRST BATCH STUCK',
+      feed_poll_failing: 'FEED KEEPS FAILING',
+      feed_backfill_failing: 'BACKFILL KEEPS FAILING',
+      series_episodes_missing: 'EPISODES MISSING',
+      series_episodes_collide: 'EPISODES COLLIDE',
     },
     action: {
       relink: 'Link it again',
@@ -6963,7 +7012,8 @@ const en: Translations<typeof zhHant> = {
       polled: 'Last polled',
       items_one: '{{count}} item',
       items_other: '{{count}} items',
-      failed: 'Last round had problems',
+      failed: 'Last poll had problems',
+      backfillFailed: 'Last daily backfill could not read some',
       undecided:
         "The first round isn't decided yet, so nothing is sent: choose Only what comes next or Download everything at the top of the page.",
       polledFailed:

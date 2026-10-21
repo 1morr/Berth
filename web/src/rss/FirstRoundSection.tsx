@@ -138,10 +138,10 @@ export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string
 
       {!read ? (
         <p className="max-w-prose text-sm text-ink">
-          {feed.last_error ? (
+          {feed.poll_error ? (
             <>
               {t('rss.first.unreadFailed')}{' '}
-              <span className="value text-xs wrap-anywhere">{feed.last_error}</span>
+              <span className="value text-xs wrap-anywhere">{feed.poll_error}</span>
             </>
           ) : (
             t('rss.first.unread')
