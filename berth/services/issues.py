@@ -152,6 +152,7 @@ async def record_issue(
     job_hash: str | None = None,
     ledger_id: int | None = None,
     series_id: int | None = None,
+    feed_id: int | None = None,
     detail: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> Recorded:
@@ -164,7 +165,12 @@ async def record_issue(
     **不 commit**：呼叫端多半在一個迴圈裡寫好幾筆，交易的邊界是它的事。
     """
     subject = subject_of(
-        kind, path=path, job_hash=job_hash, ledger_id=ledger_id, series_id=series_id
+        kind,
+        path=path,
+        job_hash=job_hash,
+        ledger_id=ledger_id,
+        series_id=series_id,
+        feed_id=feed_id,
     )
     if not subject:
         # 寫一筆沒有鍵的列的話，同型別的每一件事會互相覆蓋成一列。
@@ -978,8 +984,8 @@ STANDS_WHILE: dict[IssueType, frozenset[JobState]] = {
 }
 #: 「忽略」在條件持續期間有效的幾種（brief §9.1，`record_issue` 與 `note_cleared`）：週期量測的
 #: 那幾種，其餘的忽略是「這一次不處理」。健康檢查那兩種 5 分鐘量一次（2026-09-23 拍板）；回驗
-#: 每天對帳比一次、`unknown_torrent` 的 poller 每 5 秒寫一次（M4 票 122）、第一批卡住每天巡檢
-#: 量一次（M4 票 129）——照「這一次」的話忽略等於無效，而「等你處理」的通知會為同一件事每天推一次。
+#: 每天對帳比一次、`unknown_torrent` 的 poller 每 5 秒寫一次（M4 票 122）、巡檢那幾種每天量一次
+#: （M4 票 129、130）——照「這一次」的話忽略等於無效，而「等你處理」的通知會為同一件事每天推一次。
 STAYS_IGNORED = frozenset(
     {
         IssueType.LIBRARY_USES_TVDB,
@@ -987,6 +993,9 @@ STAYS_IGNORED = frozenset(
         IssueType.JELLYFIN_ITEM_MISMATCH,
         IssueType.UNKNOWN_TORRENT,
         IssueType.FIRST_BATCH_STUCK,
+        IssueType.FEED_POLL_FAILING,
+        IssueType.FEED_BACKFILL_FAILING,
+        IssueType.SERIES_EPISODES_MISSING,
     }
 )
 #: 條件解除過的記號，寫在被忽略的那一筆的 `detail_json` 上（`note_cleared`）。

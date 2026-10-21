@@ -207,11 +207,11 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十五種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-    各加一種）：
+    **十八種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+    各加一種，M4 票 130 加三種）：
     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再一種是每日巡檢
+    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再四種是每日巡檢
     （`sweeper`）。各邊共用同一個
     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
     與 `ISSUE_ACTIONS` 那兩條閘門。
@@ -263,6 +263,17 @@ class IssueType(StrEnum):
     #: 要整批落地才由系統確認（`services.first_batch`），所以那一批一直等人。一個 Series 一件；
     #: 那幾筆 Job 走開了（重試成功、被刪）或 Series 確認了，下一輪巡檢由系統收掉。
     FIRST_BATCH_STUCK = "first_batch_stuck"
+    #: 每日巡檢（M4 票 130）：一個 Feed 的輪詢從由好轉壞的那一輪起一直失敗超過
+    #: `sweep.FAILING_AFTER`（`rss_feeds.poll_failing_since`）。一個 Feed 一件，說出最後的原因；
+    #: 下一輪輪詢成功、或 Feed 被刪了，下一輪巡檢由系統收掉。
+    FEED_POLL_FAILING = "feed_poll_failing"
+    #: 同上，換成每日補漏讀不到 Mikan 單一 feed（`rss_feeds.backfill_failing_since`）。與輪詢分開
+    #: 兩種：Feed 照樣讀得到、只是某幾個字幕組的整季清單讀不到，是另一件事、另一個修法。
+    FEED_BACKFILL_FAILING = "feed_backfill_failing"
+    #: 每日巡檢（M4 票 130）：綁好的 RSS Series 已入庫的集數之間有洞（作品頁說「缺」的那幾集：
+    #: 播了、沒有下載在處理），而且洞之後那一集入庫已滿 `sweep.GAP_GRACE`——給字幕組晚發的時間。
+    #: 一個 Series 一件，列出缺哪幾集；補上、或 Series 解除綁定了，下一輪巡檢由系統收掉。
+    SERIES_EPISODES_MISSING = "series_episodes_missing"
 
 
 class IssueStatus(StrEnum):
@@ -290,6 +301,8 @@ class IssueSubject(StrEnum):
     #: RSS Series 的 id（M4 票 129）。`issues` 沒有 Series 那一欄：id 就是 subject 本身，
     #: `detail_json.series` 另存一份整數。
     RSS_SERIES = "rss_series"
+    #: Feed 的 id（M4 票 130），同 `RSS_SERIES`：`detail_json.feed` 另存一份整數。
+    RSS_FEED = "rss_feed"
 
 
 #: 逐型別的冪等鍵來源（plan §2.4 那一段逐型別寫死了取哪一欄）。
@@ -328,6 +341,11 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     IssueType.LOW_DISK_SPACE: IssueSubject.PATH,
     # **一個 Series 一件**（M4 票 129）：等人的是那一批，不是哪一筆下載；同一批停了三筆也是一件事。
     IssueType.FIRST_BATCH_STUCK: IssueSubject.RSS_SERIES,
+    # **一個 Feed 一件**（M4 票 130）：壞的是那一條網址或那一站；輪詢與補漏是兩種型別，各自一件。
+    IssueType.FEED_POLL_FAILING: IssueSubject.RSS_FEED,
+    IssueType.FEED_BACKFILL_FAILING: IssueSubject.RSS_FEED,
+    # 缺集也是**一個 Series 一件**：缺的那幾集列在 `detail_json`，補上一集是同一件變短。
+    IssueType.SERIES_EPISODES_MISSING: IssueSubject.RSS_SERIES,
 }
 
 
@@ -421,6 +439,11 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     # 出路有三條，都不在這一列上：到 Job 頁重試或刪掉停住的那一筆，或到審核頁確認整個 Series。
     # 哪一條對要看那一筆為什麼停，畫面把三條說出來、連到那一筆（M4 票 129）。
     IssueType.FIRST_BATCH_STUCK: (),
+    # 修法在那一站或 Feed 的網址（M4 票 130）：列上說最後的原因，連到 RSS 頁的那一個 Feed。
+    IssueType.FEED_POLL_FAILING: (),
+    IssueType.FEED_BACKFILL_FAILING: (),
+    # 出路在作品頁：缺的那幾集在季表上標著「缺」，搜尋區塊有「搜缺的集」（M4 票 130）。
+    IssueType.SERIES_EPISODES_MISSING: (),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：

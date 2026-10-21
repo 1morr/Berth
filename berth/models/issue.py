@@ -39,6 +39,7 @@ def subject_of(
     job_hash: str | None = None,
     ledger_id: int | None = None,
     series_id: int | None = None,
+    feed_id: int | None = None,
 ) -> str:
     """這一件的冪等鍵取哪一格的值（plan §2.4 的 `SUBJECT_OF`）。
 
@@ -52,6 +53,8 @@ def subject_of(
         return job_hash or ""
     if column is IssueSubject.RSS_SERIES:
         return "" if series_id is None else str(series_id)
+    if column is IssueSubject.RSS_FEED:
+        return "" if feed_id is None else str(feed_id)
     return "" if ledger_id is None else str(ledger_id)
 
 

@@ -532,6 +532,8 @@ function FeedRow({ feed, routes }: { feed: Feed; routes: RouteView[] }) {
   return (
     <article
       ref={self}
+      // 「一直失敗的 Feed」那一件連到這裡（`/rss#feed-3`，M4 票 130；`useHashTarget`）。
+      id={`feed-${feed.id}`}
       tabIndex={-1}
       aria-labelledby={headingId}
       className={`grid gap-2 border-2 bg-well px-4 py-3 ${

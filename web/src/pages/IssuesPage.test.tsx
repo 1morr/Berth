@@ -584,6 +584,105 @@ describe('待處理頁', () => {
     ).toEqual(['忽略'])
   })
 
+  it('一直失敗的 Feed 說出是哪一種、從什麼時候、最後的原因，連到 RSS 頁那一個 Feed（M4 票 130）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            id: 1,
+            type: 'feed_poll_failing',
+            subject: '3',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              feed: 3,
+              name: 'Mikan',
+              error: 'GET https://mikanani.me/RSS/MyBangumi?token=***: connection refused',
+              since: '2026-10-20T03:00:00+00:00',
+            },
+            actions: [],
+          }),
+          issue({
+            id: 2,
+            type: 'feed_backfill_failing',
+            subject: '3',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              feed: 3,
+              name: 'Mikan',
+              error: 'backfill mikan:3600:583: 404',
+              since: '2026-10-20T03:00:00+00:00',
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const [poll, backfill] = await screen.findAllByRole('article')
+
+    expect(within(poll).getByText('輪詢一直失敗')).toBeInTheDocument()
+    expect(within(poll).getByText('這個 Feed 輪詢一直失敗，超過一天了')).toBeInTheDocument()
+    await userEvent.click(within(poll).getByRole('heading', { name: 'Mikan' }))
+    expect(within(poll).getByText(/connection refused/)).toBeInTheDocument()
+    expect(within(poll).getByRole('link', { name: 'Mikan' })).toHaveAttribute('href', '/rss#feed-3')
+    expect(within(poll).getByText(/這個 Feed 一直讀不到/)).toBeInTheDocument()
+
+    expect(within(backfill).getByText('補漏一直失敗')).toBeInTheDocument()
+    await userEvent.click(within(backfill).getByRole('heading', { name: 'Mikan' }))
+    expect(within(backfill).getByText('backfill mikan:3600:583: 404')).toBeInTheDocument()
+    expect(within(backfill).getByText(/每日補漏讀不到/)).toBeInTheDocument()
+    expect(
+      within(backfill)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['忽略'])
+  })
+
+  it('缺集列出缺哪幾集，連到作品頁（M4 票 130）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'series_episodes_missing',
+            subject: '7',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              series: 7,
+              name: '[LoliHouse] Kimi to Koishitai - 07',
+              media: 'tv:120089',
+              title: '与你相恋',
+              missing: [
+                { season: 1, episode: 3 },
+                { season: 1, episode: 4 },
+                { season: 1, episode: 6 },
+              ],
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('缺集')).toBeInTheDocument()
+    await userEvent.click(
+      within(row).getByRole('heading', { name: '[LoliHouse] Kimi to Koishitai - 07' }),
+    )
+    expect(within(row).getByText('S01 E03–E04, E06')).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: '与你相恋' })).toHaveAttribute(
+      'href',
+      '/media/tv%3A120089',
+    )
+    expect(within(row).getByText(/搜這部作品缺的集/)).toBeInTheDocument()
+  })
+
   it('重新入庫先選作品，送出去的是選的那一部（M2 票 10）', async () => {
     const FOLDER = '/data/torrent/complete/anime/[Group] SPY×FAMILY S01'
     const stub = render({
