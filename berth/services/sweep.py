@@ -289,8 +289,9 @@ async def _colliding_episodes(session: AsyncSession, moment: datetime) -> tuple[
     件數，收掉的件數）。
 
     **意外**（2026-10-22 協調者確認，票 130 的 Comments）：同一個 Series 的兩筆以上不同的 Job 入庫成
-    同一集（帳本 `ok`、同季同起始集），而它們的發佈名寫的集號不同——兩個不同的發佈被對到同一集
-    （offset、絕對編號換算、季名讀錯）。發佈名讀不出集號的那一筆不參與比較。**版本並存不算**
+    同一集（帳本 `ok`、同季同起始集），而它們的發佈名寫的集號不同（合集看範圍：有兩個範圍不相交，
+    `_apart`）——兩個不同的發佈被對到同一集（offset、絕對編號換算、季名讀錯）。發佈名讀不出集號的
+    那一筆不參與比較。**版本並存不算**
     （brief §7.7、§7.8）：別的 Series 的同一集、發佈名寫同一集的 v2 / 简繁 / 不同解析度 / `[2]`。
     比 Tags 分不出這兩種：Tags 全同的第二份在規劃時就被擋成 `duplicate`，進得了帳本的 Tags 一定
     不同。
@@ -306,7 +307,7 @@ async def _colliding_episodes(session: AsyncSession, moment: datetime) -> tuple[
         hits = [
             {"season": season, "episode": start, "releases": sorted(jobs.values())}
             for (season, start), jobs in sorted(episodes.items())
-            if len(jobs) > 1 and len(await _written_episodes(jobs.values())) > 1
+            if len(jobs) > 1 and _apart(await _written_spans(jobs.values()))
         ]
         if hits:
             flagged[series_id] = hits
@@ -328,19 +329,29 @@ async def _colliding_episodes(session: AsyncSession, moment: datetime) -> tuple[
     return len(flagged), cleared
 
 
-async def _written_episodes(names: Iterable[str]) -> set[int]:
-    """這幾個發佈名各自寫的集號；讀不出來的不算。
+async def _written_spans(names: Iterable[str]) -> list[tuple[int, int]]:
+    """這幾個發佈名各自寫的集數範圍（單集是同一集起迄）；讀不出集號的不算。
 
     **一個名字讓出一次迴圈**：解析一個發佈名約 15 ms（guessit），同一集有簡繁兩版的 Series 每一集
     都要解析，連著解析一整輪會佔住迴圈好幾秒（`scripts/experiments/sweep_loop_lag.py`）。
     """
-    written: set[int] = set()
+    spans: list[tuple[int, int]] = []
     for name in names:
-        episode = parse_release(name).episode
-        if episode is not None:
-            written.add(episode)
+        info = parse_release(name)
+        if info.episode is not None:
+            spans.append((info.episode, info.episode_end or info.episode))
         await asyncio.sleep(0)
-    return written
+    return spans
+
+
+def _apart(spans: list[tuple[int, int]]) -> bool:
+    """有兩個範圍不相交：兩個寫著不同集的發佈。季末的合集 `[01-12]` 蓋到每週的那一集，是同一集的
+    版本（M4 票 130 code-review）。"""
+    return any(
+        first[1] < second[0] or second[1] < first[0]
+        for index, first in enumerate(spans)
+        for second in spans[index + 1 :]
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -400,7 +411,7 @@ async def _series_imports(session: AsyncSession) -> list[_Landed]:
     rows: list[_Landed] = []
     async for partition in result.partitions(_PARTITION):
         for series, media, season, start, end, at, status, job_hash, release in partition:
-            # 外接：上面的 where 擋掉了這三格是 NULL 的列，型別上看不出來。
+            # 上面的 where 擋掉了這三格是 NULL 的列，查詢結果的型別上看不出來。
             assert media is not None and season is not None and start is not None
             rows.append(
                 _Landed(

@@ -304,44 +304,40 @@ function Measured({ issue }: { issue: Issue }) {
       </>
     )
   }
-  if (issue.type === 'series_episodes_missing' || issue.type === 'series_episodes_collide') {
-    // RSS Series 缺集與同一集意外多份（M4 票 130）：哪幾集，連到作品頁（搜缺的集、檔案與版本的「修正」
-    // 都在那裡）。
-    const media = text(issue.detail.media)
+  if (issue.type === 'series_episodes_missing') {
+    // RSS Series 缺集（M4 票 130）：缺哪幾集；季表的「搜這部作品缺的集」在作品頁。
+    return (
+      <>
+        <DetailLine term={t('issues.missingEpisodes')}>
+          {missingText(issue.detail.missing)}
+        </DetailLine>
+        <WorkLine issue={issue} />
+        <DetailLine term={t('issues.next')}>{t('issues.nextGap')}</DetailLine>
+      </>
+    )
+  }
+  if (issue.type === 'series_episodes_collide') {
+    // 同一集意外多份（M4 票 130）：撞在哪一集、哪幾個發佈名；改正在作品頁檔案與版本的「修正」。
     const collisions = Array.isArray(issue.detail.collisions)
       ? issue.detail.collisions.map(record)
       : []
     return (
       <>
-        {issue.type === 'series_episodes_missing' ? (
-          <DetailLine term={t('issues.missingEpisodes')}>
-            {missingText(issue.detail.missing)}
-          </DetailLine>
-        ) : (
-          collisions.map((one) => {
-            const code = formatEpisode({
-              season: numeric(one.season),
-              episode_start: numeric(one.episode),
-              episode_end: null,
-            })
-            const releases = Array.isArray(one.releases) ? one.releases.map(text) : []
-            return (
-              <DetailLine key={code} term={`${t('issues.collisions')} ${code}`}>
-                {releases.join(' · ')}
-              </DetailLine>
-            )
+        {collisions.map((one) => {
+          const code = formatEpisode({
+            season: numeric(one.season),
+            episode_start: numeric(one.episode),
+            episode_end: null,
           })
-        )}
-        {media !== '' && (
-          <DetailLine term={t('issues.work')}>
-            <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
-              {text(issue.detail.title) || media}
-            </Link>
-          </DetailLine>
-        )}
-        <DetailLine term={t('issues.next')}>
-          {t(issue.type === 'series_episodes_missing' ? 'issues.nextGap' : 'issues.nextCollide')}
-        </DetailLine>
+          const releases = Array.isArray(one.releases) ? one.releases.map(text) : []
+          return (
+            <DetailLine key={code} term={`${t('issues.collisions')} ${code}`}>
+              {releases.join(' · ')}
+            </DetailLine>
+          )
+        })}
+        <WorkLine issue={issue} />
+        <DetailLine term={t('issues.next')}>{t('issues.nextCollide')}</DetailLine>
       </>
     )
   }
@@ -378,6 +374,20 @@ const STUCK_STATES = ['submit_failed', 'client_error'] as const
 
 function jobState(value: unknown): (typeof STUCK_STATES)[number] | null {
   return STUCK_STATES.find((state) => state === value) ?? null
+}
+
+/** 巡檢開在 RSS Series 上的那幾件（M4 票 130）：連到作品頁，名字是作品名、沒有就是 id。 */
+function WorkLine({ issue }: { issue: Issue }) {
+  const { t } = useTranslation()
+  const media = text(issue.detail.media)
+  if (media === '') return null
+  return (
+    <DetailLine term={t('issues.work')}>
+      <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
+        {text(issue.detail.title) || media}
+      </Link>
+    </DetailLine>
+  )
 }
 
 /** 連結的底線：散文裡的一個名字，不是一顆按鈕（同 `JobLink`）。 */

@@ -118,6 +118,30 @@ class TestEpisodesCollide:
 
         assert await collisions(session) == []
 
+    async def test_a_batch_covering_the_episode_is_a_version_too(
+        self, session: AsyncSession
+    ) -> None:
+        """同組季末的合集（`[01-12]`）寫的是一整段，與每週的單集並存：範圍蓋到那一集就是同一集。"""
+        series = await bound_series(session)
+        await landed(session, series, f"{GROUP} - 05 {TAIL}", 5)
+        await landed(session, series, f"{GROUP} [01-12] [BDRip 1080p HEVC-10bit FLAC]", 5)
+
+        await sweep_once(session, now=NOW)
+
+        assert await collisions(session) == []
+
+    async def test_two_batches_mapped_onto_the_same_episodes_are_flagged(
+        self, session: AsyncSession
+    ) -> None:
+        """兩段不相交的合集（offset 錯了，第二段被對到第一段的集數上）仍是兩個不同的發佈。"""
+        series = await bound_series(session)
+        await landed(session, series, f"{GROUP} [01-12] [BDRip 1080p HEVC-10bit FLAC]", 5)
+        await landed(session, series, f"{GROUP} [13-24] [BDRip 1080p HEVC-10bit FLAC]", 5)
+
+        await sweep_once(session, now=NOW)
+
+        assert len(await collisions(session)) == 1
+
     async def test_other_series_and_manual_copies_are_not_flagged(
         self, session: AsyncSession
     ) -> None:

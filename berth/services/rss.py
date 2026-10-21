@@ -941,7 +941,10 @@ async def _poll_feed(
         keys, unkeyed = await _series_keys(fetcher, feed.kind, fresh)
         items, grown = await _record(session, feed, fresh, moment, keys=keys)
         feed.last_polled_at = moment
-        _note_poll(feed, f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else "", moment)
+        # 讀到了：略過幾筆認不出 Series 的照寫原因，但不算輪詢失敗（巡檢的「輪詢一直失敗」說的是
+        # 整個 Feed 讀不到，M4 票 130）。
+        _note_poll(feed, "", moment)
+        feed.poll_error = f"{len(unkeyed)} item(s) skipped: {unkeyed[0]}" if unkeyed else ""
         await session.commit()
         # 番組頁要同一個 fetcher 抓，所以在它關掉之前認。同一部的不同字幕組共用一頁（票 82）。
         pages = _ShowPages(fetcher)

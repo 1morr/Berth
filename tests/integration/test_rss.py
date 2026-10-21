@@ -394,6 +394,22 @@ class TestGuidDedup:
         assert row is not None
         assert row.poll_error == ""
 
+    async def test_skipping_an_item_is_said_but_is_not_a_failing_poll(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """Feed 讀到了、只有一筆認不出 Series：原因寫在那一欄，但不起算「一直失敗」——巡檢的
+        「輪詢一直失敗」說的是整個 Feed 讀不到（M4 票 130 code-review）。"""
+        _, _, factory = await harbour(session, roots)
+        factory.rss_.pages.pop(KIMI[0].link)
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
+
+        await poll_feed(session, factory, feed.id, now=NOW)
+
+        row = await session.get(RssFeed, feed.id)
+        assert row is not None
+        assert row.poll_error.startswith("1 item(s) skipped")
+        assert row.poll_failing_since is None
+
 
 class TestBinding:
     async def test_new_series_wait_unbound_and_nothing_is_sent(
