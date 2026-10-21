@@ -1,0 +1,82 @@
+{
+  "body": {
+    "attachments": [],
+    "author": {
+      "accent_color": null,
+      "avatar": null,
+      "avatar_decoration_data": null,
+      "banner": null,
+      "banner_color": null,
+      "bot": true,
+      "clan": null,
+      "collectibles": null,
+      "discriminator": "0000",
+      "display_name_styles": null,
+      "flags": 0,
+      "global_name": null,
+      "id": "000000000000000004",
+      "primary_guild": null,
+      "public_flags": 0,
+      "username": "berth-test-bot",
+      "vad_colors": null
+    },
+    "channel_id": "000000000000000002",
+    "components": [],
+    "content": "",
+    "edited_timestamp": null,
+    "embeds": [
+      {
+        "color": 14722342,
+        "content_scan_version": 0,
+        "description": "葬送的芙莉蓮 S02E05 已入庫。",
+        "fields": [
+          {
+            "inline": true,
+            "name": "Route",
+            "value": "Anime"
+          },
+          {
+            "inline": true,
+            "name": "大小",
+            "value": "1.4 GB"
+          }
+        ],
+        "footer": {
+          "text": "Berth"
+        },
+        "title": "Berth 票 121 實驗：embed",
+        "type": "rich"
+      }
+    ],
+    "flags": 0,
+    "id": "000000000000000005",
+    "mention_everyone": false,
+    "mention_roles": [],
+    "mentions": [],
+    "pinned": false,
+    "timestamp": "2026-10-21T05:17:28.719000+00:00",
+    "tts": false,
+    "type": 0
+  },
+  "headers": {
+    "CF-RAY": "a4ddcbcd88407c66-MFM",
+    "Connection": "close",
+    "Content-Type": "application/json",
+    "Date": "Wed, 21 Oct 2026 05:17:28 GMT",
+    "Server": "cloudflare",
+    "Transfer-Encoding": "chunked",
+    "X-Content-Type-Options": "nosniff",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "vary": "Accept-Encoding",
+    "via": "1.1 google",
+    "x-discord-features": "chat",
+    "x-ratelimit-bucket": "62df3a8bf3cb0dd93018dd80d06039f6",
+    "x-ratelimit-limit": "5",
+    "x-ratelimit-remaining": "3",
+    "x-ratelimit-reset": "1792559849.846",
+    "x-ratelimit-reset-after": "1.134"
+  },
+  "status": 200
+}

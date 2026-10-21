@@ -1,0 +1,37 @@
+{
+  "body": {
+    "code": 50035,
+    "errors": {
+      "content": {
+        "_errors": [
+          {
+            "code": "BASE_TYPE_MAX_LENGTH",
+            "message": "Must be 2000 or fewer in length."
+          }
+        ]
+      }
+    },
+    "message": "Invalid Form Body"
+  },
+  "headers": {
+    "CF-RAY": "a4ddcbcfd8087c5d-MFM",
+    "Connection": "close",
+    "Content-Type": "application/json",
+    "Date": "Wed, 21 Oct 2026 05:17:29 GMT",
+    "Server": "cloudflare",
+    "Transfer-Encoding": "chunked",
+    "X-Content-Type-Options": "nosniff",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "vary": "Accept-Encoding",
+    "via": "1.1 google",
+    "x-discord-features": "chat",
+    "x-ratelimit-bucket": "62df3a8bf3cb0dd93018dd80d06039f6",
+    "x-ratelimit-limit": "5",
+    "x-ratelimit-remaining": "3",
+    "x-ratelimit-reset": "1792559850.854",
+    "x-ratelimit-reset-after": "1.461"
+  },
+  "status": 400
+}

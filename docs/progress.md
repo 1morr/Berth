@@ -271,6 +271,7 @@
 | 2026-10-21 | M4 修補段結案審查 | 220 張票全是 done，沒打勾的 4 條都是劃掉或有條件；遠端分支全合進 main。全部檢查全過、pytest 4100 passed / 2 skipped、vitest 2081 passed，CI 與每日 e2e 綠。子代理逐張過 M0–M4 票的 Comments，沒人接的約 40 條按使用者同意的三類寫進 plan §11.5。brief 補兩條決定（Discord、不改號），§20 兩處過時的「未測」改正。發 v0.2.9 | 開新 session：`/to-tickets docs/plan.md` 拆 M4 本體（從 121 起編） |
 | 2026-10-21 | M4 本體拆票 | 設計題 Q1–Q8 與管道（Discord bot 私訊、不做 webhook、「Issue 新增」併進等你處理）定案，寫進 plan §11.5〈通知〉〈巡檢〉與 brief §19、§20.23；Discord 查證在 `docs/research/discord-notifications.md`。開出 121–133 | 票 121（先請使用者建 Discord 測試 bot 與伺服器）；122 可並行 |
 | 2026-10-21 | M4 122 忽略的 Issue 在條件持續期間不再重開 | 規則收進 `services/issues`：`record_issue` 對 `STAYS_IGNORED`（兩種健康檢查、`jellyfin_item_mismatch`、`unknown_torrent`）在最後一筆被忽略且沒有 `cleared_at` 時回 `held`、不寫；`note_cleared` 寫 `cleared_at`，健康檢查、`resolver.settle_verdicts`、poller 的 `_record_unknown` 三處呼叫。`health_issues._still_ignored`、`SYSTEM` 刪掉；對帳的 `_Tally` 不數 `held`。測試：回驗三條、poller 三條（含問不到不算解除），變異手跑過。brief §9.1、CONTEXT.md、plan §11.5、CHANGELOG 同步。盤點與 code-review 未處理的見票的 Comments | 下一張 M4 票（開新 session） |
+| 2026-10-21 | M4 121 Discord bot 私訊實測 | 使用者建兩個 bot 與測試伺服器，`scripts/experiments/discord_dm.py`（`lib.py` 標準庫；`gateway-once` 用既有的 `websockets`）對 API v10 量：從沒連過 gateway 的 bot 私訊得到；開 DM channel 什麼情況都 200；沒有共同伺服器、收件人關了伺服器私訊、bot 被踢出都是 `403` / `50278`，`50007` 沒出現；超長 `400` / `50035`（`BASE_TYPE_MAX_LENGTH`、`MAX_EMBED_SIZE_EXCEEDED`）；錯 token `401` / `code 0`；送訊息 bucket 5 則，第 7 則 `429`（body `retry_after` 0.3、沒有 `code`，header `Retry-After: 5`）；邀請連結 `scope=bot&permissions=0`。brief §20.23、研究檔〈未查到〉與 §2、plan §11.5、票 128 第 2 點、`tests/fixtures/http/discord/` 九份與 README、`scripts/experiments/README.md`、development.md 同步。pre-commit 全過、pytest 4100 passed / 2 skipped。code-review 改了五項，其餘記在票的 Comments | 票 122 或 123（123 的 adapter 照 brief §20.23 與這組 fixture）；使用者 Reset 兩個 bot 的 token |
 
 ## 偏差與決定
 - 2026-10-21 M4 修補段結案：**M4 不改號、M4 本體從 121 起編**（使用者，brief §19）；**第一個通知管道改定 Discord**（plan §11.5 原寫 Telegram 或 Discord 擇一；brief §19）。
@@ -1583,3 +1584,5 @@
 - 協調者 2026-10-20 M4 票 119：**1280 兩欄平衡不採用**（critique 28→28，換來 Tab 順序與視覺不一致、跨 `lg` 斷點重新掛載丟輸入、`64rem` 斷點三處重複、`StepFrame` 多一個 `aside` 例外），只保留一屏一顆主鍵；驗收第 1 條因此不做。
 - 2026-10-20 M4 票 120：**第 1 點（頁 2、頁 4 位址 placeholder 跟著頁 1 的主機）不做**，使用者決定：設定只走一次，價值低。票改名為「Route 刪除被拒的中文排版」，只做第 2 點。
 - 2026-10-21 M4 票 122：**`unknown_torrent` 也照「條件持續期間忽略有效」**（票面只點名 `jellyfin_item_mismatch`，第 2 點盤點出來、使用者拍板）：poller 每 5 秒寫一次，按忽略 5 秒內就重開。對帳其餘六種維持 brief §9.1 的「這一次不處理」，每天重開要不要推留給票 127。
+- 2026-10-21 M4 票 121：**收件人關了伺服器私訊時 Discord 回 `50278`（no mutual guilds），不是研究檔推測的 `50007`**，與真的沒有共同伺服器分不出；plan §11.5 的提示改成兩個補法一起說，開 DM channel 恆 200 所以「測試」要真的送一則。
+- 2026-10-21 M4 票 121：**實驗腳本用 `lib.py`（標準庫），不是票面寫的 httpx**：照 `scripts/experiments/README.md` 的「只用標準庫」，票面要的是不加依賴；排查時加的 `gateway-once` 用虛擬環境既有的 `websockets`。

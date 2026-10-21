@@ -1,0 +1,21 @@
+{
+  "body": {
+    "code": 0,
+    "message": "401: Unauthorized"
+  },
+  "headers": {
+    "CF-RAY": "a4ddcbd59f907c63-MFM",
+    "Connection": "close",
+    "Content-Length": "43",
+    "Content-Type": "application/json",
+    "Date": "Wed, 21 Oct 2026 05:17:30 GMT",
+    "Server": "cloudflare",
+    "X-Content-Type-Options": "nosniff",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "via": "1.1 google",
+    "x-discord-features": "chat"
+  },
+  "status": 401
+}

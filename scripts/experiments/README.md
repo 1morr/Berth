@@ -13,7 +13,7 @@ stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
 或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`、`jellyfin_images.py` 與 `rss_subscribe_timing.py`**：它們量的就是 Berth
-自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`large_library_berth.py`
+自己的解析器與圖片代理，搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`discord_dm.py` 不 import `berth`，但 `gateway-once` 那一步要虛擬環境裡的 `websockets`，所以也一律 `uv run`；`large_library_berth.py`
 也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境；`jellyfin_stream_probe.py` 同樣
 跑在 `berth` 容器裡，讀的是那一套 Berth 的資料庫與 compose 內網的 `jellyfin`，不 import `berth`）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
 ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
@@ -57,6 +57,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `inline_preseed.py` | M4 票 70：qBittorrent 的 preseed 腳本寫進 compose 頂層 `configs` 的 `content`（`$` 寫成 `$$`）放到 `/custom-cont-init.d/10-berth.sh`（Compose 建容器時寫進去，不是掛載），非 swarm 下 `mode` 有沒有效（linuxserver 的 init 只跑 `-x` 的檔）、內容逐位元組是否等於原腳本、init 的 log 與 tamper 警告、兩個白名單鍵各一行、宿主 / `BERTH_IP` / 同網段別的位址打 API 的狀態碼，`restart` 與 `up -d --force-recreate` 之後再量一次；不寫 `mode` 的對照組、qbittorrent 的 profile 關掉時 `up -d` 報不報錯也一起跑。`--compose-bin` 換獨立的 Compose 二進位；只用標準庫，連同 `lib.py` 與 `deploy/docker-compose.yml`（腳本取自它的 `configs.qbittorrent-preseed`）照相對位置搬到 Linux 宿主就能跑。自己起停 compose project `berth-t70`（容器 `berth-t70-qbittorrent`，名字是協調者為了與票 42 並行指定的，不是 `berth-exp-*`）；結論在 brief §20.18 |
 | `season_token_compare.py` | M4 票 84：搜尋季的記號寫 `Season N` 還是 `SNN`（CJK 比 `第N季`），真的 Prowlarr 加公開站（The Pirate Bay、Mikan、dmhy）各回幾筆、其中發佈名真的含作品名的幾筆（TPB 查不到會回熱門清單），以及這些命中自己寫 `SNN` 還是 `Season N`（站有沒有做模糊比對）。需要一台 Prowlarr（URL 與 API key 由 argv 或 `PROWLARR_URL` / `PROWLARR_API_KEY` 給）；14 次查詢、每次間隔 3.5 秒，公開站會封 IP；結果 `.local/experiments/results/season_token_compare.json` |
 | `jellyfin_scan_scope.py` | M4 票 62：Jellyfin 能不能只刷新一個媒體庫（`POST /Items/{媒體庫}/Refresh`，兩個 `Default`）、會不會連別的媒體庫一起掃，對第一次掃描時是空的媒體庫、兩個路徑而其中一個空的媒體庫有沒有效，以及全庫掃描任務的範圍、時間與執行中再送一次的結果。自己起停一次性容器（image 取 `deploy/` 釘的那一個，媒體庫關掉網路 fetcher）；結論在 brief §20.1 |
+| `discord_dm.py` | M4 票 121：Discord bot 私訊對真的 Discord 回什麼——從沒連過 gateway 的 bot 私訊得到嗎、超長的 `400`、沒有共同伺服器與關了私訊、錯 token 的 `401`、第一個 `429` 的 body 與 header，以及只私訊的邀請連結。每一步一次 run（`invite`、`send <label>`、`baseline`、`ratelimit`、`gateway-once`、`fixtures`），使用者在 Discord 上的操作夾在中間；`fixtures` 遮掉 id 與名字之後寫 `tests/fixtures/http/discord/`。token 與 user ID 只從 `DISCORD_BOT_TOKEN` / `DISCORD_USER_ID` 讀。只用標準庫，`gateway-once` 例外（要 Berth 虛擬環境的 `websockets`，所以一律 `uv run`）；結論在 brief §20.23 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -149,3 +150,11 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **AnimeTosho 官方公告 2026 年 10 月初到中旬停止服務**：`runtime_gap.py` 抓到的原始資料快取在
   `.local/experiments/cache/runtime_gap/`，關站後還能對著快取重跑分析，但要擴大樣本（目前只解到 8 部
   作品，`SKIPPED_SHOWS` 裡還有幾組沒 drill down 完）要趁它還在的時候做。
+- **`discord_dm.py` 量「沒連過 gateway」要用新建的 bot**：`gateway-once` 跑過一次，那個 bot 就再也回答不了這題。
+  2026-10-21 第一個 bot 為了排查連過一次，那一題是另建第二個 bot 量的。
+- **送之前先確認收件人在共同伺服器開著「私人訊息」**（對伺服器圖示按右鍵 → 隱私設定）。它跟著使用者的全域設定
+  「加入伺服器後允許私訊」，關著時新建的伺服器也是關的，而 Discord 回的 `50278` 與「沒有共同伺服器」一字不差——
+  2026-10-21 就是被它誤導，才以為是 gateway 的問題。
+- **`discord_dm.py` 的每一步之間要使用者在 Discord 上動手**（邀請、關私訊、踢 bot），順序在
+  [`docs/development.md`](../../docs/development.md#實驗腳本)。`baseline` 與 `ratelimit` 會私訊收件人約 10 則。
+  `fixtures` 只收 `FIXTURE_NAMES` 那九份，其他 `send` 的結果只留在 `.local/experiments/results/discord_dm/`。

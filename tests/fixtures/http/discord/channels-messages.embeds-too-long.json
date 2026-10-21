@@ -1,0 +1,37 @@
+{
+  "body": {
+    "code": 50035,
+    "errors": {
+      "embeds": {
+        "_errors": [
+          {
+            "code": "MAX_EMBED_SIZE_EXCEEDED",
+            "message": "Embed size exceeds maximum size of 6000"
+          }
+        ]
+      }
+    },
+    "message": "Invalid Form Body"
+  },
+  "headers": {
+    "CF-RAY": "a4ddcbd3be577c63-MFM",
+    "Connection": "close",
+    "Content-Type": "application/json",
+    "Date": "Wed, 21 Oct 2026 05:17:29 GMT",
+    "Server": "cloudflare",
+    "Transfer-Encoding": "chunked",
+    "X-Content-Type-Options": "nosniff",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "vary": "Accept-Encoding",
+    "via": "1.1 google",
+    "x-discord-features": "chat",
+    "x-ratelimit-bucket": "62df3a8bf3cb0dd93018dd80d06039f6",
+    "x-ratelimit-limit": "5",
+    "x-ratelimit-remaining": "2",
+    "x-ratelimit-reset": "1792559851.850",
+    "x-ratelimit-reset-after": "2.136"
+  },
+  "status": 400
+}
