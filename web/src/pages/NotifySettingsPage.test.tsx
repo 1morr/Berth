@@ -342,6 +342,39 @@ describe('設定 → 通知', () => {
       expect(field).toHaveValue('https://berth.example.com')
     })
 
+    it('沒存過、自己改了欄位：說明不再說那是預填的（M4 票 132）', async () => {
+      render()
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      await user.clear(field)
+      await user.type(field, 'https://berth.my-nas.example')
+
+      expect(field).toHaveAccessibleDescription('還沒儲存：按儲存才算數。在那之前通知不附連結。')
+    })
+
+    it('清空並儲存：說已清掉、不說「已儲存」，欄位回到預填（M4 票 132）', async () => {
+      const stub = render(
+        { [BERTH_URL]: { body: botOf(UNSET) } },
+        { ...UNSET, berth_url: 'https://berth.example.com' },
+      )
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      await user.clear(field)
+      await user.click(within(field.closest('form')!).getByRole('button', { name: '儲存' }))
+
+      expect(await screen.findByText('已清掉：通知不附連結。')).toBeVisible()
+      expect(screen.queryByText('已儲存。')).not.toBeInTheDocument()
+      expect(sent(stub, BERTH_URL)).toEqual({ berth_url: '' })
+      expect(field).toHaveValue(window.location.origin)
+      expect(field).toHaveAccessibleDescription(
+        '還沒儲存：預填的是你現在開著 Berth 的網址，按儲存才算數。在那之前通知不附連結。',
+      )
+    })
+
     it('不是 http(s) 的完整網址（422）：欄位下說原因', async () => {
       render({
         [BERTH_URL]: refusal(422, 'berth_url_invalid', "'berth.local' is not an http(s) address"),

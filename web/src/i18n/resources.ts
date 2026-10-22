@@ -3068,10 +3068,12 @@ const zhHant = {
         label: 'Berth 的網址',
         placeholder: 'https://berth.example.com',
         unsaved: '還沒儲存：預填的是你現在開著 Berth 的網址，按儲存才算數。在那之前通知不附連結。',
+        unsavedEdited: '還沒儲存：按儲存才算數。在那之前通知不附連結。',
         set: '通知裡的連結開在 {{url}}。',
         save: '儲存',
         saving: '儲存中…',
         saved: '已儲存。',
+        cleared: '已清掉：通知不附連結。',
         failed: '網址沒有存下來。',
       },
       me: {
@@ -6723,10 +6725,13 @@ const en: Translations<typeof zhHant> = {
         placeholder: 'https://berth.example.com',
         unsaved:
           'Not saved yet: this is the address you have Berth open at now, and it only counts once you save it. Until then notifications carry no link.',
+        unsavedEdited:
+          'Not saved yet: it only counts once you save it. Until then notifications carry no link.',
         set: 'Links in notifications open at {{url}}.',
         save: 'Save',
         saving: 'Saving…',
         saved: 'Saved.',
+        cleared: 'Cleared: notifications carry no link.',
         failed: 'The address was not saved.',
       },
       me: {

@@ -406,10 +406,13 @@ function BerthUrlSection({ bot }: { bot: NotifyBot }) {
           autoComplete="off"
           value={value}
           placeholder={t('settings.notifyPage.berth.placeholder')}
+          // 「預填的是…」只在欄位真的是預填時說（M4 票 132）：自己改過之後那半句就不對了。
           hint={
             bot.berth_url
               ? t('settings.notifyPage.berth.set', { url: bot.berth_url })
-              : t('settings.notifyPage.berth.unsaved')
+              : draft === null
+                ? t('settings.notifyPage.berth.unsaved')
+                : t('settings.notifyPage.berth.unsavedEdited')
           }
           error={invalid ? t(REFUSAL_TEXT.berth_url_invalid) : undefined}
           onChange={(event) => {
@@ -425,8 +428,15 @@ function BerthUrlSection({ bot }: { bot: NotifyBot }) {
                 : 'settings.notifyPage.berth.save',
             )}
           </GhostButton>
+          {/* 存的是空字串就是清掉：欄位接著回到預填、說明說「還沒儲存」，這裡說「已儲存」就互相矛盾（M4 票 132）。 */}
           <p aria-live="polite" className="text-xs text-ink-dim">
-            {save.isSuccess ? t('settings.notifyPage.berth.saved') : ''}
+            {save.isSuccess
+              ? t(
+                  save.data.berth_url
+                    ? 'settings.notifyPage.berth.saved'
+                    : 'settings.notifyPage.berth.cleared',
+                )
+              : ''}
           </p>
         </div>
         {save.isError && !invalid && (
