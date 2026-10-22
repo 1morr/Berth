@@ -495,6 +495,24 @@ describe.each(LANGUAGES)('%s', (language) => {
       ).toBeInTheDocument()
     })
 
+    it('各服務的連結念得出會開新分頁（M4 票 132）', async () => {
+      await speak()
+      end({})
+
+      renderInRoute(<SetupPage />)
+
+      const links = (await doors()).getAllByRole('link')
+      expect(links.length).toBeGreaterThan(0)
+      for (const link of links) {
+        expect(link).toHaveAttribute('target', '_blank')
+        // jsdom 算名稱時吃掉 sr-only 那一段開頭的空白（en 的 ` (opens…`）；字照樣要在。
+        expect(link.textContent).toBe(`${link.getAttribute('href')}${t('complete.doors.newTab')}`)
+        expect(link).toHaveAccessibleName(
+          `${link.getAttribute('href')}${t('complete.doors.newTab').trimStart()}`,
+        )
+      }
+    })
+
     it('沿用上一位擁有者設的那一組時說忘了去哪裡換（審計 P2-21）', async () => {
       await speak()
       end({

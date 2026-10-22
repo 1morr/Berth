@@ -1102,6 +1102,7 @@ const zhHant = {
   },
   complete: {
     doors: {
+      newTab: '（開新分頁）',
       title: '各服務自己的介面',
       lede: '平常用不到它們：Berth 替你接好了。要看下載細節、管理 Jellyfin 的使用者、在 Prowlarr 加要帳號的站時才開。',
       jellyfin: '用擁有者 {{name}} 登入，與 Berth 同一組。',
@@ -4883,6 +4884,7 @@ const en: Translations<typeof zhHant> = {
   },
   complete: {
     doors: {
+      newTab: ' (opens in a new tab)',
       title: 'The services’ own interfaces',
       lede: 'You will rarely need them: Berth has wired them up. Open them to see download details, manage Jellyfin users, or add sites that need an account in Prowlarr.',
       jellyfin: 'Sign in as the owner, {{name}} — the same account as Berth.',
