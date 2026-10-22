@@ -591,8 +591,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   標題層級由 `level` 屬性決定（預設 `3`）：精靈裡它在步驟的 `h2` 底下，Media 詳情裡它緊接著 `h1`，
   所以那裡傳 `level={2}`——標題層級跟著它所在的頁面，不跳級（票 15 audit）。
   機器字串在 `dd` 而 term 是角色名的列（「資料夾名」）照樣用 `.label` term。
-- **健康頁的卡片（`ServiceCard` / `PollerCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
-  `rule-strong`。**標題層級跟著所在的頁面**：`ServiceCard` 收數字的 `level?: 2 | 3`（預設 `3`，與 `Cutaway` 同一個形狀），健康頁上它直接在
+- **健康頁的卡片（`ServiceCard` / `PollerCard` / `NotifyCard`）:** 同一種面板——`deck` 抬頭列放標題，出事時整塊框換
+  `rule-strong`。通知卡（M4 票 128）只有 token 被拒那一則 `Notice` 是紅的：Discord 連不上或被限速 Berth 自己會再試，
+  只讓框變重線；通知不是泊位，不算進健康狀態。**標題層級跟著所在的頁面**：`ServiceCard` 收數字的 `level?: 2 | 3`（預設 `3`，與 `Cutaway` 同一個形狀），健康頁上它直接在
   `h1` 底下所以傳 `level={2}`，設定頁的「連線狀態」區塊有自己的 `h2`，卡片留在 `h3`（同 `Cutaway` 的 `level`）。
 - **區塊標題（`components/SectionHeading`，M4 票 92 收成一份）:** 頁內每個區塊是 `.label text-ink` 的標題 + 可選的
   `.value text-xs text-ink-dim` 計數，壓在 `border-b-2 border-rule-strong pb-2` 上；沒有名字的 `section` 用 `aria-labelledby`
