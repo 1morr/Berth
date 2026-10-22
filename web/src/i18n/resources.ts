@@ -3076,7 +3076,7 @@ const zhHant = {
         title: '我的通知',
         unreachableChip: '送不到',
         unreachable: '上次送給你的通知沒送到。',
-        unreachableRetry: '補好之後按下面的「{{button}}」：送到了，這一句就會收掉。',
+        unreachableRetry: '補好、儲存之後按下面的「{{button}}」：送到了，這一句就會收掉。',
         idLabel: 'Discord 使用者 ID',
         idPlaceholder: '17 到 20 位數字',
         howTo:
@@ -3114,6 +3114,7 @@ const zhHant = {
         sending: '送出中…',
         missingBot: '要先設定 Discord bot。',
         missingId: '要先填你的 Discord ID 並儲存。',
+        unsavedId: '先儲存你改過的 Discord ID，再測試。',
         missingBoth: '要先設定 Discord bot，並填你的 Discord ID。',
         missingBotUser: '管理員還沒設定 Discord bot，設好之後才測得了。',
         delivered: '已送出',
@@ -6728,7 +6729,7 @@ const en: Translations<typeof zhHant> = {
         unreachableChip: 'Not delivered',
         unreachable: 'The last notification to you did not arrive.',
         unreachableRetry:
-          'Once fixed, press “{{button}}” below. When it arrives, this note goes away.',
+          'Once fixed and saved, press “{{button}}” below. When it arrives, this note goes away.',
         idLabel: 'Discord user ID',
         idPlaceholder: '17 to 20 digits',
         howTo:
@@ -6767,6 +6768,7 @@ const en: Translations<typeof zhHant> = {
         sending: 'Sending…',
         missingBot: 'Set up the Discord bot first.',
         missingId: 'Enter and save your Discord ID first.',
+        unsavedId: 'Save the Discord ID you changed, then test.',
         missingBoth: 'Set up the Discord bot and enter your Discord ID first.',
         missingBotUser: 'An admin has not set up the Discord bot yet; the test works once they do.',
         delivered: 'Sent',

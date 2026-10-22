@@ -135,10 +135,7 @@ export function NotifySettingsPage() {
     >
       {admin && <BotHalf />}
       {mine.data ? (
-        <>
-          <MySection mine={mine.data} admin={admin} />
-          <TestSection mine={mine.data} admin={admin} />
-        </>
+        <MyHalf mine={mine.data} admin={admin} />
       ) : mine.isError ? (
         <RequestFailed error={mine.error} lead={t('settings.notifyPage.readFailed')} />
       ) : (
@@ -441,14 +438,38 @@ function BerthUrlSection({ bot }: { bot: NotifyBot }) {
 }
 
 /**
+ * 我的通知與測試。ID 的草稿放在這一層（M4 票 132）：測試送的是**存著的**那一個 ID，欄位改了還沒存時
+ * 測試鍵要說「先儲存」——不然補法叫人「補好之後按測試」，改了不存就按，測到的是舊的那一個。
+ */
+function MyHalf({ mine, admin }: { mine: MyNotify; admin: boolean }) {
+  const [id, setId] = useState(mine.discord_user_id)
+  return (
+    <>
+      <MySection mine={mine} admin={admin} id={id} onId={setId} />
+      <TestSection mine={mine} admin={admin} unsavedId={id.trim() !== mine.discord_user_id} />
+    </>
+  )
+}
+
+/**
  * 我的通知：Discord ID 與要收的種類，同一個儲存鍵（M4 票 125）。存的那一刻順手記下介面語言。
  * 每個人都有這一段；`admin` 只決定補法說「你自己換」還是「找管理員」。
  */
-function MySection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
+function MySection({
+  mine,
+  admin,
+  id,
+  onId,
+}: {
+  mine: MyNotify
+  admin: boolean
+  /** 欄位裡的 ID（`MyHalf` 持有）。 */
+  id: string
+  onId: (id: string) => void
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const language = useUiLanguage()
-  const [id, setId] = useState(mine.discord_user_id)
   const [kinds, setKinds] = useState<ReadonlySet<NotificationKind>>(() => new Set(mine.kinds))
   const shownKinds = KINDS.filter((kind) => admin || !ADMIN_ONLY_KINDS.has(kind))
   const save = useMutation({
@@ -519,7 +540,7 @@ function MySection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
             hint={t('settings.notifyPage.me.howTo')}
             error={invalid ? t(REFUSAL_TEXT.discord_id_invalid) : undefined}
             onChange={(event) => {
-              setId(event.target.value)
+              onId(event.target.value)
               save.reset()
             }}
           />
@@ -563,7 +584,16 @@ function MySection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
   )
 }
 
-function TestSection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
+function TestSection({
+  mine,
+  admin,
+  unsavedId,
+}: {
+  mine: MyNotify
+  admin: boolean
+  /** 欄位裡的 ID 與存著的不同（前後空白不算）。 */
+  unsavedId: boolean
+}) {
   const { t } = useTranslation()
   const missingId = mine.discord_user_id === ''
   const missingBot = !mine.bot_configured
@@ -576,7 +606,9 @@ function TestSection({ mine, admin }: { mine: MyNotify; admin: boolean }) {
       : 'settings.notifyPage.test.missingBotUser'
     : missingId
       ? 'settings.notifyPage.test.missingId'
-      : null
+      : unsavedId
+        ? 'settings.notifyPage.test.unsavedId'
+        : null
   const queryClient = useQueryClient()
   // 成敗都重讀：送到了，「我的通知」上那一句要收掉；送不到，它要出現（後端在測試時設上或清掉）。
   // 管理員那一半的「已暫停」也可能跟著變（測試時 token 被拒）。

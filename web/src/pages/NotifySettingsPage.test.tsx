@@ -394,6 +394,26 @@ describe('設定 → 通知', () => {
       expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
     })
 
+    it('改了 ID 還沒存：測的會是舊的那一個，所以先叫人儲存、按了不送（M4 票 132）', async () => {
+      const stub = render({ [TEST]: { body: DELIVERED } }, READY)
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByRole('textbox', { name: 'Discord 使用者 ID' })
+      await user.clear(field)
+      await user.type(field, '1000000000000000404')
+      const button = screen.getByRole('button', { name: '送一則測試訊息給我' })
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      expect(button).toHaveAccessibleDescription('先儲存你改過的 Discord ID，再測試。')
+      await user.click(button)
+      expect(stub.mock.calls.some(([url]) => String(url).endsWith('/test'))).toBe(false)
+
+      // 改回存著的那一個（前後空白不算改）：又能按。
+      await user.clear(field)
+      await user.type(field, ' 1000000000000000001 ')
+      expect(button).not.toHaveAttribute('aria-disabled')
+    })
+
     it('齊了就能按，結果的 live region 在按之前就在', async () => {
       render({ [TEST]: { body: DELIVERED } }, READY)
       const user = userEvent.setup()
@@ -556,7 +576,7 @@ describe('設定 → 通知', () => {
       expect(me.getByText(/把 bot 加進你所在的伺服器/)).toBeVisible()
       expect(me.getByText(/打開「私人訊息」/)).toBeVisible()
       expect(
-        me.getByText('補好之後按下面的「送一則測試訊息給我」：送到了，這一句就會收掉。'),
+        me.getByText('補好、儲存之後按下面的「送一則測試訊息給我」：送到了，這一句就會收掉。'),
       ).toBeVisible()
       expect(me.getByText(/50278/)).toBeInTheDocument()
       expect(me.getByTestId('technical-details')).not.toHaveAttribute('open')
