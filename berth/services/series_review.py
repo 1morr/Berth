@@ -48,6 +48,7 @@ from berth.domain import (
 )
 from berth.domain import PlanItem as PlannedFile
 from berth.domain import ReasonCode as Code
+from berth.logs import job_context
 from berth.models import Job, LedgerEntry, Plan, RssSeries
 from berth.parser import written_episode
 from berth.services.clients import ServiceClientFactory
@@ -373,8 +374,10 @@ async def _replan_held(
         try:
             await replan_job(session, factory, hub, job_hash, role=Role.ADMIN)
         except JobRejectedError as refused:
-            # 按下去之後它被別處動過了（另一個分頁核准了、刪了）：那一筆已經不在等人。
-            logger.info("a held job moved on", extra={"job": job_hash, "reason": str(refused)})
+            # 按下去之後它被別處動過了（另一個分頁核准了、刪了）：那一筆已經不在等人。job id 由
+            # 上下文蓋上去（`berth.logs`）；`extra` 再帶一次 `job` 會在建 record 時撞成 KeyError。
+            with job_context(job_hash):
+                logger.info("a held job moved on", extra={"reason": str(refused)})
             continue
         replanned += 1
     return replanned
