@@ -23,49 +23,25 @@ plan §11.4 的八條驗收，各在哪一條測試：
 
 from __future__ import annotations
 
-import json
-from collections.abc import Callable, Iterator
-from contextlib import closing
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
 import pytest
 
-from tests.e2e.harness import (
-    Json,
-    all_jobs,
-    in_container,
-    ledger_of,
-    ok,
-    qbittorrent_webui,
-    wait,
-)
+from tests.e2e.harness import Json, ledger_of, ok, poll_feed, set_round, wait
 from tests.e2e.sites import (
     AGGREGATE_URL,
-    INDEX,
     KAMIINA,
     KIMI,
     KITAUJI,
     LOLIHOUSE,
     REZERO,
     REZERO_URL,
-    ROUND,
-    STAGING,
 )
 
 pytestmark = pytest.mark.e2e
 
-SITES_CONTAINER = "berth-e2e-sites"
-#: Job 停下來、不會再自己動的狀態（同 `conftest.SETTLED`）。
-SETTLED = {
-    "imported",
-    "import_failed",
-    "review",
-    "submit_failed",
-    "missing_files",
-    "client_error",
-    "client_removed",
-}
 #: Re:ZERO 那一個 cour 的第一集在 TMDB 上是 S01E39（整部只有一季）。
 REZERO_FIRST = 39
 
@@ -98,54 +74,6 @@ def _episodes(berth: httpx.Client, media: str) -> list[tuple[int, int, str]]:
     )
 
 
-def _release_index() -> dict[str, Json]:
-    index: dict[str, Json] = json.loads(in_container("cat", str(INDEX), container=SITES_CONTAINER))
-    return index
-
-
-@pytest.fixture(scope="module")
-def qbittorrent(configured: None) -> Iterator[httpx.Client]:
-    with closing(qbittorrent_webui()) as client:
-        yield client
-
-
-@pytest.fixture(scope="module")
-def settle(berth: httpx.Client, qbittorrent: httpx.Client) -> Callable[[], dict[str, Json]]:
-    """下載的替身（同 `conftest.planted`）：Berth 送出去的每一筆替身發佈，把位元組複製到
-    qBittorrent 說的下載路徑、叫它 recheck，等每一筆都停下來。回 hash → Job。
-
-    替身以外的 Job（M1 那三包）不碰：它們早就停下來了。
-    """
-    index = _release_index()
-    planted: set[str] = set()
-
-    def run() -> dict[str, Json]:
-        def settled() -> dict[str, Json] | None:
-            rows = {row["hash"]: row for row in all_jobs(berth) if row["hash"] in index}
-            for digest in set(rows) - planted:
-                listed: list[Json] = ok(qbittorrent.get(f"/api/v2/torrents/info?hashes={digest}"))
-                if not listed:
-                    continue
-                where = listed[0].get("download_path") or listed[0]["save_path"]
-                source = f"{STAGING}/{index[digest]['file']}"
-                in_container("sh", "-c", 'mkdir -p "$1" && cp "$2" "$1/"', "sh", where, source)
-                ok(qbittorrent.post("/api/v2/torrents/recheck", data={"hashes": digest}))
-                planted.add(digest)
-            done = rows and planted >= set(rows)
-            return rows if done and all(row["state"] in SETTLED for row in rows.values()) else None
-
-        return wait("the rss jobs to settle", 900, settled, every=5)
-
-    return run
-
-
-def _poll(berth: httpx.Client, feed: int) -> Json:
-    polled: Json = ok(berth.post(f"/rss/feeds/{feed}/poll"))
-    feeds = {row["id"]: row for row in ok(berth.get("/rss/feeds"))}
-    assert feeds[feed]["poll_error"] == "", feeds[feed]
-    return polled
-
-
 @pytest.fixture(scope="module")
 def first_round(
     berth: httpx.Client, resolved: dict[str, Json], settle: Callable[[], dict[str, Json]]
@@ -170,7 +98,7 @@ def first_round(
     )
     routes = {"tv_route": route, "movie_route": movies}
     aggregate = ok(berth.post("/rss/feeds", json={"url": AGGREGATE_URL, **routes}))["id"]
-    polled = _poll(berth, aggregate)
+    polled = poll_feed(berth, aggregate)
     assert (polled["bound"], polled["submitted"]) == (1, 4), polled
 
     # 從 Media 頁訂閱 acg.rip 搜尋：建好就讀一輪，第一輪由人選「全部下載」。
@@ -186,7 +114,7 @@ def first_round(
 
     # 一般的 acg.rip 搜尋 feed：沒有番組頁，長出來的留在待綁定，由人綁。
     rezero = ok(berth.post("/rss/feeds", json={"url": REZERO_URL, **routes}))["id"]
-    _poll(berth, rezero)
+    poll_feed(berth, rezero)
     ok(berth.post(f"/rss/feeds/{rezero}/prime", json={"mode": "all"}))
     pending = [
         row
@@ -326,11 +254,11 @@ def second_round(
             ["S01E01", "S01E02", "S01E03", "S01E04"]
         ], (job, said)
 
-    in_container("sh", "-c", 'echo 2 > "$1"', "sh", str(ROUND), container=SITES_CONTAINER)
-    polled = _poll(berth, first_round.aggregate)
+    set_round(2)
+    polled = poll_feed(berth, first_round.aggregate)
     # 同組的第 5 集與它的 v2，加上另一個字幕組長出來、自動綁上的那一個 Series 的第 5 集。
     assert (polled["bound"], polled["submitted"]) == (1, 3), polled
-    assert _poll(berth, first_round.kamiina)["submitted"] == 1
+    assert poll_feed(berth, first_round.kamiina)["submitted"] == 1
     return settle()
 
 

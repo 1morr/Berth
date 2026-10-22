@@ -240,8 +240,8 @@ release.yml 沒有 `concurrency`，不會被取消，但等它綠了再動 `main
 
 ### e2e
 
-M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RSS 對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
-**一次 compose、一次精靈、一次入庫，四個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
+M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RSS、M4 的通知對**真的** qBittorrent 與 Jellyfin 跑一遍（plan §10、`tests/e2e/`）。
+**一次 compose、一次精靈、一次入庫，五個模組共享**（fixture 在 `tests/e2e/conftest.py`；檔名的數字就是執行順序）：
 
 - `test_1_m1_pipeline.py`：精靈六頁只走 Berth 的 API（三個服務都選套件內），送一部美劇一季、一部動漫一季、一部電影，等它們不經人工、
   依序走過完成 → 規劃 → 入庫，再驗硬鏈接兩端同一個 inode、帳本逐檔記下的 item id 就是 Jellyfin 在那條路徑上的 item。
@@ -257,10 +257,18 @@ M1 的整條路徑、M1.5 的權限與瀏覽、M2 的修正與對帳、M3 的 RS
   同組 v1、v2 並存；確認過的 RSS Series 的新集不進 audit；一個 split-cour（Re:ZERO，TMDB 只有一季）的第一批
   被播出日比對擋在審核，改一份並套用到 RSS Series 之後其餘自動入庫；在 Jellyfin 裡改掉一集的集號，對帳開出
   `jellyfin_item_mismatch`。
+- `test_5_m4_notify.py`：plan §11.5 的驗收，Discord 換成 `discord` 容器那一台假的（下面）。兩個收件人：管理員
+  （中文、四種都訂）與一個 Jellyfin 只開 Anime 的一般使用者（英文、訂「正在下載」與「可以看了」）。第 3 輪
+  RSS 命中《与你相恋》第 6 集：一般使用者收到「正在下載」與「可以看了」，說得出作品、季集、Route、連到作品頁；
+  同一輪 Re:ZERO 第 5 集入庫進 audit，管理員收到「等你處理」、連到那一列；測試在 Berth 的容器裡呼叫
+  `compose_weekly` 產生到此刻為止的那一週（排程一週一次、新裝不補，e2e 等不到），週報說得出入庫、修了什麼、
+  還有什麼等人，摘要連到那一份；最後假 Discord 先回 5xx、再整個停掉，第 4 輪照樣入庫、健康頁的通知卡說連不上，
+  起回來之後補送。模組裡有兩段等待是產品的時間窗（「可以看了」合併 5 分鐘、「等你處理」收齊 10 分鐘），
+  所以這一個模組約 18 分鐘（票 133 本機實跑）。
 
 Prowlarr 也會起來讓精靈選套件內、測到連上，但索引站那一頁跳過——搜尋不在 e2e 裡；送單只收搜尋或一次性連結記下的結果（M4 票 79），所以 M1 那三包先由
 `sites` 冒充的 acg.rip 列成一條一次性連結（`sites.M1_URL`）讀一次，再照它送。套件內的媒體庫
-一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 20 分鐘**，平常的 `uv run pytest` 不收它
+一開始是空的，反查要等 Berth 請 Jellyfin 掃描之後那一輪，所以一次**約 50 分鐘**（票 133 本機實跑：pytest 45 分鐘，加上 build 與起停），平常的 `uv run pytest` 不收它
 （`-m 'not e2e'`）。
 
 ```bash
@@ -296,6 +304,9 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
   `acg.rip`、`nyaa.si`，照測試寫進去的輪次送出 feed、單集頁、番組頁與 `.torrent`（發佈取自票 07 的
   fixture）。它講 HTTPS，憑證由 `tests/fixtures/e2e/tls/` 的測試 CA 簽（`tests/e2e/make_tls.py` 產生）；
   `ca-bundle` 先把系統的 CA 清單接上這張 CA，Berth 以 `SSL_CERT_FILE` 信它。
+- 通知不送真的 Discord：`discord` 容器（`tests/e2e/discord.py`）回 Berth 會打的三支 API（bot 身分、開 DM
+  channel、送訊息），把每一則私訊記進自己的 volume，Berth 由 `DISCORD_API_URL` 指過去（`compose.yml`）。
+  測試在容器裡寫 `mode` 檔切成每一支回 503，或直接 `docker stop` 它；停掉再起來前面記的還在。
 - GitHub Actions 的 `.github/workflows/e2e.yml` 在 nightly、`v*` tag 與手動觸發時跑同一組指令，
   TMDB 憑證是 repo secret `TMDB_API_KEY`。
 

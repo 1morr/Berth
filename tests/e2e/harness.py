@@ -1,4 +1,4 @@
-"""e2e 兩個模組共用的位址、等待與「在容器裡問一句」。
+"""e2e 各模組共用的位址、等待與「在容器裡問一句」。
 
 fixture 在 `conftest.py`；這裡只有不需要 fixture 的那些。宿主上跑，可以用 Berth 的相依。
 """
@@ -16,7 +16,9 @@ from typing import Any
 import httpx
 
 from tests.conftest import FIXTURES
+from tests.e2e.discord import MESSAGES, MODE
 from tests.e2e.payload import Pack
+from tests.e2e.sites import INDEX, ROUND
 from tests.e2e.stack import E2E_ENV
 
 #: 宿主上的 port 是 e2e 自己的那一組（`e2e.env`，M4 票 34），與試跑環境的不撞。
@@ -30,6 +32,7 @@ JELLYFIN_CONTAINER = "berth-e2e-jellyfin"
 QBITTORRENT_CONTAINER = "berth-e2e-qbittorrent"
 TORRENTS_CONTAINER = "berth-e2e-torrents"
 SITES_CONTAINER = "berth-e2e-sites"
+DISCORD_CONTAINER = "berth-e2e-discord"
 
 ADMIN = "skipper"
 #: 擁有者的 Jellyfin 密碼（精靈第 1 步）。qBittorrent 的介面登入是另一組（`WEB_UI_LOGIN`）。
@@ -206,6 +209,38 @@ def jellyfin_client(username: str, password: str) -> httpx.Client:
     )
     client.headers["Authorization"] = f'{JELLYFIN_CLIENT}, Token="{auth["AccessToken"]}"'
     return client
+
+
+def poll_feed(berth: httpx.Client, feed: int) -> Json:
+    """按 Feed 的「立即輪詢」（`POST /rss/feeds/{id}/poll`），而且那一輪真的讀到了。"""
+    polled: Json = ok(berth.post(f"/rss/feeds/{feed}/poll"))
+    feeds = {row["id"]: row for row in ok(berth.get("/rss/feeds"))}
+    assert feeds[feed]["poll_error"] == "", feeds[feed]
+    return polled
+
+
+def set_round(number: int) -> None:
+    """替身站換到第幾輪（`sites.ROUND`）：之後的請求列得出那一輪以前的發佈。"""
+    in_container("sh", "-c", f'echo {number} > "$1"', "sh", str(ROUND), container=SITES_CONTAINER)
+
+
+def release_index() -> dict[str, Json]:
+    """替身站的每一筆發佈：info hash → `file`（`sites.STAGING` 底下的檔名）與 `title`。"""
+    index: dict[str, Json] = json.loads(in_container("cat", str(INDEX), container=SITES_CONTAINER))
+    return index
+
+
+def discord_messages() -> list[Json]:
+    """假 Discord 記下的每一則私訊，先到的在前：`recipient` 與 Berth 送的 `body`。"""
+    out = in_container(
+        "sh", "-c", 'cat "$1" 2>/dev/null || true', "sh", str(MESSAGES), container=DISCORD_CONTAINER
+    )
+    return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+
+def discord_mode(mode: str) -> None:
+    """`5xx`：假 Discord 每一支都回 503；`ok`：恢復。"""
+    in_container("sh", "-c", f'echo {mode} > "$1"', "sh", str(MODE), container=DISCORD_CONTAINER)
 
 
 def berth_client() -> httpx.Client:
