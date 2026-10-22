@@ -37,6 +37,7 @@ import httpx
 import pytest
 
 from berth.pipeline.notifying import TICK as NOTIFY_TICK
+from tests.e2e.discord import BROKEN, HEALTHY
 from tests.e2e.harness import (
     BERTH,
     BERTH_CONTAINER,
@@ -121,7 +122,7 @@ def _feed(berth: httpx.Client, url: str) -> int:
     return int(found)
 
 
-def _digest(title: str) -> str:
+def _info_hash(title: str) -> str:
     (found,) = [digest for digest, row in release_index().items() if row["title"] == title]
     return str(found)
 
@@ -217,7 +218,7 @@ def third_round(
     assert poll_feed(berth, _feed(berth, AGGREGATE_URL))["submitted"] == 1
     assert poll_feed(berth, _feed(berth, REZERO_URL))["submitted"] == 1
     jobs = settle()
-    sixth = _digest(SIXTH)
+    sixth = _info_hash(SIXTH)
     assert jobs[sixth]["state"] == "imported", jobs[sixth]
     return ThirdRound(sixth=sixth, review_before=before)
 
@@ -286,12 +287,12 @@ def test_a_new_review_item_pings_the_admin_with_a_link_to_it(
     assert re.fullmatch(r"有 \d+ 件等你處理", pinged["title"]), pinged
     assert _link(pinged) == f"{BERTH}{anchor}"
 
-    page, _, row = _link(pinged).partition("#")
+    page, _, fragment = _link(pinged).partition("#")
     with httpx.Client() as client:
         opened = client.get(page)
     assert opened.status_code == 200, opened.status_code
     assert opened.headers["content-type"].startswith("text/html"), opened.headers
-    assert (kind, ref) in _review_keys(berth), row
+    assert (kind, ref) in _review_keys(berth), fragment
 
 
 def test_the_weekly_report_tells_what_came_in_was_fixed_and_waits(
@@ -344,21 +345,22 @@ def test_a_dead_discord_blocks_nothing_and_catches_up(
     kimi: Kimi,
 ) -> None:
     """先是 5xx：「測試」照實說連不上、什麼都沒送到。再整個關掉：第 4 輪照樣送單、下載、入庫，
-    健康頁的通知卡說連不上、有幾則等著；打開之後退避到期就補送那一則「正在下載」。"""
-    discord_mode("5xx")
+    健康頁的通知資料（`/health/detail` 的 `notify`，通知卡讀的就是它）說連不上、有幾則等著；
+    打開之後退避到期就補送那一則「正在下載」。"""
+    discord_mode(BROKEN)
     try:
         before = len(discord_messages())
         tested = ok(bosun.post("/me/notifications/test"))
         assert (tested["delivered"], tested["failure"]) == (False, "unavailable"), tested
         assert len(discord_messages()) == before
     finally:
-        discord_mode("ok")
+        discord_mode(HEALTHY)
 
     docker("stop", DISCORD_CONTAINER)
     try:
         set_round(4)
         assert poll_feed(berth, _feed(berth, AGGREGATE_URL))["submitted"] == 1
-        seventh = _digest(SEVENTH)
+        seventh = _info_hash(SEVENTH)
         assert settle()[seventh]["state"] == "imported"
 
         def down() -> Json | None:
@@ -368,7 +370,7 @@ def test_a_dead_discord_blocks_nothing_and_catches_up(
         channel = wait("the health page to say Discord is unreachable", 300, down)
         assert channel["configured"] is True and channel["token_rejected"] is False, channel
         assert channel["error"], channel
-        # 管線沒有在等它：下載列表上這一筆入庫了，其他 Job 也沒有卡在半路。
+        # 管線沒有在等它：下載列表上這一筆入庫了。
         states = {row["hash"]: row["state"] for row in all_jobs(berth)}
         assert states[seventh] == "imported"
     finally:

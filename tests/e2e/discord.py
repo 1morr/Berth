@@ -26,8 +26,10 @@ from pathlib import Path, PurePosixPath
 STATE = PurePosixPath("/var/lib/discord")
 #: 每一則私訊一列。
 MESSAGES = STATE / "messages.jsonl"
-#: 測試寫、這一台每個請求讀一次：`5xx` 是壞掉，其他（或沒有這個檔）是正常。
+#: 測試寫、這一台每個請求讀一次：`BROKEN` 是壞掉，其他（或沒有這個檔）是正常。
 MODE = STATE / "mode"
+BROKEN = "5xx"
+HEALTHY = "ok"
 PORT = 8000
 #: Berth 的 base URL 帶版本（`DEFAULT_DISCORD_API_URL` 的形狀）。
 API = "/api/v10"
@@ -39,7 +41,7 @@ CHANNEL_PREFIX = "dm-"
 def broken() -> bool:
     try:
         with Path(MODE).open(encoding="utf-8") as mode:
-            return mode.read().strip() == "5xx"
+            return mode.read().strip() == BROKEN
     except FileNotFoundError:
         return False
 

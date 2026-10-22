@@ -239,7 +239,7 @@ def discord_messages() -> list[Json]:
 
 
 def discord_mode(mode: str) -> None:
-    """`5xx`：假 Discord 每一支都回 503；`ok`：恢復。"""
+    """`discord.BROKEN`：假 Discord 每一支都回 503；`discord.HEALTHY`：恢復。"""
     in_container("sh", "-c", f'echo {mode} > "$1"', "sh", str(MODE), container=DISCORD_CONTAINER)
 
 
