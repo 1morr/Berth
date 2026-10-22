@@ -4686,7 +4686,7 @@ const en: Translations<typeof zhHant> = {
       'This machine cannot reach api.themoviedb.org: check that Berth’s container can get out (DNS, firewall, proxy). Run this on the host; it prints reachable when it can:',
   },
   routes: {
-    title: 'Routes',
+    title: 'Library paths',
     lede: {
       bundled:
         'Each library you list becomes a route: finished downloads are hard-linked into its write target. Once built, a real file is linked to prove all three containers see one file system. On your first visit with the default list, building and checking starts as you arrive; once you change the list, it waits for “Build and check”.',
@@ -6843,7 +6843,7 @@ const en: Translations<typeof zhHant> = {
     },
   },
   routeSettings: {
-    title: 'Routes',
+    title: 'Library paths',
     lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads, imported files or RSS still point at cannot be deleted.',
     empty: 'No routes yet. Create one with “Add route” below, so Berth has somewhere to write.',
     disabled: 'Disabled',
