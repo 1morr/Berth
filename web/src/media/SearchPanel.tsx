@@ -131,7 +131,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   const settling = !typed && planned.isPlaceholderData
   // 已經送出、而預覽還是上一份（從季表按進來的缺集搜尋，`/search/queries` 慢的時候）：上一份不是問出去的
   // 那幾個，預覽與纜繩先不畫它（M4 票 132）。
-  const queries = settling && search.isPending ? undefined : planned.data?.queries
+  const shownQueries = settling && search.isPending ? undefined : planned.data?.queries
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
@@ -212,13 +212,13 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
         <QueryPreview
           keyword={keyword}
-          planned={queries}
+          planned={shownQueries}
           batch={planned.data?.batch ?? null}
           missing={missing}
           onTitles={() => setMissing(null)}
         >
           {/* 不能按的時候原因在搜尋鍵底下，這裡不再說一次代價。 */}
-          {!refusal && <QueryCost count={typed ? 1 : (queries?.length ?? 0)} />}
+          {!refusal && <QueryCost count={typed ? 1 : (shownQueries?.length ?? 0)} />}
         </QueryPreview>
       </form>
 
@@ -231,7 +231,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           （shape brief §3 的焦點時刻，與精靈的靠泊序列是同一種東西）。 */}
       {search.isPending ? (
         <ol className="grid gap-2">
-          {pending(keyword, queries).map((attempt) => (
+          {pending(keyword, shownQueries).map((attempt) => (
             <StepLine
               key={attempt.step}
               label={attempt.step}

@@ -7,12 +7,7 @@ import { stubApi } from '../test/fetch'
 import { COALESCE_MS, useJobStream } from './events'
 import { deletionQueryOptions, jobQueryOptions, jobsQueryOptions } from './jobs'
 
-/**
- * SSE 訂閱（`.scratch/m1/live-jobs-shape.md` §6、票 10）。
- *
- * jsdom 沒有 `EventSource`，所以這裡自己擺一個——順便讓「沒有 EventSource 的環境不該爆掉」
- * 這件事在其他測試裡自然成立（那些測試沒有這個替身，而下載列表照樣畫得出來）。
- */
+/** SSE 訂閱（`.scratch/m1/live-jobs-shape.md` §6、票 10）。替身在 `test/eventSource.ts`。 */
 
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
