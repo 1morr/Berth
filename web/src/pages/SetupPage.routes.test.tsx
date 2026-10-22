@@ -977,9 +977,13 @@ describe('頁 6：完成', () => {
       (await screen.findByRole('heading', { name: '各服務自己的介面' })).closest('section')!,
     )
     const host = window.location.hostname
-    expect(await doors.findByRole('link', { name: `http://${host}:18096` })).toBeInTheDocument()
-    expect(await doors.findByRole('link', { name: `http://${host}:18080` })).toBeInTheDocument()
-    expect(doors.getByRole('link', { name: `http://${host}:9696` })).toBeInTheDocument()
+    expect(
+      await doors.findByRole('link', { name: `http://${host}:18096（開新分頁）` }),
+    ).toBeInTheDocument()
+    expect(
+      await doors.findByRole('link', { name: `http://${host}:18080（開新分頁）` }),
+    ).toBeInTheDocument()
+    expect(doors.getByRole('link', { name: `http://${host}:9696（開新分頁）` })).toBeInTheDocument()
     expect(doors.getByText(/用擁有者 skipper 登入/)).toBeInTheDocument()
     expect(doors.getByText(/帳號 deckhand/)).toBeInTheDocument()
   })
@@ -1069,7 +1073,7 @@ describe('頁 6：完成', () => {
     expect(doors.getByText('用你原本的登入。')).toBeInTheDocument()
     // 既有 Jellyfin 填的是 host.docker.internal：換成這台主機才開得了（實跑 E6）。
     expect(
-      doors.getByRole('link', { name: `http://${window.location.hostname}:48096` }),
+      doors.getByRole('link', { name: `http://${window.location.hostname}:48096（開新分頁）` }),
     ).toBeInTheDocument()
     expect(doors.queryByText('Prowlarr')).not.toBeInTheDocument()
   })
