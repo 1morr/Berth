@@ -15,6 +15,7 @@ import {
   type StubRoute,
   type StubRoutes,
 } from '../test/fetch'
+import { FakeEventSource } from '../test/eventSource'
 import { renderApp } from '../test/render'
 
 /** 每日補漏的說明（M4 票 108）：與 RSS 頁 RSS Series 段落那一句相同（`RssPage.test.tsx`）。 */
@@ -22,6 +23,7 @@ const BACKFILL_LEDE =
   '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。'
 
 afterEach(() => {
+  FakeEventSource.opened = []
   vi.unstubAllGlobals()
 })
 
@@ -1147,7 +1149,7 @@ describe('Media 詳情頁', () => {
       await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
 
       // 預覽的那幾個字由後端給（`/search/queries` 收同一組參數），不是前端自己拼的。
-      expect(await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')).toBeVisible()
+      expect(await within(panel()).findByText('問的是這部作品缺的那幾集：')).toBeVisible()
       // 範圍那一句在帶查詢數的標籤底下（M4 票 84b）：「問的是缺的集」從清單本身看不出來。
       expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
       expect(within(panel()).getByRole('button', { name: '改回作品名搜尋' })).toBeVisible()
@@ -1198,7 +1200,7 @@ describe('Media 詳情頁', () => {
       await userEvent.click(entry)
 
       expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true&season=1')
-      expect(await within(panel()).findByText('S01 缺的那幾集，Berth 會這樣問：')).toBeVisible()
+      expect(await within(panel()).findByText('問的是 S01 缺的那幾集：')).toBeVisible()
       expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
       expect(within(panel()).getByRole('button', { name: '改回作品名搜尋' })).toBeVisible()
     })
@@ -1230,7 +1232,7 @@ describe('Media 詳情頁', () => {
       gaps()
       renderApp('/media/tv:120089')
       await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
-      await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')
+      await within(panel()).findByText('問的是這部作品缺的那幾集：')
 
       await userEvent.click(screen.getByRole('button', { name: '改回作品名搜尋' }))
 
@@ -1241,16 +1243,40 @@ describe('Media 詳情頁', () => {
       expect(screen.queryByRole('button', { name: '改回作品名搜尋' })).not.toBeInTheDocument()
     })
 
+    it('缺集那一份的預覽還沒回來、搜尋已經送出：預覽與纜繩不畫作品名那一份（M4 票 132）', async () => {
+      const stub = gaps({
+        [MISSING_QUERIES]: () => new Promise(() => {}),
+        [MISSING_SEARCH]: () => new Promise(() => {}),
+      })
+      renderApp('/media/tv:120089')
+      expect(await screen.findByRole('list', { name: '要送出去的查詢' })).toHaveTextContent(
+        'SPY x FAMILY',
+      )
+
+      await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
+
+      await waitFor(() =>
+        expect(asked(stub)).toContain('/api/search?media=tv%3A120089&missing=true'),
+      )
+      expect(within(panel()).getByText('問的是這部作品缺的那幾集：')).toBeVisible()
+      expect(within(panel()).queryByRole('list', { name: '要送出去的查詢' })).toBeNull()
+      // 搜尋中的纜繩一個查詢一條：不是問出去的那幾個就不鋪。
+      const cables = within(panel())
+        .queryAllByRole('listitem')
+        .filter((item) => item.textContent?.includes('SPY x FAMILY'))
+      expect(cables).toEqual([])
+    })
+
     it('搜缺的集之後又打了關鍵字：範圍那一句不說，出口照留（M4 票 84b）', async () => {
       gaps()
       renderApp('/media/tv:120089')
       await userEvent.click(await screen.findByRole('button', { name: '搜這部作品缺的集' }))
-      await within(panel()).findByText('這部作品缺的那幾集，Berth 會這樣問：')
+      await within(panel()).findByText('問的是這部作品缺的那幾集：')
 
       await userEvent.type(within(panel()).getByLabelText('關鍵字'), 'BDRip')
 
       expect(within(panel()).getByText('會問 · 1 個查詢')).toBeVisible()
-      expect(within(panel()).queryByText('這部作品缺的那幾集，Berth 會這樣問：')).toBeNull()
+      expect(within(panel()).queryByText('問的是這部作品缺的那幾集：')).toBeNull()
       expect(within(panel()).getByRole('button', { name: '改回作品名搜尋' })).toBeVisible()
     })
 
@@ -2722,6 +2748,26 @@ describe('下載段（M4 票 12，`.scratch/m4/media-downloads-shape.md`）', ()
       expect(api.mock.calls.some(([url]) => String(url).startsWith('/api/jobs?'))).toBe(true),
     )
     expect(screen.queryByRole('heading', { level: 2, name: '下載' })).not.toBeInTheDocument()
+  })
+
+  it('從沒送過下載時也聽推播：RSS 在背景送出並入庫，下載段長出來、季表跟著重問（M4 票 132）', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    let listing = jobPage('open')
+    const api = render({ [DOWNLOADS]: () => listing })
+    renderApp('/media/tv:120089')
+    const mediaReads = () => api.mock.calls.filter(([url]) => url === '/api/media/tv%3A120089')
+    await screen.findByRole('heading', { level: 2, name: '季集與入庫' })
+    await waitFor(() => expect(FakeEventSource.opened).toHaveLength(1))
+    const before = mediaReads().length
+
+    listing = jobPage('open', [QUEUED], COUNTS)
+    FakeEventSource.opened[0].emit(
+      'job',
+      JSON.stringify({ hash: QUEUED.hash, state: 'imported', progress: 1 }),
+    )
+
+    expect(await screen.findByRole('heading', { level: 2, name: '下載' })).toBeVisible()
+    await waitFor(() => expect(mediaReads().length).toBe(before + 1))
   })
 
   it('季表的「下載中」連到蓋到那一集的那一筆', async () => {

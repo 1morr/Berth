@@ -79,14 +79,16 @@ export function ServiceDoors({
           <div key={door.name} className="contents">
             <dt className="value self-baseline text-sm font-semibold text-ink">{door.name}</dt>
             <dd className="min-w-0 text-xs text-ink">
+              {/* 命中高度至少 24px（WCAG 2.5.8；行內的網址只有 14px，M4 票 31 的 audit），念得出會開新分頁。 */}
               {door.url ? (
                 <a
                   href={door.url}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="value wrap-anywhere underline underline-offset-2 hover:text-ink-dim"
+                  className="value inline-flex min-h-6 items-center wrap-anywhere underline underline-offset-2 hover:text-ink-dim"
                 >
                   {door.url}
+                  <span className="sr-only">{t('complete.doors.newTab')}</span>
                 </a>
               ) : (
                 <span className="text-ink-dim">{t('complete.doors.noLink')}</span>

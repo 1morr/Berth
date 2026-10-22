@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { NameChip, NameKind, QueryChoice, QueryPlan } from '../api/search'
@@ -22,16 +22,20 @@ export function QueryChoices({
   plan,
   choice,
   seasons,
+  typed,
   onChange,
   onName,
 }: {
   plan: QueryPlan
   choice: QueryChoice
   seasons: boolean
+  /** 打了關鍵字：只問那一個，chip 停用並說為什麼（M4 票 132）。 */
+  typed: boolean
   onChange: (choice: QueryChoice) => void
   onName: (chip: NameChip, on: boolean) => void
 }) {
   const { t } = useTranslation()
+  const hintId = useId()
   const names = new Set(choice.names)
   const main = plan.names.filter((chip) => !chip.kinds.includes('alias'))
   const aliases = plan.names.filter((chip) => chip.kinds.includes('alias'))
@@ -74,8 +78,18 @@ export function QueryChoices({
     note: chip.kinds.map((kind: NameKind) => t(`search.kind.${kind}`)).join(' · '),
   })
 
+  // 原生 `fieldset disabled` 一次停掉裡面每一顆 chip；別名的展開區（`summary`）照樣打得開。
   return (
-    <div className="grid gap-4">
+    <fieldset
+      disabled={typed}
+      aria-describedby={typed ? hintId : undefined}
+      className="grid min-w-0 gap-4"
+    >
+      {typed && (
+        <p id={hintId} className="max-w-prose text-xs text-ink-dim">
+          {t('search.choose.typed')}
+        </p>
+      )}
       <ChoiceRow label={t('search.choose.names')}>
         <ToggleChips
           label={t('search.choose.namesGroup')}
@@ -119,7 +133,7 @@ export function QueryChoices({
           />
         </ChoiceRow>
       )}
-    </div>
+    </fieldset>
   )
 }
 

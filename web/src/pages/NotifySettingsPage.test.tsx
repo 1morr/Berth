@@ -342,6 +342,39 @@ describe('設定 → 通知', () => {
       expect(field).toHaveValue('https://berth.example.com')
     })
 
+    it('沒存過、自己改了欄位：說明不再說那是預填的（M4 票 132）', async () => {
+      render()
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      await user.clear(field)
+      await user.type(field, 'https://berth.my-nas.example')
+
+      expect(field).toHaveAccessibleDescription('還沒儲存：按儲存才算數。在那之前通知不附連結。')
+    })
+
+    it('清空並儲存：說已清掉、不說「已儲存」，欄位回到預填（M4 票 132）', async () => {
+      const stub = render(
+        { [BERTH_URL]: { body: botOf(UNSET) } },
+        { ...UNSET, berth_url: 'https://berth.example.com' },
+      )
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByLabelText('Berth 的網址')
+      await user.clear(field)
+      await user.click(within(field.closest('form')!).getByRole('button', { name: '儲存' }))
+
+      expect(await screen.findByText('已清掉：通知不附連結。')).toBeVisible()
+      expect(screen.queryByText('已儲存。')).not.toBeInTheDocument()
+      expect(sent(stub, BERTH_URL)).toEqual({ berth_url: '' })
+      expect(field).toHaveValue(window.location.origin)
+      expect(field).toHaveAccessibleDescription(
+        '還沒儲存：預填的是你現在開著 Berth 的網址，按儲存才算數。在那之前通知不附連結。',
+      )
+    })
+
     it('不是 http(s) 的完整網址（422）：欄位下說原因', async () => {
       render({
         [BERTH_URL]: refusal(422, 'berth_url_invalid', "'berth.local' is not an http(s) address"),
@@ -392,6 +425,26 @@ describe('設定 → 通知', () => {
       expect(button).toHaveAccessibleDescription(missing)
       await user.click(button)
       expect(stub.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    })
+
+    it('改了 ID 還沒存：測的會是舊的那一個，所以先叫人儲存、按了不送（M4 票 132）', async () => {
+      const stub = render({ [TEST]: { body: DELIVERED } }, READY)
+      const user = userEvent.setup()
+      renderApp('/settings/notifications')
+
+      const field = await screen.findByRole('textbox', { name: 'Discord 使用者 ID' })
+      await user.clear(field)
+      await user.type(field, '1000000000000000404')
+      const button = screen.getByRole('button', { name: '送一則測試訊息給我' })
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      expect(button).toHaveAccessibleDescription('先儲存你改過的 Discord ID，再測試。')
+      await user.click(button)
+      expect(stub.mock.calls.some(([url]) => String(url).endsWith('/test'))).toBe(false)
+
+      // 改回存著的那一個（前後空白不算改）：又能按。
+      await user.clear(field)
+      await user.type(field, ' 1000000000000000001 ')
+      expect(button).not.toHaveAttribute('aria-disabled')
     })
 
     it('齊了就能按，結果的 live region 在按之前就在', async () => {
@@ -556,7 +609,7 @@ describe('設定 → 通知', () => {
       expect(me.getByText(/把 bot 加進你所在的伺服器/)).toBeVisible()
       expect(me.getByText(/打開「私人訊息」/)).toBeVisible()
       expect(
-        me.getByText('補好之後按下面的「送一則測試訊息給我」：送到了，這一句就會收掉。'),
+        me.getByText('補好、儲存之後按下面的「送一則測試訊息給我」：送到了，這一句就會收掉。'),
       ).toBeVisible()
       expect(me.getByText(/50278/)).toBeInTheDocument()
       expect(me.getByTestId('technical-details')).not.toHaveAttribute('open')

@@ -1102,6 +1102,7 @@ const zhHant = {
   },
   complete: {
     doors: {
+      newTab: '（開新分頁）',
       title: '各服務自己的介面',
       lede: '平常用不到它們：Berth 替你接好了。要看下載細節、管理 Jellyfin 的使用者、在 Prowlarr 加要帳號的站時才開。',
       jellyfin: '用擁有者 {{name}} 登入，與 Berth 同一組。',
@@ -1680,6 +1681,7 @@ const zhHant = {
     noName: '至少開一個名字，或自己打一個關鍵字。',
     // 搜尋前選名字與季的 chip（M4 票 84）。名字本身是機器字串，不是文案。
     choose: {
+      typed: '打了關鍵字時只問那一個；清掉它，名字與季才用得上。',
       names: '名字',
       namesGroup: '要問的名字',
       seasons: '季',
@@ -1700,8 +1702,8 @@ const zhHant = {
       alias: '別名',
     },
     // 從季表按進來的那一種（M1.5 票 10）：問的是缺的那幾集，關鍵字一樣由後端給。
-    willAskMissing: '這部作品缺的那幾集，Berth 會這樣問：',
-    willAskMissingSeason: '{{season}} 缺的那幾集，Berth 會這樣問：',
+    willAskMissing: '問的是這部作品缺的那幾集：',
+    willAskMissingSeason: '問的是 {{season}} 缺的那幾集：',
     missingOff: '改回作品名搜尋',
     // 搜尋結束之後，有回應的纜繩收成這一行（M1.5 票 08：全綠的纜繩曾佔掉 311px）。
     answeredAll_one: '{{count}} 個關鍵字都有回應',
@@ -3066,17 +3068,19 @@ const zhHant = {
         label: 'Berth 的網址',
         placeholder: 'https://berth.example.com',
         unsaved: '還沒儲存：預填的是你現在開著 Berth 的網址，按儲存才算數。在那之前通知不附連結。',
+        unsavedEdited: '還沒儲存：按儲存才算數。在那之前通知不附連結。',
         set: '通知裡的連結開在 {{url}}。',
         save: '儲存',
         saving: '儲存中…',
         saved: '已儲存。',
+        cleared: '已清掉：通知不附連結。',
         failed: '網址沒有存下來。',
       },
       me: {
         title: '我的通知',
         unreachableChip: '送不到',
         unreachable: '上次送給你的通知沒送到。',
-        unreachableRetry: '補好之後按下面的「{{button}}」：送到了，這一句就會收掉。',
+        unreachableRetry: '補好、儲存之後按下面的「{{button}}」：送到了，這一句就會收掉。',
         idLabel: 'Discord 使用者 ID',
         idPlaceholder: '17 到 20 位數字',
         howTo:
@@ -3114,6 +3118,7 @@ const zhHant = {
         sending: '送出中…',
         missingBot: '要先設定 Discord bot。',
         missingId: '要先填你的 Discord ID 並儲存。',
+        unsavedId: '先儲存你改過的 Discord ID，再測試。',
         missingBoth: '要先設定 Discord bot，並填你的 Discord ID。',
         missingBotUser: '管理員還沒設定 Discord bot，設好之後才測得了。',
         delivered: '已送出',
@@ -4686,7 +4691,7 @@ const en: Translations<typeof zhHant> = {
       'This machine cannot reach api.themoviedb.org: check that Berth’s container can get out (DNS, firewall, proxy). Run this on the host; it prints reachable when it can:',
   },
   routes: {
-    title: 'Routes',
+    title: 'Library paths',
     lede: {
       bundled:
         'Each library you list becomes a route: finished downloads are hard-linked into its write target. Once built, a real file is linked to prove all three containers see one file system. On your first visit with the default list, building and checking starts as you arrive; once you change the list, it waits for “Build and check”.',
@@ -4881,6 +4886,7 @@ const en: Translations<typeof zhHant> = {
   },
   complete: {
     doors: {
+      newTab: ' (opens in a new tab)',
       title: 'The services’ own interfaces',
       lede: 'You will rarely need them: Berth has wired them up. Open them to see download details, manage Jellyfin users, or add sites that need an account in Prowlarr.',
       jellyfin: 'Sign in as the owner, {{name}} — the same account as Berth.',
@@ -5399,8 +5405,8 @@ const en: Translations<typeof zhHant> = {
     keywordPlaceholderMissing: 'Leave empty to ask for the missing episodes',
     submit: 'Search',
     submitting: 'Searching…',
-    willAskMissing: 'Berth will ask for the episodes this title is missing:',
-    willAskMissingSeason: 'Berth will ask for the episodes {{season}} is missing:',
+    willAskMissing: 'Asking for the episodes this title is missing:',
+    willAskMissingSeason: 'Asking for the episodes {{season}} is missing:',
     missingOff: 'Search by title instead',
     willAskCount_one: 'Will ask · {{count}} query',
     willAskCount_other: 'Will ask · {{count}} queries',
@@ -5415,6 +5421,8 @@ const en: Translations<typeof zhHant> = {
       'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names or seasons.',
     noName: 'Turn on at least one name, or type a keyword.',
     choose: {
+      typed:
+        'With a keyword typed, only that keyword is asked. Clear it to use the names and seasons.',
       names: 'Names',
       namesGroup: 'Names to ask for',
       seasons: 'Seasons',
@@ -6717,10 +6725,13 @@ const en: Translations<typeof zhHant> = {
         placeholder: 'https://berth.example.com',
         unsaved:
           'Not saved yet: this is the address you have Berth open at now, and it only counts once you save it. Until then notifications carry no link.',
+        unsavedEdited:
+          'Not saved yet: it only counts once you save it. Until then notifications carry no link.',
         set: 'Links in notifications open at {{url}}.',
         save: 'Save',
         saving: 'Saving…',
         saved: 'Saved.',
+        cleared: 'Cleared: notifications carry no link.',
         failed: 'The address was not saved.',
       },
       me: {
@@ -6728,7 +6739,7 @@ const en: Translations<typeof zhHant> = {
         unreachableChip: 'Not delivered',
         unreachable: 'The last notification to you did not arrive.',
         unreachableRetry:
-          'Once fixed, press “{{button}}” below. When it arrives, this note goes away.',
+          'Once fixed and saved, press “{{button}}” below. When it arrives, this note goes away.',
         idLabel: 'Discord user ID',
         idPlaceholder: '17 to 20 digits',
         howTo:
@@ -6767,6 +6778,7 @@ const en: Translations<typeof zhHant> = {
         sending: 'Sending…',
         missingBot: 'Set up the Discord bot first.',
         missingId: 'Enter and save your Discord ID first.',
+        unsavedId: 'Save the Discord ID you changed, then test.',
         missingBoth: 'Set up the Discord bot and enter your Discord ID first.',
         missingBotUser: 'An admin has not set up the Discord bot yet; the test works once they do.',
         delivered: 'Sent',
@@ -6843,7 +6855,7 @@ const en: Translations<typeof zhHant> = {
     },
   },
   routeSettings: {
-    title: 'Routes',
+    title: 'Library paths',
     lede: 'Each route is one Jellyfin library plus one write target, and a library can have several — one per disk, say. A disabled route takes no new downloads; a route that downloads, imported files or RSS still point at cannot be deleted.',
     empty: 'No routes yet. Create one with “Add route” below, so Berth has somewhere to write.',
     disabled: 'Disabled',

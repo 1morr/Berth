@@ -2,45 +2,12 @@ import { renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { FakeEventSource } from '../test/eventSource'
 import { stubApi } from '../test/fetch'
 import { COALESCE_MS, useJobStream } from './events'
 import { deletionQueryOptions, jobQueryOptions, jobsQueryOptions } from './jobs'
 
-/**
- * SSE 訂閱（`.scratch/m1/live-jobs-shape.md` §6、票 10）。
- *
- * jsdom 沒有 `EventSource`，所以這裡自己擺一個——順便讓「沒有 EventSource 的環境不該爆掉」
- * 這件事在其他測試裡自然成立（那些測試沒有這個替身，而下載列表照樣畫得出來）。
- */
-
-class FakeEventSource {
-  static opened: FakeEventSource[] = []
-
-  readonly listeners = new Map<string, EventListener>()
-  readonly url: string
-  closed = false
-
-  constructor(url: string) {
-    this.url = url
-    FakeEventSource.opened.push(this)
-  }
-
-  addEventListener(type: string, listener: EventListener): void {
-    this.listeners.set(type, listener)
-  }
-
-  removeEventListener(type: string): void {
-    this.listeners.delete(type)
-  }
-
-  close(): void {
-    this.closed = true
-  }
-
-  emit(type: string, data: string): void {
-    this.listeners.get(type)?.(new MessageEvent(type, { data }))
-  }
-}
+/** SSE 訂閱（`.scratch/m1/live-jobs-shape.md` §6、票 10）。替身在 `test/eventSource.ts`。 */
 
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

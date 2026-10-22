@@ -1054,11 +1054,44 @@ describe('搜尋 torrent 與結果表', () => {
       expect(within(panel()).getByText('至少開一個名字，或自己打一個關鍵字。')).toBeVisible()
       expect(submit).toHaveAccessibleDescription('至少開一個名字，或自己打一個關鍵字。')
       expect(within(panel()).queryByText(/幾秒到一分鐘/)).toBeNull()
+      // 原因緊接在停用的鍵底下、名字 chip 之前（M4 票 132）：390 寬時 chip 與清單把它推出第一屏。
+      const reason = within(panel()).getByText('至少開一個名字，或自己打一個關鍵字。')
+      const names = within(panel()).getByRole('group', { name: '要問的名字' })
+      expect(submit.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(reason.compareDocumentPosition(names) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
       await userEvent.type(within(panel()).getByLabelText('關鍵字'), 'Spy Family BDRip')
 
       expect(submit).toBeEnabled()
       expect(within(panel()).getByText(COST_ONE)).toBeVisible()
+    })
+
+    it('打了關鍵字時名字與季的 chip 停用並說為什麼：按了也不影響要問的那一個（M4 票 132）', async () => {
+      render()
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+      const names = await within(panel()).findByRole('group', { name: '要問的名字' })
+
+      await userEvent.type(within(panel()).getByLabelText('關鍵字'), 'Spy Family BDRip')
+
+      const hint = '打了關鍵字時只問那一個；清掉它，名字與季才用得上。'
+      expect(within(panel()).getByText(hint)).toBeVisible()
+      // 停用的 chip 不在 Tab 順序上：說明在它們之前，逐行讀的時候先讀到。
+      expect(
+        within(panel()).getByText(hint).compareDocumentPosition(names) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      for (const chip of [
+        ...within(names).getAllByRole('button'),
+        ...within(within(panel()).getByRole('group', { name: '要問的季' })).getAllByRole('button'),
+      ]) {
+        expect(chip).toBeDisabled()
+      }
+
+      await userEvent.clear(within(panel()).getByLabelText('關鍵字'))
+
+      expect(within(names).getByRole('button', { name: 'SPY x FAMILY 英文名' })).toBeEnabled()
+      expect(within(panel()).queryByText(hint)).toBeNull()
     })
 
     it('快照還沒讀到時不畫空的 chip，搜尋鍵照舊按得下去（由後端說 no_query）', async () => {
@@ -1184,6 +1217,17 @@ describe('搜尋 torrent 與結果表', () => {
       expect(await asked()).toHaveLength(3)
       expect(within(panel()).getByText('會問 · 3 個查詢')).toBeVisible()
       expect(within(panel()).queryByText(/Berth 會問/)).toBeNull()
+    })
+
+    it('查詢數那一行是 live region：按 chip 換了幾個查詢，聽得到（M4 票 132）', async () => {
+      render()
+      renderApp('/media/tv:120089')
+      await screen.findByRole('region', { name: '搜尋 torrent' })
+
+      expect(await within(panel()).findByText('會問 · 3 個查詢')).toHaveAttribute(
+        'aria-live',
+        'polite',
+      )
     })
 
     it('會問幾個查詢與要等多久是同一句', async () => {

@@ -364,7 +364,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | --- | --- |
 | `bundled`（預設） | 乾淨的 compose：三個服務選套件內都連得上、全部走得完。九個預設索引站裡有四個連不上（訊息取自真的 Prowlarr 那一輪），逐站成敗看得到；加完之後試搜，Mikan 演「搜尋時連不上」，其餘站各回幾筆 |
 | `outdated` | qBittorrent 的 Web API 低於 2.8.4：頁 2 拒絕接入並給升級指令 |
-| `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（選既有、填任何位址與帳密都測得過；選套件內是「要求帳密」）、Prowlarr 已有索引站。三頁都選既有才走得完。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
+| `mixed` | NAS 的常見組合：既有 Jellyfin（跑過自己的精靈、兩個媒體庫，其中一個掛 TVDB；管理員 `owner` / `s3cret`）、qBittorrent 已設密碼（選既有：帳密只收 `admin` / `adminadmin`，即 `NAS_QBITTORRENT_LOGIN`；位址的主機名帶 `typo` 是連不上、帶 `old` 是太舊的 4.3.9，其餘位址都接得上；選套件內是「要求帳密」）、Prowlarr 已有索引站。三頁都選既有才走得完。兩個媒體庫的舊路徑是暫存目錄底下真的存在的 `nas/movies`、`nas/anime`，Route 的第三條纜繩才看得到它們，精靈走得完 |
 | `mixed-no-sites` | 同 `mixed`，但既有 Prowlarr 一站都沒有：頁 4 待處理，主鍵「測試推薦站，加入通過的」把通過的推薦站加進它（M4 票 67） |
 | `starting` | 四個容器同時起來（票 06g 量到的時間線，照測試次數演，前端每 3 秒一次）：選了套件內之後 Jellyfin 先回不像它自己的東西、再回兩次 503「還在載入」，約 9 秒後連上；qBittorrent 第一次連不上；Prowlarr 連不上五次，約 15 秒。不必按「重新測試」，之後與 `bundled` 一樣走得完 |
 | `key-missing` | 同 `bundled`，但 Prowlarr 的設定目錄沒有唯讀掛進 Berth：頁 4 選套件內之後讀不到 API key，就地貼上 |
