@@ -690,6 +690,49 @@ describe('有 N 件等你處理（M4 票 127）', () => {
   })
 })
 
+describe('週報（M4 票 131）', () => {
+  it('管理員看得到，勾了會一起送出', async () => {
+    const stub = render(
+      { [ME]: { body: mineOf({ ...READY, kinds: ['ready', 'weekly'] }) } },
+      { ...READY, kinds: ['ready'] },
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/notifications')
+
+    const kinds = within(await screen.findByRole('group', { name: '要收的通知' }))
+    const weekly = await kinds.findByRole('checkbox', { name: '週報' })
+    expect(weekly).not.toBeChecked()
+    expect(weekly).toHaveAccessibleDescription(/每週一早上：這一週入庫了什麼、修了什麼/)
+
+    await user.click(weekly)
+    const form = screen.getByLabelText('Discord 使用者 ID').closest('form')!
+    await user.click(within(form).getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText('已儲存。')).toBeVisible()
+    expect(sent(stub, ME)).toMatchObject({ kinds: ['ready', 'weekly'] })
+  })
+
+  it('一般使用者沒有這一格，存的時候也不送', async () => {
+    const stub = render(
+      { [ME]: { body: mineOf({ ...READY, kinds: ['ready'] }) } },
+      { ...READY, kinds: ['ready', 'weekly'] },
+      'user',
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/notifications')
+
+    const kinds = within(await screen.findByRole('group', { name: '要收的通知' }))
+    expect(kinds.getByRole('checkbox', { name: '可以看了' })).toBeChecked()
+    expect(kinds.queryByRole('checkbox', { name: '週報' })).not.toBeInTheDocument()
+
+    const form = screen.getByLabelText('Discord 使用者 ID').closest('form')!
+    await user.click(within(form).getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText('已儲存。')).toBeVisible()
+    expect(sent(stub, ME)).toMatchObject({ kinds: ['ready'] })
+  })
+})
+
 describe('一般使用者（M4 票 125）', () => {
   it('只看得到自己的那一半：沒有分頁列、bot、Berth 的網址，也不讀管理員那一份', async () => {
     const stub = render({}, READY, 'user')

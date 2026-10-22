@@ -19,7 +19,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from html import escape
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -102,9 +102,12 @@ from berth.domain import (
     ConnectionReason,
     ConnectionState,
     EpisodeSnapshot,
+    EventType,
     FeedKind,
     FileEntry,
     HealthStatus,
+    IssueStatus,
+    IssueType,
     JobState,
     JobTrigger,
     MediaInfoSummary,
@@ -125,7 +128,9 @@ from berth.domain import (
 )
 from berth.main import create_app
 from berth.models import (
+    Event,
     IndexerSettings,
+    Issue,
     JellyfinSettings,
     Job,
     JobFile,
@@ -156,10 +161,12 @@ from berth.services.clients import (
 from berth.services.health import check_health
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import DEFAULT_INDEXERS
+from berth.services.jobs import actor_of
 from berth.services.media import read_media
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
 from berth.services.sweep import sweep_once
+from berth.services.weekly import WEEK, compose_weekly, week_ending
 
 # `poll` 情境要現生一份 `.torrent`。bencode 與 pieces 的計算已經在實驗腳本的共用工具裡，
 # 而它只用標準庫——為了一個演練情境在產品程式碼裡加一個編碼器不值得。
@@ -329,6 +336,8 @@ class Scenario:
     downloads_demo: bool = False
     #: 每日巡檢的 RSS 三項（M4 票 130）。見 `_seed_rss_sweep`。
     rss_sweep_demo: bool = False
+    #: 週報頁（M4 票 131）。見 `_seed_weekly`：最近兩週的週報由產品自己的 `compose_weekly` 產生。
+    weekly_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
     #: 那一格是空的。見 `_seed_legacy_feed`。
     legacy_feed: bool = False
@@ -699,6 +708,14 @@ def rss_sweep_scenario() -> Scenario:
     )
     scenario.feed_pages = {"https://demo.invalid/unused": b""}
     scenario.rss_sweep_demo = True
+    return scenario
+
+
+def weekly_scenario() -> Scenario:
+    """週報頁 `/weekly`（M4 票 131）：同 `healthy`，加上 `_seed_weekly`，最後由產品自己的
+    `compose_weekly` 產生最近兩週的週報（週一 05:00 結束的那兩週）。"""
+    scenario = healthy()
+    scenario.weekly_demo = True
     return scenario
 
 
@@ -1828,6 +1845,7 @@ SCENARIOS = {
     "review": review_scenario,
     "downloads": downloads_scenario,
     "rss-sweep": rss_sweep_scenario,
+    "weekly": weekly_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "global-path": global_path,
@@ -2278,6 +2296,8 @@ async def _moor(
         await _seed_legacy_feed(session)
     if scenario.rss_sweep_demo:
         await _seed_rss_sweep(session, factory)
+    if scenario.weekly_demo:
+        await _seed_weekly(session)
 
 
 #: `rss-sweep` 情境的兩個 Feed 壞了多久：過了巡檢的 24 小時。
@@ -2389,6 +2409,199 @@ async def _seed_rss_sweep(session: AsyncSession, factory: FakeClientFactory) -> 
         )
     await session.commit()
     await sweep_once(session)
+
+
+#: `weekly` 情境的三部作品：一部有季集、一部作品名很長、一部電影。
+_WEEKLY_WORKS = (
+    (MediaKind.TV, 209867, "葬送的芙莉蓮", "Frieren: Beyond Journey's End"),
+    (
+        MediaKind.TV,
+        90001,
+        "不太可能成為一部作品名這麼長的動畫：超長副標題用來驗證版面在窄螢幕上換行而不橫向捲動",
+        "The Unreasonably Long Title of a Series That Keeps Going: Subtitle Without Any Spaces"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    ),
+    (MediaKind.MOVIE, 372058, "你的名字。", "Your Name."),
+)
+
+
+async def _seed_weekly(session: AsyncSession) -> None:
+    """週報的材料（M4 票 131），最後跑兩次 `compose_weekly`。
+
+    - 三部作品的帳本列（沒有檔案：這一情境看的是週報，不是對帳）：最新一週入庫芙莉蓮
+      S01E01–E03、E05 與 S02E01、那部名字很長的 S01E01–E02、一部電影；
+      上一週入庫長名字那部的 S01E01–E04。
+    - 最新一週的修正：三次核准、兩次 rematch，人解決三件 Issue、系統收掉一件。
+    - 產生當下還在等的：兩筆待審核（audit）、四件開著的 Issue（兩件缺集與一件第一批卡住
+      是巡檢開的）、一個待綁定的 RSS Series。**上一週先產生**，那時這些都還沒有，
+      歷史清單才看得出兩週不同。
+    """
+    ends_at = week_ending(datetime.now().astimezone(), time(5, 0))
+    previous_ends = ends_at - WEEK
+    anime = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert anime is not None
+
+    ids: list[str] = []
+    for kind, tmdb_id, title, title_en in _WEEKLY_WORKS:
+        media = media_id(kind, tmdb_id)
+        ids.append(media)
+        snapshot = MediaSnapshot(
+            tmdb_id=tmdb_id, kind=kind, title=title, title_en=title_en, title_original=title_en
+        )
+        session.add(
+            Media(
+                id=media,
+                tmdb_id=tmdb_id,
+                kind=kind,
+                title_en=title_en,
+                title_original=title_en,
+                folder_name=f"{title_en} [tmdbid-{tmdb_id}]",
+                tmdb_snapshot_json=snapshot.model_dump(mode="json"),
+            )
+        )
+    await session.flush()
+    frieren, long_named, movie = ids
+
+    counter = 0
+
+    async def landed(media: str, season: int | None, episode: int | None, at: datetime) -> str:
+        """一筆入庫完的 Job 與它的一列帳本；回 Job 的 hash。"""
+        nonlocal counter
+        counter += 1
+        job_hash = hashlib.sha1(f"weekly-{counter}".encode()).hexdigest()
+        session.add(
+            Job(
+                hash=job_hash,
+                name=f"[Demo] weekly {counter}",
+                source_url="",
+                trigger=JobTrigger.MANUAL,
+                media_id=media,
+                route_id=anime.id,
+                state=JobState.IMPORTED,
+                added_at=at,
+            )
+        )
+        await session.flush()
+        session.add(
+            LedgerEntry(
+                job_hash=job_hash,
+                source_rel_path=f"weekly/{counter}.mkv",
+                source_abs_path=f"/data/torrent/complete/weekly/{counter}.mkv",
+                source_dev="1",
+                target_path=f"{anime.target_path}/weekly/{counter}.mkv",
+                target_inode=str(counter),
+                media_id=media,
+                season=season,
+                episode_start=episode,
+                episode_end=episode,
+                tags_json={},
+                action=PlanAction.IMPORT,
+                created_at=at,
+            )
+        )
+        return job_hash
+
+    # 上一週：長名字那部入庫四集。
+    for episode in (1, 2, 3, 4):
+        await landed(long_named, 1, episode, previous_ends - timedelta(days=4, hours=episode))
+    await session.commit()
+    await compose_weekly(session, ends_at=previous_ends, now=previous_ends)
+
+    # 最新一週。
+    latest = ends_at - timedelta(days=5)
+    hashes = []
+    for season, episode in ((1, 1), (1, 2), (1, 3), (1, 5), (2, 1)):
+        hashes.append(await landed(frieren, season, episode, latest + timedelta(hours=episode)))
+    for episode in (1, 2):
+        await landed(long_named, 1, episode, latest + timedelta(days=1, hours=episode))
+    await landed(movie, None, None, latest + timedelta(days=2))
+
+    for hours in (30, 31, 32):
+        session.add(
+            Event(
+                job_hash=hashes[0],
+                type=EventType.REVIEW_DECIDED.value,
+                actor="1",
+                payload_json={"decision": PlanStatus.APPROVED.value},
+                created_at=latest + timedelta(hours=hours),
+            )
+        )
+    for hours in (40, 41):
+        session.add(
+            Event(
+                job_hash=hashes[0],
+                type=EventType.REMATCHED.value,
+                actor="1",
+                created_at=latest + timedelta(hours=hours),
+            )
+        )
+
+    resolved = (
+        (IssueType.MISSING_FILES, "1"),
+        (IssueType.MISSING_FILES, "1"),
+        (IssueType.LIBRARY_LINK_MISSING, "1"),
+        (IssueType.CLIENT_REMOVED, actor_of(None)),
+    )
+    for number, (issue_type, by) in enumerate(resolved):
+        session.add(
+            Issue(
+                type=issue_type,
+                subject=f"weekly-resolved-{number}",
+                status=IssueStatus.RESOLVED,
+                detected_at=latest,
+                resolved_at=latest + timedelta(days=1, hours=number),
+                resolved_by=by,
+            )
+        )
+    await session.flush()
+
+    # 產生那一刻還在等的。
+    for number, open_type in enumerate(
+        (
+            IssueType.SERIES_EPISODES_MISSING,
+            IssueType.SERIES_EPISODES_MISSING,
+            IssueType.FIRST_BATCH_STUCK,
+            IssueType.ORPHAN_COMPLETE,
+        )
+    ):
+        session.add(
+            Issue(
+                type=open_type,
+                subject=f"weekly-open-{number}",
+                status=IssueStatus.OPEN,
+                detected_at=ends_at - timedelta(hours=number + 1),
+            )
+        )
+    for number in (1, 2):
+        session.add(
+            LedgerEntry(
+                job_hash=hashes[number],
+                source_rel_path=f"weekly/audit-{number}.mkv",
+                source_abs_path=f"/data/torrent/complete/weekly/audit-{number}.mkv",
+                source_dev="1",
+                target_path=f"{anime.target_path}/weekly/audit-{number}.mkv",
+                target_inode=f"9{number}",
+                media_id=frieren,
+                season=1,
+                episode_start=number,
+                episode_end=number,
+                tags_json={},
+                action=PlanAction.IMPORT,
+                audit=True,
+                # 在這一週之外：待審核算在「還在等」，不算入庫。
+                created_at=latest - timedelta(days=20),
+            )
+        )
+    session.add(
+        RssSeries(
+            key="title:weekly-demo:group",
+            title_raw="[Demo] Unbound Series - 01 [1080p]",
+            media_id=None,
+            route_id=None,
+        )
+    )
+    await session.commit()
+    await compose_weekly(session, ends_at=ends_at, now=ends_at)
 
 
 async def _seed_legacy_feed(session: AsyncSession) -> None:

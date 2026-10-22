@@ -104,7 +104,8 @@ Berth is a **public beta**.
   only for libraries they can see in Jellyfin (Settings → Notifications; an admin sets up the bot once).
   The DM links to the title's page once the admin saves Berth's address there.
   Admins also get "N waiting for you" when something new lands in review, issues or RSS series to bind
-  (gathered for 10 minutes into one DM).
+  (gathered for 10 minutes into one DM), and every Monday a weekly report: what was imported, what was
+  fixed and what still waits (the Weekly page, with a DM summary).
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.

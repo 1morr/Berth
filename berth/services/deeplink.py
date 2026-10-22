@@ -86,6 +86,8 @@ MEDIA_PAGE = "/media/{media_id}"
 REVIEW_PAGE = "/review"
 ISSUES_PAGE = "/issues"
 RSS_PAGE = "/rss"
+#: 週報頁的某一週（M4 票 131，前端 `/weekly/$reportId`）。
+WEEKLY_PAGE = "/weekly/{report_id}"
 
 
 def berth_link(public_url: str, path: str) -> str | None:

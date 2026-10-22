@@ -301,7 +301,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十七個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十一條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十九個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -315,6 +315,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | `/review` 確認一筆 audit | `review` | 8493 |
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
+| `/weekly`（M4 票 131）：管理員從頁首導覽進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
 | `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
@@ -332,7 +333,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 2 分鐘（三十台替身）
+pnpm -C web e2e                                            # 約 2 分鐘（三十九台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```
@@ -384,6 +385,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `downloads` | 作品頁的「下載」段（M4 票 12）：同 `import`，SPY×FAMILY 已經有五筆下載——`- 08` 在 qBittorrent 排隊（`queuedDL`、還沒有檔案清單）、`- 25` 下載中而且替身每一輪多 7%（5%–95% 循環，看得到進度自己動；pre-plan 提案 S01E25 待審，季表那一集是「下載中」）、`- 01` 停在待審核（季表 S01E01「卡住」）、`- 05` 已入庫一個檔案待確認、`- 04` 已入庫確認過（只在「全部」） |
 | `routes` | Route 設定頁 `/settings/routes`（票 14）：同 `healthy`，另外 TV 媒體庫在 Jellyfin 上多掛一顆碟（新增第二條 Route 會全綠）、Movies 多一條沒掛進 Berth 的路徑（在那裡建 Route 會紅、維持停用），TV 那條 Route 有一筆已入庫的下載（刪除鍵換成「刪不得」與一鍵停用）；新增時選 Anime 沒有空路徑，給一條到 Jellyfin 媒體庫設定的連結 |
 | `rss-sweep` | 每日巡檢的 RSS 三項（M4 票 130）：同 `healthy`，Mikan 聚合 feed 的每日補漏、Nyaa 搜尋 feed 的輪詢各壞了兩天（`/rss` 的 Feed 列分開說），SPY×FAMILY 綁著一個 RSS Series、帳本缺第 3 集、第 5 集撞了寫著 `- 05` 與 `- 06` 的兩個發佈；起來時由產品的 `sweep_once` 跑一輪，`/issues` 上是輪詢一直失敗、補漏一直失敗、缺集、同一集多份各一件（Feed 那兩件連到 `/rss#feed-<id>`，另兩件連到作品頁）。Feed 的替身一個網址都不認，按「立即輪詢」是讀不到 |
+| `weekly` | 週報頁 `/weekly`（M4 票 131）：同 `healthy`，另外三部作品的帳本列（芙莉蓮 S01E01–E03、E05 與 S02E01；一部作品名很長的；一部電影）、三次核准、兩次 rematch、人解決三件與系統收掉一件 Issue、兩筆待審核、四件開著的 Issue（含三件巡檢開的）、一個待綁定的 RSS Series，最後由產品自己的 `compose_weekly` 產生最近兩週的週報：上一週只入庫長名字那部四集、其餘都是 0（歷史清單看得出兩週不同），最新一週是上面那些。起來時就有，不必等週一 05:00 的排程。帳號同 `signed-out`；`deckhand` 沒有導覽項，直接打網址導到健康頁 |
 | `issues` | 待處理頁 `/issues` 與對帳（M2 票 05）：同 `healthy`，另外真的入庫一包三集的動漫（來源在 complete、媒體庫那一份是真的硬鏈接），並把其中第二集的媒體庫檔案刪掉——使用者在 Jellyfin 按刪除之後就是這樣。按「立刻對帳」真的比四方並寫下一件 Issue，按「重新鏈接」真的 `os.link` 把它接回來。另外三種破壞（M2 票 09）：第三集被一份一樣大的複製品取代（「以硬鏈接取代」真的換回硬鏈接）、complete 裡一個沒人認領的目錄（「刪除這個目錄」真的整棵刪掉）、媒體庫裡一個手放的檔案（只列出，沒有會刪的按鈕）。管線與健康檢查那幾種（M2 票 09c）：三筆下載到一半的 SPY×FAMILY，替身 qBittorrent 說一筆 `missingFiles`、一筆 `error`、一筆已經不在——起來之後 poller 第一輪就開出三件，「重新校驗」「重試」「重新送單」各自讓它們離開壞掉的狀態；或者 `curl -X POST 'http://127.0.0.1:8484/demo/qbittorrent/fix?hash=<hash>'` 演使用者在 qBittorrent 裡自己修好那一筆（M3 票 02），poller 下一輪（至多 30 秒）把 Job 接回、那一件由系統收掉，時間線多一筆「已接回」；Anime 媒體庫掛著 TVDB，所以一開始就有一件 TVDB（只有「忽略」，按了之後「立即重測」也不會再開）。磁碟空間那一件要到設定的 qBittorrent 那一頁把門檻調到比這台機器剩的還大，`/issues` 當場多一件，調回來當場收掉。認領類三顆（M2 票 10，替身 TMDB 搜得到 `spy`）：媒體庫裡第四集是真的硬鏈接但帳本上沒有它——「認領進帳本」長回一列，`Hand Placed` 那一件按下去說出配不上的理由；qBittorrent 上一筆 `[Sub] SPY×FAMILY - 07` 沒有 Job——「認領並建立下載」選作品，下載列表多一筆；`[Old] Forgotten Batch` 按「重新入庫」選作品，規劃器接手。`/jobs` 上入庫完的那一筆，在它的詳情頁（展開那一列 → 「下載詳情」）有「重新入庫」 |
 | `discover` | 探索頁 `/`：三個外部服務仍是替身，但 TMDB 打**真的** `api.themoviedb.org`。憑證從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 read access token 都收），沒設就變成「憑證缺失」那個畫面 |
 | `tmdb-down` | 憑證有、TMDB 連不上：探索頁的每個 feed 各自顯示服務回的原文與「重試」，而不是一片空白 |

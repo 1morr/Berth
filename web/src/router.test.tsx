@@ -267,7 +267,7 @@ describe('角色', () => {
  */
 describe('一般使用者看不到修正與對帳的入口', () => {
   const NAV = {
-    admin: ['探索', '媒體庫', '下載', '審核', '待處理', 'RSS', '健康', '設定'],
+    admin: ['探索', '媒體庫', '下載', '審核', '待處理', 'RSS', '週報', '健康', '設定'],
     user: ['探索', '媒體庫', '下載', '健康', '設定'],
   }
 
@@ -287,6 +287,8 @@ describe('一般使用者看不到修正與對帳的入口', () => {
     '/review',
     '/issues',
     '/rss',
+    '/weekly',
+    '/weekly/1',
     '/settings/jellyfin',
     '/settings/qbittorrent',
     '/settings/routes',

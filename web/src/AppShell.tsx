@@ -50,7 +50,16 @@ function NavLink({
   to,
   children,
 }: {
-  to: '/' | '/library' | '/jobs' | '/review' | '/issues' | '/rss' | '/health' | '/settings'
+  to:
+    | '/'
+    | '/library'
+    | '/jobs'
+    | '/review'
+    | '/issues'
+    | '/rss'
+    | '/weekly'
+    | '/health'
+    | '/settings'
   children: ReactNode
 }) {
   return (
@@ -95,6 +104,8 @@ function Identity() {
         {me.data.role === 'admin' && <NavLink to="/issues">{t('nav.issues')}</NavLink>}
         {/* RSS 同一個規則（M3 票 08）：聚合 feed 的網址帶 token，綁定會替整個家送單。 */}
         {me.data.role === 'admin' && <NavLink to="/rss">{t('nav.rss')}</NavLink>}
+        {/* 週報同一個規則（M4 票 131）：後端的門禁在 `/weekly`。 */}
+        {me.data.role === 'admin' && <NavLink to="/weekly">{t('nav.weekly')}</NavLink>}
         <NavLink to="/health">{t('nav.health')}</NavLink>
         {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。
             每個人都有：一般使用者的設定只有通知那一頁，`/settings` 把他帶到那裡（M4 票 125）。 */}

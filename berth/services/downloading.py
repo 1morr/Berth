@@ -28,13 +28,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import JobState, MediaKind, NotificationKind
-from berth.models import Job, Media, Notification, Route, RssSeries, User
+from berth.models import Job, Media, Notification, Route, RssSeries
 from berth.models.types import utcnow
 from berth.parser import episode_span
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.jobs import AddDownloadOutcome, JobSource, add_download, series_id_of
 from berth.services.plan import guess_from_title
+from berth.services.recipients import subscribers
 
 logger = logging.getLogger(__name__)
 
@@ -128,11 +129,8 @@ async def queue_downloading(
         with session.no_autoflush:
             recipients = [
                 user
-                for user in await session.scalars(
-                    select(User).where(User.discord_user_id != "").order_by(User.id)
-                )
-                if NotificationKind.DOWNLOADING.value in user.notify_kinds_json
-                and user.id != presser
+                for user in await subscribers(session, NotificationKind.DOWNLOADING)
+                if user.id != presser
             ]
             if not recipients:
                 return 0

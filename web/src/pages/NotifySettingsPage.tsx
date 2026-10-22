@@ -87,12 +87,16 @@ const KIND_TEXT = {
     label: 'settings.notifyPage.me.kind.waiting.label',
     hint: 'settings.notifyPage.me.kind.waiting.hint',
   },
+  weekly: {
+    label: 'settings.notifyPage.me.kind.weekly.label',
+    hint: 'settings.notifyPage.me.kind.weekly.hint',
+  },
 } as const satisfies Record<NotificationKind, { label: Key; hint: Key }>
 
 const KINDS = Object.keys(KIND_TEXT) as NotificationKind[]
 
-/** 只有管理員收得到的種類（後端也會把一般使用者的 `waiting` 剝掉）。 */
-const ADMIN_ONLY_KINDS: ReadonlySet<NotificationKind> = new Set(['waiting'])
+/** 只有管理員收得到的種類（後端也會把一般使用者的 `waiting`、`weekly` 剝掉）。 */
+const ADMIN_ONLY_KINDS: ReadonlySet<NotificationKind> = new Set(['waiting', 'weekly'])
 
 /** 每一種拒絕理由的一句話。少一種是編譯錯誤。 */
 const REFUSAL_TEXT = {

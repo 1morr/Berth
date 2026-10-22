@@ -1225,6 +1225,71 @@ async def test_existing_admins_are_subscribed_to_waiting(config: Config) -> None
 
 
 FEED_ERRORS_SPLIT = "c5f2a8e4d917"
+WEEKLY_REPORTS = "a8c3f6e1d254"
+
+
+async def test_existing_admins_are_subscribed_to_the_weekly_report(config: Config) -> None:
+    """M4 票 131：週報的表建起來，升版之前就在的管理員補上「週報」，一般使用者不動；自己勾過的
+    種類照留。降版拿掉它與排著的那幾則，表也拿掉。"""
+    people = (
+        ("1", "admin", '["ready", "waiting"]'),
+        ("2", "admin", "[]"),
+        ("3", "user", '["ready"]'),
+    )
+    config.config_root.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(config)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, FEED_ERRORS_SPLIT)
+        with _sqlite(config.database_path) as db:
+            for id_, role, kinds in people:
+                db.execute(
+                    "INSERT INTO users (id, jellyfin_user_id, name, role, created_at,"
+                    " notify_kinds_json) VALUES (?, ?, ?, ?, ?, ?)",
+                    (id_, f"jf-{id_}", f"p{id_}", role, "2026-10-01T00:00:00.000000+00:00", kinds),
+                )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_upgrade_to, WEEKLY_REPORTS)
+        with _sqlite(config.database_path) as db:
+            upgraded = {
+                id_: json.loads(raw)
+                for id_, raw in db.execute("SELECT id, notify_kinds_json FROM users")
+            }
+            db.execute(
+                "INSERT INTO weekly_reports (week_of, starts_at, ends_at, content_json, created_at)"
+                " VALUES ('2026-10-19', 'a', 'b', '{}', 'c')"
+            )
+            with pytest.raises(sqlite3.IntegrityError):
+                db.execute(
+                    "INSERT INTO weekly_reports (week_of, starts_at, ends_at, content_json,"
+                    " created_at) VALUES ('2026-10-19', 'a', 'b', '{}', 'c')"
+                )
+            db.execute(
+                "INSERT INTO notifications (user_id, kind, content_json, merge_key, not_before,"
+                " status, attempts, error, created_at) VALUES (1, 'weekly', '{}', 'weekly',"
+                " '2026-10-01T00:00:00.000000+00:00', 'pending', 0, '',"
+                " '2026-10-01T00:00:00.000000+00:00')"
+            )
+            db.commit()
+
+        async with engine.begin() as connection:
+            await connection.run_sync(_downgrade_to, FEED_ERRORS_SPLIT)
+        with _sqlite(config.database_path) as db:
+            downgraded = {
+                id_: json.loads(raw)
+                for id_, raw in db.execute("SELECT id, notify_kinds_json FROM users")
+            }
+            (left,) = db.execute("SELECT count(*) FROM notifications").fetchone()
+            tables = {name for (name,) in db.execute("SELECT name FROM sqlite_master")}
+    finally:
+        await engine.dispose()
+
+    assert upgraded == {1: ["ready", "waiting", "weekly"], 2: ["weekly"], 3: ["ready"]}
+    assert downgraded == {1: ["ready", "waiting"], 2: [], 3: ["ready"]}
+    assert left == 0
+    assert "weekly_reports" not in tables
 
 
 async def test_the_old_feed_error_moves_to_the_poll_column(config: Config) -> None:
