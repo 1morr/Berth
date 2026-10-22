@@ -37,6 +37,10 @@ const FILTERS: readonly MediaJobFilter[] = ['open', 'all']
  *
  * **這部作品從沒送過下載就整段不畫**：探索點進來的新作品不多一塊空殼。讀取中也不畫（同觀看區）。
  * 頁碼不進網址：作品頁的網址不為一段清單加參數。
+ *
+ * **推播不管有沒有下載都聽**（M4 票 132）：作品頁開著時 RSS 在背景送出第一筆並入庫，原本只在有下載時
+ * 才掛的訂閱聽不到，下載段與季表要重新整理才出現。key 在 `['jobs', 'list']` 與 `['jobs', hash, 'files']`
+ * 底下，票 04 的合併失效涵蓋這一段；件數一變，`useSeasonsFollow` 讓季表重問。
  */
 export function DownloadsPanel({ media }: { media: Media }) {
   const { t } = useTranslation()
@@ -44,6 +48,7 @@ export function DownloadsPanel({ media }: { media: Media }) {
   const [filter, setFilter] = useState<MediaJobFilter>('open')
   const [page, setPage] = useState(1)
   const listing = useQuery(mediaJobsQueryOptions(media.id, filter, page))
+  useJobStream()
   useSeasonsFollow(media.id, listing.data)
 
   if (listing.isPending) return null
@@ -73,7 +78,6 @@ export function DownloadsPanel({ media }: { media: Media }) {
 
   return (
     <section aria-labelledby={headingId} className="grid gap-4">
-      <LiveJobs />
       <SectionHeading
         id={headingId}
         label={t('media.downloads.title')}
@@ -124,15 +128,6 @@ export function DownloadsPanel({ media }: { media: Media }) {
       )}
     </section>
   )
-}
-
-/**
- * 推播掛在這一段上、有下載才掛（`useJobStream` 是一條長連線）：key 在 `['jobs', 'list']` 與
- * `['jobs', hash, 'files']` 底下，票 04 的合併失效自動涵蓋這一段。
- */
-function LiveJobs() {
-  useJobStream()
-  return null
 }
 
 /**

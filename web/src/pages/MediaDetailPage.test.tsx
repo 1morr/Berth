@@ -15,6 +15,7 @@ import {
   type StubRoute,
   type StubRoutes,
 } from '../test/fetch'
+import { FakeEventSource } from '../test/eventSource'
 import { renderApp } from '../test/render'
 
 /** 每日補漏的說明（M4 票 108）：與 RSS 頁 RSS Series 段落那一句相同（`RssPage.test.tsx`）。 */
@@ -22,6 +23,7 @@ const BACKFILL_LEDE =
   '綁好的 Mikan 字幕組每天再讀一次它在 Mikan 上的整季清單，補上 Feed 輪詢沒接到的集數（例如 Berth 停機的期間）；完結之後就不再讀。'
 
 afterEach(() => {
+  FakeEventSource.opened = []
   vi.unstubAllGlobals()
 })
 
@@ -2722,6 +2724,26 @@ describe('下載段（M4 票 12，`.scratch/m4/media-downloads-shape.md`）', ()
       expect(api.mock.calls.some(([url]) => String(url).startsWith('/api/jobs?'))).toBe(true),
     )
     expect(screen.queryByRole('heading', { level: 2, name: '下載' })).not.toBeInTheDocument()
+  })
+
+  it('從沒送過下載時也聽推播：RSS 在背景送出並入庫，下載段長出來、季表跟著重問（M4 票 132）', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    let listing = jobPage('open')
+    const api = render({ [DOWNLOADS]: () => listing })
+    renderApp('/media/tv:120089')
+    const mediaReads = () => api.mock.calls.filter(([url]) => url === '/api/media/tv%3A120089')
+    await screen.findByRole('heading', { level: 2, name: '季集與入庫' })
+    await waitFor(() => expect(FakeEventSource.opened).toHaveLength(1))
+    const before = mediaReads().length
+
+    listing = jobPage('open', [QUEUED], COUNTS)
+    FakeEventSource.opened[0].emit(
+      'job',
+      JSON.stringify({ hash: QUEUED.hash, state: 'imported', progress: 1 }),
+    )
+
+    expect(await screen.findByRole('heading', { level: 2, name: '下載' })).toBeVisible()
+    await waitFor(() => expect(mediaReads().length).toBe(before + 1))
   })
 
   it('季表的「下載中」連到蓋到那一集的那一筆', async () => {
