@@ -48,7 +48,7 @@ export function ToggleChips<T extends string>({
             type="button"
             aria-pressed={pressed}
             onClick={() => onToggle(chip.value)}
-            className={`${pressed ? `${FILTER_ACTIVE} text-ink` : FILTER} max-w-full flex-wrap gap-x-2 gap-y-1 text-start`}
+            className={`${pressed ? `${FILTER_ACTIVE} text-ink` : FILTER} max-w-full flex-wrap gap-x-2 gap-y-1 text-start disabled:cursor-not-allowed disabled:text-ink-dim`}
           >
             {chip.machine ? (
               <span className="value text-sm tracking-normal wrap-anywhere normal-case">

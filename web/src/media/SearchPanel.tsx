@@ -129,6 +129,9 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
   // 送出去的選擇要是畫面上那一份預覽算的那一份：預覽還在換（`isPlaceholderData`）時搜尋鍵停著，
   // 不然按下去送的是新的選擇、畫面列的卻是舊的查詢（code-review）。
   const settling = !typed && planned.isPlaceholderData
+  // 已經送出、而預覽還是上一份（從季表按進來的缺集搜尋，`/search/queries` 慢的時候）：上一份不是問出去的
+  // 那幾個，預覽與纜繩先不畫它（M4 票 132）。
+  const queries = settling && search.isPending ? undefined : planned.data?.queries
 
   return (
     <section className="grid gap-4" aria-labelledby={headingId}>
@@ -185,6 +188,15 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
             </PrimaryButton>
           </span>
         </div>
+        {/* 停用的原因緊接在搜尋鍵那一排底下（M4 票 132）：放在 chip 與清單後面的話，390 寬展開別名時它在第一屏外。 */}
+        {refusal && (
+          <RefusalLine
+            refusal={refusal}
+            id={refusalId}
+            count={planned.data?.queries.length ?? 0}
+            limit={planned.data?.limit ?? 0}
+          />
+        )}
 
         {/* 快照還沒讀到時沒有名字可選：不畫一排空的 chip（shape〈狀態與範圍〉）。 */}
         {planned.data && planned.data.names.length > 0 && (
@@ -192,6 +204,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
             plan={planned.data}
             choice={choice ?? choiceOf(planned.data)}
             seasons={missing === null}
+            typed={typed !== ''}
             onChange={setChoice}
             onName={(chip, on) => rememberKinds(chip, on, remember.mutate)}
           />
@@ -199,17 +212,13 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
         <QueryPreview
           keyword={keyword}
-          planned={planned.data?.queries}
+          planned={queries}
           batch={planned.data?.batch ?? null}
           missing={missing}
           onTitles={() => setMissing(null)}
         >
-          <QueryCost
-            count={typed ? 1 : (planned.data?.queries.length ?? 0)}
-            limit={planned.data?.limit ?? 0}
-            refusal={refusal}
-            refusalId={refusalId}
-          />
+          {/* 不能按的時候原因在搜尋鍵底下，這裡不再說一次代價。 */}
+          {!refusal && <QueryCost count={typed ? 1 : (queries?.length ?? 0)} />}
         </QueryPreview>
       </form>
 
@@ -222,7 +231,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
           （shape brief §3 的焦點時刻，與精靈的靠泊序列是同一種東西）。 */}
       {search.isPending ? (
         <ol className="grid gap-2">
-          {pending(keyword, planned.data?.queries).map((attempt) => (
+          {pending(keyword, queries).map((attempt) => (
             <StepLine
               key={attempt.step}
               label={attempt.step}
@@ -306,8 +315,9 @@ function QueryPreview({
 
   return (
     <div className="grid gap-2">
-      {/* 數字照 The Tabular Rule：標籤在 zh-Hant 是無襯線，等寬數字要另外開。 */}
-      <p className="label text-ink-dim tabular-nums">
+      {/* 數字照 The Tabular Rule：標籤在 zh-Hant 是無襯線，等寬數字要另外開。
+          按 chip 換了查詢數要聽得到（M4 票 132），清單本身不掛 live：一次念三十幾個查詢太吵。 */}
+      <p aria-live="polite" className="label text-ink-dim tabular-nums">
         {t('search.willAskCount', { count: asked.length })}
       </p>
       <div className="grid gap-1">
@@ -371,35 +381,38 @@ function refusalOf(
 }
 
 /**
- * 按下去之前說出代價（M4 票 84）：要問幾個查詢——一個查詢就是請索引站背後的每一個站現場搜一次——與要等
- * 多久，併成一句（票 84b）。不能按的時候整句換成原因，掛在搜尋鍵
- * 的描述上，等多久那半句不說。一個查詢都沒有時不畫。
+ * 為什麼搜尋鍵停著，掛成它的描述（M4 票 84）。緊接在搜尋鍵那一排底下（票 132）。
  */
-function QueryCost({
+function RefusalLine({
+  refusal,
+  id,
   count,
   limit,
-  refusal,
-  refusalId,
 }: {
+  refusal: Refusal
+  id: string
   count: number
   limit: number
-  refusal: Refusal | null
-  refusalId: string
 }) {
   const { t } = useTranslation()
+  return (
+    <p id={id} className="max-w-prose text-sm text-ink">
+      {refusal === 'noName'
+        ? t('search.noName')
+        : t(refusal === 'tooMany' ? 'search.tooMany' : 'search.tooManyNames', {
+            queries: count,
+            limit,
+          })}
+    </p>
+  )
+}
 
-  if (refusal) {
-    return (
-      <p id={refusalId} className="max-w-prose text-sm text-ink">
-        {refusal === 'noName'
-          ? t('search.noName')
-          : t(refusal === 'tooMany' ? 'search.tooMany' : 'search.tooManyNames', {
-              queries: count,
-              limit,
-            })}
-      </p>
-    )
-  }
+/**
+ * 按下去之前說出代價（M4 票 84）：要問幾個查詢——一個查詢就是請索引站背後的每一個站現場搜一次——與要等
+ * 多久，併成一句（票 84b）。不能按的時候不畫（原因在搜尋鍵底下）。一個查詢都沒有時不畫。
+ */
+function QueryCost({ count }: { count: number }) {
+  const { t } = useTranslation()
   if (count === 0) return null
   return <p className="max-w-prose text-xs text-ink-dim">{t('search.costWait', { count })}</p>
 }

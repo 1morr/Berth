@@ -1680,6 +1680,7 @@ const zhHant = {
     noName: '至少開一個名字，或自己打一個關鍵字。',
     // 搜尋前選名字與季的 chip（M4 票 84）。名字本身是機器字串，不是文案。
     choose: {
+      typed: '打了關鍵字時只問那一個；清掉它，名字與季才用得上。',
       names: '名字',
       namesGroup: '要問的名字',
       seasons: '季',
@@ -1700,8 +1701,8 @@ const zhHant = {
       alias: '別名',
     },
     // 從季表按進來的那一種（M1.5 票 10）：問的是缺的那幾集，關鍵字一樣由後端給。
-    willAskMissing: '這部作品缺的那幾集，Berth 會這樣問：',
-    willAskMissingSeason: '{{season}} 缺的那幾集，Berth 會這樣問：',
+    willAskMissing: '問的是這部作品缺的那幾集：',
+    willAskMissingSeason: '問的是 {{season}} 缺的那幾集：',
     missingOff: '改回作品名搜尋',
     // 搜尋結束之後，有回應的纜繩收成這一行（M1.5 票 08：全綠的纜繩曾佔掉 311px）。
     answeredAll_one: '{{count}} 個關鍵字都有回應',
@@ -5400,8 +5401,8 @@ const en: Translations<typeof zhHant> = {
     keywordPlaceholderMissing: 'Leave empty to ask for the missing episodes',
     submit: 'Search',
     submitting: 'Searching…',
-    willAskMissing: 'Berth will ask for the episodes this title is missing:',
-    willAskMissingSeason: 'Berth will ask for the episodes {{season}} is missing:',
+    willAskMissing: 'Asking for the episodes this title is missing:',
+    willAskMissingSeason: 'Asking for the episodes {{season}} is missing:',
     missingOff: 'Search by title instead',
     willAskCount_one: 'Will ask · {{count}} query',
     willAskCount_other: 'Will ask · {{count}} queries',
@@ -5416,6 +5417,8 @@ const en: Translations<typeof zhHant> = {
       'That is {{queries}} queries; one search sends at most {{limit}}. Turn off some names or seasons.',
     noName: 'Turn on at least one name, or type a keyword.',
     choose: {
+      typed:
+        'With a keyword typed, only that keyword is asked. Clear it to use the names and seasons.',
       names: 'Names',
       namesGroup: 'Names to ask for',
       seasons: 'Seasons',
