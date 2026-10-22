@@ -23,7 +23,7 @@ plan §11.5 的驗收要在真的 qBittorrent 與 Jellyfin 上走一遍；Discor
 
 ## 驗收
 
-- [ ] 新 e2e 模組在本機 `tests.e2e.stack` 與 CI 的 e2e workflow 都綠（本機 28 passed；CI 待 push 之後跑，見 Comments）
+- [x] 新 e2e 模組在本機 `tests.e2e.stack` 與 CI 的 e2e workflow 都綠（本機 28 passed；CI 見 Comments）
 - [x] 上面四個情境各有斷言
 - [x] 121–132 的 Comments 都有歸屬，寫進 plan §11.5
 - [x] 使用者真機實走一次，記在 Comments
@@ -45,7 +45,7 @@ plan §11.5 的驗收要在真的 qBittorrent 與 Jellyfin 上走一遍；Discor
 1. 第二位收件人原本叫 `deckhand`——`test_2_` 建過同名的 Jellyfin 帳號、最後停用，Jellyfin 回 400。改名 `bosun`。
 2. 「等你處理」連到清單頁而不是那一件：`test_4_` 最後一條開的 Issue 在管理員訂閱前兩秒出現，看守把它當新的一件，第 3 輪的審核項在 10 分鐘合併窗裡併進同一則（「新增 2 件」）。Berth 照設計；測試改成管理員先訂其他三種、等看守三輪（30 秒）記下現在等著的，再加訂「等你處理」。
 
-CI：workflow 的 `timeout-minutes` 60 → 90（本機一輪約 50 分鐘）。**CI 那一格沒勾**：這個 session 不 push，CI 的 e2e 要 push 之後的 nightly 或手動觸發才跑得到。
+CI：workflow 的 `timeout-minutes` 60 → 90（本機一輪約 50 分鐘）。CI（2026-10-23，協調者 push 與 merge 之後）：main `0135fca7` 上 `ci.yml`（[run 39857272808](https://github.com/1morr/Berth/actions/runs/39857272808)）綠；手動觸發 `e2e.yml`（[run 39857279844](https://github.com/1morr/Berth/actions/runs/39857279844)）**28 passed in 2072.69s（34:32）**，`test_5_m4_notify` 四條全過。
 
 斷言的界線（審查提出）：「連結開得到那一件」——e2e 斷言錨點是 `/review#{kind}-{ref}`、照連結開得到頁面（200 HTML，SPA 對任何路徑都回同一個殼）、那一列在 API 的佇列上；前端照錨點找到那一列由 `web/src/components/useHashTarget.test.tsx` 守。「健康頁說得出來」斷言的是 `/health/detail` 的 `notify`（通知卡讀的就是它），卡片文案由 `web/src/health/NotifyCard.test.tsx` 守。5xx 只對「測試」鍵驗；管線的補送驗的是整個關掉那一種。
 
