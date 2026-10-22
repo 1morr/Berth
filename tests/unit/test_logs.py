@@ -8,15 +8,18 @@ brief §16.2 要的是「結構化，每行帶 job id」。難的不是格式而
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 
 import httpx
 import pytest
 import respx
 
+import berth
 from berth.adapters.http import HttpSession, ProtocolMismatchError, ServiceUnavailableError
 from berth.adapters.prowlarr import IndexerRejectedError
 from berth.adapters.rss.client import HttpFeedFetcher
@@ -346,3 +349,69 @@ class TestSecretsInUrls:
             "Unable to connect to https://mikanani.me/RSS/MyBangumi?token=***",
             "no results",
         )
+
+
+# --- `extra` 不帶 `job`：job id 由上下文蓋上去 ---------------------------------------------
+
+
+def _extra_carrying_job(source: str) -> list[int]:
+    """`extra=` 裡帶 `job` 鍵的呼叫在第幾行：字典字面值或 `dict(job=...)` 都算。
+
+    record factory 已經在每一筆 record 上放了 `job`（`berth.logs._stamp_records`），`extra` 再帶
+    一次會在建 record 時丟 `KeyError`——而且只在 `configure_logging` 之後，單元測試多半走不到
+    （M4 票 128 在 `notify` 撞過，票 133 在 `series_review` 又撞一次）。
+    """
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        for keyword in node.keywords:
+            value = keyword.value
+            if keyword.arg != "extra":
+                continue
+            literal = isinstance(value, ast.Dict) and any(
+                isinstance(key, ast.Constant) and key.value == JOB_FIELD for key in value.keys
+            )
+            built = (
+                isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id == "dict"
+                and any(each.arg == JOB_FIELD for each in value.keywords)
+            )
+            if literal or built:
+                found.append(node.lineno)
+    return found
+
+
+class TestNoJobInExtra:
+    def test_no_berth_module_passes_job_through_extra(self) -> None:
+        root = Path(berth.__file__).parent
+        offenders = [
+            f"{path.relative_to(root.parent)}:{line}"
+            for path in sorted(root.rglob("*.py"))
+            for line in _extra_carrying_job(path.read_text(encoding="utf-8"))
+        ]
+        assert offenders == [], "use `job_context(job_hash)` instead of extra={'job': ...}"
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            'logger.info("moved", extra={"job": job_hash, "reason": why})',
+            'logger.warning("x",\n    extra={\n        "reason": why,\n        "job": h,\n    })',
+            'log.info("moved", extra=dict(reason=why, job=job_hash))',
+        ],
+    )
+    def test_the_rule_catches_job_in_extra(self, source: str) -> None:
+        assert _extra_carrying_job(source) != []
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            'logger.info("moved", extra={"jobs": 3, "reason": why})',
+            'logger.info("moved", extra={"reason": why})  # job: in the context',
+            'with job_context(h):\n    logger.info("moved", extra=dict(reason=why))',
+            'record(job="x")',
+        ],
+    )
+    def test_the_rule_ignores_lines_that_leave_job_to_the_context(self, source: str) -> None:
+        assert _extra_carrying_job(source) == []

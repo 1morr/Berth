@@ -7,18 +7,18 @@
 
 **發佈是票 07 錄下來的那幾份 fixture 裡的**（標題、發佈時間、字幕組、番組與字幕組 id），只換掉
 下載連結與 info hash：位元組是這裡造的（`payload.py` 的種子影片，片長 24 分鐘），hash 從位元組
-算。三部作品、兩輪：
+算。三部作品，M3 用前兩輪，M4（票 133）再用第 3、4 輪：
 
 - 《与你相恋到生命尽头》（Mikan 番組 4009，TMDB 285574）：聚合 feed 第一輪帶喵萌奶茶屋&LoliHouse
   的第 3、4 集，綁定時補舊集由單一字幕組 feed 補上第 1、2 集；第二輪同組第 5 集與它的 v2、另一組
-  （北宇治字幕组）的第 5 集。
+  （北宇治字幕组）的第 5 集；第三輪同組第 6 集、第四輪第 7 集。
 - 《上伊那牡丹，醉姿如百合》（TMDB 283905）：acg.rip 搜尋，第一輪綠茶字幕组第 11 集與千夏字幕组的
   整季合集，第二輪第 12 集。
 - 《Re：从零开始的异世界生活》（TMDB 65942：**整部只有一季、85 集**，第二季後半從 E39、
   2021-01-06 起）：acg.rip 搜尋，LoliHouse 把那一個 cour 從 01 重數、四集。**這一部是合成的**：
   票 07 的 fixture 沒有 split-cour，標題照同一組的格式寫、發佈時間是每一集播出的隔天。TMDB 只有
   一季時純集號是 medium 的 S01E01，播出日比對才擋得到它；有好幾季的作品（例如 SPY×FAMILY）在那
-  之前就因為信心低進審核了。
+  之前就因為信心低進審核了。第三輪多一集（第 5 集，改正之後是 S01E43）。
 
 輪次住在 `ROUND` 這個檔案裡（沒有就是第 1 輪）：測試寫它，這一台每個請求讀一次。
 
@@ -167,6 +167,9 @@ RELEASES: tuple[Release, ...] = (
     Release(_kimi("", "05"), _mikan("2026-08-06T00:36:22.835"), 2, "mikan", _LOLI),
     Release(_kimi("", "05v2"), _mikan("2026-08-07T19:02:40.118"), 2, "mikan", _LOLI),
     Release(_kimi("kitauji", "05"), _mikan("2026-08-05T22:11:09.502"), 2, "mikan", (4009, KITAUJI)),
+    # M4（票 133）的第 3、4 輪：發佈時間照同組的節奏（TMDB 每週二播，隔天深夜發）。
+    Release(_kimi("", "06"), _mikan("2026-08-13T00:41:05.517"), 3, "mikan", _LOLI),
+    Release(_kimi("", "07"), _mikan("2026-08-20T00:29:47.903"), 4, "mikan", _LOLI),
     Release(
         "[绿茶字幕组] 上伊那牡丹，酒醉身姿似百合花般 / Kamiina Botan, Yoeru Sugata wa Yuri no Hana "
         "[11][WebRip][1080p][简繁日内封]",
@@ -205,6 +208,16 @@ RELEASES: tuple[Release, ...] = (
             seconds=29 * 60,
         )
         for episode in range(1, 5)
+    ),
+    # M4 的第 3 輪：同一個 cour 的下一集（S01E43），Series 還沒確認，入庫後進 audit 等人。
+    Release(
+        _rezero(5),
+        _acgrip("2021-01-07T09:30:00") + timedelta(weeks=4),
+        3,
+        "acgrip",
+        page=150705,
+        search="rezero",
+        seconds=29 * 60,
     ),
 )
 

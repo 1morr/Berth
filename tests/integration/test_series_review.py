@@ -19,6 +19,7 @@ from berth.adapters.rss.fake import FakeFeedFetcher
 from berth.domain import (
     AuditReason,
     EpisodeSnapshot,
+    JobRefusal,
     JobState,
     JobTrigger,
     MediaSnapshot,
@@ -29,9 +30,11 @@ from berth.domain import (
     RematchRefusal,
     ReviewReason,
 )
+from berth.logs import configure_logging
 from berth.models import Job, LedgerEntry, Plan, PlanItem, RssSeries
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
+from berth.services.jobs import JobRejectedError
 from berth.services.plan_review import ItemEdit, PlanRejectedError, approve_plan, edit_items
 from berth.services.rematch import Assignment, RematchRejectedError
 from berth.services.review import AuditRow, PlanRow, review_queue, undo_audit
@@ -311,6 +314,34 @@ class TestApplyingToTheSeries:
         await sweep_imports(session, factory, EventHub(), now=NOW)
         rows = await ledger(session)
         assert sorted((row.season, row.episode_start) for row in rows) == [(1, 23), (1, 24)]
+
+    async def test_a_held_job_that_moved_on_meanwhile_is_skipped(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """按下去之後那一筆被別處動過（另一個分頁核准了）：跳過它、照常回來。
+
+        log 要走正式的安裝路徑（`configure_logging` 的 record factory）：job id 由上下文蓋上去，
+        `extra` 再帶一次 `job` 會在建 record 時撞成 `KeyError`（M4 票 128 量到的機制，票 133 修）。
+        """
+        _, factory = await delivered(session, roots, snapshot=split_cour())
+        eleven, twelve = await ledger(session)
+        await undo_audit(session, twelve.id, actor=ACTOR)
+        configure_logging()
+
+        async def moved_on(*_: object, **__: object) -> None:
+            raise JobRejectedError(JobRefusal.NOT_REPLANNABLE)
+
+        monkeypatch.setattr("berth.services.series_review.replan_job", moved_on)
+        outcome = await correct_series(
+            session,
+            factory,
+            EventHub(),
+            eleven.id,
+            to=Assignment(action=PlanAction.IMPORT, season=1, episode_start=23),
+            actor=ACTOR,
+        )
+
+        assert outcome.replanned == 0
 
     async def test_a_held_plan_a_person_edited_is_not_planned_again(
         self, session: AsyncSession, roots: dict[str, Path]

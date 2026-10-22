@@ -147,6 +147,8 @@ def test_the_names_the_tests_use_are_the_compose_ones() -> None:
         "jellyfin": harness.JELLYFIN_CONTAINER,
         "qbittorrent": harness.QBITTORRENT_CONTAINER,
         "torrents": harness.TORRENTS_CONTAINER,
+        "sites": harness.SITES_CONTAINER,
+        "discord": harness.DISCORD_CONTAINER,
     }.items() <= names.items()
 
 

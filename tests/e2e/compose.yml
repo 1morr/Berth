@@ -36,6 +36,9 @@ services:
       # 與冒充的 Mikan / acg.rip 都驗得過（M3 票 21，`tests/e2e/make_tls.py`）。**檔案不在時 Berth
       # 建不出任何 HTTP client**（連 Jellyfin 的偵測都是），所以它先寫好、Berth 才起來。
       SSL_CERT_FILE: /tls/bundle.pem
+      # 通知送到 `discord` 那一台假的 Discord API（M4 票 133，`tests/e2e/discord.py`）。名字是容器名：
+      # 測試把它 `docker stop` 再 `start` 之後位址會換，名字照樣解析得到。
+      DISCORD_API_URL: http://berth-e2e-discord:8000/api/v10
     volumes:
       - berth-e2e-tls:/tls:ro
       - berth-e2e-config:/config
@@ -121,12 +124,29 @@ services:
       start_period: 60s
       retries: 3
 
+  discord:
+    # 假的 Discord API（M4 票 133，`tests/e2e/discord.py`）：記下 Berth 送的每一則私訊。只用標準庫。
+    # 紀錄在自己的 volume：測試把這個容器 `docker stop`（管道整個掛掉）再起來，前面記的還在。
+    image: python:3.13-alpine
+    container_name: berth-e2e-discord
+    command: [python, /e2e/discord.py]
+    volumes:
+      - berth-e2e-discord:/var/lib/discord
+      - ../tests/e2e:/e2e:ro
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
 volumes:
   # e2e.env 的 DATA_ROOT。named volume 而不是 bind mount：發佈名很長，Windows 宿主的 260 字元
   # 路徑上限放不下（票 12 實測）；而 Docker Desktop VM 的 ext4 與 CI 上的 Linux 是同一種檔案系統。
   berth-e2e-data: {}
   berth-e2e-tls: {}
   berth-e2e-config: {}
+  berth-e2e-discord: {}
   qbittorrent-config: {}
   jellyfin-config: {}
   prowlarr-config: {}
