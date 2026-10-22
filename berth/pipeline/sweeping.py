@@ -116,6 +116,8 @@ class Sweeper:
                 # 新裝的：已經過去的那一週不補，第一份從下一個週一起。
                 self._reported_through = ends_at
                 return False
+            # 排程照樣往前走，即使這一次寫壞了（同巡檢）：每分鐘重試一個壞掉的會每分鐘記一次例外。
+            # 漏掉的那一週由下一次啟動補上。
+            self._reported_through = ends_at
             made = await compose_weekly(session, ends_at=ends_at, now=self._now())
-        self._reported_through = ends_at
         return made is not None

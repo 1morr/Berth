@@ -36,6 +36,7 @@ import { NotifySettingsPage } from './pages/NotifySettingsPage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { RssPage } from './pages/RssPage'
+import { WeeklyPage } from './pages/WeeklyPage'
 import { SetupPage } from './pages/SetupPage'
 import { stepOf } from './setup/navigation'
 import { TmdbSettingsPage } from './pages/TmdbSettingsPage'
@@ -392,11 +393,7 @@ const jobDetailRoute = createRoute({
 const issuesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/issues',
-  beforeLoad: async ({ context, location }) => {
-    const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin')
-      throw redirect({ to: '/health', search: { denied: true } })
-  },
+  beforeLoad: ({ context, location }) => requireAdminPage(context, location),
   component: () => (
     <AppShell>
       <IssuesPage />
@@ -411,11 +408,7 @@ const issuesRoute = createRoute({
 const reviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/review',
-  beforeLoad: async ({ context, location }) => {
-    const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin')
-      throw redirect({ to: '/health', search: { denied: true } })
-  },
+  beforeLoad: ({ context, location }) => requireAdminPage(context, location),
   component: () => (
     <AppShell>
       <ReviewPage />
@@ -430,16 +423,49 @@ const reviewRoute = createRoute({
 const rssRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/rss',
-  beforeLoad: async ({ context, location }) => {
-    const me = await requireSignedInPage(context.queryClient, location)
-    if (me !== null && me.role !== 'admin')
-      throw redirect({ to: '/health', search: { denied: true } })
-  },
+  beforeLoad: ({ context, location }) => requireAdminPage(context, location),
   component: () => (
     <AppShell>
       <RssPage />
     </AppShell>
   ),
+})
+
+/** 管理員才進得來的頁面的守衛（`/issues`、`/review`、`/rss`、`/weekly`）；後端同時回 403。 */
+async function requireAdminPage(context: { queryClient: QueryClient }, location: ParsedLocation) {
+  const me = await requireSignedInPage(context.queryClient, location)
+  if (me !== null && me.role !== 'admin')
+    throw redirect({ to: '/health', search: { denied: true } })
+}
+
+/**
+ * 週報 `/weekly`（最新一週）與 `/weekly/$reportId`（某一週）（M4 票 131）。與 `/issues` 同一個規則：
+ * **只有管理員**（後端 `ADMIN_PREFIXES` 的 `/weekly`）。Discord 摘要的連結是 `/weekly/{id}`
+ * （`berth/services/deeplink.py` 的 `WEEKLY_PAGE`），所以第二條路徑不能改名。
+ */
+const weeklyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/weekly',
+  beforeLoad: ({ context, location }) => requireAdminPage(context, location),
+  component: () => (
+    <AppShell>
+      <WeeklyPage />
+    </AppShell>
+  ),
+})
+
+const weeklyReportRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/weekly/$reportId',
+  beforeLoad: ({ context, location }) => requireAdminPage(context, location),
+  component: function WeeklyReportRoute() {
+    const { reportId } = weeklyReportRoute.useParams()
+    return (
+      <AppShell>
+        <WeeklyPage reportId={reportId} />
+      </AppShell>
+    )
+  },
 })
 
 const healthRoute = createRoute({
@@ -517,6 +543,8 @@ export const routeTree = rootRoute.addChildren([
   issuesRoute,
   reviewRoute,
   rssRoute,
+  weeklyRoute,
+  weeklyReportRoute,
   jobsRoute,
   jobDetailRoute,
   inventoryIndexRoute,

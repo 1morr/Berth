@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.db import create_session_factory
+from berth.pipeline import sweeping
 from berth.pipeline.sweeping import SWEEP_AT, Sweeper
 from berth.services.weekly import compose_weekly, list_reports
 from tests.integration.test_reconciler_schedule import Clock, ready
@@ -89,3 +90,29 @@ class TestWhenTheWeekIsWritten:
 
         assert await loop.report_if_due() is False
         assert await weeks(session) == []
+
+    async def test_a_week_that_failed_is_not_retried_every_minute(
+        self, engine: AsyncEngine, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """寫壞了照樣往前走（同巡檢）：每分鐘重試會每分鐘記一次例外；漏掉的由下一次啟動補上。"""
+        await ready(session)
+        await compose_weekly(session, ends_at=MONDAY - timedelta(days=7))
+        calls: list[datetime] = []
+
+        async def broken(_session: AsyncSession, *, ends_at: datetime, now: datetime) -> None:
+            calls.append(ends_at)
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(sweeping, "compose_weekly", broken)
+        clock = Clock(MONDAY + timedelta(minutes=1))
+        loop = build(engine, clock)
+        with pytest.raises(RuntimeError):
+            await loop.report_if_due()
+        clock.now = MONDAY + timedelta(minutes=2)
+
+        assert await loop.report_if_due() is False
+        assert calls == [MONDAY]
+
+        monkeypatch.undo()
+        restarted = build(engine, Clock(MONDAY + timedelta(minutes=3)))
+        assert await restarted.report_if_due() is True

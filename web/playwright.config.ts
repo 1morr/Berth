@@ -47,6 +47,9 @@ const FLOWS = [
     viewport: NARROW,
   },
   { name: 'issues', spec: 'issues', scenario: 'issues', port: 8494 },
+  // 週報（M4 票 131）：產品自己的 `compose_weekly` 產生最近兩週。
+  { name: 'weekly', spec: 'weekly', scenario: 'weekly', port: 8526 },
+  { name: 'weekly-390', spec: 'weekly', scenario: 'weekly', port: 8527, viewport: NARROW },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },

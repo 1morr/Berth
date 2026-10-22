@@ -351,7 +351,7 @@ class TestTheSummary:
         """驗收第 4 條：摘要推給訂閱了的管理員，附週報頁那一週的連結。"""
         await with_bot(session)
         await write_settings(session, BerthSettings(public_url=URL))
-        await subscribed_admin(session)
+        admin = await subscribed_admin(session)
         await person(session, "other-admin", discord=SECOND_ADMIN_ID)
         await person(
             session,
@@ -364,6 +364,8 @@ class TestTheSummary:
         await a_week(session)
         made = await compose_weekly(session, ends_at=END, now=END)
         assert made is not None
+        # 沒訂閱的管理員與一般使用者（訂了也不算）都沒有排。
+        assert [row.user_id for row in await queued(session)] == [admin.id]
         factory = FakeClientFactory()
 
         await send_due(session, factory, now=END + timedelta(seconds=10))
