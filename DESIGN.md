@@ -669,8 +669,10 @@ ISO 6346 標識在哪個語言都是同一串字母數字）、狀態標籤（`.
 
 ### 纜繩列（`StepLine` / `RouteCheckList`，署名元件）
 
-一條纜繩是一個步驟：狀態色塊 + `.label` 狀態字 + 名稱 + 實測值 + 它打的那支端點（靠右、`ink-dim`）。
-失敗時整列邊框換 `rule-strong`，下方就地展開 `role="alert"` 的服務原文、修正說明與 `CopyLine` 指令，
+一條纜繩是一個步驟：狀態色塊 + `.label` 狀態字 + 名稱 + 實測值；它打的那支端點與原文收在同一列、預設收起的
+`TechnicalDetails`（The Original Is Evidence, Not A Headline Rule）。
+失敗時整列邊框換 `rule-strong`，下方就地展開 `role="alert"` 的人話（封閉代碼選的 i18n 文案）、修正說明與 `CopyLine` 指令，
+端點與服務原文在最底下的技術細節裡，
 其餘已繫上的纜繩不動。精靈頁 3 與健康頁跑的是同一組檢查、用同一個元件，所以
 「精靈當時是綠的、現在紅了」在畫面上是同一種東西。
 
