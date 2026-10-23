@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-24
+
+**從 0.2.9 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。
+image 是 `ghcr.io/1morr/berth:0.3.0`，同時是 `:0.3` 與 `:latest`——固定在 `:0.2` 的不會自動升到這一版，要把
+`berth` 的 image 改成 `:0.3`。下面改到的 API 只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可。
+**這一版有六個資料庫 migration**（Berth 啟動時自動依序套用一次，各自寫在下面那一條）。
+這一版是 M4「有事時 Berth 會說」：通知走 Discord 私訊，要先在設定 → 通知貼上你自己建的 bot token；不設也照舊運作，
+只是不會收到通知。每天的巡檢與每週的週報不需要設定。
+
 ### Added
 
 - **「可以看了」送到管理員的 Discord**（M4 票 123）：一筆下載在 Jellyfin 全部認出來之後，每一位填了 Discord ID 的
