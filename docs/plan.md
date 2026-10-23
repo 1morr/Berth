@@ -321,9 +321,9 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
   - 缺資料不擋、記一筆：發佈時間是 `None` → `published_missing`；TMDB 沒有那一集的播出日 → `air_date_missing`。**沒有來源的 Job 不比**（認領 `unknown_torrent`、從 complete 目錄重新入庫的那一種，`source_url` 是空的）：逐列記「來源沒給」只是雜訊。既有 Job 的 `POST /jobs/{hash}/reimport` 留著來源，所以**照樣再比一次**——與拒絕之後重算同一個取向：上一次核准過的（BD 晚發）要再核准一次，Berth 不記「這一集的日期已經有人看過」。
   - **抓不到反方向**：新一季被當成第一季時換算出的是早就播過的集數，發佈晚於它是正常的——所以它不是「只有一季 → 第一季」升 high 的前提（§11.4 ①的「待議」）。
 
-### 4.5 AI 解析（M5 的第一種 AI 任務）
+### 4.5 AI 解析（M6 的第一種 AI 任務）
 
-介面在 M1 就定好：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`（`adapters/ai.py`），M1 的實作是 `NullAiPlanner`，**至今沒有呼叫端**。2026-09-24 起它不再是 `services/plan.py` 裡同步呼叫、結果一律進 review 的 fallback，而是 M5 的 AI 任務「規則層 low 的 Plan」的核心（brief §6.10、§11.6）：planner 判出 low 時開任務，`ai_worker` 叫 `propose`，驗證通過後依任務模式（影子 / 自動）記錄或套用。輸入壓縮（同模式檔案只送樣本 + 數量）、schema 驗證、快取鍵、預算檢查與 provider 無關，住在 services。M3 準備度評估（2026-09-24）點出的缺口開工時要補：`propose` 要能把 tokens 與費用交回給 Event 記帳；理由除了封閉的 `ReasonCode` 還要一欄自由文字；「猜作品」是另一個方法（`PlanItem` 沒有 `media_id`）。
+介面在 M1 就定好：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`（`adapters/ai.py`），M1 的實作是 `NullAiPlanner`，**至今沒有呼叫端**。2026-09-24 起它不再是 `services/plan.py` 裡同步呼叫、結果一律進 review 的 fallback，而是 M6 的 AI 任務「規則層 low 的 Plan」的核心（brief §6.10、§11.7；2026-10-24 背景接管從 M5 移到 M6）：planner 判出 low 時開任務，`ai_worker` 叫 `propose`，驗證通過後依這一種事的接管開關（影子 / 接管）記錄或套用。輸入壓縮（同模式檔案只送樣本 + 數量）、schema 驗證、快取鍵與 provider 無關，住在 services；沒有預算檢查（brief §19 2026-10-24）。M3 準備度評估（2026-09-24）點出的缺口開工時要補：`propose` 要能把 tokens（含快取寫入與讀取）交回給用量記錄（M5 的 `ai_calls`，不掛在 Job 上）；理由除了封閉的 `ReasonCode` 還要一欄自由文字；「猜作品」是另一個方法（`PlanItem` 沒有 `media_id`）。
 
 ### 4.6 Benchmark【決定】
 
@@ -1042,37 +1042,51 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 
 - **修掉（票 133）**：被擋住的 Job 在「套用到 RSS Series」時剛好被別處動過，`series_review._replan_held` 的 log 帶 `extra={"job": …}`，在 `configure_logging` 之後撞上 record factory 丟 `KeyError`（票 128 量到同一個機制、在 `notify` 撞過）——改走 `job_context`，`tests/unit/test_logs.py` 掃 `berth/` 擋 `extra` 帶 `job`；DESIGN.md 健康頁卡片清單補上通知卡（票 128）。
 - **已修（後續票）**：沒設 token 時待送一直 pending、修好後一次湧出（票 123 → 128 的 24 小時放棄）；一輪不控速（123 → 128 的單則 429）；`set_bot_token` 收 `user_id`、Berth 網址的管理員門禁（123、124 → 125）；「還沒儲存」的說明在改過之後仍說預填（124 → 132）；管理員專屬種類的勾選（125 → 127、131）。
-- **待使用者決定**：**重試用完或永久失敗的 `submit_failed`、`import_failed`、`stalled` 沒有 Issue、不進「等你處理」**（票 129），現在只在下載頁「需要人」的篩選與 Job 頁上；巡檢只補了還沒確認的 RSS Series 那一種（`first_batch_stuck`）。要不要開 Issue 型別、算進「等你處理」與推播，等使用者拍板。
+- **2026-10-24 已定**（使用者，brief §19）：**重試用完或永久失敗的 `submit_failed`、`import_failed`、`stalled` 開成 Issue**（票 129 原本只在下載頁「需要人」的篩選與 Job 頁上），算進「等你處理」與推播；排在 M5 開頭（§11.6），因為 M6 的接管開關只碰得到 Issue、審核與待綁定這三份清單。
 - **不排里程碑，有 repro 或使用者要求再開票**：週報抬頭「產生於」用瀏覽器時區、週界線用容器時區，兩者不同時日期差一天（票 131 → 132 重現為 P2，修法是後端回帶 offset 的 `created_at`；容器 `TZ` 設成自己的時區就一致）；週報入庫清單前端照介面語言的標題排、後端照英文標題存，`weekly._imported` 的註解說「對人」不對（P3）；390 寬 `Notice` 用 `flex-1` 被擠到約 140px（票 130 → 132 P2）；檔案列沒有發佈名，「同一集多份」的下一步要人從檔名認（票 130，要動 `LedgerFileOut`）；通知設定頁失敗說明出現兩次、兩個 `role=alert`（票 132 P2）；全站頁面標題都是 "Berth"（WCAG 2.4.2，票 132）；`test_command_marks` 看不到 `asynccontextmanager`（票 126，現在只有 `download_round` 一個，手動標了）；行程裡第一次解析發佈名多約 400 ms（guessit 初始化，票 130）併進上面「修補段結案」的「解析 CPU 在事件迴圈上」那一條；作品頁跟隨背景入庫仍是啟發式（票 132）；長故障時同一部作品每 5 分鐘一則「可以看了」（票 125）；DESIGN.md 沒登記精靈窄版展開鍵的 `▾` / `▴`（票 132，下一次 `/impeccable document`）；若之後加「調 log 等級」的開關，aiosqlite 的 DEBUG 會印出整份設定 JSON（票 123）。週報其餘 P2：404 頁「看最新一週」帶 `aria-current`、「巡檢開出的」與 Issue 並排成同級列容易加總錯、換週後焦點掉到 body（全站換頁焦點），P3 那一串（歷史列沒單位、h1 沒週次等）一起（票 132）；通知設定的 P3：草稿沒有未儲存標示、en 390 寬 token placeholder 截斷（票 132）；「第一批卡住」列上的下一步提到審核頁但沒有連結——審核頁沒有以 Series 為單位的錨點（票 129）；健康頁「連續失敗」用 `text-blocked-ink`（照 `PollerCard`），兩張卡要不要一起改中性票 132 的 critique 沒處理（票 128）；「24 小時」除了 `GIVE_UP_AFTER` 還寫死在 i18n 中英兩處與 CHANGELOG，沒有閘門（票 128）；兩條測試缺口：對帳`_check_unknown_torrents` 遇到被忽略的那筆不重開沒有專門測試（票 122）、後端單件錨點只對 `audit` 有 pytest（票 127，形狀同一個 `f"{kind}-{id}"`）。
 - **不做**：其餘——判斷題票上已結（收件人查詢與渲染的重複、`INLINE_LINK` 各頁一份、前後端連結形狀與 `ADMIN_ONLY_KINDS` / `STUCK_STATES` 各寫一份、`Sweeper` 與 `Reconciler` 排程同形、命名與參數傳遞，約 30 條）；刻意的行為（預覽不看在路上的 Job、人按的「重試」與自動重送不補「正在下載」、立即輪詢撞上背景輪詢用先開始那一輪的 `presser`、5 分鐘內取消訂閱照送、退避中按「測試」送到不清退避、沒有 Job 的帳本列 rematch 不算進週報，約 12 條）；記錄項（票 121 的實驗腳本、token 曾貼進對話已重設、手動驗收紀錄）；沒有 repro 的（兩個交易同時開同一筆 `unknown_torrent`、審核超過 200 列時錨點找不到、一般使用者升成管理員不補「等你處理」、Plan 沿用 `plan_id` 的邊角、補漏非預期例外記成輪詢失敗、票 121b 與 132 各一次無法重現的測試失敗）。依全域規則「寫不出失效條件的修復不做」。
 
-### 11.6 M5 AI 核心
+**M5 開工前的審查補記**（2026-10-24 逐張核對 M4 票 01–133 的 Comments，下面幾條沒有後續、也沒記去向；都不擋 M5）：
 
-2026-09-24 重排（brief §6.10、§14、§19）：**AI 只替人按審核頁、待處理頁上的那些按鈕**——可撤銷的 AI 自己做，不可撤銷的與 AI 沒把握的交給人。規則層仍是主力；**沒有 AI 時 Berth 完整可用**，每一種 AI 任務都有同一個命令的人工版本，關掉 AI 或超出預算時退回 M4 的行為。
+- **排進 M5 開頭**：通知連結的作品頁路徑（後端 `deeplink.MEDIA_PAGE`）與前端路由 `/media/$mediaId` 只靠註解綁著，前端改路由時通知連結會靜靜失效（票 124）——加一道兩邊讀同一份的閘門。
+- **不排里程碑，有 repro 或使用者要求再開票**：真服務 e2e 裡 Jellyfin 停起之後又重啟一次，`test_2` 的 `back()` 等到第一次就放行，`test_3` 撞上第二次（票 37）；qBittorrent 在探針答完、移除之前斷線時留下 `.berth-probe-*`（票 19、47、54 第 1 條，brief §16.4）；Unraid mover 搬碟之後帳本記的 shfs inode 過期，認不出時是不刪、偏安全（票 55 U4）；重建帳本與每日對帳同時跑會替同一個檔案各開一件（缺 `ReconcileRunner` 的共用鎖）、`fs.files_under` 在 async 端點裡同步走訪媒體庫（票 60）；設定頁索引站對 0 站的既有 Prowlarr 沒有精靈那句「待處理」（票 20）；三個服務的版本下限寫在後端常數、`VERSION_FLOOR` 與 i18n 三處（票 17、18）；e2e log 的 asyncio「Task was destroyed but it is pending」（`Queue.get`，疑似 SSE 訂閱者，票 62）；加路徑失敗後改選別的路徑建成 Route，精靈 `libraries` 那一步仍標 `failed`（票 08）；`_plan` 的 TMDB 刷新、mediainfo 與 Jellyfin 通知是否都在寫交易之外沒有閘門（票 01）；`poll_due` 判斷到期之後手動輪詢整輪跑完，背景會多讀一輪（票 100）；名字 chip 全關也記進伺服器，下一部作品一個名字都沒開（票 132）；Series 綁了但 Route 被清掉時「仍然下載」還按得到（票 111）；頁 2、頁 4 在第一次選套件內、正在測試時剖面與 lede 仍說「將會做什麼」「先選 Prowlarr 是哪一台」（票 81）；入庫前那幾秒預覽把已入庫的列在「會送出」（票 121b）。解析 CPU 在事件迴圈上：巡檢量過（票 129、130，一輪 15–84 ms），規劃本身沒量；M6 的 `ai_worker` 跑在同一個迴圈，但呼叫 provider 是 I/O，開工時再量。
+
+### 11.6 M5 AI 核心與側面板
+
+2026-10-24 重排（使用者，brief §19）：**不設預算**，只記用量；**側面板從 M6 提前到這裡**；背景接管整個移到 M6（§11.7）；不可逆的照樣要人按。原則照 2026-09-24：規則層仍是主力，**沒有 AI 時 Berth 完整可用**——沒設 AI 憑證時與 M4 相同，側面板說明怎麼開。
+
+為什麼側面板先做：使用者在場、自己下的指令不需要影子模式就能信任，而它一次走過命令登錄表、provider、用量記錄、工具迴圈與結果卡；M6 的背景任務用同一個核心，只多事件觸發與開關。
 
 範圍：
 
-- provider（Anthropic 實作，介面保留給其他家）、`settings.ai`（憑證、月預算、各任務型別的模式）、每次呼叫記 Event（model、tokens、費用）、快取鍵。模型與價格開工時查當時的官方資料。
-- **命令登錄表**：services 命令逐一登錄 pydantic 輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具只從這裡來；M7 的 MCP server 包的也是它。**M3 起新增的命令先標好等級與反向命令**，表本身在這裡開頭做。登錄表開工時要處理的兩條（M3 收尾）：`confirm_audit(s)` 的反向命令標成 `review.undo_audit`，語意對不上（它拆入庫，而且拒絕確認過的列）——另立「取消確認」或改成 `inverse=None`（M3 票 05）；`services/issues` 仍在 `BEFORE_M3` 豁免表，`resolve_issue` 的各個動作要逐顆標（M3 票 17）。**2026-09-26 全面審查更正**：「M3 起新增的命令先標好」只對 M3 新建的*模組*成立（`tests/unit/test_command_marks.py` 守的是模組），豁免表裡 42 個模組都還沒標，不只 `services/issues`；M3 加進舊模組、會改狀態的命令也沒有標（`jellyfin.save_bundled_libraries`、`jobs.fail_interrupted`、`issues.close_settled`、`resolver.settle_verdicts`）。已標的也有兩條要重看：背景迴圈的入口 `rss.poll_due` 標成 `REVERSIBLE`，登錄表會把它當成 AI 工具；`rss.delete_feed` 連帶刪掉 Feed Item（CASCADE），卻標成可逆、反向是 `add_feed`。命令簽名吃 session 與 factory、拒絕是各模組自己的例外，離「pydantic 輸入」還有一段。
-- **AI 任務**（`ai_tasks` 表）與 `ai_worker` 迴圈：事件觸發，一個任務一件事，帶資料包、允許的工具與預算上限，結果是「已處理」或「交給人（附理由）」——交給人的走 M4 的「等你處理」通知。
-- **自主權看可逆性**：`reversible` 通過驗證後自動執行；`irreversible` 一律做成 Proposal（`proposals` 表）等人。刪 complete、移除 torrent、purge、改設定與 Route 永遠要人；「忽略 Issue」也做成 Proposal。
+- **開工前的修補**（不需要 AI）：重試用完或永久失敗的 `submit_failed`、`import_failed`、`stalled` 開成 Issue 型別，算進「等你處理」與推播（§11.5 2026-10-24 已定）；通知連結的作品頁路徑閘門（§11.5〈M5 開工前的審查補記〉）。
+- **命令登錄表**：services 命令逐一登錄 pydantic 輸入、**結果型別**（前端依它畫結果卡）、拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。側面板、M6 的背景任務與 M7 的 MCP server 都只從這裡拿工具；表在這裡開頭做，`@command`（`berth/services/commands.py`）目前只掛屬性、不收集。要先補的（2026-10-24 核對過 repo）：`tests/unit/test_command_marks.py` 的 `BEFORE_M3` 豁免表還有 **41** 個模組沒標，審核、Issue、rematch、認領、重新入庫、刪除這些人工按鈕所在的模組（`plan_review`、`rematch`、`issues`、`claims`、`reimport`、`jobs`、`deletion`）全在裡面；M3 加進舊模組、會改狀態卻沒標的 `jellyfin.save_bundled_libraries`、`jobs.fail_interrupted`、`issues.close_settled`、`resolver.settle_verdicts`；標錯的三條：`confirm_audit(s)` 的反向命令標成 `review.undo_audit`，語意對不上（它拆入庫，而且拒絕確認過的列）——另立「取消確認」或改成 `inverse=None`（M3 票 05）；背景迴圈的入口 `rss.poll_due` 標成 `REVERSIBLE`，會被當成工具；`rss.delete_feed` 連帶刪掉 Feed Item（CASCADE），卻標成可逆、反向是 `add_feed`。命令簽名吃 session、factory 與 `actor: str`，拒絕是各模組自己的例外（`IssueRejectedError`、`PlanRejectedError`…），登錄表要給出統一的輸入 schema 與拒絕型別，AI 才分得出重試、交給人還是放棄。`test_command_marks` 看不到 `asynccontextmanager`（§11.5）一起補。
+- **provider**：Anthropic 實作，介面保留給其他家；`settings.ai`（憑證、模型）。SDK 版本、模型 id、tool use 與 prompt caching 的用法、`usage` 的欄位開工時用研究票現查，結論補進 brief §20。prompt 的固定部分（system、工具定義）放最前面、順序固定，讓快取吃得到；發佈名、RSS 標題、檔名與使用者的話都是資料，只放在訊息裡，不進 system。
+- **用量記錄**（`ai_calls`，不掛在 Job 上：`record_event` 一定要一筆 Job，與 M4 另立 outbox 同一個理由）：每次呼叫一列——model、輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處（哪一則對話或哪一個 AI 任務）、誰。**沒有預算**；保險絲只有輪數上限（一則對話或一個任務的工具呼叫輪數）與 provider 失敗或限流時交給人。**用量頁**：依日期與出處的總量、快取命中率（讀取 ÷ 全部輸入，輸入含快取寫入與讀取）。
+- **對話核心**（services，與介面無關，M7 的 Discord 接同一個）：工具迴圈、對話紀錄存在 Berth（每人自己的，重整不丟）、串流用現有的 SSE。工具＝登錄表依使用者角色過濾：`user` 碰不到管理員的命令，門禁與 API 是同一道（`api/gate.py`），不由模型說了算。`read` 直接做；使用者要求的 `reversible` 直接執行，結果卡附撤銷（反向命令）；`irreversible`——含改設定、加索引站、Route、刪 complete、移除 torrent——出**確認卡**（Proposal，`proposals` 表），人按確認才執行。
+- **側面板**：每一頁都開得到的對話區。結果卡依命令的結果型別畫：作品（海報、在不在媒體庫）、搜尋結果（帶送單鍵）、Feed 與 RSS Series、Job（SSE 即時更新）、確認卡。新頁面照 CLAUDE.md 先 `/impeccable shape`；設計前查成熟產品的對話工具 UI 與工具暴露方式（例如 Vercel AI SDK 的 tool UI、Home Assistant Assist 的 exposed entities），寫明採用了誰的慣例。
+- **AI 活動頁**：AI 執行過的每一個寫入命令、理由、tokens，逐筆撤銷。
+
+建議票序（tracer bullet，拆票時以票為準）：兩條開工前修補 → 登錄表的地基（收集、統一輸入與拒絕、補標與改錯標）→ provider 研究 → provider 與 `ai_calls` → **tracer：側面板問「這週入庫了什麼」，走一個 `read` 工具，回一張作品卡** → 寫入工具與撤銷（訂閱 RSS、搜尋並送單）→ 確認卡（加索引站、刪 complete）→ 用量頁與 AI 活動頁 → UI 收尾（`critique`、`audit`、`polish`）→ 驗收。
+
+驗收：側面板裡說「訂閱這部的 Mikan RSS」「這部作品缺的集搜一下並下載」做得到，結果是卡片、撤銷得掉；「加一個索引站」「把這部的 complete 刪掉」停在確認卡，人按確認才執行（整合測試）；`user` 角色在側面板碰不到管理員的命令（整合測試）；每次呼叫的 tokens 與快取命中率在用量頁看得到；沒設 AI 憑證時行為與 M4 相同。
+
+### 11.7 M6 背景接管
+
+2026-10-24 改（使用者，brief §19）：原本 M5 的「AI 任務、影子模式、第一批任務型別」與 M6 的「Issue 交給 AI」合成這一個里程碑，並改成**每一個要人決定的地方一個接管開關**。
+
+範圍：
+
+- **AI 任務**（`ai_tasks` 表）與 `ai_worker` 迴圈：事件觸發（planner 判出 low、開了 Issue、出現待綁定、程式檢查擋下……），那一種事的開關不是「關」才開任務；一個任務一件事，帶資料包與**只夠做這件事的工具**（登錄表的子集），結果是「已處理（附理由）」或「交給人（附理由）」——交給人的走 M4 的「等你處理」通知。工具迴圈、`ai_calls` 與 Proposal 用 M5 的。
+- **接管開關**（`settings.ai`）：一種事一個三段開關，**關**（人處理，預設）/ **影子**（AI 的建議與理由附在那一列上，人照舊按，統計一致率）/ **接管**（通過驗證的可逆動作 AI 自己做；不可逆的做成 Proposal，走「等你處理」）。一致率顯示在開關旁邊。涵蓋：審核四類（low Plan、Unmatched、audit、重複版本）；程式檢查擋下的可疑入庫（播出日、片長）；待綁定 RSS Series 猜作品；RSS Series 的季號與 offset 修正（寫回 RSS Series、重算未確認的集數）；被排除條件擋下的 Item；Issue 各型別（重新鏈接、recheck、rescan、retry、resubmit 這些可逆的；刪 complete、移除 torrent、`accept_loss`、忽略 Issue 這些不可逆的永遠是 Proposal）；M5 開出的卡住 Job；巡檢標出的缺集補下載（磁碟門檻內）；第一批卡住。哪一顆 `IssueAction` 算可逆，看登錄表，不在這裡另列。
 - **驗證**：M3 的三道程式檢查（播出日比對、片長驗證、Jellyfin 回驗）加上集在 TMDB 存在、不撞目標路徑、季集範圍，AI 的結果照樣走一遍；不通過的不套用、交給人。
-- **影子模式**：每種任務型別先影子（只記錄 AI 會怎麼做，照舊由人決定，統計一致率），使用者看數字切自動，可隨時切回。
-- **AI 活動**頁：做了什麼、理由、花費，逐筆撤銷。審核頁每一件附 AI 交上來的理由。
-- 第一批任務型別：規則層 low 的 Plan（§4.5）；Unmatched 檔案與待綁定 RSS Series 猜作品；RSS Series 的季號與 offset 修正（寫回 RSS Series、重算未確認的集數）；audit 的確認或撤銷；三道程式檢查標出的可疑入庫。
-- 修正回流：寫回 RSS Series、標題別名、排除條件；改正過的案例進 benchmark 候選語料。
+- **審核頁**每一件附 AI 交上來的理由；**修正回流**：寫回 RSS Series、標題別名、排除條件，改正過的案例進 benchmark 候選語料。每週巡檢把程式檢查標出的項目交給對應的開關。
 
-驗收：第一批每種任務在影子模式跑一週真實資料、與人的決定一致率達標（門檻拆票時定）；benchmark 上 `auto_wrong` 不升、review 比例下降；AI 不能在沒人確認下執行任何 `irreversible` 命令（整合測試）；每次呼叫的 tokens 與費用在 Job 時間線與 AI 活動看得到；關掉 AI 時行為與 M4 相同。
-
-### 11.7 M6 Issue 與側面板
-
-範圍：Issue 的各型別變成 AI 任務（重新鏈接、recheck、rematch 這些可逆的自動；刪 complete、移除 torrent 這些不可逆的做成 Proposal）；**側面板**（每一頁都開得到的對話區，工具是同一份命令登錄表）——使用者在場時自己要求的可逆動作直接執行並給撤銷，不可逆的以 Proposal 卡確認；工具權限（哪些命令 AI 永遠不能自動、預算與速率、每一次呼叫記 Event）沿用 M5。
-
-驗收：一件 `library_link_missing` 不經人修好；側面板裡說「把這一集標成已看」「這部作品缺的集搜一下」做得到；「把這部的 complete 刪掉」停在 Proposal，人按確認才執行（整合測試）。
+驗收：每一種開關在影子下跑一週真實資料、與人的決定一致率達標（門檻拆票時定）；benchmark 上 `auto_wrong` 不升、review 比例下降；一件 `library_link_missing` 在接管下不經人修好；AI 不能在沒人確認下執行任何 `irreversible` 命令（整合測試）；開關全關時行為與 M4 相同。
 
 ### 11.8 M7 外部對話與 MCP
 
-範圍：把 M4 的管道接上同一個核心——同一個 Telegram / Discord bot 既推通知也收訊息；訊息的身分對到 Berth 的使用者（個人 API token，brief §16.2）並帶著他的角色；Proposal 在外部管道上是一則帶按鈕的訊息，確認 / 拒絕回到同一個 `proposals` 列；每個管道自己的訊息長度與按鈕限制在 adapter 裡吸收。**命令登錄表另外包成 MCP server**（同一組個人 API token 與門禁），讓使用者用 Claude Code / Claude Desktop 直接查與操作 Berth。
+範圍：把 M4 的 Discord bot 接上 M5 的對話核心——同一個 bot 既推通知也收私訊，工具、門禁與卡片和側面板相同；收訊息要連 gateway（家用伺服器沒有公開網址，brief §20.23）。身分：私訊的 Discord user ID 對到存了這個 ID 的 Berth 使用者並帶著他的角色（M4 票 125 已存），**收指令前先驗證 ID 是本人的**（bot 私訊一個碼、回 Berth 填，同一個 ID 只能屬於一人）。結果卡變成 embed，Proposal 是帶按鈕的訊息，確認 / 拒絕回到同一個 `proposals` 列；訊息長度（2000 字）與按鈕限制在 adapter 裡吸收。**命令登錄表另外包成 MCP server**（個人 API token，brief §16.2，同一道門禁），讓 Claude Code、Claude Desktop、OpenClaw 這類外部 agent 直接查與操作 Berth。
 
 驗收：在手機的聊天軟體裡收到「S02E05 正在下載」，回一句「下好了通知我並標成已看」，Berth 在入庫後推第二則並標成已看；`user` 角色在外部管道與 MCP 上碰到的是同一道門禁；Claude Code 經 MCP 查得到本週入庫。
 

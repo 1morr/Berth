@@ -374,7 +374,7 @@ Feed Item 不自動下載的條件：一條關鍵字或正則（Sonarr 的格式
 _Avoid_: filter（「篩選」是清單上的顯示操作）, blacklist
 _Avoid_: entry, post
 
-### AI 與通知（M4–M7，2026-09-22 定名、09-24 改）
+### AI 與通知（M4–M7，2026-09-22 定名、09-24 改、10-24 改）
 
 **Notification**（通知）:
 送給某一個人、在他不在 Berth 頁面上時看得到的一則（M4 是 Discord 私訊）。種類有「可以看了」（一筆 Job 的正片在 Jellyfin 全部認出來，M4 票 123）、「正在下載」（RSS 一輪、一部作品一則；人手按的不送給按的人，M4 票 126）、「有 N 件等你處理」（待審核、開著的 Issue、待綁定的 RSS Series 有新的一件，只送管理員，M4 票 127）、週報的摘要（只送管理員，M4 票 131）。用收件人自己的語言寫（存 Discord ID 那一刻的介面語言）。**收件人**是訂閱了那一種（每個人自己勾，`users.notify_kinds_json`）、有 Discord ID 的人；說的是某個媒體庫裡的作品時，還要 Jellyfin 的 `UserViews` 看得到那個媒體庫——送出那一刻問，問不到就延後（M4 票 125）。不是 SSE 推給瀏覽器的那一種，也不是 `events` 的一筆：事件一定掛在一筆 Job 上。
@@ -389,23 +389,31 @@ _Avoid_: queue（佇列是程序內的東西，這一張活過重啟）, outbox 
 _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 
 **AI Task**（AI 任務）:
-交給 AI 的一件事：規則層 low 的 Plan、Unmatched 檔案、待綁定的 RSS Series、offset 修正、audit、程式檢查標出的可疑入庫、Issue、巡檢標出的項目。帶資料包、允許的工具與預算，結果是「已處理」或「交給人（附理由）」。M5 起；每一種都有同一個命令的人工版本。
+交給 AI 的一件事：規則層 low 的 Plan、Unmatched 檔案、待綁定的 RSS Series、offset 修正、audit、程式檢查標出的可疑入庫、Issue、巡檢標出的項目。帶資料包與只夠做這件事的工具，結果是「已處理」或「交給人（附理由）」。那一種事的 Takeover Switch 不是「關」才開。M6 起；每一種都有同一個命令的人工版本。
 _Avoid_: job（Job 是一包 torrent）, ticket
 
 **Command Registry**（命令登錄表）:
-services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具、M7 的 MCP server 都只從這裡來。
+services 命令的清單：輸入、結果型別、拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。側面板、AI 任務與 M7 的 MCP server 的工具都只從這裡來；結果型別決定 Result Card 怎麼畫。
 _Avoid_: tool list, API list
 
+**Takeover Switch**（接管開關）:
+一種要人決定的事（審核四類、可疑入庫、待綁定、RSS Series 的季號與 offset、Issue 各型別、卡住的 Job、巡檢標出的項目……）一個三段開關：**關**（人處理，預設）、**影子**（Shadow Mode）、**接管**（通過驗證的可逆動作 AI 自己做，不可逆的做成 Proposal）。M6 起（2026-10-24）。
+_Avoid_: auto mode, AI toggle
+
 **Shadow Mode**（影子模式）:
-一種 AI 任務型別的試用狀態：AI 照跑，只記錄它會怎麼做，照舊由人決定，統計與人的一致率。使用者看數字後切成自動。
+Takeover Switch 的中間那一段：AI 照跑，建議與理由附在那一列上，照舊由人決定，統計與人的一致率。使用者看數字再切成接管。
 _Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode
 
+**AI Call**（AI 呼叫）:
+對 provider 的一次請求，`ai_calls` 的一列：model、輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處（哪一則對話或哪一個 AI Task）。用量頁從它加總、算快取命中率。不設預算（2026-10-24）。不是 Event：事件一定掛在一筆 Job 上。
+_Avoid_: request（request 是 HTTP 請求）, cost, budget
+
 **AI Activity**（AI 活動）:
-AI 做過的每一件事、理由、花費，逐筆可撤銷。
+AI 執行過的每一個寫入命令、理由、tokens，逐筆可撤銷。
 _Avoid_: log, history
 
 **Sweep**（巡檢）:
-每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M5 起標出來的交給 AI 任務。每日那一輪由 `sweeper` 迴圈在 05:00 跑（M4 票 129）：要人動手的寫成 Issue（第一批卡住；M4 票 130 起還有一直失敗的 Feed、RSS Series 缺集、同一集意外多份——版本並存不算），「等你處理」最舊的一件等滿 3 天再提醒管理員一次（**放太久**，同一件 3 天內一次）。
+每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M6 起標出來的交給 AI 任務。每日那一輪由 `sweeper` 迴圈在 05:00 跑（M4 票 129）：要人動手的寫成 Issue（第一批卡住；M4 票 130 起還有一直失敗的 Feed、RSS Series 缺集、同一集意外多份——版本並存不算），「等你處理」最舊的一件等滿 3 天再提醒管理員一次（**放太久**，同一件 3 天內一次）。
 _Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳比的是帳本與磁碟）
 
 **Weekly Report**（週報）:
@@ -413,8 +421,12 @@ _Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳�
 _Avoid_: digest（digest 是摘要那一則通知）, summary, stats
 
 **Assistant**（助理）:
-AI 核心對人的介面：M6 的側面板、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
+AI 核心對人的介面：M5 的側面板、M7 的外部管道（Discord 私訊），兩者是同一個對話核心。工具是 Command Registry 依使用者角色過濾的那一份；使用者要求的可逆動作直接做並給撤銷，不可逆的（含改設定）提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
+
+**Result Card**（結果卡）:
+助理把一個命令的結果畫成的一張卡：作品、搜尋結果（帶送單鍵）、Feed 與 RSS Series、Job（即時更新）、Proposal 的確認卡。長什麼樣由命令的結果型別決定，不由模型決定；外部管道上是一則 embed。M5 起。
+_Avoid_: widget, message（message 是管道上送出去的那一則）
 
 **Proposal**（提案）:
 AI 想做但**不可逆**或沒把握的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。人確認才執行。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做。
