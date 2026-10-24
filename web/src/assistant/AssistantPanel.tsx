@@ -8,7 +8,7 @@ import {
 } from 'react'
 import type { TFunction } from 'i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -20,13 +20,15 @@ import {
   sendMessage,
   type NoticePart,
   type ReplyLanguage,
-  type ToolRefusal,
 } from '../api/assistant'
+import { useJobStream } from '../api/events'
+import { displayRound } from '../i18n/displayRound'
 import { COMPACT_BUTTON, GHOST_LINK, GhostButton, Notice, TEXT_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
+import { reasonText } from './refusals'
 import { ResultCard } from './ResultCard'
 import { blocksOf, withChunk, type Block, type Item, type Pending } from './transcript'
 
@@ -200,6 +202,8 @@ function Chat({
 }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  // 送出時畫面在哪一頁：作品頁時後端把那部作品跟著這句話交給模型（M5 票 12）。
+  const page = useRouterState({ select: (state) => state.location.pathname })
   const list = useQuery({ ...conversationsQueryOptions, enabled: selection.kind === 'latest' })
   const currentId =
     selection.kind === 'id'
@@ -231,6 +235,7 @@ function Chat({
         conversationId: currentId,
         text,
         language: i18n.language as ReplyLanguage,
+        page,
         onChunk: (chunk) => {
           if (chunk.type === 'start') {
             started = true
@@ -347,6 +352,7 @@ function Transcript({
       {blocks.length === 0 && !failed && (
         <p className="text-sm text-ink-dim">{t('assistant.empty')}</p>
       )}
+      {blocks.some(hasJobCard) && <JobStream />}
       <ol role="log" aria-label={t('assistant.log')} className="grid gap-3">
         {blocks.map((block) =>
           block.kind === 'user' ? (
@@ -355,6 +361,7 @@ function Transcript({
               <p className="min-w-0 text-sm break-words whitespace-pre-wrap text-ink">
                 {block.text}
               </p>
+              {block.page && <PageNote page={block.page} />}
             </li>
           ) : (
             <li key={block.key} aria-busy={block.busy} className="grid gap-1.5 px-3 py-2.5">
@@ -375,6 +382,28 @@ function Transcript({
   )
 }
 
+/** 使用者說這句話時正在看的作品：模型拿到的就是這一部（M5 票 12）。 */
+function PageNote({ page }: { page: NonNullable<Extract<Block, { kind: 'user' }>['page']> }) {
+  const { t, i18n } = useTranslation()
+  const title = displayRound(i18n.language, { 'zh-Hant': page.title, en: page.title_en })
+  return (
+    <p className="value text-xs wrap-anywhere text-ink-dim">{t('assistant.onPage', { title })}</p>
+  )
+}
+
+/** 對話裡有送單卡時才掛 `/events/stream`（同 `useJobStream` 的「掛在需要它的那一頁上」）：卡片跟著推播重問。 */
+function JobStream() {
+  useJobStream()
+  return null
+}
+
+function hasJobCard(block: Block): boolean {
+  return (
+    block.kind === 'assistant' &&
+    block.items.some((item) => item.kind === 'tool' && item.output?.type === 'SubmittedJob')
+  )
+}
+
 function ItemView({ item, admin }: { item: Item; admin: boolean }) {
   const { t } = useTranslation()
   switch (item.kind) {
@@ -382,24 +411,24 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
       return <p className="min-w-0 text-sm break-words whitespace-pre-wrap text-ink">{item.text}</p>
     case 'tool': {
       const tool = toolName(t, item.name)
+      const lines = WRITE_TOOLS.has(item.name) ? WRITE_LINES : LOOKUP_LINES
       if (item.state === 'running') {
         return (
           <p className="value flex flex-wrap items-center gap-2 text-xs text-ink">
-            <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.working}`}>
-              {t('assistant.tools.chip')}
-            </span>
-            {t('assistant.tools.running', { tool })}
+            <span className={`label px-1.5 py-0.5 ${SIGNAL_FILL.working}`}>{t(lines.chip)}</span>
+            {t(lines.running, { tool })}
           </p>
         )
       }
       if (item.state === 'refused') {
         return (
           <p className="value text-xs wrap-anywhere text-ink">
-            {t('assistant.tools.refused', { tool })}
+            {t(lines.refused, { tool })}
             {item.reason && (
               <>
                 {' '}
-                <Dot /> <span className="text-ink-dim">{reasonText(t, item.reason)}</span>
+                <Dot />{' '}
+                <span className="text-ink-dim">{reasonText(t, item.reason, item.detail)}</span>
               </>
             )}
           </p>
@@ -407,7 +436,7 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
       }
       return (
         <>
-          <p className="value text-xs text-ink-dim">{t('assistant.tools.done', { tool })}</p>
+          <p className="value text-xs text-ink-dim">{t(lines.done, { tool })}</p>
           {item.output && <ResultCard output={item.output} />}
         </>
       )
@@ -418,29 +447,41 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
 }
 
 /**
+ * 會改東西的工具（M5 票 12 的送單）：狀態行說「正在送單」，不說「正在查」。工具清單在後端，等級讀命令的標記；
+ * 前端只認得這幾個名字，沒列到的照查詢的說法——說錯的代價是一個動詞，不是說它做了什麼（那由卡片說）。
+ */
+const WRITE_TOOLS: ReadonlySet<string> = new Set(['submit_search_result'])
+
+const LOOKUP_LINES = {
+  chip: 'assistant.tools.chip',
+  running: 'assistant.tools.running',
+  done: 'assistant.tools.done',
+  refused: 'assistant.tools.refused',
+} as const
+
+const WRITE_LINES = {
+  chip: 'assistant.tools.write.chip',
+  running: 'assistant.tools.write.running',
+  done: 'assistant.tools.write.done',
+  refused: 'assistant.tools.write.refused',
+} as const
+
+/**
  * 工具在畫面上的名字：一個登記的工具一格（後端 `services/tools.py`）。沒有文案的工具（後端先加了）
  * 退回「工具」，不印出 key。
  */
-const TOOL_NAMES: Readonly<Record<string, 'assistant.tools.recent_imports'>> = {
+const TOOL_NAMES = {
   recent_imports: 'assistant.tools.recent_imports',
-}
+  missing_episodes: 'assistant.tools.missing_episodes',
+  search_indexers: 'assistant.tools.search_indexers',
+  submit_search_result: 'assistant.tools.submit_search_result',
+} as const satisfies Record<string, `assistant.tools.${string}`>
 
 function toolName(t: TFunction, name: string): string {
-  const key = Object.hasOwn(TOOL_NAMES, name) ? TOOL_NAMES[name] : undefined
+  const key = Object.hasOwn(TOOL_NAMES, name)
+    ? TOOL_NAMES[name as keyof typeof TOOL_NAMES]
+    : undefined
   return key ? t(key) : t('assistant.tools.other')
-}
-
-/**
- * 登錄表自己的兩種拒絕（`ToolRefusal`）有人話；各模組的理由碼照原樣（機器字串，`.value`），
- * 它們的說法跟著各自的結果卡來（票 09 起）。
- */
-const REFUSAL_TEXT = {
-  unknown_tool: 'assistant.tools.reason.unknown_tool',
-  invalid_input: 'assistant.tools.reason.invalid_input',
-} as const satisfies Record<ToolRefusal, string>
-
-function reasonText(t: TFunction, reason: string): string {
-  return Object.hasOwn(REFUSAL_TEXT, reason) ? t(REFUSAL_TEXT[reason as ToolRefusal]) : reason
 }
 
 /** 等一下就好的（Berth 自己會好、或使用者再送一次）是 `assigned`；要管理員改設定的是 `blocked`。 */

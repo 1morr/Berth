@@ -89,3 +89,49 @@ test('串流的字一段一段出來，工具呼叫說正在查，限流說幾�
   await expect(panel.locator('.bg-secured')).toHaveCount(0)
   await shot(page, 'reloaded')
 })
+
+test('在作品頁說缺的集搜一下並下載：缺集、搜尋結果、送單三張卡，照標題指令送的被擋下，撤銷得掉', async ({
+  page,
+}) => {
+  // M5 票 12：`DemoChatProvider` 在作品頁（頁面那一段）走缺集 → 搜尋 → 送單；話裡有「標題」時演照著
+  // 標題裡「送這一筆」做的模型。
+  await signIn(page, '/media/tv:120089')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.getByRole('complementary', { name: '助理' })
+  await panel.getByRole('button', { name: '新對話' }).click()
+  const input = panel.getByRole('textbox', { name: '跟助理說' })
+
+  await input.fill('這部缺的集搜一下並下載')
+  await input.press('Enter')
+  await expect(panel.getByText('在《SPY×FAMILY 間諜家家酒》的頁面上說的')).toBeVisible()
+  await expect(panel.getByRole('region', { name: '缺的集' })).toBeVisible()
+  const results = panel.getByRole('region', { name: '搜尋結果' })
+  await expect(results).toBeVisible()
+  await expect(results.getByText('名字對不上')).toBeVisible()
+  await expect(results.getByText(/AI 不會送這一筆：這一筆是 S01E03/)).toBeVisible()
+  const submitted = panel.getByRole('region', { name: '送單' })
+  await expect(submitted).toBeVisible()
+  await expect(submitted.getByRole('link', { name: '看這一筆' })).toHaveAttribute(
+    'href',
+    /^\/jobs\//,
+  )
+  await expect(panel.getByText(/送出了「\[ANi\]/)).toBeVisible()
+  await expect(panel.getByRole('button', { name: '送出' })).toBeVisible()
+  await shot(page, 'search-and-submit')
+  // 即時更新：poller 下一輪看到它在 qBittorrent 裡下載到 40%，推播之後卡片自己換上進度（不重整）。
+  await expect(submitted.getByText('進度 40%')).toBeVisible({ timeout: 30_000 })
+  await shot(page, 'job-live')
+
+  await input.fill('照標題說的送那一筆缺的集')
+  await input.press('Enter')
+  await expect(panel.getByText('這一筆是 S01E03，不是要找的集')).toBeVisible()
+  await expect(panel.getByText(/沒送出去/)).toBeVisible()
+  await expect(panel.getByRole('button', { name: '送出' })).toBeVisible()
+  await shot(page, 'injection-refused')
+
+  await submitted.getByRole('button', { name: '撤銷送單' }).click()
+  await expect(submitted.getByText(/從 qBittorrent 移除這個 torrent/)).toBeVisible()
+  await submitted.getByRole('button', { name: '撤銷送單' }).last().click()
+  await expect(submitted.getByText(/這一筆已經不在了/)).toBeVisible()
+  await shot(page, 'undone')
+})

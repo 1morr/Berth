@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -109,7 +110,7 @@ class MediaView:
     folder_frozen: bool
     #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media，票 09 起是 `EXISTS(jobs)`）。
     tracked: bool
-    #: 上次送單用的 Route，下拉的預選值（plan §2.2）。還沒送過單時是 `None`。
+    #: 上次送單用的 Route（plan §2.2）。還沒送過單時是 `None`。
     default_route_id: int | None
     seasons: tuple[SeasonView, ...]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
@@ -118,6 +119,8 @@ class MediaView:
     problem: TmdbProblem | None = None
     #: 失敗時服務回的原文（英文），與精靈的纜繩同一個規矩。
     detail: str = ""
+    #: 送單時不說 Route 就送到哪一條（`preselected_route`）：搜尋頁下拉的預選值，AI 送單也照它。
+    preselected_route_id: int | None = None
     #: 帳本裡這部作品的每一個檔案，照季集排（票 13）。
     files: tuple[LedgerFileView, ...] = ()
     #: 現在那幾份計劃裡對不到的檔案——它們留在 complete，不在帳本裡（brief §7.4）。
@@ -452,6 +455,7 @@ async def _view(
     snapshot = row.snapshot()
     # 這部作品在媒體庫裡有什麼（票 13）。與媒體庫的牆共用同一組判定，所以住在 inventory。
     holdings = await read_holdings(session, row, snapshot)
+    routes = await _routes(session, row.kind)
     return MediaView(
         id=row.id,
         tmdb_id=row.tmdb_id,
@@ -474,14 +478,25 @@ async def _view(
         default_route_id=row.default_route_id,
         seasons=holdings.seasons,
         fetched_at=row.tmdb_fetched_at,
-        routes=await _routes(session, row.kind),
+        routes=routes,
         problem=problem,
         detail=detail,
+        preselected_route_id=preselected_route(row.default_route_id, routes),
         files=holdings.files,
         unmatched=holdings.unmatched,
         versions=holdings.versions,
         awaiting_review=holdings.awaiting_review,
     )
+
+
+def preselected_route(default_route_id: int | None, routes: Sequence[RouteChoice]) -> int | None:
+    """送單時不說 Route 就送到哪一條：**上次送單用的那一條優先**（入庫到哪裡是一個會重複的決定，
+    票 09），它不在收得下的那幾條裡時看只有一條就是它，否則 `None`——猜一條的代價是檔案進錯
+    媒體庫（票 04b）。搜尋頁的下拉與 AI 送單（M5 票 12）讀同一個值。"""
+    ids = [route.id for route in routes]
+    if default_route_id in ids:
+        return default_route_id
+    return ids[0] if len(ids) == 1 else None
 
 
 async def _routes(session: AsyncSession, kind: MediaKind) -> tuple[RouteChoice, ...]:

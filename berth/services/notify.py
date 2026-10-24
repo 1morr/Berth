@@ -578,7 +578,7 @@ async def queue_ready(session: AsyncSession, job: Job, *, now: datetime) -> int:
 def _merged(gathered: dict[str, Any], content: dict[str, Any]) -> dict[str, Any]:
     """同一部作品、同一條 Route 的兩份事實：季集範圍合起來，其餘取新的那一份（作品名可能
     剛改過）。"""
-    spans = _collapse([*(gathered.get("episodes") or []), *(content.get("episodes") or [])])
+    spans = collapse_spans([*(gathered.get("episodes") or []), *(content.get("episodes") or [])])
     return {**content, "episodes": [list(span) for span in spans]}
 
 
@@ -606,14 +606,14 @@ async def _ready_content(session: AsyncSession, job: Job, route: Route) -> dict[
 
 def episode_spans(entries: Iterable[LedgerEntry]) -> list[tuple[int, int, int]]:
     """帳本的季集收成連續的範圍：E01、E02、E03 是一段，E05 另一段。沒有季集的（電影）不算。"""
-    return _collapse(
+    return collapse_spans(
         (entry.season, entry.episode_start, entry.episode_end or entry.episode_start)
         for entry in entries
         if entry.season is not None and entry.episode_start is not None
     )
 
 
-def _collapse(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
+def collapse_spans(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
     """`(季, 起, 迄)` 排好、接得上（重疊或相鄰）的併成一段。"""
     spans: list[tuple[int, int, int]] = []
     for season, start, end in sorted((point[0], point[1], point[2]) for point in points):
@@ -1068,7 +1068,7 @@ def _render(notification: Notification, language: Language, berth_url: str) -> M
     return Message(
         title=text[notification.kind.value].format(title=title),
         # 「正在下載」存的是逐筆猜到的季集，在這裡才合成連續的範圍。
-        description=describe_spans(_collapse(content.get("episodes") or [])),
+        description=describe_spans(collapse_spans(content.get("episodes") or [])),
         fields=((_ROUTE, route),) if route else (),
         links=(Link(text["open"], url),) if url else (),
     )

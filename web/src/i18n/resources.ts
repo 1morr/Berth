@@ -3997,6 +3997,8 @@ const zhHant = {
     log: '對話內容',
     toggle: '助理',
     you: '你',
+    // 使用者那一句底下：說這句話時在看哪一部（M5 票 12，模型拿到的就是它）。
+    onPage: '在《{{title}}》的頁面上說的',
     speaker: '助理',
     newConversation: '新對話',
     history: '歷史',
@@ -4028,10 +4030,28 @@ const zhHant = {
       done: '查過{{tool}}',
       refused: '{{tool}}沒做成',
       recent_imports: '最近入庫',
+      missing_episodes: '缺的集',
+      search_indexers: '索引站',
+      submit_search_result: '送單',
       other: '工具',
+      // 會改東西的工具（送單）：狀態行不說「查」（M5 票 12）。
+      write: {
+        chip: '進行中',
+        running: '正在{{tool}}',
+        done: '{{tool}}好了',
+        refused: '{{tool}}沒做成',
+      },
       reason: {
         unknown_tool: '你的清單上沒有這個工具',
         invalid_input: '模型給的參數不對',
+        // 送單的防線（後端 `submit_guard.SubmitRefusal`）。
+        not_from_this_conversation: '這一筆不是這則對話搜出來的，AI 不能送',
+        other_work: '這一筆是搜另一部作品時搜到的',
+        not_a_match: '這一筆不像這部作品',
+        episodes_unknown: '讀不出這一筆是哪幾集',
+        other_episodes: '這一筆是 {{detail}}，不是要找的集',
+        excluded: '被標題規則「{{detail}}」擋下',
+        route_needed: '要先說入庫到哪一條 Route',
       },
     },
     notice: {
@@ -4067,6 +4087,35 @@ const zhHant = {
     // 結果卡（M5 票 09）：依工具結果的型別畫，`assistant/ResultCard.tsx`。
     cards: {
       unknown: '這一版畫不出這個結果的卡片。',
+      missing: {
+        title: '缺的集',
+        count_one: '{{count}} 集',
+        count_other: '{{count}} 集',
+        none: '沒有缺的集。',
+      },
+      search: {
+        title: '搜尋結果',
+        fits_one: '符合 {{count}} 筆',
+        fits_other: '符合 {{count}} 筆',
+        wanted: '找 {{episodes}}',
+        whole: '整部作品',
+        later: '下一批 {{seasons}}',
+        empty: '索引站沒有回任何一筆。',
+        capped: '符合的一共 {{total}} 筆，這裡列 {{shown}} 筆。',
+        toPage: '去作品頁搜全部',
+        aiWont: 'AI 不會送這一筆：{{reason}}。',
+      },
+      submitted: {
+        title: '送單',
+        open: '看這一筆',
+        gone: '這一筆已經不在了：撤銷了，或在 Job 頁刪掉了紀錄。',
+        readFailed: '讀不到這一筆現在的狀態。',
+        undo: '撤銷送單',
+        undoing: '撤銷中…',
+        undoConfirm:
+          '撤銷這次送單：從 qBittorrent 移除這個 torrent、刪掉已經下載的檔案、清掉這一筆的紀錄。那幾集會回到「缺」。',
+        undoFailed: '撤銷沒成。',
+      },
       recentImports: {
         title_one: '最近 {{count}} 天入庫',
         title_other: '最近 {{count}} 天入庫',
@@ -7998,6 +8047,7 @@ const en: Translations<typeof zhHant> = {
     log: 'Conversation',
     toggle: 'Assistant',
     you: 'You',
+    onPage: 'Said on the page of {{title}}',
     speaker: 'Assistant',
     newConversation: 'New',
     history: 'History',
@@ -8029,10 +8079,27 @@ const en: Translations<typeof zhHant> = {
       done: 'Looked up {{tool}}',
       refused: '{{tool}} did not go through',
       recent_imports: 'recent imports',
+      missing_episodes: 'missing episodes',
+      search_indexers: 'the indexers',
+      submit_search_result: 'Submit',
       other: 'a tool',
+      write: {
+        chip: 'Working',
+        running: '{{tool}} in progress',
+        done: '{{tool}} done',
+        refused: '{{tool}} did not go through',
+      },
       reason: {
         unknown_tool: 'that tool is not on your list',
         invalid_input: 'the model sent the wrong arguments',
+        not_from_this_conversation:
+          'this release was not found in this conversation, so AI may not send it',
+        other_work: 'this release came from a search for another work',
+        not_a_match: 'this release does not look like this work',
+        episodes_unknown: 'cannot tell which episodes this release has',
+        other_episodes: 'this release is {{detail}}, not the episodes wanted',
+        excluded: 'blocked by the title rule “{{detail}}”',
+        route_needed: 'say which route to import into first',
       },
     },
     notice: {
@@ -8071,6 +8138,35 @@ const en: Translations<typeof zhHant> = {
     // Result cards (M5 ticket 09): drawn from the tool result's type, `assistant/ResultCard.tsx`.
     cards: {
       unknown: 'This version cannot draw a card for this result.',
+      missing: {
+        title: 'Missing episodes',
+        count_one: '{{count}} episode',
+        count_other: '{{count}} episodes',
+        none: 'Nothing is missing.',
+      },
+      search: {
+        title: 'Search results',
+        fits_one: '{{count}} fits',
+        fits_other: '{{count}} fit',
+        wanted: 'Looking for {{episodes}}',
+        whole: 'The whole work',
+        later: 'next batch {{seasons}}',
+        empty: 'The indexers returned nothing.',
+        capped: '{{total}} fit in all; {{shown}} are listed here.',
+        toPage: 'Search all on the work page',
+        aiWont: 'AI will not send this one: {{reason}}.',
+      },
+      submitted: {
+        title: 'Submitted',
+        open: 'Open this download',
+        gone: 'This download is gone: it was undone, or its record was deleted on the job page.',
+        readFailed: 'Could not read where this download is now.',
+        undo: 'Undo submit',
+        undoing: 'Undoing…',
+        undoConfirm:
+          'Undo this submit: remove the torrent from qBittorrent, delete the files downloaded so far, and clear its record. Those episodes go back to missing.',
+        undoFailed: 'Undo did not go through.',
+      },
       recentImports: {
         title_one: 'Imported in the last {{count}} day',
         title_other: 'Imported in the last {{count}} days',

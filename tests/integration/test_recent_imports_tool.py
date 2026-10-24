@@ -16,7 +16,9 @@ from berth.domain import JellyfinPresence, MediaKind, PlanAction, Role
 from berth.models import LedgerEntry, Media
 from berth.services.auth import AuthenticatedUser
 from berth.services.registry import NextStep, Refusal, ToolContext
+from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY, RecentImports, RecentWork
+from tests.integration.factories import FakeClientFactory
 from tests.integration.test_weekly import DUNE, END, FRIEREN, imported, works
 
 pytestmark = pytest.mark.asyncio
@@ -39,7 +41,13 @@ async def test_the_last_week_of_imports_comes_back_by_work(
     await imported(session, FRIEREN, 9, at=END - timedelta(days=8))
     await imported(session, FRIEREN, 10, at=END - timedelta(days=1), action=PlanAction.SKIP)
 
-    context = ToolContext(sessions=create_session_factory(engine), user=ADMIN, now=END)
+    context = ToolContext(
+        sessions=create_session_factory(engine),
+        clients=FakeClientFactory(),
+        sources=SourceCache(),
+        user=ADMIN,
+        now=END,
+    )
     result = await REGISTRY.invoke("recent_imports", {"days": 7}, context)
 
     assert result == RecentImports(
@@ -83,7 +91,13 @@ async def test_one_episode_jellyfin_cannot_find_makes_the_work_lost(
     entry = await imported(session, FRIEREN, 3, at=END - timedelta(days=1))
     await seen(session, entry, found=False)
 
-    context = ToolContext(sessions=create_session_factory(engine), user=ADMIN, now=END)
+    context = ToolContext(
+        sessions=create_session_factory(engine),
+        clients=FakeClientFactory(),
+        sources=SourceCache(),
+        user=ADMIN,
+        now=END,
+    )
     result = await REGISTRY.invoke("recent_imports", {}, context)
 
     assert isinstance(result, RecentImports)
@@ -109,7 +123,13 @@ async def seen(session: AsyncSession, entry: LedgerEntry, *, found: bool) -> Non
 
 async def test_an_ordinary_user_cannot_reach_it(engine: AsyncEngine) -> None:
     """週報頁只有管理員（`/weekly`），這個工具跟著它。"""
-    context = ToolContext(sessions=create_session_factory(engine), user=DECKHAND, now=END)
+    context = ToolContext(
+        sessions=create_session_factory(engine),
+        clients=FakeClientFactory(),
+        sources=SourceCache(),
+        user=DECKHAND,
+        now=END,
+    )
 
     result = await REGISTRY.invoke("recent_imports", {}, context)
 

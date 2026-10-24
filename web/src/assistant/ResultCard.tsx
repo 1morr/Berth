@@ -3,7 +3,10 @@ import { ErrorBoundary } from 'react-error-boundary'
 import { useTranslation } from 'react-i18next'
 
 import type { ToolResults, ToolResultType } from '../api/assistant'
+import { MissingEpisodesCard } from './MissingEpisodesCard'
 import { RecentImportsCard } from './RecentImportsCard'
+import { SearchResultsCard } from './SearchResultsCard'
+import { SubmittedJobCard } from './SubmittedJobCard'
 import type { ToolOutput } from './transcript'
 
 /**
@@ -15,6 +18,9 @@ import type { ToolOutput } from './transcript'
  */
 const CARDS: { [K in ToolResultType]: ComponentType<{ result: ToolResults[K] }> | null } = {
   RecentImports: RecentImportsCard,
+  MissingEpisodes: MissingEpisodesCard,
+  SearchResults: SearchResultsCard,
+  SubmittedJob: SubmittedJobCard,
   Refusal: null,
 }
 

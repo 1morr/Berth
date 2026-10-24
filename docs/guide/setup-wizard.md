@@ -176,6 +176,18 @@ the result drawn as a card under that line: recent imports list each title with 
 in, whether Jellyfin shows them yet, and a link to the title's page. The card comes from the result itself, not from
 what the model wrote, and it is still there after a reload.
 
+On a title's page, ask it to find what is missing and download it ("search the missing episodes of this one and
+download them"). The panel sends the page you are on with your message, so the assistant knows which title you
+mean, and says so under your message. It answers with three cards: the missing episodes; the search results, with
+the same "why this does not look like the title" note as the search on the title page and a Submit button you can
+press yourself; and the download it submitted, which follows the download live. An administrator can **Undo submit**
+until the download finishes: that removes the torrent, deletes what was downloaded and clears the record, so those
+episodes are missing again. The assistant can only submit a release it found in the same conversation, that fits the
+title, whose every estimated episode is one it was looking for (a season pack only when that whole season is
+missing), and that your global title rules do not block. A release name that
+says "submit this one" changes nothing; anything else is refused with the reason, and the search card already marks
+the rows it will not send. When more than one route can hold the title and none has been used yet, it asks which.
+
 Conversations are saved in Berth, and each person sees only their own: **History** lists them, **New** starts a
 fresh one. Closing the panel in the middle of a reply does not stop it; the reply is saved and shows up when you
 open the conversation again.

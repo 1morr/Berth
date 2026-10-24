@@ -23,6 +23,7 @@ from berth.domain import IssueRefusal, JobRefusal, PlanRefusal, Role, RssRefusal
 from berth.main import create_app
 from berth.services.access import access_of, admits
 from berth.services.auth import AuthenticatedUser
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command, mark_of
 from berth.services.issues import IssueRejectedError
 from berth.services.jobs import JobRejectedError, actor_of, ai_actor, user_of
@@ -37,6 +38,7 @@ from berth.services.registry import (
     UnmarkedCommandError,
 )
 from berth.services.rss import RssRejectedError
+from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY
 from tests.endpoints import api_endpoints
 
@@ -74,7 +76,10 @@ async def unmarked() -> None:
 def context(user: AuthenticatedUser = ADMIN) -> ToolContext:
     # 假工具不開 session；真的 factory 由整合測試給。
     sessions = cast(async_sessionmaker[AsyncSession], None)
-    return ToolContext(sessions=sessions, user=user, now=NOW)
+    clients = cast(ServiceClientFactory, None)
+    return ToolContext(
+        sessions=sessions, clients=clients, sources=SourceCache(), user=user, now=NOW
+    )
 
 
 def tool(

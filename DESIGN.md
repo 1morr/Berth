@@ -1036,6 +1036,23 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
   （抬頭列 `px-3 py-2`、列 `px-3 py-2.5`，不是 Cards / Containers 的 `1rem`）：卡片已經在助理那一塊的內距裡，面板只有 26rem。**「最近入庫」**（`RecentImportsCard`）一部一列（列間 `border-t-2 border-rule`）：橫放的牆卡片——左邊 `w-14` 的
   `ArtSlot` 海報（照 UI 語言挑），右邊同牆卡片的標識帶：類型代號 `Dot` 年份、作品名 `h4`（連到作品頁，作品被刪了不連）、
   入庫的集（週報同一個寫法）、Jellyfin 收錄了沒（不塗漆：在 / 等收錄是 `ink-dim`，找不到是 `ink`，同媒體庫牆）。
+  框與抬頭列共用 `assistant/cardParts.tsx` 的 `CardFrame`，作品名連到作品頁用同一份 `WorkLink`（M5 票 12）。
+  **「缺的集」**（`MissingEpisodesCard`）：作品名 `h4` 加缺的集（週報的寫法併成段），計數是「N 集」。
+  **「搜尋結果」**（`SearchResultsCard`）：抬頭計數是「符合 N 筆」；作品名底下一行 `.value text-xs ink-dim` 說找哪幾集與下一批；
+  有 `problem` 時是搜尋頁同一塊 `IndexerNotice`；接著搜尋頁的 `RoutePicker`（初值是後端的 `preselected_route_id`），
+  然後一筆一列：發佈名（`.value text-sm wrap-anywhere`，陌生人寫的字照原樣印）、不是「符合」的那一句（搜尋頁同一個
+  中性色塊加理由，`reasonOf`）、符合但 AI 不送的一句 `text-xs ink-dim`「AI 不會送這一筆：…」（不塗漆：它是說明不是失敗）、
+  Tags 中性色塊、大小 `Dot` 做種 `Dot` 站 `Dot` 預估季集，最後是搜尋頁同一顆 `SubmitAction`（確認裡印著資料夾名）。
+  只列了一部分時底下一行說一共幾筆加「去作品頁搜全部」。
+  **「送單」**（`SubmittedJobCard`）：抬頭計數是「已送出 / 這一個已經在了」；內容讀 `['jobs', hash]`——狀態色塊
+  （`JOB_SIGNAL`，同下載列表）加發佈名、`JobFacts` 那一行、「看這一筆」連到 Job 頁；對話裡有這種卡時面板掛著
+  `/events/stream`，卡片跟著推播重問。管理員、`undoable` 時一顆 Ghost「撤銷送單」，就地展開 `ConfirmPanel` 說會刪什麼，
+  確認鍵是 Primary（同 Job 頁的刪除）；這一筆不在了（404）是一句 `text-xs ink-dim`，不是錯誤。
+- **寫入工具的狀態行**（M5 票 12）：送單不說「查」——色塊「進行中」、「正在送單」、「送單好了」、「送單沒做成」
+  （`WRITE_TOOLS`；沒列到的照查詢的說法）。拒絕理由碼有人話的（登錄表的兩種與送單的 `SubmitRefusal`）換成那一句，
+  帶原文（規則、預估的季集）；其餘照原樣。
+- **使用者那一句底下的頁面**：在作品頁說的話，下面一行 `.value text-xs ink-dim`「在《作品》的頁面上說的」——模型拿到的
+  就是這一部，人看得到它拿到了什麼。
 
 ### 工作清單列（`QueueRow` / `DetailLine`）
 

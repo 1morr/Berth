@@ -64,6 +64,17 @@ class UserText(_Part):
     text: str
 
 
+class PagePart(_Part):
+    """使用者送出這句話時正在看的作品（M5 票 12）。模型拿它知道「這部」是哪一部，畫面不畫。
+    存在使用者那一則裡、排在話的前面：下一句話的歷史照樣帶著。"""
+
+    type: Literal["page"] = "page"
+    media: str
+    #: 作品名的兩輪（zh-TW 顯示名與英文名）：只給畫面在那一句底下說，不送給模型（`page_content`）。
+    title: str
+    title_en: str
+
+
 class ModelText(_Part):
     type: Literal["model_text"] = "model_text"
     text: str
@@ -110,7 +121,9 @@ class NoticePart(_Part):
 
 
 #: 一則裡的一個 part。`Part` 是同一份聯集加上讀出時用的 discriminator。
-StoredPart = UserText | ModelText | ToolCallPart | OpaqueModelPart | ToolResultPart | NoticePart
+StoredPart = (
+    UserText | PagePart | ModelText | ToolCallPart | OpaqueModelPart | ToolResultPart | NoticePart
+)
 Part = Annotated[StoredPart, Field(discriminator="type")]
 _PARTS = TypeAdapter(list[Part])
 
@@ -250,6 +263,18 @@ def tool_content(part: ToolResultPart) -> str:
     )
 
 
+def page_content(part: PagePart) -> str:
+    """正在看的作品給模型的那一段：帶出處的 JSON，**只有作品 id**。作品名是 TMDB 的字（外部來的），
+    外部文字只經由工具結果進來（brief §6.10、§20.24）；模型要名字就呼叫工具。名字存著給畫面說。"""
+    return json.dumps(
+        {"source": "berth", "page": {"media": part.media}}, ensure_ascii=False, sort_keys=True
+    )
+
+
+def _user_text(part: UserText | PagePart) -> TextPart:
+    return TextPart(part.text if isinstance(part, UserText) else page_content(part))
+
+
 def tool_result_of(part: ToolResultPart) -> ToolResult:
     """存下的一個工具結果 → 送給 provider 的那一份。"""
     return ToolResult(
@@ -266,7 +291,9 @@ def turns_of(
     for row in rows:
         parts = parts_of(row)
         if row.kind is MessageKind.USER:
-            _add_user(turns, tuple(TextPart(p.text) for p in parts if isinstance(p, UserText)))
+            _add_user(
+                turns, tuple(_user_text(p) for p in parts if isinstance(p, UserText | PagePart))
+            )
         elif row.kind is MessageKind.TOOLS:
             results = tuple(tool_result_of(p) for p in parts if isinstance(p, ToolResultPart))
             # 這一份就是上一輪那幾個呼叫的結果，不補「沒執行」。

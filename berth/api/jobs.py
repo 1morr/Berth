@@ -204,6 +204,9 @@ class JobOut(BaseModel):
     replannable: bool
     #: 這一筆現在按得了重新入庫嗎（M2 票 10）。只有 admin 看得到那一顆（門禁），旗標誰都拿得到。
     reimportable: bool
+    #: 送單現在撤得回來嗎：還沒下載完、媒體庫與 complete 裡都還沒有它（M5 票 12）。AI 送單的結果卡
+    #: 照它畫撤銷鍵，撤銷是 `DELETE /jobs/{hash}` 移除 torrent、刪檔、清紀錄（只有 admin）。
+    undoable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11）。還沒算過就是 `null`——畫面照它決定
     #: 要不要去要那一份逐檔的決定，而不是先打一次 404。
     plan_id: int | None

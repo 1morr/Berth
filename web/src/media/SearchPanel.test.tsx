@@ -36,6 +36,7 @@ function media(overrides: Partial<Media> = {}): Media {
     folder_frozen: false,
     tracked: false,
     default_route_id: null,
+    preselected_route_id: null,
     fetched_at: '2026-09-09T12:00:00Z',
     problem: null,
     detail: '',
@@ -153,6 +154,7 @@ function job(): Job {
     retryable: false,
     replannable: false,
     reimportable: false,
+    undoable: false,
     plan_id: null,
     audits: 0,
     series: '',
@@ -1558,7 +1560,7 @@ describe('搜尋 torrent 與結果表', () => {
     })
 
     it('上次送單用的那條 Route 是下一次的預選值（plan §2.2）', async () => {
-      render({ [MEDIA_PATH]: { body: media({ default_route_id: 2 }) } })
+      render({ [MEDIA_PATH]: { body: media({ default_route_id: 2, preselected_route_id: 2 }) } })
       renderApp('/media/tv:120089')
 
       expect(await screen.findByLabelText('入庫到')).toHaveValue('2')

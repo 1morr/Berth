@@ -109,8 +109,10 @@ Berth is a **public beta**.
 - AI is just starting: Settings → AI connects your own provider in the Anthropic or the OpenAI-compatible format
   (Anthropic's or OpenAI's API, OpenRouter, DeepSeek, a self-hosted Ollama or vLLM and others) and tests whether
   its model can call tools. Settings → Usage shows the tokens every call spent and the cache hit rate, with no
-  budget. Every page has an assistant side panel to chat with it; for now its only tool looks up recent
-  imports, drawn as a card of titles. Berth works the same without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
+  budget. Every page has an assistant side panel to chat with it: it looks up recent imports, and on a title's
+  page it finds the missing episodes, searches for them and submits one, each drawn as a card. It can only submit
+  a release it found in the same conversation that fits the title and the episodes asked for. Berth works the
+  same without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
   [the assistant](docs/guide/setup-wizard.md#the-assistant-side-panel).
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.

@@ -54,6 +54,7 @@ function downloadJob(overrides: Partial<Job> = {}): Job {
     retryable: false,
     replannable: false,
     reimportable: false,
+    undoable: false,
     plan_id: null,
     audits: 0,
     series: '',
@@ -113,6 +114,7 @@ function media(overrides: Partial<Media> = {}): Media {
     folder_frozen: false,
     tracked: false,
     default_route_id: null,
+    preselected_route_id: null,
     fetched_at: '2026-09-09T12:00:00Z',
     problem: null,
     detail: '',
@@ -557,11 +559,12 @@ describe('Media 詳情頁', () => {
     expect(screen.getByText('TMDB 120089')).toBeVisible()
   })
 
-  it('只有一條相符的 Route 時自動選它（票 04b）', async () => {
+  it('下拉的初值是後端預選的那一條（票 04b；規則在 `media.preselected_route`，M5 票 12）', async () => {
     render({
       [SPY_PATH]: {
         body: media({
           routes: [{ id: 2, name: 'Anime', slug: 'anime', collection_type: 'tvshows' }],
+          preselected_route_id: 2,
         }),
       },
     })
@@ -2394,7 +2397,7 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       awaiting_route: { tv: 0, movie: 0 },
     }
     const stub = render({
-      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [SPY_PATH]: { body: media({ default_route_id: 2, preselected_route_id: 2 }) },
       [MIKAN_SEARCH]: { body: [] },
       'POST /api/rss/subscriptions/search': { status: 201, body: made },
       'GET /api/rss/feeds/5/preview': {
@@ -2942,7 +2945,7 @@ describe('作品頁對 Berth 的請求沒成時說出對的原因（M4 票 90）
 
   it.each(REQUEST_FAILURES)('建立搜尋 feed 沒有成功（%s）', async (_, failure, expected) => {
     render({
-      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [SPY_PATH]: { body: media({ default_route_id: 2, preselected_route_id: 2 }) },
       [MIKAN_SEARCH]: { body: [] },
       'POST /api/rss/subscriptions/search': failure,
     })

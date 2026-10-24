@@ -1,5 +1,4 @@
 import { useId } from 'react'
-import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import type { RecentImports, RecentWork } from '../api/assistant'
@@ -8,6 +7,7 @@ import { Dot } from '../components/Dot'
 import { KIND_CODE } from '../components/kind'
 import { displayRound } from '../i18n/displayRound'
 import { countEpisodes, describeSpans } from '../weekly/spans'
+import { CardFrame, WorkLink } from './cardParts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -25,14 +25,12 @@ export function RecentImportsCard({ result }: { result: RecentImports }) {
   const episodes = result.works.reduce((sum, work) => sum + countEpisodes(work.episodes), 0)
 
   return (
-    // 內距比頁面上的面板小一號（`px-3`）：卡片已經在助理那一塊的內距裡，面板只有 26rem。
-    <section aria-labelledby={id} className="border-2 border-rule">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule bg-deck px-3 py-2">
-        <h3 id={id} className="label mr-auto text-ink">
-          {t('assistant.cards.recentImports.title', { count: days })}
-        </h3>
-        {result.works.length > 0 && (
-          <p className="value text-xs text-ink-dim">
+    <CardFrame
+      labelId={id}
+      heading={t('assistant.cards.recentImports.title', { count: days })}
+      count={
+        result.works.length > 0 ? (
+          <>
             {t('weekly.imported.works', { count: result.works.length })}
             {episodes > 0 && (
               <>
@@ -40,9 +38,10 @@ export function RecentImportsCard({ result }: { result: RecentImports }) {
                 <Dot /> {t('weekly.imported.episodes', { count: episodes })}
               </>
             )}
-          </p>
-        )}
-      </div>
+          </>
+        ) : undefined
+      }
+    >
       {result.works.length === 0 ? (
         <p className="px-3 py-2.5 text-sm text-ink-dim">
           {t('assistant.cards.recentImports.empty')}
@@ -58,7 +57,7 @@ export function RecentImportsCard({ result }: { result: RecentImports }) {
           ))}
         </ul>
       )}
-    </section>
+    </CardFrame>
   )
 }
 
@@ -77,18 +76,7 @@ function WorkRow({ work, language }: { work: RecentWork; language: string }) {
           </p>
         )}
         <h4 className="value text-sm wrap-anywhere text-ink">
-          {work.media === null ? (
-            title
-          ) : (
-            // 作品頁的路徑由 `berthPages.test.ts` 對著後端的 `BerthPage.MEDIA`（票 02）。
-            <Link
-              to="/media/$mediaId"
-              params={{ mediaId: work.media }}
-              className="underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-            >
-              {title}
-            </Link>
-          )}
+          {work.media === null ? title : <WorkLink media={work.media}>{title}</WorkLink>}
         </h4>
         <p className="value text-xs wrap-anywhere text-ink-dim">
           {work.kind === 'movie' ? t('weekly.imported.movie') : describeSpans(work.episodes)}
