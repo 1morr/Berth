@@ -20,9 +20,10 @@ import { UsageChart } from '../settings/UsageChart'
 import { useUsageFormat } from '../settings/usageFormat'
 import { HEAD_CELL, USAGE_TABLE, UsageTable } from '../settings/UsageTable'
 
-/** 出處的名字。少一種就編譯不過：票 08 加了對話、M6 加了 AI 任務，這裡跟著補一格。 */
+/** 出處的名字。少一種就編譯不過：M6 加了 AI 任務，這裡跟著補一格。 */
 const ORIGIN_TEXT = {
   test: 'settings.usagePage.origin.test',
+  conversation: 'settings.usagePage.origin.conversation',
 } as const satisfies Record<AiCallOrigin, string>
 
 const FAILURE_TEXT = {

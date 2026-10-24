@@ -165,3 +165,22 @@ that are one bar per day (cache read, other input, output; the daily numbers are
 origin, by format and model (the same model through two hosts is two rows), by person, and the reasons calls
 failed. Some endpoints do not report cache use; those calls are left out of the hit rate and the page says how
 many there were. There is no budget and no limit: this page only reports.
+
+## The assistant (side panel)
+
+Once AI is set up, every page has an **Assistant** button in the header. It opens a column on the right (on a
+phone it takes the whole screen) that stays open as you move between pages and after a reload. Type a message and
+press Enter (Shift+Enter for a new line); the reply streams in as it is written. When the assistant looks
+something up, the panel says so ("Looking up recent imports") and then "Looked up" once it has the answer.
+
+Conversations are saved in Berth, and each person sees only their own: **History** lists them, **New** starts a
+fresh one. Closing the panel in the middle of a reply does not stop it; the reply is saved and shows up when you
+open the conversation again.
+
+What the assistant can do depends on who you are: an ordinary user does not get the admin-only tools. Only what a
+tool actually did counts: if the model says it did something but no tool ran, nothing happened. After one message
+the assistant calls tools at most 10 times, then stops and says so. When the provider is rate limited, out of
+credit, refuses the key or cannot be reached, the panel says which, and how long to wait when the provider says;
+Berth does not retry on its own. A model the test found to be **chat only** gets no tools at all, and the panel
+says so. Without AI set up, admins see a link to **Settings → AI** and everyone else sees that an administrator has
+not turned AI on yet.

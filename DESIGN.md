@@ -999,6 +999,36 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
 - **空狀態**：有史以來一筆都沒有時整頁只剩一塊中性 `Notice` 與連到「設定 → AI」的 Ghost 連結，不畫空圖；這段期間沒有、之前有時總量照畫、
   圖只剩基線，給「看 90 天」的連結。
 
+### 助理側面板（`AssistantPanel`，M5 票 08）
+
+`.scratch/m5/side-panel-shape.md`（使用者選定：並排、最近一則加歷史清單、開關記在瀏覽器）。照 Vercel AI SDK 的工具呼叫三態
+（正在查 / 查過 / 沒做成），不照它的聊天泡泡。
+
+- **外框**：頁首導覽之後一顆 `NAV_BOX` 的「助理」（`aria-expanded`，開著時 `NAV_BOX_ACTIVE`；它是一欄不是一頁，所以是按鈕）。
+  `lg` 以上面板 `fixed` 在右側全高（`26rem`，`xl` `28rem`），`AppShell` 外框以同寬的 `padding-right` 讓出那一欄——頁首與頁面
+  變窄、照常可操作，**沒有東西疊在誰上面**（The Rule-Line Rule：沒有 z 軸），與頁面之間一條 `border-l-2 border-rule-strong`。
+  `lg` 以下開著時 `main` 收起、面板 `sticky top-0 h-dvh` 接在頁首下面。開關存在 `localStorage`，換頁不關、重整照原樣；
+  使用者按開的焦點進輸入框，照記憶打開的不搶；「關閉」或焦點在面板內的 `Esc` 收起，焦點回到「助理」鍵。
+- **抬頭列**：`deck` 底、`border-b-2 border-rule`，`.label`「助理」的 `h2`（自己帶 `bg-deck`，算 `deck` 抬頭列）加三顆
+  `COMPACT_BUTTON`：新對話、歷史（歷史清單開著時換成「回到對話」）、關閉。
+- **對話是航海日誌，不是泡泡**：`role="log"` 的 `<ol>`，一句使用者的話一塊（`deck` 底，抬起一階），它之後的模型回合、
+  工具與 notice 收成同一塊「助理」（面板本身的 `well` 底）；每塊上方一個 `.label text-ink-dim` 說話者，塊與塊 `gap-3`，
+  不左右對齊、沒有圓角。模型的字是 `text-sm whitespace-pre-wrap break-words` 的散文，**永遠不塗信號色**：做了什麼只以
+  工具結果的卡為準（票 09 起），文字說「已訂閱」也只是字。回覆中的那一塊 `aria-busy`，串流完才被念。
+- **工具狀態行**：`.value text-xs` 一行。正在查是 compact 的 `working` 色塊「查詢中」加「正在查最近入庫」；查過是中性的
+  `ink-dim`；沒做成是 `ink` 字加 `· 理由碼`（`ink-dim`，機器字串照原樣）。
+- **停下來的原因**是 `Notice`：限流、provider 掛掉、連不上是 `assigned`「等一下」（再送一次就好）；key 不對、額度用完、
+  模型不存在、端點拒絕與 Berth 自己出錯是 `blocked`「沒成」，管理員多一條「去設定」的文字連結；到了工具輪數上限是
+  `assigned`「停下」。只能聊天的模型在對話上方常駐一則 `neutral` 的 `Notice`。
+- **輸入**：`textarea`（同輸入框的 `hull` 底 + `border-2 border-rule-strong`，散文字型），Enter 送出、Shift+Enter 換行、
+  組字中的 Enter 不送。送出鍵是 **Ghost**：頁面自己的主鍵已經是那一屏的調度黃，面板不搶；回覆中 `busy`「回覆中…」。
+  後端的拒絕（上一個回覆還在跑、AI 沒設定好）在送出鍵旁一直掛著的 `role="status"` 說，打好的字留著。
+- **沒設定好**：一塊空狀態（`well` 底 + `rule` 框）：管理員「AI 還沒設定好。」加 `GHOST_LINK`「去設定」，一般使用者只有
+  「管理員還沒開啟 AI。」；沒有輸入框。
+- **歷史清單**：取代對話那一塊，`SectionHeading` 形狀的 `h3`「對話」，每列一顆整行按鈕（`border-2 border-rule`，hover 線變重）：
+  第一句話（散文）加 `text-xs ink-dim` 的 `Timestamp`。
+- 對話很長時面板內捲動；新字進來時只有本來就在最底才跟著捲。
+
 ### 工作清單列（`QueueRow` / `DetailLine`）
 
 `/review` 的每一類（計劃、對不到、重複、待確認）、`/issues`，以及媒體庫的「待審 / 對不到」子集是**同一種列、同一份元件**
