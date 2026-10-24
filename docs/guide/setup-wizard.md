@@ -121,8 +121,10 @@ the model yet.
   keys, it is stored in Berth's database and never shown again: the page only says whether one is saved, and
   **Remove key** clears it.
 - **Model**: left blank, Anthropic's own API uses `claude-opus-5-5`. Everything else, OpenAI's own API included,
-  has no default: load the list from the endpoint and pick one, or type the model id their docs give. Some
-  endpoints cannot list their models; then type it.
+  has no default: press **Read the model list from the endpoint** and the models it lists appear as buttons
+  under the field; press one to fill it in, or type the model id their docs give. With more than 12, the field
+  doubles as a filter: only the first 12 that match what you type are shown. Some endpoints cannot list their
+  models (DeepSeek's Anthropic-format address is one); then type it.
 
 AI counts as set up when there is an endpoint (a base URL, or a key for an official API) and a model.
 
@@ -149,7 +151,7 @@ chat only.
 | --- | --- | --- | --- |
 | OpenAI | leave blank | yes | Not yet tried against OpenAI itself; the test tells you. If the request with tools is refused, the error text under **Technical details** says why. |
 | OpenRouter | `https://openrouter.ai/api/v1` | yes | Pick a model whose page lists **tools** among its supported parameters. If none of the model's providers supports tools, OpenRouter ignores them without an error, and the test says so. |
-| DeepSeek | `https://api.deepseek.com` (its docs use no `/v1`) | yes | Its docs list both current models (`deepseek-flash`, `deepseek-v4-pro`) as supporting tools. |
+| DeepSeek | `https://api.deepseek.com` (its docs use no `/v1`) | yes | Both current models (`deepseek-flash`, `deepseek-v4-pro`) call tools; tried on 2026-10-24, in this format and in the Anthropic format at `https://api.deepseek.com/anthropic`. |
 | Ollama | `http://<host>:11434/v1` | no | Use a model listed under [Tools on ollama.com](https://ollama.com/search?c=tools). Others are refused with "does not support tools". |
 | vLLM | `http://<host>:<port>/v1` | only if you started it with `--api-key` | Start vLLM with `--enable-auto-tool-choice` and the `--tool-call-parser` that matches the model (see vLLM's tool calling docs). Without a parser the call comes back as plain text. |
 
