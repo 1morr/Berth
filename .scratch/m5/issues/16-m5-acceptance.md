@@ -8,7 +8,7 @@
 
 ## 為什麼
 
-逐條對 plan §11.6 的驗收，並用真的 Anthropic key 端到端跑一次。
+逐條對 plan §11.6 的驗收，並用真的 key 端到端跑一次（Anthropic 與 OpenAI 相容各一次）。
 
 ## 做什麼
 
