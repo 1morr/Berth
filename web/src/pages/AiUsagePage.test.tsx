@@ -141,6 +141,22 @@ describe('設定 → 用量', () => {
     expect(within(screen.getByRole('table', { name: '沒成的' })).getByText('被限流')).toBeVisible()
   })
 
+  it('OpenAI 相容格式的那一列說出格式名，不是 i18n key', async () => {
+    render({
+      30: {
+        ...USED,
+        by_model: [{ format: 'openai', host: 'ollama:11434', model: 'qwen3', tally: BUSY }],
+      },
+    })
+    renderApp('/settings/usage')
+
+    expect(
+      within(await screen.findByRole('table', { name: '依格式與模型' })).getByText(
+        'OpenAI 相容 · ollama:11434',
+      ),
+    ).toBeVisible()
+  })
+
   it('換期間：問 7 天那一段，網址帶 days', async () => {
     const stub = render({ 30: USED, 7: { ...USED, totals: { ...BUSY, input_tokens: 777 } } })
     const user = userEvent.setup()
