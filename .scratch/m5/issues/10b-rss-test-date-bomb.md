@@ -1,6 +1,6 @@
 # 10b — RSS 頁面流程測試隨日期變紅
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（排在票 11 之前）
 
@@ -19,8 +19,46 @@
 
 ## 驗收
 
-- [ ] 原因寫在 Comments：產品還是測試、時間從哪裡來
-- [ ] 這條測試綠，而且不再依賴執行當天的日期（附上把時間往後推的證明）
-- [ ] 全部檢查、`pnpm -C web build`、pytest、vitest 綠；progress.md 已更新（含回頭註記票 10 回報的這條紅燈已修）
+- [x] 原因寫在 Comments：產品還是測試、時間從哪裡來
+- [x] 這條測試綠，而且不再依賴執行當天的日期（附上把時間往後推的證明）
+- [x] 全部檢查、`pnpm -C web build`、pytest、vitest 綠；progress.md 已更新（含回頭註記票 10 回報的這條紅燈已修）
 
 ## Comments
+
+### 原因（2026-10-24）
+
+**測試的問題，產品沒錯。** 「現在」是讀清單那一刻的牆上時間：`GET /api/rss/series` → `services.rss.list_series(now=None)` 取 `now or utcnow()`，經 `_series_view` → `_finished` 傳給 `parser.series_finished`。`finished.py` 的 docstring 寫明完結不存下來、每次讀清單照現況算，Berth 停機一個月後打開 RSS 頁，安靜了 30 天的 Series 本來就該收進「已完結」，改用輪詢時間反而錯。錄下的 Feed 裡《与你相恋》最新一筆是 2026-09-24 08:08:01 UTC，加 `QUIET_AFTER` 30 天就是 2026-10-24 08:08，那之後跑的都紅（`assert (2, 12, True) == (2, 12, False)`）。
+
+### 修法
+
+- 這條測試開頭用 time-machine 的 `time_machine` fixture 把時鐘固定在 `KIMI_NEXT_DAY`（錄下的最新一筆的隔天，從 fixture 算出來，不是另一個寫死的日期）。整條流程（登入、輪詢、綁定、讀清單）用同一個時鐘。
+- 結尾跳到 `KIMI_NEXT_DAY + QUIET_AFTER`，斷言同一列變成 `finished: true`：證明前面的 `False` 是時鐘給的。登入也照同一個時鐘過期，所以跳過去之後重新登入。
+- 新 dev 依賴 `time-machine>=3.5.1`（3.x 不再假造 `monotonic`，asyncio 不受影響）。`docs/development.md`〈後端〉補一段「測試裡的『現在』」。
+
+### 不再依賴執行當天的證明
+
+用暫時的 pytest plugin 在整個 session 開頭 `time_machine.travel(timedelta(days=N), tick=True)`（沒進 repo）：
+
+```
+travel     0 days: 2 passed   # TestThePageFlow
+travel   -60 days: 2 passed
+travel    40 days: 2 passed
+travel   400 days: 2 passed
+travel  3650 days: 2 passed
+```
+
+修好之後全套：正常時鐘 `4620 passed, 1 skipped`；時鐘 +400 天（session 內讀回 2027-11-28）同樣 `4620 passed, 1 skipped`。變異：把跳過 `QUIET_AFTER` 那一行換成 `pass`，最後一條斷言紅（`assert False is True`）。
+
+### 全套掃描（第 4 點）
+
+修之前用同一個 plugin 跑全套 N = 0、−60、400、3650：
+
+- 往後推（0、400、3650）只有這一條紅。
+- 往回推 60 天多紅一條 `tests/integration/test_reimport.py::TestRebuildingADeletedLibrary::test_jellyfin_finds_every_episode_again`：入庫用寫死的 `arrange.NOW`（2026-09-08），反查掃描用 `utcnow() + 1 分鐘`，時鐘早於 2026-09-08 才紅，往後永遠綠，**不是定時炸彈，不修**。兩個時鐘混用，下次動這條時可以順手改成都從 `NOW` 算。
+- 四種 N 都有的 9 個 ERROR 是掃描時加了 `-p no:logging`（`caplog` 不在了），與日期無關；不加這個旗標的全套是綠的。
+
+掃描的極限：抓得到「過了某一天就翻面」的測試，抓不到只在某段時間窗內才紅的（跨年、月底、夏令時間）。
+
+### code-review（基準 `c8c15646`）
+
+Standards 沒有硬性違規；已改：`development.md` 那段的「fixture」同時指 pytest fixture 與錄下的資料，後者改成「錄下來的資料」。未處理（判斷題）：同檔第三份 `next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)`，三份不抽；`KIMI_NEXT_DAY` 說的是怎麼算而不是用途，有註解，保留。Spec 沒有缺漏或範圍外的改動。
