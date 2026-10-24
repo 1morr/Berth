@@ -227,5 +227,8 @@ class TestTheBreakdowns:
             (AiCallOrigin.TEST, 4)
         ]
         # 多的在前。
-        assert report.failures == ((AiFailure.RATE_LIMITED, 2), (AiFailure.PROVIDER_DOWN, 1))
+        assert [(line.failure, line.calls) for line in report.failures] == [
+            (AiFailure.RATE_LIMITED, 2),
+            (AiFailure.PROVIDER_DOWN, 1),
+        ]
         assert report.totals.failed == 3

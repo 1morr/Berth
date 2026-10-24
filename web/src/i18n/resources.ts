@@ -3194,7 +3194,8 @@ const zhHant = {
         go: '前往 AI 設定',
       },
       emptyPeriod: '這段期間沒有呼叫。',
-      longer: '看 90 天',
+      longer_one: '看 {{count}} 天',
+      longer_other: '看 {{count}} 天',
       totals: {
         label: '這段期間的總量',
         calls: '呼叫',
@@ -3202,7 +3203,7 @@ const zhHant = {
         output: '輸出 tokens',
         hitRate: '快取命中率',
         failed: '沒成的',
-        noRate: '沒有回報快取的呼叫，算不出來。',
+        noRate: '算不出來：沒有一筆同時回報了輸入與快取讀取、而且輸入不是 0。',
       },
       unreported_one: '{{count}} 次沒回報快取，不算在內。',
       unreported_other: '{{count}} 次沒回報快取，不算在內。',
@@ -7090,7 +7091,8 @@ const en: Translations<typeof zhHant> = {
         go: 'Go to AI settings',
       },
       emptyPeriod: 'No calls in this period.',
-      longer: 'Show 90 days',
+      longer_one: 'Show {{count}} day',
+      longer_other: 'Show {{count}} days',
       totals: {
         label: 'Totals for this period',
         calls: 'Calls',
@@ -7098,7 +7100,8 @@ const en: Translations<typeof zhHant> = {
         output: 'Output tokens',
         hitRate: 'Cache hit rate',
         failed: 'Failed',
-        noRate: 'No call reported cache use, so there is nothing to compute.',
+        noRate:
+          'Nothing to compute: no call reported both its input and its cache reads with any input at all.',
       },
       unreported_one: '{{count}} call did not report cache use and is left out.',
       unreported_other: '{{count}} calls did not report cache use and are left out.',

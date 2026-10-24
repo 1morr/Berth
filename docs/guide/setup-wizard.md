@@ -142,6 +142,3 @@ that are one bar per day (cache read, other input, output; the daily numbers are
 origin, by format and model (the same model through two hosts is two rows), by person, and the reasons calls
 failed. Some endpoints do not report cache use; those calls are left out of the hit rate and the page says how
 many there were. There is no budget and no limit: this page only reports.
-
-Berth records every request: model, input and output tokens, cache tokens, how long it took and who ran it.
-There is no spending limit.

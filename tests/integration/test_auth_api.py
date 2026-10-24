@@ -458,6 +458,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/settings/ai"): Access.ADMIN,
     ("POST", "/settings/ai/test"): Access.ADMIN,
     ("GET", "/settings/ai/models"): Access.ADMIN,
+    # 用量頁（M5 票 13）：看得到每個人的用量。
+    ("GET", "/settings/ai/usage"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,

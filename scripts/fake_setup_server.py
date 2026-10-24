@@ -2525,7 +2525,7 @@ async def _seed_usage(session: AsyncSession) -> None:
     - 同一個 Opus 經 `openrouter.ai`：不回快取欄位（`NULL`），命中率不算它、頁面說有幾次沒回報；
     - Haiku：沒有快取；
     - 五次被限流（什麼都不知道）、一次串流斷掉（知道輸入、不知道輸出）；
-    - `skipper` 與 `deckhand` 各按過，十幾次沒有人（像背景任務那樣）。
+    - `skipper`、`deckhand` 與沒有人（像背景任務那樣）各佔三分之一。
 
     時間是容器時區的每天上午十點起，每次隔四分鐘；今天也有幾次。
     """

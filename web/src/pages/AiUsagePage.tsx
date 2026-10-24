@@ -18,12 +18,12 @@ import { RequestFailed } from '../components/RequestFailed'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { UsageChart } from '../settings/UsageChart'
 import { useUsageFormat } from '../settings/usageFormat'
-import { UsageTable } from '../settings/UsageTable'
+import { HEAD_CELL, USAGE_TABLE, UsageTable } from '../settings/UsageTable'
 
 /** 出處的名字。少一種就編譯不過：票 08 加了對話、M6 加了 AI 任務，這裡跟著補一格。 */
-const ORIGIN_TEXT: Record<AiCallOrigin, 'settings.usagePage.origin.test'> = {
+const ORIGIN_TEXT = {
   test: 'settings.usagePage.origin.test',
-}
+} as const satisfies Record<AiCallOrigin, string>
 
 const FAILURE_TEXT = {
   rate_limited: 'settings.usagePage.failure.rate_limited',
@@ -93,6 +93,7 @@ function FirstCall() {
 function Report({ usage, days }: { usage: AiUsage; days: UsagePeriod }) {
   const { t } = useTranslation()
   const quiet = usage.totals.calls === 0
+  const longest = USAGE_PERIODS[USAGE_PERIODS.length - 1]
 
   return (
     <>
@@ -107,9 +108,9 @@ function Report({ usage, days }: { usage: AiUsage; days: UsagePeriod }) {
         {quiet && (
           <p className="text-sm text-ink">
             {t('settings.usagePage.emptyPeriod')}{' '}
-            {days !== 90 && (
-              <Link to="/settings/usage" search={{ days: 90 }} className="underline">
-                {t('settings.usagePage.longer')}
+            {longest !== undefined && days !== longest && (
+              <Link to="/settings/usage" search={{ days: longest }} className="underline">
+                {t('settings.usagePage.longer', { count: longest })}
               </Link>
             )}
           </p>
@@ -235,6 +236,7 @@ function Breakdowns({ usage }: { usage: AiUsage }) {
           lines={usage.by_origin.map((line) => ({
             key: line.origin,
             label: t(ORIGIN_TEXT[line.origin]),
+            prose: true,
             tally: line.tally,
           }))}
         />
@@ -264,6 +266,7 @@ function Breakdowns({ usage }: { usage: AiUsage }) {
           lines={usage.by_user.map((line) => ({
             key: String(line.user_id),
             label: line.name ?? t('settings.usagePage.byUser.nobody'),
+            prose: line.name === null,
             tally: line.tally,
           }))}
         />
@@ -277,19 +280,13 @@ function Breakdowns({ usage }: { usage: AiUsage }) {
         {usage.failures.length === 0 ? (
           <p className="text-sm text-ink">{t('settings.usagePage.failures.none')}</p>
         ) : (
-          <table
-            aria-labelledby="usage-failures"
-            className="w-full border-collapse border-2 border-rule bg-well text-left"
-          >
+          <table aria-labelledby="usage-failures" className={USAGE_TABLE}>
             <thead>
               <tr>
-                <th scope="col" className="label px-3 py-2 whitespace-nowrap text-ink-dim">
+                <th scope="col" className={HEAD_CELL}>
                   {t('settings.usagePage.failures.column')}
                 </th>
-                <th
-                  scope="col"
-                  className="label px-3 py-2 text-right whitespace-nowrap text-ink-dim"
-                >
+                <th scope="col" className={`${HEAD_CELL} text-right`}>
                   {t('settings.usagePage.failures.count')}
                 </th>
               </tr>

@@ -70,6 +70,12 @@ class UserUsage:
 
 
 @dataclass(frozen=True)
+class FailureCount:
+    failure: AiFailure
+    calls: int
+
+
+@dataclass(frozen=True)
 class UsageReport:
     #: 有史以來有沒有任何一列：分得出「第一次來」與「這段期間沒有」。
     has_any: bool
@@ -84,7 +90,7 @@ class UsageReport:
     by_model: tuple[ModelUsage, ...]
     by_user: tuple[UserUsage, ...]
     #: 沒成的分類與次數，多的在前；全都成了是空的。
-    failures: tuple[tuple[AiFailure, int], ...]
+    failures: tuple[FailureCount, ...]
 
 
 def tally(calls: Iterable[AiCall]) -> UsageTally:
@@ -151,7 +157,8 @@ async def read_usage(
             for user_id, counted in _grouped(rows, lambda row: row.user_id)
         ),
         failures=tuple(
-            sorted(
+            FailureCount(failure=failure, calls=calls)
+            for failure, calls in sorted(
                 Counter(row.failure for row in rows if row.failure is not None).items(),
                 key=lambda pair: (-pair[1], pair[0].value),
             )

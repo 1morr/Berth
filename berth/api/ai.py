@@ -190,6 +190,8 @@ class UserUsageOut(BaseModel):
 
 
 class FailureCountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     failure: AiFailure
     calls: int
 
@@ -278,16 +280,4 @@ async def get_usage(
 ) -> AiUsageOut:
     """今天往前 `days` 天（含今天）的用量，日期照容器時區（與週報同一個規則）。"""
     report = await read_usage(session, days=int(days), today=datetime.now().astimezone().date())
-    return AiUsageOut(
-        has_any=report.has_any,
-        since=report.since,
-        until=report.until,
-        totals=UsageTallyOut.model_validate(report.totals),
-        days=[DayUsageOut.model_validate(day) for day in report.days],
-        by_origin=[OriginUsageOut.model_validate(line) for line in report.by_origin],
-        by_model=[ModelUsageOut.model_validate(line) for line in report.by_model],
-        by_user=[UserUsageOut.model_validate(line) for line in report.by_user],
-        failures=[
-            FailureCountOut(failure=failure, calls=calls) for failure, calls in report.failures
-        ],
-    )
+    return AiUsageOut.model_validate(report)

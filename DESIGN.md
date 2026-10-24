@@ -1102,7 +1102,8 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
   （The Focus Follows The Confirm Rule）。
 - **Do** 讓處理完就消失的清單列把焦點交給接替的那一列，清單空了交給頁面的 `h1`（The Focus Takes The Next Row Rule）。
 - **Do** 把「需要你」的計數塗在摘要層，不要只放在展開區裡（The Needs-You Floats Up Rule）。
-- **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。
+- **Do** 讓窄版少掉的欄收成一行帶標籤的 `Dot` 分隔值，一份 DOM 兩種版面。例外是收掉的欄多到在 390 寬一定斷行時（用量頁的四個 token 欄）：
+  一組一行、不用 `Dot`，否則斷開的那一行以中點開頭，讀起來像清單符號。
 - **Do** 讓 `Cutaway` 與 `ServiceCard` 的 `level` 跟著它所在頁面的標題層級，不跳級。
 - **Do** 讓等得到的事（Feed 這一輪讀不到、自動綁定排著重認、送單卡住）走線變重或 `assigned`，不走 `blocked`：
   Berth 自己會再試的不是阻擋（The One Meaning Rule）。

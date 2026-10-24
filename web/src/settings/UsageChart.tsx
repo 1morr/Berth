@@ -46,28 +46,31 @@ export function UsageChart({ days }: { days: AiUsage['days'] }) {
           className="mt-1 flex h-40 items-stretch gap-px border-b-2 border-rule-strong"
           onPointerLeave={() => setPointed(null)}
         >
-          {days.map((day, index) => (
-            <div
-              key={day.date}
-              data-testid="usage-bar"
-              data-pointed={pointed === index ? 'true' : undefined}
-              className="flex min-w-0 flex-1 flex-col-reverse gap-px data-[pointed=true]:bg-deck"
-              onPointerEnter={() => setPointed(index)}
-              onPointerDown={() => setPointed(index)}
-            >
-              {SEGMENTS.map((segment) => {
-                const value = segmentsOf(day.tally)[segment]
-                if (value === 0 || peak === 0) return null
-                return (
-                  <div
-                    key={segment}
-                    className={`min-h-px ${SEGMENT_FILL[segment]}`}
-                    style={{ height: `${(value / peak) * 100}%` }}
-                  />
-                )
-              })}
-            </div>
-          ))}
+          {days.map((day, index) => {
+            const segments = segmentsOf(day.tally)
+            return (
+              <div
+                key={day.date}
+                data-testid="usage-bar"
+                data-pointed={pointed === index ? 'true' : undefined}
+                className="flex min-w-0 flex-1 flex-col-reverse gap-px data-[pointed=true]:bg-deck"
+                onPointerEnter={() => setPointed(index)}
+                onPointerDown={() => setPointed(index)}
+              >
+                {SEGMENTS.map((segment) => {
+                  const value = segments[segment]
+                  if (value === 0 || peak === 0) return null
+                  return (
+                    <div
+                      key={segment}
+                      className={`min-h-px ${SEGMENT_FILL[segment]}`}
+                      style={{ height: `${(value / peak) * 100}%` }}
+                    />
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
         <div className="value mt-1 flex justify-between gap-3 text-xs text-ink-dim">
           <span>{days[0]?.date}</span>
