@@ -3,8 +3,8 @@
 與介面無關：側面板（`api/conversations.py` 的 SSE）與 M7 的 Discord 都呼叫 `AssistantRuns.send`，
 讀它回的事件。存下來的形狀與讀取在 `services.conversations`。
 
-- **工具＝登錄表依角色過濾**（`Registry.tools_for`）；`invoke` 再查一次，模型叫了清單外的名字也
-  一樣擋。設定頁測出不支援工具呼叫的模型（`settings.ai.tool_test`）請求不帶工具。
+- **工具＝登錄表依角色過濾**（`Registry.tools_for`）；`Registry.resolve` 再查一次，模型叫了清單外的
+  名字也一樣擋。設定頁測出不支援工具呼叫的模型（`settings.ai.tool_test`）請求不帶工具。
 - **prompt 的固定前綴**：system 只放固定的字（一個語言一份，`system_prompt`）、工具照登記的順序；
   使用者的話與外部來的文字只在訊息裡，工具結果是帶出處的 JSON（`conversations.tool_content`）。
 - **兩條保險絲**（brief §6.10）：一則訊息之後最多 `MAX_TOOL_ROUNDS` 次模型呼叫，到了就停、說出
@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -49,8 +49,9 @@ from berth.domain import (
     MessageKind,
     ToolOutcome,
 )
-from berth.models import AiSettings, Conversation, ConversationMessage
+from berth.models import AiSettings, Conversation
 from berth.models.types import utcnow
+from berth.services import proposals
 from berth.services.ai import effective_model, is_ready
 from berth.services.ai_calls import call_model
 from berth.services.auth import AuthenticatedUser
@@ -65,7 +66,7 @@ from berth.services.conversations import (
     ToolCallPart,
     ToolResultPart,
     UserText,
-    dump_parts,
+    append_message,
     messages_of,
     own_conversation,
     status_of,
@@ -73,6 +74,7 @@ from berth.services.conversations import (
     tool_result_of,
     turns_of,
 )
+from berth.services.proposals import ProposalCard
 from berth.services.registry import NextStep, Refusal, Registry, Tool, ToolContext, ToolRefusal
 from berth.services.settings import read_settings
 from berth.services.tools import REGISTRY
@@ -205,7 +207,7 @@ class AssistantRuns:
     def replying(self, conversation_id: int) -> bool:
         return conversation_id in self._active
 
-    # 花掉的 tokens 收不回來；工具裡的寫入各自標著（`Registry.invoke`）。
+    # 花掉的 tokens 收不回來；工具裡的寫入各自標著（`proposals.dispatch`、`Registry.run`）。
     @command(Effect.IRREVERSIBLE)
     async def send(
         self,
@@ -243,7 +245,7 @@ class AssistantRuns:
             cid = conversation.id
             self._active.add(cid)
             try:
-                _append(session, conversation, MessageKind.USER, [UserText(text=said)], now)
+                append_message(session, conversation, MessageKind.USER, [UserText(text=said)], now)
                 await session.commit()
             except BaseException:
                 self._active.discard(cid)
@@ -263,6 +265,52 @@ class AssistantRuns:
 
         task.add_done_callback(done)
         return Reply(conversation_id=cid, events=_events(queue))
+
+    # 執行的是不可逆的工具（`proposals.confirm`）。
+    @command(Effect.IRREVERSIBLE)
+    async def confirm(self, proposal_id: int, *, user: AuthenticatedUser) -> ProposalCard:
+        """按下確認卡的「確認」：以這個人執行（`services.proposals.confirm`）。"""
+        return await self._deciding(
+            proposal_id,
+            user,
+            lambda context: proposals.confirm(self._registry, proposal_id, context),
+        )
+
+    # 只改那張卡，但按過就回不去（`proposals.reject`）。
+    @command(Effect.IRREVERSIBLE)
+    async def reject(self, proposal_id: int, *, user: AuthenticatedUser) -> ProposalCard:
+        """按下確認卡的「拒絕」：記下來，什麼都不做。"""
+        return await self._deciding(
+            proposal_id, user, lambda context: proposals.reject(proposal_id, context)
+        )
+
+    async def _deciding(
+        self,
+        proposal_id: int,
+        user: AuthenticatedUser,
+        decide: Callable[[ToolContext], Awaitable[ProposalCard]],
+    ) -> ProposalCard:
+        """按卡片也要佔住那則對話：決定那一則與回覆的那幾則交錯的話，模型的工具呼叫與它的結果之間
+        會夾一則，歷史就組不起來。回覆還在跑時是 `busy`（前端那時也不給按）。"""
+        async with self._sessions() as session:
+            cid = await proposals.conversation_of(session, proposal_id=proposal_id, user_id=user.id)
+        if cid is not None:
+            if self.replying(cid):
+                raise AssistantRefusedError(AssistantRefusal.BUSY, str(cid))
+            self._active.add(cid)
+        try:
+            return await decide(
+                ToolContext(
+                    sessions=self._sessions,
+                    clients=self._clients,
+                    user=user,
+                    now=self._now(),
+                    confirmed=True,
+                )
+            )
+        finally:
+            if cid is not None:
+                self._active.discard(cid)
 
     @command(Effect.READ)
     async def aclose(self) -> None:
@@ -370,8 +418,10 @@ class AssistantRuns:
             turns.append(reply)
             if not reply.tool_calls:
                 return
-            context = ToolContext(sessions=self._sessions, user=user, now=self._now())
-            results = [await self._run_tool(call, context, emit) for call in reply.tool_calls]
+            context = ToolContext(
+                sessions=self._sessions, clients=self._clients, user=user, now=self._now()
+            )
+            results = [await self._run_tool(cid, call, context, emit) for call in reply.tool_calls]
             await self._save(cid, MessageKind.TOOLS, results)
             turns.append(UserTurn(tuple(tool_result_of(part) for part in results)))
         await self._stop(
@@ -379,7 +429,11 @@ class AssistantRuns:
         )
 
     async def _run_tool(
-        self, call: ToolCall, context: ToolContext, emit: Callable[[AssistantEvent], None]
+        self,
+        cid: int,
+        call: ToolCall,
+        context: ToolContext,
+        emit: Callable[[AssistantEvent], None],
     ) -> ToolResultPart:
         arguments = call.arguments_object()
         result: BaseModel
@@ -391,11 +445,18 @@ class AssistantRuns:
                 next=NextStep.RETRY,
             )
         else:
-            result = await self._registry.invoke(call.name, arguments, context)
+            result = await proposals.dispatch(
+                self._registry,
+                call.name,
+                arguments,
+                context,
+                conversation_id=cid,
+                call_id=call.id,
+            )
         part = ToolResultPart(
             call_id=call.id,
             tool=call.name,
-            outcome=ToolOutcome.REFUSED if isinstance(result, Refusal) else ToolOutcome.DONE,
+            outcome=_outcome_of(result),
             result_type=type(result).__name__,
             result=result.model_dump(mode="json"),
         )
@@ -412,7 +473,7 @@ class AssistantRuns:
         async with self._sessions() as session:
             conversation = await session.get(Conversation, cid)
             assert conversation is not None  # 送出時建好、驗過是這個人的
-            _append(session, conversation, kind, parts, self._now())
+            append_message(session, conversation, kind, parts, self._now())
             await session.commit()
 
 
@@ -424,19 +485,12 @@ async def _events(queue: asyncio.Queue[AssistantEvent]) -> AsyncIterator[Assista
             return
 
 
-def _append(
-    session: AsyncSession,
-    conversation: Conversation,
-    kind: MessageKind,
-    parts: Sequence[StoredPart],
-    now: datetime,
-) -> None:
-    session.add(
-        ConversationMessage(
-            conversation_id=conversation.id, kind=kind, parts_json=dump_parts(parts), created_at=now
-        )
-    )
-    conversation.updated_at = now
+def _outcome_of(result: BaseModel) -> ToolOutcome:
+    if isinstance(result, Refusal):
+        return ToolOutcome.REFUSED
+    if isinstance(result, ProposalCard):
+        return ToolOutcome.PROPOSED
+    return ToolOutcome.DONE
 
 
 # Any：登記表裡每一條的輸入與結果型別各不相同（同 `Registry`）。

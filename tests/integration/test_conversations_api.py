@@ -17,6 +17,7 @@ from tests.integration.factories import FakeClientFactory
 from tests.integration.test_ai_settings_api import BROWSER
 from tests.integration.test_assistant import calls
 from tests.integration.test_issues_api import CREW, client, factory, sign_in
+from tests.integration.test_proposals import asks
 from tests.integration.test_weekly import FRIEREN, imported, works
 
 __all__ = ["client", "factory"]
@@ -202,3 +203,64 @@ class TestEachPersonsOwn:
     def test_signed_out_gets_nothing(self, client: TestClient) -> None:
         assert client.get("/api/conversations").status_code == 401
         assert client.get("/api/assistant").status_code == 401
+
+
+class TestConfirmationCards:
+    """確認卡（M5 票 10）：讀對話時帶著每一張卡的現況；只有要它的那個人按得到。"""
+
+    def proposed(self, client: TestClient, factory: FakeClientFactory) -> tuple[int, int]:
+        """管理員叫 AI 加 Nyaa：停在一張卡上。回對話與卡片的 id。"""
+        ai_ready(client)
+        factory.ai_.replies = [
+            asks("add_indexer", site="nyaasi", reason="For anime."),
+            says("Press confirm."),
+        ]
+        streamed = send(client, "add nyaa")
+        [output] = [chunk for chunk in streamed if chunk["type"] == "tool-output-available"]
+        assert (output["outcome"], output["result_type"]) == ("proposed", "ProposalCard")
+        assert isinstance(output["result"], dict)
+        cid, card = streamed[0]["conversation_id"], output["result"]["id"]
+        assert isinstance(cid, int) and isinstance(card, int)
+        return cid, card
+
+    def test_confirming_runs_it_and_the_conversation_reads_the_outcome(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        cid, card = self.proposed(client, factory)
+        before = client.get(f"/api/conversations/{cid}").json()
+        assert [row["status"] for row in before["proposals"]] == ["proposed"]
+
+        confirmed = client.post(f"/api/proposals/{card}/confirm", headers=BROWSER)
+
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["status"] == "confirmed"
+        assert factory.prowlarr_.add_attempts == ["nyaasi"]
+        after = client.get(f"/api/conversations/{cid}").json()
+        assert [row["status"] for row in after["proposals"]] == ["confirmed"]
+        # 按過的那一則是給模型看的：畫面上由卡片自己畫，不另出一則。
+        assert [message["kind"] for message in after["messages"]][-1] == "decision"
+        assert after["messages"][-1]["parts"] == []
+
+    def test_someone_else_gets_a_404_and_nothing_happens(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        _, card = self.proposed(client, factory)
+        sign_in(client, CREW)
+
+        for action in ("confirm", "reject"):
+            refused = client.post(f"/api/proposals/{card}/{action}", headers=BROWSER)
+            assert refused.status_code == 404
+            assert refused.json()["detail"]["reason"] == "proposal_missing"
+        assert factory.prowlarr_.add_attempts == []
+
+    def test_a_card_pressed_twice_is_a_409(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        _, card = self.proposed(client, factory)
+        assert client.post(f"/api/proposals/{card}/reject", headers=BROWSER).status_code == 200
+
+        again = client.post(f"/api/proposals/{card}/confirm", headers=BROWSER)
+
+        assert again.status_code == 409
+        assert again.json()["detail"]["reason"] == "already_decided"
+        assert factory.prowlarr_.add_attempts == []

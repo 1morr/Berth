@@ -433,5 +433,5 @@ _Avoid_: chat, thread（thread 是 Discord 的東西）, session（session 是�
 _Avoid_: widget, message（message 是管道上送出去的那一則）
 
 **Proposal**（提案）:
-AI 想做但**不可逆**或沒把握的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。人確認才執行。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做。
+AI 想做但**不可逆**或沒把握的一次工具呼叫：工具、參數、AI 的理由、為什麼要人按（cause）、卡上講的「會發生什麼」（preview）、狀態（proposed / confirmed / rejected / expired）、誰按的與結果。人按了確認才以他執行，按的當下重驗角色與輸入；不成立、或執行被拒（什麼都沒改）是 expired。只有要它的那個人按得到。畫面上是一張確認卡，外部管道上是一則帶按鈕的訊息；`proposals` 表一列，不是側面板的狀態。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做（M5 票 10 起有實作）。
 _Avoid_: suggestion, action, task

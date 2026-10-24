@@ -186,6 +186,121 @@ async def delete_job(
             return await _apply(session, factory, job, scope, seen=seen, actor=actor)
 
 
+class DeletionRefusal(StrEnum):
+    """助理刪一部作品的下載時不做的理由（M5 票 10 的確認卡）。對話框照舊一筆一筆走 `delete_job`，
+    不經過這裡；所以這一組不在 `domain/enums.py`、沒有狀態碼（同 `ToolRefusal`）。"""
+
+    #: 這部作品沒有還在的 Job：沒有 torrent 可移除、也沒有下載目錄裡的檔案可刪。
+    NOTHING_TO_DELETE = "nothing_to_delete"
+    #: 確認卡上列的那一筆已經不在、或已經刪過了：人看到的那一份不成立，整批不做。
+    JOB_GONE = "job_gone"
+
+
+class DeletionRejectedError(Exception):
+    def __init__(self, reason: DeletionRefusal, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else reason.value)
+        self.reason = reason
+        self.detail = detail
+
+
+#: 「刪 complete」的範圍（brief §9.2）：從 qBittorrent 移除、刪下載目錄裡的檔案。媒體庫的硬鏈接與
+#: 帳本留著——Jellyfin 照樣看得到，只是不再做種（2026-10-24 使用者選定）。
+DOWNLOADS_SCOPE = DeleteScope(remove_torrent=True, delete_files=True)
+
+
+@dataclass(frozen=True, slots=True)
+class JobDownloads:
+    """一筆 Job 在下載目錄裡的東西：確認卡上的一段。"""
+
+    hash: str
+    name: str
+    state: JobState
+    #: 磁碟上還在的來源檔，絕對路徑。
+    files: tuple[str, ...]
+    #: 帳本或 qBittorrent 報過、磁碟上已經不在的。
+    missing: int
+    bytes: int
+    #: 這幾個檔案刪掉時真的會空出來的：媒體庫的硬鏈接還握著同一份時是 0。
+    reclaimable: int
+
+
+@dataclass(frozen=True, slots=True)
+class JobDownloadsOutcome:
+    """一筆刪了什麼；沒做成的是 `refused` 的理由碼。"""
+
+    hash: str
+    name: str
+    sources: int
+    freed: int
+    refused: str = ""
+
+
+@command(Effect.READ)
+async def plan_downloads_deletion(session: AsyncSession, media: str) -> tuple[JobDownloads, ...]:
+    """刪 `media` 的下載會刪到什麼（M5 票 10）：每一筆還沒移除的 Job、它在下載目錄裡的檔案與
+    空得出多少。**只讀**，逐一 `stat`（同 `estimate_deletion`）。一筆都沒有丟
+    `DeletionRejectedError(NOTHING_TO_DELETE)`。"""
+    jobs = await session.scalars(
+        select(Job)
+        .where(Job.media_id == media, Job.state != JobState.REMOVED)
+        .order_by(Job.added_at, Job.hash)
+    )
+    planned = []
+    for job in jobs:
+        paths = await _scope_paths(session, job)
+        measured = _measure(paths.sources)
+        planned.append(
+            JobDownloads(
+                hash=job.hash,
+                name=job.name,
+                state=job.state,
+                files=tuple(str(path) for path in measured.found),
+                missing=len(paths.sources) - len(measured.found),
+                bytes=measured.bytes,
+                reclaimable=measured.reclaimable,
+            )
+        )
+    if not planned:
+        raise DeletionRejectedError(DeletionRefusal.NOTHING_TO_DELETE, media)
+    return tuple(planned)
+
+
+# 移除 torrent、刪 complete 裡的檔案（brief §14），同 `delete_job`。
+@command(Effect.IRREVERSIBLE)
+async def delete_downloads(
+    session: AsyncSession, factory: ServiceClientFactory, hashes: Sequence[str], *, actor: str
+) -> tuple[JobDownloadsOutcome, ...]:
+    """這幾筆各走一次 `delete_job`（`DOWNLOADS_SCOPE`）。
+
+    **先全部驗過再動手**：有一筆已經不在或已經刪過時整批不做（`JOB_GONE`）——人按確認時同意的是
+    他看到的那幾筆。驗過之後某一筆被拒（例如 qBittorrent 問不到），那一筆什麼都沒動、記下理由，
+    其餘照做：已經刪掉的收不回來，停在中間只會讓結果更難說清楚。
+    """
+    for job_hash in hashes:
+        job = await session.get(Job, job_hash, populate_existing=True)
+        if job is None or job.state is JobState.REMOVED:
+            raise DeletionRejectedError(DeletionRefusal.JOB_GONE, job_hash)
+    done = []
+    for job_hash in hashes:
+        job = await session.get(Job, job_hash)
+        name = job.name if job is not None else ""
+        try:
+            outcome = await delete_job(session, factory, job_hash, DOWNLOADS_SCOPE, actor=actor)
+        except JobRejectedError as exc:
+            done.append(
+                JobDownloadsOutcome(
+                    hash=job_hash, name=name, sources=0, freed=0, refused=exc.reason
+                )
+            )
+            continue
+        done.append(
+            JobDownloadsOutcome(
+                hash=job_hash, name=name, sources=outcome.sources, freed=outcome.freed
+            )
+        )
+    return tuple(done)
+
+
 async def _apply(
     session: AsyncSession,
     factory: ServiceClientFactory,

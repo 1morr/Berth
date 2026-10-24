@@ -5,10 +5,11 @@ import type { Chunk, Message, NoticePart, ToolOutcome } from '../api/assistant'
  *
  * 一句使用者的話一塊；它之後、下一句之前的模型回合、工具結果與 notice 收成同一塊「助理」——
  * 一則訊息之後模型可以來回好幾輪，畫面上仍是它回的那一次。工具的狀態行把呼叫與結果以 call id 接起來：
- * 有呼叫沒結果是「正在查」，結果是 `Refusal` 是「沒做成」。結果本身跟著那一行走，卡片從它畫（票 09）。
+ * 有呼叫沒結果是「正在查」，結果是 `Refusal` 是「沒做成」，變成確認卡的是「等你按」（票 10）。結果本身
+ * 跟著那一行走，卡片從它畫（票 09）。
  */
 
-type ToolState = 'running' | 'done' | 'refused'
+type ToolState = 'running' | 'done' | 'refused' | 'proposed'
 
 /** 工具的結果（存下的 `ToolResultPart` 與串流的 `tool-output-available` 同形）：結果卡從它畫（票 09）。 */
 export interface ToolOutput {
@@ -106,7 +107,7 @@ function finished(
 ): Pick<Extract<Item, { kind: 'tool' }>, 'state' | 'reason' | 'output'> {
   const refused = outcome === 'refused'
   return {
-    state: refused ? 'refused' : 'done',
+    state: refused ? 'refused' : outcome === 'proposed' ? 'proposed' : 'done',
     reason: refused ? reasonOf(result) : '',
     output: { type, result },
   }

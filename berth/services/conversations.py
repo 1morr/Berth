@@ -9,8 +9,10 @@
   `conversation_messages.parts_json`、讀出時驗過。模型那一輪的 `OpaqueModelPart`
   （Anthropic 的 thinking）只回給 provider，不給畫面。
 - **送給模型的歷史由 `turns_of` 從存下的那幾則組出來**：說給人聽的 notice 不送；連著的使用者那一側
-  （上一輪的工具結果、這一句話）併成一輪；呼叫了卻沒有結果的工具（回覆跑到一半 Berth 關機）補一份
-  「沒執行」，provider 才收這份歷史。
+  （上一輪的工具結果、這一句話、有人按了確認卡）併成一輪；呼叫了卻沒有結果的工具（回覆跑到一半
+  Berth 關機）補一份「沒執行」，provider 才收這份歷史。
+- **有人按了確認卡**（M5 票 10）存成一則 `decision`：模型下一輪從帶出處的 JSON 讀到結果，畫面上
+  由那張卡自己畫（卡片讀 `proposals` 的現況，不讀這一則）。
 """
 
 from __future__ import annotations
@@ -32,6 +34,8 @@ from berth.domain import (
     AssistantNotice,
     AssistantRefusal,
     MessageKind,
+    ProposalRefusal,
+    ProposalStatus,
     ToolOutcome,
 )
 from berth.models import AiSettings, Conversation, ConversationMessage
@@ -47,6 +51,16 @@ TITLE_LENGTH = 80
 
 class AssistantRefusedError(Exception):
     def __init__(self, reason: AssistantRefusal, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else reason.value)
+        self.reason = reason
+        self.detail = detail
+
+
+class ProposalRejectedError(Exception):
+    """按確認卡不做的理由（`services.proposals`，M5 票 10）。定義在這裡而不在 `proposals`：登錄表
+    要把它列進 `REJECTIONS`，而 `proposals` 依賴登錄表。"""
+
+    def __init__(self, reason: ProposalRefusal, detail: str = "") -> None:
         super().__init__(f"{reason}: {detail}" if detail else reason.value)
         self.reason = reason
         self.detail = detail
@@ -109,8 +123,28 @@ class NoticePart(_Part):
     limit: int | None = None
 
 
+class DecisionPart(_Part):
+    """有人按了一張確認卡（M5 票 10）：確認了、結果是什麼，或拒絕了。給模型看的，畫面不另畫。"""
+
+    type: Literal["decision"] = "decision"
+    proposal_id: int
+    tool: str
+    status: ProposalStatus
+    #: 確認之後的結果型別與結果（同 `ToolResultPart`）；拒絕時是空的。
+    result_type: str | None = None
+    result: dict[str, Any] | None = None
+
+
 #: 一則裡的一個 part。`Part` 是同一份聯集加上讀出時用的 discriminator。
-StoredPart = UserText | ModelText | ToolCallPart | OpaqueModelPart | ToolResultPart | NoticePart
+StoredPart = (
+    UserText
+    | ModelText
+    | ToolCallPart
+    | OpaqueModelPart
+    | ToolResultPart
+    | NoticePart
+    | DecisionPart
+)
 Part = Annotated[StoredPart, Field(discriminator="type")]
 _PARTS = TypeAdapter(list[Part])
 
@@ -218,6 +252,23 @@ async def messages_of(session: AsyncSession, conversation_id: int) -> list[Conve
     return list(rows)
 
 
+def append_message(
+    session: AsyncSession,
+    conversation: Conversation,
+    kind: MessageKind,
+    parts: Sequence[StoredPart],
+    now: datetime,
+) -> None:
+    """加一則到對話的最後（不 commit）。同一則對話一次只有一個寫者：回覆在跑時，按確認卡的那一支
+    等它跑完（`services.assistant.AssistantRuns`）。"""
+    session.add(
+        ConversationMessage(
+            conversation_id=conversation.id, kind=kind, parts_json=dump_parts(parts), created_at=now
+        )
+    )
+    conversation.updated_at = now
+
+
 def parts_of(row: ConversationMessage) -> list[Part]:
     return _PARTS.validate_python(row.parts_json)
 
@@ -250,6 +301,27 @@ def tool_content(part: ToolResultPart) -> str:
     )
 
 
+def decision_content(part: DecisionPart) -> str:
+    """有人按了確認卡，給模型的那一段：帶出處的 JSON，**只有 Berth 自己的字**。
+
+    它在使用者那一側進模型（工具呼叫早就有了結果），而外部來的文字只能經由工具結果進來
+    （brief §6.10「外部文字是資料」、§20.24）：結果裡的 torrent 名、Prowlarr 回的原文都不放，只說
+    做成了沒有與拒絕的理由碼。做了什麼的細節在卡上（plan §11.6：做了什麼只以結果卡為準）。
+    """
+    content: dict[str, Any] = {
+        "source": "berth",
+        "proposal": part.proposal_id,
+        "tool": part.tool,
+        "status": part.status.value,
+    }
+    if part.result_type is not None:
+        refused = part.result_type == "Refusal"
+        content["outcome"] = "refused" if refused else "done"
+        if refused and part.result is not None:
+            content["reason"] = part.result.get("reason", "")
+    return json.dumps(content, ensure_ascii=False, sort_keys=True)
+
+
 def tool_result_of(part: ToolResultPart) -> ToolResult:
     """存下的一個工具結果 → 送給 provider 的那一份。"""
     return ToolResult(
@@ -267,6 +339,11 @@ def turns_of(
         parts = parts_of(row)
         if row.kind is MessageKind.USER:
             _add_user(turns, tuple(TextPart(p.text) for p in parts if isinstance(p, UserText)))
+        elif row.kind is MessageKind.DECISION:
+            decided = tuple(
+                TextPart(decision_content(p)) for p in parts if isinstance(p, DecisionPart)
+            )
+            _add_user(turns, decided)
         elif row.kind is MessageKind.TOOLS:
             results = tuple(tool_result_of(p) for p in parts if isinstance(p, ToolResultPart))
             # 這一份就是上一輪那幾個呼叫的結果，不補「沒執行」。

@@ -1871,6 +1871,8 @@ class MessageKind(StrEnum):
     TOOLS = "tools"
     #: Berth 說給人聽的事（provider 沒成、到了輪數上限）。不送給模型。
     NOTICE = "notice"
+    #: 有人按了確認卡（確認或拒絕，M5 票 10）。模型下一輪看得到，畫面由卡片自己畫。
+    DECISION = "decision"
 
 
 class AssistantNotice(StrEnum):
@@ -1890,6 +1892,39 @@ class ToolOutcome(StrEnum):
     DONE = "done"
     #: 登錄表的 `Refusal`：什麼都沒改。
     REFUSED = "refused"
+    #: 沒執行，做成了一張確認卡（Proposal，M5 票 10）：等人按（AI SDK 的 `approval-requested`）。
+    PROPOSED = "proposed"
+
+
+class ProposalStatus(StrEnum):
+    """一張確認卡走到哪裡（`proposals.status`，M5 票 10，CONTEXT.md 的 Proposal）。"""
+
+    #: 等人按。
+    PROPOSED = "proposed"
+    #: 人按了確認，以按的那個人執行了：結果在 `result`（執行到一半的那一刻 `result` 還是空的）。
+    CONFIRMED = "confirmed"
+    #: 人按了拒絕，什麼都沒做。
+    REJECTED = "rejected"
+    #: 按確認的當下已經不成立（角色變了、列已經不在、索引站已經加了），或執行被拒：什麼都沒改，
+    #: `result` 是那一份 `Refusal`。
+    EXPIRED = "expired"
+
+
+class ProposalCause(StrEnum):
+    """為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種
+    （票 11 的網址來源）。"""
+
+    #: 命令標著 `irreversible`（brief §14）：永遠要人。
+    IRREVERSIBLE = "irreversible"
+
+
+class ProposalRefusal(StrEnum):
+    """按確認卡的端點不做的理由（`services.proposals`）。"""
+
+    #: 沒有這張卡，或它不是你的——兩種說同一句。
+    PROPOSAL_MISSING = "proposal_missing"
+    #: 這張卡已經有人按過了（另一個分頁、另一個管道）。
+    ALREADY_DECIDED = "already_decided"
 
 
 class AssistantRefusal(StrEnum):

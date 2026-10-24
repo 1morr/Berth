@@ -1909,6 +1909,27 @@ SCENARIOS = {
 }
 
 
+def _demo_proposal(said: str, tools: set[str], chinese: bool) -> ToolCall | None:
+    """側面板演練裡兩個要人按的工具（M5 票 10）：話裡說到哪一個就呼叫哪一個。"""
+    lowered = said.lower()
+    if "add_indexer" in tools and ("索引站" in said or "indexer" in lowered):
+        reason = "你說要多一個動畫的索引站。" if chinese else "You asked for another anime indexer."
+        arguments = {"site": "dmhy", "reason": reason}
+        return ToolCall(
+            id="toolu_demo_indexer", name="add_indexer", arguments=json.dumps(arguments)
+        )
+    if "delete_downloads" in tools and "complete" in lowered:
+        movie = media_id(*_WEEKLY_WORKS[2][:2])
+        reason = (
+            "你說這部不用再做種了。" if chinese else "You said this one no longer needs seeding."
+        )
+        arguments = {"media": movie, "reason": reason}
+        return ToolCall(
+            id="toolu_demo_delete", name="delete_downloads", arguments=json.dumps(arguments)
+        )
+    return None
+
+
 class ScenarioHosts:
     """套件內主機名解不解得到：情境說沒起的那幾個解不到。compose 的主機名就是服務的名字。"""
 
@@ -1978,6 +1999,9 @@ class DemoChatProvider:
         話裡有「入庫」或「import」、而工具清單上有 `recent_imports` 時先呼叫它；收到工具結果就說
         查到幾部；有「限流」或「rate limit」時演被限流 30 秒。其餘照抄一句回去。
         回覆照 system 說的語言。
+
+        確認卡（M5 票 10）：有「索引站」或「indexer」時提議加 dmhy（Nyaa 已經在了）；有「complete」
+        時提議刪電影那一筆的下載（`_seed_recent` 放了真的檔案）。收到 `proposed` 就請人按卡片。
         """
         chinese = "Traditional Chinese" in request.system
         last = request.turns[-1]
@@ -1986,8 +2010,13 @@ class DemoChatProvider:
             if isinstance(last, UserTurn)
             else []
         )
+        # 有人按了確認卡的那一段也在使用者那一側（帶出處的 JSON，M5 票 10）：不是使用者說的話。
         said = (
-            " ".join(p.text for p in last.parts if isinstance(p, TextPart))
+            " ".join(
+                p.text
+                for p in last.parts
+                if isinstance(p, TextPart) and not p.text.startswith('{"')
+            )
             if isinstance(last, UserTurn)
             else ""
         )
@@ -2007,8 +2036,26 @@ class DemoChatProvider:
                 stop=StopReason.TOOL_CALLS, stop_raw="tool_use", reply=reply, usage=usage
             )
             return
-        if results:
-            works = json.loads(results[0].content).get("result", {}).get("works", [])
+        proposal = _demo_proposal(said, names, chinese) if not results else None
+        if proposal is not None:
+            yield ToolCallStarted(id=proposal.id, name=proposal.name)
+            await asyncio.sleep(0.6)
+            yield TurnEnded(
+                stop=StopReason.TOOL_CALLS,
+                stop_raw="tool_use",
+                reply=ModelTurn((proposal,)),
+                usage=usage,
+            )
+            return
+        outcome = json.loads(results[0].content) if results else {}
+        if outcome.get("status") == "proposed":
+            text = (
+                "卡片上寫了會發生什麼；按「確認」才會做，不想做就按「拒絕」。"
+                if chinese
+                else "The card says what would happen. Nothing happens until you press Confirm."
+            )
+        elif results:
+            works = outcome.get("result", {}).get("works", [])
             text = (
                 f"這七天入庫了 {len(works)} 部作品。"
                 if chinese
@@ -2559,7 +2606,7 @@ async def _moor(
     if scenario.usage_demo:
         await _seed_usage(session)
     if scenario.assistant_demo:
-        await _seed_recent(session)
+        await _seed_recent(session, paths)
         await set_ai(session, format=ApiFormat.ANTHROPIC, base_url="", model="", api_key="demo-key")
 
 
@@ -2816,10 +2863,13 @@ async def _landed(
     return job_hash
 
 
-async def _seed_recent(session: AsyncSession) -> None:
+async def _seed_recent(session: AsyncSession, paths: PathSettings) -> None:
     """「最近入庫」查得到東西（M5 票 09）：週報那幾部在這兩天又入庫了幾集。週報的最新一週在上週一
     05:00 就結束了，`weekly` 自己的列多半不在最近七天裡。三部各演一種 Jellyfin 收錄狀態：
-    芙莉蓮找到了、長名字那部還在等、電影的新版本 Jellyfin 找不到。"""
+    芙莉蓮找到了、長名字那部還在等、電影的新版本 Jellyfin 找不到。
+
+    電影那一筆的下載是真的檔案（M5 票 10）：叫助理「刪掉這部的 complete」時，確認卡列得出要刪的
+    兩個檔案，按確認之後它們真的從磁碟上消失。"""
     anime = await session.scalar(select(Route).where(Route.slug == "anime"))
     assert anime is not None
     now = datetime.now(UTC)
@@ -2845,8 +2895,31 @@ async def _seed_recent(session: AsyncSession) -> None:
         now - timedelta(hours=5),
         resolve_after=now + timedelta(minutes=5),
     )
-    await _landed(session, anime, "recent-movie", movie, None, None, now - timedelta(days=2))
+    movie_job = await _landed(
+        session, anime, "recent-movie", movie, None, None, now - timedelta(days=2)
+    )
+    await _downloaded_files(
+        session, paths, movie_job, "[Demo] Dune Part Two", ("Dune.Part.Two.mkv", "Dune.nfo")
+    )
     await session.commit()
+
+
+async def _downloaded_files(
+    session: AsyncSession, paths: PathSettings, job_hash: str, folder: str, names: tuple[str, ...]
+) -> None:
+    """`_landed` 那一筆在 complete 裡真的有這幾個檔案：`job_files` 與帳本的來源指著它們。"""
+    job = await session.get(Job, job_hash)
+    assert job is not None
+    job.save_path = f"{paths.complete_root}/movies"
+    job.content_path = f"{job.save_path}/{folder}"
+    source_dir = Path(job.content_path)
+    source_dir.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (source_dir / name).write_bytes(b"demo " + name.encode())
+        session.add(JobFile(job_hash=job_hash, rel_path=f"{folder}/{name}", size=5 + len(name)))
+    ledger = await session.scalar(select(LedgerEntry).where(LedgerEntry.job_hash == job_hash))
+    assert ledger is not None
+    ledger.source_abs_path = str(source_dir / names[0])
 
 
 async def _seed_weekly(session: AsyncSession) -> None:
