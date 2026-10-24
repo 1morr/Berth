@@ -1,7 +1,7 @@
 """「最近入庫」經命令登錄表呼叫（M5 票 05，票 09 的 tracer 用它）。
 
-從登錄表的介面進去（`REGISTRY.invoke`），斷言回來的結果型別。帳本的入庫列直接寫，造法與週報的
-測試同一套（`tests/integration/test_weekly.py`）：兩者讀的是同一段算法。
+從 AI 呼叫工具的那一個入口進去（`proposals.dispatch`），斷言回來的結果型別。帳本的入庫列直接寫，
+造法與週報的測試同一套（`tests/integration/test_weekly.py`）：兩者讀的是同一段算法。
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from berth.db import create_session_factory
 from berth.domain import JellyfinPresence, MediaKind, PlanAction, Role
 from berth.models import LedgerEntry, Media
 from berth.services.auth import AuthenticatedUser
+from berth.services.proposals import dispatch
 from berth.services.registry import NextStep, Refusal, ToolContext
 from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY, RecentImports, RecentWork
@@ -25,6 +26,16 @@ pytestmark = pytest.mark.asyncio
 
 ADMIN = AuthenticatedUser(id=1, name="skipper", role=Role.ADMIN, jellyfin_user_id="a")
 DECKHAND = AuthenticatedUser(id=2, name="deckhand", role=Role.USER, jellyfin_user_id="b")
+
+
+def context_for(engine: AsyncEngine, user: AuthenticatedUser) -> ToolContext:
+    return ToolContext(
+        sessions=create_session_factory(engine),
+        clients=FakeClientFactory(),
+        sources=SourceCache(),
+        user=user,
+        now=END,
+    )
 
 
 async def test_the_last_week_of_imports_comes_back_by_work(
@@ -41,14 +52,10 @@ async def test_the_last_week_of_imports_comes_back_by_work(
     await imported(session, FRIEREN, 9, at=END - timedelta(days=8))
     await imported(session, FRIEREN, 10, at=END - timedelta(days=1), action=PlanAction.SKIP)
 
-    context = ToolContext(
-        sessions=create_session_factory(engine),
-        clients=FakeClientFactory(),
-        sources=SourceCache(),
-        user=ADMIN,
-        now=END,
+    context = context_for(engine, ADMIN)
+    result = await dispatch(
+        REGISTRY, "recent_imports", {"days": 7}, context, conversation_id=None, call_id=None
     )
-    result = await REGISTRY.invoke("recent_imports", {"days": 7}, context)
 
     assert result == RecentImports(
         since=END - timedelta(days=7),
@@ -91,14 +98,10 @@ async def test_one_episode_jellyfin_cannot_find_makes_the_work_lost(
     entry = await imported(session, FRIEREN, 3, at=END - timedelta(days=1))
     await seen(session, entry, found=False)
 
-    context = ToolContext(
-        sessions=create_session_factory(engine),
-        clients=FakeClientFactory(),
-        sources=SourceCache(),
-        user=ADMIN,
-        now=END,
+    context = context_for(engine, ADMIN)
+    result = await dispatch(
+        REGISTRY, "recent_imports", {}, context, conversation_id=None, call_id=None
     )
-    result = await REGISTRY.invoke("recent_imports", {}, context)
 
     assert isinstance(result, RecentImports)
     assert [work.presence for work in result.works] == [JellyfinPresence.LOST]
@@ -123,15 +126,11 @@ async def seen(session: AsyncSession, entry: LedgerEntry, *, found: bool) -> Non
 
 async def test_an_ordinary_user_cannot_reach_it(engine: AsyncEngine) -> None:
     """週報頁只有管理員（`/weekly`），這個工具跟著它。"""
-    context = ToolContext(
-        sessions=create_session_factory(engine),
-        clients=FakeClientFactory(),
-        sources=SourceCache(),
-        user=DECKHAND,
-        now=END,
-    )
+    context = context_for(engine, DECKHAND)
 
-    result = await REGISTRY.invoke("recent_imports", {}, context)
+    result = await dispatch(
+        REGISTRY, "recent_imports", {}, context, conversation_id=None, call_id=None
+    )
 
     assert isinstance(result, Refusal)
     assert (result.reason, result.next) == ("unknown_tool", NextStep.GIVE_UP)

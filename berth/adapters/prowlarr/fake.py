@@ -24,6 +24,20 @@ PING_SINCE = (1, 3, 0)
 #: 假的定義清單：站名與 `definitionName` 都取自真的 `indexer/schema`（`tests/fixtures/`）。
 #: 推薦的九站（與 Anidex）之後是推薦清單以外的定義（2026-09-30 berth-lab 的 Prowlarr 2.6.5 schema，
 #: M4 票 09）：公開的 torrent 站、與 preset 同 `definitionName` 的一對、公開的 usenet 站、一個私站。
+#: 推薦清單上那幾站的第一個網址，抄自同一份 `indexer-schema.defaults.json`（M5 票 10 的確認卡）。
+_URLS = {
+    "nyaasi": "https://nyaa.si/",
+    "dmhy": "https://share.dmhy.org/",
+    "Anidex": "https://anidex.info/",
+    "animetosho-xyz": "https://animetosho.xyz/",
+    "acgrip": "https://acg.rip/",
+    "mikan": "https://mikanani.me/",
+    "1337x": "https://1337x.to/",
+    "yts": "https://yts.gg/",
+    "eztv": "https://eztvx.to/",
+    "thepiratebay": "https://thepiratebay.org/",
+}
+
 DEFAULT_DEFINITIONS: tuple[IndexerDefinition, ...] = tuple(
     IndexerDefinition(
         definition_name,
@@ -32,6 +46,7 @@ DEFAULT_DEFINITIONS: tuple[IndexerDefinition, ...] = tuple(
         language=language,
         description=description,
         protocol="usenet" if definition_name == "NZBIndex" else "torrent",
+        urls=(_URLS[definition_name],) if definition_name in _URLS else (),
     )
     for definition_name, name, privacy, language, description in (
         (

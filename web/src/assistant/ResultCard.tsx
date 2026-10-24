@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { ToolResults, ToolResultType } from '../api/assistant'
 import { MissingEpisodesCard } from './MissingEpisodesCard'
+import { ProposalCardView } from './ProposalCard'
 import { RecentImportsCard } from './RecentImportsCard'
 import { SearchResultsCard } from './SearchResultsCard'
 import { SubmittedJobCard } from './SubmittedJobCard'
@@ -21,7 +22,12 @@ const CARDS: { [K in ToolResultType]: ComponentType<{ result: ToolResults[K] }> 
   MissingEpisodes: MissingEpisodesCard,
   SearchResults: SearchResultsCard,
   SubmittedJob: SubmittedJobCard,
+  // 要人按的工具只在確認之後才有結果：那時結果畫在確認卡裡（`ProposalCard` 的 `Outcome`），
+  // 工具結果裡永遠是那一張卡，不會是它們。
+  IndexerAdded: null,
+  DownloadsDeleted: null,
   Refusal: null,
+  ProposalCard: ProposalCardView,
 }
 
 /**

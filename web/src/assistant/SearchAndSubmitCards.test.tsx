@@ -193,6 +193,7 @@ function said(...results: { tool: string; type: string; result: object; refused?
     created_at: AT,
     updated_at: AT,
     replying: false,
+    proposals: [],
     messages: [
       {
         id: 1,

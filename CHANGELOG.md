@@ -39,6 +39,17 @@
   與一句說明，不壞整個對話。API：SSE 的 `tool-output-available` 多 `result_type` 與 `result`（與存下的 `tool_result`
   同形）；OpenAPI 多 `ToolResultType`；「最近入庫」的結果多 `year`、`poster_url`、`poster_url_en`、`presence`。
   沒有資料庫 migration。
+- **助理的確認卡**（M5 票 10）：不可逆的事助理不能自己做，停在一張確認卡上，你按了「確認」才以你的名義執行。
+  這一版有兩件：**加索引站**（「幫我加一個動畫的索引站」：卡上寫哪一站、它的網址、加到哪一台 Prowlarr）與
+  **刪掉一部作品的下載**（「把這部的 complete 刪掉」：移除 qBittorrent 裡的 torrent、刪掉下載資料夾裡的檔案，卡上逐個列出
+  要刪的檔案、刪了空不空得出空間；媒體庫的鏈接留著，Jellyfin 照樣看得到）。卡上附 AI 的理由；「拒絕」什麼都不做。
+  按下去的當下再驗一次：那一站已經被加了、下載已經被刪了、你已經不是管理員時，卡片寫「失效」並說原因，什麼都沒改。
+  只有叫它做的那個人按得到；回覆還在跑時要等它講完。按了之後卡片說後端真的做了什麼，模型下一句話時看得到結果
+  （不會自己多回一句）。API：`POST /api/proposals/{id}/confirm`、`POST /api/proposals/{id}/reject`；
+  `GET /api/conversations/{id}` 多 `proposals`（每一張卡的現況）；SSE 的 `tool-output-available` 的 `outcome` 多
+  `proposed`，`result_type` 多 `ProposalCard`；OpenAPI 多 `ProposalPreviewType`。
+  **這一版有資料庫 migration**（`9708ccd64def`）：新表 `proposals`，一張卡一列（工具、參數、理由、卡上的預覽、狀態、
+  誰按的、結果）。
 - **跟助理說「這部缺的集搜一下並下載」**（M5 票 12）：在作品頁打開助理說，它知道是哪一部（送出時帶著目前的頁面，
   那一句底下說「在《…》的頁面上說的」）。三個新工具：查缺的集、照缺的集搜索引站、送單；結果各是一張卡——缺的集、
   搜尋結果（同搜尋頁的「為什麼不像這部作品」，自己也按得了送單，Route 的下拉在卡上）、送出的那一筆（跟著下載進度即時

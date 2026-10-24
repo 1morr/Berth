@@ -55,6 +55,7 @@ from berth.domain import RouteRefusal, enums
 from berth.main import create_app
 from berth.services import jellyfin_access
 from berth.services.deeplink import BerthPage
+from berth.services.proposals import result_models
 from berth.services.registry import ToolRefusal
 from berth.services.routes import RouteRejectedError
 from berth.services.tools import REGISTRY
@@ -91,6 +92,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "NotifyRefusal": notify_api._STATUS,
     "AiRefusal": ai_api._STATUS,
     "AssistantRefusal": conversations_api._STATUS,
+    "ProposalRefusal": conversations_api._PROPOSAL_STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
     "OwnerRefusal": setup_api._OWNER_STATUS,
     "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
@@ -242,9 +244,11 @@ class TestBerthPages:
 
 
 def tool_schemas() -> dict[str, Any]:
-    """登錄表要給前端的每一格：結果型別、`Refusal` 與它們帶到的巢狀 model 與 enum。"""
+    """登錄表要給前端的每一格：結果型別、`Refusal`、`ProposalCard`、確認卡的預覽型別（M5 票 10），
+    與它們帶到的巢狀 model 與 enum。"""
+    models = (*result_models(REGISTRY), *REGISTRY.preview_models())
     _, top = models_json_schema(
-        [(model, "serialization") for model in REGISTRY.frontend_models()],
+        [(model, "serialization") for model in models],
         ref_template="#/components/schemas/{model}",
     )
     defs: dict[str, Any] = top["$defs"]
@@ -292,13 +296,26 @@ class TestToolResults:
     def test_the_result_type_names_are_a_closed_set(self, document: dict[str, Any]) -> None:
         """`ToolResultPart.result_type` 是一個字串；前端以 `ToolResultType` 逐一對卡片（票 09），
         登記了新的結果型別卻沒有卡時 `tsc` 紅。"""
-        names = [model.__name__ for model in REGISTRY.frontend_models()]
+        names = [model.__name__ for model in result_models(REGISTRY)]
 
+        assert "ProposalCard" in names
         assert document["components"]["schemas"]["ToolResultType"] == {
             "type": "string",
             "enum": names,
         }
         generated = union_members(GENERATED.read_text(encoding="utf-8"), "ToolResultType")
+        assert generated == set(names)
+
+    def test_the_preview_type_names_are_a_closed_set(self, document: dict[str, Any]) -> None:
+        """確認卡依 `ProposalCard.preview_type` 挑那一段怎麼畫（M5 票 10），同一個道理。"""
+        names = [model.__name__ for model in REGISTRY.preview_models()]
+
+        assert names == ["IndexerAddition", "DownloadsDeletion"]
+        assert document["components"]["schemas"]["ProposalPreviewType"] == {
+            "type": "string",
+            "enum": names,
+        }
+        generated = union_members(GENERATED.read_text(encoding="utf-8"), "ProposalPreviewType")
         assert generated == set(names)
 
 
@@ -557,6 +574,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "notify_refusal": "NotifyRefusalOut",
             "ai_refusal": "AiRefusalOut",
             "assistant_refusal": "AssistantRefusalOut",
+            "proposal_refusal": "ProposalRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

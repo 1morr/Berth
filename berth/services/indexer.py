@@ -20,8 +20,10 @@ unique`），所以重按時改成 `indexer/test`，結果一樣是「這個站�
 from __future__ import annotations
 
 import asyncio
+import difflib
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -498,6 +500,132 @@ async def search_indexers(
     finally:
         await search.aclose()
     return IndexerSearchResult(query=query, sites=tuple(sites), error="")
+
+
+class SiteRefusal(StrEnum):
+    """助理加一站時不做的理由（M5 票 10 的確認卡）。精靈與設定頁照舊走 `apply_default_indexers`
+    的逐站纜繩，不經過這裡；所以這一組不在 `domain/enums.py`、沒有狀態碼（同 `ToolRefusal`）。"""
+
+    #: 還沒選 Prowlarr 從哪裡來：不知道要加到哪一台。
+    PROWLARR_UNCHOSEN = "prowlarr_unchosen"
+    #: 那台 Prowlarr 沒答上來。
+    PROWLARR_UNREACHABLE = "prowlarr_unreachable"
+    #: 這台 Prowlarr 的定義裡沒有這個名字；`detail` 是最像的幾個。
+    SITE_UNKNOWN = "site_unknown"
+    #: 有這個定義，但 Berth 加不了（私站、usenet，`_offered`）。
+    SITE_NOT_OFFERED = "site_not_offered"
+    #: 這一站已經在 Prowlarr 裡了。
+    SITE_PRESENT = "site_present"
+    #: Prowlarr 加之前自己連一次那一站，沒連上：什麼都沒建立，`detail` 是它回的原文。
+    SITE_REJECTED = "site_rejected"
+
+
+class SiteRejectedError(Exception):
+    def __init__(self, reason: SiteRefusal, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else reason.value)
+        self.reason = reason
+        self.detail = detail
+
+
+@dataclass(frozen=True, slots=True)
+class SiteAddition:
+    """加一站之前說清楚會發生什麼（M5 票 10 的確認卡）。"""
+
+    #: Prowlarr 的 `definitionName`：加的時候認這個。
+    definition_name: str
+    name: str
+    #: 這一站的網址（定義自帶清單的第一個）；定義沒寫是空字串。
+    url: str
+    description: str
+    language: str
+    #: 加到哪一台 Prowlarr。
+    prowlarr: str
+    origin: ServiceOrigin
+
+
+@dataclass(frozen=True, slots=True)
+class SiteAdded:
+    definition_name: str
+    name: str
+    indexer_id: int
+
+
+#: 認不出名字時，`detail` 列出最像的幾個（`difflib`）。
+_CLOSE_MATCHES = 5
+
+
+@command(Effect.READ)
+async def plan_site_addition(
+    session: AsyncSession, factory: ServiceClientFactory, site: str
+) -> SiteAddition:
+    """加 `site` 會發生什麼，什麼都不建立（M5 票 10）。`site` 是 `definitionName` 或站名，大小寫
+    不拘。做不成的（還沒選來源、認不得、私站、已經加了、Prowlarr 沒答）丟 `SiteRejectedError`。"""
+    setup = await read_settings(session, SetupSettings)
+    settings = await read_settings(session, IndexerSettings)
+    origin, base_url = _target(setup, settings)
+    if origin is None:
+        raise SiteRejectedError(SiteRefusal.PROWLARR_UNCHOSEN)
+    client = factory.prowlarr(base_url, settings.api_key)
+    try:
+        definitions = _by_definition(await client.definitions())
+        present = {row.definition_name for row in await client.indexers()}
+    except ServiceError as exc:
+        raise SiteRejectedError(SiteRefusal.PROWLARR_UNREACHABLE, message(exc)) from exc
+    finally:
+        await client.aclose()
+
+    definition = _named(definitions, site)
+    if definition is None:
+        offered = [row.name for row in definitions.values() if _offered(row)]
+        close = difflib.get_close_matches(site, offered, n=_CLOSE_MATCHES, cutoff=0.4)
+        raise SiteRejectedError(SiteRefusal.SITE_UNKNOWN, ", ".join(close))
+    if not _offered(definition):
+        raise SiteRejectedError(SiteRefusal.SITE_NOT_OFFERED, definition.name)
+    if definition.definition_name in present:
+        raise SiteRejectedError(SiteRefusal.SITE_PRESENT, definition.name)
+    return SiteAddition(
+        definition_name=definition.definition_name,
+        name=definition.name,
+        url=definition.urls[0] if definition.urls else "",
+        description=definition.description,
+        language=definition.language,
+        prowlarr=base_url,
+        origin=origin,
+    )
+
+
+# 加索引站是 brief §14 的「改設定」，理由同 `apply_default_indexers`。
+@command(Effect.IRREVERSIBLE)
+async def add_site(
+    session: AsyncSession, factory: ServiceClientFactory, definition_name: str
+) -> SiteAdded:
+    """加一站，走精靈與設定頁同一支（`apply_default_indexers`，逐站纜繩照樣記）。沒加進去的
+    丟 `SiteRejectedError`：Prowlarr 加之前連不上那一站時什麼都不會建立（brief §20.7）。"""
+    status = await apply_default_indexers(session, factory, [definition_name])
+    if not status.reachable:
+        raise SiteRejectedError(SiteRefusal.PROWLARR_UNREACHABLE, status.error)
+    added = next((row for row in status.sites if row.definition_name == definition_name), None)
+    if added is None:
+        step = next((row for row in status.steps if row.step == definition_name), None)
+        raise SiteRejectedError(SiteRefusal.SITE_REJECTED, step.error if step else "")
+    return SiteAdded(
+        definition_name=added.definition_name, name=added.name, indexer_id=added.indexer_id
+    )
+
+
+def _named(definitions: Mapping[str, IndexerDefinition], site: str) -> IndexerDefinition | None:
+    """`definitionName` 照原樣先比，再不分大小寫比機器名與站名。"""
+    if site in definitions:
+        return definitions[site]
+    wanted = site.strip().casefold()
+    return next(
+        (
+            row
+            for row in definitions.values()
+            if wanted in (row.definition_name.casefold(), row.name.casefold())
+        ),
+        None,
+    )
 
 
 class IndexerNotRemovedError(Exception):

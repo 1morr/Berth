@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AssistantStatus, Conversation, RecentImports } from '../api/assistant'
+import type { AssistantStatus, Conversation, ProposalCard, RecentImports } from '../api/assistant'
 import { HEALTHY, stubApi, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 import { held, streamed } from '../test/sse'
@@ -18,7 +18,15 @@ const READY: AssistantStatus = { ready: true, chat_only: false }
 const AT = '2026-10-24T12:00:00Z'
 
 function conversation(id: number, messages: Conversation['messages']): Conversation {
-  return { id, title: 'hi', created_at: AT, updated_at: AT, replying: false, messages }
+  return {
+    id,
+    title: 'hi',
+    created_at: AT,
+    updated_at: AT,
+    replying: false,
+    messages,
+    proposals: [],
+  }
 }
 
 const SAVED = conversation(7, [
@@ -566,5 +574,199 @@ describe('開與關', () => {
     await userEvent.keyboard('{Escape}')
 
     expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+  })
+})
+
+describe('確認卡', () => {
+  const ADD_DMHY: ProposalCard = {
+    id: 5,
+    tool: 'add_indexer',
+    cause: 'irreversible',
+    reason: '你說要多一個動畫的索引站。',
+    preview_type: 'IndexerAddition',
+    preview: {
+      site: 'dmhy',
+      name: 'dmhy',
+      url: 'https://share.dmhy.org/',
+      description: 'dmhy is a TAIWANESE Public magnet tracker for ANIME',
+      language: 'zh-TW',
+      prowlarr: 'http://prowlarr:9696',
+      origin: 'bundled',
+    },
+    status: 'proposed',
+    result_type: null,
+    result: null,
+    created_at: AT,
+    decided_at: null,
+  }
+
+  const DELETE_DUNE: ProposalCard = {
+    ...ADD_DMHY,
+    id: 6,
+    tool: 'delete_downloads',
+    reason: '你說這部不用再做種了。',
+    preview_type: 'DownloadsDeletion',
+    preview: {
+      media: 'movie:693134',
+      title: '沙丘：第二部',
+      title_en: 'Dune: Part Two',
+      jobs: [
+        {
+          hash: 'abc',
+          name: '[Demo] Dune Part Two',
+          state: 'imported',
+          files: [
+            '/data/torrent/complete/movies/Dune.Part.Two.mkv',
+            '/data/torrent/complete/movies/Dune.nfo',
+          ],
+          missing: 0,
+          bytes: 4_000_000_000,
+          reclaimable: 0,
+        },
+      ],
+    },
+  }
+
+  /** 叫 AI 做了一件不可逆的事、它停在一張卡上，存下來的那幾則。 */
+  function proposed(card: ProposalCard, live: ProposalCard = card): Conversation {
+    return {
+      ...conversation(7, [
+        { id: 1, kind: 'user', created_at: AT, parts: [{ type: 'user_text', text: '做吧' }] },
+        {
+          id: 2,
+          kind: 'model',
+          created_at: AT,
+          parts: [{ type: 'tool_call', id: 'c1', name: card.tool, arguments: '{}' }],
+        },
+        {
+          id: 3,
+          kind: 'tools',
+          created_at: AT,
+          parts: [
+            {
+              type: 'tool_result',
+              call_id: 'c1',
+              tool: card.tool,
+              outcome: 'proposed',
+              result_type: 'ProposalCard',
+              result: card,
+            },
+          ],
+        },
+      ]),
+      proposals: [live],
+    }
+  }
+
+  function saved(body: Conversation | (() => Conversation), routes: StubRoutes = {}) {
+    return render({
+      routes: {
+        'GET /api/conversations': { body: [{ id: 7, title: '做吧', updated_at: AT }] },
+        'GET /api/conversations/7': () => ({ body: typeof body === 'function' ? body() : body }),
+        ...routes,
+      },
+    })
+  }
+
+  it('說出會發生什麼與 AI 的理由，按確認之後說後端真的做了什麼', async () => {
+    let confirmed = false
+    const done: ProposalCard = {
+      ...ADD_DMHY,
+      status: 'confirmed',
+      result_type: 'IndexerAdded',
+      result: { site: 'dmhy', name: 'dmhy' },
+    }
+    const stub = saved(() => proposed(ADD_DMHY, confirmed ? done : ADD_DMHY), {
+      'POST /api/proposals/5/confirm': () => {
+        confirmed = true
+        return { body: done }
+      },
+    })
+    const panel = await openPanel()
+
+    const card = await within(panel).findByRole('region', { name: '加索引站' })
+    expect(within(panel).getByText('提出了加索引站')).toBeInTheDocument()
+    expect(within(card).getByText('等你確認')).toBeInTheDocument()
+    expect(within(card).getByText(/把 dmhy 加進 Prowlarr/)).toBeInTheDocument()
+    expect(within(card).getByText('https://share.dmhy.org/')).toBeInTheDocument()
+    expect(within(card).getByText('你說要多一個動畫的索引站。')).toBeInTheDocument()
+
+    await userEvent.click(within(card).getByRole('button', { name: '確認加入' }))
+
+    expect(await within(card).findByText('已加入 dmhy。')).toBeInTheDocument()
+    expect(within(card).getByText('已確認')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: '確認加入' })).not.toBeInTheDocument()
+    expect(stub.mock.calls.filter(([url]) => url === '/api/proposals/5/confirm')).toHaveLength(1)
+  })
+
+  it('刪下載的卡列出每一個要刪的檔案，空不出空間時照實說', async () => {
+    saved(proposed(DELETE_DUNE))
+    const panel = await openPanel()
+
+    const card = await within(panel).findByRole('region', { name: '刪下載' })
+    const files = within(card).getByRole('list', { name: '[Demo] Dune Part Two 會刪的檔案' })
+    expect(
+      within(files)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([
+      '/data/torrent/complete/movies/Dune.Part.Two.mkv',
+      '/data/torrent/complete/movies/Dune.nfo',
+    ])
+    expect(within(card).getByText(/媒體庫的鏈接留著/)).toBeInTheDocument()
+    expect(within(card).getByText('媒體庫還留著同一份：刪了不會空出空間。')).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: '確認刪除' })).toBeInTheDocument()
+  })
+
+  it('按下去的時候已經不成立，卡上說為什麼', async () => {
+    const lapsed: ProposalCard = {
+      ...ADD_DMHY,
+      status: 'expired',
+      result_type: 'Refusal',
+      result: { tool: 'add_indexer', reason: 'site_present', detail: 'dmhy', next: 'give_up' },
+    }
+    saved(proposed(ADD_DMHY, lapsed))
+    const panel = await openPanel()
+
+    const card = await within(panel).findByRole('region', { name: '加索引站' })
+    expect(within(card).getByText('失效')).toBeInTheDocument()
+    expect(
+      within(card).getByText(/按下去的時候已經不成立.*這一站已經在 Prowlarr 裡了。/),
+    ).toBeInTheDocument()
+  })
+
+  it('拒絕了就說什麼都沒做', async () => {
+    saved(proposed(ADD_DMHY, { ...ADD_DMHY, status: 'rejected' }))
+    const panel = await openPanel()
+
+    const card = await within(panel).findByRole('region', { name: '加索引站' })
+    expect(within(card).getByText('拒絕了，什麼都沒做。')).toBeInTheDocument()
+  })
+
+  it('回覆還在跑時按不得', async () => {
+    saved({ ...proposed(ADD_DMHY), replying: true })
+    const panel = await openPanel()
+
+    const card = await within(panel).findByRole('region', { name: '加索引站' })
+    expect(within(card).getByRole('button', { name: '確認加入' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    expect(within(card).getByText('回覆講完才按得到。')).toBeInTheDocument()
+  })
+
+  it('別人先按了就地說，不當成做好了', async () => {
+    saved(proposed(ADD_DMHY), {
+      'POST /api/proposals/5/reject': {
+        status: 409,
+        body: { detail: { reason: 'already_decided', detail: '5' } },
+      },
+    })
+    const panel = await openPanel()
+
+    const card = await within(panel).findByRole('region', { name: '加索引站' })
+    await userEvent.click(within(card).getByRole('button', { name: '拒絕' }))
+
+    expect(await within(card).findByText('這張卡已經有人按過了。')).toBeInTheDocument()
   })
 })

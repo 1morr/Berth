@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { EventSourceParserStream } from 'eventsource-parser/stream'
 
-import { apiGet, apiStream } from './client'
+import { apiGet, apiPost, apiStream } from './client'
 import { parseRefusal, type ReasonSet, type Refusal } from './refusal'
 import type { Schemas } from './schemas'
 
@@ -63,6 +63,23 @@ export type SubmittedJob = Schemas['SubmittedJob']
 /** 使用者送出那句話時正在看的作品（M5 票 12）。 */
 export type PagePart = Schemas['PagePart']
 
+/**
+ * 確認卡（M5 票 10，CONTEXT.md 的 Proposal）：不可逆的工具不執行，變成一張等人按的卡。工具結果裡存的是提出
+ * 時的那一份；按過之後的狀態與結果在 `Conversation.proposals`（同形）。
+ */
+export type ProposalCard = Schemas['ProposalCard']
+
+/** 卡上「會發生什麼」的型別名（後端從要人按的那幾個工具產生），每一種的形狀是同名的 component。 */
+export type ProposalPreviewType = Schemas['ProposalPreviewType']
+
+export type ProposalPreviews = { [K in ProposalPreviewType]: Schemas[K] }
+
+export type IndexerAddition = Schemas['IndexerAddition']
+
+export type DownloadsDeletion = Schemas['DownloadsDeletion']
+
+export type ProposalRefusal = Schemas['ProposalRefusal']
+
 /** 回覆的語言（後端的 `Language`）。 */
 export type ReplyLanguage = Schemas['MessageIn']['language']
 
@@ -80,6 +97,28 @@ const CHUNK_TYPES: ReasonSet<Chunk['type']> = {
   'tool-output-available': true,
   notice: true,
   finish: true,
+}
+
+const PROPOSAL_REASONS: ReasonSet<ProposalRefusal> = {
+  proposal_missing: true,
+  already_decided: true,
+}
+
+/** 按卡片被拒的理由：卡片的（不是你的、已經按過）或對話的（回覆還在跑）。認不得的是 `null`。 */
+export function proposalRefusalOf(
+  error: unknown,
+): Refusal<ProposalRefusal> | Refusal<AssistantRefusal> | null {
+  return parseRefusal(error, PROPOSAL_REASONS) ?? parseRefusal(error, REASONS)
+}
+
+/** 按確認：以按的這個人執行。按下去的當下不成立的，回來的卡是 `expired`、理由在 `result`。 */
+export function confirmProposal(id: number): Promise<ProposalCard> {
+  return apiPost<ProposalCard>(`/proposals/${id}/confirm`)
+}
+
+/** 按拒絕：記下來，什麼都不做。 */
+export function rejectProposal(id: number): Promise<ProposalCard> {
+  return apiPost<ProposalCard>(`/proposals/${id}/reject`)
 }
 
 /** 認不得的理由是 `null`，畫面照請求為什麼沒成說。 */

@@ -4,7 +4,8 @@ import { signIn } from './login.ts'
 import { narrow, shot } from './shot.ts'
 
 // `assistant`：同 `weekly`，AI 設定好了；`DemoChatProvider` 一段一段吐字、話裡有「入庫」時呼叫
-// 「最近入庫」、有「限流」時演被限流 30 秒（M5 票 08，`.scratch/m5/side-panel-shape.md`）。
+// 「最近入庫」、有「限流」時演被限流 30 秒（M5 票 08，`.scratch/m5/side-panel-shape.md`）；有「索引站」
+// 時提議加 dmhy、有「complete」時提議刪電影那一筆的下載（M5 票 10 的確認卡）。
 
 const PAGES = [
   '/',
@@ -134,4 +135,49 @@ test('在作品頁說缺的集搜一下並下載：缺集、搜尋結果、送�
   await submitted.getByRole('button', { name: '撤銷送單' }).last().click()
   await expect(submitted.getByText(/這一筆已經不在了/)).toBeVisible()
   await shot(page, 'undone')
+})
+
+test('不可逆的停在確認卡：按確認才加索引站，刪下載的卡列出檔案、拒絕之後什麼都沒刪', async ({
+  page,
+}) => {
+  await signIn(page, '/weekly')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.getByRole('complementary', { name: '助理' })
+  const input = panel.getByRole('textbox', { name: '跟助理說' })
+  await panel.getByRole('button', { name: '新對話' }).click()
+
+  // 票 10：`DemoChatProvider` 話裡有「索引站」就提議加 dmhy。
+  await input.fill('幫我加一個動畫的索引站')
+  await input.press('Enter')
+  const indexer = panel.getByRole('region', { name: '加索引站' })
+  await expect(indexer.getByText('等你確認')).toBeVisible()
+  await expect(indexer.getByText('https://share.dmhy.org/')).toBeVisible()
+  await expect(panel.getByText(/按「確認」才會做/)).toBeVisible()
+  await shot(page, 'proposal-indexer')
+  await indexer.getByRole('button', { name: '確認加入' }).click()
+  await expect(indexer.getByText('已加入 dmhy。')).toBeVisible()
+  await expect(indexer.getByText('已確認')).toBeVisible()
+  await shot(page, 'proposal-confirmed')
+
+  // 話裡有「complete」就提議刪電影那一筆的下載（演練伺服器放了兩個真的檔案）。
+  await input.fill('把這部電影的 complete 刪掉')
+  await input.press('Enter')
+  const downloads = panel.getByRole('region', { name: '刪下載' })
+  const files = downloads.getByRole('list', { name: /會刪的檔案$/ })
+  await expect(files.getByRole('listitem')).toHaveCount(2)
+  await expect(downloads.getByText(/媒體庫的鏈接留著/)).toBeVisible()
+  // 回覆講完之前卡片按不得（後端那時回 `busy`）。
+  await expect(panel.getByRole('button', { name: '送出' })).toBeVisible()
+  await expect(downloads.getByRole('button', { name: '確認刪除' })).not.toHaveAttribute(
+    'aria-disabled',
+  )
+  await shot(page, 'proposal-downloads')
+  await downloads.getByRole('button', { name: '拒絕' }).click()
+  await expect(downloads.getByText('拒絕了，什麼都沒做。')).toBeVisible()
+
+  // 重整之後兩張卡照它們的結局畫（讀 `proposals` 的現況，不是提出時的那一份）。
+  await page.reload()
+  await expect(panel.getByRole('region', { name: '加索引站' }).getByText('已確認')).toBeVisible()
+  await expect(panel.getByRole('region', { name: '刪下載' }).getByText('已拒絕')).toBeVisible()
+  await shot(page, 'proposal-reloaded')
 })
