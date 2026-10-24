@@ -82,6 +82,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Activity */
+        get: operations["get_activity_api_ai_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -2635,6 +2652,66 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** ActivityEntryOut */
+        ActivityEntryOut: {
+            /** Conversation Id */
+            conversation_id: number;
+            /** Conversation Title */
+            conversation_title: string;
+            /** Own */
+            own: boolean;
+            /** Message Id */
+            message_id: number;
+            /** Call Id */
+            call_id: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** User Id */
+            user_id: number;
+            /** User Name */
+            user_name: string;
+            via: components["schemas"]["ActivityVia"];
+            /** Tool */
+            tool: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason: string;
+            /** Result Type */
+            result_type: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            tokens: components["schemas"]["ReplyTokensOut"];
+            undo: components["schemas"]["ActivityUndo"];
+            /** Undone At */
+            undone_at: string | null;
+        };
+        /** ActivityOut */
+        ActivityOut: {
+            /** Entries */
+            entries: components["schemas"]["ActivityEntryOut"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
+         * ActivityUndo
+         * @description AI 活動頁的一列撤不撤得了（M5 票 14）。撤不了的說得出為什麼。
+         * @enum {string}
+         */
+        ActivityUndo: "undoable" | "undone" | "no_inverse" | "not_allowed";
+        /**
+         * ActivityVia
+         * @description AI 活動頁的一列是怎麼做成的（M5 票 14）。
+         * @enum {string}
+         */
+        ActivityVia: "ai" | "confirmed";
         /**
          * AiCallOrigin
          * @description 一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
@@ -5652,6 +5729,16 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /**
+         * ReplyTokensOut
+         * @description 那一次回覆（使用者那一句之後的每一次模型呼叫）花的 tokens。`null` 是不知道。
+         */
+        ReplyTokensOut: {
+            /** Input */
+            input: number | null;
+            /** Output */
+            output: number | null;
+        };
         /** RetestIn */
         RetestIn: {
             /**
@@ -7601,6 +7688,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_api_ai_activity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"];
                 };
             };
         };

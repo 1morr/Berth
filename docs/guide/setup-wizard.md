@@ -222,3 +222,15 @@ credit, refuses the key or cannot be reached, the panel says which, and how long
 Berth does not retry on its own. A model the test found to be **chat only** gets no tools at all, and the panel
 says so. Without AI set up, admins see a link to **Settings → AI** and everyone else sees that an administrator has
 not turned AI on yet.
+
+## AI activity
+
+**AI activity** in the header (shown once AI is set up) lists everything the assistant changed: the downloads it
+submitted and the subscriptions it made, plus the confirmation cards someone confirmed. Newest first, each row says
+when, on whose behalf, which tool, what it was given, **the assistant's reason** (it has to give one for every
+change), how many tokens that reply used, and which conversation it came from; your own conversations open in the
+side panel. A row you can undo has the same undo as its card in the conversation, and the assistant learns of it
+the next time you say something there. A row already undone says when; one that cannot be undone says why: adding
+an indexer and deleting downloads cannot be taken back, and undoing a submit is for administrators. Administrators
+see and can undo everyone's rows; everyone else sees only the rows from their own conversations. The page lists the
+latest 200.

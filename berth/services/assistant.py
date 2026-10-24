@@ -263,7 +263,9 @@ class AssistantRuns:
             try:
                 viewing = await _viewing(session, page)
                 parts: list[StoredPart] = [*viewing, UserText(text=said)]
-                append_message(session, conversation, MessageKind.USER, parts, now)
+                user_message = append_message(session, conversation, MessageKind.USER, parts, now)
+                await session.flush()
+                user_message_id = user_message.id
                 await session.commit()
             except BaseException:
                 self._active.discard(cid)
@@ -272,7 +274,7 @@ class AssistantRuns:
         queue: asyncio.Queue[AssistantEvent] = asyncio.Queue()
         queue.put_nowait(Started(cid))
         task = asyncio.create_task(
-            self._reply(cid, user, language, settings, queue.put_nowait),
+            self._reply(cid, user_message_id, user, language, settings, queue.put_nowait),
             name=f"assistant-{cid}",
         )
         self._tasks.add(task)
@@ -368,13 +370,14 @@ class AssistantRuns:
     async def _reply(
         self,
         cid: int,
+        user_message_id: int,
         user: AuthenticatedUser,
         language: Language,
         settings: AiSettings,
         emit: Callable[[AssistantEvent], None],
     ) -> None:
         try:
-            await self._loop(cid, user, language, settings, emit)
+            await self._loop(cid, user_message_id, user, language, settings, emit)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -391,6 +394,7 @@ class AssistantRuns:
     async def _loop(
         self,
         cid: int,
+        user_message_id: int,
         user: AuthenticatedUser,
         language: Language,
         settings: AiSettings,
@@ -436,6 +440,7 @@ class AssistantRuns:
                         origin=AiCallOrigin.CONVERSATION,
                         user_id=user.id,
                         conversation_id=cid,
+                        message_id=user_message_id,
                         forward=forward,
                     )
             except AiProviderError as exc:

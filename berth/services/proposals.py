@@ -36,6 +36,7 @@ from berth.services.commands import Effect, command
 from berth.services.conversations import (
     DecisionPart,
     ProposalRejectedError,
+    ToolResultPart,
     append_message,
     own_conversation,
 )
@@ -187,6 +188,21 @@ def result_models(registry: Registry) -> tuple[type[BaseModel], ...]:
     """`ToolResultPart.result_type` 的全部可能：每一個工具的結果型別、`Refusal`，與變成確認卡時的
     `ProposalCard`（`main._document_components` 照它產 `ToolResultType`）。"""
     return (*registry.frontend_models(), ProposalCard)
+
+
+def card_id_of(part: ToolResultPart) -> int | None:
+    """這一份工具結果是一張確認卡時，卡的 id（AI 活動頁與撤銷照它找那一列，M5 票 14）。"""
+    if part.result_type != ProposalCard.__name__:
+        return None
+    return int(part.result.get("id", 0))
+
+
+def done_of(row: Proposal) -> dict[str, Any] | None:
+    """人按了確認、而且執行成了的那一份結果（M5 票 14）。還沒按、被拒絕、失效、執行被拒的
+    是 `None`。"""
+    if row.status is not ProposalStatus.CONFIRMED or row.result_json is None:
+        return None
+    return None if row.result_type == Refusal.__name__ else row.result_json
 
 
 def card_of(row: Proposal) -> ProposalCard:

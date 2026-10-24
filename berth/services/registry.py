@@ -137,15 +137,16 @@ class Refusal(BaseModel):
     next: NextStep
 
 
-class ProposalInput(BaseModel):
-    """要人按的工具的輸入都帶著這一格：AI 為什麼要做，原文印在確認卡上（M5 票 10）。"""
+class WriteInput(BaseModel):
+    """寫入的工具（可逆與不可逆）的輸入都帶著這一格：AI 為什麼要做，原文印在確認卡上（M5 票 10）
+    與 AI 活動頁上（M5 票 14）。讀取的不用。"""
 
     reason: str = Field(
         min_length=1,
         max_length=500,
         description=(
-            "One sentence, in the user's language, on why this should be done. It is shown on "
-            "the confirmation card the user has to press."
+            "One sentence, in the user's language, on why this should be done. The user reads "
+            "it on the confirmation card or on the AI activity page."
         ),
     )
 
@@ -227,10 +228,10 @@ class Tool[Input: BaseModel, Result: BaseModel]:
                 raise ValueError(f"{self.name}: an irreversible tool has no run; it is proposed")
             if self.preview is None:
                 raise ValueError(f"{self.name}: an irreversible tool needs preview and apply")
-            if not issubclass(self.input, ProposalInput):
-                raise ValueError(f"{self.name}: an irreversible tool's input is a ProposalInput")
         elif self.run is None:
             raise ValueError(f"{self.name}: a {self.effect} tool needs run")
+        if self.effect is not Effect.READ and not issubclass(self.input, WriteInput):
+            raise ValueError(f"{self.name}: a {self.effect} tool's input is a WriteInput")
         if self.demote is not None and self.preview is None:
             raise ValueError(f"{self.name}: a tool that can be demoted needs preview and apply")
         if self.undo is not None:

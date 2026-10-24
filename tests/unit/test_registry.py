@@ -32,7 +32,6 @@ from berth.services.plan_review import PlanRejectedError
 from berth.services.registry import (
     REJECTIONS,
     NextStep,
-    ProposalInput,
     Refusal,
     Registry,
     Tool,
@@ -40,6 +39,7 @@ from berth.services.registry import (
     ToolRefusal,
     Undo,
     UnmarkedCommandError,
+    WriteInput,
     cause_of,
 )
 from berth.services.rss import RssRejectedError
@@ -62,6 +62,12 @@ class Count(BaseModel):
 
 class Counted(BaseModel):
     days: int
+
+
+class Nudge(WriteInput):
+    """可逆的假工具的輸入：寫入的工具都帶著理由（M5 票 14）。"""
+
+    days: int = Field(default=7, ge=1, le=31)
 
 
 @command(Effect.READ)
@@ -108,15 +114,19 @@ def tool(
     target: Any = peek,
     route: tuple[str, str] = ("GET", "/jobs"),
     run: Any = None,
+    input: Any = None,
     **extra: Any,
 ) -> Tool[Any, Any]:
     async def echo(_: ToolContext, given: Count) -> Counted:
         return Counted(days=given.days)
 
+    if input is None:
+        mark = mark_of(target)
+        input = Count if mark is None or mark.effect is Effect.READ else Nudge
     return Tool(
         name=name,
         description="Count days.",
-        input=Count,
+        input=input,
         result=Counted,
         command=target,
         route=route,
@@ -161,7 +171,7 @@ async def scuttle() -> None:
     """一支不可逆的假命令。"""
 
 
-class Scuttle(ProposalInput):
+class Scuttle(WriteInput):
     ship: str
 
 
@@ -212,8 +222,15 @@ class TestToolsThatNeedAPerson:
             proposed(apply=None)
 
     def test_an_irreversible_tool_asks_for_a_reason(self) -> None:
-        with pytest.raises(ValueError, match="ProposalInput"):
+        with pytest.raises(ValueError, match="WriteInput"):
             proposed(input=Count)
+
+    def test_a_reversible_tool_asks_for_a_reason_too(self) -> None:
+        """AI 直接做的寫入也要說為什麼：理由印在 AI 活動頁（M5 票 14）。讀取的不用。"""
+        with pytest.raises(ValueError, match="WriteInput"):
+            tool(target=poke, input=Count)
+        assert tool(target=poke, input=Nudge).input is Nudge
+        assert tool(target=peek, input=Count).input is Count
 
     def test_a_reversible_tool_is_run(self) -> None:
         with pytest.raises(ValueError, match="needs run"):

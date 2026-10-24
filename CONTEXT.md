@@ -409,7 +409,7 @@ _Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode
 _Avoid_: request（request 是 HTTP 請求）, cost, budget
 
 **AI Activity**（AI 活動）:
-AI 執行過的每一個寫入命令、理由、tokens，逐筆可撤銷。
+AI 執行過的每一個寫入命令、理由、tokens，逐筆可撤銷。一筆是 AI 直接做的可逆寫入，或人按了確認的 Proposal；從對話存下的工具結果與確認卡撈，不是另一份日誌（M5 票 14，`/ai-activity`）。管理員看全部，其他人只看自己對話裡的。
 _Avoid_: log, history
 
 **Sweep**（巡檢）:

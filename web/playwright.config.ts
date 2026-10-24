@@ -62,6 +62,15 @@ const FLOWS = [
     port: 8531,
     viewport: NARROW,
   },
+  // AI 活動頁（M5 票 14）：同 `assistant`，在側面板送單、確認加索引站之後，到活動頁看與撤銷。
+  { name: 'ai-activity', spec: 'ai-activity', scenario: 'assistant', port: 8532 },
+  {
+    name: 'ai-activity-390',
+    spec: 'ai-activity',
+    scenario: 'assistant',
+    port: 8533,
+    viewport: NARROW,
+  },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },

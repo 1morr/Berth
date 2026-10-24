@@ -375,7 +375,7 @@ describe('送單卡', () => {
     const panel = await openPanel()
 
     const card = await within(panel).findByRole('region', { name: '送單' })
-    expect(await within(card).findByText('已送出')).toBeInTheDocument()
+    expect(await within(card).findByText('已送出', { selector: 'span' })).toBeInTheDocument()
     expect(within(panel).getByText('送單好了')).toBeInTheDocument()
     expect(within(card).getByRole('link', { name: '看這一筆' })).toHaveAttribute(
       'href',
@@ -443,7 +443,7 @@ describe('送單卡', () => {
     })
     const panel = await openPanel()
     const card = await within(panel).findByRole('region', { name: '送單' })
-    await within(card).findByText('已送出')
+    await within(card).findByText('已送出', { selector: 'span' })
 
     expect(within(card).queryByRole('button', { name: '撤銷送單' })).toBeNull()
   })

@@ -38,10 +38,11 @@ from berth.domain import (
     AssistantNotice,
     AssistantRefusal,
     Language,
+    MessageKind,
     Role,
     ToolOutcome,
 )
-from berth.models import AiCall, AiSettings, AiToolTest, User
+from berth.models import AiCall, AiSettings, AiToolTest, ConversationMessage, User
 from berth.services.ai import set_ai
 from berth.services.assistant import (
     MAX_TOOL_ROUNDS,
@@ -398,6 +399,30 @@ async def test_every_call_is_recorded_against_the_conversation(
         (AiCallOrigin.CONVERSATION, started_id(events), admin.id, None),
         (AiCallOrigin.CONVERSATION, started_id(events), admin.id, AiFailure.RATE_LIMITED),
     ]
+
+
+async def test_every_call_knows_which_words_it_answers(
+    engine: AsyncEngine, session: AsyncSession
+) -> None:
+    """AI 活動頁的「這次回覆的 tokens」照它加總（M5 票 14）：一次回覆的每一個呼叫都連到那一句話。"""
+    admin = await person(session, "skipper", Role.ADMIN)
+    await ai_ready(session)
+    provider = FakeChatProvider(replies=[calls("ping"), says("Done."), says("Again.")])
+    runs, sessions = runs_for(engine, provider, Registry((PING,)))
+
+    first = await drain(runs, admin, "hi")
+    await drain(runs, admin, "again", conversation_id=started_id(first))
+
+    async with sessions() as fresh:
+        said = list(
+            await fresh.scalars(
+                select(ConversationMessage.id)
+                .where(ConversationMessage.kind == MessageKind.USER)
+                .order_by(ConversationMessage.id)
+            )
+        )
+        rows = list(await fresh.scalars(select(AiCall).order_by(AiCall.id)))
+    assert [row.message_id for row in rows] == [said[0], said[0], said[1]]
 
 
 # --- 誰拿得到什麼 -------------------------------------------------------------------

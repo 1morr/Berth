@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from './api/auth'
-import { AssistantPanel, PANEL_ID } from './assistant/AssistantPanel'
+import { assistantStatusQueryOptions } from './api/assistant'
+import { AssistantControlContext } from './assistant/AssistantControl'
+import { AssistantPanel, PANEL_ID, type ConversationRequest } from './assistant/AssistantPanel'
 import { usePanelOpen } from './assistant/usePanelOpen'
 import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE, NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
@@ -27,6 +29,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   // 使用者自己按開的才把焦點交給輸入框；重整時照記憶打開的不搶。
   const [byHand, setByHand] = useState(false)
   const panel = open && me.data !== undefined
+  // 頁面要面板顯示某一則對話（AI 活動頁）：面板接下就清掉。
+  const [request, setRequest] = useState<ConversationRequest | null>(null)
+  const control = useMemo(
+    () => ({
+      openConversation: (id: number) => {
+        setByHand(true)
+        setOpen(true)
+        setRequest((current) => ({ id, nonce: (current?.nonce ?? 0) + 1 }))
+      },
+    }),
+    [setOpen],
+  )
+  const handled = useCallback(() => setRequest(null), [])
 
   const toggle = () => {
     setByHand(!open)
@@ -38,39 +53,47 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={`min-h-dvh bg-hull text-ink ${panel ? 'lg:pr-[26rem] xl:pr-[28rem]' : ''}`}>
-      {/* 頁首有八個 Tab 停留點；鍵盤使用者每換一頁都要先過完它們（票 15 audit）。
+    <AssistantControlContext value={control}>
+      <div className={`min-h-dvh bg-hull text-ink ${panel ? 'lg:pr-[26rem] xl:pr-[28rem]' : ''}`}>
+        {/* 頁首有八個 Tab 停留點；鍵盤使用者每換一頁都要先過完它們（票 15 audit）。
           平常看不見，拿到焦點才浮出來。`not-sr-only` 會把 padding 歸零，所以浮出時的 padding
           寫在 `focus:` 那一組（票 15 實跑量到 58×15px）。 */}
-      <a
-        href="#main"
-        className="label sr-only border-2 border-rule-strong bg-deck text-ink focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:px-4 focus:py-2.5"
-      >
-        {t('nav.skip')}
-      </a>
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
-        <div>
-          <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
-          <p className="text-sm text-ink-dim">{t('app.tagline')}</p>
-        </div>
-        <span className="ml-auto">
-          <Identity assistantOpen={open} onToggleAssistant={toggle} />
-        </span>
-      </header>
-      <div className="lg:flex lg:items-start">
-        {/* `tabIndex={-1}`：skip link 跳過來時焦點要真的落在這裡，下一個 Tab 才從內容開始。 */}
-        <main
-          id="main"
-          tabIndex={-1}
-          className={`outline-none lg:min-w-0 lg:flex-1 ${panel ? 'max-lg:hidden' : ''}`}
+        <a
+          href="#main"
+          className="label sr-only border-2 border-rule-strong bg-deck text-ink focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:px-4 focus:py-2.5"
         >
-          {children}
-        </main>
-        {panel && (
-          <AssistantPanel admin={me.data.role === 'admin'} focusOnMount={byHand} onClose={close} />
-        )}
+          {t('nav.skip')}
+        </a>
+        <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
+          <div>
+            <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
+            <p className="text-sm text-ink-dim">{t('app.tagline')}</p>
+          </div>
+          <span className="ml-auto">
+            <Identity assistantOpen={open} onToggleAssistant={toggle} />
+          </span>
+        </header>
+        <div className="lg:flex lg:items-start">
+          {/* `tabIndex={-1}`：skip link 跳過來時焦點要真的落在這裡，下一個 Tab 才從內容開始。 */}
+          <main
+            id="main"
+            tabIndex={-1}
+            className={`outline-none lg:min-w-0 lg:flex-1 ${panel ? 'max-lg:hidden' : ''}`}
+          >
+            {children}
+          </main>
+          {panel && (
+            <AssistantPanel
+              admin={me.data.role === 'admin'}
+              focusOnMount={byHand}
+              onClose={close}
+              request={request}
+              onRequestHandled={handled}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </AssistantControlContext>
   )
 }
 
@@ -83,6 +106,7 @@ function NavLink({
     | '/'
     | '/library'
     | '/jobs'
+    | '/ai-activity'
     | '/review'
     | '/issues'
     | '/rss'
@@ -122,6 +146,8 @@ function Identity({
   const { t } = useTranslation()
   const me = useQuery(meQueryOptions)
   const leave = useSignOut()
+  // AI 沒設定好時導覽沒有這一格（直接進網址照樣看得到以前的）；人人看得到，不分角色。
+  const assistant = useQuery(assistantStatusQueryOptions)
 
   if (!me.data) return <LanguageToggle />
 
@@ -137,6 +163,9 @@ function Identity({
         <NavLink to="/">{t('nav.discover')}</NavLink>
         <NavLink to="/library">{t('nav.inventory')}</NavLink>
         <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
+        {assistant.data?.ready === true && (
+          <NavLink to="/ai-activity">{t('nav.aiActivity')}</NavLink>
+        )}
         {/* 審核與待處理同一個規則：審核與修正是 admin 的事（plan §6），後端同時回 403。 */}
         {me.data.role === 'admin' && <NavLink to="/review">{t('nav.review')}</NavLink>}
         {me.data.role === 'admin' && <NavLink to="/issues">{t('nav.issues')}</NavLink>}

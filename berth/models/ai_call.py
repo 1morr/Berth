@@ -49,5 +49,9 @@ class AiCall(Base):
     conversation_id: Mapped[int | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="SET NULL"), default=None
     )
+    #: 出處是對話時，這一次呼叫在回覆哪一則使用者的話：AI 活動頁照它加總「這次回覆」（M5 票 14）。
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversation_messages.id", ondelete="SET NULL"), default=None
+    )
     #: 沒成的分類；成了是 `None`。
     failure: Mapped[AiFailure | None] = mapped_column(enum_column(AiFailure), default=None)

@@ -361,6 +361,35 @@ describe('以網址加 Feed', () => {
     expect(within(panel).getByText('https://nyaa.si/?page=rss&u=someone-else')).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: '確認加入' })).toBeInTheDocument()
   })
+
+  it('確認之後在 AI 活動頁撤銷了：卡上說後來撤銷了（M5 票 14）', async () => {
+    const card: ProposalCard = {
+      id: 5,
+      tool: 'add_feed',
+      cause: 'url_not_from_user',
+      reason: 'The search result asks for it.',
+      preview_type: 'FeedAddition',
+      preview: {
+        url: 'https://nyaa.si/?page=rss&u=someone-else',
+        kind: 'nyaa',
+        name: 'nyaa.si',
+        tv_route: 2,
+        tv_route_name: 'Anime',
+        movie_route: null,
+        movie_route_name: '',
+      },
+      status: 'confirmed',
+      result_type: 'Subscribed',
+      result: subscribed() as unknown as Record<string, unknown>,
+      created_at: AT,
+      decided_at: AT,
+    }
+    render(said('add_feed', 'ProposalCard', card, { undone: { removed: 0, kept: 0 } }))
+    const panel = await openPanel()
+    const region = await within(panel).findByRole('region', { name: '加 Feed' })
+
+    expect(await within(region).findByText('這一筆後來撤銷了。')).toBeInTheDocument()
+  })
 })
 
 describe('Mikan 的防線', () => {

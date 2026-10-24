@@ -61,6 +61,17 @@
   API：`POST /api/conversations*` 收 `page`；對話多一種 part `page`；`GET /api/media/{id}` 多 `preselected_route_id`
   （搜尋頁下拉的預選值，規則搬到後端一份）；`JobOut` 多 `undoable`；OpenAPI 多 `MissingEpisodes`、`SearchResults`、
   `SearchResultRow`、`SubmitRefusal`、`SubmittedJob`。沒有資料庫 migration。
+- **AI 活動頁**（M5 票 14）：頁首導覽多一格「AI 活動」（AI 設定好了才出現），列出助理做過的每一件會改東西的事——
+  它直接做的送單與訂閱，以及你按了確認的確認卡。一列說何時、代誰、哪個工具、輸入、**AI 給的理由**、那一次回覆花了多少
+  tokens，以及出自哪一則對話（自己的對話按一下就在側面板打開）。撤得了的就在那一列撤（與結果卡上的撤銷同一件事，助理下一句
+  話就知道）；已經撤過的說何時撤的，撤不了的說為什麼（加索引站、刪下載做了就撤不回；撤銷送單只有管理員）。管理員看得到也撤
+  得了每個人的，其他人只看自己對話裡的。被降成確認卡、你按了確認的「以網址加 Feed」現在也撤得了。助理的送單與訂閱工具現在
+  每次都要說一句為什麼（同確認卡）。
+  API：新端點 `GET /api/ai-activity`；撤銷端點 `POST /api/conversations/{id}/messages/{message}/tools/{call}/undo` 管理員
+  可以指別人的對話，也收確認卡的那一份結果；`submit_search_result`、`subscribe_mikan`、`subscribe_search_feed` 的輸入多
+  必填的 `reason`；OpenAPI 多 `ActivityOut`、`ActivityEntryOut`、`ActivityUndo`、`ActivityVia`、`ReplyTokensOut`。
+  資料庫 migration `5e1a7c3d9b20`：`ai_calls` 多 `message_id`（那一次呼叫在回覆哪一句話），舊的呼叫是空的，活動頁上
+  它們的 tokens 印「—」。
 - **跟助理說「訂閱這部的 Mikan RSS」**（M5 票 11）：在作品頁說，它查作品名、在 Mikan 搜番組、列字幕組，訂閱你選的
   那一組（整季當場送出，同作品頁的訂閱）；「用 Nyaa 訂閱這部」以搜尋詞建 Nyaa 或 acg.rip 的搜尋 feed（第一輪照樣等你在
   RSS 頁選）。**網址由 Berth 自己組的直接做、不出確認卡**：Mikan 只收這則對話裡 Berth 自己搜出來的番組與字幕組，別處來的

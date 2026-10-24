@@ -330,15 +330,15 @@ def append_message(
     kind: MessageKind,
     parts: Sequence[StoredPart],
     now: datetime,
-) -> None:
-    """加一則到對話的最後（不 commit）。同一則對話一次只有一個寫者：回覆在跑時，按確認卡的那一支
-    等它跑完（`services.assistant.AssistantRuns`）。"""
-    session.add(
-        ConversationMessage(
-            conversation_id=conversation.id, kind=kind, parts_json=dump_parts(parts), created_at=now
-        )
+) -> ConversationMessage:
+    """加一則到對話的最後（不 commit），回那一列（flush 之後才有 id）。同一則對話一次只有一個
+    寫者：回覆在跑時，按確認卡的那一支等它跑完（`services.assistant.AssistantRuns`）。"""
+    row = ConversationMessage(
+        conversation_id=conversation.id, kind=kind, parts_json=dump_parts(parts), created_at=now
     )
+    session.add(row)
     conversation.updated_at = now
+    return row
 
 
 def parts_of(row: ConversationMessage) -> list[Part]:
