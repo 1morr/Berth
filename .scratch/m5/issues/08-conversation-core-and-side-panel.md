@@ -1,0 +1,30 @@
+# 08 — 對話核心與側面板（tracer 前半）
+
+**Status:** ready-for-agent
+
+**Blocked by:** 05、07
+
+**讀:** plan §11.6〈對話核心〉〈側面板〉〈provider〉、§6、§7；brief §6.10「外部文字是資料」「用量，不設預算」、§14；CONTEXT.md 的 Assistant；`DESIGN.md`、`PRODUCT.md`；SSE 的現有用法（`api/events.py`）
+
+## 為什麼
+
+側面板是 M5 的主角，M7 的 Discord 接的也是同一個對話核心。這張先讓「在任何一頁打開側面板、跟 AI 說話、串流看到回覆」端到端跑通，工具迴圈也接上；第一張結果卡在票 09。
+
+## 做什麼
+
+1. **先 shape**：照 CLAUDE.md `/impeccable shape`，輸出 `.scratch/m5/side-panel-shape.md`。設計前查成熟產品的對話工具 UI 與工具暴露方式（Vercel AI SDK 的 tool UI、Home Assistant Assist 的 exposed entities），寫明採用了誰的慣例。
+2. **對話核心**（services，與介面無關）：對話與訊息存在 Berth，每人自己的，重整不丟。工具迴圈的工具＝票 05 的登錄表依角色過濾。固定的 prompt 前綴（system、工具定義）放最前、順序固定，讓快取吃得到；外部文字包在標明出處的資料區塊裡（brief §6.10）。回覆用使用者的介面語言。
+3. **保險絲**：一則對話的工具呼叫輪數上限（數字寫進 plan §11.6）；provider 掛掉或限流時把原因說給人聽，不默默失敗。每次呼叫寫 `ai_calls`，出處是這則對話。
+4. **串流**：用現有的 SSE。**別人的串流收不到我的對話**：現有 hub 若是全體廣播，對話要有自己的通道。
+5. **側面板**：每一頁都開得到；文字訊息串流顯示；工具呼叫顯示「正在查……」這一類狀態（卡片在票 09）。文案走 i18n。
+6. **沒設 AI key**：管理員看到「去設定」，`user` 看到「管理員還沒開啟 AI」。其餘頁面與 M4 相同。
+
+## 驗收
+
+- [ ] 用假 provider：一則對話送出、串流回來、存進 DB、重整後還在（pytest＋vitest）
+- [ ] 假 provider 一直呼叫工具時，到輪數上限就停、說出原因（pytest）
+- [ ] 限流與 provider 失敗回出可讀的原因（pytest）
+- [ ] A 的對話不出現在 B 的串流與列表裡（pytest）
+- [ ] `user` 的工具清單沒有管理員命令（整合測試）
+- [ ] 每頁開得到側面板，串流顯示（playwright 實跑，附截圖）
+- [ ] 全部檢查、pytest、vitest 綠；plan §11.6、DESIGN.md（若有新元件）、progress.md 已更新
