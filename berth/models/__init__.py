@@ -3,6 +3,7 @@
 M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加（progress.md 偏差與決定）。
 """
 
+from berth.models.ai_call import AiCall
 from berth.models.auth import User, UserSession
 from berth.models.base import Base
 from berth.models.event import Event
@@ -25,6 +26,8 @@ from berth.models.rss import DEFAULT_INTERVAL_SEC, FEED_INTERVALS, RssFeed, RssI
 from berth.models.setting import (
     DEFAULT_BUNDLED_LIBRARIES,
     SETTINGS_GROUPS,
+    AiSettings,
+    AiToolTest,
     BerthPathResult,
     BerthSettings,
     BundledLibrary,
@@ -65,6 +68,9 @@ __all__ = [
     "DEFAULT_INTERVAL_SEC",
     "FEED_INTERVALS",
     "SETTINGS_GROUPS",
+    "AiCall",
+    "AiSettings",
+    "AiToolTest",
     "Base",
     "BerthPathResult",
     "BerthSettings",

@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **設定 → AI：接上自己的 AI provider 並測試**（M5 票 07）：選 API 格式（這一版是 Anthropic Messages，Anthropic 官方、
+  OpenRouter、DeepSeek、自架的 Ollama 這類講同一種格式的端點都行）、填 base URL（留空是官方，不含 `/v1`）、API key
+  （官方要，自架的可以不填；存了之後畫面只說「已設定」，key 不回到瀏覽器）、模型（官方留空用 `claude-opus-5-5`，
+  第三方可從端點的模型清單挑或手填）。「儲存並測試」打三次小請求：一句回覆、一次假工具 `berth_echo` 的呼叫、把工具結果
+  送回去，畫面說出回覆、每一次的 tokens（端點沒回的那一格是「不知道」，不是 0）與這個模型支不支援工具呼叫；不支援的標成
+  「只能聊天」，換了格式、base URL 或模型要重測。失敗時說出原因：key 不對、模型不存在、限流（與幾秒後再試）、額度用完、
+  provider 有問題、連不上；不自動重試。沒設定 AI 時 Berth 與之前完全一樣。API：`GET` / `PUT /api/settings/ai`、
+  `POST /api/settings/ai/test`、`GET /api/settings/ai/models`。
+  **這一版有資料庫 migration**（`2b74d84a462c`）：新的用量記錄表 `ai_calls`，每一次對 provider 的請求一列（model、
+  輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處、誰、沒成的原因），不設預算。
+
 ## [0.3.0] - 2026-10-24
 
 **從 0.2.9 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。
