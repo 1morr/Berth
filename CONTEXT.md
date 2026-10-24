@@ -405,7 +405,7 @@ Takeover Switch 的中間那一段：AI 照跑，建議與理由附在那一列�
 _Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode
 
 **AI Call**（AI 呼叫）:
-對 provider 的一次請求，`ai_calls` 的一列：model、輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處（哪一則對話或哪一個 AI Task）。用量頁從它加總、算快取命中率。不設預算（2026-10-24）。不是 Event：事件一定掛在一筆 Job 上。
+對 provider 的一次請求，`ai_calls` 的一列：格式、主機、model、輸入與輸出 tokens、快取寫入與讀取 tokens（沒回的是「不知道」，不是 0）、耗時、出處（設定頁的測試、哪一則對話或哪一個 AI Task）、誰。**沒成的請求也是一列**，帶著失敗的分類（M5 票 07）。用量頁從它加總、算快取命中率。不設預算（2026-10-24）。不是 Event：事件一定掛在一筆 Job 上。
 _Avoid_: request（request 是 HTTP 請求）, cost, budget
 
 **AI Activity**（AI 活動）:

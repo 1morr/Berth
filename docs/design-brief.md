@@ -1825,3 +1825,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **usage**：全部輸入在 Anthropic 是 `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`（`input_tokens` 只算最後一個 breakpoint 之後的），在 OpenAI 相容是 `prompt_tokens`；快取讀取是 `cache_read_input_tokens` / `prompt_tokens_details.cached_tokens`（DeepSeek 是 `prompt_cache_hit_tokens`），快取寫入是 `cache_creation_input_tokens` / `prompt_tokens_details.cache_write_tokens`（vLLM 是 `created_cache_tokens`，DeepSeek 與 Ollama 沒有）。沒回的是「不知道」。串流時 Anthropic 從 `message_start` 起、`message_delta` 的累計值覆寫；OpenAI 要 `stream_options.include_usage`，取最後一個 `usage` 非 null 的 chunk（OpenRouter 那一個的 `choices` 不是空的）。
 - **錯誤**分成限流、額度用完、provider 掛掉（含 200 之後的串流錯誤事件）、憑證不對、模型不存在、連不上、請求被拒或看不懂；**M5 一律不自動重試**。額度與帳務的錯誤重試也沒用（OpenAI 原文「Retrying billing, spend, or quota errors won't restore API access」）。
 - **外部文字**：兩家的建議與 §6.10「外部文字是資料」一致——Anthropic「Put untrusted content only in tool results ... never in `system` prompts or plain user `text` blocks」並建議 JSON 編碼，OpenAI 說不受信任的輸入走 user 訊息、不進 developer 訊息。Berth 的做法：外部文字只經由工具結果進來，命令結果序列化成帶出處欄位的 JSON；給模型的指示不放進工具結果。
+- **票 07 實作時定的（2026-10-24，沒有真 key，下面標「未實測」的等有 key 時補）**：
+  - **SSE 用 `httpx-sse` 0.4.3**（`EventSource(response).aiter_sse()`；不宣告依賴、與 httpx 0.28 和 respx 一起用的情況由 `tests/integration/test_anthropic_provider.py` 驗過；MCP 官方 Python SDK 也依賴它）。
+  - **認證兩個標頭都送**：`Authorization: Bearer` 與 `x-api-key`（沒有 key 時兩個都不送）。官方接不接受兩個同時出現**未實測**（研究最後一節第 1 條）；被拒的話設定頁的測試第一次就會說出 400 的原文，改成只送 Bearer。
+  - **頂層 `cache_control` 照送**：第三方碰到它是忽略還是 400 **未實測**（第 2 條），同上由測試的第一次說出來。
+  - **thinking block 當 `OpaquePart` 原樣帶回**（`thinking_delta` 與 `signature_delta` 拼回完整 block）；現役模型預設會不會回它**未實測**（第 3 條）。
+  - **「AI 設定好了」**（第 6 條）：有端點（填了 base URL，或官方端點而且有 key）、有模型（官方端點留空用 `claude-opus-5-5`）。沒設定好時沒有東西叫模型，系統與 M4 相同。
+  - **探針照研究結論 4 打三次**，每一次各記一列 `ai_calls`；第二次帶工具的回 400 判「不支援」，401 / 404 這類不會只因為多了工具才出現的錯也算「這次沒測成」、不存。模型平行呼叫兩次也算支援，第三次給每個呼叫各一個結果。
+  - **不是 Anthropic 形狀的 404 不算模型不存在**：`error.type` 不是 `not_found_error` 的 404 多半是 base URL 多寫或少寫了 `/v1`，歸「看不懂」並附原文。

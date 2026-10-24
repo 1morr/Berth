@@ -15,6 +15,7 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from berth.adapters.ai import ChatProvider, Endpoint
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
@@ -77,6 +78,9 @@ class OneJellyfin:
 
     def discord(self, token: str) -> DiscordBot:
         raise AssertionError("login never talks to Discord")
+
+    def ai(self, endpoint: Endpoint) -> ChatProvider:
+        raise AssertionError("login never talks to an AI provider")
 
 
 @pytest.fixture

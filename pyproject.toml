@@ -13,6 +13,7 @@ dependencies = [
     "feedparser>=6.0.14",
     "guessit>=4.4.0",
     "httpx>=0.28.1",
+    "httpx-sse>=0.4.3",
     "pydantic>=2.13.5",
     "pymediainfo>=7.0.1",
     "sqlalchemy[asyncio]>=2.0.52",

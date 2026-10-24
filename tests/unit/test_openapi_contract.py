@@ -36,6 +36,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 import berth.api
+from berth.api import ai as ai_api
 from berth.api import files as files_api
 from berth.api import issues as issues_api
 from berth.api import jellyfin as jellyfin_api
@@ -83,6 +84,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "RematchRefusal": files_api._STATUS,
     "RssRefusal": rss_api._STATUS,
     "NotifyRefusal": notify_api._STATUS,
+    "AiRefusal": ai_api._STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
     "OwnerRefusal": setup_api._OWNER_STATUS,
     "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
@@ -104,6 +106,7 @@ MODELS = (
     "InterfaceLoginRefusalOut",
     "ChoiceRefusalOut",
     "NotifyRefusalOut",
+    "AiRefusalOut",
     "JobSignalOut",
 )
 
@@ -485,6 +488,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "connection_failed": "ChoiceRefusalOut",
             "rss_refusal": "RssRefusalOut",
             "notify_refusal": "NotifyRefusalOut",
+            "ai_refusal": "AiRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

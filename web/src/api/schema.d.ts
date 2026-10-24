@@ -4,6 +4,64 @@
  */
 
 export interface paths {
+    "/api/settings/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ai */
+        get: operations["get_ai_api_settings_ai_get"];
+        /**
+         * Put Ai
+         * @description 存設定。不連端點：連得上與否是「測試」的事。
+         */
+        put: operations["put_ai_api_settings_ai_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/ai/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Test
+         * @description 照存著的設定打三次請求（`services.ai`），每一次都記進用量。
+         */
+        post: operations["post_test_api_settings_ai_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Models */
+        get: operations["get_models_api_settings_ai_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -2419,6 +2477,115 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * AiFailure
+         * @description 對 provider 的一次請求沒成的分類（brief §20.24「錯誤」、研究 ai-providers.md 結論 8）。
+         *
+         *     分得這麼細是因為**下一步不同**：限流等一下、額度要人去儲值、憑證與模型要去設定頁改、
+         *     連不上查網址與網路。M5 一律不自動重試。
+         * @enum {string}
+         */
+        AiFailure: "rate_limited" | "quota_exhausted" | "provider_down" | "auth_failed" | "model_not_found" | "unreachable" | "rejected";
+        /** AiModelsOut */
+        AiModelsOut: {
+            /** Models */
+            models: string[] | null;
+            failure: components["schemas"]["AiFailure"] | null;
+            /** Detail */
+            detail: string;
+        };
+        /** AiProbeCallOut */
+        AiProbeCallOut: {
+            step: components["schemas"]["AiProbeStep"];
+            usage: components["schemas"]["UsageOut"];
+        };
+        /**
+         * AiProbeStep
+         * @description 設定頁的測試打的三次請求（研究 ai-providers.md 結論 4）。
+         * @enum {string}
+         */
+        AiProbeStep: "hello" | "tool_call" | "tool_result";
+        /**
+         * AiRefusal
+         * @description AI 設定的命令不做的理由（`services.ai`）。
+         * @enum {string}
+         */
+        AiRefusal: "base_url_invalid" | "not_ready";
+        /**
+         * AiRefusalOut
+         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。
+         */
+        AiRefusalOut: {
+            reason: components["schemas"]["AiRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /** AiSettingsIn */
+        AiSettingsIn: {
+            format: components["schemas"]["ApiFormat"];
+            /** Base Url */
+            base_url: string;
+            /** Model */
+            model: string;
+            /** Api Key */
+            api_key?: string | null;
+        };
+        /** AiSettingsOut */
+        AiSettingsOut: {
+            format: components["schemas"]["ApiFormat"];
+            /** Base Url */
+            base_url: string;
+            /** Api Key Present */
+            api_key_present: boolean;
+            /** Model */
+            model: string;
+            /** Default Model */
+            default_model: string | null;
+            /** Ready */
+            ready: boolean;
+            tool_test: components["schemas"]["AiToolTestOut"] | null;
+        };
+        /**
+         * AiTestOut
+         * @description 一次測試。端點說不行也是 200：那是「測試的結果」，不是請求錯了。
+         */
+        AiTestOut: {
+            failure: components["schemas"]["AiFailure"] | null;
+            /** Detail */
+            detail: string;
+            /** Retry After */
+            retry_after: number | null;
+            /** Reply */
+            reply: string;
+            /** Calls */
+            calls: components["schemas"]["AiProbeCallOut"][];
+            tools: components["schemas"]["AiToolTestOut"] | null;
+            tools_failure: components["schemas"]["AiFailure"] | null;
+            /** Tools Detail */
+            tools_detail: string;
+        };
+        /** AiToolTestOut */
+        AiToolTestOut: {
+            /** Supported */
+            supported: boolean;
+            gap: components["schemas"]["ToolGap"] | null;
+            /** Detail */
+            detail: string;
+            /**
+             * Tested At
+             * Format: date-time
+             */
+            tested_at: string;
+        };
+        /**
+         * ApiFormat
+         * @description `settings.ai` 的 API 格式（plan §11.6〈provider〉、brief §20.24）。
+         *
+         *     同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。M5 票 07 先開
+         *     Anthropic，OpenAI 相容在 07b。
+         * @enum {string}
+         */
+        ApiFormat: "anthropic";
         /**
          * AuditAction
          * @description `audit` 那一類按得了的兩顆（brief §6.5：「一鍵撤銷或確認」）。
@@ -5775,6 +5942,15 @@ export interface components {
             api_key: string;
         };
         /**
+         * ToolGap
+         * @description 設定頁的測試判定「這個模型不支援工具呼叫」的樣子（`docs/research/ai-providers.md` 結論 4）。
+         *
+         *     說給人聽的補法不同：被拒要看端點的設定（vLLM 的啟動選項、換 Ollama 的模型），寫成文字是
+         *     端點沒有把模型的輸出解析成呼叫，忽略是端點根本沒把工具交給模型。
+         * @enum {string}
+         */
+        ToolGap: "tools_rejected" | "written_as_text" | "tools_ignored" | "wrong_call" | "result_rejected" | "no_reply";
+        /**
          * TrackingOut
          * @description Berth 經手的作品在這個媒體庫上的入庫狀態。判定規則在 `services/inventory.py`。
          */
@@ -5875,6 +6051,20 @@ export interface components {
             path: string;
             /** Reasons */
             reasons: components["schemas"]["ItemReasonOut"][];
+        };
+        /**
+         * UsageOut
+         * @description 一次呼叫的 tokens。`null` 是端點沒回那一格（不知道），不是 0。
+         */
+        UsageOut: {
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Output Tokens */
+            output_tokens: number | null;
+            /** Cache Write Tokens */
+            cache_write_tokens: number | null;
+            /** Cache Read Tokens */
+            cache_read_tokens: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -6098,6 +6288,117 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_ai_api_settings_ai_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiSettingsOut"];
+                };
+            };
+        };
+    };
+    put_ai_api_settings_ai_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiSettingsOut"];
+                };
+            };
+            /** @description `base_url_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    post_test_api_settings_ai_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTestOut"];
+                };
+            };
+            /** @description `not_ready` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    get_models_api_settings_ai_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiModelsOut"];
+                };
+            };
+            /** @description `not_ready` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
     post_login_api_auth_login_post: {
         parameters: {
             query?: never;
