@@ -62,3 +62,25 @@ travel  3650 days: 2 passed
 ### code-review（基準 `c8c15646`）
 
 Standards 沒有硬性違規；已改：`development.md` 那段的「fixture」同時指 pytest fixture 與錄下的資料，後者改成「錄下來的資料」。未處理（判斷題）：同檔第三份 `next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)`，三份不抽；`KIMI_NEXT_DAY` 說的是怎麼算而不是用途，有註解，保留。Spec 沒有缺漏或範圍外的改動。
+
+### 後續：e2e 的那一半（2026-10-24，合進 main `583de588` 之後）
+
+協調者回報 CI 的 web-e2e 紅 8 條（run 40079562312）：`rss`、`rss-auto-bind`、`rss-exclusions`、`rss-backfill` 各 1280 與 390。同一個原因：演練伺服器（`scripts/fake_setup_server.py`）是真的 Berth、用真的時鐘，`rss` 系列情境讀的是同一份錄下的 Feed，過了 2026-09-24 08:08 UTC + 30 天，《与你相恋》一長出來就收進「已完結」，`region 'RSS Series'` 裡找不到它。上一次 CI 綠是在 08:08 UTC 前跑完。本機重現：`pnpm -C web e2e` 同樣 8 failed / 44 passed。
+
+**修法：固定演練伺服器的時鐘，不改錄下的日期。** 改日期的話，`rss-split-cour-airing` 靠的「發佈日 vs TMDB 播出日」（第二 cour 2026-07-02 起播）也得跟著搬，錄下的 Feed、單一 feed、兩份 acg.rip、合集 feed 與 TMDB 替身的日期要一起平移，牽動的地方太多。
+
+- `Scenario.clock`：設了的話，`main` 在建 app 與種資料之前 `time_machine.travel(clock, tick=True).start()`。時鐘照常往前走，背景迴圈的排程照跑。
+- `rss_scenario` 設成 `tests/integration/test_rss.NOW`（2026-09-25 12:00 UTC）。這是 services 層測試對這份錄下的資料本來就用的「今天」，在每一份錄下的 Feed 之後（最新是聚合 feed 的 09-24 08:08 與 acg.rip 的 09-24 12:31）。`rss-legacy-feed`、`rss-split-cour`、`rss-split-cour-airing`、`rss-runtime` 都從 `rss_scenario` 長出來，一起固定。
+- pytest 那條的 `KIMI_NEXT_DAY` 換成同一個 `NOW`：API 測試、services 測試、演練伺服器對同一個「今天」。
+- 只固定伺服器，瀏覽器照真的時間。前端只有顯示用到瀏覽器時鐘（`relativeTime` 的「幾天前」、`FilesPanel` 的反查「即將」），所以這幾個情境的畫面上「幾天前」會多算一段，沒有判斷會因此翻面。cookie 用 `Max-Age`，登入不受影響。
+
+**往後推的證明**：一個暫時的 `sitecustomize.py`（沒進 repo）讓每台演練伺服器起來就 `time_machine.travel(+N 天)`；`rss` 情境自己的固定是絕對時刻，會蓋過它。日誌讀回：`rss` 那幾台都是 2026-09-25，`weekly` 分別在 2026-12-03、2027-11-28。
+
+```
+正常時鐘：52 passed (1.6m)
++40 天：  52 passed (1.6m)
++400 天： 52 passed (1.6m)
+修之前（正常時鐘）：8 failed, 44 passed
+```
+
+**其他 e2e 的掃描**：+40 與 +400 天時，其他情境的伺服器跟著往後推，也全綠，沒有同類依賴。掃描的極限：瀏覽器沒有一起推，只在瀏覽器那一側比日期的依賴掃不到。不過前端沒有這種判斷（見上一段）。

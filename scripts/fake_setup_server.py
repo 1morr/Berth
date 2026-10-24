@@ -25,6 +25,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote, urlsplit
 
+import time_machine
 import uvicorn
 from fastapi import FastAPI, Request, Response
 from sqlalchemy import select
@@ -211,6 +212,7 @@ from tests.integration.test_rss import FEED as RSS_FEED
 from tests.integration.test_rss import FEED_URL as RSS_FEED_URL
 from tests.integration.test_rss import KIMI_ID as RSS_KIMI_ID
 from tests.integration.test_rss import MIKAN as RSS_MIKAN
+from tests.integration.test_rss import NOW as RSS_NOW
 from tests.integration.test_rss import episode_pages as rss_episode_pages
 from tests.integration.test_rss_preview import KAMIINA as RSS_KAMIINA
 from tests.integration.test_rss_preview import KAMIINA_URL as RSS_KAMIINA_URL
@@ -381,6 +383,10 @@ class Scenario:
     #: mediainfo 的替身（M3 票 15）：檔名含 ` - <集號> ` 的影片量到幾秒。演練寫到磁碟上的不是真的
     #: 影片，真的 libmediainfo 一律說不出片長；空的話走真的那一支。
     measured: dict[str, int] = field(default_factory=dict)
+    #: 這台 server 的時鐘從這一刻起走（M5 票 10b）。演練用錄下來的資料、又有拿牆上時間跟它比的
+    #: 規則（RSS Series 安靜 30 天算完結）時設；`None` 是真的時間。只固定 server，瀏覽器照真的時間，
+    #: 所以畫面上的「幾天前」會比錄下的那天多算一段。
+    clock: datetime | None = None
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1593,6 +1599,7 @@ def rss_scenario(
     """
     batch = demo_torrent(RSS_BATCH_RELEASE)
     scenario = _planning(healthy(), {**RSS_PACKS, **RSS_BATCH_PACKS})
+    scenario.clock = RSS_NOW
     scenario.indexer_results = ()
     scenario.tmdb_credential = "00000000000000000000000000000010"
     scenario.tmdb = FakeTmdbClient(
@@ -2352,6 +2359,10 @@ def main(argv: list[str] | None = None) -> int:
         (config_root / "nas" / folder).mkdir(parents=True, exist_ok=True)
 
     scenario = SCENARIOS[args.scenario]()
+    if scenario.clock is not None:
+        # 建 app 與種資料之前：資料庫裡的每一個時間都要出自同一個時鐘。`tick=True` 讓它照常往前走，
+        # 背景迴圈的排程才跑得動；time-machine 3 不碰 `monotonic`，asyncio 不受影響。
+        time_machine.travel(scenario.clock, tick=True).start()
     if scenario.measured:
         # 換掉模組上的函式：`services/plan.py` 以 `mediainfo.probe` 呼叫它，它不在 client 工廠裡。
         # mypy 不讓函式被賦值；替身的簽名與它相同。

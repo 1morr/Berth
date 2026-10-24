@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import replace
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +40,7 @@ from tests.integration.test_rss import (
     KIMI_ID,
     KIMI_KEY,
     MIKAN,
+    NOW,
     anime_route,
     episode_pages,
     kimi,
@@ -56,11 +56,6 @@ from tests.integration.test_rss_screen import (
     serve,
     serve_single,
 )
-
-#: 畫面流程那條測試的「今天」：錄下來的《与你相恋》最新一集的隔天。RSS 頁的「已完結」照讀清單
-#: 那一刻的牆上時間算（`parser.series_finished`），不固定的話，錄下的日期一過 `QUIET_AFTER` 就紅
-#: （M5 票 10b）。
-KIMI_NEXT_DAY = max(item.published_at for item in KIMI if item.published_at) + timedelta(days=1)
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
@@ -145,7 +140,7 @@ class TestThePageFlow:
     def test_add_poll_bind_and_see_the_jobs(
         self, client: TestClient, roots: dict[str, Path], time_machine: TimeMachineFixture
     ) -> None:
-        time_machine.move_to(KIMI_NEXT_DAY)
+        time_machine.move_to(NOW)
         route_id = seed(client, roots)
         sign_in(client)
 
@@ -217,7 +212,7 @@ class TestThePageFlow:
 
         # 上面的 False 是固定的時鐘給的，不是執行那天：安靜滿 `QUIET_AFTER` 之後同一列收進
         # 「已完結」。登入也照同一個時鐘過期，所以一個月後重新登入。
-        time_machine.move_to(KIMI_NEXT_DAY + QUIET_AFTER)
+        time_machine.move_to(NOW + QUIET_AFTER)
         sign_in(client)
         quiet = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
         assert quiet["finished"] is True

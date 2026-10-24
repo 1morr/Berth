@@ -79,6 +79,9 @@ from tests.integration.test_reconciler_schedule import ready
 
 pytestmark = pytest.mark.asyncio
 
+#: 錄下來的 Feed 的「今天」：聚合、單一與 acg.rip 那幾份最新一筆的隔天。拿牆上時間跟錄下的日期比
+#: 的地方都要固定在這一刻：走 HTTP 的測試用 `time_machine`，演練伺服器的 RSS 情境用
+#: `Scenario.clock`（M5 票 10b）。
 NOW = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
 FEED_URL = "https://mikanani.me/RSS/MyBangumi?token=REDACTED"
 MIKAN = FIXTURES / "http" / "mikan"
