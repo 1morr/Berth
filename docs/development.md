@@ -423,6 +423,8 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 **設定 → AI（M5 票 07）每個情境都演得出來**，provider 是演練用的替身（`DemoChatProvider`，不出網）：三步測試照常走完、
 模型清單有四個。key 填 `rejected` 演「key 不對」，模型名帶 `missing` 演「模型不存在」、帶 `chat-only` 演「只能聊天」。
 設 `BERTH_AI_REAL=1` 時改打真的端點（設定頁填的 base URL 與 key），有真 key 時拿它看一次真的回應與 tokens。
+OpenAI 相容（票 07b）另有一台走**真的 adapter、真的 HTTP** 的假端點：格式選 OpenAI 相容、base URL 填
+`http://127.0.0.1:<port>/demo/openai/v1`（key 可空），模型清單有 `demo-gpt` 與 `demo-chat-only`；作答規則同上。
 
 `healthy` 沒有 TMDB 憑證，所以它同時是探索頁「還沒填憑證」的樣子——那一步是精靈的必填閘門
 （見 [README〈What you need〉](../README.md#what-you-need)），畫面要指得出下一步。

@@ -110,17 +110,21 @@ Berth can use an AI model through your own provider account. Nothing requires it
 works exactly as before. So far this page only connects the provider and tests it; nothing else in Berth calls
 the model yet.
 
-- **API format**: Anthropic Messages. Any service that speaks this format works, not only Anthropic.
-- **Base URL**: leave it blank for Anthropic's own API. For another service, paste the Anthropic-format base URL
-  from its docs, **without** `/v1`: for example `https://openrouter.ai/api`, `https://api.deepseek.com/anthropic`,
-  or `http://<host>:11434` for Ollama.
-- **API key**: needed for Anthropic's own API. A self-hosted Ollama or vLLM can run without one. Like the other
+- **API format**: **Anthropic Messages** or **OpenAI-compatible** (Chat Completions). Pick the one the service
+  speaks; many speak both. Any service that speaks the format works, not only Anthropic or OpenAI.
+- **Base URL**: leave it blank for the format's own official API (`https://api.anthropic.com` or
+  `https://api.openai.com/v1`). For another service, paste the base URL from its docs. The two formats differ on
+  `/v1`: an Anthropic-format base URL has **no** `/v1` (`https://openrouter.ai/api`,
+  `https://api.deepseek.com/anthropic`, `http://<host>:11434`), an OpenAI-compatible one usually **ends in**
+  `/v1` (examples below).
+- **API key**: needed for the official APIs. A self-hosted Ollama or vLLM can run without one. Like the other
   keys, it is stored in Berth's database and never shown again: the page only says whether one is saved, and
   **Remove key** clears it.
-- **Model**: left blank, Anthropic's own API uses `claude-opus-5-5`. Other services have no default: load the
-  list from the endpoint and pick one, or type the model id their docs give.
+- **Model**: left blank, Anthropic's own API uses `claude-opus-5-5`. Everything else, OpenAI's own API included,
+  has no default: load the list from the endpoint and pick one, or type the model id their docs give. Some
+  endpoints cannot list their models; then type it.
 
-AI counts as set up when there is an endpoint (a base URL, or a key for Anthropic's own API) and a model.
+AI counts as set up when there is an endpoint (a base URL, or a key for an official API) and a model.
 
 **Save and test** saves the form, then sends three small requests: one asking for a one-word reply, one offering a
 harmless test tool (`berth_echo`) with a random value to pass back, and one returning the tool's result to the
@@ -131,7 +135,26 @@ that result, so test again.
 
 When a test fails, the page says why: the key was refused, the model does not exist, the account is rate limited
 (and for how long, when the provider says), out of credit, the provider is having trouble, or the endpoint cannot
-be reached. Berth never retries on its own.
+be reached. An error the endpoint words in a way Berth does not recognize is shown as "the endpoint sent an error
+Berth cannot read", with the endpoint's own text under **Technical details**; a 404 that is not about the model
+usually means the base URL is missing `/v1` or has one too many. Berth never retries on its own.
+
+### OpenAI-compatible endpoints
+
+Tool calling is where OpenAI-compatible services differ most. The test tells you which case you are in: the
+endpoint refused the tools, ignored them, or the model wrote the call out as text. Each one makes the model
+chat only.
+
+| Service | Base URL | Key | Tool calling |
+| --- | --- | --- | --- |
+| OpenAI | leave blank | yes | Not yet tried against OpenAI itself; the test tells you. If the request with tools is refused, the error text under **Technical details** says why. |
+| OpenRouter | `https://openrouter.ai/api/v1` | yes | Pick a model whose page lists **tools** among its supported parameters. If none of the model's providers supports tools, OpenRouter ignores them without an error, and the test says so. |
+| DeepSeek | `https://api.deepseek.com` (its docs use no `/v1`) | yes | Its docs list both current models (`deepseek-flash`, `deepseek-v4-pro`) as supporting tools. |
+| Ollama | `http://<host>:11434/v1` | no | Use a model listed under [Tools on ollama.com](https://ollama.com/search?c=tools). Others are refused with "does not support tools". |
+| vLLM | `http://<host>:<port>/v1` | only if you started it with `--api-key` | Start vLLM with `--enable-auto-tool-choice` and the `--tool-call-parser` that matches the model (see vLLM's tool calling docs). Without a parser the call comes back as plain text. |
+
+Cache numbers depend on the service: Ollama reports none, vLLM reports cache reads only when started with
+`--enable-prompt-tokens-details`, and DeepSeek has no cache-write figure. Berth shows those as "unknown".
 
 Berth records every request: model, input and output tokens, cache tokens, how long it took and who ran it.
 There is no spending limit.

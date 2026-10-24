@@ -127,3 +127,39 @@ async def test_a_result_for_settings_changed_mid_test_is_not_stored(session: Asy
     assert result.tools is not None
     assert result.tools.supported is False
     assert (await read_ai(session)).tool_test is None
+
+
+def replies_with(template: str) -> Callable[[ChatRequest], TurnEnded]:
+    return lambda request: says(template.format(nonce=nonce_in(request)))
+
+
+@pytest.mark.parametrize(
+    ("template", "gap"),
+    [
+        # 端點忽略了工具，模型只是在回話裡提到它（提示本身就有工具名與 nonce）。
+        ("I can't call berth_echo here, but the nonce was {nonce}.", ToolGap.TOOLS_IGNORED),
+        ("Sure, I called berth_echo.", ToolGap.TOOLS_IGNORED),
+        # 端點沒有把模型輸出的呼叫解析出來：vLLM 沒開 `--tool-call-parser` 時的幾種樣子。
+        (
+            '<tool_call>\n{{"name": "berth_echo", "arguments": {{"nonce": "{nonce}"}}}}'
+            "\n</tool_call>",
+            ToolGap.WRITTEN_AS_TEXT,
+        ),
+        ('{{"name": "berth_echo", "parameters": {{"nonce": "{nonce}"}}}}', ToolGap.WRITTEN_AS_TEXT),
+        (
+            '[TOOL_CALLS] [{{"name":"berth_echo","arguments":{{"nonce":"{nonce}"}}}}]',
+            ToolGap.WRITTEN_AS_TEXT,
+        ),
+        ('berth_echo(nonce="{nonce}")', ToolGap.WRITTEN_AS_TEXT),
+    ],
+)
+async def test_mentioning_the_tool_is_not_the_same_as_writing_the_call(
+    session: AsyncSession, template: str, gap: ToolGap
+) -> None:
+    provider = FakeChatProvider(replies=[says("ok"), replies_with(template)])
+    user_id = await ready(session)
+
+    result = await run_ai_test(session, FakeClientFactory(ai=provider), user_id=user_id)
+
+    assert result.tools is not None
+    assert result.tools.gap is gap

@@ -2539,8 +2539,10 @@ export interface components {
             api_key_present: boolean;
             /** Model */
             model: string;
-            /** Default Model */
-            default_model: string | null;
+            /** Official Models */
+            official_models: {
+                [key: string]: string | null;
+            };
             /** Ready */
             ready: boolean;
             tool_test: components["schemas"]["AiToolTestOut"] | null;
@@ -2581,11 +2583,11 @@ export interface components {
          * ApiFormat
          * @description `settings.ai` 的 API 格式（plan §11.6〈provider〉、brief §20.24）。
          *
-         *     同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。M5 票 07 先開
-         *     Anthropic，OpenAI 相容在 07b。
+         *     同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。每一種格式一個
+         *     adapter，對照表在 `adapters.ai.formats`。
          * @enum {string}
          */
-        ApiFormat: "anthropic";
+        ApiFormat: "anthropic" | "openai";
         /**
          * AuditAction
          * @description `audit` 那一類按得了的兩顆（brief §6.5：「一鍵撤銷或確認」）。

@@ -1830,6 +1830,15 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - **認證兩個標頭都送**：`Authorization: Bearer` 與 `x-api-key`（沒有 key 時兩個都不送）。官方接不接受兩個同時出現**未實測**（研究最後一節第 1 條）；被拒的話設定頁的測試第一次就會說出 400 的原文，改成只送 Bearer。
   - **頂層 `cache_control` 照送**：第三方碰到它是忽略還是 400 **未實測**（第 2 條），同上由測試的第一次說出來。
   - **thinking block 當 `OpaquePart` 原樣帶回**（`thinking_delta` 與 `signature_delta` 拼回完整 block）；現役模型預設會不會回它**未實測**（第 3 條）。
-  - **「AI 設定好了」**（第 6 條）：有端點（填了 base URL，或官方端點而且有 key）、有模型（官方端點留空用 `claude-opus-5-5`）。沒設定好時沒有東西叫模型，系統與 M4 相同。
+  - **「AI 設定好了」**（第 6 條）：有端點（填了 base URL，或官方端點而且有 key）、有模型（Anthropic 官方端點留空用 `claude-opus-5-5`；OpenAI 官方與第三方沒有預設，票 07b）。沒設定好時沒有東西叫模型，系統與 M4 相同。
   - **探針照研究結論 4 打三次**，每一次各記一列 `ai_calls`；第二次帶工具的回 400 判「不支援」，401 / 404 這類不會只因為多了工具才出現的錯也算「這次沒測成」、不存。模型平行呼叫兩次也算支援，第三次給每個呼叫各一個結果。
   - **不是 Anthropic 形狀的 404 不算模型不存在**：`error.type` 不是 `not_found_error` 的 404 多半是 base URL 多寫或少寫了 `/v1`，歸「看不懂」並附原文。
+- **票 07b 實作時定的（2026-10-24，沒有真 key、也沒有第三方端點；標「未實測」的等有時補）**：
+  - **輸出上限的欄位看端點**：官方 OpenAI 送 `max_completion_tokens`（推理模型對 `max_tokens` 回 400：「Unsupported parameter: 'max_tokens' ... Use 'max_completion_tokens' instead」，[Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/5568853/how-do-you-use-rag-in-the-rest-api-with-gpt-5)、[litellm#13381](https://github.com/BerriAI/litellm/issues/13381)），第三方送 `max_tokens`（Ollama 的 `/v1/chat/completions` 欄位表只列 `max_tokens`，[openai-compatibility.mdx](https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx)；其餘研究過的端點都收它）。
+  - **不送 `tool_choice`**（研究最後一節第 5 條沒實測，取兩種都判得出不支援的那一邊）：vLLM 沒開 parser 時呼叫變成文字，探針判 `written_as_text`；也不送 `reasoning_effort`。官方 OpenAI 不送它時工具呼叫能不能用**未實測**（第 4 條）：被拒的話探針判 `tools_rejected`，原文在技術細節。探針 256 個輸出 tokens 對推理模型夠不夠也**未實測**（推理吃光上限會是空回覆，第三次判 `no_reply`）。
+  - **DeepSeek 的 `reasoning_content` 當 `OpaquePart` 帶回下一輪**（研究底稿 §3.4）；OpenRouter 的 `reasoning` / `reasoning_details` 沒有帶。
+  - **快取讀取大於 `prompt_tokens` 時記成「不知道」並寫 log**（第 7 條，在有真端點之前的保險）。
+  - **錯誤 body 照 `error.{message,type,code}` 讀**：429 的 `error.code` 是 `credit_balance_exhausted`、`*_spend_limit_exceeded`、`*_usage_limit_exceeded` 或 `error.type` 是 `insufficient_quota` 算額度用完；404 只有在 `code` 是 `model_not_found` 或訊息提到 model 時才算模型不存在，其餘（反向代理的 404 頁、OpenAI 的「Invalid URL」）歸看不懂、附原文；body 讀不懂照狀態碼分。200 但 body 只有 `error`（OpenRouter 非串流）或根本不是事件串流，也是錯誤。串流中途的 `error` chunk 照 `error.code`（OpenRouter 放 HTTP 狀態碼）分，說不出來的是 provider 掛掉；`finish_reason: "error"` 同。
+  - **「寫成文字」看的是呼叫的形狀，不是有沒有提到**（code review 提出，探針兩種格式共用）：回覆裡有 JSON 的 `"nonce":`、`"name": "berth_echo"`（Hermes 的 `<tool_call>`、Llama、Mistral 的 `[TOOL_CALLS]`）或 `berth_echo(` 才判 `written_as_text`；只提到工具名或 nonce 是 `tools_ignored`——提示本身就有這兩個字，端點忽略工具時模型常會複述，兩種的補法不同（OpenRouter 換模型、vLLM 加 parser）。
+  - **串流中途的錯誤 chunk 沒有狀態碼**：`error.code` 是 `rate_limit_exceeded`、`slow_down` 或 `error.type` 是 `rate_limit_error` 判限流；錯誤原文同時寫進 log（兩種格式），認不得的之後靠它補分類。
+  - **有 `finish_reason`、沒送 `[DONE]` 就關掉的串流算正常結束**；沒有 `finish_reason` 就斷掉的是 provider 掛掉，usage 四格都不知道。有工具呼叫卻寫 `stop`（或沒寫）的，結束原因當成工具呼叫。

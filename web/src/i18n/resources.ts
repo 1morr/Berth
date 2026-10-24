@@ -3059,18 +3059,25 @@ const zhHant = {
         title: '連線',
         formatLabel: '格式',
         formatAnthropic: 'Anthropic Messages',
+        formatOpenai: 'OpenAI 相容（Chat Completions）',
         baseUrlLabel: 'Base URL',
-        baseUrlPlaceholder: 'https://api.anthropic.com',
-        baseUrlHint:
-          '留空用官方端點。第三方照它文件給的 Anthropic 格式網址填，不含 /v1，例如 https://openrouter.ai/api、http://<主機>:11434。',
+        baseUrlPlaceholder: {
+          anthropic: 'https://api.anthropic.com',
+          openai: 'https://api.openai.com/v1',
+        },
+        baseUrlHint: {
+          anthropic:
+            '留空用官方端點。第三方照它文件給的 Anthropic 格式網址填，不含 /v1，例如 https://openrouter.ai/api、http://<主機>:11434。',
+          openai:
+            '留空用 OpenAI 官方端點。第三方照它文件給的 OpenAI 相容網址填，多半含 /v1，例如 https://openrouter.ai/api/v1、http://<主機>:11434/v1。',
+        },
         keyLabel: 'API key',
         keyPlaceholder: '貼上 API key',
         keyPlaceholderSet: '已設定，留空不改',
         keyHint: 'key 只送到 Berth 的後端，存下之後不會再顯示。自架的 Ollama / vLLM 可以不填。',
         modelLabel: '模型',
         modelHintDefault: '留空用 {{model}}。',
-        modelHintOfficial: '留空用官方端點的預設模型。',
-        modelHintThirdParty: '第三方端點一定要從清單選或填一個模型。',
+        modelHintRequired: '這個端點沒有預設模型：從清單選或填一個。',
         save: '儲存',
         saving: '儲存中…',
         saveTest: '儲存並測試',
@@ -3083,7 +3090,7 @@ const zhHant = {
         removing: '移除中…',
         removeWarning: '移除之後 Berth 不再帶 key 連這個端點，直到你貼上新的 key。',
         missingKey: '官方端點需要 API key：先貼上 key。',
-        missingModel: '第三方端點需要模型：先選或填一個。',
+        missingModel: '這個端點需要模型：先選或填一個。',
       },
       models: {
         read: '從端點讀取模型清單',
@@ -3099,7 +3106,7 @@ const zhHant = {
         config: '設定',
         ready: '設定好了',
         notReady: '還沒設定好',
-        notReadyHint: '官方端點要 API key；第三方端點要模型。',
+        notReadyHint: '官方端點要 API key；沒有預設模型的端點要填模型。',
         tools: '工具呼叫',
         supported: '支援',
         chatOnly: '只能聊天',
@@ -3164,18 +3171,18 @@ const zhHant = {
           },
           unreachable: {
             what: '連不上這個端點。',
-            fix: '確認 base URL 與網路；Anthropic 格式的 base URL 不含 /v1。',
+            fix: '確認 base URL 與網路；Anthropic 格式的 base URL 不含 /v1，OpenAI 相容的多半含 /v1。',
           },
           rejected: {
-            what: '端點回了看不懂的回應，或拒絕了請求。',
-            fix: '確認 base URL 指到 Anthropic 格式的端點；原文在技術細節。',
+            what: '端點回了看不懂的錯誤，或拒絕了請求。',
+            fix: '確認格式與 base URL 對得上端點的文件（/v1 有沒有多寫或少寫）；原文在技術細節。',
           },
         },
       },
       refusal: {
         base_url_invalid:
           '要是 http:// 或 https:// 開頭的完整網址，例如 https://openrouter.ai/api。',
-        not_ready: '還沒設定好：官方端點要 API key，第三方端點要模型。',
+        not_ready: '還沒設定好：官方端點要 API key，沒有預設模型的端點要填模型。',
       },
     },
     notifyPage: {
@@ -6861,10 +6868,18 @@ const en: Translations<typeof zhHant> = {
         title: 'Connection',
         formatLabel: 'Format',
         formatAnthropic: 'Anthropic Messages',
+        formatOpenai: 'OpenAI-compatible (Chat Completions)',
         baseUrlLabel: 'Base URL',
-        baseUrlPlaceholder: 'https://api.anthropic.com',
-        baseUrlHint:
-          'Leave empty for the official endpoint. For a third party, use the Anthropic-format URL from its docs, without /v1, for example https://openrouter.ai/api or http://<host>:11434.',
+        baseUrlPlaceholder: {
+          anthropic: 'https://api.anthropic.com',
+          openai: 'https://api.openai.com/v1',
+        },
+        baseUrlHint: {
+          anthropic:
+            'Leave empty for the official endpoint. For a third party, use the Anthropic-format URL from its docs, without /v1, for example https://openrouter.ai/api or http://<host>:11434.',
+          openai:
+            'Leave empty for the official OpenAI endpoint. For a third party, use the OpenAI-compatible URL from its docs, usually with /v1, for example https://openrouter.ai/api/v1 or http://<host>:11434/v1.',
+        },
         keyLabel: 'API key',
         keyPlaceholder: 'Paste the API key',
         keyPlaceholderSet: 'Already set; leave empty to keep it',
@@ -6872,9 +6887,7 @@ const en: Translations<typeof zhHant> = {
           'The key only goes to Berth’s backend and is never shown again. Self-hosted Ollama / vLLM can leave it empty.',
         modelLabel: 'Model',
         modelHintDefault: 'Leave empty to use {{model}}.',
-        modelHintOfficial: 'Leave empty to use the official endpoint’s default model.',
-        modelHintThirdParty:
-          'A third-party endpoint needs a model: pick one from the list or type it.',
+        modelHintRequired: 'This endpoint has no default model: pick one from the list or type it.',
         save: 'Save',
         saving: 'Saving…',
         saveTest: 'Save and test',
@@ -6887,7 +6900,7 @@ const en: Translations<typeof zhHant> = {
         removing: 'Removing…',
         removeWarning: 'Berth will stop sending a key to this endpoint until you paste a new one.',
         missingKey: 'The official endpoint needs an API key: paste one first.',
-        missingModel: 'A third-party endpoint needs a model: pick or type one first.',
+        missingModel: 'This endpoint needs a model: pick or type one first.',
       },
       models: {
         read: 'Read the model list from the endpoint',
@@ -6903,7 +6916,8 @@ const en: Translations<typeof zhHant> = {
         config: 'Setup',
         ready: 'Ready',
         notReady: 'Not ready',
-        notReadyHint: 'The official endpoint needs an API key; a third party needs a model.',
+        notReadyHint:
+          'The official endpoint needs an API key; an endpoint without a default model needs a model.',
         tools: 'Tool calling',
         supported: 'Supported',
         chatOnly: 'Chat only',
@@ -6970,11 +6984,11 @@ const en: Translations<typeof zhHant> = {
           },
           unreachable: {
             what: 'Cannot reach this endpoint.',
-            fix: 'Check the base URL and the network; an Anthropic-format base URL has no /v1.',
+            fix: 'Check the base URL and the network; an Anthropic-format base URL has no /v1, an OpenAI-compatible one usually does.',
           },
           rejected: {
-            what: 'The endpoint sent a reply Berth cannot read, or refused the request.',
-            fix: 'Check the base URL points at an Anthropic-format endpoint; the original reply is under technical details.',
+            what: 'The endpoint sent an error Berth cannot read, or refused the request.',
+            fix: 'Check the format and base URL match the endpoint’s docs (a missing or extra /v1); the original reply is under technical details.',
           },
         },
       },
@@ -6982,7 +6996,7 @@ const en: Translations<typeof zhHant> = {
         base_url_invalid:
           'This needs to be a full address starting with http:// or https://, for example https://openrouter.ai/api.',
         not_ready:
-          'Not ready: the official endpoint needs an API key, a third party needs a model.',
+          'Not ready: the official endpoint needs an API key, an endpoint without a default model needs a model.',
       },
     },
     notifyPage: {

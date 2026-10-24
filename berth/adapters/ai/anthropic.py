@@ -21,7 +21,6 @@ import json
 import logging
 from collections.abc import AsyncIterator, Mapping
 from typing import Any
-from urllib.parse import urlsplit
 
 import httpx
 from httpx_sse import EventSource
@@ -43,7 +42,15 @@ from berth.adapters.ai import (
     Usage,
     UserTurn,
 )
-from berth.adapters.http import HttpSession, ProtocolMismatchError, ServiceError, json_body
+from berth.adapters.ai.wire import (
+    LIST_TIMEOUT,
+    STREAM_TIMEOUT,
+    failure_of_status,
+    host_of,
+    list_model_ids,
+    retry_after,
+)
+from berth.adapters.http import HttpSession, ServiceError
 from berth.domain import AiFailure, ApiFormat
 
 logger = logging.getLogger(__name__)
@@ -57,10 +64,6 @@ API_VERSION = "2026-10-21"
 #: 官方 models overview「start with Claude Opus 5.5」。只在官方端點時當預設（研究結論 5）。
 DEFAULT_MODEL = "claude-opus-5-5"
 
-#: 一輪對話可以想很久；連線本身不該等。
-_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
-#: 列模型只是一次 GET。
-_LIST_TIMEOUT = 15.0
 _EPHEMERAL = {"type": "ephemeral"}
 
 _STOPS = {
@@ -85,28 +88,6 @@ _ERROR_TYPES = {
 }
 
 
-def _failure_of_status(status: int) -> AiFailure:
-    if status == 429:
-        return AiFailure.RATE_LIMITED
-    if status == 402:
-        return AiFailure.QUOTA_EXHAUSTED
-    if status in (401, 403):
-        return AiFailure.AUTH_FAILED
-    if status == 404:
-        return AiFailure.MODEL_NOT_FOUND
-    if status >= 500:
-        return AiFailure.PROVIDER_DOWN
-    return AiFailure.REJECTED
-
-
-def _retry_after(response: httpx.Response) -> float | None:
-    raw = response.headers.get("retry-after")
-    try:
-        return float(raw) if raw is not None else None
-    except ValueError:
-        return None
-
-
 def _error_of(body: object) -> tuple[str, str]:
     """`(error.type, error.message)`；body 不是這個形狀時兩個都是空字串。"""
     if isinstance(body, Mapping):
@@ -123,14 +104,14 @@ class AnthropicProvider:
 
     @property
     def host(self) -> str:
-        return urlsplit(self._base_url).netloc.rpartition("@")[2]
+        return host_of(self._base_url)
 
     def _session(self) -> HttpSession:
         headers = {"anthropic-version": API_VERSION}
         if self._api_key:
             headers["authorization"] = f"Bearer {self._api_key}"
             headers["x-api-key"] = self._api_key
-        return HttpSession(self._base_url, headers=headers, timeout=_LIST_TIMEOUT)
+        return HttpSession(self._base_url, headers=headers, timeout=LIST_TIMEOUT)
 
     async def stream(self, request: ChatRequest) -> AsyncIterator[StreamEvent]:
         turn = _TurnAssembler()
@@ -139,7 +120,7 @@ class AnthropicProvider:
             async with (
                 self._session() as session,
                 session.stream(
-                    "POST", "/v1/messages", json=_body(request), timeout=_TIMEOUT
+                    "POST", "/v1/messages", json=_body(request), timeout=STREAM_TIMEOUT
                 ) as response,
             ):
                 if response.status_code != 200:
@@ -170,28 +151,10 @@ class AnthropicProvider:
         )
 
     async def list_models(self) -> list[str] | None:
-        try:
-            async with self._session() as session:
-                response = await session.request(
-                    "GET", "/v1/models", params={"limit": 1000}, tolerate=tuple(range(400, 600))
-                )
-                if response.status_code != 200:
-                    error = await _http_error(response)
-                    if error.failure in (AiFailure.MODEL_NOT_FOUND, AiFailure.REJECTED):
-                        # 端點沒有這一支（第三方常見）：退回手填，不是錯。
-                        return None
-                    raise error
-                body = json_body(response)
-        except AiProviderError:
-            raise
-        except ProtocolMismatchError:
-            return None
-        except ServiceError as exc:
-            raise AiProviderError(AiFailure.UNREACHABLE, str(exc)) from exc
-        data = body.get("data") if isinstance(body, Mapping) else None
-        if not isinstance(data, list):
-            return None
-        return [str(item["id"]) for item in data if isinstance(item, Mapping) and "id" in item]
+        async with self._session() as session:
+            return await list_model_ids(
+                session, "/v1/models", params={"limit": 1000}, read_error=_http_error
+            )
 
 
 def _request_id(response: httpx.Response) -> str:
@@ -205,7 +168,7 @@ async def _http_error(response: httpx.Response) -> AiProviderError:
     except ValueError:
         body = None
     kind, message = _error_of(body)
-    failure = _ERROR_TYPES.get(kind) or _failure_of_status(response.status_code)
+    failure = _ERROR_TYPES.get(kind) or failure_of_status(response.status_code)
     if response.status_code == 404 and kind != "not_found_error":
         # 不是 Anthropic 形狀的 404：多半是 base URL 多寫或少寫了一段，不是模型不存在。
         failure = AiFailure.REJECTED
@@ -213,9 +176,13 @@ async def _http_error(response: httpx.Response) -> AiProviderError:
     detail = f"{response.status_code} {kind}: {text}".strip()
     logger.info(
         "anthropic request failed",
-        extra={"status": response.status_code, "request_id": _request_id(response)},
+        extra={
+            "status": response.status_code,
+            "request_id": _request_id(response),
+            "detail": detail,
+        },
     )
-    return AiProviderError(failure, detail, retry_after=_retry_after(response))
+    return AiProviderError(failure, detail, retry_after=retry_after(response))
 
 
 def _body(request: ChatRequest) -> _Json:
@@ -259,20 +226,17 @@ def _message(turn: UserTurn | ModelTurn) -> _Json:
             blocks.append({"type": "text", "text": part.text})
         elif isinstance(part, ToolCall):
             blocks.append(
-                {"type": "tool_use", "id": part.id, "name": part.name, "input": _input(part)}
+                {
+                    "type": "tool_use",
+                    "id": part.id,
+                    "name": part.name,
+                    # 要是 JSON 物件；解不開時送空物件（結果裡會說參數不對）。
+                    "input": part.arguments_object() or {},
+                }
             )
         elif part.format is ApiFormat.ANTHROPIC:
             blocks.append(dict(part.raw))
     return {"role": "assistant", "content": blocks}
-
-
-def _input(call: ToolCall) -> object:
-    """送回去的 `input` 要是 JSON 物件；模型給的原文解不開時送空物件（結果裡會說參數不對）。"""
-    try:
-        parsed = json.loads(call.arguments or "{}")
-    except ValueError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
 
 
 class _TurnAssembler:

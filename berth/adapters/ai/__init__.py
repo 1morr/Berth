@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -44,6 +45,15 @@ class ToolCall:
     name: str
     #: 模型給的 JSON 原文（沒給參數是空字串）。
     arguments: str
+
+    def arguments_object(self) -> dict[str, object] | None:
+        """參數原文解成 JSON 物件；解不開或不是物件是 `None`（官方說模型不一定給合法的 JSON）。
+        沒給參數算空物件。"""
+        try:
+            parsed = json.loads(self.arguments or "{}")
+        except ValueError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
 
 @dataclass(frozen=True, slots=True)

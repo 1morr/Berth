@@ -2,7 +2,8 @@
 
 **「AI 設定好了」**（`is_ready`）：有端點、有模型。端點是「填了 base URL」或「官方端點而且有 key」
 ——自架的 Ollama / vLLM 不需要 key（研究最後一節第 6 條），官方沒有 key 什麼都做不了。模型空的
-時候官方端點用預設的那一個，第三方沒有預設。**沒設定好時整個系統與 M4 相同**：沒有東西會叫模型。
+時候只有 Anthropic 官方端點有預設（`adapters.ai.formats`），其餘一定要選或填。**沒設定好時整個系統
+與 M4 相同**：沒有東西會叫模型。
 
 **測試是三次請求**（研究結論 4）：不帶工具的最小請求 → 帶一個假工具與隨機 nonce → 把工具的結果
 送回去要拿到文字。第一次沒過就說原因、不往下；後兩次判出「支不支援工具呼叫」存進
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 from dataclasses import dataclass
 from urllib.parse import urlsplit
@@ -34,7 +36,7 @@ from berth.adapters.ai import (
     Usage,
     UserTurn,
 )
-from berth.adapters.ai.anthropic import DEFAULT_MODEL
+from berth.adapters.ai.formats import official_model, official_models
 from berth.domain import AiCallOrigin, AiFailure, AiProbeStep, AiRefusal, ApiFormat, ToolGap
 from berth.models import AiSettings, AiToolTest
 from berth.models.types import utcnow
@@ -64,6 +66,12 @@ _CALL = (
 _MAX_OUTPUT = 256
 #: 技術細節裡抄模型回的文字到多長。
 _SNIPPET = 300
+#: 模型把呼叫寫成了文字的樣子：JSON 的 `"nonce":` 或 `"name": "berth_echo"`（Hermes 的
+#: `<tool_call>`、Llama、Mistral 的 `[TOOL_CALLS]`），或 `berth_echo(` 這種呼叫式。只提到工具名或
+#: nonce 不算：提示本身就有這兩個字，端點忽略工具時模型常會複述它們（那是 `TOOLS_IGNORED`）。
+_WRITTEN_CALL = re.compile(
+    rf'"nonce"\s*:|"name"\s*:\s*"{PROBE_TOOL.name}"|\b{PROBE_TOOL.name}\s*\('
+)
 
 
 class AiRefusedError(Exception):
@@ -81,8 +89,9 @@ class AiView:
     api_key_present: bool
     #: 存的模型；空的是沒填。
     model: str
-    #: 模型空著時用的那一個：只有官方端點有。
-    default_model: str | None
+    #: 每一種格式的官方端點在模型空著時用的那一個；`None` 是一定要選或填。設定頁要照草稿裡的格式
+    #: 說「留空用哪一個」，所以每一種都給。
+    official_models: dict[ApiFormat, str | None]
     ready: bool
     tool_test: AiToolTest | None
 
@@ -120,8 +129,9 @@ class ModelList:
 
 
 def default_model(settings: AiSettings) -> str | None:
-    """預設模型只在官方 Anthropic 端點時給（研究結論 5）：第三方會把 `claude-*` 映射成別的模型。"""
-    return DEFAULT_MODEL if not settings.base_url else None
+    """預設模型只在官方端點、而且那一種格式有建議時給（研究結論 5）：第三方會把 `claude-*`
+    映射成別的模型。"""
+    return official_model(settings.format) if not settings.base_url else None
 
 
 def effective_model(settings: AiSettings) -> str:
@@ -144,7 +154,7 @@ def _view(settings: AiSettings) -> AiView:
         base_url=settings.base_url,
         api_key_present=bool(settings.api_key),
         model=settings.model,
-        default_model=default_model(settings),
+        official_models=official_models(),
         ready=is_ready(settings),
         tool_test=settings.tool_test,
     )
@@ -339,24 +349,12 @@ def _judge_call(reply: ModelTurn, nonce: str) -> tuple[ToolCall, ...] | AiToolTe
     calls = reply.tool_calls
     if not calls:
         text = reply.text
-        gap = (
-            ToolGap.WRITTEN_AS_TEXT
-            if nonce in text or PROBE_TOOL.name in text
-            else ToolGap.TOOLS_IGNORED
-        )
+        gap = ToolGap.WRITTEN_AS_TEXT if _WRITTEN_CALL.search(text) else ToolGap.TOOLS_IGNORED
         return _unsupported(gap, text[:_SNIPPET])
     for call in calls:
-        if call.name != PROBE_TOOL.name or _nonce_of(call) != nonce:
+        if call.name != PROBE_TOOL.name or (call.arguments_object() or {}).get("nonce") != nonce:
             return _unsupported(ToolGap.WRONG_CALL, f"{call.name} {call.arguments}"[:_SNIPPET])
     return calls
-
-
-def _nonce_of(call: ToolCall) -> object:
-    try:
-        arguments = json.loads(call.arguments or "{}")
-    except ValueError:
-        return None
-    return arguments.get("nonce") if isinstance(arguments, dict) else None
 
 
 def _describe(ended: TurnEnded) -> str:

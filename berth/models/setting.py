@@ -141,8 +141,8 @@ class AiSettings(SettingsGroup):
     """AI provider（plan §11.6〈provider〉、brief §20.24）。
 
     **key 只寫不讀**：API 只回「有沒有」（同 `services.tmdb` 與 Prowlarr 的 `api_key_present`），
-    原文不回到瀏覽器、不進 log。base URL 空的是官方端點。模型空的時候，官方端點用預設的那一個
-    （`services.ai.effective_model`），第三方一定要選或填。
+    原文不回到瀏覽器、不進 log。base URL 空的是官方端點。模型空的時候，有預設的官方端點用它
+    （`services.ai.effective_model`；只有 Anthropic 有），其餘一定要選或填。
     """
 
     KEY = "ai"

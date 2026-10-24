@@ -318,7 +318,7 @@ Chat Completions。五家都支援；Responses 在 OpenRouter 與 Ollama 只有 
 
 ## 留給 07 / 07b 實測的事
 
-沒有真 key 查不到，或文件互相矛盾的；實測完寫回 brief §20 那一節。票 07（2026-10-24，沒有真 key）的處置寫在 brief §20.24「票 07 實作時定的」：第 6 條已定，第 1–3 條照研究的建議先做、等有 key 時實測。
+沒有真 key 查不到，或文件互相矛盾的；實測完寫回 brief §20 那一節。票 07（2026-10-24，沒有真 key）的處置寫在 brief §20.24「票 07 實作時定的」：第 6 條已定，第 1–3 條照研究的建議先做、等有 key 時實測。票 07b（同日，也沒有真 key 與第三方端點）的處置寫在 brief §20.24「票 07b 實作時定的」：第 4、5、7 條照那裡的做法先做，等有端點時實測。
 
 1. **Anthropic 官方接不接受同時送 `Authorization: Bearer` 與 `x-api-key`**：接受就兩個都送（DeepSeek 只寫了 `x-api-key`、Ollama 雲端只收 Bearer），不接受就只送 Bearer。官方文件的 cURL 範例自己也新舊並存（A 未查到第 1 條）。
 2. **第三方 Anthropic 相容端點碰到 `anthropic-version: 2026-10-21` 與頂層 `cache_control` 時是忽略還是 400**（Ollama 文件只說拒絕比 `2023-06-01` 舊的版本、`cache_control` 不支援）。
