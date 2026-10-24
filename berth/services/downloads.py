@@ -54,6 +54,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
 from berth.services.issues import close_settled, flag_stuck_jobs, note_cleared, record_issue
@@ -153,6 +154,7 @@ class PollOutcome:
     unknown: int
 
 
+@command(Effect.READ)
 async def next_interval(session: AsyncSession) -> timedelta:
     """現在該多久問一次。
 
@@ -180,6 +182,8 @@ def backoff(failures: int) -> timedelta:
     return min(grown, BACKOFF_CEILING)
 
 
+# 背景迴圈的入口：照 qBittorrent 的現況推 Job、開收 Issue，不排通知（M5 票 03 的判準）。
+@command(Effect.REVERSIBLE)
 async def poll_downloads(
     session: AsyncSession,
     client: QbittorrentClient,
@@ -280,6 +284,7 @@ class Downloader:
         self._client: QbittorrentClient | None = None
         self._base_url = ""
 
+    @command(Effect.REVERSIBLE)
     async def poll(self, session: AsyncSession, *, now: datetime | None = None) -> PollOutcome:
         client = await self._connect(session)
         try:
@@ -290,6 +295,7 @@ class Downloader:
             await self.aclose()
             raise
 
+    @command(Effect.READ)
     async def aclose(self) -> None:
         client, self._client = self._client, None
         self._base_url = ""
@@ -313,6 +319,7 @@ class Downloader:
         return client
 
 
+@command(Effect.REVERSIBLE)
 async def record_poll_failure(session: AsyncSession, error: str) -> int:
     """一輪整個失敗了（連不上、被封、回的東西不對）。回傳連續失敗次數。
 

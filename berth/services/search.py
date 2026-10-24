@@ -238,6 +238,7 @@ class QueryPlan:
     limit: int = MAX_QUERIES
 
 
+@command(Effect.READ)
 async def plan_queries(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -358,6 +359,7 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
     )
 
 
+@command(Effect.READ)
 async def search_torrents(
     session: AsyncSession,
     factory: ServiceClientFactory,

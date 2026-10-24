@@ -16,8 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.models import Job
+from berth.services.commands import Effect, command
 
 
+@command(Effect.READ)
 async def tracked_media(session: AsyncSession, media_ids: Iterable[str]) -> frozenset[str]:
     """這幾部作品裡，哪幾部 Berth 已經為它做過事。
 
@@ -30,6 +32,7 @@ async def tracked_media(session: AsyncSession, media_ids: Iterable[str]) -> froz
     return frozenset(media_id for media_id in rows if media_id is not None)
 
 
+@command(Effect.READ)
 async def is_tracked(session: AsyncSession, media_id: str) -> bool:
     """一部作品的版本。詳情頁只問一部，不必湊一個集合。"""
     return media_id in await tracked_media(session, [media_id])

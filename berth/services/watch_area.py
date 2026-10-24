@@ -21,6 +21,7 @@ from berth.adapters.jellyfin import JellyfinItem, JellyfinSeason
 from berth.domain import JellyfinImageType, MediaKind, PlanAction
 from berth.models import LedgerEntry, parse_media_id
 from berth.models import media_id as build_media_id
+from berth.services.commands import Effect, command
 from berth.services.inventory import jellyfin_link
 from berth.services.jellyfin_access import ItemNotVisibleError, JellyfinAccess
 from berth.services.watch import WatchState, watch_state
@@ -69,6 +70,7 @@ class WatchArea:
     seasons: tuple[WatchSeason, ...]
 
 
+@command(Effect.READ)
 async def read_watch_area(
     session: AsyncSession, access: JellyfinAccess, media_id: str
 ) -> WatchArea | None:
@@ -102,6 +104,7 @@ async def read_watch_area(
     )
 
 
+@command(Effect.READ)
 async def read_episodes(
     access: JellyfinAccess, series_id: str, season_id: str
 ) -> tuple[WatchEpisode, ...]:
