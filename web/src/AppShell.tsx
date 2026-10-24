@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from './api/auth'
 import { assistantStatusQueryOptions } from './api/assistant'
 import { AssistantControlContext } from './assistant/AssistantControl'
 import { AssistantPanel, PANEL_ID, type ConversationRequest } from './assistant/AssistantPanel'
-import { usePanelOpen } from './assistant/usePanelOpen'
+import { isWide, usePanelOpen } from './assistant/usePanelOpen'
 import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE, NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
 import { useSignOut } from './components/useSignOut'
@@ -29,6 +29,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // 使用者自己按開的才把焦點交給輸入框；重整時照記憶打開的不搶。
   const [byHand, setByHand] = useState(false)
   const panel = open && me.data !== undefined
+  // 開過一次之後面板一直掛著，收起只是藏起來（M5 票 15b）：打了還沒送出的字、串流到一半的回覆、正在看的那則對話
+  // 收起再打開都還在——窄版點了面板裡的連結會收起它（M5 票 15），回來時字不能不見。
+  const [kept, setKept] = useState(open)
+  if (open && !kept) setKept(true)
   // 頁面要面板顯示某一則對話（AI 活動頁）：面板接下就清掉。
   const [request, setRequest] = useState<ConversationRequest | null>(null)
   const control = useMemo(
@@ -58,6 +62,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     returning.current = true
     setOpen(false)
   }
+
+  // `lg` 以下面板取代頁面：換了一頁（瀏覽器的上一頁、面板以外的導覽）就收起面板，換過去的那一頁才看得到。
+  // 外框不再隨換頁重建（M5 票 15b）之前，這件事是重建時「窄版不照記憶打開」順帶做掉的。
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const shownAt = useRef(pathname)
+  useEffect(() => {
+    if (shownAt.current === pathname) return
+    shownAt.current = pathname
+    if (open && !isWide()) setOpen(false)
+  }, [pathname, open, setOpen])
 
   return (
     <AssistantControlContext value={control}>
@@ -93,10 +107,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {children}
           </main>
-          {panel && (
+          {kept && me.data && (
             <AssistantPanel
+              open={open}
               admin={me.data.role === 'admin'}
-              focusOnMount={byHand}
+              focusOnOpen={byHand}
               onClose={close}
               onLeave={() => setOpen(false)}
               request={request}

@@ -31,7 +31,7 @@ import { JobRow } from '../jobs/JobRow'
  */
 export function JobsPage() {
   const { t } = useTranslation()
-  const search = useSearch({ from: '/jobs' })
+  const search = useSearch({ from: '/shell/jobs' })
   const filter: ListFilter = search.filter ?? 'active'
   const page = search.page ?? 1
   const jobs = useQuery(jobsQueryOptions(filter, page))

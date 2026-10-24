@@ -34,7 +34,7 @@ export function JellyfinSettingsPage() {
   const { t } = useTranslation()
   const check = useServiceCheck()
   // 精靈跑完之後打開 `/setup` 被帶到這裡（`routes.tsx`）：不說一句的話像是點錯了連結（審計 P2-8）。
-  const { from } = useSearch({ from: '/settings/jellyfin' })
+  const { from } = useSearch({ from: '/shell/settings/jellyfin' })
 
   return (
     <SettingsFrame

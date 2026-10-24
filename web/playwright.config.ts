@@ -71,6 +71,15 @@ const FLOWS = [
     port: 8533,
     viewport: NARROW,
   },
+  // 換頁時側面板不重建（M5 票 15b）：打了字沒送出、串流到一半時點卡片裡的作品。
+  { name: 'assistant-navigation', spec: 'assistant-navigation', scenario: 'assistant', port: 8534 },
+  {
+    name: 'assistant-navigation-390',
+    spec: 'assistant-navigation',
+    scenario: 'assistant',
+    port: 8535,
+    viewport: NARROW,
+  },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },

@@ -1,6 +1,5 @@
 import { useParams } from '@tanstack/react-router'
 
-import { AppShell } from '../AppShell'
 import { MediaDetailPage } from './MediaDetailPage'
 
 /**
@@ -9,10 +8,6 @@ import { MediaDetailPage } from './MediaDetailPage'
  * `mediaId` 是 `tv:120089` 這種複合鍵。冒號在網址裡會被編碼成 `%3A`，`useParams` 解回原樣。
  */
 export function MediaRoute() {
-  const { mediaId } = useParams({ from: '/media/$mediaId' })
-  return (
-    <AppShell>
-      <MediaDetailPage id={mediaId} />
-    </AppShell>
-  )
+  const { mediaId } = useParams({ from: '/shell/media/$mediaId' })
+  return <MediaDetailPage id={mediaId} />
 }

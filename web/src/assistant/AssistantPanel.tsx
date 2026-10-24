@@ -57,16 +57,19 @@ export interface ConversationRequest {
 }
 
 export function AssistantPanel({
+  open,
   admin,
-  focusOnMount,
+  focusOnOpen,
   onClose,
   onLeave,
   request = null,
   onRequestHandled,
 }: {
+  /** 收起時面板照樣掛著、只是藏起來（M5 票 15b）：打了的字、串流中的回覆、正在看的那則對話都留著。 */
+  open: boolean
   admin: boolean
   /** 使用者按「助理」打開的：焦點進輸入框。重整時照記憶打開的不搶焦點。 */
-  focusOnMount: boolean
+  focusOnOpen: boolean
   /** 關閉鍵與 Esc：收起，焦點回頁首的「助理」鍵。 */
   onClose: () => void
   /** `lg` 以下按了面板裡的連結：收起面板讓出那一頁，焦點不搬回頁首。 */
@@ -83,13 +86,17 @@ export function AssistantPanel({
   const [selection, setSelection] = useState<Selection>({ kind: 'latest' })
   const input = useRef<HTMLTextAreaElement>(null)
 
-  // 輸入框畫出來的那一刻給一次（狀態讀到之前它還不在）；之後焦點是使用者的。
+  // 每一次按開給一次（狀態讀到之前輸入框還不在，所以也看 `ready`）；之後焦點是使用者的。收起時重設。
   const focused = useRef(false)
   useEffect(() => {
-    if (!focusOnMount || focused.current || !input.current) return
+    if (!open) {
+      focused.current = false
+      return
+    }
+    if (!focusOnOpen || focused.current || !input.current) return
     focused.current = true
     input.current.focus()
-  }, [focusOnMount, ready])
+  }, [open, focusOnOpen, ready])
 
   // 頁面要看某一則：換到那一則、回到對話（在 render 裡接，不在 effect 裡 setState）。
   const [seen, setSeen] = useState<ConversationRequest | null>(null)
@@ -132,6 +139,7 @@ export function AssistantPanel({
   return (
     <aside
       id={PANEL_ID}
+      hidden={!open}
       aria-label={t('assistant.label')}
       onKeyDown={onKeyDown}
       onClick={onClick}
