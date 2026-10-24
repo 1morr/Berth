@@ -15,6 +15,7 @@ import {
   type AiSettings,
   type AiTest,
   type AiToolTest,
+  type ApiFormat,
   type ToolGap,
 } from '../api/ai'
 import {
@@ -81,6 +82,23 @@ const STEP_TEXT = {
   tool_call: 'settings.aiPage.test.usage.tool_call',
   tool_result: 'settings.aiPage.test.usage.tool_result',
 } as const satisfies Record<AiProbeStep, Key>
+
+/**
+ * 每一種格式的選項名與 base URL 的說明：兩種格式的官方網址不同，`/v1` 一個不含、一個含（brief §20.24）。
+ * 少一種是編譯錯誤。
+ */
+const FORMAT_TEXT = {
+  anthropic: {
+    label: 'settings.aiPage.connection.formatAnthropic',
+    placeholder: 'settings.aiPage.connection.baseUrlPlaceholder.anthropic',
+    hint: 'settings.aiPage.connection.baseUrlHint.anthropic',
+  },
+  openai: {
+    label: 'settings.aiPage.connection.formatOpenai',
+    placeholder: 'settings.aiPage.connection.baseUrlPlaceholder.openai',
+    hint: 'settings.aiPage.connection.baseUrlHint.openai',
+  },
+} as const satisfies Record<ApiFormat, { label: Key; placeholder: Key; hint: Key }>
 
 /** 每一種拒絕理由的一句話。少一種是編譯錯誤。 */
 const REFUSAL_TEXT = {
@@ -158,6 +176,8 @@ function AiBody({ ai }: { ai: AiSettings }) {
     format !== ai.format || baseUrl.trim() !== ai.base_url || model.trim() !== ai.model
   const dirty = changed || key.trim() !== ''
   const official = baseUrl.trim() === ''
+  // 照草稿裡的格式：切了格式還沒存，「留空用哪一個」也跟著換。
+  const officialModel = official ? (ai.official_models[format] ?? null) : null
 
   const save = useMutation({
     mutationFn: () =>
@@ -201,23 +221,17 @@ function AiBody({ ai }: { ai: AiSettings }) {
     onSuccess: (next) => setOptions(next.models ?? []),
   })
 
-  const missing: Key | null = official
-    ? ai.api_key_present || key.trim() !== ''
-      ? null
-      : 'settings.aiPage.connection.missingKey'
-    : model.trim() === ''
-      ? 'settings.aiPage.connection.missingModel'
-      : null
+  const missing: Key | null =
+    official && !ai.api_key_present && key.trim() === ''
+      ? 'settings.aiPage.connection.missingKey'
+      : model.trim() === '' && officialModel === null
+        ? 'settings.aiPage.connection.missingModel'
+        : null
 
   const invalidUrl = aiRefusalOf(save.error)?.reason === 'base_url_invalid'
-  const modelHint =
-    official && ai.default_model
-      ? t('settings.aiPage.connection.modelHintDefault', { model: ai.default_model })
-      : t(
-          official
-            ? 'settings.aiPage.connection.modelHintOfficial'
-            : 'settings.aiPage.connection.modelHintThirdParty',
-        )
+  const modelHint = officialModel
+    ? t('settings.aiPage.connection.modelHintDefault', { model: officialModel })
+    : t('settings.aiPage.connection.modelHintRequired')
 
   return (
     <>
@@ -240,7 +254,11 @@ function AiBody({ ai }: { ai: AiSettings }) {
               onChange={(event) => setFormat(event.target.value as typeof format)}
               className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
             >
-              <option value="anthropic">{t('settings.aiPage.connection.formatAnthropic')}</option>
+              {(Object.keys(FORMAT_TEXT) as ApiFormat[]).map((value) => (
+                <option key={value} value={value}>
+                  {t(FORMAT_TEXT[value].label)}
+                </option>
+              ))}
             </select>
           </p>
           <Field
@@ -249,8 +267,8 @@ function AiBody({ ai }: { ai: AiSettings }) {
             inputMode="url"
             autoComplete="off"
             value={baseUrl}
-            placeholder={t('settings.aiPage.connection.baseUrlPlaceholder')}
-            hint={t('settings.aiPage.connection.baseUrlHint')}
+            placeholder={t(FORMAT_TEXT[format].placeholder)}
+            hint={t(FORMAT_TEXT[format].hint)}
             error={invalidUrl ? t(REFUSAL_TEXT.base_url_invalid) : undefined}
             onChange={(event) => {
               setBaseUrl(event.target.value)
@@ -277,7 +295,7 @@ function AiBody({ ai }: { ai: AiSettings }) {
             list={listId}
             autoComplete="off"
             value={model}
-            placeholder={official ? (ai.default_model ?? '') : ''}
+            placeholder={officialModel ?? ''}
             hint={modelHint}
             onChange={(event) => {
               setModel(event.target.value)

@@ -48,7 +48,7 @@ from berth.adapters.ai import (
     Usage,
     UserTurn,
 )
-from berth.adapters.ai.anthropic import AnthropicProvider
+from berth.adapters.ai.formats import provider_for
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -2025,8 +2025,9 @@ class FakeClientFactory:
         return self._discord
 
     def ai(self, endpoint: Endpoint) -> ChatProvider:
-        if os.environ.get("BERTH_AI_REAL"):
-            return AnthropicProvider(endpoint)
+        if os.environ.get("BERTH_AI_REAL") or DEMO_OPENAI_PATH in endpoint.base_url:
+            # 演練的 OpenAI 相容端點（`_mount_demo_openai`）走真的 adapter、真的 HTTP。
+            return provider_for(endpoint)
         return DemoChatProvider(endpoint)
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
@@ -2102,6 +2103,7 @@ def main(argv: list[str] | None = None) -> int:
         _mount_demo_accounts(app, scenario.jellyfin)
     _mount_demo_qbittorrent(app, scenario.qbittorrent)
     _mount_demo_prowlarr(app, scenario.prowlarr)
+    _mount_demo_openai(app)
 
     print(f"scenario={args.scenario} config_root={config_root}", file=sys.stderr)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
@@ -2140,6 +2142,99 @@ def _mount_demo_torrent(app: FastAPI, releases: tuple[str, ...]) -> None:
     # 沒被更早的路由比對到的路徑——照順序 `app.get(...)` 加進去的話，這一支永遠拿到
     # `index.html`（實測：`adapters/torrent.py` 收到一頁 HTML 並正確地說「這不是 torrent」）。
     app.router.routes.insert(0, StarletteRoute("/demo/torrent", endpoint, methods=["GET"]))
+
+
+#: 演練的 OpenAI 相容端點掛在這底下；設定頁的 base URL 填 `demo_url(DEMO_OPENAI_PATH)`。
+DEMO_OPENAI_PATH = "/demo/openai/v1"
+
+
+def _mount_demo_openai(app: FastAPI) -> None:
+    """一台 OpenAI 相容（Chat Completions）的假端點（M5 票 07b）：格式選 OpenAI 相容、base URL 填
+    `http://127.0.0.1:<port>/demo/openai/v1` 時，設定頁的測試走**真的** `OpenAiProvider` 打它。
+
+    作答同 `DemoChatProvider`：key `rejected` 回 401、模型名帶 `missing` 回 404、帶 `chat-only` 忽略
+    工具；其餘回 `ok`、照抄 nonce 呼叫 `berth_echo`、收到 `role: tool` 回一句話。串流照官方的形狀：
+    每個 chunk 一行 `data:`、最後一個 usage chunk（`choices` 是空的）與 `[DONE]`。
+    """
+
+    def chunk(delta: dict[str, object], finish: str | None = None) -> dict[str, object]:
+        return {
+            "object": "chat.completion.chunk",
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+        }
+
+    async def completions(request: Request) -> Response:
+        body = await request.json()
+        model = str(body.get("model", ""))
+        if request.headers.get("authorization") == "Bearer rejected":
+            error = {
+                "message": "Incorrect API key provided",
+                "type": "invalid_request_error",
+                "code": "invalid_api_key",
+            }
+            return Response(
+                json.dumps({"error": error}), status_code=401, media_type="application/json"
+            )
+        if "missing" in model:
+            error = {
+                "message": f'model "{model}" not found, try pulling it first',
+                "type": "not_found_error",
+            }
+            return Response(
+                json.dumps({"error": error}), status_code=404, media_type="application/json"
+            )
+        messages = body.get("messages") or []
+        if "tools" not in body:
+            chunks = [chunk({"role": "assistant", "content": "ok"}), chunk({}, "stop")]
+        elif messages and messages[-1].get("role") == "tool":
+            chunks = [chunk({"content": "Got the nonce back."}), chunk({}, "stop")]
+        elif "chat-only" in model:
+            chunks = [chunk({"content": "Sure, I have called the tool."}), chunk({}, "stop")]
+        else:
+            nonce = str(messages[-1].get("content", "")).split('"')[1]
+            call = {
+                "index": 0,
+                "id": "call_demo",
+                "type": "function",
+                "function": {"name": "berth_echo", "arguments": ""},
+            }
+            arguments = {"index": 0, "function": {"arguments": json.dumps({"nonce": nonce})}}
+            chunks = [
+                chunk({"tool_calls": [call]}),
+                chunk({"tool_calls": [arguments]}),
+                chunk({}, "tool_calls"),
+            ]
+        usage = {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 31,
+                "completion_tokens": 5,
+                "prompt_tokens_details": {"cached_tokens": 0},
+            },
+        }
+        await asyncio.sleep(0.4)
+        text = (
+            "".join(f"data: {json.dumps(item)}\n\n" for item in [*chunks, usage])
+            + "data: [DONE]\n\n"
+        )
+        return Response(text, media_type="text/event-stream")
+
+    async def models(request: Request) -> Response:
+        listed = {
+            "object": "list",
+            "data": [
+                {"id": "demo-gpt", "object": "model"},
+                {"id": "demo-chat-only", "object": "model"},
+            ],
+        }
+        return Response(json.dumps(listed), media_type="application/json")
+
+    app.router.routes.insert(
+        0, StarletteRoute(f"{DEMO_OPENAI_PATH}/chat/completions", completions, methods=["POST"])
+    )
+    app.router.routes.insert(
+        0, StarletteRoute(f"{DEMO_OPENAI_PATH}/models", models, methods=["GET"])
+    )
 
 
 def _mount_demo_accounts(app: FastAPI, jellyfin: FakeJellyfinClient) -> None:

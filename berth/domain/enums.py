@@ -1776,11 +1776,13 @@ class NotifyRefusal(StrEnum):
 class ApiFormat(StrEnum):
     """`settings.ai` 的 API 格式（plan §11.6〈provider〉、brief §20.24）。
 
-    同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。M5 票 07 先開
-    Anthropic，OpenAI 相容在 07b。
+    同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。每一種格式一個
+    adapter，對照表在 `adapters.ai.formats`。
     """
 
     ANTHROPIC = "anthropic"
+    #: OpenAI 相容的 Chat Completions（M5 票 07b）：OpenAI、OpenRouter、vLLM、Ollama、DeepSeek…
+    OPENAI = "openai"
 
 
 class AiFailure(StrEnum):

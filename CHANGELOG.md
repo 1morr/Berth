@@ -29,6 +29,14 @@
   每天一根直條（快取讀取、其他輸入、輸出），逐日數字收在圖下；依出處、依格式與模型（同一個模型經兩台主機分開列）、
   依人的明細，與沒成的原因。端點沒回報快取的呼叫不算進命中率，頁面說有幾次。不設預算，只是看的。沒有資料庫 migration。
   API：`GET /api/settings/ai/usage?days=7|30|90`。
+- **設定 → AI 多一種格式：OpenAI 相容**（M5 票 07b）：OpenAI 官方、OpenRouter、DeepSeek、自架的 Ollama 與 vLLM 這類
+  講 Chat Completions 的端點。base URL 照它文件給的填（多半含 `/v1`，例如 `https://openrouter.ai/api/v1`、
+  `http://<主機>:11434/v1`；留空是 OpenAI 官方），模型沒有預設（OpenAI 官方也要選或填），模型清單從端點讀、讀不到就手填。
+  測試同樣打三次；端點拒絕工具、忽略工具、或模型把呼叫寫成文字，都標成「只能聊天」並說是哪一種（兩種格式都改成看呼叫的形狀：模型只是在回話裡提到工具名，算「忽略工具」，不再誤標成「寫成文字」）。端點回的錯誤認不得時
+  說「端點回了看不懂的錯誤」、原文在技術細節；不是在說模型的 404 不再當成「模型不存在」。快取讀取照端點回的記
+  （DeepSeek 的 `prompt_cache_hit_tokens` 也認得），沒回的與比全部輸入還大的記成「不知道」。`docs/guide` 的 AI 一節
+  補上幾個常見端點的填法與怎麼開工具呼叫。沒有資料庫 migration。API：`ApiFormat` 多 `openai`；`GET` / `PUT
+  /api/settings/ai` 回的 `default_model` 換成 `official_models`（每一種格式的官方端點在模型留空時用哪一個）。
 
 ### Changed
 

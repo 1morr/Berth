@@ -27,6 +27,9 @@ export type ToolGap = Schemas['ToolGap']
 
 export type AiProbeStep = Schemas['AiProbeStep']
 
+/** 打端點用的 API 格式。 */
+export type ApiFormat = Schemas['ApiFormat']
+
 export type AiRefusal = Schemas['AiRefusal']
 
 /** 執行期認得的那幾種。少一種或多一種都是編譯錯誤（同 `api/notify.ts`）。 */

@@ -180,7 +180,7 @@ def test_nothing_is_set_up_by_default(client: TestClient) -> None:
 
     assert view["ready"] is False
     assert view["api_key_present"] is False
-    assert view["default_model"] == "claude-opus-5-5"
+    assert view["official_models"]["anthropic"] == "claude-opus-5-5"
     assert view["tool_test"] is None
 
 
@@ -219,7 +219,6 @@ def test_a_self_hosted_endpoint_without_a_key_is_ready_once_a_model_is_named(
     named = save(client, base_url="http://ollama.lan:11434", api_key="", model="qwen3").json()
 
     assert no_model["ready"] is False
-    assert no_model["default_model"] is None
     assert named["ready"] is True
 
 

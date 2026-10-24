@@ -13,7 +13,7 @@ from typing import Protocol
 
 # `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
 from berth.adapters.ai import ChatProvider, Endpoint
-from berth.adapters.ai.anthropic import AnthropicProvider
+from berth.adapters.ai.formats import provider_for
 from berth.adapters.dns import HostResolver as HostResolver
 from berth.adapters.dns import SystemHostResolver
 from berth.adapters.indexer import IndexerSearch
@@ -151,5 +151,4 @@ class HttpServiceClientFactory:
         return HttpDiscordBot(token, base_url=self._discord_api_url)
 
     def ai(self, endpoint: Endpoint) -> ChatProvider:
-        # 07b 加 OpenAI 相容時這裡依 `endpoint.format` 分。
-        return AnthropicProvider(endpoint)
+        return provider_for(endpoint)

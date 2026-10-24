@@ -20,7 +20,7 @@ const READY: AiSettings = {
   base_url: '',
   api_key_present: true,
   model: '',
-  default_model: 'claude-opus-5-5',
+  official_models: { anthropic: 'claude-opus-5-5', openai: null },
   ready: true,
   tool_test: null,
 }
@@ -242,5 +242,36 @@ describe('設定 → AI', () => {
       'm-a',
       'm-b',
     ])
+  })
+
+  it('切到 OpenAI 相容：base URL 照它的慣例說明；官方端點沒有預設模型，要先填', async () => {
+    const saved: AiSettings = {
+      ...READY,
+      format: 'openai',
+      model: 'gpt-x',
+      ready: true,
+    }
+    const stub = render(READY, { [SAVE]: { body: saved } })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    const model = await screen.findByLabelText('模型')
+    expect(model).toHaveAttribute('placeholder', 'claude-opus-5-5')
+    await user.selectOptions(screen.getByLabelText('格式'), 'OpenAI 相容（Chat Completions）')
+
+    expect(screen.getByLabelText('Base URL')).toHaveAttribute(
+      'placeholder',
+      'https://api.openai.com/v1',
+    )
+    expect(screen.getByText(/含 \/v1，例如 https:\/\/openrouter\.ai\/api\/v1/)).toBeVisible()
+    expect(model).toHaveAttribute('placeholder', '')
+    expect(screen.getByText('這個端點需要模型：先選或填一個。')).toBeVisible()
+
+    await user.type(model, 'gpt-x')
+    expect(screen.queryByText('這個端點需要模型：先選或填一個。')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText('已儲存。')).toBeVisible()
+    expect(bodyOf(stub, SAVE)).toMatchObject({ format: 'openai', model: 'gpt-x' })
   })
 })

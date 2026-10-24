@@ -68,8 +68,8 @@ class AiSettingsOut(BaseModel):
     api_key_present: bool
     #: 存的模型；空字串是沒填。
     model: str
-    #: 模型空著時用的那一個：只有官方端點有，第三方是 `null`。
-    default_model: str | None
+    #: 每一種格式的官方端點在模型空著時用的那一個；`null` 是一定要選或填（第三方一律沒有）。
+    official_models: dict[ApiFormat, str | None]
     #: AI 設定好了：有端點（填了 base URL，或官方端點而且有 key）、有模型。
     ready: bool
     #: 上一次測試對工具呼叫的結論；`null` 是還沒測，或格式、base URL、模型改過之後還沒重測。
@@ -80,7 +80,7 @@ class AiSettingsIn(BaseModel):
     format: ApiFormat
     #: 空字串是官方端點。
     base_url: str
-    #: 空字串是沒填（官方端點用預設的那一個）。
+    #: 空字串是沒填（有預設的官方端點用 `official_models` 裡那一個）。
     model: str
     #: 不送或 `null` 是留著存著的那一把；空字串是清掉。
     api_key: str | None = None
