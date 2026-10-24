@@ -7,17 +7,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from datetime import date, datetime
+from enum import IntEnum
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import AiFailure, AiProbeStep, AiRefusal, ApiFormat, ToolGap
+from berth.domain import AiCallOrigin, AiFailure, AiProbeStep, AiRefusal, ApiFormat, ToolGap
 from berth.services.ai import AiRefusedError, list_models, read_ai, run_ai_test, set_ai
+from berth.services.ai_usage import read_usage
 
 router = APIRouter(prefix="/settings/ai", tags=["settings"])
 
@@ -135,6 +137,96 @@ class AiModelsOut(BaseModel):
     detail: str
 
 
+class UsageTallyOut(BaseModel):
+    """一組呼叫的加總。每一格只加知道的（`NULL` 不當 0）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    calls: int
+    #: 沒成的，也算在 `calls` 裡。
+    failed: int
+    #: 全部輸入，含快取寫入與讀取。
+    input_tokens: int
+    output_tokens: int
+    cache_write_tokens: int
+    cache_read_tokens: int
+    #: 快取讀取 ÷ 全部輸入，只算兩格都知道的呼叫，0–1；`null` 是沒有東西可除。
+    hit_rate: float | None
+    #: 知道輸入、卻沒回報快取讀取的呼叫數：它們不在命中率裡。
+    cache_unreported: int
+
+
+class DayUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date
+    tally: UsageTallyOut
+
+
+class OriginUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    origin: AiCallOrigin
+    tally: UsageTallyOut
+
+
+class ModelUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    format: ApiFormat
+    #: base URL 的 `host[:port]`：同一個模型經兩台主機是兩列。
+    host: str
+    model: str
+    tally: UsageTallyOut
+
+
+class UserUsageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    #: `null` 是沒有人：背景任務，或人刪了。
+    user_id: int | None
+    name: str | None
+    tally: UsageTallyOut
+
+
+class FailureCountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    failure: AiFailure
+    calls: int
+
+
+class AiUsageOut(BaseModel):
+    """用量頁（M5 票 13、`.scratch/m5/usage-page-shape.md`）。分組的各串都是用得多的在前。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 有史以來有沒有任何一筆呼叫：分得出「第一次來」與「這段期間沒有」。
+    has_any: bool
+    #: 期間的第一天與最後一天（含），容器時區的日期。
+    since: date
+    until: date
+    totals: UsageTallyOut
+    #: 每一天一格，沒有呼叫的也在，由舊到新。
+    days: list[DayUsageOut]
+    by_origin: list[OriginUsageOut]
+    by_model: list[ModelUsageOut]
+    by_user: list[UserUsageOut]
+    #: 多的在前；全都成了是空的。
+    failures: list[FailureCountOut]
+
+
+class UsageDays(IntEnum):
+    """期間的選項：與 Anthropic Console、OpenAI 的用量頁一樣是幾個固定的長度，不收任意範圍。
+
+    不用 `Literal[7, 30, 90]`：查詢字串進來是 `"7"`，pydantic 的 `Literal` 不替它轉成整數。
+    """
+
+    WEEK = 7
+    MONTH = 30
+    QUARTER = 90
+
+
 def _user_id(request: Request) -> int:
     user = current_user(request)
     # 在要登入的門後面，門禁跑過之後一定有人。
@@ -180,3 +272,12 @@ async def get_models(session: SessionDep, factory: ClientFactoryDep) -> AiModels
     except AiRefusedError as exc:
         raise ai_refusal(exc) from exc
     return AiModelsOut.model_validate(listed)
+
+
+@router.get("/usage")
+async def get_usage(
+    session: SessionDep, days: Annotated[UsageDays, Query()] = UsageDays.MONTH
+) -> AiUsageOut:
+    """今天往前 `days` 天（含今天）的用量，日期照容器時區（與週報同一個規則）。"""
+    report = await read_usage(session, days=int(days), today=datetime.now().astimezone().date())
+    return AiUsageOut.model_validate(report)

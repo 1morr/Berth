@@ -84,12 +84,12 @@ function methodsCalled(stub: ReturnType<typeof stubApi>): string[] {
 }
 
 describe('設定 → AI', () => {
-  it('分頁列最後一格是 AI，當前頁', async () => {
+  it('分頁列倒數第二格是 AI（最後是用量），當前頁', async () => {
     render()
     renderApp('/settings/ai')
 
     const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
-    expect(tabs.getAllByRole('link').at(-1)).toHaveTextContent('AI')
+    expect(tabs.getAllByRole('link').at(-2)).toHaveTextContent('AI')
     expect(tabs.getByRole('link', { name: 'AI' })).toHaveAttribute('data-status', 'active')
   })
 

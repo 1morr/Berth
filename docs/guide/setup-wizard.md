@@ -100,7 +100,7 @@ changes are made here.
 | Review `/review`, Issues `/issues` | Imports Berth was not sure about, and problems found by the nightly check (a deleted episode, a hardlink replaced by a copy, a torrent nobody claimed). Admins only. |
 | RSS `/rss` | Mikan feeds, and Nyaa or acg.rip search feeds: new episodes are sent and imported on their own. |
 | Health `/health` | The four health checks and the download loop. Every user can see it. |
-| Settings `/settings/*` | Admins only. One page per berth: **Jellyfin** (health and recheck, an existing server's address and sign-in, the public URL), **qBittorrent** (health, an existing server's address and login, the bundled one's web UI login, the free-space threshold), **Library paths** (add Routes — a library can have a second one — rename, disable, recheck, delete), **Prowlarr** (add indexers, try a search, remove; an existing server's URL or key; **Stop using Prowlarr**: health checks leave it alone and title pages point searches to RSS subscriptions — the same state as the wizard's **Do this later**, and you can switch back), **TMDB** (replace the key and test it). After the berths come **Notifications** and **AI** ([below](#ai-settings--ai)). |
+| Settings `/settings/*` | Admins only. One page per berth: **Jellyfin** (health and recheck, an existing server's address and sign-in, the public URL), **qBittorrent** (health, an existing server's address and login, the bundled one's web UI login, the free-space threshold), **Library paths** (add Routes — a library can have a second one — rename, disable, recheck, delete), **Prowlarr** (add indexers, try a search, remove; an existing server's URL or key; **Stop using Prowlarr**: health checks leave it alone and title pages point searches to RSS subscriptions — the same state as the wizard's **Do this later**, and you can switch back), **TMDB** (replace the key and test it). After the berths come **Notifications**, **AI** ([below](#ai-settings--ai)) and **Usage** ([below](#ai-usage-settings--usage)). |
 
 To start the wizard over, see [Backup, secrets and reinstalling](backup-and-reinstall.md#rerunning-the-wizard).
 
@@ -133,5 +133,12 @@ When a test fails, the page says why: the key was refused, the model does not ex
 (and for how long, when the provider says), out of credit, the provider is having trouble, or the endpoint cannot
 be reached. Berth never retries on its own.
 
-Berth records every request: model, input and output tokens, cache tokens, how long it took and who ran it.
-There is no spending limit.
+## AI usage (Settings → Usage)
+
+Every request Berth sends to the model is recorded, including failed ones. **Usage** (admins only, since it shows
+everyone's) totals them for the last 7, 30 or 90 days, by the container's time zone: calls, input and output
+tokens, and the **cache hit rate** (cache reads ÷ all input, where input includes cache writes and reads). Below
+that are one bar per day (cache read, other input, output; the daily numbers are under the chart) and tables by
+origin, by format and model (the same model through two hosts is two rows), by person, and the reasons calls
+failed. Some endpoints do not report cache use; those calls are left out of the hit rate and the page says how
+many there were. There is no budget and no limit: this page only reports.

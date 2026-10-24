@@ -123,6 +123,23 @@
           "oklch(0.93 0.012 245)"
         ]
       },
+      "bar-faint": {
+        "role": "neutral",
+        "displayName": "直條淡段 Bar Faint",
+        "canonical": "oklch(0.6 0.024 245)",
+        "lightValue": "oklch(0.58 0.014 245)",
+        "note": "只給圖用：用量頁直條的第三段（輸出），與 ink、ink-dim 組成同一色相的三階。深色等於 rule-strong 的值；亮色另立，因為 rule-strong 與 ink-dim 幾乎同值、rule 對 well 只有 1.76:1（對 well 深色 4.51:1、亮色 3.29:1，dataviz 驗證器實跑）。",
+        "tonalRamp": [
+          "oklch(0.15 0.024 245)",
+          "oklch(0.26 0.024 245)",
+          "oklch(0.37 0.024 245)",
+          "oklch(0.48 0.024 245)",
+          "oklch(0.6 0.024 245)",
+          "oklch(0.7 0.024 245)",
+          "oklch(0.8 0.024 245)",
+          "oklch(0.93 0.024 245)"
+        ]
+      },
       "assigned": {
         "role": "primary",
         "displayName": "hi-vis 調度黃 Assigned",
