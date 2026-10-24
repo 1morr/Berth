@@ -30,7 +30,8 @@ class Effect(StrEnum):
     #: 改了東西，但有路回去：反向命令、或同一個命令再按一次別的選項。
     REVERSIBLE = "reversible"
     #: 做了就回不去（刪 complete 裡的檔案、移除 torrent、purge、寫到別人服務上撤不回的），以及
-    #: brief §14 的改設定、Route 與索引站——就算再改一次改得回去（M5 票 04）。兩者都永遠要人。
+    #: brief §14 的改設定、Route（含 Feed 送到哪條，M5 票 09b）與索引站——就算再改一次改得回去
+    #: （M5 票 04）。兩者都永遠要人。
     IRREVERSIBLE = "irreversible"
 
 
