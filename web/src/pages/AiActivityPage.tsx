@@ -1,4 +1,4 @@
-import { useContext, useEffect, useId, useRef } from 'react'
+import { useContext, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,7 @@ import { Dot } from '../components/Dot'
 import { RequestFailed } from '../components/RequestFailed'
 import { DetailLine } from '../components/QueueRow'
 import { Timestamp } from '../components/Timestamp'
+import { useFocusOnSettle } from '../components/useFocusOnSettle'
 
 /**
  * AI 活動頁 `/ai-activity`（M5 票 14，`.scratch/m5/ai-activity-shape.md`）。
@@ -133,12 +134,7 @@ function ActivityRow({ entry }: { entry: AiActivityEntry }) {
   const copy = undoCopy(t, entry.result_type)
 
   // 撤銷之後這一格換成「已撤銷」，鍵本身消失了：焦點留在這一句上，不掉回頁面頂端。
-  const status = useRef<HTMLParagraphElement>(null)
-  const wasUndoable = useRef(entry.undo === 'undoable')
-  useEffect(() => {
-    if (wasUndoable.current && entry.undo === 'undone') status.current?.focus()
-    wasUndoable.current = entry.undo === 'undoable'
-  }, [entry.undo])
+  const status = useFocusOnSettle<HTMLParagraphElement>(entry.undo === 'undone')
 
   return (
     <article
@@ -229,7 +225,7 @@ function ActivityRow({ entry }: { entry: AiActivityEntry }) {
         />
       )}
       {entry.undo === 'undone' && (
-        <p ref={status} tabIndex={-1} className="text-xs text-ink outline-none">
+        <p ref={status} tabIndex={-1} className="text-xs text-ink">
           {t('aiActivity.undone')} <Timestamp at={entry.undone_at} past />
         </p>
       )}

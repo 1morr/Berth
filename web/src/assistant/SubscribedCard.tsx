@@ -1,4 +1,4 @@
-import { useContext, useId } from 'react'
+import { useContext, useId, type Ref } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import { feedsQueryOptions, RSS_KEY } from '../api/rss'
 import { TEXT_LINK } from '../components/controls'
 import { Dot } from '../components/Dot'
 import { Timestamp } from '../components/Timestamp'
+import { useFocusOnSettle } from '../components/useFocusOnSettle'
 import { displayRound } from '../i18n/displayRound'
 import { excludedText, sentences } from '../media/excludedText'
 import { CardFrame, WorkLink } from './cardParts'
@@ -30,6 +31,8 @@ export function SubscribedCard({ result }: { result: Subscribed }) {
   const id = useId()
   const { undone } = useContext(ToolCallContext)
   const feeds = useQuery({ ...feedsQueryOptions(), enabled: undone === null })
+  // 撤銷鍵消失了：焦點落在說已撤銷的那一段（M5 票 15）。
+  const undoneRef = useFocusOnSettle<HTMLParagraphElement>(undone !== null)
   const live = feeds.data?.find((feed) => feed.id === result.feed.id)
   const gone = feeds.isSuccess && live === undefined
   const excluded = excludedText(t, result.excluded, i18n.language)
@@ -86,7 +89,7 @@ export function SubscribedCard({ result }: { result: Subscribed }) {
           </ul>
         )}
         {undone ? (
-          <Undone undone={undone} />
+          <Undone undone={undone} statusRef={undoneRef} />
         ) : (
           <>
             {result.submitted > 0 && (
@@ -137,12 +140,18 @@ function NextPoll({ polledAt, interval }: { polledAt: string | null; interval: n
   return <Timestamp at={next} />
 }
 
-function Undone({ undone }: { undone: ToolOutput }) {
+function Undone({
+  undone,
+  statusRef,
+}: {
+  undone: ToolOutput
+  statusRef: Ref<HTMLParagraphElement>
+}) {
   const { t, i18n } = useTranslation()
   // 依 `type` 讀 `result` 的形狀（同 `ResultCard`）：型別是後端照同一份登記寫的。
   const counts = undone.type === 'Unsubscribed' ? (undone.result as unknown as Unsubscribed) : null
   return (
-    <p role="status" className="text-xs text-ink">
+    <p ref={statusRef} role="status" tabIndex={-1} className="text-xs text-ink">
       {sentences(
         [
           t('assistant.cards.subscribed.undone'),

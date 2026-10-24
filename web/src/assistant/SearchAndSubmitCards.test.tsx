@@ -427,6 +427,9 @@ describe('送單卡', () => {
 
     expect(await within(card).findByText(/已撤銷這次送單/)).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: '撤銷送單' })).toBeNull()
+    // 鍵消失了：焦點落在說已撤銷的那一句，抬頭也不再說「已送出」（M5 票 15）。
+    await waitFor(() => expect(within(card).getByText(/已撤銷這次送單/)).toHaveFocus())
+    expect(within(card).queryByText('已送出')).toBeNull()
     expect(
       stub.mock.calls.some(
         ([url, init]) =>

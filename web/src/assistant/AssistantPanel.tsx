@@ -102,6 +102,15 @@ export function AssistantPanel({
     onRequestHandled?.()
   }, [request, onRequestHandled])
 
+  // 歷史清單挑了一則：清單那一列跟著清單消失，焦點回輸入框（shape 第 6 節）。輸入框在清單收起、
+  // 對話那一塊不再 `hidden` 之後才拿得到焦點，所以等畫完再給。
+  const backToChat = useRef(false)
+  useEffect(() => {
+    if (view !== 'chat' || !backToChat.current) return
+    backToChat.current = false
+    input.current?.focus()
+  }, [view])
+
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
       event.stopPropagation()
@@ -160,6 +169,7 @@ export function AssistantPanel({
         <ConversationList
           onPick={(id) => {
             setSelection({ kind: 'id', id })
+            backToChat.current = true
             setView('chat')
           }}
         />

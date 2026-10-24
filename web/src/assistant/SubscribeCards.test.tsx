@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -241,6 +241,8 @@ describe('訂閱卡', () => {
     expect(within(card).getByText(/撤回了 11 筆還沒下載完的/)).toBeInTheDocument()
     expect(within(card).getByText(/1 筆已經下載完，留著/)).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: '撤銷訂閱' })).toBeNull()
+    // 鍵消失了：焦點落在說已撤銷的那一段（M5 票 15）。
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveFocus())
     expect(
       stub.mock.calls.some(([url]) =>
         String(url).endsWith('/api/conversations/7/messages/3/tools/c0/undo'),

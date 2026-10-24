@@ -18,6 +18,7 @@ import { CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/contr
 import { Dot } from '../components/Dot'
 import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL } from '../components/signal'
+import { useFocusOnSettle } from '../components/useFocusOnSettle'
 import { formatSize } from '../media/searchResult'
 import { ProposalsContext } from './proposals'
 import { ToolCallContext } from './toolCall'
@@ -63,6 +64,8 @@ export function ProposalCardView({ result }: { result: ProposalCard }) {
   const [problem, setProblem] = useState('')
   const waiting = card.status === 'proposed'
   const known = knownTool(card.tool)
+  // 按過之後兩顆鍵消失：焦點落在說結果的那一格（M5 票 15）。
+  const outcome = useFocusOnSettle<HTMLDivElement>(!waiting)
 
   const decide = async (action: 'confirm' | 'reject') => {
     if (pressing) return
@@ -132,8 +135,14 @@ export function ProposalCardView({ result }: { result: ProposalCard }) {
             {replying && <p className="text-xs text-ink-dim">{t('assistant.proposal.wait')}</p>}
           </div>
         )}
-        {/* 一直掛著：按下去之後的結果與被拒的理由由它念（跟著結果才掛上去的 live region 多數閱讀器不念）。 */}
-        <div role="status" className="text-xs break-words text-ink empty:hidden">
+        {/* 一直掛著：按下去之後的結果與被拒的理由由它念（跟著結果才掛上去的 live region 多數閱讀器不念）。
+            空的時候 `sr-only`：留在無障礙樹裡（`display: none` 就不在了），又不佔 grid 的間距。 */}
+        <div
+          ref={outcome}
+          role="status"
+          tabIndex={-1}
+          className="text-xs break-words text-ink empty:sr-only"
+        >
           {!waiting && <Outcome card={card} />}
           {undone !== null && <p>{t('assistant.proposal.undone')}</p>}
           {problem}

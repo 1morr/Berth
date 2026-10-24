@@ -7,6 +7,7 @@ import { ApiError } from '../api/client'
 import { jobQueryOptions } from '../api/jobs'
 import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
+import { useFocusOnSettle } from '../components/useFocusOnSettle'
 import { JobFacts } from '../jobs/JobFacts'
 import { JobLink } from '../jobs/JobLink'
 import { JOB_SIGNAL, mediaTitleOf } from '../jobs/jobState'
@@ -30,18 +31,31 @@ export function SubmittedJobCard({ result }: { result: SubmittedJob }) {
   const { undone } = useContext(ToolCallContext)
   const job = useQuery({ ...jobQueryOptions(result.hash), enabled: undone === null })
   const gone = job.error instanceof ApiError && job.error.status === 404
+  // 撤銷鍵消失了：焦點落在說已撤銷的那一句（M5 票 15）。
+  const status = useFocusOnSettle<HTMLParagraphElement>(undone !== null)
 
   return (
     <CardFrame
       labelId={id}
       heading={t('assistant.cards.submitted.title')}
-      count={result.created ? t('submit.done') : t('submit.already')}
+      count={
+        undone
+          ? t('assistant.cards.submitted.undoneCount')
+          : result.created
+            ? t('submit.done')
+            : t('submit.already')
+      }
     >
       <div className="grid gap-2 px-3 py-2.5">
         {undone || gone ? (
           <>
             <p className="value text-sm wrap-anywhere text-ink">{result.name}</p>
-            <p role={undone ? 'status' : undefined} className="text-xs text-ink-dim">
+            <p
+              ref={status}
+              role={undone ? 'status' : undefined}
+              tabIndex={undone ? -1 : undefined}
+              className="text-xs text-ink-dim"
+            >
               {undone ? t('assistant.cards.submitted.undone') : t('assistant.cards.submitted.gone')}
             </p>
           </>

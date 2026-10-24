@@ -4254,6 +4254,7 @@ const zhHant = {
         undoConfirm:
           '撤銷這次送單：從 qBittorrent 移除這個 torrent、刪掉已經下載的檔案、清掉這一筆的紀錄。那幾集會回到「缺」。',
         undone: '已撤銷這次送單：移除了 torrent、刪了下載的檔、清了紀錄。',
+        undoneCount: '已撤銷',
       },
       // 訂閱（M5 票 11，`assistant/SubscribedCard.tsx`）。
       subscribed: {
@@ -8496,6 +8497,7 @@ const en: Translations<typeof zhHant> = {
           'Undo this submit: remove the torrent from qBittorrent, delete the files downloaded so far, and clear its record. Those episodes go back to missing.',
         undone:
           'This submit was undone: the torrent is removed, its files deleted and its record cleared.',
+        undoneCount: 'Undone',
       },
       subscribed: {
         title: 'Subscribed',

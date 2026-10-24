@@ -336,6 +336,8 @@ describe('存下來的', () => {
     await userEvent.click(await within(panel).findByRole('button', { name: /這週入庫了什麼/ }))
 
     expect(await within(panel).findByText('這週入庫了兩部。')).toBeInTheDocument()
+    // 清單那一列消失了：焦點回輸入框，不掉到頁面頂端（M5 票 15）。
+    expect(within(panel).getByRole('textbox')).toHaveFocus()
   })
 
   it('沒有工具結果時，模型說做了也不畫成成功', async () => {
@@ -697,6 +699,8 @@ describe('確認卡', () => {
     expect(within(card).getByText('已確認')).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: '確認加入' })).not.toBeInTheDocument()
     expect(stub.mock.calls.filter(([url]) => url === '/api/proposals/5/confirm')).toHaveLength(1)
+    // 兩顆鍵消失了：焦點落在說結果的那一格，不掉到頁面頂端（M5 票 15）。
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveFocus())
   })
 
   it('刪下載的卡列出每一個要刪的檔案，空不出空間時照實說', async () => {
@@ -768,5 +772,7 @@ describe('確認卡', () => {
     await userEvent.click(within(card).getByRole('button', { name: '拒絕' }))
 
     expect(await within(card).findByText('這張卡已經有人按過了。')).toBeInTheDocument()
+    // 鍵還在（卡照舊等人按）：焦點留在按下去的那一顆上。
+    expect(within(card).getByRole('button', { name: '拒絕' })).toHaveFocus()
   })
 })
