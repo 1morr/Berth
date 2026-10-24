@@ -201,7 +201,7 @@ function ActivityRow({ entry }: { entry: AiActivityEntry }) {
           </summary>
           <dl className="mt-2 grid gap-1 border-2 border-rule bg-hull px-3 py-2">
             {args.map(([name, value]) => (
-              <DetailLine key={name} term={name} machine>
+              <DetailLine key={name} term={name} code>
                 {typeof value === 'string' ? value : JSON.stringify(value)}
               </DetailLine>
             ))}

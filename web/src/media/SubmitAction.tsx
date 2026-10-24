@@ -42,7 +42,7 @@ export function SubmitAction({
   /** 這一輪選的 Route。`null` = 還沒選——那是送不出去的，而說不行的是那個下拉。 */
   route: number | null
   /** 那一列發佈名的 id：一列一顆「送單」，鍵的說明說是哪一筆（M5 票 15）。 */
-  describedBy?: string
+  describedBy: string
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()

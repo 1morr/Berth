@@ -1015,7 +1015,7 @@ Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做�
   ① 中性色塊的動作名（沿用面板的工具名，`assistant/toolNames.ts`）加對象（`.value wrap-anywhere` 的 `h2`：送出的發佈名、Feed 名、索引站名；
   其他型別沒有對象就不印，列的名字退回動作名）；② 一行事實（`text-sm ink-dim`，`Dot` 分隔）：`Timestamp` · 「AI 代 {人} 做的」
   或「{人} 確認的」· 出自對話「標題」（對話標題是一句話，不用書名號）· 「這次回覆 N tokens」（輸入加輸出，不知道時「—」）；③ `reason` 非空時 `.label`「AI 的理由」
-  加原文（`text-sm ink`）；④ 原生 `<details>`，摘要是 `.label`「輸入」加 `ExpandHint`，`hull` 底的 `dl`，每個輸入欄一條 `DetailLine machine`
+  加原文（`text-sm ink`）；④ 原生 `<details>`，摘要是 `.label`「輸入」加 `ExpandHint`，`hull` 底的 `dl`，每個輸入欄一條 `DetailLine code`
   （欄名是機器字串，照原樣、`.value text-xs ink-dim`——`.label` 會把英文轉成 `SOURCE_ID`，M5 票 15；非字串值以 JSON 印出）；⑤ 撤銷那一格。
 - **出自對話**：是自己的對話時是一顆文字連結樣式的按鈕（底線 `rule-strong`，hover 換 `ink`），按了打開側面板並顯示那一則；
   別人的對話只印標題，不給按鈕。機制：`AppShell` 提供 `AssistantControlContext.openConversation(id)`，把面板打開並把

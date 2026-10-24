@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, type ReactNode } from 'react'
 
 import { FILTER_ACTIVE } from './controls'
+import { focusIfLost } from './useFocusOnSettle'
 
 /**
  * 一頁裡的一組單選篩選（媒體庫的待審 / 對不到、下載列表、作品頁的下載段；M4 票 92 收成這一份）。
@@ -34,8 +35,7 @@ export function FilterBar<V extends string | undefined>({
   useEffect(() => {
     if (shown.current === current) return
     shown.current = current
-    const active = document.activeElement
-    if (active === null || active === document.body) chosen.current?.focus()
+    focusIfLost(chosen.current)
   }, [current])
 
   return (

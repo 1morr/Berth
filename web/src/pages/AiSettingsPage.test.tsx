@@ -216,7 +216,7 @@ describe('設定 → AI', () => {
 
     await user.click(await screen.findByRole('button', { name: '儲存並測試' }))
 
-    const note = '但剛才的測試沒過，見下方的「測試」。'
+    const note = '剛才的測試沒過，見下方的「測試」。'
     expect(await screen.findByText(note)).toBeVisible()
     await user.type(screen.getByLabelText('模型'), 'claude-x')
     expect(screen.queryByText(note)).toBeNull()
@@ -233,7 +233,7 @@ describe('設定 → AI', () => {
 
     expect(await screen.findByText('只能聊天。')).toBeVisible()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByText('但剛才的測試沒過，見下方的「測試」。')).toBeNull()
+    expect(screen.queryByText('剛才的測試沒過，見下方的「測試」。')).toBeNull()
   })
 
   it('沒測到工具結論：說稍後再測，並說 failure 的句子', async () => {

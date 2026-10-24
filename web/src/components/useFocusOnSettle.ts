@@ -14,10 +14,14 @@ export function useFocusOnSettle<T extends HTMLElement>(settled: boolean) {
   useEffect(() => {
     const arrived = settled && !was.current
     was.current = settled
-    if (!arrived) return
-    const active = document.activeElement
-    if (active !== null && active !== document.body) return
-    target.current?.focus()
+    if (arrived) focusIfLost(target.current)
   }, [settled])
   return target
+}
+
+/** 焦點真的掉了（落在 `body`）才交給 `target`：使用者自己點到別處、正在打字的不搶。`FilterBar` 也用它。 */
+export function focusIfLost(target: HTMLElement | null): void {
+  const active = document.activeElement
+  if (active !== null && active !== document.body) return
+  target?.focus()
 }
