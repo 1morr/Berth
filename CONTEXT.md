@@ -95,7 +95,7 @@ _Avoid_: download folder, save path（僅指 qBittorrent 的欄位時可用）
 
 **Service**:
 Berth 協調的三個外部服務之一：Jellyfin、qBittorrent、Prowlarr。字串同時是 compose 的服務名。
-_Avoid_: integration, provider（Provider 專指 metadata provider）
+_Avoid_: integration, provider（provider 專指外部的資料或模型來源：metadata provider（TMDB）與 AI provider（Anthropic、OpenAI 相容的端點））
 
 **Service Origin**:
 使用者在精靈替單一服務選的來源：`bundled`（套件內，Berth 代為設定）或 `existing`（既有，使用者自己的那一台）。

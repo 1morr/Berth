@@ -9,14 +9,16 @@ M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 �
 [`docs/research/library-browsing.md`](../../docs/research/library-browsing.md) 與
 [`docs/research/large-library.md`](../../docs/research/large-library.md)，摘要進
 brief §10 / §19 / §20.3 / §20.4 / §20.6 / §20.7 / §20.8。原始 JSON 落在 `.local/experiments/results/`（不進版控），
-stdout 是同一份東西的人類版（`absolute_rule_cost.py` 只印 stdout）。
+stdout 是同一份東西的人類版（`absolute_rule_cost.py` 與 `ai_sdk_mocking.py` 只印 stdout）。
 
 腳本只用 Python 標準庫，不 import `berth`，也不需要專案的虛擬環境 —— 這樣才能原封不動搬到 NAS
 或別人的 Linux 宿主上跑。**例外是 `absolute_rule_cost.py`、`jellyfin_images.py`、`rss_subscribe_timing.py` 與 `sweep_loop_lag.py`**：它們量的就是 Berth
 自己（解析器、圖片代理、巡檢一輪佔住事件迴圈多久），搬到別台機器上跑沒有意義，所以 import `berth`、要用 `uv run` 跑（`discord_dm.py` 不 import `berth`，但 `gateway-once` 那一步要虛擬環境裡的 `websockets`，所以也一律 `uv run`；`large_library_berth.py`
 也 import `berth`，但它跑在 Berth 自己 build 出來的 image 裡，宿主不需要虛擬環境；`jellyfin_stream_probe.py` 同樣
 跑在 `berth` 容器裡，讀的是那一套 Berth 的資料庫與 compose 內網的 `jellyfin`，不 import `berth`）。唯一的宿主相依是 `make_media.py` 會呼叫 `docker`（借 Jellyfin image 的
-ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。
+ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 `hardlink.sh` 的可攜性。**另一種例外是 `ai_sdk_mocking.py`**：
+它量的是第三方 SDK（`anthropic`、`openai`）本身，Berth 不依賴它們，所以版本釘在檔頭的 PEP 723 區塊，用
+`uv run --script` 裝在臨時環境裡跑，不用專案的虛擬環境。
 
 ## 每個檔案在做什麼
 
@@ -59,6 +61,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `season_token_compare.py` | M4 票 84：搜尋季的記號寫 `Season N` 還是 `SNN`（CJK 比 `第N季`），真的 Prowlarr 加公開站（The Pirate Bay、Mikan、dmhy）各回幾筆、其中發佈名真的含作品名的幾筆（TPB 查不到會回熱門清單），以及這些命中自己寫 `SNN` 還是 `Season N`（站有沒有做模糊比對）。需要一台 Prowlarr（URL 與 API key 由 argv 或 `PROWLARR_URL` / `PROWLARR_API_KEY` 給）；14 次查詢、每次間隔 3.5 秒，公開站會封 IP；結果 `.local/experiments/results/season_token_compare.json` |
 | `jellyfin_scan_scope.py` | M4 票 62：Jellyfin 能不能只刷新一個媒體庫（`POST /Items/{媒體庫}/Refresh`，兩個 `Default`）、會不會連別的媒體庫一起掃，對第一次掃描時是空的媒體庫、兩個路徑而其中一個空的媒體庫有沒有效，以及全庫掃描任務的範圍、時間與執行中再送一次的結果。自己起停一次性容器（image 取 `deploy/` 釘的那一個，媒體庫關掉網路 fetcher）；結論在 brief §20.1 |
 | `discord_dm.py` | M4 票 121：Discord bot 私訊對真的 Discord 回什麼——從沒連過 gateway 的 bot 私訊得到嗎、超長的 `400`、沒有共同伺服器與關了私訊、錯 token 的 `401`、第一個 `429` 的 body 與 header，以及只私訊的邀請連結。每一步一次 run（`invite`、`send <label>`、`baseline`、`ratelimit`、`gateway-once`、`fixtures`；M4 票 124 加 `embed-url`：九種自架網址放 embed `url` 與寫成 Markdown 連結各送一則），使用者在 Discord 上的操作夾在中間；`fixtures` 遮掉 id 與名字之後寫 `tests/fixtures/http/discord/`。token 與 user ID 只從 `DISCORD_BOT_TOKEN` / `DISCORD_USER_ID` 讀。只用標準庫，`gateway-once` 例外（要 Berth 虛擬環境的 `websockets`，所以一律 `uv run`）；結論在 brief §20.23 |
+| `ai_sdk_mocking.py` | M5 票 06：`anthropic` 與 `openai` 的 SDK 改用 `httpx2` 之後，專案的 respx 攔不攔得到它們的請求、在 import 之前 `httpx2.alias_httpx()` 之後呢，以及 Anthropic 串流在 200 之後送 `event: error` 時 SDK 拋哪個型別。SDK 版本釘在 PEP 723 區塊，用 `uv run --script` 跑；不連網。結論在 brief §20.24 |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方

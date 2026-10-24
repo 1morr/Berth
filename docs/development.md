@@ -481,8 +481,8 @@ Fake 是**有狀態**的，每個情境只有一份，所以頁 1 與頁 3 真�
 
 ### 實驗腳本
 
-`scripts/experiments/` 是對真實外部服務做的驗證（Jellyfin 命名、qBittorrent 版本差異、
-Prowlarr 設定 API、硬鏈接），全部可重跑。每個腳本在回答什麼、有哪些坑，見
+`scripts/experiments/` 是對真實外部服務與第三方套件做的驗證（Jellyfin 命名、qBittorrent 版本差異、
+Prowlarr 設定 API、硬鏈接、AI SDK 能不能用 respx 測），全部可重跑。每個腳本在回答什麼、有哪些坑，見
 [`scripts/experiments/README.md`](../scripts/experiments/README.md)；結果寫在
 [`docs/research/m0-experiments.md`](research/m0-experiments.md)。
 
@@ -766,6 +766,14 @@ uv run python scripts/experiments/discord_dm.py send no-mutual-guild
 uv run python scripts/experiments/discord_dm.py send too-long-no-mutual-guild --length 2001  # 長度檢查先於共同伺服器
 uv run python scripts/experiments/discord_dm.py fixtures                # 遮掉 id 與名字，寫 tests/fixtures/http/discord/
 uv run python scripts/experiments/discord_dm.py embed-url               # 票 124：embed url 與 Markdown 連結收哪些主機
+```
+
+官方 AI SDK 能不能用專案的 respx 測（M5 票 06）：`anthropic` 與 `openai` 釘在腳本開頭的 PEP 723 區塊裡，
+`uv run --script` 裝在臨時環境、不進 Berth 的依賴；不連網、不需要憑證。換 SDK 版本時改那幾行重跑，
+結論在 brief §20.24：
+
+```bash
+uv run --script scripts/experiments/ai_sdk_mocking.py
 ```
 
 ## 目錄結構
