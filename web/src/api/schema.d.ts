@@ -3502,7 +3502,7 @@ export interface components {
          *     （`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
          * @enum {string}
          */
-        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal" | "adopt" | "claim_torrent" | "claim_file";
+        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal" | "adopt" | "claim_torrent" | "claim_file" | "retry_import" | "abandon";
         /**
          * IssueOut
          * @description 清單上的一列（`services/issues.IssueView` 的對外形狀）。
@@ -3585,12 +3585,14 @@ export interface components {
          * IssueType
          * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
          *
-         *     **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-         *     各加一種，M4 票 130 加四種）：
+         *     **二十二種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+         *     各加一種，M4 票 130 加四種，M5 票 01 加三種）：
          *     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
-         *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
+         *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，再一種
          *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
-         *     （`sweeper`）。各邊共用同一個
+         *     （`sweeper`），最後三種是停住、Berth 自己不會再推的 Job（`qbit_poller` 每一輪量）。
+         *     **一種卡住一種型別，不是一種型別帶原因**（同 `feed_poll_failing` / `feed_backfill_failing` 的
+         *     取捨）：三種的出路不同、按鈕不同，型別就是「哪一組按鈕」。各邊共用同一個
          *     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
          *     與 `ISSUE_ACTIONS` 那兩條閘門。
          *
@@ -3599,7 +3601,7 @@ export interface components {
          *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
-        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide";
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide" | "submit_failed" | "import_failed" | "stalled";
         /**
          * ItemEditIn
          * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。

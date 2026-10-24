@@ -60,8 +60,8 @@ from berth.parser import parse_release
 from berth.services.commands import Effect, command
 from berth.services.inventory import read_holdings
 from berth.services.issues import (
-    STANDS_WHILE,
     clear_by_system,
+    covered,
     note_cleared,
     record_issue,
     still_ignored,
@@ -164,12 +164,12 @@ async def _stuck_first_batches(session: AsyncSession, moment: datetime) -> tuple
             )
         ).tuples()
     )
-    covered = await _covered(session, [job for _, job in rows])
+    taken = await covered(session, [job for _, job in rows])
     since = await _stopped_at(session, [job for _, job in rows])
     flagged: dict[int, tuple[RssSeries, Job, datetime]] = {}
     for series, job in rows:
         stopped = since.get(job.hash, job.added_at)
-        if job.hash in covered or moment - stopped < STUCK_AFTER:
+        if job.hash in taken or moment - stopped < STUCK_AFTER:
             continue
         held = flagged.get(series.id)
         if held is None or stopped < held[2]:
@@ -532,28 +532,6 @@ async def _remind_lingering(session: AsyncSession, moment: datetime) -> int:
                 record.reminded[oldest] = moment
     await write_settings(session, record)
     return queued
-
-
-async def _covered(session: AsyncSession, jobs: list[Job]) -> set[str]:
-    """這幾筆裡已經有一件管線 Issue 說著它現在這個狀態的（`client_error`；重新送單被拒、落回
-    `submit_failed` 的 `client_removed`），不再為同一筆開第二件：開著的那一件已經在等人；被忽略的
-    那一件是人看過、說了不用管，換一個型別再問同一筆是噪音（M4 票 129 code-review）。收掉的不算：
-    它說的是過去。"""
-    if not jobs:
-        return set()
-    state = {job.hash: job.state for job in jobs}
-    open_rows = await session.execute(
-        select(Issue.type, Issue.job_hash).where(
-            Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
-            Issue.type.in_(STANDS_WHILE),
-            Issue.job_hash.in_(state),
-        )
-    )
-    return {
-        job_hash
-        for kind, job_hash in open_rows.tuples()
-        if job_hash is not None and state[job_hash] in STANDS_WHILE[kind]
-    }
 
 
 async def _stopped_at(session: AsyncSession, jobs: list[Job]) -> dict[str, datetime]:

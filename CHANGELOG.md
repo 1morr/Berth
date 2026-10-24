@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **卡住的下載開成 Issue**（M5 票 01）：送單失敗而 Berth 不會再自動重送的（前後送了五次都沒成，或種子連結失效、
+  qBittorrent 拒絕這種再問也一樣的）、入庫失敗的、超過 10 分鐘沒有資料在動的，各自在 `/issues` 開一件，說出原因
+  與下一步，算進「有 N 件等你處理」與它的 Discord 通知。按鈕沿用下載頁的：重新送單、再試一次入庫，以及新的「放棄」
+  （Berth 不再等這一筆；磁碟與 qBittorrent 都不動，要連檔案一起刪到下載頁的刪除範圍）。下載恢復、被重試或刪掉時
+  那一件自己收掉；忽略在它還卡著的期間有效。升級前就卡住的那幾筆，Berth 起來之後幾秒內補上。沒有資料庫 migration。
+  API：`IssueType` 多 `submit_failed`、`import_failed`、`stalled`，`IssueAction` 多 `retry_import`、`abandon`。
+
 ## [0.3.0] - 2026-10-24
 
 **從 0.2.9 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。
