@@ -424,6 +424,10 @@ _Avoid_: digest（digest 是摘要那一則通知）, summary, stats
 AI 核心對人的介面：M5 的側面板、M7 的外部管道（Discord 私訊），兩者是同一個對話核心。工具是 Command Registry 依使用者角色過濾的那一份；使用者要求的可逆動作直接做並給撤銷，不可逆的（含改設定）提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
+**Conversation**（對話）:
+一個人與助理的一串來回，存在 Berth（`conversations` 一列、每一則一列），只有那個人看得到。一則使用者訊息之後助理最多呼叫 10 輪工具；provider 沒成或到了上限時那一則停下來，原因存成一則說給人聽的 notice（不送給模型）。M5 票 08 起。
+_Avoid_: chat, thread（thread 是 Discord 的東西）, session（session 是登入）
+
 **Result Card**（結果卡）:
 助理把一個命令的結果畫成的一張卡：作品、搜尋結果（帶送單鍵）、Feed 與 RSS Series、Job（即時更新）、Proposal 的確認卡。長什麼樣由命令的結果型別決定，不由模型決定；外部管道上是一則 embed。M5 起。
 _Avoid_: widget, message（message 是管道上送出去的那一則）

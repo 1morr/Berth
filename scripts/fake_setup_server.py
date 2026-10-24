@@ -43,6 +43,7 @@ from berth.adapters.ai import (
     TextDelta,
     TextPart,
     ToolCall,
+    ToolCallStarted,
     ToolResult,
     TurnEnded,
     Usage,
@@ -176,6 +177,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.parser import plan as decide
+from berth.services.ai import set_ai
 from berth.services.clients import (
     BUNDLED_JELLYFIN_URL,
     BUNDLED_PROWLARR_URL,
@@ -363,6 +365,8 @@ class Scenario:
     weekly_demo: bool = False
     #: 用量頁（M5 票 13）。見 `_seed_usage`。
     usage_demo: bool = False
+    #: 助理的側面板（M5 票 08）：AI 設定好了（演練的 provider，`DemoChatProvider`）。
+    assistant_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
     #: 那一格是空的。見 `_seed_legacy_feed`。
     legacy_feed: bool = False
@@ -741,6 +745,14 @@ def weekly_scenario() -> Scenario:
     `compose_weekly` 產生最近兩週的週報（週一 05:00 結束的那兩週）。"""
     scenario = healthy()
     scenario.weekly_demo = True
+    return scenario
+
+
+def assistant_scenario() -> Scenario:
+    """助理的側面板（M5 票 08）：同 `weekly`（「最近入庫」查得到東西），AI 已經設定好，回覆由
+    `DemoChatProvider` 演。"""
+    scenario = weekly_scenario()
+    scenario.assistant_demo = True
     return scenario
 
 
@@ -1879,6 +1891,7 @@ SCENARIOS = {
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
     "usage": usage_scenario,
+    "assistant": assistant_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "global-path": global_path,
@@ -1932,6 +1945,11 @@ class DemoChatProvider:
         usage = Usage(
             input_tokens=24, output_tokens=6, cache_write_tokens=None, cache_read_tokens=0
         )
+        if request.system:
+            # 對話（M5 票 08）才有 system；設定頁的探針沒有。
+            async for event in self._converse(request, usage):
+                yield event
+            return
         last = request.turns[-1]
         if not request.tools:
             reply = ModelTurn((TextPart("ok"),))
@@ -1953,6 +1971,60 @@ class DemoChatProvider:
             yield TextDelta(reply.text)
         stop = StopReason.TOOL_CALLS if reply.tool_calls else StopReason.END
         yield TurnEnded(stop=stop, stop_raw=stop.value, reply=reply, usage=usage)
+
+    async def _converse(self, request: ChatRequest, usage: Usage) -> AsyncIterator[StreamEvent]:
+        """側面板的演練（M5 票 08）：一段一段吐字，看得到串流。
+
+        話裡有「入庫」或「import」、而工具清單上有 `recent_imports` 時先呼叫它；收到工具結果就說
+        查到幾部；有「限流」或「rate limit」時演被限流 30 秒。其餘照抄一句回去。
+        回覆照 system 說的語言。
+        """
+        chinese = "Traditional Chinese" in request.system
+        last = request.turns[-1]
+        results = (
+            [p for p in last.parts if isinstance(p, ToolResult)]
+            if isinstance(last, UserTurn)
+            else []
+        )
+        said = (
+            " ".join(p.text for p in last.parts if isinstance(p, TextPart))
+            if isinstance(last, UserTurn)
+            else ""
+        )
+        if "限流" in said or "rate limit" in said.lower():
+            raise AiProviderError(AiFailure.RATE_LIMITED, "429 rate_limit_error", retry_after=30)
+        names = {tool.name for tool in request.tools}
+        if (
+            not results
+            and "recent_imports" in names
+            and ("入庫" in said or "import" in said.lower())
+        ):
+            call = ToolCall(id="toolu_demo_recent", name="recent_imports", arguments='{"days": 7}')
+            yield ToolCallStarted(id=call.id, name=call.name)
+            await asyncio.sleep(0.6)
+            reply = ModelTurn((call,))
+            yield TurnEnded(
+                stop=StopReason.TOOL_CALLS, stop_raw="tool_use", reply=reply, usage=usage
+            )
+            return
+        if results:
+            works = json.loads(results[0].content).get("result", {}).get("works", [])
+            text = (
+                f"這七天入庫了 {len(works)} 部作品。"
+                if chinese
+                else f"{len(works)} works were imported in the last seven days."
+            )
+        else:
+            text = (
+                f"（演練）收到：「{said}」。這台是演練伺服器，回覆是照抄的。"
+                if chinese
+                else f'(Demo) You said: "{said}". This is the demo server, so the reply is an echo.'
+            )
+        for start in range(0, len(text), 6):
+            yield TextDelta(text[start : start + 6])
+            await asyncio.sleep(0.08)
+        reply = ModelTurn((TextPart(text),))
+        yield TurnEnded(stop=StopReason.END, stop_raw="end_turn", reply=reply, usage=usage)
 
     async def list_models(self) -> list[str] | None:
         return ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "demo-chat-only"]
@@ -2486,6 +2558,8 @@ async def _moor(
         await _seed_weekly(session)
     if scenario.usage_demo:
         await _seed_usage(session)
+    if scenario.assistant_demo:
+        await set_ai(session, format=ApiFormat.ANTHROPIC, base_url="", model="", api_key="demo-key")
 
 
 #: `rss-sweep` 情境的兩個 Feed 壞了多久：過了巡檢的 24 小時。

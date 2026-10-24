@@ -433,6 +433,12 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/issues/rebuild-ledger"): Access.ADMIN,
     ("POST", "/issues/rebuild-ledger"): Access.ADMIN,
     ("POST", "/files/rematch"): Access.ADMIN,
+    # 助理的對話（M5 票 08）：登入就可以，工具依角色過濾在對話核心；每一支只看得到自己的。
+    ("GET", "/assistant"): Access.SIGNED_IN,
+    ("GET", "/conversations"): Access.SIGNED_IN,
+    ("POST", "/conversations"): Access.SIGNED_IN,
+    ("GET", "/conversations/*"): Access.SIGNED_IN,
+    ("POST", "/conversations/*/messages"): Access.SIGNED_IN,
     # 週報（M4 票 131）。
     ("GET", "/weekly"): Access.ADMIN,
     ("GET", "/weekly/*"): Access.ADMIN,

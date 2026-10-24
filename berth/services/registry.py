@@ -35,6 +35,7 @@ from berth.services.ai import AiRefusedError
 from berth.services.auth import AuthenticatedUser
 from berth.services.claims import ClaimRejectedError, UnclaimedError
 from berth.services.commands import CommandMark, Effect, command, mark_of
+from berth.services.conversations import AssistantRefusedError
 from berth.services.issues import IssueRejectedError
 from berth.services.jellyfin import BundledLibraryRejectedError, InterfaceLoginRejectedError
 from berth.services.jobs import JobRejectedError, ai_actor
@@ -51,6 +52,7 @@ from berth.services.setup import ChoiceLockedError, OwnerRejectedError
 #: 一種都沒漏。
 REJECTIONS: tuple[type[Exception], ...] = (
     AiRefusedError,
+    AssistantRefusedError,
     BundledLibraryRejectedError,
     ChoiceLockedError,
     ClaimRejectedError,

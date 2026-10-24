@@ -109,8 +109,9 @@ Berth is a **public beta**.
 - AI is just starting: Settings → AI connects your own provider in the Anthropic or the OpenAI-compatible format
   (Anthropic's or OpenAI's API, OpenRouter, DeepSeek, a self-hosted Ollama or vLLM and others) and tests whether
   its model can call tools. Settings → Usage shows the tokens every call spent and the cache hit rate, with no
-  budget. Nothing else uses AI yet, and Berth works the same without it. See
-  [AI](docs/guide/setup-wizard.md#ai-settings--ai).
+  budget. Every page has an assistant side panel to chat with it; for now its only tool looks up recent
+  imports. Berth works the same without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
+  [the assistant](docs/guide/setup-wizard.md#the-assistant-side-panel).
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.

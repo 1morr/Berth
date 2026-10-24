@@ -1,6 +1,9 @@
 // 後端與前端由同一個程序提供，所以一律走相對路徑；開發時 Vite 代理 /api（vite.config.ts）。
 const API_PREFIX = '/api'
 
+/** 非 GET 一律帶這個標頭作 CSRF 防線（plan §6）；後端的檢查在票 07。 */
+const CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' } as const
+
 /**
  * 後端回的錯誤。`status` 讓呼叫端分得出「還沒設定好」與「真的壞了」。
  *
@@ -57,6 +60,35 @@ export async function apiDelete<T = void>(path: string): Promise<T> {
 }
 
 /**
+ * POST 一個 body、回應是串流（SSE）：助理的回覆（M5 票 08）。門禁與 CSRF 標頭同一般的請求；不成時同樣丟
+ * `ApiError`（帶著後端的 `detail`），成了就把 `Response` 原樣交出去，由呼叫端讀 `body`。
+ */
+export async function apiStream(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const response = await fetch(`${API_PREFIX}${path}`, {
+    method: 'POST',
+    signal,
+    headers: {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+      ...CSRF_HEADERS,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      `POST ${path} failed with ${response.status}`,
+      await detailOf(response),
+    )
+  }
+  return response
+}
+
+/**
  * `signal` 是 TanStack Query 給 `queryFn` 的那一個（M4 票 04）：頁面換掉、翻頁時沒人要的那一次請求真的
  * 被取消，而不是照樣送到後端、跑完一整份查詢才被丟掉。
  */
@@ -72,8 +104,7 @@ async function request<T>(
     headers: {
       Accept: 'application/json',
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      // 非 GET 一律帶這個標頭作 CSRF 防線（plan §6）；後端的檢查在票 07。
-      ...(method === 'GET' ? {} : { 'X-Requested-With': 'XMLHttpRequest' }),
+      ...(method === 'GET' ? {} : CSRF_HEADERS),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })

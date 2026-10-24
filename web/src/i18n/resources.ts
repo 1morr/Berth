@@ -3247,6 +3247,7 @@ const zhHant = {
       byOrigin: '依出處',
       origin: {
         test: '設定頁的測試',
+        conversation: '側面板的對話',
       },
       byModel: {
         title: '依格式與模型',
@@ -3989,6 +3990,80 @@ const zhHant = {
         passed: '略過',
       },
     },
+  },
+  // 助理的側面板（M5 票 08，`.scratch/m5/side-panel-shape.md`）。
+  assistant: {
+    label: '助理',
+    log: '對話內容',
+    toggle: '助理',
+    you: '你',
+    speaker: '助理',
+    newConversation: '新對話',
+    history: '歷史',
+    back: '回到對話',
+    close: '關閉',
+    empty: '跟助理說你想做什麼。',
+    input: '跟助理說',
+    send: '送出',
+    sending: '回覆中…',
+    replying: '還在回覆…',
+    readFailed: '讀不到這則對話。',
+    chatOnly: {
+      label: '只能聊天',
+      body: '這個模型只能聊天：它說的事都沒有真的做。',
+    },
+    notReady: {
+      admin: 'AI 還沒設定好。',
+      user: '管理員還沒開啟 AI。',
+      settings: '去設定',
+    },
+    list: {
+      title: '對話',
+      empty: '還沒有對話。',
+      readFailed: '讀不到對話清單。',
+    },
+    tools: {
+      chip: '查詢中',
+      running: '正在查{{tool}}',
+      done: '查過{{tool}}',
+      refused: '{{tool}}沒做成',
+      recent_imports: '最近入庫',
+      other: '工具',
+      reason: {
+        unknown_tool: '你的清單上沒有這個工具',
+        invalid_input: '模型給的參數不對',
+      },
+    },
+    notice: {
+      wait: '等一下',
+      failed: '沒成',
+      stopped: '停下',
+      roundLimit_one:
+        '這一輪呼叫工具到了 {{count}} 次的上限，先停在這裡。再說一次要做什麼就會接著做。',
+      roundLimit_other:
+        '這一輪呼叫工具到了 {{count}} 次的上限，先停在這裡。再說一次要做什麼就會接著做。',
+      internal: 'Berth 自己出錯了，原因在 berth 容器的 log。',
+      settings: '去設定',
+      failure: {
+        rate_limited_one: 'AI 端點要 Berth 慢一點：{{count}} 秒後再送。',
+        rate_limited_other: 'AI 端點要 Berth 慢一點：{{count}} 秒後再送。',
+        rate_limitedUnknown: 'AI 端點要 Berth 慢一點：等一下再送。',
+        quota_exhausted: 'AI 的額度用完了，重試也沒用。',
+        provider_down: 'AI provider 暫時有問題，等一下再送。',
+        auth_failed: 'AI 端點不接受設定裡的 API key。',
+        model_not_found: 'AI 端點不認得設定裡的模型。',
+        unreachable: '連不上 AI 端點。',
+        rejected: 'AI 端點拒絕了這次請求。',
+      },
+    },
+    refusal: {
+      not_ready: 'AI 還沒設定好，送不出去。',
+      conversation_missing: '找不到這則對話。',
+      busy: '上一個回覆還在跑，等它講完再送。',
+      empty_message: '先打一句話。',
+    },
+    sendFailed: '沒送出去。',
+    streamBroken: '連線斷了：回覆在 Berth 那邊會照樣跑完，等一下重開這則對話看看。',
   },
   // 清單的上一頁 / 下一頁（`components/Pager`）：媒體庫的牆與下載列表共用。
   pager: {
@@ -7153,6 +7228,7 @@ const en: Translations<typeof zhHant> = {
       byOrigin: 'By origin',
       origin: {
         test: 'Settings test',
+        conversation: 'Side panel conversations',
       },
       byModel: {
         title: 'By format and model',
@@ -7901,6 +7977,82 @@ const en: Translations<typeof zhHant> = {
         passed: 'Passed over',
       },
     },
+  },
+  assistant: {
+    label: 'Assistant',
+    log: 'Conversation',
+    toggle: 'Assistant',
+    you: 'You',
+    speaker: 'Assistant',
+    newConversation: 'New',
+    history: 'History',
+    back: 'Back',
+    close: 'Close',
+    empty: 'Tell the assistant what you want to do.',
+    input: 'Message the assistant',
+    send: 'Send',
+    sending: 'Replying…',
+    replying: 'Still replying…',
+    readFailed: 'Could not read this conversation.',
+    chatOnly: {
+      label: 'Chat only',
+      body: 'This model can only chat: nothing it says it did has actually been done.',
+    },
+    notReady: {
+      admin: 'AI is not set up yet.',
+      user: 'An administrator has not turned AI on yet.',
+      settings: 'Set it up',
+    },
+    list: {
+      title: 'Conversations',
+      empty: 'No conversations yet.',
+      readFailed: 'Could not read the conversation list.',
+    },
+    tools: {
+      chip: 'Looking',
+      running: 'Looking up {{tool}}',
+      done: 'Looked up {{tool}}',
+      refused: '{{tool}} did not go through',
+      recent_imports: 'recent imports',
+      other: 'a tool',
+      reason: {
+        unknown_tool: 'that tool is not on your list',
+        invalid_input: 'the model sent the wrong arguments',
+      },
+    },
+    notice: {
+      wait: 'Wait',
+      failed: 'Failed',
+      stopped: 'Stopped',
+      roundLimit_one:
+        'This reply reached the limit of {{count}} tool call, so it stopped here. Say what to do again and it carries on.',
+      roundLimit_other:
+        'This reply reached the limit of {{count}} tool calls, so it stopped here. Say what to do again and it carries on.',
+      internal: 'Berth itself went wrong; the reason is in the berth container log.',
+      settings: 'Set it up',
+      failure: {
+        rate_limited_one:
+          'The AI endpoint asked Berth to slow down: send again in {{count}} second.',
+        rate_limited_other:
+          'The AI endpoint asked Berth to slow down: send again in {{count}} seconds.',
+        rate_limitedUnknown: 'The AI endpoint asked Berth to slow down: send again in a moment.',
+        quota_exhausted: 'The AI quota is used up; retrying will not help.',
+        provider_down: 'The AI provider is having trouble; send again in a moment.',
+        auth_failed: 'The AI endpoint does not accept the API key in settings.',
+        model_not_found: 'The AI endpoint does not know the model in settings.',
+        unreachable: 'Could not reach the AI endpoint.',
+        rejected: 'The AI endpoint rejected this request.',
+      },
+    },
+    refusal: {
+      not_ready: 'AI is not set up, so this was not sent.',
+      conversation_missing: 'This conversation is not there.',
+      busy: 'The last reply is still running; send once it finishes.',
+      empty_message: 'Type something first.',
+    },
+    sendFailed: 'Not sent.',
+    streamBroken:
+      'The connection dropped: Berth finishes the reply anyway, so reopen this conversation in a moment.',
   },
   pager: {
     previous: 'Previous',

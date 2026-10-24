@@ -55,7 +55,7 @@ PING_SECONDS = 20
 SHUTDOWN_GRACE_SECONDS = 2.0
 
 
-class _Stream(EventSourceResponse):
+class EventStream(EventSourceResponse):
     """只為了文件：`sse_starlette` 不在類別上宣告 `media_type`（它自己組標頭），而 FastAPI
     就是讀那一格決定文件上的 content type——沒有它，這一支會被寫成 `application/json`。
     端點自己回一個 `EventSourceResponse` 實例，所以這個類別不參與執行期。
@@ -66,7 +66,7 @@ class _Stream(EventSourceResponse):
 
 @router.get(
     "/stream",
-    response_class=_Stream,
+    response_class=EventStream,
     responses={200: {"model": JobSignalOut, "description": "一筆接一筆的 `event: job`"}},
 )
 async def stream(hub: EventHubDep) -> EventSourceResponse:

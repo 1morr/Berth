@@ -6,6 +6,7 @@ M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加�
 from berth.models.ai_call import AiCall
 from berth.models.auth import User, UserSession
 from berth.models.base import Base
+from berth.models.conversation import Conversation, ConversationMessage
 from berth.models.event import Event
 from berth.models.issue import Issue, subject_of
 from berth.models.job import Job, JobFile
@@ -75,6 +76,8 @@ __all__ = [
     "BerthPathResult",
     "BerthSettings",
     "BundledLibrary",
+    "Conversation",
+    "ConversationMessage",
     "DiskSettings",
     "Event",
     "HealthSettings",

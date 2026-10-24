@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { meQueryOptions } from './api/auth'
-import { GhostButton, NAV_LINK } from './components/controls'
+import { AssistantPanel, PANEL_ID } from './assistant/AssistantPanel'
+import { usePanelOpen } from './assistant/usePanelOpen'
+import { GhostButton, NAV_BOX, NAV_BOX_ACTIVE, NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
 import { useSignOut } from './components/useSignOut'
 
@@ -13,12 +15,30 @@ import { useSignOut } from './components/useSignOut'
  *
  * `main` 不設寬度上限：健康頁的泊位板是整寬的橫幅（direction contract 的 FIRST VIEWPORT），
  * 每一頁自己決定內文那一欄有多寬。
+ *
+ * **助理的側面板掛在這裡**（M5 票 08，`.scratch/m5/side-panel-shape.md`）：換頁不關。`lg` 以上固定在右側、
+ * 全高，外框讓出同樣寬的一欄，頁首與頁面變窄、照常可操作（並排，不疊在任何東西上：這個系統沒有浮起來的層）；
+ * `lg` 以下開著時取代 `main`。登入之後才有。
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
+  const me = useQuery(meQueryOptions)
+  const [open, setOpen] = usePanelOpen()
+  // 使用者自己按開的才把焦點交給輸入框；重整時照記憶打開的不搶。
+  const [byHand, setByHand] = useState(false)
+  const panel = open && me.data !== undefined
+
+  const toggle = () => {
+    setByHand(!open)
+    setOpen(!open)
+  }
+  const close = () => {
+    setOpen(false)
+    document.getElementById(TOGGLE_ID)?.focus()
+  }
 
   return (
-    <div className="min-h-dvh bg-hull text-ink">
+    <div className={`min-h-dvh bg-hull text-ink ${panel ? 'lg:pr-[26rem] xl:pr-[28rem]' : ''}`}>
       {/* 頁首有八個 Tab 停留點；鍵盤使用者每換一頁都要先過完它們（票 15 audit）。
           平常看不見，拿到焦點才浮出來。`not-sr-only` 會把 padding 歸零，所以浮出時的 padding
           寫在 `focus:` 那一組（票 15 實跑量到 58×15px）。 */}
@@ -34,13 +54,22 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="text-sm text-ink-dim">{t('app.tagline')}</p>
         </div>
         <span className="ml-auto">
-          <Identity />
+          <Identity assistantOpen={open} onToggleAssistant={toggle} />
         </span>
       </header>
-      {/* `tabIndex={-1}`：skip link 跳過來時焦點要真的落在這裡，下一個 Tab 才從內容開始。 */}
-      <main id="main" tabIndex={-1} className="outline-none">
-        {children}
-      </main>
+      <div className="lg:flex lg:items-start">
+        {/* `tabIndex={-1}`：skip link 跳過來時焦點要真的落在這裡，下一個 Tab 才從內容開始。 */}
+        <main
+          id="main"
+          tabIndex={-1}
+          className={`outline-none lg:min-w-0 lg:flex-1 ${panel ? 'max-lg:hidden' : ''}`}
+        >
+          {children}
+        </main>
+        {panel && (
+          <AssistantPanel admin={me.data.role === 'admin'} focusOnMount={byHand} onClose={close} />
+        )}
+      </div>
     </div>
   )
 }
@@ -80,7 +109,16 @@ function NavLink({
  * 角色用**中性色塊**：四個信號色各自只有一個意思，角色不是狀態，不能借用它們。
  * 它仍然要看得見——`user` 因此知道自己為什麼沒有「設定」那顆按鈕，而不是以為壞了。
  */
-function Identity() {
+/** 頁首的「助理」鍵：`aria-controls` 指著面板，關掉面板時焦點回到這裡。 */
+const TOGGLE_ID = 'assistant-toggle'
+
+function Identity({
+  assistantOpen,
+  onToggleAssistant,
+}: {
+  assistantOpen: boolean
+  onToggleAssistant: () => void
+}) {
   const { t } = useTranslation()
   const me = useQuery(meQueryOptions)
   const leave = useSignOut()
@@ -111,6 +149,17 @@ function Identity() {
             每個人都有：一般使用者的設定只有通知那一頁，`/settings` 把他帶到那裡（M4 票 125）。 */}
         <NavLink to="/settings">{t('nav.settings')}</NavLink>
       </nav>
+      {/* 不是一頁，是這一頁旁邊的一欄：按鈕而不是連結，開著時同導覽的當前格（重線 + `deck`）。 */}
+      <button
+        id={TOGGLE_ID}
+        type="button"
+        aria-expanded={assistantOpen}
+        aria-controls={assistantOpen ? PANEL_ID : undefined}
+        onClick={onToggleAssistant}
+        className={`${assistantOpen ? NAV_BOX_ACTIVE : NAV_BOX} px-4 py-2.5`}
+      >
+        {t('assistant.toggle')}
+      </button>
       <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
       </GhostButton>
