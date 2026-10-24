@@ -287,6 +287,58 @@ describe('存下來的', () => {
   })
 })
 
+describe('工具沒做成與保險絲', () => {
+  it('清單外的工具說人話，到了輪數上限說出幾次', async () => {
+    render({
+      routes: {
+        'GET /api/conversations': { body: [{ id: 7, title: 'hi', updated_at: AT }] },
+        'GET /api/conversations/7': {
+          body: conversation(7, [
+            { id: 1, kind: 'user', created_at: AT, parts: [{ type: 'user_text', text: '刪掉' }] },
+            {
+              id: 2,
+              kind: 'model',
+              created_at: AT,
+              parts: [{ type: 'tool_call', id: 'c1', name: 'recent_imports', arguments: '{}' }],
+            },
+            {
+              id: 3,
+              kind: 'tools',
+              created_at: AT,
+              parts: [
+                {
+                  type: 'tool_result',
+                  call_id: 'c1',
+                  tool: 'recent_imports',
+                  outcome: 'refused',
+                  result_type: 'Refusal',
+                  result: {
+                    tool: 'recent_imports',
+                    reason: 'unknown_tool',
+                    detail: '',
+                    next: 'give_up',
+                  },
+                },
+              ],
+            },
+            {
+              id: 4,
+              kind: 'notice',
+              created_at: AT,
+              parts: [{ type: 'notice', notice: 'round_limit', limit: 10 }],
+            },
+          ]),
+        },
+      },
+    })
+    const panel = await openPanel()
+
+    expect(await within(panel).findByText('最近入庫沒做成')).toBeInTheDocument()
+    expect(within(panel).getByText('你的清單上沒有這個工具')).toBeInTheDocument()
+    expect(within(panel).getByText(/到了 10 次的上限/)).toBeInTheDocument()
+  })
+})
+
 describe('只能聊天', () => {
   it('標明這個模型只能聊天，輸入框照常', async () => {
     render({ status: { ready: true, chat_only: true } })

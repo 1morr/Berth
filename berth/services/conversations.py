@@ -105,16 +105,17 @@ class NoticePart(_Part):
     failure: AiFailure | None = None
     #: 限流時 provider 說的「幾秒後再來」。
     retry_after: float | None = None
+    #: `round_limit` 時是幾次（`services.assistant.MAX_TOOL_ROUNDS`）：畫面照它說，不另抄一份數字。
+    limit: int | None = None
 
 
-Part = Annotated[
-    UserText | ModelText | ToolCallPart | OpaqueModelPart | ToolResultPart | NoticePart,
-    Field(discriminator="type"),
-]
+#: 一則裡的一個 part。`Part` 是同一份聯集加上讀出時用的 discriminator。
+StoredPart = UserText | ModelText | ToolCallPart | OpaqueModelPart | ToolResultPart | NoticePart
+Part = Annotated[StoredPart, Field(discriminator="type")]
 _PARTS = TypeAdapter(list[Part])
 
 
-def dump_parts(parts: Sequence[_Part]) -> list[dict[str, Any]]:
+def dump_parts(parts: Sequence[StoredPart]) -> list[dict[str, Any]]:
     return [part.model_dump(mode="json") for part in parts]
 
 
@@ -249,6 +250,13 @@ def tool_content(part: ToolResultPart) -> str:
     )
 
 
+def tool_result_of(part: ToolResultPart) -> ToolResult:
+    """存下的一個工具結果 → 送給 provider 的那一份。"""
+    return ToolResult(
+        part.call_id, tool_content(part), is_error=part.outcome is ToolOutcome.REFUSED
+    )
+
+
 def turns_of(
     rows: Sequence[ConversationMessage], format: ApiFormat
 ) -> tuple[UserTurn | ModelTurn, ...]:
@@ -260,22 +268,18 @@ def turns_of(
         if row.kind is MessageKind.USER:
             _add_user(turns, tuple(TextPart(p.text) for p in parts if isinstance(p, UserText)))
         elif row.kind is MessageKind.TOOLS:
-            results = tuple(
-                ToolResult(p.call_id, tool_content(p), is_error=p.outcome is ToolOutcome.REFUSED)
-                for p in parts
-                if isinstance(p, ToolResultPart)
-            )
+            results = tuple(tool_result_of(p) for p in parts if isinstance(p, ToolResultPart))
             # 這一份就是上一輪那幾個呼叫的結果，不補「沒執行」。
             _add_user(turns, results, closes=False)
         elif row.kind is MessageKind.MODEL:
-            model = ModelTurn(tuple(_model_parts(parts, format)))
+            model = ModelTurn(tuple(_provider_parts(parts, format)))
             if model.parts:
                 _close_open_calls(turns)
                 turns.append(model)
     return tuple(turns)
 
 
-def _model_parts(
+def _provider_parts(
     parts: Sequence[Part], format: ApiFormat
 ) -> list[TextPart | ToolCall | OpaquePart]:
     out: list[TextPart | ToolCall | OpaquePart] = []

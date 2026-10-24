@@ -21,6 +21,7 @@ from berth.adapters.ai import (
     ModelTurn,
     StopReason,
     StreamEvent,
+    TextDelta,
     TextPart,
     ToolCall,
     ToolResult,
@@ -303,7 +304,7 @@ async def test_a_model_that_keeps_calling_tools_stops_at_the_round_limit_and_say
     events = await drain(runs, admin, "loop forever")
 
     assert len(provider.requests) == MAX_TOOL_ROUNDS == 10
-    notice = NoticePart(notice=AssistantNotice.ROUND_LIMIT)
+    notice = NoticePart(notice=AssistantNotice.ROUND_LIMIT, limit=MAX_TOOL_ROUNDS)
     assert events[-2:] == [NoticeRaised(notice), Finished()]
     async with sessions() as fresh:
         view = await read_conversation(fresh, user_id=admin.id, conversation_id=started_id(events))
@@ -568,3 +569,45 @@ async def test_the_reply_finishes_even_when_nobody_is_reading(
             fresh, user_id=admin.id, conversation_id=reply.conversation_id
         )
     assert view.messages[-1].parts == [ModelText(text="Saved anyway.")]
+
+
+class BreaksMidway(FakeChatProvider):
+    """吐了幾個字之後串流斷掉（provider 的錯誤事件、連線斷了）。"""
+
+    async def stream(self, request: ChatRequest) -> AsyncIterator[StreamEvent]:
+        self.requests.append(request)
+        yield TextDelta("Half a sen")
+        raise AiProviderError(AiFailure.PROVIDER_DOWN, "stream ended without message_stop")
+
+
+async def test_words_already_streamed_are_kept_when_the_provider_breaks_midway(
+    engine: AsyncEngine, session: AsyncSession
+) -> None:
+    """畫面上已經看到的字，重讀之後不該消失（重整不丟）。"""
+    admin = await person(session, "skipper", Role.ADMIN)
+    await ai_ready(session)
+    runs, sessions = runs_for(engine, BreaksMidway())
+
+    events = await drain(runs, admin, "hi")
+
+    async with sessions() as fresh:
+        view = await read_conversation(fresh, user_id=admin.id, conversation_id=started_id(events))
+    assert [message.parts for message in view.messages[1:]] == [
+        [ModelText(text="Half a sen")],
+        [NoticePart(notice=AssistantNotice.PROVIDER_FAILED, failure=AiFailure.PROVIDER_DOWN)],
+    ]
+
+
+async def test_the_round_limit_notice_says_the_limit(
+    engine: AsyncEngine, session: AsyncSession
+) -> None:
+    admin = await person(session, "skipper", Role.ADMIN)
+    await ai_ready(session)
+    provider = FakeChatProvider(replies=[calls("ping") for _ in range(MAX_TOOL_ROUNDS)])
+    runs, _ = runs_for(engine, provider, Registry((PING,)))
+
+    events = await drain(runs, admin, "loop forever")
+
+    notice = events[-2]
+    assert isinstance(notice, NoticeRaised)
+    assert notice.notice.limit == 10

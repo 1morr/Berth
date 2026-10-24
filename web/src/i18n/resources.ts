@@ -3994,6 +3994,7 @@ const zhHant = {
   // 助理的側面板（M5 票 08，`.scratch/m5/side-panel-shape.md`）。
   assistant: {
     label: '助理',
+    log: '對話內容',
     toggle: '助理',
     you: '你',
     speaker: '助理',
@@ -4028,12 +4029,19 @@ const zhHant = {
       refused: '{{tool}}沒做成',
       recent_imports: '最近入庫',
       other: '工具',
+      reason: {
+        unknown_tool: '你的清單上沒有這個工具',
+        invalid_input: '模型給的參數不對',
+      },
     },
     notice: {
       wait: '等一下',
       failed: '沒成',
       stopped: '停下',
-      roundLimit: '這一輪呼叫工具的次數到了上限，先停在這裡。再說一次要做什麼就會接著做。',
+      roundLimit_one:
+        '這一輪呼叫工具到了 {{count}} 次的上限，先停在這裡。再說一次要做什麼就會接著做。',
+      roundLimit_other:
+        '這一輪呼叫工具到了 {{count}} 次的上限，先停在這裡。再說一次要做什麼就會接著做。',
       internal: 'Berth 自己出錯了，原因在 berth 容器的 log。',
       settings: '去設定',
       failure: {
@@ -7972,6 +7980,7 @@ const en: Translations<typeof zhHant> = {
   },
   assistant: {
     label: 'Assistant',
+    log: 'Conversation',
     toggle: 'Assistant',
     you: 'You',
     speaker: 'Assistant',
@@ -8006,13 +8015,19 @@ const en: Translations<typeof zhHant> = {
       refused: '{{tool}} did not go through',
       recent_imports: 'recent imports',
       other: 'a tool',
+      reason: {
+        unknown_tool: 'that tool is not on your list',
+        invalid_input: 'the model sent the wrong arguments',
+      },
     },
     notice: {
       wait: 'Wait',
       failed: 'Failed',
       stopped: 'Stopped',
-      roundLimit:
-        'This reply reached the limit on tool calls, so it stopped here. Say what to do again and it carries on.',
+      roundLimit_one:
+        'This reply reached the limit of {{count}} tool call, so it stopped here. Say what to do again and it carries on.',
+      roundLimit_other:
+        'This reply reached the limit of {{count}} tool calls, so it stopped here. Say what to do again and it carries on.',
       internal: 'Berth itself went wrong; the reason is in the berth container log.',
       settings: 'Set it up',
       failure: {

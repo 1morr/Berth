@@ -30,6 +30,9 @@ export type Chunk = Schemas['AssistantChunk']
 
 export type AssistantRefusal = Schemas['AssistantRefusal']
 
+/** 登錄表自己的拒絕理由（後端 `services/registry.ToolRefusal`）。 */
+export type ToolRefusal = Schemas['ToolRefusal']
+
 /** 回覆的語言（後端的 `Language`）。 */
 export type ReplyLanguage = Schemas['MessageIn']['language']
 

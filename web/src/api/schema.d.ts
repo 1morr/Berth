@@ -4815,6 +4815,8 @@ export interface components {
             failure?: components["schemas"]["AiFailure"] | null;
             /** Retry After */
             retry_after?: number | null;
+            /** Limit */
+            limit?: number | null;
         };
         /**
          * NotificationKind

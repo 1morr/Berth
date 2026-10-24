@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.ai import (
@@ -37,7 +38,6 @@ from berth.adapters.ai import (
     TextDelta,
     ToolCall,
     ToolCallStarted,
-    ToolResult,
     ToolSpec,
     UserTurn,
 )
@@ -61,6 +61,7 @@ from berth.services.conversations import (
     ModelText,
     NoticePart,
     OpaqueModelPart,
+    StoredPart,
     ToolCallPart,
     ToolResultPart,
     UserText,
@@ -69,7 +70,7 @@ from berth.services.conversations import (
     own_conversation,
     status_of,
     title_of,
-    tool_content,
+    tool_result_of,
     turns_of,
 )
 from berth.services.registry import NextStep, Refusal, Registry, Tool, ToolContext, ToolRefusal
@@ -308,13 +309,18 @@ class AssistantRuns:
                 turns_of(await messages_of(session, cid), settings.format)
             )
 
+        #: 這一輪已經送到畫面上的字：串流中途斷掉時照樣存下來，重讀之後才不會消失。
+        streamed: list[str] = []
+
         def forward(event: StreamEvent) -> None:
             if isinstance(event, TextDelta):
+                streamed.append(event.text)
                 emit(ReplyText(event.text))
             elif isinstance(event, ToolCallStarted):
                 emit(ToolStarted(call_id=event.id, name=event.name))
 
         for _ in range(MAX_TOOL_ROUNDS):
+            streamed.clear()
             request = ChatRequest(
                 model=effective_model(settings),
                 system=system,
@@ -339,6 +345,9 @@ class AssistantRuns:
                     "assistant provider failed",
                     extra={"conversation": cid, "failure": exc.failure, "detail": exc.detail},
                 )
+                if partial := "".join(streamed):
+                    # 不帶工具呼叫：沒講完的呼叫不能執行，送回去也會被 provider 拒絕。
+                    await self._save(cid, MessageKind.MODEL, [ModelText(text=partial)])
                 await self._stop(
                     cid,
                     NoticePart(
@@ -350,32 +359,23 @@ class AssistantRuns:
                 )
                 return
             reply = ended.reply
-            await self._save(cid, MessageKind.MODEL, _model_parts(reply))
+            await self._save(cid, MessageKind.MODEL, _stored_parts(reply))
             turns.append(reply)
             if not reply.tool_calls:
                 return
             context = ToolContext(sessions=self._sessions, user=user, now=self._now())
             results = [await self._run_tool(call, context, emit) for call in reply.tool_calls]
             await self._save(cid, MessageKind.TOOLS, results)
-            turns.append(
-                UserTurn(
-                    tuple(
-                        ToolResult(
-                            part.call_id,
-                            tool_content(part),
-                            is_error=part.outcome is ToolOutcome.REFUSED,
-                        )
-                        for part in results
-                    )
-                )
-            )
-        await self._stop(cid, NoticePart(notice=AssistantNotice.ROUND_LIMIT), emit)
+            turns.append(UserTurn(tuple(tool_result_of(part) for part in results)))
+        await self._stop(
+            cid, NoticePart(notice=AssistantNotice.ROUND_LIMIT, limit=MAX_TOOL_ROUNDS), emit
+        )
 
     async def _run_tool(
         self, call: ToolCall, context: ToolContext, emit: Callable[[AssistantEvent], None]
     ) -> ToolResultPart:
         arguments = call.arguments_object()
-        result: Any
+        result: BaseModel
         if arguments is None:
             result = Refusal(
                 tool=call.name,
@@ -401,7 +401,7 @@ class AssistantRuns:
         await self._save(cid, MessageKind.NOTICE, [notice])
         emit(NoticeRaised(notice))
 
-    async def _save(self, cid: int, kind: MessageKind, parts: Sequence[Any]) -> None:
+    async def _save(self, cid: int, kind: MessageKind, parts: Sequence[StoredPart]) -> None:
         async with self._sessions() as session:
             conversation = await session.get(Conversation, cid)
             assert conversation is not None  # 送出時建好、驗過是這個人的
@@ -421,7 +421,7 @@ def _append(
     session: AsyncSession,
     conversation: Conversation,
     kind: MessageKind,
-    parts: Sequence[Any],
+    parts: Sequence[StoredPart],
     now: datetime,
 ) -> None:
     session.add(
@@ -432,13 +432,14 @@ def _append(
     conversation.updated_at = now
 
 
+# Any：登記表裡每一條的輸入與結果型別各不相同（同 `Registry`）。
 def _spec(tool: Tool[Any, Any]) -> ToolSpec:
     return ToolSpec(
         name=tool.name, description=tool.description, input_schema=tool.input.model_json_schema()
     )
 
 
-def _model_parts(reply: ModelTurn) -> list[ModelText | ToolCallPart | OpaqueModelPart]:
+def _stored_parts(reply: ModelTurn) -> list[ModelText | ToolCallPart | OpaqueModelPart]:
     parts: list[ModelText | ToolCallPart | OpaqueModelPart] = []
     for part in reply.parts:
         if isinstance(part, ToolCall):

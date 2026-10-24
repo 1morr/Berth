@@ -18,14 +18,13 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from sse_starlette import EventSourceResponse
 
 from berth.api.deps import SessionDep
 from berth.api.errors import refusal_responses
-from berth.api.events import PING_SECONDS, SHUTDOWN_GRACE_SECONDS
+from berth.api.events import PING_SECONDS, EventStream
 from berth.api.gate import current_user
 from berth.domain import AssistantRefusal, Language, MessageKind, ToolOutcome
 from berth.services.assistant import (
@@ -250,12 +249,6 @@ class AssistantChunk(RootModel[Chunk]):
     """SSE 一行 `data:` 的形狀。"""
 
 
-class _Stream(EventSourceResponse):
-    """只為了文件上的 content type（同 `api/events._Stream`）。"""
-
-    media_type = "text/event-stream"
-
-
 # Any：同 `_responses`。
 _STREAM_DOC: dict[int | str, dict[str, Any]] = {
     200: {"model": AssistantChunk, "description": "一行 `data:` 一個 chunk，到 `finish` 為止"}
@@ -264,7 +257,7 @@ _STREAM_DOC: dict[int | str, dict[str, Any]] = {
 
 @router.post(
     "/conversations",
-    response_class=_Stream,
+    response_class=EventStream,
     responses=_STREAM_DOC | _responses(AssistantRefusal.NOT_READY, AssistantRefusal.EMPTY_MESSAGE),
 )
 async def post_conversation(
@@ -276,7 +269,7 @@ async def post_conversation(
 
 @router.post(
     "/conversations/{conversation_id}/messages",
-    response_class=_Stream,
+    response_class=EventStream,
     responses=_STREAM_DOC
     | _responses(
         AssistantRefusal.NOT_READY,
@@ -303,13 +296,10 @@ async def _send(
         )
     except AssistantRefusedError as exc:
         raise assistant_refusal(exc) from exc
-    shutdown = anyio.Event()
+    # 不必等關機訊號：串流讀到 `finish` 就結束，關機時 `AssistantRuns.aclose` 收掉回覆、
+    # 照樣送出 `finish`。
     return EventSourceResponse(
-        _chunks(reply),
-        ping=PING_SECONDS,
-        shutdown_event=shutdown,
-        shutdown_grace_period=SHUTDOWN_GRACE_SECONDS,
-        headers={"Cache-Control": "no-store"},
+        _chunks(reply), ping=PING_SECONDS, headers={"Cache-Control": "no-store"}
     )
 
 

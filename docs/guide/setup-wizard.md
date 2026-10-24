@@ -168,8 +168,8 @@ many there were. There is no budget and no limit: this page only reports.
 
 ## The assistant (side panel)
 
-Once AI is set up, every page has an **Assistant** button in the header. It opens a column on the right (on a
-phone it takes the whole screen) that stays open as you move between pages and after a reload. Type a message and
+Every page has an **Assistant** button in the header. It opens a column on the right (on a phone it takes the
+whole screen) that stays open as you move between pages and after a reload. Type a message and
 press Enter (Shift+Enter for a new line); the reply streams in as it is written. When the assistant looks
 something up, the panel says so ("Looking up recent imports") and then "Looked up" once it has the answer.
 

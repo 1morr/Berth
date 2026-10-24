@@ -20,8 +20,10 @@ import {
   sendMessage,
   type NoticePart,
   type ReplyLanguage,
+  type ToolRefusal,
 } from '../api/assistant'
-import { COMPACT_BUTTON, GHOST_LINK, GhostButton, Notice } from '../components/controls'
+import { COMPACT_BUTTON, GHOST_LINK, GhostButton, Notice, TEXT_LINK } from '../components/controls'
+import { Dot } from '../components/Dot'
 import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
@@ -167,7 +169,7 @@ function ConversationList({ onPick }: { onPick: (id: number) => void }) {
               onClick={() => onPick(row.id)}
               className="grid w-full gap-1 border-2 border-rule px-3 py-2 text-left hover:border-rule-strong"
             >
-              <span className="text-sm break-words text-ink">{row.title}</span>
+              <span className="min-w-0 text-sm break-words text-ink">{row.title}</span>
               <span className="text-xs text-ink-dim">
                 <Timestamp at={row.updated_at} past />
               </span>
@@ -343,12 +345,14 @@ function Transcript({
       {blocks.length === 0 && !failed && (
         <p className="text-sm text-ink-dim">{t('assistant.empty')}</p>
       )}
-      <ol role="log" aria-label={t('assistant.label')} className="grid gap-3">
+      <ol role="log" aria-label={t('assistant.log')} className="grid gap-3">
         {blocks.map((block) =>
           block.kind === 'user' ? (
             <li key={block.key} className="grid gap-1.5 bg-deck px-3 py-2.5">
               <span className="label text-ink-dim">{t('assistant.you')}</span>
-              <p className="text-sm break-words whitespace-pre-wrap text-ink">{block.text}</p>
+              <p className="min-w-0 text-sm break-words whitespace-pre-wrap text-ink">
+                {block.text}
+              </p>
             </li>
           ) : (
             <li key={block.key} aria-busy={block.busy} className="grid gap-1.5 px-3 py-2.5">
@@ -361,7 +365,7 @@ function Transcript({
         )}
       </ol>
       {replying && (
-        <p aria-busy className="value mt-3 text-xs text-ink-dim">
+        <p aria-busy className="mt-3 text-xs text-ink-dim">
           {t('assistant.replying')}
         </p>
       )}
@@ -373,7 +377,7 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
   const { t } = useTranslation()
   switch (item.kind) {
     case 'text':
-      return <p className="text-sm break-words whitespace-pre-wrap text-ink">{item.text}</p>
+      return <p className="min-w-0 text-sm break-words whitespace-pre-wrap text-ink">{item.text}</p>
     case 'tool': {
       const tool = toolName(t, item.name)
       if (item.state === 'running') {
@@ -390,7 +394,12 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
         return (
           <p className="value text-xs wrap-anywhere text-ink">
             {t('assistant.tools.refused', { tool })}
-            {item.reason && <span className="text-ink-dim"> · {item.reason}</span>}
+            {item.reason && (
+              <>
+                {' '}
+                <Dot /> <span className="text-ink-dim">{reasonText(t, item.reason)}</span>
+              </>
+            )}
           </p>
         )
       }
@@ -401,11 +410,30 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
   }
 }
 
-/** 工具在畫面上的名字。沒有文案的工具（後端先加了）退回「工具」，不印出 key。 */
+/**
+ * 工具在畫面上的名字：一個登記的工具一格（後端 `services/tools.py`）。沒有文案的工具（後端先加了）
+ * 退回「工具」，不印出 key。
+ */
+const TOOL_NAMES: Readonly<Record<string, 'assistant.tools.recent_imports'>> = {
+  recent_imports: 'assistant.tools.recent_imports',
+}
+
 function toolName(t: TFunction, name: string): string {
-  return name === 'recent_imports'
-    ? t('assistant.tools.recent_imports')
-    : t('assistant.tools.other')
+  const key = Object.hasOwn(TOOL_NAMES, name) ? TOOL_NAMES[name] : undefined
+  return key ? t(key) : t('assistant.tools.other')
+}
+
+/**
+ * 登錄表自己的兩種拒絕（`ToolRefusal`）有人話；各模組的理由碼照原樣（機器字串，`.value`），
+ * 它們的說法跟著各自的結果卡來（票 09 起）。
+ */
+const REFUSAL_TEXT = {
+  unknown_tool: 'assistant.tools.reason.unknown_tool',
+  invalid_input: 'assistant.tools.reason.invalid_input',
+} as const satisfies Record<ToolRefusal, string>
+
+function reasonText(t: TFunction, reason: string): string {
+  return Object.hasOwn(REFUSAL_TEXT, reason) ? t(REFUSAL_TEXT[reason as ToolRefusal]) : reason
 }
 
 /** 等一下就好的（Berth 自己會好、或使用者再送一次）是 `assigned`；要管理員改設定的是 `blocked`。 */
@@ -424,7 +452,7 @@ function NoticeView({ notice, admin }: { notice: NoticePart; admin: boolean }) {
     case 'round_limit':
       signal = 'assigned'
       label = t('assistant.notice.stopped')
-      text = t('assistant.notice.roundLimit')
+      text = t('assistant.notice.roundLimit', { count: notice.limit ?? 0 })
       break
     case 'internal_error':
       signal = 'blocked'
@@ -450,10 +478,7 @@ function NoticeView({ notice, admin }: { notice: NoticePart; admin: boolean }) {
       {admin && signal === 'blocked' && notice.notice === 'provider_failed' && (
         <>
           {' '}
-          <Link
-            to="/settings/ai"
-            className="underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-          >
+          <Link to="/settings/ai" className={TEXT_LINK}>
             {t('assistant.notice.settings')}
           </Link>
         </>
