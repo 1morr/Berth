@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -46,8 +46,7 @@ console.log(statusOf({ status: 'ok' }))
 let root: string | undefined
 
 function probe(changes: Record<string, string> = {}): string {
-  // macOS 的暫存目錄經過 symlink（`/var` → `/private/var`），knip 拿到 symlink 路徑時把每個檔都報成沒人用。
-  root = realpathSync(mkdtempSync(join(tmpdir(), 'berth-knip-')))
+  root = mkdtempSync(join(tmpdir(), 'berth-knip-'))
   for (const [path, text] of Object.entries({ ...TREE, ...changes })) {
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), text)
