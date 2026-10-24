@@ -283,9 +283,9 @@ async def _verify(
     return tuple(await asyncio.gather(*(verify(name) for name in names)))
 
 
-# 沒有單一反向命令：一次加好幾站，`remove_indexer` 一次只撤得掉一站（既有的那一台 Berth 不撤，
-# 移除交給它自己的介面，M4 票 20）。
-@command(Effect.REVERSIBLE)
+# 加索引站是 brief §14 的「改設定」，永遠要人（plan §11.6 的確認卡）；既有的那一台 Berth 也撤不掉
+# 它加的站，移除交給它自己的介面（M4 票 20）。
+@command(Effect.IRREVERSIBLE)
 async def apply_default_indexers(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -341,8 +341,8 @@ async def apply_default_indexers(
     return await read_indexer_status(session, factory)
 
 
-# 沒有單一反向命令：理由同 `apply_default_indexers`，加進去的一站一站用 `remove_indexer` 撤。
-@command(Effect.REVERSIBLE)
+# 不可逆：理由同 `apply_default_indexers`。
+@command(Effect.IRREVERSIBLE)
 async def add_recommended_indexers(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
@@ -440,7 +440,7 @@ async def _record_added(
     await update_settings(session, SetupSettings, record)
 
 
-@command(Effect.REVERSIBLE, inverse="indexer.skip_indexers")
+@command(Effect.IRREVERSIBLE)
 async def skip_indexers(
     session: AsyncSession, factory: ServiceClientFactory, *, skipped: bool = True
 ) -> IndexerSetupStatus:
@@ -504,7 +504,7 @@ class IndexerNotRemovedError(Exception):
     """移除時 Prowlarr 沒答上來或沒收下：什麼都沒記下，訊息是原文（M4 票 99）。"""
 
 
-@command(Effect.REVERSIBLE, inverse="indexer.apply_default_indexers")
+@command(Effect.IRREVERSIBLE)
 async def remove_indexer(
     session: AsyncSession, factory: ServiceClientFactory, indexer_id: int
 ) -> IndexerSetupStatus:
@@ -512,7 +512,8 @@ async def remove_indexer(
 
     **只移除 Berth 加的站**（`added_sites`，M4 票 66）：接管只管 Berth 擁有的物件（brief §16.4），
     使用者自己加的公開站 Berth 雖然加得回去，也不是 Berth 的；票 47 之前加的沒有紀錄，同樣不碰。
-    Berth 只加 `_offered` 的站，所以反向命令（再加一次那一站）對它們都成立。
+    Berth 只加 `_offered` 的站，所以再加得回來；但加回來是新的一站（新的 id，在 Prowlarr 改過的
+    設定不在），而且加站與移除都是改設定（brief §14），所以標不可逆。
     那一站的「加入結果」一起拿掉——留著一條綠的等於說它還在；最後一站也移除時，精靈就回到頁 4
     （`_indexer_settled`）。Prowlarr 沒答上來是 `IndexerNotRemovedError`：畫面要分得出是它還是
     Berth。
@@ -632,7 +633,7 @@ def _test_failed_step(check: SiteCheck) -> SetupStep:
     )
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.IRREVERSIBLE)
 async def set_interface_login(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -642,8 +643,8 @@ async def set_interface_login(
 ) -> IndexerSetupStatus:
     """設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，站不重驗。
 
-    與第 6 步的登入那一條是同一段（`_apply_password`），結果換掉那一條纜繩。可逆的方式就是
-    再設一組。既有的索引站拒絕（`ValueError`）。
+    與第 6 步的登入那一條是同一段（`_apply_password`），結果換掉那一條纜繩。舊的那一組回不來，
+    只能再設一組蓋過（brief §16.4），所以標不可逆。既有的索引站拒絕（`ValueError`）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)

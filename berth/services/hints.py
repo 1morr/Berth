@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import asyncio
 
+from berth.services.commands import Effect, command
+
 
 class JobHints:
     """一個會自己合併的喚醒訊號。
@@ -31,6 +33,7 @@ class JobHints:
         """有東西動了。**永不阻塞、永不丟例外**——呼叫端是背景迴圈。"""
         self._wake.set()
 
+    @command(Effect.READ)
     async def wait(self, timeout: float) -> bool:
         """等一個提示，最多等 `timeout` 秒。回傳「是被叫醒的還是等到時間了」。
 

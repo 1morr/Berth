@@ -48,6 +48,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
@@ -149,6 +150,7 @@ class HealthReport:
     notify: ChannelView
 
 
+@command(Effect.READ)
 async def read_health(session: AsyncSession) -> HealthReport:
     """上一輪的結果。**不連任何服務**——健康頁載入時看的是紀錄，不是又打一次每個服務。"""
     health = await read_settings(session, HealthSettings)
@@ -191,6 +193,7 @@ async def _poller(session: AsyncSession) -> PollerView:
     )
 
 
+@command(Effect.READ)
 async def overall_status(session: AsyncSession) -> Status:
     """匿名的 `GET /api/health` 回的那一個字（plan §6）。
 
@@ -202,6 +205,7 @@ async def overall_status(session: AsyncSession) -> Status:
     return "degraded" if _degraded(health, await routes_health(session), setup) else "ok"
 
 
+@command(Effect.READ)
 async def is_due(
     session: AsyncSession, *, now: datetime | None = None, interval: timedelta = CHECK_INTERVAL
 ) -> bool:
@@ -212,6 +216,7 @@ async def is_due(
     return (now or utcnow()) - health.checked_at >= interval
 
 
+@command(Effect.READ)
 async def recheck_due(session: AsyncSession, *, now: datetime) -> bool:
     """還沒到整輪、但該先重測 Prowlarr 了（M4 票 61）：上一次連不上、而且已經過了
     `RECHECK_INTERVAL`。不用它的不算——它不該被連。"""
@@ -228,6 +233,8 @@ async def recheck_due(session: AsyncSession, *, now: datetime) -> bool:
     return now - row.checked_at >= RECHECK_INTERVAL
 
 
+# 不可逆：Route 那一項會在 qBittorrent 重建被刪的 `berth-*` 分類，Berth 不刪分類（brief §16.4）。
+@command(Effect.IRREVERSIBLE)
 async def check_health(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> HealthReport:
@@ -245,6 +252,8 @@ async def check_health(
     return await read_health(session)
 
 
+# 只改健康紀錄，下一次測就換掉；不碰 Route（見 docstring）。
+@command(Effect.REVERSIBLE)
 async def check_service(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -262,6 +271,7 @@ async def check_service(
     return await read_health(session)
 
 
+@command(Effect.REVERSIBLE)
 async def record_setup_results(
     session: AsyncSession, setup: SetupSettings, *, now: datetime | None = None
 ) -> None:

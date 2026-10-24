@@ -192,6 +192,7 @@ class KeyedLocks:
         """現在字典裡有幾把。「用完就丟」沒有別的觀測點。"""
         return len(self._locks)
 
+    @command(Effect.READ)
     @asynccontextmanager
     async def hold(self, key: str) -> AsyncIterator[None]:
         self._waiting[key] += 1
