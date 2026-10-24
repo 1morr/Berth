@@ -45,7 +45,7 @@ const FAILURE_TEXT = {
  */
 export function AiUsagePage() {
   const { t } = useTranslation()
-  const { days: requested } = useSearch({ from: '/settings/usage' })
+  const { days: requested } = useSearch({ from: '/shell/settings/usage' })
   const days = requested ?? DEFAULT_USAGE_PERIOD
   // 換期間時手上留著上一段：總量與圖照畫，不閃成讀取中。
   const usage = useQuery({ ...aiUsageQueryOptions(days), placeholderData: keepPreviousData })

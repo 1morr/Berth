@@ -577,6 +577,49 @@ describe('開與關', () => {
     expect(localStorage.getItem('berth.assistant.open')).toBe('0')
   })
 
+  it('收起再打開，打了還沒送出的字還在（面板收起只是藏起來，M5 票 15b）', async () => {
+    render()
+    const panel = await openPanel()
+    await userEvent.type(within(panel).getByRole('textbox'), '還沒送出')
+
+    await userEvent.click(within(panel).getByRole('button', { name: '關閉' }))
+    const again = await openPanel()
+
+    expect(within(again).getByRole('textbox')).toHaveValue('還沒送出')
+    expect(within(again).getByRole('textbox')).toHaveFocus()
+  })
+
+  it('歷史清單開著時收起，再打開回到對話那一塊', async () => {
+    render()
+    const panel = await openPanel()
+    await userEvent.click(within(panel).getByRole('button', { name: '歷史' }))
+    expect(within(panel).getByRole('heading', { name: '對話' })).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: '關閉' }))
+    const again = await openPanel()
+
+    expect(within(again).queryByRole('heading', { name: '對話' })).not.toBeInTheDocument()
+    expect(within(again).getByRole('textbox')).toBeVisible()
+  })
+
+  it('換頁時面板不重建：字還在，是同一個面板（M5 票 15b）', async () => {
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/assistant': { body: READY },
+      'GET /api/conversations': { body: [] },
+    })
+    const { router } = renderApp('/health')
+    const panel = await openPanel()
+    await userEvent.type(within(panel).getByRole('textbox'), '還沒送出')
+
+    await router.navigate({ to: '/jobs' })
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
+    expect(screen.getByRole('complementary', { name: '助理' })).toBe(panel)
+    expect(within(panel).getByRole('textbox')).toHaveValue('還沒送出')
+  })
+
   it('Esc 也關得掉', async () => {
     render()
     await openPanel()
@@ -629,6 +672,25 @@ describe('窄版（`lg` 以下，面板取代頁面）', () => {
 
     expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
     expect(localStorage.getItem('berth.assistant.open')).toBe('0')
+  })
+
+  it('面板以外的換頁（瀏覽器的上一頁）也收起面板，看得到那一頁', async () => {
+    narrow()
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/assistant': { body: READY },
+      'GET /api/conversations': { body: [] },
+    })
+    const { router } = renderApp('/health')
+    await openPanel()
+
+    await router.navigate({ to: '/jobs' })
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument(),
+    )
   })
 
   it('不記得上次開著：每次打開網頁看到的是那一頁', async () => {

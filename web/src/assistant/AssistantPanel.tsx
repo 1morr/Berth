@@ -57,19 +57,25 @@ export interface ConversationRequest {
 }
 
 export function AssistantPanel({
+  open,
   admin,
-  focusOnMount,
+  focusOnOpen,
   onClose,
   onLeave,
   request = null,
   onRequestHandled,
 }: {
+  /** 收起時面板照樣掛著、只是藏起來（M5 票 15b）：打了的字、串流中的回覆、正在看的那則對話都留著。 */
+  open: boolean
   admin: boolean
   /** 使用者按「助理」打開的：焦點進輸入框。重整時照記憶打開的不搶焦點。 */
-  focusOnMount: boolean
+  focusOnOpen: boolean
   /** 關閉鍵與 Esc：收起，焦點回頁首的「助理」鍵。 */
   onClose: () => void
-  /** `lg` 以下按了面板裡的連結：收起面板讓出那一頁，焦點不搬回頁首。 */
+  /**
+   * `lg` 以下按了面板裡的連結：收起面板讓出那一頁，焦點不搬回頁首。換了路徑的那幾種 `AppShell` 聽 pathname 也收得到；
+   * 這一條管的是連到同一頁的（在 `/ai-activity` 按抬頭的「活動」、只換 search 的），pathname 沒變。
+   */
   onLeave: () => void
   request?: ConversationRequest | null
   /** 請求接下了：`AppShell` 清掉它，之後關了再開不會又跳回那一則。 */
@@ -80,16 +86,26 @@ export function AssistantPanel({
   const ready = status.data?.ready === true
 
   const [view, setView] = useState<'chat' | 'history'>('chat')
+  // 收起再打開回到對話那一塊（打了的字與正在看的那一則留著，歷史清單不留）。在 render 裡接，不在 effect 裡 setState。
+  const [shownOpen, setShownOpen] = useState(open)
+  if (open !== shownOpen) {
+    setShownOpen(open)
+    if (open) setView('chat')
+  }
   const [selection, setSelection] = useState<Selection>({ kind: 'latest' })
   const input = useRef<HTMLTextAreaElement>(null)
 
-  // 輸入框畫出來的那一刻給一次（狀態讀到之前它還不在）；之後焦點是使用者的。
+  // 每一次按開給一次（狀態讀到之前輸入框還不在，所以也看 `ready`）；之後焦點是使用者的。收起時重設。
   const focused = useRef(false)
   useEffect(() => {
-    if (!focusOnMount || focused.current || !input.current) return
+    if (!open) {
+      focused.current = false
+      return
+    }
+    if (!focusOnOpen || focused.current || !input.current) return
     focused.current = true
     input.current.focus()
-  }, [focusOnMount, ready])
+  }, [open, focusOnOpen, ready])
 
   // 頁面要看某一則：換到那一則、回到對話（在 render 裡接，不在 effect 裡 setState）。
   const [seen, setSeen] = useState<ConversationRequest | null>(null)
@@ -132,6 +148,7 @@ export function AssistantPanel({
   return (
     <aside
       id={PANEL_ID}
+      hidden={!open}
       aria-label={t('assistant.label')}
       onKeyDown={onKeyDown}
       onClick={onClick}
@@ -182,6 +199,7 @@ export function AssistantPanel({
       )}
       {ready && (
         <Chat
+          live={open}
           hidden={view !== 'chat'}
           admin={admin}
           chatOnly={status.data?.chat_only === true}
@@ -257,6 +275,7 @@ function ConversationList({
 }
 
 function Chat({
+  live,
   hidden,
   admin,
   chatOnly,
@@ -264,6 +283,8 @@ function Chat({
   onSelect,
   input,
 }: {
+  /** 面板開著：收起時推播斷開（M5 票 15b）。 */
+  live: boolean
   hidden: boolean
   admin: boolean
   chatOnly: boolean
@@ -370,6 +391,7 @@ function Chat({
       )}
       <ProposalsContext value={proposals}>
         <Transcript
+          live={live}
           blocks={blocks}
           admin={admin}
           failed={currentId !== null && conversation.isError}
@@ -403,11 +425,13 @@ function Chat({
 }
 
 function Transcript({
+  live,
   blocks,
   admin,
   failed,
   replying,
 }: {
+  live: boolean
   blocks: Block[]
   admin: boolean
   failed: boolean
@@ -436,7 +460,8 @@ function Transcript({
       {blocks.length === 0 && !failed && (
         <p className="text-sm text-ink-dim">{t('assistant.empty')}</p>
       )}
-      {blocks.some(hasJobCard) && <JobStream />}
+      {/* 面板收起時只是藏起來（M5 票 15b），推播不跟著常駐：`useJobStream` 是掛在需要它的地方的連線，重連時整批重問一次。 */}
+      {live && blocks.some(hasJobCard) && <JobStream />}
       <ol role="log" aria-label={t('assistant.log')} className="grid gap-3">
         {blocks.map((block) =>
           block.kind === 'user' ? (

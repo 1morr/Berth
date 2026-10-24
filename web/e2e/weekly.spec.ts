@@ -1,6 +1,3 @@
-import { copyFileSync, mkdirSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-
 import { expect, test } from '@playwright/test'
 
 import { blankAndOverflow } from './layout.ts'
@@ -51,18 +48,9 @@ test('/weekly 從導覽進去，看最新一週三段、翻到上一週、找不
   const layout = await blankAndOverflow(page)
   expect(layout.overflow).toBe(false)
 
+  // 截圖只留在 `test-results/`（同其他 spec）。票 131 目錄裡的 `weekly-*.png` 是那一張票當時的證據，不再每跑一次就改寫
+  // （改寫受版本控制的檔，每一輪 e2e 之後工作區都髒，M5 票 15b 之後收掉）。
   await shot(page, 'weekly')
-  const width = page.viewportSize()?.width ?? 1280
-  const target = fileURLToPath(
-    new URL(`../../.scratch/m4/issues/131-weekly-report/weekly-${width}.png`, import.meta.url),
-  )
-  mkdirSync(
-    fileURLToPath(new URL('../../.scratch/m4/issues/131-weekly-report/', import.meta.url)),
-    {
-      recursive: true,
-    },
-  )
-  copyFileSync(test.info().outputPath('weekly.png'), target)
 
   // 翻到上一週：網址換成那一份的 id，內容也換了。
   await history.getByRole('link').click()
