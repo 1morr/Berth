@@ -1,6 +1,6 @@
 # 09b — Feed 的 Route 標成不可逆
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately（不碰票 09 的檔案）
 
@@ -23,8 +23,11 @@
 
 ## 驗收
 
-- [ ] `set_feed_routes` 標 `irreversible`，測試守住且雙向變異驗過（pytest）
-- [ ] brief §14、§19（與 plan 若有）已同步
-- [ ] 全部檢查、`pnpm -C web build`、pytest、vitest 綠；progress.md 已更新
+- [x] `set_feed_routes` 標 `irreversible`，測試守住且雙向變異驗過（pytest）
+- [x] brief §14、§19（與 plan 若有）已同步
+- [x] 全部檢查、`pnpm -C web build`、pytest、vitest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-24 實作：雙向變異實跑過——`set_feed_routes` 改回 `@command(Effect.REVERSIBLE)` 時 `test_command_marks.py` 1 failed；改成多行排版、改一個參數名時 16 passed。plan 沒有提到 Feed Route 的等級（§11.6〈對話核心〉本來就把 Route 整個列為 `irreversible`），沒改。登錄表沒有工具指著 `set_feed_routes`，等級只由 `registry.Tool.effect` / `.inverse` 讀，前端與 `api/gate.py` 不依等級分流，`PUT /rss/feeds/{id}/routes` 行為不變。
+- code-review 未處理（不排里程碑）：①輪詢間隔、排除條件、搜尋記住的名字種類（`rss.set_feed_interval`、`rss.set_exclusions`、`search.remember_names`）沒有測試釘成 `reversible`，有人改成不可逆不會紅——票沒要求，要守時在 `test_command_marks.py` 加一條反向清單；②那條測試的變數 `settings` 其實也裝 Route 的命令，可改名 `settings_and_routes`（改動前就有）。

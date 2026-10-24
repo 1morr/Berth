@@ -484,7 +484,7 @@ async def set_feed_interval(session: AsyncSession, feed_id: int, interval_sec: i
     return await _feed_view_of(session, feed_id)
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.IRREVERSIBLE)
 async def set_feed_routes(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -504,7 +504,8 @@ async def set_feed_routes(
 
     從作品頁訂閱建的 Feed 只看那部作品那一種（`_route_kinds`）：另一種不要求，給了也存 `None`。
 
-    沒有單一的反向命令：Route 再改一次是同一支，當場綁上的由 `unbind_series` 一個一個拆。
+    不可逆，與 Route 的增刪同一類（理由見 brief §19，M5 票 09b）：Route 再改一次是同一支、
+    當場綁上的由 `unbind_series` 拆，但改錯之間送出的下載收不回來。
 
     當場綁上送出的是一輪「正在下載」，不告訴改 Route 的人（`user_id`，M4 票 126）。
     """

@@ -178,8 +178,11 @@ class TestTheServices:
     def test_changing_settings_and_routes_is_irreversible(self) -> None:
         """brief §14「改設定與 Route 永遠要人」照字面標（M5 票 04 定案；票 03 的 `set_min_free`
         先這樣標，同一類的另幾支原本標可逆）。設定是管理員在設定頁或精靈上存下的值；跟著使用
-        留下的偏好（`search.remember_names`）、Feed 自己的屬性（`rss.set_feed_interval`）與排除條件
-        （`rss.set_exclusions`，brief §14 要 AI 寫回的記憶）不算。"""
+        留下的偏好（`search.remember_names`）、Feed 的輪詢間隔（`rss.set_feed_interval`）與排除條件
+        （`rss.set_exclusions`，brief §14 要 AI 寫回的記憶）不算。
+
+        Feed 的 Route（`rss.set_feed_routes`）算在 Route 的增刪同一類（M5 票 09b，理由見
+        brief §19）。"""
         settings = (
             "settings.write_settings",
             "settings.update_settings",
@@ -193,6 +196,7 @@ class TestTheServices:
             "notify.set_mine",
             "notify.set_berth_url",
             "routes.delete_route",
+            "rss.set_feed_routes",
         )
         assert {name: _effect(name) for name in settings} == dict.fromkeys(
             settings, Effect.IRREVERSIBLE
