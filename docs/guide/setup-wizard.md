@@ -180,6 +180,15 @@ Conversations are saved in Berth, and each person sees only their own: **History
 fresh one. Closing the panel in the middle of a reply does not stop it; the reply is saved and shows up when you
 open the conversation again.
 
+Some things cannot be undone, so the assistant never does them on its own: **adding an indexer** and **deleting a
+title's downloads** stop on a **confirmation card**. The card says what would happen (which site, its address and
+which Prowlarr; or every file that would be deleted and whether that frees any space, since library links stay and
+Jellyfin keeps playing the title) and the assistant's reason. Nothing happens until you press **Confirm**;
+**Reject** does nothing. When you confirm, Berth checks again first: if the site was added meanwhile, the downloads
+are already gone or you are no longer an administrator, the card says **Expired** and why, and nothing changes.
+Only the person who asked can press the card, and only once the reply has finished. Afterwards the card shows what
+Berth actually did; the model sees it the next time you say something.
+
 What the assistant can do depends on who you are: an ordinary user does not get the admin-only tools. Only what a
 tool actually did counts: if the model says it did something but no tool ran, nothing happened. After one message
 the assistant calls tools at most 10 times, then stops and says so. When the provider is rate limited, out of

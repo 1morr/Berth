@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -26,7 +26,7 @@ from berth.api.deps import SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.events import PING_SECONDS, EventStream
 from berth.api.gate import current_user
-from berth.domain import AssistantRefusal, Language, MessageKind, ToolOutcome
+from berth.domain import AssistantRefusal, Language, MessageKind, ProposalRefusal, ToolOutcome
 from berth.services.assistant import (
     AssistantEvent,
     AssistantRuns,
@@ -41,9 +41,11 @@ from berth.services.assistant import (
 from berth.services.auth import AuthenticatedUser
 from berth.services.conversations import (
     AssistantRefusedError,
+    DecisionPart,
     ModelText,
     NoticePart,
     OpaqueModelPart,
+    ProposalRejectedError,
     ToolCallPart,
     ToolResultPart,
     UserText,
@@ -51,6 +53,7 @@ from berth.services.conversations import (
     list_conversations,
     read_conversation,
 )
+from berth.services.proposals import ProposalCard, of_conversation
 
 router = APIRouter(tags=["assistant"])
 
@@ -119,7 +122,7 @@ class ConversationSummaryOut(BaseModel):
     updated_at: datetime
 
 
-#: 畫面看得到的 part。`OpaqueModelPart`（provider 要原樣帶回的 thinking）不出去。
+#: 畫面看得到的 part（`_HIDDEN` 那幾種不出去）。
 VisiblePart = Annotated[
     UserText | ModelText | ToolCallPart | ToolResultPart | NoticePart,
     Field(discriminator="type"),
@@ -141,6 +144,9 @@ class ConversationOut(BaseModel):
     #: 回覆還在後端跑（送出的那個請求斷了也照樣跑完）。
     replying: bool
     messages: list[MessageOut]
+    #: 這則對話裡每一張確認卡的現況（M5 票 10）。卡片依 `ToolResultPart` 裡的 id 讀這一份：存下的
+    #: 那一份是提出時的樣子，按過之後的狀態與結果在這裡。
+    proposals: list[ProposalCard]
 
 
 @router.get("/assistant")
@@ -162,10 +168,10 @@ async def get_conversations(session: SessionDep, request: Request) -> list[Conve
 async def get_conversation(
     conversation_id: int, session: SessionDep, request: Request, runs: AssistantDep
 ) -> ConversationOut:
+    user = _user(request)
     try:
-        view = await read_conversation(
-            session, user_id=_user(request).id, conversation_id=conversation_id
-        )
+        view = await read_conversation(session, user_id=user.id, conversation_id=conversation_id)
+        cards = await of_conversation(session, user_id=user.id, conversation_id=conversation_id)
     except AssistantRefusedError as exc:
         raise assistant_refusal(exc) from exc
     return ConversationOut(
@@ -179,11 +185,16 @@ async def get_conversation(
                 id=message.id,
                 kind=message.kind,
                 created_at=message.created_at,
-                parts=[part for part in message.parts if not isinstance(part, OpaqueModelPart)],
+                parts=[part for part in message.parts if not isinstance(part, _HIDDEN)],
             )
             for message in view.messages
         ],
+        proposals=cards,
     )
+
+
+#: 不給畫面的 part：provider 要原樣帶回的 thinking；按確認卡的那一則由卡片自己畫（讀 `proposals`）。
+_HIDDEN = (OpaqueModelPart, DecisionPart)
 
 
 # --- 送一句話 ---------------------------------------------------------------------
@@ -334,3 +345,54 @@ def _chunk(event: AssistantEvent) -> Chunk:
             return StreamNotice(notice=notice)
         case Finished():
             return StreamFinish()
+
+
+# --- 確認卡（M5 票 10）------------------------------------------------------------
+
+_PROPOSAL_STATUS: dict[ProposalRefusal, int] = {
+    ProposalRefusal.PROPOSAL_MISSING: status.HTTP_404_NOT_FOUND,
+    #: 另一個分頁或管道先按了：重讀對話就看得到結果。
+    ProposalRefusal.ALREADY_DECIDED: status.HTTP_409_CONFLICT,
+}
+
+
+class ProposalRefusalOut(BaseModel):
+    reason: ProposalRefusal
+    detail: str
+
+
+# Any：同 `_responses`。
+_PROPOSAL_RESPONSES: dict[int | str, dict[str, Any]] = refusal_responses(
+    ProposalRefusalOut, _PROPOSAL_STATUS
+) | _responses(AssistantRefusal.BUSY)
+
+
+@router.post("/proposals/{proposal_id}/confirm", responses=_PROPOSAL_RESPONSES)
+async def post_confirm(proposal_id: int, request: Request, runs: AssistantDep) -> ProposalCard:
+    """按確認：以按的這個人執行，當下重驗角色與輸入。不成立的回 200、狀態是 `expired`，理由在
+    `result`——那是卡片的結局，不是請求的錯。"""
+    return await _decide(runs.confirm, proposal_id, request)
+
+
+@router.post("/proposals/{proposal_id}/reject", responses=_PROPOSAL_RESPONSES)
+async def post_reject(proposal_id: int, request: Request, runs: AssistantDep) -> ProposalCard:
+    """按拒絕：記下來，什麼都不做。"""
+    return await _decide(runs.reject, proposal_id, request)
+
+
+async def _decide(
+    decide: Callable[..., Awaitable[ProposalCard]], proposal_id: int, request: Request
+) -> ProposalCard:
+    try:
+        return await decide(proposal_id, user=_user(request))
+    except ProposalRejectedError as exc:
+        raise proposal_refusal(exc) from exc
+    except AssistantRefusedError as exc:
+        raise assistant_refusal(exc) from exc
+
+
+def proposal_refusal(refusal: ProposalRejectedError) -> HTTPException:
+    body = ProposalRefusalOut(reason=refusal.reason, detail=refusal.detail)
+    return HTTPException(
+        status_code=_PROPOSAL_STATUS[refusal.reason], detail=body.model_dump(mode="json")
+    )

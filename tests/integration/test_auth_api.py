@@ -439,6 +439,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("POST", "/conversations"): Access.SIGNED_IN,
     ("GET", "/conversations/*"): Access.SIGNED_IN,
     ("POST", "/conversations/*/messages"): Access.SIGNED_IN,
+    # 確認卡（M5 票 10）：誰按得到看卡片是誰的，在 `services.proposals`，不在門禁。
+    ("POST", "/proposals/*/confirm"): Access.SIGNED_IN,
+    ("POST", "/proposals/*/reject"): Access.SIGNED_IN,
     # 週報（M4 票 131）。
     ("GET", "/weekly"): Access.ADMIN,
     ("GET", "/weekly/*"): Access.ADMIN,

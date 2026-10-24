@@ -11,9 +11,10 @@ from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field
 
-from berth.domain import JellyfinPresence, MediaKind
-from berth.services import weekly
-from berth.services.registry import Registry, Tool, ToolContext
+from berth.domain import JellyfinPresence, JobState, MediaKind, ServiceOrigin
+from berth.models import Media
+from berth.services import deletion, indexer, weekly
+from berth.services.registry import NextStep, ProposalInput, Registry, Tool, ToolContext
 
 # --- 最近入庫 ---------------------------------------------------------------
 
@@ -83,6 +84,154 @@ async def _recent_imports(context: ToolContext, given: RecentImportsInput) -> Re
     )
 
 
+# --- 加索引站（要人按，M5 票 10）---------------------------------------------------
+
+
+class AddIndexerInput(ProposalInput):
+    site: str = Field(
+        min_length=1,
+        max_length=200,
+        description="The site's Prowlarr definition name or display name, e.g. nyaasi or Nyaa.si.",
+    )
+
+
+class IndexerAddition(BaseModel):
+    """確認卡上「會發生什麼」：哪一站、它在哪個網址、加到哪一台 Prowlarr。"""
+
+    site: str
+    name: str
+    #: 這一站的網址（Prowlarr 定義的第一個）；定義沒寫是空字串。
+    url: str
+    description: str
+    language: str
+    #: 加到哪一台 Prowlarr（它的位址）、那一台是不是 Berth 套件內的。
+    prowlarr: str
+    origin: ServiceOrigin
+
+
+class IndexerAdded(BaseModel):
+    site: str
+    name: str
+
+
+async def _plan_indexer(context: ToolContext, given: AddIndexerInput) -> IndexerAddition:
+    async with context.sessions() as session:
+        plan = await indexer.plan_site_addition(session, context.clients, given.site)
+    return IndexerAddition(
+        site=plan.definition_name,
+        name=plan.name,
+        url=plan.url,
+        description=plan.description,
+        language=plan.language,
+        prowlarr=plan.prowlarr,
+        origin=plan.origin,
+    )
+
+
+async def _add_indexer(
+    context: ToolContext, given: AddIndexerInput, shown: IndexerAddition
+) -> IndexerAdded:
+    async with context.sessions() as session:
+        added = await indexer.add_site(session, context.clients, shown.site)
+    return IndexerAdded(site=added.definition_name, name=added.name)
+
+
+# --- 刪 complete（要人按，M5 票 10）-------------------------------------------------
+
+
+class DeleteDownloadsInput(ProposalInput):
+    media: str = Field(
+        pattern=r"^(tv|movie):[0-9]+$",
+        description="The work's id as Berth gives it, e.g. tv:209867 or movie:550.",
+    )
+
+
+class JobDownloadsPreview(BaseModel):
+    hash: str
+    name: str
+    state: JobState
+    #: 會被刪的檔案，絕對路徑。
+    files: list[str]
+    #: 紀錄上有、磁碟上已經不在的幾個。
+    missing: int
+    bytes: int
+    #: 刪了真的空得出來的；媒體庫還握著同一份時是 0。
+    reclaimable: int
+
+
+class DownloadsDeletion(BaseModel):
+    """確認卡上「會發生什麼」：這部作品每一筆 Job 會移除 torrent、刪掉下載目錄裡的這幾個檔案；
+    媒體庫的鏈接與紀錄留著（brief §9.2）。"""
+
+    media: str
+    title: str
+    title_en: str
+    jobs: list[JobDownloadsPreview]
+
+
+class JobDownloadsDeleted(BaseModel):
+    hash: str
+    name: str
+    sources: int
+    freed: int
+    #: 這一筆沒做成的理由碼（`JobRefusal`）；做成了是空字串。
+    refused: str
+
+
+class DownloadsDeleted(BaseModel):
+    media: str
+    jobs: list[JobDownloadsDeleted]
+
+
+async def _plan_downloads(context: ToolContext, given: DeleteDownloadsInput) -> DownloadsDeletion:
+    async with context.sessions() as session:
+        jobs = await deletion.plan_downloads_deletion(session, given.media)
+        media = await session.get(Media, given.media)
+    snapshot = media.snapshot() if media is not None else None
+    return DownloadsDeletion(
+        media=given.media,
+        title=snapshot.title if snapshot is not None else "",
+        title_en=snapshot.title_en if snapshot is not None else "",
+        jobs=[
+            JobDownloadsPreview(
+                hash=job.hash,
+                name=job.name,
+                state=job.state,
+                files=list(job.files),
+                missing=job.missing,
+                bytes=job.bytes,
+                reclaimable=job.reclaimable,
+            )
+            for job in jobs
+        ],
+    )
+
+
+async def _delete_downloads(
+    context: ToolContext, given: DeleteDownloadsInput, shown: DownloadsDeletion
+) -> DownloadsDeleted:
+    async with context.sessions() as session:
+        done = await deletion.delete_downloads(
+            session,
+            context.clients,
+            [job.hash for job in shown.jobs],
+            actor=context.actor,
+        )
+    return DownloadsDeleted(
+        media=given.media,
+        jobs=[
+            JobDownloadsDeleted(
+                hash=row.hash,
+                name=row.name,
+                sources=row.sources,
+                freed=row.freed,
+                refused=row.refused,
+            )
+            for row in done
+        ],
+    )
+
+
 REGISTRY = Registry(
     (
         Tool(
@@ -97,6 +246,43 @@ REGISTRY = Registry(
             # 這段資料平常在週報頁：只有管理員（`ADMIN_PREFIXES` 的 `/weekly`）。
             route=("GET", "/weekly"),
             run=_recent_imports,
+        ),
+        Tool(
+            name="add_indexer",
+            description=(
+                "Propose adding a public torrent site to Prowlarr so Berth can search it. Nothing "
+                "is added until the user presses confirm on the card; tell them so."
+            ),
+            input=AddIndexerInput,
+            result=IndexerAdded,
+            command=indexer.add_site,
+            route=("POST", "/setup/indexers/apply"),
+            preview=_plan_indexer,
+            preview_type=IndexerAddition,
+            apply=_add_indexer,
+            next_steps={
+                indexer.SiteRefusal.SITE_UNKNOWN: NextStep.RETRY,
+                indexer.SiteRefusal.PROWLARR_UNREACHABLE: NextStep.RETRY,
+                indexer.SiteRefusal.SITE_PRESENT: NextStep.GIVE_UP,
+                indexer.SiteRefusal.SITE_NOT_OFFERED: NextStep.GIVE_UP,
+            },
+        ),
+        Tool(
+            name="delete_downloads",
+            description=(
+                "Propose deleting a work's downloads: remove its torrents from qBittorrent and "
+                "delete their files in the download folder. Library links stay, so Jellyfin "
+                "still plays it. Nothing is deleted until the user presses confirm on the card; "
+                "tell them so."
+            ),
+            input=DeleteDownloadsInput,
+            result=DownloadsDeleted,
+            command=deletion.delete_downloads,
+            route=("DELETE", "/jobs/{job_hash}"),
+            preview=_plan_downloads,
+            preview_type=DownloadsDeletion,
+            apply=_delete_downloads,
+            next_steps={deletion.DeletionRefusal.NOTHING_TO_DELETE: NextStep.GIVE_UP},
         ),
     )
 )

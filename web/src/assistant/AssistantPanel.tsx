@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -27,6 +28,7 @@ import { Dot } from '../components/Dot'
 import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
+import { ProposalsContext, type Proposals } from './proposals'
 import { ResultCard } from './ResultCard'
 import { blocksOf, withChunk, type Block, type Item, type Pending } from './transcript'
 
@@ -219,6 +221,16 @@ function Chat({
   const messages = currentId === null ? [] : (conversation.data?.messages ?? [])
   const blocks = blocksOf(messages, pending)
   const replying = pending === null && conversation.data?.replying === true
+  // 確認卡的現況（票 10）：卡片從存下的工具結果畫，狀態與結果讀這一份。回覆在跑時按不得。
+  const cards = conversation.data?.proposals
+  const proposals = useMemo<Proposals>(
+    () => ({
+      cards: new Map((currentId === null ? [] : (cards ?? [])).map((card) => [card.id, card])),
+      replying: pending !== null || replying,
+      refresh: () => queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY }),
+    }),
+    [cards, currentId, pending, replying, queryClient],
+  )
 
   const send = async () => {
     const text = draft.trim()
@@ -281,12 +293,14 @@ function Chat({
           </Notice>
         </div>
       )}
-      <Transcript
-        blocks={blocks}
-        admin={admin}
-        failed={currentId !== null && conversation.isError}
-        replying={replying}
-      />
+      <ProposalsContext value={proposals}>
+        <Transcript
+          blocks={blocks}
+          admin={admin}
+          failed={currentId !== null && conversation.isError}
+          replying={replying}
+        />
+      </ProposalsContext>
       <form onSubmit={onSubmit} className="grid gap-2 border-t-2 border-rule px-4 py-3">
         <label htmlFor="assistant-input" className="sr-only">
           {t('assistant.input')}
@@ -407,7 +421,11 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
       }
       return (
         <>
-          <p className="value text-xs text-ink-dim">{t('assistant.tools.done', { tool })}</p>
+          <p className="value text-xs text-ink-dim">
+            {item.state === 'proposed'
+              ? t('assistant.tools.proposed', { tool })
+              : t('assistant.tools.done', { tool })}
+          </p>
           {item.output && <ResultCard output={item.output} />}
         </>
       )
@@ -421,22 +439,29 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
  * 工具在畫面上的名字：一個登記的工具一格（後端 `services/tools.py`）。沒有文案的工具（後端先加了）
  * 退回「工具」，不印出 key。
  */
-const TOOL_NAMES: Readonly<Record<string, 'assistant.tools.recent_imports'>> = {
+const TOOL_NAMES = {
   recent_imports: 'assistant.tools.recent_imports',
-}
+  add_indexer: 'assistant.tools.add_indexer',
+  delete_downloads: 'assistant.tools.delete_downloads',
+} as const
+
+type ToolNameKey = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES]
 
 function toolName(t: TFunction, name: string): string {
-  const key = Object.hasOwn(TOOL_NAMES, name) ? TOOL_NAMES[name] : undefined
+  const key: ToolNameKey | undefined = Object.hasOwn(TOOL_NAMES, name)
+    ? TOOL_NAMES[name as keyof typeof TOOL_NAMES]
+    : undefined
   return key ? t(key) : t('assistant.tools.other')
 }
 
 /**
- * 登錄表自己的兩種拒絕（`ToolRefusal`）有人話；各模組的理由碼照原樣（機器字串，`.value`），
+ * 登錄表自己的拒絕（`ToolRefusal`）有人話；各模組的理由碼照原樣（機器字串，`.value`），
  * 它們的說法跟著各自的結果卡來（票 09 起）。
  */
 const REFUSAL_TEXT = {
   unknown_tool: 'assistant.tools.reason.unknown_tool',
   invalid_input: 'assistant.tools.reason.invalid_input',
+  not_allowed: 'assistant.tools.reason.not_allowed',
 } as const satisfies Record<ToolRefusal, string>
 
 function reasonText(t: TFunction, reason: string): string {

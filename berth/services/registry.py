@@ -9,11 +9,17 @@
 - `Registry.tools_for(role)`：給這個角色的工具，**順序就是登記的順序**——工具定義在 prompt 的固定
   前綴裡，順序一變快取就吃不到。過濾照 API 的門禁（`services/access.py`）：每一條登記指著做同一件
   事的那一支端點，門禁不放那個角色進去，清單上就沒有它。
-- `Registry.invoke(name, arguments, context)`：驗輸入、再檢查一次角色（模型叫了清單外的名字
-  也一樣擋）、呼叫命令、回結果型別的一份；各模組的拒絕例外（`REJECTIONS`）在這裡變成同一種
-  `Refusal`，帶「重試 / 交給人 / 放棄」。其餘的例外是 bug，照樣往外丟。
+- `Registry.resolve(name, arguments, user)`：找工具、再檢查一次角色（模型叫了清單外的名字也一樣
+  擋）、驗輸入，得到一次 `Call`。之後分兩條路（M5 票 10）：
+  - **直接做**（`read`、`reversible`）：`Registry.run`。
+  - **要人按**（`irreversible`，與被 `Tool.demote` 降級的那幾次）：`Registry.preview` 算出卡上
+    「會發生什麼」，人按確認之後 `Registry.apply` 照他看到的那一份做。決定走哪一條、存卡片的是
+    `services.proposals`，這裡只給機制。
+  三支都把各模組的拒絕例外（`REJECTIONS`）變成同一種 `Refusal`，帶「重試 / 交給人 / 放棄」；
+  其餘的例外是 bug，照樣往外丟。
 
 副作用等級與反向命令**直接讀命令的標記**，不另寫一份；登記一支沒標的命令，造 `Tool` 那一刻就紅。
+**不可逆的工具沒有 `run`**（造 `Tool` 時就擋）：AI 自己做不了它，在結構上就是這樣，不靠呼叫端記得。
 """
 
 from __future__ import annotations
@@ -26,19 +32,22 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.domain import Role
+from berth.domain import ProposalCause, Role
 from berth.services.access import Access, access_of, admits
 from berth.services.ai import AiRefusedError
 from berth.services.auth import AuthenticatedUser
 from berth.services.claims import ClaimRejectedError, UnclaimedError
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import CommandMark, Effect, command, mark_of
-from berth.services.conversations import AssistantRefusedError
+from berth.services.conversations import AssistantRefusedError, ProposalRejectedError
+from berth.services.deletion import DeletionRejectedError
+from berth.services.indexer import SiteRejectedError
 from berth.services.issues import IssueRejectedError
 from berth.services.jellyfin import BundledLibraryRejectedError, InterfaceLoginRejectedError
-from berth.services.jobs import JobRejectedError, ai_actor
+from berth.services.jobs import JobRejectedError, actor_of, ai_actor
 from berth.services.notify import NotifyRefusedError
 from berth.services.plan_review import PlanRejectedError
 from berth.services.rematch import RematchRejectedError
@@ -56,16 +65,19 @@ REJECTIONS: tuple[type[Exception], ...] = (
     BundledLibraryRejectedError,
     ChoiceLockedError,
     ClaimRejectedError,
+    DeletionRejectedError,
     InterfaceLoginRejectedError,
     IssueRejectedError,
     JobRejectedError,
     NotifyRefusedError,
     OwnerRejectedError,
     PlanRejectedError,
+    ProposalRejectedError,
     RematchRejectedError,
     ReviewRejectedError,
     RouteRejectedError,
     RssRejectedError,
+    SiteRejectedError,
     UnclaimedError,
 )
 
@@ -95,6 +107,8 @@ class ToolRefusal(StrEnum):
     UNKNOWN_TOOL = "unknown_tool"
     #: 輸入不合 schema。`detail` 只說哪一格、為什麼，不回填收到的值。
     INVALID_INPUT = "invalid_input"
+    #: 按確認卡的當下，這個人的角色已經拿不到這個工具（M5 票 10）。他看過那張卡，所以照實說。
+    NOT_ALLOWED = "not_allowed"
 
 
 class Refusal(BaseModel):
@@ -110,19 +124,36 @@ class Refusal(BaseModel):
     next: NextStep
 
 
+class ProposalInput(BaseModel):
+    """要人按的工具的輸入都帶著這一格：AI 為什麼要做，原文印在確認卡上（M5 票 10）。"""
+
+    reason: str = Field(
+        min_length=1,
+        max_length=500,
+        description=(
+            "One sentence, in the user's language, on why this should be done. It is shown on "
+            "the confirmation card the user has to press."
+        ),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ToolContext:
     """一次工具呼叫在誰的名下、拿什麼做事。依賴由呼叫端給，工具自己不建。"""
 
     sessions: async_sessionmaker[AsyncSession]
+    clients: ServiceClientFactory
     user: AuthenticatedUser
     #: 這一次呼叫的時刻（「最近七天」從這裡往回算）。
     now: datetime
+    #: 人按了確認卡，由他本人執行（M5 票 10）。否則是 AI 代他做的。
+    confirmed: bool = False
 
     @property
     def actor(self) -> str:
-        """寫進 `events.actor` 的那個人：`ai:<user id>`，AI 代這位使用者做的（plan §2.3）。"""
-        return ai_actor(self.user.id)
+        """寫進 `events.actor` 的那個人：AI 代這位使用者做的是 `ai:<user id>`（plan §2.3），
+        他按了確認卡、由他本人執行的是他自己。"""
+        return actor_of(self.user.id) if self.confirmed else ai_actor(self.user.id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,8 +172,19 @@ class Tool[Input: BaseModel, Result: BaseModel]:
     #: 做同一件事的那一支端點，`(方法, 路徑)`，路徑相對 `/api`、寫 FastAPI 的模板。誰拿得到這個工具
     #: 照它的門禁（`services/access.py`）。
     route: tuple[str, str]
-    #: 怎麼呼叫命令：把驗過的輸入交給 `command`，把它的回傳攤成 `result`。
-    run: Callable[[ToolContext, Input], Awaitable[Result]]
+    #: **直接做**：把驗過的輸入交給 `command`，把它的回傳攤成 `result`。不可逆的工具沒有它。
+    run: Callable[[ToolContext, Input], Awaitable[Result]] | None = None
+    #: **要人按**的那一條（M5 票 10）：算出確認卡上「會發生什麼」（刪哪些檔、加哪個網址），
+    #: 什麼都不改；做不成的（站已經在了、沒有東西可刪）在這裡就拒絕，不出卡片。
+    preview: Callable[[ToolContext, Input], Awaitable[BaseModel]] | None = None
+    #: `preview` 回的型別：前端依它畫卡上那一段（`main._document_components`）。
+    preview_type: type[BaseModel] | None = None
+    #: 人按了確認之後照**他看到的那一份**（存下的 preview）做。做之前 `preview` 會先重算一次，
+    #: 不成立的就不走到這裡；這一支自己要擋的是那一份裡的東西已經不在了。
+    apply: Callable[[ToolContext, Input, Any], Awaitable[Result]] | None = None
+    #: **降級的入口**（M5 票 10）：可逆的工具在某些呼叫上要人按時，說出原因；`None` 是照常直接做。
+    #: 之後的檢查（票 11 的網址來源）接在這裡，不各自造一套。降級的工具也要有 preview 與 apply。
+    demote: Callable[[ToolContext, Input], ProposalCause | None] | None = None
     #: 哪幾種模組的拒絕值得重試或該放棄；沒列的都是交給人。
     next_steps: Mapping[StrEnum, NextStep] = field(default_factory=dict)
 
@@ -154,6 +196,20 @@ class Tool[Input: BaseModel, Result: BaseModel]:
         method, path = self.route
         if method not in _METHODS or not path.startswith("/"):
             raise ValueError(f"{self.name}: route {self.route!r} is not (method, /api path)")
+        proposes = (self.preview, self.preview_type, self.apply)
+        if any(part is not None for part in proposes) and None in proposes:
+            raise ValueError(f"{self.name}: preview, preview_type and apply come together")
+        if self.effect is Effect.IRREVERSIBLE:
+            if self.run is not None:
+                raise ValueError(f"{self.name}: an irreversible tool has no run; it is proposed")
+            if self.preview is None:
+                raise ValueError(f"{self.name}: an irreversible tool needs preview and apply")
+            if not issubclass(self.input, ProposalInput):
+                raise ValueError(f"{self.name}: an irreversible tool's input is a ProposalInput")
+        elif self.run is None:
+            raise ValueError(f"{self.name}: a {self.effect} tool needs run")
+        if self.demote is not None and self.preview is None:
+            raise ValueError(f"{self.name}: a tool that can be demoted needs preview and apply")
 
     @property
     def effect(self) -> Effect:
@@ -166,6 +222,12 @@ class Tool[Input: BaseModel, Result: BaseModel]:
     @property
     def access(self) -> Access:
         return access_of(*self.route)
+
+    def cause(self, context: ToolContext, given: Input) -> ProposalCause | None:
+        """這一次呼叫為什麼要人按；`None` 是直接做。不可逆的永遠要人（brief §14）。"""
+        if self.effect is Effect.IRREVERSIBLE:
+            return ProposalCause.IRREVERSIBLE
+        return self.demote(context, given) if self.demote is not None else None
 
     def next_step(self, reason: StrEnum) -> NextStep:
         """登記說的下一步，沒說的是交給人。**連 enum 一起比**：`JobRefusal.MEDIA_MISSING` 與
@@ -202,23 +264,29 @@ class Registry:
     def __iter__(self) -> Iterator[Tool[Any, Any]]:
         return iter(self._tools.values())
 
+    def get(self, name: str) -> Tool[Any, Any] | None:
+        return self._tools.get(name)
+
     def frontend_models(self) -> tuple[type[BaseModel], ...]:
         """經對話送到前端的型別：每一個結果型別與 `Refusal`（`main._document_components`）。"""
         return (*(tool.result for tool in self._tools.values()), Refusal)
+
+    def preview_models(self) -> tuple[type[BaseModel], ...]:
+        """確認卡上「會發生什麼」的型別，一個要人按的工具一個（M5 票 10）。"""
+        return tuple(
+            tool.preview_type for tool in self._tools.values() if tool.preview_type is not None
+        )
 
     def tools_for(self, role: Role) -> tuple[Tool[Any, Any], ...]:
         """這個角色拿得到的工具，照登記的順序。"""
         return tuple(tool for tool in self._tools.values() if admits(tool.access, role))
 
-    # 派發到任何一條登記，照最壞的那一條標（brief §14）：不可逆的工具（加索引站、刪 complete）
-    # 也從這裡呼叫。要人確認的那一道在對話核心（票 10 的確認卡），不在這裡。
-    @command(Effect.IRREVERSIBLE)
-    async def invoke(
-        self, name: str, arguments: Mapping[str, object], context: ToolContext
-    ) -> BaseModel | Refusal:
-        """呼叫一個工具。結果是那個工具的結果型別，或一份 `Refusal`。"""
+    def resolve(
+        self, name: str, arguments: Mapping[str, object], user: AuthenticatedUser
+    ) -> Call | Refusal:
+        """找到工具、確認這個人拿得到、驗過輸入。清單外的名字與沒權限的說同一句。"""
         tool = self._tools.get(name)
-        if tool is None or not admits(tool.access, context.user.role):
+        if tool is None or not admits(tool.access, user.role):
             return Refusal(
                 tool=name, reason=ToolRefusal.UNKNOWN_TOOL, detail="", next=NextStep.GIVE_UP
             )
@@ -231,22 +299,62 @@ class Registry:
                 detail=_where(exc),
                 next=NextStep.RETRY,
             )
-        try:
-            result = await tool.run(context, given)
-        except REJECTIONS as exc:
-            reason: StrEnum = exc.reason  # type: ignore[attr-defined]  # REJECTIONS 每一類都有，測試掃過
-            return Refusal(
-                tool=name,
-                reason=reason.value,
-                detail=str(getattr(exc, "detail", "")),
-                next=tool.next_step(reason),
-            )
-        if not isinstance(result, tool.result):
-            raise TypeError(
-                f"tool {name} returned {type(result).__name__}, not {tool.result.__name__}"
-            )
-        done: BaseModel = result
-        return done
+        return Call(tool=tool, given=given)
+
+    # 派發到直接做的那幾條登記：只有讀取與可逆的有 `run`（不可逆的造 `Tool` 時就擋了）。
+    @command(Effect.REVERSIBLE)
+    async def run(self, call: Call, context: ToolContext) -> BaseModel | Refusal:
+        """直接做。結果是那個工具的結果型別，或一份 `Refusal`。"""
+        tool = call.tool
+        assert tool.run is not None, f"{tool.name} is proposed, not run"
+        return await _attempt(tool, tool.run(context, call.given), tool.result)
+
+    @command(Effect.READ)
+    async def preview(self, call: Call, context: ToolContext) -> BaseModel | Refusal:
+        """確認卡上「會發生什麼」，什麼都不改。做不成的是一份 `Refusal`。"""
+        tool = call.tool
+        assert tool.preview is not None and tool.preview_type is not None
+        return await _attempt(tool, tool.preview(context, call.given), tool.preview_type)
+
+    # 派發到每一條要人按的登記，照最壞的那一條標（brief §14）：加索引站、刪 complete 從這裡做。
+    # 只有 `services.proposals` 在人按了確認之後呼叫它。
+    @command(Effect.IRREVERSIBLE)
+    async def apply(
+        self, call: Call, context: ToolContext, shown: BaseModel
+    ) -> BaseModel | Refusal:
+        """照人看到的那一份 preview 做。"""
+        tool = call.tool
+        assert tool.apply is not None
+        return await _attempt(tool, tool.apply(context, call.given, shown), tool.result)
+
+
+@dataclass(frozen=True, slots=True)
+class Call:
+    """驗過的一次呼叫：哪一個工具、什麼輸入。"""
+
+    tool: Tool[Any, Any]
+    given: BaseModel
+
+
+async def _attempt(
+    tool: Tool[Any, Any], pending: Awaitable[object], expected: type[BaseModel]
+) -> BaseModel | Refusal:
+    """等那一支做完；模組的拒絕換成 `Refusal`，回錯型別是 bug。"""
+    try:
+        result = await pending
+    except REJECTIONS as exc:
+        reason: StrEnum = exc.reason  # type: ignore[attr-defined]  # REJECTIONS 每一類都有，測試掃過
+        return Refusal(
+            tool=tool.name,
+            reason=reason.value,
+            detail=str(getattr(exc, "detail", "")),
+            next=tool.next_step(reason),
+        )
+    if not isinstance(result, expected):
+        raise TypeError(
+            f"tool {tool.name} returned {type(result).__name__}, not {expected.__name__}"
+        )
+    return result
 
 
 def _where(exc: ValidationError) -> str:

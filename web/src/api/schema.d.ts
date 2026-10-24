@@ -214,6 +214,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/proposals/{proposal_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Confirm
+         * @description 按確認：以按的這個人執行，當下重驗角色與輸入。不成立的回 200、狀態是 `expired`，理由在
+         *     `result`——那是卡片的結局，不是請求的錯。
+         */
+        post: operations["post_confirm_api_proposals__proposal_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals/{proposal_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Reject
+         * @description 按拒絕：記下來，什麼都不做。
+         */
+        post: operations["post_reject_api_proposals__proposal_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discover/trending": {
         parameters: {
             query?: never;
@@ -3129,6 +3170,8 @@ export interface components {
             replying: boolean;
             /** Messages */
             messages: components["schemas"]["MessageOut"][];
+            /** Proposals */
+            proposals: components["schemas"]["ProposalCard"][];
         };
         /** ConversationSummaryOut */
         ConversationSummaryOut: {
@@ -4684,7 +4727,7 @@ export interface components {
          * @description 對話裡的一則（`conversation_messages.kind`，M5 票 08）。
          * @enum {string}
          */
-        MessageKind: "user" | "model" | "tools" | "notice";
+        MessageKind: "user" | "model" | "tools" | "notice" | "decision";
         /** MessageOut */
         MessageOut: {
             /** Id */
@@ -5289,6 +5332,65 @@ export interface components {
             /** Excluded */
             excluded: number;
         };
+        /**
+         * ProposalCard
+         * @description 一張確認卡：工具迴圈回給模型與畫面的那一份（`ToolResultPart` 的 `ProposalCard`），也是讀
+         *     對話時每一張卡的現況。同一個形狀，前端一種卡（`main._document_components` 進 OpenAPI）。
+         */
+        ProposalCard: {
+            /** Id */
+            id: number;
+            /** Tool */
+            tool: string;
+            cause: components["schemas"]["ProposalCause"];
+            /** Reason */
+            reason: string;
+            /** Preview Type */
+            preview_type: string;
+            /** Preview */
+            preview: {
+                [key: string]: unknown;
+            };
+            status: components["schemas"]["ProposalStatus"];
+            /** Result Type */
+            result_type: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+        };
+        /**
+         * ProposalCause
+         * @description 為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種
+         *     （票 11 的網址來源）。
+         * @enum {string}
+         */
+        ProposalCause: "irreversible";
+        /**
+         * ProposalRefusal
+         * @description 按確認卡的端點不做的理由（`services.proposals`）。
+         * @enum {string}
+         */
+        ProposalRefusal: "proposal_missing" | "already_decided";
+        /** ProposalRefusalOut */
+        ProposalRefusalOut: {
+            reason: components["schemas"]["ProposalRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * ProposalStatus
+         * @description 一張確認卡走到哪裡（`proposals.status`，M5 票 10，CONTEXT.md 的 Proposal）。
+         * @enum {string}
+         */
+        ProposalStatus: "proposed" | "confirmed" | "rejected" | "expired";
         /** QbittorrentApplyIn */
         QbittorrentApplyIn: {
             login?: components["schemas"]["InterfaceLoginIn"] | null;
@@ -6328,7 +6430,7 @@ export interface components {
          * @description 一次工具呼叫的結果（Vercel AI SDK 的 `output-available` / `output-error`）。
          * @enum {string}
          */
-        ToolOutcome: "done" | "refused";
+        ToolOutcome: "done" | "refused" | "proposed";
         /** ToolResultPart */
         ToolResultPart: {
             /**
@@ -6732,9 +6834,88 @@ export interface components {
          *     （`main._document_components`），前端拿得到這個封閉集合。
          * @enum {string}
          */
-        ToolRefusal: "unknown_tool" | "invalid_input";
+        ToolRefusal: "unknown_tool" | "invalid_input" | "not_allowed";
         /** @enum {string} */
-        ToolResultType: "RecentImports" | "Refusal";
+        ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "Refusal" | "ProposalCard";
+        /** @enum {string} */
+        ProposalPreviewType: "IndexerAddition" | "DownloadsDeletion";
+        /** DownloadsDeleted */
+        DownloadsDeleted: {
+            /** Media */
+            media: string;
+            /** Jobs */
+            jobs: components["schemas"]["JobDownloadsDeleted"][];
+        };
+        /**
+         * DownloadsDeletion
+         * @description 確認卡上「會發生什麼」：這部作品每一筆 Job 會移除 torrent、刪掉下載目錄裡的這幾個檔案；
+         *     媒體庫的鏈接與紀錄留著（brief §9.2）。
+         */
+        DownloadsDeletion: {
+            /** Media */
+            media: string;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Jobs */
+            jobs: components["schemas"]["JobDownloadsPreview"][];
+        };
+        /** IndexerAdded */
+        IndexerAdded: {
+            /** Site */
+            site: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * IndexerAddition
+         * @description 確認卡上「會發生什麼」：哪一站、它在哪個網址、加到哪一台 Prowlarr。
+         */
+        IndexerAddition: {
+            /** Site */
+            site: string;
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /** Description */
+            description: string;
+            /** Language */
+            language: string;
+            /** Prowlarr */
+            prowlarr: string;
+            origin: components["schemas"]["ServiceOrigin"];
+        };
+        /** JobDownloadsDeleted */
+        JobDownloadsDeleted: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+            /** Sources */
+            sources: number;
+            /** Freed */
+            freed: number;
+            /** Refused */
+            refused: string;
+        };
+        /** JobDownloadsPreview */
+        JobDownloadsPreview: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+            state: components["schemas"]["JobState"];
+            /** Files */
+            files: string[];
+            /** Missing */
+            missing: number;
+            /** Bytes */
+            bytes: number;
+            /** Reclaimable */
+            reclaimable: number;
+        };
         /**
          * NextStep
          * @description 拒絕之後 AI 該怎麼辦（plan §11.6）。
@@ -7202,6 +7383,104 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+        };
+    };
+    post_confirm_api_proposals__proposal_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCard"];
+                };
+            };
+            /** @description `proposal_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalRefusalOut"];
+                };
+            };
+            /** @description `busy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_reject_api_proposals__proposal_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCard"];
+                };
+            };
+            /** @description `proposal_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalRefusalOut"];
+                };
+            };
+            /** @description `busy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

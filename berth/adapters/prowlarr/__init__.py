@@ -73,6 +73,8 @@ class IndexerDefinition:
     description: str = ""
     #: `torrent` / `usenet`。Berth 只接 qBittorrent，公開站清單只收 torrent（M4 票 09）。
     protocol: str = ""
+    #: 定義自帶的網址清單（`indexerUrls`），照 Prowlarr 給的順序。確認卡說這一站在哪裡（M5 票 10）。
+    urls: tuple[str, ...] = ()
 
 
 class IndexerRejectedError(ServiceError):

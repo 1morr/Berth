@@ -1,7 +1,8 @@
 """命令登錄表（M5 票 05，plan §11.6〈命令登錄表〉）：工具逐條登記、依角色過濾、統一拒絕。
 
-斷言只走登錄表的介面：`Tool(...)` 造得出來與否、`tools_for(role)` 給了誰、`invoke(...)` 回什麼。
-假工具包的是這裡定義的假命令（標了或沒標），所以不碰資料庫——`run` 不開 session。
+斷言只走登錄表的介面：`Tool(...)` 造得出來與否、`tools_for(role)` 給了誰、`resolve(...)` 之後
+`run` / `preview` / `apply` 回什麼。假工具包的是這裡定義的假命令（標了或沒標），所以不碰資料庫——
+`run` 不開 session。
 """
 
 from __future__ import annotations
@@ -19,10 +20,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import berth.services
-from berth.domain import IssueRefusal, JobRefusal, PlanRefusal, Role, RssRefusal
+from berth.domain import IssueRefusal, JobRefusal, PlanRefusal, ProposalCause, Role, RssRefusal
 from berth.main import create_app
 from berth.services.access import access_of, admits
 from berth.services.auth import AuthenticatedUser
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command, mark_of
 from berth.services.issues import IssueRejectedError
 from berth.services.jobs import JobRejectedError, actor_of, ai_actor, user_of
@@ -30,6 +32,7 @@ from berth.services.plan_review import PlanRejectedError
 from berth.services.registry import (
     REJECTIONS,
     NextStep,
+    ProposalInput,
     Refusal,
     Registry,
     Tool,
@@ -71,10 +74,21 @@ async def unmarked() -> None:
     """一支沒標副作用的假命令。"""
 
 
-def context(user: AuthenticatedUser = ADMIN) -> ToolContext:
-    # 假工具不開 session；真的 factory 由整合測試給。
+def context(user: AuthenticatedUser = ADMIN, *, confirmed: bool = False) -> ToolContext:
+    # 假工具不開 session、不連服務；真的由整合測試給。
     sessions = cast(async_sessionmaker[AsyncSession], None)
-    return ToolContext(sessions=sessions, user=user, now=NOW)
+    clients = cast(ServiceClientFactory, None)
+    return ToolContext(sessions=sessions, clients=clients, user=user, now=NOW, confirmed=confirmed)
+
+
+async def invoke(
+    registry: Registry, name: str, arguments: dict[str, object], given: ToolContext
+) -> BaseModel:
+    """直接做的那一條：`resolve` 之後 `run`。"""
+    call = registry.resolve(name, arguments, given.user)
+    if isinstance(call, Refusal):
+        return call
+    return await registry.run(call, given)
 
 
 def tool(
@@ -129,6 +143,138 @@ class TestRegistering:
     def test_the_route_must_be_a_method_and_an_api_path(self) -> None:
         with pytest.raises(ValueError, match="route"):
             tool(route=("FETCH", "jobs"))
+
+
+@command(Effect.IRREVERSIBLE)
+async def scuttle() -> None:
+    """一支不可逆的假命令。"""
+
+
+class Scuttle(ProposalInput):
+    ship: str
+
+
+class Scuttling(BaseModel):
+    ship: str
+
+
+async def plan_scuttle(_: ToolContext, given: Scuttle) -> Scuttling:
+    return Scuttling(ship=given.ship)
+
+
+async def do_scuttle(_: ToolContext, given: Scuttle, shown: Scuttling) -> Scuttling:
+    return shown
+
+
+def proposed(**extra: Any) -> Tool[Any, Any]:
+    """一個要人按的假工具（M5 票 10）：預覽說出要鑿沉哪一艘，執行照人看到的那一份。"""
+    fields: dict[str, Any] = {
+        "name": "scuttle",
+        "description": "Scuttle a ship.",
+        "input": Scuttle,
+        "result": Scuttling,
+        "command": scuttle,
+        "route": ("DELETE", "/jobs/{job_hash}"),
+        "preview": plan_scuttle,
+        "preview_type": Scuttling,
+        "apply": do_scuttle,
+    }
+    return Tool(**(fields | extra))
+
+
+class TestToolsThatNeedAPerson:
+    """不可逆的工具 AI 自己做不了，在登記的形狀上就是這樣（M5 票 10）。"""
+
+    def test_an_irreversible_tool_cannot_be_run_directly(self) -> None:
+        async def run(_: ToolContext, given: Scuttle) -> Scuttling:
+            return Scuttling(ship=given.ship)
+
+        with pytest.raises(ValueError, match="no run"):
+            proposed(run=run)
+
+    def test_an_irreversible_tool_says_what_would_happen(self) -> None:
+        with pytest.raises(ValueError, match="preview"):
+            proposed(preview=None, preview_type=None, apply=None)
+
+    def test_preview_and_apply_come_together(self) -> None:
+        with pytest.raises(ValueError, match="together"):
+            proposed(apply=None)
+
+    def test_an_irreversible_tool_asks_for_a_reason(self) -> None:
+        with pytest.raises(ValueError, match="ProposalInput"):
+            proposed(input=Count)
+
+    def test_a_reversible_tool_is_run(self) -> None:
+        with pytest.raises(ValueError, match="needs run"):
+            Tool(
+                name="poke",
+                description="Poke.",
+                input=Count,
+                result=Counted,
+                command=poke,
+                route=("GET", "/jobs"),
+            )
+
+    def test_an_irreversible_call_always_needs_a_person(self) -> None:
+        registered = proposed()
+
+        assert registered.cause(context(), Scuttle(ship="Pinafore", reason="x")) is (
+            ProposalCause.IRREVERSIBLE
+        )
+
+    def test_a_reversible_call_is_done_unless_a_check_demotes_it(self) -> None:
+        """降級的入口：可逆的工具在某些呼叫上要人按（票 11 的網址來源接這裡）。"""
+
+        def from_the_user(_: ToolContext, given: Count) -> ProposalCause | None:
+            return ProposalCause.IRREVERSIBLE if given.days > 7 else None
+
+        async def plan(_: ToolContext, given: Count) -> Counted:
+            return Counted(days=given.days)
+
+        async def do(_: ToolContext, given: Count, shown: Counted) -> Counted:
+            return shown
+
+        plain = tool(target=poke)
+        checked = tool(
+            target=poke, demote=from_the_user, preview=plan, preview_type=Counted, apply=do
+        )
+
+        assert plain.cause(context(), Count(days=30)) is None
+        assert checked.cause(context(), Count(days=3)) is None
+        assert checked.cause(context(), Count(days=30)) is ProposalCause.IRREVERSIBLE
+
+    def test_a_tool_that_can_be_demoted_says_what_would_happen(self) -> None:
+        with pytest.raises(ValueError, match="demoted"):
+            tool(target=poke, demote=lambda _, __: None)
+
+    @pytest.mark.asyncio
+    async def test_preview_then_apply_what_was_shown(self) -> None:
+        registry = Registry((proposed(),))
+        call = registry.resolve("scuttle", {"ship": "Pinafore", "reason": "x"}, ADMIN)
+        assert not isinstance(call, Refusal)
+
+        shown = await registry.preview(call, context())
+        done = await registry.apply(call, context(confirmed=True), Scuttling(ship="Shown"))
+
+        assert shown == Scuttling(ship="Pinafore")
+        assert done == Scuttling(ship="Shown")
+
+    @pytest.mark.asyncio
+    async def test_a_rejection_in_the_preview_is_a_refusal(self) -> None:
+        async def refuse(_: ToolContext, __: Scuttle) -> Scuttling:
+            raise JobRejectedError(JobRefusal.JOB_MISSING, "abc")
+
+        registry = Registry((proposed(preview=refuse),))
+        call = registry.resolve("scuttle", {"ship": "Pinafore", "reason": "x"}, ADMIN)
+        assert not isinstance(call, Refusal)
+
+        assert await registry.preview(call, context()) == Refusal(
+            tool="scuttle", reason="job_missing", detail="abc", next=NextStep.HAND_OVER
+        )
+
+    def test_a_confirmed_call_is_the_person_not_the_ai(self) -> None:
+        assert context(DECKHAND).actor == "ai:2"
+        assert context(DECKHAND, confirmed=True).actor == "2"
 
 
 class TestTheRealRegistry:
@@ -187,8 +333,8 @@ class TestWhoGetsWhichTools:
         """模型叫了清單外的名字：與真的不存在同一句，不說出「有，但你不行」。"""
         registry = self.registry()
 
-        hidden = await registry.invoke("delete_job", {}, context(DECKHAND))
-        missing = await registry.invoke("no_such_tool", {}, context(DECKHAND))
+        hidden = await invoke(registry, "delete_job", {}, context(DECKHAND))
+        missing = await invoke(registry, "no_such_tool", {}, context(DECKHAND))
 
         assert hidden == Refusal(
             tool="delete_job", reason="unknown_tool", detail="", next=NextStep.GIVE_UP
@@ -199,12 +345,12 @@ class TestWhoGetsWhichTools:
 @pytest.mark.asyncio
 class TestInvoking:
     async def test_the_input_is_validated_and_the_result_returned(self) -> None:
-        result = await Registry((tool(),)).invoke("count_days", {"days": 3}, context())
+        result = await invoke(Registry((tool(),)), "count_days", {"days": 3}, context())
 
         assert result == Counted(days=3)
 
     async def test_bad_input_is_a_retry_that_does_not_echo_the_value(self) -> None:
-        result = await Registry((tool(),)).invoke("count_days", {"days": "sk-secret"}, context())
+        result = await invoke(Registry((tool(),)), "count_days", {"days": "sk-secret"}, context())
 
         assert isinstance(result, Refusal)
         assert (result.reason, result.next) == ("invalid_input", NextStep.RETRY)
@@ -216,7 +362,7 @@ class TestInvoking:
             return Nothing()
 
         with pytest.raises(TypeError, match="count_days"):
-            await Registry((tool(run=wrong),)).invoke("count_days", {}, context())
+            await invoke(Registry((tool(run=wrong),)), "count_days", {}, context())
 
     async def test_what_the_tool_sees_acts_for_the_person_through_the_ai(self) -> None:
         seen: list[ToolContext] = []
@@ -225,7 +371,7 @@ class TestInvoking:
             seen.append(given)
             return Counted(days=args.days)
 
-        await Registry((tool(run=remember),)).invoke("count_days", {}, context(DECKHAND))
+        await invoke(Registry((tool(run=remember),)), "count_days", {}, context(DECKHAND))
 
         assert seen[0].actor == "ai:2"
 
@@ -245,7 +391,7 @@ class TestRefusals:
         ids=lambda exc: type(exc).__name__,
     )
     async def test_a_module_rejection_becomes_one_refusal(self, exc: Any) -> None:
-        result = await Registry((tool(run=raising(exc)),)).invoke("count_days", {}, context())
+        result = await invoke(Registry((tool(run=raising(exc)),)), "count_days", {}, context())
 
         assert result == Refusal(
             tool="count_days",
@@ -261,7 +407,7 @@ class TestRefusals:
             next_steps={RssRefusal.FEED_UNREACHABLE: NextStep.RETRY},
         )
 
-        result = await Registry((registered,)).invoke("count_days", {}, context())
+        result = await invoke(Registry((registered,)), "count_days", {}, context())
 
         assert isinstance(result, Refusal)
         assert result.next is NextStep.RETRY
@@ -274,7 +420,7 @@ class TestRefusals:
             next_steps={JobRefusal.MEDIA_MISSING: NextStep.RETRY},
         )
 
-        result = await Registry((registered,)).invoke("count_days", {}, context())
+        result = await invoke(Registry((registered,)), "count_days", {}, context())
 
         assert isinstance(result, Refusal)
         assert result.next is NextStep.HAND_OVER
@@ -283,7 +429,7 @@ class TestRefusals:
         registered = tool(run=raising(KeyError("missing")))
 
         with pytest.raises(KeyError):
-            await Registry((registered,)).invoke("count_days", {}, context())
+            await invoke(Registry((registered,)), "count_days", {}, context())
 
 
 def rejections_in(modules: list[ModuleType]) -> set[type[Exception]]:
@@ -313,12 +459,26 @@ def fake_module(source: str) -> ModuleType:
 
 
 class TestTheDispatcherItself:
-    def test_invoking_is_marked_as_bad_as_the_worst_tool(self) -> None:
-        """`invoke` 跑得到每一條登記，不可逆的工具也是（M5 票 04 起閘門看得到類別上的方法）。"""
-        mark = mark_of(Registry.invoke)
+    """三支派發照它們跑得到的最壞的那一種登記標（M5 票 04 起閘門看得到類別上的方法）。"""
+
+    @pytest.mark.parametrize(
+        ("method", "effect"),
+        [
+            # 只有讀取與可逆的工具有 `run`。
+            (Registry.run, Effect.REVERSIBLE),
+            (Registry.preview, Effect.READ),
+            # 加索引站、刪 complete 從這裡做。
+            (Registry.apply, Effect.IRREVERSIBLE),
+        ],
+        ids=["run", "preview", "apply"],
+    )
+    def test_each_dispatcher_is_marked_as_bad_as_what_it_reaches(
+        self, method: Any, effect: Effect
+    ) -> None:
+        mark = mark_of(method)
 
         assert mark is not None
-        assert (mark.effect, mark.inverse) == (Effect.IRREVERSIBLE, None)
+        assert (mark.effect, mark.inverse) == (effect, None)
 
 
 class TestEveryRejectionIsTranslated:

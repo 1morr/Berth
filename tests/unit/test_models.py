@@ -99,6 +99,7 @@ def test_metadata_holds_exactly_the_tables_built_so_far() -> None:
         "ai_calls",
         "conversations",
         "conversation_messages",
+        "proposals",
         "users",
         "sessions",
         "settings",
