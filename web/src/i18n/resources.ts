@@ -4315,6 +4315,7 @@ const zhHant = {
     input: '輸入',
     undone: '已撤銷',
     noInverse: '這一件做了就撤不回。',
+    nothingDone: '這一次什麼都沒改（那一筆本來就在），沒有東西可撤。',
     notAllowed: '只有管理員撤得了這一筆。',
     // 沒有專屬文案的型別（確認過的可逆提案之類）。
     undo: {
@@ -8557,6 +8558,7 @@ const en: Translations<typeof zhHant> = {
     input: 'Input',
     undone: 'Undone',
     noInverse: 'This one cannot be undone.',
+    nothingDone: 'Nothing changed this time (it was already there), so there is nothing to undo.',
     notAllowed: 'Only an admin can undo this one.',
     undo: {
       label: 'Undo',

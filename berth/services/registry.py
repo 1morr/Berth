@@ -297,6 +297,8 @@ class Undo[Result: BaseModel, Undone: BaseModel]:
     run: Callable[[ToolContext, Result], Awaitable[Undone]]
     #: `run` 回的型別：畫面說撤掉了什麼（`main._document_components`）。
     result: type[Undone]
+    #: 那一次做成了、卻什麼都沒改（送單時那一筆本來就在）：沒有東西可撤，撤了會動到不是它做的東西。
+    did_nothing: Callable[[Result], bool] = lambda _: False
 
 
 def _dotted(function: Callable[..., Any]) -> str:
@@ -391,6 +393,16 @@ class Registry:
         tool = call.tool
         assert tool.apply is not None
         return await _attempt(tool, tool.apply(context, call.given, shown), tool.result)
+
+    def nothing_to_undo(self, tool: Tool[Any, Any], done: Mapping[str, object]) -> bool:
+        """存下的那一份結果說那一次什麼都沒改（`Undo.did_nothing`）。
+        讀不回的交給 `undo` 說 `changed`。"""
+        assert tool.undo is not None
+        try:
+            result = tool.result.model_validate(done)
+        except ValidationError:
+            return False
+        return tool.undo.did_nothing(result)
 
     # 派發到每一條撤銷：刪 Job、刪 Feed 與下載下來的檔都回不來（反向命令各自標著）。只有
     # `services.undo` 在人按了撤銷之後呼叫它。

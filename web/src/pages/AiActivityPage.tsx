@@ -118,7 +118,6 @@ function undoCopy(t: TFunction, resultType: string): { label: string; confirm: s
   }
 }
 
-/** 輸入與輸出 token 加起來；兩格都不知道是 `null`。 */
 /** 輸入加輸出。任一格不知道就是不知道：加一半會是一個看起來像總數、其實少算的數。 */
 function totalTokens(tokens: AiActivityEntry['tokens']): number | null {
   if (tokens.input === null || tokens.output === null) return null
@@ -233,6 +232,9 @@ function ActivityRow({ entry }: { entry: AiActivityEntry }) {
       )}
       {entry.undo === 'no_inverse' && (
         <p className="text-xs text-ink-dim">{t('aiActivity.noInverse')}</p>
+      )}
+      {entry.undo === 'nothing_done' && (
+        <p className="text-xs text-ink-dim">{t('aiActivity.nothingDone')}</p>
       )}
       {entry.undo === 'not_allowed' && (
         <p className="text-xs text-ink-dim">{t('aiActivity.notAllowed')}</p>

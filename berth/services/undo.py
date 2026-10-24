@@ -74,8 +74,14 @@ async def undo(
             raise UndoRejectedError(UndoRefusal.CALL_MISSING, call_id)
         tool = registry.get(done.tool)
         result = await _done_result(session, done)
-    if tool is None or tool.undo is None or result is None:
-        # 讀取的、不可逆的、那一次沒做成的（結果是 `Refusal`、還沒按或被拒的確認卡）都沒有東西可撤。
+    if (
+        tool is None
+        or tool.undo is None
+        or result is None
+        or registry.nothing_to_undo(tool, result)
+    ):
+        # 讀取的、不可逆的、那一次沒做成的（結果是 `Refusal`、還沒按或被拒的確認卡）、做成了卻什麼都
+        # 沒改的（送單時那一筆本來就在）都沒有東西可撤。
         raise UndoRejectedError(UndoRefusal.NOT_UNDOABLE, done.tool)
     if not tool.undoable_by(context.user.role):
         raise UndoRejectedError(UndoRefusal.NOT_ALLOWED, done.tool)

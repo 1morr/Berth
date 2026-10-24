@@ -55,7 +55,7 @@ export type SearchResults = Schemas['SearchResults']
 
 export type SearchResultRow = Schemas['SearchResultRow']
 
-/** AI 送不出一筆 release 的理由（後端 `services/submit_guard.SubmitRefusal`）。 */
+/** AI 送不出一筆搜尋結果的理由（後端 `services/submit_guard.SubmitRefusal`）。 */
 export type SubmitRefusal = Schemas['SubmitRefusal']
 
 export type SubmittedJob = Schemas['SubmittedJob']

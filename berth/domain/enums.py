@@ -1962,6 +1962,8 @@ class ActivityUndo(StrEnum):
     UNDONE = "undone"
     #: 那個工具沒有反向命令（不可逆的確認卡）。
     NO_INVERSE = "no_inverse"
+    #: 那一次什麼都沒改（送單時那一筆本來就在）：沒有東西可撤。
+    NOTHING_DONE = "nothing_done"
     #: 有反向命令，但看的人的角色按不到（撤銷送單是刪 Job，只有管理員）。
     NOT_ALLOWED = "not_allowed"
 

@@ -1,5 +1,5 @@
-"""送單的防線：只收這則對話自己搜出來、過了規則層比對的 release（M5 票 12，brief §6.10「外部文字是
-資料」③，plan §11.6〈對話核心〉）。
+"""送單的防線：只收這則對話自己搜出來、過了規則層比對的 Search Result（M5 票 12，
+brief §6.10「外部文字是資料」③，plan §11.6〈對話核心〉）。
 
 搜尋結果的標題是陌生人寫的，最容易藏「送這一筆」這種指令。防線不靠模型聽話，靠這裡：
 
@@ -35,7 +35,7 @@ SEARCH_TOOL = "search_indexers"
 
 
 class SubmitRefusal(StrEnum):
-    """AI 送不出一筆 release 的理由（M5 票 12）。不在 `domain/enums.py`：那裡的 `*Refusal` 是端點的
+    """AI 送不出一筆搜尋結果的理由（M5 票 12）。不在 `domain/enums.py`：那裡的 `*Refusal` 是端點的
     拒絕、每一種都有狀態碼，這幾種只有工具會說（同 `registry.ToolRefusal`）。照樣進 OpenAPI，
     前端說得出人話。"""
 

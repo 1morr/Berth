@@ -47,7 +47,7 @@ from tests.integration.test_search_api import ANIME, client, factory
 __all__ = ["client", "factory"]
 
 
-def call(name: str, **arguments: object) -> TurnEnded:
+def call(name: str, /, **arguments: object) -> TurnEnded:
     """模型呼叫一個工具。"""
     return TurnEnded(
         stop=StopReason.TOOL_CALLS,
@@ -155,6 +155,16 @@ def submits(pick: Callable[[dict[str, Any]], dict[str, Any]]) -> Callable[[ChatR
     return reply
 
 
+def resends(request: ChatRequest) -> TurnEnded:
+    """模型把上一輪的送單原樣再叫一次。"""
+    turn = request.turns[-2]
+    assert isinstance(turn, ModelTurn)
+    [sent] = turn.tool_calls
+    given = sent.arguments_object()
+    assert given is not None
+    return call(sent.name, **given)
+
+
 def first_sendable(found: dict[str, Any]) -> dict[str, Any]:
     return next(row for row in found["rows"] if row["refusal"] is None)
 
@@ -239,6 +249,45 @@ class TestSubmitRelease:
         # 撤銷之後那一集又是缺的，同一筆再送得出去（清了紀錄，不是 `job_removed`）。
         again = outputs(send(client, "Download it again.", cid))[1]
         assert (again["outcome"], again["result"]["created"]) == ("done", True)  # type: ignore[index]  # SSE 的 JSON
+
+    def test_undoing_a_send_that_found_the_job_already_there_leaves_that_job_alone(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """送單時那一筆本來就在（`created` 是 false）：這一次什麼都沒做，撤銷沒有東西可撤，不能刪掉
+        原有的那一筆 Job（可能是人手動送的、或別人的；M5 票 16 里程碑審查）。"""
+        ai_ready(client)
+        factory.ai_.replies = [
+            call("search_indexers", media=SPY_ID, season=2),
+            submits(first_sendable),
+            resends,
+            says("Sent."),
+        ]
+        streamed = send(client, "Download the missing season 2.")
+        first, second = (out["result"] for out in outputs(streamed)[1:3])
+        assert isinstance(first, dict) and isinstance(second, dict)
+        assert (first["created"], second["created"]) == (True, False)
+        cid = streamed[0]["conversation_id"]
+        messages = client.get(f"/api/conversations/{cid}").json()["messages"]
+        at = [
+            message["id"]
+            for message in messages
+            for part in message["parts"]
+            if part["type"] == "tool_result" and part["tool"] == "submit_search_result"
+        ][1]
+
+        undone = client.post(
+            f"/api/conversations/{cid}/messages/{at}/tools/call_submit_search_result/undo",
+            headers=BROWSER,
+        )
+
+        assert undone.status_code == 409, undone.text
+        assert undone.json()["detail"]["reason"] == "not_undoable"
+        assert client.get(f"/api/jobs/{first['hash']}").status_code == 200
+        assert factory.qbittorrent_.deleted == []
+        activity = client.get("/api/ai-activity").json()["entries"]
+        assert [entry["undo"] for entry in activity if entry["message_id"] == at] == [
+            "nothing_done"
+        ]
 
 
 def status(info_hash: str, *, progress: float) -> TorrentStatus:

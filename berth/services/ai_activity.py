@@ -260,16 +260,18 @@ class _WriteCollector:
             result_type=row.result_type,
             result=row.result,
             tokens=tokens.get(row.user_message_id or 0, ReplyTokens(input=None, output=None)),
-            undo=self._undo(row.tool, undone=undone_at is not None),
+            undo=self._undo(row.tool, row.result, undone=undone_at is not None),
             undone_at=undone_at,
         )
 
-    def _undo(self, name: str, *, undone: bool) -> ActivityUndo:
+    def _undo(self, name: str, result: dict[str, Any], *, undone: bool) -> ActivityUndo:
         if undone:
             return ActivityUndo.UNDONE
         tool = self._registry.get(name)
         if tool is None or tool.undo is None:
             return ActivityUndo.NO_INVERSE
+        if self._registry.nothing_to_undo(tool, result):
+            return ActivityUndo.NOTHING_DONE
         if not tool.undoable_by(self._viewer.role):
             return ActivityUndo.NOT_ALLOWED
         return ActivityUndo.UNDOABLE
