@@ -1811,10 +1811,12 @@ class AiFailure(StrEnum):
 class AiCallOrigin(StrEnum):
     """一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
 
-    M5 票 07 只有設定頁的測試；對話（票 08）與 AI 任務（M6）各自加一個值。
+    M5 票 07 只有設定頁的測試；對話是票 08，AI 任務（M6）再加一個值。
     """
 
     TEST = "test"
+    #: 側面板的一則對話（`ai_calls.conversation_id` 指著它）。
+    CONVERSATION = "conversation"
 
 
 class ToolGap(StrEnum):
@@ -1856,3 +1858,48 @@ class AiProbeStep(StrEnum):
     TOOL_CALL = "tool_call"
     #: 把假工具的結果送回去，要拿到文字回覆。
     TOOL_RESULT = "tool_result"
+
+
+class MessageKind(StrEnum):
+    """對話裡的一則（`conversation_messages.kind`，M5 票 08）。"""
+
+    #: 使用者打的字。
+    USER = "user"
+    #: 模型的一輪：文字與工具呼叫。不叫 assistant：那是 CONTEXT.md 的「助理」。
+    MODEL = "model"
+    #: Berth 執行工具的結果，一輪的呼叫收成一則。
+    TOOLS = "tools"
+    #: Berth 說給人聽的事（provider 沒成、到了輪數上限）。不送給模型。
+    NOTICE = "notice"
+
+
+class AssistantNotice(StrEnum):
+    """對話停下來的原因，說給人聽（plan §11.6〈對話核心〉的兩條保險絲）。"""
+
+    #: 對 provider 的請求沒成；`AiFailure` 說是哪一種。
+    PROVIDER_FAILED = "provider_failed"
+    #: 一則訊息之後的工具呼叫到了輪數上限（`services.assistant.MAX_TOOL_ROUNDS`）。
+    ROUND_LIMIT = "round_limit"
+    #: Berth 自己出錯（bug），原因在 log。
+    INTERNAL_ERROR = "internal_error"
+
+
+class ToolOutcome(StrEnum):
+    """一次工具呼叫的結果（Vercel AI SDK 的 `output-available` / `output-error`）。"""
+
+    DONE = "done"
+    #: 登錄表的 `Refusal`：什麼都沒改。
+    REFUSED = "refused"
+
+
+class AssistantRefusal(StrEnum):
+    """對話的命令不做的理由（`services.conversations`）。"""
+
+    #: AI 還沒設定好（`services.ai.is_ready`）。
+    NOT_READY = "not_ready"
+    #: 沒有這則對話，或它不是你的——兩種說同一句。
+    CONVERSATION_MISSING = "conversation_missing"
+    #: 這則對話的上一個回覆還在跑。
+    BUSY = "busy"
+    #: 送了空白的訊息。
+    EMPTY_MESSAGE = "empty_message"

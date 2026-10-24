@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,7 @@ from berth.adapters.ai import (
     AiProviderError,
     ChatProvider,
     ChatRequest,
+    StreamEvent,
     TurnEnded,
     Usage,
 )
@@ -36,9 +38,12 @@ async def call_model(
     format: ApiFormat,
     origin: AiCallOrigin,
     user_id: int | None,
+    conversation_id: int | None = None,
+    forward: Callable[[StreamEvent], None] | None = None,
 ) -> TurnEnded:
     """送一輪、等它講完，記一列 `ai_calls`。沒成是 `AiProviderError`（那一列照樣寫了）。
 
+    `forward` 收到串流的每一個事件（對話把字一路送到側面板）；它不得丟例外。
     其他例外（取消、Berth 自己的錯）不記：說不出那一次是成是敗。
     """
     started_at = utcnow()
@@ -58,6 +63,7 @@ async def call_model(
                 duration_ms=round((time.monotonic() - started) * 1000),
                 origin=origin,
                 user_id=user_id,
+                conversation_id=conversation_id,
                 failure=failure,
             )
         )
@@ -67,6 +73,8 @@ async def call_model(
     try:
         # 讀到串流結束，不在 TurnEnded 就跳出：產生器要自己走完，`async with` 才在這裡關掉連線。
         async for event in provider.stream(request):
+            if forward is not None:
+                forward(event)
             if isinstance(event, TurnEnded):
                 ended = event
         if ended is None:

@@ -45,5 +45,9 @@ class AiCall(Base):
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), default=None
     )
+    #: 出處是對話時是哪一則（`origin` 是 `conversation`）。對話刪了，用量還在（`SET NULL`）。
+    conversation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), default=None
+    )
     #: 沒成的分類；成了是 `None`。
     failure: Mapped[AiFailure | None] = mapped_column(enum_column(AiFailure), default=None)

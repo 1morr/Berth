@@ -139,6 +139,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assistant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_assistant_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversations
+         * @description 這個人的對話，最近有動的在前。
+         */
+        get: operations["get_conversations_api_conversations_get"];
+        put?: never;
+        /**
+         * Post Conversation
+         * @description 開一則新對話，第一句是 `text`。
+         */
+        post: operations["post_conversation_api_conversations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation */
+        get: operations["get_conversation_api_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversations/{conversation_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Message */
+        post: operations["post_message_api_conversations__conversation_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discover/trending": {
         parameters: {
             query?: never;
@@ -2501,10 +2576,10 @@ export interface components {
          * AiCallOrigin
          * @description 一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
          *
-         *     M5 票 07 只有設定頁的測試；對話（票 08）與 AI 任務（M6）各自加一個值。
+         *     M5 票 07 只有設定頁的測試；對話是票 08，AI 任務（M6）再加一個值。
          * @enum {string}
          */
-        AiCallOrigin: "test";
+        AiCallOrigin: "test" | "conversation";
         /**
          * AiFailure
          * @description 對 provider 的一次請求沒成的分類（brief §20.24「錯誤」、研究 ai-providers.md 結論 8）。
@@ -2645,6 +2720,39 @@ export interface components {
          * @enum {string}
          */
         ApiFormat: "anthropic" | "openai";
+        /**
+         * AssistantChunk
+         * @description SSE 一行 `data:` 的形狀。
+         */
+        AssistantChunk: components["schemas"]["StreamStart"] | components["schemas"]["StreamTextDelta"] | components["schemas"]["StreamToolStart"] | components["schemas"]["StreamToolOutput"] | components["schemas"]["StreamNotice"] | components["schemas"]["StreamFinish"];
+        /**
+         * AssistantNotice
+         * @description 對話停下來的原因，說給人聽（plan §11.6〈對話核心〉的兩條保險絲）。
+         * @enum {string}
+         */
+        AssistantNotice: "provider_failed" | "round_limit" | "internal_error";
+        /**
+         * AssistantRefusal
+         * @description 對話的命令不做的理由（`services.conversations`）。
+         * @enum {string}
+         */
+        AssistantRefusal: "not_ready" | "conversation_missing" | "busy" | "empty_message";
+        /**
+         * AssistantRefusalOut
+         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。
+         */
+        AssistantRefusalOut: {
+            reason: components["schemas"]["AssistantRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /** AssistantStatusOut */
+        AssistantStatusOut: {
+            /** Ready */
+            ready: boolean;
+            /** Chat Only */
+            chat_only: boolean;
+        };
         /**
          * AuditAction
          * @description `audit` 那一類按得了的兩顆（brief §6.5：「一鍵撤銷或確認」）。
@@ -3001,6 +3109,39 @@ export interface components {
          * @enum {string}
          */
         ConnectionState: "ok" | "failed" | "waiting" | "timeout";
+        /** ConversationOut */
+        ConversationOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Replying */
+            replying: boolean;
+            /** Messages */
+            messages: components["schemas"]["MessageOut"][];
+        };
+        /** ConversationSummaryOut */
+        ConversationSummaryOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** DayUsageOut */
         DayUsageOut: {
             /**
@@ -4532,6 +4673,31 @@ export interface components {
             /** Awaiting Review */
             awaiting_review: number;
         };
+        /** MessageIn */
+        MessageIn: {
+            /** Text */
+            text: string;
+            language: components["schemas"]["Language"];
+        };
+        /**
+         * MessageKind
+         * @description 對話裡的一則（`conversation_messages.kind`，M5 票 08）。
+         * @enum {string}
+         */
+        MessageKind: "user" | "model" | "tools" | "notice";
+        /** MessageOut */
+        MessageOut: {
+            /** Id */
+            id: number;
+            kind: components["schemas"]["MessageKind"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Parts */
+            parts: (components["schemas"]["UserText"] | components["schemas"]["ModelText"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"] | components["schemas"]["NoticePart"])[];
+        };
         /**
          * MikanSubscriptionIn
          * @description 訂閱一個 Mikan 番組 × 字幕組並綁到這部作品。作品要先打過 `GET /media/{id}`。
@@ -4555,6 +4721,16 @@ export interface components {
              * @default
              */
             subgroup_name?: string;
+        };
+        /** ModelText */
+        ModelText: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "model_text";
+            /** Text */
+            text: string;
         };
         /** ModelUsageOut */
         ModelUsageOut: {
@@ -4624,6 +4800,21 @@ export interface components {
             /** Name */
             name: string;
             collection_type: components["schemas"]["CollectionType"];
+        };
+        /**
+         * NoticePart
+         * @description Berth 說給人聽的停止原因。不送給模型。
+         */
+        NoticePart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "notice";
+            notice: components["schemas"]["AssistantNotice"];
+            failure?: components["schemas"]["AiFailure"] | null;
+            /** Retry After */
+            retry_after?: number | null;
         };
         /**
          * NotificationKind
@@ -5956,6 +6147,77 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** StreamFinish */
+        StreamFinish: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "finish";
+        };
+        /**
+         * StreamNotice
+         * @description 回覆停下來的原因（也已經存成一則 notice）。
+         */
+        StreamNotice: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "notice";
+            notice: components["schemas"]["NoticePart"];
+        };
+        /** StreamStart */
+        StreamStart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "start";
+            /** Conversation Id */
+            conversation_id: number;
+        };
+        /** StreamTextDelta */
+        StreamTextDelta: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "text-delta";
+            /** Delta */
+            delta: string;
+        };
+        /**
+         * StreamToolOutput
+         * @description 工具跑完了（`tool-output-available`）。結果本身在 `finish` 之後重讀的那一份裡。
+         */
+        StreamToolOutput: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool-output-available";
+            /** Tool Call Id */
+            tool_call_id: string;
+            /** Tool Name */
+            tool_name: string;
+            outcome: components["schemas"]["ToolOutcome"];
+        };
+        /**
+         * StreamToolStart
+         * @description 模型開始呼叫一個工具（Vercel AI SDK 的 `tool-input-start`）。
+         */
+        StreamToolStart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool-input-start";
+            /** Tool Call Id */
+            tool_call_id: string;
+            /** Tool Name */
+            tool_name: string;
+        };
         /** SubgroupOut */
         SubgroupOut: {
             /** Id */
@@ -6029,6 +6291,20 @@ export interface components {
             /** Api Key */
             api_key: string;
         };
+        /** ToolCallPart */
+        ToolCallPart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_call";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Arguments */
+            arguments: string;
+        };
         /**
          * ToolGap
          * @description 設定頁的測試判定「這個模型不支援工具呼叫」的樣子（`docs/research/ai-providers.md` 結論 4）。
@@ -6038,6 +6314,31 @@ export interface components {
          * @enum {string}
          */
         ToolGap: "tools_rejected" | "written_as_text" | "tools_ignored" | "wrong_call" | "result_rejected" | "no_reply";
+        /**
+         * ToolOutcome
+         * @description 一次工具呼叫的結果（Vercel AI SDK 的 `output-available` / `output-error`）。
+         * @enum {string}
+         */
+        ToolOutcome: "done" | "refused";
+        /** ToolResultPart */
+        ToolResultPart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_result";
+            /** Call Id */
+            call_id: string;
+            /** Tool */
+            tool: string;
+            outcome: components["schemas"]["ToolOutcome"];
+            /** Result Type */
+            result_type: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+        };
         /**
          * TrackingOut
          * @description Berth 經手的作品在這個媒體庫上的入庫狀態。判定規則在 `services/inventory.py`。
@@ -6183,6 +6484,16 @@ export interface components {
             hit_rate: number | null;
             /** Cache Unreported */
             cache_unreported: number;
+        };
+        /** UserText */
+        UserText: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "user_text";
+            /** Text */
+            text: string;
         };
         /** UserUsageOut */
         UserUsageOut: {
@@ -6690,6 +7001,181 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeOut"];
+                };
+            };
+        };
+    };
+    get_status_api_assistant_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantStatusOut"];
+                };
+            };
+        };
+    };
+    get_conversations_api_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummaryOut"][];
+                };
+            };
+        };
+    };
+    post_conversation_api_conversations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageIn"];
+            };
+        };
+        responses: {
+            /** @description 一行 `data:` 一個 chunk，到 `finish` 為止 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantChunk"];
+                };
+            };
+            /** @description `not_ready` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description `empty_message` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+        };
+    };
+    get_conversation_api_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description `conversation_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_message_api_conversations__conversation_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageIn"];
+            };
+        };
+        responses: {
+            /** @description 一行 `data:` 一個 chunk，到 `finish` 為止 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantChunk"];
+                };
+            };
+            /** @description `conversation_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description `not_ready` · `busy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description `empty_message` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
                 };
             };
         };

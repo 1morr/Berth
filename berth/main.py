@@ -37,6 +37,7 @@ from berth.pipeline import (
     RssPoller,
     Sweeper,
 )
+from berth.services.assistant import AssistantRuns
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.deeplink import BerthPage
 from berth.services.events import EventHub
@@ -197,6 +198,9 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         runner = ReconcileRunner(sessions, clients)
         app.state.reconciler = runner
         reconciler = Reconciler(sessions, runner)
+        # 助理正在跑的回覆（M5 票 08）：送出的請求斷了它照樣跑完，所以它的擁有者在這裡。
+        assistant = AssistantRuns(sessions, clients)
+        app.state.assistant = assistant
         rss = RssPoller(sessions, clients)
         notifier = NotifySender(sessions, clients)
         sweeper = Sweeper(sessions)
@@ -227,6 +231,8 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             # 對帳跑在自己的 task 上（202 之後那個請求早就回完了），所以 cancel 迴圈
             # 收不到它。跑到一半被收掉的那一輪不留半筆：`reconcile_once` 只在最後 commit。
             await runner.aclose()
+            # 跑到一半的回覆留下已經存的幾則，下一句話接得上（`services.conversations.turns_of`）。
+            await assistant.aclose()
             await engine.dispose()
 
     return lifespan
