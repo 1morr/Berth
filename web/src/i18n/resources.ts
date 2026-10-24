@@ -1877,6 +1877,14 @@ const zhHant = {
       '這個 Feed 一直讀不到。先看上面的原因：網址或 token 失效了就到 RSS 頁刪掉它、重新加一次；是那一站連不上，等它恢復就好。下一輪輪詢讀到之後，下一次每日巡檢會自己收掉這一件。',
     nextFeedBackfill:
       'Feed 本身讀得到，但每日補漏讀不到某幾個字幕組在 Mikan 上的整季清單（原因裡的 mikan:番組:字幕組），Berth 停機期間被捲掉的集數接不回來。多半是 Mikan 下架了那個番組或字幕組；確定不再需要就到 RSS 頁解除那個 Series 的綁定。讀到之後，下一次每日巡檢會自己收掉這一件。',
+    // 卡住的 Job（M5 票 01）：停在哪一步、原因、下一步。出路是列上的按鈕，或 Job 頁的刪除範圍。
+    progress: '進度',
+    nextSubmitFailed:
+      'Berth 已經不會再自動重送這一筆：暫時性的失敗前後送了五次都沒成，或這一次的失敗再問也一樣（種子連結失效、qBittorrent 拒絕）。先看上面的原因，修好之後按「重新送單」；不要了就按「放棄」。要連 qBittorrent 上的東西一起刪，打開上面那一筆下載用刪除範圍。Job 一離開送單失敗，這一件就自己收掉。',
+    nextImportFailed:
+      '正片沒有鏈接進媒體庫，importer 不會自己再試。先看上面的原因（多半是權限，或媒體庫與 complete 不在同一個檔案系統），修好之後按「再試一次入庫」，已經鏈接好的那幾個會跳過；不要了就按「放棄」。Job 一離開入庫失敗，這一件就自己收掉。',
+    nextStalled:
+      '這一筆超過十分鐘沒有資料在動，多半是沒有人在做種。資料一動起來，這一件就自己收掉；等不到的話按「放棄」，Berth 不再等它。要從 qBittorrent 移除 torrent 與檔案，打開上面那一筆下載用刪除範圍。',
     // RSS Series 缺集（M4 票 130）：缺哪幾集、哪一部作品；搜缺的集在作品頁。
     missingEpisodes: '缺',
     work: '作品',
@@ -1907,6 +1915,9 @@ const zhHant = {
       feed_backfill_failing: '這個 Feed 的每日補漏一直讀不到，超過一天了',
       series_episodes_missing: '這個 RSS Series 已入庫的集數中間缺了幾集',
       series_episodes_collide: '這個 RSS Series 有兩個不同的發佈被入庫成同一集',
+      submit_failed: '送單失敗，Berth 不會再自動重送',
+      import_failed: '入庫失敗，importer 不會自己再試',
+      stalled: '下載停住了，一直沒有資料在動',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -1928,6 +1939,9 @@ const zhHant = {
       feed_backfill_failing: '補漏一直失敗',
       series_episodes_missing: '缺集',
       series_episodes_collide: '同一集多份',
+      submit_failed: '送單失敗',
+      import_failed: '入庫失敗',
+      stalled: '停滯',
     },
     action: {
       relink: '重新鏈接',
@@ -1948,6 +1962,9 @@ const zhHant = {
       adopt: '重新入庫',
       claim_torrent: '認領並建立下載',
       claim_file: '認領進帳本',
+      // 卡住的 Job（M5 票 01）：Job 頁的「再試一次入庫」；放棄同兩顆「承認」，什麼都不刪。
+      retry_import: '再試一次入庫',
+      abandon: '放棄',
       ignore: '忽略',
     },
     working: '處理中…',
@@ -5592,6 +5609,13 @@ const en: Translations<typeof zhHant> = {
       'This feed cannot be read. Check the reason above: if the address or token no longer works, delete the feed on the RSS page and add it again; if the site is down, wait for it to come back. Once a poll reads it, the next daily sweep closes this on its own.',
     nextFeedBackfill:
       'The feed itself reads fine, but the daily backfill cannot read some groups’ season lists on Mikan (the mikan:show:group in the reason), so episodes missed while Berth was down are not caught. Mikan has usually taken that show or group down; if you no longer need it, unbind that series on the RSS page. Once it reads, the next daily sweep closes this on its own.',
+    progress: 'Progress',
+    nextSubmitFailed:
+      'Berth will not send this one again by itself: temporary failures went on through all five tries, or this failure will not change on asking again (a dead torrent link, qBittorrent refusing it). Check the reason above, fix it, then press Send it again; if you no longer want it, press Give up. To delete what is in qBittorrent too, open the download above and use its delete options. This closes on its own once the job leaves send failed.',
+    nextImportFailed:
+      'The main video was not linked into the library, and the importer will not try again by itself. Check the reason above (usually permissions, or the library and complete being on different filesystems), fix it, then press Retry the import; files already linked are skipped. If you no longer want it, press Give up. This closes on its own once the job leaves import failed.',
+    nextStalled:
+      'No data has moved for this one in over ten minutes, most likely because nobody is seeding it. This closes on its own once data moves again; if you would rather not wait, press Give up and Berth stops waiting for it. To remove the torrent and its files from qBittorrent, open the download above and use its delete options.',
     missingEpisodes: 'Missing',
     work: 'Title',
     nextGap:
@@ -5619,6 +5643,9 @@ const en: Translations<typeof zhHant> = {
       feed_backfill_failing: 'This feed’s daily backfill has kept failing for over a day',
       series_episodes_missing: 'Episodes are missing between the ones this RSS series imported',
       series_episodes_collide: 'Two different releases from this RSS series landed as one episode',
+      submit_failed: 'Sending failed and Berth will not retry it by itself',
+      import_failed: 'Importing failed and the importer will not try again by itself',
+      stalled: 'The download has stopped moving',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -5640,6 +5667,9 @@ const en: Translations<typeof zhHant> = {
       feed_backfill_failing: 'BACKFILL KEEPS FAILING',
       series_episodes_missing: 'EPISODES MISSING',
       series_episodes_collide: 'EPISODES COLLIDE',
+      submit_failed: 'SEND FAILED',
+      import_failed: 'IMPORT FAILED',
+      stalled: 'STALLED',
     },
     action: {
       relink: 'Link it again',
@@ -5659,6 +5689,8 @@ const en: Translations<typeof zhHant> = {
       adopt: 'Import it again',
       claim_torrent: 'Claim it as a download',
       claim_file: 'Claim it into the ledger',
+      retry_import: 'Retry the import',
+      abandon: 'Give up',
       ignore: 'Ignore',
     },
     working: 'Working…',

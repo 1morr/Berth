@@ -2287,6 +2287,7 @@ async def _moor(
         await _seed_issues(session, paths)
         await _seed_jellyfin_mismatch(session, scenario)
         await _seed_pipeline_issues(session, scenario, factory)
+        await _seed_stuck_jobs(session, scenario)
         await _seed_claims(session, scenario, paths)
     if scenario.review_demo:
         await _seed_review(session, paths)
@@ -2762,12 +2763,16 @@ PIPELINE_BROKEN = {
 
 
 def _pipeline_torrent(info_hash: str, state: str) -> TorrentStatus:
-    name = PIPELINE_BROKEN[info_hash][0]
+    return replace(_torrent_named(info_hash, PIPELINE_BROKEN[info_hash][0]), state=state)
+
+
+def _torrent_named(info_hash: str, name: str) -> TorrentStatus:
+    """`issues` 情境裡一筆下載到 40% 的 torrent。"""
     now = int(datetime.now(UTC).timestamp())
     return TorrentStatus(
         hash=info_hash,
         name=name,
-        state=state,
+        state="downloading",
         category="berth-anime",
         tags=("berth",),
         progress=0.4,
@@ -2831,6 +2836,75 @@ async def _seed_pipeline_issues(
         for row in scenario.jellyfin.libraries_
     ]
     await watch_conditions(session, factory)
+
+
+#: `issues` 情境裡卡住的三筆下載（M5 票 01）：hash → (名字, Job 的起點狀態, 原因)。
+STUCK_DEMO_JOBS = {
+    "de95824305162738c9f0a1b2c3d4e5f607182930": (
+        "[ANi] SPY×FAMILY - 07 [1080P]",
+        JobState.DOWNLOADING,
+        "",
+    ),
+    "ef06935416273849d0a1b2c3d4e5f60718293041": (
+        "[ANi] SPY×FAMILY - 08 [1080P]",
+        JobState.SUBMIT_FAILED,
+        "rejected: qBittorrent refused the torrent (415)",
+    ),
+    "f017a4652738495ae1b2c3d4e5f6071829304152": (
+        "[ANi] SPY×FAMILY - 09 [1080P]",
+        JobState.IMPORT_FAILED,
+        "link_failed: [Errno 18] Invalid cross-device link",
+    ),
+}
+
+
+async def _seed_stuck_jobs(session: AsyncSession, scenario: Scenario) -> None:
+    """卡住的 Job 那三種（M5 票 01），都由 `qbit_poller` 的第一輪開成 Issue：
+
+    - 一筆下載中的，qBittorrent 替身說它 `stalledDL`、20 分鐘沒動：第一輪推進 `stalled` 並開一件。
+    - 一筆送單失敗、再問也一樣的（事件沒有 `retry_at`）。
+    - 一筆入庫失敗。
+    """
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    idle = int((datetime.now(UTC) - timedelta(minutes=20)).timestamp())
+    for info_hash, (name, state, error) in STUCK_DEMO_JOBS.items():
+        session.add(
+            Job(
+                hash=info_hash,
+                name=name,
+                source_url=f"magnet:?xt=urn:btih:{info_hash}",
+                trigger=JobTrigger.MANUAL,
+                media_id=media_id(MediaKind.TV, 120089),
+                route_id=route.id,
+                state=state,
+                error=error,
+                progress=0.4 if state is JobState.DOWNLOADING else 0.0,
+            )
+        )
+        await session.flush()
+        if state is JobState.SUBMIT_FAILED:
+            session.add(
+                Event(
+                    job_hash=info_hash,
+                    type=EventType.SUBMIT_FAILED.value,
+                    actor=actor_of(None),
+                    payload_json={"error": error},
+                )
+            )
+        if state is JobState.DOWNLOADING:
+            session.add(
+                JobFile(job_hash=info_hash, rel_path=f"{name}/{name}.mkv", size=1_400_000_000)
+            )
+            scenario.qbittorrent.torrents = (
+                *scenario.qbittorrent.torrents,
+                replace(
+                    _torrent_named(info_hash, name),
+                    state="stalledDL",
+                    last_activity=idle,
+                ),
+            )
+    await session.commit()
 
 
 #: `issues` 情境裡那一筆無主 torrent（M2 票 10）：掛著 Anime 的 category，Berth 沒有它的 Job。

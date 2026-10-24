@@ -56,7 +56,7 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
-from berth.services.issues import close_settled, note_cleared, record_issue
+from berth.services.issues import close_settled, flag_stuck_jobs, note_cleared, record_issue
 from berth.services.jobs import (
     IN_CLIENT_STATES,
     freeze,
@@ -236,6 +236,8 @@ async def poll_downloads(
         # 接回主幹的那幾筆（與被別的路徑推走的那幾筆）的管線 Issue 在同一個交易裡收掉：
         # 畫面上不該有一刻是「Job 好了、Issue 還開著」（M3 票 02）。
         await close_settled(session, moment)
+        # 停住、Berth 自己不會再推的那幾筆（含這一輪剛停住的）開成 Issue，同一個交易（M5 票 01）。
+        await flag_stuck_jobs(session, moment)
         await _remember(session, moment, unknown)
         await session.commit()
 

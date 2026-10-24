@@ -1,10 +1,11 @@
 """Issue 的載體與它的按鈕（plan §2.4、§6 issues 群組、brief §9.1、M2 票 05 / 09）。
 
 三件事在這裡：**寫下一件**（`record_issue`，冪等）、**攤給畫面**（`list_issues`）、
-**按下去**（`resolve_issue` / `ignore_issue`）。偵測本身不在這裡——對帳在
+**按下去**（`resolve_issue` / `ignore_issue`）。偵測多半不在這裡——對帳在
 `services/reconcile.py`，管線那四種在 `services/downloads.py` 與 `services/resolver.py`，
 健康檢查那兩種在 `services/health_issues.py`，它們寫下一律呼叫 `record_issue`，量到條件解除時
-呼叫 `note_cleared`（`STAYS_IGNORED` 那幾種）。
+呼叫 `note_cleared`（`STAYS_IGNORED` 那幾種）。例外是卡住的 Job 那三種（`flag_stuck_jobs`，M5 票
+01）：它們的生產者 `jobs` 與 `importer` import 不了這個模組，所以偵測在這裡、由 poller 每一輪叫。
 
 **冪等是這一支的全部重點**。`qbit_poller` 每 5 秒醒一次、對帳每天跑一輪，同一件事會被說很多
 遍；清單上要是一件一列，不是一天一萬七千列。所以寫入是「同一個 `(type, subject)` 只有一筆
@@ -81,6 +82,8 @@ from berth.services.jobs import (
     record_event,
     restart_state,
     resubmit_job,
+    retries_spent,
+    retry_job,
     transition,
 )
 from berth.services.qbittorrent import sign_in
@@ -366,8 +369,10 @@ async def resolve_issue(
         await _rescan(session, factory, row)
     elif action is IssueAction.RECHECK or action is IssueAction.RETRY:
         await _restart(session, factory, row, action, actor=actor)
-    elif action is IssueAction.ACCEPT_LOSS or action is IssueAction.ACCEPT_REMOVAL:
+    elif action in (IssueAction.ACCEPT_LOSS, IssueAction.ACCEPT_REMOVAL, IssueAction.ABANDON):
         await _accept(session, factory, row, actor=actor)
+    elif action is IssueAction.RETRY_IMPORT:
+        await _retry_import(session, factory, row)
     elif action is IssueAction.RESUBMIT:
         await _resubmit(session, factory, row, actor=actor)
     elif action is IssueAction.ADOPT:
@@ -422,6 +427,85 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
     clear_by_system(settled, now)
     await session.flush()
     return len(settled)
+
+
+async def flag_stuck_jobs(session: AsyncSession, now: datetime) -> int:
+    """停住、Berth 自己不會再推的 Job 各開一件（`STUCK_JOBS`，M5 票 01）。回這一輪新開幾件。
+
+    **偵測在這裡、由 poller 每一輪叫**，不在各個轉換點：三個狀態有五個以上的生產者（送單、重試、
+    自動重送、重新送單、啟動時的 `fail_interrupted`、importer、poller 自己的停住），而 `jobs` 與
+    `importer` import 不了這個模組（會繞回來）；放在同一輪的 `close_settled` 旁邊，開與收看的是
+    同一份現況。升級之前就停住的那幾筆，第一輪就補上，不需要資料 migration。
+
+    `submit_failed` 只算 `jobs.retries_spent` 的那幾筆：還排著自動重送的還在路上。別的 Issue 已經
+    說著它現在這個狀態的不開（`covered`：重新送單被拒、落回 `submit_failed` 的 `client_removed`）。
+    開著的那一件只在內容變了時更新 `detail_json`；**`detected_at` 不動**，不同於 `record_issue` 對
+    既有那一筆的更新：每一輪都在量，照寫的話它永遠是「剛剛」，清單的順序也每 5 秒換一次。
+
+    這一輪沒判成卡住的由系統收掉（同巡檢的 `_settle`）：開著的收成 `resolved`——Job 狀態沒變、卻又
+    排上了自動重送的那一筆（人在 Job 頁按了重試、又暫時失敗）`close_settled` 收不到；被忽略的記下
+    解除過（`note_cleared`），之後再停住是新的一件。**不 commit**。
+    """
+    jobs = list(await session.scalars(select(Job).where(Job.state.in_(STUCK_JOBS.values()))))
+    spent = await retries_spent(
+        session, [job.hash for job in jobs if job.state is JobState.SUBMIT_FAILED]
+    )
+    stuck = [job for job in jobs if job.state is not JobState.SUBMIT_FAILED or job.hash in spent]
+    taken = await covered(session, stuck, besides=STUCK_JOBS)
+    flagged = {(_STUCK_KIND[job.state], job.hash): job for job in stuck if job.hash not in taken}
+
+    known = list(
+        await session.scalars(
+            select(Issue).where(
+                Issue.type.in_(STUCK_JOBS),
+                Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
+            )
+        )
+    )
+    gone = [row for row in known if (row.type, row.subject) not in flagged]
+    clear_by_system([row for row in gone if row.status is IssueStatus.OPEN], now)
+    note_cleared(gone, now)
+    open_now = {(row.type, row.subject): row for row in known if row.status is IssueStatus.OPEN}
+    opened = 0
+    for (kind, _), job in flagged.items():
+        detail = {"name": job.name, "error": job.error, "progress": job.progress}
+        existing = open_now.get((kind, job.hash))
+        if existing is not None:
+            if existing.detail_json != detail:
+                existing.detail_json = detail
+            continue
+        recorded = await record_issue(session, kind, job_hash=job.hash, detail=detail, now=now)
+        opened += recorded.opened
+    await session.flush()
+    return opened
+
+
+async def covered(
+    session: AsyncSession, jobs: Sequence[Job], *, besides: Collection[IssueType] = ()
+) -> set[str]:
+    """這幾筆裡已經有一件管線 Issue 說著它現在這個狀態的（`STANDS_WHILE`），不再為同一筆開第二件：
+    開著的那一件已經在等人；被忽略的那一件是人看過、說了不用管，換一個型別再問同一筆是噪音
+    （M4 票 129 code-review）。收掉的不算：它說的是過去。`besides` 那幾種不算數（呼叫端自己的
+    型別）。
+
+    巡檢的第一批卡住（`sweep`）與卡住的 Job（`flag_stuck_jobs`）共用。
+    """
+    if not jobs:
+        return set()
+    state = {job.hash: job.state for job in jobs}
+    kinds = [kind for kind in STANDS_WHILE if kind not in besides]
+    open_rows = await session.execute(
+        select(Issue.type, Issue.job_hash).where(
+            Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
+            Issue.type.in_(kinds),
+            Issue.job_hash.in_(state),
+        )
+    )
+    return {
+        job_hash
+        for kind, job_hash in open_rows.tuples()
+        if job_hash is not None and state[job_hash] in STANDS_WHILE[kind]
+    }
 
 
 def note_cleared(rows: Iterable[Issue], now: datetime) -> None:
@@ -757,18 +841,29 @@ async def _accept(
         raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
 
 
+async def _retry_import(session: AsyncSession, factory: ServiceClientFactory, row: Issue) -> None:
+    """重試入庫：Job 頁的那一顆（`jobs.retry_job`），Job 回 `importing`，importer 下一輪從沒鏈接的
+    那幾個接著做（M5 票 01）。又失敗的話那一筆回到 `import_failed`，下一輪 poller 開新的一件。"""
+    job = await _broken_job(session, row)
+    try:
+        await retry_job(session, factory, job.hash)
+    except JobRejectedError as refusal:
+        raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
+
+
 async def _resubmit(
     session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
 ) -> None:
     """重新送單：照存下來的下載連結再加一次（`services/jobs.resubmit_job`）。
 
     **送了而 qBittorrent 不收**（409 / 415）時 Job 落在 `submit_failed`，這一件仍然開著：
-    修好之後再按一次就是再送一次（所以 `submit_failed` 也在這一顆的 `_BROKEN_BY` 裡）。
+    修好之後再按一次就是再送一次（所以 `client_removed` 的 `STANDS_WHILE` 也有 `submit_failed`）。
+    `submit_failed` 那一種（M5 票 01）走同一顆：起點本來就是 `submit_failed`。
     """
     job = await _broken_job(session, row)
     try:
         view = await resubmit_job(
-            session, factory, job.hash, expected=_BROKEN_BY[IssueAction.RESUBMIT], actor=actor
+            session, factory, job.hash, expected=STANDS_WHILE[row.type], actor=actor
         )
     except JobRejectedError as refusal:
         raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
@@ -920,20 +1015,23 @@ def _actions(row: Issue, job_state: JobState | None) -> tuple[IssueAction, ...]:
 
     型別決定有哪幾顆（`ISSUE_ACTIONS`），這一筆的資料決定其中哪幾顆按得下去：決定過的
     一顆都沒有，指不到帳本的按不了動帳本的那幾顆，沒有 Job 的按不了動 Job 的那幾顆，
-    Job 已經離開那個壞掉狀態的管線 Issue 按不了它的按鈕（`_BROKEN_BY`），大小不同的
+    Job 已經離開那個壞掉狀態的管線 Issue 按不了它的按鈕（`STANDS_WHILE`），大小不同的
     `inode_mismatch` 沒有「以硬鏈接取代」。
 
     **在後端算而不是讓畫面猜**：按下去會被拒絕的按鈕不該畫出來。
     """
     if row.status is not IssueStatus.OPEN:
         return ()
+    standing = STANDS_WHILE.get(row.type)
     usable: list[IssueAction] = []
     for action in ISSUE_ACTIONS[row.type]:
         if action in _ON_THE_LEDGER_ROW and row.ledger_id is None:
             continue
         if action in _ON_THE_JOB and job_state is None:
             continue
-        if action in _BROKEN_BY and job_state not in _BROKEN_BY[action]:
+        # **看這一種型別的**，不是看這一顆：「重新送單」與「放棄」掛在好幾種型別上，各自站得住的
+        # 狀態不同。
+        if standing is not None and job_state not in standing:
             continue
         # 「否則列出等人決定」（brief §9.1）：大小不同時不給這一顆。
         same_size = (row.detail_json or {}).get("same_size")
@@ -967,11 +1065,20 @@ _ON_THE_JOB = frozenset(
         IssueAction.RETRY,
         IssueAction.RESUBMIT,
         IssueAction.ACCEPT_REMOVAL,
+        IssueAction.RETRY_IMPORT,
+        IssueAction.ABANDON,
     }
 )
-#: 管線那三種 Issue 說的事**還是現況**的 Job 狀態（plan §3.1 的出邊）。一份定義兩個用途：
+#: 卡住的 Job 那三種（M5 票 01）：Job 停在這個狀態、Berth 自己不會再推它（`flag_stuck_jobs`）。
+STUCK_JOBS: dict[IssueType, JobState] = {
+    IssueType.SUBMIT_FAILED: JobState.SUBMIT_FAILED,
+    IssueType.IMPORT_FAILED: JobState.IMPORT_FAILED,
+    IssueType.STALLED: JobState.STALLED,
+}
+_STUCK_KIND: dict[JobState, IssueType] = {state: kind for kind, state in STUCK_JOBS.items()}
+#: 管線那幾種 Issue 說的事**還是現況**的 Job 狀態（plan §3.1 的出邊）。一份定義兩個用途：
 #:
-#: - 按鈕只在這幾個狀態按得了（`_BROKEN_BY`）。Job 自己往前走了（另一個分頁按過、Job 頁上重試
+#: - 按鈕只在這幾個狀態按得了（`_actions`）。Job 自己往前走了（另一個分頁按過、Job 頁上重試
 #:   成功、它被刪了）的話，按下去會把一筆好好的下載拉回去。
 #: - Job 離開這幾個狀態時由系統收掉（`close_settled`，M3 票 02）。
 #:
@@ -981,11 +1088,13 @@ STANDS_WHILE: dict[IssueType, frozenset[JobState]] = {
     IssueType.MISSING_FILES: frozenset({JobState.MISSING_FILES}),
     IssueType.CLIENT_ERROR: frozenset({JobState.CLIENT_ERROR}),
     IssueType.CLIENT_REMOVED: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
+    **{kind: frozenset({state}) for kind, state in STUCK_JOBS.items()},
 }
 #: 「忽略」在條件持續期間有效的幾種（brief §9.1，`record_issue` 與 `note_cleared`）：週期量測的
 #: 那幾種，其餘的忽略是「這一次不處理」。健康檢查那兩種 5 分鐘量一次（2026-09-23 拍板）；回驗
 #: 每天對帳比一次、`unknown_torrent` 的 poller 每 5 秒寫一次（M4 票 122）、巡檢那幾種每天量一次
-#: （M4 票 129、130）——照「這一次」的話忽略等於無效，而「等你處理」的通知會為同一件事每天推一次。
+#: （M4 票 129、130）、卡住的 Job 那三種 poller 每一輪量（M5 票 01）——照「這一次」的話忽略等於
+#: 無效，而「等你處理」的通知會為同一件事每天推一次。
 STAYS_IGNORED = frozenset(
     {
         IssueType.LIBRARY_USES_TVDB,
@@ -997,10 +1106,8 @@ STAYS_IGNORED = frozenset(
         IssueType.FEED_BACKFILL_FAILING,
         IssueType.SERIES_EPISODES_MISSING,
         IssueType.SERIES_EPISODES_COLLIDE,
+        *STUCK_JOBS,
     }
 )
 #: 條件解除過的記號，寫在被忽略的那一筆的 `detail_json` 上（`note_cleared`）。
 CLEARED_AT = "cleared_at"
-_BROKEN_BY: dict[IssueAction, frozenset[JobState]] = {
-    action: states for kind, states in STANDS_WHILE.items() for action in ISSUE_ACTIONS[kind]
-}

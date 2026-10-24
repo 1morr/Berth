@@ -169,6 +169,9 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.FEED_BACKFILL_FAILING: "補漏一直失敗",
         IssueType.SERIES_EPISODES_MISSING: "缺集",
         IssueType.SERIES_EPISODES_COLLIDE: "同一集多份",
+        IssueType.SUBMIT_FAILED: "送單失敗",
+        IssueType.IMPORT_FAILED: "入庫失敗",
+        IssueType.STALLED: "停滯",
     },
     Language.EN: {
         IssueType.LIBRARY_LINK_MISSING: "link missing",
@@ -190,6 +193,9 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.FEED_BACKFILL_FAILING: "backfill keeps failing",
         IssueType.SERIES_EPISODES_MISSING: "episodes missing",
         IssueType.SERIES_EPISODES_COLLIDE: "episodes collide",
+        IssueType.SUBMIT_FAILED: "submit failed",
+        IssueType.IMPORT_FAILED: "import failed",
+        IssueType.STALLED: "stalled",
     },
 }
 

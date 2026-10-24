@@ -30,7 +30,7 @@ import asyncio
 import json
 import logging
 from collections import Counter
-from collections.abc import AsyncIterator, Coroutine, Iterable, Sequence
+from collections.abc import AsyncIterator, Collection, Coroutine, Iterable, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -612,19 +612,39 @@ async def _due_retries(session: AsyncSession, now: datetime) -> list[str]:
             .order_by(Job.added_at, Job.hash)
         )
     )
-    if not hashes:
-        return []
-    latest: dict[str, dict[str, Any]] = {}
-    rows = await session.execute(
-        select(Event.job_hash, Event.payload_json)
-        .where(Event.job_hash.in_(hashes), Event.type == EventType.SUBMIT_FAILED.value)
-        .order_by(Event.id)
-    )
-    for job_hash, payload in rows:
-        latest[job_hash] = payload or {}
+    latest = await _last_failures(session, hashes)
     return [
         job_hash for job_hash in hashes if _due_attempt(latest.get(job_hash, {}), now) is not None
     ]
+
+
+async def retries_spent(session: AsyncSession, job_hashes: Collection[str]) -> set[str]:
+    """這幾筆 `submit_failed` 裡**不會再自動重送**的：最後一次失敗沒排 `retry_at`——暫時性失敗的
+    次數用完了，或那一次本來就是再問也一樣的（M5 票 01，卡住的 Job 開成 Issue）。
+
+    排了 `retry_at` 的不算，即使時間已過：那一筆還在等 `retry_due`（前提不成立時它留在原地不花
+    次數）。沒有任何一筆 `submit_failed` 事件的也算：沒有東西排著它。
+    """
+    latest = await _last_failures(session, job_hashes)
+    return {job_hash for job_hash in job_hashes if not latest.get(job_hash, {}).get("retry_at")}
+
+
+async def _last_failures(
+    session: AsyncSession, job_hashes: Collection[str]
+) -> dict[str, dict[str, Any]]:
+    """每一筆最後一次 `submit_failed` 事件的 payload；沒有的不在裡面。"""
+    latest: dict[str, dict[str, Any]] = {}
+    if not job_hashes:
+        return latest
+    rows = await session.execute(
+        select(Event.job_hash, Event.payload_json)
+        .where(Event.job_hash.in_(job_hashes), Event.type == EventType.SUBMIT_FAILED.value)
+        .order_by(Event.id)
+    )
+    for job_hash, payload in rows:
+        if job_hash is not None:
+            latest[job_hash] = payload or {}
+    return latest
 
 
 async def _last_failure(session: AsyncSession, job_hash: str) -> dict[str, Any]:
