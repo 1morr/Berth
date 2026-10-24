@@ -1555,6 +1555,9 @@ class RematchRefusal(StrEnum):
     LINK_FAILED = "link_failed"
     #: 舊的那一條鏈接拆不掉。`detail` 是系統原文；新的那一條已經收回，帳本沒改。
     UNLINK_FAILED = "unlink_failed"
+    #: 要拿掉的那一條是唯一一份：complete 裡的來源不在了（M5 票 03）。「忽略」不刪資料，
+    #: 要刪它走刪除範圍。`detail` 是來源路徑。
+    SOURCE_MISSING = "source_missing"
     #: 要「套用到這個 RSS Series」，而這個檔案不是 RSS Series 送的（或那個 Series 不在了）。
     #: M3 票 13。
     NOT_FROM_SERIES = "not_from_series"
@@ -1576,6 +1579,9 @@ class ReviewRefusal(StrEnum):
     NOT_AUDITED = "not_audited"
     #: 硬鏈接拆不掉。`detail` 是系統原文。
     UNLINK_FAILED = "unlink_failed"
+    #: complete 裡的來源不在了：媒體庫那一份是唯一一份，撤銷會把它刪掉。要刪它走刪除範圍
+    #: （M5 票 03）。`detail` 是來源路徑。
+    SOURCE_MISSING = "source_missing"
 
 
 class FeedKind(StrEnum):

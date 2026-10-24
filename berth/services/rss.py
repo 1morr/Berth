@@ -667,12 +667,14 @@ async def _bind_to_feed_route(
     return bound.submitted
 
 
-@command(Effect.REVERSIBLE, inverse="rss.add_feed")
+# Item 跟著刪：加回同一個網址只長得出那一站現在還列著的，更早的紀錄與每一筆排除、預覽過的結論
+# 都回不來（M5 票 03 改掉原本的「可逆、反向是 `add_feed`」）。
+@command(Effect.IRREVERSIBLE)
 async def delete_feed(session: AsyncSession, feed_id: int) -> int:
     """刪 Feed 連它的 Item 一起刪，RSS Series 與綁定留著（shape §4）。回刪掉幾筆 Item。
 
-    可逆的根據：重新加回同一個網址會重新長出 Item，已經送過的由 `add_download` 以 info hash
-    認回同一筆 Job，不重送。
+    加回同一個網址會重新長出那一站還列著的 Item，已經送過的由 `add_download` 以 info hash 認回
+    同一筆 Job，不重送；那一站已經不列的就沒了。
     """
     row = await session.get(RssFeed, feed_id)
     if row is None:
@@ -841,7 +843,9 @@ async def prime_feed(
 # --- 輪詢 ---------------------------------------------------------------
 
 
-@command(Effect.REVERSIBLE)
+# 背景迴圈的一輪：沒有人在場，送出的「正在下載」排給每一位訂閱者（`download_round`），送出去
+# 收不回來——同 `sweep.sweep_once`。人按的「立即輪詢」（`poll_feed`）看主效果，同手動送單。
+@command(Effect.IRREVERSIBLE)
 async def poll_due(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> int:

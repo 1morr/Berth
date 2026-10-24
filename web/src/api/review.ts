@@ -51,6 +51,7 @@ const REASONS: ReasonSet<ReviewRefusal> = {
   ledger_missing: true,
   not_audited: true,
   unlink_failed: true,
+  source_missing: true,
 }
 
 /** 這一次失敗是「後端說不行」還是「網路壞了」。認不得的理由回 `null`。 */

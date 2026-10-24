@@ -24,7 +24,7 @@ _ATTRIBUTE = "__berth_command__"
 class Effect(StrEnum):
     """副作用等級（brief §14）。"""
 
-    #: 只讀，什麼都不改。
+    #: 只讀，什麼都不改。補外部服務的快取（TMDB 的抄本，重抓就是現況）也算只讀。
     READ = "read"
     #: 改了東西，但有路回去：反向命令、或同一個命令再按一次別的選項。
     REVERSIBLE = "reversible"

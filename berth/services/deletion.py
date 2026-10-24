@@ -49,6 +49,7 @@ from berth.domain import EventType, JobRefusal, JobState, LedgerStatus
 from berth.logs import job_context
 from berth.models import Event, Job, JobFile, LedgerEntry, PathSettings, QbittorrentSettings, Route
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.jobs import JobRejectedError, job_lock, record_event, transition
 from berth.services.qbittorrent import sign_in
 from berth.services.settings import read_settings
@@ -115,6 +116,7 @@ class DeleteOutcome:
     unmanaged: tuple[str, ...] = ()
 
 
+@command(Effect.READ)
 async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEstimate:
     """這一筆刪下去會空出多少（brief §9.2）。**只讀，不改任何東西。**
 
@@ -138,6 +140,9 @@ async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEst
     )
 
 
+# 移除 torrent、刪 complete 裡的檔案、purge（brief §14）。等級照最壞的那一種範圍標：
+# 標記是一支命令一個，不看參數。
+@command(Effect.IRREVERSIBLE)
 async def delete_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -494,6 +499,28 @@ def remove_one(path: Path, *, roots: Sequence[Path], placed: Placed) -> Unlink:
     return Unlink.REMOVED if gone else Unlink.GONE
 
 
+def last_copy(path: Path, *, roots: Sequence[Path], placed: Placed) -> bool:
+    """拆掉這一條，資料就沒了：上面是 Berth 放的那一個，而它的來源已經不在 complete 裡。
+
+    可逆的命令（rematch 的「忽略」、audit 撤銷）走到這裡就停（M5 票 03）：它們說的是「這一個不該
+    在媒體庫」，不是「刪掉它」。來源還在、只是換了 inode（重新下載）的不算——鏈得回來。
+    守衛同 `remove_one`：指到媒體庫外面的那一條連 `stat` 都不做，丟 `fs.PathEscapeError`。
+    """
+    fs.root_of(path, roots)
+    try:
+        facts = fs.stat(path)
+    except FileNotFoundError:
+        return False
+    if placed.source is None or not placed.holds(facts):
+        return False
+    try:
+        fs.stat(placed.source)
+    except FileNotFoundError:
+        return True
+    return False
+
+
+@command(Effect.READ)
 async def route_targets(session: AsyncSession) -> list[Path]:
     """刪除守衛認得的那幾個根：每一條 Route 的目標路徑。媒體庫裡只刪得到它們底下的東西。"""
     return [Path(row.target_path) for row in await session.scalars(select(Route))]

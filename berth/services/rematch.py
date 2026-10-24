@@ -56,7 +56,8 @@ from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.models.types import utcnow
 from berth.parser import revise
 from berth.services.clients import ServiceClientFactory
-from berth.services.deletion import Placed, Unlink, remove_one, route_targets
+from berth.services.commands import Effect, command
+from berth.services.deletion import Placed, Unlink, last_copy, remove_one, route_targets
 from berth.services.importer import (
     TargetTakenError,
     link_into,
@@ -150,6 +151,9 @@ class Landing:
     audit: bool = False
 
 
+# 反向是同一支命令改回原本的處置（事件的 `from`）。只拿掉、不另鏈的那幾個來源不在就拒絕
+# （`_spare_last_copies`），所以可逆。
+@command(Effect.REVERSIBLE, inverse="rematch.rematch_file")
 async def rematch_file(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -171,6 +175,7 @@ async def rematch_file(
         landing.because, landing.audit = to.because, to.audit
         main.planned = _decided(main.planned, kind, to, landing)
         landing.moves.extend(await _sidecars(session, landing, main))
+        await _spare_last_copies(session, landing)
         plan = await land(session, landing, actor=actor)
         unmanaged = [move.unmanaged for move in landing.moves if move.unmanaged]
         if landing.job is not None:
@@ -197,6 +202,27 @@ async def rematch_file(
     )
 
 
+async def _spare_last_copies(session: AsyncSession, landing: Landing) -> None:
+    """只拿掉、不另外鏈一條的那幾個（忽略、跟著影片被拿掉的字幕），來源都還在才做（M5 票 03）。
+
+    來源不在時媒體庫那一份是唯一一份：拿掉就是刪掉，而 rematch 是可逆命令。在任何磁碟動作之前
+    整個拒絕，字幕也算——`land` 對跟著走的那幾個只記錯、照做其餘的，到那裡就太晚了。另外鏈一條的
+    不必問：來源不在就鏈不起來，`_carry_out` 在拆舊的之前就停了。重複版本的「取代」不經過這裡：
+    它要的就是舊的那一份消失。
+    """
+    roots = await route_targets(session)
+    for move in landing.moves:
+        if move.old is None or move.planned.action in WRITTEN:
+            continue
+        try:
+            last = last_copy(Path(move.old.target_path), roots=roots, placed=Placed.of(move.old))
+        except (OSError, fs.PathEscapeError) as exc:
+            raise RematchRejectedError(RematchRefusal.UNLINK_FAILED, message(exc)) from exc
+        if last:
+            raise RematchRejectedError(RematchRefusal.SOURCE_MISSING, move.old.source_abs_path)
+
+
+@command(Effect.READ)
 async def destination(session: AsyncSession, ledger_id: int, to: Assignment) -> str:
     """`rematch_file` 會把這一列帳本放到哪裡（容器裡的完整路徑），**不動任何東西**。
 
@@ -225,6 +251,8 @@ async def _job_hash_of(
     return row.job_hash
 
 
+# 只拿行程內的鎖，什麼都不寫。
+@command(Effect.READ)
 @asynccontextmanager
 async def locked(*job_hashes: str | None) -> AsyncIterator[None]:
     """鎖住這幾筆 Job：importer 的重試、audit 的兩顆、Plan 編輯、刪除都寫同一份 Plan 與帳本。
@@ -340,6 +368,7 @@ async def _job_file(session: AsyncSession, job_hash: str | None, rel_path: str) 
     return found
 
 
+@command(Effect.READ)
 async def claimant(session: AsyncSession, entry: LedgerEntry) -> PlanItem | None:
     """帳本這一列的來源在它那一筆 Job 的 Plan 裡是哪一列（取代舊版時要改成沒有落點的那一列）。"""
     job = await session.get(Job, entry.job_hash) if entry.job_hash is not None else None
@@ -488,6 +517,7 @@ async def _sidecars(session: AsyncSession, landing: Landing, main: Move) -> list
     return moves
 
 
+@command(Effect.READ)
 async def sidecars_of(session: AsyncSession, video: LedgerEntry) -> list[LedgerEntry]:
     """帳本上掛在這個影片旁邊的字幕。旁邊的定義是命名規則的那一條（`naming.subtitle_target`）：
     同一個資料夾、檔名以影片的主幹加一個點開頭。rematch 與取代舊版共用這一份。"""
@@ -508,6 +538,9 @@ async def sidecars_of(session: AsyncSession, video: LedgerEntry) -> list[LedgerE
 # --- 套用 -----------------------------------------------------------------
 
 
+# 磁碟那一步本身沒有「唯一一份」的守衛：重複版本的「取代」經過這裡換掉舊的那一份。
+# 守衛在 `rematch_file`。
+@command(Effect.IRREVERSIBLE)
 async def land(session: AsyncSession, landing: Landing, *, actor: str) -> Plan:
     """磁碟 → 紀錄。第一個檔案做不成就整個拒絕（還沒寫任何東西）；其餘的只記在自己那一列。
 
@@ -699,6 +732,8 @@ async def _resummarise(session: AsyncSession, plan_id: int) -> None:
     loaded.plan.summary_json = summary | {"review_reason": reason}
 
 
+# 只請 Jellyfin 重掃，同 `importer.notify_jellyfin`。
+@command(Effect.REVERSIBLE)
 async def announce(session: AsyncSession, factory: ServiceClientFactory, landing: Landing) -> None:
     """通知 Jellyfin：新鏈接的路徑與拆掉的路徑（brief §20.1：它對每一條都重讀那個資料夾）。
 
