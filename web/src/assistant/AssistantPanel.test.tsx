@@ -579,6 +579,63 @@ describe('開與關', () => {
   })
 })
 
+describe('窄版（`lg` 以下，面板取代頁面）', () => {
+  /** 讓 `matchMedia` 說這是手機寬度：jsdom 沒有它，面板沒有它時當桌機。 */
+  function narrow() {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) => ({ matches: false, media: query }) as unknown as MediaQueryList,
+    )
+  }
+
+  it('面板裡的連結換了頁就收起面板，看得到那一頁', async () => {
+    narrow()
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/assistant': { body: { ready: false, chat_only: false, tools: [] } },
+      'GET /api/conversations': { body: [] },
+    })
+    const { router } = renderApp('/')
+    const panel = await openPanel()
+
+    await userEvent.click(await within(panel).findByRole('link', { name: '去設定' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/ai'))
+    expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+  })
+
+  it('連到的就是這一頁（在活動頁按「活動」）也收起面板', async () => {
+    narrow()
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/assistant': { body: READY },
+      'GET /api/conversations': { body: [] },
+      'GET /api/ai-activity': { body: { entries: [], truncated: false } },
+    })
+    renderApp('/ai-activity')
+    const panel = await openPanel()
+
+    await userEvent.click(within(panel).getByRole('link', { name: '活動' }))
+
+    expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('berth.assistant.open')).toBe('0')
+  })
+
+  it('不記得上次開著：每次打開網頁看到的是那一頁', async () => {
+    narrow()
+    localStorage.setItem('berth.assistant.open', '1')
+    render()
+
+    expect(await screen.findByRole('button', { name: '助理' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+  })
+})
+
 describe('確認卡', () => {
   const ADD_DMHY: ProposalCard = {
     id: 5,

@@ -5,6 +5,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type RefObject,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,6 +35,7 @@ import { ResultCard } from './ResultCard'
 import { toolName } from './toolNames'
 import { ToolCallContext } from './toolCall'
 import { blocksOf, withChunk, type Block, type Item, type Pending } from './transcript'
+import { isWide } from './usePanelOpen'
 
 /**
  * 助理的側面板（M5 票 08，`.scratch/m5/side-panel-shape.md`）。`AppShell` 決定它在哪裡、開著沒有；
@@ -45,9 +47,6 @@ import { blocksOf, withChunk, type Block, type Item, type Pending } from './tran
 
 /** 面板的 id：頁首的「助理」鍵以 `aria-controls` 指著它。 */
 export const PANEL_ID = 'assistant'
-
-/** 面板並排的寬度（Tailwind 的 `lg`）：以下面板取代頁面。 */
-const WIDE = '(min-width: 64rem)'
 
 type Selection = { kind: 'latest' } | { kind: 'new' } | { kind: 'id'; id: number }
 
@@ -61,13 +60,17 @@ export function AssistantPanel({
   admin,
   focusOnMount,
   onClose,
+  onLeave,
   request = null,
   onRequestHandled,
 }: {
   admin: boolean
   /** 使用者按「助理」打開的：焦點進輸入框。重整時照記憶打開的不搶焦點。 */
   focusOnMount: boolean
+  /** 關閉鍵與 Esc：收起，焦點回頁首的「助理」鍵。 */
   onClose: () => void
+  /** `lg` 以下按了面板裡的連結：收起面板讓出那一頁，焦點不搬回頁首。 */
+  onLeave: () => void
   request?: ConversationRequest | null
   /** 請求接下了：`AppShell` 清掉它，之後關了再開不會又跳回那一則。 */
   onRequestHandled?: () => void
@@ -118,26 +121,28 @@ export function AssistantPanel({
     }
   }
 
+  // `lg` 以下面板取代頁面：面板裡的連結（卡上的作品、「看這一筆」、「去設定」、抬頭的「活動」）換了頁，
+  // 不收起面板就換了一頁卻看不到（M5 票 15）。`defaultPrevented` 是路由自己接下的站內導覽；
+  // 按著修飾鍵開新分頁的不算。
+  const onClick = (event: MouseEvent<HTMLElement>) => {
+    if (!event.defaultPrevented || isWide()) return
+    if (event.target instanceof Element && event.target.closest('a[href]')) onLeave()
+  }
+
   return (
     <aside
       id={PANEL_ID}
       aria-label={t('assistant.label')}
       onKeyDown={onKeyDown}
-      // `lg` 以上固定在右側全高（`AppShell` 讓出同寬的一欄）；以下取代 `main`，捲過頁首之後佔滿畫面。
+      onClick={onClick}
+      // `lg` 以上固定在右側全高（`AppShell` 讓出同寬的一欄）；以下取代頁首與 `main`，佔滿畫面。
       className="sticky top-0 flex h-dvh flex-col bg-well lg:fixed lg:inset-y-0 lg:right-0 lg:w-[26rem] lg:border-l-2 lg:border-rule-strong xl:w-[28rem]"
     >
       <div className="flex flex-wrap items-center gap-2 border-b-2 border-rule bg-deck px-4 py-2.5">
         <h2 className="label mr-auto bg-deck text-ink">{t('assistant.label')}</h2>
         {ready && (
           <>
-            <Link
-              to="/ai-activity"
-              className={COMPACT_BUTTON}
-              // `lg` 以下面板取代頁面：不收起面板就換了一頁卻看不到。
-              onClick={() => {
-                if (!window.matchMedia(WIDE).matches) onClose()
-              }}
-            >
+            <Link to="/ai-activity" className={COMPACT_BUTTON}>
               {t('assistant.activity')}
             </Link>
             <button
