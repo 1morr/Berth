@@ -58,9 +58,11 @@ PROBE_TOOL = ToolSpec(
     },
 )
 _HELLO = "This is a connection test from Berth. Reply with the single word: ok"
+# 「拿到結果後用一句話回」：舊的「Do not answer in text」在第三次跟著歷史送回去，模型照做又呼叫一次
+# （2026-10-24 實跑 DeepSeek 兩種格式，第三次 4 / 10 重複呼叫；改了之後 10 / 10 回文字）。
 _CALL = (
-    'This is a tool-calling test from Berth. Call the berth_echo tool with nonce "{nonce}". '
-    "Do not answer in text."
+    'This is a tool-calling test from Berth. Call the berth_echo tool once with nonce "{nonce}". '
+    "When you get its result, reply with one short sentence."
 )
 #: 會先想一下的模型要留一點空間；三次加起來仍是幾百個 tokens。
 _MAX_OUTPUT = 256
@@ -316,9 +318,10 @@ class _Probe:
             if exc.failure is AiFailure.REJECTED:
                 return _unsupported(ToolGap.RESULT_REJECTED, exc.detail)
             return exc
-        if not answered.reply.text.strip():
-            return _unsupported(ToolGap.NO_REPLY, _describe(answered))
-        return AiToolTest(supported=True, tested_at=utcnow())
+        if answered.reply.text.strip() or _called_again(answered.reply, nonce):
+            # 又呼叫了一次、名字與 nonce 都對：工具結果的來回已經走通，指令擋不住每一個模型這樣做。
+            return AiToolTest(supported=True, tested_at=utcnow())
+        return _unsupported(ToolGap.NO_REPLY, _describe(answered))
 
     def view(
         self,
@@ -355,6 +358,11 @@ def _judge_call(reply: ModelTurn, nonce: str) -> tuple[ToolCall, ...] | AiToolTe
         if call.name != PROBE_TOOL.name or (call.arguments_object() or {}).get("nonce") != nonce:
             return _unsupported(ToolGap.WRONG_CALL, f"{call.name} {call.arguments}"[:_SNIPPET])
     return calls
+
+
+def _called_again(reply: ModelTurn, nonce: str) -> bool:
+    """第三次的回覆是同一個工具、同一個 nonce 的呼叫（M5 票 16 實跑）。"""
+    return isinstance(_judge_call(reply, nonce), tuple)
 
 
 def _describe(ended: TurnEnded) -> str:

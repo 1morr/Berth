@@ -305,6 +305,24 @@ def test_the_request_goes_to_the_base_url_that_was_saved(client: TestClient) -> 
     assert {row.host for row in calls_in(client)} == {"openrouter.ai"}
 
 
+@respx.mock
+def test_calling_the_tool_again_after_the_result_still_counts_as_supported(
+    client: TestClient,
+) -> None:
+    """實跑 DeepSeek（2026-10-24，兩種格式都是）：同一組設定連測 20 次有 14 次在第三步又呼叫一次
+    `berth_echo`（名字與 nonce 都對），被判成「只能聊天」。工具結果的來回已經走通，那一次呼叫就是
+    支援的證據；這個假端點輪流回呼叫與一句話，連測四次都要是支援（M5 票 16）。"""
+    afters = iter([calls_echo, says("Got it."), calls_echo, says("Got it.")])
+    respx.post(OFFICIAL).mock(
+        side_effect=endpoint(says("ok"), calls_echo, lambda request: next(afters)(request))
+    )
+    save(client)
+
+    verdicts = [run_test(client).json()["tools"] for _ in range(4)]
+
+    assert [tools["supported"] for tools in verdicts] == [True, True, True, True]
+
+
 @pytest.mark.parametrize(
     ("call", "gap"),
     [
