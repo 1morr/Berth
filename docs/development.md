@@ -170,7 +170,8 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
   前端的 `ReasonSet` 加一格（`tsc`，`refusal.test.ts` 的 `@ts-expect-error` 釘著那道閘門本身）。
   第五件是**畫面要說一句話**：`jobs.refusal.*` 走動態 key，所以 `t()` 的 `strictKeyChecks`
   會替它擋；`RouteRefusal` 與 `AccessRefusal` 的消費端是查表或單一理由比較，那一句沒有閘門。
-- **後端組的前端網址只從 `deeplink.BerthPage` 來**（通知連結，M5 票 02）。它不是任何端點的回應，
+- **後端組的前端網址從 `deeplink.BerthPage` 來**（通知連結，M5 票 02）。這是慣例：`berth_link` 收任意字串，
+  繞過它手組的路徑沒有閘門。`BerthPage` 不是任何端點的回應，
   由 `main._document_pages` 塞進 OpenAPI 的 components；前端 `src/berthPages.test.ts` 的 `PAGES`
   對每一條模板寫明落在哪一條路由，拿真的路由表解析。後端加一頁：重跑 `pnpm gen:api`
   （`TestBerthPages` 先紅），`PAGES` 少一個鍵 `tsc` 紅；前端改了那幾條路由：vitest 紅。

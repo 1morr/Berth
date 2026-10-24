@@ -64,12 +64,17 @@ async def waiting_now(session: AsyncSession) -> dict[str, Waiting]:
     found: dict[str, Waiting] = {}
     for kind, id_ in await queue_keys(session):
         found[f"review:{kind.value}:{id_}"] = Waiting(
-            WaitingSource.REVIEW, id_, f"{BerthPage.REVIEW}#{kind.value}-{id_}"
+            WaitingSource.REVIEW, id_, f"{LIST_PAGE[WaitingSource.REVIEW]}#{kind.value}-{id_}"
         )
     for id_, issue_type in await open_issues(session):
         found[f"issue:{id_}"] = Waiting(
-            WaitingSource.ISSUE, id_, f"{BerthPage.ISSUES}#issue-{id_}", issue_type=issue_type
+            WaitingSource.ISSUE,
+            id_,
+            f"{LIST_PAGE[WaitingSource.ISSUE]}#issue-{id_}",
+            issue_type=issue_type,
         )
     for id_ in await unbound_series(session):
-        found[f"rss:{id_}"] = Waiting(WaitingSource.RSS, id_, f"{BerthPage.RSS}#series-{id_}")
+        found[f"rss:{id_}"] = Waiting(
+            WaitingSource.RSS, id_, f"{LIST_PAGE[WaitingSource.RSS]}#series-{id_}"
+        )
     return found
