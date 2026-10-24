@@ -13,7 +13,6 @@ dependencies = [
     "feedparser>=6.0.14",
     "guessit>=4.4.0",
     "httpx>=0.28.1",
-    "httpx-sse>=0.4.3",
     "pydantic>=2.13.5",
     "pymediainfo>=7.0.1",
     "sqlalchemy[asyncio]>=2.0.52",
@@ -41,7 +40,6 @@ dev = [
     "pyyaml>=6.0.3",
     "respx>=0.23.1",
     "ruff>=0.16.6",
-    "time-machine>=3.5.1",
     "types-pyyaml>=6.0.12.20260906",
 ]
 

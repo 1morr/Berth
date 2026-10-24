@@ -1,6 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import { FilterBar } from './FilterBar'
@@ -38,33 +36,5 @@ describe('FilterBar', () => {
 
     expect(screen.getByRole('button', { name: '全部 6' })).toBe(all)
     expect(all).toHaveFocus()
-  })
-
-  it('按了換選、那一顆變成字：焦點落在新選的那一格，不掉回頁面頂端（M5 票 15）', async () => {
-    function Switch() {
-      const [current, setCurrent] = useState<'week' | 'month'>('month')
-      return (
-        <FilterBar
-          label="期間"
-          options={[
-            { value: 'week', label: '7 天' },
-            { value: 'month', label: '30 天' },
-          ]}
-          current={current}
-          renderOption={(value, label) => (
-            <button type="button" onClick={() => setCurrent(value)}>
-              {label}
-            </button>
-          )}
-        />
-      )
-    }
-    render(<Switch />)
-    // 一開始畫出來的那一格不搶焦點。
-    expect(screen.getByText('30 天')).not.toHaveFocus()
-
-    await userEvent.click(screen.getByRole('button', { name: '7 天' }))
-
-    expect(screen.getByText('7 天')).toHaveFocus()
   })
 })

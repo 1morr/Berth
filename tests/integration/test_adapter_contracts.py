@@ -2279,9 +2279,6 @@ async def test_prowlarr_schema_carries_the_ten_default_indexers() -> None:
     assert by_name["nyaasi"].privacy == "public"
     # Anime Tosho 是唯一不是 public 的那一個，勾選清單靠這個欄位標示出來。
     assert by_name["animetosho-xyz"].privacy == "semiPrivate"
-    # 確認卡說出這一站在哪個網址（M5 票 10）：定義自帶的網址清單，原樣照順序。
-    assert by_name["nyaasi"].urls[0] == "https://nyaa.si/"
-    assert by_name["dmhy"].urls == ("https://share.dmhy.org/",)
 
 
 @respx.mock

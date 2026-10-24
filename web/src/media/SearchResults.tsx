@@ -1,4 +1,3 @@
-import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dot } from '../components/Dot'
@@ -137,15 +136,12 @@ function ResultRow({
   const { t, i18n } = useTranslation()
   const size = formatSize(row.size, i18n.language)
   const seeders = formatCount(row.seeders, i18n.language)
-  const titleId = useId()
 
   return (
     <tr>
       <td className="px-4 py-3 align-top">
         {/* 發佈名整行換行，不截斷：它是這一列的證據，解析器讀的就是同一串字。 */}
-        <p id={titleId} className="value text-sm wrap-anywhere text-ink">
-          {row.title}
-        </p>
+        <p className="value text-sm wrap-anywhere text-ink">{row.title}</p>
         <VerdictNote row={row} typed={typed} media={media} />
         <TagStrip row={row} />
         {/* 窄版把另外五欄收成一行。桌機上它整行不畫，那五欄自己在右邊。 */}
@@ -171,7 +167,7 @@ function ResultRow({
         {/* 送單住在發佈名那一格：它的確認要就地展開，而那一段裡印著資料夾名——
             靠右那幾格窄到放不下一句話（The Failure Expands In Place Rule）。 */}
         <div className="mt-3">
-          <SubmitAction media={media} row={row} route={route} describedBy={titleId} />
+          <SubmitAction media={media} row={row} route={route} />
         </div>
       </td>
       <td className="value hidden px-4 py-3 text-right align-top text-xs whitespace-nowrap text-ink sm:table-cell">

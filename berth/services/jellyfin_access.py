@@ -49,7 +49,6 @@ from berth.domain import CollectionType, LibrarySort, MediaKind, SortOrder
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, end_sessions
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.settings import read_settings
 from berth.services.steps import message
 from berth.services.watch import WatchState, watch_state
@@ -265,7 +264,6 @@ class JellyfinAccess:
             )
         )
 
-    @command(Effect.READ)
     async def filters(self, library_id: str) -> JellyfinFilters:
         """這個媒體庫裡的作品有哪些類型與年份。同樣先驗媒體庫：`/Items/Filters` 帶了 `parentId`
         就不套權限，連使用者自己的 token 都照回（研究 §2）。"""
@@ -275,7 +273,6 @@ class JellyfinAccess:
                 user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
 
-    @command(Effect.READ)
     async def index(self, library_id: str) -> tuple[JellyfinItem, ...]:
         """這個媒體庫的每一部作品（只有 id、名稱、年份、TMDB id、Primary 圖的 tag）。
         同樣先驗媒體庫。"""
@@ -313,7 +310,6 @@ class JellyfinAccess:
 
     # --- Media 詳情的觀看區（票 08）---
 
-    @command(Effect.READ)
     async def locate(
         self, kind: MediaKind, tmdb_id: int, *, links: Collection[str]
     ) -> JellyfinItem | None:
@@ -342,7 +338,6 @@ class JellyfinAccess:
                 return found
         return None
 
-    @command(Effect.READ)
     async def seasons(self, series_id: str) -> tuple[JellyfinSeason, ...]:
         """這部劇的季。Jellyfin 自己查可見性（帶 `userId` 時看不到回 404，研究 §2）。"""
         with reachable():
@@ -351,7 +346,6 @@ class JellyfinAccess:
             except NotFoundError as exc:
                 raise ItemNotVisibleError("no such show, or not yours to see") from exc
 
-    @command(Effect.READ)
     async def episodes(self, series_id: str, season_id: str) -> tuple[JellyfinItem, ...]:
         """那一季的集。劇與季的可見性都由 Jellyfin 查（`seasonId` 同樣帶著使用者查，研究 §2）。"""
         with reachable():
@@ -362,7 +356,6 @@ class JellyfinAccess:
             except NotFoundError as exc:
                 raise ItemNotVisibleError("no such season, or not yours to see") from exc
 
-    @command(Effect.READ)
     async def series_next_up(self, series_id: str) -> JellyfinItem | None:
         """這部劇接下來看哪一集（看到一半的、沒看過的第一集都算），看完了是 `None`。
 
@@ -374,8 +367,6 @@ class JellyfinAccess:
         with reachable():
             return await self._client.series_next_up(user_id=self._user_id, series_id=series_id)
 
-    # 不可逆：標為未看清掉觀看次數與最後觀看時間（見 docstring）；標已看在同一支，照最壞的標。
-    @command(Effect.IRREVERSIBLE)
     async def mark_played(self, item_id: str, *, played: bool) -> WatchState:
         """把這個 item 標為已看或未看，寫進這個人在 Jellyfin 的紀錄；回寫入之後的觀看狀態。
 
@@ -394,8 +385,6 @@ class JellyfinAccess:
         return watch_state(written)
 
 
-# 可逆：帳號在 Jellyfin 停用時登出他每一台裝置（`auth.end_sessions`）；其餘只讀。
-@command(Effect.REVERSIBLE)
 @asynccontextmanager
 async def jellyfin_access(
     session: AsyncSession,
@@ -417,7 +406,6 @@ async def jellyfin_access(
         await client.aclose()
 
 
-@command(Effect.READ)
 async def visible_libraries(client: JellyfinClient, jellyfin_user_id: str) -> frozenset[str]:
     """這個人在 Jellyfin 看得到的每一個媒體庫的 id（`UserViews`，不限 Berth 瀏覽得了的類型）。
 

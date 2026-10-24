@@ -46,7 +46,6 @@ from berth.domain import (
 )
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
-from berth.services.commands import Effect, command
 from berth.services.jellyfin_access import (
     BrowsableLibrary,
     JellyfinAccess,
@@ -276,7 +275,6 @@ class Covers(Protocol):
     def episode_end(self) -> int | None: ...
 
 
-@command(Effect.READ)
 async def read_wall(
     session: AsyncSession,
     access: JellyfinAccess,
@@ -323,7 +321,6 @@ async def read_wall(
     )
 
 
-@command(Effect.READ)
 async def libraries_with_imports(
     session: AsyncSession, library_ids: Collection[str]
 ) -> frozenset[str]:
@@ -353,7 +350,6 @@ async def libraries_with_imports(
     return frozenset(found)
 
 
-@command(Effect.READ)
 async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnapshot) -> Holdings:
     """這部作品在媒體庫與管線裡的樣子（Media 詳情頁）。
 
@@ -768,17 +764,6 @@ async def _file_kinds(
         return {}
     found = await session.execute(select(JobFile.id, JobFile.kind).where(JobFile.id.in_(wanted)))
     return {file_id: kind for file_id, kind in found.tuples() if kind is not None}
-
-
-def imports_presence(entries: Sequence[LedgerEntry]) -> JellyfinPresence:
-    """幾個入庫的正片合起來，Jellyfin 收錄了沒（AI 的「最近入庫」，M5 票 09）。一個一個看
-    （`_file_presence`）：有找不到的是 `lost`——要人去 Jellyfin 看，比還在等的優先說；
-    其餘有還在等的是 `searching`；全部找到才是 `found`。沒有正片是 `none`。"""
-    each = {_file_presence(entry) for entry in entries} - {JellyfinPresence.NONE}
-    for presence in (JellyfinPresence.LOST, JellyfinPresence.SEARCHING, JellyfinPresence.FOUND):
-        if presence in each:
-            return presence
-    return JellyfinPresence.NONE
 
 
 def _file_presence(entry: LedgerEntry) -> JellyfinPresence:

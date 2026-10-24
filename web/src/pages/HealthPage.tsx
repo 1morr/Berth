@@ -41,7 +41,7 @@ export function HealthPage() {
   //  設定頁只有 admin 進得去（後端 403、前端守衛會彈回來），所以那條連結也只給 admin。
   const me = useQuery(meQueryOptions)
   // 剛才是被 `/settings/*` 的守衛送過來的（票 03 第 14 條）：換了一頁就要說出為什麼。
-  const { denied } = useSearch({ from: '/shell/health' })
+  const { denied } = useSearch({ from: '/health' })
 
   const recheck = useMutation({
     mutationFn: runHealthCheck,

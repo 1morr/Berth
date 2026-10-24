@@ -92,10 +92,9 @@ async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> 
     await session.commit()
 
 
-# 撤銷是刪 Job（它有自己的刪除範圍）：AI 送的那一筆，結果卡上的撤銷在入庫前移除 torrent、刪掉
-# 下載下來的檔案、清掉紀錄（M5 票 12）。排出去的「正在下載」收不回來，但與 RSS 那幾個送單的命令
+# 撤銷是刪 Job（它有自己的刪除範圍）。排出去的「正在下載」收不回來，但與 RSS 那幾個送單的命令
 # （`rss.bind_series` 等）同一個標法：等級看命令的主效果。
-@command(Effect.REVERSIBLE, inverse="deletion.withdraw_job")
+@command(Effect.REVERSIBLE)
 async def add_manual_download(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -104,18 +103,10 @@ async def add_manual_download(
     media_id: str,
     route_id: int,
     user_id: int | None,
-    actor: str | None = None,
 ) -> AddDownloadOutcome:
-    """人手按的下載（搜尋結果、作品頁），或 AI 代人送的（`actor` 是 `ai:<user id>`）：
-    `jobs.add_download`，送成了就告訴其他訂閱者。"""
+    """人手按的下載（搜尋結果、作品頁）：`jobs.add_download`，送成了就告訴其他訂閱者。"""
     outcome = await add_download(
-        session,
-        factory,
-        source=source,
-        media_id=media_id,
-        route_id=route_id,
-        user_id=user_id,
-        actor=actor,
+        session, factory, source=source, media_id=media_id, route_id=route_id, user_id=user_id
     )
     async with download_round(session, presser=user_id, now=utcnow()) as batch:
         batch.note(outcome)

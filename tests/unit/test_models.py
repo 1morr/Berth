@@ -90,16 +90,11 @@ class TestJsonText:
 def test_metadata_holds_exactly_the_tables_built_so_far() -> None:
     """表是**按里程碑增量加**的（progress.md 偏差與決定）：M0 五張，
     M1 票 03、09、11 各加兩張，票 12 加帳本，M2 票 05 加 `issues`，M3 票 08 加 RSS 三張，
-    M4 票 123 加通知的待送表，票 131 加週報，M5 票 07 加用量記錄 `ai_calls`，
-    票 08 加助理的對話兩張。
+    M4 票 123 加通知的待送表，票 131 加週報。
 
     這條斷言是刻意寫死的——多一張表就是多一個 migration，不該由一次 import 順手帶進來。
     """
     assert set(Base.metadata.tables) == {
-        "ai_calls",
-        "conversations",
-        "conversation_messages",
-        "proposals",
         "users",
         "sessions",
         "settings",
@@ -137,7 +132,6 @@ def test_every_settings_group_has_a_distinct_key() -> None:
     keys = [group.KEY for group in SETTINGS_GROUPS]
 
     assert sorted(keys) == [
-        "ai",
         "berth",
         "disk",
         "health",

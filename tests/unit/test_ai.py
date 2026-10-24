@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from berth.adapters.ai.planner import AiPlanner, NullAiPlanner
+from berth.adapters.ai import AiPlanner, NullAiPlanner
 from berth.domain import Confidence, FileEntry, FileKind, ParseContext, PlanAction, PlanItem
 
 

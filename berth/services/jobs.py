@@ -30,7 +30,7 @@ import asyncio
 import json
 import logging
 from collections import Counter
-from collections.abc import AsyncIterator, Collection, Coroutine, Iterable, Sequence
+from collections.abc import AsyncIterator, Coroutine, Iterable, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -76,7 +76,6 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.parser.release import parse_release
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.qbittorrent import sign_in
 from berth.services.routes import incomplete_path_of, save_path_of
 from berth.services.settings import read_settings
@@ -88,23 +87,6 @@ logger = logging.getLogger(__name__)
 #: 從沒做完的那幾個接著做。已經在下載的 torrent 再送一次只是多一次無謂的請求，而 `imported`
 #: 再來一次是另一件事（M2 的重新入庫）。
 RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
-
-#: 送單撤得回來的狀態（M5 票 12，AI 送單的結果卡）：送出去了、還沒下載完，媒體庫與 complete 裡都還
-#: 沒有它的東西，撤銷（`deletion.withdraw_job`：移除 torrent、刪下載下來的檔、清紀錄）不會碰到已經
-#: 看得了的檔案。`requested` 不在：送單還在打 qBittorrent，那一刻握著鎖。下載完（`completed`）
-#: 之後規劃器隨時會接手入庫，要刪得去 Job 頁看清楚刪的範圍。
-UNDOABLE = frozenset(
-    {
-        JobState.SUBMIT_FAILED,
-        JobState.SUBMITTED,
-        JobState.METADATA_READY,
-        JobState.DOWNLOADING,
-        JobState.STALLED,
-        JobState.MISSING_FILES,
-        JobState.CLIENT_ERROR,
-        JobState.CLIENT_REMOVED,
-    }
-)
 
 #: 手動重跑得了 Plan 的狀態（票 11）。`review` 也在裡面：plan §3.1 的「使用者拒絕 →
 #: `completed`」就是為了讓它重新 planning，而 M1 沒有審核 UI，重跑是唯一按得到的那一步。
@@ -209,7 +191,6 @@ class KeyedLocks:
         """現在字典裡有幾把。「用完就丟」沒有別的觀測點。"""
         return len(self._locks)
 
-    @command(Effect.READ)
     @asynccontextmanager
     async def hold(self, key: str) -> AsyncIterator[None]:
         self._waiting[key] += 1
@@ -232,8 +213,6 @@ def job_lock(job_hash: str) -> AbstractAsyncContextManager[None]:
     return _locks.hold(job_hash)
 
 
-# 只拿行程內的鎖，什麼都不寫。
-@command(Effect.READ)
 @asynccontextmanager
 async def job_locks(job_hashes: Iterable[str]) -> AsyncIterator[None]:
     """一次握住好幾筆的鎖。**照 hash 排序依序拿**：兩個同時要多把的呼叫端（poller 的一輪、rematch
@@ -317,8 +296,6 @@ class JobView:
     retryable: bool
     #: 這一筆現在按得了「重新入庫」嗎（M2 票 10）。同上，規則在後端算。
     reimportable: bool
-    #: 送單現在撤得回來嗎（`UNDOABLE`，M5 票 12）。同上，規則在後端算。
-    undoable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11），沒算過就是 `None`。
     #:
     #: **是 id 而不是整份 Plan**：下載列表一次畫幾十列，而逐檔的決定只有展開那一列時才要
@@ -388,8 +365,6 @@ class AddDownloadOutcome:
     created: bool
 
 
-# 撤銷是刪 Job（它有自己的刪除範圍），同 `downloading.add_manual_download`。
-@command(Effect.REVERSIBLE)
 async def add_download(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -401,12 +376,8 @@ async def add_download(
     trigger: JobTrigger = JobTrigger.MANUAL,
     trigger_ref: str = "",
     grounds: Sequence[BindReason] = (),
-    actor: str | None = None,
 ) -> AddDownloadOutcome:
     """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。
-
-    `actor` 是寫進事件的那個人，沒給時照 `trigger` 推（RSS 是 `rss:<ref>`，其餘是 `user_id`）；
-    AI 代人送的是 `ai:<user id>`（`ai_actor`，M5 票 12），Job 本身仍是那位使用者的。
 
     `grounds` 是**沒有人選作品**時認出它的依據（RSS Series 自動綁定，M3 票 09）：寫進 `created`
     事件，時間線說得出「為什麼是這一部」。有人選的（手動送單、人綁的 Series）不帶。
@@ -416,8 +387,7 @@ async def add_download(
     在磁碟不夠時說的是 `low_disk_space` 而不是「本來就在了」——兩者都沒有下載任何東西。
     """
     media, route = await _preconditions(session, media_id, route_id)
-    if actor is None:
-        actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
+    actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
 
     if source.info_hash:
         existing = await session.get(Job, source.info_hash)
@@ -487,7 +457,6 @@ async def add_download(
         return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
-@command(Effect.REVERSIBLE)
 async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_hash: str) -> JobView:
     """`submit_failed` → `requested` → 再送一次（plan §3.1）。
 
@@ -580,8 +549,6 @@ SUBMIT_RETRIES = (
 )
 
 
-# 背景迴圈：重送人已經要過的那幾筆，不排通知。
-@command(Effect.REVERSIBLE)
 async def retry_due(session: AsyncSession, factory: ServiceClientFactory, *, now: datetime) -> int:
     """把到時間的暫時失敗再送一次（plan §3.1 的 `submit_failed` 自動重送，M4 票 03）。回試了幾筆。
 
@@ -645,40 +612,19 @@ async def _due_retries(session: AsyncSession, now: datetime) -> list[str]:
             .order_by(Job.added_at, Job.hash)
         )
     )
-    latest = await _last_failures(session, hashes)
-    return [
-        job_hash for job_hash in hashes if _due_attempt(latest.get(job_hash, {}), now) is not None
-    ]
-
-
-@command(Effect.READ)
-async def retries_spent(session: AsyncSession, job_hashes: Collection[str]) -> set[str]:
-    """這幾筆 `submit_failed` 裡**不會再自動重送**的：最後一次失敗沒排 `retry_at`——暫時性失敗的
-    次數用完了，或那一次本來就是再問也一樣的（M5 票 01，卡住的 Job 開成 Issue）。
-
-    排了 `retry_at` 的不算，即使時間已過：那一筆還在等 `retry_due`（前提不成立時它留在原地不花
-    次數）。沒有任何一筆 `submit_failed` 事件的也算：沒有東西排著它。
-    """
-    latest = await _last_failures(session, job_hashes)
-    return {job_hash for job_hash in job_hashes if not latest.get(job_hash, {}).get("retry_at")}
-
-
-async def _last_failures(
-    session: AsyncSession, job_hashes: Collection[str]
-) -> dict[str, dict[str, Any]]:
-    """每一筆最後一次 `submit_failed` 事件的 payload；沒有的不在裡面。"""
+    if not hashes:
+        return []
     latest: dict[str, dict[str, Any]] = {}
-    if not job_hashes:
-        return latest
     rows = await session.execute(
         select(Event.job_hash, Event.payload_json)
-        .where(Event.job_hash.in_(job_hashes), Event.type == EventType.SUBMIT_FAILED.value)
+        .where(Event.job_hash.in_(hashes), Event.type == EventType.SUBMIT_FAILED.value)
         .order_by(Event.id)
     )
     for job_hash, payload in rows:
-        if job_hash is not None:
-            latest[job_hash] = payload or {}
-    return latest
+        latest[job_hash] = payload or {}
+    return [
+        job_hash for job_hash in hashes if _due_attempt(latest.get(job_hash, {}), now) is not None
+    ]
 
 
 async def _last_failure(session: AsyncSession, job_hash: str) -> dict[str, Any]:
@@ -700,8 +646,6 @@ def _due_attempt(failure: dict[str, Any], now: datetime) -> int | None:
     return int(failure.get("attempt", 1))
 
 
-# 撤銷是刪 Job，同 `add_download`。
-@command(Effect.REVERSIBLE)
 async def resubmit_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -789,8 +733,6 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     return await _view_one(session, job)
 
 
-# 它自己只多寫錯誤與時間線；`work` 的副作用算 `work` 那一支命令的。
-@command(Effect.REVERSIBLE)
 async def guarded[T](
     session: AsyncSession, job_hash: str, work: Coroutine[Any, Any, T], *, fallback: T
 ) -> T:
@@ -879,7 +821,6 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
     logger.info("job recovered from a failed round", extra={"state": job.state.value})
 
 
-@command(Effect.READ)
 async def list_jobs(
     session: AsyncSession,
     *,
@@ -929,13 +870,11 @@ async def _filter_counts(session: AsyncSession, media_id: str | None) -> dict[Jo
     return counts
 
 
-@command(Effect.READ)
 async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
     job = await session.get(Job, job_hash)
     return None if job is None else await _view_one(session, job)
 
 
-@command(Effect.READ)
 async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEventView, ...]:
     """時間線，最舊的在前面——它是一份紀錄，讀的方向是事情發生的方向（brief §5.2）。"""
     rows = await session.scalars(
@@ -953,7 +892,6 @@ async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEven
     )
 
 
-@command(Effect.READ)
 async def read_job_files(session: AsyncSession, job_hash: str) -> tuple[JobFileView, ...] | None:
     """這一筆的檔案，照路徑排（作品頁「下載」段展開的那一列，M4 票 12）。沒有這一筆是 `None`。
 
@@ -1032,7 +970,6 @@ async def _existing_outcome(session: AsyncSession, job: Job) -> AddDownloadOutco
     return AddDownloadOutcome(job=await _view_one(session, job), created=False)
 
 
-@command(Effect.READ)
 async def check_disk(session: AsyncSession, route: Route) -> None:
     """這條 Route 的下載落腳處剩下的空間夠不夠再開一個下載（`DiskSettings`，M3 票 04）。
 
@@ -1241,8 +1178,6 @@ async def _fail(
 INTERRUPTED = "interrupted: Berth stopped before qBittorrent answered"
 
 
-# 啟動時把送到一半的寫成送單失敗；回去是每一筆各自的「重試」。
-@command(Effect.REVERSIBLE)
 async def fail_interrupted(session: AsyncSession) -> int:
     """重啟的那一刻：停在 `requested` 的都落到 `submit_failed`（plan §3.1，M3 票 02）。回傳幾筆。
 
@@ -1266,7 +1201,6 @@ async def fail_interrupted(session: AsyncSession) -> int:
     return moved
 
 
-@command(Effect.READ)
 async def restart_state(session: AsyncSession, job: Job) -> JobState:
     """壞掉的一筆接回 poller 的主幹時落在哪一站（plan §3.1）：檔案清單早就到手的回
     `metadata_ready`，還沒有的回 `submitted`。兩站的下一步 poller 本來就會走。
@@ -1287,8 +1221,6 @@ def freeze(media: Media, route: Route) -> None:
     media.default_route_id = route.id
 
 
-# 一次狀態轉換；怎麼回去看是哪一種狀態，由呼叫它的命令決定。
-@command(Effect.REVERSIBLE)
 async def transition(
     session: AsyncSession,
     job: Job,
@@ -1314,8 +1246,6 @@ async def transition(
     return changed
 
 
-# 時間線多一筆；撤銷也是再寫一筆。
-@command(Effect.REVERSIBLE)
 async def record_event(
     session: AsyncSession,
     job: Job,
@@ -1382,21 +1312,8 @@ def _fingerprint(payload: dict[str, Any]) -> str:
 
 def actor_of(user_id: int | None) -> str:
     """`events.actor` 的 user id 或 `system`（plan §2.3）。RSS 送的那一種（`rss:<series>`）由
-    `add_download` 照 `trigger_ref` 組，AI 代人做的是 `ai_actor`。"""
+    `add_download` 照 `trigger_ref` 組，`ai` 在 M5。"""
     return str(user_id) if user_id is not None else "system"
-
-
-def ai_actor(user_id: int) -> str:
-    """AI 代這位使用者做的：`ai:<user id>`（M5 票 05，plan §2.3）。側面板裡是使用者叫它做的，所以
-    要看得出是誰；AI 活動頁（票 14）以 `ai:` 開頭撈。"""
-    return f"ai:{user_id}"
-
-
-def user_of(actor: str) -> int | None:
-    """`events.actor` 背後的那位使用者：本人按的（`7`）或 AI 代他做的（`ai:7`）。`system` 與
-    `rss:<series>` 沒有人。"""
-    person = actor.removeprefix("ai:")
-    return int(person) if person.isdigit() else None
 
 
 # --- 攤平 ---------------------------------------------------------------
@@ -1530,7 +1447,6 @@ def _view(job: Job, related: _Related) -> JobView:
         added_at=job.added_at,
         retryable=job.state in RETRYABLE,
         reimportable=reimportable(job),
-        undoable=job.state in UNDOABLE,
         plan_id=plan_id,
         audits=audits,
         series=_series_name(related.series.get(series_id) if series_id is not None else None),

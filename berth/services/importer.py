@@ -53,7 +53,6 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.deletion import Placed, remove_one
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import actor_of, guarded, record_event, transition
@@ -82,8 +81,6 @@ class ImportOutcome:
     held: int
 
 
-# 背景迴圈：鏈進媒體庫、寫帳本、請 Jellyfin 重掃，不排給人的通知。來源都還在，回去是撤銷或刪除範圍。
-@command(Effect.REVERSIBLE)
 async def sweep_imports(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -393,8 +390,6 @@ def record_link(
     entry.resolve_after = first_resolve_at(now) if item.action is PlanAction.IMPORT else None
 
 
-# 只排下一次反查。
-@command(Effect.REVERSIBLE)
 async def restate_versions(
     session: AsyncSession, item: PlanItem, target: str, now: datetime
 ) -> None:
@@ -560,8 +555,6 @@ async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job
     await notify_jellyfin(session, factory, job, paths)
 
 
-# 只請 Jellyfin 重掃：沒有東西要撤，再請一次也無害。
-@command(Effect.REVERSIBLE)
 async def notify_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory, job: Job | None, paths: Sequence[str]
 ) -> None:

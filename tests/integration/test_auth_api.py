@@ -21,13 +21,12 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
+from berth.api import gate
 from berth.api.deps import get_client_factory
-from berth.api.gate import CSRF_HEADER, SESSION_COOKIE
+from berth.api.gate import CSRF_HEADER, SESSION_COOKIE, Access, access_of
 from berth.config import Config
 from berth.main import create_app
 from berth.models import JellyfinSettings, SetupSettings
-from berth.services import access
-from berth.services.access import Access, access_of
 from berth.services.settings import read_settings, write_settings
 from tests.endpoints import api_endpoints
 from tests.integration.arrange import own
@@ -433,19 +432,6 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/issues/rebuild-ledger"): Access.ADMIN,
     ("POST", "/issues/rebuild-ledger"): Access.ADMIN,
     ("POST", "/files/rematch"): Access.ADMIN,
-    # 助理的對話（M5 票 08）：登入就可以，工具依角色過濾在對話核心；每一支只看得到自己的。
-    ("GET", "/assistant"): Access.SIGNED_IN,
-    # AI 活動（M5 票 14）：登入就可以；管理員看全部、其他人只看自己的，在 service 裡分。
-    ("GET", "/ai-activity"): Access.SIGNED_IN,
-    ("GET", "/conversations"): Access.SIGNED_IN,
-    ("POST", "/conversations"): Access.SIGNED_IN,
-    ("GET", "/conversations/*"): Access.SIGNED_IN,
-    ("POST", "/conversations/*/messages"): Access.SIGNED_IN,
-    # 確認卡（M5 票 10）：誰按得到看卡片是誰的，在 `services.proposals`，不在門禁。
-    ("POST", "/proposals/*/confirm"): Access.SIGNED_IN,
-    ("POST", "/proposals/*/reject"): Access.SIGNED_IN,
-    # 結果卡上的撤銷（M5 票 11）：誰按得到照那個工具的撤銷指著的端點，在 `services.undo`，不在門禁。
-    ("POST", "/conversations/*/messages/*/tools/*/undo"): Access.SIGNED_IN,
     # 週報（M4 票 131）。
     ("GET", "/weekly"): Access.ADMIN,
     ("GET", "/weekly/*"): Access.ADMIN,
@@ -467,13 +453,6 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/settings/notifications"): Access.ADMIN,
     ("PUT", "/settings/notifications/bot"): Access.ADMIN,
     ("PUT", "/settings/notifications/berth-url"): Access.ADMIN,
-    # AI 設定（M5 票 07）：在 `/settings` 底下，同一道門。
-    ("GET", "/settings/ai"): Access.ADMIN,
-    ("PUT", "/settings/ai"): Access.ADMIN,
-    ("POST", "/settings/ai/test"): Access.ADMIN,
-    ("GET", "/settings/ai/models"): Access.ADMIN,
-    # 用量頁（M5 票 13）：看得到每個人的用量。
-    ("GET", "/settings/ai/usage"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,
@@ -652,23 +631,21 @@ class TestTheSurfaceCheckItself:
     def test_dropping_a_prefix_from_the_gate_is_caught(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        kept = tuple(prefix for prefix in access.ADMIN_PREFIXES if prefix != "/files")
-        monkeypatch.setattr(access, "ADMIN_PREFIXES", kept)
+        kept = tuple(prefix for prefix in gate.ADMIN_PREFIXES if prefix != "/files")
+        monkeypatch.setattr(gate, "ADMIN_PREFIXES", kept)
 
         assert misclassified(ACCESS) == {("POST", "/files/rematch"): Access.SIGNED_IN}
 
     def test_reordering_the_gate_changes_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(access, "ADMIN_PREFIXES", tuple(reversed(access.ADMIN_PREFIXES)))
-        monkeypatch.setattr(access, "ADMIN_ROUTES", tuple(reversed(access.ADMIN_ROUTES)))
+        monkeypatch.setattr(gate, "ADMIN_PREFIXES", tuple(reversed(gate.ADMIN_PREFIXES)))
+        monkeypatch.setattr(gate, "ADMIN_ROUTES", tuple(reversed(gate.ADMIN_ROUTES)))
 
         assert misclassified(ACCESS) == {}
 
     def test_a_signed_in_route_closed_by_mistake_is_caught(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(
-            access, "ADMIN_ROUTES", (*access.ADMIN_ROUTES, ("POST", "/jobs/*/retry"))
-        )
+        monkeypatch.setattr(gate, "ADMIN_ROUTES", (*gate.ADMIN_ROUTES, ("POST", "/jobs/*/retry")))
 
         assert misclassified(ACCESS) == {("POST", "/jobs/*/retry"): Access.ADMIN}
 

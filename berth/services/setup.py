@@ -200,7 +200,6 @@ _UNFINISHED = {
 }
 
 
-@command(Effect.READ)
 async def is_setup_complete(session: AsyncSession) -> bool:
     """精靈跑完了沒。這一個位元是匿名可讀的（`GET /api/health`）：前端要在**還沒有人
     登入得了**的時候就決定該畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放。
@@ -208,13 +207,11 @@ async def is_setup_complete(session: AsyncSession) -> bool:
     return (await read_settings(session, SetupSettings)).completed
 
 
-@command(Effect.READ)
 async def read_status(session: AsyncSession) -> SetupStatus:
     """目前的頁與每個服務的選擇。不做任何測試。"""
     return await _read(session, now=utcnow())
 
 
-@command(Effect.IRREVERSIBLE)
 async def complete_setup(session: AsyncSession, *, now: datetime | None = None) -> SetupStatus:
     """完成頁：寫下 `settings.setup.completed`，精靈結束（plan §9.3 頁 6）。
 
@@ -267,7 +264,6 @@ class ClaimedOwner:
     signed_in: SignedIn
 
 
-@command(Effect.IRREVERSIBLE)
 async def claim_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -380,7 +376,6 @@ def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
     return bool(tested) and (choice.base_url, tested) == (target.base_url, target.server_id)
 
 
-@command(Effect.IRREVERSIBLE)
 async def sign_in_existing_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -422,13 +417,10 @@ async def sign_in_existing_owner(
     )
 
 
-@command(Effect.READ)
 async def is_owner_established(session: AsyncSession) -> bool:
     return (await read_settings(session, SetupSettings)).owner_established()
 
 
-# 不可逆：改設定，而且換台時可能移除舊那一台空的 `berth-*` 分類。
-@command(Effect.IRREVERSIBLE)
 async def choose_service(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -513,8 +505,6 @@ async def choose_service(
     return await _test_and_record(session, factory, kind, restart=True, now=moment, tested=tested)
 
 
-# 不可逆：qBittorrent 的探測 torrent 在 5.x 會觸發使用者的「加入時執行」（`_data_sight`）。
-@command(Effect.IRREVERSIBLE)
 async def retest_service(
     session: AsyncSession,
     factory: ServiceClientFactory,

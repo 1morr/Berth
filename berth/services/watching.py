@@ -16,7 +16,6 @@ from datetime import timedelta
 from berth.adapters.jellyfin import ITEM_EPISODE, ITEM_MOVIE, JellyfinItem
 from berth.domain import JellyfinImageType, MediaKind
 from berth.models.types import utcnow
-from berth.services.commands import Effect, command
 from berth.services.jellyfin_access import JellyfinAccess
 from berth.services.watch import shown_progress
 
@@ -68,7 +67,6 @@ class Watching:
     next_up: tuple[WatchingCard, ...]
 
 
-@command(Effect.READ)
 async def read_watching(access: JellyfinAccess, library_id: str) -> Watching:
     """這個人在這個媒體庫的繼續觀看與下一集。不在允許清單上丟 `LibraryNotVisibleError`，
     兩支都不會送出去。"""

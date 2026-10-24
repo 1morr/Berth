@@ -3,10 +3,8 @@
 M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加（progress.md 偏差與決定）。
 """
 
-from berth.models.ai_call import AiCall
 from berth.models.auth import User, UserSession
 from berth.models.base import Base
-from berth.models.conversation import Conversation, ConversationMessage
 from berth.models.event import Event
 from berth.models.issue import Issue, subject_of
 from berth.models.job import Job, JobFile
@@ -22,14 +20,11 @@ from berth.models.media import (
 )
 from berth.models.notification import Notification
 from berth.models.plan import Plan, PlanItem
-from berth.models.proposal import Proposal
 from berth.models.route import Route, RouteHealth
 from berth.models.rss import DEFAULT_INTERVAL_SEC, FEED_INTERVALS, RssFeed, RssItem, RssSeries
 from berth.models.setting import (
     DEFAULT_BUNDLED_LIBRARIES,
     SETTINGS_GROUPS,
-    AiSettings,
-    AiToolTest,
     BerthPathResult,
     BerthSettings,
     BundledLibrary,
@@ -70,15 +65,10 @@ __all__ = [
     "DEFAULT_INTERVAL_SEC",
     "FEED_INTERVALS",
     "SETTINGS_GROUPS",
-    "AiCall",
-    "AiSettings",
-    "AiToolTest",
     "Base",
     "BerthPathResult",
     "BerthSettings",
     "BundledLibrary",
-    "Conversation",
-    "ConversationMessage",
     "DiskSettings",
     "Event",
     "HealthSettings",
@@ -98,7 +88,6 @@ __all__ = [
     "Plan",
     "PlanItem",
     "PollerSettings",
-    "Proposal",
     "QbittorrentSettings",
     "Route",
     "RouteHealth",

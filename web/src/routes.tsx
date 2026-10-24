@@ -8,7 +8,6 @@ import {
   type ParsedLocation,
 } from '@tanstack/react-router'
 
-import { DEFAULT_USAGE_PERIOD, usagePeriodOf, type UsagePeriod } from './api/ai'
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
@@ -26,7 +25,6 @@ import { HealthPage } from './pages/HealthPage'
 import { IssuesPage } from './pages/IssuesPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { JobDetailPage } from './pages/JobDetailPage'
-import { AiActivityPage } from './pages/AiActivityPage'
 import { JobsPage } from './pages/JobsPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
@@ -34,8 +32,6 @@ import { IndexerSettingsPage } from './pages/IndexerSettingsPage'
 import { JellyfinSettingsPage } from './pages/JellyfinSettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
-import { AiSettingsPage } from './pages/AiSettingsPage'
-import { AiUsagePage } from './pages/AiUsagePage'
 import { NotifySettingsPage } from './pages/NotifySettingsPage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
@@ -58,21 +54,6 @@ interface LoginSearch {
 
 // 根路由不畫任何 chrome：精靈與登入都是整頁的，不套 app shell。
 const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outlet })
-
-/**
- * 登入之後的每一頁共用的外框（頁首與助理側面板，M5 票 15b）：一條沒有路徑的 layout route，換頁只換
- * `<Outlet />` 裡的內容區，外框與面板不重建——打了還沒送出的字、串流到一半的回覆、正在看的那則對話都留著。
- * 之前每一頁各包一份 `AppShell`，每換一頁整個外框重建。門禁照舊在每一頁自己的 `beforeLoad`。
- */
-const shellRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  id: 'shell',
-  component: () => (
-    <AppShell>
-      <Outlet />
-    </AppShell>
-  ),
-})
 
 /**
  * setup 未完成時任何頁面都導向精靈（plan §9.3、票 05 驗收）。
@@ -179,11 +160,6 @@ interface HealthSearch {
   denied?: boolean
 }
 
-/** 用量頁的期間（M5 票 13）。預設的 30 天不寫進網址。 */
-interface UsageSearch {
-  days?: UsagePeriod
-}
-
 /** 設定頁從哪裡來：精靈跑完之後打開 `/setup` 被帶過來的是 `setup`（M4 票 60）。 */
 interface SettingsSearch {
   from?: 'setup'
@@ -243,12 +219,16 @@ const loginRoute = createRoute({
  * 是找東西的地方，不是看它有沒有壞的地方。
  */
 const indexRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },
-  component: () => <DiscoverPage />,
+  component: () => (
+    <AppShell>
+      <DiscoverPage />
+    </AppShell>
+  ),
 })
 
 /**
@@ -257,11 +237,9 @@ const indexRoute = createRoute({
  * `mediaId` 是 `tv:120089` / `movie:1241982`——冒號在路徑段裡是合法字元，而認不得的字串
  * 由後端回一個 `not_found` 的理由，不是 404 頁：使用者手打錯網址時該看到「TMDB 上沒有
  * 這部作品」加一條回探索頁的路，而不是一片空白。
- *
- * 通知裡的連結指到這裡（後端 `deeplink.BerthPage.MEDIA`），改路徑時 `berthPages.test.ts` 紅。
  */
 const mediaRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/media/$mediaId',
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
@@ -276,7 +254,7 @@ const mediaRoute = createRoute({
  * id 只會多一次 404。
  */
 const inventoryIndexRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/library',
   beforeLoad: async ({ context, location }) => {
     if ((await requireSignedInPage(context.queryClient, location)) === null) return
@@ -288,7 +266,11 @@ const inventoryIndexRoute = createRoute({
       if (isRedirect(error)) throw error
     }
   },
-  component: () => <InventoryPage libraryId={null} page={1} />,
+  component: () => (
+    <AppShell>
+      <InventoryPage libraryId={null} page={1} />
+    </AppShell>
+  ),
 })
 
 interface InventorySearch extends WallSearch {
@@ -317,7 +299,7 @@ const isYear = (item: unknown): item is number => Number.isInteger(item)
  * 一般使用者也進得來（brief §11）；看得到哪幾個媒體庫由後端對 Jellyfin 的允許清單決定。
  */
 const inventoryRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/library/$libraryId',
   // **每一格都寫回去，驗不過的寫 `undefined`**：根路由不驗網址，子路由拿到的是根的原樣與這裡的結果合起來，
   // 少寫一格那一格的原樣就漏到 `useSearch`（M1.5 票 11 實測 `filter="nonsense"`，票 13 修）。
@@ -358,7 +340,7 @@ interface JobsSearch {
  * 一般使用者也進得來：送單本來就是他做的事（brief §11），而這一頁是它的結果。
  */
 const jobsRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/jobs',
   // 每一格都寫回去，驗不過的寫 `undefined`（媒體庫那一條的同一個理由）。
   validateSearch: (search: Record<string, unknown>): JobsSearch => {
@@ -371,20 +353,11 @@ const jobsRoute = createRoute({
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },
-  component: () => <JobsPage />,
-})
-
-/**
- * AI 活動 `/ai-activity`（M5 票 14）。登入即可，同 `/jobs`：`user` 看自己對話裡的，管理員看全部（後端分）。
- * 導覽那一格只在 AI 設定好時出現，網址照樣進得來。
- */
-const aiActivityRoute = createRoute({
-  getParentRoute: () => shellRoute,
-  path: '/ai-activity',
-  beforeLoad: async ({ context, location }) => {
-    await requireSignedInPage(context.queryClient, location)
-  },
-  component: () => <AiActivityPage />,
+  component: () => (
+    <AppShell>
+      <JobsPage />
+    </AppShell>
+  ),
 })
 
 /**
@@ -395,14 +368,18 @@ const aiActivityRoute = createRoute({
  * 「可能打錯了，或已經刪除並清除紀錄」加一條回下載列表的路。
  */
 const jobDetailRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/jobs/$hash',
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },
   component: function JobDetailRoute() {
     const { hash } = jobDetailRoute.useParams()
-    return <JobDetailPage hash={hash} />
+    return (
+      <AppShell>
+        <JobDetailPage hash={hash} />
+      </AppShell>
+    )
   },
 })
 
@@ -414,10 +391,14 @@ const jobDetailRoute = createRoute({
  * 前端隱藏不是安全機制。
  */
 const issuesRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/issues',
   beforeLoad: ({ context, location }) => requireAdminPage(context, location),
-  component: () => <IssuesPage />,
+  component: () => (
+    <AppShell>
+      <IssuesPage />
+    </AppShell>
+  ),
 })
 
 /**
@@ -425,10 +406,14 @@ const issuesRoute = createRoute({
  * `user` 停在待審核的下載只能等，那一句話在 `/jobs` 與 Media 詳情，不在這裡。
  */
 const reviewRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/review',
   beforeLoad: ({ context, location }) => requireAdminPage(context, location),
-  component: () => <ReviewPage />,
+  component: () => (
+    <AppShell>
+      <ReviewPage />
+    </AppShell>
+  ),
 })
 
 /**
@@ -436,10 +421,14 @@ const reviewRoute = createRoute({
  * （後端 `ADMIN_PREFIXES` 的 `/rss`）——聚合 feed 的網址帶 token，綁定會替整個家送單。
  */
 const rssRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/rss',
   beforeLoad: ({ context, location }) => requireAdminPage(context, location),
-  component: () => <RssPage />,
+  component: () => (
+    <AppShell>
+      <RssPage />
+    </AppShell>
+  ),
 })
 
 /** 管理員才進得來的頁面的守衛（`/issues`、`/review`、`/rss`、`/weekly`）；後端同時回 403。 */
@@ -452,27 +441,35 @@ async function requireAdminPage(context: { queryClient: QueryClient }, location:
 /**
  * 週報 `/weekly`（最新一週）與 `/weekly/$reportId`（某一週）（M4 票 131）。與 `/issues` 同一個規則：
  * **只有管理員**（後端 `ADMIN_PREFIXES` 的 `/weekly`）。Discord 摘要的連結是 `/weekly/{id}`
- * （`berth/services/deeplink.py` 的 `BerthPage.WEEKLY`），所以第二條路徑不能改名（`berthPages.test.ts` 守著）。
+ * （`berth/services/deeplink.py` 的 `WEEKLY_PAGE`），所以第二條路徑不能改名。
  */
 const weeklyRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/weekly',
   beforeLoad: ({ context, location }) => requireAdminPage(context, location),
-  component: () => <WeeklyPage />,
+  component: () => (
+    <AppShell>
+      <WeeklyPage />
+    </AppShell>
+  ),
 })
 
 const weeklyReportRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/weekly/$reportId',
   beforeLoad: ({ context, location }) => requireAdminPage(context, location),
   component: function WeeklyReportRoute() {
     const { reportId } = weeklyReportRoute.useParams()
-    return <WeeklyPage reportId={reportId} />
+    return (
+      <AppShell>
+        <WeeklyPage reportId={reportId} />
+      </AppShell>
+    )
   },
 })
 
 const healthRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/health',
   validateSearch: (search: Record<string, unknown>): HealthSearch =>
     search.denied === true || search.denied === 'true' ? { denied: true } : {},
@@ -480,7 +477,11 @@ const healthRoute = createRoute({
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },
-  component: () => <HealthPage />,
+  component: () => (
+    <AppShell>
+      <HealthPage />
+    </AppShell>
+  ),
 })
 
 /**
@@ -488,7 +489,7 @@ const healthRoute = createRoute({
  * 頁首的「設定」連到這裡，所以每個設定頁上它都是當前頁；守衛由目的地那一頁自己做。
  */
 const settingsIndexRoute = createRoute({
-  getParentRoute: () => shellRoute,
+  getParentRoute: () => rootRoute,
   path: '/settings',
   // 一般使用者的設定只有通知那一頁（M4 票 125）。
   beforeLoad: async ({ context, location }) => {
@@ -508,21 +509,21 @@ function settingsRoute(
   { everyone = false }: { everyone?: boolean } = {},
 ) {
   return createRoute({
-    getParentRoute: () => shellRoute,
+    getParentRoute: () => rootRoute,
     path,
     validateSearch: (search: Record<string, unknown>): SettingsSearch =>
       search.from === 'setup' ? { from: 'setup' } : {},
     beforeLoad: async ({ context, location }) => {
       const me = await requireSignedInPage(context.queryClient, location)
-      if (!everyone) refuseNonAdmin(me)
+      if (!everyone && me !== null && me.role !== 'admin')
+        throw redirect({ to: '/health', search: { denied: true } })
     },
-    component: () => <Page />,
+    component: () => (
+      <AppShell>
+        <Page />
+      </AppShell>
+    ),
   })
-}
-
-function refuseNonAdmin(me: Me | null) {
-  if (me !== null && me.role !== 'admin')
-    throw redirect({ to: '/health', search: { denied: true } })
 }
 
 const jellyfinSettingsRoute = settingsRoute('/settings/jellyfin', JellyfinSettingsPage)
@@ -535,50 +536,27 @@ const tmdbSettingsRoute = settingsRoute('/settings/tmdb', TmdbSettingsPage)
 const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySettingsPage, {
   everyone: true,
 })
-/** AI 不是泊位，與通知同一組；只有管理員（API key 與模型是整台 Berth 的設定）。 */
-const aiSettingsRoute = settingsRoute('/settings/ai', AiSettingsPage)
-/**
- * AI 用量（M5 票 13）：看得到每個人的用量，所以只有管理員。期間在網址上（`?days=7`），重整與分享不丟；
- * 不走 `settingsRoute`，因為它的 search 只認得 `from`。
- */
-const usageSettingsRoute = createRoute({
-  getParentRoute: () => shellRoute,
-  path: '/settings/usage',
-  validateSearch: (search: Record<string, unknown>): UsageSearch => {
-    const days = usagePeriodOf(search.days)
-    return days === undefined || days === DEFAULT_USAGE_PERIOD ? {} : { days }
-  },
-  beforeLoad: async ({ context, location }) => {
-    refuseNonAdmin(await requireSignedInPage(context.queryClient, location))
-  },
-  component: () => <AiUsagePage />,
-})
 
 export const routeTree = rootRoute.addChildren([
-  shellRoute.addChildren([
-    indexRoute,
-    healthRoute,
-    issuesRoute,
-    reviewRoute,
-    rssRoute,
-    weeklyRoute,
-    weeklyReportRoute,
-    jobsRoute,
-    aiActivityRoute,
-    jobDetailRoute,
-    inventoryIndexRoute,
-    inventoryRoute,
-    mediaRoute,
-    jellyfinSettingsRoute,
-    qbittorrentSettingsRoute,
-    routeSettingsRoute,
-    indexerSettingsRoute,
-    tmdbSettingsRoute,
-    notifySettingsRoute,
-    aiSettingsRoute,
-    usageSettingsRoute,
-    settingsIndexRoute,
-  ]),
+  indexRoute,
+  healthRoute,
+  issuesRoute,
+  reviewRoute,
+  rssRoute,
+  weeklyRoute,
+  weeklyReportRoute,
+  jobsRoute,
+  jobDetailRoute,
+  inventoryIndexRoute,
+  inventoryRoute,
   loginRoute,
+  mediaRoute,
+  jellyfinSettingsRoute,
+  qbittorrentSettingsRoute,
+  routeSettingsRoute,
+  indexerSettingsRoute,
+  tmdbSettingsRoute,
+  notifySettingsRoute,
+  settingsIndexRoute,
   setupRoute,
 ])

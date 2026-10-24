@@ -288,25 +288,6 @@ describe('審核佇列', () => {
     )
   })
 
-  it('來源不在時撤銷被擋下，說出它是唯一一份與來源路徑（M5 票 03）', async () => {
-    render({
-      [QUEUE]: queue([audit()]),
-      'POST /api/review/audit/7/undo': {
-        status: 409,
-        body: { detail: { reason: 'source_missing', detail: '/data/complete/anime/a.mkv' } },
-      },
-    })
-    renderApp('/review')
-    const row = await screen.findByRole('article')
-
-    await userEvent.click(within(row).getByRole('button', { name: '撤銷' }))
-    await userEvent.click(within(row).getByRole('button', { name: '確定撤銷' }))
-
-    expect(await within(row).findByRole('alert')).toHaveTextContent(
-      'complete 裡的來源已經不在，媒體庫這一份是唯一一份，撤銷會把它刪掉，所以什麼都沒改；真要刪就用這筆下載的「刪除」。來源原本在： /data/complete/anime/a.mkv',
-    )
-  })
-
   it('沒有 Issue 列，原位一行「另有 N 件待處理」連到 /issues（M3 票 05）', async () => {
     render({ [QUEUE]: queue([audit()], 1, 2) })
     renderApp('/review')

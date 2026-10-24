@@ -112,7 +112,7 @@ describe('設定 → Jellyfin', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
-  it('分頁列照泊位板的順序列出五頁、後面接通知、AI 與用量，當前頁是 Jellyfin（票 06i、123）', async () => {
+  it('分頁列照泊位板的順序列出五頁、後面接通知，當前頁是 Jellyfin（票 06i、123）', async () => {
     render()
     renderApp('/settings/jellyfin')
 
@@ -127,8 +127,6 @@ describe('設定 → Jellyfin', () => {
       ['TMDB', '/settings/tmdb'],
       // 通知不是泊位，接在五格之後（票 123）。
       ['通知', '/settings/notifications'],
-      ['AI', '/settings/ai'],
-      ['用量', '/settings/usage'],
     ])
     expectCurrentByStateOnly(
       tabs.getByRole('link', { name: 'Jellyfin' }),

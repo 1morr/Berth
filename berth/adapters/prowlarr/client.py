@@ -77,7 +77,6 @@ class HttpProwlarrClient:
                 language=str(row.get("language") or ""),
                 description=str(row.get("description") or ""),
                 protocol=str(row.get("protocol") or ""),
-                urls=tuple(str(url) for url in row.get("indexerUrls") or () if url),
             )
             for row in payload
             if isinstance(row, dict) and row.get("definitionName")

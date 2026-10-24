@@ -1,6 +1,6 @@
 # 06 — 研究：兩種 provider 格式（Anthropic 與 OpenAI 相容）
 
-**Status:** done
+**Status:** ready-for-agent
 
 **Blocked by:** None — can start immediately
 
@@ -26,17 +26,8 @@
 
 ## 驗收
 
-- [x] `docs/research/` 有一份附來源的結論，兩種格式逐條對照；brief §20 新的一節摘要並連結
-- [x] 每一條都有官方文件或實測的出處，沒有憑記憶的版本號
-- [x] 給出偵測「支不支援工具呼叫」的做法
-- [x] 給出共同介面的草案（訊息、工具、串流事件、usage）與 SDK / httpx 的建議
-- [x] progress.md 已更新
-
-## Comments
-
-- 2026-10-24 完成：結論在 `docs/research/ai-providers.md`（底稿 `docs/research/ai-providers/`），摘要 brief §20.24；實測 `scripts/experiments/ai_sdk_mocking.py`。沒有用真 key 打過端點，要真 key 才能確認的七件事列在研究文件最後一節，歸票 07 / 07b。
-- code-review 沒處理的發現：
-  - （Spec）「不支援時各自的樣子」在 OpenAI 官方、DeepSeek 與 Anthropic 格式的第三方都沒查到；探針（結論 4）不靠這些樣子判定，只影響說明能不能具體。
-  - （Spec）OpenAI 的工具名稱規則沒查，`ToolSpec.name` 取保守的小寫 snake_case；07b 開工時查。
-  - （Standards）`ToolCallStarted` 與 `ToolCall` 都帶 `id`、`name`：前者是參數還沒到時的事件，不合併。
-  - （Standards）實驗腳本 `_call_both` 的兩段 try/except 同形、`stream_error` 裡的 import 沒有 `type: ignore`：一次性腳本不抽；mypy 只在第一次 import 報錯，多加的 ignore 會被 strict 的 unused-ignore 擋下。
+- [ ] `docs/research/` 有一份附來源的結論，兩種格式逐條對照；brief §20 新的一節摘要並連結
+- [ ] 每一條都有官方文件或實測的出處，沒有憑記憶的版本號
+- [ ] 給出偵測「支不支援工具呼叫」的做法
+- [ ] 給出共同介面的草案（訊息、工具、串流事件、usage）與 SDK / httpx 的建議
+- [ ] progress.md 已更新

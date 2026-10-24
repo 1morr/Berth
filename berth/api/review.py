@@ -63,13 +63,12 @@ from berth.services.series_review import confirm_series
 router = APIRouter(prefix="/review", tags=["review"])
 
 #: 哪一種拒絕該回哪個狀態碼。**每一種理由都要在這裡**（`tests/unit/test_openapi_contract.py`
-#: 守著）。`not_audited`、`unlink_failed` 與 `source_missing` 是 409：請求本身沒問題，是**現在**
-#: 做不了——另一個分頁先按了、那一條掛載壞著，或 complete 裡的來源已經不在。
+#: 守著）。`not_audited` 與 `unlink_failed` 是 409：請求本身沒問題，是**現在**做不了——另一個
+#: 分頁先按了，或那一條掛載壞著。
 _STATUS: dict[ReviewRefusal, int] = {
     ReviewRefusal.LEDGER_MISSING: status.HTTP_404_NOT_FOUND,
     ReviewRefusal.NOT_AUDITED: status.HTTP_409_CONFLICT,
     ReviewRefusal.UNLINK_FAILED: status.HTTP_409_CONFLICT,
-    ReviewRefusal.SOURCE_MISSING: status.HTTP_409_CONFLICT,
 }
 
 
@@ -87,12 +86,9 @@ def _refusals(*reasons: ReviewRefusal) -> dict[int | str, dict[str, Any]]:
 #: 確認只改旗標，所以只有這一列本身的兩種。
 CONFIRM_RESPONSES = _refusals(ReviewRefusal.LEDGER_MISSING, ReviewRefusal.NOT_AUDITED)
 
-#: 撤銷另外要真的拆一條鏈接，而那一條不能是唯一一份。
+#: 撤銷另外要真的拆一條鏈接。
 UNDO_RESPONSES = _refusals(
-    ReviewRefusal.LEDGER_MISSING,
-    ReviewRefusal.NOT_AUDITED,
-    ReviewRefusal.UNLINK_FAILED,
-    ReviewRefusal.SOURCE_MISSING,
+    ReviewRefusal.LEDGER_MISSING, ReviewRefusal.NOT_AUDITED, ReviewRefusal.UNLINK_FAILED
 )
 
 

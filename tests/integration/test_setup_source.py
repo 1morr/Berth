@@ -266,6 +266,7 @@ async def test_a_changed_prowlarr_login_replaces_the_old_one(session: AsyncSessi
     )
     assert client.signs_in("deckhand", "changed")
     assert not client.signs_in("skipper", "changed")
+    assert mark_of(set_interface_login) == CommandMark(Effect.REVERSIBLE)
 
 
 @pytest.mark.asyncio
@@ -794,6 +795,9 @@ async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSessi
     assert [row.step for row in status.steps] == ["nyaasi", PROWLARR_LOGIN_STEP]
     await search_indexers(session, factory, query="")
     assert [query.indexer_ids for query in search.queries] == [(1,)]
+    assert mark_of(remove_indexer) == CommandMark(
+        Effect.REVERSIBLE, inverse="indexer.apply_default_indexers"
+    )
 
 
 @pytest.mark.asyncio

@@ -12,8 +12,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 # `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
-from berth.adapters.ai import ChatProvider, Endpoint
-from berth.adapters.ai.formats import provider_for
 from berth.adapters.dns import HostResolver as HostResolver
 from berth.adapters.dns import SystemHostResolver
 from berth.adapters.indexer import IndexerSearch
@@ -63,10 +61,6 @@ class ServiceClientFactory(Protocol):
 
     def discord(self, token: str) -> DiscordBot:
         """通知的 Discord bot（M4 票 123）。位址是設定（`DISCORD_API_URL`），可變的是 token。"""
-        ...
-
-    def ai(self, endpoint: Endpoint) -> ChatProvider:
-        """AI provider（M5 票 07）。格式決定用哪一個 adapter；位址與 key 是 `settings.ai`。"""
         ...
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
@@ -149,6 +143,3 @@ class HttpServiceClientFactory:
 
     def discord(self, token: str) -> DiscordBot:
         return HttpDiscordBot(token, base_url=self._discord_api_url)
-
-    def ai(self, endpoint: Endpoint) -> ChatProvider:
-        return provider_for(endpoint)

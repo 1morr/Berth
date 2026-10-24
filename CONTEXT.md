@@ -95,7 +95,7 @@ _Avoid_: download folder, save path（僅指 qBittorrent 的欄位時可用）
 
 **Service**:
 Berth 協調的三個外部服務之一：Jellyfin、qBittorrent、Prowlarr。字串同時是 compose 的服務名。
-_Avoid_: integration, provider（provider 專指外部的資料或模型來源：metadata provider（TMDB）與 AI provider（Anthropic、OpenAI 相容的端點））
+_Avoid_: integration, provider（Provider 專指 metadata provider）
 
 **Service Origin**:
 使用者在精靈替單一服務選的來源：`bundled`（套件內，Berth 代為設定）或 `existing`（既有，使用者自己的那一台）。
@@ -306,7 +306,7 @@ _Avoid_: re-run, resync
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:
-Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）、Jellyfin 回驗的一種（jellyfin_item_mismatch）與巡檢的五種（first_batch_stuck：RSS Series 的第一批被停住的 Job 卡住，M4 票 129；feed_poll_failing、feed_backfill_failing：Feed 的輪詢或每日補漏一直失敗超過一天；series_episodes_missing：RSS Series 已入庫的集數中間缺了幾集；series_episodes_collide：同一集意外多份，同一個 RSS Series 兩個發佈名寫不同集的發佈被入庫成同一集，M4 票 130）與卡住的 Job 三種（submit_failed：送單失敗而 Berth 不會再自動重送；import_failed；stalled，M5 票 01，`qbit_poller` 每一輪開與收）；`issues.type` 與 `issue_detected` 事件共用這二十二種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種、回驗那一種、巡檢那五種與卡住的 Job 三種條件解除時由系統收掉。健康檢查那兩種、回驗那一種、巡檢那五種、卡住的 Job 三種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。卡住的 Job 那三種的按鈕「放棄」（`abandon`，M5 票 01）是 Berth 不再等那一筆下載（Job 進 `removed`、磁碟與 qBittorrent 不動），與通知的**放棄**（`abandoned`）是兩件事。
+Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）、Jellyfin 回驗的一種（jellyfin_item_mismatch）與巡檢的五種（first_batch_stuck：RSS Series 的第一批被停住的 Job 卡住，M4 票 129；feed_poll_failing、feed_backfill_failing：Feed 的輪詢或每日補漏一直失敗超過一天；series_episodes_missing：RSS Series 已入庫的集數中間缺了幾集；series_episodes_collide：同一集意外多份，同一個 RSS Series 兩個發佈名寫不同集的發佈被入庫成同一集，M4 票 130）；`issues.type` 與 `issue_detected` 事件共用這十九種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種、回驗那一種與巡檢那五種條件解除時由系統收掉。健康檢查那兩種、回驗那一種、巡檢那五種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 
 **Jellyfin 回驗**:
@@ -393,7 +393,7 @@ _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 _Avoid_: job（Job 是一包 torrent）, ticket
 
 **Command Registry**（命令登錄表）:
-AI 工具的清單，**逐條登記**：命令都標了副作用，但只有登記過的才是工具（M5 票 05）。一條寫輸入、結果型別、做同一件事的那一支端點（誰拿得到照它的門禁）與怎麼呼叫命令；副作用等級（`read` / `reversible` / `irreversible`）與反向命令讀命令的標記。各模組的拒絕在這裡變成同一種，帶下一步（重試 / 交給人 / 放棄）。側面板、AI 任務與 M7 的 MCP server 的工具都只從這裡來；結果型別決定 Result Card 怎麼畫。
+services 命令的清單：輸入、結果型別、拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。側面板、AI 任務與 M7 的 MCP server 的工具都只從這裡來；結果型別決定 Result Card 怎麼畫。
 _Avoid_: tool list, API list
 
 **Takeover Switch**（接管開關）:
@@ -405,11 +405,11 @@ Takeover Switch 的中間那一段：AI 照跑，建議與理由附在那一列�
 _Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode
 
 **AI Call**（AI 呼叫）:
-對 provider 的一次請求，`ai_calls` 的一列：格式、主機、model、輸入與輸出 tokens、快取寫入與讀取 tokens（沒回的是「不知道」，不是 0）、耗時、出處（設定頁的測試、哪一則對話或哪一個 AI Task）、誰。**沒成的請求也是一列**，帶著失敗的分類（M5 票 07）。用量頁從它加總、算快取命中率。不設預算（2026-10-24）。不是 Event：事件一定掛在一筆 Job 上。
+對 provider 的一次請求，`ai_calls` 的一列：model、輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處（哪一則對話或哪一個 AI Task）。用量頁從它加總、算快取命中率。不設預算（2026-10-24）。不是 Event：事件一定掛在一筆 Job 上。
 _Avoid_: request（request 是 HTTP 請求）, cost, budget
 
 **AI Activity**（AI 活動）:
-AI 執行過的每一個寫入命令、理由、tokens，逐筆可撤銷。一筆是 AI 直接做的可逆寫入，或人按了確認的 Proposal；從對話存下的工具結果與確認卡撈，不是另一份日誌（M5 票 14，`/ai-activity`）。管理員看全部，其他人只看自己對話裡的。
+AI 執行過的每一個寫入命令、理由、tokens，逐筆可撤銷。
 _Avoid_: log, history
 
 **Sweep**（巡檢）:
@@ -424,14 +424,10 @@ _Avoid_: digest（digest 是摘要那一則通知）, summary, stats
 AI 核心對人的介面：M5 的側面板、M7 的外部管道（Discord 私訊），兩者是同一個對話核心。工具是 Command Registry 依使用者角色過濾的那一份；使用者要求的可逆動作直接做並給撤銷，不可逆的（含改設定）提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
-**Conversation**（對話）:
-一個人與助理的一串來回，存在 Berth（`conversations` 一列、每一則一列），只有那個人看得到。一則使用者訊息之後助理最多呼叫 10 輪工具；provider 沒成或到了上限時那一則停下來，原因存成一則說給人聽的 notice（不送給模型）。M5 票 08 起。
-_Avoid_: chat, thread（thread 是 Discord 的東西）, session（session 是登入）
-
 **Result Card**（結果卡）:
 助理把一個命令的結果畫成的一張卡：作品、搜尋結果（帶送單鍵）、Feed 與 RSS Series、Job（即時更新）、Proposal 的確認卡。長什麼樣由命令的結果型別決定，不由模型決定；外部管道上是一則 embed。M5 起。
 _Avoid_: widget, message（message 是管道上送出去的那一則）
 
 **Proposal**（提案）:
-AI 想做但**不可逆**或沒把握的一次工具呼叫：工具、參數、AI 的理由、為什麼要人按（cause）、卡上講的「會發生什麼」（preview）、狀態（proposed / confirmed / rejected / expired）、誰按的與結果。人按了確認才以他執行，按的當下重驗角色與輸入；不成立、或執行被拒（什麼都沒改）是 expired。只有要它的那個人按得到。畫面上是一張確認卡，外部管道上是一則帶按鈕的訊息；`proposals` 表一列，不是側面板的狀態。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做（M5 票 10 起有實作）。
+AI 想做但**不可逆**或沒把握的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。人確認才執行。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做。
 _Avoid_: suggestion, action, task

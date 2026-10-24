@@ -106,18 +106,6 @@ Berth is a **public beta**.
   Admins also get "N waiting for you" when something new lands in review, issues or RSS series to bind
   (gathered for 10 minutes into one DM), and every Monday a weekly report: what was imported, what was
   fixed and what still waits (the Weekly page, with a DM summary).
-- AI is just starting: Settings → AI connects your own provider in the Anthropic or the OpenAI-compatible format
-  (Anthropic's or OpenAI's API, OpenRouter, DeepSeek, a self-hosted Ollama or vLLM and others) and tests whether
-  its model can call tools. Settings → Usage shows the tokens every call spent and the cache hit rate, with no
-  budget. Every page has an assistant side panel to chat with it: it looks up recent imports; on a title's page
-  it finds the missing episodes, searches for them and submits one, each drawn as a card, and it can only submit
-  a release it found in the same conversation that fits the title and the episodes asked for. It subscribes a
-  title to a Mikan fansub group or a Nyaa / acg.rip search feed, and a subscription card can undo it. Adding an
-  indexer or deleting a title's downloads waits on a confirmation card until you press Confirm. The AI activity
-  page lists every change it made, with its reason, and undoes the ones that can be undone. Berth works the
-  same without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
-  [the assistant](docs/guide/setup-wizard.md#the-assistant-side-panel) and
-  [AI activity](docs/guide/setup-wizard.md#ai-activity).
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.

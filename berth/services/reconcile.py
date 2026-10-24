@@ -68,7 +68,6 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.issues import IssueRejectedError, Recorded, record_issue
 from berth.services.plan import WRITTEN
 from berth.services.qbittorrent import (
@@ -163,8 +162,6 @@ class _Tally:
             self.updated += 1
 
 
-# 只寫偵測結果與帳本狀態，不刪不鏈、不排通知；下一輪照現況重寫。
-@command(Effect.REVERSIBLE)
 async def reconcile_once(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -666,7 +663,6 @@ class ReconcileRunner:
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    @command(Effect.REVERSIBLE)
     async def start(self) -> ReconcileReport:
         """開一輪，**立刻回**這一輪的樣子（`POST /reconcile` 的 202）。
 
@@ -727,7 +723,6 @@ class ReconcileRunner:
             self._current = None
             self._progress = None
 
-    @command(Effect.READ)
     async def wait(self) -> None:
         """等進行中的那一輪跑完。**只給測試**（同 `services/jobs.held_locks`）。
 
@@ -738,7 +733,6 @@ class ReconcileRunner:
         if self._task is not None:
             await self._task
 
-    @command(Effect.READ)
     async def aclose(self) -> None:
         """關機時收掉背景那一輪。跑到一半被 cancel 的不留半筆——只在最後 commit 一次。"""
         if self._task is None:

@@ -39,7 +39,6 @@ function job(overrides: Partial<Job> = {}): Job {
     retryable: false,
     replannable: false,
     reimportable: false,
-    undoable: false,
     plan_id: 7,
     audits: 0,
     series: '',

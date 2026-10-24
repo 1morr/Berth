@@ -13,12 +13,11 @@ export interface StubRoute {
  */
 /**
  * `stubApi` 的路由表：固定回應，或每次叫用時才算的替身（回 Promise 的能停在半路或丟出送不到）。替身拿得到
- * 那一次請求的 `init`：記得自己狀態的假後端照送來的內容回（例如沿用與否）。回 `Response` 的替身原樣交出去
- * （`test/sse.ts` 的串流）。
+ * 那一次請求的 `init`：記得自己狀態的假後端照送來的內容回（例如沿用與否）。
  */
 export type StubRoutes = Record<
   string,
-  StubRoute | ((init?: RequestInit) => StubRoute | Response | Promise<StubRoute | Response>)
+  StubRoute | ((init?: RequestInit) => StubRoute | Promise<StubRoute>)
 >
 
 export function stubApi(routes: StubRoutes) {
@@ -29,8 +28,6 @@ export function stubApi(routes: StubRoutes) {
     if (!route) return new Response(JSON.stringify({ detail: 'Not Found' }), { status: 404 })
     // 回 Promise 的替身讓請求停在半路：測「送出中」那一段用得到。
     const resolved = typeof route === 'function' ? await route(init) : route
-    // 串流的回應（助理的 SSE）由替身自己組好整個 `Response`。
-    if (resolved instanceof Response) return resolved
     const status = resolved.status ?? 200
     // 204 不能帶 body：`new Response('null', { status: 204 })` 會丟 TypeError，替身自己炸掉、
     // 呼叫端走進失敗分支——票 14 的刪除測試因此從來沒看到過「刪掉了」（票 14a）。

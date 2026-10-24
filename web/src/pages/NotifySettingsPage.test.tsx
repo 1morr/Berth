@@ -113,10 +113,8 @@ describe('設定 → 通知', () => {
 
     const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
     const names = tabs.getAllByRole('link').map((link) => link.textContent)
-    expect(names.at(-4)).toBe('TMDB')
-    expect(names.at(-3)).toBe('通知')
-    expect(names.at(-2)).toBe('AI')
-    expect(names.at(-1)).toBe('用量')
+    expect(names.at(-2)).toBe('TMDB')
+    expect(names.at(-1)).toBe('通知')
     expect(tabs.getByRole('link', { name: '通知' })).toHaveAttribute('data-status', 'active')
   })
 

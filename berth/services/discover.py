@@ -31,7 +31,6 @@ from berth.domain import MediaKind, TmdbProblem
 from berth.models import MediaCard, TmdbCache, TmdbSettings, dump_cards, load_cards
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.settings import read_settings, write_settings
 from berth.services.tmdb import credential, tmdb_problem
 from berth.services.tracking import tracked_media
@@ -96,7 +95,6 @@ class _KindFeed(Protocol):
     async def __call__(self, kind: MediaKind, *, language: str) -> tuple[TmdbEntry, ...]: ...
 
 
-@command(Effect.READ)
 async def read_trending(session: AsyncSession, factory: ServiceClientFactory) -> DiscoverResult:
     """本週趨勢，劇集與電影交錯。"""
 
@@ -106,7 +104,6 @@ async def read_trending(session: AsyncSession, factory: ServiceClientFactory) ->
     return await _feed(session, factory, TRENDING_KEY, fetch)
 
 
-@command(Effect.READ)
 async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> DiscoverResult:
     """熱門，同樣兩種作品交錯。"""
 
@@ -116,7 +113,6 @@ async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> 
     return await _feed(session, factory, POPULAR_KEY, fetch)
 
 
-@command(Effect.READ)
 async def search_media(
     session: AsyncSession, factory: ServiceClientFactory, query: str
 ) -> DiscoverResult:
@@ -226,7 +222,6 @@ def _interleave(*lists: tuple[MediaCard, ...]) -> tuple[MediaCard, ...]:
     return tuple(card for row in zip_longest(*lists) for card in row if card is not None)
 
 
-@command(Effect.READ)
 async def image_base(session: AsyncSession, client: TmdbClient) -> str:
     """圖片基底對同一把憑證是常數，所以存起來，只在還沒有的時候問。
 

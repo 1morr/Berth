@@ -75,12 +75,6 @@ uv run mypy                 # 型別檢查（strict）
 uv run lint-imports         # 依賴方向契約（plan §1.3）
 ```
 
-測試裡的「現在」：services 的命令多半收 `now=`，直接傳；走 HTTP 那一層傳不進去的，用 time-machine 的
-`time_machine` fixture 把時鐘固定在錄下來的資料的日期附近（`time_machine.move_to(...)`，例見
-`tests/integration/test_rss_api.py::TestThePageFlow`）。錄下來的日期是寫死的，拿牆上時間跟它比的
-斷言總有一天會翻面（M5 票 10b）。演練伺服器同理：用錄下的資料的情境設 `Scenario.clock`（見
-〈UI 的 Fake 後端〉的 `rss`）。
-
 資料庫 migration（Alembic）。程序啟動時會自動套用到最新版本，以下只在改 schema 時用：
 
 ```bash
@@ -154,7 +148,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑二十五條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑二十條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -176,18 +170,6 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
   前端的 `ReasonSet` 加一格（`tsc`，`refusal.test.ts` 的 `@ts-expect-error` 釘著那道閘門本身）。
   第五件是**畫面要說一句話**：`jobs.refusal.*` 走動態 key，所以 `t()` 的 `strictKeyChecks`
   會替它擋；`RouteRefusal` 與 `AccessRefusal` 的消費端是查表或單一理由比較，那一句沒有閘門。
-- **後端組的前端網址從 `deeplink.BerthPage` 來**（通知連結，M5 票 02）。這是慣例：`berth_link` 收任意字串，
-  繞過它手組的路徑沒有閘門。`BerthPage` 不是任何端點的回應，
-  由 `main._document_components` 塞進 OpenAPI 的 components；前端 `src/berthPages.test.ts` 的 `PAGES`
-  對每一條模板寫明落在哪一條路由，拿真的路由表解析。後端加一頁：重跑 `pnpm gen:api`
-  （`TestBerthPages` 先紅），`PAGES` 少一個鍵 `tsc` 紅；前端改了那幾條路由：vitest 紅。
-  錨點（`#issue-5` 這類）不在這道閘門裡，各清單頁的 vitest 寫死同一個形狀。
-- **AI 工具的結果型別**（`services/tools.py` 的每一條登記，加上 `Refusal`、`NextStep`、`ToolRefusal`，M5 票 05）
-  也由 `main._document_components` 塞進 components：它們經對話送到前端，不是端點的回應。加一個工具
-  或改結果型別就重跑 `pnpm gen:api`（`TestToolResults` 先紅）。結果型別名字的封閉集合 `ToolResultType`
-  也在這裡（M5 票 09）：前端 `assistant/ResultCard.tsx` 一種型別一格，登記了新的結果型別沒有卡（或明寫 `null`）時
-  `tsc` 紅。要人按的工具（M5 票 10）多兩樣：`ProposalCard` 進 `ToolResultType`，每個工具的預覽型別與它們的名字
-  `ProposalPreviewType` 也進 components，前端 `assistant/ProposalCard.tsx` 的 `PREVIEWS` 一種一格。
 - **會拒絕的端點都要在 `responses=` 裡宣告**（`TestDeclaringWhatEachEndpointRefuses`）：走訪
   `create_app()` 的每一條路由，比對路由**物件**上的 `responses` 與 handler **語法樹**丟得出來的
   拒絕，漏宣告與多宣告都紅。**守的是形狀那一層**（`RouteRefusalOut` 這幾個 model），不是理由
@@ -330,7 +312,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十五條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共四十七個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十一條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共三十九個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -345,10 +327,6 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
 | `/weekly`（M4 票 131）：管理員從頁首導覽進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
-| 助理的側面板（M5 票 08）：九個頁面都開得到、桌機換頁與重整還開著（窄版每次打開網頁看到的是那一頁、打開時連頁首一起收起，M5 票 15）、關閉後焦點回到「助理」鍵；串流到一半有字、那一塊 `aria-busy`，工具呼叫說「正在查最近入庫」再換成「查過」、底下畫出「最近 7 天入庫」的結果卡（票 09），限流說 30 秒後再送，重整之後三段與卡片都在；確認卡（票 10）：「加一個動畫的索引站」停在一張說出 dmhy 網址的卡上、按「確認加入」之後說已加入，「把這部電影的 complete 刪掉」的卡列出兩個要刪的檔案、按「拒絕」之後說什麼都沒做，重整之後兩張卡照結局畫；在 SPY×FAMILY 作品頁說「這部缺的集搜一下並下載」，那一句底下說在哪一部的頁面上，畫出缺的集、搜尋結果（不像這部作品的說為什麼、AI 不送的那一筆標出來）與送單三張卡，再說「照標題說的送」被擋下（說出原因），管理員撤銷送單之後卡上說已撤銷（票 12；撤銷經過對話，票 11） | `assistant` | 8528 / 8529 |
-| 助理訂閱 RSS（M5 票 11）：在《与你相恋》作品頁說「訂閱這部的 Mikan RSS」，助理查作品名、搜番組、列字幕組，兩條 Route 都收劇集時從 `route_needed` 說的那幾條挑 Anime 重叫，訂閱卡說出 Feed 名稱、MIKAN、綁到的作品與字幕組、當場送出 12 筆與下一次輪詢，沒有確認卡；桌機的 RSS 頁看得到那個 Feed；「撤銷訂閱」就地確認之後卡上說已撤銷與撤回 / 留下幾筆，RSS 頁的 Feed 不在了，重整之後照樣說已撤銷 | `assistant-rss` | 8530 / 8531 |
-| AI 活動頁（M5 票 14）：在 SPY×FAMILY 作品頁讓助理送一筆單、再提議加索引站並按確認，從面板抬頭的「活動」到 `/ai-activity`（窄版面板跟著收起）：新的在前兩列，加索引站那一列是 dmhy、「skipper 確認的」、說撤不回，送單那一列說出 AI 的理由、這次回覆的 tokens、展開看得到輸入；從頁面撤銷送單之後那一列說已撤銷，按「出自對話」在側面板打開那一則、送單卡照樣說已撤銷 | `assistant` | 8532 / 8533 |
-| 換頁時側面板不重建（M5 票 15b）：問了「這週入庫了什麼」之後，打了字還沒送出就點卡片裡的作品，那一頁畫出來之後字還在；送一句長話、回覆吐到一半時點卡片裡的作品，換頁之後那一則照樣接著吐字、畫完，最近入庫的卡還在同一則裡（窄版點連結會收起面板，回來再打開） | `assistant` | 8534 / 8535 |
 | `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
@@ -366,19 +344,13 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 2 分鐘（四十七台替身）
+pnpm -C web e2e                                            # 約 2 分鐘（三十九台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
-E2E_PORT_OFFSET=1000 pnpm -C web e2e                       # 整張 port 表平移 +1000（平行的 worktree）
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```
 
 - **不重試、不接手已經在跑的 server**：替身是有狀態的，重跑一次面對的是被上一次改過的替身。表上的 port
   有東西在聽時先停掉它。
-- **平行的 worktree 各跑一套**：`E2E_PORT_OFFSET` 把上表的 port 整段平移（`web/e2e/ports.ts`；例如 `1000` 是
-  9484–9535），起替身與 `baseURL` 一起移，替身給的連結跟著 `--port` 走。沒設是 0、port 照表，CI 不設。
-  `--project` 只挑要跑的流程，**四十七台替身照樣全部起來**，所以只跑一條也會撞到另一個 worktree 正在用的 port——
-  錯誤是 `http://127.0.0.1:<port>/api/health is already used`。每個 worktree 用不同的位移（例如 1000、2000），
-  位移之後要落在 1024–65535，打錯的值在起伺服器之前就說清楚（`web/gates/e2e-ports.test.ts` 守著）。
 - 選擇器寫的是 zh-Hant 文案（瀏覽器語系 `zh-TW`），改文案要跟著改腳本。
 - 失敗時 `web/test-results/` 留截圖與 trace、`web/playwright-report/` 是 HTML 報告；CI 的 `web-e2e` job 把兩者
   上傳成 artifact `playwright-evidence`（留 14 天）。
@@ -413,7 +385,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：頁 1 擁有者那一步紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
-| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。**伺服器的時鐘從 2026-09-25 12:00 UTC 起走**（錄下的 Feed 的隔天，`Scenario.clock`，M5 票 10b）：「安靜 30 天算完結」拿牆上時間比錄下的日期，用真的時間的話過了那一天整份就收進「已完結」；瀏覽器照真的時間，畫面上的「幾天前」會多算一段。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）；TV 與 Anime 都收劇集，所以「劇集送進」要選（M4 票 105，選 Anime），「電影送進」預填 Movies。按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；《与你相恋到生命尽头》的番組頁在，輪詢時就自動綁到它與 Feed 說的 Anime（整季補齊，M4 票 78 起沒有不補的選項），其餘 10 個番組頁查不到、留在待綁定。12 集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上 12 筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
+| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）；TV 與 Anime 都收劇集，所以「劇集送進」要選（M4 票 105，選 Anime），「電影送進」預填 Movies。按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；《与你相恋到生命尽头》的番組頁在，輪詢時就自動綁到它與 Feed 說的 Anime（整季補齊，M4 票 78 起沒有不補的選項），其餘 10 個番組頁查不到、留在待綁定。12 集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上 12 筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
 | `rss-legacy-feed` | 舊 Feed 選 Route（M4 票 105）：同 `rss`，但聚合 feed 已經在了，是票 105 之前加的——劇集那一格是空的（TV 與 Anime 兩條，migration 推不出來），電影那一格是 Movies。Feed 列標「要選 Route」；輪詢之後《与你相恋》認出來了、停在待綁定（`route_ambiguous`，作品預填成候選，也是手動綁定與補舊集的演練起點）；按「改 Route」選 Anime，確認區說會當場綁上 1 部，存下之後它綁上、補齊整季 12 集 |
 | `rss-split-cour` | 改正並套用到 RSS Series（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季 24 集。綁定時補舊集，12 集全部落在 S01E01–E12（錯的：字幕組的第二 cour 從 01 重數），在 `/review` 是這個 RSS Series 的第一批、一組；把第 1 集改成 S01E13 並勾「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24，再按「全部確認」 |
 | `rss-split-cour-airing` | 從審核裡套用到 RSS Series（M3 票 14b）：同 `rss-split-cour`，但第二 cour 正在播（2026-07-02 起）。綁定時補舊集，12 集照字面對到一月播出的 S01E01–E12，播出日比對把 12 份計劃整批擋在 `/review` 的「要你決定」、一集都沒入庫；在第 1 集那一份按「改」、起集填 13、勾著「套用到這個 RSS Series」套用，其餘 11 份重新規劃、自動入庫（第一批，等全部確認），改的那一份等你核准 |
@@ -425,9 +397,6 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `routes` | Route 設定頁 `/settings/routes`（票 14）：同 `healthy`，另外 TV 媒體庫在 Jellyfin 上多掛一顆碟（新增第二條 Route 會全綠）、Movies 多一條沒掛進 Berth 的路徑（在那裡建 Route 會紅、維持停用），TV 那條 Route 有一筆已入庫的下載（刪除鍵換成「刪不得」與一鍵停用）；新增時選 Anime 沒有空路徑，給一條到 Jellyfin 媒體庫設定的連結 |
 | `rss-sweep` | 每日巡檢的 RSS 三項（M4 票 130）：同 `healthy`，Mikan 聚合 feed 的每日補漏、Nyaa 搜尋 feed 的輪詢各壞了兩天（`/rss` 的 Feed 列分開說），SPY×FAMILY 綁著一個 RSS Series、帳本缺第 3 集、第 5 集撞了寫著 `- 05` 與 `- 06` 的兩個發佈；起來時由產品的 `sweep_once` 跑一輪，`/issues` 上是輪詢一直失敗、補漏一直失敗、缺集、同一集多份各一件（Feed 那兩件連到 `/rss#feed-<id>`，另兩件連到作品頁）。Feed 的替身一個網址都不認，按「立即輪詢」是讀不到 |
 | `weekly` | 週報頁 `/weekly`（M4 票 131）：同 `healthy`，另外三部作品的帳本列（芙莉蓮 S01E01–E03、E05 與 S02E01；一部作品名很長的；一部電影）、三次核准、兩次 rematch、人解決三件與系統收掉一件 Issue、兩筆待審核、四件開著的 Issue（含三件巡檢開的）、一個待綁定的 RSS Series，最後由產品自己的 `compose_weekly` 產生最近兩週的週報：上一週只入庫長名字那部四集、其餘都是 0（歷史清單看得出兩週不同），最新一週是上面那些。起來時就有，不必等週一 05:00 的排程。帳號同 `signed-out`；`deckhand` 沒有導覽項，直接打網址導到健康頁 |
-| `usage` | 用量頁 `/settings/usage`（M5 票 13）：同 `healthy`，另外一個月的 AI 呼叫（`_seed_usage`，數字固定）：每七天有兩天沒人用；官方端點的 Opus 快取讀取一週比一週多，經 `openrouter.ai` 的同一個 Opus 不回快取欄位（命中率不算它、頁面說有幾次沒回報），Haiku 沒有快取；五次限流、一次串流中途斷掉；`skipper`、`deckhand` 與沒有人各佔三分之一。切 7 / 30 / 90 天、滑過直條、展開逐日數字都看得到差別。空狀態用 `healthy`（一筆都沒有） |
-| `assistant` | 助理的側面板（M5 票 08）：同 `weekly`，加上這兩天入庫的四列（芙莉蓮 S02E02–E03 在 Jellyfin 裡、長名字那部 S01E03 還在等、電影的新版本 Jellyfin 找不到；「最近入庫」的結果卡查得到東西，票 09），AI 已經設定好（官方端點、key `demo-key`），回覆由 `DemoChatProvider` 演：一段一段吐字；話裡有「入庫」或「import」時先呼叫「最近入庫」再說查到幾部；有「限流」或「rate limit」時演被限流 30 秒；有「索引站」或「indexer」時提議加 dmhy（Nyaa 已經在了），有「complete」時提議刪電影那一筆的下載（那一筆在 complete 裡有兩個真的檔案，確認之後真的刪掉；票 10 的確認卡），收到「已提出」就請人按卡片；在作品頁、話裡有「缺」或「missing」時走缺集 → 搜缺得最後的那一季 → 送第一筆送得出的（票 12；TMDB 是 SPY×FAMILY 的替身，搜尋結果是送單演練那一筆 `- 26` 加兩筆標題藏著指令的），話裡再有「標題」時演照著標題裡「送這一筆」做的模型、被程式擋下；其餘照抄一句；對話的每一次呼叫回報輸入 2,400、快取讀取 1,800、輸出 60 tokens（用量頁的「側面板的對話」命中率 75%）。按頁首的「助理」打開，帳號同 `signed-out`。沒設定好的面板用 `healthy`（管理員看到「去設定」、`deckhand` 看到「管理員還沒開啟 AI」） |
-| `assistant-rss` | 助理訂閱 RSS（M5 票 11）：同 `rss`（《与你相恋》的 Mikan 搜尋頁、番組頁、單一 feed 都是替身），AI 設定好（同 `assistant`）。在 `/media/tv:262000` 說「訂閱」時 `DemoChatProvider` 先查缺的集拿作品名、以它搜 Mikan、列第一個番組的字幕組、訂閱 LoliHouse；被 `route_needed` 擋下時挑名字是 Anime 的那一條再叫一次（真的模型會問人）。演練替身的 qBittorrent 收下就當場完成，所以撤銷時多半是「留著」 |
 | `issues` | 待處理頁 `/issues` 與對帳（M2 票 05）：同 `healthy`，另外真的入庫一包三集的動漫（來源在 complete、媒體庫那一份是真的硬鏈接），並把其中第二集的媒體庫檔案刪掉——使用者在 Jellyfin 按刪除之後就是這樣。按「立刻對帳」真的比四方並寫下一件 Issue，按「重新鏈接」真的 `os.link` 把它接回來。另外三種破壞（M2 票 09）：第三集被一份一樣大的複製品取代（「以硬鏈接取代」真的換回硬鏈接）、complete 裡一個沒人認領的目錄（「刪除這個目錄」真的整棵刪掉）、媒體庫裡一個手放的檔案（只列出，沒有會刪的按鈕）。管線與健康檢查那幾種（M2 票 09c）：三筆下載到一半的 SPY×FAMILY，替身 qBittorrent 說一筆 `missingFiles`、一筆 `error`、一筆已經不在——起來之後 poller 第一輪就開出三件，「重新校驗」「重試」「重新送單」各自讓它們離開壞掉的狀態；或者 `curl -X POST 'http://127.0.0.1:8484/demo/qbittorrent/fix?hash=<hash>'` 演使用者在 qBittorrent 裡自己修好那一筆（M3 票 02），poller 下一輪（至多 30 秒）把 Job 接回、那一件由系統收掉，時間線多一筆「已接回」；Anime 媒體庫掛著 TVDB，所以一開始就有一件 TVDB（只有「忽略」，按了之後「立即重測」也不會再開）。磁碟空間那一件要到設定的 qBittorrent 那一頁把門檻調到比這台機器剩的還大，`/issues` 當場多一件，調回來當場收掉。認領類三顆（M2 票 10，替身 TMDB 搜得到 `spy`）：媒體庫裡第四集是真的硬鏈接但帳本上沒有它——「認領進帳本」長回一列，`Hand Placed` 那一件按下去說出配不上的理由；qBittorrent 上一筆 `[Sub] SPY×FAMILY - 07` 沒有 Job——「認領並建立下載」選作品，下載列表多一筆；`[Old] Forgotten Batch` 按「重新入庫」選作品，規劃器接手。`/jobs` 上入庫完的那一筆，在它的詳情頁（展開那一列 → 「下載詳情」）有「重新入庫」 |
 | `discover` | 探索頁 `/`：三個外部服務仍是替身，但 TMDB 打**真的** `api.themoviedb.org`。憑證從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 read access token 都收），沒設就變成「憑證缺失」那個畫面 |
 | `tmdb-down` | 憑證有、TMDB 連不上：探索頁的每個 feed 各自顯示服務回的原文與「重試」，而不是一片空白 |
@@ -444,12 +413,6 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `long-lists` | 長清單的收合（M1.5 票 09）：同 `inventory`，但索引站只給 benchmark 語料裡葬送的芙莉蓮 `[7³ACG]` BD 合集（39 個檔案：S01 28 集、S00 11 集）。在芙莉蓮的詳情頁（`/media/tv:209867`）送到 Anime，計劃、入庫與替身 Jellyfin 的反查約一分鐘走完，之後看「檔案與版本」與 `/jobs` 那一列的計劃；名偵探柯南（`/media/tv:30983`，TMDB 併成一季 1216 集）不必送單，打開就是那張季表。需要 `TMDB_API_KEY`。**Windows 上加 `--config-root` 指一個短路徑**（例如 `C:/Users/<你>/t9`）：預設的暫存目錄太深，S00 那 11 個檔案的目標路徑會超過 260 字元而入庫失敗 |
 | `library` | 媒體庫頁 `/library` 的整庫瀏覽與權限（M1.5 票 03）：Movies / TV / Anime 三個媒體庫擺好作品（Movies 有 131 部，翻得到第二頁；有一部沒有 TMDB id），海報經 Berth 代理替身 Jellyfin 的 SVG（票 04；`Home Videos 2019` 沒有圖、`Harbour Film 007` 有 tag 但圖不見了，兩格都是「無海報」），Berth 經手的有在牆上的、還沒進 Jellyfin 的、待審與 Unmatched（M2 票 14：`skipper` 在 TV 媒體庫的「待審」是 Slow Horses 一份等審核的計劃，「對不到」是 The Bear 兩個 Extras 檔案，就地按得了；Anime 上是 Frieren 的計劃）。作品有類型與社群評分（票 06：排序、類型與年份篩選看得出差別；Shōgun 的 `War & Politics` 帶 `&`），Home Videos 2019 兩者都沒有。每部劇六集；`deckhand` 看到 The Bear 第三集、第四集看到 18%，看完 Breaking Bad，Slow Horses、Shōgun、Game of Thrones、The Office 各看了幾集，Oppenheimer 看到 42%、Harbour Film 002 看到 65%、看過 Harbour Film 001，`skipper` 看完 Slow Horses、The Bear 看過一集（票 05，標為已看 / 未看寫進替身 Jellyfin，重開伺服器就還原）。所以 `deckhand` 的媒體庫頁上方有繼續觀看與下一集（票 07：劇有 16:9 的 Thumb 或 Backdrop，Harbour Film 002 沒有橫圖是「無圖」；登入後就落在媒體庫——看得到的媒體庫裡有 Berth 入庫的東西時；一筆都沒有時落在探索，M4 票 10——探索頁只放 TMDB 牆，M3 票 06），`bosun` / `knot`（權限同 `deckhand`、什麼都沒看過）兩列都不出現。`skipper` / `harbour` 看得到三個媒體庫；`deckhand` / `rope` 只開放 Movies 與 TV，開 `/library/item-anime` 是「找不到或沒有權限」。`curl -X POST 'http://127.0.0.1:8484/demo/jellyfin/disable?user=deckhand'` 在替身 Jellyfin 停用他（`enable` 復原），至多 60 秒後他的下一個請求被送回登入頁。Media 詳情的觀看區（票 08）：`deckhand` 開 The Bear 是「繼續看 S01E04」、集有劇照；The Office 有兩季與 Specials，主按鈕是「看下一集 S01E05」；Breaking Bad 看完了；Oppenheimer 是電影；SPY×FAMILY 在他看不到的 Anime，頁面上沒有觀看區（`skipper` 開同一頁就有）；`bosun` 開 The Bear 是「從 S01E01 開始看」。有 `TMDB_API_KEY` 時詳情頁打真的 TMDB |
 | `poll` | 送單到完成的狀態**自己走完**（票 10）：qBittorrent 打**真的**那一台，所以 `sync/maindata` 會真的換 state、poller 會真的驅動 §3.1 的轉換、SSE 會真的把那一列推著動。位址從 `BERTH_QBITTORRENT_URL` 讀，準備步驟見下方 |
-
-**設定 → AI（M5 票 07）每個情境都演得出來**，provider 是演練用的替身（`DemoChatProvider`，不出網）：三步測試照常走完、
-模型清單有四個。key 填 `rejected` 演「key 不對」，模型名帶 `missing` 演「模型不存在」、帶 `chat-only` 演「只能聊天」。
-設 `BERTH_AI_REAL=1` 時改打真的端點（設定頁填的 base URL 與 key），有真 key 時拿它看一次真的回應與 tokens。
-OpenAI 相容（票 07b）另有一台走**真的 adapter、真的 HTTP** 的假端點：格式選 OpenAI 相容、base URL 填
-`http://127.0.0.1:<port>/demo/openai/v1`（key 可空），模型清單有 `demo-gpt` 與 `demo-chat-only`；作答規則同上。
 
 `healthy` 沒有 TMDB 憑證，所以它同時是探索頁「還沒填憑證」的樣子——那一步是精靈的必填閘門
 （見 [README〈What you need〉](../README.md#what-you-need)），畫面要指得出下一步。
@@ -518,8 +481,8 @@ Fake 是**有狀態**的，每個情境只有一份，所以頁 1 與頁 3 真�
 
 ### 實驗腳本
 
-`scripts/experiments/` 是對真實外部服務與第三方套件做的驗證（Jellyfin 命名、qBittorrent 版本差異、
-Prowlarr 設定 API、硬鏈接、AI SDK 能不能用 respx 測），全部可重跑。每個腳本在回答什麼、有哪些坑，見
+`scripts/experiments/` 是對真實外部服務做的驗證（Jellyfin 命名、qBittorrent 版本差異、
+Prowlarr 設定 API、硬鏈接），全部可重跑。每個腳本在回答什麼、有哪些坑，見
 [`scripts/experiments/README.md`](../scripts/experiments/README.md)；結果寫在
 [`docs/research/m0-experiments.md`](research/m0-experiments.md)。
 
@@ -803,14 +766,6 @@ uv run python scripts/experiments/discord_dm.py send no-mutual-guild
 uv run python scripts/experiments/discord_dm.py send too-long-no-mutual-guild --length 2001  # 長度檢查先於共同伺服器
 uv run python scripts/experiments/discord_dm.py fixtures                # 遮掉 id 與名字，寫 tests/fixtures/http/discord/
 uv run python scripts/experiments/discord_dm.py embed-url               # 票 124：embed url 與 Markdown 連結收哪些主機
-```
-
-官方 AI SDK 能不能用專案的 respx 測（M5 票 06）：`anthropic` 與 `openai` 釘在腳本開頭的 PEP 723 區塊裡，
-`uv run --script` 裝在臨時環境、不進 Berth 的依賴；不連網、不需要憑證。換 SDK 版本時改那幾行重跑，
-結論在 brief §20.24：
-
-```bash
-uv run --script scripts/experiments/ai_sdk_mocking.py
 ```
 
 ## 目錄結構

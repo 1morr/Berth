@@ -72,8 +72,7 @@ export function SearchPanel({ media, ref }: { media: Media; ref: Ref<SearchHandl
 
   // `undefined` 是「這一輪還沒動過」，與刻意選「尚未指定」（`null`）不是同一件事。
   const [route, setRoute] = useState<number | null | undefined>(undefined)
-  // 預選是後端算好的那一條（`services.media.preselected_route`）：AI 送單不說 Route 時也照它（M5 票 12）。
-  const chosen = route === undefined ? media.preselected_route_id : route
+  const chosen = route === undefined ? preselected(media) : route
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<SortKey>('seeders')
   // `null` = 照作品名搜（預設）。有值時這一區塊搜的是季表上缺的那幾集。
@@ -559,6 +558,21 @@ function pending(keyword: string, planned: string[] | undefined): SetupStep[] {
   const typed = keyword.trim()
   const steps = typed ? [typed] : (planned ?? [])
   return steps.map((step) => ({ step, status: 'running', detail: '', error: '' }))
+}
+
+/**
+ * 這一輪的預選 Route。
+ *
+ * **上次送單用的那一條優先**（`default_route_id`，票 09 寫）：入庫到哪裡是一個會重複的
+ * 決定，同一部作品的第二季幾乎一定進同一條 Route。它已經不在（被刪掉了）時落回下一條規則。
+ *
+ * 其次是「只有一條收得下這部作品」——沒有第二個選項的選擇不該讓使用者做。
+ */
+function preselected(media: Media): number | null {
+  const routes = media.routes
+  const last = routes.find((route) => route.id === media.default_route_id)
+  if (last) return last.id
+  return routes.length === 1 ? routes[0].id : null
 }
 
 function failedCount(results: { attempts: readonly { status: string }[] }): number {

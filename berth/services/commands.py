@@ -2,7 +2,7 @@
 
 每一個 service 命令標明它的副作用等級，可逆的另外說出反向命令是哪一個。M5 的命令登錄表讀它：
 可逆的 AI 通過驗證後自己做，不可逆的做成 Proposal 等人。**這裡只有標記**——不收集、不查詢，
-登錄表本身在 M5 做；每個 service 命令一出生就帶著它（M5 票 04 起沒有豁免）。
+登錄表本身在 M5 做；現在要的只是 M3 起新增的命令一出生就帶著它。
 
 反向命令以 `"<模組>.<函式>"` 指名（相對 `berth.services`，同 brief §14 的 `issues.resolve`）：
 寫成字串而不是函式物件，是因為反向命令常常定義在後面、或在另一個模組裡。名字寫錯、指到一個
@@ -24,14 +24,11 @@ _ATTRIBUTE = "__berth_command__"
 class Effect(StrEnum):
     """副作用等級（brief §14）。"""
 
-    #: 只讀，什麼都不改。補外部服務的快取（TMDB 的抄本，重抓就是現況）、收掉已經過期而本來就不能
-    #: 用的列（`auth.read_session`）也算只讀。
+    #: 只讀，什麼都不改。
     READ = "read"
     #: 改了東西，但有路回去：反向命令、或同一個命令再按一次別的選項。
     REVERSIBLE = "reversible"
-    #: 做了就回不去（刪 complete 裡的檔案、移除 torrent、purge、寫到別人服務上撤不回的），以及
-    #: brief §14 的改設定、Route（含 Feed 送到哪條，M5 票 09b）與索引站——就算再改一次改得回去
-    #: （M5 票 04）。兩者都永遠要人。
+    #: 做了就回不去（刪 complete 裡的檔案、移除 torrent、purge）。永遠要人。
     IRREVERSIBLE = "irreversible"
 
 

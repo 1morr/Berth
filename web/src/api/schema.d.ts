@@ -4,101 +4,6 @@
  */
 
 export interface paths {
-    "/api/settings/ai": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Ai */
-        get: operations["get_ai_api_settings_ai_get"];
-        /**
-         * Put Ai
-         * @description 存設定。不連端點：連得上與否是「測試」的事。
-         */
-        put: operations["put_ai_api_settings_ai_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/ai/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Test
-         * @description 照存著的設定打三次請求（`services.ai`），每一次都記進用量。
-         */
-        post: operations["post_test_api_settings_ai_test_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/ai/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Models */
-        get: operations["get_models_api_settings_ai_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/ai/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Usage
-         * @description 今天往前 `days` 天（含今天）的用量，日期照容器時區（與週報同一個規則）。
-         */
-        get: operations["get_usage_api_settings_ai_usage_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-activity": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Activity */
-        get: operations["get_activity_api_ai_activity_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -150,144 +55,6 @@ export interface paths {
         get: operations["get_me_api_auth_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Status */
-        get: operations["get_status_api_assistant_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Conversations
-         * @description 這個人的對話，最近有動的在前。
-         */
-        get: operations["get_conversations_api_conversations_get"];
-        put?: never;
-        /**
-         * Post Conversation
-         * @description 開一則新對話，第一句是 `text`。
-         */
-        post: operations["post_conversation_api_conversations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/conversations/{conversation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Conversation */
-        get: operations["get_conversation_api_conversations__conversation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/conversations/{conversation_id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Post Message */
-        post: operations["post_message_api_conversations__conversation_id__messages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/proposals/{proposal_id}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Confirm
-         * @description 按確認：以按的這個人執行，當下重驗角色與輸入。不成立的回 200、狀態是 `expired`，理由在
-         *     `result`——那是卡片的結局，不是請求的錯。
-         */
-        post: operations["post_confirm_api_proposals__proposal_id__confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/proposals/{proposal_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Reject
-         * @description 按拒絕：記下來，什麼都不做。
-         */
-        post: operations["post_reject_api_proposals__proposal_id__reject_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/conversations/{conversation_id}/messages/{message_id}/tools/{call_id}/undo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Undo
-         * @description 按結果卡上的撤銷：以按的這個人走那個工具的反向命令。指的是 `message_id` 那一則存著的那一次
-         *     （同一個 call id 可能出現不只一次）。撤銷被拒（qBittorrent 連不上）回 200、`result_type` 是
-         *     `Refusal`，什麼都沒記——再按一次會接著做。
-         */
-        post: operations["post_undo_api_conversations__conversation_id__messages__message_id__tools__call_id__undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2652,261 +2419,6 @@ export interface components {
             /** Detail */
             detail: string;
         };
-        /** ActivityEntryOut */
-        ActivityEntryOut: {
-            /** Conversation Id */
-            conversation_id: number;
-            /** Conversation Title */
-            conversation_title: string;
-            /** Own */
-            own: boolean;
-            /** Message Id */
-            message_id: number;
-            /** Call Id */
-            call_id: string;
-            /**
-             * At
-             * Format: date-time
-             */
-            at: string;
-            /** User Id */
-            user_id: number;
-            /** User Name */
-            user_name: string;
-            via: components["schemas"]["ActivityVia"];
-            /** Tool */
-            tool: string;
-            /** Arguments */
-            arguments: {
-                [key: string]: unknown;
-            };
-            /** Reason */
-            reason: string;
-            /** Result Type */
-            result_type: string;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            };
-            tokens: components["schemas"]["ReplyTokensOut"];
-            undo: components["schemas"]["ActivityUndo"];
-            /** Undone At */
-            undone_at: string | null;
-        };
-        /** ActivityOut */
-        ActivityOut: {
-            /** Entries */
-            entries: components["schemas"]["ActivityEntryOut"][];
-            /** Truncated */
-            truncated: boolean;
-        };
-        /**
-         * ActivityUndo
-         * @description AI 活動頁的一列撤不撤得了（M5 票 14）。撤不了的說得出為什麼。
-         * @enum {string}
-         */
-        ActivityUndo: "undoable" | "undone" | "no_inverse" | "nothing_done" | "not_allowed";
-        /**
-         * ActivityVia
-         * @description AI 活動頁的一列是怎麼做成的（M5 票 14）。
-         * @enum {string}
-         */
-        ActivityVia: "ai" | "confirmed";
-        /**
-         * AiCallOrigin
-         * @description 一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
-         *
-         *     M5 票 07 只有設定頁的測試；對話是票 08，AI 任務（M6）再加一個值。
-         * @enum {string}
-         */
-        AiCallOrigin: "test" | "conversation";
-        /**
-         * AiFailure
-         * @description 對 provider 的一次請求沒成的分類（brief §20.24「錯誤」、研究 ai-providers.md 結論 8）。
-         *
-         *     分得這麼細是因為**下一步不同**：限流等一下、額度要人去儲值、憑證與模型要去設定頁改、
-         *     連不上查網址與網路。M5 一律不自動重試。
-         * @enum {string}
-         */
-        AiFailure: "rate_limited" | "quota_exhausted" | "provider_down" | "auth_failed" | "model_not_found" | "unreachable" | "rejected";
-        /** AiModelsOut */
-        AiModelsOut: {
-            /** Models */
-            models: string[] | null;
-            failure: components["schemas"]["AiFailure"] | null;
-            /** Detail */
-            detail: string;
-        };
-        /** AiProbeCallOut */
-        AiProbeCallOut: {
-            step: components["schemas"]["AiProbeStep"];
-            usage: components["schemas"]["UsageOut"];
-        };
-        /**
-         * AiProbeStep
-         * @description 設定頁的測試打的三次請求（研究 ai-providers.md 結論 4）。
-         * @enum {string}
-         */
-        AiProbeStep: "hello" | "tool_call" | "tool_result";
-        /**
-         * AiRefusal
-         * @description AI 設定的命令不做的理由（`services.ai`）。
-         * @enum {string}
-         */
-        AiRefusal: "base_url_invalid" | "not_ready";
-        /**
-         * AiRefusalOut
-         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。
-         */
-        AiRefusalOut: {
-            reason: components["schemas"]["AiRefusal"];
-            /** Detail */
-            detail: string;
-        };
-        /** AiSettingsIn */
-        AiSettingsIn: {
-            format: components["schemas"]["ApiFormat"];
-            /** Base Url */
-            base_url: string;
-            /** Model */
-            model: string;
-            /** Api Key */
-            api_key?: string | null;
-        };
-        /** AiSettingsOut */
-        AiSettingsOut: {
-            format: components["schemas"]["ApiFormat"];
-            /** Base Url */
-            base_url: string;
-            /** Api Key Present */
-            api_key_present: boolean;
-            /** Model */
-            model: string;
-            /** Official Models */
-            official_models: {
-                [key: string]: string | null;
-            };
-            /** Ready */
-            ready: boolean;
-            tool_test: components["schemas"]["AiToolTestOut"] | null;
-        };
-        /**
-         * AiTestOut
-         * @description 一次測試。端點說不行也是 200：那是「測試的結果」，不是請求錯了。
-         */
-        AiTestOut: {
-            failure: components["schemas"]["AiFailure"] | null;
-            /** Detail */
-            detail: string;
-            /** Retry After */
-            retry_after: number | null;
-            /** Reply */
-            reply: string;
-            /** Calls */
-            calls: components["schemas"]["AiProbeCallOut"][];
-            tools: components["schemas"]["AiToolTestOut"] | null;
-            tools_failure: components["schemas"]["AiFailure"] | null;
-            /** Tools Detail */
-            tools_detail: string;
-        };
-        /** AiToolTestOut */
-        AiToolTestOut: {
-            /** Supported */
-            supported: boolean;
-            gap: components["schemas"]["ToolGap"] | null;
-            /** Detail */
-            detail: string;
-            /**
-             * Tested At
-             * Format: date-time
-             */
-            tested_at: string;
-        };
-        /**
-         * AiUsageOut
-         * @description 用量頁（M5 票 13、`.scratch/m5/usage-page-shape.md`）。分組的各串都是用得多的在前。
-         */
-        AiUsageOut: {
-            /** Has Any */
-            has_any: boolean;
-            /**
-             * Since
-             * Format: date
-             */
-            since: string;
-            /**
-             * Until
-             * Format: date
-             */
-            until: string;
-            totals: components["schemas"]["UsageTallyOut"];
-            /** Days */
-            days: components["schemas"]["DayUsageOut"][];
-            /** By Origin */
-            by_origin: components["schemas"]["OriginUsageOut"][];
-            /** By Model */
-            by_model: components["schemas"]["ModelUsageOut"][];
-            /** By User */
-            by_user: components["schemas"]["UserUsageOut"][];
-            /** Failures */
-            failures: components["schemas"]["FailureCountOut"][];
-        };
-        /**
-         * ApiFormat
-         * @description `settings.ai` 的 API 格式（plan §11.6〈provider〉、brief §20.24）。
-         *
-         *     同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。每一種格式一個
-         *     adapter，對照表在 `adapters.ai.formats`。
-         * @enum {string}
-         */
-        ApiFormat: "anthropic" | "openai";
-        /**
-         * AssistantChunk
-         * @description SSE 一行 `data:` 的形狀。
-         */
-        AssistantChunk: components["schemas"]["StreamStart"] | components["schemas"]["StreamTextDelta"] | components["schemas"]["StreamToolStart"] | components["schemas"]["StreamToolOutput"] | components["schemas"]["StreamNotice"] | components["schemas"]["StreamFinish"];
-        /**
-         * AssistantNotice
-         * @description 對話停下來的原因，說給人聽（plan §11.6〈對話核心〉的兩條保險絲）。
-         * @enum {string}
-         */
-        AssistantNotice: "provider_failed" | "round_limit" | "internal_error";
-        /**
-         * AssistantRefusal
-         * @description 對話的命令不做的理由（`services.conversations`）。
-         * @enum {string}
-         */
-        AssistantRefusal: "not_ready" | "conversation_missing" | "busy" | "empty_message";
-        /**
-         * AssistantRefusalOut
-         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。
-         */
-        AssistantRefusalOut: {
-            reason: components["schemas"]["AssistantRefusal"];
-            /** Detail */
-            detail: string;
-        };
-        /** AssistantStatusOut */
-        AssistantStatusOut: {
-            /** Ready */
-            ready: boolean;
-            /** Chat Only */
-            chat_only: boolean;
-            /** Tools */
-            tools: components["schemas"]["AssistantToolOut"][];
-        };
-        /**
-         * AssistantToolOut
-         * @description 這個人拿得到的一個工具（M5 票 11）：側面板的狀態行照等級說「正在查」或「正在做」，
-         *     結果卡照 `undoable` 給撤銷鍵。等級讀命令的標記，前端不另寫一份。
-         */
-        AssistantToolOut: {
-            /** Name */
-            name: string;
-            effect: components["schemas"]["Effect"];
-            /** Undoable */
-            undoable: boolean;
-        };
         /**
          * AuditAction
          * @description `audit` 那一類按得了的兩顆（brief §6.5：「一鍵撤銷或確認」）。
@@ -3263,50 +2775,6 @@ export interface components {
          * @enum {string}
          */
         ConnectionState: "ok" | "failed" | "waiting" | "timeout";
-        /** ConversationOut */
-        ConversationOut: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Replying */
-            replying: boolean;
-            /** Messages */
-            messages: components["schemas"]["MessageOut"][];
-            /** Proposals */
-            proposals: components["schemas"]["ProposalCard"][];
-        };
-        /** ConversationSummaryOut */
-        ConversationSummaryOut: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** DayUsageOut */
-        DayUsageOut: {
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            tally: components["schemas"]["UsageTallyOut"];
-        };
         /**
          * DeletionEstimateOut
          * @description `services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
@@ -3466,12 +2934,6 @@ export interface components {
             known_episode_end: number | null;
         };
         /**
-         * Effect
-         * @description 副作用等級（brief §14）。
-         * @enum {string}
-         */
-        Effect: "read" | "reversible" | "irreversible";
-        /**
          * EpisodeOut
          * @description 一集。
          */
@@ -3541,12 +3003,6 @@ export interface components {
              * @default
              */
             password?: string;
-        };
-        /** FailureCountOut */
-        FailureCountOut: {
-            failure: components["schemas"]["AiFailure"];
-            /** Calls */
-            calls: number;
         };
         /** FeedDeletedOut */
         FeedDeletedOut: {
@@ -4046,7 +3502,7 @@ export interface components {
          *     （`missing_files` / `client_error` / `client_removed`）的動作是票 09c 加的。
          * @enum {string}
          */
-        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal" | "adopt" | "claim_torrent" | "claim_file" | "retry_import" | "abandon";
+        IssueAction: "relink" | "forget" | "delete_complete" | "mark_sourceless" | "replace_with_link" | "delete_orphan" | "replan" | "relook" | "rescan" | "recheck" | "accept_loss" | "retry" | "resubmit" | "accept_removal" | "adopt" | "claim_torrent" | "claim_file";
         /**
          * IssueOut
          * @description 清單上的一列（`services/issues.IssueView` 的對外形狀）。
@@ -4129,14 +3585,12 @@ export interface components {
          * IssueType
          * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
          *
-         *     **二十二種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-         *     各加一種，M4 票 130 加四種，M5 票 01 加三種）：
+         *     **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+         *     各加一種，M4 票 130 加四種）：
          *     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
-         *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，再一種
+         *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
          *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
-         *     （`sweeper`），最後三種是停住、Berth 自己不會再推的 Job（`qbit_poller` 每一輪量）。
-         *     **一種卡住一種型別，不是一種型別帶原因**（同 `feed_poll_failing` / `feed_backfill_failing` 的
-         *     取捨）：三種的出路不同、按鈕不同，型別就是「哪一組按鈕」。各邊共用同一個
+         *     （`sweeper`）。各邊共用同一個
          *     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
          *     與 `ISSUE_ACTIONS` 那兩條閘門。
          *
@@ -4145,7 +3599,7 @@ export interface components {
          *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
-        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide" | "submit_failed" | "import_failed" | "stalled";
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide";
         /**
          * ItemEditIn
          * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。
@@ -4454,8 +3908,6 @@ export interface components {
             replannable: boolean;
             /** Reimportable */
             reimportable: boolean;
-            /** Undoable */
-            undoable: boolean;
             /** Plan Id */
             plan_id: number | null;
             /** Audits */
@@ -4487,7 +3939,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "source_expired" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "not_undoable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "source_expired" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -4819,8 +4271,6 @@ export interface components {
             tracked: boolean;
             /** Default Route Id */
             default_route_id: number | null;
-            /** Preselected Route Id */
-            preselected_route_id: number | null;
             /** Seasons */
             seasons: components["schemas"]["SeasonOut"][];
             /** Fetched At */
@@ -4838,36 +4288,6 @@ export interface components {
             versions: components["schemas"]["VersionGroupOut"][];
             /** Awaiting Review */
             awaiting_review: number;
-        };
-        /** MessageIn */
-        MessageIn: {
-            /** Text */
-            text: string;
-            language: components["schemas"]["Language"];
-            /**
-             * Page
-             * @default
-             */
-            page?: string;
-        };
-        /**
-         * MessageKind
-         * @description 對話裡的一則（`conversation_messages.kind`，M5 票 08）。
-         * @enum {string}
-         */
-        MessageKind: "user" | "model" | "tools" | "notice" | "decision";
-        /** MessageOut */
-        MessageOut: {
-            /** Id */
-            id: number;
-            kind: components["schemas"]["MessageKind"];
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Parts */
-            parts: (components["schemas"]["UserText"] | components["schemas"]["PagePart"] | components["schemas"]["ModelText"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"] | components["schemas"]["NoticePart"] | components["schemas"]["UndonePart"])[];
         };
         /**
          * MikanSubscriptionIn
@@ -4892,25 +4312,6 @@ export interface components {
              * @default
              */
             subgroup_name?: string;
-        };
-        /** ModelText */
-        ModelText: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "model_text";
-            /** Text */
-            text: string;
-        };
-        /** ModelUsageOut */
-        ModelUsageOut: {
-            format: components["schemas"]["ApiFormat"];
-            /** Host */
-            host: string;
-            /** Model */
-            model: string;
-            tally: components["schemas"]["UsageTallyOut"];
         };
         /** MyNotifyIn */
         MyNotifyIn: {
@@ -4971,23 +4372,6 @@ export interface components {
             /** Name */
             name: string;
             collection_type: components["schemas"]["CollectionType"];
-        };
-        /**
-         * NoticePart
-         * @description Berth 說給人聽的停止原因。不送給模型。
-         */
-        NoticePart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "notice";
-            notice: components["schemas"]["AssistantNotice"];
-            failure?: components["schemas"]["AiFailure"] | null;
-            /** Retry After */
-            retry_after?: number | null;
-            /** Limit */
-            limit?: number | null;
         };
         /**
          * NotificationKind
@@ -5113,11 +4497,6 @@ export interface components {
             /** Items */
             items: components["schemas"]["OneshotItemOut"][];
         };
-        /** OriginUsageOut */
-        OriginUsageOut: {
-            origin: components["schemas"]["AiCallOrigin"];
-            tally: components["schemas"]["UsageTallyOut"];
-        };
         /**
          * OwnerIn
          * @description 擁有者的 Jellyfin 帳密：套件內拿去建管理員，既有拿去登入。只交給 Jellyfin，不存下來。
@@ -5179,24 +4558,6 @@ export interface components {
             reason: components["schemas"]["OwnerRefusal"];
             /** Detail */
             detail: string;
-        };
-        /**
-         * PagePart
-         * @description 使用者送出這句話時正在看的作品（M5 票 12）。模型拿它知道「這部」是哪一部，畫面不畫。
-         *     存在使用者那一則裡、排在話的前面：下一句話的歷史照樣帶著。
-         */
-        PagePart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "page";
-            /** Media */
-            media: string;
-            /** Title */
-            title: string;
-            /** Title En */
-            title_en: string;
         };
         /**
          * PlanAction
@@ -5478,64 +4839,6 @@ export interface components {
             /** Excluded */
             excluded: number;
         };
-        /**
-         * ProposalCard
-         * @description 一張確認卡：工具迴圈回給模型與畫面的那一份（`ToolResultPart` 的 `ProposalCard`），也是讀
-         *     對話時每一張卡的現況。同一個形狀，前端一種卡（`main._document_components` 進 OpenAPI）。
-         */
-        ProposalCard: {
-            /** Id */
-            id: number;
-            /** Tool */
-            tool: string;
-            cause: components["schemas"]["ProposalCause"];
-            /** Reason */
-            reason: string;
-            /** Preview Type */
-            preview_type: string;
-            /** Preview */
-            preview: {
-                [key: string]: unknown;
-            };
-            status: components["schemas"]["ProposalStatus"];
-            /** Result Type */
-            result_type: string | null;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Decided At */
-            decided_at: string | null;
-        };
-        /**
-         * ProposalCause
-         * @description 為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種。
-         * @enum {string}
-         */
-        ProposalCause: "irreversible" | "url_not_from_user";
-        /**
-         * ProposalRefusal
-         * @description 按確認卡的端點不做的理由（`services.proposals`）。
-         * @enum {string}
-         */
-        ProposalRefusal: "proposal_missing" | "already_decided";
-        /** ProposalRefusalOut */
-        ProposalRefusalOut: {
-            reason: components["schemas"]["ProposalRefusal"];
-            /** Detail */
-            detail: string;
-        };
-        /**
-         * ProposalStatus
-         * @description 一張確認卡走到哪裡（`proposals.status`，M5 票 10，CONTEXT.md 的 Proposal）。
-         * @enum {string}
-         */
-        ProposalStatus: "proposed" | "confirmed" | "rejected" | "expired";
         /** QbittorrentApplyIn */
         QbittorrentApplyIn: {
             login?: components["schemas"]["InterfaceLoginIn"] | null;
@@ -5699,7 +5002,7 @@ export interface components {
          *     知道成不成，而那時**什麼紀錄都還沒改**——先鏈接、成了才拆舊的、都成了才寫帳本。
          * @enum {string}
          */
-        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed" | "source_missing" | "not_from_series" | "no_episode_number";
+        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed" | "not_from_series" | "no_episode_number";
         /**
          * RematchRefusalOut
          * @description 改不下去時回的那一份。`reason` 給畫面挑句子，`detail` 是檔名、路徑或系統原文，不翻譯。
@@ -5728,16 +5031,6 @@ export interface components {
             kinds: {
                 [key: string]: boolean;
             };
-        };
-        /**
-         * ReplyTokensOut
-         * @description 那一次回覆（使用者那一句之後的每一次模型呼叫）花的 tokens。`null` 是不知道。
-         */
-        ReplyTokensOut: {
-            /** Input */
-            input: number | null;
-            /** Output */
-            output: number | null;
         };
         /** RetestIn */
         RetestIn: {
@@ -5780,7 +5073,7 @@ export interface components {
          *     那一列與 Job 都沒動——先拆鏈接、成了才改紀錄。
          * @enum {string}
          */
-        ReviewRefusal: "ledger_missing" | "not_audited" | "unlink_failed" | "source_missing";
+        ReviewRefusal: "ledger_missing" | "not_audited" | "unlink_failed";
         /**
          * ReviewRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
@@ -6406,84 +5699,6 @@ export interface components {
                 [key: string]: number;
             };
         };
-        /** StreamFinish */
-        StreamFinish: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "finish";
-        };
-        /**
-         * StreamNotice
-         * @description 回覆停下來的原因（也已經存成一則 notice）。
-         */
-        StreamNotice: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "notice";
-            notice: components["schemas"]["NoticePart"];
-        };
-        /** StreamStart */
-        StreamStart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "start";
-            /** Conversation Id */
-            conversation_id: number;
-        };
-        /** StreamTextDelta */
-        StreamTextDelta: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "text-delta";
-            /** Delta */
-            delta: string;
-        };
-        /**
-         * StreamToolOutput
-         * @description 工具跑完了（`tool-output-available`）。結果與存下的 `ToolResultPart` 同形：串流時就畫得出
-         *     結果卡（票 09），`finish` 之後重讀的那一份是同一個。
-         */
-        StreamToolOutput: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "tool-output-available";
-            /** Tool Call Id */
-            tool_call_id: string;
-            /** Tool Name */
-            tool_name: string;
-            outcome: components["schemas"]["ToolOutcome"];
-            /** Result Type */
-            result_type: string;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * StreamToolStart
-         * @description 模型開始呼叫一個工具（Vercel AI SDK 的 `tool-input-start`）。
-         */
-        StreamToolStart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "tool-input-start";
-            /** Tool Call Id */
-            tool_call_id: string;
-            /** Tool Name */
-            tool_name: string;
-        };
         /** SubgroupOut */
         SubgroupOut: {
             /** Id */
@@ -6557,54 +5772,6 @@ export interface components {
             /** Api Key */
             api_key: string;
         };
-        /** ToolCallPart */
-        ToolCallPart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "tool_call";
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Arguments */
-            arguments: string;
-        };
-        /**
-         * ToolGap
-         * @description 設定頁的測試判定「這個模型不支援工具呼叫」的樣子（`docs/research/ai-providers.md` 結論 4）。
-         *
-         *     說給人聽的補法不同：被拒要看端點的設定（vLLM 的啟動選項、換 Ollama 的模型），寫成文字是
-         *     端點沒有把模型的輸出解析成呼叫，忽略是端點根本沒把工具交給模型。
-         * @enum {string}
-         */
-        ToolGap: "tools_rejected" | "written_as_text" | "tools_ignored" | "wrong_call" | "result_rejected" | "no_reply";
-        /**
-         * ToolOutcome
-         * @description 一次工具呼叫的結果（Vercel AI SDK 的 `output-available` / `output-error`）。
-         * @enum {string}
-         */
-        ToolOutcome: "done" | "refused" | "proposed";
-        /** ToolResultPart */
-        ToolResultPart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "tool_result";
-            /** Call Id */
-            call_id: string;
-            /** Tool */
-            tool: string;
-            outcome: components["schemas"]["ToolOutcome"];
-            /** Result Type */
-            result_type: string;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            };
-        };
         /**
          * TrackingOut
          * @description Berth 經手的作品在這個媒體庫上的入庫狀態。判定規則在 `services/inventory.py`。
@@ -6619,42 +5786,6 @@ export interface components {
             versions: number;
             /** Audits */
             audits: number;
-        };
-        /**
-         * UndoRefusal
-         * @description 結果卡上的撤銷不做的理由（`services.undo`，M5 票 11）。
-         * @enum {string}
-         */
-        UndoRefusal: "call_missing" | "not_undoable" | "already_undone" | "not_allowed";
-        /** UndoRefusalOut */
-        UndoRefusalOut: {
-            reason: components["schemas"]["UndoRefusal"];
-            /** Detail */
-            detail: string;
-        };
-        /**
-         * UndonePart
-         * @description 有人在結果卡上按了撤銷、撤掉了（M5 票 11）：存在一則 `decision` 裡。模型下一輪看得到
-         *     （只有 Berth 自己的字，`undone_content`），畫面照 `call_id` 把那張卡改成已撤銷。
-         */
-        UndonePart: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "undone";
-            /** Message Id */
-            message_id: number;
-            /** Call Id */
-            call_id: string;
-            /** Tool */
-            tool: string;
-            /** Result Type */
-            result_type: string;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            };
         };
         /**
          * UnknownTorrentOut
@@ -6742,68 +5873,6 @@ export interface components {
             path: string;
             /** Reasons */
             reasons: components["schemas"]["ItemReasonOut"][];
-        };
-        /**
-         * UsageDays
-         * @description 期間的選項：與 Anthropic Console、OpenAI 的用量頁一樣是幾個固定的長度，不收任意範圍。
-         *
-         *     不用 `Literal[7, 30, 90]`：查詢字串進來是 `"7"`，pydantic 的 `Literal` 不替它轉成整數。
-         * @enum {integer}
-         */
-        UsageDays: 7 | 30 | 90;
-        /**
-         * UsageOut
-         * @description 一次呼叫的 tokens。`null` 是端點沒回那一格（不知道），不是 0。
-         */
-        UsageOut: {
-            /** Input Tokens */
-            input_tokens: number | null;
-            /** Output Tokens */
-            output_tokens: number | null;
-            /** Cache Write Tokens */
-            cache_write_tokens: number | null;
-            /** Cache Read Tokens */
-            cache_read_tokens: number | null;
-        };
-        /**
-         * UsageTallyOut
-         * @description 一組呼叫的加總。每一格只加知道的（`NULL` 不當 0）。
-         */
-        UsageTallyOut: {
-            /** Calls */
-            calls: number;
-            /** Failed */
-            failed: number;
-            /** Input Tokens */
-            input_tokens: number;
-            /** Output Tokens */
-            output_tokens: number;
-            /** Cache Write Tokens */
-            cache_write_tokens: number;
-            /** Cache Read Tokens */
-            cache_read_tokens: number;
-            /** Hit Rate */
-            hit_rate: number | null;
-            /** Cache Unreported */
-            cache_unreported: number;
-        };
-        /** UserText */
-        UserText: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "user_text";
-            /** Text */
-            text: string;
-        };
-        /** UserUsageOut */
-        UserUsageOut: {
-            /** User Id */
-            user_id: number | null;
-            /** Name */
-            name: string | null;
-            tally: components["schemas"]["UsageTallyOut"];
         };
         /** ValidationError */
         ValidationError: {
@@ -7009,538 +6078,6 @@ export interface components {
             fixed: components["schemas"]["FixedOut"];
             waiting: components["schemas"]["StillWaitingOut"];
         };
-        /**
-         * BerthPage
-         * @description 後端組的網址指到前端的哪幾頁：前端路由表（`web/src/routes.tsx`）的路徑，`{…}` 是參數。
-         *
-         *     進 OpenAPI（`main._document_pages`），前端的 `berthPages.test.ts` 拿每一條對真的路由表解析，
-         *     前端改了路由、這裡沒跟上時那邊紅（M5 票 02）。要連回 Berth 的新頁面加在這裡，不在別處手組路徑。
-         * @enum {string}
-         */
-        BerthPage: "/media/{media_id}" | "/review" | "/issues" | "/rss" | "/weekly/{report_id}";
-        /**
-         * ToolRefusal
-         * @description 登錄表自己的拒絕理由（各模組的理由照原樣傳出去）。不在 `domain/enums.py`：那裡的 `*Refusal`
-         *     是端點的拒絕、每一種都有狀態碼（`TestStatusTables`），這兩種沒有端點。照樣進 OpenAPI
-         *     （`main._document_components`），前端拿得到這個封閉集合。
-         * @enum {string}
-         */
-        ToolRefusal: "unknown_tool" | "invalid_input" | "not_allowed" | "changed";
-        /**
-         * SubscribeRefusal
-         * @description AI 訂閱不了的理由（M5 票 11）。只有工具會說，不在 `domain/enums.py`（同
-         *     `submit_guard.SubmitRefusal`）；照樣進 OpenAPI，前端說得出人話。
-         * @enum {string}
-         */
-        SubscribeRefusal: "bangumi_not_from_this_conversation" | "subgroup_not_from_this_conversation" | "route_needed";
-        /** @enum {string} */
-        ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "MissingEpisodes" | "SearchResults" | "SubmittedJob" | "MikanSearchResults" | "MikanSubgroups" | "Subscribed" | "Subscribed" | "Subscribed" | "Refusal" | "ProposalCard";
-        /** @enum {string} */
-        ProposalPreviewType: "IndexerAddition" | "DownloadsDeletion" | "FeedAddition";
-        /** DownloadsDeleted */
-        DownloadsDeleted: {
-            /** Media */
-            media: string;
-            /** Jobs */
-            jobs: components["schemas"]["JobDownloadsDeleted"][];
-        };
-        /**
-         * DownloadsDeletion
-         * @description 確認卡上「會發生什麼」：這部作品每一筆 Job 會移除 torrent、刪掉下載目錄裡的這幾個檔案；
-         *     媒體庫的鏈接與紀錄留著（brief §9.2）。
-         */
-        DownloadsDeletion: {
-            /** Media */
-            media: string;
-            /** Title */
-            title: string;
-            /** Title En */
-            title_en: string;
-            /** Jobs */
-            jobs: components["schemas"]["JobDownloadsPreview"][];
-        };
-        /** ExcludedRow */
-        ExcludedRow: {
-            code: components["schemas"]["SkipCode"];
-            /** Count */
-            count: number;
-        };
-        /**
-         * FeedAddition
-         * @description 確認卡上「會發生什麼」：Berth 之後每隔一段時間會連這個網址（M5 票 11）。
-         */
-        FeedAddition: {
-            /** Url */
-            url: string;
-            kind: components["schemas"]["FeedKind"];
-            /** Name */
-            name: string;
-            /** Tv Route */
-            tv_route: number | null;
-            /** Tv Route Name */
-            tv_route_name: string;
-            /** Movie Route */
-            movie_route: number | null;
-            /** Movie Route Name */
-            movie_route_name: string;
-        };
-        /** IndexerAdded */
-        IndexerAdded: {
-            /** Site */
-            site: string;
-            /** Name */
-            name: string;
-        };
-        /**
-         * IndexerAddition
-         * @description 確認卡上「會發生什麼」：哪一站、它在哪個網址、加到哪一台 Prowlarr。
-         */
-        IndexerAddition: {
-            /** Site */
-            site: string;
-            /** Name */
-            name: string;
-            /** Url */
-            url: string;
-            /** Description */
-            description: string;
-            /** Language */
-            language: string;
-            /** Prowlarr */
-            prowlarr: string;
-            origin: components["schemas"]["ServiceOrigin"];
-        };
-        /** JobDownloadsDeleted */
-        JobDownloadsDeleted: {
-            /** Hash */
-            hash: string;
-            /** Name */
-            name: string;
-            /** Sources */
-            sources: number;
-            /** Freed */
-            freed: number;
-            /** Refused */
-            refused: string;
-        };
-        /** JobDownloadsPreview */
-        JobDownloadsPreview: {
-            /** Hash */
-            hash: string;
-            /** Name */
-            name: string;
-            state: components["schemas"]["JobState"];
-            /** Files */
-            files: string[];
-            /** Missing */
-            missing: number;
-            /** Bytes */
-            bytes: number;
-            /** Reclaimable */
-            reclaimable: number;
-        };
-        /**
-         * Lang
-         * @description 檔名 tag 用的字幕語言 token（brief §6.8）。
-         *
-         *     不是 ISO 語言碼，也不打算是：Jellyfin 分不出繁簡（brief §20.1），所以繁簡是**自由文字
-         *     標題**而不是語言碼。`CHT` / `CHS` 在這裡是那個標題欄位的詞彙表。
-         * @enum {string}
-         */
-        Lang: "CHS" | "CHT" | "JP" | "EN";
-        /**
-         * MikanBangumi
-         * @description Mikan 搜尋頁上的一個番組。
-         */
-        MikanBangumi: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
-        };
-        /**
-         * MikanSearchResults
-         * @description 「搜 Mikan 番組」的結果（M5 票 11）：照頁上的順序。
-         */
-        MikanSearchResults: {
-            /** Term */
-            term: string;
-            /** Bangumi */
-            bangumi: components["schemas"]["MikanBangumi"][];
-        };
-        /**
-         * MikanSubgroup
-         * @description 一個番組底下的一個字幕組（作品頁「RSS 訂閱」挑的那幾列，`bangumi.SubgroupView`）。
-         */
-        MikanSubgroup: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Updated */
-            updated: string | null;
-            /** Releases */
-            releases: number;
-            /** Latest */
-            latest: string;
-            /** Bound To */
-            bound_to: string | null;
-        };
-        /**
-         * MikanSubgroups
-         * @description 「列字幕組」的結果（M5 票 11）。
-         */
-        MikanSubgroups: {
-            /** Bangumi */
-            bangumi: number;
-            /** Title */
-            title: string;
-            /** Subgroups */
-            subgroups: components["schemas"]["MikanSubgroup"][];
-        };
-        /**
-         * MissingEpisodes
-         * @description 一部作品已經播出、還沒有任何下載在處理的集（季表的「缺」，`EpisodeStatus.MISSING`）。
-         *     與作品頁的季表、缺集一鍵搜同一份判定（M5 票 12）。
-         */
-        MissingEpisodes: {
-            /** Media */
-            media: string;
-            kind: components["schemas"]["MediaKind"];
-            /** Title */
-            title: string;
-            /** Title En */
-            title_en: string;
-            /** Year */
-            year: number | null;
-            /**
-             * Episodes
-             * @description Missing [season, first episode, last episode] ranges; empty for a movie.
-             */
-            episodes: [
-                number,
-                number,
-                number
-            ][];
-            /** Count */
-            count: number;
-        };
-        /**
-         * NextStep
-         * @description 拒絕之後 AI 該怎麼辦（plan §11.6）。
-         * @enum {string}
-         */
-        NextStep: "retry" | "hand_over" | "give_up";
-        /**
-         * RecentImports
-         * @description 「最近入庫」的結果卡：`[since, until)` 之間入庫的作品，依英文標題排。
-         */
-        RecentImports: {
-            /**
-             * Since
-             * Format: date-time
-             */
-            since: string;
-            /**
-             * Until
-             * Format: date-time
-             */
-            until: string;
-            /** Works */
-            works: components["schemas"]["RecentWork"][];
-        };
-        /**
-         * RecentWork
-         * @description 一部作品在這段時間入庫了什麼：結果卡上的一列（M5 票 09）。前四格與集數同週報的
-         *     `ImportedWorkOut`，前端同一套說法。
-         */
-        RecentWork: {
-            /** Media */
-            media: string | null;
-            kind: components["schemas"]["MediaKind"] | null;
-            /** Title */
-            title: string;
-            /** Title En */
-            title_en: string;
-            /** Year */
-            year: number | null;
-            /**
-             * Poster Url
-             * @description Poster image URL for the card; may be empty.
-             */
-            poster_url: string;
-            /**
-             * Poster Url En
-             * @description Poster image URL for the card; may be empty.
-             */
-            poster_url_en: string;
-            /**
-             * Episodes
-             * @description [season, first episode, last episode] ranges; empty for a movie.
-             */
-            episodes: [
-                number,
-                number,
-                number
-            ][];
-            /** @description Whether Jellyfin shows these files yet: found, searching (still waiting), lost (Jellyfin could not find at least one). */
-            presence: components["schemas"]["JellyfinPresence"];
-        };
-        /**
-         * Refusal
-         * @description 工具沒做成，而且什麼都沒改。AI 依 `next` 分得出重試、交給人還是放棄。
-         */
-        Refusal: {
-            /** Tool */
-            tool: string;
-            /** Reason */
-            reason: string;
-            /** Detail */
-            detail: string;
-            next: components["schemas"]["NextStep"];
-        };
-        /**
-         * RouteOption
-         * @description 收得下這部作品的一條 Route（作品頁下拉的那幾條）。
-         */
-        RouteOption: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Slug */
-            slug: string;
-        };
-        /**
-         * SearchResultRow
-         * @description 搜尋結果卡的一列：搜尋頁結果表的那幾格（`search.SearchResult`），加上 AI 送不送得出它。
-         */
-        SearchResultRow: {
-            /** Source Id */
-            source_id: string;
-            /** Title */
-            title: string;
-            /** Indexer */
-            indexer: string;
-            /** Size */
-            size: number;
-            /** Seeders */
-            seeders: number | null;
-            /** Info Url */
-            info_url: string;
-            /** Published At */
-            published_at: string | null;
-            tags: components["schemas"]["Tags"];
-            /** Season */
-            season: number | null;
-            /** Episode Start */
-            episode_start: number | null;
-            /** Episode End */
-            episode_end: number | null;
-            /** Whole Season */
-            whole_season: boolean;
-            strategy: components["schemas"]["MappingStrategy"] | null;
-            verdict: components["schemas"]["SearchVerdict"];
-            /** Evidence */
-            evidence: string;
-            /** @description Why you may not submit this row; null means you may. */
-            refusal: components["schemas"]["SubmitRefusal"] | null;
-            /** Refusal Detail */
-            refusal_detail: string;
-        };
-        /**
-         * SearchResults
-         * @description 「依作品與集搜尋」的結果卡（M5 票 12）。
-         */
-        SearchResults: {
-            /** Media */
-            media: string;
-            kind: components["schemas"]["MediaKind"];
-            /** Title */
-            title: string;
-            /** Title En */
-            title_en: string;
-            /** Year */
-            year: number | null;
-            /** Wanted */
-            wanted: [
-                number,
-                number,
-                number
-            ][];
-            /** Whole Seasons */
-            whole_seasons: number[];
-            /** Rows */
-            rows: components["schemas"]["SearchResultRow"][];
-            /** Counts */
-            counts: {
-                [key: string]: number;
-            };
-            /**
-             * Next Seasons
-             * @description Seasons of the next batch; search again with from_season=next_seasons[0].
-             */
-            next_seasons: number[];
-            /** Routes */
-            routes: components["schemas"]["RouteOption"][];
-            /** Route */
-            route: number | null;
-            problem: components["schemas"]["IndexerProblem"] | null;
-            /** Detail */
-            detail: string;
-        };
-        /**
-         * SubmissionUndone
-         * @description 撤銷了一次送單：那一筆 Job 移除了 torrent、刪了下載下來的檔、清了紀錄（M5 票 12）。
-         */
-        SubmissionUndone: {
-            /** Hash */
-            hash: string;
-        };
-        /**
-         * SubmitRefusal
-         * @description AI 送不出一筆 release 的理由（M5 票 12）。不在 `domain/enums.py`：那裡的 `*Refusal` 是端點的
-         *     拒絕、每一種都有狀態碼，這幾種只有工具會說（同 `registry.ToolRefusal`）。照樣進 OpenAPI，
-         *     前端說得出人話。
-         * @enum {string}
-         */
-        SubmitRefusal: "not_from_this_conversation" | "other_work" | "not_a_match" | "episodes_unknown" | "other_episodes" | "excluded" | "route_needed";
-        /**
-         * SubmittedJob
-         * @description 送出去的那一筆 Job（M5 票 12）：卡片照 `hash` 讀它現在的狀態、跟著 `/events/stream` 更新，
-         *     撤銷走送單的反向命令（刪 Job）。
-         */
-        SubmittedJob: {
-            /** Hash */
-            hash: string;
-            /** Name */
-            name: string;
-            /** Media */
-            media: string;
-            /** Created */
-            created: boolean;
-        };
-        /**
-         * Subscribed
-         * @description 訂閱的結果卡：Feed 與它帶到的 RSS Series（M5 票 11）。撤銷走 `subscriptions.unsubscribe`。
-         */
-        Subscribed: {
-            /** Media */
-            media: string | null;
-            /** Media Title */
-            media_title: string;
-            /** Media Title En */
-            media_title_en: string;
-            /**
-             * Subscribed At
-             * Format: date-time
-             */
-            subscribed_at: string;
-            feed: components["schemas"]["SubscribedFeed"];
-            /** Feed Created */
-            feed_created: boolean;
-            /** Series */
-            series: components["schemas"]["SubscribedSeries"][];
-            /** Submitted */
-            submitted: number;
-            /** Excluded */
-            excluded: components["schemas"]["ExcludedRow"][];
-        };
-        /**
-         * SubscribedFeed
-         * @description Feed 卡：名稱、來源、下一次輪詢。網址不放：聚合 feed 的網址帶著使用者的 token。
-         */
-        SubscribedFeed: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            kind: components["schemas"]["FeedKind"];
-            /** Interval Sec */
-            interval_sec: number;
-            /** Last Polled At */
-            last_polled_at: string | null;
-            /** Next Poll At */
-            next_poll_at: string | null;
-            /** Primed */
-            primed: boolean;
-            /** Poll Error */
-            poll_error: string;
-        };
-        /**
-         * SubscribedSeries
-         * @description RSS Series 卡的一列：綁到哪部作品、哪一個字幕組。
-         */
-        SubscribedSeries: {
-            /** Id */
-            id: number;
-            /** Media */
-            media: string | null;
-            /** Media Title */
-            media_title: string;
-            /** Media Title En */
-            media_title_en: string;
-            /** Route Name */
-            route_name: string;
-            source: components["schemas"]["FeedKind"] | null;
-            /** Mikan Bangumi Name */
-            mikan_bangumi_name: string;
-            /** Mikan Subgroup Name */
-            mikan_subgroup_name: string;
-            /** Group */
-            group: string;
-        };
-        /**
-         * Tags
-         * @description 會進檔名的那幾個欄位（brief §6.8）。
-         *
-         *     tag 以結構化欄位存在 Plan item 與帳本裡，檔名只是它們的一種呈現——`render()` 是那個
-         *     唯一的呈現函式，改詞彙不改邏輯。
-         */
-        Tags: {
-            /** @default null */
-            source?: components["schemas"]["Source"] | null;
-            /**
-             * Resolution
-             * @default
-             */
-            resolution?: string;
-            /**
-             * Subs
-             * @default []
-             */
-            subs?: components["schemas"]["Lang"][];
-            /**
-             * Hardsub
-             * @default false
-             */
-            hardsub?: boolean;
-            /**
-             * Group
-             * @default
-             */
-            group?: string;
-            /**
-             * Version
-             * @default
-             */
-            version?: string;
-            /**
-             * Edition
-             * @default
-             */
-            edition?: string;
-        };
-        /**
-         * Unsubscribed
-         * @description 撤銷了一個訂閱：助理的結果卡照它說撤回了什麼（`services/tools.py` 的撤銷直接回這一份）。
-         */
-        Unsubscribed: {
-            /** Removed */
-            removed: number;
-            /** Kept */
-            kept: number;
-        };
     };
     responses: never;
     parameters: never;
@@ -7550,168 +6087,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_ai_api_settings_ai_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiSettingsOut"];
-                };
-            };
-        };
-    };
-    put_ai_api_settings_ai_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AiSettingsIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiSettingsOut"];
-                };
-            };
-            /** @description `base_url_invalid` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiRefusalOut"];
-                };
-            };
-        };
-    };
-    post_test_api_settings_ai_test_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiTestOut"];
-                };
-            };
-            /** @description `not_ready` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiRefusalOut"];
-                };
-            };
-        };
-    };
-    get_models_api_settings_ai_models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiModelsOut"];
-                };
-            };
-            /** @description `not_ready` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiRefusalOut"];
-                };
-            };
-        };
-    };
-    get_usage_api_settings_ai_usage_get: {
-        parameters: {
-            query?: {
-                days?: components["schemas"]["UsageDays"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiUsageOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_activity_api_ai_activity_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActivityOut"];
-                };
-            };
-        };
-    };
     post_login_api_auth_login_post: {
         parameters: {
             query?: never;
@@ -7779,339 +6154,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeOut"];
-                };
-            };
-        };
-    };
-    get_status_api_assistant_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantStatusOut"];
-                };
-            };
-        };
-    };
-    get_conversations_api_conversations_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationSummaryOut"][];
-                };
-            };
-        };
-    };
-    post_conversation_api_conversations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MessageIn"];
-            };
-        };
-        responses: {
-            /** @description 一行 `data:` 一個 chunk，到 `finish` 為止 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantChunk"];
-                };
-            };
-            /** @description `not_ready` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description `empty_message` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-        };
-    };
-    get_conversation_api_conversations__conversation_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversation_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationOut"];
-                };
-            };
-            /** @description `conversation_missing` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_message_api_conversations__conversation_id__messages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversation_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MessageIn"];
-            };
-        };
-        responses: {
-            /** @description 一行 `data:` 一個 chunk，到 `finish` 為止 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantChunk"];
-                };
-            };
-            /** @description `conversation_missing` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description `not_ready` · `busy` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description `empty_message` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-        };
-    };
-    post_confirm_api_proposals__proposal_id__confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCard"];
-                };
-            };
-            /** @description `proposal_missing` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalRefusalOut"];
-                };
-            };
-            /** @description `busy` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_reject_api_proposals__proposal_id__reject_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                proposal_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalCard"];
-                };
-            };
-            /** @description `proposal_missing` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProposalRefusalOut"];
-                };
-            };
-            /** @description `busy` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_undo_api_conversations__conversation_id__messages__message_id__tools__call_id__undo_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversation_id: number;
-                message_id: number;
-                call_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UndonePart"];
-                };
-            };
-            /** @description `not_allowed` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UndoRefusalOut"];
-                };
-            };
-            /** @description `conversation_missing` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description `busy` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantRefusalOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8239,7 +6281,7 @@ export interface operations {
                     "application/json": components["schemas"]["RematchRefusalOut"];
                 };
             };
-            /** @description `not_unmatched` · `plan_pending` · `source_missing` · `route_missing` · `target_taken` · `link_failed` · `unlink_failed` */
+            /** @description `not_unmatched` · `plan_pending` · `route_missing` · `target_taken` · `link_failed` · `unlink_failed` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10113,7 +8155,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewRefusalOut"];
                 };
             };
-            /** @description `not_audited` · `unlink_failed` · `source_missing` */
+            /** @description `not_audited` · `unlink_failed` */
             409: {
                 headers: {
                     [name: string]: unknown;

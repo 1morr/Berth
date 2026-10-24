@@ -5,9 +5,9 @@ recover after losing Berth's database.
 
 ## What Berth stores, and backing it up
 
-Everything Berth knows is in `${CONFIG_ROOT}/berth/berth.db`: the services' API keys, your TMDB key, the AI
-provider's key, the download history, review and issue state, and the *ledger* (the record of which library file
-came from which download). Secrets are protected by file permissions only, with no application-level encryption (the same as
+Everything Berth knows is in `${CONFIG_ROOT}/berth/berth.db`: the services' API keys, your TMDB key, the
+download history, review and issue state, and the *ledger* (the record of which library file came from which
+download). Secrets are protected by file permissions only, with no application-level encryption (the same as
 Seerr). Berth never stores your Jellyfin password in plain text; see
 [Accounts and passwords](setup-wizard.md#accounts-and-passwords). Berth's logs, and the errors it reports when
 a service or feed cannot be reached, show URLs with every query value replaced by `***` (for example a Mikan
@@ -29,8 +29,7 @@ To really start over (or when the database is damaged or lost): stop Berth, move
   Each wizard page runs again but creates nothing twice (the API key, libraries, categories and indexers are all
   idempotent). Page 1 becomes "sign in as your Jellyfin admin", and on page 3 you press **Build and check**
   yourself.
-- **Paste the TMDB key again**, and the AI provider's key if you set one: they were in the database you moved
-  away.
+- **Paste the TMDB key again**: it was in the database you moved away.
 - **Download history, past downloads, review and issues are empty**: they were in that database too.
 - **The ledger comes back by rebuilding it.** The files in your libraries are all still there, but Berth no longer
   knows them. The wizard's last page and the top of **Issues** say how many library files are missing from the

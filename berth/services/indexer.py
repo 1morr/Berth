@@ -20,10 +20,8 @@ unique`），所以重按時改成 `indexer/test`，結果一樣是「這個站�
 from __future__ import annotations
 
 import asyncio
-import difflib
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -285,9 +283,9 @@ async def _verify(
     return tuple(await asyncio.gather(*(verify(name) for name in names)))
 
 
-# 加索引站是 brief §14 的「改設定」，永遠要人（plan §11.6 的確認卡）；既有的那一台 Berth 也撤不掉
-# 它加的站，移除交給它自己的介面（M4 票 20）。
-@command(Effect.IRREVERSIBLE)
+# 沒有單一反向命令：一次加好幾站，`remove_indexer` 一次只撤得掉一站（既有的那一台 Berth 不撤，
+# 移除交給它自己的介面，M4 票 20）。
+@command(Effect.REVERSIBLE)
 async def apply_default_indexers(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -343,8 +341,8 @@ async def apply_default_indexers(
     return await read_indexer_status(session, factory)
 
 
-# 不可逆：理由同 `apply_default_indexers`。
-@command(Effect.IRREVERSIBLE)
+# 沒有單一反向命令：理由同 `apply_default_indexers`，加進去的一站一站用 `remove_indexer` 撤。
+@command(Effect.REVERSIBLE)
 async def add_recommended_indexers(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
@@ -442,7 +440,7 @@ async def _record_added(
     await update_settings(session, SetupSettings, record)
 
 
-@command(Effect.IRREVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="indexer.skip_indexers")
 async def skip_indexers(
     session: AsyncSession, factory: ServiceClientFactory, *, skipped: bool = True
 ) -> IndexerSetupStatus:
@@ -502,137 +500,11 @@ async def search_indexers(
     return IndexerSearchResult(query=query, sites=tuple(sites), error="")
 
 
-class SiteRefusal(StrEnum):
-    """助理加一站時不做的理由（M5 票 10 的確認卡）。精靈與設定頁照舊走 `apply_default_indexers`
-    的逐站纜繩，不經過這裡；所以這一組不在 `domain/enums.py`、沒有狀態碼（同 `ToolRefusal`）。"""
-
-    #: 還沒選 Prowlarr 從哪裡來：不知道要加到哪一台。
-    PROWLARR_UNCHOSEN = "prowlarr_unchosen"
-    #: 那台 Prowlarr 沒答上來。
-    PROWLARR_UNREACHABLE = "prowlarr_unreachable"
-    #: 這台 Prowlarr 的定義裡沒有這個名字；`detail` 是最像的幾個。
-    SITE_UNKNOWN = "site_unknown"
-    #: 有這個定義，但 Berth 加不了（私站、usenet，`_offered`）。
-    SITE_NOT_OFFERED = "site_not_offered"
-    #: 這一站已經在 Prowlarr 裡了。
-    SITE_PRESENT = "site_present"
-    #: Prowlarr 加之前自己連一次那一站，沒連上：什麼都沒建立，`detail` 是它回的原文。
-    SITE_REJECTED = "site_rejected"
-
-
-class SiteRejectedError(Exception):
-    def __init__(self, reason: SiteRefusal, detail: str = "") -> None:
-        super().__init__(f"{reason}: {detail}" if detail else reason.value)
-        self.reason = reason
-        self.detail = detail
-
-
-@dataclass(frozen=True, slots=True)
-class SiteAddition:
-    """加一站之前說清楚會發生什麼（M5 票 10 的確認卡）。"""
-
-    #: Prowlarr 的 `definitionName`：加的時候認這個。
-    definition_name: str
-    name: str
-    #: 這一站的網址（定義自帶清單的第一個）；定義沒寫是空字串。
-    url: str
-    description: str
-    language: str
-    #: 加到哪一台 Prowlarr。
-    prowlarr: str
-    origin: ServiceOrigin
-
-
-@dataclass(frozen=True, slots=True)
-class SiteAdded:
-    definition_name: str
-    name: str
-    indexer_id: int
-
-
-#: 認不出名字時，`detail` 列出最像的幾個（`difflib`）。
-_CLOSE_MATCHES = 5
-
-
-@command(Effect.READ)
-async def plan_site_addition(
-    session: AsyncSession, factory: ServiceClientFactory, site: str
-) -> SiteAddition:
-    """加 `site` 會發生什麼，什麼都不建立（M5 票 10）。`site` 是 `definitionName` 或站名，大小寫
-    不拘。做不成的（還沒選來源、認不得、私站、已經加了、Prowlarr 沒答）丟 `SiteRejectedError`。"""
-    setup = await read_settings(session, SetupSettings)
-    settings = await read_settings(session, IndexerSettings)
-    origin, base_url = _target(setup, settings)
-    if origin is None:
-        raise SiteRejectedError(SiteRefusal.PROWLARR_UNCHOSEN)
-    client = factory.prowlarr(base_url, settings.api_key)
-    try:
-        definitions = _by_definition(await client.definitions())
-        present = {row.definition_name for row in await client.indexers()}
-    except ServiceError as exc:
-        raise SiteRejectedError(SiteRefusal.PROWLARR_UNREACHABLE, message(exc)) from exc
-    finally:
-        await client.aclose()
-
-    definition = _named(definitions, site)
-    if definition is None:
-        offered = [row.name for row in definitions.values() if _offered(row)]
-        close = difflib.get_close_matches(site, offered, n=_CLOSE_MATCHES, cutoff=0.4)
-        raise SiteRejectedError(SiteRefusal.SITE_UNKNOWN, ", ".join(close))
-    if not _offered(definition):
-        raise SiteRejectedError(SiteRefusal.SITE_NOT_OFFERED, definition.name)
-    if definition.definition_name in present:
-        raise SiteRejectedError(SiteRefusal.SITE_PRESENT, definition.name)
-    return SiteAddition(
-        definition_name=definition.definition_name,
-        name=definition.name,
-        url=definition.urls[0] if definition.urls else "",
-        description=definition.description,
-        language=definition.language,
-        prowlarr=base_url,
-        origin=origin,
-    )
-
-
-# 加索引站是 brief §14 的「改設定」，理由同 `apply_default_indexers`。
-@command(Effect.IRREVERSIBLE)
-async def add_site(
-    session: AsyncSession, factory: ServiceClientFactory, definition_name: str
-) -> SiteAdded:
-    """加一站，走精靈與設定頁同一支（`apply_default_indexers`，逐站纜繩照樣記）。沒加進去的
-    丟 `SiteRejectedError`：Prowlarr 加之前連不上那一站時什麼都不會建立（brief §20.7）。"""
-    status = await apply_default_indexers(session, factory, [definition_name])
-    if not status.reachable:
-        raise SiteRejectedError(SiteRefusal.PROWLARR_UNREACHABLE, status.error)
-    added = next((row for row in status.sites if row.definition_name == definition_name), None)
-    if added is None:
-        step = next((row for row in status.steps if row.step == definition_name), None)
-        raise SiteRejectedError(SiteRefusal.SITE_REJECTED, step.error if step else "")
-    return SiteAdded(
-        definition_name=added.definition_name, name=added.name, indexer_id=added.indexer_id
-    )
-
-
-def _named(definitions: Mapping[str, IndexerDefinition], site: str) -> IndexerDefinition | None:
-    """`definitionName` 照原樣先比，再不分大小寫比機器名與站名。"""
-    if site in definitions:
-        return definitions[site]
-    wanted = site.strip().casefold()
-    return next(
-        (
-            row
-            for row in definitions.values()
-            if wanted in (row.definition_name.casefold(), row.name.casefold())
-        ),
-        None,
-    )
-
-
 class IndexerNotRemovedError(Exception):
     """移除時 Prowlarr 沒答上來或沒收下：什麼都沒記下，訊息是原文（M4 票 99）。"""
 
 
-@command(Effect.IRREVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="indexer.apply_default_indexers")
 async def remove_indexer(
     session: AsyncSession, factory: ServiceClientFactory, indexer_id: int
 ) -> IndexerSetupStatus:
@@ -640,8 +512,7 @@ async def remove_indexer(
 
     **只移除 Berth 加的站**（`added_sites`，M4 票 66）：接管只管 Berth 擁有的物件（brief §16.4），
     使用者自己加的公開站 Berth 雖然加得回去，也不是 Berth 的；票 47 之前加的沒有紀錄，同樣不碰。
-    Berth 只加 `_offered` 的站，所以再加得回來；但加回來是新的一站（新的 id，在 Prowlarr 改過的
-    設定不在），而且加站與移除都是改設定（brief §14），所以標不可逆。
+    Berth 只加 `_offered` 的站，所以反向命令（再加一次那一站）對它們都成立。
     那一站的「加入結果」一起拿掉——留著一條綠的等於說它還在；最後一站也移除時，精靈就回到頁 4
     （`_indexer_settled`）。Prowlarr 沒答上來是 `IndexerNotRemovedError`：畫面要分得出是它還是
     Berth。
@@ -761,7 +632,7 @@ def _test_failed_step(check: SiteCheck) -> SetupStep:
     )
 
 
-@command(Effect.IRREVERSIBLE)
+@command(Effect.REVERSIBLE)
 async def set_interface_login(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -771,8 +642,8 @@ async def set_interface_login(
 ) -> IndexerSetupStatus:
     """設定頁的「更新登入」（M4 票 07）：只換套件內 Prowlarr 的介面登入，站不重驗。
 
-    與第 6 步的登入那一條是同一段（`_apply_password`），結果換掉那一條纜繩。舊的那一組回不來，
-    只能再設一組蓋過（brief §16.4），所以標不可逆。既有的索引站拒絕（`ValueError`）。
+    與第 6 步的登入那一條是同一段（`_apply_password`），結果換掉那一條纜繩。可逆的方式就是
+    再設一組。既有的索引站拒絕（`ValueError`）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, IndexerSettings)

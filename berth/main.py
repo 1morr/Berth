@@ -8,12 +8,9 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePath
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
-from pydantic import TypeAdapter
-from pydantic.json_schema import models_json_schema
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
@@ -37,19 +34,13 @@ from berth.pipeline import (
     RssPoller,
     Sweeper,
 )
-from berth.services.assistant import AssistantRuns
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
-from berth.services.deeplink import BerthPage
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
 from berth.services.jobs import fail_interrupted
-from berth.services.proposals import result_models
 from berth.services.reconcile import ReconcileRunner
-from berth.services.registry import ToolRefusal
 from berth.services.sources import SourceCache
-from berth.services.subscribe_guard import SubscribeRefusal
-from berth.services.tools import REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -129,55 +120,7 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_error)
     app.include_router(api_router, prefix=API_PREFIX)
     _mount_frontend(app, resolved.web_root)
-    _document_components(app)
     return app
-
-
-def _document_components(app: FastAPI) -> None:
-    """把沒有端點回的型別放進 OpenAPI 的 components，`pnpm gen:api` 照它產出前端的型別。照 FastAPI
-    文件〈Extending OpenAPI〉的做法換掉 `app.openapi`，快取與重產仍由原本那一支管。
-
-    - `BerthPage`（M5 票 02）：通知裡的連結指到前端的哪幾頁，`berthPages.test.ts` 拿來對路由表。
-    - 命令登錄表每一個工具的結果型別與 `Refusal`、`NextStep`、`ToolRefusal`（M5 票 05）：經對話
-      送到前端，結果卡依它畫。巢狀的 model 一起進去；與既有的同名卻不同形時當場紅，
-      不讓一方蓋掉另一方。
-    - `ToolResultType`（M5 票 09）：那幾個結果型別的名字（加上變成確認卡時的 `ProposalCard`，
-      票 10），`ToolResultPart.result_type` 的封閉集合。前端以它逐一對卡片，登記了新的結果型別
-      卻沒有卡時 `tsc` 紅。
-    - 確認卡上「會發生什麼」的型別與它們的名字 `ProposalPreviewType`（M5 票 10）：同一個道理，
-      要人按的工具多一種預覽，前端就要多畫一種。
-    - 撤銷回的型別（M5 票 11，`UndonePart.result`）：卡上說撤掉了什麼。`SubscribeRefusal`（同票）：
-      訂閱的防線的理由只出現在 `Refusal.reason` 那個字串裡，沒有欄位帶著它，前端要它說人話。
-    """
-    build = app.openapi
-    pages = TypeAdapter(BerthPage).json_schema()
-    reasons = TypeAdapter(ToolRefusal).json_schema()
-    subscribe_reasons = TypeAdapter(SubscribeRefusal).json_schema()
-    results = result_models(REGISTRY)
-    previews = REGISTRY.preview_models()
-    undos = REGISTRY.undo_models()
-    result_types = {"type": "string", "enum": [model.__name__ for model in results]}
-    preview_types = {"type": "string", "enum": [model.__name__ for model in previews]}
-    _, tools = models_json_schema(
-        [(model, "serialization") for model in (*results, *previews, *undos)],
-        ref_template="#/components/schemas/{model}",
-    )
-
-    def openapi() -> dict[str, Any]:
-        document = build()
-        schemas = document.setdefault("components", {}).setdefault("schemas", {})
-        schemas["BerthPage"] = pages
-        schemas["ToolRefusal"] = reasons
-        schemas["SubscribeRefusal"] = subscribe_reasons
-        schemas["ToolResultType"] = result_types
-        schemas["ProposalPreviewType"] = preview_types
-        for name, schema in tools.get("$defs", {}).items():
-            if schemas.setdefault(name, schema) != schema:
-                raise RuntimeError(f"{name}: a tool result and an endpoint disagree on its shape")
-        return document
-
-    # FastAPI 文件教的就是直接指派；mypy 不讓方法被換掉。
-    app.openapi = openapi  # type: ignore[method-assign]
 
 
 def _lifespan(config: Config) -> Lifespan[FastAPI]:
@@ -216,9 +159,6 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         runner = ReconcileRunner(sessions, clients)
         app.state.reconciler = runner
         reconciler = Reconciler(sessions, runner)
-        # 助理正在跑的回覆（M5 票 08）：送出的請求斷了它照樣跑完，所以它的擁有者在這裡。
-        assistant = AssistantRuns(sessions, clients, app.state.sources)
-        app.state.assistant = assistant
         rss = RssPoller(sessions, clients)
         notifier = NotifySender(sessions, clients)
         sweeper = Sweeper(sessions)
@@ -249,8 +189,6 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             # 對帳跑在自己的 task 上（202 之後那個請求早就回完了），所以 cancel 迴圈
             # 收不到它。跑到一半被收掉的那一輪不留半筆：`reconcile_once` 只在最後 commit。
             await runner.aclose()
-            # 跑到一半的回覆留下已經存的幾則，下一句話接得上（`services.conversations.turns_of`）。
-            await assistant.aclose()
             await engine.dispose()
 
     return lifespan

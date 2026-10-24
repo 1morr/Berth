@@ -26,7 +26,6 @@ from berth.domain import (
     EventType,
     IssueStatus,
     IssueType,
-    JellyfinPresence,
     MediaKind,
     NotificationKind,
     PlanAction,
@@ -35,7 +34,6 @@ from berth.domain import (
 from berth.models import Event, Issue, Job, LedgerEntry, Media, Notification, WeeklyReport
 from berth.models.types import utcnow
 from berth.services.commands import Effect, command
-from berth.services.inventory import imports_presence
 from berth.services.jobs import actor_of
 from berth.services.notify import episode_spans
 from berth.services.recipients import subscribers
@@ -58,20 +56,6 @@ class ImportedWork:
     title_en: str
     #: `(季, 起, 迄)`，接得上的已經併成一段。電影是空的。
     episodes: tuple[tuple[int, int, int], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class RecentWork:
-    """「最近入庫」的一部（AI 的工具，M5 票 05、09）：週報那一列，加上結果卡要畫的年份、海報與
-    Jellyfin 收錄了沒。週報存下的內容不帶這幾格。"""
-
-    work: ImportedWork
-    year: int | None
-    #: TMDB 海報的兩輪（畫面照 UI 語言挑）；作品被刪了或沒有海報是空字串。
-    poster_url: str
-    poster_url_en: str
-    #: 這段時間入庫的那幾個正片（`inventory.imports_presence`）。
-    presence: JellyfinPresence
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,60 +214,12 @@ async def list_reports(session: AsyncSession) -> list[WeeklyLine]:
     ]
 
 
-@command(Effect.READ)
-async def recent_imports(
-    session: AsyncSession, *, since: datetime, until: datetime
-) -> tuple[RecentWork, ...]:
-    """`[since, until)` 之間入庫了哪些作品與集（AI 的「最近入庫」，M5 票 05）。算法與週報的第一段
-    是同一份，只是時間由呼叫端給、當場算，不存。"""
-    recent: list[RecentWork] = []
-    for work, rows in await _imported_with_rows(session, since, until):
-        # `_work` 剛讀過同一列，這一次從 session 的 identity map 拿。
-        media = await session.get(Media, rows[0].media_id) if rows[0].media_id else None
-        snapshot = media.snapshot() if media else None
-        recent.append(
-            RecentWork(
-                work=_imported_work(work),
-                year=media.year if media else None,
-                poster_url=snapshot.poster_url if snapshot else "",
-                # 舊快照沒有英文那一輪，落回另一輪（同 `services/media.py`）。
-                poster_url_en=(snapshot.poster_url_en or snapshot.poster_url) if snapshot else "",
-                presence=imports_presence(rows),
-            )
-        )
-    return tuple(recent)
-
-
 # --- 產生 -----------------------------------------------------------------
 
 
 async def _imported(session: AsyncSession, starts_at: datetime, ends_at: datetime) -> list[Any]:
-    """這一週入庫的正片，依作品收成季集範圍。"""
-    return [work for work, _ in await _imported_with_rows(session, starts_at, ends_at)]
-
-
-async def _imported_with_rows(
-    session: AsyncSession, starts_at: datetime, ends_at: datetime
-) -> list[tuple[dict[str, Any], list[LedgerEntry]]]:
-    """這段時間入庫的作品與它們的帳本列，照作品排好。"""
-    found: list[tuple[dict[str, Any], list[LedgerEntry]]] = []
-    for key, rows in (await _imported_entries(session, starts_at, ends_at)).items():
-        work = await _work(session, key, rows)
-        if work is not None:
-            found.append((work, rows))
-    return sorted(found, key=lambda pair: _work_order(pair[0]))
-
-
-def _work_order(work: dict[str, Any]) -> tuple[str, str]:
-    # 照英文標題排：中文標題的碼位順序對人沒有意義，英文字母序至少是一個查得到的順序。
-    return (work["title_en"].casefold(), work["media"] or "")
-
-
-async def _imported_entries(
-    session: AsyncSession, starts_at: datetime, ends_at: datetime
-) -> dict[str, list[LedgerEntry]]:
-    """這段時間入庫的正片帳本列，依作品分（作品被刪了的依 Job）。只算屬於某一筆 Job 的帳本列：
-    `rebuild-ledger` 與認領長回來的列（`job_hash` 是 `None`）是補記帳，不是這一週入庫的。"""
+    """這一週入庫的正片，依作品收成季集範圍。只算屬於某一筆 Job 的帳本列：`rebuild-ledger` 與
+    認領長回來的列（`job_hash` 是 `None`）是補記帳，不是這一週入庫的。"""
     entries = list(
         await session.scalars(
             select(LedgerEntry).where(
@@ -297,7 +233,13 @@ async def _imported_entries(
     by_work: dict[str, list[LedgerEntry]] = {}
     for entry in entries:
         by_work.setdefault(entry.media_id or f"job:{entry.job_hash}", []).append(entry)
-    return by_work
+    works: list[dict[str, Any]] = []
+    for key, rows in by_work.items():
+        work = await _work(session, key, rows)
+        if work is not None:
+            works.append(work)
+    # 照英文標題排：中文標題的碼位順序對人沒有意義，英文字母序至少是一個查得到的順序。
+    return sorted(works, key=lambda work: (work["title_en"].casefold(), work["media"] or ""))
 
 
 async def _work(session: AsyncSession, key: str, rows: list[LedgerEntry]) -> dict[str, Any] | None:
@@ -379,7 +321,16 @@ def _view(report: WeeklyReport) -> WeeklyView:
         first_day=first_day,
         last_day=first_day + WEEK - timedelta(days=1),
         created_at=report.created_at,
-        imported=tuple(_imported_work(work) for work in content["imported"]),
+        imported=tuple(
+            ImportedWork(
+                media=work["media"],
+                kind=MediaKind(work["kind"]) if work["kind"] else None,
+                title=work["title"],
+                title_en=work["title_en"],
+                episodes=tuple((s, a, b) for s, a, b in work["episodes"]),
+            )
+            for work in content["imported"]
+        ),
         fixed=Fixed(
             approved=fixed["approved"],
             rematched=fixed["rematched"],
@@ -392,16 +343,6 @@ def _view(report: WeeklyReport) -> WeeklyView:
             rss=waiting["rss"],
             swept=_types(waiting["swept"]),
         ),
-    )
-
-
-def _imported_work(work: dict[str, Any]) -> ImportedWork:
-    return ImportedWork(
-        media=work["media"],
-        kind=MediaKind(work["kind"]) if work["kind"] else None,
-        title=work["title"],
-        title_en=work["title_en"],
-        episodes=tuple((season, start, end) for season, start, end in work["episodes"]),
     )
 
 

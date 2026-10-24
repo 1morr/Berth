@@ -72,7 +72,6 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
     InterfaceLogin,
@@ -205,7 +204,6 @@ class JellyfinSetupStatus:
     berth_paths: tuple[BerthPathResult, ...]
 
 
-@command(Effect.READ)
 async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
     """不連線，只把存下來的狀態攤成 UI 的形狀。輪詢進度也走這一支。"""
     setup = await read_settings(session, SetupSettings)
@@ -236,8 +234,6 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
     )
 
 
-# 精靈上存下的設定（brief §14「改設定」永遠要人）。
-@command(Effect.IRREVERSIBLE)
 async def save_bundled_libraries(
     session: AsyncSession, rows: Sequence[LibraryDraft]
 ) -> JellyfinSetupStatus:
@@ -453,7 +449,6 @@ class JellyfinClaim:
     server_id: str = ""
 
 
-@command(Effect.IRREVERSIBLE)
 async def claim_jellyfin(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -502,7 +497,6 @@ async def claim_jellyfin(
     )
 
 
-@command(Effect.IRREVERSIBLE)
 async def bootstrap_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> JellyfinSetupStatus:
@@ -520,7 +514,6 @@ async def bootstrap_jellyfin(
     return status
 
 
-@command(Effect.IRREVERSIBLE)
 async def create_libraries(
     session: AsyncSession, factory: ServiceClientFactory, *, libraries: Sequence[LibraryRequest]
 ) -> JellyfinSetupStatus:
@@ -541,7 +534,6 @@ async def create_libraries(
     return status
 
 
-@command(Effect.IRREVERSIBLE)
 async def connect_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
 ) -> JellyfinSetupStatus:
@@ -556,7 +548,6 @@ async def connect_jellyfin(
     return status
 
 
-@command(Effect.IRREVERSIBLE)
 async def add_berth_paths(
     session: AsyncSession, factory: ServiceClientFactory, *, library_names: Sequence[str]
 ) -> JellyfinSetupStatus:
@@ -722,8 +713,6 @@ class InterfaceLoginRejectedError(Exception):
         self.detail = detail
 
 
-# 不可逆：驗密碼就是登入一次 Jellyfin，同 `auth.sign_in` 留下裝置紀錄。
-@command(Effect.IRREVERSIBLE)
 async def resolve_interface_login(
     session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
 ) -> InterfaceLogin:
@@ -856,8 +845,6 @@ def remembered_startup(setup: SetupSettings) -> JellyfinStartup | None:
     return JellyfinStartup(**stored.model_dump())
 
 
-# 只讀：存的是 Jellyfin 現況的快照，重讀就是現況（同 TMDB 快取，`Effect.READ`）。
-@command(Effect.READ)
 async def remember_libraries(session: AsyncSession, libraries: Sequence[JellyfinLibrary]) -> None:
     """把 Jellyfin 現在報的媒體庫存成精靈的快照（頁 3 讀它），commit。"""
     snapshot = [

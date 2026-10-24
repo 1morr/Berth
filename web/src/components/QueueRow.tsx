@@ -119,21 +119,10 @@ export function QueueRow({
 }
 
 /** 展開區的一格：欄名走 `.label`，值走 `.value`——路徑與 hash 是機器字串（The Machine String Rule）。 */
-export function DetailLine({
-  term,
-  code = false,
-  children,
-}: {
-  term: string
-  /** 欄名是機器字串（AI 活動頁照原樣印的工具輸入欄名）：等寬、不被 `.label` 轉成大寫（同 `CutawayRow` 的 `code`）。 */
-  code?: boolean
-  children: ReactNode
-}) {
+export function DetailLine({ term, children }: { term: string; children: ReactNode }) {
   return (
     <div className="grid gap-0.5 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-2">
-      <dt className={code ? 'value text-xs wrap-anywhere text-ink-dim' : 'label text-ink-dim'}>
-        {term}
-      </dt>
+      <dt className="label text-ink-dim">{term}</dt>
       <dd className="value min-w-0 wrap-anywhere text-xs text-ink">{children}</dd>
     </div>
   )

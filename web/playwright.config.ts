@@ -1,7 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
 
-import { portOffset } from './e2e/ports.ts'
-
 // 瀏覽器那一層的 e2e（plan §10）：每條流程對一個演練情境（`scripts/fake_setup_server.py`）跑。
 // 替身是**有狀態**的，一條流程改過的東西另一條看得到，所以一條流程獨佔一台 server、
 // 不重試（重跑一次面對的是被上一次改過的替身，綠了也不代表什麼）。
@@ -52,36 +50,6 @@ const FLOWS = [
   // 週報（M4 票 131）：產品自己的 `compose_weekly` 產生最近兩週。
   { name: 'weekly', spec: 'weekly', scenario: 'weekly', port: 8526 },
   { name: 'weekly-390', spec: 'weekly', scenario: 'weekly', port: 8527, viewport: NARROW },
-  // 助理的側面板（M5 票 08）：AI 設定好了，回覆由演練的 provider 演。
-  { name: 'assistant', spec: 'assistant', scenario: 'assistant', port: 8528 },
-  { name: 'assistant-390', spec: 'assistant', scenario: 'assistant', port: 8529, viewport: NARROW },
-  // 側面板裡訂閱 RSS 與撤銷（M5 票 11）：同 `rss` 的 Mikan 替身，AI 設定好了。
-  { name: 'assistant-rss', spec: 'assistant-rss', scenario: 'assistant-rss', port: 8530 },
-  {
-    name: 'assistant-rss-390',
-    spec: 'assistant-rss',
-    scenario: 'assistant-rss',
-    port: 8531,
-    viewport: NARROW,
-  },
-  // AI 活動頁（M5 票 14）：同 `assistant`，在側面板送單、確認加索引站之後，到活動頁看與撤銷。
-  { name: 'ai-activity', spec: 'ai-activity', scenario: 'assistant', port: 8532 },
-  {
-    name: 'ai-activity-390',
-    spec: 'ai-activity',
-    scenario: 'assistant',
-    port: 8533,
-    viewport: NARROW,
-  },
-  // 換頁時側面板不重建（M5 票 15b）：打了字沒送出、串流到一半時點卡片裡的作品。
-  { name: 'assistant-navigation', spec: 'assistant-navigation', scenario: 'assistant', port: 8534 },
-  {
-    name: 'assistant-navigation-390',
-    spec: 'assistant-navigation',
-    scenario: 'assistant',
-    port: 8535,
-    viewport: NARROW,
-  },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },
@@ -170,14 +138,7 @@ const FLOWS = [
   viewport?: { width: number; height: number }
 }[]
 
-// 平行的 worktree 各跑一套時整段位移：`E2E_PORT_OFFSET=1000 pnpm -C web e2e`（`e2e/ports.ts`）。
-// 表上寫的是不位移時的 port；起伺服器與 `baseURL` 都經過 `served`。
-const OFFSET = portOffset(
-  process.env.E2E_PORT_OFFSET,
-  FLOWS.map((flow) => flow.port),
-)
-const served = (port: number) => port + OFFSET
-const origin = (port: number) => `http://127.0.0.1:${served(port)}`
+const origin = (port: number) => `http://127.0.0.1:${port}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -204,7 +165,7 @@ export default defineConfig({
   })),
   webServer: FLOWS.map(({ name, scenario, port }) => ({
     name,
-    command: `uv run python scripts/fake_setup_server.py --scenario ${scenario} --port ${served(port)}`,
+    command: `uv run python scripts/fake_setup_server.py --scenario ${scenario} --port ${port}`,
     cwd: '..',
     url: `${origin(port)}/api/health`,
     // 永遠自己起一台：接手一台已經在跑的，等於接手一個被別人改過的替身。

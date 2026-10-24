@@ -36,7 +36,6 @@ from berth.domain import IssueStatus, IssueType
 from berth.models import DiskSettings, Issue, JellyfinSettings, PathSettings, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.issues import clear_by_system, note_cleared, record_issue
 from berth.services.jellyfin import tvdb_fetchers
 from berth.services.routes import route_library_matches
@@ -57,8 +56,6 @@ class Finding:
     unknown: frozenset[str] = frozenset()
 
 
-# 背景迴圈的一段：只開與收 Issue，不排通知；下一輪照現況重寫。
-@command(Effect.REVERSIBLE)
 async def watch_conditions(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> None:
@@ -71,8 +68,6 @@ async def watch_conditions(
     await session.commit()
 
 
-# brief §14：改設定永遠要人，即使改得回去。
-@command(Effect.IRREVERSIBLE)
 async def set_min_free(
     session: AsyncSession, gigabytes: int, *, now: datetime | None = None
 ) -> int:
@@ -85,7 +80,6 @@ async def set_min_free(
     return settings.min_free_gb
 
 
-@command(Effect.READ)
 async def read_min_free(session: AsyncSession) -> int:
     return (await read_settings(session, DiskSettings)).min_free_gb
 

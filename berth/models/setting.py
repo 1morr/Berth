@@ -13,7 +13,6 @@ from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import (
-    ApiFormat,
     BerthPathFailure,
     CollectionType,
     ConnectionReason,
@@ -25,7 +24,6 @@ from berth.domain import (
     ServiceOrigin,
     StepFailure,
     StepStatus,
-    ToolGap,
 )
 from berth.models.base import Base
 from berth.models.types import JsonText, UtcDateTime, utcnow
@@ -120,38 +118,6 @@ class NotifySettings(SettingsGroup):
     discord_bot_token: str = ""
     discord_application_id: str = ""
     discord_bot_name: str = ""
-
-
-class AiToolTest(BaseModel):
-    """設定頁的測試對「支不支援工具呼叫」下的結論（M5 票 07，研究 ai-providers.md 結論 4）。
-
-    只存有結論的：限流、provider 掛掉、連不上是「這次沒測成」，不存。格式、base URL 或模型一改就
-    清掉（`services.ai.set_ai`），票 08 的側面板照它決定給不給工具。
-    """
-
-    supported: bool
-    #: 不支援的樣子；支援是 `None`。
-    gap: ToolGap | None = None
-    #: 端點的原文（400 的訊息、模型回的文字開頭），給技術細節。
-    detail: str = ""
-    tested_at: datetime
-
-
-class AiSettings(SettingsGroup):
-    """AI provider（plan §11.6〈provider〉、brief §20.24）。
-
-    **key 只寫不讀**：API 只回「有沒有」（同 `services.tmdb` 與 Prowlarr 的 `api_key_present`），
-    原文不回到瀏覽器、不進 log。base URL 空的是官方端點。模型空的時候，有預設的官方端點用它
-    （`services.ai.effective_model`；只有 Anthropic 有），其餘一定要選或填。
-    """
-
-    KEY = "ai"
-
-    format: ApiFormat = ApiFormat.ANTHROPIC
-    base_url: str = ""
-    api_key: str = ""
-    model: str = ""
-    tool_test: AiToolTest | None = None
 
 
 class BerthSettings(SettingsGroup):
@@ -650,5 +616,4 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     BerthSettings,
     NotifyWatchSettings,
     SweepSettings,
-    AiSettings,
 )

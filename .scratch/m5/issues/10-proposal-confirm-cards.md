@@ -1,6 +1,6 @@
 # 10 — 確認卡（Proposal）：加索引站、刪 complete
 
-**Status:** done
+**Status:** ready-for-agent
 
 **Blocked by:** 09
 
@@ -20,28 +20,9 @@
 
 ## 驗收
 
-- [x] 用假 provider：「加一個索引站」停在確認卡，沒按之前索引站沒加；按確認後加好（整合測試）
-- [x] 「把這部的 complete 刪掉」同上，拒絕後什麼都沒刪（整合測試）
-- [x] 確認時角色或輸入已不成立 → 失效並說原因（pytest）
-- [x] `user` 按不到管理員的 Proposal（pytest）
-- [x] 確認卡實跑（playwright 截圖）
-- [x] 全部檢查、pytest、vitest 綠；CONTEXT.md、progress.md 已更新
-
-## Comments
-
-
-2026-10-24（實作 session）：
-
-- **使用者選定**：「刪 complete」吃作品 id、只移除 torrent 加刪下載目錄的檔案（媒體庫鏈接與帳本留著）；只有提出的人按得到；按了不自動叫模型。記在 brief §19。
-- **成熟產品的慣例**：工具狀態照 Vercel AI SDK 的 tool approval（`approval-requested` → 這裡的 `proposed`），但**不暫停迴圈**：AI SDK 把工具呼叫停住、等批准再接著跑，Berth 的 Proposal 要活過那一次回覆（M7 的 Discord 按鈕、M6 的背景任務），所以工具結果直接是「已提出」，按了之後另加一則 `decision`。串流不加新的 chunk 型別，沿用 `tool-output-available`（`outcome: proposed`）。
-- **截圖**：本目錄的 `proposal-*-1280.png` / `-390.png`（playwright `assistant` 兩個專案）。另一個 worktree 的 e2e 佔著同一組 port，這一輪是以暫存 config 把 `assistant` 兩台搬到 9528 / 9529 跑的，spec 與情境照舊。
-- **code-review（Standards × Spec）已改**：確認時重算的預覽要與卡上那一份相同，否則失效（`ToolRefusal.CHANGED`）；存下的預覽這一版讀不回來也是失效，不再被標成「確認了但內部出錯」；按卡的結果給模型時不帶外部文字（torrent 名、Prowlarr 原文），只有狀態、做成沒有與理由碼；前端補齊 `prowlarr_unchosen` / `site_unknown` / `site_not_offered` 的說法並附原文；按過的狀態不再手寫帶外框的中性色塊（`deck` 疊在 `deck` 抬頭列上會消失，改成只寫字）；`Outcome` 改讀產生的型別；`.of()` 工廠取代逐格搬欄位；`deletion.DownloadsDeleted` 改名 `JobDownloadsOutcome`（與工具那一層的同名型別分開）；`assistant.py` 指著已拆掉的 `Registry.invoke` 的兩處註解。
-- **code-review 未處理**：
-  - `SiteRefusal`、`DeletionRefusal` 不在 `domain/enums.py`、沒進 OpenAPI，前端 `ProposalCard.tsx` 的 `LAPSES` 以字串查表，後端改名時前端不會紅（認不得的照原樣印理由碼，不會壞）。要閘門的話可以比照 `ToolRefusal` 匯進 components；等第三個要人按的工具時一起做。
-  - 加一個要人按的工具要改 `TITLES`、`CONFIRMS`、`TOOL_NAMES`、`LAPSES` 與 i18n，只有 `PREVIEWS` / `CARDS` 被 `tsc` 守（Shotgun Surgery）。同上，等下一個工具。
-  - `SiteRejectedError` / `DeletionRejectedError` / `ProposalRejectedError` 的 `__init__` 與 repo 裡十幾個拒絕例外同形，沒有抽共同基底（照既有寫法）。
-  - `_execute` 先 `admits` 再 `resolve`（後者也查角色）：前者是為了說出 `not_allowed` 而不是 `unknown_tool`，保留。
-  - 認不得站名時 `detail` 列出最像的五個（`difflib`），票沒要求，規模小保留。
-  - 刪下載的預覽含大小：還在下載的 Job，檔案大小一變，確認時就是 `changed`、要重新叫助理提一次。偏保守，等真的有人碰到再說。
-  - Prowlarr 新增一站時沒帶 `baseUrl`，是不是用 `indexerUrls` 的第一個，未實測（brief §20.7 已註明）。
-- **與本票無關的紅燈**：`tests/integration/test_rss_api.py::TestThePageFlow::test_add_poll_bind_and_see_the_jobs` 在開工時的 `3ed4475d` 上一樣紅：`series_finished` 以真時鐘判斷「最近一筆發佈之後 30 天沒有新的」，fixture 的發佈時間 2026-10-24 剛跨過 30 天。沒有修，記在 progress.md 的下一步。
+- [ ] 用假 provider：「加一個索引站」停在確認卡，沒按之前索引站沒加；按確認後加好（整合測試）
+- [ ] 「把這部的 complete 刪掉」同上，拒絕後什麼都沒刪（整合測試）
+- [ ] 確認時角色或輸入已不成立 → 失效並說原因（pytest）
+- [ ] `user` 按不到管理員的 Proposal（pytest）
+- [ ] 確認卡實跑（playwright 截圖）
+- [ ] 全部檢查、pytest、vitest 綠；CONTEXT.md、progress.md 已更新

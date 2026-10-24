@@ -38,7 +38,6 @@ from berth.domain import ReasonCode as Code
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.parser import revise
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
 from berth.services.jobs import record_event
 from berth.services.plan import follows
 from berth.services.plan_view import dump_reasons, load_plan, reasons_of
@@ -61,9 +60,6 @@ logger = logging.getLogger(__name__)
 _MAX_SERIAL = 99
 
 
-# 「取代」拿掉媒體庫裡舊的那一份，舊的來源不在 complete 時那就是唯一一份。「跳過」與
-# 「保留兩者」可逆，但標記是一支命令一個。
-@command(Effect.IRREVERSIBLE)
 async def decide_duplicate(
     session: AsyncSession,
     factory: ServiceClientFactory,

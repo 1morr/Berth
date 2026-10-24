@@ -36,7 +36,6 @@ function media(overrides: Partial<Media> = {}): Media {
     folder_frozen: false,
     tracked: false,
     default_route_id: null,
-    preselected_route_id: null,
     fetched_at: '2026-09-09T12:00:00Z',
     problem: null,
     detail: '',
@@ -154,7 +153,6 @@ function job(): Job {
     retryable: false,
     replannable: false,
     reimportable: false,
-    undoable: false,
     plan_id: null,
     audits: 0,
     series: '',
@@ -1335,10 +1333,6 @@ describe('搜尋 torrent 與結果表', () => {
     it('確認裡印著資料夾名，而且說清楚這一按就定了（票 04b、brief §4.5）', async () => {
       await searched()
 
-      // 一列一顆「送單」：鍵的說明是那一列的發佈名，螢幕閱讀器分得出是哪一筆（M5 票 15）。
-      expect(screen.getByRole('button', { name: '送單' })).toHaveAccessibleDescription(
-        '[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
-      )
       await userEvent.click(screen.getByRole('button', { name: '送單' }))
 
       // 搜尋列底下也有同一串字（那是「將會是」的預覽，M1.5 票 08 從身分帶搬來），所以只看確認區塊裡的那一份。
@@ -1564,7 +1558,7 @@ describe('搜尋 torrent 與結果表', () => {
     })
 
     it('上次送單用的那條 Route 是下一次的預選值（plan §2.2）', async () => {
-      render({ [MEDIA_PATH]: { body: media({ default_route_id: 2, preselected_route_id: 2 }) } })
+      render({ [MEDIA_PATH]: { body: media({ default_route_id: 2 }) } })
       renderApp('/media/tv:120089')
 
       expect(await screen.findByLabelText('入庫到')).toHaveValue('2')

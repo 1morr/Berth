@@ -68,7 +68,8 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.deeplink import (
-    BerthPage,
+    MEDIA_PAGE,
+    WEEKLY_PAGE,
     PublicUrlRejectedError,
     berth_link,
     normalized_public_url,
@@ -168,9 +169,6 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.FEED_BACKFILL_FAILING: "補漏一直失敗",
         IssueType.SERIES_EPISODES_MISSING: "缺集",
         IssueType.SERIES_EPISODES_COLLIDE: "同一集多份",
-        IssueType.SUBMIT_FAILED: "送單失敗",
-        IssueType.IMPORT_FAILED: "入庫失敗",
-        IssueType.STALLED: "停滯",
     },
     Language.EN: {
         IssueType.LIBRARY_LINK_MISSING: "link missing",
@@ -192,9 +190,6 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.FEED_BACKFILL_FAILING: "backfill keeps failing",
         IssueType.SERIES_EPISODES_MISSING: "episodes missing",
         IssueType.SERIES_EPISODES_COLLIDE: "episodes collide",
-        IssueType.SUBMIT_FAILED: "submit failed",
-        IssueType.IMPORT_FAILED: "import failed",
-        IssueType.STALLED: "stalled",
     },
 }
 
@@ -389,8 +384,8 @@ def _rejected(settings: NotifySettings, sender: NotifySenderSettings) -> bool:
     return bool(token) and sender.rejected_token == _fingerprint(token)
 
 
-# 改設定，brief §14 永遠要人（M5 票 04）：換回原本的 token 是人的事。
-@command(Effect.IRREVERSIBLE)
+# 同一個命令就是自己的反向：換回原本的 token，或傳空字串清掉。
+@command(Effect.REVERSIBLE)
 async def set_bot_token(
     session: AsyncSession, factory: ServiceClientFactory, token: str
 ) -> BotView:
@@ -424,8 +419,8 @@ def _clear_bot(settings: NotifySettings) -> None:
     settings.discord_bot_name = ""
 
 
-# 同上：改的是這個人的通知設定。
-@command(Effect.IRREVERSIBLE)
+# 同上：再存一次原本的那一份。
+@command(Effect.REVERSIBLE)
 async def set_mine(
     session: AsyncSession,
     user_id: int,
@@ -457,8 +452,8 @@ async def set_mine(
     return await read_mine(session, user_id)
 
 
-# 同上。
-@command(Effect.IRREVERSIBLE)
+# 同上：再存一次原本的網址，或空字串清掉。
+@command(Effect.REVERSIBLE)
 async def set_berth_url(session: AsyncSession, value: str) -> BotView:
     """存 Berth 從外面看的網址（`deeplink.normalized_public_url`：http(s) 的絕對網址、拿掉結尾
     的 `/`）。空字串是清掉，之後的通知不附連結。已經寫進待送表的那幾則也照新的組：
@@ -578,7 +573,7 @@ async def queue_ready(session: AsyncSession, job: Job, *, now: datetime) -> int:
 def _merged(gathered: dict[str, Any], content: dict[str, Any]) -> dict[str, Any]:
     """同一部作品、同一條 Route 的兩份事實：季集範圍合起來，其餘取新的那一份（作品名可能
     剛改過）。"""
-    spans = collapse_spans([*(gathered.get("episodes") or []), *(content.get("episodes") or [])])
+    spans = _collapse([*(gathered.get("episodes") or []), *(content.get("episodes") or [])])
     return {**content, "episodes": [list(span) for span in spans]}
 
 
@@ -606,14 +601,14 @@ async def _ready_content(session: AsyncSession, job: Job, route: Route) -> dict[
 
 def episode_spans(entries: Iterable[LedgerEntry]) -> list[tuple[int, int, int]]:
     """帳本的季集收成連續的範圍：E01、E02、E03 是一段，E05 另一段。沒有季集的（電影）不算。"""
-    return collapse_spans(
+    return _collapse(
         (entry.season, entry.episode_start, entry.episode_end or entry.episode_start)
         for entry in entries
         if entry.season is not None and entry.episode_start is not None
     )
 
 
-def collapse_spans(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
+def _collapse(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
     """`(季, 起, 迄)` 排好、接得上（重疊或相鄰）的併成一段。"""
     spans: list[tuple[int, int, int]] = []
     for season, start, end in sorted((point[0], point[1], point[2]) for point in points):
@@ -1064,11 +1059,11 @@ def _render(notification: Notification, language: Language, berth_url: str) -> M
     title = content["title_en"] if language is Language.EN else content["title"]
     route = content.get("route") or ""
     media = content.get("media")
-    url = berth_link(berth_url, BerthPage.MEDIA.format(media_id=media)) if media else None
+    url = berth_link(berth_url, MEDIA_PAGE.format(media_id=media)) if media else None
     return Message(
         title=text[notification.kind.value].format(title=title),
         # 「正在下載」存的是逐筆猜到的季集，在這裡才合成連續的範圍。
-        description=describe_spans(collapse_spans(content.get("episodes") or [])),
+        description=describe_spans(_collapse(content.get("episodes") or [])),
         fields=((_ROUTE, route),) if route else (),
         links=(Link(text["open"], url),) if url else (),
     )
@@ -1140,7 +1135,7 @@ def _render_weekly(notification: Notification, language: Language, berth_url: st
     text = _TEXT[language]
     first = date.fromisoformat(content["week_of"])
     last = first + timedelta(days=6)
-    url = berth_link(berth_url, BerthPage.WEEKLY.format(report_id=content["report"]))
+    url = berth_link(berth_url, WEEKLY_PAGE.format(report_id=content["report"]))
     return Message(
         title=text["weekly"].format(first=f"{first:%m-%d}", last=f"{last:%m-%d}"),
         description=text["weekly_body"].format(

@@ -67,8 +67,7 @@ from berth.naming import read_target
 from berth.parser import kind_by_extension
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
-from berth.services.jobs import JobRejectedError, check_route, freeze, record_event, user_of
+from berth.services.jobs import JobRejectedError, check_route, freeze, record_event
 from berth.services.media import read_media
 from berth.services.qbittorrent import sign_in, unknown_torrents
 from berth.services.reimport import contents_on_disk
@@ -117,8 +116,6 @@ def reimport_hash(path: Path) -> str:
     return hashlib.sha1(f"berth-reimport:{fs.path_key(path)}".encode()).hexdigest()
 
 
-# 只長出 Job 與檔案列；回去是刪除範圍全不勾的那一次刪除，沒有單一反向命令。
-@command(Effect.REVERSIBLE)
 async def reimport_folder(
     session: AsyncSession, factory: ServiceClientFactory, path: Path, media_id: str, *, actor: str
 ) -> Job:
@@ -144,7 +141,7 @@ async def reimport_folder(
             name=path.name,
             trigger=JobTrigger.REIMPORT,
             trigger_ref=str(path),
-            user_id=user_of(actor),
+            user_id=_user_id(actor),
             media_id=media.id,
             route_id=route.id,
             state=JobState.COMPLETED,
@@ -182,8 +179,6 @@ async def reimport_folder(
 # --- 認領 qBittorrent 上的一筆 --------------------------------------------
 
 
-# 只長出 Job，torrent 不動；回去同 `reimport_folder`。
-@command(Effect.REVERSIBLE)
 async def claim_torrent(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -226,7 +221,7 @@ async def claim_torrent(
             hash=found.hash,
             name=found.name,
             trigger=JobTrigger.MANUAL,
-            user_id=user_of(actor),
+            user_id=_user_id(actor),
             media_id=media.id,
             route_id=route.id,
             state=JobState.SUBMITTED,
@@ -267,8 +262,6 @@ async def claim_torrent(
     return job
 
 
-# 只補 TMDB 快取（`media.read_media`）。
-@command(Effect.READ)
 async def ensure_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> Media:
@@ -302,11 +295,14 @@ async def _route_by_folder(session: AsyncSession, path: Path) -> tuple[Route, Pa
     raise ClaimRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, f"{path} is under no route folder")
 
 
+def _user_id(actor: str) -> int | None:
+    """`events.actor` 是 user id 的字串（`jobs.actor_of`），Job 要的是那個數字。"""
+    return int(actor) if actor.isdigit() else None
+
+
 # --- 認領進帳本 -----------------------------------------------------------
 
 
-# 帳本多一列、收掉它說的那幾件 Issue；回去是那一列的「忘掉」。
-@command(Effect.REVERSIBLE)
 async def claim_file(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -391,7 +387,6 @@ class SourceIndex:
     unread: list[str] = field(default_factory=list)
 
 
-@command(Effect.READ)
 async def source_index(session: AsyncSession) -> SourceIndex:
     """complete 裡每一條 Route 子目錄底下的每一個檔案，以 `(device, inode)` 為鍵。
 
@@ -417,8 +412,6 @@ async def source_index(session: AsyncSession) -> SourceIndex:
     return index
 
 
-# 只收掉 Issue；條件還在的下一輪對帳會重開。
-@command(Effect.REVERSIBLE)
 async def settle(
     session: AsyncSession, path: str, job_hash: str | None, *, actor: str, now: datetime
 ) -> None:

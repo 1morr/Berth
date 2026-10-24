@@ -16,7 +16,6 @@ import { ConfirmAction, GhostButton } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
-import { formatPercent } from '../jobs/jobState'
 import { formatCoverage, formatEpisode, formatJellyfinEpisode } from '../components/episodes'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
@@ -197,9 +196,6 @@ const CONFIRM = {
   claim_torrent: 'work',
   // 認領進帳本只多一列帳本，配不上就是拒絕，什麼都不寫。
   claim_file: null,
-  // 卡住的 Job（M5 票 01）：重試入庫只把那一筆放回 importer；放棄同兩顆「承認」，一個位元組都不動。
-  retry_import: null,
-  abandon: null,
 } as const satisfies Record<IssueAction, { warning: string; action: string } | 'work' | null>
 
 /** 路徑那一欄叫什麼。沒列的是媒體庫裡的路徑（帳本的目標、Route 的目標）。 */
@@ -280,22 +276,6 @@ function Measured({ issue }: { issue: Issue }) {
         )}
         {error !== '' && <DetailLine term={t('issues.stoppedError')}>{error}</DetailLine>}
         <DetailLine term={t('issues.next')}>{t('issues.nextFirstBatch')}</DetailLine>
-      </>
-    )
-  }
-  if (isStuckJob(issue.type)) {
-    // 卡住的 Job（M5 票 01）：原因、停住的那一筆走到哪，與下一步；「下載」那一格連到 Job 頁的刪除範圍。
-    const error = text(issue.detail.error)
-    const progress = numeric(issue.detail.progress)
-    return (
-      <>
-        {error !== '' && <DetailLine term={t('issues.stoppedError')}>{error}</DetailLine>}
-        {issue.type === 'stalled' && progress !== null && (
-          <DetailLine term={t('issues.progress')}>
-            {formatPercent(progress, i18n.language)}
-          </DetailLine>
-        )}
-        <DetailLine term={t('issues.next')}>{t(STUCK_JOB_NEXT[issue.type])}</DetailLine>
       </>
     )
   }
@@ -392,17 +372,6 @@ const DIFFERS = ['season', 'episode', 'tmdb'] as const
 
 function isDiffer(value: unknown): value is (typeof DIFFERS)[number] {
   return DIFFERS.some((what) => what === value)
-}
-
-/** 卡住的 Job 那三種（後端 `issues.STUCK_JOBS`）的下一步。 */
-const STUCK_JOB_NEXT = {
-  submit_failed: 'issues.nextSubmitFailed',
-  import_failed: 'issues.nextImportFailed',
-  stalled: 'issues.nextStalled',
-} as const satisfies Partial<Record<Issue['type'], string>>
-
-function isStuckJob(type: Issue['type']): type is keyof typeof STUCK_JOB_NEXT {
-  return Object.hasOwn(STUCK_JOB_NEXT, type)
 }
 
 /** 讓第一批停住的那兩種狀態（後端 `sweep._STUCK_STATES`）。 */

@@ -207,14 +207,12 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **二十二種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-    各加一種，M4 票 130 加四種，M5 票 01 加三種）：
+    **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+    各加一種，M4 票 130 加四種）：
     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
-    中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，再一種
+    中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
-    （`sweeper`），最後三種是停住、Berth 自己不會再推的 Job（`qbit_poller` 每一輪量）。
-    **一種卡住一種型別，不是一種型別帶原因**（同 `feed_poll_failing` / `feed_backfill_failing` 的
-    取捨）：三種的出路不同、按鈕不同，型別就是「哪一組按鈕」。各邊共用同一個
+    （`sweeper`）。各邊共用同一個
     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
     與 `ISSUE_ACTIONS` 那兩條閘門。
 
@@ -280,16 +278,6 @@ class IssueType(StrEnum):
     #: 它們的發佈名寫的集號不同（兩個不同的發佈被對到同一集）。版本並存（brief §7.7、§7.8）不算。
     #: 一個 Series 一件；改正了或刪掉了，下一輪巡檢由系統收掉。
     SERIES_EPISODES_COLLIDE = "series_episodes_collide"
-    #: 卡住的 Job（M5 票 01）：送單失敗、而且 Berth 不會再自動重送——暫時性失敗的重送次數用完了
-    #: （`jobs.SUBMIT_RETRIES`），或那一次本來就是再問也一樣的（`.torrent` 404、qBittorrent 拒絕）。
-    #: 還在自動重送的那幾筆不算：它們還在路上。Job 離開 `submit_failed` 時系統收掉。
-    SUBMIT_FAILED = "submit_failed"
-    #: 卡住的 Job（M5 票 01）：入庫失敗（正片鏈接不成，plan §3.1）。importer 不會自己再試，
-    #: 所以每一筆都等人。Job 離開 `import_failed` 時系統收掉。
-    IMPORT_FAILED = "import_failed"
-    #: 卡住的 Job（M5 票 01）：沒有資料在動超過 `downloads.STALL_AFTER`（Job 在 `stalled`）。資料
-    #: 又動起來、Job 回到 `downloading` 時系統收掉。
-    STALLED = "stalled"
 
 
 #: 每日巡檢（`sweeper`）開的那幾種（M4 票 129、130）。週報的「還有什麼等人」另外點出它們
@@ -376,10 +364,6 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     # 缺集也是**一個 Series 一件**：缺的那幾集列在 `detail_json`，補上一集是同一件變短。
     IssueType.SERIES_EPISODES_MISSING: IssueSubject.RSS_SERIES,
     IssueType.SERIES_EPISODES_COLLIDE: IssueSubject.RSS_SERIES,
-    # 卡住的 Job（M5 票 01）是**那一筆下載**的事，同客戶端那幾種。
-    IssueType.SUBMIT_FAILED: IssueSubject.JOB_HASH,
-    IssueType.IMPORT_FAILED: IssueSubject.JOB_HASH,
-    IssueType.STALLED: IssueSubject.JOB_HASH,
 }
 
 
@@ -437,12 +421,6 @@ class IssueAction(StrEnum):
     CLAIM_TORRENT = "claim_torrent"
     #: 認領進帳本：單一檔案的 `rebuild-ledger`——配得上的長回一列，配不到的拒絕、那一件照舊開著。
     CLAIM_FILE = "claim_file"
-    #: 重試入庫：同 Job 頁的「重試入庫」（`jobs.retry_job`），Job 回 `importing`，已鏈接好的跳過
-    #: （M5 票 01）。
-    RETRY_IMPORT = "retry_import"
-    #: 放棄：別再等這一筆了（M5 票 01）。與兩顆「承認」同一個做法——刪除範圍四個旗標全不勾，Job 進
-    #: `removed`，磁碟與 qBittorrent 都不動；要連 torrent 與檔案一起刪的人去 Job 頁的刪除範圍。
-    ABANDON = "abandon"
 
 
 #: 逐型別按得了哪幾顆，**順序就是畫面上的順序**（第一顆是 brief §9.1 的預設建議動作）。
@@ -486,12 +464,6 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.SERIES_EPISODES_MISSING: (),
     # 改正在作品頁的檔案與版本（「修正」走 rematch）；哪一份放錯要人看發佈名才知道。
     IssueType.SERIES_EPISODES_COLLIDE: (),
-    # 卡住的 Job（M5 票 01）沿用 Job 頁已有的那幾顆：送單失敗是重新送單（與 Job 頁的「重試」一樣
-    # 再送一次存下來的連結，但走 `resubmit_job`：先問過連結與 qBittorrent 才動 Job），入庫失敗是
-    # 重試入庫；停住的沒有 Berth 按得了的修法（缺的是做種的人），只有放棄。
-    IssueType.SUBMIT_FAILED: (IssueAction.RESUBMIT, IssueAction.ABANDON),
-    IssueType.IMPORT_FAILED: (IssueAction.RETRY_IMPORT, IssueAction.ABANDON),
-    IssueType.STALLED: (IssueAction.ABANDON,),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：
@@ -518,9 +490,6 @@ ACTION_DELETES: dict[IssueAction, bool] = {
     IssueAction.ADOPT: False,
     IssueAction.CLAIM_TORRENT: False,
     IssueAction.CLAIM_FILE: False,
-    IssueAction.RETRY_IMPORT: False,
-    # 同兩顆「承認」：Job 結束，一個位元組都不動。
-    IssueAction.ABANDON: False,
 }
 
 #: 這幾顆要管理員選一部作品才按得下去（`POST /issues/{id}/resolve` 的 `media`，票 10）。
@@ -1275,9 +1244,6 @@ class JobRefusal(StrEnum):
     #: 從頭再來，送單都還沒成的那一筆 complete 裡什麼都沒有，沒下載完就被移除的那一筆 complete 裡
     #: 只有殘件（M2 票 10）。
     NOT_REIMPORTABLE = "not_reimportable"
-    #: 撤不回了（`jobs.UNDOABLE`）：已經下載完、規劃器隨時接手入庫，或已經入庫。撤銷送單與撤銷訂閱
-    #: （M5 票 12、11）只撤還沒下載完的；要刪得去 Job 頁看清楚刪的範圍。
-    NOT_UNDOABLE = "not_undoable"
     #: 重新入庫的 Import Source（complete 裡那一包）不在了，或裡面一個檔案都沒有。
     #: 什麼都還沒動：沒有檔案可以規劃，退回 `completed` 只會得到一份空的 Plan（M2 票 10）。
     CONTENT_MISSING = "content_missing"
@@ -1558,9 +1524,6 @@ class RematchRefusal(StrEnum):
     LINK_FAILED = "link_failed"
     #: 舊的那一條鏈接拆不掉。`detail` 是系統原文；新的那一條已經收回，帳本沒改。
     UNLINK_FAILED = "unlink_failed"
-    #: 要拿掉的那一條是唯一一份：complete 裡的來源不在了（M5 票 03）。「忽略」不刪資料，
-    #: 要刪它走刪除範圍。`detail` 是來源路徑。
-    SOURCE_MISSING = "source_missing"
     #: 要「套用到這個 RSS Series」，而這個檔案不是 RSS Series 送的（或那個 Series 不在了）。
     #: M3 票 13。
     NOT_FROM_SERIES = "not_from_series"
@@ -1582,9 +1545,6 @@ class ReviewRefusal(StrEnum):
     NOT_AUDITED = "not_audited"
     #: 硬鏈接拆不掉。`detail` 是系統原文。
     UNLINK_FAILED = "unlink_failed"
-    #: complete 裡的來源不在了：媒體庫那一份是唯一一份，撤銷會把它刪掉。要刪它走刪除範圍
-    #: （M5 票 03）。`detail` 是來源路徑。
-    SOURCE_MISSING = "source_missing"
 
 
 class FeedKind(StrEnum):
@@ -1774,208 +1734,3 @@ class NotifyRefusal(StrEnum):
     DISCORD_ID_MISSING = "discord_id_missing"
     #: Berth 的網址不是 http(s) 的絕對網址（M4 票 124）。
     BERTH_URL_INVALID = "berth_url_invalid"
-
-
-class ApiFormat(StrEnum):
-    """`settings.ai` 的 API 格式（plan §11.6〈provider〉、brief §20.24）。
-
-    同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。每一種格式一個
-    adapter，對照表在 `adapters.ai.formats`。
-    """
-
-    ANTHROPIC = "anthropic"
-    #: OpenAI 相容的 Chat Completions（M5 票 07b）：OpenAI、OpenRouter、vLLM、Ollama、DeepSeek…
-    OPENAI = "openai"
-
-
-class AiFailure(StrEnum):
-    """對 provider 的一次請求沒成的分類（brief §20.24「錯誤」、研究 ai-providers.md 結論 8）。
-
-    分得這麼細是因為**下一步不同**：限流等一下、額度要人去儲值、憑證與模型要去設定頁改、
-    連不上查網址與網路。M5 一律不自動重試。
-    """
-
-    #: 429（有 `retry-after` 就帶著秒數）。
-    RATE_LIMITED = "rate_limited"
-    #: 402、`billing_error`：重試也沒用（"Retrying billing ... won't restore API access"）。
-    QUOTA_EXHAUSTED = "quota_exhausted"
-    #: 5xx、529 overloaded，與 200 之後的串流錯誤事件、串流沒結束就斷掉。
-    PROVIDER_DOWN = "provider_down"
-    #: 401、403：key 不對或沒有權限。
-    AUTH_FAILED = "auth_failed"
-    #: 404：端點不認得這個模型。
-    MODEL_NOT_FOUND = "model_not_found"
-    #: 連不上、DNS、逾時。
-    UNREACHABLE = "unreachable"
-    #: 其餘的 4xx，或回的東西看不懂。原文照記。
-    REJECTED = "rejected"
-
-
-class AiCallOrigin(StrEnum):
-    """一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
-
-    M5 票 07 只有設定頁的測試；對話是票 08，AI 任務（M6）再加一個值。
-    """
-
-    TEST = "test"
-    #: 側面板的一則對話（`ai_calls.conversation_id` 指著它）。
-    CONVERSATION = "conversation"
-
-
-class ToolGap(StrEnum):
-    """設定頁的測試判定「這個模型不支援工具呼叫」的樣子（`docs/research/ai-providers.md` 結論 4）。
-
-    說給人聽的補法不同：被拒要看端點的設定（vLLM 的啟動選項、換 Ollama 的模型），寫成文字是
-    端點沒有把模型的輸出解析成呼叫，忽略是端點根本沒把工具交給模型。
-    """
-
-    #: 帶了工具的那一次回 400（第一次不帶工具的成功了）。
-    TOOLS_REJECTED = "tools_rejected"
-    #: 只回了文字，而文字裡有 nonce 或工具名：模型把呼叫寫成了文字。
-    WRITTEN_AS_TEXT = "written_as_text"
-    #: 只回了文字、沒提到工具：端點忽略了工具。
-    TOOLS_IGNORED = "tools_ignored"
-    #: 呼叫了，但名字或參數不對。
-    WRONG_CALL = "wrong_call"
-    #: 把工具的結果送回去那一次回 400。
-    RESULT_REJECTED = "result_rejected"
-    #: 工具的結果送回去之後沒有拿到文字回覆。
-    NO_REPLY = "no_reply"
-
-
-class AiRefusal(StrEnum):
-    """AI 設定的命令不做的理由（`services.ai`）。"""
-
-    #: base URL 不是 http(s) 的絕對網址。
-    BASE_URL_INVALID = "base_url_invalid"
-    #: 測試或讀模型清單時 AI 還沒設定好（`services.ai.is_ready`）。
-    NOT_READY = "not_ready"
-
-
-class AiProbeStep(StrEnum):
-    """設定頁的測試打的三次請求（研究 ai-providers.md 結論 4）。"""
-
-    #: 不帶工具的最小請求：驗 key、base URL 與模型。
-    HELLO = "hello"
-    #: 帶一個無害的假工具與隨機 nonce，看模型有沒有照格式呼叫。
-    TOOL_CALL = "tool_call"
-    #: 把假工具的結果送回去，要拿到文字回覆。
-    TOOL_RESULT = "tool_result"
-
-
-class MessageKind(StrEnum):
-    """對話裡的一則（`conversation_messages.kind`，M5 票 08）。"""
-
-    #: 使用者打的字。
-    USER = "user"
-    #: 模型的一輪：文字與工具呼叫。不叫 assistant：那是 CONTEXT.md 的「助理」。
-    MODEL = "model"
-    #: Berth 執行工具的結果，一輪的呼叫收成一則。
-    TOOLS = "tools"
-    #: Berth 說給人聽的事（provider 沒成、到了輪數上限）。不送給模型。
-    NOTICE = "notice"
-    #: 有人按了確認卡（確認或拒絕，M5 票 10）。模型下一輪看得到，畫面由卡片自己畫。
-    DECISION = "decision"
-
-
-class AssistantNotice(StrEnum):
-    """對話停下來的原因，說給人聽（plan §11.6〈對話核心〉的兩條保險絲）。"""
-
-    #: 對 provider 的請求沒成；`AiFailure` 說是哪一種。
-    PROVIDER_FAILED = "provider_failed"
-    #: 一則訊息之後的工具呼叫到了輪數上限（`services.assistant.MAX_TOOL_ROUNDS`）。
-    ROUND_LIMIT = "round_limit"
-    #: Berth 自己出錯（bug），原因在 log。
-    INTERNAL_ERROR = "internal_error"
-
-
-class ToolOutcome(StrEnum):
-    """一次工具呼叫的結果（Vercel AI SDK 的 `output-available` / `output-error`）。"""
-
-    DONE = "done"
-    #: 登錄表的 `Refusal`：什麼都沒改。
-    REFUSED = "refused"
-    #: 沒執行，做成了一張確認卡（Proposal，M5 票 10）：等人按（AI SDK 的 `approval-requested`）。
-    PROPOSED = "proposed"
-
-
-class ProposalStatus(StrEnum):
-    """一張確認卡走到哪裡（`proposals.status`，M5 票 10，CONTEXT.md 的 Proposal）。"""
-
-    #: 等人按。
-    PROPOSED = "proposed"
-    #: 人按了確認，以按的那個人執行了：結果在 `result`（執行到一半的那一刻 `result` 還是空的）。
-    CONFIRMED = "confirmed"
-    #: 人按了拒絕，什麼都沒做。
-    REJECTED = "rejected"
-    #: 按確認的當下已經不成立（角色變了、列已經不在、索引站已經加了），或執行被拒：什麼都沒改，
-    #: `result` 是那一份 `Refusal`。
-    EXPIRED = "expired"
-
-
-class ProposalCause(StrEnum):
-    """為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種。"""
-
-    #: 命令標著 `irreversible`（brief §14）：永遠要人。
-    IRREVERSIBLE = "irreversible"
-    #: 模型直接給了一整個網址，而它不在使用者這則對話自己打的話裡（M5 票 11，brief §6.10 ②）：
-    #: 可能是搜尋結果、番組頁裡藏的指令。
-    URL_NOT_FROM_USER = "url_not_from_user"
-
-
-class ProposalRefusal(StrEnum):
-    """按確認卡的端點不做的理由（`services.proposals`）。"""
-
-    #: 沒有這張卡，或它不是你的——兩種說同一句。
-    PROPOSAL_MISSING = "proposal_missing"
-    #: 這張卡已經有人按過了（另一個分頁、另一個管道）。
-    ALREADY_DECIDED = "already_decided"
-
-
-class UndoRefusal(StrEnum):
-    """結果卡上的撤銷不做的理由（`services.undo`，M5 票 11）。"""
-
-    #: 這則對話裡沒有這一次工具呼叫的結果（或對話不是你的——那一種是 `conversation_missing`）。
-    CALL_MISSING = "call_missing"
-    #: 那個工具沒有撤銷（讀取的、要人按的），或那一次沒做成。
-    NOT_UNDOABLE = "not_undoable"
-    #: 已經撤銷過了（另一個分頁先按了）。
-    ALREADY_UNDONE = "already_undone"
-    #: 這個人的角色按不到這一個撤銷（刪 Job 只有管理員）。
-    NOT_ALLOWED = "not_allowed"
-
-
-class ActivityVia(StrEnum):
-    """AI 活動頁的一列是怎麼做成的（M5 票 14）。"""
-
-    #: AI 直接做的（可逆的工具，`ai:<user id>`）。
-    AI = "ai"
-    #: AI 提出、人按了確認卡、以他執行的（Proposal，M5 票 10）。
-    CONFIRMED = "confirmed"
-
-
-class ActivityUndo(StrEnum):
-    """AI 活動頁的一列撤不撤得了（M5 票 14）。撤不了的說得出為什麼。"""
-
-    UNDOABLE = "undoable"
-    #: 已經撤銷過了。
-    UNDONE = "undone"
-    #: 那個工具沒有反向命令（不可逆的確認卡）。
-    NO_INVERSE = "no_inverse"
-    #: 那一次什麼都沒改（送單時那一筆本來就在）：沒有東西可撤。
-    NOTHING_DONE = "nothing_done"
-    #: 有反向命令，但看的人的角色按不到（撤銷送單是刪 Job，只有管理員）。
-    NOT_ALLOWED = "not_allowed"
-
-
-class AssistantRefusal(StrEnum):
-    """對話的命令不做的理由（`services.conversations`）。"""
-
-    #: AI 還沒設定好（`services.ai.is_ready`）。
-    NOT_READY = "not_ready"
-    #: 沒有這則對話，或它不是你的——兩種說同一句。
-    CONVERSATION_MISSING = "conversation_missing"
-    #: 這則對話的上一個回覆還在跑。
-    BUSY = "busy"
-    #: 送了空白的訊息。
-    EMPTY_MESSAGE = "empty_message"

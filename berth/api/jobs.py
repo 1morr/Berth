@@ -68,8 +68,6 @@ _STATUS: dict[JobRefusal, int] = {
     JobRefusal.CLIENT_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
     # 還在下載、還在入庫的那一筆是**現在**不能從頭再來，等它停下來同一個請求就會成功。
     JobRefusal.NOT_REIMPORTABLE: status.HTTP_409_CONFLICT,
-    # 只有工具的撤銷會說（M5 票 11）；端點本身不丟它，表要涵蓋整個封閉集合。
-    JobRefusal.NOT_UNDOABLE: status.HTTP_409_CONFLICT,
     # 那一包不在 complete 裡了：請求本身沒錯，是磁碟上的事實變了（brief §9.3）。
     JobRefusal.CONTENT_MISSING: status.HTTP_409_CONFLICT,
     # 另一個分頁先刪了、背景迴圈先推進了：重新看一次那一筆，同一個請求可能就成立。
@@ -206,9 +204,6 @@ class JobOut(BaseModel):
     replannable: bool
     #: 這一筆現在按得了重新入庫嗎（M2 票 10）。只有 admin 看得到那一顆（門禁），旗標誰都拿得到。
     reimportable: bool
-    #: 送單現在撤得回來嗎：還沒下載完、媒體庫與 complete 裡都還沒有它（M5 票 12）。AI 送單的結果卡
-    #: 照它畫撤銷鍵，撤銷是 `DELETE /jobs/{hash}` 移除 torrent、刪檔、清紀錄（只有 admin）。
-    undoable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11）。還沒算過就是 `null`——畫面照它決定
     #: 要不要去要那一份逐檔的決定，而不是先打一次 404。
     plan_id: int | None

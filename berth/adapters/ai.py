@@ -1,13 +1,12 @@
 """AI fallback 解析器的介面（plan §4.5、brief §6.10）。
 
-**介面在 M1 就定好，實作在 M6**（plan §4.5：背景接管的第一種 AI 任務）。先定的理由是它約束的
-是規則層：`propose` 收規則層算出來的 Plan、回同一個型別的 Plan，所以 AI 只能提出一份「這幾個
-檔案應該這樣放」的提案，不能發明一種規則層表達不出來的處置，也碰不到檔案（brief §6.10「AI 是
-fallback 解析器與助理，不是執行者」）。
+**介面在 M1 就定好，實作在 M4。**先定的理由是它約束的是規則層：`propose` 收規則層算出來的
+Plan、回同一個型別的 Plan，所以 AI 只能提出一份「這幾個檔案應該這樣放」的提案，
+不能發明一種規則層表達不出來的處置，也碰不到檔案（brief §6.10「AI 是 fallback 解析器與
+助理，不是執行者」）。
 
-與 provider 無關的那幾件事（輸入壓縮、schema 驗證、快取鍵）住在 services，不在這裡——換一家
-provider 不該讓它們跟著搬家。**沒有預算檢查**：AI 不設預算、只記用量（brief §6.10「用量，不設
-預算」，`ai_calls`）。對 provider 的請求走同一個套件的 `ChatProvider`（`berth.adapters.ai`）。
+與 provider 無關的那幾件事（輸入壓縮、schema 驗證、快取鍵、預算檢查）住在 `services/plan.py`，
+不在這裡——換一家 provider 不該讓預算檢查跟著搬家。
 """
 
 from __future__ import annotations
