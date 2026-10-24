@@ -154,7 +154,7 @@ pnpm -C web lint            # eslint
 pnpm -C web format          # prettier（CI 用 format:check）
 pnpm -C web typecheck       # tsc（strict）；build 已含，這是單獨跑的快捷
 pnpm -C web gen:api         # 重新產生 API 型別（見下）
-pnpm -C web e2e             # playwright 對演練情境跑二十三條流程（先 build，見〈前端 e2e〉）
+pnpm -C web e2e             # playwright 對演練情境跑二十四條流程（先 build，見〈前端 e2e〉）
 ```
 
 ### API 型別
@@ -330,7 +330,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十三條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共四十三個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十四條流程（除了送單、審核、待處理那三條，各有 1280 與 390 兩份，共四十五個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -347,6 +347,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | `/weekly`（M4 票 131）：管理員從頁首導覽進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
 | 助理的側面板（M5 票 08）：九個頁面都開得到、換頁與重整還開著、關閉後焦點回到「助理」鍵；串流到一半有字、那一塊 `aria-busy`，工具呼叫說「正在查最近入庫」再換成「查過」、底下畫出「最近 7 天入庫」的結果卡（票 09），限流說 30 秒後再送，重整之後三段與卡片都在；確認卡（票 10）：「加一個動畫的索引站」停在一張說出 dmhy 網址的卡上、按「確認加入」之後說已加入，「把這部電影的 complete 刪掉」的卡列出兩個要刪的檔案、按「拒絕」之後說什麼都沒做，重整之後兩張卡照結局畫；在 SPY×FAMILY 作品頁說「這部缺的集搜一下並下載」，那一句底下說在哪一部的頁面上，畫出缺的集、搜尋結果（不像這部作品的說為什麼、AI 不送的那一筆標出來）與送單三張卡，再說「照標題說的送」被擋下（說出原因），管理員撤銷送單之後卡上說已撤銷（票 12；撤銷經過對話，票 11） | `assistant` | 8528 / 8529 |
 | 助理訂閱 RSS（M5 票 11）：在《与你相恋》作品頁說「訂閱這部的 Mikan RSS」，助理查作品名、搜番組、列字幕組，兩條 Route 都收劇集時從 `route_needed` 說的那幾條挑 Anime 重叫，訂閱卡說出 Feed 名稱、MIKAN、綁到的作品與字幕組、當場送出 12 筆與下一次輪詢，沒有確認卡；桌機的 RSS 頁看得到那個 Feed；「撤銷訂閱」就地確認之後卡上說已撤銷與撤回 / 留下幾筆，RSS 頁的 Feed 不在了，重整之後照樣說已撤銷 | `assistant-rss` | 8530 / 8531 |
+| AI 活動頁（M5 票 14）：在 SPY×FAMILY 作品頁讓助理送一筆單、再提議加索引站並按確認，從面板抬頭的「活動」到 `/ai-activity`（窄版面板跟著收起）：新的在前兩列，加索引站那一列是 dmhy、「skipper 確認的」、說撤不回，送單那一列說出 AI 的理由、這次回覆的 tokens、展開看得到輸入；從頁面撤銷送單之後那一列說已撤銷，按「出自對話」在側面板打開那一則、送單卡照樣說已撤銷 | `assistant` | 8532 / 8533 |
 | `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
@@ -364,7 +365,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 2 分鐘（四十三台替身）
+pnpm -C web e2e                                            # 約 2 分鐘（四十五台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```

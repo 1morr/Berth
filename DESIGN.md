@@ -644,6 +644,7 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。單選的篩選列
   （媒體庫、下載列表、作品頁的下載段）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
+- `AI 活動`（M5 票 14）在「下載」之後，AI 設定好時才有、不分角色；其餘項目的角色門禁見各頁。
 - `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
 - 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `deck` 底 + `ink` 字
   （同角色色塊的中性方塊），未選中沉一階到 `well` 底 + `ink-dim` 字，兩顆之間 1px 縫。語言是角色不是狀態
@@ -999,6 +1000,32 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
 - **空狀態**：有史以來一筆都沒有時整頁只剩一塊中性 `Notice` 與連到「設定 → AI」的 Ghost 連結，不畫空圖；這段期間沒有、之前有時總量照畫、
   圖只剩基線，給「看 90 天」的連結。
 
+### AI 活動頁（`/ai-activity`，M5 票 14）
+
+`.scratch/m5/ai-activity-shape.md`。登入即可（同 `/jobs`）：`user` 看自己對話裡的，管理員看全部，導言多半句「（所有人的）」。
+形狀學 GitHub 的 audit log 與 Vercel 的 Activity（一列一個動作、最新在前、誰＋做了什麼＋對象＋時間，細節收在展開），撤銷學
+Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做它們的篩選與匯出。資料來自對話本身，不另寫日誌。
+
+- **導覽與入口**：頁首導覽在「下載」之後一格「AI 活動」，只在 AI 設定好（`GET /assistant` 的 `ready`）時出現，不分角色；
+  直接進網址照樣看得到以前的。側面板抬頭列也有一顆 `COMPACT_BUTTON` 的「活動」連過來。
+- **列**（`max-w-[80rem]`，外殼同工作清單列：`well` 底 + `border-2 border-rule` + `px-4 py-3`，列間 `gap-3`，**不塗信號色**）：
+  ① 中性色塊的動作名（沿用面板的工具名，`assistant/toolNames.ts`）加對象（`.value wrap-anywhere` 的 `h2`：送出的發佈名、Feed 名、索引站名；
+  其他型別沒有對象就不印，列的名字退回動作名）；② 一行事實（`text-sm ink-dim`，`Dot` 分隔）：`Timestamp` · 「AI 代 {人} 做的」
+  或「{人} 確認的」· 出自對話「標題」（對話標題是一句話，不用書名號）· 「這次回覆 N tokens」（輸入加輸出，不知道時「—」）；③ `reason` 非空時 `.label`「AI 的理由」
+  加原文（`text-sm ink`）；④ 原生 `<details>`，`.label`「輸入」，`hull` 底的 `dl`，每個輸入欄一條 `DetailLine`（欄名照原樣，
+  非字串值以 JSON 印出）；⑤ 撤銷那一格。
+- **出自對話**：是自己的對話時是一顆文字連結樣式的按鈕（底線 `rule-strong`，hover 換 `ink`），按了打開側面板並顯示那一則；
+  別人的對話只印標題，不給按鈕。機制：`AppShell` 提供 `AssistantControlContext.openConversation(id)`，把面板打開並把
+  `{ id, nonce }` 的請求交給 `AssistantPanel`；面板切到那一則、回到對話，焦點進輸入框（同按「助理」鍵），接下之後 `AppShell` 清掉請求，
+  之後關了再開不會又跳回去。
+- **撤銷三種說法**：撤得了是 Ghost「撤銷送單 / 撤銷訂閱」，就地 `ConfirmPanel`、後果句同結果卡（共用 `UndoControl`，面板的
+  `UndoButton` 是它讀 context 的外殼；沒有專屬文案的型別用通用的「撤銷」）；撤了是 `text-xs ink` 的「已撤銷」加 `Timestamp`，
+  列不消失，焦點留在這一句；撤不了是 `text-xs ink-dim` 一句為什麼——「這一件做了就撤不回。」（不說「反向命令」，那是程式裡的詞）或「只有管理員撤得了這一筆。」。
+  撤銷被拒是 `blocked-ink` 的 `role="alert"`，列留著、再按一次接著做。撤掉之後重問這一頁、Job、作品、RSS 與對話。
+- **空狀態**：中性 `Notice`「AI 還沒替你 / 任何人做過事。」加一句側面板怎麼用。超過 200 筆時列表末一句 `text-xs ink-dim`「更早的不列在這裡。」。
+  讀取中是三塊與列等高的 `deck` 色條（不動），讀不到是 `RequestFailed`。
+- **窄版**：一欄；事實行自然換行，撤銷的確認區照 `CONFIRM_ACTIONS` 疊成一欄。
+
 ### 助理側面板（`AssistantPanel`，M5 票 08）
 
 `.scratch/m5/side-panel-shape.md`（使用者選定：並排、最近一則加歷史清單、開關記在瀏覽器）。照 Vercel AI SDK 的工具呼叫三態
@@ -1009,8 +1036,8 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
   變窄、照常可操作，**沒有東西疊在誰上面**（The Rule-Line Rule：沒有 z 軸），與頁面之間一條 `border-l-2 border-rule-strong`。
   `lg` 以下開著時 `main` 收起、面板 `sticky top-0 h-dvh` 接在頁首下面。開關存在 `localStorage`，換頁不關、重整照原樣；
   使用者按開的焦點進輸入框，照記憶打開的不搶；「關閉」或焦點在面板內的 `Esc` 收起，焦點回到「助理」鍵。
-- **抬頭列**：`deck` 底、`border-b-2 border-rule`，`.label`「助理」的 `h2`（自己帶 `bg-deck`，算 `deck` 抬頭列）加三顆
-  `COMPACT_BUTTON`：新對話、歷史（歷史清單開著時換成「回到對話」）、關閉。
+- **抬頭列**：`deck` 底、`border-b-2 border-rule`，`.label`「助理」的 `h2`（自己帶 `bg-deck`，算 `deck` 抬頭列）加四顆
+  `COMPACT_BUTTON`：活動（連到 `/ai-activity` 的 `Link`；`lg` 以下面板取代頁面，按了先收起面板）、新對話、歷史（歷史清單開著時換成「回到對話」）、關閉。
 - **對話是航海日誌，不是泡泡**：`role="log"` 的 `<ol>`，一句使用者的話一塊（`deck` 底，抬起一階），它之後的模型回合、
   工具與 notice 收成同一塊「助理」（面板本身的 `well` 底）；每塊上方一個 `.label text-ink-dim` 說話者，塊與塊 `gap-3`，
   不左右對齊、沒有圓角。模型的字是 `text-sm whitespace-pre-wrap break-words` 的散文，**永遠不塗信號色**：做了什麼只以
@@ -1075,7 +1102,7 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
   下方一行「回覆講完才按得到」。結果寫在一直掛著的 `role="status"` 裡（`text-xs ink`）：後端回報真的做了什麼
   （「已加入 dmhy」「刪了 2 個檔案，空出 8 KB」）、失效的理由（「按下去的時候已經不成立，什麼都沒做：這一站已經在
   Prowlarr 裡了」，有原文時 `Dot` 之後接 `.value ink-dim` 的原文），或「拒絕了，什麼都沒做」；別人先按了也在這裡說，不當成做好了。重整之後卡片讀對話的 `proposals`
-  照它的結局畫。
+  照它的結局畫。確認過、可逆的卡（被降級的加 Feed）在 AI 活動頁撤銷之後，同一格多一句「這一筆後來撤銷了。」（M5 票 14）。
 
 ### 工作清單列（`QueueRow` / `DetailLine`）
 

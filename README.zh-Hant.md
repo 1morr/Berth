@@ -95,7 +95,7 @@ Berth 是**公開 beta**。
 
 - 只支援 **Jellyfin 12.0 以上**與 **Prowlarr**。不支援 Emby、Plex、Jackett。
 - 通知剛開始做：每個人都可以在一筆下載可以看了的時候收到 Discord 私訊，只收自己在 Jellyfin 看得到的媒體庫（設定 → 通知；bot 由管理員設一次）。管理員在那裡存了 Berth 的網址，私訊就帶作品頁的連結。管理員另外會在待審核、Issue 或待綁定的 RSS Series 有新的一件時收到「有 N 件等你處理」（等 10 分鐘收齊成一則），每週一還有一份週報：入庫了什麼、修了什麼、還有什麼等你處理（週報頁，附一則私訊摘要）。
-- AI 剛開始做：設定 → AI 接上你自己的 provider（Anthropic 或 OpenAI 相容格式：Anthropic 與 OpenAI 官方、OpenRouter、DeepSeek、自架的 Ollama 或 vLLM 等），並測試它的模型能不能呼叫工具；設定 → 用量看每次呼叫花的 tokens 與快取命中率，不設預算。每一頁都有助理的側面板可以跟它說話：查最近入庫，在作品頁上查缺的集、搜尋並送單，結果各畫成一張卡，它只送得出同一則對話裡自己搜出來、符合這部作品與要找的集的那一筆；也能替作品訂閱 Mikan 的字幕組或 Nyaa / acg.rip 的搜尋 feed，訂閱卡上撤銷得掉；加索引站、刪掉一部作品的下載停在確認卡上，你按了「確認」才做。沒設定 AI 時 Berth 照常運作。見 [AI](docs/guide/setup-wizard.md#ai-settings--ai) 與 [助理](docs/guide/setup-wizard.md#the-assistant-side-panel)。
+- AI 剛開始做：設定 → AI 接上你自己的 provider（Anthropic 或 OpenAI 相容格式：Anthropic 與 OpenAI 官方、OpenRouter、DeepSeek、自架的 Ollama 或 vLLM 等），並測試它的模型能不能呼叫工具；設定 → 用量看每次呼叫花的 tokens 與快取命中率，不設預算。每一頁都有助理的側面板可以跟它說話：查最近入庫，在作品頁上查缺的集、搜尋並送單，結果各畫成一張卡，它只送得出同一則對話裡自己搜出來、符合這部作品與要找的集的那一筆；也能替作品訂閱 Mikan 的字幕組或 Nyaa / acg.rip 的搜尋 feed，訂閱卡上撤銷得掉；加索引站、刪掉一部作品的下載停在確認卡上，你按了「確認」才做。AI 活動頁列出它改過的每一件事與理由，撤得了的就在那裡撤。沒設定 AI 時 Berth 照常運作。見 [AI](docs/guide/setup-wizard.md#ai-settings--ai)、[助理](docs/guide/setup-wizard.md#the-assistant-side-panel) 與 [AI 活動](docs/guide/setup-wizard.md#ai-activity)。
 - 實測過 **Windows 的 Docker Desktop** 與 **Unraid 7.1**；Ubuntu 的 rootless Docker 測過一部分。其他系統還沒實測。
 - **不要把 Berth 直接開到公網。** 從區網或 VPN 連。
 

@@ -26,6 +26,7 @@ import { HealthPage } from './pages/HealthPage'
 import { IssuesPage } from './pages/IssuesPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { JobDetailPage } from './pages/JobDetailPage'
+import { AiActivityPage } from './pages/AiActivityPage'
 import { JobsPage } from './pages/JobsPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
@@ -371,6 +372,23 @@ const jobsRoute = createRoute({
 })
 
 /**
+ * AI 活動 `/ai-activity`（M5 票 14）。登入即可，同 `/jobs`：`user` 看自己對話裡的，管理員看全部（後端分）。
+ * 導覽那一格只在 AI 設定好時出現，網址照樣進得來。
+ */
+const aiActivityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ai-activity',
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: () => (
+    <AppShell>
+      <AiActivityPage />
+    </AppShell>
+  ),
+})
+
+/**
  * Job 詳情 `/jobs/:hash`（M2 票 12）。守衛與 `/jobs` 相同：一般使用者也進得來，他看得到自己的下載
  * （brief §11）；頁上哪幾顆動作給誰由頁面決定，擋住的那一條在後端的門禁。
  *
@@ -582,6 +600,7 @@ export const routeTree = rootRoute.addChildren([
   weeklyRoute,
   weeklyReportRoute,
   jobsRoute,
+  aiActivityRoute,
   jobDetailRoute,
   inventoryIndexRoute,
   inventoryRoute,

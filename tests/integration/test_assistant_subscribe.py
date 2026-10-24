@@ -89,7 +89,13 @@ def picks_loli(request: ChatRequest) -> TurnEnded:
     """模型從上一次的字幕組清單挑 LoliHouse，訂閱這部。"""
     groups = last_result(request)["subgroups"]
     loli = next(group for group in groups if group["name"] == "LoliHouse")
-    return call("subscribe_mikan", bangumi=4009, subgroup=loli["id"], media=KIMI_ID)
+    return call(
+        "subscribe_mikan",
+        reason="The user asked for it.",
+        bangumi=4009,
+        subgroup=loli["id"],
+        media=KIMI_ID,
+    )
 
 
 def feeds_and_jobs(client: TestClient) -> tuple[int, int]:
@@ -167,7 +173,13 @@ class TestMikanIdsMustComeFromThisConversation:
         ai_ready(client)
         serve_mikan(factory)
         factory.ai_.replies = [
-            call("subscribe_mikan", bangumi=4009, subgroup=370, media=KIMI_ID),
+            call(
+                "subscribe_mikan",
+                reason="The user asked for it.",
+                bangumi=4009,
+                subgroup=370,
+                media=KIMI_ID,
+            ),
             says("Done."),
         ]
 
@@ -187,7 +199,13 @@ class TestMikanIdsMustComeFromThisConversation:
         serve_mikan(factory)
         factory.ai_.replies = [
             call("search_mikan", term=TERM),
-            call("subscribe_mikan", bangumi=4009, subgroup=370, media=KIMI_ID),
+            call(
+                "subscribe_mikan",
+                reason="The user asked for it.",
+                bangumi=4009,
+                subgroup=370,
+                media=KIMI_ID,
+            ),
             says("Done."),
         ]
 
@@ -305,7 +323,13 @@ class TestUndo:
         streamed = mikan_flow(client, roots, factory)
         cid = streamed[0]["conversation_id"]
         factory.ai_.replies = [
-            call("subscribe_mikan", bangumi=4009, subgroup=370, media=KIMI_ID),
+            call(
+                "subscribe_mikan",
+                reason="The user asked for it.",
+                bangumi=4009,
+                subgroup=370,
+                media=KIMI_ID,
+            ),
             says("Already there."),
         ]
         say(client, "Subscribe again.", conversation=cid)
@@ -341,7 +365,13 @@ class TestSubscribeBySearchWords:
         ai_ready(client)
         factory.rss_.pages[nyaa.search_url(TERM)] = NYAA
         factory.ai_.replies = [
-            call("subscribe_search_feed", site="nyaa", term=TERM, media=KIMI_ID),
+            call(
+                "subscribe_search_feed",
+                reason="The user asked for it.",
+                site="nyaa",
+                term=TERM,
+                media=KIMI_ID,
+            ),
             says("Subscribed on Nyaa."),
         ]
 

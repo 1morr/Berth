@@ -113,9 +113,11 @@ Berth is a **public beta**.
   it finds the missing episodes, searches for them and submits one, each drawn as a card, and it can only submit
   a release it found in the same conversation that fits the title and the episodes asked for. It subscribes a
   title to a Mikan fansub group or a Nyaa / acg.rip search feed, and a subscription card can undo it. Adding an
-  indexer or deleting a title's downloads waits on a confirmation card until you press Confirm. Berth works the
+  indexer or deleting a title's downloads waits on a confirmation card until you press Confirm. The AI activity
+  page lists every change it made, with its reason, and undoes the ones that can be undone. Berth works the
   same without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
-  [the assistant](docs/guide/setup-wizard.md#the-assistant-side-panel).
+  [the assistant](docs/guide/setup-wizard.md#the-assistant-side-panel) and
+  [AI activity](docs/guide/setup-wizard.md#ai-activity).
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.
 - **Don't expose Berth directly to the internet.** Reach it over your LAN or a VPN.

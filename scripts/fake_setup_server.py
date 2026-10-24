@@ -2203,6 +2203,11 @@ def _release_step(
                 source_id=row["source_id"],
                 media=found["media"],
                 route=route,
+                reason=(
+                    "這一筆符合，而且正是缺的那幾集。"
+                    if chinese
+                    else "This release matches and covers the missing episodes."
+                ),
             )
         case "submit_search_result" if content.get("status") == "refused":
             return (
@@ -2254,7 +2259,15 @@ def _subscribe_step(
                 return "這個番組沒有字幕組。" if chinese else "Nobody releases this bangumi."
             group = next((g for g in groups if g["name"] == "LoliHouse"), groups[0])
             return _demo_call(
-                "subscribe_mikan", bangumi=found["bangumi"], subgroup=group["id"], media=page
+                "subscribe_mikan",
+                bangumi=found["bangumi"],
+                subgroup=group["id"],
+                media=page,
+                reason=(
+                    f"你要訂閱這部；{group['name']} 有在出這個番組。"
+                    if chinese
+                    else f"You asked to subscribe; {group['name']} releases this bangumi."
+                ),
             )
         case "subscribe_mikan" if found.get("reason") == "route_needed" and found.get("detail"):
             # 真的模型會問人送進哪一條；演練直接挑名字是 Anime 的那一條（沒有就第一條）再叫一次。

@@ -1191,6 +1191,7 @@ const zhHant = {
     discover: '探索',
     inventory: '媒體庫',
     jobs: '下載',
+    aiActivity: 'AI 活動',
     issues: '待處理',
     review: '審核',
     health: '健康',
@@ -3997,6 +3998,7 @@ const zhHant = {
     label: '助理',
     log: '對話內容',
     toggle: '助理',
+    activity: '活動',
     you: '你',
     // 使用者那一句底下：說這句話時在看哪一部（M5 票 12，模型拿到的就是它）。
     onPage: '在《{{title}}》的頁面上說的',
@@ -4136,6 +4138,7 @@ const zhHant = {
         failed: '沒成',
       },
       reason: 'AI 的理由',
+      undone: '這一筆後來撤銷了。',
       confirm: {
         add_indexer: '確認加入',
         delete_downloads: '確認刪除',
@@ -4284,6 +4287,37 @@ const zhHant = {
           lost: 'Jellyfin 找不到它',
         },
       },
+    },
+  },
+  // AI 活動頁（M5 票 14，`pages/AiActivityPage.tsx`）。
+  aiActivity: {
+    title: 'AI 活動',
+    intro: {
+      user: '助理替人做過的每一件事。撤得了的就在這裡撤。',
+      admin: '助理替人做過的每一件事（所有人的）。撤得了的就在這裡撤。',
+    },
+    readFailed: '讀不到 AI 活動。',
+    empty: {
+      label: '還沒有',
+      user: 'AI 還沒替你做過事。',
+      admin: 'AI 還沒替任何人做過事。',
+      how: '在側面板叫助理送單或訂閱，做過的事會列在這裡。',
+    },
+    truncated: '更早的不列在這裡。',
+    viaAi: 'AI 代 {{name}} 做的',
+    viaConfirmed: '{{name}} 確認的',
+    from: '出自對話「{{title}}」',
+    // total 是加總過的數字，或不知道時的「—」。
+    tokens: '這次回覆 {{total}} tokens',
+    reason: 'AI 的理由',
+    input: '輸入',
+    undone: '已撤銷',
+    noInverse: '這一件做了就撤不回。',
+    notAllowed: '只有管理員撤得了這一筆。',
+    // 沒有專屬文案的型別（確認過的可逆提案之類）。
+    undo: {
+      label: '撤銷',
+      confirm: '撤銷這一筆：把它做過的事撤回。',
     },
   },
   // 清單的上一頁 / 下一頁（`components/Pager`）：媒體庫的牆與下載列表共用。
@@ -5523,6 +5557,7 @@ const en: Translations<typeof zhHant> = {
     discover: 'Discover',
     inventory: 'Library',
     jobs: 'Downloads',
+    aiActivity: 'AI activity',
     issues: 'Issues',
     review: 'Review',
     health: 'Health',
@@ -8205,6 +8240,7 @@ const en: Translations<typeof zhHant> = {
     label: 'Assistant',
     log: 'Conversation',
     toggle: 'Assistant',
+    activity: 'Activity',
     you: 'You',
     onPage: 'Said on the page of {{title}}',
     speaker: 'Assistant',
@@ -8342,6 +8378,7 @@ const en: Translations<typeof zhHant> = {
         failed: 'Failed',
       },
       reason: 'AI’s reason',
+      undone: 'This was undone later.',
       confirm: {
         add_indexer: 'Confirm adding',
         delete_downloads: 'Confirm deleting',
@@ -8491,6 +8528,35 @@ const en: Translations<typeof zhHant> = {
           lost: 'Jellyfin cannot find it',
         },
       },
+    },
+  },
+  aiActivity: {
+    title: 'AI activity',
+    intro: {
+      user: 'Everything the assistant has done for people. Undo what can be undone, right here.',
+      admin:
+        'Everything the assistant has done for people, everyone’s included. Undo what can be undone, right here.',
+    },
+    readFailed: 'Could not read the AI activity.',
+    empty: {
+      label: 'Nothing yet',
+      user: 'The assistant has not done anything for you yet.',
+      admin: 'The assistant has not done anything for anyone yet.',
+      how: 'Ask it in the side panel to submit a release or subscribe to a feed, and what it does is listed here.',
+    },
+    truncated: 'Older entries are not listed here.',
+    viaAi: 'Done by the AI for {{name}}',
+    viaConfirmed: 'Confirmed by {{name}}',
+    from: 'From the conversation “{{title}}”',
+    tokens: '{{total}} tokens in this reply',
+    reason: 'AI’s reason',
+    input: 'Input',
+    undone: 'Undone',
+    noInverse: 'This one cannot be undone.',
+    notAllowed: 'Only an admin can undo this one.',
+    undo: {
+      label: 'Undo',
+      confirm: 'Undo this one: take back what it did.',
     },
   },
   pager: {

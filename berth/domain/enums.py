@@ -1945,6 +1945,27 @@ class UndoRefusal(StrEnum):
     NOT_ALLOWED = "not_allowed"
 
 
+class ActivityVia(StrEnum):
+    """AI 活動頁的一列是怎麼做成的（M5 票 14）。"""
+
+    #: AI 直接做的（可逆的工具，`ai:<user id>`）。
+    AI = "ai"
+    #: AI 提出、人按了確認卡、以他執行的（Proposal，M5 票 10）。
+    CONFIRMED = "confirmed"
+
+
+class ActivityUndo(StrEnum):
+    """AI 活動頁的一列撤不撤得了（M5 票 14）。撤不了的說得出為什麼。"""
+
+    UNDOABLE = "undoable"
+    #: 已經撤銷過了。
+    UNDONE = "undone"
+    #: 那個工具沒有反向命令（不可逆的確認卡）。
+    NO_INVERSE = "no_inverse"
+    #: 有反向命令，但看的人的角色按不到（撤銷送單是刪 Job，只有管理員）。
+    NOT_ALLOWED = "not_allowed"
+
+
 class AssistantRefusal(StrEnum):
     """對話的命令不做的理由（`services.conversations`）。"""
 

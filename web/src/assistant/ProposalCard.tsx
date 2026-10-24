@@ -20,6 +20,7 @@ import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL } from '../components/signal'
 import { formatSize } from '../media/searchResult'
 import { ProposalsContext } from './proposals'
+import { ToolCallContext } from './toolCall'
 
 /**
  * 確認卡（M5 票 10，CONTEXT.md 的 Proposal，DESIGN.md〈助理側面板〉的確認卡）：不可逆的工具 AI 不能自己做，
@@ -54,6 +55,8 @@ const CONFIRMS = {
 export function ProposalCardView({ result }: { result: ProposalCard }) {
   const { t } = useTranslation()
   const { cards, replying, refresh } = useContext(ProposalsContext)
+  // 確認過、可逆的卡（被降級的加 Feed）可以在 AI 活動頁撤銷（M5 票 14）：撤銷記在這張卡的那一份結果上。
+  const { undone } = useContext(ToolCallContext)
   const card = cards.get(result.id) ?? result
   const id = useId()
   const [pressing, setPressing] = useState<'confirm' | 'reject' | null>(null)
@@ -132,6 +135,7 @@ export function ProposalCardView({ result }: { result: ProposalCard }) {
         {/* 一直掛著：按下去之後的結果與被拒的理由由它念（跟著結果才掛上去的 live region 多數閱讀器不念）。 */}
         <div role="status" className="text-xs break-words text-ink empty:hidden">
           {!waiting && <Outcome card={card} />}
+          {undone !== null && <p>{t('assistant.proposal.undone')}</p>}
           {problem}
         </div>
       </div>

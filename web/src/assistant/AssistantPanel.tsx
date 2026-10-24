@@ -7,7 +7,6 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from 'react'
-import type { TFunction } from 'i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +31,7 @@ import { Timestamp } from '../components/Timestamp'
 import { ProposalsContext, type Proposals } from './proposals'
 import { reasonText } from './refusals'
 import { ResultCard } from './ResultCard'
+import { toolName } from './toolNames'
 import { ToolCallContext } from './toolCall'
 import { blocksOf, withChunk, type Block, type Item, type Pending } from './transcript'
 
@@ -46,17 +46,31 @@ import { blocksOf, withChunk, type Block, type Item, type Pending } from './tran
 /** 面板的 id：頁首的「助理」鍵以 `aria-controls` 指著它。 */
 export const PANEL_ID = 'assistant'
 
+/** 面板並排的寬度（Tailwind 的 `lg`）：以下面板取代頁面。 */
+const WIDE = '(min-width: 64rem)'
+
 type Selection = { kind: 'latest' } | { kind: 'new' } | { kind: 'id'; id: number }
+
+/** 頁面請求面板顯示某一則對話（AI 活動頁，M5 票 14）。`nonce` 讓同一則被連續請求兩次也算兩次。 */
+export interface ConversationRequest {
+  id: number
+  nonce: number
+}
 
 export function AssistantPanel({
   admin,
   focusOnMount,
   onClose,
+  request = null,
+  onRequestHandled,
 }: {
   admin: boolean
   /** 使用者按「助理」打開的：焦點進輸入框。重整時照記憶打開的不搶焦點。 */
   focusOnMount: boolean
   onClose: () => void
+  request?: ConversationRequest | null
+  /** 請求接下了：`AppShell` 清掉它，之後關了再開不會又跳回那一則。 */
+  onRequestHandled?: () => void
 }) {
   const { t } = useTranslation()
   const status = useQuery(assistantStatusQueryOptions)
@@ -73,6 +87,20 @@ export function AssistantPanel({
     focused.current = true
     input.current.focus()
   }, [focusOnMount, ready])
+
+  // 頁面要看某一則：換到那一則、回到對話（在 render 裡接，不在 effect 裡 setState）。
+  const [seen, setSeen] = useState<ConversationRequest | null>(null)
+  if (request !== null && request !== seen) {
+    setSeen(request)
+    setSelection({ kind: 'id', id: request.id })
+    setView('chat')
+  }
+  // 焦點進輸入框（按開的焦點進面板，同「助理」鍵）；接下之後 `AppShell` 清掉請求。
+  useEffect(() => {
+    if (request === null) return
+    input.current?.focus()
+    onRequestHandled?.()
+  }, [request, onRequestHandled])
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
@@ -93,6 +121,16 @@ export function AssistantPanel({
         <h2 className="label mr-auto bg-deck text-ink">{t('assistant.label')}</h2>
         {ready && (
           <>
+            <Link
+              to="/ai-activity"
+              className={COMPACT_BUTTON}
+              // `lg` 以下面板取代頁面：不收起面板就換了一頁卻看不到。
+              onClick={() => {
+                if (!window.matchMedia(WIDE).matches) onClose()
+              }}
+            >
+              {t('assistant.activity')}
+            </Link>
             <button
               type="button"
               className={COMPACT_BUTTON}
@@ -495,33 +533,6 @@ const WRITE_LINES = {
   done: 'assistant.tools.write.done',
   refused: 'assistant.tools.write.refused',
 } as const
-
-/**
- * 工具在畫面上的名字：一個登記的工具一格（後端 `services/tools.py`）。沒有文案的工具（後端先加了）
- * 退回「工具」，不印出 key。
- */
-const TOOL_NAMES = {
-  recent_imports: 'assistant.tools.recent_imports',
-  missing_episodes: 'assistant.tools.missing_episodes',
-  search_indexers: 'assistant.tools.search_indexers',
-  submit_search_result: 'assistant.tools.submit_search_result',
-  add_indexer: 'assistant.tools.add_indexer',
-  delete_downloads: 'assistant.tools.delete_downloads',
-  search_mikan: 'assistant.tools.search_mikan',
-  mikan_subgroups: 'assistant.tools.mikan_subgroups',
-  subscribe_mikan: 'assistant.tools.subscribe_mikan',
-  subscribe_search_feed: 'assistant.tools.subscribe_search_feed',
-  add_feed: 'assistant.tools.add_feed',
-} as const
-
-type ToolNameKey = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES]
-
-function toolName(t: TFunction, name: string): string {
-  const key: ToolNameKey | undefined = Object.hasOwn(TOOL_NAMES, name)
-    ? TOOL_NAMES[name as keyof typeof TOOL_NAMES]
-    : undefined
-  return key ? t(key) : t('assistant.tools.other')
-}
 
 /** 等一下就好的（Berth 自己會好、或使用者再送一次）是 `assigned`；要管理員改設定的是 `blocked`。 */
 const WAITABLE: ReadonlySet<NoticePart['failure']> = new Set([

@@ -43,7 +43,7 @@ from berth.services import (
 )
 from berth.services.jobs import JobRejectedError
 from berth.services.notify import collapse_spans
-from berth.services.registry import NextStep, ProposalInput, Registry, Tool, ToolContext, Undo
+from berth.services.registry import NextStep, Registry, Tool, ToolContext, Undo, WriteInput
 from berth.services.submit_guard import (
     SEARCH_TOOL,
     RouteOption,
@@ -147,7 +147,7 @@ async def _recent_imports(context: ToolContext, given: RecentImportsInput) -> Re
 # --- 加索引站（要人按，M5 票 10）---------------------------------------------------
 
 
-class AddIndexerInput(ProposalInput):
+class AddIndexerInput(WriteInput):
     site: str = Field(
         min_length=1,
         max_length=200,
@@ -203,7 +203,7 @@ async def _add_indexer(
 # --- 刪 complete（要人按，M5 票 10）-------------------------------------------------
 
 
-class DeleteDownloadsInput(ProposalInput):
+class DeleteDownloadsInput(WriteInput):
     media: str = Field(
         pattern=r"^(tv|movie):[0-9]+$",
         description="The work's id as Berth gives it, e.g. tv:209867 or movie:550.",
@@ -488,7 +488,7 @@ def _result_row(
 # --- 送單 ---------------------------------------------------------------------
 
 
-class SubmitSearchResultInput(BaseModel):
+class SubmitSearchResultInput(WriteInput):
     source_id: str = Field(
         min_length=1,
         description="The source_id of a row from a search_indexers result in this conversation.",
@@ -741,7 +741,7 @@ ROUTE_FIELD = Field(
 )
 
 
-class SubscribeMikanInput(BaseModel):
+class SubscribeMikanInput(WriteInput):
     bangumi: int = Field(ge=1, description="A bangumi id from a search_mikan result.")
     subgroup: int = Field(
         ge=0, description="A subgroup id from a mikan_subgroups result for that bangumi."
@@ -792,7 +792,7 @@ class SearchSite(StrEnum):
     ACGRIP = "acgrip"
 
 
-class SubscribeSearchInput(BaseModel):
+class SubscribeSearchInput(WriteInput):
     site: SearchSite
     term: str = Field(
         min_length=1,
@@ -844,7 +844,7 @@ UNSUBSCRIBE = Undo(
 # --- 以網址加 Feed（M5 票 11）--------------------------------------------------------
 
 
-class AddFeedInput(ProposalInput):
+class AddFeedInput(WriteInput):
     url: str = Field(
         min_length=1,
         max_length=2000,

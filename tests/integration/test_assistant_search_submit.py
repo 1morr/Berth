@@ -143,7 +143,13 @@ def submits(pick: Callable[[dict[str, Any]], dict[str, Any]]) -> Callable[[ChatR
         found = last_result(request)
         route = found["route"] or next(r["id"] for r in found["routes"] if r["slug"] == "tv")
         row = pick(found)
-        return call("submit_search_result", source_id=row["source_id"], media=SPY_ID, route=route)
+        return call(
+            "submit_search_result",
+            reason="The user asked for it.",
+            source_id=row["source_id"],
+            media=SPY_ID,
+            route=route,
+        )
 
     return reply
 
@@ -362,7 +368,11 @@ class TestInjectedReleases:
     def test_an_id_written_by_the_model_is_refused(
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
-        refusal = self.refused(client, factory, submits(lambda _: {"source_id": "made-up"}))
+        refusal = self.refused(
+            client,
+            factory,
+            submits(lambda _: {"source_id": "made-up", "reason": "The user asked for it."}),
+        )
 
         assert refusal["reason"] == "not_from_this_conversation"
 
@@ -428,7 +438,12 @@ class TestRoute:
 
         def unrouted(request: ChatRequest) -> TurnEnded:
             row = first_sendable(last_result(request))
-            return call("submit_search_result", source_id=row["source_id"], media=SPY_ID)
+            return call(
+                "submit_search_result",
+                reason="The user asked for it.",
+                source_id=row["source_id"],
+                media=SPY_ID,
+            )
 
         factory.ai_.replies = [
             call("search_indexers", media=SPY_ID, season=2),

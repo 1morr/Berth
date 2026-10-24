@@ -39,6 +39,7 @@ async def call_model(
     origin: AiCallOrigin,
     user_id: int | None,
     conversation_id: int | None = None,
+    message_id: int | None = None,
     forward: Callable[[StreamEvent], None] | None = None,
 ) -> TurnEnded:
     """送一輪、等它講完，記一列 `ai_calls`。沒成是 `AiProviderError`（那一列照樣寫了）。
@@ -64,6 +65,7 @@ async def call_model(
                 origin=origin,
                 user_id=user_id,
                 conversation_id=conversation_id,
+                message_id=message_id,
                 failure=failure,
             )
         )
