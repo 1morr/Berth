@@ -589,6 +589,19 @@ describe('開與關', () => {
     expect(within(again).getByRole('textbox')).toHaveFocus()
   })
 
+  it('歷史清單開著時收起，再打開回到對話那一塊', async () => {
+    render()
+    const panel = await openPanel()
+    await userEvent.click(within(panel).getByRole('button', { name: '歷史' }))
+    expect(within(panel).getByRole('heading', { name: '對話' })).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: '關閉' }))
+    const again = await openPanel()
+
+    expect(within(again).queryByRole('heading', { name: '對話' })).not.toBeInTheDocument()
+    expect(within(again).getByRole('textbox')).toBeVisible()
+  })
+
   it('換頁時面板不重建：字還在，是同一個面板（M5 票 15b）', async () => {
     stubApi({
       'GET /api/health': { body: HEALTHY },

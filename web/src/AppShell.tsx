@@ -31,8 +31,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const panel = open && me.data !== undefined
   // 開過一次之後面板一直掛著，收起只是藏起來（M5 票 15b）：打了還沒送出的字、串流到一半的回覆、正在看的那則對話
   // 收起再打開都還在——窄版點了面板裡的連結會收起它（M5 票 15），回來時字不能不見。
-  const [kept, setKept] = useState(open)
-  if (open && !kept) setKept(true)
+  const [everOpened, setEverOpened] = useState(open)
+  if (open && !everOpened) setEverOpened(true)
   // 頁面要面板顯示某一則對話（AI 活動頁）：面板接下就清掉。
   const [request, setRequest] = useState<ConversationRequest | null>(null)
   const control = useMemo(
@@ -107,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {children}
           </main>
-          {kept && me.data && (
+          {everOpened && me.data && (
             <AssistantPanel
               open={open}
               admin={me.data.role === 'admin'}

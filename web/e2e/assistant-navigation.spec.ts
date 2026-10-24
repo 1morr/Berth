@@ -1,8 +1,8 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { signIn } from './login.ts'
 import { reopenOnNarrow } from './panel.ts'
-import { narrow, shot } from './shot.ts'
+import { shot } from './shot.ts'
 
 // `assistant`（同 `assistant.spec.ts`）：換頁時側面板不重建（M5 票 15b）。最常見的換頁是點卡片裡的作品連結
 // ——面板最主要的用法：桌機上邊開著面板邊看那一部；窄版上連結會收起面板（M5 票 15），回來再打開。
@@ -11,25 +11,16 @@ import { narrow, shot } from './shot.ts'
  * 點了作品連結之後**等那一頁真的畫出來**才斷言：網址一換就問的話，舊的面板還沒被換掉，讀到的是換頁前的那一份
  * （第一版的 repro 在 1280 因此是假的綠）。窄版的面板開著時頁面藏著，先等頁面、再打開面板。
  */
-async function landOnWork(page: import('@playwright/test').Page) {
+async function landOnWork(page: Page) {
   await expect(page).toHaveURL(/\/media\/tv(:|%3A)209867$/)
-  if (narrow(page)) {
-    await expect(page.locator('main#main').getByRole('heading', { level: 1 })).toHaveText(
-      // 演練的 TMDB 替身只認得 SPY×FAMILY：這一部的作品頁印 id。換頁之前 `/weekly` 的 h1 是「週報」。
-      'tv:209867',
-    )
-  }
+  // 演練的 TMDB 替身只認得 SPY×FAMILY：這一部的作品頁印 id。換頁之前 `/weekly` 的 h1 是「週報」。窄版的面板
+  // 被連結收起了，桌機的面板並排，兩種都看得到這一頁的 h1。
+  await expect(page.locator('main#main').getByRole('heading', { level: 1 })).toHaveText('tv:209867')
   await reopenOnNarrow(page)
-  if (!narrow(page)) {
-    await expect(page.locator('main#main').getByRole('heading', { level: 1 })).toHaveText(
-      // 演練的 TMDB 替身只認得 SPY×FAMILY：這一部的作品頁印 id。換頁之前 `/weekly` 的 h1 是「週報」。
-      'tv:209867',
-    )
-  }
 }
 
 /** 問一次「最近入庫」，拿到一張帶作品連結的卡。 */
-async function withRecentImports(page: import('@playwright/test').Page) {
+async function withRecentImports(page: Page) {
   await signIn(page, '/weekly')
   await page.getByRole('button', { name: '助理' }).click()
   const panel = page.getByRole('complementary', { name: '助理' })

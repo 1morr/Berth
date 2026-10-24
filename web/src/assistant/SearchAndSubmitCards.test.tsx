@@ -393,6 +393,23 @@ describe('送單卡', () => {
     expect(await within(card).findByText('下載中', {}, { timeout: 3000 })).toBeInTheDocument()
   })
 
+  it('面板收起時推播斷開、打開時重連（收起只是藏起來，連線不跟著常駐，M5 票 15b）', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    render(said({ tool: 'submit_search_result', type: 'SubmittedJob', result: SUBMITTED }), {
+      routes: { [`GET /api/jobs/${HASH}`]: { body: job() } },
+    })
+    const panel = await openPanel()
+    await within(panel).findByRole('region', { name: '送單' })
+    const [first] = FakeEventSource.opened
+    expect(first.closed).toBe(false)
+
+    await userEvent.click(within(panel).getByRole('button', { name: '關閉' }))
+    expect(first.closed).toBe(true)
+
+    await openPanel()
+    expect(FakeEventSource.opened.filter((source) => !source.closed)).toHaveLength(1)
+  })
+
   it('管理員在入庫前撤得掉：經過對話走反向命令，之後卡片說撤銷了', async () => {
     let undone = false
     const stub = render(
