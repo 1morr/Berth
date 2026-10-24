@@ -1,4 +1,4 @@
-"""週報的端點（M4 票 131，plan §11.5〈巡檢〉）。只有管理員進得來（`api/gate.py` 的
+"""週報的端點（M4 票 131，plan §11.5〈巡檢〉）。只有管理員進得來（`services/access.py` 的
 `ADMIN_PREFIXES`）。
 
 只有讀：週報由 `sweeper` 每週一產生（`services.weekly`），這裡沒有「現在產生一份」的端點。

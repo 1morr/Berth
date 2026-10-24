@@ -21,12 +21,13 @@ from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.adapters.prowlarr.fake import FakeProwlarrClient
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.api import gate
 from berth.api.deps import get_client_factory
-from berth.api.gate import CSRF_HEADER, SESSION_COOKIE, Access, access_of
+from berth.api.gate import CSRF_HEADER, SESSION_COOKIE
 from berth.config import Config
 from berth.main import create_app
 from berth.models import JellyfinSettings, SetupSettings
+from berth.services import access
+from berth.services.access import Access, access_of
 from berth.services.settings import read_settings, write_settings
 from tests.endpoints import api_endpoints
 from tests.integration.arrange import own
@@ -631,21 +632,23 @@ class TestTheSurfaceCheckItself:
     def test_dropping_a_prefix_from_the_gate_is_caught(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        kept = tuple(prefix for prefix in gate.ADMIN_PREFIXES if prefix != "/files")
-        monkeypatch.setattr(gate, "ADMIN_PREFIXES", kept)
+        kept = tuple(prefix for prefix in access.ADMIN_PREFIXES if prefix != "/files")
+        monkeypatch.setattr(access, "ADMIN_PREFIXES", kept)
 
         assert misclassified(ACCESS) == {("POST", "/files/rematch"): Access.SIGNED_IN}
 
     def test_reordering_the_gate_changes_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(gate, "ADMIN_PREFIXES", tuple(reversed(gate.ADMIN_PREFIXES)))
-        monkeypatch.setattr(gate, "ADMIN_ROUTES", tuple(reversed(gate.ADMIN_ROUTES)))
+        monkeypatch.setattr(access, "ADMIN_PREFIXES", tuple(reversed(access.ADMIN_PREFIXES)))
+        monkeypatch.setattr(access, "ADMIN_ROUTES", tuple(reversed(access.ADMIN_ROUTES)))
 
         assert misclassified(ACCESS) == {}
 
     def test_a_signed_in_route_closed_by_mistake_is_caught(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(gate, "ADMIN_ROUTES", (*gate.ADMIN_ROUTES, ("POST", "/jobs/*/retry")))
+        monkeypatch.setattr(
+            access, "ADMIN_ROUTES", (*access.ADMIN_ROUTES, ("POST", "/jobs/*/retry"))
+        )
 
         assert misclassified(ACCESS) == {("POST", "/jobs/*/retry"): Access.ADMIN}
 

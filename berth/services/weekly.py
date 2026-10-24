@@ -214,6 +214,15 @@ async def list_reports(session: AsyncSession) -> list[WeeklyLine]:
     ]
 
 
+@command(Effect.READ)
+async def recent_imports(
+    session: AsyncSession, *, since: datetime, until: datetime
+) -> tuple[ImportedWork, ...]:
+    """`[since, until)` 之間入庫了哪些作品與集（AI 的「最近入庫」，M5 票 05）。算法與週報的第一段
+    是同一份，只是時間由呼叫端給、當場算，不存。"""
+    return tuple(_imported_work(work) for work in await _imported(session, since, until))
+
+
 # --- 產生 -----------------------------------------------------------------
 
 
@@ -321,16 +330,7 @@ def _view(report: WeeklyReport) -> WeeklyView:
         first_day=first_day,
         last_day=first_day + WEEK - timedelta(days=1),
         created_at=report.created_at,
-        imported=tuple(
-            ImportedWork(
-                media=work["media"],
-                kind=MediaKind(work["kind"]) if work["kind"] else None,
-                title=work["title"],
-                title_en=work["title_en"],
-                episodes=tuple((s, a, b) for s, a, b in work["episodes"]),
-            )
-            for work in content["imported"]
-        ),
+        imported=tuple(_imported_work(work) for work in content["imported"]),
         fixed=Fixed(
             approved=fixed["approved"],
             rematched=fixed["rematched"],
@@ -343,6 +343,16 @@ def _view(report: WeeklyReport) -> WeeklyView:
             rss=waiting["rss"],
             swept=_types(waiting["swept"]),
         ),
+    )
+
+
+def _imported_work(work: dict[str, Any]) -> ImportedWork:
+    return ImportedWork(
+        media=work["media"],
+        kind=MediaKind(work["kind"]) if work["kind"] else None,
+        title=work["title"],
+        title_en=work["title_en"],
+        episodes=tuple((season, start, end) for season, start, end in work["episodes"]),
     )
 
 

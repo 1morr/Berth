@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from pydantic import TypeAdapter
+from pydantic.json_schema import models_json_schema
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
@@ -43,7 +44,9 @@ from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
 from berth.services.jobs import fail_interrupted
 from berth.services.reconcile import ReconcileRunner
+from berth.services.registry import ToolRefusal
 from berth.services.sources import SourceCache
+from berth.services.tools import REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -123,21 +126,35 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_error)
     app.include_router(api_router, prefix=API_PREFIX)
     _mount_frontend(app, resolved.web_root)
-    _document_pages(app)
+    _document_components(app)
     return app
 
 
-def _document_pages(app: FastAPI) -> None:
-    """把 `BerthPage` 放進 OpenAPI 的 components（M5 票 02）。沒有一支端點回它——它是通知裡的
-    連結指到前端的哪幾頁——所以 FastAPI 自己不會收；`pnpm gen:api` 照它產出型別，前端的
-    `berthPages.test.ts` 拿來對路由表。照 FastAPI 文件〈Extending OpenAPI〉的做法換掉
-    `app.openapi`，快取與重產仍由原本那一支管。"""
+def _document_components(app: FastAPI) -> None:
+    """把沒有端點回的型別放進 OpenAPI 的 components，`pnpm gen:api` 照它產出前端的型別。照 FastAPI
+    文件〈Extending OpenAPI〉的做法換掉 `app.openapi`，快取與重產仍由原本那一支管。
+
+    - `BerthPage`（M5 票 02）：通知裡的連結指到前端的哪幾頁，`berthPages.test.ts` 拿來對路由表。
+    - 命令登錄表每一個工具的結果型別與 `Refusal`、`NextStep`、`ToolRefusal`（M5 票 05）：經對話
+      送到前端，結果卡依它畫。巢狀的 model 一起進去；與既有的同名卻不同形時當場紅，
+      不讓一方蓋掉另一方。
+    """
     build = app.openapi
-    schema = TypeAdapter(BerthPage).json_schema()
+    pages = TypeAdapter(BerthPage).json_schema()
+    reasons = TypeAdapter(ToolRefusal).json_schema()
+    _, tools = models_json_schema(
+        [(model, "serialization") for model in REGISTRY.frontend_models()],
+        ref_template="#/components/schemas/{model}",
+    )
 
     def openapi() -> dict[str, Any]:
         document = build()
-        document.setdefault("components", {}).setdefault("schemas", {})["BerthPage"] = schema
+        schemas = document.setdefault("components", {}).setdefault("schemas", {})
+        schemas["BerthPage"] = pages
+        schemas["ToolRefusal"] = reasons
+        for name, schema in tools.get("$defs", {}).items():
+            if schemas.setdefault(name, schema) != schema:
+                raise RuntimeError(f"{name}: a tool result and an endpoint disagree on its shape")
         return document
 
     # FastAPI 文件教的就是直接指派；mypy 不讓方法被換掉。

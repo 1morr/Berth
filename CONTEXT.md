@@ -393,7 +393,7 @@ _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 _Avoid_: job（Job 是一包 torrent）, ticket
 
 **Command Registry**（命令登錄表）:
-services 命令的清單：輸入、結果型別、拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。側面板、AI 任務與 M7 的 MCP server 的工具都只從這裡來；結果型別決定 Result Card 怎麼畫。
+AI 工具的清單，**逐條登記**：命令都標了副作用，但只有登記過的才是工具（M5 票 05）。一條寫輸入、結果型別、做同一件事的那一支端點（誰拿得到照它的門禁）與怎麼呼叫命令；副作用等級（`read` / `reversible` / `irreversible`）與反向命令讀命令的標記。各模組的拒絕在這裡變成同一種，帶下一步（重試 / 交給人 / 放棄）。側面板、AI 任務與 M7 的 MCP server 的工具都只從這裡來；結果型別決定 Result Card 怎麼畫。
 _Avoid_: tool list, API list
 
 **Takeover Switch**（接管開關）:
