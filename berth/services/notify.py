@@ -68,8 +68,7 @@ from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.deeplink import (
-    MEDIA_PAGE,
-    WEEKLY_PAGE,
+    BerthPage,
     PublicUrlRejectedError,
     berth_link,
     normalized_public_url,
@@ -1065,7 +1064,7 @@ def _render(notification: Notification, language: Language, berth_url: str) -> M
     title = content["title_en"] if language is Language.EN else content["title"]
     route = content.get("route") or ""
     media = content.get("media")
-    url = berth_link(berth_url, MEDIA_PAGE.format(media_id=media)) if media else None
+    url = berth_link(berth_url, BerthPage.MEDIA.format(media_id=media)) if media else None
     return Message(
         title=text[notification.kind.value].format(title=title),
         # 「正在下載」存的是逐筆猜到的季集，在這裡才合成連續的範圍。
@@ -1141,7 +1140,7 @@ def _render_weekly(notification: Notification, language: Language, berth_url: st
     text = _TEXT[language]
     first = date.fromisoformat(content["week_of"])
     last = first + timedelta(days=6)
-    url = berth_link(berth_url, WEEKLY_PAGE.format(report_id=content["report"]))
+    url = berth_link(berth_url, BerthPage.WEEKLY.format(report_id=content["report"]))
     return Message(
         title=text["weekly"].format(first=f"{first:%m-%d}", last=f"{last:%m-%d}"),
         description=text["weekly_body"].format(

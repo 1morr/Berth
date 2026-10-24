@@ -8,9 +8,11 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePath
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from pydantic import TypeAdapter
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
@@ -35,6 +37,7 @@ from berth.pipeline import (
     Sweeper,
 )
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
+from berth.services.deeplink import BerthPage
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
@@ -120,7 +123,25 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_error)
     app.include_router(api_router, prefix=API_PREFIX)
     _mount_frontend(app, resolved.web_root)
+    _document_pages(app)
     return app
+
+
+def _document_pages(app: FastAPI) -> None:
+    """把 `BerthPage` 放進 OpenAPI 的 components（M5 票 02）。沒有一支端點回它——它是通知裡的
+    連結指到前端的哪幾頁——所以 FastAPI 自己不會收；`pnpm gen:api` 照它產出型別，前端的
+    `berthPages.test.ts` 拿來對路由表。照 FastAPI 文件〈Extending OpenAPI〉的做法換掉
+    `app.openapi`，快取與重產仍由原本那一支管。"""
+    build = app.openapi
+    schema = TypeAdapter(BerthPage).json_schema()
+
+    def openapi() -> dict[str, Any]:
+        document = build()
+        document.setdefault("components", {}).setdefault("schemas", {})["BerthPage"] = schema
+        return document
+
+    # FastAPI 文件教的就是直接指派；mypy 不讓方法被換掉。
+    app.openapi = openapi  # type: ignore[method-assign]
 
 
 def _lifespan(config: Config) -> Lifespan[FastAPI]:

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import IssueType
 from berth.services.commands import Effect, command
-from berth.services.deeplink import ISSUES_PAGE, REVIEW_PAGE, RSS_PAGE
+from berth.services.deeplink import BerthPage
 from berth.services.issues import open_issues
 from berth.services.review import queue_keys
 from berth.services.rss import unbound_series
@@ -38,10 +38,10 @@ class WaitingSource(StrEnum):
 
 
 #: 每一份清單的頁面。
-LIST_PAGE: dict[WaitingSource, str] = {
-    WaitingSource.REVIEW: REVIEW_PAGE,
-    WaitingSource.ISSUE: ISSUES_PAGE,
-    WaitingSource.RSS: RSS_PAGE,
+LIST_PAGE: dict[WaitingSource, BerthPage] = {
+    WaitingSource.REVIEW: BerthPage.REVIEW,
+    WaitingSource.ISSUE: BerthPage.ISSUES,
+    WaitingSource.RSS: BerthPage.RSS,
 }
 
 
@@ -64,12 +64,12 @@ async def waiting_now(session: AsyncSession) -> dict[str, Waiting]:
     found: dict[str, Waiting] = {}
     for kind, id_ in await queue_keys(session):
         found[f"review:{kind.value}:{id_}"] = Waiting(
-            WaitingSource.REVIEW, id_, f"{REVIEW_PAGE}#{kind.value}-{id_}"
+            WaitingSource.REVIEW, id_, f"{BerthPage.REVIEW}#{kind.value}-{id_}"
         )
     for id_, issue_type in await open_issues(session):
         found[f"issue:{id_}"] = Waiting(
-            WaitingSource.ISSUE, id_, f"{ISSUES_PAGE}#issue-{id_}", issue_type=issue_type
+            WaitingSource.ISSUE, id_, f"{BerthPage.ISSUES}#issue-{id_}", issue_type=issue_type
         )
     for id_ in await unbound_series(session):
-        found[f"rss:{id_}"] = Waiting(WaitingSource.RSS, id_, f"{RSS_PAGE}#series-{id_}")
+        found[f"rss:{id_}"] = Waiting(WaitingSource.RSS, id_, f"{BerthPage.RSS}#series-{id_}")
     return found
