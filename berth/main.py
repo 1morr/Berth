@@ -48,6 +48,7 @@ from berth.services.proposals import result_models
 from berth.services.reconcile import ReconcileRunner
 from berth.services.registry import ToolRefusal
 from berth.services.sources import SourceCache
+from berth.services.subscribe_guard import SubscribeRefusal
 from berth.services.tools import REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -145,16 +146,20 @@ def _document_components(app: FastAPI) -> None:
       卻沒有卡時 `tsc` 紅。
     - 確認卡上「會發生什麼」的型別與它們的名字 `ProposalPreviewType`（M5 票 10）：同一個道理，
       要人按的工具多一種預覽，前端就要多畫一種。
+    - 撤銷回的型別（M5 票 11，`UndonePart.result`）：卡上說撤掉了什麼。`SubscribeRefusal`（同票）：
+      訂閱的防線的理由只出現在 `Refusal.reason` 那個字串裡，沒有欄位帶著它，前端要它說人話。
     """
     build = app.openapi
     pages = TypeAdapter(BerthPage).json_schema()
     reasons = TypeAdapter(ToolRefusal).json_schema()
+    subscribe_reasons = TypeAdapter(SubscribeRefusal).json_schema()
     results = result_models(REGISTRY)
     previews = REGISTRY.preview_models()
+    undos = REGISTRY.undo_models()
     result_types = {"type": "string", "enum": [model.__name__ for model in results]}
     preview_types = {"type": "string", "enum": [model.__name__ for model in previews]}
     _, tools = models_json_schema(
-        [(model, "serialization") for model in (*results, *previews)],
+        [(model, "serialization") for model in (*results, *previews, *undos)],
         ref_template="#/components/schemas/{model}",
     )
 
@@ -163,6 +168,7 @@ def _document_components(app: FastAPI) -> None:
         schemas = document.setdefault("components", {}).setdefault("schemas", {})
         schemas["BerthPage"] = pages
         schemas["ToolRefusal"] = reasons
+        schemas["SubscribeRefusal"] = subscribe_reasons
         schemas["ToolResultType"] = result_types
         schemas["ProposalPreviewType"] = preview_types
         for name, schema in tools.get("$defs", {}).items():

@@ -68,6 +68,8 @@ _STATUS: dict[JobRefusal, int] = {
     JobRefusal.CLIENT_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
     # 還在下載、還在入庫的那一筆是**現在**不能從頭再來，等它停下來同一個請求就會成功。
     JobRefusal.NOT_REIMPORTABLE: status.HTTP_409_CONFLICT,
+    # 只有工具的撤銷會說（M5 票 11）；端點本身不丟它，表要涵蓋整個封閉集合。
+    JobRefusal.NOT_UNDOABLE: status.HTTP_409_CONFLICT,
     # 那一包不在 complete 裡了：請求本身沒錯，是磁碟上的事實變了（brief §9.3）。
     JobRefusal.CONTENT_MISSING: status.HTTP_409_CONFLICT,
     # 另一個分頁先刪了、背景迴圈先推進了：重新看一次那一筆，同一個請求可能就成立。

@@ -90,7 +90,7 @@ logger = logging.getLogger(__name__)
 RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
 
 #: 送單撤得回來的狀態（M5 票 12，AI 送單的結果卡）：送出去了、還沒下載完，媒體庫與 complete 裡都還
-#: 沒有它的東西，撤銷（`deletion.delete_job`：移除 torrent、刪下載下來的檔、清紀錄）不會碰到已經
+#: 沒有它的東西，撤銷（`deletion.withdraw_job`：移除 torrent、刪下載下來的檔、清紀錄）不會碰到已經
 #: 看得了的檔案。`requested` 不在：送單還在打 qBittorrent，那一刻握著鎖。下載完（`completed`）
 #: 之後規劃器隨時會接手入庫，要刪得去 Job 頁看清楚刪的範圍。
 UNDOABLE = frozenset(

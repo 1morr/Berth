@@ -66,6 +66,7 @@ from berth.services.conversations import (
     StoredPart,
     ToolCallPart,
     ToolResultPart,
+    UndonePart,
     UserText,
     append_message,
     messages_of,
@@ -81,6 +82,7 @@ from berth.services.registry import NextStep, Refusal, Registry, Tool, ToolConte
 from berth.services.settings import read_settings
 from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY
+from berth.services.undo import undo
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +217,11 @@ class AssistantRuns:
     def replying(self, conversation_id: int) -> bool:
         return conversation_id in self._active
 
+    @property
+    def registry(self) -> Registry:
+        """這幾個回覆用的那一份登錄表：側面板問「有哪些工具、哪幾個會改東西」讀它（M5 票 11）。"""
+        return self._registry
+
     # 花掉的 tokens 收不回來；工具裡的寫入各自標著（`proposals.dispatch`、`Registry.run`）。
     @command(Effect.IRREVERSIBLE)
     async def send(
@@ -295,6 +302,39 @@ class AssistantRuns:
             proposal_id, user, lambda context: proposals.reject(proposal_id, context)
         )
 
+    # 撤銷呼叫的是各工具的反向命令（`services.undo`）。
+    @command(Effect.IRREVERSIBLE)
+    async def undo(
+        self, conversation_id: int, message_id: int, call_id: str, *, user: AuthenticatedUser
+    ) -> UndonePart:
+        """按下結果卡上的「撤銷」：以這個人執行那個工具的反向命令（`services.undo.undo`）。同按確認卡，
+        撤銷那一則也要佔住對話；回覆還在跑時是 `busy`。"""
+        if self.replying(conversation_id):
+            raise AssistantRefusedError(AssistantRefusal.BUSY, str(conversation_id))
+        self._active.add(conversation_id)
+        try:
+            return await undo(
+                self._registry,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                call_id=call_id,
+                context=self._context(user, conversation_id),
+            )
+        finally:
+            self._active.discard(conversation_id)
+
+    def _context(self, user: AuthenticatedUser, conversation_id: int | None) -> ToolContext:
+        """人按的（確認卡、撤銷）：以他本人執行。"""
+        return ToolContext(
+            sessions=self._sessions,
+            clients=self._clients,
+            sources=self._sources,
+            user=user,
+            now=self._now(),
+            conversation_id=conversation_id,
+            confirmed=True,
+        )
+
     async def _deciding(
         self,
         proposal_id: int,
@@ -310,17 +350,7 @@ class AssistantRuns:
                 raise AssistantRefusedError(AssistantRefusal.BUSY, str(cid))
             self._active.add(cid)
         try:
-            return await decide(
-                ToolContext(
-                    sessions=self._sessions,
-                    clients=self._clients,
-                    sources=self._sources,
-                    user=user,
-                    now=self._now(),
-                    conversation_id=cid,
-                    confirmed=True,
-                )
-            )
+            return await decide(self._context(user, cid))
         finally:
             if cid is not None:
                 self._active.discard(cid)

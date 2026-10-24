@@ -60,6 +60,19 @@ export type SubmitRefusal = Schemas['SubmitRefusal']
 
 export type SubmittedJob = Schemas['SubmittedJob']
 
+/** 訂閱的結果卡（M5 票 11）：Feed 與它帶到的 RSS Series。三個訂閱工具同一種。 */
+export type Subscribed = Schemas['Subscribed']
+
+/** AI 訂閱不了的理由（後端 `services/subscribe_guard.SubscribeRefusal`）。 */
+export type SubscribeRefusal = Schemas['SubscribeRefusal']
+
+/** 有人在結果卡上撤銷了一次工具呼叫（M5 票 11）：存在對話裡，也是撤銷端點的回應。 */
+export type UndonePart = Schemas['UndonePart']
+
+export type Unsubscribed = Schemas['Unsubscribed']
+
+export type UndoRefusal = Schemas['UndoRefusal']
+
 /** 使用者送出那句話時正在看的作品（M5 票 12）。 */
 export type PagePart = Schemas['PagePart']
 
@@ -77,6 +90,8 @@ export type ProposalPreviews = { [K in ProposalPreviewType]: Schemas[K] }
 export type IndexerAddition = Schemas['IndexerAddition']
 
 export type DownloadsDeletion = Schemas['DownloadsDeletion']
+
+export type FeedAddition = Schemas['FeedAddition']
 
 export type ProposalRefusal = Schemas['ProposalRefusal']
 
@@ -119,6 +134,34 @@ export function confirmProposal(id: number): Promise<ProposalCard> {
 /** 按拒絕：記下來，什麼都不做。 */
 export function rejectProposal(id: number): Promise<ProposalCard> {
   return apiPost<ProposalCard>(`/proposals/${id}/reject`)
+}
+
+const UNDO_REASONS: ReasonSet<UndoRefusal> = {
+  call_missing: true,
+  not_undoable: true,
+  already_undone: true,
+  not_allowed: true,
+}
+
+/** 撤銷被拒的理由：撤銷的（找不到、撤過了、你按不到）或對話的（回覆還在跑）。認不得的是 `null`。 */
+export function undoRefusalOf(
+  error: unknown,
+): Refusal<UndoRefusal> | Refusal<AssistantRefusal> | null {
+  return parseRefusal(error, UNDO_REASONS) ?? parseRefusal(error, REASONS)
+}
+
+/**
+ * 按結果卡上的撤銷（M5 票 11）：以按的這個人走那個工具的反向命令。撤掉了的回來是那一份撤銷的結果；撤銷被拒
+ * （qBittorrent 連不上）也是 200，`result_type` 是 `Refusal`，什麼都沒記，再按一次會接著做。
+ */
+export function undoToolCall(
+  conversationId: number,
+  messageId: number,
+  callId: string,
+): Promise<UndonePart> {
+  return apiPost<UndonePart>(
+    `/conversations/${conversationId}/messages/${messageId}/tools/${encodeURIComponent(callId)}/undo`,
+  )
 }
 
 /** 認不得的理由是 `null`，畫面照請求為什麼沒成說。 */

@@ -1275,6 +1275,9 @@ class JobRefusal(StrEnum):
     #: 從頭再來，送單都還沒成的那一筆 complete 裡什麼都沒有，沒下載完就被移除的那一筆 complete 裡
     #: 只有殘件（M2 票 10）。
     NOT_REIMPORTABLE = "not_reimportable"
+    #: 撤不回了（`jobs.UNDOABLE`）：已經下載完、規劃器隨時接手入庫，或已經入庫。撤銷送單與撤銷訂閱
+    #: （M5 票 12、11）只撤還沒下載完的；要刪得去 Job 頁看清楚刪的範圍。
+    NOT_UNDOABLE = "not_undoable"
     #: 重新入庫的 Import Source（complete 裡那一包）不在了，或裡面一個檔案都沒有。
     #: 什麼都還沒動：沒有檔案可以規劃，退回 `completed` 只會得到一份空的 Plan（M2 票 10）。
     CONTENT_MISSING = "content_missing"
@@ -1911,11 +1914,13 @@ class ProposalStatus(StrEnum):
 
 
 class ProposalCause(StrEnum):
-    """為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種
-    （票 11 的網址來源）。"""
+    """為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種。"""
 
     #: 命令標著 `irreversible`（brief §14）：永遠要人。
     IRREVERSIBLE = "irreversible"
+    #: 模型直接給了一整個網址，而它不在使用者這則對話自己打的話裡（M5 票 11，brief §6.10 ②）：
+    #: 可能是搜尋結果、番組頁裡藏的指令。
+    URL_NOT_FROM_USER = "url_not_from_user"
 
 
 class ProposalRefusal(StrEnum):
@@ -1925,6 +1930,19 @@ class ProposalRefusal(StrEnum):
     PROPOSAL_MISSING = "proposal_missing"
     #: 這張卡已經有人按過了（另一個分頁、另一個管道）。
     ALREADY_DECIDED = "already_decided"
+
+
+class UndoRefusal(StrEnum):
+    """結果卡上的撤銷不做的理由（`services.undo`，M5 票 11）。"""
+
+    #: 這則對話裡沒有這一次工具呼叫的結果（或對話不是你的——那一種是 `conversation_missing`）。
+    CALL_MISSING = "call_missing"
+    #: 那個工具沒有撤銷（讀取的、要人按的），或那一次沒做成。
+    NOT_UNDOABLE = "not_undoable"
+    #: 已經撤銷過了（另一個分頁先按了）。
+    ALREADY_UNDONE = "already_undone"
+    #: 這個人的角色按不到這一個撤銷（刪 Job 只有管理員）。
+    NOT_ALLOWED = "not_allowed"
 
 
 class AssistantRefusal(StrEnum):

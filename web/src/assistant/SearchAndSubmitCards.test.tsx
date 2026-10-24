@@ -23,7 +23,18 @@ import { renderApp } from '../test/render'
 
 const ADMIN = { name: 'skipper', role: 'admin' }
 const CREW = { name: 'deckhand', role: 'user' }
-const READY: AssistantStatus = { ready: true, chat_only: false }
+/** 後端說的工具清單（M5 票 11）：送單是會改東西的工具；管理員撤得了，一般使用者撤不了（刪 Job 是 admin 的事）。 */
+function ready(undoable: boolean): AssistantStatus {
+  return {
+    ready: true,
+    chat_only: false,
+    tools: [
+      { name: 'missing_episodes', effect: 'read', undoable: false },
+      { name: 'search_indexers', effect: 'read', undoable: false },
+      { name: 'submit_search_result', effect: 'reversible', undoable },
+    ],
+  }
+}
 const AT = '2026-10-24T12:00:00Z'
 const SPY = 'tv:120089'
 const SPY_PATH = '/api/media/tv%3A120089'
@@ -232,11 +243,42 @@ function said(...results: { tool: string; type: string; result: object; refused?
   return value
 }
 
+const SUBMITTED_CONVERSATION = said({
+  tool: 'submit_search_result',
+  type: 'SubmittedJob',
+  result: SUBMITTED,
+})
+
+/** 有人在卡上撤銷了 `callId`：對話後面多一則（後端存成 `decision`，畫面看得到的是 `undone`）。 */
+function withUndone(conversation: Conversation, callId: string): Conversation {
+  return {
+    ...conversation,
+    messages: [
+      ...conversation.messages,
+      {
+        id: 99,
+        kind: 'decision',
+        created_at: AT,
+        parts: [
+          {
+            type: 'undone',
+            message_id: 3,
+            call_id: callId,
+            tool: 'submit_search_result',
+            result_type: 'SubmissionUndone',
+            result: { hash: HASH },
+          },
+        ],
+      },
+    ],
+  }
+}
+
 function render(conversation: Conversation, { me = ADMIN, routes = {} as StubRoutes } = {}) {
   const stub = stubApi({
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: me },
-    'GET /api/assistant': { body: READY },
+    'GET /api/assistant': { body: ready(me.role === 'admin') },
     'GET /api/conversations': { body: [{ id: 7, title: 'hi', updated_at: AT }] },
     'GET /api/conversations/7': { body: conversation },
     [`GET ${SPY_PATH}`]: { body: media() },
@@ -347,28 +389,30 @@ describe('送單卡', () => {
     expect(await within(card).findByText('下載中', {}, { timeout: 3000 })).toBeInTheDocument()
   })
 
-  it('管理員在入庫前撤得掉：移除 torrent、刪檔、清紀錄，之後說這一筆不在了', async () => {
-    let gone = false
+  it('管理員在入庫前撤得掉：經過對話走反向命令，之後卡片說撤銷了', async () => {
+    let undone = false
     const stub = render(
       said({ tool: 'submit_search_result', type: 'SubmittedJob', result: SUBMITTED }),
       {
         routes: {
-          [`GET /api/jobs/${HASH}`]: () =>
-            gone ? { status: 404, body: { detail: 'not found' } } : { body: job() },
-          [`DELETE /api/jobs/${HASH}?unlink=false&remove_torrent=true&delete_files=true&purge=true`]:
-            () => {
-              gone = true
-              return {
-                body: {
-                  links: 0,
-                  sources: 1,
-                  torrent: true,
-                  purged: true,
-                  freed: 0,
-                  unmanaged: [],
-                },
-              }
-            },
+          [`GET /api/jobs/${HASH}`]: { body: job() },
+          // 撤掉之後重讀對話：多一則撤銷，那一張卡照 call id 改成已撤銷。
+          'GET /api/conversations/7': () => ({
+            body: undone ? withUndone(SUBMITTED_CONVERSATION, 'c0') : SUBMITTED_CONVERSATION,
+          }),
+          'POST /api/conversations/7/messages/3/tools/c0/undo': () => {
+            undone = true
+            return {
+              body: {
+                type: 'undone',
+                message_id: 3,
+                call_id: 'c0',
+                tool: 'submit_search_result',
+                result_type: 'SubmissionUndone',
+                result: { hash: HASH },
+              },
+            }
+          },
         },
       },
     )
@@ -381,8 +425,15 @@ describe('送單卡', () => {
       within(card).getAllByRole('button', { name: '撤銷送單' }).at(-1) as HTMLElement,
     )
 
-    expect(await within(card).findByText(/這一筆已經不在了/)).toBeInTheDocument()
-    expect(stub.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true)
+    expect(await within(card).findByText(/已撤銷這次送單/)).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: '撤銷送單' })).toBeNull()
+    expect(
+      stub.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith('/api/conversations/7/messages/3/tools/c0/undo') &&
+          init?.method === 'POST',
+      ),
+    ).toBe(true)
   })
 
   it('一般使用者與下載完的那一筆沒有撤銷鍵', async () => {

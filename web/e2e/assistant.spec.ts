@@ -133,7 +133,8 @@ test('在作品頁說缺的集搜一下並下載：缺集、搜尋結果、送�
   await submitted.getByRole('button', { name: '撤銷送單' }).click()
   await expect(submitted.getByText(/從 qBittorrent 移除這個 torrent/)).toBeVisible()
   await submitted.getByRole('button', { name: '撤銷送單' }).last().click()
-  await expect(submitted.getByText(/這一筆已經不在了/)).toBeVisible()
+  // 撤銷經過對話（M5 票 11）：卡片照那一則說撤銷了。
+  await expect(submitted.getByText(/已撤銷這次送單/)).toBeVisible()
   await shot(page, 'undone')
 })
 

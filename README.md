@@ -111,9 +111,10 @@ Berth is a **public beta**.
   its model can call tools. Settings → Usage shows the tokens every call spent and the cache hit rate, with no
   budget. Every page has an assistant side panel to chat with it: it looks up recent imports; on a title's page
   it finds the missing episodes, searches for them and submits one, each drawn as a card, and it can only submit
-  a release it found in the same conversation that fits the title and the episodes asked for. Adding an indexer
-  or deleting a title's downloads waits on a confirmation card until you press Confirm. Berth works the same
-  without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
+  a release it found in the same conversation that fits the title and the episodes asked for. It subscribes a
+  title to a Mikan fansub group or a Nyaa / acg.rip search feed, and a subscription card can undo it. Adding an
+  indexer or deleting a title's downloads waits on a confirmation card until you press Confirm. Berth works the
+  same without AI. See [AI](docs/guide/setup-wizard.md#ai-settings--ai) and
   [the assistant](docs/guide/setup-wizard.md#the-assistant-side-panel).
 - Tested on **Windows with Docker Desktop** and **Unraid 7.1**; partly on Ubuntu with rootless Docker. Other
   systems have not been tested yet.

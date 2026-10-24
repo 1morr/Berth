@@ -7,6 +7,7 @@ import {
   proposalRefusalOf,
   rejectProposal,
   type DownloadsDeletion,
+  type FeedAddition,
   type IndexerAddition,
   type ProposalCard,
   type ProposalPreviews,
@@ -34,17 +35,20 @@ const PREVIEWS: {
 } = {
   IndexerAddition: IndexerAdditionView,
   DownloadsDeletion: DownloadsDeletionView,
+  FeedAddition: FeedAdditionView,
 }
 
 /** 卡片標題與確認鍵的字：一個要人按的工具一組。沒有文案的（後端先加了）退回通用的說法。 */
 const TITLES = {
   add_indexer: 'assistant.proposal.tool.add_indexer',
   delete_downloads: 'assistant.proposal.tool.delete_downloads',
+  add_feed: 'assistant.proposal.tool.add_feed',
 } as const
 
 const CONFIRMS = {
   add_indexer: 'assistant.proposal.confirm.add_indexer',
   delete_downloads: 'assistant.proposal.confirm.delete_downloads',
+  add_feed: 'assistant.proposal.confirm.add_feed',
 } as const
 
 export function ProposalCardView({ result }: { result: ProposalCard }) {
@@ -89,6 +93,10 @@ export function ProposalCardView({ result }: { result: ProposalCard }) {
         <StatusChip card={card} />
       </div>
       <div className="grid gap-3 px-3 py-2.5">
+        {/* 可逆的工具被降成這張卡時說為什麼（M5 票 11）：不可逆的不必說，那是常態。 */}
+        {card.cause === 'url_not_from_user' && (
+          <p className="text-xs text-ink">{t('assistant.proposal.cause.url_not_from_user')}</p>
+        )}
         <Preview type={card.preview_type} preview={card.preview} />
         {card.reason && (
           <p className="text-xs break-words text-ink-dim">
@@ -177,6 +185,26 @@ function IndexerAdditionView({ preview }: { preview: IndexerAddition }) {
         )}
       </dl>
       <p className="text-xs text-ink-dim">{t('assistant.proposal.indexer.then')}</p>
+    </div>
+  )
+}
+
+function FeedAdditionView({ preview }: { preview: FeedAddition }) {
+  const { t } = useTranslation()
+  const routes = [preview.tv_route_name, preview.movie_route_name].filter(Boolean)
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm text-ink">
+        {t('assistant.proposal.feed.what', { name: preview.name })}
+      </p>
+      <dl className="grid gap-1.5 bg-hull px-3 py-2">
+        <Line term={t('assistant.proposal.feed.url')}>{preview.url}</Line>
+        <Line term={t('assistant.proposal.feed.site')}>{t(`rss.kind.${preview.kind}`)}</Line>
+        {routes.length > 0 && (
+          <Line term={t('assistant.proposal.feed.routes')}>{routes.join(' · ')}</Line>
+        )}
+      </dl>
+      <p className="text-xs text-ink-dim">{t('assistant.proposal.feed.then')}</p>
     </div>
   )
 }
@@ -270,6 +298,10 @@ function Outcome({ card }: { card: ProposalCard }) {
       const added = card.result as ToolResults['IndexerAdded']
       return <>{t('assistant.proposal.outcome.indexerAdded', { name: added.name })}</>
     }
+    case 'Subscribed': {
+      const added = card.result as ToolResults['Subscribed']
+      return <>{t('assistant.proposal.outcome.feedAdded', { name: added.feed.name })}</>
+    }
     case 'DownloadsDeleted': {
       const deleted = card.result as ToolResults['DownloadsDeleted']
       return (
@@ -310,6 +342,11 @@ const LAPSES = {
   prowlarr_unreachable: 'assistant.proposal.lapse.prowlarr_unreachable',
   nothing_to_delete: 'assistant.proposal.lapse.nothing_to_delete',
   job_gone: 'assistant.proposal.lapse.job_gone',
+  feed_duplicate: 'assistant.proposal.lapse.feed_duplicate',
+  feed_unsupported: 'assistant.proposal.lapse.feed_unsupported',
+  route_required: 'assistant.proposal.lapse.route_required',
+  route_missing: 'assistant.proposal.lapse.route_missing',
+  route_disabled: 'assistant.proposal.lapse.route_disabled',
 } as const
 
 function lapseText(t: TFunction, reason: string): string {

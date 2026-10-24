@@ -42,7 +42,11 @@ from berth.services.auth import AuthenticatedUser
 from berth.services.claims import ClaimRejectedError, UnclaimedError
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import CommandMark, Effect, command, mark_of
-from berth.services.conversations import AssistantRefusedError, ProposalRejectedError
+from berth.services.conversations import (
+    AssistantRefusedError,
+    ProposalRejectedError,
+    UndoRejectedError,
+)
 from berth.services.deletion import DeletionRejectedError
 from berth.services.indexer import SiteRejectedError
 from berth.services.issues import IssueRejectedError
@@ -57,6 +61,7 @@ from berth.services.rss import RssRejectedError
 from berth.services.setup import ChoiceLockedError, OwnerRejectedError
 from berth.services.sources import SourceCache
 from berth.services.submit_guard import SubmitRefusedError
+from berth.services.subscribe_guard import SubscribeRefusedError
 
 #: 各模組自己的拒絕：建構時收 `reason`（封閉集合），多半還有 `detail`（原文）。命令丟出它時**還沒動
 #: 任何東西**，所以換成 `Refusal` 是安全的。`tests/unit/test_registry.py` 掃 `berth/services` 確認
@@ -76,7 +81,9 @@ REJECTIONS: tuple[type[Exception], ...] = (
     PlanRejectedError,
     ProposalRejectedError,
     SubmitRefusedError,
+    SubscribeRefusedError,
     RematchRejectedError,
+    UndoRejectedError,
     ReviewRejectedError,
     RouteRejectedError,
     RssRejectedError,
@@ -195,8 +202,12 @@ class Tool[Input: BaseModel, Result: BaseModel]:
     #: 不成立的就不走到這裡；這一支自己要擋的是那一份裡的東西已經不在了。
     apply: Callable[[ToolContext, Input, Any], Awaitable[Result]] | None = None
     #: **降級的入口**（M5 票 10）：可逆的工具在某些呼叫上要人按時，說出原因；`None` 是照常直接做。
-    #: 之後的檢查（票 11 的網址來源）接在這裡，不各自造一套。降級的工具也要有 preview 與 apply。
-    demote: Callable[[ToolContext, Input], ProposalCause | None] | None = None
+    #: 之後的檢查接在這裡，不各自造一套（票 11 的網址來源要讀這則對話，所以是 async）。降級的工具
+    #: 也要有 preview 與 apply。
+    demote: Callable[[ToolContext, Input], Awaitable[ProposalCause | None]] | None = None
+    #: **撤銷**（M5 票 11）：結果卡上的撤銷鍵走它，它呼叫的就是命令標著的反向命令。只有可逆的
+    #: 工具有。
+    undo: Undo[Result, Any] | None = None
     #: 哪幾種模組的拒絕值得重試或該放棄；沒列的都是交給人。
     next_steps: Mapping[StrEnum, NextStep] = field(default_factory=dict)
 
@@ -222,6 +233,15 @@ class Tool[Input: BaseModel, Result: BaseModel]:
             raise ValueError(f"{self.name}: a {self.effect} tool needs run")
         if self.demote is not None and self.preview is None:
             raise ValueError(f"{self.name}: a tool that can be demoted needs preview and apply")
+        if self.undo is not None:
+            if self.effect is not Effect.REVERSIBLE:
+                raise ValueError(f"{self.name}: only a reversible tool can be undone")
+            undone_by = _dotted(self.undo.command)
+            if undone_by != self.inverse:
+                raise ValueError(
+                    f"{self.name}: undo calls {undone_by}, but the command's inverse is "
+                    f"{self.inverse}"
+                )
 
     @property
     def effect(self) -> Effect:
@@ -235,11 +255,9 @@ class Tool[Input: BaseModel, Result: BaseModel]:
     def access(self) -> Access:
         return access_of(*self.route)
 
-    def cause(self, context: ToolContext, given: Input) -> ProposalCause | None:
-        """這一次呼叫為什麼要人按；`None` 是直接做。不可逆的永遠要人（brief §14）。"""
-        if self.effect is Effect.IRREVERSIBLE:
-            return ProposalCause.IRREVERSIBLE
-        return self.demote(context, given) if self.demote is not None else None
+    def undoable_by(self, role: Role) -> bool:
+        """這個角色按得到撤銷嗎：工具有撤銷、門禁放他進撤銷指著的那一支端點。"""
+        return self.undo is not None and admits(access_of(*self.undo.route), role)
 
     def next_step(self, reason: StrEnum) -> NextStep:
         """登記說的下一步，沒說的是交給人。**連 enum 一起比**：`JobRefusal.MEDIA_MISSING` 與
@@ -253,6 +271,36 @@ class Tool[Input: BaseModel, Result: BaseModel]:
         mark = mark_of(self.command)
         assert mark is not None  # __post_init__ 擋掉了沒標的
         return mark
+
+
+# 只看：降級的檢查讀這則對話，不改東西。
+@command(Effect.READ)
+async def cause_of(
+    tool: Tool[Any, Any], context: ToolContext, given: BaseModel
+) -> ProposalCause | None:
+    """這一次呼叫為什麼要人按；`None` 是直接做。不可逆的永遠要人（brief §14）。"""
+    if tool.effect is Effect.IRREVERSIBLE:
+        return ProposalCause.IRREVERSIBLE
+    return await tool.demote(context, given) if tool.demote is not None else None
+
+
+@dataclass(frozen=True, slots=True)
+class Undo[Result: BaseModel, Undone: BaseModel]:
+    """一個可逆工具的撤銷（M5 票 11）：結果卡上的撤銷鍵、人按的。"""
+
+    #: 撤銷呼叫的命令：**必須是工具那支命令標著的反向命令**（造 `Tool` 時比對），撤銷不另寫一套。
+    command: Callable[..., Any]
+    #: 做同一件事的那一支端點：誰按得到撤銷照它的門禁（AI 送單人人送得了，刪 Job 只有管理員）。
+    route: tuple[str, str]
+    #: 照存下的那一份結果撤銷，以按的那個人執行（`ToolContext.confirmed`）。
+    run: Callable[[ToolContext, Result], Awaitable[Undone]]
+    #: `run` 回的型別：畫面說撤掉了什麼（`main._document_components`）。
+    result: type[Undone]
+
+
+def _dotted(function: Callable[..., Any]) -> str:
+    """`berth.services.rss.delete_feed` → `rss.delete_feed`（`@command(inverse=...)` 的寫法）。"""
+    return f"{function.__module__.removeprefix('berth.services.')}.{function.__name__}"
 
 
 class UnmarkedCommandError(TypeError):
@@ -282,6 +330,10 @@ class Registry:
     def frontend_models(self) -> tuple[type[BaseModel], ...]:
         """經對話送到前端的型別：每一個結果型別與 `Refusal`（`main._document_components`）。"""
         return (*(tool.result for tool in self._tools.values()), Refusal)
+
+    def undo_models(self) -> tuple[type[BaseModel], ...]:
+        """撤銷回的型別，一個可撤銷的工具一個（M5 票 11）。"""
+        return tuple(tool.undo.result for tool in self._tools.values() if tool.undo is not None)
 
     def preview_models(self) -> tuple[type[BaseModel], ...]:
         """確認卡上「會發生什麼」的型別，一個要人按的工具一個（M5 票 10）。"""
@@ -338,6 +390,22 @@ class Registry:
         tool = call.tool
         assert tool.apply is not None
         return await _attempt(tool, tool.apply(context, call.given, shown), tool.result)
+
+    # 派發到每一條撤銷：刪 Job、刪 Feed 與下載下來的檔都回不來（反向命令各自標著）。只有
+    # `services.undo` 在人按了撤銷之後呼叫它。
+    @command(Effect.IRREVERSIBLE)
+    async def undo(
+        self, tool: Tool[Any, Any], context: ToolContext, done: Mapping[str, object]
+    ) -> BaseModel | Refusal:
+        """照存下的那一份結果（`done`）撤銷。這一版讀不回那一份是 `changed`。"""
+        assert tool.undo is not None
+        try:
+            result = tool.result.model_validate(done)
+        except ValidationError:
+            return Refusal(
+                tool=tool.name, reason=ToolRefusal.CHANGED, detail="", next=NextStep.GIVE_UP
+            )
+        return await _attempt(tool, tool.undo.run(context, result), tool.undo.result)
 
 
 @dataclass(frozen=True, slots=True)

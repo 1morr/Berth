@@ -190,9 +190,10 @@ class TestSubmitRelease:
     def test_undo_is_the_inverse_command_and_the_same_release_can_be_sent_again(
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
-        """撤銷走送單的反向命令（`deletion.delete_job`）：移除 torrent、刪下載的檔、清紀錄。"""
+        """撤銷走送單的反向命令（`deletion.withdraw_job`）：移除 torrent、刪下載的檔、清紀錄。卡上的
+        撤銷鍵經過對話（M5 票 11），模型下一輪知道。"""
         mark = mark_of(add_manual_download)
-        assert mark is not None and mark.inverse == "deletion.delete_job"
+        assert mark is not None and mark.inverse == "deletion.withdraw_job"
         ai_ready(client)
         factory.ai_.replies = [
             call("search_indexers", media=SPY_ID, season=2),
@@ -206,18 +207,29 @@ class TestSubmitRelease:
         first = outputs(streamed)[1]["result"]
         assert isinstance(first, dict)
 
-        undone = client.delete(
-            f"/api/jobs/{first['hash']}",
-            params={"remove_torrent": True, "delete_files": True, "purge": True},
+        cid = streamed[0]["conversation_id"]
+        assert isinstance(cid, int)
+
+        messages = client.get(f"/api/conversations/{cid}").json()["messages"]
+        at = next(
+            message["id"]
+            for message in messages
+            for part in message["parts"]
+            if part["type"] == "tool_result" and part["tool"] == "submit_search_result"
+        )
+        undone = client.post(
+            f"/api/conversations/{cid}/messages/{at}/tools/call_submit_search_result/undo",
             headers=BROWSER,
         )
 
         assert undone.status_code == 200, undone.text
-        assert (undone.json()["torrent"], undone.json()["purged"]) == (True, True)
+        assert (undone.json()["result_type"], undone.json()["result"]) == (
+            "SubmissionUndone",
+            {"hash": first["hash"]},
+        )
         assert client.get(f"/api/jobs/{first['hash']}").status_code == 404
+        assert [hash for hash, _ in factory.qbittorrent_.deleted] == [first["hash"]]
         # 撤銷之後那一集又是缺的，同一筆再送得出去（清了紀錄，不是 `job_removed`）。
-        cid = streamed[0]["conversation_id"]
-        assert isinstance(cid, int)
         again = outputs(send(client, "Download it again.", cid))[1]
         assert (again["outcome"], again["result"]["created"]) == ("done", True)  # type: ignore[index]  # SSE 的 JSON
 

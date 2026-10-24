@@ -93,6 +93,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "AiRefusal": ai_api._STATUS,
     "AssistantRefusal": conversations_api._STATUS,
     "ProposalRefusal": conversations_api._PROPOSAL_STATUS,
+    "UndoRefusal": conversations_api._UNDO_STATUS,
     "BundledLibraryRefusal": setup_api._BUNDLED_STATUS,
     "OwnerRefusal": setup_api._OWNER_STATUS,
     "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
@@ -310,7 +311,7 @@ class TestToolResults:
         """確認卡依 `ProposalCard.preview_type` 挑那一段怎麼畫（M5 票 10），同一個道理。"""
         names = [model.__name__ for model in REGISTRY.preview_models()]
 
-        assert names == ["IndexerAddition", "DownloadsDeletion"]
+        assert names == ["IndexerAddition", "DownloadsDeletion", "FeedAddition"]
         assert document["components"]["schemas"]["ProposalPreviewType"] == {
             "type": "string",
             "enum": names,
@@ -575,6 +576,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "ai_refusal": "AiRefusalOut",
             "assistant_refusal": "AssistantRefusalOut",
             "proposal_refusal": "ProposalRefusalOut",
+            "undo_refusal": "UndoRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

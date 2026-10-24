@@ -442,6 +442,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 確認卡（M5 票 10）：誰按得到看卡片是誰的，在 `services.proposals`，不在門禁。
     ("POST", "/proposals/*/confirm"): Access.SIGNED_IN,
     ("POST", "/proposals/*/reject"): Access.SIGNED_IN,
+    # 結果卡上的撤銷（M5 票 11）：誰按得到照那個工具的撤銷指著的端點，在 `services.undo`，不在門禁。
+    ("POST", "/conversations/*/messages/*/tools/*/undo"): Access.SIGNED_IN,
     # 週報（M4 票 131）。
     ("GET", "/weekly"): Access.ADMIN,
     ("GET", "/weekly/*"): Access.ADMIN,

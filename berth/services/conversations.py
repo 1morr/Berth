@@ -12,7 +12,8 @@
   （上一輪的工具結果、這一句話、有人按了確認卡）併成一輪；呼叫了卻沒有結果的工具（回覆跑到一半
   Berth 關機）補一份「沒執行」，provider 才收這份歷史。
 - **有人按了確認卡**（M5 票 10）存成一則 `decision`：模型下一輪從帶出處的 JSON 讀到結果，畫面上
-  由那張卡自己畫（卡片讀 `proposals` 的現況，不讀這一則）。
+  由那張卡自己畫（卡片讀 `proposals` 的現況，不讀這一則）。**有人在結果卡上撤銷了**（M5 票 11）
+  也是一則 `decision`（`UndonePart`），畫面照它把那張卡改成已撤銷。
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from berth.domain import (
     ProposalRefusal,
     ProposalStatus,
     ToolOutcome,
+    UndoRefusal,
 )
 from berth.models import AiSettings, Conversation, ConversationMessage
 from berth.services.ai import is_ready
@@ -61,6 +63,16 @@ class ProposalRejectedError(Exception):
     要把它列進 `REJECTIONS`，而 `proposals` 依賴登錄表。"""
 
     def __init__(self, reason: ProposalRefusal, detail: str = "") -> None:
+        super().__init__(f"{reason}: {detail}" if detail else reason.value)
+        self.reason = reason
+        self.detail = detail
+
+
+class UndoRejectedError(Exception):
+    """結果卡上的撤銷不做的理由（`services.undo`，M5 票 11）。住在這裡的理由同
+    `ProposalRejectedError`。"""
+
+    def __init__(self, reason: UndoRefusal, detail: str = "") -> None:
         super().__init__(f"{reason}: {detail}" if detail else reason.value)
         self.reason = reason
         self.detail = detail
@@ -146,6 +158,21 @@ class DecisionPart(_Part):
     result: dict[str, Any] | None = None
 
 
+class UndonePart(_Part):
+    """有人在結果卡上按了撤銷、撤掉了（M5 票 11）：存在一則 `decision` 裡。模型下一輪看得到
+    （只有 Berth 自己的字，`undone_content`），畫面照 `call_id` 把那張卡改成已撤銷。"""
+
+    type: Literal["undone"] = "undone"
+    #: 撤銷的是哪一則裡的哪一次工具呼叫（那一則的 id 與 `ToolResultPart.call_id`）。只有 call id
+    #: 不夠：有的 provider 每一輪都用同一個 id（本機模型的 `call_0`）。
+    message_id: int
+    call_id: str
+    tool: str
+    #: 撤銷回的型別與內容（`Unsubscribed`…）：卡上說撤掉了什麼。
+    result_type: str
+    result: dict[str, Any]
+
+
 #: 一則裡的一個 part。`Part` 是同一份聯集加上讀出時用的 discriminator。
 StoredPart = (
     UserText
@@ -156,6 +183,7 @@ StoredPart = (
     | ToolResultPart
     | NoticePart
     | DecisionPart
+    | UndonePart
 )
 Part = Annotated[StoredPart, Field(discriminator="type")]
 _PARTS = TypeAdapter(list[Part])
@@ -264,6 +292,38 @@ async def messages_of(session: AsyncSession, conversation_id: int) -> list[Conve
     return list(rows)
 
 
+@command(Effect.READ)
+async def tool_results_of(
+    session: AsyncSession, conversation_id: int, tool: str
+) -> list[ToolResultPart]:
+    """這則對話裡 `tool` 做成了的每一份結果，**新的在前**。那幾份是 Berth 寫的，模型改不到：
+    送單與訂閱的防線只認它們（`submit_guard`、`subscribe_guard`）。"""
+    found: list[ToolResultPart] = []
+    for message in reversed(await messages_of(session, conversation_id)):
+        if message.kind is not MessageKind.TOOLS:
+            continue
+        found.extend(
+            part
+            for part in parts_of(message)
+            if isinstance(part, ToolResultPart)
+            and part.tool == tool
+            and part.outcome is ToolOutcome.DONE
+        )
+    return found
+
+
+@command(Effect.READ)
+async def user_words_of(session: AsyncSession, conversation_id: int) -> list[str]:
+    """使用者在這則對話裡自己打的每一句話，照順序（頁面那一段不算：那是 Berth 附上的）。"""
+    return [
+        part.text
+        for message in await messages_of(session, conversation_id)
+        if message.kind is MessageKind.USER
+        for part in parts_of(message)
+        if isinstance(part, UserText)
+    ]
+
+
 def append_message(
     session: AsyncSession,
     conversation: Conversation,
@@ -346,6 +406,16 @@ def decision_content(part: DecisionPart) -> str:
     return json.dumps(content, ensure_ascii=False, sort_keys=True)
 
 
+def undone_content(part: UndonePart) -> str:
+    """有人撤銷了一次工具呼叫，給模型的那一段：帶出處的 JSON，只說哪一次、哪一個工具。撤掉了什麼
+    在卡上；模型要細節就再查（同 `decision_content` 的理由）。"""
+    return json.dumps(
+        {"source": "berth", "undone": {"call": part.call_id, "tool": part.tool}},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
 def tool_result_of(part: ToolResultPart) -> ToolResult:
     """存下的一個工具結果 → 送給 provider 的那一份。"""
     return ToolResult(
@@ -367,7 +437,9 @@ def turns_of(
             )
         elif row.kind is MessageKind.DECISION:
             decided = tuple(
-                TextPart(decision_content(p)) for p in parts if isinstance(p, DecisionPart)
+                TextPart(decision_content(p) if isinstance(p, DecisionPart) else undone_content(p))
+                for p in parts
+                if isinstance(p, DecisionPart | UndonePart)
             )
             _add_user(turns, decided)
         elif row.kind is MessageKind.TOOLS:

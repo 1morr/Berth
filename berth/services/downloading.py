@@ -95,7 +95,7 @@ async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> 
 # 撤銷是刪 Job（它有自己的刪除範圍）：AI 送的那一筆，結果卡上的撤銷在入庫前移除 torrent、刪掉
 # 下載下來的檔案、清掉紀錄（M5 票 12）。排出去的「正在下載」收不回來，但與 RSS 那幾個送單的命令
 # （`rss.bind_series` 等）同一個標法：等級看命令的主效果。
-@command(Effect.REVERSIBLE, inverse="deletion.delete_job")
+@command(Effect.REVERSIBLE, inverse="deletion.withdraw_job")
 async def add_manual_download(
     session: AsyncSession,
     factory: ServiceClientFactory,

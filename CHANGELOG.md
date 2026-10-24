@@ -61,6 +61,20 @@
   API：`POST /api/conversations*` 收 `page`；對話多一種 part `page`；`GET /api/media/{id}` 多 `preselected_route_id`
   （搜尋頁下拉的預選值，規則搬到後端一份）；`JobOut` 多 `undoable`；OpenAPI 多 `MissingEpisodes`、`SearchResults`、
   `SearchResultRow`、`SubmitRefusal`、`SubmittedJob`。沒有資料庫 migration。
+- **跟助理說「訂閱這部的 Mikan RSS」**（M5 票 11）：在作品頁說，它查作品名、在 Mikan 搜番組、列字幕組，訂閱你選的
+  那一組（整季當場送出，同作品頁的訂閱）；「用 Nyaa 訂閱這部」以搜尋詞建 Nyaa 或 acg.rip 的搜尋 feed（第一輪照樣等你在
+  RSS 頁選）。**網址由 Berth 自己組的直接做、不出確認卡**：Mikan 只收這則對話裡 Berth 自己搜出來的番組與字幕組，別處來的
+  id 一律拒絕。也可以給它一整個 Feed 網址：網址是你在這則對話裡自己打的才直接加，否則（例如搜尋結果、番組頁裡藏的網址）
+  停在確認卡上，你按了才加。結果是一張**訂閱卡**：Feed 名稱、來源、綁到哪部作品與字幕組、當場送出幾筆、下一次輪詢。
+  **卡上可以撤銷**：停掉訂閱（刪掉這次建的 Feed，或解開就地綁上的 RSS Series，再訂一次訂得回來），並撤回它送出、還沒下載完
+  的下載（移除 torrent、刪檔、清紀錄）；已經下載完的留著，卡上說留了幾筆。撤銷之後助理下一句話就知道。送單卡的「撤銷送單」
+  走同一條路。作品有不只一條 Route 收得下、又還沒送過單時，它會先問要入庫到哪一條。這幾個工具只有管理員拿得到（RSS 整塊
+  都是）。
+  API：`GET /api/assistant` 多 `tools`（每個工具的副作用等級、你按不按得到撤銷；側面板依它說「正在查」或「正在做」，
+  不再自己寫一份）；新端點 `POST /api/conversations/{id}/messages/{message}/tools/{call}/undo`；對話多一種 part `undone`；
+  確認卡的 `cause` 多 `url_not_from_user`；OpenAPI 多 `Subscribed`、`Unsubscribed`、`SubmissionUndone`、`FeedAddition`、
+  `MikanSearchResults`、`MikanSubgroups`、`SubscribeRefusal`、`UndoRefusal`。送單卡的撤銷不再直接打 `DELETE /api/jobs/{hash}`。
+  沒有資料庫 migration。
 - **設定 → 用量：看 AI 花了多少 tokens 與快取命中率**（M5 票 13）：只有管理員（看得到每個人的）。最近 7 / 30 / 90 天
   （照容器時區切日）的呼叫數、輸入與輸出 tokens、快取命中率（快取讀取 ÷ 全部輸入，輸入含快取寫入與讀取）與沒成的次數；
   每天一根直條（快取讀取、其他輸入、輸出），逐日數字收在圖下；依出處、依格式與模型（同一個模型經兩台主機分開列）、

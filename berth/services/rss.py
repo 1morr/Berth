@@ -415,7 +415,7 @@ async def list_feeds(session: AsyncSession) -> tuple[FeedView, ...]:
     )
 
 
-@command(Effect.REVERSIBLE, inverse="rss.delete_feed")
+@command(Effect.REVERSIBLE, inverse="subscriptions.unsubscribe")
 async def add_feed(
     session: AsyncSession,
     *,
@@ -439,13 +439,8 @@ async def add_feed(
     （`_check_routes`）。
     """
     url = url.strip()
-    kind = kind_of(url)
-    if kind is None:
-        raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
-    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
-        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    kind = await _vet_new_feed(session, url, KindRoutes(tv=tv_route_id, movie=movie_route_id))
     _check_interval(interval_sec)
-    await _check_routes(session, KindRoutes(tv=tv_route_id, movie=movie_route_id))
     rules = _normalized_rules(exclusions)
     row = RssFeed(
         name=name.strip() or _default_name(url),
@@ -464,6 +459,73 @@ async def add_feed(
         await session.rollback()
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url) from exc
     return _feed_view(row, 0, KindCounts())
+
+
+async def _vet_new_feed(session: AsyncSession, url: str, routes: KindRoutes) -> FeedKind:
+    """`add_feed` 與它的預覽共用的檢查：認得的站、還沒加過、兩條 Route 成立。"""
+    kind = kind_of(url)
+    if kind is None:
+        raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
+    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    await _check_routes(session, routes)
+    return kind
+
+
+@dataclass(frozen=True, slots=True)
+class FeedAddition:
+    """加一個 Feed 之前算好的那一份（M5 票 11 的確認卡）：哪一站、叫什麼、送進哪兩條 Route。"""
+
+    url: str
+    kind: FeedKind
+    name: str
+    tv_route_id: int | None
+    tv_route_name: str
+    movie_route_id: int | None
+    movie_route_name: str
+
+
+@command(Effect.READ)
+async def plan_feed_addition(
+    session: AsyncSession,
+    *,
+    url: str,
+    name: str = "",
+    tv_route_id: int | None = None,
+    movie_route_id: int | None = None,
+) -> FeedAddition:
+    """`add_feed` 會加的那一個，什麼都不改；加不了的照 `add_feed` 拒絕。
+
+    沒給的那一種 Route **只有一條啟用中的時就填它**（同 M4 票 105 migration 的「能推就推」）：助理
+    不必為了唯一的那一條多問一句；不只一條時照 `add_feed` 是 `route_required`，要說是哪一條。
+    """
+    url = url.strip()
+    tv = tv_route_id if tv_route_id is not None else await _only_route(session, MediaKind.TV)
+    movie = (
+        movie_route_id
+        if movie_route_id is not None
+        else await _only_route(session, MediaKind.MOVIE)
+    )
+    kind = await _vet_new_feed(session, url, KindRoutes(tv=tv, movie=movie))
+    return FeedAddition(
+        url=url,
+        kind=kind,
+        name=name.strip() or _default_name(url),
+        tv_route_id=tv,
+        tv_route_name=await _route_name(session, tv),
+        movie_route_id=movie,
+        movie_route_name=await _route_name(session, movie),
+    )
+
+
+async def _only_route(session: AsyncSession, kind: MediaKind) -> int | None:
+    routes = await _routes_for(session, kind)
+    return routes[0].id if len(routes) == 1 else None
+
+
+async def _route_name(session: AsyncSession, route_id: int | None) -> str:
+    route = await session.get(Route, route_id) if route_id is not None else None
+    return route.name if route is not None else ""
 
 
 def _check_interval(interval_sec: int) -> None:
@@ -2015,17 +2077,26 @@ def _reasons(row: RssSeries) -> tuple[BindReason, ...]:
 
 @command(Effect.READ)
 async def list_series(
-    session: AsyncSession, *, media_id: str | None = None, now: datetime | None = None
+    session: AsyncSession,
+    *,
+    media_id: str | None = None,
+    feed_id: int | None = None,
+    now: datetime | None = None,
 ) -> tuple[SeriesView, ...]:
     """待綁定的排前面（shape §2），同類之內新的在前。
 
-    給 `media_id` 時只列綁在那部作品上的（票 19 的詳情頁）。`now` 是算完結的那一刻。
+    給 `media_id` 時只列綁在那部作品上的（票 19 的詳情頁）；給 `feed_id` 時只列那個 Feed 帶到的
+    （M5 票 11，助理訂閱之後的結果卡）。`now` 是算完結的那一刻。
     """
     query = select(RssSeries).order_by(
         RssSeries.media_id.is_not(None), RssSeries.created_at.desc(), RssSeries.id.desc()
     )
     if media_id is not None:
         query = query.where(RssSeries.media_id == media_id)
+    if feed_id is not None:
+        query = query.where(
+            RssSeries.id.in_(select(RssItem.series_id).where(RssItem.feed_id == feed_id))
+        )
     rows = list(await session.scalars(query))
     # 第一批在問什麼一次問完（`first_batch.asks` 收一串 id），不逐列各問一次。
     asked = await first_batch_asks(session, [row.id for row in rows if not row.confirmed])
@@ -2404,9 +2475,12 @@ class Subscription:
     #: 為什麼，指向「只下載現有的」。算的是整個 Series（就地綁定時含聚合 feed 之前擋下的），
     #: 不只這一次讀到的。照 `SkipCode` 的宣告順序，沒有的不列。
     excluded: tuple[ExcludedCount, ...]
+    #: 這一次新建了 `feed`（`False`：那個 Series 本來就在使用者的聚合 feed 裡待綁定，就地綁上）。
+    #: 撤銷照它分兩條路（`subscriptions.unsubscribe`）：新建的 Feed 刪掉，聚合 feed 不能刪。
+    feed_created: bool
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="subscriptions.unsubscribe")
 async def subscribe_mikan(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -2433,8 +2507,9 @@ async def subscribe_mikan(
     `bind_series` 寫進它原本的 Feed。已經綁了是 `series_bound`。人在場，所以**讀不到單一 feed 就當場
     拒絕**（`feed_unreachable`），不留下沒讀過的 Feed 與沒有名字的 Series。
 
-    **沒有單一的反向命令**：新建 Feed 那一條是 `delete_feed`（綁定留著），就地綁定那一條是
-    `unbind_series`——拿前者撤銷後者會刪掉使用者的聚合 feed。已經送出的 Job 有自己的刪除範圍。
+    **反向命令是 `subscriptions.unsubscribe`**（M5 票 11）：新建 Feed 那一條刪掉它、就地綁定那一條
+    解綁（不能刪使用者的聚合 feed，`feed_created` 分得出兩條），兩條都撤回這次送出、還沒下載完的
+    Job。
     """
     moment = now or utcnow()
     # 綁定與補舊集送出的是同一輪「正在下載」，不告訴按的人（M4 票 126）。
@@ -2492,6 +2567,7 @@ async def _subscribe(
             feed=await _feed_view_of(session, home.id),
             series=replace(await _series_view(session, named), submitted=bound.submitted),
             excluded=await _excluded_counts(session, series.id),
+            feed_created=False,
         )
 
     url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
@@ -2549,6 +2625,7 @@ async def _subscribe(
         feed=await _feed_view_of(session, feed.id),
         series=replace(await _series_view(session, row), submitted=bound.submitted + submitted),
         excluded=await _excluded_counts(session, series.id),
+        feed_created=True,
     )
 
 
@@ -2562,7 +2639,7 @@ async def _excluded_counts(session: AsyncSession, series_id: int) -> tuple[Exclu
     return tuple(ExcludedCount(code=code, count=counts[code]) for code in SkipCode if counts[code])
 
 
-@command(Effect.REVERSIBLE, inverse="rss.delete_feed")
+@command(Effect.REVERSIBLE, inverse="subscriptions.unsubscribe")
 async def subscribe_search(
     session: AsyncSession,
     factory: ServiceClientFactory,
