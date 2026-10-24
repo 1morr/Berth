@@ -3254,6 +3254,7 @@ const zhHant = {
       },
       format: {
         anthropic: 'Anthropic',
+        openai: 'OpenAI 相容',
       },
       byUser: {
         title: '依人',
@@ -7159,6 +7160,7 @@ const en: Translations<typeof zhHant> = {
       },
       format: {
         anthropic: 'Anthropic',
+        openai: 'OpenAI-compatible',
       },
       byUser: {
         title: 'By person',
