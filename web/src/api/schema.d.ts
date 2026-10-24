@@ -6405,6 +6405,73 @@ export interface components {
          * @enum {string}
          */
         BerthPage: "/media/{media_id}" | "/review" | "/issues" | "/rss" | "/weekly/{report_id}";
+        /**
+         * ToolRefusal
+         * @description 登錄表自己的拒絕理由（各模組的理由照原樣傳出去）。不在 `domain/enums.py`：那裡的 `*Refusal`
+         *     是端點的拒絕、每一種都有狀態碼（`TestStatusTables`），這兩種沒有端點。照樣進 OpenAPI
+         *     （`main._document_components`），前端拿得到這個封閉集合。
+         * @enum {string}
+         */
+        ToolRefusal: "unknown_tool" | "invalid_input";
+        /**
+         * NextStep
+         * @description 拒絕之後 AI 該怎麼辦（plan §11.6）。
+         * @enum {string}
+         */
+        NextStep: "retry" | "hand_over" | "give_up";
+        /**
+         * RecentImports
+         * @description 「最近入庫」的結果卡：`[since, until)` 之間入庫的作品，依英文標題排。
+         */
+        RecentImports: {
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /** Works */
+            works: components["schemas"]["RecentWork"][];
+        };
+        /**
+         * RecentWork
+         * @description 一部作品在這段時間入庫了什麼。形狀同週報的 `ImportedWorkOut`，前端同一套說法。
+         */
+        RecentWork: {
+            /** Media */
+            media: string | null;
+            kind: components["schemas"]["MediaKind"] | null;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /**
+             * Episodes
+             * @description [season, first episode, last episode] ranges; empty for a movie.
+             */
+            episodes: [
+                number,
+                number,
+                number
+            ][];
+        };
+        /**
+         * Refusal
+         * @description 工具沒做成，而且什麼都沒改。AI 依 `next` 分得出重試、交給人還是放棄。
+         */
+        Refusal: {
+            /** Tool */
+            tool: string;
+            /** Reason */
+            reason: string;
+            /** Detail */
+            detail: string;
+            next: components["schemas"]["NextStep"];
+        };
     };
     responses: never;
     parameters: never;

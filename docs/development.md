@@ -172,10 +172,13 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
   會替它擋；`RouteRefusal` 與 `AccessRefusal` 的消費端是查表或單一理由比較，那一句沒有閘門。
 - **後端組的前端網址從 `deeplink.BerthPage` 來**（通知連結，M5 票 02）。這是慣例：`berth_link` 收任意字串，
   繞過它手組的路徑沒有閘門。`BerthPage` 不是任何端點的回應，
-  由 `main._document_pages` 塞進 OpenAPI 的 components；前端 `src/berthPages.test.ts` 的 `PAGES`
+  由 `main._document_components` 塞進 OpenAPI 的 components；前端 `src/berthPages.test.ts` 的 `PAGES`
   對每一條模板寫明落在哪一條路由，拿真的路由表解析。後端加一頁：重跑 `pnpm gen:api`
   （`TestBerthPages` 先紅），`PAGES` 少一個鍵 `tsc` 紅；前端改了那幾條路由：vitest 紅。
   錨點（`#issue-5` 這類）不在這道閘門裡，各清單頁的 vitest 寫死同一個形狀。
+- **AI 工具的結果型別**（`services/tools.py` 的每一條登記，加上 `Refusal`、`NextStep`、`ToolRefusal`，M5 票 05）
+  也由 `main._document_components` 塞進 components：它們經對話送到前端，不是端點的回應。加一個工具
+  或改結果型別就重跑 `pnpm gen:api`（`TestToolResults` 先紅）。
 - **會拒絕的端點都要在 `responses=` 裡宣告**（`TestDeclaringWhatEachEndpointRefuses`）：走訪
   `create_app()` 的每一條路由，比對路由**物件**上的 `responses` 與 handler **語法樹**丟得出來的
   拒絕，漏宣告與多宣告都紅。**守的是形狀那一層**（`RouteRefusalOut` 這幾個 model），不是理由

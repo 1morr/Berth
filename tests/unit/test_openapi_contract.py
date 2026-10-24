@@ -22,6 +22,7 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import json
 import pkgutil
 import re
 import textwrap
@@ -34,6 +35,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from pydantic.json_schema import models_json_schema
 
 import berth.api
 from berth.api import ai as ai_api
@@ -52,7 +54,9 @@ from berth.domain import RouteRefusal, enums
 from berth.main import create_app
 from berth.services import jellyfin_access
 from berth.services.deeplink import BerthPage
+from berth.services.registry import ToolRefusal
 from berth.services.routes import RouteRejectedError
+from berth.services.tools import REGISTRY
 from tests.endpoints import Endpoint, api_endpoints
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -233,6 +237,55 @@ class TestBerthPages:
         members = union_members(GENERATED.read_text(encoding="utf-8"), "BerthPage")
 
         assert members == {page.value for page in BerthPage}
+
+
+def tool_schemas() -> dict[str, Any]:
+    """登錄表要給前端的每一格：結果型別、`Refusal` 與它們帶到的巢狀 model 與 enum。"""
+    _, top = models_json_schema(
+        [(model, "serialization") for model in REGISTRY.frontend_models()],
+        ref_template="#/components/schemas/{model}",
+    )
+    defs: dict[str, Any] = top["$defs"]
+    return defs
+
+
+TOOL_SCHEMAS = tool_schemas()
+
+
+class TestToolResults:
+    """工具的結果型別與統一拒絕進 OpenAPI（M5 票 05）：前端（票 09）依產出的型別畫結果卡。
+
+    沒有一支端點回它們——它們經對話送到前端——所以 FastAPI 自己不會收，由
+    `main._document_components` 照登錄表塞進 components。巢狀的 model 跟著進去。
+    """
+
+    @pytest.mark.parametrize("name", sorted(TOOL_SCHEMAS))
+    def test_the_document_carries_every_result(self, document: dict[str, Any], name: str) -> None:
+        assert document["components"]["schemas"][name] == TOOL_SCHEMAS[name]
+
+    def test_nested_models_resolve_inside_the_document(self, document: dict[str, Any]) -> None:
+        """`$ref` 指到 components 裡真的有的那一格，不是 pydantic 自己的 `#/$defs/...`。"""
+        schemas = document["components"]["schemas"]
+        refs = re.findall(r'"\$ref": "([^"]+)"', json.dumps(list(TOOL_SCHEMAS.values())))
+
+        assert refs
+        assert {ref.removeprefix("#/components/schemas/") for ref in refs} <= set(schemas)
+
+    @pytest.mark.parametrize("name", sorted(TOOL_SCHEMAS))
+    def test_the_generated_types_are_not_stale(self, name: str) -> None:
+        """巢狀的 model 與 enum 也算：`RecentWork` 改了欄位卻沒重跑 `pnpm gen:api`，紅的是它。"""
+        text = GENERATED.read_text(encoding="utf-8")
+        schema = TOOL_SCHEMAS[name]
+
+        if "enum" in schema:
+            assert union_members(text, name) == set(schema["enum"])
+        else:
+            assert object_fields(text, name) == set(schema["properties"])
+
+    def test_the_registry_reasons_are_generated(self) -> None:
+        members = union_members(GENERATED.read_text(encoding="utf-8"), "ToolRefusal")
+
+        assert members == {reason.value for reason in ToolRefusal}
 
 
 class TestStatusTables:
