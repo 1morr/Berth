@@ -168,8 +168,9 @@ many there were. There is no budget and no limit: this page only reports.
 
 ## The assistant (side panel)
 
-Every page has an **Assistant** button in the header. It opens a column on the right (on a phone it takes the
-whole screen) that stays open as you move between pages and after a reload. Type a message and
+Every page has an **Assistant** button in the header. On a desktop it opens a column on the right that stays open
+as you move between pages and after a reload. On a phone it takes the whole screen and closes again when you follow
+a link from it, and a newly opened page starts on that page rather than on the assistant. Type a message and
 press Enter (Shift+Enter for a new line); the reply streams in as it is written. When the assistant looks
 something up, the panel says so ("Looking up recent imports") and then "Looked up" once it has the answer, with
 the result drawn as a card under that line: recent imports list each title with its poster, the episodes that came

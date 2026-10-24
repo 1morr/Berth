@@ -447,8 +447,9 @@ HTTP 狀態、端點、errno、inode 不當標題：人話由後端的封閉代�
 所以每一個就地確認都走 `useInPlaceConfirm` 加 `ConfirmPanel`：展開時焦點進到確認區塊（`role="group"` + `tabIndex={-1}`，
 `aria-labelledby` 指向那段後果說明，螢幕閱讀器才念得到）；取消或 `Esc` 收起時焦點回到觸發鍵；
 `Esc` 會 `stopPropagation`，只收起確認，不連帶收起它所在的 `<details>`。確認之後整塊被換掉時
-（送單成功），焦點落在接下來最可能要按的那條連結上。沒有這幾步，焦點掉回 `body`，鍵盤使用者得從頁首
-重新 Tab 一遍（票 15 實測）。確認裡要重述會被寫死的東西：送單的確認印出 Route 名與資料夾名，
+（送單成功），焦點落在接下來最可能要按的那條連結上；沒有下一步可按、按下去的鍵跟著結果消失時（助理的確認卡、
+撤銷、AI 活動頁的撤銷），焦點落在說結果的那一句（`components/useFocusOnSettle`，那一句 `tabIndex={-1}`；只在焦點真的掉到
+`body` 時給，M5 票 15）。沒有這幾步，焦點掉回 `body`，鍵盤使用者得從頁首重新 Tab 一遍（票 15 實測）。確認裡要重述會被寫死的東西：送單的確認印出 Route 名與資料夾名，
 因為選 Route 的下拉早就捲出畫面了。
 **例外是 radio 觸發的確認**（服務頁的「套件內 / 既有」，M4 票 09）：radio 在兩格間移動就會選中，點下去開的確認照規則把焦點
 移進去；方向鍵瀏覽開的確認**焦點留在 radio 上**——搬走的話使用者走不回另一格。所以那一組 radio 上的 `Esc` 也收得起確認
@@ -642,7 +643,8 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   裡）字退成 `ink-dim`、游標 `not-allowed`，方塊與按下的底色照留——看得出原本開著哪幾顆。單選的篩選列照舊是下面那一種。
 - **篩選列選著的那一個不是連結**，是一段 `aria-current="true"` 的字（`NAV_BOX_ACTIVE` 的外觀）：`Link` 當前時一定掛
   `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。單選的篩選列
-  （媒體庫、下載列表、作品頁的下載段）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
+  （媒體庫、下載列表、作品頁的下載段、用量頁的期間）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
+  按下去的那一顆換成了字，焦點跟著它消失：換選之後焦點落在新選的那一格（`tabIndex={-1}`），一開始畫出來與焦點在別處時不搶（M5 票 15）。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
 - `AI 活動`（M5 票 14）在「下載」之後，AI 設定好時才有、不分角色；其餘項目的角色門禁見各頁。
 - `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
@@ -996,7 +998,8 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
   那一根鋪 `deck`。圖本身 `aria-hidden`、不可聚焦——九十根各自可聚焦是九十個 Tab 停留點；等價物是圖下收在 `<details>` 的逐日表。
 - **表**（`UsageTable`）：出處、格式與模型、人、逐日共用一張表；`bg-well` 加 `border-2 rule`，欄名 `whitespace-nowrap`。命中率那一格底下說
   這一列有幾次沒回報。窄版只留第一欄、呼叫、命中率，四個 token 欄收到第一欄底下**一組一行**——一行中點分隔在 390 寬一定斷行，
-  斷開的那一行以中點開頭，讀起來像清單符號（實跑看到的）。
+  斷開的那一行以中點開頭，讀起來像清單符號（實跑看到的）；每一組不拆開（`whitespace-nowrap`）。命中率格底下的「N 次沒回報」
+  只在 `sm` 以上不換行：窄版不換行時它把第一欄擠窄，英文的 `claude-haiku-5-5` 從字中間斷開（M5 票 15）。
 - **空狀態**：有史以來一筆都沒有時整頁只剩一塊中性 `Notice` 與連到「設定 → AI」的 Ghost 連結，不畫空圖；這段期間沒有、之前有時總量照畫、
   圖只剩基線，給「看 90 天」的連結。
 
@@ -1012,15 +1015,15 @@ Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做�
   ① 中性色塊的動作名（沿用面板的工具名，`assistant/toolNames.ts`）加對象（`.value wrap-anywhere` 的 `h2`：送出的發佈名、Feed 名、索引站名；
   其他型別沒有對象就不印，列的名字退回動作名）；② 一行事實（`text-sm ink-dim`，`Dot` 分隔）：`Timestamp` · 「AI 代 {人} 做的」
   或「{人} 確認的」· 出自對話「標題」（對話標題是一句話，不用書名號）· 「這次回覆 N tokens」（輸入加輸出，不知道時「—」）；③ `reason` 非空時 `.label`「AI 的理由」
-  加原文（`text-sm ink`）；④ 原生 `<details>`，`.label`「輸入」，`hull` 底的 `dl`，每個輸入欄一條 `DetailLine`（欄名照原樣，
-  非字串值以 JSON 印出）；⑤ 撤銷那一格。
+  加原文（`text-sm ink`）；④ 原生 `<details>`，摘要是 `.label`「輸入」加 `ExpandHint`，`hull` 底的 `dl`，每個輸入欄一條 `DetailLine machine`
+  （欄名是機器字串，照原樣、`.value text-xs ink-dim`——`.label` 會把英文轉成 `SOURCE_ID`，M5 票 15；非字串值以 JSON 印出）；⑤ 撤銷那一格。
 - **出自對話**：是自己的對話時是一顆文字連結樣式的按鈕（底線 `rule-strong`，hover 換 `ink`），按了打開側面板並顯示那一則；
   別人的對話只印標題，不給按鈕。機制：`AppShell` 提供 `AssistantControlContext.openConversation(id)`，把面板打開並把
   `{ id, nonce }` 的請求交給 `AssistantPanel`；面板切到那一則、回到對話，焦點進輸入框（同按「助理」鍵），接下之後 `AppShell` 清掉請求，
   之後關了再開不會又跳回去。
 - **撤銷三種說法**：撤得了是 Ghost「撤銷送單 / 撤銷訂閱」，就地 `ConfirmPanel`、後果句同結果卡（共用 `UndoControl`，面板的
   `UndoButton` 是它讀 context 的外殼；沒有專屬文案的型別用通用的「撤銷」）；撤了是 `text-xs ink` 的「已撤銷」加 `Timestamp`，
-  列不消失，焦點留在這一句；撤不了是 `text-xs ink-dim` 一句為什麼——「這一件做了就撤不回。」（不說「反向命令」，那是程式裡的詞）或「只有管理員撤得了這一筆。」。
+  列不消失，焦點留在這一句（`useFocusOnSettle`）；撤不了是 `text-xs ink-dim` 一句為什麼——「這一件做了就撤不回。」（不說「反向命令」，那是程式裡的詞）或「只有管理員撤得了這一筆。」。
   撤銷被拒是 `blocked-ink` 的 `role="alert"`，列留著、再按一次接著做。撤掉之後重問這一頁、Job、作品、RSS 與對話。
 - **空狀態**：中性 `Notice`「AI 還沒替你 / 任何人做過事。」加一句側面板怎麼用。超過 200 筆時列表末一句 `text-xs ink-dim`「更早的不列在這裡。」。
   讀取中是三塊與列等高的 `deck` 色條（不動），讀不到是 `RequestFailed`。
@@ -1034,10 +1037,14 @@ Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做�
 - **外框**：頁首導覽之後一顆 `NAV_BOX` 的「助理」（`aria-expanded`，開著時 `NAV_BOX_ACTIVE`；它是一欄不是一頁，所以是按鈕）。
   `lg` 以上面板 `fixed` 在右側全高（`26rem`，`xl` `28rem`），`AppShell` 外框以同寬的 `padding-right` 讓出那一欄——頁首與頁面
   變窄、照常可操作，**沒有東西疊在誰上面**（The Rule-Line Rule：沒有 z 軸），與頁面之間一條 `border-l-2 border-rule-strong`。
-  `lg` 以下開著時 `main` 收起、面板 `sticky top-0 h-dvh` 接在頁首下面。開關存在 `localStorage`，換頁不關、重整照原樣；
-  使用者按開的焦點進輸入框，照記憶打開的不搶；「關閉」或焦點在面板內的 `Esc` 收起，焦點回到「助理」鍵。
+  `lg` 以下開著時**頁首與 `main` 一起收起**、面板 `sticky top-0 h-dvh` 佔滿畫面，輸入框在第一屏（接在頁首下面時 390 寬的
+  輸入框落在 y≈994，M5 票 15）；是收起不是疊上去，面板自己的抬頭列有「關閉」。開關存在 `localStorage`，換頁不關、重整照原樣
+  ——**只在 `lg` 以上照記憶打開**：窄版照記憶打開，從通知點進來先看到的是上次沒關的助理而不是那一頁。`lg` 以下按了面板裡的
+  站內連結（卡上的作品、「看這一筆」、「去設定」、抬頭的「活動」）就收起面板，換了的那一頁才看得到（判斷寫在面板的
+  `onClick`：路由接下的導覽 `defaultPrevented`，按著修飾鍵開新分頁的不算）。使用者按開的焦點進輸入框，照記憶打開的不搶；
+  「關閉」或焦點在面板內的 `Esc` 收起，焦點回到「助理」鍵（等頁首畫回來再給）。
 - **抬頭列**：`deck` 底、`border-b-2 border-rule`，`.label`「助理」的 `h2`（自己帶 `bg-deck`，算 `deck` 抬頭列）加四顆
-  `COMPACT_BUTTON`：活動（連到 `/ai-activity` 的 `Link`；`lg` 以下面板取代頁面，按了先收起面板）、新對話、歷史（歷史清單開著時換成「回到對話」）、關閉。
+  `COMPACT_BUTTON`：活動（連到 `/ai-activity` 的 `Link`）、新對話、歷史（歷史清單開著時換成「回到對話」）、關閉。
 - **對話是航海日誌，不是泡泡**：`role="log"` 的 `<ol>`，一句使用者的話一塊（`deck` 底，抬起一階），它之後的模型回合、
   工具與 notice 收成同一塊「助理」（面板本身的 `well` 底）；每塊上方一個 `.label text-ink-dim` 說話者，塊與塊 `gap-3`，
   不左右對齊、沒有圓角。模型的字是 `text-sm whitespace-pre-wrap break-words` 的散文，**永遠不塗信號色**：做了什麼只以
@@ -1046,14 +1053,16 @@ Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做�
   `ink-dim`；沒做成是 `ink` 字加 `· 理由碼`（`ink-dim`，機器字串照原樣）。
 - **停下來的原因**是 `Notice`：限流、provider 掛掉、連不上是 `assigned`「等一下」（再送一次就好）；key 不對、額度用完、
   模型不存在、端點拒絕與 Berth 自己出錯是 `blocked`「沒成」，管理員多一條「去設定」的文字連結；到了工具輪數上限是
-  `assigned`「停下」。只能聊天的模型在對話上方常駐一則 `neutral` 的 `Notice`。
+  `assigned`「停下」。只能聊天的模型在對話上方常駐一則 `neutral` 的 `Notice`（面板上它是說明、誰都改不了；設定 → AI 的狀態與
+  測試結果兩處是 `assigned`——換不換模型是管理員的決定，不是測試失敗，M5 票 15）。
 - **輸入**：`textarea`（同輸入框的 `hull` 底 + `border-2 border-rule-strong`，散文字型），Enter 送出、Shift+Enter 換行、
   組字中的 Enter 不送。送出鍵是 **Ghost**：頁面自己的主鍵已經是那一屏的調度黃，面板不搶；回覆中 `busy`「回覆中…」。
   後端的拒絕（上一個回覆還在跑、AI 沒設定好）在送出鍵旁一直掛著的 `role="status"` 說，打好的字留著。
 - **沒設定好**：一塊空狀態（`well` 底 + `rule` 框）：管理員「AI 還沒設定好。」加 `GHOST_LINK`「去設定」，一般使用者只有
   「管理員還沒開啟 AI。」；沒有輸入框。
 - **歷史清單**：取代對話那一塊，`SectionHeading` 形狀的 `h3`「對話」，每列一顆整行按鈕（`border-2 border-rule`，hover 線變重）：
-  第一句話（散文）加 `text-xs ink-dim` 的 `Timestamp`。
+  第一句話（散文）加 `text-xs ink-dim` 的 `Timestamp`；正在看的那一則 `aria-current`、重線加 `deck` 底。挑了一則之後焦點回輸入框
+  （M5 票 15）。
 - 對話很長時面板內捲動；新字進來時只有本來就在最底才跟著捲。
 - **結果卡**（`ResultCard`，M5 票 09）：畫在「查過……」那一行底下，**依工具結果的型別挑元件**（後端產生的
   `ToolResultType` 一種一格，登記了新型別沒有卡時 `tsc` 紅），串流當下就畫、重整後從存下的結果再畫。認不得的型別與
@@ -1069,20 +1078,22 @@ Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做�
   有 `problem` 時是搜尋頁同一塊 `IndexerNotice`；接著搜尋頁的 `RoutePicker`（初值是後端的 `preselected_route_id`），
   然後一筆一列：發佈名（`.value text-sm wrap-anywhere`，陌生人寫的字照原樣印）、不是「符合」的那一句（搜尋頁同一個
   中性色塊加理由，`reasonOf`）、符合但 AI 不送的一句 `text-xs ink-dim`「AI 不會送這一筆：…」（不塗漆：它是說明不是失敗）、
-  Tags 中性色塊、大小 `Dot` 做種 `Dot` 站 `Dot` 預估季集，最後是搜尋頁同一顆 `SubmitAction`（確認裡印著資料夾名）。
+  Tags 中性色塊、大小 `Dot` 做種 `Dot` 站 `Dot` 預估季集，最後是搜尋頁同一顆 `SubmitAction`（確認裡印著資料夾名；一列一顆「送單」，`aria-describedby` 指著那一列的發佈名，
+  搜尋頁的結果表同樣，M5 票 15）。
   只列了一部分時底下一行說一共幾筆加「去作品頁搜全部」。
   **「送單」**（`SubmittedJobCard`）：抬頭計數是「已送出 / 這一個已經在了」；內容讀 `['jobs', hash]`——狀態色塊
   （`JOB_SIGNAL`，同下載列表）加發佈名、`JobFacts` 那一行、「看這一筆」連到 Job 頁；對話裡有這種卡時面板掛著
   `/events/stream`，卡片跟著推播重問。`undoable` 時一顆 Ghost「撤銷送單」（按不按得到照後端說的），就地展開 `ConfirmPanel` 說會刪什麼，
-  確認鍵是 Primary（同 Job 頁的刪除）；撤銷之後是一句 `role="status"` 的 `text-xs ink-dim`「已撤銷這次送單」，這一筆不在了（404）
+  確認鍵是 Primary（同 Job 頁的刪除）；撤銷之後是一句 `role="status"` 的 `text-xs ink-dim`「已撤銷這次送單」（焦點落在它上面，
+  抬頭計數換成「已撤銷」），這一筆不在了（404）
   也是一句 `text-xs ink-dim`，不是錯誤。
   **「訂閱」**（`SubscribedCard`，M5 票 11）：抬頭計數是來源（`MIKAN` / `NYAA` / `ACG.RIP`，同 RSS 頁）；Feed 名稱
   （`.value text-sm`）、一 RSS Series 一行（作品名 `WorkLink` `Dot` 字幕組 `Dot` Route 的 `ink-dim`）、當場送出幾筆、
   被排除的那一句（作品頁訂閱同一句）、搜尋 feed 第一輪還沒選時一句加 `TEXT_LINK`「去 RSS 頁」、`ink-dim` 的「下一次輪詢」
-  加 `Timestamp`（讀 `/rss/feeds` 的現況；Feed 不在清單上了說一句）。
+  加 `Timestamp`（讀 `/rss/feeds` 的現況；Feed 不在清單上了說一句；算出來的時間已經過了是「半分鐘內」，不說「4 週前」）。
 - **撤銷**（`UndoButton`，M5 票 11）：可逆的寫入卡片底下一顆 Ghost（「撤銷送單」「撤銷訂閱」），就地 `ConfirmPanel` 說會撤掉
   什麼，確認鍵 Primary；經過對話（模型下一輪知道）。撤掉之後卡片換成一句 `role="status"` 的 `text-xs`，說撤回了什麼、留下什麼，
-  不再讀現況、不再給鍵；撤銷被拒（qBittorrent 連不上）是 `blocked-ink` 的 `role="alert"`，卡片照舊、再按一次接著做。
+  焦點落在它上面（`useFocusOnSettle`），不再讀現況、不再給鍵；撤銷被拒（qBittorrent 連不上）是 `blocked-ink` 的 `role="alert"`，卡片照舊、再按一次接著做。
 - **寫入工具的狀態行**（M5 票 12）：送單、訂閱不說「查」——色塊「進行中」、「正在送單」、「送單好了」、「送單沒做成」
   （等級讀 `GET /assistant` 的 `tools`，後端從命令標記來，M5 票 11；清單上沒有的照查詢的說法）。zh-Hant 的工具名前後都是
   中文字，免得「查過{{tool}}」夾著半形字。拒絕理由碼有人話的（登錄表的、送單的 `SubmitRefusal`、訂閱的 `SubscribeRefusal`）
@@ -1093,13 +1104,15 @@ Gmail 的「復原」（就在那一列上、撤了之後列還在）；不做�
   卡片同結果卡的外形與小一號內距，**等人按時整塊框換 `rule-strong`**、抬頭列右側 compact 的 `assigned` 色塊「等你確認」
   （需要你，一色一義）；按過之後框回 `rule`，狀態只寫字（`.label ink-dim`：已確認、已拒絕、失效——常態不塗漆；中性色塊是 `deck`，
   疊在 `deck` 抬頭列上會消失，所以不用色塊），只有確認之後 Berth 自己出錯的那一種是 `blocked` 色塊「沒成」。內容由上到下：**會發生什麼**（依預覽型別一種一格：加索引站是一句話加
-  `hull` 底的 `dl`——網址、加到哪一台、定義自帶的英文說明，值是 `.value text-xs wrap-anywhere`；加 Feed（M5 票 11）同形——
+  `hull` 底的 `dl`——網址、加到哪一台、定義自帶的英文說明，網址是 `.value text-xs wrap-anywhere`，「Berth 套件內」與英文說明是散文（整格等寬時
+  斷成「Berth 套 / 件內」，M5 票 15）；加 Feed（M5 票 11）同形——
   網址、來源、Route，可逆的工具被降成卡時，最上面多一句 `text-xs ink` 說為什麼（「這個網址不是你在這則對話裡打的」）；刪下載是一句話、一句
   「媒體庫的鏈接留著」的後果，加每一筆 Job 一塊 `hull` 底：Job 名、逐檔的絕對路徑清單、件數 `Dot` 大小，與「刪了空出
   多少」或「媒體庫還留著同一份：刪了不會空出空間」）→ `.label`「AI 的理由」加模型給的原文（`text-xs ink-dim`）→
   `CONFIRM_ACTIONS` 的兩顆鍵：`PrimaryButton`「確認加入 / 確認刪除」與 Ghost「拒絕」。卡片在對話裡，按鍵是這張卡唯一的
   主要動作，所以用黃漆（送出鍵是 Ghost 的理由是讓頁面的主鍵；這裡要人做的就是這一件事）。回覆還在跑時兩顆都 `busy`，
-  下方一行「回覆講完才按得到」。結果寫在一直掛著的 `role="status"` 裡（`text-xs ink`）：後端回報真的做了什麼
+  下方一行「回覆講完才按得到」。結果寫在一直掛著的 `role="status"` 裡（`text-xs ink`；空的時候 `sr-only`——`display: none` 就不在無障礙樹裡了；按過之後
+  兩顆鍵消失，焦點落在這一格，M5 票 15）：後端回報真的做了什麼
   （「已加入 dmhy」「刪了 2 個檔案，空出 8 KB」）、失效的理由（「按下去的時候已經不成立，什麼都沒做：這一站已經在
   Prowlarr 裡了」，有原文時 `Dot` 之後接 `.value ink-dim` 的原文），或「拒絕了，什麼都沒做」；別人先按了也在這裡說，不當成做好了。重整之後卡片讀對話的 `proposals`
   照它的結局畫。確認過、可逆的卡（被降級的加 Feed）在 AI 活動頁撤銷之後，同一格多一句「這一筆後來撤銷了。」（M5 票 14）。
