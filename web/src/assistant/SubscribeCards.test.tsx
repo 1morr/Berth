@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -202,6 +202,19 @@ describe('訂閱卡', () => {
     expect(within(panel).getByText('訂閱好了')).toBeInTheDocument()
   })
 
+  it('下一次輪詢的時間已經過了：說半分鐘內，不說「幾週前」（M5 票 15）', async () => {
+    const LONG_AGO = '2026-01-01T00:00:00Z'
+    const overdue = subscribed()
+    overdue.feed = { ...overdue.feed, last_polled_at: LONG_AGO }
+    render(said('subscribe_mikan', 'Subscribed', overdue), {
+      routes: { 'GET /api/rss/feeds': { body: [feed({ last_polled_at: LONG_AGO })] } },
+    })
+    const panel = await openPanel()
+    const card = await within(panel).findByRole('region', { name: '訂閱' })
+
+    expect(within(card).getByText(/下一次輪詢/)).toHaveTextContent('下一次輪詢 半分鐘內')
+  })
+
   it('撤銷經過對話：確認之後卡片說撤回了幾筆，不再給撤銷鍵', async () => {
     let undone = false
     const stub = render(
@@ -241,6 +254,8 @@ describe('訂閱卡', () => {
     expect(within(card).getByText(/撤回了 11 筆還沒下載完的/)).toBeInTheDocument()
     expect(within(card).getByText(/1 筆已經下載完，留著/)).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: '撤銷訂閱' })).toBeNull()
+    // 鍵消失了：焦點落在說已撤銷的那一段（M5 票 15）。
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveFocus())
     expect(
       stub.mock.calls.some(([url]) =>
         String(url).endsWith('/api/conversations/7/messages/3/tools/c0/undo'),

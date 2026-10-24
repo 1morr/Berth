@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -20,7 +20,7 @@ import { useSignOut } from './components/useSignOut'
  *
  * **助理的側面板掛在這裡**（M5 票 08，`.scratch/m5/side-panel-shape.md`）：換頁不關。`lg` 以上固定在右側、
  * 全高，外框讓出同樣寬的一欄，頁首與頁面變窄、照常可操作（並排，不疊在任何東西上：這個系統沒有浮起來的層）；
- * `lg` 以下開著時取代 `main`。登入之後才有。
+ * `lg` 以下開著時取代頁首與 `main`，面板裡的連結換了頁就收起（M5 票 15）。登入之後才有。
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
@@ -47,9 +47,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     setByHand(!open)
     setOpen(!open)
   }
-  const close = () => {
-    setOpen(false)
+  // 關閉之後焦點回到「助理」鍵。等畫完再給：`lg` 以下面板開著時頁首是收起來的，那時鍵還拿不到焦點。
+  const returning = useRef(false)
+  useEffect(() => {
+    if (open || !returning.current) return
+    returning.current = false
     document.getElementById(TOGGLE_ID)?.focus()
+  }, [open])
+  const close = () => {
+    returning.current = true
+    setOpen(false)
   }
 
   return (
@@ -64,7 +71,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           {t('nav.skip')}
         </a>
-        <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
+        {/* `lg` 以下面板開著時連頁首一起收起，面板佔滿畫面、輸入框在第一屏（M5 票 15）。是收起不是疊上去：
+            這個系統沒有浮起來的層。面板自己的抬頭列有「關閉」。 */}
+        <header
+          className={`flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4 ${panel ? 'max-lg:hidden' : ''}`}
+        >
           <div>
             <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
             <p className="text-sm text-ink-dim">{t('app.tagline')}</p>
@@ -87,6 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               admin={me.data.role === 'admin'}
               focusOnMount={byHand}
               onClose={close}
+              onLeave={() => setOpen(false)}
               request={request}
               onRequestHandled={handled}
             />

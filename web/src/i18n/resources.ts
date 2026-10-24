@@ -3108,6 +3108,7 @@ const zhHant = {
         title: '狀態',
         config: '設定',
         ready: '設定好了',
+        readyButFailed: '剛才的測試沒過，見下方的「測試」。',
         notReady: '還沒設定好',
         notReadyHint: '官方端點要 API key；沒有預設模型的端點要填模型。',
         tools: '工具呼叫',
@@ -4254,6 +4255,7 @@ const zhHant = {
         undoConfirm:
           '撤銷這次送單：從 qBittorrent 移除這個 torrent、刪掉已經下載的檔案、清掉這一筆的紀錄。那幾集會回到「缺」。',
         undone: '已撤銷這次送單：移除了 torrent、刪了下載的檔、清了紀錄。',
+        undoneCount: '已撤銷',
       },
       // 訂閱（M5 票 11，`assistant/SubscribedCard.tsx`）。
       subscribed: {
@@ -7341,6 +7343,7 @@ const en: Translations<typeof zhHant> = {
         title: 'Status',
         config: 'Setup',
         ready: 'Ready',
+        readyButFailed: 'The last test failed; see Test below.',
         notReady: 'Not ready',
         notReadyHint:
           'The official endpoint needs an API key; an endpoint without a default model needs a model.',
@@ -8496,6 +8499,7 @@ const en: Translations<typeof zhHant> = {
           'Undo this submit: remove the torrent from qBittorrent, delete the files downloaded so far, and clear its record. Those episodes go back to missing.',
         undone:
           'This submit was undone: the torrent is removed, its files deleted and its record cleared.',
+        undoneCount: 'Undone',
       },
       subscribed: {
         title: 'Subscribed',

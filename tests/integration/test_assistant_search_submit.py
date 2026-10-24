@@ -13,6 +13,7 @@ import asyncio
 import json
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -515,6 +516,21 @@ class TestPageContext:
         cid = streamed[0]["conversation_id"]
         [user] = client.get(f"/api/conversations/{cid}").json()["messages"][:1]
         assert [part["type"] for part in user["parts"]] == ["page", "user_text"]
+
+    def test_a_percent_encoded_work_path_still_names_the_work(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        # 站內的作品連結把 id 編碼過（`encodeURIComponent`，`tv:120089` → `tv%3A120089`），
+        # 路由的 pathname 照網址原樣：點連結進來的作品頁送的是這一種（M5 票 15 實跑抓到）。
+        ai_ready(client)
+        client.get(f"/api/media/{SPY_ID}")
+        factory.ai_.replies = [says("On it.")]
+
+        self.say_on(client, f"/media/{quote(SPY_ID, safe='')}", "What is missing here?")
+
+        [request] = factory.ai_.requests
+        texts = [part.text for part in request.turns[-1].parts if isinstance(part, TextPart)]
+        assert texts[0] == json.dumps({"page": {"media": SPY_ID}, "source": "berth"})
 
     def test_other_pages_and_unknown_works_add_nothing(
         self, client: TestClient, factory: FakeClientFactory

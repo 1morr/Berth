@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { signIn } from './login.ts'
+import { reopenOnNarrow } from './panel.ts'
 import { narrow, shot } from './shot.ts'
 
 // `assistant`：同 `weekly`，AI 設定好了；`DemoChatProvider` 一段一段吐字、話裡有「入庫」時呼叫
@@ -19,7 +20,9 @@ const PAGES = [
   '/settings',
 ]
 
-test('每一頁都開得到側面板，換頁與重整都還開著', async ({ page }) => {
+test('每一頁都開得到側面板；桌機換頁與重整都還開著，窄版每次打開網頁看到的是那一頁', async ({
+  page,
+}) => {
   await signIn(page, '/health')
   await page.getByRole('button', { name: '助理' }).click()
   const panel = page.getByRole('complementary', { name: '助理' })
@@ -27,17 +30,28 @@ test('每一頁都開得到側面板，換頁與重整都還開著', async ({ pa
 
   for (const path of PAGES) {
     await page.goto(path)
+    if (narrow(page)) {
+      // 窄版不照記憶打開（面板取代頁面，M5 票 15）：先看到那一頁，再按「助理」。
+      await expect(panel).toHaveCount(0)
+      await page.getByRole('button', { name: '助理' }).click()
+    }
     await expect(panel).toBeVisible()
-    await expect(page.getByRole('button', { name: '助理' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    )
+    // 窄版開著時頁首（連同「助理」鍵）收起，關閉鍵在面板的抬頭列。
+    if (!narrow(page)) {
+      await expect(page.getByRole('button', { name: '助理' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+    }
     // 並排（桌機）或取代頁面（窄版），兩種都不撐出橫向捲動。
     const overflow = await page.evaluate<number>(
       'document.documentElement.scrollWidth - window.innerWidth',
     )
     expect(overflow, path).toBe(0)
+    // 窄版連頁首一起收起，面板佔滿畫面、輸入框在第一屏。
     await expect(page.locator('main#main')).toBeVisible({ visible: !narrow(page) })
+    await expect(page.getByRole('banner')).toBeVisible({ visible: !narrow(page) })
+    await expect(panel.getByRole('textbox', { name: '跟助理說' })).toBeInViewport()
   }
 
   await panel.getByRole('button', { name: '關閉' }).click()
@@ -83,6 +97,7 @@ test('串流的字一段一段出來，工具呼叫說正在查，限流說幾�
 
   // 重整之後三段都還在（存在 Berth），模型的字沒有塗成功色。
   await page.reload()
+  await reopenOnNarrow(page)
   await expect(log.getByText('這週入庫了什麼')).toBeVisible()
   await expect(panel.getByText('查過最近入庫')).toBeVisible()
   await expect(panel.getByRole('region', { name: '最近 7 天入庫' })).toBeVisible()
@@ -178,6 +193,7 @@ test('不可逆的停在確認卡：按確認才加索引站，刪下載的卡�
 
   // 重整之後兩張卡照它們的結局畫（讀 `proposals` 的現況，不是提出時的那一份）。
   await page.reload()
+  await reopenOnNarrow(page)
   await expect(panel.getByRole('region', { name: '加索引站' }).getByText('已確認')).toBeVisible()
   await expect(panel.getByRole('region', { name: '刪下載' }).getByText('已拒絕')).toBeVisible()
   await shot(page, 'proposal-reloaded')

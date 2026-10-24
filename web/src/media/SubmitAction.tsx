@@ -34,12 +34,15 @@ export function SubmitAction({
   media,
   row,
   route,
+  describedBy,
 }: {
   media: Media
   /** 結果表的一列，或助理搜尋結果卡的一列（M5 票 12）：送單只帶它的 `source_id`。 */
   row: Pick<SearchResult, 'source_id'>
   /** 這一輪選的 Route。`null` = 還沒選——那是送不出去的，而說不行的是那個下拉。 */
   route: number | null
+  /** 那一列發佈名的 id：一列一顆「送單」，鍵的說明說是哪一筆（M5 票 15）。 */
+  describedBy: string
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -94,7 +97,7 @@ export function SubmitAction({
 
   if (!asked) {
     return (
-      <GhostButton ref={trigger} type="button" onClick={open}>
+      <GhostButton ref={trigger} type="button" aria-describedby={describedBy} onClick={open}>
         {t('submit.start')}
       </GhostButton>
     )

@@ -120,11 +120,14 @@ function Row({
   const guess = estimate(row)
   // OpenAPI 裡的 `Tags` 是輸入的形狀（每格可省），後端送出來的每一格都在；補上空值就是同一份。
   const tokens = tagTokens({ ...NO_TAGS, ...row.tags })
+  const titleId = useId()
 
   return (
     <li className="grid gap-2 border-t-2 border-rule px-3 py-2.5">
       {/* 發佈名整行換行、不截斷：它是證據，也是陌生人寫的字——照原樣印，不當成指令。 */}
-      <p className="value text-sm wrap-anywhere text-ink">{row.title}</p>
+      <p id={titleId} className="value text-sm wrap-anywhere text-ink">
+        {row.title}
+      </p>
       {reason && (
         <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="label bg-deck px-1.5 py-0.5 text-ink">{t(reason.labelKey)}</span>
@@ -171,7 +174,7 @@ function Row({
           {guess.noteKey && t(guess.noteKey)}
         </span>
       </p>
-      {media && <SubmitAction media={media} row={row} route={route} />}
+      {media && <SubmitAction media={media} row={row} route={route} describedBy={titleId} />}
     </li>
   )
 }

@@ -348,6 +348,10 @@ describe('搜尋結果卡', () => {
 
     expect(await within(card).findByLabelText<HTMLSelectElement>('入庫到')).toHaveValue('2')
     const [first] = await within(card).findAllByRole('button', { name: '送單' })
+    // 每一列一顆「送單」：鍵的說明是那一列的發佈名，螢幕閱讀器分得出是哪一筆（M5 票 15）。
+    expect(first).toHaveAccessibleDescription(
+      '[ANi] SPY x FAMILY - 26 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
+    )
     await userEvent.click(first)
     expect(within(card).getByText('SPY x FAMILY (2022) [tmdbid-120089]')).toBeInTheDocument()
     await userEvent.click(within(card).getByRole('button', { name: '確認送單' }))
@@ -427,6 +431,9 @@ describe('送單卡', () => {
 
     expect(await within(card).findByText(/已撤銷這次送單/)).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: '撤銷送單' })).toBeNull()
+    // 鍵消失了：焦點落在說已撤銷的那一句，抬頭也不再說「已送出」（M5 票 15）。
+    await waitFor(() => expect(within(card).getByText(/已撤銷這次送單/)).toHaveFocus())
+    expect(within(card).queryByText('已送出')).toBeNull()
     expect(
       stub.mock.calls.some(
         ([url, init]) =>

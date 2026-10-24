@@ -1,6 +1,7 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, type ReactNode } from 'react'
 
 import { FILTER_ACTIVE } from './controls'
+import { focusIfLost } from './useFocusOnSettle'
 
 /**
  * 一頁裡的一組單選篩選（媒體庫的待審 / 對不到、下載列表、作品頁的下載段；M4 票 92 收成這一份）。
@@ -27,11 +28,27 @@ export function FilterBar<V extends string | undefined>({
   renderOption: (value: V, label: string) => ReactNode
   className?: string
 }) {
+  // 按下去的那一顆換成了字（選著的那一格不是連結）：焦點跟著它消失、掉回 `body`。換選之後落在新選的
+  // 那一格（`tabIndex={-1}`），下一個 Tab 從它接著走（M5 票 15）。一開始畫出來時不搶；焦點在別處時也不搶。
+  const chosen = useRef<HTMLSpanElement>(null)
+  const shown = useRef(current)
+  useEffect(() => {
+    if (shown.current === current) return
+    shown.current = current
+    focusIfLost(chosen.current)
+  }, [current])
+
   return (
     <nav aria-label={label} className={`flex flex-wrap gap-2 ${className}`}>
       {options.map((entry) =>
         entry.value === current ? (
-          <span key={entry.value ?? ''} aria-current="true" className={`${FILTER_ACTIVE} text-ink`}>
+          <span
+            key={entry.value ?? ''}
+            ref={chosen}
+            aria-current="true"
+            tabIndex={-1}
+            className={`${FILTER_ACTIVE} text-ink`}
+          >
             {entry.label}
           </span>
         ) : (

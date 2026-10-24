@@ -333,9 +333,19 @@ describe('存下來的', () => {
     const panel = await openPanel()
 
     await userEvent.click(within(panel).getByRole('button', { name: '歷史' }))
+    // 標出正在看的那一則（最近那一則），M5 票 15。
+    expect(await within(panel).findByRole('button', { name: /最新的/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(within(panel).getByRole('button', { name: /這週入庫了什麼/ })).not.toHaveAttribute(
+      'aria-current',
+    )
     await userEvent.click(await within(panel).findByRole('button', { name: /這週入庫了什麼/ }))
 
     expect(await within(panel).findByText('這週入庫了兩部。')).toBeInTheDocument()
+    // 清單那一列消失了：焦點回輸入框，不掉到頁面頂端（M5 票 15）。
+    expect(within(panel).getByRole('textbox')).toHaveFocus()
   })
 
   it('沒有工具結果時，模型說做了也不畫成成功', async () => {
@@ -577,6 +587,63 @@ describe('開與關', () => {
   })
 })
 
+describe('窄版（`lg` 以下，面板取代頁面）', () => {
+  /** 讓 `matchMedia` 說這是手機寬度：jsdom 沒有它，面板沒有它時當桌機。 */
+  function narrow() {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) => ({ matches: false, media: query }) as unknown as MediaQueryList,
+    )
+  }
+
+  it('面板裡的連結換了頁就收起面板，看得到那一頁', async () => {
+    narrow()
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/assistant': { body: { ready: false, chat_only: false, tools: [] } },
+      'GET /api/conversations': { body: [] },
+    })
+    const { router } = renderApp('/')
+    const panel = await openPanel()
+
+    await userEvent.click(await within(panel).findByRole('link', { name: '去設定' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/ai'))
+    expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+  })
+
+  it('連到的就是這一頁（在活動頁按「活動」）也收起面板', async () => {
+    narrow()
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: ADMIN },
+      'GET /api/assistant': { body: READY },
+      'GET /api/conversations': { body: [] },
+      'GET /api/ai-activity': { body: { entries: [], truncated: false } },
+    })
+    renderApp('/ai-activity')
+    const panel = await openPanel()
+
+    await userEvent.click(within(panel).getByRole('link', { name: '活動' }))
+
+    expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('berth.assistant.open')).toBe('0')
+  })
+
+  it('不記得上次開著：每次打開網頁看到的是那一頁', async () => {
+    narrow()
+    localStorage.setItem('berth.assistant.open', '1')
+    render()
+
+    expect(await screen.findByRole('button', { name: '助理' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByRole('complementary', { name: '助理' })).not.toBeInTheDocument()
+  })
+})
+
 describe('確認卡', () => {
   const ADD_DMHY: ProposalCard = {
     id: 5,
@@ -697,6 +764,8 @@ describe('確認卡', () => {
     expect(within(card).getByText('已確認')).toBeInTheDocument()
     expect(within(card).queryByRole('button', { name: '確認加入' })).not.toBeInTheDocument()
     expect(stub.mock.calls.filter(([url]) => url === '/api/proposals/5/confirm')).toHaveLength(1)
+    // 兩顆鍵消失了：焦點落在說結果的那一格，不掉到頁面頂端（M5 票 15）。
+    await waitFor(() => expect(within(card).getByRole('status')).toHaveFocus())
   })
 
   it('刪下載的卡列出每一個要刪的檔案，空不出空間時照實說', async () => {
@@ -768,5 +837,7 @@ describe('確認卡', () => {
     await userEvent.click(within(card).getByRole('button', { name: '拒絕' }))
 
     expect(await within(card).findByText('這張卡已經有人按過了。')).toBeInTheDocument()
+    // 鍵還在（卡照舊等人按）：焦點留在按下去的那一顆上。
+    expect(within(card).getByRole('button', { name: '拒絕' })).toHaveFocus()
   })
 })

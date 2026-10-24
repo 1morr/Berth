@@ -205,6 +205,37 @@ describe('設定 → AI', () => {
     expect(cells.map((cell) => cell.textContent)).toEqual(['1,234', '5', '0', '不知道'])
   })
 
+  it('測試沒過：狀態那一格不只說設定好了，改了欄位之後那句收起', async () => {
+    render(READY, {
+      [TEST]: {
+        body: { ...CONNECTED, failure: 'auth_failed', reply: '', calls: [], tools: null },
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '儲存並測試' }))
+
+    const note = '剛才的測試沒過，見下方的「測試」。'
+    expect(await screen.findByText(note)).toBeVisible()
+    await user.type(screen.getByLabelText('模型'), 'claude-x')
+    expect(screen.queryByText(note)).toBeNull()
+  })
+
+  it('測出只能聊天：與狀態那一格同一個意思（等你決定），不是紅色的失敗', async () => {
+    render(READY, {
+      [TEST]: { body: { ...CONNECTED, tools: UNSUPPORTED.tool_test } },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '儲存並測試' }))
+
+    expect(await screen.findByText('只能聊天。')).toBeVisible()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText('剛才的測試沒過，見下方的「測試」。')).toBeNull()
+  })
+
   it('沒測到工具結論：說稍後再測，並說 failure 的句子', async () => {
     render(READY, {
       [TEST]: {

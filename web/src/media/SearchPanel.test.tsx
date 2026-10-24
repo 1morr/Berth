@@ -1335,6 +1335,10 @@ describe('搜尋 torrent 與結果表', () => {
     it('確認裡印著資料夾名，而且說清楚這一按就定了（票 04b、brief §4.5）', async () => {
       await searched()
 
+      // 一列一顆「送單」：鍵的說明是那一列的發佈名，螢幕閱讀器分得出是哪一筆（M5 票 15）。
+      expect(screen.getByRole('button', { name: '送單' })).toHaveAccessibleDescription(
+        '[ANi] SPY x FAMILY - 50 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]',
+      )
       await userEvent.click(screen.getByRole('button', { name: '送單' }))
 
       // 搜尋列底下也有同一串字（那是「將會是」的預覽，M1.5 票 08 從身分帶搬來），所以只看確認區塊裡的那一份。
