@@ -302,18 +302,24 @@ def tool_content(part: ToolResultPart) -> str:
 
 
 def decision_content(part: DecisionPart) -> str:
-    """有人按了確認卡，給模型的那一段：同工具結果，帶出處的 JSON。"""
-    return json.dumps(
-        {
-            "source": "berth",
-            "proposal": part.proposal_id,
-            "tool": part.tool,
-            "status": part.status.value,
-            "result": part.result,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
+    """有人按了確認卡，給模型的那一段：帶出處的 JSON，**只有 Berth 自己的字**。
+
+    它在使用者那一側進模型（工具呼叫早就有了結果），而外部來的文字只能經由工具結果進來
+    （brief §6.10「外部文字是資料」、§20.24）：結果裡的 torrent 名、Prowlarr 回的原文都不放，只說
+    做成了沒有與拒絕的理由碼。做了什麼的細節在卡上（plan §11.6：做了什麼只以結果卡為準）。
+    """
+    content: dict[str, Any] = {
+        "source": "berth",
+        "proposal": part.proposal_id,
+        "tool": part.tool,
+        "status": part.status.value,
+    }
+    if part.result_type is not None:
+        refused = part.result_type == "Refusal"
+        content["outcome"] = "refused" if refused else "done"
+        if refused and part.result is not None:
+            content["reason"] = part.result.get("reason", "")
+    return json.dumps(content, ensure_ascii=False, sort_keys=True)
 
 
 def tool_result_of(part: ToolResultPart) -> ToolResult:

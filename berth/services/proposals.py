@@ -9,8 +9,9 @@ Discord 按鈕都經過這一支，所以它與介面無關。
   「已提出，等人確認」，不是做好了。做不成的在預覽就拒絕，不出卡片。
 - **`confirm`**：只有要它的那個人按得到（2026-10-24 使用者選定），別人的與不存在的說同一句。
   先把狀態搶成 `confirmed`（兩個分頁同時按只有一個做），再**以按的那個人**重驗：角色還拿得到
-  這個工具、輸入照樣驗得過、預覽重算照樣成立；任何一條不成立、或執行被拒，都是 `expired`
-  並帶著那一份 `Refusal`（什麼都沒改）。成了的照**人看到的那一份預覽**做（`Registry.apply`）。
+  這個工具、輸入照樣驗得過、預覽重算照樣成立**而且與卡上那一份一樣**；任何一條不成立、或執行
+  被拒，都是 `expired` 並帶著那一份 `Refusal`（什麼都沒改）。成了的照**人看到的那一份預覽**做
+  （`Registry.apply`）。
 - **`reject`**：記下來，什麼都不做。
 - 出自一則對話的卡片，按了之後在那則對話加一則 `decision`：模型下一輪看得到結果，畫面上卡片讀
   `proposals` 的現況。**按了不叫模型**（2026-10-24 使用者選定）：不多花 tokens，模型等下一句話
@@ -24,7 +25,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -218,9 +219,23 @@ async def _execute(
     fresh = await registry.preview(call, context)
     if isinstance(fresh, Refusal):
         return fresh
-    preview_model = call.tool.preview_type
-    assert preview_model is not None and preview_model.__name__ == preview_type
-    return await registry.apply(call, context, preview_model.model_validate(preview))
+    shown = _shown(call.tool.preview_type, preview_type, preview)
+    if shown is None or shown != fresh:
+        # 讀不回存下的那一份（這一版改了預覽的型別或形狀），或重算的與它不一樣：都還沒動任何東西。
+        return Refusal(tool=tool_name, reason=ToolRefusal.CHANGED, detail="", next=NextStep.GIVE_UP)
+    return await registry.apply(call, context, shown)
+
+
+def _shown(
+    model: type[BaseModel] | None, stored_type: str, stored: dict[str, Any]
+) -> BaseModel | None:
+    """存下的那一份預覽，照這一版的型別讀回來；讀不回來是 `None`。"""
+    if model is None or model.__name__ != stored_type:
+        return None
+    try:
+        return model.model_validate(stored)
+    except ValidationError:
+        return None
 
 
 async def _claim(

@@ -11,6 +11,7 @@ import {
   type ProposalCard,
   type ProposalPreviews,
   type ProposalPreviewType,
+  type ToolResults,
 } from '../api/assistant'
 import { CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
 import { Dot } from '../components/Dot'
@@ -132,22 +133,18 @@ export function ProposalCardView({ result }: { result: ProposalCard }) {
 
 function StatusChip({ card }: { card: ProposalCard }) {
   const { t } = useTranslation()
-  // 等人按的是 `assigned`（需要你）；按過的是常態，不塗漆（The Usual Stays Unpainted Rule）。只有確認之後
-  // Berth 自己出錯的那一種是 `blocked`。
+  // 等人按的是 `assigned` 色塊（需要你）；只有確認之後 Berth 自己出錯的那一種是 `blocked`。按過的是常態，
+  // 不塗漆（The Usual Stays Unpainted Rule），只寫字：`neutral` 色塊是 `deck`，疊在 `deck` 抬頭列上會消失。
   const failed = card.status === 'confirmed' && card.result_type === 'Refusal'
-  const fill =
-    card.status === 'proposed'
-      ? SIGNAL_FILL.assigned
-      : failed
-        ? SIGNAL_FILL.blocked
-        : 'bg-deck text-ink border-2 border-rule'
-  return (
-    <span className={`label px-1.5 py-0.5 ${fill}`}>
-      {failed
-        ? t('assistant.proposal.status.failed')
-        : t(`assistant.proposal.status.${card.status}`)}
-    </span>
-  )
+  if (card.status === 'proposed' || failed) {
+    const fill = failed ? SIGNAL_FILL.blocked : SIGNAL_FILL.assigned
+    return (
+      <span className={`label px-1.5 py-0.5 ${fill}`}>
+        {failed ? t('assistant.proposal.status.failed') : t('assistant.proposal.status.proposed')}
+      </span>
+    )
+  }
+  return <span className="label text-ink-dim">{t(`assistant.proposal.status.${card.status}`)}</span>
 }
 
 function Preview({ type, preview }: { type: string; preview: Record<string, unknown> }) {
@@ -249,51 +246,62 @@ function Line({ term, children }: { term: string; children: React.ReactNode }) {
 /** 按過之後怎麼了：做了什麼（後端回報的，不是按鈕的回聲）、為什麼沒做成，或拒絕了。 */
 function Outcome({ card }: { card: ProposalCard }) {
   const { t, i18n } = useTranslation()
-  const result = card.result ?? {}
   if (card.status === 'rejected') return <>{t('assistant.proposal.outcome.rejected')}</>
-  if (card.result_type === 'Refusal') {
-    const reason = typeof result.reason === 'string' ? result.reason : ''
-    return (
-      <>
-        {card.status === 'expired'
-          ? t('assistant.proposal.outcome.expired')
-          : t('assistant.proposal.outcome.failed')}{' '}
-        {lapseText(t, reason)}
-      </>
-    )
+  // 依 `result_type` 讀 `result` 的形狀（同 `ResultCard`）：型別是後端照同一份登記寫的。
+  switch (card.result_type) {
+    case 'Refusal': {
+      const refusal = card.result as ToolResults['Refusal']
+      return (
+        <>
+          {card.status === 'expired'
+            ? t('assistant.proposal.outcome.expired')
+            : t('assistant.proposal.outcome.failed')}{' '}
+          {lapseText(t, refusal.reason)}
+          {refusal.detail && (
+            <>
+              {' '}
+              <Dot /> <span className="value wrap-anywhere text-ink-dim">{refusal.detail}</span>
+            </>
+          )}
+        </>
+      )
+    }
+    case 'IndexerAdded': {
+      const added = card.result as ToolResults['IndexerAdded']
+      return <>{t('assistant.proposal.outcome.indexerAdded', { name: added.name })}</>
+    }
+    case 'DownloadsDeleted': {
+      const deleted = card.result as ToolResults['DownloadsDeleted']
+      return (
+        <ul className="grid gap-1">
+          {deleted.jobs.map((job) => (
+            <li key={job.hash} className="wrap-anywhere">
+              {job.refused
+                ? t('assistant.proposal.outcome.jobRefused', {
+                    name: job.name,
+                    reason: job.refused,
+                  })
+                : t('assistant.proposal.outcome.jobDeleted', {
+                    count: job.sources,
+                    size: formatSize(job.freed, i18n.language),
+                  })}
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    default:
+      return <>{t('assistant.proposal.outcome.done')}</>
   }
-  if (card.result_type === 'IndexerAdded') {
-    return <>{t('assistant.proposal.outcome.indexerAdded', { name: String(result.name ?? '') })}</>
-  }
-  if (card.result_type === 'DownloadsDeleted' && Array.isArray(result.jobs)) {
-    const jobs = result.jobs as {
-      hash: string
-      name: string
-      sources: number
-      freed: number
-      refused: string
-    }[]
-    return (
-      <ul className="grid gap-1">
-        {jobs.map((job) => (
-          <li key={job.hash} className="wrap-anywhere">
-            {job.refused
-              ? t('assistant.proposal.outcome.jobRefused', { name: job.name, reason: job.refused })
-              : t('assistant.proposal.outcome.jobDeleted', {
-                  count: job.sources,
-                  size: formatSize(job.freed, i18n.language),
-                })}
-          </li>
-        ))}
-      </ul>
-    )
-  }
-  return <>{t('assistant.proposal.outcome.done')}</>
 }
 
-/** 失效的理由有人話的那幾種；其餘照原樣印理由碼（機器字串）。 */
+/** 失效的理由有人話的那幾種；其餘照原樣印理由碼（機器字串）。原文（`detail`）另外接在後面。 */
 const LAPSES = {
   not_allowed: 'assistant.proposal.lapse.not_allowed',
+  changed: 'assistant.proposal.lapse.changed',
+  prowlarr_unchosen: 'assistant.proposal.lapse.prowlarr_unchosen',
+  site_unknown: 'assistant.proposal.lapse.site_unknown',
+  site_not_offered: 'assistant.proposal.lapse.site_not_offered',
   unknown_tool: 'assistant.proposal.lapse.unknown_tool',
   invalid_input: 'assistant.proposal.lapse.invalid_input',
   internal_error: 'assistant.proposal.lapse.internal_error',

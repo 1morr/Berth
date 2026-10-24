@@ -6834,7 +6834,7 @@ export interface components {
          *     （`main._document_components`），前端拿得到這個封閉集合。
          * @enum {string}
          */
-        ToolRefusal: "unknown_tool" | "invalid_input" | "not_allowed";
+        ToolRefusal: "unknown_tool" | "invalid_input" | "not_allowed" | "changed";
         /** @enum {string} */
         ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "Refusal" | "ProposalCard";
         /** @enum {string} */

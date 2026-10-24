@@ -225,7 +225,7 @@ class JobDownloads:
 
 
 @dataclass(frozen=True, slots=True)
-class DownloadsDeleted:
+class JobDownloadsOutcome:
     """一筆刪了什麼；沒做成的是 `refused` 的理由碼。"""
 
     hash: str
@@ -269,7 +269,7 @@ async def plan_downloads_deletion(session: AsyncSession, media: str) -> tuple[Jo
 @command(Effect.IRREVERSIBLE)
 async def delete_downloads(
     session: AsyncSession, factory: ServiceClientFactory, hashes: Sequence[str], *, actor: str
-) -> tuple[DownloadsDeleted, ...]:
+) -> tuple[JobDownloadsOutcome, ...]:
     """這幾筆各走一次 `delete_job`（`DOWNLOADS_SCOPE`）。
 
     **先全部驗過再動手**：有一筆已經不在或已經刪過時整批不做（`JOB_GONE`）——人按確認時同意的是
@@ -288,11 +288,15 @@ async def delete_downloads(
             outcome = await delete_job(session, factory, job_hash, DOWNLOADS_SCOPE, actor=actor)
         except JobRejectedError as exc:
             done.append(
-                DownloadsDeleted(hash=job_hash, name=name, sources=0, freed=0, refused=exc.reason)
+                JobDownloadsOutcome(
+                    hash=job_hash, name=name, sources=0, freed=0, refused=exc.reason
+                )
             )
             continue
         done.append(
-            DownloadsDeleted(hash=job_hash, name=name, sources=outcome.sources, freed=outcome.freed)
+            JobDownloadsOutcome(
+                hash=job_hash, name=name, sources=outcome.sources, freed=outcome.freed
+            )
         )
     return tuple(done)
 

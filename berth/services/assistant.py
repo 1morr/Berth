@@ -3,8 +3,8 @@
 與介面無關：側面板（`api/conversations.py` 的 SSE）與 M7 的 Discord 都呼叫 `AssistantRuns.send`，
 讀它回的事件。存下來的形狀與讀取在 `services.conversations`。
 
-- **工具＝登錄表依角色過濾**（`Registry.tools_for`）；`invoke` 再查一次，模型叫了清單外的名字也
-  一樣擋。設定頁測出不支援工具呼叫的模型（`settings.ai.tool_test`）請求不帶工具。
+- **工具＝登錄表依角色過濾**（`Registry.tools_for`）；`Registry.resolve` 再查一次，模型叫了清單外的
+  名字也一樣擋。設定頁測出不支援工具呼叫的模型（`settings.ai.tool_test`）請求不帶工具。
 - **prompt 的固定前綴**：system 只放固定的字（一個語言一份，`system_prompt`）、工具照登記的順序；
   使用者的話與外部來的文字只在訊息裡，工具結果是帶出處的 JSON（`conversations.tool_content`）。
 - **兩條保險絲**（brief §6.10）：一則訊息之後最多 `MAX_TOOL_ROUNDS` 次模型呼叫，到了就停、說出
@@ -207,7 +207,7 @@ class AssistantRuns:
     def replying(self, conversation_id: int) -> bool:
         return conversation_id in self._active
 
-    # 花掉的 tokens 收不回來；工具裡的寫入各自標著（`Registry.invoke`）。
+    # 花掉的 tokens 收不回來；工具裡的寫入各自標著（`proposals.dispatch`、`Registry.run`）。
     @command(Effect.IRREVERSIBLE)
     async def send(
         self,

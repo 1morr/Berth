@@ -108,6 +108,18 @@ class IndexerAddition(BaseModel):
     prowlarr: str
     origin: ServiceOrigin
 
+    @classmethod
+    def of(cls, plan: indexer.SiteAddition) -> IndexerAddition:
+        return cls(
+            site=plan.definition_name,
+            name=plan.name,
+            url=plan.url,
+            description=plan.description,
+            language=plan.language,
+            prowlarr=plan.prowlarr,
+            origin=plan.origin,
+        )
+
 
 class IndexerAdded(BaseModel):
     site: str
@@ -117,15 +129,7 @@ class IndexerAdded(BaseModel):
 async def _plan_indexer(context: ToolContext, given: AddIndexerInput) -> IndexerAddition:
     async with context.sessions() as session:
         plan = await indexer.plan_site_addition(session, context.clients, given.site)
-    return IndexerAddition(
-        site=plan.definition_name,
-        name=plan.name,
-        url=plan.url,
-        description=plan.description,
-        language=plan.language,
-        prowlarr=plan.prowlarr,
-        origin=plan.origin,
-    )
+    return IndexerAddition.of(plan)
 
 
 async def _add_indexer(
@@ -158,6 +162,18 @@ class JobDownloadsPreview(BaseModel):
     #: 刪了真的空得出來的；媒體庫還握著同一份時是 0。
     reclaimable: int
 
+    @classmethod
+    def of(cls, job: deletion.JobDownloads) -> JobDownloadsPreview:
+        return cls(
+            hash=job.hash,
+            name=job.name,
+            state=job.state,
+            files=list(job.files),
+            missing=job.missing,
+            bytes=job.bytes,
+            reclaimable=job.reclaimable,
+        )
+
 
 class DownloadsDeletion(BaseModel):
     """確認卡上「會發生什麼」：這部作品每一筆 Job 會移除 torrent、刪掉下載目錄裡的這幾個檔案；
@@ -177,6 +193,12 @@ class JobDownloadsDeleted(BaseModel):
     #: 這一筆沒做成的理由碼（`JobRefusal`）；做成了是空字串。
     refused: str
 
+    @classmethod
+    def of(cls, row: deletion.JobDownloadsOutcome) -> JobDownloadsDeleted:
+        return cls(
+            hash=row.hash, name=row.name, sources=row.sources, freed=row.freed, refused=row.refused
+        )
+
 
 class DownloadsDeleted(BaseModel):
     media: str
@@ -192,18 +214,7 @@ async def _plan_downloads(context: ToolContext, given: DeleteDownloadsInput) -> 
         media=given.media,
         title=snapshot.title if snapshot is not None else "",
         title_en=snapshot.title_en if snapshot is not None else "",
-        jobs=[
-            JobDownloadsPreview(
-                hash=job.hash,
-                name=job.name,
-                state=job.state,
-                files=list(job.files),
-                missing=job.missing,
-                bytes=job.bytes,
-                reclaimable=job.reclaimable,
-            )
-            for job in jobs
-        ],
+        jobs=[JobDownloadsPreview.of(job) for job in jobs],
     )
 
 
@@ -219,16 +230,7 @@ async def _delete_downloads(
         )
     return DownloadsDeleted(
         media=given.media,
-        jobs=[
-            JobDownloadsDeleted(
-                hash=row.hash,
-                name=row.name,
-                sources=row.sources,
-                freed=row.freed,
-                refused=row.refused,
-            )
-            for row in done
-        ],
+        jobs=[JobDownloadsDeleted.of(row) for row in done],
     )
 
 

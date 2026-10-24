@@ -35,7 +35,7 @@ from berth.domain import (
     ServiceOrigin,
     ToolOutcome,
 )
-from berth.models import SetupSettings
+from berth.models import Proposal, SetupSettings
 from berth.services.assistant import AssistantRuns, ToolFinished
 from berth.services.auth import AuthenticatedUser
 from berth.services.conversations import ProposalRejectedError
@@ -150,8 +150,10 @@ async def test_adding_an_indexer_stops_on_a_card_and_happens_only_when_confirmed
 @dataclass(frozen=True, slots=True)
 class DeletionAsked:
     runs: AssistantRuns
+    runs_provider: FakeChatProvider
     admin: AuthenticatedUser
     media: str
+    conversation: int
     card: dict[str, object]
 
 
@@ -163,7 +165,7 @@ async def deletion_asked(
     admin = await person(session, "skipper", Role.ADMIN)
     await ai_ready(session)
     assert job.media_id is not None
-    factory.ai_ = FakeChatProvider(
+    provider = factory.ai_ = FakeChatProvider(
         replies=[
             asks("delete_downloads", media=job.media_id, reason="You asked to stop seeding it."),
             says("Press confirm on the card to delete them."),
@@ -171,7 +173,9 @@ async def deletion_asked(
     )
     runs = AssistantRuns(create_session_factory(engine), factory, now=lambda: NOW)
     events = await drain(runs, admin, "delete this one's complete")
-    return DeletionAsked(runs, admin, job.media_id, proposed_card(events))
+    return DeletionAsked(
+        runs, provider, admin, job.media_id, started_id(events), proposed_card(events)
+    )
 
 
 async def test_deleting_downloads_stops_on_a_card_listing_the_files_and_rejecting_keeps_them(
@@ -341,3 +345,60 @@ async def test_a_user_is_never_offered_the_administrator_tools(
     [finished] = [event for event in events if isinstance(event, ToolFinished)]
     assert finished.result.outcome is ToolOutcome.REFUSED
     assert finished.result.result["reason"] == ToolRefusal.UNKNOWN_TOOL
+
+
+async def test_a_card_whose_preview_changed_meanwhile_expires(
+    engine: AsyncEngine, session: AsyncSession
+) -> None:
+    """人按確認時同意的是他看到的那一份：換了一台 Prowlarr，就不是卡上寫的那件事了。"""
+    asked = await indexer_asked(engine, session)
+    setup = await read_settings(session, SetupSettings)
+    setup.choices = {
+        ServiceKind.PROWLARR: chosen(ServiceOrigin.BUNDLED, "http://prowlarr-2:9696"),
+    }
+    await write_settings(session, setup)
+    await session.commit()
+
+    decided = await asked.runs.confirm(card_id(asked.card), user=asked.admin)
+
+    assert refusal_of(decided)[0] == ToolRefusal.CHANGED
+    assert asked.prowlarr.add_attempts == []
+
+
+async def test_a_card_stored_by_another_version_expires_without_running(
+    engine: AsyncEngine, session: AsyncSession
+) -> None:
+    """存下的預覽這一版讀不回來（改了形狀）：什麼都還沒做，是失效，不是「做到一半出錯」。"""
+    asked = await indexer_asked(engine, session)
+    proposal = await session.get(Proposal, card_id(asked.card))
+    assert proposal is not None
+    proposal.preview_json = {"site": "nyaasi"}
+    await session.commit()
+
+    decided = await asked.runs.confirm(card_id(asked.card), user=asked.admin)
+
+    assert refusal_of(decided)[0] == ToolRefusal.CHANGED
+    assert asked.prowlarr.add_attempts == []
+
+
+async def test_the_model_reads_the_decision_without_outside_text(
+    engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
+) -> None:
+    """按卡的結果在使用者那一側進模型，所以不帶外部來的字（torrent 名、Prowlarr 原文）：
+    外部文字只經由工具結果進來（brief §6.10、§20.24）。細節在卡上。"""
+    asked = await deletion_asked(engine, session, roots)
+    await asked.runs.confirm(card_id(asked.card), user=asked.admin)
+    provider = asked.runs_provider
+    provider.replies.append(says("Done."))
+
+    await drain(asked.runs, asked.admin, "thanks", conversation_id=asked.conversation)
+
+    decision = provider.requests[-1].turns[-1].parts[0]
+    assert isinstance(decision, TextPart)
+    assert json.loads(decision.text) == {
+        "source": "berth",
+        "proposal": card_id(asked.card),
+        "tool": "delete_downloads",
+        "status": "confirmed",
+        "outcome": "done",
+    }

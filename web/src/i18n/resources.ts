@@ -4037,6 +4037,7 @@ const zhHant = {
         unknown_tool: '你的清單上沒有這個工具',
         invalid_input: '模型給的參數不對',
         not_allowed: '你現在的角色做不了這件事',
+        changed: '會發生的事和卡上寫的不一樣了',
       },
     },
     notice: {
@@ -4136,6 +4137,11 @@ const zhHant = {
       },
       lapse: {
         not_allowed: '你的角色已經做不了這件事。',
+        changed:
+          '會發生的事和卡上寫的不一樣了（例如換了一台 Prowlarr、多了檔案），請重新叫助理提一次。',
+        prowlarr_unchosen: '還沒選 Prowlarr 從哪裡來。',
+        site_unknown: '這台 Prowlarr 不認得這一站。',
+        site_not_offered: 'Berth 加不了這一站（私站或 usenet）。',
         unknown_tool: '這一版沒有這個工具了。',
         invalid_input: '這一版不認得卡上的參數。',
         internal_error: 'Berth 自己出錯了，原因在 berth 容器的 log。',
@@ -8121,6 +8127,7 @@ const en: Translations<typeof zhHant> = {
         unknown_tool: 'that tool is not on your list',
         invalid_input: 'the model sent the wrong arguments',
         not_allowed: 'your role cannot do this now',
+        changed: 'what would happen no longer matches the card',
       },
     },
     notice: {
@@ -8222,6 +8229,11 @@ const en: Translations<typeof zhHant> = {
       },
       lapse: {
         not_allowed: 'your role can no longer do this.',
+        changed:
+          'what would happen no longer matches the card (another Prowlarr, more files, for example); ask the assistant again.',
+        prowlarr_unchosen: 'Prowlarr has not been chosen yet.',
+        site_unknown: 'this Prowlarr does not know that site.',
+        site_not_offered: 'Berth cannot add that site (private or usenet).',
         unknown_tool: 'this version no longer has that tool.',
         invalid_input: 'this version does not understand the card’s arguments.',
         internal_error: 'Berth itself went wrong; the reason is in the berth container log.',

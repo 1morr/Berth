@@ -109,6 +109,9 @@ class ToolRefusal(StrEnum):
     INVALID_INPUT = "invalid_input"
     #: 按確認卡的當下，這個人的角色已經拿不到這個工具（M5 票 10）。他看過那張卡，所以照實說。
     NOT_ALLOWED = "not_allowed"
+    #: 按確認卡的當下，重算的「會發生什麼」與卡上寫的不一樣了（換了一台 Prowlarr、多了檔案），
+    #: 或這一版讀不回存下的那一份（M5 票 10）。人同意的是他看到的那一份，所以不做。
+    CHANGED = "changed"
 
 
 class Refusal(BaseModel):

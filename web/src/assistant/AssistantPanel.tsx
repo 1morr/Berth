@@ -462,6 +462,7 @@ const REFUSAL_TEXT = {
   unknown_tool: 'assistant.tools.reason.unknown_tool',
   invalid_input: 'assistant.tools.reason.invalid_input',
   not_allowed: 'assistant.tools.reason.not_allowed',
+  changed: 'assistant.tools.reason.changed',
 } as const satisfies Record<ToolRefusal, string>
 
 function reasonText(t: TFunction, reason: string): string {
