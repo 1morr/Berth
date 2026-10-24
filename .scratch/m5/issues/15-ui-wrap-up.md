@@ -2,7 +2,7 @@
 
 **Status:** ready-for-agent
 
-**Blocked by:** 10、11、12、13、14
+**Blocked by:** 07b、10、11、12、13、14
 
 **讀:** CLAUDE.md〈UI〉；`DESIGN.md`、`PRODUCT.md`；`.scratch/m5/` 的各份 shape
 
