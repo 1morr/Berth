@@ -8,6 +8,7 @@ import {
   type ParsedLocation,
 } from '@tanstack/react-router'
 
+import { DEFAULT_USAGE_PERIOD, usagePeriodOf, type UsagePeriod } from './api/ai'
 import { meQueryOptions, type Me } from './api/auth'
 import { ApiError } from './api/client'
 import { healthQueryOptions } from './api/health'
@@ -33,6 +34,7 @@ import { JellyfinSettingsPage } from './pages/JellyfinSettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
 import { AiSettingsPage } from './pages/AiSettingsPage'
+import { AiUsagePage } from './pages/AiUsagePage'
 import { NotifySettingsPage } from './pages/NotifySettingsPage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
@@ -159,6 +161,11 @@ async function signedIn(queryClient: QueryClient): Promise<boolean> {
  */
 interface HealthSearch {
   denied?: boolean
+}
+
+/** 用量頁的期間（M5 票 13）。預設的 30 天不寫進網址。 */
+interface UsageSearch {
+  days?: UsagePeriod
 }
 
 /** 設定頁從哪裡來：精靈跑完之後打開 `/setup` 被帶過來的是 `setup`（M4 票 60）。 */
@@ -518,8 +525,7 @@ function settingsRoute(
       search.from === 'setup' ? { from: 'setup' } : {},
     beforeLoad: async ({ context, location }) => {
       const me = await requireSignedInPage(context.queryClient, location)
-      if (!everyone && me !== null && me.role !== 'admin')
-        throw redirect({ to: '/health', search: { denied: true } })
+      if (!everyone) refuseNonAdmin(me)
     },
     component: () => (
       <AppShell>
@@ -527,6 +533,11 @@ function settingsRoute(
       </AppShell>
     ),
   })
+}
+
+function refuseNonAdmin(me: Me | null) {
+  if (me !== null && me.role !== 'admin')
+    throw redirect({ to: '/health', search: { denied: true } })
 }
 
 const jellyfinSettingsRoute = settingsRoute('/settings/jellyfin', JellyfinSettingsPage)
@@ -541,6 +552,26 @@ const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySetti
 })
 /** AI 不是泊位，與通知同一組；只有管理員（API key 與模型是整台 Berth 的設定）。 */
 const aiSettingsRoute = settingsRoute('/settings/ai', AiSettingsPage)
+/**
+ * AI 用量（M5 票 13）：看得到每個人的用量，所以只有管理員。期間在網址上（`?days=7`），重整與分享不丟；
+ * 不走 `settingsRoute`，因為它的 search 只認得 `from`。
+ */
+const usageSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/usage',
+  validateSearch: (search: Record<string, unknown>): UsageSearch => {
+    const days = usagePeriodOf(search.days)
+    return days === undefined || days === DEFAULT_USAGE_PERIOD ? {} : { days }
+  },
+  beforeLoad: async ({ context, location }) => {
+    refuseNonAdmin(await requireSignedInPage(context.queryClient, location))
+  },
+  component: () => (
+    <AppShell>
+      <AiUsagePage />
+    </AppShell>
+  ),
+})
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -563,6 +594,7 @@ export const routeTree = rootRoute.addChildren([
   tmdbSettingsRoute,
   notifySettingsRoute,
   aiSettingsRoute,
+  usageSettingsRoute,
   settingsIndexRoute,
   setupRoute,
 ])

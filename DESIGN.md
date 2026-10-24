@@ -9,6 +9,7 @@ colors:
   rule-strong: "oklch(0.6 0.024 245)"
   ink: "oklch(0.97 0.005 245)"
   ink-dim: "oklch(0.78 0.012 245)"
+  bar-faint: "oklch(0.6 0.024 245)"
   assigned: "oklch(0.85 0.18 95)"
   working: "oklch(0.79 0.14 205)"
   secured: "oklch(0.76 0.16 150)"
@@ -285,6 +286,9 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 - **重橫線 `rule-strong`**：分區的重線、失敗時的邊框、主要按鈕的輪廓、輸入框的邊框。深色對 `deck` / `hull` / `well` 是 3.33 / 3.95 / 4.51:1，
   亮色 6.46:1（M2 票 16 的 audit 重量；之前寫的「兩個主題都 6.4:1」只對亮色），都滿足 WCAG 2.2 非文字對比 3:1。
 - **字 `ink` / 弱字 `ink-dim`**：主要與次要文字。`ink-dim` 用在標籤、端點、提示，不用在必須讀清楚的值。
+- **直條淡段 `bar-faint`**：只給圖用（M5 票 13 的用量頁）。直條的三段是 `ink` / `ink-dim` / `bar-faint`，同一色相的三階中性，
+  不借信號色（用量不是狀態）。深色等於 `rule-strong` 的值；亮色另立（`oklch(0.58 0.014 245)`）——`rule-strong` 與 `ink-dim`
+  在亮色幾乎同值、`rule` 對 `well` 只有 1.76:1。對 `well` 深色 4.51:1、亮色 3.29:1，dataviz 的 `validate_palette.js --ordinal` 實跑。
 
 ### Named Rules
 
@@ -975,6 +979,25 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   送不出去（`matched` 帶著原文）塗 `assigned`。被排除或去重擋下的多一行 `ink-dim` 的「為什麼沒下載」，那不是錯誤；
   送不出去的原文是 `.value text-xs ink`。事實行開頭是集數（`E12`，`.value ink`）；另一行說來自哪裡：「來自 Feed 名 · 作品名
   × 字幕組」，沒綁的是「待綁定」（M4 票 13；列是 `rss/ItemLine`，Series 展開的清單共用、不帶這一行）。
+
+### 用量頁（`/settings/usage`，M5 票 13）
+
+`.scratch/m5/usage-page-shape.md`。設定的最後一個分頁，`SettingsFrame` 的 `max-w-3xl` 單欄；只有管理員。形狀照 Anthropic Console 與
+OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、幾個固定的期間），不畫金額。
+
+- **期間**：`FilterBar` 的 7 / 30 / 90 天，在網址上（`?days=7`，預設的 30 不寫）；旁邊一行 `.value text-xs` 的起訖日期。
+- **總量列**：五格 `dl`，`gap-px` 透出 `rule` 當格線（與泊位板同一種格子），`grid-cols-2`（最後一格橫跨）、`sm` 一列五格。
+  `dt` 是 `.label`、`dd` 是 `.value text-sm`——不是大數字的 KPI 磚，數字與表格同一階。不上信號色：失敗次數也是中性的。
+  命中率底下一行小字說「N 次沒回報快取，不算在內」，分母是 0 時印 `—` 並說算不出來。
+- **直條**（`UsageChart`）：每天一根，沒有呼叫的日子只剩基線（`border-b-2 rule-strong`）；三段由下而上 `ink` / `ink-dim` /
+  `bar-faint`，直角、柱與柱 `gap-px`、段與段之間 1px 的 `well` 縫（零圓角與 1px 縫壓過 dataviz 的 4px 圓頭與 2px 縫）。
+  圖例在圖上方。**沒有浮動 tooltip**（這套系統沒有 z 軸）：圖上方一行讀數，平常說最後一天，指標滑過或按到一根就換成那一天、
+  那一根鋪 `deck`。圖本身 `aria-hidden`、不可聚焦——九十根各自可聚焦是九十個 Tab 停留點；等價物是圖下收在 `<details>` 的逐日表。
+- **表**（`UsageTable`）：出處、格式與模型、人、逐日共用一張表；`bg-well` 加 `border-2 rule`，欄名 `whitespace-nowrap`。命中率那一格底下說
+  這一列有幾次沒回報。窄版只留第一欄、呼叫、命中率，四個 token 欄收到第一欄底下**一組一行**——一行中點分隔在 390 寬一定斷行，
+  斷開的那一行以中點開頭，讀起來像清單符號（實跑看到的）。
+- **空狀態**：有史以來一筆都沒有時整頁只剩一塊中性 `Notice` 與連到「設定 → AI」的 Ghost 連結，不畫空圖；這段期間沒有、之前有時總量照畫、
+  圖只剩基線，給「看 90 天」的連結。
 
 ### 工作清單列（`QueueRow` / `DetailLine`）
 

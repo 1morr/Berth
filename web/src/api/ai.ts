@@ -59,3 +59,35 @@ export function runAiTest(): Promise<AiTest> {
 export function listAiModels(): Promise<AiModels> {
   return apiGet<AiModels>('/settings/ai/models')
 }
+
+/** 用量頁（M5 票 13）：今天往前幾天的彙總。 */
+export type AiUsage = Schemas['AiUsageOut']
+
+export type UsageTally = Schemas['UsageTallyOut']
+
+/** 一列 `ai_calls` 是誰叫的。 */
+export type AiCallOrigin = Schemas['AiCallOrigin']
+
+/** 期間只有後端的 `UsageDays` 那幾種。 */
+export type UsagePeriod = Schemas['UsageDays']
+
+/** 照切換列的先後。少一種或多一種都是編譯錯誤（同上面的 `REASONS`）。 */
+const PERIODS: Record<UsagePeriod, true> = { 7: true, 30: true, 90: true }
+
+export const USAGE_PERIODS: readonly UsagePeriod[] = (Object.keys(PERIODS) as `${UsagePeriod}`[])
+  .map((days) => Number(days) as UsagePeriod)
+  .sort((a, b) => a - b)
+
+export const DEFAULT_USAGE_PERIOD: UsagePeriod = 30
+
+/** 網址上的 `days`：認得的才收，其餘是 `undefined`（落回預設）。 */
+export function usagePeriodOf(value: unknown): UsagePeriod | undefined {
+  return USAGE_PERIODS.find((days) => days === Number(value))
+}
+
+export function aiUsageQueryOptions(days: UsagePeriod) {
+  return queryOptions({
+    queryKey: ['settings', 'ai', 'usage', days],
+    queryFn: () => apiGet<AiUsage>(`/settings/ai/usage?days=${days}`),
+  })
+}

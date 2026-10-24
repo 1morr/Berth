@@ -62,6 +62,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Usage
+         * @description 今天往前 `days` 天（含今天）的用量，日期照容器時區（與週報同一個規則）。
+         */
+        get: operations["get_usage_api_settings_ai_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -2478,6 +2498,14 @@ export interface components {
             detail: string;
         };
         /**
+         * AiCallOrigin
+         * @description 一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
+         *
+         *     M5 票 07 只有設定頁的測試；對話（票 08）與 AI 任務（M6）各自加一個值。
+         * @enum {string}
+         */
+        AiCallOrigin: "test";
+        /**
          * AiFailure
          * @description 對 provider 的一次請求沒成的分類（brief §20.24「錯誤」、研究 ai-providers.md 結論 8）。
          *
@@ -2576,6 +2604,35 @@ export interface components {
              * Format: date-time
              */
             tested_at: string;
+        };
+        /**
+         * AiUsageOut
+         * @description 用量頁（M5 票 13、`.scratch/m5/usage-page-shape.md`）。分組的各串都是用得多的在前。
+         */
+        AiUsageOut: {
+            /** Has Any */
+            has_any: boolean;
+            /**
+             * Since
+             * Format: date
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date
+             */
+            until: string;
+            totals: components["schemas"]["UsageTallyOut"];
+            /** Days */
+            days: components["schemas"]["DayUsageOut"][];
+            /** By Origin */
+            by_origin: components["schemas"]["OriginUsageOut"][];
+            /** By Model */
+            by_model: components["schemas"]["ModelUsageOut"][];
+            /** By User */
+            by_user: components["schemas"]["UserUsageOut"][];
+            /** Failures */
+            failures: components["schemas"]["FailureCountOut"][];
         };
         /**
          * ApiFormat
@@ -2942,6 +2999,15 @@ export interface components {
          * @enum {string}
          */
         ConnectionState: "ok" | "failed" | "waiting" | "timeout";
+        /** DayUsageOut */
+        DayUsageOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            tally: components["schemas"]["UsageTallyOut"];
+        };
         /**
          * DeletionEstimateOut
          * @description `services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
@@ -3170,6 +3236,12 @@ export interface components {
              * @default
              */
             password?: string;
+        };
+        /** FailureCountOut */
+        FailureCountOut: {
+            failure: components["schemas"]["AiFailure"];
+            /** Calls */
+            calls: number;
         };
         /** FeedDeletedOut */
         FeedDeletedOut: {
@@ -4482,6 +4554,15 @@ export interface components {
              */
             subgroup_name?: string;
         };
+        /** ModelUsageOut */
+        ModelUsageOut: {
+            format: components["schemas"]["ApiFormat"];
+            /** Host */
+            host: string;
+            /** Model */
+            model: string;
+            tally: components["schemas"]["UsageTallyOut"];
+        };
         /** MyNotifyIn */
         MyNotifyIn: {
             /** Discord User Id */
@@ -4665,6 +4746,11 @@ export interface components {
             kind: components["schemas"]["FeedKind"];
             /** Items */
             items: components["schemas"]["OneshotItemOut"][];
+        };
+        /** OriginUsageOut */
+        OriginUsageOut: {
+            origin: components["schemas"]["AiCallOrigin"];
+            tally: components["schemas"]["UsageTallyOut"];
         };
         /**
          * OwnerIn
@@ -6053,6 +6139,14 @@ export interface components {
             reasons: components["schemas"]["ItemReasonOut"][];
         };
         /**
+         * UsageDays
+         * @description 期間的選項：與 Anthropic Console、OpenAI 的用量頁一樣是幾個固定的長度，不收任意範圍。
+         *
+         *     不用 `Literal[7, 30, 90]`：查詢字串進來是 `"7"`，pydantic 的 `Literal` 不替它轉成整數。
+         * @enum {integer}
+         */
+        UsageDays: 7 | 30 | 90;
+        /**
          * UsageOut
          * @description 一次呼叫的 tokens。`null` 是端點沒回那一格（不知道），不是 0。
          */
@@ -6065,6 +6159,36 @@ export interface components {
             cache_write_tokens: number | null;
             /** Cache Read Tokens */
             cache_read_tokens: number | null;
+        };
+        /**
+         * UsageTallyOut
+         * @description 一組呼叫的加總。每一格只加知道的（`NULL` 不當 0）。
+         */
+        UsageTallyOut: {
+            /** Calls */
+            calls: number;
+            /** Failed */
+            failed: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Cache Write Tokens */
+            cache_write_tokens: number;
+            /** Cache Read Tokens */
+            cache_read_tokens: number;
+            /** Hit Rate */
+            hit_rate: number | null;
+            /** Cache Unreported */
+            cache_unreported: number;
+        };
+        /** UserUsageOut */
+        UserUsageOut: {
+            /** User Id */
+            user_id: number | null;
+            /** Name */
+            name: string | null;
+            tally: components["schemas"]["UsageTallyOut"];
         };
         /** ValidationError */
         ValidationError: {
@@ -6395,6 +6519,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    get_usage_api_settings_ai_usage_get: {
+        parameters: {
+            query?: {
+                days?: components["schemas"]["UsageDays"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiUsageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -73,7 +73,7 @@ from berth.adapters.jellyfin import (
     ParentImage,
     TypeOption,
 )
-from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata
+from berth.adapters.jellyfin.fake import FakeJellyfinClient, ItemMetadata, account_id
 from berth.adapters.notify import BotIdentity, DiscordBot
 from berth.adapters.notify.fake import FakeDiscordBot
 from berth.adapters.prowlarr import IndexerDefinition, ProwlarrClient, ProwlarrIndexer
@@ -114,7 +114,9 @@ from berth.api.deps import get_bundled_services, get_client_factory, get_host_re
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
+    AiCallOrigin,
     AiFailure,
+    ApiFormat,
     CollectionType,
     Confidence,
     ConnectionReason,
@@ -136,6 +138,7 @@ from berth.domain import (
     PlanStatus,
     PlanSummary,
     ReasonCode,
+    Role,
     SeasonSnapshot,
     ServiceKind,
     ServiceOrigin,
@@ -146,6 +149,7 @@ from berth.domain import (
 )
 from berth.main import create_app
 from berth.models import (
+    AiCall,
     Event,
     IndexerSettings,
     Issue,
@@ -167,6 +171,7 @@ from berth.models import (
     SetupOwner,
     SetupSettings,
     TmdbSettings,
+    User,
     media_id,
 )
 from berth.models.types import utcnow
@@ -356,6 +361,8 @@ class Scenario:
     rss_sweep_demo: bool = False
     #: 週報頁（M4 票 131）。見 `_seed_weekly`：最近兩週的週報由產品自己的 `compose_weekly` 產生。
     weekly_demo: bool = False
+    #: 用量頁（M5 票 13）。見 `_seed_usage`。
+    usage_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
     #: 那一格是空的。見 `_seed_legacy_feed`。
     legacy_feed: bool = False
@@ -734,6 +741,13 @@ def weekly_scenario() -> Scenario:
     `compose_weekly` 產生最近兩週的週報（週一 05:00 結束的那兩週）。"""
     scenario = healthy()
     scenario.weekly_demo = True
+    return scenario
+
+
+def usage_scenario() -> Scenario:
+    """用量頁 `/settings/usage`（M5 票 13）：同 `healthy`，加上 `_seed_usage` 的一個月呼叫。"""
+    scenario = healthy()
+    scenario.usage_demo = True
     return scenario
 
 
@@ -1864,6 +1878,7 @@ SCENARIOS = {
     "downloads": downloads_scenario,
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
+    "usage": usage_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "global-path": global_path,
@@ -2374,6 +2389,8 @@ async def _moor(
         await _seed_rss_sweep(session, factory)
     if scenario.weekly_demo:
         await _seed_weekly(session)
+    if scenario.usage_demo:
+        await _seed_usage(session)
 
 
 #: `rss-sweep` 情境的兩個 Feed 壞了多久：過了巡檢的 24 小時。
@@ -2499,6 +2516,85 @@ _WEEKLY_WORKS = (
     ),
     (MediaKind.MOVIE, 372058, "你的名字。", "Your Name."),
 )
+
+
+async def _seed_usage(session: AsyncSession) -> None:
+    """用量頁的一個月（M5 票 13）：每天幾次到二十幾次，有幾天沒有，數字是固定的（每次起來都一樣）。
+
+    - 官方端點的 Opus：快取讀取一週比一週多（命中率往上爬），偶爾一次快取寫入；
+    - 同一個 Opus 經 `openrouter.ai`：不回快取欄位（`NULL`），命中率不算它、頁面說有幾次沒回報；
+    - Haiku：沒有快取；
+    - 五次被限流（什麼都不知道）、一次串流斷掉（知道輸入、不知道輸出）；
+    - `skipper` 與 `deckhand` 各按過，十幾次沒有人（像背景任務那樣）。
+
+    時間是容器時區的每天上午十點起，每次隔四分鐘；今天也有幾次。
+    """
+    skipper = User(jellyfin_user_id=account_id("skipper"), name="skipper", role=Role.ADMIN)
+    deckhand = User(jellyfin_user_id=account_id("deckhand"), name="deckhand", role=Role.USER)
+    session.add_all([skipper, deckhand])
+    await session.flush()
+    today = datetime.now().astimezone().replace(hour=10, minute=0, second=0, microsecond=0)
+    for back in range(30):
+        # 每七天有兩天沒人用。
+        if back % 7 in (2, 3):
+            continue
+        week = 3 - back // 7
+        for n in range((back * 7) % 11 + 4):
+            at = today - timedelta(days=back) + timedelta(minutes=4 * n)
+            who = (skipper, deckhand, None)[n % 3]
+            spent = 6000 + (n * 1300 + back * 170) % 9000
+            if n % 9 == 8:
+                host, model, read, write = "openrouter.ai", "claude-opus-5-5", None, None
+            elif n % 5 == 4:
+                host, model, read, write = "api.anthropic.com", "claude-haiku-5-5", 0, 0
+            else:
+                read = spent * (20 + 15 * week + n % 7) // 100
+                write = 1800 if n == 0 else 0
+                host, model = "api.anthropic.com", "claude-opus-5-5"
+            session.add(
+                AiCall(
+                    created_at=at,
+                    format=ApiFormat.ANTHROPIC,
+                    host=host,
+                    model=model,
+                    input_tokens=spent,
+                    output_tokens=180 + (n * 37) % 600,
+                    cache_write_tokens=write,
+                    cache_read_tokens=read,
+                    duration_ms=900 + n * 40,
+                    origin=AiCallOrigin.TEST,
+                    user_id=who.id if who else None,
+                )
+            )
+    for back in (1, 1, 4, 9, 9):
+        session.add(
+            AiCall(
+                created_at=today - timedelta(days=back, minutes=-90),
+                format=ApiFormat.ANTHROPIC,
+                host="api.anthropic.com",
+                model="claude-opus-5-5",
+                duration_ms=120,
+                origin=AiCallOrigin.TEST,
+                user_id=skipper.id,
+                failure=AiFailure.RATE_LIMITED,
+            )
+        )
+    session.add(
+        AiCall(
+            created_at=today - timedelta(days=5, minutes=-95),
+            format=ApiFormat.ANTHROPIC,
+            host="api.anthropic.com",
+            model="claude-opus-5-5",
+            input_tokens=7400,
+            cache_write_tokens=0,
+            cache_read_tokens=5200,
+            duration_ms=31000,
+            origin=AiCallOrigin.TEST,
+            user_id=deckhand.id,
+            failure=AiFailure.PROVIDER_DOWN,
+        )
+    )
+    await session.commit()
 
 
 async def _seed_weekly(session: AsyncSession) -> None:
