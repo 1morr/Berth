@@ -279,6 +279,11 @@ function DownloadsDeletionView({ preview }: { preview: DownloadsDeletion }) {
   )
 }
 
+/** 值是機器字串（網址）：等寬、任意處斷。 */
+const MACHINE_VALUE = 'value text-xs wrap-anywhere text-ink'
+/** 值是散文或混著散文：詞與詞之間斷，機器字串由呼叫端自己包 `.value`。 */
+const PROSE_VALUE = 'min-w-0 text-xs break-words text-ink'
+
 function Line({
   term,
   prose = false,
@@ -292,9 +297,7 @@ function Line({
   return (
     <div className="grid gap-0.5 sm:grid-cols-[6rem_minmax(0,1fr)] sm:gap-2">
       <dt className="label text-ink-dim">{term}</dt>
-      <dd className={`text-xs text-ink ${prose ? 'min-w-0 break-words' : 'value wrap-anywhere'}`}>
-        {children}
-      </dd>
+      <dd className={prose ? PROSE_VALUE : MACHINE_VALUE}>{children}</dd>
     </div>
   )
 }
