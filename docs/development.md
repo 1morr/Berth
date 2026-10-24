@@ -368,11 +368,17 @@ pnpm -C web build                                          # server 發的是 we
 pnpm -C web exec playwright install chromium               # 第一次
 pnpm -C web e2e                                            # 約 2 分鐘（四十七台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
+E2E_PORT_OFFSET=1000 pnpm -C web e2e                       # 整張 port 表平移 +1000（平行的 worktree）
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```
 
 - **不重試、不接手已經在跑的 server**：替身是有狀態的，重跑一次面對的是被上一次改過的替身。表上的 port
   有東西在聽時先停掉它。
+- **平行的 worktree 各跑一套**：`E2E_PORT_OFFSET` 把上表的 port 整段平移（`web/e2e/ports.ts`；例如 `1000` 是
+  9484–9535），起替身與 `baseURL` 一起移，替身給的連結跟著 `--port` 走。沒設是 0、port 照表，CI 不設。
+  `--project` 只挑要跑的流程，**四十七台替身照樣全部起來**，所以只跑一條也會撞到另一個 worktree 正在用的 port——
+  錯誤是 `http://127.0.0.1:<port>/api/health is already used`。每個 worktree 用不同的位移（例如 1000、2000），
+  位移之後要落在 1024–65535，打錯的值在起伺服器之前就說清楚（`web/gates/e2e-ports.test.ts` 守著）。
 - 選擇器寫的是 zh-Hant 文案（瀏覽器語系 `zh-TW`），改文案要跟著改腳本。
 - 失敗時 `web/test-results/` 留截圖與 trace、`web/playwright-report/` 是 HTML 報告；CI 的 `web-e2e` job 把兩者
   上傳成 artifact `playwright-evidence`（留 14 天）。
