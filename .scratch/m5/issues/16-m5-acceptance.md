@@ -56,22 +56,32 @@
 
 ## 真 key 實跑清單（第 2 項，等使用者）
 
-在演練伺服器上用真的 provider：`BERTH_AI_REAL=1 uv run python scripts/fake_setup_server.py --scenario assistant`（另一次 `--scenario assistant-rss`），其他服務是替身；key 存在暫存目錄的 SQLite，不進 git。每種格式：設定 → AI 填好、「儲存並測試」，再在側面板跑驗收的四句（`/media/tv:120089` 說缺的集搜一下並下載、`assistant-rss` 的 `/media/tv:262000` 說訂閱、加索引站、刪 complete），最後看 `/settings/usage`。
+**2026-10-24 使用者沒有 Anthropic 官方 key，改用同一把 DeepSeek key 跑兩種格式**（協調者轉達）：
 
-| # | 看什麼 | 來源 | 格式 |
+- Anthropic 格式：base URL `https://api.deepseek.com/anthropic`，**模型要手填**（`deepseek-v4-pro`）。照票 07b，填了 base URL 就沒有預設模型（第三方會把 `claude-*` 映射成別的），留空時 `is_ready` 是 false、側面板不開。
+- OpenAI 相容：base URL `https://api.deepseek.com`，模型 `deepseek-v4-pro`。
+
+在演練伺服器上接真的 provider，其他服務都是替身；key 存在暫存目錄的 SQLite，不進 git，跑完整個目錄刪掉：
+
+- 8640：`BERTH_AI_REAL=1 uv run python scripts/fake_setup_server.py --scenario assistant --port 8640`
+- 8641：`--scenario assistant-rss --port 8641`
+
+每種格式的步驟：設定 → AI 填好、按「儲存並測試」，再在側面板跑驗收那四句（8640 的 `/media/tv:120089` 說缺的集搜一下並下載、加索引站、刪 complete；8641 的 `/media/tv:262000` 說訂閱），最後看 `/settings/usage`。
+
+| # | 看什麼 | 來源 | 這次驗得到嗎 |
 | --- | --- | --- | --- |
-| 1 | 同時送 `Authorization: Bearer` 與 `x-api-key` 官方收不收 | brief §20.24 票 07 第 1 條 | Anthropic |
-| 2 | 頂層 `cache_control` 與 `anthropic-version`：官方第二次呼叫起 `cache_read` > 0；第三方 Anthropic 相容端點是忽略還是 400 | 票 07 第 2 條 | Anthropic |
-| 3 | 現役模型預設回不回 `thinking` block，回的話下一輪原樣帶回沒被拒 | 票 07 第 3 條 | Anthropic |
-| 4 | 官方 OpenAI 不送 `reasoning_effort` 時工具呼叫能不能用 | 票 07b 第 4 條 | OpenAI 官方 |
-| 5 | 探針 256 個輸出 tokens 對推理模型夠不夠（不夠會判 `no_reply`） | 票 07b | OpenAI 推理模型 |
-| 6 | `prompt_tokens` 含不含快取讀取（不含的話命中率 > 100%，現在的保險是記「不知道」並寫 log） | 研究第 7 條 | OpenAI 相容 |
-| 7 | Ollama 收到 `tool_choice` 是忽略還是 400（目前不送） | 研究第 5 條、票 07b | Ollama（有的話） |
-| 8 | OpenRouter 的 403 分類、`id` 比名字晚到時的 `call_{index}` | 票 07b Comments | OpenRouter（有的話） |
-| 9 | 整條對話第一次對真 provider：串流、工具呼叫、結果卡、確認卡、撤銷 | 票 07、08、09 | 兩種 |
-| 10 | 用量頁的 tokens 與命中率，數字記在下面 | 本票 | 兩種 |
+| 1 | `Authorization: Bearer` 與 `x-api-key` 同時送：端點收不收 | brief §20.24 票 07 第 1 條 | 只驗 DeepSeek；**官方未實測：沒有官方 key** |
+| 2 | 頂層 `cache_control` 第三方是忽略還是 400；官方第二次呼叫起 `cache_read` > 0 | 票 07 第 2 條 | 只驗 DeepSeek 忽略與否（協調者說會忽略），以及 DeepSeek 在 Anthropic 格式回不回快取欄位；**官方的快取寫入與讀取未實測：沒有官方 key** |
+| 3 | 預設回不回 `thinking` block，回的話下一輪原樣帶回沒被拒 | 票 07 第 3 條 | 只驗 DeepSeek 的 Anthropic 格式；**官方模型未實測：沒有官方 key** |
+| 4 | 官方 OpenAI 不送 `reasoning_effort` 時工具呼叫能不能用 | 票 07b 第 4 條 | **未實測：沒有官方 OpenAI key** |
+| 5 | 探針 256 個輸出 tokens 對推理模型夠不夠（不夠判 `no_reply`） | 票 07b | DeepSeek 兩種格式 |
+| 6 | `prompt_tokens` 含不含快取讀取（`prompt_cache_hit_tokens` / `cached_tokens`；不含的話命中率會超過 100%，保險是記「不知道」並寫 log） | 研究第 7 條 | DeepSeek OpenAI 相容（自動快取，看第二次呼叫） |
+| 7 | Ollama 收到 `tool_choice` 是忽略還是 400 | 研究第 5 條、票 07b | **未實測：沒有自架端點** |
+| 8 | OpenRouter 的 403 分類、`id` 晚到時的 `call_{index}` | 票 07b Comments | **未實測：沒有 OpenRouter** |
+| 9 | 整條對話第一次接真 provider：串流、工具呼叫、結果卡、確認卡、撤銷 | 票 07、08、09 | DeepSeek 兩種格式 |
+| 10 | 用量頁的 tokens 與命中率，數字記在下面 | 本票 | DeepSeek 兩種格式 |
 
-實跑完：結論寫回 brief §20.24（把「未實測」改成實測結果），`docs/guide/setup-wizard.md` 那張表的 OpenAI 官方「not yet tried」跟著改。
+實跑完把結論寫回 brief §20.24：驗到的改成實測結果並寫明是 DeepSeek；驗不到的照實標「未實測：沒有官方 key」，不當成驗過。`docs/guide/setup-wizard.md` 那張表加上 DeepSeek 兩種格式的實測結果；OpenAI 官方仍是「not yet tried」。
 
 ## Comments
 
