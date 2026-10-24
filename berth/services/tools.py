@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -16,19 +17,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import (
     EpisodeStatus,
+    FeedKind,
     JellyfinPresence,
     JobRefusal,
     JobState,
     MediaKind,
+    ProposalCause,
+    RssRefusal,
     SearchVerdict,
     ServiceOrigin,
+    SkipCode,
     TmdbProblem,
 )
 from berth.models import Media
-from berth.services import deletion, downloading, indexer, media, search, weekly
+from berth.services import (
+    bangumi,
+    deletion,
+    downloading,
+    indexer,
+    media,
+    rss,
+    search,
+    subscriptions,
+    weekly,
+)
 from berth.services.jobs import JobRejectedError
 from berth.services.notify import collapse_spans
-from berth.services.registry import NextStep, ProposalInput, Registry, Tool, ToolContext
+from berth.services.registry import NextStep, ProposalInput, Registry, Tool, ToolContext, Undo
 from berth.services.submit_guard import (
     SEARCH_TOOL,
     RouteOption,
@@ -40,6 +55,19 @@ from berth.services.submit_guard import (
     refusal_of,
     vet_submission,
 )
+from berth.services.subscribe_guard import (
+    MIKAN_SEARCH_TOOL,
+    MIKAN_SUBGROUPS_TOOL,
+    MikanBangumi,
+    MikanSearchResults,
+    MikanSubgroup,
+    MikanSubgroups,
+    SubscribeRefusal,
+    SubscribeRefusedError,
+    said_by_user,
+    vet_mikan,
+)
+from berth.services.subscriptions import Unsubscribed
 
 #: 作品的 id：`tv:<tmdb id>` 或 `movie:<tmdb id>`（同 `GET /media/{media_id}`）。
 MEDIA_ID = Field(
@@ -515,6 +543,394 @@ async def _submit_search_result(
     return SubmittedJob(hash=job.hash, name=job.name, media=given.media, created=outcome.created)
 
 
+async def _undo_submission(context: ToolContext, done: SubmittedJob) -> SubmissionUndone:
+    async with context.sessions() as session:
+        await deletion.withdraw_job(session, context.clients, done.hash, actor=context.actor)
+    return SubmissionUndone(hash=done.hash)
+
+
+class SubmissionUndone(BaseModel):
+    """撤銷了一次送單：那一筆 Job 移除了 torrent、刪了下載下來的檔、清了紀錄（M5 票 12）。"""
+
+    hash: str
+
+
+# --- 搜 Mikan 番組、列字幕組（M5 票 11）----------------------------------------------
+
+
+class SearchMikanInput(BaseModel):
+    term: str = Field(
+        min_length=1,
+        max_length=200,
+        description=(
+            "What to search Mikan for: the work's original, romaji, English or Chinese title."
+        ),
+    )
+
+
+async def _search_mikan(context: ToolContext, given: SearchMikanInput) -> MikanSearchResults:
+    hits = await bangumi.search_bangumi(context.clients, given.term)
+    return MikanSearchResults(
+        term=given.term.strip(),
+        bangumi=[MikanBangumi(id=hit.id, title=hit.title) for hit in hits],
+    )
+
+
+class MikanSubgroupsInput(BaseModel):
+    bangumi: int = Field(ge=1, description="A bangumi id from a search_mikan result.")
+
+
+async def _mikan_subgroups(context: ToolContext, given: MikanSubgroupsInput) -> MikanSubgroups:
+    async with context.sessions() as session:
+        view = await bangumi.read_bangumi(session, context.clients, given.bangumi)
+    return MikanSubgroups(
+        bangumi=view.id,
+        title=view.title,
+        subgroups=[
+            MikanSubgroup(
+                id=group.id,
+                name=group.name,
+                updated=group.updated,
+                releases=group.releases,
+                latest=group.latest,
+                bound_to=group.bound_to,
+            )
+            for group in view.subgroups
+        ],
+    )
+
+
+# --- 訂閱（M5 票 11）---------------------------------------------------------------
+
+
+class SubscribedFeed(BaseModel):
+    """Feed 卡：名稱、來源、下一次輪詢。網址不放：聚合 feed 的網址帶著使用者的 token。"""
+
+    id: int
+    name: str
+    kind: FeedKind
+    interval_sec: int
+    last_polled_at: datetime | None
+    #: 下一輪大約什麼時候（上一輪加間隔）；還沒輪過是 `null`（背景迴圈半分鐘內就輪到它）。
+    next_poll_at: datetime | None
+    #: 第一輪預覽選過了沒（`rss.FeedView.primed_at`）。搜尋 feed 的第一輪要人在 RSS 頁選
+    #: 「全部下載」或「只追之後的」，選之前一筆都不送；AI 不替人選（`rss.prime_feed` 不可逆）。
+    primed: bool
+    #: 上一輪沒讀到時的原文；讀到了是空字串。
+    poll_error: str
+
+    @classmethod
+    def of(cls, view: rss.FeedView) -> SubscribedFeed:
+        polled = view.last_polled_at
+        return cls(
+            id=view.id,
+            name=view.name,
+            kind=view.kind,
+            interval_sec=view.interval_sec,
+            last_polled_at=polled,
+            next_poll_at=polled + timedelta(seconds=view.interval_sec) if polled else None,
+            primed=view.primed_at is not None,
+            poll_error=view.poll_error,
+        )
+
+
+class SubscribedSeries(BaseModel):
+    """RSS Series 卡的一列：綁到哪部作品、哪一個字幕組。"""
+
+    id: int
+    #: 綁到的作品（`tv:209867`）；待綁定是 `null`。
+    media: str | None
+    media_title: str
+    media_title_en: str
+    route_name: str
+    source: FeedKind | None
+    #: Mikan 的番組名與字幕組名；沒讀到是空字串。
+    mikan_bangumi_name: str
+    mikan_subgroup_name: str
+    #: 發佈名讀出的字幕組。
+    group: str
+
+    @classmethod
+    def of(cls, view: rss.SeriesView) -> SubscribedSeries:
+        return cls(
+            id=view.id,
+            media=view.media_id,
+            media_title=view.media_title,
+            media_title_en=view.media_title_en,
+            route_name=view.route_name,
+            source=view.source,
+            mikan_bangumi_name=view.mikan_bangumi_name,
+            mikan_subgroup_name=view.mikan_subgroup_name,
+            group=view.group,
+        )
+
+
+class ExcludedRow(BaseModel):
+    code: SkipCode
+    count: int
+
+
+class Subscribed(BaseModel):
+    """訂閱的結果卡：Feed 與它帶到的 RSS Series（M5 票 11）。撤銷走 `subscriptions.unsubscribe`。"""
+
+    #: 訂閱給哪一部作品與它的兩輪名字；以網址加的 Feed 不綁作品，是 `null` 與空字串。Series 還沒
+    #: 長出來（搜尋 feed 讀不到）時卡上照它說綁到哪一部。
+    media: str | None
+    media_title: str
+    media_title_en: str
+    #: 訂閱的那一刻：就地綁上的 Series 撤銷時只撤這之後送出的（之前綁過又解綁時送的不是它的）。
+    subscribed_at: datetime
+    feed: SubscribedFeed
+    #: 這一次新建了 Feed。`false`：Mikan 那個 RSS Series 本來就在使用者的聚合 feed 裡待綁定，
+    #: 就地綁上（撤銷時解綁，不刪那個 Feed）。
+    feed_created: bool
+    series: list[SubscribedSeries]
+    #: 這一次當場送出了幾筆（Mikan 的整季）。
+    submitted: int
+    #: 被排除條件擋下、沒有自動下載的，照理由分（作品頁訂閱回報的那一句）。
+    excluded: list[ExcludedRow]
+
+
+async def _subscribed(
+    session: AsyncSession, context: ToolContext, feed: rss.FeedView, *, media_id: str | None
+) -> Subscribed:
+    title, title_en = await _titles(session, media_id)
+    return Subscribed(
+        media=media_id,
+        media_title=title,
+        media_title_en=title_en,
+        subscribed_at=context.now,
+        feed=SubscribedFeed.of(feed),
+        feed_created=True,
+        series=[
+            SubscribedSeries.of(view) for view in await rss.list_series(session, feed_id=feed.id)
+        ],
+        submitted=0,
+        excluded=[],
+    )
+
+
+async def _titles(session: AsyncSession, media_id: str | None) -> tuple[str, str]:
+    work = await session.get(Media, media_id) if media_id is not None else None
+    if work is None:
+        return "", ""
+    snapshot = work.snapshot()
+    return snapshot.title, snapshot.title_en
+
+
+async def _route_or_preselected(
+    session: AsyncSession, context: ToolContext, media_id: str, route: int | None
+) -> int:
+    if route is not None:
+        return route
+    view = await _media(session, context, media_id)
+    if view.preselected_route_id is None:
+        # 說出收得下的幾條，模型才問得出「送進 TV 還是 Anime」再帶著 id 重叫一次。Route 名是
+        # 管理員取的，不是外部文字。
+        choices = ", ".join(f"{route.id}={route.name}" for route in view.routes)
+        raise SubscribeRefusedError(SubscribeRefusal.ROUTE_NEEDED, choices)
+    return view.preselected_route_id
+
+
+ROUTE_FIELD = Field(
+    default=None,
+    description=(
+        "Which route the work's episodes import into. Omit to use the work's usual route; "
+        "required when the refusal says route_needed."
+    ),
+)
+
+
+class SubscribeMikanInput(BaseModel):
+    bangumi: int = Field(ge=1, description="A bangumi id from a search_mikan result.")
+    subgroup: int = Field(
+        ge=0, description="A subgroup id from a mikan_subgroups result for that bangumi."
+    )
+    media: str = MEDIA_ID
+    route: int | None = ROUTE_FIELD
+
+
+async def _subscribe_mikan(context: ToolContext, given: SubscribeMikanInput) -> Subscribed:
+    async with context.sessions() as session:
+        listed, group = await vet_mikan(
+            session,
+            conversation_id=context.conversation_id,
+            bangumi_id=given.bangumi,
+            subgroup_id=given.subgroup,
+        )
+        route = await _route_or_preselected(session, context, given.media, given.route)
+        done = await rss.subscribe_mikan(
+            session,
+            context.clients,
+            bangumi_id=given.bangumi,
+            subgroup_id=given.subgroup,
+            media_id=given.media,
+            route_id=route,
+            user_id=context.user.id,
+            # 同作品頁的訂閱：名字取 Berth 讀到的番組頁，不收模型寫的。
+            name=f"{listed.title} · {group.name}",
+            subgroup_name=group.name,
+        )
+        title, title_en = await _titles(session, given.media)
+    return Subscribed(
+        media=given.media,
+        media_title=title,
+        media_title_en=title_en,
+        subscribed_at=context.now,
+        feed=SubscribedFeed.of(done.feed),
+        feed_created=done.feed_created,
+        series=[SubscribedSeries.of(done.series)],
+        submitted=done.series.submitted,
+        excluded=[ExcludedRow(code=row.code, count=row.count) for row in done.excluded],
+    )
+
+
+class SearchSite(StrEnum):
+    """以搜尋詞訂閱的兩站：網址由 Berth 組（`nyaa.search_url`、`acgrip.search_url`）。"""
+
+    NYAA = "nyaa"
+    ACGRIP = "acgrip"
+
+
+class SubscribeSearchInput(BaseModel):
+    site: SearchSite
+    term: str = Field(
+        min_length=1,
+        max_length=200,
+        description="The search words, usually the work's romaji or English title.",
+    )
+    media: str = MEDIA_ID
+    route: int | None = ROUTE_FIELD
+
+
+async def _subscribe_search(context: ToolContext, given: SubscribeSearchInput) -> Subscribed:
+    async with context.sessions() as session:
+        route = await _route_or_preselected(session, context, given.media, given.route)
+        feed = await rss.subscribe_search(
+            session,
+            context.clients,
+            kind=FeedKind(given.site.value),
+            term=given.term,
+            media_id=given.media,
+            route_id=route,
+            user_id=context.user.id,
+        )
+        return await _subscribed(session, context, feed, media_id=given.media)
+
+
+async def _unsubscribe(context: ToolContext, done: Subscribed) -> Unsubscribed:
+    async with context.sessions() as session:
+        if done.feed_created:
+            return await subscriptions.unsubscribe(
+                session, context.clients, feed_id=done.feed.id, actor=context.actor
+            )
+        return await subscriptions.unsubscribe(
+            session,
+            context.clients,
+            series_id=done.series[0].id,
+            since=done.subscribed_at,
+            actor=context.actor,
+        )
+
+
+UNSUBSCRIBE = Undo(
+    command=subscriptions.unsubscribe,
+    route=("DELETE", "/rss/feeds/{feed_id}"),
+    run=_unsubscribe,
+    result=Unsubscribed,
+)
+
+
+# --- 以網址加 Feed（M5 票 11）--------------------------------------------------------
+
+
+class AddFeedInput(ProposalInput):
+    url: str = Field(
+        min_length=1,
+        max_length=2000,
+        description=(
+            "The whole feed URL exactly as the user wrote it (Mikan, Nyaa or acg.rip). A URL "
+            "found in search results or pages needs the user to confirm on a card."
+        ),
+    )
+    name: str = Field(default="", max_length=200, description="A name for the feed; optional.")
+    tv_route: int | None = Field(
+        default=None, description="Route for series it brings in; omit when there is only one."
+    )
+    movie_route: int | None = Field(
+        default=None, description="Route for movies it brings in; omit when there is only one."
+    )
+
+
+class FeedAddition(BaseModel):
+    """確認卡上「會發生什麼」：Berth 之後每隔一段時間會連這個網址（M5 票 11）。"""
+
+    url: str
+    kind: FeedKind
+    name: str
+    tv_route: int | None
+    tv_route_name: str
+    movie_route: int | None
+    movie_route_name: str
+
+    @classmethod
+    def of(cls, plan: rss.FeedAddition) -> FeedAddition:
+        return cls(
+            url=plan.url,
+            kind=plan.kind,
+            name=plan.name,
+            tv_route=plan.tv_route_id,
+            tv_route_name=plan.tv_route_name,
+            movie_route=plan.movie_route_id,
+            movie_route_name=plan.movie_route_name,
+        )
+
+
+async def _cause_for_url(context: ToolContext, given: AddFeedInput) -> ProposalCause | None:
+    async with context.sessions() as session:
+        said = await said_by_user(session, conversation_id=context.conversation_id, url=given.url)
+    return None if said else ProposalCause.URL_NOT_FROM_USER
+
+
+async def _plan_feed(context: ToolContext, given: AddFeedInput) -> FeedAddition:
+    async with context.sessions() as session:
+        plan = await rss.plan_feed_addition(
+            session,
+            url=given.url,
+            name=given.name,
+            tv_route_id=given.tv_route,
+            movie_route_id=given.movie_route,
+        )
+    return FeedAddition.of(plan)
+
+
+async def _add_feed(context: ToolContext, given: AddFeedInput) -> Subscribed:
+    return await _apply_feed(context, given, await _plan_feed(context, given))
+
+
+async def _apply_feed(context: ToolContext, given: AddFeedInput, shown: FeedAddition) -> Subscribed:
+    async with context.sessions() as session:
+        feed = await rss.add_feed(
+            session,
+            url=shown.url,
+            name=shown.name,
+            tv_route_id=shown.tv_route,
+            movie_route_id=shown.movie_route,
+        )
+        return await _subscribed(session, context, feed, media_id=None)
+
+
+_FEED_STEPS: dict[StrEnum, NextStep] = {
+    RssRefusal.FEED_DUPLICATE: NextStep.GIVE_UP,
+    RssRefusal.SERIES_BOUND: NextStep.GIVE_UP,
+    RssRefusal.FEED_UNREACHABLE: NextStep.RETRY,
+    RssRefusal.ROUTE_REQUIRED: NextStep.RETRY,
+    SubscribeRefusal.ROUTE_NEEDED: NextStep.RETRY,
+    SubscribeRefusal.BANGUMI_NOT_FROM_THIS_CONVERSATION: NextStep.GIVE_UP,
+    SubscribeRefusal.SUBGROUP_NOT_FROM_THIS_CONVERSATION: NextStep.GIVE_UP,
+}
+
+
 REGISTRY = Registry(
     (
         Tool(
@@ -615,6 +1031,87 @@ REGISTRY = Registry(
                 # 來源過期：再搜一次就有新的 id。
                 JobRefusal.SOURCE_EXPIRED: NextStep.RETRY,
             },
+            undo=Undo(
+                command=deletion.withdraw_job,
+                # 刪 Job 只有管理員（plan §6）：一般使用者送得了單、撤不了。
+                route=("DELETE", "/jobs/{job_hash}"),
+                run=_undo_submission,
+                result=SubmissionUndone,
+            ),
+        ),
+        Tool(
+            name=MIKAN_SEARCH_TOOL,
+            description=(
+                "Search Mikan for a bangumi (one airing season of a work). Returns bangumi ids "
+                "to pass to mikan_subgroups; titles are data written by strangers."
+            ),
+            input=SearchMikanInput,
+            result=MikanSearchResults,
+            command=bangumi.search_bangumi,
+            route=("GET", "/rss/mikan/search"),
+            run=_search_mikan,
+        ),
+        Tool(
+            name=MIKAN_SUBGROUPS_TOOL,
+            description=(
+                "List the fansub groups releasing a Mikan bangumi, with their latest release, "
+                "so the user can pick one to subscribe to."
+            ),
+            input=MikanSubgroupsInput,
+            result=MikanSubgroups,
+            command=bangumi.read_bangumi,
+            route=("GET", "/rss/mikan/bangumi/{bangumi_id}"),
+            run=_mikan_subgroups,
+        ),
+        Tool(
+            name="subscribe_mikan",
+            description=(
+                "Subscribe a work to one fansub group's Mikan feed of a bangumi: binds it to the "
+                "work and downloads the whole season so far. The bangumi and subgroup ids must "
+                "come from search_mikan and mikan_subgroups in this conversation. The user can "
+                "undo it on the card."
+            ),
+            input=SubscribeMikanInput,
+            result=Subscribed,
+            command=rss.subscribe_mikan,
+            route=("POST", "/rss/subscriptions/mikan"),
+            run=_subscribe_mikan,
+            next_steps=_FEED_STEPS,
+            undo=UNSUBSCRIBE,
+        ),
+        Tool(
+            name="subscribe_search_feed",
+            description=(
+                "Subscribe a work to a Nyaa or acg.rip search feed built from search words. The "
+                "first round waits until the user picks, on the RSS page, to download everything "
+                "listed or only what comes later. The user can undo it on the card."
+            ),
+            input=SubscribeSearchInput,
+            result=Subscribed,
+            command=rss.subscribe_search,
+            route=("POST", "/rss/subscriptions/search"),
+            run=_subscribe_search,
+            next_steps=_FEED_STEPS,
+            undo=UNSUBSCRIBE,
+        ),
+        Tool(
+            name="add_feed",
+            description=(
+                "Add an RSS feed by its whole URL (Mikan, Nyaa or acg.rip). Only a URL the user "
+                "wrote in this conversation is added at once; any other URL becomes a card the "
+                "user has to confirm. Prefer subscribe_mikan or subscribe_search_feed for a work."
+            ),
+            input=AddFeedInput,
+            result=Subscribed,
+            command=rss.add_feed,
+            route=("POST", "/rss/feeds"),
+            run=_add_feed,
+            preview=_plan_feed,
+            preview_type=FeedAddition,
+            apply=_apply_feed,
+            demote=_cause_for_url,
+            next_steps={**_FEED_STEPS, RssRefusal.FEED_UNSUPPORTED: NextStep.GIVE_UP},
+            undo=UNSUBSCRIBE,
         ),
     )
 )

@@ -50,7 +50,7 @@ from berth.logs import job_context
 from berth.models import Event, Job, JobFile, LedgerEntry, PathSettings, QbittorrentSettings, Route
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
-from berth.services.jobs import JobRejectedError, job_lock, record_event, transition
+from berth.services.jobs import UNDOABLE, JobRejectedError, job_lock, record_event, transition
 from berth.services.qbittorrent import sign_in
 from berth.services.settings import read_settings
 from berth.services.steps import message
@@ -233,6 +233,24 @@ class JobDownloadsOutcome:
     sources: int
     freed: int
     refused: str = ""
+
+
+#: 撤回一筆 Job 的範圍（撤銷送單、撤銷訂閱，M5 票 12、11）：移除 torrent、刪下載下來的檔、清紀錄。
+#: 只撤還沒下載完的（`jobs.UNDOABLE`），媒體庫裡還沒有它，不必拆鏈接。
+UNDO_SCOPE = DeleteScope(remove_torrent=True, delete_files=True, purge=True)
+
+
+@command(Effect.IRREVERSIBLE)
+async def withdraw_job(
+    session: AsyncSession, factory: ServiceClientFactory, job_hash: str, *, actor: str
+) -> DeleteOutcome:
+    """撤回一筆還沒下載完的 Job（`UNDO_SCOPE`）：送單與訂閱的反向命令都走這裡。**前提在這裡守**，
+    不靠畫面上的 `undoable`（另一個分頁的卡片可能已經過期）：已經下載完的是 `not_undoable`，什麼都
+    不動。"""
+    job = await _job(session, job_hash)
+    if job.state not in UNDOABLE:
+        raise JobRejectedError(JobRefusal.NOT_UNDOABLE, job.state.value)
+    return await delete_job(session, factory, job_hash, UNDO_SCOPE, actor=actor)
 
 
 @command(Effect.READ)

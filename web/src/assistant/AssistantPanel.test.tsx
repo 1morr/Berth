@@ -14,7 +14,7 @@ import { held, streamed } from '../test/sse'
 
 const ADMIN = { name: 'skipper', role: 'admin' }
 const CREW = { name: 'deckhand', role: 'user' }
-const READY: AssistantStatus = { ready: true, chat_only: false }
+const READY: AssistantStatus = { ready: true, chat_only: false, tools: [] }
 const AT = '2026-10-24T12:00:00Z'
 
 function conversation(id: number, messages: Conversation['messages']): Conversation {
@@ -137,7 +137,7 @@ afterEach(() => {
 
 describe('沒設好 AI', () => {
   it('管理員看到去設定', async () => {
-    render({ status: { ready: false, chat_only: false } })
+    render({ status: { ready: false, chat_only: false, tools: [] } })
 
     const panel = await openPanel()
 
@@ -150,7 +150,7 @@ describe('沒設好 AI', () => {
   })
 
   it('一般使用者看到管理員還沒開啟', async () => {
-    render({ me: CREW, status: { ready: false, chat_only: false } })
+    render({ me: CREW, status: { ready: false, chat_only: false, tools: [] } })
 
     const panel = await openPanel()
 
@@ -542,7 +542,7 @@ describe('工具沒做成與保險絲', () => {
 
 describe('只能聊天', () => {
   it('標明這個模型只能聊天，輸入框照常', async () => {
-    render({ status: { ready: true, chat_only: true } })
+    render({ status: { ready: true, chat_only: true, tools: [] } })
 
     const panel = await openPanel()
 

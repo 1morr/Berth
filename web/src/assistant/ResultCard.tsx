@@ -8,6 +8,7 @@ import { ProposalCardView } from './ProposalCard'
 import { RecentImportsCard } from './RecentImportsCard'
 import { SearchResultsCard } from './SearchResultsCard'
 import { SubmittedJobCard } from './SubmittedJobCard'
+import { SubscribedCard } from './SubscribedCard'
 import type { ToolOutput } from './transcript'
 
 /**
@@ -22,6 +23,10 @@ const CARDS: { [K in ToolResultType]: ComponentType<{ result: ToolResults[K] }> 
   MissingEpisodes: MissingEpisodesCard,
   SearchResults: SearchResultsCard,
   SubmittedJob: SubmittedJobCard,
+  // Mikan 的兩個查詢（M5 票 11）：只是挑番組與字幕組的材料，模型拿去問人或往下做；狀態行說查過了。
+  MikanSearchResults: null,
+  MikanSubgroups: null,
+  Subscribed: SubscribedCard,
   // 要人按的工具只在確認之後才有結果：那時結果畫在確認卡裡（`ProposalCard` 的 `Outcome`），
   // 工具結果裡永遠是那一張卡，不會是它們。
   IndexerAdded: null,

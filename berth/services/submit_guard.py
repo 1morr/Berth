@@ -23,19 +23,11 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import (
-    IndexerProblem,
-    MappingStrategy,
-    MediaKind,
-    MessageKind,
-    SearchVerdict,
-    Tags,
-    ToolOutcome,
-)
+from berth.domain import IndexerProblem, MappingStrategy, MediaKind, SearchVerdict, Tags
 from berth.models import RssSettings
 from berth.parser.exclusion import matches
 from berth.services.commands import Effect, command
-from berth.services.conversations import ToolResultPart, messages_of, parts_of
+from berth.services.conversations import tool_results_of
 from berth.services.settings import read_settings
 
 #: 搜尋工具的名字（`services/tools.py` 登記的那一條）：送單只認它存下的結果。
@@ -232,18 +224,9 @@ async def vet_submission(
 async def _searched(
     session: AsyncSession, conversation_id: int, source_id: str
 ) -> tuple[SearchResults, SearchResultRow] | None:
-    for message in reversed(await messages_of(session, conversation_id)):
-        if message.kind is not MessageKind.TOOLS:
-            continue
-        for part in parts_of(message):
-            if not (
-                isinstance(part, ToolResultPart)
-                and part.tool == SEARCH_TOOL
-                and part.outcome is ToolOutcome.DONE
-            ):
-                continue
-            search = SearchResults.model_validate(part.result)
-            row = next((row for row in search.rows if row.source_id == source_id), None)
-            if row is not None:
-                return search, row
+    for part in await tool_results_of(session, conversation_id, SEARCH_TOOL):
+        search = SearchResults.model_validate(part.result)
+        row = next((row for row in search.rows if row.source_id == source_id), None)
+        if row is not None:
+            return search, row
     return None

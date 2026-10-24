@@ -1046,18 +1046,28 @@ OpenAI 的用量頁（依日直條、依 token 種類分段、可分組的表、
   只列了一部分時底下一行說一共幾筆加「去作品頁搜全部」。
   **「送單」**（`SubmittedJobCard`）：抬頭計數是「已送出 / 這一個已經在了」；內容讀 `['jobs', hash]`——狀態色塊
   （`JOB_SIGNAL`，同下載列表）加發佈名、`JobFacts` 那一行、「看這一筆」連到 Job 頁；對話裡有這種卡時面板掛著
-  `/events/stream`，卡片跟著推播重問。管理員、`undoable` 時一顆 Ghost「撤銷送單」，就地展開 `ConfirmPanel` 說會刪什麼，
-  確認鍵是 Primary（同 Job 頁的刪除）；這一筆不在了（404）是一句 `text-xs ink-dim`，不是錯誤。
-- **寫入工具的狀態行**（M5 票 12）：送單不說「查」——色塊「進行中」、「正在送單」、「送單好了」、「送單沒做成」
-  （`WRITE_TOOLS`；沒列到的照查詢的說法）。拒絕理由碼有人話的（登錄表的兩種與送單的 `SubmitRefusal`）換成那一句，
-  帶原文（規則、預估的季集）；其餘照原樣。
+  `/events/stream`，卡片跟著推播重問。`undoable` 時一顆 Ghost「撤銷送單」（按不按得到照後端說的），就地展開 `ConfirmPanel` 說會刪什麼，
+  確認鍵是 Primary（同 Job 頁的刪除）；撤銷之後是一句 `role="status"` 的 `text-xs ink-dim`「已撤銷這次送單」，這一筆不在了（404）
+  也是一句 `text-xs ink-dim`，不是錯誤。
+  **「訂閱」**（`SubscribedCard`，M5 票 11）：抬頭計數是來源（`MIKAN` / `NYAA` / `ACG.RIP`，同 RSS 頁）；Feed 名稱
+  （`.value text-sm`）、一 RSS Series 一行（作品名 `WorkLink` `Dot` 字幕組 `Dot` Route 的 `ink-dim`）、當場送出幾筆、
+  被排除的那一句（作品頁訂閱同一句）、搜尋 feed 第一輪還沒選時一句加 `TEXT_LINK`「去 RSS 頁」、`ink-dim` 的「下一次輪詢」
+  加 `Timestamp`（讀 `/rss/feeds` 的現況；Feed 不在清單上了說一句）。
+- **撤銷**（`UndoButton`，M5 票 11）：可逆的寫入卡片底下一顆 Ghost（「撤銷送單」「撤銷訂閱」），就地 `ConfirmPanel` 說會撤掉
+  什麼，確認鍵 Primary；經過對話（模型下一輪知道）。撤掉之後卡片換成一句 `role="status"` 的 `text-xs`，說撤回了什麼、留下什麼，
+  不再讀現況、不再給鍵；撤銷被拒（qBittorrent 連不上）是 `blocked-ink` 的 `role="alert"`，卡片照舊、再按一次接著做。
+- **寫入工具的狀態行**（M5 票 12）：送單、訂閱不說「查」——色塊「進行中」、「正在送單」、「送單好了」、「送單沒做成」
+  （等級讀 `GET /assistant` 的 `tools`，後端從命令標記來，M5 票 11；清單上沒有的照查詢的說法）。zh-Hant 的工具名前後都是
+  中文字，免得「查過{{tool}}」夾著半形字。拒絕理由碼有人話的（登錄表的、送單的 `SubmitRefusal`、訂閱的 `SubscribeRefusal`）
+  換成那一句，帶原文（規則、預估的季集）；其餘照原樣。
 - **使用者那一句底下的頁面**：在作品頁說的話，下面一行 `.value text-xs ink-dim`「在《作品》的頁面上說的」——模型拿到的
   就是這一部，人看得到它拿到了什麼。
 - **確認卡**（`ProposalCard`，M5 票 10）：不可逆的工具停在這張卡上。狀態行說「提出了加索引站」（`ink-dim`；等不等人按由卡片說，這一行按過之後也不過時），
   卡片同結果卡的外形與小一號內距，**等人按時整塊框換 `rule-strong`**、抬頭列右側 compact 的 `assigned` 色塊「等你確認」
   （需要你，一色一義）；按過之後框回 `rule`，狀態只寫字（`.label ink-dim`：已確認、已拒絕、失效——常態不塗漆；中性色塊是 `deck`，
   疊在 `deck` 抬頭列上會消失，所以不用色塊），只有確認之後 Berth 自己出錯的那一種是 `blocked` 色塊「沒成」。內容由上到下：**會發生什麼**（依預覽型別一種一格：加索引站是一句話加
-  `hull` 底的 `dl`——網址、加到哪一台、定義自帶的英文說明，值是 `.value text-xs wrap-anywhere`；刪下載是一句話、一句
+  `hull` 底的 `dl`——網址、加到哪一台、定義自帶的英文說明，值是 `.value text-xs wrap-anywhere`；加 Feed（M5 票 11）同形——
+  網址、來源、Route，可逆的工具被降成卡時，最上面多一句 `text-xs ink` 說為什麼（「這個網址不是你在這則對話裡打的」）；刪下載是一句話、一句
   「媒體庫的鏈接留著」的後果，加每一筆 Job 一塊 `hull` 底：Job 名、逐檔的絕對路徑清單、件數 `Dot` 大小，與「刪了空出
   多少」或「媒體庫還留著同一份：刪了不會空出空間」）→ `.label`「AI 的理由」加模型給的原文（`text-xs ink-dim`）→
   `CONFIRM_ACTIONS` 的兩顆鍵：`PrimaryButton`「確認加入 / 確認刪除」與 Ghost「拒絕」。卡片在對話裡，按鍵是這張卡唯一的

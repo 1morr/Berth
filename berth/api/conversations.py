@@ -26,7 +26,14 @@ from berth.api.deps import SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.events import PING_SECONDS, EventStream
 from berth.api.gate import current_user
-from berth.domain import AssistantRefusal, Language, MessageKind, ProposalRefusal, ToolOutcome
+from berth.domain import (
+    AssistantRefusal,
+    Language,
+    MessageKind,
+    ProposalRefusal,
+    ToolOutcome,
+    UndoRefusal,
+)
 from berth.services.assistant import (
     AssistantEvent,
     AssistantRuns,
@@ -39,6 +46,7 @@ from berth.services.assistant import (
     ToolStarted,
 )
 from berth.services.auth import AuthenticatedUser
+from berth.services.commands import Effect
 from berth.services.conversations import (
     AssistantRefusedError,
     DecisionPart,
@@ -49,6 +57,8 @@ from berth.services.conversations import (
     ProposalRejectedError,
     ToolCallPart,
     ToolResultPart,
+    UndonePart,
+    UndoRejectedError,
     UserText,
     assistant_status,
     list_conversations,
@@ -105,13 +115,23 @@ AssistantDep = Annotated[AssistantRuns, Depends(get_assistant)]
 # --- 讀取 -------------------------------------------------------------------------
 
 
-class AssistantStatusOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class AssistantToolOut(BaseModel):
+    """這個人拿得到的一個工具（M5 票 11）：側面板的狀態行照等級說「正在查」或「正在做」，
+    結果卡照 `undoable` 給撤銷鍵。等級讀命令的標記，前端不另寫一份。"""
 
+    name: str
+    effect: Effect
+    #: 這個人按得到結果卡上的撤銷（工具有撤銷、門禁放他進撤銷指著的端點）。
+    undoable: bool
+
+
+class AssistantStatusOut(BaseModel):
     #: AI 設定好了；`false` 時側面板說怎麼開（管理員去設定、一般使用者等管理員）。
     ready: bool
     #: 設定頁測出這個模型不支援工具呼叫：請求不帶工具，側面板標明只能聊天。
     chat_only: bool
+    #: 這個人拿得到的工具，照登記的順序。只能聊天時照樣列：存下的舊對話還是要說得出等級。
+    tools: list[AssistantToolOut]
 
 
 class ConversationSummaryOut(BaseModel):
@@ -126,7 +146,7 @@ class ConversationSummaryOut(BaseModel):
 #: 畫面看得到的 part（`_HIDDEN` 那幾種不出去）。`PagePart` 出去：使用者那一句底下說得出模型拿到的是
 #: 哪一部作品（M5 票 12）。
 VisiblePart = Annotated[
-    UserText | PagePart | ModelText | ToolCallPart | ToolResultPart | NoticePart,
+    UserText | PagePart | ModelText | ToolCallPart | ToolResultPart | NoticePart | UndonePart,
     Field(discriminator="type"),
 ]
 
@@ -152,8 +172,23 @@ class ConversationOut(BaseModel):
 
 
 @router.get("/assistant")
-async def get_status(session: SessionDep) -> AssistantStatusOut:
-    return AssistantStatusOut.model_validate(await assistant_status(session))
+async def get_status(
+    session: SessionDep, request: Request, runs: AssistantDep
+) -> AssistantStatusOut:
+    status_now = await assistant_status(session)
+    role = _user(request).role
+    return AssistantStatusOut(
+        ready=status_now.ready,
+        chat_only=status_now.chat_only,
+        tools=[
+            AssistantToolOut(
+                name=tool.name,
+                effect=tool.effect,
+                undoable=tool.undoable_by(role),
+            )
+            for tool in runs.registry.tools_for(role)
+        ],
+    )
 
 
 @router.get("/conversations")
@@ -395,6 +430,53 @@ async def _decide(
         raise proposal_refusal(exc) from exc
     except AssistantRefusedError as exc:
         raise assistant_refusal(exc) from exc
+
+
+# --- 結果卡上的撤銷（M5 票 11）------------------------------------------------------
+
+_UNDO_STATUS: dict[UndoRefusal, int] = {
+    UndoRefusal.CALL_MISSING: status.HTTP_404_NOT_FOUND,
+    UndoRefusal.NOT_UNDOABLE: status.HTTP_409_CONFLICT,
+    #: 另一個分頁先按了：重讀對話就看得到。
+    UndoRefusal.ALREADY_UNDONE: status.HTTP_409_CONFLICT,
+    UndoRefusal.NOT_ALLOWED: status.HTTP_403_FORBIDDEN,
+}
+
+
+class UndoRefusalOut(BaseModel):
+    reason: UndoRefusal
+    detail: str
+
+
+# Any：同 `_responses`。
+_UNDO_RESPONSES: dict[int | str, dict[str, Any]] = refusal_responses(
+    UndoRefusalOut, _UNDO_STATUS
+) | _responses(AssistantRefusal.BUSY, AssistantRefusal.CONVERSATION_MISSING)
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages/{message_id}/tools/{call_id}/undo",
+    responses=_UNDO_RESPONSES,
+)
+async def post_undo(
+    conversation_id: int, message_id: int, call_id: str, request: Request, runs: AssistantDep
+) -> UndonePart:
+    """按結果卡上的撤銷：以按的這個人走那個工具的反向命令。指的是 `message_id` 那一則存著的那一次
+    （同一個 call id 可能出現不只一次）。撤銷被拒（qBittorrent 連不上）回 200、`result_type` 是
+    `Refusal`，什麼都沒記——再按一次會接著做。"""
+    try:
+        return await runs.undo(conversation_id, message_id, call_id, user=_user(request))
+    except UndoRejectedError as exc:
+        raise undo_refusal(exc) from exc
+    except AssistantRefusedError as exc:
+        raise assistant_refusal(exc) from exc
+
+
+def undo_refusal(refusal: UndoRejectedError) -> HTTPException:
+    body = UndoRefusalOut(reason=refusal.reason, detail=refusal.detail)
+    return HTTPException(
+        status_code=_UNDO_STATUS[refusal.reason], detail=body.model_dump(mode="json")
+    )
 
 
 def proposal_refusal(refusal: ProposalRejectedError) -> HTTPException:

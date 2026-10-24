@@ -2786,6 +2786,7 @@ const zhHant = {
         '這一筆現在不能重新入庫——它還在下載、規劃或入庫中，或者它從來沒有下載完（complete 裡只有殘件）。重新整理看看它現在的狀態。',
       content_missing:
         'complete 裡已經沒有這一包了（或裡面一個檔案都沒有），所以什麼都沒有動。要入庫就重新下載一次。',
+      not_undoable: '這一筆已經下載完了，撤不回；要刪請到 Job 頁看清楚刪的範圍。',
       moved_on:
         '你按下去之後，這一筆已經被別處改過了（可能是另一個分頁剛刪掉它），所以什麼都沒有動。重新整理看看它現在的狀態。',
       low_disk_space:
@@ -4037,8 +4038,14 @@ const zhHant = {
       missing_episodes: '缺的集',
       search_indexers: '索引站',
       submit_search_result: '送單',
+      // 名字前後都是中文字：狀態行的「查過{{tool}}」「{{tool}}好了」不夾著半形字。
+      search_mikan: '番組',
+      mikan_subgroups: '字幕組',
+      subscribe_mikan: '訂閱',
+      subscribe_search_feed: '搜尋訂閱',
+      add_feed: '加訂閱來源',
       other: '工具',
-      // 會改東西的工具（送單）：狀態行不說「查」（M5 票 12）。
+      // 會改東西的工具（等級由後端給，M5 票 11）：狀態行不說「查」（M5 票 12）。
       write: {
         chip: '進行中',
         running: '正在{{tool}}',
@@ -4058,6 +4065,26 @@ const zhHant = {
         other_episodes: '這一筆是 {{detail}}，不是要找的集',
         excluded: '被標題規則「{{detail}}」擋下',
         route_needed: '要先說入庫到哪一條 Route',
+        // 訂閱的防線（後端 `subscribe_guard.SubscribeRefusal`，M5 票 11）。
+        bangumi_not_from_this_conversation: '這個番組不是這則對話搜出來的，AI 不能訂',
+        subgroup_not_from_this_conversation: '這個字幕組不在這則對話列出的清單裡，AI 不能訂',
+      },
+    },
+    // 結果卡上的撤銷（M5 票 11，`assistant/UndoButton.tsx`）。
+    undo: {
+      undoing: '撤銷中…',
+      wait: '回覆講完才按得到。',
+      refused: '撤銷沒做成：{{reason}}。什麼都沒記下，再按一次會接著做。',
+      failed: '撤銷沒成。',
+      refusal: {
+        call_missing: '這則對話裡找不到這一次。',
+        not_undoable: '這一次沒有東西可以撤銷。',
+        already_undone: '已經撤銷過了。',
+        not_allowed: '你的角色撤銷不了這件事。',
+        not_ready: 'AI 還沒設定好。',
+        conversation_missing: '找不到這則對話。',
+        busy: '回覆還在跑，等它講完再按。',
+        empty_message: '先打一句話。',
       },
     },
     notice: {
@@ -4093,7 +4120,13 @@ const zhHant = {
       tool: {
         add_indexer: '加索引站',
         delete_downloads: '刪下載',
+        add_feed: '加 Feed',
         other: '要你確認',
+      },
+      // 可逆的工具被降成確認卡時說為什麼（M5 票 11）。
+      cause: {
+        url_not_from_user:
+          '這個網址不是你在這則對話裡打的（可能來自搜尋結果或網頁裡的字），所以要你確認。',
       },
       status: {
         proposed: '等你確認',
@@ -4106,6 +4139,7 @@ const zhHant = {
       confirm: {
         add_indexer: '確認加入',
         delete_downloads: '確認刪除',
+        add_feed: '確認加入',
         other: '確認',
       },
       confirming: '執行中…',
@@ -4132,6 +4166,13 @@ const zhHant = {
         description: '說明',
         then: 'Prowlarr 加之前會先連一次這個站，連不上就什麼都不加。',
       },
+      feed: {
+        what: '加一個 Feed「{{name}}」：之後 Berth 會每隔一段時間讀這個網址。',
+        url: '網址',
+        site: '來源',
+        routes: 'Route',
+        then: '加了之後不會馬上讀。Mikan 的聚合 feed 第一輪就自動綁定送單；搜尋 feed 的第一輪先讓你選。',
+      },
       downloads: {
         what: '刪掉「{{title}}」的下載。',
         keeps:
@@ -4150,6 +4191,7 @@ const zhHant = {
         expired: '按下去的時候已經不成立，什麼都沒做：',
         failed: '沒做成：',
         indexerAdded: '已加入 {{name}}。',
+        feedAdded: '已加入 Feed「{{name}}」。',
         jobDeleted_one: '刪了 {{count}} 個檔案，空出 {{size}}。',
         jobDeleted_other: '刪了 {{count}} 個檔案，空出 {{size}}。',
         jobRefused: '{{name}} 沒做成 · {{reason}}',
@@ -4170,6 +4212,11 @@ const zhHant = {
         prowlarr_unreachable: '連不上 Prowlarr。',
         nothing_to_delete: '這部作品已經沒有下載可刪。',
         job_gone: '卡上列的那一筆已經不在，或已經刪過了。',
+        feed_duplicate: '這個網址已經是一個 Feed 了。',
+        feed_unsupported: 'Berth 不認得這個網址的站（只收 Mikan、Nyaa、acg.rip）。',
+        route_required: '有不只一條 Route 收得下，要說送進哪一條。',
+        route_missing: '卡上的 Route 已經不在了。',
+        route_disabled: '卡上的 Route 停用了。',
       },
     },
     sendFailed: '沒送出去。',
@@ -4201,10 +4248,30 @@ const zhHant = {
         gone: '這一筆已經不在了：撤銷了，或在 Job 頁刪掉了紀錄。',
         readFailed: '讀不到這一筆現在的狀態。',
         undo: '撤銷送單',
-        undoing: '撤銷中…',
         undoConfirm:
           '撤銷這次送單：從 qBittorrent 移除這個 torrent、刪掉已經下載的檔案、清掉這一筆的紀錄。那幾集會回到「缺」。',
-        undoFailed: '撤銷沒成。',
+        undone: '已撤銷這次送單：移除了 torrent、刪了下載的檔、清了紀錄。',
+      },
+      // 訂閱（M5 票 11，`assistant/SubscribedCard.tsx`）。
+      subscribed: {
+        title: '訂閱',
+        series: '綁上的 RSS Series',
+        unbound: '還沒綁作品',
+        submitted_one: '當場送出 {{count}} 筆（整季照補舊集的規矩）。',
+        submitted_other: '當場送出 {{count}} 筆（整季照補舊集的規矩）。',
+        firstRound: '第一輪還沒送：要在 RSS 頁選「全部下載」或「只追之後的」。',
+        toRss: '去 RSS 頁',
+        gone: '這個 Feed 已經不在了：在 RSS 頁刪掉了。',
+        nextPoll: '下一次輪詢',
+        soon: '半分鐘內',
+        undo: '撤銷訂閱',
+        undoConfirm:
+          '撤銷這個訂閱：停掉它（刪掉這次建的 Feed，或解開就地綁上的 RSS Series），並撤回它送出、還沒下載完的 Job（移除 torrent、刪檔、清紀錄）。已經下載完的留著。',
+        undone: '已撤銷這個訂閱。',
+        removed_one: '撤回了 {{count}} 筆還沒下載完的。',
+        removed_other: '撤回了 {{count}} 筆還沒下載完的。',
+        kept_one: '{{count}} 筆已經下載完，留著：要刪去 Job 頁。',
+        kept_other: '{{count}} 筆已經下載完，留著：要刪去 Job 頁。',
       },
       recentImports: {
         title_one: '最近 {{count}} 天入庫',
@@ -6925,6 +6992,8 @@ const en: Translations<typeof zhHant> = {
         'This one cannot be imported again right now — it is still downloading, planning or importing, or it never finished downloading (complete holds only a partial copy). Reload to see where it stands now.',
       content_missing:
         'This download is no longer in complete (or it has no files left), so nothing was touched. Download it again to import it.',
+      not_undoable:
+        'This one has finished downloading and cannot be taken back; delete it on the job page to see what goes.',
       moved_on:
         'Something else changed this download after you pressed the button (another tab may have just deleted it), so nothing was touched. Reload to see where it stands now.',
       low_disk_space:
@@ -8175,6 +8244,11 @@ const en: Translations<typeof zhHant> = {
       missing_episodes: 'missing episodes',
       search_indexers: 'the indexers',
       submit_search_result: 'Submit',
+      search_mikan: 'Mikan bangumi',
+      mikan_subgroups: 'fansub groups',
+      subscribe_mikan: 'Mikan subscription',
+      subscribe_search_feed: 'search feed subscription',
+      add_feed: 'Adding a feed',
       other: 'a tool',
       write: {
         chip: 'Working',
@@ -8195,6 +8269,27 @@ const en: Translations<typeof zhHant> = {
         other_episodes: 'this release is {{detail}}, not the episodes wanted',
         excluded: 'blocked by the title rule “{{detail}}”',
         route_needed: 'say which route to import into first',
+        bangumi_not_from_this_conversation:
+          'this bangumi was not found in this conversation, so AI may not subscribe to it',
+        subgroup_not_from_this_conversation:
+          'this fansub group was not listed in this conversation, so AI may not subscribe to it',
+      },
+    },
+    undo: {
+      undoing: 'Undoing…',
+      wait: 'You can press this once the reply finishes.',
+      refused:
+        'Undo did not go through: {{reason}}. Nothing was recorded; press again to carry on.',
+      failed: 'Undo did not go through.',
+      refusal: {
+        call_missing: 'This step is not in this conversation.',
+        not_undoable: 'There is nothing to undo here.',
+        already_undone: 'It was already undone.',
+        not_allowed: 'Your role cannot undo this.',
+        not_ready: 'AI is not set up.',
+        conversation_missing: 'This conversation is not there.',
+        busy: 'The reply is still running; press once it finishes.',
+        empty_message: 'Type something first.',
       },
     },
     notice: {
@@ -8232,7 +8327,12 @@ const en: Translations<typeof zhHant> = {
       tool: {
         add_indexer: 'Add an indexer',
         delete_downloads: 'Delete downloads',
+        add_feed: 'Add a feed',
         other: 'Needs your confirmation',
+      },
+      cause: {
+        url_not_from_user:
+          'You did not type this address in this conversation (it may come from search results or a page), so it needs your confirmation.',
       },
       status: {
         proposed: 'Waiting for you',
@@ -8245,6 +8345,7 @@ const en: Translations<typeof zhHant> = {
       confirm: {
         add_indexer: 'Confirm adding',
         delete_downloads: 'Confirm deleting',
+        add_feed: 'Confirm adding',
         other: 'Confirm',
       },
       confirming: 'Working…',
@@ -8271,6 +8372,13 @@ const en: Translations<typeof zhHant> = {
         description: 'About',
         then: 'Prowlarr connects to the site once before adding it; if that fails, nothing is added.',
       },
+      feed: {
+        what: 'Add the feed “{{name}}”: Berth will read this address every so often.',
+        url: 'Address',
+        site: 'Source',
+        routes: 'Routes',
+        then: 'It is not read right away. A Mikan aggregate feed binds and downloads from its first round; a search feed lets you choose its first round.',
+      },
       downloads: {
         what: 'Delete the downloads of “{{title}}”.',
         keeps:
@@ -8289,6 +8397,7 @@ const en: Translations<typeof zhHant> = {
         expired: 'It no longer held when pressed, so nothing was done:',
         failed: 'It did not go through:',
         indexerAdded: 'Added {{name}}.',
+        feedAdded: 'Added the feed “{{name}}”.',
         jobDeleted_one: 'Deleted {{count}} file and freed {{size}}.',
         jobDeleted_other: 'Deleted {{count}} files and freed {{size}}.',
         jobRefused: '{{name}} did not go through · {{reason}}',
@@ -8309,6 +8418,11 @@ const en: Translations<typeof zhHant> = {
         prowlarr_unreachable: 'could not reach Prowlarr.',
         nothing_to_delete: 'that work has no downloads left to delete.',
         job_gone: 'a download on the card is gone or was already deleted.',
+        feed_duplicate: 'that address is already a feed.',
+        feed_unsupported: 'Berth does not know that site (only Mikan, Nyaa and acg.rip).',
+        route_required: 'more than one route can hold it; say which one.',
+        route_missing: 'the route on the card is gone.',
+        route_disabled: 'the route on the card is disabled.',
       },
     },
     sendFailed: 'Not sent.',
@@ -8341,10 +8455,31 @@ const en: Translations<typeof zhHant> = {
         gone: 'This download is gone: it was undone, or its record was deleted on the job page.',
         readFailed: 'Could not read where this download is now.',
         undo: 'Undo submit',
-        undoing: 'Undoing…',
         undoConfirm:
           'Undo this submit: remove the torrent from qBittorrent, delete the files downloaded so far, and clear its record. Those episodes go back to missing.',
-        undoFailed: 'Undo did not go through.',
+        undone:
+          'This submit was undone: the torrent is removed, its files deleted and its record cleared.',
+      },
+      subscribed: {
+        title: 'Subscribed',
+        series: 'Bound RSS series',
+        unbound: 'Not bound to a work yet',
+        submitted_one: '{{count}} release sent right away (the whole season so far).',
+        submitted_other: '{{count}} releases sent right away (the whole season so far).',
+        firstRound:
+          'Nothing is sent from the first round yet: choose “Download all” or “Only later ones” on the RSS page.',
+        toRss: 'Go to RSS',
+        gone: 'This feed is gone: it was deleted on the RSS page.',
+        nextPoll: 'Next poll',
+        soon: 'within half a minute',
+        undo: 'Undo subscription',
+        undoConfirm:
+          'Undo this subscription: stop it (delete the feed it made, or unbind the RSS series it bound in place) and take back the downloads it sent that have not finished (remove the torrent, delete the files, clear the record). Finished downloads stay.',
+        undone: 'This subscription was undone.',
+        removed_one: '{{count}} unfinished download was taken back.',
+        removed_other: '{{count}} unfinished downloads were taken back.',
+        kept_one: '{{count}} had finished and stays; delete it on the job page.',
+        kept_other: '{{count}} had finished and stay; delete them on the job page.',
       },
       recentImports: {
         title_one: 'Imported in the last {{count}} day',

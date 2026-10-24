@@ -1,35 +1,34 @@
-import { useId } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useContext, useId } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import type { SubmittedJob } from '../api/assistant'
-import { meQueryOptions } from '../api/auth'
 import { ApiError } from '../api/client'
-import { deleteJob, jobQueryOptions, refusalOf } from '../api/jobs'
-import { ConfirmPanel } from '../components/ConfirmPanel'
-import { CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
+import { jobQueryOptions } from '../api/jobs'
 import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
-import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { JobFacts } from '../jobs/JobFacts'
 import { JobLink } from '../jobs/JobLink'
 import { JOB_SIGNAL, mediaTitleOf } from '../jobs/jobState'
 import { CardFrame } from './cardParts'
+import { ToolCallContext } from './toolCall'
+import { UndoButton } from './UndoButton'
 
 /**
  * 送單的結果卡（M5 票 12）：送出去的那一筆 Job **現在**的樣子。
  *
  * - **即時更新**：讀 `['jobs', hash]`，側面板有這種卡時掛著 `/events/stream`（`AssistantPanel` 的 `JobStream`），
  *   poller 推播到這一筆就重問一次——與下載列表、Job 頁同一條路。存下的結果只有身分，狀態不從它畫。
- * - **撤銷走送單的反向命令**（`deletion.delete_job`）：移除 torrent、刪下載下來的檔、清紀錄，同一筆之後還送得出去。
- *   只在還沒下載完時（`undoable`，後端算）給，只有管理員按得到（刪除是 admin 的事，plan §6）；就地確認，說清楚會刪什麼。
+ * - **撤銷走送單的反向命令**（`deletion.withdraw_job`）：移除 torrent、刪下載下來的檔、清紀錄，同一筆之後還送得出去。
+ *   只在還沒下載完時（`JobOut.undoable`，後端算）給，按不按得到照後端說的（刪除是 admin 的事，plan §6）；就地確認，
+ *   說清楚會刪什麼。撤銷經過對話（`UndoButton`，M5 票 11），模型下一輪知道。
  * - 這一筆不在了（撤銷了、或在 Job 頁刪了紀錄）說一句，不當成錯誤。
  */
 export function SubmittedJobCard({ result }: { result: SubmittedJob }) {
   const { t, i18n } = useTranslation()
   const id = useId()
-  const job = useQuery(jobQueryOptions(result.hash))
-  const me = useQuery(meQueryOptions)
+  const { undone } = useContext(ToolCallContext)
+  const job = useQuery({ ...jobQueryOptions(result.hash), enabled: undone === null })
   const gone = job.error instanceof ApiError && job.error.status === 404
 
   return (
@@ -39,10 +38,12 @@ export function SubmittedJobCard({ result }: { result: SubmittedJob }) {
       count={result.created ? t('submit.done') : t('submit.already')}
     >
       <div className="grid gap-2 px-3 py-2.5">
-        {gone ? (
+        {undone || gone ? (
           <>
             <p className="value text-sm wrap-anywhere text-ink">{result.name}</p>
-            <p className="text-xs text-ink-dim">{t('assistant.cards.submitted.gone')}</p>
+            <p role={undone ? 'status' : undefined} className="text-xs text-ink-dim">
+              {undone ? t('assistant.cards.submitted.undone') : t('assistant.cards.submitted.gone')}
+            </p>
           </>
         ) : job.data ? (
           <>
@@ -60,7 +61,14 @@ export function SubmittedJobCard({ result }: { result: SubmittedJob }) {
             <p className="text-xs">
               <JobLink hash={result.hash}>{t('assistant.cards.submitted.open')}</JobLink>
             </p>
-            {me.data?.role === 'admin' && job.data.undoable && <Undo hash={result.hash} />}
+            {job.data.undoable && (
+              <UndoButton
+                label={t('assistant.cards.submitted.undo')}
+                confirm={t('assistant.cards.submitted.undoConfirm')}
+                // 那幾集回到「缺」，作品頁的季表跟著換。
+                invalidate={[['jobs'], ['media']]}
+              />
+            )}
           </>
         ) : job.isError ? (
           <RequestFailed error={job.error} lead={t('assistant.cards.submitted.readFailed')} />
@@ -69,62 +77,5 @@ export function SubmittedJobCard({ result }: { result: SubmittedJob }) {
         )}
       </div>
     </CardFrame>
-  )
-}
-
-/** 撤銷這次送單：DELETE 的四個旗標固定成「移除 torrent、刪檔、清紀錄」（媒體庫裡還沒有它，不必拆鏈接）。 */
-function Undo({ hash }: { hash: string }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const { asked, open, close, trigger, panel, onKeyDown } = useInPlaceConfirm()
-  const titleId = useId()
-  const undo = useMutation({
-    mutationFn: () =>
-      deleteJob(hash, { unlink: false, removeTorrent: true, deleteFiles: true, purge: true }),
-    onSuccess: async () => {
-      close()
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['jobs'] }),
-        // 那幾集回到「缺」，作品頁的季表跟著換。
-        queryClient.invalidateQueries({ queryKey: ['media'] }),
-      ])
-    },
-  })
-  const refusal = refusalOf(undo.error)
-
-  if (!asked) {
-    return (
-      <div>
-        <GhostButton ref={trigger} type="button" onClick={open}>
-          {t('assistant.cards.submitted.undo')}
-        </GhostButton>
-      </div>
-    )
-  }
-
-  return (
-    <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={titleId}>
-      <p id={titleId} className="max-w-prose text-xs text-ink">
-        {t('assistant.cards.submitted.undoConfirm')}
-      </p>
-      <div className={CONFIRM_ACTIONS}>
-        <PrimaryButton type="button" busy={undo.isPending} onClick={() => undo.mutate()}>
-          {undo.isPending
-            ? t('assistant.cards.submitted.undoing')
-            : t('assistant.cards.submitted.undo')}
-        </PrimaryButton>
-        <GhostButton type="button" onClick={close}>
-          {t('common.cancel')}
-        </GhostButton>
-      </div>
-      {undo.isError &&
-        (refusal ? (
-          <p role="alert" className="max-w-prose text-xs text-blocked-ink">
-            {t(`jobs.refusal.${refusal.reason}`)}
-          </p>
-        ) : (
-          <RequestFailed error={undo.error} lead={t('assistant.cards.submitted.undoFailed')} />
-        ))}
-    </ConfirmPanel>
   )
 }

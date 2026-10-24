@@ -369,6 +369,8 @@ class Scenario:
     usage_demo: bool = False
     #: 助理的側面板（M5 票 08）：AI 設定好了（演練的 provider，`DemoChatProvider`）。
     assistant_demo: bool = False
+    #: AI 設定好、回覆由 `DemoChatProvider` 演，不另放資料（M5 票 11 的 `assistant-rss`）。
+    ai_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
     #: 那一格是空的。見 `_seed_legacy_feed`。
     legacy_feed: bool = False
@@ -779,6 +781,15 @@ def assistant_scenario() -> Scenario:
     scenario.indexer_results = ASSISTANT_RESULTS
     # 送進去的那一筆記在客戶端、在下載中：送單卡畫得出「下載中」，不是下一輪就「已從客戶端移除」。
     scenario.qbittorrent = ListingQbittorrent()
+    return scenario
+
+
+def assistant_rss_scenario() -> Scenario:
+    """側面板裡訂閱 RSS（M5 票 11）：同 `rss`（《与你相恋》的 Mikan 搜尋頁、番組頁、單一 feed
+    都是替身），AI 設定好。在作品頁（`/media/tv:262000`）說「訂閱這部的 Mikan RSS」走查作品名
+    → 搜番組 → 列字幕組 → 訂閱 LoliHouse（整季 12 筆），卡上撤銷得掉。"""
+    scenario = rss_scenario()
+    scenario.ai_demo = True
     return scenario
 
 
@@ -1942,6 +1953,7 @@ SCENARIOS = {
     "weekly": weekly_scenario,
     "usage": usage_scenario,
     "assistant": assistant_scenario,
+    "assistant-rss": assistant_rss_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
     "global-path": global_path,
@@ -2075,6 +2087,8 @@ class DemoChatProvider:
             raise AiProviderError(AiFailure.RATE_LIMITED, "429 rate_limit_error", retry_after=30)
         names = {tool.name for tool in request.tools}
         call = _release_step(request, results, chinese) if "submit_search_result" in names else None
+        if call is None and "subscribe_mikan" in names:
+            call = _subscribe_step(request, results, chinese)
         if isinstance(call, ToolCall):
             yield ToolCallStarted(id=call.id, name=call.name)
             await asyncio.sleep(0.6)
@@ -2204,6 +2218,76 @@ def _release_step(
                 else f"Sent {found.get('name')}; the card shows where it is now."
             )
     return None
+
+
+def _subscribe_step(
+    request: ChatRequest, results: list[ToolResult], chinese: bool
+) -> ToolCall | str | None:
+    """「訂閱這部的 Mikan RSS」的演練（M5 票 11）：在作品頁說話時先查作品名（模型只拿到作品 id），
+    以它搜 Mikan、列第一個番組的字幕組、訂閱 LoliHouse（沒有就第一組）。回的形狀同 `_release_step`。
+    """
+    asked = _asked(request)
+    if not ("訂閱" in asked or "subscribe" in asked.lower()):
+        return None
+    page = _page_of(request)
+    if not results:
+        if page is None:
+            return (
+                "先打開一部作品的頁面再說，我才知道要訂哪一部。"
+                if chinese
+                else "Open a work's page first so I know which work to subscribe."
+            )
+        return _demo_call("missing_episodes", media=page)
+    content = json.loads(results[0].content)
+    found = content.get("result", {})
+    match content.get("tool"):
+        case "missing_episodes":
+            return _demo_call("search_mikan", term=found.get("title") or found.get("title_en"))
+        case "search_mikan":
+            hits = found.get("bangumi") or []
+            if not hits:
+                return "Mikan 上找不到這部。" if chinese else "Mikan has no bangumi for it."
+            return _demo_call("mikan_subgroups", bangumi=hits[0]["id"])
+        case "mikan_subgroups":
+            groups = found.get("subgroups") or []
+            if not groups or page is None:
+                return "這個番組沒有字幕組。" if chinese else "Nobody releases this bangumi."
+            group = next((g for g in groups if g["name"] == "LoliHouse"), groups[0])
+            return _demo_call(
+                "subscribe_mikan", bangumi=found["bangumi"], subgroup=group["id"], media=page
+            )
+        case "subscribe_mikan" if found.get("reason") == "route_needed" and found.get("detail"):
+            # 真的模型會問人送進哪一條；演練直接挑名字是 Anime 的那一條（沒有就第一條）再叫一次。
+            choices = [choice.split("=", 1) for choice in str(found["detail"]).split(", ")]
+            route = next((id_ for id_, name in choices if name == "Anime"), choices[0][0])
+            again = {**_last_arguments(request, "subscribe_mikan"), "route": int(route)}
+            return _demo_call("subscribe_mikan", **again)
+        case "subscribe_mikan" if content.get("status") == "refused":
+            return (
+                f"沒訂成：{found.get('reason')}。"
+                if chinese
+                else f"Not subscribed: {found.get('reason')}."
+            )
+        case "subscribe_mikan":
+            submitted = found.get("submitted", 0)
+            return (
+                f"訂好了，整季 {submitted} 集已經送出；卡片上可以撤銷。"
+                if chinese
+                else f"Subscribed; {submitted} episodes are on their way. "
+                "You can undo it on the card."
+            )
+    return None
+
+
+def _last_arguments(request: ChatRequest, name: str) -> dict[str, Any]:
+    """模型上一次呼叫 `name` 帶的參數。"""
+    for turn in reversed(request.turns):
+        if isinstance(turn, ModelTurn):
+            for call in turn.tool_calls:
+                if call.name == name:
+                    arguments: dict[str, Any] = json.loads(call.arguments)
+                    return arguments
+    return {}
 
 
 def _demo_call(name: str, **arguments: object) -> ToolCall:
@@ -2767,6 +2851,7 @@ async def _moor(
         await _seed_usage(session)
     if scenario.assistant_demo:
         await _seed_recent(session, paths)
+    if scenario.assistant_demo or scenario.ai_demo:
         await set_ai(session, format=ApiFormat.ANTHROPIC, base_url="", model="", api_key="demo-key")
 
 

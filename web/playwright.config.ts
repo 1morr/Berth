@@ -53,6 +53,15 @@ const FLOWS = [
   // 助理的側面板（M5 票 08）：AI 設定好了，回覆由演練的 provider 演。
   { name: 'assistant', spec: 'assistant', scenario: 'assistant', port: 8528 },
   { name: 'assistant-390', spec: 'assistant', scenario: 'assistant', port: 8529, viewport: NARROW },
+  // 側面板裡訂閱 RSS 與撤銷（M5 票 11）：同 `rss` 的 Mikan 替身，AI 設定好了。
+  { name: 'assistant-rss', spec: 'assistant-rss', scenario: 'assistant-rss', port: 8530 },
+  {
+    name: 'assistant-rss-390',
+    spec: 'assistant-rss',
+    scenario: 'assistant-rss',
+    port: 8531,
+    viewport: NARROW,
+  },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },

@@ -188,6 +188,20 @@ missing), and that your global title rules do not block. A release name that
 says "submit this one" changes nothing; anything else is refused with the reason, and the search card already marks
 the rows it will not send. When more than one route can hold the title and none has been used yet, it asks which.
 
+On a title's page you can also ask it to **subscribe** ("subscribe to this one's Mikan RSS"). It looks the title up
+on Mikan, lists the fansub groups and subscribes the one you pick, the same as **RSS subscription** on the title
+page: the whole season so far is sent at once. "Subscribe to this one with Nyaa" makes a Nyaa or acg.rip search
+feed from search words; its first round still waits for you to choose on the RSS page. Berth builds these
+addresses itself, so there is no confirmation card, but it only subscribes a Mikan bangumi and fansub group it
+found in the same conversation. You can also give it a whole feed address: one you typed in the conversation is
+added at once; any other address (one written in a search result or a page, say) stops on a confirmation card.
+The **Subscribed** card shows the feed's name and source, which title and group it is bound to, what was sent and
+when it is read next. **Undo subscription** on the card stops the subscription (deletes the feed it made, or
+unbinds the RSS series it bound in your existing feed, so you can subscribe again) and takes back the downloads it
+sent that have not finished; finished ones stay, and the card says how many. **Undo submit** on a download card
+works the same way, and either way the assistant knows about it the next time you say something. These tools are
+for administrators, like the RSS page.
+
 Conversations are saved in Berth, and each person sees only their own: **History** lists them, **New** starts a
 fresh one. Closing the panel in the middle of a reply does not stop it; the reply is saved and shows up when you
 open the conversation again.

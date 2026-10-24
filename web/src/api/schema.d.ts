@@ -255,6 +255,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversations/{conversation_id}/messages/{message_id}/tools/{call_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Undo
+         * @description 按結果卡上的撤銷：以按的這個人走那個工具的反向命令。指的是 `message_id` 那一則存著的那一次
+         *     （同一個 call id 可能出現不只一次）。撤銷被拒（qBittorrent 連不上）回 200、`result_type` 是
+         *     `Refusal`，什麼都沒記——再按一次會接著做。
+         */
+        post: operations["post_undo_api_conversations__conversation_id__messages__message_id__tools__call_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discover/trending": {
         parameters: {
             query?: never;
@@ -2793,6 +2815,20 @@ export interface components {
             ready: boolean;
             /** Chat Only */
             chat_only: boolean;
+            /** Tools */
+            tools: components["schemas"]["AssistantToolOut"][];
+        };
+        /**
+         * AssistantToolOut
+         * @description 這個人拿得到的一個工具（M5 票 11）：側面板的狀態行照等級說「正在查」或「正在做」，
+         *     結果卡照 `undoable` 給撤銷鍵。等級讀命令的標記，前端不另寫一份。
+         */
+        AssistantToolOut: {
+            /** Name */
+            name: string;
+            effect: components["schemas"]["Effect"];
+            /** Undoable */
+            undoable: boolean;
         };
         /**
          * AuditAction
@@ -3352,6 +3388,12 @@ export interface components {
             /** Known Episode End */
             known_episode_end: number | null;
         };
+        /**
+         * Effect
+         * @description 副作用等級（brief §14）。
+         * @enum {string}
+         */
+        Effect: "read" | "reversible" | "irreversible";
         /**
          * EpisodeOut
          * @description 一集。
@@ -4368,7 +4410,7 @@ export interface components {
          *     列上有一顆重試（plan §3.1）。這裡的每一種都是「還沒開始就停住」。
          * @enum {string}
          */
-        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "source_expired" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
+        JobRefusal: "media_missing" | "route_missing" | "route_kind_mismatch" | "route_disabled" | "route_unhealthy" | "source_unavailable" | "source_expired" | "job_missing" | "not_retryable" | "not_replannable" | "client_unreachable" | "delete_files_requires_remove_torrent" | "not_reimportable" | "not_undoable" | "content_missing" | "moved_on" | "low_disk_space" | "job_removed" | "review_needs_admin";
         /**
          * JobRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子、挑下一步，`detail` 是原文，不翻譯。
@@ -4748,7 +4790,7 @@ export interface components {
              */
             created_at: string;
             /** Parts */
-            parts: (components["schemas"]["UserText"] | components["schemas"]["PagePart"] | components["schemas"]["ModelText"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"] | components["schemas"]["NoticePart"])[];
+            parts: (components["schemas"]["UserText"] | components["schemas"]["PagePart"] | components["schemas"]["ModelText"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"] | components["schemas"]["NoticePart"] | components["schemas"]["UndonePart"])[];
         };
         /**
          * MikanSubscriptionIn
@@ -5395,11 +5437,10 @@ export interface components {
         };
         /**
          * ProposalCause
-         * @description 為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種
-         *     （票 11 的網址來源）。
+         * @description 為什麼這一次呼叫要人按（M5 票 10）。之後的檢查把可逆的呼叫降成確認卡時，各自多一種。
          * @enum {string}
          */
-        ProposalCause: "irreversible";
+        ProposalCause: "irreversible" | "url_not_from_user";
         /**
          * ProposalRefusal
          * @description 按確認卡的端點不做的理由（`services.proposals`）。
@@ -6493,6 +6534,42 @@ export interface components {
             audits: number;
         };
         /**
+         * UndoRefusal
+         * @description 結果卡上的撤銷不做的理由（`services.undo`，M5 票 11）。
+         * @enum {string}
+         */
+        UndoRefusal: "call_missing" | "not_undoable" | "already_undone" | "not_allowed";
+        /** UndoRefusalOut */
+        UndoRefusalOut: {
+            reason: components["schemas"]["UndoRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * UndonePart
+         * @description 有人在結果卡上按了撤銷、撤掉了（M5 票 11）：存在一則 `decision` 裡。模型下一輪看得到
+         *     （只有 Berth 自己的字，`undone_content`），畫面照 `call_id` 把那張卡改成已撤銷。
+         */
+        UndonePart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "undone";
+            /** Message Id */
+            message_id: number;
+            /** Call Id */
+            call_id: string;
+            /** Tool */
+            tool: string;
+            /** Result Type */
+            result_type: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * UnknownTorrentOut
          * @description qBittorrent 上一個 Berth 沒有 Job 的 torrent（plan §3.2、票 10）。
          */
@@ -6862,10 +6939,17 @@ export interface components {
          * @enum {string}
          */
         ToolRefusal: "unknown_tool" | "invalid_input" | "not_allowed" | "changed";
+        /**
+         * SubscribeRefusal
+         * @description AI 訂閱不了的理由（M5 票 11）。只有工具會說，不在 `domain/enums.py`（同
+         *     `submit_guard.SubmitRefusal`）；照樣進 OpenAPI，前端說得出人話。
+         * @enum {string}
+         */
+        SubscribeRefusal: "bangumi_not_from_this_conversation" | "subgroup_not_from_this_conversation" | "route_needed";
         /** @enum {string} */
-        ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "MissingEpisodes" | "SearchResults" | "SubmittedJob" | "Refusal" | "ProposalCard";
+        ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "MissingEpisodes" | "SearchResults" | "SubmittedJob" | "MikanSearchResults" | "MikanSubgroups" | "Subscribed" | "Subscribed" | "Subscribed" | "Refusal" | "ProposalCard";
         /** @enum {string} */
-        ProposalPreviewType: "IndexerAddition" | "DownloadsDeletion";
+        ProposalPreviewType: "IndexerAddition" | "DownloadsDeletion" | "FeedAddition";
         /** DownloadsDeleted */
         DownloadsDeleted: {
             /** Media */
@@ -6887,6 +6971,31 @@ export interface components {
             title_en: string;
             /** Jobs */
             jobs: components["schemas"]["JobDownloadsPreview"][];
+        };
+        /** ExcludedRow */
+        ExcludedRow: {
+            code: components["schemas"]["SkipCode"];
+            /** Count */
+            count: number;
+        };
+        /**
+         * FeedAddition
+         * @description 確認卡上「會發生什麼」：Berth 之後每隔一段時間會連這個網址（M5 票 11）。
+         */
+        FeedAddition: {
+            /** Url */
+            url: string;
+            kind: components["schemas"]["FeedKind"];
+            /** Name */
+            name: string;
+            /** Tv Route */
+            tv_route: number | null;
+            /** Tv Route Name */
+            tv_route_name: string;
+            /** Movie Route */
+            movie_route: number | null;
+            /** Movie Route Name */
+            movie_route_name: string;
         };
         /** IndexerAdded */
         IndexerAdded: {
@@ -6952,6 +7061,56 @@ export interface components {
          * @enum {string}
          */
         Lang: "CHS" | "CHT" | "JP" | "EN";
+        /**
+         * MikanBangumi
+         * @description Mikan 搜尋頁上的一個番組。
+         */
+        MikanBangumi: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+        };
+        /**
+         * MikanSearchResults
+         * @description 「搜 Mikan 番組」的結果（M5 票 11）：照頁上的順序。
+         */
+        MikanSearchResults: {
+            /** Term */
+            term: string;
+            /** Bangumi */
+            bangumi: components["schemas"]["MikanBangumi"][];
+        };
+        /**
+         * MikanSubgroup
+         * @description 一個番組底下的一個字幕組（作品頁「RSS 訂閱」挑的那幾列，`bangumi.SubgroupView`）。
+         */
+        MikanSubgroup: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Updated */
+            updated: string | null;
+            /** Releases */
+            releases: number;
+            /** Latest */
+            latest: string;
+            /** Bound To */
+            bound_to: string | null;
+        };
+        /**
+         * MikanSubgroups
+         * @description 「列字幕組」的結果（M5 票 11）。
+         */
+        MikanSubgroups: {
+            /** Bangumi */
+            bangumi: number;
+            /** Title */
+            title: string;
+            /** Subgroups */
+            subgroups: components["schemas"]["MikanSubgroup"][];
+        };
         /**
          * MissingEpisodes
          * @description 一部作品已經播出、還沒有任何下載在處理的集（季表的「缺」，`EpisodeStatus.MISSING`）。
@@ -7144,6 +7303,14 @@ export interface components {
             detail: string;
         };
         /**
+         * SubmissionUndone
+         * @description 撤銷了一次送單：那一筆 Job 移除了 torrent、刪了下載下來的檔、清了紀錄（M5 票 12）。
+         */
+        SubmissionUndone: {
+            /** Hash */
+            hash: string;
+        };
+        /**
          * SubmitRefusal
          * @description AI 送不出一筆 release 的理由（M5 票 12）。不在 `domain/enums.py`：那裡的 `*Refusal` 是端點的
          *     拒絕、每一種都有狀態碼，這幾種只有工具會說（同 `registry.ToolRefusal`）。照樣進 OpenAPI，
@@ -7165,6 +7332,76 @@ export interface components {
             media: string;
             /** Created */
             created: boolean;
+        };
+        /**
+         * Subscribed
+         * @description 訂閱的結果卡：Feed 與它帶到的 RSS Series（M5 票 11）。撤銷走 `subscriptions.unsubscribe`。
+         */
+        Subscribed: {
+            /** Media */
+            media: string | null;
+            /** Media Title */
+            media_title: string;
+            /** Media Title En */
+            media_title_en: string;
+            /**
+             * Subscribed At
+             * Format: date-time
+             */
+            subscribed_at: string;
+            feed: components["schemas"]["SubscribedFeed"];
+            /** Feed Created */
+            feed_created: boolean;
+            /** Series */
+            series: components["schemas"]["SubscribedSeries"][];
+            /** Submitted */
+            submitted: number;
+            /** Excluded */
+            excluded: components["schemas"]["ExcludedRow"][];
+        };
+        /**
+         * SubscribedFeed
+         * @description Feed 卡：名稱、來源、下一次輪詢。網址不放：聚合 feed 的網址帶著使用者的 token。
+         */
+        SubscribedFeed: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            kind: components["schemas"]["FeedKind"];
+            /** Interval Sec */
+            interval_sec: number;
+            /** Last Polled At */
+            last_polled_at: string | null;
+            /** Next Poll At */
+            next_poll_at: string | null;
+            /** Primed */
+            primed: boolean;
+            /** Poll Error */
+            poll_error: string;
+        };
+        /**
+         * SubscribedSeries
+         * @description RSS Series 卡的一列：綁到哪部作品、哪一個字幕組。
+         */
+        SubscribedSeries: {
+            /** Id */
+            id: number;
+            /** Media */
+            media: string | null;
+            /** Media Title */
+            media_title: string;
+            /** Media Title En */
+            media_title_en: string;
+            /** Route Name */
+            route_name: string;
+            source: components["schemas"]["FeedKind"] | null;
+            /** Mikan Bangumi Name */
+            mikan_bangumi_name: string;
+            /** Mikan Subgroup Name */
+            mikan_subgroup_name: string;
+            /** Group */
+            group: string;
         };
         /**
          * Tags
@@ -7206,6 +7443,16 @@ export interface components {
              * @default
              */
             edition?: string;
+        };
+        /**
+         * Unsubscribed
+         * @description 撤銷了一個訂閱：助理的結果卡照它說撤回了什麼（`services/tools.py` 的撤銷直接回這一份）。
+         */
+        Unsubscribed: {
+            /** Removed */
+            removed: number;
+            /** Kept */
+            kept: number;
         };
     };
     responses: never;
@@ -7680,6 +7927,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProposalRefusalOut"];
+                };
+            };
+            /** @description `busy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_undo_api_conversations__conversation_id__messages__message_id__tools__call_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: number;
+                message_id: number;
+                call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UndonePart"];
+                };
+            };
+            /** @description `not_allowed` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UndoRefusalOut"];
+                };
+            };
+            /** @description `conversation_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantRefusalOut"];
                 };
             };
             /** @description `busy` */

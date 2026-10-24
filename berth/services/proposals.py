@@ -39,7 +39,14 @@ from berth.services.conversations import (
     append_message,
     own_conversation,
 )
-from berth.services.registry import NextStep, Refusal, Registry, ToolContext, ToolRefusal
+from berth.services.registry import (
+    NextStep,
+    Refusal,
+    Registry,
+    ToolContext,
+    ToolRefusal,
+    cause_of,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +90,7 @@ async def dispatch(
     call = registry.resolve(name, arguments, context.user)
     if isinstance(call, Refusal):
         return call
-    cause = call.tool.cause(context, call.given)
+    cause = await cause_of(call.tool, context, call.given)
     if cause is None:
         return await registry.run(call, context)
     shown = await registry.preview(call, context)

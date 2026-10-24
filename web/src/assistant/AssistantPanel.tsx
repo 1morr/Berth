@@ -32,6 +32,7 @@ import { Timestamp } from '../components/Timestamp'
 import { ProposalsContext, type Proposals } from './proposals'
 import { reasonText } from './refusals'
 import { ResultCard } from './ResultCard'
+import { ToolCallContext } from './toolCall'
 import { blocksOf, withChunk, type Block, type Item, type Pending } from './transcript'
 
 /**
@@ -229,6 +230,7 @@ function Chat({
   const cards = conversation.data?.proposals
   const proposals = useMemo<Proposals>(
     () => ({
+      conversationId: currentId,
       cards: new Map((currentId === null ? [] : (cards ?? [])).map((card) => [card.id, card])),
       replying: pending !== null || replying,
       refresh: () => queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY }),
@@ -420,12 +422,16 @@ function hasJobCard(block: Block): boolean {
 
 function ItemView({ item, admin }: { item: Item; admin: boolean }) {
   const { t } = useTranslation()
+  // 這個人拿得到的工具與它們的等級（M5 票 11）：後端讀命令的標記，這裡不另寫一份。
+  const status = useQuery(assistantStatusQueryOptions)
   switch (item.kind) {
     case 'text':
       return <p className="min-w-0 text-sm break-words whitespace-pre-wrap text-ink">{item.text}</p>
     case 'tool': {
       const tool = toolName(t, item.name)
-      const lines = WRITE_TOOLS.has(item.name) ? WRITE_LINES : LOOKUP_LINES
+      const known = status.data?.tools.find((one) => one.name === item.name)
+      // 清單上沒有的（舊對話裡、這一版拿掉了，或角色拿不到了）照查詢的說法：說錯的代價是一個動詞。
+      const lines = known && known.effect !== 'read' ? WRITE_LINES : LOOKUP_LINES
       if (item.state === 'running') {
         return (
           <p className="value flex flex-wrap items-center gap-2 text-xs text-ink">
@@ -455,7 +461,18 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
               ? t('assistant.tools.proposed', { tool })
               : t(lines.done, { tool })}
           </p>
-          {item.output && <ResultCard output={item.output} />}
+          {item.output && (
+            <ToolCallContext
+              value={{
+                callId: item.callId,
+                messageId: item.messageId,
+                undoable: known?.undoable === true,
+                undone: item.undone,
+              }}
+            >
+              <ResultCard output={item.output} />
+            </ToolCallContext>
+          )}
         </>
       )
     }
@@ -464,12 +481,6 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
   }
 }
 
-/**
- * 會改東西的工具（M5 票 12 的送單）：狀態行說「正在送單」，不說「正在查」。工具清單在後端，等級讀命令的標記；
- * 前端只認得這幾個名字，沒列到的照查詢的說法——說錯的代價是一個動詞，不是說它做了什麼（那由卡片說）。
- */
-const WRITE_TOOLS: ReadonlySet<string> = new Set(['submit_search_result'])
-
 const LOOKUP_LINES = {
   chip: 'assistant.tools.chip',
   running: 'assistant.tools.running',
@@ -477,6 +488,7 @@ const LOOKUP_LINES = {
   refused: 'assistant.tools.refused',
 } as const
 
+/** 會改東西的工具（可逆的直接做、不可逆的出卡）：狀態行說「正在送單」，不說「正在查」（M5 票 12）。 */
 const WRITE_LINES = {
   chip: 'assistant.tools.write.chip',
   running: 'assistant.tools.write.running',
@@ -495,6 +507,11 @@ const TOOL_NAMES = {
   submit_search_result: 'assistant.tools.submit_search_result',
   add_indexer: 'assistant.tools.add_indexer',
   delete_downloads: 'assistant.tools.delete_downloads',
+  search_mikan: 'assistant.tools.search_mikan',
+  mikan_subgroups: 'assistant.tools.mikan_subgroups',
+  subscribe_mikan: 'assistant.tools.subscribe_mikan',
+  subscribe_search_feed: 'assistant.tools.subscribe_search_feed',
+  add_feed: 'assistant.tools.add_feed',
 } as const
 
 type ToolNameKey = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES]

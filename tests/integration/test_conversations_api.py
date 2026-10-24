@@ -164,7 +164,8 @@ class TestNotSetUp:
     def test_nothing_is_sent_and_the_status_says_why(self, client: TestClient) -> None:
         sign_in(client, CREW)
 
-        assert client.get("/api/assistant").json() == {"ready": False, "chat_only": False}
+        status = client.get("/api/assistant").json()
+        assert (status["ready"], status["chat_only"]) == (False, False)
         response = client.post(
             "/api/conversations", json={"text": "hi", "language": "en"}, headers=BROWSER
         )
@@ -176,6 +177,47 @@ class TestNotSetUp:
         sign_in(client, CREW)
 
         assert client.get("/api/assistant").json()["ready"] is True
+
+
+class TestTheToolsEachPersonGets:
+    """側面板照後端說的等級說話、給撤銷鍵（M5 票 11）：前端不另寫一份哪些工具會改東西。"""
+
+    def test_an_admin_gets_every_tool_with_its_effect_and_the_undo(
+        self, client: TestClient
+    ) -> None:
+        ai_ready(client)
+
+        tools = {tool["name"]: tool for tool in client.get("/api/assistant").json()["tools"]}
+
+        assert tools["recent_imports"] == {
+            "name": "recent_imports",
+            "effect": "read",
+            "undoable": False,
+        }
+        assert (tools["subscribe_mikan"]["effect"], tools["subscribe_mikan"]["undoable"]) == (
+            "reversible",
+            True,
+        )
+        assert tools["add_indexer"]["effect"] == "irreversible"
+        assert tools["submit_search_result"]["undoable"] is True
+
+    def test_an_ordinary_user_can_submit_but_not_undo_and_has_no_rss(
+        self, client: TestClient
+    ) -> None:
+        ai_ready(client)
+        sign_in(client, CREW)
+
+        tools = {tool["name"]: tool for tool in client.get("/api/assistant").json()["tools"]}
+
+        # 刪 Job 只有管理員：送單撤不了。RSS 整塊只有管理員。
+        assert (
+            tools["submit_search_result"]["effect"],
+            tools["submit_search_result"]["undoable"],
+        ) == (
+            "reversible",
+            False,
+        )
+        assert not {"subscribe_mikan", "subscribe_search_feed", "add_feed"} & tools.keys()
 
 
 class TestEachPersonsOwn:

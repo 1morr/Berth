@@ -37,7 +37,10 @@ from berth.services.registry import (
     Registry,
     Tool,
     ToolContext,
+    ToolRefusal,
+    Undo,
     UnmarkedCommandError,
+    cause_of,
 )
 from berth.services.rss import RssRejectedError
 from berth.services.sources import SourceCache
@@ -223,17 +226,20 @@ class TestToolsThatNeedAPerson:
                 route=("GET", "/jobs"),
             )
 
-    def test_an_irreversible_call_always_needs_a_person(self) -> None:
+    @pytest.mark.asyncio
+    async def test_an_irreversible_call_always_needs_a_person(self) -> None:
         registered = proposed()
 
-        assert registered.cause(context(), Scuttle(ship="Pinafore", reason="x")) is (
+        assert await cause_of(registered, context(), Scuttle(ship="Pinafore", reason="x")) is (
             ProposalCause.IRREVERSIBLE
         )
 
-    def test_a_reversible_call_is_done_unless_a_check_demotes_it(self) -> None:
-        """降級的入口：可逆的工具在某些呼叫上要人按（票 11 的網址來源接這裡）。"""
+    @pytest.mark.asyncio
+    async def test_a_reversible_call_is_done_unless_a_check_demotes_it(self) -> None:
+        """降級的入口：可逆的工具在某些呼叫上要人按（票 11 的網址來源接這裡，要讀對話所以是
+        async）。"""
 
-        def from_the_user(_: ToolContext, given: Count) -> ProposalCause | None:
+        async def from_the_user(_: ToolContext, given: Count) -> ProposalCause | None:
             return ProposalCause.IRREVERSIBLE if given.days > 7 else None
 
         async def plan(_: ToolContext, given: Count) -> Counted:
@@ -247,13 +253,72 @@ class TestToolsThatNeedAPerson:
             target=poke, demote=from_the_user, preview=plan, preview_type=Counted, apply=do
         )
 
-        assert plain.cause(context(), Count(days=30)) is None
-        assert checked.cause(context(), Count(days=3)) is None
-        assert checked.cause(context(), Count(days=30)) is ProposalCause.IRREVERSIBLE
+        assert await cause_of(plain, context(), Count(days=30)) is None
+        assert await cause_of(checked, context(), Count(days=3)) is None
+        assert await cause_of(checked, context(), Count(days=30)) is ProposalCause.IRREVERSIBLE
 
     def test_a_tool_that_can_be_demoted_says_what_would_happen(self) -> None:
+        async def never(_: ToolContext, __: Count) -> None:
+            return None
+
         with pytest.raises(ValueError, match="demoted"):
-            tool(target=poke, demote=lambda _, __: None)
+            tool(target=poke, demote=never)
+
+
+@command(Effect.REVERSIBLE, inverse="tests.unit.test_registry.unnudge")
+async def nudge() -> None:
+    """可逆、反向命令是 `unnudge`。"""
+
+
+@command(Effect.IRREVERSIBLE)
+async def unnudge() -> None:
+    """`nudge` 的反向命令。"""
+
+
+class Uncounted(BaseModel):
+    days: int
+
+
+async def take_back(_: ToolContext, done: Counted) -> Uncounted:
+    return Uncounted(days=done.days)
+
+
+class TestUndo:
+    """結果卡上的撤銷走命令標著的反向命令（M5 票 11），不另寫一套。"""
+
+    def test_the_undo_calls_the_marked_inverse(self) -> None:
+        undone = tool(
+            target=nudge,
+            undo=Undo(command=unnudge, route=("GET", "/jobs"), run=take_back, result=Uncounted),
+        )
+
+        assert undone.undo is not None and undone.inverse == "tests.unit.test_registry.unnudge"
+
+    def test_an_undo_through_another_command_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="inverse"):
+            tool(
+                target=nudge,
+                undo=Undo(command=scuttle, route=("GET", "/jobs"), run=take_back, result=Uncounted),
+            )
+
+    def test_only_a_reversible_tool_has_an_undo(self) -> None:
+        with pytest.raises(ValueError, match="only a reversible"):
+            tool(
+                target=peek,
+                undo=Undo(command=unnudge, route=("GET", "/jobs"), run=take_back, result=Uncounted),
+            )
+
+    @pytest.mark.asyncio
+    async def test_it_is_run_on_the_stored_result_and_a_stale_shape_is_changed(self) -> None:
+        undone = tool(
+            target=nudge,
+            undo=Undo(command=unnudge, route=("GET", "/jobs"), run=take_back, result=Uncounted),
+        )
+        registry = Registry((undone,))
+
+        assert await registry.undo(undone, context(), {"days": 3}) == Uncounted(days=3)
+        stale = await registry.undo(undone, context(), {"weeks": 3})
+        assert isinstance(stale, Refusal) and stale.reason == ToolRefusal.CHANGED
 
     @pytest.mark.asyncio
     async def test_preview_then_apply_what_was_shown(self) -> None:

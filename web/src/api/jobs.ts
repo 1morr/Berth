@@ -70,6 +70,7 @@ const REASONS: ReasonSet<JobRefusal> = {
   client_unreachable: true,
   delete_files_requires_remove_torrent: true,
   not_reimportable: true,
+  not_undoable: true,
   content_missing: true,
   moved_on: true,
   low_disk_space: true,
