@@ -312,6 +312,15 @@ def fake_module(source: str) -> ModuleType:
     return module
 
 
+class TestTheDispatcherItself:
+    def test_invoking_is_marked_as_bad_as_the_worst_tool(self) -> None:
+        """`invoke` 跑得到每一條登記，不可逆的工具也是（M5 票 04 起閘門看得到類別上的方法）。"""
+        mark = mark_of(Registry.invoke)
+
+        assert mark is not None
+        assert (mark.effect, mark.inverse) == (Effect.IRREVERSIBLE, None)
+
+
 class TestEveryRejectionIsTranslated:
     """新模組多了一種拒絕而登錄表不認得它，到了 AI 那一邊就是一個沒接住的例外。"""
 

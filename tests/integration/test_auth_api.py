@@ -454,6 +454,11 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/settings/notifications"): Access.ADMIN,
     ("PUT", "/settings/notifications/bot"): Access.ADMIN,
     ("PUT", "/settings/notifications/berth-url"): Access.ADMIN,
+    # AI 設定（M5 票 07）：在 `/settings` 底下，同一道門。
+    ("GET", "/settings/ai"): Access.ADMIN,
+    ("PUT", "/settings/ai"): Access.ADMIN,
+    ("POST", "/settings/ai/test"): Access.ADMIN,
+    ("GET", "/settings/ai/models"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,

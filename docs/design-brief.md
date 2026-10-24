@@ -548,7 +548,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 - **沒有 AI 也完整可用**（2026-09-24 使用者補充）：AI 只是替使用者按審核頁、待處理頁上的那些按鈕，讓人專心看片——平常用 Jellyfin App 看，只在要加新作品時打開 Berth。所以每一種 AI 任務都有同一個命令的人工版本；不需要 AI 的檢查（Jellyfin 回驗、片長驗證、每日程式檢查）與通知是核心功能，不綁在 AI 上；沒有 AI 時要靠規則、批次動作與通知把人工降到最少。
 - **三層漏斗**：規則層 → AI → 人（§6.10）。沒有 AI 時是兩層：播出日比對、片長驗證與 Jellyfin 回驗在 M3，每日檢查與通知在 M4，都不靠 AI。
-- **自主權看可不可以撤銷**：每個命令在**命令登錄表**裡標明副作用等級（讀取 / 可逆 / 不可逆）與反向命令。可逆的（綁定作品、改季號與 offset、核准或改寫計劃、rematch、確認 audit、重試、recheck、重新反查、在磁碟門檻內補下載）通過驗證後 AI 自己做；不可逆的（刪 complete 檔案、移除 torrent、purge、改設定與 Route）**永遠要人**，做成 Proposal；「忽略 Issue」會把問題藏起來，也做成 Proposal。M3 起新增的命令都要先標好等級與反向命令。標記一支命令一個、照它最壞的那一種效果標（2026-10-24 M5 票 03）：一支命令裡可逆與不可逆的按鈕並存時（Issue 的處理、重複版本的決定）整支是不可逆，要讓 AI 自己做其中可逆的那幾顆，先拆成各自的命令。
+- **自主權看可不可以撤銷**：每個命令在**命令登錄表**裡標明副作用等級（讀取 / 可逆 / 不可逆）與反向命令。可逆的（綁定作品、改季號與 offset、核准或改寫計劃、rematch、確認 audit、重試、recheck、重新反查、在磁碟門檻內補下載）通過驗證後 AI 自己做；不可逆的（刪 complete 檔案、移除 torrent、purge、改設定與 Route）**永遠要人**，做成 Proposal；「忽略 Issue」會把問題藏起來，也做成 Proposal。每個命令都要先標好等級與反向命令（M5 票 04 起沒有豁免，測試守）。標記一支命令一個、照它最壞的那一種效果標（2026-10-24 M5 票 03）：一支命令裡可逆與不可逆的按鈕並存時（Issue 的處理、重複版本的決定）整支是不可逆，要讓 AI 自己做其中可逆的那幾顆，先拆成各自的命令。「改設定」照字面（2026-10-24 M5 票 04）：管理員在設定頁或精靈上存下的值（服務位址與帳密、TMDB 憑證、對外網址、門檻、通知管道與每人的通知設定），連同 Route 與索引站的增刪，就算再改一次改得回去也標不可逆；跟著使用留下的偏好（搜尋記住的名字種類）、Feed 自己的屬性（輪詢間隔、Route）與排除條件（下面「記憶」那一條要 AI 寫回的）不算。寫到別人服務上、Berth 撤不回的（§16.4 物件表「不能」那幾列，含登入 Jellyfin 留下的裝置）一律不可逆。
 - **AI 說了不算，要經過驗證**：AI 的結果與規則層的結果走同一組程式檢查（播出日、片長、TMDB 集存在、不撞目標路徑），不通過的不套用。
 - **每一個要人決定的地方都有接管開關**（2026-10-24 使用者）：審核頁、Issue、待綁定與 RSS Series 的修正、卡住的 Job、巡檢標出的項目，每一種事一個三段開關——**關**（人處理，M4 的行為，預設）、**影子**（AI 給建議與理由、人按，統計與人的決定一致率）、**接管**（AI 自己做）。使用者看一致率再切，可隨時切回。接管只放開可逆的：不可逆的照樣做成 Proposal 等人按（2026-10-24 使用者再確認）。
 - **可追溯、可撤銷**：「AI 活動」頁列出 AI 做了什麼、理由、tokens，逐筆撤銷；審核頁只剩 AI 交上來的，每一件附 AI 的理由。
@@ -1825,3 +1825,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **usage**：全部輸入在 Anthropic 是 `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`（`input_tokens` 只算最後一個 breakpoint 之後的），在 OpenAI 相容是 `prompt_tokens`；快取讀取是 `cache_read_input_tokens` / `prompt_tokens_details.cached_tokens`（DeepSeek 是 `prompt_cache_hit_tokens`），快取寫入是 `cache_creation_input_tokens` / `prompt_tokens_details.cache_write_tokens`（vLLM 是 `created_cache_tokens`，DeepSeek 與 Ollama 沒有）。沒回的是「不知道」。串流時 Anthropic 從 `message_start` 起、`message_delta` 的累計值覆寫；OpenAI 要 `stream_options.include_usage`，取最後一個 `usage` 非 null 的 chunk（OpenRouter 那一個的 `choices` 不是空的）。
 - **錯誤**分成限流、額度用完、provider 掛掉（含 200 之後的串流錯誤事件）、憑證不對、模型不存在、連不上、請求被拒或看不懂；**M5 一律不自動重試**。額度與帳務的錯誤重試也沒用（OpenAI 原文「Retrying billing, spend, or quota errors won't restore API access」）。
 - **外部文字**：兩家的建議與 §6.10「外部文字是資料」一致——Anthropic「Put untrusted content only in tool results ... never in `system` prompts or plain user `text` blocks」並建議 JSON 編碼，OpenAI 說不受信任的輸入走 user 訊息、不進 developer 訊息。Berth 的做法：外部文字只經由工具結果進來，命令結果序列化成帶出處欄位的 JSON；給模型的指示不放進工具結果。
+- **票 07 實作時定的（2026-10-24，沒有真 key，下面標「未實測」的等有 key 時補）**：
+  - **SSE 用 `httpx-sse` 0.4.3**（`EventSource(response).aiter_sse()`；不宣告依賴、與 httpx 0.28 和 respx 一起用的情況由 `tests/integration/test_anthropic_provider.py` 驗過；MCP 官方 Python SDK 也依賴它）。
+  - **認證兩個標頭都送**：`Authorization: Bearer` 與 `x-api-key`（沒有 key 時兩個都不送）。官方接不接受兩個同時出現**未實測**（研究最後一節第 1 條）；被拒的話設定頁的測試第一次就會說出 400 的原文，改成只送 Bearer。
+  - **頂層 `cache_control` 照送**：第三方碰到它是忽略還是 400 **未實測**（第 2 條），同上由測試的第一次說出來。
+  - **thinking block 當 `OpaquePart` 原樣帶回**（`thinking_delta` 與 `signature_delta` 拼回完整 block）；現役模型預設會不會回它**未實測**（第 3 條）。
+  - **「AI 設定好了」**（第 6 條）：有端點（填了 base URL，或官方端點而且有 key）、有模型（官方端點留空用 `claude-opus-5-5`）。沒設定好時沒有東西叫模型，系統與 M4 相同。
+  - **探針照研究結論 4 打三次**，每一次各記一列 `ai_calls`；第二次帶工具的回 400 判「不支援」，401 / 404 這類不會只因為多了工具才出現的錯也算「這次沒測成」、不存。模型平行呼叫兩次也算支援，第三次給每個呼叫各一個結果。
+  - **不是 Anthropic 形狀的 404 不算模型不存在**：`error.type` 不是 `not_found_error` 的 404 多半是 base URL 多寫或少寫了 `/v1`，歸「看不懂」並附原文。

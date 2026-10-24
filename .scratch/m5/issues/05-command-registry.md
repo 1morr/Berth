@@ -47,7 +47,7 @@
   `RssRefusal.MEDIA_MISSING`，改成連型別一起比，有測試）、巢狀結果型別的過期檢查（`TestToolResults` 改成掃全部 `$defs`）、
   四處還指著 `api/gate.py` 的舊位置、名詞表要避開的「工具清單」。
 - code-review 未處理（判斷題）：
-  - `REJECTIONS` 只收建構時帶 `reason` 的 14 種；`ReportMissingError`、`ItemNotVisibleError`、`TargetTakenError`
+  - `REJECTIONS` 只收建構時帶 `reason` 的 15 種；`ReportMissingError`、`ItemNotVisibleError`、`TargetTakenError`
     這類「找不到 / 看不到」的例外會當 bug 丟出去。第一個工具碰不到；之後的票登記會丟它們的命令時再加（並決定 `next`）。
   - `UnclaimedError` 帶 `path` 不帶 `detail`，轉成 `Refusal` 時 `detail` 是空的。
   - `run` 實際呼叫的是不是 `command=` 那一支沒有檢查（「等級與標記一致」那條測試在建構上就成立）。要守得改成
@@ -57,3 +57,7 @@
   - `(方法, 路徑)` 是裸的 `tuple[str, str]`（門禁的兩張表原本就是），`REJECTIONS` 的 `reason` / `detail` 用
     `getattr` 與一個 `type: ignore` 取（沒有共同基底，票面說模組的例外不改）。
   - 測試裡的 `service_modules()` 與 `test_command_marks` 各一份（從測試模組 import 會帶進它的頂層副作用，同 `tests/endpoints.py` 的理由）。
+- 合進 main（cd790065，票 04、07）時兩條紅：票 04 把閘門擴到公開類別上的 async 方法，`Registry.invoke` 沒標——
+  標 `irreversible`（派發到每一條登記，照最壞的那一條；要人確認的那一道在對話核心，票 10），`TestTheDispatcherItself`
+  寫明理由；票 07 的 `ai.AiRefusedError` 收 `reason`，掃描抓到它不在 `REJECTIONS`——收進去，同形不必特別處理。
+  `registry` 因此 import `services.ai`：票 08 的對話核心若放進 `ai`、又要 import 登錄表，會成環，到時把例外或核心拆開。

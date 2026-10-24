@@ -1,14 +1,14 @@
 """命令的副作用標記（brief §14「自主權看可不可以撤銷」，M3 票 05 立下）。
 
 M5 的命令登錄表要讀每一個命令的副作用等級與反向命令：可逆的 AI 自己做、不可逆的永遠要人。
-登錄表本身在 M5 做，**標記現在就要標**——M3 起新增的命令一出生就帶著它，M5 不必回頭逐一猜。
+登錄表本身在 M5 做，**標記先標**——每個命令一出生就帶著它，登錄表不必回頭逐一猜。
 
 這一條測試守兩件事：
 
 1. 標了反向命令的，反向命令本身也是一個已標記的命令（寫錯名字、指到沒標的函式都紅）。
-2. M3 起新增的 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，包了
-   `asynccontextmanager` 的也算）都有標記。
-   「M3 之前就在」的模組列在 `BEFORE_M3`，豁免；**新模組不必登記就自動被守**。
+2. 每一個 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，包了
+   `asynccontextmanager` 的、公開類別上的公開 async 方法也算）都有標記。沒有豁免表
+   （M5 票 04 標完最後一批、拆掉 `BEFORE_M3`）：**新模組、新命令不必登記就被守**。
 
 檢查本身在最後做雙向變異：以一段原始碼載成假的 service 模組，拿掉一個標記、寫錯反向命令名
 會紅；改一個無關的函式名或排版不紅。
@@ -25,37 +25,6 @@ from types import ModuleType
 
 import berth.services
 from berth.services.commands import Effect, mark_of
-
-#: M3 開工前就在的 service 模組，公開命令還沒有標記（M5 票 03、04 補）。補完一個就從這裡
-#: 拿掉；新模組不在這裡，所以一出生就被守。`review` 不在：M3 第一個新命令
-#: （批次確認）落在它裡面，整個模組已經標完。
-BEFORE_M3 = frozenset(
-    {
-        "auth",
-        "bench",
-        "clients",
-        "deeplink",
-        "discover",
-        "downloads",
-        "events",
-        "health",
-        "hints",
-        "jellyfin",
-        "jellyfin_access",
-        "jellyfin_images",
-        "qbittorrent",
-        "routes",
-        "search",
-        "settings",
-        "setup",
-        "steps",
-        "tmdb",
-        "tracking",
-        "watch",
-        "watch_area",
-        "watching",
-    }
-)
 
 _PACKAGE = "berth.services."
 
@@ -76,14 +45,28 @@ def commands_of(module: ModuleType) -> dict[str, object]:
 
     包了一層 `asynccontextmanager` 的也算（`downloading.download_round`）：外層是普通函式，
     `functools.wraps` 留下的 `__wrapped__` 才是那個 `async def`。
+
+    公開類別的公開 async 方法也算，名字是 `<類別>.<方法>`（M5 票 04）：API 直接呼叫的寫入
+    也住在類別上（`jellyfin_access.JellyfinAccess.mark_played`）。底線開頭的類別是內部零件。
     """
-    return {
+    found = {
         name: value
         for name, value in vars(module).items()
         if not name.startswith("_")
         and _is_async(value)
         and getattr(value, "__module__", None) == module.__name__
     }
+    for class_name, owner in vars(module).items():
+        if class_name.startswith("_") or not inspect.isclass(owner):
+            continue
+        if owner.__module__ != module.__name__:
+            continue
+        found |= {
+            f"{class_name}.{name}": value
+            for name, value in vars(owner).items()
+            if not name.startswith("_") and _is_async(value)
+        }
+    return found
 
 
 def _is_async(value: object) -> bool:
@@ -93,7 +76,7 @@ def _is_async(value: object) -> bool:
     return inspect.isasyncgenfunction(wrapped)
 
 
-def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list[str]:
+def violations(modules: Iterable[ModuleType]) -> list[str]:
     """兩條規則不成立的每一處，一行一處。空的就是守住了。"""
     modules = list(modules)
     marked = {
@@ -110,7 +93,6 @@ def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list
     found += [
         f"{short(module)}.{name}: public command without a mark"
         for module in modules
-        if short(module) not in exempt
         for name in commands_of(module)
         if f"{short(module)}.{name}" not in marked
     ]
@@ -119,11 +101,7 @@ def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list
 
 class TestTheServices:
     def test_every_rule_holds(self) -> None:
-        assert violations(service_modules(), exempt=BEFORE_M3) == []
-
-    def test_every_exempt_module_still_exists(self) -> None:
-        """豁免表指著不存在的模組，就是有人拆了檔案卻沒回來收這一格。"""
-        assert BEFORE_M3 - {short(module) for module in service_modules()} == set()
+        assert violations(service_modules()) == []
 
     def test_confirming_an_audit_has_no_single_way_back(self) -> None:
         """確認可逆（brief §14），但沒有一支命令把它撤回來（M5 票 03 改掉 M3 票 05 的標法）。
@@ -158,6 +136,85 @@ class TestTheServices:
         assert due is not None and pressed is not None
         assert (due.effect, pressed.effect) == (Effect.IRREVERSIBLE, Effect.REVERSIBLE)
 
+    def test_writes_to_other_services_that_berth_cannot_take_back_are_irreversible(
+        self,
+    ) -> None:
+        """寫到別人服務上、Berth 撤不回來的（brief §16.4 物件表「在 Berth 能撤回嗎：不能」）。
+
+        登入 Jellyfin 留下裝置「Berth」；分類重建了就留著（刪 Route 不刪分類）；Route 檢查的探針
+        校驗到 100% 會觸發使用者 qBittorrent 的「完成時執行外部程式」（brief §20.2），頁 2 的探針
+        在 5.x 觸發「加入時執行」（`setup._data_sight`）。
+        """
+        leaves_behind = (
+            "auth.sign_in",  # Jellyfin 的裝置「Berth」
+            "jellyfin.resolve_interface_login",  # 同上
+            "jellyfin.claim_jellyfin",  # 管理員、初始設定、API key
+            "jellyfin.connect_jellyfin",  # API key
+            "jellyfin.bootstrap_jellyfin",  # 媒體庫
+            "jellyfin.create_libraries",  # 媒體庫
+            "jellyfin.add_berth_paths",  # 媒體庫上的 Berth 路徑
+            "jellyfin_access.JellyfinAccess.mark_played",  # 標為未看清掉觀看次數
+            "setup.claim_owner",  # 管理員、API key
+            "setup.sign_in_existing_owner",  # API key
+            "setup.choose_service",  # 移除舊那一台空的分類；探針
+            "setup.retest_service",  # 探針
+            "qbittorrent.apply_qbittorrent",  # 介面登入
+            "qbittorrent.set_interface_login",  # 同上
+            "indexer.apply_default_indexers",  # Prowlarr 的站
+            "indexer.add_recommended_indexers",  # 同上
+            "indexer.remove_indexer",  # 移除的那一站
+            "indexer.set_interface_login",  # 介面登入
+            "routes.build_routes",  # 分類、探針
+            "routes.create_route",  # 同上
+            "routes.update_route",  # 同上
+            "routes.check_route",  # 同上
+            "routes.check_routes",  # 同上
+            "health.check_health",  # 重建的分類
+        )
+        assert {name: _effect(name) for name in leaves_behind} == dict.fromkeys(
+            leaves_behind, Effect.IRREVERSIBLE
+        )
+
+    def test_changing_settings_and_routes_is_irreversible(self) -> None:
+        """brief §14「改設定與 Route 永遠要人」照字面標（M5 票 04 定案；票 03 的 `set_min_free`
+        先這樣標，同一類的另幾支原本標可逆）。設定是管理員在設定頁或精靈上存下的值；跟著使用
+        留下的偏好（`search.remember_names`）、Feed 自己的屬性（`rss.set_feed_interval`）與排除條件
+        （`rss.set_exclusions`，brief §14 要 AI 寫回的記憶）不算。"""
+        settings = (
+            "settings.write_settings",
+            "settings.update_settings",
+            "setup.complete_setup",
+            "jellyfin.save_bundled_libraries",
+            "deeplink.set_public_url",
+            "tmdb.verify_tmdb",
+            "health_issues.set_min_free",
+            "indexer.skip_indexers",
+            "notify.set_bot_token",
+            "notify.set_mine",
+            "notify.set_berth_url",
+            "routes.delete_route",
+        )
+        assert {name: _effect(name) for name in settings} == dict.fromkeys(
+            settings, Effect.IRREVERSIBLE
+        )
+        for name in settings:
+            mark = mark_of(_command(name))
+            assert mark is not None and mark.inverse is None, name
+
+
+def _command(name: str) -> object:
+    """`"<模組>.<函式>"` 或 `"<模組>.<類別>.<方法>"`。"""
+    module, *path = name.split(".")
+    found: object = importlib.import_module(_PACKAGE + module)
+    for part in path:
+        found = getattr(found, part)
+    return found
+
+
+def _effect(name: str) -> Effect | None:
+    mark = mark_of(_command(name))
+    return None if mark is None else mark.effect
+
 
 # --- 雙向變異：以原始碼造一個假的 service 模組，改它，看檢查怎麼說 ---------------------------
 
@@ -190,6 +247,17 @@ async def _helper(session): ...
 
 def plain(value):
     return value
+
+
+class Access:
+    @command(Effect.IRREVERSIBLE)
+    async def write(self, item): ...
+
+    async def _peek(self): ...
+
+
+class _Part:
+    async def run(self): ...
 """
 
 
@@ -200,8 +268,8 @@ def load(source: str) -> ModuleType:
     return module
 
 
-def check(source: str, *, exempt: frozenset[str] = frozenset()) -> list[str]:
-    return violations([load(source)], exempt=exempt)
+def check(source: str) -> list[str]:
+    return violations([load(source)])
 
 
 class TestTheCheckItself:
@@ -226,14 +294,6 @@ class TestTheCheckItself:
         source = _SOURCE.replace('inverse="fake.take_back"', 'inverse="fake.takeback"')
         assert check(source) == ["fake.settle: inverse fake.takeback is not a marked command"]
 
-    def test_an_exempt_module_may_leave_marks_out_but_not_misname_an_inverse(self) -> None:
-        source = _SOURCE.replace("@command(Effect.READ)\n", "").replace(
-            'inverse="fake.take_back"', 'inverse="fake.nowhere"'
-        )
-        assert check(source, exempt=frozenset({"fake"})) == [
-            "fake.settle: inverse fake.nowhere is not a marked command"
-        ]
-
     def test_a_removed_mark_on_a_context_manager_is_caught(self) -> None:
         """包了一層 `asynccontextmanager` 就不是 coroutine function，但它照樣是公開命令。"""
         source = _SOURCE.replace(
@@ -249,8 +309,20 @@ class TestTheCheckItself:
         )
         assert check(source) == []
 
+    def test_a_removed_mark_on_a_method_is_caught(self) -> None:
+        """公開類別上的公開 async 方法是命令；底線開頭的方法與類別不是。"""
+        source = _SOURCE.replace(
+            "    @command(Effect.IRREVERSIBLE)\n    async def write", "    async def write"
+        )
+        assert check(source) == ["fake.Access.write: public command without a mark"]
+
     def test_renaming_an_unrelated_function_is_not_caught(self) -> None:
-        source = _SOURCE.replace("_helper", "_other_helper").replace("def plain", "def simple")
+        source = (
+            _SOURCE.replace("_helper", "_other_helper")
+            .replace("def plain", "def simple")
+            .replace("_peek", "_glance")
+            .replace("class _Part", "class _Piece")
+        )
         assert check(source) == []
 
     def test_reformatting_is_not_caught(self) -> None:

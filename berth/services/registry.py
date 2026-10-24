@@ -31,9 +31,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.domain import Role
 from berth.services.access import Access, access_of, admits
+from berth.services.ai import AiRefusedError
 from berth.services.auth import AuthenticatedUser
 from berth.services.claims import ClaimRejectedError, UnclaimedError
-from berth.services.commands import CommandMark, Effect, mark_of
+from berth.services.commands import CommandMark, Effect, command, mark_of
 from berth.services.issues import IssueRejectedError
 from berth.services.jellyfin import BundledLibraryRejectedError, InterfaceLoginRejectedError
 from berth.services.jobs import JobRejectedError, ai_actor
@@ -49,6 +50,7 @@ from berth.services.setup import ChoiceLockedError, OwnerRejectedError
 #: 任何東西**，所以換成 `Refusal` 是安全的。`tests/unit/test_registry.py` 掃 `berth/services` 確認
 #: 一種都沒漏。
 REJECTIONS: tuple[type[Exception], ...] = (
+    AiRefusedError,
     BundledLibraryRejectedError,
     ChoiceLockedError,
     ClaimRejectedError,
@@ -206,6 +208,9 @@ class Registry:
         """這個角色拿得到的工具，照登記的順序。"""
         return tuple(tool for tool in self._tools.values() if admits(tool.access, role))
 
+    # 派發到任何一條登記，照最壞的那一條標（brief §14）：不可逆的工具（加索引站、刪 complete）
+    # 也從這裡呼叫。要人確認的那一道在對話核心（票 10 的確認卡），不在這裡。
+    @command(Effect.IRREVERSIBLE)
     async def invoke(
         self, name: str, arguments: Mapping[str, object], context: ToolContext
     ) -> BaseModel | Refusal:
