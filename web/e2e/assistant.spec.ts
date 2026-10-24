@@ -198,3 +198,25 @@ test('不可逆的停在確認卡：按確認才加索引站，刪下載的卡�
   await expect(panel.getByRole('region', { name: '刪下載' }).getByText('已拒絕')).toBeVisible()
   await shot(page, 'proposal-reloaded')
 })
+
+test('用量頁看得到側面板的對話：每一次呼叫的 tokens 與快取命中率（M5 驗收）', async ({ page }) => {
+  await signIn(page, '/weekly')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.getByRole('complementary', { name: '助理' })
+  await panel.getByRole('button', { name: '新對話' }).click()
+  const input = panel.getByRole('textbox', { name: '跟助理說' })
+  await input.fill('你好')
+  await input.press('Enter')
+  await expect(panel.getByRole('button', { name: '送出' })).toBeVisible()
+
+  // `DemoChatProvider` 的對話每一次回報輸入 2,400、快取讀取 1,800：這個情境只有對話的呼叫。
+  await page.goto('/settings/usage')
+  const totals = page.getByRole('region', { name: '這段期間的總量' })
+  await expect(totals.getByText('75%')).toBeVisible()
+  const byOrigin = page.getByRole('table', { name: '依出處' })
+  const row = byOrigin.getByRole('row').filter({ hasText: '側面板的對話' })
+  await expect(row).toContainText('75%')
+  await expect(row).toContainText(/\d/)
+  await expect(byOrigin.getByRole('row').filter({ hasText: '設定頁的測試' })).toHaveCount(0)
+  await shot(page, 'usage')
+})
