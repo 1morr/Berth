@@ -33,6 +33,21 @@ export type AssistantRefusal = Schemas['AssistantRefusal']
 /** 登錄表自己的拒絕理由（後端 `services/registry.ToolRefusal`）。 */
 export type ToolRefusal = Schemas['ToolRefusal']
 
+/**
+ * 結果卡（M5 票 09）：工具結果的 `result_type` 是哪一種、那一種的 `result` 長什麼樣。
+ * 名字的封閉集合由後端從命令登錄表產生（`ToolResultType`），每一種的形狀是同名的 component。
+ * 存下的 `ToolResultPart.result_type` 只是字串：舊版本存下、這一版已經拿掉的型別認不得。
+ */
+export type ToolResultType = Schemas['ToolResultType']
+
+export type ToolOutcome = Schemas['ToolOutcome']
+
+export type ToolResults = { [K in ToolResultType]: Schemas[K] }
+
+export type RecentImports = Schemas['RecentImports']
+
+export type RecentWork = Schemas['RecentWork']
+
 /** 回覆的語言（後端的 `Language`）。 */
 export type ReplyLanguage = Schemas['MessageIn']['language']
 

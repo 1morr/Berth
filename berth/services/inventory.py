@@ -770,6 +770,17 @@ async def _file_kinds(
     return {file_id: kind for file_id, kind in found.tuples() if kind is not None}
 
 
+def imports_presence(entries: Sequence[LedgerEntry]) -> JellyfinPresence:
+    """幾個入庫的正片合起來，Jellyfin 收錄了沒（AI 的「最近入庫」，M5 票 09）。一個一個看
+    （`_file_presence`）：有找不到的是 `lost`——要人去 Jellyfin 看，比還在等的優先說；
+    其餘有還在等的是 `searching`；全部找到才是 `found`。沒有正片是 `none`。"""
+    each = {_file_presence(entry) for entry in entries} - {JellyfinPresence.NONE}
+    for presence in (JellyfinPresence.LOST, JellyfinPresence.SEARCHING, JellyfinPresence.FOUND):
+        if presence in each:
+            return presence
+    return JellyfinPresence.NONE
+
+
 def _file_presence(entry: LedgerEntry) -> JellyfinPresence:
     """一個檔案找到了沒。與牆上那一格不同：這裡問的是**這一集**，所以不必等 Series。"""
     if entry.action is not PlanAction.IMPORT:

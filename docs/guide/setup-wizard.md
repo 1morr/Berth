@@ -171,7 +171,10 @@ many there were. There is no budget and no limit: this page only reports.
 Every page has an **Assistant** button in the header. It opens a column on the right (on a phone it takes the
 whole screen) that stays open as you move between pages and after a reload. Type a message and
 press Enter (Shift+Enter for a new line); the reply streams in as it is written. When the assistant looks
-something up, the panel says so ("Looking up recent imports") and then "Looked up" once it has the answer.
+something up, the panel says so ("Looking up recent imports") and then "Looked up" once it has the answer, with
+the result drawn as a card under that line: recent imports list each title with its poster, the episodes that came
+in, whether Jellyfin shows them yet, and a link to the title's page. The card comes from the result itself, not from
+what the model wrote, and it is still there after a reload.
 
 Conversations are saved in Berth, and each person sees only their own: **History** lists them, **New** starts a
 fresh one. Closing the panel in the middle of a reply does not stop it; the reply is saved and shows up when you

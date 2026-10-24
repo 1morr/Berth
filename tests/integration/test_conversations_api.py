@@ -5,14 +5,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from datetime import timedelta
 
 from fastapi.testclient import TestClient
 
 from berth.adapters.ai import ModelTurn, StopReason, TextPart, TurnEnded, Usage
+from berth.models.types import utcnow
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_ai_settings_api import BROWSER
+from tests.integration.test_assistant import calls
 from tests.integration.test_issues_api import CREW, client, factory, sign_in
+from tests.integration.test_weekly import FRIEREN, imported, works
 
 __all__ = ["client", "factory"]
 
@@ -100,6 +105,58 @@ class TestSendingAMessage:
 
         assert response.status_code == 422
         assert response.json()["detail"]["reason"] == "empty_message"
+
+
+class TestResultCards:
+    """結果卡從工具結果畫（M5 票 09）：串流時那一個 chunk 帶著結果型別與結果，
+    重讀時也在存下的那一則裡。"""
+
+    def test_what_came_in_this_week_comes_back_as_a_recent_imports_result(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        ai_ready(client)
+        this_week(client)
+        factory.ai_.replies = [calls("recent_imports"), says("Frieren got two episodes.")]
+
+        streamed = send(client, "What came in this week?")
+
+        [output] = [chunk for chunk in streamed if chunk["type"] == "tool-output-available"]
+        assert (output["tool_name"], output["outcome"], output["result_type"]) == (
+            "recent_imports",
+            "done",
+            "RecentImports",
+        )
+        assert isinstance(output["result"], dict)
+        [work] = output["result"]["works"]
+        assert (work["media"], work["episodes"], work["presence"]) == (
+            FRIEREN,
+            [[1, 1, 2]],
+            "lost",
+        )
+        cid = streamed[0]["conversation_id"]
+        body = client.get(f"/api/conversations/{cid}").json()
+        stored = [
+            part
+            for message in body["messages"]
+            for part in message["parts"]
+            if part["type"] == "tool_result"
+        ]
+        assert [(part["result_type"], part["result"]) for part in stored] == [
+            ("RecentImports", output["result"])
+        ]
+
+
+def this_week(client: TestClient) -> None:
+    """芙莉蓮昨天入庫了兩集（反查沒排上，所以 Jellyfin 找不到）。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
+        async with sessions() as session:
+            await works(session)
+            for episode in (1, 2):
+                await imported(session, FRIEREN, episode, at=utcnow() - timedelta(days=1))
+
+    asyncio.run(run())
 
 
 class TestNotSetUp:

@@ -29,10 +29,16 @@
   「歷史」列出以前的對話。工具依角色給：一般使用者拿不到管理員的命令。一則訊息之後最多呼叫 10 輪工具，到了就停下來說；
   provider 限流、額度用完、key 不對、連不上時說出原因（限流說幾秒後再送），不自動重試。設定頁測出只能聊天的模型，
   面板標明「只能聊天」、不帶工具；AI 沒設定好時管理員看到「去設定」，一般使用者看到「管理員還沒開啟 AI」。
-  這一版只有「最近入庫」一個工具，結果卡在下一版。API：`GET /api/assistant`、`GET` / `POST /api/conversations`、
+  這一版只有「最近入庫」一個工具。API：`GET /api/assistant`、`GET` / `POST /api/conversations`、
   `GET /api/conversations/{id}`、`POST /api/conversations/{id}/messages`（POST 回 SSE）。
   **這一版有資料庫 migration**（`13c178a92497`）：對話兩張表 `conversations`、`conversation_messages`，`ai_calls`
   多一欄 `conversation_id`（用量頁的出處多「側面板的對話」）。
+- **助理的結果卡**（M5 票 09）：工具的結果畫成卡片，依結果本身畫、不依模型寫的字，重整之後照樣在（存在對話裡，
+  不重新查）。第一張是「最近入庫」：最近幾天入庫的作品一部一列——海報、類型與年份、入庫的集、Jellyfin 收錄了沒
+  （已收錄、等收錄、找不到），作品名連到作品頁。模型的文字只講重點，細節在卡上。這一版畫不出的結果只留「查過……」那一行
+  與一句說明，不壞整個對話。API：SSE 的 `tool-output-available` 多 `result_type` 與 `result`（與存下的 `tool_result`
+  同形）；OpenAPI 多 `ToolResultType`；「最近入庫」的結果多 `year`、`poster_url`、`poster_url_en`、`presence`。
+  沒有資料庫 migration。
 - **設定 → 用量：看 AI 花了多少 tokens 與快取命中率**（M5 票 13）：只有管理員（看得到每個人的）。最近 7 / 30 / 90 天
   （照容器時區切日）的呼叫數、輸入與輸出 tokens、快取命中率（快取讀取 ÷ 全部輸入，輸入含快取寫入與讀取）與沒成的次數；
   每天一根直條（快取讀取、其他輸入、輸出），逐日數字收在圖下；依出處、依格式與模型（同一個模型經兩台主機分開列）、

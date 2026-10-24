@@ -6191,7 +6191,8 @@ export interface components {
         };
         /**
          * StreamToolOutput
-         * @description 工具跑完了（`tool-output-available`）。結果本身在 `finish` 之後重讀的那一份裡。
+         * @description 工具跑完了（`tool-output-available`）。結果與存下的 `ToolResultPart` 同形：串流時就畫得出
+         *     結果卡（票 09），`finish` 之後重讀的那一份是同一個。
          */
         StreamToolOutput: {
             /**
@@ -6204,6 +6205,12 @@ export interface components {
             /** Tool Name */
             tool_name: string;
             outcome: components["schemas"]["ToolOutcome"];
+            /** Result Type */
+            result_type: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
         };
         /**
          * StreamToolStart
@@ -6726,6 +6733,8 @@ export interface components {
          * @enum {string}
          */
         ToolRefusal: "unknown_tool" | "invalid_input";
+        /** @enum {string} */
+        ToolResultType: "RecentImports" | "Refusal";
         /**
          * NextStep
          * @description 拒絕之後 AI 該怎麼辦（plan §11.6）。
@@ -6752,7 +6761,8 @@ export interface components {
         };
         /**
          * RecentWork
-         * @description 一部作品在這段時間入庫了什麼。形狀同週報的 `ImportedWorkOut`，前端同一套說法。
+         * @description 一部作品在這段時間入庫了什麼：結果卡上的一列（M5 票 09）。前四格與集數同週報的
+         *     `ImportedWorkOut`，前端同一套說法。
          */
         RecentWork: {
             /** Media */
@@ -6762,6 +6772,18 @@ export interface components {
             title: string;
             /** Title En */
             title_en: string;
+            /** Year */
+            year: number | null;
+            /**
+             * Poster Url
+             * @description Poster image URL for the card; may be empty.
+             */
+            poster_url: string;
+            /**
+             * Poster Url En
+             * @description Poster image URL for the card; may be empty.
+             */
+            poster_url_en: string;
             /**
              * Episodes
              * @description [season, first episode, last episode] ranges; empty for a movie.
@@ -6771,6 +6793,8 @@ export interface components {
                 number,
                 number
             ][];
+            /** @description Whether Jellyfin shows these files yet: found, searching (still waiting), lost (Jellyfin could not find at least one). */
+            presence: components["schemas"]["JellyfinPresence"];
         };
         /**
          * Refusal

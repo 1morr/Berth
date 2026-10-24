@@ -27,13 +27,15 @@ import { Dot } from '../components/Dot'
 import { problemText } from '../components/requestProblem'
 import { SIGNAL_FILL, type Signal } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
+import { ResultCard } from './ResultCard'
 import { blocksOf, withChunk, type Block, type Item, type Pending } from './transcript'
 
 /**
  * 助理的側面板（M5 票 08，`.scratch/m5/side-panel-shape.md`）。`AppShell` 決定它在哪裡、開著沒有；
  * 這裡是面板裡的一切：沒設定好的說法、只能聊天的標示、對話、歷史清單、輸入。
  *
- * **模型的字永遠是中性的散文**：不塗任何信號色、不畫成成功——做了什麼只以工具結果的卡為準（票 09 起）。
+ * **模型的字永遠是中性的散文**：不塗任何信號色、不畫成成功——做了什麼只以工具結果的卡為準
+ * （`ResultCard`，票 09）。
  */
 
 /** 面板的 id：頁首的「助理」鍵以 `aria-controls` 指著它。 */
@@ -403,7 +405,12 @@ function ItemView({ item, admin }: { item: Item; admin: boolean }) {
           </p>
         )
       }
-      return <p className="value text-xs text-ink-dim">{t('assistant.tools.done', { tool })}</p>
+      return (
+        <>
+          <p className="value text-xs text-ink-dim">{t('assistant.tools.done', { tool })}</p>
+          {item.output && <ResultCard output={item.output} />}
+        </>
+      )
     }
     case 'notice':
       return <NoticeView notice={item.notice} admin={admin} />
