@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from urllib.parse import unquote
 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -531,9 +532,12 @@ class AssistantRuns:
 
 
 async def _viewing(session: AsyncSession, page: str) -> list[PagePart]:
-    """畫面在某一部作品的頁面上（`BerthPage.MEDIA`）、Berth 認得那一部時是那一部，否則沒有。"""
+    """畫面在某一部作品的頁面上（`BerthPage.MEDIA`）、Berth 認得那一部時是那一部，否則沒有。
+
+    路徑照網址原樣送來：站內的作品連結把 id 編碼過（`tv%3A120089`），先解碼（M5 票 15）。
+    """
     prefix = BerthPage.MEDIA.split("{", 1)[0]
-    media_id = page.removeprefix(prefix) if page.startswith(prefix) else ""
+    media_id = unquote(page.removeprefix(prefix)) if page.startswith(prefix) else ""
     if not media_id or "/" in media_id:
         return []
     row = await session.get(Media, media_id)
