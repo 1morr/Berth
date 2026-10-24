@@ -6,39 +6,70 @@
 
 ## [Unreleased]
 
+這一版是 M5「助理」：每一頁都開得到的側面板，跟它說話，它照你的意思查東西與動手，結果畫成卡片；可逆的直接做並在卡上
+附撤銷，不可逆的停在確認卡等你按。要先在設定 → AI 接上你自己的 provider（Anthropic 或 OpenAI 相容的端點，key 自備，
+Berth 不設預算、只記用量）；不設時 Berth 與 0.3.0 完全一樣，助理面板只說怎麼開。下面改到的 API 只有 Berth 自己的
+畫面在用，升級之後重新整理一次頁面即可。**這一版有四個資料庫 migration**（Berth 啟動時自動依序套用一次，各自寫在
+下面那一條）。
+
 ### Added
 
-- **卡住的下載開成 Issue**（M5 票 01）：送單失敗而 Berth 不會再自動重送的（前後送了五次都沒成，或種子連結失效、
-  qBittorrent 拒絕這種再問也一樣的）、入庫失敗的、超過 10 分鐘沒有資料在動的，各自在 `/issues` 開一件，說出原因
-  與下一步，算進「有 N 件等你處理」與它的 Discord 通知。按鈕沿用下載頁的：重新送單、再試一次入庫，以及新的「放棄」
-  （Berth 不再等這一筆；磁碟與 qBittorrent 都不動，要連檔案一起刪到下載頁的刪除範圍）。下載恢復、被重試或刪掉時
-  那一件自己收掉；忽略在它還卡著的期間有效。升級前就卡住的那幾筆，Berth 起來之後幾秒內補上。沒有資料庫 migration。
-  API：`IssueType` 多 `submit_failed`、`import_failed`、`stalled`，`IssueAction` 多 `retry_import`、`abandon`。
-- **設定 → AI：接上自己的 AI provider 並測試**（M5 票 07）：選 API 格式（這一版是 Anthropic Messages，Anthropic 官方、
-  OpenRouter、DeepSeek、自架的 Ollama 這類講同一種格式的端點都行）、填 base URL（留空是官方，不含 `/v1`）、API key
-  （官方要，自架的可以不填；存了之後畫面只說「已設定」，key 不回到瀏覽器）、模型（官方留空用 `claude-opus-5-5`，
-  第三方可從端點的模型清單挑或手填）。「儲存並測試」打三次小請求：一句回覆、一次假工具 `berth_echo` 的呼叫、把工具結果
-  送回去，畫面說出回覆、每一次的 tokens（端點沒回的那一格是「不知道」，不是 0）與這個模型支不支援工具呼叫；不支援的標成
-  「只能聊天」，換了格式、base URL 或模型要重測。失敗時說出原因：key 不對、模型不存在、限流（與幾秒後再試）、額度用完、
-  provider 有問題、連不上；不自動重試。沒設定 AI 時 Berth 與之前完全一樣。API：`GET` / `PUT /api/settings/ai`、
-  `POST /api/settings/ai/test`、`GET /api/settings/ai/models`。
-  **這一版有資料庫 migration**（`2b74d84a462c`）：新的用量記錄表 `ai_calls`，每一次對 provider 的請求一列（model、
-  輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處、誰、沒成的原因），不設預算。
-- **助理的側面板**（M5 票 08）：每一頁的頁首多一顆「助理」，打開是右側一欄（手機上取代頁面），換頁不關、重整也記得。
-  跟它說話，回覆一字一字串流出來；它查東西時說「正在查……」，查完說「查過……」。對話存在 Berth、每人只看得到自己的，
-  「歷史」列出以前的對話。工具依角色給：一般使用者拿不到管理員的命令。一則訊息之後最多呼叫 10 輪工具，到了就停下來說；
-  provider 限流、額度用完、key 不對、連不上時說出原因（限流說幾秒後再送），不自動重試。設定頁測出只能聊天的模型，
-  面板標明「只能聊天」、不帶工具；AI 沒設定好時管理員看到「去設定」，一般使用者看到「管理員還沒開啟 AI」。
-  這一版只有「最近入庫」一個工具。API：`GET /api/assistant`、`GET` / `POST /api/conversations`、
+- **設定 → AI：接上自己的 AI provider 並測試**（M5 票 07、07b）：選 API 格式——**Anthropic Messages**（Anthropic
+  官方，或講同一種格式的第三方端點）或 **OpenAI 相容**（Chat Completions：OpenAI 官方、OpenRouter、DeepSeek、自架的
+  Ollama 與 vLLM）；填 base URL（留空是官方；Anthropic 格式不含 `/v1`，OpenAI 相容照端點文件給的填，多半含 `/v1`，
+  例如 `https://openrouter.ai/api/v1`、`http://<主機>:11434/v1`）、API key（官方要，自架的可以不填；存了之後畫面只說
+  「已設定」，key 不回到瀏覽器）、模型（Anthropic 官方留空用 `claude-opus-5-5`，其餘含 OpenAI 官方都要選或填；
+  按「從端點讀取模型清單」，讀到的模型列成一排按鈕，按了就填進模型欄，超過 12 個時模型欄兼當搜尋框；讀不到就手填）。「儲存並測試」打三次小請求：一句回覆、一次假工具 `berth_echo` 的呼叫、把工具結果
+  送回去，畫面說出回覆、每一次的 tokens（端點沒回的那一格是「不知道」，不是 0）與這個模型支不支援工具呼叫（拿到工具結果後又照樣
+  呼叫一次的模型也算支援）。端點拒絕
+  工具、忽略工具（只在回話裡提到工具名也算）、或把呼叫寫成文字，都標成「只能聊天」並說是哪一種；換了格式、base URL
+  或模型要重測。失敗時說出原因：key 不對、模型不存在（只有說模型不存在的 404 才算）、限流（與幾秒後再試）、額度用完、
+  provider 有問題、連不上、端點回了看不懂的錯誤（原文在技術細節）；不自動重試。快取讀取照端點回的記（DeepSeek 的
+  `prompt_cache_hit_tokens` 也認得），沒回的與比全部輸入還大的記成「不知道」。`docs/guide` 的 AI 一節有幾個常見端點的
+  填法與怎麼開工具呼叫。API：`GET` / `PUT /api/settings/ai`（`ApiFormat` 是 `anthropic` / `openai`，`official_models`
+  說每一種格式的官方端點在模型留空時用哪一個）、`POST /api/settings/ai/test`、`GET /api/settings/ai/models`。
+  **資料庫 migration**（`2b74d84a462c`）：新的用量記錄表 `ai_calls`，每一次對 provider 的請求一列（格式、主機、model、
+  輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處、誰、沒成的原因）。
+- **助理的側面板**（M5 票 08、15）：每一頁的頁首多一顆「助理」，桌機上打開是右側一欄、與頁面並排，換頁不關、重整也
+  記得；手機寬度（1024px 以下）佔滿畫面、連頁首一起收起，不記得上次開著（從通知點進來先看到的是那一頁），面板裡的站內
+  連結會收起面板。跟它說話，回覆一字一字串流出來；它查東西時說「正在查……」，做事時說「正在做……」，完成或沒做成
+  各說一句。對話存在 Berth、每人只看得到自己的，「歷史」列出以前的對話並標出正在看的那一則。工具依角色給：一般使用者
+  拿不到管理員的命令（與 API 同一道門禁，不由模型說了算）。一則訊息之後最多叫 10 次模型，到了就停下來說；provider
+  限流、額度用完、key 不對、連不上時說出原因（限流說幾秒後再送），不自動重試。設定頁測出只能聊天的模型，面板標明
+  「只能聊天」、不帶工具（它自己寫出的工具呼叫也不執行）；AI 沒設定好時管理員看到「去設定」，一般使用者看到「管理員還沒開啟 AI」。按了確認卡、撤銷、
+  挑了歷史裡的一則之後，焦點落在說結果的那一句或輸入框上，螢幕閱讀器念得到結果。API：`GET /api/assistant`（含
+  `tools`：你拿得到的工具、副作用等級、按不按得到撤銷）、`GET` / `POST /api/conversations`、
   `GET /api/conversations/{id}`、`POST /api/conversations/{id}/messages`（POST 回 SSE）。
-  **這一版有資料庫 migration**（`13c178a92497`）：對話兩張表 `conversations`、`conversation_messages`，`ai_calls`
-  多一欄 `conversation_id`（用量頁的出處多「側面板的對話」）。
+  **資料庫 migration**（`13c178a92497`）：對話兩張表 `conversations`、`conversation_messages`，`ai_calls` 多一欄
+  `conversation_id`（用量頁的出處多「側面板的對話」）。
 - **助理的結果卡**（M5 票 09）：工具的結果畫成卡片，依結果本身畫、不依模型寫的字，重整之後照樣在（存在對話裡，
-  不重新查）。第一張是「最近入庫」：最近幾天入庫的作品一部一列——海報、類型與年份、入庫的集、Jellyfin 收錄了沒
-  （已收錄、等收錄、找不到），作品名連到作品頁。模型的文字只講重點，細節在卡上。這一版畫不出的結果只留「查過……」那一行
-  與一句說明，不壞整個對話。API：SSE 的 `tool-output-available` 多 `result_type` 與 `result`（與存下的 `tool_result`
-  同形）；OpenAPI 多 `ToolResultType`；「最近入庫」的結果多 `year`、`poster_url`、`poster_url_en`、`presence`。
-  沒有資料庫 migration。
+  不重新查）；做了什麼以卡片為準，模型說做了不算。「這週入庫了什麼」是一張「最近入庫」卡：最近幾天入庫的作品一部一列
+  ——海報、類型與年份、入庫的集、Jellyfin 收錄了沒（已收錄、等收錄、找不到），作品名連到作品頁。畫不出的結果只留
+  「查過……」那一行與一句說明，不壞整個對話。API：SSE 的 `tool-output-available` 帶 `result_type` 與 `result`
+  （與存下的 `tool_result` 同形）；OpenAPI 多 `ToolResultType`。
+- **跟助理說「訂閱這部的 Mikan RSS」**（M5 票 11）：在作品頁說，它查作品名、在 Mikan 搜番組、列字幕組，訂閱你選的
+  那一組（整季當場送出，同作品頁的訂閱）；「用 Nyaa 訂閱這部」以搜尋詞建 Nyaa 或 acg.rip 的搜尋 feed（第一輪照樣等你在
+  RSS 頁選）。**網址由 Berth 自己組的直接做、不出確認卡**：Mikan 只收這則對話裡 Berth 自己搜出來的番組與字幕組，別處來的
+  id 一律拒絕。也可以給它一整個 Feed 網址：網址是你在這則對話裡自己打的才直接加，否則（例如搜尋結果、番組頁裡藏的網址）
+  停在確認卡上，你按了才加；Feed 的名字由 Berth 依網址取，不用模型寫的。結果是一張**訂閱卡**：Feed 名稱、來源、綁到哪部作品與字幕組、當場送出幾筆、下一次輪詢。
+  **卡上可以撤銷**：停掉訂閱（刪掉這次建的 Feed，或解開就地綁上的 RSS Series，再訂一次訂得回來），並撤回它送出、還沒
+  下載完的下載（移除 torrent、刪檔、清紀錄）；已經下載完的留著，卡上說留了幾筆。撤銷之後助理下一句話就知道。作品有不只
+  一條 Route 收得下、又還沒送過單時，它會先問要入庫到哪一條。這幾個工具只有管理員拿得到（RSS 整塊都是）。
+  API：`POST /api/conversations/{id}/messages/{message}/tools/{call}/undo`；對話多一種 part `undone`；確認卡的 `cause`
+  有 `url_not_from_user`；OpenAPI 多 `Subscribed`、`Unsubscribed`、`SubmissionUndone`、`FeedAddition`、
+  `MikanSearchResults`、`MikanSubgroups`、`SubscribeRefusal`、`UndoRefusal`。
+- **跟助理說「這部缺的集搜一下並下載」**（M5 票 12）：在作品頁打開助理說，它知道是哪一部（送出時帶著目前的頁面，
+  那一句底下說「在《…》的頁面上說的」）。三個工具：查缺的集、照缺的集搜索引站、送單；結果各是一張卡——缺的集、
+  搜尋結果（同搜尋頁的「為什麼不像這部作品」，自己也按得了送單，Route 的下拉在卡上）、送出的那一筆（跟著下載進度即時
+  更新，管理員在下載完之前按「撤銷送單」就移除 torrent、刪掉已下載的檔案、清掉紀錄，那幾集回到缺；那一筆本來就在、不是這一次送的，
+  卡上不給撤銷，免得刪掉別人或你手動送的那一筆）。**送單有程式守著，
+  不靠模型聽話**：AI 只送得出這則對話裡 Berth 自己搜出來的那幾筆，而且要「符合」這部作品、預估的每一集都是要找的缺集
+  （只寫季的季包要整季都缺）、沒被全域的標題規則擋下；發佈名裡寫著「送這一筆」也只能在這些裡被挑中，其餘一律拒絕並說出
+  原因（卡上也先標出 AI 不會送的那幾筆）。作品有不只一條 Route 收得下、又還沒送過單時，它會先問要入庫到哪一條。一般使用者
+  也拿得到這三個工具（搜尋與送單本來就是一般使用者做的事），撤銷只有管理員。AI 代你送的單在時間線上記成 `ai:<你的 id>`。
+  API：`POST /api/conversations*` 收 `page`；對話多一種 part `page`；`GET /api/media/{id}` 多 `preselected_route_id`
+  （搜尋頁下拉的預選值，規則搬到後端一份）；`JobOut` 多 `undoable`；OpenAPI 多 `MissingEpisodes`、`SearchResults`、
+  `SearchResultRow`、`SubmitRefusal`、`SubmittedJob`。
 - **助理的確認卡**（M5 票 10）：不可逆的事助理不能自己做，停在一張確認卡上，你按了「確認」才以你的名義執行。
   這一版有兩件：**加索引站**（「幫我加一個動畫的索引站」：卡上寫哪一站、它的網址、加到哪一台 Prowlarr）與
   **刪掉一部作品的下載**（「把這部的 complete 刪掉」：移除 qBittorrent 裡的 torrent、刪掉下載資料夾裡的檔案，卡上逐個列出
@@ -47,71 +78,34 @@
   只有叫它做的那個人按得到；回覆還在跑時要等它講完。按了之後卡片說後端真的做了什麼，模型下一句話時看得到結果
   （不會自己多回一句）。API：`POST /api/proposals/{id}/confirm`、`POST /api/proposals/{id}/reject`；
   `GET /api/conversations/{id}` 多 `proposals`（每一張卡的現況）；SSE 的 `tool-output-available` 的 `outcome` 多
-  `proposed`，`result_type` 多 `ProposalCard`；OpenAPI 多 `ProposalPreviewType`。
-  **這一版有資料庫 migration**（`9708ccd64def`）：新表 `proposals`，一張卡一列（工具、參數、理由、卡上的預覽、狀態、
+  `proposed`；OpenAPI 多 `ProposalPreviewType`。
+  **資料庫 migration**（`9708ccd64def`）：新表 `proposals`，一張卡一列（工具、參數、理由、卡上的預覽、狀態、
   誰按的、結果）。
-- **跟助理說「這部缺的集搜一下並下載」**（M5 票 12）：在作品頁打開助理說，它知道是哪一部（送出時帶著目前的頁面，
-  那一句底下說「在《…》的頁面上說的」）。三個新工具：查缺的集、照缺的集搜索引站、送單；結果各是一張卡——缺的集、
-  搜尋結果（同搜尋頁的「為什麼不像這部作品」，自己也按得了送單，Route 的下拉在卡上）、送出的那一筆（跟著下載進度即時
-  更新，管理員在下載完之前按「撤銷送單」就移除 torrent、刪掉已下載的檔案、清掉紀錄，那幾集回到缺）。**送單有程式守著，
-  不靠模型聽話**：AI 只送得出這則對話裡 Berth 自己搜出來的那幾筆，而且要「符合」這部作品、預估的每一集都是要找的缺集（只寫季的季包要整季都缺）、
-  沒被全域的標題規則擋下；發佈名裡寫著「送這一筆」也只能在這些裡被挑中，其餘一律拒絕並說出原因（卡上也先標出 AI 不會送的
-  那幾筆）。作品有不只一條 Route 收得下、又還沒送過單時，它會先問要入庫到哪一條。一般使用者也拿得到這三個工具（搜尋與
-  送單本來就是一般使用者做的事），撤銷只有管理員。AI 代你送的單在時間線上記成 `ai:<你的 id>`。
-  API：`POST /api/conversations*` 收 `page`；對話多一種 part `page`；`GET /api/media/{id}` 多 `preselected_route_id`
-  （搜尋頁下拉的預選值，規則搬到後端一份）；`JobOut` 多 `undoable`；OpenAPI 多 `MissingEpisodes`、`SearchResults`、
-  `SearchResultRow`、`SubmitRefusal`、`SubmittedJob`。沒有資料庫 migration。
 - **AI 活動頁**（M5 票 14）：頁首導覽多一格「AI 活動」（AI 設定好了才出現），列出助理做過的每一件會改東西的事——
-  它直接做的送單與訂閱，以及你按了確認的確認卡。一列說何時、代誰、哪個工具、輸入、**AI 給的理由**、那一次回覆花了多少
-  tokens，以及出自哪一則對話（自己的對話按一下就在側面板打開）。撤得了的就在那一列撤（與結果卡上的撤銷同一件事，助理下一句
-  話就知道）；已經撤過的說何時撤的，撤不了的說為什麼（加索引站、刪下載做了就撤不回；撤銷送單只有管理員）。管理員看得到也撤
-  得了每個人的，其他人只看自己對話裡的。被降成確認卡、你按了確認的「以網址加 Feed」現在也撤得了。助理的送單與訂閱工具現在
-  每次都要說一句為什麼（同確認卡）。
-  API：新端點 `GET /api/ai-activity`；撤銷端點 `POST /api/conversations/{id}/messages/{message}/tools/{call}/undo` 管理員
-  可以指別人的對話，也收確認卡的那一份結果；`submit_search_result`、`subscribe_mikan`、`subscribe_search_feed` 的輸入多
-  必填的 `reason`；OpenAPI 多 `ActivityOut`、`ActivityEntryOut`、`ActivityUndo`、`ActivityVia`、`ReplyTokensOut`。
-  資料庫 migration `5e1a7c3d9b20`：`ai_calls` 多 `message_id`（那一次呼叫在回覆哪一句話），舊的呼叫是空的，活動頁上
-  它們的 tokens 印「—」。
-- **跟助理說「訂閱這部的 Mikan RSS」**（M5 票 11）：在作品頁說，它查作品名、在 Mikan 搜番組、列字幕組，訂閱你選的
-  那一組（整季當場送出，同作品頁的訂閱）；「用 Nyaa 訂閱這部」以搜尋詞建 Nyaa 或 acg.rip 的搜尋 feed（第一輪照樣等你在
-  RSS 頁選）。**網址由 Berth 自己組的直接做、不出確認卡**：Mikan 只收這則對話裡 Berth 自己搜出來的番組與字幕組，別處來的
-  id 一律拒絕。也可以給它一整個 Feed 網址：網址是你在這則對話裡自己打的才直接加，否則（例如搜尋結果、番組頁裡藏的網址）
-  停在確認卡上，你按了才加。結果是一張**訂閱卡**：Feed 名稱、來源、綁到哪部作品與字幕組、當場送出幾筆、下一次輪詢。
-  **卡上可以撤銷**：停掉訂閱（刪掉這次建的 Feed，或解開就地綁上的 RSS Series，再訂一次訂得回來），並撤回它送出、還沒下載完
-  的下載（移除 torrent、刪檔、清紀錄）；已經下載完的留著，卡上說留了幾筆。撤銷之後助理下一句話就知道。送單卡的「撤銷送單」
-  走同一條路。作品有不只一條 Route 收得下、又還沒送過單時，它會先問要入庫到哪一條。這幾個工具只有管理員拿得到（RSS 整塊
-  都是）。
-  API：`GET /api/assistant` 多 `tools`（每個工具的副作用等級、你按不按得到撤銷；側面板依它說「正在查」或「正在做」，
-  不再自己寫一份）；新端點 `POST /api/conversations/{id}/messages/{message}/tools/{call}/undo`；對話多一種 part `undone`；
-  確認卡的 `cause` 多 `url_not_from_user`；OpenAPI 多 `Subscribed`、`Unsubscribed`、`SubmissionUndone`、`FeedAddition`、
-  `MikanSearchResults`、`MikanSubgroups`、`SubscribeRefusal`、`UndoRefusal`。送單卡的撤銷不再直接打 `DELETE /api/jobs/{hash}`。
-  沒有資料庫 migration。
+  它直接做的送單與訂閱，以及你按了確認的確認卡。一列說何時、代誰、哪個工具、輸入、**AI 給的理由**（會改東西的工具每次
+  都要說一句為什麼）、那一次回覆花了多少 tokens，以及出自哪一則對話（自己的對話按一下就在側面板打開）。撤得了的就在那一列
+  撤（與結果卡上的撤銷同一件事，助理下一句話就知道），被降成確認卡、你按了確認的「以網址加 Feed」也撤得了；已經撤過的
+  說何時撤的，撤不了的說為什麼（加索引站、刪下載做了就撤不回；撤銷送單只有管理員；那一筆本來就在、那一次什麼都沒改）。管理員看得到也撤得了每個人的，
+  其他人只看自己對話裡的。API：`GET /api/ai-activity`；撤銷端點管理員可以指別人的對話，也收確認卡的那一份結果；
+  OpenAPI 多 `ActivityOut`、`ActivityEntryOut`、`ActivityUndo`、`ActivityVia`、`ReplyTokensOut`。
+  **資料庫 migration**（`5e1a7c3d9b20`）：`ai_calls` 多 `message_id`（那一次呼叫在回覆哪一句話）。
 - **設定 → 用量：看 AI 花了多少 tokens 與快取命中率**（M5 票 13）：只有管理員（看得到每個人的）。最近 7 / 30 / 90 天
   （照容器時區切日）的呼叫數、輸入與輸出 tokens、快取命中率（快取讀取 ÷ 全部輸入，輸入含快取寫入與讀取）與沒成的次數；
   每天一根直條（快取讀取、其他輸入、輸出），逐日數字收在圖下；依出處、依格式與模型（同一個模型經兩台主機分開列）、
-  依人的明細，與沒成的原因。端點沒回報快取的呼叫不算進命中率，頁面說有幾次。不設預算，只是看的。沒有資料庫 migration。
+  依人的明細，與沒成的原因。端點沒回報快取的呼叫不算進命中率，頁面說有幾次。不設預算，只是看的。
   API：`GET /api/settings/ai/usage?days=7|30|90`。
-- **設定 → AI 多一種格式：OpenAI 相容**（M5 票 07b）：OpenAI 官方、OpenRouter、DeepSeek、自架的 Ollama 與 vLLM 這類
-  講 Chat Completions 的端點。base URL 照它文件給的填（多半含 `/v1`，例如 `https://openrouter.ai/api/v1`、
-  `http://<主機>:11434/v1`；留空是 OpenAI 官方），模型沒有預設（OpenAI 官方也要選或填），模型清單從端點讀、讀不到就手填。
-  測試同樣打三次；端點拒絕工具、忽略工具、或模型把呼叫寫成文字，都標成「只能聊天」並說是哪一種（兩種格式都改成看呼叫的形狀：模型只是在回話裡提到工具名，算「忽略工具」，不再誤標成「寫成文字」）。端點回的錯誤認不得時
-  說「端點回了看不懂的錯誤」、原文在技術細節；不是在說模型的 404 不再當成「模型不存在」。快取讀取照端點回的記
-  （DeepSeek 的 `prompt_cache_hit_tokens` 也認得），沒回的與比全部輸入還大的記成「不知道」。`docs/guide` 的 AI 一節
-  補上幾個常見端點的填法與怎麼開工具呼叫。沒有資料庫 migration。API：`ApiFormat` 多 `openai`；`GET` / `PUT
-  /api/settings/ai` 回的 `default_model` 換成 `official_models`（每一種格式的官方端點在模型留空時用哪一個）。
+- **卡住的下載開成 Issue**（M5 票 01，不需要 AI）：送單失敗而 Berth 不會再自動重送的（前後送了五次都沒成，或種子連結
+  失效、qBittorrent 拒絕這種再問也一樣的）、入庫失敗的、超過 10 分鐘沒有資料在動的，各自在 `/issues` 開一件，說出原因
+  與下一步，算進「有 N 件等你處理」與它的 Discord 通知。按鈕沿用下載頁的：重新送單、再試一次入庫，以及新的「放棄」
+  （Berth 不再等這一筆；磁碟與 qBittorrent 都不動，要連檔案一起刪到下載頁的刪除範圍）。下載恢復、被重試或刪掉時
+  那一件自己收掉；忽略在它還卡著的期間有效。升級前就卡住的那幾筆，Berth 起來之後幾秒內補上。
+  API：`IssueType` 多 `submit_failed`、`import_failed`、`stalled`，`IssueAction` 多 `retry_import`、`abandon`。
 
 ### Changed
 
 - **換頁時助理側面板不重建**（M5 票 15b）：邊開著面板邊點卡片裡的作品、或用頁首換頁時，輸入框裡還沒送出的字、
   回覆到一半的那一則（照樣接著一字一字畫完）、正在看的那則對話都留著；以前每換一頁面板整個重來，打的字會不見，
   回覆到一半的只剩「回覆中…」等它存好才一次出現。收起再打開也一樣都在。
-- **助理側面板在手機上與鍵盤操作的收尾**（M5 票 15）：手機寬度（1024px 以下）打開助理時連頁首一起收起，輸入框在
-  第一屏；不再記得上次開著（從通知點進來先看到的是那一頁），桌機照舊記得。面板裡的連結（卡上的作品、「看這一筆」、
-  「去設定」、「活動」）在手機上會收起面板，換過去的那一頁看得到。按了確認卡、撤銷、挑了歷史裡的一則之後，焦點落在
-  說結果的那一句或輸入框上，螢幕閱讀器念得到結果；歷史清單標出正在看的那一則；搜尋結果每一顆「送單」說得出是哪一筆；
-  用量頁切期間之後焦點留在新選的那一格。從站內連結點進作品頁再叫助理「這部缺的集搜一下」時，它現在知道是哪一部
-  （之前只有直接打網址進來才認得）。AI 活動頁展開的輸入欄名照原樣印（英文不再變成大寫）；用量表英文窄版的模型名
-  不再從中間斷開；設定 → AI 測出只能聊天時與狀態同一個黃色，測試沒過時狀態多一句「剛才的測試沒過」。
 - **媒體庫裡唯一一份不會被「忽略」或「撤銷」刪掉**（M5 票 03）：complete 裡的來源已經不在（例如在 qBittorrent 連
   檔案一起刪了）時，媒體庫那個檔案就是僅存的一份。以前在審核頁按「撤銷」、或把它改成「忽略」（連同跟著影片被拿掉的
   字幕）會把它拆掉，資料就沒了；現在擋下來、什麼都不改，說出來源原本在哪裡。真要刪它，用那筆下載的刪除範圍。

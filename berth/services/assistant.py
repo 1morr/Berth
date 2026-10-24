@@ -475,7 +475,10 @@ class AssistantRuns:
                 now=self._now(),
                 conversation_id=cid,
             )
-            results = [await self._run_tool(cid, call, context, emit) for call in reply.tool_calls]
+            results = [
+                await self._run_tool(cid, call, context, emit, offered=specs)
+                for call in reply.tool_calls
+            ]
             await self._save(cid, MessageKind.TOOLS, results)
             turns.append(UserTurn(tuple(tool_result_of(part) for part in results)))
         await self._stop(
@@ -488,10 +491,18 @@ class AssistantRuns:
         call: ToolCall,
         context: ToolContext,
         emit: Callable[[AssistantEvent], None],
+        *,
+        offered: Sequence[ToolSpec],
     ) -> ToolResultPart:
         arguments = call.arguments_object()
         result: BaseModel
-        if arguments is None:
+        if all(spec.name != call.name for spec in offered):
+            # 只執行這一輪給了模型的工具：只能聊天的模型沒拿到工具，
+            # 自己寫出的呼叫一樣是清單外的名字。
+            result = Refusal(
+                tool=call.name, reason=ToolRefusal.UNKNOWN_TOOL, detail="", next=NextStep.GIVE_UP
+            )
+        elif arguments is None:
             result = Refusal(
                 tool=call.name,
                 reason=ToolRefusal.INVALID_INPUT,

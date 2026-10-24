@@ -256,23 +256,109 @@ describe('設定 → AI', () => {
     expect(screen.getByText('provider 暫時有問題。')).toBeVisible()
   })
 
-  it('讀模型清單：塞進 datalist 並說讀到幾個', async () => {
-    render(READY, {
+  it('讀模型清單：在欄位下方列成一排按鈕，點了（或用鍵盤按）就填進模型欄並標成已選', async () => {
+    const stub = render(READY, {
       'GET /api/settings/ai/models': {
         body: { models: ['m-a', 'm-b'], failure: null, detail: '' },
       },
+      [SAVE]: { body: { ...READY, model: 'm-b' } },
     })
     const user = userEvent.setup()
     renderApp('/settings/ai')
 
     await user.click(await screen.findByRole('button', { name: '從端點讀取模型清單' }))
 
-    expect(await screen.findByText('讀到 2 個模型，從欄位的建議裡挑。')).toBeVisible()
-    const list = document.getElementById(screen.getByLabelText('模型').getAttribute('list')!)
-    expect([...list!.querySelectorAll('option')].map((option) => option.value)).toEqual([
-      'm-a',
-      'm-b',
-    ])
+    expect(
+      await screen.findByText('讀到 2 個模型：點一個填進模型欄，也可以照樣手填。'),
+    ).toBeVisible()
+    const model = screen.getByLabelText('模型')
+    // 不是原生 datalist：建議浮在欄位旁、要點欄位才看得到（M5 票 16 實跑回饋）。
+    expect(model).not.toHaveAttribute('list')
+    const listed = screen.getByRole('group', { name: '端點列出的模型' })
+    const a = within(listed).getByRole('button', { name: 'm-a' })
+    const b = within(listed).getByRole('button', { name: 'm-b' })
+    expect(a).toHaveAttribute('aria-pressed', 'false')
+    expect(b).toHaveAttribute('aria-pressed', 'false')
+
+    // 鍵盤：Tab 到那一顆、按空白鍵。
+    b.focus()
+    await user.keyboard(' ')
+    expect(model).toHaveValue('m-b')
+    expect(b).toHaveAttribute('aria-pressed', 'true')
+    expect(a).toHaveAttribute('aria-pressed', 'false')
+
+    // 手填照樣可以：打的字對上清單裡的那一個，就標那一個。
+    await user.clear(model)
+    await user.type(model, 'm-a')
+    expect(a).toHaveAttribute('aria-pressed', 'true')
+    expect(b).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(b)
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+    expect(await screen.findByText('已儲存。')).toBeVisible()
+    expect(bodyOf(stub, SAVE)).toMatchObject({ model: 'm-b' })
+  })
+
+  it.each([
+    [2, 2],
+    [12, 12],
+  ])('讀到 %i 個模型：全部列成按鈕，不用篩選', async (count, shown) => {
+    const names = Array.from({ length: count }, (_, i) => `m-${i}`)
+    render(READY, {
+      'GET /api/settings/ai/models': { body: { models: names, failure: null, detail: '' } },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '從端點讀取模型清單' }))
+
+    const listed = await screen.findByRole('group', { name: '端點列出的模型' })
+    expect(within(listed).getAllByRole('button')).toHaveLength(shown)
+    expect(screen.queryByText(/打字篩選/)).toBeNull()
+  })
+
+  it('讀到幾百個模型：只列前 12 個，模型欄兼當搜尋框（照 OpenRouter 的模型選單）', async () => {
+    const names = Array.from({ length: 300 }, (_, i) => `m-${i}`)
+    render(READY, {
+      'GET /api/settings/ai/models': { body: { models: names, failure: null, detail: '' } },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '從端點讀取模型清單' }))
+
+    const listed = await screen.findByRole('group', { name: '端點列出的模型' })
+    expect(within(listed).getAllByRole('button')).toHaveLength(12)
+    expect(screen.getByText('還有 288 個，打字篩選。')).toBeVisible()
+
+    // 打字篩選：m-29、m-290 到 m-299 共 11 個，全部列出、不再說還有。
+    const model = screen.getByLabelText('模型')
+    await user.type(model, 'm-29')
+    expect(
+      within(listed)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['m-29', ...Array.from({ length: 10 }, (_, i) => `m-29${i}`)])
+    expect(screen.queryByText(/打字篩選/)).toBeNull()
+
+    // 篩到什麼都沒有：照樣可以手填。
+    await user.clear(model)
+    await user.type(model, 'my-own-model')
+    expect(screen.queryByRole('group', { name: '端點列出的模型' })).toBeNull()
+    expect(screen.getByText('清單裡沒有符合的模型，照樣可以手填。')).toBeVisible()
+  })
+
+  it('讀不到模型清單：說請手填，沒有按鈕', async () => {
+    render(READY, {
+      'GET /api/settings/ai/models': { body: { models: null, failure: null, detail: '' } },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '從端點讀取模型清單' }))
+
+    expect(await screen.findByText('這個端點列不出模型，請照它的文件手填。')).toBeVisible()
+    expect(screen.queryByRole('group', { name: '端點列出的模型' })).toBeNull()
   })
 
   it('切到 OpenAI 相容：base URL 照它的慣例說明；官方端點沒有預設模型，要先填', async () => {

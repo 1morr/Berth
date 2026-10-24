@@ -21,7 +21,7 @@ import { UndoButton } from './UndoButton'
  * - **即時更新**：讀 `['jobs', hash]`，側面板有這種卡時掛著 `/events/stream`（`AssistantPanel` 的 `JobStream`），
  *   poller 推播到這一筆就重問一次——與下載列表、Job 頁同一條路。存下的結果只有身分，狀態不從它畫。
  * - **撤銷走送單的反向命令**（`deletion.withdraw_job`）：移除 torrent、刪下載下來的檔、清紀錄，同一筆之後還送得出去。
- *   只在還沒下載完時（`JobOut.undoable`，後端算）給，按不按得到照後端說的（刪除是 admin 的事，plan §6）；就地確認，
+ *   只在這一次真的送了（`created`）、還沒下載完時（`JobOut.undoable`，後端算）給，按不按得到照後端說的（刪除是 admin 的事，plan §6）；就地確認，
  *   說清楚會刪什麼。撤銷經過對話（`UndoButton`，M5 票 11），模型下一輪知道。
  * - 這一筆不在了（撤銷了、或在 Job 頁刪了紀錄）說一句，不當成錯誤。
  */
@@ -75,7 +75,7 @@ export function SubmittedJobCard({ result }: { result: SubmittedJob }) {
             <p className="text-xs">
               <JobLink hash={result.hash}>{t('assistant.cards.submitted.open')}</JobLink>
             </p>
-            {job.data.undoable && (
+            {result.created && job.data.undoable && (
               <UndoButton
                 label={t('assistant.cards.submitted.undo')}
                 confirm={t('assistant.cards.submitted.undoConfirm')}

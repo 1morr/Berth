@@ -2029,7 +2029,11 @@ class DemoChatProvider:
             input_tokens=24, output_tokens=6, cache_write_tokens=None, cache_read_tokens=0
         )
         if request.system:
-            # 對話（M5 票 08）才有 system；設定頁的探針沒有。
+            # 對話（M5 票 08）才有 system；設定頁的探針沒有。固定的前綴（system 與工具）
+            # 算快取讀到的，用量頁的命中率才不是 0（M5 票 16 的 e2e 看它）。
+            usage = Usage(
+                input_tokens=2400, output_tokens=60, cache_write_tokens=0, cache_read_tokens=1800
+            )
             async for event in self._converse(request, usage):
                 yield event
             return

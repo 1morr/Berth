@@ -460,6 +460,22 @@ describe('送單卡', () => {
     ).toBe(true)
   })
 
+  it('那一筆本來就在（不是這一次送的）：卡上沒有撤銷鍵，撤了會刪掉原有的那一筆', async () => {
+    render(
+      said({
+        tool: 'submit_search_result',
+        type: 'SubmittedJob',
+        result: { ...SUBMITTED, created: false },
+      }),
+      { routes: { [`GET /api/jobs/${HASH}`]: { body: job() } } },
+    )
+    const panel = await openPanel()
+    const card = await within(panel).findByRole('region', { name: '送單' })
+
+    expect(await within(card).findByText('看這一筆')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: '撤銷送單' })).toBeNull()
+  })
+
   it('一般使用者與下載完的那一筆沒有撤銷鍵', async () => {
     render(said({ tool: 'submit_search_result', type: 'SubmittedJob', result: SUBMITTED }), {
       me: CREW,

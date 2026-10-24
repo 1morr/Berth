@@ -153,10 +153,12 @@ class TestEachPersonsOwn:
         self, client: TestClient, factory: FakeClientFactory
     ) -> None:
         ai_ready(client)
-        submit_flow(client, factory, "Admin's download.")
         sign_in(client, CREW)
         submit_flow(client, factory, "Crew's download.")
+        sign_in(client)
+        submit_flow(client, factory, "Admin's download.")
 
+        sign_in(client, CREW)
         theirs = activity(client)["entries"]
         assert [(e["user_name"], e["conversation_title"]) for e in theirs] == [
             (CREW["username"], "Crew's download.")
@@ -166,10 +168,11 @@ class TestEachPersonsOwn:
 
         sign_in(client)
         everyone = activity(client)["entries"]
-        # 新的在前；別人的對話不是你的，連不過去。
-        assert [(e["user_name"], e["own"]) for e in everyone] == [
-            (CREW["username"], False),
-            (ADMIN["username"], True),
+        # 新的在前；別人的對話不是你的，連不過去。管理員送的是同一筆、本來就在：
+        # 沒有東西可撤（票 16）。
+        assert [(e["user_name"], e["own"], e["undo"]) for e in everyone] == [
+            (ADMIN["username"], True, "nothing_done"),
+            (CREW["username"], False, "undoable"),
         ]
 
     def test_an_admin_undoes_someone_elses_and_their_conversation_knows(

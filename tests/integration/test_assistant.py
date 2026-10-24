@@ -493,6 +493,24 @@ async def test_a_chat_only_model_gets_no_tools(engine: AsyncEngine, session: Asy
     assert (await assistant_status(session)).chat_only is True
 
 
+async def test_a_chat_only_model_that_calls_a_tool_anyway_is_refused(
+    engine: AsyncEngine, session: AsyncSession
+) -> None:
+    """沒給工具就不執行工具：只能聊天的模型自己寫出一次工具呼叫，照清單外的名字拒絕（M5 票 16
+    里程碑審查；plan §11.6「不支援的請求不帶工具」）。"""
+    admin = await person(session, "skipper", Role.ADMIN)
+    await ai_ready(session)
+    await mark_tools(session, supported=False)
+    provider = FakeChatProvider(replies=[calls("recent_imports"), says("Sorry.")])
+    runs, _ = runs_for(engine, provider)
+
+    events = await drain(runs, admin, "what's new")
+
+    assert refused(events) == [("recent_imports", "Refusal")]
+    finished = [event.result for event in events if isinstance(event, ToolFinished)]
+    assert finished[0].result["reason"] == "unknown_tool"
+
+
 async def test_a_model_that_passed_the_tool_test_gets_its_tools(
     engine: AsyncEngine, session: AsyncSession
 ) -> None:

@@ -73,3 +73,19 @@ test('精靈跑完之後：/setup 導向設定頁，加一個索引站並試搜�
   await expect(main.getByText('已完成')).toBeVisible()
   await shot(page, 'tmdb')
 })
+
+test('沒設 AI 時：側面板只說怎麼開、沒有輸入框，也沒有 AI 活動（與 M4 相同，M5 驗收）', async ({
+  page,
+}) => {
+  await signIn(page, '/health')
+  await expect(
+    page.getByRole('navigation', { name: '主要導覽' }).getByRole('link', { name: 'AI 活動' }),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.getByRole('complementary', { name: '助理' })
+  await expect(panel.getByText('AI 還沒設定好。')).toBeVisible()
+  await expect(panel.getByRole('textbox', { name: '跟助理說' })).toHaveCount(0)
+  await shot(page, 'assistant-not-ready')
+  await panel.getByRole('link', { name: '去設定' }).click()
+  await expect(page).toHaveURL('/settings/ai')
+})

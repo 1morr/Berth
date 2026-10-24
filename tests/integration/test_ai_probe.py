@@ -96,6 +96,25 @@ async def test_no_text_after_the_tool_result_is_chat_only(session: AsyncSession)
     assert result.tools.gap is ToolGap.NO_REPLY
 
 
+async def test_calling_another_tool_after_the_result_is_still_no_reply(
+    session: AsyncSession,
+) -> None:
+    """第三步又呼叫一次只在名字與 nonce 都對時算數（M5 票 16）；呼叫別的就是沒好好回。"""
+    wrong = TurnEnded(
+        stop=StopReason.TOOL_CALLS,
+        stop_raw="tool_use",
+        reply=ModelTurn((ToolCall(id="call_9", name="something_else", arguments="{}"),)),
+        usage=Usage(),
+    )
+    provider = FakeChatProvider(replies=[says("ok"), echoes(1), wrong])
+    user_id = await ready(session)
+
+    result = await run_ai_test(session, FakeClientFactory(ai=provider), user_id=user_id)
+
+    assert result.tools is not None
+    assert result.tools.gap is ToolGap.NO_REPLY
+
+
 @dataclass
 class SwitchesModelMidTest(FakeChatProvider):
     """第二次請求送出之前，管理員在另一個分頁換了模型：探針已經讀過設定了。"""

@@ -28,6 +28,7 @@ import {
 } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
+import { ToggleChips } from '../components/ToggleChips'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 
 type Key = ParseKeys
@@ -159,6 +160,25 @@ function FailureLines({ failure, retryAfter }: { failure: AiFailure; retryAfter:
  * 表單的草稿放在這一層：狀態要知道「改了格式、base URL 或模型還沒存」（後端存下時會清掉測試結論），
  * 測試也只打**存著的**設定，所以草稿沒存時要先存。
  */
+/** 一次最多列幾顆模型鍵。 */
+const MODEL_CHIPS = 12
+
+/**
+ * 列哪幾顆模型鍵：12 個以內全列；超過時模型欄兼當搜尋框，只列符合打的字的前 12 個，其餘說還有幾個
+ * （照 OpenRouter 自己的模型選單：先搜尋再挑；M5 票 16 使用者選定）。
+ */
+function shownModels(options: string[], typed: string): { shown: string[]; more: number } {
+  const query = typed.trim().toLowerCase()
+  const matching =
+    options.length <= MODEL_CHIPS || query === ''
+      ? options
+      : options.filter((option) => option.toLowerCase().includes(query))
+  return {
+    shown: matching.slice(0, MODEL_CHIPS),
+    more: Math.max(0, matching.length - MODEL_CHIPS),
+  }
+}
+
 function AiBody({ ai }: { ai: AiSettings }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -168,7 +188,6 @@ function AiBody({ ai }: { ai: AiSettings }) {
   const [key, setKey] = useState('')
   const [options, setOptions] = useState<string[]>([])
   const formatId = useId()
-  const listId = useId()
   const missingId = useId()
   const unsavedId = useId()
 
@@ -220,6 +239,8 @@ function AiBody({ ai }: { ai: AiSettings }) {
     mutationFn: listAiModels,
     onSuccess: (next) => setOptions(next.models ?? []),
   })
+
+  const listed = shownModels(options, model)
 
   const missing: Key | null =
     official && !ai.api_key_present && key.trim() === ''
@@ -292,7 +313,6 @@ function AiBody({ ai }: { ai: AiSettings }) {
           />
           <Field
             label={t('settings.aiPage.connection.modelLabel')}
-            list={listId}
             autoComplete="off"
             value={model}
             placeholder={officialModel ?? ''}
@@ -302,11 +322,6 @@ function AiBody({ ai }: { ai: AiSettings }) {
               save.reset()
             }}
           />
-          <datalist id={listId}>
-            {options.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
 
           <div className="grid justify-items-start gap-2">
             {/* 讀清單用的是存著的設定：有沒存的改動時鍵照樣在 Tab 順序上，說先儲存（同通知頁的測試鍵）。 */}
@@ -334,6 +349,31 @@ function AiBody({ ai }: { ai: AiSettings }) {
                     : t('settings.aiPage.models.found', { count: models.data.models.length })
                 : ''}
             </p>
+            {/* 讀到的模型列成一排按鈕，點了填進欄位；不用原生 datalist：它的建議浮在欄位旁、要點欄位才看得到
+                （M5 票 16 實跑回饋）。打的字對上哪一個就標哪一個，手填照樣可以。 */}
+            {listed.shown.length > 0 && (
+              <ToggleChips
+                label={t('settings.aiPage.models.listed')}
+                chips={listed.shown.map((option) => ({
+                  value: option,
+                  label: option,
+                  machine: true,
+                }))}
+                selected={new Set([model.trim()])}
+                onToggle={(picked) => {
+                  setModel(picked)
+                  save.reset()
+                }}
+              />
+            )}
+            {listed.more > 0 && (
+              <p className="text-xs text-ink-dim">
+                {t('settings.aiPage.models.more', { count: listed.more })}
+              </p>
+            )}
+            {options.length > 0 && listed.shown.length === 0 && (
+              <p className="text-xs text-ink-dim">{t('settings.aiPage.models.noMatch')}</p>
+            )}
             {models.isSuccess && models.data.failure !== null && (
               <div className="grid gap-1">
                 <Notice signal="blocked" label={t('common.failed')}>

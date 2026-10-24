@@ -152,10 +152,12 @@ describe('撤銷那一格', () => {
       entry({ call_id: 'a', undo: 'no_inverse', tool: 'add_indexer', result_type: 'IndexerAdded' }),
       entry({ call_id: 'b', undo: 'not_allowed' }),
       entry({ call_id: 'c', undo: 'undone', undone_at: AT }),
+      entry({ call_id: 'd', undo: 'nothing_done' }),
     ])
 
     expect(await screen.findByText('這一件做了就撤不回。')).toBeInTheDocument()
     expect(screen.getByText('只有管理員撤得了這一筆。')).toBeInTheDocument()
+    expect(screen.getByText(/這一次什麼都沒改/)).toBeInTheDocument()
     expect(screen.getByText(/已撤銷/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '撤銷送單' })).toBeNull()
   })

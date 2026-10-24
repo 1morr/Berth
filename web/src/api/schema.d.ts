@@ -2705,7 +2705,7 @@ export interface components {
          * @description AI 活動頁的一列撤不撤得了（M5 票 14）。撤不了的說得出為什麼。
          * @enum {string}
          */
-        ActivityUndo: "undoable" | "undone" | "no_inverse" | "not_allowed";
+        ActivityUndo: "undoable" | "undone" | "no_inverse" | "nothing_done" | "not_allowed";
         /**
          * ActivityVia
          * @description AI 活動頁的一列是怎麼做成的（M5 票 14）。
