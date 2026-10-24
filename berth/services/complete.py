@@ -27,10 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters import fs
 from berth.adapters.qbittorrent import TorrentStatus
 from berth.models import Job, LedgerEntry, PathSettings, Route
+from berth.services.commands import Effect, command
 from berth.services.routes import save_path_of
 from berth.services.settings import read_settings
 
 
+@command(Effect.READ)
 async def route_folders(session: AsyncSession) -> list[Path]:
     """每一條 Route 的 complete 子目錄（`save_path_of`，一個地方算）。停用的也算：停用說的是
     「不要再往這裡送單」，不是「裡面的東西沒人管」。"""
@@ -39,6 +41,7 @@ async def route_folders(session: AsyncSession) -> list[Path]:
     return [Path(save_path_of(paths.complete_root, slug)) for slug in slugs]
 
 
+@command(Effect.READ)
 async def claimed(
     session: AsyncSession, torrents: Iterable[TorrentStatus], folders: list[Path]
 ) -> set[str]:

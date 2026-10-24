@@ -46,6 +46,7 @@ from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.naming import folder_name
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.discover import POSTER_SIZE, image_base
 from berth.services.inventory import (
     LedgerFileView,
@@ -127,6 +128,8 @@ class MediaView:
     awaiting_review: int = 0
 
 
+# 會寫 TMDB 快取，那是 TMDB 的抄本，重抓就回來。
+@command(Effect.READ)
 async def read_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:
@@ -134,6 +137,8 @@ async def read_media(
     return await _load(session, factory, media_id, force=False)
 
 
+# 同 `read_media`。
+@command(Effect.READ)
 async def read_snapshot(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaSnapshot | None:
@@ -156,6 +161,8 @@ class SnapshotRead:
     detail: str = ""
 
 
+# 同 `read_media`。
+@command(Effect.READ)
 async def read_snapshot_checked(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> SnapshotRead:
@@ -168,6 +175,8 @@ async def read_snapshot_checked(
     return SnapshotRead(snapshot=snapshot, problem=view.problem, detail=view.detail)
 
 
+# 同 `read_media`。
+@command(Effect.READ)
 async def snapshot_for_planning(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaSnapshot | None:
@@ -187,6 +196,8 @@ async def snapshot_for_planning(
     return row.stored_snapshot() if row is not None else None
 
 
+# 強制重抓 TMDB：寫下的是 TMDB 現況的抄本，沒有要撤的；之後再抓也是現況。
+@command(Effect.REVERSIBLE)
 async def refresh_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:

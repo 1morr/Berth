@@ -73,7 +73,7 @@ from berth.logs import job_context
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, RssSeries
 from berth.parser import parse_release
 from berth.services.commands import Effect, command
-from berth.services.deletion import Placed, Unlink, remove_one, route_targets
+from berth.services.deletion import Placed, Unlink, last_copy, remove_one, route_targets
 from berth.services.first_batch import FirstBatchAsk
 from berth.services.first_batch import asks as first_batch_asks
 from berth.services.jobs import job_lock, record_event, transition
@@ -344,7 +344,9 @@ async def _collect(
     return ReviewQueue(rows=rows, total=total)
 
 
-@command(Effect.REVERSIBLE, inverse="review.undo_audit")
+# 可逆（brief §14）但沒有單一反向命令：`undo_audit` 拆的是入庫、而且拒絕確認過的列。旗標掛不
+# 回去，確認錯了的那個檔案照樣改得動：rematch 改落點，或刪除（M5 票 03）。
+@command(Effect.REVERSIBLE)
 async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> None:
     """「它是對的」：兩處旗標一起清，時間線寫一筆 `audit_confirmed`。檔案不動。"""
     async with _deciding(session, ledger_id) as (entry, job):
@@ -362,7 +364,8 @@ async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) ->
     logger.info("audit confirmed", extra={"ledger": ledger_id})
 
 
-@command(Effect.REVERSIBLE, inverse="review.undo_audit")
+# 同 `confirm_audit`。
+@command(Effect.REVERSIBLE)
 async def confirm_audits(
     session: AsyncSession, ledger_ids: Sequence[int], *, actor: str
 ) -> AuditsConfirmed:
@@ -373,7 +376,7 @@ async def confirm_audits(
     （`ledger_missing`）的列跳過、不算失敗——按下去的人要的是「這幾列都不再等我」，而它們已經不等了。
 
     範圍只有送來的 id：畫面列出的那些，不是伺服器端的「全部」，按下之後才進來的 audit 不會被順手
-    確認掉。反向是逐列撤銷（`undo_audit`）。
+    確認掉。
     """
     confirmed = skipped = 0
     for ledger_id in dict.fromkeys(ledger_ids):
@@ -395,6 +398,9 @@ async def undo_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> Au
     那條路徑上的已經不是 Berth 放的那一個時（使用者換成了自己的一份）不拆它，其餘照做：撤銷說的
     是「這一個入庫是錯的」，帳本那一列與 Job 照樣處理，而那個檔案下一輪對帳是
     `unmanaged_library_file`——它本來就是（M3 票 01）。
+
+    **complete 裡的來源不在時拒絕**（`source_missing`，M5 票 03）：媒體庫那一份是唯一一份，拆了
+    就是刪掉，而撤銷是可逆命令。要刪它走刪除範圍。
     """
     async with _deciding(session, ledger_id) as (entry, job):
         return await _undo(session, entry, job, actor=actor)
@@ -428,8 +434,11 @@ async def _undo(
     session: AsyncSession, entry: LedgerEntry, job: Job | None, *, actor: str
 ) -> AuditUndone:
     target = Path(entry.target_path)
+    roots, placed = await route_targets(session), Placed.of(entry)
     try:
-        result = remove_one(target, roots=await route_targets(session), placed=Placed.of(entry))
+        if last_copy(target, roots=roots, placed=placed):
+            raise ReviewRejectedError(ReviewRefusal.SOURCE_MISSING, entry.source_abs_path)
+        result = remove_one(target, roots=roots, placed=placed)
     except (OSError, fs.PathEscapeError) as exc:
         # **拆不掉就什麼都不改**：帳本那一列還在，佇列上它也還在，旁邊多一句為什麼。
         raise ReviewRejectedError(ReviewRefusal.UNLINK_FAILED, str(exc)) from exc

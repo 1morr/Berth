@@ -33,6 +33,7 @@ const REASONS: ReasonSet<RematchRefusal> = {
   target_taken: true,
   link_failed: true,
   unlink_failed: true,
+  source_missing: true,
   not_from_series: true,
   no_episode_number: true,
 }

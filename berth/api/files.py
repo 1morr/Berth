@@ -47,6 +47,7 @@ _STATUS: dict[RematchRefusal, int] = {
     RematchRefusal.TARGET_TAKEN: status.HTTP_409_CONFLICT,
     RematchRefusal.LINK_FAILED: status.HTTP_409_CONFLICT,
     RematchRefusal.UNLINK_FAILED: status.HTTP_409_CONFLICT,
+    RematchRefusal.SOURCE_MISSING: status.HTTP_409_CONFLICT,
     RematchRefusal.NOT_FROM_SERIES: status.HTTP_422_UNPROCESSABLE_CONTENT,
     RematchRefusal.NO_EPISODE_NUMBER: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
@@ -84,6 +85,7 @@ REMATCH_RESPONSES = rematch_responses(
     RematchRefusal.EPISODE_NOT_ALLOWED,
     RematchRefusal.NOT_FROM_SERIES,
     RematchRefusal.NO_EPISODE_NUMBER,
+    RematchRefusal.SOURCE_MISSING,
     *LANDING_REFUSALS,
 )
 

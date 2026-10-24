@@ -76,6 +76,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.parser.release import parse_release
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.qbittorrent import sign_in
 from berth.services.routes import incomplete_path_of, save_path_of
 from berth.services.settings import read_settings
@@ -213,6 +214,8 @@ def job_lock(job_hash: str) -> AbstractAsyncContextManager[None]:
     return _locks.hold(job_hash)
 
 
+# 只拿行程內的鎖，什麼都不寫。
+@command(Effect.READ)
 @asynccontextmanager
 async def job_locks(job_hashes: Iterable[str]) -> AsyncIterator[None]:
     """一次握住好幾筆的鎖。**照 hash 排序依序拿**：兩個同時要多把的呼叫端（poller 的一輪、rematch
@@ -365,6 +368,8 @@ class AddDownloadOutcome:
     created: bool
 
 
+# 撤銷是刪 Job（它有自己的刪除範圍），同 `downloading.add_manual_download`。
+@command(Effect.REVERSIBLE)
 async def add_download(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -457,6 +462,7 @@ async def add_download(
         return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
+@command(Effect.REVERSIBLE)
 async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_hash: str) -> JobView:
     """`submit_failed` → `requested` → 再送一次（plan §3.1）。
 
@@ -549,6 +555,8 @@ SUBMIT_RETRIES = (
 )
 
 
+# 背景迴圈：重送人已經要過的那幾筆，不排通知。
+@command(Effect.REVERSIBLE)
 async def retry_due(session: AsyncSession, factory: ServiceClientFactory, *, now: datetime) -> int:
     """把到時間的暫時失敗再送一次（plan §3.1 的 `submit_failed` 自動重送，M4 票 03）。回試了幾筆。
 
@@ -618,6 +626,7 @@ async def _due_retries(session: AsyncSession, now: datetime) -> list[str]:
     ]
 
 
+@command(Effect.READ)
 async def retries_spent(session: AsyncSession, job_hashes: Collection[str]) -> set[str]:
     """這幾筆 `submit_failed` 裡**不會再自動重送**的：最後一次失敗沒排 `retry_at`——暫時性失敗的
     次數用完了，或那一次本來就是再問也一樣的（M5 票 01，卡住的 Job 開成 Issue）。
@@ -666,6 +675,8 @@ def _due_attempt(failure: dict[str, Any], now: datetime) -> int | None:
     return int(failure.get("attempt", 1))
 
 
+# 撤銷是刪 Job，同 `add_download`。
+@command(Effect.REVERSIBLE)
 async def resubmit_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -753,6 +764,8 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     return await _view_one(session, job)
 
 
+# 它自己只多寫錯誤與時間線；`work` 的副作用算 `work` 那一支命令的。
+@command(Effect.REVERSIBLE)
 async def guarded[T](
     session: AsyncSession, job_hash: str, work: Coroutine[Any, Any, T], *, fallback: T
 ) -> T:
@@ -841,6 +854,7 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
     logger.info("job recovered from a failed round", extra={"state": job.state.value})
 
 
+@command(Effect.READ)
 async def list_jobs(
     session: AsyncSession,
     *,
@@ -890,11 +904,13 @@ async def _filter_counts(session: AsyncSession, media_id: str | None) -> dict[Jo
     return counts
 
 
+@command(Effect.READ)
 async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
     job = await session.get(Job, job_hash)
     return None if job is None else await _view_one(session, job)
 
 
+@command(Effect.READ)
 async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEventView, ...]:
     """時間線，最舊的在前面——它是一份紀錄，讀的方向是事情發生的方向（brief §5.2）。"""
     rows = await session.scalars(
@@ -912,6 +928,7 @@ async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEven
     )
 
 
+@command(Effect.READ)
 async def read_job_files(session: AsyncSession, job_hash: str) -> tuple[JobFileView, ...] | None:
     """這一筆的檔案，照路徑排（作品頁「下載」段展開的那一列，M4 票 12）。沒有這一筆是 `None`。
 
@@ -990,6 +1007,7 @@ async def _existing_outcome(session: AsyncSession, job: Job) -> AddDownloadOutco
     return AddDownloadOutcome(job=await _view_one(session, job), created=False)
 
 
+@command(Effect.READ)
 async def check_disk(session: AsyncSession, route: Route) -> None:
     """這條 Route 的下載落腳處剩下的空間夠不夠再開一個下載（`DiskSettings`，M3 票 04）。
 
@@ -1198,6 +1216,8 @@ async def _fail(
 INTERRUPTED = "interrupted: Berth stopped before qBittorrent answered"
 
 
+# 啟動時把送到一半的寫成送單失敗；回去是每一筆各自的「重試」。
+@command(Effect.REVERSIBLE)
 async def fail_interrupted(session: AsyncSession) -> int:
     """重啟的那一刻：停在 `requested` 的都落到 `submit_failed`（plan §3.1，M3 票 02）。回傳幾筆。
 
@@ -1221,6 +1241,7 @@ async def fail_interrupted(session: AsyncSession) -> int:
     return moved
 
 
+@command(Effect.READ)
 async def restart_state(session: AsyncSession, job: Job) -> JobState:
     """壞掉的一筆接回 poller 的主幹時落在哪一站（plan §3.1）：檔案清單早就到手的回
     `metadata_ready`，還沒有的回 `submitted`。兩站的下一步 poller 本來就會走。
@@ -1241,6 +1262,8 @@ def freeze(media: Media, route: Route) -> None:
     media.default_route_id = route.id
 
 
+# 一次狀態轉換；怎麼回去看是哪一種狀態，由呼叫它的命令決定。
+@command(Effect.REVERSIBLE)
 async def transition(
     session: AsyncSession,
     job: Job,
@@ -1266,6 +1289,8 @@ async def transition(
     return changed
 
 
+# 時間線多一筆；撤銷也是再寫一筆。
+@command(Effect.REVERSIBLE)
 async def record_event(
     session: AsyncSession,
     job: Job,

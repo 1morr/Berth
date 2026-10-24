@@ -67,6 +67,7 @@ from berth.parser import (
 from berth.parser import plan as decide
 from berth.services import first_batch
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import (
     REPLANNABLE,
@@ -137,6 +138,8 @@ class PlanOutcome:
     preplanned: int
 
 
+# 背景迴圈：算 Plan、推進 Job，不碰媒體庫、不排通知。
+@command(Effect.REVERSIBLE)
 async def sweep_plans(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -164,6 +167,7 @@ async def sweep_plans(
     return PlanOutcome(planned=planned, preplanned=preplanned)
 
 
+@command(Effect.REVERSIBLE)
 async def replan_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -201,6 +205,7 @@ async def replan_job(
     return view
 
 
+@command(Effect.READ)
 async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     """這一筆**現在**會被規劃成什麼（`job_files.rel_path` → 那一列）。不寫、不動狀態。
 
@@ -214,6 +219,7 @@ async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     return {f"{contents.root}{item.rel_path}": item for item in items}
 
 
+@command(Effect.READ)
 async def held_proposal(
     session: AsyncSession, job: Job, *, season: int, offset: int | None
 ) -> dict[str, PlannedFile]:
@@ -253,6 +259,7 @@ def _measured(row: JobFile | None) -> int | None:
     return found if isinstance(found, int) else None
 
 
+@command(Effect.READ)
 async def plan_id_of(session: AsyncSession, job_hash: str) -> int | None:
     """這個 Job 現在那一份計劃的 id。沒算過就是 `None`（下載列表照它決定畫不畫那一區）。"""
     found: int | None = await session.scalar(select(Plan.id).where(Plan.job_hash == job_hash))
@@ -516,6 +523,7 @@ def guess_from_title(
     return guess
 
 
+@command(Effect.READ)
 async def series_of(session: AsyncSession, job: Job) -> RssSeries | None:
     """送出這一筆的 RSS Series（`trigger_ref` 是它的 id）。
 

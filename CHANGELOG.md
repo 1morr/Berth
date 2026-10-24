@@ -15,6 +15,13 @@
   那一件自己收掉；忽略在它還卡著的期間有效。升級前就卡住的那幾筆，Berth 起來之後幾秒內補上。沒有資料庫 migration。
   API：`IssueType` 多 `submit_failed`、`import_failed`、`stalled`，`IssueAction` 多 `retry_import`、`abandon`。
 
+### Changed
+
+- **媒體庫裡唯一一份不會被「忽略」或「撤銷」刪掉**（M5 票 03）：complete 裡的來源已經不在（例如在 qBittorrent 連
+  檔案一起刪了）時，媒體庫那個檔案就是僅存的一份。以前在審核頁按「撤銷」、或把它改成「忽略」（連同跟著影片被拿掉的
+  字幕）會把它拆掉，資料就沒了；現在擋下來、什麼都不改，說出來源原本在哪裡。真要刪它，用那筆下載的刪除範圍。
+  重複版本的「取代」照舊：它要的就是舊的那一份消失。API：`ReviewRefusal` 與 `RematchRefusal` 多 `source_missing`（409）。
+
 ## [0.3.0] - 2026-10-24
 
 **從 0.2.9 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。

@@ -147,6 +147,8 @@ class IssueView:
     query: str
 
 
+# 只開或更新一件 Issue；收它的是條件解除或人按的按鈕。
+@command(Effect.REVERSIBLE)
 async def record_issue(
     session: AsyncSession,
     kind: IssueType,
@@ -223,6 +225,7 @@ async def record_issue(
     return Recorded(issue=row, opened=True)
 
 
+@command(Effect.READ)
 async def list_issues(session: AsyncSession) -> list[IssueView]:
     """還沒有人決定的那幾件，最近偵測到的在前面。
 
@@ -301,6 +304,8 @@ async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> se
     }
 
 
+# brief §14：「忽略 Issue」會把問題藏起來，永遠要人。
+@command(Effect.IRREVERSIBLE)
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """「我知道了，不用管它」。不碰磁碟、不碰帳本。
 
@@ -319,6 +324,8 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     return await _reread(session, row)
 
 
+# 按鈕裡有刪 complete 的檔案、移除 torrent、拿媒體庫的複製換成鏈接；等級照最壞的那一顆標。
+@command(Effect.IRREVERSIBLE)
 async def resolve_issue(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -402,6 +409,8 @@ async def resolve_issue(
     return await _reread(session, row)
 
 
+# 只收掉 Issue；Job 再壞回去下一輪重開。
+@command(Effect.REVERSIBLE)
 async def close_settled(session: AsyncSession, now: datetime) -> int:
     """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
 
@@ -429,6 +438,8 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
     return len(settled)
 
 
+# 只開與收 Issue，不排通知。
+@command(Effect.REVERSIBLE)
 async def flag_stuck_jobs(session: AsyncSession, now: datetime) -> int:
     """停住、Berth 自己不會再推的 Job 各開一件（`STUCK_JOBS`，M5 票 01）。回這一輪新開幾件。
 
@@ -480,6 +491,7 @@ async def flag_stuck_jobs(session: AsyncSession, now: datetime) -> int:
     return opened
 
 
+@command(Effect.READ)
 async def covered(
     session: AsyncSession, jobs: Sequence[Job], *, besides: Collection[IssueType] = ()
 ) -> set[str]:

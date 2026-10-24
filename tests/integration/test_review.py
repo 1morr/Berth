@@ -453,6 +453,23 @@ class TestUndo:
         assert await state_of(session, job) is JobState.IMPORTED
         assert [row for row in await events_of(session) if row.type == "audit_undone"] == []
 
+    async def test_the_last_copy_is_not_undone(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """complete 裡的來源已經被刪了：媒體庫那一份是唯一一份，拆了就沒了。撤銷是可逆命令
+        （`commands.Effect`），不走到這一步——拒絕、什麼都不改，要刪它走刪除範圍。"""
+        job, entry = await audited(session, roots)
+        Path(entry.source_abs_path).unlink()
+
+        with pytest.raises(ReviewRejectedError) as refused:
+            await undo_audit(session, entry.id, actor=ACTOR)
+
+        assert refused.value.reason is ReviewRefusal.SOURCE_MISSING
+        assert Path(entry.target_path).exists()
+        assert len(await ledger_of(session)) == 1
+        assert await state_of(session, job) is JobState.IMPORTED
+        assert [row for row in await events_of(session) if row.type == "audit_undone"] == []
+
     async def test_undoing_twice_is_refused(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:

@@ -2196,6 +2196,8 @@ const zhHant = {
         ledger_missing: '這一列已經不在了，多半是另一個分頁先撤銷了。',
         not_audited: '這一列已經被確認過了，多半是另一個分頁先按了。',
         unlink_failed: '媒體庫裡那個檔案拿不掉，所以什麼都沒改。',
+        source_missing:
+          'complete 裡的來源已經不在，媒體庫這一份是唯一一份，撤銷會把它刪掉，所以什麼都沒改；真要刪就用這筆下載的「刪除」。來源原本在：',
       },
       // 動作結果給看不見畫面的人（那一列會直接消失）。
       confirmed: '已確認，這一列從佇列上收掉了。',
@@ -2293,7 +2295,7 @@ const zhHant = {
       left_other: '{{count}} 集搬不過去，留在原處等你看。',
       nothingElse: '沒有其他還沒確認的集數要跟著改。',
     },
-    // 十四種擋下來的理由，各一個下一步。`detail`（檔名、路徑或系統原文）接在後面。
+    // 每一種擋下來的理由各一個下一步。`detail`（檔名、路徑或系統原文）接在後面。
     refusal: {
       ledger_missing: '這個檔案的帳本已經不在了，多半是另一個分頁先改了。',
       file_missing: '這個檔案已經不在這筆下載裡了。',
@@ -2309,6 +2311,8 @@ const zhHant = {
       target_taken: '目標位置上已經有別的檔案，Berth 不覆寫它：',
       link_failed: '鏈接建不起來，所以什麼都沒改：',
       unlink_failed: '媒體庫裡舊的那一條拿不掉，所以什麼都沒改：',
+      source_missing:
+        'complete 裡的來源已經不在，媒體庫這一份是唯一一份，拿掉就是刪掉，所以什麼都沒改；真要刪就用這筆下載的「刪除」。來源原本在：',
       not_from_series:
         '這個檔案不是 RSS Series 送的，沒有 Series 可以套用。取消勾選「套用到這個 RSS Series」再試一次：',
       no_episode_number:
@@ -5907,6 +5911,8 @@ const en: Translations<typeof zhHant> = {
         ledger_missing: 'This row is gone — most likely undone from another tab.',
         not_audited: 'This one has already been confirmed — most likely from another tab.',
         unlink_failed: 'The file in the library could not be removed, so nothing changed.',
+        source_missing:
+          'The source in complete is gone, so the library copy is the only one and undoing would delete it. Nothing changed; to delete it, use Delete on this download. The source was at:',
       },
       confirmed: 'Confirmed; it is off the queue.',
       undone: 'Undone; the download is back in review.',
@@ -6012,6 +6018,8 @@ const en: Translations<typeof zhHant> = {
       target_taken: 'Another file already sits at the target, and Berth does not overwrite it:',
       link_failed: 'The link could not be made, so nothing changed:',
       unlink_failed: 'The old link in the library could not be removed, so nothing changed:',
+      source_missing:
+        'The source in complete is gone, so the library copy is the only one and taking it away would delete it. Nothing changed; to delete it, use Delete on this download. The source was at:',
       not_from_series:
         'This file was not sent by an RSS Series, so there is no Series to apply to. Untick “Apply to this RSS Series” and try again:',
       no_episode_number:

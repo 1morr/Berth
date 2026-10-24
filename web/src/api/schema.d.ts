@@ -5004,7 +5004,7 @@ export interface components {
          *     知道成不成，而那時**什麼紀錄都還沒改**——先鏈接、成了才拆舊的、都成了才寫帳本。
          * @enum {string}
          */
-        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed" | "not_from_series" | "no_episode_number";
+        RematchRefusal: "ledger_missing" | "file_missing" | "not_unmatched" | "plan_pending" | "not_duplicate" | "action_not_allowed" | "episode_required" | "episode_range_reversed" | "episode_not_allowed" | "media_missing" | "route_missing" | "target_taken" | "link_failed" | "unlink_failed" | "source_missing" | "not_from_series" | "no_episode_number";
         /**
          * RematchRefusalOut
          * @description 改不下去時回的那一份。`reason` 給畫面挑句子，`detail` 是檔名、路徑或系統原文，不翻譯。
@@ -5075,7 +5075,7 @@ export interface components {
          *     那一列與 Job 都沒動——先拆鏈接、成了才改紀錄。
          * @enum {string}
          */
-        ReviewRefusal: "ledger_missing" | "not_audited" | "unlink_failed";
+        ReviewRefusal: "ledger_missing" | "not_audited" | "unlink_failed" | "source_missing";
         /**
          * ReviewRefusalOut
          * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文，不翻譯。
@@ -6292,7 +6292,7 @@ export interface operations {
                     "application/json": components["schemas"]["RematchRefusalOut"];
                 };
             };
-            /** @description `not_unmatched` · `plan_pending` · `route_missing` · `target_taken` · `link_failed` · `unlink_failed` */
+            /** @description `not_unmatched` · `plan_pending` · `source_missing` · `route_missing` · `target_taken` · `link_failed` · `unlink_failed` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8166,7 +8166,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewRefusalOut"];
                 };
             };
-            /** @description `not_audited` · `unlink_failed` */
+            /** @description `not_audited` · `unlink_failed` · `source_missing` */
             409: {
                 headers: {
                     [name: string]: unknown;
