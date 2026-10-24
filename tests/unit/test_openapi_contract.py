@@ -50,6 +50,7 @@ from berth.api.routes import route_refusal, route_responses
 from berth.domain import RouteRefusal, enums
 from berth.main import create_app
 from berth.services import jellyfin_access
+from berth.services.deeplink import BerthPage
 from berth.services.routes import RouteRejectedError
 from tests.endpoints import Endpoint, api_endpoints
 
@@ -209,6 +210,26 @@ class TestRefusalShapes:
             "rss_series",
         }
         assert set(schema["required"]) == {"reason", "detail"}
+
+
+class TestBerthPages:
+    """後端組的 Berth 網址指到前端的哪幾頁（M5 票 02）。
+
+    通知裡的連結由後端照 `deeplink.BerthPage` 組，作品頁、清單頁與週報頁的路由在前端。這一個
+    封閉集合進 OpenAPI，前端的 `berthPages.test.ts` 從產出的型別拿到每一條模板，拿真的路由表
+    解析；這裡守的是前一半：集合進得了文件，簽進版控的產出沒有過期。
+    """
+
+    def test_the_document_carries_every_page(self, document: dict[str, Any]) -> None:
+        schema = document["components"]["schemas"]["BerthPage"]
+
+        assert schema["enum"] == [page.value for page in BerthPage]
+
+    def test_the_generated_types_are_not_stale(self) -> None:
+        """後端加了一頁或改了模板卻沒重跑 `pnpm gen:api` 時，紅的就是這一條。"""
+        members = union_members(GENERATED.read_text(encoding="utf-8"), "BerthPage")
+
+        assert members == {page.value for page in BerthPage}
 
 
 class TestStatusTables:

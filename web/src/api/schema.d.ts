@@ -6080,6 +6080,15 @@ export interface components {
             fixed: components["schemas"]["FixedOut"];
             waiting: components["schemas"]["StillWaitingOut"];
         };
+        /**
+         * BerthPage
+         * @description 後端組的網址指到前端的哪幾頁：前端路由表（`web/src/routes.tsx`）的路徑，`{…}` 是參數。
+         *
+         *     進 OpenAPI（`main._document_pages`），前端的 `berthPages.test.ts` 拿每一條對真的路由表解析，
+         *     前端改了路由、這裡沒跟上時那邊紅（M5 票 02）。要連回 Berth 的新頁面加在這裡，不在別處手組路徑。
+         * @enum {string}
+         */
+        BerthPage: "/media/{media_id}" | "/review" | "/issues" | "/rss" | "/weekly/{report_id}";
     };
     responses: never;
     parameters: never;

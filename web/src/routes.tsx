@@ -237,6 +237,8 @@ const indexRoute = createRoute({
  * `mediaId` 是 `tv:120089` / `movie:1241982`——冒號在路徑段裡是合法字元，而認不得的字串
  * 由後端回一個 `not_found` 的理由，不是 404 頁：使用者手打錯網址時該看到「TMDB 上沒有
  * 這部作品」加一條回探索頁的路，而不是一片空白。
+ *
+ * 通知裡的連結指到這裡（後端 `deeplink.BerthPage.MEDIA`），改路徑時 `berthPages.test.ts` 紅。
  */
 const mediaRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -441,7 +443,7 @@ async function requireAdminPage(context: { queryClient: QueryClient }, location:
 /**
  * 週報 `/weekly`（最新一週）與 `/weekly/$reportId`（某一週）（M4 票 131）。與 `/issues` 同一個規則：
  * **只有管理員**（後端 `ADMIN_PREFIXES` 的 `/weekly`）。Discord 摘要的連結是 `/weekly/{id}`
- * （`berth/services/deeplink.py` 的 `WEEKLY_PAGE`），所以第二條路徑不能改名。
+ * （`berth/services/deeplink.py` 的 `BerthPage.WEEKLY`），所以第二條路徑不能改名（`berthPages.test.ts` 守著）。
  */
 const weeklyRoute = createRoute({
   getParentRoute: () => rootRoute,

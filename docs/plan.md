@@ -1048,7 +1048,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 
 **M5 開工前的審查補記**（2026-10-24 逐張核對 M4 票 01–133 的 Comments，下面幾條沒有後續、也沒記去向；都不擋 M5）：
 
-- **排進 M5 開頭**：通知連結的作品頁路徑（後端 `deeplink.MEDIA_PAGE`）與前端路由 `/media/$mediaId` 只靠註解綁著，前端改路由時通知連結會靜靜失效（票 124）——加一道兩邊讀同一份的閘門。
+- **排進 M5 開頭**：通知連結的作品頁路徑（後端 `deeplink.BerthPage.MEDIA`，當時叫 `MEDIA_PAGE`）與前端路由 `/media/$mediaId` 只靠註解綁著，前端改路由時通知連結會靜靜失效（票 124）——加一道兩邊讀同一份的閘門（M5 票 02 已做：`deeplink.BerthPage` 經 OpenAPI 進 `schema.d.ts`，前端 `berthPages.test.ts` 拿真的路由表解析每一條）。
 - **不排里程碑，有 repro 或使用者要求再開票**：真服務 e2e 裡 Jellyfin 停起之後又重啟一次，`test_2` 的 `back()` 等到第一次就放行，`test_3` 撞上第二次（票 37）；qBittorrent 在探針答完、移除之前斷線時留下 `.berth-probe-*`（票 19、47、54 第 1 條，brief §16.4）；Unraid mover 搬碟之後帳本記的 shfs inode 過期，認不出時是不刪、偏安全（票 55 U4）；重建帳本與每日對帳同時跑會替同一個檔案各開一件（缺 `ReconcileRunner` 的共用鎖）、`fs.files_under` 在 async 端點裡同步走訪媒體庫（票 60）；設定頁索引站對 0 站的既有 Prowlarr 沒有精靈那句「待處理」（票 20）；三個服務的版本下限寫在後端常數、`VERSION_FLOOR` 與 i18n 三處（票 17、18）；e2e log 的 asyncio「Task was destroyed but it is pending」（`Queue.get`，疑似 SSE 訂閱者，票 62）；加路徑失敗後改選別的路徑建成 Route，精靈 `libraries` 那一步仍標 `failed`（票 08）；`_plan` 的 TMDB 刷新、mediainfo 與 Jellyfin 通知是否都在寫交易之外沒有閘門（票 01）；`poll_due` 判斷到期之後手動輪詢整輪跑完，背景會多讀一輪（票 100）；名字 chip 全關也記進伺服器，下一部作品一個名字都沒開（票 132）；Series 綁了但 Route 被清掉時「仍然下載」還按得到（票 111）；頁 2、頁 4 在第一次選套件內、正在測試時剖面與 lede 仍說「將會做什麼」「先選 Prowlarr 是哪一台」（票 81）；入庫前那幾秒預覽把已入庫的列在「會送出」（票 121b）。解析 CPU 在事件迴圈上：巡檢量過（票 129、130，一輪 15–84 ms），規劃本身沒量；M6 的 `ai_worker` 跑在同一個迴圈，但呼叫 provider 是 I/O，開工時再量。
 
 ### 11.6 M5 AI 核心與側面板
