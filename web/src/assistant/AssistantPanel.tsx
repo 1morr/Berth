@@ -172,6 +172,7 @@ export function AssistantPanel({
       {status.data && !ready && <NotReady admin={admin} />}
       {ready && view === 'history' && (
         <ConversationList
+          selection={selection}
           onPick={(id) => {
             setSelection({ kind: 'id', id })
             backToChat.current = true
@@ -209,9 +210,22 @@ function NotReady({ admin }: { admin: boolean }) {
   )
 }
 
-function ConversationList({ onPick }: { onPick: (id: number) => void }) {
+function ConversationList({
+  selection,
+  onPick,
+}: {
+  selection: Selection
+  onPick: (id: number) => void
+}) {
   const { t } = useTranslation()
   const list = useQuery(conversationsQueryOptions)
+  // 正在看的那一則（M5 票 15）：重線加 `deck` 底，同就地確認裡選中的那一列。
+  const current =
+    selection.kind === 'id'
+      ? selection.id
+      : selection.kind === 'latest'
+        ? (list.data?.[0]?.id ?? null)
+        : null
   return (
     <section aria-labelledby="assistant-history" className="min-h-0 flex-1 overflow-y-auto p-4">
       <h3 id="assistant-history" className="label mb-3 border-b-2 border-rule-strong pb-2 text-ink">
@@ -226,8 +240,9 @@ function ConversationList({ onPick }: { onPick: (id: number) => void }) {
           <li key={row.id}>
             <button
               type="button"
+              aria-current={row.id === current ? 'true' : undefined}
               onClick={() => onPick(row.id)}
-              className="grid w-full gap-1 border-2 border-rule px-3 py-2 text-left hover:border-rule-strong"
+              className={`grid w-full gap-1 border-2 px-3 py-2 text-left hover:border-rule-strong ${row.id === current ? 'border-rule-strong bg-deck' : 'border-rule'}`}
             >
               <span className="min-w-0 text-sm break-words text-ink">{row.title}</span>
               <span className="text-xs text-ink-dim">

@@ -190,11 +190,15 @@ function IndexerAdditionView({ preview }: { preview: IndexerAddition }) {
         <Line term={t('assistant.proposal.indexer.url')}>
           {preview.url || t('assistant.proposal.indexer.noUrl')}
         </Line>
-        <Line term={t('assistant.proposal.indexer.prowlarr')}>
-          {preview.prowlarr} <Dot /> {t(`assistant.proposal.indexer.origin.${preview.origin}`)}
+        {/* 網址是機器字串、「Berth 套件內」是散文：只有網址等寬、任意處斷（M5 票 15：整行等寬時斷成「Berth 套 / 件內」）。 */}
+        <Line term={t('assistant.proposal.indexer.prowlarr')} prose>
+          <span className="value wrap-anywhere">{preview.prowlarr}</span> <Dot />{' '}
+          {t(`assistant.proposal.indexer.origin.${preview.origin}`)}
         </Line>
         {preview.description && (
-          <Line term={t('assistant.proposal.indexer.description')}>{preview.description}</Line>
+          <Line term={t('assistant.proposal.indexer.description')} prose>
+            {preview.description}
+          </Line>
         )}
       </dl>
       <p className="text-xs text-ink-dim">{t('assistant.proposal.indexer.then')}</p>
@@ -275,11 +279,22 @@ function DownloadsDeletionView({ preview }: { preview: DownloadsDeletion }) {
   )
 }
 
-function Line({ term, children }: { term: string; children: React.ReactNode }) {
+function Line({
+  term,
+  prose = false,
+  children,
+}: {
+  term: string
+  /** 值是一句話（定義自帶的英文說明），或混著散文：照散文的字型與斷行，機器字串由呼叫端自己包 `.value`。 */
+  prose?: boolean
+  children: React.ReactNode
+}) {
   return (
     <div className="grid gap-0.5 sm:grid-cols-[6rem_minmax(0,1fr)] sm:gap-2">
       <dt className="label text-ink-dim">{term}</dt>
-      <dd className="value text-xs wrap-anywhere text-ink">{children}</dd>
+      <dd className={`text-xs text-ink ${prose ? 'min-w-0 break-words' : 'value wrap-anywhere'}`}>
+        {children}
+      </dd>
     </div>
   )
 }

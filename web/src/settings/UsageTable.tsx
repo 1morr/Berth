@@ -83,7 +83,8 @@ export function UsageTable({
                 )}
                 <span className="value mt-1 grid text-xs text-ink-dim sm:hidden">
                   {TOKEN_COLUMNS.map((column) => (
-                    <span key={column}>
+                    // 一組不拆開（「Cache write」與它的數字在 390 寬曾分成兩行）。
+                    <span key={column} className="whitespace-nowrap">
                       {t(`settings.usagePage.column.${column}`)} {format.count(tokens[column])}
                     </span>
                   ))}
@@ -98,7 +99,8 @@ export function UsageTable({
               <td className={CELL}>
                 {format.rate(line.tally.hit_rate)}
                 {line.tally.cache_unreported > 0 && (
-                  <span className="block text-xs whitespace-nowrap text-ink-dim">
+                  // 窄版可以換行：不換行的「13 unreported」把第一欄擠窄，模型 id 從字中間斷開（M5 票 15）。
+                  <span className="block text-xs text-ink-dim sm:whitespace-nowrap">
                     {t('settings.usagePage.unreportedShort', {
                       count: line.tally.cache_unreported,
                     })}

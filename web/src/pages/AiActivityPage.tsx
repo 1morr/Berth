@@ -12,6 +12,7 @@ import { toolName } from '../assistant/toolNames'
 import { UndoControl } from '../assistant/UndoButton'
 import { Notice, PAGE_TITLE } from '../components/controls'
 import { Dot } from '../components/Dot'
+import { ExpandHint } from '../components/ExpandHint'
 import { RequestFailed } from '../components/RequestFailed'
 import { DetailLine } from '../components/QueueRow'
 import { Timestamp } from '../components/Timestamp'
@@ -193,13 +194,14 @@ function ActivityRow({ entry }: { entry: AiActivityEntry }) {
       )}
 
       {args.length > 0 && (
-        <details>
-          <summary className="flex min-h-6 w-fit cursor-pointer items-center">
+        <details className="group">
+          <summary className="flex min-h-6 w-fit cursor-pointer items-center gap-3 marker:content-none">
             <span className="label text-ink-dim">{t('aiActivity.input')}</span>
+            <ExpandHint />
           </summary>
           <dl className="mt-2 grid gap-1 border-2 border-rule bg-hull px-3 py-2">
             {args.map(([name, value]) => (
-              <DetailLine key={name} term={name}>
+              <DetailLine key={name} term={name} machine>
                 {typeof value === 'string' ? value : JSON.stringify(value)}
               </DetailLine>
             ))}

@@ -3108,6 +3108,7 @@ const zhHant = {
         title: '狀態',
         config: '設定',
         ready: '設定好了',
+        readyButFailed: '但剛才的測試沒過，見下方的「測試」。',
         notReady: '還沒設定好',
         notReadyHint: '官方端點要 API key；沒有預設模型的端點要填模型。',
         tools: '工具呼叫',
@@ -7342,6 +7343,7 @@ const en: Translations<typeof zhHant> = {
         title: 'Status',
         config: 'Setup',
         ready: 'Ready',
+        readyButFailed: 'but the last test failed; see Test below.',
         notReady: 'Not ready',
         notReadyHint:
           'The official endpoint needs an API key; an endpoint without a default model needs a model.',

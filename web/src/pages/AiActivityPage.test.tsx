@@ -125,7 +125,10 @@ describe('AI 活動頁的列', () => {
     render([entry()])
     const row = await screen.findByRole('article', { name: '[ANi] 孤獨搖滾 - 01' })
 
-    await userEvent.click(within(row).getByText('輸入'))
+    // 摘要用字說它展得開（The Summary Is One Button Rule，M5 票 15）。
+    const summary = within(row).getByText('輸入').closest('summary') as HTMLElement
+    expect(within(summary).getByText('展開')).toBeInTheDocument()
+    await userEvent.click(summary)
 
     expect(within(row).getByText('release_id')).toBeInTheDocument()
     expect(within(row).getByText('r1')).toBeInTheDocument()

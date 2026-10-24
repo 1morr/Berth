@@ -132,12 +132,22 @@ export function SubscribedCard({ result }: { result: Subscribed }) {
   )
 }
 
-/** 上一輪加上間隔；還沒輪過是「半分鐘內」（背景迴圈每半分鐘看一次到期的 Feed）。 */
+/**
+ * 上一輪加上間隔；還沒輪過、或那個時間已經過了（到期了、背景迴圈還沒輪到它）是「半分鐘內」——背景迴圈每半分鐘
+ * 看一次到期的 Feed。不說「下一次輪詢 4 週前」（M5 票 15）。
+ */
 function NextPoll({ polledAt, interval }: { polledAt: string | null; interval: number }) {
   const { t } = useTranslation()
-  if (!polledAt) return <span className="value">{t('assistant.cards.subscribed.soon')}</span>
-  const next = new Date(new Date(polledAt).getTime() + interval * 1000).toISOString()
-  return <Timestamp at={next} />
+  const next = polledAt ? new Date(polledAt).getTime() + interval * 1000 : null
+  if (next === null || isPast(next)) {
+    return <span className="value">{t('assistant.cards.subscribed.soon')}</span>
+  }
+  return <Timestamp at={new Date(next).toISOString()} />
+}
+
+/** 同 `FilesPanel` 的 `overdue`：讀牆上時間放在元件外。 */
+function isPast(moment: number): boolean {
+  return moment <= Date.now()
 }
 
 function Undone({

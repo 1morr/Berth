@@ -403,7 +403,12 @@ function AiBody({ ai }: { ai: AiSettings }) {
         )}
       </SettingsSection>
 
-      <StatusSection ai={ai} changed={changed} />
+      <StatusSection
+        ai={ai}
+        changed={changed}
+        // 這一次打開頁面測過、沒過，而且之後沒再改：「設定好了」只是欄位填齊了（M5 票 15）。
+        testFailed={!dirty && !test.isPending && test.data?.failure != null}
+      />
 
       <SettingsSection id="ai-test" title={t('settings.aiPage.test.title')}>
         {/* live region 常駐、結果放進去：跟結果同一次掛上的話不會被念出來。 */}
@@ -421,7 +426,15 @@ function AiBody({ ai }: { ai: AiSettings }) {
   )
 }
 
-function StatusSection({ ai, changed }: { ai: AiSettings; changed: boolean }) {
+function StatusSection({
+  ai,
+  changed,
+  testFailed,
+}: {
+  ai: AiSettings
+  changed: boolean
+  testFailed: boolean
+}) {
   const { t } = useTranslation()
   const tools = ai.tool_test
   // 改了還沒存：舊的結論不再是現況，存下時後端也會清掉它。
@@ -434,9 +447,16 @@ function StatusSection({ ai, changed }: { ai: AiSettings; changed: boolean }) {
           <dt className="label text-ink-dim">{t('settings.aiPage.status.config')}</dt>
           <dd className="flex flex-wrap items-center gap-2 text-sm text-ink">
             {ai.ready ? (
-              <span className="label bg-deck px-2 py-1.5 text-ink">
-                {t('settings.aiPage.status.ready')}
-              </span>
+              <>
+                <span className="label bg-deck px-2 py-1.5 text-ink">
+                  {t('settings.aiPage.status.ready')}
+                </span>
+                {testFailed && (
+                  <span className="text-xs text-ink">
+                    {t('settings.aiPage.status.readyButFailed')}
+                  </span>
+                )}
+              </>
             ) : (
               <>
                 <span className="text-ink-dim">{t('settings.aiPage.status.notReady')}</span>
@@ -505,8 +525,9 @@ function TestResult({ result }: { result: AiTest }): ReactNode {
           </Notice>
           {result.tools ? (
             <div className="grid gap-1">
+              {/* 只能聊天與狀態那一格同一個意思：換不換模型是管理員的決定（`assigned`），不是測試失敗（M5 票 15）。 */}
               <Notice
-                signal={result.tools.supported ? 'secured' : 'blocked'}
+                signal={result.tools.supported ? 'secured' : 'assigned'}
                 label={t('settings.aiPage.test.toolsLabel')}
               >
                 {result.tools.supported ? (

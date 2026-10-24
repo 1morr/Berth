@@ -333,6 +333,14 @@ describe('存下來的', () => {
     const panel = await openPanel()
 
     await userEvent.click(within(panel).getByRole('button', { name: '歷史' }))
+    // 標出正在看的那一則（最近那一則），M5 票 15。
+    expect(await within(panel).findByRole('button', { name: /最新的/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(within(panel).getByRole('button', { name: /這週入庫了什麼/ })).not.toHaveAttribute(
+      'aria-current',
+    )
     await userEvent.click(await within(panel).findByRole('button', { name: /這週入庫了什麼/ }))
 
     expect(await within(panel).findByText('這週入庫了兩部。')).toBeInTheDocument()

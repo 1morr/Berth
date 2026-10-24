@@ -202,6 +202,19 @@ describe('訂閱卡', () => {
     expect(within(panel).getByText('訂閱好了')).toBeInTheDocument()
   })
 
+  it('下一次輪詢的時間已經過了：說半分鐘內，不說「幾週前」（M5 票 15）', async () => {
+    const LONG_AGO = '2026-01-01T00:00:00Z'
+    const overdue = subscribed()
+    overdue.feed = { ...overdue.feed, last_polled_at: LONG_AGO }
+    render(said('subscribe_mikan', 'Subscribed', overdue), {
+      routes: { 'GET /api/rss/feeds': { body: [feed({ last_polled_at: LONG_AGO })] } },
+    })
+    const panel = await openPanel()
+    const card = await within(panel).findByRole('region', { name: '訂閱' })
+
+    expect(within(card).getByText(/下一次輪詢/)).toHaveTextContent('下一次輪詢 半分鐘內')
+  })
+
   it('撤銷經過對話：確認之後卡片說撤回了幾筆，不再給撤銷鍵', async () => {
     let undone = false
     const stub = render(
