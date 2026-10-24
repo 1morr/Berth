@@ -749,8 +749,8 @@ def weekly_scenario() -> Scenario:
 
 
 def assistant_scenario() -> Scenario:
-    """助理的側面板（M5 票 08）：同 `weekly`（「最近入庫」查得到東西），AI 已經設定好，回覆由
-    `DemoChatProvider` 演。"""
+    """助理的側面板（M5 票 08）：同 `weekly`，加上這兩天入庫的幾集（`_seed_recent`：「最近入庫」
+    與它的結果卡查得到東西，票 09），AI 已經設定好，回覆由 `DemoChatProvider` 演。"""
     scenario = weekly_scenario()
     scenario.assistant_demo = True
     return scenario
@@ -2559,6 +2559,7 @@ async def _moor(
     if scenario.usage_demo:
         await _seed_usage(session)
     if scenario.assistant_demo:
+        await _seed_recent(session)
         await set_ai(session, format=ApiFormat.ANTHROPIC, base_url="", model="", api_key="demo-key")
 
 
@@ -2766,6 +2767,88 @@ async def _seed_usage(session: AsyncSession) -> None:
     await session.commit()
 
 
+async def _landed(
+    session: AsyncSession,
+    route: Route,
+    key: str,
+    media: str,
+    season: int | None,
+    episode: int | None,
+    at: datetime,
+    *,
+    jellyfin_item_id: str = "",
+    resolve_after: datetime | None = None,
+) -> str:
+    """一筆入庫完的 Job 與它的一列帳本（沒有檔案）；回 Job 的 hash。`key` 在這一台裡不重複。"""
+    job_hash = hashlib.sha1(key.encode()).hexdigest()
+    session.add(
+        Job(
+            hash=job_hash,
+            name=f"[Demo] {key}",
+            source_url="",
+            trigger=JobTrigger.MANUAL,
+            media_id=media,
+            route_id=route.id,
+            state=JobState.IMPORTED,
+            added_at=at,
+        )
+    )
+    await session.flush()
+    session.add(
+        LedgerEntry(
+            job_hash=job_hash,
+            source_rel_path=f"{key}.mkv",
+            source_abs_path=f"/data/torrent/complete/{key}.mkv",
+            source_dev="1",
+            target_path=f"{route.target_path}/{key}.mkv",
+            target_inode=key,
+            media_id=media,
+            season=season,
+            episode_start=episode,
+            episode_end=episode,
+            tags_json={},
+            action=PlanAction.IMPORT,
+            jellyfin_item_id=jellyfin_item_id,
+            resolve_after=resolve_after,
+            created_at=at,
+        )
+    )
+    return job_hash
+
+
+async def _seed_recent(session: AsyncSession) -> None:
+    """「最近入庫」查得到東西（M5 票 09）：週報那幾部在這兩天又入庫了幾集。週報的最新一週在上週一
+    05:00 就結束了，`weekly` 自己的列多半不在最近七天裡。三部各演一種 Jellyfin 收錄狀態：
+    芙莉蓮找到了、長名字那部還在等、電影的新版本 Jellyfin 找不到。"""
+    anime = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert anime is not None
+    now = datetime.now(UTC)
+    frieren, long_named, movie = (media_id(kind, tmdb_id) for kind, tmdb_id, *_ in _WEEKLY_WORKS)
+    for episode in (2, 3):
+        await _landed(
+            session,
+            anime,
+            f"recent-frieren-{episode}",
+            frieren,
+            2,
+            episode,
+            now - timedelta(days=1, hours=episode),
+            jellyfin_item_id=f"demo-frieren-s02e{episode:02}",
+        )
+    await _landed(
+        session,
+        anime,
+        "recent-long-3",
+        long_named,
+        1,
+        3,
+        now - timedelta(hours=5),
+        resolve_after=now + timedelta(minutes=5),
+    )
+    await _landed(session, anime, "recent-movie", movie, None, None, now - timedelta(days=2))
+    await session.commit()
+
+
 async def _seed_weekly(session: AsyncSession) -> None:
     """週報的材料（M4 票 131），最後跑兩次 `compose_weekly`。
 
@@ -2806,41 +2889,9 @@ async def _seed_weekly(session: AsyncSession) -> None:
     counter = 0
 
     async def landed(media: str, season: int | None, episode: int | None, at: datetime) -> str:
-        """一筆入庫完的 Job 與它的一列帳本；回 Job 的 hash。"""
         nonlocal counter
         counter += 1
-        job_hash = hashlib.sha1(f"weekly-{counter}".encode()).hexdigest()
-        session.add(
-            Job(
-                hash=job_hash,
-                name=f"[Demo] weekly {counter}",
-                source_url="",
-                trigger=JobTrigger.MANUAL,
-                media_id=media,
-                route_id=anime.id,
-                state=JobState.IMPORTED,
-                added_at=at,
-            )
-        )
-        await session.flush()
-        session.add(
-            LedgerEntry(
-                job_hash=job_hash,
-                source_rel_path=f"weekly/{counter}.mkv",
-                source_abs_path=f"/data/torrent/complete/weekly/{counter}.mkv",
-                source_dev="1",
-                target_path=f"{anime.target_path}/weekly/{counter}.mkv",
-                target_inode=str(counter),
-                media_id=media,
-                season=season,
-                episode_start=episode,
-                episode_end=episode,
-                tags_json={},
-                action=PlanAction.IMPORT,
-                created_at=at,
-            )
-        )
-        return job_hash
+        return await _landed(session, anime, f"weekly-{counter}", media, season, episode, at)
 
     # 上一週：長名字那部入庫四集。
     for episode in (1, 2, 3, 4):

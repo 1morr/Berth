@@ -215,12 +215,17 @@ class StreamToolStart(BaseModel):
 
 
 class StreamToolOutput(BaseModel):
-    """工具跑完了（`tool-output-available`）。結果本身在 `finish` 之後重讀的那一份裡。"""
+    """工具跑完了（`tool-output-available`）。結果與存下的 `ToolResultPart` 同形：串流時就畫得出
+    結果卡（票 09），`finish` 之後重讀的那一份是同一個。"""
 
     type: Literal["tool-output-available"] = "tool-output-available"
     tool_call_id: str
     tool_name: str
     outcome: ToolOutcome
+    #: 結果型別的名字（`ToolResultType` 的一個）：前端依它挑卡片。
+    result_type: str
+    # `Any`：形狀由 `result_type` 那一個型別說（OpenAPI 的 components），前端照它對回去。
+    result: dict[str, Any]
 
 
 class StreamNotice(BaseModel):
@@ -317,8 +322,14 @@ def _chunk(event: AssistantEvent) -> Chunk:
             return StreamTextDelta(delta=text)
         case ToolStarted(call_id=call_id, name=name):
             return StreamToolStart(tool_call_id=call_id, tool_name=name)
-        case ToolFinished(call_id=call_id, name=name, outcome=outcome):
-            return StreamToolOutput(tool_call_id=call_id, tool_name=name, outcome=outcome)
+        case ToolFinished(result=part):
+            return StreamToolOutput(
+                tool_call_id=part.call_id,
+                tool_name=part.tool,
+                outcome=part.outcome,
+                result_type=part.result_type,
+                result=part.result,
+            )
         case NoticeRaised(notice=notice):
             return StreamNotice(notice=notice)
         case Finished():

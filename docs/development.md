@@ -178,7 +178,9 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
   錨點（`#issue-5` 這類）不在這道閘門裡，各清單頁的 vitest 寫死同一個形狀。
 - **AI 工具的結果型別**（`services/tools.py` 的每一條登記，加上 `Refusal`、`NextStep`、`ToolRefusal`，M5 票 05）
   也由 `main._document_components` 塞進 components：它們經對話送到前端，不是端點的回應。加一個工具
-  或改結果型別就重跑 `pnpm gen:api`（`TestToolResults` 先紅）。
+  或改結果型別就重跑 `pnpm gen:api`（`TestToolResults` 先紅）。結果型別名字的封閉集合 `ToolResultType`
+  也在這裡（M5 票 09）：前端 `assistant/ResultCard.tsx` 一種型別一格，登記了新的結果型別沒有卡（或明寫 `null`）時
+  `tsc` 紅。
 - **會拒絕的端點都要在 `responses=` 裡宣告**（`TestDeclaringWhatEachEndpointRefuses`）：走訪
   `create_app()` 的每一條路由，比對路由**物件**上的 `responses` 與 handler **語法樹**丟得出來的
   拒絕，漏宣告與多宣告都紅。**守的是形狀那一層**（`RouteRefusalOut` 這幾個 model），不是理由
@@ -336,7 +338,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
 | `/weekly`（M4 票 131）：管理員從頁首導覽進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
-| 助理的側面板（M5 票 08）：九個頁面都開得到、換頁與重整還開著、關閉後焦點回到「助理」鍵；串流到一半有字、那一塊 `aria-busy`，工具呼叫說「正在查最近入庫」再換成「查過」，限流說 30 秒後再送，重整之後三段都在 | `assistant` | 8528 / 8529 |
+| 助理的側面板（M5 票 08）：九個頁面都開得到、換頁與重整還開著、關閉後焦點回到「助理」鍵；串流到一半有字、那一塊 `aria-busy`，工具呼叫說「正在查最近入庫」再換成「查過」、底下畫出「最近 7 天入庫」的結果卡（票 09），限流說 30 秒後再送，重整之後三段與卡片都在 | `assistant` | 8528 / 8529 |
 | `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
@@ -408,7 +410,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `rss-sweep` | 每日巡檢的 RSS 三項（M4 票 130）：同 `healthy`，Mikan 聚合 feed 的每日補漏、Nyaa 搜尋 feed 的輪詢各壞了兩天（`/rss` 的 Feed 列分開說），SPY×FAMILY 綁著一個 RSS Series、帳本缺第 3 集、第 5 集撞了寫著 `- 05` 與 `- 06` 的兩個發佈；起來時由產品的 `sweep_once` 跑一輪，`/issues` 上是輪詢一直失敗、補漏一直失敗、缺集、同一集多份各一件（Feed 那兩件連到 `/rss#feed-<id>`，另兩件連到作品頁）。Feed 的替身一個網址都不認，按「立即輪詢」是讀不到 |
 | `weekly` | 週報頁 `/weekly`（M4 票 131）：同 `healthy`，另外三部作品的帳本列（芙莉蓮 S01E01–E03、E05 與 S02E01；一部作品名很長的；一部電影）、三次核准、兩次 rematch、人解決三件與系統收掉一件 Issue、兩筆待審核、四件開著的 Issue（含三件巡檢開的）、一個待綁定的 RSS Series，最後由產品自己的 `compose_weekly` 產生最近兩週的週報：上一週只入庫長名字那部四集、其餘都是 0（歷史清單看得出兩週不同），最新一週是上面那些。起來時就有，不必等週一 05:00 的排程。帳號同 `signed-out`；`deckhand` 沒有導覽項，直接打網址導到健康頁 |
 | `usage` | 用量頁 `/settings/usage`（M5 票 13）：同 `healthy`，另外一個月的 AI 呼叫（`_seed_usage`，數字固定）：每七天有兩天沒人用；官方端點的 Opus 快取讀取一週比一週多，經 `openrouter.ai` 的同一個 Opus 不回快取欄位（命中率不算它、頁面說有幾次沒回報），Haiku 沒有快取；五次限流、一次串流中途斷掉；`skipper`、`deckhand` 與沒有人各佔三分之一。切 7 / 30 / 90 天、滑過直條、展開逐日數字都看得到差別。空狀態用 `healthy`（一筆都沒有） |
-| `assistant` | 助理的側面板（M5 票 08）：同 `weekly`，AI 已經設定好（官方端點、key `demo-key`），回覆由 `DemoChatProvider` 演：一段一段吐字；話裡有「入庫」或「import」時先呼叫「最近入庫」再說查到幾部；有「限流」或「rate limit」時演被限流 30 秒；其餘照抄一句。按頁首的「助理」打開，帳號同 `signed-out`。沒設定好的面板用 `healthy`（管理員看到「去設定」、`deckhand` 看到「管理員還沒開啟 AI」） |
+| `assistant` | 助理的側面板（M5 票 08）：同 `weekly`，加上這兩天入庫的四列（芙莉蓮 S02E02–E03 在 Jellyfin 裡、長名字那部 S01E03 還在等、電影的新版本 Jellyfin 找不到；「最近入庫」的結果卡查得到東西，票 09），AI 已經設定好（官方端點、key `demo-key`），回覆由 `DemoChatProvider` 演：一段一段吐字；話裡有「入庫」或「import」時先呼叫「最近入庫」再說查到幾部；有「限流」或「rate limit」時演被限流 30 秒；其餘照抄一句。按頁首的「助理」打開，帳號同 `signed-out`。沒設定好的面板用 `healthy`（管理員看到「去設定」、`deckhand` 看到「管理員還沒開啟 AI」） |
 | `issues` | 待處理頁 `/issues` 與對帳（M2 票 05）：同 `healthy`，另外真的入庫一包三集的動漫（來源在 complete、媒體庫那一份是真的硬鏈接），並把其中第二集的媒體庫檔案刪掉——使用者在 Jellyfin 按刪除之後就是這樣。按「立刻對帳」真的比四方並寫下一件 Issue，按「重新鏈接」真的 `os.link` 把它接回來。另外三種破壞（M2 票 09）：第三集被一份一樣大的複製品取代（「以硬鏈接取代」真的換回硬鏈接）、complete 裡一個沒人認領的目錄（「刪除這個目錄」真的整棵刪掉）、媒體庫裡一個手放的檔案（只列出，沒有會刪的按鈕）。管線與健康檢查那幾種（M2 票 09c）：三筆下載到一半的 SPY×FAMILY，替身 qBittorrent 說一筆 `missingFiles`、一筆 `error`、一筆已經不在——起來之後 poller 第一輪就開出三件，「重新校驗」「重試」「重新送單」各自讓它們離開壞掉的狀態；或者 `curl -X POST 'http://127.0.0.1:8484/demo/qbittorrent/fix?hash=<hash>'` 演使用者在 qBittorrent 裡自己修好那一筆（M3 票 02），poller 下一輪（至多 30 秒）把 Job 接回、那一件由系統收掉，時間線多一筆「已接回」；Anime 媒體庫掛著 TVDB，所以一開始就有一件 TVDB（只有「忽略」，按了之後「立即重測」也不會再開）。磁碟空間那一件要到設定的 qBittorrent 那一頁把門檻調到比這台機器剩的還大，`/issues` 當場多一件，調回來當場收掉。認領類三顆（M2 票 10，替身 TMDB 搜得到 `spy`）：媒體庫裡第四集是真的硬鏈接但帳本上沒有它——「認領進帳本」長回一列，`Hand Placed` 那一件按下去說出配不上的理由；qBittorrent 上一筆 `[Sub] SPY×FAMILY - 07` 沒有 Job——「認領並建立下載」選作品，下載列表多一筆；`[Old] Forgotten Batch` 按「重新入庫」選作品，規劃器接手。`/jobs` 上入庫完的那一筆，在它的詳情頁（展開那一列 → 「下載詳情」）有「重新入庫」 |
 | `discover` | 探索頁 `/`：三個外部服務仍是替身，但 TMDB 打**真的** `api.themoviedb.org`。憑證從環境變數 `TMDB_API_KEY` 讀（v3 key 或 v4 read access token 都收），沒設就變成「憑證缺失」那個畫面 |
 | `tmdb-down` | 憑證有、TMDB 連不上：探索頁的每個 feed 各自顯示服務回的原文與「重試」，而不是一片空白 |

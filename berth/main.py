@@ -139,10 +139,16 @@ def _document_components(app: FastAPI) -> None:
     - 命令登錄表每一個工具的結果型別與 `Refusal`、`NextStep`、`ToolRefusal`（M5 票 05）：經對話
       送到前端，結果卡依它畫。巢狀的 model 一起進去；與既有的同名卻不同形時當場紅，
       不讓一方蓋掉另一方。
+    - `ToolResultType`（M5 票 09）：那幾個結果型別的名字，`ToolResultPart.result_type` 的封閉集合。
+      前端以它逐一對卡片，登記了新的結果型別卻沒有卡時 `tsc` 紅。
     """
     build = app.openapi
     pages = TypeAdapter(BerthPage).json_schema()
     reasons = TypeAdapter(ToolRefusal).json_schema()
+    result_types = {
+        "type": "string",
+        "enum": [model.__name__ for model in REGISTRY.frontend_models()],
+    }
     _, tools = models_json_schema(
         [(model, "serialization") for model in REGISTRY.frontend_models()],
         ref_template="#/components/schemas/{model}",
@@ -153,6 +159,7 @@ def _document_components(app: FastAPI) -> None:
         schemas = document.setdefault("components", {}).setdefault("schemas", {})
         schemas["BerthPage"] = pages
         schemas["ToolRefusal"] = reasons
+        schemas["ToolResultType"] = result_types
         for name, schema in tools.get("$defs", {}).items():
             if schemas.setdefault(name, schema) != schema:
                 raise RuntimeError(f"{name}: a tool result and an endpoint disagree on its shape")

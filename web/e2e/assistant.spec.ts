@@ -68,7 +68,12 @@ test('串流的字一段一段出來，工具呼叫說正在查，限流說幾�
   await expect(panel.getByText('正在查最近入庫')).toBeVisible()
   await shot(page, 'tool-running')
   await expect(panel.getByText('查過最近入庫')).toBeVisible()
+  // 結果卡（票 09）：依結果型別畫，作品名連到作品頁。
+  const card = panel.getByRole('region', { name: '最近 7 天入庫' })
+  await expect(card).toBeVisible()
+  await expect(card.getByRole('link').first()).toHaveAttribute('href', /^\/media\//)
   await expect(log.getByText(/這七天入庫了 \d+ 部作品/)).toBeVisible()
+  await shot(page, 'result-card')
 
   await input.fill('觸發限流')
   await input.press('Enter')
@@ -79,6 +84,7 @@ test('串流的字一段一段出來，工具呼叫說正在查，限流說幾�
   await page.reload()
   await expect(log.getByText('這週入庫了什麼')).toBeVisible()
   await expect(panel.getByText('查過最近入庫')).toBeVisible()
+  await expect(panel.getByRole('region', { name: '最近 7 天入庫' })).toBeVisible()
   await expect(panel.getByText('AI 端點要 Berth 慢一點：30 秒後再送。')).toBeVisible()
   await expect(panel.locator('.bg-secured')).toHaveCount(0)
   await shot(page, 'reloaded')

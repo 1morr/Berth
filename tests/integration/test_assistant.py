@@ -53,6 +53,7 @@ from berth.services.assistant import (
     Started,
     ToolFinished,
     ToolStarted,
+    system_prompt,
 )
 from berth.services.auth import AuthenticatedUser
 from berth.services.commands import Effect, command
@@ -232,6 +233,16 @@ async def test_the_reply_is_in_the_interface_language(
     assert "嗨" not in provider.requests[0].system
 
 
+async def test_the_model_is_told_the_card_carries_the_details() -> None:
+    """結果卡畫在回覆旁邊（票 09）：模型講重點，不把卡上的清單再唸一遍。沒有工具就沒有卡。"""
+    with_tools = system_prompt(Language.EN, tools=True)
+    without = system_prompt(Language.EN, tools=False)
+
+    assert "shown to the user as a card" in with_tools
+    assert "do not repeat" in with_tools
+    assert "card" not in without
+
+
 # --- 工具迴圈 -----------------------------------------------------------------------
 
 
@@ -247,7 +258,15 @@ async def test_a_tool_call_runs_and_its_result_goes_back_as_data_with_its_source
 
     assert events[1:] == [
         ToolStarted(call_id="call_0", name="ping"),
-        ToolFinished(call_id="call_0", name="ping", outcome=ToolOutcome.DONE),
+        ToolFinished(
+            ToolResultPart(
+                call_id="call_0",
+                tool="ping",
+                outcome=ToolOutcome.DONE,
+                result_type="Pong",
+                result={"said": "pong"},
+            )
+        ),
         ReplyText("It said pong."),
         Finished(),
     ]
@@ -283,10 +302,7 @@ async def test_a_tool_outside_the_list_is_refused_and_the_model_hears_why(
 
     events = await drain(runs, admin, "do it")
 
-    assert (
-        ToolFinished(call_id="call_0", name="delete_everything", outcome=ToolOutcome.REFUSED)
-        in events
-    )
+    assert refused(events) == [("delete_everything", "Refusal")]
     result = provider.requests[1].turns[-1].parts[0]
     assert isinstance(result, ToolResult)
     assert result.is_error
@@ -414,9 +430,16 @@ async def test_a_user_who_names_an_admin_tool_is_still_refused(
 
     events = await drain(runs, deckhand, "what's new")
 
-    assert (
-        ToolFinished(call_id="call_0", name="recent_imports", outcome=ToolOutcome.REFUSED) in events
-    )
+    assert refused(events) == [("recent_imports", "Refusal")]
+
+
+def refused(events: list[AssistantEvent]) -> list[tuple[str, str]]:
+    """被拒絕的工具與它的結果型別。"""
+    return [
+        (event.result.tool, event.result.result_type)
+        for event in events
+        if isinstance(event, ToolFinished) and event.result.outcome is ToolOutcome.REFUSED
+    ]
 
 
 async def mark_tools(session: AsyncSession, *, supported: bool) -> None:

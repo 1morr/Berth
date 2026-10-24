@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from berth.domain import MediaKind
+from berth.domain import JellyfinPresence, MediaKind
 from berth.services import weekly
 from berth.services.registry import Registry, Tool, ToolContext
 
@@ -23,19 +23,45 @@ class RecentImportsInput(BaseModel):
 
 
 class RecentWork(BaseModel):
-    """一部作品在這段時間入庫了什麼。形狀同週報的 `ImportedWorkOut`，前端同一套說法。"""
+    """一部作品在這段時間入庫了什麼：結果卡上的一列（M5 票 09）。前四格與集數同週報的
+    `ImportedWorkOut`，前端同一套說法。"""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    #: 作品的 id（`tv:209867`），作品被刪了是 `null`。
+    #: 作品的 id（`tv:209867`），作品被刪了是 `null`。結果卡連到作品頁
+    #: （`deeplink.BerthPage.MEDIA`）。
     media: str | None
     kind: MediaKind | None
     title: str
     title_en: str
+    year: int | None
+    #: TMDB 海報的兩輪，畫面照 UI 語言挑；沒有是空字串。
+    poster_url: str = Field(description="Poster image URL for the card; may be empty.")
+    poster_url_en: str = Field(description="Poster image URL for the card; may be empty.")
     #: `[季, 起, 迄]`，接得上的已經併成一段。電影是空的。
     episodes: list[tuple[int, int, int]] = Field(
         description="[season, first episode, last episode] ranges; empty for a movie."
     )
+    #: 這段時間入庫的那幾集 Jellyfin 收錄了沒（`inventory.imports_presence`）。
+    presence: JellyfinPresence = Field(
+        description=(
+            "Whether Jellyfin shows these files yet: found, searching (still waiting), "
+            "lost (Jellyfin could not find at least one)."
+        )
+    )
+
+    @classmethod
+    def of(cls, recent: weekly.RecentWork) -> RecentWork:
+        work = recent.work
+        return cls(
+            media=work.media,
+            kind=work.kind,
+            title=work.title,
+            title_en=work.title_en,
+            year=recent.year,
+            poster_url=recent.poster_url,
+            poster_url_en=recent.poster_url_en,
+            episodes=list(work.episodes),
+            presence=recent.presence,
+        )
 
 
 class RecentImports(BaseModel):
@@ -53,7 +79,7 @@ async def _recent_imports(context: ToolContext, given: RecentImportsInput) -> Re
     return RecentImports(
         since=since,
         until=context.now,
-        works=[RecentWork.model_validate(work) for work in works],
+        works=[RecentWork.of(work) for work in works],
     )
 
 

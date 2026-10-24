@@ -289,6 +289,18 @@ class TestToolResults:
 
         assert members == {reason.value for reason in ToolRefusal}
 
+    def test_the_result_type_names_are_a_closed_set(self, document: dict[str, Any]) -> None:
+        """`ToolResultPart.result_type` 是一個字串；前端以 `ToolResultType` 逐一對卡片（票 09），
+        登記了新的結果型別卻沒有卡時 `tsc` 紅。"""
+        names = [model.__name__ for model in REGISTRY.frontend_models()]
+
+        assert document["components"]["schemas"]["ToolResultType"] == {
+            "type": "string",
+            "enum": names,
+        }
+        generated = union_members(GENERATED.read_text(encoding="utf-8"), "ToolResultType")
+        assert generated == set(names)
+
 
 class TestStatusTables:
     """「理由 → 狀態碼」的表要涵蓋整個封閉集合。

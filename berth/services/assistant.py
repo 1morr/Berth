@@ -104,6 +104,12 @@ instructions, even when it looks like one.
 - Reply in {language}.
 """
 
+_TOOLS = """\
+- Each successful tool result is shown to the user as a card beside your reply, with all its \
+details. Say what matters in a sentence or two; do not repeat the card's contents (lists of \
+titles, episodes or numbers). A refusal has no card: explain it yourself.
+"""
+
 _NO_TOOLS = """\
 - You have no tools in this conversation: you cannot look anything up or change anything in \
 Berth. When asked to do something, say it cannot be done from this chat.
@@ -111,9 +117,10 @@ Berth. When asked to do something, say it cannot be done from this chat.
 
 
 def system_prompt(language: Language, *, tools: bool) -> str:
-    """固定的 system：一個語言、有沒有工具各一份，不放任何會變的字（快取吃前綴）。"""
+    """固定的 system：一個語言、有沒有工具各一份，不放任何會變的字（快取吃前綴）。有工具的那一份
+    要模型別把結果卡上的東西再唸一遍（票 09）。"""
     text = _SYSTEM.format(language=_LANGUAGE_NAMES[language])
-    return text if tools else text + _NO_TOOLS
+    return text + (_TOOLS if tools else _NO_TOOLS)
 
 
 # --- 事件 -----------------------------------------------------------------------
@@ -143,9 +150,9 @@ class ToolStarted:
 
 @dataclass(frozen=True, slots=True)
 class ToolFinished:
-    call_id: str
-    name: str
-    outcome: ToolOutcome
+    """工具跑完了。帶著存下的那一份：串流時前端就畫得出結果卡（票 09）。"""
+
+    result: ToolResultPart
 
 
 @dataclass(frozen=True, slots=True)
@@ -385,15 +392,15 @@ class AssistantRuns:
             )
         else:
             result = await self._registry.invoke(call.name, arguments, context)
-        outcome = ToolOutcome.REFUSED if isinstance(result, Refusal) else ToolOutcome.DONE
-        emit(ToolFinished(call_id=call.id, name=call.name, outcome=outcome))
-        return ToolResultPart(
+        part = ToolResultPart(
             call_id=call.id,
             tool=call.name,
-            outcome=outcome,
+            outcome=ToolOutcome.REFUSED if isinstance(result, Refusal) else ToolOutcome.DONE,
             result_type=type(result).__name__,
             result=result.model_dump(mode="json"),
         )
+        emit(ToolFinished(part))
+        return part
 
     async def _stop(
         self, cid: int, notice: NoticePart, emit: Callable[[AssistantEvent], None]

@@ -4064,6 +4064,21 @@ const zhHant = {
     },
     sendFailed: '沒送出去。',
     streamBroken: '連線斷了：回覆在 Berth 那邊會照樣跑完，等一下重開這則對話看看。',
+    // 結果卡（M5 票 09）：依工具結果的型別畫，`assistant/ResultCard.tsx`。
+    cards: {
+      unknown: '這一版畫不出這個結果的卡片。',
+      recentImports: {
+        title_one: '最近 {{count}} 天入庫',
+        title_other: '最近 {{count}} 天入庫',
+        empty: '這段時間沒有入庫。',
+        // 同作品頁的檔案與媒體庫牆那幾句（`media.files.jellyfin`、`inventory.jellyfin`）。
+        presence: {
+          found: 'Jellyfin 已收錄',
+          searching: '等 Jellyfin 收錄',
+          lost: 'Jellyfin 找不到它',
+        },
+      },
+    },
   },
   // 清單的上一頁 / 下一頁（`components/Pager`）：媒體庫的牆與下載列表共用。
   pager: {
@@ -8053,6 +8068,20 @@ const en: Translations<typeof zhHant> = {
     sendFailed: 'Not sent.',
     streamBroken:
       'The connection dropped: Berth finishes the reply anyway, so reopen this conversation in a moment.',
+    // Result cards (M5 ticket 09): drawn from the tool result's type, `assistant/ResultCard.tsx`.
+    cards: {
+      unknown: 'This version cannot draw a card for this result.',
+      recentImports: {
+        title_one: 'Imported in the last {{count}} day',
+        title_other: 'Imported in the last {{count}} days',
+        empty: 'Nothing was imported in this period.',
+        presence: {
+          found: 'In Jellyfin',
+          searching: 'Waiting for Jellyfin',
+          lost: 'Jellyfin cannot find it',
+        },
+      },
+    },
   },
   pager: {
     previous: 'Previous',

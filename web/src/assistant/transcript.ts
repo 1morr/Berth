@@ -1,18 +1,33 @@
-import type { Chunk, Message, NoticePart } from '../api/assistant'
+import type { Chunk, Message, NoticePart, ToolOutcome } from '../api/assistant'
 
 /**
  * 存下來的那幾則（加上正在串流的那一段）→ 畫面上的一塊一塊（`.scratch/m5/side-panel-shape.md` §3）。
  *
  * 一句使用者的話一塊；它之後、下一句之前的模型回合、工具結果與 notice 收成同一塊「助理」——
  * 一則訊息之後模型可以來回好幾輪，畫面上仍是它回的那一次。工具的狀態行把呼叫與結果以 call id 接起來：
- * 有呼叫沒結果是「正在查」，結果是 `Refusal` 是「沒做成」。
+ * 有呼叫沒結果是「正在查」，結果是 `Refusal` 是「沒做成」。結果本身跟著那一行走，卡片從它畫（票 09）。
  */
 
 type ToolState = 'running' | 'done' | 'refused'
 
+/** 工具的結果（存下的 `ToolResultPart` 與串流的 `tool-output-available` 同形）：結果卡從它畫（票 09）。 */
+export interface ToolOutput {
+  /** 結果型別的名字。舊版本存下的可能不在這一版的 `ToolResultType` 裡。 */
+  type: string
+  result: Record<string, unknown>
+}
+
 export type Item =
   | { kind: 'text'; key: string; text: string }
-  | { kind: 'tool'; key: string; name: string; state: ToolState; reason: string }
+  | {
+      kind: 'tool'
+      key: string
+      name: string
+      state: ToolState
+      reason: string
+      /** 還在跑時是 `null`。 */
+      output: ToolOutput | null
+    }
   | { kind: 'notice'; key: string; notice: NoticePart }
 
 export type Block =
@@ -57,6 +72,7 @@ export function blocksOf(messages: Message[], pending: Pending | null): Block[] 
             name: part.name,
             state: 'running' as const,
             reason: '',
+            output: null,
           }
           tools.set(part.id, line)
           reply(key).items.push(line)
@@ -65,9 +81,7 @@ export function blocksOf(messages: Message[], pending: Pending | null): Block[] 
         case 'tool_result': {
           const line = tools.get(part.call_id)
           if (!line) break
-          const refused = part.outcome === 'refused'
-          line.state = refused ? 'refused' : 'done'
-          line.reason = refused ? reasonOf(part.result) : ''
+          Object.assign(line, finished(part.outcome, part.result_type, part.result))
           break
         }
         case 'notice':
@@ -82,6 +96,20 @@ export function blocksOf(messages: Message[], pending: Pending | null): Block[] 
     blocks.push({ kind: 'assistant', key: 'pending-reply', items: pending.items, busy: true })
   }
   return blocks
+}
+
+/** 一個工具跑完了：狀態、拒絕的理由碼與結果。 */
+function finished(
+  outcome: ToolOutcome,
+  type: string,
+  result: Record<string, unknown>,
+): Pick<Extract<Item, { kind: 'tool' }>, 'state' | 'reason' | 'output'> {
+  const refused = outcome === 'refused'
+  return {
+    state: refused ? 'refused' : 'done',
+    reason: refused ? reasonOf(result) : '',
+    output: { type, result },
+  }
 }
 
 /** `Refusal.reason`（理由碼）。結果不是那個形狀時是空字串。 */
@@ -108,12 +136,13 @@ export function withChunk(items: Item[], chunk: Chunk): Item[] {
           name: chunk.tool_name,
           state: 'running',
           reason: '',
+          output: null,
         },
       ]
     case 'tool-output-available':
       return items.map((item) =>
         item.kind === 'tool' && item.key === `pending-${chunk.tool_call_id}`
-          ? { ...item, state: chunk.outcome === 'refused' ? 'refused' : 'done' }
+          ? { ...item, ...finished(chunk.outcome, chunk.result_type, chunk.result) }
           : item,
       )
     case 'notice':
