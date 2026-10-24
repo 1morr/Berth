@@ -4335,6 +4335,8 @@ export interface components {
             replannable: boolean;
             /** Reimportable */
             reimportable: boolean;
+            /** Undoable */
+            undoable: boolean;
             /** Plan Id */
             plan_id: number | null;
             /** Audits */
@@ -4698,6 +4700,8 @@ export interface components {
             tracked: boolean;
             /** Default Route Id */
             default_route_id: number | null;
+            /** Preselected Route Id */
+            preselected_route_id: number | null;
             /** Seasons */
             seasons: components["schemas"]["SeasonOut"][];
             /** Fetched At */
@@ -4721,6 +4725,11 @@ export interface components {
             /** Text */
             text: string;
             language: components["schemas"]["Language"];
+            /**
+             * Page
+             * @default
+             */
+            page?: string;
         };
         /**
          * MessageKind
@@ -4739,7 +4748,7 @@ export interface components {
              */
             created_at: string;
             /** Parts */
-            parts: (components["schemas"]["UserText"] | components["schemas"]["ModelText"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"] | components["schemas"]["NoticePart"])[];
+            parts: (components["schemas"]["UserText"] | components["schemas"]["PagePart"] | components["schemas"]["ModelText"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"] | components["schemas"]["NoticePart"])[];
         };
         /**
          * MikanSubscriptionIn
@@ -5051,6 +5060,24 @@ export interface components {
             reason: components["schemas"]["OwnerRefusal"];
             /** Detail */
             detail: string;
+        };
+        /**
+         * PagePart
+         * @description 使用者送出這句話時正在看的作品（M5 票 12）。模型拿它知道「這部」是哪一部，畫面不畫。
+         *     存在使用者那一則裡、排在話的前面：下一句話的歷史照樣帶著。
+         */
+        PagePart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "page";
+            /** Media */
+            media: string;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
         };
         /**
          * PlanAction
@@ -6836,7 +6863,7 @@ export interface components {
          */
         ToolRefusal: "unknown_tool" | "invalid_input" | "not_allowed" | "changed";
         /** @enum {string} */
-        ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "Refusal" | "ProposalCard";
+        ToolResultType: "RecentImports" | "IndexerAdded" | "DownloadsDeleted" | "MissingEpisodes" | "SearchResults" | "SubmittedJob" | "Refusal" | "ProposalCard";
         /** @enum {string} */
         ProposalPreviewType: "IndexerAddition" | "DownloadsDeletion";
         /** DownloadsDeleted */
@@ -6917,6 +6944,42 @@ export interface components {
             reclaimable: number;
         };
         /**
+         * Lang
+         * @description 檔名 tag 用的字幕語言 token（brief §6.8）。
+         *
+         *     不是 ISO 語言碼，也不打算是：Jellyfin 分不出繁簡（brief §20.1），所以繁簡是**自由文字
+         *     標題**而不是語言碼。`CHT` / `CHS` 在這裡是那個標題欄位的詞彙表。
+         * @enum {string}
+         */
+        Lang: "CHS" | "CHT" | "JP" | "EN";
+        /**
+         * MissingEpisodes
+         * @description 一部作品已經播出、還沒有任何下載在處理的集（季表的「缺」，`EpisodeStatus.MISSING`）。
+         *     與作品頁的季表、缺集一鍵搜同一份判定（M5 票 12）。
+         */
+        MissingEpisodes: {
+            /** Media */
+            media: string;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Year */
+            year: number | null;
+            /**
+             * Episodes
+             * @description Missing [season, first episode, last episode] ranges; empty for a movie.
+             */
+            episodes: [
+                number,
+                number,
+                number
+            ][];
+            /** Count */
+            count: number;
+        };
+        /**
          * NextStep
          * @description 拒絕之後 AI 該怎麼辦（plan §11.6）。
          * @enum {string}
@@ -6989,6 +7052,160 @@ export interface components {
             /** Detail */
             detail: string;
             next: components["schemas"]["NextStep"];
+        };
+        /**
+         * RouteOption
+         * @description 收得下這部作品的一條 Route（作品頁下拉的那幾條）。
+         */
+        RouteOption: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
+        /**
+         * SearchResultRow
+         * @description 搜尋結果卡的一列：搜尋頁結果表的那幾格（`search.SearchResult`），加上 AI 送不送得出它。
+         */
+        SearchResultRow: {
+            /** Source Id */
+            source_id: string;
+            /** Title */
+            title: string;
+            /** Indexer */
+            indexer: string;
+            /** Size */
+            size: number;
+            /** Seeders */
+            seeders: number | null;
+            /** Info Url */
+            info_url: string;
+            /** Published At */
+            published_at: string | null;
+            tags: components["schemas"]["Tags"];
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Whole Season */
+            whole_season: boolean;
+            strategy: components["schemas"]["MappingStrategy"] | null;
+            verdict: components["schemas"]["SearchVerdict"];
+            /** Evidence */
+            evidence: string;
+            /** @description Why you may not submit this row; null means you may. */
+            refusal: components["schemas"]["SubmitRefusal"] | null;
+            /** Refusal Detail */
+            refusal_detail: string;
+        };
+        /**
+         * SearchResults
+         * @description 「依作品與集搜尋」的結果卡（M5 票 12）。
+         */
+        SearchResults: {
+            /** Media */
+            media: string;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Year */
+            year: number | null;
+            /** Wanted */
+            wanted: [
+                number,
+                number,
+                number
+            ][];
+            /** Whole Seasons */
+            whole_seasons: number[];
+            /** Rows */
+            rows: components["schemas"]["SearchResultRow"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Next Seasons
+             * @description Seasons of the next batch; search again with from_season=next_seasons[0].
+             */
+            next_seasons: number[];
+            /** Routes */
+            routes: components["schemas"]["RouteOption"][];
+            /** Route */
+            route: number | null;
+            problem: components["schemas"]["IndexerProblem"] | null;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * SubmitRefusal
+         * @description AI 送不出一筆 release 的理由（M5 票 12）。不在 `domain/enums.py`：那裡的 `*Refusal` 是端點的
+         *     拒絕、每一種都有狀態碼，這幾種只有工具會說（同 `registry.ToolRefusal`）。照樣進 OpenAPI，
+         *     前端說得出人話。
+         * @enum {string}
+         */
+        SubmitRefusal: "not_from_this_conversation" | "other_work" | "not_a_match" | "episodes_unknown" | "other_episodes" | "excluded" | "route_needed";
+        /**
+         * SubmittedJob
+         * @description 送出去的那一筆 Job（M5 票 12）：卡片照 `hash` 讀它現在的狀態、跟著 `/events/stream` 更新，
+         *     撤銷走送單的反向命令（刪 Job）。
+         */
+        SubmittedJob: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+            /** Media */
+            media: string;
+            /** Created */
+            created: boolean;
+        };
+        /**
+         * Tags
+         * @description 會進檔名的那幾個欄位（brief §6.8）。
+         *
+         *     tag 以結構化欄位存在 Plan item 與帳本裡，檔名只是它們的一種呈現——`render()` 是那個
+         *     唯一的呈現函式，改詞彙不改邏輯。
+         */
+        Tags: {
+            /** @default null */
+            source?: components["schemas"]["Source"] | null;
+            /**
+             * Resolution
+             * @default
+             */
+            resolution?: string;
+            /**
+             * Subs
+             * @default []
+             */
+            subs?: components["schemas"]["Lang"][];
+            /**
+             * Hardsub
+             * @default false
+             */
+            hardsub?: boolean;
+            /**
+             * Group
+             * @default
+             */
+            group?: string;
+            /**
+             * Version
+             * @default
+             */
+            version?: string;
+            /**
+             * Edition
+             * @default
+             */
+            edition?: string;
         };
     };
     responses: never;

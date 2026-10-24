@@ -210,13 +210,14 @@ describe('送一句話', () => {
         'aria-disabled',
       ),
     )
-    // 介面語言跟著送出去，回覆用它。
+    // 介面語言跟著送出去，回覆用它；畫面在哪一頁也是（作品頁時模型知道「這部」是哪一部，M5 票 12）。
     const sent = stub.mock.calls.find(
       ([url, init]) => url === '/api/conversations' && init?.method === 'POST',
     )
     expect(JSON.parse(String(sent?.[1]?.body))).toEqual({
       text: '這週入庫了什麼',
       language: 'zh-Hant',
+      page: '/',
     })
   })
 

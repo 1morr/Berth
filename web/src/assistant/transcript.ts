@@ -1,4 +1,4 @@
-import type { Chunk, Message, NoticePart, ToolOutcome } from '../api/assistant'
+import type { Chunk, Message, NoticePart, PagePart, ToolOutcome } from '../api/assistant'
 
 /**
  * 存下來的那幾則（加上正在串流的那一段）→ 畫面上的一塊一塊（`.scratch/m5/side-panel-shape.md` §3）。
@@ -26,13 +26,21 @@ export type Item =
       name: string
       state: ToolState
       reason: string
+      /** 拒絕的原文（`Refusal.detail`）：理由那一句引它（規則、預估的季集）。 */
+      detail: string
       /** 還在跑時是 `null`。 */
       output: ToolOutput | null
     }
   | { kind: 'notice'; key: string; notice: NoticePart }
 
 export type Block =
-  | { kind: 'user'; key: string; text: string }
+  | {
+      kind: 'user'
+      key: string
+      text: string
+      /** 說這句話時正在看的作品（M5 票 12）：模型拿到的就是它。不在作品頁是 `null`。 */
+      page: PagePart | null
+    }
   | { kind: 'assistant'; key: string; items: Item[]; busy: boolean }
 
 /** 送出之後、`finish` 之前那一段：使用者的話與串流到的東西。 */
@@ -57,11 +65,16 @@ export function blocksOf(messages: Message[], pending: Pending | null): Block[] 
   }
 
   for (const message of shown) {
+    // 頁面那一段排在同一則的話前面（後端 `PagePart`）。
+    let page: PagePart | null = null
     for (const [index, part] of message.parts.entries()) {
       const key = `${message.id}-${index}`
       switch (part.type) {
+        case 'page':
+          page = part
+          break
         case 'user_text':
-          blocks.push({ kind: 'user', key, text: part.text })
+          blocks.push({ kind: 'user', key, text: part.text, page })
           break
         case 'model_text':
           reply(key).items.push({ kind: 'text', key, text: part.text })
@@ -73,6 +86,7 @@ export function blocksOf(messages: Message[], pending: Pending | null): Block[] 
             name: part.name,
             state: 'running' as const,
             reason: '',
+            detail: '',
             output: null,
           }
           tools.set(part.id, line)
@@ -93,7 +107,7 @@ export function blocksOf(messages: Message[], pending: Pending | null): Block[] 
   }
 
   if (pending) {
-    blocks.push({ kind: 'user', key: 'pending-user', text: pending.text })
+    blocks.push({ kind: 'user', key: 'pending-user', text: pending.text, page: null })
     blocks.push({ kind: 'assistant', key: 'pending-reply', items: pending.items, busy: true })
   }
   return blocks
@@ -104,11 +118,12 @@ function finished(
   outcome: ToolOutcome,
   type: string,
   result: Record<string, unknown>,
-): Pick<Extract<Item, { kind: 'tool' }>, 'state' | 'reason' | 'output'> {
+): Pick<Extract<Item, { kind: 'tool' }>, 'state' | 'reason' | 'detail' | 'output'> {
   const refused = outcome === 'refused'
   return {
     state: refused ? 'refused' : outcome === 'proposed' ? 'proposed' : 'done',
     reason: refused ? reasonOf(result) : '',
+    detail: refused && typeof result.detail === 'string' ? result.detail : '',
     output: { type, result },
   }
 }
@@ -137,6 +152,7 @@ export function withChunk(items: Item[], chunk: Chunk): Item[] {
           name: chunk.tool_name,
           state: 'running',
           reason: '',
+          detail: '',
           output: null,
         },
       ]

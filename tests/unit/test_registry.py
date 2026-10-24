@@ -40,6 +40,7 @@ from berth.services.registry import (
     UnmarkedCommandError,
 )
 from berth.services.rss import RssRejectedError
+from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY
 from tests.endpoints import api_endpoints
 
@@ -78,7 +79,14 @@ def context(user: AuthenticatedUser = ADMIN, *, confirmed: bool = False) -> Tool
     # 假工具不開 session、不連服務；真的由整合測試給。
     sessions = cast(async_sessionmaker[AsyncSession], None)
     clients = cast(ServiceClientFactory, None)
-    return ToolContext(sessions=sessions, clients=clients, user=user, now=NOW, confirmed=confirmed)
+    return ToolContext(
+        sessions=sessions,
+        clients=clients,
+        sources=SourceCache(),
+        user=user,
+        now=NOW,
+        confirmed=confirmed,
+    )
 
 
 async def invoke(

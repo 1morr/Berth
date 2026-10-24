@@ -55,6 +55,8 @@ from berth.services.review import ReviewRejectedError
 from berth.services.routes import RouteRejectedError
 from berth.services.rss import RssRejectedError
 from berth.services.setup import ChoiceLockedError, OwnerRejectedError
+from berth.services.sources import SourceCache
+from berth.services.submit_guard import SubmitRefusedError
 
 #: 各模組自己的拒絕：建構時收 `reason`（封閉集合），多半還有 `detail`（原文）。命令丟出它時**還沒動
 #: 任何東西**，所以換成 `Refusal` 是安全的。`tests/unit/test_registry.py` 掃 `berth/services` 確認
@@ -73,6 +75,7 @@ REJECTIONS: tuple[type[Exception], ...] = (
     OwnerRejectedError,
     PlanRejectedError,
     ProposalRejectedError,
+    SubmitRefusedError,
     RematchRejectedError,
     ReviewRejectedError,
     RouteRejectedError,
@@ -145,10 +148,16 @@ class ToolContext:
     """一次工具呼叫在誰的名下、拿什麼做事。依賴由呼叫端給，工具自己不建。"""
 
     sessions: async_sessionmaker[AsyncSession]
+    #: 外部服務（TMDB、索引站、qBittorrent）。
     clients: ServiceClientFactory
+    #: 搜尋結果的下載連結記在這裡，送單拿 id 換回來（`services/sources.py`，與 `/search` 同一份）。
+    sources: SourceCache
     user: AuthenticatedUser
     #: 這一次呼叫的時刻（「最近七天」從這裡往回算）。
     now: datetime
+    #: 這一次呼叫出自哪一則對話。送單只收這則對話自己搜出來的搜尋結果（`submit_guard`）；
+    #: 不在對話裡（M6 的背景任務）是 `None`。
+    conversation_id: int | None = None
     #: 人按了確認卡，由他本人執行（M5 票 10）。否則是 AI 代他做的。
     confirmed: bool = False
 

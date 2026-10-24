@@ -48,6 +48,21 @@ export type RecentImports = Schemas['RecentImports']
 
 export type RecentWork = Schemas['RecentWork']
 
+export type MissingEpisodes = Schemas['MissingEpisodes']
+
+/** 「依作品與集搜尋」的結果卡與它的一列（M5 票 12）。 */
+export type SearchResults = Schemas['SearchResults']
+
+export type SearchResultRow = Schemas['SearchResultRow']
+
+/** AI 送不出一筆 release 的理由（後端 `services/submit_guard.SubmitRefusal`）。 */
+export type SubmitRefusal = Schemas['SubmitRefusal']
+
+export type SubmittedJob = Schemas['SubmittedJob']
+
+/** 使用者送出那句話時正在看的作品（M5 票 12）。 */
+export type PagePart = Schemas['PagePart']
+
 /**
  * 確認卡（M5 票 10，CONTEXT.md 的 Proposal）：不可逆的工具不執行，變成一張等人按的卡。工具結果裡存的是提出
  * 時的那一份；按過之後的狀態與結果在 `Conversation.proposals`（同形）。
@@ -143,18 +158,25 @@ export async function sendMessage({
   conversationId,
   text,
   language,
+  page = '',
   onChunk,
   signal,
 }: {
   conversationId: number | null
   text: string
   language: ReplyLanguage
+  /** 送出時畫面在哪一頁（路由的路徑）：作品頁時模型知道「這部」是哪一部（M5 票 12）。 */
+  page?: string
   onChunk: (chunk: Chunk) => void
   signal?: AbortSignal
 }): Promise<void> {
   const path =
     conversationId === null ? '/conversations' : `/conversations/${conversationId}/messages`
-  const response = await apiStream(path, { text, language } satisfies Schemas['MessageIn'], signal)
+  const response = await apiStream(
+    path,
+    { text, language, page } satisfies Schemas['MessageIn'],
+    signal,
+  )
   if (!response.body) return
   const reader = response.body
     .pipeThrough(new TextDecoderStream())

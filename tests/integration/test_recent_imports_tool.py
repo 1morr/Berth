@@ -17,6 +17,7 @@ from berth.models import LedgerEntry, Media
 from berth.services.auth import AuthenticatedUser
 from berth.services.proposals import dispatch
 from berth.services.registry import NextStep, Refusal, ToolContext
+from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY, RecentImports, RecentWork
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_weekly import DUNE, END, FRIEREN, imported, works
@@ -29,7 +30,11 @@ DECKHAND = AuthenticatedUser(id=2, name="deckhand", role=Role.USER, jellyfin_use
 
 def context_for(engine: AsyncEngine, user: AuthenticatedUser) -> ToolContext:
     return ToolContext(
-        sessions=create_session_factory(engine), clients=FakeClientFactory(), user=user, now=END
+        sessions=create_session_factory(engine),
+        clients=FakeClientFactory(),
+        sources=SourceCache(),
+        user=user,
+        now=END,
     )
 
 

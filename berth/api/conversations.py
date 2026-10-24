@@ -45,6 +45,7 @@ from berth.services.conversations import (
     ModelText,
     NoticePart,
     OpaqueModelPart,
+    PagePart,
     ProposalRejectedError,
     ToolCallPart,
     ToolResultPart,
@@ -122,9 +123,10 @@ class ConversationSummaryOut(BaseModel):
     updated_at: datetime
 
 
-#: 畫面看得到的 part（`_HIDDEN` 那幾種不出去）。
+#: 畫面看得到的 part（`_HIDDEN` 那幾種不出去）。`PagePart` 出去：使用者那一句底下說得出模型拿到的是
+#: 哪一部作品（M5 票 12）。
 VisiblePart = Annotated[
-    UserText | ModelText | ToolCallPart | ToolResultPart | NoticePart,
+    UserText | PagePart | ModelText | ToolCallPart | ToolResultPart | NoticePart,
     Field(discriminator="type"),
 ]
 
@@ -204,6 +206,9 @@ class MessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=8000)
     #: 介面語言：回覆用它。
     language: Language
+    #: 送出時畫面在哪一頁（前端路由的路徑，`/media/tv:1234`）。作品頁時模型知道「這部」是哪一部
+    #: （M5 票 12）；其他頁什麼都不加。
+    page: str = Field(default="", max_length=512)
 
 
 class StreamStart(BaseModel):
@@ -309,6 +314,7 @@ async def _send(
             text=body.text,
             language=body.language,
             conversation_id=conversation_id,
+            page=body.page,
         )
     except AssistantRefusedError as exc:
         raise assistant_refusal(exc) from exc

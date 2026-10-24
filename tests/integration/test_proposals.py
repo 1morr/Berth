@@ -44,6 +44,7 @@ from berth.services.indexer import SiteRefusal, apply_default_indexers
 from berth.services.proposals import ProposalCard, of_conversation
 from berth.services.registry import ToolRefusal
 from berth.services.settings import read_settings, write_settings
+from berth.services.sources import SourceCache
 from tests.integration.arrange import chosen, own
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_assistant import NOW, ai_ready, drain, person, says, started_id
@@ -103,7 +104,7 @@ async def test_adding_an_indexer_stops_on_a_card_and_happens_only_when_confirmed
     )
     sessions = create_session_factory(engine)
     runs = AssistantRuns(
-        sessions, FakeClientFactory(ai=provider, prowlarr=prowlarr), now=lambda: NOW
+        sessions, FakeClientFactory(ai=provider, prowlarr=prowlarr), SourceCache(), now=lambda: NOW
     )
 
     events = await drain(runs, admin, "add an indexer for anime")
@@ -171,7 +172,7 @@ async def deletion_asked(
             says("Press confirm on the card to delete them."),
         ]
     )
-    runs = AssistantRuns(create_session_factory(engine), factory, now=lambda: NOW)
+    runs = AssistantRuns(create_session_factory(engine), factory, SourceCache(), now=lambda: NOW)
     events = await drain(runs, admin, "delete this one's complete")
     return DeletionAsked(
         runs, provider, admin, job.media_id, started_id(events), proposed_card(events)
@@ -237,6 +238,7 @@ async def indexer_asked(engine: AsyncEngine, session: AsyncSession) -> IndexerAs
     runs = AssistantRuns(
         create_session_factory(engine),
         FakeClientFactory(ai=provider, prowlarr=prowlarr),
+        SourceCache(),
         now=lambda: NOW,
     )
     events = await drain(runs, admin, "add nyaa")
@@ -336,12 +338,18 @@ async def test_a_user_is_never_offered_the_administrator_tools(
         replies=[asks("add_indexer", site="nyaasi", reason="For anime."), says("No.")]
     )
     runs = AssistantRuns(
-        create_session_factory(engine), FakeClientFactory(ai=provider), now=lambda: NOW
+        create_session_factory(engine),
+        FakeClientFactory(ai=provider),
+        SourceCache(),
+        now=lambda: NOW,
     )
 
     events = await drain(runs, deckhand, "add nyaa")
 
-    assert [spec.name for spec in provider.requests[0].tools] == []
+    offered = {spec.name for spec in provider.requests[0].tools}
+    assert offered.isdisjoint({"add_indexer", "delete_downloads"})
+    # 一般使用者拿得到的只有指著他也進得去的端點的那幾個（M5 票 12 的缺集、搜尋與送單）。
+    assert offered == {"missing_episodes", "search_indexers", "submit_search_result"}
     [finished] = [event for event in events if isinstance(event, ToolFinished)]
     assert finished.result.outcome is ToolOutcome.REFUSED
     assert finished.result.result["reason"] == ToolRefusal.UNKNOWN_TOOL

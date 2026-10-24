@@ -89,6 +89,23 @@ logger = logging.getLogger(__name__)
 #: 再來一次是另一件事（M2 的重新入庫）。
 RETRYABLE = frozenset({JobState.SUBMIT_FAILED, JobState.IMPORT_FAILED})
 
+#: 送單撤得回來的狀態（M5 票 12，AI 送單的結果卡）：送出去了、還沒下載完，媒體庫與 complete 裡都還
+#: 沒有它的東西，撤銷（`deletion.delete_job`：移除 torrent、刪下載下來的檔、清紀錄）不會碰到已經
+#: 看得了的檔案。`requested` 不在：送單還在打 qBittorrent，那一刻握著鎖。下載完（`completed`）
+#: 之後規劃器隨時會接手入庫，要刪得去 Job 頁看清楚刪的範圍。
+UNDOABLE = frozenset(
+    {
+        JobState.SUBMIT_FAILED,
+        JobState.SUBMITTED,
+        JobState.METADATA_READY,
+        JobState.DOWNLOADING,
+        JobState.STALLED,
+        JobState.MISSING_FILES,
+        JobState.CLIENT_ERROR,
+        JobState.CLIENT_REMOVED,
+    }
+)
+
 #: 手動重跑得了 Plan 的狀態（票 11）。`review` 也在裡面：plan §3.1 的「使用者拒絕 →
 #: `completed`」就是為了讓它重新 planning，而 M1 沒有審核 UI，重跑是唯一按得到的那一步。
 #: `importing` 不在裡面——那一份計劃已經被採信，而 importer 正照著它動檔案（票 12）。
@@ -300,6 +317,8 @@ class JobView:
     retryable: bool
     #: 這一筆現在按得了「重新入庫」嗎（M2 票 10）。同上，規則在後端算。
     reimportable: bool
+    #: 送單現在撤得回來嗎（`UNDOABLE`，M5 票 12）。同上，規則在後端算。
+    undoable: bool
     #: 這一筆現在那一份 Import Plan 的 id（票 11），沒算過就是 `None`。
     #:
     #: **是 id 而不是整份 Plan**：下載列表一次畫幾十列，而逐檔的決定只有展開那一列時才要
@@ -382,8 +401,12 @@ async def add_download(
     trigger: JobTrigger = JobTrigger.MANUAL,
     trigger_ref: str = "",
     grounds: Sequence[BindReason] = (),
+    actor: str | None = None,
 ) -> AddDownloadOutcome:
     """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。
+
+    `actor` 是寫進事件的那個人，沒給時照 `trigger` 推（RSS 是 `rss:<ref>`，其餘是 `user_id`）；
+    AI 代人送的是 `ai:<user id>`（`ai_actor`，M5 票 12），Job 本身仍是那位使用者的。
 
     `grounds` 是**沒有人選作品**時認出它的依據（RSS Series 自動綁定，M3 票 09）：寫進 `created`
     事件，時間線說得出「為什麼是這一部」。有人選的（手動送單、人綁的 Series）不帶。
@@ -393,7 +416,8 @@ async def add_download(
     在磁碟不夠時說的是 `low_disk_space` 而不是「本來就在了」——兩者都沒有下載任何東西。
     """
     media, route = await _preconditions(session, media_id, route_id)
-    actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
+    if actor is None:
+        actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
 
     if source.info_hash:
         existing = await session.get(Job, source.info_hash)
@@ -1506,6 +1530,7 @@ def _view(job: Job, related: _Related) -> JobView:
         added_at=job.added_at,
         retryable=job.state in RETRYABLE,
         reimportable=reimportable(job),
+        undoable=job.state in UNDOABLE,
         plan_id=plan_id,
         audits=audits,
         series=_series_name(related.series.get(series_id) if series_id is not None else None),

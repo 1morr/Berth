@@ -36,7 +36,8 @@ export function SubmitAction({
   route,
 }: {
   media: Media
-  row: SearchResult
+  /** 結果表的一列，或助理搜尋結果卡的一列（M5 票 12）：送單只帶它的 `source_id`。 */
+  row: Pick<SearchResult, 'source_id'>
   /** 這一輪選的 Route。`null` = 還沒選——那是送不出去的，而說不行的是那個下拉。 */
   route: number | null
 }) {

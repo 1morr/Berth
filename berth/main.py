@@ -211,7 +211,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         app.state.reconciler = runner
         reconciler = Reconciler(sessions, runner)
         # 助理正在跑的回覆（M5 票 08）：送出的請求斷了它照樣跑完，所以它的擁有者在這裡。
-        assistant = AssistantRuns(sessions, clients)
+        assistant = AssistantRuns(sessions, clients, app.state.sources)
         app.state.assistant = assistant
         rss = RssPoller(sessions, clients)
         notifier = NotifySender(sessions, clients)

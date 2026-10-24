@@ -69,6 +69,7 @@ from berth.services.conversations import (
 )
 from berth.services.registry import Registry, Tool, ToolContext
 from berth.services.settings import update_settings
+from berth.services.sources import SourceCache
 from berth.services.tools import REGISTRY
 from tests.integration.factories import FakeClientFactory
 
@@ -148,7 +149,11 @@ def runs_for(
 ) -> tuple[AssistantRuns, async_sessionmaker[AsyncSession]]:
     sessions = create_session_factory(engine)
     runs = AssistantRuns(
-        sessions, FakeClientFactory(ai=provider), registry=registry or REGISTRY, now=lambda: NOW
+        sessions,
+        FakeClientFactory(ai=provider),
+        SourceCache(),
+        registry=registry or REGISTRY,
+        now=lambda: NOW,
     )
     return runs, sessions
 
@@ -401,7 +406,8 @@ async def test_every_call_is_recorded_against_the_conversation(
 async def test_a_user_gets_no_admin_tools_and_an_admin_does(
     engine: AsyncEngine, session: AsyncSession
 ) -> None:
-    """登錄表依角色過濾（plan §11.6）：`recent_imports` 指著只有管理員進得去的 `/weekly`。"""
+    """登錄表依角色過濾（plan §11.6）：`recent_imports` 指著只有管理員進得去的 `/weekly`；
+    缺集、搜尋與送單指著一般使用者也進得去的作品頁、`/search` 與 `POST /jobs`（M5 票 12）。"""
     admin = await person(session, "skipper", Role.ADMIN)
     deckhand = await person(session, "deckhand", Role.USER)
     await ai_ready(session)
@@ -414,9 +420,7 @@ async def test_a_user_gets_no_admin_tools_and_an_admin_does(
     admin_tools = {tool.name for tool in provider.requests[0].tools}
     deckhand_tools = {tool.name for tool in provider.requests[1].tools}
     assert "recent_imports" in admin_tools
-    assert deckhand_tools == set()
-    # 沒有工具的那一份 system 也這麼說，模型才不會假裝去查。
-    assert "You have no tools" in provider.requests[1].system
+    assert deckhand_tools == {"missing_episodes", "search_indexers", "submit_search_result"}
 
 
 async def test_a_user_who_names_an_admin_tool_is_still_refused(

@@ -211,8 +211,11 @@ class MediaOut(BaseModel):
     #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**推導出來的**，
     #: 不是欄位——票 09 起是 `EXISTS(jobs)`，票 12 加帳本，M3 加 Rule（票 04b）。
     tracked: bool
-    #: 上次送單用的 Route。下拉的預選值——「入庫到哪裡」是一個會重複的決定（plan §2.2）。
+    #: 上次送單用的 Route（plan §2.2）。
     default_route_id: int | None
+    #: 下拉的預選值：上次送單用的那一條，不在收得下的裡面時只有一條就是它，否則 `null`
+    #: （`services.media.preselected_route`）。AI 送單不說 Route 時也照它（M5 票 12）。
+    preselected_route_id: int | None
     seasons: list[SeasonOut]
     #: 這份快照什麼時候抓的。畫面用它說「這是 N 前的快照」。
     fetched_at: datetime | None
