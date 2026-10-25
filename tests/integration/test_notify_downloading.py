@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -38,6 +39,7 @@ from berth.domain import (
 )
 from berth.models import Job, Media, Route, RssFeed, RssSeries, User
 from berth.naming import folder_name
+from berth.services import downloading
 from berth.services.notify import send_due
 from berth.services.rss import bind_series, poll_feed, subscribe_mikan
 from tests.integration.factories import FakeClientFactory
@@ -290,6 +292,60 @@ class TestBrokenRound:
 
         (only,) = to(factory, ADMIN_ID)
         assert only.description == "S01E03–E04"
+
+
+class _CancelledOn(FakeTorrentFetcher):
+    """要到某一份 `.torrent` 時那一輪被 cancel：關機時正在跑的請求（M5 票 02）。"""
+
+    def __init__(self, cancelled: Release, sources: dict[str, TorrentSource]) -> None:
+        super().__init__(sources=sources)
+        self.cancelled = f"https://mikanani.me/Download/20260924/{cancelled.hash}.torrent"
+
+    async def fetch(self, url: str) -> TorrentSource:
+        if url == self.cancelled:
+            raise asyncio.CancelledError
+        return await super().fetch(url)
+
+
+class TestCancelledRound:
+    async def test_what_was_sent_before_the_cancel_is_still_told(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """與壞掉的那一輪同理：cancel 之前送出的兩筆已經在 qBittorrent 裡了。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(5), kimi(4), kimi(3)])
+        factory.torrent_ = _CancelledOn(kimi(5), factory.torrent_.sources)
+
+        with pytest.raises(asyncio.CancelledError):
+            await poll_feed(session, factory, await feed_id(session), now=NOW)
+        await deliver(session, factory)
+
+        (only,) = to(factory, ADMIN_ID)
+        assert only.description == "S01E03–E04"
+
+    async def test_a_write_that_fails_only_logs_and_the_cancel_goes_on(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """排不進去不蓋掉 cancel：關機照走，只留一行 log。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(5), kimi(4), kimi(3)])
+        factory.torrent_ = _CancelledOn(kimi(5), factory.torrent_.sources)
+
+        async def broken(*_args: object) -> None:
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(downloading, "_close", broken)
+
+        with pytest.raises(asyncio.CancelledError):
+            await poll_feed(session, factory, await feed_id(session), now=NOW)
+
+        assert "downloading notifications of a broken round not queued" in caplog.messages
 
 
 class TestBinding:

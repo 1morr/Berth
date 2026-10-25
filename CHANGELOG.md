@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **關機時被打斷的那一輪 RSS 送單也會說「正在下載」**（M5 票 02）：之前那一輪已經送進 qBittorrent 的幾筆沒有通知。
+
 ## [0.3.0] - 2026-10-24
 
 **從 0.2.9 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。

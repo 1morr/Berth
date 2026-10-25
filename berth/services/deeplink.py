@@ -78,14 +78,23 @@ async def set_public_url(session: AsyncSession, value: str, *, published_port: i
 
 
 # --- Berth 自己 -------------------------------------------------------------
+#
+# 前端的網址只在這裡組。`*_PAGE` 每一條都要是 `web/src/routes.tsx` 的一條路由，`*_ROW` 每一個都要是
+# 那一頁給列的 `id`：`tests/unit/test_berth_links.py` 讀前端原文對照（M5 票 02），這裡加一條就被守。
 
-#: 作品頁。與前端的路由表（`web/src/routes.tsx` 的 `/media/$mediaId`）同一條路徑。
+#: 作品頁（前端 `/media/$mediaId`）。
 MEDIA_PAGE = "/media/{media_id}"
-#: 「有 N 件等你處理」的三份清單（M4 票 127），同樣是前端路由表的路徑。只有一件時後面接那一列的
-#: 錨點（`services.waiting`），頁面載入後捲到那一列、把焦點放上去。
+#: 「有 N 件等你處理」的三份清單（M4 票 127）。只有一件時後面接那一列的錨點（`*_ROW`，
+#: `services.waiting`），頁面載入後捲到那一列、把焦點放上去。
 REVIEW_PAGE = "/review"
 ISSUES_PAGE = "/issues"
 RSS_PAGE = "/rss"
+#: 審核頁的一列：那一類（`ReviewKind`）與它的 id（`#plan-12`）。
+REVIEW_ROW = "{kind}-{ref}"
+#: Issue 頁的一列（`#issue-5`）。
+ISSUE_ROW = "issue-{ref}"
+#: RSS 頁待綁定的一列（`#series-7`）。
+SERIES_ROW = "series-{ref}"
 #: 週報頁的某一週（M4 票 131，前端 `/weekly/$reportId`）。
 WEEKLY_PAGE = "/weekly/{report_id}"
 

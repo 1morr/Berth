@@ -2,8 +2,8 @@
 
 **一輪一則**：試跑時一次 Mikan 綁定 11 分鐘送出 144 個 torrent，一個 torrent 一則會洗版。所以 RSS
 那一頭的每一輪（一個 Feed 的一次輪詢、綁定後的補送、訂閱、「全部下載」）開一個 `download_round`，
-送成的 Job 記在它身上，輪結束時依收件人與作品（+ Route）合成一則。輪中途出例外也照寫已經送出去的
-那幾筆：torrent 已經在 qBittorrent 裡了。
+送成的 Job 記在它身上，輪結束時依收件人與作品（+ Route）合成一則。輪中途出例外或被 cancel 也照寫
+已經送出去的那幾筆：torrent 已經在 qBittorrent 裡了。
 
 **人在場按的不告訴他**：手動送單（`add_manual_download`）與人按出來的那幾輪記下按的人（`presser`），
 他不收；其他訂閱者照收。
@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -65,24 +66,43 @@ async def download_round(
     """一輪的範圍。結束時把送成的那幾筆寫成「正在下載」並 commit；裡面的送單各自已經 commit 過。
 
     例外時先 rollback 那一刻沒寫完的，照寫已經送出去的，再把**原本的**例外丟回去：寫通知也失敗
-    （原本的例外就是資料庫壞了）只記 log，不蓋掉它。只接 `Exception`：關機時的 cancel 不在這裡碰
-    資料庫，那一輪已送出的就沒有這一則。
+    （原本的例外就是資料庫壞了）只記 log，不蓋掉它。
+
+    **被 cancel 的那一輪也照寫**（關機時正在跑的請求，M5 票 02）：寫的那一段包在 shield 裡做完，
+    資料庫 IO 不在半途被打斷（同 `pipeline/ticks.whole_tick`、sqlalchemy#8145）；只碰本機資料庫，
+    不打外面的服務。寫的時候再被 cancel 就不等它，cancel 照樣往上走，那一段留在背景做完。
     """
     batch = DownloadRound(presser)
     try:
         yield batch
-    except Exception:
+    except asyncio.CancelledError:
         if batch.sent:
+            writing = asyncio.ensure_future(_close_after_failure(session, batch, now))
             try:
-                await session.rollback()
-                await _close(session, batch, now)
-            except Exception:
-                logger.exception(
-                    "downloading notifications of a broken round not queued",
+                await asyncio.shield(writing)
+            except asyncio.CancelledError:
+                logger.warning(
+                    "downloading notifications of a cancelled round left to finish",
                     extra={"jobs": len(batch.sent)},
                 )
         raise
+    except Exception:
+        if batch.sent:
+            await _close_after_failure(session, batch, now)
+        raise
     await _close(session, batch, now)
+
+
+async def _close_after_failure(session: AsyncSession, batch: DownloadRound, now: datetime) -> None:
+    """一輪沒有好好結束時照寫已經送出去的。寫不成只記 log：丟出去的是那一輪原本的例外。"""
+    try:
+        await session.rollback()
+        await _close(session, batch, now)
+    except Exception:
+        logger.exception(
+            "downloading notifications of a broken round not queued",
+            extra={"jobs": len(batch.sent)},
+        )
 
 
 async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> None:

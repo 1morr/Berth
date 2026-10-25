@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from time_machine import TimeMachineFixture
 
@@ -24,9 +24,27 @@ from berth.adapters.rss.mikan import bangumi_feed_url, bangumi_url, parse_feed, 
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import CollectionType, FeedKind, JobState, JobTrigger, PlanAction, Tags
+from berth.domain import (
+    CollectionType,
+    FeedKind,
+    JobState,
+    JobTrigger,
+    NotificationKind,
+    PlanAction,
+    Tags,
+)
 from berth.main import create_app
-from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssSeries, TmdbSettings
+from berth.models import (
+    Job,
+    LedgerEntry,
+    Media,
+    Notification,
+    Route,
+    RssFeed,
+    RssSeries,
+    TmdbSettings,
+    User,
+)
 from berth.models.types import utcnow
 from berth.parser import QUIET_AFTER
 from berth.services.settings import write_settings
@@ -34,6 +52,7 @@ from berth.services.sources import SourceCache
 from tests.conftest import FIXTURES, TMDB_API_KEY
 from tests.integration.arrange import arrange, bundled_libraries, factory_for, fake_jellyfin
 from tests.integration.factories import FakeClientFactory, answered
+from tests.integration.test_notify import ADMIN_ID, SECOND_ADMIN_ID, person
 from tests.integration.test_rss import (
     FEED,
     FEED_URL,
@@ -47,7 +66,7 @@ from tests.integration.test_rss import (
     torrents,
 )
 from tests.integration.test_rss_auto_bind import kimi_tmdb
-from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL
+from tests.integration.test_rss_preview import ACGRIP, ACGRIP_URL, LOLIHOUSE_KEY, acgrip_torrents
 from tests.integration.test_rss_screen import (
     KIMI_NAME,
     SINGLE,
@@ -64,6 +83,7 @@ KIMI_NEXT_DAY = max(item.published_at for item in KIMI if item.published_at) + t
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
+DOWNLOADING = NotificationKind.DOWNLOADING
 
 
 @pytest.fixture
@@ -991,3 +1011,126 @@ class TestSubscribeFromTheDetailPage:
         assert (listed["route_kinds"], listed["movie_route_id"]) == (["tv"], None)
         assert chosen.status_code == 200, chosen.text
         assert chosen.json()["feed"]["route_kinds"] == ["tv"]
+
+
+def two_subscribers(client: TestClient) -> None:
+    """登入的人（按的人，skipper）與另一位管理員（bosun）都訂了「正在下載」、都有 Discord ID。"""
+
+    async def subscribe(session: AsyncSession) -> None:
+        await session.execute(
+            update(User)
+            .where(User.name == ADMIN["username"])
+            .values(discord_user_id=ADMIN_ID, notify_kinds_json=[DOWNLOADING.value])
+        )
+        await person(session, "bosun", discord=SECOND_ADMIN_ID, kinds=(DOWNLOADING,))
+        await session.commit()
+
+    in_session(client, subscribe)
+
+
+def downloading_queued(client: TestClient) -> dict[str, int]:
+    """每一位收件人排了幾則「正在下載」，照名字。"""
+
+    async def count(session: AsyncSession) -> dict[str, int]:
+        rows = await session.execute(
+            select(User.name, func.count())
+            .join(Notification, Notification.user_id == User.id)
+            .where(Notification.kind == DOWNLOADING)
+            .group_by(User.name)
+        )
+        return {name: int(n) for name, n in rows.all()}
+
+    return in_session(client, count)
+
+
+class TestWhoPressed:
+    """按下去的人不收自己那一輪的「正在下載」，其他訂閱者照收（M4 票 126、M5 票 02）。
+
+    經過 HTTP 那一層：端點拿掉傳下去的 `user_id=` 的話，按的人也收到，這幾條就紅。"""
+
+    def test_releasing_an_excluded_item(self, client: TestClient, roots: dict[str, Path]) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        two_subscribers(client)
+        client.put(
+            "/api/rss/exclusions", json={"not_single": True, "rules": ["- 11 "]}, headers=BROWSER
+        )
+        feed = add(client, route_id)
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        held = next(
+            row for row in client.get("/api/rss/items").json() if row["title"] == KIMI[1].title
+        )
+        client.put(
+            f"/api/rss/series/{held['series_id']}/binding",
+            json={"media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+        assert downloading_queued(client) == {"bosun": 1}
+
+        released = client.post(f"/api/rss/items/{held['id']}/release", headers=BROWSER)
+
+        assert released.status_code == 200, released.text
+        assert downloading_queued(client) == {"bosun": 2}
+
+    def test_downloading_everything(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        two_subscribers(client)
+        factory.rss_.pages[ACGRIP_URL] = ACGRIP
+        factory.torrent_ = acgrip_torrents(ACGRIP)
+        feed = add(client, route_id, ACGRIP_URL)["id"]
+        client.post(f"/api/rss/feeds/{feed}/poll", headers=BROWSER)
+        series = next(
+            row for row in client.get("/api/rss/series").json() if row["key"] == LOLIHOUSE_KEY
+        )
+        client.put(
+            f"/api/rss/series/{series['id']}/binding",
+            json={"media": KIMI_ID, "route": route_id},
+            headers=BROWSER,
+        )
+        assert downloading_queued(client) == {}
+
+        primed = client.post(f"/api/rss/feeds/{feed}/prime", json={"mode": "all"}, headers=BROWSER)
+
+        assert primed.status_code == 200, primed.text
+        assert primed.json()["submitted"] == 2
+        assert downloading_queued(client) == {"bosun": 1}
+
+    def test_choosing_the_routes_later(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        """同 `TestChoosingRoutesLater`：選了 Route 之後當場綁上、送出兩集。"""
+        route_id = seed(client, roots)
+        factory.tmdb_ = kimi_tmdb()
+        factory.rss_.pages[bangumi_url(4009)] = (MIKAN / "home-bangumi.4009.html").read_bytes()
+
+        async def arrange_old_feed(session: AsyncSession) -> int:
+            await write_settings(session, TmdbSettings(api_key=TMDB_API_KEY))
+            await anime_route(
+                session,
+                roots,
+                slug="tv",
+                name="TV",
+                jellyfin_library_id="item-1",
+                category="berth-tv",
+            )
+            feed = RssFeed(name="Mikan", url=FEED_URL, kind=FeedKind.MIKAN, primed_at=utcnow())
+            session.add(feed)
+            await session.commit()
+            return feed.id
+
+        feed_id = in_session(client, arrange_old_feed)
+        sign_in(client)
+        two_subscribers(client)
+        client.post(f"/api/rss/feeds/{feed_id}/poll", headers=BROWSER)
+        assert downloading_queued(client) == {}
+
+        chosen = client.put(
+            f"/api/rss/feeds/{feed_id}/routes", json={"tv_route": route_id}, headers=BROWSER
+        )
+
+        assert chosen.status_code == 200, chosen.text
+        assert chosen.json()["submitted"] == 2
+        assert downloading_queued(client) == {"bosun": 1}
