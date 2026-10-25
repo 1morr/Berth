@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.domain import Role
 from berth.services.access import Access, access_of, admits
+from berth.services.ai import AiRefusedError
 from berth.services.auth import AuthenticatedUser
 from berth.services.claims import ClaimRejectedError, UnclaimedError
 from berth.services.commands import CommandMark, Effect, mark_of
@@ -49,6 +50,7 @@ from berth.services.setup import ChoiceLockedError, OwnerRejectedError
 #: 任何東西**，所以換成 `Refusal` 是安全的。`tests/unit/test_registry.py` 掃 `berth/services` 確認
 #: 一種都沒漏。
 REJECTIONS: tuple[type[Exception], ...] = (
+    AiRefusedError,
     BundledLibraryRejectedError,
     ChoiceLockedError,
     ClaimRejectedError,
