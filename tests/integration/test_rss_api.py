@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+from time_machine import TimeMachineFixture
 
 from berth.adapters.rss import acgrip
 from berth.adapters.rss.mikan import bangumi_feed_url, bangumi_url, parse_feed, search_url
@@ -26,6 +28,7 @@ from berth.domain import CollectionType, FeedKind, JobState, JobTrigger, PlanAct
 from berth.main import create_app
 from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssSeries, TmdbSettings
 from berth.models.types import utcnow
+from berth.parser import QUIET_AFTER
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
 from tests.conftest import FIXTURES, TMDB_API_KEY
@@ -53,6 +56,11 @@ from tests.integration.test_rss_screen import (
     serve,
     serve_single,
 )
+
+#: 畫面流程那條測試的「今天」：錄下來的《与你相恋》最新一集的隔天。RSS 頁的「已完結」照讀清單
+#: 那一刻的牆上時間算（`parser.series_finished`），不固定的話，錄下的日期一過 `QUIET_AFTER` 就紅
+#: （M5 票 01）。
+KIMI_NEXT_DAY = max(item.published_at for item in KIMI if item.published_at) + timedelta(days=1)
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
 ADMIN = {"username": "skipper", "password": "harbour"}
@@ -135,8 +143,9 @@ def movies_route(client: TestClient, roots: dict[str, Path], slug: str = "movies
 
 class TestThePageFlow:
     def test_add_poll_bind_and_see_the_jobs(
-        self, client: TestClient, roots: dict[str, Path]
+        self, client: TestClient, roots: dict[str, Path], time_machine: TimeMachineFixture
     ) -> None:
+        time_machine.move_to(KIMI_NEXT_DAY)
         route_id = seed(client, roots)
         sign_in(client)
 
@@ -205,6 +214,13 @@ class TestThePageFlow:
             False,
         )
         assert client.get("/api/rss/series/404/items").status_code == 404
+
+        # 上面的 False 是固定的時鐘給的，不是執行那天：安靜滿 `QUIET_AFTER` 之後同一列收進
+        # 「已完結」。登入也照同一個時鐘過期，所以一個月後重新登入。
+        time_machine.move_to(KIMI_NEXT_DAY + QUIET_AFTER)
+        sign_in(client)
+        quiet = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
+        assert quiet["finished"] is True
 
     def test_deleting_a_feed_says_how_many_items_went(
         self, client: TestClient, roots: dict[str, Path]

@@ -75,6 +75,11 @@ uv run mypy                 # 型別檢查（strict）
 uv run lint-imports         # 依賴方向契約（plan §1.3）
 ```
 
+測試裡的「現在」：services 的命令多半收 `now=`，直接傳；走 HTTP 那一層傳不進去的，用 time-machine 的
+`time_machine` fixture 把時鐘固定在錄下來的資料的日期附近（`time_machine.move_to(...)`，例見
+`tests/integration/test_rss_api.py::TestThePageFlow`）。錄下來的日期是寫死的，拿牆上時間跟它比的
+斷言總有一天會翻面（M5 票 01）。
+
 資料庫 migration（Alembic）。程序啟動時會自動套用到最新版本，以下只在改 schema 時用：
 
 ```bash
