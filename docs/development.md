@@ -175,6 +175,9 @@ pnpm -C web gen:api         # berth openapi → web/openapi.json → src/api/sch
   前端的 `ReasonSet` 加一格（`tsc`，`refusal.test.ts` 的 `@ts-expect-error` 釘著那道閘門本身）。
   第五件是**畫面要說一句話**：`jobs.refusal.*` 走動態 key，所以 `t()` 的 `strictKeyChecks`
   會替它擋；`RouteRefusal` 與 `AccessRefusal` 的消費端是查表或單一理由比較，那一句沒有閘門。
+- **AI 工具的結果型別**（`services/tools.py` 的每一條登記，加上 `Refusal`、`NextStep`、`ToolRefusal`，M5 票 06）
+  由 `main._document_components` 塞進 OpenAPI 的 components：它們經對話送到前端，不是端點的回應。加一個工具
+  或改結果型別就重跑 `pnpm gen:api`（`TestToolResults` 先紅）。
 - **會拒絕的端點都要在 `responses=` 裡宣告**（`TestDeclaringWhatEachEndpointRefuses`）：走訪
   `create_app()` 的每一條路由，比對路由**物件**上的 `responses` 與 handler **語法樹**丟得出來的
   拒絕，漏宣告與多宣告都紅。**守的是形狀那一層**（`RouteRefusalOut` 這幾個 model），不是理由

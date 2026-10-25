@@ -1337,8 +1337,21 @@ def _fingerprint(payload: dict[str, Any]) -> str:
 
 def actor_of(user_id: int | None) -> str:
     """`events.actor` 的 user id 或 `system`（plan §2.3）。RSS 送的那一種（`rss:<series>`）由
-    `add_download` 照 `trigger_ref` 組，`ai` 在 M5。"""
+    `add_download` 照 `trigger_ref` 組，AI 代人做的是 `ai_actor`。"""
     return str(user_id) if user_id is not None else "system"
+
+
+def ai_actor(user_id: int) -> str:
+    """AI 代這位使用者做的：`ai:<user id>`（M5 票 06，plan §2.3）。側面板裡是使用者叫它做的，所以
+    要看得出是誰；AI 活動頁（票 21）以 `ai:` 開頭撈。"""
+    return f"ai:{user_id}"
+
+
+def user_of(actor: str) -> int | None:
+    """`events.actor` 背後的那位使用者：本人按的（`7`）或 AI 代他做的（`ai:7`）。`system` 與
+    `rss:<series>` 沒有人。"""
+    person = actor.removeprefix("ai:")
+    return int(person) if person.isdigit() else None
 
 
 # --- 攤平 ---------------------------------------------------------------
