@@ -2,7 +2,7 @@
 
 `GET` 誰都讀得到：停在 review 的那一筆，一般使用者看得到「等管理員審核」與它為什麼停下來。
 **逐列改、核准、拒絕只有 admin**（plan §6、brief §11，2026-09-22 拍板），規則在門禁
-（`api/gate.py` 的 `ADMIN_ROUTES`），不在這裡。
+（`services/access.py` 的 `ADMIN_ROUTES`，`api/gate.py` 照它擋），不在這裡。
 
 核准只讓狀態落地（`review → importing`），檔案由 importer 去鏈接；這一層負責叫醒它，拒絕則叫醒
 規劃器——兩個迴圈平常 60 秒才醒一次，而按下去的人要的是現在。

@@ -68,7 +68,7 @@ from berth.parser import kind_by_extension
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
-from berth.services.jobs import JobRejectedError, check_route, freeze, record_event
+from berth.services.jobs import JobRejectedError, check_route, freeze, record_event, user_of
 from berth.services.media import read_media
 from berth.services.qbittorrent import sign_in, unknown_torrents
 from berth.services.reimport import contents_on_disk
@@ -144,7 +144,7 @@ async def reimport_folder(
             name=path.name,
             trigger=JobTrigger.REIMPORT,
             trigger_ref=str(path),
-            user_id=_user_id(actor),
+            user_id=user_of(actor),
             media_id=media.id,
             route_id=route.id,
             state=JobState.COMPLETED,
@@ -226,7 +226,7 @@ async def claim_torrent(
             hash=found.hash,
             name=found.name,
             trigger=JobTrigger.MANUAL,
-            user_id=_user_id(actor),
+            user_id=user_of(actor),
             media_id=media.id,
             route_id=route.id,
             state=JobState.SUBMITTED,
@@ -300,11 +300,6 @@ async def _route_by_folder(session: AsyncSession, path: Path) -> tuple[Route, Pa
         if fs.top_level_under(path, [folder]) == path:
             return route, folder
     raise ClaimRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, f"{path} is under no route folder")
-
-
-def _user_id(actor: str) -> int | None:
-    """`events.actor` 是 user id 的字串（`jobs.actor_of`），Job 要的是那個數字。"""
-    return int(actor) if actor.isdigit() else None
 
 
 # --- 認領進帳本 -----------------------------------------------------------
