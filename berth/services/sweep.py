@@ -216,7 +216,7 @@ def _retry_pending(failure: dict[str, Any], moment: datetime) -> bool:
     次數、等它回來；但過期滿 `STUCK_AFTER` 就不算了：Route 停用或紅著時 `retry_due` 也是留在原地
     不送，那一筆沒有人在管（M5 票 03 code-review）。"""
     retry_at = failure.get("retry_at")
-    return bool(retry_at) and moment - datetime.fromisoformat(retry_at) < STUCK_AFTER
+    return isinstance(retry_at, str) and moment - datetime.fromisoformat(retry_at) < STUCK_AFTER
 
 
 async def _last_stops(
