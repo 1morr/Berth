@@ -49,6 +49,7 @@ from berth.domain import CollectionType, LibrarySort, MediaKind, SortOrder
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, end_sessions
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.settings import read_settings
 from berth.services.steps import message
 from berth.services.watch import WatchState, watch_state
@@ -385,6 +386,8 @@ class JellyfinAccess:
         return watch_state(written)
 
 
+# 照最重的標：帳號停用時結束他的 session（`auth.end_sessions`）。
+@command(Effect.IRREVERSIBLE)
 @asynccontextmanager
 async def jellyfin_access(
     session: AsyncSession,
@@ -406,6 +409,7 @@ async def jellyfin_access(
         await client.aclose()
 
 
+@command(Effect.READ)
 async def visible_libraries(client: JellyfinClient, jellyfin_user_id: str) -> frozenset[str]:
     """這個人在 Jellyfin 看得到的每一個媒體庫的 id（`UserViews`，不限 Berth 瀏覽得了的類型）。
 

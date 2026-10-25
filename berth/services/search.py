@@ -238,6 +238,7 @@ class QueryPlan:
     limit: int = MAX_QUERIES
 
 
+@command(Effect.READ)
 async def plan_queries(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -358,6 +359,8 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
     )
 
 
+# 下載連結記在行程內的 `SourceCache`，不改狀態。
+@command(Effect.READ)
 async def search_torrents(
     session: AsyncSession,
     factory: ServiceClientFactory,

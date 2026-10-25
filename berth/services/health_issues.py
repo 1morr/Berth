@@ -72,7 +72,8 @@ async def watch_conditions(
 
 
 # 同一個命令就是自己的反向：存回原本的門檻。
-@command(Effect.REVERSIBLE, inverse="health_issues.set_min_free")
+# 改設定（brief §14 永遠要人，M5 票 05）。
+@command(Effect.IRREVERSIBLE, inverse="health_issues.set_min_free")
 async def set_min_free(
     session: AsyncSession, gigabytes: int, *, now: datetime | None = None
 ) -> int:

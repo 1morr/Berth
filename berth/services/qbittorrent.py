@@ -85,6 +85,7 @@ def managed(statuses: Iterable[TorrentStatus], categories: Container[str]) -> li
     return [row for row in statuses if row.category in categories or BERTH_TAG in row.tags]
 
 
+@command(Effect.READ)
 async def unknown_torrents(
     session: AsyncSession, statuses: Iterable[TorrentStatus]
 ) -> list[TorrentStatus]:
@@ -102,6 +103,7 @@ async def unknown_torrents(
     return [row for row in ours if row.hash not in known]
 
 
+@command(Effect.READ)
 async def route_categories(session: AsyncSession) -> set[str]:
     """Route 用的 qBittorrent 分類：Berth 認得的那幾個。"""
     return {row for row in await session.scalars(select(Route.category)) if row}
@@ -119,6 +121,8 @@ def unknown_torrent_detail(status: TorrentStatus) -> dict[str, Any]:
     }
 
 
+# 登入只換一個 cookie。
+@command(Effect.READ)
 async def sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> None:
     """既有服務要先登入；套件內的那一台在免密白名單上（plan §9.2）。
 
@@ -132,6 +136,8 @@ async def sign_in(client: QbittorrentClient, settings: QbittorrentSettings) -> N
     await try_sign_in(client, settings)
 
 
+# 同 `sign_in`。
+@command(Effect.READ)
 async def try_sign_in(
     client: QbittorrentClient, settings: QbittorrentSettings
 ) -> ServiceError | None:
@@ -179,6 +185,7 @@ class QbittorrentSetupStatus:
     error: str
 
 
+@command(Effect.READ)
 async def read_qbittorrent(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> QbittorrentSetupStatus:
@@ -210,6 +217,8 @@ async def read_qbittorrent(
     )
 
 
+# 設那一台的介面登入：只能再設一組蓋過（brief §16.4）。
+@command(Effect.IRREVERSIBLE)
 async def apply_qbittorrent(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -283,14 +292,15 @@ async def apply_qbittorrent(
     )
 
 
-@command(Effect.REVERSIBLE)
+# 同 `apply_qbittorrent`。
+@command(Effect.IRREVERSIBLE)
 async def set_interface_login(
     session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
 ) -> QbittorrentSetupStatus:
     """設定頁的「更新登入」（M4 票 07）：只換套件內那一台的介面登入。
 
-    與頁 2 的密碼那一條是同一段（`_apply_password`），結果換掉那一條纜繩。可逆的方式就是
-    再設一組。既有的那一台拒絕（`ValueError`）。
+    與頁 2 的密碼那一條是同一段（`_apply_password`），結果換掉那一條纜繩。原本那一組
+    回不來，只能再設一組蓋過。既有的那一台拒絕（`ValueError`）。
     """
     setup = await read_settings(session, SetupSettings)
     settings = await read_settings(session, QbittorrentSettings)
@@ -438,6 +448,7 @@ def note_qbittorrent_login(setup: SetupSettings, instance: str) -> None:
     setup.qbittorrent.steps = [*(row for row in setup.qbittorrent.steps if row.key != key), step]
 
 
+@command(Effect.READ)
 async def qbittorrent_interface_user(client: QbittorrentClient) -> str:
     """那一台自己設過的 WebUI 帳號（`_instance_username`）。連線測試順便讀：讀不到不讓測試變紅，
     登入那一條照舊等「設定介面登入」。"""

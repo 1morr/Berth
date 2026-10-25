@@ -25,6 +25,7 @@ from berth.domain import Role, default_notify_kinds
 from berth.models import JellyfinSettings, SetupSettings, User, UserSession
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.settings import read_settings
 
 #: session 的絕對壽命。不滑動續期：到期就是到期，重登一次即可（票 07 驗收）。
@@ -73,6 +74,8 @@ class SignedIn:
     token: str
 
 
+# Jellyfin 為每次登入記一筆裝置「Berth」，Berth 撤不回（brief §16.4）。
+@command(Effect.IRREVERSIBLE)
 async def sign_in(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -94,6 +97,7 @@ async def sign_in(
     return await open_session(session, auth)
 
 
+@command(Effect.REVERSIBLE, inverse="auth.sign_out")
 async def open_session(session: AsyncSession, auth: JellyfinAuth) -> SignedIn:
     """Jellyfin 已經認過的人換一張 Berth session，並當場 commit。
 
@@ -111,6 +115,8 @@ async def open_session(session: AsyncSession, auth: JellyfinAuth) -> SignedIn:
     return SignedIn(user=user, token=token)
 
 
+# 過期的列就地刪掉不算改狀態：它們本來就已經失效。
+@command(Effect.READ)
 async def read_session(session: AsyncSession, token: str | None) -> AuthenticatedUser | None:
     """token 背後的使用者，沒有或已過期就是 `None`。
 
@@ -132,6 +138,8 @@ async def read_session(session: AsyncSession, token: str | None) -> Authenticate
     return None if user is None else _view(user)
 
 
+# 權杖收不回來：回去要那個人自己再登入一次。
+@command(Effect.IRREVERSIBLE)
 async def sign_out(session: AsyncSession, token: str | None) -> None:
     """使這一張 session 失效。其他裝置上的 session 不動。"""
     if not token:
@@ -140,6 +148,8 @@ async def sign_out(session: AsyncSession, token: str | None) -> None:
     await session.commit()
 
 
+# 同 `sign_out`，每一台裝置。
+@command(Effect.IRREVERSIBLE)
 async def end_sessions(session: AsyncSession, user_id: int) -> None:
     """這個人在每一台裝置上的 session 全部失效，並當場 commit。
 

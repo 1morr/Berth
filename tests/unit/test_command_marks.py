@@ -6,9 +6,9 @@ M5 的命令登錄表要讀每一個命令的副作用等級與反向命令：�
 這一條測試守兩件事：
 
 1. 標了反向命令的，反向命令本身也是一個已標記的命令（寫錯名字、指到沒標的函式都紅）。
-2. M3 起新增的 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，包括被
-   `asynccontextmanager` 包過的）都有標記。
-   「M3 之前就在」的模組列在 `BEFORE_M3`，豁免；**新模組不必登記就自動被守**。
+2. 每一個 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，包括被
+   `asynccontextmanager` 包過的）都有標記。沒有豁免表（M5 票 05 拆掉）：新命令一出生就被守。
+3. 寫到外部服務、撤不回的命令，與改設定、Route 的命令，等級是 `irreversible`（逐條列出）。
 
 檢查本身在最後做雙向變異：以一段原始碼載成假的 service 模組，拿掉一個標記、寫錯反向命令名
 會紅；改一個無關的函式名或排版不紅。
@@ -19,41 +19,63 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+import sys
 import textwrap
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from types import ModuleType
 
-import berth.services
-from berth.services.commands import mark_of
+import pytest
 
-#: M3 開工前就在的 service 模組，公開命令還沒有標記（M5 票 04、05 補）。補完一個就從這裡
-#: 拿掉；新模組不在這裡，所以一出生就被守。`review` 不在：M3 第一個新命令
-#: （批次確認）落在它裡面，整個模組已經標完。
-BEFORE_M3 = frozenset(
+import berth.services
+from berth.services.commands import Effect, mark_of
+
+#: 寫到外部服務、Berth 撤不回的命令（brief §16.4 物件表「在 Berth 能撤回嗎：不能」那幾列）。
+#: 標成可逆的話登錄表會讓 AI 不經人就做，所以逐條鎖住等級。名單是封閉的：新命令寫到外部服務時
+#: 要自己加進來（`violations` 只守「有標」，不守「標對」）。
+EXTERNAL_IRREVERSIBLE = frozenset(
     {
-        "auth",
-        "bench",
-        "clients",
-        "deeplink",
-        "discover",
-        "downloads",
-        "events",
-        "health",
-        "hints",
-        "jellyfin",
-        "jellyfin_access",
-        "jellyfin_images",
-        "qbittorrent",
-        "routes",
-        "search",
-        "settings",
-        "setup",
-        "steps",
-        "tmdb",
-        "tracking",
-        "watch",
-        "watch_area",
-        "watching",
+        "auth.sign_in",  # Jellyfin 的裝置紀錄
+        "deletion.delete_job",  # 從 qBittorrent 移除 torrent
+        "indexer.add_recommended_indexers",  # Prowlarr 的站
+        "indexer.apply_default_indexers",
+        "indexer.remove_indexer",
+        "indexer.set_interface_login",  # 介面登入：只能再設一組蓋過
+        "jellyfin.add_berth_paths",  # 媒體庫上的 Berth 路徑
+        "jellyfin.bootstrap_jellyfin",  # 媒體庫
+        "jellyfin.claim_jellyfin",  # 管理員帳號、初始設定、API key
+        "jellyfin.connect_jellyfin",  # API key
+        "jellyfin.create_libraries",
+        "jellyfin.resolve_interface_login",  # 同 `auth.sign_in`
+        "jellyfin_access.jellyfin_access",  # 停用的帳號結束 session，同 `auth.end_sessions`
+        "leftovers.remove_empty_categories",
+        "notify.send_due",  # Discord 訊息送出去收不回來
+        "notify.send_test",
+        "qbittorrent.apply_qbittorrent",
+        "qbittorrent.set_interface_login",
+        "routes.build_routes",  # 新的 `berth-*` 分類（刪 Route 不刪分類）
+        "routes.check_route",  # 探針觸發 qBittorrent 的「完成時執行外部程式」
+        "routes.check_routes",
+        "routes.create_route",
+        "routes.update_route",
+        "setup.choose_service",  # 換台時移除空的分類
+        "setup.claim_owner",
+        "setup.sign_in_existing_owner",
+    }
+)
+
+#: 改設定與 Route：回得去，但 brief §14 列為「永遠要人」，plan §11.6 的登錄表直接讀標記決定出不出
+#: 確認卡，所以標 `irreversible`（M5 票 05）。
+SETTINGS_IRREVERSIBLE = frozenset(
+    {
+        "deeplink.set_public_url",
+        "health_issues.set_min_free",
+        "notify.set_berth_url",
+        "notify.set_bot_token",
+        "routes.delete_route",
+        "settings.update_settings",
+        "settings.write_settings",
+        "setup.complete_setup",
+        "tmdb.verify_tmdb",
     }
 )
 
@@ -89,7 +111,7 @@ def commands_of(module: ModuleType) -> dict[str, object]:
     }
 
 
-def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list[str]:
+def violations(modules: Iterable[ModuleType]) -> list[str]:
     """兩條規則不成立的每一處，一行一處。空的就是守住了。"""
     modules = list(modules)
     marked = {
@@ -106,20 +128,32 @@ def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list
     found += [
         f"{short(module)}.{name}: public command without a mark"
         for module in modules
-        if short(module) not in exempt
         for name in commands_of(module)
         if f"{short(module)}.{name}" not in marked
     ]
     return found
 
 
+def not_irreversible(names: Iterable[str]) -> set[str]:
+    """名單裡等級不是 `irreversible` 的（沒標、名字寫錯的也算）。"""
+    found = set()
+    for name in names:
+        module, _, function = name.partition(".")
+        mark = mark_of(commands_of(importlib.import_module(_PACKAGE + module)).get(function))
+        if mark is None or mark.effect is not Effect.IRREVERSIBLE:
+            found.add(name)
+    return found
+
+
 class TestTheServices:
     def test_every_rule_holds(self) -> None:
-        assert violations(service_modules(), exempt=BEFORE_M3) == []
+        assert violations(service_modules()) == []
 
-    def test_every_exempt_module_still_exists(self) -> None:
-        """豁免表指著不存在的模組，就是有人拆了檔案卻沒回來收這一格。"""
-        assert BEFORE_M3 - {short(module) for module in service_modules()} == set()
+    def test_external_writes_that_cannot_be_undone_are_irreversible(self) -> None:
+        assert not_irreversible(EXTERNAL_IRREVERSIBLE) == set()
+
+    def test_settings_and_route_changes_are_irreversible(self) -> None:
+        assert not_irreversible(SETTINGS_IRREVERSIBLE) == set()
 
     def test_the_hand_marked_context_manager_is_seen(self) -> None:
         """`download_round` 在檢查看得到 `asynccontextmanager` 之前是手動標的（M4 票 126）。"""
@@ -169,8 +203,8 @@ def load(source: str) -> ModuleType:
     return module
 
 
-def check(source: str, *, exempt: frozenset[str] = frozenset()) -> list[str]:
-    return violations([load(source)], exempt=exempt)
+def check(source: str) -> list[str]:
+    return violations([load(source)])
 
 
 class TestTheCheckItself:
@@ -215,14 +249,6 @@ class TestTheCheckItself:
         source = _SOURCE.replace('inverse="fake.take_back"', 'inverse="fake.takeback"')
         assert check(source) == ["fake.settle: inverse fake.takeback is not a marked command"]
 
-    def test_an_exempt_module_may_leave_marks_out_but_not_misname_an_inverse(self) -> None:
-        source = _SOURCE.replace("@command(Effect.READ)\n", "").replace(
-            'inverse="fake.take_back"', 'inverse="fake.nowhere"'
-        )
-        assert check(source, exempt=frozenset({"fake"})) == [
-            "fake.settle: inverse fake.nowhere is not a marked command"
-        ]
-
     def test_renaming_an_unrelated_function_is_not_caught(self) -> None:
         source = _SOURCE.replace("_helper", "_other_helper").replace("def plain", "def simple")
         assert check(source) == []
@@ -237,3 +263,34 @@ class TestTheCheckItself:
     def test_renaming_a_command_and_its_inverse_together_is_not_caught(self) -> None:
         source = _SOURCE.replace("take_back", "revert")
         assert check(source) == []
+
+
+class TestTheIrreversibleList:
+    """名單那一條也是雙向：等級降了、名字寫錯會紅，排版不紅。"""
+
+    @pytest.fixture
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> Callable[[str], None]:
+        def put(source: str) -> None:
+            monkeypatch.setitem(sys.modules, _PACKAGE + "fake", load(source))
+
+        return put
+
+    def test_the_untouched_module_passes(self, install: Callable[[str], None]) -> None:
+        install(_SOURCE)
+        assert not_irreversible({"fake.holding"}) == set()
+
+    def test_a_lowered_effect_is_caught(self, install: Callable[[str], None]) -> None:
+        install(_SOURCE.replace("@command(Effect.IRREVERSIBLE)", "@command(Effect.REVERSIBLE)"))
+        assert not_irreversible({"fake.holding"}) == {"fake.holding"}
+
+    def test_a_misspelled_name_is_caught(self, install: Callable[[str], None]) -> None:
+        install(_SOURCE)
+        assert not_irreversible({"fake.hold"}) == {"fake.hold"}
+
+    def test_reformatting_is_not_caught(self, install: Callable[[str], None]) -> None:
+        install(
+            _SOURCE.replace(
+                "@command(Effect.IRREVERSIBLE)", "@command(\n    Effect.IRREVERSIBLE\n)"
+            )
+        )
+        assert not_irreversible({"fake.holding"}) == set()
