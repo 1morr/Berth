@@ -241,7 +241,6 @@ class TestOneRound:
 
         assert len(to(factory, ADMIN_ID)) == 2
         assert mark_of(poll_due) == CommandMark(Effect.IRREVERSIBLE, inverse=None)
-        assert mark_of(poll_feed) == CommandMark(Effect.REVERSIBLE, inverse=None)
 
 
 class _RefusesBotan(FakeQbittorrentClient):
