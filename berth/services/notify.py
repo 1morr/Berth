@@ -391,7 +391,8 @@ def _rejected(settings: NotifySettings, sender: NotifySenderSettings) -> bool:
 
 
 # 同一個命令就是自己的反向：換回原本的 token，或傳空字串清掉。
-@command(Effect.REVERSIBLE)
+# 改設定（brief §14 永遠要人，M5 票 05）。
+@command(Effect.IRREVERSIBLE)
 async def set_bot_token(
     session: AsyncSession, factory: ServiceClientFactory, token: str
 ) -> BotView:
@@ -459,7 +460,8 @@ async def set_mine(
 
 
 # 同上：再存一次原本的網址，或空字串清掉。
-@command(Effect.REVERSIBLE)
+# 改設定（brief §14 永遠要人，M5 票 05）。
+@command(Effect.IRREVERSIBLE)
 async def set_berth_url(session: AsyncSession, value: str) -> BotView:
     """存 Berth 從外面看的網址（`deeplink.normalized_public_url`：http(s) 的絕對網址、拿掉結尾
     的 `/`）。空字串是清掉，之後的通知不附連結。已經寫進待送表的那幾則也照新的組：

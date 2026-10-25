@@ -14,6 +14,15 @@
 照最重的那一種**（`issues.resolve_issue`）：分動作的等級是登錄表登記工具時的事。被
 `asynccontextmanager` 包過的也是命令，標記慣例貼在最外層（`downloading.download_round`；貼在
 內層也認得）。
+
+**改設定與 Route 標 `irreversible`**（M5 票 05）：回得去，但 brief §14 列為永遠要人，而登錄表直接讀
+標記決定出不出確認卡（plan §11.6）。這裡的設定是改變 Berth 怎麼運作的那幾種（服務位址與憑證、對外
+網址、門檻）；個人偏好（`notify.set_mine`、`search.remember_names`）、精靈的進度與草稿
+（`indexer.skip_indexers`、`jellyfin.save_bundled_libraries`）、單一 Feed 的設定、排除條件（brief
+§6.10 的修正回流，全域那一層也是）照舊可逆。寫到外部服務、Berth 撤不回的（brief §16.4 物件表）
+同樣是 `irreversible`。**重建 Route 已經定義的 `berth-*` 分類不算**（送單與健康迴圈都會）：那是
+Route 存在的前提，不是新的東西。`settings.write_settings` 這類原語照最重的標，等級不往上傳：
+呼叫它的命令照自己的效果標。
 """
 
 from __future__ import annotations
@@ -36,7 +45,8 @@ class Effect(StrEnum):
     READ = "read"
     #: 改了東西，但有路回去：反向命令、或同一個命令再按一次別的選項。
     REVERSIBLE = "reversible"
-    #: 做了就回不去（刪 complete 裡的檔案、移除 torrent、purge）。永遠要人。
+    #: 做了就回不去（刪 complete 裡的檔案、移除 torrent、purge、寫到外部服務撤不回的）；
+    #: 改設定與 Route 也算（見模組 docstring）。永遠要人。
     IRREVERSIBLE = "irreversible"
 
 

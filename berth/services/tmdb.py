@@ -17,6 +17,7 @@ from berth.adapters.http import AuthFailedError, ServiceError
 from berth.domain import StepFailure, StepStatus, TmdbProblem
 from berth.models import SetupSettings, SetupStep, TmdbSettings
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import StepView, failed_step, message, step_views
 
@@ -41,6 +42,7 @@ class TmdbSetupStatus:
     steps: tuple[StepView, ...]
 
 
+@command(Effect.READ)
 async def read_tmdb_status(session: AsyncSession) -> TmdbSetupStatus:
     """不連線，只回存下來的狀態。"""
     setup = await read_settings(session, SetupSettings)
@@ -48,6 +50,8 @@ async def read_tmdb_status(session: AsyncSession) -> TmdbSetupStatus:
     return _view(setup, settings)
 
 
+# 改設定（存下 API key，brief §14 永遠要人）。
+@command(Effect.IRREVERSIBLE)
 async def verify_tmdb(
     session: AsyncSession, factory: ServiceClientFactory, *, api_key: str
 ) -> TmdbSetupStatus:

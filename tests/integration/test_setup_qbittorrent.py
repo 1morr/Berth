@@ -146,7 +146,8 @@ async def test_a_changed_login_replaces_the_old_one(session: AsyncSession) -> No
     assert [(row.step, row.status) for row in status.steps] == [
         (QbittorrentStep.PASSWORD.value, StepStatus.OK)
     ]
-    assert mark_of(set_interface_login) == CommandMark(Effect.REVERSIBLE)
+    # 原本那一組回不來，只能再設一組蓋過（brief §16.4，M5 票 05）。
+    assert mark_of(set_interface_login) == CommandMark(Effect.IRREVERSIBLE)
 
 
 @pytest.mark.asyncio
