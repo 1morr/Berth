@@ -416,16 +416,22 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
     """
     rows = list(
         await session.scalars(
-            select(Issue).where(Issue.type.in_(STANDS_WHILE), Issue.status == IssueStatus.OPEN)
+            select(Issue).where(
+                Issue.type.in_(STANDS_WHILE),
+                Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
+            )
         )
     )
     if not rows:
         return 0
     jobs = await _live_jobs(session, rows)
     settled = [row for row in rows if jobs.get(row.job_hash or "") not in STANDS_WHILE[row.type]]
-    clear_by_system(settled, now)
+    clear_by_system([row for row in settled if row.status is IssueStatus.OPEN], now)
+    # 被忽略的卡住的 Job 也記下條件解除過（`STAYS_IGNORED`）：兩輪巡檢之間走開又回來的那一筆，
+    # 巡檢那一刻看不到它走開過，而它又停住是新的一件（M5 票 03 code-review）。
+    note_cleared(settled, now)
     await session.flush()
-    return len(settled)
+    return sum(1 for row in settled if row.status is IssueStatus.RESOLVED)
 
 
 def note_cleared(rows: Iterable[Issue], now: datetime) -> None:

@@ -2443,7 +2443,7 @@ _WEEKLY_WORKS = (
 
 
 #: `stuck-jobs` 情境的三筆：（hash, 名字, 狀態, 停下來那一刻寫的事件, payload, 原文）。
-_STUCK_JOBS = (
+_STUCK_DEMO = (
     (
         "5" * 40,
         "[SweetSub] Kusuriya no Hitorigoto - 05 [WebRip 1080p]",
@@ -2479,7 +2479,7 @@ async def _seed_stuck_jobs(session: AsyncSession, scenario: Scenario) -> None:
     now = utcnow()
     stopped = now - timedelta(days=2)
     save_path = "/data/torrent/incomplete/anime"
-    for job_hash, name, state, event, payload, error in _STUCK_JOBS:
+    for job_hash, name, state, event, payload, error in _STUCK_DEMO:
         session.add(
             Job(
                 hash=job_hash,

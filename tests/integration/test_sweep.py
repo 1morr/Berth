@@ -65,9 +65,9 @@ async def stuck_job(
     at: datetime = STOPPED,
     payload: dict[str, Any] | None = None,
 ) -> Job:
-    """停在 `state` 的一筆。送單失敗預設是**還排著自動重送**的那一種（qBittorrent 停機一整天，
-    次數不花）：再問也一樣、或次數用完的那一筆自己就是一件 `submit_failed`（M5 票 03），不再是
-    第一批卡住的事。"""
+    """停在 `state` 的一筆。送單失敗預設是**還排著自動重送**的那一種（`pending`）：再問也一樣、
+    次數用完、或重送過期滿一天的那一筆自己就是一件 `submit_failed`（M5 票 03），不再是第一批卡住
+    的事。"""
     job = Job(
         hash=job_hash,
         name=TITLE,
@@ -92,11 +92,12 @@ async def stuck_job(
 
 
 def pending(at: datetime) -> dict[str, Any]:
-    """暫時的送單失敗，十分鐘後自動重送（`jobs.retry_due` 在管）。"""
+    """暫時的送單失敗，自動重送還排著（`jobs.retry_due` 在管）。排在一週後：這一檔的巡檢最晚跑在
+    停下來之後第五天，重送過期滿一天的話它會變成一件 `submit_failed`（`sweep._retry_pending`）。"""
     return {
         "error": "qBittorrent timed out",
         "attempt": 2,
-        "retry_at": (at + timedelta(minutes=10)).isoformat(),
+        "retry_at": (at + timedelta(days=7)).isoformat(),
     }
 
 

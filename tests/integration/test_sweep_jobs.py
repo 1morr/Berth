@@ -135,7 +135,8 @@ class TestEachKindOpensOne:
         assert issue.type is IssueType.SUBMIT_FAILED
 
     async def test_a_send_with_a_retry_still_due_is_not_stuck(self, session: AsyncSession) -> None:
-        """自動重送排著：`retry_due` 在管。qBittorrent 停機時它過了時間也還排著（停機不花次數）。"""
+        """自動重送排著：`retry_due` 在管。qBittorrent 停機時它過了時間也還排著（停機不花次數），
+        過期還不到一天的都算。"""
         await stopped_job(
             session,
             JobState.SUBMIT_FAILED,
@@ -146,7 +147,7 @@ class TestEachKindOpensOne:
             },
         )
 
-        await sweep_once(session, now=STOPPED + timedelta(days=2))
+        await sweep_once(session, now=STOPPED + timedelta(minutes=9) + STUCK_AFTER)
 
         assert await stuck(session) == []
 
@@ -386,3 +387,44 @@ class TestTheWaitingPush:
         message = only(factory)
         assert message.title == "有 3 件等你處理"
         assert message.description == "新增 3 件：3 個 Issue（送單失敗、入庫失敗、停滯）"
+
+
+class TestReviewFindings:
+    async def test_a_retry_held_back_for_over_a_day_is_stuck(self, session: AsyncSession) -> None:
+        """自動重送排著、卻一直被擋（Route 停用、紅著）：`retry_due` 不花次數也不送，`retry_at`
+        一直停在過去。過期滿 `STUCK_AFTER` 就沒有人在管了（code-review）。"""
+        await stopped_job(
+            session,
+            JobState.SUBMIT_FAILED,
+            payload={
+                "error": "timed out",
+                "attempt": 2,
+                "retry_at": (STOPPED + timedelta(minutes=10)).isoformat(),
+            },
+        )
+
+        await sweep_once(session, now=STOPPED + timedelta(minutes=10) + STUCK_AFTER)
+
+        (issue,) = await stuck(session)
+        assert issue.type is IssueType.SUBMIT_FAILED
+
+    async def test_an_ignored_one_comes_back_after_the_job_moved_on_between_sweeps(
+        self, session: AsyncSession
+    ) -> None:
+        """忽略了，隔天 Job 頁重試（Job 離開那個狀態、poller 那一輪看到），又失敗：是新的一件，
+        不是還在忽略的那一件（code-review）。"""
+        job = await stopped_job(session, JobState.IMPORT_FAILED)
+        await sweep_once(session, now=STOPPED + timedelta(hours=1))
+        (issue,) = await stuck(session)
+        await ignore_issue(session, issue.id, actor="7")
+        job.state = JobState.IMPORTING
+        await session.commit()
+        await close_settled(session, STOPPED + timedelta(hours=2))
+        await session.commit()
+        job.state = JobState.IMPORT_FAILED
+        await session.commit()
+
+        await sweep_once(session, now=STOPPED + timedelta(days=1, hours=1))
+
+        (again,) = await stuck(session)
+        assert again.id != issue.id
