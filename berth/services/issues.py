@@ -144,6 +144,8 @@ class IssueView:
     query: str
 
 
+# 只寫 Issue；條件解除時由系統收掉。
+@command(Effect.REVERSIBLE)
 async def record_issue(
     session: AsyncSession,
     kind: IssueType,
@@ -220,6 +222,7 @@ async def record_issue(
     return Recorded(issue=row, opened=True)
 
 
+@command(Effect.READ)
 async def list_issues(session: AsyncSession) -> list[IssueView]:
     """還沒有人決定的那幾件，最近偵測到的在前面。
 
@@ -298,6 +301,9 @@ async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> se
     }
 
 
+# brief §14：忽略會把問題藏起來，要人。`STAYS_IGNORED` 那幾種在條件持續期間一直安靜，
+# 而沒有「取消忽略」的命令。
+@command(Effect.IRREVERSIBLE)
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """「我知道了，不用管它」。不碰磁碟、不碰帳本。
 
@@ -316,6 +322,9 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     return await _reread(session, row)
 
 
+# 等級看最重的那一顆：`delete_complete`、`delete_orphan` 刪 complete，`forget` 刪帳本列。
+# 其餘幾顆可逆，分動作登記是登錄表的事。
+@command(Effect.IRREVERSIBLE)
 async def resolve_issue(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -397,6 +406,8 @@ async def resolve_issue(
     return await _reread(session, row)
 
 
+# 只收 Issue；Job 再壞時 poller 重開。
+@command(Effect.REVERSIBLE)
 async def close_settled(session: AsyncSession, now: datetime) -> int:
     """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
 

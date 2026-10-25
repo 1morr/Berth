@@ -53,6 +53,7 @@ from berth.naming import folder_name
 from berth.pipeline import RssPoller
 from berth.services import rss
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.downloads import poll_downloads
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
@@ -608,7 +609,7 @@ class TestFeeds:
     async def test_re_adding_a_deleted_feed_does_not_send_twice(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        """`delete_feed` 標 reversible 的根據：加回來之後以 info hash 認回同一筆 Job。
+        """加回來之後以 info hash 認回同一筆 Job。
 
         那一筆 Job 就是這個 RSS Series 送的，所以重新長出的 Item 認回成已送單，不是重複（票 10）。
         """
@@ -629,6 +630,26 @@ class TestFeeds:
         kimi_items = [row for row in await list_items(session) if row.series_id == series.id]
         assert {(row.status, row.skip) for row in kimi_items} == {(FeedItemStatus.DOWNLOADED, None)}
         assert {row.job_hash for row in kimi_items} == {item.info_hash for item in KIMI}
+
+    async def test_items_that_slid_out_of_the_feed_do_not_come_back(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """`delete_feed` 標 irreversible 的根據（M5 票 04）：Item 連著刪，加回同一個網址只長得回
+        Feed 現在還列著的那幾筆——RSS 只列最近的，滑出去的那幾筆再也讀不到。"""
+        _, _, factory = await harbour(session, roots)
+        feed = await routed_feed(session, url=FEED_URL, name="Mikan")
+        await poll_feed(session, factory, feed.id, now=NOW)
+        await delete_feed(session, feed.id)
+
+        head, *items = FEED.split(b"<item>")
+        newest = b"".join(b"<item>" + item.split(b"</item>")[0] + b"</item>" for item in items[:3])
+        factory.rss_.pages[FEED_URL] = head + newest + b"</channel></rss>"
+        again = await routed_feed(session, url=FEED_URL, name="Mikan")
+        await poll_feed(session, factory, again.id, now=NOW + timedelta(days=30))
+
+        assert len(items) == 12
+        assert await count(session, RssItem) == 3
+        assert mark_of(delete_feed) == CommandMark(Effect.IRREVERSIBLE, inverse=None)
 
     async def test_a_feed_that_cannot_be_fetched_says_why_on_its_own_row(
         self, session: AsyncSession, roots: dict[str, Path]

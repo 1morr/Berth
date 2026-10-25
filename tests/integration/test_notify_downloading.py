@@ -38,8 +38,9 @@ from berth.domain import (
 )
 from berth.models import Job, Media, Route, RssFeed, RssSeries, User
 from berth.naming import folder_name
+from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.notify import send_due
-from berth.services.rss import bind_series, poll_feed, subscribe_mikan
+from berth.services.rss import bind_series, poll_due, poll_feed, subscribe_mikan
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_notify import ADMIN_ID, CREW_ID, SECOND_ADMIN_ID, person, with_bot
 from tests.integration.test_rss import NOW, harbour, routed_feed
@@ -225,6 +226,22 @@ class TestOneRound:
         jobs = list(await session.scalars(select(Job)))
         assert len(jobs) == 5
         assert {job.state for job in jobs} == {JobState.SUBMITTED}
+
+    async def test_the_background_round_sends_what_cannot_be_taken_back(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """`poll_due` 標 irreversible 的根據（M5 票 04）：背景迴圈的一輪不只寫 Item，還送單、排
+        「正在下載」，送出去就收不回來。人按的 `poll_feed` 照主效果標（`commands` 的慣例）。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(3), botan(1)])
+
+        assert await poll_due(session, factory, now=NOW) == 1
+        await deliver(session, factory)
+
+        assert len(to(factory, ADMIN_ID)) == 2
+        assert mark_of(poll_due) == CommandMark(Effect.IRREVERSIBLE, inverse=None)
+        assert mark_of(poll_feed) == CommandMark(Effect.REVERSIBLE, inverse=None)
 
 
 class _RefusesBotan(FakeQbittorrentClient):

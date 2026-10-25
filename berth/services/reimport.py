@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.domain import EventType, JobRefusal, JobState
 from berth.logs import job_context
 from berth.models import Job, JobFile
+from berth.services.commands import Effect, command
 from berth.services.jobs import (
     JobRejectedError,
     JobView,
@@ -37,6 +38,8 @@ logger = logging.getLogger(__name__)
 REIMPORT = "reimport"
 
 
+# 退回 `completed` 重算一次，檔案不動。
+@command(Effect.REVERSIBLE)
 async def reimport_job(session: AsyncSession, job_hash: str, *, actor: str) -> JobView:
     """`POST /jobs/{hash}/reimport`：那一筆的 complete 目錄重新走一次（plan §3.1）。
 

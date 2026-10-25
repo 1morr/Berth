@@ -6,7 +6,8 @@ M5 的命令登錄表要讀每一個命令的副作用等級與反向命令：�
 這一條測試守兩件事：
 
 1. 標了反向命令的，反向命令本身也是一個已標記的命令（寫錯名字、指到沒標的函式都紅）。
-2. M3 起新增的 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`）都有標記。
+2. M3 起新增的 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，包括被
+   `asynccontextmanager` 包過的）都有標記。
    「M3 之前就在」的模組列在 `BEFORE_M3`，豁免；**新模組不必登記就自動被守**。
 
 檢查本身在最後做雙向變異：以一段原始碼載成假的 service 模組，拿掉一個標記、寫錯反向命令名
@@ -23,44 +24,26 @@ from collections.abc import Iterable
 from types import ModuleType
 
 import berth.services
-from berth.services.commands import Effect, mark_of
+from berth.services.commands import mark_of
 
-#: M3 開工前就在的 service 模組，公開命令還沒有標記（M5 做登錄表時一起補）。補完一個就從這裡
+#: M3 開工前就在的 service 模組，公開命令還沒有標記（M5 票 04、05 補）。補完一個就從這裡
 #: 拿掉；新模組不在這裡，所以一出生就被守。`review` 不在：M3 第一個新命令
 #: （批次確認）落在它裡面，整個模組已經標完。
 BEFORE_M3 = frozenset(
     {
         "auth",
         "bench",
-        "claims",
         "clients",
-        "complete",
         "deeplink",
-        "deletion",
         "discover",
         "downloads",
-        "duplicates",
         "events",
         "health",
-        "health_issues",
         "hints",
-        "importer",
-        "inventory",
-        "issues",
         "jellyfin",
         "jellyfin_access",
         "jellyfin_images",
-        "jobs",
-        "media",
-        "plan",
-        "plan_review",
-        "plan_view",
         "qbittorrent",
-        "reconcile",
-        "reimport",
-        "rematch",
-        "resolve_schedule",
-        "resolver",
         "routes",
         "search",
         "settings",
@@ -89,13 +72,20 @@ def short(module: ModuleType) -> str:
 
 
 def commands_of(module: ModuleType) -> dict[str, object]:
-    """模組**自己定義的**公開 `async def`。從別處 import 進來的不算它的。"""
+    """模組**自己定義的**公開 `async def`。從別處 import 進來的不算它的。
+
+    `asynccontextmanager` 包過的回的是一個普通函式，裡面那一層才是 `async def`（async generator），
+    所以要拆開看；`functools.wraps` 把 `__module__` 抄到外層，歸屬照樣認得出來。
+    """
     return {
         name: value
         for name, value in vars(module).items()
         if not name.startswith("_")
-        and inspect.iscoroutinefunction(value)
+        and inspect.isfunction(value)
         and value.__module__ == module.__name__
+        and (
+            inspect.iscoroutinefunction(value) or inspect.isasyncgenfunction(inspect.unwrap(value))
+        )
     }
 
 
@@ -131,18 +121,18 @@ class TestTheServices:
         """豁免表指著不存在的模組，就是有人拆了檔案卻沒回來收這一格。"""
         assert BEFORE_M3 - {short(module) for module in service_modules()} == set()
 
-    def test_the_batch_confirm_is_reversible_and_undone_row_by_row(self) -> None:
-        """票面點名的那一個：批次確認是可逆的，反向命令是逐列撤銷。"""
-        from berth.services.review import confirm_audits
+    def test_the_hand_marked_context_manager_is_seen(self) -> None:
+        """`download_round` 在檢查看得到 `asynccontextmanager` 之前是手動標的（M4 票 126）。"""
+        from berth.services import downloading
 
-        mark = mark_of(confirm_audits)
-        assert mark is not None
-        assert (mark.effect, mark.inverse) == (Effect.REVERSIBLE, "review.undo_audit")
+        assert "download_round" in commands_of(downloading)
 
 
 # --- 雙向變異：以原始碼造一個假的 service 模組，改它，看檢查怎麼說 ---------------------------
 
 _SOURCE = """
+from contextlib import asynccontextmanager
+
 from berth.services.commands import Effect, command
 
 
@@ -156,6 +146,12 @@ async def settle(session, ids): ...
 
 @command(Effect.REVERSIBLE)
 async def take_back(session, id): ...
+
+
+@command(Effect.IRREVERSIBLE)
+@asynccontextmanager
+async def holding(session):
+    yield
 
 
 async def _helper(session): ...
@@ -194,6 +190,26 @@ class TestTheCheckItself:
             "fake.settle: inverse fake.take_back is not a marked command",
             "fake.take_back: public command without a mark",
         ]
+
+    def test_a_removed_mark_on_a_context_manager_is_caught(self) -> None:
+        source = _SOURCE.replace(
+            "@command(Effect.IRREVERSIBLE)\n@asynccontextmanager", "@asynccontextmanager"
+        )
+        assert check(source) == ["fake.holding: public command without a mark"]
+
+    def test_a_mark_inside_the_context_manager_still_counts(self) -> None:
+        """標記貼在 `asynccontextmanager` 底下也算：`functools.wraps` 連 `__dict__` 抄到外層。"""
+        source = _SOURCE.replace(
+            "@command(Effect.IRREVERSIBLE)\n@asynccontextmanager",
+            "@asynccontextmanager\n@command(Effect.IRREVERSIBLE)",
+        )
+        assert check(source) == []
+
+    def test_a_private_context_manager_is_not_caught(self) -> None:
+        source = _SOURCE.replace(
+            "@command(Effect.IRREVERSIBLE)\n@asynccontextmanager", "@asynccontextmanager"
+        )
+        assert check(source.replace("holding", "_holding")) == []
 
     def test_a_misspelled_inverse_is_caught(self) -> None:
         source = _SOURCE.replace('inverse="fake.take_back"', 'inverse="fake.takeback"')

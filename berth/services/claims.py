@@ -67,6 +67,7 @@ from berth.naming import read_target
 from berth.parser import kind_by_extension
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.jobs import JobRejectedError, check_route, freeze, record_event
 from berth.services.media import read_media
 from berth.services.qbittorrent import sign_in, unknown_torrents
@@ -116,6 +117,8 @@ def reimport_hash(path: Path) -> str:
     return hashlib.sha1(f"berth-reimport:{fs.path_key(path)}".encode()).hexdigest()
 
 
+# 建一筆 Job、交給規劃器；撤銷是刪 Job（它有自己的刪除範圍），complete 裡的檔案一個都不動。
+@command(Effect.REVERSIBLE)
 async def reimport_folder(
     session: AsyncSession, factory: ServiceClientFactory, path: Path, media_id: str, *, actor: str
 ) -> Job:
@@ -179,6 +182,8 @@ async def reimport_folder(
 # --- 認領 qBittorrent 上的一筆 --------------------------------------------
 
 
+# 同 `reimport_folder`：只建 Job，torrent 與檔案不動。
+@command(Effect.REVERSIBLE)
 async def claim_torrent(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -262,6 +267,8 @@ async def claim_torrent(
     return job
 
 
+# 只讀：沒見過的那一部向 TMDB 要一份快照存下來，那是快取（同 `media.read_media`）。
+@command(Effect.READ)
 async def ensure_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> Media:
@@ -303,6 +310,8 @@ def _user_id(actor: str) -> int | None:
 # --- 認領進帳本 -----------------------------------------------------------
 
 
+# 只加一列帳本；再按一次什麼都不多（冪等），對帳照現況重寫它。
+@command(Effect.REVERSIBLE)
 async def claim_file(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -387,6 +396,7 @@ class SourceIndex:
     unread: list[str] = field(default_factory=list)
 
 
+@command(Effect.READ)
 async def source_index(session: AsyncSession) -> SourceIndex:
     """complete 裡每一條 Route 子目錄底下的每一個檔案，以 `(device, inode)` 為鍵。
 
@@ -412,6 +422,8 @@ async def source_index(session: AsyncSession) -> SourceIndex:
     return index
 
 
+# 只收 Issue；條件再出現時下一輪偵測重開。
+@command(Effect.REVERSIBLE)
 async def settle(
     session: AsyncSession, path: str, job_hash: str | None, *, actor: str, now: datetime
 ) -> None:

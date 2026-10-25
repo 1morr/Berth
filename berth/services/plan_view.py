@@ -38,6 +38,7 @@ from berth.domain import (
 from berth.domain import PlanItem as PlannedFile
 from berth.models import Job, JobFile, Media, Plan, PlanItem
 from berth.parser import promote, revise
+from berth.services.commands import Effect, command
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +105,7 @@ class LoadedPlan:
     settled: frozenset[str]
 
 
+@command(Effect.READ)
 async def read_plan(session: AsyncSession, plan_id: int) -> PlanView | None:
     loaded = await load_plan(session, plan_id)
     if loaded is None:
@@ -155,6 +157,7 @@ def landing(loaded: LoadedPlan) -> tuple[PlannedFile, ...]:
     return revise(promote(loaded.items, loaded.media), loaded.media, settled=loaded.settled)
 
 
+@command(Effect.READ)
 async def load_plan(session: AsyncSession, plan_id: int) -> LoadedPlan | None:
     """一份 Plan 與它的列、分類、作品快照。**不打網路**：快照用存下來的那一份。"""
     plan = await session.get(Plan, plan_id, populate_existing=True)
