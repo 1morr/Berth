@@ -742,7 +742,8 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     return await _view_one(session, job)
 
 
-# 自己只寫那一輪的失敗紀錄（`Job.error` 與時間線）；`work` 的副作用算在交出它的那一支命令上。
+# 自己只寫那一輪的失敗紀錄（`Job.error` 與時間線）。`work` 在這裡跑，交進來的只有規劃與入庫的
+# 一輪（`plan.sweep_plans`、`importer.sweep_imports`），兩者都可逆；交別的進來要重看這個標記。
 @command(Effect.REVERSIBLE)
 async def guarded[T](
     session: AsyncSession, job_hash: str, work: Coroutine[Any, Any, T], *, fallback: T

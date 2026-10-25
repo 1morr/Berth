@@ -184,8 +184,9 @@ async def sweep_resolutions(
 
 
 # 可逆但沒有單一反向命令：寫下的只有 item、版本名與回驗結論，都是 Jellyfin 現況的抄本，Issue 的
-# 「重新反查」與每日對帳會照新的樣子重寫。找齊的那一筆也排「可以看了」，但這是打開作品頁時跑的
-# 那一種，照主效果標（`commands` 的慣例）；同一件事的背景迴圈 `sweep_resolutions` 照最重的標。
+# 「重新反查」與每日對帳會照新的樣子重寫。找齊的那一筆也排「可以看了」，但那是排程那一輪過一會兒
+# 也會排的同一則（只問還沒到時間的那幾列），這裡只是早一點，不多出一則；背景迴圈
+# `sweep_resolutions` 照最重的副作用標。
 @command(Effect.REVERSIBLE)
 async def resolve_early(
     session: AsyncSession,

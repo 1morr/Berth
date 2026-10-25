@@ -479,7 +479,7 @@ class TestUndo:
         assert refused.value.reason is ReviewRefusal.NOT_AUDITED
         assert Path(entry.target_path).exists()
 
-    async def test_so_confirming_is_reversible_without_an_inverse(
+    async def test_confirming_is_reversible_without_an_inverse(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """確認的標記（M5 票 04）：`undo_audit` 不是它的反向——上一條，它拒絕確認過的列，而且它

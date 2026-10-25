@@ -668,8 +668,9 @@ async def _bind_to_feed_route(
 
 
 # 回不去（M5 票 04）：Item 連著刪（CASCADE），加回同一個網址只長得回 Feed 現在還列著的那幾筆，
-# 滑出 Feed 的歷史、第一輪預覽的決定與這個 Feed 自己的設定都沒了。當 `add_feed` 的撤銷時丟掉的
-# 只有它剛帶進來的那幾筆，所以 `add_feed` 的反向照樣指它。
+# 滑出 Feed 的歷史、第一輪預覽的決定與這個 Feed 自己的設定都沒了。`add_feed` 的反向照樣指它：
+# 加完就撤時丟掉的只有剛帶進來的那幾筆；輪過幾輪之後再撤，丟的是那之間累積的，撤銷鍵要不要
+# 出確認卡由登錄表決定（M5 票 06、14）。
 @command(Effect.IRREVERSIBLE)
 async def delete_feed(session: AsyncSession, feed_id: int) -> int:
     """刪 Feed 連它的 Item 一起刪，RSS Series 與綁定留著（shape §4）。回刪掉幾筆 Item。
