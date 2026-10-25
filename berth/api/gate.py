@@ -15,7 +15,7 @@
 **不用 `BaseHTTPMiddleware`**：它會把回應整個收進記憶體再送出去，plan §6 的
 `GET /events/stream`（SSE）在它底下就不是串流了。純 ASGI 沒有這個問題。
 
-**哪一條路徑要哪一種人**寫在 `services/access.py`（M5 票 05 搬過去）：命令登錄表給一個人哪些
+**哪一條路徑要哪一種人**寫在 `services/access.py`（M5 票 06 搬過去）：命令登錄表給一個人哪些
 工具也照同一張表，這裡只負責 CSRF、讀 session 與精靈的擁有者那一關。
 """
 
