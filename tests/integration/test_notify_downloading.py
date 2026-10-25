@@ -10,10 +10,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 from xml.sax.saxutils import escape
 
 import pytest
@@ -38,6 +40,7 @@ from berth.domain import (
 )
 from berth.models import Job, Media, Route, RssFeed, RssSeries, User
 from berth.naming import folder_name
+from berth.services import downloading
 from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.notify import send_due
 from berth.services.rss import bind_series, poll_due, poll_feed, subscribe_mikan
@@ -302,6 +305,113 @@ class TestBrokenRound:
 
         with pytest.raises(RuntimeError):
             await poll_feed(session, factory, await feed_id(session), now=NOW)
+        await deliver(session, factory)
+
+        (only,) = to(factory, ADMIN_ID)
+        assert only.description == "S01E03–E04"
+
+
+class _CancelledOn(FakeTorrentFetcher):
+    """要到某一份 `.torrent` 時那一輪被 cancel：關機時正在跑的請求（M5 票 02）。"""
+
+    def __init__(self, cancelled: Release, sources: dict[str, TorrentSource]) -> None:
+        super().__init__(sources=sources)
+        self.cancelled = f"https://mikanani.me/Download/20260924/{cancelled.hash}.torrent"
+
+    async def fetch(self, url: str) -> TorrentSource:
+        if url == self.cancelled:
+            raise asyncio.CancelledError
+        return await super().fetch(url)
+
+
+class TestCancelledRound:
+    async def test_what_was_sent_before_the_cancel_is_still_told(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """與壞掉的那一輪同理：cancel 之前送出的兩筆已經在 qBittorrent 裡了。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(5), kimi(4), kimi(3)])
+        factory.torrent_ = _CancelledOn(kimi(5), factory.torrent_.sources)
+
+        with pytest.raises(asyncio.CancelledError):
+            await poll_feed(session, factory, await feed_id(session), now=NOW)
+        await deliver(session, factory)
+
+        (only,) = to(factory, ADMIN_ID)
+        assert only.description == "S01E03–E04"
+
+    async def test_a_write_that_fails_only_logs_and_the_cancel_goes_on(
+        self,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """排不進去不蓋掉 cancel：關機照走，只留一行 log。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(5), kimi(4), kimi(3)])
+        factory.torrent_ = _CancelledOn(kimi(5), factory.torrent_.sources)
+
+        async def broken(*_args: object) -> None:
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(downloading, "_close", broken)
+
+        with pytest.raises(asyncio.CancelledError):
+            await poll_feed(session, factory, await feed_id(session), now=NOW)
+
+        assert "downloading notifications of a broken round not queued" in caplog.messages
+
+
+class _HoldsOn(FakeTorrentFetcher):
+    """要到某一份 `.torrent` 時停住，等測試來 cancel（真的 `task.cancel()`）。"""
+
+    def __init__(self, held: Release, sources: dict[str, TorrentSource]) -> None:
+        super().__init__(sources=sources)
+        self.held = f"https://mikanani.me/Download/20260924/{held.hash}.torrent"
+        self.reached = asyncio.Event()
+
+    async def fetch(self, url: str) -> TorrentSource:
+        if url == self.held:
+            self.reached.set()
+            await asyncio.Event().wait()
+        return await super().fetch(url)
+
+
+class TestCancelledTwice:
+    async def test_a_second_cancel_while_writing_waits_for_the_write(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """寫的時候再來一次 cancel（lifespan 自己被 cancel 時轉過來的那一次）：寫完才往上走，
+        不留一段在背景用著呼叫端要關掉的 session。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(5), kimi(4), kimi(3)])
+        fetcher = _HoldsOn(kimi(5), factory.torrent_.sources)
+        factory.torrent_ = fetcher
+        writing, release = asyncio.Event(), asyncio.Event()
+        close = downloading._close
+
+        async def held_close(*args: Any) -> None:
+            writing.set()
+            await release.wait()
+            await close(*args)
+
+        monkeypatch.setattr(downloading, "_close", held_close)
+        running = asyncio.create_task(poll_feed(session, factory, await feed_id(session), now=NOW))
+        await fetcher.reached.wait()
+        running.cancel()
+        await writing.wait()
+        running.cancel()
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not running.done()
+        release.set()
+
+        with pytest.raises(asyncio.CancelledError):
+            await running
         await deliver(session, factory)
 
         (only,) = to(factory, ADMIN_ID)
