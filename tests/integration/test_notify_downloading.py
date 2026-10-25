@@ -15,6 +15,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 from xml.sax.saxutils import escape
 
 import pytest
@@ -346,6 +347,59 @@ class TestCancelledRound:
             await poll_feed(session, factory, await feed_id(session), now=NOW)
 
         assert "downloading notifications of a broken round not queued" in caplog.messages
+
+
+class _HoldsOn(FakeTorrentFetcher):
+    """要到某一份 `.torrent` 時停住，等測試來 cancel（真的 `task.cancel()`）。"""
+
+    def __init__(self, held: Release, sources: dict[str, TorrentSource]) -> None:
+        super().__init__(sources=sources)
+        self.held = f"https://mikanani.me/Download/20260924/{held.hash}.torrent"
+        self.reached = asyncio.Event()
+
+    async def fetch(self, url: str) -> TorrentSource:
+        if url == self.held:
+            self.reached.set()
+            await asyncio.Event().wait()
+        return await super().fetch(url)
+
+
+class TestCancelledTwice:
+    async def test_a_second_cancel_while_writing_waits_for_the_write(
+        self, session: AsyncSession, roots: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """寫的時候再來一次 cancel（lifespan 自己被 cancel 時轉過來的那一次）：寫完才往上走，
+        不留一段在背景用著呼叫端要關掉的 session。"""
+        factory = await harbour_two(session, roots)
+        await recipients(session, factory)
+        serve(factory, [kimi(5), kimi(4), kimi(3)])
+        fetcher = _HoldsOn(kimi(5), factory.torrent_.sources)
+        factory.torrent_ = fetcher
+        writing, release = asyncio.Event(), asyncio.Event()
+        close = downloading._close
+
+        async def held_close(*args: Any) -> None:
+            writing.set()
+            await release.wait()
+            await close(*args)
+
+        monkeypatch.setattr(downloading, "_close", held_close)
+        running = asyncio.create_task(poll_feed(session, factory, await feed_id(session), now=NOW))
+        await fetcher.reached.wait()
+        running.cancel()
+        await writing.wait()
+        running.cancel()
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not running.done()
+        release.set()
+
+        with pytest.raises(asyncio.CancelledError):
+            await running
+        await deliver(session, factory)
+
+        (only,) = to(factory, ADMIN_ID)
+        assert only.description == "S01E03–E04"
 
 
 class TestBinding:

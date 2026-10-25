@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -69,8 +70,9 @@ async def download_round(
     （原本的例外就是資料庫壞了）只記 log，不蓋掉它。
 
     **被 cancel 的那一輪也照寫**（關機時正在跑的請求，M5 票 02）：寫的那一段包在 shield 裡做完，
-    資料庫 IO 不在半途被打斷（同 `pipeline/ticks.whole_tick`、sqlalchemy#8145）；只碰本機資料庫，
-    不打外面的服務。寫的時候再被 cancel 就不等它，cancel 照樣往上走，那一段留在背景做完。
+    資料庫 IO 不在半途被打斷（sqlalchemy#8145，同 `pipeline/ticks.whole_tick` 的取向）。寫的時候
+    再被 cancel 也等它寫完才把 cancel 往上傳：它只碰本機資料庫、不打外面的服務，等得起；寫不成
+    只記 log。
     """
     batch = DownloadRound(presser)
     try:
@@ -78,13 +80,10 @@ async def download_round(
     except asyncio.CancelledError:
         if batch.sent:
             writing = asyncio.ensure_future(_close_after_failure(session, batch, now))
-            try:
-                await asyncio.shield(writing)
-            except asyncio.CancelledError:
-                logger.warning(
-                    "downloading notifications of a cancelled round left to finish",
-                    extra={"jobs": len(batch.sent)},
-                )
+            while not writing.done():
+                # 再被 cancel 也等它寫完：放手的話它在背景用著呼叫端正要關掉的同一個 session。
+                with contextlib.suppress(asyncio.CancelledError):
+                    await asyncio.shield(writing)
         raise
     except Exception:
         if batch.sent:
