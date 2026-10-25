@@ -1,5 +1,5 @@
-"""十九種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
-M4 票 129、130）。
+"""二十二種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
+M4 票 129、130、M5 票 03）。
 
 `IssueType` 有兩個呼叫端：管線寫 `issue_detected` 事件時用它，對帳寫 `issues` 表時也用它。
 **共用一個集合**是票 05 的驗收條件之一，而共用的代價是「加一種型別」要回答兩個問題——
@@ -51,21 +51,25 @@ FROM_HEALTH_CHECKS = {
 #: Jellyfin 回驗（M3 票 17）：反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`。
 FROM_JELLYFIN_VERIFY = {IssueType.JELLYFIN_ITEM_MISMATCH}
 
-#: 每日巡檢（M4 票 129、130）：每天量一次，條件解除時由系統收掉。
+#: 每日巡檢的卡住的 Job（M5 票 03）：一種停住的狀態一種，按鈕沿用 Job 頁的。
+STUCK_JOBS = {IssueType.SUBMIT_FAILED, IssueType.IMPORT_FAILED, IssueType.STALLED}
+
+#: 每日巡檢（M4 票 129、130，M5 票 03）：每天量一次，條件解除時由系統收掉。
 FROM_SWEEP = {
     IssueType.FIRST_BATCH_STUCK,
     IssueType.FEED_POLL_FAILING,
     IssueType.FEED_BACKFILL_FAILING,
     IssueType.SERIES_EPISODES_MISSING,
     IssueType.SERIES_EPISODES_COLLIDE,
-}
+} | STUCK_JOBS
 
 
 class TestTheClosedSet:
     def test_it_is_the_union_of_the_three_producers(self) -> None:
-        """十九種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的五種（plan §2.4）。
+        """二十二種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的八種
+        （plan §2.4）。
 
-        分別列一次而不是數 19：多一種而各邊都沒登記它時，說得出少的是哪一種。
+        分別列一次而不是數 22：多一種而各邊都沒登記它時，說得出少的是哪一種。
         """
         assert set(IssueType) == (
             FROM_RECONCILING
@@ -117,6 +121,8 @@ class TestTheIdempotencyKey:
             # 票 05 實作時改判（`SUBJECT_OF` 上寫了理由）：它有兩條偵測路徑，而其中一條
             # 手上一條路徑都沒有。
             IssueType.MISSING_FILES,
+            # 卡住的 Job 是那一筆下載的事（M5 票 03）：同一個 Series 停了兩筆是兩件。
+            *STUCK_JOBS,
         }
 
     def test_the_jellyfin_ones_are_one_ledger_row(self) -> None:
@@ -175,6 +181,9 @@ class TestWhatEachTypeCanBeResolvedWith:
             IssueType.CLIENT_REMOVED: (IssueAction.RESUBMIT, IssueAction.ACCEPT_REMOVAL),
             IssueType.JELLYFIN_ITEM_UNRESOLVED: (IssueAction.RELOOK, IssueAction.RESCAN),
             IssueType.JELLYFIN_ITEM_MISMATCH: (IssueAction.RELOOK,),
+            IssueType.SUBMIT_FAILED: (IssueAction.RETRY, IssueAction.ABANDON),
+            IssueType.IMPORT_FAILED: (IssueAction.RETRY, IssueAction.ABANDON),
+            IssueType.STALLED: (IssueAction.ABANDON,),
         }
 
     def test_the_health_ones_have_nothing_berth_can_press(self) -> None:
@@ -190,6 +199,11 @@ class TestWhatEachTypeCanBeResolvedWith:
         """「承認遺失」「承認移除」讓那一筆下載結束，但磁碟與 qBittorrent 一樣都不動（票 09c）：
         要刪東西走 Job 頁的刪除範圍，那裡四個旗標逐一說清楚。"""
         for kind in FROM_THE_PIPELINE:
+            assert deleting(ISSUE_ACTIONS, kind) == [], kind
+
+    def test_none_of_the_stuck_job_actions_deletes(self) -> None:
+        """「放棄」是 Job 頁的刪除範圍四個旗標全不勾（M5 票 03）：要刪東西的人去 Job 頁一個個勾。"""
+        for kind in STUCK_JOBS:
             assert deleting(ISSUE_ACTIONS, kind) == [], kind
 
     def test_the_missing_link_offers_the_three_from_the_brief(self) -> None:

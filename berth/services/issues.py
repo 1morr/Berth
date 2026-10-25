@@ -81,6 +81,7 @@ from berth.services.jobs import (
     record_event,
     restart_state,
     resubmit_job,
+    retry_job,
     transition,
 )
 from berth.services.qbittorrent import sign_in
@@ -364,9 +365,11 @@ async def resolve_issue(
         await _relook(session, row)
     elif action is IssueAction.RESCAN:
         await _rescan(session, factory, row)
+    elif action is IssueAction.RETRY and row.type in _RETRIED_LIKE_THE_JOB_PAGE:
+        await _retry(session, factory, row)
     elif action is IssueAction.RECHECK or action is IssueAction.RETRY:
         await _restart(session, factory, row, action, actor=actor)
-    elif action is IssueAction.ACCEPT_LOSS or action is IssueAction.ACCEPT_REMOVAL:
+    elif action in (IssueAction.ACCEPT_LOSS, IssueAction.ACCEPT_REMOVAL, IssueAction.ABANDON):
         await _accept(session, factory, row, actor=actor)
     elif action is IssueAction.RESUBMIT:
         await _resubmit(session, factory, row, actor=actor)
@@ -398,7 +401,8 @@ async def resolve_issue(
 
 
 async def close_settled(session: AsyncSession, now: datetime) -> int:
-    """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
+    """管線那三種與卡住的 Job 那三種（M5 票 03）裡、Job 已經不在那個狀態的，由系統收掉
+    （`resolved_by = system`）。回傳幾件。
 
     M2 票 09c 延後的那一條（失效條件在那張票上）：使用者在 qBittorrent 裡自己 recheck、把
     torrent 加回去，poller 把 Job 接回主幹（`services/downloads.py`）；或 Job 被別的路徑推走
@@ -740,10 +744,26 @@ async def _restart(
         )
 
 
+async def _retry(session: AsyncSession, factory: ServiceClientFactory, row: Issue) -> None:
+    """卡住的 Job 的「重試」（M5 票 03）：就是 Job 頁那一顆（`jobs.retry_job`）。送單失敗再送一次，
+    入庫失敗回 `importing`、importer 從沒鏈接的那幾個接著做。
+
+    **又送不出去時這一件仍然開著**（同 `_resubmit`）：那一次已經寫進時間線、Job 回到
+    `submit_failed`，畫面說「修好了」就是騙人。又是暫時的失敗的話自動重送從頭排上，下一輪巡檢收掉它。
+    """
+    job = await _broken_job(session, row)
+    try:
+        view = await retry_job(session, factory, job.hash)
+    except JobRejectedError as refusal:
+        raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
+    if view.state is JobState.SUBMIT_FAILED:
+        raise IssueRejectedError(IssueRefusal.RESUBMIT_FAILED, view.error)
+
+
 async def _accept(
     session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
 ) -> None:
-    """承認遺失 / 承認移除：那一筆下載到此為止（2026-09-23 使用者拍板）。
+    """承認遺失 / 承認移除 / 放棄：那一筆下載到此為止（2026-09-23 使用者拍板；放棄是 M5 票 03）。
 
     **走 `delete_job`、四個旗標全不勾**：Job 進 `removed`、時間線一筆 `deleted`，磁碟與
     qBittorrent 一個位元組都不動（`ACTION_DELETES` 是 False）。要刪東西的人去 Job 頁的刪除範圍，
@@ -763,12 +783,13 @@ async def _resubmit(
     """重新送單：照存下來的下載連結再加一次（`services/jobs.resubmit_job`）。
 
     **送了而 qBittorrent 不收**（409 / 415）時 Job 落在 `submit_failed`，這一件仍然開著：
-    修好之後再按一次就是再送一次（所以 `submit_failed` 也在這一顆的 `_BROKEN_BY` 裡）。
+    修好之後再按一次就是再送一次（所以 `submit_failed` 也在 `client_removed` 的
+    `STANDS_WHILE` 裡）。
     """
     job = await _broken_job(session, row)
     try:
         view = await resubmit_job(
-            session, factory, job.hash, expected=_BROKEN_BY[IssueAction.RESUBMIT], actor=actor
+            session, factory, job.hash, expected=STANDS_WHILE[row.type], actor=actor
         )
     except JobRejectedError as refusal:
         raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
@@ -850,6 +871,8 @@ _REFUSAL_OF: dict[JobRefusal, IssueRefusal] = {
     JobRefusal.ROUTE_DISABLED: IssueRefusal.ROUTE_UNUSABLE,
     JobRefusal.ROUTE_UNHEALTHY: IssueRefusal.ROUTE_UNUSABLE,
     JobRefusal.ROUTE_KIND_MISMATCH: IssueRefusal.ROUTE_UNUSABLE,
+    # 卡住的 Job 的重試（`retry_job`）與第一次送單同一組前提，磁碟門檻是其中之一（M5 票 03）。
+    JobRefusal.LOW_DISK_SPACE: IssueRefusal.LOW_DISK_SPACE,
 }
 
 
@@ -920,20 +943,20 @@ def _actions(row: Issue, job_state: JobState | None) -> tuple[IssueAction, ...]:
 
     型別決定有哪幾顆（`ISSUE_ACTIONS`），這一筆的資料決定其中哪幾顆按得下去：決定過的
     一顆都沒有，指不到帳本的按不了動帳本的那幾顆，沒有 Job 的按不了動 Job 的那幾顆，
-    Job 已經離開那個壞掉狀態的管線 Issue 按不了它的按鈕（`_BROKEN_BY`），大小不同的
+    Job 已經離開那個狀態的管線 Issue 與卡住的 Job 按不了它的按鈕（`STANDS_WHILE`），大小不同的
     `inode_mismatch` 沒有「以硬鏈接取代」。
 
     **在後端算而不是讓畫面猜**：按下去會被拒絕的按鈕不該畫出來。
     """
     if row.status is not IssueStatus.OPEN:
         return ()
+    if row.type in STANDS_WHILE and job_state not in STANDS_WHILE[row.type]:
+        return ()
     usable: list[IssueAction] = []
     for action in ISSUE_ACTIONS[row.type]:
         if action in _ON_THE_LEDGER_ROW and row.ledger_id is None:
             continue
         if action in _ON_THE_JOB and job_state is None:
-            continue
-        if action in _BROKEN_BY and job_state not in _BROKEN_BY[action]:
             continue
         # 「否則列出等人決定」（brief §9.1）：大小不同時不給這一顆。
         same_size = (row.detail_json or {}).get("same_size")
@@ -967,25 +990,35 @@ _ON_THE_JOB = frozenset(
         IssueAction.RETRY,
         IssueAction.RESUBMIT,
         IssueAction.ACCEPT_REMOVAL,
+        IssueAction.ABANDON,
     }
 )
-#: 管線那三種 Issue 說的事**還是現況**的 Job 狀態（plan §3.1 的出邊）。一份定義兩個用途：
+#: 「重試」就是 Job 頁那一顆（`jobs.retry_job`）的型別（M5 票 03）。`client_error` 的重試是另一件
+#: 事：請 qBittorrent 重新開始那一包（`_restart`）。
+_RETRIED_LIKE_THE_JOB_PAGE = frozenset({IssueType.SUBMIT_FAILED, IssueType.IMPORT_FAILED})
+#: 管線那三種 Issue 與卡住的 Job 那三種（M5 票 03）說的事**還是現況**的 Job 狀態（plan §3.1 的
+#: 出邊）。一份定義兩個用途：
 #:
-#: - 按鈕只在這幾個狀態按得了（`_BROKEN_BY`）。Job 自己往前走了（另一個分頁按過、Job 頁上重試
+#: - 按鈕只在這幾個狀態按得了（`_actions`）。Job 自己往前走了（另一個分頁按過、Job 頁上重試
 #:   成功、它被刪了）的話，按下去會把一筆好好的下載拉回去。
 #: - Job 離開這幾個狀態時由系統收掉（`close_settled`，M3 票 02）。
 #:
 #: `client_removed` 多收一個 `submit_failed`：上一次重新送單被 qBittorrent 拒絕的那一筆落在那裡，
-#: 這一件仍然開著，再按一次就是再送一次。
+#: 這一件仍然開著，再按一次就是再送一次。卡住的 Job 那三種只看狀態；送單失敗「不會再自動重送」
+#: 那一半由巡檢每一輪重量（`sweep._stuck_jobs`）。
 STANDS_WHILE: dict[IssueType, frozenset[JobState]] = {
     IssueType.MISSING_FILES: frozenset({JobState.MISSING_FILES}),
     IssueType.CLIENT_ERROR: frozenset({JobState.CLIENT_ERROR}),
     IssueType.CLIENT_REMOVED: frozenset({JobState.CLIENT_REMOVED, JobState.SUBMIT_FAILED}),
+    IssueType.SUBMIT_FAILED: frozenset({JobState.SUBMIT_FAILED}),
+    IssueType.IMPORT_FAILED: frozenset({JobState.IMPORT_FAILED}),
+    IssueType.STALLED: frozenset({JobState.STALLED}),
 }
 #: 「忽略」在條件持續期間有效的幾種（brief §9.1，`record_issue` 與 `note_cleared`）：週期量測的
 #: 那幾種，其餘的忽略是「這一次不處理」。健康檢查那兩種 5 分鐘量一次（2026-09-23 拍板）；回驗
 #: 每天對帳比一次、`unknown_torrent` 的 poller 每 5 秒寫一次（M4 票 122）、巡檢那幾種每天量一次
-#: （M4 票 129、130）——照「這一次」的話忽略等於無效，而「等你處理」的通知會為同一件事每天推一次。
+#: （M4 票 129、130，M5 票 03）——照「這一次」的話忽略等於無效，而「等你處理」的通知會為同一件事
+#: 每天推一次。
 STAYS_IGNORED = frozenset(
     {
         IssueType.LIBRARY_USES_TVDB,
@@ -997,10 +1030,10 @@ STAYS_IGNORED = frozenset(
         IssueType.FEED_BACKFILL_FAILING,
         IssueType.SERIES_EPISODES_MISSING,
         IssueType.SERIES_EPISODES_COLLIDE,
+        IssueType.SUBMIT_FAILED,
+        IssueType.IMPORT_FAILED,
+        IssueType.STALLED,
     }
 )
 #: 條件解除過的記號，寫在被忽略的那一筆的 `detail_json` 上（`note_cleared`）。
 CLEARED_AT = "cleared_at"
-_BROKEN_BY: dict[IssueAction, frozenset[JobState]] = {
-    action: states for kind, states in STANDS_WHILE.items() for action in ISSUE_ACTIONS[kind]
-}

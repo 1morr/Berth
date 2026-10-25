@@ -1869,6 +1869,13 @@ const zhHant = {
     stoppedError: '原因',
     nextFirstBatch:
       '這個 RSS Series 的第一批要整批到齊，Berth 才會替你確認；停住的這一筆讓它一直等著。打開上面那一筆下載，重試或刪掉它；已經入庫的那幾集也可以在審核頁直接確認整個 Series。處理之後，下一次每日巡檢會自己收掉這一件。',
+    // 卡住的 Job（M5 票 03）：停住於、原因同第一批卡住那三行；下一步各一句。
+    nextSubmitFailed:
+      '原因寫在上面：連結過期或索引站拒絕的話，到作品頁重新搜一次；qBittorrent 拒絕的話先在它那邊修好，再按「重試」。不要了就按「放棄這一筆」：紀錄留著，磁碟與 qBittorrent 都不動。重試送成了，這一件會自己收掉。',
+    nextImportFailed:
+      '打開上面那一筆下載，時間線上逐檔的「鏈接失敗」說得出是哪個檔案、為什麼（多半是跨掛載或權限）。修好之後按「重試」，從還沒鏈接的那幾個接著做。入庫成了，這一件會自己收掉。',
+    nextStalled:
+      'qBittorrent 很久沒有收到資料，多半是沒有人在做種。可以再等等，或到 qBittorrent 看它連到了幾個 peer。不要了就按「放棄這一筆」：torrent 留在 qBittorrent 上，要一起移除，打開上面那一筆下載，在刪除範圍勾選。恢復下載時這一件會自己收掉。',
     // 一直失敗的 Feed（M4 票 130）：從什麼時候、最後的原因、連到 RSS 頁的那一個 Feed。
     failingSince: '失敗起於',
     lastError: '最後的原因',
@@ -1907,6 +1914,9 @@ const zhHant = {
       feed_backfill_failing: '這個 Feed 的每日補漏一直讀不到，超過一天了',
       series_episodes_missing: '這個 RSS Series 已入庫的集數中間缺了幾集',
       series_episodes_collide: '這個 RSS Series 有兩個不同的發佈被入庫成同一集',
+      submit_failed: '這一筆下載送不進 qBittorrent，也不會再自動重送',
+      import_failed: '這一筆下載完了，入庫沒有成功',
+      stalled: '這一筆下載停滯超過一天了',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -1928,6 +1938,9 @@ const zhHant = {
       feed_backfill_failing: '補漏一直失敗',
       series_episodes_missing: '缺集',
       series_episodes_collide: '同一集多份',
+      submit_failed: '送單失敗',
+      import_failed: '入庫失敗',
+      stalled: '停滯',
     },
     action: {
       relink: '重新鏈接',
@@ -1948,6 +1961,8 @@ const zhHant = {
       adopt: '重新入庫',
       claim_torrent: '認領並建立下載',
       claim_file: '認領進帳本',
+      // 卡住的 Job（M5 票 03）：Job 頁的刪除範圍四個旗標全不勾。
+      abandon: '放棄這一筆',
       ignore: '忽略',
     },
     working: '處理中…',
@@ -1985,6 +2000,8 @@ const zhHant = {
       route_unusable:
         '這一筆的 Route 現在用不了（被刪了、停用了或紅著），送出去也入不了庫。先到媒體庫路徑設定看那一條。',
       media_required: '先選它是哪一部作品。沒有作品的下載算不出任何一條目標路徑。',
+      low_disk_space:
+        '這一筆的 Route 所在的磁碟剩下的空間低於門檻，所以沒有重試。先空出一些空間再按。',
       unclaimable: '配不上帳本，所以什麼都沒有寫。',
     },
     // 媒體庫裡一個檔案配不上帳本的理由（`ClaimMiss`，`rebuild-ledger` 與「認領進帳本」）。
@@ -5585,6 +5602,12 @@ const en: Translations<typeof zhHant> = {
     stoppedError: 'Reason',
     nextFirstBatch:
       'Berth confirms this RSS series for you only once its whole first batch has arrived, and this stopped download keeps it waiting. Open the download above and retry or delete it; you can also confirm the whole series from the review page using the episodes already imported. Once it is handled, the next daily sweep closes this on its own.',
+    nextSubmitFailed:
+      'The reason is above. If the link expired or the indexer refused it, search again from the media page; if qBittorrent refused it, fix that there first, then press Retry. If you no longer want it, press Give up on it: the record stays, and nothing on disk or in qBittorrent is touched. Once a retry gets it in, this closes on its own.',
+    nextImportFailed:
+      'Open the download above: the per-file link failures on its timeline say which file and why (usually a link across mounts, or permissions). Fix that, then press Retry to carry on with the files not linked yet. Once it is imported, this closes on its own.',
+    nextStalled:
+      'qBittorrent has not received any data for a long time, most likely because nobody is seeding it. You can wait, or check its peers in qBittorrent. If you no longer want it, press Give up on it: the torrent stays in qBittorrent — to remove it too, open the download above and tick it in the delete options. Once it moves again, this closes on its own.',
     failingSince: 'Failing since',
     lastError: 'Last reason',
     feed: 'Feed',
@@ -5619,6 +5642,10 @@ const en: Translations<typeof zhHant> = {
       feed_backfill_failing: 'This feed’s daily backfill has kept failing for over a day',
       series_episodes_missing: 'Episodes are missing between the ones this RSS series imported',
       series_episodes_collide: 'Two different releases from this RSS series landed as one episode',
+      submit_failed:
+        'This download could not be sent to qBittorrent and will not be retried on its own',
+      import_failed: 'This download finished, but importing it failed',
+      stalled: 'This download has been stalled for over a day',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -5640,6 +5667,9 @@ const en: Translations<typeof zhHant> = {
       feed_backfill_failing: 'BACKFILL KEEPS FAILING',
       series_episodes_missing: 'EPISODES MISSING',
       series_episodes_collide: 'EPISODES COLLIDE',
+      submit_failed: 'SEND FAILED',
+      import_failed: 'IMPORT FAILED',
+      stalled: 'STALLED',
     },
     action: {
       relink: 'Link it again',
@@ -5659,6 +5689,7 @@ const en: Translations<typeof zhHant> = {
       adopt: 'Import it again',
       claim_torrent: 'Claim it as a download',
       claim_file: 'Claim it into the ledger',
+      abandon: 'Give up on it',
       ignore: 'Ignore',
     },
     working: 'Working…',
@@ -5698,6 +5729,8 @@ const en: Translations<typeof zhHant> = {
       media_required:
         'Pick which title this is first. A download without a title has no target path to go to.',
       unclaimable: 'It does not match the ledger, so nothing was written.',
+      low_disk_space:
+        'The disk under this download’s route has less free space than the threshold, so it was not retried. Free up some space, then press again.',
     },
     claimMiss: {
       outside_routes: 'It is not under any route’s target.',

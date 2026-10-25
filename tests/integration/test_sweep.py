@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -62,7 +63,11 @@ async def stuck_job(
     job_hash: str = HASH,
     state: JobState = JobState.SUBMIT_FAILED,
     at: datetime = STOPPED,
+    payload: dict[str, Any] | None = None,
 ) -> Job:
+    """停在 `state` 的一筆。送單失敗預設是**還排著自動重送**的那一種（qBittorrent 停機一整天，
+    次數不花）：再問也一樣、或次數用完的那一筆自己就是一件 `submit_failed`（M5 票 03），不再是
+    第一批卡住的事。"""
     job = Job(
         hash=job_hash,
         name=TITLE,
@@ -78,12 +83,21 @@ async def stuck_job(
             job_hash=job_hash,
             type=EventType.SUBMIT_FAILED.value,
             actor=f"rss:{series.id}",
-            payload_json={"error": job.error},
+            payload_json=payload if payload is not None else pending(at),
             created_at=at,
         )
     )
     await session.commit()
     return job
+
+
+def pending(at: datetime) -> dict[str, Any]:
+    """暫時的送單失敗，十分鐘後自動重送（`jobs.retry_due` 在管）。"""
+    return {
+        "error": "qBittorrent timed out",
+        "attempt": 2,
+        "retry_at": (at + timedelta(minutes=10)).isoformat(),
+    }
 
 
 async def stuck_issues(session: AsyncSession) -> list[IssueView]:
@@ -126,7 +140,7 @@ class TestStuckFirstBatch:
                 job_hash=HASH,
                 type=EventType.SUBMIT_FAILED.value,
                 actor="7",
-                payload_json={"error": "again"},
+                payload_json=pending(STOPPED + timedelta(hours=12)),
                 created_at=STOPPED + timedelta(hours=12),
             )
         )
