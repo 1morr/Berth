@@ -1767,3 +1767,88 @@ class NotifyRefusal(StrEnum):
     DISCORD_ID_MISSING = "discord_id_missing"
     #: Berth 的網址不是 http(s) 的絕對網址（M4 票 124）。
     BERTH_URL_INVALID = "berth_url_invalid"
+
+
+class ApiFormat(StrEnum):
+    """`settings.ai` 的 API 格式（plan §11.6〈provider〉、brief §20.24）。
+
+    同一個值也標在 `OpaquePart` 上：provider 要原樣帶回的東西只認得自己的格式。M5 票 08 先開
+    Anthropic，OpenAI 相容在票 09。
+    """
+
+    ANTHROPIC = "anthropic"
+
+
+class AiFailure(StrEnum):
+    """對 provider 的一次請求沒成的分類（brief §20.24「錯誤」、研究 ai-providers.md 結論 8）。
+
+    分得這麼細是因為**下一步不同**：限流等一下、額度要人去儲值、憑證與模型要去設定頁改、
+    連不上查網址與網路。M5 一律不自動重試。
+    """
+
+    #: 429（有 `retry-after` 就帶著秒數）。
+    RATE_LIMITED = "rate_limited"
+    #: 402、`billing_error`：重試也沒用（"Retrying billing ... won't restore API access"）。
+    QUOTA_EXHAUSTED = "quota_exhausted"
+    #: 5xx、529 overloaded，與 200 之後的串流錯誤事件、串流沒結束就斷掉。
+    PROVIDER_DOWN = "provider_down"
+    #: 401、403：key 不對或沒有權限。
+    AUTH_FAILED = "auth_failed"
+    #: 404：端點不認得這個模型。
+    MODEL_NOT_FOUND = "model_not_found"
+    #: 連不上、DNS、逾時。
+    UNREACHABLE = "unreachable"
+    #: 其餘的 4xx，或回的東西看不懂。原文照記。
+    REJECTED = "rejected"
+    #: Berth 這一側不等了（使用者關掉、程序要停）。已經送出的輸入照樣花掉，所以也記一列。
+    CANCELLED = "cancelled"
+
+
+class AiCallOrigin(StrEnum):
+    """一列 `ai_calls` 是誰叫的（plan §11.6〈用量記錄〉的「出處」）。
+
+    M5 票 08 只有設定頁的測試；對話（票 10）與 AI 任務（M6）各自加一個值。
+    """
+
+    TEST = "test"
+
+
+class ToolGap(StrEnum):
+    """設定頁的測試判定「這個模型不支援工具呼叫」的樣子（`docs/research/ai-providers.md` 結論 4）。
+
+    說給人聽的補法不同：被拒要看端點的設定（vLLM 的啟動選項、換 Ollama 的模型），寫成文字是
+    端點沒有把模型的輸出解析成呼叫，忽略是端點根本沒把工具交給模型。
+    """
+
+    #: 帶了工具的那一次回 400（第一次不帶工具的成功了）。
+    TOOLS_REJECTED = "tools_rejected"
+    #: 只回了文字，而文字裡有 nonce 或工具名：模型把呼叫寫成了文字。
+    WRITTEN_AS_TEXT = "written_as_text"
+    #: 只回了文字、沒提到工具：端點忽略了工具。
+    TOOLS_IGNORED = "tools_ignored"
+    #: 呼叫了，但名字或參數不對。
+    WRONG_CALL = "wrong_call"
+    #: 把工具的結果送回去那一次回 400。
+    RESULT_REJECTED = "result_rejected"
+    #: 工具的結果送回去之後沒有拿到文字回覆。
+    NO_REPLY = "no_reply"
+
+
+class AiRefusal(StrEnum):
+    """AI 設定的命令不做的理由（`services.ai`）。"""
+
+    #: base URL 不是 http(s) 的絕對網址。
+    BASE_URL_INVALID = "base_url_invalid"
+    #: 測試或讀模型清單時 AI 還沒設定好（`services.ai.is_ready`）。
+    NOT_READY = "not_ready"
+
+
+class AiProbeStep(StrEnum):
+    """設定頁的測試打的三次請求（研究 ai-providers.md 結論 4）。"""
+
+    #: 不帶工具的最小請求：驗 key、base URL 與模型。
+    HELLO = "hello"
+    #: 帶一個無害的假工具與隨機 nonce，看模型有沒有照格式呼叫。
+    TOOL_CALL = "tool_call"
+    #: 把假工具的結果送回去，要拿到文字回覆。
+    TOOL_RESULT = "tool_result"

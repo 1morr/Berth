@@ -633,7 +633,7 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `border-rule-strong`，誰贏看 CSS 的產生順序。按鈕（`aria-pressed` 的季切換、只看缺集）照舊二選一 `NAV_BOX` / `NAV_BOX_ACTIVE`。
 - **可多選的切換鍵（`ToggleChips`，M4 票 83）:** 同一個 `FILTER` / `FILTER_ACTIVE` 方塊，每一顆 `aria-pressed`、整組 `role="group"`
   以 `sr-only` 的一句命名；可帶筆數（`.value text-xs`，與標籤之間一個空白，可存取名稱才是「符合 13」）。搜尋結果的類別篩選用它，
-  作品頁的名字與季的選擇（票 84）也用它：名字是要送出去的那一串，`machine` 讓它走 `.value` 原樣（方塊本身是 `.label`，英文會大寫，
+  作品頁的名字與季的選擇（票 84）也用它，設定 → AI 讀到的模型也是（M5 第一次嘗試的實跑：當單選用，按了填進模型欄、打的字對上哪一顆就標哪一顆；12 個以內全列，超過時模型欄兼當搜尋框、只列符合的前 12 顆並說還有幾個，照 OpenRouter 的模型選單；不用原生 `datalist`，它的建議浮在欄位旁、要點欄位才看得到）：名字是要送出去的那一串，`machine` 讓它走 `.value` 原樣（方塊本身是 `.label`，英文會大寫，
   The Machine String Rule），`note` 是跟在後面的 `ink-dim` 小字（「英文名」「原名」），一樣算進可存取名稱。停用時（包在 `fieldset disabled`
   裡）字退成 `ink-dim`、游標 `not-allowed`，方塊與按下的底色照留——看得出原本開著哪幾顆。單選的篩選列照舊是下面那一種。
 - **篩選列選著的那一個不是連結**，是一段 `aria-current="true"` 的字（`NAV_BOX_ACTIVE` 的外觀）：`Link` 當前時一定掛

@@ -16,6 +16,19 @@
   下載頁「需要人」的篩選照舊。API：Issue 多三種型別（`submit_failed`、`import_failed`、
   `stalled`）、一顆動作（`abandon`）與一種拒絕理由（`low_disk_space`）。
 
+- **設定 → AI：接上自己的 AI provider 並測試**（M5 票 08）：選 API 格式（這一版是 Anthropic Messages：Anthropic 官方、
+  OpenRouter、DeepSeek、自架的 Ollama 這類講同一種格式的端點都行）、填 base URL（留空是官方，不含 `/v1`）、API key
+  （官方要，自架的可以不填；存了之後畫面只說「已設定」，key 不回到瀏覽器，「移除 key」清掉）、模型（官方留空用
+  `claude-opus-5-5`；第三方可按「從端點讀模型清單」挑，讀到的畫成模型欄下方一排按鈕，超過 12 個時模型欄兼當搜尋框；
+  列不出來的照它的文件手填）。「儲存並測試」打三次小請求：一句回覆、一次假工具 `berth_echo` 的呼叫、把工具結果
+  送回去，畫面說出回覆、每一次的 tokens（端點沒回的那一格是「不知道」，不是 0）與這個模型支不支援工具呼叫；不支援的
+  標成「只能聊天」，換了格式、base URL 或模型要重測。失敗時說出原因：key 不對、模型不存在、限流（與幾秒後再試）、
+  額度用完、provider 有問題、連不上；不自動重試。沒設定 AI 時 Berth 與之前完全一樣。API：`GET` / `PUT
+  /api/settings/ai`、`POST /api/settings/ai/test`、`GET /api/settings/ai/models`。
+  **這一版有資料庫 migration**（`2b74d84a462c`）：新的用量記錄表 `ai_calls`，每一次對 provider 的請求一列（格式、
+  主機、model、輸入與輸出 tokens、快取寫入與讀取 tokens、耗時、出處、誰、沒成的原因——失敗與中途取消的也記），
+  不設預算。
+
 ### Fixed
 
 - **關機時被打斷的那一輪 RSS 送單也會說「正在下載」**（M5 票 02）：之前那一輪已經送進 qBittorrent 的幾筆沒有通知。

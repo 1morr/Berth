@@ -32,6 +32,7 @@ import { IndexerSettingsPage } from './pages/IndexerSettingsPage'
 import { JellyfinSettingsPage } from './pages/JellyfinSettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
+import { AiSettingsPage } from './pages/AiSettingsPage'
 import { NotifySettingsPage } from './pages/NotifySettingsPage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
@@ -536,6 +537,8 @@ const tmdbSettingsRoute = settingsRoute('/settings/tmdb', TmdbSettingsPage)
 const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySettingsPage, {
   everyone: true,
 })
+/** AI 不是泊位，與通知同一組；只有管理員（API key 與模型是整台 Berth 的設定）。 */
+const aiSettingsRoute = settingsRoute('/settings/ai', AiSettingsPage)
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -557,6 +560,7 @@ export const routeTree = rootRoute.addChildren([
   indexerSettingsRoute,
   tmdbSettingsRoute,
   notifySettingsRoute,
+  aiSettingsRoute,
   settingsIndexRoute,
   setupRoute,
 ])

@@ -100,6 +100,41 @@ changes are made here.
 | Review `/review`, Issues `/issues` | Imports Berth was not sure about, and problems found by the nightly check (a deleted episode, a hardlink replaced by a copy, a torrent nobody claimed). Admins only. |
 | RSS `/rss` | Mikan feeds, and Nyaa or acg.rip search feeds: new episodes are sent and imported on their own. |
 | Health `/health` | The four health checks and the download loop. Every user can see it. |
-| Settings `/settings/*` | Admins only. One page per berth: **Jellyfin** (health and recheck, an existing server's address and sign-in, the public URL), **qBittorrent** (health, an existing server's address and login, the bundled one's web UI login, the free-space threshold), **Library paths** (add Routes — a library can have a second one — rename, disable, recheck, delete), **Prowlarr** (add indexers, try a search, remove; an existing server's URL or key; **Stop using Prowlarr**: health checks leave it alone and title pages point searches to RSS subscriptions — the same state as the wizard's **Do this later**, and you can switch back), **TMDB** (replace the key and test it). |
+| Settings `/settings/*` | Admins only. One page per berth: **Jellyfin** (health and recheck, an existing server's address and sign-in, the public URL), **qBittorrent** (health, an existing server's address and login, the bundled one's web UI login, the free-space threshold), **Library paths** (add Routes — a library can have a second one — rename, disable, recheck, delete), **Prowlarr** (add indexers, try a search, remove; an existing server's URL or key; **Stop using Prowlarr**: health checks leave it alone and title pages point searches to RSS subscriptions — the same state as the wizard's **Do this later**, and you can switch back), **TMDB** (replace the key and test it). After the berths come **Notifications** and **AI** ([below](#ai-settings--ai)). |
 
 To start the wizard over, see [Backup, secrets and reinstalling](backup-and-reinstall.md#rerunning-the-wizard).
+
+## AI (Settings → AI)
+
+Berth can use an AI model through your own provider account. Nothing requires it: without an AI provider Berth
+works exactly as before. So far this page only connects the provider and tests it; nothing else in Berth calls
+the model yet.
+
+- **API format**: Anthropic Messages. Any service that speaks this format works, not only Anthropic.
+- **Base URL**: leave it blank for Anthropic's own API. For another service, paste the Anthropic-format base URL
+  from its docs, **without** `/v1`: for example `https://openrouter.ai/api`, `https://api.deepseek.com/anthropic`,
+  or `http://<host>:11434` for Ollama.
+- **API key**: needed for Anthropic's own API. A self-hosted Ollama or vLLM can run without one. Like the other
+  keys, it is stored in Berth's database and never shown again: the page only says whether one is saved, and
+  **Remove key** clears it.
+- **Model**: left blank, Anthropic's own API uses `claude-opus-5-5`. Other services have no default: press
+  **Read the model list from the endpoint** and the models it lists appear as buttons under the field; press one
+  to fill it in, or type the model id their docs give. With more than 12, the field doubles as a filter: only the
+  first 12 that match what you type are shown. Some endpoints cannot list their models (DeepSeek's
+  Anthropic-format address is one); then type it.
+
+AI counts as set up when there is an endpoint (a base URL, or a key for Anthropic's own API) and a model.
+
+**Save and test** saves the form, then sends three small requests: one asking for a one-word reply, one offering a
+harmless test tool (`berth_echo`) with a random value to pass back, and one returning the tool's result to the
+model. The page shows the reply, the tokens each request used ("unknown" when the endpoint did not report that
+number; it is not zero), and whether the model supports tool calling. A model that does not is **chat only**: it
+can talk, but it cannot subscribe, search or download for you. Changing the format, base URL or model clears
+that result, so test again.
+
+When a test fails, the page says why: the key was refused, the model does not exist, the account is rate limited
+(and for how long, when the provider says), out of credit, the provider is having trouble, or the endpoint cannot
+be reached. Berth never retries on its own.
+
+Berth records every request, including the ones that failed or were stopped halfway (their input was already
+spent): model, input and output tokens, cache tokens, how long it took and who ran it. There is no spending limit.

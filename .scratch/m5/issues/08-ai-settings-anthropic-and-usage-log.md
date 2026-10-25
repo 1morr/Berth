@@ -1,6 +1,6 @@
 # 08 — AI 設定、Anthropic provider 與用量記錄
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 07
 
@@ -23,11 +23,23 @@ provider 與用量記錄是側面板與背景任務共用的地基。這一張�
 
 ## 驗收
 
-- [ ] 用假端點（respx）：測試請求寫一列 `ai_calls`，欄位齊全；端點沒回快取欄位時記成「不知道」（pytest）
-- [ ] 自訂 base URL 生效：請求打到填的主機（pytest）
-- [ ] 假端點不回工具呼叫（只回文字、或拒絕 `tools`）→ 測試結果是「不支援」，設定頁說清楚；改模型後要重測（pytest＋vitest）
-- [ ] 限流、無效 key、連不上、模型不存在各自回出對的原因，失敗與取消的那一次也有一列（pytest）
-- [ ] 工具支援探測對一個「拿到結果就回文字」的假端點連跑 10 次都判成支援（pytest）
-- [ ] 設定頁填 key、按測試、看到結果（playwright 實跑；有真 key 時附一次真的呼叫結果）
-- [ ] 沒設 key 時現有測試全部照舊綠
-- [ ] 全部檢查、pytest、vitest 綠；brief / plan 有被推翻的同輪改；docs/guide、CHANGELOG、progress.md 已更新
+- [x] 用假端點（respx）：測試請求寫一列 `ai_calls`，欄位齊全；端點沒回快取欄位時記成「不知道」（pytest）
+- [x] 自訂 base URL 生效：請求打到填的主機（pytest）
+- [x] 假端點不回工具呼叫（只回文字、或拒絕 `tools`）→ 測試結果是「不支援」，設定頁說清楚；改模型後要重測（pytest＋vitest）
+- [x] 限流、無效 key、連不上、模型不存在各自回出對的原因，失敗與取消的那一次也有一列（pytest）
+- [x] 工具支援探測對一個「拿到結果就回文字」的假端點連跑 10 次都判成支援（pytest）
+- [x] 設定頁填 key、按測試、看到結果（playwright 實跑；有真 key 時附一次真的呼叫結果）——對演練伺服器（`healthy`，`DemoChatProvider`）跑：無效 key、支援、讀模型清單、改了模型未存要重測、只能聊天、模型不存在、重新整理後結論還在、390 寬無橫向捲動、zh；**這個容器沒有真 key，真的呼叫沒做**
+- [x] 沒設 key 時現有測試全部照舊綠
+- [x] 全部檢查、pytest、vitest 綠；brief / plan 有被推翻的同輪改；docs/guide、CHANGELOG、progress.md 已更新
+
+## Comments
+
+- 2026-10-25 實作（session 紀錄在 progress.md）。程式碼以第一次嘗試的 `435bc47`、`9c8ea32`、`fd5dd1c` 為底移植，補上這張票多的：串流講到一半被取消也記一列（`AiFailure.CANCELLED`，介面多一個串流事件 `UsageReported`，記取消前最後知道的數字）、認證只送 `x-api-key`（brief §20.24）、`list_models` 回 `ModelInfo`（含 `max_input_tokens`，給票 17）、`StopReason.CONTEXT_FULL`、`set_ai` 改標 `irreversible`、工具探測連跑 10 次的測試（假端點照歷史裡每一句指令做：把指令改回「不要用文字回答」會紅）。
+- **設定頁的 AI 一格沿用「設定 → 通知」頁的形狀**（`.scratch/m4/notify-settings-shape.md`），沒有另做 `/impeccable shape`：同一組 `SettingsFrame` / `SettingsSection`、key 只寫不讀加確認移除、測試結果放常駐的 live region。「只能聊天」的常駐狀態用 `assigned` 不用 `blocked`（`blocked` 是 `role=alert`，每次開頁都會被念）。截圖在 `.local/screens/m5-08/`。
+- **沒有真 key**：OpenRouter 收不收 `x-api-key`、第三方碰到頂層 `cache_control` 是忽略還是 400、現役模型會不會回 thinking block，都標「未實測」寫在 brief §20.24「票 08 實作時定的」，等有 key 時用 `BERTH_AI_REAL=1 uv run python scripts/fake_setup_server.py --scenario healthy` 實測。
+- code-review 沒處理的：
+  - **prompt caching 照研究結論 6 送**（頂層 `cache_control`、system breakpoint、工具依名稱排序）：Spec 軸說票沒要求、第三方可能 400。留著：快取前綴與介面是同一層的事，第三方拒收時第一次測試就會說出 400 原文；實測後再決定。
+  - **第三步又呼叫一次也算支援**（`9c8ea32`）與改指令措辭兩條並存：10 次的測試用「照歷史指令做、什麼都不回」的假端點，分得出措辭那一條；研究 §4 的判定表已補一句指向 brief。
+  - 不是 Anthropic 形狀的 404 歸「看不懂」不歸「模型不存在」（多半是 base URL 的 `/v1` 寫錯），brief 已記。
+  - 「12 個以上時模型欄兼當搜尋框」：實作是超過 12 個才兼當，照第一次嘗試使用者選定的行為。
+  - 判斷題、不改：`api/ai.py` 的 `_user_id` 與 `api/notify.py` 同形（第三份，可收進 `api/gate.py`）；`Usage` 四欄與「失敗 + 原文」在 view / out / model 各展開一次；`HttpServiceClientFactory.ai()` 還不看 `endpoint.format`（票 09 加第二種格式時依它分，並讓缺的格式在測試裡紅）；`AnthropicProvider._session()` 的預設逾時是列模型那一個。
