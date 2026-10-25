@@ -192,6 +192,8 @@ const CONFIRM = {
   retry: null,
   resubmit: null,
   accept_removal: null,
+  // 卡住的 Job 的「放棄」是 Job 頁的刪除範圍四個旗標全不勾（M5 票 03）：一樣一個位元組都不動。
+  abandon: null,
   adopt: 'work',
   claim_torrent: 'work',
   // 認領進帳本只多一列帳本，配不上就是拒絕，什麼都不寫。
@@ -276,6 +278,20 @@ function Measured({ issue }: { issue: Issue }) {
         )}
         {error !== '' && <DetailLine term={t('issues.stoppedError')}>{error}</DetailLine>}
         <DetailLine term={t('issues.next')}>{t('issues.nextFirstBatch')}</DetailLine>
+      </>
+    )
+  }
+  if (isStuckJob(issue.type)) {
+    // 卡住的 Job（M5 票 03）：停住於、原因與下一步；「下載」那一格連到那一筆。
+    const since = text(issue.detail.since)
+    const error = text(issue.detail.error)
+    return (
+      <>
+        {since !== '' && (
+          <DetailLine term={t('issues.stoppedSince')}>{whenText(since, i18n.language)}</DetailLine>
+        )}
+        {error !== '' && <DetailLine term={t('issues.stoppedError')}>{error}</DetailLine>}
+        <DetailLine term={t('issues.next')}>{t(NEXT_STUCK[issue.type])}</DetailLine>
       </>
     )
   }
@@ -379,6 +395,17 @@ const STUCK_STATES = ['submit_failed', 'client_error'] as const
 
 function jobState(value: unknown): (typeof STUCK_STATES)[number] | null {
   return STUCK_STATES.find((state) => state === value) ?? null
+}
+
+/** 卡住的 Job 的三種（後端 `sweep._STUCK_JOBS`）各自的下一步。 */
+const NEXT_STUCK = {
+  submit_failed: 'issues.nextSubmitFailed',
+  import_failed: 'issues.nextImportFailed',
+  stalled: 'issues.nextStalled',
+} as const
+
+function isStuckJob(type: Issue['type']): type is keyof typeof NEXT_STUCK {
+  return type in NEXT_STUCK
 }
 
 /** 巡檢開在 RSS Series 上的那幾件（M4 票 130）：連到作品頁，名字是作品名、沒有就是 id。 */

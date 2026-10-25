@@ -61,6 +61,8 @@ _STATUS: dict[IssueRefusal, int] = {
     IssueRefusal.SOURCE_UNAVAILABLE: status.HTTP_502_BAD_GATEWAY,
     IssueRefusal.RESUBMIT_FAILED: status.HTTP_409_CONFLICT,
     IssueRefusal.ROUTE_UNUSABLE: status.HTTP_409_CONFLICT,
+    # 同 `POST /jobs/{hash}/retry`：空出來之後同一個請求就會成功（卡住的 Job 的重試，M5 票 03）。
+    IssueRefusal.LOW_DISK_SPACE: status.HTTP_409_CONFLICT,
     # 請求本身少了東西（沒選作品）或選的那一部 TMDB 上不在：重送同一份不會變好。
     IssueRefusal.MEDIA_REQUIRED: status.HTTP_422_UNPROCESSABLE_CONTENT,
     # 配不上帳本是磁碟上的事實（票 10）：來源回來了、或資料夾改對了，同一個請求就會成功。
@@ -87,8 +89,8 @@ def _refusals(*reasons: IssueRefusal) -> dict[int | str, dict[str, Any]]:
 #: 來源不在（重新鏈接、以硬鏈接取代）、鏈接沒成（同兩顆）、問不到 qBittorrent（兩顆會刪
 #: complete 的，與管線那三種的重新 recheck / 重試 / 重新送單）、目錄有主了與刪不掉（刪除孤兒）、
 #: 大小變了（以硬鏈接取代）、問不到 Jellyfin（重新掃描媒體庫）、下載連結給不出同一個 torrent、
-#: qBittorrent 不收、Route 用不了（重新送單），沒選作品（重新入庫、認領 torrent）、配不上帳本
-#: （認領進帳本）。
+#: qBittorrent 不收、Route 用不了（重新送單與卡住的 Job 的重試）、磁碟不夠（卡住的 Job 的重試），
+#: 沒選作品（重新入庫、認領 torrent）、配不上帳本（認領進帳本）。
 RESOLVE_RESPONSES = _refusals(
     IssueRefusal.ISSUE_MISSING,
     IssueRefusal.ISSUE_NOT_OPEN,
@@ -103,6 +105,7 @@ RESOLVE_RESPONSES = _refusals(
     IssueRefusal.SOURCE_UNAVAILABLE,
     IssueRefusal.RESUBMIT_FAILED,
     IssueRefusal.ROUTE_UNUSABLE,
+    IssueRefusal.LOW_DISK_SPACE,
     IssueRefusal.MEDIA_REQUIRED,
     IssueRefusal.UNCLAIMABLE,
 )

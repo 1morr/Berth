@@ -93,6 +93,7 @@ class Sweeper:
         logger.info(
             "sweep round",
             extra={
+                "jobs": outcome.jobs,
                 "stuck": outcome.stuck,
                 "failing": outcome.failing,
                 "missing": outcome.missing,

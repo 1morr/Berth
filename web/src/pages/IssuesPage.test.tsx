@@ -584,6 +584,128 @@ describe('待處理頁', () => {
     ).toEqual(['忽略'])
   })
 
+  it('送單失敗以那一筆下載認，說出原因與下一步，按得了重試與放棄（M5 票 03）', async () => {
+    const stub = render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'submit_failed',
+            subject: HASH,
+            path: '',
+            ledger_id: null,
+            detail: {
+              name: '[SweetSub] Kusuriya no Hitorigoto - 05',
+              state: 'submit_failed',
+              error: 'qBittorrent refused the torrent: 415',
+              since: '2026-10-20T03:00:00+00:00',
+            },
+            actions: ['retry', 'abandon'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': { body: issue({ status: 'resolved', actions: [] }) },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(
+      within(row).getByRole('heading', { name: '[SweetSub] Kusuriya no Hitorigoto - 05' }),
+    ).toBeInTheDocument()
+    expect(within(row).getByText('送單失敗')).toBeInTheDocument()
+    expect(
+      within(row).getByText('這一筆下載送不進 qBittorrent，也不會再自動重送'),
+    ).toBeInTheDocument()
+    await userEvent.click(within(row).getByText('[SweetSub] Kusuriya no Hitorigoto - 05'))
+    expect(within(row).getByText('qBittorrent refused the torrent: 415')).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: HASH })).toHaveAttribute('href', `/jobs/${HASH}`)
+    expect(within(row).getByText(/到作品頁重新搜一次/)).toBeInTheDocument()
+    expect(
+      within(row)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['重試', '放棄這一筆', '忽略'])
+
+    // 放棄不刪東西（四個旗標全不勾），所以不必就地確認：按下去就送出。
+    await userEvent.click(within(row).getByRole('button', { name: '放棄這一筆' }))
+
+    await waitFor(() => expect(sent(stub, 'POST /api/issues/1/resolve')).toBe(1))
+  })
+
+  it.each([
+    [
+      'import_failed',
+      '入庫失敗',
+      '這一筆下載完了，入庫沒有成功',
+      /從還沒鏈接的那幾個接著做/,
+      ['重試', '放棄這一筆', '忽略'],
+    ],
+    ['stalled', '停滯', '這一筆下載停滯超過一天了', /多半是沒有人在做種/, ['放棄這一筆', '忽略']],
+  ] as const)(
+    '%s 說出它是哪一種與下一步（M5 票 03）',
+    async (type, label, sentence, next, buttons) => {
+      render({
+        [ISSUES]: {
+          body: [
+            issue({
+              type,
+              subject: HASH,
+              path: '',
+              ledger_id: null,
+              detail: {
+                name: '[SweetSub] Kusuriya no Hitorigoto - 05',
+                state: type,
+                error: '',
+                since: '2026-10-20T03:00:00+00:00',
+              },
+              actions: type === 'stalled' ? ['abandon'] : ['retry', 'abandon'],
+            }),
+          ],
+        },
+      })
+      renderApp('/issues')
+      const row = await screen.findByRole('article')
+
+      expect(within(row).getByText(label)).toBeInTheDocument()
+      expect(within(row).getByText(sentence)).toBeInTheDocument()
+      await userEvent.click(within(row).getByText('[SweetSub] Kusuriya no Hitorigoto - 05'))
+      expect(within(row).getByText(next)).toBeInTheDocument()
+      // 沒有原文時不畫「原因」那一行。
+      expect(within(row).queryByText('原因')).not.toBeInTheDocument()
+      expect(
+        within(row)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual([...buttons])
+    },
+  )
+
+  it('卡住的 Job 重試時磁碟不夠，那一列留著並說出為什麼（M5 票 03）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'import_failed',
+            subject: HASH,
+            path: '',
+            ledger_id: null,
+            detail: { name: '[SweetSub] Kusuriya no Hitorigoto - 05', state: 'import_failed' },
+            actions: ['retry', 'abandon'],
+          }),
+        ],
+      },
+      'POST /api/issues/1/resolve': {
+        status: 409,
+        body: { detail: { reason: 'low_disk_space', detail: '' } },
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('button', { name: '重試' }))
+
+    expect(await within(row).findByText(/剩下的空間低於門檻，所以沒有重試/)).toBeInTheDocument()
+  })
+
   it('一直失敗的 Feed 說出是哪一種、從什麼時候、最後的原因，連到 RSS 頁那一個 Feed（M4 票 130）', async () => {
     render({
       [ISSUES]: {
