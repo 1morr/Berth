@@ -53,6 +53,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.deletion import Placed, remove_one
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import actor_of, guarded, record_event, transition
@@ -81,6 +82,8 @@ class ImportOutcome:
     held: int
 
 
+# 背景迴圈的一輪：硬鏈接進媒體庫、寫帳本；入庫可撤銷（原檔在 complete，brief §14），不排通知。
+@command(Effect.REVERSIBLE)
 async def sweep_imports(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -390,6 +393,8 @@ def record_link(
     entry.resolve_after = first_resolve_at(now) if item.action is PlanAction.IMPORT else None
 
 
+# 只把帳本重新排進反查，結論照 Jellyfin 現況重寫。
+@command(Effect.REVERSIBLE)
 async def restate_versions(
     session: AsyncSession, item: PlanItem, target: str, now: datetime
 ) -> None:
@@ -555,6 +560,8 @@ async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job
     await notify_jellyfin(session, factory, job, paths)
 
 
+# 請 Jellyfin 照現況重讀那幾個資料夾：再請一次就是照新的現況重讀，沒有東西要撤。
+@command(Effect.REVERSIBLE)
 async def notify_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory, job: Job | None, paths: Sequence[str]
 ) -> None:

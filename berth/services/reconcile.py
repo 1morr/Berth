@@ -68,6 +68,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.issues import IssueRejectedError, Recorded, record_issue
 from berth.services.plan import WRITTEN
 from berth.services.qbittorrent import (
@@ -162,6 +163,8 @@ class _Tally:
             self.updated += 1
 
 
+# 只寫 Issue 與帳本的檢查欄位，下一輪照現況重寫；不排通知。
+@command(Effect.REVERSIBLE)
 async def reconcile_once(
     session: AsyncSession,
     factory: ServiceClientFactory,

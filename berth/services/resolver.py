@@ -115,6 +115,9 @@ class ResolveOutcome:
     exhausted: int
 
 
+# 背景迴圈的入口照最重的副作用標：找齊的那一筆排「可以看了」（`notify.queue_ready`），
+# 送出去收不回來。
+@command(Effect.IRREVERSIBLE)
 async def sweep_resolutions(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> ResolveOutcome:
@@ -181,7 +184,9 @@ async def sweep_resolutions(
 
 
 # 可逆但沒有單一反向命令：寫下的只有 item、版本名與回驗結論，都是 Jellyfin 現況的抄本，Issue 的
-# 「重新反查」與每日對帳會照新的樣子重寫。
+# 「重新反查」與每日對帳會照新的樣子重寫。找齊的那一筆也排「可以看了」，但那是排程那一輪過一會兒
+# 也會排的同一則（只問還沒到時間的那幾列），這裡只是早一點，不多出一則；背景迴圈
+# `sweep_resolutions` 照最重的副作用標。
 @command(Effect.REVERSIBLE)
 async def resolve_early(
     session: AsyncSession,
@@ -247,6 +252,8 @@ async def resolve_early(
     return len(found)
 
 
+# 只換新 Jellyfin 現況的抄本（item 與 Series id），找不到的不動。
+@command(Effect.REVERSIBLE)
 async def refresh_resolved(
     session: AsyncSession, client: JellyfinClient, entries: Sequence[LedgerEntry]
 ) -> Refreshed:
@@ -353,6 +360,8 @@ def still_identifying(item: JellyfinItem, *, ledger_tmdb: str, jellyfin_tmdb: st
     return bool(ledger_tmdb) and not jellyfin_tmdb
 
 
+# 只寫或收 Issue；下一輪照比到的重寫。
+@command(Effect.REVERSIBLE)
 async def settle_verdicts(
     session: AsyncSession, verdicts: Sequence[Verdict], now: datetime
 ) -> list[Recorded]:

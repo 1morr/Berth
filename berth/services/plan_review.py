@@ -45,6 +45,7 @@ from berth.logs import job_context
 from berth.models import Job, PlanItem, RssSeries
 from berth.models.types import utcnow
 from berth.parser import revise
+from berth.services.commands import Effect, command
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import job_lock, record_event, transition
 from berth.services.plan import WRITTEN, summarise
@@ -94,6 +95,8 @@ class ItemEdit:
     episode_end: int | None = None
 
 
+# 再改一次就回去；沒有另一支反向命令。
+@command(Effect.REVERSIBLE)
 async def edit_items(
     session: AsyncSession,
     plan_id: int,
@@ -138,6 +141,8 @@ async def edit_items(
     return view
 
 
+# 入庫可撤銷：硬鏈接，原檔在 complete（brief §14）。
+@command(Effect.REVERSIBLE)
 async def approve_plan(
     session: AsyncSession, hub: EventHub, plan_id: int, *, actor: str
 ) -> PlanView:
@@ -178,6 +183,8 @@ async def approve_plan(
     return view
 
 
+# 退回 `completed`、規劃器重算，檔案不動。
+@command(Effect.REVERSIBLE)
 async def reject_plan(session: AsyncSession, hub: EventHub, plan_id: int, *, actor: str) -> None:
     """拒絕：`review → completed`（plan §3.1），規劃器下一輪整份重算。檔案不動。
 

@@ -7,6 +7,13 @@
 反向命令以 `"<模組>.<函式>"` 指名（相對 `berth.services`，同 brief §14 的 `issues.resolve`）：
 寫成字串而不是函式物件，是因為反向命令常常定義在後面、或在另一個模組裡。名字寫錯、指到一個
 沒標的函式，由 `tests/unit/test_command_marks.py` 擋下。
+
+一支命令做好幾件事時（M5 票 04 統一）：**人按的命令照主效果標**——送單順手排的「正在下載」不讓
+送單變成不可逆（`downloading.add_manual_download`）；**背景迴圈的入口照最重的副作用標**——一輪裡
+排了送出去收不回來的通知就是不可逆（`sweep.sweep_once`、`rss.poll_due`）。**按得了好幾種動作的
+照最重的那一種**（`issues.resolve_issue`）：分動作的等級是登錄表登記工具時的事。被
+`asynccontextmanager` 包過的也是命令，標記慣例貼在最外層（`downloading.download_round`；貼在
+內層也認得）。
 """
 
 from __future__ import annotations
@@ -24,7 +31,8 @@ _ATTRIBUTE = "__berth_command__"
 class Effect(StrEnum):
     """副作用等級（brief §14）。"""
 
-    #: 只讀，什麼都不改。
+    #: 只讀，什麼都不改。向外部服務重抓、寫回 Berth 自己的快取（TMDB 快照）也算只讀：那一份
+    #: 本來就是外部資料的抄本，不改任何決定或路徑。
     READ = "read"
     #: 改了東西，但有路回去：反向命令、或同一個命令再按一次別的選項。
     REVERSIBLE = "reversible"

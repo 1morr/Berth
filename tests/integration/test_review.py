@@ -32,6 +32,7 @@ from berth.domain import (
     ReviewRefusal,
 )
 from berth.models import Job, LedgerEntry, PlanItem
+from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
 from berth.services.issues import count_open, record_issue
@@ -477,6 +478,21 @@ class TestUndo:
 
         assert refused.value.reason is ReviewRefusal.NOT_AUDITED
         assert Path(entry.target_path).exists()
+
+    async def test_confirming_is_reversible_without_an_inverse(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """確認的標記（M5 票 04）：`undo_audit` 不是它的反向——上一條，它拒絕確認過的列，而且它
+        拆入庫，不是「取消確認」。仍然可逆：確認只清旗標，檔案與 Job 原封不動，放錯了照樣 rematch
+        或刪。
+        """
+        job, entry = await audited(session, roots)
+        await confirm_audit(session, entry.id, actor=ACTOR)
+
+        assert Path(entry.target_path).exists()
+        assert await state_of(session, job) is JobState.IMPORTED
+        for confirm in (confirm_audit, confirm_audits):
+            assert mark_of(confirm) == CommandMark(Effect.REVERSIBLE, inverse=None)
 
 
 class TestTwoTabs:

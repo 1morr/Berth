@@ -667,12 +667,15 @@ async def _bind_to_feed_route(
     return bound.submitted
 
 
-@command(Effect.REVERSIBLE, inverse="rss.add_feed")
+# 回不去（M5 票 04）：Item 連著刪（CASCADE），加回同一個網址只長得回 Feed 現在還列著的那幾筆，
+# 滑出 Feed 的歷史、第一輪預覽的決定與這個 Feed 自己的設定都沒了。`add_feed` 的反向照樣指它：
+# 加完就撤時丟掉的只有剛帶進來的那幾筆；輪過幾輪之後再撤，丟的是那之間累積的，撤銷鍵要不要
+# 出確認卡由登錄表決定（M5 票 06、14）。
+@command(Effect.IRREVERSIBLE)
 async def delete_feed(session: AsyncSession, feed_id: int) -> int:
     """刪 Feed 連它的 Item 一起刪，RSS Series 與綁定留著（shape §4）。回刪掉幾筆 Item。
 
-    可逆的根據：重新加回同一個網址會重新長出 Item，已經送過的由 `add_download` 以 info hash
-    認回同一筆 Job，不重送。
+    加回同一個網址時，已經送過的由 `add_download` 以 info hash 認回同一筆 Job，不重送。
     """
     row = await session.get(RssFeed, feed_id)
     if row is None:
@@ -841,7 +844,9 @@ async def prime_feed(
 # --- 輪詢 ---------------------------------------------------------------
 
 
-@command(Effect.REVERSIBLE)
+# 背景迴圈的入口照最重的副作用標（M5 票 04）：一輪裡送單、排「正在下載」（`download_round`），
+# 送出去收不回來。人按的單一 Feed 輪詢 `poll_feed` 照主效果標。
+@command(Effect.IRREVERSIBLE)
 async def poll_due(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> int:

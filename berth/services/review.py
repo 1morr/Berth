@@ -344,7 +344,9 @@ async def _collect(
     return ReviewQueue(rows=rows, total=total)
 
 
-@command(Effect.REVERSIBLE, inverse="review.undo_audit")
+# 可逆但沒有反向命令（M5 票 04）：確認只清旗標、檔案不動，放錯了照樣用 rematch 換位置或刪掉；
+# 回不去的只有「等人看」這個狀態。`undo_audit` 不是它的反向——那一支拆入庫，而且拒絕確認過的列。
+@command(Effect.REVERSIBLE)
 async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) -> None:
     """「它是對的」：兩處旗標一起清，時間線寫一筆 `audit_confirmed`。檔案不動。"""
     async with _deciding(session, ledger_id) as (entry, job):
@@ -362,7 +364,8 @@ async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) ->
     logger.info("audit confirmed", extra={"ledger": ledger_id})
 
 
-@command(Effect.REVERSIBLE, inverse="review.undo_audit")
+# 同 `confirm_audit`。
+@command(Effect.REVERSIBLE)
 async def confirm_audits(
     session: AsyncSession, ledger_ids: Sequence[int], *, actor: str
 ) -> AuditsConfirmed:
@@ -373,7 +376,7 @@ async def confirm_audits(
     （`ledger_missing`）的列跳過、不算失敗——按下去的人要的是「這幾列都不再等我」，而它們已經不等了。
 
     範圍只有送來的 id：畫面列出的那些，不是伺服器端的「全部」，按下之後才進來的 audit 不會被順手
-    確認掉。反向是逐列撤銷（`undo_audit`）。
+    確認掉。沒有反向命令，理由見 `confirm_audit` 的標記。
     """
     confirmed = skipped = 0
     for ledger_id in dict.fromkeys(ledger_ids):
