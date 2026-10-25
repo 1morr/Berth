@@ -11,7 +11,8 @@
 就是頁面上看得到的，新增與總數永遠和頁面對得上。
 
 每一件的鍵是 `<來源>:<id>`（審核多一段種類：`review:audit:12`），錨點是那一列在頁面上的 `id`
-（`#audit-12`、`#issue-5`、`#series-7`），前端照同一個形狀給列加 `id`。
+（`#audit-12`、`#issue-5`、`#series-7`，形狀是 `deeplink` 的 `*_ROW`），前端照同一個形狀給列
+加 `id`。
 """
 
 from __future__ import annotations
@@ -23,7 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import IssueType
 from berth.services.commands import Effect, command
-from berth.services.deeplink import ISSUES_PAGE, REVIEW_PAGE, RSS_PAGE
+from berth.services.deeplink import (
+    ISSUE_ROW,
+    ISSUES_PAGE,
+    REVIEW_PAGE,
+    REVIEW_ROW,
+    RSS_PAGE,
+    SERIES_ROW,
+)
 from berth.services.issues import open_issues
 from berth.services.review import queue_keys
 from berth.services.rss import unbound_series
@@ -64,12 +72,19 @@ async def waiting_now(session: AsyncSession) -> dict[str, Waiting]:
     found: dict[str, Waiting] = {}
     for kind, id_ in await queue_keys(session):
         found[f"review:{kind.value}:{id_}"] = Waiting(
-            WaitingSource.REVIEW, id_, f"{REVIEW_PAGE}#{kind.value}-{id_}"
+            WaitingSource.REVIEW,
+            id_,
+            f"{REVIEW_PAGE}#{REVIEW_ROW.format(kind=kind.value, ref=id_)}",
         )
     for id_, issue_type in await open_issues(session):
         found[f"issue:{id_}"] = Waiting(
-            WaitingSource.ISSUE, id_, f"{ISSUES_PAGE}#issue-{id_}", issue_type=issue_type
+            WaitingSource.ISSUE,
+            id_,
+            f"{ISSUES_PAGE}#{ISSUE_ROW.format(ref=id_)}",
+            issue_type=issue_type,
         )
     for id_ in await unbound_series(session):
-        found[f"rss:{id_}"] = Waiting(WaitingSource.RSS, id_, f"{RSS_PAGE}#series-{id_}")
+        found[f"rss:{id_}"] = Waiting(
+            WaitingSource.RSS, id_, f"{RSS_PAGE}#{SERIES_ROW.format(ref=id_)}"
+        )
     return found
