@@ -336,6 +336,8 @@ class Scenario:
     downloads_demo: bool = False
     #: 每日巡檢的 RSS 三項（M4 票 130）。見 `_seed_rss_sweep`。
     rss_sweep_demo: bool = False
+    #: 卡住的 Job 三種（M5 票 03）。見 `_seed_stuck_jobs`。
+    stuck_jobs_demo: bool = False
     #: 週報頁（M4 票 131）。見 `_seed_weekly`：最近兩週的週報由產品自己的 `compose_weekly` 產生。
     weekly_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
@@ -708,6 +710,18 @@ def rss_sweep_scenario() -> Scenario:
     )
     scenario.feed_pages = {"https://demo.invalid/unused": b""}
     scenario.rss_sweep_demo = True
+    return scenario
+
+
+def stuck_jobs_scenario() -> Scenario:
+    """卡住的 Job 開成 Issue（M5 票 03）：`/issues` 上送單失敗、入庫失敗、停滯各一件。
+
+    同 `healthy`，加上 `_seed_stuck_jobs`，最後由產品自己的 `sweep_once` 跑一輪開出 Issue。停滯
+    那一筆真的掛在替身 qBittorrent 上（`stalledDL`、兩天沒動），poller 不會把它推走；另外兩筆不在
+    客戶端上。
+    """
+    scenario = healthy()
+    scenario.stuck_jobs_demo = True
     return scenario
 
 
@@ -1845,6 +1859,7 @@ SCENARIOS = {
     "review": review_scenario,
     "downloads": downloads_scenario,
     "rss-sweep": rss_sweep_scenario,
+    "stuck-jobs": stuck_jobs_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
@@ -2298,6 +2313,8 @@ async def _moor(
         await _seed_rss_sweep(session, factory)
     if scenario.weekly_demo:
         await _seed_weekly(session)
+    if scenario.stuck_jobs_demo:
+        await _seed_stuck_jobs(session, scenario)
 
 
 #: `rss-sweep` 情境的兩個 Feed 壞了多久：過了巡檢的 24 小時。
@@ -2423,6 +2440,94 @@ _WEEKLY_WORKS = (
     ),
     (MediaKind.MOVIE, 372058, "你的名字。", "Your Name."),
 )
+
+
+#: `stuck-jobs` 情境的三筆：（hash, 名字, 狀態, 停下來那一刻寫的事件, payload, 原文）。
+_STUCK_JOBS = (
+    (
+        "5" * 40,
+        "[SweetSub] Kusuriya no Hitorigoto - 05 [WebRip 1080p]",
+        JobState.SUBMIT_FAILED,
+        EventType.SUBMIT_FAILED,
+        {"error": "POST /api/v2/torrents/add: 415 Torrent file is not valid"},
+        "POST /api/v2/torrents/add: 415 Torrent file is not valid",
+    ),
+    (
+        "6" * 40,
+        "[ANi] SPY×FAMILY - 26 [1080P][Baha][WEB-DL]",
+        JobState.IMPORT_FAILED,
+        EventType.LINK_FAILED,
+        {"errno": 18, "error": "Invalid cross-device link"},
+        "link failed: [Errno 18] Invalid cross-device link",
+    ),
+    (
+        "7" * 40,
+        "[Nekomoe kissaten] Frieren - 30 [WebRip 1080p]",
+        JobState.STALLED,
+        EventType.STALLED,
+        {"client_state": "stalledDL", "idle_minutes": 10},
+        "",
+    ),
+)
+
+
+async def _seed_stuck_jobs(session: AsyncSession, scenario: Scenario) -> None:
+    """卡住的 Job 三種的材料（M5 票 03），最後跑一輪 `sweep_once`。兩天前停下來，停滯那一筆也過了
+    巡檢的 24 小時。"""
+    route = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert route is not None
+    now = utcnow()
+    stopped = now - timedelta(days=2)
+    save_path = "/data/torrent/incomplete/anime"
+    for job_hash, name, state, event, payload, error in _STUCK_JOBS:
+        session.add(
+            Job(
+                hash=job_hash,
+                name=name,
+                source_url="",
+                trigger=JobTrigger.MANUAL,
+                route_id=route.id,
+                state=state,
+                error=error,
+                save_path=save_path,
+                total_size=1_400_000_000,
+                added_at=stopped - timedelta(hours=1),
+                completed_at=stopped if state is JobState.IMPORT_FAILED else None,
+            )
+        )
+        await session.flush()
+        session.add(
+            Event(
+                job_hash=job_hash,
+                type=event.value,
+                actor="system",
+                payload_json=payload,
+                created_at=stopped,
+            )
+        )
+        if state is JobState.STALLED:
+            session.add(
+                JobFile(job_hash=job_hash, rel_path=f"{name}.mkv", size=1_400_000_000, priority=1)
+            )
+            scenario.qbittorrent.torrents = (
+                *scenario.qbittorrent.torrents,
+                TorrentStatus(
+                    hash=job_hash,
+                    name=name,
+                    state="stalledDL",
+                    category="berth-anime",
+                    tags=("berth",),
+                    progress=0.4,
+                    completion_on=-1,
+                    last_activity=int(stopped.timestamp()),
+                    added_on=int(stopped.timestamp()),
+                    save_path=save_path,
+                    content_path=f"{save_path}/{name}.mkv",
+                    total_size=1_400_000_000,
+                ),
+            )
+    await session.commit()
+    await sweep_once(session, now=now)
 
 
 async def _seed_weekly(session: AsyncSession) -> None:
