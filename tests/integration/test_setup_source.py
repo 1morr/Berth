@@ -266,7 +266,8 @@ async def test_a_changed_prowlarr_login_replaces_the_old_one(session: AsyncSessi
     )
     assert client.signs_in("deckhand", "changed")
     assert not client.signs_in("skipper", "changed")
-    assert mark_of(set_interface_login) == CommandMark(Effect.REVERSIBLE)
+    # 原本那一組回不來，只能再設一組蓋過（brief §16.4，M5 票 05）。
+    assert mark_of(set_interface_login) == CommandMark(Effect.IRREVERSIBLE)
 
 
 @pytest.mark.asyncio
@@ -795,9 +796,8 @@ async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSessi
     assert [row.step for row in status.steps] == ["nyaasi", PROWLARR_LOGIN_STEP]
     await search_indexers(session, factory, query="")
     assert [query.indexer_ids for query in search.queries] == [(1,)]
-    assert mark_of(remove_indexer) == CommandMark(
-        Effect.REVERSIBLE, inverse="indexer.apply_default_indexers"
-    )
+    # 加回去的是新的一站，沒有反向命令（M5 票 05）。
+    assert mark_of(remove_indexer) == CommandMark(Effect.IRREVERSIBLE)
 
 
 @pytest.mark.asyncio
