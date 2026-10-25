@@ -216,7 +216,7 @@ class TestThePageFlow:
         assert client.get("/api/rss/series/404/items").status_code == 404
 
         # 上面的 False 是固定的時鐘給的，不是執行那天：安靜滿 `QUIET_AFTER` 之後同一列收進
-        # 「已完結」。登入也照同一個時鐘過期，所以一個月後重新登入。
+        # 「已完結」。登入也照同一個時鐘過期，所以跳過去之後重新登入。
         time_machine.move_to(KIMI_NEXT_DAY + QUIET_AFTER)
         sign_in(client)
         quiet = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
