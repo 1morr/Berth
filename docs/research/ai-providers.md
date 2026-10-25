@@ -210,7 +210,7 @@ class ChatProvider(Protocol):
 
 | 第二次的結果 | 判成 | 說給人聽（票 08 / 09 的文案方向） |
 |---|---|---|
-| 一個 `berth_echo` 的 ToolCall，`arguments` 解得開、`nonce` 對，第三次也過 | 支援 | — |
+| 一個 `berth_echo` 的 ToolCall，`arguments` 解得開、`nonce` 對，第三次也過（票 08：第三次又呼叫一次、名字與 nonce 都對也算，brief §20.24） | 支援 | — |
 | 400，且第一次成功 | 不支援 | 原文照記；認得的給下一步：Ollama 的 `does not support tools` →「換一個支援工具的模型」；vLLM →「啟動時加 `--enable-auto-tool-choice` 與 `--tool-call-parser`」 |
 | 200，只有文字 | 不支援 | 文字裡出現 nonce 或工具名 →「模型把呼叫寫成了文字」（vLLM 沒開 parser 的樣子）；沒有 →「端點忽略了工具」（OpenRouter 的樣子） |
 | 呼叫了，但名字或 nonce 不對 | 不支援 | 「呼叫的格式不對」 |

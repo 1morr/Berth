@@ -83,7 +83,9 @@ async def call_model(
                 ended = event
         if ended is None:
             # adapter 保證最後一個是 TurnEnded；沒有就是它的錯，當成 provider 那一側出事。
-            raise AiProviderError(AiFailure.PROVIDER_DOWN, "stream ended without a turn")
+            raise AiProviderError(
+                AiFailure.PROVIDER_DOWN, "stream ended without a turn", usage=known
+            )
     except AiProviderError as exc:
         await record(exc.usage, exc.failure)
         raise

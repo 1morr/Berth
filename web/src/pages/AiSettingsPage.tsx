@@ -142,10 +142,6 @@ function FailureLines({ failure, retryAfter }: { failure: AiFailure; retryAfter:
   )
 }
 
-/**
- * 表單的草稿放在這一層：狀態要知道「改了格式、base URL 或模型還沒存」（後端存下時會清掉測試結論），
- * 測試也只打**存著的**設定，所以草稿沒存時要先存。
- */
 /** 一次最多列幾顆模型鍵。 */
 const MODEL_CHIPS = 12
 
@@ -165,6 +161,10 @@ function shownModels(options: string[], typed: string): { shown: string[]; more:
   }
 }
 
+/**
+ * 表單的草稿放在這一層：狀態要知道「改了格式、base URL 或模型還沒存」（後端存下時會清掉測試結論），
+ * 測試也只打**存著的**設定，所以草稿沒存時要先存。
+ */
 function AiBody({ ai }: { ai: AiSettings }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()

@@ -16,7 +16,15 @@ import respx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.ai import ChatRequest, Endpoint, TextPart, UserTurn
+from berth.adapters.ai import (
+    AiProviderError,
+    ChatRequest,
+    Endpoint,
+    TextPart,
+    Usage,
+    UsageReported,
+    UserTurn,
+)
 from berth.adapters.ai.anthropic import AnthropicProvider
 from berth.domain import AiCallOrigin, AiFailure, ApiFormat
 from berth.models import AiCall
@@ -135,3 +143,30 @@ async def test_a_call_cancelled_before_anything_came_back_is_still_a_row(
     row = (await session.scalars(select(AiCall))).one()
     assert row.failure is AiFailure.CANCELLED
     assert (row.input_tokens, row.output_tokens) == (None, None)
+
+
+async def test_a_stream_that_ends_without_a_turn_keeps_the_usage_it_reported(
+    session: AsyncSession,
+) -> None:
+    class Truncated:
+        host = "ai.invalid"
+
+        async def stream(self, request: ChatRequest) -> AsyncIterator[object]:
+            yield UsageReported(Usage(input_tokens=30, cache_read_tokens=10))
+
+        async def list_models(self) -> None:  # pragma: no cover
+            return None
+
+    with pytest.raises(AiProviderError):
+        await call_model(
+            session,
+            Truncated(),  # type: ignore[arg-type]  # 只用到 host 與 stream
+            HELLO,
+            format=ApiFormat.ANTHROPIC,
+            origin=AiCallOrigin.TEST,
+            user_id=None,
+        )
+
+    row = (await session.scalars(select(AiCall))).one()
+    assert row.failure is AiFailure.PROVIDER_DOWN
+    assert (row.input_tokens, row.cache_read_tokens, row.output_tokens) == (30, 10, None)

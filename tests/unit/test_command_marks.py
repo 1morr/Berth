@@ -34,6 +34,8 @@ from berth.services.commands import Effect, mark_of
 #: 要自己加進來（`violations` 只守「有標」，不守「標對」）。
 EXTERNAL_IRREVERSIBLE = frozenset(
     {
+        "ai.run_ai_test",  # 花掉的 tokens 收不回來
+        "ai_calls.call_model",
         "auth.sign_in",  # Jellyfin 的裝置紀錄
         "deletion.delete_job",  # 從 qBittorrent 移除 torrent
         "indexer.add_recommended_indexers",  # Prowlarr 的站
