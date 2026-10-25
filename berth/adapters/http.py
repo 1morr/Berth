@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import socket
 import ssl
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from functools import cache
 from types import TracebackType
 from typing import Any, Self
@@ -160,27 +161,43 @@ class HttpSession:
         """
         try:
             response = await self._client.request(method, path, **kwargs)
-        except httpx.UnsupportedProtocol as exc:
-            raise SchemeMissingError(f"{method} {path}: {exc}") from exc
-        except httpx.ConnectError as exc:
-            if is_dns_failure(exc):
-                raise ServiceNotDeployedError(f"{method} {path}: host does not resolve") from exc
-            if is_plain_http_answer(exc):
-                raise SchemeMismatchError(f"{method} {path}: {exc}") from exc
-            raise ServiceUnavailableError(f"{method} {path}: connection refused") from exc
-        except httpx.ConnectTimeout as exc:
-            if is_plain_http_answer(exc):
-                raise SchemeMismatchError(f"{method} {path}: TLS handshake got no answer") from exc
-            raise ServiceUnavailableError(f"{method} {path}: ConnectTimeout") from exc
-        except httpx.TimeoutException as exc:
-            raise ServiceTimeoutError(f"{method} {path}: {type(exc).__name__}") from exc
         except httpx.HTTPError as exc:
-            raise ServiceUnavailableError(f"{method} {path}: {type(exc).__name__}") from exc
+            raise _classify(method, path, exc) from exc
 
         if response.status_code in tolerate:
             return response
         raise_for_status(f"{method} {path}", response.status_code)
         return response
+
+    @asynccontextmanager
+    async def stream(self, method: str, path: str, **kwargs: Any) -> AsyncIterator[httpx.Response]:
+        """串流的回應，**每一個狀態碼都原樣交出來**：串流的那一方自己讀 body 分類（AI provider 的
+        錯誤 body 才說得出是限流還是額度用完）。傳輸層的失敗——連線前與讀 body 時——照
+        `request` 的分法。"""
+        try:
+            async with self._client.stream(method, path, **kwargs) as response:
+                yield response
+        except httpx.HTTPError as exc:
+            raise _classify(method, path, exc) from exc
+
+
+def _classify(method: str, path: str, exc: httpx.HTTPError) -> ServiceError:
+    """httpx 的傳輸層例外 → 分類過的那一種。"""
+    if isinstance(exc, httpx.UnsupportedProtocol):
+        return SchemeMissingError(f"{method} {path}: {exc}")
+    if isinstance(exc, httpx.ConnectError):
+        if is_dns_failure(exc):
+            return ServiceNotDeployedError(f"{method} {path}: host does not resolve")
+        if is_plain_http_answer(exc):
+            return SchemeMismatchError(f"{method} {path}: {exc}")
+        return ServiceUnavailableError(f"{method} {path}: connection refused")
+    if isinstance(exc, httpx.ConnectTimeout):
+        if is_plain_http_answer(exc):
+            return SchemeMismatchError(f"{method} {path}: TLS handshake got no answer")
+        return ServiceUnavailableError(f"{method} {path}: ConnectTimeout")
+    if isinstance(exc, httpx.TimeoutException):
+        return ServiceTimeoutError(f"{method} {path}: {type(exc).__name__}")
+    return ServiceUnavailableError(f"{method} {path}: {type(exc).__name__}")
 
 
 def raise_for_status(label: str, status: int) -> None:

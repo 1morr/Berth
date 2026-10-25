@@ -17,7 +17,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from html import escape
@@ -32,6 +32,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
+from berth.adapters.ai import (
+    AiProviderError,
+    ChatProvider,
+    ChatRequest,
+    Endpoint,
+    ModelInfo,
+    ModelTurn,
+    StopReason,
+    StreamEvent,
+    TextDelta,
+    TextPart,
+    ToolCall,
+    ToolResult,
+    TurnEnded,
+    Usage,
+    UserTurn,
+)
+from berth.adapters.ai.anthropic import AnthropicProvider
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -97,6 +115,7 @@ from berth.api.deps import get_bundled_services, get_client_factory, get_host_re
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
+    AiFailure,
     CollectionType,
     Confidence,
     ConnectionReason,
@@ -1888,6 +1907,59 @@ class ScenarioHosts:
         return host not in self._undeployed
 
 
+class DemoChatProvider:
+    """設定頁 AI 一格的演練（M5 票 08）：照請求的形狀作答，三步探針走得完。
+
+    key 是 `rejected` 演「key 不對」，模型名帶 `missing` 演「模型不存在」、帶 `chat-only` 演
+    「只能聊天」（只回文字、不呼叫工具）。其餘一律回 `ok`、照抄 nonce、收到工具結果回一句話。
+    設了 `BERTH_AI_REAL` 時不走這裡，打真的端點（`FakeClientFactory.ai`）。
+    """
+
+    host = "demo.invalid"
+
+    def __init__(self, endpoint: Endpoint) -> None:
+        self._key = endpoint.api_key
+
+    async def stream(self, request: ChatRequest) -> AsyncIterator[StreamEvent]:
+        await asyncio.sleep(0.4)
+        if self._key == "rejected":
+            raise AiProviderError(
+                AiFailure.AUTH_FAILED, "401 authentication_error: invalid x-api-key"
+            )
+        if "missing" in request.model:
+            raise AiProviderError(
+                AiFailure.MODEL_NOT_FOUND, f"404 not_found_error: model: {request.model}"
+            )
+        usage = Usage(
+            input_tokens=24, output_tokens=6, cache_write_tokens=None, cache_read_tokens=0
+        )
+        last = request.turns[-1]
+        if not request.tools:
+            reply = ModelTurn((TextPart("ok"),))
+        elif isinstance(last, UserTurn) and any(isinstance(p, ToolResult) for p in last.parts):
+            reply = ModelTurn((TextPart("Got the nonce back."),))
+        elif "chat-only" in request.model:
+            reply = ModelTurn((TextPart("Sure, I have called the tool."),))
+        else:
+            asked = next(p.text for p in last.parts if isinstance(p, TextPart))
+            nonce = asked.split('"')[1]
+            reply = ModelTurn(
+                (
+                    ToolCall(
+                        id="toolu_demo", name="berth_echo", arguments=json.dumps({"nonce": nonce})
+                    ),
+                )
+            )
+        if reply.text:
+            yield TextDelta(reply.text)
+        stop = StopReason.TOOL_CALLS if reply.tool_calls else StopReason.END
+        yield TurnEnded(stop=stop, stop_raw=stop.value, reply=reply, usage=usage)
+
+    async def list_models(self) -> list[ModelInfo] | None:
+        names = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "demo-chat-only")
+        return [ModelInfo(id=name) for name in names]
+
+
 class FakeClientFactory:
     """回情境裡那**同一份**實例。每次造新的，第 3 步的九步就永遠從零開始。
 
@@ -1953,6 +2025,11 @@ class FakeClientFactory:
     def discord(self, token: str) -> DiscordBot:
         self._discord.token = token
         return self._discord
+
+    def ai(self, endpoint: Endpoint) -> ChatProvider:
+        if os.environ.get("BERTH_AI_REAL"):
+            return AnthropicProvider(endpoint)
+        return DemoChatProvider(endpoint)
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.prowlarr.ping_error is not None:

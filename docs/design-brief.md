@@ -1826,4 +1826,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **外部文字**：兩家的建議與 §6.10「外部文字是資料」一致——Anthropic「Put untrusted content only in tool results ... never in `system` prompts or plain user `text` blocks」並建議 JSON 編碼、不把自己的指示放進工具結果，OpenAI 說不受信任的輸入不進 developer 訊息。
 - **壓縮與 preserved thinking**：Fable 5.1、Opus 5.5、Sonnet 5.5、Haiku 5.5 的 thinking block 綁著產生它的前綴，改前面的訊息之後再送回它，**2026-08-31 起建立的帳號是 400**；拿掉全部 thinking 是合法的。所以 Berth 的壓縮只在回覆的邊界做、壓縮時拿掉全部 thinking、之後照樣 append-only（plan §11.6〈上下文管理〉）。Anthropic 的伺服器端 context editing 與壓縮（beta）與 OpenAI Responses 的壓縮 M5 不用：第三方都沒有、兩套會在不同的點觸發。
 - **Skill**：Anthropic Agent Skills、agentskills.io 開放規格與 OpenClaw 是同一種 `SKILL.md`（`name` ≤ 64 字元小寫加連字號、不含 `anthropic` / `claude`、等於資料夾名；`description` ≤ 1,024 字元、第三人稱、說做什麼與何時用；正文 ≤ 500 行；三層漸進載入）。Berth 只認 `name` 與 `description`，不認得的欄位讓測試紅，沒有第三層。
+- **票 08 實作時定的（2026-10-25，沒有真 key；標「未實測」的等有 key 時補）**：
+  - **SSE 用 `httpx-sse` 0.4.3**（`EventSource(response).aiter_sse()`）；與 httpx 0.28、respx 一起用的情況由 `tests/integration/test_anthropic_provider.py` 驗過。
+  - **認證只送 `x-api-key`**（上面「base URL」那一條）。OpenRouter 的 Anthropic 端點收不收它**未實測**；不收的話設定頁的測試第一次就說出 401 的原文。
+  - **頂層 `cache_control` 照送**：第三方碰到它是忽略還是 400 **未實測**，同上由測試的第一次說出來。thinking block 當 `OpaquePart` 原樣帶回（`thinking_delta` 與 `signature_delta` 拼回完整 block）。
+  - **「AI 設定好了」**：有端點（填了 base URL，或官方端點而且有 key）、有模型（官方端點留空用 `claude-opus-5-5`）。沒設定好時沒有東西叫模型，系統與 M4 相同。
+  - **探針照上面「偵測」那一條打三次**，每一次各記一列 `ai_calls`；第二次帶工具的回 400 判「不支援」，401 / 404 這類不會只因為多了工具才出現的錯是「這次沒測成」、不存。第三次又呼叫一次、名字與 nonce 都對的也算支援（第一次嘗試實跑 DeepSeek 14 / 20 這樣）。
+  - **不是 Anthropic 形狀的 404 不算模型不存在**：`error.type` 不是 `not_found_error` 的 404 多半是 base URL 多寫或少寫了 `/v1`，歸「看不懂」並附原文。
+  - **串流講到一半被取消也記一列**（`failure = cancelled`）：adapter 在 `message_start` 之後就發一個 `UsageReported`，記的是取消前最後知道的數字，沒講完的輸出是「不知道」。
 - **對話指令**：Claude Code 只認訊息開頭，`/clear` 的別名有 `/new`、`/compact [instructions]`、`/usage`（`/cost` 是別名）、`/undo` 是 `/rewind` 的別名；OpenClaw 的 `/new`、`/compact`、`/status`、`/usage`（控制用量列）、沒有 `/undo`。M5 照 plan §11.6 的六個，建議 `/new` 加別名 `/clear`（待使用者拍板，票 07 的 Comments）。

@@ -67,6 +67,7 @@ EXTERNAL_IRREVERSIBLE = frozenset(
 #: 確認卡，所以標 `irreversible`（M5 票 05）。
 SETTINGS_IRREVERSIBLE = frozenset(
     {
+        "ai.set_ai",  # 清掉的 key 只寫不讀、回不來
         "deeplink.set_public_url",
         "health_issues.set_min_free",
         "notify.set_berth_url",
