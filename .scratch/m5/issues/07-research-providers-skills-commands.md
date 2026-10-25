@@ -1,6 +1,6 @@
 # 07 — 研究：兩種 provider 格式、Skill 格式與對話指令的慣例
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None — can start immediately
 
@@ -29,9 +29,36 @@
 
 ## 驗收
 
-- [ ] `docs/research/` 有一份附來源的結論，兩種格式逐條對照；brief §20 新的一節摘要並連結
-- [ ] 每一條都有官方文件或實測的出處，沒有憑記憶的版本號
-- [ ] 給出偵測「支不支援工具呼叫」的做法
-- [ ] 給出共同介面的草案（訊息、工具、串流事件、usage）與 SDK / httpx 的建議
-- [ ] 給出 context window 的取法、伺服器端壓縮的建議、`SKILL.md` 的建議格式與對話指令的名單
-- [ ] progress.md 已更新
+- [x] `docs/research/` 有一份附來源的結論，兩種格式逐條對照；brief §20 新的一節摘要並連結
+- [x] 每一條都有官方文件或實測的出處，沒有憑記憶的版本號
+- [x] 給出偵測「支不支援工具呼叫」的做法
+- [x] 給出共同介面的草案（訊息、工具、串流事件、usage）與 SDK / httpx 的建議
+- [x] 給出 context window 的取法、伺服器端壓縮的建議、`SKILL.md` 的建議格式與對話指令的名單
+- [x] progress.md 已更新
+
+## Comments
+
+結論在 `docs/research/ai-providers.md`，摘要在 brief §20.24。
+
+**等使用者拍板**（與 plan §11.6 或票面不同、或是取捨）：
+
+- **對話指令**：名單與 plan §11.6 相同（`/help`、`/new`、`/compact [重點]`、`/usage`、`/skills`、`/undo`），只建議 `/new` 多一個別名 `/clear`（Claude Code 的主名；它的 `/clear` 別名有 `/new`）。`/undo` 在 Claude Code 是 `/rewind`（倒回對話與程式碼）的別名，Berth 的語意是撤銷最近一次 AI 的寫入，名字保留、`/help` 寫清楚。不收 `/status`、`/context`、`/resume`、`/stop`、`/reset`、`/cost`（理由在研究文件結論 12）。票 16 開工前定。
+- **OpenAI 相容走 Chat Completions 的代價**：OpenAI 官方的 GPT-6 Astra / 6.1 Sol 在 Chat Completions 不能呼叫工具，設定頁會測成「只能聊天」。第三方（OpenRouter、vLLM、Ollama、DeepSeek）不受影響。要用這兩個模型做工具呼叫得另加 Responses adapter，建議等有人要再開票。
+
+- **研究自己加的、plan 與票面沒寫的決定**（後面的票開工時可以推翻）：`/usage` 多報「輸入佔 context window 的比例」（把 `/context` 併進來，票 16）；保險絲④細化成「已經有輸出送到人面前的不重試」、「連不上重試一次」、「沒有 `retry-after` 的 Anthropic 429 照限流重試」（票 10、18）；`SKILL.md` 的 `description` 收緊到 ≤ 200 字元、不認得的欄位讓測試紅、沒有第三層（票 15）；context window 讀不到時預設 32k（票 17）。
+
+**給後面的票**：
+
+- 票 17：plan §11.6〈上下文管理〉已補三條（只在回覆邊界壓、壓縮時 Anthropic adapter 拿掉全部 thinking、之後 append-only）。票面「先把舊的工具結果換成已收起」「最近幾輪原樣保留」照做沒問題，前提是這三條；不照做的話，2026-08-31 之後建立的 Anthropic 帳號壓縮後第一個請求就 400。換掉工具結果時 `tool_use_id` 不變。
+- 票 08：Anthropic adapter 建議送 `x-api-key`（官方仍支援、DeepSeek 只列它）；OpenRouter 收不收要用真 key 實測。研究文件最後一節列了要真 key 才確認得了的事，實測後補回 brief §20.24。「AI 有沒有設定」不能只看 key（自架的 Ollama / vLLM 可以沒有）。
+- 票 08 / 09：context window 讀不到時用保守預設 32k，設定頁多一格選填的 context window（讀到時預填）。
+- 票 08：探測工具支援是三步（不帶工具 → 帶假工具 → 把結果送回去），第三步是研究加的建議。
+- 票 08：錯誤分類票面寫四種（限流、provider 掛掉、驗證失敗、連不上），研究分七種，多了**額度用完**（402、OpenAI 429 的額度類 `error.code`、Anthropic spend-cap 429——不重試）、**模型不存在**、**請求被拒 / 看不懂**；照研究結論 8 做，否則額度類會被當成限流重試。
+- 票 17：驗收「快取只失效在被換掉的那一段之後」在 Anthropic 格式下要改寫——壓縮時拿掉全部 thinking，messages 段的快取從第一則帶 thinking 的回覆起失效（tools、system 照樣吃得到）。OpenAI 相容格式照原驗收。
+- 票 09：DeepSeek 思考模式帶工具時要不要回送 `reasoning_content` 未查到，實測；要的話共同介面的 `OpaquePart` 也收它。
+
+### code-review（基準 `e1ff4381`）
+
+已改：claude-api skill 來源的三條（Opus 5.5 thinking 關不掉與 effort 預設、Sonnet 5.5 的使用者訊息位置、壓縮時丟 thinking 的代價）改引官方頁；OpenClaw 兩頁改下載 GitHub 原文逐字對過；Mythos 5.1 與「現役四個」的矛盾；「prompt is too long」在結論 8 與 10 說法統一；plan §11.6〈Skill〉〈對話指令〉的「開工時查證」改指 brief §20.24；brief §6.10 的括號限在側面板；progress 新列補結尾的 `|`；development.md 補研究文件連結；上面幾條交接。
+
+未處理：`scripts/experiments/README.md` 開頭的票、研究文件與 brief 章節清單沒加 M5 07（清單早就停在 M3，不在這張補）；brief §20.24 逐條沒附 URL，只在段首連研究文件（研究文件逐條有出處）；`ai_sdk_mocking.py` 的 `_call_both` 兩段 try/except 重複（一次性腳本，照第一次嘗試原樣）；共同介面草案的 `OpaquePart.format` 目前只有 Anthropic 用、`ChatRequest` 與 CONTEXT.md 的 AI Call 擦邊——草案，票 08 定名字。

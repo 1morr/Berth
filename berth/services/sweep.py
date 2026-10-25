@@ -4,7 +4,10 @@
 「等你處理」），已經有 Issue 管著的不重複開；量到條件不在了由系統收掉。排程在
 `pipeline/sweeping.py`。
 
-- **卡住的**（`_stuck_first_batches`）：還沒確認的 RSS Series 有 Job 停在 `submit_failed` /
+- **卡住的 Job**（`_stuck_jobs`，M5 票 03）：停在 `submit_failed`（不會再自動重送）、
+  `import_failed`、`stalled`（滿 `STUCK_AFTER`）的每一筆各一件，型別與狀態同名。排在第一批之前：
+  它們按得了重試，有了它們「第一批卡住」就不再為同一筆開第二件（`_covered`）。
+- **卡住的第一批**（`_stuck_first_batches`）：還沒確認的 RSS Series 有 Job 停在 `submit_failed` /
   `client_error` 超過 `STUCK_AFTER`。第一批要整批落地才由系統確認（`services.first_batch`），
   停住的那一筆讓整批一直等人（M4 票 11 的遺留）。
 - **一直失敗的 Feed**（`_failing_feeds`，M4 票 130）：輪詢或每日補漏從由好轉壞的那一輪起一直失敗
@@ -28,7 +31,7 @@ import logging
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,8 +76,28 @@ from berth.services.waiting import WaitingSource, waiting_now
 logger = logging.getLogger(__name__)
 
 #: 停了多久才算卡住（票面預設 24 小時）。送單失敗的暫時性重試（`jobs.retry_due`）在這之內早就
-#: 用完；過了一天還停著的，沒有人看就不會動。
+#: 用完；過了一天還停著的，沒有人看就不會動。卡住的 Job 只有停滯照它等（M5 票 03）：送單失敗不會再
+#: 自動重送、入庫失敗本來就沒有自動重試，多等一天也不會自己好。
 STUCK_AFTER = timedelta(hours=24)
+
+
+class _StuckJob(NamedTuple):
+    """卡住的 Job 的一種（M5 票 03）。"""
+
+    kind: IssueType
+    #: 停下來那一刻寫的事件。入庫失敗的那一刻沒有自己的事件，`link_failed` 是逐檔寫在它前面的
+    #: 那幾筆。
+    stopped_by: EventType
+    #: 要停滿 `STUCK_AFTER` 才算：只有會自己恢復的停滯。
+    waits: bool
+
+
+#: 卡住的 Job 的三種，依 Job 的狀態。
+_STUCK_JOBS: dict[JobState, _StuckJob] = {
+    JobState.SUBMIT_FAILED: _StuckJob(IssueType.SUBMIT_FAILED, EventType.SUBMIT_FAILED, False),
+    JobState.IMPORT_FAILED: _StuckJob(IssueType.IMPORT_FAILED, EventType.LINK_FAILED, False),
+    JobState.STALLED: _StuckJob(IssueType.STALLED, EventType.STALLED, True),
+}
 
 #: 讓第一批停住的那兩種狀態（M4 票 11 的 Comments）。其他停住的狀態（`review`、
 #: `import_failed`）在審核佇列或 Job 頁上已經等著人。
@@ -110,6 +133,8 @@ REMIND_EVERY = timedelta(days=3)
 class SweepOutcome:
     """一輪做了什麼（迴圈記 log 用）。"""
 
+    #: 這一輪開著（新開或還在）的卡住的 Job（三種加起來）。
+    jobs: int
     #: 這一輪開著（新開或還在）的「第一批卡住」。
     stuck: int
     #: 這一輪開著的「一直失敗的 Feed」（輪詢與補漏各算一件）。
@@ -129,6 +154,7 @@ class SweepOutcome:
 async def sweep_once(session: AsyncSession, *, now: datetime | None = None) -> SweepOutcome:
     """巡檢一輪，最後 commit。"""
     moment = now or utcnow()
+    jobs, released = await _stuck_jobs(session, moment)
     stuck, cleared = await _stuck_first_batches(session, moment)
     failing, recovered = await _failing_feeds(session, moment)
     missing, filled = await _missing_episodes(session, moment)
@@ -136,13 +162,83 @@ async def sweep_once(session: AsyncSession, *, now: datetime | None = None) -> S
     reminded = await _remind_lingering(session, moment)
     await session.commit()
     return SweepOutcome(
+        jobs=jobs,
         stuck=stuck,
         failing=failing,
         missing=missing,
         colliding=colliding,
-        cleared=cleared + recovered + filled + untangled,
+        cleared=released + cleared + recovered + filled + untangled,
         reminded=reminded,
     )
+
+
+async def _stuck_jobs(session: AsyncSession, moment: datetime) -> tuple[int, int]:
+    """每一筆卡住的 Job 開（或更新）一件，收掉不再卡住的。回（開著的件數，收掉的件數）。
+
+    已經有別的 Issue 管著它現在這個狀態的不開（`_covered`：重新送單被拒、落回 `submit_failed` 的
+    `client_removed`）。Job 離開那個狀態時 poller 那一輪就收掉了（`issues.close_settled`）；這裡收的
+    是還在那個狀態、但不再算卡住的——送單失敗又排上了自動重送。
+    """
+    rows = list(await session.scalars(select(Job).where(Job.state.in_(_STUCK_JOBS))))
+    kinds = [stuck.kind for stuck in _STUCK_JOBS.values()]
+    covered = await _covered(session, rows, excluding=kinds)
+    last = await _last_stops(session, rows)
+    flagged: set[tuple[IssueType, str]] = set()
+    for job in rows:
+        kind, stopped_by, waits = _STUCK_JOBS[job.state]
+        stopped, payload = last.get((job.hash, stopped_by.value), (None, {}))
+        since = stopped or job.completed_at or job.added_at
+        if (
+            job.hash in covered
+            or (job.state is JobState.SUBMIT_FAILED and _retry_pending(payload, moment))
+            or (waits and moment - since < STUCK_AFTER)
+        ):
+            continue
+        await record_issue(
+            session,
+            kind,
+            job_hash=job.hash,
+            detail={
+                "name": job.name,
+                "state": job.state.value,
+                "error": job.error,
+                "since": since.isoformat(),
+            },
+            now=moment,
+        )
+        flagged.add((kind, job.hash))
+    cleared = await _settle(session, kinds, flagged, moment)
+    return len(flagged), cleared
+
+
+def _retry_pending(failure: dict[str, Any], moment: datetime) -> bool:
+    """這一次送單失敗還有自動重送排著。過了時間還沒送的也算——qBittorrent 停機時 `retry_due` 不花
+    次數、等它回來；但過期滿 `STUCK_AFTER` 就不算了：Route 停用或紅著時 `retry_due` 也是留在原地
+    不送，那一筆沒有人在管（M5 票 03 code-review）。"""
+    retry_at = failure.get("retry_at")
+    return isinstance(retry_at, str) and moment - datetime.fromisoformat(retry_at) < STUCK_AFTER
+
+
+async def _last_stops(
+    session: AsyncSession, jobs: list[Job]
+) -> dict[tuple[str, str], tuple[datetime, dict[str, Any]]]:
+    """每一筆的 `_STUCK_JOBS` 那幾種事件，各自最後一筆的時刻與 payload，鍵是（hash, 事件型別）。"""
+    if not jobs:
+        return {}
+    found: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+    for job_hash, event, created_at, payload in (
+        await session.execute(
+            select(Event.job_hash, Event.type, Event.created_at, Event.payload_json)
+            .where(
+                Event.job_hash.in_([job.hash for job in jobs]),
+                Event.type.in_([stuck.stopped_by.value for stuck in _STUCK_JOBS.values()]),
+            )
+            .order_by(Event.id)
+        )
+    ).tuples():
+        if job_hash is not None:
+            found[(job_hash, event)] = (created_at, payload or {})
+    return found
 
 
 async def _stuck_first_batches(session: AsyncSession, moment: datetime) -> tuple[int, int]:
@@ -534,18 +630,20 @@ async def _remind_lingering(session: AsyncSession, moment: datetime) -> int:
     return queued
 
 
-async def _covered(session: AsyncSession, jobs: list[Job]) -> set[str]:
-    """這幾筆裡已經有一件管線 Issue 說著它現在這個狀態的（`client_error`；重新送單被拒、落回
-    `submit_failed` 的 `client_removed`），不再為同一筆開第二件：開著的那一件已經在等人；被忽略的
-    那一件是人看過、說了不用管，換一個型別再問同一筆是噪音（M4 票 129 code-review）。收掉的不算：
-    它說的是過去。"""
+async def _covered(
+    session: AsyncSession, jobs: list[Job], *, excluding: Collection[IssueType] = ()
+) -> set[str]:
+    """這幾筆裡已經有一件 Issue 說著它現在這個狀態的（`client_error`；重新送單被拒、落回
+    `submit_failed` 的 `client_removed`；卡住的 Job 那三種，M5 票 03），不再為同一筆開第二件：開著的
+    那一件已經在等人；被忽略的那一件是人看過、說了不用管，換一個型別再問同一筆是噪音（M4 票 129
+    code-review）。收掉的不算：它說的是過去。`excluding` 那幾種不算數：問的人自己就是那幾種。"""
     if not jobs:
         return set()
     state = {job.hash: job.state for job in jobs}
     open_rows = await session.execute(
         select(Issue.type, Issue.job_hash).where(
             Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
-            Issue.type.in_(STANDS_WHILE),
+            Issue.type.in_(set(STANDS_WHILE) - set(excluding)),
             Issue.job_hash.in_(state),
         )
     )

@@ -46,6 +46,7 @@ const REASONS: ReasonSet<IssueRefusal> = {
   source_unavailable: true,
   resubmit_failed: true,
   route_unusable: true,
+  low_disk_space: true,
   media_required: true,
   unclaimable: true,
 }

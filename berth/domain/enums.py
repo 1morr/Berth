@@ -207,11 +207,11 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-    各加一種，M4 票 130 加四種）：
+    **二十二種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+    各加一種，M4 票 130 加四種，M5 票 03 加三種）：
     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
+    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再八種是每日巡檢
     （`sweeper`）。各邊共用同一個
     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
     與 `ISSUE_ACTIONS` 那兩條閘門。
@@ -278,6 +278,17 @@ class IssueType(StrEnum):
     #: 它們的發佈名寫的集號不同（兩個不同的發佈被對到同一集）。版本並存（brief §7.7、§7.8）不算。
     #: 一個 Series 一件；改正了或刪掉了，下一輪巡檢由系統收掉。
     SERIES_EPISODES_COLLIDE = "series_episodes_collide"
+    #: 每日巡檢（M5 票 03）：一筆 Job 停在 `submit_failed`，而且**不會再自動重送**——最後一次失敗
+    #: 再問也一樣（`.torrent` 404、qBittorrent 明確拒絕），或暫時的次數用完了（plan §3.1）。還排著
+    #: 自動重送的不算。**一種狀態一種型別**（同管線那三種）：每一種的出路不同，按鈕與「還是現況」
+    #: 都照型別寫死（`ISSUE_ACTIONS`、`issues.STANDS_WHILE`），不靠 `detail_json` 裡的一個原因分。
+    #: Job 離開這個狀態時 poller 那一輪收掉，又排上自動重送的由下一輪巡檢收掉。
+    SUBMIT_FAILED = "submit_failed"
+    #: 每日巡檢（M5 票 03）：一筆 Job 停在 `import_failed`。入庫沒有自動重試，停在這裡就是等人。
+    IMPORT_FAILED = "import_failed"
+    #: 每日巡檢（M5 票 03）：一筆 Job 停滯（`stalled`）滿 `sweep.STUCK_AFTER`。停滯會自己恢復
+    #: （做種變多就動了），所以才停一陣子的不算；恢復了 poller 那一輪收掉。
+    STALLED = "stalled"
 
 
 #: 每日巡檢（`sweeper`）開的那幾種（M4 票 129、130）。週報的「還有什麼等人」另外點出它們
@@ -289,6 +300,9 @@ SWEPT_ISSUE_TYPES = frozenset(
         IssueType.FEED_BACKFILL_FAILING,
         IssueType.SERIES_EPISODES_MISSING,
         IssueType.SERIES_EPISODES_COLLIDE,
+        IssueType.SUBMIT_FAILED,
+        IssueType.IMPORT_FAILED,
+        IssueType.STALLED,
     }
 )
 
@@ -364,6 +378,10 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     # 缺集也是**一個 Series 一件**：缺的那幾集列在 `detail_json`，補上一集是同一件變短。
     IssueType.SERIES_EPISODES_MISSING: IssueSubject.RSS_SERIES,
     IssueType.SERIES_EPISODES_COLLIDE: IssueSubject.RSS_SERIES,
+    # 卡住的 Job（M5 票 03）是**那一筆下載**的事：同一個 Series 停了兩筆就是兩件，各自重試。
+    IssueType.SUBMIT_FAILED: IssueSubject.JOB_HASH,
+    IssueType.IMPORT_FAILED: IssueSubject.JOB_HASH,
+    IssueType.STALLED: IssueSubject.JOB_HASH,
 }
 
 
@@ -421,6 +439,10 @@ class IssueAction(StrEnum):
     CLAIM_TORRENT = "claim_torrent"
     #: 認領進帳本：單一檔案的 `rebuild-ledger`——配得上的長回一列，配不到的拒絕、那一件照舊開著。
     CLAIM_FILE = "claim_file"
+    #: 放棄：卡住的那一筆下載不要了（M5 票 03）。就是 Job 頁的刪除範圍**四個旗標全不勾**，與兩顆
+    #: 「承認」同一個做法（`delete_job`、Job 進 `removed`），磁碟與 qBittorrent 都不動；要連 torrent
+    #: 或檔案一起刪，走 Job 頁的刪除範圍。
+    ABANDON = "abandon"
 
 
 #: 逐型別按得了哪幾顆，**順序就是畫面上的順序**（第一顆是 brief §9.1 的預設建議動作）。
@@ -464,6 +486,12 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.SERIES_EPISODES_MISSING: (),
     # 改正在作品頁的檔案與版本（「修正」走 rematch）；哪一份放錯要人看發佈名才知道。
     IssueType.SERIES_EPISODES_COLLIDE: (),
+    # 卡住的 Job（M5 票 03）：**沿用 Job 頁的那幾顆**。重試是 Job 頁的重試（`jobs.retry_job`：送單
+    # 失敗再送一次、入庫失敗從沒鏈接的那幾個接著做），放棄是刪除範圍四個旗標全不勾。停滯沒有
+    # 重試：Job 頁也沒有，torrent 一直在 qBittorrent 上跑，等的是做種的人。
+    IssueType.SUBMIT_FAILED: (IssueAction.RETRY, IssueAction.ABANDON),
+    IssueType.IMPORT_FAILED: (IssueAction.RETRY, IssueAction.ABANDON),
+    IssueType.STALLED: (IssueAction.ABANDON,),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：
@@ -490,6 +518,8 @@ ACTION_DELETES: dict[IssueAction, bool] = {
     IssueAction.ADOPT: False,
     IssueAction.CLAIM_TORRENT: False,
     IssueAction.CLAIM_FILE: False,
+    # 同兩顆「承認」：四個旗標全不勾。
+    IssueAction.ABANDON: False,
 }
 
 #: 這幾顆要管理員選一部作品才按得下去（`POST /issues/{id}/resolve` 的 `media`，票 10）。
@@ -1444,6 +1474,9 @@ class IssueRefusal(StrEnum):
     #: 重新送單真的送了，qBittorrent 不收（409 / 415）。同 `relink_failed`，`detail` 是原文；
     #: 那一筆現在是 `submit_failed`，這一件仍然開著、再按一次就是再送一次。
     RESUBMIT_FAILED = "resubmit_failed"
+    #: 重試那一筆時，它的 Route 所在的磁碟剩下的空間低於門檻（與第一次送單同一個前提，
+    #: `services/jobs.check_disk`）。什麼都還沒動。
+    LOW_DISK_SPACE = "low_disk_space"
     #: 重新送單時那一筆的 Route 用不了（被刪了、停用了、紅著、改收別種作品）：送出去也入不了庫。
     #: 與第一次送單同一組前提（`services/jobs.check_route`）。
     ROUTE_UNUSABLE = "route_unusable"
