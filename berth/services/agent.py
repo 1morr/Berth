@@ -786,3 +786,11 @@ async def read_conversation(
     if conversation is None or conversation.user_id != user_id:
         raise AgentRefusedError(AgentRefusal.CONVERSATION_MISSING, conversation_id)
     return tuple(load_history(conversation.history_json))
+
+
+# 側面板一打開就要分得出「可以問」與「AI 沒開」（票 12）；一般使用者讀不到 `ai.read_ai`。
+# 門禁的一環，不當工具：問得到它的那一輪，AI 一定是開著的。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def ai_enabled(session: AsyncSession) -> bool:
+    """AI 開著沒有（`open_turn` 擋 `ai_disabled` 看的是同一格）。"""
+    return (await read_settings(session, AiSettings)).enabled

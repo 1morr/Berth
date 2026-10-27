@@ -4,6 +4,7 @@
   前端 `useChat` 每次送整份訊息，這裡**只取最後一則使用者訊息的字**，歷史以資料庫為準；前端送回的
   工具結果與核准一律不採用（brief §20.24：adapter 預設照收）。body 另外帶 `language`（介面語言，
   `domain.Language`），防護停下時的說明照它寫。
+- `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
   重新載入頁面時接回來。
 
@@ -46,6 +47,7 @@ from berth.domain import Actor, AgentRefusal, Language
 from berth.services.agent import (
     AgentRefusedError,
     Turn,
+    ai_enabled,
     open_turn,
     read_conversation,
 )
@@ -66,6 +68,11 @@ _STATUS: dict[AgentRefusal, int] = {
 class AgentRefusalOut(BaseModel):
     reason: AgentRefusal
     detail: str
+
+
+class AgentStatusOut(BaseModel):
+    #: 關著時面板只說怎麼設定（管理員）或「管理員還沒設定」（一般使用者），其餘與 M4 相同。
+    enabled: bool
 
 
 class ConversationOut(BaseModel):
@@ -192,6 +199,12 @@ async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncIterator[Bas
             yield chunk
     finally:
         await turn.close()
+
+
+@router.get("/status")
+async def get_status(session: SessionDep) -> AgentStatusOut:
+    """AI 開著沒有。登入就讀得到（一般使用者讀不到 `/settings/ai`）。"""
+    return AgentStatusOut(enabled=await ai_enabled(session))
 
 
 @router.get(

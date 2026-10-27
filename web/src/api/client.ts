@@ -72,24 +72,36 @@ async function request<T>(
     headers: {
       Accept: 'application/json',
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      // 非 GET 一律帶這個標頭作 CSRF 防線（plan §6）；後端的檢查在票 07。
-      ...(method === 'GET' ? {} : { 'X-Requested-With': 'XMLHttpRequest' }),
+      ...(method === 'GET' ? {} : CSRF_HEADERS),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 
-  if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      `${method} ${path} failed with ${response.status}`,
-      await detailOf(response),
-    )
-  }
+  if (!response.ok) throw await responseError(method, path, response)
 
   // 204 沒有 body（登出就是），硬 parse 會炸在 JSON.parse 上而不是回傳 void。
   if (response.status === 204) return undefined as T
 
   return (await response.json()) as T
+}
+
+/** 非 GET 一律帶這個標頭作 CSRF 防線（plan §6）；後端的檢查在票 07。 */
+export const CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' } as const
+
+/**
+ * 沒成的回應換成 `ApiError`，帶著後端的 `detail`。`request` 與側面板的串流（`api/agent.ts`，它的請求由
+ * `useChat` 發）共用這一份。
+ */
+export async function responseError(
+  method: string,
+  path: string,
+  response: Response,
+): Promise<ApiError> {
+  return new ApiError(
+    response.status,
+    `${method} ${path} failed with ${response.status}`,
+    await detailOf(response),
+  )
 }
 
 /** 錯誤回應的 `detail`。不是 JSON（前置代理回一頁 HTML）時就是 `undefined`。 */
