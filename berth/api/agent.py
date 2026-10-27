@@ -487,7 +487,7 @@ class StepCallOut(BaseModel):
     #: `null` 是接口沒報（不當 0）。
     cache_read_tokens: int | None
     cache_write_tokens: int | None
-    #: 價目表上沒有這個模型、或出錯沒有回應是 `null`。
+    #: 查不到價目、或出錯沒有回應是 `null`。
     cost_usd: float | None
     web_searches: int
     #: 模型說它為什麼停（原樣）；出錯是空字串。

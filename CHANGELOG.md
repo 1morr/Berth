@@ -89,6 +89,18 @@
   另可填 Tavily key 給之後的網路搜尋工具。開關預設關著：不設定的話 Berth 與之前完全一樣。設定存在資料庫，
   不讀環境變數。API：`GET|PUT /api/settings/ai`、`POST /api/settings/ai/test`、`DELETE /api/settings/ai/keys/{key}`。
 
+### Changed
+
+- **AI 估計費用改用 genai-prices 查價，照端點網址認服務商**（M5 票 21b）：價目改由 Pydantic 維護的
+  [genai-prices](https://github.com/pydantic/genai-prices)（隨 Berth 內附的 0.1.13）提供，先照 base URL 認出是哪一家，
+  所以「Anthropic 接口 + DeepSeek 端點」照 DeepSeek 的價算，不再照模型名套原廠價；DeepSeek 的尖峰離峰照每次呼叫當時的價。
+  網址認不得（自架閘道）時照接口種類查；都查不到的看 Berth 自己的補位表，再查不到照舊寫「未知」。查價不連網，價目跟著
+  Berth 的版本更新。AI 設定頁與用量頁的「查證日期」改成**價目來源**（genai-prices 的版本與它認出的服務商，或補位表的查證日期），
+  用量頁的價目改成每一組「端點 + 模型」各列一次，模型欄的建議改成這個端點查得到價的模型。**既有呼叫的費用不重算**，只影響之後的呼叫。
+  API：`AiPriceOut.verified` 換成 `source`（`table`、`version`、`vendor`、`verified`）；`AiOut.known_models` 搬到每個接口的
+  `AiEndpointOut.known_models`；`GET /api/settings/usage` 的 `prices` 每列多 `base_url`。
+  **資料庫 migration `a9c3e5f1b742`**：`ai_calls` 多一欄 `base_url`（打的端點），既有的列是 `NULL`。
+
 ### Removed
 
 - 沒有呼叫端的 `AiPlanner` / `NullAiPlanner` 介面（M5 票 09）；AI 解析在 M6 重新設計（plan §4.5）。

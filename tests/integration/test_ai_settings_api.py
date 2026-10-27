@@ -71,7 +71,9 @@ class TestSaving:
     def test_nothing_is_set_up_at_first_and_ai_is_off(self, client: TestClient) -> None:
         got = client.get(BASE).json()
         assert got["enabled"] is False
-        assert got["anthropic"] == {"base_url": "", "model": "", "has_key": False, "price": None}
+        anthropic = got["anthropic"]
+        assert (anthropic["base_url"], anthropic["model"], anthropic["has_key"]) == ("", "", False)
+        assert anthropic["price"] is None
         assert got["has_tavily_key"] is False
 
     def test_a_saved_key_comes_back_only_as_has_key(self, client: TestClient) -> None:
@@ -107,6 +109,7 @@ class TestSaving:
             "model": "claude-sonnet-5-5",
             "has_key": True,
             "price": got["anthropic"]["price"],
+            "known_models": got["anthropic"]["known_models"],
         }
 
     def test_anthropic_loses_a_pasted_v1(self, client: TestClient) -> None:
@@ -140,15 +143,30 @@ class TestSaving:
         price = save(client).json()["anthropic"]["price"]
         assert price["input"] == "2"
         assert price["output"] == "10"
-        assert price["verified"] == "2026-10-27"
+        assert price["source"] == {
+            "table": "genai_prices",
+            "version": "0.1.13",
+            "vendor": "Anthropic",
+            "verified": None,
+        }
         unknown = save(client, provider="openai", model="some-local-model").json()
         assert unknown["openai"]["price"] is None
 
+    def test_the_price_follows_the_base_url(self, client: TestClient) -> None:
+        # Anthropic 接口打 DeepSeek 的相容端點：照 DeepSeek 的價（M5 票 21b）。
+        got = save(client, base_url="https://api.deepseek.com/anthropic", model="deepseek-flash")
+        price = got.json()["anthropic"]["price"]
+        assert price["source"]["vendor"] == "Deepseek"
+
     def test_the_models_with_a_price_are_offered_as_suggestions(self, client: TestClient) -> None:
-        models = client.get(BASE).json()["known_models"]
-        assert "claude-sonnet-5-5" in models
-        assert "deepseek-flash" in models
-        assert models == sorted(models)
+        save(client, provider="openai", base_url="https://api.deepseek.com", model="deepseek-flash")
+        got = client.get(BASE).json()
+        anthropic, openai = got["anthropic"]["known_models"], got["openai"]["known_models"]
+        assert "claude-sonnet-5-5" in anthropic
+        assert anthropic == sorted(anthropic)
+        # 端點是 DeepSeek：建議的是 DeepSeek 的模型，不是 OpenAI 的。
+        assert "deepseek-flash" in openai
+        assert "gpt-5.5" not in openai
 
     def test_the_tavily_key_is_write_only_too(self, client: TestClient) -> None:
         got = save(client, tavily_api_key=TAVILY)

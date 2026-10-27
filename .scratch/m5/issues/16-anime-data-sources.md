@@ -53,3 +53,5 @@ prototype 實測過這三個來源的組合可行。
     - `AnimeSeason`（adapter 的 enum）直接出現在 `anilist.read_season` 的簽名（import-linter 允許）。
     - 卡片的說明句只提 AniList、Bangumi，沒提 Fribb：Fribb 的結果只有 id 與數字，沒有抄得上卡片的字。
   - **留給之後**：一般使用者沒有 `new-season-picks`（它要的 `rss.*` 只給管理員）；要給的話是另一張票決定讓一般使用者推薦但不訂閱。
+- 2026-10-28 票 15 交接：AniList、bgm.tv 的讀取工具進 `services/agent_tools.TOOLS` 時，`tests/integration/test_agent_injection.py` 的 `test_every_read_tool_is_classified` 與 `test_every_read_tool_is_tried` 會紅。照著做：在 `ENTRIES` 加一個入口（`InjectionEntry`：讓假服務回帶注入的名字或簡介、回模型讀它的那一步），在 `READ_ARGS` 補參數；加 Feed 與送單兩類會自動多跑這個入口。plan §11.6〈注入的防線與守它的測試〉不必改（測試名不變）。
+- 2026-10-28 合併 main 時照票 15 的交接處理：兩個新入口（`anilist_title`、`bgm_name`）進 `ENTRIES`，其餘四支進 `SAME_PATH`，六支進 `READ_ARGS`；plan §11.6 對照表的前言跟著改。

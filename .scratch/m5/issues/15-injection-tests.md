@@ -1,6 +1,6 @@
 # 15 — prompt injection 的整合測試
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 14
 
@@ -23,8 +23,13 @@
 
 ## 驗收
 
-- [ ] 以上六類各至少一條整合測試，全部是「模型照做了，系統擋住」
-- [ ] brief §14 或 plan §11.6 標明哪些防線由哪些測試守（宣稱與測試逐條對得上）
-- [ ] 全部檢查與 pytest 綠；progress.md 已更新
+- [x] 以上六類各至少一條整合測試，全部是「模型照做了，系統擋住」
+- [x] brief §14 或 plan §11.6 標明哪些防線由哪些測試守（宣稱與測試逐條對得上）
+- [x] 全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-28 完成。`tests/integration/test_agent_injection.py`：注入的字經真的工具進到模型（`ENTRIES`：torrent 標題、Feed Item、Mikan 番組資料、網頁搜尋，假服務回它），假模型下一步照做，斷言只看程式層的結果；六類各一個類別，加 Feed 與送單兩類逐一入口都跑。前端那一半在 `web/src/agent/AgentPanel.test.tsx` 的 `AgentPanel with a reply an injection wrote`。對照表在 plan §11.6〈注入的防線與守它的測試〉，`tests/unit/test_injection_claims.py` 雙向核對。每一道防線都拆掉做過變異，各有測試紅（progress.md 的 session 紀錄列了是哪幾個）。
+- **AniList、Bangumi（bgm.tv）的資料**（票面列的入口）這張沒做：工具在票 16、還不存在。它們進 `TOOLS` 時 `test_every_read_tool_is_classified` 與 `test_every_read_tool_is_tried` 會紅，票 16 的 Comments 記了要把它們加進 `ENTRIES`。
+- code-review 已改：名詞照 CONTEXT（入口不叫「外部內容」、Feed Item）、`Source` / `release` 改名 `InjectionEntry` / `indexer_result`、具名的入口常數取代位置取用、重複的步驟抽成 `to_add_the_attackers_feed` 與 `read_tools`、`needs_person` 那一條改用合法參數叫看得到的卡片工具並斷言出卡（原本用 `{}`，驗證就先擋了）、TMDB 與 Jellyfin 的 key 列進子集斷言、補 `assert_reached`、前端那條等串流的回覆出現、claims 檢查認模組層與 `async` 的測試、表裡 `test_every_read_tool_is_classified` 自成一列、關鍵字訂閱那一列註明「直接做但不送」。
+- code-review 未處理：測試直接叫 `rss._search_url`（私有）擺假 feed 的網址，同 `test_rss_*` 的前例；改成公開會多一個只給測試用的介面。

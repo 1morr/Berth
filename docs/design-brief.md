@@ -299,7 +299,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 - **執行**：通過驗證、且這種任務在自動模式 → 直接套用（入庫可撤銷：硬鏈接，原檔在 complete）；影子模式只記錄 AI 會怎麼做。AI 的結果照樣走上面的程式檢查，不通過的不套用、交給人。
 - **修正回流**：人或 AI 的改正寫回結構化的地方（RSS Series 的季號與 offset、標題別名、排除條件），規則層下一次就用得到；改正過的案例進 benchmark 的候選語料，讓例外慢慢變成規則層的常態。
 - 快取鍵：`torrent hash + 解析器版本 + prompt 版本`；同一 torrent 不重複付費。
-- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。~~設定頁有月預算上限，超過即停用並提示~~（2026-10-27 拿掉，§19）：不以總花費切斷 AI，改用防護——每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器；花費只做可見與提醒（§14）。提醒有兩種（M5 票 21，`domain/spend.py`）：今天的估計費用到了管理員設的每日提醒值；今天是近 14 天（不含今天）**有用量那幾天**的日中位數 5 倍以上，那樣的日子少於 3 天不比（使用者 2026-10-27 選定：家用幾天才問一次，沒用的日子算 0 的話中位數常是 0）。費用只用知道的那部分，**所以費用未知的呼叫（有回應、有 token，但模型不在價目表上）提醒看不見**；出錯、沒有回應的呼叫沒有花費可算，不算未知：今天或前 14 天有這種呼叫時，用量頁與側面板明說有幾次沒算進去（未知不當 0；協調者 2026-10-27）。提醒出現在用量頁與側面板（只給管理員），不推 Discord。
+- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。~~設定頁有月預算上限，超過即停用並提示~~（2026-10-27 拿掉，§19）：不以總花費切斷 AI，改用防護——每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器；花費只做可見與提醒（§14）。提醒有兩種（M5 票 21，`domain/spend.py`）：今天的估計費用到了管理員設的每日提醒值；今天是近 14 天（不含今天）**有用量那幾天**的日中位數 5 倍以上，那樣的日子少於 3 天不比（使用者 2026-10-27 選定：家用幾天才問一次，沒用的日子算 0 的話中位數常是 0）。費用只用知道的那部分，**所以費用未知的呼叫（有回應、有 token，但查不到價目）提醒看不見**；出錯、沒有回應的呼叫沒有花費可算，不算未知：今天或前 14 天有這種呼叫時，用量頁與側面板明說有幾次沒算進去（未知不當 0；協調者 2026-10-27）。提醒出現在用量頁與側面板（只給管理員），不推 Discord。
 - 引入時機：§17 的 M5（2026-09-24 排在巡檢與通知之後），在 benchmark 存在之後，才能量化 AI 帶來的增益與誤判。
 
 ---
@@ -1847,7 +1847,14 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
     - 官方的 `pydantic-ai-harness` 0.62.0（Alpha、釘死 `pydantic-ai-slim==2.62.0`）有 `SummarizingCompaction`，但切點以訊息數或 token 數算、不認一輪從哪裡開始，不拿掉孤兒 result，也拿不到摘要那一次的回應來記帳，所以 Berth 自己寫（`services/compaction.py`）。
 - **觀測的缺口**：run 中途被中止（`UsageLimitExceeded`、重複呼叫、模型錯誤）時，`on_complete` 不會被呼叫，這一輪的歷史與 token 用量都拿不到。記帳要掛在每次模型呼叫之後。
 - **費用**：
-  - `ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表。
+  - ~~`ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表~~（M5 票 21b 改寫成下面這幾條）。
+  - **價目用 genai-prices**（[pydantic/genai-prices](https://github.com/pydantic/genai-prices)，pydantic-ai-slim 2.62.0 的相依，要求 `>=0.1.13`；2026-10-28 讀 0.1.13 原始碼與實測，M5 票 21b）：
+    - `calc_price(usage, model_ref, provider_id=..., provider_api_url=...)` 先用 `provider_api_url` 對每家的 `api_pattern`（regex）認服務商、再找模型；認不得網址或模型是 `LookupError`。`https://api.deepseek.com/anthropic` + `deepseek-flash` 認成 `deepseek`（100 萬 input + 100 萬 output 在離峰是 $0.75）；同一組改傳 `provider_id=anthropic` 查不到，所以**接口種類不能當服務商**，只在網址認不得時退一步用。pydantic-ai 的查價順序也是網址 → provider 名（`_genai_prices.iter_provider_references`），但它遇到任何 `LookupError` 都退回，連「網址認得、那一家沒有這個模型」也是；Berth 在這種情況當查不到（M5 票 21b 的 code-review）。
+    - 價錢帶時間：DeepSeek 的尖峰（UTC 01–04、06–10）是離峰的兩倍，`genai_request_timestamp` 決定套哪一段（週末全天離峰它還表達不了，那時的價是上限）；Anthropic 的長 context 與 OpenAI 的 gpt-5.5 有分級價（`+tiers`）。
+    - **DeepSeek 官方價目**（[api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing)，2026-10-28 協調者讀）：`deepseek-flash` 尖峰 $0.3 / $1.2（每百萬 input / output），離峰減半 $0.15 / $0.6；尖峰是週一到週五 UTC 01:00–04:00、06:00–10:00，其餘時間（含週末與中國國定假日）都是離峰。與 genai-prices 0.1.13 的資料一致，只差它把週末與假日的那兩段也當尖峰（只會高估）。所以設定頁與用量頁出現的半價是**離峰價，不是過時的價**；M5 票 09 手寫表的 $0.3 / $1.2 是尖峰價。
+    - `usage.input_tokens` 含快取讀寫；快取比 input 還多是 `ValueError`。沒有快取寫價的服務（DeepSeek）快取寫照輸入價算。
+    - **自動更新是 opt-in**：只有 `UpdatePrices().start()`（或 pydantic-ai 的 `prices.update_in_background()`）會每小時從 GitHub 抓 `data.json`，抓到的換掉全域 snapshot（`data_snapshot.get_snapshot()`）；不開就不連網。Berth 自己用套件內附的資料建一份 `DataSnapshot(providers=genai_prices.data.providers, from_auto_update=False)`，別人開了自動更新也不受影響。
+    - 0.1.13 已認得 M5 票 09 手寫表上的全部模型（Claude 5.5 家族、`claude-fable-5-1`、DeepSeek V4 與 `deepseek-flash`），Berth 的補位表因此是空的。
   - Anthropic 的 `input_tokens` 已經包含快取讀與寫。
   - `web_search` 的次數在 `usage.details['web_search_requests']`，每次 $0.01。
 - **provider**：

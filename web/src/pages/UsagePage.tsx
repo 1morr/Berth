@@ -21,6 +21,7 @@ import { Timestamp } from '../components/Timestamp'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { alertText, unknownText } from '../usage/alerts'
 import { STOP_TEXT } from '../usage/labels'
+import { endpointText, priceSourceText } from '../usage/prices'
 import { percent, tally, tokens, usd } from '../usage/numbers'
 
 /**
@@ -429,21 +430,28 @@ function Prices({ usage }: { usage: Usage }) {
   return (
     <SettingsSection id="usage-prices" title={t('usage.prices.title')}>
       <ul className="grid max-w-prose gap-2 text-sm text-ink-dim">
-        {usage.prices.map(({ model, price }) => (
-          <li key={model} className="wrap-anywhere">
-            {price === null
-              ? t('usage.prices.unknown', { model })
-              : t('usage.prices.model', {
-                  model,
-                  input: price.input,
-                  output: price.output,
-                  cacheRead: price.cache_read,
-                  cacheWrite: price.cache_write,
-                  verified: price.verified,
-                })}
-          </li>
-        ))}
-        <li>{t('usage.prices.byName')}</li>
+        {usage.prices.map(({ model, base_url, price }) => {
+          const name =
+            base_url === null
+              ? t('usage.prices.noEndpoint', { model })
+              : t('usage.prices.at', { endpoint: endpointText(base_url), model })
+          return (
+            <li key={`${base_url ?? ''} ${model}`} className="wrap-anywhere">
+              {price === null
+                ? t('usage.prices.unknown', { name })
+                : t('usage.prices.model', {
+                    name,
+                    input: price.input,
+                    output: price.output,
+                    cacheRead: price.cache_read,
+                    cacheWrite: price.cache_write,
+                    source: priceSourceText(t, price.source),
+                  })}
+            </li>
+          )
+        })}
+        <li>{t('usage.prices.lookup')}</li>
+        <li>{t('usage.prices.timeOfDay')}</li>
         <li>{t('usage.prices.webSearch')}</li>
         <li>{t('usage.prices.tavily')}</li>
       </ul>
