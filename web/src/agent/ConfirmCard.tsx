@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 
 import { isJobRefusal } from '../api/jobs'
 import { mediaQueryOptions } from '../api/media'
+import { routesQueryOptions } from '../api/routes'
+import { isRssRefusal } from '../api/rss'
 import {
   decideProposal,
   proposalRefusalOf,
@@ -17,6 +19,7 @@ import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
 import i18n from '../i18n'
+import { formatList } from '../i18n/list'
 import { formatSize } from '../media/searchResult'
 import { useCardActions } from './cards'
 
@@ -85,7 +88,14 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
       <ol className="grid gap-2">
         {rows.map((row, index) => {
           const ticking = waiting && many
-          const body = <RowBody command={proposal.command} row={row} labelled={ticking} />
+          const body = (
+            <RowBody
+              command={proposal.command}
+              row={row}
+              labelled={ticking}
+              external={proposal.preview.external_fields[index] ?? []}
+            />
+          )
           const result = proposal.results?.[index]
           return (
             // 列沒有自己的 id；位置就是它的身分（卡片的參數存下之後不再變）。
@@ -181,9 +191,21 @@ function Effects({ proposal }: { proposal: Proposal }) {
           ))}
         </ul>
       ) : null}
+      {proposal.preview.external_fields.some((fields) => fields.length > 0) ? (
+        // 只在自由文字出自網頁的卡上出現（M5 票 14）：每張都亮的話就沒人看了。
+        <p className="text-xs text-ink">{t('agent.card.externalLead')}</p>
+      ) : null}
       {WAITING.has(proposal.status) ? (
         <p className="text-xs text-ink-dim">
           {t('agent.card.expires')} <Timestamp at={proposal.expires_at} />
+        </p>
+      ) : null}
+      {proposal.preview.held_back > 0 ? (
+        <p className="text-xs text-ink-dim">
+          {t('agent.card.heldBack', {
+            count: proposal.preview.held_back,
+            limit: proposal.arguments.length,
+          })}
         </p>
       ) : null}
     </div>
@@ -193,6 +215,9 @@ function Effects({ proposal }: { proposal: Proposal }) {
 /** 卡片的標題：命令的人話名稱，認不得的照原名。 */
 const COMMAND_TITLES = {
   'downloading.add_manual_download': 'agent.card.commands.downloading_add_manual_download',
+  'rss.subscribe_mikan': 'agent.card.commands.rss_subscribe_mikan',
+  'rss.subscribe_search': 'agent.card.commands.rss_subscribe_search',
+  'rss.add_feed': 'agent.card.commands.rss_add_feed',
 } as const
 
 function commandTitle(command: string): string {
@@ -218,14 +243,169 @@ function rowLabel(command: string, row: Row, index: number): string {
   return `#${index + 1}`
 }
 
-/** 一列的欄位。送單照結果表的說法（發佈名、大小、作品、Route）；其他命令列出參數原文。 */
-function RowBody({ command, row, labelled }: { command: string; row: Row; labelled: boolean }) {
+/**
+ * 一列的欄位。送單照結果表的說法（發佈名、大小、作品、Route），RSS 的三種照 RSS 頁的說法；其他命令
+ * 列出參數原文。`external` 是出自網頁的那幾格：在那一格旁邊標出來。
+ */
+function RowBody({
+  command,
+  row,
+  labelled,
+  external,
+}: {
+  command: string
+  row: Row
+  labelled: boolean
+  external: readonly string[]
+}) {
+  const { t } = useTranslation()
   // `labelled`：勾選框的標籤已經是發佈名，欄位裡不再印一次。
   if (isSubmit(command, row)) return <SubmitRowBody row={row} labelled={labelled} />
+  if (command === 'rss.add_feed') return <FeedRowBody row={row} external={external} />
+  if (command === 'rss.subscribe_mikan' || command === 'rss.subscribe_search') {
+    return <SubscribeRowBody command={command} row={row} external={external} />
+  }
   return (
-    <pre className="value text-xs whitespace-pre-wrap wrap-anywhere text-ink">
-      {JSON.stringify(row, null, 2)}
-    </pre>
+    <div className="grid gap-1">
+      <pre className="value text-xs whitespace-pre-wrap wrap-anywhere text-ink">
+        {JSON.stringify(row, null, 2)}
+      </pre>
+      {external.length > 0 ? (
+        <p className="text-xs text-ink">
+          {t('agent.card.externalFields', { fields: external.join(', ') })}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/** 一格：標籤、值，出自網頁的多一個標記。 */
+interface Field {
+  name: string
+  label: string
+  value: string
+  mono?: boolean
+}
+
+function Fields({ fields, external }: { fields: Field[]; external: readonly string[] }) {
+  const { t } = useTranslation()
+  return (
+    <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
+      {fields.map((field) => (
+        <div key={field.name} className="contents">
+          <dt className="label text-ink-dim">{field.label}</dt>
+          <dd className={`wrap-anywhere text-ink ${field.mono ? 'value' : ''}`}>
+            {field.value}
+            {external.includes(field.name) ? (
+              <span className="label ml-2 text-blocked-ink">{t('agent.card.fromWeb')}</span>
+            ) : null}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' && value.trim() !== '' ? value : '—'
+}
+
+/** Route 的名字。加 Feed 只有管理員做得了，所以讀得到 Route 清單。 */
+function useRouteName(): (id: unknown) => string {
+  const routes = useQuery(routesQueryOptions)
+  return (id) => {
+    if (typeof id !== 'number') return '—'
+    return routes.data?.find((managed) => managed.route.id === id)?.route.name ?? `#${id}`
+  }
+}
+
+function FeedRowBody({ row, external }: { row: Row; external: readonly string[] }) {
+  const { t, i18n: i18nInstance } = useTranslation()
+  const routeName = useRouteName()
+  const exclusions = Array.isArray(row.exclusions) ? row.exclusions.map(String) : []
+  return (
+    <Fields
+      external={external}
+      fields={[
+        { name: 'url', label: t('agent.card.fields.url'), value: text(row.url), mono: true },
+        { name: 'name', label: t('agent.card.fields.name'), value: text(row.name) },
+        {
+          name: 'tv_route_id',
+          label: t('agent.card.fields.tvRoute'),
+          value: routeName(row.tv_route_id),
+        },
+        {
+          name: 'movie_route_id',
+          label: t('agent.card.fields.movieRoute'),
+          value: routeName(row.movie_route_id),
+        },
+        ...(exclusions.length > 0
+          ? [
+              {
+                name: 'exclusions',
+                label: t('agent.card.fields.exclusions'),
+                value: formatList(exclusions, i18nInstance.language),
+                mono: true,
+              },
+            ]
+          : []),
+      ]}
+    />
+  )
+}
+
+function SubscribeRowBody({
+  command,
+  row,
+  external,
+}: {
+  command: 'rss.subscribe_mikan' | 'rss.subscribe_search'
+  row: Row
+  external: readonly string[]
+}) {
+  const { t } = useTranslation()
+  const mediaId = typeof row.media_id === 'string' ? row.media_id : ''
+  const media = useQuery({ ...mediaQueryOptions(mediaId), enabled: mediaId !== '' })
+  const route = media.data?.routes.find((choice) => choice.id === row.route_id)
+  const source: Field[] =
+    command === 'rss.subscribe_mikan'
+      ? [
+          {
+            // 番組名是模型給的自由文字（`name`），出自網頁的話標在這一格。
+            name: 'name',
+            label: t('agent.card.fields.bangumi'),
+            value: text(row.name) === '—' ? `#${String(row.bangumi_id)}` : text(row.name),
+          },
+          {
+            name: 'subgroup_name',
+            label: t('agent.card.fields.subgroup'),
+            value:
+              text(row.subgroup_name) === '—'
+                ? `#${String(row.subgroup_id)}`
+                : text(row.subgroup_name),
+          },
+        ]
+      : [
+          { name: 'kind', label: t('agent.card.fields.site'), value: text(row.kind) },
+          { name: 'term', label: t('agent.card.fields.term'), value: text(row.term), mono: true },
+        ]
+  return (
+    <Fields
+      external={external}
+      fields={[
+        ...source,
+        {
+          name: 'media_id',
+          label: t('agent.card.fields.media'),
+          value: media.data?.title ?? mediaId,
+        },
+        {
+          name: 'route_id',
+          label: t('agent.card.fields.route'),
+          value: route?.name ?? `#${String(row.route_id)}`,
+        },
+      ]}
+    />
   )
 }
 
@@ -252,17 +432,23 @@ function SubmitRowBody({ row, labelled }: { row: SubmitRow; labelled: boolean })
   )
 }
 
-/** 一列的結果。拒絕理由照命令那一組的句子（送單是 `jobs.refusal`），認不得的印原文。 */
+/** 拒絕理由照命令那一組的句子：送單是 `jobs.refusal`，RSS 的三種是 `rss.refusal`。 */
+function refusalSentence(command: string, result: ProposalRow): string | null {
+  if (result.outcome !== 'refused') return null
+  const reason = result.reason
+  if (command === 'downloading.add_manual_download' && isJobRefusal(reason)) {
+    return i18n.t(`jobs.refusal.${reason}`)
+  }
+  if (command.startsWith('rss.') && isRssRefusal(reason)) return i18n.t(`rss.refusal.${reason}`)
+  return null
+}
+
+/** 一列的結果。認不得的拒絕理由印原文。 */
 function RowResult({ result, command }: { result: ProposalRow; command: string }) {
   const { t } = useTranslation()
   const done = result.outcome === 'done'
   const reason = result.reason
-  const said =
-    result.outcome === 'refused' &&
-    command === 'downloading.add_manual_download' &&
-    isJobRefusal(reason)
-      ? t(`jobs.refusal.${reason}`)
-      : result.detail || reason
+  const said = refusalSentence(command, result) ?? (result.detail || reason)
   return (
     <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
       <span className={`label ${done ? 'text-ink' : 'text-ink-dim'}`}>

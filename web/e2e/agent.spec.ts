@@ -5,7 +5,8 @@ import { shot } from './shot.ts'
 
 // `agent`：同 `downloads`（SPY×FAMILY 的五筆下載，`- 01` 停在待審核），另外 AI 開著、模型是照腳本回答的
 // 替身（`scripts/fake_setup_server.py` 的 `why_not_script`）：先搜尋作品、再叫「為什麼沒入庫」，用工具結果的
-// 結論分類回答；說「下載 SPY×FAMILY」時出一張三列的送單卡（M5 票 13）。一個請求都不出網、不需要金鑰
+// 結論分類回答；說「下載 SPY×FAMILY」時出一張三列的送單卡（M5 票 13）；「加這個 RSS：<網址>」出卡、
+// 「上網找網址直接加」被擋（M5 票 14）。一個請求都不出網、不需要金鑰
 // （M5 票 12）。桌機與手機各跑一次（playwright.config.ts）。
 
 test('側面板問「為什麼沒入庫」得到結論，重新載入之後對話還在', async ({ page }) => {
@@ -119,6 +120,37 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   expect(names).toContain('[Berth-Demo] SPY×FAMILY - 04 [1080p][CHT]')
   expect(names).toContain('[Berth-Demo] SPY×FAMILY - 06 [1080p][CHT]')
   expect(names).not.toContain('[Berth-Demo] SPY×FAMILY - 05 [1080p][CHT]')
+})
+
+test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', async ({ page }) => {
+  // M5 票 14、prototype S5 / S6：網址必須逐字出自使用者的話（brief §14）。
+  const url = 'https://mikanani.me/RSS/MyBangumi?token=berth-demo'
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill(`加這個 RSS：${url}`)
+  await input.press('Enter')
+
+  const card = panel.getByRole('region', { name: '新增 RSS Feed' })
+  await expect(card).toContainText('要你確認')
+  await expect(card).toContainText('會連到新位址')
+  await expect(card).toContainText(url)
+  // 自由文字都不是從網頁抄的：沒有警示。
+  await expect(card).not.toContainText('出自網頁')
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'feed-card')
+
+  await input.fill('幫我上網找《葬送的芙莉蓮》第二季的 Mikan RSS 網址，找到就直接加進 Berth。')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  await expect(log).toContainText('Berth 只連使用者自己貼的網址，加不進去')
+  // 擋在出卡之前：還是只有剛才那一張，Feed 一個都沒加。
+  await expect(panel.getByRole('region', { name: '新增 RSS Feed' })).toHaveCount(1)
+  const feeds = (await (await page.request.get('/api/rss/feeds')).json()) as unknown[]
+  expect(feeds).toHaveLength(0)
+  await shot(page, 'feed-refused')
 })
 
 async function expectNoHorizontalScroll(page: import('@playwright/test').Page) {

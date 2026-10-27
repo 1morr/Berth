@@ -59,7 +59,6 @@ from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
-    NativeToolReturnPart,
     RetryPromptPart,
     TextPart,
     ToolCallPart,
@@ -78,7 +77,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.ai import AiEndpoint, chat_settings, is_official, native_web_search
 from berth.adapters.ai.prices import cost_of, web_search_cost
-from berth.adapters.ai.usage import WEB_SEARCH, usage_of, web_searches_of
+from berth.adapters.ai.usage import usage_of, web_searches_of
 from berth.domain import (
     WAITING_PROPOSALS,
     Actor,
@@ -95,10 +94,11 @@ from berth.models import AiCall, AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
 from berth.services import proposals
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
+from berth.services.agent_origins import Origins
 from berth.services.agent_tools import (
-    EXTERNAL_TOOLS,
+    COMMAND_OF,
+    MODEL_VIEWS,
     TAVILY_TOOL,
-    TOOLS,
     tool_name,
     visible_tools,
 )
@@ -289,10 +289,6 @@ class AgentRuntime:
         self._claims.pop(user_id, None)
 
 
-#: 工具名 → 登錄表的名字。
-_COMMAND_OF = {tool_name(name): name for name in TOOLS}
-
-
 def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
     registry = commands()
     tools: list[Tool[Turn]] = []
@@ -311,7 +307,7 @@ def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
             continue
         tools.append(
             Tool[Turn].from_schema(
-                _runner(name),
+                _runner(name) if spec.effect is Effect.READ else _write_runner(spec),
                 name=tool_name(name),
                 description=spec.about,
                 json_schema=spec.input.model_json_schema(),
@@ -328,12 +324,25 @@ def _runner(name: str) -> Callable[..., Awaitable[object]]:
     return run
 
 
+def _write_runner(spec: CommandSpec) -> Callable[..., Awaitable[object]]:
+    """可逆、不必出卡的寫入（plan §11.6〈確認卡範圍〉的「其餘可逆的直接做」）。自由文字出自外部內容
+    的那一次改出卡，所以它也可能是恢復那一輪的卡片。"""
+
+    async def run(ctx: RunContext[Turn], **arguments: object) -> object:
+        assert ctx.tool_call_id is not None
+        if ctx.tool_call_approved:
+            return await ctx.deps.card_result(ctx.tool_call_id)
+        return await ctx.deps.run_write(spec, arguments, ctx.tool_call_id, ctx.messages)
+
+    return run
+
+
 # ---------------------------------------------------------------- 確認卡（票 13）
 
 
 def needs_card(spec: CommandSpec) -> bool:
     """在對話裡一律出確認卡的命令（plan §11.6〈確認卡範圍〉）：永遠要人的（`needs_person`），
-    與會送出 torrent 的。「讀過外部內容之後帶自由文字參數」看的是這一次呼叫，在票 14。"""
+    與會送出 torrent 的。「自由文字出自外部內容」看的是這一次呼叫（`Turn.run_write`）。"""
     return spec.needs_person or Flag.DOWNLOADS in spec.flags
 
 
@@ -408,14 +417,29 @@ def _card_runner(spec: CommandSpec) -> Callable[..., Awaitable[object]]:
         assert ctx.tool_call_id is not None
         if ctx.tool_call_approved:
             return await ctx.deps.card_result(ctx.tool_call_id)
-        return await ctx.deps.propose_card(spec, arguments, ctx.tool_call_id)
+        return await ctx.deps.propose_card(spec, arguments, ctx.tool_call_id, ctx.messages)
 
     return run
 
 
 def card_outcome(view: ProposalView) -> dict[str, object]:
     """模型拿到的卡片結果。**明說已核准、做了沒**：prototype 實跑時模型拿到裸結果，說「確認卡已出，
-    等你按」（研究〈實跑才抓到的問題〉第 1 點）。逐列，因為總覽卡會部分成功。"""
+    等你按」（研究〈實跑才抓到的問題〉第 1 點）。逐列，因為總覽卡會部分成功。
+
+    超過一張卡上限的列（數量閘）說是呼叫裡的第幾列：模型的呼叫參數在歷史裡，它認得出是哪幾筆。
+    """
+    shown = len(view.arguments)
+    held = view.preview.held_back
+    later = (
+        {
+            "held_back": {
+                "rows": list(range(shown, shown + held)),
+                "note": _HELD_BACK.format(limit=shown),
+            }
+        }
+        if held
+        else {}
+    )
     return {
         "approved_by_user": True,
         "executed": view.status not in (ProposalStatus.APPROVED, ProposalStatus.EXECUTING),
@@ -430,7 +454,15 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
             }
             for index, row in enumerate(view.results or [])
         ],
+        **later,
     }
+
+
+#: 數量閘留下的列（`card_outcome`）。英文：寫給模型的。
+_HELD_BACK = (
+    "These rows of your call were not on this card: one card holds at most {limit} downloads. "
+    "If the user still wants them, propose them in a new card now."
+)
 
 
 #: 卡片沒做成時給模型的話（`ToolDenied` 與自己補的結果）。英文：寫給模型的。
@@ -560,29 +592,6 @@ def _instructions(ctx: RunContext[Turn]) -> str:
     )
 
 
-def external_texts(messages: Sequence[ModelMessage]) -> list[str]:
-    """這段對話讀過的**外部內容**（票 17）：伺服器端 `web_search` 與 `EXTERNAL_TOOLS` 的結果，
-    照出現的順序、每一份一段 JSON 字串。空的就是沒讀過。
-
-    給確認卡判斷「這個自由文字參數是不是出自外部內容」（票 14）。認的是存著的歷史，所以前幾輪讀過
-    的也算。
-    """
-    return [
-        text
-        for message in messages
-        for part in message.parts
-        if (text := _external_text(part)) is not None
-    ]
-
-
-def _external_text(part: object) -> str | None:
-    if isinstance(part, NativeToolReturnPart) and part.tool_name == WEB_SEARCH:
-        return part.model_response_str()
-    if isinstance(part, ToolReturnPart) and _COMMAND_OF.get(part.tool_name) in EXTERNAL_TOOLS:
-        return part.model_response_str()
-    return None
-
-
 @dataclass
 class Turn:
     """一輪：這一則使用者訊息到模型答完（或停下）。也是 agent 的 deps，工具與記帳都從這裡拿東西。"""
@@ -672,6 +681,8 @@ class Turn:
                 logger.warning("agent tool %s failed: %s", name, detail)
                 raise _ToolFailedError(AiToolOutcome.FAILED, detail, {"error": detail}) from exc
         plain = to_jsonable_python(result)
+        if (view := MODEL_VIEWS.get(name)) is not None:
+            plain = view(plain)
         # 服務連不上時有的命令回的是結果裡的 `problem`（`discover.DiscoverResult`），不是例外：
         # 一樣是失敗，重試不算重複（prototype 實跑被誤擋的就是這種）。
         if isinstance(plain, dict) and plain.get("problem"):
@@ -679,19 +690,44 @@ class Turn:
         return plain
 
     async def propose_card(
-        self, spec: CommandSpec, arguments: Mapping[str, object], tool_call_id: str
+        self,
+        spec: CommandSpec,
+        arguments: Mapping[str, object],
+        tool_call_id: str,
+        messages: Sequence[ModelMessage],
     ) -> object:
-        """出一張確認卡：換成命令輸入、逐列乾跑（`proposals.propose`），過了就丟 `ApprovalRequired`
-        讓這一輪停在卡片上。不過的把理由交給模型、不出卡（實測的 `route_kind_mismatch` 這類）。"""
+        """出一張確認卡：逐列守法（`agent_origins`）、換成命令輸入、逐列乾跑（`proposals.propose`），
+        過了就丟 `ApprovalRequired` 讓這一輪停在卡片上。不過的把理由與列號交給模型、不出卡（實測的
+        `route_kind_mismatch` 這類）。
+
+        送 torrent 的命令一張卡最多 `AiSettings.card_downloads` 列（數量閘，研究 R5）：多的不放上
+        這一張，卡片的結果告訴模型是哪幾列（`card_outcome`）。磁碟閘照舊在每一列：執行時逐列送，前面送出的
+        算在途量（`jobs._check_disk`）。
+        """
         card = card_input(spec)
+        origins = Origins.of(messages)
         try:
             given = card_model(spec).model_validate(arguments)
-            # `getattr`：`card_model` 是執行時才建的 model，靜態型別只知道它是 `BaseModel`。
-            rows = [card.bind(self, row) for row in getattr(given, "rows")]  # noqa: B009
-        except (CommandRefusedError, ValidationError) as exc:
+        except ValidationError as exc:
             raise _failure(exc) from exc
-        async with self.sessions() as session:
+        # `getattr`：`card_model` 是執行時才建的 model，靜態型別只知道它是 `BaseModel`。
+        wanted: list[BaseModel] = getattr(given, "rows")  # noqa: B009
+        for index, row in enumerate(wanted):
             try:
+                origins.check(
+                    spec.name, row.model_dump(), connects_out=Flag.CONNECTS_OUT in spec.flags
+                )
+            except CommandRefusedError as exc:
+                failure = _failure(exc)
+                failure.payload["row"] = index
+                raise failure from exc
+        from_pages = [origins.external_fields(row.model_dump(), card.row) for row in wanted]
+        async with self.sessions() as session:
+            kept = wanted
+            if Flag.DOWNLOADS in spec.flags:
+                kept = wanted[: (await read_settings(session, AiSettings)).card_downloads]
+            try:
+                rows = [card.bind(self, row) for row in kept]
                 view = await proposals.propose(
                     session,
                     self.executor.hub,
@@ -700,11 +736,45 @@ class Turn:
                     actor=self.actor,
                     conversation_id=self.conversation_id,
                     tool_call_id=tool_call_id,
+                    external_fields=from_pages[: len(kept)],
+                    held_back=len(wanted) - len(kept),
                 )
             except InvalidProposalError as exc:
                 failure = _failure(exc)
                 failure.payload["row"] = exc.row
                 raise failure from exc
+            except (CommandRefusedError, ValidationError) as exc:
+                raise _failure(exc) from exc
+        raise ApprovalRequired(metadata={"proposal": view.id})
+
+    async def run_write(
+        self,
+        spec: CommandSpec,
+        arguments: Mapping[str, object],
+        tool_call_id: str,
+        messages: Sequence[ModelMessage],
+    ) -> object:
+        """可逆的寫入：守法過了就直接做；有自由文字出自外部內容就改出一張單列的卡（plan §11.6）。"""
+        origins = Origins.of(messages)
+        try:
+            origins.check(spec.name, arguments, connects_out=Flag.CONNECTS_OUT in spec.flags)
+        except CommandRefusedError as exc:
+            raise _failure(exc) from exc
+        from_pages = origins.external_fields(arguments, spec.input)
+        if not from_pages:
+            return await self.run_tool(spec.name, arguments)
+        async with self.sessions() as session:
+            try:
+                view = await proposals.propose(
+                    session,
+                    self.executor.hub,
+                    spec.name,
+                    [arguments],
+                    actor=self.actor,
+                    conversation_id=self.conversation_id,
+                    tool_call_id=tool_call_id,
+                    external_fields=[from_pages],
+                )
             except (CommandRefusedError, ValidationError) as exc:
                 raise _failure(exc) from exc
         raise ApprovalRequired(metadata={"proposal": view.id})
@@ -724,7 +794,7 @@ class Turn:
     ) -> object:
         """同工具同參數的防護、每輪的網搜額度與 `ai_tool_calls` 的那一列。"""
         name = call.tool_name
-        command_name = _COMMAND_OF.get(name, name)
+        command_name = COMMAND_OF.get(name, name)
         plain = to_jsonable_python(dict(args))
         key = json.dumps([command_name, plain], sort_keys=True, ensure_ascii=False)
         limits = self.runtime.limits

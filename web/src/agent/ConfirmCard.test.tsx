@@ -44,7 +44,13 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
     command: 'downloading.add_manual_download',
     arguments: [row(1), row(2), row(3)],
     arguments_hash: 'h',
-    preview: { effect: 'reversible', flags: ['downloads'], checked: [true, true, true] },
+    preview: {
+      effect: 'reversible',
+      flags: ['downloads'],
+      checked: [true, true, true],
+      external_fields: [[], [], []],
+      held_back: 0,
+    },
     user_id: 1,
     proposer: 'ai',
     conversation_id: CONVERSATION,
@@ -107,6 +113,12 @@ function serve(
         decisions.push(body)
         current = decided(body)
         return json(current)
+      }
+      if (path === '/api/routes') {
+        return json([
+          { route: { id: 3, name: 'Anime' }, usage: {} },
+          { route: { id: 4, name: 'Movies' }, usage: {} },
+        ])
       }
       if (path === '/api/media/tv%3A120089') {
         return json({ title: 'SPY×FAMILY', routes: [{ id: 3, name: 'Anime', slug: 'anime' }] })
@@ -234,5 +246,94 @@ describe('ConfirmCard', () => {
 
     expect(within(section).queryByRole('button', { name: /確認/ })).toBeNull()
     expect(within(section).getByText('一列都沒勾。全部不要的話按「拒絕」。')).toBeInTheDocument()
+  })
+
+  it('marks only the fields copied from a web page, and says what is held for the next card', async () => {
+    const feed = card({
+      command: 'rss.add_feed',
+      arguments: [
+        {
+          url: 'https://mikanani.me/RSS/MyBangumi?token=abc',
+          name: 'Erai-raws',
+          tv_route_id: 3,
+          movie_route_id: 4,
+          exclusions: [],
+          interval_sec: 900,
+        },
+      ],
+      preview: {
+        effect: 'reversible',
+        flags: ['connects_out', 'settings'],
+        checked: [true],
+        external_fields: [['name']],
+        held_back: 0,
+      },
+    })
+    serve(feed, stored('approval-requested'), () => feed)
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '新增 RSS Feed' })
+    expect(within(section).getByText('會連到新位址')).toBeInTheDocument()
+    expect(within(section).getByText(/從搜到的網頁抄來的/)).toBeInTheDocument()
+    expect(
+      within(section).getByText('https://mikanani.me/RSS/MyBangumi?token=abc'),
+    ).toBeInTheDocument()
+    await within(section).findByText('Movies')
+    // 名稱那一格是從網頁抄的：標記就在它旁邊，網址那一格沒有。
+    const marks = within(section).getAllByText('出自網頁')
+    expect(marks).toHaveLength(1)
+    expect(marks[0].closest('dd')).toHaveTextContent('Erai-raws')
+  })
+
+  it('a card with nothing from the web carries no warning; rows over the limit are announced', async () => {
+    serve(
+      card({
+        preview: {
+          effect: 'reversible',
+          flags: ['downloads'],
+          checked: [true, true, true],
+          external_fields: [[], [], []],
+          held_back: 2,
+        },
+      }),
+      stored('approval-requested'),
+      () => card(),
+    )
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '送出下載' })
+    expect(within(section).queryByText(/出自網頁/)).toBeNull()
+    expect(within(section).getByText(/另外 2 項超過一張卡的上限（3 項）/)).toBeInTheDocument()
+  })
+
+  it('a refused RSS row says why in words', async () => {
+    const mikan = card({
+      command: 'rss.subscribe_mikan',
+      arguments: [
+        {
+          bangumi_id: 3310,
+          subgroup_id: 583,
+          media_id: 'tv:120089',
+          route_id: 3,
+          name: '',
+          subgroup_name: 'ANi',
+        },
+      ],
+      preview: {
+        effect: 'reversible',
+        flags: ['downloads'],
+        checked: [true],
+        external_fields: [[]],
+        held_back: 0,
+      },
+      status: 'failed',
+      results: [{ outcome: 'refused', reason: 'series_bound', detail: 'tv:1', result: null }],
+    })
+    serve(mikan, stored('output-denied'), () => mikan)
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '訂閱 Mikan 番組' })
+    expect(within(section).getByText('ANi')).toBeInTheDocument()
+    expect(within(section).getByText(/這個 RSS Series 已經綁好了/)).toBeInTheDocument()
   })
 })

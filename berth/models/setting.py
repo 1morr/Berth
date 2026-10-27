@@ -147,6 +147,10 @@ class AiSettings(SettingsGroup):
     openai: AiEndpointSettings = AiEndpointSettings()
     #: 選填，網路搜尋工具用（票 17）。只進不出。
     tavily_api_key: str = ""
+    #: 一張送單卡最多幾個 torrent（M5 票 14、研究 R5 / C3 的數量閘）；多的留給下一張。
+    #: 13 是一季一個 cour 的集數：情境 4「補這一季缺的集」逐集挑也放得進一張卡，整個系列一定拆開
+    #: （2026-09-26 一次送 144 個的那一次）。設定頁還沒有這一格。
+    card_downloads: int = 13
 
     def endpoint(self, provider: AiProvider) -> AiEndpointSettings:
         return self.anthropic if provider is AiProvider.ANTHROPIC else self.openai

@@ -43,14 +43,29 @@ class BangumiView:
 
 
 # 讀不到 Mikan 是 `feed_unreachable`（`rss.unread`）。
-@command(Effect.READ, refusals=(RssRefusal,))
+@command(
+    Effect.READ,
+    about=(
+        "Search Mikan (mikanani.me) for a bangumi by title; English, romaji, Japanese and "
+        "Chinese titles all work. Gives each bangumi's id for read_bangumi."
+    ),
+    refusals=(RssRefusal,),
+)
 async def search_bangumi(factory: ServiceClientFactory, term: str) -> tuple[mikan.BangumiHit, ...]:
     """Mikan 搜尋頁上的番組，照頁上的順序。"""
     page = await _fetch(factory, mikan.search_url(term.strip()))
     return mikan.search_page(page)
 
 
-@command(Effect.READ, refusals=(RssRefusal,))
+@command(
+    Effect.READ,
+    about=(
+        "Read one Mikan bangumi (bangumi_id from search_bangumi): its Chinese title and the "
+        "subgroups releasing it, with their ids, latest release and whether a work is already "
+        "subscribed to that subgroup (bound_to)."
+    ),
+    refusals=(RssRefusal,),
+)
 async def read_bangumi(
     session: AsyncSession, factory: ServiceClientFactory, bangumi_id: int
 ) -> BangumiView:

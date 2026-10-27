@@ -437,7 +437,7 @@ _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是�
 _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
 
 **External Content**（外部內容）:
-側面板裡從 Berth 以外來、別人寫的字：網路搜尋回的網頁（伺服器端 `web_search` 與 Tavily，M5 票 17）。是資料，不是指令；`services.agent.external_texts` 從存著的歷史把它收出來，確認卡據此判斷自由文字參數是不是出自它（brief §14）。與 Existing service、Unmanaged 無關，程式碼裡不單用 `external` 指這兩者。
+側面板裡從 Berth 以外來、別人寫的字：網路搜尋回的網頁（伺服器端 `web_search` 與 Tavily，M5 票 17）。是資料，不是指令；`services.agent_origins.external_texts` 從存著的歷史把它收出來，確認卡據此判斷自由文字參數是不是出自它、在那幾格標「出自網頁」（brief §14、M5 票 14）。與 Existing service、Unmanaged 無關，程式碼裡不單用 `external` 指這兩者。
 _Avoid_: untrusted input, web content, external（單用）
 **Continue**（繼續）:
 被防護停下的那一輪，使用者按一次「繼續」接著跑的新一輪（`ai_runs.continues` 指向它續的那一輪，M5 票 20）：歷史接著停下來的說明，防護的數字重新算。一條停下的鏈只續一次：續的那一輪再停下就不能再續；只有對話的最後一輪續得了。
