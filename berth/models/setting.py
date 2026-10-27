@@ -13,6 +13,7 @@ from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import (
+    AiProvider,
     BerthPathFailure,
     CollectionType,
     ConnectionReason,
@@ -118,6 +119,37 @@ class NotifySettings(SettingsGroup):
     discord_bot_token: str = ""
     discord_application_id: str = ""
     discord_bot_name: str = ""
+
+
+class AiEndpointSettings(BaseModel):
+    """一種接口的連線資訊（`AiSettings.anthropic` / `.openai`）。"""
+
+    #: 空的是官方端點。存的是 `adapters.ai.normalize_base_url` 之後的樣子。
+    base_url: str = ""
+    #: **只進不出**：API 只回 `has_key`，原文不回到瀏覽器（同 Discord bot token）。
+    api_key: str = ""
+    model: str = ""
+
+
+class AiSettings(SettingsGroup):
+    """AI provider（brief §14〈provider〉、§19「M5 的方向」⑧，M5 票 09）。
+
+    兩種接口**各自**記 base URL、key、模型：切換接口不會丟掉另一邊填好的那一組。`provider` 是現在
+    用的那一種；`enabled` 關著就是沒有 AI，其餘功能與 M4 相同（plan §11.6）。存在資料庫，跟 TMDB
+    key 一樣，**不從環境變數讀**。
+    """
+
+    KEY = "ai"
+
+    enabled: bool = False
+    provider: AiProvider = AiProvider.ANTHROPIC
+    anthropic: AiEndpointSettings = AiEndpointSettings()
+    openai: AiEndpointSettings = AiEndpointSettings()
+    #: 選填，網路搜尋工具用（票 17）。只進不出。
+    tavily_api_key: str = ""
+
+    def endpoint(self, provider: AiProvider) -> AiEndpointSettings:
+        return self.anthropic if provider is AiProvider.ANTHROPIC else self.openai
 
 
 class BerthSettings(SettingsGroup):
@@ -616,4 +648,5 @@ SETTINGS_GROUPS: tuple[type[SettingsGroup], ...] = (
     BerthSettings,
     NotifyWatchSettings,
     SweepSettings,
+    AiSettings,
 )

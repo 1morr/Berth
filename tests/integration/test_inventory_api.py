@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -137,8 +137,8 @@ def client(
         yield running
 
 
-def sign_in(client: TestClient, who: dict[str, str] = ADMIN) -> httpx.Response:
-    response: httpx.Response = client.post("/api/auth/login", json=who, headers=BROWSER)
+def sign_in(client: TestClient, who: dict[str, str] = ADMIN) -> httpx2.Response:
+    response: httpx2.Response = client.post("/api/auth/login", json=who, headers=BROWSER)
     return response
 
 

@@ -14,7 +14,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -74,8 +74,8 @@ def client(config: Config, tmp_path: Path, factory: FakeClientFactory) -> Iterat
         yield running
 
 
-def post(client: TestClient, path: str, body: object = None) -> httpx.Response:
-    response: httpx.Response = client.post(path, json=body, headers=BROWSER)
+def post(client: TestClient, path: str, body: object = None) -> httpx2.Response:
+    response: httpx2.Response = client.post(path, json=body, headers=BROWSER)
     return response
 
 

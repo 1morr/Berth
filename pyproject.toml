@@ -13,7 +13,9 @@ dependencies = [
     "feedparser>=6.0.14",
     "guessit>=4.4.0",
     "httpx>=0.28.1",
+    "httpx2>=2.16.0",
     "pydantic>=2.13.5",
+    "pydantic-ai-slim[anthropic,openai,ui]>=2.62.0",
     "pymediainfo>=7.0.1",
     "sqlalchemy[asyncio]>=2.0.52",
     "sse-starlette>=3.4.11",
@@ -74,8 +76,6 @@ asyncio_default_fixture_loop_scope = "function"
 # 警告一律當錯誤：相依套件的 deprecation 要在它變成故障之前就被看見。
 filterwarnings = [
     "error",
-    # Starlette 1.6 的 TestClient 改推 httpx2，但 plan 1.4 的 adapter 測試用 httpx + respx，不跟著分裂。
-    "ignore:Using `httpx` with `starlette.testclient` is deprecated:",
     # starlette 自己 import anyio 時觸發的別名警告，與本專案的程式碼無關。
     "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
 ]

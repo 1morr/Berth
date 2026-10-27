@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -52,7 +52,7 @@ def client(config: Config, tmp_path: Path, factory: FakeClientFactory) -> Iterat
 
 
 def leaks(
-    token: str, responses: list[httpx.Response], records: list[logging.LogRecord]
+    token: str, responses: list[httpx2.Response], records: list[logging.LogRecord]
 ) -> list[str]:
     """回應原文與 log（照 Berth 寫出去的 JSON 那一行，含 `extra`）裡帶著 token 的那幾處。"""
     found = [f"{r.request.method} {r.request.url.path}" for r in responses if token in r.text]
@@ -60,8 +60,8 @@ def leaks(
     return found
 
 
-def save_token(client: TestClient, token: str = TOKEN) -> httpx.Response:
-    response: httpx.Response = client.put(f"{BASE}/bot", json={"token": token}, headers=BROWSER)
+def save_token(client: TestClient, token: str = TOKEN) -> httpx2.Response:
+    response: httpx2.Response = client.put(f"{BASE}/bot", json={"token": token}, headers=BROWSER)
     return response
 
 
@@ -70,8 +70,8 @@ def save_id(
     discord_id: str = DISCORD_ID,
     language: str = "zh-Hant",
     kinds: tuple[str, ...] = ("ready",),
-) -> httpx.Response:
-    response: httpx.Response = client.put(
+) -> httpx2.Response:
+    response: httpx2.Response = client.put(
         MINE,
         json={"discord_user_id": discord_id, "language": language, "kinds": list(kinds)},
         headers=BROWSER,
@@ -94,15 +94,15 @@ def sign_in_crew(client: TestClient, name: str = "deckhand") -> None:
     client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
 
 
-def save_berth_url(client: TestClient, url: str) -> httpx.Response:
-    response: httpx.Response = client.put(
+def save_berth_url(client: TestClient, url: str) -> httpx2.Response:
+    response: httpx2.Response = client.put(
         f"{BASE}/berth-url", json={"berth_url": url}, headers=BROWSER
     )
     return response
 
 
-def press_test(client: TestClient) -> httpx.Response:
-    response: httpx.Response = client.post(f"{MINE}/test", headers=BROWSER)
+def press_test(client: TestClient) -> httpx2.Response:
+    response: httpx2.Response = client.post(f"{MINE}/test", headers=BROWSER)
     return response
 
 
@@ -406,15 +406,15 @@ class TestTheLeakCheckItself:
         assert leaks(TOKEN, [], caplog.records) != []
 
     def test_a_token_in_a_response_is_caught(self) -> None:
-        request = httpx.Request("GET", f"http://berth{BASE}")
-        response = httpx.Response(200, json={"token": TOKEN}, request=request)
+        request = httpx2.Request("GET", f"http://berth{BASE}")
+        response = httpx2.Response(200, json={"token": TOKEN}, request=request)
 
         assert leaks(TOKEN, [response], []) == [f"GET {BASE}"]
 
     def test_unrelated_lines_are_not_caught(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(LOGGED)
         logging.getLogger("berth.services.notify").info("saved", extra={"bot": "berth"})
-        request = httpx.Request("GET", f"http://berth{BASE}")
-        response = httpx.Response(200, json={"bot_configured": True}, request=request)
+        request = httpx2.Request("GET", f"http://berth{BASE}")
+        response = httpx2.Response(200, json={"bot_configured": True}, request=request)
 
         assert leaks(TOKEN, [response], caplog.records) == []

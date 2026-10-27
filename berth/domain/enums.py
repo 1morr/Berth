@@ -1764,3 +1764,47 @@ class NotifyRefusal(StrEnum):
     DISCORD_ID_MISSING = "discord_id_missing"
     #: Berth 的網址不是 http(s) 的絕對網址（M4 票 124）。
     BERTH_URL_INVALID = "berth_url_invalid"
+
+
+class AiProvider(StrEnum):
+    """模型走哪一種接口（brief §14〈provider〉、M5 票 09）。"""
+
+    #: Anthropic Messages API（官方，或相容的閘道）。
+    ANTHROPIC = "anthropic"
+    #: OpenAI 相容的 Chat Completions（官方、OpenRouter、自架閘道、本機模型）。
+    OPENAI = "openai"
+
+
+class AiProbeFailure(StrEnum):
+    """「測試連線」沒成功的分類（`adapters.ai.probe`）。畫面照它挑句子，原文另外附上。"""
+
+    #: `401` / `403`：key 錯、被撤銷或沒有權限。
+    KEY_REJECTED = "key_rejected"
+    #: `404`：模型名稱不存在，或 base URL 的路徑不對。
+    NOT_FOUND = "not_found"
+    #: 其餘的 4xx / 5xx（含限流、額度用完、服務過載）。
+    SERVICE_ERROR = "service_error"
+    #: 連不上、逾時、TLS 錯。
+    UNREACHABLE = "unreachable"
+    #: 回了東西但不是 API 的形狀（base URL 指到一個網頁）。
+    BAD_RESPONSE = "bad_response"
+
+
+class AiRefusal(StrEnum):
+    """AI 設定的命令不做的理由（`services.ai`）。"""
+
+    #: base URL 不是 http(s) 的絕對網址。
+    BASE_URL_INVALID = "base_url_invalid"
+    #: 要開啟或測試，但這個接口還沒有 key。
+    KEY_MISSING = "key_missing"
+    #: 要開啟或測試，但沒填模型名稱。
+    MODEL_MISSING = "model_missing"
+
+
+class AiSecret(StrEnum):
+    """AI 設定裡存著的 key（`services.ai.forget_ai_key`）。"""
+
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    #: 網路搜尋工具（票 17）。
+    TAVILY = "tavily"

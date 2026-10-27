@@ -33,6 +33,7 @@ import { JellyfinSettingsPage } from './pages/JellyfinSettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
 import { NotifySettingsPage } from './pages/NotifySettingsPage'
+import { AiSettingsPage } from './pages/AiSettingsPage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { RssPage } from './pages/RssPage'
@@ -536,6 +537,8 @@ const tmdbSettingsRoute = settingsRoute('/settings/tmdb', TmdbSettingsPage)
 const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySettingsPage, {
   everyone: true,
 })
+/** AI provider（M5 票 09）：不是泊位，只有管理員。 */
+const aiSettingsRoute = settingsRoute('/settings/ai', AiSettingsPage)
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -557,6 +560,7 @@ export const routeTree = rootRoute.addChildren([
   indexerSettingsRoute,
   tmdbSettingsRoute,
   notifySettingsRoute,
+  aiSettingsRoute,
   settingsIndexRoute,
   setupRoute,
 ])

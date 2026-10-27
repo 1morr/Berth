@@ -12,6 +12,17 @@
   一次回齊季表、相關的下載與最後幾筆時間線、開著的 Issue、RSS 那一側（綁了沒、被排除了沒），加一個結論：
   入庫失敗、沒下載成、等審核、待綁定、被排除、沒有來源、還在下載、Jellyfin 還沒掃到、還沒播、已入庫。
   一般使用者只看得到自己送的下載，看不到 Issue 與 RSS。這一版還沒有畫面，是之後 AI 側面板的資料來源。
+- **設定 → AI**（M5 票 09）：接上你自己的模型服務。兩種接口各自記著 Base URL、API key 與模型名：
+  Anthropic Messages（官方或相容閘道）與 OpenAI 相容的 Chat Completions（OpenAI、OpenRouter、自架閘道、本機模型）；
+  切換接口不會丟掉另一邊填好的。「測試連線」用表單上還沒存的值打一次最小呼叫，成功說哪個模型回話，失敗說是
+  key 被拒、模型或網址找不到、服務出錯、連不上還是網址指錯地方，並附上服務回的原文。key 存進去之後畫面只說
+  「已設定」，不回到瀏覽器、不進 log。已知價目的模型顯示每百萬 token 的價格與查證日期，認不得的寫「未知」。
+  另可填 Tavily key 給之後的網路搜尋工具。開關預設關著：不設定的話 Berth 與之前完全一樣。設定存在資料庫，
+  不讀環境變數。API：`GET|PUT /api/settings/ai`、`POST /api/settings/ai/test`、`DELETE /api/settings/ai/keys/{key}`。
+
+### Removed
+
+- 沒有呼叫端的 `AiPlanner` / `NullAiPlanner` 介面（M5 票 09）；AI 解析在 M6 重新設計（plan §4.5）。
 
 ## [0.3.0] - 2026-10-24
 

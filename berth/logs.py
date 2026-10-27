@@ -101,6 +101,11 @@ class _JsonFormatter(logging.Formatter):
 #: `uvicorn` 那一個。access log 印的是請求的路徑加 query。
 _SELF_PRINTING = ("uvicorn.access", "uvicorn.error")
 
+#: DEBUG 那幾行帶著憑證的 logger，不管 root 開到多低都停在這一級（M5 票 09、R13）。
+#: aiosqlite 的 DEBUG 是 `executing functools.partial(<execute>, sql, params)`：寫 `settings`
+#: 那一句的參數就是整份 JSON，含每一把 key。
+_QUIET: dict[str, int] = {"aiosqlite": logging.INFO}
+
 
 class _RedactQueries(logging.Filter):
     """在 record 交給別人的 handler 之前把網址的 query 值遮掉。
@@ -132,6 +137,8 @@ def configure_logging(level: int = logging.INFO) -> None:
     的話同一行會印好幾次——而那種 log 讀起來像是同一件事真的發生了好幾次。
     """
     _stamp_records()
+    for name, floor in _QUIET.items():
+        logging.getLogger(name).setLevel(floor)
     for name in _SELF_PRINTING:
         logger = logging.getLogger(name)
         if not any(isinstance(found, _RedactQueries) for found in logger.filters):
