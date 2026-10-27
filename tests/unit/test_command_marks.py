@@ -258,6 +258,9 @@ NAMED: dict[str, CommandMark] = {
     "ai.forget_ai_key": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
     # 不改狀態，但連到表單上的任意網址、key 欄空著時帶的是存著的那把，還花 token。
     "ai.test_ai": _mark(Effect.READ, Flag.CONNECTS_OUT),
+    # M5 票 11：開一輪花掉的 token 回不來，入口不是工具；讀自己的對話是一般的讀取。
+    "agent.open_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
+    "agent.read_conversation": _mark(Effect.READ),
 }
 
 

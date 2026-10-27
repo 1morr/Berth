@@ -851,7 +851,14 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
     logger.info("job recovered from a failed round", extra={"state": job.state.value})
 
 
-@command(Effect.READ)
+@command(
+    Effect.READ,
+    about=(
+        "List download jobs, newest first, one page at a time. shown picks the group: active "
+        "(still on the way, the default), attention (waiting for a person), imported, all, or "
+        "open. Give media_id to see only one work's jobs."
+    ),
+)
 async def list_jobs(
     session: AsyncSession,
     *,
@@ -907,7 +914,13 @@ async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
     return None if job is None else await _view_one(session, job)
 
 
-@command(Effect.READ)
+@command(
+    Effect.READ,
+    about=(
+        "The timeline of one job, oldest first: every state change, what caused it and who "
+        "did it. job_hash comes from list_jobs."
+    ),
+)
 async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEventView, ...]:
     """時間線，最舊的在前面——它是一份紀錄，讀的方向是事情發生的方向（brief §5.2）。"""
     rows = await session.scalars(

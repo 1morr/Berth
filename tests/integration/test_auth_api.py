@@ -498,6 +498,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 門禁只看方法與路徑，這一條要看狀態，所以守在命令裡（403 `review_needs_admin`，
     # `test_plans_api.py` 的 `TestReplanInReviewIsAdmins`）；這張表上它仍然是 SIGNED_IN。
     ("GET", "/auth/me"): Access.SIGNED_IN,
+    # 側面板的對話（M5 票 11）：一般使用者也用得到；工具照他的角色，對話只有本人讀得到。
+    ("POST", "/agent/chat"): Access.SIGNED_IN,
+    ("GET", "/agent/conversations/*"): Access.SIGNED_IN,
     # 每個人自己的通知（M4 票 125）：Discord ID、種類、測試。收件人取自 session。
     ("GET", "/me/notifications"): Access.SIGNED_IN,
     ("PUT", "/me/notifications"): Access.SIGNED_IN,

@@ -6,6 +6,7 @@
 from fastapi import APIRouter
 
 from berth.api import (
+    agent,
     ai,
     auth,
     discover,
@@ -32,6 +33,7 @@ from berth.api import (
 
 #: 掛在 `/api` 之下（plan §6）。
 router = APIRouter()
+router.include_router(agent.router)
 router.include_router(ai.router)
 router.include_router(auth.router)
 router.include_router(discover.router)

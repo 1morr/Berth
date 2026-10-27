@@ -36,6 +36,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 import berth.api
+from berth.api import agent as agent_api
 from berth.api import ai as ai_api
 from berth.api import files as files_api
 from berth.api import issues as issues_api
@@ -91,6 +92,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
     "ChoiceRefusal": setup_api._CHOICE_STATUS,
     "WhyNotRefusal": why_not_api._STATUS,
+    "AgentRefusal": agent_api._STATUS,
     "ProposalRefusal": proposals_api._STATUS,
 }
 
@@ -111,6 +113,7 @@ MODELS = (
     "NotifyRefusalOut",
     "AiRefusalOut",
     "WhyNotRefusalOut",
+    "AgentRefusalOut",
     "ProposalRefusalOut",
     "JobSignalOut",
     "ProposalSignalOut",
@@ -461,6 +464,7 @@ class TestDeclaringWhatEachEndpointRefuses:
         叫 `issue_refusal`，與 `route_refusal`、`access_refusal` 同一個命名。
         """
         assert HELPERS == {
+            "agent_refusal": "AgentRefusalOut",
             "route_refusal": "RouteRefusalOut",
             "proposal_refusal": "ProposalRefusalOut",
             "access_refusal": "AccessRefusalOut",

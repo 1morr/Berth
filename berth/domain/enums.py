@@ -1810,6 +1810,52 @@ class AiSecret(StrEnum):
     TAVILY = "tavily"
 
 
+class AgentRefusal(StrEnum):
+    """側面板對話的端點不做的理由（`services.agent`、M5 票 11）。"""
+
+    #: AI 關著（`settings.ai.enabled`）：側面板只說怎麼設定。
+    AI_DISABLED = "ai_disabled"
+    #: 這個人已經有一輪在跑（每人同時 1 輪，plan §11.6〈防護〉）。
+    BUSY = "busy"
+    #: 送來的最後一則不是有字的使用者訊息。
+    NO_MESSAGE = "no_message"
+    #: 沒有這段對話，或它不是這個人的（看不到就是沒有）。
+    CONVERSATION_MISSING = "conversation_missing"
+
+
+class AiStopReason(StrEnum):
+    """一輪 agent 為什麼停下（`ai_runs.stop_reason`，研究 C5）。用量頁數的是它（票 21）。"""
+
+    #: 模型自己答完了。
+    COMPLETED = "completed"
+    #: 一輪的模型呼叫次數到頂（plan §11.6〈防護〉）。
+    REQUEST_LIMIT = "request_limit"
+    #: 一輪的 input 或 output token 到頂。
+    TOKEN_LIMIT = "token_limit"
+    #: 同一個工具同一組參數第 4 次（失敗的不計）。
+    REPEATED_CALL = "repeated_call"
+    #: 模型或 provider 出錯（連不上、key 被拒、回了壞東西）。
+    ERROR = "error"
+    #: 使用者關掉了連線（按停止、關頁）。
+    CANCELLED = "cancelled"
+
+
+class AiToolOutcome(StrEnum):
+    """一次工具呼叫的結果（`ai_tool_calls.outcome`）。"""
+
+    OK = "ok"
+    #: 照樣做了，但它與這一輪先前的一次完全相同：結果附一句警告。
+    WARNED = "warned"
+    #: 第 3 次相同的呼叫：沒有做，回一句「換個做法」。
+    BLOCKED = "blocked"
+    #: 第 4 次：整輪中止。
+    ABORTED = "aborted"
+    #: 命令以它宣告的理由拒絕（`CommandRefusedError`）。不算重複。
+    REFUSED = "refused"
+    #: 參數不對或命令出錯（服務連不上這類）。不算重複：重試是正當的。
+    FAILED = "failed"
+
+
 class ProposalStatus(StrEnum):
     """一張 Proposal 走到哪裡（`services.proposals`，M5 票 08）。"""
 

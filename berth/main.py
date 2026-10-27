@@ -34,6 +34,7 @@ from berth.pipeline import (
     RssPoller,
     Sweeper,
 )
+from berth.services.agent import AgentRuntime
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
@@ -110,6 +111,8 @@ def create_app(
     app.state.jellyfin_access = AccessCache()
     # 搜尋結果與一次性連結的下載連結記在這裡，瀏覽器只拿 id（M4 票 79）。
     app.state.sources = SourceCache()
+    # 防護的數字與「誰正在跑一輪」（每人同時 1 輪，M5 票 11）。
+    app.state.agent = AgentRuntime()
     # 門禁包住整個 `/api`，所以它要在路由之外（票 07）。
     app.add_middleware(ApiGate, prefix=API_PREFIX)
     # 前端一整包 JS 七百多 KB、壓縮後約兩百，而 Berth 自己送靜態檔、前面不一定有代理替它壓

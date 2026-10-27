@@ -249,7 +249,17 @@ class _Episodes:
 
 
 # 一般使用者也問得了，只看得到自己送的 Job（brief §19「M5 的方向」⑦，見 `_visible`）。
-@command(Effect.READ, refusals=(WhyNotRefusal,), audience=Role.USER)
+@command(
+    Effect.READ,
+    refusals=(WhyNotRefusal,),
+    audience=Role.USER,
+    about=(
+        "Explain why a work, or one episode of it (episode = [season, episode]), is not in "
+        "the library yet: a conclusion per episode, with the jobs, issues and RSS items "
+        "behind it. Reads Berth's records only. media_id looks like tv:1429 or movie:550 and "
+        "comes from an earlier tool result."
+    ),
+)
 async def explain(
     session: AsyncSession,
     media_id: str,

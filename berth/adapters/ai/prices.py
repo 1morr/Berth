@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from berth.adapters.ai.usage import TokenUsage
+
 _ANTHROPIC = "https://platform.claude.com/docs/en/about-claude/pricing"
 _DEEPSEEK = "https://api-docs.deepseek.com/quick_start/pricing"
 
@@ -64,3 +66,26 @@ def price_of(model: str) -> ModelPrice | None:
         return None
     matches = [key for key in PRICES if name.startswith(key)]
     return PRICES[max(matches, key=len)] if matches else None
+
+
+_MILLION = Decimal(1_000_000)
+
+
+def cost_of(model: str, usage: TokenUsage) -> Decimal | None:
+    """一次呼叫的估計費用（美元）；價目表上沒有這個模型是 `None`。
+
+    沒命中快取的 input（總數扣掉快取讀與寫）照輸入價，快取讀寫各照各的價。不知道的快取格子當作
+    沒有：那部分照一般輸入價算進去，估計因此偏高、不會偏低。
+    """
+    price = price_of(model)
+    if price is None:
+        return None
+    read, write = usage.cache_read or 0, usage.cache_write or 0
+    plain = max(usage.input - read - write, 0)
+    total = (
+        plain * price.input
+        + usage.output * price.output
+        + read * price.cache_read
+        + write * price.cache_write
+    )
+    return total / _MILLION
