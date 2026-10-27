@@ -33,7 +33,7 @@ from berth.domain import (
 )
 from berth.models import Event, Issue, Job, LedgerEntry, Media, Notification, WeeklyReport
 from berth.models.types import utcnow
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import actor_of
 from berth.services.notify import episode_spans
 from berth.services.recipients import subscribers
@@ -137,7 +137,7 @@ def week_ending(moment: datetime, at: time) -> datetime:
 
 
 # 寫一份週報並排摘要；摘要送出去就收不回來。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def compose_weekly(
     session: AsyncSession, *, ends_at: datetime, now: datetime | None = None
 ) -> WeeklyView | None:

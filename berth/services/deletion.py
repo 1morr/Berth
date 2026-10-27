@@ -49,6 +49,7 @@ from berth.domain import EventType, JobRefusal, JobState, LedgerStatus
 from berth.logs import job_context
 from berth.models import Event, Job, JobFile, LedgerEntry, PathSettings, QbittorrentSettings, Route
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import JobRejectedError, job_lock, record_event, transition
 from berth.services.qbittorrent import sign_in
 from berth.services.settings import read_settings
@@ -115,6 +116,7 @@ class DeleteOutcome:
     unmanaged: tuple[str, ...] = ()
 
 
+@command(Effect.READ)
 async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEstimate:
     """這一筆刪下去會空出多少（brief §9.2）。**只讀，不改任何東西。**
 
@@ -138,6 +140,8 @@ async def estimate_deletion(session: AsyncSession, job_hash: str) -> DeletionEst
     )
 
 
+# 刪 complete 與媒體庫裡的檔案、向 qBittorrent 移除：做了就回不去（brief §14）。
+@command(Effect.IRREVERSIBLE)
 async def delete_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -494,6 +498,7 @@ def remove_one(path: Path, *, roots: Sequence[Path], placed: Placed) -> Unlink:
     return Unlink.REMOVED if gone else Unlink.GONE
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def route_targets(session: AsyncSession) -> list[Path]:
     """刪除守衛認得的那幾個根：每一條 Route 的目標路徑。媒體庫裡只刪得到它們底下的東西。"""
     return [Path(row.target_path) for row in await session.scalars(select(Route))]

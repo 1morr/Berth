@@ -16,7 +16,7 @@ from berth.adapters.ai.prices import PRICES, ModelPrice, price_of
 from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret
 from berth.models import AiEndpointSettings, AiSettings
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.deeplink import PublicUrlRejectedError, normalized_public_url
 from berth.services.settings import read_settings, update_settings
 
@@ -114,7 +114,8 @@ async def read_ai(session: AsyncSession) -> AiView:
     return _view(await read_settings(session, AiSettings))
 
 
-@command(Effect.REVERSIBLE)
+# 改設定頁的設定；收任意 base URL，之後每次呼叫都帶著 key 連過去。用原值再存一次就回去。
+@command(Effect.REVERSIBLE, inverse="ai.set_ai", flags={Flag.SETTINGS, Flag.CONNECTS_OUT})
 async def set_ai(
     session: AsyncSession, *, enabled: bool, form: AiForm, tavily_api_key: str | None = None
 ) -> AiView:
@@ -148,7 +149,7 @@ async def set_ai(
 
 
 # key 一清掉就回不來，要人重新貼一次。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def forget_ai_key(session: AsyncSession, secret: AiSecret) -> AiView:
     """清掉一把 key，其餘設定不動。清的是現在用的接口的 key 時一併關掉 AI：沒有 key 開不了。"""
 
@@ -164,9 +165,9 @@ async def forget_ai_key(session: AsyncSession, secret: AiSecret) -> AiView:
     return _view(await update_settings(session, AiSettings, change))
 
 
-# 不改 Berth 的任何狀態，所以是 READ；但它連到表單上的網址、花使用者的 token。票 02 的旗標
-# （`connects_out`）落地之後要補上，否則登錄表會把它當成 AI 可以自己按的唯讀命令。
-@command(Effect.READ)
+# 不改 Berth 的任何狀態，所以是 READ；但它連到表單上的任意網址，key 欄空著時帶的是存著的那把
+# （外洩 key 的路徑），還花使用者的 token：`CONNECTS_OUT`，`needs_person` 為真。
+@command(Effect.READ, flags={Flag.CONNECTS_OUT})
 async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: AiForm) -> AiTest:
     """照表單打一次最小呼叫，不存任何東西。服務回的錯誤是結果，不是拒絕。"""
     base_url = _base_url(form)

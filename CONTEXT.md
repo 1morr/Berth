@@ -336,6 +336,10 @@ _Avoid_: diagnostics, status check
 Job 時間線上的一筆事件：型別、時間、actor、payload。
 _Avoid_: log, activity, history
 
+**Why Not**（為什麼沒入庫；程式碼 `WhyNot`）:
+一部作品或其中一集為什麼還沒在媒體庫裡的**結論分類**，十種：入庫失敗、沒下載成、等審核、待綁定、被排除、沒有來源、還在下載、Jellyfin 還沒掃到、還沒播、已入庫（宣告順序就是優先序，整部作品說最前面那一種）。規則只在 `domain/why_not.py` 一份；`GET /media/{id}/why-not`（`services/why_not.explain`，M5 票 10）把季表、Job 與事件、Issue、RSS 那一側收在一份回答裡，agent 與畫面都讀它。
+_Avoid_: diagnosis, status（status 是季表那一格）, reason（reason 是拒絕理由與 Review Reason）
+
 ### RSS
 
 **Feed**:
@@ -393,7 +397,7 @@ _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 _Avoid_: job（Job 是一包 torrent）, ticket
 
 **Command Registry**（命令登錄表）:
-services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）與反向命令。AI 的工具、M7 的 MCP server 都只從這裡來。
+services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）、反向命令與旗標（`connects_out` / `sends_out` / `downloads` / `settings` / `internal`；`internal` 的不當工具）。AI 的工具、M7 的 MCP server 都只從這裡來。
 _Avoid_: tool list, API list
 
 **Shadow Mode**（影子模式）:

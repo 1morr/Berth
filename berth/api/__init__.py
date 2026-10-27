@@ -26,6 +26,7 @@ from berth.api import (
     settings,
     setup,
     weekly,
+    why_not,
 )
 
 #: 掛在 `/api` 之下（plan §6）。
@@ -51,5 +52,6 @@ router.include_router(search.router)
 router.include_router(settings.router)
 router.include_router(setup.router)
 router.include_router(weekly.router)
+router.include_router(why_not.router)
 
 __all__ = ["router"]

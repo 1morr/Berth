@@ -8,6 +8,9 @@ importer 照核准後的那一份去鏈接（`services/importer.py`）——核�
   不合法的改動整批拒絕、什麼都不寫（`PlanRefusal`）。
 - **核准**（`approve_plan`）＝照提案入庫（2026-09-23 使用者拍板）：待審核的列季集完整就入庫，
   寫下的路徑就是畫面上 `landing` 算出來的那一份。還有沒決定的列或兩列撞同一條路徑時拒絕。
+  升成 `import` 的列寫入前**與帳本再比一次**（`plan.against_ledger`，與規劃時同一份規則，
+  M5 票 05）：被擋下的列規劃時沒比過，等人的期間帳本也可能多了同一集。撞上的略過、記著撞上
+  哪一列，其餘照常。
   `review → importing`，然後叫醒 importer。**批次核准與改過之後的核准是同一支**：一份 Plan 一顆
   按鈕，改過幾列都一樣。
 - **拒絕**（`reject_plan`）照 plan §3.1：`review → completed`。規劃器下一輪會把它**整份重算**，
@@ -45,9 +48,10 @@ from berth.logs import job_context
 from berth.models import Job, PlanItem, RssSeries
 from berth.models.types import utcnow
 from berth.parser import revise
+from berth.services.commands import Effect, command
 from berth.services.events import EventHub, JobSignal
-from berth.services.jobs import job_lock, record_event, transition
-from berth.services.plan import WRITTEN, summarise
+from berth.services.jobs import actor_of, job_lock, record_event, transition
+from berth.services.plan import WRITTEN, against_ledger, summarise
 from berth.services.plan_view import (
     LoadedPlan,
     PlanView,
@@ -94,6 +98,8 @@ class ItemEdit:
     episode_end: int | None = None
 
 
+# 改回去要再改一次，但 `following` 會連帶換掉沒人碰過的列與 Series：不是單純指向自己。
+@command(Effect.REVERSIBLE)
 async def edit_items(
     session: AsyncSession,
     plan_id: int,
@@ -138,6 +144,8 @@ async def edit_items(
     return view
 
 
+# 只讓狀態落地，鏈接由 importer 建，rematch 拆得掉（brief §14）。
+@command(Effect.REVERSIBLE)
 async def approve_plan(
     session: AsyncSession, hub: EventHub, plan_id: int, *, actor: str
 ) -> PlanView:
@@ -155,7 +163,8 @@ async def approve_plan(
         if held:
             raise PlanRejectedError(PlanRefusal.UNDECIDED, _names(held))
         _refuse_clashes(landed)
-        _write(loaded, landed, edited=set())
+        landed, duplicates = await _recheck_unsettled(session, job, loaded, landed)
+        _write(loaded, landed, edited=set(), duplicates=duplicates)
         plan = loaded.plan
         plan.status = PlanStatus.APPROVED
         plan.decided_by = actor
@@ -170,6 +179,14 @@ async def approve_plan(
             actor=actor,
             payload={"plan": plan.id, "decision": PlanStatus.APPROVED.value, "files": files},
         )
+        if duplicates:
+            await record_event(
+                session,
+                job,
+                EventType.DUPLICATE_SKIPPED,
+                actor=actor_of(None),
+                payload={"plan": plan.id, "files": sorted(duplicates)},
+            )
         await session.commit()
         hub.publish(JobSignal(hash=job.hash, state=job.state, progress=job.progress))
     logger.info("plan approved", extra={"plan": plan_id, "files": files})
@@ -178,6 +195,8 @@ async def approve_plan(
     return view
 
 
+# 檔案不動，規劃器重算；沒有單一反向命令。
+@command(Effect.REVERSIBLE)
 async def reject_plan(session: AsyncSession, hub: EventHub, plan_id: int, *, actor: str) -> None:
     """拒絕：`review → completed`（plan §3.1），規劃器下一輪整份重算。檔案不動。
 
@@ -303,6 +322,20 @@ def _edited(item: PlannedFile, edit: ItemEdit) -> PlannedFile:
     )
 
 
+async def _recheck_unsettled(
+    session: AsyncSession, job: Job, loaded: LoadedPlan, landed: Sequence[PlannedFile]
+) -> tuple[tuple[PlannedFile, ...], dict[str, int]]:
+    """核准的那一份與帳本比（`plan.against_ledger`，規則與規劃時同一份）：重複的列略過、記著撞上
+    帳本哪一列，其餘照常核准——與規劃時自動入庫的那一份同一個處理，那幾列在 Review Queue 上等人。
+
+    已經鏈接的列不比：它們的路徑是磁碟上的事實，`_write` 也不動它們。
+    """
+    pending = [item for item in landed if item.rel_path not in loaded.settled]
+    checked, duplicates = await against_ledger(session, job, pending)
+    by_path = {item.rel_path: item for item in checked}
+    return tuple(by_path.get(item.rel_path, item) for item in landed), duplicates
+
+
 def _refuse_clashes(items: Sequence[PlannedFile]) -> None:
     counted = Counter(item.target_path for item in items if item.action in WRITTEN)
     clashes = sorted(path for path, count in counted.items() if path and count > 1)
@@ -310,8 +343,16 @@ def _refuse_clashes(items: Sequence[PlannedFile]) -> None:
         raise PlanRejectedError(PlanRefusal.TARGET_CLASH, clashes[0])
 
 
-def _write(loaded: LoadedPlan, items: Sequence[PlannedFile], *, edited: set[int]) -> None:
+def _write(
+    loaded: LoadedPlan,
+    items: Sequence[PlannedFile],
+    *,
+    edited: set[int],
+    duplicates: Mapping[str, int] | None = None,
+) -> None:
     """解析器的形狀寫回那幾列，以及一份重算過的摘要。已經鏈接的列不動。
+
+    `duplicates` 是核准時比帳本撞上的那幾列（`rel_path` → 帳本那一列，`_recheck_unsettled`）。
 
     改過的那幾列清掉 `error`（例如 `target_unmanaged`：人把它改成略過就是他的回答）與 `audit`
     ——人親手指定的一列沒有「medium 待確認」可言。
@@ -326,6 +367,8 @@ def _write(loaded: LoadedPlan, items: Sequence[PlannedFile], *, edited: set[int]
         row.target_path = item.target_path
         row.confidence = item.confidence
         row.reasons_json = dump_reasons(item.reasons)
+        if duplicates and item.rel_path in duplicates:
+            row.duplicate_of = duplicates[item.rel_path]
         if index in edited:
             row.error = ""
             row.audit = False

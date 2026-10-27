@@ -52,6 +52,6 @@ M5 的一切都要先有一個模型可以叫。使用者決定兩種接口都�
 - Standards（判斷題）：base URL 借用 `deeplink.normalized_public_url` 驗（會拒絕帶 `?` 的網址）；`forget_ai_key` 以 `AiProvider(secret.value)` 靠兩個 enum 字串值相同轉換。
 - Standards（輕微）：`probe` 只接 pydantic-ai 的模型錯誤，其他例外（`UserError` 之類）會變成 500 而不是測試失敗；沒有量到會發生的路徑。
 - Spec：價目只看模型名（相容閘道上同名模型照原廠價），記在 progress.md，票 21 決定。
-- Spec：`test_ai` 標 `Effect.READ` 但會連出去、花 token；已加註解，票 02 的 `connects_out` 旗標落地後補上。
 - Spec：`.env.example` 裡 prototype 用的 `AI_*` 變數沒動（已寫明 Berth 不讀）。
+- 已處理（2026-10-27，合併 main 之後）：`test_ai` 補上 `Flag.CONNECTS_OUT`（`Effect.READ` 照舊，`needs_person` 為真）——它連到表單上的任意網址、key 欄空著時帶的是存著的那把，還花 token。同輪補齊這張票其餘三支：`set_ai` 是 REVERSIBLE + SETTINGS + CONNECTS_OUT、inverse 指自己（收任意 base URL；同 `notify.set_bot_token`），`forget_ai_key` 是 IRREVERSIBLE + SETTINGS，`read_ai` 是 READ；四支都進 `tests/unit/test_command_marks.py` 的 `NAMED`。
 - 已修：移除無關 key 時清掉沒存的「開啟」、存完 Base URL 沒換成後端正規化的值、`SettingsTabs` 的過時註解、`_complete` 改名、開關說明不再提還沒做的側面板、plan §1.2 / §1.4 補 ai 與依賴。

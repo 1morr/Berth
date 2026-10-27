@@ -51,7 +51,7 @@ from berth.domain import (
 )
 from berth.models import IndexerSettings, SetupSettings, SetupStep
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jellyfin import resolve_interface_login
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
@@ -285,7 +285,7 @@ async def _verify(
 
 # 沒有單一反向命令：一次加好幾站，`remove_indexer` 一次只撤得掉一站（既有的那一台 Berth 不撤，
 # 移除交給它自己的介面，M4 票 20）。
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def apply_default_indexers(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -342,7 +342,7 @@ async def apply_default_indexers(
 
 
 # 沒有單一反向命令：理由同 `apply_default_indexers`，加進去的一站一站用 `remove_indexer` 撤。
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def add_recommended_indexers(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> IndexerSetupStatus:
@@ -440,7 +440,7 @@ async def _record_added(
     await update_settings(session, SetupSettings, record)
 
 
-@command(Effect.REVERSIBLE, inverse="indexer.skip_indexers")
+@command(Effect.REVERSIBLE, inverse="indexer.skip_indexers", flags={Flag.SETTINGS})
 async def skip_indexers(
     session: AsyncSession, factory: ServiceClientFactory, *, skipped: bool = True
 ) -> IndexerSetupStatus:
@@ -504,7 +504,7 @@ class IndexerNotRemovedError(Exception):
     """移除時 Prowlarr 沒答上來或沒收下：什麼都沒記下，訊息是原文（M4 票 99）。"""
 
 
-@command(Effect.REVERSIBLE, inverse="indexer.apply_default_indexers")
+@command(Effect.REVERSIBLE, inverse="indexer.apply_default_indexers", flags={Flag.SETTINGS})
 async def remove_indexer(
     session: AsyncSession, factory: ServiceClientFactory, indexer_id: int
 ) -> IndexerSetupStatus:
@@ -632,7 +632,7 @@ def _test_failed_step(check: SiteCheck) -> SetupStep:
     )
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="indexer.set_interface_login", flags={Flag.SETTINGS})
 async def set_interface_login(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -807,7 +807,7 @@ async def _wait_for_restart(client: ProwlarrClient, *, sleep: Sleeper) -> None:
     raise ServiceError("prowlarr did not come back after the credentials were set")
 
 
-@command(Effect.READ)
+@command(Effect.READ, flags={Flag.INTERNAL, Flag.CONNECTS_OUT})
 async def probe_indexer(factory: ServiceClientFactory, base_url: str, api_key: str) -> SetupStep:
     """那個 Prowlarr 現在回得出什麼：健康檢查的第三項（精靈的連線測試是 `setup._test_connection`）。
 

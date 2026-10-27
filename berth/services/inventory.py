@@ -29,8 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin import JellyfinItem
 from berth.domain import (
+    CLAIMING_ACTIONS,
     REMATCH_ACTIONS,
     SETTLED_PLANS,
+    STUCK_STATES,
+    UNDER_WAY_STATES,
     EpisodeSnapshot,
     EpisodeStatus,
     FileKind,
@@ -46,6 +49,7 @@ from berth.domain import (
 )
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
+from berth.services.commands import Effect, Flag, command
 from berth.services.jellyfin_access import (
     BrowsableLibrary,
     JellyfinAccess,
@@ -63,28 +67,6 @@ FAILED_STATES: frozenset[JobState] = frozenset(
         JobState.IMPORT_FAILED,
     }
 )
-
-#: 還在路上：送單到入庫之間的每一站。`stalled` 也算——做種的人回來它就會自己動。
-UNDER_WAY_STATES: frozenset[JobState] = frozenset(
-    {
-        JobState.REQUESTED,
-        JobState.SUBMITTED,
-        JobState.METADATA_READY,
-        JobState.DOWNLOADING,
-        JobState.STALLED,
-        JobState.COMPLETED,
-        JobState.PLANNING,
-        JobState.IMPORTING,
-    }
-)
-
-#: 停下來等人的 Job：它的計劃蓋到的集數算「卡住」。送單失敗不在裡面——那一包連檔案清單
-#: 都還沒有，蓋不到任何一集。
-STUCK_STATES: frozenset[JobState] = frozenset({JobState.REVIEW, JobState.IMPORT_FAILED})
-
-#: 計劃裡說得出「這個檔案衝著哪一集來」的處置。`review` 也算：季集是猜的，但它確實是那一集的檔案。
-_CLAIMING: frozenset[PlanAction] = frozenset({PlanAction.IMPORT, PlanAction.REVIEW})
-
 
 # --- 一個 Jellyfin 媒體庫的牆 -------------------------------------------------
 
@@ -275,6 +257,7 @@ class Covers(Protocol):
     def episode_end(self) -> int | None: ...
 
 
+@command(Effect.READ)
 async def read_wall(
     session: AsyncSession,
     access: JellyfinAccess,
@@ -321,6 +304,7 @@ async def read_wall(
     )
 
 
+@command(Effect.READ)
 async def libraries_with_imports(
     session: AsyncSession, library_ids: Collection[str]
 ) -> frozenset[str]:
@@ -350,6 +334,7 @@ async def libraries_with_imports(
     return frozenset(found)
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnapshot) -> Holdings:
     """這部作品在媒體庫與管線裡的樣子（Media 詳情頁）。
 
@@ -415,7 +400,7 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
                     ),
                 )
             )
-        if item.action not in _CLAIMING:
+        if item.action not in CLAIMING_ACTIONS:
             continue
         if job.state in STUCK_STATES:
             claim(stuck, item, job)

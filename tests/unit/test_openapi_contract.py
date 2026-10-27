@@ -47,6 +47,7 @@ from berth.api import review as review_api
 from berth.api import routes as routes_api
 from berth.api import rss as rss_api
 from berth.api import setup as setup_api
+from berth.api import why_not as why_not_api
 from berth.api.routes import route_refusal, route_responses
 from berth.domain import RouteRefusal, enums
 from berth.main import create_app
@@ -88,6 +89,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "OwnerRefusal": setup_api._OWNER_STATUS,
     "InterfaceLoginRefusal": setup_api._LOGIN_STATUS,
     "ChoiceRefusal": setup_api._CHOICE_STATUS,
+    "WhyNotRefusal": why_not_api._STATUS,
 }
 
 #: 拒絕的形狀（`{reason, detail}` 與 Route 多的那兩格）與 SSE 的推播。前端直接取這幾個
@@ -106,6 +108,7 @@ MODELS = (
     "ChoiceRefusalOut",
     "NotifyRefusalOut",
     "AiRefusalOut",
+    "WhyNotRefusalOut",
     "JobSignalOut",
 )
 
@@ -468,6 +471,7 @@ class TestDeclaringWhatEachEndpointRefuses:
             "rss_refusal": "RssRefusalOut",
             "notify_refusal": "NotifyRefusalOut",
             "ai_refusal": "AiRefusalOut",
+            "why_not_refusal": "WhyNotRefusalOut",
             "_refuse": "JobRefusalOut",
         }
 

@@ -31,7 +31,7 @@ from berth.domain import (
     ReviewReason,
 )
 from berth.logs import configure_logging
-from berth.models import Job, LedgerEntry, Plan, PlanItem, RssSeries
+from berth.models import Job, LedgerEntry, Media, Plan, PlanItem, RssSeries
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
 from berth.services.jobs import JobRejectedError
@@ -47,6 +47,7 @@ from berth.services.series_review import (
 from tests.integration.arrange import arrange, factory_for
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_air_date_check import airing_split_cour
+from tests.integration.test_plan import already_in_the_library
 from tests.integration.test_plan_review import held
 from tests.integration.test_rss import (
     FEED,
@@ -658,3 +659,40 @@ class TestTheCorrectedPlanItself:
         assert placed == {first: (2, 1), second: (2, 2), third: (1, 10)}
         followed = next(item for item in outcome.plan.items if item.id == second)
         assert followed.action is PlanAction.IMPORT
+
+    async def test_a_row_that_followed_is_checked_against_the_library_on_approval(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """跟著 Series 新值換上的提案（`held_proposal`）沒比過帳本：媒體庫裡已經有 S02E02-E03 的話，
+        換成 S02E02 的那一列在核准時略過、等人決定，不撞進去（M5 票 05）。"""
+        job, route, factory, plan_id = await held(
+            session, roots, name=SPY_BATCH, files=SPY_BATCH_FILES
+        )
+        series = RssSeries(
+            key="title:spy-family:ani",
+            title_raw="SPY×FAMILY",
+            media_id=job.media_id,
+            route_id=route.id,
+        )
+        session.add(series)
+        await session.flush()
+        job.trigger, job.trigger_ref = JobTrigger.RSS, str(series.id)
+        await session.commit()
+        media = await session.get(Media, job.media_id)
+        assert media is not None
+        await already_in_the_library(
+            session, media, route, season=2, episode_start=2, episode_end=3
+        )
+        known = await session.scalar(select(LedgerEntry))
+        assert known is not None
+        first, second, _ = [(await held_row(session, number))[1] for number in (1, 2, 3)]
+        await correct_series_from_plan(
+            session, factory, EventHub(), plan_id, edit_to(first, 2, 1), actor=ACTOR
+        )
+
+        approved = await approve_plan(session, EventHub(), plan_id, actor=ACTOR)
+
+        followed = next(item for item in approved.items if item.id == second)
+        assert followed.action is PlanAction.SKIP
+        row = await session.get(PlanItem, second, populate_existing=True)
+        assert row is not None and row.duplicate_of == known.id

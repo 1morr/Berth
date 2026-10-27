@@ -529,6 +529,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 作品頁打開時先問一次 Jellyfin（M4 票 51）：看詳情的人都會打開它。
     ("POST", "/media/*/resolve"): Access.SIGNED_IN,
     ("GET", "/media/*/watch"): Access.SIGNED_IN,
+    # 為什麼沒入庫（M5 票 10）：一般使用者也問得到，看得到什麼由命令照按的人決定。
+    ("GET", "/media/*/why-not"): Access.SIGNED_IN,
     ("GET", "/plans/*"): Access.SIGNED_IN,
     ("GET", "/search"): Access.SIGNED_IN,
     ("GET", "/search/queries"): Access.SIGNED_IN,

@@ -67,6 +67,7 @@ from berth.parser import (
 from berth.parser import plan as decide
 from berth.services import first_batch
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import (
     REPLANNABLE,
@@ -137,6 +138,8 @@ class PlanOutcome:
     preplanned: int
 
 
+# planner 一輪的入口：算 Plan、自動模式核准，與人按的核准同樣可逆。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def sweep_plans(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -164,6 +167,8 @@ async def sweep_plans(
     return PlanOutcome(planned=planned, preplanned=preplanned)
 
 
+# 退回 `completed` 重算：檔案不動，再核准或改寫就回去；沒有單一反向命令。
+@command(Effect.REVERSIBLE)
 async def replan_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -194,13 +199,14 @@ async def replan_job(
             ):
                 raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
             await _plan(session, factory, hub, job_hash, utcnow())
-    plan_id = await plan_id_of(session, job_hash)
+    plan_id = await _plan_id_of(session, job_hash)
     view = None if plan_id is None else await read_plan(session, plan_id)
     if view is None:
         raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
     return view
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     """這一筆**現在**會被規劃成什麼（`job_files.rel_path` → 那一列）。不寫、不動狀態。
 
@@ -214,6 +220,7 @@ async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     return {f"{contents.root}{item.rel_path}": item for item in items}
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def held_proposal(
     session: AsyncSession, job: Job, *, season: int, offset: int | None
 ) -> dict[str, PlannedFile]:
@@ -253,7 +260,7 @@ def _measured(row: JobFile | None) -> int | None:
     return found if isinstance(found, int) else None
 
 
-async def plan_id_of(session: AsyncSession, job_hash: str) -> int | None:
+async def _plan_id_of(session: AsyncSession, job_hash: str) -> int | None:
     """這個 Job 現在那一份計劃的 id。沒算過就是 `None`（下載列表照它決定畫不畫那一區）。"""
     found: int | None = await session.scalar(select(Plan.id).where(Plan.job_hash == job_hash))
     return found
@@ -516,6 +523,7 @@ def guess_from_title(
     return guess
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def series_of(session: AsyncSession, job: Job) -> RssSeries | None:
     """送出這一筆的 RSS Series（`trigger_ref` 是它的 id）。
 
@@ -658,6 +666,20 @@ def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[Pl
         else item
         for item in items
     )
+
+
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def against_ledger(
+    session: AsyncSession, job: Job, items: Sequence[PlannedFile]
+) -> tuple[tuple[PlannedFile, ...], dict[str, int]]:
+    """核准那一步再比一次帳本（M5 票 05），與規劃時同一支 `_against_ledger`。
+
+    規劃時只比 `import` 的列：被擋下的列（播出日比對、低信心、Route 政策）與從審核裡套用到 RSS
+    Series 時換上的提案（`held_proposal`）都沒比過，而核准會把它們升成 `import`
+    （`plan_review.approve_plan`）。等人的期間帳本也可能多了另一包送的同一集。
+    """
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    return await _against_ledger(session, job, await _contents(session, job), route, items)
 
 
 async def _against_ledger(

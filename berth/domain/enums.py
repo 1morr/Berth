@@ -75,6 +75,36 @@ class JobState(StrEnum):
     REMOVED = "removed"
 
 
+#: 還在路上：送單到入庫之間的每一站。`stalled` 也算——做種的人回來它就會自己動。
+UNDER_WAY_STATES: frozenset[JobState] = frozenset(
+    {
+        JobState.REQUESTED,
+        JobState.SUBMITTED,
+        JobState.METADATA_READY,
+        JobState.DOWNLOADING,
+        JobState.STALLED,
+        JobState.COMPLETED,
+        JobState.PLANNING,
+        JobState.IMPORTING,
+    }
+)
+
+#: 停下來等人的 Job：它的計劃蓋到的集數算「卡住」。送單失敗不在裡面——那一包連檔案清單
+#: 都還沒有，蓋不到任何一集。
+STUCK_STATES: frozenset[JobState] = frozenset({JobState.REVIEW, JobState.IMPORT_FAILED})
+
+
+class WhyNotRefusal(StrEnum):
+    """`services/why_not.explain` 在讀任何東西之前就停下來的理由（M5 票 10）。"""
+
+    #: Berth 沒有這部作品（沒有人打開過它的作品頁，或 id 根本不對）。
+    MEDIA_MISSING = "media_missing"
+    #: 季與集只給了一個。
+    EPISODE_INCOMPLETE = "episode_incomplete"
+    #: 電影沒有季集，卻問了一集。
+    NOT_A_SERIES = "not_a_series"
+
+
 class JobTrigger(StrEnum):
     """這個 Job 是誰要的（`CONTEXT.md`、plan §2.3）。
 

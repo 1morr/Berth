@@ -57,7 +57,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.parser import parse_release
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.inventory import read_holdings
 from berth.services.issues import (
     STANDS_WHILE,
@@ -125,7 +125,7 @@ class SweepOutcome:
 
 
 # 寫 Issue 與排通知；Issue 由下一輪收、通知送出去收不回來。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def sweep_once(session: AsyncSession, *, now: datetime | None = None) -> SweepOutcome:
     """巡檢一輪，最後 commit。"""
     moment = now or utcnow()

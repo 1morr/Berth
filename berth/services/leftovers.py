@@ -29,7 +29,7 @@ from berth.adapters.qbittorrent import QbittorrentClient
 from berth.domain import ServiceKind, StepFailure
 from berth.models import IndexerSettings, Job, QbittorrentSettings, SetupSettings
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import IN_CLIENT_STATES
 from berth.services.qbittorrent import route_categories, try_sign_in
 from berth.services.routes import CATEGORY_PREFIX
@@ -91,7 +91,7 @@ async def read_leftovers(
 
 # 回不去：刪掉之前 Berth 沒記它的路徑，不是 Route 的那幾個（審計 S2 舊 QA 留下的那種）
 # Berth 建不回來。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SETTINGS})
 async def remove_empty_categories(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> tuple[str, ...]:
