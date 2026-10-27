@@ -102,6 +102,9 @@ class ProposalPreview:
     external_fields: tuple[tuple[str, ...], ...] = ()
     #: 這一次呼叫裡超過一張卡上限、沒放上這一張的列數（送單的數量閘，M5 票 14）。
     held_back: int = 0
+    #: 逐列：按下去會送出幾個 torrent（送單一列一個，訂閱 Mikan 是單一 feed 上整季的筆數）；
+    #: `None` 是提出時不知道，要送出時才知道。不送 torrent 的命令是空的。
+    torrents: tuple[int | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +165,7 @@ async def propose(
     tool_call_id: str | None = None,
     external_fields: Sequence[Sequence[str]] = (),
     held_back: int = 0,
+    torrents: Sequence[int | None] = (),
     now: datetime | None = None,
 ) -> ProposalView:
     """建一張卡片（模組 docstring 第 1 點）。輸入格式不對是 pydantic 的 `ValidationError`。
@@ -196,6 +200,7 @@ async def propose(
         external_fields=tuple(tuple(fields) for fields in external_fields)
         or tuple(() for _ in rows),
         held_back=held_back,
+        torrents=tuple(torrents),
     )
     proposal = Proposal(
         command=name,
@@ -536,6 +541,7 @@ def _view(proposal: Proposal) -> ProposalView:
                 for fields in preview.get("external_fields") or [[] for _ in preview["checked"]]
             ),
             held_back=preview.get("held_back", 0),
+            torrents=tuple(preview.get("torrents") or ()),
         ),
         user_id=proposal.user_id,
         proposer=proposal.proposer,

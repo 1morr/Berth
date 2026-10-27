@@ -28,6 +28,7 @@ from pydantic_ai.models.function import AgentInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
+from berth.adapters.rss import mikan
 from berth.adapters.websearch import WebPage
 from berth.config import Config
 from berth.models import DiskSettings
@@ -53,6 +54,8 @@ from tests.integration.test_agent_cards import (
     sent,
 )
 from tests.integration.test_media import SPY_ID
+from tests.integration.test_rss_screen import mikan_feed
+from tests.integration.test_rss_screen import release as synthetic
 
 URL = "https://mikanani.me/RSS/MyBangumi?token=m5prototype"
 
@@ -185,9 +188,12 @@ class TestIdsComeFromToolResults:
         assert "subgroup_id=999" in refusal(script)["detail"]
         assert cards(client) == []
 
-    def test_ids_from_tool_results_make_a_card(self, client: TestClient, script: Script) -> None:
+    def test_ids_from_tool_results_make_a_card(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
         tv, _ = seen_work(client)
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
+        season(factory, 12)
         row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
         script.steps = [tool("rss_subscribe_mikan", rows=[row])]
 
@@ -196,6 +202,52 @@ class TestIdsComeFromToolResults:
         [proposal] = cards(client)
         assert proposal["command"] == "rss.subscribe_mikan"
         assert proposal["preview"]["flags"] == ["downloads"]
+
+
+def season(factory: FakeClientFactory, episodes: int) -> None:
+    """番組 3310 × 字幕組 583 的單一 feed 上有 `episodes` 集。"""
+    factory.rss_.pages[mikan.bangumi_feed_url(3310, 583)] = mikan_feed(
+        [synthetic(583, "ANi", f"{episode:02d}") for episode in range(1, episodes + 1)]
+    )
+
+
+class TestWhatACardSends:
+    """按卡的人要知道自己要送多少（協調者 2026-10-27）：訂閱 Mikan 按下去就當場送整季。"""
+
+    def subscribe(self, client: TestClient, script: Script) -> dict[str, Any]:
+        tv, _ = seen_work(client)
+        looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
+        script.steps = [tool("rss_subscribe_mikan", rows=[row])]
+        chat(client, "Subscribe it from Mikan.")
+        [proposal] = cards(client)
+        return proposal
+
+    def test_a_mikan_subscription_says_how_many_episodes_the_season_sends(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        season(factory, 12)
+
+        proposal = self.subscribe(client, script)
+
+        assert proposal["preview"]["torrents"] == [12]
+        # 只讀：什麼都還沒送、也沒建 Feed。
+        assert sent(factory) == []
+        assert feeds(client) == []
+
+    def test_a_season_that_cannot_be_read_yet_is_unknown_not_zero(
+        self, client: TestClient, script: Script
+    ) -> None:
+        proposal = self.subscribe(client, script)
+
+        assert proposal["preview"]["torrents"] == [None]
+
+    def test_each_submit_row_is_one_torrent(self, client: TestClient, script: Script) -> None:
+        script.steps = [card(rows(client, 1, 2))]
+        chat(client, "Download 1 and 2.")
+
+        [proposal] = cards(client)
+        assert proposal["preview"]["torrents"] == [1, 1]
 
 
 # ---------------------------------------------------------------- 網址

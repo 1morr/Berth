@@ -3932,7 +3932,13 @@ const zhHant = {
         subgroup: '字幕組',
         site: '站',
         term: '搜尋詞',
+        sends: '送出',
       },
+      // 訂閱 Mikan：整季一律補，按下去就送（單一 feed 上的筆數是上限，已經有的不再送）。
+      wholeSeason_one: '會送出整季：{{count}} 個 torrent，按下確認就送，不經第一批確認。',
+      wholeSeason_other: '會送出整季：{{count}} 個 torrent，按下確認就送，不經第一批確認。',
+      wholeSeasonUnknown:
+        '會送出整季，按下確認就送、不經第一批確認；現在讀不到 Mikan，數量要送出時才知道。',
       confirm: '確認',
       confirmCount_one: '確認這 {{count}} 項',
       confirmCount_other: '確認這 {{count}} 項',
@@ -7827,7 +7833,14 @@ const en: Translations<typeof zhHant> = {
         subgroup: 'Subgroup',
         site: 'Site',
         term: 'Search term',
+        sends: 'Sends',
       },
+      wholeSeason_one:
+        'The whole season: {{count}} torrent, sent as soon as you confirm, with no first-batch check.',
+      wholeSeason_other:
+        'The whole season: {{count}} torrents, sent as soon as you confirm, with no first-batch check.',
+      wholeSeasonUnknown:
+        'The whole season, sent as soon as you confirm, with no first-batch check. Mikan cannot be read right now, so how many is known only when it is sent.',
       confirm: 'Confirm',
       confirmCount_one: 'Confirm {{count}} item',
       confirmCount_other: 'Confirm these {{count}}',

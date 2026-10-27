@@ -112,6 +112,7 @@ from berth.services.proposals import (
     ProposalView,
 )
 from berth.services.registry import CommandSpec, commands
+from berth.services.rss import mikan_season_size
 from berth.services.settings import read_settings
 from berth.services.skills import menu, skills_for
 from berth.services.web import SEARCH_DOMAINS
@@ -387,6 +388,24 @@ def _bind_submit(turn: Turn, row: BaseModel) -> dict[str, object]:
             "downloading.add_manual_download", JobRefusal.SOURCE_EXPIRED, row.source_id
         ) from exc
     return {"source": source, "media_id": row.media_id, "route_id": row.route_id}
+
+
+async def _one_torrent(_turn: Turn, _row: Mapping[str, object]) -> int | None:
+    return 1
+
+
+async def _mikan_season(turn: Turn, row: Mapping[str, object]) -> int | None:
+    bangumi, subgroup = row["bangumi_id"], row["subgroup_id"]
+    assert isinstance(bangumi, int) and isinstance(subgroup, int)
+    return await mikan_season_size(turn.executor.factory, bangumi_id=bangumi, subgroup_id=subgroup)
+
+
+#: 送 torrent 的卡片命令，一列按下去會送出幾個（預覽說給按卡的人聽，協調者 2026-10-27）。
+#: 帶 `downloads` 而沒列的是不知道（`None`）。
+_TORRENTS: dict[str, Callable[[Turn, Mapping[str, object]], Awaitable[int | None]]] = {
+    "downloading.add_manual_download": _one_torrent,
+    "rss.subscribe_mikan": _mikan_season,
+}
 
 
 #: 輸入要先換過才交給命令的卡片命令。沒列的，模型給的一列就是命令輸入。
@@ -726,6 +745,12 @@ class Turn:
             kept = wanted
             if Flag.DOWNLOADS in spec.flags:
                 kept = wanted[: (await read_settings(session, AiSettings)).card_downloads]
+            count = _TORRENTS.get(spec.name)
+            torrents = (
+                [await count(self, row.model_dump()) if count else None for row in kept]
+                if Flag.DOWNLOADS in spec.flags
+                else []
+            )
             try:
                 rows = [card.bind(self, row) for row in kept]
                 view = await proposals.propose(
@@ -738,6 +763,7 @@ class Turn:
                     tool_call_id=tool_call_id,
                     external_fields=from_pages[: len(kept)],
                     held_back=len(wanted) - len(kept),
+                    torrents=torrents,
                 )
             except InvalidProposalError as exc:
                 failure = _failure(exc)

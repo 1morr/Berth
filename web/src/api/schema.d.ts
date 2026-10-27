@@ -5273,6 +5273,8 @@ export interface components {
             external_fields: string[][];
             /** Held Back */
             held_back: number;
+            /** Torrents */
+            torrents: (number | null)[];
         };
         /**
          * ProposalRefusal

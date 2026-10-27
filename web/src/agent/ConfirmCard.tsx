@@ -94,6 +94,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               row={row}
               labelled={ticking}
               external={proposal.preview.external_fields[index] ?? []}
+              torrents={proposal.preview.torrents[index]}
             />
           )
           const result = proposal.results?.[index]
@@ -252,18 +253,21 @@ function RowBody({
   row,
   labelled,
   external,
+  torrents,
 }: {
   command: string
   row: Row
   labelled: boolean
   external: readonly string[]
+  /** 這一列按下去會送出幾個 torrent；`null` 是要送出時才知道，`undefined` 是不送。 */
+  torrents: number | null | undefined
 }) {
   const { t } = useTranslation()
   // `labelled`：勾選框的標籤已經是發佈名，欄位裡不再印一次。
   if (isSubmit(command, row)) return <SubmitRowBody row={row} labelled={labelled} />
   if (command === 'rss.add_feed') return <FeedRowBody row={row} external={external} />
   if (command === 'rss.subscribe_mikan' || command === 'rss.subscribe_search') {
-    return <SubscribeRowBody command={command} row={row} external={external} />
+    return <SubscribeRowBody command={command} row={row} external={external} torrents={torrents} />
   }
   return (
     <div className="grid gap-1">
@@ -358,10 +362,12 @@ function SubscribeRowBody({
   command,
   row,
   external,
+  torrents,
 }: {
   command: 'rss.subscribe_mikan' | 'rss.subscribe_search'
   row: Row
   external: readonly string[]
+  torrents: number | null | undefined
 }) {
   const { t } = useTranslation()
   const mediaId = typeof row.media_id === 'string' ? row.media_id : ''
@@ -404,6 +410,19 @@ function SubscribeRowBody({
           label: t('agent.card.fields.route'),
           value: route?.name ?? `#${String(row.route_id)}`,
         },
+        // 訂閱 Mikan 按下去就當場送整季，不經第一批確認（協調者 2026-10-27）：按的人要知道送多少。
+        ...(command === 'rss.subscribe_mikan'
+          ? [
+              {
+                name: 'sends',
+                label: t('agent.card.fields.sends'),
+                value:
+                  typeof torrents === 'number'
+                    ? t('agent.card.wholeSeason', { count: torrents })
+                    : t('agent.card.wholeSeasonUnknown'),
+              },
+            ]
+          : []),
       ]}
     />
   )

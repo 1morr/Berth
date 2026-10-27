@@ -58,6 +58,9 @@ class ProposalPreviewOut(BaseModel):
     external_fields: list[list[str]]
     #: 超過一張卡的上限、留給下一張的列數（送單的數量閘）。
     held_back: int
+    #: 逐列：按下去會送出幾個 torrent；`null` 是要送出時才知道（讀不到 Mikan 的單一 feed）。
+    #: 不送 torrent 的命令是空清單。
+    torrents: list[int | None]
 
 
 class ProposalRowOut(BaseModel):

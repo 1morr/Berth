@@ -50,6 +50,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
       checked: [true, true, true],
       external_fields: [[], [], []],
       held_back: 0,
+      torrents: [1, 1, 1],
     },
     user_id: 1,
     proposer: 'ai',
@@ -267,6 +268,7 @@ describe('ConfirmCard', () => {
         checked: [true],
         external_fields: [['name']],
         held_back: 0,
+        torrents: [],
       },
     })
     serve(feed, stored('approval-requested'), () => feed)
@@ -294,6 +296,7 @@ describe('ConfirmCard', () => {
           checked: [true, true, true],
           external_fields: [[], [], []],
           held_back: 2,
+          torrents: [1, 1, 1],
         },
       }),
       stored('approval-requested'),
@@ -325,6 +328,7 @@ describe('ConfirmCard', () => {
         checked: [true],
         external_fields: [[]],
         held_back: 0,
+        torrents: [12],
       },
       status: 'failed',
       results: [{ outcome: 'refused', reason: 'series_bound', detail: 'tv:1', result: null }],
@@ -335,5 +339,41 @@ describe('ConfirmCard', () => {
     const section = await screen.findByRole('region', { name: '訂閱 Mikan 番組' })
     expect(within(section).getByText('ANi')).toBeInTheDocument()
     expect(within(section).getByText(/這個 RSS Series 已經綁好了/)).toBeInTheDocument()
+  })
+
+  it('a Mikan subscription says it sends the whole season, and how many when Berth could tell', async () => {
+    const mikan = (torrents: (number | null)[]) =>
+      card({
+        command: 'rss.subscribe_mikan',
+        arguments: [
+          {
+            bangumi_id: 3310,
+            subgroup_id: 583,
+            media_id: 'tv:120089',
+            route_id: 3,
+            name: '',
+            subgroup_name: 'ANi',
+          },
+        ],
+        preview: {
+          effect: 'reversible',
+          flags: ['downloads'],
+          checked: [true],
+          external_fields: [[]],
+          held_back: 0,
+          torrents,
+        },
+      })
+    serve(mikan([12]), stored('approval-requested'), () => mikan([12]))
+    const { unmount } = renderPanel()
+
+    const section = await screen.findByRole('region', { name: '訂閱 Mikan 番組' })
+    expect(within(section).getByText(/會送出整季：12 個 torrent/)).toBeInTheDocument()
+    unmount()
+
+    serve(mikan([null]), stored('approval-requested'), () => mikan([null]))
+    renderPanel()
+    const unknown = await screen.findByRole('region', { name: '訂閱 Mikan 番組' })
+    expect(within(unknown).getByText(/會送出整季.*數量要送出時才知道/)).toBeInTheDocument()
   })
 })
