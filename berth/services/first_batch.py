@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Integer
 
 from berth.domain import (
+    SYSTEM,
     EventType,
     FirstBatchBasis,
     ItemReason,
@@ -40,7 +41,7 @@ from berth.domain import ReasonCode as Code
 from berth.models import Job, LedgerEntry, Plan, PlanItem, RssSeries
 from berth.parser import vouch_first_batch
 from berth.services.commands import Effect, Flag, command
-from berth.services.jobs import actor_of, record_event
+from berth.services.jobs import record_event
 from berth.services.plan_view import planned, reasons_of
 
 #: 同一個 Series 的其他 Job 落在這幾個狀態才算「到齊」：計劃自動入庫、寫進（或正在寫進）媒體庫。
@@ -179,9 +180,7 @@ async def confirm_by_batch(
         )
     payload = {"series": series.id, "name": series.title_raw, "episodes": list(vouched.episodes)}
     for one in (job, *await _jobs(session, vouched.others)):
-        await record_event(
-            session, one, EventType.SERIES_CONFIRMED, actor=actor_of(None), payload=payload
-        )
+        await record_event(session, one, EventType.SERIES_CONFIRMED, actor=SYSTEM, payload=payload)
 
 
 async def _jobs(session: AsyncSession, hashes: Sequence[str]) -> list[Job]:

@@ -59,6 +59,7 @@ from berth.adapters.http import ServiceError, is_transient
 from berth.adapters.rss import FeedFetcher, FeedItem, acgrip, mikan, nyaa
 from berth.adapters.tmdb import BASE_URL as TMDB_BASE_URL
 from berth.domain import (
+    SYSTEM,
     BindReason,
     BindReasonCode,
     FeedItemStatus,
@@ -77,6 +78,8 @@ from berth.domain import (
     TmdbProblem,
     because,
     collection_type_for,
+    label_of,
+    rss_label,
     skipped,
 )
 from berth.models import DEFAULT_INTERVAL_SEC as DEFAULT_INTERVAL_SEC
@@ -116,7 +119,6 @@ from berth.services.jobs import (
     FILTER_STATES,
     JobRejectedError,
     JobSource,
-    actor_of,
     add_download,
     freeze,
 )
@@ -151,9 +153,6 @@ _TMDB_SITE = _site_of(TMDB_BASE_URL)
 
 #: 正在跑的那一輪（`poll_feed`）：Feed id → 做完時放進結果（沒做完就結束是 `None`）。
 _rounds: dict[int, asyncio.Future[PollOutcome | None]] = {}
-
-#: 自動綁定的 `bound_by`（`events.actor` 的 `system`）。
-SYSTEM = actor_of(None)
 
 #: 綁好的 Mikan RSS Series 多久讀一次單一 feed 補漏（plan §3.2）。實際的間隔再加上聚合 Feed 的
 #: 輪詢間隔：補漏是輪到那個 Feed 時順手做的。
@@ -686,7 +685,7 @@ async def _bind_to_feed_route(
             series_id,
             media_id=media_id,
             route_id=route_id,
-            user_id=None,
+            bound_by=SYSTEM,
             moment=moment,
             batch=batch,
         )
@@ -1407,6 +1406,7 @@ async def _submit(
             trigger=JobTrigger.RSS,
             trigger_ref=str(series.id),
             grounds=_reasons(series) if series.bound_by == SYSTEM else (),
+            actor=rss_label(str(series.id)),
         )
     except JobRejectedError as refusal:
         # `add_download` 可能 rollback 過，那一列要重讀。
@@ -1713,7 +1713,7 @@ async def _prebind(
             series_id,
             media_id=feed.media_id,
             route_id=route_id,
-            user_id=feed.user_id,
+            bound_by=label_of(feed.user_id),
             moment=moment,
             batch=batch,
         )
@@ -1868,7 +1868,7 @@ async def _auto_bind(
             series_id,
             media_id=ids[0],
             route_id=route.id,
-            user_id=None,
+            bound_by=SYSTEM,
             moment=moment,
             batch=batch,
         )
@@ -2110,7 +2110,7 @@ async def bind_series(
             series_id,
             media_id=media_id,
             route_id=route_id,
-            user_id=user_id,
+            bound_by=label_of(user_id),
             moment=moment,
             batch=batch,
         )
@@ -2123,11 +2123,12 @@ async def _bind(
     *,
     media_id: str,
     route_id: int,
-    user_id: int | None,
+    bound_by: str,
     moment: datetime,
     batch: DownloadRound,
 ) -> SeriesView:
-    """`bind_series` 的本體，送出的記在呼叫端那一輪（輪詢裡的自動綁定、訂閱）。"""
+    """`bind_series` 的本體，送出的記在呼叫端那一輪（輪詢裡的自動綁定、訂閱）。`bound_by` 是
+    `events.actor` 的寫法（`domain/actor.py`）。"""
     series = await session.get(RssSeries, series_id)
     if series is None:
         raise RssRejectedError(RssRefusal.SERIES_MISSING, str(series_id))
@@ -2141,7 +2142,7 @@ async def _bind(
     season = await _read_season(factory, series) if home is not None else None
     series.media_id = media.id
     series.route_id = route.id
-    series.bound_by = actor_of(user_id)
+    series.bound_by = bound_by
     freeze(media, route)
     waiting = await session.scalars(
         select(RssItem).where(
@@ -2481,6 +2482,7 @@ async def subscribe_mikan(
     media_id: str,
     route_id: int,
     user_id: int | None,
+    actor: str,
     name: str = "",
     subgroup_name: str = "",
     now: datetime | None = None,
@@ -2511,7 +2513,7 @@ async def subscribe_mikan(
             subgroup_id=subgroup_id,
             media_id=media_id,
             route_id=route_id,
-            user_id=user_id,
+            bound_by=actor,
             name=name,
             subgroup_name=subgroup_name,
             moment=moment,
@@ -2527,7 +2529,7 @@ async def _subscribe(
     subgroup_id: int,
     media_id: str,
     route_id: int,
-    user_id: int | None,
+    bound_by: str,
     name: str,
     subgroup_name: str,
     moment: datetime,
@@ -2550,7 +2552,7 @@ async def _subscribe(
             series.id,
             media_id=media_id,
             route_id=route_id,
-            user_id=user_id,
+            bound_by=bound_by,
             moment=moment,
             batch=batch,
         )
@@ -2595,7 +2597,7 @@ async def _subscribe(
                 series.id,
                 media_id=media_id,
                 route_id=route_id,
-                user_id=user_id,
+                bound_by=bound_by,
                 moment=moment,
                 batch=batch,
             )

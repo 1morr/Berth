@@ -1,6 +1,6 @@
 # 07 — 命令執行器
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 06
 
@@ -23,10 +23,24 @@
 
 ## 驗收
 
-- [ ] 經執行器的命令會喚醒、推播、記 actor（測試）
-- [ ] 一般使用者經執行器碰不到 admin 命令、碰不到別人的送單（測試）
-- [ ] API 門禁與 `audience` 一致（測試）
-- [ ] 搬過去的路由行為不變（既有測試綠）；`pnpm gen:api` 沒有差異
-- [ ] plan §6 補執行器；全部檢查與 pytest 綠；progress.md 已更新
+- [x] 經執行器的命令會喚醒、推播、記 actor（測試）
+- [x] 一般使用者經執行器碰不到 admin 命令、碰不到別人的送單（測試）
+- [x] API 門禁與 `audience` 一致（測試）
+- [x] 搬過去的路由行為不變（既有測試綠）；`pnpm gen:api` 沒有差異
+- [x] plan §6 補執行器；全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27（票 07 做完）：`services/executor.py`（`Executor.execute(session, name, args, actor)`、`CommandRefusedError`、執行器自己的 `CommandRefusal`）、`domain/actor.py`（`Actor`、`SYSTEM`、`label_of`、`rss_label`、`owner_of`）、`@command(audience=)`、`api/commands.Command` 相依。
+  - **使用者選定**：搬的路由是票 10/13/14 的 9 支加重試、重算（共 11 支，`test_executor_routes.ROUTED`）；AI 的 actor 寫 `ai:<user id>`。
+  - **重試、重算只動得了自己送的**（`jobs.own_job`）：別人的與不存在的同一個 `job_missing`（不新增理由，`gen:api` 才沒有差異），`retryable`／`replannable` 也照按的人算；RSS 送的（沒有人）只有管理員按得到。
+  - 執行器的喚醒照「動到的 Job 停在誰的狀態」，不逐命令宣告：`completed`／`planning` 叫規劃器、`importing` 叫 importer；只讀的命令不推播、不喚醒。`POST /jobs` 因此多推一則 SSE（含 `created=False` 的那一種，無害）。
+  - `CommandRefusal` 不放 `domain/enums.py`：那裡的 `*Refusal` 由 `test_openapi_contract` 要求出現在 API，而這兩種到不了 HTTP。路由的 `_refuse`／`rss_refusal`／`why_not_refusal` 收到別的 enum 會 `ValueError` → 500，前提是門禁與 `audience` 一致（測試守）。
+  - R14：`actor_of` 與各模組的 `SYSTEM`、claims 的 `_user_id`、重試寫死的 `"user"` 收斂到 `domain/actor.py`；`add_download` 的 `actor` 必填；沒有 Job 的帳本列確認／撤銷寫 `record_work_event`（掛在作品上）。
+  - code-review 修掉的：`subscribe_mikan` 的 `bound_by` 記成人而不是 `ai:<id>`（Spec 軸，`_bind` 改收 `bound_by`）；只讀命令也推播（Standards 軸）；`add_download` 的選填 actor、`weekly` 的多餘別名、沒人用的 `Actor.rss`、`Any` 的註解。
+  - 沒處理的：
+    - **沒走執行器的路由，`audience` 沒有東西守**（Spec 軸）：門禁是 SIGNED_IN 的讀取命令（discover、inventory、watching、watch_area、`notify.read_mine` 等）仍是預設 `admin`，方向是擋多。票 11 開讀取工具、搬路由時一起標。
+    - `plan.replan_job` 不記按的人：它本來就沒有「按了重算」的事件，`_plan` 寫的都是 `system`。要的話加一筆事件，留給 AI 活動頁（票 21）決定。
+    - `subscribe_search` 建的搜尋 feed 之後長出的 Series，由 `_prebind` 以 `label_of(feed.user_id)` 綁，AI 建的也記成人：要記成 `ai:` 得在 Feed 上存 actor。
+    - 執行器每次呼叫重算簽名與型別（`_injected`），登錄表已算過一次，可以存進 `CommandSpec`；registry 認得的注入名字（`now`、`sleep`、`timeout`、`published_port`）與型別（`JellyfinAccess`、`BundledServices`、`HostResolver`）執行器給不出，沒預設值的命令執行時丟 `RuntimeError`（`watching.read_watching` 那一條測試），沒有閘門掃全部命令。
+    - 三支路由的拒絕轉換（`Enum(refusal.reason)` → body → `_STATUS`）形狀相同，沒抽出共用的一支。

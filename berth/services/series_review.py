@@ -372,7 +372,7 @@ async def _replan_held(
     replanned = 0
     for job_hash in held:
         try:
-            await replan_job(session, factory, hub, job_hash, role=Role.ADMIN)
+            await replan_job(session, factory, hub, job_hash, role=Role.ADMIN, user_id=None)
         except JobRejectedError as refused:
             # 按下去之後它被別處動過了（另一個分頁核准了、刪了）：那一筆已經不在等人。job id 由
             # 上下文蓋上去（`berth.logs`）；`extra` 再帶一次 `job` 會在建 record 時撞成 KeyError。

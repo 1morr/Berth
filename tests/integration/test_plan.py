@@ -969,7 +969,7 @@ class TestReplan:
         await run(session, factory)
         first = await plan_of(session)
 
-        view = await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
+        view = await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN, user_id=None)
 
         assert view.id == first.id
         assert len(await items_of(session)) == len(STRAY_FILES)
@@ -1003,7 +1003,7 @@ class TestReplan:
         await run(session, factory)
 
         with pytest.raises(JobRejectedError) as refusal:
-            await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
+            await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN, user_id=None)
 
         assert refusal.value.reason == "not_replannable"
 
@@ -1016,7 +1016,7 @@ class TestReplan:
         await run(session, factory)
         assert job.state is JobState.REVIEW
 
-        await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
+        await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN, user_id=None)
 
         await session.refresh(job)
         assert job.state is JobState.REVIEW
@@ -1031,7 +1031,7 @@ class TestReplan:
         await downloaded_job(session, media, route, roots, state=JobState.DOWNLOADING)
 
         with pytest.raises(JobRejectedError) as refusal:
-            await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN)
+            await replan_job(session, factory, EventHub(), HASH, role=Role.ADMIN, user_id=None)
 
         assert refusal.value.reason == "not_replannable"
 

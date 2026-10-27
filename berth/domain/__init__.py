@@ -1,5 +1,6 @@
 """純資料型別與狀態機，無 IO（plan §1.2）。"""
 
+from berth.domain.actor import SYSTEM, SYSTEM_ACTOR, Actor, ActorKind, label_of, owner_of, rss_label
 from berth.domain.binding import BIND_PARAMS, BindReason, BindReasonCode, because
 from berth.domain.enums import (
     ACTION_DELETES,
@@ -159,8 +160,12 @@ __all__ = [
     "STUCK_STATES",
     "SUBJECT_OF",
     "SWEPT_ISSUE_TYPES",
+    "SYSTEM",
+    "SYSTEM_ACTOR",
     "UNDER_WAY_STATES",
     "AccessRefusal",
+    "Actor",
+    "ActorKind",
     "AiProbeFailure",
     "AiProvider",
     "AiRefusal",
@@ -273,7 +278,10 @@ __all__ = [
     "conclude",
     "default_notify_kinds",
     "episode_label",
+    "label_of",
     "overall",
+    "owner_of",
+    "rss_label",
     "skipped",
     "sort_langs",
     "why",

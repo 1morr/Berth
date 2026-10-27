@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
 from berth.domain import (
+    SYSTEM,
     EventType,
     IssueStatus,
     IssueType,
@@ -56,7 +57,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.deletion import Placed, remove_one
 from berth.services.events import EventHub, JobSignal
-from berth.services.jobs import actor_of, guarded, record_event, transition
+from berth.services.jobs import guarded, record_event, transition
 from berth.services.plan import WRITTEN, plan_counts
 from berth.services.resolve_schedule import first_resolve_at
 from berth.services.settings import read_settings
@@ -232,7 +233,7 @@ async def _place(
             session,
             job,
             EventType.LINKED,
-            actor=actor_of(None),
+            actor=SYSTEM,
             payload={"file": item.rel_path, "target": target_text},
         )
         await restate_versions(session, item, target_text, now)
@@ -268,7 +269,7 @@ async def _close(session: AsyncSession, which: ColumnElement[bool], now: datetim
     for row in await session.scalars(select(Issue).where(Issue.status == IssueStatus.OPEN, which)):
         row.status = IssueStatus.RESOLVED
         row.resolved_at = now
-        row.resolved_by = actor_of(None)
+        row.resolved_by = SYSTEM
         logger.info("issue cleared", extra={"issue": row.type.value, "subject": row.subject})
 
 
@@ -451,7 +452,7 @@ async def _link_failed(
         session,
         job,
         EventType.LINK_FAILED,
-        actor=actor_of(None),
+        actor=SYSTEM,
         payload={
             "file": item.rel_path,
             "target": target,
@@ -537,7 +538,7 @@ async def _hold(session: AsyncSession, hub: EventHub, job: Job, plan: Plan) -> J
         session,
         job,
         EventType.REVIEW_REQUIRED,
-        actor=actor_of(None),
+        actor=SYSTEM,
         payload=plan_counts(plan) | {"plan": plan.id, "reason": ReviewReason.TARGET_EXISTS.value},
     )
     await session.commit()
@@ -583,7 +584,7 @@ async def notify_jellyfin(
                 session,
                 job,
                 EventType.JELLYFIN_REQUEST_FAILED,
-                actor=actor_of(None),
+                actor=SYSTEM,
                 payload={"request": JellyfinRequest.SCAN.value, "error": message(exc)},
             )
         logger.warning("jellyfin was not told about the change", extra={"error": message(exc)})
@@ -595,7 +596,7 @@ async def notify_jellyfin(
             session,
             job,
             EventType.JELLYFIN_SCAN_REQUESTED,
-            actor=actor_of(None),
+            actor=SYSTEM,
             payload={"count": len(paths), "paths": list(paths)},
         )
 

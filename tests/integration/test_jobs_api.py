@@ -587,6 +587,47 @@ class TestSubmitFailed:
         assert job["error"] == ""
 
 
+class TestOnlyTheirOwn:
+    """一般使用者只重試、重算得了自己送的（brief §19「M5 的方向」⑦，M5 票 07）。別人的與沒有的
+    同一個回應 `job_missing`；畫面上那兩顆也不畫。"""
+
+    def failed_submit(self, client: TestClient, factory: FakeClientFactory) -> None:
+        from berth.adapters.http import ServiceUnavailableError
+
+        factory.qbittorrent_.add_error = ServiceUnavailableError("connection refused")
+        submit(client)
+        factory.qbittorrent_.add_error = None
+
+    def test_an_ordinary_user_retries_their_own(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        sign_in(client, CREW)
+        self.failed_submit(client, factory)
+
+        assert client.get(f"/api/jobs/{MAGNET_HASH}").json()["retryable"] is True
+        job = client.post(f"/api/jobs/{MAGNET_HASH}/retry", headers=BROWSER).json()
+
+        assert job["state"] == "submitted"
+
+    def test_an_ordinary_user_cannot_retry_someone_elses(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        sign_in(client)
+        self.failed_submit(client, factory)
+        sign_in(client, CREW)
+
+        shown = client.get(f"/api/jobs/{MAGNET_HASH}").json()
+        retried = client.post(f"/api/jobs/{MAGNET_HASH}/retry", headers=BROWSER)
+        replanned = client.post(f"/api/jobs/{MAGNET_HASH}/replan", headers=BROWSER)
+
+        assert (shown["retryable"], shown["replannable"]) == (False, False)
+        assert retried.status_code == 404
+        assert retried.json()["detail"]["reason"] == "job_missing"
+        assert replanned.status_code == 404
+        assert replanned.json()["detail"]["reason"] == "job_missing"
+        assert client.get(f"/api/jobs/{MAGNET_HASH}").json()["state"] == "submit_failed"
+
+
 class TestDeleteScope:
     """`DELETE /jobs/{hash}` 的四個旗標與估算那一支（brief §9.2、M2 票 04）。
 

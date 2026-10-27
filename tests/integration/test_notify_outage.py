@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.notify.discord import HttpDiscordBot
 from berth.config import DEFAULT_DISCORD_API_URL
-from berth.domain import EventType, JobState, NotificationStatus
+from berth.domain import EventType, JobState, NotificationStatus, label_of
 from berth.models import Job, Notification
 from berth.services.jobs import JobSource, add_download
 from berth.services.notify import read_channel, send_due
@@ -59,6 +59,7 @@ async def test_a_job_goes_from_submit_to_ready_while_discord_is_unreachable(
         media_id=media.id,
         route_id=route.id,
         user_id=None,
+        actor=label_of(None),
     )
     await send_due(session, factory, now=NOW)
     await run_pipeline(session, factory, roots)

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import (
     SWEPT_ISSUE_TYPES,
+    SYSTEM,
     EventType,
     IssueStatus,
     IssueType,
@@ -34,7 +35,6 @@ from berth.domain import (
 from berth.models import Event, Issue, Job, LedgerEntry, Media, Notification, WeeklyReport
 from berth.models.types import utcnow
 from berth.services.commands import Effect, Flag, command
-from berth.services.jobs import actor_of
 from berth.services.notify import episode_spans
 from berth.services.recipients import subscribers
 from berth.services.waiting import WaitingSource, waiting_now
@@ -277,7 +277,6 @@ async def _fixed(session: AsyncSession, starts_at: datetime, ends_at: datetime) 
             rematched += 1
         elif (payload or {}).get("decision") == PlanStatus.APPROVED.value:
             approved += 1
-    system = actor_of(None)
     resolved: dict[str, int] = {}
     cleared: dict[str, int] = {}
     for issue_type, by in await session.execute(
@@ -287,7 +286,7 @@ async def _fixed(session: AsyncSession, starts_at: datetime, ends_at: datetime) 
             Issue.resolved_at < ends_at,
         )
     ):
-        tally = cleared if by == system else resolved
+        tally = cleared if by == SYSTEM else resolved
         tally[issue_type.value] = tally.get(issue_type.value, 0) + 1
     return {"approved": approved, "rematched": rematched, "resolved": resolved, "cleared": cleared}
 

@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import ColumnElement, Integer, Select, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,7 +77,7 @@ from berth.services.commands import Effect, command
 from berth.services.deletion import Placed, Unlink, remove_one, route_targets
 from berth.services.first_batch import FirstBatchAsk
 from berth.services.first_batch import asks as first_batch_asks
-from berth.services.jobs import job_lock, record_event, transition
+from berth.services.jobs import job_lock, record_event, record_work_event, transition
 from berth.services.plan_view import reasons_of
 
 logger = logging.getLogger(__name__)
@@ -353,14 +354,14 @@ async def confirm_audit(session: AsyncSession, ledger_id: int, *, actor: str) ->
     async with _deciding(session, ledger_id) as (entry, job):
         entry.audit = False
         await _clear_item(session, entry, unapply=False)
-        if job is not None:
-            await record_event(
-                session,
-                job,
-                EventType.AUDIT_CONFIRMED,
-                actor=actor,
-                payload={"ledger": entry.id, "target": entry.target_path},
-            )
+        await _record(
+            session,
+            entry,
+            job,
+            EventType.AUDIT_CONFIRMED,
+            actor=actor,
+            payload={"ledger": entry.id, "target": entry.target_path},
+        )
         await session.commit()
     logger.info("audit confirmed", extra={"ledger": ledger_id})
 
@@ -419,13 +420,29 @@ async def _deciding(
     job_hash = (await _audited(session, ledger_id)).job_hash
     if job_hash is None:
         # `rebuild-ledger` 與「認領進帳本」長回來的列可能沒有 Job（`models/ledger.py`），沒有鎖
-        # 可拿，也沒有時間線可寫。
+        # 可拿；事件掛在作品上（`_record`）。
         yield await _audited(session, ledger_id), None
         return
     with job_context(job_hash):
         async with job_lock(job_hash):
             entry = await _audited(session, ledger_id)
             yield entry, await session.get(Job, job_hash)
+
+
+async def _record(
+    session: AsyncSession,
+    entry: LedgerEntry,
+    job: Job | None,
+    event: EventType,
+    *,
+    actor: str,
+    payload: dict[str, Any],  # 事件的 payload 是 JSON，同 `jobs.record_event`
+) -> None:
+    """有 Job 寫進它的時間線；沒有的掛在作品上（研究 R14）。"""
+    if job is not None:
+        await record_event(session, job, event, actor=actor, payload=payload)
+    else:
+        await record_work_event(session, entry.media_id, event, actor=actor, payload=payload)
 
 
 async def _undo(
@@ -443,18 +460,19 @@ async def _undo(
     await session.delete(entry)
     if job is not None:
         await _back_to_review(session, job)
-        await record_event(
-            session,
-            job,
-            EventType.AUDIT_UNDONE,
-            actor=actor,
-            payload={
-                "ledger": entry.id,
-                "target": entry.target_path,
-                "unlinked": undone.unlinked,
-                "unmanaged": undone.unmanaged,
-            },
-        )
+    await _record(
+        session,
+        entry,
+        job,
+        EventType.AUDIT_UNDONE,
+        actor=actor,
+        payload={
+            "ledger": entry.id,
+            "target": entry.target_path,
+            "unlinked": undone.unlinked,
+            "unmanaged": undone.unmanaged,
+        },
+    )
     await session.commit()
     logger.info("audit undone", extra={"ledger": entry.id, "result": result.value})
     return undone

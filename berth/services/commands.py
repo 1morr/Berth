@@ -4,13 +4,16 @@
 M5 票 06）讀它：要不要人確認看 `needs_person`，規則只有那一份。**這裡只有標記**——不收集、不查詢，
 收集在登錄表。
 
-要給人或 AI 用的命令（非 `INTERNAL`）另外可以帶三樣，登錄表照收（`details_of`）：
+要給人或 AI 用的命令（非 `INTERNAL`）另外可以帶四樣，登錄表照收（`details_of`）：
 
 - `about`：**給模型看的說明**，明寫，不從 docstring 抓（docstring 是寫給維護的人的）。
 - `refusals`：它拒絕時用的理由集合（`domain` 的 `*Refusal`）。
 - `validate`：**乾跑**。收 `session` 與它要的那幾格輸入（關鍵字，名字同命令的參數），只讀、不改任何
   狀態；不行就丟命令自己的拒絕例外（`reason` 在 `refusals` 裡），可以就回 `None`。命令本身走同一組
   檢查（先呼叫它，或共用它呼叫的那幾支），卡片預覽與真的執行才擋得一樣。
+- `audience`：誰做得了（M5 票 07）。預設 `Role.ADMIN`；`Role.USER` 是一般使用者也行——讀取類，與
+  處理自己送單的那幾支（brief §19「M5 的方向」⑦），「自己的」由命令看注入的 `user_id` 與 `role`。
+  命令執行器照它擋；API 路由經執行器時門禁要與它一致（`tests/unit/test_executor_routes.py`）。
 
 **反向命令（inverse）有三種寫法**：
 
@@ -37,6 +40,8 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, TypeVar
+
+from berth.domain import Role
 
 _Command = TypeVar("_Command", bound=Callable[..., Any])
 
@@ -103,12 +108,13 @@ class CommandMark:
 
 @dataclass(frozen=True, slots=True)
 class CommandDetails:
-    """要給人或 AI 用的命令另外帶的三樣（模組 docstring）。都沒給是預設值：沒寫說明、沒列拒絕理由、
-    沒有乾跑——預覽只顯示參數。"""
+    """要給人或 AI 用的命令另外帶的四樣（模組 docstring）。都沒給是預設值：沒寫說明、沒列拒絕理由、
+    沒有乾跑——預覽只顯示參數——只有管理員做得了。"""
 
     about: str = ""
     refusals: tuple[type[StrEnum], ...] = ()
     validate: Validator | None = None
+    audience: Role = Role.ADMIN
 
     def __post_init__(self) -> None:
         if self.validate is not None and not self.refusals:
@@ -123,13 +129,16 @@ def command(
     about: str = "",
     refusals: Iterable[type[StrEnum]] = (),
     validate: Validator | None = None,
+    audience: Role = Role.ADMIN,
 ) -> Callable[[_Command], _Command]:
-    """標上副作用等級、反向命令與旗標（與登錄表要的三樣）。函式本身原樣回傳，不包一層。"""
+    """標上副作用等級、反向命令與旗標（與登錄表要的四樣）。函式本身原樣回傳，不包一層。"""
     mark_value = CommandMark(effect=effect, inverse=inverse, flags=frozenset(flags))
-    details = CommandDetails(about=about, refusals=tuple(refusals), validate=validate)
+    details = CommandDetails(
+        about=about, refusals=tuple(refusals), validate=validate, audience=audience
+    )
     if Flag.INTERNAL in mark_value.flags and details != CommandDetails():
         raise ValueError(
-            "an internal command is not registered, it takes no about/refusals/validate"
+            "an internal command is not registered, it takes no about/refusals/validate/audience"
         )
 
     def mark(function: _Command) -> _Command:
@@ -147,7 +156,7 @@ def mark_of(function: object) -> CommandMark | None:
 
 
 def details_of(function: object) -> CommandDetails:
-    """一個命令給登錄表的三樣；沒標的是預設值。"""
+    """一個命令給登錄表的四樣；沒標的是預設值。"""
     found = getattr(function, _DETAILS, None)
     return found if isinstance(found, CommandDetails) else CommandDetails()
 

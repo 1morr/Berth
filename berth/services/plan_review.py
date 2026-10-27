@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import (
     EDITABLE_ACTIONS,
+    SYSTEM,
     EventType,
     JobState,
     MediaKind,
@@ -50,7 +51,7 @@ from berth.models.types import utcnow
 from berth.parser import revise
 from berth.services.commands import Effect, command
 from berth.services.events import EventHub, JobSignal
-from berth.services.jobs import actor_of, job_lock, record_event, transition
+from berth.services.jobs import job_lock, record_event, transition
 from berth.services.plan import WRITTEN, against_ledger, summarise
 from berth.services.plan_view import (
     LoadedPlan,
@@ -184,7 +185,7 @@ async def approve_plan(
                 session,
                 job,
                 EventType.DUPLICATE_SKIPPED,
-                actor=actor_of(None),
+                actor=SYSTEM,
                 payload={"plan": plan.id, "files": sorted(duplicates)},
             )
         await session.commit()

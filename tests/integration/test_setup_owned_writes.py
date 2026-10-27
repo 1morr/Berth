@@ -54,6 +54,7 @@ from berth.domain import (
     JobState,
     ServiceKind,
     ServiceOrigin,
+    label_of,
 )
 from berth.main import create_app
 from berth.models import Issue, Job, LedgerEntry, Media, Route
@@ -752,6 +753,7 @@ async def walk_runtime(session: AsyncSession, run: Runtime) -> None:
         media_id=run.media.id,
         route_id=route.id,
         user_id=None,
+        actor=label_of(None),
     )
     files = tuple(
         TorrentFile(index=index, name=name, size=size, priority=1, progress=0.4)

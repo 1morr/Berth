@@ -12,10 +12,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
+from berth.api.commands import Command, Run
+from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.schemas import StepOut
 from berth.domain import IndexerProblem, MappingStrategy, NameKind, SearchVerdict, Source
 from berth.services.search import (
@@ -24,7 +25,6 @@ from berth.services.search import (
     SearchView,
     plan_queries,
     remember_names,
-    search_torrents,
 )
 from berth.services.search_queries import QueryChoice
 
@@ -262,9 +262,7 @@ async def put_names(session: SessionDep, body: RememberedNamesIn) -> RememberedN
 
 @router.get("")
 async def get_search(
-    session: SessionDep,
-    factory: ClientFactoryDep,
-    sources: SourceCacheDep,
+    run: Annotated[Run, Depends(Command("search.search_torrents"))],
     media: Annotated[str, Query(description="`tv:<tmdb>` / `movie:<tmdb>`。")],
     q: Annotated[
         str, Query(description="自己打的關鍵字。有值時取代作品的各個標題，只問這一個。")
@@ -276,16 +274,12 @@ async def get_search(
     in_season: InSeasonParam = None,
     any_season: AnySeasonParam = True,
 ) -> SearchOut:
-    return _out(
-        await search_torrents(
-            session,
-            factory,
-            sources,
-            media_id=media,
-            query=q,
-            scope=_scope(missing, season, from_season, _choice(name, in_season, any_season)),
-        )
+    view: SearchView = await run(
+        media_id=media,
+        query=q,
+        scope=_scope(missing, season, from_season, _choice(name, in_season, any_season)),
     )
+    return _out(view)
 
 
 def _choice(

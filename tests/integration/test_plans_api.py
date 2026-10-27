@@ -25,7 +25,7 @@ from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.domain import JobState, JobTrigger, MediaKind
 from berth.main import create_app
-from berth.models import Job, JobFile, Media, Route, TmdbSettings
+from berth.models import Job, JobFile, Media, Route, TmdbSettings, User
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
@@ -134,6 +134,22 @@ def sign_in(client: TestClient, who: dict[str, str] = ADMIN) -> httpx2.Response:
     return response
 
 
+def hand_to_crew(client: TestClient) -> None:
+    """那一筆改記在一般使用者名下：他只重算得了自己送的（M5 票 07）。要先以他登入過一次。"""
+
+    async def run() -> None:
+        sessions = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with sessions() as session:
+            crew = await session.scalar(select(User).where(User.name == CREW["username"]))
+            job = await session.get(Job, HASH)
+            assert crew is not None
+            assert job is not None
+            job.user_id = crew.id
+            await session.commit()
+
+    asyncio.run(run())
+
+
 def replan(client: TestClient, job_hash: str = HASH) -> httpx2.Response:
     response: httpx2.Response = client.post(f"/api/jobs/{job_hash}/replan", headers=BROWSER)
     return response
@@ -149,6 +165,7 @@ class TestGate:
     def test_an_ordinary_user_may_read_a_plan(self, client: TestClient) -> None:
         """入庫本來就是一般使用者做的事（brief §11）——只有設定才要 admin。"""
         sign_in(client, CREW)
+        hand_to_crew(client)
         job = replan(client).json()
 
         assert client.get(f"/api/plans/{job['plan_id']}").status_code == 200
@@ -228,6 +245,7 @@ class TestReplanInReviewIsAdmins:
         assert replan(client).json()["state"] == "review"
         client.post("/api/auth/logout", headers=BROWSER)
         sign_in(client, CREW)
+        hand_to_crew(client)
 
         response = replan(client)
 
@@ -254,6 +272,7 @@ class TestReplanInReviewIsAdmins:
 
     def test_an_ordinary_user_still_replans_a_completed_job(self, client: TestClient) -> None:
         sign_in(client, CREW)
+        hand_to_crew(client)
         assert client.get("/api/jobs?filter=all").json()["jobs"][0]["replannable"] is True
 
         response = replan(client)

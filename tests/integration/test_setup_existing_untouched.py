@@ -21,6 +21,7 @@ from berth.domain import (
     RouteCheck,
     ServiceKind,
     ServiceOrigin,
+    label_of,
 )
 from berth.models import Media, QbittorrentSettings, SetupSettings
 from berth.services.clients import BundledServices
@@ -230,6 +231,7 @@ async def test_an_existing_qbittorrent_keeps_its_global_paths_through_pages_two_
         media_id=media.id,
         route_id=anime_route,
         user_id=None,
+        actor=label_of(None),
     )
 
     # 送單落在 Berth 的分類，分類的路徑是 Berth 的 complete 根目錄底下那一條；下載中落在分類自己的

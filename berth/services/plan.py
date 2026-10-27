@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters import fs, mediainfo
 from berth.config import VERSION
 from berth.domain import (
+    SYSTEM,
     Confidence,
     EventType,
     FileEntry,
@@ -72,9 +73,9 @@ from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import (
     REPLANNABLE,
     JobRejectedError,
-    actor_of,
     guarded,
     job_lock,
+    own_job,
     record_event,
     replannable,
     series_id_of,
@@ -167,8 +168,9 @@ async def sweep_plans(
     return PlanOutcome(planned=planned, preplanned=preplanned)
 
 
-# 退回 `completed` 重算：檔案不動，再核准或改寫就回去；沒有單一反向命令。
-@command(Effect.REVERSIBLE)
+# 退回 `completed` 重算：檔案不動，再核准或改寫就回去；沒有單一反向命令。一般使用者重算得了
+# 自己送的（brief §19「M5 的方向」⑦）。
+@command(Effect.REVERSIBLE, refusals=(JobRefusal,), audience=Role.USER)
 async def replan_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -176,6 +178,7 @@ async def replan_job(
     job_hash: str,
     *,
     role: Role,
+    user_id: int | None,
 ) -> PlanView:
     """手動重跑一次（`POST /api/jobs/{hash}/replan`、plan §6 jobs 群組）。
 
@@ -185,9 +188,7 @@ async def replan_job(
     **`review` 的那一次只有 admin**（`jobs.replannable`，M3 票 04）：門禁看不到狀態，所以守在這裡——
     與退回 `completed` 的 CAS 同一把鎖、同一個讀到的狀態。
     """
-    job = await session.get(Job, job_hash)
-    if job is None:
-        raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
+    job = await own_job(session, job_hash, user_id=user_id, role=role)
     if job.state not in REPLANNABLE:
         raise JobRejectedError(JobRefusal.NOT_REPLANNABLE, job.state.value)
     with job_context(job_hash):
@@ -356,7 +357,7 @@ async def _plan(
             session,
             job,
             EventType.DUPLICATE_SKIPPED,
-            actor=actor_of(None),
+            actor=SYSTEM,
             payload={"plan": row.id, "files": sorted(duplicates)},
         )
     await session.commit()
@@ -408,7 +409,7 @@ async def _preplan(session: AsyncSession, hub: EventHub, job_hash: str, now: dat
         session,
         job,
         EventType.PREPLAN,
-        actor=actor_of(None),
+        actor=SYSTEM,
         payload=plan_counts(row) | {"plan": row.id},
     )
     await session.commit()
@@ -435,7 +436,7 @@ async def _announce(
             session,
             job,
             EventType.PLAN_GENERATED,
-            actor=actor_of(None),
+            actor=SYSTEM,
             payload=counts | {"engine": row.engine.value},
         )
         return
@@ -443,7 +444,7 @@ async def _announce(
         session,
         job,
         EventType.REVIEW_REQUIRED,
-        actor=actor_of(None),
+        actor=SYSTEM,
         payload=counts | {"reason": (reason or ReviewReason.LOW_CONFIDENCE).value},
     )
 

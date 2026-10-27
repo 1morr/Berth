@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
 from berth.adapters.rss import mikan
+from berth.domain import RssRefusal
 from berth.models import RssSeries
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
@@ -41,14 +42,15 @@ class BangumiView:
     subgroups: tuple[SubgroupView, ...]
 
 
-@command(Effect.READ)
+# 讀不到 Mikan 是 `feed_unreachable`（`rss.unread`）。
+@command(Effect.READ, refusals=(RssRefusal,))
 async def search_bangumi(factory: ServiceClientFactory, term: str) -> tuple[mikan.BangumiHit, ...]:
     """Mikan 搜尋頁上的番組，照頁上的順序。"""
     page = await _fetch(factory, mikan.search_url(term.strip()))
     return mikan.search_page(page)
 
 
-@command(Effect.READ)
+@command(Effect.READ, refusals=(RssRefusal,))
 async def read_bangumi(
     session: AsyncSession, factory: ServiceClientFactory, bangumi_id: int
 ) -> BangumiView:

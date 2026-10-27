@@ -26,6 +26,7 @@ from berth.adapters import fs
 from berth.adapters.http import ServiceUnavailableError
 from berth.db import create_session_factory
 from berth.domain import (
+    SYSTEM,
     EventType,
     JellyfinRequest,
     JobState,
@@ -33,6 +34,7 @@ from berth.domain import (
     PlanAction,
     PlanStatus,
     ReviewReason,
+    Role,
 )
 from berth.models import Event, Job, JobFile, LedgerEntry, PlanItem, Route
 from berth.pipeline import Importer, PlannerRunner
@@ -420,7 +422,7 @@ class TestFailures:
         assert await state_of(session, job) is JobState.IMPORT_FAILED
         monkeypatch.setattr(os, "link", real_link)
 
-        view = await retry_job(session, factory, HASH)
+        view = await retry_job(session, factory, HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN)
         assert view.state is JobState.IMPORTING
         await run(session, factory)
 

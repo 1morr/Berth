@@ -34,6 +34,7 @@ from berth.domain import (
     ReasonCode,
     ReviewReason,
     SkipCode,
+    label_of,
     why,
 )
 from berth.models import Event, Job, LedgerEntry, PlanItem, RssItem
@@ -349,6 +350,7 @@ async def submit_manually(
         media_id=media.id,
         route_id=route.id,
         user_id=None,
+        actor=label_of(None),
     )
     await run_pipeline(session, factory, roots)
     job = await session.get(Job, outcome.job.hash)

@@ -7,16 +7,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from berth.api.commands import Command, Run
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.schemas import RouteOut
 from berth.domain import RouteRefusal
 from berth.services.routes import (
+    ManagedRoute,
     RouteInUseError,
     RouteRejectedError,
     check_route,
@@ -24,7 +26,6 @@ from berth.services.routes import (
     create_route,
     delete_route,
     list_libraries,
-    list_routes,
     update_route,
 )
 
@@ -145,8 +146,11 @@ class RouteEditIn(BaseModel):
 
 
 @router.get("/routes")
-async def get_routes(session: SessionDep) -> list[ManagedRouteOut]:
+async def get_routes(
+    run: Annotated[Run, Depends(Command("routes.list_routes"))],
+) -> list[ManagedRouteOut]:
     """全部 Route 與它們的引用數。不連線。"""
+    rows: tuple[ManagedRoute, ...] = await run()
     return [
         ManagedRouteOut(
             route=RouteOut.model_validate(row.route),
@@ -156,7 +160,7 @@ async def get_routes(session: SessionDep) -> list[ManagedRouteOut]:
             rss_series=row.usage.rss_series,
             in_use=row.usage.in_use,
         )
-        for row in await list_routes(session)
+        for row in rows
     ]
 
 

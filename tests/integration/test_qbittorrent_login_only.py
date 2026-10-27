@@ -19,7 +19,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
-from berth.domain import HealthStatus, MediaKind, ServiceKind, ServiceOrigin
+from berth.domain import HealthStatus, MediaKind, ServiceKind, ServiceOrigin, label_of
 from berth.models import Media, QbittorrentSettings, SetupSettings
 from berth.services import qbittorrent as qbittorrent_service
 from berth.services.jobs import JobSource, add_download
@@ -88,6 +88,7 @@ async def walk_the_wizard(
         media_id=media.id,
         route_id=next(row.id for row in routes.routes if row.slug == "anime"),
         user_id=None,
+        actor=label_of(None),
     )
     assert [row.category for row in qbittorrent.added] == ["berth-anime"]
     return qbittorrent

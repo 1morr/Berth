@@ -14,13 +14,12 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from berth.api.commands import Command, Run
 from berth.api.deps import (
     ClientFactoryDep,
-    EventHubDep,
-    ImportHintsDep,
     PlanHintsDep,
     SessionDep,
     SourceCacheDep,
@@ -30,8 +29,9 @@ from berth.api.gate import current_actor, current_user
 from berth.domain import JobFilter, JobRefusal, JobState, JobTrigger, PlanAction, Role
 from berth.services import deletion
 from berth.services.deletion import DeleteScope
-from berth.services.downloading import add_manual_download
+from berth.services.executor import CommandRefusedError
 from berth.services.jobs import (
+    AddDownloadOutcome,
     JobRejectedError,
     JobView,
     list_jobs,
@@ -39,9 +39,7 @@ from berth.services.jobs import (
     read_job_events,
     read_job_files,
     replannable,
-    retry_job,
 )
-from berth.services.plan import replan_job
 from berth.services.reimport import reimport_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -316,7 +314,7 @@ class JobEventOut(BaseModel):
     id: int
     #: `created` / `submitted` / `submit_failed` / `retried`（`domain.EventType`）。
     type: str
-    #: user id、`system`、`rss:<rule>` 或 `ai`。
+    #: user id、`system`、`rss:<rule>` 或 `ai:<user id>`（`domain/actor.py`）。
     actor: str
     #: 逐型別不同的那幾格。畫面照型別挑要顯示哪幾個。
     payload: dict[str, Any]
@@ -325,8 +323,7 @@ class JobEventOut(BaseModel):
 
 @router.post("", status_code=status.HTTP_200_OK, responses=SUBMIT_RESPONSES)
 async def post_job(
-    session: SessionDep,
-    factory: ClientFactoryDep,
+    run: Annotated[Run, Depends(Command("downloading.add_manual_download"))],
     sources: SourceCacheDep,
     request: Request,
     body: JobCreateIn,
@@ -336,17 +333,14 @@ async def post_job(
     **qBittorrent 收不下不是這一支的錯誤**：那時 Job 已經存在了，狀態是 `submit_failed`
     加上原文，而畫面上那一列有一顆重試（plan §3.1）。200 回的就是那一筆。
     """
-    user = current_user(request)
     try:
-        outcome = await add_manual_download(
-            session,
-            factory,
-            source=sources.recall(body.source_id),
-            media_id=body.media,
-            route_id=body.route,
-            user_id=user.id if user is not None else None,
+        source = sources.recall(body.source_id)
+        outcome: AddDownloadOutcome = await run(
+            source=source, media_id=body.media, route_id=body.route
         )
     except JobRejectedError as refusal:
+        raise _refuse(refusal) from refusal
+    except CommandRefusedError as refusal:
         raise _refuse(refusal) from refusal
     return JobCreatedOut(job=_out(outcome.job, request), created=outcome.created)
 
@@ -399,9 +393,8 @@ async def get_job_events(session: SessionDep, job_hash: str) -> list[JobEventOut
 
 @router.post("/{job_hash}/replan", responses=REPLAN_RESPONSES)
 async def post_replan(
+    run: Annotated[Run, Depends(Command("plan.replan_job"))],
     session: SessionDep,
-    factory: ClientFactoryDep,
-    hub: EventHubDep,
     request: Request,
     job_hash: str,
 ) -> JobOut:
@@ -412,8 +405,8 @@ async def post_replan(
     要重畫的是那一列。
     """
     try:
-        await replan_job(session, factory, hub, job_hash, role=_role(request))
-    except JobRejectedError as refusal:
+        await run(job_hash=job_hash)
+    except CommandRefusedError as refusal:
         raise _refuse(refusal) from refusal
     job = await read_job(session, job_hash)
     if job is None:
@@ -440,20 +433,15 @@ async def post_reimport(
 
 @router.post("/{job_hash}/retry", responses=RETRY_RESPONSES)
 async def post_retry(
-    session: SessionDep,
-    factory: ClientFactoryDep,
-    imports: ImportHintsDep,
-    request: Request,
-    job_hash: str,
+    run: Annotated[Run, Depends(Command("jobs.retry_job"))], request: Request, job_hash: str
 ) -> JobOut:
     """`submit_failed` → `requested` → 再送一次；`import_failed` → `importing`（plan §3.1）。"""
+    # 進 `importing` 時執行器叫醒 importer：它平常 60 秒才醒一次，而按下重試的人要的是現在。
+    # 一般使用者只重試得了自己送的（`jobs.own_job`）。
     try:
-        job = await retry_job(session, factory, job_hash)
-    except JobRejectedError as refusal:
+        job: JobView = await run(job_hash=job_hash)
+    except CommandRefusedError as refusal:
         raise _refuse(refusal) from refusal
-    if job.state is JobState.IMPORTING:
-        # importer 平常 60 秒才醒一次，而按下重試的人要的是現在。
-        imports.nudge()
     return _out(job, request)
 
 
@@ -510,20 +498,27 @@ async def delete_job(
     return JobDeletedOut.model_validate(outcome, from_attributes=True)
 
 
-def _role(request: Request) -> Role:
-    """按的人是誰。門禁保證 `/jobs` 一定有人登入，沒有的話照最小權限算。"""
-    user = current_user(request)
-    return user.role if user is not None else Role.USER
-
-
 def _out(view: JobView, request: Request) -> JobOut:
-    """一筆 Job 的對外形狀。`replannable` 看的是**按的人**（M3 票 04），所以在這一層才算得出來。"""
+    """一筆 Job 的對外形狀。`retryable` 與 `replannable` 看的是**按的人**（M3 票 04）：一般使用者
+    只按得到自己送的那幾筆（`jobs.own_job`，M5 票 07），所以在這一層才算得出來。門禁保證 `/jobs`
+    一定有人登入，沒有的話照最小權限算。"""
+    user = current_user(request)
+    role = user.role if user is not None else Role.USER
+    mine = role is Role.ADMIN or (user is not None and view.user_id == user.id)
     return JobOut.model_validate(
-        asdict(view) | {"replannable": replannable(view.state, _role(request))}
+        asdict(view)
+        | {
+            "retryable": view.retryable and mine,
+            "replannable": mine and replannable(view.state, role),
+        }
     )
 
 
-def _refuse(refusal: JobRejectedError) -> HTTPException:
-    """`reason` 是給畫面挑句子的封閉集合，`detail` 是原文。兩個都送出去。"""
-    body = JobRefusalOut(reason=refusal.reason, detail=refusal.detail)
-    return HTTPException(status_code=_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
+def _refuse(refusal: JobRejectedError | CommandRefusedError) -> HTTPException:
+    """`reason` 是給畫面挑句子的封閉集合，`detail` 是原文。兩個都送出去。
+
+    經執行器的拒絕 `reason` 仍是 `JobRefusal`（那幾個命令只宣告它）；不是的話這裡丟 `ValueError`。
+    """
+    reason = JobRefusal(refusal.reason)
+    body = JobRefusalOut(reason=reason, detail=refusal.detail)
+    return HTTPException(status_code=_STATUS[reason], detail=body.model_dump(mode="json"))
