@@ -30,6 +30,13 @@ tools:
      starting at E39). When ranges overlap or leave a gap, chain them from the episode counts
      instead, and check the end against the TMDB season's episode count from `media_read_media`.
      Say on the table which ranges you corrected and why.
+   - **If `fribb_lookup_anime` fails** (the mapping table cannot be downloaded right now), go on
+     without it: find the series with `discover_search_media`, read it with `media_read_media`,
+     and chain the TV entries in airing order from their AniList episode counts: the first
+     starts at S01E01, each next one right after the last, and once a TMDB season's episode
+     count is used up the next entry starts at E01 of the next season. If the counts do not add
+     up to the TMDB seasons, say so instead of guessing. Mark every row mapped this way "未經對照表，請確認" (not checked
+     against the mapping table, please check), in the user's language.
 4. Movies, and many OVAs, are separate TMDB movies, or land in TMDB's specials (season 0).
    For entries in `unmapped`, and for a movie or OVA that Fribb maps only to specials (season
    0), search its title with `discover_search_media`: a theatrical release is usually its own

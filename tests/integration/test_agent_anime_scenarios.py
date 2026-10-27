@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date
@@ -31,6 +32,7 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    TextPart,
     ToolCallPart,
     ToolReturnPart,
 )
@@ -54,7 +56,7 @@ from berth.services.skills import catalog
 from tests.conftest import FIXTURES, read_fixture
 from tests.integration.arrange import sign_in_crew
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_agent_api import Script, call, chat, recorded, say
+from tests.integration.test_agent_api import Script, call, chat, recorded, say, stored_history
 from tests.integration.test_agent_cards import (
     berth_services,
     cards,
@@ -544,6 +546,31 @@ def to_fribb(script: Script) -> list[Any]:
     ]
 
 
+def unmapped_mark() -> str:
+    """`series-mapping` 要模型在沒經對照表的列上標的那幾個字（skill 改了，這條測試跟著紅）。"""
+    skill = next(skill for skill in catalog() if skill.name == "series-mapping")
+    assert "If `fribb_lookup_anime` fails" in skill.body
+    found = re.search(r'"(未經對照表[^"]*)"', skill.body)
+    assert found is not None, "series-mapping no longer says how to mark rows without Fribb"
+    return found.group(1)
+
+
+def table_and_card(table: str) -> Callable[..., Any]:
+    """同一則回覆：先把表給使用者看，再提一張總覽卡（卡片沒有備註格，標記在表上）。"""
+
+    def step(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        return ModelResponse(
+            parts=[
+                TextPart(table),
+                ToolCallPart(
+                    "downloading_add_manual_download", add_download(messages), tool_call_id="card-1"
+                ),
+            ]
+        )
+
+    return step
+
+
 def guarded_write(script: Script) -> list[Any]:
     """查了 Route、搜了 torrent，但**沒讀過**作品：`tv:65942` 只在 Fribb 的結果裡。"""
     return [
@@ -611,6 +638,45 @@ class TestWholeFranchise:
         assert [by_id[i]["first_tmdb_episode"] for i in tv_cours] == [1, 27, 39, 51, 67]
         # 改正之後 25 + 13 + 12 + 16 + 19 剛好是 TMDB 第 1 季的 85 集；OVA 在 Specials。
         assert (by_id[100049]["tmdb_season"], by_id[100049]["first_tmdb_episode"]) == (0, 1)
+
+    def test_without_the_mapping_table_the_model_chains_counts_and_marks_the_rows(
+        self, client: TestClient, script: Script, outside: Outside, factory: FakeClientFactory
+    ) -> None:
+        """Fribb 的表還沒下載過、這一刻又下載不到：工具失敗交給模型，模型照 `series-mapping`
+        第 3 步改用 AniList 的集數串、對 TMDB 那一季的總集數，表上標「未經對照表」，卡片照樣出。"""
+        outside.fribb.mock(return_value=httpx.Response(503))
+        mark = unmapped_mark()
+        table = (
+            f"| AniList entry | episodes | TMDB | |\n"
+            f"| Re:Zero | 25 | S01E01–E25 | {mark} |\n"
+            f"| 2nd Season | 13 | S01E26–E38 | {mark} |"
+        )
+        script.steps = [
+            *to_fribb(script),
+            call("discover_search_media", query="Re:Zero"),
+            call("media_read_media", media_id=REZERO_ID),
+            call("search_search_torrents", media_id=REZERO_ID, query="Re:Zero S01"),
+            table_and_card(table),
+        ]
+
+        chat(client, "幫我把 Re:Zero 全系列都抓下來")
+
+        [failed] = returned(script, "fribb_lookup_anime")
+        assert "503" in failed["error"]
+        assert ("fribb.lookup_anime", "failed") in commands_of(client)
+        [work] = returned(script, "media_read_media")
+        assert {s["season_number"]: s["episode_count"] for s in work["seasons"]}[1] == 85
+        [proposal] = cards(client)
+        assert proposal["command"] == "downloading.add_manual_download"
+        assert proposal["arguments"][0]["media_id"] == REZERO_ID
+        replies = [
+            part.content
+            for message in stored_history(client)
+            if isinstance(message, ModelResponse)
+            for part in message.parts
+            if isinstance(part, TextPart)
+        ]
+        assert any(mark in reply for reply in replies)
 
     def test_an_ova_that_fribb_puts_in_specials_is_found_as_a_movie_by_title(
         self, client: TestClient, script: Script
