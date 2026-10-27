@@ -1,6 +1,6 @@
 """AI 的價目表與一次呼叫的用量、費用（M5 票 09、11，研究報告 C5）。
 
-認得的模型有四個價與查證日期，認不得的是 `None`，不當 0。
+認得的模型有四個價與查證日期，認不得的是 `None`，不當 0。伺服器端網搜的次數與價（票 17）。
 """
 
 from __future__ import annotations
@@ -8,10 +8,12 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from pydantic_ai.messages import ModelResponse, NativeToolCallPart, TextPart
 from pydantic_ai.usage import RequestUsage
 
-from berth.adapters.ai.prices import cost_of, price_of
-from berth.adapters.ai.usage import TokenUsage, usage_of
+from berth.adapters.ai import AiEndpoint, is_official
+from berth.adapters.ai.prices import cost_of, price_of, web_search_cost
+from berth.adapters.ai.usage import TokenUsage, usage_of, web_searches_of
 from berth.domain import AiProvider
 
 
@@ -76,3 +78,41 @@ class TestUsage:
     def test_chat_completions_has_no_cache_write_count(self) -> None:
         raw = RequestUsage(input_tokens=900, output_tokens=50, cache_read_tokens=600)
         assert usage_of(AiProvider.OPENAI, raw) == TokenUsage(900, 50, 600, None)
+
+
+class TestWebSearches:
+    """伺服器端網搜的次數與費用（M5 票 17）。"""
+
+    def test_the_billed_count_the_service_reports_wins(self) -> None:
+        # 一次 `server_tool_use` 區塊裡可能搜了好幾次；計費的是 usage 報的那個數。
+        response = ModelResponse(
+            parts=[NativeToolCallPart("web_search", {"query": "x"}), TextPart("ok")],
+            usage=RequestUsage(details={"web_search_requests": 3}),
+        )
+        assert web_searches_of(response) == 3
+
+    def test_without_a_reported_count_the_search_calls_are_counted(self) -> None:
+        response = ModelResponse(
+            parts=[
+                NativeToolCallPart("web_search", {"query": "a"}),
+                NativeToolCallPart("web_search", {"query": "b"}),
+                NativeToolCallPart("code_execution", {"code": "1"}),
+                TextPart("ok"),
+            ]
+        )
+        assert web_searches_of(response) == 2
+
+    def test_only_the_official_anthropic_endpoint_has_a_search_price(self) -> None:
+        assert web_search_cost(3, official=True) == Decimal("0.03")
+        assert web_search_cost(3, official=False) is None
+        assert web_search_cost(0, official=False) == 0
+
+    def test_the_official_endpoint_is_an_empty_or_the_documented_base_url(self) -> None:
+        def official(provider: AiProvider, base_url: str) -> bool:
+            return is_official(AiEndpoint(provider, base_url, "key", "model"))
+
+        assert official(AiProvider.ANTHROPIC, "")
+        assert official(AiProvider.ANTHROPIC, "https://api.anthropic.com/v1/")
+        assert not official(AiProvider.ANTHROPIC, "https://api.deepseek.com/anthropic")
+        assert official(AiProvider.OPENAI, "https://api.openai.com/v1")
+        assert not official(AiProvider.OPENAI, "https://api.deepseek.com")

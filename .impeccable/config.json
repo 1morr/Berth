@@ -5,5 +5,20 @@
       "maxFindings": 5,
       "maxChars": 8000
     }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "web/src/agent/Markdown.test.tsx"
+        ],
+        "createdAt": "2026-10-27T12:23:57.627Z",
+        "reason": "agent: fixture string asserting raw <img> HTML in replies is NOT rendered (ticket M5-12 security test)"
+      }
+    ]
   }
 }

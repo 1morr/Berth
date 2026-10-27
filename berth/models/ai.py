@@ -7,7 +7,7 @@
 - **`ai_runs`**：一則回覆一列，數字**每次模型呼叫之後當場加上去**——被防護中止、出錯、被關掉的
   那一輪也有（brief §20.24：`on_complete` 不會被呼叫）。`stop_reason` 是 `NULL` 就是還在跑。
 - **`ai_calls`**：每次模型呼叫一列，成敗都記。快取讀寫**照原樣存，`NULL` 是不知道**，不當 0
-  （研究 C5）；費用認不得模型也是 `NULL`。
+  （研究 C5）；費用認不得模型也是 `NULL`。伺服器端網搜的次數與費用另記兩格（M5 票 17）。
 - **`ai_tool_calls`**：每次工具呼叫一列：命令名、參數、結果的分類（`AiToolOutcome`）、結果
   有沒有被截。
 
@@ -74,6 +74,8 @@ class AiRun(Base):
     cache_write_tokens: Mapped[int | None] = mapped_column(default=0)
     #: 估計費用（美元）；有一次算不出來，合計就是 `NULL`。
     cost_usd: Mapped[float | None] = mapped_column(Float, default=0.0)
+    #: 伺服器端網搜的次數（各次呼叫的 `web_searches` 合計；Tavily 是工具呼叫，在 `ai_tool_calls`）。
+    web_searches: Mapped[int] = mapped_column(default=0, server_default="0")
     #: 這一輪是使用者對哪一輪按的「繼續」（M5 票 20）；它自己就不能再被繼續。
     #: 沒有外鍵：指的是同一段對話裡的一輪，刪對話時一起刪。
     continues: Mapped[str | None] = mapped_column(Text, default=None)
@@ -93,7 +95,14 @@ class AiCall(Base):
     output_tokens: Mapped[int] = mapped_column(default=0)
     cache_read_tokens: Mapped[int | None] = mapped_column(default=None)
     cache_write_tokens: Mapped[int | None] = mapped_column(default=None)
+    #: token 加上價錢知道的網搜（`web_search_cost_usd` 不是 `NULL` 的那部分）。
     cost_usd: Mapped[float | None] = mapped_column(Float, default=None)
+    #: 這一次呼叫裡伺服器端網搜了幾次（M5 票 17，`adapters.ai.usage.web_searches_of`）。
+    web_searches: Mapped[int] = mapped_column(default=0, server_default="0")
+    #: 網搜的費用：沒搜是 0；`NULL` 是價錢不知道（不是 Anthropic 官方端點，沒算進 `cost_usd`），
+    #: 或這次呼叫出錯、沒有回應（`error` 不是空字串，分得出來）。預設是 `None`：SQLAlchemy 的
+    #: `default` 與 `server_default` 都會蓋掉明設的 `None`（實測），所以記帳那一處每次明寫。
+    web_search_cost_usd: Mapped[float | None] = mapped_column(Float, default=None)
     #: 模型說它為什麼停（`stop`、`length`、`tool_call`…）；出錯是空字串。
     finish_reason: Mapped[str] = mapped_column(Text, default="")
     duration_ms: Mapped[int] = mapped_column(default=0)

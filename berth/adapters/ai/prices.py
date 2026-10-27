@@ -17,6 +17,9 @@ from decimal import Decimal
 from berth.adapters.ai.usage import TokenUsage
 
 _ANTHROPIC = "https://platform.claude.com/docs/en/about-claude/pricing"
+_ANTHROPIC_WEB_SEARCH = (
+    "https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool"
+)
 _DEEPSEEK = "https://api-docs.deepseek.com/quick_start/pricing"
 
 
@@ -89,3 +92,17 @@ def cost_of(model: str, usage: TokenUsage) -> Decimal | None:
         + write * price.cache_write
     )
     return total / _MILLION
+
+
+#: Anthropic 官方端點的伺服器端網搜：$10 / 1,000 次（另外搜尋結果照輸入 token 算，已在 token 裡）。
+#: 查證 2026-10-27，`_ANTHROPIC_WEB_SEARCH`。
+WEB_SEARCH_USD = Decimal("0.01")
+
+
+def web_search_cost(searches: int, *, official: bool) -> Decimal | None:
+    """這幾次伺服器端網搜的費用；沒搜是 0。只有 Anthropic 官方端點的價知道，其他端點
+    （DeepSeek 的相容端點、自架閘道）是 `None`：**不計進估計費用**，畫面說明（M5 票 17）。
+    """
+    if searches == 0:
+        return Decimal(0)
+    return searches * WEB_SEARCH_USD if official else None

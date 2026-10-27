@@ -425,7 +425,7 @@ _Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳�
 _Avoid_: digest（digest 是摘要那一則通知）, summary, stats
 
 **Assistant**（助理）:
-AI 核心對人的介面：M6 的側面板、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
+AI 核心對人的介面：M5 的側面板（頁首的「助理」，M5 票 12）、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
 **Conversation**（對話）:
@@ -436,6 +436,9 @@ _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是�
 一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`，帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫、乒乓、無進展，M5 票 11、20）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。provider 斷路器不是一輪的事：它以一份 provider 設定為單位，暫停時開不了新的一輪。
 _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
 
+**External Content**（外部內容）:
+側面板裡從 Berth 以外來、別人寫的字：網路搜尋回的網頁（伺服器端 `web_search` 與 Tavily，M5 票 17）。是資料，不是指令；`services.agent.external_texts` 從存著的歷史把它收出來，確認卡據此判斷自由文字參數是不是出自它（brief §14）。與 Existing service、Unmanaged 無關，程式碼裡不單用 `external` 指這兩者。
+_Avoid_: untrusted input, web content, external（單用）
 **Continue**（繼續）:
 被防護停下的那一輪，使用者按一次「繼續」接著跑的新一輪（`ai_runs.continues` 指向它續的那一輪，M5 票 20）：歷史接著停下來的說明，防護的數字重新算。一條停下的鏈只續一次：續的那一輪再停下就不能再續；只有對話的最後一輪續得了。
 _Avoid_: resume（Resume 是 Jellyfin 的繼續觀看）, retry, regenerate（那是 `useChat` 重答同一則）

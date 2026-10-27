@@ -7,7 +7,7 @@
 降版拿掉兩欄。
 
 Revision ID: c4e7a9d2b158
-Revises: 78a62163b817
+Revises: c3e7a1f9d524
 Create Date: 2026-10-27 20:30:00.000000
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c4e7a9d2b158"
-down_revision: str | None = "78a62163b817"
+down_revision: str | None = "c3e7a1f9d524"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

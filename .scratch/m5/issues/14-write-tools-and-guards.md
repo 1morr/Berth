@@ -32,3 +32,5 @@
 - [ ] 全部檢查、pytest、vitest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 協調者（票 03b 收尾時的 Heads up，已查證）：`routes.check_route` / `routes.check_routes` 標成 `REVERSIBLE`、沒有旗標，所以 `needs_person` 是假、也不是 `internal`，會進登錄表、可以被登錄成工具。但它們會寫探測檔、讓 qBittorrent 校驗到 100%，觸發使用者設的「完成時執行外部程式」（`services/routes.py` 的說明、brief §20.2、M4 票 19；健康迴圈因此刻意不探測）。AI 自己按一次，使用者那邊的外部程式就跑一次（常見是發通知）。這張決定工具時二擇一並寫一行依據：不登錄成工具；或加 `Flag.SENDS_OUT`（`needs_person` 變真、出確認卡），同步 `tests/unit/test_command_marks.py` 的 NAMED。

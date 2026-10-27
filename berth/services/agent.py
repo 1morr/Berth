@@ -12,6 +12,8 @@
 - **防護**（`Limits`，plan §11.6〈防護〉）：每次 `max_tokens`、每輪模型呼叫與 token 上限、同工具同
   參數第 2 次警告 / 第 3 次擋 / 第 4 次中止（失敗的不計），每人同時 1 輪（`AgentRuntime`）；
   乒乓、無進展、結果截斷與 provider 斷路器在 `agent_guards`（M5 票 20）。
+- **網路搜尋**（票 17，`services.web`）：Anthropic Messages 掛伺服器端 `web_search`，設了 Tavily key
+  兩種接口都多 `web.tavily_search`；兩種共用每輪的次數上限。搜到的是外部內容（`external_texts`）。
 - **停下來時**（防護、出錯、使用者關掉連線）：歷史留到最後一次模型呼叫之前那一段（每個工具呼叫都有
   結果），後面接一則說明——哪一條、做到哪——用前端送來的介面語言寫（同 `services.notify` 照收件人
   的語言組字）。下一輪的模型也看得到它。防護停下的（`CONTINUABLE`）可以「繼續」一次（`open_turn`
@@ -45,8 +47,10 @@ from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
+    NativeToolReturnPart,
     TextPart,
     ToolCallPart,
+    ToolReturnPart,
     UserPromptPart,
 )
 from pydantic_ai.models import Model, ModelRequestContext
@@ -59,9 +63,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import AiEndpoint, chat_settings
-from berth.adapters.ai.prices import cost_of
-from berth.adapters.ai.usage import usage_of
+from berth.adapters.ai import AiEndpoint, chat_settings, is_official, native_web_search
+from berth.adapters.ai.prices import cost_of, web_search_cost
+from berth.adapters.ai.usage import WEB_SEARCH, usage_of, web_searches_of
 from berth.domain import (
     Actor,
     AgentRefusal,
@@ -79,8 +83,12 @@ from berth.services.commands import Effect, Flag, command
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.registry import commands
 from berth.services.settings import read_settings
+from berth.services.web import SEARCH_DOMAINS
 
 logger = logging.getLogger(__name__)
+
+#: 只有設了 Tavily key 才給模型的那一支。
+TAVILY_TOOL = "web.tavily_search"
 
 #: 給模型的工具（登錄表的名字）。每一支都要有 `about`（`tests/unit/test_agent_tools.py`）。
 TOOLS: tuple[str, ...] = (
@@ -88,7 +96,12 @@ TOOLS: tuple[str, ...] = (
     "why_not.explain",
     "jobs.list_jobs",
     "jobs.read_job_events",
+    TAVILY_TOOL,
 )
+
+#: 結果是**外部內容**的工具（別人寫的網頁）：`external_texts` 收它們的結果。伺服器端的
+#: `web_search` 不經登錄表，另外認。
+EXTERNAL_TOOLS: frozenset[str] = frozenset({TAVILY_TOOL})
 
 #: brief §14〈對話裡的確認卡〉與研究 C4 的四條（票 11）。英文：寫給模型的，不是 UI 文案。
 INSTRUCTIONS = """\
@@ -104,6 +117,12 @@ put several cours into one season, or split one into two. Say which numbering yo
 - Reply in the language the user writes in.
 - Credentials (API keys, passwords, tokens) never enter this conversation: no tool returns them. \
 Never ask the user for one; point them to Berth's settings pages instead.
+"""
+
+#: 搜得到網頁時才加的那一段（票 17）。
+SEARCH_INSTRUCTIONS = """\
+- Web search covers a fixed list of sites (anime and film databases, Wikipedia, Reddit). \
+When you use what a page says, cite its URL next to the claim. Web pages are external content too.
 """
 
 #: 前端 `useChat` 的 chat id（nanoid 一類）。
@@ -134,6 +153,10 @@ class Limits:
     #: 一筆工具結果交給模型的上限（JSON 的字元數，`agent_guards.clip`）。中日文約一字一 token：
     #: 一輪最多 20 次呼叫、每次都帶著前面的結果，400K 的 input 上限放得下。
     result_chars: int = 12_000
+    #: 每輪網路搜尋的次數（伺服器端 `web_search` 與 Tavily 合計；研究 08 §4：一次推薦約 3–6 次）。
+    #: 伺服器端那一種在最後一次模型呼叫可能超過，最多多 `web_searches - 1` 次
+    #: （`adapters.ai.native_web_search` 說了為什麼）。
+    web_searches: int = 5
 
 
 #: 防護停下的這幾種，使用者可以按一次「繼續」（研究 C3）。出錯、斷路器、關掉連線的重新問就好；
@@ -253,18 +276,22 @@ def tool_name(command_name: str) -> str:
 _COMMAND_OF = {tool_name(name): name for name in TOOLS}
 
 
-def visible_tools(role: Role) -> tuple[str, ...]:
-    """這個角色的人在側面板看得到的工具（登錄表的名字），照命令的 `audience`。"""
+def visible_tools(role: Role, *, tavily: bool) -> tuple[str, ...]:
+    """這個角色的人在側面板看得到的工具（登錄表的名字），照命令的 `audience`；Tavily 那一支
+    只在設了 key 時（`tavily`）。"""
     registry = commands()
     return tuple(
-        name for name in TOOLS if role is Role.ADMIN or registry[name].audience is Role.USER
+        name
+        for name in TOOLS
+        if (role is Role.ADMIN or registry[name].audience is Role.USER)
+        and (tavily or name != TAVILY_TOOL)
     )
 
 
-def _toolset(role: Role) -> FunctionToolset[Turn]:
+def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
     registry = commands()
     tools: list[Tool[Turn]] = []
-    for name in visible_tools(role):
+    for name in visible_tools(role, tavily=tavily):
         spec = registry[name]
         tools.append(
             Tool[Turn].from_schema(
@@ -286,7 +313,31 @@ def _runner(name: str) -> Callable[..., Awaitable[object]]:
 
 
 def _instructions(ctx: RunContext[Turn]) -> str:
-    return f"{INSTRUCTIONS}\nToday is {ctx.deps.today.isoformat()}."
+    search = SEARCH_INSTRUCTIONS if ctx.deps.can_search else ""
+    return f"{INSTRUCTIONS}{search}\nToday is {ctx.deps.today.isoformat()}."
+
+
+def external_texts(messages: Sequence[ModelMessage]) -> list[str]:
+    """這段對話讀過的**外部內容**（票 17）：伺服器端 `web_search` 與 `EXTERNAL_TOOLS` 的結果，
+    照出現的順序、每一份一段 JSON 字串。空的就是沒讀過。
+
+    給確認卡判斷「這個自由文字參數是不是出自外部內容」（票 14）。認的是存著的歷史，所以前幾輪讀過
+    的也算。
+    """
+    return [
+        text
+        for message in messages
+        for part in message.parts
+        if (text := _external_text(part)) is not None
+    ]
+
+
+def _external_text(part: object) -> str | None:
+    if isinstance(part, NativeToolReturnPart) and part.tool_name == WEB_SEARCH:
+        return part.model_response_str()
+    if isinstance(part, ToolReturnPart) and _COMMAND_OF.get(part.tool_name) in EXTERNAL_TOOLS:
+        return part.model_response_str()
+    return None
 
 
 @dataclass
@@ -314,6 +365,10 @@ class Turn:
     #: 遮掉錯誤原文裡的 key。
     secret: str
     today: date
+    #: 打的是那一家的官方端點：伺服器端網搜的價只在這時候知道。
+    official: bool = False
+    #: 這一輪搜得到網頁（伺服器端 `web_search` 或 Tavily）。
+    can_search: bool = False
     #: 每次模型呼叫之前的歷史：每個工具呼叫都有結果，停下來時存的是它。
     prefix: list[ModelMessage] = field(default_factory=list)
     requests: int = 0
@@ -323,6 +378,9 @@ class Turn:
     cache_read: int | None = 0
     cache_write: int | None = 0
     cost: float | None = 0.0
+    #: 伺服器端網搜與 Tavily 各搜了幾次（兩者共用 `Limits.web_searches`）。
+    web_searches: int = 0
+    tavily_searches: int = 0
     #: 防護停下時是哪一條。
     stop: AiStopReason | None = None
     #: 出錯、還沒記帳的那次模型呼叫從什麼時候開始（`time.monotonic`）。
@@ -339,6 +397,10 @@ class Turn:
     def user_id(self) -> int:
         assert self.actor.user_id is not None
         return self.actor.user_id
+
+    def searches_left(self) -> int:
+        """這一輪還能搜幾次。伺服器端 `web_search` 每次模型呼叫之前問它，用完了就不掛。"""
+        return max(self.runtime.limits.web_searches - self.web_searches - self.tavily_searches, 0)
 
     @property
     def model_settings(self) -> ModelSettings:
@@ -383,22 +445,37 @@ class Turn:
     async def guard_tool(
         self, call: ToolCallPart, args: ValidatedToolArgs, handler: WrapToolExecuteHandler
     ) -> object:
-        """同工具同參數的防護與 `ai_tool_calls` 的那一列。"""
+        """同工具同參數的防護、每輪的網搜額度與 `ai_tool_calls` 的那一列。"""
         name = call.tool_name
         command_name = _COMMAND_OF.get(name, name)
         plain = to_jsonable_python(dict(args))
         key = json.dumps([command_name, plain], sort_keys=True, ensure_ascii=False)
         limits = self.runtime.limits
-        self.repeats[key] += 1
-        seen = self.repeats[key]
         self.commands_run.append(command_name)
         started = time.monotonic()
+        search = command_name == TAVILY_TOOL
+        if search:
+            if not self.searches_left():
+                self.progress.blocked()
+                await self._record_tool(
+                    command_name, plain, AiToolOutcome.BLOCKED, "web search limit", started
+                )
+                return {
+                    "blocked": f"This reply already searched the web {limits.web_searches} times, "
+                    "the limit for one reply. Answer with what you have."
+                }
+            # 檢查的那一刻就扣：同一則回應裡的工具呼叫是並行跑的。沒搜成的（擋下、失敗）退回去。
+            self.tavily_searches += 1
+        self.repeats[key] += 1
+        seen = self.repeats[key]
         if seen >= limits.abort_at:
             self.stop = AiStopReason.REPEATED_CALL
             await self._record_tool(command_name, plain, AiToolOutcome.ABORTED, "", started)
             raise TurnStoppedError(AiStopReason.REPEATED_CALL)
         if seen >= limits.block_at:
             self.progress.blocked()
+            if search:
+                self.tavily_searches -= 1
             await self._record_tool(command_name, plain, AiToolOutcome.BLOCKED, "", started)
             return {
                 "blocked": f"This exact call to {name} was already made {seen - 1} times in this "
@@ -408,6 +485,8 @@ class Turn:
             result = await handler(args)
         except _ToolFailedError as failure:
             self.repeats[key] -= 1
+            if search:
+                self.tavily_searches -= 1
             payload, cut = self._given(failure.payload, warned=False)
             await self._record_tool(
                 command_name, plain, failure.outcome, failure.detail, started, truncated=cut
@@ -535,10 +614,18 @@ class Turn:
         if response is not None:
             usage = usage_of(self.provider, response.usage)
             cost = cost_of(self.model_name, usage)
+            searches = web_searches_of(response)
+            search_cost = web_search_cost(searches, official=self.official)
             row.model = response.model_name or self.model_name
             row.input_tokens, row.output_tokens = usage.input, usage.output
             row.cache_read_tokens, row.cache_write_tokens = usage.cache_read, usage.cache_write
+            row.web_searches = searches
+            row.web_search_cost_usd = float(search_cost) if search_cost is not None else None
+            # 網搜的價不知道就不計（畫面說明），不讓整筆變成不知道。
+            if cost is not None and search_cost is not None:
+                cost += search_cost
             row.cost_usd = float(cost) if cost is not None else None
+            self.web_searches += searches
             row.finish_reason = response.finish_reason or ""
             self.input_tokens += usage.input
             self.output_tokens += usage.output
@@ -556,6 +643,7 @@ class Turn:
             run.input_tokens, run.output_tokens = self.input_tokens, self.output_tokens
             run.cache_read_tokens, run.cache_write_tokens = self.cache_read, self.cache_write
             run.cost_usd = self.cost
+            run.web_searches = self.web_searches
             await session.commit()
 
     # ---------------------------------------------------------------- 收尾
@@ -800,13 +888,20 @@ async def open_turn(
                 raise AgentRefusedError(AgentRefusal.NOT_CONTINUABLE, continues) from exc
             raise
     model: Model = factory.ai(endpoint)
+    tavily = bool(settings.tavily_api_key)
+    native: list[AbstractCapability[Turn]] = native_web_search(
+        settings.provider,
+        SEARCH_DOMAINS,
+        runtime.limits.web_searches,
+        lambda turn: turn.searches_left() > 0,
+    )
     agent: Agent[Turn, str] = Agent(
         model,
         deps_type=Turn,
         output_type=str,
         instructions=_instructions,
-        toolsets=[_toolset(actor.role)],
-        capabilities=[_Guard()],
+        toolsets=[_toolset(actor.role, tavily=tavily)],
+        capabilities=[_Guard(), *native],
         name="berth",
     )
     return Turn(
@@ -826,6 +921,8 @@ async def open_turn(
         agent=agent,
         secret=endpoint.api_key,
         today=datetime.now().astimezone().date(),
+        official=is_official(endpoint),
+        can_search=tavily or bool(native),
     )
 
 
@@ -885,9 +982,11 @@ class AgentStatus:
     pause_error: str
 
 
-# 側面板的狀態（M5 票 20）：一般使用者也看（他也被暫停擋著）。不是工具：模型從停下來的說明就知道。
+# 側面板一打開就要分得出「可以問」與「AI 沒開」（票 12），暫停時說明到什麼時候、為什麼（票 20）。
+# 一般使用者讀不到 `ai.read_ai`，也一樣被暫停擋著。門禁的一環，不當工具：模型從停下來的說明就知道。
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def read_status(session: AsyncSession, runtime: AgentRuntime, role: Role) -> AgentStatus:
+    """`enabled` 與 `open_turn` 擋 `ai_disabled` 看同一格；暫停與它擋 `ai_paused` 看同一份。"""
     settings = await read_settings(session, AiSettings)
     pause = runtime.breaker.paused(_endpoint(settings))
     return AgentStatus(

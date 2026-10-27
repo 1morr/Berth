@@ -13,6 +13,7 @@ from berth.adapters.ai import chat_settings
 from berth.domain import AiProvider, Role
 from berth.services.agent import (
     STALE_CLAIM_SECONDS,
+    TAVILY_TOOL,
     TOOLS,
     AgentRefusedError,
     AgentRuntime,
@@ -39,9 +40,17 @@ def test_tool_names_are_unique_and_accepted_by_both_providers() -> None:
 
 def test_a_user_sees_only_the_commands_meant_for_users() -> None:
     registry = commands()
-    assert set(visible_tools(Role.ADMIN)) == set(TOOLS)
-    assert visible_tools(Role.USER)
-    assert all(registry[name].audience is Role.USER for name in visible_tools(Role.USER))
+    assert set(visible_tools(Role.ADMIN, tavily=True)) == set(TOOLS)
+    assert visible_tools(Role.USER, tavily=True)
+    assert all(
+        registry[name].audience is Role.USER for name in visible_tools(Role.USER, tavily=True)
+    )
+
+
+def test_the_tavily_tool_is_there_only_with_a_key() -> None:
+    for role in Role:
+        assert TAVILY_TOOL not in visible_tools(role, tavily=False)
+        assert TAVILY_TOOL in visible_tools(role, tavily=True)
 
 
 class TestOneTurnAtATime:

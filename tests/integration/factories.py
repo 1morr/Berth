@@ -27,6 +27,8 @@ from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torrent_fake import FakeTorrentFetcher
+from berth.adapters.websearch import WebSearch
+from berth.adapters.websearch.fake import FakeWebSearch
 from berth.domain import ServiceKind
 from berth.services.clients import BUNDLED_JELLYFIN_URL, BUNDLED_PROWLARR_URL
 
@@ -51,6 +53,7 @@ class FakeClientFactory:
         rss: FakeFeedFetcher | None = None,
         discord: FakeDiscordBot | None = None,
         ai: FakeAi | None = None,
+        web_search: FakeWebSearch | None = None,
         #: 位址 → 在那個位址上的另一台 Jellyfin（M4 票 18：換位址時認得出是不是同一台）。
         #: 沒列的位址都是 `jellyfin` 那一台。
         elsewhere: dict[str, FakeJellyfinClient] | None = None,
@@ -69,6 +72,7 @@ class FakeClientFactory:
         self.rss_ = rss or FakeFeedFetcher()
         self.discord_ = discord or FakeDiscordBot()
         self.ai_ = ai or FakeAi()
+        self.web_search_ = web_search or FakeWebSearch()
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []
@@ -107,6 +111,10 @@ class FakeClientFactory:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         return self.ai_.model(endpoint)
+
+    def tavily(self, api_key: str) -> WebSearch:
+        self.web_search_.api_key = api_key
+        return self.web_search_
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         self.api_keys.append(api_key)

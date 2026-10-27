@@ -5,7 +5,8 @@
   工具結果與核准一律不採用（brief §20.24：adapter 預設照收）。body 另外帶 `language`（介面語言，
   `domain.Language`），防護停下時的說明照它寫；按「繼續」時帶 `continues`（停下的那一輪的 id，
   M5 票 20）。防護停下時說明之後多一則 `data-stop`（`TurnStopOut`）：側面板照它畫「繼續」。
-- `GET /agent/status`：AI 開了沒、provider 斷路器暫停到什麼時候（M5 票 20）。
+- `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
+  斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
   重新載入頁面時接回來。
 
@@ -77,7 +78,7 @@ class AgentRefusalOut(BaseModel):
 
 
 class AgentStatusOut(BaseModel):
-    #: `settings.ai.enabled`：關著時側面板只說怎麼設定。
+    #: 關著時面板只說怎麼設定（管理員）或「管理員還沒設定」（一般使用者），其餘與 M4 相同。
     enabled: bool
     #: provider 斷路器暫停到什麼時候；`null` 是沒有暫停。
     paused_until: datetime | None
@@ -258,7 +259,7 @@ async def get_conversation(
 async def get_status(
     request: Request, session: SessionDep, runtime: AgentRuntimeDep
 ) -> AgentStatusOut:
-    """側面板的狀態。一般使用者也看得到：他也被暫停擋著。"""
+    """側面板的狀態。登入就讀得到：一般使用者讀不到 `/settings/ai`，也一樣被暫停擋著。"""
     actor = _actor(request)
     found = await read_status(session, runtime, actor.role)
     return AgentStatusOut(

@@ -53,7 +53,7 @@ export interface paths {
         };
         /**
          * Get Status
-         * @description 側面板的狀態。一般使用者也看得到：他也被暫停擋著。
+         * @description 側面板的狀態。登入就讀得到：一般使用者讀不到 `/settings/ai`，也一樣被暫停擋著。
          */
         get: operations["get_status_api_agent_status_get"];
         put?: never;
