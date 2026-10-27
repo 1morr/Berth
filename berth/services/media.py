@@ -46,6 +46,7 @@ from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.naming import folder_name
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.discover import POSTER_SIZE, image_base
 from berth.services.inventory import (
     LedgerFileView,
@@ -127,6 +128,8 @@ class MediaView:
     awaiting_review: int = 0
 
 
+# 快照是 TMDB 的快取：過期順手重抓不算改東西。
+@command(Effect.READ)
 async def read_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:
@@ -134,6 +137,7 @@ async def read_media(
     return await _load(session, factory, media_id, force=False)
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def read_snapshot(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaSnapshot | None:
@@ -156,6 +160,7 @@ class SnapshotRead:
     detail: str = ""
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def read_snapshot_checked(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> SnapshotRead:
@@ -168,6 +173,7 @@ async def read_snapshot_checked(
     return SnapshotRead(snapshot=snapshot, problem=view.problem, detail=view.detail)
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def snapshot_for_planning(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaSnapshot | None:
@@ -187,6 +193,9 @@ async def snapshot_for_planning(
     return row.stored_snapshot() if row is not None else None
 
 
+# 按它就是要換成 TMDB 現在的標題，`folder_name` 跟著改、之後的落點跟著改；沒有單一反向命令
+# （舊標題 TMDB 不會再給）。`read_media` 過期順手重抓不算：那是快取。
+@command(Effect.REVERSIBLE)
 async def refresh_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:

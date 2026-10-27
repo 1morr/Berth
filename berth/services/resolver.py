@@ -62,7 +62,7 @@ from berth.domain import CollectionType, EventType, IssueStatus, IssueType, Plan
 from berth.models import Event, Issue, JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.issues import Recorded, clear_by_system, note_cleared, record_issue
 from berth.services.jobs import actor_of, record_event
 from berth.services.notify import queue_ready
@@ -115,6 +115,9 @@ class ResolveOutcome:
     exhausted: int
 
 
+# 反查一輪的入口；認到的那一筆排「可以看了」的通知（`notify.queue_ready`），送出去收不回來，同
+# `sweep.sweep_once`。
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def sweep_resolutions(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> ResolveOutcome:
@@ -247,6 +250,8 @@ async def resolve_early(
     return len(found)
 
 
+# 對帳的一段：把帳本換成 Jellyfin 現況的抄本，找不到的不動。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def refresh_resolved(
     session: AsyncSession, client: JellyfinClient, entries: Sequence[LedgerEntry]
 ) -> Refreshed:
@@ -353,6 +358,8 @@ def still_identifying(item: JellyfinItem, *, ledger_tmdb: str, jellyfin_tmdb: st
     return bool(ledger_tmdb) and not jellyfin_tmdb
 
 
+# 寫下或收掉 Issue，下一次比對照現況重寫。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def settle_verdicts(
     session: AsyncSession, verdicts: Sequence[Verdict], now: datetime
 ) -> list[Recorded]:

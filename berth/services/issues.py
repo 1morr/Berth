@@ -71,7 +71,7 @@ from berth.models.types import utcnow
 from berth.parser import parse_release
 from berth.services import claims, complete
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
 from berth.services.jobs import (
@@ -144,6 +144,8 @@ class IssueView:
     query: str
 
 
+# 偵測者的那一段：開或更新一件 Issue，不碰檔案。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def record_issue(
     session: AsyncSession,
     kind: IssueType,
@@ -220,6 +222,7 @@ async def record_issue(
     return Recorded(issue=row, opened=True)
 
 
+@command(Effect.READ)
 async def list_issues(session: AsyncSession) -> list[IssueView]:
     """還沒有人決定的那幾件，最近偵測到的在前面。
 
@@ -298,6 +301,8 @@ async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> se
     }
 
 
+# 沒有命令收回忽略，而忽略會把問題藏起來（brief §14 列為要人的）。
+@command(Effect.IRREVERSIBLE)
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """「我知道了，不用管它」。不碰磁碟、不碰帳本。
 
@@ -316,6 +321,9 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     return await _reread(session, row)
 
 
+# 暫定（M5 票 04 拆成一種動作一個命令）：有幾顆刪東西（`ACTION_DELETES`），整支照最嚴的標；
+# 「重新送單」那一顆送 torrent。
+@command(Effect.IRREVERSIBLE, flags={Flag.DOWNLOADS})
 async def resolve_issue(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -397,6 +405,8 @@ async def resolve_issue(
     return await _reread(session, row)
 
 
+# poller 那一輪的一段：收掉現況已經不成立的 Issue。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def close_settled(session: AsyncSession, now: datetime) -> int:
     """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
 

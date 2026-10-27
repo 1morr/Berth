@@ -49,6 +49,7 @@ from berth.domain import (
 )
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
+from berth.services.commands import Effect, Flag, command
 from berth.services.jellyfin_access import (
     BrowsableLibrary,
     JellyfinAccess,
@@ -256,6 +257,7 @@ class Covers(Protocol):
     def episode_end(self) -> int | None: ...
 
 
+@command(Effect.READ)
 async def read_wall(
     session: AsyncSession,
     access: JellyfinAccess,
@@ -302,6 +304,7 @@ async def read_wall(
     )
 
 
+@command(Effect.READ)
 async def libraries_with_imports(
     session: AsyncSession, library_ids: Collection[str]
 ) -> frozenset[str]:
@@ -331,6 +334,7 @@ async def libraries_with_imports(
     return frozenset(found)
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnapshot) -> Holdings:
     """這部作品在媒體庫與管線裡的樣子（Media 詳情頁）。
 

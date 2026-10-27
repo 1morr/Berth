@@ -67,6 +67,7 @@ from berth.naming import read_target
 from berth.parser import kind_by_extension
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import JobRejectedError, check_route, freeze, record_event
 from berth.services.media import read_media
 from berth.services.qbittorrent import sign_in, unknown_torrents
@@ -116,6 +117,8 @@ def reimport_hash(path: Path) -> str:
     return hashlib.sha1(f"berth-reimport:{fs.path_key(path)}".encode()).hexdigest()
 
 
+# 只由 Issue 的認領叫（`issues`）：建一筆停在 `completed` 的 Job，不動檔案；沒有單一反向命令。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def reimport_folder(
     session: AsyncSession, factory: ServiceClientFactory, path: Path, media_id: str, *, actor: str
 ) -> Job:
@@ -126,7 +129,7 @@ async def reimport_folder(
     什麼都沒動就停下來。
     """
     route, folder = await _route_by_folder(session, path)
-    media = await ensure_media(session, factory, media_id)
+    media = await _ensure_media(session, factory, media_id)
     _usable(route, media)
     files = contents_on_disk(str(folder), str(path))
     if not files:
@@ -179,6 +182,8 @@ async def reimport_folder(
 # --- 認領 qBittorrent 上的一筆 --------------------------------------------
 
 
+# 只由 Issue 的認領叫：替已經在 qBittorrent 上的那一筆建 Job，不送新的 torrent。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def claim_torrent(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -214,7 +219,7 @@ async def claim_torrent(
         raise ClaimRejectedError(
             IssueRefusal.ROUTE_UNUSABLE, f"category {found.category!r} belongs to no route"
         )
-    media = await ensure_media(session, factory, media_id)
+    media = await _ensure_media(session, factory, media_id)
     _usable(route, media)
     with job_context(job_hash):
         job = Job(
@@ -262,7 +267,7 @@ async def claim_torrent(
     return job
 
 
-async def ensure_media(
+async def _ensure_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> Media:
     """管理員選的那一部。Berth 還沒見過就先向 TMDB 要一份快照（`read_media`，與詳情頁同一支）；
@@ -303,6 +308,8 @@ def _user_id(actor: str) -> int | None:
 # --- 認領進帳本 -----------------------------------------------------------
 
 
+# 只加帳本列，一個位元組都不刪（同 `ledger_rebuild.rebuild_ledger`）；Issue 與重建帳本叫它。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def claim_file(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -371,7 +378,7 @@ async def claim_file(
         resolve_after=first_resolve_at(moment) if reading.action is PlanAction.IMPORT else None,
     )
     session.add(entry)
-    await settle(session, str(path), job_hash, actor=actor, now=moment)
+    await _settle(session, str(path), job_hash, actor=actor, now=moment)
     await session.flush()
     logger.info("a library file was claimed into the ledger", extra={"target": target})
     return entry
@@ -387,6 +394,7 @@ class SourceIndex:
     unread: list[str] = field(default_factory=list)
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def source_index(session: AsyncSession) -> SourceIndex:
     """complete 裡每一條 Route 子目錄底下的每一個檔案，以 `(device, inode)` 為鍵。
 
@@ -412,7 +420,7 @@ async def source_index(session: AsyncSession) -> SourceIndex:
     return index
 
 
-async def settle(
+async def _settle(
     session: AsyncSession, path: str, job_hash: str | None, *, actor: str, now: datetime
 ) -> None:
     """這個檔案長回帳本了：它那一件 `unmanaged_library_file` 跟著收掉；它屬於的那一筆 Job 若掛著

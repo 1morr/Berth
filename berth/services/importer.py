@@ -53,6 +53,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.deletion import Placed, remove_one
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import actor_of, guarded, record_event, transition
@@ -81,6 +82,8 @@ class ImportOutcome:
     held: int
 
 
+# importer 一輪的入口：建硬鏈接、拆換了落點的舊鏈接，來源都還在 complete，rematch 搬得回去。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def sweep_imports(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -390,6 +393,8 @@ def record_link(
     entry.resolve_after = first_resolve_at(now) if item.action is PlanAction.IMPORT else None
 
 
+# 只把反查排回去，Jellyfin 現況再抄一次。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def restate_versions(
     session: AsyncSession, item: PlanItem, target: str, now: datetime
 ) -> None:
@@ -555,6 +560,8 @@ async def _notify(session: AsyncSession, factory: ServiceClientFactory, job: Job
     await notify_jellyfin(session, factory, job, paths)
 
 
+# 叫 Jellyfin 照磁碟現況重讀那個資料夾：磁碟改回去再叫一次就是撤銷。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def notify_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory, job: Job | None, paths: Sequence[str]
 ) -> None:

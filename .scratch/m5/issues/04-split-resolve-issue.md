@@ -25,3 +25,5 @@
 - [ ] 全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27（票 03 留）：`issues` 已經不在豁免表（做什麼第 4 條已完成）。`resolve_issue` 暫標 `IRREVERSIBLE`，拆開時換成各動作自己的標記；`issues.ignore_issue` 標 `IRREVERSIBLE`（沒有收回忽略的命令，brief §14 要人），拆「忽略」類時一起看。

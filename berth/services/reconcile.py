@@ -68,6 +68,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.services import complete
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.issues import IssueRejectedError, Recorded, record_issue
 from berth.services.plan import WRITTEN
 from berth.services.qbittorrent import (
@@ -162,6 +163,8 @@ class _Tally:
             self.updated += 1
 
 
+# 對帳一輪的入口：只寫 Issue 與帳本的檢查欄位。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def reconcile_once(
     session: AsyncSession,
     factory: ServiceClientFactory,
