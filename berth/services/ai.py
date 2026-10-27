@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.ai import AiEndpoint, normalize_base_url, probe
-from berth.adapters.ai.prices import ModelPrice, price_of
-from berth.domain import AiProbeFailure, AiProvider, AiRefusal
+from berth.adapters.ai.prices import PRICES, ModelPrice, price_of
+from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret
 from berth.models import AiEndpointSettings, AiSettings
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
@@ -47,11 +47,16 @@ class AiView:
     anthropic: AiEndpointView
     openai: AiEndpointView
     has_tavily_key: bool
+    #: 價目表上認得的模型名，給模型欄當建議（可以不選、照打）。
+    known_models: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class AiForm:
-    """表單上的一種接口。`api_key` 是 `None` 表示沒動（存的時候留著、測試時拿存著的）。"""
+    """表單上的一種接口。`api_key` 是 `None` 或空白表示沒動（存的時候留著、測試時拿存著的）。
+
+    清掉 key 是另一個命令（`forget_ai_key`）：空欄在存檔與測試裡是同一個意思。
+    """
 
     provider: AiProvider
     base_url: str
@@ -84,6 +89,7 @@ def _view(settings: AiSettings) -> AiView:
         anthropic=_endpoint_view(settings.anthropic),
         openai=_endpoint_view(settings.openai),
         has_tavily_key=bool(settings.tavily_api_key),
+        known_models=tuple(sorted(PRICES)),
     )
 
 
@@ -122,7 +128,7 @@ async def set_ai(
 
     def change(settings: AiSettings) -> None:
         endpoint = settings.endpoint(form.provider)
-        api_key = endpoint.api_key if form.api_key is None else form.api_key.strip()
+        api_key = (form.api_key or "").strip() or endpoint.api_key
         if enabled:
             try:
                 _complete(api_key, model)
@@ -131,7 +137,7 @@ async def set_ai(
                 return
         endpoint.base_url, endpoint.model, endpoint.api_key = base_url, model, api_key
         settings.provider, settings.enabled = form.provider, enabled
-        if tavily_api_key is not None:
+        if tavily_api_key and tavily_api_key.strip():
             settings.tavily_api_key = tavily_api_key.strip()
 
     # key 欄空著時要看存著的那一把，所以前提在寫鎖裡判斷；被拒時寫回去的是原樣。
@@ -139,6 +145,23 @@ async def set_ai(
     if refusal:
         raise refusal[0]
     return _view(saved)
+
+
+# key 一清掉就回不來，要人重新貼一次。
+@command(Effect.IRREVERSIBLE)
+async def forget_ai_key(session: AsyncSession, secret: AiSecret) -> AiView:
+    """清掉一把 key，其餘設定不動。清的是現在用的接口的 key 時一併關掉 AI：沒有 key 開不了。"""
+
+    def change(settings: AiSettings) -> None:
+        if secret is AiSecret.TAVILY:
+            settings.tavily_api_key = ""
+            return
+        provider = AiProvider(secret.value)
+        settings.endpoint(provider).api_key = ""
+        if settings.provider is provider:
+            settings.enabled = False
+
+    return _view(await update_settings(session, AiSettings, change))
 
 
 @command(Effect.READ)

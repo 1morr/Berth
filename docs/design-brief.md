@@ -1838,6 +1838,9 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - `web_search` 的次數在 `usage.details['web_search_requests']`，每次 $0.01。
 - **provider**：
   - `AnthropicProvider(base_url=...)` 不含 `/v1`（SDK 會自己接 `/v1/messages`）；`OpenAIProvider(base_url=...)` 照那家服務的文件（OpenAI 官方含 `/v1`，DeepSeek 的 `https://api.deepseek.com` 不含也能用）。
+  - **anthropic SDK 2.x 把 `api_key` 放在 `Authorization: Bearer`**，不是舊版的 `x-api-key`（2026-10-27 讀 anthropic 2.3.0 的 `_client.py` 與 M5 票 09 的 MockTransport 測試）。只認 `x-api-key` 的相容閘道會回 401，測試連線照實說「key 被拒」。
+  - 兩家 SDK 在 `api_key` / `base_url` 沒給時讀環境變數（`ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`、`OPENAI_BASE_URL`，anthropic 另讀 `ANTHROPIC_CONFIG_DIR` 底下的 profile）；Berth 一律明給（M5 票 09）。
+  - pydantic-ai-slim 2.62.0（2026-10-27 的 stable）的 provider 吃 `httpx2.AsyncClient`；`ModelSettings` 可以逐次給 `max_retries` 與 `timeout`。錯誤分類：`ModelAuthenticationError`、`ModelNotFoundError`、`ModelConnectionError`（含逾時）都是 `ModelAPIError` 的子類，帶 HTTP 狀態碼的同時是 `ModelHTTPError`（`body` 是服務回的原文）。
   - 伺服器端 `web_search` 走 Anthropic Messages 才有（Anthropic 官方，以及 DeepSeek 的相容端點）；Chat Completions 沒有，要另接 Tavily 這類工具。
 - **真模型實測**（DeepSeek `deepseek-flash`，Anthropic 與 OpenAI 兩種相容接口各跑六個情境；TMDB 與索引站是真的，qBittorrent 是替身）：
   - **完成度**：兩種接口都跑完全部情境，沒有接口相關的錯誤。

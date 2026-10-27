@@ -107,6 +107,7 @@ adapters ──► domain                  （不 import services、models；回
 - `settings`：`key`（unique）、`value_json`、`updated_at`（稽核欄位：這一組上一次被寫的時間，ORM 的 `onupdate` 自動寫，目前沒有讀者，M4 票 95 決定保留）。key 分組：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`parser`、`ai`、`rss`、`setup`、`health`。每組一個 pydantic model；`services.*` 只含**連線資訊**。
   - `health`：`health_checker` 上一輪的結果——逐服務的 `status` / `detail` / `error` / `checked_at` / `last_ok_at` / `failures` / `configured` / `banned` / `unsupported` / `library_count`（API 另有 `unused`：不存，讀的時候從 `setup.indexer.skipped` 算，M4 票 61），加上這一輪的時間。Route 的總結**不存**，讀的時候從 `routes` 表算（`routes_health`，M4 票 59：換一台 qBittorrent 之後存著的那一份還說「已繫上」）。完成精靈時頁上測過的結論抄進來（M4 票 59）。**與 `services.*` 分開存**：那幾組是整組覆寫的使用者設定，把迴圈每 5 分鐘寫一次的狀態混進去，兩邊會互相蓋掉（票 10 改，原文是「`services.*` 含連線資訊與最後健康狀態」）。
   - `services.jellyfin` 另含 `public_url`（選填的對外網址，媒體庫深連結的主機；空的時候由 `services/deeplink.py` 推導——既有服務用 `base_url`、套件內用瀏覽器的主機名加 `base_url` 的 port，Seerr 的 `externalHostname` 慣例，票 13）、`api_key`、`metadata_fetchers`（鍵是套件內媒體庫的資料夾名，沒寫的依內容類型落回預設，票 06f；值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）。**沒有 MergeVersions 的任務 id**：票 14b 起只支援 Jellyfin 12，而 12.x 原生合併多版本（brief §19、§20.9）。舊資料庫裡那兩個鍵還在，`extra="ignore"` 讓它照樣讀得回來，所以沒有 migration。
+  - `ai`（M5 票 09）：`enabled`（關著就沒有 AI）、`provider`（`anthropic` / `openai`，現在用的那一種）、`anthropic` 與 `openai` 各一組 `base_url` / `api_key` / `model`（兩種各自保存，切換不丟另一邊；`base_url` 空的是官方端點，Anthropic 存之前拿掉結尾的 `/v1`）、`tavily_api_key`（選填，票 17）。**key 只進不出**：API 回 `has_key` / `has_tavily_key`；PUT 的 key 欄空著是不動，清掉走 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`（清的是現用接口的 key 時一併關掉 AI）。不從環境變數讀。
   - `rss`（M3 票 10）：排除條件的全域那一層——`exclude_not_single`（預設 `true`：不是單集的不自動下載）與 `exclude`（規則清單，格式同 `rss_feeds.exclude_json`）。
   - `paths` 另含 `library_root`（套件內媒體庫的資料夾與既有媒體庫「加入 Berth 路徑」的父目錄，預設 `/data/library`）。
   - `setup.jellyfin`：Jellyfin 的七步（頁 1 的擁有者那一半與頁 3 的媒體庫）各自的 `key` / `status` / `detail` / `error`，以及 Jellyfin 回報的媒體庫與各自路徑。每一步在做**之前**就寫入 `running` 並 commit，前端才輪詢得到進度。版本號不另外存：它是 `public_info` 那一步的 `detail`（失敗的那一輪也帶著，版本閘門就是靠它顯示）。
@@ -571,6 +572,16 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 - `probe(path) -> MediaInfoSummary{duration_s, width, height, video_codec, bit_depth, audio_langs, subtitle_tracks[{lang, title, codec, forced, default}]}`。
 - 只在 planning 階段對影片檔呼叫；失敗不阻擋，Plan 只少一個訊號。量到的片長有兩個消費者：`classify` 的 5 分鐘規則與片長驗證（§4.1）。
+
+### 8.8 AI provider adapter（M5 票 09）
+
+- `adapters/ai`：`build_model(AiEndpoint) -> pydantic_ai.models.Model`，`AiEndpoint` 是接口種類、base URL、key、模型名。Anthropic 走 `AnthropicModel` + `AnthropicProvider`，OpenAI 相容走 `OpenAIChatModel` + `OpenAIProvider`（brief §20.24）。
+- **永遠明給 `api_key` 與 `base_url`**：兩家 SDK 沒拿到時會讀 `ANTHROPIC_API_KEY`、`OPENAI_BASE_URL` 這類環境變數，產品的設定只在資料庫。留空的 base URL 換成官方端點（`https://api.anthropic.com`、`https://api.openai.com/v1`）。
+- `probe(model) -> Probe`：「測試連線」的一次最小呼叫（`pydantic_ai.direct.model_request`，`max_tokens` 16、`max_retries` 0、`timeout` 30 秒）。失敗分五類（`AiProbeFailure`）：401/403 `key_rejected`、404 `not_found`、其餘 HTTP 錯誤 `service_error`、連線或逾時 `unreachable`、回的不是 API `bad_response`；附 HTTP 狀態碼與服務的原文。`services.ai.test_ai` 把原文裡的 key 遮掉再回給畫面。
+- `adapters/ai/prices.py`：每個模型四個價（輸入、輸出、快取讀、快取寫，USD / 百萬 token）加查證日期與來源；以模型名開頭比對、最長的鍵優先。**認不得回 `None`**（費用 NULL、畫面寫「未知」），不用 `genai_prices` 補位。
+- 替身 `adapters/ai/fake.py`（`FunctionModel`）：測試與演練伺服器共用，照 key 與模型名演出成功、key 被拒、模型不存在。
+- 兩家 SDK 依賴 `httpx2`；adapter 的測試換 `httpx2.MockTransport`。Starlette 的 `TestClient` 只要 import 得到 `httpx2` 就用它，所以 API 測試的回應型別是 `httpx2.Response`；其餘 adapter 照舊 `httpx` + `respx`。
+- **key 不進 log**（R13）：aiosqlite 的 DEBUG 行帶 SQL 參數（寫 `settings` 那一句就是整份 JSON），`configure_logging` 把那個 logger 固定在 INFO；engine 開 `hide_parameters`，SQL 例外的訊息也不帶參數。
 
 ---
 

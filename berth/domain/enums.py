@@ -1769,3 +1769,12 @@ class AiRefusal(StrEnum):
     KEY_MISSING = "key_missing"
     #: 要開啟或測試，但沒填模型名稱。
     MODEL_MISSING = "model_missing"
+
+
+class AiSecret(StrEnum):
+    """AI 設定裡存著的 key（`services.ai.forget_ai_key`）。"""
+
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    #: 網路搜尋工具（票 17）。
+    TAVILY = "tavily"

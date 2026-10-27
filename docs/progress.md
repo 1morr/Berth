@@ -1655,3 +1655,8 @@
   - 對話的往返上限從研究報告的 10 改成 20（實測單輪最多 9）。
   - 「為什麼沒入庫」的聚合讀取命令獨立成票 10（不需要 AI）。
 - 2026-10-27 M5 01：票說只取測試與 `development.md`，另外帶進 `scripts/fake_setup_server.py` 的 `Scenario.clock`，因為 CI 的 web-e2e 紅在同一個時間炸彈。它是演練伺服器，不是產品程式碼。
+- 2026-10-27 M5 09：**兩種接口各自保存**（brief §19 ⑧「各自設 base URL 與 key」）：`settings.ai` 是 `anthropic` / `openai` 兩組加 `provider` 與 `enabled`，不是票面寫的單一一組；切換接口不丟另一邊。設定頁照 Sonarr 的 Test 測表單上還沒存的值。
+- 2026-10-27 M5 09：**清掉 key 是獨立命令 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`**，PUT 與測試的 key 欄空著一律是「不動」：用 PUT 的空字串清 key 會順便把那一種設成現用接口，而現用接口開著時會被「缺 key」擋下。清的是現用接口的 key 時一併關掉 AI。
+- 2026-10-27 M5 09：**`httpx2` 進來之後 Starlette 的 `TestClient` 就改用它**（anthropic / openai SDK 的必要相依，躲不掉）：12 個 API 測試檔的回應型別改標 `httpx2.Response`，pyproject 那條「Starlette 用 httpx 已 deprecated」的警告過濾拿掉（不再觸發）。adapter 照舊 `httpx` + `respx`。
+- 2026-10-27 M5 09：**價目表只用自己的**，不拿 `genai_prices` 補位（相容閘道上的同名模型會被算成原廠價）；DeepSeek 只記尖峰價、離峰不折算（估計偏高不偏低）。設定頁的模型欄以價目表為 datalist 建議（使用者選定），API 多 `known_models`。
+- 2026-10-27 M5 09：**R13 修在 log 與 engine 兩層**，不做憑證另存或遮罩過濾：aiosqlite logger 固定 INFO（它的 DEBUG 行就是帶 SQL 參數的那幾行）、engine `hide_parameters=True`。之後若加 log 等級開關，其他 logger 印憑證的話要另補。

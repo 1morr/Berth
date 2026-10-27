@@ -86,9 +86,10 @@ class TestSaving:
         save(client, api_key=KEY)
         assert save(client, model="claude-haiku-5-5").json()["anthropic"]["has_key"] is True
 
-    def test_an_empty_key_clears_it(self, client: TestClient) -> None:
+    def test_a_blank_key_keeps_the_saved_one(self, client: TestClient) -> None:
+        """空欄就是沒動（同測試連線）；清掉 key 是另一個命令。"""
         save(client, api_key=KEY)
-        assert save(client, api_key="").json()["anthropic"]["has_key"] is False
+        assert save(client, api_key="  ").json()["anthropic"]["has_key"] is True
 
     def test_each_provider_keeps_its_own_settings(self, client: TestClient) -> None:
         save(client, api_key=KEY, base_url="https://gw.example/anthropic")
@@ -143,17 +144,55 @@ class TestSaving:
         unknown = save(client, provider="openai", model="some-local-model").json()
         assert unknown["openai"]["price"] is None
 
+    def test_the_models_with_a_price_are_offered_as_suggestions(self, client: TestClient) -> None:
+        models = client.get(BASE).json()["known_models"]
+        assert "claude-sonnet-5-5" in models
+        assert "deepseek-flash" in models
+        assert models == sorted(models)
+
     def test_the_tavily_key_is_write_only_too(self, client: TestClient) -> None:
         got = save(client, tavily_api_key=TAVILY)
         assert got.json()["has_tavily_key"] is True
         assert TAVILY not in got.text
-        assert save(client).json()["has_tavily_key"] is True
-        assert save(client, tavily_api_key="").json()["has_tavily_key"] is False
+        assert save(client, tavily_api_key="").json()["has_tavily_key"] is True
 
     def test_it_is_behind_the_admin_gate(self, config: Config, tmp_path: Path) -> None:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
         with TestClient(app) as anonymous:
             assert anonymous.get(BASE).status_code == 401
+
+
+def forget(client: TestClient, which: str) -> httpx2.Response:
+    response: httpx2.Response = client.delete(f"{BASE}/keys/{which}", headers=BROWSER)
+    return response
+
+
+class TestForgettingAKey:
+    def test_a_provider_key_is_forgotten_and_the_rest_stays(self, client: TestClient) -> None:
+        save(client, api_key=KEY, base_url="https://gw.example/anthropic")
+        got = forget(client, "anthropic")
+        assert got.status_code == 200, got.text
+        assert got.json()["anthropic"]["has_key"] is False
+        assert got.json()["anthropic"]["base_url"] == "https://gw.example/anthropic"
+
+    def test_forgetting_the_key_in_use_turns_ai_off(self, client: TestClient) -> None:
+        save(client, api_key=KEY, enabled=True)
+        assert forget(client, "anthropic").json()["enabled"] is False
+
+    def test_forgetting_the_other_providers_key_leaves_ai_on(self, client: TestClient) -> None:
+        save(client, provider="openai", api_key=OTHER_KEY, model="deepseek-flash")
+        save(client, api_key=KEY, enabled=True)
+        got = forget(client, "openai").json()
+        assert got["enabled"] is True
+        assert got["provider"] == "anthropic"
+        assert got["openai"]["has_key"] is False
+
+    def test_the_tavily_key_is_forgotten(self, client: TestClient) -> None:
+        save(client, tavily_api_key=TAVILY)
+        assert forget(client, "tavily").json()["has_tavily_key"] is False
+
+    def test_something_else_is_not_a_key(self, client: TestClient) -> None:
+        assert forget(client, "jellyfin").status_code == 422
 
 
 class TestConnectionTest:

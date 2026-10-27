@@ -1,7 +1,8 @@
 """AI provider 設定的端點（M5 票 09、plan §11.6〈provider〉）。
 
 掛在 `/settings` 底下，所以只有管理員進得來（`api/gate.py`）。**key 只進不出**：回的是 `has_key`
-與 `has_tavily_key`；送進來的 key 欄位是 `null` 表示沒動，空字串是清掉。
+與 `has_tavily_key`；送進來的 key 欄位是 `null` 或空字串表示沒動，清掉走
+`DELETE /settings/ai/keys/{key}`。
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
-from berth.domain import AiProbeFailure, AiProvider, AiRefusal
-from berth.services.ai import AiForm, AiRefusedError, read_ai, set_ai, test_ai
+from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret
+from berth.services.ai import AiForm, AiRefusedError, forget_ai_key, read_ai, set_ai, test_ai
 
 router = APIRouter(prefix="/settings/ai", tags=["settings"])
 
@@ -78,10 +79,12 @@ class AiOut(BaseModel):
     anthropic: AiEndpointOut
     openai: AiEndpointOut
     has_tavily_key: bool
+    #: 價目表上認得的模型名（排序過），給模型欄當建議；不在裡面的照樣可以填。
+    known_models: list[str]
 
 
 class AiTestIn(BaseModel):
-    """表單上的一種接口。`api_key` 是 `null` 或空字串時用這個接口存著的那一把。"""
+    """表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。"""
 
     provider: AiProvider
     #: 空字串是官方端點。
@@ -92,7 +95,7 @@ class AiTestIn(BaseModel):
 
 class AiIn(AiTestIn):
     enabled: bool
-    #: `null` 是不動，空字串是清掉。
+    #: `null` 或空字串是不動。
     tavily_api_key: str | None = None
 
 
@@ -129,6 +132,12 @@ async def put_ai(session: SessionDep, body: AiIn) -> AiOut:
     except AiRefusedError as exc:
         raise ai_refusal(exc) from exc
     return AiOut.model_validate(view)
+
+
+@router.delete("/keys/{key}")
+async def delete_ai_key(session: SessionDep, key: AiSecret) -> AiOut:
+    """清掉一把 key。清的是現在用的接口的 key 時一併關掉 AI。"""
+    return AiOut.model_validate(await forget_ai_key(session, key))
 
 
 @router.post("/test", responses=_responses())

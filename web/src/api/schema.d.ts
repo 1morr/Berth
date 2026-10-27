@@ -25,6 +25,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ai/keys/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Ai Key
+         * @description 清掉一把 key。清的是現在用的接口的 key 時一併關掉 AI。
+         */
+        delete: operations["delete_ai_key_api_settings_ai_keys__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/ai/test": {
         parameters: {
             query?: never;
@@ -2493,6 +2513,8 @@ export interface components {
             openai: components["schemas"]["AiEndpointOut"];
             /** Has Tavily Key */
             has_tavily_key: boolean;
+            /** Known Models */
+            known_models: string[];
         };
         /**
          * AiPriceOut
@@ -2541,8 +2563,14 @@ export interface components {
             detail: string;
         };
         /**
+         * AiSecret
+         * @description AI 設定裡存著的 key（`services.ai.forget_ai_key`）。
+         * @enum {string}
+         */
+        AiSecret: "anthropic" | "openai" | "tavily";
+        /**
          * AiTestIn
-         * @description 表單上的一種接口。`api_key` 是 `null` 或空字串時用這個接口存著的那一把。
+         * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。
          */
         AiTestIn: {
             provider: components["schemas"]["AiProvider"];
@@ -6282,6 +6310,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    delete_ai_key_api_settings_ai_keys__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["schemas"]["AiSecret"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
