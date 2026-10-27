@@ -1825,6 +1825,37 @@ class AgentRefusal(StrEnum):
     CONVERSATION_MISSING = "conversation_missing"
     #: 「繼續」按不了：不是最後一輪、不是被防護停下的、已經續過一次（M5 票 20）。
     NOT_CONTINUABLE = "not_continuable"
+    #: 斜線指令沒有這一個：不以 `/` 開頭，或不是登錄表上的名字（後面多帶了字的也是，M5 票 18）。
+    #: detail 是打的第一個詞。
+    UNKNOWN_COMMAND = "unknown_command"
+    #: 送進對話的訊息以 `/` 開頭：那是斜線指令，不交給模型（M5 票 18）。detail 同上。
+    SLASH_COMMAND = "slash_command"
+
+
+class SlashCommand(StrEnum):
+    """側面板的斜線指令（`services.slash`，M5 票 18）。值是打的字去掉 `/`。M7 的 Discord 共用。"""
+
+    #: 開一段新對話（側面板換一個 chat id）。
+    NEW = "new"
+    #: 壓縮這段對話，只留最後一個回合。
+    COMPACT = "compact"
+    #: 這段對話花了多少：輪數、模型與工具呼叫、token、快取、網搜、估計費用。
+    USAGE = "usage"
+    #: 用哪個模型、這段對話佔了 context window 的多少、provider 暫停了沒。
+    STATUS = "status"
+    #: 我還沒決定的確認卡（每一段對話的）。
+    PENDING = "pending"
+    #: 我用得上的 skills。
+    SKILLS = "skills"
+
+
+class AiRunKind(StrEnum):
+    """`ai_runs` 的一列是什麼（M5 票 18）。用量頁照它分開數（票 21）。"""
+
+    #: 一則使用者訊息的回覆（側面板的一輪）。
+    CHAT = "chat"
+    #: 上下文壓縮的那一次摘要：自動的（一輪開頭）或使用者打的 `/compact`。
+    COMPACTION = "compaction"
 
 
 class AiStopReason(StrEnum):
