@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, assert_never
 
 import anyio
 from fastapi import APIRouter
@@ -26,8 +26,15 @@ from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
 from berth.api.deps import EventHubDep
-from berth.domain import JobState
-from berth.services.events import JOB_EVENT, EventHub
+from berth.domain import JobState, ProposalStatus
+from berth.services.events import (
+    JOB_EVENT,
+    PROPOSAL_EVENT,
+    EventHub,
+    JobSignal,
+    ProposalSignal,
+    Signal,
+)
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -45,6 +52,17 @@ class JobSignalOut(BaseModel):
     state: JobState
     #: 0.0–1.0。
     progress: float
+
+
+class ProposalSignalOut(BaseModel):
+    """`event: proposal` 那一行的 `data`（M5 票 08）：這一張 Proposal 的狀態變了。
+
+    同樣是提示：前端讓 `['proposals']` 失效再問一次。只有 id 與狀態，看不看得到那一張的命令與參數
+    由 `GET /proposals` 的門禁決定。
+    """
+
+    id: int
+    status: ProposalStatus
 
 
 #: 沒有事件時多久送一次註解 ping。反向代理常見的閒置逾時是 60 秒。
@@ -67,7 +85,12 @@ class _Stream(EventSourceResponse):
 @router.get(
     "/stream",
     response_class=_Stream,
-    responses={200: {"model": JobSignalOut, "description": "一筆接一筆的 `event: job`"}},
+    responses={
+        200: {
+            "model": JobSignalOut | ProposalSignalOut,
+            "description": "一筆接一筆的 `event: job` 與 `event: proposal`",
+        }
+    },
 )
 async def stream(hub: EventHubDep) -> EventSourceResponse:
     """一條 SSE 連線。斷線或關機時一定收掉訂閱。"""
@@ -103,10 +126,19 @@ async def _signals(hub: EventHub, shutdown: anyio.Event) -> AsyncIterator[dict[s
                 if waiting not in done:
                     waiting.cancel()
                     return
-                signal = waiting.result()
-                payload = JobSignalOut(
-                    hash=signal.hash, state=signal.state, progress=signal.progress
-                )
-                yield {"event": JOB_EVENT, "data": payload.model_dump_json()}
+                yield _event(waiting.result())
         finally:
             stopping.cancel()
+
+
+def _event(signal: Signal) -> dict[str, Any]:
+    """一則推播的 `event:` 與 `data`。多一種 `Signal` 時 mypy 在 `assert_never` 紅。"""
+    match signal:
+        case JobSignal():
+            job = JobSignalOut(hash=signal.hash, state=signal.state, progress=signal.progress)
+            return {"event": JOB_EVENT, "data": job.model_dump_json()}
+        case ProposalSignal():
+            proposal = ProposalSignalOut(id=signal.id, status=signal.status)
+            return {"event": PROPOSAL_EVENT, "data": proposal.model_dump_json()}
+        case _:
+            assert_never(signal)

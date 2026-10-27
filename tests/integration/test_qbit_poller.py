@@ -24,7 +24,7 @@ from berth.db import create_session_factory
 from berth.domain import JobState
 from berth.pipeline.downloads import QbitPoller
 from berth.services.downloads import ACTIVE_INTERVAL, IDLE_INTERVAL
-from berth.services.events import EventHub, JobSignal
+from berth.services.events import EventHub, JobSignal, Signal
 from berth.services.hints import JobHints
 from berth.services.setup import complete_setup
 from tests.integration.factories import FakeClientFactory
@@ -96,7 +96,8 @@ class ReadsTheDatabase(EventHub):
         self._database = database
         self.states: list[str] = []
 
-    def publish(self, signal: JobSignal) -> None:
+    def publish(self, signal: Signal) -> None:
+        assert isinstance(signal, JobSignal)
         reader = sqlite3.connect(self._database)
         try:
             row = reader.execute("SELECT state FROM jobs WHERE hash = ?", (signal.hash,)).fetchone()

@@ -12,6 +12,9 @@
 當天巡檢開完的 Issue。與巡檢不同，**重啟之後補上漏掉的那一週**：一週才一份，週一早上剛好在重啟就
 少一份是看得出來的缺口；同一週再產生什麼都不寫，所以補跑不會多一筆。只有新裝、還一份都沒有時不補：
 啟動那一刻已經過去的那一週 Berth 還沒在做事。
+
+**過期的確認卡也在這裡收**（M5 票 08，`services/proposals.expire_due`）：每一次醒來都收，不等
+`SWEEP_AT`——卡片的期限以分鐘計，畫面上還開著的那一張要跟著變成「已過期」，所以要 hub。
 """
 
 from __future__ import annotations
@@ -26,6 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.pipeline.reconciling import local_now, previous
 from berth.pipeline.ticks import Clock, Sleeper, whole_tick
+from berth.services.events import EventHub
+from berth.services.proposals import expire_due
 from berth.services.setup import is_setup_complete
 from berth.services.sweep import sweep_once
 from berth.services.weekly import compose_weekly, has_reports, week_ending
@@ -45,6 +50,7 @@ class Sweeper:
     def __init__(
         self,
         sessions: async_sessionmaker[AsyncSession],
+        hub: EventHub,
         *,
         tick: timedelta = TICK,
         at: clock_time = SWEEP_AT,
@@ -52,6 +58,7 @@ class Sweeper:
         now: Clock = local_now,
     ) -> None:
         self._sessions = sessions
+        self._hub = hub
         self._tick = tick
         self._at = at
         self._sleep = sleep
@@ -66,6 +73,10 @@ class Sweeper:
         while True:
             await self._sleep(self._tick.total_seconds())
             try:
+                await whole_tick(self.expire_proposals())
+            except Exception:
+                logger.exception("proposal expiry tick failed")
+            try:
                 await whole_tick(self.run_if_due())
             except Exception:
                 logger.exception("sweeper tick failed")
@@ -74,6 +85,11 @@ class Sweeper:
                 await whole_tick(self.report_if_due())
             except Exception:
                 logger.exception("weekly report tick failed")
+
+    async def expire_proposals(self) -> list[int]:
+        """過了期限還沒人按的確認卡標成過期，回傳是哪幾張。"""
+        async with self._sessions() as session:
+            return await expire_due(session, self._hub, now=self._now())
 
     async def run_if_due(self) -> bool:
         """跨過 `SWEEP_AT` 了就跑一輪，回傳這一次有沒有真的跑。"""

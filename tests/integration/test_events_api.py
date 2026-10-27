@@ -26,10 +26,17 @@ from fastapi.testclient import TestClient
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import JobState
+from berth.domain import JobState, ProposalStatus
 from berth.main import create_app
 from berth.models import TmdbSettings
-from berth.services.events import JOB_EVENT, EventHub, JobSignal
+from berth.services.events import (
+    JOB_EVENT,
+    PROPOSAL_EVENT,
+    EventHub,
+    JobSignal,
+    ProposalSignal,
+    Signal,
+)
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
 from berth.services.setup import complete_setup
@@ -101,6 +108,21 @@ def test_a_signed_in_page_reads_the_job_signals(client: TestClient) -> None:
     assert json.loads(data) == {"hash": "abc", "state": "downloading", "progress": 0.25}
 
 
+def test_a_signed_in_page_reads_the_proposal_signals(client: TestClient) -> None:
+    """確認卡的狀態變了（M5 票 08）：同一條串流，`event: proposal`，只有 id 與狀態。"""
+    client.post("/api/auth/login", json=ADMIN, headers=BROWSER)
+    hub = hub_of(client)
+
+    _, _, body = asyncio.run(
+        _stream_once(client, hub, ProposalSignal(id=7, status=ProposalStatus.EXECUTED))
+    )
+
+    lines = [row for row in body.decode().splitlines() if row and not row.startswith(":")]
+    assert f"event: {PROPOSAL_EVENT}" in lines
+    data = next(row for row in lines if row.startswith("data:"))[len("data:") :]
+    assert json.loads(data) == {"id": 7, "status": "executed"}
+
+
 def test_the_stream_is_never_compressed(client: TestClient) -> None:
     """gzip 會把事件收在壓縮器的緩衝裡，前端要等到湊滿一塊才看得到（M3 票 06 加壓縮時）。
 
@@ -136,7 +158,7 @@ def test_closing_the_page_takes_the_subscription_with_it(client: TestClient) -> 
 
 
 async def _stream_once(
-    client: TestClient, hub: EventHub, signal: JobSignal, *, accept_encoding: str = ""
+    client: TestClient, hub: EventHub, signal: Signal, *, accept_encoding: str = ""
 ) -> tuple[int, dict[bytes, bytes], bytes]:
     """把 SSE 端點拉到第一筆事件為止，然後掛斷。
 

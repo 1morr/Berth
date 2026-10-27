@@ -20,6 +20,7 @@ from berth.models.media import (
 )
 from berth.models.notification import Notification
 from berth.models.plan import Plan, PlanItem
+from berth.models.proposal import Proposal
 from berth.models.route import Route, RouteHealth
 from berth.models.rss import DEFAULT_INTERVAL_SEC, FEED_INTERVALS, RssFeed, RssItem, RssSeries
 from berth.models.setting import (
@@ -92,6 +93,7 @@ __all__ = [
     "Plan",
     "PlanItem",
     "PollerSettings",
+    "Proposal",
     "QbittorrentSettings",
     "Route",
     "RouteHealth",

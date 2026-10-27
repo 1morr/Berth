@@ -52,7 +52,7 @@ from berth.services.downloads import (
     poll_downloads,
     record_poll_failure,
 )
-from berth.services.events import EventHub, JobSignal
+from berth.services.events import EventHub, JobSignal, Signal
 from berth.services.hints import JobHints
 from berth.services.issues import ignore_issue
 from berth.services.jobs import held_locks, job_lock, transition
@@ -891,6 +891,7 @@ class TestWholeJourney:
             await run(session, client, hub=hub)
             signal = queue.get_nowait()
 
+        assert isinstance(signal, JobSignal)
         assert signal.hash == HASH
         assert signal.state == JobState.METADATA_READY.value
 
@@ -907,7 +908,8 @@ class TestWholeJourney:
         seen: list[tuple[str, bool]] = []
 
         class Spy(EventHub):
-            def publish(self, signal: JobSignal) -> None:
+            def publish(self, signal: Signal) -> None:
+                assert isinstance(signal, JobSignal)
                 # 發佈的那一刻：推的是哪一個狀態，而那一刻交易還開著嗎。
                 seen.append((signal.state, session.in_transaction()))
 
@@ -979,7 +981,8 @@ class TestDownloader:
         pushed: list[JobSignal] = []
 
         class Spy(EventHub):
-            def publish(self, signal: JobSignal) -> None:
+            def publish(self, signal: Signal) -> None:
+                assert isinstance(signal, JobSignal)
                 pushed.append(signal)
 
         spy = Spy()

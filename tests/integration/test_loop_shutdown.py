@@ -74,7 +74,7 @@ LOOPS: dict[type[Loop], Callable[[Sessions], Loop]] = {
     ),
     RssPoller: lambda s: RssPoller(s, FakeClientFactory(), sleep=at_once),
     NotifySender: lambda s: NotifySender(s, FakeClientFactory(), tick=timedelta()),
-    Sweeper: lambda s: Sweeper(s, sleep=at_once, now=day_later()),
+    Sweeper: lambda s: Sweeper(s, EventHub(), sleep=at_once, now=day_later()),
 }
 
 
