@@ -24,6 +24,8 @@ interface Backend {
   stored: unknown[] | null
   /** `POST /agent/chat` 的回應。 */
   chat: () => Response
+  /** 今天的花費提醒（後端只給管理員）。 */
+  alerts: AgentStatus['spend_alerts']
 }
 
 let sent: Record<string, unknown>[] = []
@@ -34,6 +36,7 @@ function backend(overrides: Partial<Backend>): Backend {
     enabled: true,
     stored: null,
     chat: () => stream(say('好。')),
+    alerts: [],
     ...overrides,
   }
 }
@@ -99,6 +102,7 @@ function serve(api: Backend) {
           enabled: api.enabled,
           paused_until: null,
           pause_error: '',
+          spend_alerts: api.alerts,
         } satisfies AgentStatus)
       if (method === 'GET' && path.startsWith('/api/agent/conversations/')) {
         // 後端對沒有的那一段（含剛開的新對話）一律是 `conversation_missing`。
@@ -329,5 +333,82 @@ describe('AgentPanel when the server turns the message down', () => {
 
     expect(await screen.findByText(/AI 還沒設定/)).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+})
+
+describe('AgentPanel links each reply to its steps', () => {
+  it('puts one link under a reloaded reply, even when it came back as several messages', async () => {
+    const turn = { runId: 'r1', pydantic_ai: { timestamp: '2026-10-27T02:00:00Z' } }
+    serve(
+      backend({
+        stored: [
+          { id: 'u1', role: 'user', parts: [{ type: 'text', text: '為什麼沒入庫？' }] },
+          {
+            id: 'a1',
+            role: 'assistant',
+            metadata: turn,
+            parts: [
+              {
+                type: 'tool-why_not_explain',
+                toolCallId: 'call1',
+                state: 'output-available',
+                input: { media_id: 'tv:120089' },
+                output: { conclusion: 'awaiting_review' },
+              },
+            ],
+          },
+          {
+            id: 'a2',
+            role: 'assistant',
+            metadata: turn,
+            parts: [{ type: 'text', text: '停在審核。' }],
+          },
+        ],
+      }),
+    )
+    renderPanel()
+
+    await screen.findByText('停在審核。')
+    const links = screen.getAllByRole('link', { name: '這則回覆的步驟' })
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAttribute('href', '/agent/runs/r1')
+  })
+
+  it('links a reply that just streamed in, from the turn id at the start of the stream', async () => {
+    const chunks = say('好。')
+    chunks[0] = { type: 'start', messageMetadata: { runId: 'r2' } }
+    serve(backend({ stored: [], chat: () => stream(chunks) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '在嗎？{Enter}')
+
+    const link = await screen.findByRole('link', { name: '這則回覆的步驟' })
+    expect(link).toHaveAttribute('href', '/agent/runs/r2')
+  })
+})
+
+describe('AgentPanel spend reminders', () => {
+  it('tells an administrator, with a way to the usage page, and still lets them ask', async () => {
+    serve(
+      backend({
+        alerts: [{ kind: 'threshold', today: '1.2', against: '1' }],
+      }),
+    )
+    renderPanel()
+
+    expect(
+      await screen.findByText(/今天估計花了 \$1\.20，超過提醒值 \$1\.00。AI 照常可用。/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '看用量' })).toHaveAttribute('href', '/settings/usage')
+    expect(await screen.findByLabelText('問助理')).toBeEnabled()
+  })
+
+  it('says nothing when there is nothing to remind', async () => {
+    serve(backend({ me: USER }))
+    renderPanel()
+
+    await screen.findByLabelText('問助理')
+    expect(screen.queryByText('提醒')).not.toBeInTheDocument()
   })
 })

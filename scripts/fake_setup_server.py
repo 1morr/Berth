@@ -1762,8 +1762,9 @@ def agent_scenario() -> Scenario:
 
     替身是 `why_not_script`。問「SPY×FAMILY 為什麼沒入庫」（或英文的
     `Why isn't SPY×FAMILY in the library?`），它先搜尋作品、再叫「為什麼沒入庫」，
-    用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）。
-    其餘一律說它只演這兩件事。一個請求都不出網，不需要金鑰。
+    用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）；
+    說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止（票 21 的步驟頁）。
+    其餘一律說它只演這幾件事。一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
     scenario.tmdb = demo_tmdb(search={query: [SPY_ENTRY] for query in SPY_QUERIES})
@@ -1819,6 +1820,9 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
                 if chinese
                 else "Here is an outside image:\n\n![tracking pixel](https://tracker.example/pixel.png)"
             )
+        if "一直查" in text or "keep checking" in text.lower():
+            # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
+            return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
         found = _WHY_NOT_ASKED.search(text.strip())
         if found is None:
             return _say(
@@ -1829,6 +1833,9 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             )
         title = (found.group(1) or found.group(2) or "").strip()
         return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": title})])
+    if isinstance(last, ToolReturnPart) and last.tool_name == "jobs_list_jobs":
+        # 被警告、被擋下也照叫：防護要看到第 4 次。
+        return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
     if isinstance(last, ToolReturnPart) and isinstance(last.content, dict):
         # 工具結果是執行器回的 JSON（`Turn.run_tool` 的 `to_jsonable_python`）。
         result: dict[str, Any] = cast(dict[str, Any], last.content)
