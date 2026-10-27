@@ -132,6 +132,8 @@ def test_every_settings_group_has_a_distinct_key() -> None:
     keys = [group.KEY for group in SETTINGS_GROUPS]
 
     assert sorted(keys) == [
+        # AI provider（M5 票 09）：兩種接口各自的 base URL、key、模型，與開關。
+        "ai",
         "berth",
         "disk",
         "health",

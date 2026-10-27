@@ -28,11 +28,14 @@ from urllib.parse import quote, urlsplit
 import time_machine
 import uvicorn
 from fastapi import FastAPI, Request, Response
+from pydantic_ai.models import Model
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
+from berth.adapters.ai import AiEndpoint
+from berth.adapters.ai.fake import FakeAi
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -1898,6 +1901,11 @@ class FakeClientFactory:
             rejected_tokens={"rejected"},
             unreachable={"1000000000000000404"},
         )
+        #: AI provider（M5 票 09）：key `rejected` 被拒、模型 `missing-model` 不存在，畫面上演得出
+        #: 兩種失敗；其餘一律回 OK。
+        self._ai = FakeAi(
+            rejected_keys=frozenset({"rejected"}), unknown_models=frozenset({"missing-model"})
+        )
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         if self._scenario.jellyfin.error is not None and base_url != BUNDLED_JELLYFIN_URL:
@@ -1945,6 +1953,9 @@ class FakeClientFactory:
     def discord(self, token: str) -> DiscordBot:
         self._discord.token = token
         return self._discord
+
+    def ai(self, endpoint: AiEndpoint) -> Model:
+        return self._ai.model(endpoint)
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.prowlarr.ping_error is not None:

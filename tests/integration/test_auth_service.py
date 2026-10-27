@@ -12,9 +12,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+from pydantic_ai.models import Model
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from berth.adapters.ai import AiEndpoint
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
@@ -77,6 +79,9 @@ class OneJellyfin:
 
     def discord(self, token: str) -> DiscordBot:
         raise AssertionError("login never talks to Discord")
+
+    def ai(self, endpoint: AiEndpoint) -> Model:
+        raise AssertionError("login never talks to an AI provider")
 
 
 @pytest.fixture
