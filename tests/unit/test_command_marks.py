@@ -271,6 +271,10 @@ NAMED: dict[str, CommandMark] = {
     ),
     # 一輪的步驟：只讀三張觀測表；一般使用者只看得到自己的（`audience=user`）。
     "usage.read_run": _mark(Effect.READ),
+    # M5 票 18：摘要花掉的 token 與換掉的歷史都回不來；斜線指令的入口整支照最重的 `/compact` 標
+    # （其餘五支是讀取或什麼都不做），兩支都不是工具。
+    "compaction.compact": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
+    "slash.run_slash": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
 }
 
 

@@ -28,6 +28,12 @@ export const TOGGLE_ID = 'agent-toggle'
 export const PANEL_ID = 'agent-panel'
 export const PANEL_TITLE_ID = 'agent-panel-title'
 export const INPUT_ID = 'agent-input'
+/** 斜線指令的提示清單（M5 票 18）與它的一列：輸入欄的 `aria-activedescendant` 指著那一列。 */
+export const SLASH_HINT_ID = 'agent-slash-hint'
+
+export function slashOptionId(name: string): string {
+  return `${SLASH_HINT_ID}-${name}`
+}
 
 export const PanelContext = createContext<PanelState | null>(null)
 
@@ -78,5 +84,5 @@ export function rememberNewConversation(): string {
   return id
 }
 
-/** 後端收的形狀（`services/agent._CONVERSATION_ID`）。 */
+/** 後端收的形狀（`services/agent.CONVERSATION_ID`）。 */
 const CONVERSATION_ID = /^[A-Za-z0-9_-]{1,64}$/

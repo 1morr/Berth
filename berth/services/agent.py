@@ -51,7 +51,7 @@ from pydantic_ai import (
     ToolApproved,
     ToolDenied,
 )
-from pydantic_ai.capabilities import AbstractCapability
+from pydantic_ai.capabilities import AbstractCapability, ProcessHistory
 from pydantic_ai.capabilities.abstract import ValidatedToolArgs, WrapToolExecuteHandler
 from pydantic_ai.exceptions import ModelAPIError
 from pydantic_ai.messages import (
@@ -77,13 +77,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.ai import AiEndpoint, chat_settings, is_official, native_web_search
-from berth.adapters.ai.prices import cost_of, web_search_cost
-from berth.adapters.ai.usage import WEB_SEARCH, usage_of, web_searches_of
+from berth.adapters.ai.usage import WEB_SEARCH
 from berth.domain import (
     WAITING_PROPOSALS,
     Actor,
     AgentRefusal,
     AiProvider,
+    AiRunKind,
     AiStopReason,
     AiToolOutcome,
     JobRefusal,
@@ -91,9 +91,10 @@ from berth.domain import (
     ProposalStatus,
     Role,
 )
-from berth.models import AiCall, AiConversation, AiRun, AiSettings, AiToolCall
+from berth.models import AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
 from berth.services import proposals
+from berth.services.agent_books import call_row, elapsed_ms, plus
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
 from berth.services.agent_tools import (
     EXTERNAL_TOOLS,
@@ -104,6 +105,7 @@ from berth.services.agent_tools import (
 )
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
+from berth.services.compaction import Summarizer, compact, context_fraction
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.jobs import JobRejectedError
 from berth.services.proposals import (
@@ -149,7 +151,10 @@ load its skill with skills_load_skill and follow it:
 """
 
 #: 前端 `useChat` 的 chat id（nanoid 一類）。
-_CONVERSATION_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+CONVERSATION_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+#: 人類訊息以它開頭就是斜線指令（`services.slash`，M5 票 18），不交給模型。
+SLASH = "/"
 
 #: 存進 `ai_tool_calls.args_json` 的上限。
 _ARGS_LIMIT = 2000
@@ -180,6 +185,14 @@ class Limits:
     #: 伺服器端那一種在最後一次模型呼叫可能超過，最多多 `web_searches - 1` 次
     #: （`adapters.ai.native_web_search` 說了為什麼）。
     web_searches: int = 5
+    #: 一輪開頭，上一次回應佔了 context window 的這個比例就壓縮（M5 票 18）。只在開頭看：一輪裡
+    #: 最多 20 次呼叫、每次的結果都還會再長，所以留四成給這一輪。
+    compact_at: float = 0.6
+    #: 壓縮時保留最後幾輪（`/compact` 只留 1 個）。
+    keep_turns: int = 2
+    #: 模型的 context window 查不到時（pydantic-ai 的模型資料沒有，例如 DeepSeek、自架閘道）拿它當
+    #: 分母。偏小只會早一點壓（多一次摘要），不會塞爆。
+    context_window: int = 128_000
 
 
 #: 防護停下的這幾種，使用者可以按一次「繼續」（研究 C3）。出錯、斷路器、關掉連線的重新問就好；
@@ -606,6 +619,8 @@ class Turn:
     prompt: ModelRequest | None
     language: Language
     agent: Agent[Turn, str | DeferredToolRequests]
+    #: 這一輪的模型（壓縮的摘要也用它）。
+    model: Model
     #: 遮掉錯誤原文裡的 key。
     secret: str
     today: date
@@ -639,6 +654,8 @@ class Turn:
     commands_run: list[str] = field(default_factory=list)
     #: 工具帶來了什麼：乒乓與無進展看它。
     progress: Progress = field(default_factory=Progress)
+    #: 這一輪開頭看過要不要壓縮了（每輪最多一次，M5 票 18）。
+    compaction_checked: bool = False
     finished: bool = False
 
     @property
@@ -653,6 +670,34 @@ class Turn:
     @property
     def model_settings(self) -> ModelSettings:
         return chat_settings(self.provider, self.runtime.limits.max_tokens)
+
+    def summarizer(self) -> Summarizer:
+        return Summarizer(
+            sessions=self.sessions,
+            model=self.model,
+            endpoint=self.endpoint,
+            breaker=self.runtime.breaker,
+            conversation_id=self.conversation_id,
+            user_id=self.user_id,
+        )
+
+    async def compact_once(
+        self, used: float | None, messages: list[ModelMessage]
+    ) -> list[ModelMessage]:
+        """一輪開頭（第一次模型呼叫之前）看一次：到了門檻就壓縮（`services.compaction`）。
+
+        `used` 是 `ctx.context_window_used`。之後的呼叫原樣過。換掉的歷史就是 `all_messages()`
+        與停下時存的那一份（`prefix`），不另外存。
+        """
+        if self.compaction_checked:
+            return messages
+        self.compaction_checked = True
+        limits = self.runtime.limits
+        fraction = context_fraction(used, messages, limits.context_window)
+        if fraction is None or fraction < limits.compact_at:
+            return messages
+        done = await compact(self.summarizer(), messages, limits.keep_turns)
+        return messages if done is None else done.messages
 
     # ---------------------------------------------------------------- 工具
 
@@ -823,7 +868,7 @@ class Turn:
                     args_json=json.dumps(args, ensure_ascii=False)[:_ARGS_LIMIT],
                     outcome=outcome,
                     detail=detail,
-                    duration_ms=_elapsed_ms(started),
+                    duration_ms=elapsed_ms(started),
                     truncated=truncated,
                 )
             )
@@ -885,34 +930,23 @@ class Turn:
     async def _record_call(
         self, response: ModelResponse | None, started: float, error: str
     ) -> None:
-        row = AiCall(
+        row = call_row(
             run_id=self.run_id,
             step=self.requests,
-            model=self.model_name,
-            duration_ms=_elapsed_ms(started),
+            provider=self.provider,
+            model_name=self.model_name,
+            official=self.official,
+            response=response,
+            started=started,
             error=error,
         )
         if response is not None:
-            usage = usage_of(self.provider, response.usage)
-            cost = cost_of(self.model_name, usage)
-            searches = web_searches_of(response)
-            search_cost = web_search_cost(searches, official=self.official)
-            row.model = response.model_name or self.model_name
-            row.input_tokens, row.output_tokens = usage.input, usage.output
-            row.cache_read_tokens, row.cache_write_tokens = usage.cache_read, usage.cache_write
-            row.web_searches = searches
-            row.web_search_cost_usd = float(search_cost) if search_cost is not None else None
-            # 網搜的價不知道就不計（畫面說明），不讓整筆變成不知道。
-            if cost is not None and search_cost is not None:
-                cost += search_cost
-            row.cost_usd = float(cost) if cost is not None else None
-            self.web_searches += searches
-            row.finish_reason = response.finish_reason or ""
-            self.input_tokens += usage.input
-            self.output_tokens += usage.output
-            self.cache_read = _plus(self.cache_read, usage.cache_read)
-            self.cache_write = _plus(self.cache_write, usage.cache_write)
-            self.cost = _plus(self.cost, row.cost_usd)
+            self.web_searches += row.web_searches
+            self.input_tokens += row.input_tokens
+            self.output_tokens += row.output_tokens
+            self.cache_read = plus(self.cache_read, row.cache_read_tokens)
+            self.cache_write = plus(self.cache_write, row.cache_write_tokens)
+            self.cost = plus(self.cost, row.cost_usd)
             self.runtime.breaker.succeeded(self.endpoint)
         else:
             # 沒有回應：服務收不收費不知道。
@@ -1069,6 +1103,12 @@ _NOTES: dict[Language, dict[str, str]] = {
 }
 
 
+async def _compact_history(
+    ctx: RunContext[Turn], messages: list[ModelMessage]
+) -> list[ModelMessage]:
+    return await ctx.deps.compact_once(ctx.context_window_used, messages)
+
+
 @dataclass
 class _Guard(AbstractCapability[Turn]):
     """把每次模型呼叫與工具呼叫交給 `Turn` 的防護與記帳。"""
@@ -1118,15 +1158,6 @@ def _describe(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}"
 
 
-def _elapsed_ms(started: float) -> int:
-    return int((time.monotonic() - started) * 1000)
-
-
-def _plus[N: (int, float)](total: N | None, more: N | None) -> N | None:
-    """有一次不知道，合計就是不知道。"""
-    return None if total is None or more is None else total + more
-
-
 def load_history(raw: str) -> list[ModelMessage]:
     return list(ModelMessagesTypeAdapter.validate_json(raw))
 
@@ -1158,9 +1189,11 @@ async def open_turn(
     的說明在最後）重新跑一輪、防護的數字重新算。只有這段對話的最後一輪、被防護停下（`CONTINUABLE`）、
     它自己不是續的，才能繼續；續過一次之後它就不是最後一輪了。不行的是 `not_continuable`。
 
-    拒絕：`no_message`、`conversation_missing`、`ai_disabled`、`ai_paused`（斷路器，detail 是
-    到什麼時候）、`not_continuable`、`busy`、`card_undecided`。佔到的那一輪由 `Turn.close` 讓出
-    （串流沒開始的，見 `AgentRuntime`）。
+    以 `/` 開頭的是斜線指令（`services.slash`），不交給模型：`slash_command`。
+
+    拒絕：`no_message`、`slash_command`、`conversation_missing`、`ai_disabled`、`ai_paused`
+    （斷路器，detail 是到什麼時候）、`not_continuable`、`busy`、`card_undecided`。佔到的那一輪由
+    `Turn.close` 讓出（串流沒開始的，見 `AgentRuntime`）。
     """
     assert actor.user_id is not None
     resuming = text is None
@@ -1168,7 +1201,9 @@ async def open_turn(
         text = text.strip()
         if not text:
             raise AgentRefusedError(AgentRefusal.NO_MESSAGE)
-    if not _CONVERSATION_ID.fullmatch(conversation_id):
+        if text.startswith(SLASH):
+            raise AgentRefusedError(AgentRefusal.SLASH_COMMAND, text.split()[0])
+    if not CONVERSATION_ID.fullmatch(conversation_id):
         raise AgentRefusedError(AgentRefusal.CONVERSATION_MISSING, conversation_id)
     # 自己開 session、自己 commit：串流開始之前這一輪的兩列就要落地，不靠請求的那一個收尾。
     async with sessions() as session:
@@ -1197,7 +1232,7 @@ async def open_turn(
         )
         # 這一輪才脫離的不算：模型從補上的結果知道它們。
         notes = _card_notes(await proposals.detached_cards(session, conversation_id))
-        endpoint = _endpoint(settings)
+        endpoint = current_endpoint(settings)
         if (pause := runtime.breaker.paused(endpoint)) is not None:
             raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
         run_id = uuid.uuid4().hex
@@ -1247,7 +1282,8 @@ async def open_turn(
         output_type=[str, DeferredToolRequests],
         instructions=_instructions,
         toolsets=[_toolset(actor.role, tavily=tavily)],
-        capabilities=[_Guard(), *native],
+        # 壓縮在每次模型呼叫之前（`before_model_request`），記帳與防護包著呼叫本身。
+        capabilities=[ProcessHistory(_compact_history), _Guard(), *native],
         name="berth",
     )
     return Turn(
@@ -1265,6 +1301,7 @@ async def open_turn(
         prompt=None if text is None else ModelRequest(parts=[UserPromptPart(text)]),
         language=language,
         agent=agent,
+        model=model,
         secret=endpoint.api_key,
         today=datetime.now().astimezone().date(),
         official=is_official(endpoint),
@@ -1274,7 +1311,7 @@ async def open_turn(
     )
 
 
-def _endpoint(settings: AiSettings) -> AiEndpoint:
+def current_endpoint(settings: AiSettings) -> AiEndpoint:
     """現用接口的那一份設定。"""
     stored = settings.endpoint(settings.provider)
     return AiEndpoint(settings.provider, stored.base_url, stored.api_key, stored.model)
@@ -1290,7 +1327,8 @@ async def _check_continuable(session: AsyncSession, conversation_id: str, turn_i
 async def _last_turn(session: AsyncSession, conversation_id: str) -> AiRun | None:
     found: AiRun | None = await session.scalar(
         select(AiRun)
-        .where(AiRun.conversation_id == conversation_id)
+        # 壓縮的摘要不是一輪：它排在觸發它的那一輪之後，但「最後一輪」是那一輪。
+        .where(AiRun.conversation_id == conversation_id, AiRun.kind == AiRunKind.CHAT)
         .order_by(AiRun.started_at.desc())
         .limit(1)
     )
@@ -1339,7 +1377,7 @@ class AgentStatus:
 async def read_status(session: AsyncSession, runtime: AgentRuntime, role: Role) -> AgentStatus:
     """`enabled` 與 `open_turn` 擋 `ai_disabled` 看同一格；暫停與它擋 `ai_paused` 看同一份。"""
     settings = await read_settings(session, AiSettings)
-    pause = runtime.breaker.paused(_endpoint(settings))
+    pause = runtime.breaker.paused(current_endpoint(settings))
     return AgentStatus(
         enabled=settings.enabled,
         paused_until=pause.until if pause is not None else None,

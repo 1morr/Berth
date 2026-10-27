@@ -10,7 +10,7 @@ import type { Schemas } from './schemas'
  * **不知道的不當 0**：快取讀寫與費用是 `{known, unknown}`——知道的加總與幾次呼叫不知道。
  */
 
-export type Usage = Schemas['UsageOut']
+export type Usage = Schemas['AiUsageOut']
 
 export type DayUsage = Schemas['DayUsageOut']
 

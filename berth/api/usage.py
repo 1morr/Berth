@@ -124,7 +124,7 @@ class SpendCheckOut(BaseModel):
     unknown_before: int
 
 
-class UsageOut(BaseModel):
+class AiUsageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     today: date
@@ -153,9 +153,9 @@ class SpendAlertSetOut(BaseModel):
 
 
 @router.get("")
-async def get_usage(session: SessionDep) -> UsageOut:
+async def get_usage(session: SessionDep) -> AiUsageOut:
     """近 30 天的用量、防護次數、最近的輪、價目與花費提醒。"""
-    return UsageOut.model_validate(await read_usage(session))
+    return AiUsageOut.model_validate(await read_usage(session))
 
 
 @router.put("/alert")

@@ -167,6 +167,18 @@ def object_fields(text: str, name: str) -> set[str]:
     raise AssertionError(f"{name} is not declared in {GENERATED.name}")
 
 
+class TestSchemaNames:
+    """回應模型的類別名要全站唯一。
+
+    兩個 router 各有一個同名的模型時，FastAPI 改用帶模組路徑的名字
+    （`berth__api__usage__UsageOut`），前端的 `Schemas['UsageOut']` 就悄悄不見了（票 21 合併票 18
+    時撞到）。
+    """
+
+    def test_no_schema_needs_its_module_path(self, document: dict[str, Any]) -> None:
+        assert [name for name in document["components"]["schemas"] if "__" in name] == []
+
+
 class TestRefusalReasons:
     """拒絕理由的封閉集合（`{reason, detail}` 的那一格）。"""
 

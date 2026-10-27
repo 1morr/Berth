@@ -15,7 +15,7 @@ import time_machine
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import AiProvider, AiRunRefusal, AiStopReason, AiToolOutcome, Role
+from berth.domain import AiProvider, AiRunKind, AiRunRefusal, AiStopReason, AiToolOutcome, Role
 from berth.domain.spend import SpendAlertKind
 from berth.models import AiCall, AiConversation, AiRun, AiToolCall, User
 from berth.services.usage import (
@@ -557,3 +557,28 @@ class TestUnknownCostsInTheReminders:
         spend = await spend_check(session, now=NOW)
 
         assert (spend.unknown_today, spend.unknown_before) == (0, 0)
+
+
+class TestCompactionRuns:
+    """票 18 交接：`ai_runs` 有 `chat` 與 `compaction` 兩種。
+
+    「輪」只數對話，費用與 token 含壓縮的摘要（`ai_calls` 本來就有它那一次呼叫）。
+    """
+
+    async def test_a_summary_counts_in_the_money_but_not_as_a_turn(
+        self, session: AsyncSession
+    ) -> None:
+        user = await _user(session)
+        at = _utc(NOW - timedelta(hours=1))
+        chat = await _run(session, user, at)
+        summary = await _run(session, user, at + timedelta(seconds=5))
+        summary.kind = AiRunKind.COMPACTION
+        session.add_all([_call(chat, at, cost=0.01), _call(summary, at, cost=0.02)])
+        await session.flush()
+
+        usage = await read_usage(session, now=NOW)
+
+        assert usage.runs_count == 1
+        assert [run.id for run in usage.runs] == [chat.id]
+        assert usage.totals.calls == 2
+        assert usage.totals.cost.known == pytest.approx(0.03)

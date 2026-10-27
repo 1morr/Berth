@@ -15,6 +15,13 @@
   連到那一輪的步驟頁：每一次模型呼叫與它叫的工具、各自的 token、耗時、結果（含被擋的理由）與停止原因，被中止的那一輪也有。
   一般使用者看得到自己的步驟頁，看不到用量頁。新增 `GET /api/settings/usage`、`PUT /api/settings/usage/alert`、
   `GET /api/agent/runs/{id}`；`GET /api/agent/status` 多 `spend`（提醒與沒算進去的呼叫數，只給管理員），對話的每一則助理訊息帶 `metadata.runId`。
+- **助理的上下文壓縮與斜線指令**（M5 票 18）：對話一長，下一則開頭自動把較早的部分換成一段摘要
+  （佔到模型 context window 的六成時，留最後兩輪），助理照樣記得要的是哪部作品、送了什麼；等你確認的卡片不受影響。
+  摘要在對話開頭收成一行，展開看全文。輸入欄打 `/` 列出指令：`/new` 新對話、`/compact` 現在就壓縮（只留最後一輪）、
+  `/usage` 這段對話用了多少（token、快取命中、網搜次數、估計費用）、`/status` 模型與上下文用了多少、
+  `/pending` 還在等你決定的確認卡（每一段對話的）、`/skills` 助理會照著做的工作流程。指令不經過模型，結果只在這個分頁。
+  新增 `POST /api/agent/conversations/{id}/commands`；以 `/` 開頭的訊息送進 `POST /api/agent/chat` 是 422 `slash_command`。
+  **資料庫 migration `e6b2d9a4c731`**：`ai_runs` 多一欄 `kind`（`chat` / `compaction`），既有的列是 `chat`。
 - **助理可以替你送單，先出一張確認卡**（M5 票 13）：在側面板說「下載 ⋯⋯」，助理搜作品、搜發佈、選好 Route，
   然後出一張卡：每一列是一個要送的 torrent（發佈名、大小、作品、Route），標著「會送出 torrent」與期限。
   多列時逐列可取消勾選；按下確認就送出勾著的那幾列，每一列當場看得到結果（會部分成功），助理接著說它拿到的結果。

@@ -19,13 +19,14 @@ from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from decimal import Decimal
 
 from pydantic import NonNegativeFloat
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.ai.prices import ModelPrice, price_of
-from berth.domain import AiProvider, AiRunRefusal, AiStopReason, AiToolOutcome, Role
+from berth.domain import AiProvider, AiRunKind, AiRunRefusal, AiStopReason, AiToolOutcome, Role
 from berth.domain.spend import ANOMALY_WINDOW_DAYS, SpendAlert, spend_alerts
 from berth.models import AiCall, AiRun, AiSettings, AiToolCall, User
+from berth.services.agent_tools import TAVILY_TOOL
 from berth.services.commands import Effect, Flag, command
 from berth.services.settings import read_settings, update_settings
 
@@ -33,9 +34,23 @@ from berth.services.settings import read_settings, update_settings
 WINDOW_DAYS = 30
 #: 「最近的輪」列幾輪。
 RECENT_RUNS = 20
-#: Tavily 的工具（命令名）；`ok` 與 `warned` 是真的搜了。
-TAVILY = "web.tavily_search"
+#: Tavily 真的搜了的那幾種結果：照做了的與警告後照做的（被擋下、失敗的沒有搜）。
 _SEARCHED = frozenset({AiToolOutcome.OK, AiToolOutcome.WARNED})
+
+
+def tavily_searched(tool: AiToolCall) -> bool:
+    """這一次工具呼叫是不是真的用掉一次 Tavily。
+
+    用量頁、步驟頁與 `/usage`（`services.slash`）共用這一條規則。
+    """
+    return tool.command == TAVILY_TOOL and tool.outcome in _SEARCHED
+
+
+def tavily_searched_sql() -> ColumnElement[bool]:
+    """`tavily_searched` 的 SQL 寫法：在資料庫裡數的那一處（`/usage`）用它。"""
+    return and_(AiToolCall.command == TAVILY_TOOL, AiToolCall.outcome.in_(_SEARCHED))
+
+
 #: 防護與出錯：用量頁數這幾種停止原因。答完與停在確認卡等人按（票 13）是正常的停法，不數。
 GUARD_STOPS: tuple[AiStopReason, ...] = tuple(
     reason
@@ -210,7 +225,8 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         await session.execute(
             select(AiRun, User.name)
             .join(User, User.id == AiRun.user_id)
-            .where(AiRun.started_at >= start)
+            # 「輪」只數對話；壓縮的摘要（票 18）不是一輪，它的費用與 token 照樣在 `ai_calls` 裡。
+            .where(AiRun.started_at >= start, AiRun.kind == AiRunKind.CHAT)
             .order_by(AiRun.started_at.desc())
         )
     ).all()
@@ -220,7 +236,7 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         day = _local_day(call.created_at, zone)
         by_day.setdefault(day, DayUsage(day)).add_call(call)
     for tool in tools:
-        if tool.command == TAVILY and tool.outcome in _SEARCHED:
+        if tavily_searched(tool):
             day = _local_day(tool.created_at, zone)
             by_day.setdefault(day, DayUsage(day)).tavily_searches += 1
     days = sorted(by_day.values(), key=lambda d: d.day, reverse=True)
@@ -454,9 +470,7 @@ async def read_run(session: AsyncSession, run_id: str, *, user_id: int, role: Ro
         cache_write_tokens=run.cache_write_tokens,
         cost_usd=run.cost_usd,
         web_searches=run.web_searches,
-        tavily_searches=sum(
-            1 for tool in tools if tool.command == TAVILY and tool.outcome in _SEARCHED
-        ),
+        tavily_searches=sum(1 for tool in tools if tavily_searched(tool)),
         steps=[
             RunStep(step, call_of.get(step), by_step.get(step, []))
             for step in sorted(call_of.keys() | by_step.keys())

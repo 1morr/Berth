@@ -10,7 +10,10 @@
 - `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
   斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
-  重新載入頁面時接回來。
+  重新載入頁面時接回來。壓縮過的對話開頭是一則 `data-compaction`（摘要）。
+- `POST /agent/conversations/{id}/commands`：斜線指令（`services.slash`，M5 票 18）。body 同
+  Slack 的 slash command 只帶打的字（`text`），由伺服器認是哪一個；回的是結構，畫面自己組字。
+  以 `/` 開頭的訊息送進 `/chat` 是 `slash_command`：指令不經過模型。
 - `GET /agent/runs/{id}`：一輪的步驟（M5 票 21）。一般使用者只看得到自己的。每一則助理訊息的
   `metadata.runId` 指到它那一輪：串流時在開頭的 `start`，重新載入時在每一則上。
 
@@ -21,14 +24,14 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from functools import cached_property
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
@@ -61,6 +64,7 @@ from berth.domain import (
     AiStopReason,
     AiToolOutcome,
     Language,
+    ProposalStatus,
 )
 from berth.services.agent import (
     AgentRefusedError,
@@ -69,6 +73,16 @@ from berth.services.agent import (
     open_turn,
     read_conversation,
     read_status,
+)
+from berth.services.slash import (
+    Compacted,
+    NewConversation,
+    Pending,
+    Skills,
+    SlashResult,
+    Status,
+    Usage,
+    run_slash,
 )
 from berth.services.usage import RunRejectedError, read_run
 
@@ -85,6 +99,8 @@ _STATUS: dict[AgentRefusal, int] = {
     AgentRefusal.NO_MESSAGE: status.HTTP_422_UNPROCESSABLE_CONTENT,
     AgentRefusal.CONVERSATION_MISSING: status.HTTP_404_NOT_FOUND,
     AgentRefusal.NOT_CONTINUABLE: status.HTTP_409_CONFLICT,
+    AgentRefusal.UNKNOWN_COMMAND: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    AgentRefusal.SLASH_COMMAND: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -123,6 +139,111 @@ class ConversationOut(BaseModel):
     messages: list[dict[str, Any]]
     #: 最後一輪沒有答完的話停在哪；答完了或還在跑是 `null`。
     stop: TurnStopOut | None
+
+
+class SlashIn(BaseModel):
+    #: 打的字，整則就是 `/<名字>`。
+    text: str
+
+
+class NewOut(BaseModel):
+    command: Literal["new"]
+
+
+class CompactOut(BaseModel):
+    command: Literal["compact"]
+    #: 壓縮前有幾則訊息。
+    before: int
+    #: 壓縮後有幾則；`null` 是沒有壓（只有一輪，或摘要失敗）。
+    after: int | None
+    #: 摘要失敗的原文（key 已遮掉）；其他時候是空字串。
+    error: str
+
+
+class UsageOut(BaseModel):
+    """這段對話到目前為止（含壓縮的摘要）。`null` 是有一次不知道，合計就是不知道。"""
+
+    command: Literal["usage"]
+    turns: int
+    compactions: int
+    requests: int
+    tool_calls: int
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int | None
+    #: 伺服器端網搜（Anthropic `web_search`）。
+    web_searches: int
+    #: Tavily 真的搜了的次數。
+    tavily_searches: int
+    cost_usd: float | None
+
+
+class StatusOut(BaseModel):
+    command: Literal["status"]
+    provider: AiProvider
+    model: str
+    messages: int
+    #: 上一次回應的 input + output；還沒有回應是 `null`。
+    context_tokens: int | None
+    context_window: int
+    #: 到了這個比例，下一輪開頭自動壓縮。
+    compact_at: float
+    paused_until: datetime | None
+
+
+class PendingCardOut(BaseModel):
+    id: int
+    command: str
+    status: ProposalStatus
+    rows: int
+    expires_at: datetime
+    #: 在這段對話裡。
+    here: bool
+
+
+class PendingOut(BaseModel):
+    command: Literal["pending"]
+    cards: list[PendingCardOut]
+
+
+class SkillOut(BaseModel):
+    name: str
+    #: 寫給模型的英文描述（skill 檔的 `description`），畫面原樣顯示。
+    description: str
+
+
+class SkillsOut(BaseModel):
+    command: Literal["skills"]
+    skills: list[SkillOut]
+
+
+SlashOut = Annotated[
+    NewOut | CompactOut | UsageOut | StatusOut | PendingOut | SkillsOut,
+    Field(discriminator="command"),
+]
+
+
+def slash_out(
+    result: SlashResult,
+) -> NewOut | CompactOut | UsageOut | StatusOut | PendingOut | SkillsOut:
+    match result:
+        case NewConversation():
+            return NewOut(command="new")
+        case Compacted():
+            return CompactOut(
+                command="compact", before=result.before, after=result.after, error=result.error
+            )
+        case Usage():
+            return UsageOut.model_validate({"command": "usage", **asdict(result)})
+        case Status():
+            return StatusOut.model_validate({"command": "status", **asdict(result)})
+        case Pending():
+            return PendingOut.model_validate({"command": "pending", **asdict(result)})
+        case Skills():
+            return SkillsOut(
+                command="skills",
+                skills=[SkillOut(name=s.name, description=s.description) for s in result.skills],
+            )
 
 
 def agent_refusal(exc: AgentRefusedError) -> HTTPException:
@@ -317,6 +438,39 @@ async def get_status(
         pause_error=found.pause_error,
         spend=SpendCheckOut.model_validate(found.spend) if found.spend is not None else None,
     )
+
+
+@router.post(
+    "/conversations/{conversation_id}/commands",
+    responses=_responses(
+        AgentRefusal.UNKNOWN_COMMAND,
+        AgentRefusal.CONVERSATION_MISSING,
+        AgentRefusal.AI_DISABLED,
+        AgentRefusal.AI_PAUSED,
+        AgentRefusal.BUSY,
+    ),
+)
+async def post_command(
+    request: Request,
+    body: SlashIn,
+    conversation_id: str,
+    factory: ClientFactoryDep,
+    runtime: AgentRuntimeDep,
+    sessions: SessionFactoryDep,
+) -> SlashOut:
+    """斜線指令。不經過模型，只有 `/compact` 的摘要叫一次。"""
+    try:
+        result = await run_slash(
+            runtime=runtime,
+            sessions=sessions,
+            factory=factory,
+            actor=_actor(request),
+            conversation_id=conversation_id,
+            text=body.text,
+        )
+    except AgentRefusedError as exc:
+        raise agent_refusal(exc) from exc
+    return slash_out(result)
 
 
 class RunRefusalOut(BaseModel):

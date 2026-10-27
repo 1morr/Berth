@@ -509,6 +509,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/agent/status"): Access.SIGNED_IN,
     # 每一輪的步驟（M5 票 21）：側面板每一則回覆連過來；只讀得到自己的，管理員讀得到全部。
     ("GET", "/agent/runs/*"): Access.SIGNED_IN,
+    # 斜線指令（M5 票 18）：同對話，只動得到自己的那一段。
+    ("POST", "/agent/conversations/*/commands"): Access.SIGNED_IN,
     # 每個人自己的通知（M4 票 125）：Discord ID、種類、測試。收件人取自 session。
     ("GET", "/me/notifications"): Access.SIGNED_IN,
     ("PUT", "/me/notifications"): Access.SIGNED_IN,

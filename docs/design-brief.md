@@ -1831,6 +1831,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - `ProcessHistory` 改過的歷史就是 `all_messages()` 回傳的那份。
   - 切點落在使用者訊息上，待確認的 tool call 一定留在尾巴；被切掉的 tool call 留下的孤兒 tool result 要一起拿掉，否則 Anthropic 會拒收。
   - `AnthropicCompaction`（伺服器端，beta）與 `OpenAICompaction`（只適用 Responses API）沒有採用。
+  - 2026-10-27 讀 pydantic-ai-slim 2.62.0 原始碼（M5 票 18）：
+    - 摘要放在 `ModelRequest` 裡的 `CompactionPart(content=...)`：每一家都以使用者語氣送出、包在 `<conversation_summary>` 並說明是另一個模型寫的（`models/__init__.py` 的 `_conversation_summary_text`），不當 system prompt。`VercelAIAdapter.dump_messages` 把它轉成 `data-compaction` 片段（`data.content` 是摘要）。
+    - `RunContext.context_window_used` 是上一則回應的 token 對 `model.context_window`；模型資料（genai-prices）沒有這個模型的 window、或還沒有回應時是 `None`，不是 0。
+    - `ProcessHistory` 在 `before_model_request` 換掉 `ctx.messages`，所以換掉的歷史就是之後 `all_messages()` 的那一份。
+    - `RetryPromptPart` 已 deprecated（v3 移除）：工具的重試改成 `ToolReturnPart(outcome='retried')`。
+    - 官方的 `pydantic-ai-harness` 0.62.0（Alpha、釘死 `pydantic-ai-slim==2.62.0`）有 `SummarizingCompaction`，但切點以訊息數或 token 數算、不認一輪從哪裡開始，不拿掉孤兒 result，也拿不到摘要那一次的回應來記帳，所以 Berth 自己寫（`services/compaction.py`）。
 - **觀測的缺口**：run 中途被中止（`UsageLimitExceeded`、重複呼叫、模型錯誤）時，`on_complete` 不會被呼叫，這一輪的歷史與 token 用量都拿不到。記帳要掛在每次模型呼叫之後。
 - **費用**：
   - `ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表。

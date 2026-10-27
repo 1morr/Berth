@@ -26,9 +26,13 @@ interface Backend {
   chat: () => Response
   /** 今天的花費提醒與沒算進去的呼叫數（後端只給管理員，其他人是 `null`）。 */
   spend: AgentStatus['spend']
+  /** `POST /agent/conversations/{id}/commands` 的回應（斜線指令，票 18）。 */
+  command: (text: string) => Response
 }
 
 let sent: Record<string, unknown>[] = []
+/** 送出的斜線指令（`{text}` 的字）。 */
+let commanded: string[] = []
 
 function backend(overrides: Partial<Backend>): Backend {
   return {
@@ -37,6 +41,7 @@ function backend(overrides: Partial<Backend>): Backend {
     stored: null,
     chat: () => stream(say('好。')),
     spend: { alerts: [], unknown_today: 0, unknown_before: 0 },
+    command: () => json({ command: 'new' }),
     ...overrides,
   }
 }
@@ -91,6 +96,7 @@ function toolThenSay(text: string): object[] {
 
 function serve(api: Backend) {
   sent = []
+  commanded = []
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>(async (input, init) => {
@@ -109,6 +115,11 @@ function serve(api: Backend) {
         return api.stored === null || path !== `/api/agent/conversations/${CONVERSATION}`
           ? json({ detail: { reason: 'conversation_missing', detail: CONVERSATION } }, 404)
           : json({ id: CONVERSATION, messages: api.stored })
+      }
+      if (method === 'POST' && path === `/api/agent/conversations/${CONVERSATION}/commands`) {
+        const { text } = JSON.parse(String(init?.body)) as { text: string }
+        commanded.push(text)
+        return api.command(text)
       }
       if (method === 'POST' && path === '/api/agent/chat') {
         sent.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
@@ -424,5 +435,289 @@ describe('AgentPanel spend reminders', () => {
     expect(await screen.findByText(/有 3 次呼叫的費用未知，提醒沒算進它們。/)).toBeInTheDocument()
     expect(screen.getByText('費用未知')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '看用量' })).toHaveAttribute('href', '/settings/usage')
+  })
+})
+
+describe('AgentPanel slash commands', () => {
+  const USAGE = {
+    command: 'usage',
+    turns: 2,
+    compactions: 1,
+    requests: 3,
+    tool_calls: 1,
+    input_tokens: 12000,
+    output_tokens: 800,
+    cache_read_tokens: 6000,
+    web_searches: 0,
+    tavily_searches: 2,
+    cost_usd: 0.0123,
+  }
+
+  it('lists the commands while a slash is being typed, narrows them, and Escape only closes the list', async () => {
+    serve(backend({}))
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByRole('textbox', { name: '問助理' })
+    await user.type(input, '/')
+
+    const hint = screen.getByRole('listbox', { name: '指令' })
+    expect(
+      within(hint)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual([
+      '/new開一段新對話',
+      '/compact壓縮這段對話，只留最後一輪',
+      '/usage這段對話用了多少',
+      '/status模型與上下文用了多少',
+      '/pending還在等你決定的確認卡',
+      '/skills助理會照著做的工作流程',
+    ])
+    expect(input).toHaveAttribute('aria-activedescendant', 'agent-slash-hint-new')
+
+    await user.keyboard('{ArrowDown}')
+    expect(within(hint).getByRole('option', { selected: true })).toHaveTextContent('/compact')
+    expect(input).toHaveAttribute('aria-activedescendant', 'agent-slash-hint-compact')
+
+    await user.type(input, 's')
+    expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(2)
+    await user.keyboard('{Tab}')
+    expect(input).toHaveValue('/status')
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(screen.getByRole('log')).toBeInTheDocument()
+    // 不是指令的字不出清單。
+    await user.clear(input)
+    await user.type(input, '為什麼')
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('runs a command picked with the mouse', async () => {
+    serve(backend({ command: () => json(USAGE) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/')
+    await user.click(screen.getByRole('option', { name: /\/usage/ }))
+
+    expect(await screen.findByRole('region', { name: '/usage' })).toBeInTheDocument()
+    expect(commanded).toEqual(['/usage'])
+  })
+
+  it('completes a half-typed command on Enter, then runs it without asking the model', async () => {
+    serve(backend({ command: () => json(USAGE) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByRole('textbox', { name: '問助理' })
+    await user.type(input, '/us{Enter}')
+    // 打到一半的先補完，不執行。
+    expect(input).toHaveValue('/usage')
+    expect(commanded).toEqual([])
+    await user.keyboard('{Enter}')
+
+    const output = await screen.findByRole('region', { name: '/usage' })
+    expect(commanded).toEqual(['/usage'])
+    expect(sent).toHaveLength(0)
+    expect(input).toHaveValue('')
+    const facts = within(output)
+    expect(facts.getByText('回覆').nextSibling).toHaveTextContent('2')
+    expect(facts.getByText('壓縮').nextSibling).toHaveTextContent('1')
+    expect(facts.getByText('Input token').nextSibling).toHaveTextContent('12,000')
+    expect(facts.getByText('快取命中').nextSibling).toHaveTextContent('50%')
+    expect(facts.getByText('Tavily 搜尋').nextSibling).toHaveTextContent('2')
+    expect(facts.getByText('估計費用').nextSibling).toHaveTextContent('$0.0123')
+  })
+
+  it('says unknown when a cost or cache count is unknown', async () => {
+    serve(backend({ command: () => json({ ...USAGE, cost_usd: null, cache_read_tokens: null }) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/usage{Enter}')
+
+    const output = within(await screen.findByRole('region', { name: '/usage' }))
+    expect(output.getByText('估計費用').nextSibling).toHaveTextContent('未知')
+    expect(output.getByText('快取命中').nextSibling).toHaveTextContent('未知')
+  })
+
+  it('shows the model and how full the context is', async () => {
+    serve(
+      backend({
+        command: () =>
+          json({
+            command: 'status',
+            provider: 'anthropic',
+            model: 'claude-sonnet-5-5',
+            messages: 6,
+            context_tokens: 32000,
+            context_window: 128000,
+            compact_at: 0.6,
+            paused_until: null,
+          }),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/status{Enter}')
+
+    const output = within(await screen.findByRole('region', { name: '/status' }))
+    expect(output.getByText('anthropic · claude-sonnet-5-5')).toBeInTheDocument()
+    expect(output.getByText('32,000 / 128,000 token（25%）')).toBeInTheDocument()
+    expect(output.getByText('一輪開頭到 60% 時')).toBeInTheDocument()
+    expect(output.queryByText('暫停到')).toBeNull()
+  })
+
+  it('lists the cards waiting for me, here and elsewhere', async () => {
+    const card = { rows: 1, expires_at: '2026-10-28T12:00:00Z', command: 'jobs.retry_job' }
+    serve(
+      backend({
+        command: () =>
+          json({
+            command: 'pending',
+            cards: [
+              { ...card, id: 7, status: 'pending', here: true },
+              { ...card, id: 9, status: 'detached', rows: 3, here: false },
+            ],
+          }),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/pending{Enter}')
+
+    const output = within(await screen.findByRole('region', { name: '/pending' }))
+    const [here, elsewhere] = output.getAllByRole('listitem')
+    expect(here).toHaveTextContent('#7 jobs.retry_job')
+    expect(here).toHaveTextContent('等你決定')
+    expect(here).toHaveTextContent('1 列 · 這段對話')
+    expect(elsewhere).toHaveTextContent('已脫離對話')
+    expect(elsewhere).toHaveTextContent('3 列 · 別的對話')
+  })
+
+  it('says so when no card is waiting', async () => {
+    serve(backend({ command: () => json({ command: 'pending', cards: [] }) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/pending{Enter}')
+
+    expect(await screen.findByText('沒有在等你決定的確認卡。')).toBeInTheDocument()
+  })
+
+  it('lists the skills with their descriptions as written', async () => {
+    serve(
+      backend({
+        command: () =>
+          json({
+            command: 'skills',
+            skills: [
+              { name: 'why-not-imported', description: 'Find out why an episode is missing.' },
+            ],
+          }),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/skills{Enter}')
+
+    const output = within(await screen.findByRole('region', { name: '/skills' }))
+    expect(output.getByText('why-not-imported')).toBeInTheDocument()
+    expect(output.getByText('Find out why an episode is missing.')).toHaveAttribute('lang', 'en')
+  })
+
+  it('starts a new conversation on /new', async () => {
+    serve(
+      backend({
+        stored: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: '舊的一句' }] }],
+        command: () => json({ command: 'new' }),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    expect(await screen.findByText('舊的一句')).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: '問助理' }), '/new{Enter}')
+
+    expect(await screen.findByText(/問 Berth 裡的事/)).toBeInTheDocument()
+    expect(screen.queryByText('舊的一句')).toBeNull()
+    expect(localStorage.getItem('berth.agent.conversation')).not.toBe(CONVERSATION)
+  })
+
+  it('picks up the compacted history after /compact, with the summary folded up', async () => {
+    const api = backend({
+      stored: [
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: '第一句' }] },
+        { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: '第一個回答' }] },
+        { id: 'u2', role: 'user', parts: [{ type: 'text', text: '第二句' }] },
+        { id: 'a2', role: 'assistant', parts: [{ type: 'text', text: '第二個回答' }] },
+      ],
+    })
+    api.command = () => {
+      api.stored = [
+        {
+          id: 'u2',
+          role: 'user',
+          parts: [
+            { type: 'data-compaction', data: { content: '- 使用者在問 **SPY×FAMILY**' } },
+            { type: 'text', text: '第二句' },
+          ],
+        },
+        { id: 'a2', role: 'assistant', parts: [{ type: 'text', text: '第二個回答' }] },
+      ]
+      return json({ command: 'compact', before: 4, after: 2, error: '' })
+    }
+    serve(api)
+    const user = userEvent.setup()
+    renderPanel()
+
+    expect(await screen.findByText('第一句')).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: '問助理' }), '/compact{Enter}')
+
+    expect(await screen.findByText(/已壓縮：4 則訊息/)).toBeInTheDocument()
+    const log = within(screen.getByRole('log'))
+    expect(log.queryByText('第一句')).toBeNull()
+    expect(log.getByText('第二句')).toBeInTheDocument()
+    const summary = log.getByText('較早的對話已壓縮成這段摘要').closest('details')!
+    expect(summary).not.toHaveAttribute('open')
+    expect(within(summary).getByText('SPY×FAMILY')).toBeInTheDocument()
+  })
+
+  it('says when there was nothing to compact, or the summary failed', async () => {
+    let answer = { command: 'compact', before: 2, after: null, error: '' }
+    serve(backend({ command: () => json(answer) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByRole('textbox', { name: '問助理' })
+    await user.type(input, '/compact{Enter}')
+    expect(await screen.findByText('只有一輪，沒什麼好壓縮。')).toBeInTheDocument()
+
+    answer = { ...answer, error: 'ModelHTTPError: 529' }
+    await user.type(input, '/compact{Enter}')
+    expect(await screen.findByText('ModelHTTPError: 529')).toBeInTheDocument()
+    expect(screen.getByText(/壓縮沒成功，對話照舊/)).toBeInTheDocument()
+  })
+
+  it('puts an unknown command back in the box and says what is wrong', async () => {
+    serve(
+      backend({
+        command: () => json({ detail: { reason: 'unknown_command', detail: '/compactt' } }, 422),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByRole('textbox', { name: '問助理' })
+    await user.type(input, '/compactt{Enter}')
+
+    expect(await screen.findByText(/沒有「\/compactt」這個指令/)).toBeInTheDocument()
+    expect(input).toHaveValue('/compactt')
+    expect(sent).toHaveLength(0)
   })
 })
