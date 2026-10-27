@@ -158,7 +158,7 @@ async def approve_plan(
         if held:
             raise PlanRejectedError(PlanRefusal.UNDECIDED, _names(held))
         _refuse_clashes(landed)
-        landed, duplicates = await _against_ledger(session, job, loaded, landed)
+        landed, duplicates = await _recheck_unsettled(session, job, loaded, landed)
         _write(loaded, landed, edited=set(), duplicates=duplicates)
         plan = loaded.plan
         plan.status = PlanStatus.APPROVED
@@ -315,7 +315,7 @@ def _edited(item: PlannedFile, edit: ItemEdit) -> PlannedFile:
     )
 
 
-async def _against_ledger(
+async def _recheck_unsettled(
     session: AsyncSession, job: Job, loaded: LoadedPlan, landed: Sequence[PlannedFile]
 ) -> tuple[tuple[PlannedFile, ...], dict[str, int]]:
     """核准的那一份與帳本比（`plan.against_ledger`，規則與規劃時同一份）：重複的列略過、記著撞上
@@ -345,7 +345,7 @@ def _write(
 ) -> None:
     """解析器的形狀寫回那幾列，以及一份重算過的摘要。已經鏈接的列不動。
 
-    `duplicates` 是核准時比帳本撞上的那幾列（`rel_path` → 帳本那一列，`_against_ledger`）。
+    `duplicates` 是核准時比帳本撞上的那幾列（`rel_path` → 帳本那一列，`_recheck_unsettled`）。
 
     改過的那幾列清掉 `error`（例如 `target_unmanaged`：人把它改成略過就是他的回答）與 `audit`
     ——人親手指定的一列沒有「medium 待確認」可言。
