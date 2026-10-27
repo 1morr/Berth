@@ -1861,5 +1861,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - 總覽卡要逐列顯示結果，因為會部分成功。
   - 失敗後的重試不算重複呼叫。
   - 「讀過外部內容」的警示要縮小到「自由文字參數出自外部內容」，否則每張卡都亮。
+- **串流時的 capability hook**（2026-10-27 M5 票 11 實測，pydantic-ai-slim 2.62.0、`VercelAIAdapter.run_stream`）：
+  - `wrap_model_request` 每次呼叫都拿得到完整的 `ModelResponse`（含 `usage`），記帳掛在這裡就夠。
+  - 模型串流到一半出錯時，`wrap_model_request` 的 handler 丟的是 `CancelledError`，真正的例外只到 `on_run_error`。
+  - run 出錯（含 capability 自己丟的例外）時，串流送 `error`（`errorText` 是例外的字串）、`finish-step`、`finish`（`finishReason: error`），`on_complete` 不跑。
+  - `SubmitMessage` 是 `extra='allow'`：`useChat` 透過 transport 的 `body` 加的欄位（Berth 的 `language`）在 `model_extra`。
+  - `FunctionModel` 要另給 `stream_function` 才能串流（`adapters/ai/fake.py` 從同一則回答拆出片段）。
 - **還沒測**：Claude 與 OpenAI 的官方端點（這次兩組 key 都是 DeepSeek）、`AnthropicCompaction`。
 - DeepSeek 的 Anthropic 相容端點會忽略 `cache_control` 但自己快取，也會執行伺服器端 `web_search`（`usage.server_tool_use.web_search_requests`）。

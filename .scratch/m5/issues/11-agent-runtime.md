@@ -1,6 +1,6 @@
 # 11 — agent runtime、對話存檔與記帳
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 07, 09, 10
 
@@ -38,11 +38,17 @@
 
 ## 驗收
 
-- [ ] 一段對話：讀取工具自動跑、結果串流回來，歷史存進資料庫（整合測試）
-- [ ] 前端送來的歷史與工具結果不被採用（測試）
-- [ ] 被防護中止的那一輪在 `ai_runs` 有數字與停止原因（測試）
-- [ ] 失敗後重試同一個呼叫不被擋（測試）
-- [ ] 一般使用者的對話碰不到 admin 命令（測試）
-- [ ] plan §2、§6 補；`pnpm gen:api`；全部檢查與 pytest 綠；progress.md 已更新
+- [x] 一段對話：讀取工具自動跑、結果串流回來，歷史存進資料庫（整合測試）
+- [x] 前端送來的歷史與工具結果不被採用（測試）
+- [x] 被防護中止的那一輪在 `ai_runs` 有數字與停止原因（測試）
+- [x] 失敗後重試同一個呼叫不被擋（測試）
+- [x] 一般使用者的對話碰不到 admin 命令（測試）
+- [x] plan §2、§6 補；`pnpm gen:api`；全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 實作（`test_agent_api.py` 對應驗收）：一段對話 `TestAConversation`；前端不可信 `TestTheFrontendIsNotTrusted`；被中止的那一輪 `TestGuards`（重複呼叫、次數、token）與 `TestTheBooks`（provider 出錯）、`TestClosingTheConnection`（關掉連線）；失敗後重試 `test_a_failed_call_retried_is_not_a_repeat`、`test_a_failure_returned_as_a_result_is_not_a_repeat`；一般使用者 `TestWhoCanUseWhat`。
+- code-review 已修：關掉連線時收尾被取消、串流沒開始時位子不放、結果帶 `problem` 的失敗算成重複、token 超限丟掉已串流的答案、`Any` 沒寫原因、說明裡寫死「第 4 次」、`chat_settings` 沒測試、工具名反查。
+- code-review 沒處理（判斷）：
+  - **Spec**：`read_conversation` 的 `user_id` 會變成輸入欄位——不成立，`user_id` 在登錄表的 `INJECTED_NAMES`，由伺服器給。命令拒絕重複不擋——照票面「失敗的不計」，記在 progress「偏差與決定」。
+  - **Standards**：`api/agent.py::_relay` 直接叫 `Turn` 的收尾方法而不是 `@command`（同 `Executor.execute` 的先例：它們是一輪的生命週期，不是命令）；`Turn` 的合計一格一格抄進 `AiRun`（Data Clumps）與 `_record_call` / `_record_tool` 同形；`Turn` 管工具、防護、記帳、收尾幾件事（Divergent Change）——票 18、20 加壓縮與其餘防護時再看要不要拆。對外路由叫 `/agent` 而 CONTEXT 說對外叫「助理」：路徑是票面定的。說明英文寫 "reply"：那是 UI 文案，CONTEXT 的 Avoid 管的是名詞。

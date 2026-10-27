@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/agent/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat
+         * @description 送一則訊息，串流回模型的回覆與工具呼叫（UI message stream）。
+         */
+        post: operations["chat_api_agent_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversation
+         * @description 存著的歷史，轉成 `useChat` 的訊息。沒有工具結果的工具呼叫是 `approval-requested`。
+         */
+        get: operations["get_conversation_api_agent_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/ai": {
         parameters: {
             query?: never;
@@ -2502,6 +2542,18 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * AgentRefusal
+         * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
+         * @enum {string}
+         */
+        AgentRefusal: "ai_disabled" | "busy" | "no_message" | "conversation_missing";
+        /** AgentRefusalOut */
+        AgentRefusalOut: {
+            reason: components["schemas"]["AgentRefusal"];
+            /** Detail */
+            detail: string;
+        };
         /** AiEndpointOut */
         AiEndpointOut: {
             /** Base Url */
@@ -2971,6 +3023,15 @@ export interface components {
          * @enum {string}
          */
         ConnectionState: "ok" | "failed" | "waiting" | "timeout";
+        /** ConversationOut */
+        ConversationOut: {
+            /** Id */
+            id: string;
+            /** Messages */
+            messages: {
+                [key: string]: unknown;
+            }[];
+        };
         /**
          * DeletionEstimateOut
          * @description `services/deletion.DeletionEstimate` 的對外形狀（理由與算法在那裡）。
@@ -6441,6 +6502,93 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    chat_api_agent_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description `conversation_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+            /** @description `ai_disabled` · `busy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+            /** @description `no_message` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+        };
+    };
+    get_conversation_api_agent_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description `conversation_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_ai_api_settings_ai_get: {
         parameters: {
             query?: never;

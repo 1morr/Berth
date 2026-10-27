@@ -428,6 +428,14 @@ _Avoid_: digest（digest 是摘要那一則通知）, summary, stats
 AI 核心對人的介面：M6 的側面板、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
+**Conversation**（對話）:
+側面板裡一個人與 Assistant 的一段往來，歷史只由伺服器保管（`ai_conversations`，M5 票 11）；畫面每次只送最後一則使用者訊息。只有本人讀得到。
+_Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是登入）
+
+**Turn**（一輪）:
+一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`，帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。
+_Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
+
 **Proposal**（提案）:
 AI 想做但**不可逆**或沒把握的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。人確認才執行。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做。
 _Avoid_: suggestion, action, task

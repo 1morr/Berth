@@ -158,6 +158,21 @@ def sign_in_owner(client: TestClient, name: str = "skipper") -> None:
     client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
 
 
+def sign_in_crew(client: TestClient, name: str = "deckhand") -> None:
+    """換成一位 `user` 角色的人登入（擁有者已經成立）。"""
+
+    async def seat() -> str:
+        sessions: async_sessionmaker[AsyncSession] = client.app.state.session_factory  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+        async with sessions() as session:
+            auth = JellyfinAuth(
+                token="", user_id=f"id-{name}", name=name, server_id="", is_administrator=False
+            )
+            return (await open_session(session, auth)).token
+
+    assert client.portal is not None
+    client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
+
+
 def bundled_libraries(library_root: Path) -> tuple[SetupLibrary, ...]:
     """Jellyfin 回報的三個媒體庫。目錄由第 3 步的 Berth 建好（plan §9.4 第 4 步），所以這裡
     也真的建出來——第 5 步的檢查問的就是「這條路徑在 Berth 內看得到嗎」。

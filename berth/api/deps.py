@@ -13,6 +13,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.config import Config
+from berth.services.agent import AgentRuntime
 from berth.services.clients import (
     BundledServices,
     HostResolver,
@@ -139,3 +140,19 @@ def get_executor(
 
 
 ExecutorDep = Annotated[Executor, Depends(get_executor)]
+
+
+def get_agent_runtime(request: Request) -> AgentRuntime:
+    """防護的數字與「誰正在跑一輪」，一個程序一份（`create_app` 放進 `app.state`）。"""
+    runtime: AgentRuntime = request.app.state.agent
+    return runtime
+
+
+def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
+    """串流開始時請求的 session 已經收掉，一輪裡的記帳與工具各自開 session。"""
+    sessions: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return sessions
+
+
+AgentRuntimeDep = Annotated[AgentRuntime, Depends(get_agent_runtime)]
+SessionFactoryDep = Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)]

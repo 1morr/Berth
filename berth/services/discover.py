@@ -27,7 +27,7 @@ from berth.adapters.tmdb import (
     TmdbClient,
     TmdbEntry,
 )
-from berth.domain import MediaKind, TmdbProblem
+from berth.domain import MediaKind, Role, TmdbProblem
 from berth.models import MediaCard, TmdbCache, TmdbSettings, dump_cards, load_cards
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
@@ -118,8 +118,16 @@ async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> 
     return await _feed(session, factory, POPULAR_KEY, fetch)
 
 
-# 同 `read_trending`。
-@command(Effect.READ)
+# 同 `read_trending`。`/discover` 登入就能用，所以一般使用者的側面板也找得到作品（M5 票 11）。
+@command(
+    Effect.READ,
+    audience=Role.USER,
+    about=(
+        "Search TMDB for series and movies by title. Each result's id (tv:<tmdb id> or "
+        "movie:<tmdb id>) is the media_id other tools take; tracked says Berth has done "
+        "something for it."
+    ),
+)
 async def search_media(
     session: AsyncSession, factory: ServiceClientFactory, query: str
 ) -> DiscoverResult:

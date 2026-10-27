@@ -15,17 +15,14 @@ from pathlib import Path
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.http import ServiceUnavailableError
-from berth.adapters.jellyfin import JellyfinAuth
 from berth.api.deps import get_client_factory
-from berth.api.gate import CSRF_HEADER, SESSION_COOKIE
+from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.logs import configure_logging, json_line
 from berth.main import create_app
-from berth.services.auth import open_session
-from tests.integration.arrange import sign_in_owner
+from tests.integration.arrange import sign_in_crew, sign_in_owner
 from tests.integration.factories import FakeClientFactory
 
 BROWSER = {CSRF_HEADER: "XMLHttpRequest"}
@@ -77,21 +74,6 @@ def save_id(
         headers=BROWSER,
     )
     return response
-
-
-def sign_in_crew(client: TestClient, name: str = "deckhand") -> None:
-    """換成一位 `user` 角色的人登入（擁有者已經在 `client` fixture 成立）。"""
-
-    async def seat() -> str:
-        sessions: async_sessionmaker[AsyncSession] = client.app.state.session_factory  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
-        async with sessions() as session:
-            auth = JellyfinAuth(
-                token="", user_id=f"id-{name}", name=name, server_id="", is_administrator=False
-            )
-            return (await open_session(session, auth)).token
-
-    assert client.portal is not None
-    client.cookies.set(SESSION_COOKIE, client.portal.call(seat))
 
 
 def save_berth_url(client: TestClient, url: str) -> httpx2.Response:

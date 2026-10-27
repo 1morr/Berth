@@ -28,7 +28,7 @@ from pydantic_ai.exceptions import (
     UnexpectedModelBehavior,
 )
 from pydantic_ai.models import Model
-from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -138,3 +138,20 @@ def _message(exc: BaseException) -> str:
     if exc.__cause__ is not None and str(exc.__cause__) not in parts[0]:
         parts.append(str(exc.__cause__))
     return ": ".join(part for part in parts if part)
+
+
+def chat_settings(provider: AiProvider, max_tokens: int) -> ModelSettings:
+    """側面板每一次模型呼叫的設定（M5 票 11）：輸出上限，與 Anthropic 的快取標記。
+
+    Anthropic 明寫 `cache_control`（instructions、工具定義、最後一則訊息各一個）：自架閘道不一定吃
+    頂層的自動快取；prototype 實測命中 46–98%（brief §20.24）。Chat Completions 的快取由服務自己做。
+    """
+    if provider is AiProvider.ANTHROPIC:
+        anthropic: AnthropicModelSettings = {
+            "max_tokens": max_tokens,
+            "anthropic_cache_instructions": "5m",
+            "anthropic_cache_tool_definitions": "5m",
+            "anthropic_cache_messages": "5m",
+        }
+        return anthropic
+    return {"max_tokens": max_tokens}
