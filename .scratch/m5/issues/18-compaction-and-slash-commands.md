@@ -34,3 +34,5 @@
 - [ ] 全部檢查、pytest、vitest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 票 17 交接：`/usage` 要顯示網搜次數——伺服器端的是 `ai_runs.web_searches`（各次呼叫在 `ai_calls.web_searches`），Tavily 的是 `ai_tool_calls` 裡 `command = 'web.tavily_search'` 且 `outcome` 是 `ok` / `warned` 的列。費用見票 21 的同一條。

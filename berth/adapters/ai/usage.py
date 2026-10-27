@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pydantic_ai.messages import ModelResponse, NativeToolCallPart
 from pydantic_ai.usage import RequestUsage
 
 from berth.domain import AiProvider
@@ -40,3 +41,24 @@ def usage_of(provider: AiProvider, usage: RequestUsage) -> TokenUsage:
             usage.cache_write_tokens,
         )
     return TokenUsage(usage.input_tokens, usage.output_tokens, usage.cache_read_tokens, None)
+
+
+#: 伺服器端網搜的工具名（Anthropic Messages；DeepSeek 的相容端點同名）。
+WEB_SEARCH = "web_search"
+
+
+def web_searches_of(response: ModelResponse) -> int:
+    """這一次模型呼叫裡伺服器端搜了幾次（M5 票 17）。
+
+    服務報的 `usage.server_tool_use.web_search_requests`（pydantic-ai 放在
+    `details['web_search_requests']`，0 次時不放）是計費的那個數，有就照它；沒報的照回應裡
+    `web_search` 的呼叫數（自架閘道不一定報，替身的串流也報不出來）。
+    """
+    reported = response.usage.details.get("web_search_requests", 0)
+    if reported:
+        return reported
+    return sum(
+        1
+        for part in response.parts
+        if isinstance(part, NativeToolCallPart) and part.tool_name == WEB_SEARCH
+    )
