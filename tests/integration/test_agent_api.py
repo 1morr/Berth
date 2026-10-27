@@ -772,11 +772,18 @@ class TestWhoCanUseWhat:
         script.steps = [say("Hi.")]
         chat(client, "Hello?")
         assert script.tools[0] == [
+            "bangumi_read_bangumi",
+            "bangumi_search_bangumi",
             "discover_search_media",
             "downloading_add_manual_download",
             "jobs_list_jobs",
             "jobs_read_job_events",
+            "media_read_media",
             "media_route_choices",
+            "routes_list_routes",
+            "rss_add_feed",
+            "rss_subscribe_mikan",
+            "rss_subscribe_search",
             "search_search_torrents",
             "skills_load_skill",
             "why_not_explain",
@@ -791,10 +798,11 @@ class TestWhoCanUseWhat:
         response = chat(client, "List every download.")
 
         assert response.status_code == 200, response.text
-        # 一般使用者：讀取，與送自己的單（brief §19「M5 的方向」⑦）。
+        # 一般使用者：讀取，與送自己的單（brief §19「M5 的方向」⑦）。訂閱與加 Feed 是管理員的。
         assert script.tools[0] == [
             "discover_search_media",
             "downloading_add_manual_download",
+            "media_read_media",
             "media_route_choices",
             "search_search_torrents",
             "skills_load_skill",

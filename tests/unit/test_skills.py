@@ -36,27 +36,19 @@ from berth.services.skills import (
 FIRST_BATCH = {"series-mapping", "new-season-picks", "why-not-imported", "missing-episodes"}
 
 #: 流程要、但還不是側面板工具的命令。票 13 / 14 / 16 把它們加進 `TOOLS` 時，這裡跟著刪
-#: （票 13 刪了 `search.search_torrents` 與 `downloading.add_manual_download`）。
+#: （票 13 刪了 `search.search_torrents` 與 `downloading.add_manual_download`，
+#: 票 14 刪了 `media.*`、`bangumi.*` 與 `rss.subscribe_*`）。
 #: `anilist.*`、`fribb.*`、`bgm.*` 是票 16 還沒建的命令：名字不同就改 skill 檔。
 PENDING: dict[str, set[str]] = {
     "series-mapping": {
         "anilist.search_anime",
         "anilist.read_franchise",
         "fribb.lookup_anime",
-        "media.read_media",
     },
     "new-season-picks": {
         "anilist.read_season",
         "bgm.read_calendar",
         "discover.read_trending",
-        "bangumi.search_bangumi",
-        "bangumi.read_bangumi",
-        "media.read_media",
-        "rss.subscribe_mikan",
-        "rss.subscribe_search",
-    },
-    "missing-episodes": {
-        "media.read_media",
     },
 }
 

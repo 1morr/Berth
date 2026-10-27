@@ -2462,6 +2462,26 @@ def _mikan_key(bangumi_id: int, subgroup_id: int) -> str:
     return f"mikan:{bangumi_id}:{subgroup_id}"
 
 
+# 確認卡的預覽（M5 票 14）：只讀單一 feed，不寫任何東西；不是給人或 AI 按的命令。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def mikan_season_size(
+    factory: ServiceClientFactory, *, bangumi_id: int, subgroup_id: int
+) -> int | None:
+    """訂閱這個番組 × 字幕組（`subscribe_mikan`）按下去最多送出幾個 torrent：單一 feed 上的筆數——
+    整季一律補，不經第一批確認。已經有 Job 的、被排除條件擋下的不會再送，所以是上限。
+
+    讀不到是 `None`：數量要真的送出時才知道（`subscribe_mikan` 那時讀不到就整個拒絕）。
+    """
+    fetcher = factory.rss()
+    try:
+        content = await fetcher.fetch(mikan.bangumi_feed_url(bangumi_id, subgroup_id))
+        return len(mikan.parse_single_feed(content).items)
+    except ServiceError:
+        return None
+    finally:
+        await fetcher.aclose()
+
+
 @command(
     Effect.REVERSIBLE,
     flags={Flag.DOWNLOADS},

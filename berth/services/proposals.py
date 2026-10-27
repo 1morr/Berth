@@ -97,6 +97,14 @@ class ProposalPreview:
     effect: Effect
     flags: tuple[Flag, ...]
     checked: tuple[bool, ...]
+    #: 逐列：出自外部內容的自由文字格子（M5 票 14，`agent_origins`）。卡片只在這幾格標警示；
+    #: 人提出的、或 AI 沒讀過外部內容的，每一列都是空的。
+    external_fields: tuple[tuple[str, ...], ...] = ()
+    #: 這一次呼叫裡超過一張卡上限、沒放上這一張的列數（送單的數量閘，M5 票 14）。
+    held_back: int = 0
+    #: 逐列：按下去會送出幾個 torrent（送單一列一個，訂閱 Mikan 是單一 feed 上整季的筆數）；
+    #: `None` 是提出時不知道，要送出時才知道。不送 torrent 的命令是空的。
+    torrents: tuple[int | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,12 +163,19 @@ async def propose(
     actor: Actor,
     conversation_id: str | None = None,
     tool_call_id: str | None = None,
+    external_fields: Sequence[Sequence[str]] = (),
+    held_back: int = 0,
+    torrents: Sequence[int | None] = (),
     now: datetime | None = None,
 ) -> ProposalView:
     """建一張卡片（模組 docstring 第 1 點）。輸入格式不對是 pydantic 的 `ValidationError`。
 
-    AI 提出的帶 `tool_call_id`（提出它的那一次工具呼叫），恢復那一輪時靠它找回卡片。
+    AI 提出的帶 `tool_call_id`（提出它的那一次工具呼叫），恢復那一輪時靠它找回卡片；
+    `external_fields` 與 `held_back` 照實記進預覽（`ProposalPreview`），由提出它的那一方算
+    （`services.agent`）。
     """
+    if external_fields and len(external_fields) != len(rows):
+        raise ValueError("external_fields names the fields of every row")
     if actor.user_id is None or actor.kind is ActorKind.SYSTEM:
         raise ValueError("a proposal is made by a person, or by the AI for a person")
     if not rows:
@@ -179,7 +194,13 @@ async def propose(
         checked.append(verdict.checked)
     moment = now or datetime.now(UTC)
     preview = ProposalPreview(
-        effect=spec.effect, flags=tuple(sorted(spec.flags)), checked=tuple(checked)
+        effect=spec.effect,
+        flags=tuple(sorted(spec.flags)),
+        checked=tuple(checked),
+        external_fields=tuple(tuple(fields) for fields in external_fields)
+        or tuple(() for _ in rows),
+        held_back=held_back,
+        torrents=tuple(torrents),
     )
     proposal = Proposal(
         command=name,
@@ -514,6 +535,13 @@ def _view(proposal: Proposal) -> ProposalView:
             effect=Effect(preview["effect"]),
             flags=tuple(Flag(flag) for flag in preview["flags"]),
             checked=tuple(preview["checked"]),
+            # 票 14 之前存的卡沒有這兩格。
+            external_fields=tuple(
+                tuple(fields)
+                for fields in preview.get("external_fields") or [[] for _ in preview["checked"]]
+            ),
+            held_back=preview.get("held_back", 0),
+            torrents=tuple(preview.get("torrents") or ()),
         ),
         user_id=proposal.user_id,
         proposer=proposal.proposer,

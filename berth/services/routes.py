@@ -534,7 +534,14 @@ class LibraryOption:
     uses_tvdb: bool
 
 
-@command(Effect.READ)
+@command(
+    Effect.READ,
+    about=(
+        "List every route (a Jellyfin library folder Berth imports into), with its id, slug, "
+        "collection type (tvshows or movies) and whether it is enabled. A new RSS feed needs "
+        "one enabled route per kind."
+    ),
+)
 async def list_routes(session: AsyncSession) -> tuple[ManagedRoute, ...]:
     """Route 設定頁的清單（`GET /routes`）。不連線；引用數一次算完，不逐條查。"""
     paths = await read_settings(session, PathSettings)

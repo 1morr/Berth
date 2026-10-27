@@ -129,8 +129,16 @@ class MediaView:
     awaiting_review: int = 0
 
 
-# 快照是 TMDB 的快取：過期順手重抓不算改東西。
-@command(Effect.READ)
+# 快照是 TMDB 的快取：過期順手重抓不算改東西。作品頁登入就看得到（M5 票 14：一般使用者補缺集要它）。
+@command(
+    Effect.READ,
+    about=(
+        "Read one work (media_id from search_media): titles, seasons with which episodes are "
+        "in the library, downloading or missing, the routes it can go to (routes) and the one "
+        "used last (default_route_id), and the files Berth imported."
+    ),
+    audience=Role.USER,
+)
 async def read_media(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str
 ) -> MediaView:

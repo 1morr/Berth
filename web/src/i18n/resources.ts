@@ -3883,6 +3883,13 @@ const zhHant = {
         search_search_torrents: '搜尋發佈',
         media_route_choices: '列出可放的 Route',
         downloading_add_manual_download: '送出下載',
+        media_read_media: '讀作品頁',
+        routes_list_routes: '列出 Route',
+        bangumi_search_bangumi: '搜尋 Mikan 番組',
+        bangumi_read_bangumi: '讀 Mikan 番組的字幕組',
+        rss_subscribe_mikan: '訂閱 Mikan 番組',
+        rss_subscribe_search: '訂閱關鍵字搜尋',
+        rss_add_feed: '新增 RSS Feed',
         web_tavily_search: '網路搜尋（Tavily）',
         web_search: '網路搜尋',
       },
@@ -3904,6 +3911,9 @@ const zhHant = {
       label: '要你確認',
       commands: {
         downloading_add_manual_download: '送出下載',
+        rss_subscribe_mikan: '訂閱 Mikan 番組',
+        rss_subscribe_search: '訂閱關鍵字搜尋',
+        rss_add_feed: '新增 RSS Feed',
       },
       // 提出時伺服器算的效果（命令的標記與旗標）。
       effects: {
@@ -3914,12 +3924,36 @@ const zhHant = {
         settings: '會改設定',
       },
       expires: '期限：',
+      // 只在自由文字出自網頁的卡上出現（M5 票 14）。
+      externalLead: '標著「出自網頁」的欄位是助理從搜到的網頁抄來的，不是你說的。確認前看一眼。',
+      externalFields: '出自網頁：{{fields}}',
+      fromWeb: '出自網頁',
+      // 送單的數量閘：一張卡送出的 torrent 有上限，單獨就超過（或集數不知道）的一項自己一張。
+      heldBack_one:
+        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
+      heldBack_other:
+        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
       fields: {
         release: '發佈',
         size: '大小',
         media: '作品',
         route: 'Route',
+        url: '網址',
+        name: '名稱',
+        tvRoute: '劇集 Route',
+        movieRoute: '電影 Route',
+        exclusions: '排除條件',
+        bangumi: '番組',
+        subgroup: '字幕組',
+        site: '站',
+        term: '搜尋詞',
+        sends: '送出',
       },
+      // 訂閱 Mikan：整季一律補，按下去就送（單一 feed 上的筆數是上限，已經有的不再送）。
+      wholeSeason_one: '會送出整季：{{count}} 個 torrent，按下確認就送，不經第一批確認。',
+      wholeSeason_other: '會送出整季：{{count}} 個 torrent，按下確認就送，不經第一批確認。',
+      wholeSeasonUnknown:
+        '會送出整季，按下確認就送、不經第一批確認；現在讀不到 Mikan，數量要送出時才知道。',
       confirm: '確認',
       confirmCount_one: '確認這 {{count}} 項',
       confirmCount_other: '確認這 {{count}} 項',
@@ -7992,6 +8026,13 @@ const en: Translations<typeof zhHant> = {
         search_search_torrents: 'Search releases',
         media_route_choices: 'List routes it can go into',
         downloading_add_manual_download: 'Send a download',
+        media_read_media: 'Read the title page',
+        routes_list_routes: 'List routes',
+        bangumi_search_bangumi: 'Search Mikan',
+        bangumi_read_bangumi: 'Read a Mikan bangumi’s subgroups',
+        rss_subscribe_mikan: 'Subscribe to a Mikan bangumi',
+        rss_subscribe_search: 'Subscribe to a keyword search',
+        rss_add_feed: 'Add an RSS feed',
         web_tavily_search: 'Web search (Tavily)',
         web_search: 'Web search',
       },
@@ -8013,6 +8054,9 @@ const en: Translations<typeof zhHant> = {
       label: 'Needs you',
       commands: {
         downloading_add_manual_download: 'Send downloads',
+        rss_subscribe_mikan: 'Subscribe to a Mikan bangumi',
+        rss_subscribe_search: 'Subscribe to a keyword search',
+        rss_add_feed: 'Add an RSS feed',
       },
       effects: {
         irreversible: 'Cannot be undone',
@@ -8022,12 +8066,36 @@ const en: Translations<typeof zhHant> = {
         settings: 'Changes settings',
       },
       expires: 'Valid until:',
+      externalLead:
+        'Fields marked “From a web page” were copied by the assistant from a page it found, not said by you. Check them before confirming.',
+      externalFields: 'From a web page: {{fields}}',
+      fromWeb: 'From a web page',
+      heldBack_one:
+        '{{count}} more does not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes it after you decide this one.',
+      heldBack_other:
+        '{{count}} more do not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes them after you decide this one.',
       fields: {
         release: 'Release',
         size: 'Size',
         media: 'Title',
         route: 'Route',
+        url: 'Address',
+        name: 'Name',
+        tvRoute: 'Series route',
+        movieRoute: 'Film route',
+        exclusions: 'Exclusions',
+        bangumi: 'Bangumi',
+        subgroup: 'Subgroup',
+        site: 'Site',
+        term: 'Search term',
+        sends: 'Sends',
       },
+      wholeSeason_one:
+        'The whole season: {{count}} torrent, sent as soon as you confirm, with no first-batch check.',
+      wholeSeason_other:
+        'The whole season: {{count}} torrents, sent as soon as you confirm, with no first-batch check.',
+      wholeSeasonUnknown:
+        'The whole season, sent as soon as you confirm, with no first-batch check. Mikan cannot be read right now, so how many is known only when it is sent.',
       confirm: 'Confirm',
       confirmCount_one: 'Confirm {{count}} item',
       confirmCount_other: 'Confirm these {{count}}',

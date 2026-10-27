@@ -7,10 +7,24 @@ import { toolNameKey } from './toolNames'
 
 type Phase = 'running' | 'done' | 'failed'
 
+/**
+ * 後端交給模型的失敗（`services/agent._failure`）：命令拒絕、守法擋下（票 14）、參數錯、命令出錯。
+ * 對模型它是一筆結果，對人是沒做成。
+ */
+const FAILURE_KEYS = ['refused', 'invalid_arguments', 'error'] as const
+
+function failedOutput(output: unknown): boolean {
+  return (
+    typeof output === 'object' &&
+    output !== null &&
+    FAILURE_KEYS.some((key) => Object.hasOwn(output, key))
+  )
+}
+
 function phaseOf(part: ToolUIPart | DynamicToolUIPart): Phase {
   switch (part.state) {
     case 'output-available':
-      return 'done'
+      return failedOutput(part.output) ? 'failed' : 'done'
     case 'output-error':
     case 'output-denied':
       return 'failed'

@@ -1767,7 +1767,9 @@ def agent_scenario() -> Scenario:
     說「下載 SPY×FAMILY」（`Download SPY×FAMILY`）時它搜作品、搜發佈、問 Route，再出一張
     三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。索引站多三筆單集（`AGENT_RELEASES`），
     qBittorrent 收下就留著。說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
-    （票 21 的步驟頁）。其餘一律說它只演這幾件事。一個請求都不出網，不需要金鑰。
+    （票 21 的步驟頁）。「加這個 RSS：<網址>」出一張加 Feed 的卡，
+    「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。其餘一律說它只演這幾件事。
+    一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
     scenario.tmdb = demo_tmdb(search={query: [SPY_ENTRY] for query in SPY_QUERIES})
@@ -1807,6 +1809,13 @@ AGENT_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
 DEMO_PACKS.update(AGENT_RELEASES)
 
 _DOWNLOAD_ASKED = re.compile(r"^(?:下載|download)\s*(.+?)[。.!！]?$", re.I)
+
+#: 「加這個 RSS：<網址>」（票 14）：網址是使用者貼的，出卡。
+_FEED_GIVEN = re.compile(r"(?:加這個\s*RSS|add this RSS)[^h]*(https?://\S+)", re.I)
+#: 「上網找網址直接加」：假模型拿一個它「找到」的網址去加，被守法擋下。
+_FEED_SEARCHED = re.compile(r"上網找|find .*on the web", re.I)
+#: 假模型「在網頁上找到」的那一個。
+FOUND_FEED_URL = "https://mikanani.me/RSS/Bangumi?bangumiId=3310&subgroupid=583"
 
 
 #: 替身 TMDB 認得的 SPY×FAMILY 查詢（`discover.normalise_query` 之後的樣子）。
@@ -1859,6 +1868,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
                 if chinese
                 else "Here is an outside image:\n\n![tracking pixel](https://tracker.example/pixel.png)"
             )
+        if _FEED_GIVEN.search(text) or _FEED_SEARCHED.search(text):
+            return ModelResponse(parts=[ToolCallPart("routes_list_routes", {})])
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
@@ -1870,14 +1881,19 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         found = _WHY_NOT_ASKED.search(text.strip())
         if found is None:
             return _say(
-                "這是演練用的假模型，只演兩件事：問「SPY×FAMILY 為什麼沒入庫」，"
-                "或說「下載 SPY×FAMILY」。"
+                "這是演練用的假模型，只演這幾件事：問「SPY×FAMILY 為什麼沒入庫」、"
+                "說「下載 SPY×FAMILY」、「加這個 RSS：<網址>」，或「上網找 RSS 網址直接加」。"
                 if chinese
-                else "This is the demo model. It only acts out two things: "
-                "“Why isn't SPY×FAMILY in the library?” and “Download SPY×FAMILY”."
+                else "This is the demo model. It only acts out: “Why isn't SPY×FAMILY in the "
+                "library?”, “Download SPY×FAMILY”, “Add this RSS: <address>” and “Find an RSS "
+                "address on the web and add it”."
             )
         title = (found.group(1) or found.group(2) or "").strip()
         return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": title})])
+    if isinstance(last, ToolReturnPart) and (
+        _FEED_GIVEN.search(question) or _FEED_SEARCHED.search(question)
+    ):
+        return _feed_step(question, last, chinese=chinese)
     if isinstance(last, ToolReturnPart) and last.tool_name == "jobs_list_jobs":
         # 被警告、被擋下也照叫：防護要看到第 4 次。
         return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
@@ -1951,6 +1967,41 @@ def _download_step(
             if chinese
             else f"You confirmed: {done} sent, {skipped} unticked by you."
         )
+    return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _feed_step(question: str, last: ToolReturnPart, *, chinese: bool) -> ModelResponse:
+    """加 Feed 的下一步（票 14）：列 Route → 加 Feed（出卡或被擋）→ 照結果回答。"""
+    # `Any`：工具結果是執行器回的 JSON（`Turn.run_tool`），形狀隨工具，這裡照名字讀。
+    result: Any = last.content
+    if last.outcome == "denied":
+        return _say("好，那就不加。" if chinese else "All right, nothing was added.")
+    if last.tool_name == "routes_list_routes":
+        by_kind = {row["route"]["collection_type"]: row["route"]["id"] for row in result}
+        given = _FEED_GIVEN.search(question)
+        url = given.group(1) if given is not None else FOUND_FEED_URL
+        row = {
+            "url": url,
+            "tv_route_id": by_kind.get("tvshows"),
+            "movie_route_id": by_kind.get("movies"),
+        }
+        return ModelResponse(parts=[ToolCallPart("rss_add_feed", {"rows": [row]})])
+    if last.tool_name == "rss_add_feed" and isinstance(result, dict):
+        if result.get("refused") == "address_not_from_user":
+            return _say(
+                f"我在網頁上找到 {FOUND_FEED_URL}，但 Berth 只連使用者自己貼的網址，加不進去。"
+                "要加的話請你自己把網址貼給我，或改用 Mikan 番組訂閱。"
+                if chinese
+                else f"I found {FOUND_FEED_URL} on the web, but Berth only connects to addresses "
+                "you paste yourself. Paste it to me, or subscribe through Mikan instead."
+            )
+        if "refused" in result:
+            return _say(
+                f"加不進去：`{result['refused']}`。"
+                if chinese
+                else f"It cannot be added: `{result['refused']}`."
+            )
+        return _say("Feed 加好了。" if chinese else "The feed is added.")
     return _say("（沒有下一步）" if chinese else "(nothing more to do)")
 
 

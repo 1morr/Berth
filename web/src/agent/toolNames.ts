@@ -8,6 +8,14 @@ const TOOL_NAMES = {
   search_search_torrents: 'agent.tool.names.search_search_torrents',
   media_route_choices: 'agent.tool.names.media_route_choices',
   downloading_add_manual_download: 'agent.tool.names.downloading_add_manual_download',
+  // 票 14：訂閱、加 Feed 與它們要的讀取。
+  media_read_media: 'agent.tool.names.media_read_media',
+  routes_list_routes: 'agent.tool.names.routes_list_routes',
+  bangumi_search_bangumi: 'agent.tool.names.bangumi_search_bangumi',
+  bangumi_read_bangumi: 'agent.tool.names.bangumi_read_bangumi',
+  rss_subscribe_mikan: 'agent.tool.names.rss_subscribe_mikan',
+  rss_subscribe_search: 'agent.tool.names.rss_subscribe_search',
+  rss_add_feed: 'agent.tool.names.rss_add_feed',
   // 票 17：設了 Tavily key 才有；`web_search` 是 Anthropic 伺服器端那一種，不經登錄表。
   web_tavily_search: 'agent.tool.names.web_tavily_search',
   web_search: 'agent.tool.names.web_search',
