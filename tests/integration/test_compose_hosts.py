@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
+import socket
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -22,6 +24,9 @@ from berth.config import Config
 from berth.main import create_app
 from berth.services.clients import BundledServices
 from tests.integration.factories import COMPOSE
+
+# RFC 2544 的測試網段；代理工具的 fake-IP 模式從這裡發位址。
+FAKE_IP_RANGE = ipaddress.ip_network("198.18.0.0/15")
 
 
 class AnsweringResolver:
@@ -91,7 +96,8 @@ class TestSystemHostResolver:
     """真的問一次系統的解析器。
 
     解不到的那一個用含空白的名字：`getaddrinfo` 當場拒絕，與網路無關。`.invalid` 不行——有 fake-IP 的
-    DNS（代理工具的 TUN 模式）連它也答一個 198.18.x（2026-10-03 在開發機實測）。
+    DNS（代理工具的 TUN 模式）連它也答一個 198.18.x（2026-10-03 在開發機實測）。2026-10-24 量到
+    macOS 開發機上的 fake-IP 連含空白的名字也答：問不出「解不到」的機器上，那一條跳過。
     """
 
     @pytest.mark.asyncio
@@ -100,7 +106,10 @@ class TestSystemHostResolver:
 
     @pytest.mark.asyncio
     async def test_a_reserved_invalid_name_does_not(self) -> None:
-        assert await SystemHostResolver().resolves("berth not a host") is False
+        name = "berth not a host"
+        if _answered_by_fake_ip(name):
+            pytest.skip("這台機器的 DNS 是 fake-IP（198.18.0.0/15），什麼名字都答")
+        assert await SystemHostResolver().resolves(name) is False
 
     @pytest.mark.asyncio
     async def test_no_answer_in_time_is_not_taken_as_absent(
@@ -116,3 +125,11 @@ class TestSystemHostResolver:
         monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", never_answers)
 
         assert await SystemHostResolver().resolves("jellyfin") is True
+
+
+def _answered_by_fake_ip(name: str) -> bool:
+    try:
+        answers = socket.getaddrinfo(name, None)
+    except socket.gaierror:
+        return False
+    return any(ipaddress.ip_address(sockaddr[0]) in FAKE_IP_RANGE for *_, sockaddr in answers)

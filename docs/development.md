@@ -75,6 +75,12 @@ uv run mypy                 # 型別檢查（strict）
 uv run lint-imports         # 依賴方向契約（plan §1.3）
 ```
 
+測試裡的「現在」：services 的命令多半收 `now=`，直接傳；走 HTTP 那一層傳不進去的，用 time-machine 的
+`time_machine` fixture 把時鐘固定在錄下來的資料的日期附近（`time_machine.move_to(...)`，例見
+`tests/integration/test_rss_api.py::TestThePageFlow`）。錄下來的日期是寫死的，拿牆上時間跟它比的
+斷言總有一天會翻面（M5 票 01）。演練伺服器同理：用錄下的資料的情境設 `Scenario.clock`（見
+〈UI 的 Fake 後端〉的 `rss`）。
+
 資料庫 migration（Alembic）。程序啟動時會自動套用到最新版本，以下只在改 schema 時用：
 
 ```bash
@@ -385,7 +391,7 @@ uv run python scripts/fake_setup_server.py --port 8383     # 換 port（索引�
 | `old-jellyfin` | 既有 Jellyfin 還停在 10.11（其餘兩個服務照 `bundled`，擋路的只留一個）：頁 1 擁有者那一步紅燈，說出目前版本、為什麼要 12，以及升級前後要做的事；健康頁上同一台也是紅的 |
 | `signed-out` | 精靈已跑完，畫面從登入頁開始。`skipper` / `harbour` 是管理員，`deckhand` / `rope` 是普通使用者（看不到設定入口） |
 | `unmounted` | Jellyfin 少了媒體庫目錄的掛載：泊位 4 的第四條纜繩失敗，看「哪個容器少了哪個掛載」與 compose 修正片段 |
-| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）；TV 與 Anime 都收劇集，所以「劇集送進」要選（M4 票 105，選 Anime），「電影送進」預填 Movies。按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；《与你相恋到生命尽头》的番組頁在，輪詢時就自動綁到它與 Feed 說的 Anime（整季補齊，M4 票 78 起沒有不補的選項），其餘 10 個番組頁查不到、留在待綁定。12 集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上 12 筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
+| `rss` | RSS 頁 `/rss`（M3 票 08）：同 `healthy`，一個請求都不出網。**伺服器的時鐘從 2026-09-25 12:00 UTC 起走**（錄下的 Feed 的隔天，`Scenario.clock`，M5 票 01）：「安靜 30 天算完結」拿牆上時間比錄下的日期，用真的時間的話過了那一天整份就收進「已完結」；瀏覽器照真的時間，畫面上的「幾天前」會多算一段。Mikan 是替身：加 `https://mikanani.me/RSS/MyBangumi?token=REDACTED`（任何 token 都一樣，替身只認這一條網址）；TV 與 Anime 都收劇集，所以「劇集送進」要選（M4 票 105，選 Anime），「電影送進」預填 Movies。按「立即輪詢」，票 07 錄下來的聚合 feed 12 筆長出 11 個 RSS Series（單集頁照 `tests/integration/test_rss.py` 合成）。TMDB 也是替身，搜「Kimi ga Shinu made Koi wo Shitai」或「与你相恋到生命尽头」找得到那一部；《与你相恋到生命尽头》的番組頁在，輪詢時就自動綁到它與 Feed 說的 Anime（整季補齊，M4 票 78 起沒有不補的選項），其餘 10 個番組頁查不到、留在待綁定。12 集的 `.torrent` 換成這台自己生的，qBittorrent 收下就當場完成，幾秒後 `/jobs` 上 12 筆都已入庫。票 11 起另有錄下來的 acg.rip 搜尋 feed：加 `https://acg.rip/.xml?term=Kamiina+Botan`、按「立即輪詢」，30 筆停在頁首的第一輪預覽（8 筆合集被排除）。票 19 起在《与你相恋》的詳情頁（`/media/tv:262000`）按「新增訂閱」：以任何一個名字搜 Mikan 都是番組 4009（搜尋頁是合成的），訂閱喵萌奶茶屋&LoliHouse 就是整季 12 筆；acg.rip 以任何一個名字建搜尋 feed 讀到的都是錄下來的《与你相恋》那一份。帳號同 `signed-out` |
 | `rss-legacy-feed` | 舊 Feed 選 Route（M4 票 105）：同 `rss`，但聚合 feed 已經在了，是票 105 之前加的——劇集那一格是空的（TV 與 Anime 兩條，migration 推不出來），電影那一格是 Movies。Feed 列標「要選 Route」；輪詢之後《与你相恋》認出來了、停在待綁定（`route_ambiguous`，作品預填成候選，也是手動綁定與補舊集的演練起點）；按「改 Route」選 Anime，確認區說會當場綁上 1 部，存下之後它綁上、補齊整季 12 集 |
 | `rss-split-cour` | 改正並套用到 RSS Series（M3 票 13）：同 `rss`，但 TMDB 把《与你相恋》的兩個 cour 併成一季 24 集。綁定時補舊集，12 集全部落在 S01E01–E12（錯的：字幕組的第二 cour 從 01 重數），在 `/review` 是這個 RSS Series 的第一批、一組；把第 1 集改成 S01E13 並勾「套用到這個 RSS Series」，其餘 11 集跟著搬到 14–24，再按「全部確認」 |
 | `rss-split-cour-airing` | 從審核裡套用到 RSS Series（M3 票 14b）：同 `rss-split-cour`，但第二 cour 正在播（2026-07-02 起）。綁定時補舊集，12 集照字面對到一月播出的 S01E01–E12，播出日比對把 12 份計劃整批擋在 `/review` 的「要你決定」、一集都沒入庫；在第 1 集那一份按「改」、起集填 13、勾著「套用到這個 RSS Series」套用，其餘 11 份重新規劃、自動入庫（第一批，等全部確認），改的那一份等你核准 |
