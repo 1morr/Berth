@@ -19,7 +19,7 @@ review（`no_media`），而 Review Queue 核准不了它。第三顆不必—�
 一字不差才算」，所以長回來的那一列就是 importer 當時會寫下的那一列。**配不到的一筆都不猜**
 （`ClaimMiss`）：猜錯的代價是帳本說某個檔案是第 3 集，而 Review Queue、重複判斷、刪除範圍都信它。
 
-**三顆都不刪任何東西**（`ACTION_DELETES`）。**都不 commit**：呼叫端（`resolve_issue`、
+**三顆都不刪任何東西**（`ACTION_DELETES`）。**都不 commit**：呼叫端（`issues` 的按鈕、
 `rebuild_ledger`）決定交易的邊界。
 """
 
@@ -322,7 +322,7 @@ async def claim_file(
     """媒體庫裡的一個檔案 → 帳本上完整的一列。配不上丟 `UnclaimedError`，什麼都不寫。
 
     本來就在帳本上的回那一列（冪等）。**不 commit**：CLI 一次走完再 commit，按鈕由
-    `resolve_issue` commit。
+    `issues.claim_file` commit。
     """
     route = await _route_of(session, path)
     relative = Path(path).relative_to(Path(route.target_path)).as_posix()

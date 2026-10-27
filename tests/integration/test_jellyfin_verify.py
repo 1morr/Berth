@@ -23,7 +23,7 @@ from berth.adapters.jellyfin import JellyfinItem, JellyfinSource
 from berth.domain import IssueAction, IssueStatus, IssueType
 from berth.models import Issue, LedgerEntry, Route
 from berth.models.types import utcnow
-from berth.services.issues import ignore_issue, list_issues, resolve_issue
+from berth.services.issues import ignore_issue, list_issues, relook
 from berth.services.reconcile import reconcile_once
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.resolver import sweep_resolutions
@@ -487,7 +487,7 @@ class TestTheButtons:
         (view,) = [row for row in await list_issues(session) if row.type is MISMATCH]
         assert view.actions == (IssueAction.RELOOK,)
 
-        await resolve_issue(session, factory, view.id, IssueAction.RELOOK, actor="7")
+        await relook(session, view.id, actor="7")
 
         await session.refresh(first)
         assert first.resolve_after is not None

@@ -40,7 +40,7 @@ from berth.services.claims import reimport_hash
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
-from berth.services.issues import IssueRejectedError, list_issues, resolve_issue
+from berth.services.issues import BUTTONS, IssueRejectedError, Press, list_issues
 from berth.services.ledger_rebuild import rebuild_ledger
 from berth.services.plan import sweep_plans
 from berth.services.reconcile import reconcile_once
@@ -99,7 +99,7 @@ async def press(
     *,
     media: str = "",
 ) -> None:
-    await resolve_issue(session, factory, issue.id, action, actor=ACTOR, media=media)
+    await BUTTONS[action](session, factory, Press(issue.id, actor=ACTOR, media=media))
 
 
 async def refused(
