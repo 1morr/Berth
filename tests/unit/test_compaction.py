@@ -1,6 +1,6 @@
 """上下文壓縮裡不靠模型的那一塊（M5 票 18）：切在哪、留下什麼。
 
-切點落在使用者訊息上、保留最後幾個回合；被切掉的 tool call 留下的孤兒結果一起拿掉（Anthropic
+切點落在使用者訊息上、保留最後幾輪；被切掉的 tool call 留下的孤兒結果一起拿掉（Anthropic
 拒收沒有 call 的 result）；待確認的呼叫（最後一則回應裡還沒有結果的）留在尾巴（brief §20.24）。
 """
 
@@ -123,7 +123,7 @@ class TestSplit:
         assert unpaired(cut.head) == []
 
     def test_a_result_whose_call_was_cut_away_is_dropped(self) -> None:
-        # 使用者沒按卡就繼續說話：上一個回合留下的呼叫被拒，結果與新訊息在同一則請求裡。
+        # 使用者沒按卡就繼續說話：上一輪留下的呼叫被拒，結果與新訊息在同一則請求裡。
         messages = [
             *THREE_TURNS[:8],
             calls("card"),

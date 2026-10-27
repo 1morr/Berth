@@ -80,7 +80,7 @@ from berth.domain import (
 )
 from berth.models import AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
-from berth.services.agent_books import call_row, elapsed_ms
+from berth.services.agent_books import call_row, elapsed_ms, plus
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
 from berth.services.agent_tools import (
     EXTERNAL_TOOLS,
@@ -167,7 +167,7 @@ class Limits:
     #: 一輪開頭，上一次回應佔了 context window 的這個比例就壓縮（M5 票 18）。只在開頭看：一輪裡
     #: 最多 20 次呼叫、每次的結果都還會再長，所以留四成給這一輪。
     compact_at: float = 0.6
-    #: 壓縮時保留最後幾個回合（`/compact` 只留 1 個）。
+    #: 壓縮時保留最後幾輪（`/compact` 只留 1 個）。
     keep_turns: int = 2
     #: 模型的 context window 查不到時（pydantic-ai 的模型資料沒有，例如 DeepSeek、自架閘道）拿它當
     #: 分母。偏小只會早一點壓（多一次摘要），不會塞爆。
@@ -414,12 +414,10 @@ class Turn:
         return Summarizer(
             sessions=self.sessions,
             model=self.model,
-            provider=self.provider,
-            model_name=self.model_name,
-            official=self.official,
+            endpoint=self.endpoint,
+            breaker=self.runtime.breaker,
             conversation_id=self.conversation_id,
             user_id=self.user_id,
-            secret=self.secret,
         )
 
     async def compact_once(
@@ -652,9 +650,9 @@ class Turn:
             self.web_searches += row.web_searches
             self.input_tokens += row.input_tokens
             self.output_tokens += row.output_tokens
-            self.cache_read = _plus(self.cache_read, row.cache_read_tokens)
-            self.cache_write = _plus(self.cache_write, row.cache_write_tokens)
-            self.cost = _plus(self.cost, row.cost_usd)
+            self.cache_read = plus(self.cache_read, row.cache_read_tokens)
+            self.cache_write = plus(self.cache_write, row.cache_write_tokens)
+            self.cost = plus(self.cost, row.cost_usd)
             self.runtime.breaker.succeeded(self.endpoint)
         else:
             # 沒有回應：服務收不收費不知道。
@@ -833,11 +831,6 @@ class _Guard(AbstractCapability[Turn]):
 
 def _describe(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}"
-
-
-def _plus[N: (int, float)](total: N | None, more: N | None) -> N | None:
-    """有一次不知道，合計就是不知道。"""
-    return None if total is None or more is None else total + more
 
 
 def load_history(raw: str) -> list[ModelMessage]:

@@ -117,6 +117,11 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setMessages((current) => withoutLastUser(current))
       setDraft(text)
     }
+    await turnedDown(error)
+  }
+
+  /** 訊息或指令被擋下：換一段對話、換成「AI 沒開」，或在輸入欄上方說為什麼（字已經放回去了）。 */
+  async function turnedDown(error: unknown) {
     const refusal = agentRefusalOf(error)
     if (refusal?.reason === 'conversation_missing') {
       startNew(true)
@@ -127,7 +132,11 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       await queryClient.refetchQueries({ queryKey: agentStatusQueryOptions.queryKey })
       return
     }
-    setFailure(refusal?.reason === 'busy' ? { kind: 'busy' } : { kind: 'request', error })
+    if (refusal?.reason === 'busy') setFailure({ kind: 'busy' })
+    else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused' })
+    else if (refusal?.reason === 'unknown_command')
+      setFailure({ kind: 'unknown', word: refusal.detail })
+    else setFailure({ kind: 'request', error })
   }
 
   /** 斜線指令：不經過模型（`services/slash.py`）。結果接在當下的對話後面，只在這個分頁。 */
@@ -151,20 +160,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setOutputs((current) => [...current, { key, after, result }])
     } catch (error) {
       setDraft(text)
-      const refusal = agentRefusalOf(error)
-      if (refusal?.reason === 'conversation_missing') {
-        startNew(true)
-        return
-      }
-      if (refusal?.reason === 'ai_disabled' || signedOut(error)) {
-        await queryClient.refetchQueries({ queryKey: agentStatusQueryOptions.queryKey })
-        return
-      }
-      if (refusal?.reason === 'busy') setFailure({ kind: 'busy' })
-      else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused' })
-      else if (refusal?.reason === 'unknown_command')
-        setFailure({ kind: 'unknown', word: refusal.detail })
-      else setFailure({ kind: 'request', error })
+      await turnedDown(error)
     } finally {
       setRunning(false)
     }
@@ -191,7 +187,10 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
     void submit()
   }
 
-  /** 提示清單開著時的按鍵（APG combobox 的 listbox 彈出：焦點留在輸入欄）。處理了回 `true`。 */
+  /**
+   * 提示清單開著時的按鍵（APG combobox 的 listbox 彈出：焦點留在輸入欄）。處理了回 `true`。
+   * 滑鼠點一列直接執行：那是看著說明選的。
+   */
   function onHintKey(event: KeyboardEvent<HTMLTextAreaElement>, current: SlashName): boolean {
     const at = options.indexOf(current)
     switch (event.key) {
@@ -207,7 +206,9 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
         return true
       case 'Enter':
         if (event.shiftKey) return false
-        pick(current)
+        // 打到一半（`/c`）先補完、再按一次才執行：`/compact` 換掉的歷史回不來。
+        if (draft === `/${current}`) pick(current)
+        else edit(`/${current}`)
         return true
       case 'Escape':
         // 先收起清單；再按一次 Esc 才是收起面板（`AgentPanel` 看 `defaultPrevented`）。

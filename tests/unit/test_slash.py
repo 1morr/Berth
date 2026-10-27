@@ -8,7 +8,7 @@ from typing import get_args
 from berth.api.agent import SlashOut, slash_out
 from berth.domain import AiProvider, SlashCommand
 from berth.services.slash import (
-    COMMANDS,
+    SLASH_COMMANDS,
     Compacted,
     NewConversation,
     Pending,
@@ -31,7 +31,7 @@ ONE_OF_EACH: list[SlashResult] = [
 
 
 def test_every_command_has_a_handler() -> None:
-    assert set(COMMANDS) == set(SlashCommand)
+    assert set(SLASH_COMMANDS) == set(SlashCommand)
 
 
 def test_every_result_has_an_api_shape_named_after_its_command() -> None:

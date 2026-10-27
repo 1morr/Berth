@@ -22,6 +22,7 @@ from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
+    TextPart,
     ToolCallPart,
     UserPromptPart,
 )
@@ -33,10 +34,12 @@ from berth.adapters.ai.fake import FakeAi
 from berth.api.deps import get_client_factory
 from berth.api.gate import SESSION_COOKIE
 from berth.config import Config
-from berth.domain import Actor, AiToolOutcome, JobState, JobTrigger, Role
+from berth.domain import Actor, AgentRefusal, AiToolOutcome, JobState, JobTrigger, Role
 from berth.main import create_app
 from berth.models import AiConversation, AiRun, AiToolCall, Job, User
 from berth.services import proposals
+from berth.services.agent import STALE_CLAIM_SECONDS, AgentRefusedError, AgentRuntime
+from berth.services.agent_guards import ProviderBreaker
 from berth.services.events import EventHub
 from berth.services.executor import Executor
 from berth.services.hints import JobHints
@@ -54,6 +57,9 @@ from tests.integration.test_agent_api import (
     texts,
     turn_ai_on,
 )
+
+#: `sign_in_owner` 建的第一個人。
+OWNER_ID = 1
 
 
 @pytest.fixture
@@ -193,6 +199,9 @@ class TestUsage:
 
         # Tavily 的次數是成功（與照樣做了的）那幾次；被擋下的不算（票 17 的交接）。
         async def searched(session: AsyncSession) -> None:
+            # 伺服器端網搜記在 `ai_runs.web_searches`（票 17）。
+            (await session.get_one(AiRun, runs[0].id)).web_searches = 1
+            (await session.get_one(AiRun, runs[1].id)).web_searches = 2
             for outcome in (AiToolOutcome.OK, AiToolOutcome.WARNED, AiToolOutcome.BLOCKED):
                 session.add(
                     AiToolCall(
@@ -212,6 +221,7 @@ class TestUsage:
         assert usage["input_tokens"] == sum(r.input_tokens for r in runs)
         assert usage["output_tokens"] == sum(r.output_tokens for r in runs)
         assert usage["tavily_searches"] == 2
+        assert usage["web_searches"] == 3
         assert usage["cost_usd"] == pytest.approx(sum(r.cost_usd or 0 for r in runs))
 
     def test_a_cost_nobody_knows_makes_the_total_unknown(
@@ -352,7 +362,7 @@ class TestCompact:
         }
         assert summaries(history) == ["SUMMARY: said hello three times"]
         assert texts(history) == ["third"]
-        # 摘要那一次看到的是前兩個回合。
+        # 摘要那一次看到的是前兩輪。
         summarized = texts(script.seen[-1])[0]
         assert "User: first" in summarized and "User: second" in summarized
         assert "User: third" not in summarized
@@ -360,7 +370,7 @@ class TestCompact:
         # 重新載入的面板看得到摘要在哪。
         messages = client.get("/api/agent/conversations/c1").json()["messages"]
         assert any(p["type"] == "data-compaction" for m in messages for p in m["parts"])
-        # 之後照常說話，模型看到摘要 + 最後一個回合 + 新的話。
+        # 之後照常說話，模型看到摘要 + 最後一輪 + 新的話。
         script.steps = [*script.steps, say("four")]
         chat(client, "fourth")
         assert texts(script.seen[-1]) == ["third", "fourth"]
@@ -394,6 +404,62 @@ class TestCompact:
         assert compacted["after"] is None
         assert "529" in compacted["error"]
         assert texts(stored_history(client)) == texts(before)
+
+
+class TestTheSummaryCountsForTheBreaker:
+    def test_a_failing_provider_pauses_compacting_too(
+        self, client: TestClient, script: Script
+    ) -> None:
+        three_turns(client, script)
+        client.app.state.agent = AgentRuntime(breaker=ProviderBreaker(threshold=1))  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+
+        def overloaded(_m: list[ModelMessage], _i: AgentInfo) -> ModelResponse:
+            raise ModelHTTPError(529, "claude-sonnet-5-5", {"error": {"message": "overloaded"}})
+
+        script.steps = [*script.steps, overloaded]
+
+        assert "529" in ok(client, "/compact")["error"]
+        again = slash(client, "/compact")
+        assert again.status_code == 409
+        assert again.json()["detail"]["reason"] == "ai_paused"
+        assert ok(client, "/status")["paused_until"] is not None
+
+
+class TestCompactHoldsTheTurn:
+    """`/compact` 佔住這個人的那一輪：壓縮時開不了新的一輪，壓完存回去的才不會蓋掉它的回覆。"""
+
+    def test_a_slow_summary_still_holds_it(self, client: TestClient, script: Script) -> None:
+        three_turns(client, script)
+        now = [1000.0]
+        runtime = AgentRuntime(clock=lambda: now[0])
+        client.app.state.agent = runtime  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+        tried: list[AgentRefusal | None] = []
+
+        def slow(_m: list[ModelMessage], _i: AgentInfo) -> ModelResponse:
+            # 摘要寫了比「佔了位子卻沒開始」的寬限還久。
+            now[0] += STALE_CLAIM_SECONDS + 1
+            try:
+                runtime.claim(OWNER_ID)
+                tried.append(None)
+            except AgentRefusedError as exc:
+                tried.append(exc.reason)
+            return ModelResponse(parts=[TextPart("SUMMARY")])
+
+        script.steps = [*script.steps, slow]
+
+        assert ok(client, "/compact")["after"] is not None
+        assert tried == [AgentRefusal.BUSY]
+        # 壓完讓出來了。
+        runtime.claim(OWNER_ID)
+
+    def test_compact_while_a_turn_runs_is_busy(self, client: TestClient, script: Script) -> None:
+        three_turns(client, script)
+        client.app.state.agent.claim(OWNER_ID)  # type: ignore[attr-defined]  # 同上
+
+        response = slash(client, "/compact")
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["reason"] == "busy"
 
 
 class TestACardSurvivesCompaction:

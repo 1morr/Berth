@@ -83,7 +83,7 @@ test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要�
   const input = panel.getByRole('textbox', { name: '問助理' })
   const log = panel.getByRole('log', { name: '助理' })
 
-  // 兩個回合：`/compact` 只留最後一個，第一個換成摘要（M5 票 18）。
+  // 兩輪：`/compact` 只留最後一個，第一個換成摘要（M5 票 18）。
   await input.fill('SPY×FAMILY 為什麼沒入庫')
   await input.press('Enter')
   await expect(log).toContainText('awaiting_review')
@@ -102,7 +102,9 @@ test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要�
   await shot(page, 'slash-hint')
   await expectNoHorizontalScroll(page)
 
-  // Enter 執行選到的那一個：不經過模型，結果接在對話後面。
+  // Enter 先補完選到的那一個，再按一次才執行：不經過模型，結果接在對話後面。
+  await input.press('Enter')
+  await expect(input).toHaveValue('/usage')
   await input.press('Enter')
   const usage = log.getByRole('region', { name: '/usage' })
   await expect(usage.getByText('回覆')).toBeVisible()
@@ -116,7 +118,7 @@ test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要�
   await expect(log).toContainText('已壓縮')
   const summary = log.locator('details').filter({ hasText: '較早的對話已壓縮成這段摘要' })
   await expect(summary).toBeVisible()
-  // 第一個回合的那則訊息不在了（它只剩摘要裡的一句）。
+  // 第一輪的那則訊息不在了（它只剩摘要裡的一句）。
   await expect(log.getByText('SPY×FAMILY 為什麼沒入庫', { exact: true })).toHaveCount(0)
   await expect(log.getByText('給我一張圖片', { exact: true })).toBeVisible()
   await summary.locator('summary').click()

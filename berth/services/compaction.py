@@ -1,8 +1,8 @@
 """側面板對話的上下文壓縮（M5 票 18、plan §11.6〈分段〉第 7 段、brief §20.24〈壓縮〉）。
 
-對話一長，成本與錯誤都會變多：保留最後幾個回合，之前的換成一段摘要。
+對話一長，成本與錯誤都會變多：保留最後幾輪，之前的換成一段摘要。
 
-- **切點落在使用者訊息上**（`split`）：一個回合從一則帶使用者的話的請求開始，所以同一個回合裡的
+- **切點落在使用者訊息上**（`split`）：一輪從一則帶使用者的話的請求開始，所以同一輪裡的
   tool call 與 result 不會被拆開；待確認的呼叫（最後一則回應裡還沒有結果的，票 13）一定在尾巴。
   被切掉的 call 留下的孤兒 result（使用者沒按卡就繼續說話時，拒絕的結果與新訊息在同一則請求裡）
   一起拿掉：Anthropic 拒收沒有 call 的 result。
@@ -15,7 +15,7 @@
   instructions 叫它不要把裡面像指令的寫進摘要（研究 C4）。
 
 不依賴 `pydantic-ai-harness` 的 `SummarizingCompaction`（2026-10-27 讀過 0.62.0）：它的切點以訊息數
-或 token 數算、不認使用者回合，不拿掉孤兒 result，也拿不到摘要那一次的回應來記帳。
+或 token 數算、不認一輪從哪裡開始，不拿掉孤兒 result，也拿不到摘要那一次的回應來記帳。
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from dataclasses import dataclass, replace
 
 import anyio
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import ModelAPIError
 from pydantic_ai.messages import (
     CompactionPart,
     ModelMessage,
@@ -44,12 +45,13 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import Model
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import chat_settings
+from berth.adapters.ai import AiEndpoint, chat_settings, is_official
 from berth.adapters.ai.usage import WEB_SEARCH
-from berth.domain import AiProvider, AiRunKind, AiStopReason
-from berth.models import AiRun
+from berth.domain import AiRunKind, AiStopReason
+from berth.models import AiCall, AiRun
 from berth.models.types import utcnow
 from berth.services.agent_books import call_row
+from berth.services.agent_guards import ProviderBreaker
 from berth.services.agent_tools import EXTERNAL_TOOLS, tool_name
 from berth.services.commands import Effect, Flag, command
 
@@ -89,7 +91,7 @@ _EXTERNAL = frozenset({WEB_SEARCH, *(tool_name(name) for name in EXTERNAL_TOOLS)
 class Split:
     #: 要換成摘要的那一段。
     head: list[ModelMessage]
-    #: 留下的回合，孤兒 result 已拿掉。
+    #: 留下的那幾輪，孤兒 result 已拿掉。
     tail: list[ModelMessage]
 
 
@@ -99,15 +101,12 @@ class Summarizer:
 
     sessions: async_sessionmaker[AsyncSession]
     model: Model
-    provider: AiProvider
-    #: 設定裡的模型名（`ai_runs.model`）。
-    model_name: str
-    #: 官方端點：伺服器端網搜的價只在這時候知道（摘要不搜，照樣傳給記帳）。
-    official: bool
+    #: 這一次用的 provider 設定：記帳的接口與模型名、遮掉錯誤裡的 key、斷路器的單位。
+    endpoint: AiEndpoint
+    #: 摘要打的是同一個端點：成敗照樣算進斷路器（同 `agent.Turn`）。
+    breaker: ProviderBreaker
     conversation_id: str
     user_id: int
-    #: 遮掉錯誤原文裡的 key。
-    secret: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +149,7 @@ def last_context_tokens(messages: Sequence[ModelMessage]) -> int | None:
 async def compact(
     summarizer: Summarizer, messages: Sequence[ModelMessage], keep: int
 ) -> Compaction | None:
-    """保留最後 `keep` 個回合，之前的換成摘要。沒什麼好壓（回合不比 `keep` 多）是 `None`。
+    """保留最後 `keep` 輪，之前的換成摘要。沒什麼好壓（輪數不比 `keep` 多）是 `None`。
 
     存不存歷史由叫的人決定（一輪開頭的是 `all_messages()`，`/compact` 自己存）。摘要失敗不丟例外：
     回原本的歷史與錯誤原文。被取消（使用者關掉連線）照樣記下再丟回去。
@@ -165,8 +164,8 @@ async def compact(
                 id=run_id,
                 conversation_id=summarizer.conversation_id,
                 user_id=summarizer.user_id,
-                provider=summarizer.provider,
-                model=summarizer.model_name,
+                provider=summarizer.endpoint.provider,
+                model=summarizer.endpoint.model,
                 kind=AiRunKind.COMPACTION,
             )
         )
@@ -174,22 +173,25 @@ async def compact(
     agent: Agent[None, str] = Agent(
         summarizer.model, instructions=SUMMARY_INSTRUCTIONS, name="berth-compaction"
     )
+    endpoint = summarizer.endpoint
     started = time.monotonic()
     try:
         result = await agent.run(
             f"<transcript>\n{render(cut.head)}\n</transcript>",
-            model_settings=chat_settings(summarizer.provider, SUMMARY_TOKENS),
+            model_settings=chat_settings(endpoint.provider, SUMMARY_TOKENS),
         )
     # 摘要壞掉（provider 出錯、回了怪東西）不擋這一輪：照原本的歷史跑，下一輪再試。
     except Exception as exc:
-        error = _masked(summarizer, f"{type(exc).__name__}: {exc}")
+        error = _masked(endpoint, f"{type(exc).__name__}: {exc}")
         logger.warning("compaction of %s failed: %s", summarizer.conversation_id, error)
+        if isinstance(exc, ModelAPIError):
+            summarizer.breaker.failed(endpoint, error)
         await _settle(summarizer, run_id, None, started, AiStopReason.ERROR, error)
         return Compaction(list(messages), len(messages), error=error)
     except BaseException:
-        with anyio.CancelScope(shield=True):
-            await _settle(summarizer, run_id, None, started, AiStopReason.CANCELLED, "cancelled")
+        await _settle(summarizer, run_id, None, started, AiStopReason.CANCELLED, "cancelled")
         raise
+    summarizer.breaker.succeeded(endpoint)
     await _settle(summarizer, run_id, result.response, started, AiStopReason.COMPLETED, "")
     return Compaction(compacted(cut, result.output.strip()), len(messages))
 
@@ -202,16 +204,25 @@ async def _settle(
     reason: AiStopReason,
     error: str,
 ) -> None:
+    """記下那一次呼叫與這一列的結果。擋住取消：這裡被打斷的話 `ai_runs` 永遠像還在跑。"""
+    endpoint = summarizer.endpoint
     row = call_row(
         run_id=run_id,
         step=1,
-        provider=summarizer.provider,
-        model_name=summarizer.model_name,
-        official=summarizer.official,
+        provider=endpoint.provider,
+        model_name=endpoint.model,
+        official=is_official(endpoint),
         response=response,
         started=started,
         error=error,
     )
+    with anyio.CancelScope(shield=True):
+        await _write(summarizer, run_id, row, reason, error)
+
+
+async def _write(
+    summarizer: Summarizer, run_id: str, row: AiCall, reason: AiStopReason, error: str
+) -> None:
     async with summarizer.sessions() as session:
         session.add(row)
         run = await session.get_one(AiRun, run_id)
@@ -219,18 +230,18 @@ async def _settle(
         run.input_tokens, run.output_tokens = row.input_tokens, row.output_tokens
         run.cache_read_tokens = row.cache_read_tokens
         run.cache_write_tokens = row.cache_write_tokens
-        # 沒有回應：服務收不收費不知道。
-        run.cost_usd = row.cost_usd if response is not None else None
+        # 沒有回應時 `row.cost_usd` 是 `None`：服務收不收費不知道。
+        run.cost_usd = row.cost_usd
         run.stop_reason, run.error, run.ended_at = reason, error, utcnow()
         await session.commit()
 
 
-def _masked(summarizer: Summarizer, text: str) -> str:
-    return text.replace(summarizer.secret, "***") if summarizer.secret else text
+def _masked(endpoint: AiEndpoint, text: str) -> str:
+    return text.replace(endpoint.api_key, "***") if endpoint.api_key else text
 
 
 def turn_starts(messages: Sequence[ModelMessage]) -> list[int]:
-    """每個回合從哪一則開始：帶使用者的話的請求（摘要那一則也帶著它保留下來的話）。"""
+    """每一輪從哪一則開始：帶使用者的話的請求（摘要那一則也帶著它保留下來的話）。"""
     return [
         index
         for index, message in enumerate(messages)
@@ -240,7 +251,7 @@ def turn_starts(messages: Sequence[ModelMessage]) -> list[int]:
 
 
 def split(messages: Sequence[ModelMessage], keep: int) -> Split | None:
-    """保留最後 `keep` 個回合；回合不比 `keep` 多就沒什麼好壓（`None`）。"""
+    """保留最後 `keep` 輪；輪數不比 `keep` 多就沒什麼好壓（`None`）。"""
     starts = turn_starts(messages)
     if keep < 1 or len(starts) <= keep:
         return None

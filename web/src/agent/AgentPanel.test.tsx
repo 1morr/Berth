@@ -373,7 +373,7 @@ describe('AgentPanel slash commands', () => {
         .map((option) => option.textContent),
     ).toEqual([
       '/new開一段新對話',
-      '/compact壓縮這段對話，只留最後一個回合',
+      '/compact壓縮這段對話，只留最後一輪',
       '/usage這段對話用了多少',
       '/status模型與上下文用了多少',
       '/pending還在等你決定的確認卡',
@@ -399,13 +399,29 @@ describe('AgentPanel slash commands', () => {
     expect(screen.queryByRole('listbox')).toBeNull()
   })
 
-  it('runs the highlighted command on Enter without asking the model, and shows the result in the log', async () => {
+  it('runs a command picked with the mouse', async () => {
+    serve(backend({ command: () => json(USAGE) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/')
+    await user.click(screen.getByRole('option', { name: /\/usage/ }))
+
+    expect(await screen.findByRole('region', { name: '/usage' })).toBeInTheDocument()
+    expect(commanded).toEqual(['/usage'])
+  })
+
+  it('completes a half-typed command on Enter, then runs it without asking the model', async () => {
     serve(backend({ command: () => json(USAGE) }))
     const user = userEvent.setup()
     renderPanel()
 
     const input = await screen.findByRole('textbox', { name: '問助理' })
     await user.type(input, '/us{Enter}')
+    // 打到一半的先補完，不執行。
+    expect(input).toHaveValue('/usage')
+    expect(commanded).toEqual([])
+    await user.keyboard('{Enter}')
 
     const output = await screen.findByRole('region', { name: '/usage' })
     expect(commanded).toEqual(['/usage'])
@@ -585,7 +601,7 @@ describe('AgentPanel slash commands', () => {
 
     const input = await screen.findByRole('textbox', { name: '問助理' })
     await user.type(input, '/compact{Enter}')
-    expect(await screen.findByText('只有一個回合，沒什麼好壓縮。')).toBeInTheDocument()
+    expect(await screen.findByText('只有一輪，沒什麼好壓縮。')).toBeInTheDocument()
 
     answer = { ...answer, error: 'ModelHTTPError: 529' }
     await user.type(input, '/compact{Enter}')

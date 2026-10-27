@@ -1,7 +1,7 @@
 """斜線指令（M5 票 18、plan §11.6〈分段〉第 7 段、研究 C2）。
 
-一份登錄表給所有表面共用（Hermes 的 `COMMAND_REGISTRY`）：側面板現在用，M7 的 Discord 照 `COMMANDS`
-列指令、叫同一支 `run_slash`。
+一份登錄表給所有表面共用（Hermes 的 `COMMAND_REGISTRY`）：側面板現在用，M7 的 Discord 照
+`SLASH_COMMANDS` 列指令、叫同一支 `run_slash`。
 
 - **只認人類訊息開頭的 `/`**：整則訊息就是 `/<名字>`，名字照 `domain.SlashCommand`；不是的
   （多帶了字、打錯）是 `unknown_command`，不會退回去當成問模型的話。反過來，送進對話的 `/`
@@ -23,7 +23,6 @@ from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import is_official
 from berth.domain import (
     WAITING_PROPOSALS,
     Actor,
@@ -44,6 +43,7 @@ from berth.services.agent import (
     current_endpoint,
     load_history,
 )
+from berth.services.agent_books import plus
 from berth.services.agent_tools import TAVILY_TOOL
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
@@ -62,7 +62,7 @@ class NewConversation:
 class Compacted:
     #: 壓縮前有幾則訊息。
     before: int
-    #: 壓縮後有幾則；`None` 是沒有壓（只有一個回合，或摘要失敗）。
+    #: 壓縮後有幾則；`None` 是沒有壓（只有一輪，或摘要失敗）。
     after: int | None
     #: 摘要失敗的原文（key 已遮掉）；成功與沒什麼好壓是空字串。
     error: str = ""
@@ -181,7 +181,7 @@ async def run_slash(
             raise AgentRefusedError(AgentRefusal.AI_DISABLED)
         history = await _history(session, conversation_id, actor.user_id)
     call = _Call(runtime, sessions, factory, actor, conversation_id, settings, history)
-    return await COMMANDS[name](call)
+    return await SLASH_COMMANDS[name](call)
 
 
 async def _history(session: AsyncSession, conversation_id: str, user_id: int) -> list[ModelMessage]:
@@ -198,24 +198,24 @@ async def _new(_call: _Call) -> NewConversation:
 
 
 async def _compact(call: _Call) -> Compacted:
-    """只留最後一個回合（plan §11.6）。待確認的呼叫在那個回合裡，卡片本身在 Proposal 表。"""
+    """只留最後一輪（plan §11.6）。待確認的呼叫在那一輪裡，卡片本身在 Proposal 表。"""
     endpoint = current_endpoint(call.settings)
     if (pause := call.runtime.breaker.paused(endpoint)) is not None:
         raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
     # 佔住這個人的那一輪：壓縮時開不了新的一輪，壓完存回去的才不會蓋掉它的回覆。
     call.runtime.claim(call.user_id)
+    # 摘要可能比 `STALE_CLAIM_SECONDS` 久：標成進行中，位子佔到 `release` 為止（同串流開始的一輪）。
+    call.runtime.streaming(call.user_id)
     try:
         async with call.sessions() as session:
             history = await _history(session, call.conversation_id, call.user_id)
         summarizer = Summarizer(
             sessions=call.sessions,
             model=call.factory.ai(endpoint),
-            provider=call.settings.provider,
-            model_name=endpoint.model,
-            official=is_official(endpoint),
+            endpoint=endpoint,
+            breaker=call.runtime.breaker,
             conversation_id=call.conversation_id,
             user_id=call.user_id,
-            secret=endpoint.api_key,
         )
         done = await compact(summarizer, history, keep=1)
         if done is None or done.error:
@@ -262,12 +262,10 @@ async def _usage(call: _Call) -> Usage:
 
 
 def _total[N: (int, float)](values: Iterable[N | None], zero: N) -> N | None:
-    """有一個不知道，合計就是不知道（同 `agent._plus`）。"""
-    total = zero
+    """有一個不知道，合計就是不知道（`agent_books.plus`，同一輪的合計）。"""
+    total: N | None = zero
     for value in values:
-        if value is None:
-            return None
-        total += value
+        total = plus(total, value)
     return total
 
 
@@ -309,8 +307,9 @@ async def _skills(call: _Call) -> Skills:
     return Skills(skills=tuple(await list_skills(role=call.actor.role)))
 
 
-#: 登錄表：每一個 `SlashCommand` 一支（`tests/unit/test_slash.py` 守全不全）。
-COMMANDS: dict[SlashCommand, Callable[[_Call], Awaitable[SlashResult]]] = {
+#: 登錄表：每一個 `SlashCommand` 一支（`tests/unit/test_slash.py` 守全不全）。不叫 `COMMANDS`：
+#: 那是 Command Registry（`registry.commands()`）。
+SLASH_COMMANDS: dict[SlashCommand, Callable[[_Call], Awaitable[SlashResult]]] = {
     SlashCommand.NEW: _new,
     SlashCommand.COMPACT: _compact,
     SlashCommand.USAGE: _usage,

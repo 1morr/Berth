@@ -3903,15 +3903,15 @@ const zhHant = {
       label: '指令',
       about: {
         new: '開一段新對話',
-        compact: '壓縮這段對話，只留最後一個回合',
+        compact: '壓縮這段對話，只留最後一輪',
         usage: '這段對話用了多少',
         status: '模型與上下文用了多少',
         pending: '還在等你決定的確認卡',
         skills: '助理會照著做的工作流程',
       },
       compact: {
-        done: '已壓縮：{{before}} 則訊息換成一段摘要加最後一個回合，剩 {{after}} 則。待確認的卡片不受影響。',
-        nothing: '只有一個回合，沒什麼好壓縮。',
+        done: '已壓縮：{{before}} 則訊息換成一段摘要加最後一輪，剩 {{after}} 則。待確認的卡片不受影響。',
+        nothing: '只有一輪，沒什麼好壓縮。',
         failed: '壓縮沒成功，對話照舊：',
       },
       usage: {

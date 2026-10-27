@@ -455,7 +455,7 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - 送出中：動作鍵 `busy`（`aria-disabled`、按了不再送，焦點留在原地），不用 `disabled`（M3 票 06，DESIGN.md Buttons）。
 - 元件：全部是專案自有元件（媒體卡片、狀態徽章、時間線、Plan 表格（逐列可改季集與動作）、檔案樹、`CollapsibleRow`），不用 shadcn/ui（§1.4）。**`/review`（M3 票 05）**：兩段（要你決定、已入庫等你看一眼），Issue 只剩一行連到 `/issues`；同一個 Job 的 audit 收成一組（`review/auditGroups.ts`，鍵留得下票 13 的 RSS Series），一組一顆「全部確認」、audit 段標題列一顆整段的（就地確認、說出件數）；收起的 audit 列與組說出主要原因（`review/leadReason.ts`，純函式）。**M1 的 Plan 畫在 `/jobs` 的就地展開區**（票 11），不是 `/jobs/:hash`：票 09 拍板不另建那一頁。**M2 另建 `/jobs/:hash`**（2026-09-22 定，M2 票 12 實作，`.scratch/m2/job-detail-shape.md`）：brief §13 的 Job 詳情頁——時間線、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重試、重新入庫、刪除範圍）；刪除範圍是要二次確認的破壞性動作，塞在列表的展開區說不清楚「哪一筆正在被刪」。`/jobs` 的展開區只留狀態、最近三段時間線與到詳情頁的連結；計劃與每一顆動作只在詳情頁。**逐檔表格是唯讀的 `JobPlan`，不與 Review Queue 的 `PlanEditor` 共用**：編輯要有核准 / 拒絕流程包著，搬到詳情頁等於多一個審核入口（Plan 停在 `pending_review` 時 admin 在詳情頁看到到審核佇列的連結）。**Plan 歷史是時間線上九種與 Plan 有關的事件**（`plans.job_hash` unique、重新規劃整份換掉，所以沒有舊的那幾份可列），畫法仍是時間線元件。
 - 文案：react-i18next，`zh-Hant` 與 `en` 兩個語言檔並列，預設跟隨瀏覽器；所有字串走 key，不硬編。
-- **側面板**（M5 票 12，`.scratch/m5/side-panel-shape.md`）：頁首一顆「助理」開關（`aria-expanded`），開關記在這個分頁（`sessionStorage`）、對話 id 記在這個瀏覽器（`localStorage`）。`lg` 以上是外框右側 `26rem` 的一欄、頁面讓位；以下蓋滿視窗、底下那一頁 `inert`。開關與對話放在根路由的 `AgentProvider`（每一頁各包一層 `AppShell`，換頁會重掛），`useChat` 的 `Chat` 放在查詢快取（`['agent', 'chat', id]`，不過期）——換頁時還在串流的那一輪接得上。`DefaultChatTransport` 只送最後一則、帶介面語言；重新載入時從 `GET /agent/conversations/{id}` 接回。回覆的 markdown 走 react-markdown：原始 HTML 不渲染、`javascript:` 網址拿掉、**圖片不載入**（只印替代文字與網址原文）。輸入欄打 `/` 時上方列出斜線指令（`listbox`，焦點留在輸入欄：上下鍵、Enter 執行、Tab 補完、Esc 收起，M5 票 18）；指令的結果接在打它那一刻的對話後面、只在這個分頁；`data-compaction` 畫成一行收著的摘要。
+- **側面板**（M5 票 12，`.scratch/m5/side-panel-shape.md`）：頁首一顆「助理」開關（`aria-expanded`），開關記在這個分頁（`sessionStorage`）、對話 id 記在這個瀏覽器（`localStorage`）。`lg` 以上是外框右側 `26rem` 的一欄、頁面讓位；以下蓋滿視窗、底下那一頁 `inert`。開關與對話放在根路由的 `AgentProvider`（每一頁各包一層 `AppShell`，換頁會重掛），`useChat` 的 `Chat` 放在查詢快取（`['agent', 'chat', id]`，不過期）——換頁時還在串流的那一輪接得上。`DefaultChatTransport` 只送最後一則、帶介面語言；重新載入時從 `GET /agent/conversations/{id}` 接回。回覆的 markdown 走 react-markdown：原始 HTML 不渲染、`javascript:` 網址拿掉、**圖片不載入**（只印替代文字與網址原文）。輸入欄打 `/` 時上方列出斜線指令（`listbox`，焦點留在輸入欄：上下鍵、Tab 補完、Enter 補完打到一半的、已經完整才執行、點一列直接執行、Esc 收起，M5 票 18）；指令的結果接在打它那一刻的對話後面、只在這個分頁；`data-compaction` 畫成一行收著的摘要。
 - 主題：深色為預設（媒體應用慣例），亮色跟隨系統。
 - 版面：桌機為主，但每一頁都要有真正可用的窄版（審核、佇列、送單在手機上要做得完）。
 - 無障礙：WCAG 2.2 AA 是驗收條件——純鍵盤可完成、焦點可見、對比達標、狀態不只靠顏色。
@@ -1186,7 +1186,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
    - 走完情境 1（新番推薦）與 2（Re:Zero 全系列）。
 7. **claw 的其餘部分**：
    - 自動壓縮：門檻用 `ctx.context_window_used` 的比例，切點落在使用者訊息上，待確認的呼叫留在尾巴。
-   - `/compact` 只留最後一個回合。
+   - `/compact` 只留最後一輪。
    - 斜線指令登錄表：`/new`、`/compact`、`/usage`、`/status`、`/pending`、`/skills`。只認人類訊息開頭的 `/`，M7 的 Discord 共用。
    - 純指令型 skills，漸進揭露。
    - 防護的其餘幾條：無進展偵測、工具結果截斷、並發、斷路器。

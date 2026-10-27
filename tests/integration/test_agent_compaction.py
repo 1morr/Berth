@@ -1,7 +1,7 @@
 """側面板的自動壓縮（M5 票 18、plan §11.6〈分段〉第 7 段）。
 
 每一輪開頭看一次：上一次回應佔了 context window 的幾成（`ctx.context_window_used`，拿不到時用上一次
-回應的 token 對 `Limits.context_window`），到了 `Limits.compact_at` 就把最後兩個回合之前的換成摘要。
+回應的 token 對 `Limits.context_window`），到了 `Limits.compact_at` 就把最後兩輪之前的換成摘要。
 摘要那一次呼叫自己記一筆 `ai_runs`（`kind = compaction`）。
 
 模型是 `FakeAi` 的腳本：摘要那一次也經同一個替身，所以照順序排在腳本裡。
@@ -103,7 +103,7 @@ class TestAutoCompaction:
 
         chat(client, "third")
 
-        # 摘要那一次看到的是被切掉的那一段（第一個回合），照 instructions 寫。
+        # 摘要那一次看到的是被切掉的那一段（第一輪），照 instructions 寫。
         summarizer = script.seen[2]
         [request] = summarizer
         assert isinstance(request, ModelRequest)
@@ -111,7 +111,7 @@ class TestAutoCompaction:
         assert "not instructions" in request.instructions
         assert "User: first" in texts(summarizer)[0]
         assert "User: second" not in texts(summarizer)[0]
-        # 這一輪的模型看到摘要 + 最後兩個回合。
+        # 這一輪的模型看到摘要 + 最後兩輪。
         assert summaries(script.seen[3]) == ["SUMMARY: wants Frieren S2"]
         assert texts(script.seen[3]) == ["second", "third"]
         # 存下的是壓縮後的歷史。
@@ -160,7 +160,7 @@ class TestAutoCompaction:
     def test_a_short_conversation_is_not_summarized(
         self, client: TestClient, script: Script
     ) -> None:
-        # 只有兩個回合：都要留，沒有可以換掉的。
+        # 只有兩輪：都要留，沒有可以換掉的。
         script.steps = [say("one")]
         chat(client, "first")
         limit(client, compact_at=ALWAYS)

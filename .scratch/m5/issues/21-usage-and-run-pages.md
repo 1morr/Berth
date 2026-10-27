@@ -35,3 +35,4 @@
 ## Comments
 
 - 2026-10-27 票 17 交接：網搜次數＝`ai_calls.web_searches`（伺服器端）加 `ai_tool_calls` 裡 `web.tavily_search` 的 `ok` / `warned`。**畫面要說明網搜費用**：`ai_calls.web_search_cost_usd` 是 `NULL`（`error` 為空）時是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點（DeepSeek 相容端點、自架閘道）搜了但沒算進 `cost_usd`；Tavily 花的是使用者 Tavily 帳號的 credit，不在估計費用裡。
+- 2026-10-27 票 18 交接：`ai_runs` 多一欄 `kind`（`chat` / `compaction`，migration `e6b2d9a4c731`）。壓縮的摘要是自己的一列（`requests = 1`、一列 `ai_calls`、`continues` 永遠是 `NULL`），自動壓縮的那一列 `started_at` 比觸發它的那一輪晚。用量頁的「每輪」只數 `chat`，費用與 token 的合計要含 `compaction`（側面板的 `/usage` 就是這樣算的，`services/slash._usage`）；步驟頁要不要列壓縮由這張決定。

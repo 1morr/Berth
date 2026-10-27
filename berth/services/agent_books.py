@@ -34,6 +34,9 @@ def call_row(
         model=model_name,
         duration_ms=elapsed_ms(started),
         error=error,
+        # 沒有回應時也明寫：呼叫的人照這一列加總，不等 flush 才填預設值。
+        input_tokens=0,
+        output_tokens=0,
         # 預設是 `None` 也明寫：SQLAlchemy 的預設會蓋掉明設的 `None`（`AiCall` 那一格說了）。
         web_search_cost_usd=None,
     )
@@ -54,6 +57,11 @@ def call_row(
     row.cost_usd = float(cost) if cost is not None else None
     row.finish_reason = response.finish_reason or ""
     return row
+
+
+def plus[N: (int, float)](total: N | None, more: N | None) -> N | None:
+    """有一次不知道，合計就是不知道。"""
+    return None if total is None or more is None else total + more
 
 
 def elapsed_ms(started: float) -> int:

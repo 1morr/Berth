@@ -1837,7 +1837,7 @@ class SlashCommand(StrEnum):
 
     #: 開一段新對話（側面板換一個 chat id）。
     NEW = "new"
-    #: 壓縮這段對話，只留最後一個回合。
+    #: 壓縮這段對話，只留最後一輪。
     COMPACT = "compact"
     #: 這段對話花了多少：輪數、模型與工具呼叫、token、快取、網搜、估計費用。
     USAGE = "usage"

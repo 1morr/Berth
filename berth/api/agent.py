@@ -135,7 +135,7 @@ class CompactOut(BaseModel):
     command: Literal["compact"]
     #: 壓縮前有幾則訊息。
     before: int
-    #: 壓縮後有幾則；`null` 是沒有壓（只有一個回合，或摘要失敗）。
+    #: 壓縮後有幾則；`null` 是沒有壓（只有一輪，或摘要失敗）。
     after: int | None
     #: 摘要失敗的原文（key 已遮掉）；其他時候是空字串。
     error: str
