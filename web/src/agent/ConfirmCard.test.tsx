@@ -129,7 +129,12 @@ function serve(
         ])
       }
       if (path === '/api/media/tv%3A120089') {
-        return json({ title: 'SPY×FAMILY', routes: [{ id: 3, name: 'Anime', slug: 'anime' }] })
+        return json({
+          title: 'SPY×FAMILY',
+          routes: [{ id: 3, name: 'Anime', slug: 'anime' }],
+          folder_name: 'SPY x FAMILY (2022) [tmdbid-120089]',
+          folder_frozen: false,
+        })
       }
       if (method === 'POST' && path === '/api/agent/chat') {
         chats.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
@@ -211,6 +216,18 @@ describe('ConfirmCard', () => {
     expect(await screen.findByText('送出了第 2、3 集。')).toBeInTheDocument()
   })
 
+  it('says once which folder the first send will fix for good, as the title page does', async () => {
+    serve(card(), stored('approval-requested'), () => card({ status: 'rejected' }))
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '送出下載' })
+
+    expect(await within(section).findAllByText('SPY x FAMILY (2022) [tmdbid-120089]')).toHaveLength(
+      1,
+    )
+    expect(within(section).getByText(/送單成功那一刻這串字就定下來/)).toBeInTheDocument()
+  })
+
   it('rejecting tells the conversation it was not approved', async () => {
     serve(card(), stored('approval-requested'), () => card({ status: 'rejected' }))
     const user = userEvent.setup()
@@ -224,6 +241,19 @@ describe('ConfirmCard', () => {
     const [resume] = chats[0].messages as { parts: Record<string, unknown>[] }[]
     expect(resume.parts[0]).toMatchObject({ approval: { approved: false } })
     expect(within(section).getByRole('status')).toHaveTextContent('已拒絕，什麼都沒做。')
+  })
+
+  it('keeps the keyboard focus on the card once its buttons are gone', async () => {
+    serve(card(), stored('approval-requested'), () => card({ status: 'rejected' }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '送出下載' })
+    within(section).getByRole('button', { name: '拒絕' }).focus()
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => expect(within(section).queryByRole('button')).toBeNull())
+    expect(within(section).getByRole('heading', { name: '送出下載' })).toHaveFocus()
   })
 
   it('a detached card still runs when pressed, without resuming the conversation', async () => {
@@ -283,7 +313,7 @@ describe('ConfirmCard', () => {
 
     const section = await screen.findByRole('region', { name: '新增 RSS Feed' })
     expect(within(section).getByText('會連到新位址')).toBeInTheDocument()
-    expect(within(section).getByText(/從搜到的網頁或動漫資料站/)).toBeInTheDocument()
+    expect(within(section).getByText(/從網頁或動漫資料站/)).toBeInTheDocument()
     expect(
       within(section).getByText('https://mikanani.me/RSS/MyBangumi?token=abc'),
     ).toBeInTheDocument()
@@ -314,7 +344,7 @@ describe('ConfirmCard', () => {
     const section = await screen.findByRole('region', { name: '送出下載' })
     expect(within(section).queryByText(/出自外部來源/)).toBeNull()
     expect(
-      within(section).getByText(/另外 2 項放不上這張：一張卡送出的 torrent 有上限/),
+      within(section).getByText(/另外 2 項不在這張卡上：一張卡送出的 torrent 有上限/),
     ).toBeInTheDocument()
   })
 

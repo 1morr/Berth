@@ -1531,7 +1531,7 @@ const zhHant = {
         unaired: '未播出',
       },
       // 「缺」「卡住」那一格的「為什麼」（M5 票 22）：讀票 10 的結論，按了才問。
-      why: {
+      cause: {
         button: '為什麼',
         missing: '為什麼缺？',
         stuck: '為什麼卡住？',
@@ -3958,19 +3958,21 @@ const zhHant = {
       expires: '期限：',
       // 只在自由文字出自外部內容的卡上出現（M5 票 14）：搜到的網頁，以及 AniList、Bangumi 這類社群資料站（票 16）。
       externalLead:
-        '標著「出自外部來源」的欄位是助理從搜到的網頁或動漫資料站（AniList、Bangumi）抄來的，不是你說的。確認前看一眼。',
+        '標著「出自外部來源」的欄位是助理從網頁或動漫資料站（AniList、Bangumi）抄來的，不是你說的；確認前看一眼。',
       externalFields: '出自外部來源：{{fields}}',
       fromOutside: '出自外部來源',
       // 送單的數量閘：一張卡送出的 torrent 有上限，單獨就超過（或集數不知道）的一項自己一張。
+      // 後半句是使用者要做的事；「單獨就超過的自己一張」是助理的規則，不說（票 22 critique）。
       heldBack_one:
-        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
+        '另外 {{count}} 項不在這張卡上：一張卡送出的 torrent 有上限。這張按完，助理會再提下一張。',
       heldBack_other:
-        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
+        '另外 {{count}} 項不在這張卡上：一張卡送出的 torrent 有上限。這張按完，助理會再提下一張。',
       fields: {
         release: '發佈',
         size: '大小',
         media: '作品',
         route: 'Route',
+        folder: '資料夾',
         url: '網址',
         name: '名稱',
         tvRoute: '劇集 Route',
@@ -5818,7 +5820,7 @@ const en: Translations<typeof zhHant> = {
         missing: 'Missing',
         unaired: 'Not aired',
       },
-      why: {
+      cause: {
         button: 'Why',
         missing: 'Why is it missing?',
         stuck: 'Why is it stuck?',
@@ -8157,18 +8159,19 @@ const en: Translations<typeof zhHant> = {
       },
       expires: 'Valid until:',
       externalLead:
-        'Fields marked “From an outside source” were copied by the assistant from a web page or an anime database (AniList, Bangumi), not said by you. Check them before confirming.',
+        'Fields marked “From an outside source” were copied by the assistant from a web page or an anime database (AniList, Bangumi), not said by you; check them before confirming.',
       externalFields: 'From an outside source: {{fields}}',
       fromOutside: 'From an outside source',
       heldBack_one:
-        '{{count}} more does not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes it after you decide this one.',
+        '{{count}} more is not on this card: a card sends a limited number of torrents. Once you decide this one, the assistant proposes the next.',
       heldBack_other:
-        '{{count}} more do not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes them after you decide this one.',
+        '{{count}} more are not on this card: a card sends a limited number of torrents. Once you decide this one, the assistant proposes the next.',
       fields: {
         release: 'Release',
         size: 'Size',
         media: 'Title',
         route: 'Route',
+        folder: 'Folder',
         url: 'Address',
         name: 'Name',
         tvRoute: 'Series route',

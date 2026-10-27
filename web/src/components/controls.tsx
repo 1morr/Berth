@@ -222,6 +222,13 @@ export const COMPACT_BUTTON =
 export const TEXT_LINK =
   'label inline-flex min-h-6 items-center text-ink underline decoration-rule-strong decoration-2 underline-offset-4 hover:decoration-ink'
 
+/**
+ * 句子裡的連結：照散文的字與行高排、可以換行，只多一條底線（M5 票 22：助理回覆裡的連結）。
+ * 單獨一行、像一個動作的才用 `TEXT_LINK`。
+ */
+export const INLINE_LINK =
+  'underline decoration-rule-strong underline-offset-4 hover:decoration-ink'
+
 export const GHOST_LINK =
   'label justify-self-start border-2 border-rule px-4 py-2.5 text-ink hover:border-rule-strong'
 

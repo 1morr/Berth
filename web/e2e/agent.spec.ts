@@ -94,8 +94,10 @@ test('被防護中止的那一輪：從「步驟」看到每一步的數字，�
   await log.getByRole('link', { name: '這則回覆的步驟' }).last().click()
 
   await expect(page.getByRole('heading', { level: 1, name: '這一輪的步驟' })).toBeVisible()
-  await expect(page.getByText('停下', { exact: true })).toBeVisible()
-  await expect(page.getByText('同一個呼叫重複')).toBeVisible()
+  // 桌機上面板還開著，裡面那一則也是「停下」：只看步驟頁本身。
+  const main = page.locator('#main')
+  await expect(main.getByText('停下', { exact: true })).toBeVisible()
+  await expect(main.getByText('同一個呼叫重複')).toBeVisible()
   const steps = page.getByRole('list').filter({ has: page.getByRole('heading', { level: 3 }) })
   await expect(steps.getByRole('heading', { level: 3 })).toHaveText([
     '第 1 次模型呼叫',

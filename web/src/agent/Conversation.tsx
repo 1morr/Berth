@@ -10,7 +10,15 @@ import {
   type ToolUIPart,
   type UIMessage,
 } from 'ai'
-import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -105,6 +113,9 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   // 指令在跑時也不收新的一則，但沒有串流可以停。
   const busy = streaming || running
   const input = useRef<HTMLTextAreaElement>(null)
+  // 「送出」與「停止」輪流佔同一格：焦點在那一格裡時，換鍵之後交給新的那一顆（WCAG 2.4.3）。
+  const action = useRef<HTMLDivElement>(null)
+  const actionFocused = useRef(false)
   const outputKey = useRef(0)
   const options = hintClosed ? [] : slashMatches(draft)
   const picked = options[Math.min(active, options.length - 1)]
@@ -117,6 +128,12 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       void queryClient.invalidateQueries({ queryKey: agentStatusQueryOptions.queryKey })
     }
   }, [status, queryClient, conversationId])
+
+  useLayoutEffect(() => {
+    if (actionFocused.current && !action.current?.contains(document.activeElement)) {
+      action.current?.querySelector('button')?.focus()
+    }
+  }, [streaming])
 
   // 剛按「助理」打開時對話還在讀，焦點先落在面板標題（`AgentToggle`）；輸入欄出現了就接過來。
   // 只接標題上的：換頁時面板跟著重掛，不該把焦點從頁面上搶走。
@@ -334,6 +351,8 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
         spent={spent}
         onContinue={(turn) => {
           setFailure(null)
+          // 「繼續」一按就收掉：焦點先交給輸入欄，不掉回 `body`。
+          input.current?.focus()
           void send(t('agent.stopped.continue'), turn)
         }}
       />
@@ -391,7 +410,20 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
             {t('agent.inputHint')}
           </p>
           {/* 主要鍵的寬由外層限（DESIGN.md Buttons）；`grid` 讓 Ghost 也撐滿同一格，換鍵時不移位。 */}
-          <div className="grid w-32">
+          <div
+            ref={action}
+            onFocus={() => {
+              actionFocused.current = true
+            }}
+            onBlur={(event) => {
+              // 換鍵時舊的那一顆被拿掉：那不算離開。點到別處（還在畫面上的那一顆失去焦點）才算。
+              const left = event.target
+              queueMicrotask(() => {
+                if (left.isConnected) actionFocused.current = false
+              })
+            }}
+            className="grid w-32"
+          >
             {streaming ? (
               <GhostButton type="button" onClick={stopTurn}>
                 {t('agent.stop')}

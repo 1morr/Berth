@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isJobRefusal } from '../api/jobs'
@@ -41,6 +41,15 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   const [ticked, setTicked] = useState<ReadonlySet<number>>(() => new Set(rows.keys()))
   const waiting = WAITING.has(proposal.status)
   const many = rows.length > 1
+  // 按過之後整排鍵收掉：焦點交給卡片標題，不掉回 `body`（WCAG 2.4.3）。只在這一頁按的才搬。
+  const title = useRef<HTMLHeadingElement>(null)
+  const pressed = useRef(false)
+  useEffect(() => {
+    if (!waiting && pressed.current) {
+      pressed.current = false
+      title.current?.focus()
+    }
+  }, [waiting])
 
   const decide = useMutation({
     mutationFn: (approve: boolean) =>
@@ -57,6 +66,8 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
       await respond(toolCallId, decided)
     },
     onError: async (error) => {
+      // 送不出去時卡片還在等、鍵還在：不搬焦點。被拒（已經有人按過、過期）的會重畫成結果，照樣搬。
+      pressed.current = proposalRefusalOf(error) !== null
       // 已經有人按過或剛好過期：問一次它現在的樣子，卡片照那個畫。
       if (proposalRefusalOf(error) !== null) {
         await queryClient.invalidateQueries({
@@ -78,12 +89,13 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
             {t('agent.card.label')}
           </span>
         ) : null}
-        <h3 id={titleId} className="min-w-0 flex-1 text-sm text-ink">
+        <h3 ref={title} id={titleId} tabIndex={-1} className="min-w-0 flex-1 text-sm text-ink">
           {commandTitle(proposal.command)}
         </h3>
       </div>
 
       <Effects proposal={proposal} />
+      {proposal.command === SUBMIT ? <SubmitFolders rows={rows} /> : null}
 
       <ol className="grid gap-2">
         {rows.map((row, index) => {
@@ -147,8 +159,12 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
             {ticked.size > 0 ? (
               <PrimaryButton
                 type="button"
-                disabled={decide.isPending}
-                onClick={() => decide.mutate(true)}
+                // `busy` 而不是 `disabled`：停用的鍵接不住焦點（DESIGN.md〈Buttons〉）。
+                busy={decide.isPending}
+                onClick={() => {
+                  pressed.current = true
+                  decide.mutate(true)
+                }}
               >
                 {decide.isPending && decide.variables
                   ? t('agent.card.running')
@@ -162,8 +178,11 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
             )}
             <GhostButton
               type="button"
-              disabled={decide.isPending}
-              onClick={() => decide.mutate(false)}
+              busy={decide.isPending}
+              onClick={() => {
+                pressed.current = true
+                decide.mutate(false)
+              }}
             >
               {t('agent.card.reject')}
             </GhostButton>
@@ -232,8 +251,10 @@ interface SubmitRow {
   route_id: number
 }
 
+const SUBMIT = 'downloading.add_manual_download'
+
 function isSubmit(command: string, row: Row): row is Row & SubmitRow {
-  return command === 'downloading.add_manual_download' && typeof row.media_id === 'string'
+  return command === SUBMIT && typeof row.media_id === 'string'
 }
 
 function rowLabel(command: string, row: Row, index: number): string {
@@ -298,7 +319,10 @@ function Fields({ fields, external }: { fields: Field[]; external: readonly stri
           <dd className={`wrap-anywhere text-ink ${field.mono ? 'value' : ''}`}>
             {field.value}
             {external.includes(field.name) ? (
-              <span className="label ml-2 text-blocked-ink">{t('agent.card.fromOutside')}</span>
+              // 提醒、不是阻擋：不用紅（The One Meaning Rule），重線框標出來（The Heavier Line Rule）。
+              <span className="label ml-2 inline-block border-2 border-rule-strong px-1 text-ink">
+                {t('agent.card.fromOutside')}
+              </span>
             ) : null}
           </dd>
         </div>
@@ -448,11 +472,42 @@ function SubmitRowBody({ row, labelled }: { row: SubmitRow; labelled: boolean })
   )
 }
 
+/**
+ * 送單會寫死的資料夾名（plan §5，票 13 留給票 22）：作品頁的送單確認會重述它，卡片也要——第一次送單
+ * 成功那一刻它就定下來，之後改不掉。同一部作品的列只印一次。
+ */
+function SubmitFolders({ rows }: { rows: readonly Row[] }) {
+  const ids = [
+    ...new Set(rows.filter((row) => isSubmit(SUBMIT, row)).map((row) => row.media_id as string)),
+  ]
+  return ids.map((id) => <SubmitFolder key={id} mediaId={id} />)
+}
+
+function SubmitFolder({ mediaId }: { mediaId: string }) {
+  const { t } = useTranslation()
+  const media = useQuery(mediaQueryOptions(mediaId))
+  if (!media.data) return null
+  return (
+    <div className="grid gap-0.5 text-xs">
+      <p className="flex flex-wrap gap-x-3 gap-y-0.5">
+        <span className="label text-ink-dim">{t('agent.card.fields.folder')}</span>
+        {/* 機器字串：原樣出現在檔案系統上。 */}
+        <span className="value min-w-0 wrap-anywhere text-ink">
+          {media.data.folder_name || '—'}
+        </span>
+      </p>
+      <p className="max-w-prose text-ink-dim">
+        {media.data.folder_frozen ? t('submit.alreadyFrozen') : t('submit.willFreeze')}
+      </p>
+    </div>
+  )
+}
+
 /** 拒絕理由照命令那一組的句子：送單是 `jobs.refusal`，RSS 的三種是 `rss.refusal`。 */
 function refusalSentence(command: string, result: ProposalRow): string | null {
   if (result.outcome !== 'refused') return null
   const reason = result.reason
-  if (command === 'downloading.add_manual_download' && isJobRefusal(reason)) {
+  if (command === SUBMIT && isJobRefusal(reason)) {
     return i18n.t(`jobs.refusal.${reason}`)
   }
   if (command.startsWith('rss.') && isRssRefusal(reason)) return i18n.t(`rss.refusal.${reason}`)

@@ -945,6 +945,33 @@ class TestThePanelKnowsWhetherAiIsOn:
         assert client.get("/api/agent/status").status_code == 401
 
 
+class TestTheStopNoteReads:
+    """停下的說明是給人讀的一句（票 22 critique）。
+
+    中文不夾空格、沒有工具時不印空括號、英文分單複數。
+    """
+
+    def test_in_chinese_with_no_tool_run(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        factory.ai_.rejected_keys = frozenset({KEY})
+
+        chat(client, "在嗎？")
+
+        said = "這一輪停下來了：AI 服務出錯。已做：1 次模型呼叫、0 次工具呼叫。"
+        assert stop_note(client) == said
+
+    def test_in_english_with_one_call(self, client: TestClient, factory: FakeClientFactory) -> None:
+        factory.ai_.rejected_keys = frozenset({KEY})
+
+        chat(client, "Hello?", language="en")
+
+        assert stop_note(client) == (
+            "This reply was stopped: the AI service returned an error. "
+            "Done so far: 1 model call, 0 tool calls."
+        )
+
+
 class TestTheBooks:
     def test_the_model_gets_the_rules_and_the_date(
         self, client: TestClient, script: Script

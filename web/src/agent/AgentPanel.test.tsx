@@ -624,6 +624,62 @@ describe('AgentPanel when a guard stops a turn', () => {
   })
 })
 
+describe('AgentPanel keeps the keyboard focus', () => {
+  it('moves it from Send to Stop and back when the button changes under it', async () => {
+    let finish: () => void = () => {}
+    serve(
+      backend({
+        stored: [],
+        chat: () => {
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const encode = (chunk: object) =>
+                new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`)
+              controller.enqueue(encode({ type: 'start' }))
+              finish = () => {
+                for (const chunk of say('好。').slice(1)) controller.enqueue(encode(chunk))
+                controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+                controller.close()
+              }
+            },
+          })
+          return new Response(body, {
+            headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+          })
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+    await user.type(await screen.findByLabelText('問助理'), '在嗎？')
+
+    await user.click(screen.getByRole('button', { name: '送出' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '停止' })).toHaveFocus())
+    finish()
+    await waitFor(() => expect(screen.getByRole('button', { name: '送出' })).toHaveFocus())
+  })
+
+  it('gives it to the input after Continue, whose button goes away', async () => {
+    let calls = 0
+    serve(
+      backend({
+        stored: [],
+        chat: () => stream(calls++ === 0 ? stoppedStream('r1', true) : say('接著查完了。')),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+    const input = await screen.findByLabelText('問助理')
+    await user.type(input, '一直查{Enter}')
+
+    await user.click(await screen.findByRole('button', { name: '繼續' }))
+
+    expect(await screen.findByText('接著查完了。')).toBeInTheDocument()
+    expect(input).toHaveFocus()
+  })
+})
+
 describe('AgentPanel while the AI service is paused', () => {
   const until = () => new Date(Date.now() + 15 * 60_000).toISOString()
 

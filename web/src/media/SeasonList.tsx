@@ -162,7 +162,7 @@ function SeasonBody({
                 {t('media.episode.absolute')}
               </th>
             )}
-            <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+            <th scope="col" className="label px-3 py-2 whitespace-nowrap text-ink-dim sm:px-4">
               {t('media.episode.inLibrary')}
             </th>
             <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
@@ -231,19 +231,20 @@ function EpisodeRow({
           </td>
         )}
         {/* `whitespace-nowrap`：窄版上集名那一欄會吃掉寬度，狀態被擠成一字一行（票 15 實跑）。 */}
-        <td className="px-4 py-2 whitespace-nowrap">
-          <span className="inline-flex items-center gap-2">
+        <td className="px-3 py-2 whitespace-nowrap sm:px-4">
+          {/* 窄版鍵排在色塊下面：並排時這一格 `nowrap`，會把集表撐得比畫面寬（票 22 critique 實量）。 */}
+          <span className="inline-flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
             <EpisodeState status={episode.status} job={episode.job} />
             {askable !== null ? (
               <button
                 type="button"
                 aria-expanded={asking}
                 aria-controls={asking ? whyId : undefined}
-                aria-label={t(`media.episode.why.${askable}`)}
+                aria-label={t(`media.episode.cause.${askable}`)}
                 onClick={() => setAsking((open) => !open)}
                 className={COMPACT_BUTTON}
               >
-                {t('media.episode.why.button')}
+                {t('media.episode.cause.button')}
               </button>
             ) : null}
           </span>
@@ -298,27 +299,28 @@ function WhyNotLine({
   const found = useQuery(whyNotQueryOptions(mediaId, season, episode))
 
   if (found.isPending)
-    return <p className="text-xs text-ink-dim">{t('media.episode.why.loading')}</p>
-  if (found.isError) return <p className="text-xs text-ink">{t('media.episode.why.failed')}</p>
+    return <p className="text-xs text-ink-dim">{t('media.episode.cause.loading')}</p>
+  if (found.isError) return <p className="text-xs text-ink">{t('media.episode.cause.failed')}</p>
   const next = nextStep(found.data)
   return (
     <p aria-live="polite" className="max-w-prose text-sm break-words whitespace-normal text-ink">
-      {t(`media.episode.why.conclusion.${found.data.conclusion}`)}
+      {t(`media.episode.cause.conclusion.${found.data.conclusion}`)}
       {next ? <> {next}</> : null}
     </p>
   )
 }
 
 function nextStep(found: WhyNot) {
-  const job = found.episodes[0]?.jobs[0] ?? found.jobs[0]?.hash
+  // 只取蓋到這一集的那一筆：整部作品的第一筆可能與這一集無關。
+  const job = found.episodes[0]?.jobs[0]
   switch (found.conclusion) {
     case 'unbound':
     case 'excluded':
-      return found.rss !== null ? <WhyLink to="/rss" label="media.episode.why.rss" /> : null
+      return found.rss !== null ? <WhyLink to="/rss" label="media.episode.cause.rss" /> : null
     case 'awaiting_review':
       // `issues` 不是 `null` 就是管理員：審核是他的頁面。
       return found.issues !== null ? (
-        <WhyLink to="/review" label="media.episode.why.review" />
+        <WhyLink to="/review" label="media.episode.cause.review" />
       ) : null
     case 'import_failed':
     case 'download_failed':
@@ -334,7 +336,7 @@ function WhyLink({
   label,
 }: {
   to: '/rss' | '/review'
-  label: 'media.episode.why.rss' | 'media.episode.why.review'
+  label: 'media.episode.cause.rss' | 'media.episode.cause.review'
 }) {
   const { t } = useTranslation()
   return (
@@ -348,7 +350,7 @@ function JobLink({ hash }: { hash: string }) {
   const { t } = useTranslation()
   return (
     <Link to="/jobs/$hash" params={{ hash }} className={TEXT_LINK}>
-      {t('media.episode.why.job')}
+      {t('media.episode.cause.job')}
     </Link>
   )
 }

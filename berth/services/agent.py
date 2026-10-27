@@ -1138,10 +1138,14 @@ class Turn:
 
     def _note(self, reason: AiStopReason) -> str:
         text = _NOTES[self.language]
+        names = ", ".join(dict.fromkeys(self.commands_run))
         done = text["done"].format(
             requests=self.requests,
             tools=self.tool_calls,
-            names=", ".join(dict.fromkeys(self.commands_run)) or "-",
+            # 英文分單複數；中文的量詞不變。沒有工具時不印空括號。
+            calls="call" if self.requests == 1 else "calls",
+            tool_calls="call" if self.tool_calls == 1 else "calls",
+            names=text["names"].format(names=names) if names else "",
         )
         why = text[reason].format(
             requests=self.runtime.limits.requests,
@@ -1152,7 +1156,8 @@ class Turn:
             failures=self.runtime.breaker.threshold,
             minutes=int(self.runtime.breaker.pause.total_seconds() // 60),
         )
-        return f"{why} {done}"
+        # 中文句子之間不夾空格。
+        return f"{why}{text['join']}{done}"
 
     def _masked(self, text: str) -> str:
         return text.replace(self.secret, _MASK) if self.secret else text
@@ -1181,7 +1186,9 @@ _NOTES: dict[Language, dict[str, str]] = {
             "這一輪停下來了：AI 服務連續 {failures} 次出錯，先暫停 {minutes} 分鐘，之後再試。"
         ),
         AiStopReason.CANCELLED: "這一輪停下來了：連線被關掉。",
-        "done": "已做：{requests} 次模型呼叫、{tools} 次工具呼叫（{names}）。",
+        "done": "已做：{requests} 次模型呼叫、{tools} 次工具呼叫{names}。",
+        "names": "（{names}）",
+        "join": "",
     },
     Language.EN: {
         AiStopReason.REQUEST_LIMIT: (
@@ -1208,7 +1215,9 @@ _NOTES: dict[Language, dict[str, str]] = {
             "paused for {minutes} minutes before Berth tries again."
         ),
         AiStopReason.CANCELLED: "This reply was stopped: the connection was closed.",
-        "done": "Done so far: {requests} model calls, {tools} tool calls ({names}).",
+        "done": "Done so far: {requests} model {calls}, {tools} tool {tool_calls}{names}.",
+        "names": " ({names})",
+        "join": " ",
     },
 }
 
