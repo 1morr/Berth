@@ -1837,6 +1837,26 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - Anthropic 的 `input_tokens` 已經包含快取讀與寫。
   - `web_search` 的次數在 `usage.details['web_search_requests']`，每次 $0.01。
 - **provider**：
-  - `AnthropicProvider(base_url=...)` 不含 `/v1`（SDK 會自己接 `/v1/messages`）；`OpenAIProvider(base_url=...)` 要含 `/v1`。
-  - 伺服器端 `web_search` 只有 Anthropic 有。
-- **還沒量**（要金鑰）：情境 1、2 的品質、步數、token 與費用，以及兩種 provider 的實際差異。
+  - `AnthropicProvider(base_url=...)` 不含 `/v1`（SDK 會自己接 `/v1/messages`）；`OpenAIProvider(base_url=...)` 照那家服務的文件（OpenAI 官方含 `/v1`，DeepSeek 的 `https://api.deepseek.com` 不含也能用）。
+  - 伺服器端 `web_search` 走 Anthropic Messages 才有（Anthropic 官方，以及 DeepSeek 的相容端點）；Chat Completions 沒有，要另接 Tavily 這類工具。
+- **真模型實測**（DeepSeek `deepseek-flash`，Anthropic 與 OpenAI 兩種相容接口各跑六個情境；TMDB 與索引站是真的，qBittorrent 是替身）：
+  - **完成度**：兩種接口都跑完全部情境，沒有接口相關的錯誤。
+  - **品質**：
+    - Re:Zero 全系列能講清楚「TMDB 把 S1–S4 併成 S01 共 85 集、劇場版是獨立 movie」，總覽卡 7 列。
+    - 壓縮之後追問「剛剛送了什麼」答得出來。
+    - 新番推薦的評分都附人數。
+    - 要 AI 自己找 RSS 網址時，兩種接口都拒絕，改用 Mikan 番組訂閱。
+  - **用量**：
+    - 一個情境 3–16 次模型呼叫；Re:Zero 那個最重，約 220K input、11K output、2.5 分鐘。
+    - 快取命中 46–98%。
+    - 六個情境合計約 $0.07–0.08（DeepSeek 尖峰價）；換成 Claude Sonnet 5.5 的價目推估約 $0.5–0.6。
+    - 單輪最多 9 次模型呼叫，所以對話的往返上限 10 太緊，建議 15–20。
+- **實跑抓到、正式版要照做的**：
+  - 確認後的工具結果要明說已核准、已執行，否則模型會說「卡片已出，等你按」。
+  - 待確認的呼叫要找「最後一則模型回應裡還沒有結果的」：平行呼叫時，別的工具的結果會排在它後面。
+  - 卡片預覽要先跑命令的驗證：`route_required`、`route_kind_mismatch` 都是按了確認才被擋下，只好再出一張卡。
+  - 總覽卡要逐列顯示結果，因為會部分成功。
+  - 失敗後的重試不算重複呼叫。
+  - 「讀過外部內容」的警示要縮小到「自由文字參數出自外部內容」，否則每張卡都亮。
+- **還沒測**：Claude 與 OpenAI 的官方端點（這次兩組 key 都是 DeepSeek）、`AnthropicCompaction`。
+- DeepSeek 的 Anthropic 相容端點會忽略 `cache_control` 但自己快取，也會執行伺服器端 `web_search`（`usage.server_tool_use.web_search_requests`）。
