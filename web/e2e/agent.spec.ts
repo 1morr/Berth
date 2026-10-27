@@ -74,6 +74,63 @@ test('側面板問「為什麼沒入庫」得到結論，重新載入之後對�
   await expect(panel).toHaveCount(0)
 })
 
+test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要，重新載入之後摘要還在', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  const log = panel.getByRole('log', { name: '助理' })
+
+  // 兩個回合：`/compact` 只留最後一個，第一個換成摘要（M5 票 18）。
+  await input.fill('SPY×FAMILY 為什麼沒入庫')
+  await input.press('Enter')
+  await expect(log).toContainText('awaiting_review')
+  await input.fill('給我一張圖片')
+  await input.press('Enter')
+  await expect(panel.getByText('圖片沒有載入')).toBeVisible()
+
+  // 打 `/`：輸入欄上方列出六個指令，上下鍵移動。
+  await input.fill('/')
+  const hint = panel.getByRole('listbox', { name: '指令' })
+  await expect(hint.getByRole('option')).toHaveCount(6)
+  await input.press('ArrowDown')
+  await input.press('ArrowDown')
+  await expect(hint.getByRole('option', { selected: true })).toContainText('/usage')
+  await expect(input).toBeFocused()
+  await shot(page, 'slash-hint')
+  await expectNoHorizontalScroll(page)
+
+  // Enter 執行選到的那一個：不經過模型，結果接在對話後面。
+  await input.press('Enter')
+  const usage = log.getByRole('region', { name: '/usage' })
+  await expect(usage.getByText('回覆')).toBeVisible()
+  await expect(usage).toContainText('模型呼叫')
+  await expect(hint).toHaveCount(0)
+  await expect(input).toHaveValue('')
+  await shot(page, 'slash-usage')
+
+  await input.fill('/compact')
+  await input.press('Enter')
+  await expect(log).toContainText('已壓縮')
+  const summary = log.locator('details').filter({ hasText: '較早的對話已壓縮成這段摘要' })
+  await expect(summary).toBeVisible()
+  // 第一個回合的那則訊息不在了（它只剩摘要裡的一句）。
+  await expect(log.getByText('SPY×FAMILY 為什麼沒入庫', { exact: true })).toHaveCount(0)
+  await expect(log.getByText('給我一張圖片', { exact: true })).toBeVisible()
+  await summary.locator('summary').click()
+  await expect(summary).toContainText('使用者問過：SPY×FAMILY 為什麼沒入庫')
+  await shot(page, 'slash-compacted')
+
+  // 指令的結果只在這個分頁；壓縮後的歷史在伺服器上。
+  await page.reload()
+  await expect(
+    panel.getByRole('log', { name: '助理' }).getByText('較早的對話已壓縮成這段摘要'),
+  ).toBeVisible()
+  await expect(panel.getByRole('region', { name: '/usage' })).toHaveCount(0)
+})
+
 async function expectNoHorizontalScroll(page: import('@playwright/test').Page) {
   const overflow = await page.evaluate(
     '[document.documentElement.scrollWidth, window.innerWidth, document.querySelector("#agent-panel").scrollWidth, document.querySelector("#agent-panel").clientWidth]',

@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 
-import { apiGet, CSRF_HEADERS, responseError } from './client'
+import { apiGet, apiPost, CSRF_HEADERS, responseError } from './client'
 import { parseRefusal, type ReasonSet, type Refusal } from './refusal'
 import type { Schemas } from './schemas'
 
@@ -23,6 +23,8 @@ const REASONS: ReasonSet<AgentRefusal> = {
   no_message: true,
   conversation_missing: true,
   not_continuable: true,
+  unknown_command: true,
+  slash_command: true,
 }
 
 export function agentRefusalOf(error: unknown): Refusal<AgentRefusal> | null {
@@ -82,4 +84,48 @@ export function agentTransport(language: () => string) {
       return response
     },
   })
+}
+
+/**
+ * 斜線指令的結果（M5 票 18，`services/slash.py`）：照 `command` 分。字由畫面照介面語言組。
+ */
+export type SlashResult =
+  | Schemas['NewOut']
+  | Schemas['CompactOut']
+  | Schemas['UsageOut']
+  | Schemas['StatusOut']
+  | Schemas['PendingOut']
+  | Schemas['SkillsOut']
+
+export type SlashName = SlashResult['command']
+
+/** 提示清單的順序；少一個或多一個都是編譯錯誤（同 `REASONS`）。 */
+const SLASH: Record<SlashName, true> = {
+  new: true,
+  compact: true,
+  usage: true,
+  status: true,
+  pending: true,
+  skills: true,
+}
+
+const SLASH_COMMANDS = Object.keys(SLASH) as SlashName[]
+
+/** 以 `/` 開頭的就是指令，不送給模型（後端也擋：`slash_command`）。 */
+export function isSlashCommand(text: string): boolean {
+  return text.trimStart().startsWith('/')
+}
+
+/** 打到一半的指令（`/`、`/co`）：提示清單只在這時候出現。 */
+export function slashMatches(draft: string): SlashName[] {
+  const typed = /^\/([a-z]*)$/.exec(draft)
+  if (typed === null) return []
+  return SLASH_COMMANDS.filter((name) => name.startsWith(typed[1]))
+}
+
+export function runSlashCommand(conversationId: string, text: string): Promise<SlashResult> {
+  return apiPost<SlashResult>(
+    `/agent/conversations/${encodeURIComponent(conversationId)}/commands`,
+    { text },
+  )
 }

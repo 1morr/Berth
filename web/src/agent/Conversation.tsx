@@ -1,22 +1,29 @@
 import { Chat, useChat } from '@ai-sdk/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { isTextUIPart, isToolUIPart, type UIMessage } from 'ai'
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { isDataUIPart, isTextUIPart, isToolUIPart, type UIMessage } from 'ai'
+import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
   agentRefusalOf,
   agentStatusQueryOptions,
   agentTransport,
+  isSlashCommand,
   readConversation,
+  runSlashCommand,
+  slashMatches,
+  type SlashName,
+  type SlashResult,
 } from '../api/agent'
 import { ApiError, signedOut } from '../api/client'
 import { GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { ExpandHint } from '../components/ExpandHint'
 import { RequestFailed } from '../components/RequestFailed'
 import i18n from '../i18n'
 import { Markdown } from './Markdown'
 import { PanelFailed, PanelLoading } from './PanelStates'
-import { INPUT_ID, PANEL_TITLE_ID, usePanel } from './panelState'
+import { INPUT_ID, PANEL_TITLE_ID, SLASH_HINT_ID, slashOptionId, usePanel } from './panelState'
+import { SlashHint, SlashOutput } from './Slash'
 import { ToolCall } from './ToolCall'
 
 /**
@@ -46,7 +53,18 @@ export function Conversation({ conversationId }: { conversationId: string }) {
 }
 
 /** 送不出去的那一則：後端說不行的理由，或請求本身為什麼沒成。 */
-type Failure = { kind: 'busy' } | { kind: 'request'; error: unknown }
+type Failure =
+  | { kind: 'busy' }
+  | { kind: 'paused' }
+  | { kind: 'unknown'; word: string }
+  | { kind: 'request'; error: unknown }
+
+/** 指令的結果與它接在第幾則訊息之後（打它的那一刻有幾則）。 */
+interface Output {
+  key: number
+  after: number
+  result: Exclude<SlashResult, { command: 'new' }>
+}
 
 function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   const { t } = useTranslation()
@@ -54,8 +72,18 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   const { draft, setDraft, startNew, restarted } = usePanel()
   const { messages, sendMessage, status, stop, setMessages, clearError } = useChat({ chat })
   const [failure, setFailure] = useState<Failure | null>(null)
-  const busy = status === 'submitted' || status === 'streaming'
+  const [outputs, setOutputs] = useState<Output[]>([])
+  const [running, setRunning] = useState(false)
+  // 提示清單：上下鍵移到哪一列；按了 Esc 就收起，改字才再出現。
+  const [active, setActive] = useState(0)
+  const [hintClosed, setHintClosed] = useState(false)
+  const streaming = status === 'submitted' || status === 'streaming'
+  // 指令在跑時也不收新的一則，但沒有串流可以停。
+  const busy = streaming || running
   const input = useRef<HTMLTextAreaElement>(null)
+  const outputKey = useRef(0)
+  const options = hintClosed ? [] : slashMatches(draft)
+  const picked = options[Math.min(active, options.length - 1)]
 
   // 剛按「助理」打開時對話還在讀，焦點先落在面板標題（`AgentToggle`）；輸入欄出現了就接過來。
   // 只接標題上的：換頁時面板跟著重掛，不該把焦點從頁面上搶走。
@@ -63,11 +91,21 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
     if (document.activeElement?.id === PANEL_TITLE_ID) input.current?.focus()
   }, [])
 
-  async function submit() {
-    const text = draft.trim()
+  function edit(next: string) {
+    setDraft(next)
+    setActive(0)
+    setHintClosed(false)
+  }
+
+  async function submit(typed = draft) {
+    const text = typed.trim()
     if (text === '' || busy) return
     setDraft('')
     setFailure(null)
+    if (isSlashCommand(text)) {
+      await command(text)
+      return
+    }
     await sendMessage({ text })
     const error = chat.error
     if (error === undefined) return
@@ -92,21 +130,97 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
     setFailure(refusal?.reason === 'busy' ? { kind: 'busy' } : { kind: 'request', error })
   }
 
+  /** 斜線指令：不經過模型（`services/slash.py`）。結果接在當下的對話後面，只在這個分頁。 */
+  async function command(text: string) {
+    setRunning(true)
+    try {
+      const result = await runSlashCommand(chat.id, text)
+      if (result.command === 'new') {
+        startNew()
+        return
+      }
+      let after = messages.length
+      if (result.command === 'compact' && result.after !== null) {
+        // 伺服器換掉了歷史：接回壓縮後的那一份，舊的指令結果跟著不在了。
+        const fresh = (await readConversation(chat.id)) ?? []
+        setMessages(fresh)
+        setOutputs([])
+        after = fresh.length
+      }
+      const key = ++outputKey.current
+      setOutputs((current) => [...current, { key, after, result }])
+    } catch (error) {
+      setDraft(text)
+      const refusal = agentRefusalOf(error)
+      if (refusal?.reason === 'conversation_missing') {
+        startNew(true)
+        return
+      }
+      if (refusal?.reason === 'ai_disabled' || signedOut(error)) {
+        await queryClient.refetchQueries({ queryKey: agentStatusQueryOptions.queryKey })
+        return
+      }
+      if (refusal?.reason === 'busy') setFailure({ kind: 'busy' })
+      else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused' })
+      else if (refusal?.reason === 'unknown_command')
+        setFailure({ kind: 'unknown', word: refusal.detail })
+      else setFailure({ kind: 'request', error })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  function pick(name: SlashName) {
+    void submit(`/${name}`)
+  }
+
   function onSubmit(event: FormEvent) {
     event.preventDefault()
     void submit()
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // 組字中的 Enter 是選字，不是送出（中文、日文輸入法）。
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    // 組字中的按鍵是選字，不是送出或移動（中文、日文輸入法）。
+    if (event.nativeEvent.isComposing) return
+    if (picked !== undefined && onHintKey(event, picked)) {
+      event.preventDefault()
+      return
+    }
+    if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
     void submit()
   }
 
+  /** 提示清單開著時的按鍵（APG combobox 的 listbox 彈出：焦點留在輸入欄）。處理了回 `true`。 */
+  function onHintKey(event: KeyboardEvent<HTMLTextAreaElement>, current: SlashName): boolean {
+    const at = options.indexOf(current)
+    switch (event.key) {
+      case 'ArrowDown':
+        setActive((at + 1) % options.length)
+        return true
+      case 'ArrowUp':
+        setActive((at - 1 + options.length) % options.length)
+        return true
+      case 'Tab':
+        if (event.shiftKey) return false
+        edit(`/${current}`)
+        return true
+      case 'Enter':
+        if (event.shiftKey) return false
+        pick(current)
+        return true
+      case 'Escape':
+        // 先收起清單；再按一次 Esc 才是收起面板（`AgentPanel` 看 `defaultPrevented`）。
+        setHintClosed(true)
+        return true
+      default:
+        return false
+    }
+  }
+
   return (
     <>
-      <Transcript messages={messages} busy={busy} restarted={restarted} />
+      <Transcript messages={messages} outputs={outputs} busy={streaming} restarted={restarted} />
       <form
         onSubmit={onSubmit}
         className="grid gap-2 border-t-2 border-rule px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
@@ -119,6 +233,14 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
               {t('agent.failure.busy')}
             </Notice>
           ) : null}
+          {failure?.kind === 'paused' ? (
+            <Notice signal="assigned" label={t('agent.failure.waitLabel')}>
+              {t('agent.failure.paused')}
+            </Notice>
+          ) : null}
+          {failure?.kind === 'unknown' ? (
+            <p className="text-sm text-ink">{t('agent.failure.unknown', { word: failure.word })}</p>
+          ) : null}
           {failure?.kind === 'request' ? (
             <div className="grid gap-1">
               <RequestFailed error={failure.error} lead={t('agent.failure.lead')} />
@@ -126,6 +248,9 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
             </div>
           ) : null}
         </div>
+        {picked !== undefined ? (
+          <SlashHint options={options} active={options.indexOf(picked)} onPick={pick} />
+        ) : null}
         <label htmlFor={INPUT_ID} className="sr-only">
           {t('agent.inputLabel')}
         </label>
@@ -133,10 +258,13 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
           ref={input}
           id={INPUT_ID}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => edit(event.target.value)}
           onKeyDown={onKeyDown}
           rows={2}
           aria-describedby={`${INPUT_ID}-hint`}
+          aria-autocomplete="list"
+          aria-controls={picked !== undefined ? SLASH_HINT_ID : undefined}
+          aria-activedescendant={picked !== undefined ? slashOptionId(picked) : undefined}
           className="value field-sizing-content max-h-36 min-h-16 w-full resize-none border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
         />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -145,7 +273,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
           </p>
           {/* 主要鍵的寬由外層限（DESIGN.md Buttons）；`grid` 讓 Ghost 也撐滿同一格，換鍵時不移位。 */}
           <div className="grid w-32">
-            {busy ? (
+            {streaming ? (
               <GhostButton type="button" onClick={() => void stop()}>
                 {t('agent.stop')}
               </GhostButton>
@@ -170,10 +298,12 @@ function withoutLastUser(messages: UIMessage[]): UIMessage[] {
  */
 function Transcript({
   messages,
+  outputs,
   busy,
   restarted,
 }: {
   messages: UIMessage[]
+  outputs: Output[]
   busy: boolean
   restarted: boolean
 }) {
@@ -205,15 +335,28 @@ function Transcript({
       {messages.length === 0 ? (
         <p className="max-w-prose text-sm text-ink">{t('agent.empty')}</p>
       ) : null}
+      {outputsAfter(outputs, 0)}
       {messages.map((message, index) => (
-        <Message
-          key={message.id}
-          message={message}
-          continued={index > 0 && messages[index - 1].role === message.role}
-        />
+        <Fragment key={message.id}>
+          <Message
+            message={message}
+            continued={
+              index > 0 &&
+              messages[index - 1].role === message.role &&
+              !outputs.some((output) => output.after === index)
+            }
+          />
+          {outputsAfter(outputs, index + 1)}
+        </Fragment>
       ))}
     </div>
   )
+}
+
+function outputsAfter(outputs: Output[], after: number) {
+  return outputs
+    .filter((output) => output.after === after)
+    .map((output) => <SlashOutput key={`slash:${output.key}`} result={output.result} />)
 }
 
 function Message({ message, continued }: { message: UIMessage; continued: boolean }) {
@@ -224,13 +367,24 @@ function Message({ message, continued }: { message: UIMessage; continued: boolea
       .filter(isTextUIPart)
       .map((part) => part.text)
       .join('')
+    // 壓縮的摘要跟著保留下來的第一則使用者訊息（`services/compaction.py`）；它不是你說的話。
+    const summaries = message.parts.filter(isDataUIPart).flatMap(summaryOf)
     return (
-      <div className="grid min-w-0 gap-1">
-        {continued ? null : <span className="label text-ink-dim">{t('agent.you')}</span>}
-        <p className="border-2 border-rule bg-deck px-3 py-2 text-sm whitespace-pre-wrap break-words text-ink">
-          {text}
-        </p>
-      </div>
+      <>
+        {summaries.map((summary, index) => (
+          <Summary key={`${message.id}:summary:${index}`} text={summary} />
+        ))}
+        {text ? (
+          <div className="grid min-w-0 gap-1">
+            {continued && summaries.length === 0 ? null : (
+              <span className="label text-ink-dim">{t('agent.you')}</span>
+            )}
+            <p className="border-2 border-rule bg-deck px-3 py-2 text-sm whitespace-pre-wrap break-words text-ink">
+              {text}
+            </p>
+          </div>
+        ) : null}
+      </>
     )
   }
   if (message.role !== 'assistant') return null
@@ -246,5 +400,29 @@ function Message({ message, continued }: { message: UIMessage; continued: boolea
         return null
       })}
     </div>
+  )
+}
+
+/** `data-compaction`（pydantic-ai 的 `compaction_payload`）的摘要字；別的資料片段不是摘要。 */
+function summaryOf(part: { type: string; data: unknown }): string[] {
+  if (part.type !== 'data-compaction') return []
+  const content = (part.data as { content?: unknown } | null)?.content
+  return typeof content === 'string' && content !== '' ? [content] : []
+}
+
+/** 較早的對話換成的那段摘要：收成一行，展開看全文（它是模型寫的，照 markdown 畫）。 */
+function Summary({ text }: { text: string }) {
+  const { t } = useTranslation()
+  return (
+    <details className="group min-w-0 border-2 border-rule bg-well">
+      <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
+        <span className="label text-ink-dim">{t('agent.summary.label')}</span>
+        <span className="min-w-0 flex-1 text-sm text-ink">{t('agent.summary.title')}</span>
+        <ExpandHint />
+      </summary>
+      <div className="border-t-2 border-rule bg-hull px-3 py-2">
+        <Markdown text={text} />
+      </div>
+    </details>
   )
 }

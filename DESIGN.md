@@ -1026,6 +1026,12 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 - **送出列**：`textarea`（輸入框的外觀、`field-sizing-content`，2–6 行），Enter 送出、Shift+Enter 換行、組字中的 Enter 不送；
   主要鍵「送出」限寬 `w-32`，串流中同一格換成 Ghost「停止」。送不出去時那一則從紀錄拿掉、字放回輸入欄：`busy` 是 `assigned`
   的「等一下」，其餘走 `RequestFailed`。
+- **斜線指令**（M5 票 18）：輸入欄打 `/` 時，上方是一張 `listbox`（`well` 底、`border-2 border-rule-strong`），一列是 `.value`「/名字」+
+  `ink-dim` 小字說明；選到的那一列 `deck` 底加左側 3px 的 `ink` 內線（同泊位板的「這一格」，不靠顏色）。焦點一直在輸入欄
+  （`aria-activedescendant`）。指令的結果接在對話裡：`well` 底一塊，`.label`「指令」+ `.value`「/usage」，內容是 `.label` / `.value`
+  兩欄的定義清單；不塗漆（它不是警告）。
+- **摘要**：壓縮換掉的那一段畫成一行 `<details>`，同工具那一行的外觀：`.label`「摘要」+「較早的對話已壓縮成這段摘要」，展開是 markdown。
+  它不是你說的，所以不標「你」。
 - **AI 沒開**不是錯誤，不塗漆：管理員一句說明 + `GHOST_LINK`「到 AI 設定」，其他人一句「管理員還沒設定」，都沒有送出列。
 
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
