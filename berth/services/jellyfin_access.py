@@ -49,6 +49,7 @@ from berth.domain import CollectionType, LibrarySort, MediaKind, SortOrder
 from berth.models import JellyfinSettings
 from berth.services.auth import AuthenticatedUser, end_sessions
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.settings import read_settings
 from berth.services.steps import message
 from berth.services.watch import WatchState, watch_state
@@ -385,6 +386,9 @@ class JellyfinAccess:
         return watch_state(written)
 
 
+# API 與 service 共用的入口；帳號在 Jellyfin 停用時順手結束他的 session，
+# 所以不是 `READ`。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 @asynccontextmanager
 async def jellyfin_access(
     session: AsyncSession,
@@ -406,6 +410,8 @@ async def jellyfin_access(
         await client.aclose()
 
 
+# 只給 `notify` 算收件人。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def visible_libraries(client: JellyfinClient, jellyfin_user_id: str) -> frozenset[str]:
     """這個人在 Jellyfin 看得到的每一個媒體庫的 id（`UserViews`，不限 Berth 瀏覽得了的類型）。
 

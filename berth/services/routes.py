@@ -81,6 +81,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.jellyfin import (
     berth_path,
     is_listed,
@@ -203,6 +204,7 @@ class RouteSetupStatus:
     ready: bool
 
 
+@command(Effect.READ)
 async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
     """不連線，只把媒體庫與已建的 Route 攤成 UI 的形狀。"""
     setup = await read_settings(session, SetupSettings)
@@ -237,6 +239,8 @@ async def read_route_status(session: AsyncSession) -> RouteSetupStatus:
     )
 
 
+# 換掉精靈的媒體庫快照（照 Jellyfin 現況），不是使用者的設定。
+@command(Effect.REVERSIBLE)
 async def reread_libraries(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> RouteSetupStatus:
@@ -252,6 +256,8 @@ async def reread_libraries(
     return await read_route_status(session)
 
 
+# 健康頁與 `/api/health` 的總結（`health` 讀）。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def routes_health(session: AsyncSession) -> HealthStatus:
     """健康頁四項裡的第四項：**啟用中**的 Route 的總結（票 10、票 14）。
 
@@ -272,6 +278,8 @@ async def routes_health(session: AsyncSession) -> HealthStatus:
     return HealthStatus.UNKNOWN
 
 
+# `setup` 判斷頁序。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def routes_ready(session: AsyncSession) -> bool:
     """第 5 步做完了沒：至少一條啟用中的 Route，而且每一條啟用中的都通過了檢查。
 
@@ -282,6 +290,8 @@ async def routes_ready(session: AsyncSession) -> bool:
     return _ready(tuple(route.health_status for route in routes.values() if route.enabled))
 
 
+# 只由 `setup.choose_service` 換 qBittorrent 時叫。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def forget_route_checks(session: AsyncSession) -> None:
     """所有 Route 的檢查作廢，回到「還沒檢查」（M4 票 15）：使用者在精靈換了一台 qBittorrent，
     分類建在原本那一台上，上一次的綠燈說的是它。媒體庫與路徑頁要重新檢查才走得過去
@@ -292,6 +302,8 @@ async def forget_route_checks(session: AsyncSession) -> None:
         route.health_detail_json = None
 
 
+# 精靈第 5 步建 Route（brief §14 改 Route 要人）；一次建好幾條，沒有單一反向命令。
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def build_routes(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -333,6 +345,8 @@ async def build_routes(
     return await read_route_status(session)
 
 
+# 重跑檢查：只寫健康欄位、建 category、寫探測檔，不改 Route 的設定。
+@command(Effect.REVERSIBLE)
 async def check_routes(
     session: AsyncSession, factory: ServiceClientFactory, *, probe_qbittorrent: bool = True
 ) -> tuple[RouteView, ...]:
@@ -356,6 +370,8 @@ async def check_routes(
     return (await read_route_status(session)).routes
 
 
+# 改 Route 永遠要人（brief §14）。
+@command(Effect.REVERSIBLE, inverse="routes.delete_route", flags={Flag.SETTINGS})
 async def create_route(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -420,6 +436,8 @@ async def create_route(
     return _route_view(route, paths.complete_root)
 
 
+# 名稱與啟用：帶回原本的值就回去。
+@command(Effect.REVERSIBLE, inverse="routes.update_route", flags={Flag.SETTINGS})
 async def update_route(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -451,6 +469,8 @@ async def update_route(
     return _route_view(route, paths.complete_root)
 
 
+# 同 `check_routes`，只有一條。
+@command(Effect.REVERSIBLE)
 async def check_route(
     session: AsyncSession, factory: ServiceClientFactory, route_id: int
 ) -> RouteView:
@@ -514,6 +534,7 @@ class LibraryOption:
     uses_tvdb: bool
 
 
+@command(Effect.READ)
 async def list_routes(session: AsyncSession) -> tuple[ManagedRoute, ...]:
     """Route 設定頁的清單（`GET /routes`）。不連線；引用數一次算完，不逐條查。"""
     paths = await read_settings(session, PathSettings)
@@ -525,6 +546,7 @@ async def list_routes(session: AsyncSession) -> tuple[ManagedRoute, ...]:
     )
 
 
+@command(Effect.READ)
 async def list_libraries(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> tuple[LibraryOption, ...]:
@@ -618,6 +640,9 @@ async def _count_where(
     return await session.scalar(select(func.count()).select_from(table).where(condition)) or 0
 
 
+# 只刪得了沒人引用的，category 與 complete 子目錄留著；但重建的是新的一條（新的 id，名稱、啟用與
+# 檢查紀錄重來），同 `rss.delete_feed` 標不可逆。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def delete_route(session: AsyncSession, route_id: int) -> None:
     """Route 設定頁的「刪除」：一個明確、要二次確認的動作（票 14）。
 

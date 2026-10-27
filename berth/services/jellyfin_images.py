@@ -19,6 +19,7 @@ from berth.adapters.jellyfin import JellyfinImage
 from berth.domain import ImageSize, JellyfinImageType
 from berth.models import JellyfinSettings
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.jellyfin_access import reachable
 from berth.services.settings import read_settings
 
@@ -45,6 +46,7 @@ class ImageMissingError(Exception):
     """Jellyfin 沒有這張圖（或沒有這個 item）。卡片換成佔位。"""
 
 
+@command(Effect.READ)
 async def read_image(
     session: AsyncSession,
     factory: ServiceClientFactory,
