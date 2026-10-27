@@ -43,3 +43,4 @@ prototype 實測過這三個來源的組合可行。
   - **命令名**：skills 先用了 `anilist.search_anime`、`anilist.read_franchise`、`anilist.read_season`、`fribb.lookup_anime`、`bgm.read_calendar`（Bangumi 番組計劃用 `bgm`，`bangumi` 這個模組名已經是 Mikan 的番組查詢）。名字不同的話改 `berth/skills/*/SKILL.md`；`tests/unit/test_skills.py::test_a_pending_tool_is_not_misnamed_once_its_module_exists` 會在模組建好、名字對不上時紅。工具進 `TOOLS` 時刪 `PENDING` 的那幾格。
   - **情境 1、2 還要**：`media.read_media` 與 `discover.read_trending` 進 `TOOLS`（目前不是工具、`about` 是空的）。
   - **第 4 點的 offset 重疊**：票 19 寫進了 `series-mapping`（offset + 1 是第一集、同一季的範圍要首尾相接、重疊或有縫時用集數串起來並對 TMDB 的總集數、表上註明改了哪幾段）。要不要另外做程式檢查仍由這張決定、記理由。
+- 2026-10-28 票 15 交接：AniList、bgm.tv 的讀取工具進 `services/agent_tools.TOOLS` 時，`tests/integration/test_agent_injection.py` 的 `test_every_read_tool_is_classified` 與 `test_every_read_tool_is_tried` 會紅。照著做：在 `ENTRIES` 加一個入口（`InjectionEntry`：讓假服務回帶注入的名字或簡介、回模型讀它的那一步），在 `READ_ARGS` 補參數；加 Feed 與送單兩類會自動多跑這個入口。plan §11.6〈注入的防線與守它的測試〉不必改（測試名不變）。

