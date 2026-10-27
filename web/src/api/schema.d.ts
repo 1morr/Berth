@@ -5504,6 +5504,12 @@ export interface components {
             flags: components["schemas"]["Flag"][];
             /** Checked */
             checked: boolean[];
+            /** External Fields */
+            external_fields: string[][];
+            /** Held Back */
+            held_back: number;
+            /** Torrents */
+            torrents: (number | null)[];
         };
         /**
          * ProposalRefusal

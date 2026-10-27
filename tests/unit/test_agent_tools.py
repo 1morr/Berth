@@ -1,6 +1,7 @@
 """側面板的工具與每人一輪的位子（M5 票 11）：工具都來自命令登錄表，帶著給模型的說明。
 
-票 13 起有寫入：會改東西的工具一律出確認卡（`needs_card`）。票 14 加「可逆的直接做」時改這一條。
+票 13 起有寫入：要人或送 torrent 的出確認卡（`needs_card`）；票 14 起其餘可逆的直接做（plan §11.6
+〈確認卡範圍〉），只有自由文字出自外部內容的那一次改出卡。
 """
 
 from __future__ import annotations
@@ -8,6 +9,7 @@ from __future__ import annotations
 import re
 
 import pytest
+from pydantic import ValidationError
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -28,17 +30,43 @@ from berth.services.agent import (
     needs_card,
     pending_calls,
 )
-from berth.services.agent_tools import TAVILY_TOOL, TOOLS, tool_name, visible_tools
+from berth.services.agent_tools import MODEL_VIEWS, TAVILY_TOOL, TOOLS, tool_name, visible_tools
 from berth.services.commands import Effect
 from berth.services.registry import commands
 
 
-def test_every_tool_is_a_registered_command_with_an_about_and_writes_need_a_card() -> None:
+def test_every_tool_is_a_registered_command_with_an_about() -> None:
     registry = commands()
     for name in TOOLS:
         assert name in registry, name
-        assert registry[name].effect is Effect.READ or needs_card(registry[name]), name
         assert registry[name].about, name
+
+
+def test_irreversible_tools_need_a_card() -> None:
+    """直接做的寫入只有可逆的：不可逆一律要人（brief §14）。"""
+    registry = commands()
+    for name in TOOLS:
+        spec = registry[name]
+        if spec.effect is Effect.IRREVERSIBLE:
+            assert needs_card(spec), name
+
+
+def test_which_writes_need_a_card() -> None:
+    registry = commands()
+    writes = {name for name in TOOLS if registry[name].effect is not Effect.READ}
+    assert {name for name in writes if needs_card(registry[name])} == {
+        "downloading.add_manual_download",
+        "rss.subscribe_mikan",
+        "rss.add_feed",
+    }
+    # 可逆、沒有旗標：直接做（關鍵字出自網頁時改出卡，`agent_origins`）。
+    assert {name for name in writes if not needs_card(registry[name])} == {"rss.subscribe_search"}
+
+
+def test_route_checks_are_not_tools() -> None:
+    """探測讓 qBittorrent 校驗到 100%，觸發使用者設的「完成時執行外部程式」（票 03b）。"""
+    assert "routes.check_route" not in TOOLS
+    assert "routes.check_routes" not in TOOLS
 
 
 def test_the_submit_card_takes_source_ids_never_links() -> None:
@@ -146,3 +174,58 @@ def test_every_call_caps_its_output_and_anthropic_marks_what_to_cache() -> None:
     assert anthropic.get("anthropic_cache_instructions") == "5m"
     assert anthropic.get("anthropic_cache_messages") == "5m"
     assert chat_settings(AiProvider.OPENAI, 4096) == {"max_tokens": 4096}
+
+
+class TestSearchTorrentsForTheModel:
+    """缺集搜尋（票 14）：季號只在 `missing` 時有意義，結果交給模型之前縮小。"""
+
+    def test_a_season_without_missing_is_refused_not_ignored(self) -> None:
+        """默默當成整部搜的話，模型拿到的是它沒要的那一份（同 API 的 `season_without_missing`）。"""
+        tool = commands()["search.search_torrents"].input
+
+        with pytest.raises(ValidationError, match="missing"):
+            tool.model_validate({"media_id": "tv:1", "scope": {"season": 2}})
+        with pytest.raises(ValidationError, match="missing"):
+            tool.model_validate({"media_id": "tv:1", "scope": {"from_season": 2}})
+        tool.model_validate({"media_id": "tv:1", "scope": {"missing": True, "season": 2}})
+
+    def test_rows_keep_what_picking_a_release_needs(self) -> None:
+        row = {
+            "title": "[ANi] SPY×FAMILY - 01 [1080P]",
+            "indexer": "Mikan",
+            "size": 1024,
+            "seeders": 3,
+            "info_url": "https://mikanani.me/Home/Episode/abc",
+            "source_id": "s-1",
+            "key": "abc",
+            "tags": {"resolution": "1080p", "subs": ["CHT"], "hardsub": False, "group": "ANi"},
+            "season": 1,
+            "episode_start": 1,
+            "episode_end": 1,
+            "whole_season": False,
+            "strategy": "absolute",
+            "published_at": "2026-10-01T00:00:00Z",
+            "verdict": "fits",
+            "evidence": "",
+        }
+
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": [row], "counts": []})
+
+        assert given == {
+            "rows": [
+                {
+                    "source_id": "s-1",
+                    "title": "[ANi] SPY×FAMILY - 01 [1080P]",
+                    "indexer": "Mikan",
+                    "size": 1024,
+                    "seeders": 3,
+                    "season": 1,
+                    "episode_start": 1,
+                    "episode_end": 1,
+                    "whole_season": False,
+                    "verdict": "fits",
+                    "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "ANi"},
+                }
+            ],
+            "counts": [],
+        }

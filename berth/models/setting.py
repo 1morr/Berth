@@ -147,6 +147,11 @@ class AiSettings(SettingsGroup):
     openai: AiEndpointSettings = AiEndpointSettings()
     #: 選填，網路搜尋工具用（票 17）。只進不出。
     tavily_api_key: str = ""
+    #: 一張卡送出的 torrent 總數上限（M5 票 14、研究 R5 / C3 的數量閘）；多的留給下一張，單獨就超過
+    #: （或集數不知道）的一列自己一張（`services.agent.Turn._on_one_card`）。
+    #: 13 是一季一個 cour 的集數：情境 4「補這一季缺的集」逐集挑也放得進一張卡，整個系列一定拆開
+    #: （2026-09-26 一次送 144 個的那一次）。設定頁還沒有這一格。
+    card_downloads: int = 13
     #: 每日花費提醒值（美元，M5 票 21）；`None` 是不提醒。只提醒，不停用 AI（brief §6.10）。
     daily_alert_usd: float | None = None
 

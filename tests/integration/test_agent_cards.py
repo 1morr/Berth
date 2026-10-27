@@ -31,8 +31,10 @@ from fastapi.testclient import TestClient
 from pydantic_ai.messages import (
     CompactionPart,
     ModelMessage,
+    ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
+    TextPart,
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
@@ -45,7 +47,7 @@ from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.api.deps import get_client_factory
 from berth.config import Config
 from berth.main import create_app
-from berth.models import AiConversation, Job, Route
+from berth.models import AiConversation, Job, Route, User
 from berth.services.agent import load_history
 from berth.services.jobs import JobSource
 from berth.services.sources import SourceCache
@@ -75,6 +77,11 @@ def script() -> Script:
 
 @pytest.fixture
 def factory(roots: dict[str, Path], script: Script) -> FakeClientFactory:
+    return berth_services(roots, script)
+
+
+def berth_services(roots: dict[str, Path], script: Script) -> FakeClientFactory:
+    """Jellyfin（管理員與一般使用者）、認得 SPY×FAMILY 的 TMDB、照 `script` 回答的模型。"""
     made = factory_for(
         roots,
         jellyfin=fake_jellyfin(
@@ -96,6 +103,12 @@ def start(config: Config, tmp_path: Path, factory: FakeClientFactory) -> TestCli
 
 @pytest.fixture
 def client(
+    config: Config, tmp_path: Path, roots: dict[str, Path], factory: FakeClientFactory
+) -> Iterator[TestClient]:
+    yield from running_berth(config, tmp_path, roots, factory)
+
+
+def running_berth(
     config: Config, tmp_path: Path, roots: dict[str, Path], factory: FakeClientFactory
 ) -> Iterator[TestClient]:
     """精靈跑完、Route 都在、AI 開著、作品頁打開過的一台 Berth，管理員登入著。"""
@@ -132,12 +145,62 @@ def route_of(client: TestClient, slug: str) -> int:
     return in_db(client, read)
 
 
-def rows(client: TestClient, *episodes: int, slug: str = "tv") -> list[dict[str, Any]]:
+def rows(
+    client: TestClient,
+    *episodes: int,
+    slug: str = "tv",
+    conversation: str = "c1",
+    who: dict[str, str] = ADMIN,
+    seen: bool = True,
+) -> list[dict[str, Any]]:
+    """送單卡的列。`seen`：這幾個 id 記進對話的一筆工具結果（id 必須出自工具結果，票 14）；
+    前端偽造的參數不必。"""
     route = route_of(client, slug)
-    return [
+    made = [
         {"source_id": offer(client, episode), "media_id": SPY_ID, "route_id": route}
         for episode in episodes
     ]
+    if seen:
+        looked_up(client, {"rows": made}, conversation=conversation, who=who)
+    return made
+
+
+def looked_up(
+    client: TestClient,
+    result: object,
+    *,
+    conversation: str = "c1",
+    who: dict[str, str] = ADMIN,
+    tool: str = "search_search_torrents",
+) -> None:
+    """對話裡多一段「查了一次、工具回了 `result`」（沒有就替 `who` 建這段對話）。
+
+    卡片測試的假模型直接出卡；真的模型出卡之前會先查，id 才出自工具結果（`agent_origins`）。
+    """
+
+    async def append(session: AsyncSession) -> None:
+        found = await session.get(AiConversation, conversation)
+        if found is None:
+            owner = await session.scalar(select(User.id).where(User.name == who["username"]))
+            assert owner is not None
+            found = AiConversation(id=conversation, user_id=owner)
+            session.add(found)
+            earlier: list[ModelMessage] = []
+        else:
+            earlier = load_history(found.history_json)
+        call = f"seen-{len(earlier)}"
+        found.history_json = ModelMessagesTypeAdapter.dump_json(
+            [
+                *earlier,
+                ModelRequest(parts=[UserPromptPart("Look it up.")]),
+                ModelResponse(parts=[ToolCallPart(tool, {}, tool_call_id=call)]),
+                ModelRequest(parts=[ToolReturnPart(tool, result, tool_call_id=call)]),
+                ModelResponse(parts=[TextPart("Found it.")]),
+            ]
+        ).decode()
+        await session.commit()
+
+    in_db(client, append)
 
 
 def card(rows_: list[dict[str, Any]], tool_call_id: str = CALL) -> Step:
@@ -301,7 +364,7 @@ class TestConfirming:
         assert sent(factory) == [magnet(2)]
 
         # 前端觸發恢復，還送來竄改過的參數：不採用，也不再做一次。
-        forged = {"rows": rows(client, 9)}
+        forged = {"rows": rows(client, 9, seen=False)}
         response = resume(client, forged_input=forged)
 
         assert response.status_code == 200, response.text
@@ -341,6 +404,7 @@ class TestConfirming:
         """總覽卡會部分成功（研究〈實跑才抓到的問題〉第 4 點）：同一個 torrent 送兩次。"""
         both = rows(client, 1)
         both.append(dict(both[0], source_id=offer(client, 1)))
+        looked_up(client, {"rows": both})
         script.steps = [card(both), say("Done.")]
         chat(client, "Download episode 1 twice.")
         [proposal] = cards(client)
@@ -360,8 +424,29 @@ class TestRefusedBeforeACard:
     def test_a_source_id_the_model_made_up_gets_no_card(
         self, client: TestClient, script: Script
     ) -> None:
-        made_up = [{"source_id": "src-2", "media_id": SPY_ID, "route_id": route_of(client, "tv")}]
+        """沒有出自工具結果的 id 一律擋（票 14 的守法），不管來源快取裡有沒有它。"""
+        made_up = rows(client, 1, seen=False)
         script.steps = [card(made_up), say("I need to search first.")]
+
+        response = chat(client, "Download it.")
+
+        assert response.status_code == 200, response.text
+        assert cards(client) == []
+        refused = returned(script.seen[-1]).content
+        assert isinstance(refused, dict)
+        assert refused["refused"] == "id_not_from_results"
+        assert made_up[0]["source_id"] in refused["detail"]
+        [turn] = recorded(client)
+        assert [t.outcome for t in turn.tools] == ["refused"]
+        assert turn.run.stop_reason == "completed"
+
+    def test_a_source_id_from_a_search_long_ago_gets_no_card(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """搜過、但來源快取已經沒有它（兩小時前搜的、或重啟過）：再搜一次。"""
+        stale = [{"source_id": "src-2", "media_id": SPY_ID, "route_id": route_of(client, "tv")}]
+        looked_up(client, {"rows": stale})
+        script.steps = [card(stale), say("I need to search first.")]
 
         response = chat(client, "Download it.")
 
@@ -397,7 +482,7 @@ class TestTheFrontendIsOnlyATrigger:
         script.steps = [say("Hello.")]
         chat(client, "Hi.")
 
-        response = resume(client, forged_input={"rows": rows(client, 1)})
+        response = resume(client, forged_input={"rows": rows(client, 1, seen=False)})
 
         assert response.status_code == 422
         assert response.json()["detail"]["reason"] == "no_message"
@@ -631,7 +716,7 @@ class TestWhoMayPress:
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
         sign_in(client, CREW)
-        script.steps = [card(rows(client, 1)), say("Sent.")]
+        script.steps = [card(rows(client, 1, conversation="crew", who=CREW)), say("Sent.")]
         chat(client, "Download episode 1.", conversation="crew")
         [proposal] = cards(client, "crew")
 

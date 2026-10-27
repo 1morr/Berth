@@ -42,7 +42,8 @@ from berth.config import Config
 from berth.domain import AiProvider
 from berth.main import create_app
 from berth.models import AiCall, AiConversation
-from berth.services.agent import external_texts, load_history
+from berth.services.agent import load_history
+from berth.services.agent_origins import external_texts
 from berth.services.web import SEARCH_DOMAINS
 from tests.integration.arrange import sign_in_owner
 from tests.integration.factories import FakeClientFactory

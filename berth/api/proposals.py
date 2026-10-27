@@ -54,6 +54,13 @@ class ProposalPreviewOut(BaseModel):
     flags: list[Flag]
     #: 逐列：提出時跑過命令的驗證沒有。`false` 是命令沒有驗證函式，預覽只看得到參數。
     checked: list[bool]
+    #: 逐列：出自外部內容（網頁）的自由文字欄位名（M5 票 14）。卡片只在這幾格標警示。
+    external_fields: list[list[str]]
+    #: 超過一張卡的上限、留給下一張的列數（送單的數量閘）。
+    held_back: int
+    #: 逐列：按下去會送出幾個 torrent；`null` 是要送出時才知道（讀不到 Mikan 的單一 feed）。
+    #: 不送 torrent 的命令是空清單。
+    torrents: list[int | None]
 
 
 class ProposalRowOut(BaseModel):

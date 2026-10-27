@@ -92,6 +92,10 @@ const REASONS: ReasonSet<RssRefusal> = {
   interval_unsupported: true,
 }
 
+export function isRssRefusal(reason: string): reason is RssRefusal {
+  return Object.hasOwn(REASONS, reason)
+}
+
 export function parseRssRefusal(error: unknown) {
   return parseRefusal(error, REASONS)
 }

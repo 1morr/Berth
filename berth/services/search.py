@@ -111,6 +111,15 @@ class QueryScope:
     #: 缺集分批時這一批從哪一季起（M3 票 20，`BatchView`）。
     from_season: int = 0
 
+    def __post_init__(self) -> None:
+        # 單獨帶季號沒有意義，默默當成整部作品搜的話，問的人（API 或側面板的模型）拿到的是他沒要的
+        # 那一份。API 先擋成有理由碼的 422（`api/search._scope`）；側面板經登錄表的輸入模型，這裡的
+        # `ValueError` 成為給模型的參數錯（M5 票 14）。
+        if self.season is not None and not self.missing:
+            raise ValueError("season needs missing=true")
+        if self.from_season and not self.missing:
+            raise ValueError("from_season needs missing=true")
+
 
 #: 沒帶 `scope`：記住的名字種類與預設的季，整部作品搜。
 DEFAULT_SCOPE = QueryScope()
@@ -367,7 +376,9 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
     about=(
         "Search the user's indexers for releases of one work (media_id from search_media). "
         "Leave query empty to search by the work's names; pass query to search one exact "
-        "phrase instead. Each row has a source_id: pass it to send that release as a download. "
+        "phrase instead. To look only for the episodes the library is missing, pass "
+        "scope: {missing: true, season: <n>} (season works only together with missing). "
+        "Each row has a source_id: pass it to send that release as a download. "
         "Rows come grouped by verdict, best matches first; problem says why nothing came back."
     ),
     audience=Role.USER,
