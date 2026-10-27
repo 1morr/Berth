@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Berth 助理 prototype</title>
+<!-- PROTOTYPE（M5）：一次性頁面，由 m5_agent_chat.py 供應。React + @ai-sdk/react 直接從 esm.sh 載入，不經 web/ 的 build。 -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.2.8",
+    "react/jsx-runtime": "https://esm.sh/react@19.2.8/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@19.2.8/client?external=react",
+    "ai": "https://esm.sh/ai@7.0.138?deps=zod@3.25.76",
+    "@ai-sdk/react": "https://esm.sh/@ai-sdk/react@4.0.141?external=react,ai&deps=zod@3.25.76",
+    "htm": "https://esm.sh/htm@3.1.1",
+    "marked": "https://esm.sh/marked@18.1.1",
+    "dompurify": "https://esm.sh/dompurify@3.4.17"
+  }
+}
+</script>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #fff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
+    --accent: #1f5f8b; --accent-ink: #fff; --warn: #9a5b00; --warn-bg: #fff4e0; --ok: #2d6a3e; --bad: #9b2c2c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --ink: #ecebe6; --muted: #9c9a93; --line: #34332f;
+      --accent: #6fb0dc; --accent-ink: #0d1b24; --warn: #f0b45c; --warn-bg: #3a2a10; --ok: #7fc493; --bad: #ef8a8a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; height: 100vh; }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } aside { display: none; } }
+  header { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0 auto 0 0; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  main, .col { display: flex; flex-direction: column; min-height: 0; }
+  .col { height: 100vh; }
+  main { flex: 1; }
+  .log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 760px; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); padding: 8px 12px; border-radius: 12px 12px 2px 12px; white-space: pre-wrap; }
+  .msg.assistant { align-self: flex-start; width: 100%; }
+  .text :is(p, ul, ol, table) { margin: 0 0 8px; }
+  .text table { border-collapse: collapse; font-size: 13px; }
+  .text :is(td, th) { border: 1px solid var(--line); padding: 3px 8px; text-align: left; vertical-align: top; }
+  .text code { font-family: var(--mono); font-size: 12px; }
+  .tool { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 4px 0; }
+  .tool summary { cursor: pointer; }
+  .tool pre { white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; background: var(--panel); border: 1px solid var(--line); padding: 8px; border-radius: 6px; }
+  .card { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; margin: 8px 0; max-width: 640px; }
+  .card h3 { margin: 0 0 4px; font-size: 14px; }
+  .card .effect { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .card .taint { background: var(--warn-bg); color: var(--warn); font-size: 12px; padding: 4px 8px; border-radius: 6px; margin-bottom: 8px; }
+  .card label.row { display: grid; grid-template-columns: 20px 1fr; gap: 6px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .card .sub { color: var(--muted); font-size: 12px; }
+  .card dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0 0 8px; font-size: 13px; }
+  .card dt { color: var(--muted); }
+  .card dd { margin: 0; }
+  .card .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .card .status { font-size: 12px; font-weight: 600; }
+  .status.executed, .status.approved { color: var(--ok); }
+  .status.denied, .status.expired, .status.failed { color: var(--bad); }
+  .status.detached { color: var(--warn); }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .note { align-self: center; font-size: 12px; color: var(--muted); white-space: pre-wrap; background: var(--panel); border: 1px dashed var(--line); padding: 6px 10px; border-radius: 6px; max-width: 760px; }
+  .err { color: var(--bad); }
+  form.composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--panel); }
+  form.composer textarea { flex: 1; font: inherit; resize: none; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 12px 14px; font-size: 12px; }
+  aside h2 { font-size: 13px; margin: 14px 0 6px; }
+  .meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .meter > div { height: 100%; background: var(--accent); }
+  .run { border-top: 1px solid var(--line); padding: 6px 0; }
+  .run .k { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .chip { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); }
+  .chip.loop_warned, .chip.guard_blocked, .chip.deferred { border-color: var(--warn); color: var(--warn); }
+  .chip.loop_blocked, .chip.loop_abort, .chip.error { border-color: var(--bad); color: var(--bad); }
+  .examples button { display: block; width: 100%; text-align: left; margin: 4px 0; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import htm from "htm";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+
+const html = htm.bind(React.createElement);
+const WRITE_TOOLS = new Set(["submit_downloads", "subscribe_mikan", "subscribe_search", "add_rss_feed"]);
+const STATUS = { pending: "等你決定", detached: "等你決定（已脫離對話）", approved: "已確認，執行中", executed: "已執行", denied: "已拒絕", expired: "已過期", failed: "失敗" };
+const EXAMPLES = [
+  "推薦這一季評價好的新番，附評分人數",
+  "幫我下載 Re:Zero 全系列（不要短篇）",
+  "我追的番最新一集為什麼還沒進媒體庫？",
+  "幫我加這個 RSS：https://mikanani.me/RSS/MyBangumi?token=REDACTED",
+];
+
+const api = (path, body) => fetch(path, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+
+function Markdown({ text }) {
+  const safe = useMemo(() => DOMPurify.sanitize(marked.parse(text || "")), [text]);
+  return html`<div class="text" dangerouslySetInnerHTML=${{ __html: safe }} />`;
+}
+
+function Card({ part, proposal, onDecide }) {
+  const [sel, setSel] = useState(() => (proposal?.preview?.items || []).map((_, i) => i));
+  const [busy, setBusy] = useState(false);
+  // 卡片可能先於 proposals 列表畫出來：proposal 到了再預設全勾（已決定的照伺服器記的選擇）
+  useEffect(() => { if (proposal) setSel(proposal.selection ?? (proposal.preview?.items || []).map((_, i) => i)); }, [proposal?.id]);
+  if (!proposal) {
+    // 寫入工具沒有出卡片：被防護擋下，或工具自己回了錯誤
+    return html`<div class="card"><h3>${part.type.slice(5)}（沒有出卡片）</h3><div class="sub">${typeof part.output === "string" ? part.output : JSON.stringify(part.output ?? part.errorText ?? "")}</div></div>`;
+  }
+  const pv = proposal.preview || {};
+  const open = proposal.status === "pending" || proposal.status === "detached";
+  const decide = async approved => { setBusy(true); await onDecide(part, proposal, approved, pv.kind === "checklist" ? sel : null); setBusy(false); };
+  return html`<div class="card">
+    <h3>${pv.title}</h3>
+    <div class="effect">${pv.effect}</div>
+    ${proposal.tainted ? html`<div class="taint">這段對話讀過外部內容（網頁 / torrent 標題 / 第三方資料）。請確認參數是你要的。</div>` : null}
+    ${pv.kind === "checklist" ? pv.items.map((it, i) => html`<label class="row" key=${i}>
+        <input type="checkbox" disabled=${!open} checked=${sel.includes(i)} onChange=${e => setSel(s => e.target.checked ? [...s, i].sort() : s.filter(x => x !== i))} />
+        <span><b>${it.label}</b><br/><span class="sub">${it.media} · ${it.route}<br/>${it.source}</span></span>
+      </label>`) : html`<dl>${Object.entries(pv.fields || {}).map(([k, v]) => html`<dt key=${k}>${k}</dt><dd>${String(v ?? "—")}</dd>`)}</dl>`}
+    <div class="actions">
+      ${open ? html`<button class="primary" disabled=${busy || (pv.kind === "checklist" && !sel.length)} onClick=${() => decide(true)}>確認${pv.kind === "checklist" ? `（${sel.length} 項）` : ""}</button>
+        <button disabled=${busy} onClick=${() => decide(false)}>拒絕</button>` : null}
+      <span class=${"status " + proposal.status}>${STATUS[proposal.status] || proposal.status}</span>
+      <span class="sub">卡片 ${proposal.id.slice(-6)}</span>
+    </div>
+    ${proposal.result ? html`<details class="tool"><summary>結果</summary><pre>${JSON.stringify(proposal.result, null, 2)}</pre></details>` : null}
+  </div>`;
+}
+
+function Part({ part, proposals, onDecide }) {
+  if (part.type === "text") return html`<${Markdown} text=${part.text} />`;
+  if (part.type === "reasoning") return null;
+  if (part.type?.startsWith("tool-")) {
+    const name = part.type.slice(5);
+    if (WRITE_TOOLS.has(name)) return html`<${Card} part=${part} proposal=${proposals[part.toolCallId]} onDecide=${onDecide} />`;
+    return html`<details class="tool"><summary>🔧 ${name} · ${part.state}</summary>
+      <pre>${JSON.stringify(part.input, null, 1)}</pre>
+      ${part.output !== undefined ? html`<pre>${JSON.stringify(part.output, null, 1)}</pre>` : null}
+      ${part.errorText ? html`<pre class="err">${part.errorText}</pre>` : null}
+    </details>`;
+  }
+  if (part.type === "source-url") return html`<div class="tool">🔗 <a href=${part.url} target="_blank" rel="noreferrer">${part.title || part.url}</a></div>`;
+  return null;
+}
+
+function Chat({ conv, refresh, notes, addNote, startNew }) {
+  const [input, setInput] = useState("");
+  const logRef = useRef(null);
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: "/api/chat",
+    // 歷史由伺服器保管：只送最後一則（新訊息，或帶著核准回應的那則助理訊息）
+    prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({ body: { id, trigger, messageId, messages: messages.slice(-1) } }),
+  }), []);
+  const { messages, sendMessage, addToolApprovalResponse, status, error } = useChat({
+    id: conv.id,
+    messages: conv.messages,
+    transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    onFinish: refresh,
+    onError: refresh,
+  });
+  const proposals = useMemo(() => Object.fromEntries(conv.proposals.map(p => [p.id, p])), [conv.proposals]);
+  useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [messages, notes]);
+
+  const onDecide = async (part, proposal, approved, selection) => {
+    const r = await api(`/api/proposals/${proposal.id}/decide`, { approved, selection });
+    if (r.error) { addNote("卡片：" + r.error); await refresh(); return; }
+    if (!r.detached && part.state === "approval-requested") {
+      addToolApprovalResponse({ id: part.approval.id, approved, reason: approved ? undefined : "使用者在卡片上按了拒絕。" });
+    }
+    await refresh();
+  };
+
+  const submit = async e => {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || status === "streaming" || status === "submitted") return;
+    setInput("");
+    if (text.startsWith("/")) {
+      addNote("› " + text);
+      const r = await api(`/api/conv/${conv.id}/command`, { command: text });
+      if (r.new) return startNew(r.new);
+      addNote(r.text);
+      if (r.reload) await refresh(true);
+      return;
+    }
+    sendMessage({ text });
+  };
+
+  return html`<main>
+    <div class="log" ref=${logRef}>
+      ${messages.length === 0 ? html`<div class="note examples">試試看：${EXAMPLES.map(x => html`<button key=${x} onClick=${() => setInput(x)}>${x}</button>`)}</div>` : null}
+      ${messages.map(m => html`<div key=${m.id} class=${"msg " + m.role}>
+        ${m.role === "user" ? m.parts.filter(p => p.type === "text").map(p => p.text).join("") : m.parts.map((p, i) => html`<${Part} key=${i} part=${p} proposals=${proposals} onDecide=${onDecide} />`)}
+      </div>`)}
+      ${notes.map((n, i) => html`<div key=${"n" + i} class="note">${n}</div>`)}
+      ${status === "submitted" ? html`<div class="note">思考中…</div>` : null}
+      ${error ? html`<div class="note err">${String(error.message || error)}</div>` : null}
+    </div>
+    <form class="composer" onSubmit=${submit}>
+      <textarea rows="2" value=${input} placeholder="跟助理說話，或輸入 /compact /usage /pending /skills /new" onInput=${e => setInput(e.target.value)}
+        onKeyDown=${e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) submit(e); }} />
+      <button class="primary" disabled=${status === "streaming" || status === "submitted"}>送出</button>
+    </form>
+  </main>`;
+}
+
+function Side({ conv }) {
+  const used = conv.context.last_input_tokens, cap = conv.context.compact_at;
+  const tot = conv.runs.reduce((a, r) => ({ cost: a.cost + (r.cost_usd || 0), inp: a.inp + r.input_tokens, cr: a.cr + r.cache_read, out: a.out + r.output_tokens }), { cost: 0, inp: 0, cr: 0, out: 0 });
+  return html`<aside>
+    <h2>上下文</h2>
+    <div class="meter"><div style=${{ width: Math.min(100, used / cap * 100) + "%" }} /></div>
+    <div class="k">上一輪 input ${used.toLocaleString()} / 壓縮門檻 ${cap.toLocaleString()}</div>
+    <h2>這段對話</h2>
+    <div>input ${tot.inp.toLocaleString()}（快取 ${tot.inp ? Math.round(tot.cr / tot.inp * 100) : 0}%）· output ${tot.out.toLocaleString()} · 估計 $${tot.cost.toFixed(4)}</div>
+    <div class="k">${conv.tainted ? "已讀過外部內容" : "尚未讀過外部內容"} · <a href="/stats" target="_blank">全部紀錄</a></div>
+    <h2>每一輪</h2>
+    ${[...conv.runs].reverse().map(r => html`<div class="run" key=${r.id}>
+      <div><b>${r.kind}</b> · ${r.stop_reason} · ${r.requests} 步 · ${r.cost_usd != null ? "$" + r.cost_usd.toFixed(4) : "費用未知"}</div>
+      <div class="k">in ${r.input_tokens.toLocaleString()}（快取讀 ${r.cache_read.toLocaleString()}，寫 ${r.cache_write.toLocaleString()}）· out ${r.output_tokens.toLocaleString()}${r.web_searches ? ` · 網搜 ${r.web_searches}` : ""}</div>
+      ${r.error ? html`<div class="err">${r.error}</div>` : null}
+      <div class="chips">${r.tools.map(t => html`<span key=${t.idx} class=${"chip " + t.outcome} title=${t.outcome + " · " + t.ms + "ms"}>${t.tool}</span>`)}</div>
+    </div>`)}
+  </aside>`;
+}
+
+function App() {
+  const [config, setConfig] = useState(null);
+  const [conv, setConv] = useState(null);
+  const [epoch, setEpoch] = useState(0); // 壓縮後重掛 useChat，讓畫面換成伺服器的歷史
+  const [notes, setNotes] = useState([]);
+  const addNote = n => setNotes(ns => [...ns, n]);
+  const load = async id => { const c = await api(`/api/conv/${id}`); if (c.error) return false; setConv(c); try { localStorage.setItem("m5conv", id); } catch {} return true; };
+  const startNew = async (id, provider) => {
+    id = id || (await api("/api/conv", { provider: provider || conv?.provider || Object.keys(config.providers)[0] })).id;
+    setNotes([]); await load(id); setEpoch(e => e + 1);
+  };
+  useEffect(() => { api("/api/config").then(setConfig); }, []);
+  useEffect(() => {
+    if (!config) return;
+    let saved = null; try { saved = localStorage.getItem("m5conv"); } catch {}
+    (saved ? load(saved) : Promise.resolve(false)).then(ok => ok || startNew());
+  }, [config]);
+  if (!config || !conv) return html`<div class="note">載入中…</div>`;
+  const refresh = async remount => { await load(conv.id); if (remount === true) setEpoch(e => e + 1); };
+  return html`<div class="app">
+    <div class="col">
+      <header>
+        <h1>Berth 助理 <span class="meta">prototype</span></h1>
+        <select value=${conv.provider} onChange=${e => startNew(null, e.target.value)}>
+          ${Object.entries(config.providers).map(([k, v]) => html`<option key=${k} value=${k}>${k} · ${v.model}</option>`)}
+        </select>
+        <button onClick=${() => startNew()}>新對話</button>
+        <span class="meta">Berth ${config.berth}${config.tavily ? " · Tavily" : ""}</span>
+      </header>
+      <${Chat} key=${conv.id + ":" + epoch} conv=${conv} refresh=${refresh} notes=${notes} addNote=${addNote} startNew=${id => startNew(id)} />
+    </div>
+    <${Side} conv=${conv} />
+  </div>`;
+}
+
+createRoot(document.getElementById("root")).render(html`<${App} />`);
+</script>
+</body>
+</html>

@@ -59,6 +59,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `season_token_compare.py` | M4 票 84：搜尋季的記號寫 `Season N` 還是 `SNN`（CJK 比 `第N季`），真的 Prowlarr 加公開站（The Pirate Bay、Mikan、dmhy）各回幾筆、其中發佈名真的含作品名的幾筆（TPB 查不到會回熱門清單），以及這些命中自己寫 `SNN` 還是 `Season N`（站有沒有做模糊比對）。需要一台 Prowlarr（URL 與 API key 由 argv 或 `PROWLARR_URL` / `PROWLARR_API_KEY` 給）；14 次查詢、每次間隔 3.5 秒，公開站會封 IP；結果 `.local/experiments/results/season_token_compare.json` |
 | `jellyfin_scan_scope.py` | M4 票 62：Jellyfin 能不能只刷新一個媒體庫（`POST /Items/{媒體庫}/Refresh`，兩個 `Default`）、會不會連別的媒體庫一起掃，對第一次掃描時是空的媒體庫、兩個路徑而其中一個空的媒體庫有沒有效，以及全庫掃描任務的範圍、時間與執行中再送一次的結果。自己起停一次性容器（image 取 `deploy/` 釘的那一個，媒體庫關掉網路 fetcher）；結論在 brief §20.1 |
 | `discord_dm.py` | M4 票 121：Discord bot 私訊對真的 Discord 回什麼——從沒連過 gateway 的 bot 私訊得到嗎、超長的 `400`、沒有共同伺服器與關了私訊、錯 token 的 `401`、第一個 `429` 的 body 與 header，以及只私訊的邀請連結。每一步一次 run（`invite`、`send <label>`、`baseline`、`ratelimit`、`gateway-once`、`fixtures`；M4 票 124 加 `embed-url`：九種自架網址放 embed `url` 與寫成 Markdown 連結各送一則），使用者在 Discord 上的操作夾在中間；`fixtures` 遮掉 id 與名字之後寫 `tests/fixtures/http/discord/`。token 與 user ID 只從 `DISCORD_BOT_TOKEN` / `DISCORD_USER_ID` 讀。只用標準庫，`gateway-once` 例外（要 Berth 虛擬環境的 `websockets`，所以一律 `uv run`）；結論在 brief §20.23 |
+| `m5_agent_chat.py` | M5 規劃（2026-10-27）的 AI 對話 prototype：pydantic-ai 2.61 的內建 agent 加一頁 `@ai-sdk/react` 側面板（`m5_agent_chat.html`），透過 HTTP 打一台跑著的 Berth（不 import `berth`）。確認卡存成 SQLite 一列、歷史由伺服器保管、id / 網址防護、重複呼叫偵測、壓縮、斜線指令、每輪 token 與費用。PEP 723 腳本，`uv run --env-file .env scripts/experiments/m5_agent_chat.py`；`--selftest` 與 `--demo` 不需要金鑰（腳本化的假模型與假 Berth，本體在 `m5_agent_selftest.py`）。結論在 brief §20.24 與 `docs/research/m5-prototype-2026-10-27.md` |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方
@@ -159,3 +160,6 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 - **`discord_dm.py` 的每一步之間要使用者在 Discord 上動手**（邀請、關私訊、踢 bot），順序在
   [`docs/development.md`](../../docs/development.md#實驗腳本)。`baseline` 與 `ratelimit` 會私訊收件人約 10 則。
   `fixtures` 只收 `FIXTURE_NAMES` 那九份，其他 `send` 的結果只留在 `.local/experiments/results/discord_dm/`。
+- **`m5_agent_chat.py` 的對話紀錄在 `.local/experiments/m5-agent-PROTOTYPE-wipe-me.db`**，跨重啟保留（重啟後按舊卡片正是要驗的）；
+  要從頭來就刪掉它。頁面的 React 與 AI SDK 從 esm.sh 載入：`ai` 與 `@ai-sdk/react` 要帶 `deps=zod@3.25.76`，
+  不帶或帶 zod 4 時 esm.sh 解出來的 `zod/v4` 缺匯出，頁面一片空白。
