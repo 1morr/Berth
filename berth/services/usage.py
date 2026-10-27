@@ -6,7 +6,9 @@
 
 - **分日照伺服器的時區**（`now` 的時區；正式跑是 `datetime.now().astimezone()`），近 30 天含今天。
 - **不知道的不當 0**（研究 C5）：快取讀寫、費用各自記「知道的加總」與「幾次呼叫不知道」。
-  出錯沒有回應的那一次沒有 token，不算快取不知道；它的費用照記帳（`services.agent`）算不知道。
+  出錯、沒有回應的那一次沒有 token，也就沒有花費可算：快取與費用都不數它，**不是**不知道（協調者
+  2026-10-27：否則一次出錯就讓有價目的模型連掛兩週「提醒沒算進」）。`ai_runs.cost_usd` 的合計
+  （`services.agent` 的記帳）仍照「有一次算不出來就是 `NULL`」。
 - **花費提醒只提醒、不停用**（`domain.spend`）：用知道的那部分費用比。提醒值存在 `settings.ai`。
 """
 
@@ -113,14 +115,15 @@ class DayUsage:
         self.calls += 1
         self.input_tokens += call.input_tokens
         self.output_tokens += call.output_tokens
-        answered = not call.error
-        if answered:
-            self.cache_read.add(call.cache_read_tokens)
-            self.cache_write.add(call.cache_write_tokens)
-            if call.cache_read_tokens is not None:
-                self.read_input += call.input_tokens
-        self.cost.add(call.cost_usd)
         self.web_searches += call.web_searches
+        # 出錯、沒拿到回應的那一次沒有 token，也就沒有花費可算：快取與費用都不數它（不是不知道）。
+        if call.error:
+            return
+        self.cache_read.add(call.cache_read_tokens)
+        self.cache_write.add(call.cache_write_tokens)
+        if call.cache_read_tokens is not None:
+            self.read_input += call.input_tokens
+        self.cost.add(call.cost_usd)
 
     def merge(self, other: DayUsage) -> None:
         self.calls += other.calls
@@ -186,7 +189,7 @@ class UsageView:
 class SpendCheck:
     """今天的花費提醒，與它**沒算進去的**。
 
-    提醒只用知道的費用比，價目表上沒有的模型（或出錯沒有回應）的那幾次不在裡面。管理員要看得出
+    提醒只用知道的費用比，有回應、有 token 而價目表上沒有這個模型的那幾次不在裡面。管理員要看得出
     「沒有提醒」是沒事，還是有一部分根本沒算（brief §6.10：未知不當 0）。
     """
 
@@ -273,7 +276,11 @@ async def spend_check(session: AsyncSession, *, now: datetime | None = None) -> 
     today = (now or datetime.now().astimezone()).date()
     start = _day_start(today - timedelta(days=ANOMALY_WINDOW_DAYS), zone)
     rows = await session.execute(
-        select(AiCall.created_at, AiCall.cost_usd).where(AiCall.created_at >= start)
+        select(AiCall.created_at, AiCall.cost_usd).where(
+            AiCall.created_at >= start,
+            # 同 `DayUsage.add_call`：出錯、沒有回應的那一次沒有花費可算，不是費用未知。
+            AiCall.error == "",
+        )
     )
     costs: dict[date, tuple[float, int]] = {}
     for created_at, cost in rows:

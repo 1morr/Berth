@@ -207,7 +207,7 @@ describe('設定 → 用量', () => {
 
     expect(
       await screen.findByText(
-        '有 4 次呼叫的費用未知（今天 1 次、前 14 天 3 次），提醒沒算進它們：模型不在價目表上，或呼叫出錯沒有回應。',
+        '有 4 次呼叫的費用未知（今天 1 次、前 14 天 3 次），提醒沒算進它們：那幾次的模型不在價目表上。',
       ),
     ).toBeVisible()
     expect(screen.getByText('費用未知')).toBeVisible()

@@ -204,7 +204,7 @@ class TestUnknowns:
                 _call(run, _utc(at), cost=0.02, write=100),
                 # 價目表上沒有的模型；Chat Completions 不報快取寫。
                 _call(run, _utc(at), step=2, cost=None, write=None),
-                # 出錯、沒有回應：費用不知道。
+                # 出錯、沒有回應：沒有花費可算，不是不知道（協調者 2026-10-27）。
                 _call(
                     run,
                     _utc(at),
@@ -223,7 +223,8 @@ class TestUnknowns:
         today = (await read_usage(session, now=NOW)).days[0]
 
         assert today.cost.known == pytest.approx(0.02)
-        assert today.cost.unknown == 2
+        # 只有價目查不到的那一次；出錯的那一次不數。
+        assert today.cost.unknown == 1
         assert today.cache_write.known == 100
         # 出錯那一次沒有 token，不算「快取寫不知道」。
         assert today.cache_write.unknown == 1
@@ -582,3 +583,43 @@ class TestCompactionRuns:
         assert [run.id for run in usage.runs] == [chat.id]
         assert usage.totals.calls == 2
         assert usage.totals.cost.known == pytest.approx(0.03)
+
+
+class TestFailedCallsAreNotUnknownCosts:
+    """協調者 2026-10-27：出錯、沒拿到回應的呼叫沒有 token，也就沒有花費可算。
+
+    費用未知只數「有回應、有 token，但價目查不到」的；不然一次出錯就讓有價目的模型連掛兩週
+    「提醒沒算進」。
+    """
+
+    async def test_a_failed_call_on_a_priced_model_leaves_nothing_unknown(
+        self, session: AsyncSession
+    ) -> None:
+        user = await _user(session)
+        at = _utc(NOW - timedelta(hours=1))
+        run = await _run(session, user, at)
+        session.add_all(
+            [
+                _call(run, at, cost=0.01),
+                _call(
+                    run,
+                    at,
+                    step=2,
+                    input_tokens=0,
+                    output=0,
+                    read=None,
+                    write=None,
+                    cost=None,
+                    error="status_code: 529, overloaded",
+                ),
+            ]
+        )
+        await session.flush()
+
+        usage = await read_usage(session, now=NOW)
+        panel = await spend_check(session, now=NOW)
+
+        assert (panel.unknown_today, panel.unknown_before) == (0, 0)
+        assert usage.spend == panel
+        assert usage.days[0].cost.unknown == 0
+        assert usage.days[0].cost.known == pytest.approx(0.01)

@@ -1723,7 +1723,7 @@
 - 2026-10-27 M5 21：**價目維持只看模型名**（票 09 留給這張決定）：只在官方 base URL 下套用的話，走 Anthropic 接口的 DeepSeek 相容端點（使用者實際在用的那一組）就全變成「未知」；用量頁的「費用怎麼算」說明自架閘道上同名的模型照表上的價估。
 - 2026-10-27 M5 21：**「從側面板每一則回覆連得過來」的一則回覆是一輪**：重新載入後一輪拆成好幾則 UI 訊息，「步驟」只掛在最後一則。命令名是 `usage.set_spend_alert`（shape 原寫 `ai.*`），status 的提醒是清單 `spend_alerts`（兩種可同時出現）；shape 已改。
 - 2026-10-27 M5 21：**正式環境分日照系統時區逐一換算**（`astimezone()` 不帶參數），不拿 `datetime.now().astimezone()` 的固定偏移：30 天裡跨過夏令時的那幾天會差一小時（code-review 提出）。
-- 2026-10-27 M5 21（協調者）：**提醒看不見費用未知的呼叫，畫面要說出來**：模型不在價目表上時每日提醒與異常永遠不響。`SpendCheck` 帶 `unknown_today` / `unknown_before`（前 14 天），用量頁與側面板（管理員）在有未知時多一塊 `neutral`「費用未知」；`AgentStatusOut.spend_alerts` 換成 `spend`（一般使用者 `null`）。出錯沒有回應的呼叫也算未知，與 `ai_runs.cost_usd` 一致。
+- 2026-10-27 M5 21（協調者）：**提醒看不見費用未知的呼叫，畫面要說出來**：模型不在價目表上時每日提醒與異常永遠不響。`SpendCheck` 帶 `unknown_today` / `unknown_before`（前 14 天），用量頁與側面板（管理員）在有未知時多一塊 `neutral`「費用未知」；`AgentStatusOut.spend_alerts` 換成 `spend`（一般使用者 `null`）。~~出錯沒有回應的呼叫也算未知~~（同日協調者推翻，見下一條）。
 - 2026-10-27 M5 18：**自動壓縮的退路量的是上一則回應的 input + output**（票面寫 input）：與 pydantic-ai 的 `context_window_used` 同一個算法，下一次請求至少有這麼大；`/status` 顯示的也是它。context window 查不到時的分母是 `Limits.context_window` 128K（使用者選定），不在設定頁加欄位。
 - 2026-10-27 M5 18：**`/pending` 列這個人每一段對話裡在等的卡**（使用者選定），`here` 標是不是這一段；管理員也只看自己的。`/new` 與「新對話」不碰舊對話裡的卡（要不要脫離由票 13 決定）。
 - 2026-10-27 M5 18：**斜線指令要整則就是 `/<名字>`**：多帶了字（`/compact 留 id`）、打錯、不以 `/` 開頭都是 `unknown_command`，不退回去當成問模型的話；反過來，`/` 開頭的訊息送進對話一律 `slash_command`（同 Claude Code 的未知指令）。指令需要 AI 開著（面板關著時本來就沒有輸入欄）。
@@ -1731,3 +1731,4 @@
 - 2026-10-27 M5 18：**提示清單上按 Enter**：打到一半（`/c`）只補完、完整時才執行（code-review 提出：`/compact` 換掉的歷史回不來）；滑鼠點一列直接執行。
 - 2026-10-28 M5 18（合併 main，票 13）：**驗收第 2 條改成經 `/agent/chat` 的真恢復**（協調者要求）：`test_agent_cards.py::TestHistoryShape` 裡票 13 手動砍掉歷史頭部的那一條換成真的 `/compact`，`test_agent_slash.py` 以 `proposals.execute` 代替的那一條刪掉。migration `e6b2d9a4c731` 改接在 `d8a4f1c6e273` 之後（`alembic heads` 只剩它，upgrade / downgrade 兩步 / upgrade 跑過）。前端兩邊都把「送不出去」抽成一支，統一叫 `report`（指令、恢復、訊息共用）；`open_turn` 的 `/` 拒絕放進票 13 的「有字才檢查」那一段（恢復那一輪沒有字）。
 - 2026-10-27 M5 21（合併票 18）：**用量頁的「輪」只數 `kind = chat`**，壓縮的摘要不算一輪，但它的 token 與費用照算（逐日表本來就從 `ai_calls` 加）；步驟頁不另列壓縮（沒有回覆連到它，id 打得開但不是入口）。**Tavily「真的搜了」的規則只有一份**：`services.usage.tavily_searched`（與 SQL 版 `tavily_searched_sql`），用量頁、步驟頁與 `/usage`（`services.slash`）共用。`/usage` 是一段對話的合計、用量頁是逐日，其餘讀取不重疊。
+- 2026-10-27 M5 21（協調者）：**出錯、沒有回應的呼叫不算費用未知**：沒有 token 就沒有花費可算；之前把它算成未知，一次出錯就讓有價目的模型連掛兩週「提醒沒算進」。用量頁的逐日費用與 `spend_check` 都只數「有回應、價目查不到」的（`TestFailedCallsAreNotUnknownCosts`）。`ai_runs.cost_usd`（一輪的合計、步驟頁的總費用）仍照票 11 的記帳：有一次沒有回應就是 `NULL`，沒有改。

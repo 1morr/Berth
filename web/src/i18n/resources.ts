@@ -4042,9 +4042,9 @@ const zhHant = {
         '今天估計花了 {{today}}，是近 14 天有用量那幾天的中位數 {{against}} 的 {{times}} 倍。AI 照常可用。',
       unknownLabel: '費用未知',
       unknown_one:
-        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：模型不在價目表上，或呼叫出錯沒有回應。',
+        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：那幾次的模型不在價目表上。',
       unknown_other:
-        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：模型不在價目表上，或呼叫出錯沒有回應。',
+        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：那幾次的模型不在價目表上。',
     },
     summary: {
       title: '今天與近 30 天',
@@ -4081,7 +4081,7 @@ const zhHant = {
       labeled: '{{label}} {{value}}',
       notes: {
         unknown:
-          '「—」是接口沒報（OpenAI 相容接口不報快取寫），不是 0。「+未知」是有幾次呼叫的費用算不進去：模型不在價目表上，或呼叫出錯沒有回應。',
+          '「—」是接口沒報（OpenAI 相容接口不報快取寫），不是 0。「+未知」是有幾次呼叫的費用算不進去：模型不在價目表上（出錯沒有回應的呼叫沒有花費，不算在內）。',
         newInput: '新的 input 是沒命中、也沒寫進快取的那部分；命中率是快取讀佔全部 input 的比例。',
       },
     },
@@ -8153,9 +8153,9 @@ const en: Translations<typeof zhHant> = {
         'Today’s estimated spend is {{today}}, {{times}} times the median {{against}} of the days with usage in the last 14. AI keeps working.',
       unknownLabel: 'Cost unknown',
       unknown_one:
-        '{{count}} call has an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave it out: its model is not in the price table, or it failed without a response.',
+        '{{count}} call has an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave it out: its model is not in the price table.',
       unknown_other:
-        '{{count}} calls have an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave them out: their model is not in the price table, or they failed without a response.',
+        '{{count}} calls have an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave them out: their model is not in the price table.',
     },
     summary: {
       title: 'Today and the last 30 days',
@@ -8192,7 +8192,7 @@ const en: Translations<typeof zhHant> = {
       labeled: '{{label}} {{value}}',
       notes: {
         unknown:
-          '“—” means the provider did not report it (OpenAI-compatible endpoints do not report cache writes); it is not 0. “+unknown” means some calls could not be priced: the model is not in the price table, or the call failed without a response.',
+          '“—” means the provider did not report it (OpenAI-compatible endpoints do not report cache writes); it is not 0. “+unknown” means some calls could not be priced: the model is not in the price table (calls that failed without a response cost nothing and are not counted).',
         newInput:
           'New input is the part that neither hit nor was written to the cache; the hit rate is cache reads over all input.',
       },

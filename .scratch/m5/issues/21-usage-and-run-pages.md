@@ -39,7 +39,7 @@
 - 2026-10-27 票 21 完成：shape 在 `.scratch/m5/usage-and-run-shape.md`（使用者選定入口是設定分頁「用量」、提醒值在用量頁就地設、異常的中位數只算有用量的日子且至少 3 天、側面板的提醒只給管理員）。實跑截圖在本目錄（`steps-*.png`、`usage-*.png`、`stopped-in-panel-*.png`，1280 與 390；`pnpm -C web e2e` 的 `agent` 情境說「一直查」重現）。
 - 2026-10-27 code-review 已修：`tally` 把知道的 0 當成不知道（加 `counted`）、命中率把不知道的快取讀當 0、正式環境分日用固定偏移（跨夏令時錯一天）、`/agent/status` 每次讀整份 30 天（改 `usage.today_alerts`）、步驟頁的名字只給管理員、費用「+未知」說出幾次、aria-label 走 i18n、`Tally.merge`、提醒值 0 的提示。
 - 2026-10-27 code-review 沒處理（判斷過）：
-  - 出錯沒有回應的呼叫在用量頁算「費用不知道」：與 `ai_runs.cost_usd` 的記帳一致（服務收不收費不知道），表下說明寫了這一種。
+  - ~~出錯沒有回應的呼叫在用量頁算「費用不知道」~~（2026-10-27 協調者推翻：沒有 token 就沒有花費可算，用量頁與提醒都不數它；`ai_runs.cost_usd` 的合計不變）。
   - 「新的 input」只扣掉知道的快取寫：OpenAI 相容接口不報快取寫，那部分算在新的 input 裡。
   - 壞味道留著：`RunPage` 的 `STOP_CHIP` 與 `usage/labels.ts` 的 `STOP_TEXT` 兩張表（一張是色塊、一張是說法）；`usage/alerts.ts` 的 `where` 旗標；「窄版先收起面板」的 `onClick` 在面板兩處；`api/agent.py` 從 `api/usage.py` 拿 `SpendAlertOut`。票 22 的 UI 收尾（critique / audit / polish）可以一起看。
 - 2026-10-27 合併票 18（協調者）：照它的交接，用量頁的「每輪」只數 `chat`、合計含 `compaction`（測試 `TestCompactionRuns`）；步驟頁不另列壓縮。Tavily 的計數規則與 `/usage` 共用 `services.usage.tavily_searched(_sql)`。
