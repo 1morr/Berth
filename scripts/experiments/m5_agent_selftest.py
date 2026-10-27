@@ -55,7 +55,10 @@ def fake_berth(request: httpx.Request) -> httpx.Response:
         )
     if path == "/api/routes":
         return httpx.Response(
-            200, json=[{"id": 3, "name": "Anime", "collection_type": "tvshows", "enabled": True}]
+            200,
+            json=[
+                {"route": {"id": 3, "name": "Anime", "collection_type": "tvshows", "enabled": True}}
+            ],
         )
     if path == "/api/search":
         rows = [
@@ -144,6 +147,19 @@ def plan(messages: list[ModelMessage]) -> list[Any]:
             ),
         ]
         return [steps[n]] if n < len(steps) else [f"完成：{returns[-1].content}"]
+    if prompt == "平行":  # 同一步兩個工具：一個直接跑、一個要確認
+        if n == 0:
+            item = {
+                "media_id": "tv:65942",
+                "source_id": "src-2",
+                "route_id": 3,
+                "label": "S01E26–E50",
+            }
+            return [
+                ("berth_routes", {}),
+                ("submit_downloads", {"items": [item], "summary": "平行"}),
+            ]
+        return [f"平行完成：{returns[-1].content}"]
     if prompt == "forge":
         if n == 0:
             return [
@@ -382,25 +398,41 @@ async def run(app_mod: ModuleType) -> int:
 
         print("9. 自動壓縮：門檻壓到很低，下一輪開頭自己壓")
         app_mod.CFG.compact_at = 10
-        n0 = len(app_mod.STORE.history(cid))
+
+        def compactions() -> int:
+            return len(
+                app_mod.STORE.q(
+                    "select 1 from ai_runs where conversation_id=? and kind='compaction'", cid
+                )
+            )
+
+        await say(cid, "多一句")  # /compact 只留了一個回合，再兩句才超過自動壓縮保留的兩個
+        c0 = compactions()
         await say(cid, "再一句")
         hist = app_mod.STORE.history(cid)
-        n1 = len(hist)
         head = " ".join(str(p.content) for p in hist[0].parts if isinstance(p, UserPromptPart))
         check(
-            n1 < n0 + 2 and "摘要" in head,
-            f"自動壓縮了（{n0} 則 + 新的一輪 → {n1} 則，開頭是摘要），on_complete 存下的是壓縮後的歷史",
-        )
-        kinds = [
-            r["kind"]
-            for r in app_mod.STORE.q("select kind from ai_runs where conversation_id=?", cid)
-        ]
-        check(
-            kinds.count("compaction") >= 2,
-            f"壓縮本身也記一筆 run（{kinds.count('compaction')} 筆）",
+            compactions() == c0 + 1 and "摘要" in head,
+            f"自動壓縮了一次（壓縮紀錄 {c0} → {compactions()}），存下的歷史開頭是摘要",
         )
 
-        print("10. 重新載入頁面：伺服器把歷史轉回 UI messages")
+        print("10. 平行呼叫：卡片的呼叫不在歷史最後一則（另一個工具的結果排在後面）")
+        POSTED.clear()
+        await say(cid, "平行")
+        pid4 = proposals(cid)[-1]["id"]
+        hist = app_mod.STORE.history(cid)
+        check(
+            isinstance(hist[-1], ModelRequest)
+            and [c.tool_call_id for c in app_mod._pending_calls(hist)] == [pid4],
+            "找得到待確認的那一個，即使它不在最後一則",
+        )
+        await c.post(f"/api/proposals/{pid4}/decide", json={"approved": True})
+        await stream(approval_msg(pid4, {}))
+        check(
+            app_mod.STORE.proposal(pid4)["status"] == "executed" and len(POSTED) == 1, "恢復並執行"
+        )
+
+        print("11. 重新載入頁面：伺服器把歷史轉回 UI messages")
         payload = (await c.get(f"/api/conv/{cid}")).json()
         parts = [p for m in payload["messages"] for p in m["parts"]]
         print("    part 型別：", sorted({p["type"] for p in parts}))

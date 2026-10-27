@@ -113,8 +113,27 @@ PRICES = {
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
     "claude-opus-5-5": (4.0, 20.0, 0.20, 5.0),
     "claude-fable-5-1": (10.0, 50.0, 0.25, 12.5),
+    # DeepSeek 尖峰價（2026-10-27 查 api-docs.deepseek.com/quick_start/pricing）；離峰半價，見 _price_row。
+    # 沒有快取寫入的費用，未命中就是一般 input。
+    "deepseek-flash": (0.3, 1.2, 0.006, 0.3),
+    "deepseek-v4-flash": (0.3, 1.2, 0.006, 0.3),
+    "deepseek-v4-pro": (1.32, 3.96, 0.044, 1.32),
 }
-WEB_SEARCH_USD = 0.01  # Anthropic web_search：$10 / 1,000 次
+WEB_SEARCH_USD = (
+    0.01  # Anthropic web_search：$10 / 1,000 次。DeepSeek 的 web_search 價格文件沒寫，不計
+)
+
+
+def _price_row(model: str, at: datetime) -> tuple[float, float, float, float] | None:
+    row = PRICES.get(model) or next(
+        (v for k, v in PRICES.items() if model.lower().startswith(k)), None
+    )
+    if row and model.lower().startswith("deepseek"):
+        peak = at.weekday() < 5 and (1 <= at.hour < 4 or 6 <= at.hour < 10)  # UTC，週一到週五
+        if not peak:
+            row = tuple(x / 2 for x in row)  # type: ignore[assignment]  # 四個欄位一起減半
+    return row
+
 
 Provider = Literal["anthropic", "openai"]
 
@@ -288,7 +307,12 @@ class Berth:
     """打一台跑著的 Berth（真的或 Fake 後端）。只用公開 API，與前端走同一條路。"""
 
     def __init__(self, base: str, transport: httpx.AsyncBaseTransport | None = None) -> None:
-        self.http = httpx.AsyncClient(base_url=base, timeout=120, transport=transport)
+        self.http = httpx.AsyncClient(
+            base_url=base,
+            timeout=120,
+            transport=transport,
+            headers={"X-Requested-With": "XMLHttpRequest"},  # Berth 的 CSRF 閘門（api/gate.py）
+        )
         self.logged_in = False
 
     async def _login(self) -> None:
@@ -487,10 +511,10 @@ async def berth_routes(ctx: RunContext[Deps]) -> Any:
     if isinstance(r, list):
         return [
             {
-                "route_id": x["id"],
-                "name": x["name"],
-                "collection_type": x.get("collection_type"),
-                "enabled": x.get("enabled"),
+                "route_id": x["route"]["id"],
+                "name": x["route"]["name"],
+                "collection_type": x["route"].get("collection_type"),
+                "enabled": x["route"].get("enabled"),
             }
             for x in r
         ]
@@ -510,6 +534,7 @@ async def berth_search_torrents(
         params["q"] = keyword
     if season is not None:
         params["season"] = season
+        params["missing"] = "true"  # Berth：帶季號的搜尋要帶 missing（422 season_without_missing）
     r = await BERTH.call("GET", "/api/search", params=params)
     if "rows" in r:
         rows = r["rows"]
@@ -768,7 +793,8 @@ async def load_skill(ctx: RunContext[Deps], name: str) -> str:
 
 
 def _route_name(route_id: int, routes: Any) -> str:
-    for r in routes if isinstance(routes, list) else []:
+    for item in routes if isinstance(routes, list) else []:
+        r = item.get("route", item)  # GET /api/routes 回 ManagedRouteOut：{"route": {...}, ...}
         if r.get("id") == route_id:
             return r.get("name", str(route_id))
     return f"route {route_id}"
@@ -808,7 +834,8 @@ def _finish(ctx: RunContext[Deps], result: Any) -> Any:
         json.dumps(result, ensure_ascii=False),
         ctx.tool_call_id,
     )
-    return result
+    # 明說「已經按過、已經做了」：第一次真模型實跑時，模型拿到裸結果還說「卡片已出，等你按」
+    return {"approved_by_user": True, "executed": True, "result": result}
 
 
 async def execute(tool: str, args: dict[str, Any]) -> Any:
@@ -1050,6 +1077,14 @@ async def guard_and_record(
         harvest(d.conv_id, result)
         if isinstance(result, str) and result.startswith("擋下"):
             outcome = "guard_blocked"
+        if isinstance(result, dict) and (
+            result.get("error") or result.get("problem") == "unreachable"
+        ):
+            d.calls[key] -= (
+                1  # 失敗的呼叫不算重複：連線失敗後重試是正當的（第一次真模型實跑時被誤擋 3 次）
+            )
+            outcome = "failed"
+            return result
         if n == 2:
             outcome = "loop_warned"
             result = {
@@ -1063,6 +1098,7 @@ async def guard_and_record(
     except LoopAbortError:
         raise
     except Exception as e:  # 工具壞掉：把原文交給模型，不讓整輪死掉
+        d.calls[key] -= 1  # 同上，失敗的不算重複
         outcome = "error"
         result = f"工具出錯：{type(e).__name__}: {e}"
         return result
@@ -1108,18 +1144,23 @@ def render(msgs: list[ModelMessage]) -> str:
     return "\n".join(lines)
 
 
-async def compact(
-    conv_id: str, provider: str, msgs: list[ModelMessage], model: Model | None = None
+async def compact(  # keep：保留最後幾個使用者回合（/compact 只留 1 個，自動壓縮留 CFG.keep_turns）
+    conv_id: str,
+    provider: str,
+    msgs: list[ModelMessage],
+    model: Model | None = None,
+    keep: int | None = None,
 ) -> list[ModelMessage] | None:
-    """保留最後 keep_turns 個使用者回合，之前的換成一段摘要。切點一定在使用者訊息上，tool call / result 不會被拆開。"""
+    """保留最後 keep 個使用者回合，之前的換成一段摘要。切點一定在使用者訊息上，tool call / result 不會被拆開。"""
+    keep = keep or CFG.keep_turns
     starts = [
         i
         for i, m in enumerate(msgs)
         if isinstance(m, ModelRequest) and any(isinstance(p, UserPromptPart) for p in m.parts)
     ]
-    if len(starts) <= CFG.keep_turns:
+    if len(starts) <= keep:
         return None
-    cut = starts[-CFG.keep_turns]
+    cut = starts[-keep]
     run_id = uuid.uuid4().hex[:12]
     summarizer = Agent(model or build_model(provider), instructions=SUMMARY_PROMPT)
     started = now()
@@ -1215,23 +1256,27 @@ MODEL_OVERRIDE: Model | None = None  # --selftest 用 FunctionModel
 
 
 def _cost(resp: ModelResponse) -> float | None:
+    """自己的價目表優先（genai_prices 不一定認得新模型，或把相容閘道上的同名模型算成別家的價）。"""
+    u = resp.usage
+    row = _price_row(resp.model_name or "", resp.timestamp or now())
+    if row and u:
+        fresh = u.input_tokens - u.cache_read_tokens - u.cache_write_tokens
+        searches = (
+            u.details.get("web_search_requests", 0)
+            if (resp.model_name or "").startswith("claude")
+            else 0
+        )
+        return (
+            fresh * row[0]
+            + u.output_tokens * row[1]
+            + u.cache_read_tokens * row[2]
+            + u.cache_write_tokens * row[3]
+        ) / 1e6 + searches * WEB_SEARCH_USD
     try:
         price = resp.cost()
-        if price is not None:
-            return float(price.total_price)
-    except Exception:  # genai_prices 不認得這個模型：退回自己的表
-        pass
-    row = PRICES.get(resp.model_name or "")
-    if not row or not resp.usage:
+        return float(price.total_price) if price is not None else None
+    except Exception:  # genai_prices 也不認得：費用未知
         return None
-    u = resp.usage
-    fresh = u.input_tokens - u.cache_read_tokens - u.cache_write_tokens
-    return (
-        fresh * row[0]
-        + u.output_tokens * row[1]
-        + u.cache_read_tokens * row[2]
-        + u.cache_write_tokens * row[3]
-    ) / 1e6 + (u.details.get("web_search_requests", 0) * WEB_SEARCH_USD)
 
 
 def _record_run(
@@ -1327,10 +1372,27 @@ class ServerHistoryAdapter(VercelAIAdapter):
 
 
 def _pending_calls(history: list[ModelMessage]) -> list[ToolCallPart]:
-    """歷史最後一則回應裡還沒有結果的工具呼叫（等確認的那幾張卡）。"""
-    if not history or not isinstance(history[-1], ModelResponse):
+    """最後一則模型回應裡還沒有結果的工具呼叫（等確認的那幾張卡）。
+
+    不能只看最後一則訊息：同一步平行呼叫時，不需要確認的那幾個先執行完，它們的結果排在後面
+    （第一次真模型實跑，OpenAI 相容接口的 S1 就是 fribb_lookup + subscribe_mikan 一起叫）。
+    """
+    idx = next(
+        (i for i in range(len(history) - 1, -1, -1) if isinstance(history[i], ModelResponse)), None
+    )
+    if idx is None:
         return []
-    return [p for p in history[-1].parts if isinstance(p, ToolCallPart)]
+    answered = {
+        p.tool_call_id
+        for m in history[idx + 1 :]
+        for p in m.parts
+        if isinstance(p, (ToolReturnPart, RetryPromptPart))
+    }
+    return [
+        p
+        for p in history[idx].parts
+        if isinstance(p, ToolCallPart) and p.tool_call_id not in answered
+    ]
 
 
 def _decision(pid: str) -> bool | ToolDenied | ToolApproved | None:
@@ -1541,9 +1603,9 @@ async def api_command(request: Request) -> Response:
     conv = STORE.conv(cid)
     if cmd == "/compact":
         history = STORE.history(cid)
-        out = await compact(cid, conv["provider"], history, MODEL_OVERRIDE)
+        out = await compact(cid, conv["provider"], history, MODEL_OVERRIDE, keep=1)
         if out is None:
-            return JSONResponse({"text": f"不用壓縮：使用者回合不到 {CFG.keep_turns + 1} 個。"})
+            return JSONResponse({"text": "不用壓縮：只有一個使用者回合。"})
         STORE.save_history(cid, out)
         return JSONResponse(
             {
