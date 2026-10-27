@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
-from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret
+from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret, PriceTable
 from berth.services.ai import AiForm, AiRefusedError, forget_ai_key, read_ai, set_ai, test_ai
 
 router = APIRouter(prefix="/settings/ai", tags=["settings"])
@@ -44,8 +44,22 @@ def ai_refusal(refusal: AiRefusedError) -> HTTPException:
     return HTTPException(status_code=_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
 
 
+class PriceSourceOut(BaseModel):
+    """價目從哪來（M5 票 21b）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    table: PriceTable
+    #: genai-prices 的版本；補位表是空字串。
+    version: str
+    #: genai-prices 認出的服務商（`Deepseek`）；補位表是空字串。
+    vendor: str
+    #: 補位表那一列的查證日期；genai-prices 是 `null`。
+    verified: date | None
+
+
 class AiPriceOut(BaseModel):
-    """美元 / 百萬 token（`adapters.ai.prices`）。"""
+    """美元 / 百萬 token（`adapters.ai.prices`）。分時段計價的服務是現在這個時段的價。"""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,8 +67,7 @@ class AiPriceOut(BaseModel):
     output: Decimal
     cache_read: Decimal
     cache_write: Decimal
-    #: 這一列價目查證的日期。
-    verified: date
+    source: PriceSourceOut
 
 
 class AiEndpointOut(BaseModel):
@@ -65,8 +78,10 @@ class AiEndpointOut(BaseModel):
     model: str
     #: 存過 key 沒有。key 本身永遠不回來。
     has_key: bool
-    #: 價目表上沒有這個模型是 `null`：費用未知，不當 0。
+    #: 這個端點上查不到這個模型的價是 `null`：費用未知，不當 0。
     price: AiPriceOut | None
+    #: 這個端點查得到價的模型名（排序過），給模型欄當建議；不在裡面的照樣可以填。
+    known_models: list[str]
 
 
 class AiOut(BaseModel):
@@ -79,8 +94,6 @@ class AiOut(BaseModel):
     anthropic: AiEndpointOut
     openai: AiEndpointOut
     has_tavily_key: bool
-    #: 價目表上認得的模型名（排序過），給模型欄當建議；不在裡面的照樣可以填。
-    known_models: list[str]
 
 
 class AiTestIn(BaseModel):

@@ -1775,6 +1775,15 @@ class AiProvider(StrEnum):
     OPENAI = "openai"
 
 
+class PriceTable(StrEnum):
+    """一個價目從哪一份表查到的（`adapters.ai.prices`，M5 票 21b）。"""
+
+    #: Pydantic 維護的 genai-prices（依 base URL 與模型名查），價目跟著套件版本走。
+    GENAI_PRICES = "genai_prices"
+    #: Berth 自己的補位表：genai-prices 認不得的模型，每一列帶查證日期。
+    BERTH = "berth"
+
+
 class AiProbeFailure(StrEnum):
     """「測試連線」沒成功的分類（`adapters.ai.probe`）。畫面照它挑句子，原文另外附上。"""
 

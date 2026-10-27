@@ -31,6 +31,7 @@ import {
 import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
+import { priceSourceText } from '../usage/prices'
 
 type Key = ParseKeys
 
@@ -268,11 +269,11 @@ function AiForm({ saved }: { saved: AiSettings }) {
               onChange={(event) => edit({ model: event.target.value }, 'model_missing')}
             />
             <datalist id={modelsId}>
-              {saved.known_models.map((model) => (
+              {endpoint.known_models.map((model) => (
                 <option key={model} value={model} />
               ))}
             </datalist>
-            <Price endpoint={endpoint} model={draft.model} />
+            <Price endpoint={endpoint} model={draft.model} baseUrl={draft.base_url} />
           </div>
 
           <div className="grid gap-2">
@@ -397,11 +398,23 @@ function ProviderChoice({
   )
 }
 
-/** 已存的模型的價目；認不得是「未知」，不當 0。表單上的模型改了還沒存時不猜。 */
-function Price({ endpoint, model }: { endpoint: AiEndpoint; model: string }) {
+/**
+ * 已存的端點與模型的價目；查不到是「未知」，不當 0。價錢跟著端點走（M5 票 21b），所以表單上的模型或
+ * base URL 改了還沒存時不猜。
+ */
+function Price({
+  endpoint,
+  model,
+  baseUrl,
+}: {
+  endpoint: AiEndpoint
+  model: string
+  baseUrl: string
+}) {
   const { t } = useTranslation()
   let body: ReactNode
-  if (model.trim() !== endpoint.model) body = t('settings.aiPage.price.unsaved')
+  if (model.trim() !== endpoint.model || baseUrl.trim() !== endpoint.base_url)
+    body = t('settings.aiPage.price.unsaved')
   else if (!endpoint.model) body = t('settings.aiPage.price.none')
   else if (endpoint.price === null) body = t('settings.aiPage.price.unknown')
   else
@@ -415,9 +428,7 @@ function Price({ endpoint, model }: { endpoint: AiEndpoint; model: string }) {
             cacheWrite: endpoint.price.cache_write,
           })}
         </span>{' '}
-        <span className="text-ink-dim">
-          {t('settings.aiPage.price.verified', { date: endpoint.price.verified })}
-        </span>
+        <span className="text-ink-dim">{priceSourceText(t, endpoint.price.source)}</span>
       </>
     )
 

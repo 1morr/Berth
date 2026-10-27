@@ -20,28 +20,36 @@ const SONNET_PRICE = {
   output: '10',
   cache_read: '0.10',
   cache_write: '2.5',
-  verified: '2026-10-27',
-}
+  source: { table: 'genai_prices', version: '0.1.13', vendor: 'Anthropic', verified: null },
+} as const
+
+const SUGGESTED = ['claude-haiku-5-5', 'claude-sonnet-5-5']
 
 const UNSET: AiSettings = {
   enabled: false,
   provider: 'anthropic',
-  anthropic: { base_url: '', model: '', has_key: false, price: null },
-  openai: { base_url: '', model: '', has_key: false, price: null },
+  anthropic: { base_url: '', model: '', has_key: false, price: null, known_models: SUGGESTED },
+  openai: { base_url: '', model: '', has_key: false, price: null, known_models: [] },
   has_tavily_key: false,
-  known_models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'deepseek-flash'],
 }
 
 /** 兩種都填過、現在用 Anthropic 而且開著。 */
 const IN_USE: AiSettings = {
   ...UNSET,
   enabled: true,
-  anthropic: { base_url: '', model: 'claude-sonnet-5-5', has_key: true, price: SONNET_PRICE },
+  anthropic: {
+    base_url: '',
+    model: 'claude-sonnet-5-5',
+    has_key: true,
+    price: SONNET_PRICE,
+    known_models: SUGGESTED,
+  },
   openai: {
     base_url: 'https://api.deepseek.com',
     model: 'some-local-model',
     has_key: true,
     price: null,
+    known_models: ['deepseek-flash'],
   },
 }
 
@@ -120,14 +128,46 @@ describe('設定 → AI', () => {
     expect(screen.getByRole('button', { name: '移除 key' })).toBeVisible()
   })
 
-  it('認得的模型說出價目與查證日期', async () => {
+  it('查得到價的模型說出價目與價目來源（genai-prices 的版本與它認出的服務商）', async () => {
     render({}, IN_USE)
     renderApp('/settings/ai')
 
     expect(
       await screen.findByText('每百萬 token：輸入 $2 · 輸出 $10 · 快取讀 $0.10 · 快取寫 $2.5'),
     ).toBeVisible()
-    expect(screen.getByText('2026-10-27 查證')).toBeVisible()
+    expect(screen.getByText('價目來源：genai-prices 0.1.13（Anthropic）')).toBeVisible()
+  })
+
+  it('genai-prices 沒有、Berth 補位表有的模型：來源寫補位表與查證日期', async () => {
+    render(
+      {},
+      {
+        ...IN_USE,
+        anthropic: {
+          ...IN_USE.anthropic,
+          price: {
+            ...SONNET_PRICE,
+            source: { table: 'berth', version: '', vendor: '', verified: '2026-10-28' },
+          },
+        },
+      },
+    )
+    renderApp('/settings/ai')
+
+    expect(await screen.findByText('價目來源：Berth 補位表（2026-10-28 查證）')).toBeVisible()
+  })
+
+  it('模型欄的建議是這個端點查得到價的模型', async () => {
+    render({}, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    const suggestions = () =>
+      [...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))
+    await screen.findByLabelText('模型')
+    expect(suggestions()).toEqual(SUGGESTED)
+    await user.click(screen.getByRole('button', { name: 'OpenAI 相容' }))
+    expect(suggestions()).toEqual(['deepseek-flash'])
   })
 
   it('切換接口：換成那一種存著的值；認不得的模型價目寫未知，不當 0', async () => {
@@ -139,7 +179,9 @@ describe('設定 → AI', () => {
 
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com')
     expect(screen.getByLabelText('模型')).toHaveValue('some-local-model')
-    expect(screen.getByText('價目未知：用量頁的費用會寫「未知」，不當 0。')).toBeVisible()
+    expect(
+      screen.getByText('價目未知：這個端點查不到這個模型的價，用量頁的費用會寫「未知」，不當 0。'),
+    ).toBeVisible()
     expect(screen.getByText(/現在用的是 Anthropic Messages。/)).toBeVisible()
   })
 
@@ -152,7 +194,18 @@ describe('設定 → AI', () => {
     await user.clear(model)
     await user.type(model, 'claude-opus-5-5')
 
-    expect(screen.getByText('存了之後顯示這個模型的價目。')).toBeVisible()
+    expect(screen.getByText('存了之後顯示這個端點與模型的價目。')).toBeVisible()
+  })
+
+  it('改了 base URL 還沒存：價目跟著端點走，也不猜', async () => {
+    render({}, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    const baseUrl = await screen.findByLabelText('Base URL')
+    await user.type(baseUrl, 'https://api.deepseek.com/anthropic')
+
+    expect(screen.getByText('存了之後顯示這個端點與模型的價目。')).toBeVisible()
   })
 
   it('儲存：送出選中那一種與開關，key 欄空著送 null；存完欄位清空並說已儲存', async () => {
@@ -327,6 +380,7 @@ describe('設定 → AI', () => {
           'Per million tokens: input $2 · output $10 · cache read $0.10 · cache write $2.5',
         ),
       ).toBeVisible()
+      expect(screen.getByText('Price source: genai-prices 0.1.13 (Anthropic)')).toBeVisible()
     } finally {
       await i18next.changeLanguage('zh-Hant')
     }
