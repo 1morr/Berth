@@ -537,7 +537,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 **形狀從一開始就定**（M0 起）：
 
-- **API-first**：UI 做得到的每個動作都是一個有名字、有 schema、冪等的服務命令（`search_torrents`、`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`、`reconcile`、`issues.resolve`…）。AI 的工具與 MCP server 只是包裝這些命令。
+- **API-first**：UI 做得到的每個動作都是一個有名字、有 schema、冪等的服務命令（`search_torrents`、`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`、`reconcile`、`issues.relink`（Issue 的按鈕一顆一個命令，M5 票 04）…）。AI 的工具與 MCP server 只是包裝這些命令。
 - **資料可讀**：Plan、Event、Issue 都是結構化 JSON，AI 不需要爬 UI。
 
 **AI native**（2026-09-24 使用者拍板，推翻 2026-09-22 的「改狀態的命令一律先提案」）：目標是綁不到 TMDB、解析不出集數、offset 錯、解析錯這類問題**幾乎不需要人工處理**，外加定期巡檢。原則：

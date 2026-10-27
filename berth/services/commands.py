@@ -6,7 +6,7 @@
 **反向命令（inverse）有三種寫法**：
 
 1. **指名的反向命令**：`"<模組>.<函式>"`（相對 `berth.services`，同 brief §14 的
-   `issues.resolve`），例如 `rss.bind_series` ↔ `rss.unbind_series`。
+   `issues.relink`），例如 `rss.bind_series` ↔ `rss.unbind_series`。
 2. **指向自己**：同一個命令換參數就能回去，例如設定類的 `set_*` 帶回原本的值。憑證類
    （`notify.set_bot_token`、`*.set_interface_login`）的原值不進 AI 的上下文，撤銷要由伺服器
    存下改之前那一份。
