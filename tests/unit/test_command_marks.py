@@ -53,7 +53,6 @@ BEFORE_M3 = frozenset(
         "hints",
         "importer",
         "inventory",
-        "issues",
         "jellyfin",
         "jellyfin_access",
         "jellyfin_images",
@@ -205,6 +204,29 @@ NAMED: dict[str, CommandMark] = {
     "indexer.verify_sites": _mark(Effect.READ),
     # 帶著 key 連到傳進來的位址：只給健康檢查用。
     "indexer.probe_indexer": _mark(Effect.READ, Flag.INTERNAL, Flag.CONNECTS_OUT),
+    # Issue 的按鈕（M5 票 04，研究 A3 的 R8、C1）：刪東西的、放棄追蹤的、忽略的要人；修復的可逆，
+    # 送出 torrent 的那一顆帶 `downloads`。
+    "issues.relink": _mark(Effect.REVERSIBLE),
+    "issues.forget": _mark(Effect.IRREVERSIBLE),
+    "issues.delete_complete": _mark(Effect.IRREVERSIBLE),
+    "issues.mark_sourceless": _mark(Effect.IRREVERSIBLE),
+    "issues.replace_with_link": _mark(Effect.IRREVERSIBLE),
+    "issues.delete_orphan": _mark(Effect.IRREVERSIBLE),
+    "issues.replan": _mark(Effect.REVERSIBLE),
+    "issues.relook": _mark(Effect.REVERSIBLE),
+    "issues.rescan": _mark(Effect.REVERSIBLE),
+    "issues.recheck": _mark(Effect.REVERSIBLE),
+    "issues.retry": _mark(Effect.REVERSIBLE),
+    "issues.accept_loss": _mark(Effect.IRREVERSIBLE),
+    "issues.accept_removal": _mark(Effect.IRREVERSIBLE),
+    "issues.resubmit": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS),
+    "issues.reimport": _mark(Effect.REVERSIBLE),
+    "issues.claim_torrent": _mark(Effect.REVERSIBLE),
+    "issues.claim_file": _mark(Effect.REVERSIBLE),
+    "issues.ignore_issue": _mark(Effect.IRREVERSIBLE),
+    "issues.record_issue": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "issues.close_settled": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "issues.list_issues": _mark(Effect.READ),
 }
 
 

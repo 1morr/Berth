@@ -28,3 +28,4 @@
 ## Comments
 
 - 2026-10-27（票 02 留）：閘門現在也認 `@asynccontextmanager` 包過的公開函式。這一批模組裡的 `jobs.job_locks`、`rematch.locked` 會被掃到：只有內部用的改成私有；跨模組要用的鎖或入口標 `INTERNAL`。
+- 2026-10-27（票 04 留）：`issues` 整個模組已由票 04 標完並移出豁免表（四支非按鈕的命令也標了，見票 04 Comments），這張票不必再碰它。

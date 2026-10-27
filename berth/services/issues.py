@@ -1,7 +1,8 @@
 """Issue 的載體與它的按鈕（plan §2.4、§6 issues 群組、brief §9.1、M2 票 05 / 09）。
 
 三件事在這裡：**寫下一件**（`record_issue`，冪等）、**攤給畫面**（`list_issues`）、
-**按下去**（`resolve_issue` / `ignore_issue`）。偵測本身不在這裡——對帳在
+**按下去**（一顆一個命令，名字就是 `IssueAction` 的值，`BUTTONS` 是 API 的分派表；以及
+`ignore_issue`）。偵測本身不在這裡——對帳在
 `services/reconcile.py`，管線那四種在 `services/downloads.py` 與 `services/resolver.py`，
 健康檢查那兩種在 `services/health_issues.py`，它們寫下一律呼叫 `record_issue`，量到條件解除時
 呼叫 `note_cleared`（`STAYS_IGNORED` 那幾種）。
@@ -27,11 +28,11 @@ Issue，而使用者剛剛才決定過它。
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection, Coroutine, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Collection, Coroutine, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, assert_never
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +72,7 @@ from berth.models.types import utcnow
 from berth.parser import parse_release
 from berth.services import claims, complete
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
 from berth.services.jobs import (
@@ -144,6 +145,7 @@ class IssueView:
     query: str
 
 
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def record_issue(
     session: AsyncSession,
     kind: IssueType,
@@ -162,7 +164,8 @@ async def record_issue(
     沒記過 `cleared_at`），就什麼都不寫（`held`）。規則放在這裡而不是各個生產者，是因為同一種
     有兩個生產者（`unknown_torrent` 的 poller 與對帳）——放在生產者那邊遲早有一個忘了。
 
-    **不 commit**：呼叫端多半在一個迴圈裡寫好幾筆，交易的邊界是它的事。
+    **不 commit**：呼叫端多半在一個迴圈裡寫好幾筆，交易的邊界是它的事。所以標 `internal`：
+    它是偵測那一輪交易裡的一段，不當工具。
     """
     subject = subject_of(
         kind,
@@ -220,6 +223,7 @@ async def record_issue(
     return Recorded(issue=row, opened=True)
 
 
+@command(Effect.READ)
 async def list_issues(session: AsyncSession) -> list[IssueView]:
     """還沒有人決定的那幾件，最近偵測到的在前面。
 
@@ -298,6 +302,7 @@ async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> se
     }
 
 
+@command(Effect.IRREVERSIBLE)
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """「我知道了，不用管它」。不碰磁碟、不碰帳本。
 
@@ -306,6 +311,8 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     「這件事不存在」。真的要它安靜下來，按的是「承認刪除並清帳本」。
 
     `STAYS_IGNORED` 那幾種例外：週期量測的，忽略在條件持續期間有效（`record_issue`）。
+
+    標**不可逆**：忽略會把問題藏起來（brief §14），而沒有命令把它重新打開——要人。
     """
     row = await _open_issue(session, issue_id)
     row.status = IssueStatus.IGNORED
@@ -316,87 +323,7 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     return await _reread(session, row)
 
 
-async def resolve_issue(
-    session: AsyncSession,
-    factory: ServiceClientFactory,
-    issue_id: int,
-    action: IssueAction,
-    *,
-    actor: str,
-    plans: JobHints | None = None,
-    media: str = "",
-) -> IssueView:
-    """按下那一顆（brief §9.1 的「預設建議動作」那一欄）。
-
-    `media` 只有認領類的兩顆要（`NEEDS_MEDIA`）：管理員選的那一部作品（`tv:<tmdb>`）。
-
-    **做得到才記成 resolved**：重新鏈接失敗時那一筆仍然是 `open`，清單上還看得到它。
-    反過來的話畫面會說「修好了」，而媒體庫裡什麼都沒變。
-
-    `plans` 是規劃器的喚醒訊號（「重新規劃」與「重新入庫」用）。沒給也修得好：規劃器每 60 秒自己
-    掃一次 `completed`（plan §3.2），給了只是早一點。
-    """
-    row = await _open_issue(session, issue_id)
-    view = await _reread(session, row)
-    if action not in view.actions:
-        raise IssueRejectedError(
-            IssueRefusal.ACTION_NOT_AVAILABLE,
-            f"{row.type.value} cannot be resolved with {action.value} right now",
-        )
-    if action in NEEDS_MEDIA and not media:
-        raise IssueRejectedError(IssueRefusal.MEDIA_REQUIRED, "pick the work this belongs to")
-
-    if action is IssueAction.RELINK:
-        await _relink(session, row)
-    elif action is IssueAction.FORGET:
-        await _forget(session, row)
-    elif action is IssueAction.DELETE_COMPLETE:
-        await _delete_complete(session, factory, row, actor=actor)
-    elif action is IssueAction.MARK_SOURCELESS:
-        await _mark_sourceless(session, row)
-    elif action is IssueAction.REPLACE_WITH_LINK:
-        await _replace_with_link(session, row)
-    elif action is IssueAction.DELETE_ORPHAN:
-        await _delete_orphan(session, factory, row)
-    elif action is IssueAction.REPLAN:
-        await _replan(session, row, actor=actor)
-    elif action is IssueAction.RELOOK:
-        await _relook(session, row)
-    elif action is IssueAction.RESCAN:
-        await _rescan(session, factory, row)
-    elif action is IssueAction.RECHECK or action is IssueAction.RETRY:
-        await _restart(session, factory, row, action, actor=actor)
-    elif action is IssueAction.ACCEPT_LOSS or action is IssueAction.ACCEPT_REMOVAL:
-        await _accept(session, factory, row, actor=actor)
-    elif action is IssueAction.RESUBMIT:
-        await _resubmit(session, factory, row, actor=actor)
-    elif action is IssueAction.ADOPT:
-        await _claimed(claims.reimport_folder(session, factory, Path(row.path), media, actor=actor))
-    elif action is IssueAction.CLAIM_TORRENT:
-        await _claimed(
-            claims.claim_torrent(session, factory, row.job_hash or "", media, actor=actor)
-        )
-    elif action is IssueAction.CLAIM_FILE:
-        await _claim_file(session, factory, row, actor=actor)
-    else:
-        # 加一顆新的而沒有接到這裡，mypy 在這一行紅——不會靜靜跑到別顆的實作。
-        assert_never(action)
-
-    row.status = IssueStatus.RESOLVED
-    row.resolved_at = utcnow()
-    row.resolved_by = actor
-    row.detail_json = {**(row.detail_json or {}), "action": action.value}
-    await session.commit()
-    if action in _WAKES_PLANNER and plans is not None:
-        # commit 之後才叫醒：規劃器那一輪讀的是資料庫，早叫它只會看到還是 `imported` 的那一列。
-        plans.nudge()
-    logger.info(
-        "issue resolved",
-        extra={"issue_id": row.id, "issue": row.type.value, "action": action.value},
-    )
-    return await _reread(session, row)
-
-
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def close_settled(session: AsyncSession, now: datetime) -> int:
     """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
 
@@ -408,7 +335,7 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
 
     **Job 還在那個狀態就不收**，不論客戶端現在怎麼說——那是 poller 決定接不接回的事，這一支只看
     Job。由 poller 每一輪叫：狀態是它推的，同一個交易收掉就沒有「Job 好了、Issue 還開著」的一刻。
-    **不 commit**。
+    **不 commit**，所以標 `internal`。
     """
     rows = list(
         await session.scalars(
@@ -449,15 +376,28 @@ def clear_by_system(rows: Sequence[Issue], now: datetime) -> None:
 
 
 # --- 按鈕 -------------------------------------------------------------
+#
+# 一顆一個命令，名字就是 `IssueAction` 的值（`adopt` 例外，照名詞表叫 `reimport`）。M5 票 04、
+# 研究 A3 的 R8：可逆性差很多——有重新鏈接、recheck，也有刪 complete、刪孤兒目錄——所以各自標記，
+# 登錄表與確認卡才分得出哪幾顆要人。
+# 刪東西的（`ACTION_DELETES`）與放棄追蹤的（承認遺失 / 移除、清帳本、標成已無來源）沒有反向命令，
+# 標 `irreversible`（研究 C1 那張表）。
+#
+# 每一顆都是同一個形狀：`_pressable` 找到這一件、確認它現在按得了這一顆；做那一顆自己的事；
+# `_settle` 記成 resolved 並 commit。**做得到才記成 resolved**：做不到就在中間丟
+# `IssueRejectedError`，那一筆仍然是 `open`，清單上還看得到它。反過來的話畫面會說「修好了」，而
+# 媒體庫裡什麼都沒變。
 
 
-async def _relink(session: AsyncSession, row: Issue) -> None:
+@command(Effect.REVERSIBLE)
+async def relink(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """照帳本那一列再硬鏈接一次，帳本那一欄回 `ok`（brief §9.1）。
 
     走的是 `fs.link` 與 Route 的守衛——媒體庫裡的檔案只有這一條路徑放得進去（plan §8.6）。
     成了之後**重新量目標的 inode**：`target_inode` 記的是「當時鏈接出來的那一個」，新的
     鏈接是新的一次，照抄舊值會讓下一輪的 `inode_mismatch` 比到一個不存在的東西。
     """
+    row = await _pressable(session, issue_id, IssueAction.RELINK)
     entry = await _entry_of(session, row)
     source = Path(entry.source_abs_path)
     try:
@@ -482,24 +422,30 @@ async def _relink(session: AsyncSession, row: Issue) -> None:
     entry.source_dev = str(facts.device)
     entry.target_inode = str(fs.stat(target).inode)
     entry.status = LedgerStatus.OK
-    await session.flush()
+    return await _settle(session, row, IssueAction.RELINK, actor=actor)
 
 
-async def _forget(session: AsyncSession, row: Issue) -> None:
+@command(Effect.IRREVERSIBLE)
+async def forget(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """承認刪除並清帳本（brief §9.1）：那一列本來就不該再宣稱媒體庫裡有這個檔案。
 
     只刪帳本那一列，不碰 Job 也不碰 complete：來源還在的話它仍然是一份可以重新入庫的東西
     （brief §9.3），而這一顆說的只是「媒體庫裡沒有它，這樣就對了」。
+
+    **不可逆**：它是只 purge 一列帳本（brief §14 把 purge 列在不可逆底下）。來源還在的話重新入庫
+    長得回一列，但那是另一條路（規劃、鏈接），不是這一顆的反向。
     """
+    row = await _pressable(session, issue_id, IssueAction.FORGET)
     entry = await session.get(LedgerEntry, row.ledger_id) if row.ledger_id is not None else None
     if entry is not None:
         await session.delete(entry)
-    await session.flush()
+    return await _settle(session, row, IssueAction.FORGET, actor=actor)
 
 
-async def _delete_complete(
-    session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
-) -> None:
+@command(Effect.IRREVERSIBLE)
+async def delete_complete(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
     """連 complete 一起刪：這一筆下載整個不要了。
 
     **走 `delete_job` 的四個旗標**（plan §11.3 決定 4、票 04），不是另一套刪除。四個**全勾**，
@@ -514,6 +460,7 @@ async def _delete_complete(
 
     所以這一顆的文案要說清楚它的單位是**一筆下載**而不是一個檔案（`PRODUCT.md`、`/issues` 頁）。
     """
+    row = await _pressable(session, issue_id, IssueAction.DELETE_COMPLETE)
     if row.job_hash is None:
         raise IssueRejectedError(
             IssueRefusal.ACTION_NOT_AVAILABLE, "this entry is not attached to a download"
@@ -531,27 +478,35 @@ async def _delete_complete(
 
     # 那一筆下載已經不在了，它底下其他等著人決定的事也不必決定了。
     await _close_siblings(session, row, actor=actor)
+    return await _settle(session, row, IssueAction.DELETE_COMPLETE, actor=actor)
 
 
-async def _mark_sourceless(session: AsyncSession, row: Issue) -> None:
+@command(Effect.IRREVERSIBLE)
+async def mark_sourceless(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """標記為「已無來源」，library 檔保留（brief §9.1）。
 
     帳本那一列改成 `source_missing` 就是那個標記：對帳看到這一欄就不再為它開 Issue（同刪除
     範圍只勾「刪 complete 檔案」的結果，票 04）。媒體庫那一份一個位元組都不動——它現在是那份
     資料唯一的名字。
+
+    **不可逆**：放棄追蹤，沒有命令改回來（研究 C1）。
     """
+    row = await _pressable(session, issue_id, IssueAction.MARK_SOURCELESS)
     entry = await _entry_of(session, row)
     entry.status = LedgerStatus.SOURCE_MISSING
-    await session.flush()
+    return await _settle(session, row, IssueAction.MARK_SOURCELESS, actor=actor)
 
 
-async def _replace_with_link(session: AsyncSession, row: Issue) -> None:
+@command(Effect.IRREVERSIBLE)
+async def replace_with_link(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """以硬鏈接取代：媒體庫裡那一份複製品換成來源的硬鏈接（brief §9.1）。
 
     **按下去那一刻重量一次大小**：偵測時一樣大、之後被轉碼覆蓋的那一份不能換掉——換掉等於
     丟掉別人的成品，而 `detail_json.same_size` 是偵測那一刻的事。換的那一步走
-    `fs.replace_link`（票 08）：同一個名字一步換過去，失敗時舊的不動。
+    `fs.replace_link`（票 08）：同一個名字一步換過去，失敗時舊的不動。被換掉的那一份就沒了
+    （`ACTION_DELETES`），所以不可逆。
     """
+    row = await _pressable(session, issue_id, IssueAction.REPLACE_WITH_LINK)
     entry = await _entry_of(session, row)
     source, target = Path(entry.source_abs_path), Path(entry.target_path)
     try:
@@ -577,16 +532,20 @@ async def _replace_with_link(session: AsyncSession, row: Issue) -> None:
     entry.source_dev = str(origin.device)
     entry.target_inode = str(fs.stat(target).inode)
     entry.status = LedgerStatus.OK
-    await session.flush()
+    return await _settle(session, row, IssueAction.REPLACE_WITH_LINK, actor=actor)
 
 
-async def _delete_orphan(session: AsyncSession, factory: ServiceClientFactory, row: Issue) -> None:
+@command(Effect.IRREVERSIBLE)
+async def delete_orphan(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
     """刪掉 complete 裡那個沒人認領的目錄（brief §9.1）。
 
     **動手之前重問一次它有沒有主**（`services/complete.claimed`，與對帳同一份判準）：偵測之後
     有人在 qBittorrent 上把它加回來做種的話，刪下去就是刪掉正在做種的資料。問不到
     qBittorrent 就不刪——那一刻答不出它有沒有主。
     """
+    row = await _pressable(session, issue_id, IssueAction.DELETE_ORPHAN)
     path = Path(row.path)
     folders = await complete.route_folders(session)
     settings = await read_settings(session, QbittorrentSettings)
@@ -607,9 +566,13 @@ async def _delete_orphan(session: AsyncSession, factory: ServiceClientFactory, r
         raise IssueRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, message(exc)) from exc
     except OSError as exc:
         raise IssueRejectedError(IssueRefusal.DELETE_FAILED, message(exc)) from exc
+    return await _settle(session, row, IssueAction.DELETE_ORPHAN, actor=actor)
 
 
-async def _replan(session: AsyncSession, row: Issue, *, actor: str) -> None:
+@command(Effect.REVERSIBLE)
+async def replan(
+    session: AsyncSession, issue_id: int, *, actor: str, plans: JobHints | None = None
+) -> IssueView:
     """重新規劃：Job 從 `imported` 退回 `completed`，規劃器照現在的檔案重算一份（brief §9.1）。
 
     **不經 `replan_job`**：那一支是 Job 頁上那一顆，只接 `completed` / `planning` / `review`
@@ -618,7 +581,11 @@ async def _replan(session: AsyncSession, row: Issue, *, actor: str) -> None:
 
     時間線寫一筆 `retried`：它是事件去重的界線（plan §3.3），重算出來的 `plan_generated` 與
     第一次一字不差時才不會被吞掉。
+
+    `plans` 是規劃器的喚醒訊號。沒給也修得好：規劃器每 60 秒自己掃一次 `completed`（plan §3.2），
+    給了只是早一點。
     """
+    row = await _pressable(session, issue_id, IssueAction.REPLAN)
     job = await session.get(Job, row.job_hash) if row.job_hash else None
     if job is None:
         raise IssueRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, "the download is gone")
@@ -638,20 +605,26 @@ async def _replan(session: AsyncSession, row: Issue, *, actor: str) -> None:
             actor=actor,
             payload={"state": JobState.COMPLETED.value},
         )
+    return await _settle(session, row, IssueAction.REPLAN, actor=actor, plans=plans)
 
 
-async def _relook(session: AsyncSession, row: Issue) -> None:
+@command(Effect.REVERSIBLE)
+async def relook(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """重新反查：那一列重新排進 `jellyfin_resolver`，六次從頭算（plan §3.2）。
 
     排在**現在**而不是 30 秒後：使用者按下去多半是因為他剛在 Jellyfin 那邊修好了什麼。
     """
+    row = await _pressable(session, issue_id, IssueAction.RELOOK)
     entry = await _entry_of(session, row)
     entry.resolve_attempts = 0
     entry.resolve_after = utcnow()
-    await session.flush()
+    return await _settle(session, row, IssueAction.RELOOK, actor=actor)
 
 
-async def _rescan(session: AsyncSession, factory: ServiceClientFactory, row: Issue) -> None:
+@command(Effect.REVERSIBLE)
+async def rescan(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
     """先請 Jellyfin 掃描，再重新反查（brief §20.1：路徑通知對從沒掃到過內容的媒體庫無效）。
 
     **只掃這一件的媒體庫**（M4 票 62，審計 E2）：Jellyfin 已經在 Route 的路徑底下列出過東西時
@@ -660,6 +633,7 @@ async def _rescan(session: AsyncSession, factory: ServiceClientFactory, row: Iss
 
     **Jellyfin 問不到就整顆不做**，那一列不重排——畫面上它還在，旁邊說為什麼。
     """
+    row = await _pressable(session, issue_id, IssueAction.RESCAN)
     entry = await _entry_of(session, row)
     route = owning_route(entry.target_path, list(await session.scalars(select(Route))))
     settings = await read_settings(session, JellyfinSettings)
@@ -684,7 +658,240 @@ async def _rescan(session: AsyncSession, factory: ServiceClientFactory, row: Iss
         )
     entry.resolve_attempts = 0
     entry.resolve_after = utcnow()
-    await session.flush()
+    return await _settle(session, row, IssueAction.RESCAN, actor=actor)
+
+
+@command(Effect.REVERSIBLE)
+async def recheck(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
+    """重新 recheck（`missing_files`）：請 qBittorrent 重新開始並重新校驗，Job 回到 poller 接得住
+    的那一站（`_restart`）。"""
+    row = await _pressable(session, issue_id, IssueAction.RECHECK)
+    await _restart(session, factory, row, IssueAction.RECHECK, actor=actor)
+    return await _settle(session, row, IssueAction.RECHECK, actor=actor)
+
+
+@command(Effect.REVERSIBLE)
+async def retry(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
+    """重試（`client_error`）：請 qBittorrent 重新開始，Job 回到 poller 接得住的那一站
+    （`_restart`）。"""
+    row = await _pressable(session, issue_id, IssueAction.RETRY)
+    await _restart(session, factory, row, IssueAction.RETRY, actor=actor)
+    return await _settle(session, row, IssueAction.RETRY, actor=actor)
+
+
+@command(Effect.IRREVERSIBLE)
+async def accept_loss(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
+    """承認遺失（`missing_files`）：那一包的檔案就是沒了，Job 進 `removed`（`_accept`）。"""
+    row = await _pressable(session, issue_id, IssueAction.ACCEPT_LOSS)
+    await _accept(session, factory, row, actor=actor)
+    return await _settle(session, row, IssueAction.ACCEPT_LOSS, actor=actor)
+
+
+@command(Effect.IRREVERSIBLE)
+async def accept_removal(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
+    """承認移除（`client_removed`）：torrent 是使用者自己拿掉的，Job 進 `removed`（`_accept`）。"""
+    row = await _pressable(session, issue_id, IssueAction.ACCEPT_REMOVAL)
+    await _accept(session, factory, row, actor=actor)
+    return await _settle(session, row, IssueAction.ACCEPT_REMOVAL, actor=actor)
+
+
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
+async def resubmit(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
+    """重新送單：照存下來的下載連結再加一次（`services/jobs.resubmit_job`）。送出 torrent，所以
+    帶 `downloads`。
+
+    **送了而 qBittorrent 不收**（409 / 415）時 Job 落在 `submit_failed`，這一件仍然開著：
+    修好之後再按一次就是再送一次（所以 `submit_failed` 也在這一顆的 `_BROKEN_BY` 裡）。
+    """
+    row = await _pressable(session, issue_id, IssueAction.RESUBMIT)
+    job = await _broken_job(session, row)
+    try:
+        view = await resubmit_job(
+            session, factory, job.hash, expected=_BROKEN_BY[IssueAction.RESUBMIT], actor=actor
+        )
+    except JobRejectedError as refusal:
+        raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
+    if view.state is JobState.SUBMIT_FAILED:
+        raise IssueRejectedError(IssueRefusal.RESUBMIT_FAILED, view.error)
+    return await _settle(session, row, IssueAction.RESUBMIT, actor=actor)
+
+
+@command(Effect.REVERSIBLE)
+async def reimport(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    issue_id: int,
+    media: str,
+    *,
+    actor: str,
+    plans: JobHints | None = None,
+) -> IssueView:
+    """重新入庫（孤兒目錄）：當成一筆重新入庫的 Job，走目錄版 `reimport`（`services/claims`）。
+
+    `media` 是管理員選的那一部作品（`tv:<tmdb>`）。`plans` 是規劃器的喚醒訊號，同 `replan`。
+
+    **唯一不以按鈕值為名的一顆**：按鈕值是 `adopt`，函式照名詞表叫 reimport（`CONTEXT.md`
+    〈Claim〉）。
+    """
+    row = await _pressable(session, issue_id, IssueAction.ADOPT, media=media)
+    await _claimed(claims.reimport_folder(session, factory, Path(row.path), media, actor=actor))
+    return await _settle(session, row, IssueAction.ADOPT, actor=actor, plans=plans)
+
+
+@command(Effect.REVERSIBLE)
+async def claim_torrent(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, media: str, *, actor: str
+) -> IssueView:
+    """認領 torrent：替 qBittorrent 上那一筆建 Job，交給 poller 與規劃器（`services/claims`）。
+
+    `media` 是管理員選的那一部作品（`tv:<tmdb>`）。
+    """
+    row = await _pressable(session, issue_id, IssueAction.CLAIM_TORRENT, media=media)
+    await _claimed(claims.claim_torrent(session, factory, row.job_hash or "", media, actor=actor))
+    return await _settle(session, row, IssueAction.CLAIM_TORRENT, actor=actor)
+
+
+@command(Effect.REVERSIBLE)
+async def claim_file(
+    session: AsyncSession, factory: ServiceClientFactory, issue_id: int, *, actor: str
+) -> IssueView:
+    """認領進帳本：單一檔案的 `rebuild-ledger`。配不上的拒絕，那一件照舊開著
+    （brief §9.1「只列出」）。
+
+    **不刪任何東西**：配得上的只是多一列帳本；配不上的連帳本都不寫。
+    """
+    row = await _pressable(session, issue_id, IssueAction.CLAIM_FILE)
+    try:
+        await claims.claim_file(session, factory, Path(row.path), actor=actor)
+    except claims.UnclaimedError as miss:
+        raise IssueRejectedError(IssueRefusal.UNCLAIMABLE, miss.reason.value) from miss
+    return await _settle(session, row, IssueAction.CLAIM_FILE, actor=actor)
+
+
+@dataclass(frozen=True, slots=True)
+class Press:
+    """`POST /issues/{id}/resolve` 帶來的那一次按：哪一件、誰按的、規劃器的喚醒訊號，以及認領類
+    兩顆（`NEEDS_MEDIA`）要的那一部作品。其餘幾顆不看 `media` 與 `plans`。"""
+
+    issue_id: int
+    actor: str
+    plans: JobHints | None = None
+    media: str = ""
+
+
+#: 一顆按鈕：收下 `Press`，叫它自己的那一個命令。
+Button = Callable[[AsyncSession, ServiceClientFactory, Press], Awaitable[IssueView]]
+
+#: `POST /issues/{id}/resolve` 照 `action` 分派到哪一個命令。鍵與 `ISSUE_ACTIONS` 一一對應、每一格
+#: 叫的是以那一顆為名的命令（`adopt` 叫 `reimport`），`tests/unit/test_issue_commands.py` 守著。
+#: 每一格只把那個命令要的參數傳過去：命令的簽名就是它的輸入（M5 的命令登錄表由簽名推出輸入模型）。
+BUTTONS: dict[IssueAction, Button] = {
+    IssueAction.RELINK: lambda session, _, press: relink(
+        session, press.issue_id, actor=press.actor
+    ),
+    IssueAction.FORGET: lambda session, _, press: forget(
+        session, press.issue_id, actor=press.actor
+    ),
+    IssueAction.DELETE_COMPLETE: lambda session, factory, press: delete_complete(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.MARK_SOURCELESS: lambda session, _, press: mark_sourceless(
+        session, press.issue_id, actor=press.actor
+    ),
+    IssueAction.REPLACE_WITH_LINK: lambda session, _, press: replace_with_link(
+        session, press.issue_id, actor=press.actor
+    ),
+    IssueAction.DELETE_ORPHAN: lambda session, factory, press: delete_orphan(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.REPLAN: lambda session, _, press: replan(
+        session, press.issue_id, actor=press.actor, plans=press.plans
+    ),
+    IssueAction.RELOOK: lambda session, _, press: relook(
+        session, press.issue_id, actor=press.actor
+    ),
+    IssueAction.RESCAN: lambda session, factory, press: rescan(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.RECHECK: lambda session, factory, press: recheck(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.ACCEPT_LOSS: lambda session, factory, press: accept_loss(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.RETRY: lambda session, factory, press: retry(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.RESUBMIT: lambda session, factory, press: resubmit(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.ACCEPT_REMOVAL: lambda session, factory, press: accept_removal(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+    IssueAction.ADOPT: lambda session, factory, press: reimport(
+        session, factory, press.issue_id, press.media, actor=press.actor, plans=press.plans
+    ),
+    IssueAction.CLAIM_TORRENT: lambda session, factory, press: claim_torrent(
+        session, factory, press.issue_id, press.media, actor=press.actor
+    ),
+    IssueAction.CLAIM_FILE: lambda session, factory, press: claim_file(
+        session, factory, press.issue_id, actor=press.actor
+    ),
+}
+
+
+async def _pressable(
+    session: AsyncSession, issue_id: int, action: IssueAction, *, media: str = ""
+) -> Issue:
+    """按下去之前：這一件還開著、它現在按得了這一顆（`_actions`），認領類兩顆帶了作品。
+    都還沒動任何東西。"""
+    row = await _open_issue(session, issue_id)
+    view = await _reread(session, row)
+    if action not in view.actions:
+        raise IssueRejectedError(
+            IssueRefusal.ACTION_NOT_AVAILABLE,
+            f"{row.type.value} cannot be resolved with {action.value} right now",
+        )
+    if action in NEEDS_MEDIA and not media:
+        raise IssueRejectedError(IssueRefusal.MEDIA_REQUIRED, "pick the work this belongs to")
+    return row
+
+
+async def _settle(
+    session: AsyncSession,
+    row: Issue,
+    action: IssueAction,
+    *,
+    actor: str,
+    plans: JobHints | None = None,
+) -> IssueView:
+    """那一顆做完了：記成 resolved、記下按的是哪一顆，commit。
+
+    給了 `plans` 就在 commit 之後叫醒規劃器（`replan`、`adopt` 把一筆 Job 放在 `completed`）：
+    規劃器那一輪讀的是資料庫，早叫它只會看到還是 `imported` 的那一列。
+    """
+    row.status = IssueStatus.RESOLVED
+    row.resolved_at = utcnow()
+    row.resolved_by = actor
+    row.detail_json = {**(row.detail_json or {}), "action": action.value}
+    await session.commit()
+    if plans is not None:
+        plans.nudge()
+    logger.info(
+        "issue resolved",
+        extra={"issue_id": row.id, "issue": row.type.value, "action": action.value},
+    )
+    return await _reread(session, row)
 
 
 async def _restart(
@@ -749,31 +956,14 @@ async def _accept(
     qBittorrent 一個位元組都不動（`ACTION_DELETES` 是 False）。要刪東西的人去 Job 頁的刪除範圍，
     那裡四個旗標逐一說清楚；這一顆只說「別再等它了」。torrent 還在 qBittorrent 上的話它仍然有
     Job，所以不會變成 `unknown_torrent`。
+
+    兩顆都標**不可逆**：`removed` 沒有命令拉得回來，放棄追蹤要人（研究 C1）。
     """
     job = await _broken_job(session, row)
     try:
         await delete_job(session, factory, job.hash, DeleteScope(), actor=actor)
     except JobRejectedError as refusal:
         raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
-
-
-async def _resubmit(
-    session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
-) -> None:
-    """重新送單：照存下來的下載連結再加一次（`services/jobs.resubmit_job`）。
-
-    **送了而 qBittorrent 不收**（409 / 415）時 Job 落在 `submit_failed`，這一件仍然開著：
-    修好之後再按一次就是再送一次（所以 `submit_failed` 也在這一顆的 `_BROKEN_BY` 裡）。
-    """
-    job = await _broken_job(session, row)
-    try:
-        view = await resubmit_job(
-            session, factory, job.hash, expected=_BROKEN_BY[IssueAction.RESUBMIT], actor=actor
-        )
-    except JobRejectedError as refusal:
-        raise IssueRejectedError(_REFUSAL_OF[refusal.reason], refusal.detail) from refusal
-    if view.state is JobState.SUBMIT_FAILED:
-        raise IssueRejectedError(IssueRefusal.RESUBMIT_FAILED, view.error)
 
 
 async def _claimed(work: Coroutine[Any, Any, Job]) -> None:
@@ -785,20 +975,6 @@ async def _claimed(work: Coroutine[Any, Any, Job]) -> None:
         await work
     except claims.ClaimRejectedError as refusal:
         raise IssueRejectedError(refusal.reason, refusal.detail) from refusal
-
-
-async def _claim_file(
-    session: AsyncSession, factory: ServiceClientFactory, row: Issue, *, actor: str
-) -> None:
-    """認領進帳本：單一檔案的 `rebuild-ledger`。配不上的拒絕，那一件照舊開著
-    （brief §9.1「只列出」）。
-
-    **不刪任何東西**：配得上的只是多一列帳本；配不上的連帳本都不寫。
-    """
-    try:
-        await claims.claim_file(session, factory, Path(row.path), actor=actor)
-    except claims.UnclaimedError as miss:
-        raise IssueRejectedError(IssueRefusal.UNCLAIMABLE, miss.reason.value) from miss
 
 
 async def _broken_job(session: AsyncSession, row: Issue) -> Job:
@@ -942,9 +1118,6 @@ def _actions(row: Issue, job_state: JobState | None) -> tuple[IssueAction, ...]:
         usable.append(action)
     return tuple(usable)
 
-
-#: 按完之後叫醒規劃器：這幾顆都把一筆 Job 放在 `completed`，接下來是規劃器的事。
-_WAKES_PLANNER = frozenset({IssueAction.REPLAN, IssueAction.ADOPT})
 
 #: 這幾顆動的是帳本那一列，指不到它就按不了。
 _ON_THE_LEDGER_ROW = frozenset(

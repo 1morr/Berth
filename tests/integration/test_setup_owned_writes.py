@@ -62,7 +62,7 @@ from berth.services.downloads import poll_downloads
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.importer import sweep_imports
-from berth.services.issues import resolve_issue
+from berth.services.issues import BUTTONS, Press
 from berth.services.jellyfin import API_KEY_APP, BUNDLED_SERVER_NAME
 from berth.services.jobs import JobSource, add_download
 from berth.services.plan import sweep_plans
@@ -810,7 +810,7 @@ async def press(
         select(Issue).where(Issue.type == kind, Issue.status == IssueStatus.OPEN).order_by(Issue.id)
     )
     assert issue is not None, kind
-    await resolve_issue(session, factory, issue.id, action, actor=ACTOR)
+    await BUTTONS[action](session, factory, Press(issue.id, actor=ACTOR))
 
 
 # --- 閘門 ---
