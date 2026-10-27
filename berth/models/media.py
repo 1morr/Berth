@@ -62,6 +62,9 @@ class MediaCard(BaseModel):
     #: `en` 介面的海報。**TMDB 的海報也分語言**（M1.5 票 11），所以與標題一樣兩輪都存。
     #: 票 11 之前寫下的快取沒有這一欄，讀出來是空字串，至多一小時後換新（plan §8.3）。
     poster_url_en: str = ""
+    #: TMDB 的類型有 Animation（M5 票 16 之後：側面板找動畫只挑這種）。之前寫下的快取沒有這一欄，
+    #: 讀出來是 `None`（不知道），至多一小時後換新。
+    animation: bool | None = None
 
     @property
     def id(self) -> str:

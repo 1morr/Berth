@@ -53,7 +53,7 @@ from berth.adapters.qbittorrent import (
 )
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
-from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering, parse_detail
+from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering, parse_detail, parse_entries
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.domain import CollectionType, MediaKind, SiteFailure, SortOrder
 from berth.services.indexer import DEFAULT_INDEXERS
@@ -2559,6 +2559,7 @@ async def test_tmdb_trending_tv_reads_the_series_fields() -> None:
         original_title="Lanterns",
         year=2026,
         poster_path="/gpC7h43xPMEV3goYMQShfJbTtLq.jpg",
+        animation=False,
     )
     assert [entry.kind for entry in entries] == [MediaKind.TV] * 6
 
@@ -2583,6 +2584,7 @@ async def test_tmdb_trending_movie_reads_the_movie_fields() -> None:
         original_title="Moana",
         year=2026,
         poster_path="/gaet1xQ2nxrG0V1Ep9T20ZMNEIC.jpg",
+        animation=False,
     )
 
 
@@ -2647,6 +2649,21 @@ async def test_tmdb_search_multi_keeps_the_original_title_next_to_the_translatio
         ("SPY×FAMILY 間諜家家酒", "SPY×FAMILY"),
         ("SPY×FAMILY 間諜家家酒 CODE：White", "劇場版 SPY×FAMILY CODE: White"),
     ]
+
+
+def test_a_search_result_says_whether_it_is_animation() -> None:
+    """`genre_ids` 有 16（Animation）就是動畫：側面板照它只挑動畫（`series-mapping` 的退路）。
+    SPY×FAMILY 的劇集與電影都是 16；宮崎駿那一輪的三部作品不是（劇情、紀錄片、沒填類型）。"""
+    spy = json.loads(read_fixture("http/tmdb/search-multi.spy-x-family.en.json"))["results"]
+    assert [(e.tmdb_id, e.animation) for e in parse_entries(spy)] == [
+        (120089, True),
+        (1062807, True),
+    ]
+    miyazaki = json.loads(read_fixture("http/tmdb/search-multi.miyazaki.en.json"))["results"]
+    assert {e.animation for e in parse_entries(miyazaki)} == {False}
+    # 沒有 `genre_ids` 這一格（別的端點、舊的快取）是不知道，不是「不是動畫」。
+    [unknown] = parse_entries([{"id": 1, "media_type": "tv", "name": "X"}])
+    assert unknown.animation is None
 
 
 @respx.mock

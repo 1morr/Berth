@@ -157,6 +157,8 @@ class TestSearch:
         body = client.get("/api/discover/search", params={"q": "Lanterns"}).json()
 
         assert [item["id"] for item in body["items"]] == ["tv:95350"]
+        # 「是不是動畫」只給側面板，畫面的形狀不變（`DiscoverItemOut`）。
+        assert "animation" not in body["items"][0]
 
     def test_a_blank_query_is_an_empty_wall_not_an_error(self, client: TestClient) -> None:
         """搜尋框清空是使用者每天都會做的事，不是 422。"""
