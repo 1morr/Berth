@@ -81,13 +81,13 @@ function calls(stub: ReturnType<typeof stubApi>, key: string): number {
 }
 
 describe('設定 → AI', () => {
-  it('分頁列：AI 在通知之後，是當前頁', async () => {
+  it('分頁列：AI 在通知與用量之間，是當前頁', async () => {
     render()
     renderApp('/settings/ai')
 
     const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
     const names = tabs.getAllByRole('link').map((link) => link.textContent)
-    expect(names.slice(-2)).toEqual(['通知', 'AI'])
+    expect(names.slice(-3)).toEqual(['通知', 'AI', '用量'])
     expect(tabs.getByRole('link', { name: 'AI' })).toHaveAttribute('data-status', 'active')
   })
 

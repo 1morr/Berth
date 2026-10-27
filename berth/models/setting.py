@@ -147,6 +147,8 @@ class AiSettings(SettingsGroup):
     openai: AiEndpointSettings = AiEndpointSettings()
     #: 選填，網路搜尋工具用（票 17）。只進不出。
     tavily_api_key: str = ""
+    #: 每日花費提醒值（美元，M5 票 21）；`None` 是不提醒。只提醒，不停用 AI（brief §6.10）。
+    daily_alert_usd: float | None = None
 
     def endpoint(self, provider: AiProvider) -> AiEndpointSettings:
         return self.anthropic if provider is AiProvider.ANTHROPIC else self.openai

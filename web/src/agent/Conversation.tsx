@@ -1,5 +1,6 @@
 import { Chat, useChat } from '@ai-sdk/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   isDataUIPart,
   isTextUIPart,
@@ -25,7 +26,7 @@ import {
 } from '../api/agent'
 import { ApiError, signedOut } from '../api/client'
 import { proposalsKey, proposalsQueryOptions, type Proposal } from '../api/proposals'
-import { GhostButton, Notice, PrimaryButton } from '../components/controls'
+import { GhostButton, Notice, PrimaryButton, TEXT_LINK } from '../components/controls'
 import { ExpandHint } from '../components/ExpandHint'
 import { RequestFailed } from '../components/RequestFailed'
 import i18n from '../i18n'
@@ -36,6 +37,7 @@ import { PanelFailed, PanelLoading } from './PanelStates'
 import { INPUT_ID, PANEL_TITLE_ID, SLASH_HINT_ID, slashOptionId, usePanel } from './panelState'
 import { SlashHint, SlashOutput } from './Slash'
 import { ToolCall } from './ToolCall'
+import { useNarrow } from './useNarrow'
 
 /**
  * 一段對話：接回伺服器存著的那一份，之後由 `useChat` 串流（M5 票 12）。
@@ -399,6 +401,7 @@ function Transcript({
               messages[index - 1].role === message.role &&
               !outputs.some((output) => output.after === index)
             }
+            runId={lastOfItsRun(messages, index)}
           />
           {outputsAfter(outputs, index + 1)}
         </Fragment>
@@ -413,8 +416,37 @@ function outputsAfter(outputs: Output[], after: number) {
     .map((output) => <SlashOutput key={`slash:${output.key}`} result={output.result} />)
 }
 
-function Message({ message, continued }: { message: UIMessage; continued: boolean }) {
+/**
+ * 這一則助理訊息是它那一輪的最後一則的話，那一輪的 id（M5 票 21）；否則 `null`。後端在每一則助理訊息的
+ * `metadata.runId` 寫它是哪一輪的（串流時在開頭，重新載入時每一則都有）。重新載入之後一輪會拆成好幾則，
+ * 「步驟」只掛在最後一則下面。
+ */
+function lastOfItsRun(messages: UIMessage[], index: number): string | null {
+  const runId = runIdOf(messages[index])
+  if (runId === null) return null
+  const next = messages.at(index + 1)
+  return next !== undefined && runIdOf(next) === runId ? null : runId
+}
+
+function runIdOf(message: UIMessage): string | null {
+  if (message.role !== 'assistant') return null
+  const metadata = message.metadata
+  if (typeof metadata !== 'object' || metadata === null || !('runId' in metadata)) return null
+  return typeof metadata.runId === 'string' ? metadata.runId : null
+}
+
+function Message({
+  message,
+  continued,
+  runId,
+}: {
+  message: UIMessage
+  continued: boolean
+  runId: string | null
+}) {
   const { t } = useTranslation()
+  const narrow = useNarrow()
+  const { setOpen } = usePanel()
 
   if (message.role === 'user') {
     const text = message.parts
@@ -453,6 +485,20 @@ function Message({ message, continued }: { message: UIMessage; continued: boolea
         if (isToolUIPart(part)) return <ToolPart key={key} part={part} />
         return null
       })}
+      {runId ? (
+        <Link
+          to="/agent/runs/$runId"
+          params={{ runId }}
+          aria-label={t('agent.stepsLabel')}
+          // 窄版的面板蓋滿整個視窗：不收起來的話，換過去的那一頁看不到。
+          onClick={() => {
+            if (narrow) setOpen(false)
+          }}
+          className={`${TEXT_LINK} justify-self-start text-ink-dim`}
+        >
+          {t('agent.steps')}
+        </Link>
+      ) : null}
     </div>
   )
 }

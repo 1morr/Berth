@@ -611,6 +611,7 @@ class TestTheCircuitBreaker:
             "enabled": True,
             "paused_until": "2026-10-27T12:15:00Z",
             "pause_error": "",
+            "spend": None,
         }
 
 
@@ -835,8 +836,15 @@ class TestThePanelKnowsWhetherAiIsOn:
     """側面板一打開就要分得出「可以問」與「沒開」（票 12）：一般使用者讀不到 `/settings/ai`。"""
 
     def test_everyone_signed_in_reads_that_it_is_on(self, client: TestClient) -> None:
-        on = {"enabled": True, "paused_until": None, "pause_error": ""}
-        assert client.get("/api/agent/status").json() == on
+        on: dict[str, object] = {
+            "enabled": True,
+            "paused_until": None,
+            "pause_error": "",
+            "spend": None,
+        }
+        # 管理員多一份花費提醒（還沒用過：沒有提醒、沒有未知），一般使用者是 `null`。
+        nothing_yet = {"alerts": [], "unknown_today": 0, "unknown_before": 0}
+        assert client.get("/api/agent/status").json() == on | {"spend": nothing_yet}
         sign_in_crew(client)
         assert client.get("/api/agent/status").json() == on
 
@@ -852,6 +860,7 @@ class TestThePanelKnowsWhetherAiIsOn:
             "enabled": False,
             "paused_until": None,
             "pause_error": "",
+            "spend": None,
         }
 
     def test_signed_out_it_is_not_there(self, client: TestClient) -> None:
@@ -950,3 +959,160 @@ class TestClosingTheConnection:
         assert turn.run.stop_reason == "cancelled"
         assert "the connection was closed" in last_assistant_text(client)
         runtime.claim(1)
+
+
+class TestTheSteps:
+    """每一輪的步驟頁（M5 票 21）：從側面板的每一則回覆連得過來，被中止的那一輪也有數字。"""
+
+    def test_a_stopped_turn_has_its_steps_and_numbers(
+        self, client: TestClient, script: Script
+    ) -> None:
+        script.steps = [call("jobs_list_jobs", page=1)]
+        chat(client, "What is downloading?")
+        [turn] = recorded(client)
+
+        found = client.get(f"/api/agent/runs/{turn.run.id}").json()
+
+        assert found["stop_reason"] == "repeated_call"
+        assert found["requests"] == 4
+        assert [s["step"] for s in found["steps"]] == [1, 2, 3, 4]
+        assert [t["outcome"] for s in found["steps"] for t in s["tools"]] == [
+            "ok",
+            "warned",
+            "blocked",
+            "aborted",
+        ]
+        assert sum(s["call"]["input_tokens"] for s in found["steps"]) == turn.run.input_tokens
+
+    def test_every_reply_carries_its_turn_live_and_on_reload(
+        self, client: TestClient, script: Script
+    ) -> None:
+        script.steps = [say("Hi.")]
+        response = chat(client, "Hello?")
+        [turn] = recorded(client)
+
+        [start] = [c for c in chunks(response) if c["type"] == "start"]
+        assert start["messageMetadata"] == {"runId": turn.run.id}
+        messages = client.get("/api/agent/conversations/c1").json()["messages"]
+        assert [m["metadata"]["runId"] for m in messages if m["role"] == "assistant"] == [
+            turn.run.id
+        ]
+
+    def test_the_stop_note_carries_its_turn_too(self, client: TestClient, script: Script) -> None:
+        script.steps = [call("jobs_list_jobs", page=1)]
+        chat(client, "What is downloading?")
+        [turn] = recorded(client)
+
+        messages = client.get("/api/agent/conversations/c1").json()["messages"]
+
+        assert {m["metadata"]["runId"] for m in messages if m["role"] == "assistant"} == {
+            turn.run.id
+        }
+
+    def test_a_user_sees_their_own_turn_but_not_someone_elses(
+        self, client: TestClient, script: Script
+    ) -> None:
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+        [owners] = recorded(client)
+        sign_in_crew(client)
+        chat(client, "Hello?", conversation="c2")
+        mine = next(r for r in recorded(client) if r.run.id != owners.run.id)
+
+        assert client.get(f"/api/agent/runs/{mine.run.id}").status_code == 200
+        response = client.get(f"/api/agent/runs/{owners.run.id}")
+        assert response.status_code == 404
+        assert response.json()["detail"]["reason"] == "run_missing"
+
+
+class TestTheUsagePage:
+    """用量頁（M5 票 21）：只有管理員；數字與 `ai_calls` 一致；花費只提醒、不停用。"""
+
+    def test_the_numbers_add_up_to_ai_calls(self, client: TestClient, script: Script) -> None:
+        script.steps = [call("jobs_list_jobs", page=1), say("Nothing.")]
+        chat(client, "What is downloading?")
+        chat(client, "And now?")
+        calls = [c for turn in recorded(client) for c in turn.calls]
+
+        usage = client.get("/api/settings/usage").json()
+
+        assert usage["totals"]["calls"] == len(calls) > 0
+        assert usage["totals"]["input_tokens"] == sum(c.input_tokens for c in calls)
+        assert usage["totals"]["output_tokens"] == sum(c.output_tokens for c in calls)
+        assert usage["totals"]["cost"]["known"] == pytest.approx(
+            sum(c.cost_usd or 0 for c in calls)
+        )
+        assert sum(d["input_tokens"] for d in usage["days"]) == usage["totals"]["input_tokens"]
+        assert usage["runs_count"] == 2
+        assert [r["id"] for r in usage["runs"]] == [t.run.id for t in reversed(recorded(client))]
+        assert [p["model"] for p in usage["prices"]] == ["claude-sonnet-5-5"]
+        assert usage["prices"][0]["price"]["verified"] == "2026-10-27"
+
+    def test_users_cannot_see_it(self, client: TestClient) -> None:
+        sign_in_crew(client)
+        assert client.get("/api/settings/usage").status_code == 403
+        response = client.put("/api/settings/usage/alert", json={"daily_usd": 1}, headers=BROWSER)
+        assert response.status_code == 403
+
+    def test_an_alert_is_said_but_ai_keeps_working(
+        self, client: TestClient, script: Script
+    ) -> None:
+        response = client.put(
+            "/api/settings/usage/alert", json={"daily_usd": 0.000001}, headers=BROWSER
+        )
+        assert response.json() == {"daily_usd": 0.000001}
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+
+        assert [a["kind"] for a in client.get("/api/settings/usage").json()["spend"]["alerts"]] == [
+            "threshold"
+        ]
+        assert [a["kind"] for a in client.get("/api/agent/status").json()["spend"]["alerts"]] == [
+            "threshold"
+        ]
+        # 只提醒：下一輪照樣跑。
+        assert chat(client, "Again?").status_code == 200
+        assert len(recorded(client)) == 2
+
+    def test_the_panel_alert_is_for_admins_only(self, client: TestClient, script: Script) -> None:
+        client.put("/api/settings/usage/alert", json={"daily_usd": 0.000001}, headers=BROWSER)
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+        sign_in_crew(client)
+
+        assert client.get("/api/agent/status").json()["spend"] is None
+
+    def test_a_negative_alert_is_refused(self, client: TestClient) -> None:
+        response = client.put("/api/settings/usage/alert", json={"daily_usd": -1}, headers=BROWSER)
+        assert response.status_code == 422
+
+    def test_clearing_the_alert(self, client: TestClient) -> None:
+        client.put("/api/settings/usage/alert", json={"daily_usd": 2}, headers=BROWSER)
+        response = client.put(
+            "/api/settings/usage/alert", json={"daily_usd": None}, headers=BROWSER
+        )
+        assert response.json() == {"daily_usd": None}
+        assert client.get("/api/settings/usage").json()["daily_alert_usd"] is None
+
+
+class TestUnknownCostsAreSaid:
+    """協調者 2026-10-27：模型不在價目表上時提醒永遠不響；畫面要看得出來，不是「沒事」。"""
+
+    def test_a_model_without_a_price_is_counted_for_the_admin(
+        self, client: TestClient, script: Script
+    ) -> None:
+        body = {
+            "enabled": True,
+            "provider": "openai",
+            "base_url": "http://gateway.local/v1",
+            "model": "my-local-llm",
+            "api_key": "sk-local",
+        }
+        assert client.put("/api/settings/ai", json=body, headers=BROWSER).status_code == 200
+        client.put("/api/settings/usage/alert", json={"daily_usd": 0.000001}, headers=BROWSER)
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+
+        spend = client.get("/api/agent/status").json()["spend"]
+        assert spend == {"alerts": [], "unknown_today": 1, "unknown_before": 0}
+        assert client.get("/api/settings/usage").json()["spend"]["unknown_today"] == 1

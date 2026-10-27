@@ -75,6 +75,59 @@ test('側面板問「為什麼沒入庫」得到結論，重新載入之後對�
   await expect(panel).toHaveCount(0)
 })
 
+test('被防護中止的那一輪：從「步驟」看到每一步的數字，用量頁數得到它（M5 票 21）', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('一直查下載')
+  await input.press('Enter')
+
+  // 同一個呼叫第 4 次：整輪中止，留一則說明。
+  const log = panel.getByRole('log', { name: '助理' })
+  await expect(log).toContainText('第 4 次')
+  await shot(page, 'stopped-in-panel')
+  // 窄版的面板蓋滿整個視窗：按了就收起來，才看得到步驟頁。
+  await log.getByRole('link', { name: '這則回覆的步驟' }).last().click()
+
+  await expect(page.getByRole('heading', { level: 1, name: '這一輪的步驟' })).toBeVisible()
+  await expect(page.getByText('停下', { exact: true })).toBeVisible()
+  await expect(page.getByText('同一個呼叫重複')).toBeVisible()
+  const steps = page.getByRole('list').filter({ has: page.getByRole('heading', { level: 3 }) })
+  await expect(steps.getByRole('heading', { level: 3 })).toHaveText([
+    '第 1 次模型呼叫',
+    '第 2 次模型呼叫',
+    '第 3 次模型呼叫',
+    '第 4 次模型呼叫',
+  ])
+  for (const outcome of ['完成', '警告後照做', '被擋下', '中止這一輪'])
+    await expect(steps.getByText(outcome, { exact: true })).toBeVisible()
+  await expectPageFits(page)
+  await shot(page, 'steps')
+
+  // 用量頁：這一輪在「最近的輪」，重複呼叫數到 1 次。
+  await page.goto('/settings/usage')
+  await expect(page.getByRole('heading', { level: 1, name: 'AI 用量' })).toBeVisible()
+  const stops = page.locator('section').filter({
+    has: page.getByRole('heading', { name: '一輪停在哪裡' }),
+  })
+  await expect(stops.getByText('同一個呼叫重複').locator('xpath=..')).toContainText('1 次')
+  await expect(page.getByRole('table', { name: '最近 20 輪，新的在上' })).toContainText(
+    '同一個呼叫重複',
+  )
+  await expectPageFits(page)
+  await shot(page, 'usage')
+})
+
+async function expectPageFits(page: import('@playwright/test').Page) {
+  const [pageWidth, viewport] = (await page.evaluate(
+    '[document.documentElement.scrollWidth, window.innerWidth]',
+  )) as number[]
+  expect(pageWidth).toBeLessThanOrEqual(viewport)
+}
+
 test('送單卡：出卡、重新載入之後照樣按得下去、取消一列再確認，只送出勾著的', async ({ page }) => {
   // 假模型說「下載 SPY×FAMILY」時：搜作品、搜發佈、問 Route，再出一張三列的送單卡（M5 票 13）。
   await signIn(page, '/jobs')

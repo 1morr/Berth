@@ -3,21 +3,7 @@ import { getToolName } from 'ai'
 import { useTranslation } from 'react-i18next'
 
 import { ExpandHint } from '../components/ExpandHint'
-
-/** 工具名（後端的 `tool_name`：登錄表的名字把 `.` 換成 `_`）→ 人話。認不得的照原文畫。 */
-const TOOL_NAMES = {
-  discover_search_media: 'agent.tool.names.discover_search_media',
-  why_not_explain: 'agent.tool.names.why_not_explain',
-  jobs_list_jobs: 'agent.tool.names.jobs_list_jobs',
-  jobs_read_job_events: 'agent.tool.names.jobs_read_job_events',
-  // 票 13：送單那一條路。
-  search_search_torrents: 'agent.tool.names.search_search_torrents',
-  media_route_choices: 'agent.tool.names.media_route_choices',
-  downloading_add_manual_download: 'agent.tool.names.downloading_add_manual_download',
-  // 票 17：設了 Tavily key 才有；`web_search` 是 Anthropic 伺服器端那一種，不經登錄表。
-  web_tavily_search: 'agent.tool.names.web_tavily_search',
-  web_search: 'agent.tool.names.web_search',
-} as const
+import { toolNameKey } from './toolNames'
 
 type Phase = 'running' | 'done' | 'failed'
 
@@ -49,9 +35,8 @@ function pretty(value: unknown): string {
 export function ToolCall({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   const { t } = useTranslation()
   const name = getToolName(part)
-  const known = Object.hasOwn(TOOL_NAMES, name)
-    ? t(TOOL_NAMES[name as keyof typeof TOOL_NAMES])
-    : null
+  const key = toolNameKey(name)
+  const known = key ? t(key) : null
   const phase = phaseOf(part)
   const result = part.state === 'output-error' ? part.errorText : pretty(part.output)
 

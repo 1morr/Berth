@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run
+         * @description 一輪的步驟：每一次模型呼叫與它叫的工具、各自的數字，以及停止原因。
+         */
+        get: operations["get_run_api_agent_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/ai": {
         parameters: {
             query?: never;
@@ -2539,6 +2559,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Usage
+         * @description 近 30 天的用量、防護次數、最近的輪、價目與花費提醒。
+         */
+        get: operations["get_usage_api_settings_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/usage/alert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Spend Alert
+         * @description 存每日提醒值。只提醒，不擋任何東西。
+         */
+        put: operations["put_spend_alert_api_settings_usage_alert_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/weekly": {
         parameters: {
             query?: never;
@@ -2649,6 +2709,7 @@ export interface components {
             paused_until: string | null;
             /** Pause Error */
             pause_error: string;
+            spend: components["schemas"]["SpendCheckOut"] | null;
         };
         /** AiEndpointOut */
         AiEndpointOut: {
@@ -2733,6 +2794,12 @@ export interface components {
             detail: string;
         };
         /**
+         * AiRunRefusal
+         * @description 一輪的步驟（`services.usage.read_run`，M5 票 21）讀不到的理由。
+         * @enum {string}
+         */
+        AiRunRefusal: "run_missing";
+        /**
          * AiSecret
          * @description AI 設定裡存著的 key（`services.ai.forget_ai_key`）。
          * @enum {string}
@@ -2768,6 +2835,33 @@ export interface components {
             detail: string;
             /** Model */
             model: string;
+        };
+        /**
+         * AiToolOutcome
+         * @description 一次工具呼叫的結果（`ai_tool_calls.outcome`）。
+         * @enum {string}
+         */
+        AiToolOutcome: "ok" | "warned" | "blocked" | "aborted" | "refused" | "failed" | "proposed";
+        /** AiUsageOut */
+        AiUsageOut: {
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Days */
+            days: components["schemas"]["DayUsageOut"][];
+            totals: components["schemas"]["DayUsageOut"];
+            /** Runs Count */
+            runs_count: number;
+            guards: components["schemas"]["GuardCountsOut"];
+            /** Runs */
+            runs: components["schemas"]["RunRowOut"][];
+            /** Prices */
+            prices: components["schemas"]["ModelPriceRowOut"][];
+            /** Daily Alert Usd */
+            daily_alert_usd: number | null;
+            spend: components["schemas"]["SpendCheckOut"];
         };
         /**
          * AuditAction
@@ -3148,6 +3242,40 @@ export interface components {
                 [key: string]: unknown;
             }[];
             stop: components["schemas"]["TurnStopOut"] | null;
+        };
+        /** CostTallyOut */
+        CostTallyOut: {
+            /** Known */
+            known: number;
+            /** Counted */
+            counted: number;
+            /** Unknown */
+            unknown: number;
+        };
+        /** DayUsageOut */
+        DayUsageOut: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Calls */
+            calls: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** New Input */
+            new_input: number;
+            cache_read: components["schemas"]["TokenTallyOut"];
+            cache_write: components["schemas"]["TokenTallyOut"];
+            /** Output Tokens */
+            output_tokens: number;
+            /** Hit Rate */
+            hit_rate: number | null;
+            cost: components["schemas"]["CostTallyOut"];
+            /** Web Searches */
+            web_searches: number;
+            /** Tavily Searches */
+            tavily_searches: number;
         };
         /**
          * DeletionEstimateOut
@@ -3570,6 +3698,21 @@ export interface components {
          * @enum {string}
          */
         Flag: "connects_out" | "sends_out" | "downloads" | "settings" | "internal";
+        /** GuardCountsOut */
+        GuardCountsOut: {
+            /** Stops */
+            stops: {
+                [key: string]: number;
+            };
+            /** Blocked */
+            blocked: number;
+            /** Refused */
+            refused: number;
+            /** Failed */
+            failed: number;
+            /** Truncated */
+            truncated: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4715,6 +4858,12 @@ export interface components {
              */
             subgroup_name?: string;
         };
+        /** ModelPriceRowOut */
+        ModelPriceRowOut: {
+            /** Model */
+            model: string;
+            price: components["schemas"]["AiPriceOut"] | null;
+        };
         /** MyNotifyIn */
         MyNotifyIn: {
             /** Discord User Id */
@@ -5796,6 +5945,87 @@ export interface components {
             /** Rules */
             rules: string[];
         };
+        /** RunOut */
+        RunOut: {
+            /** Id */
+            id: string;
+            /** User Name */
+            user_name: string;
+            provider: components["schemas"]["AiProvider"];
+            /** Model */
+            model: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            stop_reason: components["schemas"]["AiStopReason"] | null;
+            /** Error */
+            error: string;
+            /** Continues */
+            continues: string | null;
+            /** Requests */
+            requests: number;
+            /** Tool Calls */
+            tool_calls: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Cache Read Tokens */
+            cache_read_tokens: number | null;
+            /** Cache Write Tokens */
+            cache_write_tokens: number | null;
+            /** Hit Rate */
+            hit_rate: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Web Searches */
+            web_searches: number;
+            /** Tavily Searches */
+            tavily_searches: number;
+            /** Steps */
+            steps: components["schemas"]["RunStepOut"][];
+        };
+        /** RunRefusalOut */
+        RunRefusalOut: {
+            reason: components["schemas"]["AiRunRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /** RunRowOut */
+        RunRowOut: {
+            /** Id */
+            id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** User Name */
+            user_name: string;
+            stop_reason: components["schemas"]["AiStopReason"] | null;
+            /** Requests */
+            requests: number;
+            /** Tool Calls */
+            tool_calls: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Cost Usd */
+            cost_usd: number | null;
+        };
+        /** RunStepOut */
+        RunStepOut: {
+            /** Step */
+            step: number;
+            call: components["schemas"]["StepCallOut"] | null;
+            /** Tools */
+            tools: components["schemas"]["StepToolOut"][];
+        };
         /**
          * SearchOut
          * @description 一次搜尋的回應。
@@ -6227,6 +6457,41 @@ export interface components {
          * @enum {string}
          */
         Source: "BD" | "WEB" | "DVD" | "HDTV" | "REMUX";
+        /** SpendAlertIn */
+        SpendAlertIn: {
+            /** Daily Usd */
+            daily_usd: number | null;
+        };
+        /**
+         * SpendAlertKind
+         * @enum {string}
+         */
+        SpendAlertKind: "threshold" | "anomaly";
+        /** SpendAlertOut */
+        SpendAlertOut: {
+            kind: components["schemas"]["SpendAlertKind"];
+            /** Today */
+            today: string;
+            /** Against */
+            against: string;
+        };
+        /** SpendAlertSetOut */
+        SpendAlertSetOut: {
+            /** Daily Usd */
+            daily_usd: number | null;
+        };
+        /**
+         * SpendCheckOut
+         * @description 今天的花費提醒，與它沒算進去的呼叫數：只提醒、不停用；費用未知的不當 0。
+         */
+        SpendCheckOut: {
+            /** Alerts */
+            alerts: components["schemas"]["SpendAlertOut"][];
+            /** Unknown Today */
+            unknown_today: number;
+            /** Unknown Before */
+            unknown_before: number;
+        };
         /** StatusOut */
         StatusOut: {
             /**
@@ -6247,6 +6512,34 @@ export interface components {
             compact_at: number;
             /** Paused Until */
             paused_until: string | null;
+        };
+        /** StepCallOut */
+        StepCallOut: {
+            /** Model */
+            model: string;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Cache Read Tokens */
+            cache_read_tokens: number | null;
+            /** Cache Write Tokens */
+            cache_write_tokens: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Web Searches */
+            web_searches: number;
+            /** Finish Reason */
+            finish_reason: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Error */
+            error: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * StepFailure
@@ -6286,6 +6579,20 @@ export interface components {
          * @enum {string}
          */
         StepStatus: "ok" | "skipped" | "failed" | "running" | "pending";
+        /** StepToolOut */
+        StepToolOut: {
+            /** Command */
+            command: string;
+            /** Args Json */
+            args_json: string;
+            outcome: components["schemas"]["AiToolOutcome"];
+            /** Detail */
+            detail: string;
+            /** Truncated */
+            truncated: boolean;
+            /** Duration Ms */
+            duration_ms: number;
+        };
         /** StillWaitingOut */
         StillWaitingOut: {
             /** Review */
@@ -6373,6 +6680,15 @@ export interface components {
         TmdbTestIn: {
             /** Api Key */
             api_key: string;
+        };
+        /** TokenTallyOut */
+        TokenTallyOut: {
+            /** Known */
+            known: number;
+            /** Counted */
+            counted: number;
+            /** Unknown */
+            unknown: number;
         };
         /**
          * TrackingOut
@@ -7020,6 +7336,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+        };
+    };
+    get_run_api_agent_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description `run_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11918,6 +12274,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusOut"];
+                };
+            };
+        };
+    };
+    get_usage_api_settings_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiUsageOut"];
+                };
+            };
+        };
+    };
+    put_spend_alert_api_settings_usage_alert_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendAlertIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendAlertSetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

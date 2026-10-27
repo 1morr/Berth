@@ -1041,6 +1041,26 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   它不是你說的，所以不標「你」。
 - **AI 沒開**不是錯誤，不塗漆：管理員一句說明 + `GHOST_LINK`「到 AI 設定」，其他人一句「管理員還沒設定」，都沒有送出列。
 
+- **每一則回覆的「步驟」**（M5 票 21）：一輪的最後一則助理訊息底下一個 `TEXT_LINK`（`ink-dim`）連到 `/agent/runs/$runId`；重新載入後一輪拆成好幾則時只掛在最後一則。窄版的面板蓋滿視窗，按了先收起面板。
+- **花費提醒**（M5 票 21，只給管理員）：抬頭列下方一塊 `assigned` 的 `Notice`「提醒」+ 一句 +「看用量」連結。只提醒、不擋送出列。有費用未知的呼叫時另一塊 `neutral` 的「費用未知」說提醒沒算進幾次（不是出事，是提醒看不見那幾次；用量頁同一個做法）。
+
+### AI 用量頁與每輪步驟頁（`UsagePage` / `RunPage`，M5 票 21）
+
+`.scratch/m5/usage-and-run-shape.md`。**只有數字表，不畫圖**（拒絕的類別預設是折線圖儀表板）。
+- **用量頁**（`/settings/usage`，設定分頁「AI」之後的「用量」）：提醒（`assigned` 的 `Notice`）→ 今天與 30 天的 `Cutaway` →
+  每日提醒值（就地的數字欄 + Ghost「儲存」，`noValidate`，負數由頁面說成一句話）→ 逐日表 → 防護與工具呼叫的兩張 `Cutaway`（0 的也列，`muted`）→
+  最近的輪 → 「費用怎麼算」的 `ink-dim` 小字清單。
+- **兩張表是一份 DOM 兩種版面，看表格自己的寬**：外層 `@container`，次要欄 `hidden @2xl:table-cell`，窄的時候收成列頭底下
+  一行 `Dot` 分隔、每一格自己說出它是什麼。用 container query 而不是 `sm` / `lg`：側面板打開時頁面變窄，視窗卻沒變。
+  數字格 `.value tabular-nums` 靠右；整列 `align-baseline`（費用是 `text-sm`、其餘 `text-xs`，不對基線就高低不齊）。
+- **不知道的不當 0**：接口沒報的寫「—」，部分算不出來的接「+未知」，全部算不出來寫「未知」，說明在表下。
+- **步驟頁**（`/agent/runs/$runId`，登入就進得來，只看得到自己的）：`h1` + 時間 · 誰 · 接口與模型 → 停止原因的色塊
+  （完成、已停止是 `neutral`；防護停下是 `assigned`「停下」，需要你決定下一步；停在確認卡上（票 13）是 `assigned`「等你確認」；出錯與斷路器是 `blocked`，原文收在「技術細節」；
+  還在跑是 `working`，每 2 秒重問）→ 合計的 `Cutaway` → `SectionHeading`「步驟」底下的 `ol`。
+- **一步是一格**：`well` 底 `border-2 border-rule`（這次呼叫出錯換 `rule-strong` + `blocked-ink` 一句 + 技術細節），`h3` 是「第 n 次模型呼叫」+ 模型名 + 靠右的耗時，
+  底下一行 `Dot` 分隔的 token 與費用。它叫的工具縮排在下面，`hull` 底一列一個：人話名稱（與側面板同一份對照，`agent/toolNames.ts`）+
+  結果的字（不只靠色；沒照做的框換 `rule-strong`）+ 截短標記 + 耗時，被擋的理由一行，參數收在 `<details>`。
+
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
 
 觸發鍵是 Ghost；展開後是 `well` 底 + `border-2 border-rule-strong` + `0.75rem` 內距、`gap-3` 的區塊，最後一排是

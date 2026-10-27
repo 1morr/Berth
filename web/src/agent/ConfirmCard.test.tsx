@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { AgentStatus } from '../api/agent'
 import type { Proposal } from '../api/proposals'
 import { renderInRoute } from '../test/render'
 import { AgentPanel } from './AgentPanel'
@@ -97,7 +98,13 @@ function serve(
       const method = init?.method ?? 'GET'
       const path = typeof input === 'string' ? input : String(input)
       if (path === '/api/auth/me') return json({ name: 'skipper', role: 'admin' })
-      if (path === '/api/agent/status') return json({ enabled: true })
+      if (path === '/api/agent/status')
+        return json({
+          enabled: true,
+          paused_until: null,
+          pause_error: '',
+          spend: null,
+        } satisfies AgentStatus)
       if (path === `/api/agent/conversations/${CONVERSATION}`) {
         return json({ id: CONVERSATION, messages })
       }
