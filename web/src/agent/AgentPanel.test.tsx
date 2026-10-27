@@ -24,8 +24,8 @@ interface Backend {
   stored: unknown[] | null
   /** `POST /agent/chat` 的回應。 */
   chat: () => Response
-  /** 今天的花費提醒（後端只給管理員）。 */
-  alerts: AgentStatus['spend_alerts']
+  /** 今天的花費提醒與沒算進去的呼叫數（後端只給管理員，其他人是 `null`）。 */
+  spend: AgentStatus['spend']
 }
 
 let sent: Record<string, unknown>[] = []
@@ -36,7 +36,7 @@ function backend(overrides: Partial<Backend>): Backend {
     enabled: true,
     stored: null,
     chat: () => stream(say('好。')),
-    alerts: [],
+    spend: { alerts: [], unknown_today: 0, unknown_before: 0 },
     ...overrides,
   }
 }
@@ -102,7 +102,7 @@ function serve(api: Backend) {
           enabled: api.enabled,
           paused_until: null,
           pause_error: '',
-          spend_alerts: api.alerts,
+          spend: api.spend,
         } satisfies AgentStatus)
       if (method === 'GET' && path.startsWith('/api/agent/conversations/')) {
         // 後端對沒有的那一段（含剛開的新對話）一律是 `conversation_missing`。
@@ -392,7 +392,11 @@ describe('AgentPanel spend reminders', () => {
   it('tells an administrator, with a way to the usage page, and still lets them ask', async () => {
     serve(
       backend({
-        alerts: [{ kind: 'threshold', today: '1.2', against: '1' }],
+        spend: {
+          alerts: [{ kind: 'threshold', today: '1.2', against: '1' }],
+          unknown_today: 0,
+          unknown_before: 0,
+        },
       }),
     )
     renderPanel()
@@ -405,10 +409,20 @@ describe('AgentPanel spend reminders', () => {
   })
 
   it('says nothing when there is nothing to remind', async () => {
-    serve(backend({ me: USER }))
+    serve(backend({ me: USER, spend: null }))
     renderPanel()
 
     await screen.findByLabelText('問助理')
     expect(screen.queryByText('提醒')).not.toBeInTheDocument()
+    expect(screen.queryByText('費用未知')).not.toBeInTheDocument()
+  })
+
+  it('does not look all clear when some costs are unknown and the reminders leave them out', async () => {
+    serve(backend({ spend: { alerts: [], unknown_today: 2, unknown_before: 1 } }))
+    renderPanel()
+
+    expect(await screen.findByText(/有 3 次呼叫的費用未知，提醒沒算進它們。/)).toBeInTheDocument()
+    expect(screen.getByText('費用未知')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '看用量' })).toHaveAttribute('href', '/settings/usage')
   })
 })

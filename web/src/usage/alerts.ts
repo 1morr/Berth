@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 
-import type { SpendAlert } from '../api/usage'
+import type { SpendAlert, SpendCheck } from '../api/usage'
 import { usd } from './numbers'
 
 /**
@@ -25,4 +25,24 @@ export function alertText(
   return where === 'page'
     ? t('usage.alerts.anomaly', { ...values, times })
     : t('agent.spend.anomaly', { ...values, times })
+}
+
+/**
+ * 提醒沒算進去的那一句（協調者 2026-10-27）：提醒只用知道的費用比，費用未知的呼叫（模型不在價目表上，
+ * 或出錯沒有回應）不在裡面。沒有這一句的話，「沒有提醒」看起來就像沒事。都知道是 `null`。
+ */
+export function unknownText(
+  t: TFunction,
+  spend: SpendCheck,
+  where: 'page' | 'panel',
+): string | null {
+  const count = spend.unknown_today + spend.unknown_before
+  if (count === 0) return null
+  return where === 'page'
+    ? t('usage.alerts.unknown', {
+        count,
+        today: spend.unknown_today,
+        before: spend.unknown_before,
+      })
+    : t('agent.spend.unknown', { count })
 }

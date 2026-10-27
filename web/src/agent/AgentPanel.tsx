@@ -14,7 +14,7 @@ import {
   Notice,
   TEXT_LINK,
 } from '../components/controls'
-import { alertText } from '../usage/alerts'
+import { alertText, unknownText } from '../usage/alerts'
 import { Conversation } from './Conversation'
 import { PanelFailed, PanelLoading } from './PanelStates'
 import { INPUT_ID, PANEL_ID, PANEL_TITLE_ID, TOGGLE_ID, usePanel } from './panelState'
@@ -132,36 +132,46 @@ function PanelBody({ conversationId }: { conversationId: string }) {
   // `key`：換一段對話就是換一份 `Chat`，輸入欄以外的狀態（失敗的那一句）跟著清掉。
   return (
     <>
-      <SpendAlerts alerts={status.data.spend_alerts} />
+      <SpendAlerts spend={status.data.spend} />
       <Conversation key={conversationId} conversationId={conversationId} />
     </>
   )
 }
 
 /**
- * 今天的花費提醒（M5 票 21）：後端只給管理員，一般使用者永遠是空的。只提醒、不停用，不推 Discord。
+ * 今天的花費提醒（M5 票 21）：後端只給管理員，一般使用者是 `null`。只提醒、不停用，不推 Discord。
+ * 有費用未知的呼叫時多一句說提醒沒算進它們：不然「沒有提醒」看起來像沒事（協調者 2026-10-27）。
  */
-function SpendAlerts({ alerts }: { alerts: AgentStatus['spend_alerts'] }) {
+function SpendAlerts({ spend }: { spend: AgentStatus['spend'] }) {
   const { t, i18n } = useTranslation()
   const narrow = useNarrow()
   const { setOpen } = usePanel()
-  if (alerts.length === 0) return null
+  if (spend === null) return null
+  const unknown = unknownText(t, spend, 'panel')
+  if (spend.alerts.length === 0 && unknown === null) return null
+  const toUsage = (
+    <Link
+      to="/settings/usage"
+      onClick={() => {
+        if (narrow) setOpen(false)
+      }}
+      className={TEXT_LINK}
+    >
+      {t('agent.spend.link')}
+    </Link>
+  )
   return (
     <div className="grid gap-2 border-b-2 border-rule px-4 py-3">
-      {alerts.map((alert) => (
+      {spend.alerts.map((alert) => (
         <Notice key={alert.kind} signal="assigned" label={t('agent.spend.label')}>
-          {alertText(t, alert, i18n.language, 'panel')}{' '}
-          <Link
-            to="/settings/usage"
-            onClick={() => {
-              if (narrow) setOpen(false)
-            }}
-            className={TEXT_LINK}
-          >
-            {t('agent.spend.link')}
-          </Link>
+          {alertText(t, alert, i18n.language, 'panel')} {toUsage}
         </Notice>
       ))}
+      {unknown !== null ? (
+        <Notice signal="neutral" label={t('agent.spend.unknownLabel')}>
+          {unknown} {spend.alerts.length === 0 ? toUsage : null}
+        </Notice>
+      ) : null}
     </div>
   )
 }

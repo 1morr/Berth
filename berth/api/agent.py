@@ -50,7 +50,7 @@ from berth.api.deps import (
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.api.usage import SpendAlertOut
+from berth.api.usage import SpendCheckOut
 from berth.domain import (
     Actor,
     AgentRefusal,
@@ -97,8 +97,8 @@ class AgentStatusOut(BaseModel):
     paused_until: datetime | None
     #: 讓它暫停的那一次的錯誤原文（key 已遮掉）；只給管理員，其他人與沒有暫停是空字串。
     pause_error: str
-    #: 今天的花費提醒（同用量頁）；只給管理員，其他人永遠是空的。只提醒，不停用。
-    spend_alerts: list[SpendAlertOut]
+    #: 今天的花費提醒與它沒算進去的呼叫數（同用量頁）；只給管理員，其他人是 `null`。只提醒，不停用。
+    spend: SpendCheckOut | None
 
 
 class TurnStopOut(BaseModel):
@@ -300,7 +300,7 @@ async def get_status(
         enabled=found.enabled,
         paused_until=found.paused_until,
         pause_error=found.pause_error,
-        spend_alerts=[SpendAlertOut.model_validate(alert) for alert in found.spend_alerts],
+        spend=SpendCheckOut.model_validate(found.spend) if found.spend is not None else None,
     )
 
 

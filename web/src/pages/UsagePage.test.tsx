@@ -110,7 +110,7 @@ const USAGE: Usage = {
     { model: 'my-local-llm', price: null },
   ],
   daily_alert_usd: null,
-  alerts: [],
+  spend: { alerts: [], unknown_today: 0, unknown_before: 0 },
 }
 
 function render(routes: StubRoutes = {}, usage: Usage = USAGE) {
@@ -182,10 +182,14 @@ describe('設定 → 用量', () => {
       {
         ...USAGE,
         daily_alert_usd: 0.02,
-        alerts: [
-          { kind: 'threshold', today: '0.0312', against: '0.02' },
-          { kind: 'anomaly', today: '0.0312', against: '0.002' },
-        ],
+        spend: {
+          alerts: [
+            { kind: 'threshold', today: '0.0312', against: '0.02' },
+            { kind: 'anomaly', today: '0.0312', against: '0.002' },
+          ],
+          unknown_today: 0,
+          unknown_before: 0,
+        },
       },
     )
     renderApp('/settings/usage')
@@ -195,6 +199,26 @@ describe('設定 → 用量', () => {
     ).toBeVisible()
     expect(screen.getByText(/近 14 天有用量那幾天的中位數 \$0\.0020 的 16 倍/)).toBeVisible()
     expect(screen.getByLabelText('每日提醒值（美元）')).toHaveValue(0.02)
+  })
+
+  it('提醒沒算進費用未知的呼叫時明說幾次，不讓「沒有提醒」像沒事', async () => {
+    render({}, { ...USAGE, spend: { alerts: [], unknown_today: 1, unknown_before: 3 } })
+    renderApp('/settings/usage')
+
+    expect(
+      await screen.findByText(
+        '有 4 次呼叫的費用未知（今天 1 次、前 14 天 3 次），提醒沒算進它們：模型不在價目表上，或呼叫出錯沒有回應。',
+      ),
+    ).toBeVisible()
+    expect(screen.getByText('費用未知')).toBeVisible()
+  })
+
+  it('費用都知道時不多說', async () => {
+    render()
+    renderApp('/settings/usage')
+
+    await screen.findByRole('table', { name: '近 30 天每天的用量，新的在上' })
+    expect(screen.queryByText('費用未知')).not.toBeInTheDocument()
   })
 
   it('存提醒值；空著存是不提醒；負數不送', async () => {

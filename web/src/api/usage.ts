@@ -16,6 +16,8 @@ export type DayUsage = Schemas['DayUsageOut']
 
 export type SpendAlert = Schemas['SpendAlertOut']
 
+export type SpendCheck = Schemas['SpendCheckOut']
+
 export type Run = Schemas['RunOut']
 
 export type RunStep = Schemas['RunStepOut']

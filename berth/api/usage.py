@@ -112,6 +112,18 @@ class SpendAlertOut(BaseModel):
     against: Decimal
 
 
+class SpendCheckOut(BaseModel):
+    """今天的花費提醒，與它沒算進去的呼叫數：只提醒、不停用；費用未知的不當 0。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    alerts: list[SpendAlertOut]
+    #: 今天幾次呼叫的費用不知道（模型不在價目表上，或出錯沒有回應）：提醒沒算進它們。
+    unknown_today: int
+    #: 前 14 天（異常的基準）幾次呼叫的費用不知道。
+    unknown_before: int
+
+
 class UsageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,7 +140,7 @@ class UsageOut(BaseModel):
     #: 每日提醒值（美元）；`null` 是不提醒。
     daily_alert_usd: float | None
     #: 只提醒，不停用 AI。
-    alerts: list[SpendAlertOut]
+    spend: SpendCheckOut
 
 
 class SpendAlertIn(BaseModel):

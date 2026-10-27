@@ -3891,6 +3891,9 @@ const zhHant = {
       label: '提醒',
       threshold: '今天估計花了 {{today}}，超過提醒值 {{against}}。AI 照常可用。',
       anomaly: '今天估計花了 {{today}}，是近 14 天中位數的 {{times}} 倍。AI 照常可用。',
+      unknownLabel: '費用未知',
+      unknown_one: '有 {{count}} 次呼叫的費用未知，提醒沒算進它們。',
+      unknown_other: '有 {{count}} 次呼叫的費用未知，提醒沒算進它們。',
       link: '看用量',
     },
     failure: {
@@ -3916,6 +3919,11 @@ const zhHant = {
       threshold: '今天估計花了 {{today}}，超過你設的提醒值 {{against}}。AI 照常可用。',
       anomaly:
         '今天估計花了 {{today}}，是近 14 天有用量那幾天的中位數 {{against}} 的 {{times}} 倍。AI 照常可用。',
+      unknownLabel: '費用未知',
+      unknown_one:
+        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：模型不在價目表上，或呼叫出錯沒有回應。',
+      unknown_other:
+        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：模型不在價目表上，或呼叫出錯沒有回應。',
     },
     summary: {
       title: '今天與近 30 天',
@@ -7869,6 +7877,9 @@ const en: Translations<typeof zhHant> = {
         'Today’s estimated spend is {{today}}, over your reminder of {{against}}. AI keeps working.',
       anomaly:
         'Today’s estimated spend is {{today}}, {{times}} times the 14-day median. AI keeps working.',
+      unknownLabel: 'Cost unknown',
+      unknown_one: '{{count}} call has an unknown cost; the reminders leave it out.',
+      unknown_other: '{{count}} calls have an unknown cost; the reminders leave them out.',
       link: 'See usage',
     },
     failure: {
@@ -7895,6 +7906,11 @@ const en: Translations<typeof zhHant> = {
         'Today’s estimated spend is {{today}}, over your reminder of {{against}}. AI keeps working.',
       anomaly:
         'Today’s estimated spend is {{today}}, {{times}} times the median {{against}} of the days with usage in the last 14. AI keeps working.',
+      unknownLabel: 'Cost unknown',
+      unknown_one:
+        '{{count}} call has an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave it out: its model is not in the price table, or it failed without a response.',
+      unknown_other:
+        '{{count}} calls have an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave them out: their model is not in the price table, or they failed without a response.',
     },
     summary: {
       title: 'Today and the last 30 days',

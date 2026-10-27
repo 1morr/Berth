@@ -2689,8 +2689,7 @@ export interface components {
             paused_until: string | null;
             /** Pause Error */
             pause_error: string;
-            /** Spend Alerts */
-            spend_alerts: components["schemas"]["SpendAlertOut"][];
+            spend: components["schemas"]["SpendCheckOut"] | null;
         };
         /** AiEndpointOut */
         AiEndpointOut: {
@@ -6365,6 +6364,18 @@ export interface components {
             /** Daily Usd */
             daily_usd: number | null;
         };
+        /**
+         * SpendCheckOut
+         * @description 今天的花費提醒，與它沒算進去的呼叫數：只提醒、不停用；費用未知的不當 0。
+         */
+        SpendCheckOut: {
+            /** Alerts */
+            alerts: components["schemas"]["SpendAlertOut"][];
+            /** Unknown Today */
+            unknown_today: number;
+            /** Unknown Before */
+            unknown_before: number;
+        };
         /** StepCallOut */
         StepCallOut: {
             /** Model */
@@ -6674,8 +6685,7 @@ export interface components {
             prices: components["schemas"]["ModelPriceRowOut"][];
             /** Daily Alert Usd */
             daily_alert_usd: number | null;
-            /** Alerts */
-            alerts: components["schemas"]["SpendAlertOut"][];
+            spend: components["schemas"]["SpendCheckOut"];
         };
         /** ValidationError */
         ValidationError: {

@@ -162,7 +162,22 @@ class UsageView:
     runs: list[RunRow]
     prices: list[ModelPriceRow]
     daily_alert_usd: float | None
+    spend: SpendCheck
+
+
+@dataclass(frozen=True, slots=True)
+class SpendCheck:
+    """今天的花費提醒，與它**沒算進去的**。
+
+    提醒只用知道的費用比，價目表上沒有的模型（或出錯沒有回應）的那幾次不在裡面。管理員要看得出
+    「沒有提醒」是沒事，還是有一部分根本沒算（brief §6.10：未知不當 0）。
+    """
+
     alerts: list[SpendAlert]
+    #: 今天幾次呼叫的費用不知道（每日提醒值與異常都比今天）。
+    unknown_today: int
+    #: 前 14 天（異常的基準）幾次呼叫的費用不知道。
+    unknown_before: int
 
 
 def _local_day(at: datetime, zone: tzinfo | None) -> date:
@@ -212,7 +227,11 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         totals.merge(day_usage)
 
     threshold = (await read_settings(session, AiSettings)).daily_alert_usd
-    alerts = _alerts({day: usage.cost.known for day, usage in by_day.items()}, today, threshold)
+    spend = _check(
+        {day: (usage.cost.known, usage.cost.unknown) for day, usage in by_day.items()},
+        today,
+        threshold,
+    )
     models = sorted({call.model for call in calls})
     return UsageView(
         today=today,
@@ -223,39 +242,46 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         runs=[_run_row(run, name) for run, name in runs[:RECENT_RUNS]],
         prices=[ModelPriceRow(model, price_of(model)) for model in models],
         daily_alert_usd=threshold,
-        alerts=alerts,
+        spend=spend,
     )
 
 
 # 側面板（管理員）的花費提醒：與用量頁同一份規則，只讀近 15 天的費用。`agent.read_status` 叫，
 # 不當工具。
 @command(Effect.READ, flags={Flag.INTERNAL})
-async def today_alerts(session: AsyncSession, *, now: datetime | None = None) -> list[SpendAlert]:
-    """今天的花費提醒（同用量頁的那幾則）。"""
+async def spend_check(session: AsyncSession, *, now: datetime | None = None) -> SpendCheck:
+    """今天的花費提醒與沒算進去的呼叫數（同用量頁的那一份）。"""
     zone = now.tzinfo if now is not None else None
     today = (now or datetime.now().astimezone()).date()
     start = _day_start(today - timedelta(days=ANOMALY_WINDOW_DAYS), zone)
     rows = await session.execute(
         select(AiCall.created_at, AiCall.cost_usd).where(AiCall.created_at >= start)
     )
-    costs: dict[date, float] = {}
+    costs: dict[date, tuple[float, int]] = {}
     for created_at, cost in rows:
         day = _local_day(created_at, zone)
-        costs[day] = costs.get(day, 0.0) + (cost or 0.0)
+        known, unknown = costs.get(day, (0.0, 0))
+        costs[day] = (known + cost, unknown) if cost is not None else (known, unknown + 1)
     threshold = (await read_settings(session, AiSettings)).daily_alert_usd
-    return _alerts(costs, today, threshold)
+    return _check(costs, today, threshold)
 
 
-def _alerts(costs: dict[date, float], today: date, threshold: float | None) -> list[SpendAlert]:
-    """逐日的已知費用 → 今天的提醒（`domain.spend`）。近 14 天沒用量的日子補 0。"""
-    previous = [
-        _dollars(costs.get(today - timedelta(days=n), 0.0))
-        for n in range(ANOMALY_WINDOW_DAYS, 0, -1)
-    ]
-    return spend_alerts(
-        _dollars(costs.get(today, 0.0)),
+def _check(
+    costs: dict[date, tuple[float, int]], today: date, threshold: float | None
+) -> SpendCheck:
+    """逐日的（已知費用, 費用未知的呼叫數）→ 今天的提醒（`domain.spend`）與沒算進去的次數。
+    近 14 天沒用量的日子補 0。"""
+    before = [today - timedelta(days=n) for n in range(ANOMALY_WINDOW_DAYS, 0, -1)]
+    known_today, unknown_today = costs.get(today, (0.0, 0))
+    alerts = spend_alerts(
+        _dollars(known_today),
         threshold=_dollars(threshold) if threshold is not None else None,
-        previous=previous,
+        previous=[_dollars(costs.get(day, (0.0, 0))[0]) for day in before],
+    )
+    return SpendCheck(
+        alerts=alerts,
+        unknown_today=unknown_today,
+        unknown_before=sum(costs.get(day, (0.0, 0))[1] for day in before),
     )
 
 

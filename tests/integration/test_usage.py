@@ -23,7 +23,7 @@ from berth.services.usage import (
     read_run,
     read_usage,
     set_spend_alert,
-    today_alerts,
+    spend_check,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -328,7 +328,7 @@ class TestAlerts:
         usage = await read_usage(session, now=NOW)
 
         assert usage.daily_alert_usd == 0.5
-        assert [a.kind for a in usage.alerts] == [SpendAlertKind.THRESHOLD]
+        assert [a.kind for a in usage.spend.alerts] == [SpendAlertKind.THRESHOLD]
 
     async def test_an_anomaly_alerts_against_the_days_with_usage(
         self, session: AsyncSession
@@ -338,7 +338,7 @@ class TestAlerts:
             await self._spend(session, user, days_ago, 0.02)
         await self._spend(session, user, 0, 0.10)
 
-        alerts = (await read_usage(session, now=NOW)).alerts
+        alerts = (await read_usage(session, now=NOW)).spend.alerts
 
         assert [(a.kind, a.against) for a in alerts] == [(SpendAlertKind.ANOMALY, Decimal("0.02"))]
 
@@ -351,7 +351,7 @@ class TestAlerts:
         usage = await read_usage(session, now=NOW)
 
         assert usage.daily_alert_usd is None
-        assert usage.alerts == []
+        assert usage.spend.alerts == []
 
 
 class TestARun:
@@ -507,4 +507,51 @@ class TestReviewFixes:
         session.add(_call(run, at, cost=0.6))
         await session.flush()
 
-        assert await today_alerts(session, now=NOW) == (await read_usage(session, now=NOW)).alerts
+        assert (await spend_check(session, now=NOW)).alerts == (
+            await read_usage(session, now=NOW)
+        ).spend.alerts
+
+
+class TestUnknownCostsInTheReminders:
+    """協調者 2026-10-27：提醒只算有價目的那部分。
+
+    費用未知的呼叫要說出來，不讓「沒有提醒」看起來像沒事。
+    """
+
+    async def _spend(
+        self, session: AsyncSession, user: User, days_ago: int, cost: float | None
+    ) -> None:
+        at = _utc(NOW - timedelta(days=days_ago, hours=1))
+        run = await _run(session, user, at)
+        session.add(_call(run, at, cost=cost))
+        await session.flush()
+
+    async def test_unknown_costs_today_and_before_are_counted(self, session: AsyncSession) -> None:
+        user = await _user(session)
+        await set_spend_alert(session, 0.5)
+        await self._spend(session, user, 0, None)
+        await self._spend(session, user, 0, None)
+        await self._spend(session, user, 0, 0.01)
+        await self._spend(session, user, 3, None)
+        # 第 15 天之前的不在基準期間裡。
+        await self._spend(session, user, 20, None)
+
+        spend = (await read_usage(session, now=NOW)).spend
+
+        assert spend.alerts == []
+        assert (spend.unknown_today, spend.unknown_before) == (2, 1)
+
+    async def test_the_panel_sees_the_same_unknowns(self, session: AsyncSession) -> None:
+        user = await _user(session)
+        await self._spend(session, user, 0, None)
+        await self._spend(session, user, 6, None)
+
+        assert await spend_check(session, now=NOW) == (await read_usage(session, now=NOW)).spend
+
+    async def test_all_known_costs_leave_nothing_unsaid(self, session: AsyncSession) -> None:
+        user = await _user(session)
+        await self._spend(session, user, 0, 0.01)
+
+        spend = await spend_check(session, now=NOW)
+
+        assert (spend.unknown_today, spend.unknown_before) == (0, 0)

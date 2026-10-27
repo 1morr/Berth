@@ -1716,3 +1716,4 @@
 - 2026-10-27 M5 21：**價目維持只看模型名**（票 09 留給這張決定）：只在官方 base URL 下套用的話，走 Anthropic 接口的 DeepSeek 相容端點（使用者實際在用的那一組）就全變成「未知」；用量頁的「費用怎麼算」說明自架閘道上同名的模型照表上的價估。
 - 2026-10-27 M5 21：**「從側面板每一則回覆連得過來」的一則回覆是一輪**：重新載入後一輪拆成好幾則 UI 訊息，「步驟」只掛在最後一則。命令名是 `usage.set_spend_alert`（shape 原寫 `ai.*`），status 的提醒是清單 `spend_alerts`（兩種可同時出現）；shape 已改。
 - 2026-10-27 M5 21：**正式環境分日照系統時區逐一換算**（`astimezone()` 不帶參數），不拿 `datetime.now().astimezone()` 的固定偏移：30 天裡跨過夏令時的那幾天會差一小時（code-review 提出）。
+- 2026-10-27 M5 21（協調者）：**提醒看不見費用未知的呼叫，畫面要說出來**：模型不在價目表上時每日提醒與異常永遠不響。`SpendCheck` 帶 `unknown_today` / `unknown_before`（前 14 天），用量頁與側面板（管理員）在有未知時多一塊 `neutral`「費用未知」；`AgentStatusOut.spend_alerts` 換成 `spend`（一般使用者 `null`）。出錯沒有回應的呼叫也算未知，與 `ai_runs.cost_usd` 一致。

@@ -19,7 +19,7 @@ import { QueueLoading } from '../components/QueueLoading'
 import { RequestFailed } from '../components/RequestFailed'
 import { Timestamp } from '../components/Timestamp'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
-import { alertText } from '../usage/alerts'
+import { alertText, unknownText } from '../usage/alerts'
 import { STOP_TEXT } from '../usage/labels'
 import { percent, tally, tokens, usd } from '../usage/numbers'
 
@@ -50,15 +50,7 @@ function UsageBody({ usage }: { usage: Usage }) {
 
   return (
     <>
-      {usage.alerts.length > 0 ? (
-        <div className="grid gap-2">
-          {usage.alerts.map((alert) => (
-            <Notice key={alert.kind} signal="assigned" label={t('usage.alerts.label')}>
-              {alertText(t, alert, language, 'page')}
-            </Notice>
-          ))}
-        </div>
-      ) : null}
+      <SpendNotes usage={usage} />
       <Cutaway title={t('usage.summary.title')} level={2}>
         <CutawayRow term={t('usage.summary.today')} value={<Cost day={today} />} />
         <CutawayRow term={t('usage.summary.total')} value={<Cost day={usage.totals} />} />
@@ -75,6 +67,30 @@ function UsageBody({ usage }: { usage: Usage }) {
       <Runs usage={usage} />
       <Prices usage={usage} />
     </>
+  )
+}
+
+/**
+ * 提醒與它沒算進去的：提醒是 `assigned`（需要你看一眼）；費用未知的那一句不塗漆——不是出事，
+ * 是提醒在那幾次呼叫上看不見（協調者 2026-10-27）。
+ */
+function SpendNotes({ usage }: { usage: Usage }) {
+  const { t, i18n } = useTranslation()
+  const unknown = unknownText(t, usage.spend, 'page')
+  if (usage.spend.alerts.length === 0 && unknown === null) return null
+  return (
+    <div className="grid gap-2">
+      {usage.spend.alerts.map((alert) => (
+        <Notice key={alert.kind} signal="assigned" label={t('usage.alerts.label')}>
+          {alertText(t, alert, i18n.language, 'page')}
+        </Notice>
+      ))}
+      {unknown !== null ? (
+        <Notice signal="neutral" label={t('usage.alerts.unknownLabel')}>
+          {unknown}
+        </Notice>
+      ) : null}
+    </div>
   )
 }
 

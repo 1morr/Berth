@@ -610,7 +610,7 @@ class TestTheCircuitBreaker:
             "enabled": True,
             "paused_until": "2026-10-27T12:15:00Z",
             "pause_error": "",
-            "spend_alerts": [],
+            "spend": None,
         }
 
 
@@ -832,9 +832,11 @@ class TestThePanelKnowsWhetherAiIsOn:
             "enabled": True,
             "paused_until": None,
             "pause_error": "",
-            "spend_alerts": [],
+            "spend": None,
         }
-        assert client.get("/api/agent/status").json() == on
+        # 管理員多一份花費提醒（還沒用過：沒有提醒、沒有未知），一般使用者是 `null`。
+        nothing_yet = {"alerts": [], "unknown_today": 0, "unknown_before": 0}
+        assert client.get("/api/agent/status").json() == on | {"spend": nothing_yet}
         sign_in_crew(client)
         assert client.get("/api/agent/status").json() == on
 
@@ -850,7 +852,7 @@ class TestThePanelKnowsWhetherAiIsOn:
             "enabled": False,
             "paused_until": None,
             "pause_error": "",
-            "spend_alerts": [],
+            "spend": None,
         }
 
     def test_signed_out_it_is_not_there(self, client: TestClient) -> None:
@@ -1054,10 +1056,10 @@ class TestTheUsagePage:
         script.steps = [say("Hi.")]
         chat(client, "Hello?")
 
-        assert [a["kind"] for a in client.get("/api/settings/usage").json()["alerts"]] == [
+        assert [a["kind"] for a in client.get("/api/settings/usage").json()["spend"]["alerts"]] == [
             "threshold"
         ]
-        assert [a["kind"] for a in client.get("/api/agent/status").json()["spend_alerts"]] == [
+        assert [a["kind"] for a in client.get("/api/agent/status").json()["spend"]["alerts"]] == [
             "threshold"
         ]
         # 只提醒：下一輪照樣跑。
@@ -1070,7 +1072,7 @@ class TestTheUsagePage:
         chat(client, "Hello?")
         sign_in_crew(client)
 
-        assert client.get("/api/agent/status").json()["spend_alerts"] == []
+        assert client.get("/api/agent/status").json()["spend"] is None
 
     def test_a_negative_alert_is_refused(self, client: TestClient) -> None:
         response = client.put("/api/settings/usage/alert", json={"daily_usd": -1}, headers=BROWSER)
@@ -1083,3 +1085,26 @@ class TestTheUsagePage:
         )
         assert response.json() == {"daily_usd": None}
         assert client.get("/api/settings/usage").json()["daily_alert_usd"] is None
+
+
+class TestUnknownCostsAreSaid:
+    """協調者 2026-10-27：模型不在價目表上時提醒永遠不響；畫面要看得出來，不是「沒事」。"""
+
+    def test_a_model_without_a_price_is_counted_for_the_admin(
+        self, client: TestClient, script: Script
+    ) -> None:
+        body = {
+            "enabled": True,
+            "provider": "openai",
+            "base_url": "http://gateway.local/v1",
+            "model": "my-local-llm",
+            "api_key": "sk-local",
+        }
+        assert client.put("/api/settings/ai", json=body, headers=BROWSER).status_code == 200
+        client.put("/api/settings/usage/alert", json={"daily_usd": 0.000001}, headers=BROWSER)
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+
+        spend = client.get("/api/agent/status").json()["spend"]
+        assert spend == {"alerts": [], "unknown_today": 1, "unknown_before": 0}
+        assert client.get("/api/settings/usage").json()["spend"]["unknown_today"] == 1
