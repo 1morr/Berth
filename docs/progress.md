@@ -291,6 +291,7 @@
 | 2026-10-27 | M5 規劃階段二：AI 對話 prototype（不是票） | 使用者拍板十項（brief §19「M5 的方向」）。`scripts/experiments/m5_agent_chat.py`（+ `.html`、`m5_agent_selftest.py`）：pydantic-ai 2.61 + @ai-sdk/react 4，確認卡存成 Proposal 列、伺服器保管歷史、防護、壓縮、斜線指令、觀測。`--selftest` 十步全過（不需要金鑰），`--demo` 用 playwright 在瀏覽器走過確認卡、重載、部分勾選、重複呼叫中止。brief §6.10、§14、§17、§19、§20.24 改；`.env.example` 加 `AI_*` 與 `TAVILY_API_KEY`；`docs/research/m5-prototype-2026-10-27.md` | 使用者填 `.env` 後實測情境 1、2（問題 3、6），結論補進 brief §20.24 → 改寫 plan §11.6–§11.8 → `/to-tickets docs/plan.md` 拆 M5 |
 | 2026-10-27 | M5 prototype 真模型實測（不是票） | 使用者填好 `.env`（兩組都是 DeepSeek `deepseek-flash`：Anthropic 與 OpenAI 相容接口）。`scripts/experiments/m5_agent_scenarios.py` 對 Fake 後端 `search`（真 TMDB、使用者的 Prowlarr、替身 qBittorrent）跑六個情境 × 兩種接口，跑了三輪：第一輪抓到 `berth_routes` 寫錯，第二輪兩種接口共用 Berth 互相干擾，第三輪各自一台全新 Berth。實跑修掉四個 prototype bug：確認後的結果沒說已執行、平行呼叫時找不到待確認的呼叫、帶季號的搜尋少 `missing`、失敗後重試被算成重複；selftest 加到 11 步。六個情境合計約 $0.07–0.08。結論、數字與逐字稿在 `docs/research/m5-prototype-2026-10-27.md` 與同名資料夾，摘要進 brief §20.24 | Claude / OpenAI 官方端點還沒測（要另一把 key，選做）→ 改寫 plan §11.6–§11.8 → `/to-tickets docs/plan.md` 拆 M5 |
 | 2026-10-27 | 拆票（M5） | plan §11.6–§11.8 依 brief 改寫：M5 AI 地基與對話 agent、M6 人工接管開關、M7 Discord 與 MCP；§4.5 改成 M6 的任務。M5 拆成 24 張票寫入 `.scratch/m5/issues/`（使用者在對話裡要求直接拆）。拆票時定下的取捨記在下方「偏差與決定」 | `/implement .scratch/m5/issues/01-ci-green.md`（新 session；01 之後 02、05、09、10 可以並行） |
+| 2026-10-27 | M5 01 讓 CI 與本機測試回到綠燈 | 從 `backup/m5-attempt-1-20261024` 取回四個測試修正：RSS page-flow 用 time-machine（新 dev 依賴 3.6.0）把時鐘釘在 `test_rss.NOW`，並斷言過了 `QUIET_AFTER` 就收進已完結；fake-IP DNS 下 skip resolver 那條；knip 探測目錄 `realpathSync`；演練伺服器 `Scenario.clock`（rss 系列情境，CI 的 web-e2e 也紅在這裡）。修前四類都重現過；修後 pytest 4340 passed / 1 skipped、vitest 2183 passed、web e2e 44 passed、pre-commit 全綠。尚未 push，`main` 的 CI 要 push 後才轉綠 | 使用者同意後 push 並確認 CI；`/implement` 02、05、09、10 任一張（新 session） |
 
 ## 偏差與決定
 - 2026-10-21 M4 修補段結案：**M4 不改號、M4 本體從 121 起編**（使用者，brief §19）；**第一個通知管道改定 Discord**（plan §11.5 原寫 Telegram 或 Discord 擇一；brief §19）。
@@ -1653,3 +1654,4 @@
   - TMDB 的 discover / recommendations / collection 新端點不在 M5，情境用得到再查證、再加。
   - 對話的往返上限從研究報告的 10 改成 20（實測單輪最多 9）。
   - 「為什麼沒入庫」的聚合讀取命令獨立成票 10（不需要 AI）。
+- 2026-10-27 M5 01：票說只取測試與 `development.md`，另外帶進 `scripts/fake_setup_server.py` 的 `Scenario.clock`，因為 CI 的 web-e2e 紅在同一個時間炸彈。它是演練伺服器，不是產品程式碼。

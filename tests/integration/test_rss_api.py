@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+from time_machine import TimeMachineFixture
 
 from berth.adapters.rss import acgrip
 from berth.adapters.rss.mikan import bangumi_feed_url, bangumi_url, parse_feed, search_url
@@ -26,6 +27,7 @@ from berth.domain import CollectionType, FeedKind, JobState, JobTrigger, PlanAct
 from berth.main import create_app
 from berth.models import Job, LedgerEntry, Media, Route, RssFeed, RssSeries, TmdbSettings
 from berth.models.types import utcnow
+from berth.parser import QUIET_AFTER
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
 from tests.conftest import FIXTURES, TMDB_API_KEY
@@ -38,6 +40,7 @@ from tests.integration.test_rss import (
     KIMI_ID,
     KIMI_KEY,
     MIKAN,
+    NOW,
     anime_route,
     episode_pages,
     kimi,
@@ -135,8 +138,9 @@ def movies_route(client: TestClient, roots: dict[str, Path], slug: str = "movies
 
 class TestThePageFlow:
     def test_add_poll_bind_and_see_the_jobs(
-        self, client: TestClient, roots: dict[str, Path]
+        self, client: TestClient, roots: dict[str, Path], time_machine: TimeMachineFixture
     ) -> None:
+        time_machine.move_to(NOW)
         route_id = seed(client, roots)
         sign_in(client)
 
@@ -205,6 +209,13 @@ class TestThePageFlow:
             False,
         )
         assert client.get("/api/rss/series/404/items").status_code == 404
+
+        # 上面的 False 是固定的時鐘給的，不是執行那天：安靜滿 `QUIET_AFTER` 之後同一列收進
+        # 「已完結」。登入也照同一個時鐘過期，所以一個月後重新登入。
+        time_machine.move_to(NOW + QUIET_AFTER)
+        sign_in(client)
+        quiet = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
+        assert quiet["finished"] is True
 
     def test_deleting_a_feed_says_how_many_items_went(
         self, client: TestClient, roots: dict[str, Path]
