@@ -39,3 +39,4 @@ AI 的工具、確認卡、M7 的 MCP server，都要從同一份清單知道一
   - **03b 的問題**：`Flag.INTERNAL` 明寫「身分與門禁」；照它把 `setup.claim_owner`、`sign_in_existing_owner` 也標 `internal`（code-review Spec 軸指出），`NAMED` 跟著改。`mark_played` 不在 services、沒有命令，要當工具時先搬進 services，本票沒動。
   - code-review 修掉的：`registry.dry_run` 沒標（Standards 軸）；送單預覽漏了「索引站報了 hash 而那一筆已在」——`check_submit` 改收 `source`，與 `add_download` 共用 `_before_resolve`（兩軸都指出，`job_removed` 那條測試守）；補 Callable 參數與 validate 多收參數的變異測試、「列出的集合 = 有標記非 `internal` 的全部」、乾跑後 session 不髒。
   - 沒處理的（判斷題）：命令先跑自己的驗證再重算一次 url、kind、rules、series（`add_feed`、`_subscribe`、`subscribe_search`），可以讓驗證函式回傳算好的值；驗證函式命名 `rss._can_*`（私有）與 `jobs.check_submit`（跨模組，公開標 `internal`）不一致；`registry._modules` 與 `test_command_marks.service_modules` 重複一份。
+- 2026-10-27（合併 main，票 09 之後）：`ai.read_ai`、`set_ai`、`forget_ai_key`、`test_ai` 推得出輸入、進登錄表（152 支）：provider 是設定，不是身分與門禁，要不要人由 `needs_person` 管（依據寫在 `services/ai.py`）。`pnpm -C web gen:api` 無 diff（`LibraryDraft` 改成 model 沒動到 OpenAPI）。
