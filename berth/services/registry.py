@@ -15,6 +15,7 @@ AI 的工具、確認卡（M5）、MCP server（M7）都從這一份知道一個
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import inspect
 import pkgutil
@@ -35,6 +36,7 @@ from berth.services.commands import (
     CommandMark,
     Effect,
     Flag,
+    Private,
     Validator,
     command,
     details_of,
@@ -238,6 +240,57 @@ def _spec(name: str, function: Callable[..., Any], mark: CommandMark) -> Command
         validate=details.validate,
         audience=details.audience,
     )
+
+
+def public_arguments(spec: CommandSpec, row: Mapping[str, object]) -> dict[str, object]:
+    """一列命令輸入（`mode="json"` 的形狀）去掉標了 `Private` 的格子：給瀏覽器與模型看的那一份。
+
+    照輸入模型的型別往下走（巢狀的 dataclass / pydantic model、清單、`X | None`）。認不得型別的
+    格子原樣留著：只有標了的才去掉。
+    """
+    return _public_fields(_fields_of(spec.input), row)
+
+
+def _public(hint: object, value: object) -> object:
+    if isinstance(value, list):
+        items = typing.get_args(bare_type(hint))
+        return [_public(items[0] if items else Any, item) for item in value]
+    if isinstance(value, Mapping):
+        target = bare_type(hint)
+        if isinstance(target, type) and (
+            dataclasses.is_dataclass(target) or issubclass(target, BaseModel)
+        ):
+            return _public_fields(_fields_of(target), value)
+    return value
+
+
+def _public_fields(
+    fields: Mapping[str, tuple[object, bool]], row: Mapping[str, object]
+) -> dict[str, object]:
+    public: dict[str, object] = {}
+    for key, value in row.items():
+        hint, private = fields.get(key, (Any, False))
+        if not private:
+            public[key] = _public(hint, value)
+    return public
+
+
+def _fields_of(target: type) -> dict[str, tuple[object, bool]]:
+    """每一格的型別與它是不是 `Private`。"""
+    if issubclass(target, BaseModel):
+        return {
+            name: (info.annotation, any(isinstance(m, Private) for m in info.metadata))
+            for name, info in target.model_fields.items()
+        }
+    hints = typing.get_type_hints(target, include_extras=True)
+    found: dict[str, tuple[object, bool]] = {}
+    for name, hint in hints.items():
+        if typing.get_origin(hint) is typing.Annotated:
+            base, *metadata = typing.get_args(hint)
+            found[name] = (base, any(isinstance(m, Private) for m in metadata))
+        else:
+            found[name] = (hint, False)
+    return found
 
 
 def bare_type(hint: object) -> object:

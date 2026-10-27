@@ -1823,6 +1823,9 @@ class AgentRefusal(StrEnum):
     NO_MESSAGE = "no_message"
     #: 沒有這段對話，或它不是這個人的（看不到就是沒有）。
     CONVERSATION_MISSING = "conversation_missing"
+    #: 恢復那一輪（前端說「按了卡片」）時，還有卡片沒決定（M5 票 13）：前端的核准只是觸發，
+    #: 決定以伺服器上的 Proposal 為準。平行的兩張卡要兩張都按了才恢復。
+    CARD_UNDECIDED = "card_undecided"
     #: 「繼續」按不了：不是最後一輪、不是被防護停下的、已經續過一次（M5 票 20）。
     NOT_CONTINUABLE = "not_continuable"
 
@@ -1832,6 +1835,8 @@ class AiStopReason(StrEnum):
 
     #: 模型自己答完了。
     COMPLETED = "completed"
+    #: 停在確認卡上，等人按（M5 票 13）。按了之後由下一個請求恢復，那是另一輪。
+    AWAITING_CONFIRMATION = "awaiting_confirmation"
     #: 一輪的模型呼叫次數到頂（plan §11.6〈防護〉）。
     REQUEST_LIMIT = "request_limit"
     #: 一輪的 input 或 output token 到頂。
@@ -1864,6 +1869,8 @@ class AiToolOutcome(StrEnum):
     REFUSED = "refused"
     #: 參數不對或命令出錯（服務連不上這類）。不算重複：重試是正當的。
     FAILED = "failed"
+    #: 出了確認卡（M5 票 13）：命令還沒做，等人按。
+    PROPOSED = "proposed"
 
 
 class ProposalStatus(StrEnum):
@@ -1873,7 +1880,8 @@ class ProposalStatus(StrEnum):
     PENDING = "pending"
     #: 等人按，而提出它的那一輪對話已經往下走了（使用者沒按就繼續說話）。之後再按由伺服器直接執行。
     DETACHED = "detached"
-    #: 核准了，還沒執行：還在那一輪對話裡的卡片由對話恢復時執行（票 13）。
+    #: 核准了，還沒執行。核准的那一下接著就執行（票 13），所以只有行程死在兩者之間才會停在這裡；
+    #: 對話恢復那一輪會補執行（`services.agent`）。
     APPROVED = "approved"
     #: 人拒絕了。
     REJECTED = "rejected"
