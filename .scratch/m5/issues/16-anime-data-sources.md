@@ -38,3 +38,8 @@ prototype 實測過這三個來源的組合可行。
 - [ ] 全部檢查與 pytest 綠；plan §8 補 adapter；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 票 19 交接：
+  - **命令名**：skills 先用了 `anilist.search_anime`、`anilist.read_franchise`、`anilist.read_season`、`fribb.lookup_anime`、`bgm.read_calendar`（Bangumi 番組計劃用 `bgm`，`bangumi` 這個模組名已經是 Mikan 的番組查詢）。名字不同的話改 `berth/skills/*/SKILL.md`；`tests/unit/test_skills.py::test_a_pending_tool_is_not_misnamed_once_its_module_exists` 會在模組建好、名字對不上時紅。工具進 `TOOLS` 時刪 `PENDING` 的那幾格。
+  - **情境 1、2 還要**：`media.read_media` 與 `discover.read_trending` 進 `TOOLS`（目前不是工具、`about` 是空的）。
+  - **第 4 點的 offset 重疊**：票 19 寫進了 `series-mapping`（offset + 1 是第一集、同一季的範圍要首尾相接、重疊或有縫時用集數串起來並對 TMDB 的總集數、表上註明改了哪幾段）。要不要另外做程式檢查仍由這張決定、記理由。

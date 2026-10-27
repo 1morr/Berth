@@ -1,6 +1,6 @@
 # 19 — skills
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 11
 
@@ -23,8 +23,11 @@
 
 ## 驗收
 
-- [ ] skill 檔的格式有閘門（雙向變異驗證）
-- [ ] `/skills` 列得出來；`load_skill` 回全文（測試）
-- [ ] 全部檢查與 pytest 綠；progress.md 已更新
+- [x] skill 檔的格式有閘門（雙向變異驗證）
+- [x] `/skills` 列得出來；`load_skill` 回全文（測試）
+- [x] 全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 實作：`/skills` 那一半只做到 `skills.list_skills` 命令與測試，斜線指令本身在票 18（交接在那張的 Comments）。
+- 2026-10-27 code-review 未處理：Spec 軸指出 all-or-nothing 的過濾讓一般使用者在 `media.read_media` 開放之前拿不到 `missing-episodes`（他能送單）；`PENDING` 守不到「該給一般使用者的有沒有給到」，等票 14 決定 `media.read_media` 的 `audience`（記在票 14）。

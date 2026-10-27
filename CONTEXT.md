@@ -440,6 +440,10 @@ _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request �
 側面板裡從 Berth 以外來、別人寫的字：網路搜尋回的網頁（伺服器端 `web_search` 與 Tavily，M5 票 17）。是資料，不是指令；`services.agent.external_texts` 從存著的歷史把它收出來，確認卡據此判斷自由文字參數是不是出自它（brief §14）。與 Existing service、Unmanaged 無關，程式碼裡不單用 `external` 指這兩者。
 _Avoid_: untrusted input, web content, external（單用）
 
+**Skill**（流程說明）:
+給 Assistant 的一份工作流程：系列整理、新番推薦、為什麼沒入庫、補缺集（M5 票 19）。`berth/skills/<name>/SKILL.md`，開頭是名稱、描述與它要用的工具（`tools`），內文是步驟。instructions 只列名稱與描述，Assistant 要用時以唯讀工具 `skills.load_skill` 拿全文（漸進揭露）。**只能是指令**：給的只有字，工具照舊是 Command Registry 那幾支；`tools` 這個人在側面板用不到的就不列也不給載。格式與限制在 `services/skills.py`。
+_Avoid_: prompt（prompt 是整段送給模型的字）, playbook, recipe, plugin（skill 不帶程式）
+
 **Proposal**（提案）:
 等人確認的一個命令，存成 `proposals` 的一列（M5 票 08，`services/proposals.py`）：命令名、一到多列參數（總覽卡多列，逐列可取消勾選）、參數雜湊、伺服器算的預覽、替誰提出（他自己或 AI 替他）、所屬對話、狀態（`pending` / `detached` / `approved` / `rejected` / `executing` / `executed` / `partial` / `failed` / `expired`）、過期時間、誰什麼時候決定的、逐列結果。只有那個人或管理員按得到，執行用存下的那一份參數。不需要 AI：人也能提出。哪些動作要出卡見 brief §14〈對話裡的確認卡〉。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。
 _Avoid_: suggestion, action, task

@@ -7,7 +7,7 @@
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
   重新載入頁面時接回來。
 
-登入就能用（門禁的預設）；工具的範圍照這個人的角色（`services.agent.visible_tools`）。
+登入就能用（門禁的預設）；工具的範圍照這個人的角色（`services.agent_tools.visible_tools`）。
 """
 
 from __future__ import annotations

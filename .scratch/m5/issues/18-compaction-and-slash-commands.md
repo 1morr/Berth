@@ -36,3 +36,4 @@
 ## Comments
 
 - 2026-10-27 票 17 交接：`/usage` 要顯示網搜次數——伺服器端的是 `ai_runs.web_searches`（各次呼叫在 `ai_calls.web_searches`），Tavily 的是 `ai_tool_calls` 裡 `command = 'web.tavily_search'` 且 `outcome` 是 `ok` / `warned` 的列。費用見票 21 的同一條。
+- 2026-10-27 票 19 交接：`/skills` 叫 `skills.list_skills`（讀取、`audience=user`、注入 `role`），回這個人用得上的 skill 名稱與描述；照 skill 的工具過濾過，與 instructions 列的是同一份（`services.skills.skills_for`）。描述是英文（寫給模型的），畫面要不要另外翻由這張決定。

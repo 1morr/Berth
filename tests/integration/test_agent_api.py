@@ -384,6 +384,7 @@ class TestWhoCanUseWhat:
             "discover_search_media",
             "jobs_list_jobs",
             "jobs_read_job_events",
+            "skills_load_skill",
             "why_not_explain",
         ]
 
@@ -396,7 +397,11 @@ class TestWhoCanUseWhat:
         response = chat(client, "List every download.")
 
         assert response.status_code == 200, response.text
-        assert script.tools[0] == ["discover_search_media", "why_not_explain"]
+        assert script.tools[0] == [
+            "discover_search_media",
+            "skills_load_skill",
+            "why_not_explain",
+        ]
         # 模型照叫：pydantic-ai 回它「沒有這個工具」，命令一次都沒跑。
         [turn] = recorded(client)
         assert turn.tools == []

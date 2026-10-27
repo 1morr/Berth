@@ -32,3 +32,5 @@
 - [ ] 全部檢查、pytest、vitest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 票 19 交接：skills 用到的這幾支要進 `services/agent_tools.TOOLS`（並補 `about`）：`search.search_torrents`、`media.read_media`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`rss.subscribe_mikan`、`rss.subscribe_search`。加進去時 `tests/unit/test_skills.py` 的 `PENDING` 會紅，照著刪。命令改名的話同時改 `berth/skills/*/SKILL.md`（frontmatter 的 `tools` 與內文的工具名，格式閘門會擋對不上的）。`search_torrents` 的缺集搜尋在 skill 裡寫成 `scope: {missing: true, season: <n>}`。Route 由 `media.read_media` 的 `routes` / `default_route_id` 給（只列種類相符的），skills 不用 `routes.list_routes`；**`media.read_media` 現在是 `admin`**，要讓一般使用者拿得到 `missing-episodes`（他能送單），這支要開成 `audience=user`（作品頁本來登入就看得到），否則 skill 照 all-or-nothing 對他永遠不出現。
