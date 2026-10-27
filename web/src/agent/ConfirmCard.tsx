@@ -193,7 +193,7 @@ function Effects({ proposal }: { proposal: Proposal }) {
         </ul>
       ) : null}
       {proposal.preview.external_fields.some((fields) => fields.length > 0) ? (
-        // 只在自由文字出自網頁的卡上出現（M5 票 14）：每張都亮的話就沒人看了。
+        // 只在自由文字出自外部內容的卡上出現（M5 票 14）：每張都亮的話就沒人看了。
         <p className="text-xs text-ink">{t('agent.card.externalLead')}</p>
       ) : null}
       {WAITING.has(proposal.status) ? (
@@ -243,7 +243,7 @@ function rowLabel(command: string, row: Row, index: number): string {
 
 /**
  * 一列的欄位。送單照結果表的說法（發佈名、大小、作品、Route），RSS 的三種照 RSS 頁的說法；其他命令
- * 列出參數原文。`external` 是出自網頁的那幾格：在那一格旁邊標出來。
+ * 列出參數原文。`external` 是出自外部內容的那幾格：在那一格旁邊標出來。
  */
 function RowBody({
   command,
@@ -280,7 +280,7 @@ function RowBody({
   )
 }
 
-/** 一格：標籤、值，出自網頁的多一個標記。 */
+/** 一格：標籤、值，出自外部內容的多一個標記。 */
 interface Field {
   name: string
   label: string
@@ -298,7 +298,7 @@ function Fields({ fields, external }: { fields: Field[]; external: readonly stri
           <dd className={`wrap-anywhere text-ink ${field.mono ? 'value' : ''}`}>
             {field.value}
             {external.includes(field.name) ? (
-              <span className="label ml-2 text-blocked-ink">{t('agent.card.fromWeb')}</span>
+              <span className="label ml-2 text-blocked-ink">{t('agent.card.fromOutside')}</span>
             ) : null}
           </dd>
         </div>
@@ -374,7 +374,7 @@ function SubscribeRowBody({
     command === 'rss.subscribe_mikan'
       ? [
           {
-            // 番組名是模型給的自由文字（`name`），出自網頁的話標在這一格。
+            // 番組名是模型給的自由文字（`name`），出自外部內容的話標在這一格。
             name: 'name',
             label: t('agent.card.fields.bangumi'),
             value: text(row.name) === '—' ? `#${String(row.bangumi_id)}` : text(row.name),

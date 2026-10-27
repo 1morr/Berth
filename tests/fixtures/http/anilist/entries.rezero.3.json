@@ -1,0 +1,95 @@
+{
+  "request": {
+    "query": "query($ids:[Int],$n:Int){Page(perPage:$n){media(id_in:$ids,type:ANIME){id idMal format status episodes season seasonYear startDate{year month day} title{romaji english native} averageScore popularity genres relations{edges{relationType(version:2) node{id type}}}}}}",
+    "variables": {
+      "ids": [
+        163134
+      ],
+      "n": 50
+    }
+  },
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "cache-control": "no-cache, private",
+    "x-ratelimit-limit": "30",
+    "x-ratelimit-remaining": "24"
+  },
+  "body": {
+    "data": {
+      "Page": {
+        "media": [
+          {
+            "id": 163134,
+            "idMal": 54857,
+            "format": "TV",
+            "status": "FINISHED",
+            "episodes": 16,
+            "season": "FALL",
+            "seasonYear": 2024,
+            "startDate": {
+              "year": 2024,
+              "month": 10,
+              "day": 2
+            },
+            "title": {
+              "romaji": "Re:Zero kara Hajimeru Isekai Seikatsu 3rd Season",
+              "english": "Re:ZERO -Starting Life in Another World- Season 3",
+              "native": "Re:ゼロから始める異世界生活 3rd season"
+            },
+            "averageScore": 84,
+            "popularity": 203504,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Drama",
+              "Fantasy",
+              "Psychological",
+              "Romance",
+              "Thriller"
+            ],
+            "relations": {
+              "edges": [
+                {
+                  "relationType": "SOURCE",
+                  "node": {
+                    "id": 85737,
+                    "type": "MANGA"
+                  }
+                },
+                {
+                  "relationType": "PREQUEL",
+                  "node": {
+                    "id": 119661,
+                    "type": "ANIME"
+                  }
+                },
+                {
+                  "relationType": "ALTERNATIVE",
+                  "node": {
+                    "id": 175172,
+                    "type": "MANGA"
+                  }
+                },
+                {
+                  "relationType": "SPIN_OFF",
+                  "node": {
+                    "id": 182417,
+                    "type": "ANIME"
+                  }
+                },
+                {
+                  "relationType": "SEQUEL",
+                  "node": {
+                    "id": 189046,
+                    "type": "ANIME"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "status": 429,
+  "headers": {
+    "retry-after": "30",
+    "x-ratelimit-limit": "90",
+    "x-ratelimit-remaining": "0",
+    "x-ratelimit-reset": "1502035959"
+  },
+  "body": {
+    "data": null,
+    "errors": [
+      {
+        "message": "Too Many Requests.",
+        "status": 429
+      }
+    ]
+  }
+}

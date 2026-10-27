@@ -19,11 +19,11 @@ tools:
 2. Walk the franchise with `anilist_read_franchise` (sequels, prequels, side stories, summaries;
    leave spin-offs out unless the user asks for them). Keep each entry's format and episode
    count.
-3. Map every AniList entry to TMDB with `fribb_lookup_anime`. A TV entry gives the TMDB series,
-   the TMDB season and an episode offset.
-   - **The offset means the entry's first episode is offset + 1** in that TMDB season, and its
-     last is offset + its episode count. TMDB often folds several cours into one season (all of
-     Re:Zero's seasons 2–4 sit in TMDB season 1).
+3. Map every AniList entry to TMDB with `fribb_lookup_anime` (all ids in one call). A TV entry
+   gives its `media_ids`, the TMDB season and `first_tmdb_episode`.
+   - **`first_tmdb_episode` is offset + 1**; the entry's last episode is offset + its episode
+     count. TMDB often folds several cours into one season (all of Re:Zero's seasons 2–4 sit in
+     TMDB season 1).
    - **Check that the ranges in one TMDB season follow each other with no overlap and no gap.**
      Fribb's offsets are sometimes off by one: for Re:Zero, season 1 has 25 episodes and the next
      cour's offset is 26, which would start it at E27 and overlap the cour after it (offset 38,
@@ -31,8 +31,10 @@ tools:
      instead, and check the end against the TMDB season's episode count from `media_read_media`.
      Say on the table which ranges you corrected and why.
 4. Movies, and many OVAs, are separate TMDB movies, or land in TMDB's specials (season 0).
-   When Fribb has no movie for an entry, search the title with `discover_search_media` and mark
-   that row "matched by title, please check".
+   For entries in `unmapped`, and for a movie or OVA that Fribb maps only to specials (season
+   0), search its title with `discover_search_media`: a theatrical release is usually its own
+   TMDB movie. Mark that row "matched by title, please check" on the table.
+   The confirmation card has no place for notes, so the table is where the user sees it.
 5. Read every TMDB entry with `media_read_media`: confirm it exists and see how many episodes
    are already imported. Do not offer what is already there.
 6. Show the user one table before searching anything:

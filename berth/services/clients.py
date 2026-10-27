@@ -9,14 +9,21 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from pydantic_ai.models import Model
 
 # `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
 from berth.adapters.ai import AiEndpoint, build_model
+from berth.adapters.anilist import AniList
+from berth.adapters.anilist.client import HttpAniList
+from berth.adapters.bgm import Bgm
+from berth.adapters.bgm.client import HttpBgm
 from berth.adapters.dns import HostResolver as HostResolver
 from berth.adapters.dns import SystemHostResolver
+from berth.adapters.fribb import AnimeIds
+from berth.adapters.fribb.client import HttpFribb, list_path
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.prowlarr import ProwlarrSearch
 from berth.adapters.jellyfin import JellyfinClient
@@ -35,7 +42,7 @@ from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.adapters.websearch import WebSearch
 from berth.adapters.websearch.tavily import HttpTavily
-from berth.config import DEFAULT_DISCORD_API_URL, Config
+from berth.config import DEFAULT_CONFIG_ROOT, DEFAULT_DISCORD_API_URL, Config
 from berth.domain import ServiceKind
 
 
@@ -84,6 +91,18 @@ class ServiceClientFactory(Protocol):
         """側面板的網路搜尋（M5 票 17）。位址固定，可變的是 key。"""
         ...
 
+    def anilist(self) -> AniList:
+        """AniList（M5 票 16）。位址固定、免 key；限流與快取全程序一份（在 adapter 裡）。"""
+        ...
+
+    def anime_ids(self) -> AnimeIds:
+        """AniList id → TMDB 的對照表（Fribb，M5 票 16）。表下載在 `CONFIG_ROOT` 底下。"""
+        ...
+
+    def bgm(self) -> Bgm:
+        """Bangumi 番組計劃的放送表（M5 票 16）。位址固定、免 key。"""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class BundledServices:
@@ -130,8 +149,14 @@ def host_resolver() -> HostResolver:
 class HttpServiceClientFactory:
     """正式的那一份：位址由呼叫端給，套件內是 compose 主機名、既有是使用者填的。"""
 
-    def __init__(self, *, discord_api_url: str = DEFAULT_DISCORD_API_URL) -> None:
+    def __init__(
+        self,
+        *,
+        discord_api_url: str = DEFAULT_DISCORD_API_URL,
+        config_root: Path = DEFAULT_CONFIG_ROOT,
+    ) -> None:
         self._discord_api_url = discord_api_url
+        self._config_root = config_root
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         return HttpJellyfinClient(base_url, token=token)
@@ -162,3 +187,12 @@ class HttpServiceClientFactory:
 
     def tavily(self, api_key: str) -> WebSearch:
         return HttpTavily(api_key)
+
+    def anilist(self) -> AniList:
+        return HttpAniList()
+
+    def anime_ids(self) -> AnimeIds:
+        return HttpFribb(list_path(self._config_root))
+
+    def bgm(self) -> Bgm:
+        return HttpBgm()

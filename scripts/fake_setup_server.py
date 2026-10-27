@@ -47,6 +47,12 @@ from starlette.routing import Route as StarletteRoute
 from berth.adapters import mediainfo
 from berth.adapters.ai import AiEndpoint
 from berth.adapters.ai.fake import FakeAi, Script
+from berth.adapters.anilist import AniList
+from berth.adapters.anilist.fake import FakeAniList
+from berth.adapters.bgm import Bgm
+from berth.adapters.bgm.fake import FakeBgm
+from berth.adapters.fribb import AnimeIds
+from berth.adapters.fribb.fake import FakeAnimeIds
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -2296,6 +2302,16 @@ class FakeClientFactory:
 
     def tavily(self, api_key: str) -> WebSearch:
         return self._web_search
+
+    # 演練伺服器沒有動漫資料的情境（票 16）：答空的，不連外。
+    def anilist(self) -> AniList:
+        return FakeAniList()
+
+    def anime_ids(self) -> AnimeIds:
+        return FakeAnimeIds()
+
+    def bgm(self) -> Bgm:
+        return FakeBgm()
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.prowlarr.ping_error is not None:

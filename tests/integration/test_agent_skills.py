@@ -80,8 +80,7 @@ class TestProgressiveDisclosure:
         assert f"- why-not-imported: {why_not.description}" in instructions
         assert why_not.body not in instructions
         assert "skills_load_skill" in instructions
-        # 流程要的工具還沒進側面板（票 13 / 14 / 16）：不列。
-        assert "series-mapping" not in instructions
+        assert "- series-mapping:" in instructions
 
     def test_the_model_loads_a_skill_and_gets_its_whole_body(
         self, client: TestClient, script: Seen
@@ -107,14 +106,17 @@ class TestProgressiveDisclosure:
     def test_a_skill_that_is_not_offered_cannot_be_loaded(
         self, client: TestClient, script: Seen
     ) -> None:
-        script.steps = [call("skills_load_skill", name="series-mapping"), say("No such skill.")]
+        # 一般使用者訂閱不了（`rss.*` 只給管理員），推薦新番那一份對他不存在。
+        sign_in_crew(client)
+        script.steps = [call("skills_load_skill", name="new-season-picks"), say("No such skill.")]
 
-        chat(client, "Map all of Re:Zero.")
+        chat(client, "What's good this season?")
 
+        assert "new-season-picks" not in script.instructions[0]
         [refused] = returned(script, "skills_load_skill")
         assert refused.model_response_object() == {
             "refused": "skill_missing",
-            "detail": "series-mapping",
+            "detail": "new-season-picks",
         }
         [turn] = recorded(client)
         assert [(tool.command, tool.outcome) for tool in turn.tools] == [

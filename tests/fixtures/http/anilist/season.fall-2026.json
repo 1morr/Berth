@@ -1,0 +1,1597 @@
+{
+  "request": {
+    "query": "query($s:MediaSeason,$y:Int,$n:Int){Page(perPage:$n){media(season:$s,seasonYear:$y,type:ANIME,sort:POPULARITY_DESC,isAdult:false){id idMal format status episodes season seasonYear startDate{year month day} title{romaji english native} averageScore popularity genres nextAiringEpisode{episode} stats{scoreDistribution{amount}}}}}",
+    "variables": {
+      "s": "FALL",
+      "y": 2026,
+      "n": 25
+    }
+  },
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "cache-control": "no-cache, private",
+    "x-ratelimit-limit": "30",
+    "x-ratelimit-remaining": "22"
+  },
+  "body": {
+    "data": {
+      "Page": {
+        "media": [
+          {
+            "id": 195539,
+            "idMal": 61990,
+            "format": "ONA",
+            "status": "FINISHED",
+            "episodes": 10,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 20
+            },
+            "title": {
+              "romaji": "Cyberpunk: Edgerunners 2",
+              "english": "Cyberpunk: Edgerunners 2",
+              "native": "サイバーパンク: エッジランナーズ2"
+            },
+            "averageScore": 84,
+            "popularity": 107511,
+            "genres": [
+              "Action",
+              "Drama",
+              "Sci-Fi"
+            ],
+            "nextAiringEpisode": null,
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 93
+                },
+                {
+                  "amount": 31
+                },
+                {
+                  "amount": 80
+                },
+                {
+                  "amount": 105
+                },
+                {
+                  "amount": 297
+                },
+                {
+                  "amount": 598
+                },
+                {
+                  "amount": 2031
+                },
+                {
+                  "amount": 4845
+                },
+                {
+                  "amount": 7028
+                },
+                {
+                  "amount": 4436
+                }
+              ]
+            }
+          },
+          {
+            "id": 195516,
+            "idMal": 61987,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 2
+            },
+            "title": {
+              "romaji": "Kusuriya no Hitorigoto 3rd Season",
+              "english": "The Apothecary Diaries Season 3",
+              "native": "薬屋のひとりごと 第3期"
+            },
+            "averageScore": 85,
+            "popularity": 105810,
+            "genres": [
+              "Drama",
+              "Mystery"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 38
+                },
+                {
+                  "amount": 17
+                },
+                {
+                  "amount": 14
+                },
+                {
+                  "amount": 31
+                },
+                {
+                  "amount": 80
+                },
+                {
+                  "amount": 100
+                },
+                {
+                  "amount": 384
+                },
+                {
+                  "amount": 1021
+                },
+                {
+                  "amount": 1754
+                },
+                {
+                  "amount": 1463
+                }
+              ]
+            }
+          },
+          {
+            "id": 195604,
+            "idMal": 61967,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": null,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 3
+            },
+            "title": {
+              "romaji": "Black Clover 2nd Season",
+              "english": "Black Clover Season 2",
+              "native": "ブラッククローバー 第2期"
+            },
+            "averageScore": 87,
+            "popularity": 99829,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Comedy",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 72
+                },
+                {
+                  "amount": 17
+                },
+                {
+                  "amount": 24
+                },
+                {
+                  "amount": 42
+                },
+                {
+                  "amount": 86
+                },
+                {
+                  "amount": 108
+                },
+                {
+                  "amount": 398
+                },
+                {
+                  "amount": 806
+                },
+                {
+                  "amount": 1758
+                },
+                {
+                  "amount": 2368
+                }
+              ]
+            }
+          },
+          {
+            "id": 159042,
+            "idMal": 53913,
+            "format": "ONA",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 1
+            },
+            "title": {
+              "romaji": "Tensei Shitara Ken Deshita 2nd Season",
+              "english": "Reincarnated as a Sword Season 2",
+              "native": "転生したら剣でした 第2期"
+            },
+            "averageScore": 75,
+            "popularity": 52537,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 27
+                },
+                {
+                  "amount": 9
+                },
+                {
+                  "amount": 11
+                },
+                {
+                  "amount": 18
+                },
+                {
+                  "amount": 83
+                },
+                {
+                  "amount": 161
+                },
+                {
+                  "amount": 373
+                },
+                {
+                  "amount": 384
+                },
+                {
+                  "amount": 325
+                },
+                {
+                  "amount": 259
+                }
+              ]
+            }
+          },
+          {
+            "id": 189123,
+            "idMal": 61323,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 4
+            },
+            "title": {
+              "romaji": "Ao no Hako Season 2",
+              "english": "Blue Box Season 2",
+              "native": "アオのハコ Season２"
+            },
+            "averageScore": 81,
+            "popularity": 50392,
+            "genres": [
+              "Romance",
+              "Slice of Life",
+              "Sports"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 24
+                },
+                {
+                  "amount": 8
+                },
+                {
+                  "amount": 20
+                },
+                {
+                  "amount": 28
+                },
+                {
+                  "amount": 60
+                },
+                {
+                  "amount": 87
+                },
+                {
+                  "amount": 281
+                },
+                {
+                  "amount": 540
+                },
+                {
+                  "amount": 601
+                },
+                {
+                  "amount": 536
+                }
+              ]
+            }
+          },
+          {
+            "id": 212888,
+            "idMal": 64340,
+            "format": "ONA",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 9,
+              "day": 27
+            },
+            "title": {
+              "romaji": "Tempal: Item no Chikara",
+              "english": "Overgeared",
+              "native": "テムパル～アイテムの力～"
+            },
+            "averageScore": 76,
+            "popularity": 50296,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Comedy",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 6
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 54
+                },
+                {
+                  "amount": 30
+                },
+                {
+                  "amount": 45
+                },
+                {
+                  "amount": 54
+                },
+                {
+                  "amount": 113
+                },
+                {
+                  "amount": 185
+                },
+                {
+                  "amount": 549
+                },
+                {
+                  "amount": 654
+                },
+                {
+                  "amount": 603
+                },
+                {
+                  "amount": 539
+                }
+              ]
+            }
+          },
+          {
+            "id": 210482,
+            "idMal": 61469,
+            "format": "ONA",
+            "status": "RELEASING",
+            "episodes": 11,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 9,
+              "day": 25
+            },
+            "title": {
+              "romaji": "JoJo no Kimyou na Bouken: Steel Ball Run - 2nd & 3rd STAGE",
+              "english": "STEEL BALL RUN JoJo's Bizarre Adventure 2nd - 3rd STAGE",
+              "native": "ジョジョの奇妙な冒険 スティール・ボール・ラン 2nd＆3rd STAGE"
+            },
+            "averageScore": 86,
+            "popularity": 46803,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Drama",
+              "Mystery",
+              "Supernatural"
+            ],
+            "nextAiringEpisode": {
+              "episode": 6
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 46
+                },
+                {
+                  "amount": 14
+                },
+                {
+                  "amount": 31
+                },
+                {
+                  "amount": 26
+                },
+                {
+                  "amount": 56
+                },
+                {
+                  "amount": 87
+                },
+                {
+                  "amount": 306
+                },
+                {
+                  "amount": 699
+                },
+                {
+                  "amount": 1463
+                },
+                {
+                  "amount": 1523
+                }
+              ]
+            }
+          },
+          {
+            "id": 205909,
+            "idMal": 63293,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 9
+            },
+            "title": {
+              "romaji": "Hotaru no Yomeiri",
+              "english": "Firefly Wedding",
+              "native": "ホタルの嫁入り"
+            },
+            "averageScore": 75,
+            "popularity": 45950,
+            "genres": [
+              "Drama",
+              "Romance"
+            ],
+            "nextAiringEpisode": {
+              "episode": 4
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 32
+                },
+                {
+                  "amount": 23
+                },
+                {
+                  "amount": 39
+                },
+                {
+                  "amount": 39
+                },
+                {
+                  "amount": 105
+                },
+                {
+                  "amount": 137
+                },
+                {
+                  "amount": 401
+                },
+                {
+                  "amount": 446
+                },
+                {
+                  "amount": 451
+                },
+                {
+                  "amount": 330
+                }
+              ]
+            }
+          },
+          {
+            "id": 160275,
+            "idMal": 54250,
+            "format": "MOVIE",
+            "status": "FINISHED",
+            "episodes": 1,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 23
+            },
+            "title": {
+              "romaji": "Made in Abyss: Mezameru Shinpi",
+              "english": null,
+              "native": "メイドインアビス 目覚める神秘"
+            },
+            "averageScore": 80,
+            "popularity": 44910,
+            "genres": [
+              "Adventure",
+              "Drama",
+              "Fantasy",
+              "Horror",
+              "Mystery",
+              "Sci-Fi"
+            ],
+            "nextAiringEpisode": null,
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 15
+                },
+                {
+                  "amount": 2
+                },
+                {
+                  "amount": 5
+                },
+                {
+                  "amount": 3
+                },
+                {
+                  "amount": 17
+                },
+                {
+                  "amount": 19
+                },
+                {
+                  "amount": 76
+                },
+                {
+                  "amount": 110
+                },
+                {
+                  "amount": 192
+                },
+                {
+                  "amount": 201
+                }
+              ]
+            }
+          },
+          {
+            "id": 191656,
+            "idMal": 61578,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 4
+            },
+            "title": {
+              "romaji": "Seitokai ni mo Ana wa Aru!",
+              "english": "Even the Student Council Has Its Holes!",
+              "native": "生徒会にも穴はある！"
+            },
+            "averageScore": 73,
+            "popularity": 44831,
+            "genres": [
+              "Comedy",
+              "Ecchi",
+              "Slice of Life"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 73
+                },
+                {
+                  "amount": 35
+                },
+                {
+                  "amount": 50
+                },
+                {
+                  "amount": 58
+                },
+                {
+                  "amount": 129
+                },
+                {
+                  "amount": 191
+                },
+                {
+                  "amount": 503
+                },
+                {
+                  "amount": 627
+                },
+                {
+                  "amount": 501
+                },
+                {
+                  "amount": 375
+                }
+              ]
+            }
+          },
+          {
+            "id": 143103,
+            "idMal": 50668,
+            "format": "MOVIE",
+            "status": "NOT_YET_RELEASED",
+            "episodes": 1,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 11,
+              "day": 20
+            },
+            "title": {
+              "romaji": "Mahoutsukai no Yoru",
+              "english": "Witch on the Holy Night",
+              "native": "魔法使いの夜"
+            },
+            "averageScore": null,
+            "popularity": 42579,
+            "genres": [
+              "Action",
+              "Drama",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 1
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 11
+                },
+                {
+                  "amount": 5
+                },
+                {
+                  "amount": 2
+                },
+                {
+                  "amount": 6
+                },
+                {
+                  "amount": 4
+                },
+                {
+                  "amount": 10
+                },
+                {
+                  "amount": 15
+                },
+                {
+                  "amount": 53
+                },
+                {
+                  "amount": 127
+                }
+              ]
+            }
+          },
+          {
+            "id": 207329,
+            "idMal": 63431,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": null,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 7
+            },
+            "title": {
+              "romaji": "Tsuihou Sareta Cheat Fuyo Majutsushi wa Kimama na Second Life wo Ouka Suru.: Ore wa Buki dake ja Naku, Arayuru Mono ni \"Kyouka Point\" wo Fuyo Dekiru shi, Ore no Ishi de Itsudemo Kouka wo Kaijo Dekiru kedo, Nokotta Hitotachi Daijoubu?",
+              "english": "The Laid-Off Cheat-Granting Mage Enjoys a Second Lease on Life",
+              "native": "追放されたチート付与魔術師は気ままなセカンドライフを謳歌する。　～俺は武器だけじゃなく、あらゆるものに『強化ポイント』を付与できるし、俺の意思でいつでも効果を解除できるけど、残った人たち大丈夫？～"
+            },
+            "averageScore": 73,
+            "popularity": 38921,
+            "genres": [
+              "Adventure",
+              "Comedy",
+              "Fantasy",
+              "Slice of Life"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 45
+                },
+                {
+                  "amount": 11
+                },
+                {
+                  "amount": 43
+                },
+                {
+                  "amount": 44
+                },
+                {
+                  "amount": 127
+                },
+                {
+                  "amount": 176
+                },
+                {
+                  "amount": 415
+                },
+                {
+                  "amount": 496
+                },
+                {
+                  "amount": 386
+                },
+                {
+                  "amount": 295
+                }
+              ]
+            }
+          },
+          {
+            "id": 178083,
+            "idMal": 59088,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 13,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 3
+            },
+            "title": {
+              "romaji": "Tokyo Revengers: Santen Sensou-hen",
+              "english": "Tokyo Revengers: War of the Three Titans Arc",
+              "native": "東京リベンジャーズ 三天戦争編"
+            },
+            "averageScore": 76,
+            "popularity": 37115,
+            "genres": [
+              "Action",
+              "Drama",
+              "Romance",
+              "Supernatural"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 29
+                },
+                {
+                  "amount": 8
+                },
+                {
+                  "amount": 24
+                },
+                {
+                  "amount": 22
+                },
+                {
+                  "amount": 64
+                },
+                {
+                  "amount": 103
+                },
+                {
+                  "amount": 237
+                },
+                {
+                  "amount": 276
+                },
+                {
+                  "amount": 331
+                },
+                {
+                  "amount": 308
+                }
+              ]
+            }
+          },
+          {
+            "id": 213805,
+            "idMal": 64534,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": null,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 1
+            },
+            "title": {
+              "romaji": "Koori no Jouheki 2nd Season",
+              "english": "The Ramparts of Ice Season 2",
+              "native": "氷の城壁 第2期"
+            },
+            "averageScore": 81,
+            "popularity": 36948,
+            "genres": [
+              "Comedy",
+              "Drama",
+              "Romance",
+              "Slice of Life"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 29
+                },
+                {
+                  "amount": 10
+                },
+                {
+                  "amount": 23
+                },
+                {
+                  "amount": 20
+                },
+                {
+                  "amount": 66
+                },
+                {
+                  "amount": 89
+                },
+                {
+                  "amount": 244
+                },
+                {
+                  "amount": 612
+                },
+                {
+                  "amount": 759
+                },
+                {
+                  "amount": 556
+                }
+              ]
+            }
+          },
+          {
+            "id": 199340,
+            "idMal": 62582,
+            "format": "MOVIE",
+            "status": "FINISHED",
+            "episodes": 1,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 16
+            },
+            "title": {
+              "romaji": "Seishun Buta Yarou wa Dear Friend no Yume wo Minai",
+              "english": "Rascal Does Not Dream of a Dear Friend",
+              "native": "青春ブタ野郎はディアフレンドの夢を見ない"
+            },
+            "averageScore": 83,
+            "popularity": 34658,
+            "genres": [
+              "Drama",
+              "Psychological",
+              "Romance",
+              "Supernatural"
+            ],
+            "nextAiringEpisode": null,
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 8
+                },
+                {
+                  "amount": 4
+                },
+                {
+                  "amount": 3
+                },
+                {
+                  "amount": 14
+                },
+                {
+                  "amount": 10
+                },
+                {
+                  "amount": 35
+                },
+                {
+                  "amount": 69
+                },
+                {
+                  "amount": 140
+                },
+                {
+                  "amount": 232
+                }
+              ]
+            }
+          },
+          {
+            "id": 172192,
+            "idMal": 57612,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": null,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 8
+            },
+            "title": {
+              "romaji": "Kikansha no Mahou wa Tokubetsu desu 2nd Season",
+              "english": "A Returner's Magic Should be Special Season 2",
+              "native": "帰還者の魔法は特別です 第2期"
+            },
+            "averageScore": 69,
+            "popularity": 32398,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 4
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 18
+                },
+                {
+                  "amount": 7
+                },
+                {
+                  "amount": 21
+                },
+                {
+                  "amount": 33
+                },
+                {
+                  "amount": 90
+                },
+                {
+                  "amount": 102
+                },
+                {
+                  "amount": 217
+                },
+                {
+                  "amount": 128
+                },
+                {
+                  "amount": 152
+                },
+                {
+                  "amount": 114
+                }
+              ]
+            }
+          },
+          {
+            "id": 200929,
+            "idMal": 62844,
+            "format": "MOVIE",
+            "status": "NOT_YET_RELEASED",
+            "episodes": 1,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 12,
+              "day": 11
+            },
+            "title": {
+              "romaji": "Kusuriya no Hitorigoto: Bouhi no Hihou",
+              "english": "The Apothecary Diaries: The Late Lady’s Treasure",
+              "native": "薬屋のひとりごと 亡妃の秘宝"
+            },
+            "averageScore": null,
+            "popularity": 31858,
+            "genres": [
+              "Drama",
+              "Mystery"
+            ],
+            "nextAiringEpisode": {
+              "episode": 1
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 6
+                },
+                {
+                  "amount": 1
+                },
+                {
+                  "amount": 1
+                },
+                {
+                  "amount": 1
+                },
+                {
+                  "amount": 3
+                },
+                {
+                  "amount": 2
+                },
+                {
+                  "amount": 3
+                },
+                {
+                  "amount": 11
+                },
+                {
+                  "amount": 53
+                },
+                {
+                  "amount": 54
+                }
+              ]
+            }
+          },
+          {
+            "id": 206814,
+            "idMal": 63367,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": null,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 11
+            },
+            "title": {
+              "romaji": "Dragon Ball Super: Beerus",
+              "english": "Dragon Ball Super: Beerus",
+              "native": "ドラゴンボール超 ビルス"
+            },
+            "averageScore": 81,
+            "popularity": 28351,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Sci-Fi"
+            ],
+            "nextAiringEpisode": {
+              "episode": 4
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 34
+                },
+                {
+                  "amount": 3
+                },
+                {
+                  "amount": 12
+                },
+                {
+                  "amount": 25
+                },
+                {
+                  "amount": 58
+                },
+                {
+                  "amount": 72
+                },
+                {
+                  "amount": 207
+                },
+                {
+                  "amount": 378
+                },
+                {
+                  "amount": 426
+                },
+                {
+                  "amount": 563
+                }
+              ]
+            }
+          },
+          {
+            "id": 185756,
+            "idMal": 60601,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": null,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 9,
+              "day": 27
+            },
+            "title": {
+              "romaji": "Tensei Kizoku, Kantei Skill de Nariagaru 3rd Season",
+              "english": "As a Reincarnated Aristocrat, I'll Use My Appraisal Skill to Rise in the World Season 3",
+              "native": "転生貴族、鑑定スキルで成り上がる 第3期"
+            },
+            "averageScore": 70,
+            "popularity": 28327,
+            "genres": [
+              "Adventure",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 6
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 34
+                },
+                {
+                  "amount": 21
+                },
+                {
+                  "amount": 21
+                },
+                {
+                  "amount": 23
+                },
+                {
+                  "amount": 79
+                },
+                {
+                  "amount": 105
+                },
+                {
+                  "amount": 282
+                },
+                {
+                  "amount": 220
+                },
+                {
+                  "amount": 166
+                },
+                {
+                  "amount": 133
+                }
+              ]
+            }
+          },
+          {
+            "id": 207191,
+            "idMal": 63409,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 5
+            },
+            "title": {
+              "romaji": "Doumo, Suki na Hito ni Horegusuri wo Irai Sareta Majo desu.",
+              "english": "Hello, I am a Witch and my Crush Wants me to Make a Love Potion!",
+              "native": "どうも、好きな人に惚れ薬を依頼された魔女です。"
+            },
+            "averageScore": 72,
+            "popularity": 27253,
+            "genres": [
+              "Fantasy",
+              "Romance"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 11
+                },
+                {
+                  "amount": 6
+                },
+                {
+                  "amount": 25
+                },
+                {
+                  "amount": 45
+                },
+                {
+                  "amount": 100
+                },
+                {
+                  "amount": 141
+                },
+                {
+                  "amount": 343
+                },
+                {
+                  "amount": 329
+                },
+                {
+                  "amount": 217
+                },
+                {
+                  "amount": 140
+                }
+              ]
+            }
+          },
+          {
+            "id": 208025,
+            "idMal": 63509,
+            "format": "TV_SHORT",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 5
+            },
+            "title": {
+              "romaji": "Dark Summoner to Dekiteiru",
+              "english": "I'm Dating a Dark Summoner",
+              "native": "ダークサモナーとデキている"
+            },
+            "averageScore": 67,
+            "popularity": 26857,
+            "genres": [
+              "Comedy",
+              "Ecchi",
+              "Fantasy",
+              "Romance"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 36
+                },
+                {
+                  "amount": 22
+                },
+                {
+                  "amount": 33
+                },
+                {
+                  "amount": 38
+                },
+                {
+                  "amount": 98
+                },
+                {
+                  "amount": 140
+                },
+                {
+                  "amount": 225
+                },
+                {
+                  "amount": 140
+                },
+                {
+                  "amount": 126
+                },
+                {
+                  "amount": 178
+                }
+              ]
+            }
+          },
+          {
+            "id": 186541,
+            "idMal": 60948,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 13,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 4
+            },
+            "title": {
+              "romaji": "Mezametara Saikyou Soubi to Uchuusen-mochi datta node, Ikkodate Mezashite Youhei to shite Jiyuu ni Ikitai",
+              "english": "Reborn as a Space Mercenary: I Woke Up Piloting the Strongest Starship!",
+              "native": "目覚めたら最強装備と宇宙船持ちだったので、一戸建て目指して傭兵として自由に生きたい"
+            },
+            "averageScore": 69,
+            "popularity": 26456,
+            "genres": [
+              "Action",
+              "Comedy",
+              "Drama",
+              "Mecha",
+              "Romance",
+              "Sci-Fi"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 25
+                },
+                {
+                  "amount": 19
+                },
+                {
+                  "amount": 39
+                },
+                {
+                  "amount": 42
+                },
+                {
+                  "amount": 106
+                },
+                {
+                  "amount": 155
+                },
+                {
+                  "amount": 320
+                },
+                {
+                  "amount": 196
+                },
+                {
+                  "amount": 182
+                },
+                {
+                  "amount": 170
+                }
+              ]
+            }
+          },
+          {
+            "id": 206949,
+            "idMal": 63382,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 25,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 6
+            },
+            "title": {
+              "romaji": "Kyouran Reijou Nia Liston",
+              "english": "Nia Liston: The Merciless Maiden",
+              "native": "凶乱令嬢ニア・リストン"
+            },
+            "averageScore": 76,
+            "popularity": 26132,
+            "genres": [
+              "Action",
+              "Fantasy"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 24
+                },
+                {
+                  "amount": 4
+                },
+                {
+                  "amount": 10
+                },
+                {
+                  "amount": 13
+                },
+                {
+                  "amount": 67
+                },
+                {
+                  "amount": 105
+                },
+                {
+                  "amount": 289
+                },
+                {
+                  "amount": 362
+                },
+                {
+                  "amount": 306
+                },
+                {
+                  "amount": 202
+                }
+              ]
+            }
+          },
+          {
+            "id": 191788,
+            "idMal": 61603,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 24,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 4
+            },
+            "title": {
+              "romaji": "Aoashi 2nd Season",
+              "english": "Aoashi Season 2",
+              "native": "アオアシ 第2期"
+            },
+            "averageScore": 80,
+            "popularity": 25851,
+            "genres": [
+              "Sports"
+            ],
+            "nextAiringEpisode": {
+              "episode": 5
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 10
+                },
+                {
+                  "amount": 7
+                },
+                {
+                  "amount": 17
+                },
+                {
+                  "amount": 13
+                },
+                {
+                  "amount": 27
+                },
+                {
+                  "amount": 37
+                },
+                {
+                  "amount": 154
+                },
+                {
+                  "amount": 306
+                },
+                {
+                  "amount": 311
+                },
+                {
+                  "amount": 260
+                }
+              ]
+            }
+          },
+          {
+            "id": 152677,
+            "idMal": 52480,
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 13,
+            "season": "FALL",
+            "seasonYear": 2026,
+            "startDate": {
+              "year": 2026,
+              "month": 10,
+              "day": 7
+            },
+            "title": {
+              "romaji": "Tantei wa mou, Shindeiru. Season 2",
+              "english": "The Detective Is Already Dead Season 2",
+              "native": "探偵はもう、死んでいる。Season2"
+            },
+            "averageScore": 71,
+            "popularity": 25797,
+            "genres": [
+              "Comedy",
+              "Drama",
+              "Mystery",
+              "Romance",
+              "Supernatural"
+            ],
+            "nextAiringEpisode": {
+              "episode": 4
+            },
+            "stats": {
+              "scoreDistribution": [
+                {
+                  "amount": 14
+                },
+                {
+                  "amount": 5
+                },
+                {
+                  "amount": 12
+                },
+                {
+                  "amount": 22
+                },
+                {
+                  "amount": 53
+                },
+                {
+                  "amount": 89
+                },
+                {
+                  "amount": 128
+                },
+                {
+                  "amount": 96
+                },
+                {
+                  "amount": 99
+                },
+                {
+                  "amount": 136
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

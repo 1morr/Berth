@@ -5,7 +5,7 @@
   每條違規造一份證明會紅，改無關的格式證明不紅。
 - **漸進揭露**：instructions 只列名稱與描述，`skills.load_skill` 回全文；流程要的工具這個人在側面板
   看不到的，不列也不給載。
-- **還在等工具的 skill**（`PENDING`）：工具進了 `TOOLS` 這裡就紅，提醒拿掉。
+- **宣告的工具都是側面板的工具**：票 16 之後沒有還在等的（原本的 `PENDING` 跟著拿掉）。
 """
 
 from __future__ import annotations
@@ -34,23 +34,6 @@ from berth.services.skills import (
 
 #: 第一批（票 19）。
 FIRST_BATCH = {"series-mapping", "new-season-picks", "why-not-imported", "missing-episodes"}
-
-#: 流程要、但還不是側面板工具的命令。票 13 / 14 / 16 把它們加進 `TOOLS` 時，這裡跟著刪
-#: （票 13 刪了 `search.search_torrents` 與 `downloading.add_manual_download`，
-#: 票 14 刪了 `media.*`、`bangumi.*` 與 `rss.subscribe_*`）。
-#: `anilist.*`、`fribb.*`、`bgm.*` 是票 16 還沒建的命令：名字不同就改 skill 檔。
-PENDING: dict[str, set[str]] = {
-    "series-mapping": {
-        "anilist.search_anime",
-        "anilist.read_franchise",
-        "fribb.lookup_anime",
-    },
-    "new-season-picks": {
-        "anilist.read_season",
-        "bgm.read_calendar",
-        "discover.read_trending",
-    },
-}
 
 VALID = """\
 ---
@@ -215,23 +198,14 @@ class TestTheSkillsInTheRepo:
         assert set(names) >= FIRST_BATCH
         assert len(names) == len(set(names))
 
-    def test_every_declared_tool_is_a_command_or_one_still_to_come(self) -> None:
-        """宣告的工具要嘛已經是側面板的工具，要嘛記在 `PENDING`；兩邊對得上。"""
+    def test_every_declared_tool_is_a_panel_tool(self) -> None:
+        """宣告了、卻不是側面板工具的：那份 skill 永遠不出現（名字寫錯也是這樣）。"""
         for skill in catalog():
-            assert set(skill.tools) - set(TOOLS) == PENDING.get(skill.name, set()), skill.name
-
-    def test_a_pending_tool_is_not_misnamed_once_its_module_exists(self) -> None:
-        """票 16 建了 `anilist` 模組，而 skill 寫的命令名不在裡面：名字對不上，skill 永遠不出現。"""
-        registry = commands()
-        modules = {name.split(".")[0] for name in registry}
-        for pending in PENDING.values():
-            for name in pending:
-                assert name in registry or name.split(".")[0] not in modules, name
+            assert set(skill.tools) <= set(TOOLS), skill.name
 
     def test_every_tool_named_in_a_body_is_declared(self) -> None:
         """內文叫到、卻沒宣告的工具：這個人看不到它時，skill 照樣會被列出來。"""
         known = {tool_name(name): name for name in commands()}
-        known |= {tool_name(name): name for pending in PENDING.values() for name in pending}
         for skill in catalog():
             named = set(re.findall(r"`([a-z0-9_]+)`", skill.body)) & known.keys()
             assert {known[name] for name in named} <= set(skill.tools), skill.name
@@ -255,9 +229,11 @@ class TestWhatThePanelOffers:
         assert set(listed) <= FIRST_BATCH
 
     @pytest.mark.asyncio
-    async def test_a_skill_waiting_for_its_tools_is_not_listed(self) -> None:
-        listed = {entry.name for entry in await list_skills(role=Role.ADMIN)}
-        assert listed.isdisjoint(PENDING)
+    async def test_an_admin_has_every_skill_and_a_user_only_those_their_tools_allow(self) -> None:
+        """一般使用者訂閱不了 Mikan 與關鍵字（`rss.*` 只給管理員），所以沒有推薦新番那一份。"""
+        assert {entry.name for entry in await list_skills(role=Role.ADMIN)} == FIRST_BATCH
+        listed = {entry.name for entry in await list_skills(role=Role.USER)}
+        assert listed == FIRST_BATCH - {"new-season-picks"}
 
     @pytest.mark.asyncio
     async def test_load_skill_returns_the_whole_body(self) -> None:
@@ -268,8 +244,10 @@ class TestWhatThePanelOffers:
         assert "`why_not_explain`" in loaded.instructions
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("name", ["no-such-skill", "series-mapping"])
-    async def test_an_unknown_or_unavailable_skill_is_refused(self, name: str) -> None:
+    @pytest.mark.parametrize(
+        ("name", "role"), [("no-such-skill", Role.ADMIN), ("new-season-picks", Role.USER)]
+    )
+    async def test_an_unknown_or_unavailable_skill_is_refused(self, name: str, role: Role) -> None:
         with pytest.raises(SkillRefusedError) as refused:
-            await load_skill(name, role=Role.ADMIN)
+            await load_skill(name, role=role)
         assert refused.value.reason is SkillRefusal.SKILL_MISSING

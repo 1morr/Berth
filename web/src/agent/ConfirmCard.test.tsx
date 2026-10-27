@@ -283,13 +283,13 @@ describe('ConfirmCard', () => {
 
     const section = await screen.findByRole('region', { name: '新增 RSS Feed' })
     expect(within(section).getByText('會連到新位址')).toBeInTheDocument()
-    expect(within(section).getByText(/從搜到的網頁抄來的/)).toBeInTheDocument()
+    expect(within(section).getByText(/從搜到的網頁或動漫資料站/)).toBeInTheDocument()
     expect(
       within(section).getByText('https://mikanani.me/RSS/MyBangumi?token=abc'),
     ).toBeInTheDocument()
     await within(section).findByText('Movies')
     // 名稱那一格是從網頁抄的：標記就在它旁邊，網址那一格沒有。
-    const marks = within(section).getAllByText('出自網頁')
+    const marks = within(section).getAllByText('出自外部來源')
     expect(marks).toHaveLength(1)
     expect(marks[0].closest('dd')).toHaveTextContent('Erai-raws')
   })
@@ -312,7 +312,7 @@ describe('ConfirmCard', () => {
     renderPanel()
 
     const section = await screen.findByRole('region', { name: '送出下載' })
-    expect(within(section).queryByText(/出自網頁/)).toBeNull()
+    expect(within(section).queryByText(/出自外部來源/)).toBeNull()
     expect(
       within(section).getByText(/另外 2 項放不上這張：一張卡送出的 torrent 有上限/),
     ).toBeInTheDocument()

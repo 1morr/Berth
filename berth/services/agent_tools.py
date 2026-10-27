@@ -14,6 +14,15 @@ from berth.services.registry import commands
 #: 只有設了 Tavily key 才給模型的那一支。
 TAVILY_TOOL = "web.tavily_search"
 
+#: 推薦新番與整部系列的資料來源（票 16）：社群編的資料站，結果是外部內容。
+ANIME_TOOLS: tuple[str, ...] = (
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "anilist.read_season",
+    "fribb.lookup_anime",
+    "bgm.read_calendar",
+)
+
 #: 給模型的工具（登錄表的名字）。每一支都要有 `about`（`tests/unit/test_agent_tools.py`）。
 TOOLS: tuple[str, ...] = (
     "discover.search_media",
@@ -35,11 +44,14 @@ TOOLS: tuple[str, ...] = (
     "rss.subscribe_mikan",
     "rss.subscribe_search",
     "rss.add_feed",
+    # 票 16：推薦新番與整部系列。
+    *ANIME_TOOLS,
+    "discover.read_trending",
 )
 
-#: 結果是**外部內容**的工具（別人寫的網頁）：`agent_origins.external_texts` 收它們的結果。
-#: 伺服器端的 `web_search` 不經登錄表，另外認。
-EXTERNAL_TOOLS: frozenset[str] = frozenset({TAVILY_TOOL})
+#: 結果是**外部內容**的工具（別人寫的網頁、社群編的資料站）：`agent_origins.external_texts` 收它們的
+#: 結果，它們的 id 也不算「出自工具結果」。伺服器端的 `web_search` 不經登錄表，另外認。
+EXTERNAL_TOOLS: frozenset[str] = frozenset({TAVILY_TOOL, *ANIME_TOOLS})
 
 
 def tool_name(command_name: str) -> str:
@@ -101,7 +113,64 @@ def _compact_row(row: object) -> object:
     return kept
 
 
+def _compact_media(result: object) -> object:
+    """`media.read_media` 給模型的那一份（票 16）：一季一集一筆的集表在長的一季就超過截斷上限——
+    Re:Zero 的 TMDB 第 1 季 85 集，`agent_guards.clip` 砍掉 `seasons` 之後模型看不到那一季的總集數，
+    `series-mapping` 對範圍要的正是它。逐集換成「狀態 → 集數範圍」（`imported: "1-25, 27"`），
+    檔案只留季集、tags 與狀態；海報網址與英文簡介模型用不到。"""
+    if not isinstance(result, dict):
+        return result
+    kept = {k: v for k, v in result.items() if k not in _MEDIA_DROPPED}
+    if isinstance(kept.get("seasons"), list):
+        kept["seasons"] = [_compact_season(season) for season in kept["seasons"]]
+    if isinstance(kept.get("files"), list):
+        kept["files"] = [
+            {key: row[key] for key in _FILE_KEYS if key in row} if isinstance(row, dict) else row
+            for row in kept["files"]
+        ]
+    return kept
+
+
+_MEDIA_DROPPED = frozenset({"poster_url", "poster_url_en", "overview_en"})
+_FILE_KEYS = ("season", "episode_start", "episode_end", "tags", "status", "presence")
+
+
+def _compact_season(season: object) -> object:
+    if not isinstance(season, dict) or not isinstance(season.get("episodes"), list):
+        return season
+    by_status: dict[str, list[int]] = {}
+    jobs: dict[str, str] = {}
+    for episode in season["episodes"]:
+        if not isinstance(episode, dict) or not isinstance(episode.get("episode_number"), int):
+            continue
+        status = str(episode.get("status"))
+        by_status.setdefault(status, []).append(episode["episode_number"])
+        if episode.get("job"):
+            jobs[str(episode["episode_number"])] = str(episode["job"])
+    compact = {k: v for k, v in season.items() if k != "episodes"}
+    compact["episodes"] = {status: _ranges(numbers) for status, numbers in by_status.items()}
+    if jobs:
+        compact["jobs"] = jobs
+    return compact
+
+
+def _ranges(numbers: list[int]) -> str:
+    """`[1, 2, 3, 5]` → `"1-3, 5"`。"""
+    spans: list[str] = []
+    ordered = sorted(set(numbers))
+    start = previous = ordered[0]
+    for number in [*ordered[1:], None]:
+        if number is not None and number == previous + 1:
+            previous = number
+            continue
+        spans.append(str(start) if start == previous else f"{start}-{previous}")
+        if number is not None:
+            start = previous = number
+    return ", ".join(spans)
+
+
 #: 結果交給模型之前換成的樣子（JSON 形狀進、JSON 形狀出）。沒列的原樣交。
 MODEL_VIEWS: dict[str, Callable[[object], object]] = {
     "search.search_torrents": _compact_search,
+    "media.read_media": _compact_media,
 }

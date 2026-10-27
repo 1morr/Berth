@@ -249,7 +249,7 @@ test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', 
   await expect(card).toContainText('會連到新位址')
   await expect(card).toContainText(url)
   // 自由文字都不是從網頁抄的：沒有警示。
-  await expect(card).not.toContainText('出自網頁')
+  await expect(card).not.toContainText('出自外部來源')
   await expectNoHorizontalScroll(page)
   await shot(page, 'feed-card')
 
