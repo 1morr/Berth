@@ -3915,9 +3915,11 @@ const zhHant = {
       externalLead: '標著「出自網頁」的欄位是助理從搜到的網頁抄來的，不是你說的。確認前看一眼。',
       externalFields: '出自網頁：{{fields}}',
       fromWeb: '出自網頁',
-      // 送單的數量閘：一張卡最多 {{limit}} 個 torrent。
-      heldBack_one: '另外 {{count}} 項超過一張卡的上限（{{limit}} 項），按了之後助理會再提一張。',
-      heldBack_other: '另外 {{count}} 項超過一張卡的上限（{{limit}} 項），按了之後助理會再提一張。',
+      // 送單的數量閘：一張卡送出的 torrent 有上限，單獨就超過（或集數不知道）的一項自己一張。
+      heldBack_one:
+        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
+      heldBack_other:
+        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
       fields: {
         release: '發佈',
         size: '大小',
@@ -7881,9 +7883,9 @@ const en: Translations<typeof zhHant> = {
       externalFields: 'From a web page: {{fields}}',
       fromWeb: 'From a web page',
       heldBack_one:
-        '{{count}} more is over the limit of {{limit}} per card; the assistant proposes it on a new card after you decide this one.',
+        '{{count}} more does not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes it after you decide this one.',
       heldBack_other:
-        '{{count}} more are over the limit of {{limit}} per card; the assistant proposes them on a new card after you decide this one.',
+        '{{count}} more do not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes them after you decide this one.',
       fields: {
         release: 'Release',
         size: 'Size',

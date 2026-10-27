@@ -306,7 +306,9 @@ describe('ConfirmCard', () => {
 
     const section = await screen.findByRole('region', { name: '送出下載' })
     expect(within(section).queryByText(/出自網頁/)).toBeNull()
-    expect(within(section).getByText(/另外 2 項超過一張卡的上限（3 項）/)).toBeInTheDocument()
+    expect(
+      within(section).getByText(/另外 2 項放不上這張：一張卡送出的 torrent 有上限/),
+    ).toBeInTheDocument()
   })
 
   it('a refused RSS row says why in words', async () => {

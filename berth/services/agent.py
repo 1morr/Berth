@@ -465,7 +465,7 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
         {
             "held_back": {
                 "rows": list(range(shown, shown + held)),
-                "note": _HELD_BACK.format(limit=shown),
+                "note": _HELD_BACK,
             }
         }
         if held
@@ -491,8 +491,9 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
 
 #: 數量閘留下的列（`card_outcome`）。英文：寫給模型的。
 _HELD_BACK = (
-    "These rows of your call were not on this card: one card holds at most {limit} downloads. "
-    "If the user still wants them, propose them in a new card now."
+    "These rows of your call were not on this card: one card sends at most a set number of "
+    "torrents, and a row that alone sends more (or whose count is unknown) gets a card of its "
+    "own. If the user still wants them, propose them in a new card now."
 )
 
 
@@ -786,15 +787,12 @@ class Turn:
                 raise failure from exc
         from_pages = [origins.external_fields(row.model_dump(), card.row) for row in wanted]
         async with self.sessions() as session:
-            kept = wanted
+            kept: Sequence[BaseModel] = wanted
+            torrents: list[int | None] = []
             if Flag.DOWNLOADS in spec.flags:
-                kept = wanted[: (await read_settings(session, AiSettings)).card_downloads]
-            count = _TORRENTS.get(spec.name)
-            torrents = (
-                [await count(self, row.model_dump()) if count else None for row in kept]
-                if Flag.DOWNLOADS in spec.flags
-                else []
-            )
+                limit = (await read_settings(session, AiSettings)).card_downloads
+                torrents = await self._on_one_card(spec, wanted, limit)
+                kept = wanted[: len(torrents)]
             try:
                 rows = [card.bind(self, row) for row in kept]
                 view = await proposals.propose(
@@ -816,6 +814,27 @@ class Turn:
             except (CommandRefusedError, ValidationError) as exc:
                 raise _failure(exc) from exc
         raise ApprovalRequired(metadata={"proposal": view.id})
+
+    async def _on_one_card(
+        self, spec: CommandSpec, wanted: Sequence[BaseModel], limit: int
+    ) -> list[int | None]:
+        """數量閘（研究 R5，協調者 2026-10-27）：從頭放進這張卡的那幾列，各會送出幾個 torrent。
+
+        一張卡的 torrent 總數最多 `limit`（送單一列 1 個、Mikan 訂閱照單一 feed 的集數）。單獨就超過
+        的一列——讀不到集數（`None`）的也當成超過——自己一張：放在第一列時這張只有它，排在後面的留給
+        下一張。不放上這一張的就不必去讀它的集數。
+        """
+        count = _TORRENTS.get(spec.name)
+        kept: list[int | None] = []
+        total = 0
+        for row in wanted:
+            torrents = await count(self, row.model_dump()) if count is not None else None
+            weight = torrents if torrents is not None else limit + 1
+            if kept and total + weight > limit:
+                break
+            kept.append(torrents)
+            total += weight
+        return kept
 
     async def run_write(
         self,

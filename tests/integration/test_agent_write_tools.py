@@ -204,10 +204,10 @@ class TestIdsComeFromToolResults:
         assert proposal["preview"]["flags"] == ["downloads"]
 
 
-def season(factory: FakeClientFactory, episodes: int) -> None:
-    """番組 3310 × 字幕組 583 的單一 feed 上有 `episodes` 集。"""
-    factory.rss_.pages[mikan.bangumi_feed_url(3310, 583)] = mikan_feed(
-        [synthetic(583, "ANi", f"{episode:02d}") for episode in range(1, episodes + 1)]
+def season(factory: FakeClientFactory, episodes: int, subgroup: int = 583) -> None:
+    """番組 3310 × 這個字幕組的單一 feed 上有 `episodes` 集。沒給的字幕組讀不到。"""
+    factory.rss_.pages[mikan.bangumi_feed_url(3310, subgroup)] = mikan_feed(
+        [synthetic(subgroup, "ANi", f"{episode:02d}") for episode in range(1, episodes + 1)]
     )
 
 
@@ -496,3 +496,91 @@ def _incomplete_root(roots: dict[str, Path]) -> Iterator[None]:
     """磁碟門檻量 Route 的未完成目錄，量不到不擋（`jobs._check_disk`）：建出來。"""
     roots["incomplete"].mkdir(parents=True, exist_ok=True)
     yield
+
+
+class TestTorrentsOnOneCard:
+    """數量閘數的是 torrent（協調者 2026-10-27）：一張卡的總數最多 13（送單一列 1 個，Mikan 訂閱照
+    預覽的集數）；單獨就超過 13 的一列、讀不到集數的一列，自己一張。超出的退回給模型拆下一張。"""
+
+    def propose(self, client: TestClient, script: Script, subgroups: list[int]) -> dict[str, Any]:
+        tv, _ = seen_work(client)
+        looked_up(
+            client,
+            {"id": 3310, "subgroups": [{"id": subgroup} for subgroup in subgroups]},
+            tool="bangumi_read_bangumi",
+        )
+        script.steps = [
+            tool(
+                "rss_subscribe_mikan",
+                rows=[
+                    {
+                        "bangumi_id": 3310,
+                        "subgroup_id": subgroup,
+                        "media_id": SPY_ID,
+                        "route_id": tv,
+                    }
+                    for subgroup in subgroups
+                ],
+            )
+        ]
+        chat(client, "Subscribe these from Mikan.")
+        [proposal] = cards(client)
+        return proposal
+
+    def test_two_twelve_episode_seasons_do_not_share_a_card(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        season(factory, 12, 583)
+        season(factory, 12, 584)
+
+        proposal = self.propose(client, script, [583, 584])
+
+        assert [row["subgroup_id"] for row in proposal["arguments"]] == [583]
+        assert proposal["preview"]["torrents"] == [12]
+        assert proposal["preview"]["held_back"] == 1
+
+    def test_a_season_over_the_limit_goes_on_a_card_alone(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        season(factory, 24, 583)
+
+        proposal = self.propose(client, script, [583])
+
+        assert proposal["preview"]["torrents"] == [24]
+        assert proposal["preview"]["held_back"] == 0
+
+    def test_a_season_over_the_limit_does_not_join_another_row(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        season(factory, 1, 583)
+        season(factory, 24, 584)
+
+        proposal = self.propose(client, script, [583, 584])
+
+        assert proposal["preview"]["torrents"] == [1]
+        assert proposal["preview"]["held_back"] == 1
+
+    def test_an_unknown_season_goes_alone(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        # 584 讀不到：數量要送出時才知道，當成超過。
+        proposal = self.propose(client, script, [584])
+
+        assert proposal["preview"]["torrents"] == [None]
+        assert proposal["preview"]["held_back"] == 0
+
+    @pytest.mark.parametrize(("subgroups", "kept"), [([584, 583], [584]), ([583, 584], [583])])
+    def test_an_unknown_season_does_not_share_a_card(
+        self,
+        client: TestClient,
+        script: Script,
+        factory: FakeClientFactory,
+        subgroups: list[int],
+        kept: list[int],
+    ) -> None:
+        season(factory, 1, 583)
+
+        proposal = self.propose(client, script, subgroups)
+
+        assert [row["subgroup_id"] for row in proposal["arguments"]] == kept
+        assert proposal["preview"]["held_back"] == 1

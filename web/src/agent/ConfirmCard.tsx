@@ -203,10 +203,7 @@ function Effects({ proposal }: { proposal: Proposal }) {
       ) : null}
       {proposal.preview.held_back > 0 ? (
         <p className="text-xs text-ink-dim">
-          {t('agent.card.heldBack', {
-            count: proposal.preview.held_back,
-            limit: proposal.arguments.length,
-          })}
+          {t('agent.card.heldBack', { count: proposal.preview.held_back })}
         </p>
       ) : null}
     </div>
