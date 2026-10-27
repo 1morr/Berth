@@ -261,6 +261,7 @@ NAMED: dict[str, CommandMark] = {
     # M5 票 11：開一輪花掉的 token 回不來，入口不是工具；讀自己的對話是一般的讀取。
     "agent.open_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
     "agent.read_conversation": _mark(Effect.READ),
+    "agent.ai_enabled": _mark(Effect.READ, Flag.INTERNAL),
 }
 
 

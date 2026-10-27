@@ -1,6 +1,6 @@
 # 12 — 側面板（tracer：為什麼沒入庫）
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 11
 
@@ -32,12 +32,23 @@ M5 第一個看得到的東西：每一頁都叫得出的對話面板，走完�
 
 ## 驗收
 
-- [ ] shape 文件在、實作照它
-- [ ] 在 `agent` 情境問「X 為什麼沒入庫」，得到票 10 的結論分類；重新載入頁面之後對話還在（playwright 實跑，附截圖）
-- [ ] 回覆裡的外部圖片不會被載入（vitest）
-- [ ] 沒設 provider 時兩種角色各自看到對的說明（vitest＋實跑）
-- [ ] 手機寬度沒有橫向捲動（實跑）
-- [ ] 前端 e2e 加一條側面板的 tracer
-- [ ] 全部檢查、pytest、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
+- [x] shape 文件在、實作照它
+- [x] 在 `agent` 情境問「X 為什麼沒入庫」，得到票 10 的結論分類；重新載入頁面之後對話還在（playwright 實跑，附截圖）
+- [x] 回覆裡的外部圖片不會被載入（vitest）
+- [x] 沒設 provider 時兩種角色各自看到對的說明（vitest＋實跑）
+- [x] 手機寬度沒有橫向捲動（實跑）
+- [x] 前端 e2e 加一條側面板的 tracer
+- [x] 全部檢查、pytest、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 實作（票 12 session）：
+  - **shape**：`.scratch/m5/side-panel-shape.md`；使用者選定桌面並排、頁首一顆鍵換頁不關、不送頁面脈絡。截圖在 `12-side-panel/`（`agent-*` 是 e2e 的桌機與 390、`off-*` 是 AI 沒開的管理員 1280 與一般使用者 390）。
+  - **偏離 shape**（使用者決定）：停下的說明照票 11 當一般助理文字，「停下」訊息塊的畫法移到票 22（票 20 在改串流）。
+  - **code-review 已改**：markdown 改成白名單（task list 的勾選框、註腳拆掉）、沒寫語言的 code block 不再疊行內 code 的底色、輸入欄上限改成 6 行、送不出去的那一句放進一直掛著的 `aria-live`、面板標題不再拿掉焦點環、`conversation_missing` 與 `ai_disabled` 兩條分支補測試、`api/agent.ts` 與 `client.ts` 共用 `responseError` / `CSRF_HEADERS`、讀取與讀不到的外框收成 `PanelStates`、假模型的結論表改用 `WhyNot` 當鍵。
+  - **未處理**（判斷後留著）：
+    - `ToolCall.TOOL_NAMES` 是工具名 → i18n key 的對照表，後端加一支工具要改四處。留著：repo 的慣例是查表給 `t()` 字面 key（`requestProblem.PROBLEM_TEXT`），`resources.test` 才查得到每個 key 有人用；認不得的工具照原文畫，不會壞。
+    - `useNarrow` 的 `(max-width: 63.999rem)` 是手抄 Tailwind 的 `lg`，與 class 裡的 `lg:` 兩份來源。
+    - 按「停止」之後，後端存的「連線被關掉」那則說明要重新載入才看得到——串流中與重新載入後的畫面短暫不同，歸票 22（「串流與重新載入要是同一個形狀」）。
+    - 送不出去時的標籤是 `RequestFailed` 的「失敗」+「這一則沒送出去：」，shape 已改成這樣寫。
+  - **實跑觀察**：e2e 以 `--repeat-each` 加多個 worker 對同一台伺服器跑時，同一個帳號撞到「每人同時一輪」，畫面正確顯示「等一下」；正式設定一台伺服器只跑一條，不會撞。

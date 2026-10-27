@@ -429,6 +429,29 @@ class TestWhoCanUseWhat:
         assert script.seen == []
 
 
+class TestThePanelKnowsWhetherAiIsOn:
+    """側面板一打開就要分得出「可以問」與「沒開」（票 12）：一般使用者讀不到 `/settings/ai`。"""
+
+    def test_everyone_signed_in_reads_that_it_is_on(self, client: TestClient) -> None:
+        assert client.get("/api/agent/status").json() == {"enabled": True}
+        sign_in_crew(client)
+        assert client.get("/api/agent/status").json() == {"enabled": True}
+
+    def test_it_reads_off_once_ai_is_turned_off(self, client: TestClient) -> None:
+        client.put(
+            "/api/settings/ai",
+            json={"enabled": False, "provider": "anthropic", "base_url": "", "model": "m"},
+            headers=BROWSER,
+        )
+        sign_in_crew(client)
+
+        assert client.get("/api/agent/status").json() == {"enabled": False}
+
+    def test_signed_out_it_is_not_there(self, client: TestClient) -> None:
+        client.cookies.clear()
+        assert client.get("/api/agent/status").status_code == 401
+
+
 class TestTheBooks:
     def test_the_model_gets_the_rules_and_the_date(
         self, client: TestClient, script: Script

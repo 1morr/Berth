@@ -3,6 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { AgentPanel, AgentToggle } from './agent/AgentPanel'
+import { usePanel } from './agent/panelState'
+import { useNarrow } from './agent/useNarrow'
 import { meQueryOptions } from './api/auth'
 import { GhostButton, NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
@@ -13,12 +16,29 @@ import { useSignOut } from './components/useSignOut'
  *
  * `main` 不設寬度上限：健康頁的泊位板是整寬的橫幅（direction contract 的 FIRST VIEWPORT），
  * 每一頁自己決定內文那一欄有多寬。
+ *
+ * 側面板（M5 票 12）在桌面是右邊的一欄，頁面讓位；窄版蓋滿整個視窗，底下這一頁 `inert`
+ * （`.scratch/m5/side-panel-shape.md`）。
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const { open } = usePanel()
+  const narrow = useNarrow()
+
+  return (
+    <div className="min-h-dvh bg-hull text-ink lg:flex">
+      <div inert={open && narrow} className="min-w-0 flex-1">
+        <Page>{children}</Page>
+      </div>
+      <AgentPanel narrow={narrow} />
+    </div>
+  )
+}
+
+function Page({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
 
   return (
-    <div className="min-h-dvh bg-hull text-ink">
+    <>
       {/* 頁首有八個 Tab 停留點；鍵盤使用者每換一頁都要先過完它們（票 15 audit）。
           平常看不見，拿到焦點才浮出來。`not-sr-only` 會把 padding 歸零，所以浮出時的 padding
           寫在 `focus:` 那一組（票 15 實跑量到 58×15px）。 */}
@@ -41,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main id="main" tabIndex={-1} className="outline-none">
         {children}
       </main>
-    </div>
+    </>
   )
 }
 
@@ -111,6 +131,8 @@ function Identity() {
             每個人都有：一般使用者的設定只有通知那一頁，`/settings` 把他帶到那裡（M4 票 125）。 */}
         <NavLink to="/settings">{t('nav.settings')}</NavLink>
       </nav>
+      {/* 不在導覽裡：它不換頁，是一顆開關（`aria-expanded`）。 */}
+      <AgentToggle />
       <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>
         {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
       </GhostButton>

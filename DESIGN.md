@@ -1009,6 +1009,25 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   （修法在 Jellyfin 裡，所以寫在列上）。兩邊用同一個格式化函式，差的那一格一眼對得出來；不塗漆、不畫差異標記。
 - **處理完就消失：** 清單外層掛 `useFocusAfterRemoval`（The Focus Takes The Next Row Rule）。
 
+### 側面板（`agent/AgentPanel`，M5 票 12）
+
+`.scratch/m5/side-panel-shape.md`。頁首「助理」是一顆開關（`NAV_BOX`，打開時 `NAV_BOX_ACTIVE`，`aria-expanded` + `aria-controls`），
+放在導覽之後、登出之前——它不換頁，所以不在 `<nav>` 裡。
+- **版面**：`lg` 以上外框變成兩欄，右欄是 `26rem` 寬、`sticky top-0 h-dvh` 的面板（`border-l-2 border-rule-strong`、`hull` 底），
+  頁面讓位、兩邊都能操作；以下 `fixed inset-0` 蓋滿視窗，是 `role="dialog" aria-modal`，底下那一頁 `inert`。
+- **抬頭列**是 `deck` 底的 `h2`「助理」+ Ghost「新對話」（AI 開著才有）+ Ghost「關閉」。`Esc` 收起，焦點回到開關；打開時焦點落在輸入欄
+  （對話還在讀時先落在標題，輸入欄出現了再接過去——只接標題上的，換頁重掛不搶焦點）。
+- **對話紀錄**是 `role="log"`、串流中 `aria-busy`。你說的：`.label`「你」+ `deck` 底一塊散文；助理說的：`.label`「助理」+ markdown
+  （標題降成 `.label`、code 走 `.value`、表格只在自己那一格捲）。連著的同一方只標一次。
+- **工具一行一個**：`<details>`，`well` 底 `border-2 border-rule`；摘要是 `.label`「工具」+ 人話名稱 + 狀態——執行中是 `working`
+  小色塊，完成是 `ink-dim` 字（常態不塗漆），沒成功是 `ink-dim` 字且框換 `rule-strong`（助理自己會看結果，不是阻擋，不塗紅）。
+  展開沉到 `hull`，「參數」「結果」是 `.value text-xs` 的 JSON 原文。
+- **圖片不載入**：markdown 圖片畫成一塊 `well` 底的「圖片沒有載入」+ 替代文字 + `.value` 網址原文（不是連結）。這是安全規則，不是樣式選擇。
+- **送出列**：`textarea`（輸入框的外觀、`field-sizing-content`，2–6 行），Enter 送出、Shift+Enter 換行、組字中的 Enter 不送；
+  主要鍵「送出」限寬 `w-32`，串流中同一格換成 Ghost「停止」。送不出去時那一則從紀錄拿掉、字放回輸入欄：`busy` 是 `assigned`
+  的「等一下」，其餘走 `RequestFailed`。
+- **AI 沒開**不是錯誤，不塗漆：管理員一句說明 + `GHOST_LINK`「到 AI 設定」，其他人一句「管理員還沒設定」，都沒有送出列。
+
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
 
 觸發鍵是 Ghost；展開後是 `well` 底 + `border-2 border-rule-strong` + `0.75rem` 內距、`gap-3` 的區塊，最後一排是
@@ -1111,6 +1130,9 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 - **Don't** 用骨架屏動畫、脈動點或「即時」指示器；讀取中是不動的佔位，值自己換就是訊號。
 
 ## Known contradictions
+
+- **窄版的側面板是一個疊層**（M5 票 12），而 Elevation & Depth 寫著「沒有 z 軸」。它蓋滿整個視窗（`fixed inset-0 z-10`），
+  不是浮在頁面上的一塊：沒有遮罩、沒有陰影，底下那一頁 `inert`。桌面上它是外框的一欄，仍然沒有 z 軸。
 
 - **值與值之間的中點分隔（`components/Dot.tsx`）是一個字元**，而 Don't 那一條寫著
   「不用字元當裝飾標記」。那條規則說的是**會進無障礙名稱**的標記（`▸`、`•`、emoji）——
