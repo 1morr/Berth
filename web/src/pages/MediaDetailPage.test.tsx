@@ -4,7 +4,7 @@ import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Job, JobFile, JobPage, MediaJobFilter } from '../api/jobs'
-import type { Media, WatchArea, WatchEpisode } from '../api/media'
+import type { Media, WatchArea, WatchEpisode, WhyNot } from '../api/media'
 import type { Bangumi, Feed, OneshotItem, RssSeries } from '../api/rss'
 import type { Batch, QueryPlan, SearchResults } from '../api/search'
 import {
@@ -936,6 +936,83 @@ describe('Media 詳情頁', () => {
     await userEvent.click(within(files).getByText('1 個檔案'))
 
     expect(within(files).getByText('Jellyfin 試了 6 次都沒找到')).toBeVisible()
+  })
+
+  describe('為什麼沒入庫（M5 票 22，票 10 的結論）', () => {
+    const episode = media().seasons[0].episodes[0]
+    const WHY_NOT = 'GET /api/media/tv%3A120089/why-not?season=1&episode=2'
+
+    function withGap() {
+      const [first, second] = media().seasons
+      return media({
+        seasons: [
+          {
+            ...first,
+            episodes: [
+              episode,
+              { ...episode, episode_number: 2, name: 'SECURE A WIFE', status: 'missing' },
+            ],
+          },
+          second,
+        ],
+      })
+    }
+
+    function whyNot(overrides: Partial<WhyNot> = {}): WhyNot {
+      return {
+        media_id: 'tv:120089',
+        kind: 'tv',
+        title: 'SPY×FAMILY',
+        season: 1,
+        episode: 2,
+        conclusion: 'unbound',
+        seasons: [],
+        episodes: [],
+        jobs: [],
+        issues: [],
+        rss: { series: [], items: [] },
+        ...overrides,
+      }
+    }
+
+    it('缺的那一集按「為什麼」才問，說得出原因與下一步', async () => {
+      const stub = render({ [SPY_PATH]: { body: withGap() }, [WHY_NOT]: { body: whyNot() } })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByText('Season 1'))
+      const row = (await screen.findByText('SECURE A WIFE')).closest('tr')!
+      const asked = () => stub.mock.calls.some(([input]) => String(input).includes('/why-not'))
+      expect(asked()).toBe(false)
+
+      const why = within(row).getByRole('button', { name: '為什麼缺？' })
+      expect(why).toHaveAttribute('aria-expanded', 'false')
+      await userEvent.click(why)
+
+      expect(why).toHaveAttribute('aria-expanded', 'true')
+      const said = await screen.findByText(/RSS Series 還沒綁到作品/)
+      expect(said).toBeVisible()
+      expect(document.getElementById(why.getAttribute('aria-controls')!)).toContainElement(said)
+      expect(within(said).getByRole('link', { name: '到 RSS 頁' })).toHaveAttribute('href', '/rss')
+      // 已入庫的那一集沒有這顆鍵。
+      const imported = screen.getByText('OPERATION STRIX').closest('tr')!
+      expect(within(imported).queryByRole('button', { name: /為什麼/ })).toBeNull()
+    })
+
+    it('一般使用者看不到 RSS 那一側，就不給到 RSS 頁的連結', async () => {
+      render(
+        {
+          [SPY_PATH]: { body: withGap() },
+          [WHY_NOT]: { body: whyNot({ conclusion: 'no_source', issues: null, rss: null }) },
+        },
+        'user',
+      )
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByText('Season 1'))
+      await userEvent.click(await screen.findByRole('button', { name: '為什麼缺？' }))
+
+      const said = await screen.findByText(/哪裡都沒有它/)
+      expect(said).toBeVisible()
+      expect(within(said).queryByRole('link')).toBeNull()
+    })
   })
 
   describe('只看缺集（M1.5 票 09）', () => {

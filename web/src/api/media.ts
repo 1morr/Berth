@@ -19,6 +19,19 @@ export type Episode = Schemas['EpisodeOut']
  */
 const STALE_TIME = 5 * 60 * 1000
 
+/** 一集為什麼還沒入庫（M5 票 10 的結論，票 22 起作品頁按「為什麼」才問）。 */
+export type WhyNot = Schemas['WhyNotOut']
+
+export function whyNotQueryOptions(id: string, season: number, episode: number) {
+  return queryOptions({
+    queryKey: ['media', id, 'why-not', season, episode],
+    queryFn: () =>
+      apiGet<WhyNot>(
+        `/media/${encodeURIComponent(id)}/why-not?season=${season}&episode=${episode}`,
+      ),
+  })
+}
+
 export function mediaQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['media', id],

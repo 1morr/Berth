@@ -1530,6 +1530,30 @@ const zhHant = {
         missing: '缺',
         unaired: '未播出',
       },
+      // 「缺」「卡住」那一格的「為什麼」（M5 票 22）：讀票 10 的結論，按了才問。
+      why: {
+        button: '為什麼',
+        missing: '為什麼缺？',
+        stuck: '為什麼卡住？',
+        loading: '查詢中',
+        failed: '查不到原因',
+        job: '看那一筆下載',
+        rss: '到 RSS 頁',
+        review: '到審核',
+        conclusion: {
+          import_failed: '下載完了，入庫那一步失敗，要人看那一筆。',
+          download_failed:
+            '沒下載成：送單失敗、客戶端報錯、檔案不見，或 torrent 被移出了 qBittorrent。',
+          awaiting_review: '下載完了，停在審核等管理員確認。',
+          unbound: 'RSS 有這一集，但它的 RSS Series 還沒綁到作品；綁好之前不送。',
+          excluded: 'RSS 有這一集，被排除條件擋下，或這個 Feed 第一輪選了「只追之後的」。',
+          no_source: '播了，但哪裡都沒有它：沒有人送過，RSS 也沒出現過。可以用下面的搜尋找發佈。',
+          downloading: '在路上，或 RSS 綁好了、下一輪就送。',
+          jellyfin_pending: '已入庫，Jellyfin 還沒認到那個檔案。',
+          unaired: '還沒播，或 TMDB 還沒有播出日。',
+          imported: '已經入庫了，這一頁還沒更新。重新整理就會看到。',
+        },
+      },
     },
     // 這部作品的下載（M4 票 12，`.scratch/m4/media-downloads-shape.md`）。發佈名、檔名與字幕組不是文案。
     downloads: {
@@ -5793,6 +5817,32 @@ const en: Translations<typeof zhHant> = {
         stuck: 'Stuck',
         missing: 'Missing',
         unaired: 'Not aired',
+      },
+      why: {
+        button: 'Why',
+        missing: 'Why is it missing?',
+        stuck: 'Why is it stuck?',
+        loading: 'Looking',
+        failed: 'Could not find out why',
+        job: 'See that download',
+        rss: 'Go to RSS',
+        review: 'Go to review',
+        conclusion: {
+          import_failed: 'It downloaded, but importing it failed. That download needs a look.',
+          download_failed:
+            'It did not download: the submit failed, the client reported an error, files went missing, or the torrent was removed from qBittorrent.',
+          awaiting_review: 'It downloaded and is waiting in review for an administrator.',
+          unbound:
+            'RSS has this episode, but its RSS Series is not bound to a title yet; nothing is sent until it is.',
+          excluded:
+            'RSS has this episode, but an exclusion rule blocked it, or the feed’s first round was set to only follow what comes next.',
+          no_source:
+            'It aired, but nothing has it: nobody sent it and RSS never listed it. The search below can find a release.',
+          downloading: 'It is on its way, or RSS is bound and sends it next round.',
+          jellyfin_pending: 'It is imported; Jellyfin has not picked up the file yet.',
+          unaired: 'It has not aired yet, or TMDB has no air date for it.',
+          imported: 'It is already imported; this page has not caught up. Reload to see it.',
+        },
       },
     },
     downloads: {
