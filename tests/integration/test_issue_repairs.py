@@ -36,7 +36,7 @@ from berth.models.types import utcnow
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.importer import sweep_imports
-from berth.services.issues import IssueRejectedError, list_issues, record_issue, resolve_issue
+from berth.services.issues import BUTTONS, IssueRejectedError, Press, list_issues, record_issue
 from berth.services.plan import sweep_plans
 from berth.services.reconcile import reconcile_once
 from berth.services.resolver import sweep_resolutions
@@ -73,7 +73,7 @@ async def press(
     *,
     plans: JobHints | None = None,
 ) -> None:
-    await resolve_issue(session, factory, issue.id, action, actor=ACTOR, plans=plans)
+    await BUTTONS[action](session, factory, Press(issue.id, actor=ACTOR, plans=plans))
 
 
 async def refused(

@@ -38,3 +38,4 @@
   - **inverse 一律 `None`**：`rematch.rematch_file`、`plan_review.edit_items` 看起來能「同一個命令換參數回去」，但取代舊版被換掉的那一條、`following` 連帶換掉的列不會跟著回來，所以不寫指向自己。
   - `importer.notify_jellyfin`、`rematch.announce` 標 `REVERSIBLE` + `INTERNAL`：叫 Jellyfin 照磁碟現況重讀，不是 Discord 那種對外發訊息，不帶 `SENDS_OUT`。
   - **旗標要不要從被叫的命令往上傳，沒有規則**：`resolver.sweep_resolutions` 經 `_announce` 叫 `notify.queue_ready`（`IRREVERSIBLE` + `sends_out`），照 `sweep.sweep_once` 的先例標 `IRREVERSIBLE` + `internal` + `sends_out`。但同模組既有的 `resolver.resolve_early`（Issue 的「重新反查」）也走 `_announce`，標的是 `REVERSIBLE`、沒有 `sends_out`；`rss.poll_due` 叫 `download_round` 也沒帶 `sends_out`。`resolve_early` 照傳的話會變成要人，與 brief §14「重新反查 AI 自己做」衝突，所以沒動。票 06 做登錄表時要定：「排一則通知」算不算命令自己的 `sends_out`。
+- 2026-10-27（票 04 合併時補）：`issues.resolve_issue` 的暫標已隨票 04 拿掉——它拆成 17 支以按鈕為名的命令，各自標記（見票 04 Comments）。`record_issue`、`list_issues`、`ignore_issue`、`close_settled` 的標法兩張票一致，合併時保留這張的註解；「忽略」不另立旗標，照不可逆標。

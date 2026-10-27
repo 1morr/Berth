@@ -28,11 +28,12 @@ from berth.domain import (
     ReconcileSide,
 )
 from berth.services.issues import (
+    BUTTONS,
     IssueRejectedError,
     IssueView,
+    Press,
     ignore_issue,
     list_issues,
-    resolve_issue,
 )
 from berth.services.ledger_rebuild import RebuildReport, read_ledger_gap, rebuild_ledger
 from berth.services.reconcile import ReconcileReport, SideReport
@@ -226,21 +227,15 @@ async def post_resolve(
     issue_id: int,
     body: IssueResolveIn,
 ) -> IssueOut:
-    """按下那一顆（brief §9.1 的「預設建議動作」那一欄）。
+    """按下那一顆（brief §9.1 的「預設建議動作」那一欄）。一顆一個命令，照 `action` 查
+    `services/issues.BUTTONS` 分派（M5 票 04）。
 
     **做得到才記成 resolved**：重新鏈接失敗時那一筆仍然是 `open`，清單上還看得到它——
     畫面說修好了而媒體庫沒變，是這一票最糟的結果。
     """
+    press = Press(issue_id, actor=current_actor(request), plans=plans, media=body.media)
     try:
-        view = await resolve_issue(
-            session,
-            factory,
-            issue_id,
-            body.action,
-            actor=current_actor(request),
-            plans=plans,
-            media=body.media,
-        )
+        view = await BUTTONS[body.action](session, factory, press)
     except IssueRejectedError as refusal:
         raise issue_refusal(refusal) from refusal
     return issue_out(view)

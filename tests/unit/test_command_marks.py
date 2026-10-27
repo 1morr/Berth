@@ -211,6 +211,28 @@ NAMED: dict[str, CommandMark] = {
     # `folder_name`，算改。
     "media.read_media": _mark(Effect.READ),
     "media.refresh_media": _mark(Effect.REVERSIBLE),
+    # Issue 的按鈕（M5 票 04，研究 A3 的 R8、C1）：刪東西的、放棄追蹤的要人（忽略在上面）；
+    # 修復的可逆，送出 torrent 的那一顆帶 `downloads`。
+    "issues.relink": _mark(Effect.REVERSIBLE),
+    "issues.forget": _mark(Effect.IRREVERSIBLE),
+    "issues.delete_complete": _mark(Effect.IRREVERSIBLE),
+    "issues.mark_sourceless": _mark(Effect.IRREVERSIBLE),
+    "issues.replace_with_link": _mark(Effect.IRREVERSIBLE),
+    "issues.delete_orphan": _mark(Effect.IRREVERSIBLE),
+    "issues.replan": _mark(Effect.REVERSIBLE),
+    "issues.relook": _mark(Effect.REVERSIBLE),
+    "issues.rescan": _mark(Effect.REVERSIBLE),
+    "issues.recheck": _mark(Effect.REVERSIBLE),
+    "issues.retry": _mark(Effect.REVERSIBLE),
+    "issues.accept_loss": _mark(Effect.IRREVERSIBLE),
+    "issues.accept_removal": _mark(Effect.IRREVERSIBLE),
+    "issues.resubmit": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS),
+    "issues.reimport": _mark(Effect.REVERSIBLE),
+    "issues.claim_torrent": _mark(Effect.REVERSIBLE),
+    "issues.claim_file": _mark(Effect.REVERSIBLE),
+    "issues.record_issue": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "issues.close_settled": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "issues.list_issues": _mark(Effect.READ),
 }
 
 

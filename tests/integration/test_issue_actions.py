@@ -21,9 +21,11 @@ from berth.domain import IssueAction, IssueRefusal, IssueStatus, IssueType, Ledg
 from berth.models import Issue, Job, LedgerEntry
 from berth.services.issues import (
     IssueRejectedError,
+    delete_complete,
+    forget,
     ignore_issue,
     list_issues,
-    resolve_issue,
+    relink,
 )
 from berth.services.reconcile import reconcile_once
 from tests.integration.factories import FakeClientFactory
@@ -62,12 +64,12 @@ class TestRelink:
     async def test_the_file_comes_back_as_a_hard_link_to_the_source(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        issue, target, factory = await broken(session, roots)
+        issue, target, _ = await broken(session, roots)
         entry = await entry_at(session, target)
         assert entry is not None
         source = Path(entry.source_abs_path)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+        await relink(session, issue.id, actor=ACTOR)
 
         assert Path(target).exists()
         # **同一個 inode 才叫硬鏈接**（brief §4.4）：複製一份過去在畫面上長得一樣，
@@ -77,9 +79,9 @@ class TestRelink:
     async def test_the_issue_is_resolved_and_says_which_button(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        issue, _, factory = await broken(session, roots)
+        issue, _, _ = await broken(session, roots)
 
-        view = await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+        view = await relink(session, issue.id, actor=ACTOR)
 
         assert view.status is IssueStatus.RESOLVED
         assert view.resolved_by == ACTOR
@@ -89,9 +91,9 @@ class TestRelink:
     async def test_the_ledger_row_goes_back_to_ok(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        issue, target, factory = await broken(session, roots)
+        issue, target, _ = await broken(session, roots)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+        await relink(session, issue.id, actor=ACTOR)
 
         entry = await entry_at(session, target)
         assert entry is not None
@@ -102,9 +104,9 @@ class TestRelink:
     ) -> None:
         """`target_inode` 記的是「當時鏈接出來的那一個」。照抄舊值的話，票 09 的
         `inode_mismatch` 會拿一個已經不存在的 inode 去比——每一輪都報一次假的不一致。"""
-        issue, target, factory = await broken(session, roots)
+        issue, target, _ = await broken(session, roots)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+        await relink(session, issue.id, actor=ACTOR)
 
         entry = await entry_at(session, target)
         assert entry is not None
@@ -115,7 +117,7 @@ class TestRelink:
     ) -> None:
         """修好了就是修好了：下一輪對帳不該再把同一件事端出來。"""
         issue, _, factory = await broken(session, roots)
-        await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+        await relink(session, issue.id, actor=ACTOR)
 
         await reconcile_once(session, factory, now=NOW)
 
@@ -126,13 +128,13 @@ class TestRelink:
     ) -> None:
         """兩邊都沒有就不是鏈接的事，而且**那一件要留著 open**：畫面說修好了而檔案還是
         不在，比一則錯誤訊息糟得多。"""
-        issue, target, factory = await broken(session, roots)
+        issue, target, _ = await broken(session, roots)
         entry = await entry_at(session, target)
         assert entry is not None
         Path(entry.source_abs_path).unlink()
 
         with pytest.raises(IssueRejectedError) as refusal:
-            await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+            await relink(session, issue.id, actor=ACTOR)
 
         assert refusal.value.reason is IssueRefusal.SOURCE_MISSING
         assert [row.id for row in await list_issues(session)] == [issue.id]
@@ -144,9 +146,9 @@ class TestForget:
     async def test_the_ledger_row_goes_away(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        issue, target, factory = await broken(session, roots)
+        issue, target, _ = await broken(session, roots)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.FORGET, actor=ACTOR)
+        await forget(session, issue.id, actor=ACTOR)
 
         assert await entry_at(session, target) is None
         assert len(await ledger_of(session)) == LINKS - 1
@@ -156,9 +158,9 @@ class TestForget:
     ) -> None:
         """這一顆說的只是「媒體庫裡沒有它，這樣就對了」——來源還在的話它仍然重新入庫得回來
         （brief §9.3）。"""
-        issue, _, factory = await broken(session, roots)
+        issue, _, _ = await broken(session, roots)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.FORGET, actor=ACTOR)
+        await forget(session, issue.id, actor=ACTOR)
 
         assert len(alive(await sources(session))) == SOURCES
         assert len(alive(await targets(session))) == LINKS - 1
@@ -168,7 +170,7 @@ class TestForget:
     ) -> None:
         """**沒有帳本那一列就沒有那個宣稱**，所以下一輪不會再問一次同一件事。"""
         issue, _, factory = await broken(session, roots)
-        await resolve_issue(session, factory, issue.id, IssueAction.FORGET, actor=ACTOR)
+        await forget(session, issue.id, actor=ACTOR)
 
         await reconcile_once(session, factory, now=NOW)
 
@@ -185,7 +187,7 @@ class TestDeleteComplete:
         before = await sources(session)
         remaining = await targets(session)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.DELETE_COMPLETE, actor=ACTOR)
+        await delete_complete(session, factory, issue.id, actor=ACTOR)
 
         assert alive(before) == []
         # 其餘還在媒體庫裡的那幾個也跟著走：留著就是沒有來源的孤兒（票 09 的
@@ -199,7 +201,7 @@ class TestDeleteComplete:
         qBittorrent 下一次重新檢查就把整包再抓一遍。"""
         issue, _, factory = await broken(session, roots)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.DELETE_COMPLETE, actor=ACTOR)
+        await delete_complete(session, factory, issue.id, actor=ACTOR)
 
         assert factory.qbittorrent_.deleted == [(HASH, False)]
 
@@ -208,7 +210,7 @@ class TestDeleteComplete:
     ) -> None:
         issue, _, factory = await broken(session, roots)
 
-        await resolve_issue(session, factory, issue.id, IssueAction.DELETE_COMPLETE, actor=ACTOR)
+        await delete_complete(session, factory, issue.id, actor=ACTOR)
 
         assert await session.get(Job, HASH) is None
         assert await ledger_of(session) == []
@@ -223,7 +225,7 @@ class TestDeleteComplete:
         會自己回來，而且還多帶四個兄弟。
         """
         issue, _, factory = await broken(session, roots)
-        await resolve_issue(session, factory, issue.id, IssueAction.DELETE_COMPLETE, actor=ACTOR)
+        await delete_complete(session, factory, issue.id, actor=ACTOR)
 
         await reconcile_once(session, factory, now=NOW)
 
@@ -238,9 +240,7 @@ class TestDeleteComplete:
         factory.qbittorrent_.error = ServiceUnavailableError("qbittorrent is not answering")
 
         with pytest.raises(IssueRejectedError) as refusal:
-            await resolve_issue(
-                session, factory, issue.id, IssueAction.DELETE_COMPLETE, actor=ACTOR
-            )
+            await delete_complete(session, factory, issue.id, actor=ACTOR)
 
         assert refusal.value.reason is IssueRefusal.CLIENT_UNREACHABLE
         assert len(alive(await sources(session))) == SOURCES
@@ -252,21 +252,21 @@ class TestWhatCanBePressed:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """多半是另一個分頁先按了。"""
-        issue, _, factory = await broken(session, roots)
-        await resolve_issue(session, factory, issue.id, IssueAction.FORGET, actor=ACTOR)
+        issue, _, _ = await broken(session, roots)
+        await forget(session, issue.id, actor=ACTOR)
 
         with pytest.raises(IssueRejectedError) as refusal:
-            await resolve_issue(session, factory, issue.id, IssueAction.RELINK, actor=ACTOR)
+            await relink(session, issue.id, actor=ACTOR)
 
         assert refusal.value.reason is IssueRefusal.ISSUE_NOT_OPEN
 
     async def test_an_issue_that_is_not_there_is_refused(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        _, _, factory = await imported(session, roots)
+        _, _, _ = await imported(session, roots)
 
         with pytest.raises(IssueRejectedError) as refusal:
-            await resolve_issue(session, factory, 404, IssueAction.RELINK, actor=ACTOR)
+            await relink(session, 404, actor=ACTOR)
 
         assert refusal.value.reason is IssueRefusal.ISSUE_MISSING
 
@@ -300,9 +300,7 @@ class TestWhatCanBePressed:
 
         assert view.actions == (IssueAction.RELINK, IssueAction.FORGET)
         with pytest.raises(IssueRejectedError) as refusal:
-            await resolve_issue(
-                session, factory, issue.id, IssueAction.DELETE_COMPLETE, actor=ACTOR
-            )
+            await delete_complete(session, factory, issue.id, actor=ACTOR)
         assert refusal.value.reason is IssueRefusal.ACTION_NOT_AVAILABLE
 
 

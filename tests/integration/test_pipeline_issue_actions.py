@@ -22,7 +22,7 @@ from berth.adapters.torrent import TorrentSource
 from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.domain import EventType, IssueAction, IssueRefusal, IssueStatus, IssueType, JobState
 from berth.models import Issue, Job
-from berth.services.issues import IssueRejectedError, list_issues, resolve_issue
+from berth.services.issues import BUTTONS, IssueRejectedError, Press, list_issues
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_downloads import FILES, HASH, NOW, events_of, run, setup_job, status
 
@@ -58,7 +58,7 @@ async def the_issue(session: AsyncSession, kind: IssueType) -> Issue:
 async def press(
     session: AsyncSession, factory: FakeClientFactory, issue: Issue, action: IssueAction
 ) -> None:
-    await resolve_issue(session, factory, issue.id, action, actor=ACTOR)
+    await BUTTONS[action](session, factory, Press(issue.id, actor=ACTOR))
 
 
 async def refused(
