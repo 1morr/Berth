@@ -265,6 +265,10 @@ NAMED: dict[str, CommandMark] = {
     "agent.read_status": _mark(Effect.READ, Flag.INTERNAL),
     # M5 票 17：打的是固定的 Tavily（不是新位址），花使用者 Tavily 帳號的 credit；只讀。
     "web.tavily_search": _mark(Effect.READ),
+    # M5 票 18：摘要花掉的 token 與換掉的歷史都回不來；斜線指令的入口整支照最重的 `/compact` 標
+    # （其餘五支是讀取或什麼都不做），兩支都不是工具。
+    "compaction.compact": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
+    "slash.run_slash": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
 }
 
 

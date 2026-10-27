@@ -10,7 +10,7 @@ prototype 的 selftest 十一步（`scripts/experiments/m5_agent_selftest.py`）
 5. 模型自己編的 id：`TestRefusedBeforeACard`（來源換不回來；其餘 id 的守法在票 14）
 6. 同工具同參數一直叫：`test_agent_api.py::TestGuards`（票 11）
 7. 沒按就繼續說話、之後再按：`TestMovingOn`
-8、9. 壓縮之後卡片還在：`TestHistoryShape`（壓縮本身在票 18；這裡守住歷史的形狀）
+8、9. 壓縮之後卡片還在：`TestHistoryShape`（`/compact` 之後確認、經 `/agent/chat` 恢復，票 18）
 10. 平行呼叫：`TestParallelCalls`
 11. 重新載入：`TestReload`
 
@@ -29,8 +29,8 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import (
+    CompactionPart,
     ModelMessage,
-    ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
     ToolCallPart,
@@ -518,32 +518,47 @@ class TestHistoryShape:
         assert isinstance(stored[-1], ModelResponse)
         assert [call.tool_call_id for call in stored[-1].tool_calls] == [CALL]
 
-    def test_a_card_still_resumes_after_the_head_of_the_history_is_dropped(
+    def test_compact_then_confirm_and_the_resumed_turn_runs_as_usual(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
+        """有待確認的卡片時 `/compact`，之後照常確認並執行（票 18 驗收第 2 條）。"""
         script.steps = [
             say("Hello."),
             card(rows(client, 1)),
+            say("SUMMARY: the user wants SPY×FAMILY episode 1."),
             say("Sent."),
         ]
         chat(client, "Hi.")
         chat(client, "Download episode 1.")
-        tail = history(client)[2:]
-        assert isinstance(tail[0], ModelRequest)
 
-        async def compact(session: AsyncSession) -> None:
-            found = await session.get(AiConversation, "c1")
-            assert found is not None
-            found.history_json = ModelMessagesTypeAdapter.dump_json(tail).decode()
-            await session.commit()
+        compacted = client.post(
+            "/api/agent/conversations/c1/commands", json={"text": "/compact"}, headers=BROWSER
+        )
 
-        in_db(client, compact)
-        decide(client, cards(client)[0]["id"], approve=True)
+        assert compacted.status_code == 200, compacted.text
+        assert compacted.json()["after"] is not None
+        # 第一輪換成摘要；待確認的呼叫原樣留在尾巴，卡片照舊在等。
+        stored = history(client)
+        assert [p.content for m in stored for p in m.parts if isinstance(p, CompactionPart)] == [
+            "SUMMARY: the user wants SPY×FAMILY episode 1."
+        ]
+        assert isinstance(stored[-1], ModelResponse)
+        assert [call.tool_call_id for call in stored[-1].tool_calls] == [CALL]
+        [proposal] = cards(client)
+        assert proposal["status"] == "pending"
+
+        pressed = decide(client, proposal["id"], approve=True)
         response = resume(client)
 
+        assert pressed.json()["status"] == "executed"
         assert response.status_code == 200, response.text
         assert sent(factory) == [magnet(1)]
-        assert outcome_of(script.seen[-1])["executed"] is True
+        # 恢復那一輪的模型看到摘要、那一輪，與已核准、已執行的結果。
+        resumed = script.seen[-1]
+        assert any(isinstance(p, CompactionPart) for m in resumed for p in m.parts)
+        assert outcome_of(resumed)["executed"] is True
+        assert [r.run.kind for r in recorded(client)][-2:] == ["compaction", "chat"]
+        assert recorded(client)[-1].run.stop_reason == "completed"
 
 
 # ---------------------------------------------------------------- 11

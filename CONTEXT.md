@@ -433,7 +433,7 @@ _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳
 _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是登入）
 
 **Turn**（一輪）:
-一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`，帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫、乒乓、無進展，M5 票 11、20）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。provider 斷路器不是一輪的事：它以一份 provider 設定為單位，暫停時開不了新的一輪。
+一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`（`kind = chat`；Compaction 的摘要另記一列，不算一輪），帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫、乒乓、無進展，M5 票 11、20）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。provider 斷路器不是一輪的事：它以一份 provider 設定為單位，暫停時開不了新的一輪。
 _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
 
 **External Content**（外部內容）:
@@ -442,6 +442,14 @@ _Avoid_: untrusted input, web content, external（單用）
 **Continue**（繼續）:
 被防護停下的那一輪，使用者按一次「繼續」接著跑的新一輪（`ai_runs.continues` 指向它續的那一輪，M5 票 20）：歷史接著停下來的說明，防護的數字重新算。一條停下的鏈只續一次：續的那一輪再停下就不能再續；只有對話的最後一輪續得了。
 _Avoid_: resume（Resume 是 Jellyfin 的繼續觀看）, retry, regenerate（那是 `useChat` 重答同一則）
+
+**Compaction**（壓縮）:
+Conversation 太長時，把最後幾個 Turn 之前的歷史換成一段由模型寫的摘要（M5 票 18，`services/compaction.py`）：一輪開頭佔了 context window 的六成就自動做（留最後兩輪），`/compact` 只留最後一輪。切點落在使用者訊息上，待確認的工具呼叫留在尾巴；摘要那一次記一列 `ai_runs`（`kind = compaction`）。失敗了歷史照舊。
+_Avoid_: summarize（摘要是它產出的那段字）, truncate（Truncation 是一筆工具結果太長時只交前一段，票 20）, prune
+
+**Slash Command**（斜線指令）:
+人在 Assistant 的輸入欄打的 `/<名字>`：`/new`、`/compact`、`/usage`、`/status`、`/pending`、`/skills`（M5 票 18，`services/slash.py`，M7 的外部管道共用同一份登錄表）。整則訊息就是那個指令才算；不經過模型（`/compact` 的摘要除外），也不進對話歷史。
+_Avoid_: command（單用：Command 是 Command Registry 上的命令）, shortcut, macro
 
 **Skill**（流程說明）:
 給 Assistant 的一份工作流程：系列整理、新番推薦、為什麼沒入庫、補缺集（M5 票 19）。`berth/skills/<name>/SKILL.md`，開頭是名稱、描述與它要用的工具（`tools`），內文是步驟。instructions 只列名稱與描述，Assistant 要用時以唯讀工具 `skills.load_skill` 拿全文（漸進揭露）。**只能是指令**：給的只有字，工具照舊是 Command Registry 那幾支；`tools` 這個人在側面板用不到的就不列也不給載。格式與限制在 `services/skills.py`。

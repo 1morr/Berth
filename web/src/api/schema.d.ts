@@ -64,6 +64,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/conversations/{conversation_id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Command
+         * @description 斜線指令。不經過模型，只有 `/compact` 的摘要叫一次。
+         */
+        post: operations["post_command_api_agent_conversations__conversation_id__commands_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/ai": {
         parameters: {
             query?: never;
@@ -2614,7 +2634,7 @@ export interface components {
          * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
          * @enum {string}
          */
-        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "card_undecided" | "not_continuable";
+        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "card_undecided" | "not_continuable" | "unknown_command" | "slash_command";
         /** AgentRefusalOut */
         AgentRefusalOut: {
             reason: components["schemas"]["AgentRefusal"];
@@ -3072,6 +3092,20 @@ export interface components {
          * @enum {string}
          */
         CollectionType: "movies" | "tvshows";
+        /** CompactOut */
+        CompactOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "compact";
+            /** Before */
+            before: number;
+            /** After */
+            after: number | null;
+            /** Error */
+            error: string;
+        };
         /** ComposeOut */
         ComposeOut: {
             /** Resolvable */
@@ -4741,6 +4775,14 @@ export interface components {
             name: string;
             collection_type: components["schemas"]["CollectionType"];
         };
+        /** NewOut */
+        NewOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "new";
+        };
         /**
          * NotificationKind
          * @description 待送表上一則的種類，也是每個人訂閱的單位（`User.notify_kinds_json`）。
@@ -4926,6 +4968,33 @@ export interface components {
             reason: components["schemas"]["OwnerRefusal"];
             /** Detail */
             detail: string;
+        };
+        /** PendingCardOut */
+        PendingCardOut: {
+            /** Id */
+            id: number;
+            /** Command */
+            command: string;
+            status: components["schemas"]["ProposalStatus"];
+            /** Rows */
+            rows: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Here */
+            here: boolean;
+        };
+        /** PendingOut */
+        PendingOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "pending";
+            /** Cards */
+            cards: components["schemas"]["PendingCardOut"][];
         };
         /**
          * PlanAction
@@ -6099,6 +6168,23 @@ export interface components {
          * @enum {string}
          */
         SiteStage: "test" | "add";
+        /** SkillOut */
+        SkillOut: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+        };
+        /** SkillsOut */
+        SkillsOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "skills";
+            /** Skills */
+            skills: components["schemas"]["SkillOut"][];
+        };
         /**
          * SkipCode
          * @description 一筆 Feed Item 被擋下的原因。
@@ -6124,6 +6210,11 @@ export interface components {
                 [key: string]: string | number;
             };
         };
+        /** SlashIn */
+        SlashIn: {
+            /** Text */
+            text: string;
+        };
         /**
          * SortOrder
          * @description 排序方向；沿用 Jellyfin `sortOrder` 的字串。沒有值的排在升冪最前、降冪最後（研究 §3.1）。
@@ -6136,6 +6227,27 @@ export interface components {
          * @enum {string}
          */
         Source: "BD" | "WEB" | "DVD" | "HDTV" | "REMUX";
+        /** StatusOut */
+        StatusOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "status";
+            provider: components["schemas"]["AiProvider"];
+            /** Model */
+            model: string;
+            /** Messages */
+            messages: number;
+            /** Context Tokens */
+            context_tokens: number | null;
+            /** Context Window */
+            context_window: number;
+            /** Compact At */
+            compact_at: number;
+            /** Paused Until */
+            paused_until: string | null;
+        };
         /**
          * StepFailure
          * @description 一條纜繩為什麼沒繫上（M4 票 21）。封閉集合：前端照它選一句人話，原文另放 `error`，
@@ -6374,6 +6486,37 @@ export interface components {
             path: string;
             /** Reasons */
             reasons: components["schemas"]["ItemReasonOut"][];
+        };
+        /**
+         * UsageOut
+         * @description 這段對話到目前為止（含壓縮的摘要）。`null` 是有一次不知道，合計就是不知道。
+         */
+        UsageOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "usage";
+            /** Turns */
+            turns: number;
+            /** Compactions */
+            compactions: number;
+            /** Requests */
+            requests: number;
+            /** Tool Calls */
+            tool_calls: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Cache Read Tokens */
+            cache_read_tokens: number | null;
+            /** Web Searches */
+            web_searches: number;
+            /** Tavily Searches */
+            tavily_searches: number;
+            /** Cost Usd */
+            cost_usd: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -6757,7 +6900,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentRefusalOut"];
                 };
             };
-            /** @description `no_message` */
+            /** @description `no_message` · `unknown_command` · `slash_command` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6824,6 +6967,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentStatusOut"];
+                };
+            };
+        };
+    };
+    post_command_api_agent_conversations__conversation_id__commands_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlashIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewOut"] | components["schemas"]["CompactOut"] | components["schemas"]["UsageOut"] | components["schemas"]["StatusOut"] | components["schemas"]["PendingOut"] | components["schemas"]["SkillsOut"];
+                };
+            };
+            /** @description `conversation_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+            /** @description `ai_disabled` · `ai_paused` · `busy` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+            /** @description `unknown_command` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
                 };
             };
         };
