@@ -3039,7 +3039,7 @@ const zhHant = {
       },
       enabled: {
         label: '開啟 AI',
-        hint: '關著就沒有 AI：側面板只說怎麼設定，其餘功能與現在相同。',
+        hint: '關著就沒有 AI，其餘功能與現在相同。',
       },
       provider: {
         label: '接口',
@@ -6799,7 +6799,7 @@ const en: Translations<typeof zhHant> = {
       },
       enabled: {
         label: 'Turn on AI',
-        hint: 'Off means no AI: the side panel only explains how to set it up, and everything else stays as it is now.',
+        hint: 'Off means no AI; everything else stays as it is now.',
       },
       provider: {
         label: 'API kind',

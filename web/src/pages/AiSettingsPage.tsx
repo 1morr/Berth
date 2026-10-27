@@ -139,8 +139,9 @@ function AiForm({ saved }: { saved: AiSettings }) {
     mutationFn: saveAi,
     onSuccess: (next) => {
       queryClient.setQueryData(aiQueryOptions.queryKey, next)
-      // key 只寫不讀：存進去之後欄位回到空的，placeholder 改說「已設定」。另一種接口沒存的草稿留著。
-      setDrafts((was) => ({ ...was, [next.provider]: { ...was[next.provider], api_key: '' } }))
+      // 存的那一種換成後端存下的樣子（Anthropic 的 /v1 已拿掉）；key 只寫不讀，欄位回到空的、
+      // placeholder 改說「已設定」。另一種接口沒存的草稿留著。
+      setDrafts((was) => ({ ...was, [next.provider]: draftOf(next[next.provider]) }))
       setTavily('')
       setStatus('saved')
     },
@@ -158,10 +159,13 @@ function AiForm({ saved }: { saved: AiSettings }) {
     setStatus(null)
   }
 
-  /** 清掉一把 key 之後：後端可能一併關掉了 AI（清的是現在用的那一種），開關跟著它。 */
+  /**
+   * 清掉一把 key 之後：清的是現在用的那一種時後端一併關掉了 AI，開關跟著它。只在後端真的從開變關時改，
+   * 剛勾、還沒存的「開啟」不因為清了一把無關的 key 被取消。
+   */
   function forgotten(next: AiSettings) {
     queryClient.setQueryData(aiQueryOptions.queryKey, next)
-    if (!next.enabled) setEnabled(false)
+    if (saved.enabled && !next.enabled) setEnabled(false)
     setStatus('removed')
   }
 

@@ -270,6 +270,36 @@ describe('設定 → AI', () => {
     expect(screen.getByLabelText('API key')).toHaveAttribute('placeholder', '貼上 key')
   })
 
+  it('存完：欄位換成後端存下的樣子（Anthropic 的 /v1 拿掉了）', async () => {
+    const stored: AiSettings = {
+      ...UNSET,
+      anthropic: { ...UNSET.anthropic, base_url: 'https://gw.example/anthropic' },
+    }
+    render({ [SAVE]: { body: stored } })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.type(await screen.findByLabelText('Base URL'), 'https://gw.example/anthropic/v1')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    expect(await screen.findByText('已儲存。')).toBeVisible()
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://gw.example/anthropic')
+  })
+
+  it('移除跟開關無關的 key：剛勾、還沒存的開啟留著', async () => {
+    const withTavily: AiSettings = { ...UNSET, has_tavily_key: true }
+    render({ 'DELETE /api/settings/ai/keys/tavily': { body: UNSET } }, withTavily)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('checkbox', { name: '開啟 AI' }))
+    await user.click(screen.getByRole('button', { name: '移除 Tavily key' }))
+    await user.click(screen.getByRole('button', { name: '移除' }))
+
+    expect(await screen.findByText('已移除 key。')).toBeVisible()
+    expect(screen.getByRole('checkbox', { name: '開啟 AI' })).toBeChecked()
+  })
+
   it('Tavily key 只寫不讀，貼了跟著儲存送出', async () => {
     const stub = render({ [SAVE]: { body: { ...IN_USE, has_tavily_key: true } } }, IN_USE)
     const user = userEvent.setup()

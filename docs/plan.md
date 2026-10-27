@@ -44,7 +44,7 @@ berth/
   domain/              純資料型別與狀態機，無 IO：JobState、ReleaseInfo、Tags、Candidate、PlanItem、Confidence
   parser/              純函式：classify、cjk、release、structure、mapper、subtitles、planner、confidence
   naming/              純函式：title 選擇、sanitize、tag 渲染、路徑模板
-  adapters/            外部服務：qbittorrent、jellyfin、tmdb、prowlarr、rss/{mikan,nyaa,acgrip,generic}、fs、mediainfo
+  adapters/            外部服務：qbittorrent、jellyfin、tmdb、prowlarr、rss/{mikan,nyaa,acgrip,generic}、fs、mediainfo、ai（模型與價目，M5 票 09）
   services/            命令（use case）：setup、routes、discover、search、download、plan、import_、review、rematch、delete、rss、reconcile、health
   pipeline/            背景迴圈：qbit_poller、planner_runner、importer、jellyfin_resolver、reconciler、rss_poller、health_checker
   api/                 FastAPI routers：auth、setup、settings、routes、discover、media、search、jobs、plans、review、files、rss、issues、health、events
@@ -84,6 +84,7 @@ adapters ──► domain                  （不 import services、models；回
 | Web | FastAPI、uvicorn、pydantic v2 | 型別即 schema，自動產 OpenAPI，未來 MCP 直接吃 |
 | DB | SQLAlchemy 2（async）+ aiosqlite、Alembic | 單檔、零維運；migration 從第一天就有 |
 | HTTP client | httpx（async） | 統一逾時與重試 |
+| AI | pydantic-ai-slim（`anthropic`、`openai`、`ui` extras） | 兩種接口一套 agent loop，deferred tool 撐得起確認卡（brief §20.24）。它的兩家 SDK 帶進 `httpx2`，與 adapter 用的 `httpx` 並存（§8.8） |
 | 解析 | guessit、自維護 CJK 規則 | brief §20.4 |
 | mediainfo | pymediainfo | manylinux wheel 內含 libmediainfo，不需系統套件 |
 | RSS | feedparser | 成熟、容忍壞 XML |

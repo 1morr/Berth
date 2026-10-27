@@ -24,7 +24,7 @@ export function SettingsTabs() {
           {t(berth.nameKey)}
         </Link>
       ))}
-      {/* 通知不是泊位（沒有號、不在泊位板上）：與那五格之間隔一條線，讓人看得出那五格是一組。 */}
+      {/* 通知與 AI 不是泊位（沒有號、不在泊位板上）：與那五格之間隔一條線，讓人看得出那五格是一組。 */}
       <span aria-hidden="true" className="mx-1 w-0.5 self-stretch bg-rule" />
       <Link to="/settings/notifications" className={`${NAV_LINK} px-3 py-2`}>
         {t('settings.tabs.notify')}

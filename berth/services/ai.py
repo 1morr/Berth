@@ -101,7 +101,7 @@ def _base_url(form: AiForm) -> str:
     return normalize_base_url(form.provider, checked)
 
 
-def _complete(api_key: str, model: str) -> None:
+def _require_key_and_model(api_key: str, model: str) -> None:
     """開啟與測試的前提：有 key、有模型名。"""
     if not api_key:
         raise AiRefusedError(AiRefusal.KEY_MISSING)
@@ -131,7 +131,7 @@ async def set_ai(
         api_key = (form.api_key or "").strip() or endpoint.api_key
         if enabled:
             try:
-                _complete(api_key, model)
+                _require_key_and_model(api_key, model)
             except AiRefusedError as exc:
                 refusal.append(exc)
                 return
@@ -164,6 +164,8 @@ async def forget_ai_key(session: AsyncSession, secret: AiSecret) -> AiView:
     return _view(await update_settings(session, AiSettings, change))
 
 
+# 不改 Berth 的任何狀態，所以是 READ；但它連到表單上的網址、花使用者的 token。票 02 的旗標
+# （`connects_out`）落地之後要補上，否則登錄表會把它當成 AI 可以自己按的唯讀命令。
 @command(Effect.READ)
 async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: AiForm) -> AiTest:
     """照表單打一次最小呼叫，不存任何東西。服務回的錯誤是結果，不是拒絕。"""
@@ -173,7 +175,7 @@ async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: Ai
     if not api_key:
         saved = await read_settings(session, AiSettings)
         api_key = saved.endpoint(form.provider).api_key
-    _complete(api_key, model)
+    _require_key_and_model(api_key, model)
     result = await probe(factory.ai(AiEndpoint(form.provider, base_url, api_key, model)))
     return AiTest(
         ok=result.failure is None,
