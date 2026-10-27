@@ -48,7 +48,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jellyfin import resolve_interface_login
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
@@ -283,7 +283,7 @@ async def apply_qbittorrent(
     )
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="qbittorrent.set_interface_login", flags={Flag.SETTINGS})
 async def set_interface_login(
     session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
 ) -> QbittorrentSetupStatus:

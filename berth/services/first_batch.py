@@ -39,7 +39,7 @@ from berth.domain import PlanItem as PlannedFile
 from berth.domain import ReasonCode as Code
 from berth.models import Job, LedgerEntry, Plan, PlanItem, RssSeries
 from berth.parser import vouch_first_batch
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import actor_of, record_event
 from berth.services.plan_view import planned, reasons_of
 
@@ -157,7 +157,7 @@ async def _waiting(session: AsyncSession, job: Job) -> tuple[Plan, tuple[Planned
     return plan, tuple(planned(row, None) for row in rows)
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def confirm_by_batch(
     session: AsyncSession, job: Job, series: RssSeries, vouched: Vouched
 ) -> None:

@@ -32,7 +32,7 @@ from berth.models import Job, Media, Notification, Route, RssSeries
 from berth.models.types import utcnow
 from berth.parser import episode_span
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import AddDownloadOutcome, JobSource, add_download, series_id_of
 from berth.services.plan import guess_from_title
 from berth.services.recipients import subscribers
@@ -57,7 +57,7 @@ class DownloadRound:
 
 
 # 寫下的那幾則一旦送出就收不回來，同 `queue_downloading`。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 @asynccontextmanager
 async def download_round(
     session: AsyncSession, *, presser: int | None, now: datetime
@@ -94,7 +94,7 @@ async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> 
 
 # 撤銷是刪 Job（它有自己的刪除範圍）。排出去的「正在下載」收不回來，但與 RSS 那幾個送單的命令
 # （`rss.bind_series` 等）同一個標法：等級看命令的主效果。
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
 async def add_manual_download(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -114,7 +114,7 @@ async def add_manual_download(
 
 
 # 寫下的那幾則一旦送出就收不回來（送出迴圈不等人）。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def queue_downloading(
     session: AsyncSession, job_hashes: Sequence[str], *, presser: int | None, now: datetime
 ) -> int:

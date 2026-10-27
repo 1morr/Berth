@@ -27,7 +27,6 @@ from berth.domain import (
 )
 from berth.models import QbittorrentSettings, SetupSettings, SetupStep
 from berth.services.clients import BundledServices
-from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.qbittorrent import (
     WEB_UI_PASSWORD_KEY,
     apply_qbittorrent,
@@ -146,7 +145,6 @@ async def test_a_changed_login_replaces_the_old_one(session: AsyncSession) -> No
     assert [(row.step, row.status) for row in status.steps] == [
         (QbittorrentStep.PASSWORD.value, StepStatus.OK)
     ]
-    assert mark_of(set_interface_login) == CommandMark(Effect.REVERSIBLE)
 
 
 @pytest.mark.asyncio

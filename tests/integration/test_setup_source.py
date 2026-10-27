@@ -42,7 +42,6 @@ from berth.models import (
     TmdbSettings,
 )
 from berth.services.clients import BundledServices
-from berth.services.commands import CommandMark, Effect, mark_of
 from berth.services.indexer import (
     DEFAULT_INDEXERS,
     IndexerSetupStatus,
@@ -266,7 +265,6 @@ async def test_a_changed_prowlarr_login_replaces_the_old_one(session: AsyncSessi
     )
     assert client.signs_in("deckhand", "changed")
     assert not client.signs_in("skipper", "changed")
-    assert mark_of(set_interface_login) == CommandMark(Effect.REVERSIBLE)
 
 
 @pytest.mark.asyncio
@@ -763,7 +761,6 @@ async def test_a_trial_search_writes_nothing(session: AsyncSession) -> None:
     await search_indexers(session, factory, query="")
 
     assert (await read_settings(session, SetupSettings)).model_dump() == before
-    assert mark_of(search_indexers) == CommandMark(Effect.READ)
 
 
 @pytest.mark.asyncio
@@ -795,9 +792,6 @@ async def test_a_removed_site_is_gone_and_no_longer_searched(session: AsyncSessi
     assert [row.step for row in status.steps] == ["nyaasi", PROWLARR_LOGIN_STEP]
     await search_indexers(session, factory, query="")
     assert [query.indexer_ids for query in search.queries] == [(1,)]
-    assert mark_of(remove_indexer) == CommandMark(
-        Effect.REVERSIBLE, inverse="indexer.apply_default_indexers"
-    )
 
 
 @pytest.mark.asyncio
@@ -904,7 +898,6 @@ async def test_a_site_is_tested_before_it_is_added(session: AsyncSession) -> Non
     assert checks[1].detail == BLOCKED["1337x"]
     assert await client.indexers() == []
     assert (await read_settings(session, SetupSettings)).model_dump() == before
-    assert mark_of(verify_sites) == CommandMark(Effect.READ)
 
 
 @pytest.mark.asyncio

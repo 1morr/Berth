@@ -59,7 +59,7 @@ from berth.parser import (
 )
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.jobs import JobSource
 from berth.services.media import read_media, read_snapshot
 from berth.services.search_queries import (
@@ -269,7 +269,7 @@ async def plan_queries(
     )
 
 
-@command(Effect.REVERSIBLE, inverse="search.remember_names")
+@command(Effect.REVERSIBLE, inverse="search.remember_names", flags={Flag.SETTINGS})
 async def remember_names(
     session: AsyncSession, changes: Mapping[NameKind, bool]
 ) -> dict[NameKind, bool]:

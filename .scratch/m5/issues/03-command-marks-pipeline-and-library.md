@@ -26,3 +26,5 @@
 - [ ] 全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27（票 02 留）：閘門現在也認 `@asynccontextmanager` 包過的公開函式。這一批模組裡的 `jobs.job_locks`、`rematch.locked` 會被掃到：只有內部用的改成私有；跨模組要用的鎖或入口標 `INTERNAL`。

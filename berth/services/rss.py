@@ -107,7 +107,7 @@ from berth.parser.exclusion import Layer, RuleError, normalize_rules, screen
 from berth.parser.planner import episode_span
 from berth.parser.release import parse_release, tags_of
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.discover import search_media
 from berth.services.downloading import DownloadRound, download_round
 from berth.services.first_batch import FirstBatchAsk
@@ -415,7 +415,7 @@ async def list_feeds(session: AsyncSession) -> tuple[FeedView, ...]:
     )
 
 
-@command(Effect.REVERSIBLE, inverse="rss.delete_feed")
+@command(Effect.REVERSIBLE, inverse="rss.delete_feed", flags={Flag.CONNECTS_OUT, Flag.SETTINGS})
 async def add_feed(
     session: AsyncSession,
     *,
@@ -471,7 +471,7 @@ def _check_interval(interval_sec: int) -> None:
         raise RssRejectedError(RssRefusal.INTERVAL_UNSUPPORTED, str(interval_sec))
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="rss.set_feed_interval", flags={Flag.SETTINGS})
 async def set_feed_interval(session: AsyncSession, feed_id: int, interval_sec: int) -> FeedView:
     """改這個 Feed 的輪詢間隔（M4 票 109）。不當場輪：下一輪照 `poll_due` 的算法，是上一輪
     （`last_polled_at`）加上新的間隔。"""
@@ -484,7 +484,7 @@ async def set_feed_interval(session: AsyncSession, feed_id: int, interval_sec: i
     return await _feed_view_of(session, feed_id)
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS, Flag.DOWNLOADS})
 async def set_feed_routes(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -667,12 +667,12 @@ async def _bind_to_feed_route(
     return bound.submitted
 
 
-@command(Effect.REVERSIBLE, inverse="rss.add_feed")
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def delete_feed(session: AsyncSession, feed_id: int) -> int:
     """刪 Feed 連它的 Item 一起刪，RSS Series 與綁定留著（shape §4）。回刪掉幾筆 Item。
 
-    可逆的根據：重新加回同一個網址會重新長出 Item，已經送過的由 `add_download` 以 info hash
-    認回同一筆 Job，不重送。
+    **不可逆**（M5 票 02，R4）：Item 上的排除理由、人放行過、第一輪選了什麼都跟著刪；加回同一個
+    網址長出的是新的 Item，feed 只帶得到最近那幾筆，已經捲出去的回不來。
     """
     row = await session.get(RssFeed, feed_id)
     if row is None:
@@ -767,7 +767,7 @@ async def preview_feed(session: AsyncSession, feed_id: int) -> tuple[ItemView, .
     return tuple(views)
 
 
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.DOWNLOADS})
 async def prime_feed(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -841,7 +841,7 @@ async def prime_feed(
 # --- 輪詢 ---------------------------------------------------------------
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL, Flag.DOWNLOADS})
 async def poll_due(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> int:
@@ -888,7 +888,7 @@ def _note_backfill(feed: RssFeed, error: str, moment: datetime) -> None:
     feed.backfill_failing_since = (feed.backfill_failing_since or moment) if error else None
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
 async def poll_feed(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -1281,7 +1281,7 @@ async def _submit_waiting(
     return sent
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
 async def release_item(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -1554,11 +1554,15 @@ async def read_exclusions(session: AsyncSession) -> ExclusionsView:
     return ExclusionsView(not_single=settings.exclude_not_single, rules=tuple(settings.exclude))
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def set_exclusions(
     session: AsyncSession, *, not_single: bool, rules: Sequence[str]
 ) -> ExclusionsView:
-    """整組覆寫全域那一層。反向是同一支帶回原本的值：收緊時擋下的那幾筆本來就還沒下載。"""
+    """整組覆寫全域那一層。
+
+    沒有單一反向命令（M5 票 02）：規則可以帶回原本的值，但 `_rescreen` 只收緊，這一次擋下的那幾筆
+    不會跟著放回來，要逐筆 `release_item`。擋下的本來就還沒下載，所以仍算可逆。另外兩層同理。
+    """
     kept = _normalized_rules(rules)
 
     def change(value: RssSettings) -> None:
@@ -1570,7 +1574,7 @@ async def set_exclusions(
     return ExclusionsView(not_single=saved.exclude_not_single, rules=tuple(saved.exclude))
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def set_feed_exclusions(
     session: AsyncSession, feed_id: int, rules: Sequence[str]
 ) -> FeedView:
@@ -1584,7 +1588,7 @@ async def set_feed_exclusions(
     return await _feed_view_of(session, feed_id)
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def set_series_exclusions(
     session: AsyncSession, series_id: int, rules: Sequence[str]
 ) -> SeriesView:
@@ -2039,7 +2043,7 @@ async def unbound_series(session: AsyncSession) -> list[int]:
     )
 
 
-@command(Effect.REVERSIBLE, inverse="rss.unbind_series")
+@command(Effect.REVERSIBLE, inverse="rss.unbind_series", flags={Flag.DOWNLOADS})
 async def bind_series(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -2401,7 +2405,7 @@ class Subscription:
     excluded: tuple[ExcludedCount, ...]
 
 
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
 async def subscribe_mikan(
     session: AsyncSession,
     factory: ServiceClientFactory,
