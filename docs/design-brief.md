@@ -299,7 +299,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 - **執行**：通過驗證、且這種任務在自動模式 → 直接套用（入庫可撤銷：硬鏈接，原檔在 complete）；影子模式只記錄 AI 會怎麼做。AI 的結果照樣走上面的程式檢查，不通過的不套用、交給人。
 - **修正回流**：人或 AI 的改正寫回結構化的地方（RSS Series 的季號與 offset、標題別名、排除條件），規則層下一次就用得到；改正過的案例進 benchmark 的候選語料，讓例外慢慢變成規則層的常態。
 - 快取鍵：`torrent hash + 解析器版本 + prompt 版本`；同一 torrent 不重複付費。
-- 每次呼叫記錄 model、tokens、費用到 Event；設定頁有月預算上限，超過即停用並提示。
+- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。~~設定頁有月預算上限，超過即停用並提示~~（2026-10-27 拿掉，§19）：不以總花費切斷 AI，改用防護——每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器；花費只做可見與提醒（§14）。
 - 引入時機：§17 的 M5（2026-09-24 排在巡檢與通知之後），在 benchmark 存在之後，才能量化 AI 帶來的增益與誤判。
 
 ---
@@ -554,11 +554,15 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 里程碑 | 內容 | 為什麼在這個位置 |
 | --- | --- | --- |
 | **M4 巡檢與通知** | 每日程式檢查 + 每週週報；`events` 的訂閱者 + channel adapter（第一個是 Discord，2026-10-21）+ 每人的訂閱設定；「可以看了」「有 N 件等你處理」 | 不需要 AI；平常不打開 Berth 的前提是有事時它會說（2026-09-24 排到 AI 之前） |
-| **M5 AI 核心** | provider、預算與記帳、命令登錄表當工具、AI 任務與背景迴圈、影子模式、AI 活動頁與撤銷。第一批任務：規則層 low 的 Plan、Unmatched 與待綁定猜作品、offset 修正、audit 確認或撤銷、程式檢查標出的可疑入庫 | M2 的命令面與 M3 的 RSS Series 是它的工具與收件匣；交給人的事走 M4 的通知 |
-| **M6 Issue 與側面板** | Issue 交給 AI（可逆的動作自動、不可逆的做成 Proposal）；側面板對話，工具同一份命令登錄表 | 核心在 M4 已經有了，這裡只多任務型別與一個介面 |
-| **M7 外部對話與 MCP** | M4 的管道接上同一個核心：同一個 bot 既推通知也收訊息，Proposal 是帶按鈕的訊息，身分用個人 API token（§16.2）；命令登錄表另外包成 MCP server | 只多兩個介面，核心與 Proposal 共用 |
+| **M5 AI 地基與對話 agent**（2026-10-27 改） | 命令登錄表與執行器、Proposal（兩者不需要 AI 也成立）；provider（Anthropic 與 OpenAI 相容，各自可設 base URL 與 key）、防護與記帳、觀測頁；每一頁都叫得出的側面板對話：工具、確認卡、外部資料（AniList、Fribb、Bangumi、網搜）、skills、上下文壓縮、斜線指令 | 有人在場的對話最適合讓核心第一次碰到真實模型；確認卡就是 Proposal 的第一個介面 |
+| **M6 人工接管開關**（2026-10-27 改） | 以決定點為單位的人 / 影子 / AI 三段開關；背景 AI 任務（規則層 low 的 Plan、Unmatched 與待綁定猜作品、offset 修正、audit 確認或撤銷、可疑入庫、Issue）；影子一致率；AI 活動頁與撤銷 | 影子模式要等核心在 M5 穩了才開始累積真實資料 |
+| **M7 Discord 與 MCP**（2026-10-27 改） | M4 的 Discord bot 接上同一個核心：同樣的對話體驗，確認卡是帶按鈕的訊息，身分用個人 API token（§16.2）；命令登錄表另外包成 MCP server | 只多兩個入口，核心與 Proposal 共用 |
 
 **Proposal 只用在不可逆的動作與 AI 沒把握的事**：命令名、參數、理由，人確認才執行。這與「AI 不動原檔」是同一條界線。
+
+**對話裡的確認卡**（2026-10-27）：不可逆的、送出 torrent、讓 Berth 連到新位址（Feed 網址、改設定）、對外發訊息、以及讀過外部內容之後帶自由文字參數的寫入，一律出確認卡；其餘可逆動作直接做並給撤銷。卡片的參數由伺服器存，按確認時用存下的那一份，不信前端回傳的；id 必須出自這段對話已存的工具結果，網址必須逐字出自使用者打的字。整個系列一次送單時先出一張總覽卡，逐列可取消勾選（§20.24）。
+
+**provider**（2026-10-27）：Anthropic Messages API 與 OpenAI 相容的 Chat Completions 都做，使用者自己設 base URL 與 key（自架閘道、OpenRouter、本機模型走後者）。網路搜尋在 Anthropic 用伺服器端 `web_search`，另可設 Tavily key（兩種 provider 都能用）。
 
 ---
 
@@ -705,9 +709,9 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | **M2 修正與對帳** | Review Queue、Unmatched 指派、rematch、Reconciler、刪除範圍、重新入庫、`berth rebuild-ledger`（§16.2 的災難復原指令）、Job 詳情頁 | 刪掉 library 後可一鍵重建；Issue 表對三種人為破壞都能偵測；medium 自動入庫可一鍵撤銷；`user` 看不到也按不到審核與刪除 |
 | **M3 RSS** | Mikan、Nyaa、acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結 | 聚合 feed 加一個搜尋 feed 全自動追完，中途訂閱的補齊舊集（§15） |
 | **M4 巡檢與通知**（2026-09-22 加、09-24 改並排到 AI 之前） | 每日程式檢查、每週週報；`events` 訂閱者、channel adapter（Discord）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」；進審核的事推出「等你處理」；週報說得出這週入庫與修正了什麼 |
-| **M5 AI 核心**（2026-09-24 改） | provider、預算、命令登錄表、AI 任務與影子模式、AI 活動與撤銷（§6.10、§14） | 影子模式一週與人一致率達標；benchmark `auto_wrong` 不升、review 比例下降；AI 不能在沒人確認下執行不可逆的命令；關掉 AI 時與 M4 相同 |
-| **M6 Issue 與側面板**（2026-09-22 加、09-24 改） | Issue 交給 AI、側面板對話、Proposal（§14） | 一件 `library_link_missing` 不經人修好；側面板說「這部作品缺的集搜一下」做得到；刪 complete 的請求停在 Proposal |
-| **M7 外部對話與 MCP**（2026-09-22 加、09-24 改） | M4 的管道接上同一個核心、Proposal 帶按鈕、個人 API token、MCP server（§14、§16.2） | 手機上收到通知、回一句話、按確認之後完成；Claude Code 經 MCP 查得到本週入庫 |
+| **M5 AI 地基與對話 agent**（2026-09-24 改、10-27 再改） | 命令登錄表與執行器、Proposal、provider、防護與記帳、側面板對話（工具、確認卡、外部資料、skills、壓縮、斜線指令）、觀測頁（§6.10、§14） | 側面板說「下載 Re:Zero 全系列」得到逐列可勾的總覽卡，按確認後送單；「為什麼這集沒入庫」答得出卡在哪；AI 不能在沒人確認下執行不可逆的命令；重啟之後舊卡片按得下去；關掉 AI 時與 M4 相同 |
+| **M6 人工接管開關**（2026-09-22 加、10-27 改） | 決定點的人 / 影子 / AI 開關、背景 AI 任務（含 Issue）、影子一致率、AI 活動與撤銷（§6.10、§14） | 影子模式一週與人一致率達標；benchmark `auto_wrong` 不升、review 比例下降；一件 `library_link_missing` 不經人修好；刪 complete 的請求停在 Proposal |
+| **M7 Discord 與 MCP**（2026-09-22 加、10-27 改） | M4 的 Discord bot 接上同一個核心、確認卡帶按鈕、個人 API token、MCP server（§14、§16.2） | 手機上收到通知、回一句話、按確認之後完成；Claude Code 經 MCP 查得到本週入庫 |
 | 之後 | anime-lists 對應、Jellyfin Webhook（§9.5，社群回報不可靠）、字型與字幕解壓、多使用者審批、非影片媒體、MCP server | — |
 
 ---
@@ -789,6 +793,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 「Issue 新增」併進「有 N 件等你處理」（2026-10-21，使用者） | 新的 Issue 本來就算進等你處理，分開推同一件事會收到兩則；那一則說出這一波新增了什麼 | plan §11.5 |
 | M4 不改號（2026-10-21，使用者） | 票 01–120 是「M4 之前先做的修補」，以 v0.2.9 結案；巡檢與通知（M4 本體）仍叫 M4、從票 121 起編，M5–M7 不動。理由：程式碼註解、舊票與已發版的 CHANGELOG 有數千處「M4 票 NN」、數百處指 AI 的「M5」，改號之後分不清 | plan §11.5、progress.md |
 | 通知用每個人自己的語言寫（2026-10-21，使用者，M4 票 123） | 收件人不在瀏覽器上，後端原本不知道誰用哪個語言；存 Discord ID 的那一刻記下當下的介面語言（`users.notify_language`），送出時照它組字。這是後端第一個自己組人話的地方（`services.notify`），句子 zh-Hant 與 en 並列。另兩個選項：全站一個語言、只用繁中；沒選：英文使用者收到中文 | plan §11.5、§20.23 |
+| M5 的方向（2026-10-27，使用者拍板；`docs/research/m5-ai-direction-2026-10-27.md`） | ① 上一輪 M5（2026-10-24 撤銷，分支 `backup/m5-attempt-1-20261024`）**設計太簡單**：很多情況沒考慮，沒有搜尋、skills、上下文壓縮；這一輪重寫，舊程式碼只稍微參考。② **架構**：內建 agent 加之後匯出的 MCP；內建的 loop 用 pydantic-ai（prototype 不過就自己寫），不用 Claude Agent SDK、不用 LiteLLM。③ **拿掉月預算上限**，改成防護加只提醒的花費可見性（§6.10）。④ **里程碑**：M5 AI 地基與對話 agent → M6 人工接管開關 → M7 Discord 與 MCP（推翻 2026-09-24 的 M5 核心 / M6 Issue 與側面板 / M7 外部對話）。⑤ 對話裡哪些動作出確認卡（§14）。⑥ 外部資料：AniList + Fribb + Bangumi；網路搜尋預設 Anthropic `web_search`，Tavily 可選。⑦ 卡住而沒有 Issue 的三種 Job（重試用完的 `submit_failed`、`import_failed`、停滯）**開 Issue**；一般使用者**可以用側面板**，但只能讀取與處理自己的送單。⑧ **provider 兩種都做**：Anthropic 與 OpenAI 相容，各自設 base URL 與 key。⑨ prototype 與 e2e 的 TMDB、模型金鑰由使用者填進 `.env`。⑩ 三個備份分支留著當參考 | §6.10、§14、§17、§20.24；plan §11.6–§11.8 在 M5 拆票時改寫 |
 | 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
 
 M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
@@ -1805,3 +1810,33 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **只私訊的邀請連結**是 `https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=0`：`bot` scope 才會讓 bot 進伺服器（共同伺服器），私訊不需要任何伺服器權限。application id 由 `GET /applications/@me` 以 bot token 取得。新建的 application `bot_public` 預設 `true`、`bot_require_code_grant` 預設 `false`。
 - **`GET /applications/@me` 回 Application Object**，Berth 只讀 `id` 與 `name`（官方文件 Application Resource〈Get Current Application〉與〈Application Object〉，https://discord.com/developers/docs/resources/application ，2026-10-21 經 context7 查 `discord/discord-api-docs`；M4 票 123）。這一份回應沒有錄：裡面有 application 擁有者的帳號（票 121 刻意不存），契約測試只用這兩格。錯的 token 在這一支同樣是 `401`。
 - **embed 的 `url` 不收沒有點的主機名**（2026-10-21，M4 票 124，`discord_dm.py embed-url`；摘要在 `.local/experiments/results/discord_dm/embed-url-summary.json`，不進版控）：官方文件的 Embed Structure 只寫 `url?` string「url of embed」（經 context7 查 `discord/discord-api-docs`），沒寫檢查規則。對九種自架網址形狀（路徑 `/media/tv:120089`）各送一則：網域、子路徑、`*.ts.net`、`nas.local`、`192.168.1.10`、`127.0.0.1`、`localhost`、`[::1]` 都 `200`，回的 embed 原樣帶著 `url`；**`http://berth:8000/…` 是 `400` / `50035`、`errors.embeds.0.url._errors[].code = "URL_TYPE_INVALID_URL"`（`Not a well formed URL.`）**，整則送不出。同一個網址寫成 description 裡的 Markdown 連結（`[打開](http://berth:8000/…)`）九種都 `200`，所以 Berth 的連結放在 description（`adapters/notify/discord._description`）。手機上 Markdown 連結是否每一種都可點沒有逐一看。
+
+### 20.24 pydantic-ai 的確認卡與 Vercel AI SDK 串流（2026-10-27 實測，M5 prototype）
+
+全文、selftest 輸出與用到的版本在 [`docs/research/m5-prototype-2026-10-27.md`](research/m5-prototype-2026-10-27.md)，腳本是 `scripts/experiments/m5_agent_chat.py`。版本：pydantic-ai-slim 2.61.0、ai 7.0.138、@ai-sdk/react 4.0.141。
+
+- **deferred tool 可以存成一列、重啟之後接著跑**：
+  - 工具丟 `ApprovalRequired` 時，run 以 `DeferredToolRequests` 結束。這需要 `output_type` 含 `DeferredToolRequests`。
+  - 歷史用 `ModelMessagesTypeAdapter` 存成 JSON。
+  - 另一個請求、甚至另一個行程，帶 `message_history` 與 `DeferredToolResults` 就能恢復。核准用 `ToolApproved(override_args=...)`，參數以伺服器存的為準。
+  - 恢復時工具裡的 `ctx.tool_call_approved` 為真，所以「丟之前跑防護、算預覽」與「核准後執行」是同一個函式。
+  - 待確認的呼叫**必須一次全部解決**，否則 `UserError`。使用者沒按就繼續說話時，pydantic-ai 會自己補一句 "interrupted"。
+  - 所以 **Proposal 的生命週期要獨立於 agent run**。卡片脫離對話之後再按，由伺服器直接執行，下一輪告訴模型結果。
+- **`VercelAIAdapter` 預設信任前端**：
+  - 前端送回的核准與工具參數都照收。偽造一則「已核准」的助理訊息，工具就會用偽造的參數執行。官方文件明說這是設計。
+  - `sdk_version` 預設 5，沒有核准串流，要傳 6 或 7（兩者 wire 相同）。
+  - Berth 的做法：歷史放伺服器，前端只送最後一則；`deferred_tool_results` 從 Proposal 表組好再傳給 `run_stream`，前端的 approval 只當觸發。
+  - `dump_messages(..., sdk_version=7)` 把沒有結果的 tool call 轉成 `approval-requested`，所以重新載入頁面後卡片照樣按得下去。
+- **壓縮**：
+  - `ProcessHistory` 改過的歷史就是 `all_messages()` 回傳的那份。
+  - 切點落在使用者訊息上，待確認的 tool call 一定留在尾巴；被切掉的 tool call 留下的孤兒 tool result 要一起拿掉，否則 Anthropic 會拒收。
+  - `AnthropicCompaction`（伺服器端，beta）與 `OpenAICompaction`（只適用 Responses API）沒有採用。
+- **觀測的缺口**：run 中途被中止（`UsageLimitExceeded`、重複呼叫、模型錯誤）時，`on_complete` 不會被呼叫，這一輪的歷史與 token 用量都拿不到。記帳要掛在每次模型呼叫之後。
+- **費用**：
+  - `ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表。
+  - Anthropic 的 `input_tokens` 已經包含快取讀與寫。
+  - `web_search` 的次數在 `usage.details['web_search_requests']`，每次 $0.01。
+- **provider**：
+  - `AnthropicProvider(base_url=...)` 不含 `/v1`（SDK 會自己接 `/v1/messages`）；`OpenAIProvider(base_url=...)` 要含 `/v1`。
+  - 伺服器端 `web_search` 只有 Anthropic 有。
+- **還沒量**（要金鑰）：情境 1、2 的品質、步數、token 與費用，以及兩種 provider 的實際差異。
