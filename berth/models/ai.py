@@ -96,6 +96,9 @@ class AiCall(Base):
     step: Mapped[int]
     #: 服務報的模型名；出錯沒有回應時是設定裡的名字。
     model: Mapped[str] = mapped_column(Text)
+    #: 打的是哪個端點（`adapters.ai.effective_base_url`，官方的也寫出來）：查價先看它（M5 票 21b）。
+    #: `NULL` 是票 21b 之前記的呼叫。
+    base_url: Mapped[str | None] = mapped_column(Text, default=None)
     input_tokens: Mapped[int] = mapped_column(default=0)
     output_tokens: Mapped[int] = mapped_column(default=0)
     cache_read_tokens: Mapped[int | None] = mapped_column(default=None)

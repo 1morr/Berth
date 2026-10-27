@@ -15,7 +15,15 @@ import time_machine
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import AiProvider, AiRunKind, AiRunRefusal, AiStopReason, AiToolOutcome, Role
+from berth.domain import (
+    AiProvider,
+    AiRunKind,
+    AiRunRefusal,
+    AiStopReason,
+    AiToolOutcome,
+    PriceTable,
+    Role,
+)
 from berth.domain.spend import SpendAlertKind
 from berth.models import AiCall, AiConversation, AiRun, AiToolCall, User
 from berth.services.usage import (
@@ -75,11 +83,13 @@ def _call(
     cost: float | None = 0.01,
     searches: int = 0,
     error: str = "",
+    base_url: str | None = None,
 ) -> AiCall:
     return AiCall(
         run_id=run.id,
         step=step,
         model="claude-sonnet-5-5",
+        base_url=base_url,
         input_tokens=input_tokens,
         output_tokens=output,
         cache_read_tokens=read,
@@ -297,23 +307,39 @@ class TestRecentRuns:
 
 
 class TestPrices:
-    async def test_models_used_are_listed_with_their_price_or_unknown(
+    async def test_each_endpoint_and_model_used_is_listed_with_its_price_or_unknown(
         self, session: AsyncSession
     ) -> None:
         user = await _user(session)
         at = _utc(NOW - timedelta(hours=1))
         run = await _run(session, user, at)
-        unknown = _call(run, at, step=2, cost=None)
-        unknown.model = "my-local-llm"
-        session.add_all([_call(run, at), unknown])
+        official = _call(run, at, base_url="https://api.anthropic.com")
+        deepseek = _call(run, at, step=2, base_url="https://api.deepseek.com/anthropic")
+        deepseek.model = "deepseek-flash"
+        local = _call(run, at, step=3, cost=None, base_url="https://llm.home.example/v1")
+        local.model = "my-local-llm"
+        # 票 21b 之前記的：不知道打哪裡，照接口種類查。
+        older = _call(run, at, step=4)
+        session.add_all([official, deepseek, local, older])
         await session.flush()
 
-        prices = {p.model: p.price for p in (await read_usage(session, now=NOW)).prices}
+        prices = {
+            (p.model, p.base_url): p.price for p in (await read_usage(session, now=NOW)).prices
+        }
 
-        assert prices["my-local-llm"] is None
-        sonnet = prices["claude-sonnet-5-5"]
+        assert prices[("my-local-llm", "https://llm.home.example/v1")] is None
+        sonnet = prices[("claude-sonnet-5-5", "https://api.anthropic.com")]
         assert sonnet is not None
-        assert sonnet.verified == date(2026, 10, 27)
+        assert (sonnet.input, sonnet.source.table, sonnet.source.vendor) == (
+            Decimal("2"),
+            PriceTable.GENAI_PRICES,
+            "Anthropic",
+        )
+        assert prices[("claude-sonnet-5-5", None)] == sonnet
+        # 現在（台北 10:00 = UTC 02:00）是 DeepSeek 的尖峰：輸入 $0.3。
+        flash = prices[("deepseek-flash", "https://api.deepseek.com/anthropic")]
+        assert flash is not None
+        assert (flash.input, flash.source.vendor) == (Decimal("0.3"), "Deepseek")
 
 
 class TestAlerts:

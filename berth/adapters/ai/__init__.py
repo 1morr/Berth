@@ -83,13 +83,17 @@ def normalize_base_url(provider: AiProvider, base_url: str) -> str:
     return url
 
 
+def effective_base_url(provider: AiProvider, base_url: str) -> str:
+    """實際打的網址：留空是那一家的官方端點。查價（`prices`）與記帳（`ai_calls.base_url`）用它。"""
+    return normalize_base_url(provider, base_url) or normalize_base_url(
+        provider, OFFICIAL_BASE_URL[provider]
+    )
+
+
 def is_official(endpoint: AiEndpoint) -> bool:
     """打的是那一家自己的端點（base URL 留空或填的就是官方那一個）。網搜的價只在這裡確定。"""
-    base_url = normalize_base_url(endpoint.provider, endpoint.base_url)
-    return base_url in (
-        "",
-        normalize_base_url(endpoint.provider, OFFICIAL_BASE_URL[endpoint.provider]),
-    )
+    official = normalize_base_url(endpoint.provider, OFFICIAL_BASE_URL[endpoint.provider])
+    return effective_base_url(endpoint.provider, endpoint.base_url) == official
 
 
 def native_web_search[D](
@@ -115,10 +119,7 @@ def native_web_search[D](
 
 def build_model(endpoint: AiEndpoint, *, http_client: httpx2.AsyncClient | None = None) -> Model:
     """照設定組出模型物件。`http_client` 給測試換 transport；正式環境用 SDK 自己的。"""
-    base_url = (
-        normalize_base_url(endpoint.provider, endpoint.base_url)
-        or (OFFICIAL_BASE_URL[endpoint.provider])
-    )
+    base_url = effective_base_url(endpoint.provider, endpoint.base_url)
     if endpoint.provider is AiProvider.ANTHROPIC:
         return AnthropicModel(
             endpoint.model,

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import replace
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +39,7 @@ from berth.adapters.http import AuthFailedError
 from berth.adapters.websearch import WebPage
 from berth.api.deps import get_client_factory
 from berth.config import Config
+from berth.domain import AiProvider
 from berth.main import create_app
 from berth.models import AiCall, AiConversation
 from berth.services.agent import load_history
@@ -57,6 +60,8 @@ from tests.integration.test_agent_api import (
 )
 
 TAVILY_KEY = "tvly-dev-agent-test-key"
+#: DeepSeek 的離峰（尖峰是 UTC 01–04、06–10）。
+OFF_PEAK = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 
 
 class Seen(Script):
@@ -95,13 +100,18 @@ def client(config: Config, tmp_path: Path, factory: FakeClientFactory) -> Iterat
 
 
 def turn_ai_on(
-    client: TestClient, provider: str, *, base_url: str = "", tavily: bool = False
+    client: TestClient,
+    provider: str,
+    *,
+    base_url: str = "",
+    tavily: bool = False,
+    model: str | None = None,
 ) -> None:
     body: dict[str, Any] = {
         "enabled": True,
         "provider": provider,
         "base_url": base_url,
-        "model": "claude-sonnet-5-5" if provider == "anthropic" else "deepseek-flash",
+        "model": model or ("claude-sonnet-5-5" if provider == "anthropic" else "deepseek-flash"),
         "api_key": KEY,
     }
     if tavily:
@@ -193,7 +203,7 @@ class TestTheBooks:
         [call_row] = turn.calls
         assert call_row.web_searches == 1
         assert call_row.web_search_cost_usd == pytest.approx(0.01)
-        tokens_only = float(cost_of(call_row.model, token_usage(call_row)) or 0)
+        tokens_only = float(priced(call_row) or 0)
         assert call_row.cost_usd == pytest.approx(tokens_only + 0.01)
         assert turn.run.web_searches == 1
         assert turn.run.cost_usd == pytest.approx(call_row.cost_usd)
@@ -201,7 +211,12 @@ class TestTheBooks:
     def test_other_endpoints_count_searches_but_leave_their_price_out(
         self, client: TestClient, script: Seen
     ) -> None:
-        turn_ai_on(client, "anthropic", base_url="https://api.deepseek.com/anthropic")
+        turn_ai_on(
+            client,
+            "anthropic",
+            base_url="https://api.deepseek.com/anthropic",
+            model="deepseek-flash",
+        )
         script.steps = [searched("Frieren season 2 reception")]
 
         chat(client, "Is Frieren season 2 any good?")
@@ -211,10 +226,44 @@ class TestTheBooks:
         assert call_row.web_searches == 1
         # 價錢不知道：這一格是 NULL，估計費用只有 token（不讓整筆變成不知道）。
         assert call_row.web_search_cost_usd is None
-        tokens_only = cost_of(call_row.model, token_usage(call_row))
+        tokens_only = priced(call_row)
         assert tokens_only is not None
         assert call_row.cost_usd == pytest.approx(float(tokens_only))
         assert turn.run.web_searches == 1
+
+    def test_a_call_is_priced_by_the_endpoint_it_went_to(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        # Anthropic 接口打 DeepSeek 的相容端點（M5 票 21b）：記下端點，照 DeepSeek 在回應時的價。
+        turn_ai_on(
+            client,
+            "anthropic",
+            base_url="https://api.deepseek.com/anthropic",
+            model="deepseek-flash",
+        )
+        script.steps = [
+            lambda _m, _i: ModelResponse(parts=[TextPart("Hello.")], timestamp=OFF_PEAK)
+        ]
+
+        chat(client, "Hi")
+
+        [turn] = recorded(client)
+        [call_row] = turn.calls
+        assert call_row.base_url == "https://api.deepseek.com/anthropic"
+        # DeepSeek 離峰：輸入 $0.15、輸出 $0.6（每百萬）。
+        expected = (call_row.input_tokens * 0.15 + call_row.output_tokens * 0.6) / 1_000_000
+        assert call_row.cost_usd == pytest.approx(expected)
+
+    def test_an_empty_base_url_records_the_official_one(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "anthropic")
+        script.steps = [say("Hello.")]
+
+        chat(client, "Hi")
+
+        [turn] = recorded(client)
+        assert [c.base_url for c in turn.calls] == ["https://api.anthropic.com"]
 
     def test_a_reply_without_searches_records_zero(self, client: TestClient, script: Seen) -> None:
         turn_ai_on(client, "anthropic")
@@ -330,9 +379,17 @@ def tool_returns(messages: list[ModelMessage]) -> list[ToolReturnPart]:
     ]
 
 
-def token_usage(row: AiCall) -> TokenUsage:
-    return TokenUsage(
+def priced(row: AiCall) -> Decimal | None:
+    """這一列的 token 照它記下的端點、在它記帳的那一刻算出來的費用（網搜另計）。"""
+    usage = TokenUsage(
         row.input_tokens, row.output_tokens, row.cache_read_tokens, row.cache_write_tokens
+    )
+    return cost_of(
+        row.model,
+        usage,
+        base_url=row.base_url,
+        provider=AiProvider.ANTHROPIC,
+        at=row.created_at,
     )
 
 

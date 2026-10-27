@@ -44,7 +44,7 @@ const TODAY = day({
   cache_write: { known: 500, counted: 2, unknown: 1 },
   output_tokens: 500,
   hit_rate: 0.8636,
-  // 一次的模型不在價目表上。
+  // 一次查不到價目。
   cost: { known: 0.0312, counted: 2, unknown: 1 },
   web_searches: 2,
   tavily_searches: 1,
@@ -99,15 +99,27 @@ const USAGE: Usage = {
   prices: [
     {
       model: 'claude-sonnet-5-5',
+      base_url: 'https://api.anthropic.com',
       price: {
         input: '2',
         output: '10',
         cache_read: '0.10',
         cache_write: '2.5',
-        verified: '2026-10-27',
+        source: { table: 'genai_prices', version: '0.1.13', vendor: 'Anthropic', verified: null },
       },
     },
-    { model: 'my-local-llm', price: null },
+    {
+      model: 'deepseek-flash',
+      base_url: null,
+      price: {
+        input: '0.3',
+        output: '1.2',
+        cache_read: '0.006',
+        cache_write: '0.3',
+        source: { table: 'berth', version: '', vendor: '', verified: '2026-10-28' },
+      },
+    },
+    { model: 'my-local-llm', base_url: 'https://llm.home.example/v1', price: null },
   ],
   daily_alert_usd: null,
   spend: { alerts: [], unknown_today: 0, unknown_before: 0 },
@@ -164,14 +176,25 @@ describe('設定 → 用量', () => {
     expect(within(runs).getByRole('link')).toHaveAttribute('href', '/agent/runs/run-1')
   })
 
-  it('費用怎麼算：價目附查證日期，不在表上的寫未知，網搜與 Tavily 另外說', async () => {
+  it('費用怎麼算：每組端點與模型附價目來源，查不到的寫未知，網搜與 Tavily 另外說', async () => {
     render()
     renderApp('/settings/usage')
 
     expect(
-      await screen.findByText(/claude-sonnet-5-5：輸入 \$2、.*查證於 2026-10-27。/),
+      await screen.findByText(
+        /^api\.anthropic\.com · claude-sonnet-5-5：輸入 \$2、.*價目來源：genai-prices 0\.1\.13（Anthropic）。$/,
+      ),
     ).toBeVisible()
-    expect(screen.getByText('my-local-llm：不在價目表上，費用未知。')).toBeVisible()
+    expect(
+      screen.getByText(
+        /^deepseek-flash（舊紀錄，沒記端點）：.*價目來源：Berth 補位表（2026-10-28 查證）。$/,
+      ),
+    ).toBeVisible()
+    expect(
+      screen.getByText('llm.home.example/v1 · my-local-llm：這個端點查不到價目，費用未知。'),
+    ).toBeVisible()
+    expect(screen.getByText(/先照端點的網址認出服務商/)).toBeVisible()
+    expect(screen.getByText(/上面列的是現在這個時段的價/)).toBeVisible()
     expect(screen.getByText(/每次 \$0\.01，已算進估計費用/)).toBeVisible()
     expect(screen.getByText(/Tavily 花的是你 Tavily 帳號的 credit/)).toBeVisible()
   })
@@ -207,7 +230,7 @@ describe('設定 → 用量', () => {
 
     expect(
       await screen.findByText(
-        '有 4 次呼叫的費用未知（今天 1 次、前 14 天 3 次），提醒沒算進它們：那幾次的模型不在價目表上。',
+        '有 4 次呼叫的費用未知（今天 1 次、前 14 天 3 次），提醒沒算進它們：那幾次查不到價目。',
       ),
     ).toBeVisible()
     expect(screen.getByText('費用未知')).toBeVisible()
