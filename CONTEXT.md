@@ -336,6 +336,10 @@ _Avoid_: diagnostics, status check
 Job 時間線上的一筆事件：型別、時間、actor、payload。
 _Avoid_: log, activity, history
 
+**Why Not**（為什麼沒入庫；程式碼 `WhyNot`）:
+一部作品或其中一集為什麼還沒在媒體庫裡的**結論分類**，十種：入庫失敗、沒下載成、等審核、待綁定、被排除、沒有來源、還在下載、Jellyfin 還沒掃到、還沒播、已入庫（宣告順序就是優先序，整部作品說最前面那一種）。規則只在 `domain/why_not.py` 一份；`GET /media/{id}/why-not`（`services/why_not.explain`，M5 票 10）把季表、Job 與事件、Issue、RSS 那一側收在一份回答裡，agent 與畫面都讀它。
+_Avoid_: diagnosis, status（status 是季表那一格）, reason（reason 是拒絕理由與 Review Reason）
+
 ### RSS
 
 **Feed**:
