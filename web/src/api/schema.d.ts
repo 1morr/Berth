@@ -390,7 +390,8 @@ export interface paths {
         put?: never;
         /**
          * Post Resolve
-         * @description 按下那一顆（brief §9.1 的「預設建議動作」那一欄）。
+         * @description 按下那一顆（brief §9.1 的「預設建議動作」那一欄）。一顆一個命令，照 `action` 查
+         *     `services/issues.BUTTONS` 分派（M5 票 04）。
          *
          *     **做得到才記成 resolved**：重新鏈接失敗時那一筆仍然是 `open`，清單上還看得到它——
          *     畫面說修好了而媒體庫沒變，是這一票最糟的結果。
