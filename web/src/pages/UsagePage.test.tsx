@@ -105,7 +105,7 @@ const USAGE: Usage = {
         output: '10',
         cache_read: '0.10',
         cache_write: '2.5',
-        source: { table: 'genai_prices', version: '0.1.13', provider: 'Anthropic', verified: null },
+        source: { table: 'genai_prices', version: '0.1.13', vendor: 'Anthropic', verified: null },
       },
     },
     {
@@ -116,7 +116,7 @@ const USAGE: Usage = {
         output: '1.2',
         cache_read: '0.006',
         cache_write: '0.3',
-        source: { table: 'berth', version: '', provider: '', verified: '2026-10-28' },
+        source: { table: 'berth', version: '', vendor: '', verified: '2026-10-28' },
       },
     },
     { model: 'my-local-llm', base_url: 'https://llm.home.example/v1', price: null },

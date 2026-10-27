@@ -1841,7 +1841,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **費用**：
   - ~~`ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表~~（M5 票 21b 改寫成下面這幾條）。
   - **價目用 genai-prices**（[pydantic/genai-prices](https://github.com/pydantic/genai-prices)，pydantic-ai-slim 2.62.0 的相依，要求 `>=0.1.13`；2026-10-28 讀 0.1.13 原始碼與實測，M5 票 21b）：
-    - `calc_price(usage, model_ref, provider_id=..., provider_api_url=...)` 先用 `provider_api_url` 對每家的 `api_pattern`（regex）認服務商、再找模型；認不得網址或模型是 `LookupError`。`https://api.deepseek.com/anthropic` + `deepseek-flash` 認成 `deepseek`（100 萬 input + 100 萬 output 在離峰是 $0.75）；同一組改傳 `provider_id=anthropic` 查不到，所以**接口種類不能當服務商**，只在網址認不得時退一步用。pydantic-ai 的查價順序也是這樣（`_genai_prices.iter_provider_references`：網址 → provider 名）。
+    - `calc_price(usage, model_ref, provider_id=..., provider_api_url=...)` 先用 `provider_api_url` 對每家的 `api_pattern`（regex）認服務商、再找模型；認不得網址或模型是 `LookupError`。`https://api.deepseek.com/anthropic` + `deepseek-flash` 認成 `deepseek`（100 萬 input + 100 萬 output 在離峰是 $0.75）；同一組改傳 `provider_id=anthropic` 查不到，所以**接口種類不能當服務商**，只在網址認不得時退一步用。pydantic-ai 的查價順序也是網址 → provider 名（`_genai_prices.iter_provider_references`），但它遇到任何 `LookupError` 都退回，連「網址認得、那一家沒有這個模型」也是；Berth 在這種情況當查不到（M5 票 21b 的 code-review）。
     - 價錢帶時間：DeepSeek 的尖峰（UTC 01–04、06–10）是離峰的兩倍，`genai_request_timestamp` 決定套哪一段（週末全天離峰它還表達不了，那時的價是上限）；Anthropic 的長 context 與 OpenAI 的 gpt-5.5 有分級價（`+tiers`）。
     - `usage.input_tokens` 含快取讀寫；快取比 input 還多是 `ValueError`。沒有快取寫價的服務（DeepSeek）快取寫照輸入價算。
     - **自動更新是 opt-in**：只有 `UpdatePrices().start()`（或 pydantic-ai 的 `prices.update_in_background()`）會每小時從 GitHub 抓 `data.json`，抓到的換掉全域 snapshot（`data_snapshot.get_snapshot()`）；不開就不連網。Berth 自己用套件內附的資料建一份 `DataSnapshot(providers=genai_prices.data.providers, from_auto_update=False)`，別人開了自動更新也不受影響。

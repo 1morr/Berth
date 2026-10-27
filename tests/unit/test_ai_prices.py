@@ -17,12 +17,14 @@ from pydantic_ai.messages import ModelResponse, NativeToolCallPart, TextPart
 from pydantic_ai.usage import RequestUsage
 
 from berth.adapters.ai import AiEndpoint, is_official
+from berth.adapters.ai import prices as prices_module
 from berth.adapters.ai.prices import (
     FALLBACK,
     FallbackPrice,
     ModelPrice,
     PriceSource,
     cost_of,
+    known_models,
     price_of,
     web_search_cost,
 )
@@ -41,7 +43,7 @@ GATEWAY = "https://llm.home.example/v1"
 MILLION = 1_000_000
 
 
-def _price(model: str, base_url: str | None, provider: AiProvider | None) -> ModelPrice | None:
+def _price(model: str, base_url: str | None, provider: AiProvider) -> ModelPrice | None:
     return price_of(model, base_url=base_url, provider=provider, at=OFF_PEAK)
 
 
@@ -49,7 +51,7 @@ def _cost(
     model: str,
     usage: TokenUsage,
     base_url: str | None = ANTHROPIC,
-    provider: AiProvider | None = AiProvider.ANTHROPIC,
+    provider: AiProvider = AiProvider.ANTHROPIC,
     at: datetime = OFF_PEAK,
 ) -> Decimal | None:
     return cost_of(model, usage, base_url=base_url, provider=provider, at=at)
@@ -79,7 +81,7 @@ class TestLookup:
             Decimal("2.5"),
         )
         assert price.source == PriceSource(
-            PriceTable.GENAI_PRICES, version="0.1.13", provider="Anthropic"
+            PriceTable.GENAI_PRICES, version="0.1.13", vendor="Anthropic"
         )
 
     def test_an_official_openai_model_is_priced(self) -> None:
@@ -101,6 +103,10 @@ class TestLookup:
         # 自架閘道上叫 `claude-sonnet-5-5` 的模型照 Anthropic 的價（pydantic-ai 的查價順序）。
         on_gateway = _price("claude-sonnet-5-5", GATEWAY, AiProvider.ANTHROPIC)
         assert on_gateway == _price("claude-sonnet-5-5", ANTHROPIC, AiProvider.ANTHROPIC)
+
+    def test_a_known_url_decides_even_when_its_provider_lacks_the_model(self) -> None:
+        # DeepSeek 的相容端點也收 `claude-*` 的名字，但收的是 DeepSeek 的錢：不套 Anthropic 的價。
+        assert _price("claude-sonnet-5-5", DEEPSEEK_ANTHROPIC, AiProvider.ANTHROPIC) is None
 
     def test_the_interface_kind_alone_is_not_enough_for_another_vendor(self) -> None:
         # 不認得的網址、接口是 OpenAI：別家的模型名不照名字猜成那一家的價。
@@ -149,6 +155,9 @@ class TestNoNetwork:
         monkeypatch.setattr(socket.socket, "connect", refuse)
         monkeypatch.setattr(socket.socket, "connect_ex", refuse)
         monkeypatch.setattr(socket, "getaddrinfo", refuse)
+        # 第一次查價才載入價目：清掉快取，連載入那一次也算進來。
+        prices_module._snapshot.cache_clear()
+        assert "deepseek-flash" in known_models(DEEPSEEK_ANTHROPIC, AiProvider.ANTHROPIC)
         usage = TokenUsage(input=MILLION, output=MILLION, cache_read=0, cache_write=0)
         assert _cost("deepseek-flash", usage, DEEPSEEK_ANTHROPIC) == Decimal("0.75")
         assert _price("gpt-5.5", OPENAI, AiProvider.OPENAI) is not None

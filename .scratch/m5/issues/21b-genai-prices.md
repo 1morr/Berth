@@ -1,6 +1,6 @@
 # 21b — 費用估算改用 genai-prices（依網址與模型名查價）
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 21
 
@@ -28,10 +28,18 @@
 
 ## 驗收
 
-- [ ] DeepSeek 的 Anthropic 相容端點 + `deepseek-flash` 算得出費用，與 genai-prices 的結果一致（測試，不打網路）
-- [ ] Anthropic 官方、OpenAI 官方各一個模型算得出費用；genai-prices 與補位表都不認得的模型是 `None`，畫面「未知」（測試）
-- [ ] 查價過程不發網路請求（測試）
-- [ ] 用量頁與 AI 設定頁的價目來源說明正確（vitest；playwright 實跑附截圖）
-- [ ] 全部檢查、pytest、vitest 綠；`pnpm -C web gen:api` 無 diff；plan、brief、CHANGELOG、progress.md 已更新
+- [x] DeepSeek 的 Anthropic 相容端點 + `deepseek-flash` 算得出費用，與 genai-prices 的結果一致（測試，不打網路）
+- [x] Anthropic 官方、OpenAI 官方各一個模型算得出費用；genai-prices 與補位表都不認得的模型是 `None`，畫面「未知」（測試）
+- [x] 查價過程不發網路請求（測試）
+- [x] 用量頁與 AI 設定頁的價目來源說明正確（vitest；playwright 實跑附截圖）
+- [x] 全部檢查、pytest、vitest 綠；`pnpm -C web gen:api` 無 diff；plan、brief、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-28 實作（session 紀錄在 progress.md）。使用者選了 `ai_calls` 加 `base_url` 一欄（migration `a9c3e5f1b742`），用量頁依「端點 + 模型」列價。
+- code-review 已修：網址認得而那一家沒有這個模型時不退回接口種類（DeepSeek 端點上的 `claude-*` 原本會套 Anthropic 的價）；候選順序只寫一份（`_genai_provider`）；`PriceSource.provider` 改名 `vendor`（`CONTEXT.md` 的 provider 專指 metadata provider）；`provider` 參數拿掉沒人用的 `| None`；用量頁同一組端點與模型的去重改成確定的；不連網測試清掉快取（連第一次載入也算）並涵蓋 `known_models`。
+- code-review 未處理（判斷題，留著）：
+  - `PriceSource` 不適用的欄位有的是空字串（`version`、`vendor`）、有的是 `None`（`verified`），前端要 `?? ''`。要整齊可以改成依 `table` 分的兩種型別。
+  - `ModelPrice` 與 `FallbackPrice` 重複四個價欄位；`(base_url, provider)` 在 `call_row`、`services/ai`、`services/usage` 三處各自先算 `effective_base_url` 再傳。
+  - 設定頁從 `web/src/usage/prices.ts` 拿價目來源的說法、用的是 `usage.prices.source.*` 的 i18n key；之後若有第三處用，搬到共用的地方。
+  - 票 21b 之前的舊列（`base_url` 是 `NULL`）照接口種類查現在的價，可能與它當時記下的已知費用不一致（progress.md 偏差已記）。

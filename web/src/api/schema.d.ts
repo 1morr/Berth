@@ -5408,8 +5408,8 @@ export interface components {
             table: components["schemas"]["PriceTable"];
             /** Version */
             version: string;
-            /** Provider */
-            provider: string;
+            /** Vendor */
+            vendor: string;
             /** Verified */
             verified: string | null;
         };

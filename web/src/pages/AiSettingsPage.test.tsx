@@ -20,7 +20,7 @@ const SONNET_PRICE = {
   output: '10',
   cache_read: '0.10',
   cache_write: '2.5',
-  source: { table: 'genai_prices', version: '0.1.13', provider: 'Anthropic', verified: null },
+  source: { table: 'genai_prices', version: '0.1.13', vendor: 'Anthropic', verified: null },
 } as const
 
 const SUGGESTED = ['claude-haiku-5-5', 'claude-sonnet-5-5']
@@ -147,7 +147,7 @@ describe('設定 → AI', () => {
           ...IN_USE.anthropic,
           price: {
             ...SONNET_PRICE,
-            source: { table: 'berth', version: '', provider: '', verified: '2026-10-28' },
+            source: { table: 'berth', version: '', vendor: '', verified: '2026-10-28' },
           },
         },
       },

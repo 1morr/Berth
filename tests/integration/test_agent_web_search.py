@@ -210,7 +210,12 @@ class TestTheBooks:
     def test_other_endpoints_count_searches_but_leave_their_price_out(
         self, client: TestClient, script: Seen
     ) -> None:
-        turn_ai_on(client, "anthropic", base_url="https://api.deepseek.com/anthropic")
+        turn_ai_on(
+            client,
+            "anthropic",
+            base_url="https://api.deepseek.com/anthropic",
+            model="deepseek-flash",
+        )
         script.steps = [searched("Frieren season 2 reception")]
 
         chat(client, "Is Frieren season 2 any good?")

@@ -2,8 +2,9 @@
 
 **先問 genai-prices**（Pydantic 維護、pydantic-ai 的相依）：照 pydantic-ai 的
 `iter_provider_references` 由具體到一般，先用 base URL 認服務商（Anthropic 接口打 DeepSeek 的
-相容端點就照 DeepSeek 的價），網址認不得再用接口種類（`anthropic` / `openai`）。接口種類不能
-單獨當服務商：DeepSeek 的相容端點用 `anthropic` 查不到 `deepseek-flash`。都查不到再看 Berth 的
+相容端點就照 DeepSeek 的價），網址認不得再用接口種類（`anthropic` / `openai`）；網址認得而那一家
+沒有這個模型就是查不到。接口種類不能單獨當服務商：DeepSeek 的相容端點用 `anthropic` 查不到
+`deepseek-flash`。都查不到再看 Berth 的
 補位表（`FALLBACK`），再查不到是 `None`：費用記 NULL、畫面寫「未知」，不當 0（當 0 會讓用量頁
 看起來免費）。
 
@@ -23,6 +24,7 @@ from functools import cache
 import genai_prices
 from genai_prices import Usage
 from genai_prices.data_snapshot import DataSnapshot
+from genai_prices.types import Provider
 
 from berth.adapters.ai.usage import TokenUsage
 from berth.domain import AiProvider, PriceTable
@@ -38,7 +40,8 @@ class PriceSource:
 
     table: PriceTable
     version: str = ""
-    provider: str = ""
+    #: genai-prices 認出的服務商（`Deepseek`）；不叫 provider，那個詞是接口種類（`AiProvider`）。
+    vendor: str = ""
     verified: date | None = None
 
 
@@ -84,29 +87,36 @@ def _snapshot() -> DataSnapshot:
     return DataSnapshot(providers=providers, from_auto_update=False)
 
 
-@dataclass(frozen=True, slots=True)
-class _Reference:
-    """genai-prices 查得到這個模型的那一組 `(provider_id, provider_api_url)`。"""
+def _genai_provider(base_url: str | None, provider: AiProvider) -> Provider | None:
+    """genai-prices 裡這個端點是哪一家。
 
-    provider_id: str | None
-    api_url: str | None
-    name: str
-
-
-def _genai_reference(
-    model: str, base_url: str | None, provider: AiProvider | None
-) -> _Reference | None:
-    # 順序同 pydantic-ai 的 `iter_provider_references`（網址比名字精確）；它是私有模組，不直接用。
-    candidates = ((None, base_url or None), (provider.value if provider else None, None))
-    for provider_id, api_url in candidates:
-        if provider_id is None and api_url is None:
-            continue
+    網址比名字精確，先看網址（同 pydantic-ai 的 `iter_provider_references`）；**網址認得就是
+    那一家**，那一家沒有這個模型也不退回接口種類——DeepSeek 的相容端點也收 `claude-*` 的名字，
+    收的是 DeepSeek 的錢（這一點與 pydantic-ai 不同：它遇到 `LookupError` 一律退回）。網址認不得
+    （自架閘道）或不知道（票 21b 之前記的呼叫）才照接口種類。
+    """
+    snapshot = _snapshot()
+    if base_url:
         try:
-            found, _ = _snapshot().find_provider_model(model, None, provider_id, api_url)
+            return snapshot.find_provider(None, None, base_url)
         except LookupError:
-            continue
-        return _Reference(provider_id, api_url, found.name)
-    return None
+            pass
+    try:
+        return snapshot.find_provider(None, provider.value, None)
+    except LookupError:
+        return None
+
+
+def _genai_vendor(model: str, base_url: str | None, provider: AiProvider) -> Provider | None:
+    """有這個模型的那一家；查不到是 `None`。"""
+    vendor = _genai_provider(base_url, provider)
+    if vendor is None:
+        return None
+    try:
+        _snapshot().find_provider_model(model, vendor, None, None)
+    except LookupError:
+        return None
+    return vendor
 
 
 def _fallback(model: str) -> FallbackPrice | None:
@@ -114,9 +124,8 @@ def _fallback(model: str) -> FallbackPrice | None:
     return FALLBACK[max(matches, key=len)] if matches else None
 
 
-def _total(reference: _Reference, model: str, usage: Usage, at: datetime) -> Decimal:
-    calculation = _snapshot().calc(usage, model, reference.provider_id, reference.api_url, at)
-    return calculation.total_price
+def _total(vendor: Provider, model: str, usage: Usage, at: datetime) -> Decimal:
+    return _snapshot().calc(usage, model, vendor.id, None, at).total_price
 
 
 def _plain(value: Decimal) -> Decimal:
@@ -128,7 +137,7 @@ def price_of(
     model: str,
     *,
     base_url: str | None,
-    provider: AiProvider | None,
+    provider: AiProvider,
     at: datetime | None = None,
 ) -> ModelPrice | None:
     """這個端點上這個模型在 `at`（預設現在）的價目；查不到是 `None`。
@@ -138,8 +147,8 @@ def price_of(
     name = model.strip()
     if not name:
         return None
-    reference = _genai_reference(name, base_url, provider)
-    if reference is None:
+    vendor = _genai_vendor(name, base_url, provider)
+    if vendor is None:
         row = _fallback(name)
         if row is None:
             return None
@@ -150,7 +159,7 @@ def price_of(
     per_unit = _MILLION / _UNIT
 
     def rate(**usage: int) -> Decimal:
-        return _plain(_total(reference, name, Usage(**usage), when) * per_unit)
+        return _plain(_total(vendor, name, Usage(**usage), when) * per_unit)
 
     return ModelPrice(
         input=rate(input_tokens=_UNIT),
@@ -158,7 +167,7 @@ def price_of(
         cache_read=rate(input_tokens=_UNIT, cache_read_tokens=_UNIT),
         cache_write=rate(input_tokens=_UNIT, cache_write_tokens=_UNIT),
         source=PriceSource(
-            PriceTable.GENAI_PRICES, version=genai_prices.__version__, provider=reference.name
+            PriceTable.GENAI_PRICES, version=genai_prices.__version__, vendor=vendor.name
         ),
     )
 
@@ -168,7 +177,7 @@ def cost_of(
     usage: TokenUsage,
     *,
     base_url: str | None,
-    provider: AiProvider | None,
+    provider: AiProvider,
     at: datetime | None = None,
 ) -> Decimal | None:
     """一次呼叫的估計費用（美元）；查不到價是 `None`。
@@ -180,8 +189,8 @@ def cost_of(
     if not name:
         return None
     read, write = usage.cache_read or 0, usage.cache_write or 0
-    reference = _genai_reference(name, base_url, provider)
-    if reference is not None:
+    vendor = _genai_vendor(name, base_url, provider)
+    if vendor is not None:
         # 快取比 input 還多時 genai-prices 丟 `ValueError`；當作沒有沒命中的 input。
         tokens = Usage(
             input_tokens=max(usage.input, read + write),
@@ -189,7 +198,7 @@ def cost_of(
             cache_read_tokens=read,
             cache_write_tokens=write,
         )
-        return _total(reference, name, tokens, at or datetime.now(UTC))
+        return _total(vendor, name, tokens, at or datetime.now(UTC))
 
     row = _fallback(name)
     if row is None:
@@ -205,19 +214,12 @@ def cost_of(
 
 
 def known_models(base_url: str | None, provider: AiProvider) -> tuple[str, ...]:
-    """這個端點查得到價的模型名（genai-prices 認出的服務商的模型，加補位表），給模型欄當建議。"""
+    """這個端點查得到價的模型名（genai-prices 認出的那一家的模型，加補位表），給模型欄當建議。"""
     names = set(FALLBACK)
-    candidates = ((None, base_url or None), (provider.value, None))
-    for provider_id, api_url in candidates:
-        if provider_id is None and api_url is None:
-            continue
-        try:
-            found = _snapshot().find_provider(None, provider_id, api_url)
-        except LookupError:
-            continue
+    vendor = _genai_provider(base_url, provider)
+    if vendor is not None:
         # `ft:` 開頭的是微調模型的前綴，不是打得出來的模型名。
-        names.update(m.id for m in found.models if not m.deprecated and ":" not in m.id)
-        break
+        names.update(m.id for m in vendor.models if not m.deprecated and ":" not in m.id)
     return tuple(sorted(names))
 
 

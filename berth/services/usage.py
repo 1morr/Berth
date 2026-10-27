@@ -260,9 +260,12 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         .join(AiRun, AiRun.id == AiCall.run_id)
         .where(AiCall.created_at >= start)
         .distinct()
+        .order_by(AiRun.provider)
     )
-    # 同一組端點與模型由兩種接口打過（少見）：照先查到的那一種列一次。
-    endpoints = {(model, url): provider for model, url, provider in used}
+    # 同一組端點與模型由兩種接口打過（少見）：列一次，照接口種類排序在前的那一種查。
+    endpoints: dict[tuple[str, str | None], AiProvider] = {}
+    for model, url, provider in used:
+        endpoints.setdefault((model, url), provider)
     at = now or datetime.now(UTC)
     return UsageView(
         today=today,

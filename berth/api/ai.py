@@ -53,7 +53,7 @@ class PriceSourceOut(BaseModel):
     #: genai-prices 的版本；補位表是空字串。
     version: str
     #: genai-prices 認出的服務商（`Deepseek`）；補位表是空字串。
-    provider: str
+    vendor: str
     #: 補位表那一列的查證日期；genai-prices 是 `null`。
     verified: date | None
 

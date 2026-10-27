@@ -330,7 +330,7 @@ class TestPrices:
         assert prices[("my-local-llm", "https://llm.home.example/v1")] is None
         sonnet = prices[("claude-sonnet-5-5", "https://api.anthropic.com")]
         assert sonnet is not None
-        assert (sonnet.input, sonnet.source.table, sonnet.source.provider) == (
+        assert (sonnet.input, sonnet.source.table, sonnet.source.vendor) == (
             Decimal("2"),
             PriceTable.GENAI_PRICES,
             "Anthropic",
@@ -339,7 +339,7 @@ class TestPrices:
         # 現在（台北 10:00 = UTC 02:00）是 DeepSeek 的尖峰：輸入 $0.3。
         flash = prices[("deepseek-flash", "https://api.deepseek.com/anthropic")]
         assert flash is not None
-        assert (flash.input, flash.source.provider) == (Decimal("0.3"), "Deepseek")
+        assert (flash.input, flash.source.vendor) == (Decimal("0.3"), "Deepseek")
 
 
 class TestAlerts:

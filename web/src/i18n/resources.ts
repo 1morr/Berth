@@ -4120,7 +4120,7 @@ const zhHant = {
       at: '{{endpoint}} · {{model}}',
       noEndpoint: '{{model}}（舊紀錄，沒記端點）',
       source: {
-        genaiPrices: '價目來源：genai-prices {{version}}（{{provider}}）',
+        genaiPrices: '價目來源：genai-prices {{version}}（{{vendor}}）',
         berth: '價目來源：Berth 補位表（{{date}} 查證）',
       },
       lookup:
@@ -8241,7 +8241,7 @@ const en: Translations<typeof zhHant> = {
       at: '{{endpoint}} · {{model}}',
       noEndpoint: '{{model}} (older record, endpoint not kept)',
       source: {
-        genaiPrices: 'Price source: genai-prices {{version}} ({{provider}})',
+        genaiPrices: 'Price source: genai-prices {{version}} ({{vendor}})',
         berth: 'Price source: Berth’s own table (checked {{date}})',
       },
       lookup:

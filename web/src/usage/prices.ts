@@ -7,7 +7,7 @@ type PriceSource = NonNullable<AiEndpoint['price']>['source']
 /** 價目從哪來（M5 票 21b）：genai-prices 的版本與它認出的服務商，或 Berth 補位表的查證日期。 */
 export function priceSourceText(t: TFunction, source: PriceSource): string {
   return source.table === 'genai_prices'
-    ? t('usage.prices.source.genaiPrices', { version: source.version, provider: source.provider })
+    ? t('usage.prices.source.genaiPrices', { version: source.version, vendor: source.vendor })
     : t('usage.prices.source.berth', { date: source.verified ?? '' })
 }
 

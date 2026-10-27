@@ -146,7 +146,7 @@ class TestSaving:
         assert price["source"] == {
             "table": "genai_prices",
             "version": "0.1.13",
-            "provider": "Anthropic",
+            "vendor": "Anthropic",
             "verified": None,
         }
         unknown = save(client, provider="openai", model="some-local-model").json()
@@ -156,7 +156,7 @@ class TestSaving:
         # Anthropic 接口打 DeepSeek 的相容端點：照 DeepSeek 的價（M5 票 21b）。
         got = save(client, base_url="https://api.deepseek.com/anthropic", model="deepseek-flash")
         price = got.json()["anthropic"]["price"]
-        assert price["source"]["provider"] == "Deepseek"
+        assert price["source"]["vendor"] == "Deepseek"
 
     def test_the_models_with_a_price_are_offered_as_suggestions(self, client: TestClient) -> None:
         save(client, provider="openai", base_url="https://api.deepseek.com", model="deepseek-flash")
