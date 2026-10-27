@@ -29,8 +29,12 @@ def database_url(config: Config) -> URL:
 
 
 def create_engine(config: Config) -> AsyncEngine:
+    """`hide_parameters`：SQL 例外與 echo 的訊息不帶參數——`settings` 那一列的參數就是整份憑證
+    （M5 票 09、R13）。"""
     path = str(config.database_path)
-    return create_async_engine(database_url(config), async_creator=lambda: _connect(path))
+    return create_async_engine(
+        database_url(config), async_creator=lambda: _connect(path), hide_parameters=True
+    )
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

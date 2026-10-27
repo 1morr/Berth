@@ -2948,6 +2948,7 @@ const zhHant = {
     tabs: {
       label: '設定',
       notify: '通知',
+      ai: 'AI',
     },
     // 每一個分頁底部那一行：跑的是哪一版（票 106）。
     version: 'Berth {{version}}',
@@ -3026,6 +3027,110 @@ const zhHant = {
       lede: '換一把 TMDB API key。新的那一把測得過才換掉舊的；測不過的話舊的照舊在用，探索與入庫不受影響。',
       kept: '這一把測不過，沒有換掉——探索與入庫照舊用原本那一把。',
       failed: '測試沒有走完。',
+    },
+    // 設定 → AI（M5 票 09，`.scratch/m5/ai-settings-shape.md`）。不是泊位。
+    aiPage: {
+      title: 'AI 設定',
+      lede: 'Berth 用你自己的模型服務 key。開關關著就沒有 AI，其餘功能照常。',
+      readFailed: '讀不到 AI 設定。',
+      service: {
+        title: '模型服務',
+        lede: '兩種接口各自記著網址、key 與模型；切換接口不會丟掉另一邊填好的。儲存時把選中的那一種設成現在用的。',
+      },
+      enabled: {
+        label: '開啟 AI',
+        hint: '關著就沒有 AI，其餘功能與現在相同。',
+      },
+      provider: {
+        label: '接口',
+        anthropic: 'Anthropic Messages',
+        openai: 'OpenAI 相容',
+        inUse: '現在用的是 {{name}}。',
+        hint: {
+          anthropic: 'Anthropic 官方，或相容的閘道（例如 DeepSeek 的 /anthropic）。',
+          openai: 'OpenAI 官方、OpenRouter、自架閘道、本機模型：走 Chat Completions 的都是這一種。',
+        },
+      },
+      baseUrl: {
+        label: 'Base URL',
+        hint: {
+          anthropic: '空著是官方端點。不含 /v1，SDK 會自己接；貼了也會拿掉。',
+          openai: '空著是 OpenAI 官方。照那家服務文件寫的網址填（OpenAI 官方含 /v1）。',
+        },
+      },
+      key: {
+        label: 'API key',
+        placeholder: '貼上 key',
+        placeholderSet: '已設定，貼上新的就換掉',
+        hint: 'key 存在 Berth 的資料庫，不會再顯示出來。',
+        remove: '移除 key',
+        removeConfirm: '移除',
+        removing: '移除中…',
+        removeWarning: '這把 key 會從 Berth 刪掉，之後要用得重新貼上。',
+        removeWarningInUse: '這把 key 會從 Berth 刪掉。這是現在用的接口，AI 會一併關掉。',
+        removed: '已移除 key。',
+      },
+      model: {
+        label: '模型',
+        hint: '服務那邊的模型名稱。清單是 Berth 有價目的模型，不在清單上的照樣可以填。',
+      },
+      price: {
+        label: '價目',
+        known:
+          '每百萬 token：輸入 ${{input}} · 輸出 ${{output}} · 快取讀 ${{cacheRead}} · 快取寫 ${{cacheWrite}}',
+        verified: '{{date}} 查證',
+        unknown: '價目未知：用量頁的費用會寫「未知」，不當 0。',
+        unsaved: '存了之後顯示這個模型的價目。',
+        none: '還沒填模型。',
+      },
+      test: {
+        button: '測試連線',
+        testing: '測試中…',
+        hint: '測的是表單上現在的值，不必先存；key 欄空著就用存著的那一把。',
+        ok: '連上了',
+        answeredBy: '回話的模型：',
+        didNotRun: '測試沒有走完。',
+        failure: {
+          key_rejected: {
+            what: '服務不接受這把 key。',
+            fix: '換一把，或確認這把 key 是給這個網址用的。',
+          },
+          not_found: {
+            what: '服務找不到這個模型或網址。',
+            fix: '檢查模型名稱與 Base URL；Anthropic 的網址不含 /v1。',
+          },
+          service_error: {
+            what: '服務回了錯誤。',
+            fix: '看下面的原文：限流或額度用完時等一下再試。',
+          },
+          unreachable: {
+            what: '連不上這個網址。',
+            fix: '檢查網址拼對了沒有，以及 Berth 這台機器連不連得出去。',
+          },
+          bad_response: {
+            what: '回來的不是模型 API 的回應。',
+            fix: 'Base URL 可能指到一個網頁：照那家服務的文件再填一次。',
+          },
+        },
+      },
+      search: {
+        title: '網路搜尋（選填）',
+        lede: '設了 Tavily key，兩種接口的對話都多一個網路搜尋工具。走 Anthropic 時另有它自己的伺服器端搜尋，可以不設。',
+        label: 'Tavily API key',
+        remove: '移除 Tavily key',
+        removeWarning: '這把 key 會從 Berth 刪掉，網路搜尋工具跟著不見。',
+      },
+      refusal: {
+        base_url_invalid: '這不是 http(s) 的完整網址。',
+        key_missing: '這個接口還沒有 key：貼上一把。',
+        model_missing: '還沒填模型名稱。',
+      },
+      save: {
+        button: '儲存',
+        saving: '儲存中…',
+        saved: '已儲存。',
+        failed: '沒有存成功。',
+      },
     },
     // 設定 → 通知（M4 票 123）。不是泊位：沒有泊位號、不在泊位板上。
     notifyPage: {
@@ -6609,6 +6714,7 @@ const en: Translations<typeof zhHant> = {
     tabs: {
       label: 'Settings',
       notify: 'Notifications',
+      ai: 'AI',
     },
     version: 'Berth {{version}}',
     connection: {
@@ -6682,6 +6788,113 @@ const en: Translations<typeof zhHant> = {
       lede: 'Swap in another TMDB API key. The new key replaces the old one only once it passes the test; if it fails, the old key stays in use and browsing and imports carry on.',
       kept: 'This key failed the test and was not saved — browsing and imports keep using the one you had.',
       failed: 'The test did not go through.',
+    },
+    aiPage: {
+      title: 'AI settings',
+      lede: 'Berth uses your own model service key. With the switch off there is no AI, and everything else works as before.',
+      readFailed: 'The AI settings could not be read.',
+      service: {
+        title: 'Model service',
+        lede: 'Each kind keeps its own address, key and model, so switching kinds never loses what you filled in for the other. Saving makes the selected kind the one in use.',
+      },
+      enabled: {
+        label: 'Turn on AI',
+        hint: 'Off means no AI; everything else stays as it is now.',
+      },
+      provider: {
+        label: 'API kind',
+        anthropic: 'Anthropic Messages',
+        openai: 'OpenAI-compatible',
+        inUse: '{{name}} is in use.',
+        hint: {
+          anthropic: 'Anthropic itself, or a compatible gateway (such as DeepSeek’s /anthropic).',
+          openai:
+            'OpenAI, OpenRouter, a self-hosted gateway or a local model: anything that speaks Chat Completions.',
+        },
+      },
+      baseUrl: {
+        label: 'Base URL',
+        hint: {
+          anthropic:
+            'Leave it empty for the official endpoint. Without /v1, which the SDK adds itself; a pasted /v1 is removed.',
+          openai:
+            'Leave it empty for OpenAI. Otherwise use the address in that service’s docs (OpenAI’s own includes /v1).',
+        },
+      },
+      key: {
+        label: 'API key',
+        placeholder: 'Paste a key',
+        placeholderSet: 'Set. Paste a new one to replace it',
+        hint: 'The key is stored in Berth’s database and never shown again.',
+        remove: 'Remove key',
+        removeConfirm: 'Remove',
+        removing: 'Removing…',
+        removeWarning: 'The key is deleted from Berth; you will have to paste it again to use it.',
+        removeWarningInUse:
+          'The key is deleted from Berth. This is the kind in use, so AI is turned off too.',
+        removed: 'Key removed.',
+      },
+      model: {
+        label: 'Model',
+        hint: 'The model name on that service. The list holds the models Berth has prices for; any other name works too.',
+      },
+      price: {
+        label: 'Price',
+        known:
+          'Per million tokens: input ${{input}} · output ${{output}} · cache read ${{cacheRead}} · cache write ${{cacheWrite}}',
+        verified: 'checked {{date}}',
+        unknown: 'Price unknown: the usage page will show the cost as “unknown”, not as 0.',
+        unsaved: 'Save to see this model’s price.',
+        none: 'No model yet.',
+      },
+      test: {
+        button: 'Test connection',
+        testing: 'Testing…',
+        hint: 'Tests what the form says right now, no need to save first; an empty key field uses the saved key.',
+        ok: 'Connected',
+        answeredBy: 'Answered by:',
+        didNotRun: 'The test did not go through.',
+        failure: {
+          key_rejected: {
+            what: 'The service does not accept this key.',
+            fix: 'Use another key, or check that this key is for this address.',
+          },
+          not_found: {
+            what: 'The service cannot find this model or address.',
+            fix: 'Check the model name and the Base URL; Anthropic’s address has no /v1.',
+          },
+          service_error: {
+            what: 'The service returned an error.',
+            fix: 'Read the original text below: for rate limits or an exhausted quota, try again later.',
+          },
+          unreachable: {
+            what: 'This address cannot be reached.',
+            fix: 'Check the address for typos, and that the machine running Berth can reach the internet.',
+          },
+          bad_response: {
+            what: 'What came back is not a model API response.',
+            fix: 'The Base URL may point at a web page: fill it in again from that service’s docs.',
+          },
+        },
+      },
+      search: {
+        title: 'Web search (optional)',
+        lede: 'With a Tavily key, conversations on either kind get a web search tool. Anthropic has its own server-side search, so you can skip this there.',
+        label: 'Tavily API key',
+        remove: 'Remove Tavily key',
+        removeWarning: 'The key is deleted from Berth, and the web search tool goes with it.',
+      },
+      refusal: {
+        base_url_invalid: 'This is not a full http(s) address.',
+        key_missing: 'This kind has no key yet: paste one.',
+        model_missing: 'No model name yet.',
+      },
+      save: {
+        button: 'Save',
+        saving: 'Saving…',
+        saved: 'Saved.',
+        failed: 'Saving did not go through.',
+      },
     },
     notifyPage: {
       title: 'Notification settings',

@@ -247,6 +247,15 @@ NAMED: dict[str, CommandMark] = {
     "health.check_health": _mark(Effect.REVERSIBLE),
     # 帳號在 Jellyfin 停用時順手結束他的 session，所以不是 `READ`。
     "jellyfin_access.jellyfin_access": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    # M5 票 09：AI provider。回的是 `has_key`，不是 key。
+    "ai.read_ai": _mark(Effect.READ),
+    # 改設定頁的設定；收任意 base URL，之後每次呼叫都帶著 key 連過去。用原值再存一次就回去
+    # （同 `notify.set_bot_token`：key 的原值要由伺服器存下）。
+    "ai.set_ai": _mark(Effect.REVERSIBLE, Flag.SETTINGS, Flag.CONNECTS_OUT, inverse="ai.set_ai"),
+    # key 刪了就回不來，要人重新貼。
+    "ai.forget_ai_key": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    # 不改狀態，但連到表單上的任意網址、key 欄空著時帶的是存著的那把，還花 token。
+    "ai.test_ai": _mark(Effect.READ, Flag.CONNECTS_OUT),
 }
 
 

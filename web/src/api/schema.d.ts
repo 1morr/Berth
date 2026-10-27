@@ -4,6 +4,67 @@
  */
 
 export interface paths {
+    "/api/settings/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ai */
+        get: operations["get_ai_api_settings_ai_get"];
+        /**
+         * Put Ai
+         * @description 存表單上那一種接口並設成現在用的；另一種存著的不動。開啟要有 key 與模型名。
+         */
+        put: operations["put_ai_api_settings_ai_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/ai/keys/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Ai Key
+         * @description 清掉一把 key。清的是現在用的接口的 key 時一併關掉 AI。
+         */
+        delete: operations["delete_ai_key_api_settings_ai_keys__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/ai/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Ai Test
+         * @description 照表單打一次最小呼叫，不存。服務拒絕也是 200：那是測試的結果，不是請求錯了。
+         */
+        post: operations["post_ai_test_api_settings_ai_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -2439,6 +2500,119 @@ export interface components {
             reason: components["schemas"]["AccessRefusal"];
             /** Detail */
             detail: string;
+        };
+        /** AiEndpointOut */
+        AiEndpointOut: {
+            /** Base Url */
+            base_url: string;
+            /** Model */
+            model: string;
+            /** Has Key */
+            has_key: boolean;
+            price: components["schemas"]["AiPriceOut"] | null;
+        };
+        /** AiIn */
+        AiIn: {
+            provider: components["schemas"]["AiProvider"];
+            /** Base Url */
+            base_url: string;
+            /** Model */
+            model: string;
+            /** Api Key */
+            api_key?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Tavily Api Key */
+            tavily_api_key?: string | null;
+        };
+        /** AiOut */
+        AiOut: {
+            /** Enabled */
+            enabled: boolean;
+            provider: components["schemas"]["AiProvider"];
+            anthropic: components["schemas"]["AiEndpointOut"];
+            openai: components["schemas"]["AiEndpointOut"];
+            /** Has Tavily Key */
+            has_tavily_key: boolean;
+            /** Known Models */
+            known_models: string[];
+        };
+        /**
+         * AiPriceOut
+         * @description 美元 / 百萬 token（`adapters.ai.prices`）。
+         */
+        AiPriceOut: {
+            /** Input */
+            input: string;
+            /** Output */
+            output: string;
+            /** Cache Read */
+            cache_read: string;
+            /** Cache Write */
+            cache_write: string;
+            /**
+             * Verified
+             * Format: date
+             */
+            verified: string;
+        };
+        /**
+         * AiProbeFailure
+         * @description 「測試連線」沒成功的分類（`adapters.ai.probe`）。畫面照它挑句子，原文另外附上。
+         * @enum {string}
+         */
+        AiProbeFailure: "key_rejected" | "not_found" | "service_error" | "unreachable" | "bad_response";
+        /**
+         * AiProvider
+         * @description 模型走哪一種接口（brief §14〈provider〉、M5 票 09）。
+         * @enum {string}
+         */
+        AiProvider: "anthropic" | "openai";
+        /**
+         * AiRefusal
+         * @description AI 設定的命令不做的理由（`services.ai`）。
+         * @enum {string}
+         */
+        AiRefusal: "base_url_invalid" | "key_missing" | "model_missing";
+        /**
+         * AiRefusalOut
+         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文（沒有就是空字串）。
+         */
+        AiRefusalOut: {
+            reason: components["schemas"]["AiRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * AiSecret
+         * @description AI 設定裡存著的 key（`services.ai.forget_ai_key`）。
+         * @enum {string}
+         */
+        AiSecret: "anthropic" | "openai" | "tavily";
+        /**
+         * AiTestIn
+         * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。
+         */
+        AiTestIn: {
+            provider: components["schemas"]["AiProvider"];
+            /** Base Url */
+            base_url: string;
+            /** Model */
+            model: string;
+            /** Api Key */
+            api_key?: string | null;
+        };
+        /** AiTestOut */
+        AiTestOut: {
+            /** Ok */
+            ok: boolean;
+            failure: components["schemas"]["AiProbeFailure"] | null;
+            /** Status */
+            status: number | null;
+            /** Detail */
+            detail: string;
+            /** Model */
+            model: string;
         };
         /**
          * AuditAction
@@ -6266,6 +6440,123 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_ai_api_settings_ai_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiOut"];
+                };
+            };
+        };
+    };
+    put_ai_api_settings_ai_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiOut"];
+                };
+            };
+            /** @description `base_url_invalid` · `key_missing` · `model_missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    delete_ai_key_api_settings_ai_keys__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["schemas"]["AiSecret"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_ai_test_api_settings_ai_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTestOut"];
+                };
+            };
+            /** @description `base_url_invalid` · `key_missing` · `model_missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
     post_login_api_auth_login_post: {
         parameters: {
             query?: never;

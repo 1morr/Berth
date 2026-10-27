@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -72,13 +72,13 @@ def client(config: Config, tmp_path: Path, jellyfin: FakeJellyfinClient) -> Iter
         yield running
 
 
-def post(client: TestClient, path: str, body: object = None) -> httpx.Response:
+def post(client: TestClient, path: str, body: object = None) -> httpx2.Response:
     """前端一律帶 CSRF 標頭（`api/client.ts`）；沒帶的情形另外測。"""
-    response: httpx.Response = client.post(path, json=body, headers=BROWSER)
+    response: httpx2.Response = client.post(path, json=body, headers=BROWSER)
     return response
 
 
-def sign_in(client: TestClient, credentials: dict[str, str]) -> httpx.Response:
+def sign_in(client: TestClient, credentials: dict[str, str]) -> httpx2.Response:
     return post(client, "/api/auth/login", credentials)
 
 
@@ -453,6 +453,11 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/settings/notifications"): Access.ADMIN,
     ("PUT", "/settings/notifications/bot"): Access.ADMIN,
     ("PUT", "/settings/notifications/berth-url"): Access.ADMIN,
+    # AI provider（M5 票 09）：key 只進不出，連 GET 都只有管理員。
+    ("GET", "/settings/ai"): Access.ADMIN,
+    ("PUT", "/settings/ai"): Access.ADMIN,
+    ("POST", "/settings/ai/test"): Access.ADMIN,
+    ("DELETE", "/settings/ai/keys/*"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,
@@ -652,8 +657,8 @@ class TestTheSurfaceCheckItself:
         assert misclassified(ACCESS) == {("POST", "/jobs/*/retry"): Access.ADMIN}
 
 
-def delete(client: TestClient, path: str) -> httpx.Response:
-    response: httpx.Response = client.delete(path, headers=BROWSER)
+def delete(client: TestClient, path: str) -> httpx2.Response:
+    response: httpx2.Response = client.delete(path, headers=BROWSER)
     return response
 
 

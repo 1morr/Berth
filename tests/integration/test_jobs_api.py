@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -93,8 +93,8 @@ def _seed(client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
     asyncio.run(run())
 
 
-def sign_in(client: TestClient, who: dict[str, str] = ADMIN) -> httpx.Response:
-    response: httpx.Response = client.post("/api/auth/login", json=who, headers=BROWSER)
+def sign_in(client: TestClient, who: dict[str, str] = ADMIN) -> httpx2.Response:
+    response: httpx2.Response = client.post("/api/auth/login", json=who, headers=BROWSER)
     return response
 
 
@@ -191,10 +191,10 @@ def pile_up(client: TestClient, count: int, state: JobState = JobState.IMPORTED)
     asyncio.run(run())
 
 
-def submit(client: TestClient, **overrides: object) -> httpx.Response:
+def submit(client: TestClient, **overrides: object) -> httpx2.Response:
     # 詳情頁先開過一次，`media` 那一列才存在（快照要有地方放，plan §2.2）。
     client.get(f"/api/media/{SPY_ID}")
-    response: httpx.Response = client.post(
+    response: httpx2.Response = client.post(
         "/api/jobs", json=body(client, **overrides), headers=BROWSER
     )
     return response

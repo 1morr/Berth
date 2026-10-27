@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -85,8 +85,8 @@ def client(
         yield running
 
 
-def sign_in(client: TestClient) -> httpx.Response:
-    response: httpx.Response = client.post("/api/auth/login", json=ADMIN, headers=BROWSER)
+def sign_in(client: TestClient) -> httpx2.Response:
+    response: httpx2.Response = client.post("/api/auth/login", json=ADMIN, headers=BROWSER)
     return response
 
 

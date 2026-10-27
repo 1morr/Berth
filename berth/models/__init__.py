@@ -25,6 +25,8 @@ from berth.models.rss import DEFAULT_INTERVAL_SEC, FEED_INTERVALS, RssFeed, RssI
 from berth.models.setting import (
     DEFAULT_BUNDLED_LIBRARIES,
     SETTINGS_GROUPS,
+    AiEndpointSettings,
+    AiSettings,
     BerthPathResult,
     BerthSettings,
     BundledLibrary,
@@ -65,6 +67,8 @@ __all__ = [
     "DEFAULT_INTERVAL_SEC",
     "FEED_INTERVALS",
     "SETTINGS_GROUPS",
+    "AiEndpointSettings",
+    "AiSettings",
     "Base",
     "BerthPathResult",
     "BerthSettings",

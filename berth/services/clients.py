@@ -11,7 +11,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from pydantic_ai.models import Model
+
 # `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
+from berth.adapters.ai import AiEndpoint, build_model
 from berth.adapters.dns import HostResolver as HostResolver
 from berth.adapters.dns import SystemHostResolver
 from berth.adapters.indexer import IndexerSearch
@@ -69,6 +72,10 @@ class ServiceClientFactory(Protocol):
         與 `prowlarr()` 的分工是**問題不同**：那一支回答「這台還通不通、有哪些站」（精靈與健康
         檢查），這一支回答「這部作品有哪些發佈」。
         """
+        ...
+
+    def ai(self, endpoint: AiEndpoint) -> Model:
+        """AI provider 的模型物件（M5 票 09）。位址、key、模型名都是設定，接口兩種。"""
         ...
 
 
@@ -143,3 +150,6 @@ class HttpServiceClientFactory:
 
     def discord(self, token: str) -> DiscordBot:
         return HttpDiscordBot(token, base_url=self._discord_api_url)
+
+    def ai(self, endpoint: AiEndpoint) -> Model:
+        return build_model(endpoint)
