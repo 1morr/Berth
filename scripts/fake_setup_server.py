@@ -1758,18 +1758,54 @@ class TricklingQbittorrent(PlanningQbittorrent):
 
 
 def agent_scenario() -> Scenario:
-    """側面板（M5 票 12）：同 `downloads`，另外 AI 開著，模型是照腳本回答的替身。
+    """側面板（M5 票 12、13）：同 `downloads`，另外 AI 開著，模型是照腳本回答的替身。
 
     替身是 `why_not_script`。問「SPY×FAMILY 為什麼沒入庫」（或英文的
     `Why isn't SPY×FAMILY in the library?`），它先搜尋作品、再叫「為什麼沒入庫」，
-    用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）；
-    說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止（票 21 的步驟頁）。
-    其餘一律說它只演這幾件事。一個請求都不出網，不需要金鑰。
+    用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）。
+    說「下載 SPY×FAMILY」（`Download SPY×FAMILY`）時它搜作品、搜發佈、問 Route，再出一張
+    三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。索引站多三筆單集（`AGENT_RELEASES`），
+    qBittorrent 收下就留著。說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
+    （票 21 的步驟頁）。其餘一律說它只演這幾件事。一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
     scenario.tmdb = demo_tmdb(search={query: [SPY_ENTRY] for query in SPY_QUERIES})
     scenario.ai_script = why_not_script
+    packs = {PLAN_RELEASE: PLAN_FILES, **AGENT_RELEASES}
+    scenario.qbittorrent = TricklingQbittorrent(
+        packs, version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
+    )
+    # `/demo/torrent` 只發這裡列的那幾份（`_mount_demo_torrent`）。
+    scenario.demo_releases = (*scenario.demo_releases, *AGENT_RELEASES)
+    scenario.indexer_results = (
+        *scenario.indexer_results,
+        *(
+            IndexerResult(
+                title=release,
+                indexer="berth-demo",
+                size=sum(size for _, size in files),
+                seeders=1,
+                download_url=demo_url(f"/demo/torrent?release={quote(release)}"),
+                info_hash="",
+                # 沒有 hash 時搜尋以 `guid` 去重（`IndexerResult.key`）：空的話三筆會併成一筆。
+                guid=release,
+            )
+            for release, files in AGENT_RELEASES.items()
+        ),
+    )
     return scenario
+
+
+#: `agent` 情境的送單卡要送的三集（票 13）。每一包一個正片檔。
+AGENT_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
+    f"[Berth-Demo] SPY×FAMILY - {episode:02d} [1080p][CHT]": (
+        (f"[Berth-Demo] SPY×FAMILY - {episode:02d} [1080p][CHT].mkv", 40000),
+    )
+    for episode in (4, 5, 6)
+}
+DEMO_PACKS.update(AGENT_RELEASES)
+
+_DOWNLOAD_ASKED = re.compile(r"^(?:下載|download)\s*(.+?)[。.!！]?$", re.I)
 
 
 #: 替身 TMDB 認得的 SPY×FAMILY 查詢（`discover.normalise_query` 之後的樣子）。
@@ -1823,19 +1859,27 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
+        wanted = _DOWNLOAD_ASKED.search(text.strip())
+        if wanted is not None:
+            return ModelResponse(
+                parts=[ToolCallPart("discover_search_media", {"query": wanted.group(1).strip()})]
+            )
         found = _WHY_NOT_ASKED.search(text.strip())
         if found is None:
             return _say(
-                "這是演練用的假模型，只演一件事：問「SPY×FAMILY 為什麼沒入庫」。"
+                "這是演練用的假模型，只演兩件事：問「SPY×FAMILY 為什麼沒入庫」，"
+                "或說「下載 SPY×FAMILY」。"
                 if chinese
-                else "This is the demo model. It only acts out one question: "
-                "“Why isn't SPY×FAMILY in the library?”"
+                else "This is the demo model. It only acts out two things: "
+                "“Why isn't SPY×FAMILY in the library?” and “Download SPY×FAMILY”."
             )
         title = (found.group(1) or found.group(2) or "").strip()
         return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": title})])
     if isinstance(last, ToolReturnPart) and last.tool_name == "jobs_list_jobs":
         # 被警告、被擋下也照叫：防護要看到第 4 次。
         return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
+    if isinstance(last, ToolReturnPart) and _DOWNLOAD_ASKED.search(question.strip()):
+        return _download_step(messages, last, chinese=chinese)
     if isinstance(last, ToolReturnPart) and isinstance(last.content, dict):
         # 工具結果是執行器回的 JSON（`Turn.run_tool` 的 `to_jsonable_python`）。
         result: dict[str, Any] = cast(dict[str, Any], last.content)
@@ -1855,6 +1899,73 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             else f"The tool did not work: `{last.model_response()}`"
         )
     return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _download_step(
+    messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
+) -> ModelResponse:
+    """「下載 SPY×FAMILY」的下一步：搜作品 → 搜發佈 → 問 Route → 出卡 → 照卡片的結果回答。"""
+    result: Any = last.content
+    if last.outcome == "denied":
+        return _say("好，那就不送。" if chinese else "All right, nothing was sent.")
+    if last.tool_name == "discover_search_media":
+        items = result.get("items") or []
+        if not items:
+            return _say("找不到這部作品。" if chinese else "I could not find that title.")
+        return ModelResponse(
+            parts=[ToolCallPart("search_search_torrents", {"media_id": items[0]["id"]})]
+        )
+    asked = _last_call(messages)
+    if last.tool_name == "search_search_torrents":
+        return ModelResponse(
+            parts=[ToolCallPart("media_route_choices", {"media_id": asked["media_id"]})]
+        )
+    if last.tool_name == "media_route_choices":
+        found = _last_result(messages, "search_search_torrents")
+        route = result[0]["id"] if result else None
+        rows = [
+            {"source_id": row["source_id"], "media_id": asked["media_id"], "route_id": route}
+            for row in found.get("rows") or []
+            if row["title"] in AGENT_RELEASES
+        ]
+        if not rows or route is None:
+            return _say("沒有可以送的發佈。" if chinese else "There is nothing to send.")
+        return ModelResponse(
+            parts=[ToolCallPart("downloading_add_manual_download", {"rows": rows})]
+        )
+    if last.tool_name == "downloading_add_manual_download" and isinstance(result, dict):
+        if "refused" in result:
+            return _say(
+                f"送不出去：`{result['refused']}`。"
+                if chinese
+                else f"It cannot be sent: `{result['refused']}`."
+            )
+        outcomes = [row["outcome"] for row in result.get("rows") or []]
+        done = outcomes.count("done")
+        skipped = outcomes.count("skipped")
+        return _say(
+            f"你確認了，已經送出 {done} 筆，{skipped} 筆你取消了勾選。"
+            if chinese
+            else f"You confirmed: {done} sent, {skipped} unticked by you."
+        )
+    return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _last_call(messages: list[ModelMessage]) -> dict[str, Any]:
+    """上一則模型回應裡最後一個工具呼叫的參數。"""
+    response = next(m for m in reversed(messages) if isinstance(m, ModelResponse))
+    return dict(response.tool_calls[-1].args_as_dict())
+
+
+def _last_result(messages: list[ModelMessage], tool: str) -> dict[str, Any]:
+    part = next(
+        part
+        for message in reversed(messages)
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, ToolReturnPart) and part.tool_name == tool
+    )
+    return cast(dict[str, Any], part.content)
 
 
 def _why_not_answer(result: dict[str, Any], *, chinese: bool) -> str:

@@ -152,6 +152,36 @@ describe('一輪的步驟', () => {
     expect(screen.getByText('status_code: 429, rate limited')).not.toBeVisible()
   })
 
+  it('停在確認卡上的一輪：等你確認，工具說出了確認卡（M5 票 13）', async () => {
+    const [first] = STOPPED.steps
+    render({
+      'GET /api/agent/runs/run-1': {
+        body: {
+          ...STOPPED,
+          stop_reason: 'awaiting_confirmation',
+          steps: [
+            {
+              ...first,
+              tools: [
+                {
+                  ...first.tools[0],
+                  command: 'downloading.add_manual_download',
+                  outcome: 'proposed',
+                  truncated: false,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    })
+    renderApp('/agent/runs/run-1')
+
+    expect(await screen.findByText('等你確認')).toBeVisible()
+    expect(screen.getByText('停在確認卡，等人按')).toBeVisible()
+    expect(screen.getByText('出了確認卡')).toBeVisible()
+  })
+
   it('「繼續」來的一輪連回前一輪', async () => {
     render({
       'GET /api/agent/runs/run-2': { body: { ...STOPPED, id: 'run-2', continues: 'run-1' } },

@@ -36,9 +36,11 @@ RECENT_RUNS = 20
 #: Tavily 的工具（命令名）；`ok` 與 `warned` 是真的搜了。
 TAVILY = "web.tavily_search"
 _SEARCHED = frozenset({AiToolOutcome.OK, AiToolOutcome.WARNED})
-#: 防護與出錯：用量頁數這幾種停止原因（完成的不數）。
+#: 防護與出錯：用量頁數這幾種停止原因。答完與停在確認卡等人按（票 13）是正常的停法，不數。
 GUARD_STOPS: tuple[AiStopReason, ...] = tuple(
-    reason for reason in AiStopReason if reason is not AiStopReason.COMPLETED
+    reason
+    for reason in AiStopReason
+    if reason not in {AiStopReason.COMPLETED, AiStopReason.AWAITING_CONFIRMATION}
 )
 
 

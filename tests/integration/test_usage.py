@@ -272,6 +272,8 @@ class TestGuards:
         assert guards.stops[AiStopReason.NO_PROGRESS] == 1
         assert guards.stops[AiStopReason.PING_PONG] == 0
         assert AiStopReason.COMPLETED not in guards.stops
+        # 停在確認卡等人按（票 13）是正常的停法，不是防護。
+        assert AiStopReason.AWAITING_CONFIRMATION not in guards.stops
         assert (guards.blocked, guards.refused, guards.failed, guards.truncated) == (2, 1, 0, 1)
 
 

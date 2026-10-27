@@ -52,6 +52,19 @@ _DETAILS = "__berth_command_details__"
 Validator = Callable[..., Awaitable[None]]
 
 
+@dataclass(frozen=True, slots=True)
+class Private:
+    """標在命令輸入的一格上（`Annotated[str, PRIVATE]`）：**這一格不出伺服器**。
+
+    確認卡存的是完整的命令輸入（執行時就用它），但 API 與給模型看的那一份由登錄表的
+    `public_arguments` 去掉這幾格。例子是送單來源的下載連結：它帶著 Prowlarr 的 API key
+    （M4 票 79、M5 票 13）。標在型別上而不是命令上：收同一個型別的命令都跟著遮。
+    """
+
+
+PRIVATE = Private()
+
+
 class Effect(StrEnum):
     """副作用等級（brief §14）。"""
 

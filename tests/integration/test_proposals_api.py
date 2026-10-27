@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,16 +175,6 @@ class TestDecide:
 
 
 class TestSubmitCards:
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "票 13：送單卡只能存完整的下載連結（`downloading.add_manual_download` 收 "
-            "`JobSource`，`source_id` 是 `POST /jobs` 那一層換的），連結帶 Prowlarr 的 "
-            "API key，`GET /proposals` 原樣回給瀏覽器。改存 `source_id` 的話重啟或兩小時後"
-            "換不回來（`SourceCache`），比 `PROPOSAL_TTL` 先過期。票 13 要決定發佈資訊怎麼"
-            "存進 Proposal，或讓 `SourceCache` 落地。"
-        ),
-    )
     def test_a_submit_card_never_hands_the_download_link_to_the_browser(
         self, client: TestClient
     ) -> None:

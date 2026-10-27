@@ -4,6 +4,10 @@ const TOOL_NAMES = {
   why_not_explain: 'agent.tool.names.why_not_explain',
   jobs_list_jobs: 'agent.tool.names.jobs_list_jobs',
   jobs_read_job_events: 'agent.tool.names.jobs_read_job_events',
+  // 票 13：送單那一條路。
+  search_search_torrents: 'agent.tool.names.search_search_torrents',
+  media_route_choices: 'agent.tool.names.media_route_choices',
+  downloading_add_manual_download: 'agent.tool.names.downloading_add_manual_download',
   // 票 17：設了 Tavily key 才有；`web_search` 是 Anthropic 伺服器端那一種，不經登錄表。
   web_tavily_search: 'agent.tool.names.web_tavily_search',
   web_search: 'agent.tool.names.web_search',

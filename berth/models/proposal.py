@@ -10,6 +10,7 @@
 - 提出者是 `user_id` 加 `proposer`（人自己，或 AI 替他）。按得到的是他本人或管理員；執行時的角色
   照他**那一刻**的角色重讀。人不在了，他的卡片也沒有意義（`ON DELETE CASCADE`）。
 - `conversation_id` 是提出它的那段對話；人提出的是 `NULL`。對話表在票 11，所以這裡還沒有外鍵。
+- `tool_call_id` 連回對話裡提出它的那一次工具呼叫（票 13）：恢復時靠它找回卡片。
 """
 
 from __future__ import annotations
@@ -32,6 +33,8 @@ class Proposal(Base):
         Index("ix_proposals_status_expires_at", "status", "expires_at"),
         Index("ix_proposals_user_id", "user_id"),
         Index("ix_proposals_conversation_id", "conversation_id"),
+        # 恢復那一輪找卡片：同一段對話裡、那一次 tool call 的最新一張（id 不保證唯一，見下）。
+        Index("ix_proposals_conversation_tool_call", "conversation_id", "tool_call_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -48,6 +51,9 @@ class Proposal(Base):
     #: 他自己（`person`）或 AI 替他（`ai`）。
     proposer: Mapped[ActorKind] = mapped_column(enum_column(ActorKind))
     conversation_id: Mapped[str | None] = mapped_column(Text, default=None)
+    #: AI 提出的那一次 tool call（pydantic-ai 的 `tool_call_id`，票 13）：恢復那一輪時從它找回卡片。
+    #: 人提出的是 `None`。不唯一：有的 OpenAI 相容閘道每一輪都從 `call_0` 編起。
+    tool_call_id: Mapped[str | None] = mapped_column(Text, default=None)
     status: Mapped[ProposalStatus] = mapped_column(
         enum_column(ProposalStatus), default=ProposalStatus.PENDING
     )
@@ -58,6 +64,9 @@ class Proposal(Base):
         ForeignKey("users.id", ondelete="SET NULL"), default=None
     )
     decided_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    #: 脫離提出它的那一輪的時刻（使用者沒按就繼續說話）。之後每一輪的 instructions 帶上
+    #: 這幾張的近況。
+    detached_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     #: 核准時勾的那幾列（0 起算）；`None` 是全部。
     selection_json: Mapped[list[int] | None] = mapped_column(JsonText, default=None)
     #: 逐列結果（`services.proposals.RowResult`），執行時每做完一列寫一次；還沒執行是 `None`。

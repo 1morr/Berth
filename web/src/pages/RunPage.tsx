@@ -56,6 +56,8 @@ export function RunPage({ runId }: { runId: string }) {
 /** 停止原因 → 色塊。防護停下是「需要你決定下一步」（`assigned`），出錯是擋住了（`blocked`）。 */
 const STOP_CHIP: Record<AiStopReason, { signal: Signal; key: ParseKeys }> = {
   completed: { signal: 'neutral', key: 'usage.run.chip.completed' },
+  // 停在確認卡上（票 13）：要你按，所以是調度黃。
+  awaiting_confirmation: { signal: 'assigned', key: 'usage.run.chip.waiting' },
   request_limit: { signal: 'assigned', key: 'usage.run.chip.stopped' },
   token_limit: { signal: 'assigned', key: 'usage.run.chip.stopped' },
   repeated_call: { signal: 'assigned', key: 'usage.run.chip.stopped' },
@@ -232,7 +234,8 @@ function pretty(json: string): string {
 function Tool({ tool }: { tool: StepTool }) {
   const { t, i18n } = useTranslation()
   const key = toolNameKey(tool.command)
-  const stopped = tool.outcome !== 'ok' && tool.outcome !== 'warned'
+  // 被擋、被拒、出錯、中止：框換重線。照做了的與出了確認卡的是常態。
+  const stopped = !['ok', 'warned', 'proposed'].includes(tool.outcome)
 
   return (
     <li
