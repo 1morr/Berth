@@ -39,7 +39,7 @@ from berth.adapters.qbittorrent import (
     TorrentFile,
     TorrentStatus,
 )
-from berth.domain import EventType, IssueStatus, IssueType, JobState
+from berth.domain import SYSTEM, EventType, IssueStatus, IssueType, JobState
 from berth.logs import job_context
 from berth.models import (
     Event,
@@ -137,9 +137,6 @@ BROKEN_STATES = {
     MISSING_FILES_STATE: (JobState.MISSING_FILES, IssueType.MISSING_FILES),
     ERROR_STATE: (JobState.CLIENT_ERROR, IssueType.CLIENT_ERROR),
 }
-
-#: 迴圈自己動的那幾筆事件的 actor（plan §2.3）。
-SYSTEM = "system"
 
 
 @dataclass(frozen=True, slots=True)

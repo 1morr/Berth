@@ -17,7 +17,7 @@ from types import ModuleType
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from berth.domain import JobRefusal, RssRefusal
+from berth.domain import JobRefusal, Role, RssRefusal
 from berth.services import registry
 from berth.services.commands import Effect, Flag, command, mark_of
 from berth.services.downloading import add_manual_download
@@ -47,8 +47,12 @@ class TestTheListing:
         assert spec.function is add_manual_download
         assert spec.result is AddDownloadOutcome
         assert set(spec.input.model_fields) == {"source", "media_id", "route_id"}
-        assert set(spec.injected) == {"session", "factory", "user_id"}
+        assert set(spec.injected) == {"session", "factory", "user_id", "actor"}
         assert spec.refusals == (JobRefusal,)
+        assert spec.audience is Role.USER
+
+    def test_a_command_is_for_admins_unless_it_says_otherwise(self) -> None:
+        assert registry.commands()["rss.add_feed"].audience is Role.ADMIN
 
     def test_the_input_model_validates_and_keeps_the_defaults(self) -> None:
         spec = registry.commands()["rss.add_feed"]

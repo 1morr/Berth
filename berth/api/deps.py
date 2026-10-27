@@ -21,6 +21,7 @@ from berth.services.clients import (
     host_resolver,
 )
 from berth.services.events import EventHub
+from berth.services.executor import Executor
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
 from berth.services.reconcile import ReconcileRunner
@@ -124,3 +125,17 @@ ConfigDep = Annotated[Config, Depends(get_config)]
 ReconcilerDep = Annotated[ReconcileRunner, Depends(get_reconciler)]
 BundledServicesDep = Annotated[BundledServices, Depends(get_bundled_services)]
 HostResolverDep = Annotated[HostResolver, Depends(get_host_resolver)]
+
+
+def get_executor(
+    factory: ClientFactoryDep,
+    hub: EventHubDep,
+    sources: SourceCacheDep,
+    plans: PlanHintsDep,
+    imports: ImportHintsDep,
+) -> Executor:
+    """命令執行器（`services/executor.py`）。拿的是上面那幾支相依，測試換掉的 Fake 它也跟著用。"""
+    return Executor(factory=factory, hub=hub, sources=sources, plans=plans, imports=imports)
+
+
+ExecutorDep = Annotated[Executor, Depends(get_executor)]

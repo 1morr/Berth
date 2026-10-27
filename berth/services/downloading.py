@@ -27,7 +27,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import JobRefusal, JobState, MediaKind, NotificationKind
+from berth.domain import JobRefusal, JobState, MediaKind, NotificationKind, Role
 from berth.models import Job, Media, Notification, Route, RssSeries
 from berth.models.types import utcnow
 from berth.parser import episode_span
@@ -110,6 +110,8 @@ async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> 
     ),
     refusals=(JobRefusal,),
     validate=check_submit,
+    # 送單本來就是一般使用者做的事（brief §11）；Job 記在 `user_id` 名下。
+    audience=Role.USER,
 )
 async def add_manual_download(
     session: AsyncSession,
@@ -119,10 +121,20 @@ async def add_manual_download(
     media_id: str,
     route_id: int,
     user_id: int | None,
+    actor: str,
 ) -> AddDownloadOutcome:
-    """人手按的下載（搜尋結果、作品頁）：`jobs.add_download`，送成了就告訴其他訂閱者。"""
+    """人手按的下載（搜尋結果、作品頁）：`jobs.add_download`，送成了就告訴其他訂閱者。
+
+    `user_id` 是 Job 記在誰名下，`actor` 是時間線上誰按的：AI 替人送時是 `ai:<user id>`。
+    """
     outcome = await add_download(
-        session, factory, source=source, media_id=media_id, route_id=route_id, user_id=user_id
+        session,
+        factory,
+        source=source,
+        media_id=media_id,
+        route_id=route_id,
+        user_id=user_id,
+        actor=actor,
     )
     async with download_round(session, presser=user_id, now=utcnow()) as batch:
         batch.note(outcome)

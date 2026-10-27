@@ -23,7 +23,7 @@ class Event(Base):
     job_hash: Mapped[str | None] = mapped_column(Text, default=None)
     media_id: Mapped[str | None] = mapped_column(Text, default=None)
     type: Mapped[str] = mapped_column(Text)
-    #: user id、`system`、`rss:<rule>` 或 `ai`。
+    #: user id、`system`、`rss:<rule>` 或 `ai:<user id>`（`domain/actor.py`）。
     actor: Mapped[str] = mapped_column(Text)
     payload_json: Mapped[dict[str, Any] | None] = mapped_column(JsonText, default=None)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

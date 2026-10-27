@@ -28,6 +28,7 @@ from berth.adapters.torrent import NotATorrentError, TorrentSource
 from berth.adapters.torrent_fake import DEFAULT_HASH, FakeTorrentFetcher
 from berth.db import create_session_factory
 from berth.domain import (
+    SYSTEM,
     CollectionType,
     Confidence,
     EventType,
@@ -39,6 +40,7 @@ from berth.domain import (
     PlanAction,
     PlanStatus,
     Role,
+    label_of,
 )
 from berth.logs import JOB_FIELD, configure_logging, json_line
 from berth.models import (
@@ -215,7 +217,13 @@ class TestAddDownload:
         media, route, factory = await _ready(session, roots)
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.created is True
@@ -251,6 +259,7 @@ class TestAddDownload:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert refusal.value.reason == "route_missing"
@@ -265,7 +274,13 @@ class TestAddDownload:
         media, route, factory = await _ready(session, roots)
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         added = factory.qbittorrent_.added
@@ -282,7 +297,13 @@ class TestAddDownload:
         media, route, factory = await _ready(session, roots)
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert [row.name for row in factory.qbittorrent_.created_categories] == ["berth-anime"]
@@ -301,7 +322,13 @@ class TestAddDownload:
         factory = factory_for(roots, qbittorrent=qbittorrent)
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.job.state is JobState.SUBMIT_FAILED
@@ -314,7 +341,13 @@ class TestAddDownload:
         media, route, factory = await _ready(session, roots)
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         events = await read_job_events(session, MAGNET_HASH)
@@ -336,6 +369,7 @@ class TestAddDownload:
             media_id=media.id,
             route_id=route.id,
             user_id=skipper,
+            actor=label_of(skipper),
         )
 
         job = await session.get(Job, outcome.job.hash)
@@ -351,11 +385,23 @@ class TestDuplicateSubmission:
     ) -> None:
         media, route, factory = await _ready(session, roots)
         first = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         second = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert second.created is False
@@ -370,12 +416,24 @@ class TestDuplicateSubmission:
         media, route, factory = await _ready(session, roots)
         source = _source(url="https://prowlarr.invalid/1/download?x=1", info_hash=DEFAULT_HASH)
         await add_download(
-            session, factory, source=source, media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=source,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         factory.torrent_.requested.clear()
 
         second = await add_download(
-            session, factory, source=source, media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=source,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert second.created is False
@@ -393,6 +451,7 @@ class TestDuplicateSubmission:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert len(await read_job_events(session, MAGNET_HASH)) == 2
@@ -406,7 +465,13 @@ class TestFolderNameFreeze:
         media, route, factory = await _ready(session, roots)
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         await session.refresh(media)
@@ -425,7 +490,13 @@ class TestFolderNameFreeze:
         )
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         await session.refresh(media)
@@ -437,7 +508,13 @@ class TestFolderNameFreeze:
         """第二次送單時 TMDB 可能已經改了標題，而磁碟上的資料夾還是第一次那一個。"""
         media, route, factory = await _ready(session, roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         media.folder_name = "SPY x FAMILY (2022)"
         await session.commit()
@@ -449,6 +526,7 @@ class TestFolderNameFreeze:
             media_id=media.id,
             route_id=route.id,
             user_id=None,
+            actor=label_of(None),
         )
 
         await session.refresh(media)
@@ -461,7 +539,13 @@ class TestFolderNameFreeze:
         media, route, factory = await _ready(session, roots)
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         await session.refresh(media)
@@ -476,7 +560,13 @@ class TestTracked:
         assert await is_tracked(session, media.id) is False
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert await is_tracked(session, media.id) is True
@@ -498,6 +588,7 @@ class TestRefusals:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "route_unhealthy"
@@ -513,7 +604,13 @@ class TestRefusals:
         media, route, factory = await _ready(session, roots, health=HealthStatus.UNKNOWN)
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.job.state is JobState.SUBMITTED
@@ -534,6 +631,7 @@ class TestRefusals:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "route_kind_mismatch"
@@ -553,6 +651,7 @@ class TestRefusals:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "route_disabled"
@@ -564,7 +663,13 @@ class TestRefusals:
 
         with pytest.raises(JobRejectedError) as failure:
             await add_download(
-                session, factory, source=_source(), media_id=media.id, route_id=999, user_id=None
+                session,
+                factory,
+                source=_source(),
+                media_id=media.id,
+                route_id=999,
+                user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "route_missing"
@@ -582,6 +687,7 @@ class TestRefusals:
                 media_id="tv:999999",
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "media_missing"
@@ -605,6 +711,7 @@ class TestRefusals:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "source_unavailable"
@@ -635,7 +742,13 @@ class TestSubmitFailed:
         factory = factory_for(roots, qbittorrent=FakeQbittorrentClient(add_error=error))
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.job.state is JobState.SUBMIT_FAILED
@@ -652,11 +765,19 @@ class TestSubmitFailed:
         qbittorrent = FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         qbittorrent.add_error = None  # 服務回來了
-        job = await retry_job(session, factory, MAGNET_HASH)
+        job = await retry_job(
+            session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN
+        )
 
         assert job.state is JobState.SUBMITTED
         assert job.error == ""
@@ -691,11 +812,12 @@ class TestSubmitFailed:
             media_id=media.id,
             route_id=route.id,
             user_id=None,
+            actor=label_of(None),
         )
         factory.qbittorrent_ = FakeQbittorrentClient()
         fetcher.requested.clear()
 
-        await retry_job(session, factory, DEFAULT_HASH)
+        await retry_job(session, factory, DEFAULT_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN)
 
         assert fetcher.requested == [url]
         assert factory.qbittorrent_.added[0].content == b"d4:infodee"
@@ -712,13 +834,21 @@ class TestSubmitFailed:
             roots, qbittorrent=FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         )
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         route.enabled = False
         await session.commit()
 
         with pytest.raises(JobRejectedError) as failure:
-            await retry_job(session, factory, MAGNET_HASH)
+            await retry_job(
+                session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN
+            )
 
         assert failure.value.reason == "route_disabled"
 
@@ -732,13 +862,21 @@ class TestSubmitFailed:
             roots, qbittorrent=FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         )
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         route.health_status = HealthStatus.FAILED
         await session.commit()
 
         with pytest.raises(JobRejectedError) as failure:
-            await retry_job(session, factory, MAGNET_HASH)
+            await retry_job(
+                session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN
+            )
 
         assert failure.value.reason == "route_unhealthy"
 
@@ -749,11 +887,19 @@ class TestSubmitFailed:
         「再送一次」的按鈕——已經在下載的 torrent 再送一次只會多一次無謂的請求。"""
         media, route, factory = await _ready(session, roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         with pytest.raises(JobRejectedError) as failure:
-            await retry_job(session, factory, MAGNET_HASH)
+            await retry_job(
+                session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN
+            )
 
         assert failure.value.reason == "not_retryable"
 
@@ -785,6 +931,7 @@ class TestTheDiskGate:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "low_disk_space"
@@ -806,7 +953,13 @@ class TestTheDiskGate:
         monkeypatch.setattr(fs, "free_space", unmeasurable)
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.job.state is JobState.SUBMITTED
@@ -823,7 +976,13 @@ class TestTheDiskGate:
         await _threshold(session, HUGE)
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.job.state is JobState.SUBMITTED
@@ -838,13 +997,21 @@ class TestTheDiskGate:
         qbittorrent = FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         qbittorrent.add_error = None
         await _threshold(session, HUGE)
 
         with pytest.raises(JobRejectedError) as failure:
-            await retry_job(session, factory, MAGNET_HASH)
+            await retry_job(
+                session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN
+            )
 
         assert failure.value.reason == "low_disk_space"
         job = await read_job(session, MAGNET_HASH)
@@ -862,7 +1029,13 @@ class TestARemovedHash:
     async def _removed(self, session: AsyncSession, roots: dict[str, Path]) -> FakeClientFactory:
         media, route, factory = await _ready(session, roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         job = await session.get(Job, MAGNET_HASH)
         assert job is not None
@@ -884,6 +1057,7 @@ class TestARemovedHash:
                 media_id="tv:120089",
                 route_id=await _route_id(session),
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "job_removed"
@@ -907,6 +1081,7 @@ class TestARemovedHash:
                 media_id="tv:120089",
                 route_id=await _route_id(session),
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert failure.value.reason == "job_removed"
@@ -928,6 +1103,7 @@ class TestARemovedHash:
             media_id="tv:120089",
             route_id=await _route_id(session),
             user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.created is True
@@ -965,6 +1141,7 @@ class TestTheJobSurvivesTheSubmission:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         await session.rollback()
@@ -984,7 +1161,13 @@ class TestTheJobSurvivesTheSubmission:
         before = media.folder_name
 
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert factory.tmdb_.requests == []
@@ -998,7 +1181,13 @@ class TestReading:
     ) -> None:
         media, route, factory = await _ready(session, roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         await add_download(
             session,
@@ -1007,6 +1196,7 @@ class TestReading:
             media_id=media.id,
             route_id=route.id,
             user_id=None,
+            actor=label_of(None),
         )
         first = await session.get(Job, MAGNET_HASH)
         assert first is not None
@@ -1032,7 +1222,13 @@ class TestReading:
         )
         await session.commit()
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         (row,) = (await list_jobs(session)).jobs
@@ -1070,7 +1266,13 @@ class TestReading:
         換回去就不說了。"""
         media, route, factory = await _ready(session, roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         sent_to = (await read_settings(session, QbittorrentSettings)).base_url
         assert (await _read(session, MAGNET_HASH)).previous_client == ""
@@ -1105,7 +1307,13 @@ class TestReading:
     ) -> None:
         media, route, factory = await _ready(session, roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert (await read_job(session, MAGNET_HASH)) is not None
@@ -1408,6 +1616,7 @@ class TestJobLogging:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         lines = [json.loads(json_line(record)) for record in caplog.records]

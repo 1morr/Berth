@@ -50,6 +50,7 @@ from berth.adapters.jellyfin import (
 from berth.domain import (
     ISSUE_ACTIONS,
     NEEDS_MEDIA,
+    SYSTEM,
     EventType,
     IssueAction,
     IssueRefusal,
@@ -77,7 +78,6 @@ from berth.services.deletion import DeleteScope, delete_job
 from berth.services.hints import JobHints
 from berth.services.jobs import (
     JobRejectedError,
-    actor_of,
     job_lock,
     record_event,
     restart_state,
@@ -372,7 +372,7 @@ def clear_by_system(rows: Sequence[Issue], now: datetime) -> None:
     for row in rows:
         row.status = IssueStatus.RESOLVED
         row.resolved_at = now
-        row.resolved_by = actor_of(None)
+        row.resolved_by = SYSTEM
         logger.info("issue cleared", extra={"issue": row.type.value, "subject": row.subject})
 
 

@@ -12,9 +12,10 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
+from berth.api.commands import Command, Run
 from berth.api.deps import ClientFactoryDep, SessionDep, SourceCacheDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
@@ -31,13 +32,15 @@ from berth.domain import (
     RssRefusal,
     SkipCode,
 )
-from berth.services.bangumi import read_bangumi, search_bangumi
+from berth.services.bangumi import BangumiView
+from berth.services.executor import CommandRefusedError
 from berth.services.oneshot import read_oneshot
 from berth.services.rss import (
     DEFAULT_INTERVAL_SEC,
     FEED_INTERVALS,
+    FeedView,
     RssRejectedError,
-    add_feed,
+    Subscription,
     bind_series,
     delete_feed,
     list_feeds,
@@ -54,8 +57,6 @@ from berth.services.rss import (
     set_feed_interval,
     set_feed_routes,
     set_series_exclusions,
-    subscribe_mikan,
-    subscribe_search,
     unbind_series,
 )
 
@@ -116,9 +117,10 @@ def _responses(*reasons: RssRefusal) -> dict[int | str, dict[str, Any]]:
     return refusal_responses(RssRefusalOut, {reason: _STATUS[reason] for reason in reasons})
 
 
-def rss_refusal(refusal: RssRejectedError) -> HTTPException:
-    body = RssRefusalOut(reason=refusal.reason, detail=refusal.detail)
-    return HTTPException(status_code=_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
+def rss_refusal(refusal: RssRejectedError | CommandRefusedError) -> HTTPException:
+    reason = RssRefusal(refusal.reason)
+    body = RssRefusalOut(reason=reason, detail=refusal.detail)
+    return HTTPException(status_code=_STATUS[reason], detail=body.model_dump(mode="json"))
 
 
 class KindCountsOut(BaseModel):
@@ -498,11 +500,10 @@ async def get_feeds(session: SessionDep) -> list[FeedOut]:
         RssRefusal.INTERVAL_UNSUPPORTED,
     ),
 )
-async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
+async def post_feed(run: Annotated[Run, Depends(Command("rss.add_feed"))], body: FeedIn) -> FeedOut:
     """記下這個 Feed。不當場輪詢——背景迴圈在半分鐘內輪到它，畫面上也有「立即輪詢」。"""
     try:
-        view = await add_feed(
-            session,
+        view: FeedView = await run(
             url=body.url,
             name=body.name,
             tv_route_id=body.tv_route,
@@ -511,7 +512,7 @@ async def post_feed(session: SessionDep, body: FeedIn) -> FeedOut:
             interval_sec=body.interval_sec,
         )
         return FeedOut.model_validate(view)
-    except RssRejectedError as refusal:
+    except CommandRefusedError as refusal:
         raise rss_refusal(refusal) from refusal
 
 
@@ -834,13 +835,16 @@ _BINDING_REFUSALS = (
     responses=_responses(RssRefusal.FEED_UNREACHABLE),
 )
 async def get_mikan_search(
-    factory: ClientFactoryDep, q: str = Query(min_length=1)
+    run: Annotated[Run, Depends(Command("bangumi.search_bangumi"))],
+    q: str = Query(min_length=1),
 ) -> list[BangumiHitOut]:
     """Mikan 搜尋頁上的番組。英文、羅馬字、日文、繁中都搜得到（brief §20.12）。"""
     try:
-        return [BangumiHitOut.model_validate(hit) for hit in await search_bangumi(factory, q)]
-    except RssRejectedError as refusal:
+        # `mikan.BangumiHit`：api 不 import adapters，`BangumiHitOut` 照屬性讀。
+        hits: tuple[object, ...] = await run(term=q)
+    except CommandRefusedError as refusal:
         raise rss_refusal(refusal) from refusal
+    return [BangumiHitOut.model_validate(hit) for hit in hits]
 
 
 @router.get(
@@ -848,13 +852,14 @@ async def get_mikan_search(
     responses=_responses(RssRefusal.FEED_UNREACHABLE),
 )
 async def get_mikan_bangumi(
-    session: SessionDep, factory: ClientFactoryDep, bangumi_id: int
+    run: Annotated[Run, Depends(Command("bangumi.read_bangumi"))], bangumi_id: int
 ) -> BangumiOut:
     """一個番組的字幕組，每一組說出是不是已經綁在某部作品上。"""
     try:
-        return BangumiOut.model_validate(await read_bangumi(session, factory, bangumi_id))
-    except RssRejectedError as refusal:
+        view: BangumiView = await run(bangumi_id=bangumi_id)
+    except CommandRefusedError as refusal:
         raise rss_refusal(refusal) from refusal
+    return BangumiOut.model_validate(view)
 
 
 @router.post(
@@ -868,23 +873,20 @@ async def get_mikan_bangumi(
     ),
 )
 async def post_mikan_subscription(
-    session: SessionDep, factory: ClientFactoryDep, request: Request, body: MikanSubscriptionIn
+    run: Annotated[Run, Depends(Command("rss.subscribe_mikan"))], body: MikanSubscriptionIn
 ) -> SubscriptionOut:
     """建單一 feed、綁上它的 RSS Series、送出整季（或只追之後的）。那個 Series 已經在待綁定時
     就地綁它，不多開 Feed。讀不到單一 feed 是 502，什麼都沒加。"""
     try:
-        done = await subscribe_mikan(
-            session,
-            factory,
+        done: Subscription = await run(
             bangumi_id=body.bangumi,
             subgroup_id=body.subgroup,
             media_id=body.media,
             route_id=body.route,
-            user_id=_user_id(request),
             name=body.name,
             subgroup_name=body.subgroup_name,
         )
-    except RssRejectedError as refusal:
+    except CommandRefusedError as refusal:
         raise rss_refusal(refusal) from refusal
     return SubscriptionOut.model_validate(done)
 
@@ -897,20 +899,14 @@ async def post_mikan_subscription(
     ),
 )
 async def post_search_subscription(
-    session: SessionDep, factory: ClientFactoryDep, request: Request, body: SearchSubscriptionIn
+    run: Annotated[Run, Depends(Command("rss.subscribe_search"))], body: SearchSubscriptionIn
 ) -> FeedOut:
     """建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
     仍是 201，原文在 `poll_error`。"""
     try:
-        feed = await subscribe_search(
-            session,
-            factory,
-            kind=body.kind,
-            term=body.term,
-            media_id=body.media,
-            route_id=body.route,
-            user_id=_user_id(request),
+        feed: FeedView = await run(
+            kind=body.kind, term=body.term, media_id=body.media, route_id=body.route
         )
-    except RssRejectedError as refusal:
+    except CommandRefusedError as refusal:
         raise rss_refusal(refusal) from refusal
     return FeedOut.model_validate(feed)

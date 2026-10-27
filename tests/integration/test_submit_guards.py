@@ -22,7 +22,7 @@ from berth.adapters import fs
 from berth.adapters.http import ProtocolMismatchError, ServiceUnavailableError
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.db import create_session_factory
-from berth.domain import EventType, FeedItemStatus, JobState, JobTrigger
+from berth.domain import SYSTEM, EventType, FeedItemStatus, JobState, JobTrigger, Role, label_of
 from berth.models import DiskSettings, Job, Media, Route
 from berth.pipeline.downloads import QbitPoller
 from berth.services.events import EventHub
@@ -107,6 +107,7 @@ class TestInFlightCountsAgainstTheDisk:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert measured == [Path(where) if created else roots["incomplete"]]
@@ -120,7 +121,13 @@ class TestInFlightCountsAgainstTheDisk:
         _free(monkeypatch, 1 + 0.5 * EPISODE / GIB)
 
         first = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         with pytest.raises(JobRejectedError) as refusal:
             await add_download(
@@ -130,6 +137,7 @@ class TestInFlightCountsAgainstTheDisk:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert first.job.state is JobState.SUBMITTED
@@ -153,6 +161,7 @@ class TestInFlightCountsAgainstTheDisk:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
             assert outcome.job.state is JobState.SUBMITTED
 
@@ -164,7 +173,13 @@ class TestInFlightCountsAgainstTheDisk:
         await _threshold(session)
         _free(monkeypatch, 1 + 0.5 * EPISODE / GIB)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         job = await session.get(Job, MAGNET_HASH)
         assert job is not None
@@ -178,6 +193,7 @@ class TestInFlightCountsAgainstTheDisk:
             media_id=media.id,
             route_id=route.id,
             user_id=None,
+            actor=label_of(None),
         )
 
         assert second.job.state is JobState.SUBMITTED
@@ -199,6 +215,7 @@ class TestInFlightCountsAgainstTheDisk:
             media_id=media.id,
             route_id=route.id,
             user_id=None,
+            actor=label_of(None),
         )
 
         with caplog.at_level(logging.INFO, logger="berth.services.jobs"):
@@ -209,6 +226,7 @@ class TestInFlightCountsAgainstTheDisk:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=None,
+                actor=label_of(None),
             )
 
         assert second.job.state is JobState.SUBMITTED
@@ -220,7 +238,13 @@ class TestInFlightCountsAgainstTheDisk:
         media, route, factory = await _ready(session, roots)
 
         outcome = await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
 
         assert outcome.job.total_size == EPISODE
@@ -233,7 +257,13 @@ async def _failed_once(
     media, route, _ = await _ready(session, roots)
     factory = factory_for(roots, qbittorrent=FakeQbittorrentClient(error=error))
     outcome = await add_download(
-        session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+        session,
+        factory,
+        source=_source(),
+        media_id=media.id,
+        route_id=route.id,
+        user_id=None,
+        actor=label_of(None),
     )
     assert outcome.job.state is JobState.SUBMIT_FAILED
     return factory
@@ -338,6 +368,7 @@ class TestTransientFailuresAreRetried:
             media_id=media.id,
             route_id=route.id,
             user_id=None,
+            actor=label_of(None),
         )
 
         assert await retry_due(session, factory, now=_later(SUBMIT_RETRIES[0])) == 1
@@ -357,7 +388,7 @@ class TestTransientFailuresAreRetried:
     ) -> None:
         factory = await _failed_once(session, roots, TIMEOUT)
 
-        await retry_job(session, factory, MAGNET_HASH)
+        await retry_job(session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN)
 
         failures = [
             row.payload

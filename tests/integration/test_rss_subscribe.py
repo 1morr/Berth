@@ -29,6 +29,7 @@ from berth.domain import (
     Role,
     RssRefusal,
     SkipCode,
+    label_of,
 )
 from berth.models import Job, Route, RssFeed, RssSeries, User
 from berth.parser import release
@@ -92,6 +93,7 @@ class TestMikan:
             media_id=media.id,
             route_id=route.id,
             user_id=1,
+            actor=label_of(1),
             name="与你相恋到生命尽头 · LoliHouse",
             now=NOW,
         )
@@ -128,6 +130,7 @@ class TestMikan:
             media_id=media.id,
             route_id=route.id,
             user_id=1,
+            actor=label_of(1),
             now=NOW,
         )
 
@@ -149,6 +152,7 @@ class TestMikan:
             media_id=media.id,
             route_id=route.id,
             user_id=1,
+            actor=label_of(1),
             now=NOW,
         )
         assert done.series.submitted == 11
@@ -173,6 +177,7 @@ class TestMikan:
             media_id=media.id,
             route_id=route.id,
             user_id=1,
+            actor=label_of(1),
             subgroup_name="LoliHouse",
             now=NOW,
         )
@@ -202,6 +207,7 @@ class TestMikan:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=1,
+                actor=label_of(1),
                 now=NOW,
             )
 
@@ -223,6 +229,7 @@ class TestMikan:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=1,
+                actor=label_of(1),
                 now=NOW,
             )
 
@@ -249,6 +256,7 @@ class TestMikan:
                 media_id=media.id,
                 route_id=route.id,
                 user_id=1,
+                actor=label_of(1),
                 now=NOW,
             )
 

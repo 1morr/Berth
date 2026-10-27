@@ -41,6 +41,7 @@ from berth.domain import (
     MediaSnapshot,
     NameKind,
     ParseContext,
+    Role,
     SearchVerdict,
     SeasonSnapshot,
     StepFailure,
@@ -360,7 +361,8 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
 
 
 # 只送查詢給已經存著的索引站，不建任何東西（同 `indexer.search_indexers`）。
-@command(Effect.READ)
+# 送單之前的那一步，一般使用者也做得了（brief §11）。
+@command(Effect.READ, audience=Role.USER)
 async def search_torrents(
     session: AsyncSession,
     factory: ServiceClientFactory,

@@ -9,14 +9,13 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
-from berth.api.deps import SessionDep
+from berth.api.commands import Command, Run
 from berth.api.errors import refusal_responses
-from berth.api.jellyfin import session_user
 from berth.api.jobs import JobEventOut
 from berth.domain import (
     EpisodeStatus,
@@ -28,7 +27,8 @@ from berth.domain import (
     WhyNot,
     WhyNotRefusal,
 )
-from berth.services.why_not import WhyNotRejectedError, explain
+from berth.services.executor import CommandRefusedError
+from berth.services.why_not import WhyNotRejectedError, WhyNotView
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -152,30 +152,28 @@ class WhyNotOut(BaseModel):
     responses=refusal_responses(WhyNotRefusalOut, _STATUS),
 )
 async def get_why_not(
-    session: SessionDep,
-    request: Request,
+    run: Annotated[Run, Depends(Command("why_not.explain"))],
     media_id: str,
     season: int | None = None,
     episode: int | None = None,
 ) -> WhyNotOut:
     """這部作品（或那一集）為什麼沒入庫：季表、Job 與最後幾筆事件、Issue、RSS 那一側與一個結論。
     只讀資料庫，不問任何服務。"""
-    user = session_user(request)
     try:
         if (season is None) != (episode is None):
             raise WhyNotRejectedError(WhyNotRefusal.EPISODE_INCOMPLETE, "season and episode")
-        view = await explain(
-            session,
-            media_id,
-            role=user.role,
-            user_id=user.id,
+        view: WhyNotView = await run(
+            media_id=media_id,
             episode=None if season is None or episode is None else (season, episode),
         )
     except WhyNotRejectedError as refusal:
         raise why_not_refusal(refusal) from refusal
+    except CommandRefusedError as refusal:
+        raise why_not_refusal(refusal) from refusal
     return WhyNotOut.model_validate(asdict(view))
 
 
-def why_not_refusal(refusal: WhyNotRejectedError) -> HTTPException:
-    body = WhyNotRefusalOut(reason=refusal.reason, detail=refusal.detail)
-    return HTTPException(status_code=_STATUS[refusal.reason], detail=body.model_dump(mode="json"))
+def why_not_refusal(refusal: WhyNotRejectedError | CommandRefusedError) -> HTTPException:
+    reason = WhyNotRefusal(refusal.reason)
+    body = WhyNotRefusalOut(reason=reason, detail=refusal.detail)
+    return HTTPException(status_code=_STATUS[reason], detail=body.model_dump(mode="json"))

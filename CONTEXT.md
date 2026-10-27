@@ -400,6 +400,14 @@ _Avoid_: job（Job 是一包 torrent）, ticket
 services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）、反向命令與旗標（`connects_out` / `sends_out` / `downloads` / `settings` / `internal`；`internal` 的不收）、給模型的說明，以及可以乾跑的驗證（`validate`，確認卡的預覽先跑它）。AI 的工具、確認卡、M7 的 MCP server 都只從這裡來。程式在 `services/registry.py`。
 _Avoid_: tool list, API list
 
+**Command Executor**（命令執行器）:
+叫 Command Registry 上的命令的那一條路，API、AI 的工具、Proposal 與之後的 Discord、MCP 共用（`services/executor.py`，M5 票 07）：查登錄表、照命令的 **audience**（`admin` 預設 / `user`）擋角色、驗輸入、注入伺服器手上的東西與 Actor、事後替動到的 Job 推播並叫醒接手的迴圈、把命令宣告的拒絕換成同一個形狀。「自己的送單」由命令看注入的 `user_id`。
+_Avoid_: dispatcher, runner
+
+**Actor**（誰做的）:
+做一件事的是誰，寫進 `events.actor`：人（user id）、`system`、`rss:<id>`、`ai:<user id>`（AI 替那個人做；角色與碰得到的範圍也照那個人）。寫法只在 `domain/actor.py`。
+_Avoid_: user（user 是帳號）, operator
+
 **Shadow Mode**（影子模式）:
 一種 AI 任務型別的試用狀態：AI 照跑，只記錄它會怎麼做，照舊由人決定，統計與人的一致率。使用者看數字後切成自動。
 _Avoid_: dry-run（dry-run 是 RSS 的預覽）, test mode

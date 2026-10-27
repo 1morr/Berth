@@ -35,6 +35,7 @@ from berth.domain import (
     NotificationKind,
     Role,
     SeasonSnapshot,
+    label_of,
 )
 from berth.models import Job, Media, Route, RssFeed, RssSeries, User
 from berth.naming import folder_name
@@ -343,6 +344,7 @@ class TestWhoPressed:
         await recipients(session, factory)
         serve_single(factory)
 
+        skipper = await skipper_id(session)
         await subscribe_mikan(
             session,
             factory,
@@ -350,7 +352,8 @@ class TestWhoPressed:
             subgroup_id=370,
             media_id=media.id,
             route_id=route.id,
-            user_id=await skipper_id(session),
+            user_id=skipper,
+            actor=label_of(skipper),
             now=NOW,
         )
         await deliver(session, factory)

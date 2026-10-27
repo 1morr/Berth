@@ -12,7 +12,15 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import CollectionType, FeedKind, JobRefusal, JobState, JobTrigger, RssRefusal
+from berth.domain import (
+    CollectionType,
+    FeedKind,
+    JobRefusal,
+    JobState,
+    JobTrigger,
+    RssRefusal,
+    label_of,
+)
 from berth.models import Job, Media, Route, RssFeed, RssSeries
 from berth.services import registry
 from berth.services.downloading import add_manual_download
@@ -119,6 +127,7 @@ class TestSubmit:
                 media_id=media.id,
                 route_id=movies.id,
                 user_id=1,
+                actor="1",
             )
         assert refused.value.reason is verdict.refusal
 
@@ -179,6 +188,7 @@ class TestSubscribe:
                 media_id=media.id,
                 route_id=movies.id,
                 user_id=1,
+                actor=label_of(1),
             )
         assert refused.value.reason is verdict.refusal
 

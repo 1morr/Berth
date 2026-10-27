@@ -101,6 +101,7 @@ from berth.api.deps import get_bundled_services, get_client_factory, get_host_re
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
+    SYSTEM,
     CollectionType,
     Confidence,
     ConnectionReason,
@@ -165,7 +166,6 @@ from berth.services.clients import (
 from berth.services.health import check_health
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import DEFAULT_INDEXERS
-from berth.services.jobs import actor_of
 from berth.services.media import read_media
 from berth.services.routes import build_routes
 from berth.services.settings import read_settings, write_settings
@@ -2562,7 +2562,7 @@ async def _seed_weekly(session: AsyncSession) -> None:
         (IssueType.MISSING_FILES, "1"),
         (IssueType.MISSING_FILES, "1"),
         (IssueType.LIBRARY_LINK_MISSING, "1"),
-        (IssueType.CLIENT_REMOVED, actor_of(None)),
+        (IssueType.CLIENT_REMOVED, SYSTEM),
     )
     for number, (issue_type, by) in enumerate(resolved):
         session.add(

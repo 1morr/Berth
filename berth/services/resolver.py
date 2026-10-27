@@ -58,13 +58,13 @@ from berth.adapters.jellyfin import (
     lists_under,
     scan_libraries,
 )
-from berth.domain import CollectionType, EventType, IssueStatus, IssueType, PlanAction
+from berth.domain import SYSTEM, CollectionType, EventType, IssueStatus, IssueType, PlanAction
 from berth.models import Event, Issue, JellyfinSettings, Job, LedgerEntry, Media, Route
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.issues import Recorded, clear_by_system, note_cleared, record_issue
-from berth.services.jobs import actor_of, record_event
+from berth.services.jobs import record_event
 from berth.services.notify import queue_ready
 from berth.services.resolve_schedule import RESOLVE_DELAYS
 from berth.services.routes import owning_route
@@ -641,7 +641,7 @@ async def _announce(
             session,
             job,
             EventType.JELLYFIN_ITEM_RESOLVED,
-            actor=actor_of(None),
+            actor=SYSTEM,
             payload={"count": features},
         )
         await queue_ready(session, job, now=ready_at)
@@ -653,7 +653,7 @@ async def _announce(
             session,
             job,
             EventType.ISSUE_DETECTED,
-            actor=actor_of(None),
+            actor=SYSTEM,
             payload={
                 "type": IssueType.JELLYFIN_ITEM_UNRESOLVED.value,
                 "count": len(entries),

@@ -17,6 +17,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.db import create_session_factory
@@ -31,7 +32,7 @@ from berth.domain import (
     ReviewReason,
     ReviewRefusal,
 )
-from berth.models import Job, LedgerEntry, PlanItem
+from berth.models import Event, Job, LedgerEntry, PlanItem
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
 from berth.services.issues import count_open, record_issue
@@ -477,6 +478,48 @@ class TestUndo:
 
         assert refused.value.reason is ReviewRefusal.NOT_AUDITED
         assert Path(entry.target_path).exists()
+
+
+class TestWithoutAJob:
+    """`rebuild-ledger` 與「認領進帳本」長回來的列沒有 Job（`models/ledger.py`）：確認與撤銷照樣
+    記一筆事件，掛在作品上（研究 R14：AI 動這種列也要查得到是誰）。"""
+
+    async def jobless(self, session: AsyncSession, roots: dict[str, Path]) -> LedgerEntry:
+        _, entry = await audited(session, roots)
+        entry.job_hash = None
+        await session.commit()
+        return entry
+
+    async def events(self, session: AsyncSession) -> list[Event]:
+        return list(await session.scalars(select(Event).where(Event.job_hash.is_(None))))
+
+    async def test_confirming_one_is_recorded_on_the_work(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        entry = await self.jobless(session, roots)
+
+        await confirm_audit(session, entry.id, actor=ACTOR)
+
+        (event,) = [row for row in await self.events(session) if row.type == "audit_confirmed"]
+        assert (event.job_hash, event.media_id, event.actor) == (None, entry.media_id, ACTOR)
+        assert event.payload_json == {"ledger": entry.id, "target": entry.target_path}
+
+    async def test_undoing_one_is_recorded_on_the_work(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        entry = await self.jobless(session, roots)
+        ledger_id, target, media_id = entry.id, entry.target_path, entry.media_id
+
+        await undo_audit(session, ledger_id, actor=ACTOR)
+
+        (event,) = [row for row in await self.events(session) if row.type == "audit_undone"]
+        assert (event.job_hash, event.media_id, event.actor) == (None, media_id, ACTOR)
+        assert event.payload_json == {
+            "ledger": ledger_id,
+            "target": target,
+            "unlinked": True,
+            "unmanaged": False,
+        }
 
 
 class TestTwoTabs:

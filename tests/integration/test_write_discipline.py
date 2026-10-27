@@ -27,7 +27,7 @@ from berth.adapters.qbittorrent import TorrentFile
 from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.config import Config
 from berth.db import create_session_factory
-from berth.domain import EventType, JobState, JobTrigger
+from berth.domain import SYSTEM, EventType, JobState, JobTrigger, Role, label_of
 from berth.models import Event, Job, PollerSettings, RssSeries
 from berth.services.deletion import DeleteScope, delete_job
 from berth.services.downloads import poll_downloads
@@ -384,13 +384,21 @@ class TestNetworkOutsideTheWriteTransaction:
         qbittorrent = FakeQbittorrentClient(add_error=ServiceUnavailableError("down"))
         factory = factory_for(roots, qbittorrent=qbittorrent)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         qbittorrent.add_error = None
         fetched = watch(factory.torrent_, "fetch", config.database_path)
         added = watch(qbittorrent, "add_torrent", config.database_path)
 
-        job = await retry_job(session, factory, MAGNET_HASH)
+        job = await retry_job(
+            session, factory, MAGNET_HASH, actor=SYSTEM, user_id=None, role=Role.ADMIN
+        )
 
         assert job.state is JobState.SUBMITTED
         assert fetched == [False]
@@ -405,7 +413,13 @@ class TestNetworkOutsideTheWriteTransaction:
         route = await _route(session, roots)
         factory = factory_for(roots)
         await add_download(
-            session, factory, source=_source(), media_id=media.id, route_id=route.id, user_id=None
+            session,
+            factory,
+            source=_source(),
+            media_id=media.id,
+            route_id=route.id,
+            user_id=None,
+            actor=label_of(None),
         )
         job = await session.get(Job, MAGNET_HASH)
         assert job is not None

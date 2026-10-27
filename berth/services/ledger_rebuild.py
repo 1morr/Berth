@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
-from berth.domain import ClaimMiss, IssueStatus, IssueType
+from berth.domain import SYSTEM, ClaimMiss, IssueStatus, IssueType
 from berth.models import Issue, LedgerEntry, Route
 from berth.models.types import utcnow
 from berth.services.claims import (
@@ -35,9 +35,6 @@ from berth.services.commands import Effect, command
 from berth.services.issues import record_issue
 
 logger = logging.getLogger(__name__)
-
-#: 帳本長回來、那一件 Issue 跟著收掉時寫的是誰：CLI 沒有登入的人。
-SYSTEM = "system"
 
 
 @dataclass(slots=True)

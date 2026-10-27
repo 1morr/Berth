@@ -29,6 +29,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.domain import Role
 from berth.services.clients import BundledServices, HostResolver, ServiceClientFactory
 from berth.services.commands import (
     CommandMark,
@@ -87,6 +88,8 @@ class CommandSpec:
     #: 拒絕理由的集合（`domain` 的 `*Refusal`）；空的是沒宣告。
     refusals: tuple[type[StrEnum], ...]
     validate: Validator | None
+    #: 誰做得了（`commands.CommandDetails.audience`）：命令執行器照它擋。
+    audience: Role
 
     @property
     def effect(self) -> Effect:
@@ -204,7 +207,7 @@ def _spec(name: str, function: Callable[..., Any], mark: CommandMark) -> Command
         if parameter.name not in hints:
             raise _UnregistrableError(f"{parameter.name} has no annotation")
         hint = hints[parameter.name]
-        if parameter.name in INJECTED_NAMES or _bare(hint) in INJECTED_TYPES:
+        if parameter.name in INJECTED_NAMES or bare_type(hint) in INJECTED_TYPES:
             injected.append(parameter.name)
             continue
         default = ... if parameter.default is parameter.empty else parameter.default
@@ -233,10 +236,11 @@ def _spec(name: str, function: Callable[..., Any], mark: CommandMark) -> Command
         about=details.about,
         refusals=details.refusals,
         validate=details.validate,
+        audience=details.audience,
     )
 
 
-def _bare(hint: object) -> object:
+def bare_type(hint: object) -> object:
     """`X | None` → `X`；其餘原樣。"""
     if isinstance(hint, UnionType) or typing.get_origin(hint) is typing.Union:
         rest = [arg for arg in typing.get_args(hint) if arg is not NoneType]

@@ -248,7 +248,8 @@ class _Episodes:
         return [pair for row in rows for pair in episodes_of(row) if pair in self.known]
 
 
-@command(Effect.READ)
+# 一般使用者也問得了，只看得到自己送的 Job（brief §19「M5 的方向」⑦，見 `_visible`）。
+@command(Effect.READ, refusals=(WhyNotRefusal,), audience=Role.USER)
 async def explain(
     session: AsyncSession,
     media_id: str,

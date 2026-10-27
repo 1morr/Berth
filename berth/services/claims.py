@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters import fs
 from berth.adapters.http import ServiceError
 from berth.domain import (
+    SYSTEM,
     ClaimMiss,
     EventType,
     IssueRefusal,
@@ -49,6 +50,7 @@ from berth.domain import (
     MediaKind,
     PlanAction,
     collection_type_for,
+    owner_of,
 )
 from berth.logs import job_context
 from berth.models import (
@@ -144,7 +146,7 @@ async def reimport_folder(
             name=path.name,
             trigger=JobTrigger.REIMPORT,
             trigger_ref=str(path),
-            user_id=_user_id(actor),
+            user_id=owner_of(actor),
             media_id=media.id,
             route_id=route.id,
             state=JobState.COMPLETED,
@@ -226,7 +228,7 @@ async def claim_torrent(
             hash=found.hash,
             name=found.name,
             trigger=JobTrigger.MANUAL,
-            user_id=_user_id(actor),
+            user_id=owner_of(actor),
             media_id=media.id,
             route_id=route.id,
             state=JobState.SUBMITTED,
@@ -300,11 +302,6 @@ async def _route_by_folder(session: AsyncSession, path: Path) -> tuple[Route, Pa
     raise ClaimRejectedError(IssueRefusal.ACTION_NOT_AVAILABLE, f"{path} is under no route folder")
 
 
-def _user_id(actor: str) -> int | None:
-    """`events.actor` 是 user id 的字串（`jobs.actor_of`），Job 要的是那個數字。"""
-    return int(actor) if actor.isdigit() else None
-
-
 # --- 認領進帳本 -----------------------------------------------------------
 
 
@@ -317,7 +314,7 @@ async def claim_file(
     *,
     index: SourceIndex | None = None,
     now: datetime | None = None,
-    actor: str = "system",
+    actor: str = SYSTEM,
 ) -> LedgerEntry:
     """媒體庫裡的一個檔案 → 帳本上完整的一列。配不上丟 `UnclaimedError`，什麼都不寫。
 

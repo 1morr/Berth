@@ -47,6 +47,7 @@ from berth.adapters.http import ServiceError, is_transient
 from berth.adapters.qbittorrent import TorrentAdd, conflict_detail, ensure_category
 from berth.adapters.torrent import TorrentSource
 from berth.domain import (
+    SYSTEM,
     BindReason,
     EventType,
     HealthStatus,
@@ -287,6 +288,8 @@ class JobView:
     media_title_en: str
     route_id: int | None
     route_name: str
+    #: 送單的人（`jobs.user_id`）；RSS 與沒有人送的是 `None`。API 拿它算「這一筆是不是按的人的」。
+    user_id: int | None
     user_name: str
     save_path: str
     content_path: str
@@ -381,8 +384,11 @@ async def add_download(
     trigger: JobTrigger = JobTrigger.MANUAL,
     trigger_ref: str = "",
     grounds: Sequence[BindReason] = (),
+    actor: str,
 ) -> AddDownloadOutcome:
     """把一個 torrent 送進 qBittorrent，並替它建一筆 Job（plan §3.1）。
+
+    `actor` 是時間線上誰按的（`domain/actor.py`）：人、`ai:<user id>` 或 RSS 的 `rss:<ref>`。
 
     `grounds` 是**沒有人選作品**時認出它的依據（RSS Series 自動綁定，M3 票 09）：寫進 `created`
     事件，時間線說得出「為什麼是這一部」。有人選的（手動送單、人綁的 Series）不帶。
@@ -394,7 +400,6 @@ async def add_download(
     media, route, existing = await _before_resolve(session, source, media_id, route_id)
     if existing is not None:
         return await _existing_outcome(session, existing)
-    actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
     torrent = await _resolve(factory, source.url)
     existing = await session.get(Job, torrent.info_hash)
     if existing is not None:
@@ -457,29 +462,46 @@ async def add_download(
         return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
-# 用存下來的下載連結再送一次，不連新位址。
-@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
-async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_hash: str) -> JobView:
+# 讀一筆 Job 給要動它的命令；不改東西。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def own_job(session: AsyncSession, job_hash: str, *, user_id: int | None, role: Role) -> Job:
+    """這一筆 Job，按的人動得了的話。一般使用者只動得了自己送的（brief §19「M5 的方向」⑦）；
+    別人的與不存在的是同一個回應 `job_missing`，與 Jellyfin 的「看不到就是沒有」同一個規矩。"""
+    job = await session.get(Job, job_hash)
+    if job is None or (role is not Role.ADMIN and job.user_id != user_id):
+        raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
+    return job
+
+
+# 用存下來的下載連結再送一次，不連新位址。一般使用者重試得了自己送的（brief §19「M5 的方向」⑦）。
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS}, refusals=(JobRefusal,), audience=Role.USER)
+async def retry_job(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    job_hash: str,
+    *,
+    actor: str,
+    user_id: int | None,
+    role: Role,
+) -> JobView:
     """`submit_failed` → `requested` → 再送一次（plan §3.1）。
 
     重試走**存下來的下載連結**：畫面上那一輪搜尋早就不在了，而 Prowlarr 的代理連結每次
     搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條。
     """
-    job = await session.get(Job, job_hash)
-    if job is None:
-        raise JobRejectedError(JobRefusal.JOB_MISSING, job_hash)
+    job = await own_job(session, job_hash, user_id=user_id, role=role)
     if job.state not in RETRYABLE:
         raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
     if job.state is JobState.IMPORT_FAILED:
         with job_context(job.hash):
             async with job_lock(job.hash):
-                return await _resume_import(session, job)
+                return await _resume_import(session, job, actor=actor)
     route, subject = await _retry_target(session, job)
 
     with job_context(job.hash):
         # poller 也會寫這一列（票 10），所以重試與迴圈排隊——CAS 保證不寫壞，鎖保證不做兩次。
         async with job_lock(job.hash):
-            return await _resubmit(session, factory, job, route, subject, actor="user", attempt=1)
+            return await _resubmit(session, factory, job, route, subject, actor=actor, attempt=1)
 
 
 async def _retry_target(session: AsyncSession, job: Job) -> tuple[Route, Media | None]:
@@ -595,7 +617,7 @@ async def retry_due(session: AsyncSession, factory: ServiceClientFactory, *, now
                         job,
                         route,
                         subject,
-                        actor=actor_of(None),
+                        actor=SYSTEM,
                         attempt=attempt + 1,
                     )
                 except JobRejectedError:
@@ -722,7 +744,7 @@ async def _reachable(session: AsyncSession, factory: ServiceClientFactory) -> No
         await client.aclose()
 
 
-async def _resume_import(session: AsyncSession, job: Job) -> JobView:
+async def _resume_import(session: AsyncSession, job: Job, *, actor: str) -> JobView:
     """`import_failed` → `importing`（plan §3.1）。
 
     這一支只把那一列放回去：importer 下一輪從 `applied_at` 還空著的那幾個接著做，已經鏈接好的
@@ -732,7 +754,7 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     if not await transition(session, job, JobState.IMPORTING, expected=JobState.IMPORT_FAILED):
         raise JobRejectedError(JobRefusal.NOT_RETRYABLE, job.state.value)
     await record_event(
-        session, job, EventType.RETRIED, actor="user", payload={"state": JobState.IMPORTING.value}
+        session, job, EventType.RETRIED, actor=actor, payload={"state": JobState.IMPORTING.value}
     )
     await session.commit()
     logger.info("job import retried", extra={"state": job.state.value})
@@ -781,7 +803,7 @@ async def _note_round_failure(session: AsyncSession, job_hash: str, failure: Exc
             return
         job.error = detail
         await record_event(
-            session, job, EventType.ROUND_FAILED, actor=actor_of(None), payload={"error": detail}
+            session, job, EventType.ROUND_FAILED, actor=SYSTEM, payload={"error": detail}
         )
         await session.commit()
     except Exception:
@@ -822,7 +844,7 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
         session,
         job,
         EventType.RECOVERED,
-        actor=actor_of(None),
+        actor=SYSTEM,
         payload={"from": EventType.ROUND_FAILED.value, "state": job.state.value},
     )
     await session.commit()
@@ -1240,7 +1262,7 @@ async def fail_interrupted(session: AsyncSession) -> int:
         with job_context(job.hash):
             # 被打斷是最典型的暫時：它若其實進了 qBittorrent，poller 在問得到的那一輪先認回；
             # 沒進的由 `retry_due` 在同一輪之後再送（M4 票 03）。
-            await _fail(session, job, INTERRUPTED, actor=actor_of(None), attempt=1)
+            await _fail(session, job, INTERRUPTED, actor=SYSTEM, attempt=1)
         moved += job.state is JobState.SUBMIT_FAILED
     await session.commit()
     return moved
@@ -1348,6 +1370,32 @@ async def record_event(
     await session.flush()
 
 
+# 沒有 Job 可掛的一筆事件：只加不改，與它所屬的命令同一個交易。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
+async def record_work_event(
+    session: AsyncSession,
+    media_id: str | None,
+    event: EventType,
+    *,
+    actor: str,
+    payload: dict[str, Any],
+) -> None:
+    """掛在作品上、沒有 Job 的事件（研究 R14）：`rebuild-ledger` 與「認領進帳本」長回來的帳本列
+    被人（或 AI）確認、撤銷時。不去重：那是人按的決定，同 `DEDUP_BOUNDARIES` 的道理。
+    `flush` 不 commit。"""
+    session.add(
+        Event(
+            job_hash=None,
+            media_id=media_id,
+            type=event.value,
+            actor=actor,
+            payload_json=payload,
+            created_at=utcnow(),
+        )
+    )
+    await session.flush()
+
+
 #: 事件去重的窗口（plan §3.3）。
 EVENT_DEDUP_WINDOW = timedelta(minutes=1)
 
@@ -1358,12 +1406,6 @@ DEDUP_BOUNDARIES = (EventType.RETRIED, EventType.REVIEW_DECIDED, EventType.RECOV
 
 def _fingerprint(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
-
-
-def actor_of(user_id: int | None) -> str:
-    """`events.actor` 的 user id 或 `system`（plan §2.3）。RSS 送的那一種（`rss:<series>`）由
-    `add_download` 照 `trigger_ref` 組，`ai` 在 M5。"""
-    return str(user_id) if user_id is not None else "system"
 
 
 # --- 攤平 ---------------------------------------------------------------
@@ -1488,6 +1530,7 @@ def _view(job: Job, related: _Related) -> JobView:
         media_title_en=media.title_en if media is not None else "",
         route_id=job.route_id,
         route_name=route.name if route is not None else "",
+        user_id=job.user_id,
         user_name=user.name if user is not None else "",
         save_path=job.save_path,
         content_path=job.content_path,
