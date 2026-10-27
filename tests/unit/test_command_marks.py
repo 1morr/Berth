@@ -1,15 +1,15 @@
 """命令的副作用標記（brief §14「自主權看可不可以撤銷」，M3 票 05 立下）。
 
 M5 的命令登錄表要讀每一個命令的副作用等級與反向命令：可逆的 AI 自己做、不可逆的永遠要人。
-登錄表本身在 M5 做，**標記現在就要標**——M3 起新增的命令一出生就帶著它，M5 不必回頭逐一猜。
+命令一出生就帶著標記，登錄表不必回頭逐一猜。
 
 這一條測試守三件事：
 
 1. 標了反向命令的，反向命令本身也是一個已標記的命令（寫錯名字、指到沒標的函式都紅）。
-2. M3 起新增的 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，含
-   `@asynccontextmanager` 包過的）都有標記。「M3 之前就在」的模組列在 `BEFORE_M3`，豁免；
-   **新模組不必登記就自動被守**。
-3. `NAMED` 裡判斷過的標記（M5 票 02、03）沒被悄悄改掉。
+2. 每一個 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，含
+   `@asynccontextmanager` 包過的）都有標記。沒有豁免：M3 之前就在的模組由 M5 票 03、03b 補完，
+   豁免表跟著刪掉。
+3. `NAMED` 裡判斷過的標記（M5 票 02、03、03b）沒被悄悄改掉。
 
 標記自己矛盾的（只讀卻送單、不可逆卻有反向命令）不在這裡：`CommandMark` 建的那一刻就丟，
 見 `test_command_flags.py`。
@@ -31,33 +31,6 @@ import pytest
 
 import berth.services
 from berth.services.commands import CommandMark, Effect, Flag, mark_of
-
-#: M3 開工前就在的 service 模組，公開命令還沒有標記。補完一個就從這裡拿掉；新模組不在這裡，
-#: 所以一出生就被守。M5 票 03 清掉管線、媒體庫與審核那一批，剩下的是票 03b 那一批，它清完就
-#: 整張刪掉。
-BEFORE_M3 = frozenset(
-    {
-        "auth",
-        "bench",
-        "clients",
-        "deeplink",
-        "discover",
-        "health",
-        "health_issues",
-        "jellyfin",
-        "jellyfin_access",
-        "jellyfin_images",
-        "qbittorrent",
-        "routes",
-        "search",
-        "settings",
-        "setup",
-        "tmdb",
-        "watch",
-        "watch_area",
-        "watching",
-    }
-)
 
 _PACKAGE = "berth.services."
 
@@ -91,7 +64,7 @@ def commands_of(module: ModuleType) -> dict[str, object]:
     }
 
 
-def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list[str]:
+def violations(modules: Iterable[ModuleType]) -> list[str]:
     """兩條規則不成立的每一處，一行一處。空的就是守住了。"""
     modules = list(modules)
     marked = {
@@ -108,7 +81,6 @@ def violations(modules: Iterable[ModuleType], *, exempt: frozenset[str]) -> list
     found += [
         f"{short(module)}.{name}: public command without a mark"
         for module in modules
-        if short(module) not in exempt
         for name in commands_of(module)
         if f"{short(module)}.{name}" not in marked
     ]
@@ -211,16 +183,54 @@ NAMED: dict[str, CommandMark] = {
     # `folder_name`，算改。
     "media.read_media": _mark(Effect.READ),
     "media.refresh_media": _mark(Effect.REVERSIBLE),
+    # M5 票 03b：改設定的（brief §14 改設定、Route 永遠要人）。換一個值就回得去的指向自己。
+    "deeplink.set_public_url": _mark(
+        Effect.REVERSIBLE, Flag.SETTINGS, inverse="deeplink.set_public_url"
+    ),
+    "health_issues.set_min_free": _mark(
+        Effect.REVERSIBLE, Flag.SETTINGS, inverse="health_issues.set_min_free"
+    ),
+    "tmdb.verify_tmdb": _mark(Effect.REVERSIBLE, Flag.SETTINGS, inverse="tmdb.verify_tmdb"),
+    "jellyfin.save_bundled_libraries": _mark(
+        Effect.REVERSIBLE, Flag.SETTINGS, inverse="jellyfin.save_bundled_libraries"
+    ),
+    "jellyfin.connect_jellyfin": _mark(Effect.REVERSIBLE, Flag.SETTINGS),
+    "qbittorrent.apply_qbittorrent": _mark(
+        Effect.REVERSIBLE, Flag.SETTINGS, inverse="qbittorrent.set_interface_login"
+    ),
+    "routes.build_routes": _mark(Effect.REVERSIBLE, Flag.SETTINGS),
+    "routes.create_route": _mark(Effect.REVERSIBLE, Flag.SETTINGS, inverse="routes.delete_route"),
+    "routes.update_route": _mark(Effect.REVERSIBLE, Flag.SETTINGS, inverse="routes.update_route"),
+    # 同 `rss.delete_feed`：重建的是新的一條（新的 id，名稱、啟用與檢查紀錄重來）。
+    "routes.delete_route": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    # 在使用者的 Jellyfin 上建媒體庫、加路徑：Berth 沒有命令收回（brief §16.4 不刪 Jellyfin 的）。
+    "jellyfin.bootstrap_jellyfin": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    "jellyfin.create_libraries": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    "jellyfin.add_berth_paths": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    # 擁有者與精靈：成立了就回不去。`claim_owner` 只連存下、測過的那一台；收任意位址的是
+    # `sign_in_existing_owner`。
+    "setup.claim_owner": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    "setup.sign_in_existing_owner": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS, Flag.CONNECTS_OUT),
+    "jellyfin.claim_jellyfin": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL, Flag.SETTINGS),
+    "setup.complete_setup": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
+    # 可逆性看參數：換 qBittorrent 時勾了就移除原本那一台空的分類，照最嚴的標。
+    "setup.choose_service": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS, Flag.CONNECTS_OUT),
+    # 設定表的底層：能寫任何一組，照最嚴的帶 `settings`。
+    "settings.write_settings": _mark(Effect.REVERSIBLE, Flag.INTERNAL, Flag.SETTINGS),
+    "settings.update_settings": _mark(Effect.REVERSIBLE, Flag.INTERNAL, Flag.SETTINGS),
+    # 登入是人自己的身分，雖然 API 叫，不當工具。
+    "auth.sign_in": _mark(Effect.REVERSIBLE, Flag.INTERNAL, inverse="auth.sign_out"),
+    "auth.sign_out": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    # 迴圈入口，也是健康頁的「立即重測」：寫紀錄、在 qBittorrent 建 category、寫探測檔、記 Issue。
+    "health.check_health": _mark(Effect.REVERSIBLE),
+    # 帳號在 Jellyfin 停用時順手結束他的 session，所以不是 `READ`。
+    "jellyfin_access.jellyfin_access": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
 }
 
 
 class TestTheServices:
     def test_every_rule_holds(self) -> None:
-        assert violations(service_modules(), exempt=BEFORE_M3) == []
-
-    def test_every_exempt_module_still_exists(self) -> None:
-        """豁免表指著不存在的模組，就是有人拆了檔案卻沒回來收這一格。"""
-        assert BEFORE_M3 - {short(module) for module in service_modules()} == set()
+        assert violations(service_modules()) == []
 
     @pytest.mark.parametrize(("name", "expected"), list(NAMED.items()), ids=list(NAMED))
     def test_a_named_command_is_marked_as_decided(self, name: str, expected: CommandMark) -> None:
@@ -270,8 +280,8 @@ def load(source: str) -> ModuleType:
     return module
 
 
-def check(source: str, *, exempt: frozenset[str] = frozenset()) -> list[str]:
-    return violations([load(source)], exempt=exempt)
+def check(source: str) -> list[str]:
+    return violations([load(source)])
 
 
 class TestTheCheckItself:
@@ -306,14 +316,6 @@ class TestTheCheckItself:
     def test_a_misspelled_inverse_is_caught(self) -> None:
         source = _SOURCE.replace('inverse="fake.take_back"', 'inverse="fake.takeback"')
         assert check(source) == ["fake.settle: inverse fake.takeback is not a marked command"]
-
-    def test_an_exempt_module_may_leave_marks_out_but_not_misname_an_inverse(self) -> None:
-        source = _SOURCE.replace("@command(Effect.READ)\n", "").replace(
-            'inverse="fake.take_back"', 'inverse="fake.nowhere"'
-        )
-        assert check(source, exempt=frozenset({"fake"})) == [
-            "fake.settle: inverse fake.nowhere is not a marked command"
-        ]
 
     def test_renaming_an_unrelated_function_is_not_caught(self) -> None:
         source = _SOURCE.replace("_helper", "_other_helper").replace("def plain", "def simple")

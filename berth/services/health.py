@@ -48,6 +48,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.downloads import ACTIVE_INTERVAL
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import probe_indexer
@@ -149,6 +150,7 @@ class HealthReport:
     notify: ChannelView
 
 
+@command(Effect.READ)
 async def read_health(session: AsyncSession) -> HealthReport:
     """上一輪的結果。**不連任何服務**——健康頁載入時看的是紀錄，不是又打一次每個服務。"""
     health = await read_settings(session, HealthSettings)
@@ -191,6 +193,7 @@ async def _poller(session: AsyncSession) -> PollerView:
     )
 
 
+@command(Effect.READ)
 async def overall_status(session: AsyncSession) -> Status:
     """匿名的 `GET /api/health` 回的那一個字（plan §6）。
 
@@ -202,6 +205,8 @@ async def overall_status(session: AsyncSession) -> Status:
     return "degraded" if _degraded(health, await routes_health(session), setup) else "ok"
 
 
+# `health_checker` 迴圈每次醒來問。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def is_due(
     session: AsyncSession, *, now: datetime | None = None, interval: timedelta = CHECK_INTERVAL
 ) -> bool:
@@ -212,6 +217,8 @@ async def is_due(
     return (now or utcnow()) - health.checked_at >= interval
 
 
+# 同 `is_due`。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def recheck_due(session: AsyncSession, *, now: datetime) -> bool:
     """還沒到整輪、但該先重測 Prowlarr 了（M4 票 61）：上一次連不上、而且已經過了
     `RECHECK_INTERVAL`。不用它的不算——它不該被連。"""
@@ -228,6 +235,9 @@ async def recheck_due(session: AsyncSession, *, now: datetime) -> bool:
     return now - row.checked_at >= RECHECK_INTERVAL
 
 
+# 迴圈的入口，也是健康頁的「立即重測」：寫紀錄、在 qBittorrent 建 category、
+# 寫探測檔、記或收 Issue；再跑一次就換成新的結論。
+@command(Effect.REVERSIBLE)
 async def check_health(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> HealthReport:
@@ -245,6 +255,8 @@ async def check_health(
     return await read_health(session)
 
 
+# 設定頁的「測試連線」與健康迴圈的 Prowlarr 重測：只寫這一格的健康紀錄。
+@command(Effect.REVERSIBLE)
 async def check_service(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -262,6 +274,8 @@ async def check_service(
     return await read_health(session)
 
 
+# 只由 `setup.complete_setup` 叫。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def record_setup_results(
     session: AsyncSession, setup: SetupSettings, *, now: datetime | None = None
 ) -> None:

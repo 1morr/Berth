@@ -238,6 +238,7 @@ class QueryPlan:
     limit: int = MAX_QUERIES
 
 
+@command(Effect.READ)
 async def plan_queries(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -358,6 +359,8 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
     )
 
 
+# 只送查詢給已經存著的索引站，不建任何東西（同 `indexer.search_indexers`）。
+@command(Effect.READ)
 async def search_torrents(
     session: AsyncSession,
     factory: ServiceClientFactory,
