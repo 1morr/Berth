@@ -415,7 +415,38 @@ async def list_feeds(session: AsyncSession) -> tuple[FeedView, ...]:
     )
 
 
-@command(Effect.REVERSIBLE, inverse="rss.delete_feed", flags={Flag.CONNECTS_OUT, Flag.SETTINGS})
+async def _can_add_feed(
+    session: AsyncSession,
+    *,
+    url: str,
+    tv_route_id: int | None,
+    movie_route_id: int | None,
+    exclusions: Sequence[str],
+    interval_sec: int,
+) -> None:
+    """`add_feed` 的乾跑：它在寫入之前的每一項檢查，照同樣的順序。"""
+    url = url.strip()
+    if kind_of(url) is None:
+        raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
+    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    _check_interval(interval_sec)
+    await _check_routes(session, KindRoutes(tv=tv_route_id, movie=movie_route_id))
+    _normalized_rules(exclusions)
+
+
+@command(
+    Effect.REVERSIBLE,
+    inverse="rss.delete_feed",
+    flags={Flag.CONNECTS_OUT, Flag.SETTINGS},
+    about=(
+        "Add an RSS feed that Berth polls and downloads from. Only mikanani.me, nyaa.si and "
+        "acg.rip feeds are accepted, and the URL must be one the user typed. For each kind "
+        "(tv, movie) that has an enabled route, give the route new series of that kind go to."
+    ),
+    refusals=(RssRefusal,),
+    validate=_can_add_feed,
+)
 async def add_feed(
     session: AsyncSession,
     *,
@@ -438,14 +469,17 @@ async def add_feed(
     那一種有啟用中的 Route 就要給（`route_required`），一條都沒有時那一格存 `None`
     （`_check_routes`）。
     """
+    await _can_add_feed(
+        session,
+        url=url,
+        tv_route_id=tv_route_id,
+        movie_route_id=movie_route_id,
+        exclusions=exclusions,
+        interval_sec=interval_sec,
+    )
     url = url.strip()
     kind = kind_of(url)
-    if kind is None:
-        raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, url)
-    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
-        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
-    _check_interval(interval_sec)
-    await _check_routes(session, KindRoutes(tv=tv_route_id, movie=movie_route_id))
+    assert kind is not None  # `_can_add_feed` 擋過認不得的網址
     rules = _normalized_rules(exclusions)
     row = RssFeed(
         name=name.strip() or _default_name(url),
@@ -1483,7 +1517,8 @@ async def _in_library(session: AsyncSession, item: RssItem, series: RssSeries) -
     )
 
 
-@command(Effect.READ)
+# 收 ORM 列，是別的命令同一個交易的一段：不進登錄表（M5 票 06）。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def library_copy(
     session: AsyncSession,
     title: str,
@@ -2405,7 +2440,38 @@ class Subscription:
     excluded: tuple[ExcludedCount, ...]
 
 
-@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
+async def _can_subscribe_mikan(
+    session: AsyncSession, *, bangumi_id: int, subgroup_id: int, media_id: str, route_id: int
+) -> None:
+    """`subscribe_mikan` 的乾跑：讀單一 feed 之前的檢查（讀不讀得到要真的去讀才知道）。"""
+    await _target(session, media_id, route_id)
+    series = await session.scalar(
+        select(RssSeries).where(RssSeries.key == _mikan_key(bangumi_id, subgroup_id))
+    )
+    if series is not None and series.media_id is not None:
+        raise RssRejectedError(RssRefusal.SERIES_BOUND, series.media_id)
+    if series is not None and await _home_feed(session, series) is not None:
+        return
+    url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
+    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+
+
+def _mikan_key(bangumi_id: int, subgroup_id: int) -> str:
+    return f"mikan:{bangumi_id}:{subgroup_id}"
+
+
+@command(
+    Effect.REVERSIBLE,
+    flags={Flag.DOWNLOADS},
+    about=(
+        "Subscribe a work to one Mikan bangumi and subgroup: Berth reads the whole season, "
+        "downloads what is out and keeps downloading new episodes into the route. Use ids "
+        "taken from earlier tool results. The route must hold the work's kind."
+    ),
+    refusals=(RssRefusal,),
+    validate=_can_subscribe_mikan,
+)
 async def subscribe_mikan(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -2467,11 +2533,15 @@ async def _subscribe(
     moment: datetime,
     batch: DownloadRound,
 ) -> Subscription:
-    await _target(session, media_id, route_id)
-    key = f"mikan:{bangumi_id}:{subgroup_id}"
+    await _can_subscribe_mikan(
+        session,
+        bangumi_id=bangumi_id,
+        subgroup_id=subgroup_id,
+        media_id=media_id,
+        route_id=route_id,
+    )
+    key = _mikan_key(bangumi_id, subgroup_id)
     series = await session.scalar(select(RssSeries).where(RssSeries.key == key))
-    if series is not None and series.media_id is not None:
-        raise RssRejectedError(RssRefusal.SERIES_BOUND, series.media_id)
     home = await _home_feed(session, series) if series is not None else None
     if series is not None and home is not None:
         bound = await _bind(
@@ -2494,8 +2564,6 @@ async def _subscribe(
         )
 
     url = mikan.bangumi_feed_url(bangumi_id, subgroup_id)
-    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
-        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
     fetcher = factory.rss()
     try:
         try:
@@ -2561,7 +2629,37 @@ async def _excluded_counts(session: AsyncSession, series_id: int) -> tuple[Exclu
     return tuple(ExcludedCount(code=code, count=counts[code]) for code in SkipCode if counts[code])
 
 
-@command(Effect.REVERSIBLE, inverse="rss.delete_feed")
+def _search_url(kind: FeedKind, term: str) -> str:
+    match kind:
+        case FeedKind.NYAA:
+            return nyaa.search_url(term.strip())
+        case FeedKind.ACGRIP:
+            return acgrip.search_url(term.strip())
+        case FeedKind.MIKAN:
+            raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, "mikan has no search feed")
+
+
+async def _can_subscribe_search(
+    session: AsyncSession, *, kind: FeedKind, term: str, media_id: str, route_id: int
+) -> None:
+    """`subscribe_search` 的乾跑：建 Feed 之前的檢查。"""
+    await _target(session, media_id, route_id)
+    url = _search_url(kind, term)
+    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+
+
+@command(
+    Effect.REVERSIBLE,
+    inverse="rss.delete_feed",
+    about=(
+        "Subscribe a work to a nyaa or acgrip keyword search feed, for works Mikan does not "
+        "carry. Every subgroup the search finds is bound to the work; the first round waits "
+        "for the user to choose what to download. The route must hold the work's kind."
+    ),
+    refusals=(RssRefusal,),
+    validate=_can_subscribe_search,
+)
 async def subscribe_search(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -2579,16 +2677,8 @@ async def subscribe_search(
     （`_bind_grown`）。**當場讀一輪**，第一輪預覽（票 11）馬上有東西可看；讀不到照一般 Feed 記在
     `poll_error`，之後的輪詢再讀。第一輪照樣等人選「全部下載」或「只追之後的」。
     """
-    await _target(session, media_id, route_id)
-    match kind:
-        case FeedKind.NYAA:
-            url = nyaa.search_url(term.strip())
-        case FeedKind.ACGRIP:
-            url = acgrip.search_url(term.strip())
-        case FeedKind.MIKAN:
-            raise RssRejectedError(RssRefusal.FEED_UNSUPPORTED, "mikan has no search feed")
-    if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
-        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url)
+    await _can_subscribe_search(session, kind=kind, term=term, media_id=media_id, route_id=route_id)
+    url = _search_url(kind, term)
     feed = RssFeed(
         name=f"{_default_name(url)} · {term.strip()}",
         url=url,

@@ -45,7 +45,8 @@ berth/
   parser/              純函式：classify、cjk、release、structure、mapper、subtitles、planner、confidence
   naming/              純函式：title 選擇、sanitize、tag 渲染、路徑模板
   adapters/            外部服務：qbittorrent、jellyfin、tmdb、prowlarr、rss/{mikan,nyaa,acgrip,generic}、fs、mediainfo
-  services/            命令（use case）：setup、routes、discover、search、download、plan、import_、review、rematch、delete、rss、reconcile、health
+  services/            命令（use case）：setup、routes、discover、search、download、plan、import_、review、rematch、delete、rss、reconcile、health；
+                       命令標記（commands）與命令登錄表（registry，M5 票 06）
   pipeline/            背景迴圈：qbit_poller、planner_runner、importer、jellyfin_resolver、reconciler、rss_poller、health_checker
   api/                 FastAPI routers：auth、setup、settings、routes、discover、media、search、jobs、plans、review、files、rss、issues、health、events
   events.py            Event 寫入與 SSE 廣播
@@ -74,6 +75,7 @@ adapters ──► domain                  （不 import services、models；回
 - 所有會改變狀態的操作都是 `services` 內的命令函式，名稱即 brief §14 的命令名（`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`…）。API 與 pipeline 只呼叫 services，兩者都不直接碰 adapters 或 models。
 - **`naming` 在 `parser` 之下**（M1 票 07）：`plan` 階段要產出目標路徑（§4.1），而衝突偵測比的就是那條路徑——兩個檔案指到同一個檔名時誰都不能自動入庫。反向不成立，`naming` 只認 `domain` 的快照與 `Tags`，`import-linter` 另有一條契約守著。
 - `db`（engine、session factory）在 `models` 之下、`domain` 之上；`api`、`pipeline`、`parser`、`naming`、`adapters` 都不得 import 它。Alembic 的 `env.py` 需要 `models` 的 metadata，因此放在 `migrations/`（不納入層級契約）。
+- **命令登錄表**（M5 票 06）在 `services/registry.py`：從 `services` 各模組的命令標記與簽名收集非 `internal` 的命令（輸入模型、結果型別、拒絕理由、標記、說明、乾跑的 `validate`）。它屬於 `services` 層，AI 的工具、確認卡（M5）與 MCP server（M7）在 `api` 讀它，依賴方向不變。注入的參數（session、client factory、source cache、actor 這類）不進輸入模型；推不出輸入模型的命令讓 `tests/unit/test_command_registry.py` 紅。
 - 用 `import-linter` 在 CI 強制上述方向，契約寫在 `pyproject.toml` 的 `[tool.importlinter]`。
 - 每個 adapter 有一個 `Protocol` 介面與一個 `Fake` 實作（放在 `adapters/<name>/fake.py`），整合測試與 e2e 用 Fake 取代真服務。
 

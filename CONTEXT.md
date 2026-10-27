@@ -397,7 +397,7 @@ _Avoid_: integration, webhook（webhook 是別人打進來的那一種）
 _Avoid_: job（Job 是一包 torrent）, ticket
 
 **Command Registry**（命令登錄表）:
-services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）、反向命令與旗標（`connects_out` / `sends_out` / `downloads` / `settings` / `internal`；`internal` 的不當工具）。AI 的工具、M7 的 MCP server 都只從這裡來。
+services 命令的清單：輸入、結果與拒絕理由、副作用等級（`read` / `reversible` / `irreversible`）、反向命令與旗標（`connects_out` / `sends_out` / `downloads` / `settings` / `internal`；`internal` 的不收）、給模型的說明，以及可以乾跑的驗證（`validate`，確認卡的預覽先跑它）。AI 的工具、確認卡、M7 的 MCP server 都只從這裡來。程式在 `services/registry.py`。
 _Avoid_: tool list, API list
 
 **Shadow Mode**（影子模式）:

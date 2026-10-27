@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import PurePosixPath
@@ -306,7 +306,7 @@ async def read_wall(
 
 @command(Effect.READ)
 async def libraries_with_imports(
-    session: AsyncSession, library_ids: Collection[str]
+    session: AsyncSession, library_ids: Sequence[str]
 ) -> frozenset[str]:
     """這幾個媒體庫裡，哪幾個有 Berth 入庫的檔案：帳本至少一列落在指向它的 Route 底下。
 

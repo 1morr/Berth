@@ -259,7 +259,8 @@ async def open_issues(session: AsyncSession) -> list[tuple[int, IssueType]]:
     return list(rows.tuples())
 
 
-@command(Effect.READ)
+# 「有 N 件等你處理」與巡檢那一輪的一段（`notify`、`sweep`）：不進登錄表（M5 票 06）。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> set[int]:
     """這幾件開著的裡面，同一件事（型別與鍵都相同）的上一筆被忽略、而且之後條件沒解除過的
     （沒有 `cleared_at`）：條件一直都在，是下一輪偵測又開了一筆（`STAYS_IGNORED` 以外那幾種，

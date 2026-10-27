@@ -52,7 +52,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services import routes as routes_module
-from berth.services.jellyfin import bootstrap_jellyfin, save_bundled_libraries
+from berth.services.jellyfin import LibraryDraft, bootstrap_jellyfin, save_bundled_libraries
 from berth.services.routes import (
     RouteRejectedError,
     RouteSelection,
@@ -1444,7 +1444,7 @@ class TestEnteringTwice:
     async def _enter(self, session: AsyncSession, factory: FakeClientFactory) -> None:
         await reread_libraries(session, factory)
         await save_bundled_libraries(
-            session, [row.model_copy() for row in DEFAULT_BUNDLED_LIBRARIES]
+            session, [LibraryDraft(**row.model_dump()) for row in DEFAULT_BUNDLED_LIBRARIES]
         )
         await bootstrap_jellyfin(session, factory)
         await build_routes(session, factory, ())

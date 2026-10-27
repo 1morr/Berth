@@ -85,7 +85,8 @@ class Vouched:
     others: tuple[str, ...]
 
 
-@command(Effect.READ)
+# 收 ORM 列，是別的命令同一個交易的一段：不進登錄表（M5 票 06）。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def vouch(
     session: AsyncSession,
     job: Job,

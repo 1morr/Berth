@@ -32,7 +32,6 @@ from berth.domain import (
 )
 from berth.models import (
     DEFAULT_BUNDLED_LIBRARIES,
-    BundledLibrary,
     JellyfinSettings,
     PathSettings,
     Route,
@@ -45,6 +44,7 @@ from berth.services.jellyfin import (
     JellyfinSetupStatus,
     JellyfinStartup,
     JellyfinTarget,
+    LibraryDraft,
     add_berth_paths,
     bootstrap_jellyfin,
     claim_jellyfin,
@@ -318,9 +318,9 @@ async def test_the_bundled_paths_match_what_the_berth_path_rule_computes(
 
 #: 票 06f 的 playwright 情境：改一個名稱、加一個第四列、刪掉 Anime。
 EDITED = [
-    BundledLibrary(name="電影", collection_type=CollectionType.MOVIES, folder="films"),
-    BundledLibrary(name="TV", collection_type=CollectionType.TVSHOWS, folder="tv"),
-    BundledLibrary(name="電視劇（華語）", collection_type=CollectionType.TVSHOWS, folder="tv-zh"),
+    LibraryDraft(name="電影", collection_type=CollectionType.MOVIES, folder="films"),
+    LibraryDraft(name="TV", collection_type=CollectionType.TVSHOWS, folder="tv"),
+    LibraryDraft(name="電視劇（華語）", collection_type=CollectionType.TVSHOWS, folder="tv-zh"),
 ]
 
 
@@ -337,7 +337,7 @@ async def test_the_list_says_whether_it_is_still_the_default(
 
     back = await save_bundled_libraries(
         session,
-        [row.model_copy() for row in DEFAULT_BUNDLED_LIBRARIES],
+        [LibraryDraft(**row.model_dump()) for row in DEFAULT_BUNDLED_LIBRARIES],
     )
     assert back.bundled_default is True
 
@@ -405,13 +405,13 @@ async def test_a_row_added_after_docking_is_the_only_one_built_on_the_rerun(
     jellyfin = FakeJellyfinClient()
     factory = FakeClientFactory(jellyfin=jellyfin)
     first = await dock(session, factory)
-    documentaries = BundledLibrary(
+    documentaries = LibraryDraft(
         name="紀錄片", collection_type=CollectionType.MOVIES, folder="docs"
     )
     await save_bundled_libraries(
         session,
         [
-            BundledLibrary(name=row.name, collection_type=row.collection_type, folder=row.folder)
+            LibraryDraft(name=row.name, collection_type=row.collection_type, folder=row.folder)
             for row in first.bundled
         ]
         + [documentaries],

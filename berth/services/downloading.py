@@ -27,13 +27,19 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import JobState, MediaKind, NotificationKind
+from berth.domain import JobRefusal, JobState, MediaKind, NotificationKind
 from berth.models import Job, Media, Notification, Route, RssSeries
 from berth.models.types import utcnow
 from berth.parser import episode_span
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
-from berth.services.jobs import AddDownloadOutcome, JobSource, add_download, series_id_of
+from berth.services.jobs import (
+    AddDownloadOutcome,
+    JobSource,
+    add_download,
+    check_submit,
+    series_id_of,
+)
 from berth.services.plan import guess_from_title
 from berth.services.recipients import subscribers
 
@@ -94,7 +100,17 @@ async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> 
 
 # 撤銷是刪 Job（它有自己的刪除範圍）。排出去的「正在下載」收不回來，但與 RSS 那幾個送單的命令
 # （`rss.bind_series` 等）同一個標法：等級看命令的主效果。
-@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
+@command(
+    Effect.REVERSIBLE,
+    flags={Flag.DOWNLOADS},
+    about=(
+        "Send one torrent from search results to qBittorrent and track it as a job for the "
+        "work. The route must hold the work's kind (tv into a tvshows library, movie into a "
+        "movies library) and be enabled and healthy; a full download disk refuses it."
+    ),
+    refusals=(JobRefusal,),
+    validate=check_submit,
+)
 async def add_manual_download(
     session: AsyncSession,
     factory: ServiceClientFactory,

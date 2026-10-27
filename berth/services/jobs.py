@@ -391,15 +391,10 @@ async def add_download(
     那段時間每一筆都去索引站要一次 torrent 只是白打。代價是索引站不報 hash 的那一筆重複送單
     在磁碟不夠時說的是 `low_disk_space` 而不是「本來就在了」——兩者都沒有下載任何東西。
     """
-    media, route = await _preconditions(session, media_id, route_id)
+    media, route, existing = await _before_resolve(session, source, media_id, route_id)
+    if existing is not None:
+        return await _existing_outcome(session, existing)
     actor = f"rss:{trigger_ref}" if trigger is JobTrigger.RSS else actor_of(user_id)
-
-    if source.info_hash:
-        existing = await session.get(Job, source.info_hash)
-        if existing is not None:
-            return await _existing_outcome(session, existing)
-
-    await _check_disk(session, route)
     torrent = await _resolve(factory, source.url)
     existing = await session.get(Job, torrent.info_hash)
     if existing is not None:
@@ -958,6 +953,33 @@ async def _preconditions(
     return media, route
 
 
+# 送單的乾跑（M5 票 06，`downloading.add_manual_download` 的 `validate`）：只讀。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def check_submit(
+    session: AsyncSession, *, source: JobSource, media_id: str, route_id: int
+) -> None:
+    """`add_download` 向索引站要 torrent 之前的那一段（`_before_resolve`），同樣的理由。
+
+    索引站沒報 hash 的，要拿到 torrent 才知道是不是已經有那一筆 Job：預覽照「新的一筆」看。
+    """
+    _, _, existing = await _before_resolve(session, source, media_id, route_id)
+    if existing is not None:
+        _refuse_removed(existing)
+
+
+async def _before_resolve(
+    session: AsyncSession, source: JobSource, media_id: str, route_id: int
+) -> tuple[Media, Route, Job | None]:
+    """四個前提；索引站報了 hash 而那一筆已經在就停（回它）；否則看磁碟門檻。"""
+    media, route = await _preconditions(session, media_id, route_id)
+    if source.info_hash:
+        existing = await session.get(Job, source.info_hash)
+        if existing is not None:
+            return media, route, existing
+    await _check_disk(session, route)
+    return media, route, None
+
+
 def check_route(route: Route, media: Media | None) -> None:
     """這條 Route 現在收得下這一次送單嗎。**第一次送單與重試走同一支。**
 
@@ -982,9 +1004,13 @@ async def _existing_outcome(session: AsyncSession, job: Job) -> AddDownloadOutco
     RSS 下一輪看到同一個條目就再送一次、再拿回同一列。拒絕並帶著那一筆的 hash：重新入庫或
     連紀錄一起刪掉之後再送，是看過那一筆的人的決定。
     """
+    _refuse_removed(job)
+    return AddDownloadOutcome(job=await _view_one(session, job), created=False)
+
+
+def _refuse_removed(job: Job) -> None:
     if job.state is JobState.REMOVED:
         raise JobRejectedError(JobRefusal.JOB_REMOVED, job.hash)
-    return AddDownloadOutcome(job=await _view_one(session, job), created=False)
 
 
 async def _check_disk(session: AsyncSession, route: Route) -> None:

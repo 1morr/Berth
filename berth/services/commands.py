@@ -1,7 +1,16 @@
 """命令的副作用標記（brief §14「自主權看可不可以撤銷」，M3 票 05；旗標是 M5 票 02）。
 
-每一個 service 命令標明它的副作用等級、反向命令與旗標。M5 的命令登錄表讀它：要不要人確認看
-`needs_person`，規則只有那一份。**這裡只有標記**——不收集、不查詢，登錄表本身在 M5 做。
+每一個 service 命令標明它的副作用等級、反向命令與旗標。命令登錄表（`services/registry.py`，
+M5 票 06）讀它：要不要人確認看 `needs_person`，規則只有那一份。**這裡只有標記**——不收集、不查詢，
+收集在登錄表。
+
+要給人或 AI 用的命令（非 `INTERNAL`）另外可以帶三樣，登錄表照收（`details_of`）：
+
+- `about`：**給模型看的說明**，明寫，不從 docstring 抓（docstring 是寫給維護的人的）。
+- `refusals`：它拒絕時用的理由集合（`domain` 的 `*Refusal`）。
+- `validate`：**乾跑**。收 `session` 與它要的那幾格輸入（關鍵字，名字同命令的參數），只讀、不改任何
+  狀態；不行就丟命令自己的拒絕例外（`reason` 在 `refusals` 裡），可以就回 `None`。命令本身走同一組
+  檢查（先呼叫它，或共用它呼叫的那幾支），卡片預覽與真的執行才擋得一樣。
 
 **反向命令（inverse）有三種寫法**：
 
@@ -24,7 +33,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, TypeVar
@@ -32,6 +41,10 @@ from typing import Any, TypeVar
 _Command = TypeVar("_Command", bound=Callable[..., Any])
 
 _ATTRIBUTE = "__berth_command__"
+_DETAILS = "__berth_command_details__"
+
+#: 乾跑：`session` 加上命令的幾格輸入（關鍵字）；不行就丟命令的拒絕例外。見模組 docstring。
+Validator = Callable[..., Awaitable[None]]
 
 
 class Effect(StrEnum):
@@ -60,7 +73,9 @@ class Flag(StrEnum):
     #: 設定（加刪 Feed、間隔、Route、排除條件）——使用者自己定的規則。從 Media 頁訂閱
     #: （`rss.subscribe_*`）不算：那是「要這一部」，同綁定。
     SETTINGS = "settings"
-    #: 背景迴圈的入口、週報產生、與別的命令同一個交易的一段：不當 AI 的工具。
+    #: 不進命令登錄表、不當 AI 的工具：背景迴圈的入口、週報產生、與別的命令同一個交易的一段
+    #: （收 ORM 列的那幾支），以及**身分與門禁**——登入、登出、讀 session、Jellyfin 存取的入口
+    #: 是人自己的身分，AI 不代做（M5 票 06 定）。
     INTERNAL = "internal"
 
 
@@ -86,14 +101,40 @@ class CommandMark:
             raise ValueError(f"a read command changes nothing, got flags {changing}")
 
 
+@dataclass(frozen=True, slots=True)
+class CommandDetails:
+    """要給人或 AI 用的命令另外帶的三樣（模組 docstring）。都沒給是預設值：沒寫說明、沒列拒絕理由、
+    沒有乾跑——預覽只顯示參數。"""
+
+    about: str = ""
+    refusals: tuple[type[StrEnum], ...] = ()
+    validate: Validator | None = None
+
+    def __post_init__(self) -> None:
+        if self.validate is not None and not self.refusals:
+            raise ValueError("a command with validate must declare its refusals")
+
+
 def command(
-    effect: Effect, *, inverse: str | None = None, flags: Iterable[Flag] = ()
+    effect: Effect,
+    *,
+    inverse: str | None = None,
+    flags: Iterable[Flag] = (),
+    about: str = "",
+    refusals: Iterable[type[StrEnum]] = (),
+    validate: Validator | None = None,
 ) -> Callable[[_Command], _Command]:
-    """標上副作用等級、反向命令與旗標。函式本身原樣回傳，不包一層。"""
+    """標上副作用等級、反向命令與旗標（與登錄表要的三樣）。函式本身原樣回傳，不包一層。"""
     mark_value = CommandMark(effect=effect, inverse=inverse, flags=frozenset(flags))
+    details = CommandDetails(about=about, refusals=tuple(refusals), validate=validate)
+    if Flag.INTERNAL in mark_value.flags and details != CommandDetails():
+        raise ValueError(
+            "an internal command is not registered, it takes no about/refusals/validate"
+        )
 
     def mark(function: _Command) -> _Command:
         setattr(function, _ATTRIBUTE, mark_value)
+        setattr(function, _DETAILS, details)
         return function
 
     return mark
@@ -103,6 +144,12 @@ def mark_of(function: object) -> CommandMark | None:
     """一個函式的標記；沒標的是 `None`。"""
     found = getattr(function, _ATTRIBUTE, None)
     return found if isinstance(found, CommandMark) else None
+
+
+def details_of(function: object) -> CommandDetails:
+    """一個命令給登錄表的三樣；沒標的是預設值。"""
+    found = getattr(function, _DETAILS, None)
+    return found if isinstance(found, CommandDetails) else CommandDetails()
 
 
 def needs_person(mark: CommandMark) -> bool:
