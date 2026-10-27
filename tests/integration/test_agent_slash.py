@@ -19,12 +19,9 @@ from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import (
     CompactionPart,
     ModelMessage,
-    ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
     TextPart,
-    ToolCallPart,
-    UserPromptPart,
 )
 from pydantic_ai.models.function import AgentInfo
 from sqlalchemy import select
@@ -36,13 +33,11 @@ from berth.api.gate import SESSION_COOKIE
 from berth.config import Config
 from berth.domain import Actor, AgentRefusal, AiToolOutcome, JobState, JobTrigger, Role
 from berth.main import create_app
-from berth.models import AiConversation, AiRun, AiToolCall, Job, User
+from berth.models import AiRun, AiToolCall, Job, User
 from berth.services import proposals
 from berth.services.agent import STALE_CLAIM_SECONDS, AgentRefusedError, AgentRuntime
 from berth.services.agent_guards import ProviderBreaker
 from berth.services.events import EventHub
-from berth.services.executor import Executor
-from berth.services.hints import JobHints
 from berth.services.skills import list_skills
 from tests.integration.arrange import sign_in_crew, sign_in_owner
 from tests.integration.factories import FakeClientFactory
@@ -460,68 +455,3 @@ class TestCompactHoldsTheTurn:
 
         assert response.status_code == 409
         assert response.json()["detail"]["reason"] == "busy"
-
-
-class TestACardSurvivesCompaction:
-    """有待確認的卡片時 `/compact`，之後照常確認並執行（驗收第 2 條）。
-
-    卡片的事實來源是 Proposal 表；歷史尾巴那個還沒有結果的呼叫，是票 13 恢復時找的那一個。票 13 落地
-    之前，「確認之後由對話恢復執行」這一步以 `proposals.execute` 代替（票 08：在對話裡的卡片核准只記
-    決定，由恢復執行）。
-    """
-
-    def test_compact_then_confirm_and_run(self, client: TestClient, script: Script) -> None:
-        three_turns(client, script)
-        card = a_card(client, "c1", "e" * 40)
-        waiting = ModelResponse(
-            parts=[ToolCallPart("jobs_retry_job", {"job_hash": "e" * 40}, tool_call_id="card")]
-        )
-
-        async def asked(session: AsyncSession) -> None:
-            row = await session.get_one(AiConversation, "c1")
-            history = [
-                *ModelMessagesTypeAdapter.validate_json(row.history_json),
-                ModelRequest(parts=[UserPromptPart("retry the failed one")]),
-                waiting,
-            ]
-            row.history_json = ModelMessagesTypeAdapter.dump_json(history).decode()
-            await session.commit()
-
-        in_portal(client, asked)
-        script.steps = [*script.steps, say("SUMMARY")]
-
-        assert ok(client, "/compact")["after"] is not None
-
-        # 待確認的呼叫原樣留在尾巴，卡片照舊在等。
-        history = stored_history(client)
-        assert texts(history) == ["retry the failed one"]
-        last = history[-1]
-        assert isinstance(last, ModelResponse)
-        assert [(p.tool_call_id, p.args) for p in last.parts if isinstance(p, ToolCallPart)] == [
-            ("card", {"job_hash": "e" * 40})
-        ]
-        assert [c["id"] for c in ok(client, "/pending")["cards"]] == [card]
-
-        decided = client.post(
-            f"/api/proposals/{card}/decide", json={"approve": True}, headers=BROWSER
-        )
-        assert decided.status_code == 200, decided.text
-        assert decided.json()["status"] == "approved"
-
-        async def resumed(session: AsyncSession) -> tuple[str, JobState]:
-            app = client.app
-            executor = Executor(
-                factory=app.dependency_overrides[get_client_factory](),  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
-                hub=app.state.events,  # type: ignore[attr-defined]  # 同上
-                sources=app.state.sources,  # type: ignore[attr-defined]  # 同上
-                plans=JobHints(),
-                imports=JobHints(),
-            )
-            view = await proposals.execute(session, executor, card)
-            job = await session.get_one(Job, "e" * 40)
-            return view.status, job.state
-
-        status, state = in_portal(client, resumed)
-        assert status == "executed"
-        assert state != JobState.IMPORT_FAILED
-        assert ok(client, "/pending")["cards"] == []

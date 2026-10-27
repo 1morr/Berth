@@ -1818,7 +1818,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **deferred tool 可以存成一列、重啟之後接著跑**：
   - 工具丟 `ApprovalRequired` 時，run 以 `DeferredToolRequests` 結束。這需要 `output_type` 含 `DeferredToolRequests`。
   - 歷史用 `ModelMessagesTypeAdapter` 存成 JSON。
-  - 另一個請求、甚至另一個行程，帶 `message_history` 與 `DeferredToolResults` 就能恢復。核准用 `ToolApproved(override_args=...)`，參數以伺服器存的為準。
+  - 另一個請求、甚至另一個行程，帶 `message_history` 與 `DeferredToolResults` 就能恢復。核准用 `ToolApproved(override_args=...)`，參數以伺服器存的為準。（Berth 的正式版改成核准就由伺服器當場執行，恢復只交結果，M5 票 13，見下方〈確認卡的恢復〉。）
   - 恢復時工具裡的 `ctx.tool_call_approved` 為真，所以「丟之前跑防護、算預覽」與「核准後執行」是同一個函式。
   - 待確認的呼叫**必須一次全部解決**，否則 `UserError`。使用者沒按就繼續說話時，pydantic-ai 會自己補一句 "interrupted"。
   - 所以 **Proposal 的生命週期要獨立於 agent run**。卡片脫離對話之後再按，由伺服器直接執行，下一輪告訴模型結果。
@@ -1873,6 +1873,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - run 出錯（含 capability 自己丟的例外）時，串流送 `error`（`errorText` 是例外的字串）、`finish-step`、`finish`（`finishReason: error`），`on_complete` 不跑。
   - `SubmitMessage` 是 `extra='allow'`：`useChat` 透過 transport 的 `body` 加的欄位（Berth 的 `language`）在 `model_extra`。
   - `FunctionModel` 要另給 `stream_function` 才能串流（`adapters/ai/fake.py` 從同一則回答拆出片段）。
+- **確認卡的恢復**（2026-10-28 M5 票 13 讀原始碼與整合測試；pydantic-ai-slim 2.62.0、ai 7.0.153）：
+  - `ToolApproved.override_args` 只換掉傳進工具的參數，**不改歷史裡的 `ToolCallPart`**（`pydantic_ai/_tool_execution.py` 的 `_validate_approved_call` 用 `dataclasses.replace` 複製一份）。
+  - `DeferredToolResults` 與新的使用者訊息可以同一輪給（`_agent_graph.py` 的 `_handle_deferred_tool_results` 直接進 `CallToolsNode`）；但經 `VercelAIAdapter` 時新訊息是放進 `message_history` 的，工具結果會排在它後面。
+  - `dump_messages` 把沒有結果的呼叫轉成 `approval-requested` 時，`approval.id` 就是 `tool_call_id`（`ui/vercel_ai/_adapter.py`）。
+  - **ai 7 的前端只在當前那一則助理訊息裡找工具呼叫**：串流對上一則訊息裡的呼叫送 `tool-output-*` 時丟 `UIMessageStreamError`「No tool invocation found」（`ai/src/ui/process-ui-message-stream.ts` 的 `getToolInvocation`）。恢復時最後一則是助理的，串流接在那一則上，所以沒事；使用者沒按卡就送新訊息時會出事——Berth 改成由伺服器替那幾個呼叫補上結果、再接新訊息（`tests/integration/test_agent_cards.py::TestMovingOn`）。
+  - `addToolApprovalResponse` 之後 `sendMessage()`（不帶訊息）送出恢復的那一則，接在那一則助理訊息上（`ai/src/ui/chat.ts`）。
 - **還沒測**：Claude 與 OpenAI 的官方端點（這次兩組 key 都是 DeepSeek）、`AnthropicCompaction`。
 - DeepSeek 的 Anthropic 相容端點會忽略 `cache_control` 但自己快取，也會執行伺服器端 `web_search`（`usage.server_tool_use.web_search_requests`）。
 - **網路搜尋**（2026-10-27，M5 票 17）：

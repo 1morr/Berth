@@ -1,6 +1,14 @@
 import { Chat, useChat } from '@ai-sdk/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { isDataUIPart, isTextUIPart, isToolUIPart, type UIMessage } from 'ai'
+import {
+  isDataUIPart,
+  isTextUIPart,
+  isToolUIPart,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  type DynamicToolUIPart,
+  type ToolUIPart,
+  type UIMessage,
+} from 'ai'
 import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,10 +24,13 @@ import {
   type SlashResult,
 } from '../api/agent'
 import { ApiError, signedOut } from '../api/client'
+import { proposalsKey, proposalsQueryOptions, type Proposal } from '../api/proposals'
 import { GhostButton, Notice, PrimaryButton } from '../components/controls'
 import { ExpandHint } from '../components/ExpandHint'
 import { RequestFailed } from '../components/RequestFailed'
 import i18n from '../i18n'
+import { CardContext, type CardActions } from './cards'
+import { ConfirmCard } from './ConfirmCard'
 import { Markdown } from './Markdown'
 import { PanelFailed, PanelLoading } from './PanelStates'
 import { INPUT_ID, PANEL_TITLE_ID, SLASH_HINT_ID, slashOptionId, usePanel } from './panelState'
@@ -69,7 +80,7 @@ interface Output {
 function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { draft, setDraft, startNew, restarted } = usePanel()
+  const { draft, setDraft, startNew, restarted, conversationId } = usePanel()
   const { messages, sendMessage, status, stop, setMessages, clearError } = useChat({ chat })
   const [failure, setFailure] = useState<Failure | null>(null)
   const [outputs, setOutputs] = useState<Output[]>([])
@@ -84,6 +95,13 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   const outputKey = useRef(0)
   const options = hintClosed ? [] : slashMatches(draft)
   const picked = options[Math.min(active, options.length - 1)]
+
+  // 一輪答完（或停在卡片上）就再問一次這段對話的卡片：新出的卡要畫上去。
+  useEffect(() => {
+    if (status === 'ready' || status === 'error') {
+      void queryClient.invalidateQueries({ queryKey: proposalsKey(conversationId) })
+    }
+  }, [status, queryClient, conversationId])
 
   // 剛按「助理」打開時對話還在讀，焦點先落在面板標題（`AgentToggle`）；輸入欄出現了就接過來。
   // 只接標題上的：換頁時面板跟著重掛，不該把焦點從頁面上搶走。
@@ -117,11 +135,11 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setMessages((current) => withoutLastUser(current))
       setDraft(text)
     }
-    await turnedDown(error)
+    await report(error)
   }
 
-  /** 訊息或指令被擋下：換一段對話、換成「AI 沒開」，或在輸入欄上方說為什麼（字已經放回去了）。 */
-  async function turnedDown(error: unknown) {
+  /** 送不出去的那一次（訊息、恢復或指令）：後端說不行的理由各有去處，其餘照請求為什麼沒成說。 */
+  async function report(error: unknown) {
     const refusal = agentRefusalOf(error)
     if (refusal?.reason === 'conversation_missing') {
       startNew(true)
@@ -160,7 +178,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setOutputs((current) => [...current, { key, after, result }])
     } catch (error) {
       setDraft(text)
-      await turnedDown(error)
+      await report(error)
     } finally {
       setRunning(false)
     }
@@ -168,6 +186,33 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
 
   function pick(name: SlashName) {
     void submit(`/${name}`)
+  }
+
+  /**
+   * 按了卡片之後（`ConfirmCard`）：那一格還在最後一則助理訊息裡等確認，就告訴 `useChat`；等確認的都有
+   * 回應了，送出恢復的那一則。伺服器照 Proposal 決定按了什麼，這一則只是觸發（brief §20.24）。
+   *
+   * 送不出去（另一個分頁正在答、AI 剛被關掉）不要緊：卡片已經做完了，下一則訊息會把結果帶給助理。
+   */
+  const cardActions: CardActions = {
+    respond: async (toolCallId, decided) => {
+      const last = chat.lastMessage
+      const part = last?.role === 'assistant' ? last.parts.find(isWaiting(toolCallId)) : undefined
+      if (part === undefined) return
+      await chat.addToolApprovalResponse({
+        id: part.approval.id,
+        approved: decided.status !== 'rejected',
+      })
+      if (!lastAssistantMessageIsCompleteWithApprovalResponses({ messages: chat.messages })) {
+        return
+      }
+      setFailure(null)
+      await chat.sendMessage()
+      const error = chat.error
+      if (error === undefined) return
+      clearError()
+      await report(error)
+    },
   }
 
   function onSubmit(event: FormEvent) {
@@ -220,7 +265,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   }
 
   return (
-    <>
+    <CardContext.Provider value={cardActions}>
       <Transcript messages={messages} outputs={outputs} busy={streaming} restarted={restarted} />
       <form
         onSubmit={onSubmit}
@@ -284,8 +329,16 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
           </div>
         </div>
       </form>
-    </>
+    </CardContext.Provider>
   )
+}
+
+/** 最後一則助理訊息裡、這一次 tool call 那一格，還在等確認的話。 */
+function isWaiting(toolCallId: string) {
+  return (
+    part: UIMessage['parts'][number],
+  ): part is Extract<ToolUIPart | DynamicToolUIPart, { state: 'approval-requested' }> =>
+    isToolUIPart(part) && part.toolCallId === toolCallId && part.state === 'approval-requested'
 }
 
 function withoutLastUser(messages: UIMessage[]): UIMessage[] {
@@ -397,7 +450,7 @@ function Message({ message, continued }: { message: UIMessage; continued: boolea
         // 一則訊息裡的片段沒有自己的 id；位置就是它的身分（只會往後長，不會重排）。
         const key = `${message.id}:${index}`
         if (isTextUIPart(part)) return part.text ? <Markdown key={key} text={part.text} /> : null
-        if (isToolUIPart(part)) return <ToolCall key={key} part={part} />
+        if (isToolUIPart(part)) return <ToolPart key={key} part={part} />
         return null
       })}
     </div>
@@ -426,4 +479,18 @@ function Summary({ text }: { text: string }) {
       </div>
     </details>
   )
+}
+
+/**
+ * 一格工具呼叫。它提出過確認卡的話畫那張卡（卡片由伺服器的 Proposal 決定，不由模型決定），否則是
+ * 收成一行的工具。
+ */
+function ToolPart({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const { conversationId } = usePanel()
+  const card = useQuery({
+    ...proposalsQueryOptions(conversationId),
+    select: (found: Proposal[]) => found.find((p) => p.tool_call_id === part.toolCallId),
+  })
+  if (card.data) return <ConfirmCard proposal={card.data} toolCallId={part.toolCallId} />
+  return <ToolCall part={part} />
 }

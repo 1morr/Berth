@@ -20,6 +20,7 @@ const REASONS: ReasonSet<AgentRefusal> = {
   ai_disabled: true,
   ai_paused: true,
   busy: true,
+  card_undecided: true,
   no_message: true,
   conversation_missing: true,
   not_continuable: true,

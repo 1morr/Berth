@@ -5,7 +5,7 @@
 降版拿掉這一欄（壓縮的那幾列跟著變成看起來像對話的一輪）。
 
 Revision ID: e6b2d9a4c731
-Revises: c4e7a9d2b158
+Revises: d8a4f1c6e273
 Create Date: 2026-10-27 22:40:00.000000
 """
 
@@ -17,13 +17,13 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e6b2d9a4c731"
-down_revision: str | None = "c4e7a9d2b158"
+down_revision: str | None = "d8a4f1c6e273"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # 原生 `ADD COLUMN`、不重建表（同 `c4e7a9d2b158`）。
+    # 原生 `ADD COLUMN`、不重建表（同 `c4e7a9d2b158`）。票 13 合併之後接在它的 `d8a4f1c6e273` 之後。
     op.add_column(
         "ai_runs",
         sa.Column(

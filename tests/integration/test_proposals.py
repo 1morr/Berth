@@ -287,22 +287,17 @@ class TestDecide:
         assert [r.reason for r in refusals] == [ProposalRefusal.PROPOSAL_DECIDED]
         assert await retries(session, CREWS_JOB) == 1
 
-    async def test_approving_one_still_in_its_conversation_leaves_running_to_the_conversation(
+    async def test_approving_one_still_in_its_conversation_runs_it_at_once(
         self, session: AsyncSession
     ) -> None:
-        """還在那一輪裡的卡片由對話恢復時執行（票 13 的 `ToolApproved`），按下去只記決定。"""
+        """票 13：核准就當場執行，對話恢復那一輪只拿結果。不會有「核准了、恢復沒成就沒做」的卡。"""
         _, crew = await household(session)
         loops = Loops()
         proposal = await propose_retry(session, loops, crew, CREWS_JOB, conversation_id="c-1")
 
         view = await decide(session, loops, proposal, crew)
 
-        assert view.status is ProposalStatus.APPROVED
-        assert await state_of(session, CREWS_JOB) is JobState.IMPORT_FAILED
-
-        ran = await proposals.execute(session, loops.executor, proposal.id)
-
-        assert ran.status is ProposalStatus.EXECUTED
+        assert view.status is ProposalStatus.EXECUTED
         assert await state_of(session, CREWS_JOB) is JobState.IMPORTING
 
     async def test_a_detached_one_runs_as_soon_as_it_is_approved(
@@ -533,7 +528,7 @@ class TestExpiry:
         detached = await propose_retry(session, loops, crew, CREWS_JOB, conversation_id="c-2")
         await proposals.detach(session, loops.hub, "c-2")
         approved = await propose_retry(session, loops, crew, CREWS_JOB, conversation_id="c-3")
-        await decide(session, loops, approved, crew)
+        await approved_without_running(session, approved)
         fresh = await proposals.propose(
             session,
             loops.hub,
@@ -587,12 +582,12 @@ class TestRestart:
     async def test_a_card_approved_before_a_restart_runs_after_it(
         self, config: Config, engine: AsyncEngine
     ) -> None:
-        """還在對話裡、核准了還沒執行就重啟：恢復的那一輪（票 13）照樣執行得了。"""
+        """核准記下了、執行還沒開始就重啟：之後照樣執行得了（對話恢復那一輪會補，`services.agent`）。"""
         async with create_session_factory(engine)() as before:
             _, crew = await household(before)
             loops = Loops()
             proposal = await propose_retry(before, loops, crew, CREWS_JOB, conversation_id="c-1")
-            await decide(before, loops, proposal, crew)
+            await approved_without_running(before, proposal)
         await engine.dispose()
 
         reopened = create_engine(config)
@@ -632,6 +627,64 @@ class TestList:
         assert [p.id for p in mine] == [crews.id, other_chat.id]
         assert [p.id for p in in_chat] == [crews.id]
         assert [p.id for p in everyone] == [crews.id, other_chat.id, admins.id]
+
+
+class TestToolCalls:
+    """票 13：AI 提出的卡片連回提出它的那一次 tool call，脫離過的記得時刻。"""
+
+    async def test_a_card_is_found_by_the_call_that_proposed_it(
+        self, session: AsyncSession
+    ) -> None:
+        """同一段對話裡那一次 tool call 的最新一張：有的閘道每一輪都從 `call_0` 編起。"""
+        _, crew = await household(session)
+        loops = Loops()
+
+        async def propose(conversation: str) -> ProposalView:
+            return await proposals.propose(
+                session,
+                loops.hub,
+                "jobs.retry_job",
+                [{"job_hash": CREWS_JOB}],
+                actor=Actor.ai(crew.id, crew.role),
+                conversation_id=conversation,
+                tool_call_id="call_0",
+                now=NOW,
+            )
+
+        earlier = await propose("c-1")
+        later = await propose("c-1")
+        elsewhere = await propose("c-2")
+
+        found = await proposals.card_of_call(session, "c-1", "call_0")
+
+        assert found is not None
+        assert found.id == later.id != earlier.id
+        assert found.tool_call_id == "call_0"
+        assert (await proposals.card_of_call(session, "c-2", "call_0")).id == elsewhere.id  # type: ignore[union-attr]  # 上一行剛建的，一定有
+        assert await proposals.card_of_call(session, "c-1", "call_1") is None
+
+    async def test_detaching_remembers_when_and_lists_those_cards(
+        self, session: AsyncSession
+    ) -> None:
+        _, crew = await household(session)
+        loops = Loops()
+        moved_on = await propose_retry(session, loops, crew, CREWS_JOB, conversation_id="c-1")
+        await proposals.detach(session, loops.hub, "c-1", now=NOW)
+        still_in_turn = await propose_retry(session, loops, crew, CREWS_JOB, conversation_id="c-1")
+
+        cards = await proposals.detached_cards(session, "c-1")
+
+        assert [card.id for card in cards] == [moved_on.id]
+        assert cards[0].detached_at == NOW
+        assert (await view_of(session, still_in_turn.id)).detached_at is None
+
+
+async def approved_without_running(session: AsyncSession, proposal: ProposalView) -> None:
+    """核准記下了、執行還沒開始（行程死在兩者之間）。按鈕的路一定接著執行，所以直接改狀態。"""
+    await session.execute(
+        update(Proposal).where(Proposal.id == proposal.id).values(status=ProposalStatus.APPROVED)
+    )
+    await session.commit()
 
 
 async def view_of(session: AsyncSession, proposal_id: int) -> ProposalView:

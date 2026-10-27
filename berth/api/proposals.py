@@ -82,6 +82,8 @@ class ProposalOut(BaseModel):
     proposer: ActorKind
     #: 提出它的那段對話；人提出的是 `null`。
     conversation_id: str | None
+    #: 提出它的那一次 tool call（AI 提出的才有）：側面板照它把卡片畫在那一格工具呼叫上（票 13）。
+    tool_call_id: str | None
     status: ProposalStatus
     created_at: datetime
     expires_at: datetime
@@ -91,6 +93,8 @@ class ProposalOut(BaseModel):
     selection: list[int] | None
     #: 逐列結果；還沒執行是 `null`。
     results: list[ProposalRowOut] | None
+    #: 脫離提出它的那一輪的時刻（使用者沒按就繼續說話）；之後按下去當場執行。
+    detached_at: datetime | None
 
 
 class ProposalDecisionIn(BaseModel):

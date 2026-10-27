@@ -1,6 +1,6 @@
 """側面板的工具與每人一輪的位子（M5 票 11）：工具都來自命令登錄表，帶著給模型的說明。
 
-票 11 只開讀取類；寫入（要確認卡的）在票 13、14 加進來時，這裡的「只讀」跟著改成那兩張的規則。
+票 13 起有寫入：會改東西的工具一律出確認卡（`needs_card`）。票 14 加「可逆的直接做」時改這一條。
 """
 
 from __future__ import annotations
@@ -8,21 +8,79 @@ from __future__ import annotations
 import re
 
 import pytest
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 from berth.adapters.ai import chat_settings
 from berth.domain import AiProvider, Role
-from berth.services.agent import STALE_CLAIM_SECONDS, AgentRefusedError, AgentRuntime
+from berth.services.agent import (
+    STALE_CLAIM_SECONDS,
+    AgentRefusedError,
+    AgentRuntime,
+    card_model,
+    needs_card,
+    pending_calls,
+)
 from berth.services.agent_tools import TAVILY_TOOL, TOOLS, tool_name, visible_tools
 from berth.services.commands import Effect
 from berth.services.registry import commands
 
 
-def test_every_tool_is_a_registered_read_command_with_an_about() -> None:
+def test_every_tool_is_a_registered_command_with_an_about_and_writes_need_a_card() -> None:
     registry = commands()
     for name in TOOLS:
         assert name in registry, name
-        assert registry[name].effect is Effect.READ, name
+        assert registry[name].effect is Effect.READ or needs_card(registry[name]), name
         assert registry[name].about, name
+
+
+def test_the_submit_card_takes_source_ids_never_links() -> None:
+    """模型給的是搜尋結果的 `source_id`；下載連結帶 Prowlarr 的 key，不進對話（M4 票 79）。"""
+    spec = commands()["downloading.add_manual_download"]
+    schema = card_model(spec).model_json_schema()
+
+    row = schema["$defs"][schema["properties"]["rows"]["items"]["$ref"].split("/")[-1]]
+    assert sorted(row["properties"]) == ["media_id", "route_id", "source_id"]
+
+
+class TestPendingCalls:
+    """待確認的呼叫：最後一則模型回應裡還沒有結果的（研究〈實跑才抓到的問題〉第 2 點）。"""
+
+    def test_a_card_left_at_the_end(self) -> None:
+        history: list[ModelMessage] = [
+            ModelRequest(parts=[UserPromptPart("send it")]),
+            ModelResponse(parts=[ToolCallPart("card", {}, tool_call_id="c1")]),
+        ]
+        assert [call.tool_call_id for call in pending_calls(history)] == ["c1"]
+
+    def test_a_parallel_result_coming_after_the_card(self) -> None:
+        history: list[ModelMessage] = [
+            ModelRequest(parts=[UserPromptPart("send it")]),
+            ModelResponse(
+                parts=[
+                    ToolCallPart("lookup", {}, tool_call_id="r1"),
+                    ToolCallPart("card", {}, tool_call_id="c1"),
+                ]
+            ),
+            ModelRequest(parts=[ToolReturnPart("lookup", "found", tool_call_id="r1")]),
+        ]
+        assert [call.tool_call_id for call in pending_calls(history)] == ["c1"]
+
+    def test_nothing_waits_after_an_answer(self) -> None:
+        history: list[ModelMessage] = [
+            ModelResponse(parts=[ToolCallPart("card", {}, tool_call_id="c1")]),
+            ModelRequest(parts=[ToolReturnPart("card", "done", tool_call_id="c1")]),
+            ModelResponse(parts=[TextPart("Sent.")]),
+        ]
+        assert pending_calls(history) == []
+        assert pending_calls([]) == []
 
 
 def test_tool_names_are_unique_and_accepted_by_both_providers() -> None:

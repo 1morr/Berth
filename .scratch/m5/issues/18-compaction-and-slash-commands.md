@@ -44,3 +44,4 @@
   - 對話 id 的格式與擁有者檢查在 `agent.open_turn` 與 `slash.run_slash` 各寫一份。
   - `run_slash` 整支照最重的 `/compact` 標 `IRREVERSIBLE`，其餘五支是讀取或什麼都不做；要逐支標的話得把它們拆成各自的命令。
   - `services/agent_books.py` 的名字（記帳）要讀 docstring 才知道。
+- 2026-10-28 合併 main（票 13 確認卡）：驗收第 2 條的整合測試改成經 `/agent/chat` 的真恢復，搬到 `tests/integration/test_agent_cards.py::TestHistoryShape::test_compact_then_confirm_and_the_resumed_turn_runs_as_usual`（出卡 → `/compact` → 按卡確認 → 恢復那一輪照常執行），取代票 13 那條手動砍掉歷史頭部的模擬，`test_agent_slash.py` 以 `proposals.execute` 代替的那一條刪掉。改壞過確認會紅（`split` 丟掉尾巴最後一則：恢復那一輪找不到待確認的呼叫）。migration `e6b2d9a4c731` 改接在票 13 的 `d8a4f1c6e273` 之後。`/new` 對舊對話卡片照票 13 的現狀（不脫離，`/pending` 看得到）。

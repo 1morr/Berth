@@ -20,8 +20,14 @@
 4. **脫離對話**（`detach`）：使用者沒按就繼續說話時，那段對話裡還在等的卡片標成脫離（票 13 叫它）。
 5. **過期清掃**（`expire_due`）：`sweeper` 每分鐘醒來時叫它。決定時也會當場看期限。
 
-**什麼時候執行**：核准一張不在對話裡的（人提出的）或已經脫離的，當場執行；還在那一輪對話裡的只記
-決定，由對話恢復時執行（票 13 的 `ToolApproved(override_args=…)`，它叫 `execute`）。
+**什麼時候執行**：**核准就當場執行**，不論卡片在不在對話裡（票 13 改了票 08 的「還在對話裡的只記
+決定、由對話恢復時執行」）。對話恢復那一輪只把逐列結果交給模型（`services.agent`）：按下確認的那一刻
+就做，AI 之後被關掉、恢復那一輪送不出去、或使用者直接關掉頁面，都不會留下一張「核准了卻沒做」的卡。
+這段對話的卡片以 `tool_call_id` 找回來（`card_of_call`）；脫離過的記下 `detached_at`
+（`detached_cards`），之後每一輪的 instructions 帶上它們的近況。
+
+**給外面看的參數去掉 `Private` 的格子**（`ProposalView.arguments`，登錄表的 `public_arguments`）：
+送單來源的下載連結帶著 Prowlarr 的 API key。執行讀的是存著的完整那一份。
 
 **每一次狀態變更都推一則 `ProposalSignal`**（只有 id 與狀態，`services/events.py`）。
 
@@ -56,7 +62,7 @@ from berth.models import Proposal, User
 from berth.services.commands import Effect, Flag, command
 from berth.services.events import EventHub, ProposalSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
-from berth.services.registry import Verdict, commands, dry_run
+from berth.services.registry import Verdict, commands, dry_run, public_arguments
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +121,8 @@ class ProposalView:
     user_id: int
     proposer: ActorKind
     conversation_id: str | None
+    #: AI 提出的那一次 tool call；人提出的是 `None`。
+    tool_call_id: str | None
     status: ProposalStatus
     created_at: datetime
     expires_at: datetime
@@ -122,6 +130,8 @@ class ProposalView:
     decided_at: datetime | None
     selection: list[int] | None
     results: list[RowResult] | None
+    #: 脫離提出它的那一輪的時刻；沒脫離過是 `None`。
+    detached_at: datetime | None = None
 
 
 def arguments_hash(name: str, arguments: Sequence[Mapping[str, object]]) -> str:
@@ -144,9 +154,13 @@ async def propose(
     *,
     actor: Actor,
     conversation_id: str | None = None,
+    tool_call_id: str | None = None,
     now: datetime | None = None,
 ) -> ProposalView:
-    """建一張卡片（模組 docstring 第 1 點）。輸入格式不對是 pydantic 的 `ValidationError`。"""
+    """建一張卡片（模組 docstring 第 1 點）。輸入格式不對是 pydantic 的 `ValidationError`。
+
+    AI 提出的帶 `tool_call_id`（提出它的那一次工具呼叫），恢復那一輪時靠它找回卡片。
+    """
     if actor.user_id is None or actor.kind is ActorKind.SYSTEM:
         raise ValueError("a proposal is made by a person, or by the AI for a person")
     if not rows:
@@ -175,6 +189,7 @@ async def propose(
         user_id=actor.user_id,
         proposer=actor.kind,
         conversation_id=conversation_id,
+        tool_call_id=tool_call_id,
         status=ProposalStatus.PENDING,
         created_at=moment,
         expires_at=moment + PROPOSAL_TTL,
@@ -227,11 +242,12 @@ async def decide(
         raise await _decided(session, proposal_id)
     await session.commit()
     executor.hub.publish(ProposalSignal(id=proposal_id, status=status))
-    if approve and (seen is ProposalStatus.DETACHED or proposal.conversation_id is None):
+    if approve:
         try:
             return await execute(session, executor, proposal_id)
         except ProposalRejectedError:
-            # 核准已經記下了；別處（恢復中的對話）先開始執行，按的人看到的是它現在的樣子，不是 409。
+            # 核准已經記下了；別處（另一個分頁的同一下）先開始執行，按的人看到的是它現在的樣子，
+            # 不是 409。
             pass
     return await _read(session, proposal_id)
 
@@ -275,8 +291,10 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
 
 # 對話往下走了，還在等的卡片脫離那一輪；之後照樣按得下去。
 @command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
-async def detach(session: AsyncSession, hub: EventHub, conversation_id: str) -> list[int]:
-    """這段對話裡還在等的卡片標成脫離（模組 docstring 第 4 點），回傳是哪幾張。"""
+async def detach(
+    session: AsyncSession, hub: EventHub, conversation_id: str, *, now: datetime | None = None
+) -> list[int]:
+    """這段對話裡還在等的卡片標成脫離（模組 docstring 第 4 點），記下時刻，回傳是哪幾張。"""
     detached = list(
         await session.scalars(
             update(Proposal)
@@ -284,7 +302,7 @@ async def detach(session: AsyncSession, hub: EventHub, conversation_id: str) -> 
                 Proposal.conversation_id == conversation_id,
                 Proposal.status == ProposalStatus.PENDING,
             )
-            .values(status=ProposalStatus.DETACHED)
+            .values(status=ProposalStatus.DETACHED, detached_at=now or datetime.now(UTC))
             .returning(Proposal.id)
             .execution_options(synchronize_session=False)
         )
@@ -340,6 +358,42 @@ async def list_proposals(
         query = query.where(Proposal.conversation_id == conversation_id)
     found = await session.scalars(query.execution_options(populate_existing=True))
     return [_view(proposal) for proposal in found]
+
+
+# 對話恢復那一輪找卡片：只讀。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def card_of_call(
+    session: AsyncSession, conversation_id: str, tool_call_id: str
+) -> ProposalView | None:
+    """這段對話裡這一次 tool call 提出的卡片；沒有（沒出卡、或卡片跟著人一起刪了）是 `None`。
+
+    **取最新的一張**：`tool_call_id` 不保證唯一（有的 OpenAI 相容閘道每一輪都從 `call_0` 編起），
+    而要找的永遠是最後一則模型回應裡的那一次。
+    """
+    found = await session.scalar(
+        select(Proposal)
+        .where(Proposal.conversation_id == conversation_id, Proposal.tool_call_id == tool_call_id)
+        .order_by(Proposal.id.desc())
+        .limit(1)
+        .execution_options(populate_existing=True)
+    )
+    return None if found is None else _view(found)
+
+
+# 每一輪開頭讀：脫離過的卡片現在怎麼了。只讀。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def detached_cards(
+    session: AsyncSession, conversation_id: str, *, limit: int = 5
+) -> list[ProposalView]:
+    """這段對話裡脫離過那一輪的卡片，最近的 `limit` 張，舊的在前。"""
+    found = await session.scalars(
+        select(Proposal)
+        .where(Proposal.conversation_id == conversation_id, Proposal.detached_at.is_not(None))
+        .order_by(Proposal.id.desc())
+        .limit(limit)
+        .execution_options(populate_existing=True)
+    )
+    return [_view(proposal) for proposal in reversed(list(found))]
 
 
 async def _run_row(
@@ -445,10 +499,16 @@ def _dump(result: RowResult) -> dict[str, Any]:
 
 def _view(proposal: Proposal) -> ProposalView:
     preview = proposal.preview_json
+    spec = commands().get(proposal.command)
     return ProposalView(
         id=proposal.id,
         command=proposal.command,
-        arguments=proposal.arguments_json,
+        # 給瀏覽器與模型的那一份：標了 `Private` 的格子（下載連結）不出伺服器。
+        arguments=(
+            [public_arguments(spec, row) for row in proposal.arguments_json]
+            if spec is not None
+            else proposal.arguments_json
+        ),
         arguments_hash=proposal.arguments_hash,
         preview=ProposalPreview(
             effect=Effect(preview["effect"]),
@@ -458,6 +518,7 @@ def _view(proposal: Proposal) -> ProposalView:
         user_id=proposal.user_id,
         proposer=proposal.proposer,
         conversation_id=proposal.conversation_id,
+        tool_call_id=proposal.tool_call_id,
         status=proposal.status,
         created_at=proposal.created_at,
         expires_at=proposal.expires_at,
@@ -477,4 +538,5 @@ def _view(proposal: Proposal) -> ProposalView:
                 for result in proposal.results_json
             ]
         ),
+        detached_at=proposal.detached_at,
     )

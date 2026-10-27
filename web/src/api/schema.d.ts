@@ -2634,7 +2634,7 @@ export interface components {
          * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
          * @enum {string}
          */
-        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "not_continuable" | "unknown_command" | "slash_command";
+        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "card_undecided" | "not_continuable" | "unknown_command" | "slash_command";
         /** AgentRefusalOut */
         AgentRefusalOut: {
             reason: components["schemas"]["AgentRefusal"];
@@ -2743,7 +2743,7 @@ export interface components {
          * @description 一輪 agent 為什麼停下（`ai_runs.stop_reason`，研究 C5）。用量頁數的是它（票 21）。
          * @enum {string}
          */
-        AiStopReason: "completed" | "request_limit" | "token_limit" | "repeated_call" | "ping_pong" | "no_progress" | "circuit_open" | "error" | "cancelled";
+        AiStopReason: "completed" | "awaiting_confirmation" | "request_limit" | "token_limit" | "repeated_call" | "ping_pong" | "no_progress" | "circuit_open" | "error" | "cancelled";
         /**
          * AiTestIn
          * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。
@@ -5304,6 +5304,8 @@ export interface components {
             proposer: components["schemas"]["ActorKind"];
             /** Conversation Id */
             conversation_id: string | null;
+            /** Tool Call Id */
+            tool_call_id: string | null;
             status: components["schemas"]["ProposalStatus"];
             /**
              * Created At
@@ -5323,6 +5325,8 @@ export interface components {
             selection: number[] | null;
             /** Results */
             results: components["schemas"]["ProposalRowOut"][] | null;
+            /** Detached At */
+            detached_at: string | null;
         };
         /**
          * ProposalPreviewOut
@@ -6887,7 +6891,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentRefusalOut"];
                 };
             };
-            /** @description `ai_disabled` · `ai_paused` · `busy` · `not_continuable` */
+            /** @description `ai_disabled` · `ai_paused` · `card_undecided` · `busy` · `not_continuable` */
             409: {
                 headers: {
                     [name: string]: unknown;

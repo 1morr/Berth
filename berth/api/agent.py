@@ -2,9 +2,11 @@
 
 - `POST /agent/chat`：Vercel AI SDK 的 UI message stream（`VercelAIAdapter`，`sdk_version=7`）。
   前端 `useChat` 每次送整份訊息，這裡**只取最後一則使用者訊息的字**，歷史以資料庫為準；前端送回的
-  工具結果與核准一律不採用（brief §20.24：adapter 預設照收）。body 另外帶 `language`（介面語言，
-  `domain.Language`），防護停下時的說明照它寫；按「繼續」時帶 `continues`（停下的那一輪的 id，
-  M5 票 20）。防護停下時說明之後多一則 `data-stop`（`TurnStopOut`）：側面板照它畫「繼續」。
+  工具結果與核准一律不採用（brief §20.24：adapter 預設照收）。最後一則是**助理**的，是使用者按了
+  確認卡之後的恢復（票 13）：它只當觸發，按了什麼由伺服器上的 Proposal 決定。body 另外帶
+  `language`（介面語言，`domain.Language`），防護停下時的說明照它寫；按「繼續」時帶 `continues`
+  （停下的那一輪的 id，M5 票 20）。防護停下時說明之後多一則 `data-stop`（`TurnStopOut`）：側面板
+  照它畫「繼續」。
 - `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
   斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
@@ -28,7 +30,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
-from pydantic_ai import DeferredToolResults
+from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.messages import ModelMessage, ModelRequest
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from pydantic_ai.ui.vercel_ai.request_types import SubmitMessage, TextUIPart
@@ -78,6 +80,7 @@ SDK_VERSION: Literal[7] = 7
 _STATUS: dict[AgentRefusal, int] = {
     AgentRefusal.AI_DISABLED: status.HTTP_409_CONFLICT,
     AgentRefusal.AI_PAUSED: status.HTTP_409_CONFLICT,
+    AgentRefusal.CARD_UNDECIDED: status.HTTP_409_CONFLICT,
     AgentRefusal.BUSY: status.HTTP_409_CONFLICT,
     AgentRefusal.NO_MESSAGE: status.HTTP_422_UNPROCESSABLE_CONTENT,
     AgentRefusal.CONVERSATION_MISSING: status.HTTP_404_NOT_FOUND,
@@ -237,8 +240,9 @@ def _responses(*reasons: AgentRefusal) -> dict[int | str, dict[str, Any]]:
 
 
 @dataclass
-class ServerHistoryAdapter(VercelAIAdapter[Turn, str]):
-    """歷史由伺服器保管：送給 agent 的新訊息只有這一輪的使用者訊息，前端的核准不採用。"""
+class ServerHistoryAdapter(VercelAIAdapter[Turn, str | DeferredToolRequests]):
+    """歷史由伺服器保管：送給 agent 的新訊息只有這一輪的使用者訊息，前端的核准不採用（恢復時的
+    結論由 `open_turn` 從 Proposal 算好，經 `run_stream` 的 `deferred_tool_results` 給）。"""
 
     prompt: ModelRequest | None = None
 
@@ -259,9 +263,19 @@ def _actor(request: Request) -> Actor:
     return Actor.ai(user.id, user.role)
 
 
-def _last_user_text(run_input: SubmitMessage) -> str:
+def _prompt_text(run_input: SubmitMessage) -> str | None:
+    """這一輪的使用者訊息的字；`None` 是**恢復**。
+
+    恢復：最後一則是助理的，是按了確認卡之後 `useChat` 送的。
+
+    空字串是沒有字（`open_turn` 回 `no_message`）。
+    """
     last = run_input.messages[-1] if run_input.messages else None
-    if last is None or last.role != "user":
+    if last is None:
+        return ""
+    if last.role == "assistant":
+        return None
+    if last.role != "user":
         return ""
     return "".join(part.text for part in last.parts if isinstance(part, TextUIPart))
 
@@ -312,7 +326,7 @@ async def chat(
             factory=factory,
             actor=actor,
             conversation_id=run_input.id,
-            text=_last_user_text(run_input),
+            text=_prompt_text(run_input),
             language=_language(run_input),
             continues=_continues(run_input),
         )
@@ -334,6 +348,7 @@ async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncIterator[Bas
         turn.started()
         stream = adapter.run_stream(
             message_history=turn.history,
+            deferred_tool_results=turn.deferred,
             deps=turn,
             run_id=turn.run_id,
             model_settings=turn.model_settings,

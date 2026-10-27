@@ -19,6 +19,10 @@ TOOLS: tuple[str, ...] = (
     "jobs.list_jobs",
     "jobs.read_job_events",
     "skills.load_skill",
+    # 票 13：送單那一條路要的讀取與第一個寫入（其餘寫入在票 14）。
+    "search.search_torrents",
+    "media.route_choices",
+    "downloading.add_manual_download",
     TAVILY_TOOL,
 )
 

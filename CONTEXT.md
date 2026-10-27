@@ -456,5 +456,5 @@ _Avoid_: command（單用：Command 是 Command Registry 上的命令）, shortc
 _Avoid_: prompt（prompt 是整段送給模型的字）, playbook, recipe, plugin（skill 不帶程式）
 
 **Proposal**（提案）:
-等人確認的一個命令，存成 `proposals` 的一列（M5 票 08，`services/proposals.py`）：命令名、一到多列參數（總覽卡多列，逐列可取消勾選）、參數雜湊、伺服器算的預覽、替誰提出（他自己或 AI 替他）、所屬對話、狀態（`pending` / `detached` / `approved` / `rejected` / `executing` / `executed` / `partial` / `failed` / `expired`）、過期時間、誰什麼時候決定的、逐列結果。只有那個人或管理員按得到，執行用存下的那一份參數。不需要 AI：人也能提出。哪些動作要出卡見 brief §14〈對話裡的確認卡〉。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。
+等人確認的一個命令，存成 `proposals` 的一列（M5 票 08，`services/proposals.py`）：命令名、一到多列參數（總覽卡多列，逐列可取消勾選）、參數雜湊、伺服器算的預覽、替誰提出（他自己或 AI 替他）、所屬對話、狀態（`pending` / `detached` / `approved` / `rejected` / `executing` / `executed` / `partial` / `failed` / `expired`）、過期時間、誰什麼時候決定的、逐列結果。只有那個人或管理員按得到，**按下確認就執行**，用存下的那一份參數。AI 提出的連回提出它的那一次 tool call（M5 票 13），對話恢復時把逐列結果交給模型。不需要 AI：人也能提出。哪些動作要出卡見 brief §14〈對話裡的確認卡〉。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。
 _Avoid_: suggestion, action, task

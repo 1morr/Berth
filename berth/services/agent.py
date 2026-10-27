@@ -40,8 +40,17 @@ from datetime import date, datetime
 from typing import Any
 
 import anyio
-from pydantic import ValidationError
-from pydantic_ai import Agent, RunContext, Tool
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+from pydantic_ai import (
+    Agent,
+    ApprovalRequired,
+    DeferredToolRequests,
+    DeferredToolResults,
+    RunContext,
+    Tool,
+    ToolApproved,
+    ToolDenied,
+)
 from pydantic_ai.capabilities import AbstractCapability, ProcessHistory
 from pydantic_ai.capabilities.abstract import ValidatedToolArgs, WrapToolExecuteHandler
 from pydantic_ai.exceptions import ModelAPIError
@@ -51,6 +60,7 @@ from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
     NativeToolReturnPart,
+    RetryPromptPart,
     TextPart,
     ToolCallPart,
     ToolReturnPart,
@@ -69,17 +79,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from berth.adapters.ai import AiEndpoint, chat_settings, is_official, native_web_search
 from berth.adapters.ai.usage import WEB_SEARCH
 from berth.domain import (
+    WAITING_PROPOSALS,
     Actor,
     AgentRefusal,
     AiProvider,
     AiRunKind,
     AiStopReason,
     AiToolOutcome,
+    JobRefusal,
     Language,
+    ProposalStatus,
     Role,
 )
 from berth.models import AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
+from berth.services import proposals
 from berth.services.agent_books import call_row, elapsed_ms, plus
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
 from berth.services.agent_tools import (
@@ -93,7 +107,13 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.compaction import Summarizer, compact, context_fraction
 from berth.services.executor import CommandRefusedError, Executor
-from berth.services.registry import commands
+from berth.services.jobs import JobRejectedError
+from berth.services.proposals import (
+    InvalidProposalError,
+    ProposalRejectedError,
+    ProposalView,
+)
+from berth.services.registry import CommandSpec, commands
 from berth.services.settings import read_settings
 from berth.services.skills import menu, skills_for
 from berth.services.web import SEARCH_DOMAINS
@@ -291,6 +311,17 @@ def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
     tools: list[Tool[Turn]] = []
     for name in visible_tools(role, tavily=tavily):
         spec = registry[name]
+        if needs_card(spec):
+            tools.append(
+                Tool[Turn].from_schema(
+                    _card_runner(spec),
+                    name=tool_name(name),
+                    description=f"{spec.about} {CARD_ABOUT}",
+                    json_schema=card_model(spec).model_json_schema(),
+                    takes_ctx=True,
+                )
+            )
+            continue
         tools.append(
             Tool[Turn].from_schema(
                 _runner(name),
@@ -310,11 +341,236 @@ def _runner(name: str) -> Callable[..., Awaitable[object]]:
     return run
 
 
+# ---------------------------------------------------------------- 確認卡（票 13）
+
+
+def needs_card(spec: CommandSpec) -> bool:
+    """在對話裡一律出確認卡的命令（plan §11.6〈確認卡範圍〉）：永遠要人的（`needs_person`），
+    與會送出 torrent 的。「讀過外部內容之後帶自由文字參數」看的是這一次呼叫，在票 14。"""
+    return spec.needs_person or Flag.DOWNLOADS in spec.flags
+
+
+#: 卡片工具的說明多這一段。英文：寫給模型的。
+CARD_ABOUT = (
+    "Calling this does not do it yet: Berth shows the user a confirmation card listing every "
+    "row, and runs only the rows they keep ticked once they confirm. Put everything for one "
+    "request into one call, one row each."
+)
+
+
+class SubmitRow(BaseModel):
+    """送單卡的一列，模型給的那一份：來源是搜尋結果那一列的 `source_id`，不是下載連結——連結帶著
+    Prowlarr 的 API key，不進對話（M4 票 79）。提出時向來源快取換回整份來源存進 Proposal，所以重啟
+    之後、快取過期之後卡片照樣按得下去（`_bind_submit`）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(description="The source_id of a row from search_torrents.")
+    media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
+    route_id: int = Field(description="An id from route_choices for this work.")
+
+
+@dataclass(frozen=True, slots=True)
+class CardInput:
+    """卡片命令的一列：模型給的形狀，與把它換成命令輸入的那一步。
+
+    換不了丟 `CommandRefusedError`。
+    """
+
+    row: type[BaseModel]
+    bind: Callable[[Turn, BaseModel], dict[str, object]]
+
+
+def _bind_submit(turn: Turn, row: BaseModel) -> dict[str, object]:
+    assert isinstance(row, SubmitRow)
+    try:
+        source = turn.executor.sources.recall(row.source_id)
+    except JobRejectedError as exc:
+        # 模型自己編的、或兩小時前搜的：再搜一次（selftest 第 5 步的 id 防護在這裡成立一半）。
+        raise CommandRefusedError(
+            "downloading.add_manual_download", JobRefusal.SOURCE_EXPIRED, row.source_id
+        ) from exc
+    return {"source": source, "media_id": row.media_id, "route_id": row.route_id}
+
+
+#: 輸入要先換過才交給命令的卡片命令。沒列的，模型給的一列就是命令輸入。
+_CARD_INPUTS: dict[str, CardInput] = {
+    "downloading.add_manual_download": CardInput(SubmitRow, _bind_submit),
+}
+
+
+def card_input(spec: CommandSpec) -> CardInput:
+    found = _CARD_INPUTS.get(spec.name)
+    if found is not None:
+        return found
+    return CardInput(spec.input, lambda _turn, row: row.model_dump())
+
+
+def card_model(spec: CommandSpec) -> type[BaseModel]:
+    """卡片工具的參數：`rows`，一列一份（總覽卡逐列可勾）。"""
+    row = card_input(spec).row
+    return create_model(
+        f"{spec.input.__name__}Card",
+        __config__=ConfigDict(extra="forbid"),
+        rows=(list[row], Field(min_length=1, description="One entry per thing to do.")),  # type: ignore[valid-type]  # `row` 是執行時才知道的 model
+    )
+
+
+def _card_runner(spec: CommandSpec) -> Callable[..., Awaitable[object]]:
+    async def run(ctx: RunContext[Turn], **arguments: object) -> object:
+        assert ctx.tool_call_id is not None
+        if ctx.tool_call_approved:
+            return await ctx.deps.card_result(ctx.tool_call_id)
+        return await ctx.deps.propose_card(spec, arguments, ctx.tool_call_id)
+
+    return run
+
+
+def card_outcome(view: ProposalView) -> dict[str, object]:
+    """模型拿到的卡片結果。**明說已核准、做了沒**：prototype 實跑時模型拿到裸結果，說「確認卡已出，
+    等你按」（研究〈實跑才抓到的問題〉第 1 點）。逐列，因為總覽卡會部分成功。"""
+    return {
+        "approved_by_user": True,
+        "executed": view.status not in (ProposalStatus.APPROVED, ProposalStatus.EXECUTING),
+        "status": view.status.value,
+        "rows": [
+            {
+                "row": index,
+                "outcome": row.outcome.value,
+                "reason": row.reason,
+                "detail": row.detail,
+                "result": row.result,
+            }
+            for index, row in enumerate(view.results or [])
+        ],
+    }
+
+
+#: 卡片沒做成時給模型的話（`ToolDenied` 與自己補的結果）。英文：寫給模型的。
+_CARD_GONE = "This confirmation card no longer exists. Nothing was done."
+_CARD_DENIED: dict[ProposalStatus, str] = {
+    ProposalStatus.REJECTED: "The user rejected this confirmation card. Nothing was done.",
+    ProposalStatus.EXPIRED: (
+        "This confirmation card expired before the user decided. Nothing was done; propose it "
+        "again only if the user still wants it."
+    ),
+}
+_CARD_LEFT = (
+    "The user wrote again without deciding this confirmation card. It stays valid: if they "
+    "confirm it later, Berth runs it by itself and its result appears in your instructions. "
+    "Do not propose it again unless they ask."
+)
+
+
+def pending_calls(history: Sequence[ModelMessage]) -> list[ToolCallPart]:
+    """最後一則模型回應裡**還沒有結果**的工具呼叫：等確認的那幾張卡。
+
+    不能只看最後一則訊息：同一步平行呼叫時，不要確認的那幾個先做完，它們的結果排在模型回應後面
+    （prototype 真模型實跑，`fribb_lookup` 與 `subscribe_mikan` 一起叫）。
+    """
+    index = next(
+        (i for i in range(len(history) - 1, -1, -1) if isinstance(history[i], ModelResponse)),
+        None,
+    )
+    if index is None:
+        return []
+    answered = {
+        part.tool_call_id
+        for message in history[index + 1 :]
+        for part in message.parts
+        if isinstance(part, ToolReturnPart | RetryPromptPart)
+    }
+    response = history[index]
+    assert isinstance(response, ModelResponse)
+    return [call for call in response.tool_calls if call.tool_call_id not in answered]
+
+
+async def _settled(
+    session: AsyncSession, executor: Executor, view: ProposalView | None
+) -> ProposalView | None:
+    """核准記下了、執行沒開始的（行程死在兩者之間）補執行；其餘原樣。"""
+    if view is None or view.status is not ProposalStatus.APPROVED:
+        return view
+    try:
+        return await proposals.execute(session, executor, view.id)
+    except ProposalRejectedError:
+        # 別處先開始執行了：回它現在的樣子。
+        assert view.conversation_id is not None and view.tool_call_id is not None
+        return await proposals.card_of_call(session, view.conversation_id, view.tool_call_id)
+
+
+#: `_why_not_done` 的答案：這張卡還在等人按。
+_UNDECIDED = object()
+
+
+def _why_not_done(view: ProposalView | None) -> str | object | None:
+    """一張卡為什麼沒做：給模型的那句話；還在等人按是 `_UNDECIDED`；做了（或核准了）是 `None`。
+
+    恢復那一輪（`_approval`）與使用者沒按就繼續說話（`_closing`）共用這一份判斷。
+    """
+    if view is None:
+        return _CARD_GONE
+    if view.status in WAITING_PROPOSALS:
+        return _UNDECIDED
+    return _CARD_DENIED.get(view.status)
+
+
+def _approval(view: ProposalView | None) -> ToolApproved | ToolDenied:
+    """恢復那一輪（前端說「按了」）每一張卡的結論。還沒決定的不恢復：前端的核准只是觸發。"""
+    reason = _why_not_done(view)
+    if reason is _UNDECIDED:
+        assert view is not None
+        raise AgentRefusedError(AgentRefusal.CARD_UNDECIDED, view.tool_call_id or "")
+    return ToolDenied(reason) if isinstance(reason, str) else ToolApproved()
+
+
+def _closing(call: ToolCallPart, view: ProposalView | None) -> ToolReturnPart:
+    """使用者沒按就繼續說話：伺服器替那幾個呼叫補上結果，再接新的訊息。
+
+    不走 `deferred_tool_results`：那樣串流會對上一則訊息的呼叫送結果，而前端只在當前那則訊息裡找
+    呼叫（ai 7 的 `getToolInvocation`），找不到就整段串流報錯（brief §20.24〈確認卡的恢復〉）。
+    """
+    reason = _why_not_done(view)
+    if reason is None:
+        assert view is not None
+        return ToolReturnPart(call.tool_name, card_outcome(view), call.tool_call_id)
+    text = _CARD_LEFT if reason is _UNDECIDED else str(reason)
+    return ToolReturnPart(call.tool_name, text, call.tool_call_id, outcome="denied")
+
+
+def _card_notes(views: Sequence[ProposalView]) -> str:
+    """脫離過那一輪的卡片現在怎麼了。
+
+    prototype selftest 第 7 步：之後才按的卡，下一輪的 instructions 帶上結果。
+    """
+    if not views:
+        return ""
+    lines = []
+    for view in views:
+        outcomes = Counter(
+            f"{row.outcome.value} ({row.reason})" if row.reason else row.outcome.value
+            for row in view.results or []
+        )
+        rows = ", ".join(f"{count} {what}" for what, count in outcomes.items())
+        lines.append(
+            f"- {tool_name(view.command)} (tool call {view.tool_call_id}): {view.status.value}"
+            + (f"; rows: {rows}" if rows else "")
+        )
+    return (
+        "\nConfirmation cards from earlier replies that the user left undecided at the time. "
+        "This is their state now, newer than the conversation:\n" + "\n".join(lines) + "\n"
+    )
+
+
 def _instructions(ctx: RunContext[Turn]) -> str:
     search = SEARCH_INSTRUCTIONS if ctx.deps.can_search else ""
     offered = skills_for(ctx.deps.actor.role)
     listed = SKILLS_INSTRUCTIONS.format(menu=menu(offered)) if offered else ""
-    return f"{INSTRUCTIONS}{search}{listed}\nToday is {ctx.deps.today.isoformat()}."
+    # 脫離過的卡片放在最後：它們一變，快取從這裡之後失效，前面的照樣命中。
+    return (
+        f"{INSTRUCTIONS}{search}{listed}{ctx.deps.card_notes}"
+        f"\nToday is {ctx.deps.today.isoformat()}."
+    )
 
 
 def external_texts(messages: Sequence[ModelMessage]) -> list[str]:
@@ -358,10 +614,10 @@ class Turn:
     continues: str | None
     #: 這一輪之前存著的歷史。
     history: list[ModelMessage]
-    #: 這一則使用者訊息。
-    prompt: ModelRequest
+    #: 這一則使用者訊息。恢復那一輪（按了卡片之後）沒有。
+    prompt: ModelRequest | None
     language: Language
-    agent: Agent[Turn, str]
+    agent: Agent[Turn, str | DeferredToolRequests]
     #: 這一輪的模型（壓縮的摘要也用它）。
     model: Model
     #: 遮掉錯誤原文裡的 key。
@@ -371,6 +627,10 @@ class Turn:
     official: bool = False
     #: 這一輪搜得到網頁（伺服器端 `web_search` 或 Tavily）。
     can_search: bool = False
+    #: 恢復那一輪：每一張等著的卡的結論（伺服器從 Proposal 算的，前端的核准只是觸發）。
+    deferred: DeferredToolResults | None = None
+    #: 脫離過那一輪的卡片現在怎麼了，放進 instructions（`_card_notes`）。開輪時算一次。
+    card_notes: str = ""
     #: 每次模型呼叫之前的歷史：每個工具呼叫都有結果，停下來時存的是它。
     prefix: list[ModelMessage] = field(default_factory=list)
     requests: int = 0
@@ -449,19 +709,8 @@ class Turn:
             try:
                 result = await self.executor.execute(session, name, arguments, self.actor)
                 await session.commit()
-            except CommandRefusedError as exc:
-                raise _ToolFailedError(
-                    AiToolOutcome.REFUSED,
-                    f"{exc.reason}: {exc.detail}" if exc.detail else str(exc.reason),
-                    {"refused": str(exc.reason), "detail": exc.detail},
-                ) from exc
-            except ValidationError as exc:
-                errors = exc.errors(include_url=False, include_context=False, include_input=False)
-                raise _ToolFailedError(
-                    AiToolOutcome.FAILED,
-                    str(exc),
-                    {"invalid_arguments": to_jsonable_python(errors)},
-                ) from exc
+            except (CommandRefusedError, ValidationError) as exc:
+                raise _failure(exc) from exc
             # 工具壞掉（服務連不上這類）把原文交給模型，不讓整輪死掉；模型可以重試或換做法。
             except Exception as exc:
                 detail = self._masked(_describe(exc))
@@ -473,6 +722,47 @@ class Turn:
         if isinstance(plain, dict) and plain.get("problem"):
             raise _ToolFailedError(AiToolOutcome.FAILED, str(plain["problem"]), plain)
         return plain
+
+    async def propose_card(
+        self, spec: CommandSpec, arguments: Mapping[str, object], tool_call_id: str
+    ) -> object:
+        """出一張確認卡：換成命令輸入、逐列乾跑（`proposals.propose`），過了就丟 `ApprovalRequired`
+        讓這一輪停在卡片上。不過的把理由交給模型、不出卡（實測的 `route_kind_mismatch` 這類）。"""
+        card = card_input(spec)
+        try:
+            given = card_model(spec).model_validate(arguments)
+            # `getattr`：`card_model` 是執行時才建的 model，靜態型別只知道它是 `BaseModel`。
+            rows = [card.bind(self, row) for row in getattr(given, "rows")]  # noqa: B009
+        except (CommandRefusedError, ValidationError) as exc:
+            raise _failure(exc) from exc
+        async with self.sessions() as session:
+            try:
+                view = await proposals.propose(
+                    session,
+                    self.executor.hub,
+                    spec.name,
+                    rows,
+                    actor=self.actor,
+                    conversation_id=self.conversation_id,
+                    tool_call_id=tool_call_id,
+                )
+            except InvalidProposalError as exc:
+                failure = _failure(exc)
+                failure.payload["row"] = exc.row
+                raise failure from exc
+            except (CommandRefusedError, ValidationError) as exc:
+                raise _failure(exc) from exc
+        raise ApprovalRequired(metadata={"proposal": view.id})
+
+    async def card_result(self, tool_call_id: str) -> object:
+        """按過的卡片（恢復那一輪）：核准就當場執行過了（`proposals.decide`），這裡只把結果交給模型。"""
+        async with self.sessions() as session:
+            card = await proposals.card_of_call(session, self.conversation_id, tool_call_id)
+            view = await _settled(session, self.executor, card)
+        if view is None:
+            # `_approval` 已經把不見的卡換成拒絕；兩者之間被刪掉的才走到這裡。
+            return {"error": _CARD_GONE}
+        return card_outcome(view)
 
     async def guard_tool(
         self, call: ToolCallPart, args: ValidatedToolArgs, handler: WrapToolExecuteHandler
@@ -515,6 +805,9 @@ class Turn:
             }
         try:
             result = await handler(args)
+        except ApprovalRequired:
+            await self._record_tool(command_name, plain, AiToolOutcome.PROPOSED, "", started)
+            raise
         except _ToolFailedError as failure:
             self.repeats[key] -= 1
             if search:
@@ -673,9 +966,14 @@ class Turn:
         """串流開始了：這個人的那一輪佔到收尾為止。"""
         self.runtime.streaming(self.user_id)
 
-    async def completed(self, result: AgentRunResult[str]) -> None:
-        """模型答完：存整份歷史（`on_complete`）。"""
-        await self._finish(result.all_messages(), AiStopReason.COMPLETED, "")
+    async def completed(self, result: AgentRunResult[str | DeferredToolRequests]) -> None:
+        """模型答完，或停在確認卡上：存整份歷史（`on_complete`）。卡片的呼叫留在結尾、沒有結果。"""
+        reason = (
+            AiStopReason.AWAITING_CONFIRMATION
+            if isinstance(result.output, DeferredToolRequests)
+            else AiStopReason.COMPLETED
+        )
+        await self._finish(result.all_messages(), reason, "")
 
     async def stopped(self, error: str) -> tuple[str, TurnStop]:
         """這一輪沒有答完（串流送出錯誤的那一刻）。存到停下之前、補一則說明；回說明的字與停在哪。"""
@@ -700,7 +998,15 @@ class Turn:
             self.runtime.release(self.user_id)
 
     def _kept(self, note: str) -> list[ModelMessage]:
-        kept = self.prefix or [*self.history, self.prompt]
+        if self.prefix:
+            kept = self.prefix
+        elif self.deferred is not None:
+            # 恢復那一輪在第一次模型呼叫之前就停了：卡片的呼叫還沒有結果，後面不能接任何東西
+            # （provider 要 tool_use 緊接 tool_result）。原樣留著，下一則訊息照樣接得回卡片；
+            # 說明只在當下的串流裡。
+            return list(self.history)
+        else:
+            kept = [*self.history, *([self.prompt] if self.prompt is not None else [])]
         return [*kept, ModelResponse(parts=[TextPart(note)], model_name=_NOTE_MODEL)]
 
     async def _finish(
@@ -829,6 +1135,20 @@ class _Guard(AbstractCapability[Turn]):
         raise error
 
 
+def _failure(error: CommandRefusedError | ValidationError) -> _ToolFailedError:
+    """拒絕與參數錯：交給模型的那一份（不算重複呼叫）。"""
+    if isinstance(error, CommandRefusedError):
+        return _ToolFailedError(
+            AiToolOutcome.REFUSED,
+            f"{error.reason}: {error.detail}" if error.detail else str(error.reason),
+            {"refused": str(error.reason), "detail": error.detail},
+        )
+    errors = error.errors(include_url=False, include_context=False, include_input=False)
+    return _ToolFailedError(
+        AiToolOutcome.FAILED, str(error), {"invalid_arguments": to_jsonable_python(errors)}
+    )
+
+
 def _describe(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}"
 
@@ -848,11 +1168,17 @@ async def open_turn(
     factory: ServiceClientFactory,
     actor: Actor,
     conversation_id: str,
-    text: str,
+    text: str | None,
     language: Language,
     continues: str | None = None,
 ) -> Turn:
     """一則使用者訊息開一輪。對話沒有就替這個人建一段；是別人的就當作沒有。
+
+    `text` 是 `None` 是**恢復**（票 13）：前端說使用者按了卡片。哪幾張、按了什麼以伺服器上的
+    Proposal 為準（`_approval`），還有沒決定的不恢復。
+
+    有字而上一輪停在卡片上（使用者沒按就繼續說話）：那幾張脫離這一輪，伺服器替它們補上結果
+    （`_closing`）再接這一則。
 
     `continues` 是使用者按「繼續」的那一輪（M5 票 20）：訊息照樣是按鈕上的字，接著存著的歷史（停下來
     的說明在最後）重新跑一輪、防護的數字重新算。只有這段對話的最後一輪、被防護停下（`CONTINUABLE`）、
@@ -861,15 +1187,17 @@ async def open_turn(
     以 `/` 開頭的是斜線指令（`services.slash`），不交給模型：`slash_command`。
 
     拒絕：`no_message`、`slash_command`、`conversation_missing`、`ai_disabled`、`ai_paused`
-    （斷路器，detail 是到什麼時候）、`not_continuable`、`busy`。佔到的那一輪由 `Turn.close`
-    讓出（串流沒開始的，見 `AgentRuntime`）。
+    （斷路器，detail 是到什麼時候）、`not_continuable`、`busy`、`card_undecided`。佔到的那一輪由
+    `Turn.close` 讓出（串流沒開始的，見 `AgentRuntime`）。
     """
     assert actor.user_id is not None
-    text = text.strip()
-    if not text:
-        raise AgentRefusedError(AgentRefusal.NO_MESSAGE)
-    if text.startswith(SLASH):
-        raise AgentRefusedError(AgentRefusal.SLASH_COMMAND, text.split()[0])
+    resuming = text is None
+    if text is not None:
+        text = text.strip()
+        if not text:
+            raise AgentRefusedError(AgentRefusal.NO_MESSAGE)
+        if text.startswith(SLASH):
+            raise AgentRefusedError(AgentRefusal.SLASH_COMMAND, text.split()[0])
     if not CONVERSATION_ID.fullmatch(conversation_id):
         raise AgentRefusedError(AgentRefusal.CONVERSATION_MISSING, conversation_id)
     # 自己開 session、自己 commit：串流開始之前這一輪的兩列就要落地，不靠請求的那一個收尾。
@@ -883,12 +1211,38 @@ async def open_turn(
         history = load_history(conversation.history_json) if conversation is not None else []
         if continues is not None:
             await _check_continuable(session, conversation_id, continues)
+        calls = pending_calls(history)
+        if resuming and not calls:
+            raise AgentRefusedError(AgentRefusal.NO_MESSAGE, "nothing to resume")
+        cards = {
+            call.tool_call_id: await proposals.card_of_call(
+                session, conversation_id, call.tool_call_id
+            )
+            for call in calls
+        }
+        deferred = (
+            DeferredToolResults(approvals={key: _approval(view) for key, view in cards.items()})
+            if resuming
+            else None
+        )
+        # 這一輪才脫離的不算：模型從補上的結果知道它們。
+        notes = _card_notes(await proposals.detached_cards(session, conversation_id))
         endpoint = current_endpoint(settings)
         if (pause := runtime.breaker.paused(endpoint)) is not None:
             raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
         run_id = uuid.uuid4().hex
         runtime.claim(actor.user_id)
         try:
+            if calls and not resuming:
+                closing = [
+                    _closing(
+                        call,
+                        await _settled(session, executor, cards[call.tool_call_id]),
+                    )
+                    for call in calls
+                ]
+                history = [*history, ModelRequest(parts=closing)]
+                await proposals.detach(session, executor.hub, conversation_id)
             if conversation is None:
                 session.add(AiConversation(id=conversation_id, user_id=actor.user_id))
             session.add(
@@ -917,10 +1271,10 @@ async def open_turn(
         runtime.limits.web_searches,
         lambda turn: turn.searches_left() > 0,
     )
-    agent: Agent[Turn, str] = Agent(
+    agent: Agent[Turn, str | DeferredToolRequests] = Agent(
         model,
         deps_type=Turn,
-        output_type=str,
+        output_type=[str, DeferredToolRequests],
         instructions=_instructions,
         toolsets=[_toolset(actor.role, tavily=tavily)],
         # 壓縮在每次模型呼叫之前（`before_model_request`），記帳與防護包著呼叫本身。
@@ -939,7 +1293,7 @@ async def open_turn(
         endpoint=endpoint,
         continues=continues,
         history=history,
-        prompt=ModelRequest(parts=[UserPromptPart(text)]),
+        prompt=None if text is None else ModelRequest(parts=[UserPromptPart(text)]),
         language=language,
         agent=agent,
         model=model,
@@ -947,6 +1301,8 @@ async def open_turn(
         today=datetime.now().astimezone().date(),
         official=is_official(endpoint),
         can_search=tavily or bool(native),
+        deferred=deferred,
+        card_notes=notes,
     )
 
 
