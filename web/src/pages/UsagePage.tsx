@@ -81,13 +81,15 @@ function UsageBody({ usage }: { usage: Usage }) {
 /** 一天（或合計）的估計費用：部分算不出來接「+未知」，全部算不出來是「未知」。 */
 function Cost({ day }: { day: DayUsage }) {
   const { t, i18n } = useTranslation()
-  return (
-    <>
-      {tally(day.cost, (known) => usd(known, i18n.language), {
-        none: t('usage.unknown'),
-        partial: (known) => t('usage.partial', { known }),
-      })}
-    </>
+  const text = tally(day.cost, (known) => usd(known, i18n.language), {
+    none: t('usage.unknown'),
+    partial: (known) => t('usage.partial', { known }),
+  })
+  // 幾次算不進去：滑過去看得到，表下有說為什麼。
+  return day.cost.unknown > 0 ? (
+    <span title={t('usage.unknownCalls', { count: day.cost.unknown })}>{text}</span>
+  ) : (
+    <>{text}</>
   )
 }
 
@@ -372,7 +374,9 @@ function Runs({ usage }: { usage: Usage }) {
                         to="/agent/runs/$runId"
                         params={{ runId: run.id }}
                         className={`${TEXT_LINK} text-sm`}
-                        aria-label={`${t('usage.runs.open')}: ${run.started_at}`}
+                        aria-label={t('usage.runs.openAt', {
+                          time: new Date(run.started_at).toLocaleString(language),
+                        })}
                       >
                         <Timestamp at={run.started_at} past />
                       </Link>

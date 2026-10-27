@@ -28,6 +28,8 @@ class TokenTallyOut(BaseModel):
 
     #: 知道的那幾次呼叫的加總。
     known: int
+    #: 幾次呼叫知道（0 也是知道）。`0` 而 `unknown` 不是 0 就是全部不知道。
+    counted: int
     #: 幾次呼叫不知道（接口沒報）。
     unknown: int
 
@@ -37,6 +39,8 @@ class CostTallyOut(BaseModel):
 
     #: 估計費用（美元），只算價目表上有的模型。
     known: float
+    #: 幾次呼叫算得出費用。
+    counted: int
     #: 幾次呼叫的費用算不出來（模型不在價目表上，或出錯沒有回應）。
     unknown: int
 

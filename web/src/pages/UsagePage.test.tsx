@@ -24,11 +24,11 @@ function day(overrides: Partial<DayUsage>): DayUsage {
     calls: 0,
     input_tokens: 0,
     new_input: 0,
-    cache_read: { known: 0, unknown: 0 },
-    cache_write: { known: 0, unknown: 0 },
+    cache_read: { known: 0, counted: 0, unknown: 0 },
+    cache_write: { known: 0, counted: 0, unknown: 0 },
     output_tokens: 0,
     hit_rate: null,
-    cost: { known: 0, unknown: 0 },
+    cost: { known: 0, counted: 0, unknown: 0 },
     web_searches: 0,
     tavily_searches: 0,
     ...overrides,
@@ -39,13 +39,13 @@ const TODAY = day({
   calls: 3,
   input_tokens: 11000,
   new_input: 1000,
-  cache_read: { known: 9500, unknown: 0 },
+  cache_read: { known: 9500, counted: 3, unknown: 0 },
   // 一次走 OpenAI 相容接口：快取寫沒報。
-  cache_write: { known: 500, unknown: 1 },
+  cache_write: { known: 500, counted: 2, unknown: 1 },
   output_tokens: 500,
   hit_rate: 0.8636,
   // 一次的模型不在價目表上。
-  cost: { known: 0.0312, unknown: 1 },
+  cost: { known: 0.0312, counted: 2, unknown: 1 },
   web_searches: 2,
   tavily_searches: 1,
 })
@@ -58,14 +58,14 @@ const OLD = day({
   output_tokens: 50,
   hit_rate: 0,
   // 全部不知道：寫「未知」，不是 $0。
-  cost: { known: 0, unknown: 1 },
-  cache_write: { known: 0, unknown: 1 },
+  cost: { known: 0, counted: 0, unknown: 1 },
+  cache_write: { known: 0, counted: 0, unknown: 1 },
 })
 
 const USAGE: Usage = {
   today: '2026-10-27',
   days: [TODAY, OLD],
-  totals: { ...TODAY, calls: 4, cost: { known: 0.0312, unknown: 2 } },
+  totals: { ...TODAY, calls: 4, cost: { known: 0.0312, counted: 2, unknown: 2 } },
   runs_count: 2,
   guards: {
     stops: {
@@ -140,7 +140,10 @@ describe('設定 → 用量', () => {
     const table = await screen.findByRole('table', { name: '近 30 天每天的用量，新的在上' })
     const [, today, old] = within(table).getAllByRole('row')
     expect(within(today).getByRole('rowheader')).toHaveTextContent('2026-10-27 · 今天')
-    expect(within(today).getAllByText('$0.0312 +未知').length).toBeGreaterThan(0)
+    expect(within(today).getAllByText('$0.0312 +未知')[0]).toHaveAttribute(
+      'title',
+      '1 次呼叫的費用算不進去',
+    )
     expect(within(today).getAllByText('500 +未知').length).toBeGreaterThan(0)
     expect(within(today).getAllByText('86%').length).toBeGreaterThan(0)
     expect(within(today).getAllByText('2 · Tavily 1').length).toBeGreaterThan(0)

@@ -3909,6 +3909,8 @@ const zhHant = {
     none: '—',
     unknown: '未知',
     partial: '{{known}} +未知',
+    unknownCalls_one: '{{count}} 次呼叫的費用算不進去',
+    unknownCalls_other: '{{count}} 次呼叫的費用算不進去',
     alerts: {
       label: '提醒',
       threshold: '今天估計花了 {{today}}，超過你設的提醒值 {{against}}。AI 照常可用。',
@@ -3927,7 +3929,7 @@ const zhHant = {
       title: '每日提醒值',
       lede: '今天的估計費用到了這個數字，這一頁與側面板會提醒你。只提醒，不會停用 AI。另外，今天是近 14 天中位數的 5 倍以上時也會提醒。',
       field: '每日提醒值（美元）',
-      hint: '空著是不提醒',
+      hint: '空著是不提醒；填 0 是今天一有花費就提醒',
       save: '儲存',
       saved: '存好了：每天到 {{value}} 提醒你。',
       cleared: '存好了：不設每日提醒值。',
@@ -3979,7 +3981,7 @@ const zhHant = {
       stop: '停止原因',
       stepsValue: '{{requests}} 次呼叫、{{tools}} 個工具',
       tokensValue: 'in {{input}} / out {{output}}',
-      open: '看步驟',
+      openAt: '看 {{time}} 那一輪的步驟',
       empty: '這 30 天還沒有人問過助理。',
     },
     prices: {
@@ -7885,6 +7887,8 @@ const en: Translations<typeof zhHant> = {
     none: '—',
     unknown: 'Unknown',
     partial: '{{known}} +unknown',
+    unknownCalls_one: '{{count}} call could not be priced',
+    unknownCalls_other: '{{count}} calls could not be priced',
     alerts: {
       label: 'Heads-up',
       threshold:
@@ -7904,7 +7908,7 @@ const en: Translations<typeof zhHant> = {
       title: 'Daily reminder',
       lede: 'When today’s estimated spend reaches this amount, this page and the side panel tell you. It only reminds; it never turns AI off. You are also told when today is 5 times the 14-day median or more.',
       field: 'Daily reminder (USD)',
-      hint: 'Leave empty for no reminder',
+      hint: 'Leave empty for no reminder; 0 reminds as soon as anything is spent today',
       save: 'Save',
       saved: 'Saved: you are reminded at {{value}} a day.',
       cleared: 'Saved: no daily reminder.',
@@ -7957,7 +7961,7 @@ const en: Translations<typeof zhHant> = {
       stop: 'Stopped by',
       stepsValue: '{{requests}} calls, {{tools}} tools',
       tokensValue: 'in {{input}} / out {{output}}',
-      open: 'See steps',
+      openAt: 'See the steps of the turn at {{time}}',
       empty: 'Nobody has asked the assistant anything in the last 30 days.',
     },
     prices: {

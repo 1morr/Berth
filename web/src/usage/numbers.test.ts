@@ -15,15 +15,19 @@ describe('tally', () => {
   const format = (known: number) => tokens(known, 'en')
 
   it('writes the sum when every call is known', () => {
-    expect(tally({ known: 1200, unknown: 0 }, format, words)).toBe('1,200')
+    expect(tally({ known: 1200, counted: 2, unknown: 0 }, format, words)).toBe('1,200')
   })
 
   it('does not turn all-unknown into zero', () => {
-    expect(tally({ known: 0, unknown: 3 }, format, words)).toBe('unknown')
+    expect(tally({ known: 0, counted: 0, unknown: 3 }, format, words)).toBe('unknown')
+  })
+
+  it('keeps a known zero apart from unknown', () => {
+    expect(tally({ known: 0, counted: 2, unknown: 1 }, format, words)).toBe('0 +unknown')
   })
 
   it('marks a sum that leaves some calls out', () => {
-    expect(tally({ known: 1200, unknown: 1 }, format, words)).toBe('1,200 +unknown')
+    expect(tally({ known: 1200, counted: 2, unknown: 1 }, format, words)).toBe('1,200 +unknown')
   })
 })
 

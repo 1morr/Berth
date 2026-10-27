@@ -20,12 +20,13 @@ export function percent(rate: number | null, unknown: string): string {
 
 export interface Tally {
   known: number
+  /** 幾次呼叫知道。0 也是知道：知道的加總是 0 不等於全部不知道。 */
+  counted: number
   unknown: number
 }
 
 /**
- * 「知道的加總 + 幾次不知道」的一格：全部知道照寫；一次都不知道（知道的是 0）寫 `none`；
- * 兩者都有寫「知道的 +未知」。
+ * 「知道的加總 + 幾次不知道」的一格：全部知道照寫；一次都不知道寫 `none`；兩者都有寫「知道的 +未知」。
  */
 export function tally(
   value: Tally,
@@ -33,7 +34,7 @@ export function tally(
   { none, partial }: { none: string; partial: (known: string) => string },
 ): string {
   if (value.unknown === 0) return format(value.known)
-  if (value.known === 0) return none
+  if (value.counted === 0) return none
   return partial(format(value.known))
 }
 

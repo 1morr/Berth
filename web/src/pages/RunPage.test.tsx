@@ -30,6 +30,7 @@ const STOPPED: Run = {
   output_tokens: 120,
   cache_read_tokens: 9000,
   cache_write_tokens: null,
+  hit_rate: 9000 / 11000,
   cost_usd: 0.0123,
   web_searches: 0,
   tavily_searches: 0,
@@ -113,6 +114,8 @@ describe('一輪的步驟', () => {
     expect(await screen.findByRole('heading', { level: 1, name: '這一輪的步驟' })).toBeVisible()
     expect(await screen.findByText('停下')).toBeVisible()
     expect(screen.getByText('同一個呼叫重複')).toBeVisible()
+    // 一般使用者看的是自己的那一輪：不說是誰問的。
+    expect(screen.queryByText('deckhand 問的')).not.toBeInTheDocument()
     const totals = screen.getByRole('heading', { name: '合計' }).closest('section')!
     expect(within(totals).getByText('11,000')).toBeVisible()
     // 快取寫接口沒報：「—」，不是 0。
@@ -183,5 +186,18 @@ describe('一輪的步驟', () => {
     renderApp('/agent/runs/nope')
 
     expect(await screen.findByText('找不到這一輪：它不存在，或不是你的。')).toBeVisible()
+  })
+})
+
+describe('管理員看別人的那一輪', () => {
+  it('說出是誰問的', async () => {
+    stubApi({
+      'GET /api/health': { body: HEALTHY },
+      'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
+      'GET /api/agent/runs/run-1': { body: STOPPED },
+    })
+    renderApp('/agent/runs/run-1')
+
+    expect(await screen.findByText('deckhand 問的')).toBeVisible()
   })
 })

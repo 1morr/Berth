@@ -3193,6 +3193,8 @@ export interface components {
         CostTallyOut: {
             /** Known */
             known: number;
+            /** Counted */
+            counted: number;
             /** Unknown */
             unknown: number;
         };
@@ -5883,6 +5885,8 @@ export interface components {
             cache_read_tokens: number | null;
             /** Cache Write Tokens */
             cache_write_tokens: number | null;
+            /** Hit Rate */
+            hit_rate: number | null;
             /** Cost Usd */
             cost_usd: number | null;
             /** Web Searches */
@@ -6533,6 +6537,8 @@ export interface components {
         TokenTallyOut: {
             /** Known */
             known: number;
+            /** Counted */
+            counted: number;
             /** Unknown */
             unknown: number;
         };

@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import type { ParseKeys } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
+import { meQueryOptions } from '../api/auth'
 import {
   runQueryOptions,
   runRefusalOf,
@@ -67,6 +68,8 @@ const STOP_CHIP: Record<AiStopReason, { signal: Signal; key: ParseKeys }> = {
 
 function RunBody({ run }: { run: Run }) {
   const { t, i18n } = useTranslation()
+  // 一般使用者只看得到自己的那幾輪：名字是他自己，不必說。
+  const admin = useQuery(meQueryOptions).data?.role === 'admin'
   const language = i18n.language
   const none = t('usage.none')
   const chip = run.stop_reason
@@ -76,10 +79,6 @@ function RunBody({ run }: { run: Run }) {
     run.ended_at === null
       ? none
       : duration(new Date(run.ended_at).getTime() - new Date(run.started_at).getTime(), language)
-  const hitRate =
-    run.cache_read_tokens === null || run.input_tokens === 0
-      ? null
-      : run.cache_read_tokens / run.input_tokens
 
   return (
     <>
@@ -87,8 +86,12 @@ function RunBody({ run }: { run: Run }) {
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-dim">
           <Timestamp at={run.started_at} past />
           <Dot />
-          <span>{t('usage.run.who', { name: run.user_name })}</span>
-          <Dot />
+          {admin ? (
+            <>
+              <span>{t('usage.run.who', { name: run.user_name })}</span>
+              <Dot />
+            </>
+          ) : null}
           <span className="value text-xs wrap-anywhere">{`${run.provider} · ${run.model}`}</span>
         </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2" aria-live="polite">
@@ -124,7 +127,7 @@ function RunBody({ run }: { run: Run }) {
           term={t('usage.run.summary.output')}
           value={tokens(run.output_tokens, language)}
         />
-        <CutawayRow term={t('usage.run.summary.hitRate')} value={percent(hitRate, none)} />
+        <CutawayRow term={t('usage.run.summary.hitRate')} value={percent(run.hit_rate, none)} />
         <CutawayRow
           term={t('usage.run.summary.cost')}
           value={run.cost_usd === null ? t('usage.unknown') : usd(run.cost_usd, language)}

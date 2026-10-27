@@ -95,7 +95,7 @@ from berth.services.executor import CommandRefusedError, Executor
 from berth.services.registry import commands
 from berth.services.settings import read_settings
 from berth.services.skills import menu, skills_for
-from berth.services.usage import read_usage
+from berth.services.usage import today_alerts
 from berth.services.web import SEARCH_DOMAINS
 
 logger = logging.getLogger(__name__)
@@ -988,5 +988,5 @@ async def read_status(session: AsyncSession, runtime: AgentRuntime, role: Role) 
         enabled=settings.enabled,
         paused_until=pause.until if pause is not None else None,
         pause_error=pause.error if pause is not None and role is Role.ADMIN else "",
-        spend_alerts=(await read_usage(session)).alerts if role is Role.ADMIN else [],
+        spend_alerts=await today_alerts(session) if role is Role.ADMIN else [],
     )

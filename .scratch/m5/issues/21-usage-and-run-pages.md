@@ -1,6 +1,6 @@
 # 21 — 用量頁與每輪步驟頁
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 12, 20
 
@@ -26,12 +26,18 @@
 
 ## 驗收
 
-- [ ] shape 文件在、實作照它
-- [ ] 用量頁的數字與 `ai_calls` 加總一致（測試）
-- [ ] 步驟頁看得到被中止那一輪的數字（實跑，附截圖）
-- [ ] 提醒門檻與異常提醒有測試；不會停用 AI
-- [ ] i18n zh-Hant 與 en；全部檢查、pytest、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
+- [x] shape 文件在、實作照它
+- [x] 用量頁的數字與 `ai_calls` 加總一致（測試）
+- [x] 步驟頁看得到被中止那一輪的數字（實跑，附截圖）
+- [x] 提醒門檻與異常提醒有測試；不會停用 AI
+- [x] i18n zh-Hant 與 en；全部檢查、pytest、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
 
 ## Comments
 
 - 2026-10-27 票 17 交接：網搜次數＝`ai_calls.web_searches`（伺服器端）加 `ai_tool_calls` 裡 `web.tavily_search` 的 `ok` / `warned`。**畫面要說明網搜費用**：`ai_calls.web_search_cost_usd` 是 `NULL`（`error` 為空）時是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點（DeepSeek 相容端點、自架閘道）搜了但沒算進 `cost_usd`；Tavily 花的是使用者 Tavily 帳號的 credit，不在估計費用裡。
+- 2026-10-27 票 21 完成：shape 在 `.scratch/m5/usage-and-run-shape.md`（使用者選定入口是設定分頁「用量」、提醒值在用量頁就地設、異常的中位數只算有用量的日子且至少 3 天、側面板的提醒只給管理員）。實跑截圖在本目錄（`steps-*.png`、`usage-*.png`、`stopped-in-panel-*.png`，1280 與 390；`pnpm -C web e2e` 的 `agent` 情境說「一直查」重現）。
+- 2026-10-27 code-review 已修：`tally` 把知道的 0 當成不知道（加 `counted`）、命中率把不知道的快取讀當 0、正式環境分日用固定偏移（跨夏令時錯一天）、`/agent/status` 每次讀整份 30 天（改 `usage.today_alerts`）、步驟頁的名字只給管理員、費用「+未知」說出幾次、aria-label 走 i18n、`Tally.merge`、提醒值 0 的提示。
+- 2026-10-27 code-review 沒處理（判斷過）：
+  - 出錯沒有回應的呼叫在用量頁算「費用不知道」：與 `ai_runs.cost_usd` 的記帳一致（服務收不收費不知道），表下說明寫了這一種。
+  - 「新的 input」只扣掉知道的快取寫：OpenAI 相容接口不報快取寫，那部分算在新的 input 裡。
+  - 壞味道留著：`RunPage` 的 `STOP_CHIP` 與 `usage/labels.ts` 的 `STOP_TEXT` 兩張表（一張是色塊、一張是說法）；`usage/alerts.ts` 的 `where` 旗標；「窄版先收起面板」的 `onClick` 在面板兩處；`api/agent.py` 從 `api/usage.py` 拿 `SpendAlertOut`。票 22 的 UI 收尾（critique / audit / polish）可以一起看。

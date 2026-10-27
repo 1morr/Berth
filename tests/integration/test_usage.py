@@ -11,13 +11,20 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
+import time_machine
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import AiProvider, AiRunRefusal, AiStopReason, AiToolOutcome, Role
 from berth.domain.spend import SpendAlertKind
 from berth.models import AiCall, AiConversation, AiRun, AiToolCall, User
-from berth.services.usage import RunRejectedError, read_run, read_usage, set_spend_alert
+from berth.services.usage import (
+    RunRejectedError,
+    read_run,
+    read_usage,
+    set_spend_alert,
+    today_alerts,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -427,3 +434,77 @@ class TestARun:
         admin = await _user(session)
         with pytest.raises(RunRejectedError):
             await read_run(session, "nope", user_id=admin.id, role=Role.ADMIN)
+
+
+class TestReviewFixes:
+    """code-review（票 21）：不知道的不當 0，0 也不當不知道；分日跟著夏令時走。"""
+
+    async def test_a_known_zero_is_still_known(self, session: AsyncSession) -> None:
+        user = await _user(session)
+        at = _utc(NOW - timedelta(hours=1))
+        run = await _run(session, user, at)
+        session.add_all([_call(run, at, write=0), _call(run, at, step=2, write=None)])
+        await session.flush()
+
+        today = (await read_usage(session, now=NOW)).days[0]
+
+        # 一次報了 0、一次沒報：知道的是 1 次，畫面寫「0 +未知」而不是「未知」。
+        assert (today.cache_write.known, today.cache_write.counted, today.cache_write.unknown) == (
+            0,
+            1,
+            1,
+        )
+
+    async def test_the_hit_rate_leaves_out_calls_whose_reads_are_unknown(
+        self, session: AsyncSession
+    ) -> None:
+        user = await _user(session)
+        at = _utc(NOW - timedelta(hours=1))
+        run = await _run(session, user, at)
+        session.add_all(
+            [
+                _call(run, at, input_tokens=1000, read=800),
+                _call(run, at, step=2, input_tokens=9000, read=None),
+            ]
+        )
+        await session.flush()
+
+        today = (await read_usage(session, now=NOW)).days[0]
+
+        assert today.hit_rate == pytest.approx(0.8)
+
+    async def test_no_known_reads_is_no_rate_not_zero(self, session: AsyncSession) -> None:
+        user = await _user(session)
+        at = _utc(NOW - timedelta(hours=1))
+        run = await _run(session, user, at)
+        session.add(_call(run, at, read=None))
+        await session.flush()
+
+        assert (await read_usage(session, now=NOW)).days[0].hit_rate is None
+
+    async def test_days_follow_daylight_saving_on_the_server_clock(
+        self, session: AsyncSession
+    ) -> None:
+        # 紐約 2026-11-01 結束夏令時。10-31 00:30 EDT 是 UTC 04:30；拿今天（EST，-5）的固定偏移換算
+        # 會變成 10-30 23:30，算錯一天。time-machine 照目的地的 `ZoneInfo` 換掉程序的 `TZ`。
+        user = await _user(session)
+        at = datetime(2026, 10, 31, 4, 30, tzinfo=UTC)
+        run = await _run(session, user, at)
+        session.add(_call(run, at))
+        await session.flush()
+
+        new_york = ZoneInfo("America/New_York")
+        with time_machine.travel(datetime(2026, 11, 5, 12, 0, tzinfo=new_york), tick=False):
+            usage = await read_usage(session)
+
+        assert [d.day for d in usage.days if d.calls] == [date(2026, 10, 31)]
+
+    async def test_the_panel_alerts_match_the_page(self, session: AsyncSession) -> None:
+        user = await _user(session)
+        await set_spend_alert(session, 0.5)
+        at = _utc(NOW - timedelta(hours=1))
+        run = await _run(session, user, at)
+        session.add(_call(run, at, cost=0.6))
+        await session.flush()
+
+        assert await today_alerts(session, now=NOW) == (await read_usage(session, now=NOW)).alerts

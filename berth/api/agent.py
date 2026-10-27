@@ -374,6 +374,8 @@ class RunOut(BaseModel):
     output_tokens: int
     cache_read_tokens: int | None
     cache_write_tokens: int | None
+    #: 快取讀 ÷ input；快取讀不知道或沒有 input 是 `null`。
+    hit_rate: float | None
     cost_usd: float | None
     web_searches: int
     tavily_searches: int

@@ -16,7 +16,7 @@
    - 異常：今天 ≥ 近 14 天（不含今天）有用量那幾天的日中位數 × 5，且那樣的日子至少 3 天：「今天估計花了 $0.80，是近 14 天中位數 $0.05 的 16 倍。」
    - 兩句都說「AI 照常可用」。
 3. **今天與期間合計**：`Cutaway`（`dt`/`dd` 兩欄）——今天的估計費用、期間合計費用、輪數、模型呼叫次數、命中率。
-4. **每日提醒值**（就地設定）：一格數字欄（美元，空的是不提醒）+ Ghost「儲存」+ 一句提示「只提醒，不會停用 AI」。存的是 `settings.ai.daily_alert_usd`，經命令 `ai.set_spend_alert`（`settings` 旗標）。
+4. **每日提醒值**（就地設定）：一格數字欄（美元，空的是不提醒）+ Ghost「儲存」+ 一句提示「只提醒，不會停用 AI」。存的是 `settings.ai.daily_alert_usd`，經命令 `usage.set_spend_alert`（`settings` 旗標）。
 5. **逐日表**（只列有用量的日子，加上今天；新的在上）：日期 | 新的 input | 快取讀 | 快取寫 | output | 命中率 | 估計費用 | 網搜。
    - 數字 `.value tabular-nums` 右對齊。窄版收成每一天一塊：日期 + 費用一行，其餘以 `Dot` 分隔一行、每格自己說出它是什麼（DESIGN.md〈窄版的收法〉）。
    - **不知道的格子寫「—」**並在表下說明：快取寫是 OpenAI 相容接口不報；不當 0。
@@ -38,13 +38,13 @@
 4. **步驟**（`ol`，照時間）：每一次模型呼叫是一格 `well` + `border-2 border-rule`：
    - 第一行：`.label`「第 n 次模型呼叫」+ 模型名 `.value` + 耗時。
    - 第二行（`Dot` 分隔的 `.value text-xs`）：input、快取讀、快取寫、output、費用、模型說的停止理由（`finish_reason` 原樣）。網搜有的話多一格。
-   - 出錯的那一次：框換 `rule-strong`，就地一行 `blocked-ink` 的原文。
+   - 出錯的那一次：框換 `rule-strong`，就地一行 `blocked-ink`「這一次呼叫出錯」，原文收在「技術細節」（DESIGN.md：後端的字串只在那裡出現）。
    - 它叫的工具：底下縮排的列，每列 = 人話名稱（同側面板 `ToolCall` 的對照）+ 結果（「完成」「警告後照做」「被擋下」「中止」「被拒絕」「失敗」，不只靠色）+ 耗時 + 截短標記；被擋下或被拒絕的理由一行 `text-sm`；`<details>`「參數」展開 JSON（`.value text-xs wrap-anywhere`）。
 5. **看不到**：別人的或不存在的一律「找不到這一輪」（404，看不到就是沒有）。
 
 ## 側面板
 
-- **每一則助理回覆的最後一行**：Ghost 小連結「步驟」→ `/agent/runs/$runId`（換頁、面板留著）。串流中與重新載入後都有：後端在串流開頭送 message metadata `{runId}`，重新載入時 `GET /agent/conversations/{id}` 也把它放進每一則助理訊息的 `metadata`（存著的 `ModelResponse.run_id`）。
+- **每一則助理回覆的最後一行**（一則回覆＝一輪；重新載入後一輪拆成好幾則時掛在最後一則）：Ghost 小連結「步驟」→ `/agent/runs/$runId`（換頁、面板留著）。串流中與重新載入後都有：後端在串流開頭送 message metadata `{runId}`，重新載入時 `GET /agent/conversations/{id}` 也把它放進每一則助理訊息的 `metadata`（存著的 `ModelResponse.run_id`）。
 - **花費提醒（只給管理員）**：面板抬頭列下方一塊 `Notice` `assigned`，同用量頁那兩句的短版 +「看用量」連結；來自 `GET /agent/status` 多一格 `spend_alert`（一般使用者永遠是 `null`）。不推 Discord。
 
 ## 後端
@@ -52,8 +52,8 @@
 - `services/usage.py`：`read_usage`（`READ`，admin）：逐日（伺服器時區）、期間合計、防護計數、最近 20 輪、用到的模型的價目、提醒。數字全從 `ai_calls` / `ai_tool_calls` / `ai_runs` 算，**逐日表的加總等於 `ai_calls` 的加總**（測試）。
 - `spend_alerts(...)`：純函式在 `domain`（今天的費用、提醒值、近 14 天的逐日費用 → 提醒清單），中位數只算有用量（費用 > 0）的日子，至少 3 天。費用只用知道的那部分。
 - `agent.read_run`（`READ`，`audience=user`）：一輪的摘要、逐次模型呼叫與工具呼叫；一般使用者只看得到自己的，別人的是 `run_missing`。
-- `ai.set_spend_alert`（`REVERSIBLE`、`settings` 旗標，inverse 指自己）：`settings.ai.daily_alert_usd: float | None`。
-- API：`GET /settings/usage`（admin，前綴已在門禁）、`PUT /settings/usage/alert`、`GET /agent/runs/{run_id}`；`AgentStatusOut.spend_alert`。
+- `usage.set_spend_alert`（`REVERSIBLE`、`settings` 旗標，inverse 指自己）：`settings.ai.daily_alert_usd: float | None`。
+- API：`GET /settings/usage`（admin，前綴已在門禁）、`PUT /settings/usage/alert`、`GET /agent/runs/{run_id}`；`AgentStatusOut.spend_alerts`（清單，兩種可同時出現）。
 
 ## 不做、留給之後
 

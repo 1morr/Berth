@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from decimal import Decimal
 
 from pydantic import NonNegativeFloat
@@ -44,9 +44,11 @@ GUARD_STOPS: tuple[AiStopReason, ...] = tuple(
 
 @dataclass(slots=True)
 class Tally[N: (int, float)]:
-    """知道的加總，與幾次呼叫不知道。"""
+    """知道的加總、幾次呼叫知道、幾次不知道。**0 也是知道**：知道的加總是 0 不等於全部不知道
+    （`counted` 分得出來）。"""
 
     known: N
+    counted: int = 0
     unknown: int = 0
 
     def add(self, value: N | None) -> None:
@@ -54,6 +56,12 @@ class Tally[N: (int, float)]:
             self.unknown += 1
         else:
             self.known += value
+            self.counted += 1
+
+    def merge(self, other: Tally[N]) -> None:
+        self.known += other.known
+        self.counted += other.counted
+        self.unknown += other.unknown
 
 
 @dataclass(slots=True)
@@ -71,6 +79,8 @@ class DayUsage:
     web_searches: int = 0
     #: Tavily（使用者自己的 Tavily credit，不在估計費用裡）。
     tavily_searches: int = 0
+    #: 快取讀知道的那幾次呼叫的 input：命中率的分母（不知道的那幾次不算進去，也不當 0）。
+    read_input: int = 0
 
     @property
     def new_input(self) -> int:
@@ -79,8 +89,8 @@ class DayUsage:
 
     @property
     def hit_rate(self) -> float | None:
-        """快取讀 ÷ input；沒有 input 是 `None`。"""
-        return self.cache_read.known / self.input_tokens if self.input_tokens else None
+        """快取讀 ÷ 那幾次呼叫的 input；沒有一次知道快取讀（或沒有 input）是 `None`。"""
+        return self.cache_read.known / self.read_input if self.read_input else None
 
     def add_call(self, call: AiCall) -> None:
         self.calls += 1
@@ -90,6 +100,8 @@ class DayUsage:
         if answered:
             self.cache_read.add(call.cache_read_tokens)
             self.cache_write.add(call.cache_write_tokens)
+            if call.cache_read_tokens is not None:
+                self.read_input += call.input_tokens
         self.cost.add(call.cost_usd)
         self.web_searches += call.web_searches
 
@@ -97,14 +109,10 @@ class DayUsage:
         self.calls += other.calls
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
-        for mine, theirs in (
-            (self.cache_read, other.cache_read),
-            (self.cache_write, other.cache_write),
-        ):
-            mine.known += theirs.known
-            mine.unknown += theirs.unknown
-        self.cost.known += other.cost.known
-        self.cost.unknown += other.cost.unknown
+        self.cache_read.merge(other.cache_read)
+        self.cache_write.merge(other.cache_write)
+        self.cost.merge(other.cost)
+        self.read_input += other.read_input
         self.web_searches += other.web_searches
         self.tavily_searches += other.tavily_searches
 
@@ -157,18 +165,27 @@ class UsageView:
     alerts: list[SpendAlert]
 
 
-def _local_day(at: datetime, now: datetime) -> date:
-    return at.replace(tzinfo=at.tzinfo or UTC).astimezone(now.tzinfo).date()
+def _local_day(at: datetime, zone: tzinfo | None) -> date:
+    """伺服器時區的日期。`zone` 是 `None` 時照系統時區**逐一換算**：`datetime.now().astimezone()`
+    給的是今天的固定偏移，30 天裡跨過夏令時的那幾天會差一小時、分錯日。"""
+    aware = at.replace(tzinfo=at.tzinfo or UTC)
+    return (aware.astimezone(zone) if zone is not None else aware.astimezone()).date()
+
+
+def _day_start(day: date, zone: tzinfo | None) -> datetime:
+    """那一天 00:00（伺服器時區）換成 UTC。"""
+    if zone is not None:
+        return datetime.combine(day, time.min, zone).astimezone(UTC)
+    return datetime.combine(day, time.min).astimezone().astimezone(UTC)
 
 
 # 用量頁：只讀三張觀測表與設定。
 @command(Effect.READ)
 async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> UsageView:
     """近 30 天的用量、防護次數、最近的輪、用到的模型的價目與今天的花費提醒。"""
-    now = now or datetime.now().astimezone()
-    today = now.date()
-    first_day = today - timedelta(days=WINDOW_DAYS - 1)
-    start = datetime.combine(first_day, datetime.min.time(), now.tzinfo).astimezone(UTC)
+    zone = now.tzinfo if now is not None else None
+    today = (now or datetime.now().astimezone()).date()
+    start = _day_start(today - timedelta(days=WINDOW_DAYS - 1), zone)
 
     calls = (await session.scalars(select(AiCall).where(AiCall.created_at >= start))).all()
     tools = (await session.scalars(select(AiToolCall).where(AiToolCall.created_at >= start))).all()
@@ -183,28 +200,19 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
 
     by_day: dict[date, DayUsage] = {today: DayUsage(today)}
     for call in calls:
-        day = _local_day(call.created_at, now)
+        day = _local_day(call.created_at, zone)
         by_day.setdefault(day, DayUsage(day)).add_call(call)
     for tool in tools:
         if tool.command == TAVILY and tool.outcome in _SEARCHED:
-            day = _local_day(tool.created_at, now)
+            day = _local_day(tool.created_at, zone)
             by_day.setdefault(day, DayUsage(day)).tavily_searches += 1
     days = sorted(by_day.values(), key=lambda d: d.day, reverse=True)
     totals = DayUsage(today)
     for day_usage in days:
         totals.merge(day_usage)
 
-    settings = await read_settings(session, AiSettings)
-    threshold = settings.daily_alert_usd
-    previous = [
-        _dollars(by_day[d].cost.known) if d in by_day else Decimal(0)
-        for d in (today - timedelta(days=n) for n in range(ANOMALY_WINDOW_DAYS, 0, -1))
-    ]
-    alerts = spend_alerts(
-        _dollars(by_day[today].cost.known),
-        threshold=_dollars(threshold) if threshold is not None else None,
-        previous=previous,
-    )
+    threshold = (await read_settings(session, AiSettings)).daily_alert_usd
+    alerts = _alerts({day: usage.cost.known for day, usage in by_day.items()}, today, threshold)
     models = sorted({call.model for call in calls})
     return UsageView(
         today=today,
@@ -216,6 +224,38 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         prices=[ModelPriceRow(model, price_of(model)) for model in models],
         daily_alert_usd=threshold,
         alerts=alerts,
+    )
+
+
+# 側面板（管理員）的花費提醒：與用量頁同一份規則，只讀近 15 天的費用。`agent.read_status` 叫，
+# 不當工具。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def today_alerts(session: AsyncSession, *, now: datetime | None = None) -> list[SpendAlert]:
+    """今天的花費提醒（同用量頁的那幾則）。"""
+    zone = now.tzinfo if now is not None else None
+    today = (now or datetime.now().astimezone()).date()
+    start = _day_start(today - timedelta(days=ANOMALY_WINDOW_DAYS), zone)
+    rows = await session.execute(
+        select(AiCall.created_at, AiCall.cost_usd).where(AiCall.created_at >= start)
+    )
+    costs: dict[date, float] = {}
+    for created_at, cost in rows:
+        day = _local_day(created_at, zone)
+        costs[day] = costs.get(day, 0.0) + (cost or 0.0)
+    threshold = (await read_settings(session, AiSettings)).daily_alert_usd
+    return _alerts(costs, today, threshold)
+
+
+def _alerts(costs: dict[date, float], today: date, threshold: float | None) -> list[SpendAlert]:
+    """逐日的已知費用 → 今天的提醒（`domain.spend`）。近 14 天沒用量的日子補 0。"""
+    previous = [
+        _dollars(costs.get(today - timedelta(days=n), 0.0))
+        for n in range(ANOMALY_WINDOW_DAYS, 0, -1)
+    ]
+    return spend_alerts(
+        _dollars(costs.get(today, 0.0)),
+        threshold=_dollars(threshold) if threshold is not None else None,
+        previous=previous,
     )
 
 
@@ -333,6 +373,13 @@ class RunView:
     web_searches: int
     tavily_searches: int
     steps: list[RunStep]
+
+    @property
+    def hit_rate(self) -> float | None:
+        """快取讀 ÷ input；有一次不知道快取讀（合計是 `None`）或沒有 input 是 `None`。"""
+        if self.cache_read_tokens is None or not self.input_tokens:
+            return None
+        return self.cache_read_tokens / self.input_tokens
 
 
 # 一輪的步驟：只讀三張觀測表。一般使用者看得到自己的（側面板每一則回覆連過來），管理員看得到全部。
