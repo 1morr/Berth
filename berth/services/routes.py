@@ -1094,7 +1094,7 @@ class _Checker:
         if self._signed_out is not None:
             raise self._signed_out
         # 硬鏈接的來源目錄。qBittorrent 完成時才會自己建，但檢查現在就要用到它。未完成目錄
-        # 也先建：送單前的磁碟門檻量的就是它（`jobs.check_disk`，M4 票 22）。
+        # 也先建：送單前的磁碟門檻量的就是它（`jobs._check_disk`，M4 票 22）。
         ensure_directory(self._save_path)
         ensure_directory(Path(self._plan.incomplete_path))
         # 送給 qBittorrent 的是**計劃裡那一串字**，不是 `Path` 走一趟回來的樣子：

@@ -45,7 +45,8 @@ from berth.parser import plan as decide
 from berth.pipeline import PlannerRunner
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
-from berth.services.plan import plan_id_of, replan_job, sweep_plans
+from berth.services.jobs import read_job
+from berth.services.plan import replan_job, sweep_plans
 from berth.services.plan_view import read_plan, reasons_of
 from berth.services.setup import complete_setup
 from tests.integration.arrange import arrange, factory_for
@@ -467,7 +468,7 @@ class TestSameVersion:
 
 
 async def _plan_id(session: AsyncSession) -> int:
-    found = await plan_id_of(session, HASH)
+    found = await _current_plan_id(session, HASH)
     assert found is not None
     return found
 
@@ -1043,7 +1044,7 @@ class TestReading:
         await downloaded_job(session, media, route, roots)
         await run(session, factory)
 
-        view = await read_plan(session, await plan_id_of(session, HASH) or 0)
+        view = await read_plan(session, await _current_plan_id(session, HASH) or 0)
 
         assert view is not None
         assert view.job_hash == HASH
@@ -1061,7 +1062,7 @@ class TestReading:
         media, route, _ = await ready(session, roots)
         await downloaded_job(session, media, route, roots)
 
-        assert await plan_id_of(session, HASH) is None
+        assert await _current_plan_id(session, HASH) is None
 
     async def test_an_unknown_plan_is_not_a_view(self, session: AsyncSession) -> None:
         assert await read_plan(session, 404) is None
@@ -1282,3 +1283,9 @@ class TestRoundIsolation:
         await session.refresh(job)
         assert job.error == "qBittorrent said something"
         assert EventType.RECOVERED.value not in [row.type for row in await events_of(session)]
+
+
+async def _current_plan_id(session: AsyncSession, job_hash: str) -> int | None:
+    """這一筆現在那一份計劃的 id，從下載列表那一支讀（同畫面）。"""
+    view = await read_job(session, job_hash)
+    return None if view is None else view.plan_id

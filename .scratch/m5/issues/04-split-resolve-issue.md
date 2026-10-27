@@ -26,7 +26,8 @@
 
 ## Comments
 
+- 2026-10-27（票 03 留）：`issues` 已經不在豁免表（做什麼第 4 條已完成）。`resolve_issue` 暫標 `IRREVERSIBLE`，拆開時換成各動作自己的標記；`issues.ignore_issue` 標 `IRREVERSIBLE`（沒有收回忽略的命令，brief §14 要人），拆「忽略」類時一起看。
 - 2026-10-27（實作）：命令名是按鈕值（`issues.relink` …），`adopt` 例外叫 `issues.reimport`（`CONTEXT.md`〈Claim〉禁止函式叫 adopt）。分派表 `BUTTONS` 與 `Press` 放在 `services/issues.py`，API 與測試共用（票面寫「API 照 action 分派」，分派由 API 呼叫）。票 07 把路由搬進執行器時可以改成以命令名分派、拿掉這張表。
-- 2026-10-27（實作）：拿掉豁免後 `issues` 的另外四支也得標，這張票一併標了並釘進 `NAMED`：`record_issue`、`close_settled` 是 `reversible` + `internal`（偵測與 poller 那一輪交易裡的一段），`list_issues` 是 `read`，`ignore_issue` 是 `irreversible`（brief §14：忽略會藏起問題，沒有命令重開）。票 03 不必再碰 `issues`。
+- 2026-10-27（實作；合併票 03 後改寫）：`issues` 另外四支非按鈕的命令由票 03 先標、先合進 `main`，這張票各自做出的判斷與它一致：`record_issue`、`close_settled` 是 `reversible` + `internal`，`list_issues` 是 `read`，`ignore_issue` 是 `irreversible`（brief §14：忽略會藏起問題，沒有命令重開；不另立旗標）。合併時拿掉票 03 對 `resolve_issue` 的暫標，`NAMED` 兩邊合起來，另外釘上 `record_issue`、`close_settled`、`list_issues`。
 - 2026-10-27（實作，待使用者確認的標法）：`forget`（承認刪除並清帳本）不在 `ACTION_DELETES`、研究 C1 兩列都沒列它，標 `irreversible`：它只 purge 一列帳本，brief §14 把 purge 列在不可逆；來源還在的話重新入庫長得回來，但那是另一條路。`mark_sourceless`、`accept_loss`、`accept_removal` 照 C1 標 `irreversible`。`recheck`、`retry` 不帶 `downloads`（請 qBittorrent 重新開始已有的 torrent，不是送出新的）；`resubmit` 帶。
 - 2026-10-27（code-review 未處理）：每個命令把同一個 `IssueAction` 寫兩次（`_pressable` 與 `_settle`），寫成不同值會記錯 `detail_json.action`，目前沒有測試抓；`recheck` / `retry`、`accept_loss` / `accept_removal` 兩對幾乎一樣；加一顆按鈕要改 enum、`ISSUE_ACTIONS`、命令、`BUTTONS`、`NAMED` 五處（以前由 `assert_never` 擋漏接，現在靠 `test_issue_commands`）。都是判斷題，登錄表（票 06）定下命令形狀後再看要不要收。

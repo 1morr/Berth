@@ -9,7 +9,7 @@ M5 的命令登錄表要讀每一個命令的副作用等級與反向命令：�
 2. M3 起新增的 service 模組裡，公開的命令函式（模組自己定義的公開 `async def`，含
    `@asynccontextmanager` 包過的）都有標記。「M3 之前就在」的模組列在 `BEFORE_M3`，豁免；
    **新模組不必登記就自動被守**。
-3. `NAMED` 裡判斷過的標記（M5 票 02）沒被悄悄改掉。
+3. `NAMED` 裡判斷過的標記（M5 票 02、03）沒被悄悄改掉。
 
 標記自己矛盾的（只讀卻送單、不可逆卻有反向命令）不在這裡：`CommandMark` 建的那一刻就丟，
 見 `test_command_flags.py`。
@@ -32,48 +32,27 @@ import pytest
 import berth.services
 from berth.services.commands import CommandMark, Effect, Flag, mark_of
 
-#: M3 開工前就在的 service 模組，公開命令還沒有標記（M5 做登錄表時一起補）。補完一個就從這裡
-#: 拿掉；新模組不在這裡，所以一出生就被守。`review` 不在：M3 第一個新命令
-#: （批次確認）落在它裡面，整個模組已經標完。
+#: M3 開工前就在的 service 模組，公開命令還沒有標記。補完一個就從這裡拿掉；新模組不在這裡，
+#: 所以一出生就被守。M5 票 03 清掉管線、媒體庫與審核那一批，剩下的是票 03b 那一批，它清完就
+#: 整張刪掉。
 BEFORE_M3 = frozenset(
     {
         "auth",
         "bench",
-        "claims",
         "clients",
-        "complete",
         "deeplink",
-        "deletion",
         "discover",
-        "downloads",
-        "duplicates",
-        "events",
         "health",
         "health_issues",
-        "hints",
-        "importer",
-        "inventory",
         "jellyfin",
         "jellyfin_access",
         "jellyfin_images",
-        "jobs",
-        "media",
-        "plan",
-        "plan_review",
-        "plan_view",
         "qbittorrent",
-        "reconcile",
-        "reimport",
-        "rematch",
-        "resolve_schedule",
-        "resolver",
         "routes",
         "search",
         "settings",
         "setup",
-        "steps",
         "tmdb",
-        "tracking",
         "watch",
         "watch_area",
         "watching",
@@ -204,8 +183,36 @@ NAMED: dict[str, CommandMark] = {
     "indexer.verify_sites": _mark(Effect.READ),
     # 帶著 key 連到傳進來的位址：只給健康檢查用。
     "indexer.probe_indexer": _mark(Effect.READ, Flag.INTERNAL, Flag.CONNECTS_OUT),
-    # Issue 的按鈕（M5 票 04，研究 A3 的 R8、C1）：刪東西的、放棄追蹤的、忽略的要人；修復的可逆，
-    # 送出 torrent 的那一顆帶 `downloads`。
+    # M5 票 03：要人的。刪檔、移除 torrent；忽略會把問題藏起來，而且沒有命令收回（brief §14）。
+    "deletion.delete_job": _mark(Effect.IRREVERSIBLE),
+    "issues.ignore_issue": _mark(Effect.IRREVERSIBLE),
+    # brief §14 列為可逆、AI 可以自己做的：核准與改寫計劃、rematch、重試、重新入庫。
+    "plan_review.approve_plan": _mark(Effect.REVERSIBLE),
+    "plan_review.edit_items": _mark(Effect.REVERSIBLE),
+    "plan_review.reject_plan": _mark(Effect.REVERSIBLE),
+    "plan.replan_job": _mark(Effect.REVERSIBLE),
+    "rematch.rematch_file": _mark(Effect.REVERSIBLE),
+    "duplicates.decide_duplicate": _mark(Effect.REVERSIBLE),
+    "reimport.reimport_job": _mark(Effect.REVERSIBLE),
+    "jobs.retry_job": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS),
+    # 送 torrent 的底層一支：工具是 `downloading.add_manual_download`，這支只給別的命令叫。
+    "jobs.add_download": _mark(Effect.REVERSIBLE, Flag.INTERNAL, Flag.DOWNLOADS),
+    "jobs.retry_due": _mark(Effect.REVERSIBLE, Flag.INTERNAL, Flag.DOWNLOADS),
+    "jobs.resubmit_job": _mark(Effect.REVERSIBLE, Flag.INTERNAL, Flag.DOWNLOADS),
+    # 背景迴圈與啟動的入口。
+    "downloads.poll_downloads": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "importer.sweep_imports": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "plan.sweep_plans": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "reconcile.reconcile_once": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "jobs.fail_interrupted": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    # 排「可以看了」的通知，同 `sweep.sweep_once`。
+    "resolver.sweep_resolutions": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL, Flag.SENDS_OUT),
+    # 詳情頁的讀：快照是 TMDB 的快取，過期順手重抓不算改東西。按「重新整理」就是要換標題與
+    # `folder_name`，算改。
+    "media.read_media": _mark(Effect.READ),
+    "media.refresh_media": _mark(Effect.REVERSIBLE),
+    # Issue 的按鈕（M5 票 04，研究 A3 的 R8、C1）：刪東西的、放棄追蹤的要人（忽略在上面）；
+    # 修復的可逆，送出 torrent 的那一顆帶 `downloads`。
     "issues.relink": _mark(Effect.REVERSIBLE),
     "issues.forget": _mark(Effect.IRREVERSIBLE),
     "issues.delete_complete": _mark(Effect.IRREVERSIBLE),
@@ -223,7 +230,6 @@ NAMED: dict[str, CommandMark] = {
     "issues.reimport": _mark(Effect.REVERSIBLE),
     "issues.claim_torrent": _mark(Effect.REVERSIBLE),
     "issues.claim_file": _mark(Effect.REVERSIBLE),
-    "issues.ignore_issue": _mark(Effect.IRREVERSIBLE),
     "issues.record_issue": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
     "issues.close_settled": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
     "issues.list_issues": _mark(Effect.READ),

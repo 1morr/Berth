@@ -145,6 +145,7 @@ class IssueView:
     query: str
 
 
+# 偵測者的那一段：開或更新一件 Issue，不碰檔案。
 @command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def record_issue(
     session: AsyncSession,
@@ -164,8 +165,7 @@ async def record_issue(
     沒記過 `cleared_at`），就什麼都不寫（`held`）。規則放在這裡而不是各個生產者，是因為同一種
     有兩個生產者（`unknown_torrent` 的 poller 與對帳）——放在生產者那邊遲早有一個忘了。
 
-    **不 commit**：呼叫端多半在一個迴圈裡寫好幾筆，交易的邊界是它的事。所以標 `internal`：
-    它是偵測那一輪交易裡的一段，不當工具。
+    **不 commit**：呼叫端多半在一個迴圈裡寫好幾筆，交易的邊界是它的事。
     """
     subject = subject_of(
         kind,
@@ -302,6 +302,7 @@ async def still_ignored(session: AsyncSession, issue_ids: Collection[int]) -> se
     }
 
 
+# 沒有命令收回忽略，而忽略會把問題藏起來（brief §14 列為要人的）。
 @command(Effect.IRREVERSIBLE)
 async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> IssueView:
     """「我知道了，不用管它」。不碰磁碟、不碰帳本。
@@ -311,8 +312,6 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     「這件事不存在」。真的要它安靜下來，按的是「承認刪除並清帳本」。
 
     `STAYS_IGNORED` 那幾種例外：週期量測的，忽略在條件持續期間有效（`record_issue`）。
-
-    標**不可逆**：忽略會把問題藏起來（brief §14），而沒有命令把它重新打開——要人。
     """
     row = await _open_issue(session, issue_id)
     row.status = IssueStatus.IGNORED
@@ -323,6 +322,7 @@ async def ignore_issue(session: AsyncSession, issue_id: int, *, actor: str) -> I
     return await _reread(session, row)
 
 
+# poller 那一輪的一段：收掉現況已經不成立的 Issue。
 @command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def close_settled(session: AsyncSession, now: datetime) -> int:
     """管線那三種裡、Job 已經不在那個壞掉狀態的，由系統收掉（`resolved_by = system`）。回傳幾件。
@@ -335,7 +335,7 @@ async def close_settled(session: AsyncSession, now: datetime) -> int:
 
     **Job 還在那個狀態就不收**，不論客戶端現在怎麼說——那是 poller 決定接不接回的事，這一支只看
     Job。由 poller 每一輪叫：狀態是它推的，同一個交易收掉就沒有「Job 好了、Issue 還開著」的一刻。
-    **不 commit**，所以標 `internal`。
+    **不 commit**。
     """
     rows = list(
         await session.scalars(

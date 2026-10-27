@@ -142,6 +142,10 @@ class PlanAction(StrEnum):
     REVIEW = "review"
 
 
+#: 計劃裡說得出「這個檔案衝著哪一集來」的處置。`review` 也算：季集是猜的，但它確實是那一集的檔案。
+#: 季表（`services/inventory`）與「為什麼沒入庫」（`services/why_not`）認同一組。
+CLAIMING_ACTIONS: frozenset[PlanAction] = frozenset({PlanAction.IMPORT, PlanAction.REVIEW})
+
 #: 一個檔案在 Review Queue 上改得成哪幾種處置，依它的分類（M2 票 07）。**動作與分類矛盾的
 #: 改動一律拒絕**：字型不會變成一集、字幕只能跟著它的影片走或被略過。
 #:

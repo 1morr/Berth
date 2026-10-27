@@ -76,6 +76,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.parser.release import parse_release
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.qbittorrent import sign_in
 from berth.services.routes import incomplete_path_of, save_path_of
 from berth.services.settings import read_settings
@@ -213,6 +214,8 @@ def job_lock(job_hash: str) -> AbstractAsyncContextManager[None]:
     return _locks.hold(job_hash)
 
 
+# 鎖本身什麼都不改；poller 與 rematch 跨模組要用。
+@command(Effect.READ, flags={Flag.INTERNAL})
 @asynccontextmanager
 async def job_locks(job_hashes: Iterable[str]) -> AsyncIterator[None]:
     """一次握住好幾筆的鎖。**照 hash 排序依序拿**：兩個同時要多把的呼叫端（poller 的一輪、rematch
@@ -247,7 +250,7 @@ class JobSource:
     #: （M3 票 14），所以跟著 Job 存下來——結果表那一輪之後就不在了。
     published_at: datetime | None = None
     #: 來源報的大小（索引站結果、Feed Item），位元組；不報是 `0`。qBittorrent 報得出之前它就是
-    #: `jobs.total_size`，磁碟門檻拿它算在途量（`check_disk`，M4 票 03）。
+    #: `jobs.total_size`，磁碟門檻拿它算在途量（`_check_disk`，M4 票 03）。
     size: int = 0
 
 
@@ -365,6 +368,8 @@ class AddDownloadOutcome:
     created: bool
 
 
+# 送單的底層：工具是 `downloading.add_manual_download`，另一個呼叫端是 RSS 送單。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL, Flag.DOWNLOADS})
 async def add_download(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -394,7 +399,7 @@ async def add_download(
         if existing is not None:
             return await _existing_outcome(session, existing)
 
-    await check_disk(session, route)
+    await _check_disk(session, route)
     torrent = await _resolve(factory, source.url)
     existing = await session.get(Job, torrent.info_hash)
     if existing is not None:
@@ -457,6 +462,8 @@ async def add_download(
         return AddDownloadOutcome(job=await _view_one(session, job), created=True)
 
 
+# 用存下來的下載連結再送一次，不連新位址。
+@command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS})
 async def retry_job(session: AsyncSession, factory: ServiceClientFactory, job_hash: str) -> JobView:
     """`submit_failed` → `requested` → 再送一次（plan §3.1）。
 
@@ -492,7 +499,7 @@ async def _retry_target(session: AsyncSession, job: Job) -> tuple[Route, Media |
         raise JobRejectedError(JobRefusal.ROUTE_MISSING, str(job.route_id))
     subject = await session.get(Media, job.media_id) if job.media_id is not None else None
     check_route(route, subject)
-    await check_disk(session, route)
+    await _check_disk(session, route)
     return route, subject
 
 
@@ -549,6 +556,8 @@ SUBMIT_RETRIES = (
 )
 
 
+# 背景的自動重送：與人按的 `retry_job` 同一組前提。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL, Flag.DOWNLOADS})
 async def retry_due(session: AsyncSession, factory: ServiceClientFactory, *, now: datetime) -> int:
     """把到時間的暫時失敗再送一次（plan §3.1 的 `submit_failed` 自動重送，M4 票 03）。回試了幾筆。
 
@@ -646,6 +655,8 @@ def _due_attempt(failure: dict[str, Any], now: datetime) -> int | None:
     return int(failure.get("attempt", 1))
 
 
+# 只由 Issue `client_removed` 的「重新送單」叫。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL, Flag.DOWNLOADS})
 async def resubmit_job(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -733,6 +744,8 @@ async def _resume_import(session: AsyncSession, job: Job) -> JobView:
     return await _view_one(session, job)
 
 
+# planner 與 importer 一輪裡的一筆；效果是 `work` 的。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def guarded[T](
     session: AsyncSession, job_hash: str, work: Coroutine[Any, Any, T], *, fallback: T
 ) -> T:
@@ -821,6 +834,7 @@ async def _clear_round_failure(session: AsyncSession, job_hash: str) -> None:
     logger.info("job recovered from a failed round", extra={"state": job.state.value})
 
 
+@command(Effect.READ)
 async def list_jobs(
     session: AsyncSession,
     *,
@@ -870,11 +884,13 @@ async def _filter_counts(session: AsyncSession, media_id: str | None) -> dict[Jo
     return counts
 
 
+@command(Effect.READ)
 async def read_job(session: AsyncSession, job_hash: str) -> JobView | None:
     job = await session.get(Job, job_hash)
     return None if job is None else await _view_one(session, job)
 
 
+@command(Effect.READ)
 async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEventView, ...]:
     """時間線，最舊的在前面——它是一份紀錄，讀的方向是事情發生的方向（brief §5.2）。"""
     rows = await session.scalars(
@@ -892,6 +908,7 @@ async def read_job_events(session: AsyncSession, job_hash: str) -> tuple[JobEven
     )
 
 
+@command(Effect.READ)
 async def read_job_files(session: AsyncSession, job_hash: str) -> tuple[JobFileView, ...] | None:
     """這一筆的檔案，照路徑排（作品頁「下載」段展開的那一列，M4 票 12）。沒有這一筆是 `None`。
 
@@ -970,7 +987,7 @@ async def _existing_outcome(session: AsyncSession, job: Job) -> AddDownloadOutco
     return AddDownloadOutcome(job=await _view_one(session, job), created=False)
 
 
-async def check_disk(session: AsyncSession, route: Route) -> None:
+async def _check_disk(session: AsyncSession, route: Route) -> None:
     """這條 Route 的下載落腳處剩下的空間夠不夠再開一個下載（`DiskSettings`，M3 票 04）。
 
     量的是它的 category 自己的未完成目錄（`incomplete_path_of`，M4 票 22）：下載落在那裡、長在
@@ -1178,6 +1195,8 @@ async def _fail(
 INTERRUPTED = "interrupted: Berth stopped before qBittorrent answered"
 
 
+# 只在啟動時跑（`main.py`）。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def fail_interrupted(session: AsyncSession) -> int:
     """重啟的那一刻：停在 `requested` 的都落到 `submit_failed`（plan §3.1，M3 票 02）。回傳幾筆。
 
@@ -1201,6 +1220,7 @@ async def fail_interrupted(session: AsyncSession) -> int:
     return moved
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def restart_state(session: AsyncSession, job: Job) -> JobState:
     """壞掉的一筆接回 poller 的主幹時落在哪一站（plan §3.1）：檔案清單早就到手的回
     `metadata_ready`，還沒有的回 `submitted`。兩站的下一步 poller 本來就會走。
@@ -1221,6 +1241,8 @@ def freeze(media: Media, route: Route) -> None:
     media.default_route_id = route.id
 
 
+# 改 Job 狀態的 CAS：每一個改狀態的命令的一段，退回原狀態也走它。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def transition(
     session: AsyncSession,
     job: Job,
@@ -1246,6 +1268,8 @@ async def transition(
     return changed
 
 
+# 時間線加一筆：只加不改，與它所屬的命令同一個交易。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def record_event(
     session: AsyncSession,
     job: Job,
@@ -1403,7 +1427,7 @@ async def _by_id[K, T](
 async def _plans_of(session: AsyncSession, job_hashes: Sequence[str]) -> dict[str, tuple[int, int]]:
     """每一筆 Job 現在那一份計劃的 id 與掛著 audit 的檔案數。
 
-    `services/plan.plan_id_of` 問的是前一半；**這裡不呼叫它**：`services/plan` 已經 import
+    `services/plan._plan_id_of` 問的是前一半；**這裡不呼叫它**：`services/plan` 已經 import
      這一支（`transition`、`job_lock`），反過來就是循環。
 
     `in_()` 的長度就是呼叫端給的筆數：清單一頁（`PAGE_SIZE`）或單獨一筆。不要拿整張表來問

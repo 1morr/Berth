@@ -38,6 +38,7 @@ from berth.domain import ReasonCode as Code
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.parser import revise
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, command
 from berth.services.jobs import record_event
 from berth.services.plan import follows
 from berth.services.plan_view import dump_reasons, load_plan, reasons_of
@@ -60,6 +61,8 @@ logger = logging.getLogger(__name__)
 _MAX_SERIAL = 99
 
 
+# 取代舊版只拆舊的那一條鏈接，來源還在 complete，rematch 搬得回去；沒有單一反向命令。
+@command(Effect.REVERSIBLE)
 async def decide_duplicate(
     session: AsyncSession,
     factory: ServiceClientFactory,
