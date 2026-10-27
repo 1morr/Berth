@@ -37,3 +37,5 @@
 - [ ] 全部檢查、pytest、vitest 綠；CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-27（票 08 留下）：送單卡的來源與 `SourceCache` 對不上（2026-10-27 協調者指出，票 08 補記）。`downloading.add_manual_download` 的輸入是完整的 `JobSource`（下載連結、發佈名、info hash、大小、發佈時間）；`source_id` 是 `POST /jobs` 路由向 `services/sources.SourceCache` 換的，而它在程序內、只記兩小時、Berth 重啟就沒了（plan §6 jobs）。卡片期限是 `PROPOSAL_TTL` 24 小時、要重啟之後按得下去，所以兩條路都不通：存 `source_id`，重啟或兩小時後按下去是 `source_expired`；存整份 `JobSource`，連結帶 Prowlarr 的 API key，`GET /proposals` 原樣回給瀏覽器（違反 M4 票 79）。後者由 `tests/integration/test_proposals_api.py::TestSubmitCards::test_a_submit_card_never_hands_the_download_link_to_the_browser` 證實（`xfail(strict=True)`，修好時會變成 XPASS 而紅，記得拿掉標記）。前者這一張寫不出紅燈：目前沒有任何命令收 `source_id`，換成來源的那一步要由票 13 的工具做。票 13 要決定：把發佈資訊（下載連結、info hash、發佈名、大小、發佈時間）存進 Proposal 的參數，而且下載連結不進 API 回應（例如列表遮掉、或另存在伺服器端欄位）；或讓 `SourceCache` 落地。兩者都要讓來源活得比 `PROPOSAL_TTL` 久，或兩者對齊。

@@ -8,14 +8,16 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import Actor, JobState, JobTrigger, Role
-from berth.models import Job, User
+from berth.domain import Actor, CollectionType, JobState, JobTrigger, Role
+from berth.models import Job, Route, User
 from berth.services import proposals
 from berth.services.events import EventHub
+from tests.integration.test_media import SPY_ID
 from tests.integration.test_media_api import ADMIN, BROWSER, CREW, client, factory, sign_in
 from tests.integration.test_why_not_api import in_session
 
@@ -23,6 +25,9 @@ __all__ = ["client", "factory"]  # pytest 的 fixture 要在這個模組的命�
 
 ADMINS_JOB = "a" * 40
 CREWS_JOB = "c" * 40
+#: Prowlarr 的代理下載連結長這樣：帶著它的 API key（brief §20.7、M4 票 79）。
+PROWLARR_KEY = "0123456789abcdef0123456789abcdef"
+PROXY_LINK = f"http://prowlarr:9696/1/download?apikey={PROWLARR_KEY}&link=abc&file=Spy"
 
 
 def cards(client: TestClient, *, in_chat: bool = False) -> dict[str, int]:
@@ -168,3 +173,54 @@ class TestDecide:
 
         assert response.status_code == 422
         assert response.json()["detail"]["reason"] == "selection_invalid"
+
+
+class TestSubmitCards:
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "票 13：送單卡只能存完整的下載連結（`downloading.add_manual_download` 收 "
+            "`JobSource`，`source_id` 是 `POST /jobs` 那一層換的），連結帶 Prowlarr 的 "
+            "API key，`GET /proposals` 原樣回給瀏覽器。改存 `source_id` 的話重啟或兩小時後"
+            "換不回來（`SourceCache`），比 `PROPOSAL_TTL` 先過期。票 13 要決定發佈資訊怎麼"
+            "存進 Proposal，或讓 `SourceCache` 落地。"
+        ),
+    )
+    def test_a_submit_card_never_hands_the_download_link_to_the_browser(
+        self, client: TestClient
+    ) -> None:
+        """M4 票 79 的規矩：下載連結記在伺服器上，瀏覽器只拿 id。確認卡也一樣。"""
+        sign_in(client, CREW)
+        sign_in(client, ADMIN)
+        # 作品頁打開過，Berth 才有這部作品（快照從 TMDB 替身來）。
+        assert client.get(f"/api/media/{SPY_ID}").status_code == 200
+
+        async def arrange(session: AsyncSession) -> None:
+            crew = await session.scalar(select(User).where(User.name == CREW["username"]))
+            route = await session.scalar(
+                select(Route).where(Route.collection_type == CollectionType.TVSHOWS)
+            )
+            assert crew is not None
+            assert route is not None
+            await proposals.propose(
+                session,
+                EventHub(),
+                "downloading.add_manual_download",
+                [
+                    {
+                        "source": {"url": PROXY_LINK, "title": "[Sub] SPY x FAMILY - 01 [1080p]"},
+                        "media_id": SPY_ID,
+                        "route_id": route.id,
+                    }
+                ],
+                actor=Actor.ai(crew.id, Role(crew.role)),
+            )
+
+        in_session(client, arrange)
+        sign_in(client, CREW)
+
+        response = client.get("/api/proposals")
+
+        assert response.status_code == 200, response.text
+        assert len(response.json()) == 1
+        assert PROWLARR_KEY not in response.text
