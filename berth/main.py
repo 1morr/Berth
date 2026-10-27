@@ -103,7 +103,7 @@ def create_app(
     app = FastAPI(title="Berth", version=VERSION, lifespan=_lifespan(resolved))
     app.state.config = resolved
     app.state.clients = clients or HttpServiceClientFactory(
-        discord_api_url=resolved.discord_api_url
+        discord_api_url=resolved.discord_api_url, config_root=resolved.config_root
     )
     # 一個程序一個 hub：發佈的是背景迴圈，訂閱的是這個程序裡開著的 SSE 連線（票 10）。
     app.state.events = EventHub()

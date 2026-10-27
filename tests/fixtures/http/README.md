@@ -285,3 +285,19 @@ Mikan 與 acg.rip 從開發機匿名 curl；Nyaa 從開發機連不上，是在 
 | `discord/channels-messages.dm-closed.json` | 收件人在唯一的共同伺服器關掉「私人訊息」之後（之前已經私訊過）：**403** `50278`（no mutual guilds），**不是** `50007` |
 | `discord/channels-messages.no-mutual-guild.json` | 把 bot 踢出伺服器之後：**403** `50278`，與上一份同一個 body |
 | `discord/channels-messages.rate-limited.json` | 不間隔連續送的第 7 則：**429**，body `retry_after: 0.3`、`global: false`、**沒有 `code`**；header `Retry-After: 5`、`X-RateLimit-Scope: user` |
+
+2026-10-28（M5 票 16），`scripts/experiments/anime_sources.py` 對真的 AniList（`https://graphql.anilist.co`）、
+Bangumi（`https://api.bgm.tv`）與 Fribb/anime-lists（GitHub raw）錄的；結論在 brief §20.3。AniList 與 Bangumi 的每份是
+`{request?, status, headers, body}`（`request` 是送出去的 `query` 與 `variables`，契約測試拿它對 adapter 真的送出的東西）。
+三份**不是**整份原文錄的，各自標在最後一欄：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `anilist/search.rezero.json` | 錄的。`SEARCH_QUERY`，`q` = Re:Zero 的羅馬字原名、`n` = 8：六個條目（TV 四輪、OVA、第 2 季） |
+| `anilist/entries.rezero.0.json` … `.4.json` | 錄的。`ENTRIES_QUERY` 走 Re:Zero 系列圖的五層：`[21355]`、`[100049, 108632]`、`[119661]`、`[163134]`、`[189046]`；含 `relations`（漫畫那一頭也在，由 adapter 濾掉） |
+| `anilist/entries.missing.json` | 錄的。不存在的 id（`999999999`）：HTTP 200，`media: []` |
+| `anilist/season.fall-2026.json` | 錄的。`SEASON_QUERY`（`FALL`、2026、`n` = 25）：帶 `nextAiringEpisode` 與 `stats.scoreDistribution` |
+| `anilist/bad-query.json` | 錄的。故意寫錯的查詢（`media(nope:1)`）：**400**，`errors[].message` 寫明未知的參數 |
+| `anilist/rate-limited.docs-example.json` | **沒有錄**：故意去惹出 429 正是 AniList 條款要求不要做的事。內容是 https://docs.anilist.co/guide/rate-limiting 文件裡的範例（`Retry-After: 30`、`X-RateLimit-*`、`errors[].status: 429`），原樣照抄 |
+| `bgm/calendar.json` | 錄的。`GET /calendar`：七天、112 部，`cache-control: max-age=3600`；有的條目沒有 `rank`，有的 `rating` 是 `null` 或沒有 `score` |
+| `fribb/anime-list-full.excerpt.json` | **裁過**：真表 `anime-list-full.json`（約 7.5 MB）裁出 17 筆（Re:Zero 的 21355、100049、108632、119661、163134、189046；劇場版 164 的 `themoviedb_id` 是 `{"movie": [128]}`；幾部 2026 年秋季的新番），每筆原樣。整張表不放進 repo：倉庫沒有授權檔，資料出自 ODbL 的 anime-offline-database（brief §20.3），執行時才下載 |

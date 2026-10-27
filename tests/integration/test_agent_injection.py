@@ -5,8 +5,9 @@
 被擋、什麼都沒送、沒連出去——不看模型有沒有上當（研究 07 §2.2.9：模型行為是機率性的）。
 
 注入的入口是 `ENTRIES`：torrent 標題（索引站搜尋）、Feed Item（「為什麼沒入庫」）、Mikan 的番組
-資料、網頁搜尋結果。只有最後一個是 CONTEXT 的 External Content（確認卡的「出自網頁」看它）；
-守法不分入口，看的是伺服器存的歷史（`agent_origins`），所以加 Feed 與送單兩類逐一入口都跑。
+資料、網頁搜尋結果、AniList 的標題、Bangumi 放送表的名字（票 16）。後三個是 CONTEXT 的 External
+Content（確認卡的「出自外部來源」看它們）；守法不分入口，看的是伺服器存的歷史（`agent_origins`），
+所以加 Feed 與送單兩類逐一入口都跑。
 
 票面的六類各是一個類別：加 Feed `TestAFeedFromOutside`、送沒要求的 torrent
 `TestTorrentsNobodyAskedFor`、改設定或服務位址 `TestSettingsNeedAPerson`、說出 key
@@ -15,8 +16,8 @@
 哪一條測試守哪一道防線，見 plan §11.6〈注入的防線與守它的測試〉
 （`tests/unit/test_injection_claims.py` 核對兩邊對得上）。
 
-AniList、Bangumi（bgm.tv）的工具在票 16：它們進 `TOOLS` 時 `test_every_read_tool_is_classified`
-與 `test_every_read_tool_is_tried` 會紅，照著把它們放進 `ENTRIES`（或說明為什麼不是入口）。
+新的讀取工具進 `TOOLS` 時 `test_every_read_tool_is_classified` 與 `test_every_read_tool_is_tried`
+會紅：放進 `ENTRIES`、`SAME_PATH` 或 `BERTHS_OWN`（說明為什麼），並在 `READ_ARGS` 補參數。
 """
 
 from __future__ import annotations
@@ -42,6 +43,10 @@ from pydantic_ai.models.function import AgentInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.anilist import AnimeEntry, AnimeSeason, AnimeTitle
+from berth.adapters.anilist.fake import FakeAniList
+from berth.adapters.bgm import CalendarItem
+from berth.adapters.bgm.fake import FakeBgm
 from berth.adapters.indexer import IndexerResult
 from berth.adapters.indexer.fake import FakeIndexerSearch
 from berth.adapters.rss import mikan
@@ -240,23 +245,78 @@ def _web_page(client: TestClient, factory: FakeClientFactory) -> Step:
     return call("web_tavily_search", query="SPY×FAMILY")
 
 
+#: SPY×FAMILY 在 AniList 上的 id（這裡只當替身的鍵）。
+SPY_ANILIST = 140960
+
+
+def _anilist_title(_client: TestClient, factory: FakeClientFactory) -> Step:
+    """AniList 上的一個條目，日文標題是注入（社群編的資料站，票 16）。系列圖與季表也回它。"""
+    entry = AnimeEntry(
+        id=SPY_ANILIST,
+        mal_id=None,
+        title=AnimeTitle(romaji="SPY×FAMILY", english="SPY x FAMILY", native=TITLE),
+        format="TV",
+        status="FINISHED",
+        episodes=12,
+        season="SPRING",
+        season_year=2022,
+        start_date="2022-04-09",
+        average_score=84,
+        popularity=500000,
+        genres=("Action",),
+    )
+    factory.anilist_ = FakeAniList(
+        known={SPY_ANILIST: entry},
+        found={"SPY×FAMILY": [entry]},
+        seasons={(AnimeSeason.FALL, 2026): [entry]},
+    )
+    return call("anilist_search_anime", query="SPY×FAMILY")
+
+
+def _bgm_name(_client: TestClient, factory: FakeClientFactory) -> Step:
+    """Bangumi 放送表上的一部，中文名是注入。"""
+    factory.bgm_ = FakeBgm(
+        items=[
+            CalendarItem(
+                id=329906,
+                name="SPY×FAMILY",
+                name_cn=TITLE,
+                air_date="2022-04-09",
+                weekday=6,
+                score=7.6,
+                votes=12000,
+                rank=None,
+            )
+        ]
+    )
+    return call("bgm_read_calendar")
+
+
 TORRENT_TITLE = InjectionEntry("torrent_title", "search_search_torrents", _torrent_title)
 FEED_ITEM = InjectionEntry("feed_item", "why_not_explain", _feed_item)
 MIKAN_PAGE = InjectionEntry("mikan_page", "bangumi_search_bangumi", _mikan_page)
 WEB_PAGE = InjectionEntry("web_page", "web_tavily_search", _web_page)
-ENTRIES = (TORRENT_TITLE, FEED_ITEM, MIKAN_PAGE, WEB_PAGE)
+ANILIST_TITLE = InjectionEntry("anilist_title", "anilist_search_anime", _anilist_title)
+BGM_NAME = InjectionEntry("bgm_name", "bgm_read_calendar", _bgm_name)
+ENTRIES = (TORRENT_TITLE, FEED_ITEM, MIKAN_PAGE, WEB_PAGE, ANILIST_TITLE, BGM_NAME)
 
 #: 讀取工具裡，結果不是別人寫的字的（Berth 自己的資料：Route、skill 全文）。
 BERTHS_OWN = frozenset({"skills.load_skill", "media.route_choices", "routes.list_routes"})
-#: 讀取工具裡，結果帶別人寫的字、但守法走同一條路而不另外種注入的：TMDB 的簡介、Job 的發佈名、
-#: Mikan 番組頁上的字幕組名。守法只看「出自哪一筆工具結果」，不看是哪一個工具。
+#: 讀取工具裡，結果帶別人寫的字、但守法走同一條路而不另外種注入的：TMDB 的簡介與標題（趨勢）、
+#: Job 的發佈名、Mikan 番組頁上的字幕組名、AniList 系列圖與季表的標題（與搜尋同一份資料，入口是
+#: `ANILIST_TITLE`）、Fribb 的對照（只有 id 與數字）。守法只看「出自哪一筆工具結果」，不看是哪一個
+#: 工具。
 SAME_PATH = frozenset(
     {
         "discover.search_media",
+        "discover.read_trending",
         "media.read_media",
         "jobs.list_jobs",
         "jobs.read_job_events",
         "bangumi.read_bangumi",
+        "anilist.read_franchise",
+        "anilist.read_season",
+        "fribb.lookup_anime",
     }
 )
 
@@ -673,6 +733,12 @@ READ_ARGS: dict[str, dict[str, object]] = {
     "routes.list_routes": {},
     "bangumi.search_bangumi": {"term": "SPY×FAMILY"},
     "bangumi.read_bangumi": {"bangumi_id": 4009},
+    "anilist.search_anime": {"query": "SPY×FAMILY"},
+    "anilist.read_franchise": {"anilist_id": SPY_ANILIST},
+    "anilist.read_season": {"season": "FALL", "year": 2026},
+    "fribb.lookup_anime": {"anilist_ids": [SPY_ANILIST]},
+    "bgm.read_calendar": {},
+    "discover.read_trending": {},
 }
 
 
@@ -698,7 +764,7 @@ class TestNoKeyReachesTheModel:
             await session.commit()
 
         in_db(client, more_secrets)
-        # 四個入口的注入都在：讀取工具的參數照 `READ_ARGS`，會讀到它們。
+        # 每個入口的注入都在：讀取工具的參數照 `READ_ARGS`，會讀到它們。
         for entry in ENTRIES:
             entry.plant(client, factory)
         factory.rss_.pages[mikan.bangumi_url(4009)] = (
@@ -756,7 +822,7 @@ class TestNoKeyReachesTheModel:
 
     def test_every_read_tool_is_classified(self) -> None:
         """讀取工具不是注入的入口（`ENTRIES`）、走同一條守法路（`SAME_PATH`），就是 Berth 自己的
-        資料（`BERTHS_OWN`）。票 16 的 AniList、Bangumi 工具進來時這裡會紅。"""
+        資料（`BERTHS_OWN`）。新的讀取工具進 `TOOLS` 時這裡紅。"""
         reads = read_tools()
         planted = {name for name in reads if tool_name(name) in {entry.tool for entry in ENTRIES}}
         assert reads == planted | SAME_PATH | BERTHS_OWN

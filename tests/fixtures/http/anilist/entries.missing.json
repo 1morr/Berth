@@ -1,0 +1,25 @@
+{
+  "request": {
+    "query": "query($ids:[Int],$n:Int){Page(perPage:$n){media(id_in:$ids,type:ANIME){id idMal format status episodes season seasonYear startDate{year month day} title{romaji english native} averageScore popularity genres relations{edges{relationType(version:2) node{id type}}}}}}",
+    "variables": {
+      "ids": [
+        999999999
+      ],
+      "n": 50
+    }
+  },
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "cache-control": "no-cache, private",
+    "x-ratelimit-limit": "30",
+    "x-ratelimit-remaining": "21"
+  },
+  "body": {
+    "data": {
+      "Page": {
+        "media": []
+      }
+    }
+  }
+}

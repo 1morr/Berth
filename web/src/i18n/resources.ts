@@ -3891,6 +3891,12 @@ const zhHant = {
         rss_add_feed: '新增 RSS Feed',
         web_tavily_search: '網路搜尋（Tavily）',
         web_search: '網路搜尋',
+        anilist_search_anime: '在 AniList 搜尋動畫',
+        anilist_read_franchise: '讀 AniList 的整部系列',
+        anilist_read_season: '讀 AniList 的當季清單',
+        fribb_lookup_anime: '對照 AniList 與 TMDB',
+        bgm_read_calendar: '讀 Bangumi 放送表',
+        discover_read_trending: '讀本週趨勢',
       },
     },
     // 每一則回覆最後一行連到那一輪的步驟頁；管理員的花費提醒（M5 票 21）。
@@ -3923,10 +3929,11 @@ const zhHant = {
         settings: '會改設定',
       },
       expires: '期限：',
-      // 只在自由文字出自網頁的卡上出現（M5 票 14）。
-      externalLead: '標著「出自網頁」的欄位是助理從搜到的網頁抄來的，不是你說的。確認前看一眼。',
-      externalFields: '出自網頁：{{fields}}',
-      fromWeb: '出自網頁',
+      // 只在自由文字出自外部內容的卡上出現（M5 票 14）：搜到的網頁，以及 AniList、Bangumi 這類社群資料站（票 16）。
+      externalLead:
+        '標著「出自外部來源」的欄位是助理從搜到的網頁或動漫資料站（AniList、Bangumi）抄來的，不是你說的。確認前看一眼。',
+      externalFields: '出自外部來源：{{fields}}',
+      fromOutside: '出自外部來源',
       // 送單的數量閘：一張卡送出的 torrent 有上限，單獨就超過（或集數不知道）的一項自己一張。
       heldBack_one:
         '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
@@ -8043,6 +8050,12 @@ const en: Translations<typeof zhHant> = {
         rss_add_feed: 'Add an RSS feed',
         web_tavily_search: 'Web search (Tavily)',
         web_search: 'Web search',
+        anilist_search_anime: 'Search AniList',
+        anilist_read_franchise: 'Read a franchise on AniList',
+        anilist_read_season: 'Read the season on AniList',
+        fribb_lookup_anime: 'Map AniList to TMDB',
+        bgm_read_calendar: 'Read the Bangumi schedule',
+        discover_read_trending: 'Read this week’s trending',
       },
     },
     steps: 'Steps',
@@ -8075,9 +8088,9 @@ const en: Translations<typeof zhHant> = {
       },
       expires: 'Valid until:',
       externalLead:
-        'Fields marked “From a web page” were copied by the assistant from a page it found, not said by you. Check them before confirming.',
-      externalFields: 'From a web page: {{fields}}',
-      fromWeb: 'From a web page',
+        'Fields marked “From an outside source” were copied by the assistant from a web page or an anime database (AniList, Bangumi), not said by you. Check them before confirming.',
+      externalFields: 'From an outside source: {{fields}}',
+      fromOutside: 'From an outside source',
       heldBack_one:
         '{{count}} more does not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes it after you decide this one.',
       heldBack_other:

@@ -1,0 +1,95 @@
+{
+  "request": {
+    "query": "query($ids:[Int],$n:Int){Page(perPage:$n){media(id_in:$ids,type:ANIME){id idMal format status episodes season seasonYear startDate{year month day} title{romaji english native} averageScore popularity genres relations{edges{relationType(version:2) node{id type}}}}}}",
+    "variables": {
+      "ids": [
+        119661
+      ],
+      "n": 50
+    }
+  },
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "cache-control": "no-cache, private",
+    "x-ratelimit-limit": "30",
+    "x-ratelimit-remaining": "25"
+  },
+  "body": {
+    "data": {
+      "Page": {
+        "media": [
+          {
+            "id": 119661,
+            "idMal": 42203,
+            "format": "TV",
+            "status": "FINISHED",
+            "episodes": 12,
+            "season": "WINTER",
+            "seasonYear": 2021,
+            "startDate": {
+              "year": 2021,
+              "month": 1,
+              "day": 6
+            },
+            "title": {
+              "romaji": "Re:Zero kara Hajimeru Isekai Seikatsu 2nd Season Part 2",
+              "english": "Re:ZERO -Starting Life in Another World- Season 2 Part 2",
+              "native": "Re:ゼロから始める異世界生活 2nd Season Part 2"
+            },
+            "averageScore": 84,
+            "popularity": 314648,
+            "genres": [
+              "Action",
+              "Adventure",
+              "Drama",
+              "Fantasy",
+              "Psychological",
+              "Romance",
+              "Thriller"
+            ],
+            "relations": {
+              "edges": [
+                {
+                  "relationType": "PREQUEL",
+                  "node": {
+                    "id": 108632,
+                    "type": "ANIME"
+                  }
+                },
+                {
+                  "relationType": "SOURCE",
+                  "node": {
+                    "id": 85737,
+                    "type": "MANGA"
+                  }
+                },
+                {
+                  "relationType": "ALTERNATIVE",
+                  "node": {
+                    "id": 112218,
+                    "type": "MANGA"
+                  }
+                },
+                {
+                  "relationType": "SPIN_OFF",
+                  "node": {
+                    "id": 128306,
+                    "type": "ANIME"
+                  }
+                },
+                {
+                  "relationType": "SEQUEL",
+                  "node": {
+                    "id": 163134,
+                    "type": "ANIME"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

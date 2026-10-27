@@ -13,9 +13,10 @@ M5 的注入防線主要靠能力邊界，不靠模型聽話。三條守法都**
    外部內容裡、而使用者自己沒說過，就是出自外部內容。確認卡只在這幾格標警示——全部都標的話警示
    沒有意義（研究〈實跑才抓到的問題〉第 6 點）；可逆、本來直接做的寫入因此改出卡（plan §11.6）。
 
-**外部內容**（CONTEXT.md 的 External Content）是網路搜尋回的網頁：伺服器端 `web_search` 與
-`agent_tools.EXTERNAL_TOOLS`。torrent 名、Mikan 頁面也是別人寫的，但幾乎每段對話都讀過——算進來
-的話又是每張卡都亮；網址那一條不分來源，照樣擋得住它們裡面的網址。
+**外部內容**（CONTEXT.md 的 External Content）是網路搜尋回的網頁與社群編的動漫資料站（AniList、
+Bangumi、Fribb，票 16）：伺服器端 `web_search` 與 `agent_tools.EXTERNAL_TOOLS`。torrent 名、
+Mikan 頁面也是別人寫的，但幾乎每段對話都讀過——算進來的話又是每張卡都亮；網址那一條不分來源，
+照樣擋得住它們裡面的網址。
 """
 
 from __future__ import annotations

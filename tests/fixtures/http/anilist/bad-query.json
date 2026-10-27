@@ -1,0 +1,28 @@
+{
+  "request": {
+    "query": "query{Page{media(nope:1){id}}}",
+    "variables": {}
+  },
+  "status": 400,
+  "headers": {
+    "content-type": "application/json",
+    "cache-control": "no-cache, private",
+    "x-ratelimit-limit": "30",
+    "x-ratelimit-remaining": "20"
+  },
+  "body": {
+    "errors": [
+      {
+        "message": "Unknown argument \"nope\" on field \"media\" of type \"Page\". Did you mean \"type\"?",
+        "status": 400,
+        "locations": [
+          {
+            "line": 1,
+            "column": 18
+          }
+        ]
+      }
+    ],
+    "data": null
+  }
+}

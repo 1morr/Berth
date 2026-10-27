@@ -96,8 +96,16 @@ class _KindFeed(Protocol):
     async def __call__(self, kind: MediaKind, *, language: str) -> tuple[TmdbEntry, ...]: ...
 
 
-# TMDB 的結果快取下來，過期重抓不算改東西（同 `media.read_media`）。
-@command(Effect.READ)
+# TMDB 的結果快取下來，過期重抓不算改東西（同 `media.read_media`）。`/discover` 登入就能用，
+# 所以一般使用者的側面板也拿得到推薦（M5 票 16，`new-season-picks`）。
+@command(
+    Effect.READ,
+    audience=Role.USER,
+    about=(
+        "This week's trending series and movies on TMDB, interleaved. Each id is a media_id "
+        "other tools take."
+    ),
+)
 async def read_trending(session: AsyncSession, factory: ServiceClientFactory) -> DiscoverResult:
     """本週趨勢，劇集與電影交錯。"""
 
@@ -107,7 +115,7 @@ async def read_trending(session: AsyncSession, factory: ServiceClientFactory) ->
     return await _feed(session, factory, TRENDING_KEY, fetch)
 
 
-# 同 `read_trending`。
+# TMDB 的結果快取下來，過期重抓不算改東西。
 @command(Effect.READ)
 async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> DiscoverResult:
     """熱門，同樣兩種作品交錯。"""

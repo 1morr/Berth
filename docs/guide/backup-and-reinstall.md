@@ -12,6 +12,8 @@ Seerr). Berth never stores your Jellyfin password in plain text; see
 [Accounts and passwords](setup-wizard.md#accounts-and-passwords). Berth's logs, and the errors it reports when
 a service or feed cannot be reached, show URLs with every query value replaced by `***` (for example a Mikan
 feed's `token=***`), so a log you paste somewhere does not carry your feed token or API keys.
+`${CONFIG_ROOT}/berth/cache/` only holds data Berth downloads again by itself (the anime id table the
+assistant uses, refreshed weekly); you can leave it out of a backup.
 
 **To back up Berth, copy `${CONFIG_ROOT}/berth`.** Back up the other folders under `CONFIG_ROOT` (`jellyfin`,
 `qbittorrent`, `prowlarr`) if you want those services' settings too. Your media is in `DATA_ROOT` and is not part

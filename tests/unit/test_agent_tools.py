@@ -229,3 +229,60 @@ class TestSearchTorrentsForTheModel:
             ],
             "counts": [],
         }
+
+
+class TestWhatTheModelSeesOfAWork:
+    """`media.read_media` 給模型的那一份（票 16）：逐集換成狀態 → 集數範圍。"""
+
+    def test_episodes_become_ranges_per_status_and_jobs_stay(self) -> None:
+        statuses = ["imported"] * 3 + ["missing", "imported", "downloading", "unaired"]
+        episodes = [
+            {
+                "episode_number": n,
+                "name": f"E{n}",
+                "status": s,
+                "job": "abc" if s == "downloading" else None,
+            }
+            for n, s in enumerate(statuses, start=1)
+        ]
+        work = {
+            "id": "tv:1",
+            "poster_url": "https://image.tmdb.org/x.jpg",
+            "seasons": [{"season_number": 1, "episode_count": 7, "episodes": episodes}],
+            "files": [
+                {
+                    "season": 1,
+                    "episode_start": 1,
+                    "episode_end": 3,
+                    "target_path": "/data/x",
+                    "status": "linked",
+                }
+            ],
+        }
+
+        seen = MODEL_VIEWS["media.read_media"](work)
+
+        assert isinstance(seen, dict)
+        assert "poster_url" not in seen
+        [season] = seen["seasons"]
+        assert season["episode_count"] == 7
+        assert season["episodes"] == {
+            "imported": "1-3, 5",
+            "missing": "4",
+            "downloading": "6",
+            "unaired": "7",
+        }
+        assert season["jobs"] == {"6": "abc"}
+        assert seen["files"] == [
+            {"season": 1, "episode_start": 1, "episode_end": 3, "status": "linked"}
+        ]
+
+    def test_an_eighty_five_episode_season_fits_far_under_the_clip(self) -> None:
+        episodes = [
+            {"episode_number": n, "name": "x" * 40, "status": "missing"} for n in range(1, 86)
+        ]
+        seen = MODEL_VIEWS["media.read_media"](
+            {"seasons": [{"season_number": 1, "episodes": episodes}]}
+        )
+        assert isinstance(seen, dict)
+        assert seen["seasons"][0]["episodes"] == {"missing": "1-85"}

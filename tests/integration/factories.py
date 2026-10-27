@@ -10,6 +10,12 @@ from pydantic_ai.models import Model
 
 from berth.adapters.ai import AiEndpoint
 from berth.adapters.ai.fake import FakeAi
+from berth.adapters.anilist import AniList
+from berth.adapters.anilist.fake import FakeAniList
+from berth.adapters.bgm import Bgm
+from berth.adapters.bgm.fake import FakeBgm
+from berth.adapters.fribb import AnimeIds
+from berth.adapters.fribb.fake import FakeAnimeIds
 from berth.adapters.http import ServiceError, raise_for_status
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.indexer.fake import FakeIndexerSearch
@@ -54,6 +60,10 @@ class FakeClientFactory:
         discord: FakeDiscordBot | None = None,
         ai: FakeAi | None = None,
         web_search: FakeWebSearch | None = None,
+        #: 三個動漫資料來源（票 16）。情境測試給真的 adapter 加錄下來的回應（`respx`）。
+        anilist: AniList | None = None,
+        anime_ids: AnimeIds | None = None,
+        bgm: Bgm | None = None,
         #: 位址 → 在那個位址上的另一台 Jellyfin（M4 票 18：換位址時認得出是不是同一台）。
         #: 沒列的位址都是 `jellyfin` 那一台。
         elsewhere: dict[str, FakeJellyfinClient] | None = None,
@@ -73,6 +83,9 @@ class FakeClientFactory:
         self.discord_ = discord or FakeDiscordBot()
         self.ai_ = ai or FakeAi()
         self.web_search_ = web_search or FakeWebSearch()
+        self.anilist_ = anilist or FakeAniList()
+        self.anime_ids_ = anime_ids or FakeAnimeIds()
+        self.bgm_ = bgm or FakeBgm()
         #: 每次拿 client 時收到的憑證，用來斷言「用的是存下來的那一把」。
         self.tokens: list[str] = []
         self.api_keys: list[str] = []
@@ -115,6 +128,15 @@ class FakeClientFactory:
     def tavily(self, api_key: str) -> WebSearch:
         self.web_search_.api_key = api_key
         return self.web_search_
+
+    def anilist(self) -> AniList:
+        return self.anilist_
+
+    def anime_ids(self) -> AnimeIds:
+        return self.anime_ids_
+
+    def bgm(self) -> Bgm:
+        return self.bgm_
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         self.api_keys.append(api_key)
