@@ -24,26 +24,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Status
-         * @description AI 開著沒有。登入就讀得到（一般使用者讀不到 `/settings/ai`）。
-         */
-        get: operations["get_status_api_agent_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/agent/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -56,6 +36,26 @@ export interface paths {
          * @description 存著的歷史，轉成 `useChat` 的訊息。沒有工具結果的工具呼叫是 `approval-requested`。
          */
         get: operations["get_conversation_api_agent_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description 側面板的狀態。登入就讀得到：一般使用者讀不到 `/settings/ai`，也一樣被暫停擋著。
+         */
+        get: operations["get_status_api_agent_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2614,7 +2614,7 @@ export interface components {
          * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
          * @enum {string}
          */
-        AgentRefusal: "ai_disabled" | "busy" | "no_message" | "conversation_missing";
+        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "not_continuable";
         /** AgentRefusalOut */
         AgentRefusalOut: {
             reason: components["schemas"]["AgentRefusal"];
@@ -2625,6 +2625,10 @@ export interface components {
         AgentStatusOut: {
             /** Enabled */
             enabled: boolean;
+            /** Paused Until */
+            paused_until: string | null;
+            /** Pause Error */
+            pause_error: string;
         };
         /** AiEndpointOut */
         AiEndpointOut: {
@@ -2714,6 +2718,12 @@ export interface components {
          * @enum {string}
          */
         AiSecret: "anthropic" | "openai" | "tavily";
+        /**
+         * AiStopReason
+         * @description 一輪 agent 為什麼停下（`ai_runs.stop_reason`，研究 C5）。用量頁數的是它（票 21）。
+         * @enum {string}
+         */
+        AiStopReason: "completed" | "request_limit" | "token_limit" | "repeated_call" | "ping_pong" | "no_progress" | "circuit_open" | "error" | "cancelled";
         /**
          * AiTestIn
          * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。
@@ -3103,6 +3113,7 @@ export interface components {
             messages: {
                 [key: string]: unknown;
             }[];
+            stop: components["schemas"]["TurnStopOut"] | null;
         };
         /**
          * DeletionEstimateOut
@@ -6263,6 +6274,17 @@ export interface components {
             audits: number;
         };
         /**
+         * TurnStopOut
+         * @description 一輪沒有答完：哪一輪、為什麼、能不能按「繼續」（串流裡的 `data-stop` 也是這個形狀）。
+         */
+        TurnStopOut: {
+            /** Turn Id */
+            turn_id: string;
+            reason: components["schemas"]["AiStopReason"];
+            /** Continuable */
+            continuable: boolean;
+        };
+        /**
          * UnknownTorrentOut
          * @description qBittorrent 上一個 Berth 沒有 Job 的 torrent（plan §3.2、票 10）。
          */
@@ -6722,7 +6744,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentRefusalOut"];
                 };
             };
-            /** @description `ai_disabled` · `busy` */
+            /** @description `ai_disabled` · `ai_paused` · `busy` · `not_continuable` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6738,26 +6760,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRefusalOut"];
-                };
-            };
-        };
-    };
-    get_status_api_agent_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentStatusOut"];
                 };
             };
         };
@@ -6798,6 +6800,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_agent_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentStatusOut"];
                 };
             };
         };

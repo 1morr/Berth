@@ -8,7 +8,8 @@
   那一輪也有（brief §20.24：`on_complete` 不會被呼叫）。`stop_reason` 是 `NULL` 就是還在跑。
 - **`ai_calls`**：每次模型呼叫一列，成敗都記。快取讀寫**照原樣存，`NULL` 是不知道**，不當 0
   （研究 C5）；費用認不得模型也是 `NULL`。伺服器端網搜的次數與費用另記兩格（M5 票 17）。
-- **`ai_tool_calls`**：每次工具呼叫一列：命令名、參數、結果的分類（`AiToolOutcome`）。
+- **`ai_tool_calls`**：每次工具呼叫一列：命令名、參數、結果的分類（`AiToolOutcome`）、結果
+  有沒有被截。
 
 刪人連他的對話一起刪（`CASCADE`），刪對話連它的 run 一起刪。
 """
@@ -17,7 +18,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Float, ForeignKey, Index, Text
+from sqlalchemy import Float, ForeignKey, Index, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import AiProvider, AiStopReason, AiToolOutcome
@@ -43,6 +44,8 @@ class AiRun(Base):
         Index("ix_ai_runs_conversation_id", "conversation_id"),
         # 用量頁（票 21）以日為單位數。
         Index("ix_ai_runs_started_at", "started_at"),
+        # 一輪只能被「繼續」一次（M5 票 20）：兩個請求同時按也只有一個建得出來。
+        Index("ix_ai_runs_continues", "continues", unique=True),
     )
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -73,6 +76,9 @@ class AiRun(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float, default=0.0)
     #: 伺服器端網搜的次數（各次呼叫的 `web_searches` 合計；Tavily 是工具呼叫，在 `ai_tool_calls`）。
     web_searches: Mapped[int] = mapped_column(default=0, server_default="0")
+    #: 這一輪是使用者對哪一輪按的「繼續」（M5 票 20）；它自己就不能再被繼續。
+    #: 沒有外鍵：指的是同一段對話裡的一輪，刪對話時一起刪。
+    continues: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class AiCall(Base):
@@ -120,5 +126,9 @@ class AiToolCall(Base):
     outcome: Mapped[AiToolOutcome] = mapped_column(enum_column(AiToolOutcome))
     #: 拒絕的理由、錯誤的原文；成功是空字串。
     detail: Mapped[str] = mapped_column(Text, default="")
+    #: 結果超過上限、交給模型的是截過的（M5 票 20，`services.agent_guards.clip`）。
+    #: `server_default` 是 migration 原生 `ADD COLUMN` 留下來的（不重建表，同
+    #: `User.discord_user_id`）。
+    truncated: Mapped[bool] = mapped_column(default=False, server_default=false())
     duration_ms: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

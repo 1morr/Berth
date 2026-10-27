@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { AgentStatus } from '../api/agent'
 import type { Me } from '../api/auth'
 import { renderInRoute } from '../test/render'
 import { AgentPanel, AgentToggle } from './AgentPanel'
@@ -93,7 +94,12 @@ function serve(api: Backend) {
       const method = init?.method ?? 'GET'
       const path = typeof input === 'string' ? input : String(input)
       if (method === 'GET' && path === '/api/auth/me') return json(api.me)
-      if (method === 'GET' && path === '/api/agent/status') return json({ enabled: api.enabled })
+      if (method === 'GET' && path === '/api/agent/status')
+        return json({
+          enabled: api.enabled,
+          paused_until: null,
+          pause_error: '',
+        } satisfies AgentStatus)
       if (method === 'GET' && path.startsWith('/api/agent/conversations/')) {
         // 後端對沒有的那一段（含剛開的新對話）一律是 `conversation_missing`。
         return api.stored === null || path !== `/api/agent/conversations/${CONVERSATION}`

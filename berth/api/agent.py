@@ -3,8 +3,10 @@
 - `POST /agent/chat`：Vercel AI SDK 的 UI message stream（`VercelAIAdapter`，`sdk_version=7`）。
   前端 `useChat` 每次送整份訊息，這裡**只取最後一則使用者訊息的字**，歷史以資料庫為準；前端送回的
   工具結果與核准一律不採用（brief §20.24：adapter 預設照收）。body 另外帶 `language`（介面語言，
-  `domain.Language`），防護停下時的說明照它寫。
-- `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）。
+  `domain.Language`），防護停下時的說明照它寫；按「繼續」時帶 `continues`（停下的那一輪的 id，
+  M5 票 20）。防護停下時說明之後多一則 `data-stop`（`TurnStopOut`）：側面板照它畫「繼續」。
+- `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
+  斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
   重新載入頁面時接回來。
 
@@ -16,6 +18,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 from functools import cached_property
 from typing import Any, Literal
 
@@ -28,6 +31,7 @@ from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from pydantic_ai.ui.vercel_ai.request_types import SubmitMessage, TextUIPart
 from pydantic_ai.ui.vercel_ai.response_types import (
     BaseChunk,
+    DataChunk,
     ErrorChunk,
     TextDeltaChunk,
     TextEndChunk,
@@ -43,13 +47,14 @@ from berth.api.deps import (
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import Actor, AgentRefusal, Language
+from berth.domain import Actor, AgentRefusal, AiStopReason, Language
 from berth.services.agent import (
     AgentRefusedError,
     Turn,
-    ai_enabled,
+    TurnStop,
     open_turn,
     read_conversation,
+    read_status,
 )
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -59,9 +64,11 @@ SDK_VERSION: Literal[7] = 7
 
 _STATUS: dict[AgentRefusal, int] = {
     AgentRefusal.AI_DISABLED: status.HTTP_409_CONFLICT,
+    AgentRefusal.AI_PAUSED: status.HTTP_409_CONFLICT,
     AgentRefusal.BUSY: status.HTTP_409_CONFLICT,
     AgentRefusal.NO_MESSAGE: status.HTTP_422_UNPROCESSABLE_CONTENT,
     AgentRefusal.CONVERSATION_MISSING: status.HTTP_404_NOT_FOUND,
+    AgentRefusal.NOT_CONTINUABLE: status.HTTP_409_CONFLICT,
 }
 
 
@@ -73,6 +80,22 @@ class AgentRefusalOut(BaseModel):
 class AgentStatusOut(BaseModel):
     #: 關著時面板只說怎麼設定（管理員）或「管理員還沒設定」（一般使用者），其餘與 M4 相同。
     enabled: bool
+    #: provider 斷路器暫停到什麼時候；`null` 是沒有暫停。
+    paused_until: datetime | None
+    #: 讓它暫停的那一次的錯誤原文（key 已遮掉）；只給管理員，其他人與沒有暫停是空字串。
+    pause_error: str
+
+
+class TurnStopOut(BaseModel):
+    """一輪沒有答完：哪一輪、為什麼、能不能按「繼續」（串流裡的 `data-stop` 也是這個形狀）。"""
+
+    turn_id: str
+    reason: AiStopReason
+    continuable: bool
+
+    @classmethod
+    def of(cls, stop: TurnStop) -> TurnStopOut:
+        return cls(turn_id=stop.turn_id, reason=stop.reason, continuable=stop.continuable)
 
 
 class ConversationOut(BaseModel):
@@ -80,6 +103,8 @@ class ConversationOut(BaseModel):
     #: `useChat` 的 `UIMessage`（ai 7）。`Any`：JSON 的形狀由 pydantic-ai 的 `UIMessage` 決定，
     #: 不在這裡重抄一份 schema。
     messages: list[dict[str, Any]]
+    #: 最後一輪沒有答完的話停在哪；答完了或還在跑是 `null`。
+    stop: TurnStopOut | None
 
 
 def agent_refusal(exc: AgentRefusedError) -> HTTPException:
@@ -119,6 +144,11 @@ def _last_user_text(run_input: SubmitMessage) -> str:
     if last is None or last.role != "user":
         return ""
     return "".join(part.text for part in last.parts if isinstance(part, TextUIPart))
+
+
+def _continues(run_input: SubmitMessage) -> str | None:
+    raw = (run_input.model_extra or {}).get("continues")
+    return raw if isinstance(raw, str) and raw else None
 
 
 def _language(run_input: SubmitMessage) -> Language:
@@ -164,6 +194,7 @@ async def chat(
             conversation_id=run_input.id,
             text=_last_user_text(run_input),
             language=_language(run_input),
+            continues=_continues(run_input),
         )
     except AgentRefusedError as exc:
         raise agent_refusal(exc) from exc
@@ -190,21 +221,16 @@ async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncIterator[Bas
         )
         async for chunk in stream:
             if isinstance(chunk, ErrorChunk):
-                note = await turn.stopped(chunk.error_text)
+                note, stop = await turn.stopped(chunk.error_text)
                 text_id = uuid.uuid4().hex
                 yield TextStartChunk(id=text_id)
                 yield TextDeltaChunk(id=text_id, delta=note)
                 yield TextEndChunk(id=text_id)
+                yield DataChunk(type="data-stop", data=TurnStopOut.of(stop).model_dump(mode="json"))
                 continue
             yield chunk
     finally:
         await turn.close()
-
-
-@router.get("/status")
-async def get_status(session: SessionDep) -> AgentStatusOut:
-    """AI 開著沒有。登入就讀得到（一般使用者讀不到 `/settings/ai`）。"""
-    return AgentStatusOut(enabled=await ai_enabled(session))
 
 
 @router.get(
@@ -218,11 +244,24 @@ async def get_conversation(
     actor = _actor(request)
     assert actor.user_id is not None
     try:
-        history = await read_conversation(session, conversation_id, user_id=actor.user_id)
+        found = await read_conversation(session, conversation_id, user_id=actor.user_id)
     except AgentRefusedError as exc:
         raise agent_refusal(exc) from exc
-    messages = VercelAIAdapter.dump_messages(list(history), sdk_version=SDK_VERSION)
+    messages = VercelAIAdapter.dump_messages(list(found.history), sdk_version=SDK_VERSION)
     return ConversationOut(
         id=conversation_id,
         messages=[m.model_dump(mode="json", by_alias=True, exclude_none=True) for m in messages],
+        stop=TurnStopOut.of(found.stop) if found.stop is not None else None,
+    )
+
+
+@router.get("/status")
+async def get_status(
+    request: Request, session: SessionDep, runtime: AgentRuntimeDep
+) -> AgentStatusOut:
+    """側面板的狀態。登入就讀得到：一般使用者讀不到 `/settings/ai`，也一樣被暫停擋著。"""
+    actor = _actor(request)
+    found = await read_status(session, runtime, actor.role)
+    return AgentStatusOut(
+        enabled=found.enabled, paused_until=found.paused_until, pause_error=found.pause_error
     )

@@ -261,7 +261,8 @@ NAMED: dict[str, CommandMark] = {
     # M5 票 11：開一輪花掉的 token 回不來，入口不是工具；讀自己的對話是一般的讀取。
     "agent.open_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
     "agent.read_conversation": _mark(Effect.READ),
-    "agent.ai_enabled": _mark(Effect.READ, Flag.INTERNAL),
+    # M5 票 12、20：側面板的狀態（AI 開了沒、暫停），門禁的一環，不是工具。
+    "agent.read_status": _mark(Effect.READ, Flag.INTERNAL),
     # M5 票 17：打的是固定的 Tavily（不是新位址），花使用者 Tavily 帳號的 credit；只讀。
     "web.tavily_search": _mark(Effect.READ),
 }

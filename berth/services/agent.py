@@ -11,14 +11,16 @@
 - **記帳**（`_Guard`，pydantic-ai 的 capability）：每次模型呼叫寫一列 `ai_calls`、更新 `ai_runs`
   的合計並 commit；`on_complete` 在中止時不會被呼叫，所以不等它（brief §20.24）。
 - **防護**（`Limits`，plan §11.6〈防護〉）：每次 `max_tokens`、每輪模型呼叫與 token 上限、同工具同
-  參數第 2 次警告 / 第 3 次擋 / 第 4 次中止（失敗的不計），每人同時 1 輪（`AgentRuntime`）。
+  參數第 2 次警告 / 第 3 次擋 / 第 4 次中止（失敗的不計），每人同時 1 輪（`AgentRuntime`）；
+  乒乓、無進展、結果截斷與 provider 斷路器在 `agent_guards`（M5 票 20）。
 - **網路搜尋**（票 17，`services.web`）：Anthropic Messages 掛伺服器端 `web_search`，設了 Tavily key
   兩種接口都多 `web.tavily_search`；兩種共用每輪的次數上限。搜到的是外部內容（`external_texts`）。
 - **Skills**（票 19，`services.skills`）：instructions 只列這個人用得上的那幾份的名稱與描述，
   全文由工具 `skills.load_skill` 拿（漸進揭露）。
 - **停下來時**（防護、出錯、使用者關掉連線）：歷史留到最後一次模型呼叫之前那一段（每個工具呼叫都有
   結果），後面接一則說明——哪一條、做到哪——用前端送來的介面語言寫（同 `services.notify` 照收件人
-  的語言組字）。下一輪的模型也看得到它。
+  的語言組字）。下一輪的模型也看得到它。防護停下的（`CONTINUABLE`）可以「繼續」一次（`open_turn`
+  的 `continues`）。
 
 **session**：串流開始時請求的 session 已經收掉，而開輪寫的兩列要在那之前落地，所以開輪、記帳、
 每次工具呼叫、存歷史都各自開一個（`sessions`），各自 commit。
@@ -42,6 +44,7 @@ from pydantic import ValidationError
 from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.capabilities.abstract import ValidatedToolArgs, WrapToolExecuteHandler
+from pydantic_ai.exceptions import ModelAPIError
 from pydantic_ai.messages import (
     ModelMessage,
     ModelMessagesTypeAdapter,
@@ -59,6 +62,8 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 from pydantic_ai.toolsets import FunctionToolset
 from pydantic_core import to_jsonable_python
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.ai import AiEndpoint, chat_settings, is_official, native_web_search
@@ -75,6 +80,7 @@ from berth.domain import (
 )
 from berth.models import AiCall, AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
+from berth.services.agent_guards import Progress, ProviderBreaker, clip
 from berth.services.agent_tools import (
     EXTERNAL_TOOLS,
     TAVILY_TOOL,
@@ -144,10 +150,49 @@ class Limits:
     warn_at: int = 2
     block_at: int = 3
     abort_at: int = 4
+    #: 連續幾次模型呼叫之間的工具都沒帶來新的結果就停（無進展）。A-A-A-A 在這之前由重複呼叫擋下。
+    stale_steps: int = 3
+    #: 一筆工具結果交給模型的上限（JSON 的字元數，`agent_guards.clip`）。中日文約一字一 token：
+    #: 一輪最多 20 次呼叫、每次都帶著前面的結果，400K 的 input 上限放得下。
+    result_chars: int = 12_000
     #: 每輪網路搜尋的次數（伺服器端 `web_search` 與 Tavily 合計；研究 08 §4：一次推薦約 3–6 次）。
     #: 伺服器端那一種在最後一次模型呼叫可能超過，最多多 `web_searches - 1` 次
     #: （`adapters.ai.native_web_search` 說了為什麼）。
     web_searches: int = 5
+
+
+#: 防護停下的這幾種，使用者可以按一次「繼續」（研究 C3）。出錯、斷路器、關掉連線的重新問就好；
+#: 斷路器開著的時候也開不了新的一輪。
+CONTINUABLE = frozenset(
+    {
+        AiStopReason.REQUEST_LIMIT,
+        AiStopReason.TOKEN_LIMIT,
+        AiStopReason.REPEATED_CALL,
+        AiStopReason.PING_PONG,
+        AiStopReason.NO_PROGRESS,
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class TurnStop:
+    """一輪沒有答完：哪一輪、為什麼、還能不能按「繼續」。"""
+
+    turn_id: str
+    reason: AiStopReason
+    continuable: bool
+
+    @classmethod
+    def of(cls, turn_id: str, reason: AiStopReason, continues: str | None) -> TurnStop:
+        """被繼續過的那一輪不會是最後一輪，所以只看它自己是不是續的。"""
+        return cls(turn_id, reason, reason in CONTINUABLE and continues is None)
+
+
+def turn_stop(run: AiRun) -> TurnStop | None:
+    """`ai_runs` 的一列停在哪；答完的與還在跑的是 `None`。"""
+    if run.stop_reason is None or run.stop_reason is AiStopReason.COMPLETED:
+        return None
+    return TurnStop.of(run.id, run.stop_reason, run.continues)
 
 
 class AgentRefusedError(Exception):
@@ -187,7 +232,7 @@ class _Claim:
 
 
 class AgentRuntime:
-    """一個程序一份：防護的數字，與誰正在跑一輪（每人同時 1 輪）。
+    """一個程序一份：防護的數字、provider 斷路器，與誰正在跑一輪（每人同時 1 輪）。
 
     讓出位子的是串流的收尾（`Turn.close`）。回應沒送出去（commit 失敗、送出之前就斷線）時串流不會
     開始、收尾也不會跑，所以還沒開始串流的位子 `STALE_CLAIM_SECONDS` 之後自己回來；開始了的佔到
@@ -195,9 +240,14 @@ class AgentRuntime:
     """
 
     def __init__(
-        self, limits: Limits | None = None, *, clock: Callable[[], float] = time.monotonic
+        self,
+        limits: Limits | None = None,
+        *,
+        breaker: ProviderBreaker | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.limits = limits or Limits()
+        self.breaker = breaker or ProviderBreaker()
         self._clock = clock
         self._claims: dict[int, _Claim] = {}
 
@@ -289,6 +339,10 @@ class Turn:
     run_id: str
     provider: AiProvider
     model_name: str
+    #: 這一輪用的 provider 設定（斷路器以它為單位）。
+    endpoint: AiEndpoint
+    #: 這一輪是按了「繼續」的哪一輪；`None` 是使用者自己說的話。
+    continues: str | None
     #: 這一輪之前存著的歷史。
     history: list[ModelMessage]
     #: 這一則使用者訊息。
@@ -322,6 +376,8 @@ class Turn:
     repeats: Counter[str] = field(default_factory=Counter)
     #: 照順序，這一輪叫過的命令（說明「做到哪」）。
     commands_run: list[str] = field(default_factory=list)
+    #: 工具帶來了什麼：乒乓與無進展看它。
+    progress: Progress = field(default_factory=Progress)
     finished: bool = False
 
     @property
@@ -387,6 +443,7 @@ class Turn:
         search = command_name == TAVILY_TOOL
         if search:
             if not self.searches_left():
+                self.progress.blocked()
                 await self._record_tool(
                     command_name, plain, AiToolOutcome.BLOCKED, "web search limit", started
                 )
@@ -403,6 +460,7 @@ class Turn:
             await self._record_tool(command_name, plain, AiToolOutcome.ABORTED, "", started)
             raise TurnStoppedError(AiStopReason.REPEATED_CALL)
         if seen >= limits.block_at:
+            self.progress.blocked()
             if search:
                 self.tavily_searches -= 1
             await self._record_tool(command_name, plain, AiToolOutcome.BLOCKED, "", started)
@@ -416,17 +474,40 @@ class Turn:
             self.repeats[key] -= 1
             if search:
                 self.tavily_searches -= 1
-            await self._record_tool(command_name, plain, failure.outcome, failure.detail, started)
-            return failure.payload
-        if seen >= limits.warn_at:
-            await self._record_tool(command_name, plain, AiToolOutcome.WARNED, "", started)
-            return {
-                "result": result,
-                "warning": "This call is identical to an earlier one in this reply; "
-                "repeating it again will be blocked.",
-            }
-        await self._record_tool(command_name, plain, AiToolOutcome.OK, "", started)
-        return result
+            payload, cut = self._given(failure.payload, warned=False)
+            await self._record_tool(
+                command_name, plain, failure.outcome, failure.detail, started, truncated=cut
+            )
+            return payload
+        self.progress.saw(key, result)
+        warned = seen >= limits.warn_at
+        given, cut = self._given(result, warned=warned)
+        outcome = AiToolOutcome.WARNED if warned else AiToolOutcome.OK
+        await self._record_tool(command_name, plain, outcome, "", started, truncated=cut)
+        return given
+
+    def _given(self, result: object, *, warned: bool) -> tuple[object, bool]:
+        """交給模型的那一份：超過上限的截過、附上每一處砍了多少（研究 C3），重複的附警告。
+
+        回（那一份、有沒有截）。什麼都不用附的原樣交。
+        """
+        clipped = clip(result, self.runtime.limits.result_chars)
+        notes: dict[str, object] = {}
+        if clipped.cuts:
+            notes["truncated"] = [to_jsonable_python(cut) for cut in clipped.cuts]
+            notes["note"] = (
+                "Only part of this result is shown: each entry in `truncated` says where, how "
+                "many were shown and how many more there are. Narrow the call (another page, a "
+                "filter, a more specific query) to see the rest."
+            )
+        if warned:
+            notes["warning"] = (
+                "This call is identical to an earlier one in this reply; "
+                "repeating it again will be blocked."
+            )
+        if not notes:
+            return result, False
+        return {"result": clipped.value, **notes}, bool(clipped.cuts)
 
     async def _record_tool(
         self,
@@ -435,6 +516,8 @@ class Turn:
         outcome: AiToolOutcome,
         detail: str,
         started: float,
+        *,
+        truncated: bool = False,
     ) -> None:
         self.tool_calls += 1
         async with self.sessions() as session:
@@ -447,6 +530,7 @@ class Turn:
                     outcome=outcome,
                     detail=detail,
                     duration_ms=_elapsed_ms(started),
+                    truncated=truncated,
                 )
             )
             run = await session.get_one(AiRun, self.run_id)
@@ -463,6 +547,9 @@ class Turn:
         """一次模型呼叫：先看次數、做完當場記帳、再看 token。"""
         limits = self.runtime.limits
         self.prefix = list(messages)
+        if (stuck := self.progress.verdict(limits.stale_steps)) is not None:
+            self.stop = stuck
+            raise TurnStoppedError(stuck)
         if self.requests >= limits.requests:
             self.stop = AiStopReason.REQUEST_LIMIT
             raise TurnStoppedError(AiStopReason.REQUEST_LIMIT)
@@ -484,7 +571,16 @@ class Turn:
         return response
 
     async def failed(self, error: BaseException) -> None:
-        """這一輪出錯（`on_run_error`）：沒寫完的那次模型呼叫照錯誤原文記下。"""
+        """這一輪出錯（`on_run_error`）：沒寫完的那次模型呼叫照錯誤原文記下。
+
+        provider 的失敗記進斷路器；這一次讓它暫停的話，這一輪的停止原因是 `circuit_open`。
+        """
+        if (
+            self.pending_call_started is not None
+            and isinstance(error, ModelAPIError)
+            and self.runtime.breaker.failed(self.endpoint, self._masked(_describe(error)))
+        ):
+            self.stop = AiStopReason.CIRCUIT_OPEN
         await self._settle_call(_describe(error))
 
     async def _settle_call(self, error: str) -> None:
@@ -523,6 +619,7 @@ class Turn:
             self.cache_read = _plus(self.cache_read, usage.cache_read)
             self.cache_write = _plus(self.cache_write, usage.cache_write)
             self.cost = _plus(self.cost, row.cost_usd)
+            self.runtime.breaker.succeeded(self.endpoint)
         else:
             # 沒有回應：服務收不收費不知道。
             self.cost = None
@@ -546,14 +643,14 @@ class Turn:
         """模型答完：存整份歷史（`on_complete`）。"""
         await self._finish(result.all_messages(), AiStopReason.COMPLETED, "")
 
-    async def stopped(self, error: str) -> str:
-        """這一輪沒有答完（串流送出錯誤的那一刻）。存到停下之前、補一則說明；回說明的字。"""
+    async def stopped(self, error: str) -> tuple[str, TurnStop]:
+        """這一輪沒有答完（串流送出錯誤的那一刻）。存到停下之前、補一則說明；回說明的字與停在哪。"""
         reason = self.stop or AiStopReason.ERROR
         await self._settle_call(error)
         note = self._note(reason)
-        detail = self._masked(error) if reason is AiStopReason.ERROR else ""
+        detail = self._masked(error) if reason in _ERRORS else ""
         await self._finish(self._kept(note), reason, detail)
-        return note
+        return note, TurnStop.of(self.run_id, reason, self.continues)
 
     async def close(self) -> None:
         """串流結束（不論怎麼結束）。沒收尾的是使用者關掉了連線。一定讓出這個人的那一輪。"""
@@ -596,12 +693,18 @@ class Turn:
             input=self.runtime.limits.input_tokens,
             output=self.runtime.limits.output_tokens,
             repeats=self.runtime.limits.abort_at,
+            stale=self.runtime.limits.stale_steps,
+            failures=self.runtime.breaker.threshold,
+            minutes=int(self.runtime.breaker.pause.total_seconds() // 60),
         )
         return f"{why} {done}"
 
     def _masked(self, text: str) -> str:
         return text.replace(self.secret, _MASK) if self.secret else text
 
+
+#: 停止原因裡是出錯的：`ai_runs.error` 留原文。
+_ERRORS = frozenset({AiStopReason.ERROR, AiStopReason.CIRCUIT_OPEN})
 
 #: 說明那一則的 `model_name`：看得出它不是模型說的。
 _NOTE_MODEL = "berth"
@@ -614,7 +717,14 @@ _NOTES: dict[Language, dict[str, str]] = {
             "這一輪停下來了：用量到了每輪 {input} input / {output} output token 的上限。"
         ),
         AiStopReason.REPEATED_CALL: "這一輪停下來了：同一個工具以相同參數叫了第 {repeats} 次。",
+        AiStopReason.PING_PONG: "這一輪停下來了：模型在兩個呼叫之間來回，結果都沒變。",
+        AiStopReason.NO_PROGRESS: (
+            "這一輪停下來了：連續 {stale} 次模型呼叫，工具都沒帶來新的結果。"
+        ),
         AiStopReason.ERROR: "這一輪停下來了：AI 服務出錯。",
+        AiStopReason.CIRCUIT_OPEN: (
+            "這一輪停下來了：AI 服務連續 {failures} 次出錯，先暫停 {minutes} 分鐘，之後再試。"
+        ),
         AiStopReason.CANCELLED: "這一輪停下來了：連線被關掉。",
         "done": "已做：{requests} 次模型呼叫、{tools} 次工具呼叫（{names}）。",
     },
@@ -630,7 +740,18 @@ _NOTES: dict[Language, dict[str, str]] = {
             "This reply was stopped: the same tool was called with the same arguments "
             "{repeats} times."
         ),
+        AiStopReason.PING_PONG: (
+            "This reply was stopped: the model kept going back and forth between two calls "
+            "that returned the same results."
+        ),
+        AiStopReason.NO_PROGRESS: (
+            "This reply was stopped: {stale} model calls in a row got nothing new from the tools."
+        ),
         AiStopReason.ERROR: "This reply was stopped: the AI service returned an error.",
+        AiStopReason.CIRCUIT_OPEN: (
+            "This reply was stopped: the AI service failed {failures} times in a row, so it is "
+            "paused for {minutes} minutes before Berth tries again."
+        ),
         AiStopReason.CANCELLED: "This reply was stopped: the connection was closed.",
         "done": "Done so far: {requests} model calls, {tools} tool calls ({names}).",
     },
@@ -698,11 +819,17 @@ async def open_turn(
     conversation_id: str,
     text: str,
     language: Language,
+    continues: str | None = None,
 ) -> Turn:
     """一則使用者訊息開一輪。對話沒有就替這個人建一段；是別人的就當作沒有。
 
-    拒絕：`no_message`、`conversation_missing`、`ai_disabled`、`busy`。佔到的那一輪由
-    `Turn.close` 讓出（串流沒開始的，見 `AgentRuntime`）。
+    `continues` 是使用者按「繼續」的那一輪（M5 票 20）：訊息照樣是按鈕上的字，接著存著的歷史（停下來
+    的說明在最後）重新跑一輪、防護的數字重新算。只有這段對話的最後一輪、被防護停下（`CONTINUABLE`）、
+    它自己不是續的，才能繼續；續過一次之後它就不是最後一輪了。不行的是 `not_continuable`。
+
+    拒絕：`no_message`、`conversation_missing`、`ai_disabled`、`ai_paused`（斷路器，detail 是
+    到什麼時候）、`not_continuable`、`busy`。佔到的那一輪由 `Turn.close` 讓出（串流沒開始的，見
+    `AgentRuntime`）。
     """
     assert actor.user_id is not None
     text = text.strip()
@@ -719,7 +846,11 @@ async def open_turn(
         if conversation is not None and conversation.user_id != actor.user_id:
             raise AgentRefusedError(AgentRefusal.CONVERSATION_MISSING, conversation_id)
         history = load_history(conversation.history_json) if conversation is not None else []
-        stored = settings.endpoint(settings.provider)
+        if continues is not None:
+            await _check_continuable(session, conversation_id, continues)
+        endpoint = _endpoint(settings)
+        if (pause := runtime.breaker.paused(endpoint)) is not None:
+            raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
         run_id = uuid.uuid4().hex
         runtime.claim(actor.user_id)
         try:
@@ -731,14 +862,18 @@ async def open_turn(
                     conversation_id=conversation_id,
                     user_id=actor.user_id,
                     provider=settings.provider,
-                    model=stored.model,
+                    model=endpoint.model,
+                    continues=continues,
                 )
             )
             await session.commit()
-        except BaseException:
+        except BaseException as exc:
             runtime.release(actor.user_id)
+            # `ix_ai_runs_continues`：同一輪已經被繼續過（兩個程序同時按；同一個程序裡由佔位子
+            # 擋下）。其餘的 `IntegrityError`（同時建同一段新對話）照原樣丟。
+            if continues is not None and isinstance(exc, IntegrityError):
+                raise AgentRefusedError(AgentRefusal.NOT_CONTINUABLE, continues) from exc
             raise
-    endpoint = AiEndpoint(settings.provider, stored.base_url, stored.api_key, stored.model)
     model: Model = factory.ai(endpoint)
     tavily = bool(settings.tavily_api_key)
     native: list[AbstractCapability[Turn]] = native_web_search(
@@ -764,33 +899,85 @@ async def open_turn(
         conversation_id=conversation_id,
         run_id=run_id,
         provider=settings.provider,
-        model_name=stored.model,
+        model_name=endpoint.model,
+        endpoint=endpoint,
+        continues=continues,
         history=history,
         prompt=ModelRequest(parts=[UserPromptPart(text)]),
         language=language,
         agent=agent,
-        secret=stored.api_key,
+        secret=endpoint.api_key,
         today=datetime.now().astimezone().date(),
         official=is_official(endpoint),
         can_search=tavily or bool(native),
     )
 
 
+def _endpoint(settings: AiSettings) -> AiEndpoint:
+    """現用接口的那一份設定。"""
+    stored = settings.endpoint(settings.provider)
+    return AiEndpoint(settings.provider, stored.base_url, stored.api_key, stored.model)
+
+
+async def _check_continuable(session: AsyncSession, conversation_id: str, turn_id: str) -> None:
+    last = await _last_turn(session, conversation_id)
+    stop = turn_stop(last) if last is not None else None
+    if stop is None or stop.turn_id != turn_id or not stop.continuable:
+        raise AgentRefusedError(AgentRefusal.NOT_CONTINUABLE, turn_id)
+
+
+async def _last_turn(session: AsyncSession, conversation_id: str) -> AiRun | None:
+    found: AiRun | None = await session.scalar(
+        select(AiRun)
+        .where(AiRun.conversation_id == conversation_id)
+        .order_by(AiRun.started_at.desc())
+        .limit(1)
+    )
+    return found
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationView:
+    history: tuple[ModelMessage, ...]
+    #: 最後一輪沒有答完的話，停在哪（側面板的「繼續」照它畫）。
+    stop: TurnStop | None
+
+
 # 讀自己的對話（重新載入側面板）。一般使用者也行：只讀得到自己的。
 @command(Effect.READ, refusals=(AgentRefusal,), audience=Role.USER)
 async def read_conversation(
     session: AsyncSession, conversation_id: str, *, user_id: int
-) -> tuple[ModelMessage, ...]:
-    """這段對話存著的歷史。沒有、或不是這個人的：`conversation_missing`。"""
+) -> ConversationView:
+    """這段對話存著的歷史與最後一輪停在哪。沒有、或不是這個人的：`conversation_missing`。"""
     conversation = await session.get(AiConversation, conversation_id)
     if conversation is None or conversation.user_id != user_id:
         raise AgentRefusedError(AgentRefusal.CONVERSATION_MISSING, conversation_id)
-    return tuple(load_history(conversation.history_json))
+    last = await _last_turn(session, conversation_id)
+    return ConversationView(
+        history=tuple(load_history(conversation.history_json)),
+        stop=turn_stop(last) if last is not None else None,
+    )
 
 
-# 側面板一打開就要分得出「可以問」與「AI 沒開」（票 12）；一般使用者讀不到 `ai.read_ai`。
-# 門禁的一環，不當工具：問得到它的那一輪，AI 一定是開著的。
+@dataclass(frozen=True, slots=True)
+class AgentStatus:
+    """側面板開著時要知道的：AI 開了沒、provider 暫停到什麼時候（`None` 是沒有暫停）、為什麼。"""
+
+    enabled: bool
+    paused_until: datetime | None
+    #: 讓它暫停的那一次的錯誤原文（key 已遮掉）。只給管理員：一般使用者看不到設定，修不了。
+    pause_error: str
+
+
+# 側面板一打開就要分得出「可以問」與「AI 沒開」（票 12），暫停時說明到什麼時候、為什麼（票 20）。
+# 一般使用者讀不到 `ai.read_ai`，也一樣被暫停擋著。門禁的一環，不當工具：模型從停下來的說明就知道。
 @command(Effect.READ, flags={Flag.INTERNAL})
-async def ai_enabled(session: AsyncSession) -> bool:
-    """AI 開著沒有（`open_turn` 擋 `ai_disabled` 看的是同一格）。"""
-    return (await read_settings(session, AiSettings)).enabled
+async def read_status(session: AsyncSession, runtime: AgentRuntime, role: Role) -> AgentStatus:
+    """`enabled` 與 `open_turn` 擋 `ai_disabled` 看同一格；暫停與它擋 `ai_paused` 看同一份。"""
+    settings = await read_settings(session, AiSettings)
+    pause = runtime.breaker.paused(_endpoint(settings))
+    return AgentStatus(
+        enabled=settings.enabled,
+        paused_until=pause.until if pause is not None else None,
+        pause_error=pause.error if pause is not None and role is Role.ADMIN else "",
+    )
