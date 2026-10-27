@@ -36,12 +36,13 @@ from berth.services.hints import JobHints
 from berth.services.jobs import (
     add_download,
     job_lock,
+    read_job,
     record_event,
     resubmit_job,
     retry_job,
     transition,
 )
-from berth.services.plan import plan_id_of, sweep_plans
+from berth.services.plan import sweep_plans
 from berth.services.rss import bind_series, poll_feed
 from berth.services.settings import read_settings, write_settings
 from tests.integration.arrange import arrange, factory_for
@@ -231,7 +232,7 @@ class TestPollerAndPlanner:
             )
         )
         assert list(failed) == []
-        assert await plan_id_of(session, HASH) is not None
+        assert await _current_plan_id(session, HASH) is not None
         states = dict((await session.execute(select(Job.hash, Job.state))).tuples().all())
         assert states[FIRST] is JobState.METADATA_READY
         assert states[SLOW] is JobState.METADATA_READY
@@ -438,3 +439,9 @@ class TestNetworkOutsideTheWriteTransaction:
         assert polled.bound == 1
         assert searched and detailed
         assert not any(searched + detailed)
+
+
+async def _current_plan_id(session: AsyncSession, job_hash: str) -> int | None:
+    """這一筆現在那一份計劃的 id，從下載列表那一支讀（同畫面）。"""
+    view = await read_job(session, job_hash)
+    return None if view is None else view.plan_id

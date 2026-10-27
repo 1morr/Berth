@@ -48,6 +48,7 @@ from berth.logs import job_context
 from berth.models import Job, PlanItem, RssSeries
 from berth.models.types import utcnow
 from berth.parser import revise
+from berth.services.commands import Effect, command
 from berth.services.events import EventHub, JobSignal
 from berth.services.jobs import actor_of, job_lock, record_event, transition
 from berth.services.plan import WRITTEN, against_ledger, summarise
@@ -97,6 +98,8 @@ class ItemEdit:
     episode_end: int | None = None
 
 
+# 改回去要再改一次，但 `following` 會連帶換掉沒人碰過的列與 Series：不是單純指向自己。
+@command(Effect.REVERSIBLE)
 async def edit_items(
     session: AsyncSession,
     plan_id: int,
@@ -141,6 +144,8 @@ async def edit_items(
     return view
 
 
+# 只讓狀態落地，鏈接由 importer 建，rematch 拆得掉（brief §14）。
+@command(Effect.REVERSIBLE)
 async def approve_plan(
     session: AsyncSession, hub: EventHub, plan_id: int, *, actor: str
 ) -> PlanView:
@@ -190,6 +195,8 @@ async def approve_plan(
     return view
 
 
+# 檔案不動，規劃器重算；沒有單一反向命令。
+@command(Effect.REVERSIBLE)
 async def reject_plan(session: AsyncSession, hub: EventHub, plan_id: int, *, actor: str) -> None:
     """拒絕：`review → completed`（plan §3.1），規劃器下一輪整份重算。檔案不動。
 

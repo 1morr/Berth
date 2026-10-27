@@ -54,6 +54,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.events import EventHub, JobSignal
 from berth.services.hints import JobHints
 from berth.services.issues import close_settled, note_cleared, record_issue
@@ -153,6 +154,7 @@ class PollOutcome:
     unknown: int
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def next_interval(session: AsyncSession) -> timedelta:
     """現在該多久問一次。
 
@@ -180,6 +182,8 @@ def backoff(failures: int) -> timedelta:
     return min(grown, BACKOFF_CEILING)
 
 
+# poller 一輪的入口：照 qBittorrent 的現況推 Job 與 Issue，不送單、不刪東西。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def poll_downloads(
     session: AsyncSession,
     client: QbittorrentClient,
@@ -311,6 +315,8 @@ class Downloader:
         return client
 
 
+# 只記連續失敗次數。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def record_poll_failure(session: AsyncSession, error: str) -> int:
     """一輪整個失敗了（連不上、被封、回的東西不對）。回傳連續失敗次數。
 

@@ -56,6 +56,7 @@ from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route
 from berth.models.types import utcnow
 from berth.parser import revise
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.deletion import Placed, Unlink, remove_one, route_targets
 from berth.services.importer import (
     TargetTakenError,
@@ -150,6 +151,8 @@ class Landing:
     audit: bool = False
 
 
+# rematch 回原本那一集就回去，但取代舊版時被換掉的那一條不會跟著回來：反向命令不寫自己。
+@command(Effect.REVERSIBLE)
 async def rematch_file(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -197,6 +200,7 @@ async def rematch_file(
     )
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def destination(session: AsyncSession, ledger_id: int, to: Assignment) -> str:
     """`rematch_file` 會把這一列帳本放到哪裡（容器裡的完整路徑），**不動任何東西**。
 
@@ -225,6 +229,8 @@ async def _job_hash_of(
     return row.job_hash
 
 
+# 鎖本身什麼都不改；`duplicates` 跨模組要用。
+@command(Effect.READ, flags={Flag.INTERNAL})
 @asynccontextmanager
 async def locked(*job_hashes: str | None) -> AsyncIterator[None]:
     """鎖住這幾筆 Job：importer 的重試、audit 的兩顆、Plan 編輯、刪除都寫同一份 Plan 與帳本。
@@ -340,6 +346,7 @@ async def _job_file(session: AsyncSession, job_hash: str | None, rel_path: str) 
     return found
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def claimant(session: AsyncSession, entry: LedgerEntry) -> PlanItem | None:
     """帳本這一列的來源在它那一筆 Job 的 Plan 裡是哪一列（取代舊版時要改成沒有落點的那一列）。"""
     job = await session.get(Job, entry.job_hash) if entry.job_hash is not None else None
@@ -488,6 +495,7 @@ async def _sidecars(session: AsyncSession, landing: Landing, main: Move) -> list
     return moves
 
 
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def sidecars_of(session: AsyncSession, video: LedgerEntry) -> list[LedgerEntry]:
     """帳本上掛在這個影片旁邊的字幕。旁邊的定義是命名規則的那一條（`naming.subtitle_target`）：
     同一個資料夾、檔名以影片的主幹加一個點開頭。rematch 與取代舊版共用這一份。"""
@@ -508,6 +516,8 @@ async def sidecars_of(session: AsyncSession, video: LedgerEntry) -> list[LedgerE
 # --- 套用 -----------------------------------------------------------------
 
 
+# rematch 與重複版本的決定共用的磁碟那一步。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def land(session: AsyncSession, landing: Landing, *, actor: str) -> Plan:
     """磁碟 → 紀錄。第一個檔案做不成就整個拒絕（還沒寫任何東西）；其餘的只記在自己那一列。
 
@@ -699,6 +709,8 @@ async def _resummarise(session: AsyncSession, plan_id: int) -> None:
     loaded.plan.summary_json = summary | {"review_reason": reason}
 
 
+# 同 `importer.notify_jellyfin`。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def announce(session: AsyncSession, factory: ServiceClientFactory, landing: Landing) -> None:
     """通知 Jellyfin：新鏈接的路徑與拆掉的路徑（brief §20.1：它對每一條都重讀那個資料夾）。
 
