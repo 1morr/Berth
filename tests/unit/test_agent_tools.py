@@ -11,15 +11,8 @@ import pytest
 
 from berth.adapters.ai import chat_settings
 from berth.domain import AiProvider, Role
-from berth.services.agent import (
-    STALE_CLAIM_SECONDS,
-    TAVILY_TOOL,
-    TOOLS,
-    AgentRefusedError,
-    AgentRuntime,
-    tool_name,
-    visible_tools,
-)
+from berth.services.agent import STALE_CLAIM_SECONDS, AgentRefusedError, AgentRuntime
+from berth.services.agent_tools import TAVILY_TOOL, TOOLS, tool_name, visible_tools
 from berth.services.commands import Effect
 from berth.services.registry import commands
 

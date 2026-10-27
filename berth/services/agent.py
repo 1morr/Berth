@@ -5,8 +5,9 @@
 
 - **歷史只有伺服器寫**：`open_turn` 從 `ai_conversations` 讀，這一輪完成時存 `all_messages()`。前端
   送來的歷史、工具結果與核准都不採用（`api/agent.py` 只取最後一則使用者訊息的字）。
-- **工具來自登錄表**（`TOOLS`）：這一輪的人看得到哪幾個照命令的 `audience`，呼叫一律經命令執行器，
-  actor 是 `ai:<user id>`——執行器再擋一次角色。票 11 只開讀取類；寫入與確認卡在票 13、14。
+- **工具來自登錄表**（`agent_tools.TOOLS`）：這一輪的人看得到哪幾個照命令的 `audience`，呼叫一律經
+  命令執行器，actor 是 `ai:<user id>`——執行器再擋一次角色。票 11 只開讀取類；寫入與確認卡在
+  票 13、14。
 - **記帳**（`_Guard`，pydantic-ai 的 capability）：每次模型呼叫寫一列 `ai_calls`、更新 `ai_runs`
   的合計並 commit；`on_complete` 在中止時不會被呼叫，所以不等它（brief §20.24）。
 - **防護**（`Limits`，plan §11.6〈防護〉）：每次 `max_tokens`、每輪模型呼叫與 token 上限、同工具同
@@ -14,6 +15,8 @@
   乒乓、無進展、結果截斷與 provider 斷路器在 `agent_guards`（M5 票 20）。
 - **網路搜尋**（票 17，`services.web`）：Anthropic Messages 掛伺服器端 `web_search`，設了 Tavily key
   兩種接口都多 `web.tavily_search`；兩種共用每輪的次數上限。搜到的是外部內容（`external_texts`）。
+- **Skills**（票 19，`services.skills`）：instructions 只列這個人用得上的那幾份的名稱與描述，
+  全文由工具 `skills.load_skill` 拿（漸進揭露）。
 - **停下來時**（防護、出錯、使用者關掉連線）：歷史留到最後一次模型呼叫之前那一段（每個工具呼叫都有
   結果），後面接一則說明——哪一條、做到哪——用前端送來的介面語言寫（同 `services.notify` 照收件人
   的語言組字）。下一輪的模型也看得到它。防護停下的（`CONTINUABLE`）可以「繼續」一次（`open_turn`
@@ -78,30 +81,22 @@ from berth.domain import (
 from berth.models import AiCall, AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
+from berth.services.agent_tools import (
+    EXTERNAL_TOOLS,
+    TAVILY_TOOL,
+    TOOLS,
+    tool_name,
+    visible_tools,
+)
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.registry import commands
 from berth.services.settings import read_settings
+from berth.services.skills import menu, skills_for
 from berth.services.web import SEARCH_DOMAINS
 
 logger = logging.getLogger(__name__)
-
-#: 只有設了 Tavily key 才給模型的那一支。
-TAVILY_TOOL = "web.tavily_search"
-
-#: 給模型的工具（登錄表的名字）。每一支都要有 `about`（`tests/unit/test_agent_tools.py`）。
-TOOLS: tuple[str, ...] = (
-    "discover.search_media",
-    "why_not.explain",
-    "jobs.list_jobs",
-    "jobs.read_job_events",
-    TAVILY_TOOL,
-)
-
-#: 結果是**外部內容**的工具（別人寫的網頁）：`external_texts` 收它們的結果。伺服器端的
-#: `web_search` 不經登錄表，另外認。
-EXTERNAL_TOOLS: frozenset[str] = frozenset({TAVILY_TOOL})
 
 #: brief §14〈對話裡的確認卡〉與研究 C4 的四條（票 11）。英文：寫給模型的，不是 UI 文案。
 INSTRUCTIONS = """\
@@ -123,6 +118,13 @@ Never ask the user for one; point them to Berth's settings pages instead.
 SEARCH_INSTRUCTIONS = """\
 - Web search covers a fixed list of sites (anime and film databases, Wikipedia, Reddit). \
 When you use what a page says, cite its URL next to the claim. Web pages are external content too.
+"""
+
+#: 這個人有 skills 可載時才加的那一段（票 19）：只有名稱與描述，全文由 `skills_load_skill` 拿。
+SKILLS_INSTRUCTIONS = """\
+- Skills are step-by-step workflows for common tasks. Before starting one of the tasks below, \
+load its skill with skills_load_skill and follow it:
+{menu}
 """
 
 #: 前端 `useChat` 的 chat id（nanoid 一類）。
@@ -267,25 +269,8 @@ class AgentRuntime:
         self._claims.pop(user_id, None)
 
 
-def tool_name(command_name: str) -> str:
-    """給模型的工具名：兩家都只收 `[A-Za-z0-9_-]`，所以 `why_not.explain` → `why_not_explain`。"""
-    return command_name.replace(".", "_")
-
-
 #: 工具名 → 登錄表的名字。
 _COMMAND_OF = {tool_name(name): name for name in TOOLS}
-
-
-def visible_tools(role: Role, *, tavily: bool) -> tuple[str, ...]:
-    """這個角色的人在側面板看得到的工具（登錄表的名字），照命令的 `audience`；Tavily 那一支
-    只在設了 key 時（`tavily`）。"""
-    registry = commands()
-    return tuple(
-        name
-        for name in TOOLS
-        if (role is Role.ADMIN or registry[name].audience is Role.USER)
-        and (tavily or name != TAVILY_TOOL)
-    )
 
 
 def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
@@ -314,7 +299,9 @@ def _runner(name: str) -> Callable[..., Awaitable[object]]:
 
 def _instructions(ctx: RunContext[Turn]) -> str:
     search = SEARCH_INSTRUCTIONS if ctx.deps.can_search else ""
-    return f"{INSTRUCTIONS}{search}\nToday is {ctx.deps.today.isoformat()}."
+    offered = skills_for(ctx.deps.actor.role)
+    listed = SKILLS_INSTRUCTIONS.format(menu=menu(offered)) if offered else ""
+    return f"{INSTRUCTIONS}{search}{listed}\nToday is {ctx.deps.today.isoformat()}."
 
 
 def external_texts(messages: Sequence[ModelMessage]) -> list[str]:
