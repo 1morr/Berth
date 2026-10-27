@@ -171,6 +171,14 @@ def limit(client: TestClient, **numbers: Any) -> None:
     client.app.state.agent = AgentRuntime(Limits(**numbers))  # type: ignore[attr-defined]  # 同上
 
 
+def stop_note(client: TestClient, conversation: str = "c1") -> str:
+    """重新載入時最後一則停下的說明的字。"""
+    messages = client.get(f"/api/agent/conversations/{conversation}").json()["messages"]
+    notes = [p["data"]["note"] for m in messages for p in m["parts"] if p["type"] == "data-stop"]
+    note: str = notes[-1]
+    return note
+
+
 def streamed_text(response: httpx2.Response) -> str:
     return "".join(c["delta"] for c in chunks(response) if c["type"] == "text-delta")
 
@@ -299,8 +307,8 @@ class TestGuards:
         assert turn.run.input_tokens == sum(c.input_tokens for c in turn.calls) > 0
         assert turn.run.ended_at is not None
         # 說明當場串流回去，也留在對話裡。
-        assert "第 4 次" in streamed_text(response)
-        assert "第 4 次" in last_assistant_text(client)
+        assert "第 4 次" in streamed_stop(response)["note"]
+        assert "第 4 次" in stop_note(client)
 
     def test_a_turn_stops_at_the_model_call_limit_with_its_numbers(
         self, client: TestClient, script: Script
@@ -319,10 +327,10 @@ class TestGuards:
         assert turn.run.requests == 3
         assert [c.step for c in turn.calls] == [1, 2, 3]
         assert turn.run.output_tokens == sum(c.output_tokens for c in turn.calls) > 0
-        note = last_assistant_text(client)
+        note = stop_note(client)
         assert "limit of 3 model calls" in note
         assert "3 model calls, 3 tool calls (jobs.list_jobs)" in note
-        assert note in streamed_text(response)
+        assert note == streamed_stop(response)["note"]
 
     def test_a_turn_stops_once_its_tokens_run_past_the_limit(
         self, client: TestClient, script: Script
@@ -401,8 +409,8 @@ class TestGuards:
         [turn] = recorded(client)
         assert turn.run.stop_reason == "ping_pong"
         assert turn.run.requests == 4
-        assert "going back and forth" in last_assistant_text(client)
-        assert last_assistant_text(client) in streamed_text(response)
+        assert "going back and forth" in stop_note(client)
+        assert stop_note(client) == streamed_stop(response)["note"]
 
     def test_calls_that_keep_bringing_back_nothing_new_stop_the_turn(
         self, client: TestClient, script: Script
@@ -417,7 +425,7 @@ class TestGuards:
         assert turn.run.stop_reason == "no_progress"
         assert turn.run.requests == 6
         assert [t.outcome for t in turn.tools] == ["ok"] * 3 + ["warned"] * 3
-        assert "連續 3 次模型呼叫" in last_assistant_text(client)
+        assert "連續 3 次模型呼叫" in stop_note(client)
 
     def test_a_blocked_call_is_not_progress(self, client: TestClient, script: Script) -> None:
         """第 5 次被擋下（同一個呼叫第 3 次）：沒有新東西，第 4、5、6 次之後連續三段沒進展。"""
@@ -514,7 +522,7 @@ class TestTheCircuitBreaker:
         runs = recorded(client)
         assert [r.run.stop_reason for r in runs] == ["error"] * 4 + ["circuit_open"]
         assert "401" in runs[-1].run.error
-        assert "paused for 15 minutes" in last_assistant_text(client)
+        assert "paused for 15 minutes" in stop_note(client)
         factory.ai_.rejected_keys = frozenset()
         script.steps = [say("Hi.")]
         response = chat(client, "Hello?")
@@ -629,8 +637,25 @@ def stored_history(client: TestClient, conversation: str = "c1") -> list[ModelMe
     return found
 
 
+def stop_parts(client: TestClient, conversation: str = "c1") -> list[dict[str, Any]]:
+    """重新載入時每一則停下的說明（`data-stop` 的 `data`），照順序。"""
+    messages = client.get(f"/api/agent/conversations/{conversation}").json()["messages"]
+    return [p["data"] for m in messages for p in m["parts"] if p["type"] == "data-stop"]
+
+
 def stop_of(client: TestClient, conversation: str = "c1") -> Any:
-    return client.get(f"/api/agent/conversations/{conversation}").json()["stop"]
+    """最後一輪停在哪：最後一則訊息是停下的說明的話它的 `data`（不含說明的字），否則 `None`。"""
+    messages = client.get(f"/api/agent/conversations/{conversation}").json()["messages"]
+    stops = [p["data"] for p in messages[-1]["parts"] if p["type"] == "data-stop"]
+    if not stops:
+        return None
+    return {key: value for key, value in stops[-1].items() if key != "note"}
+
+
+def streamed_stop(response: httpx2.Response) -> dict[str, Any]:
+    [data] = [c["data"] for c in chunks(response) if c["type"] == "data-stop"]
+    found: dict[str, Any] = data
+    return found
 
 
 class TestContinuingAfterAStop:
@@ -642,13 +667,45 @@ class TestContinuingAfterAStop:
         response = chat(client, "What is downloading?")
         [turn] = recorded(client)
         assert turn.run.stop_reason == "request_limit"
-        [data] = [c for c in chunks(response) if c["type"] == "data-stop"]
-        assert data["data"] == {
+        data = streamed_stop(response)
+        del data["note"]
+        assert data == {
             "turn_id": turn.run.id,
             "reason": "request_limit",
             "continuable": True,
         }
         return turn.run.id
+
+    def test_the_stop_is_said_by_berth_the_same_way_live_and_on_reload(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """停下的說明是 Berth 說的，不是助理的文字（側面板畫成「停下」）。
+
+        串流與重新載入同一個形狀。
+        """
+        limit(client, requests=1)
+        script.steps = [call("jobs_list_jobs", page=1), say("Nothing is downloading.")]
+
+        response = chat(client, "What is downloading?", language="en")
+
+        live = streamed_stop(response)
+        assert "limit of 1 model calls" in live["note"]
+        assert streamed_text(response) == ""
+        assert stop_parts(client) == [live]
+        assert last_assistant_text(client) == ""
+
+    def test_only_the_last_stop_can_be_continued_on_reload(
+        self, client: TestClient, script: Script
+    ) -> None:
+        run_id = self.stopped_once(client, script)
+        script.steps = [call("jobs_list_jobs", page=2)]
+        chat(client, "Something else?")
+        again = recorded(client)[-1].run
+
+        assert [(s["turn_id"], s["continuable"]) for s in stop_parts(client)] == [
+            (run_id, False),
+            (again.id, True),
+        ]
 
     def test_a_stopped_turn_keeps_every_step_that_finished(
         self, client: TestClient, script: Script
@@ -684,8 +741,8 @@ class TestContinuingAfterAStop:
         last = history[-1]
         assert isinstance(last, ModelResponse)
         assert last.model_name == "berth"
-        assert last.parts == [TextPart(last_assistant_text(client))]
-        assert "limit of 2 model calls" in last_assistant_text(client)
+        assert last.parts == [TextPart(stop_note(client))]
+        assert "limit of 2 model calls" in stop_note(client)
 
     def test_a_stopped_turn_says_it_can_be_continued(
         self, client: TestClient, script: Script
@@ -934,7 +991,7 @@ class TestTheBooks:
         assert KEY not in turn.run.error
         assert [c.error != "" for c in turn.calls] == [True]
         assert KEY not in response.text
-        assert "the AI service returned an error" in last_assistant_text(client)
+        assert "the AI service returned an error" in stop_note(client)
         # 這個人的那一輪讓出來了：下一則照常跑。
         factory.ai_.rejected_keys = frozenset()
         assert chat(client, "Again?").status_code == 200
@@ -977,7 +1034,7 @@ class TestClosingTheConnection:
 
         [turn] = recorded(client)
         assert turn.run.stop_reason == "cancelled"
-        assert "the connection was closed" in last_assistant_text(client)
+        assert "the connection was closed" in stop_note(client)
         runtime.claim(1)
 
 

@@ -3874,6 +3874,9 @@ const zhHant = {
       failed: '沒成功',
       input: '參數',
       output: '結果',
+      // 助理直接建的搜尋 Feed（M5 票 22）：撤銷與選第一輪都在 RSS 頁那一列。
+      subscribed: '還沒開始下載：到 RSS 頁選第一輪（全部下載或只追之後的），不要的話在那裡刪掉。',
+      subscribedLink: '到 RSS 頁那一列',
       names: {
         discover_search_media: '搜尋作品',
         why_not_explain: '查為什麼沒入庫',
@@ -3994,12 +3997,25 @@ const zhHant = {
     },
     failure: {
       waitLabel: '等一下',
-      busy: '上一則還在回答（可能在另一個分頁）。答完再送；字放回輸入欄了。',
+      busy: '上一則還在回答（可能在另一個分頁）。答完再送。',
       missing: '這段對話已經不在了，換成一段新的。字放回輸入欄了，再按一次送出。',
       lead: '這一則沒送出去',
       restored: '字放回輸入欄了，再按一次送出就是重試。',
       unknown: '沒有「{{word}}」這個指令。打 / 看有哪些；字放回輸入欄了。',
-      paused: 'AI 服務暫停中，壓縮要等它恢復。字放回輸入欄了。',
+      paused: 'AI 服務暫停中，恢復之後再送（面板頂上寫了到幾點）。',
+      spent: '這一輪已經不能繼續了（可能在另一個分頁按過）。換個問法再問一次。',
+    },
+    // provider 斷路器暫停中（M5 票 22）。時間夾在 `until` 與 `why` 之間。
+    paused: {
+      label: '暫停',
+      until: '助理暫停到',
+      why: '：AI 服務連續出錯，到時間會自動恢復。Berth 的其他功能照常可用。',
+      error: '錯誤原文',
+    },
+    // 防護停下的那一則（M5 票 22）：Berth 說的，不是助理的話。
+    stopped: {
+      label: '停下',
+      continue: '繼續',
     },
     // 較早的對話被壓縮成的那段摘要（M5 票 18）。
     summary: {
@@ -8033,6 +8049,9 @@ const en: Translations<typeof zhHant> = {
       failed: 'Did not work',
       input: 'Arguments',
       output: 'Result',
+      subscribed:
+        'Nothing is downloading yet: choose the first round on the RSS page (everything, or only what comes next), or delete it there.',
+      subscribedLink: 'Its row on the RSS page',
       names: {
         discover_search_media: 'Search titles',
         why_not_explain: 'Why it is not imported',
@@ -8153,15 +8172,26 @@ const en: Translations<typeof zhHant> = {
     },
     failure: {
       waitLabel: 'Wait',
-      busy: 'The previous message is still being answered (maybe in another tab). Send once it is done; your text is back in the box.',
+      busy: 'The previous message is still being answered (maybe in another tab). Send once it is done.',
       missing:
         'This conversation is gone, so a new one has started. Your text is back in the box; press Send again.',
       lead: 'This message was not sent',
       restored: 'Your text is back in the box; pressing Send again retries.',
       unknown:
         'There is no “{{word}}” command. Type / to see the list; your text is back in the box.',
-      paused:
-        'The AI service is paused, so compacting has to wait until it is back. Your text is back in the box.',
+      paused: 'The AI service is paused. Send once it is back (the top of the panel says when).',
+      spent:
+        'This turn can no longer be continued (maybe it was in another tab). Ask again, perhaps another way.',
+    },
+    paused: {
+      label: 'Paused',
+      until: 'The assistant is paused until',
+      why: ': the AI service kept failing. It comes back by itself then; the rest of Berth works as usual.',
+      error: 'Error as returned',
+    },
+    stopped: {
+      label: 'Stopped',
+      continue: 'Continue',
     },
     summary: {
       label: 'Summary',

@@ -35,7 +35,7 @@ import time
 import uuid
 from collections import Counter
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any
 
@@ -1120,7 +1120,7 @@ class Turn:
             kept = [*self.history, *([self.prompt] if self.prompt is not None else [])]
         # 帶著這一輪的 id：側面板從它連到這一輪的步驟頁（M5 票 21）。
         note_response = ModelResponse(
-            parts=[TextPart(note)], model_name=_NOTE_MODEL, run_id=self.run_id
+            parts=[TextPart(note)], model_name=NOTE_MODEL, run_id=self.run_id
         )
         return [*kept, note_response]
 
@@ -1162,7 +1162,7 @@ class Turn:
 _ERRORS = frozenset({AiStopReason.ERROR, AiStopReason.CIRCUIT_OPEN})
 
 #: 說明那一則的 `model_name`：看得出它不是模型說的。
-_NOTE_MODEL = "berth"
+NOTE_MODEL = "berth"
 
 #: 停下來的說明（UI 文案，兩種語言並列；同 `services.notify` 的 `_TEXT`）。
 _NOTES: dict[Language, dict[str, str]] = {
@@ -1447,8 +1447,10 @@ async def _last_turn(session: AsyncSession, conversation_id: str) -> AiRun | Non
 @dataclass(frozen=True, slots=True)
 class ConversationView:
     history: tuple[ModelMessage, ...]
-    #: 最後一輪沒有答完的話，停在哪（側面板的「繼續」照它畫）。
-    stop: TurnStop | None
+    #: 每一輪沒有答完的停在哪（以那一輪的 id 查）。只有最後一輪可能 `continuable`：
+    #: 「繼續」只接最後一輪
+    #: （`_check_continuable`）。側面板照它把停下的說明畫成「停下」與「繼續」。
+    stops: Mapping[str, TurnStop]
 
 
 # 讀自己的對話（重新載入側面板）。一般使用者也行：只讀得到自己的。
@@ -1456,15 +1458,25 @@ class ConversationView:
 async def read_conversation(
     session: AsyncSession, conversation_id: str, *, user_id: int
 ) -> ConversationView:
-    """這段對話存著的歷史與最後一輪停在哪。沒有、或不是這個人的：`conversation_missing`。"""
+    """這段對話存著的歷史與每一輪停在哪。沒有、或不是這個人的：`conversation_missing`。"""
     conversation = await session.get(AiConversation, conversation_id)
     if conversation is None or conversation.user_id != user_id:
         raise AgentRefusedError(AgentRefusal.CONVERSATION_MISSING, conversation_id)
-    last = await _last_turn(session, conversation_id)
-    return ConversationView(
-        history=tuple(load_history(conversation.history_json)),
-        stop=turn_stop(last) if last is not None else None,
-    )
+    runs = (
+        await session.scalars(
+            select(AiRun)
+            .where(AiRun.conversation_id == conversation_id, AiRun.kind == AiRunKind.CHAT)
+            .order_by(AiRun.started_at)
+        )
+    ).all()
+    stops: dict[str, TurnStop] = {}
+    for index, run in enumerate(runs):
+        stop = turn_stop(run)
+        if stop is None:
+            continue
+        last = index == len(runs) - 1
+        stops[run.id] = stop if last else replace(stop, continuable=False)
+    return ConversationView(history=tuple(load_history(conversation.history_json)), stops=stops)
 
 
 @dataclass(frozen=True, slots=True)

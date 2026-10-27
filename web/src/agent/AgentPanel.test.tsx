@@ -22,12 +22,15 @@ interface Backend {
   enabled: boolean
   /** `GET /agent/conversations/{id}`：`null` 是 404（沒有這段）。 */
   stored: unknown[] | null
-  /** `POST /agent/chat` 的回應。 */
-  chat: () => Response
+  /** `POST /agent/chat` 的回應（`signal` 是 `useChat` 的中止）。 */
+  chat: (signal?: AbortSignal) => Response
   /** 今天的花費提醒與沒算進去的呼叫數（後端只給管理員，其他人是 `null`）。 */
   spend: AgentStatus['spend']
   /** `POST /agent/conversations/{id}/commands` 的回應（斜線指令，票 18）。 */
   command: (text: string) => Response
+  /** provider 斷路器暫停到什麼時候（票 20）；管理員另有錯誤原文。 */
+  pausedUntil: string | null
+  pauseError: string
 }
 
 let sent: Record<string, unknown>[] = []
@@ -42,6 +45,8 @@ function backend(overrides: Partial<Backend>): Backend {
     chat: () => stream(say('好。')),
     spend: { alerts: [], unknown_today: 0, unknown_before: 0 },
     command: () => json({ command: 'new' }),
+    pausedUntil: null,
+    pauseError: '',
     ...overrides,
   }
 }
@@ -106,8 +111,8 @@ function serve(api: Backend) {
       if (method === 'GET' && path === '/api/agent/status')
         return json({
           enabled: api.enabled,
-          paused_until: null,
-          pause_error: '',
+          paused_until: api.pausedUntil,
+          pause_error: api.pauseError,
           spend: api.spend,
         } satisfies AgentStatus)
       if (method === 'GET' && path.startsWith('/api/agent/conversations/')) {
@@ -123,7 +128,7 @@ function serve(api: Backend) {
       }
       if (method === 'POST' && path === '/api/agent/chat') {
         sent.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
-        return api.chat()
+        return api.chat(init?.signal ?? undefined)
       }
       return json({ detail: 'Not Found' }, 404)
     }),
@@ -458,6 +463,225 @@ describe('AgentPanel links each reply to its steps', () => {
 
     const link = await screen.findByRole('link', { name: '這則回覆的步驟' })
     expect(link).toHaveAttribute('href', '/agent/runs/r2')
+  })
+})
+
+/** 防護停下的那一則（`data-stop`，串流與重新載入同一個形狀，M5 票 22）。 */
+function stopPart(
+  turnId: string,
+  continuable: boolean,
+  note = '這一輪停下了：同一個呼叫第 4 次。',
+) {
+  return {
+    type: 'data-stop',
+    data: { turn_id: turnId, reason: 'repeated_call', continuable, note },
+  }
+}
+
+function stoppedStream(turnId: string, continuable: boolean): object[] {
+  return [
+    { type: 'start', messageMetadata: { runId: turnId } },
+    { type: 'start-step' },
+    { type: 'finish-step' },
+    stopPart(turnId, continuable),
+    { type: 'finish' },
+  ]
+}
+
+describe('AgentPanel when a guard stops a turn', () => {
+  it('says Berth stopped it, not the assistant, and continues once with the turn it picks up', async () => {
+    let calls = 0
+    serve(
+      backend({
+        stored: [],
+        chat: () => stream(calls++ === 0 ? stoppedStream('r1', true) : say('接著查完了。')),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '一直查{Enter}')
+
+    const log = screen.getByRole('log')
+    expect(await within(log).findByText('停下')).toBeInTheDocument()
+    expect(within(log).getByText('這一輪停下了：同一個呼叫第 4 次。')).toBeInTheDocument()
+    await user.click(within(log).getByRole('button', { name: '繼續' }))
+
+    expect(await within(log).findByText('接著查完了。')).toBeInTheDocument()
+    expect(sent[1]).toMatchObject({ continues: 'r1', messages: [{ parts: [{ text: '繼續' }] }] })
+    expect(sent[0]).not.toHaveProperty('continues')
+    expect(within(log).queryByRole('button', { name: '繼續' })).toBeNull()
+  })
+
+  it('offers to continue only the last turn after a reload, and not one that cannot be', async () => {
+    serve(
+      backend({
+        stored: [
+          { id: 'u1', role: 'user', parts: [{ type: 'text', text: '一直查' }] },
+          {
+            id: 'a1',
+            role: 'assistant',
+            metadata: { runId: 'r1' },
+            parts: [stopPart('r1', false)],
+          },
+          { id: 'u2', role: 'user', parts: [{ type: 'text', text: '再查' }] },
+          {
+            id: 'a2',
+            role: 'assistant',
+            metadata: { runId: 'r2' },
+            parts: [stopPart('r2', true, '這一輪停下了：每輪 9 次的上限。')],
+          },
+        ],
+      }),
+    )
+    renderPanel()
+
+    const log = await screen.findByRole('log')
+    expect(await within(log).findAllByText('停下')).toHaveLength(2)
+    expect(within(log).getAllByRole('button', { name: '繼續' })).toHaveLength(1)
+    // 「繼續」跟著最後那一則的說明。
+    expect(
+      within(log).getByRole('button', { name: '繼續' }).closest('[data-stop]'),
+    ).toHaveTextContent('每輪 9 次的上限')
+  })
+
+  it('takes the button away when the server says the turn can no longer be continued', async () => {
+    let calls = 0
+    serve(
+      backend({
+        stored: [],
+        chat: () =>
+          calls++ === 0
+            ? stream(stoppedStream('r1', true))
+            : json({ detail: { reason: 'not_continuable', detail: 'r1' } }, 409),
+      }),
+    )
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByLabelText('問助理')
+    await user.type(input, '一直查{Enter}')
+    const log = screen.getByRole('log')
+    await user.click(await within(log).findByRole('button', { name: '繼續' }))
+
+    expect(await screen.findByText(/這一輪已經不能繼續/)).toBeInTheDocument()
+    expect(within(log).queryByRole('button', { name: '繼續' })).toBeNull()
+    expect(within(log).queryByText('繼續')).toBeNull()
+    expect(input).toHaveValue('')
+  })
+
+  it('shows the note the server kept after Stop, without a reload', async () => {
+    const api = backend({ stored: [] })
+    api.chat = (signal) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify({ type: 'start', messageMetadata: { runId: 'r1' } })}\n\n`,
+            ),
+          )
+          signal?.addEventListener('abort', () => {
+            // 伺服器收到斷線，存下說明（`Turn.close`）。
+            api.stored = [
+              { id: 'u1', role: 'user', parts: [{ type: 'text', text: '慢慢查' }] },
+              {
+                id: 'a1',
+                role: 'assistant',
+                metadata: { runId: 'r1' },
+                parts: [
+                  {
+                    type: 'data-stop',
+                    data: {
+                      turn_id: 'r1',
+                      reason: 'cancelled',
+                      continuable: false,
+                      note: '這一輪停下了：連線被關掉。',
+                    },
+                  },
+                ],
+              },
+            ]
+            controller.error(new DOMException('aborted', 'AbortError'))
+          })
+        },
+      })
+      return new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+      })
+    }
+    serve(api)
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '慢慢查{Enter}')
+    await user.click(await screen.findByRole('button', { name: '停止' }))
+
+    const log = screen.getByRole('log')
+    expect(await within(log).findByText('這一輪停下了：連線被關掉。')).toBeInTheDocument()
+    expect(within(log).getByText('停下')).toBeInTheDocument()
+    expect(within(log).queryByRole('button', { name: '繼續' })).toBeNull()
+  })
+})
+
+describe('AgentPanel while the AI service is paused', () => {
+  const until = () => new Date(Date.now() + 15 * 60_000).toISOString()
+
+  it('tells anyone until when and that it comes back by itself, without the error', async () => {
+    serve(backend({ me: USER, pausedUntil: until(), pauseError: '' }))
+    renderPanel()
+
+    const pause = (await screen.findByText('暫停')).closest('div')
+    expect(pause).toHaveTextContent(/助理暫停到 \d{2}:\d{2}/)
+    expect(pause).toHaveTextContent('自動恢復')
+    expect(screen.queryByText('錯誤原文')).toBeNull()
+    // 照樣可以打字：被擋下時才說（`ai_paused`）。
+    expect(await screen.findByLabelText('問助理')).toBeInTheDocument()
+  })
+
+  it('shows an administrator the error and the way to the AI settings', async () => {
+    serve(backend({ pausedUntil: until(), pauseError: 'HTTP 503 from api.example' }))
+    renderPanel()
+
+    expect(await screen.findByText('HTTP 503 from api.example')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '到 AI 設定' })).toHaveAttribute('href', '/settings/ai')
+  })
+
+  it('says nothing while it is not paused', async () => {
+    serve(backend({}))
+    renderPanel()
+
+    await screen.findByLabelText('問助理')
+    expect(screen.queryByText('暫停')).toBeNull()
+  })
+
+  it('asks again once the pause is over and takes the note away', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const api = backend({ pausedUntil: new Date(Date.now() + 2_000).toISOString() })
+      serve(api)
+      renderPanel()
+      expect(await screen.findByText('暫停')).toBeInTheDocument()
+
+      api.pausedUntil = null
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      await waitFor(() => expect(screen.queryByText('暫停')).toBeNull())
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('asks again when a turn ends, so a pause it caused shows up', async () => {
+    const api = backend({ stored: [], chat: () => stream(stoppedStream('r1', false)) })
+    serve(api)
+    const user = userEvent.setup()
+    renderPanel()
+
+    api.pausedUntil = until()
+    await user.type(await screen.findByLabelText('問助理'), '在嗎{Enter}')
+
+    expect(await screen.findByText('暫停')).toBeInTheDocument()
   })
 })
 
