@@ -72,7 +72,7 @@ from berth.models.types import utcnow
 from berth.services import leftovers
 from berth.services.auth import SignedIn, open_session
 from berth.services.clients import BundledServices, HostResolver, ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.health import record_setup_results
 from berth.services.indexer import (
     existing_prowlarr_step,
@@ -200,6 +200,7 @@ _UNFINISHED = {
 }
 
 
+@command(Effect.READ)
 async def is_setup_complete(session: AsyncSession) -> bool:
     """精靈跑完了沒。這一個位元是匿名可讀的（`GET /api/health`）：前端要在**還沒有人
     登入得了**的時候就決定該畫精靈還是登入頁，而精靈未完成時本來就整組匿名開放。
@@ -207,11 +208,14 @@ async def is_setup_complete(session: AsyncSession) -> bool:
     return (await read_settings(session, SetupSettings)).completed
 
 
+@command(Effect.READ)
 async def read_status(session: AsyncSession) -> SetupStatus:
     """目前的頁與每個服務的選擇。不做任何測試。"""
     return await _read(session, now=utcnow())
 
 
+# 精靈結束：沒有命令回到精靈。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def complete_setup(session: AsyncSession, *, now: datetime | None = None) -> SetupStatus:
     """完成頁：寫下 `settings.setup.completed`，精靈結束（plan §9.3 頁 6）。
 
@@ -264,6 +268,9 @@ class ClaimedOwner:
     signed_in: SignedIn
 
 
+# 擁有者成立了就不再重建（`OWNER_EXISTS`）。`target` 要等於存下、測過的那一台（`_aimed_at`），
+# 不是新位址，所以不帶 `connects_out`。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def claim_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -376,6 +383,8 @@ def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
     return bool(tested) and (choice.base_url, tested) == (target.base_url, target.server_id)
 
 
+# 同 `claim_owner`，位址也是參數。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS, Flag.CONNECTS_OUT})
 async def sign_in_existing_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -417,10 +426,14 @@ async def sign_in_existing_owner(
     )
 
 
+@command(Effect.READ)
 async def is_owner_established(session: AsyncSession) -> bool:
     return (await read_settings(session, SetupSettings)).owner_established()
 
 
+# 可逆性看參數：換 qBittorrent 時勾了 `remove_empty_categories` 就移除原本那一台的
+# 空分類（同 `leftovers.remove_empty_categories`），照最嚴的標。位址是參數。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS, Flag.CONNECTS_OUT})
 async def choose_service(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -505,6 +518,8 @@ async def choose_service(
     return await _test_and_record(session, factory, kind, restart=True, now=moment, tested=tested)
 
 
+# 用存下的選擇再測一次、記下結論；套件內 Prowlarr 重讀掛載的 key。
+@command(Effect.REVERSIBLE)
 async def retest_service(
     session: AsyncSession,
     factory: ServiceClientFactory,

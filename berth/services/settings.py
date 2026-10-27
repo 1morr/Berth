@@ -8,11 +8,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.models import Setting, SettingsGroup
+from berth.services.commands import Effect, Flag, command
 
 #: 一句改不到任何一列的 UPDATE：拿 SQLite 的寫鎖（做法與理由見 `services/routes._write_lock`）。
 _TAKE_WRITE_LOCK = text("UPDATE settings SET key = key WHERE key = ''")
 
 
+# 設定表的底層，每個 service 都叫。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def read_settings[G: SettingsGroup](session: AsyncSession, group: type[G]) -> G:
     """回這個分組的目前值；沒寫過就回模型的預設值。"""
     row = await session.get(Setting, group.KEY)
@@ -21,6 +24,8 @@ async def read_settings[G: SettingsGroup](session: AsyncSession, group: type[G])
     return group.model_validate(row.value_json)
 
 
+# 設定表的底層：能寫任何一組，照最嚴的帶 `settings`。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL, Flag.SETTINGS})
 async def write_settings(session: AsyncSession, value: SettingsGroup) -> None:
     """整組覆寫。呼叫端負責 commit。"""
     payload = value.model_dump(mode="json")
@@ -31,6 +36,8 @@ async def write_settings(session: AsyncSession, value: SettingsGroup) -> None:
         row.value_json = payload
 
 
+# 同 `write_settings`。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL, Flag.SETTINGS})
 async def update_settings[G: SettingsGroup](
     session: AsyncSession, group: type[G], change: Callable[[G], None]
 ) -> G:

@@ -72,6 +72,7 @@ from berth.models import (
     SetupStep,
 )
 from berth.services.clients import ServiceClientFactory
+from berth.services.commands import Effect, Flag, command
 from berth.services.settings import read_settings, update_settings
 from berth.services.steps import (
     InterfaceLogin,
@@ -204,6 +205,7 @@ class JellyfinSetupStatus:
     berth_paths: tuple[BerthPathResult, ...]
 
 
+@command(Effect.READ)
 async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
     """不連線，只把存下來的狀態攤成 UI 的形狀。輪詢進度也走這一支。"""
     setup = await read_settings(session, SetupSettings)
@@ -234,6 +236,8 @@ async def read_jellyfin_status(session: AsyncSession) -> JellyfinSetupStatus:
     )
 
 
+# 精靈的剖面：建好的列改不得，存回原本那一份就回去。
+@command(Effect.REVERSIBLE, inverse="jellyfin.save_bundled_libraries", flags={Flag.SETTINGS})
 async def save_bundled_libraries(
     session: AsyncSession, rows: Sequence[LibraryDraft]
 ) -> JellyfinSetupStatus:
@@ -449,6 +453,8 @@ class JellyfinClaim:
     server_id: str = ""
 
 
+# `setup.claim_owner` 的一段：建管理員、換 API key。`target` 由它對過是存下的那一台。
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SETTINGS})
 async def claim_jellyfin(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -497,6 +503,8 @@ async def claim_jellyfin(
     )
 
 
+# 在 Jellyfin 上建媒體庫：Berth 沒有命令收回（brief §16.4 不刪 Jellyfin 的）。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def bootstrap_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory
 ) -> JellyfinSetupStatus:
@@ -514,6 +522,8 @@ async def bootstrap_jellyfin(
     return status
 
 
+# 同 `bootstrap_jellyfin`。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def create_libraries(
     session: AsyncSession, factory: ServiceClientFactory, *, libraries: Sequence[LibraryRequest]
 ) -> JellyfinSetupStatus:
@@ -534,6 +544,8 @@ async def create_libraries(
     return status
 
 
+# 換 API key：再登入一次是再換一把新的，留在 Jellyfin 的舊 key 不收。連的是存下的位址。
+@command(Effect.REVERSIBLE, flags={Flag.SETTINGS})
 async def connect_jellyfin(
     session: AsyncSession, factory: ServiceClientFactory, *, username: str, password: str
 ) -> JellyfinSetupStatus:
@@ -548,6 +560,8 @@ async def connect_jellyfin(
     return status
 
 
+# 在使用者的媒體庫加路徑：同 `bootstrap_jellyfin`，Berth 不收回。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
 async def add_berth_paths(
     session: AsyncSession, factory: ServiceClientFactory, *, library_names: Sequence[str]
 ) -> JellyfinSetupStatus:
@@ -713,6 +727,8 @@ class InterfaceLoginRejectedError(Exception):
         self.detail = detail
 
 
+# 只向 Jellyfin 驗密碼；`*.set_interface_login` 與 `qbittorrent.apply_qbittorrent` 寫之前叫。
+@command(Effect.READ, flags={Flag.INTERNAL})
 async def resolve_interface_login(
     session: AsyncSession, factory: ServiceClientFactory, login: InterfaceLogin
 ) -> InterfaceLogin:
@@ -845,6 +861,8 @@ def remembered_startup(setup: SetupSettings) -> JellyfinStartup | None:
     return JellyfinStartup(**stored.model_dump())
 
 
+# `routes.reread_libraries` 與本模組的精靈步驟叫：換掉精靈的媒體庫快照。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
 async def remember_libraries(session: AsyncSession, libraries: Sequence[JellyfinLibrary]) -> None:
     """把 Jellyfin 現在報的媒體庫存成精靈的快照（頁 3 讀它），commit。"""
     snapshot = [

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import ServiceKind, ServiceOrigin
 from berth.models import JellyfinSettings, SetupSettings
+from berth.services.commands import Effect, Flag, command
 from berth.services.settings import read_settings, write_settings
 
 
@@ -55,6 +56,7 @@ def normalized_public_url(value: str) -> str:
     return text
 
 
+@command(Effect.READ)
 async def jellyfin_web(session: AsyncSession, *, published_port: int) -> JellyfinWeb:
     """`published_port` 是 `Config.jellyfin_port`：只有第 3 條用得到它。"""
     settings = await read_settings(session, JellyfinSettings)
@@ -67,6 +69,8 @@ async def jellyfin_web(session: AsyncSession, *, published_port: int) -> Jellyfi
     return JellyfinWeb(public_url="", url="", port=published_port)
 
 
+# 設定頁的值：帶回原本的網址就回去。
+@command(Effect.REVERSIBLE, inverse="deeplink.set_public_url", flags={Flag.SETTINGS})
 async def set_public_url(session: AsyncSession, value: str, *, published_port: int) -> JellyfinWeb:
     """存下對外網址。空白就是清掉，回到推導（`normalized_public_url`）。"""
     text = normalized_public_url(value)
