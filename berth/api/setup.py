@@ -59,6 +59,7 @@ from berth.services.jellyfin import (
     InterfaceLoginRejectedError,
     JellyfinStartup,
     JellyfinTarget,
+    LibraryDraft,
     LibraryRequest,
     add_berth_paths,
     bootstrap_jellyfin,
@@ -584,12 +585,9 @@ class JellyfinConnectIn(BaseModel):
     password: str = Field(min_length=1)
 
 
-class BundledLibraryIn(BaseModel):
-    name: str
-    #: Berth 只寫得了電影與劇集（`SUPPORTED_TYPES`）；別的類型 FastAPI 就擋在門口。
-    collection_type: CollectionType
-    #: `library_root` 底下的一層。規則在 `services.jellyfin.check_bundled_libraries`。
-    folder: str
+# 欄位在 `services.jellyfin.LibraryDraft`（命令收的就是這一列）。不寫 docstring：它會進 OpenAPI。
+class BundledLibraryIn(LibraryDraft):
+    pass
 
 
 class BundledLibrariesIn(BaseModel):

@@ -230,9 +230,11 @@ NAMED: dict[str, CommandMark] = {
     "jellyfin.create_libraries": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
     "jellyfin.add_berth_paths": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
     # 擁有者與精靈：成立了就回不去。`claim_owner` 只連存下、測過的那一台；收任意位址的是
-    # `sign_in_existing_owner`。
-    "setup.claim_owner": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
-    "setup.sign_in_existing_owner": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS, Flag.CONNECTS_OUT),
+    # `sign_in_existing_owner`。擁有者是人自己的身分，AI 不代做：`internal`（M5 票 06）。
+    "setup.claim_owner": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS, Flag.INTERNAL),
+    "setup.sign_in_existing_owner": _mark(
+        Effect.IRREVERSIBLE, Flag.SETTINGS, Flag.CONNECTS_OUT, Flag.INTERNAL
+    ),
     "jellyfin.claim_jellyfin": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL, Flag.SETTINGS),
     "setup.complete_setup": _mark(Effect.IRREVERSIBLE, Flag.SETTINGS),
     # 可逆性看參數：換 qBittorrent 時勾了就移除原本那一台空的分類，照最嚴的標。

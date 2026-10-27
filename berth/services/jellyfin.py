@@ -29,6 +29,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.fs import (
@@ -156,12 +157,23 @@ class BundledLibraryRejectedError(Exception):
         self.row = row
 
 
-class LibraryDraft(Protocol):
-    """送來存的一列，`PUT /setup/jellyfin/bundled` 的 body 就長這樣。存下來時才變成
-    `BundledLibrary`。
+class LibraryDraft(BaseModel):
+    """送來存的一列，`PUT /setup/jellyfin/bundled` 的 body 一列就是它（`api.setup.BundledLibraryIn`
+    繼承它）。存下來時才變成 `BundledLibrary`。
 
-    api 不 import models（import-linter），所以這裡收一個形狀而不是那個 model。
+    api 不 import models（import-linter），所以是 services 自己的型別；是具體的 model 而不是
+    Protocol，命令登錄表才推得出輸入（M5 票 06）。
     """
+
+    name: str
+    #: Berth 只寫得了電影與劇集（`SUPPORTED_TYPES`）；別的類型在驗證這個 model 時就擋下。
+    collection_type: CollectionType
+    #: `library_root` 底下的一層。規則在 `check_bundled_libraries`。
+    folder: str
+
+
+class _LibraryRow(Protocol):
+    """`check_bundled_libraries` 看得懂的一列：送來的 `LibraryDraft`，或存著的 `BundledLibrary`。"""
 
     @property
     def name(self) -> str: ...
@@ -258,7 +270,7 @@ async def save_bundled_libraries(
 
 
 def check_bundled_libraries(
-    rows: Sequence[LibraryDraft], *, built: Sequence[BundledLibrary]
+    rows: Sequence[_LibraryRow], *, built: Sequence[BundledLibrary]
 ) -> tuple[BundledLibrary, ...]:
     """媒體庫清單的規則（票 06f）。回修掉前後空白的清單；不成立就丟 `BundledLibraryRejectedError`。
 

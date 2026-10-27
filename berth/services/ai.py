@@ -109,6 +109,8 @@ def _require_key_and_model(api_key: str, model: str) -> None:
         raise AiRefusedError(AiRefusal.MODEL_MISSING)
 
 
+# 這四支進命令登錄表：provider 是設定（`settings`），不是身分與門禁（`Flag.INTERNAL`，M5 票 06）；
+# 要不要人由 `needs_person` 管，給不給 AI 當工具是票 13、14 挑的。
 @command(Effect.READ)
 async def read_ai(session: AsyncSession) -> AiView:
     return _view(await read_settings(session, AiSettings))

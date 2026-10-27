@@ -269,8 +269,8 @@ class ClaimedOwner:
 
 
 # 擁有者成立了就不再重建（`OWNER_EXISTS`）。`target` 要等於存下、測過的那一台（`_aimed_at`），
-# 不是新位址，所以不帶 `connects_out`。
-@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS})
+# 不是新位址，所以不帶 `connects_out`。擁有者是人自己的身分：`internal`，不進登錄表（M5 票 06）。
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS, Flag.INTERNAL})
 async def claim_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
@@ -384,7 +384,7 @@ def _aimed_at(choice: ServiceChoice, target: JellyfinTarget) -> bool:
 
 
 # 同 `claim_owner`，位址也是參數。
-@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS, Flag.CONNECTS_OUT})
+@command(Effect.IRREVERSIBLE, flags={Flag.SETTINGS, Flag.CONNECTS_OUT, Flag.INTERNAL})
 async def sign_in_existing_owner(
     session: AsyncSession,
     factory: ServiceClientFactory,
