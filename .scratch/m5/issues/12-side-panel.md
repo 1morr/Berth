@@ -41,3 +41,5 @@ M5 第一個看得到的東西：每一頁都叫得出的對話面板，走完�
 - [ ] 全部檢查、pytest、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-27（票 20）：防護停下時串流在說明之後多一則 `data-stop`（`{turn_id, reason, continuable}`），`GET /agent/conversations/{id}` 多 `stop`（同形狀），`GET /agent/status` 回 `enabled` 與斷路器的 `paused_until`（一般使用者也讀得到，沒設 provider 的說明可以用它）。「繼續」按鈕與斷路器的畫面排在票 22；這張做說明那一則的樣子時可以順手留位子，不是驗收。

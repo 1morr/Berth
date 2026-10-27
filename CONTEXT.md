@@ -433,8 +433,12 @@ _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳
 _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是登入）
 
 **Turn**（一輪）:
-一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`，帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。
+一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`，帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫、乒乓、無進展，M5 票 11、20）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。provider 斷路器不是一輪的事：它以一份 provider 設定為單位，暫停時開不了新的一輪。
 _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
+
+**Continue**（繼續）:
+被防護停下的那一輪，使用者按一次「繼續」接著跑的新一輪（`ai_runs.continues` 指向它續的那一輪，M5 票 20）：歷史接著停下來的說明，防護的數字重新算。一條停下的鏈只續一次：續的那一輪再停下就不能再續；只有對話的最後一輪續得了。
+_Avoid_: resume（Resume 是 Jellyfin 的繼續觀看）, retry, regenerate（那是 `useChat` 重答同一則）
 
 **Proposal**（提案）:
 等人確認的一個命令，存成 `proposals` 的一列（M5 票 08，`services/proposals.py`）：命令名、一到多列參數（總覽卡多列，逐列可取消勾選）、參數雜湊、伺服器算的預覽、替誰提出（他自己或 AI 替他）、所屬對話、狀態（`pending` / `detached` / `approved` / `rejected` / `executing` / `executed` / `partial` / `failed` / `expired`）、過期時間、誰什麼時候決定的、逐列結果。只有那個人或管理員按得到，執行用存下的那一份參數。不需要 AI：人也能提出。哪些動作要出卡見 brief §14〈對話裡的確認卡〉。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。

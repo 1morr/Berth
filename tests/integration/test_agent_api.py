@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ import anyio
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -38,8 +40,9 @@ from berth.api.gate import CSRF_HEADER
 from berth.config import Config
 from berth.domain import Actor, Language, Role
 from berth.main import create_app
-from berth.models import AiCall, AiRun, AiToolCall
-from berth.services.agent import AgentRuntime, Limits, open_turn
+from berth.models import AiCall, AiConversation, AiRun, AiToolCall
+from berth.services.agent import AgentRuntime, Limits, load_history, open_turn
+from berth.services.agent_guards import ProviderBreaker
 from berth.services.executor import Executor
 from berth.services.hints import JobHints
 from tests.integration.arrange import sign_in_crew, sign_in_owner
@@ -118,8 +121,11 @@ def chat(
     conversation: str = "c1",
     earlier: list[dict[str, Any]] | None = None,
     language: str | None = None,
+    continues: str | None = None,
 ) -> httpx2.Response:
     body: dict[str, Any] = {} if language is None else {"language": language}
+    if continues is not None:
+        body["continues"] = continues
     body |= {
         "id": conversation,
         "trigger": "submit-message",
@@ -181,6 +187,17 @@ def chunks(response: httpx2.Response) -> list[dict[str, Any]]:
         if line.startswith("data: ") and line != "data: [DONE]":
             found.append(json.loads(line.removeprefix("data: ")))
     return found
+
+
+def tool_result_given(messages: list[ModelMessage]) -> Any:
+    """模型拿到的那一筆工具結果（JSON 解回來）。"""
+    [given] = [
+        part.model_response_str()
+        for message in messages
+        for part in message.parts
+        if isinstance(part, ToolReturnPart)
+    ]
+    return json.loads(given)
 
 
 def texts(messages: list[ModelMessage]) -> list[str]:
@@ -366,6 +383,91 @@ class TestGuards:
         assert turn.run.stop_reason == "completed"
         assert last_assistant_text(client) == "I could not find it."
 
+    def test_calls_going_back_and_forth_with_nothing_new_stop_the_turn(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """A-B-A-B 而結果都沒變：模型在兩件事之間來回，不會再知道更多。"""
+        script.steps = [
+            call("jobs_list_jobs", page=1),
+            call("jobs_list_jobs", page=2),
+            call("jobs_list_jobs", page=1),
+            call("jobs_list_jobs", page=2),
+            say("Still nothing."),
+        ]
+
+        response = chat(client, "What is downloading?", language="en")
+
+        [turn] = recorded(client)
+        assert turn.run.stop_reason == "ping_pong"
+        assert turn.run.requests == 4
+        assert "going back and forth" in last_assistant_text(client)
+        assert last_assistant_text(client) in streamed_text(response)
+
+    def test_calls_that_keep_bringing_back_nothing_new_stop_the_turn(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """A-B-C-A-B-C：每個呼叫都只第二次（只警告），但連續三次模型呼叫之間什麼新的都沒拿到。"""
+        pages = [1, 2, 3, 1, 2, 3, 1]
+        script.steps = [*(call("jobs_list_jobs", page=page) for page in pages), say("Done.")]
+
+        chat(client, "What is downloading?")
+
+        [turn] = recorded(client)
+        assert turn.run.stop_reason == "no_progress"
+        assert turn.run.requests == 6
+        assert [t.outcome for t in turn.tools] == ["ok"] * 3 + ["warned"] * 3
+        assert "連續 3 次模型呼叫" in last_assistant_text(client)
+
+    def test_a_blocked_call_is_not_progress(self, client: TestClient, script: Script) -> None:
+        """第 5 次被擋下（同一個呼叫第 3 次）：沒有新東西，第 4、5、6 次之後連續三段沒進展。"""
+        pages = [1, 2, 3, 1, 1, 2, 3]
+        script.steps = [*(call("jobs_list_jobs", page=page) for page in pages), say("Done.")]
+
+        chat(client, "What is downloading?")
+
+        [turn] = recorded(client)
+        assert [t.outcome for t in turn.tools] == ["ok"] * 3 + ["warned", "blocked", "warned"]
+        assert turn.run.stop_reason == "no_progress"
+        assert turn.run.requests == 6
+
+    def test_a_new_result_in_between_keeps_the_turn_going(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """每次都換一頁問：結果一樣是空的，但每一頁都是沒問過的呼叫……那也是沒看過的結果。"""
+        script.steps = [*(call("jobs_list_jobs", page=page) for page in range(1, 9)), say("Done.")]
+
+        chat(client, "What is downloading?")
+
+        [turn] = recorded(client)
+        assert turn.run.stop_reason == "completed"
+        assert turn.run.requests == 9
+
+    def test_a_result_over_the_limit_reaches_the_model_cut_down_with_what_is_left(
+        self, client: TestClient, script: Script
+    ) -> None:
+        limit(client, result_chars=40)
+        script.steps = [call("jobs_list_jobs"), say("Nothing is downloading.")]
+
+        chat(client, "What is downloading?")
+
+        given = tool_result_given(script.seen[1])
+        assert len(json.dumps(given["result"], ensure_ascii=False)) <= 40
+        assert given["truncated"][0]["more"] > 0
+        assert "Narrow" in given["note"]
+        [turn] = recorded(client)
+        assert [(t.outcome, t.truncated) for t in turn.tools] == [("ok", True)]
+
+    def test_a_result_under_the_limit_is_given_as_it_is(
+        self, client: TestClient, script: Script
+    ) -> None:
+        script.steps = [call("jobs_list_jobs"), say("Nothing is downloading.")]
+
+        chat(client, "What is downloading?")
+
+        given = tool_result_given(script.seen[1])
+        assert "truncated" not in given
+        assert [t.truncated for t in recorded(client)[0].tools] == [False]
+
     def test_one_turn_at_a_time_per_person(self, client: TestClient, script: Script) -> None:
         client.app.state.agent.claim(1)  # type: ignore[attr-defined]  # 同上：擁有者是 1 號
         script.steps = [say("Hi.")]
@@ -374,6 +476,293 @@ class TestGuards:
 
         assert response.status_code == 409
         assert response.json()["detail"]["reason"] == "busy"
+
+
+class Clock:
+    """斷路器看的時間（`ProviderBreaker.now`）：測試自己撥。"""
+
+    def __init__(self) -> None:
+        self.at = datetime(2026, 10, 27, 12, 0, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.at
+
+
+@pytest.fixture
+def clock(client: TestClient) -> Clock:
+    clock = Clock()
+    client.app.state.agent = AgentRuntime(breaker=ProviderBreaker(now=clock))  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+    return clock
+
+
+def fail_five_times(client: TestClient, factory: FakeClientFactory) -> None:
+    factory.ai_.rejected_keys = frozenset({KEY})
+    for _ in range(5):
+        assert chat(client, "Hello?", language="en").status_code == 200
+
+
+class TestTheCircuitBreaker:
+    """provider 連續 5 次失敗暫停 15 分鐘（plan §11.6〈防護〉）。"""
+
+    def test_five_failures_in_a_row_pause_the_provider(
+        self, client: TestClient, factory: FakeClientFactory, script: Script, clock: Clock
+    ) -> None:
+        factory.ai_.echo_key = True
+        fail_five_times(client, factory)
+
+        runs = recorded(client)
+        assert [r.run.stop_reason for r in runs] == ["error"] * 4 + ["circuit_open"]
+        assert "401" in runs[-1].run.error
+        assert "paused for 15 minutes" in last_assistant_text(client)
+        factory.ai_.rejected_keys = frozenset()
+        script.steps = [say("Hi.")]
+        response = chat(client, "Hello?")
+        assert response.status_code == 409
+        assert response.json()["detail"]["reason"] == "ai_paused"
+        assert script.seen == []
+        status = client.get("/api/agent/status").json()
+        assert status["enabled"] is True
+        assert status["paused_until"] == "2026-10-27T12:15:00Z"
+        assert "401" in status["pause_error"]
+        assert KEY not in status["pause_error"]
+
+    def test_a_success_in_between_starts_the_count_again(
+        self, client: TestClient, factory: FakeClientFactory, script: Script, clock: Clock
+    ) -> None:
+        script.steps = [say("Hi.")]
+        factory.ai_.rejected_keys = frozenset({KEY})
+        for _ in range(4):
+            chat(client, "Hello?")
+        factory.ai_.rejected_keys = frozenset()
+        chat(client, "Hello?")
+        factory.ai_.rejected_keys = frozenset({KEY})
+        chat(client, "Hello?")
+
+        assert recorded(client)[-1].run.stop_reason == "error"
+        assert client.get("/api/agent/status").json()["paused_until"] is None
+
+    def test_after_the_pause_one_try_goes_through_and_another_failure_pauses_again(
+        self, client: TestClient, factory: FakeClientFactory, script: Script, clock: Clock
+    ) -> None:
+        fail_five_times(client, factory)
+        clock.at += timedelta(minutes=15)
+        assert client.get("/api/agent/status").json()["paused_until"] is None
+
+        assert chat(client, "Hello?").status_code == 200
+
+        assert recorded(client)[-1].run.stop_reason == "circuit_open"
+        assert client.get("/api/agent/status").json()["paused_until"] == "2026-10-27T12:30:00Z"
+        factory.ai_.rejected_keys = frozenset()
+        clock.at += timedelta(minutes=15)
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+        assert recorded(client)[-1].run.stop_reason == "completed"
+        factory.ai_.rejected_keys = frozenset({KEY})
+        chat(client, "Hello?")
+        assert recorded(client)[-1].run.stop_reason == "error"
+
+    def test_a_different_key_is_not_paused(
+        self, client: TestClient, factory: FakeClientFactory, script: Script, clock: Clock
+    ) -> None:
+        """使用者換了 key 或模型就是另一個 provider 設定，不必等那 15 分鐘。"""
+        fail_five_times(client, factory)
+        body = {
+            "enabled": True,
+            "provider": "anthropic",
+            "base_url": "",
+            "model": "claude-sonnet-5-5",
+            "api_key": "sk-ant-a-new-key",
+        }
+        assert client.put("/api/settings/ai", json=body, headers=BROWSER).status_code == 200
+        script.steps = [say("Hi.")]
+
+        assert chat(client, "Hello?").status_code == 200
+        assert client.get("/api/agent/status").json()["paused_until"] is None
+
+    def test_only_the_provider_failing_counts(
+        self, client: TestClient, script: Script, clock: Clock
+    ) -> None:
+        """模型回了 Berth 處理不了的東西不是 provider 掛了。
+
+        只算 `ModelAPIError`：HTTP 錯、連不上、key 被拒。
+        """
+
+        def broken(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+            raise UnexpectedModelBehavior("the model sent something odd")
+
+        script.steps = [broken]
+        for _ in range(5):
+            chat(client, "Hello?")
+
+        assert [r.run.stop_reason for r in recorded(client)] == ["error"] * 5
+        assert client.get("/api/agent/status").json()["paused_until"] is None
+
+    def test_a_user_sees_the_pause_too(
+        self, client: TestClient, factory: FakeClientFactory, clock: Clock
+    ) -> None:
+        fail_five_times(client, factory)
+        sign_in_crew(client)
+
+        status = client.get("/api/agent/status")
+
+        assert status.status_code == 200
+        assert status.json() == {
+            "enabled": True,
+            "paused_until": "2026-10-27T12:15:00Z",
+            "pause_error": "",
+        }
+
+
+def stored_history(client: TestClient, conversation: str = "c1") -> list[ModelMessage]:
+    """資料庫裡存著的那一份（`ai_conversations.history_json`），不經 UI 的轉換。"""
+
+    async def read() -> list[ModelMessage]:
+        sessions: async_sessionmaker[AsyncSession] = client.app.state.session_factory  # type: ignore[attr-defined]  # Starlette 的 app 型別是 ASGIApp
+        async with sessions() as session:
+            row = await session.get_one(AiConversation, conversation)
+            return load_history(row.history_json)
+
+    assert client.portal is not None
+    found: list[ModelMessage] = client.portal.call(read)
+    return found
+
+
+def stop_of(client: TestClient, conversation: str = "c1") -> Any:
+    return client.get(f"/api/agent/conversations/{conversation}").json()["stop"]
+
+
+class TestContinuingAfterAStop:
+    """防護停下之後，使用者可以按一次「繼續」（研究 C3）。"""
+
+    def stopped_once(self, client: TestClient, script: Script) -> str:
+        limit(client, requests=1)
+        script.steps = [call("jobs_list_jobs", page=1), say("Nothing is downloading.")]
+        response = chat(client, "What is downloading?")
+        [turn] = recorded(client)
+        assert turn.run.stop_reason == "request_limit"
+        [data] = [c for c in chunks(response) if c["type"] == "data-stop"]
+        assert data["data"] == {
+            "turn_id": turn.run.id,
+            "reason": "request_limit",
+            "continuable": True,
+        }
+        return turn.run.id
+
+    def test_a_stopped_turn_keeps_every_step_that_finished(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """「繼續」接的是存著的歷史：做完的兩步工具（呼叫與結果）都在，只丟停下時那一次。
+
+        最後是停下來的說明，沒有缺結果的工具呼叫（下一輪送給模型時 provider 會拒收）。
+        """
+        limit(client, requests=2)
+        script.steps = [call("jobs_list_jobs", page=1), call("jobs_list_jobs", page=2)]
+
+        chat(client, "What is downloading?", language="en")
+
+        assert recorded(client)[0].run.stop_reason == "request_limit"
+        history = stored_history(client)
+        calls = [
+            part
+            for message in history
+            if isinstance(message, ModelResponse)
+            for part in message.parts
+            if isinstance(part, ToolCallPart)
+        ]
+        returns = [
+            part
+            for message in history
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if isinstance(part, ToolReturnPart)
+        ]
+        assert [part.args_as_dict() for part in calls] == [{"page": 1}, {"page": 2}]
+        assert [part.tool_call_id for part in returns] == [part.tool_call_id for part in calls]
+        assert texts(history) == ["What is downloading?"]
+        last = history[-1]
+        assert isinstance(last, ModelResponse)
+        assert last.model_name == "berth"
+        assert last.parts == [TextPart(last_assistant_text(client))]
+        assert "limit of 2 model calls" in last_assistant_text(client)
+
+    def test_a_stopped_turn_says_it_can_be_continued(
+        self, client: TestClient, script: Script
+    ) -> None:
+        run_id = self.stopped_once(client, script)
+
+        assert stop_of(client) == {
+            "turn_id": run_id,
+            "reason": "request_limit",
+            "continuable": True,
+        }
+
+    def test_continuing_picks_up_where_it_stopped(self, client: TestClient, script: Script) -> None:
+        run_id = self.stopped_once(client, script)
+
+        response = chat(client, "繼續", continues=run_id)
+
+        assert response.status_code == 200, response.text
+        _, again = recorded(client)
+        assert again.run.continues == run_id
+        assert again.run.stop_reason == "completed"
+        # 模型看到停下來的說明，與使用者按的「繼續」。
+        seen = script.seen[-1]
+        assert texts(seen) == ["What is downloading?", "繼續"]
+        assert "每輪 1 次的上限" in repr(seen)
+        assert stop_of(client) is None
+
+    def test_continue_works_only_once(self, client: TestClient, script: Script) -> None:
+        run_id = self.stopped_once(client, script)
+        assert chat(client, "繼續", continues=run_id).status_code == 200
+
+        response = chat(client, "繼續", continues=run_id)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["reason"] == "not_continuable"
+        assert len(recorded(client)) == 2
+
+    def test_a_continued_turn_that_stops_again_cannot_be_continued(
+        self, client: TestClient, script: Script
+    ) -> None:
+        run_id = self.stopped_once(client, script)
+        script.steps = [call("jobs_list_jobs", page=2)]
+        chat(client, "繼續", continues=run_id)
+        again = recorded(client)[-1].run
+        assert again.stop_reason == "request_limit"
+        assert stop_of(client) == {
+            "turn_id": again.id,
+            "reason": "request_limit",
+            "continuable": False,
+        }
+
+        response = chat(client, "繼續", continues=again.id)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["reason"] == "not_continuable"
+
+    def test_only_the_last_turn_can_be_continued(self, client: TestClient, script: Script) -> None:
+        run_id = self.stopped_once(client, script)
+        chat(client, "Never mind.")
+
+        response = chat(client, "繼續", continues=run_id)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["reason"] == "not_continuable"
+
+    def test_a_turn_that_failed_or_finished_cannot_be_continued(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+        finished = recorded(client)[-1].run.id
+        assert stop_of(client) is None
+        assert chat(client, "繼續", continues=finished).status_code == 409
+        factory.ai_.rejected_keys = frozenset({KEY})
+        chat(client, "Hello?")
+        failed = recorded(client)[-1].run.id
+        assert stop_of(client) == {"turn_id": failed, "reason": "error", "continuable": False}
+
+        assert chat(client, "繼續", continues=failed).status_code == 409
 
 
 class TestWhoCanUseWhat:
