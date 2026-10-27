@@ -26,3 +26,6 @@
 - [ ] 全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27（票 02 留）：閘門現在也認 `@asynccontextmanager` 包過的公開函式。這一批模組裡的 `jellyfin_access.jellyfin_access` 會被掃到：只有內部用的改成私有；跨模組要用的鎖或入口標 `INTERNAL`。
+- 2026-10-27（票 02 留）：brief §14 說改 Route 永遠要人；`routes.*` 改 Route 的命令要帶 `Flag.SETTINGS`，`needs_person` 才擋得到。

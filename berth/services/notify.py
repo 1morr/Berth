@@ -66,7 +66,7 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.deeplink import (
     MEDIA_PAGE,
     WEEKLY_PAGE,
@@ -385,7 +385,7 @@ def _rejected(settings: NotifySettings, sender: NotifySenderSettings) -> bool:
 
 
 # 同一個命令就是自己的反向：換回原本的 token，或傳空字串清掉。
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="notify.set_bot_token", flags={Flag.SETTINGS})
 async def set_bot_token(
     session: AsyncSession, factory: ServiceClientFactory, token: str
 ) -> BotView:
@@ -420,7 +420,7 @@ def _clear_bot(settings: NotifySettings) -> None:
 
 
 # 同上：再存一次原本的那一份。
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="notify.set_mine", flags={Flag.SETTINGS})
 async def set_mine(
     session: AsyncSession,
     user_id: int,
@@ -453,7 +453,7 @@ async def set_mine(
 
 
 # 同上：再存一次原本的網址，或空字串清掉。
-@command(Effect.REVERSIBLE)
+@command(Effect.REVERSIBLE, inverse="notify.set_berth_url", flags={Flag.SETTINGS})
 async def set_berth_url(session: AsyncSession, value: str) -> BotView:
     """存 Berth 從外面看的網址（`deeplink.normalized_public_url`：http(s) 的絕對網址、拿掉結尾
     的 `/`）。空字串是清掉，之後的通知不附連結。已經寫進待送表的那幾則也照新的組：
@@ -471,7 +471,7 @@ async def set_berth_url(session: AsyncSession, value: str) -> BotView:
 
 
 # 送出去的訊息收不回來。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.SENDS_OUT})
 async def send_test(session: AsyncSession, factory: ServiceClientFactory, user_id: int) -> Delivery:
     """送一則測試訊息給按的人，回 Discord 怎麼說（開 DM channel 恆 200，所以要真的送一則，
     brief §20.23）。**不經過待送表**：結果要當場說，而且它不是任何狀態變更的通知。"""
@@ -506,7 +506,7 @@ async def send_test(session: AsyncSession, factory: ServiceClientFactory, user_i
 
 
 # 寫下的那幾則一旦送出就收不回來（送出迴圈不等人）。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def queue_ready(session: AsyncSession, job: Job, *, now: datetime) -> int:
     """「可以看了」：這一筆的正片在 Jellyfin 全部認出來了（`jellyfin_item_resolved`）。
 
@@ -619,7 +619,7 @@ def _collapse(points: Iterable[Sequence[int]]) -> list[tuple[int, int, int]]:
     return spans
 
 
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def watch_waiting(session: AsyncSession, *, now: datetime | None = None) -> int:
     """「有 N 件等你處理」的看守一輪（M4 票 127）：現在等著的（`waiting.waiting_now`）與上一輪看到的
     （`NotifyWatchSettings.seen`）比，新出現的排給每一位訂閱了、有 Discord ID 的管理員，回排了
@@ -700,7 +700,7 @@ async def _queue_waiting(session: AsyncSession, fresh: list[str], moment: dateti
 
 
 # 送出去的訊息收不回來。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def queue_lingering(session: AsyncSession, key: str, *, days: int, now: datetime) -> int:
     """「放太久」的提醒（M4 票 129，每日巡檢排）：`key`（`waiting` 的鍵）那一件已經等了 `days` 天，
     給每一位訂閱了「等你處理」、有 Discord ID 的管理員排一則，回排了幾則。
@@ -739,7 +739,7 @@ def describe_spans(spans: Sequence[Sequence[int]]) -> str:
 
 
 # 送出去的訊息收不回來。
-@command(Effect.IRREVERSIBLE)
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
 async def send_due(
     session: AsyncSession, factory: ServiceClientFactory, *, now: datetime | None = None
 ) -> SendOutcome:

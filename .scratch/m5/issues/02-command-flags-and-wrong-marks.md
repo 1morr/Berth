@@ -1,6 +1,6 @@
 # 02 — 命令標記：加旗標、修正標錯的、補閘門漏洞
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 01
 
@@ -33,10 +33,18 @@ M5 的登錄表、確認卡與 M6 的接管開關，邊界全靠命令標記。�
 
 ## 驗收
 
-- [ ] 旗標與「要不要人」的判斷有單元測試
-- [ ] R3–R6 的每一條都改了，`test_command_marks` 照新規則守住
-- [ ] 沒標的 `@asynccontextmanager` 命令會讓閘門紅（變異驗證）
-- [ ] CLAUDE.md〈架構規則〉的命令標記那一句補上旗標
-- [ ] 全部檢查與 pytest 綠；progress.md 已更新
+- [x] 旗標與「要不要人」的判斷有單元測試
+- [x] R3–R6 的每一條都改了，`test_command_marks` 照新規則守住
+- [x] 沒標的 `@asynccontextmanager` 命令會讓閘門紅（變異驗證）
+- [x] CLAUDE.md〈架構規則〉的命令標記那一句補上旗標
+- [x] 全部檢查與 pytest 綠；progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 實作（code-review 後未處理、或標法有疑問的）：
+  - **旗標的正確性沒有通用閘門**：`test_command_marks` 守「有沒有標」與 inverse 名字，`NAMED` 表釘住判斷過的那幾支；新命令該帶旗標卻沒帶不會紅，靠 03／03b 與之後的審查。
+  - `SETTINGS` 的範圍定為設定頁、精靈改的東西加 RSS 頁上 Feed 的設定（加刪 Feed、間隔、Route、排除條件）；`rss.subscribe_*`（Media 頁訂閱）不算，同綁定。有爭議的兩支也標了：`notify.set_mine`（個人通知偏好）、`search.remember_names`（任何登入的人按名字 chip 都會改的全域預設）。
+  - `rss.add_feed`、`rss.subscribe_search` 的反向命令 `rss.delete_feed` 現在不可逆：撤銷照反向命令自己的標記走，要人確認（寫在 `commands.py`）。
+  - 指向自己的憑證類（`notify.set_bot_token`、兩支 `set_interface_login`）：原值不進 AI 上下文，撤銷要執行器（票 07）在伺服器端存改之前那一份。
+  - `indexer.probe_indexer` 標 `CONNECTS_OUT` 偏保守：唯一的呼叫端（健康檢查）傳的是存著的位址，但簽名收任意 `base_url` 與 `api_key`。
+  - 閘門認得 `@asynccontextmanager` 之後，豁免表裡多出三支會被掃到：`jellyfin_access.jellyfin_access`、`jobs.job_locks`、`rematch.locked`（已在 03／03b 留言）。
