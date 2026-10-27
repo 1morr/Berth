@@ -442,10 +442,10 @@ def _with_stop(message: UIMessage, stops: Mapping[str, TurnStop]) -> dict[str, A
     if not metadata.pop(_STOP_NOTE, False):
         return dumped
     stop = stops.get(metadata.get(RUN_ID, ""))
-    note = "".join(part.get("text", "") for part in dumped["parts"] if part["type"] == "text")
     if stop is None:
         # 停止原因沒有記下（不該發生）：照一般的文字畫，不憑空說能不能續。
         return dumped
+    note = "".join(part.get("text", "") for part in dumped["parts"] if part["type"] == "text")
     dumped["parts"] = [
         {"type": "data-stop", "data": TurnStopOut.of(stop, note).model_dump(mode="json")}
     ]

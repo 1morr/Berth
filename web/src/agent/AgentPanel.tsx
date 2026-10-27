@@ -17,8 +17,14 @@ import {
 import { alertText, unknownText } from '../usage/alerts'
 import { Conversation } from './Conversation'
 import { PanelFailed, PanelLoading } from './PanelStates'
-import { INPUT_ID, PANEL_ID, PANEL_TITLE_ID, TOGGLE_ID, usePanel } from './panelState'
-import { useLeavePanel } from './useNarrow'
+import {
+  INPUT_ID,
+  PANEL_ID,
+  PANEL_TITLE_ID,
+  TOGGLE_ID,
+  useLeavePanel,
+  usePanel,
+} from './panelState'
 
 /**
  * 頁首的「助理」鍵（M5 票 12，`.scratch/m5/side-panel-shape.md`〈與頁面的關係〉）。打開時是當前導覽

@@ -1,6 +1,6 @@
 # 22 — M5 UI 收尾
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 09, 12, 13, 14, 16, 17, 18, 19, 20, 21, 21b
 
@@ -20,10 +20,10 @@
 
 ## 驗收
 
-- [ ] critique / audit / polish 的分數與處理清單記在 Comments
-- [ ] 五個面 × 深淺 × 兩種寬度沒有橫向捲動，對比達標（實跑）
-- [ ] 斷路器開與關的狀態在側面板看得到；「繼續」只出現在可以續的那一則、按過一次就沒了（playwright 實跑，從票 20 搬來）
-- [ ] 全部檢查、vitest 綠；DESIGN.md、progress.md 已更新
+- [x] critique / audit / polish 的分數與處理清單記在 Comments
+- [x] 五個面 × 深淺 × 兩種寬度沒有橫向捲動，對比達標（實跑）
+- [x] 斷路器開與關的狀態在側面板看得到；「繼續」只出現在可以續的那一則、按過一次就沒了（playwright 實跑，從票 20 搬來）
+- [x] 全部檢查、vitest 綠；DESIGN.md、progress.md 已更新
 
 ## Comments
 
@@ -93,3 +93,29 @@ B：CLI 9 檔 0 條；overlay 1280 全部乾淨，390 只有三處中英混排�
 - 用量頁「一輪停在哪裡」大多是 0 的列（**P3**）。
 
 **查過不是問題的**：A 看到「缺」的 S02E01 說「停在審核」。直接問替身：五筆 Job 都蓋到那一集——替身的 TMDB 快照只有幾集，`- 08` 猜出的 S01E08 不在快照上，照票 10 的設計退成整部作品（說不出它不是哪一集）。是替身資料的樣子。
+
+**實量（A，修過之後 B 與我再量）**：`documentElement.scrollWidth` 對 `innerWidth`、面板與對話紀錄的 `scrollWidth` 對 `clientWidth`。
+
+| 面 | 深 1280 | 深 390 | 淺 1280 | 淺 390 |
+| --- | --- | --- | --- | --- |
+| 側面板（頁 / 面板 / 紀錄） | 1280 = 1280 · 414 = 414 | 390 · 390 = 390 | 同深色 | 同深色 |
+| AI 設定 | ✓ | ✓ | ✓ | ✓ |
+| 用量頁（1280 另量面板開著：表 719 / 720） | ✓ | ✓ | ✓ | ✓ |
+| 步驟頁 | ✓ | ✓ | ✓ | ✓ |
+| 作品頁「為什麼」 | ✓ | 頁 ✓；季表 394 / 340 → 修後 **340 / 340** | ✓ | 同左 |
+
+對比（深 / 淺）：「停下」色塊 12.35 / 12.35、停下說明 16.2 / 13.31、「繼續」14.18 / 15.02、卡片 `dt` 8.84 / 5.71、工具「完成」8.84 / 5.71、「步驟」7.74 / 6.44、why-not 句子 16.2 / 13.31、「為什麼」14.18 / 15.02，全部 AA 以上。只量了新元素與這幾個面上的既有元素，沒有逐元素全量。斷路器「開 → 關」（到時間自動收掉）由 vitest `asks again once the pause is over` 守；e2e 只跑得到「關 → 開」（暫停 15 分鐘）。截圖在 session scratchpad（沒有進 repo）：e2e 的 `stop-continuable` / `stop-continued` / `paused` 在 `web/test-results/`。
+
+### code-review（`e266b006` 起）
+
+- **Standards**：硬違反一條——作品頁結論句與搜尋 Feed 那一行把 `TEXT_LINK` 放在會換行的句子裡（違反這張票自己加的 DESIGN.md 規則）→ 改 `INLINE_LINK`，DESIGN.md 與 sidecar 兩處跟著改。判斷題改了的：`SeasonList` 自己的 `JobLink` 改用共用的 `jobs/JobLink`；`useLeavePanel` 從 `useNarrow.ts` 搬到 `panelState.ts`；`report(error, true)` 改具名 `{ restored }`；`isSubmit` 後多餘的 `as string`、`proposalRefusalOf` 算兩次、`_with_stop` 先算說明再檢查；輪詢的 8 次 / 250ms 命名並說明。沒改的：`_NOTES` 把格式碎片（`names`、`join`）與停止原因放同一張表（兩種語言各三格，收成 dataclass 不划算）；「暫停」那句是翻譯 + `<time>` + 翻譯（repo 有 8 處同樣拼法、沒有 `Trans` 的先例，中英語序都通）。
+- **Spec**：`pickUpStopNote` 在還沒收到這一輪 id 時（`start` 之前就按停止）會接受畫面上已有的上一輪說明、把剛送的那則蓋掉 → 改成只接受還沒畫過的那一輪（`AgentPanel.test.tsx` 一條，改回舊條件會紅）。`ConversationOut.stop` 拿掉沒有問過使用者：它是同一個未發佈里程碑（票 20）加的、只有自己的前端讀過，記在 progress「偏差與決定」並在收尾時告知使用者。驗收證據不足的兩條補在上面（每個面的實量表、斷路器「開 → 關」由誰守）。`INLINE_LINK` 動到 `IssueRow`、`JobLink`（超出五個面）：是同一份字串收成一份，`issues`、`review` 的 e2e 照跑綠。
+
+**document 時找到、沒處理的**：「步驟」連結是 `${TEXT_LINK} text-ink-dim`，`TEXT_LINK` 自帶 `text-ink`，誰贏看 CSS 先後（實量是 `ink-dim` 生效，票 21 留下的）；AI 設定頁在 DESIGN.md 沒有自己的一節；展開列 `colSpan={7}` 比實際最多 6 欄多，瀏覽器照實際欄數收。
+
+### 驗證
+
+- `uv run pre-commit run --all-files`：全部 Passed（ruff、mypy、import-linter、prettier、eslint、knip 與檔案衛生）。
+- pytest（`-m "not e2e"`）：5148 passed、1 skipped、28 deselected（11 分 9 秒）。之後只動了 `api/agent._with_stop` 的檢查順序，`test_agent_api.py` 55 passed。
+- vitest：123 檔 2295 passed。
+- 前端 e2e：`agent`、`agent-390`、`media-downloads`、`media-downloads-390`、`issues`、`review` 19 passed（2.1 分）。

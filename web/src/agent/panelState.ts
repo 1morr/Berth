@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react'
 
+import { useNarrow } from './useNarrow'
+
 /**
  * 側面板開著沒有、目前是哪一段對話（M5 票 12，`.scratch/m5/side-panel-shape.md`）。
  *
@@ -41,6 +43,18 @@ export function usePanel(): PanelState {
   const state = useContext(PanelContext)
   if (state === null) throw new Error('usePanel outside <AgentProvider>')
   return state
+}
+
+/**
+ * 從面板連到別頁時的 `onClick`：窄版的面板蓋滿整個視窗，不收起來的話換過去的那一頁看不到。
+ * 桌面上面板與頁面並排，留著。
+ */
+export function useLeavePanel(): () => void {
+  const narrow = useNarrow()
+  const { setOpen } = usePanel()
+  return () => {
+    if (narrow) setOpen(false)
+  }
 }
 
 const OPEN_KEY = 'berth.agent.open'

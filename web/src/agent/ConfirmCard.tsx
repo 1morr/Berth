@@ -67,9 +67,10 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
     },
     onError: async (error) => {
       // 送不出去時卡片還在等、鍵還在：不搬焦點。被拒（已經有人按過、過期）的會重畫成結果，照樣搬。
-      pressed.current = proposalRefusalOf(error) !== null
+      const refused = proposalRefusalOf(error) !== null
+      pressed.current = refused
       // 已經有人按過或剛好過期：問一次它現在的樣子，卡片照那個畫。
-      if (proposalRefusalOf(error) !== null) {
+      if (refused) {
         await queryClient.invalidateQueries({
           queryKey: proposalsKey(proposal.conversation_id ?? ''),
         })
@@ -477,9 +478,7 @@ function SubmitRowBody({ row, labelled }: { row: SubmitRow; labelled: boolean })
  * 成功那一刻它就定下來，之後改不掉。同一部作品的列只印一次。
  */
 function SubmitFolders({ rows }: { rows: readonly Row[] }) {
-  const ids = [
-    ...new Set(rows.filter((row) => isSubmit(SUBMIT, row)).map((row) => row.media_id as string)),
-  ]
+  const ids = [...new Set(rows.filter((row) => isSubmit(SUBMIT, row)).map((row) => row.media_id))]
   return ids.map((id) => <SubmitFolder key={id} mediaId={id} />)
 }
 

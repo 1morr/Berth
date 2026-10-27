@@ -3,10 +3,10 @@ import type { DynamicToolUIPart, ToolUIPart } from 'ai'
 import { getToolName } from 'ai'
 import { useTranslation } from 'react-i18next'
 
-import { TEXT_LINK } from '../components/controls'
+import { INLINE_LINK } from '../components/controls'
 import { ExpandHint } from '../components/ExpandHint'
+import { useLeavePanel } from './panelState'
 import { toolNameKey } from './toolNames'
-import { useLeavePanel } from './useNarrow'
 
 type Phase = 'running' | 'done' | 'failed'
 
@@ -112,7 +112,7 @@ function SubscribedFeed({ id }: { id: number }) {
   return (
     <p className="text-xs text-ink-dim">
       {t('agent.tool.subscribed')}{' '}
-      <Link to="/rss" hash={`feed-${id}`} onClick={leave} className={TEXT_LINK}>
+      <Link to="/rss" hash={`feed-${id}`} onClick={leave} className={INLINE_LINK}>
         {t('agent.tool.subscribedLink')}
       </Link>
     </p>

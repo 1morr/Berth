@@ -741,6 +741,51 @@ describe('AgentPanel while the AI service is paused', () => {
   })
 })
 
+describe('AgentPanel after Stop before the turn started', () => {
+  it('waits for this turn’s note, not the one already on screen', async () => {
+    const before = [
+      { id: 'u0', role: 'user', parts: [{ type: 'text', text: '一直查' }] },
+      { id: 'a0', role: 'assistant', metadata: { runId: 'r0' }, parts: [stopPart('r0', false)] },
+    ]
+    const api = backend({ stored: before })
+    api.chat = (signal) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener('abort', () => {
+            controller.error(new DOMException('aborted', 'AbortError'))
+            // 伺服器晚一點才存好：先讀到的還是舊的那一份。
+            setTimeout(() => {
+              api.stored = [
+                ...before,
+                { id: 'u1', role: 'user', parts: [{ type: 'text', text: '慢慢查' }] },
+                {
+                  id: 'a1',
+                  role: 'assistant',
+                  metadata: { runId: 'r1' },
+                  parts: [stopPart('r1', false, '這一輪停下了：連線被關掉。')],
+                },
+              ]
+            }, 400)
+          })
+        },
+      })
+      return new Response(body, {
+        headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+      })
+    }
+    serve(api)
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '慢慢查{Enter}')
+    await user.click(await screen.findByRole('button', { name: '停止' }))
+
+    const log = screen.getByRole('log')
+    expect(await within(log).findByText('這一輪停下了：連線被關掉。')).toBeInTheDocument()
+    expect(within(log).getByText('慢慢查')).toBeInTheDocument()
+  })
+})
+
 describe('AgentPanel spend reminders', () => {
   it('tells an administrator, with a way to the usage page, and still lets them ask', async () => {
     serve(

@@ -44,10 +44,16 @@ import { CardContext, type CardActions } from './cards'
 import { ConfirmCard } from './ConfirmCard'
 import { Markdown } from './Markdown'
 import { PanelFailed, PanelLoading } from './PanelStates'
-import { INPUT_ID, PANEL_TITLE_ID, SLASH_HINT_ID, slashOptionId, usePanel } from './panelState'
+import {
+  INPUT_ID,
+  PANEL_TITLE_ID,
+  SLASH_HINT_ID,
+  slashOptionId,
+  useLeavePanel,
+  usePanel,
+} from './panelState'
 import { SlashHint, SlashOutput } from './Slash'
 import { ToolCall } from './ToolCall'
-import { useLeavePanel } from './useNarrow'
 
 /**
  * 一段對話：接回伺服器存著的那一份，之後由 `useChat` 串流（M5 票 12）。
@@ -74,6 +80,13 @@ export function Conversation({ conversationId }: { conversationId: string }) {
   if (chat.isError) return <PanelFailed error={chat.error} />
   return <Chatting chat={chat.data} />
 }
+
+/**
+ * 按「停止」之後等伺服器存下說明：它在連線關掉時收尾（`Turn.close`），平常幾十毫秒；最多等兩秒，
+ * 等不到就算了（重新載入時照樣看得到）。
+ */
+const STOP_NOTE_TRIES = 8
+const STOP_NOTE_WAIT_MS = 250
 
 /**
  * 送不出去的那一則：後端說不行的理由，或請求本身為什麼沒成。`restored`：打的字放回輸入欄了
@@ -185,7 +198,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setFailure({ kind: 'spent', restored: false })
       return
     }
-    await report(error, restored)
+    await report(error, { restored })
   }
 
   /**
@@ -194,15 +207,19 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
    */
   async function pickUpStopNote() {
     const turn = runIdOf(chat.lastMessage)
-    for (let tries = 0; tries < 8; tries++) {
+    // 還沒收到這一輪的 id（`start` 之前就按了）：已經畫著的那幾則說明不是這一輪的。
+    const shown = new Set(
+      chat.messages.flatMap((message) => message.parts.map(stopOf)).map((found) => found?.turn_id),
+    )
+    for (let tries = 0; tries < STOP_NOTE_TRIES; tries++) {
       const fresh = await readConversation(chat.id).catch(() => null)
       const last = fresh?.at(-1)
       const stop = last?.parts.map(stopOf).find((found) => found !== null)
-      if (fresh && stop && (turn === null || stop.turn_id === turn)) {
+      if (fresh && stop && (turn === null ? !shown.has(stop.turn_id) : stop.turn_id === turn)) {
         setMessages(fresh)
         return
       }
-      await new Promise((resolve) => setTimeout(resolve, 250))
+      await new Promise((resolve) => setTimeout(resolve, STOP_NOTE_WAIT_MS))
     }
   }
 
@@ -212,7 +229,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   }
 
   /** 送不出去的那一次（訊息、恢復或指令）：後端說不行的理由各有去處，其餘照請求為什麼沒成說。 */
-  async function report(error: unknown, restored: boolean) {
+  async function report(error: unknown, { restored }: { restored: boolean }) {
     const refusal = agentRefusalOf(error)
     if (refusal?.reason === 'conversation_missing') {
       startNew(true)
@@ -255,7 +272,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setOutputs((current) => [...current, { key, after, result }])
     } catch (error) {
       setDraft(text)
-      await report(error, true)
+      await report(error, { restored: true })
     } finally {
       setRunning(false)
     }
@@ -288,7 +305,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       const error = chat.error
       if (error === undefined) return
       clearError()
-      await report(error, false)
+      await report(error, { restored: false })
     },
   }
 

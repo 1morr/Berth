@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Fragment, useId, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { whyNotQueryOptions, type Episode, type Season, type WhyNot } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
-import { COMPACT_BUTTON, TEXT_LINK } from '../components/controls'
+import { COMPACT_BUTTON, INLINE_LINK } from '../components/controls'
 import { formatEpisode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
 import { Dot } from '../components/Dot'
+import { JobLink } from '../jobs/JobLink'
 import { missingOf } from './missing'
 
 /**
@@ -301,7 +303,7 @@ function WhyNotLine({
   if (found.isPending)
     return <p className="text-xs text-ink-dim">{t('media.episode.cause.loading')}</p>
   if (found.isError) return <p className="text-xs text-ink">{t('media.episode.cause.failed')}</p>
-  const next = nextStep(found.data)
+  const next = nextStep(found.data, t)
   return (
     <p aria-live="polite" className="max-w-prose text-sm break-words whitespace-normal text-ink">
       {t(`media.episode.cause.conclusion.${found.data.conclusion}`)}
@@ -310,7 +312,7 @@ function WhyNotLine({
   )
 }
 
-function nextStep(found: WhyNot) {
+function nextStep(found: WhyNot, t: TFunction) {
   // 只取蓋到這一集的那一筆：整部作品的第一筆可能與這一集無關。
   const job = found.episodes[0]?.jobs[0]
   switch (found.conclusion) {
@@ -325,7 +327,7 @@ function nextStep(found: WhyNot) {
     case 'import_failed':
     case 'download_failed':
     case 'downloading':
-      return job ? <JobLink hash={job} /> : null
+      return job ? <JobLink hash={job}>{t('media.episode.cause.job')}</JobLink> : null
     default:
       return null
   }
@@ -340,17 +342,8 @@ function WhyLink({
 }) {
   const { t } = useTranslation()
   return (
-    <Link to={to} className={TEXT_LINK}>
+    <Link to={to} className={INLINE_LINK}>
       {t(label)}
-    </Link>
-  )
-}
-
-function JobLink({ hash }: { hash: string }) {
-  const { t } = useTranslation()
-  return (
-    <Link to="/jobs/$hash" params={{ hash }} className={TEXT_LINK}>
-      {t('media.episode.cause.job')}
     </Link>
   )
 }
