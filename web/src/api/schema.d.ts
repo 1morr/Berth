@@ -1030,6 +1030,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Proposals
+         * @description 按的人決定得了的卡片，舊的在前；帶 `conversation_id` 只列那一段對話的。
+         */
+        get: operations["get_proposals_api_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals/{proposal_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Decision
+         * @description 核准或拒絕。不在對話裡的、已經脫離對話的，核准之後當場執行，回逐列結果；還在對話裡的只記
+         *     決定，由對話恢復時執行（票 13）。
+         */
+        post: operations["post_decision_api_proposals__proposal_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/review": {
         parameters: {
             query?: never;
@@ -2543,6 +2584,12 @@ export interface components {
             detail: string;
         };
         /**
+         * ActorKind
+         * @description 經命令執行器的那幾種。RSS 送單不經執行器，它的寫法只有 `rss_label`。
+         * @enum {string}
+         */
+        ActorKind: "person" | "system" | "ai";
+        /**
          * AgentRefusal
          * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
          * @enum {string}
@@ -3191,6 +3238,12 @@ export interface components {
             known_episode_end: number | null;
         };
         /**
+         * Effect
+         * @description 副作用等級（brief §14）。
+         * @enum {string}
+         */
+        Effect: "read" | "reversible" | "irreversible";
+        /**
          * EpisodeOut
          * @description 一集。
          */
@@ -3441,6 +3494,12 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * Flag
+         * @description 與可不可逆無關、另外要說的事（plan §11.6〈分段〉第 1 段）。一個命令可以帶好幾個。
+         * @enum {string}
+         */
+        Flag: "connects_out" | "sends_out" | "downloads" | "settings" | "internal";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5112,6 +5171,115 @@ export interface components {
             /** Excluded */
             excluded: number;
         };
+        /**
+         * ProposalDecisionIn
+         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份。
+         */
+        ProposalDecisionIn: {
+            /** Approve */
+            approve: boolean;
+            /** Selection */
+            selection?: number[] | null;
+        };
+        /** ProposalOut */
+        ProposalOut: {
+            /** Id */
+            id: number;
+            /** Command */
+            command: string;
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            }[];
+            /** Arguments Hash */
+            arguments_hash: string;
+            preview: components["schemas"]["ProposalPreviewOut"];
+            /** User Id */
+            user_id: number;
+            proposer: components["schemas"]["ActorKind"];
+            /** Conversation Id */
+            conversation_id: string | null;
+            status: components["schemas"]["ProposalStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Decided By */
+            decided_by: number | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Selection */
+            selection: number[] | null;
+            /** Results */
+            results: components["schemas"]["ProposalRowOut"][] | null;
+        };
+        /**
+         * ProposalPreviewOut
+         * @description 提出那一刻伺服器算的。卡片照 `effect` 與 `flags` 說「不可逆」「會送出 torrent」。
+         */
+        ProposalPreviewOut: {
+            effect: components["schemas"]["Effect"];
+            /** Flags */
+            flags: components["schemas"]["Flag"][];
+            /** Checked */
+            checked: boolean[];
+        };
+        /**
+         * ProposalRefusal
+         * @description 決定 Proposal 時做不了的理由（`services.proposals`）。
+         * @enum {string}
+         */
+        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid";
+        /**
+         * ProposalRefusalOut
+         * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。`proposal_decided` 的 `detail` 是
+         *     它現在的狀態。
+         */
+        ProposalRefusalOut: {
+            reason: components["schemas"]["ProposalRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /** ProposalRowOut */
+        ProposalRowOut: {
+            outcome: components["schemas"]["ProposalRowOutcome"];
+            /** Reason */
+            reason: string;
+            /** Detail */
+            detail: string;
+            /** Result */
+            result: unknown;
+        };
+        /**
+         * ProposalRowOutcome
+         * @description Proposal 的一列執行之後是什麼（逐列結果）。
+         * @enum {string}
+         */
+        ProposalRowOutcome: "done" | "refused" | "failed" | "skipped";
+        /**
+         * ProposalSignalOut
+         * @description `event: proposal` 那一行的 `data`（M5 票 08）：這一張 Proposal 的狀態變了。
+         *
+         *     同樣是提示：前端讓 `['proposals']` 失效再問一次。只有 id 與狀態，看不看得到那一張的命令與參數
+         *     由 `GET /proposals` 的門禁決定。
+         */
+        ProposalSignalOut: {
+            /** Id */
+            id: number;
+            status: components["schemas"]["ProposalStatus"];
+        };
+        /**
+         * ProposalStatus
+         * @description 一張 Proposal 走到哪裡（`services.proposals`，M5 票 08）。
+         * @enum {string}
+         */
+        ProposalStatus: "pending" | "detached" | "approved" | "rejected" | "executing" | "executed" | "partial" | "failed" | "expired";
         /** QbittorrentApplyIn */
         QbittorrentApplyIn: {
             login?: components["schemas"]["InterfaceLoginIn"] | null;
@@ -6858,13 +7026,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 一筆接一筆的 `event: job` */
+            /** @description 一筆接一筆的 `event: job` 與 `event: proposal` */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": components["schemas"]["JobSignalOut"];
+                    "text/event-stream": string | components["schemas"]["JobSignalOut"] | components["schemas"]["ProposalSignalOut"];
                 };
             };
         };
@@ -8595,6 +8763,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_proposals_api_proposals_get: {
+        parameters: {
+            query?: {
+                conversation_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_decision_api_proposals__proposal_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description `proposal_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalRefusalOut"];
+                };
+            };
+            /** @description `proposal_decided` · `proposal_expired` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalRefusalOut"];
+                };
+            };
+            /** @description `selection_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalRefusalOut"];
                 };
             };
         };

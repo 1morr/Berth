@@ -535,6 +535,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 為什麼沒入庫（M5 票 10）：一般使用者也問得到，看得到什麼由命令照按的人決定。
     ("GET", "/media/*/why-not"): Access.SIGNED_IN,
     ("GET", "/plans/*"): Access.SIGNED_IN,
+    # 確認卡（M5 票 08）：登入就進得來，看得到、按得到的範圍由命令照按的人決定。
+    ("GET", "/proposals"): Access.SIGNED_IN,
+    ("POST", "/proposals/*/decide"): Access.SIGNED_IN,
     ("GET", "/search"): Access.SIGNED_IN,
     ("GET", "/search/queries"): Access.SIGNED_IN,
     # 搜尋面板的名字種類全域記住（M4 票 84）：搜尋是一般使用者做的事，按 chip 的也是他。

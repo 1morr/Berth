@@ -1854,3 +1854,55 @@ class AiToolOutcome(StrEnum):
     REFUSED = "refused"
     #: 參數不對或命令出錯（服務連不上這類）。不算重複：重試是正當的。
     FAILED = "failed"
+
+
+class ProposalStatus(StrEnum):
+    """一張 Proposal 走到哪裡（`services.proposals`，M5 票 08）。"""
+
+    #: 等人按。
+    PENDING = "pending"
+    #: 等人按，而提出它的那一輪對話已經往下走了（使用者沒按就繼續說話）。之後再按由伺服器直接執行。
+    DETACHED = "detached"
+    #: 核准了，還沒執行：還在那一輪對話裡的卡片由對話恢復時執行（票 13）。
+    APPROVED = "approved"
+    #: 人拒絕了。
+    REJECTED = "rejected"
+    #: 執行到一半。行程在這時候死掉的那一張停在這裡、不重跑：已經送出去的那幾列不能再送一次。
+    EXECUTING = "executing"
+    #: 勾選的每一列都做成了。
+    EXECUTED = "executed"
+    #: 勾選的列有的做成、有的沒有（總覽卡）。
+    PARTIAL = "partial"
+    #: 勾選的列一列都沒做成。
+    FAILED = "failed"
+    #: 沒人按，過了期限。
+    EXPIRED = "expired"
+
+
+#: 還等著人決定的那兩種：決定、脫離、過期只從這裡出發。
+WAITING_PROPOSALS = frozenset({ProposalStatus.PENDING, ProposalStatus.DETACHED})
+
+
+class ProposalRowOutcome(StrEnum):
+    """Proposal 的一列執行之後是什麼（逐列結果）。"""
+
+    DONE = "done"
+    #: 命令拒絕了（重驗或執行時），`reason` 是它的理由。
+    REFUSED = "refused"
+    #: 命令丟了沒宣告的例外，`reason` 是例外的型別名。
+    FAILED = "failed"
+    #: 人沒勾這一列。
+    SKIPPED = "skipped"
+
+
+class ProposalRefusal(StrEnum):
+    """決定 Proposal 時做不了的理由（`services.proposals`）。"""
+
+    #: 沒有這一張，或不是你提出的而你也不是管理員（看不到就是沒有）。
+    PROPOSAL_MISSING = "proposal_missing"
+    #: 已經不在等人決定了（決定過、執行過、過期過）。`detail` 是它現在的狀態。連按兩次的第二次是它。
+    PROPOSAL_DECIDED = "proposal_decided"
+    #: 按的那一刻剛好過期。
+    PROPOSAL_EXPIRED = "proposal_expired"
+    #: 勾選是空的、有重複或超出列數。全部不勾等於拒絕，畫面該送拒絕。
+    SELECTION_INVALID = "selection_invalid"

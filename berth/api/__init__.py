@@ -20,6 +20,7 @@ from berth.api import (
     media,
     notify,
     plans,
+    proposals,
     review,
     routes,
     rss,
@@ -47,6 +48,7 @@ router.include_router(media.router)
 router.include_router(notify.router)
 router.include_router(notify.me_router)
 router.include_router(plans.router)
+router.include_router(proposals.router)
 router.include_router(review.router)
 router.include_router(routes.router)
 router.include_router(rss.router)

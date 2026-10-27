@@ -7,7 +7,7 @@
 既有的表不動。降版整四張刪掉。
 
 Revision ID: 78a62163b817
-Revises: a8c3f6e1d254
+Revises: b5d2e8f4a716
 Create Date: 2026-10-27 19:25:02.470318
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "78a62163b817"
-down_revision: str | None = "a8c3f6e1d254"
+down_revision: str | None = "b5d2e8f4a716"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

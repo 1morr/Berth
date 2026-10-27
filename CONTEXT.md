@@ -437,5 +437,5 @@ _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是�
 _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
 
 **Proposal**（提案）:
-AI 想做但**不可逆**或沒把握的一個命令：命令名、參數、理由、狀態（proposed / approved / rejected / applied / failed）、誰決定的。人確認才執行。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。2026-09-24 起只用在這兩種情況，可逆的 AI 自己做。
+等人確認的一個命令，存成 `proposals` 的一列（M5 票 08，`services/proposals.py`）：命令名、一到多列參數（總覽卡多列，逐列可取消勾選）、參數雜湊、伺服器算的預覽、替誰提出（他自己或 AI 替他）、所屬對話、狀態（`pending` / `detached` / `approved` / `rejected` / `executing` / `executed` / `partial` / `failed` / `expired`）、過期時間、誰什麼時候決定的、逐列結果。只有那個人或管理員按得到，執行用存下的那一份參數。不需要 AI：人也能提出。哪些動作要出卡見 brief §14〈對話裡的確認卡〉。畫面上是一張卡，外部管道上是一則帶按鈕的訊息。
 _Avoid_: suggestion, action, task

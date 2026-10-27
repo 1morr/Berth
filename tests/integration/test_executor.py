@@ -22,7 +22,7 @@ from berth.domain import (
     Role,
 )
 from berth.models import Event, Job, User
-from berth.services.events import EventHub
+from berth.services.events import EventHub, JobSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
 from berth.services.hints import JobHints
 from berth.services.jobs import JobRejectedError, JobSource
@@ -100,6 +100,7 @@ class TestAfterTheCommand:
             signal = tab.get_nowait()
 
         assert view.state is JobState.IMPORTING
+        assert isinstance(signal, JobSignal)
         assert (signal.hash, signal.state) == (CREWS_JOB, JobState.IMPORTING)
         assert await woken(loops.imports)
         assert not await woken(loops.plans)
@@ -250,6 +251,7 @@ class TestSubmitting:
 
         job = await session.get_one(Job, MAGNET_HASH)
         assert (outcome.created, job.user_id) == (True, crew.id)
+        assert isinstance(signal, JobSignal)
         assert signal.hash == MAGNET_HASH
         created = await session.scalar(
             select(Event.actor).where(

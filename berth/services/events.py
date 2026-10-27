@@ -10,6 +10,9 @@
 - 狀態與進度仍然帶著，因為它們是**去不去重問的依據**：一輪只動了進度時，沒有展開的
   那幾十列根本不必重畫。
 
+**M5 票 08 起多一種：Proposal**（確認卡）的狀態變了。同一個規矩：只有 id 與狀態，前端讓
+`['proposals']` 失效再問一次，看不看得到那一張由列表的門禁決定，不由推播決定。
+
 **publish 是同步的**，而且滿了就丟掉最舊的那一筆：poller 不能因為某個分頁在睡覺而卡住，
 而 Job 的事件是「去重問」的提示，最新的那一筆永遠比舊的有價值。
 """
@@ -22,7 +25,7 @@ import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from berth.domain import JobState
+from berth.domain import JobState, ProposalStatus
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,7 @@ QUEUE_CAPACITY = 128
 
 #: SSE 的 `event:` 名。前端逐種掛 listener，所以它是封閉集合的一員而不是自由文字。
 JOB_EVENT = "job"
+PROPOSAL_EVENT = "proposal"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +51,18 @@ class JobSignal:
     progress: float
 
 
+@dataclass(frozen=True, slots=True)
+class ProposalSignal:
+    """「這一張 Proposal 的狀態變了」。送出去的那一份是 `api/events.ProposalSignalOut`。"""
+
+    id: int
+    status: ProposalStatus
+
+
+#: hub 送的每一種。
+Signal = JobSignal | ProposalSignal
+
+
 class EventHub:
     """一個程序內的 fan-out。訂閱者是「一個正開著的 SSE 連線」。
 
@@ -56,14 +72,14 @@ class EventHub:
 
     def __init__(self, *, capacity: int = QUEUE_CAPACITY) -> None:
         self._capacity = capacity
-        self._queues: set[asyncio.Queue[JobSignal]] = set()
+        self._queues: set[asyncio.Queue[Signal]] = set()
 
     @property
     def subscribers(self) -> int:
         """現在有幾條連線開著。只給測試：確認訂閱真的收掉了。"""
         return len(self._queues)
 
-    def publish(self, signal: JobSignal) -> None:
+    def publish(self, signal: Signal) -> None:
         """丟給每個訂閱者。**永不阻塞、永不丟例外**——呼叫端是背景迴圈。"""
         for queue in self._queues:
             while True:
@@ -77,9 +93,9 @@ class EventHub:
                 break
 
     @contextlib.contextmanager
-    def subscribe(self) -> Iterator[asyncio.Queue[JobSignal]]:
+    def subscribe(self) -> Iterator[asyncio.Queue[Signal]]:
         """開一條訂閱，離開時一定收掉——不然斷線的分頁會留下一條永遠沒人讀的佇列。"""
-        queue: asyncio.Queue[JobSignal] = asyncio.Queue(maxsize=self._capacity)
+        queue: asyncio.Queue[Signal] = asyncio.Queue(maxsize=self._capacity)
         self._queues.add(queue)
         try:
             yield queue

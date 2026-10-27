@@ -43,7 +43,7 @@ from berth.models import Event, Job, JobFile, LedgerEntry, Media, Plan, PlanItem
 from berth.naming import episode_target, folder_name
 from berth.parser import plan as decide
 from berth.pipeline import PlannerRunner
-from berth.services.events import EventHub, JobSignal
+from berth.services.events import EventHub, JobSignal, Signal
 from berth.services.hints import JobHints
 from berth.services.jobs import read_job
 from berth.services.plan import replan_job, sweep_plans
@@ -575,7 +575,8 @@ class TestPlanning:
         seen: list[tuple[str, bool]] = []
 
         class Spy(EventHub):
-            def publish(self, signal: JobSignal) -> None:
+            def publish(self, signal: Signal) -> None:
+                assert isinstance(signal, JobSignal)
                 seen.append((signal.state, session.in_transaction()))
 
         await run(session, factory, hub=Spy())
