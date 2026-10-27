@@ -34,3 +34,5 @@
 ## Comments
 
 - 2026-10-27 協調者（票 03b 收尾時的 Heads up，已查證）：`routes.check_route` / `routes.check_routes` 標成 `REVERSIBLE`、沒有旗標，所以 `needs_person` 是假、也不是 `internal`，會進登錄表、可以被登錄成工具。但它們會寫探測檔、讓 qBittorrent 校驗到 100%，觸發使用者設的「完成時執行外部程式」（`services/routes.py` 的說明、brief §20.2、M4 票 19；健康迴圈因此刻意不探測）。AI 自己按一次，使用者那邊的外部程式就跑一次（常見是發通知）。這張決定工具時二擇一並寫一行依據：不登錄成工具；或加 `Flag.SENDS_OUT`（`needs_person` 變真、出確認卡），同步 `tests/unit/test_command_marks.py` 的 NAMED。
+
+- 2026-10-27 票 19 交接：skills 用到的這幾支要進 `services/agent_tools.TOOLS`（並補 `about`）：`search.search_torrents`、`media.read_media`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`rss.subscribe_mikan`、`rss.subscribe_search`。加進去時 `tests/unit/test_skills.py` 的 `PENDING` 會紅，照著刪。命令改名的話同時改 `berth/skills/*/SKILL.md`（frontmatter 的 `tools` 與內文的工具名，格式閘門會擋對不上的）。`search_torrents` 的缺集搜尋在 skill 裡寫成 `scope: {missing: true, season: <n>}`。Route 由 `media.read_media` 的 `routes` / `default_route_id` 給（只列種類相符的），skills 不用 `routes.list_routes`；**`media.read_media` 現在是 `admin`**，要讓一般使用者拿得到 `missing-episodes`（他能送單），這支要開成 `audience=user`（作品頁本來登入就看得到），否則 skill 照 all-or-nothing 對他永遠不出現。
