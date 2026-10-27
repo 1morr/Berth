@@ -48,3 +48,5 @@
   - **票 22**：平行的兩張卡會在同一屏畫出兩塊 `assigned` 與兩顆主要鍵（「同一屏一顆 assigned 主鍵」）；總覽卡的欄位沒有縮排到勾選框標籤底下；送單卡沒有重述會被寫死的資料夾名（`SubmitAction` 有，plan §5）；面板沒聽 SSE 的 `event: proposal`（另一個分頁按了，這一頁要等下一輪答完或重新載入才更新）。`executing` 停住的卡仍沒有地方說（票 08 Comments）。
   - **票 14**：前端照命令名分派卡片畫法（`RowBody`、`COMMAND_TITLES`、拒絕理由那一組句子）與後端 `_CARD_INPUTS` 是同一件事的幾處，加新的卡片命令時一起補（票 14 已註明）。
   - `Turn.propose_card` / `card_result` 是 `services` 裡公開的 `async def` 但沒有 `@command`：與既有的 `Turn.run_tool` 同一種（方法，`test_command_marks` 只掃模組層），沒改。
+- 2026-10-27 票 19 交接：skills `missing-episodes`、`series-mapping`、`new-season-picks` 等 `downloading.add_manual_download` 進 `services/agent_tools.TOOLS`（還有別的工具，見 `tests/unit/test_skills.py` 的 `PENDING`）。加進去時 `PENDING` 那幾格會紅，照著刪；三份全齊時 skill 自己出現在 instructions。skill 裡送單的 `source` 寫成「從搜尋結果挑的那一筆」，沒有寫死 `source_id` 或 `JobSource`：這張定下形狀之後，確認 `missing-episodes`、`series-mapping`、`new-season-picks` 的那一步說法對得上。
+- 2026-10-28 合併 main（票 19、20）：`search.search_torrents`、`downloading.add_manual_download` 進了 `services/agent_tools.TOOLS`，`tests/unit/test_skills.py` 的 `PENDING` 刪了那兩格。skills 選 Route 的步驟寫的是 `media.read_media`（仍在 `PENDING`，票 14）；這張另外加了只回 Route 的 `media.route_choices`，票 14 決定 skill 用哪一支。

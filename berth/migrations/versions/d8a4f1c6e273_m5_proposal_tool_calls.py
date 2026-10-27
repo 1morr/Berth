@@ -7,7 +7,7 @@
   instructions 知道這幾張卡現在怎麼了（`services.agent`）。
 
 Revision ID: d8a4f1c6e273
-Revises: c3e7a1f9d524
+Revises: c4e7a9d2b158
 Create Date: 2026-10-28 10:00:00.000000
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d8a4f1c6e273"
-down_revision: str | None = "c3e7a1f9d524"
+down_revision: str | None = "c4e7a9d2b158"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

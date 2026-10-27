@@ -18,17 +18,22 @@ export type AgentRefusal = Schemas['AgentRefusal']
 
 const REASONS: ReasonSet<AgentRefusal> = {
   ai_disabled: true,
+  ai_paused: true,
   busy: true,
   card_undecided: true,
   no_message: true,
   conversation_missing: true,
+  not_continuable: true,
 }
 
 export function agentRefusalOf(error: unknown): Refusal<AgentRefusal> | null {
   return parseRefusal(error, REASONS)
 }
 
-/** AI 開著沒有。登入就讀得到；關著時面板只說怎麼設定（管理員）或「管理員還沒設定」。 */
+/**
+ * AI 開著沒有、provider 暫停到什麼時候（票 20；管理員另有 `pause_error`）。登入就讀得到；關著時面板
+ * 只說怎麼設定（管理員）或「管理員還沒設定」。暫停的畫法在票 22。
+ */
 export const agentStatusQueryOptions = queryOptions({
   queryKey: ['agent', 'status'],
   queryFn: ({ signal }) => apiGet<AgentStatus>('/agent/status', { signal }),

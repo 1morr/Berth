@@ -1815,6 +1815,8 @@ class AgentRefusal(StrEnum):
 
     #: AI 關著（`settings.ai.enabled`）：側面板只說怎麼設定。
     AI_DISABLED = "ai_disabled"
+    #: provider 斷路器開著（連續 5 次失敗，暫停 15 分鐘，M5 票 20）。detail 是暫停到什麼時候。
+    AI_PAUSED = "ai_paused"
     #: 這個人已經有一輪在跑（每人同時 1 輪，plan §11.6〈防護〉）。
     BUSY = "busy"
     #: 送來的最後一則不是有字的使用者訊息。
@@ -1824,6 +1826,8 @@ class AgentRefusal(StrEnum):
     #: 恢復那一輪（前端說「按了卡片」）時，還有卡片沒決定（M5 票 13）：前端的核准只是觸發，
     #: 決定以伺服器上的 Proposal 為準。平行的兩張卡要兩張都按了才恢復。
     CARD_UNDECIDED = "card_undecided"
+    #: 「繼續」按不了：不是最後一輪、不是被防護停下的、已經續過一次（M5 票 20）。
+    NOT_CONTINUABLE = "not_continuable"
 
 
 class AiStopReason(StrEnum):
@@ -1839,6 +1843,12 @@ class AiStopReason(StrEnum):
     TOKEN_LIMIT = "token_limit"
     #: 同一個工具同一組參數第 4 次（失敗的不計）。
     REPEATED_CALL = "repeated_call"
+    #: 兩個呼叫來回（A-B-A-B）而結果都沒變（M5 票 20）。
+    PING_PONG = "ping_pong"
+    #: 連續幾次模型呼叫之間的工具都沒帶來新的結果（M5 票 20）。
+    NO_PROGRESS = "no_progress"
+    #: 這一輪的出錯是 provider 連續第 5 次失敗：斷路器打開，暫停 15 分鐘（M5 票 20）。
+    CIRCUIT_OPEN = "circuit_open"
     #: 模型或 provider 出錯（連不上、key 被拒、回了壞東西）。
     ERROR = "error"
     #: 使用者關掉了連線（按停止、關頁）。

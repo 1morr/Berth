@@ -22,16 +22,13 @@ from berth.adapters.ai import chat_settings
 from berth.domain import AiProvider, Role
 from berth.services.agent import (
     STALE_CLAIM_SECONDS,
-    TAVILY_TOOL,
-    TOOLS,
     AgentRefusedError,
     AgentRuntime,
     card_model,
     needs_card,
     pending_calls,
-    tool_name,
-    visible_tools,
 )
+from berth.services.agent_tools import TAVILY_TOOL, TOOLS, tool_name, visible_tools
 from berth.services.commands import Effect
 from berth.services.registry import commands
 
