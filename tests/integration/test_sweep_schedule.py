@@ -13,9 +13,14 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.db import create_session_factory
+from berth.domain import Actor, ProposalStatus
 from berth.pipeline.sweeping import SWEEP_AT, Sweeper
+from berth.services import proposals
+from berth.services.events import EventHub, ProposalSignal
 from berth.services.notify import send_due
+from berth.services.proposals import PROPOSAL_TTL
 from tests.integration.factories import FakeClientFactory
+from tests.integration.test_executor import CREWS_JOB, household
 from tests.integration.test_plan import NOW
 from tests.integration.test_reconciler_schedule import Clock, ready
 from tests.integration.test_sweep import STOPPED, bound_series, stuck_issues, stuck_job
@@ -30,7 +35,7 @@ AFTER = datetime.combine(DAY, SWEEP_AT, tzinfo=UTC) + timedelta(minutes=30)
 
 
 def build(engine: AsyncEngine, clock: Clock) -> Sweeper:
-    return Sweeper(create_session_factory(engine), now=clock)
+    return Sweeper(create_session_factory(engine), EventHub(), now=clock)
 
 
 async def stuck(session: AsyncSession) -> None:
@@ -121,3 +126,26 @@ class TestTheRoundIsTheScheduledHour:
         assert await loop.run_if_due() is True
         await send_due(session, factory, now=clock.now + timedelta(seconds=10))
         assert len(factory.discord_.sent) == 2
+
+
+class TestProposalExpiry:
+    async def test_every_wake_expires_the_cards_past_their_deadline(
+        self, engine: AsyncEngine, session: AsyncSession
+    ) -> None:
+        """確認卡的期限以分鐘計（M5 票 08）：不等 `SWEEP_AT`，每一次醒來都收，開著的分頁也收到。"""
+        _, crew = await household(session)
+        hub = EventHub()
+        card = await proposals.propose(
+            session,
+            hub,
+            "jobs.retry_job",
+            [{"job_hash": CREWS_JOB}],
+            actor=Actor.person(crew.id, crew.role),
+            now=BEFORE - PROPOSAL_TTL,
+        )
+        loop = Sweeper(create_session_factory(engine), hub, now=Clock(BEFORE))
+
+        with hub.subscribe() as tab:
+            assert await loop.expire_proposals() == [card.id]
+            assert tab.get_nowait() == ProposalSignal(id=card.id, status=ProposalStatus.EXPIRED)
+        assert await loop.expire_proposals() == []

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from berth.db import create_session_factory
 from berth.pipeline import sweeping
 from berth.pipeline.sweeping import SWEEP_AT, Sweeper
+from berth.services.events import EventHub
 from berth.services.weekly import compose_weekly, list_reports
 from tests.integration.test_reconciler_schedule import Clock, ready
 
@@ -31,7 +32,7 @@ SUNDAY_NIGHT = MONDAY - timedelta(hours=6)
 
 
 def build(engine: AsyncEngine, clock: Clock) -> Sweeper:
-    return Sweeper(create_session_factory(engine), now=clock)
+    return Sweeper(create_session_factory(engine), EventHub(), now=clock)
 
 
 async def weeks(session: AsyncSession) -> list[date]:

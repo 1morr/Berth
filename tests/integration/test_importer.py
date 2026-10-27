@@ -38,7 +38,7 @@ from berth.domain import (
 )
 from berth.models import Event, Job, JobFile, LedgerEntry, PlanItem, Route
 from berth.pipeline import Importer, PlannerRunner
-from berth.services.events import EventHub, JobSignal
+from berth.services.events import EventHub, JobSignal, Signal
 from berth.services.hints import JobHints
 from berth.services.importer import UNMANAGED_TARGET, ImportOutcome, sweep_imports
 from berth.services.jobs import retry_job
@@ -199,7 +199,8 @@ class TestLinking:
         seen: list[tuple[str, bool]] = []
 
         class Spy(EventHub):
-            def publish(self, signal: JobSignal) -> None:
+            def publish(self, signal: Signal) -> None:
+                assert isinstance(signal, JobSignal)
                 seen.append((signal.state, session.in_transaction()))
 
         await run(session, factory, hub=Spy())

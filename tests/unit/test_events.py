@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from berth.domain import JobState
 from berth.services.downloads import BACKOFF_CEILING, IDLE_INTERVAL, backoff
-from berth.services.events import EventHub, JobSignal
+from berth.services.events import EventHub, JobSignal, Signal
+
+
+def hash_of(queued: Signal) -> str:
+    assert isinstance(queued, JobSignal)
+    return queued.hash
 
 
 def signal(hash_: str) -> JobSignal:
@@ -27,7 +32,7 @@ def test_a_slow_subscriber_loses_the_oldest_not_the_newest() -> None:
         for index in range(5):
             hub.publish(signal(str(index)))
 
-        assert [queue.get_nowait().hash for _ in range(2)] == ["3", "4"]
+        assert [hash_of(queue.get_nowait()) for _ in range(2)] == ["3", "4"]
 
 
 def test_publishing_with_nobody_listening_is_fine() -> None:
@@ -51,8 +56,8 @@ def test_everyone_listening_gets_the_same_signal() -> None:
     with hub.subscribe() as first, hub.subscribe() as second:
         hub.publish(signal("abc"))
 
-        assert first.get_nowait().hash == "abc"
-        assert second.get_nowait().hash == "abc"
+        assert hash_of(first.get_nowait()) == "abc"
+        assert hash_of(second.get_nowait()) == "abc"
 
 
 def test_consecutive_failures_back_off_to_five_minutes() -> None:

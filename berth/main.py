@@ -161,7 +161,7 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         reconciler = Reconciler(sessions, runner)
         rss = RssPoller(sessions, clients)
         notifier = NotifySender(sessions, clients)
-        sweeper = Sweeper(sessions)
+        sweeper = Sweeper(sessions, app.state.events)
         # 背景迴圈（plan §3.2）。每一個都先睡一個間隔，所以啟動本身不會慢。
         tasks = [
             asyncio.create_task(checker.run(), name=HEALTH_CHECKER_TASK),
