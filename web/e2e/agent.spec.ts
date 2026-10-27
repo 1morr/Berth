@@ -265,6 +265,74 @@ test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', 
   await shot(page, 'feed-refused')
 })
 
+test('停下的那一輪：說明是 Berth 的「停下」，「繼續」只按得到一次，重新載入後同一個樣子（M5 票 22）', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('一直查下載')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  const stop = log.locator('[data-stop]')
+  await expect(stop).toContainText('停下')
+  await expect(stop).toContainText('第 4 次')
+  const resume = log.getByRole('button', { name: '繼續' })
+  await expect(resume).toHaveCount(1)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'stop-continuable')
+
+  // 重新載入：同一個形狀（串流與重新載入都是 `data-stop`），「繼續」還在。
+  await page.reload()
+  await expect(log.locator('[data-stop]')).toContainText('第 4 次')
+  await expect(resume).toHaveCount(1)
+
+  await resume.click()
+  // 接著那一輪答完（替身對「繼續」說它只演哪幾件事）；按鈕不在了。
+  await expect(log).toContainText('這是演練用的假模型')
+  await expect(resume).toHaveCount(0)
+  await page.reload()
+  await expect(log.locator('[data-stop]')).toContainText('第 4 次')
+  await expect(log).toContainText('這是演練用的假模型')
+  await expect(resume).toHaveCount(0)
+  await shot(page, 'stop-continued')
+})
+
+// 放在最後：斷路器一開就暫停 15 分鐘，之後的流程都問不了。
+test('provider 連續出錯 5 次：側面板說暫停到幾點，再送被擋下（M5 票 20、22）', async ({ page }) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  const log = panel.getByRole('log', { name: '助理' })
+  // 關著：沒有暫停那一塊。
+  await expect(input).toBeVisible()
+  await expect(panel.getByText('助理暫停到')).toHaveCount(0)
+
+  for (let failures = 1; failures <= 5; failures++) {
+    await input.fill('provider 壞了')
+    await input.press('Enter')
+    await expect(log.locator('[data-stop]')).toHaveCount(failures)
+  }
+
+  // 開了：一般使用者也看得到到幾點；管理員另有錯誤原文。
+  await expect(panel.getByText('助理暫停到')).toBeVisible()
+  await expect(panel.getByText('錯誤原文')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'paused')
+
+  await input.fill('還在嗎')
+  await input.press('Enter')
+  await expect(panel.getByText(/AI 服務暫停中/)).toBeVisible()
+  await expect(input).toHaveValue('還在嗎')
+
+  // 重新載入照樣看得到（狀態在伺服器上）。
+  await page.reload()
+  await expect(panel.getByText('助理暫停到')).toBeVisible()
+})
+
 async function expectNoHorizontalScroll(page: import('@playwright/test').Page) {
   const overflow = await page.evaluate(
     '[document.documentElement.scrollWidth, window.innerWidth, document.querySelector("#agent-panel").scrollWidth, document.querySelector("#agent-panel").clientWidth]',
