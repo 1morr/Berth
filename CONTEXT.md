@@ -425,7 +425,7 @@ _Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳�
 _Avoid_: digest（digest 是摘要那一則通知）, summary, stats
 
 **Assistant**（助理）:
-AI 核心對人的介面：M6 的側面板、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
+AI 核心對人的介面：M5 的側面板（頁首的「助理」，M5 票 12）、M7 的外部管道。工具是 Command Registry，可逆的直接做並給撤銷，不可逆的提出 Proposal。
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
 **Conversation**（對話）:

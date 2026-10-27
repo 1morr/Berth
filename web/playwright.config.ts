@@ -46,6 +46,9 @@ const FLOWS = [
     port: 8518,
     viewport: NARROW,
   },
+  // 側面板（M5 票 12）：AI 開著、模型是照腳本回答的替身，不需要金鑰。
+  { name: 'agent', spec: 'agent', scenario: 'agent', port: 8528 },
+  { name: 'agent-390', spec: 'agent', scenario: 'agent', port: 8529, viewport: NARROW },
   { name: 'issues', spec: 'issues', scenario: 'issues', port: 8494 },
   // 週報（M4 票 131）：產品自己的 `compose_weekly` 產生最近兩週。
   { name: 'weekly', spec: 'weekly', scenario: 'weekly', port: 8526 },

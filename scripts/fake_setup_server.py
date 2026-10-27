@@ -22,20 +22,31 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from html import escape
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlsplit
 
 import time_machine
 import uvicorn
 from fastapi import FastAPI, Request, Response
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.models import Model
+from pydantic_ai.models.function import AgentInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
 from berth.adapters.ai import AiEndpoint
-from berth.adapters.ai.fake import FakeAi
+from berth.adapters.ai.fake import FakeAi, Script
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -130,11 +141,14 @@ from berth.domain import (
     ServiceOrigin,
     Source,
     Tags,
+    WhyNot,
     episode_label,
     why,
 )
 from berth.main import create_app
 from berth.models import (
+    AiEndpointSettings,
+    AiSettings,
     Event,
     IndexerSettings,
     Issue,
@@ -363,6 +377,8 @@ class Scenario:
     #: 規則（RSS Series 安靜 30 天算完結）時設；`None` 是真的時間。只固定 server，瀏覽器照真的時間，
     #: 所以畫面上的「幾天前」會比錄下的那天多算一段。
     clock: datetime | None = None
+    #: 側面板的假模型（M5 票 12）：給了就把 AI 打開，每一次模型呼叫由它回答。`None` 是 AI 關著。
+    ai_script: Script | None = None
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1741,6 +1757,123 @@ class TricklingQbittorrent(PlanningQbittorrent):
         return await super().sync()
 
 
+def agent_scenario() -> Scenario:
+    """側面板（M5 票 12）：同 `downloads`，另外 AI 開著，模型是照腳本回答的替身。
+
+    替身是 `why_not_script`。問「SPY×FAMILY 為什麼沒入庫」（或英文的
+    `Why isn't SPY×FAMILY in the library?`），它先搜尋作品、再叫「為什麼沒入庫」，
+    用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）。
+    其餘一律說它只演這兩件事。一個請求都不出網，不需要金鑰。
+    """
+    scenario = downloads_scenario()
+    scenario.tmdb = demo_tmdb(search={query: [SPY_ENTRY] for query in SPY_QUERIES})
+    scenario.ai_script = why_not_script
+    return scenario
+
+
+#: 替身 TMDB 認得的 SPY×FAMILY 查詢（`discover.normalise_query` 之後的樣子）。
+SPY_QUERIES = ("spy", "spy×family", "spy x family", "spy family", "間諜家家酒")
+
+#: 假模型回答時的結論說法。真的模型自己會說；這裡只要看得出它用的是工具結果的分類。
+WHY_NOT_WORDS: dict[WhyNot, tuple[str, str]] = {
+    WhyNot.IMPORT_FAILED: ("入庫失敗，要人看那一筆", "the import failed and needs a look"),
+    WhyNot.DOWNLOAD_FAILED: ("沒下載成", "the download failed"),
+    WhyNot.AWAITING_REVIEW: (
+        "下載完了，停在審核等管理員",
+        "it is downloaded and waiting for review",
+    ),
+    WhyNot.UNBOUND: ("RSS 有它，但還在待綁定", "RSS has it, but the series is not bound yet"),
+    WhyNot.EXCLUDED: ("被排除條件擋下", "an exclusion rule blocked it"),
+    WhyNot.NO_SOURCE: ("播了，但哪裡都沒有它", "it aired, but nothing has fetched it"),
+    WhyNot.DOWNLOADING: ("還在路上", "it is still on its way"),
+    WhyNot.JELLYFIN_PENDING: (
+        "已入庫，Jellyfin 還沒認到",
+        "it is imported; Jellyfin has not seen it yet",
+    ),
+    WhyNot.UNAIRED: ("還沒播", "it has not aired yet"),
+    WhyNot.IMPORTED: ("已經入庫了", "it is already in the library"),
+}
+
+_WHY_NOT_ASKED = re.compile(
+    r"^(.*?)\s*為什麼|^why (?:isn't|is not|hasn't|has not) (.+?)(?: in| been|\?|$)", re.I
+)
+
+
+def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+    """`agent` 情境的假模型：看最後一則請求是使用者的話還是哪一個工具的結果，決定下一步。"""
+    # 這一輪的問題：歷史裡最後一則使用者的話。回答用它的語言（假模型看不到介面語言）。
+    question = [
+        part.content
+        for message in messages
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, UserPromptPart) and isinstance(part.content, str)
+    ][-1]
+    chinese = re.search(r"[\u4e00-\u9fff]", question) is not None
+    last = messages[-1].parts[-1] if isinstance(messages[-1], ModelRequest) else None
+    if isinstance(last, UserPromptPart) and isinstance(last.content, str):
+        text = last.content
+        if "圖片" in text or "image" in text.lower():
+            return _say(
+                "這是一張外部圖片：\n\n![追蹤用的圖](https://tracker.example/pixel.png)"
+                if chinese
+                else "Here is an outside image:\n\n![tracking pixel](https://tracker.example/pixel.png)"
+            )
+        found = _WHY_NOT_ASKED.search(text.strip())
+        if found is None:
+            return _say(
+                "這是演練用的假模型，只演一件事：問「SPY×FAMILY 為什麼沒入庫」。"
+                if chinese
+                else "This is the demo model. It only acts out one question: "
+                "“Why isn't SPY×FAMILY in the library?”"
+            )
+        title = (found.group(1) or found.group(2) or "").strip()
+        return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": title})])
+    if isinstance(last, ToolReturnPart) and isinstance(last.content, dict):
+        # 工具結果是執行器回的 JSON（`Turn.run_tool` 的 `to_jsonable_python`）。
+        result: dict[str, Any] = cast(dict[str, Any], last.content)
+        if last.tool_name == "discover_search_media":
+            items = result.get("items") or []
+            if not items:
+                return _say("找不到這部作品。" if chinese else "I could not find that title.")
+            return ModelResponse(
+                parts=[ToolCallPart("why_not_explain", {"media_id": items[0]["id"]})]
+            )
+        if last.tool_name == "why_not_explain":
+            return _say(_why_not_answer(result, chinese=chinese))
+    if isinstance(last, RetryPromptPart):
+        return _say(
+            f"工具沒成功：`{last.model_response()}`"
+            if chinese
+            else f"The tool did not work: `{last.model_response()}`"
+        )
+    return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _why_not_answer(result: dict[str, Any], *, chinese: bool) -> str:
+    conclusion = str(result["conclusion"])
+    words = WHY_NOT_WORDS[WhyNot(conclusion)][0 if chinese else 1]
+    lines = [
+        f"**{result['title']}**：{words}（結論 `{conclusion}`）。"
+        if chinese
+        else f"**{result['title']}**: {words} (conclusion `{conclusion}`).",
+        "",
+    ]
+    for episode in result.get("episodes") or []:
+        label = (
+            f"S{episode['season']:02d}E{episode['episode']:02d}"
+            if episode.get("season") is not None
+            else ("整部" if chinese else "The film")
+        )
+        said = WHY_NOT_WORDS[WhyNot(episode["conclusion"])]
+        lines.append(f"- {label}：{said[0]}" if chinese else f"- {label}: {said[1]}")
+    return "\n".join(lines)
+
+
+def _say(text: str) -> ModelResponse:
+    return ModelResponse(parts=[TextPart(text)])
+
+
 def _trickle(progress: float) -> float:
     after = round(progress + 0.07, 2)
     return after if after <= 0.95 else 0.05
@@ -1856,6 +1989,7 @@ SCENARIOS = {
     "issues": issues_scenario,
     "review": review_scenario,
     "downloads": downloads_scenario,
+    "agent": agent_scenario,
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,
@@ -1906,7 +2040,9 @@ class FakeClientFactory:
         #: AI provider（M5 票 09）：key `rejected` 被拒、模型 `missing-model` 不存在，畫面上演得出
         #: 兩種失敗；其餘一律回 OK。
         self._ai = FakeAi(
-            rejected_keys=frozenset({"rejected"}), unknown_models=frozenset({"missing-model"})
+            rejected_keys=frozenset({"rejected"}),
+            unknown_models=frozenset({"missing-model"}),
+            script=scenario.ai_script,
         )
         #: 網路搜尋（M5 票 17）：不打網路，回一頁固定的。
         self._web_search = FakeWebSearch(
@@ -2219,6 +2355,9 @@ async def _seed(config: Config, scenario: Scenario, factory: FakeClientFactory) 
                 )
             if scenario.tmdb_credential:
                 await write_settings(session, TmdbSettings(api_key=scenario.tmdb_credential))
+            if scenario.ai_script is not None:
+                demo = AiEndpointSettings(api_key="demo-ai-key", model="demo-model")
+                await write_settings(session, AiSettings(enabled=True, anthropic=demo))
             await session.commit()
             if scenario.moored:
                 await _moor(session, scenario, factory, paths)

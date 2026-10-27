@@ -19,6 +19,7 @@ import {
   type WallSearch,
 } from './api/inventory'
 import { destination } from './auth/destination'
+import { AgentProvider } from './agent/AgentProvider'
 import { AppShell } from './AppShell'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { HealthPage } from './pages/HealthPage'
@@ -54,7 +55,14 @@ interface LoginSearch {
 }
 
 // 根路由不畫任何 chrome：精靈與登入都是整頁的，不套 app shell。
-const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outlet })
+// 側面板的開關與對話放在根路由：每一頁各自包一層 `AppShell`，換頁時它重掛（M5 票 12）。
+const rootRoute = createRootRouteWithContext<RouterContext>()({
+  component: () => (
+    <AgentProvider>
+      <Outlet />
+    </AgentProvider>
+  ),
+})
 
 /**
  * setup 未完成時任何頁面都導向精靈（plan §9.3、票 05 驗收）。
