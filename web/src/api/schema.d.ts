@@ -2720,6 +2720,8 @@ export interface components {
             /** Has Key */
             has_key: boolean;
             price: components["schemas"]["AiPriceOut"] | null;
+            /** Known Models */
+            known_models: string[];
         };
         /** AiIn */
         AiIn: {
@@ -2744,12 +2746,10 @@ export interface components {
             openai: components["schemas"]["AiEndpointOut"];
             /** Has Tavily Key */
             has_tavily_key: boolean;
-            /** Known Models */
-            known_models: string[];
         };
         /**
          * AiPriceOut
-         * @description 美元 / 百萬 token（`adapters.ai.prices`）。
+         * @description 美元 / 百萬 token（`adapters.ai.prices`）。分時段計價的服務是現在這個時段的價。
          */
         AiPriceOut: {
             /** Input */
@@ -2760,11 +2760,7 @@ export interface components {
             cache_read: string;
             /** Cache Write */
             cache_write: string;
-            /**
-             * Verified
-             * Format: date
-             */
-            verified: string;
+            source: components["schemas"]["PriceSourceOut"];
         };
         /**
          * AiProbeFailure
@@ -4862,6 +4858,8 @@ export interface components {
         ModelPriceRowOut: {
             /** Model */
             model: string;
+            /** Base Url */
+            base_url: string | null;
             price: components["schemas"]["AiPriceOut"] | null;
         };
         /** MyNotifyIn */
@@ -5402,6 +5400,25 @@ export interface components {
             /** Unknown Torrents */
             unknown_torrents: components["schemas"]["UnknownTorrentOut"][];
         };
+        /**
+         * PriceSourceOut
+         * @description 價目從哪來（M5 票 21b）。
+         */
+        PriceSourceOut: {
+            table: components["schemas"]["PriceTable"];
+            /** Version */
+            version: string;
+            /** Provider */
+            provider: string;
+            /** Verified */
+            verified: string | null;
+        };
+        /**
+         * PriceTable
+         * @description 一個價目從哪一份表查到的（`adapters.ai.prices`，M5 票 21b）。
+         * @enum {string}
+         */
+        PriceTable: "genai_prices" | "berth";
         /**
          * PrimeIn
          * @description 第一輪預覽選哪一個：`all` 全部下載、`later` 只追之後的。

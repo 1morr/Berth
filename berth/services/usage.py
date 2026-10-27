@@ -167,7 +167,9 @@ class RunRow:
 @dataclass(frozen=True, slots=True)
 class ModelPriceRow:
     model: str
-    #: 價目表上沒有是 `None`（畫面寫「未知」）。
+    #: 打的端點；`None` 是票 21b 之前記的呼叫（照接口種類查價）。
+    base_url: str | None
+    #: 現在的價（分時段計價的服務照現在這個時段）；查不到是 `None`（畫面寫「未知」）。
     price: ModelPrice | None
 
 
@@ -189,7 +191,7 @@ class UsageView:
 class SpendCheck:
     """今天的花費提醒，與它**沒算進去的**。
 
-    提醒只用知道的費用比，有回應、有 token 而價目表上沒有這個模型的那幾次不在裡面。管理員要看得出
+    提醒只用知道的費用比，有回應、有 token 而查不到價目的那幾次不在裡面。管理員要看得出
     「沒有提醒」是沒事，還是有一部分根本沒算（brief §6.10：未知不當 0）。
     """
 
@@ -253,7 +255,15 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         today,
         threshold,
     )
-    models = sorted({call.model for call in calls})
+    used = await session.execute(
+        select(AiCall.model, AiCall.base_url, AiRun.provider)
+        .join(AiRun, AiRun.id == AiCall.run_id)
+        .where(AiCall.created_at >= start)
+        .distinct()
+    )
+    # 同一組端點與模型由兩種接口打過（少見）：照先查到的那一種列一次。
+    endpoints = {(model, url): provider for model, url, provider in used}
+    at = now or datetime.now(UTC)
     return UsageView(
         today=today,
         days=days,
@@ -261,7 +271,12 @@ async def read_usage(session: AsyncSession, *, now: datetime | None = None) -> U
         runs_count=len(runs),
         guards=_guards([run for run, _ in runs], tools),
         runs=[_run_row(run, name) for run, name in runs[:RECENT_RUNS]],
-        prices=[ModelPriceRow(model, price_of(model)) for model in models],
+        prices=[
+            ModelPriceRow(model, url, price_of(model, base_url=url, provider=provider, at=at))
+            for (model, url), provider in sorted(
+                endpoints.items(), key=lambda item: (item[0][0], item[0][1] or "")
+            )
+        ],
         daily_alert_usd=threshold,
         spend=spend,
     )

@@ -11,8 +11,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.ai import AiEndpoint, normalize_base_url, probe
-from berth.adapters.ai.prices import PRICES, ModelPrice, price_of
+from berth.adapters.ai import AiEndpoint, effective_base_url, normalize_base_url, probe
+from berth.adapters.ai.prices import ModelPrice, known_models, price_of
 from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret
 from berth.models import AiEndpointSettings, AiSettings
 from berth.services.clients import ServiceClientFactory
@@ -36,8 +36,10 @@ class AiEndpointView:
     base_url: str
     model: str
     has_key: bool
-    #: 這個模型的價目；價目表上沒有是 `None`（畫面寫「未知」，不當 0）。
+    #: 這個端點上這個模型現在的價目；查不到是 `None`（畫面寫「未知」，不當 0）。
     price: ModelPrice | None
+    #: 這個端點查得到價的模型名，給模型欄當建議（可以不選、照打）。
+    known_models: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,8 +49,6 @@ class AiView:
     anthropic: AiEndpointView
     openai: AiEndpointView
     has_tavily_key: bool
-    #: 價目表上認得的模型名，給模型欄當建議（可以不選、照打）。
-    known_models: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,12 +73,14 @@ class AiTest:
     model: str
 
 
-def _endpoint_view(endpoint: AiEndpointSettings) -> AiEndpointView:
+def _endpoint_view(provider: AiProvider, endpoint: AiEndpointSettings) -> AiEndpointView:
+    base_url = effective_base_url(provider, endpoint.base_url)
     return AiEndpointView(
         base_url=endpoint.base_url,
         model=endpoint.model,
         has_key=bool(endpoint.api_key),
-        price=price_of(endpoint.model),
+        price=price_of(endpoint.model, base_url=base_url, provider=provider),
+        known_models=known_models(base_url, provider),
     )
 
 
@@ -86,10 +88,9 @@ def _view(settings: AiSettings) -> AiView:
     return AiView(
         enabled=settings.enabled,
         provider=settings.provider,
-        anthropic=_endpoint_view(settings.anthropic),
-        openai=_endpoint_view(settings.openai),
+        anthropic=_endpoint_view(AiProvider.ANTHROPIC, settings.anthropic),
+        openai=_endpoint_view(AiProvider.OPENAI, settings.openai),
         has_tavily_key=bool(settings.tavily_api_key),
-        known_models=tuple(sorted(PRICES)),
     )
 
 

@@ -3073,15 +3073,14 @@ const zhHant = {
       },
       model: {
         label: '模型',
-        hint: '服務那邊的模型名稱。清單是 Berth 有價目的模型，不在清單上的照樣可以填。',
+        hint: '服務那邊的模型名稱。清單是這個端點查得到價目的模型，不在清單上的照樣可以填。',
       },
       price: {
         label: '價目',
         known:
           '每百萬 token：輸入 ${{input}} · 輸出 ${{output}} · 快取讀 ${{cacheRead}} · 快取寫 ${{cacheWrite}}',
-        verified: '{{date}} 查證',
-        unknown: '價目未知：用量頁的費用會寫「未知」，不當 0。',
-        unsaved: '存了之後顯示這個模型的價目。',
+        unknown: '價目未知：這個端點查不到這個模型的價，用量頁的費用會寫「未知」，不當 0。',
+        unsaved: '存了之後顯示這個端點與模型的價目。',
         none: '還沒填模型。',
       },
       test: {
@@ -3995,7 +3994,7 @@ const zhHant = {
         tavily: 'Tavily 搜尋',
         cost: '估計費用',
         unknown: '未知',
-        note: '費用是照價目表估的；價目表上沒有的模型與非官方端點的網搜不計。',
+        note: '費用是照價目估的；查不到價目的模型與非官方端點的網搜不計。',
       },
       status: {
         model: '模型',
@@ -4028,7 +4027,7 @@ const zhHant = {
   // AI 用量頁與每一輪的步驟頁（M5 票 21，`.scratch/m5/usage-and-run-shape.md`）。
   usage: {
     title: 'AI 用量',
-    lede: '近 30 天，依伺服器的時區分日。費用是照價目表估的，不是帳單。',
+    lede: '近 30 天，依伺服器的時區分日。費用是照價目估的，不是帳單。',
     failedLead: '用量沒讀到',
     none: '—',
     unknown: '未知',
@@ -4042,9 +4041,9 @@ const zhHant = {
         '今天估計花了 {{today}}，是近 14 天有用量那幾天的中位數 {{against}} 的 {{times}} 倍。AI 照常可用。',
       unknownLabel: '費用未知',
       unknown_one:
-        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：那幾次的模型不在價目表上。',
+        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：那幾次查不到價目。',
       unknown_other:
-        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：那幾次的模型不在價目表上。',
+        '有 {{count}} 次呼叫的費用未知（今天 {{today}} 次、前 14 天 {{before}} 次），提醒沒算進它們：那幾次查不到價目。',
     },
     summary: {
       title: '今天與近 30 天',
@@ -4081,7 +4080,7 @@ const zhHant = {
       labeled: '{{label}} {{value}}',
       notes: {
         unknown:
-          '「—」是接口沒報（OpenAI 相容接口不報快取寫），不是 0。「+未知」是有幾次呼叫的費用算不進去：模型不在價目表上（出錯沒有回應的呼叫沒有花費，不算在內）。',
+          '「—」是接口沒報（OpenAI 相容接口不報快取寫），不是 0。「+未知」是有幾次呼叫的費用算不進去：查不到價目（出錯沒有回應的呼叫沒有花費，不算在內）。',
         newInput: '新的 input 是沒命中、也沒寫進快取的那部分；命中率是快取讀佔全部 input 的比例。',
       },
     },
@@ -4116,9 +4115,18 @@ const zhHant = {
     prices: {
       title: '費用怎麼算',
       model:
-        '{{model}}：輸入 ${{input}}、輸出 ${{output}}、快取讀 ${{cacheRead}}、快取寫 ${{cacheWrite}}（美元／百萬 token），查證於 {{verified}}。',
-      unknown: '{{model}}：不在價目表上，費用未知。',
-      byName: '價目只看模型名：自架閘道上同名的模型照表上的價估。',
+        '{{name}}：輸入 ${{input}}、輸出 ${{output}}、快取讀 ${{cacheRead}}、快取寫 ${{cacheWrite}}（美元／百萬 token）。{{source}}。',
+      unknown: '{{name}}：這個端點查不到價目，費用未知。',
+      at: '{{endpoint}} · {{model}}',
+      noEndpoint: '{{model}}（舊紀錄，沒記端點）',
+      source: {
+        genaiPrices: '價目來源：genai-prices {{version}}（{{provider}}）',
+        berth: '價目來源：Berth 補位表（{{date}} 查證）',
+      },
+      lookup:
+        '查價先照端點的網址認出服務商，再照模型名查 genai-prices（Pydantic 維護的價目資料，跟著 Berth 的版本更新，不連網）。網址認不得時照接口種類（Anthropic／OpenAI）查，所以自架閘道上與原廠同名的模型照原廠價估；都查不到的再看 Berth 補位表。',
+      timeOfDay:
+        '分時段計價的服務（DeepSeek 的尖峰與離峰）每次呼叫照當時的價算；上面列的是現在這個時段的價。',
       webSearch:
         '網搜：只有 Anthropic 官方端點的伺服器端網搜知道價錢（每次 $0.01，已算進估計費用）；其他端點（DeepSeek 相容端點、自架閘道）搜了但沒算進去。',
       tavily: 'Tavily 花的是你 Tavily 帳號的 credit，不在估計費用裡。',
@@ -7177,15 +7185,15 @@ const en: Translations<typeof zhHant> = {
       },
       model: {
         label: 'Model',
-        hint: 'The model name on that service. The list holds the models Berth has prices for; any other name works too.',
+        hint: 'The model name on that service. The list holds the models with a known price on this endpoint; any other name works too.',
       },
       price: {
         label: 'Price',
         known:
           'Per million tokens: input ${{input}} · output ${{output}} · cache read ${{cacheRead}} · cache write ${{cacheWrite}}',
-        verified: 'checked {{date}}',
-        unknown: 'Price unknown: the usage page will show the cost as “unknown”, not as 0.',
-        unsaved: 'Save to see this model’s price.',
+        unknown:
+          'Price unknown: no price for this model on this endpoint, so the usage page will show the cost as “unknown”, not as 0.',
+        unsaved: 'Save to see the price for this endpoint and model.',
         none: 'No model yet.',
       },
       test: {
@@ -8106,7 +8114,7 @@ const en: Translations<typeof zhHant> = {
         tavily: 'Tavily searches',
         cost: 'Estimated cost',
         unknown: 'Unknown',
-        note: 'The cost is estimated from the price table; models not on it and web searches on unofficial endpoints are not counted.',
+        note: 'The cost is estimated from known prices; models without one and web searches on unofficial endpoints are not counted.',
       },
       status: {
         model: 'Model',
@@ -8138,7 +8146,7 @@ const en: Translations<typeof zhHant> = {
   },
   usage: {
     title: 'AI usage',
-    lede: 'The last 30 days, split by the server’s time zone. Costs are estimates from the price table, not a bill.',
+    lede: 'The last 30 days, split by the server’s time zone. Costs are estimates from known prices, not a bill.',
     failedLead: 'Usage could not be read',
     none: '—',
     unknown: 'Unknown',
@@ -8153,9 +8161,9 @@ const en: Translations<typeof zhHant> = {
         'Today’s estimated spend is {{today}}, {{times}} times the median {{against}} of the days with usage in the last 14. AI keeps working.',
       unknownLabel: 'Cost unknown',
       unknown_one:
-        '{{count}} call has an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave it out: its model is not in the price table.',
+        '{{count}} call has an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave it out: no price was found for it.',
       unknown_other:
-        '{{count}} calls have an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave them out: their model is not in the price table.',
+        '{{count}} calls have an unknown cost ({{today}} today, {{before}} in the 14 days before), and the reminders leave them out: no price was found for them.',
     },
     summary: {
       title: 'Today and the last 30 days',
@@ -8192,7 +8200,7 @@ const en: Translations<typeof zhHant> = {
       labeled: '{{label}} {{value}}',
       notes: {
         unknown:
-          '“—” means the provider did not report it (OpenAI-compatible endpoints do not report cache writes); it is not 0. “+unknown” means some calls could not be priced: the model is not in the price table (calls that failed without a response cost nothing and are not counted).',
+          '“—” means the provider did not report it (OpenAI-compatible endpoints do not report cache writes); it is not 0. “+unknown” means some calls could not be priced: no price was found (calls that failed without a response cost nothing and are not counted).',
         newInput:
           'New input is the part that neither hit nor was written to the cache; the hit rate is cache reads over all input.',
       },
@@ -8228,10 +8236,18 @@ const en: Translations<typeof zhHant> = {
     prices: {
       title: 'How cost is estimated',
       model:
-        '{{model}}: input ${{input}}, output ${{output}}, cache read ${{cacheRead}}, cache write ${{cacheWrite}} (USD per million tokens), checked {{verified}}.',
-      unknown: '{{model}}: not in the price table; cost unknown.',
-      byName:
-        'Prices go by model name only: a model with the same name on a self-hosted gateway is priced as in the table.',
+        '{{name}}: input ${{input}}, output ${{output}}, cache read ${{cacheRead}}, cache write ${{cacheWrite}} (USD per million tokens). {{source}}.',
+      unknown: '{{name}}: no price for this endpoint; cost unknown.',
+      at: '{{endpoint}} · {{model}}',
+      noEndpoint: '{{model}} (older record, endpoint not kept)',
+      source: {
+        genaiPrices: 'Price source: genai-prices {{version}} ({{provider}})',
+        berth: 'Price source: Berth’s own table (checked {{date}})',
+      },
+      lookup:
+        'The endpoint’s address picks the provider, then the model name is looked up in genai-prices (price data maintained by Pydantic; it updates with Berth, never over the network). An address it does not know falls back to the interface (Anthropic / OpenAI), so a model on a self-hosted gateway with the same name as the vendor’s is priced as the vendor’s; anything still unknown is looked up in Berth’s own table.',
+      timeOfDay:
+        'Providers with time-of-day prices (DeepSeek’s peak and off-peak) are charged at the price when each call was made; the list above shows the price right now.',
       webSearch:
         'Web search: only server-side search on Anthropic’s own endpoint has a known price ($0.01 each, included in the estimate); other endpoints (DeepSeek-compatible, self-hosted gateways) searched but are not counted.',
       tavily: 'Tavily uses the credit on your Tavily account and is not in the estimate.',

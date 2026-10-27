@@ -76,7 +76,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import AiEndpoint, chat_settings, is_official, native_web_search
+from berth.adapters.ai import AiEndpoint, chat_settings, native_web_search
 from berth.adapters.ai.usage import WEB_SEARCH
 from berth.domain import (
     WAITING_PROPOSALS,
@@ -624,8 +624,6 @@ class Turn:
     #: 遮掉錯誤原文裡的 key。
     secret: str
     today: date
-    #: 打的是那一家的官方端點：伺服器端網搜的價只在這時候知道。
-    official: bool = False
     #: 這一輪搜得到網頁（伺服器端 `web_search` 或 Tavily）。
     can_search: bool = False
     #: 恢復那一輪：每一張等著的卡的結論（伺服器從 Proposal 算的，前端的核准只是觸發）。
@@ -933,9 +931,7 @@ class Turn:
         row = call_row(
             run_id=self.run_id,
             step=self.requests,
-            provider=self.provider,
-            model_name=self.model_name,
-            official=self.official,
+            endpoint=self.endpoint,
             response=response,
             started=started,
             error=error,
@@ -1304,7 +1300,6 @@ async def open_turn(
         model=model,
         secret=endpoint.api_key,
         today=datetime.now().astimezone().date(),
-        official=is_official(endpoint),
         can_search=tavily or bool(native),
         deferred=deferred,
         card_notes=notes,

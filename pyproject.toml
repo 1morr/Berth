@@ -11,6 +11,7 @@ dependencies = [
     "alembic>=1.19.2",
     "fastapi>=0.141.1",
     "feedparser>=6.0.14",
+    "genai-prices>=0.1.13",
     "guessit>=4.4.0",
     "httpx>=0.28.1",
     "httpx2>=2.16.0",

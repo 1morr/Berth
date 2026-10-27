@@ -45,7 +45,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import Model
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import AiEndpoint, chat_settings, is_official
+from berth.adapters.ai import AiEndpoint, chat_settings
 from berth.adapters.ai.usage import WEB_SEARCH
 from berth.domain import AiRunKind, AiStopReason
 from berth.models import AiCall, AiRun
@@ -209,9 +209,7 @@ async def _settle(
     row = call_row(
         run_id=run_id,
         step=1,
-        provider=endpoint.provider,
-        model_name=endpoint.model,
-        official=is_official(endpoint),
+        endpoint=endpoint,
         response=response,
         started=started,
         error=error,

@@ -37,11 +37,11 @@ class TokenTallyOut(BaseModel):
 class CostTallyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    #: 估計費用（美元），只算價目表上有的模型。
+    #: 估計費用（美元），只算查得到價目的呼叫。
     known: float
     #: 幾次呼叫算得出費用。
     counted: int
-    #: 幾次有回應的呼叫算不出費用（模型不在價目表上）；出錯沒有回應的沒有花費，不數。
+    #: 幾次有回應的呼叫算不出費用（查不到價目）；出錯沒有回應的沒有花費，不數。
     unknown: int
 
 
@@ -98,7 +98,9 @@ class ModelPriceRowOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     model: str
-    #: 價目表上沒有是 `null`：費用「未知」。
+    #: 打的端點；`null` 是票 21b 之前記的呼叫（照接口種類查價）。
+    base_url: str | None
+    #: 現在的價（分時段計價的服務照現在這個時段）；查不到是 `null`：費用「未知」。
     price: AiPriceOut | None
 
 
@@ -118,7 +120,7 @@ class SpendCheckOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     alerts: list[SpendAlertOut]
-    #: 今天幾次有回應的呼叫費用不知道（模型不在價目表上）：提醒沒算進它們。
+    #: 今天幾次有回應的呼叫費用不知道（查不到價目）：提醒沒算進它們。
     unknown_today: int
     #: 前 14 天（異常的基準）幾次呼叫的費用不知道。
     unknown_before: int

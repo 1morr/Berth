@@ -1045,8 +1045,10 @@ class TestTheUsagePage:
         assert sum(d["input_tokens"] for d in usage["days"]) == usage["totals"]["input_tokens"]
         assert usage["runs_count"] == 2
         assert [r["id"] for r in usage["runs"]] == [t.run.id for t in reversed(recorded(client))]
-        assert [p["model"] for p in usage["prices"]] == ["claude-sonnet-5-5"]
-        assert usage["prices"][0]["price"]["verified"] == "2026-10-27"
+        assert [(p["model"], p["base_url"]) for p in usage["prices"]] == [
+            ("claude-sonnet-5-5", "https://api.anthropic.com")
+        ]
+        assert usage["prices"][0]["price"]["source"]["table"] == "genai_prices"
 
     def test_users_cannot_see_it(self, client: TestClient) -> None:
         sign_in_crew(client)
@@ -1096,7 +1098,7 @@ class TestTheUsagePage:
 
 
 class TestUnknownCostsAreSaid:
-    """協調者 2026-10-27：模型不在價目表上時提醒永遠不響；畫面要看得出來，不是「沒事」。"""
+    """協調者 2026-10-27：查不到價目的模型提醒永遠不響；畫面要看得出來，不是「沒事」。"""
 
     def test_a_model_without_a_price_is_counted_for_the_admin(
         self, client: TestClient, script: Script
