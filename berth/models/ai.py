@@ -4,8 +4,9 @@
   `ModelMessagesTypeAdapter` 存成 JSON，**只有伺服器寫**：前端每次只送最後一則使用者訊息
   （brief §20.24：`VercelAIAdapter` 預設照收前端送回的歷史與核准）。`id` 是前端 `useChat` 的
   chat id，第一次送訊息時建立。
-- **`ai_runs`**：一則回覆一列，數字**每次模型呼叫之後當場加上去**——被防護中止、出錯、被關掉的
-  那一輪也有（brief §20.24：`on_complete` 不會被呼叫）。`stop_reason` 是 `NULL` 就是還在跑。
+- **`ai_runs`**：一則回覆一列（`kind = chat`），上下文壓縮的摘要也各一列（`compaction`，M5
+  票 18），數字**每次模型呼叫之後當場加上去**——被防護中止、出錯、被關掉的那一輪也有
+  （brief §20.24：`on_complete` 不會被呼叫）。`stop_reason` 是 `NULL` 就是還在跑。
 - **`ai_calls`**：每次模型呼叫一列，成敗都記。快取讀寫**照原樣存，`NULL` 是不知道**，不當 0
   （研究 C5）；費用認不得模型也是 `NULL`。伺服器端網搜的次數與費用另記兩格（M5 票 17）。
 - **`ai_tool_calls`**：每次工具呼叫一列：命令名、參數、結果的分類（`AiToolOutcome`）、結果
@@ -21,7 +22,7 @@ from datetime import datetime
 from sqlalchemy import Float, ForeignKey, Index, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
-from berth.domain import AiProvider, AiStopReason, AiToolOutcome
+from berth.domain import AiProvider, AiRunKind, AiStopReason, AiToolOutcome
 from berth.models.base import Base
 from berth.models.types import UtcDateTime, enum_column, utcnow
 
@@ -76,6 +77,10 @@ class AiRun(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float, default=0.0)
     #: 伺服器端網搜的次數（各次呼叫的 `web_searches` 合計；Tavily 是工具呼叫，在 `ai_tool_calls`）。
     web_searches: Mapped[int] = mapped_column(default=0, server_default="0")
+    #: 一輪對話，或一次壓縮的摘要（M5 票 18）。「最後一輪」（「繼續」、停在哪）只看 `chat`。
+    kind: Mapped[AiRunKind] = mapped_column(
+        enum_column(AiRunKind), default=AiRunKind.CHAT, server_default=AiRunKind.CHAT.value
+    )
     #: 這一輪是使用者對哪一輪按的「繼續」（M5 票 20）；它自己就不能再被繼續。
     #: 沒有外鍵：指的是同一段對話裡的一輪，刪對話時一起刪。
     continues: Mapped[str | None] = mapped_column(Text, default=None)

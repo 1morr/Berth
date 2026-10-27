@@ -122,6 +122,65 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   expect(names).not.toContain('[Berth-Demo] SPY×FAMILY - 05 [1080p][CHT]')
 })
 
+test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要，重新載入之後摘要還在', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  const log = panel.getByRole('log', { name: '助理' })
+
+  // 兩輪：`/compact` 只留最後一個，第一個換成摘要（M5 票 18）。
+  await input.fill('SPY×FAMILY 為什麼沒入庫')
+  await input.press('Enter')
+  await expect(log).toContainText('awaiting_review')
+  await input.fill('給我一張圖片')
+  await input.press('Enter')
+  await expect(panel.getByText('圖片沒有載入')).toBeVisible()
+
+  // 打 `/`：輸入欄上方列出六個指令，上下鍵移動。
+  await input.fill('/')
+  const hint = panel.getByRole('listbox', { name: '指令' })
+  await expect(hint.getByRole('option')).toHaveCount(6)
+  await input.press('ArrowDown')
+  await input.press('ArrowDown')
+  await expect(hint.getByRole('option', { selected: true })).toContainText('/usage')
+  await expect(input).toBeFocused()
+  await shot(page, 'slash-hint')
+  await expectNoHorizontalScroll(page)
+
+  // Enter 先補完選到的那一個，再按一次才執行：不經過模型，結果接在對話後面。
+  await input.press('Enter')
+  await expect(input).toHaveValue('/usage')
+  await input.press('Enter')
+  const usage = log.getByRole('region', { name: '/usage' })
+  await expect(usage.getByText('回覆')).toBeVisible()
+  await expect(usage).toContainText('模型呼叫')
+  await expect(hint).toHaveCount(0)
+  await expect(input).toHaveValue('')
+  await shot(page, 'slash-usage')
+
+  await input.fill('/compact')
+  await input.press('Enter')
+  await expect(log).toContainText('已壓縮')
+  const summary = log.locator('details').filter({ hasText: '較早的對話已壓縮成這段摘要' })
+  await expect(summary).toBeVisible()
+  // 第一輪的那則訊息不在了（它只剩摘要裡的一句）。
+  await expect(log.getByText('SPY×FAMILY 為什麼沒入庫', { exact: true })).toHaveCount(0)
+  await expect(log.getByText('給我一張圖片', { exact: true })).toBeVisible()
+  await summary.locator('summary').click()
+  await expect(summary).toContainText('使用者問過：SPY×FAMILY 為什麼沒入庫')
+  await shot(page, 'slash-compacted')
+
+  // 指令的結果只在這個分頁；壓縮後的歷史在伺服器上。
+  await page.reload()
+  await expect(
+    panel.getByRole('log', { name: '助理' }).getByText('較早的對話已壓縮成這段摘要'),
+  ).toBeVisible()
+  await expect(panel.getByRole('region', { name: '/usage' })).toHaveCount(0)
+})
+
 test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', async ({ page }) => {
   // M5 票 14、prototype S5 / S6：網址必須逐字出自使用者的話（brief §14）。
   const url = 'https://mikanani.me/RSS/MyBangumi?token=berth-demo'

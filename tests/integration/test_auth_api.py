@@ -504,6 +504,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 側面板分「可以問」與「AI 沒開」（M5 票 12）、暫停到什麼時候（票 20）：一般使用者讀不到
     # `/settings/ai`。
     ("GET", "/agent/status"): Access.SIGNED_IN,
+    # 斜線指令（M5 票 18）：同對話，只動得到自己的那一段。
+    ("POST", "/agent/conversations/*/commands"): Access.SIGNED_IN,
     # 每個人自己的通知（M4 票 125）：Discord ID、種類、測試。收件人取自 session。
     ("GET", "/me/notifications"): Access.SIGNED_IN,
     ("PUT", "/me/notifications"): Access.SIGNED_IN,

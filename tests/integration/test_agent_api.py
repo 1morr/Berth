@@ -165,7 +165,8 @@ def recorded(client: TestClient) -> list[Recorded]:
     return found
 
 
-def limit(client: TestClient, **numbers: int) -> None:
+# `Any`：`Limits` 的欄位有 int 也有 float（`compact_at`），逐格的型別由 `Limits` 自己守。
+def limit(client: TestClient, **numbers: Any) -> None:
     """換一組防護的數字（`Limits`）。"""
     client.app.state.agent = AgentRuntime(Limits(**numbers))  # type: ignore[attr-defined]  # 同上
 

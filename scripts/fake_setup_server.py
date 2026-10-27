@@ -179,6 +179,7 @@ from berth.services.clients import (
     BUNDLED_PROWLARR_URL,
     BundledServices,
 )
+from berth.services.compaction import SUMMARY_INSTRUCTIONS
 from berth.services.health import check_health
 from berth.services.health_issues import watch_conditions
 from berth.services.indexer import DEFAULT_INDEXERS
@@ -1846,6 +1847,8 @@ _WHY_NOT_ASKED = re.compile(
 
 def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
     """`agent` 情境的假模型：看最後一則請求是使用者的話還是哪一個工具的結果，決定下一步。"""
+    if (info.instructions or "").strip() == SUMMARY_INSTRUCTIONS.strip():
+        return _summary(messages)
     # 這一輪的問題：歷史裡最後一則使用者的話。回答用它的語言（假模型看不到介面語言）。
     question = [
         part.content
@@ -2030,6 +2033,23 @@ def _why_not_answer(result: dict[str, Any], *, chinese: bool) -> str:
         said = WHY_NOT_WORDS[WhyNot(episode["conclusion"])]
         lines.append(f"- {label}：{said[0]}" if chinese else f"- {label}: {said[1]}")
     return "\n".join(lines)
+
+
+def _summary(messages: list[ModelMessage]) -> ModelResponse:
+    """壓縮（`/compact`、自動壓縮，M5 票 18）的摘要：列出被換掉的那幾句使用者的話。"""
+    [request] = messages
+    assert isinstance(request, ModelRequest)
+    transcript = "".join(
+        part.content
+        for part in request.parts
+        if isinstance(part, UserPromptPart) and isinstance(part.content, str)
+    )
+    asked = [
+        line.removeprefix("User: ") for line in transcript.splitlines() if line.startswith("User: ")
+    ]
+    chinese = re.search(r"[\u4e00-\u9fff]", transcript) is not None
+    lead = "- 使用者問過：" if chinese else "- The user asked: "
+    return _say(lead + "；".join(asked) if chinese else lead + "; ".join(asked))
 
 
 def _say(text: str) -> ModelResponse:
