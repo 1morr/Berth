@@ -29,8 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin import JellyfinItem
 from berth.domain import (
+    CLAIMING_ACTIONS,
     REMATCH_ACTIONS,
     SETTLED_PLANS,
+    STUCK_STATES,
+    UNDER_WAY_STATES,
     EpisodeSnapshot,
     EpisodeStatus,
     FileKind,
@@ -63,28 +66,6 @@ FAILED_STATES: frozenset[JobState] = frozenset(
         JobState.IMPORT_FAILED,
     }
 )
-
-#: 還在路上：送單到入庫之間的每一站。`stalled` 也算——做種的人回來它就會自己動。
-UNDER_WAY_STATES: frozenset[JobState] = frozenset(
-    {
-        JobState.REQUESTED,
-        JobState.SUBMITTED,
-        JobState.METADATA_READY,
-        JobState.DOWNLOADING,
-        JobState.STALLED,
-        JobState.COMPLETED,
-        JobState.PLANNING,
-        JobState.IMPORTING,
-    }
-)
-
-#: 停下來等人的 Job：它的計劃蓋到的集數算「卡住」。送單失敗不在裡面——那一包連檔案清單
-#: 都還沒有，蓋不到任何一集。
-STUCK_STATES: frozenset[JobState] = frozenset({JobState.REVIEW, JobState.IMPORT_FAILED})
-
-#: 計劃裡說得出「這個檔案衝著哪一集來」的處置。`review` 也算：季集是猜的，但它確實是那一集的檔案。
-_CLAIMING: frozenset[PlanAction] = frozenset({PlanAction.IMPORT, PlanAction.REVIEW})
-
 
 # --- 一個 Jellyfin 媒體庫的牆 -------------------------------------------------
 
@@ -415,7 +396,7 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
                     ),
                 )
             )
-        if item.action not in _CLAIMING:
+        if item.action not in CLAIMING_ACTIONS:
             continue
         if job.state in STUCK_STATES:
             claim(stuck, item, job)

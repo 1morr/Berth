@@ -2393,6 +2393,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/media/{media_id}/why-not": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Why Not
+         * @description 這部作品（或那一集）為什麼沒入庫：季表、Job 與最後幾筆事件、Issue、RSS 那一側與一個結論。
+         *     只讀資料庫，不問任何服務。
+         */
+        get: operations["get_why_not_api_media__media_id__why_not_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2962,6 +2983,22 @@ export interface components {
          * @enum {string}
          */
         EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
+        /**
+         * EpisodeVerdictOut
+         * @description 一集（電影是整部，季集都是 `null`）的結論與蓋到它的那幾筆。
+         */
+        EpisodeVerdictOut: {
+            /** Season */
+            season: number | null;
+            /** Episode */
+            episode: number | null;
+            status: components["schemas"]["EpisodeStatus"] | null;
+            conclusion: components["schemas"]["WhyNot"];
+            /** Jobs */
+            jobs: string[];
+            /** Items */
+            items: number[];
+        };
         /** ExcludedCountOut */
         ExcludedCountOut: {
             code: components["schemas"]["SkipCode"];
@@ -5376,6 +5413,15 @@ export interface components {
             /** Episodes */
             episodes: components["schemas"]["EpisodeOut"][];
         };
+        /** SeasonTallyOut */
+        SeasonTallyOut: {
+            /** Season Number */
+            season_number: number;
+            /** Aired */
+            aired: number;
+            /** Imported */
+            imported: number;
+        };
         /**
          * SeriesCorrectedOut
          * @description 套用到 RSS Series 之後：Series 現在的值，與它底下還沒確認的集數怎麼了（M3 票 13）。
@@ -6077,6 +6123,139 @@ export interface components {
             imported: components["schemas"]["ImportedWorkOut"][];
             fixed: components["schemas"]["FixedOut"];
             waiting: components["schemas"]["StillWaitingOut"];
+        };
+        /**
+         * WhyNot
+         * @description 一集為什麼還沒在媒體庫裡（或其實已經在了）。
+         *
+         *     **宣告順序就是優先序**，與 `InventoryStatus` 同一個規矩：一部作品同時有好幾集各有原因時，
+         *     整體說的是最前面那一種——需要人動手的排前面，自己會好的排後面，沒事的最後。
+         * @enum {string}
+         */
+        WhyNot: "import_failed" | "download_failed" | "awaiting_review" | "unbound" | "excluded" | "no_source" | "downloading" | "jellyfin_pending" | "unaired" | "imported";
+        /** WhyNotIssueOut */
+        WhyNotIssueOut: {
+            /** Id */
+            id: number;
+            type: components["schemas"]["IssueType"];
+            /** Job Hash */
+            job_hash: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+        };
+        /** WhyNotItemOut */
+        WhyNotItemOut: {
+            /** Id */
+            id: number;
+            /** Series Id */
+            series_id: number | null;
+            /** Title */
+            title: string;
+            status: components["schemas"]["FeedItemStatus"];
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Error */
+            error: string;
+            /** Skip */
+            skip: {
+                [key: string]: unknown;
+            } | null;
+            /** Job Hash */
+            job_hash: string;
+            /** Published At */
+            published_at: string | null;
+        };
+        /** WhyNotJobOut */
+        WhyNotJobOut: {
+            /** Hash */
+            hash: string;
+            /** Name */
+            name: string;
+            state: components["schemas"]["JobState"];
+            trigger: components["schemas"]["JobTrigger"];
+            /** Error */
+            error: string;
+            /** Client State */
+            client_state: string;
+            /** Progress */
+            progress: number;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Events */
+            events: components["schemas"]["JobEventOut"][];
+        };
+        /**
+         * WhyNotOut
+         * @description 一部作品（或一集）為什麼沒入庫。
+         */
+        WhyNotOut: {
+            /** Media Id */
+            media_id: string;
+            kind: components["schemas"]["MediaKind"];
+            /** Title */
+            title: string;
+            /** Season */
+            season: number | null;
+            /** Episode */
+            episode: number | null;
+            conclusion: components["schemas"]["WhyNot"];
+            /** Seasons */
+            seasons: components["schemas"]["SeasonTallyOut"][];
+            /** Episodes */
+            episodes: components["schemas"]["EpisodeVerdictOut"][];
+            /** Jobs */
+            jobs: components["schemas"]["WhyNotJobOut"][];
+            /** Issues */
+            issues: components["schemas"]["WhyNotIssueOut"][] | null;
+            rss: components["schemas"]["WhyNotRssOut"] | null;
+        };
+        /**
+         * WhyNotRefusal
+         * @description `services/why_not.explain` 在讀任何東西之前就停下來的理由（M5 票 10）。
+         * @enum {string}
+         */
+        WhyNotRefusal: "media_missing" | "episode_incomplete" | "not_a_series";
+        /**
+         * WhyNotRefusalOut
+         * @description 做不了的時候回的那一份。`reason` 給畫面挑句子，`detail` 是原文。
+         */
+        WhyNotRefusalOut: {
+            reason: components["schemas"]["WhyNotRefusal"];
+            /** Detail */
+            detail: string;
+        };
+        /** WhyNotRssOut */
+        WhyNotRssOut: {
+            /** Series */
+            series: components["schemas"]["WhyNotSeriesOut"][];
+            /** Items */
+            items: components["schemas"]["WhyNotItemOut"][];
+        };
+        /**
+         * WhyNotSeriesOut
+         * @description 綁到這部作品的 RSS Series，或待綁定而候選裡有它的。
+         */
+        WhyNotSeriesOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Bound */
+            bound: boolean;
+            /** Confirmed */
+            confirmed: boolean;
+            /** Exclude */
+            exclude: string[];
         };
     };
     responses: never;
@@ -10831,6 +11010,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_why_not_api_media__media_id__why_not_get: {
+        parameters: {
+            query?: {
+                season?: number | null;
+                episode?: number | null;
+            };
+            header?: never;
+            path: {
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhyNotOut"];
+                };
+            };
+            /** @description `media_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhyNotRefusalOut"];
+                };
+            };
+            /** @description `episode_incomplete` · `not_a_series` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhyNotRefusalOut"];
                 };
             };
         };
