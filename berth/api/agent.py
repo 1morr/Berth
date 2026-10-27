@@ -9,6 +9,8 @@
   斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
   重新載入頁面時接回來。
+- `GET /agent/runs/{id}`：一輪的步驟（M5 票 21）。一般使用者只看得到自己的。每一則助理訊息的
+  `metadata.runId` 指到它那一輪：串流時在開頭的 `start`，重新載入時在每一則上。
 
 登入就能用（門禁的預設）；工具的範圍照這個人的角色（`services.agent_tools.visible_tools`）。
 """
@@ -16,23 +18,24 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import cached_property
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_ai import DeferredToolResults
-from pydantic_ai.messages import ModelMessage, ModelRequest
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from pydantic_ai.ui.vercel_ai.request_types import SubmitMessage, TextUIPart
 from pydantic_ai.ui.vercel_ai.response_types import (
     BaseChunk,
     DataChunk,
     ErrorChunk,
+    StartChunk,
     TextDeltaChunk,
     TextEndChunk,
     TextStartChunk,
@@ -47,7 +50,16 @@ from berth.api.deps import (
 )
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import Actor, AgentRefusal, AiStopReason, Language
+from berth.api.usage import SpendAlertOut
+from berth.domain import (
+    Actor,
+    AgentRefusal,
+    AiProvider,
+    AiRunRefusal,
+    AiStopReason,
+    AiToolOutcome,
+    Language,
+)
 from berth.services.agent import (
     AgentRefusedError,
     Turn,
@@ -56,6 +68,7 @@ from berth.services.agent import (
     read_conversation,
     read_status,
 )
+from berth.services.usage import RunRejectedError, read_run
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -84,6 +97,8 @@ class AgentStatusOut(BaseModel):
     paused_until: datetime | None
     #: 讓它暫停的那一次的錯誤原文（key 已遮掉）；只給管理員，其他人與沒有暫停是空字串。
     pause_error: str
+    #: 今天的花費提醒（同用量頁）；只給管理員，其他人永遠是空的。只提醒，不停用。
+    spend_alerts: list[SpendAlertOut]
 
 
 class TurnStopOut(BaseModel):
@@ -220,6 +235,8 @@ async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncIterator[Bas
             on_complete=turn.completed,
         )
         async for chunk in stream:
+            if isinstance(chunk, StartChunk):
+                chunk.message_metadata = {RUN_ID: turn.run_id}
             if isinstance(chunk, ErrorChunk):
                 note, stop = await turn.stopped(chunk.error_text)
                 text_id = uuid.uuid4().hex
@@ -247,12 +264,29 @@ async def get_conversation(
         found = await read_conversation(session, conversation_id, user_id=actor.user_id)
     except AgentRefusedError as exc:
         raise agent_refusal(exc) from exc
-    messages = VercelAIAdapter.dump_messages(list(found.history), sdk_version=SDK_VERSION)
+    messages = VercelAIAdapter.dump_messages(_tagged(found.history), sdk_version=SDK_VERSION)
     return ConversationOut(
         id=conversation_id,
         messages=[m.model_dump(mode="json", by_alias=True, exclude_none=True) for m in messages],
         stop=TurnStopOut.of(found.stop) if found.stop is not None else None,
     )
+
+
+#: 每一則助理訊息的 `metadata` 裡指到它那一輪的鍵（側面板連到步驟頁）。
+RUN_ID = "runId"
+
+
+def _tagged(history: Sequence[ModelMessage]) -> list[ModelMessage]:
+    """每一則模型回應的 metadata 帶上它那一輪的 id。
+
+    `dump_messages` 把回應的 metadata 照抄進 `UIMessage.metadata`。
+    """
+    return [
+        replace(message, metadata={**(message.metadata or {}), RUN_ID: message.run_id})
+        if isinstance(message, ModelResponse) and message.run_id
+        else message
+        for message in history
+    ]
 
 
 @router.get("/status")
@@ -263,5 +297,104 @@ async def get_status(
     actor = _actor(request)
     found = await read_status(session, runtime, actor.role)
     return AgentStatusOut(
-        enabled=found.enabled, paused_until=found.paused_until, pause_error=found.pause_error
+        enabled=found.enabled,
+        paused_until=found.paused_until,
+        pause_error=found.pause_error,
+        spend_alerts=[SpendAlertOut.model_validate(alert) for alert in found.spend_alerts],
     )
+
+
+class RunRefusalOut(BaseModel):
+    reason: AiRunRefusal
+    detail: str
+
+
+class StepCallOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    model: str
+    input_tokens: int
+    output_tokens: int
+    #: `null` 是接口沒報（不當 0）。
+    cache_read_tokens: int | None
+    cache_write_tokens: int | None
+    #: 價目表上沒有這個模型、或出錯沒有回應是 `null`。
+    cost_usd: float | None
+    web_searches: int
+    #: 模型說它為什麼停（原樣）；出錯是空字串。
+    finish_reason: str
+    duration_ms: int
+    #: 出錯的原文（key 已遮掉）；成功是空字串。
+    error: str
+    created_at: datetime
+
+
+class StepToolOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 命令登錄表的名字（`why_not.explain`）。
+    command: str
+    #: 參數的 JSON，截在 2000 字。
+    args_json: str
+    outcome: AiToolOutcome
+    #: 拒絕的理由、錯誤的原文；成功是空字串。
+    detail: str
+    truncated: bool
+    duration_ms: int
+
+
+class RunStepOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    step: int
+    #: 記帳之前就斷掉的那一次是 `null`（只剩它叫的工具）。
+    call: StepCallOut | None
+    tools: list[StepToolOut]
+
+
+class RunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_name: str
+    provider: AiProvider
+    model: str
+    started_at: datetime
+    #: 還在跑是 `null`。
+    ended_at: datetime | None
+    #: 還在跑是 `null`。
+    stop_reason: AiStopReason | None
+    #: 出錯的原文（key 已遮掉）。
+    error: str
+    #: 這一輪是對哪一輪按的「繼續」。
+    continues: str | None
+    requests: int
+    tool_calls: int
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int | None
+    cache_write_tokens: int | None
+    cost_usd: float | None
+    web_searches: int
+    tavily_searches: int
+    steps: list[RunStepOut]
+
+
+_RUN_STATUS: dict[AiRunRefusal, int] = {AiRunRefusal.RUN_MISSING: status.HTTP_404_NOT_FOUND}
+
+
+def run_refusal(exc: RunRejectedError) -> HTTPException:
+    body = RunRefusalOut(reason=exc.reason, detail=exc.detail)
+    return HTTPException(status_code=_RUN_STATUS[exc.reason], detail=body.model_dump(mode="json"))
+
+
+@router.get("/runs/{run_id}", responses=refusal_responses(RunRefusalOut, _RUN_STATUS))
+async def get_run(request: Request, session: SessionDep, run_id: str) -> RunOut:
+    """一輪的步驟：每一次模型呼叫與它叫的工具、各自的數字，以及停止原因。"""
+    actor = _actor(request)
+    assert actor.user_id is not None
+    try:
+        found = await read_run(session, run_id, user_id=actor.user_id, role=actor.role)
+    except RunRejectedError as exc:
+        raise run_refusal(exc) from exc
+    return RunOut.model_validate(found)

@@ -78,6 +78,7 @@ from berth.domain import (
     Language,
     Role,
 )
+from berth.domain.spend import SpendAlert
 from berth.models import AiCall, AiConversation, AiRun, AiSettings, AiToolCall
 from berth.models.types import utcnow
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
@@ -94,6 +95,7 @@ from berth.services.executor import CommandRefusedError, Executor
 from berth.services.registry import commands
 from berth.services.settings import read_settings
 from berth.services.skills import menu, skills_for
+from berth.services.usage import read_usage
 from berth.services.web import SEARCH_DOMAINS
 
 logger = logging.getLogger(__name__)
@@ -667,7 +669,11 @@ class Turn:
 
     def _kept(self, note: str) -> list[ModelMessage]:
         kept = self.prefix or [*self.history, self.prompt]
-        return [*kept, ModelResponse(parts=[TextPart(note)], model_name=_NOTE_MODEL)]
+        # 帶著這一輪的 id：側面板從它連到這一輪的步驟頁（M5 票 21）。
+        note_response = ModelResponse(
+            parts=[TextPart(note)], model_name=_NOTE_MODEL, run_id=self.run_id
+        )
+        return [*kept, note_response]
 
     async def _finish(
         self, messages: Sequence[ModelMessage], reason: AiStopReason, error: str
@@ -967,6 +973,8 @@ class AgentStatus:
     paused_until: datetime | None
     #: 讓它暫停的那一次的錯誤原文（key 已遮掉）。只給管理員：一般使用者看不到設定，修不了。
     pause_error: str
+    #: 今天的花費提醒（M5 票 21，同用量頁）。只給管理員：花的是他設的 key，一般使用者是空的。
+    spend_alerts: list[SpendAlert]
 
 
 # 側面板一打開就要分得出「可以問」與「AI 沒開」（票 12），暫停時說明到什麼時候、為什麼（票 20）。
@@ -980,4 +988,5 @@ async def read_status(session: AsyncSession, runtime: AgentRuntime, role: Role) 
         enabled=settings.enabled,
         paused_until=pause.until if pause is not None else None,
         pause_error=pause.error if pause is not None and role is Role.ADMIN else "",
+        spend_alerts=(await read_usage(session)).alerts if role is Role.ADMIN else [],
     )

@@ -93,6 +93,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "ChoiceRefusal": setup_api._CHOICE_STATUS,
     "WhyNotRefusal": why_not_api._STATUS,
     "AgentRefusal": agent_api._STATUS,
+    "AiRunRefusal": agent_api._RUN_STATUS,
     "ProposalRefusal": proposals_api._STATUS,
 }
 
@@ -114,6 +115,7 @@ MODELS = (
     "AiRefusalOut",
     "WhyNotRefusalOut",
     "AgentRefusalOut",
+    "RunRefusalOut",
     "ProposalRefusalOut",
     "JobSignalOut",
     "ProposalSignalOut",
@@ -465,6 +467,7 @@ class TestDeclaringWhatEachEndpointRefuses:
         """
         assert HELPERS == {
             "agent_refusal": "AgentRefusalOut",
+            "run_refusal": "RunRefusalOut",
             "route_refusal": "RouteRefusalOut",
             "proposal_refusal": "ProposalRefusalOut",
             "access_refusal": "AccessRefusalOut",
