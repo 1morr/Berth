@@ -10,6 +10,9 @@ const TOOL_NAMES = {
   why_not_explain: 'agent.tool.names.why_not_explain',
   jobs_list_jobs: 'agent.tool.names.jobs_list_jobs',
   jobs_read_job_events: 'agent.tool.names.jobs_read_job_events',
+  // 票 17：設了 Tavily key 才有；`web_search` 是 Anthropic 伺服器端那一種，不經登錄表。
+  web_tavily_search: 'agent.tool.names.web_tavily_search',
+  web_search: 'agent.tool.names.web_search',
 } as const
 
 type Phase = 'running' | 'done' | 'failed'

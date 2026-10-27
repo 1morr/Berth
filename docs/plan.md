@@ -156,8 +156,8 @@ adapters ──► domain                  （不 import services、models；回
 `models/ai.py`，migration `78a62163b817`。刪人連他的對話與 run 一起刪，刪對話連它的 run 一起刪（`CASCADE`）。
 
 - `ai_conversations`：`id`（前端 `useChat` 的 chat id，`[A-Za-z0-9_-]{1,64}`；第一次送訊息時替這個人建）、`user_id`、`history_json`（pydantic-ai 的 `ModelMessagesTypeAdapter`，**只有伺服器寫**：前端送來的歷史、工具結果與核准都不採用，brief §20.24）、`created_at`、`updated_at`。是別人的對話一律當作沒有（404 `conversation_missing`）。
-- `ai_runs`：一則回覆一列。`id`（也是 pydantic-ai 的 `run_id`）、`conversation_id`、`user_id`（AI 替誰跑）、`provider`、`model`（設定裡的名字）、`started_at`、`ended_at`、`stop_reason`（`AiStopReason`：`completed` / `request_limit` / `token_limit` / `repeated_call` / `error` / `cancelled`；`NULL` 是還在跑）、`error`（key 已遮掉）、`requests`、`tool_calls`、`input_tokens`（含快取讀寫）、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`。**每次模型呼叫之後當場寫**（不等 `on_complete`：中止的那一輪它不會被呼叫）。合計裡有一次不知道（`NULL`）就是不知道。
-- `ai_calls`：每次模型呼叫一列，成敗都記：`run_id`、`step`（從 1 起）、`model`（服務報的名字）、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`（**原樣存，`NULL` 是接口沒報**：Chat Completions 沒有快取寫這一格，`adapters/ai/usage.py`）、`cost_usd`（價目表認不得模型是 `NULL`，`prices.cost_of`）、`finish_reason`、`duration_ms`、`error`、`created_at`。
+- `ai_runs`：一則回覆一列。`id`（也是 pydantic-ai 的 `run_id`）、`conversation_id`、`user_id`（AI 替誰跑）、`provider`、`model`（設定裡的名字）、`started_at`、`ended_at`、`stop_reason`（`AiStopReason`：`completed` / `request_limit` / `token_limit` / `repeated_call` / `error` / `cancelled`；`NULL` 是還在跑）、`error`（key 已遮掉）、`requests`、`tool_calls`、`input_tokens`（含快取讀寫）、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`、`web_searches`（伺服器端網搜的合計，票 17；Tavily 是工具呼叫，在 `ai_tool_calls`）。**每次模型呼叫之後當場寫**（不等 `on_complete`：中止的那一輪它不會被呼叫）。合計裡有一次不知道（`NULL`）就是不知道。
+- `ai_calls`：每次模型呼叫一列，成敗都記：`run_id`、`step`（從 1 起）、`model`（服務報的名字）、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`（**原樣存，`NULL` 是接口沒報**：Chat Completions 沒有快取寫這一格，`adapters/ai/usage.py`）、`cost_usd`（價目表認不得模型是 `NULL`，`prices.cost_of`；含價錢知道的網搜）、`web_searches`（這次呼叫伺服器端搜了幾次，`usage.web_searches_of`）、`web_search_cost_usd`（沒搜是 0；`NULL` 是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點不計進 `cost_usd`，畫面要說明；migration `c3e7a1f9d524`）、`finish_reason`、`duration_ms`、`error`、`created_at`。
 - `ai_tool_calls`：每次工具呼叫一列：`run_id`、`step`（發出它的那次模型呼叫）、`command`（登錄表的名字，不是給模型的工具名）、`args_json`（截在 2000 字）、`outcome`（`AiToolOutcome`：`ok` / `warned` / `blocked` / `aborted` / `refused` / `failed`）、`detail`、`duration_ms`、`created_at`。
 
 ### 2.5 不做的事
@@ -605,7 +605,13 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 - `adapters/ai/prices.py`：每個模型四個價（輸入、輸出、快取讀、快取寫，USD / 百萬 token）加查證日期與來源；以模型名開頭比對、最長的鍵優先。**認不得回 `None`**（費用 NULL、畫面寫「未知」），不用 `genai_prices` 補位。
 - 替身 `adapters/ai/fake.py`（`FunctionModel`）：測試與演練伺服器共用，照 key 與模型名演出成功、key 被拒、模型不存在。
 - 兩家 SDK 依賴 `httpx2`；adapter 的測試換 `httpx2.MockTransport`。Starlette 的 `TestClient` 只要 import 得到 `httpx2` 就用它，所以 API 測試的回應型別是 `httpx2.Response`；其餘 adapter 照舊 `httpx` + `respx`。
+- 伺服器端 `web_search`（票 17）：`native_web_search(provider, domains, max_uses, available)` 只對 Anthropic 回一個動態的 `NativeTool`（每次模型呼叫前問這一輪還有沒有額度，沒有就不掛）；`max_uses` 每次一樣，因為改工具定義會讓整段 prompt 快取失效（brief §20.24）。`is_official(endpoint)` 判斷打的是不是官方端點（網搜的價只在那裡知道）。
 - **key 不進 log**（R13）：aiosqlite 的 DEBUG 行帶 SQL 參數（寫 `settings` 那一句就是整份 JSON），`configure_logging` 把那個 logger 固定在 INFO；engine 開 `hide_parameters`，SQL 例外的訊息也不帶參數。
+
+### 8.9 網路搜尋 adapter（M5 票 17）
+
+- `adapters/websearch`：`WebSearch.search(query, *, domains, max_results) -> list[WebPage{title, url, content}]`，介面不認 Tavily（之後換 SearXNG 這類，services 不動）。實作 `HttpTavily` 打 `POST https://api.tavily.com/search`（`Authorization: Bearer`，`search_depth: basic` 1 credit，不要 `include_answer`）。錯誤：401/403 `AuthFailedError`、429 與 5xx `ServiceUnavailableError`、400/432/433（參數錯、額度用完）`ServiceError`，訊息帶服務回的 `detail.error`（brief §20.24）。契約測試對 `tests/fixtures/http/tavily/` 的錄製回應（`scripts/experiments/tavily_search.py`）。
+- `services/web.tavily_search`（`Effect.READ`、`audience=user`）讀存著的 Tavily key、只搜 `SEARCH_DOMAINS`、每頁摘錄截在 1000 字，結果帶一句「這是外部內容」給模型。
 
 ---
 
@@ -1131,6 +1137,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 - **外部資料**：
   - AniList、Fribb anime-lists、Bangumi。
   - 網路搜尋：provider 走 Anthropic Messages 時用伺服器端 `web_search`；設了 Tavily key 時兩種 provider 都多一個 Tavily 工具。外部 MCP client 留到 M7。
+    - 兩種都只搜 `services/web.SEARCH_DOMAINS`（動漫與影視資料站、維基百科、Reddit），共用每輪 5 次的上限（`Limits.web_searches`；伺服器端那一種的 `max_uses` 每次固定，最後一次模型呼叫最多再多搜 4 次，理由在 §8.8）；搜到的是外部內容，`services.agent.external_texts` 從存著的歷史收出來給確認卡用（票 14）。回覆的引用附網址（給模型的指示）。
   - TMDB 只用 Berth 已有的端點（搜尋、熱門、作品頁）。
 - **觀測**：三張表 `ai_runs`、`ai_calls`、`ai_tool_calls`。用量**在每次模型呼叫之後當場記帳**，不等 run 結束：被中止的那一輪也要有數字（brief §20.24）。
 

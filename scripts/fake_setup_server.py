@@ -108,6 +108,8 @@ from berth.adapters.torrent import (
     magnet_info_hash,
 )
 from berth.adapters.torrent_fake import FakeTorrentFetcher
+from berth.adapters.websearch import WebPage, WebSearch
+from berth.adapters.websearch.fake import FakeWebSearch
 from berth.api.deps import get_bundled_services, get_client_factory, get_host_resolver
 from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
@@ -2042,6 +2044,16 @@ class FakeClientFactory:
             unknown_models=frozenset({"missing-model"}),
             script=scenario.ai_script,
         )
+        #: 網路搜尋（M5 票 17）：不打網路，回一頁固定的。
+        self._web_search = FakeWebSearch(
+            pages=[
+                WebPage(
+                    title="Frieren: Beyond Journey's End - Wikipedia",
+                    url="https://en.wikipedia.org/wiki/Frieren",
+                    content="Frieren is a Japanese manga series written by Kanehito Yamada.",
+                )
+            ]
+        )
 
     def jellyfin(self, base_url: str, token: str = "") -> JellyfinClient:
         if self._scenario.jellyfin.error is not None and base_url != BUNDLED_JELLYFIN_URL:
@@ -2092,6 +2104,9 @@ class FakeClientFactory:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         return self._ai.model(endpoint)
+
+    def tavily(self, api_key: str) -> WebSearch:
+        return self._web_search
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.prowlarr.ping_error is not None:

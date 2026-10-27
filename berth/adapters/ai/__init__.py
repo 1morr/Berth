@@ -14,10 +14,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import httpx2
-from pydantic_ai import ModelRequest
+from pydantic_ai import ModelRequest, RunContext
+from pydantic_ai.capabilities import AbstractCapability, NativeTool
 from pydantic_ai.direct import model_request
 from pydantic_ai.exceptions import (
     ModelAPIError,
@@ -30,6 +32,7 @@ from pydantic_ai.exceptions import (
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.native_tools import WebSearchTool
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
@@ -78,6 +81,36 @@ def normalize_base_url(provider: AiProvider, base_url: str) -> str:
     if provider is AiProvider.ANTHROPIC and url.endswith("/v1"):
         url = url.removesuffix("/v1")
     return url
+
+
+def is_official(endpoint: AiEndpoint) -> bool:
+    """打的是那一家自己的端點（base URL 留空或填的就是官方那一個）。網搜的價只在這裡確定。"""
+    base_url = normalize_base_url(endpoint.provider, endpoint.base_url)
+    return base_url in (
+        "",
+        normalize_base_url(endpoint.provider, OFFICIAL_BASE_URL[endpoint.provider]),
+    )
+
+
+def native_web_search[D](
+    provider: AiProvider, domains: Sequence[str], max_uses: int, available: Callable[[D], bool]
+) -> list[AbstractCapability[D]]:
+    """伺服器端的 `web_search`（M5 票 17）：只有 Anthropic Messages 有（官方與 DeepSeek 的相容端點，
+    brief §20.24），Chat Completions 沒有、回空的。只搜 `domains`（含子網域）。
+
+    每次模型呼叫之前問一次 `available(deps)`：這一輪的額度用完了，這一次起就不掛（pydantic-ai 的
+    動態 native tool，回 `None` 是這一步沒有它）。**`max_uses` 每次都一樣**：它是工具定義的一部分，
+    而改工具定義會讓整段 prompt 快取失效（brief §20.24）；照剩幾次調它，每搜一次下一次就整段重寫。
+    代價是最後一次呼叫可能多搜幾次（最多 `max_uses - 1`），比重寫快取便宜得多。
+    """
+    if provider is not AiProvider.ANTHROPIC:
+        return []
+    tool = WebSearchTool(max_uses=max_uses, allowed_domains=list(domains))
+
+    def prepare(ctx: RunContext[D]) -> WebSearchTool | None:
+        return tool if available(ctx.deps) else None
+
+    return [NativeTool(prepare)]
 
 
 def build_model(endpoint: AiEndpoint, *, http_client: httpx2.AsyncClient | None = None) -> Model:

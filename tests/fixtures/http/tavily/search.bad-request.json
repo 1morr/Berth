@@ -1,0 +1,11 @@
+{
+  "body": {
+    "detail": {
+      "error": "include_domains_mode/filter_by_include_domains requires include_domains to be specified."
+    }
+  },
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "status": 400
+}

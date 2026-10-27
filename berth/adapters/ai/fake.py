@@ -5,7 +5,8 @@
 
 **腳本**（M5 票 11）：`script` 給了的話，每一次模型呼叫由它回答——它看得到這一次送出去的訊息與
 可用的工具（`AgentInfo.function_tools`），回一則 `ModelResponse`（文字、工具呼叫），或丟例外演出錯。
-側面板是串流的，所以替身同時給串流版：把同一則回答拆成文字與工具呼叫的片段送出去。
+側面板是串流的，所以替身同時給串流版：把同一則回答拆成文字、工具呼叫與伺服器端工具（票 17）的
+片段送出去。
 """
 
 from __future__ import annotations
@@ -13,9 +14,22 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 
 from pydantic_ai.exceptions import ModelHTTPError
-from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelResponse,
+    NativeToolCallPart,
+    NativeToolReturnPart,
+    TextPart,
+    ToolCallPart,
+)
 from pydantic_ai.models import Model
-from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
+from pydantic_ai.models.function import (
+    AgentInfo,
+    BuiltinToolCallsReturns,
+    DeltaToolCall,
+    DeltaToolCalls,
+    FunctionModel,
+)
 
 from berth.adapters.ai import AiEndpoint
 
@@ -68,7 +82,7 @@ class FakeAi:
 
         async def stream(
             messages: list[ModelMessage], info: AgentInfo
-        ) -> AsyncIterator[str | DeltaToolCalls]:
+        ) -> AsyncIterator[str | DeltaToolCalls | BuiltinToolCallsReturns]:
             for index, part in enumerate(answer(messages, info).parts):
                 if isinstance(part, TextPart):
                     yield part.content
@@ -80,5 +94,8 @@ class FakeAi:
                             tool_call_id=part.tool_call_id,
                         )
                     }
+                elif isinstance(part, NativeToolCallPart | NativeToolReturnPart):
+                    # 伺服器端工具（`web_search`，票 17）整段一次送出，同真的 Anthropic 串流。
+                    yield {index: part}
 
         return FunctionModel(answer, stream_function=stream, model_name=endpoint.model)

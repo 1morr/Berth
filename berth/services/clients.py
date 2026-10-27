@@ -33,6 +33,8 @@ from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.tmdb import TmdbClient
 from berth.adapters.tmdb.client import HttpTmdbClient
 from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
+from berth.adapters.websearch import WebSearch
+from berth.adapters.websearch.tavily import HttpTavily
 from berth.config import DEFAULT_DISCORD_API_URL, Config
 from berth.domain import ServiceKind
 
@@ -76,6 +78,10 @@ class ServiceClientFactory(Protocol):
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         """AI provider 的模型物件（M5 票 09）。位址、key、模型名都是設定，接口兩種。"""
+        ...
+
+    def tavily(self, api_key: str) -> WebSearch:
+        """側面板的網路搜尋（M5 票 17）。位址固定，可變的是 key。"""
         ...
 
 
@@ -153,3 +159,6 @@ class HttpServiceClientFactory:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         return build_model(endpoint)
+
+    def tavily(self, api_key: str) -> WebSearch:
+        return HttpTavily(api_key)

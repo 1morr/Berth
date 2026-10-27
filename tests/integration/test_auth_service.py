@@ -26,6 +26,7 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
+from berth.adapters.websearch import WebSearch
 from berth.db import create_session_factory
 from berth.domain import Role
 from berth.models import JellyfinSettings, User, UserSession
@@ -82,6 +83,9 @@ class OneJellyfin:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         raise AssertionError("login never talks to an AI provider")
+
+    def tavily(self, api_key: str) -> WebSearch:
+        raise AssertionError("login never searches the web")
 
 
 @pytest.fixture

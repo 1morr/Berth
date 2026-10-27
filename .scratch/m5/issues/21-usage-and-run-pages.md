@@ -33,3 +33,5 @@
 - [ ] i18n zh-Hant 與 en；全部檢查、pytest、vitest 綠；DESIGN.md、CHANGELOG、progress.md 已更新
 
 ## Comments
+
+- 2026-10-27 票 17 交接：網搜次數＝`ai_calls.web_searches`（伺服器端）加 `ai_tool_calls` 裡 `web.tavily_search` 的 `ok` / `warned`。**畫面要說明網搜費用**：`ai_calls.web_search_cost_usd` 是 `NULL`（`error` 為空）時是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點（DeepSeek 相容端點、自架閘道）搜了但沒算進 `cost_usd`；Tavily 花的是使用者 Tavily 帳號的 credit，不在估計費用裡。

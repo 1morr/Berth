@@ -262,6 +262,8 @@ NAMED: dict[str, CommandMark] = {
     "agent.open_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
     "agent.read_conversation": _mark(Effect.READ),
     "agent.ai_enabled": _mark(Effect.READ, Flag.INTERNAL),
+    # M5 票 17：打的是固定的 Tavily（不是新位址），花使用者 Tavily 帳號的 credit；只讀。
+    "web.tavily_search": _mark(Effect.READ),
 }
 
 

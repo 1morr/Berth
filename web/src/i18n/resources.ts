@@ -3879,6 +3879,8 @@ const zhHant = {
         why_not_explain: '查為什麼沒入庫',
         jobs_list_jobs: '列出下載',
         jobs_read_job_events: '讀下載的時間線',
+        web_tavily_search: '網路搜尋（Tavily）',
+        web_search: '網路搜尋',
       },
     },
     failure: {
@@ -7691,6 +7693,8 @@ const en: Translations<typeof zhHant> = {
         why_not_explain: 'Why it is not imported',
         jobs_list_jobs: 'List downloads',
         jobs_read_job_events: 'Read a download’s timeline',
+        web_tavily_search: 'Web search (Tavily)',
+        web_search: 'Web search',
       },
     },
     failure: {
