@@ -5,6 +5,32 @@
     {
       "series": "rezero",
       "why": "TMDB 把四季併成一季；Fribb 的 offset 已知差一集；有 OVA 與劇場版",
+      "group": "熱門",
+      "b2_search": {
+        "found": 65942,
+        "name": "Re:ZERO -Starting Life in Another World-",
+        "first_air_date": "2016-04-04",
+        "query": "Re:ZERO -Starting Life in Another World-",
+        "query_kind": "english",
+        "candidates": [
+          [
+            65942,
+            "Re:ZERO -Starting Life in Another World-",
+            "2016-04-04"
+          ]
+        ],
+        "by_title": {
+          "english": 65942,
+          "romaji": 65942,
+          "native": 65942
+        },
+        "titles": {
+          "romaji": "Re:Zero kara Hajimeru Isekai Seikatsu",
+          "english": "Re:ZERO -Starting Life in Another World-",
+          "native": "Re:ゼロから始める異世界生活"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 21355,
       "tmdb_id": 65942,
       "tmdb_name": "Re:ZERO -Starting Life in Another World-",
@@ -43,7 +69,14 @@
             "end": 25,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 25,
@@ -51,8 +84,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 100049,
@@ -99,7 +134,14 @@
             "end": 38,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 26,
+            "end": 38,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 26,
             "end": 38,
@@ -107,8 +149,10 @@
           },
           "a": "錯",
           "b": "對",
+          "b2": "對",
           "a_how": "起點差 +1、終點差 +1",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 119661,
@@ -132,7 +176,14 @@
             "end": 50,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 39,
+            "end": 50,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 39,
             "end": 50,
@@ -140,8 +191,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 163134,
@@ -165,7 +218,14 @@
             "end": 66,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 51,
+            "end": 66,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 51,
             "end": 66,
@@ -173,8 +233,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 189046,
@@ -198,7 +260,14 @@
             "end": 85,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 67,
+            "end": 85,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 67,
             "end": 85,
@@ -206,14 +275,42 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "jujutsu",
       "why": "TMDB 把三季併成一季；有劇場版 0",
+      "group": "熱門",
+      "b2_search": {
+        "found": 95479,
+        "name": "JUJUTSU KAISEN",
+        "first_air_date": "2020-10-03",
+        "query": "JUJUTSU KAISEN",
+        "query_kind": "english",
+        "candidates": [
+          [
+            95479,
+            "JUJUTSU KAISEN",
+            "2020-10-03"
+          ]
+        ],
+        "by_title": {
+          "english": 95479,
+          "romaji": 95479,
+          "native": 95479
+        },
+        "titles": {
+          "romaji": "Jujutsu Kaisen",
+          "english": "JUJUTSU KAISEN",
+          "native": "呪術廻戦"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 113415,
       "tmdb_id": 95479,
       "tmdb_name": "JUJUTSU KAISEN",
@@ -252,7 +349,14 @@
             "end": 24,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 24,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 24,
@@ -260,8 +364,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 131573,
@@ -309,7 +415,14 @@
             "end": 47,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 25,
+            "end": 47,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 25,
             "end": 47,
@@ -317,8 +430,10 @@
           },
           "a": "錯",
           "b": "對",
+          "b2": "對",
           "a_how": "季不同（S2 對 S1）",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 192809,
@@ -353,7 +468,7 @@
           "end_date": "2025-11-07",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -384,7 +499,14 @@
             "end": 59,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 48,
+            "end": 59,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 48,
             "end": 59,
@@ -392,8 +514,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 209895,
@@ -423,6 +547,32 @@
     {
       "series": "frieren",
       "why": "TMDB 把兩季併成一季",
+      "group": "熱門",
+      "b2_search": {
+        "found": 209867,
+        "name": "Frieren: Beyond Journey's End",
+        "first_air_date": "2023-09-29",
+        "query": "Frieren: Beyond Journey’s End",
+        "query_kind": "english",
+        "candidates": [
+          [
+            209867,
+            "Frieren: Beyond Journey's End",
+            "2023-09-29"
+          ]
+        ],
+        "by_title": {
+          "english": 209867,
+          "romaji": 209867,
+          "native": 209867
+        },
+        "titles": {
+          "romaji": "Sousou no Frieren",
+          "english": "Frieren: Beyond Journey’s End",
+          "native": "葬送のフリーレン"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 154587,
       "tmdb_id": 209867,
       "tmdb_name": "Frieren: Beyond Journey's End",
@@ -461,7 +611,14 @@
             "end": 28,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 28,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 28,
@@ -469,8 +626,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 170068,
@@ -481,7 +640,7 @@
           "end_date": "2024-03-24",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -499,7 +658,7 @@
           "end_date": "2025-09-03",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -530,7 +689,14 @@
             "end": 38,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 29,
+            "end": 38,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 29,
             "end": 38,
@@ -538,8 +704,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 206425,
@@ -550,7 +718,7 @@
           "end_date": "2026-05-22",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -581,7 +749,14 @@
             "end": null,
             "note": "AniList 沒有完整的開播日"
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 的季用完了"
+          },
+          "searched": {
             "season": null,
             "start": null,
             "end": null,
@@ -589,14 +764,47 @@
           },
           "a": "無法判定",
           "b": "無法判定",
+          "b2": "無法判定",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "dandadan",
       "why": "第二季被 TMDB 併進第一季（brief §20.3）",
+      "group": "熱門",
+      "b2_search": {
+        "found": 240411,
+        "name": "Dan Da Dan",
+        "first_air_date": "2024-10-04",
+        "query": "DAN DA DAN",
+        "query_kind": "english",
+        "candidates": [
+          [
+            240411,
+            "Dan Da Dan",
+            "2024-10-04"
+          ],
+          [
+            67431,
+            "Monica and Friends",
+            "1976-12-10"
+          ]
+        ],
+        "by_title": {
+          "english": 240411,
+          "romaji": 240411,
+          "native": 240411
+        },
+        "titles": {
+          "romaji": "Dandadan",
+          "english": "DAN DA DAN",
+          "native": "ダンダダン"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 171018,
       "tmdb_id": 240411,
       "tmdb_name": "Dan Da Dan",
@@ -630,7 +838,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 12,
@@ -638,8 +853,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 185660,
@@ -663,7 +880,14 @@
             "end": 24,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 13,
+            "end": 24,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 13,
             "end": 24,
@@ -671,8 +895,10 @@
           },
           "a": "錯",
           "b": "對",
+          "b2": "對",
           "a_how": "季不同（S2 對 S1）",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 198966,
@@ -683,7 +909,7 @@
           "end_date": null,
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -691,7 +917,14 @@
             "end": null,
             "note": "AniList 沒有完整的開播日"
           },
+          "fribb_tmdb_ok": null,
           "chained": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 的季用完了"
+          },
+          "searched": {
             "season": null,
             "start": null,
             "end": null,
@@ -699,14 +932,52 @@
           },
           "a": "無法判定",
           "b": "無法判定",
+          "b2": "無法判定",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "aot",
       "why": "分割 cour（第 3 季 Part 2、Final Season 三段）、OVA 多",
+      "group": "熱門",
+      "b2_search": {
+        "found": 1429,
+        "name": "Attack on Titan",
+        "first_air_date": "2013-04-07",
+        "query": "Attack on Titan",
+        "query_kind": "english",
+        "candidates": [
+          [
+            1429,
+            "Attack on Titan",
+            "2013-04-07"
+          ],
+          [
+            63510,
+            "Attack on Titan: Junior High",
+            "2015-10-04"
+          ],
+          [
+            224499,
+            "Attack on Titan: Chibi Theater",
+            "2013-07-17"
+          ]
+        ],
+        "by_title": {
+          "english": 1429,
+          "romaji": 1429,
+          "native": 1429
+        },
+        "titles": {
+          "romaji": "Shingeki no Kyojin",
+          "english": "Attack on Titan",
+          "native": "進撃の巨人"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 16498,
       "tmdb_id": 1429,
       "tmdb_name": "Attack on Titan",
@@ -760,7 +1031,14 @@
             "end": 25,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 25,
@@ -768,8 +1046,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 18397,
@@ -803,7 +1083,7 @@
           "end_date": "2014-11-22",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -821,7 +1101,7 @@
           "end_date": "2015-04-09",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -839,7 +1119,7 @@
           "end_date": "2015-06-27",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -870,7 +1150,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 12,
@@ -878,8 +1165,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 99634,
@@ -890,7 +1179,7 @@
           "end_date": "2018-08-09",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -944,7 +1233,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 3,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 3,
             "start": 1,
             "end": 12,
@@ -952,8 +1248,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 104578,
@@ -977,7 +1275,14 @@
             "end": 22,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 3,
+            "start": 13,
+            "end": 22,
+            "note": ""
+          },
+          "searched": {
             "season": 3,
             "start": 13,
             "end": 22,
@@ -985,8 +1290,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 119113,
@@ -1034,7 +1341,14 @@
             "end": 16,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 4,
+            "start": 1,
+            "end": 16,
+            "note": ""
+          },
+          "searched": {
             "season": 4,
             "start": 1,
             "end": 16,
@@ -1042,8 +1356,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 131681,
@@ -1067,7 +1383,14 @@
             "end": 28,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 4,
+            "start": 17,
+            "end": 28,
+            "note": ""
+          },
+          "searched": {
             "season": 4,
             "start": 17,
             "end": 28,
@@ -1075,8 +1398,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 146984,
@@ -1110,7 +1435,7 @@
           "end_date": "2023-11-05",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -1124,6 +1449,32 @@
     {
       "series": "mushoku",
       "why": "第二季有第 0 集、季中有總集篇；OVA 多",
+      "group": "熱門",
+      "b2_search": {
+        "found": 94664,
+        "name": "Mushoku Tensei: Jobless Reincarnation",
+        "first_air_date": "2021-01-11",
+        "query": "Mushoku Tensei: Jobless Reincarnation",
+        "query_kind": "english",
+        "candidates": [
+          [
+            94664,
+            "Mushoku Tensei: Jobless Reincarnation",
+            "2021-01-11"
+          ]
+        ],
+        "by_title": {
+          "english": 94664,
+          "romaji": 94664,
+          "native": 94664
+        },
+        "titles": {
+          "romaji": "Mushoku Tensei: Isekai Ittara Honki Dasu",
+          "english": "Mushoku Tensei: Jobless Reincarnation",
+          "native": "無職転生 ～異世界行ったら本気だす～"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 108465,
       "tmdb_id": 94664,
       "tmdb_name": "Mushoku Tensei: Jobless Reincarnation",
@@ -1172,7 +1523,14 @@
             "end": 11,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 11,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 11,
@@ -1180,8 +1538,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 127720,
@@ -1205,7 +1565,14 @@
             "end": 23,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 12,
+            "end": 23,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 12,
             "end": 23,
@@ -1213,8 +1580,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 141534,
@@ -1225,7 +1594,7 @@
           "end_date": "2022-03-16",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -1256,7 +1625,14 @@
             "end": 12,
             "note": "第一集在 Specials（S00E02）"
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 13,
@@ -1264,8 +1640,10 @@
           },
           "a": "錯",
           "b": "錯",
+          "b2": "錯",
           "a_how": "終點差 +1",
-          "b_how": "終點差 +1"
+          "b_how": "終點差 +1",
+          "b2_how": "終點差 +1"
         },
         {
           "anilist_id": 166873,
@@ -1289,7 +1667,14 @@
             "end": 24,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 14,
+            "end": 25,
+            "note": "超出那一季的 24 集"
+          },
+          "searched": {
             "season": 2,
             "start": 14,
             "end": 25,
@@ -1297,8 +1682,10 @@
           },
           "a": "對",
           "b": "錯",
+          "b2": "錯",
           "a_how": "",
-          "b_how": "起點差 +1、終點差 +1"
+          "b_how": "起點差 +1、終點差 +1",
+          "b2_how": "起點差 +1、終點差 +1"
         },
         {
           "anilist_id": 178789,
@@ -1322,7 +1709,14 @@
             "end": 14,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 3,
+            "start": 1,
+            "end": 14,
+            "note": ""
+          },
+          "searched": {
             "season": 3,
             "start": 1,
             "end": 14,
@@ -1330,8 +1724,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 217434,
@@ -1342,7 +1738,7 @@
           "end_date": null,
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -1350,7 +1746,14 @@
             "end": null,
             "note": "AniList 沒有完整的開播日"
           },
+          "fribb_tmdb_ok": null,
           "chained": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 的季用完了"
+          },
+          "searched": {
             "season": null,
             "start": null,
             "end": null,
@@ -1358,14 +1761,57 @@
           },
           "a": "無法判定",
           "b": "無法判定",
+          "b2": "無法判定",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "kaguya",
       "why": "三季加一部劇場版（First Kiss）",
+      "group": "熱門",
+      "b2_search": {
+        "found": 83121,
+        "name": "Kaguya-sama: Love Is War",
+        "first_air_date": "2019-01-12",
+        "query": "Kaguya-sama: Love is War",
+        "query_kind": "english",
+        "candidates": [
+          [
+            83121,
+            "Kaguya-sama: Love Is War",
+            "2019-01-12"
+          ],
+          [
+            333504,
+            "Kaguya-sama: Love Is War -Stairway to Adulthood-",
+            "2025-12-31"
+          ],
+          [
+            330287,
+            "Kaguya-sama: Love Is War - Stairway to Adulthood",
+            "2025-12-31"
+          ],
+          [
+            332819,
+            "Kaguya-sama: Love Is War The First Kiss That Never Ends",
+            "2023-04-01"
+          ]
+        ],
+        "by_title": {
+          "english": 83121,
+          "romaji": 83121,
+          "native": 83121
+        },
+        "titles": {
+          "romaji": "Kaguya-sama wa Kokurasetai: Tensaitachi no Renai Zunousen",
+          "english": "Kaguya-sama: Love is War",
+          "native": "かぐや様は告らせたい～天才たちの恋愛頭脳戦～"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 101921,
       "tmdb_id": 83121,
       "tmdb_name": "Kaguya-sama: Love Is War",
@@ -1414,7 +1860,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 12,
@@ -1422,8 +1875,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 112641,
@@ -1447,7 +1902,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 12,
@@ -1455,8 +1917,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 125368,
@@ -1490,7 +1954,7 @@
           "end_date": "2021-10-21",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -1521,7 +1985,14 @@
             "end": 13,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 3,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
             "season": 3,
             "start": 1,
             "end": 13,
@@ -1529,8 +2000,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 151384,
@@ -1555,7 +2028,14 @@
             "end": null,
             "note": "TMDB 沒有哪一集在開播日 ±1 天播出"
           },
+          "fribb_tmdb_ok": null,
           "chained": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 的季用完了"
+          },
+          "searched": {
             "season": null,
             "start": null,
             "end": null,
@@ -1563,8 +2043,10 @@
           },
           "a": "無法判定",
           "b": "無法判定",
+          "b2": "無法判定",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 194884,
@@ -1598,7 +2080,7 @@
           "end_date": null,
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -1612,6 +2094,32 @@
     {
       "series": "spyfamily",
       "why": "第 1 季分兩個 cour、第 2 季、劇場版 CODE: White",
+      "group": "熱門",
+      "b2_search": {
+        "found": 120089,
+        "name": "SPY x FAMILY",
+        "first_air_date": "2022-04-09",
+        "query": "SPY x FAMILY",
+        "query_kind": "english",
+        "candidates": [
+          [
+            120089,
+            "SPY x FAMILY",
+            "2022-04-09"
+          ]
+        ],
+        "by_title": {
+          "english": 120089,
+          "romaji": 120089,
+          "native": 120089
+        },
+        "titles": {
+          "romaji": "SPY×FAMILY",
+          "english": "SPY x FAMILY",
+          "native": "SPY×FAMILY"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 140960,
       "tmdb_id": 120089,
       "tmdb_name": "SPY x FAMILY",
@@ -1660,7 +2168,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 12,
@@ -1668,8 +2183,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 142838,
@@ -1693,7 +2210,14 @@
             "end": 25,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 13,
+            "end": 25,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 13,
             "end": 25,
@@ -1701,8 +2225,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 158927,
@@ -1726,7 +2252,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 12,
@@ -1734,8 +2267,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 158928,
@@ -1783,7 +2318,14 @@
             "end": 13,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 3,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
             "season": 3,
             "start": 1,
             "end": 13,
@@ -1791,14 +2333,42 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "bleach",
       "why": "千年血戰篇分三段，TMDB 接在 366 集的原作之後",
+      "group": "熱門",
+      "b2_search": {
+        "found": 30984,
+        "name": "Bleach",
+        "first_air_date": "2004-10-05",
+        "query": "Bleach",
+        "query_kind": "english",
+        "candidates": [
+          [
+            30984,
+            "Bleach",
+            "2004-10-05"
+          ]
+        ],
+        "by_title": {
+          "english": 30984,
+          "romaji": 30984,
+          "native": 30984
+        },
+        "titles": {
+          "romaji": "BLEACH",
+          "english": "Bleach",
+          "native": "BLEACH"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 116674,
       "tmdb_id": 30984,
       "tmdb_name": "Bleach",
@@ -1842,7 +2412,14 @@
             "end": 366,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 366,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 366,
@@ -1850,8 +2427,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 834,
@@ -1862,7 +2441,7 @@
           "end_date": "2006-03-23",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -1928,7 +2507,7 @@
           "end_date": "2008-09-21",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -2007,7 +2586,14 @@
             "end": 13,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 13,
@@ -2015,8 +2601,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 159322,
@@ -2040,7 +2628,14 @@
             "end": 26,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 14,
+            "end": 26,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 14,
             "end": 26,
@@ -2048,8 +2643,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 169755,
@@ -2073,7 +2670,14 @@
             "end": 40,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 27,
+            "end": 40,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 27,
             "end": 40,
@@ -2081,8 +2685,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 185874,
@@ -2106,7 +2712,14 @@
             "end": 50,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 41,
+            "end": 50,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 41,
             "end": 50,
@@ -2114,14 +2727,42 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "uchouten",
-      "why": "冷門：兩季相隔四年",
+      "why": "兩季相隔四年",
+      "group": "冷門",
+      "b2_search": {
+        "found": 61338,
+        "name": "The Eccentric Family",
+        "first_air_date": "2013-07-07",
+        "query": "The Eccentric Family",
+        "query_kind": "english",
+        "candidates": [
+          [
+            61338,
+            "The Eccentric Family",
+            "2013-07-07"
+          ]
+        ],
+        "by_title": {
+          "english": 61338,
+          "romaji": 61338,
+          "native": 61338
+        },
+        "titles": {
+          "romaji": "Uchouten Kazoku",
+          "english": "The Eccentric Family",
+          "native": "有頂天家族"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 17909,
       "tmdb_id": 61338,
       "tmdb_name": "The Eccentric Family",
@@ -2160,7 +2801,14 @@
             "end": 13,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 13,
@@ -2168,8 +2816,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 97642,
@@ -2193,7 +2843,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 12,
@@ -2201,14 +2858,42 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         }
       ]
     },
     {
       "series": "maou",
-      "why": "冷門：第 1 季與第 2 季相隔九年，第 2 季分兩個 cour",
+      "why": "第 1 季與第 2 季相隔九年，第 2 季分兩個 cour",
+      "group": "冷門",
+      "b2_search": {
+        "found": 45997,
+        "name": "The Devil Is a Part-Timer!",
+        "first_air_date": "2013-04-04",
+        "query": "The Devil is a Part-Timer!",
+        "query_kind": "english",
+        "candidates": [
+          [
+            45997,
+            "The Devil Is a Part-Timer!",
+            "2013-04-04"
+          ]
+        ],
+        "by_title": {
+          "english": 45997,
+          "romaji": 45997,
+          "native": 45997
+        },
+        "titles": {
+          "romaji": "Hataraku Maou-sama!",
+          "english": "The Devil is a Part-Timer!",
+          "native": "はたらく魔王さま!"
+        }
+      },
+      "b2_work_ok": true,
       "anilist_root": 15809,
       "tmdb_id": 45997,
       "tmdb_name": "The Devil Is a Part-Timer!",
@@ -2252,7 +2937,14 @@
             "end": 13,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
             "season": 1,
             "start": 1,
             "end": 13,
@@ -2260,8 +2952,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 130592,
@@ -2285,7 +2979,14 @@
             "end": 12,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 1,
             "end": 12,
@@ -2293,8 +2994,10 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
         },
         {
           "anilist_id": 154539,
@@ -2305,7 +3008,7 @@
           "end_date": "2023-10-01",
           "fribb": {
             "covered": false,
-            "note": "表上有，但沒有 TMDB 劇集或季"
+            "note": "表上有，但沒有 TMDB 劇集"
           },
           "truth": {
             "season": null,
@@ -2336,7 +3039,14 @@
             "end": 24,
             "note": ""
           },
+          "fribb_tmdb_ok": true,
           "chained": {
+            "season": 2,
+            "start": 13,
+            "end": 24,
+            "note": ""
+          },
+          "searched": {
             "season": 2,
             "start": 13,
             "end": 24,
@@ -2344,8 +3054,1003 @@
           },
           "a": "對",
           "b": "對",
+          "b2": "對",
           "a_how": "",
-          "b_how": ""
+          "b_how": "",
+          "b2_how": ""
+        }
+      ]
+    },
+    {
+      "series": "fruitsbasket",
+      "why": "2019 重製版，TMDB 另有 2001 年的同名作",
+      "group": "撞名",
+      "b2_search": {
+        "found": 85991,
+        "name": "Fruits Basket",
+        "first_air_date": "2019-04-06",
+        "query": "Fruits Basket (2019)",
+        "query_kind": "english",
+        "candidates": [
+          [
+            85991,
+            "Fruits Basket",
+            "2019-04-06"
+          ]
+        ],
+        "by_title": {
+          "english": 85991,
+          "romaji": 85991,
+          "native": 85991
+        },
+        "titles": {
+          "romaji": "Fruits Basket: 1st Season",
+          "english": "Fruits Basket (2019)",
+          "native": "フルーツバスケット 1st Season"
+        }
+      },
+      "b2_work_ok": true,
+      "anilist_root": 105334,
+      "tmdb_id": 85991,
+      "tmdb_name": "Fruits Basket",
+      "tmdb_seasons": [
+        {
+          "season_number": 1,
+          "episode_count": 25,
+          "name": "Season 1"
+        },
+        {
+          "season_number": 2,
+          "episode_count": 25,
+          "name": "Season 2"
+        },
+        {
+          "season_number": 3,
+          "episode_count": 13,
+          "name": "The Final Season"
+        }
+      ],
+      "entries": [
+        {
+          "anilist_id": 105334,
+          "title": "Fruits Basket: 1st Season",
+          "format": "TV",
+          "episodes": 25,
+          "start_date": "2019-04-06",
+          "end_date": "2019-09-21",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 85991,
+            "season": 1,
+            "offset": 0,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "truth": {
+            "season": 1,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "searched": {
+            "season": 1,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 111762,
+          "title": "Fruits Basket: 2nd Season",
+          "format": "TV",
+          "episodes": 25,
+          "start_date": "2020-04-07",
+          "end_date": "2020-09-22",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 85991,
+            "season": 2,
+            "offset": 0,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "truth": {
+            "season": 2,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "searched": {
+            "season": 2,
+            "start": 1,
+            "end": 25,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 124194,
+          "title": "Fruits Basket: The Final",
+          "format": "TV",
+          "episodes": 13,
+          "start_date": "2021-04-06",
+          "end_date": "2021-06-29",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 85991,
+            "season": 3,
+            "offset": 0,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 沒有哪一集在開播日 ±1 天播出"
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 3,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
+            "season": 3,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "a": "無法判定",
+          "b": "無法判定",
+          "b2": "無法判定",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 136192,
+          "title": "Fruits Basket: prelude",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2022-02-18",
+          "end_date": "2022-02-18",
+          "fribb": {
+            "covered": true,
+            "movies": [
+              896499
+            ],
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 電影 movie/896499"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        }
+      ]
+    },
+    {
+      "series": "hxh2011",
+      "why": "2011 重製版，TMDB 另有 1999 年的同名作",
+      "group": "撞名",
+      "b2_search": {
+        "found": 46298,
+        "name": "Hunter x Hunter",
+        "first_air_date": "2011-10-02",
+        "query": "Hunter x Hunter (2011)",
+        "query_kind": "english",
+        "candidates": [
+          [
+            46298,
+            "Hunter x Hunter",
+            "2011-10-02"
+          ]
+        ],
+        "by_title": {
+          "english": 46298,
+          "romaji": 46298,
+          "native": 46298
+        },
+        "titles": {
+          "romaji": "HUNTER×HUNTER (2011)",
+          "english": "Hunter x Hunter (2011)",
+          "native": "HUNTER×HUNTER (2011)"
+        }
+      },
+      "b2_work_ok": true,
+      "anilist_root": 11061,
+      "tmdb_id": 46298,
+      "tmdb_name": "Hunter x Hunter",
+      "tmdb_seasons": [
+        {
+          "season_number": 1,
+          "episode_count": 62,
+          "name": "Season 1"
+        },
+        {
+          "season_number": 2,
+          "episode_count": 74,
+          "name": "Season 2"
+        },
+        {
+          "season_number": 3,
+          "episode_count": 12,
+          "name": "Season 3"
+        }
+      ],
+      "entries": [
+        {
+          "anilist_id": 11061,
+          "title": "HUNTER×HUNTER (2011)",
+          "format": "TV",
+          "episodes": 148,
+          "start_date": "2011-10-02",
+          "end_date": "2014-09-24",
+          "fribb": {
+            "covered": false,
+            "tmdb_id": 46298,
+            "note": "有 TMDB 劇集 tv/46298，沒有季"
+          },
+          "truth": {
+            "season": 1,
+            "start": 1,
+            "end": 148,
+            "note": "跨季：到 S03E148",
+            "end_season": 3
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 148,
+            "note": "超出那一季的 62 集"
+          },
+          "searched": {
+            "season": 1,
+            "start": 1,
+            "end": 148,
+            "note": "超出那一季的 62 集"
+          },
+          "a": "未覆蓋",
+          "b": "錯",
+          "b2": "錯",
+          "a_how": "",
+          "b_how": "正解跨季（S01E01–S03E148）",
+          "b2_how": "正解跨季（S01E01–S03E148）"
+        },
+        {
+          "anilist_id": 13271,
+          "title": "HUNTER×HUNTER: Phantom Rouge",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2013-01-12",
+          "end_date": "2013-01-12",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 46298,
+            "season": 0,
+            "offset": 0,
+            "start": 1,
+            "end": 1,
+            "note": ""
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 19951,
+          "title": "HUNTER×HUNTER: THE LAST MISSION",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2013-12-27",
+          "end_date": "2013-12-27",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 46298,
+            "season": 0,
+            "offset": 1,
+            "start": 2,
+            "end": 2,
+            "note": ""
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        }
+      ]
+    },
+    {
+      "series": "urusei",
+      "why": "2022 重製版，TMDB 另有 1981 年的同名作",
+      "group": "撞名",
+      "b2_search": {
+        "found": 154524,
+        "name": "Urusei Yatsura",
+        "first_air_date": "2022-10-14",
+        "query": "Urusei Yatsura (2022)",
+        "query_kind": "romaji",
+        "candidates": [
+          [
+            154524,
+            "Urusei Yatsura",
+            "2022-10-14"
+          ]
+        ],
+        "by_title": {
+          "english": null,
+          "romaji": 154524,
+          "native": 154524
+        },
+        "titles": {
+          "romaji": "Urusei Yatsura (2022)",
+          "english": "Urusei Yatsura (2022) Seasons 1 & 2",
+          "native": "うる星やつら (2022)"
+        }
+      },
+      "b2_work_ok": true,
+      "anilist_root": 143277,
+      "tmdb_id": 154524,
+      "tmdb_name": "Urusei Yatsura",
+      "tmdb_seasons": [
+        {
+          "season_number": 1,
+          "episode_count": 46,
+          "name": "Season 1"
+        }
+      ],
+      "entries": [
+        {
+          "anilist_id": 143277,
+          "title": "Urusei Yatsura (2022)",
+          "format": "TV",
+          "episodes": 23,
+          "start_date": "2022-10-14",
+          "end_date": "2023-03-24",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 154524,
+            "season": 1,
+            "offset": 0,
+            "start": 1,
+            "end": 23,
+            "note": ""
+          },
+          "truth": {
+            "season": 1,
+            "start": 1,
+            "end": 23,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 23,
+            "note": ""
+          },
+          "searched": {
+            "season": 1,
+            "start": 1,
+            "end": 23,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 155645,
+          "title": "Urusei Yatsura (2022) 2nd Season",
+          "format": "TV",
+          "episodes": 23,
+          "start_date": "2024-01-12",
+          "end_date": "2024-06-21",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 154524,
+            "season": 1,
+            "offset": 23,
+            "start": 24,
+            "end": 46,
+            "note": ""
+          },
+          "truth": {
+            "season": 1,
+            "start": 24,
+            "end": 46,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 24,
+            "end": 46,
+            "note": ""
+          },
+          "searched": {
+            "season": 1,
+            "start": 24,
+            "end": 46,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        }
+      ]
+    },
+    {
+      "series": "kino",
+      "why": "2017 重製版，TMDB 另有 2003 年的奇諾之旅",
+      "group": "撞名",
+      "b2_search": {
+        "found": 74097,
+        "name": "Kino's Journey -the Beautiful World- the Animated Series",
+        "first_air_date": "2017-10-06",
+        "query": "Kino's Journey -the Beautiful World- the Animated Series",
+        "query_kind": "english",
+        "candidates": [
+          [
+            74097,
+            "Kino's Journey -the Beautiful World- the Animated Series",
+            "2017-10-06"
+          ],
+          [
+            34166,
+            "Kino's Journey",
+            "2003-04-08"
+          ]
+        ],
+        "by_title": {
+          "english": 74097,
+          "romaji": 74097,
+          "native": 74097
+        },
+        "titles": {
+          "romaji": "Kino no Tabi -the Beautiful World- the Animated Series",
+          "english": "Kino's Journey -the Beautiful World- the Animated Series",
+          "native": "キノの旅 -the Beautiful World- the Animated Series"
+        }
+      },
+      "b2_work_ok": true,
+      "anilist_root": 98448,
+      "tmdb_id": 74097,
+      "tmdb_name": "Kino's Journey -the Beautiful World- the Animated Series",
+      "tmdb_seasons": [
+        {
+          "season_number": 1,
+          "episode_count": 12,
+          "name": "Season 1"
+        }
+      ],
+      "entries": [
+        {
+          "anilist_id": 108973,
+          "title": "Kino no Tabi -the Beautiful World- Haikyo no Kuni",
+          "format": "SPECIAL",
+          "episodes": 27,
+          "start_date": "2016-07-23",
+          "end_date": "2016-09-02",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 98448,
+          "title": "Kino no Tabi -the Beautiful World- the Animated Series",
+          "format": "TV",
+          "episodes": 12,
+          "start_date": "2017-10-06",
+          "end_date": "2017-12-22",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 74097,
+            "season": 1,
+            "offset": 0,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "truth": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        }
+      ]
+    },
+    {
+      "series": "tamako",
+      "why": "只有劇場版接續（Tamako Love Story）",
+      "group": "冷門",
+      "b2_search": {
+        "found": 48561,
+        "name": "Tamako Market",
+        "first_air_date": "2013-01-10",
+        "query": "Tamako Market",
+        "query_kind": "english",
+        "candidates": [
+          [
+            48561,
+            "Tamako Market",
+            "2013-01-10"
+          ]
+        ],
+        "by_title": {
+          "english": 48561,
+          "romaji": 48561,
+          "native": 48561
+        },
+        "titles": {
+          "romaji": "Tamako Market",
+          "english": "Tamako Market",
+          "native": "たまこまーけっと"
+        }
+      },
+      "b2_work_ok": true,
+      "anilist_root": 16417,
+      "tmdb_id": 48561,
+      "tmdb_name": "Tamako Market",
+      "tmdb_seasons": [
+        {
+          "season_number": 0,
+          "episode_count": 13,
+          "name": "Specials"
+        },
+        {
+          "season_number": 1,
+          "episode_count": 12,
+          "name": "Season 1"
+        }
+      ],
+      "entries": [
+        {
+          "anilist_id": 16417,
+          "title": "Tamako Market",
+          "format": "TV",
+          "episodes": 12,
+          "start_date": "2013-01-10",
+          "end_date": "2013-03-28",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 48561,
+            "season": 1,
+            "offset": 0,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "truth": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
+            "season": 1,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 17879,
+          "title": "Tamako Market Specials",
+          "format": "SPECIAL",
+          "episodes": 6,
+          "start_date": "2013-03-20",
+          "end_date": "2013-08-21",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 20519,
+          "title": "Tamako Love Story",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2014-04-26",
+          "end_date": "2014-04-26",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 48561,
+            "season": 0,
+            "offset": 0,
+            "start": 1,
+            "end": 1,
+            "note": ""
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 21014,
+          "title": "Minami no Shima no Dera-chan",
+          "format": "SPECIAL",
+          "episodes": 1,
+          "start_date": "2014-04-26",
+          "end_date": "2014-04-26",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        }
+      ]
+    },
+    {
+      "series": "abyss",
+      "why": "兩季之間夾一部劇場版接續（深き魂の黎明）",
+      "group": "冷門",
+      "b2_search": {
+        "found": 72636,
+        "name": "Made in Abyss",
+        "first_air_date": "2017-07-07",
+        "query": "Made in Abyss",
+        "query_kind": "english",
+        "candidates": [
+          [
+            72636,
+            "Made in Abyss",
+            "2017-07-07"
+          ],
+          [
+            256393,
+            "Marulk's Daily Life",
+            "2020-01-17"
+          ]
+        ],
+        "by_title": {
+          "english": 72636,
+          "romaji": 72636,
+          "native": 72636
+        },
+        "titles": {
+          "romaji": "Made in Abyss",
+          "english": "Made in Abyss",
+          "native": "メイドインアビス"
+        }
+      },
+      "b2_work_ok": true,
+      "anilist_root": 97986,
+      "tmdb_id": 72636,
+      "tmdb_name": "Made in Abyss",
+      "tmdb_seasons": [
+        {
+          "season_number": 0,
+          "episode_count": 5,
+          "name": "Specials"
+        },
+        {
+          "season_number": 1,
+          "episode_count": 13,
+          "name": "Season 1"
+        },
+        {
+          "season_number": 2,
+          "episode_count": 12,
+          "name": "The Golden City of the Scorching Sun"
+        }
+      ],
+      "entries": [
+        {
+          "anilist_id": 97986,
+          "title": "Made in Abyss",
+          "format": "TV",
+          "episodes": 13,
+          "start_date": "2017-07-07",
+          "end_date": "2017-09-29",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 72636,
+            "season": 1,
+            "offset": 0,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "truth": {
+            "season": 1,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 1,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "searched": {
+            "season": 1,
+            "start": 1,
+            "end": 13,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 101343,
+          "title": "Made in Abyss: Tabidachi no Yoake",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2019-01-04",
+          "end_date": "2019-01-04",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 101344,
+          "title": "Made in Abyss: Hourou Suru Tasogare",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2019-01-18",
+          "end_date": "2019-01-18",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 100643,
+          "title": "Made in Abyss: Fukaki Tamashii no Reimei",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2020-01-17",
+          "end_date": "2020-01-17",
+          "fribb": {
+            "covered": true,
+            "movies": [
+              573730
+            ],
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "TMDB 電影 movie/573730"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 114744,
+          "title": "Marulk-chan no Nichijou",
+          "format": "SPECIAL",
+          "episodes": 4,
+          "start_date": "2020-01-17",
+          "end_date": "2020-02-07",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 114745,
+          "title": "Made in Abyss: Retsujitsu no Ougonkyou",
+          "format": "TV",
+          "episodes": 12,
+          "start_date": "2022-07-06",
+          "end_date": "2022-09-28",
+          "fribb": {
+            "covered": true,
+            "tmdb_id": 72636,
+            "season": 2,
+            "offset": 0,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "truth": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "fribb_tmdb_ok": true,
+          "chained": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "searched": {
+            "season": 2,
+            "start": 1,
+            "end": 12,
+            "note": ""
+          },
+          "a": "對",
+          "b": "對",
+          "b2": "對",
+          "a_how": "",
+          "b_how": "",
+          "b2_how": ""
+        },
+        {
+          "anilist_id": 153791,
+          "title": "Made in Abyss: Retsujitsu no Ougonkyou - Papa to Issho",
+          "format": "SPECIAL",
+          "episodes": 1,
+          "start_date": "2022-10-26",
+          "end_date": "2022-10-26",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 160275,
+          "title": "Made in Abyss: Mezameru Shinpi",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": "2026-10-23",
+          "end_date": "2026-10-23",
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
+        },
+        {
+          "anilist_id": 218721,
+          "title": "Made in Abyss: Mezameru Shinpi Part 2",
+          "format": "MOVIE",
+          "episodes": 1,
+          "start_date": null,
+          "end_date": null,
+          "fribb": {
+            "covered": false,
+            "note": "表上有，但沒有 TMDB 劇集"
+          },
+          "truth": {
+            "season": null,
+            "start": null,
+            "end": null,
+            "note": "不比（只比 TV 條目）"
+          }
         }
       ]
     }

@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from lib import Response
 from lib import request as _request
@@ -65,6 +66,8 @@ class Series:
     tmdb_id: int
     #: 為什麼挑它。
     why: str
+    #: 熱門，或冷門 / 容易撞名（重製版、同名不同作、只有劇場版接續）。
+    group: str = "熱門"
 
 
 SERIES = (
@@ -79,8 +82,14 @@ SERIES = (
     Series("kaguya", 101921, 83121, "三季加一部劇場版（First Kiss）"),
     Series("spyfamily", 140960, 120089, "第 1 季分兩個 cour、第 2 季、劇場版 CODE: White"),
     Series("bleach", 116674, 30984, "千年血戰篇分三段，TMDB 接在 366 集的原作之後"),
-    Series("uchouten", 17909, 61338, "冷門：兩季相隔四年"),
-    Series("maou", 15809, 45997, "冷門：第 1 季與第 2 季相隔九年，第 2 季分兩個 cour"),
+    Series("uchouten", 17909, 61338, "兩季相隔四年", "冷門"),
+    Series("maou", 15809, 45997, "第 1 季與第 2 季相隔九年，第 2 季分兩個 cour", "冷門"),
+    Series("fruitsbasket", 105334, 85991, "2019 重製版，TMDB 另有 2001 年的同名作", "撞名"),
+    Series("hxh2011", 11061, 46298, "2011 重製版，TMDB 另有 1999 年的同名作", "撞名"),
+    Series("urusei", 143277, 154524, "2022 重製版，TMDB 另有 1981 年的同名作", "撞名"),
+    Series("kino", 98448, 74097, "2017 重製版，TMDB 另有 2003 年的奇諾之旅", "撞名"),
+    Series("tamako", 16417, 48561, "只有劇場版接續（Tamako Love Story）", "冷門"),
+    Series("abyss", 97986, 72636, "兩季之間夾一部劇場版接續（深き魂の黎明）", "冷門"),
 )
 
 
@@ -147,7 +156,8 @@ def tmdb(path: str) -> Any:
         if token.count(".") == 2:
             resp = request(f"{TMDB}{path}", headers={"Authorization": f"Bearer {token}"})
         else:
-            resp = request(f"{TMDB}{path}", params={"api_key": token})
+            joiner = "&" if "?" in path else "?"
+            resp = request(f"{TMDB}{path}{joiner}{urlencode({'api_key': token})}")
         if resp.status != 200:
             raise SystemExit(f"TMDB {path}: {resp.status} {resp.text[:200]}")
         return resp.json()
@@ -269,17 +279,22 @@ def truth(entry: dict[str, Any], episodes: list[Episode]) -> dict[str, Any]:
                 "note": f"第一集在 Specials（S00E{special:02d}）",
             }
             return out
-    same = [
+    # 完結日在正篇的哪一季都找：TMDB 把一個條目拆成好幾季時（HxH 2011 的 148 集），終點在後面的季。
+    later = [
         ep
         for ep in dated
-        if ep.season == out["season"]
-        and ep.number >= out["start"]
+        if ep.season >= 1
+        and (ep.season, ep.number) >= (out["season"], out["start"])
         and days_apart(ep.air_date or "", end) <= TOLERANCE_DAYS
     ]
-    if not same:
-        out["note"] = "TMDB 那一季沒有哪一集在完結日 ±1 天播出"
+    if not later:
+        out["note"] = "TMDB 正篇沒有哪一集在完結日 ±1 天播出"
         return out
-    out["end"] = max(ep.number for ep in same)
+    last = max(later, key=lambda ep: (ep.season, ep.number))
+    out["end"] = last.number
+    if last.season != out["season"]:
+        out["end_season"] = last.season
+        out["note"] = f"跨季：到 S{last.season:02d}E{last.number:02d}"
     return out
 
 
@@ -301,8 +316,10 @@ def by_fribb(
             "end": None,
             "note": "TMDB 電影 " + "、".join(f"movie/{m}" for m in movies),
         }
-    if tv is None or season is None:
-        return {"covered": False, "note": "表上有，但沒有 TMDB 劇集或季"}
+    if tv is None:
+        return {"covered": False, "note": "表上有，但沒有 TMDB 劇集"}
+    if season is None:
+        return {"covered": False, "tmdb_id": tv, "note": f"有 TMDB 劇集 tv/{tv}，沒有季"}
     if tv != tmdb_id:
         return {
             "covered": True,
@@ -362,6 +379,75 @@ def by_chaining(
     return out
 
 
+NATIVE_QUERY = "query($id:Int){Media(id:$id){id title{romaji english native}}}"
+
+
+def anilist_titles(anilist_id: int) -> dict[str, Any]:
+    """三種標題（系列圖的查詢沒取 `native`；另外問、另外快取，不讓已快取的系列圖失效）。"""
+
+    def fetch() -> Any:
+        resp = request(
+            ANILIST,
+            method="POST",
+            headers={"User-Agent": UA, "Accept": "application/json"},
+            json_body={"query": NATIVE_QUERY, "variables": {"id": anilist_id}},
+        )
+        time.sleep(2.5)
+        if resp.status != 200:
+            raise SystemExit(f"AniList {resp.status}: {resp.text[:300]}")
+        return resp.json()["data"]["Media"]["title"]
+
+    titles: dict[str, Any] = cached(f"anilist-title:{anilist_id}", fetch)
+    return titles
+
+
+def search_tmdb(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """退路真的會走的路：拿第一季的 AniList 標題（english、romaji、native 依序）搜 TMDB，取第一個
+    有結果的標題裡、動畫類劇集中首播年最接近第一季的那一部（同年取搜尋排序在前的）。用
+    `search/multi`，與 Berth 的 `discover.search_media` 同一支。"""
+    tv = [e for e in entries if e["format"] == "TV" and iso(e["startDate"])]
+    if not tv:
+        return {"found": None, "note": "沒有有開播日的 TV 條目", "by_title": {}}
+    first = tv[0]
+    year = first["startDate"]["year"]
+    titles = anilist_titles(first["id"])
+    picks = {k: _pick(titles[k], year) for k in ("english", "romaji", "native") if titles.get(k)}
+    for kind in ("english", "romaji", "native"):
+        best = picks.get(kind)
+        if best is None:
+            continue
+        return {
+            "found": best["id"],
+            "name": best.get("name"),
+            "first_air_date": best.get("first_air_date"),
+            "query": titles[kind],
+            "query_kind": kind,
+            "candidates": best["candidates"],
+            # 敏感度：只用這一種標題搜的話會挑到哪一部（沒有動畫類結果是 None）。
+            "by_title": {k: (p["id"] if p else None) for k, p in picks.items()},
+            "titles": titles,
+        }
+    return {"found": None, "note": "三種標題都搜不到動畫類劇集", "by_title": {}}
+
+
+def _pick(title: str, year: int) -> dict[str, Any] | None:
+    results = tmdb(f"/search/multi?{urlencode({'query': title})}").get("results", [])
+    animated: list[dict[str, Any]] = [
+        r for r in results if r.get("media_type") == "tv" and 16 in (r.get("genre_ids") or [])
+    ]
+    if not animated:
+        return None
+
+    def distance(r: dict[str, Any]) -> int:
+        aired = r.get("first_air_date") or ""
+        return abs(int(aired[:4]) - year) if aired[:4].isdigit() else 9999
+
+    chosen = min(animated, key=distance)
+    best = dict(chosen)
+    best["candidates"] = [(r["id"], r.get("name"), r.get("first_air_date")) for r in animated]
+    return best
+
+
 def verdict(answer: dict[str, Any], right: dict[str, Any]) -> str:
     """對 / 錯 / 無法判定 / 未覆蓋。終點無法判定時只比季與起點。"""
     if right["season"] is None:
@@ -370,11 +456,15 @@ def verdict(answer: dict[str, Any], right: dict[str, Any]) -> str:
         return "未覆蓋"
     if answer.get("season") is None or answer.get("start") is None:
         return "錯"
+    if right.get("end_season") is not None:
+        return "錯"  # 正解跨季，A、B 只給得出一季裡的範圍
     keys = ("season", "start", "end") if right["end"] is not None else ("season", "start")
     return "對" if all(answer.get(k) == right[k] for k in keys) else "錯"
 
 
 def how_wrong(answer: dict[str, Any], right: dict[str, Any]) -> str:
+    if right.get("end_season") is not None:
+        return f"正解跨季（{rng(right)}）"
     if answer.get("season") != right["season"]:
         return f"季不同（S{answer.get('season')} 對 S{right['season']}）"
     parts = []
@@ -394,6 +484,9 @@ def rng(answer: dict[str, Any]) -> str:
     if answer.get("season") is None:
         return answer.get("note") or "—"
     end = answer.get("end")
+    if answer.get("end_season") is not None:
+        first = f"S{answer['season']:02d}E{answer['start']:02d}"
+        return f"{first}–S{answer['end_season']:02d}E{end:02d}"
     text = f"S{answer['season']:02d}E{answer['start'] or 0:02d}" + (f"–E{end:02d}" if end else "–?")
     return text + (f"（{answer['note']}）" if answer.get("note") else "")
 
@@ -407,6 +500,9 @@ def main() -> None:
         detail, episodes = tmdb_series(series.tmdb_id)
         tv_entries = [e for e in entries if e["format"] == "TV"]
         chained = by_chaining(tv_entries, detail)
+        searched = search_tmdb(entries)
+        found = searched["found"]
+        chained2 = by_chaining(tv_entries, tmdb_series(found)[0]) if found else {}
         rows = []
         for entry in entries:
             # 只比 TV 條目：劇場版、OVA 用播出日對 Specials 或正篇常是巧合（CODE: White 上映那天
@@ -429,12 +525,31 @@ def main() -> None:
             }
             if entry["format"] == "TV":
                 b = chained[entry["id"]]
+                b2 = chained2.get(
+                    entry["id"],
+                    {"season": None, "start": None, "end": None, "note": searched.get("note", "")},
+                )
+                b2_verdict = verdict(b2, right)
+                b2_how = how_wrong(b2, right) if b2_verdict == "錯" else ""
+                if found != series.tmdb_id and right["season"] is not None:
+                    b2_verdict = "錯"
+                    b2_how = (
+                        f"作品錯（找到 tv/{found} {searched.get('name')} "
+                        f"{searched.get('first_air_date')}）"
+                        if found
+                        else f"作品沒找到（{searched.get('note')}）"
+                    )
                 row |= {
+                    # Fribb 給的作品對不對：有劇集 id 才比；只對到電影的另記在 `fribb.movies`。
+                    "fribb_tmdb_ok": a["tmdb_id"] == series.tmdb_id if "tmdb_id" in a else None,
                     "chained": b,
+                    "searched": b2,
                     "a": verdict(a, right),
                     "b": verdict(b, right),
+                    "b2": b2_verdict,
                     "a_how": how_wrong(a, right) if verdict(a, right) == "錯" else "",
                     "b_how": how_wrong(b, right) if verdict(b, right) == "錯" else "",
+                    "b2_how": b2_how,
                 }
             rows.append(row)
         seasons = [
@@ -449,6 +564,9 @@ def main() -> None:
             {
                 "series": series.key,
                 "why": series.why,
+                "group": series.group,
+                "b2_search": searched,
+                "b2_work_ok": found == series.tmdb_id,
                 "anilist_root": series.anilist_id,
                 "tmdb_id": series.tmdb_id,
                 "tmdb_name": detail["name"],
@@ -459,12 +577,21 @@ def main() -> None:
         lines += [
             f"### {detail['name']}（TMDB tv/{series.tmdb_id}）",
             "",
-            f"{series.why}。TMDB 的季："
+            f"{series.group}。{series.why}。B2 搜到的作品："
+            + (
+                f"tv/{found} {searched.get('name')}（{searched.get('first_air_date')}，"
+                f"用「{searched.get('query')}」搜）"
+                + ("，**對**" if found == series.tmdb_id else "，**錯**")
+                if found
+                else f"沒找到（{searched.get('note')}）"
+            )
+            + "。TMDB 的季："
             + "、".join(f"S{s['season_number']:02d} {s['episode_count']} 集" for s in seasons)
             + "。",
             "",
-            "| AniList 條目 | 格式 | 集數 | A（Fribb） | B（串接） | 正解 | A | B |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| AniList 條目 | 格式 | 集數 | A（Fribb） | B（串接，作品已知） "
+            "| B2（串接，作品靠搜尋） | 正解 | A | B | B2 |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for row in rows:
             right = row["truth"]
@@ -483,16 +610,20 @@ def main() -> None:
                 a_cell += f"：{row['a_how']}"
             if row.get("b_how"):
                 b_cell += f"：{row['b_how']}"
+            b2_cell = row.get("b2", "")
+            if row.get("b2_how"):
+                b2_cell += f"：{row['b2_how']}"
             fribb_text = (
                 rng(row["fribb"])
                 if row["fribb"].get("covered")
                 else f"未覆蓋（{row['fribb']['note']}）"
             )
             chained_text = rng(row["chained"]) if "chained" in row else "—"
+            searched_text = rng(row["searched"]) if "searched" in row else "—"
             lines.append(
                 f"| {row['anilist_id']} {row['title']} | {row['format']} | {row['episodes']} | "
-                f"{fribb_text} | {chained_text} | {truth_text} | "
-                f"{a_cell or '—'} | {b_cell or '—'} |"
+                f"{fribb_text} | {chained_text} | {searched_text} | {truth_text} | "
+                f"{a_cell or '—'} | {b_cell or '—'} | {b2_cell or '—'} |"
             )
         lines.append("")
         print(f"{series.key}: {len(entries)} entries, {len(tv_entries)} TV", file=sys.stderr)
@@ -508,12 +639,14 @@ def main() -> None:
     )
     RESULTS.mkdir(parents=True, exist_ok=True)
     (RESULTS / "tables.md").write_text("\n".join(lines), encoding="utf-8")
-    tally: dict[str, dict[str, int]] = {"a": {}, "b": {}}
+    tally: dict[str, dict[str, int]] = {}
     for item in report:
         for row in item["entries"]:
-            for side in ("a", "b"):
+            for side in ("a", "b", "b2"):
                 if side in row:
-                    tally[side][row[side]] = tally[side].get(row[side], 0) + 1
+                    for key in (side, f"{side}:{item['group']}"):
+                        bucket = tally.setdefault(key, {})
+                        bucket[row[side]] = bucket.get(row[side], 0) + 1
     print(json.dumps(tally, ensure_ascii=False), file=sys.stderr)
 
 
