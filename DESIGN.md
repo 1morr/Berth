@@ -1022,6 +1022,13 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 - **工具一行一個**：`<details>`，`well` 底 `border-2 border-rule`；摘要是 `.label`「工具」+ 人話名稱 + 狀態——執行中是 `working`
   小色塊，完成是 `ink-dim` 字（常態不塗漆），沒成功是 `ink-dim` 字且框換 `rule-strong`（助理自己會看結果，不是阻擋，不塗紅）。
   展開沉到 `hull`，「參數」「結果」是 `.value text-xs` 的 JSON 原文。
+- **確認卡**（`agent/ConfirmCard`，M5 票 13）：畫在提出它的那一格工具呼叫上（有 Proposal 對得上 `tool_call_id` 的那一格），長相由命令決定、不由模型決定。
+  等人按時是 `well` 底 + `border-2 border-rule-strong`、抬頭一塊 `assigned` 色塊「要你確認」+ 命令的人話名稱；按過之後色塊拿掉、框退回 `rule`、底沉到 `hull`。
+  抬頭下是效果（`.label`：不可逆、會送出 torrent……，照伺服器提出時算的效果與旗標）與「期限：」+ `Timestamp`。
+  每一列一塊、`border-t-2 border-rule` 隔開：送單列出發佈、大小、作品、Route（作品名與 Route 名取作品頁那一份），其他命令印參數原文。
+  多列是總覽卡：每列一個原生 `Checkbox`（標籤是發佈名，欄位裡不再印一次），預設全勾；一列都沒勾時主要鍵不畫，那一格一句「全部不要的話按拒絕」。
+  按鍵排在 `CONFIRM_ACTIONS`：主要鍵說件數（「確認這 2 項」），Ghost「拒絕」。按下去就做：每一列底下一行 `.label` 結果（完成 / 被拒絕 + 那一組的理由句子 / 出錯 + 原文 / 沒勾，沒做），
+  結論是一直掛著的 `role="status"`。脫離過的卡多一行 `text-xs ink-dim` 說「仍然有效，按了就直接執行」。它沒走 `ConfirmPanel`：不是一顆觸發鍵展開的就地確認，卡片本身就是確認區。
 - **圖片不載入**：markdown 圖片畫成一塊 `well` 底的「圖片沒有載入」+ 替代文字 + `.value` 網址原文（不是連結）。這是安全規則，不是樣式選擇。
 - **送出列**：`textarea`（輸入框的外觀、`field-sizing-content`，2–6 行），Enter 送出、Shift+Enter 換行、組字中的 Enter 不送；
   主要鍵「送出」限寬 `w-32`，串流中同一格換成 Ghost「停止」。送不出去時那一則從紀錄拿掉、字放回輸入欄：`busy` 是 `assigned`

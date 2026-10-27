@@ -362,7 +362,16 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
 
 # 只送查詢給已經存著的索引站，不建任何東西（同 `indexer.search_indexers`）。
 # 送單之前的那一步，一般使用者也做得了（brief §11）。
-@command(Effect.READ, audience=Role.USER)
+@command(
+    Effect.READ,
+    about=(
+        "Search the user's indexers for releases of one work (media_id from search_media). "
+        "Leave query empty to search by the work's names; pass query to search one exact "
+        "phrase instead. Each row has a source_id: pass it to send that release as a download. "
+        "Rows come grouped by verdict, best matches first; problem says why nothing came back."
+    ),
+    audience=Role.USER,
+)
 async def search_torrents(
     session: AsyncSession,
     factory: ServiceClientFactory,

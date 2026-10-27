@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import sys
 import textwrap
 from types import ModuleType
 
@@ -141,7 +142,7 @@ async def _helper(session: AsyncSession, route: Route) -> None: ...
 
 
 def load(source: str) -> ModuleType:
-    module = ModuleType("berth.services.fake")
+    module = sys.modules.get("berth.services.fake") or ModuleType("berth.services.fake")
     exec(compile(textwrap.dedent(source), module.__name__, "exec"), vars(module))
     return module
 
@@ -212,3 +213,58 @@ class TestTheMarks:
     def test_an_internal_command_has_nothing_for_the_model(self) -> None:
         with pytest.raises(ValueError, match="internal"):
             command(Effect.READ, flags={Flag.INTERNAL}, about="not a tool")
+
+
+class TestPublicArguments:
+    """標了 `Private` 的格子不出伺服器（M5 票 13）：卡片的參數給瀏覽器與模型看之前去掉。"""
+
+    def test_the_download_link_of_a_submit_row_is_dropped(self) -> None:
+        spec = registry.commands()["downloading.add_manual_download"]
+        row = {
+            "source": {"url": "http://prowlarr/dl?apikey=k", "title": "[Sub] Show - 01"},
+            "media_id": "tv:1",
+            "route_id": 3,
+        }
+
+        public = registry.public_arguments(spec, row)
+
+        assert public == {"source": {"title": "[Sub] Show - 01"}, "media_id": "tv:1", "route_id": 3}
+
+    def test_it_follows_lists_and_optional_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # dataclass 與 pydantic 都向 `sys.modules` 找定義它的模組。
+        monkeypatch.setitem(sys.modules, "berth.services.fake", ModuleType("berth.services.fake"))
+        module = load(
+            """
+            from dataclasses import dataclass
+            from typing import Annotated
+            from berth.services.commands import PRIVATE, Effect, command
+
+            @dataclass(frozen=True)
+            class Secretive:
+                token: Annotated[str, PRIVATE]
+                label: str
+
+            @command(Effect.REVERSIBLE)
+            async def keep(items: list[Secretive], extra: Secretive | None = None) -> None:
+                pass
+            """
+        )
+        found, failures = registry.collect([module])
+        assert failures == []
+        spec = found["fake.keep"]
+
+        public = registry.public_arguments(
+            spec,
+            {
+                "items": [{"token": "a", "label": "x"}, {"token": "b", "label": "y"}],
+                "extra": {"token": "c", "label": "z"},
+            },
+        )
+
+        assert public == {"items": [{"label": "x"}, {"label": "y"}], "extra": {"label": "z"}}
+
+    def test_an_unmarked_field_is_left_alone(self) -> None:
+        spec = registry.commands()["rss.add_feed"]
+        row = {"url": "https://mikanani.me/RSS/MyBangumi?token=t", "name": "Mikan"}
+
+        assert registry.public_arguments(spec, row) == row

@@ -377,13 +377,16 @@ class TestGuards:
 
 
 class TestWhoCanUseWhat:
-    def test_an_admin_sees_every_read_tool(self, client: TestClient, script: Script) -> None:
+    def test_an_admin_sees_every_tool(self, client: TestClient, script: Script) -> None:
         script.steps = [say("Hi.")]
         chat(client, "Hello?")
         assert script.tools[0] == [
             "discover_search_media",
+            "downloading_add_manual_download",
             "jobs_list_jobs",
             "jobs_read_job_events",
+            "media_route_choices",
+            "search_search_torrents",
             "why_not_explain",
         ]
 
@@ -396,7 +399,14 @@ class TestWhoCanUseWhat:
         response = chat(client, "List every download.")
 
         assert response.status_code == 200, response.text
-        assert script.tools[0] == ["discover_search_media", "why_not_explain"]
+        # 一般使用者：讀取，與送自己的單（brief §19「M5 的方向」⑦）。
+        assert script.tools[0] == [
+            "discover_search_media",
+            "downloading_add_manual_download",
+            "media_route_choices",
+            "search_search_torrents",
+            "why_not_explain",
+        ]
         # 模型照叫：pydantic-ai 回它「沒有這個工具」，命令一次都沒跑。
         [turn] = recorded(client)
         assert turn.tools == []

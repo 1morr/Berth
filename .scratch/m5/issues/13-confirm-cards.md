@@ -1,6 +1,6 @@
 # 13 — 確認卡
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 08, 12
 
@@ -31,10 +31,10 @@
 
 ## 驗收
 
-- [ ] selftest 那 11 步的對應情境都是整合測試（不打網路）
-- [ ] 在 `agent` 情境的側面板裡：出卡 → 取消一列 → 確認 → 只送出勾選的列，逐列看得到結果；重新載入之後未決定的卡片還按得下去（playwright 實跑，附截圖）
-- [ ] 不是提出者的一般使用者按不到別人的卡（測試）
-- [ ] 全部檢查、pytest、vitest 綠；CHANGELOG、progress.md 已更新
+- [x] selftest 那 11 步的對應情境都是整合測試（不打網路）
+- [x] 在 `agent` 情境的側面板裡：出卡 → 取消一列 → 確認 → 只送出勾選的列，逐列看得到結果；重新載入之後未決定的卡片還按得下去（playwright 實跑，附截圖）
+- [x] 不是提出者的一般使用者按不到別人的卡（測試）
+- [x] 全部檢查、pytest、vitest 綠；CHANGELOG、progress.md 已更新
 
 ## Comments
 
@@ -43,3 +43,8 @@
   - pydantic-ai 2.62：`DeferredToolResults` 可與新的 user prompt 同一輪給（`_agent_graph._handle_deferred_tool_results` 直接進 `CallToolsNode`，prompt 接在工具結果後）；`ToolApproved.override_args` 只換傳進工具的參數，**不改歷史裡的 `ToolCallPart`**；`dump_messages` 的 `approval.id` 就是 `tool_call_id`。
   - ai 7 前端：恢復（最後一則是助理、`addToolApprovalResponse` + `lastAssistantMessageIsCompleteWithApprovalResponses`）時串流接在最後一則助理訊息上；**但沒按卡就送新訊息時，伺服器對舊 tool call 送的 `tool-output-*` chunk 會讓前端丟 `No tool invocation found`**（`process-ui-message-stream.ts` 的 `getToolInvocation` 只找當前訊息）——`api/agent._relay` 要濾掉舊 call id 的 chunk。
   - 擬定：①核准一律在 `decide` 當場由伺服器執行（改票 08「在對話裡的只記決定」），恢復只把 Proposal 的逐列結果包成 `{"approved_by_user": true, "executed": true, ...}` 交給模型——消掉「核准了、恢復失敗就卡在 approved」（票 08 Comments）；override_args 因此不需要，記偏差。②migration：`proposals.tool_call_id`（unique、nullable）與 `detached_at`；下一輪 instructions 只列 `detached_at` 不為空的卡（快取較穩），在 `open_turn` 算一次。③送單卡：模型端工具收 `{rows: [{source_id, media_id, route_id}]}`，提出時向 `executor.sources` 換成 `JobSource` 存進 Proposal（重啟後按得下去；jobs 表本來就存 `source_url`），API 回應遮掉：`JobSource.url` 標 `Annotated[str, Private]`，`proposals._view` 照輸入模型遞迴去掉 → 拿掉 `test_proposals_api` 的 strict xfail。④哪些工具出卡照規則 `needs_person or Flag.DOWNLOADS`，不列清單；`guard_tool` 接 `ApprovalRequired` 記新的 `AiToolOutcome.PROPOSED`；`output_type=[str, DeferredToolRequests]`，停在卡上記新的 `AiStopReason`。⑤`open_turn` 收 `text=None` 為恢復：待確認的卡還沒決定 → 新的 `AgentRefusal.CARD_UNDECIDED`（409）；有新訊息 → `detach` + `ToolDenied`（說明仍有效）；rejected / expired / 不見了 → `ToolDenied`。⑥`Turn._kept`：有待確認呼叫而 prefix 空時不接說明、原樣存歷史（否則 tool_use 後面接文字，provider 拒收）。⑦端到端要模型拿得到 `source_id` 與 Route id：考慮把 `search.search_torrents`（已在登錄表、`audience=user`）先加進 `TOOLS`；Route id 的來源（票 14 的 Route 清單工具）待定。⑧前端卡片：`api/proposals.ts`（查詢與決定）、`agent/ConfirmCard.tsx`，作品名與 Route 名用 `mediaQueryOptions(media_id)` 的 `title` 與 `routes`；Fake 後端 `agent` 情境的腳本加送單路徑。
+- 2026-10-28 完成（第二個 session）。上一則的擬定照做，改了兩處：⑥ 沒按卡就繼續說話時不走 `deferred_tool_results`，由伺服器替那幾個呼叫補上結果（`agent._closing`，理由見 progress.md 偏差）；`tool_call_id` 不唯一（code-review）。⑦ 定為 `search.search_torrents` 加新命令 `media.route_choices`。驗收的對應：selftest 11 步 → `tests/integration/test_agent_cards.py` 開頭的對照；playwright → `web/e2e/agent.spec.ts` 的送單卡那一條，截圖 `13-confirm-cards/agent-card.png`、`agent-confirmed.png`（390 寬各一張）；非提出者 → `TestWhoMayPress`。
+- 2026-10-28 code-review 已改：plan §11.6 / brief §20.24 的 `override_args` 舊說法與新的〈確認卡的恢復〉、`tool_call_id` 改不唯一、勾選排序照數字（原本 `[10, 2]` 照字典序）、`_approval` / `_closing` 共用 `_why_not_done`、恢復失敗與送出共用 `report`、i18n 去型別斷言、`noqa` 補原因、`_prompt_text` 改名、票 14 註明已做的兩支。未處理，留給後面的票：
+  - **票 22**：平行的兩張卡會在同一屏畫出兩塊 `assigned` 與兩顆主要鍵（「同一屏一顆 assigned 主鍵」）；總覽卡的欄位沒有縮排到勾選框標籤底下；送單卡沒有重述會被寫死的資料夾名（`SubmitAction` 有，plan §5）；面板沒聽 SSE 的 `event: proposal`（另一個分頁按了，這一頁要等下一輪答完或重新載入才更新）。`executing` 停住的卡仍沒有地方說（票 08 Comments）。
+  - **票 14**：前端照命令名分派卡片畫法（`RowBody`、`COMMAND_TITLES`、拒絕理由那一組句子）與後端 `_CARD_INPUTS` 是同一件事的幾處，加新的卡片命令時一起補（票 14 已註明）。
+  - `Turn.propose_card` / `card_result` 是 `services` 裡公開的 `async def` 但沒有 `@command`：與既有的 `Turn.run_tool` 同一種（方法，`test_command_marks` 只掃模組層），沒改。

@@ -19,6 +19,7 @@ export type AgentRefusal = Schemas['AgentRefusal']
 const REASONS: ReasonSet<AgentRefusal> = {
   ai_disabled: true,
   busy: true,
+  card_undecided: true,
   no_message: true,
   conversation_missing: true,
 }

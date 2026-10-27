@@ -35,7 +35,7 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from sqlalchemy import ColumnElement, and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -77,7 +77,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.parser.release import parse_release
 from berth.services.clients import ServiceClientFactory
-from berth.services.commands import Effect, Flag, command
+from berth.services.commands import PRIVATE, Effect, Flag, command
 from berth.services.qbittorrent import sign_in
 from berth.services.routes import incomplete_path_of, save_path_of
 from berth.services.settings import read_settings
@@ -243,7 +243,8 @@ class JobSource:
     再去連一次追蹤站。沒有的話由 `adapters/torrent.py` 從那份 torrent 自己算出來。
     """
 
-    url: str
+    #: 下載連結：Prowlarr 的代理網址帶著它的 API key，所以不出伺服器（`PRIVATE`，M4 票 79）。
+    url: Annotated[str, PRIVATE]
     #: 發佈名。`jobs.name`——使用者在下載列表上認得出這一列的東西。
     title: str
     info_hash: str = ""

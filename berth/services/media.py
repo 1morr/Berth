@@ -37,6 +37,7 @@ from berth.domain import (
     EpisodeSnapshot,
     MediaKind,
     MediaSnapshot,
+    Role,
     SeasonSnapshot,
     TmdbProblem,
     collection_type_for,
@@ -135,6 +136,23 @@ async def read_media(
 ) -> MediaView:
     """詳情頁要的一整份。快照過期（或還沒有）時順手重抓一次。"""
     return await _load(session, factory, media_id, force=False)
+
+
+# 作品頁的 Route 下拉（`MediaView.routes`）單獨一支：側面板送單要 Route id（M5 票 13）。
+@command(
+    Effect.READ,
+    about=(
+        "List the routes (library folders) a work can be downloaded into: only enabled routes "
+        "whose library holds the work's kind (tv or movie). Pass one of these ids as route_id "
+        "when sending a download."
+    ),
+    # 作品頁本來就給登入的人看這份下拉。
+    audience=Role.USER,
+)
+async def route_choices(session: AsyncSession, media_id: str) -> tuple[RouteChoice, ...]:
+    """這部作品送單時選得了的 Route。認不得的 id 是空的。"""
+    parsed = parse_media_id(media_id)
+    return () if parsed is None else await _routes(session, parsed[0])
 
 
 @command(Effect.READ, flags={Flag.INTERNAL})

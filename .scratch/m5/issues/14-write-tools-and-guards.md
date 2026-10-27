@@ -14,7 +14,9 @@
 
 1. **工具**：
    - 讀取：索引站搜尋（帶季號時記得 `missing`）、缺集搜尋、Mikan 番組搜尋與字幕組清單。
-   - 寫入：Mikan 訂閱、關鍵字訂閱、加 Feed、Route 清單。
+     （票 13 已把 `search.search_torrents` 與新的 `media.route_choices` 加進工具，送單那一條路才走得通；這裡補「帶季號時記得 `missing`」與結果大小。）
+   - 寫入：Mikan 訂閱、關鍵字訂閱、加 Feed、Route 清單（Route 清單見上一行）。
+   - 新的卡片命令要在前端 `agent/ConfirmCard.tsx` 補列的畫法（`RowBody`、`COMMAND_TITLES`、拒絕理由的那一組句子）；沒補的照參數原文畫。模型給的一列若不是命令輸入（像送單的 `source_id`），在 `services/agent._CARD_INPUTS` 加換法。
    - 全部經登錄表與執行器。
 2. **守法**（通用，不寫在個別工具裡）：
    - **id 必須出自這段對話已存的工具結果**：media、source、route、bangumi、subgroup。不是的回理由給模型，不出卡。

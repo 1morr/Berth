@@ -2614,7 +2614,7 @@ export interface components {
          * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
          * @enum {string}
          */
-        AgentRefusal: "ai_disabled" | "busy" | "no_message" | "conversation_missing";
+        AgentRefusal: "ai_disabled" | "busy" | "no_message" | "conversation_missing" | "card_undecided";
         /** AgentRefusalOut */
         AgentRefusalOut: {
             reason: components["schemas"]["AgentRefusal"];
@@ -5224,6 +5224,8 @@ export interface components {
             proposer: components["schemas"]["ActorKind"];
             /** Conversation Id */
             conversation_id: string | null;
+            /** Tool Call Id */
+            tool_call_id: string | null;
             status: components["schemas"]["ProposalStatus"];
             /**
              * Created At
@@ -5243,6 +5245,8 @@ export interface components {
             selection: number[] | null;
             /** Results */
             results: components["schemas"]["ProposalRowOut"][] | null;
+            /** Detached At */
+            detached_at: string | null;
         };
         /**
          * ProposalPreviewOut
@@ -6722,7 +6726,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentRefusalOut"];
                 };
             };
-            /** @description `ai_disabled` · `busy` */
+            /** @description `ai_disabled` · `card_undecided` · `busy` */
             409: {
                 headers: {
                     [name: string]: unknown;

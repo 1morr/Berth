@@ -77,6 +77,11 @@ const REASONS: ReasonSet<JobRefusal> = {
   review_needs_admin: true,
 }
 
+/** 一個字串是不是送單那一組的理由（確認卡的逐列結果是字串，M5 票 13）。 */
+export function isJobRefusal(reason: string): reason is JobRefusal {
+  return Object.hasOwn(REASONS, reason)
+}
+
 /** 這一次失敗是「後端說不行」還是「網路壞了」。判定與另外兩組共用（`api/refusal.ts`）。 */
 export function refusalOf(error: unknown): JobRefusalDetail | null {
   return parseRefusal(error, REASONS)
