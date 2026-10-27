@@ -660,6 +660,19 @@ def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[Pl
     )
 
 
+async def against_ledger(
+    session: AsyncSession, job: Job, items: Sequence[PlannedFile]
+) -> tuple[tuple[PlannedFile, ...], dict[str, int]]:
+    """核准那一步再比一次帳本（M5 票 05），與規劃時同一支 `_against_ledger`。
+
+    規劃時只比 `import` 的列：被擋下的列（播出日比對、低信心、Route 政策）與從審核裡套用到 RSS
+    Series 時換上的提案（`held_proposal`）都沒比過，而核准會把它們升成 `import`
+    （`plan_review.approve_plan`）。等人的期間帳本也可能多了另一包送的同一集。
+    """
+    route = await session.get(Route, job.route_id) if job.route_id is not None else None
+    return await _against_ledger(session, job, await _contents(session, job), route, items)
+
+
 async def _against_ledger(
     session: AsyncSession,
     job: Job,
