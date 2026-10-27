@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -18,15 +18,19 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from berth.db import create_session_factory
 from berth.domain import (
     Confidence,
+    EventType,
     JobState,
+    MediaSnapshot,
     PlanAction,
     PlanEngine,
     PlanRefusal,
     PlanStatus,
     ReasonCode,
+    Tags,
     why,
 )
-from berth.models import Job, Route
+from berth.models import Job, LedgerEntry, Media, PlanItem, Route
+from berth.naming import episode_target
 from berth.services.events import EventHub
 from berth.services.importer import sweep_imports
 from berth.services.plan import sweep_plans
@@ -45,6 +49,7 @@ from tests.integration.test_plan import (
     NOW,
     STRAY,
     STRAY_FILES,
+    already_in_the_library,
     downloaded_job,
     events_of,
     items_of,
@@ -306,6 +311,96 @@ class TestApproving:
             await approve_plan(session, EventHub(), 404, actor=ACTOR)
 
         assert refused.value.reason is PlanRefusal.PLAN_MISSING
+
+
+class TestTheLedgerAtApproval:
+    """被擋下的列在規劃時沒比帳本（只有 `import` 的列比）：核准把它升成 `import` 時要再比一次，
+    結果照規劃時的處理——那一列略過、記著撞上帳本哪一列，在 Review Queue 上等人決定（M5 票 05）。"""
+
+    async def test_a_held_row_clashing_with_the_library_is_skipped_on_approval(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """帳本上已經有 S01E05-E06：提案的 S01E05 照入的話，Jellyfin 12 會把第 6 集併掉。"""
+        media, route, factory = await ready(session, roots)
+        await already_in_the_library(
+            session, media, route, season=1, episode_start=5, episode_end=6
+        )
+        (known,) = await ledger_of(session)
+        job = await downloaded_job(session, media, route, roots, name=LOW, files=LOW_FILES)
+        await sweep_plans(session, factory, EventHub(), now=NOW)
+        assert await state_of(session, job) is JobState.REVIEW
+        _put_on_disk(roots, LOW_FILES)
+        plan_id = (await plan_of(session)).id
+
+        approved = await approve_plan(session, EventHub(), plan_id, actor=ACTOR)
+
+        video, sidecar = approved.items
+        assert (video.action, video.target_path) == (PlanAction.SKIP, "")
+        assert why(ReasonCode.LIBRARY_SPAN_CLASH, known="S01E05-E06") in video.reasons
+        assert sidecar.action is PlanAction.SKIP
+        assert [row.duplicate_of for row in await items_of(session)] == [known.id, None]
+        skipped = [e for e in await events_of(session) if e.type == EventType.DUPLICATE_SKIPPED]
+        assert [(e.payload_json or {})["files"] for e in skipped] == [[video.rel_path]]
+
+        await sweep_imports(session, factory, EventHub(), now=NOW)
+
+        assert await state_of(session, job) is JobState.IMPORTED
+        assert await ledger_of(session) == [known]
+
+    async def test_a_held_row_that_is_the_same_version_is_skipped_on_approval(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """同一集、同一組 Tags 在等人的期間進了媒體庫（另一包送的）：核准時它是重複版本。"""
+        job, route, factory, plan_id = await held(session, roots)
+        video_row = (await items_of(session))[0]
+        known = await _same_version_of(session, job, route, video_row)
+
+        approved = await approve_plan(session, EventHub(), plan_id, actor=ACTOR)
+
+        video, _ = approved.items
+        assert video.action is PlanAction.SKIP
+        assert why(ReasonCode.SAME_VERSION, known=PurePosixPath(known.target_path).name) in (
+            video.reasons
+        )
+        # 季集與 Tags 留著：決定「取代」或「保留兩者」時照它們算路徑。
+        assert (video.season, video.episode_start) == (1, 5)
+        assert (await items_of(session))[0].duplicate_of == known.id
+
+        await sweep_imports(session, factory, EventHub(), now=NOW)
+
+        assert [entry.id for entry in await ledger_of(session)] == [known.id]
+
+
+async def _same_version_of(
+    session: AsyncSession, job: Job, route: Route, row: PlanItem
+) -> LedgerEntry:
+    """媒體庫裡同一集、同一組 Tags 的一份（另一筆 Job 送的），路徑照產品的命名模板算。"""
+    media = await session.get(Media, job.media_id)
+    assert media is not None and row.season is not None and row.episode_start is not None
+    tags = Tags.model_validate(row.tags_json or {})
+    relative = episode_target(
+        MediaSnapshot.model_validate(media.tmdb_snapshot_json),
+        season=row.season,
+        episode=row.episode_start,
+        tags=tags,
+        ext=".mkv",
+    )
+    entry = LedgerEntry(
+        job_hash="other",
+        source_rel_path="old/S01E05.mkv",
+        source_abs_path="/data/torrent/complete/anime/old/S01E05.mkv",
+        source_dev="1",
+        target_path=str(PurePosixPath(route.target_path) / relative),
+        target_inode="1",
+        media_id=media.id,
+        season=row.season,
+        episode_start=row.episode_start,
+        action=PlanAction.IMPORT,
+        tags_json=tags.model_dump(mode="json"),
+    )
+    session.add(entry)
+    await session.commit()
+    return entry
 
 
 class TestRejecting:
