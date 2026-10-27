@@ -29,7 +29,6 @@ from berth.domain import (
     AgentRefusal,
     AiProvider,
     AiRunKind,
-    AiToolOutcome,
     ProposalStatus,
     SlashCommand,
 )
@@ -44,13 +43,13 @@ from berth.services.agent import (
     load_history,
 )
 from berth.services.agent_books import plus
-from berth.services.agent_tools import TAVILY_TOOL
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.compaction import Summarizer, compact, last_context_tokens
 from berth.services.proposals import list_proposals
 from berth.services.settings import read_settings
 from berth.services.skills import SkillEntry, list_skills
+from berth.services.usage import tavily_searched_sql
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,8 +242,8 @@ async def _usage(call: _Call) -> Usage:
             .join(AiRun, AiToolCall.run_id == AiRun.id)
             .where(
                 AiRun.conversation_id == call.conversation_id,
-                AiToolCall.command == TAVILY_TOOL,
-                AiToolCall.outcome.in_((AiToolOutcome.OK, AiToolOutcome.WARNED)),
+                # 與用量頁、步驟頁同一條規則（`services.usage`）。
+                tavily_searched_sql(),
             )
         )
     return Usage(

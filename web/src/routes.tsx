@@ -35,6 +35,8 @@ import { LoginPage } from './pages/LoginPage'
 import { MediaRoute } from './pages/MediaRoute'
 import { NotifySettingsPage } from './pages/NotifySettingsPage'
 import { AiSettingsPage } from './pages/AiSettingsPage'
+import { RunPage } from './pages/RunPage'
+import { UsagePage } from './pages/UsagePage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { RssPage } from './pages/RssPage'
@@ -547,6 +549,28 @@ const notifySettingsRoute = settingsRoute('/settings/notifications', NotifySetti
 })
 /** AI provider（M5 票 09）：不是泊位，只有管理員。 */
 const aiSettingsRoute = settingsRoute('/settings/ai', AiSettingsPage)
+/** AI 用量（M5 票 21）：花的是管理員設的 key，只有管理員。 */
+const usageSettingsRoute = settingsRoute('/settings/usage', UsagePage)
+
+/**
+ * 一輪的步驟（M5 票 21）：側面板每一則回覆連過來。登入就進得來，後端只給這個人自己的
+ * （管理員看得到全部），別人的是 404 `run_missing`。
+ */
+const runRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/agent/runs/$runId',
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: function RunRoute() {
+    const { runId } = runRoute.useParams()
+    return (
+      <AppShell>
+        <RunPage runId={runId} />
+      </AppShell>
+    )
+  },
+})
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -569,6 +593,8 @@ export const routeTree = rootRoute.addChildren([
   tmdbSettingsRoute,
   notifySettingsRoute,
   aiSettingsRoute,
+  usageSettingsRoute,
+  runRoute,
   settingsIndexRoute,
   setupRoute,
 ])

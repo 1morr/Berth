@@ -27,6 +27,7 @@ from berth.api import (
     search,
     settings,
     setup,
+    usage,
     weekly,
     why_not,
 )
@@ -55,6 +56,7 @@ router.include_router(rss.router)
 router.include_router(search.router)
 router.include_router(settings.router)
 router.include_router(setup.router)
+router.include_router(usage.router)
 router.include_router(weekly.router)
 router.include_router(why_not.router)
 

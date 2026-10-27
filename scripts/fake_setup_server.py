@@ -1765,9 +1765,10 @@ def agent_scenario() -> Scenario:
     `Why isn't SPY×FAMILY in the library?`），它先搜尋作品、再叫「為什麼沒入庫」，
     用工具結果的結論分類回答；問到「圖片」時回一張外部圖片的 markdown（側面板不該去載它）。
     說「下載 SPY×FAMILY」（`Download SPY×FAMILY`）時它搜作品、搜發佈、問 Route，再出一張
-    三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。「加這個 RSS：<網址>」出一張加 Feed 的卡，
-    「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。
-    索引站多三筆單集（`AGENT_RELEASES`），qBittorrent 收下就留著。其餘一律說它只演這幾件事。
+    三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。索引站多三筆單集（`AGENT_RELEASES`），
+    qBittorrent 收下就留著。說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
+    （票 21 的步驟頁）。「加這個 RSS：<網址>」出一張加 Feed 的卡，
+    「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。其餘一律說它只演這幾件事。
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
@@ -1869,6 +1870,9 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             )
         if _FEED_GIVEN.search(text) or _FEED_SEARCHED.search(text):
             return ModelResponse(parts=[ToolCallPart("routes_list_routes", {})])
+        if "一直查" in text or "keep checking" in text.lower():
+            # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
+            return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
         wanted = _DOWNLOAD_ASKED.search(text.strip())
         if wanted is not None:
             return ModelResponse(
@@ -1890,6 +1894,9 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         _FEED_GIVEN.search(question) or _FEED_SEARCHED.search(question)
     ):
         return _feed_step(question, last, chinese=chinese)
+    if isinstance(last, ToolReturnPart) and last.tool_name == "jobs_list_jobs":
+        # 被警告、被擋下也照叫：防護要看到第 4 次。
+        return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
     if isinstance(last, ToolReturnPart) and _DOWNLOAD_ASKED.search(question.strip()):
         return _download_step(messages, last, chinese=chinese)
     if isinstance(last, ToolReturnPart) and isinstance(last.content, dict):

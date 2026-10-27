@@ -29,5 +29,6 @@
 
 - **收尾**（票 12，2026-10-27 使用者）：防護停下的說明在側面板上要畫成 Berth 說的，不是助理文字——`Notice` 的 `assigned` 色塊「停下」+ 後端那一句（哪一條、做到哪）；`assigned` 不是 `blocked`：這一輪已經結束，要人決定換個問法或再問。串流與重新載入（`GET /agent/conversations/{id}`）要是同一個形狀。票 12 沒改串流（票 20 在做串流裡的停止資料，兩邊同時改會撞），等票 20 定下形狀後在這張接。畫法見 `.scratch/m5/side-panel-shape.md`〈面板結構〉。
 - **收尾**（票 12 code-review）：按「停止」之後，後端存的「這一輪停下來了：連線被關掉」只在重新載入後出現，串流中的畫面看不到——與上一條同一件事（串流與重新載入同一個形狀）。
+- **收尾**（票 21）：用量頁（`/settings/usage`）與步驟頁（`/agent/runs/$runId`）一起進 critique / audit / polish。code-review 留下的判斷題在票 21 的 Comments（兩張停止原因的表、`alertText` 的 `where` 旗標、「窄版先收起面板」重複兩處）。用量頁的兩張表是全站第一個 container query（`@container` + `@2xl:`），DESIGN.md〈AI 用量頁與每輪步驟頁〉記了理由。
 
 - 2026-10-27 票 14 交接：**側面板直接做的寫入沒有撤銷入口**。plan §11.6〈確認卡範圍〉「其餘可逆的直接做並給撤銷」：現在唯一直接做的是 `rss.subscribe_search`（建一條搜尋 Feed，反向是不可逆的 `rss.delete_feed`，要確認卡）。收尾時決定撤銷長什麼樣（工具那一行旁邊的「撤銷」出一張刪 Feed 的卡，或只連到 RSS 頁那一列）。另外：卡片上「出自網頁」的標記與卡片層級那一句（`agent.card.externalLead`）、數量閘的「另外 N 項」那一句是票 14 的初版畫法，一起 critique。

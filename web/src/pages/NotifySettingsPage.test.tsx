@@ -114,7 +114,7 @@ describe('設定 → 通知', () => {
     const tabs = within(await screen.findByRole('navigation', { name: '設定' }))
     const names = tabs.getAllByRole('link').map((link) => link.textContent)
     // AI 也不是泊位，排在通知之後（M5 票 09）。
-    expect(names.slice(-3)).toEqual(['TMDB', '通知', 'AI'])
+    expect(names.slice(-4)).toEqual(['TMDB', '通知', 'AI', '用量'])
     expect(tabs.getByRole('link', { name: '通知' })).toHaveAttribute('data-status', 'active')
   })
 

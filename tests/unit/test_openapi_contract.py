@@ -93,6 +93,7 @@ STATUS_TABLES: dict[str, dict[Any, int]] = {
     "ChoiceRefusal": setup_api._CHOICE_STATUS,
     "WhyNotRefusal": why_not_api._STATUS,
     "AgentRefusal": agent_api._STATUS,
+    "AiRunRefusal": agent_api._RUN_STATUS,
     "ProposalRefusal": proposals_api._STATUS,
 }
 
@@ -114,6 +115,7 @@ MODELS = (
     "AiRefusalOut",
     "WhyNotRefusalOut",
     "AgentRefusalOut",
+    "RunRefusalOut",
     "ProposalRefusalOut",
     "JobSignalOut",
     "ProposalSignalOut",
@@ -163,6 +165,18 @@ def object_fields(text: str, name: str) -> set[str]:
                 fields.add(found.group(1))
         raise AssertionError(f"{name} in {GENERATED.name} never closes")
     raise AssertionError(f"{name} is not declared in {GENERATED.name}")
+
+
+class TestSchemaNames:
+    """回應模型的類別名要全站唯一。
+
+    兩個 router 各有一個同名的模型時，FastAPI 改用帶模組路徑的名字
+    （`berth__api__usage__UsageOut`），前端的 `Schemas['UsageOut']` 就悄悄不見了（票 21 合併票 18
+    時撞到）。
+    """
+
+    def test_no_schema_needs_its_module_path(self, document: dict[str, Any]) -> None:
+        assert [name for name in document["components"]["schemas"] if "__" in name] == []
 
 
 class TestRefusalReasons:
@@ -465,6 +479,7 @@ class TestDeclaringWhatEachEndpointRefuses:
         """
         assert HELPERS == {
             "agent_refusal": "AgentRefusalOut",
+            "run_refusal": "RunRefusalOut",
             "route_refusal": "RouteRefusalOut",
             "proposal_refusal": "ProposalRefusalOut",
             "access_refusal": "AccessRefusalOut",

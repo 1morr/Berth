@@ -265,6 +265,12 @@ NAMED: dict[str, CommandMark] = {
     "agent.read_status": _mark(Effect.READ, Flag.INTERNAL),
     # M5 票 17：打的是固定的 Tavily（不是新位址），花使用者 Tavily 帳號的 credit；只讀。
     "web.tavily_search": _mark(Effect.READ),
+    # M5 票 21：每日提醒值是設定（只提醒、不擋），用原值再存一次就回去。
+    "usage.set_spend_alert": _mark(
+        Effect.REVERSIBLE, Flag.SETTINGS, inverse="usage.set_spend_alert"
+    ),
+    # 一輪的步驟：只讀三張觀測表；一般使用者只看得到自己的（`audience=user`）。
+    "usage.read_run": _mark(Effect.READ),
     # M5 票 18：摘要花掉的 token 與換掉的歷史都回不來；斜線指令的入口整支照最重的 `/compact` 標
     # （其餘五支是讀取或什麼都不做），兩支都不是工具。
     "compaction.compact": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),

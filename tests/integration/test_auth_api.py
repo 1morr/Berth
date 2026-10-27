@@ -458,6 +458,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("PUT", "/settings/ai"): Access.ADMIN,
     ("POST", "/settings/ai/test"): Access.ADMIN,
     ("DELETE", "/settings/ai/keys/*"): Access.ADMIN,
+    # AI 用量（M5 票 21）：花的是管理員設的 key。
+    ("GET", "/settings/usage"): Access.ADMIN,
+    ("PUT", "/settings/usage/alert"): Access.ADMIN,
     ("POST", "/settings/services/*/test"): Access.ADMIN,
     ("GET", "/routes"): Access.ADMIN,
     ("POST", "/routes"): Access.ADMIN,
@@ -504,6 +507,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 側面板分「可以問」與「AI 沒開」（M5 票 12）、暫停到什麼時候（票 20）：一般使用者讀不到
     # `/settings/ai`。
     ("GET", "/agent/status"): Access.SIGNED_IN,
+    # 每一輪的步驟（M5 票 21）：側面板每一則回覆連過來；只讀得到自己的，管理員讀得到全部。
+    ("GET", "/agent/runs/*"): Access.SIGNED_IN,
     # 斜線指令（M5 票 18）：同對話，只動得到自己的那一段。
     ("POST", "/agent/conversations/*/commands"): Access.SIGNED_IN,
     # 每個人自己的通知（M4 票 125）：Discord ID、種類、測試。收件人取自 session。

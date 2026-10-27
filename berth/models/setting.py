@@ -152,6 +152,8 @@ class AiSettings(SettingsGroup):
     #: 13 是一季一個 cour 的集數：情境 4「補這一季缺的集」逐集挑也放得進一張卡，整個系列一定拆開
     #: （2026-09-26 一次送 144 個的那一次）。設定頁還沒有這一格。
     card_downloads: int = 13
+    #: 每日花費提醒值（美元，M5 票 21）；`None` 是不提醒。只提醒，不停用 AI（brief §6.10）。
+    daily_alert_usd: float | None = None
 
     def endpoint(self, provider: AiProvider) -> AiEndpointSettings:
         return self.anthropic if provider is AiProvider.ANTHROPIC else self.openai

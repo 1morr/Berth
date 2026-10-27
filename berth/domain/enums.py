@@ -1861,6 +1861,13 @@ class AiRunKind(StrEnum):
     COMPACTION = "compaction"
 
 
+class AiRunRefusal(StrEnum):
+    """一輪的步驟（`services.usage.read_run`，M5 票 21）讀不到的理由。"""
+
+    #: 沒有這一輪，或它不是這個人的（看不到就是沒有）。
+    RUN_MISSING = "run_missing"
+
+
 class AiStopReason(StrEnum):
     """一輪 agent 為什麼停下（`ai_runs.stop_reason`，研究 C5）。用量頁數的是它（票 21）。"""
 
