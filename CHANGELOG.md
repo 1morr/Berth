@@ -8,6 +8,11 @@
 
 ### Added
 
+- **AI 對話的網路搜尋**（M5 票 17）：推薦新番、查系列順序時 AI 可以上網看評價。接口是 Anthropic Messages
+  （官方或 DeepSeek 這類相容端點）時用服務自己的網路搜尋，不用另外申請帳號；在設定 → AI 填了 Tavily key 的話，
+  兩種接口都多一個 Tavily 搜尋。只搜動漫與影視的資料站、維基百科與 Reddit，每則回覆最多搜 5 次，回覆引用的網頁附網址。
+  搜尋次數記在用量裡；Anthropic 官方端點每次估 $0.01，其他端點的網搜價格不知道，不算進估計費用。
+  **資料庫 migration `c3e7a1f9d524`**：`ai_calls`、`ai_runs` 多記網搜次數，既有的列補 0。
 - **AI 對話的後端**（M5 票 11）：`POST /api/agent/chat`（Vercel AI SDK 的串流）與 `GET /api/agent/conversations/{id}`。
   對話存在 Berth 的資料庫，畫面送來的歷史不採用；AI 能用的只有幾支讀取命令（找作品、「為什麼沒入庫」、下載清單與時間線），
   一般使用者只有前兩支。每一次模型呼叫的 token、快取讀寫與估計費用當場記下，被中止的那一輪也有。
