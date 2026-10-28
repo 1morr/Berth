@@ -198,7 +198,8 @@ def _modules() -> list[ModuleType]:
 def _spec(name: str, function: Callable[..., Any], mark: CommandMark) -> CommandSpec:
     target = inspect.unwrap(function)
     try:
-        hints = typing.get_type_hints(target)
+        # `include_extras`：`Annotated[..., Field(...)]` 的限制與說明要留到輸入模型裡（M5 票 26b）。
+        hints = typing.get_type_hints(target, include_extras=True)
     except (NameError, TypeError) as exc:
         raise _UnregistrableError(f"annotations do not resolve ({exc})") from exc
     fields: dict[str, Any] = {}
@@ -294,7 +295,9 @@ def _fields_of(target: type) -> dict[str, tuple[object, bool]]:
 
 
 def bare_type(hint: object) -> object:
-    """`X | None` → `X`；其餘原樣。"""
+    """`Annotated[X, ...]` → `X`、`X | None` → `X`；其餘原樣。"""
+    if typing.get_origin(hint) is typing.Annotated:
+        hint = typing.get_args(hint)[0]
     if isinstance(hint, UnionType) or typing.get_origin(hint) is typing.Union:
         rest = [arg for arg in typing.get_args(hint) if arg is not NoneType]
         if len(rest) == 1:

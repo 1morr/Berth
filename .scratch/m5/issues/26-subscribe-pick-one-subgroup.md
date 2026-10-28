@@ -84,7 +84,7 @@
 - **後端**：`rss.subscribe_search` 的 `subgroup` 必填（沒有預設；空白是程式錯，兩個入口都擋：API 的 `min_length` + `pattern`、卡片那一列的 `SearchSubscriptionRow`），建好一律 `primed_at`、綁上的 Series `confirmed`；「沒給字幕組 → 每一組都綁、第一輪等人選」那條路刪掉。`rss.search_subgroups` 從 `internal` 改成登錄表命令（不是工具），開 `GET /rss/search/subgroups?kind=&q=`。`subscribe_search` 合併了 main 的票 24（unique 衝突轉 `feed_duplicate`）。
 - **前端**：作品頁 `SearchFeedPicker` 改成「標題鍵 / 搜尋詞 → 搜尋 → 字幕組清單（同 Mikan 的 `Options` + `SubgroupLine`）→ 選一組、資料夾名、第一批（`rss/ReleaseTitles`，卡片也改用它）→『訂閱並送出第一批（N 筆）』」；建好不再就地畫第一輪預覽（`FirstRound` 只剩 RSS 頁用，拿掉 export）。搜不到字幕組說出來、沒有訂閱鍵；讀不到那一站用新的一句（`searchUnreachable`，原本那句寫死了 Mikan）。
 - **測試**：`test_rss_subscribe` 守舊行為的兩條刪掉（全綁等第一輪、不帶字幕組），其餘補字幕組；`list_subscriptions` 的「每一組都收」改用直接寫的舊 Feed。`test_rss_api` 三條新的（列字幕組、讀不到 502、不帶字幕組 422 / 帶了只綁那一組且第一輪已選）。vitest：作品頁兩條改寫、失敗兩條（訂閱、讀字幕組），變異（沒選字幕組也畫訂閱鍵）紅。playwright `rss-subscribe` / `-390`：acg.rip 那一段改成選喵萌奶茶屋&LoliHouse，截圖 `3-acgrip-subgroups`、`4-acgrip-picked`、`5-acgrip-subscribed`。真服務 e2e `test_4_m3_rss.py`：Kamiina Botan 改訂绿茶字幕组，驗千夏字幕组的合集不進來。實驗腳本 `rss_subscribe_timing.py` 補字幕組參數。
-- **未處理（記錄）**：登錄表推輸入模型時用 `typing.get_type_hints` 沒帶 `include_extras`，命令簽名上 `Annotated[..., Field(...)]` 的限制與說明會被丟掉——`anilist.read_season` 的 `limit`（`ge=1, le=50`）其實沒生效。本票改用一般參數加入口檢查繞開，沒改登錄表（影響所有命令的輸入模型，該另開票）。
+- **未處理（記錄）**：登錄表推輸入模型時用 `typing.get_type_hints` 沒帶 `include_extras`，命令簽名上 `Annotated[..., Field(...)]` 的限制與說明會被丟掉——`anilist.read_season` 的 `limit`（`ge=1, le=50`）其實沒生效。本票改用一般參數加入口檢查繞開，沒改登錄表（影響所有命令的輸入模型，該另開票）。→ 票 26b 已修。
 
 ### 2026-10-28 同一個 session：保留「只追之後的」（協調者）
 
