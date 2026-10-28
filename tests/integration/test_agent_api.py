@@ -492,7 +492,7 @@ class TestGuards:
         assert [t.truncated for t in recorded(client)[0].tools] == [False]
 
     def test_one_turn_at_a_time_per_person(self, client: TestClient, script: Script) -> None:
-        client.app.state.agent.claim(1)  # type: ignore[attr-defined]  # 同上：擁有者是 1 號
+        client.app.state.agent.claim(1, "c1")  # type: ignore[attr-defined]  # 同上：擁有者是 1 號
         script.steps = [say("Hi.")]
 
         response = chat(client, "Hello?")

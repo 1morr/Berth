@@ -37,6 +37,8 @@ interface Backend {
   resume: (turn: string) => Response
   /** `POST /agent/conversations/{id}/stop`。 */
   stop: () => Response
+  /** 這個人的其他對話（`GET /agent/conversations/{id}` 與停止，M5 票 25 的 `busy`）。 */
+  others: Record<string, { messages: unknown[]; running: string | null }>
 }
 
 let sent: Record<string, unknown>[] = []
@@ -45,6 +47,8 @@ let commanded: string[] = []
 /** 重連過哪幾輪、按停止打了幾次伺服器。 */
 let resumed: string[] = []
 let stops = 0
+/** 對其他對話按的停止（id）。 */
+let stoppedOthers: string[] = []
 
 function backend(overrides: Partial<Backend>): Backend {
   return {
@@ -59,6 +63,7 @@ function backend(overrides: Partial<Backend>): Backend {
     running: null,
     resume: () => new Response(null, { status: 204 }),
     stop: () => json({ detail: { reason: 'not_running', detail: CONVERSATION } }, 409),
+    others: {},
     ...overrides,
   }
 }
@@ -142,6 +147,7 @@ function serve(api: Backend) {
   commanded = []
   resumed = []
   stops = 0
+  stoppedOthers = []
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>(async (input, init) => {
@@ -163,6 +169,17 @@ function serve(api: Backend) {
       if (method === 'POST' && path === `/api/agent/conversations/${CONVERSATION}/stop`) {
         stops += 1
         return api.stop()
+      }
+      const other = /^\/api\/agent\/conversations\/([^/]+)(\/stop)?$/.exec(path)
+      if (other !== null && other[1] in api.others) {
+        const found = api.others[other[1]]
+        if (method === 'POST' && other[2] === '/stop') {
+          stoppedOthers.push(other[1])
+          found.running = null
+          return new Response(null, { status: 204 })
+        }
+        if (method === 'GET' && other[2] === undefined)
+          return json({ id: other[1], messages: found.messages, running: found.running })
       }
       if (method === 'GET' && path.startsWith('/api/agent/conversations/')) {
         // 後端對沒有的那一段（含剛開的新對話）一律是 `conversation_missing`。
@@ -865,6 +882,71 @@ describe('AgentPanel after a reload while a turn is still running', () => {
     expect(resumed).toEqual(['r9'])
     expect(input).toHaveValue('還在嗎')
     live.end()
+  })
+})
+
+describe('AgentPanel when another of my conversations is still answering', () => {
+  const OLD = 'c-old'
+  const oldAsked = {
+    id: 'o1',
+    role: 'user',
+    parts: [{ type: 'text', text: '慢慢查一下下載\n第二行不算' }],
+  }
+
+  function busyElsewhere(): Backend {
+    const api = backend({
+      stored: [],
+      others: { [OLD]: { messages: [oldAsked], running: 'r-old' } },
+    })
+    api.chat = () =>
+      api.others[OLD].running === null
+        ? stream(say('好，這一則送出去了。'))
+        : json({ detail: { reason: 'busy', detail: OLD } }, 409)
+    return api
+  }
+
+  it('says which conversation is running, stops that reply, and sends this one again', async () => {
+    serve(busyElsewhere())
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByLabelText('問助理')
+    await user.type(input, '新的一則{Enter}')
+
+    expect(await screen.findByText(/另一段對話還在回答：「慢慢查一下下載」/)).toBeInTheDocument()
+    expect(input).toHaveValue('新的一則')
+    await user.click(screen.getByRole('button', { name: '停止那一輪' }))
+
+    expect(await screen.findByText(/那一輪停下了/)).toBeInTheDocument()
+    expect(stoppedOthers).toEqual([OLD])
+    expect(input).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: '送出' }))
+    expect(await screen.findByText('好，這一則送出去了。')).toBeInTheDocument()
+  })
+
+  it('goes to the running conversation and follows it', async () => {
+    serve(busyElsewhere())
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '新的一則{Enter}')
+    await user.click(await screen.findByRole('button', { name: '到那一段對話' }))
+
+    const log = screen.getByRole('log')
+    expect(await within(log).findByText(/慢慢查一下下載/)).toBeInTheDocument()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(OLD)
+    await waitFor(() => expect(resumed).toEqual(['r-old']))
+  })
+
+  it('does not name another conversation when the busy one is this one', async () => {
+    serve(backend({ chat: () => json({ detail: { reason: 'busy', detail: CONVERSATION } }, 409) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '還在嗎{Enter}')
+
+    expect(await screen.findByText(/上一則還在回答/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '停止那一輪' })).toBeNull()
   })
 })
 

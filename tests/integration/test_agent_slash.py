@@ -434,7 +434,7 @@ class TestCompactHoldsTheTurn:
             # 摘要寫得再久，位子都佔到壓完為止。
             now[0] += 3600
             try:
-                runtime.claim(OWNER_ID)
+                runtime.claim(OWNER_ID, "c1")
                 tried.append(None)
             except AgentRefusedError as exc:
                 tried.append(exc.reason)
@@ -445,11 +445,11 @@ class TestCompactHoldsTheTurn:
         assert ok(client, "/compact")["after"] is not None
         assert tried == [AgentRefusal.BUSY]
         # 壓完讓出來了。
-        runtime.claim(OWNER_ID)
+        runtime.claim(OWNER_ID, "c1")
 
     def test_compact_while_a_turn_runs_is_busy(self, client: TestClient, script: Script) -> None:
         three_turns(client, script)
-        client.app.state.agent.claim(OWNER_ID)  # type: ignore[attr-defined]  # 同上
+        client.app.state.agent.claim(OWNER_ID, "c1")  # type: ignore[attr-defined]  # 同上
 
         response = slash(client, "/compact")
 

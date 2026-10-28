@@ -42,6 +42,7 @@ import { GhostButton, Notice, PrimaryButton, TEXT_LINK } from '../components/con
 import { ExpandHint } from '../components/ExpandHint'
 import { RequestFailed } from '../components/RequestFailed'
 import i18n from '../i18n'
+import { BusyElsewhere } from './BusyElsewhere'
 import { CardContext, type CardActions } from './cards'
 import { ConfirmCard } from './ConfirmCard'
 import { Markdown } from './Markdown'
@@ -111,6 +112,8 @@ async function follow(chat: Chat<UIMessage>, turn: string) {
  */
 type Failure = { restored: boolean } & (
   | { kind: 'busy' }
+  | { kind: 'busyElsewhere'; other: string }
+  | { kind: 'stoppedElsewhere' }
   | { kind: 'paused' }
   | { kind: 'unknown'; word: string }
   | { kind: 'spent' }
@@ -248,7 +251,10 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       // 面板頂上那一塊說暫停到幾點（`AgentPanel`）。
       void queryClient.invalidateQueries({ queryKey: agentStatusQueryOptions.queryKey })
     }
-    if (refusal?.reason === 'busy') {
+    if (refusal?.reason === 'busy' && refusal.detail !== '' && refusal.detail !== chat.id) {
+      // 在跑的是自己的另一段對話（M5 票 25）：說是哪一段，可以接過去或停掉它。
+      setFailure({ kind: 'busyElsewhere', other: refusal.detail, restored })
+    } else if (refusal?.reason === 'busy') {
       setFailure({ kind: 'busy', restored })
       await catchUp()
     } else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused', restored })
@@ -390,6 +396,19 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
             <Notice signal="assigned" label={t('agent.failure.waitLabel')}>
               {t('agent.failure.busy')}
             </Notice>
+          ) : null}
+          {failure?.kind === 'busyElsewhere' ? (
+            <BusyElsewhere
+              other={failure.other}
+              onStopped={() => {
+                // 字還在輸入欄：按「送出」就是重送。
+                setFailure({ kind: 'stoppedElsewhere', restored: failure.restored })
+                input.current?.focus()
+              }}
+            />
+          ) : null}
+          {failure?.kind === 'stoppedElsewhere' ? (
+            <p className="text-sm text-ink">{t('agent.failure.busyStopped')}</p>
           ) : null}
           {failure?.kind === 'paused' ? (
             <Notice signal="assigned" label={t('agent.failure.waitLabel')}>

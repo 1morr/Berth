@@ -4031,6 +4031,13 @@ const zhHant = {
     failure: {
       waitLabel: '等一下',
       busy: '上一則還在回答（可能在另一個分頁）。答完再送。',
+      busyElsewhere:
+        '另一段對話還在回答：「{{title}}」。一次只能答一段，等它答完、接過去看，或停掉它再送這一則。',
+      busyUntitled: '另一段對話',
+      busyStop: '停止那一輪',
+      busyOpen: '到那一段對話',
+      busyStopped: '那一輪停下了。字還在輸入欄，按「送出」就是重送。',
+      busyStopFailed: '沒停成。到那一段對話按「停止」，或再試一次。',
       missing: '這段對話已經不在了，換成一段新的。字放回輸入欄了，再按一次送出。',
       lead: '這一則沒送出去',
       restored: '字放回輸入欄了，再按一次送出就是重試。',
@@ -8241,6 +8248,14 @@ const en: Translations<typeof zhHant> = {
     failure: {
       waitLabel: 'Wait',
       busy: 'The previous message is still being answered (maybe in another tab). Send once it is done.',
+      busyElsewhere:
+        'Another conversation is still being answered: “{{title}}”. Only one runs at a time: wait for it, go to it, or stop it and send this one.',
+      busyUntitled: 'another conversation',
+      busyStop: 'Stop that reply',
+      busyOpen: 'Go to that conversation',
+      busyStopped:
+        'That reply was stopped. Your text is still in the box; press Send to send it again.',
+      busyStopFailed: 'It did not stop. Press Stop in that conversation, or try again.',
       missing:
         'This conversation is gone, so a new one has started. Your text is back in the box; press Send again.',
       lead: 'This message was not sent',

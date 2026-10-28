@@ -372,6 +372,38 @@ test('按「停止」：伺服器停下那一輪，說是你按了停止（M5 �
   await shot(page, 'resume-stopped')
 })
 
+test('另一段對話還在答：說出是哪一段，停掉那一輪之後這一則重送成功（M5 票 25）', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  const log = panel.getByRole('log', { name: '助理' })
+  await input.fill('慢慢查一下下載')
+  await input.press('Enter')
+  await expect(log.locator('details').filter({ hasText: '列出下載' }).first()).toContainText('完成')
+
+  // 開新對話：舊的那一輪還在伺服器上跑。這一頁還在跟著它時輸入欄不收指令（`/new` 要等它答完），
+  // 所以按頁首的「新對話」：同一件事（`startNew`）。
+  await panel.getByRole('button', { name: '新對話' }).click()
+  await expect(log).not.toContainText('慢慢查一下下載')
+  await input.fill('給我一張圖片')
+  await input.press('Enter')
+
+  await expect(panel).toContainText('另一段對話還在回答：「慢慢查一下下載」')
+  await expect(input).toHaveValue('給我一張圖片')
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'busy-elsewhere')
+  await panel.getByRole('button', { name: '停止那一輪' }).click()
+  await expect(panel).toContainText('那一輪停下了')
+
+  await panel.getByRole('button', { name: '送出' }).click()
+  await expect(panel.getByText('圖片沒有載入')).toBeVisible()
+  await expect(log).toContainText('給我一張圖片')
+  await shot(page, 'busy-elsewhere-resent')
+})
+
 // 一般使用者（M5 驗收「同一道門禁」）：`deckhand` 用同一個面板問「為什麼沒入庫」——那支是一般使用者
 // 也能用的讀取命令；管理員才有的工具不在他的那一份裡（整合測試 `TestWhoCanUseWhat` 守）。用量頁不給他。
 test('一般使用者也用得到側面板：問「為什麼沒入庫」得到結論，用量頁進不去', async ({ page }) => {

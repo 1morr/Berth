@@ -1826,7 +1826,8 @@ class AgentRefusal(StrEnum):
     AI_DISABLED = "ai_disabled"
     #: provider 斷路器開著（連續 5 次失敗，暫停 15 分鐘，M5 票 20）。detail 是暫停到什麼時候。
     AI_PAUSED = "ai_paused"
-    #: 這個人已經有一輪在跑（每人同時 1 輪，plan §11.6〈防護〉）。
+    #: 這個人已經有一輪在跑（每人同時 1 輪，plan §11.6〈防護〉）。detail 是在跑的那一段對話的 id
+    #: （只會是他自己的），側面板照它說是哪一段、接過去或停掉它（M5 票 25）。
     BUSY = "busy"
     #: 送來的最後一則不是有字的使用者訊息。
     NO_MESSAGE = "no_message"

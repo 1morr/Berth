@@ -603,4 +603,61 @@ class TestATurnThatBreaks:
         [run] = runs(client)
         assert run.stop_reason == "error"
         assert client.get("/api/agent/conversations/c1").json()["running"] is None
-        runtime.claim(1)
+        runtime.claim(1, "c1")
+
+
+class TestBusySaysWhichConversation:
+    """每人同時一輪：擋下時說是哪一段對話在跑（只有本人的），面板才能接過去或停掉它。"""
+
+    def test_busy_names_my_running_conversation_and_stopping_it_lets_the_message_through(
+        self, client: TestClient, ai: FakeAi, script: Script
+    ) -> None:
+        script.steps = [call("jobs_list_jobs"), say("Done.")]
+        gate = Gate(at=2)
+        ai.pause = gate
+        leave_after(
+            client,
+            "POST",
+            "/api/agent/chat",
+            body=chat_body("What is downloading?", "old"),
+            until=has_tool_output,
+        ).result(timeout=5)
+        wait_for_gate(client, gate)
+
+        refused = client.post("/api/agent/chat", json=chat_body("Hi", "new"), headers=BROWSER)
+
+        assert refused.status_code == 409
+        assert refused.json()["detail"] == {"reason": "busy", "detail": "old"}
+        assert client.post("/api/agent/conversations/old/stop", headers=BROWSER).status_code == 204
+        ai.pause = None
+        script.steps = [say("Hello.")]
+        resent = client.post("/api/agent/chat", json=chat_body("Hi", "new"), headers=BROWSER)
+        assert resent.status_code == 200
+        assert text_of(chunks_of(resent.text)) == "Hello."
+
+    def test_someone_elses_running_conversation_is_not_named(
+        self, client: TestClient, ai: FakeAi, script: Script
+    ) -> None:
+        script.steps = [call("jobs_list_jobs"), say("Done.")]
+        gate = Gate(at=2)
+        ai.pause = gate
+        leave_after(
+            client,
+            "POST",
+            "/api/agent/chat",
+            body=chat_body("What is downloading?", "owners"),
+            until=has_tool_output,
+        ).result(timeout=5)
+        wait_for_gate(client, gate)
+        owner = dict(client.cookies)
+        sign_in_crew(client)
+        ai.pause = None
+        script.steps = [say("Hello.")]
+
+        mine = client.post("/api/agent/chat", json=chat_body("Hi", "crews"), headers=BROWSER)
+
+        # 別人在跑不擋我；我的回應裡沒有那段對話。
+        assert mine.status_code == 200
+        assert "owners" not in mine.text
+        client.cookies.update(owner)
+        open_gate(client, gate)

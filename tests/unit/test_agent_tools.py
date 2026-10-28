@@ -137,12 +137,12 @@ class TestOneTurnAtATime:
 
     def test_a_second_turn_waits_for_the_first(self) -> None:
         runtime = AgentRuntime()
-        runtime.claim(1)
+        runtime.claim(1, "c1")
         with pytest.raises(AgentRefusedError):
-            runtime.claim(1)
-        runtime.claim(2)
+            runtime.claim(1, "c1")
+        runtime.claim(2, "c1")
         runtime.release(1)
-        runtime.claim(1)
+        runtime.claim(1, "c1")
 
 
 def test_every_call_caps_its_output_and_anthropic_marks_what_to_cache() -> None:

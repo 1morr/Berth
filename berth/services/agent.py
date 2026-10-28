@@ -323,16 +323,20 @@ class AgentRuntime:
         self.limits = limits or Limits()
         self.breaker = breaker or ProviderBreaker()
         self._clock = clock
-        self._claims: set[int] = set()
+        #: 誰正在跑一輪：這個人 → 哪一段對話（`busy` 說給本人聽，M5 票 25）。
+        self._claims: dict[int, str] = {}
         self._running: dict[str, _Running] = {}
 
-    def claim(self, user_id: int) -> None:
-        if user_id in self._claims:
-            raise AgentRefusedError(AgentRefusal.BUSY)
-        self._claims.add(user_id)
+    def claim(self, user_id: int, conversation_id: str) -> None:
+        """佔住這個人的那一輪。已經有一輪在跑：`busy`，detail 是那一段對話的 id（只會是他自己的：
+        位子以人為單位）。"""
+        held = self._claims.get(user_id)
+        if held is not None:
+            raise AgentRefusedError(AgentRefusal.BUSY, held)
+        self._claims[user_id] = conversation_id
 
     def release(self, user_id: int) -> None:
-        self._claims.discard(user_id)
+        self._claims.pop(user_id, None)
 
     def start(self, turn: Turn, chunks: Chunks, ending: Ending) -> LiveTurn[Any]:
         """在自己的 task 上跑這一輪：`chunks(turn)` 的每一個放進 `live`，被取消時接上 `ending`
@@ -1559,7 +1563,7 @@ async def open_turn(
             name="berth",
         )
         run_id = uuid.uuid4().hex
-        runtime.claim(actor.user_id)
+        runtime.claim(actor.user_id, conversation_id)
         try:
             if calls and not resuming:
                 closing = [
