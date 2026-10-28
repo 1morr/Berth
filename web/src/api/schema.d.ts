@@ -3237,7 +3237,6 @@ export interface components {
             messages: {
                 [key: string]: unknown;
             }[];
-            stop: components["schemas"]["TurnStopOut"] | null;
         };
         /** CostTallyOut */
         CostTallyOut: {
@@ -6727,17 +6726,6 @@ export interface components {
             versions: number;
             /** Audits */
             audits: number;
-        };
-        /**
-         * TurnStopOut
-         * @description 一輪沒有答完：哪一輪、為什麼、能不能按「繼續」（串流裡的 `data-stop` 也是這個形狀）。
-         */
-        TurnStopOut: {
-            /** Turn Id */
-            turn_id: string;
-            reason: components["schemas"]["AiStopReason"];
-            /** Continuable */
-            continuable: boolean;
         };
         /**
          * UnknownTorrentOut

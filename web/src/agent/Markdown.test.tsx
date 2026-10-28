@@ -76,4 +76,34 @@ describe('Markdown', () => {
     expect(container.querySelector('input')).toBeNull()
     expect(screen.getByText('已入庫')).toBeInTheDocument()
   })
+
+  it('ends a bare address at the Chinese text right after it', () => {
+    // 實跑抓到的（票 22 critique）：GFM 的自動連結只認空白，把「，但」吃進網址。
+    render(<Markdown text={'網址是 https://mikanani.me/RSS/Bangumi?bangumiId=3310，但我沒加。'} />)
+
+    const link = screen.getByRole('link', {
+      name: 'https://mikanani.me/RSS/Bangumi?bangumiId=3310',
+    })
+    expect(link).toHaveAttribute('href', 'https://mikanani.me/RSS/Bangumi?bangumiId=3310')
+    expect(link.parentElement).toHaveTextContent(
+      '網址是 https://mikanani.me/RSS/Bangumi?bangumiId=3310，但我沒加。',
+    )
+  })
+
+  it('leaves a written link and its own text alone', () => {
+    render(<Markdown text={'[Mikan 的頁面](https://mikanani.me/Home/Bangumi/3310)。'} />)
+
+    expect(screen.getByRole('link', { name: 'Mikan 的頁面' })).toHaveAttribute(
+      'href',
+      'https://mikanani.me/Home/Bangumi/3310',
+    )
+  })
+
+  it('draws a link in a sentence as part of the sentence, not as a label', () => {
+    render(<Markdown text={'看 https://example.org/a 這裡'} />)
+
+    const link = screen.getByRole('link')
+    expect(link).not.toHaveClass('label')
+    expect(link).not.toHaveClass('inline-flex')
+  })
 })

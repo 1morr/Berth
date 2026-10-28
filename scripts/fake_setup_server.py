@@ -28,6 +28,7 @@ from urllib.parse import quote, urlsplit
 import time_machine
 import uvicorn
 from fastapi import FastAPI, Request, Response
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -1774,7 +1775,9 @@ def agent_scenario() -> Scenario:
     三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。索引站多三筆單集（`AGENT_RELEASES`），
     qBittorrent 收下就留著。說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
     （票 21 的步驟頁）。「加這個 RSS：<網址>」出一張加 Feed 的卡，
-    「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。其餘一律說它只演這幾件事。
+    「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。說「provider 壞了」
+    （`provider down`）時替身回 HTTP 503，連續 5 次就讓斷路器暫停 15 分鐘（票 22）。
+    其餘一律說它只演這幾件事。
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
@@ -1876,6 +1879,9 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             )
         if _FEED_GIVEN.search(text) or _FEED_SEARCHED.search(text):
             return ModelResponse(parts=[ToolCallPart("routes_list_routes", {})])
+        if "provider 壞了" in text or "provider down" in text.lower():
+            # 演 provider 斷路器（M5 票 22）：每一次都是 provider 那一側的失敗。
+            raise ModelHTTPError(503, "demo", {"error": {"message": "overloaded"}})
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])

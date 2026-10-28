@@ -34,12 +34,32 @@ export function agentRefusalOf(error: unknown): Refusal<AgentRefusal> | null {
 
 /**
  * AI 開著沒有、provider 暫停到什麼時候（票 20；管理員另有 `pause_error`）。登入就讀得到；關著時面板
- * 只說怎麼設定（管理員）或「管理員還沒設定」。暫停的畫法在票 22。
+ * 只說怎麼設定（管理員）或「管理員還沒設定」，暫停時面板頂上說到幾點（票 22）。
  */
 export const agentStatusQueryOptions = queryOptions({
   queryKey: ['agent', 'status'],
   queryFn: ({ signal }) => apiGet<AgentStatus>('/agent/status', { signal }),
 })
+
+/**
+ * 防護停下的那一則（`data-stop` 的 `data`，後端 `TurnStopOut`）：串流裡與重新載入時同一個形狀。
+ * 說明是 Berth 寫的（哪一條、做到哪），不是助理的文字。只有最後一輪可能 `continuable`。
+ */
+export interface TurnStop {
+  turn_id: string
+  reason: Schemas['AiStopReason']
+  continuable: boolean
+  note: string
+}
+
+/** 一則訊息的片段是停下的說明的話，它的內容；否則 `null`。 */
+export function stopOf(part: { type: string; data?: unknown }): TurnStop | null {
+  if (part.type !== 'data-stop') return null
+  const data = part.data as Partial<TurnStop> | null
+  return typeof data?.turn_id === 'string' && typeof data.note === 'string'
+    ? (data as TurnStop)
+    : null
+}
 
 /**
  * 一段對話存著的訊息（`useChat` 的 `UIMessage`）。沒有這段（第一次用、換了帳號、被清掉）是 `null`：
@@ -65,13 +85,15 @@ export async function readConversation(
 /**
  * `useChat` 的傳輸：只送最後一則（plan §11.6〈串流〉），帶介面語言（停下來的說明照它寫），
  * 失敗時丟出與其餘 API 同一種 `ApiError`——畫面才分得出 `busy` 與 `ai_disabled`。
+ * `sendMessage` 的 `body`（按「繼續」時的 `continues`）併進去。
  */
 export function agentTransport(language: () => string) {
   return new DefaultChatTransport<UIMessage>({
     api: '/api/agent/chat',
     headers: CSRF_HEADERS,
-    prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({
+    prepareSendMessagesRequest: ({ id, messages, trigger, messageId, body }) => ({
       body: {
+        ...body,
         id,
         trigger,
         messageId,

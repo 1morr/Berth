@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { useEffect, type KeyboardEvent } from 'react'
 import { flushSync } from 'react-dom'
-import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { agentStatusQueryOptions, type AgentStatus } from '../api/agent'
@@ -17,8 +17,14 @@ import {
 import { alertText, unknownText } from '../usage/alerts'
 import { Conversation } from './Conversation'
 import { PanelFailed, PanelLoading } from './PanelStates'
-import { INPUT_ID, PANEL_ID, PANEL_TITLE_ID, TOGGLE_ID, usePanel } from './panelState'
-import { useNarrow } from './useNarrow'
+import {
+  INPUT_ID,
+  PANEL_ID,
+  PANEL_TITLE_ID,
+  TOGGLE_ID,
+  useLeavePanel,
+  usePanel,
+} from './panelState'
 
 /**
  * 頁首的「助理」鍵（M5 票 12，`.scratch/m5/side-panel-shape.md`〈與頁面的關係〉）。打開時是當前導覽
@@ -132,9 +138,56 @@ function PanelBody({ conversationId }: { conversationId: string }) {
   // `key`：換一段對話就是換一份 `Chat`，輸入欄以外的狀態（失敗的那一句）跟著清掉。
   return (
     <>
+      <Paused until={status.data.paused_until} error={status.data.pause_error} />
       <SpendAlerts spend={status.data.spend} />
       <Conversation key={conversationId} conversationId={conversationId} />
     </>
+  )
+}
+
+/**
+ * provider 斷路器暫停中（M5 票 20、22）：一般使用者也看得到到幾點；錯誤原文只給管理員（後端只給他）。
+ * 不是錯誤、也不擋打字：被擋下的那一則才說（`ai_paused`）。到時間就重問一次，關了就收掉。
+ */
+function Paused({ until, error }: { until: string | null; error: string }) {
+  const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
+  const leave = useLeavePanel()
+
+  useEffect(() => {
+    if (until === null) return
+    const wait = Math.max(new Date(until).getTime() - Date.now(), 0) + 1_000
+    const timer = setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: agentStatusQueryOptions.queryKey })
+    }, wait)
+    return () => clearTimeout(timer)
+  }, [until, queryClient])
+
+  if (until === null) return null
+  const time = new Date(until).toLocaleTimeString(i18n.language, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  return (
+    <div className="grid gap-2 border-b-2 border-rule px-4 py-3">
+      <Notice signal="assigned" label={t('agent.paused.label')}>
+        {t('agent.paused.until')}{' '}
+        <time dateTime={until} className="value">
+          {time}
+        </time>
+        {t('agent.paused.why')}
+      </Notice>
+      {error ? (
+        <div className="grid gap-1">
+          <span className="label text-ink-dim">{t('agent.paused.error')}</span>
+          <p className="value text-xs wrap-anywhere text-ink">{error}</p>
+          <Link to="/settings/ai" onClick={leave} className={`${TEXT_LINK} justify-self-start`}>
+            {t('agent.off.settings')}
+          </Link>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -144,19 +197,12 @@ function PanelBody({ conversationId }: { conversationId: string }) {
  */
 function SpendAlerts({ spend }: { spend: AgentStatus['spend'] }) {
   const { t, i18n } = useTranslation()
-  const narrow = useNarrow()
-  const { setOpen } = usePanel()
+  const leave = useLeavePanel()
   if (spend === null) return null
   const unknown = unknownText(t, spend, 'panel')
   if (spend.alerts.length === 0 && unknown === null) return null
   const toUsage = (
-    <Link
-      to="/settings/usage"
-      onClick={() => {
-        if (narrow) setOpen(false)
-      }}
-      className={TEXT_LINK}
-    >
+    <Link to="/settings/usage" onClick={leave} className={TEXT_LINK}>
       {t('agent.spend.link')}
     </Link>
   )

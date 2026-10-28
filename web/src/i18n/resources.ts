@@ -1530,6 +1530,30 @@ const zhHant = {
         missing: '缺',
         unaired: '未播出',
       },
+      // 「缺」「卡住」那一格的「為什麼」（M5 票 22）：讀票 10 的結論，按了才問。
+      cause: {
+        button: '為什麼',
+        missing: '為什麼缺？',
+        stuck: '為什麼卡住？',
+        loading: '查詢中',
+        failed: '查不到原因',
+        job: '看那一筆下載',
+        rss: '到 RSS 頁',
+        review: '到審核',
+        conclusion: {
+          import_failed: '下載完了，入庫那一步失敗，要人看那一筆。',
+          download_failed:
+            '沒下載成：送單失敗、客戶端報錯、檔案不見，或 torrent 被移出了 qBittorrent。',
+          awaiting_review: '下載完了，停在審核等管理員確認。',
+          unbound: 'RSS 有這一集，但它的 RSS Series 還沒綁到作品；綁好之前不送。',
+          excluded: 'RSS 有這一集，被排除條件擋下，或這個 Feed 第一輪選了「只追之後的」。',
+          no_source: '播了，但哪裡都沒有它：沒有人送過，RSS 也沒出現過。可以用下面的搜尋找發佈。',
+          downloading: '在路上，或 RSS 綁好了、下一輪就送。',
+          jellyfin_pending: '已入庫，Jellyfin 還沒認到那個檔案。',
+          unaired: '還沒播，或 TMDB 還沒有播出日。',
+          imported: '已經入庫了，這一頁還沒更新。重新整理就會看到。',
+        },
+      },
     },
     // 這部作品的下載（M4 票 12，`.scratch/m4/media-downloads-shape.md`）。發佈名、檔名與字幕組不是文案。
     downloads: {
@@ -3874,6 +3898,9 @@ const zhHant = {
       failed: '沒成功',
       input: '參數',
       output: '結果',
+      // 助理直接建的搜尋 Feed（M5 票 22）：撤銷與選第一輪都在 RSS 頁那一列。
+      subscribed: '還沒開始下載：到 RSS 頁選第一輪（全部下載或只追之後的），不要的話在那裡刪掉。',
+      subscribedLink: '到 RSS 頁那一列',
       names: {
         discover_search_media: '搜尋作品',
         why_not_explain: '查為什麼沒入庫',
@@ -3931,19 +3958,21 @@ const zhHant = {
       expires: '期限：',
       // 只在自由文字出自外部內容的卡上出現（M5 票 14）：搜到的網頁，以及 AniList、Bangumi 這類社群資料站（票 16）。
       externalLead:
-        '標著「出自外部來源」的欄位是助理從搜到的網頁或動漫資料站（AniList、Bangumi）抄來的，不是你說的。確認前看一眼。',
+        '標著「出自外部來源」的欄位是助理從網頁或動漫資料站（AniList、Bangumi）抄來的，不是你說的；確認前看一眼。',
       externalFields: '出自外部來源：{{fields}}',
       fromOutside: '出自外部來源',
       // 送單的數量閘：一張卡送出的 torrent 有上限，單獨就超過（或集數不知道）的一項自己一張。
+      // 後半句是使用者要做的事；「單獨就超過的自己一張」是助理的規則，不說（票 22 critique）。
       heldBack_one:
-        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
+        '另外 {{count}} 項不在這張卡上：一張卡送出的 torrent 有上限。這張按完，助理會再提下一張。',
       heldBack_other:
-        '另外 {{count}} 項放不上這張：一張卡送出的 torrent 有上限，單獨就超過的自己一張。按了之後助理會再提一張。',
+        '另外 {{count}} 項不在這張卡上：一張卡送出的 torrent 有上限。這張按完，助理會再提下一張。',
       fields: {
         release: '發佈',
         size: '大小',
         media: '作品',
         route: 'Route',
+        folder: '資料夾',
         url: '網址',
         name: '名稱',
         tvRoute: '劇集 Route',
@@ -3994,12 +4023,25 @@ const zhHant = {
     },
     failure: {
       waitLabel: '等一下',
-      busy: '上一則還在回答（可能在另一個分頁）。答完再送；字放回輸入欄了。',
+      busy: '上一則還在回答（可能在另一個分頁）。答完再送。',
       missing: '這段對話已經不在了，換成一段新的。字放回輸入欄了，再按一次送出。',
       lead: '這一則沒送出去',
       restored: '字放回輸入欄了，再按一次送出就是重試。',
       unknown: '沒有「{{word}}」這個指令。打 / 看有哪些；字放回輸入欄了。',
-      paused: 'AI 服務暫停中，壓縮要等它恢復。字放回輸入欄了。',
+      paused: 'AI 服務暫停中，恢復之後再送（面板頂上寫了到幾點）。',
+      spent: '這一輪已經不能繼續了（可能在另一個分頁按過）。換個問法再問一次。',
+    },
+    // provider 斷路器暫停中（M5 票 22）。時間夾在 `until` 與 `why` 之間。
+    paused: {
+      label: '暫停',
+      until: '助理暫停到',
+      why: '：AI 服務連續出錯，到時間會自動恢復。Berth 的其他功能照常可用。',
+      error: '錯誤原文',
+    },
+    // 防護停下的那一則（M5 票 22）：Berth 說的，不是助理的話。
+    stopped: {
+      label: '停下',
+      continue: '繼續',
     },
     // 較早的對話被壓縮成的那段摘要（M5 票 18）。
     summary: {
@@ -5777,6 +5819,32 @@ const en: Translations<typeof zhHant> = {
         stuck: 'Stuck',
         missing: 'Missing',
         unaired: 'Not aired',
+      },
+      cause: {
+        button: 'Why',
+        missing: 'Why is it missing?',
+        stuck: 'Why is it stuck?',
+        loading: 'Looking',
+        failed: 'Could not find out why',
+        job: 'See that download',
+        rss: 'Go to RSS',
+        review: 'Go to review',
+        conclusion: {
+          import_failed: 'It downloaded, but importing it failed. That download needs a look.',
+          download_failed:
+            'It did not download: the submit failed, the client reported an error, files went missing, or the torrent was removed from qBittorrent.',
+          awaiting_review: 'It downloaded and is waiting in review for an administrator.',
+          unbound:
+            'RSS has this episode, but its RSS Series is not bound to a title yet; nothing is sent until it is.',
+          excluded:
+            'RSS has this episode, but an exclusion rule blocked it, or the feed’s first round was set to only follow what comes next.',
+          no_source:
+            'It aired, but nothing has it: nobody sent it and RSS never listed it. The search below can find a release.',
+          downloading: 'It is on its way, or RSS is bound and sends it next round.',
+          jellyfin_pending: 'It is imported; Jellyfin has not picked up the file yet.',
+          unaired: 'It has not aired yet, or TMDB has no air date for it.',
+          imported: 'It is already imported; this page has not caught up. Reload to see it.',
+        },
       },
     },
     downloads: {
@@ -8033,6 +8101,9 @@ const en: Translations<typeof zhHant> = {
       failed: 'Did not work',
       input: 'Arguments',
       output: 'Result',
+      subscribed:
+        'Nothing is downloading yet: choose the first round on the RSS page (everything, or only what comes next), or delete it there.',
+      subscribedLink: 'Its row on the RSS page',
       names: {
         discover_search_media: 'Search titles',
         why_not_explain: 'Why it is not imported',
@@ -8088,18 +8159,19 @@ const en: Translations<typeof zhHant> = {
       },
       expires: 'Valid until:',
       externalLead:
-        'Fields marked “From an outside source” were copied by the assistant from a web page or an anime database (AniList, Bangumi), not said by you. Check them before confirming.',
+        'Fields marked “From an outside source” were copied by the assistant from a web page or an anime database (AniList, Bangumi), not said by you; check them before confirming.',
       externalFields: 'From an outside source: {{fields}}',
       fromOutside: 'From an outside source',
       heldBack_one:
-        '{{count}} more does not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes it after you decide this one.',
+        '{{count}} more is not on this card: a card sends a limited number of torrents. Once you decide this one, the assistant proposes the next.',
       heldBack_other:
-        '{{count}} more do not fit on this card: a card sends a limited number of torrents, and anything over it alone gets its own card. The assistant proposes them after you decide this one.',
+        '{{count}} more are not on this card: a card sends a limited number of torrents. Once you decide this one, the assistant proposes the next.',
       fields: {
         release: 'Release',
         size: 'Size',
         media: 'Title',
         route: 'Route',
+        folder: 'Folder',
         url: 'Address',
         name: 'Name',
         tvRoute: 'Series route',
@@ -8153,15 +8225,26 @@ const en: Translations<typeof zhHant> = {
     },
     failure: {
       waitLabel: 'Wait',
-      busy: 'The previous message is still being answered (maybe in another tab). Send once it is done; your text is back in the box.',
+      busy: 'The previous message is still being answered (maybe in another tab). Send once it is done.',
       missing:
         'This conversation is gone, so a new one has started. Your text is back in the box; press Send again.',
       lead: 'This message was not sent',
       restored: 'Your text is back in the box; pressing Send again retries.',
       unknown:
         'There is no “{{word}}” command. Type / to see the list; your text is back in the box.',
-      paused:
-        'The AI service is paused, so compacting has to wait until it is back. Your text is back in the box.',
+      paused: 'The AI service is paused. Send once it is back (the top of the panel says when).',
+      spent:
+        'This turn can no longer be continued (maybe it was in another tab). Ask again, perhaps another way.',
+    },
+    paused: {
+      label: 'Paused',
+      until: 'The assistant is paused until',
+      why: ': the AI service kept failing. It comes back by itself then; the rest of Berth works as usual.',
+      error: 'Error as returned',
+    },
+    stopped: {
+      label: 'Stopped',
+      continue: 'Continue',
     },
     summary: {
       label: 'Summary',

@@ -10,7 +10,15 @@ import {
   type ToolUIPart,
   type UIMessage,
 } from 'ai'
-import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -21,8 +29,10 @@ import {
   readConversation,
   runSlashCommand,
   slashMatches,
+  stopOf,
   type SlashName,
   type SlashResult,
+  type TurnStop,
 } from '../api/agent'
 import { ApiError, signedOut } from '../api/client'
 import { proposalsKey, proposalsQueryOptions, type Proposal } from '../api/proposals'
@@ -34,10 +44,16 @@ import { CardContext, type CardActions } from './cards'
 import { ConfirmCard } from './ConfirmCard'
 import { Markdown } from './Markdown'
 import { PanelFailed, PanelLoading } from './PanelStates'
-import { INPUT_ID, PANEL_TITLE_ID, SLASH_HINT_ID, slashOptionId, usePanel } from './panelState'
+import {
+  INPUT_ID,
+  PANEL_TITLE_ID,
+  SLASH_HINT_ID,
+  slashOptionId,
+  useLeavePanel,
+  usePanel,
+} from './panelState'
 import { SlashHint, SlashOutput } from './Slash'
 import { ToolCall } from './ToolCall'
-import { useNarrow } from './useNarrow'
 
 /**
  * 一段對話：接回伺服器存著的那一份，之後由 `useChat` 串流（M5 票 12）。
@@ -65,12 +81,24 @@ export function Conversation({ conversationId }: { conversationId: string }) {
   return <Chatting chat={chat.data} />
 }
 
-/** 送不出去的那一則：後端說不行的理由，或請求本身為什麼沒成。 */
-type Failure =
+/**
+ * 按「停止」之後等伺服器存下說明：它在連線關掉時收尾（`Turn.close`），平常幾十毫秒；最多等兩秒，
+ * 等不到就算了（重新載入時照樣看得到）。
+ */
+const STOP_NOTE_TRIES = 8
+const STOP_NOTE_WAIT_MS = 250
+
+/**
+ * 送不出去的那一則：後端說不行的理由，或請求本身為什麼沒成。`restored`：打的字放回輸入欄了
+ * （按「繼續」與按卡片之後的恢復沒有字可放）。
+ */
+type Failure = { restored: boolean } & (
   | { kind: 'busy' }
   | { kind: 'paused' }
   | { kind: 'unknown'; word: string }
+  | { kind: 'spent' }
   | { kind: 'request'; error: unknown }
+)
 
 /** 指令的結果與它接在第幾則訊息之後（打它的那一刻有幾則）。 */
 interface Output {
@@ -87,6 +115,10 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   const [failure, setFailure] = useState<Failure | null>(null)
   const [outputs, setOutputs] = useState<Output[]>([])
   const [running, setRunning] = useState(false)
+  // 按過「繼續」、伺服器說不能續的那幾輪：收掉按鈕。
+  const [spent, setSpent] = useState<ReadonlySet<string>>(new Set())
+  // 使用者按了「停止」：串流斷了之後，接回伺服器存下的那則說明。
+  const stopping = useRef(false)
   // 提示清單：上下鍵移到哪一列；按了 Esc 就收起，改字才再出現。
   const [active, setActive] = useState(0)
   const [hintClosed, setHintClosed] = useState(false)
@@ -94,16 +126,27 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   // 指令在跑時也不收新的一則，但沒有串流可以停。
   const busy = streaming || running
   const input = useRef<HTMLTextAreaElement>(null)
+  // 「送出」與「停止」輪流佔同一格：焦點在那一格裡時，換鍵之後交給新的那一顆（WCAG 2.4.3）。
+  const action = useRef<HTMLDivElement>(null)
+  const actionFocused = useRef(false)
   const outputKey = useRef(0)
   const options = hintClosed ? [] : slashMatches(draft)
   const picked = options[Math.min(active, options.length - 1)]
 
-  // 一輪答完（或停在卡片上）就再問一次這段對話的卡片：新出的卡要畫上去。
+  // 一輪答完（或停在卡片上）就再問一次這段對話的卡片：新出的卡要畫上去。狀態也再問：這一輪的
+  // 失敗可能讓 provider 暫停了，花費提醒也可能變了。
   useEffect(() => {
     if (status === 'ready' || status === 'error') {
       void queryClient.invalidateQueries({ queryKey: proposalsKey(conversationId) })
+      void queryClient.invalidateQueries({ queryKey: agentStatusQueryOptions.queryKey })
     }
   }, [status, queryClient, conversationId])
+
+  useLayoutEffect(() => {
+    if (actionFocused.current && !action.current?.contains(document.activeElement)) {
+      action.current?.querySelector('button')?.focus()
+    }
+  }, [streaming])
 
   // 剛按「助理」打開時對話還在讀，焦點先落在面板標題（`AgentToggle`）；輸入欄出現了就接過來。
   // 只接標題上的：換頁時面板跟著重掛，不該把焦點從頁面上搶走。
@@ -126,22 +169,67 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       await command(text)
       return
     }
-    await sendMessage({ text })
+    await send(text)
+  }
+
+  /**
+   * 送一則訊息：打的字，或「繼續」鍵上的字（`continues` 是停下的那一輪）。伺服器沒收下的從畫面上
+   * 拿掉；打的字放回輸入欄。
+   */
+  async function send(text: string, continues?: string) {
+    stopping.current = false
+    await sendMessage({ text }, continues === undefined ? undefined : { body: { continues } })
+    if (stopping.current) {
+      stopping.current = false
+      await pickUpStopNote()
+      return
+    }
     const error = chat.error
     if (error === undefined) return
     clearError()
     // 回應開始串流之後才斷的，伺服器已經收下這一則（它會存到停下之前）：留著。其餘的伺服器沒收，
-    // 從畫面上拿掉、字放回輸入欄——重新載入之後它也不會在。
+    // 從畫面上拿掉——重新載入之後它也不會在。
     const unsent = error instanceof ApiError || chat.lastMessage?.role === 'user'
-    if (unsent) {
-      setMessages((current) => withoutLastUser(current))
-      setDraft(text)
+    if (unsent) setMessages((current) => withoutLastUser(current))
+    const restored = unsent && continues === undefined
+    if (restored) setDraft(text)
+    if (continues !== undefined && agentRefusalOf(error)?.reason === 'not_continuable') {
+      setSpent((current) => new Set(current).add(continues))
+      setFailure({ kind: 'spent', restored: false })
+      return
     }
-    await report(error)
+    await report(error, { restored })
+  }
+
+  /**
+   * 按了「停止」之後：連線一關，伺服器存下「連線被關掉」那則說明（`Turn.close`），串流裡已經送不到。
+   * 接回存著的那一份，畫面才與重新載入之後一樣。收尾在伺服器那邊是非同步的，等它一下，等不到就算了。
+   */
+  async function pickUpStopNote() {
+    const turn = runIdOf(chat.lastMessage)
+    // 還沒收到這一輪的 id（`start` 之前就按了）：已經畫著的那幾則說明不是這一輪的。
+    const shown = new Set(
+      chat.messages.flatMap((message) => message.parts.map(stopOf)).map((found) => found?.turn_id),
+    )
+    for (let tries = 0; tries < STOP_NOTE_TRIES; tries++) {
+      const fresh = await readConversation(chat.id).catch(() => null)
+      const last = fresh?.at(-1)
+      const stop = last?.parts.map(stopOf).find((found) => found !== null)
+      if (fresh && stop && (turn === null ? !shown.has(stop.turn_id) : stop.turn_id === turn)) {
+        setMessages(fresh)
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, STOP_NOTE_WAIT_MS))
+    }
+  }
+
+  function stopTurn() {
+    stopping.current = true
+    void stop()
   }
 
   /** 送不出去的那一次（訊息、恢復或指令）：後端說不行的理由各有去處，其餘照請求為什麼沒成說。 */
-  async function report(error: unknown) {
+  async function report(error: unknown, { restored }: { restored: boolean }) {
     const refusal = agentRefusalOf(error)
     if (refusal?.reason === 'conversation_missing') {
       startNew(true)
@@ -152,11 +240,15 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       await queryClient.refetchQueries({ queryKey: agentStatusQueryOptions.queryKey })
       return
     }
-    if (refusal?.reason === 'busy') setFailure({ kind: 'busy' })
-    else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused' })
+    if (refusal?.reason === 'ai_paused') {
+      // 面板頂上那一塊說暫停到幾點（`AgentPanel`）。
+      void queryClient.invalidateQueries({ queryKey: agentStatusQueryOptions.queryKey })
+    }
+    if (refusal?.reason === 'busy') setFailure({ kind: 'busy', restored })
+    else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused', restored })
     else if (refusal?.reason === 'unknown_command')
-      setFailure({ kind: 'unknown', word: refusal.detail })
-    else setFailure({ kind: 'request', error })
+      setFailure({ kind: 'unknown', word: refusal.detail, restored })
+    else setFailure({ kind: 'request', error, restored })
   }
 
   /** 斜線指令：不經過模型（`services/slash.py`）。結果接在當下的對話後面，只在這個分頁。 */
@@ -180,7 +272,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       setOutputs((current) => [...current, { key, after, result }])
     } catch (error) {
       setDraft(text)
-      await report(error)
+      await report(error, { restored: true })
     } finally {
       setRunning(false)
     }
@@ -213,7 +305,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       const error = chat.error
       if (error === undefined) return
       clearError()
-      await report(error)
+      await report(error, { restored: false })
     },
   }
 
@@ -268,7 +360,19 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
 
   return (
     <CardContext.Provider value={cardActions}>
-      <Transcript messages={messages} outputs={outputs} busy={streaming} restarted={restarted} />
+      <Transcript
+        messages={messages}
+        outputs={outputs}
+        busy={busy}
+        restarted={restarted}
+        spent={spent}
+        onContinue={(turn) => {
+          setFailure(null)
+          // 「繼續」一按就收掉：焦點先交給輸入欄，不掉回 `body`。
+          input.current?.focus()
+          void send(t('agent.stopped.continue'), turn)
+        }}
+      />
       <form
         onSubmit={onSubmit}
         className="grid gap-2 border-t-2 border-rule px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
@@ -289,11 +393,14 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
           {failure?.kind === 'unknown' ? (
             <p className="text-sm text-ink">{t('agent.failure.unknown', { word: failure.word })}</p>
           ) : null}
+          {failure?.kind === 'spent' ? (
+            <p className="text-sm text-ink">{t('agent.failure.spent')}</p>
+          ) : null}
           {failure?.kind === 'request' ? (
-            <div className="grid gap-1">
-              <RequestFailed error={failure.error} lead={t('agent.failure.lead')} />
-              <p className="text-xs text-ink-dim">{t('agent.failure.restored')}</p>
-            </div>
+            <RequestFailed error={failure.error} lead={t('agent.failure.lead')} />
+          ) : null}
+          {failure?.restored ? (
+            <p className="text-xs text-ink-dim">{t('agent.failure.restored')}</p>
           ) : null}
         </div>
         {picked !== undefined ? (
@@ -320,9 +427,22 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
             {t('agent.inputHint')}
           </p>
           {/* 主要鍵的寬由外層限（DESIGN.md Buttons）；`grid` 讓 Ghost 也撐滿同一格，換鍵時不移位。 */}
-          <div className="grid w-32">
+          <div
+            ref={action}
+            onFocus={() => {
+              actionFocused.current = true
+            }}
+            onBlur={(event) => {
+              // 換鍵時舊的那一顆被拿掉：那不算離開。點到別處（還在畫面上的那一顆失去焦點）才算。
+              const left = event.target
+              queueMicrotask(() => {
+                if (left.isConnected) actionFocused.current = false
+              })
+            }}
+            className="grid w-32"
+          >
             {streaming ? (
-              <GhostButton type="button" onClick={() => void stop()}>
+              <GhostButton type="button" onClick={stopTurn}>
                 {t('agent.stop')}
               </GhostButton>
             ) : (
@@ -357,11 +477,16 @@ function Transcript({
   outputs,
   busy,
   restarted,
+  spent,
+  onContinue,
 }: {
   messages: UIMessage[]
   outputs: Output[]
   busy: boolean
   restarted: boolean
+  /** 伺服器說不能再續的那幾輪。 */
+  spent: ReadonlySet<string>
+  onContinue: (turn: string) => void
 }) {
   const { t } = useTranslation()
   const log = useRef<HTMLDivElement>(null)
@@ -402,6 +527,9 @@ function Transcript({
               !outputs.some((output) => output.after === index)
             }
             runId={lastOfItsRun(messages, index)}
+            // 「繼續」只接最後一輪：只畫在最後一則上，答著、跑指令時不畫。
+            offer={index === messages.length - 1 && !busy ? (turn) => !spent.has(turn) : null}
+            onContinue={onContinue}
           />
           {outputsAfter(outputs, index + 1)}
         </Fragment>
@@ -428,8 +556,8 @@ function lastOfItsRun(messages: UIMessage[], index: number): string | null {
   return next !== undefined && runIdOf(next) === runId ? null : runId
 }
 
-function runIdOf(message: UIMessage): string | null {
-  if (message.role !== 'assistant') return null
+function runIdOf(message: UIMessage | undefined): string | null {
+  if (message?.role !== 'assistant') return null
   const metadata = message.metadata
   if (typeof metadata !== 'object' || metadata === null || !('runId' in metadata)) return null
   return typeof metadata.runId === 'string' ? metadata.runId : null
@@ -439,14 +567,18 @@ function Message({
   message,
   continued,
   runId,
+  offer,
+  onContinue,
 }: {
   message: UIMessage
   continued: boolean
   runId: string | null
+  /** 這一則是最後一則的話，哪一輪還畫「繼續」；不是最後一則是 `null`。 */
+  offer: ((turn: string) => boolean) | null
+  onContinue: (turn: string) => void
 }) {
   const { t } = useTranslation()
-  const narrow = useNarrow()
-  const { setOpen } = usePanel()
+  const leave = useLeavePanel()
 
   if (message.role === 'user') {
     const text = message.parts
@@ -474,15 +606,30 @@ function Message({
     )
   }
   if (message.role !== 'assistant') return null
+  // 只有停下的說明的那一則是 Berth 說的，不標「助理」。
+  const spoken = message.parts.some((part) => isTextUIPart(part) || isToolUIPart(part))
 
   return (
     <div className="grid min-w-0 gap-2">
-      {continued ? null : <span className="label text-ink-dim">{t('agent.assistant')}</span>}
+      {continued || !spoken ? null : (
+        <span className="label text-ink-dim">{t('agent.assistant')}</span>
+      )}
       {message.parts.map((part, index) => {
         // 一則訊息裡的片段沒有自己的 id；位置就是它的身分（只會往後長，不會重排）。
         const key = `${message.id}:${index}`
         if (isTextUIPart(part)) return part.text ? <Markdown key={key} text={part.text} /> : null
         if (isToolUIPart(part)) return <ToolPart key={key} part={part} />
+        const stop = isDataUIPart(part) ? stopOf(part) : null
+        if (stop !== null) {
+          const offered = stop.continuable && offer !== null && offer(stop.turn_id)
+          return (
+            <StopNote
+              key={key}
+              stop={stop}
+              onContinue={offered ? () => onContinue(stop.turn_id) : null}
+            />
+          )
+        }
         return null
       })}
       {runId ? (
@@ -490,14 +637,33 @@ function Message({
           to="/agent/runs/$runId"
           params={{ runId }}
           aria-label={t('agent.stepsLabel')}
-          // 窄版的面板蓋滿整個視窗：不收起來的話，換過去的那一頁看不到。
-          onClick={() => {
-            if (narrow) setOpen(false)
-          }}
+          onClick={leave}
           className={`${TEXT_LINK} justify-self-start text-ink-dim`}
         >
           {t('agent.steps')}
         </Link>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * 防護停下的說明（M5 票 22，`.scratch/m5/side-panel-shape.md`〈面板結構〉）：Berth 說的，不是助理的話。
+ * `assigned` 不是 `blocked`：這一輪已經結束，要人決定換個問法、再問，或按一次「繼續」。
+ */
+function StopNote({ stop, onContinue }: { stop: TurnStop; onContinue: (() => void) | null }) {
+  const { t } = useTranslation()
+  return (
+    <div data-stop={stop.reason} className="grid min-w-0 gap-2">
+      <Notice signal="assigned" label={t('agent.stopped.label')}>
+        {stop.note}
+      </Notice>
+      {onContinue !== null ? (
+        <div className="grid w-32">
+          <GhostButton type="button" onClick={onContinue}>
+            {t('agent.stopped.continue')}
+          </GhostButton>
+        </div>
       ) : null}
     </div>
   )

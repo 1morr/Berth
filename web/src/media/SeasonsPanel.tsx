@@ -92,6 +92,7 @@ export function SeasonsPanel({
         <p className="max-w-prose text-sm text-ink-dim">{t('media.season.film')}</p>
       ) : listed ? (
         <SeasonList
+          mediaId={media.id}
           seasons={media.seasons}
           missingOnly={missingOnly}
           onSearchMissing={onSearchMissing}

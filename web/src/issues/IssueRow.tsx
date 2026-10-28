@@ -12,7 +12,7 @@ import {
   type IssueAction,
 } from '../api/issues'
 import { reviewQueryOptions } from '../api/review'
-import { ConfirmAction, GhostButton } from '../components/controls'
+import { ConfirmAction, GhostButton, INLINE_LINK } from '../components/controls'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
@@ -394,9 +394,6 @@ function WorkLine({ issue }: { issue: Issue }) {
     </DetailLine>
   )
 }
-
-/** 連結的底線：散文裡的一個名字，不是一顆按鈕（同 `JobLink`）。 */
-const INLINE_LINK = 'underline decoration-rule-strong underline-offset-4 hover:decoration-ink'
 
 /** 缺集的 `detail.missing`（`[{season, episode}]`）照季寫成 `S01 E03–E04, E06`，季與季以 `; ` 隔開。 */
 function missingText(value: unknown): string {

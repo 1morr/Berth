@@ -1,8 +1,11 @@
+import { Link } from '@tanstack/react-router'
 import type { DynamicToolUIPart, ToolUIPart } from 'ai'
 import { getToolName } from 'ai'
 import { useTranslation } from 'react-i18next'
 
+import { INLINE_LINK } from '../components/controls'
 import { ExpandHint } from '../components/ExpandHint'
+import { useLeavePanel } from './panelState'
 import { toolNameKey } from './toolNames'
 
 type Phase = 'running' | 'done' | 'failed'
@@ -53,8 +56,9 @@ export function ToolCall({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   const known = key ? t(key) : null
   const phase = phaseOf(part)
   const result = part.state === 'output-error' ? part.errorText : pretty(part.output)
+  const feed = name === 'rss_subscribe_search' && phase === 'done' ? feedIdOf(part.output) : null
 
-  return (
+  const line = (
     <details
       className={`group min-w-0 border-2 bg-well ${phase === 'failed' ? 'border-rule-strong' : 'border-rule'}`}
     >
@@ -81,6 +85,37 @@ export function ToolCall({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
         {result ? <ToolText label={t('agent.tool.output')} text={result} /> : null}
       </div>
     </details>
+  )
+  if (feed === null) return line
+  return (
+    <div className="grid min-w-0 gap-1">
+      {line}
+      <SubscribedFeed id={feed} />
+    </div>
+  )
+}
+
+/** 建好的 Feed 的 id。重複呼叫被警告、或結果被截過時，後端包成 `{result, ...}`（`Turn._given`）。 */
+function feedIdOf(output: unknown): number | null {
+  const found = output as { id?: unknown; result?: { id?: unknown } } | null
+  const id = found?.id ?? found?.result?.id
+  return typeof id === 'number' ? id : null
+}
+
+/**
+ * 助理直接建的搜尋 Feed（`rss.subscribe_search`，可逆所以不出卡）：撤銷在 RSS 頁那一列（M5 票 22，
+ * 使用者選定）。它從還沒選第一輪開始，什麼都還沒送；選第一輪或刪掉都在那裡，刪除有那裡的確認。
+ */
+function SubscribedFeed({ id }: { id: number }) {
+  const { t } = useTranslation()
+  const leave = useLeavePanel()
+  return (
+    <p className="text-xs text-ink-dim">
+      {t('agent.tool.subscribed')}{' '}
+      <Link to="/rss" hash={`feed-${id}`} onClick={leave} className={INLINE_LINK}>
+        {t('agent.tool.subscribedLink')}
+      </Link>
+    </p>
   )
 }
 

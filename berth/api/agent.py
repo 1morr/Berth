@@ -5,12 +5,13 @@
   工具結果與核准一律不採用（brief §20.24：adapter 預設照收）。最後一則是**助理**的，是使用者按了
   確認卡之後的恢復（票 13）：它只當觸發，按了什麼由伺服器上的 Proposal 決定。body 另外帶
   `language`（介面語言，`domain.Language`），防護停下時的說明照它寫；按「繼續」時帶 `continues`
-  （停下的那一輪的 id，M5 票 20）。防護停下時說明之後多一則 `data-stop`（`TurnStopOut`）：側面板
-  照它畫「繼續」。
+  （停下的那一輪的 id，M5 票 20）。防護停下時的說明是一則 `data-stop`（`TurnStopOut`，含說明的字），
+  不是助理的文字：側面板畫成「停下」與「繼續」（M5 票 22）。
 - `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
   斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
-  重新載入頁面時接回來。壓縮過的對話開頭是一則 `data-compaction`（摘要）。
+  重新載入頁面時接回來。壓縮過的對話開頭是一則 `data-compaction`（摘要）；停下的說明換成與串流
+  同一個 `data-stop`，只有最後一輪可能 `continuable`。
 - `POST /agent/conversations/{id}/commands`：斜線指令（`services.slash`，M5 票 18）。body 同
   Slack 的 slash command 只帶打的字（`text`），由伺服器認是哪一個；回的是結構，畫面自己組字。
   以 `/` 開頭的訊息送進 `/chat` 是 `slash_command`：指令不經過模型。
@@ -22,8 +23,7 @@
 
 from __future__ import annotations
 
-import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from functools import cached_property
@@ -35,15 +35,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
-from pydantic_ai.ui.vercel_ai.request_types import SubmitMessage, TextUIPart
+from pydantic_ai.ui.vercel_ai.request_types import SubmitMessage, TextUIPart, UIMessage
 from pydantic_ai.ui.vercel_ai.response_types import (
     BaseChunk,
     DataChunk,
     ErrorChunk,
     StartChunk,
-    TextDeltaChunk,
-    TextEndChunk,
-    TextStartChunk,
 )
 
 from berth.api.deps import (
@@ -67,6 +64,7 @@ from berth.domain import (
     ProposalStatus,
 )
 from berth.services.agent import (
+    NOTE_MODEL,
     AgentRefusedError,
     Turn,
     TurnStop,
@@ -121,15 +119,21 @@ class AgentStatusOut(BaseModel):
 
 
 class TurnStopOut(BaseModel):
-    """一輪沒有答完：哪一輪、為什麼、能不能按「繼續」（串流裡的 `data-stop` 也是這個形狀）。"""
+    """一輪沒有答完：哪一輪、為什麼、能不能按「繼續」，與 Berth 寫的那一句說明（哪一條、做到哪）。
+
+    `data-stop` 的 `data`：串流裡與重新載入時同一個形狀。說明不是助理的文字，側面板畫成「停下」。
+    """
 
     turn_id: str
     reason: AiStopReason
     continuable: bool
+    note: str
 
     @classmethod
-    def of(cls, stop: TurnStop) -> TurnStopOut:
-        return cls(turn_id=stop.turn_id, reason=stop.reason, continuable=stop.continuable)
+    def of(cls, stop: TurnStop, note: str) -> TurnStopOut:
+        return cls(
+            turn_id=stop.turn_id, reason=stop.reason, continuable=stop.continuable, note=note
+        )
 
 
 class ConversationOut(BaseModel):
@@ -137,8 +141,6 @@ class ConversationOut(BaseModel):
     #: `useChat` 的 `UIMessage`（ai 7）。`Any`：JSON 的形狀由 pydantic-ai 的 `UIMessage` 決定，
     #: 不在這裡重抄一份 schema。
     messages: list[dict[str, Any]]
-    #: 最後一輪沒有答完的話停在哪；答完了或還在跑是 `null`。
-    stop: TurnStopOut | None
 
 
 class SlashIn(BaseModel):
@@ -375,11 +377,7 @@ async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncIterator[Bas
                 chunk.message_metadata = {RUN_ID: turn.run_id}
             if isinstance(chunk, ErrorChunk):
                 note, stop = await turn.stopped(chunk.error_text)
-                text_id = uuid.uuid4().hex
-                yield TextStartChunk(id=text_id)
-                yield TextDeltaChunk(id=text_id, delta=note)
-                yield TextEndChunk(id=text_id)
-                yield DataChunk(type="data-stop", data=TurnStopOut.of(stop).model_dump(mode="json"))
+                yield _stop_chunk(TurnStopOut.of(stop, note))
                 continue
             yield chunk
     finally:
@@ -403,26 +401,55 @@ async def get_conversation(
     messages = VercelAIAdapter.dump_messages(_tagged(found.history), sdk_version=SDK_VERSION)
     return ConversationOut(
         id=conversation_id,
-        messages=[m.model_dump(mode="json", by_alias=True, exclude_none=True) for m in messages],
-        stop=TurnStopOut.of(found.stop) if found.stop is not None else None,
+        messages=[_with_stop(message, found.stops) for message in messages],
     )
 
 
 #: 每一則助理訊息的 `metadata` 裡指到它那一輪的鍵（側面板連到步驟頁）。
 RUN_ID = "runId"
+#: 停下的說明那一則的記號，只在這裡轉換時用：轉成 `data-stop` 之後拿掉。
+_STOP_NOTE = "berthStopNote"
 
 
 def _tagged(history: Sequence[ModelMessage]) -> list[ModelMessage]:
-    """每一則模型回應的 metadata 帶上它那一輪的 id。
+    """每一則模型回應的 metadata 帶上它那一輪的 id；停下的說明另外記一個記號。
 
-    `dump_messages` 把回應的 metadata 照抄進 `UIMessage.metadata`。
+    `dump_messages` 一則回應一則 `UIMessage`，回應的 metadata 照抄進 `UIMessage.metadata`。
     """
     return [
-        replace(message, metadata={**(message.metadata or {}), RUN_ID: message.run_id})
+        replace(
+            message,
+            metadata={
+                **(message.metadata or {}),
+                RUN_ID: message.run_id,
+                **({_STOP_NOTE: True} if message.model_name == NOTE_MODEL else {}),
+            },
+        )
         if isinstance(message, ModelResponse) and message.run_id
         else message
         for message in history
     ]
+
+
+def _stop_chunk(stop: TurnStopOut) -> DataChunk:
+    return DataChunk(type="data-stop", data=stop.model_dump(mode="json"))
+
+
+def _with_stop(message: UIMessage, stops: Mapping[str, TurnStop]) -> dict[str, Any]:
+    """停下的說明那一則換成與串流同一個 `data-stop`；其餘照原樣。"""
+    dumped = message.model_dump(mode="json", by_alias=True, exclude_none=True)
+    metadata = dumped.get("metadata") or {}
+    if not metadata.pop(_STOP_NOTE, False):
+        return dumped
+    stop = stops.get(metadata.get(RUN_ID, ""))
+    if stop is None:
+        # 停止原因沒有記下（不該發生）：照一般的文字畫，不憑空說能不能續。
+        return dumped
+    note = "".join(part.get("text", "") for part in dumped["parts"] if part["type"] == "text")
+    dumped["parts"] = [
+        {"type": "data-stop", "data": TurnStopOut.of(stop, note).model_dump(mode="json")}
+    ]
+    return dumped
 
 
 @router.get("/status")

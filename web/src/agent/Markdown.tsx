@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-import { TEXT_LINK } from '../components/controls'
+import { INLINE_LINK } from '../components/controls'
 
 /**
  * 助理回覆的 markdown（M5 票 12，`.scratch/m5/side-panel-shape.md`〈面板結構〉）。
@@ -18,7 +18,7 @@ export function Markdown({ text }: { text: string }) {
   return (
     <div className="grid min-w-0 gap-2 text-sm break-words text-ink">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkCjkAutolinks]}
         skipHtml
         allowedElements={ALLOWED}
         unwrapDisallowed
@@ -28,6 +28,49 @@ export function Markdown({ text }: { text: string }) {
       </ReactMarkdown>
     </div>
   )
+}
+
+/** markdown 語法樹裡用得到的那一小部分（mdast）。 */
+interface Node {
+  type: string
+  value?: string
+  url?: string
+  children?: Node[]
+}
+
+/** 中日韓文字與全形標點：網址裡不會直接出現（瀏覽器會編碼），出現了就是網址已經結束。 */
+const CJK = /[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/
+
+/**
+ * GFM 的自動連結只在空白處結束，中文句子沒有空白：「…bangumiId=3310，但我沒加」整段都進了網址
+ * （票 22 critique 實跑抓到）。自動連結（字就是網址的那一種）在第一個中日韓字元處切開，後面的放回散文。
+ * 寫成 `[字](網址)` 的連結不動。
+ */
+function remarkCjkAutolinks() {
+  return (tree: Node) => {
+    split(tree)
+  }
+}
+
+function split(node: Node) {
+  const children = node.children
+  if (children === undefined) return
+  for (let index = 0; index < children.length; index++) {
+    const child = children[index]
+    const text = child.children?.length === 1 ? child.children[0] : undefined
+    const bare =
+      child.type === 'link' && text?.type === 'text' && child.url?.endsWith(text.value ?? '\0')
+    const at = bare ? (text?.value?.search(CJK) ?? -1) : -1
+    if (bare && text?.value && at > 0) {
+      const kept = text.value.slice(0, at)
+      const rest = text.value.slice(at)
+      child.url = child.url?.slice(0, child.url.length - text.value.length) + kept
+      text.value = kept
+      children.splice(index + 1, 0, { type: 'text', value: rest })
+      continue
+    }
+    split(child)
+  }
 }
 
 /**
@@ -96,7 +139,8 @@ const COMPONENTS: Components = {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={`${TEXT_LINK} normal-case`}
+        // 散文裡的連結跟著散文排（`TEXT_LINK` 是 `.label` 的 inline-flex，換行時會與上下行疊在一起）。
+        className={`${INLINE_LINK} wrap-anywhere`}
       >
         {children}
       </a>

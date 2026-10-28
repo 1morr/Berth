@@ -1,12 +1,16 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { Fragment, useId, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
-import type { Episode, Season } from '../api/media'
+import { whyNotQueryOptions, type Episode, type Season, type WhyNot } from '../api/media'
 import { CollapsibleRow } from '../components/CollapsibleRow'
-import { COMPACT_BUTTON } from '../components/controls'
+import { COMPACT_BUTTON, INLINE_LINK } from '../components/controls'
 import { formatEpisode, seasonCode } from '../components/episodes'
 import { SIGNAL_FILL } from '../components/signal'
 import { Dot } from '../components/Dot'
+import { JobLink } from '../jobs/JobLink'
 import { missingOf } from './missing'
 
 /**
@@ -20,10 +24,12 @@ import { missingOf } from './missing'
  * 這一份只收它的結果，另外在每一季的展開區第一行放那一季的一鍵搜（票 10）。
  */
 export function SeasonList({
+  mediaId,
   seasons,
   missingOnly,
   onSearchMissing,
 }: {
+  mediaId: string
   seasons: readonly Season[]
   missingOnly: boolean
   /** 這一季缺的集一鍵搜（M1.5 票 10）。 */
@@ -64,6 +70,7 @@ export function SeasonList({
                   </p>
                 )}
                 <SeasonBody
+                  mediaId={mediaId}
                   season={season}
                   episodes={missingOnly ? gaps : season.episodes}
                   missingOnly={missingOnly}
@@ -115,11 +122,13 @@ function SeasonSummary({ season, gaps }: { season: Season; gaps: number | null }
 }
 
 function SeasonBody({
+  mediaId,
   season,
   episodes,
   missingOnly,
   absolute,
 }: {
+  mediaId: string
   season: Season
   episodes: readonly Episode[]
   missingOnly: boolean
@@ -155,7 +164,7 @@ function SeasonBody({
                 {t('media.episode.absolute')}
               </th>
             )}
-            <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
+            <th scope="col" className="label px-3 py-2 whitespace-nowrap text-ink-dim sm:px-4">
               {t('media.episode.inLibrary')}
             </th>
             <th scope="col" className="label px-4 py-2 whitespace-nowrap text-ink-dim">
@@ -179,6 +188,7 @@ function SeasonBody({
           {episodes.map((episode) => (
             <EpisodeRow
               key={episode.episode_number}
+              mediaId={mediaId}
               season={season.season_number}
               episode={episode}
               absolute={absolute}
@@ -191,54 +201,150 @@ function SeasonBody({
 }
 
 function EpisodeRow({
+  mediaId,
   season,
   episode,
   absolute,
 }: {
+  mediaId: string
   season: number
   episode: Episode
   absolute: boolean
 }) {
   const { t } = useTranslation()
+  const [asking, setAsking] = useState(false)
+  const whyId = useId()
   const runtime =
     episode.runtime === null ? null : t('media.minutesShort', { count: episode.runtime })
+  // 「缺」只說缺、「卡住」只連到那一筆：兩種都可以問為什麼（M5 票 22）。
+  const askable = episode.status === 'missing' || episode.status === 'stuck' ? episode.status : null
 
   return (
-    <tr>
-      {/* `S01E09` 而不是裸的 `E09`（M2 票 14）：與觀看區的集卡、檔名同一種寫法，對得起來才看得出兩邊差在哪。 */}
-      <td className="value px-4 py-2 text-xs whitespace-nowrap text-ink-dim">
-        {formatEpisode({ season, episode_start: episode.episode_number, episode_end: null })}
-      </td>
-      {absolute && (
-        <td className="value px-4 py-2 text-right text-xs text-ink-dim">
-          {/* 沒有排進 group 的特輯就是沒有絕對編號。`—` 而不是省略——欄位消失會讓基線錯開。 */}
-          {episode.absolute_number === null ? '—' : `#${episode.absolute_number}`}
+    <Fragment>
+      <tr>
+        {/* `S01E09` 而不是裸的 `E09`（M2 票 14）：與觀看區的集卡、檔名同一種寫法，對得起來才看得出兩邊差在哪。 */}
+        <td className="value px-4 py-2 text-xs whitespace-nowrap text-ink-dim">
+          {formatEpisode({ season, episode_start: episode.episode_number, episode_end: null })}
         </td>
-      )}
-      {/* `whitespace-nowrap`：窄版上集名那一欄會吃掉寬度，狀態被擠成一字一行（票 15 實跑）。 */}
-      <td className="px-4 py-2 whitespace-nowrap">
-        <EpisodeState status={episode.status} job={episode.job} />
-      </td>
-      <td className="px-4 py-2 text-sm break-words text-ink">
-        {episode.name}
-        {/* 窄版的片長與播出（票 13）：那兩欄在 640px 以下不畫，同樣的值在這裡；寬版這一行不畫，不重複念。 */}
-        {(runtime || episode.air_date) && (
-          <span className="value mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-dim sm:hidden">
-            {runtime && <span>{t('media.episode.runtimeValue', { value: runtime })}</span>}
-            {runtime && episode.air_date && <Dot />}
-            {episode.air_date && (
-              <span>{t('media.episode.airDateValue', { value: episode.air_date })}</span>
-            )}
-          </span>
+        {absolute && (
+          <td className="value px-4 py-2 text-right text-xs text-ink-dim">
+            {/* 沒有排進 group 的特輯就是沒有絕對編號。`—` 而不是省略——欄位消失會讓基線錯開。 */}
+            {episode.absolute_number === null ? '—' : `#${episode.absolute_number}`}
+          </td>
         )}
-      </td>
-      <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
-        {runtime ?? '—'}
-      </td>
-      <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
-        {episode.air_date ?? '—'}
-      </td>
-    </tr>
+        {/* `whitespace-nowrap`：窄版上集名那一欄會吃掉寬度，狀態被擠成一字一行（票 15 實跑）。 */}
+        <td className="px-3 py-2 whitespace-nowrap sm:px-4">
+          {/* 窄版鍵排在色塊下面：並排時這一格 `nowrap`，會把集表撐得比畫面寬（票 22 critique 實量）。 */}
+          <span className="inline-flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <EpisodeState status={episode.status} job={episode.job} />
+            {askable !== null ? (
+              <button
+                type="button"
+                aria-expanded={asking}
+                aria-controls={asking ? whyId : undefined}
+                aria-label={t(`media.episode.cause.${askable}`)}
+                onClick={() => setAsking((open) => !open)}
+                className={COMPACT_BUTTON}
+              >
+                {t('media.episode.cause.button')}
+              </button>
+            ) : null}
+          </span>
+        </td>
+        <td className="px-4 py-2 text-sm break-words text-ink">
+          {episode.name}
+          {/* 窄版的片長與播出（票 13）：那兩欄在 640px 以下不畫，同樣的值在這裡；寬版這一行不畫，不重複念。 */}
+          {(runtime || episode.air_date) && (
+            <span className="value mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-dim sm:hidden">
+              {runtime && <span>{t('media.episode.runtimeValue', { value: runtime })}</span>}
+              {runtime && episode.air_date && <Dot />}
+              {episode.air_date && (
+                <span>{t('media.episode.airDateValue', { value: episode.air_date })}</span>
+              )}
+            </span>
+          )}
+        </td>
+        <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
+          {runtime ?? '—'}
+        </td>
+        <td className="value hidden px-4 py-2 text-right text-xs text-ink-dim sm:table-cell">
+          {episode.air_date ?? '—'}
+        </td>
+      </tr>
+      {asking ? (
+        <tr id={whyId}>
+          {/* 比欄數多也沒關係：瀏覽器照實際欄數收。 */}
+          <td colSpan={7} className="bg-well px-4 py-2">
+            <WhyNotLine mediaId={mediaId} season={season} episode={episode.episode_number} />
+          </td>
+        </tr>
+      ) : null}
+    </Fragment>
+  )
+}
+
+/**
+ * 這一集為什麼還沒入庫（M5 票 22，使用者選定露出票 10 的結論）：一句結論與下一步的連結。按了才問；
+ * 結論分類只在後端算（`domain/why_not.py`），這裡只挑句子。RSS 與審核那一側只給看得到的人
+ * （後端對一般使用者回 `null`）。
+ */
+function WhyNotLine({
+  mediaId,
+  season,
+  episode,
+}: {
+  mediaId: string
+  season: number
+  episode: number
+}) {
+  const { t } = useTranslation()
+  const found = useQuery(whyNotQueryOptions(mediaId, season, episode))
+
+  if (found.isPending)
+    return <p className="text-xs text-ink-dim">{t('media.episode.cause.loading')}</p>
+  if (found.isError) return <p className="text-xs text-ink">{t('media.episode.cause.failed')}</p>
+  const next = nextStep(found.data, t)
+  return (
+    <p aria-live="polite" className="max-w-prose text-sm break-words whitespace-normal text-ink">
+      {t(`media.episode.cause.conclusion.${found.data.conclusion}`)}
+      {next ? <> {next}</> : null}
+    </p>
+  )
+}
+
+function nextStep(found: WhyNot, t: TFunction) {
+  // 只取蓋到這一集的那一筆：整部作品的第一筆可能與這一集無關。
+  const job = found.episodes[0]?.jobs[0]
+  switch (found.conclusion) {
+    case 'unbound':
+    case 'excluded':
+      return found.rss !== null ? <WhyLink to="/rss" label="media.episode.cause.rss" /> : null
+    case 'awaiting_review':
+      // `issues` 不是 `null` 就是管理員：審核是他的頁面。
+      return found.issues !== null ? (
+        <WhyLink to="/review" label="media.episode.cause.review" />
+      ) : null
+    case 'import_failed':
+    case 'download_failed':
+    case 'downloading':
+      return job ? <JobLink hash={job}>{t('media.episode.cause.job')}</JobLink> : null
+    default:
+      return null
+  }
+}
+
+function WhyLink({
+  to,
+  label,
+}: {
+  to: '/rss' | '/review'
+  label: 'media.episode.cause.rss' | 'media.episode.cause.review'
+}) {
+  const { t } = useTranslation()
+  return (
+    <Link to={to} className={INLINE_LINK}>
+      {t(label)}
+    </Link>
   )
 }
 
