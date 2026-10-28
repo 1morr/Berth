@@ -164,6 +164,25 @@ def run_task(
         "card": None
         if card is None
         else {"command": card.get("command"), "rows": card.get("arguments")},
+        # 每一輪（使用者的一句）：input 合計、每次呼叫的 input（看上下文怎麼長）、搜了幾次、
+        # 種子搜了幾次、截斷了幾筆、為什麼停（票 23d 量「找種子那一輪」用）。
+        "per_turn": [
+            {
+                "input": run["input_tokens"],
+                "call_inputs": [s["call"]["input_tokens"] for s in run["steps"] if s["call"]],
+                "requests": run["requests"],
+                "web_searches": run["web_searches"],
+                "tavily_searches": run["tavily_searches"],
+                "torrent_searches": sum(
+                    t["command"] == "search.search_torrents"
+                    for s in run["steps"]
+                    for t in s["tools"]
+                ),
+                "truncated": sum(t["truncated"] for s in run["steps"] for t in s["tools"]),
+                "stop": run["stop_reason"],
+            }
+            for run in details
+        ],
         "user_turns_used": len(replies),
     }
     log.append(

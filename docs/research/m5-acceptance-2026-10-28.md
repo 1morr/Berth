@@ -215,3 +215,57 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 - 模型給的 `route_id` 兩邊都是 3（Anime），與腳本選的同一條，所以這一次分不出「照卡片上選的送」與「照模型給的送」；那一點由 `tests/integration/test_proposal_routes.py::TestManyRoutesFit::test_the_route_chosen_on_the_card_is_the_one_sent`（模型給 Anime、卡片選 TV、送進 TV）與前端 e2e `agent`（模型給 TV、卡片選 Anime、Job 在 Anime）守。
 - openai 的回覆寫了「下載到 Anime 資料夾（你另有 TV 資料夾，卡片上可改）」：它從工具說明知道卡片會讓人選。anthropic 照卡片結果說了 Anime。
 - 情境 2 的三個變體（整季標記）**這一次沒有重跑**：協調者暫停票 23b 的系列對照工具，等「只有網路搜尋 + TMDB」與「再加 AniList / Fribb / Bangumi」的比較結果決定。
+
+## 票 23d：拿掉 Fribb 之後，Re:Zero 到出卡的每輪用量
+
+票：[`.scratch/m5/issues/23d-drop-fribb-and-franchise-walk.md`](../../.scratch/m5/issues/23d-drop-fribb-and-franchise-walk.md)。協調者要在發版前確認兩件事：長系列找種子那一輪不撞每輪 400K input 的上限；審查後收窄的 skill 那句（「TMDB 把這一段的某集放進特別篇」）仍讓無職轉生第二季整季標記。
+
+- **驅動**：`scripts/experiments/agent_sources_ab.py`（演練情境 `agent-live`，就是現在的產品），Re:Zero 只用 Anthropic 接口（伺服器端 `web_search`）跑到確認卡出現（不按），無職轉生兩種接口只到清單。每一輪的數字取自 `/api/agent/runs/{id}` 的每次呼叫（`per_turn`，這次加進驅動）。
+- **模型**：DeepSeek `deepseek-flash`，2026-10-28 UTC 08–10 時（尖峰）。
+
+### 修之前：兩次都超過
+
+| 次 | 列清單那一輪 input（每次呼叫） | 網搜 | 找種子那一輪 input（每次呼叫） | 種子搜尋 / 被截斷 | 結果 |
+|---|---|---|---|---|---|
+| 1 | 32,241（4K、6K、22K） | 1 | **409,693**（12K → 68K，9 次） | 19 / 13 | 找種子那一輪 `token_limit`，下一輪才出卡 |
+| 2 | **457,592**（4K、5K、6K、6K、**221K、216K**） | 2 | 175,541（12K → 54K，5 次） | 12 / 11 | 出卡；列清單那一輪是最後一次呼叫才沒被擋 |
+
+逐字稿：[`t23d-before-r1-anthropic-rezero.md`](m5-acceptance-2026-10-28/t23d-before-r1-anthropic-rezero.md)、[`t23d-before-r2-anthropic-rezero.md`](m5-acceptance-2026-10-28/t23d-before-r2-anthropic-rezero.md)。
+
+兩個根因：
+
+1. **找種子那一輪：種子搜尋的結果在這一輪裡累積**。一次搜尋給模型的上限是 12,000 字（`Limits.result_chars`），19 次裡 13 次頂到；結果留在上下文、每次呼叫都重送，每次呼叫多約 7K。前一輪的網頁已經不送了（第 1 次這一輪從 12K 起跳），所以不是網頁。
+2. **列清單那一輪：同一輪裡每次呼叫都重送整頁的伺服器端網搜**。第 2 次搜了兩次（Re:Zero 的維基集數表），兩份約 21 萬 token，之後兩次呼叫各重送一次。DeepSeek 回的是加密的整頁，Berth 截不短；Anthropic 的 `web_search` 也沒有大小參數（pydantic-ai 2.62 `WebSearchTool` 只有 `max_uses`、網域與地點）。票 23d 原本的修法只管下一輪。
+
+### 修法
+
+- **種子搜尋給模型只看前 10 列**，其餘只說有幾列（`rows_not_shown`；`agent_tools.MODEL_SEARCH_ROWS`）。列已照「符合」在前排好，`counts` 有各類的總數，工具說明叫模型要更準就換 `query` 再搜。測試 `tests/unit/test_agent_tools.py::TestSearchTorrentsForTheModel::test_only_the_first_rows_reach_the_model_and_it_is_told_how_many_more`。
+- **伺服器端網搜只送最近一則回應裡的**（`compaction.latest_searches_only`，取代「前幾輪不送」）：搜完的下一次呼叫照送，之後不送，每份網頁最多多送一次；掛伺服器端搜尋時 instructions 多一句「搜完就把要的寫下來」。只改送出的那一份、存著的歷史不動，「出自外部來源」的比對照舊。測試 `tests/integration/test_agent_web_search.py::TestEarlierSearchesLeaveTheContext`（兩條，加 `test_each_provider_gets_its_search_tools` 的 instructions 斷言）。
+  - 沒選「限制每輪的伺服器端網搜次數」：一次搜尋就可能 10 萬 token，限次數擋不住「搜一次之後每次呼叫都重送」。
+  - 沒選「最近一次換成短摘要」：加密內容 Berth 讀不到，摘要只能另花一次模型呼叫。
+
+### 修之後：兩次都在上限內
+
+| 次 | 列清單那一輪 input（每次呼叫） | 網搜 | 找種子那一輪 input（每次呼叫） | 種子搜尋 / 被截斷 | 結果 | 費用 USD |
+|---|---|---|---|---|---|---|
+| 1 | 48,710（4K、6K、7K、32K） | 1 | 166,155（11K → 34K，7 次），上限的 42% | 15 / 0 | 出卡，7 列 | 0.023 |
+| 2 | 143,291（4K、6K、7K、**127K**） | 2 | 102,724（12K → 27K，5 次），上限的 26% | 10 / 0 | 出卡，6 列 | 0.050 |
+
+- 兩次的清單都對：S01E01–E25、E26–E38、E39–E50、E51–E58、E59–E66、E67–E77、E78–E85，兩部劇場版是獨立電影（研究的正解）。
+- 第 2 次兩份網頁那一次呼叫是 127K，之後這一輪就結束了；它若接著再呼叫，下一次不會再帶那兩份。
+- 逐字稿：[`t23d-r1-anthropic-rezero.md`](m5-acceptance-2026-10-28/t23d-r1-anthropic-rezero.md)、[`t23d-r2-anthropic-rezero.md`](m5-acceptance-2026-10-28/t23d-r2-anthropic-rezero.md)。
+
+### 無職轉生：收窄後的那句 skill
+
+| 次 | 接口 | 第二季前半 | 第二季整季標記 | 逐字稿 |
+|---|---|---|---|---|
+| skill 收窄後（修上下文之前） | anthropic | S02E01–E12 ✅ | 兩列都標「未經核對」✅ | [`t23d-narrowed-anthropic-mushoku.md`](m5-acceptance-2026-10-28/t23d-narrowed-anthropic-mushoku.md) |
+| 同上 | openai（Tavily） | S02E01–E12，註明第 0 集是 S00E02 ✅ | ✅ | [`t23d-narrowed-openai-mushoku.md`](m5-acceptance-2026-10-28/t23d-narrowed-openai-mushoku.md) |
+| 修上下文之後 | anthropic | S02E01–E12 ✅ | ✅ | [`t23d-anthropic-mushoku.md`](m5-acceptance-2026-10-28/t23d-anthropic-mushoku.md) |
+| 同上 | openai（Tavily） | S02E01–E12 ✅ | ✅ | [`t23d-openai-mushoku.md`](m5-acceptance-2026-10-28/t23d-openai-mushoku.md) |
+
+第一、三季都沒有誤標。
+
+### 花費
+
+修之前 $0.131，收窄後的無職轉生 $0.019，修之後 Re:Zero $0.073、無職轉生 $0.024，合計 **$0.247**（使用者把上限放寬到 $1）。

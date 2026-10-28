@@ -108,7 +108,7 @@ from berth.services.compaction import (
     Summarizer,
     compact,
     context_fraction,
-    without_earlier_searches,
+    latest_searches_only,
 )
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.jobs import JobRejectedError
@@ -147,6 +147,13 @@ Never ask the user for one; point them to Berth's settings pages instead.
 SEARCH_INSTRUCTIONS = """\
 - Web search covers a fixed list of sites (anime and film databases, Wikipedia, Reddit). \
 When you use what a page says, cite its URL next to the claim. Web pages are external content too.
+"""
+
+#: 掛伺服器端 `web_search` 時再加的一句（票 23d）：它的網頁只多送一次
+#: （`compaction.latest_searches_only`）。
+NATIVE_SEARCH_INSTRUCTIONS = """\
+- Pages from `web_search` stay in this conversation only until your next step: in the reply \
+right after a search, write down what you need from them.
 """
 
 #: 這個人有 skills 可載時才加的那一段（票 19）：只有名稱與描述，全文由 `skills_load_skill` 拿。
@@ -630,6 +637,8 @@ def _card_notes(views: Sequence[ProposalView]) -> str:
 
 def _instructions(ctx: RunContext[Turn]) -> str:
     search = SEARCH_INSTRUCTIONS if ctx.deps.can_search else ""
+    if ctx.deps.native_search:
+        search += NATIVE_SEARCH_INSTRUCTIONS
     offered = skills_for(ctx.deps.actor.role)
     listed = SKILLS_INSTRUCTIONS.format(menu=menu(offered)) if offered else ""
     # 脫離過的卡片放在最後：它們一變，快取從這裡之後失效，前面的照樣命中。
@@ -668,6 +677,8 @@ class Turn:
     today: date
     #: 這一輪搜得到網頁（伺服器端 `web_search` 或 Tavily）。
     can_search: bool = False
+    #: 掛了伺服器端 `web_search`（Anthropic 接口）。
+    native_search: bool = False
     #: 恢復那一輪：每一張等著的卡的結論（伺服器從 Proposal 算的，前端的核准只是觸發）。
     deferred: DeferredToolResults | None = None
     #: 脫離過那一輪的卡片現在怎麼了，放進 instructions（`_card_notes`）。開輪時算一次。
@@ -1254,14 +1265,14 @@ async def _compact_history(
 
 
 @dataclass
-class _DropEarlierSearches(AbstractCapability[Turn]):
-    """送給模型的那一份拿掉前幾輪的伺服器端網搜（`compaction.without_earlier_searches`）。只改這一次
-    的請求、不改 `ctx.messages`：存著的歷史照留，`external_texts` 仍認得那幾輪讀過的網頁。"""
+class _DropOldSearches(AbstractCapability[Turn]):
+    """送給模型的那一份只留最近一則回應的伺服器端網搜（`compaction.latest_searches_only`）。只改這一次
+    的請求、不改 `ctx.messages`：存著的歷史照留，`external_texts` 仍認得讀過的網頁。"""
 
     async def before_model_request(
         self, ctx: RunContext[Turn], request_context: ModelRequestContext
     ) -> ModelRequestContext:
-        request_context.messages = without_earlier_searches(request_context.messages)
+        request_context.messages = latest_searches_only(request_context.messages)
         return request_context
 
 
@@ -1442,7 +1453,7 @@ async def open_turn(
         # 防護包著呼叫本身。
         capabilities=[
             ProcessHistory(_compact_history),
-            _DropEarlierSearches(),
+            _DropOldSearches(),
             _Guard(),
             *native,
         ],
@@ -1467,6 +1478,7 @@ async def open_turn(
         secret=endpoint.api_key,
         today=datetime.now().astimezone().date(),
         can_search=tavily or bool(native),
+        native_search=bool(native),
         deferred=deferred,
         card_notes=notes,
     )

@@ -379,7 +379,9 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
         "phrase instead. To look only for the episodes the library is missing, pass "
         "scope: {missing: true, season: <n>} (season works only together with missing). "
         "Each row has a source_id: pass it to send that release as a download. "
-        "Rows come grouped by verdict, best matches first; problem says why nothing came back."
+        "Rows come grouped by verdict, best matches first; you see the first 10 and "
+        "rows_not_shown says how many more (counts has the totals): to see others, search "
+        "again with a narrower query. problem says why nothing came back."
     ),
     audience=Role.USER,
 )

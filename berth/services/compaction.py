@@ -248,25 +248,27 @@ def turn_starts(messages: Sequence[ModelMessage]) -> list[int]:
     ]
 
 
-#: 拿掉前幾輪的網搜結果之後，那一則回應若什麼都不剩，留這一句（Anthropic 不收空的回應）。
+#: 拿掉網搜結果之後，那一則回應若什麼都不剩，留這一句（Anthropic 不收空的回應）。
 DROPPED_SEARCH_NOTE = "(Searched the web; the pages are no longer in this conversation.)"
 
 
-def without_earlier_searches(messages: Sequence[ModelMessage]) -> list[ModelMessage]:
-    """送給模型的歷史拿掉**前幾輪**的伺服器端 `web_search`（呼叫與結果一起，票 23d）。
+def latest_searches_only(messages: Sequence[ModelMessage]) -> list[ModelMessage]:
+    """送給模型的歷史裡，伺服器端 `web_search`（呼叫與結果一起）只留在**最近一則回應**、而且那則
+    回應要在這一輪裡；其餘的拿掉（票 23d）。
 
-    Anthropic 回的是整頁的加密內容，Berth 截不短，卻每次呼叫都重送：Re:Zero 列完清單、下一輪
-    找種子時撞過每輪 400K input 的上限（`docs/research/agent-sources-ab-2026-10-28.md`）。那幾頁
-    讀到的已經寫進那一輪的回答裡；這一輪的搜尋照留，模型還在讀。Tavily 的結果不拿：它已照
-    `Limits.result_chars` 截過，而且是明文，「出自外部來源」比對的就是它。
+    Anthropic 回的是整頁的加密內容，Berth 截不短，卻每次呼叫都重送：Re:Zero 下一輪找種子時撞過
+    每輪 400K 的上限，同一輪裡搜兩次（約 21 萬 token）之後再呼叫兩次也到了 457K
+    （`docs/research/m5-acceptance-2026-10-28.md`〈票 23d〉）。模型在搜的那一次呼叫裡就讀過這幾頁，
+    下一次呼叫照送（它常接著寫清單），之後靠它寫下的；每份網頁因此最多多送一次。Tavily 的結果
+    不拿：它已照 `Limits.result_chars` 截過，而且是明文，「出自外部來源」比對的就是它。
     """
     starts = turn_starts(messages)
-    if not starts:
-        return list(messages)
-    current = starts[-1]
+    current = starts[-1] if starts else 0
+    responses = [i for i, message in enumerate(messages) if isinstance(message, ModelResponse)]
+    latest = responses[-1] if responses and responses[-1] > current else None
     kept: list[ModelMessage] = []
     for index, message in enumerate(messages):
-        if index < current and isinstance(message, ModelResponse):
+        if index != latest and isinstance(message, ModelResponse):
             parts = [part for part in message.parts if not _searched(part)]
             if len(parts) != len(message.parts):
                 message = replace(message, parts=parts or [TextPart(DROPPED_SEARCH_NOTE)])

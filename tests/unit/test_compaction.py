@@ -25,9 +25,9 @@ from pydantic_ai.usage import RequestUsage
 from berth.services.compaction import (
     compacted,
     context_fraction,
+    latest_searches_only,
     render,
     split,
-    without_earlier_searches,
 )
 
 
@@ -255,7 +255,7 @@ class TestEarlierSearches:
             ]
         )
         now = user("second")
-        sent = without_earlier_searches([user("first"), searched_only, now])
+        sent = latest_searches_only([user("first"), searched_only, now])
 
         assert [type(part) for part in sent[1].parts] == [TextPart]
         assert sent[2] is now

@@ -77,11 +77,23 @@ def visible_tools(role: Role, *, tavily: bool) -> tuple[str, ...]:
 def _compact_search(result: object) -> object:
     """`search.search_torrents` 給模型的那一份：一次搜尋最多 350 列、每列十幾格（約 220 KB），照原樣
     交的話截斷（`agent_guards.clip`）只留得下前十幾列。挑發佈用不到的格子拿掉（站上的頁面、
-    畫面列表的鍵、怎麼算出季集、發佈時間、空的證據與 tags 的空格），留得下的列多兩三倍；列的順序
-    不變，「符合」在最前面。"""
+    畫面列表的鍵、怎麼算出季集、發佈時間、空的證據與 tags 的空格）；列的順序不變，「符合」在最前面。
+
+    **只給前 `MODEL_SEARCH_ROWS` 列**（票 23d），其餘只說有幾列（`rows_not_shown`）：結果留在這一輪
+    的上下文裡、之後每次呼叫都重送，Re:Zero 找種子時搜了 19 次，每次呼叫多約 7K input，撞到每輪
+    400K。
+    各類的總數在 `counts`，要更準的用 `query` 再搜。"""
     if not isinstance(result, dict) or not isinstance(result.get("rows"), list):
         return result
-    return {**result, "rows": [_compact_row(row) for row in result["rows"]]}
+    rows = result["rows"]
+    given = {**result, "rows": [_compact_row(row) for row in rows[:MODEL_SEARCH_ROWS]]}
+    if len(rows) > MODEL_SEARCH_ROWS:
+        given["rows_not_shown"] = len(rows) - MODEL_SEARCH_ROWS
+    return given
+
+
+#: 一次種子搜尋給模型看的列數。
+MODEL_SEARCH_ROWS = 10
 
 
 #: 給模型的一列留下的格子（`search.SearchResult`）。

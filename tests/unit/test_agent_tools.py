@@ -231,6 +231,27 @@ class TestSearchTorrentsForTheModel:
             "counts": [],
         }
 
+    def test_only_the_first_rows_reach_the_model_and_it_is_told_how_many_more(self) -> None:
+        """票 23d 實跑：找種子那一輪搜了 19 次、13 次被截在 12,000 字，每次呼叫多約 7K input，
+        Re:Zero 撞到每輪 400K。列已照「符合」在前排好，`counts` 有各類的總數；給模型前幾列就夠，
+        要更準的用 `query` 再搜。"""
+        rows = [
+            {"source_id": f"s-{n}", "title": f"[Grp] Show - {n:02d} [1080p]", "verdict": verdict}
+            for n, verdict in enumerate(["fits"] * 12 + ["other"] * 30, start=1)
+        ]
+
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": rows, "counts": []})
+
+        assert isinstance(given, dict)
+        assert [row["source_id"] for row in given["rows"]] == [f"s-{n}" for n in range(1, 11)]
+        assert given["rows_not_shown"] == 32
+
+    def test_a_short_search_is_given_whole(self) -> None:
+        rows = [{"source_id": "s-1", "title": "x", "verdict": "fits"}]
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": rows, "counts": []})
+        assert isinstance(given, dict)
+        assert "rows_not_shown" not in given
+
 
 class TestWhatTheModelSeesOfAWork:
     """`media.read_media` 給模型的那一份（票 16）：逐集換成狀態 → 集數範圍。"""

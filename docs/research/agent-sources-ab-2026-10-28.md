@@ -335,5 +335,5 @@ A 錯的 4 列，lean 每一跑都對：咒術 S2、膽大黨 S2 在這裡 2/2�
 | openai | **沒有** | ✅ 照 `aired_blocks` 切出 7 段，每季標「沒有網頁核對」，說季名是憑記憶補的 | ✅ 每季標，S02 另標第 0 集 | ✅ 每季標 | 0.020 |
 
 - **該標的全標、錯的範圍 0**；沒有網搜時沒有一次憑記憶給範圍而不說。
-- **找種子那一輪沒量**（只到清單，票面定的）；它不撞上限由 `tests/integration/test_agent_web_search.py::TestEarlierSearchesLeaveTheContext` 守。這一輪的數字也說明為什麼：Anthropic 接口的 Re:Zero 只搜 1 次，清單那一輪 5 次呼叫就吃了 245,821 input（每次約 4.5 萬是那份加密的網頁），同一題 OpenAI 接口搜 2 次只用 48,753。下一輪起那份網頁不再重送。
+- **找種子那一輪這裡沒量**（只到清單，票面定的；之後協調者要求補量，見 `m5-acceptance-2026-10-28.md`〈票 23d〉：修之前兩次都超過，修之後 42%、26%）；它不撞上限由 `tests/integration/test_agent_web_search.py::TestEarlierSearchesLeaveTheContext` 守。這一輪的數字也說明為什麼：Anthropic 接口的 Re:Zero 只搜 1 次，清單那一輪 5 次呼叫就吃了 245,821 input（每次約 4.5 萬是那份加密的網頁），同一題 OpenAI 接口搜 2 次只用 48,753。下一輪起那份網頁不再重送。
 - 合計 $0.121（上限 $0.3）。TMDB 偶爾 TLS 沒回應（兩次），模型重讀或註明讀不到，與這張票無關。
