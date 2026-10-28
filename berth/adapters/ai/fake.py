@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import (
@@ -36,6 +36,8 @@ from berth.adapters.ai import AiEndpoint
 
 #: 一次模型呼叫的回答。
 Script = Callable[[list[ModelMessage], AgentInfo], ModelResponse]
+#: 串流的那一次開始回答之前等它（收到這一次送出去的訊息）：演一輪跑得久（M5 票 25）。
+Pause = Callable[[list[ModelMessage]], Awaitable[None]]
 
 
 class FakeAi:
@@ -54,6 +56,8 @@ class FakeAi:
         self.echo_key = False
         #: 每次組模型時收到的設定，給測試斷言「用的是哪一把 key、哪個網址」。
         self.endpoints: list[AiEndpoint] = []
+        #: 給了的話，每一次串流的模型呼叫先等它（`Pause`）。
+        self.pause: Pause | None = None
 
     def model(self, endpoint: AiEndpoint) -> Model:
         self.endpoints.append(endpoint)
@@ -84,6 +88,8 @@ class FakeAi:
         async def stream(
             messages: list[ModelMessage], info: AgentInfo
         ) -> AsyncIterator[str | DeltaToolCalls | BuiltinToolCallsReturns]:
+            if self.pause is not None:
+                await self.pause(messages)
             for index, part in enumerate(answer(messages, info).parts):
                 if isinstance(part, TextPart):
                     yield part.content

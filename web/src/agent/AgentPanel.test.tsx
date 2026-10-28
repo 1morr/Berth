@@ -31,11 +31,24 @@ interface Backend {
   /** provider 斷路器暫停到什麼時候（票 20）；管理員另有錯誤原文。 */
   pausedUntil: string | null
   pauseError: string
+  /** 讀對話時正在跑的那一輪（M5 票 25）。 */
+  running: string | null
+  /** `GET /agent/conversations/{id}/stream?turn=<id>`：重連那一輪的串流（沒有在跑是 204）。 */
+  resume: (turn: string) => Response
+  /** `POST /agent/conversations/{id}/stop`。 */
+  stop: () => Response
+  /** 這個人的其他對話（`GET /agent/conversations/{id}` 與停止，M5 票 25 的 `busy`）。 */
+  others: Record<string, { messages: unknown[]; running: string | null }>
 }
 
 let sent: Record<string, unknown>[] = []
 /** 送出的斜線指令（`{text}` 的字）。 */
 let commanded: string[] = []
+/** 重連過哪幾輪、按停止打了幾次伺服器。 */
+let resumed: string[] = []
+let stops = 0
+/** 對其他對話按的停止（id）。 */
+let stoppedOthers: string[] = []
 
 function backend(overrides: Partial<Backend>): Backend {
   return {
@@ -47,6 +60,10 @@ function backend(overrides: Partial<Backend>): Backend {
     command: () => json({ command: 'new' }),
     pausedUntil: null,
     pauseError: '',
+    running: null,
+    resume: () => new Response(null, { status: 204 }),
+    stop: () => json({ detail: { reason: 'not_running', detail: CONVERSATION } }, 409),
+    others: {},
     ...overrides,
   }
 }
@@ -99,9 +116,38 @@ function toolThenSay(text: string): object[] {
   ]
 }
 
+/** 開著不結束的串流：`push` 送片段，`end` 送 `[DONE]` 收掉（伺服器上那一輪還在跑）。 */
+function held(first: object[] = [{ type: 'start' }]) {
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null
+  const encode = (chunk: string) => new TextEncoder().encode(`data: ${chunk}\n\n`)
+  const body = new ReadableStream<Uint8Array>({
+    start(opened) {
+      controller = opened
+      for (const chunk of first) opened.enqueue(encode(JSON.stringify(chunk)))
+    },
+  })
+  return {
+    response: () =>
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+      }),
+    push: (chunks: object[]) => {
+      for (const chunk of chunks) controller?.enqueue(encode(JSON.stringify(chunk)))
+    },
+    end: () => {
+      controller?.enqueue(encode('[DONE]'))
+      controller?.close()
+    },
+  }
+}
+
 function serve(api: Backend) {
   sent = []
   commanded = []
+  resumed = []
+  stops = 0
+  stoppedOthers = []
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>(async (input, init) => {
@@ -115,11 +161,31 @@ function serve(api: Backend) {
           pause_error: api.pauseError,
           spend: api.spend,
         } satisfies AgentStatus)
+      const resume = /^\/api\/agent\/conversations\/([^/]+)\/stream\?turn=(.+)$/.exec(path)
+      if (method === 'GET' && resume !== null) {
+        resumed.push(decodeURIComponent(resume[2]))
+        return api.resume(decodeURIComponent(resume[2]))
+      }
+      if (method === 'POST' && path === `/api/agent/conversations/${CONVERSATION}/stop`) {
+        stops += 1
+        return api.stop()
+      }
+      const other = /^\/api\/agent\/conversations\/([^/]+)(\/stop)?$/.exec(path)
+      if (other !== null && other[1] in api.others) {
+        const found = api.others[other[1]]
+        if (method === 'POST' && other[2] === '/stop') {
+          stoppedOthers.push(other[1])
+          found.running = null
+          return new Response(null, { status: 204 })
+        }
+        if (method === 'GET' && other[2] === undefined)
+          return json({ id: other[1], messages: found.messages, running: found.running })
+      }
       if (method === 'GET' && path.startsWith('/api/agent/conversations/')) {
         // 後端對沒有的那一段（含剛開的新對話）一律是 `conversation_missing`。
         return api.stored === null || path !== `/api/agent/conversations/${CONVERSATION}`
           ? json({ detail: { reason: 'conversation_missing', detail: CONVERSATION } }, 404)
-          : json({ id: CONVERSATION, messages: api.stored })
+          : json({ id: CONVERSATION, messages: api.stored, running: api.running })
       }
       if (method === 'POST' && path === `/api/agent/conversations/${CONVERSATION}/commands`) {
         const { text } = JSON.parse(String(init?.body)) as { text: string }
@@ -478,6 +544,11 @@ function stopPart(
   }
 }
 
+/** 按了停止的那一則（`cancelled`，不能繼續）。 */
+function stopData(turnId: string, note: string) {
+  return { turn_id: turnId, reason: 'cancelled', continuable: false, note }
+}
+
 function stoppedStream(turnId: string, continuable: boolean): object[] {
   return [
     { type: 'start', messageMetadata: { runId: turnId } },
@@ -570,45 +641,17 @@ describe('AgentPanel when a guard stops a turn', () => {
     expect(input).toHaveValue('')
   })
 
-  it('shows the note the server kept after Stop, without a reload', async () => {
-    const api = backend({ stored: [] })
-    api.chat = (signal) => {
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(
-            new TextEncoder().encode(
-              `data: ${JSON.stringify({ type: 'start', messageMetadata: { runId: 'r1' } })}\n\n`,
-            ),
-          )
-          signal?.addEventListener('abort', () => {
-            // 伺服器收到斷線，存下說明（`Turn.close`）。
-            api.stored = [
-              { id: 'u1', role: 'user', parts: [{ type: 'text', text: '慢慢查' }] },
-              {
-                id: 'a1',
-                role: 'assistant',
-                metadata: { runId: 'r1' },
-                parts: [
-                  {
-                    type: 'data-stop',
-                    data: {
-                      turn_id: 'r1',
-                      reason: 'cancelled',
-                      continuable: false,
-                      note: '這一輪停下了：連線被關掉。',
-                    },
-                  },
-                ],
-              },
-            ]
-            controller.error(new DOMException('aborted', 'AbortError'))
-          })
-        },
-      })
-      return new Response(body, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
-      })
+  it('asks the server to stop, and the note comes down the same stream', async () => {
+    const live = held([{ type: 'start', messageMetadata: { runId: 'r1' } }])
+    const api = backend({ stored: [], chat: live.response })
+    api.stop = () => {
+      // 伺服器停下那一輪、存好說明，說明經還開著的串流送到（M5 票 25）。
+      live.push([
+        { type: 'data-stop', data: stopData('r1', '這一輪停下來了：你按了停止。') },
+        { type: 'finish' },
+      ])
+      live.end()
+      return new Response(null, { status: 204 })
     }
     serve(api)
     const user = userEvent.setup()
@@ -618,9 +661,24 @@ describe('AgentPanel when a guard stops a turn', () => {
     await user.click(await screen.findByRole('button', { name: '停止' }))
 
     const log = screen.getByRole('log')
-    expect(await within(log).findByText('這一輪停下了：連線被關掉。')).toBeInTheDocument()
+    expect(await within(log).findByText('這一輪停下來了：你按了停止。')).toBeInTheDocument()
     expect(within(log).getByText('停下')).toBeInTheDocument()
     expect(within(log).queryByRole('button', { name: '繼續' })).toBeNull()
+    expect(stops).toBe(1)
+    expect(await screen.findByRole('button', { name: '送出' })).toBeInTheDocument()
+  })
+
+  it('only closes this page’s stream when the server has nothing running to stop', async () => {
+    const live = held()
+    serve(backend({ stored: [], chat: live.response }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '慢慢查{Enter}')
+    await user.click(await screen.findByRole('button', { name: '停止' }))
+
+    expect(await screen.findByRole('button', { name: '送出' })).toBeInTheDocument()
+    expect(stops).toBe(1)
   })
 })
 
@@ -741,48 +799,154 @@ describe('AgentPanel while the AI service is paused', () => {
   })
 })
 
-describe('AgentPanel after Stop before the turn started', () => {
-  it('waits for this turn’s note, not the one already on screen', async () => {
-    const before = [
-      { id: 'u0', role: 'user', parts: [{ type: 'text', text: '一直查' }] },
-      { id: 'a0', role: 'assistant', metadata: { runId: 'r0' }, parts: [stopPart('r0', false)] },
+describe('AgentPanel after a reload while a turn is still running', () => {
+  const asked = { id: 'u1', role: 'user', parts: [{ type: 'text', text: '為什麼沒入庫？' }] }
+
+  it('picks the running turn back up and follows it to the end', async () => {
+    const live = held([{ type: 'start', messageMetadata: { runId: 'r1' } }])
+    const api = backend({ stored: [asked], running: 'r1', resume: live.response })
+    serve(api)
+    renderPanel()
+
+    const log = await screen.findByRole('log')
+    expect(await within(log).findByText('為什麼沒入庫？')).toBeInTheDocument()
+    // 接上了：還在答，「停止」在。
+    expect(await screen.findByRole('button', { name: '停止' })).toBeInTheDocument()
+    expect(resumed).toEqual(['r1'])
+
+    // 伺服器那一輪答完：存著的換成完整的那一份。
+    api.stored = [
+      asked,
+      {
+        id: 'a1',
+        role: 'assistant',
+        metadata: { runId: 'r1' },
+        parts: [{ type: 'text', text: '停在審核等管理員。' }],
+      },
     ]
-    const api = backend({ stored: before })
-    api.chat = (signal) => {
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          signal?.addEventListener('abort', () => {
-            controller.error(new DOMException('aborted', 'AbortError'))
-            // 伺服器晚一點才存好：先讀到的還是舊的那一份。
-            setTimeout(() => {
-              api.stored = [
-                ...before,
-                { id: 'u1', role: 'user', parts: [{ type: 'text', text: '慢慢查' }] },
-                {
-                  id: 'a1',
-                  role: 'assistant',
-                  metadata: { runId: 'r1' },
-                  parts: [stopPart('r1', false, '這一輪停下了：連線被關掉。')],
-                },
-              ]
-            }, 400)
-          })
-        },
-      })
-      return new Response(body, {
-        headers: { 'Content-Type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
-      })
+    api.running = null
+    live.push(toolThenSay('停在審核等管理員。').slice(1))
+    live.end()
+
+    expect(await within(log).findByText('停在審核等管理員。')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '送出' })).toBeInTheDocument()
+    await waitFor(() => expect(within(log).getAllByText('停在審核等管理員。')).toHaveLength(1))
+  })
+
+  it('reads the finished turn from the history when it ended before the stream was picked up', async () => {
+    const api = backend({ stored: [asked], running: 'r1' })
+    api.resume = () => {
+      // 讀對話與重連之間它答完了：沒有可接的（204），答案在歷史裡。
+      api.stored = [
+        asked,
+        { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: '停在審核等管理員。' }] },
+      ]
+      api.running = null
+      return new Response(null, { status: 204 })
     }
+    serve(api)
+    renderPanel()
+
+    expect(await screen.findByText('停在審核等管理員。')).toBeInTheDocument()
+    expect(resumed).toEqual(['r1'])
+  })
+
+  it('does not try to pick anything up when nothing is running', async () => {
+    serve(backend({ stored: [asked] }))
+    renderPanel()
+
+    expect(await screen.findByText('為什麼沒入庫？')).toBeInTheDocument()
+    expect(resumed).toEqual([])
+  })
+
+  it('follows the turn another tab is running when sending is turned down as busy', async () => {
+    const live = held([{ type: 'start', messageMetadata: { runId: 'r9' } }])
+    const api = backend({
+      stored: [],
+      chat: () => json({ detail: { reason: 'busy', detail: '' } }, 409),
+      resume: live.response,
+    })
     serve(api)
     const user = userEvent.setup()
     renderPanel()
 
-    await user.type(await screen.findByLabelText('問助理'), '慢慢查{Enter}')
-    await user.click(await screen.findByRole('button', { name: '停止' }))
+    const input = await screen.findByLabelText('問助理')
+    // 另一個分頁剛開了一輪。
+    api.stored = [{ id: 'u9', role: 'user', parts: [{ type: 'text', text: '別的分頁問的' }] }]
+    api.running = 'r9'
+    await user.type(input, '還在嗎{Enter}')
 
     const log = screen.getByRole('log')
-    expect(await within(log).findByText('這一輪停下了：連線被關掉。')).toBeInTheDocument()
-    expect(within(log).getByText('慢慢查')).toBeInTheDocument()
+    expect(await within(log).findByText('別的分頁問的')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '停止' })).toBeInTheDocument()
+    expect(resumed).toEqual(['r9'])
+    expect(input).toHaveValue('還在嗎')
+    live.end()
+  })
+})
+
+describe('AgentPanel when another of my conversations is still answering', () => {
+  const OLD = 'c-old'
+  const oldAsked = {
+    id: 'o1',
+    role: 'user',
+    parts: [{ type: 'text', text: '慢慢查一下下載\n第二行不算' }],
+  }
+
+  function busyElsewhere(): Backend {
+    const api = backend({
+      stored: [],
+      others: { [OLD]: { messages: [oldAsked], running: 'r-old' } },
+    })
+    api.chat = () =>
+      api.others[OLD].running === null
+        ? stream(say('好，這一則送出去了。'))
+        : json({ detail: { reason: 'busy', detail: OLD } }, 409)
+    return api
+  }
+
+  it('says which conversation is running, stops that reply, and sends this one again', async () => {
+    serve(busyElsewhere())
+    const user = userEvent.setup()
+    renderPanel()
+
+    const input = await screen.findByLabelText('問助理')
+    await user.type(input, '新的一則{Enter}')
+
+    expect(await screen.findByText(/另一段對話還在回答：「慢慢查一下下載」/)).toBeInTheDocument()
+    expect(input).toHaveValue('新的一則')
+    await user.click(screen.getByRole('button', { name: '停止那一輪' }))
+
+    expect(await screen.findByText(/那一輪停下了/)).toBeInTheDocument()
+    expect(stoppedOthers).toEqual([OLD])
+    expect(input).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: '送出' }))
+    expect(await screen.findByText('好，這一則送出去了。')).toBeInTheDocument()
+  })
+
+  it('goes to the running conversation and follows it', async () => {
+    serve(busyElsewhere())
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '新的一則{Enter}')
+    await user.click(await screen.findByRole('button', { name: '到那一段對話' }))
+
+    const log = screen.getByRole('log')
+    expect(await within(log).findByText(/慢慢查一下下載/)).toBeInTheDocument()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(OLD)
+    await waitFor(() => expect(resumed).toEqual(['r-old']))
+  })
+
+  it('does not name another conversation when the busy one is this one', async () => {
+    serve(backend({ chat: () => json({ detail: { reason: 'busy', detail: CONVERSATION } }, 409) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByLabelText('問助理'), '還在嗎{Enter}')
+
+    expect(await screen.findByText(/上一則還在回答/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '停止那一輪' })).toBeNull()
   })
 })
 

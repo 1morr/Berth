@@ -14,6 +14,7 @@ export const STOP_TEXT = {
   circuit_open: 'usage.stop.circuit_open',
   error: 'usage.stop.error',
   cancelled: 'usage.stop.cancelled',
+  interrupted: 'usage.stop.interrupted',
   running: 'usage.stop.running',
 } as const satisfies Record<AiStopReason | 'running', ParseKeys>
 

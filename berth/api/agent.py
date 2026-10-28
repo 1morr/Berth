@@ -7,11 +7,16 @@
   `language`（介面語言，`domain.Language`），防護停下時的說明照它寫；按「繼續」時帶 `continues`
   （停下的那一輪的 id，M5 票 20）。防護停下時的說明是一則 `data-stop`（`TurnStopOut`，含說明的字），
   不是助理的文字：側面板畫成「停下」與「繼續」（M5 票 22）。
+- **一輪在伺服器的 task 上跑**（M5 票 25，`AgentRuntime.start`）：`POST /agent/chat` 的回應只是
+  跟著看，斷線照跑完。`GET /agent/conversations/{id}/stream?turn=<id>` 重連（Vercel AI SDK 的
+  `resumeStream`），從第一個片段重播再跟著，沒有在跑的 204；`POST /agent/conversations/{id}/stop`
+  停下它，說明經每一條跟著看的串流送到。
 - `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
   斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
-  重新載入頁面時接回來。壓縮過的對話開頭是一則 `data-compaction`（摘要）；停下的說明換成與串流
-  同一個 `data-stop`，只有最後一輪可能 `continuable`。
+  重新載入頁面時接回來；`running` 是正在跑的那一輪（那時的歷史是它開始前的樣子加上那一則使用者
+  訊息）。壓縮過的對話開頭是一則 `data-compaction`（摘要）；停下的說明換成與串流同一個
+  `data-stop`，只有最後一輪可能 `continuable`。
 - `POST /agent/conversations/{id}/commands`：斜線指令（`services.slash`，M5 票 18）。body 同
   Slack 的 slash command 只帶打的字（`text`），由伺服器認是哪一個；回的是結構，畫面自己組字。
   以 `/` 開頭的訊息送進 `/chat` 是 `slash_command`：指令不經過模型。
@@ -23,23 +28,25 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from functools import cached_property
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
-from pydantic_ai.ui.vercel_ai import VercelAIAdapter
+from pydantic_ai.ui.vercel_ai import VercelAIAdapter, VercelAIEventStream
 from pydantic_ai.ui.vercel_ai.request_types import SubmitMessage, TextUIPart, UIMessage
 from pydantic_ai.ui.vercel_ai.response_types import (
     BaseChunk,
     DataChunk,
+    DoneChunk,
     ErrorChunk,
+    FinishChunk,
     StartChunk,
 )
 
@@ -71,7 +78,10 @@ from berth.services.agent import (
     open_turn,
     read_conversation,
     read_status,
+    start_turn,
+    stop_turn,
 )
+from berth.services.agent_live import LiveTurn
 from berth.services.slash import (
     Compacted,
     NewConversation,
@@ -99,6 +109,7 @@ _STATUS: dict[AgentRefusal, int] = {
     AgentRefusal.NOT_CONTINUABLE: status.HTTP_409_CONFLICT,
     AgentRefusal.UNKNOWN_COMMAND: status.HTTP_422_UNPROCESSABLE_CONTENT,
     AgentRefusal.SLASH_COMMAND: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    AgentRefusal.NOT_RUNNING: status.HTTP_409_CONFLICT,
 }
 
 
@@ -141,6 +152,9 @@ class ConversationOut(BaseModel):
     #: `useChat` 的 `UIMessage`（ai 7）。`Any`：JSON 的形狀由 pydantic-ai 的 `UIMessage` 決定，
     #: 不在這裡重抄一份 schema。
     messages: list[dict[str, Any]]
+    #: 正在跑的那一輪的 id（M5 票 25）：`messages` 是它開始前的樣子加上那一則使用者訊息，側面板接著
+    #: 重連 `/conversations/{id}/stream?turn=<它>`。沒有在跑的是 `null`。
+    running: str | None
 
 
 class SlashIn(BaseModel):
@@ -350,38 +364,92 @@ async def chat(
         )
     except AgentRefusedError as exc:
         raise agent_refusal(exc) from exc
-    adapter = ServerHistoryAdapter(
-        agent=turn.agent,
-        run_input=run_input,
-        accept=request.headers.get("accept"),
-        sdk_version=SDK_VERSION,
-        prompt=turn.prompt,
-    )
-    return adapter.streaming_response(_relay(adapter, turn))
+    accept = request.headers.get("accept")
 
-
-async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncIterator[BaseChunk]:
-    """agent 的串流，把「出錯」換成停下來的說明；不論怎麼結束都收尾這一輪。"""
-    try:
-        turn.started()
-        stream = adapter.run_stream(
-            message_history=turn.history,
-            deferred_tool_results=turn.deferred,
-            deps=turn,
-            run_id=turn.run_id,
-            model_settings=turn.model_settings,
-            on_complete=turn.completed,
+    def chunks(started: Turn) -> AsyncGenerator[BaseChunk]:
+        adapter = ServerHistoryAdapter(
+            agent=started.agent,
+            run_input=run_input,
+            accept=accept,
+            sdk_version=SDK_VERSION,
+            prompt=started.prompt,
         )
-        async for chunk in stream:
-            if isinstance(chunk, StartChunk):
-                chunk.message_metadata = {RUN_ID: turn.run_id}
-            if isinstance(chunk, ErrorChunk):
-                note, stop = await turn.stopped(chunk.error_text)
-                yield _stop_chunk(TurnStopOut.of(stop, note))
-                continue
-            yield chunk
-    finally:
-        await turn.close()
+        return _relay(adapter, started)
+
+    # 這一輪在伺服器的 task 上跑（M5 票 25）：這個回應只是跟著看，斷線照跑完。開輪之後到 task 登記好
+    # 之間不讓出事件迴圈（`start_turn` 裡沒有 await），讀對話時說「在跑」的那一輪一定已經接得上。
+    live = await start_turn(runtime, turn, chunks, _ending)
+    return _follow(live)
+
+
+async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncGenerator[BaseChunk]:
+    """agent 的串流，把「出錯」換成停下來的說明。收尾在 `AgentRuntime` 的 task 裡。"""
+    stream = adapter.run_stream(
+        message_history=turn.history,
+        deferred_tool_results=turn.deferred,
+        deps=turn,
+        run_id=turn.run_id,
+        model_settings=turn.model_settings,
+        on_complete=turn.completed,
+    )
+    async for chunk in stream:
+        if isinstance(chunk, StartChunk):
+            chunk.message_metadata = {RUN_ID: turn.run_id}
+        if isinstance(chunk, ErrorChunk):
+            note, stop = await turn.stopped(chunk.error_text)
+            yield _stop_chunk(TurnStopOut.of(stop, note))
+            continue
+        yield chunk
+
+
+def _ending(note: str, stop: TurnStop) -> list[BaseChunk]:
+    """被取消的那一輪（按了停止、關機）最後送給還在看的人：停下的說明，然後結束。"""
+    return [_stop_chunk(TurnStopOut.of(stop, note)), FinishChunk(), DoneChunk()]
+
+
+def _follow(live: LiveTurn[BaseChunk]) -> StreamingResponse:
+    """一輪的片段從頭重播、跟到結束（UI message stream）。"""
+    # `Any`：只拿它的編碼與回應標頭，不跑 agent，deps 與輸出的型別用不到。
+    encoder = VercelAIEventStream[Any, Any](sdk_version=SDK_VERSION)
+    return encoder.streaming_response(live.follow())
+
+
+@router.get(
+    "/conversations/{conversation_id}/stream",
+    response_class=StreamingResponse,
+    responses={
+        status.HTTP_200_OK: {"content": {"text/event-stream": {}}},
+        status.HTTP_204_NO_CONTENT: {"description": "這一輪沒有在跑"},
+    },
+)
+async def resume_stream(
+    request: Request, runtime: AgentRuntimeDep, conversation_id: str, turn: str
+) -> Response:
+    """重連那一輪的串流（Vercel AI SDK 的 `resumeStream`）：還在跑、或剛跑完的話從頭重播再跟著；
+    沒有在跑、不是這一輪、不是這個人的回 204（`useChat` 照「沒有可接的」處理）。"""
+    actor = _actor(request)
+    assert actor.user_id is not None
+    live = runtime.live(conversation_id, turn, actor.user_id)
+    if live is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return _follow(live)
+
+
+@router.post(
+    "/conversations/{conversation_id}/stop",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_responses(AgentRefusal.NOT_RUNNING),
+)
+async def stop_conversation_turn(
+    request: Request, runtime: AgentRuntimeDep, conversation_id: str
+) -> None:
+    """停下正在跑的那一輪。停下的說明經跟著看的串流送到，這裡等它存好才回。"""
+    actor = _actor(request)
+    assert actor.user_id is not None
+    try:
+        await stop_turn(runtime, conversation_id, user_id=actor.user_id)
+    except AgentRefusedError as exc:
+        raise agent_refusal(exc) from exc
 
 
 @router.get(
@@ -402,6 +470,7 @@ async def get_conversation(
     return ConversationOut(
         id=conversation_id,
         messages=[_with_stop(message, found.stops) for message in messages],
+        running=found.running,
     )
 
 

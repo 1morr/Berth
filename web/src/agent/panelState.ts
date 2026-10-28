@@ -19,6 +19,8 @@ export interface PanelState {
   startNew: (lost?: boolean) => void
   /** 新的這段是因為舊的不見了才開的。 */
   restarted: boolean
+  /** 換到伺服器上另一段自己的對話（M5 票 25：被擋下時接過去還在跑的那一段）。 */
+  switchTo: (conversationId: string) => void
   /** 還沒送出的字。放在這一層：換頁、送不出去換了一段新對話，都還在。 */
   draft: string
   setDraft: (draft: string) => void
@@ -89,7 +91,10 @@ export function readConversationId(): string {
 }
 
 export function rememberNewConversation(): string {
-  const id = crypto.randomUUID()
+  return rememberConversation(crypto.randomUUID())
+}
+
+export function rememberConversation(id: string): string {
   try {
     localStorage.setItem(CONVERSATION_KEY, id)
   } catch {

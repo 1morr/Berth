@@ -34,7 +34,7 @@ from berth.pipeline import (
     RssPoller,
     Sweeper,
 )
-from berth.services.agent import AgentRuntime
+from berth.services.agent import AgentRuntime, close_interrupted
 from berth.services.clients import HttpServiceClientFactory, ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.hints import JobHints
@@ -137,6 +137,9 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         # 迴圈與 API 起來之前：停在 `requested` 的是上一次程序被打斷的送單（M3 票 02）。
         async with app.state.session_factory() as session:
             await fail_interrupted(session)
+        # 同理：`stop_reason` 還是 `NULL` 的是上一次程序崩潰時在跑的那一輪（M5 票 25）。
+        async with app.state.session_factory() as session:
+            await close_interrupted(session, app.state.agent)
         # 迴圈之間的提示（票 11）：poller 動了什麼就叫醒 `planner_runner`。**在這裡建而不是
         # 在 `create_app`**：它裡面是一個 `asyncio.Event`，而 Event 認第一次 await 它的那個
         # 事件迴圈——同一個 app 起兩次（測試就是這樣跑的）會拿到「bound to a different
@@ -192,6 +195,9 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
             # 對帳跑在自己的 task 上（202 之後那個請求早就回完了），所以 cancel 迴圈
             # 收不到它。跑到一半被收掉的那一輪不留半筆：`reconcile_once` 只在最後 commit。
             await runner.aclose()
+            # 側面板的每一輪也跑在自己的 task 上（M5 票 25）：還在跑的記成 `interrupted`、
+            # 存到停下之前，要在收掉 engine 之前。
+            await app.state.agent.aclose()
             await engine.dispose()
 
     return lifespan

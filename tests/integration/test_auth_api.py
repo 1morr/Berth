@@ -511,6 +511,9 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/agent/runs/*"): Access.SIGNED_IN,
     # 斜線指令（M5 票 18）：同對話，只動得到自己的那一段。
     ("POST", "/agent/conversations/*/commands"): Access.SIGNED_IN,
+    # 重連正在跑的那一輪、按停止（M5 票 25）：同對話，只接得到、停得了自己的那一輪。
+    ("GET", "/agent/conversations/*/stream"): Access.SIGNED_IN,
+    ("POST", "/agent/conversations/*/stop"): Access.SIGNED_IN,
     # 每個人自己的通知（M4 票 125）：Discord ID、種類、測試。收件人取自 session。
     ("GET", "/me/notifications"): Access.SIGNED_IN,
     ("PUT", "/me/notifications"): Access.SIGNED_IN,

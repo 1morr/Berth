@@ -261,6 +261,11 @@ NAMED: dict[str, CommandMark] = {
     # M5 票 11：開一輪花掉的 token 回不來，入口不是工具；讀自己的對話是一般的讀取。
     "agent.open_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
     "agent.read_conversation": _mark(Effect.READ),
+    # 一輪在伺服器的 task 上跑、按了停止、啟動時收掉崩潰時在跑的（M5 票 25）：開了就花 token，
+    # 停了、記成中斷就回不去（不同 `jobs.fail_interrupted`：那一筆還能重試）。
+    "agent.start_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
+    "agent.stop_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
+    "agent.close_interrupted": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
     # M5 票 12、20：側面板的狀態（AI 開了沒、暫停），門禁的一環，不是工具。
     "agent.read_status": _mark(Effect.READ, Flag.INTERNAL),
     # M5 票 17：打的是固定的 Tavily（不是新位址），花使用者 Tavily 帳號的 credit；只讀。
