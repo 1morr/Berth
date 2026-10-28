@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { signIn } from './login.ts'
+import { CREW, signIn } from './login.ts'
 import { shot } from './shot.ts'
 
 // `healthy`：精靈已經跑完。之後的修改在設定頁（票 06i）：`/setup` 把 admin 導去那裡，
@@ -72,4 +72,28 @@ test('精靈跑完之後：/setup 導向設定頁，加一個索引站並試搜�
   await expect(main.getByText('驗證憑證')).toBeVisible()
   await expect(main.getByText('已完成')).toBeVisible()
   await shot(page, 'tmdb')
+})
+
+// 沒設 provider（M5 驗收「與 M4 相同」）：`healthy` 的 AI 從來沒設定過。頁首照樣有「助理」，面板只說明；
+// 管理員多一條去設定的路，一般使用者被告知其他功能照常。
+test('AI 沒設定：側面板只說明，管理員有路去設定、一般使用者沒有', async ({ page }) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  await expect(panel.getByText(/AI 還沒設定/)).toBeVisible()
+  await expect(panel.getByRole('link', { name: '到 AI 設定' })).toHaveAttribute(
+    'href',
+    '/settings/ai',
+  )
+  await expect(panel.getByRole('textbox', { name: '問助理' })).toHaveCount(0)
+  await shot(page, 'agent-off-admin')
+
+  await page.context().clearCookies()
+  await signIn(page, '/jobs', CREW)
+  const toggle = page.getByRole('button', { name: '助理' })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  await expect(panel.getByText('管理員還沒設定 AI。Berth 的其他功能照常可用。')).toBeVisible()
+  await expect(panel.getByRole('link', { name: '到 AI 設定' })).toHaveCount(0)
+  await expect(panel.getByRole('textbox', { name: '問助理' })).toHaveCount(0)
+  await shot(page, 'agent-off-crew')
 })

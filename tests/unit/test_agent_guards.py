@@ -1,10 +1,11 @@
-"""側面板的防護裡不靠模型的那幾塊（M5 票 20）：工具結果截斷。"""
+"""側面板的防護裡不靠模型的那幾塊（M5 票 20）：工具結果截斷，以及防護的預設值（M5 票 23）。"""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
+from berth.services.agent import Limits
 from berth.services.agent_guards import Cut, clip
 
 
@@ -86,3 +87,16 @@ class TestClip:
         [cut] = clipped.cuts
         assert cut.at == "$"
         assert cut.unit == "chars"
+
+
+def test_the_default_limits_are_the_ones_in_the_plan() -> None:
+    """plan §11.6〈防護〉那張表：整合測試都換成小的數字，預設值只在這裡守（M5 驗收）。"""
+    limits = Limits()
+
+    assert limits.max_tokens == 4096
+    assert limits.requests == 20
+    assert (limits.input_tokens, limits.output_tokens) == (400_000, 30_000)
+    assert (limits.warn_at, limits.block_at, limits.abort_at) == (2, 3, 4)
+    assert limits.stale_steps == 3
+    assert limits.result_chars == 12_000
+    assert limits.web_searches == 5
