@@ -2,7 +2,7 @@
 
 **Status:** done
 
-**Blocked by:** 09, 12, 13, 14, 16, 17, 18, 19, 20, 21, 21b
+**Blocked by:** 09, 12, 13, 14, 16, 17, 18, 19, 20, 21, 21b, 21c
 
 **讀:** CLAUDE.md〈UI〉；`PRODUCT.md`、`DESIGN.md`；M4 票 132（上一次收尾的做法）；票 12–21 的 Comments 裡留給收尾的 UI 項
 

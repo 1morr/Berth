@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import time_machine
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import (
     ModelMessage,
@@ -32,6 +31,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.function import AgentInfo
 from pydantic_ai.native_tools import WebSearchTool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from time_machine import TimeMachineFixture
 
 from berth.adapters.ai.fake import FakeAi
 from berth.adapters.ai.prices import cost_of
@@ -61,7 +61,8 @@ from tests.integration.test_agent_api import (
 )
 
 TAVILY_KEY = "tvly-dev-agent-test-key"
-#: DeepSeek 的離峰（尖峰是 UTC 01–04、06–10）。
+#: DeepSeek 的尖峰是平日 UTC 01–04、06–10（brief §20.24），價錢是離峰的兩倍。2026-10-28 是週三。
+PEAK = datetime(2026, 10, 28, 2, 42, tzinfo=UTC)
 OFF_PEAK = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 
 
@@ -191,6 +192,13 @@ def history(client: TestClient, conversation: str = "c1") -> list[ModelMessage]:
     return found
 
 
+def turn_deepseek_on(client: TestClient) -> None:
+    """Anthropic 接口打 DeepSeek 的相容端點：價錢分尖峰離峰。"""
+    turn_ai_on(
+        client, "anthropic", base_url="https://api.deepseek.com/anthropic", model="deepseek-flash"
+    )
+
+
 class TestTheBooks:
     def test_server_side_searches_on_the_official_endpoint_are_counted_and_priced(
         self, client: TestClient, script: Seen
@@ -210,14 +218,11 @@ class TestTheBooks:
         assert turn.run.cost_usd == pytest.approx(call_row.cost_usd)
 
     def test_other_endpoints_count_searches_but_leave_their_price_out(
-        self, client: TestClient, script: Seen
+        self, client: TestClient, script: Seen, time_machine: TimeMachineFixture
     ) -> None:
-        turn_ai_on(
-            client,
-            "anthropic",
-            base_url="https://api.deepseek.com/anthropic",
-            model="deepseek-flash",
-        )
+        # `priced` 照記帳那一刻重算、記帳照回應那一刻：DeepSeek 分時段，跨過邊界兩邊會不一樣。
+        time_machine.move_to(PEAK)
+        turn_deepseek_on(client)
         script.steps = [searched("Frieren season 2 reception")]
 
         chat(client, "Is Frieren season 2 any good?")
@@ -233,29 +238,48 @@ class TestTheBooks:
         assert turn.run.web_searches == 1
 
     def test_a_call_is_priced_by_the_endpoint_it_went_to(
-        self, client: TestClient, script: Seen
+        self, client: TestClient, script: Seen, time_machine: TimeMachineFixture
     ) -> None:
         # Anthropic 接口打 DeepSeek 的相容端點（M5 票 21b）：記下端點，照 DeepSeek 在回應時的價。
-        turn_ai_on(
-            client,
-            "anthropic",
-            base_url="https://api.deepseek.com/anthropic",
-            model="deepseek-flash",
-        )
-        script.steps = [
-            lambda _m, _i: ModelResponse(parts=[TextPart("Hello.")], timestamp=OFF_PEAK)
-        ]
+        # 串流回應的時間是收到的那一刻，腳本控制不了，所以釘時鐘（票 21c）。
+        time_machine.move_to(OFF_PEAK)
+        turn_deepseek_on(client)
+        script.steps = [say("Hello.")]
 
-        # 串流那條路徑重建的回應帶的是當下的時間，不是腳本給的：不固定時鐘的話，在 DeepSeek
-        # 的尖峰時段跑就算成兩倍的價（票 22 合併 main 時在 02:56 UTC 撞到）。
-        with time_machine.travel(OFF_PEAK, tick=True):
-            chat(client, "Hi")
+        chat(client, "Hi")
 
         [turn] = recorded(client)
         [call_row] = turn.calls
         assert call_row.base_url == "https://api.deepseek.com/anthropic"
         # DeepSeek 離峰：輸入 $0.15、輸出 $0.6（每百萬）。
         expected = (call_row.input_tokens * 0.15 + call_row.output_tokens * 0.6) / 1_000_000
+        assert call_row.cost_usd == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        ("now", "input_usd", "output_usd"),
+        [pytest.param(PEAK, 0.3, 1.2, id="peak"), pytest.param(OFF_PEAK, 0.15, 0.6, id="off-peak")],
+    )
+    def test_a_call_is_priced_at_the_hour_it_was_answered(
+        self,
+        client: TestClient,
+        script: Seen,
+        time_machine: TimeMachineFixture,
+        now: datetime,
+        input_usd: float,
+        output_usd: float,
+    ) -> None:
+        # 時段照回應的時間，也就是收到的那一刻（pydantic-ai 的串流回應一律用本機時鐘，票 21c）。
+        time_machine.move_to(now)
+        turn_deepseek_on(client)
+        script.steps = [say("Hello.")]
+
+        chat(client, "Hi")
+
+        [turn] = recorded(client)
+        [call_row] = turn.calls
+        expected = (
+            call_row.input_tokens * input_usd + call_row.output_tokens * output_usd
+        ) / 1_000_000
         assert call_row.cost_usd == pytest.approx(expected)
 
     def test_an_empty_base_url_records_the_official_one(
