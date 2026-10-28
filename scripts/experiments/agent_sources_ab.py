@@ -42,7 +42,7 @@ from m5_acceptance_scenarios import (
 
 OUT = ROOT / ".local" / "experiments" / "results" / "agent_sources_ab"
 #: 組名 → 演練情境。`lean` 是 2026-10-28 的精簡組，現在就是產品；逐字稿的檔名照舊帶它。
-GROUPS = {"lean": "agent-live"}
+GROUPS = {"lean": "agent-live", "missing": "agent-live-missing"}
 #: 完成與等確認之外的停止原因都是防護（或出錯）停下的。
 NORMAL_STOPS = {"completed", "awaiting_confirmation"}
 
@@ -99,7 +99,16 @@ MORE_TASKS = tuple(
         ("abyss", "《來自深淵》"),
     )
 )
-SETS = {"main": TASKS, "more": MORE_TASKS}
+#: `--set missing --groups missing`（票 23d）：補缺集一季只搜一次，一季十幾集各自一個發佈時卡片要
+#: 涵蓋每一集。演練情境 `agent-live-missing` 的替身索引站只有單集發佈。
+MISSING_TASKS = (
+    Task(
+        "missing",
+        ("SPY×FAMILY 第一季缺的集幫我補齊，字幕組照你推薦的挑，直接出卡給我確認。", ANSWER),
+    ),
+)
+
+SETS = {"main": TASKS, "more": MORE_TASKS, "missing": MISSING_TASKS}
 
 
 def run_task(
@@ -209,7 +218,10 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--only", default="", help="逗號分隔的題目 key，例如 rezero,hxh2011")
     ap.add_argument(
-        "--set", choices=sorted(SETS), default="main", help="main：原本四題；more：其餘 14 部"
+        "--set",
+        choices=sorted(SETS),
+        default="main",
+        help="main：原本四題；more：其餘 14 部；missing：補缺集",
     )
     ap.add_argument("--groups", default="lean")
     ap.add_argument(

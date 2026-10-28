@@ -144,6 +144,8 @@ def anime_sources(factory: FakeClientFactory, tmp_path: Path) -> None:
 
 EDGERUNNERS_ID = "tv:105248"
 REZERO_ID = "tv:65942"
+STARFALL_ID = "tv:900001"
+STARFALL_EPISODES = 14
 #: Re:Zero 在 TMDB 第 1 季的五輪：（第一集、集數、開播日）。合計 85 集，各輪之間隔好幾個月。
 REZERO_COURS = (
     (1, 25, date(2016, 4, 4)),
@@ -223,6 +225,12 @@ def arrange_tmdb(factory: FakeClientFactory) -> None:
             for n in range(count)
         ),
     )
+    # 補缺集（票 23d）：一季 14 集、一集都沒有。
+    starfall = tv(
+        900001, "Starfall Harbor", "星降りの港", 2024, season_entry(1, STARFALL_EPISODES, 2024)
+    )
+    tmdb.details[(starfall.kind, starfall.tmdb_id)] = starfall
+    tmdb.season_rows[(900001, 1)] = season_rows(1, STARFALL_EPISODES, 2024)
     tmdb.search_results["re:zero"] = (
         TmdbEntry(65942, MediaKind.TV, "Re:ZERO", "Re:ゼロから始める異世界生活", 2016, ""),
     )
@@ -542,6 +550,61 @@ class TestWholeSeries:
         assert row["route_id"] == route_of(client, "tv")
         assert factory.qbittorrent_.added == []
         assert commands_of(client)[-1] == ("downloading.add_manual_download", "proposed")
+
+
+# ---------------------------------------------------------------- 補缺集
+
+
+def single_episode(group: str, episode: int, seeders: int) -> IndexerResult:
+    return IndexerResult(
+        title=f"[{group}] Starfall Harbor S01E{episode:02d} [1080p]",
+        indexer="nyaa",
+        size=1_400_000_000,
+        seeders=seeders,
+        download_url=f"https://nyaa.example/download/{group}-{episode}.torrent",
+        guid=f"{group}-{episode}",
+    )
+
+
+def episodes_of(rows: list[dict[str, Any]]) -> set[int]:
+    return {
+        episode
+        for row in rows
+        if row.get("verdict") == "fits" and row.get("episode_start") is not None
+        for episode in range(
+            row["episode_start"], (row.get("episode_end") or row["episode_start"]) + 1
+        )
+    }
+
+
+class TestMissingEpisodes:
+    def test_a_season_of_single_episode_releases_is_covered_in_what_the_model_sees(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        """票 23d：種子搜尋只給模型前 10 列之後，一季缺 14 集、每集各自一個發佈（另一組只做了前
+        7 集、做種更多，排在前面）時，前 10 列只蓋得到 7 集。補缺集一季只搜一次，模型看不到的那幾集
+        就不會上卡。"""
+        factory.indexer_search_ = FakeIndexerSearch(
+            results=[
+                *(single_episode("Fast", n, 200 - n) for n in range(1, 8)),
+                *(single_episode("Slow", n, 100 - n) for n in range(1, STARFALL_EPISODES + 1)),
+            ]
+        )
+        script.steps = [
+            call("media_read_media", media_id=STARFALL_ID),
+            call(
+                "search_search_torrents",
+                media_id=STARFALL_ID,
+                scope={"missing": True, "season": 1},
+            ),
+            say("Picking releases."),
+        ]
+
+        chat(client, "Starfall Harbor 第一季缺的幫我補齊")
+
+        [seen] = returned(script, "search_search_torrents")
+        rows = seen.get("result", seen)["rows"]
+        assert episodes_of(rows) == set(range(1, STARFALL_EPISODES + 1))
 
 
 # ---------------------------------------------------------------- 一般使用者

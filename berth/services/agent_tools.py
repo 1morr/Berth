@@ -79,21 +79,54 @@ def _compact_search(result: object) -> object:
     交的話截斷（`agent_guards.clip`）只留得下前十幾列。挑發佈用不到的格子拿掉（站上的頁面、
     畫面列表的鍵、怎麼算出季集、發佈時間、空的證據與 tags 的空格）；列的順序不變，「符合」在最前面。
 
-    **只給前 `MODEL_SEARCH_ROWS` 列**（票 23d），其餘只說有幾列（`rows_not_shown`）：結果留在這一輪
-    的上下文裡、之後每次呼叫都重送，Re:Zero 找種子時搜了 19 次，每次呼叫多約 7K input，撞到每輪
-    400K。
+    **只給前 `MODEL_SEARCH_ROWS` 列與它們沒涵蓋到的集**（票 23d，`_rows_to_show`），其餘只說有幾列
+    （`rows_not_shown`）：結果留在這一輪的上下文裡、之後每次呼叫都重送，Re:Zero 找種子時搜了 19 次，
+    每次呼叫多約 7K input，撞到每輪 400K。
     各類的總數在 `counts`，要更準的用 `query` 再搜。"""
     if not isinstance(result, dict) or not isinstance(result.get("rows"), list):
         return result
     rows = result["rows"]
-    given = {**result, "rows": [_compact_row(row) for row in rows[:MODEL_SEARCH_ROWS]]}
-    if len(rows) > MODEL_SEARCH_ROWS:
-        given["rows_not_shown"] = len(rows) - MODEL_SEARCH_ROWS
+    shown = _rows_to_show(rows)
+    given = {**result, "rows": [_compact_row(row) for row in shown]}
+    if len(rows) > len(shown):
+        given["rows_not_shown"] = len(rows) - len(shown)
     return given
 
 
-#: 一次種子搜尋給模型看的列數。
+#: 一次種子搜尋給模型看的列數；前面的列沒涵蓋到的集，後面「符合」的列照樣給（`_rows_to_show`）。
 MODEL_SEARCH_ROWS = 10
+
+
+def _rows_to_show(rows: list[object]) -> list[object]:
+    """前 `MODEL_SEARCH_ROWS` 列，加上之後每一列「符合」而帶來新的集的（照原本的順序）。
+
+    補缺集一季只搜一次（`missing-episodes`）：一季缺十幾集、每集各自一個發佈時，前 10 列常被幾集的
+    好幾個版本佔滿（票 23d 的紅燈）。不靠模型再搜：每一集至少有一列進得來，多的才不給。"""
+    shown: list[object] = []
+    covered: set[tuple[int, int | None]] = set()
+    for index, row in enumerate(rows):
+        spans = _episodes(row)
+        new = {span for span in spans if span not in covered and (span[0], None) not in covered}
+        if index < MODEL_SEARCH_ROWS or new:
+            shown.append(row)
+            covered |= spans
+    return shown
+
+
+def _episodes(row: object) -> set[tuple[int, int | None]]:
+    """一列「符合」的發佈蓋到的（季, 集）；整季包是（季, None）。
+    不是「符合」或看不出季集的是空的。"""
+    if not isinstance(row, dict) or row.get("verdict") != "fits":
+        return set()
+    season, start, end = row.get("season"), row.get("episode_start"), row.get("episode_end")
+    if not isinstance(season, int):
+        return set()
+    if row.get("whole_season"):
+        return {(season, None)}
+    if not isinstance(start, int):
+        return set()
+    last = end if isinstance(end, int) and end >= start else start
+    return {(season, episode) for episode in range(start, last + 1)}
 
 
 #: 給模型的一列留下的格子（`search.SearchResult`）。

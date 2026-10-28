@@ -1860,6 +1860,40 @@ def agent_live_scenario() -> Scenario:
     return scenario
 
 
+def agent_live_missing_scenario() -> Scenario:
+    """補缺集對真模型（M5 票 23d）：替身 TMDB 的 SPY×FAMILY 第一季 12 集都播過、一集都還沒有
+    （同 `rss-sweep` 的那一季），替身索引站只有單集發佈：Slow 每一集一個，Fast 只做了前 6 集、
+    做種更多，排在前面。模型與網路搜尋打真的、qBittorrent 收下就留著（同 `agent-live`）。驅動是
+    `scripts/experiments/agent_sources_ab.py --set missing --groups missing`。**會花模型的錢**
+    """
+    scenario = rss_sweep_scenario()
+    scenario.feed_pages = {}
+    scenario.rss_sweep_demo = False
+    scenario.live_ai = True
+    scenario.qbittorrent = KeepingQbittorrent()
+    scenario.indexer_results = MISSING_RELEASES
+    return scenario
+
+
+def _single_episode(group: str, episode: int, seeders: int) -> IndexerResult:
+    title = f"[{group}] SPY×FAMILY - {episode:02d} [1080p][CHT]"
+    info_hash = hashlib.sha1(title.encode()).hexdigest()
+    return IndexerResult(
+        title=title,
+        indexer="berth-demo",
+        size=600_000_000,
+        seeders=seeders,
+        download_url=f"magnet:?xt=urn:btih:{info_hash}",
+        info_hash=info_hash,
+    )
+
+
+MISSING_RELEASES = (
+    *(_single_episode("Fast", n, 300 - n) for n in range(1, 7)),
+    *(_single_episode("Slow", n, 100 - n) for n in range(1, 13)),
+)
+
+
 #: `agent` 情境的送單卡要送的三集（票 13）。每一包一個正片檔。
 AGENT_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
     f"[Berth-Demo] SPY×FAMILY - {episode:02d} [1080p][CHT]": (
@@ -2244,6 +2278,7 @@ SCENARIOS = {
     "downloads": downloads_scenario,
     "agent": agent_scenario,
     "agent-live": agent_live_scenario,
+    "agent-live-missing": agent_live_missing_scenario,
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,

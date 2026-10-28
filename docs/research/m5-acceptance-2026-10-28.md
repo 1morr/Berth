@@ -266,6 +266,19 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 
 第一、三季都沒有誤標。
 
+### 補缺集：一季十幾集、每集各自一個發佈
+
+「只給前 10 列」之後，補缺集（`missing-episodes`，一季只搜一次 `scope: {missing, season}`）一季缺十幾集、每集各自一個發佈時，前 10 列可能被幾集的好幾個版本佔滿，模型看不到的那幾集就不會上卡。
+
+- **紅燈**：`tests/integration/test_agent_anime_scenarios.py::TestMissingEpisodes`，一季 14 集都沒有，只有單集發佈（Fast 做了前 7 集、做種更多排在前面，Slow 每一集一個）。修之前模型拿到的「符合」只蓋到第 1–7 集。
+- **修法**：給模型的那一份除了前 10 列，之後「符合」而帶來新集數的列也給（`agent_tools._rows_to_show`；整季包算蓋到整季），重複的、不符合的才不給。不靠模型再搜，也不必讓 `scope` 支援指定集數。單元測試 `test_later_rows_come_in_only_for_episodes_not_yet_shown`。
+- **真模型**：演練情境 `agent-live-missing`（替身 TMDB 的 SPY×FAMILY 第一季 12 集都沒有，替身索引站只有單集發佈：Fast 前 6 集、Slow 全 12 集），`agent_sources_ab.py --set missing --groups missing`，兩種接口各 1 次到出卡。
+
+| 接口 | 卡片列數 | 卡片涵蓋的集 | 種子搜尋 | 費用 USD | 逐字稿 |
+|---|---|---|---|---|---|
+| anthropic | 12 | 第 1–12 集全有（Fast 1–6、Slow 7–12） | 5（第 1 次是 `missing` + `season`，其餘是模型自己找整季包） | 0.014 | [`t23d-missing-anthropic.md`](m5-acceptance-2026-10-28/t23d-missing-anthropic.md) |
+| openai | 12 | 第 1–12 集全有 | 3 | 0.010 | [`t23d-missing-openai.md`](m5-acceptance-2026-10-28/t23d-missing-openai.md) |
+
 ### 花費
 
-修之前 $0.131，收窄後的無職轉生 $0.019，修之後 Re:Zero $0.073、無職轉生 $0.024，合計 **$0.247**（使用者把上限放寬到 $1）。
+修之前 $0.131，收窄後的無職轉生 $0.019，修之後 Re:Zero $0.073、無職轉生 $0.024，合計 **$0.247**（使用者把上限放寬到 $1）。補缺集另 $0.024（上限 $0.5）。

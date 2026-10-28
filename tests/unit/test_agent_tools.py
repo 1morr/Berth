@@ -246,6 +246,38 @@ class TestSearchTorrentsForTheModel:
         assert [row["source_id"] for row in given["rows"]] == [f"s-{n}" for n in range(1, 11)]
         assert given["rows_not_shown"] == 32
 
+    def test_later_rows_come_in_only_for_episodes_not_yet_shown(self) -> None:
+        """補缺集一季只搜一次：前 10 列沒蓋到的集，後面「符合」的列照樣給；重複的、不符合的不給。"""
+
+        def row(
+            n: int, start: int, *, verdict: str = "fits", whole: bool = False
+        ) -> dict[str, object]:
+            return {
+                "source_id": f"s-{n}",
+                "verdict": verdict,
+                "season": 1,
+                "episode_start": None if whole else start,
+                "episode_end": None if whole else start,
+                "whole_season": whole,
+            }
+
+        first_ten = [row(n, 1 + n % 5) for n in range(10)]  # 只蓋第 1–5 集
+        later = [
+            row(10, 3),  # 第 3 集已經有了
+            row(11, 6),  # 新的
+            row(12, 7, verdict="other"),  # 不符合
+            row(13, 6),  # 第 6 集剛剛有了
+            row(14, 0, whole=True),  # 整季包：新的
+            row(15, 8),  # 整季包已經蓋到
+        ]
+
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": first_ten + later, "counts": []})
+
+        assert isinstance(given, dict)
+        shown = [r["source_id"] for r in given["rows"]]
+        assert shown == [f"s-{n}" for n in range(10)] + ["s-11", "s-14"]
+        assert given["rows_not_shown"] == 4
+
     def test_a_short_search_is_given_whole(self) -> None:
         rows = [{"source_id": "s-1", "title": "x", "verdict": "fits"}]
         given = MODEL_VIEWS["search.search_torrents"]({"rows": rows, "counts": []})
