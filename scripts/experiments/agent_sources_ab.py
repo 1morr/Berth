@@ -75,16 +75,41 @@ TASKS = (
     Task("hxh2011", franchise("《HUNTER×HUNTER》2011 年版").steps),
 )
 
+#: `--set more`：`docs/research/fribb-vs-chaining-2026-10-28.json` 裡其餘 14 部（補跑精簡組，看有沒有退步）。
+#: 鍵與那份研究的 `series` 相同；撞名的重製版照 HxH 的寫法說年份。
+MORE_TASKS = tuple(
+    Task(key, franchise(title).steps)
+    for key, title in (
+        ("jujutsu", "《咒術迴戰》"),
+        ("frieren", "《葬送的芙莉蓮》"),
+        ("dandadan", "《膽大黨》"),
+        ("aot", "《進擊的巨人》"),
+        ("kaguya", "《輝夜姬想讓人告白》"),
+        ("spyfamily", "《SPY×FAMILY 間諜家家酒》"),
+        ("bleach", "《BLEACH 死神》"),
+        ("uchouten", "《有頂天家族》"),
+        ("maou", "《打工吧！魔王大人》"),
+        ("fruitsbasket", "《水果籃子》2019 年版"),
+        ("urusei", "《福星小子》2022 年版"),
+        ("kino", "《奇諾之旅》2017 年版"),
+        ("tamako", "《玉子市場》"),
+        ("abyss", "《來自深淵》"),
+    )
+)
+SETS = {"main": TASKS, "more": MORE_TASKS}
 
-def run_task(r: Runner, task: Task, label: str) -> tuple[str, dict[str, Any]]:
-    """逐句送出，確認卡一出現就停（不按）。"""
+
+def run_task(
+    r: Runner, task: Task, label: str, *, list_only: bool = False
+) -> tuple[str, dict[str, Any]]:
+    """逐句送出，確認卡一出現就停（不按）。`list_only` 只送第一句（先列清單）。"""
     cid = str(uuid.uuid4())
     log = [f"# {label} · {task.key}\n", f"對話 `{cid}`。\n"]
     runs: list[str] = []
     replies: list[str] = []
     card: dict[str, Any] | None = None
     started = time.monotonic()
-    for step in task.steps:
+    for step in task.steps[:1] if list_only else task.steps:
         log.append(f"\n## 👤 {step}\n")
         chunks = r.say(cid, step)
         log.extend(render(chunks))
@@ -161,6 +186,11 @@ def main() -> None:
     ap.add_argument("--providers", default="anthropic,openai")
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--only", default="", help="逗號分隔的題目 key，例如 rezero,hxh2011")
+    ap.add_argument(
+        "--set", choices=sorted(SETS), default="main", help="main：原本四題；more：其餘 14 部"
+    )
+    ap.add_argument("--groups", default="full,lean")
+    ap.add_argument("--list-only", action="store_true", help="整部系列只送「先列清單」那一句")
     ap.add_argument("--budget", type=float, default=1.5, help="累計估計費用（USD）到這裡就停")
     ap.add_argument("--port", type=int, default=8600)
     ap.add_argument("--out", type=Path, default=OUT)
@@ -177,13 +207,14 @@ def main() -> None:
     stopped = ""
     for rep in range(1, a.reps + 1):
         for provider in a.providers.split(","):
-            for group, scenario in GROUPS.items():
+            for group in a.groups.split(","):
+                scenario = GROUPS[group]
                 if stopped:
                     break
                 label = f"r{rep}-{provider}-{group}"
                 todo = [
                     task
-                    for task in TASKS
+                    for task in SETS[a.set]
                     if (not wanted or task.key in wanted)
                     and (rep, provider, group, task.key) not in done
                 ]
@@ -201,7 +232,7 @@ def main() -> None:
                             break
                         print(f"== {label} {task.key} (spent ${spent:.4f})", flush=True)
                         try:
-                            md, stats = run_task(r, task, label)
+                            md, stats = run_task(r, task, label, list_only=a.list_only)
                         except Exception as e:  # 一題壞了不拖垮其他的
                             md, stats = (
                                 f"# {label} {task.key}\n\n腳本出錯：{e!r}\n",
