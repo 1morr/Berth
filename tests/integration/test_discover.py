@@ -9,13 +9,15 @@ from __future__ import annotations
 import dataclasses
 from datetime import UTC, datetime, timedelta
 
+import anyio
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.http import AuthFailedError, ServiceUnavailableError
 from berth.adapters.tmdb import TmdbConfiguration, TmdbEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
+from berth.db.engine import create_session_factory
 from berth.domain import MediaKind, TmdbProblem
 from berth.models import TmdbCache, TmdbSettings
 from berth.services.discover import (
@@ -26,6 +28,7 @@ from berth.services.discover import (
 )
 from berth.services.settings import read_settings, write_settings
 from tests.conftest import TMDB_API_KEY
+from tests.integration.arrange import Meeting
 from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
@@ -161,6 +164,40 @@ class TestTrending:
 
 
 class TestCache:
+    async def test_the_same_query_twice_at_once_shares_one_row(
+        self, engine: AsyncEngine, session: AsyncSession
+    ) -> None:
+        """同一步並行的兩個工具呼叫（M5 票 24）：兩個寫法正規化成同一格快取，兩邊都沒讀到、都寫。
+
+        撞在「讀快取 → 寫快取 → 執行器 commit」這一段，替身插不進去；所以兩邊在 commit 之前碰面：
+        先寫的那一邊交易開著，另一邊不管什麼時候讀，都讀不到它。
+        """
+        factory = await credentialled(session, tmdb())
+        # 精靈寫過圖片基底：沒寫的話兩邊先各寫一次 settings，搶寫鎖就排成一隊了。
+        await write_settings(
+            session,
+            TmdbSettings(api_key=TMDB_API_KEY, image_base_url="https://image.tmdb.org/t/p/"),
+        )
+        await session.commit()
+        sessions = create_session_factory(engine)
+        meeting = Meeting(limit=0.5)
+        found: list[list[str]] = []
+
+        async def search(query: str) -> None:
+            async with sessions() as own:
+                result = await search_media(own, factory, query)
+                await meeting.arrive()
+                # 同側面板的工具：執行器跑完一支就 commit（`Turn.run_tool`）。
+                await own.commit()
+                found.append([item.id for item in result.items])
+
+        async with anyio.create_task_group() as both:
+            both.start_soon(search, "SPY x FAMILY")
+            both.start_soon(search, "spy  x  family")
+
+        assert found == [["tv:120089"], ["tv:120089"]]
+        assert await session.scalar(select(func.count()).select_from(TmdbCache)) == 1
+
     async def test_the_second_call_does_not_reach_tmdb(self, session: AsyncSession) -> None:
         client = tmdb()
         factory = await credentialled(session, client)
