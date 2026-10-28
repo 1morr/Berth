@@ -268,3 +268,63 @@ class TestPublicArguments:
         row = {"url": "https://mikanani.me/RSS/MyBangumi?token=t", "name": "Mikan"}
 
         assert registry.public_arguments(spec, row) == row
+
+
+class TestAnnotatedLimits:
+    """簽名上 `Annotated[..., Field(...)]` 的限制與說明進輸入模型（M5 票 26b）：模型看得到上下限，
+    伺服器也照它擋。"""
+
+    _SOURCE = """
+    from typing import Annotated
+    from pydantic import Field
+    from berth.services.commands import Effect, command
+
+    @command(Effect.READ)
+    async def read_some(
+        limit: Annotated[int, Field(ge=1, le=50, description="How many to read.")] = 10,
+    ) -> int:
+        return limit
+    """
+
+    def spec(self) -> registry.CommandSpec:
+        found, failures = registry.collect([load(self._SOURCE)])
+        assert failures == []
+        return found["fake.read_some"]
+
+    def test_the_input_model_refuses_what_the_limits_refuse(self) -> None:
+        model = self.spec().input
+
+        assert model.model_validate({"limit": 1}).limit == 1  # type: ignore[attr-defined]  # 動態推出的 model
+        assert model.model_validate({"limit": 50}).limit == 50  # type: ignore[attr-defined]  # 同上
+        for wrong in (0, 51):
+            with pytest.raises(ValidationError):
+                model.model_validate({"limit": wrong})
+
+    def test_the_json_schema_carries_the_limits_and_the_description(self) -> None:
+        field = self.spec().input.model_json_schema()["properties"]["limit"]
+
+        assert field["minimum"] == 1
+        assert field["maximum"] == 50
+        assert field["description"] == "How many to read."
+        assert field["default"] == 10
+
+    def test_an_annotated_injected_parameter_stays_injected(self) -> None:
+        source = _SOURCE.replace(
+            "session: AsyncSession, route_id",
+            "session: Annotated[AsyncSession | None, 'db'], route_id",
+        ).replace("from sqlalchemy", "from typing import Annotated\nfrom sqlalchemy", 1)
+
+        found, failures = registry.collect([load(source)])
+
+        assert failures == []
+        assert found["fake.look"].injected == ("session", "actor")
+        assert set(found["fake.look"].input.model_fields) == {"route_id"}
+
+    def test_a_keyword_subscription_without_a_subgroup_is_refused_by_its_input(self) -> None:
+        model = registry.commands()["rss.subscribe_search"].input
+        row = {"kind": "nyaa", "term": "Kimi", "media_id": "tv:1", "route_id": 1}
+
+        assert model.model_validate({**row, "subgroup": "ANi"}).subgroup == "ANi"  # type: ignore[attr-defined]  # 動態推出的 model
+        for blank in ("", "  "):
+            with pytest.raises(ValidationError):
+                model.model_validate({**row, "subgroup": blank})
