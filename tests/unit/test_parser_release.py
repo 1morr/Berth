@@ -352,6 +352,22 @@ class TestFields:
         assert info.group == ""
         assert info.subtitle_langs == (Lang.CHS,)
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            # 真實語料（nyaa 2026-10-29，M5 票 27）：scene 式的 `-GROUP` 後面接一段括號的別名。
+            "TETSURYO Meet with Tetsudou Musume S01E03 Working is Hard Work 1080p AMZN WEB-DL "
+            "DDP2.0 H.264-VARYG (Tetsuryou! meet with Tetsudou Musume, Multi-Subs)",
+            "TETSURYO Meet with Tetsudou Musume S01E03 Working is Hard Work 1080p HIDI WEB-DL "
+            "AAC2.0 H.264-VARYG (Tetsuryou! meet with Tetsudou Musume)",
+            "TETSURYO Meet with Tetsudou Musume S01E03 1080p AMZN WEB-DL DDP2.0 H.264-VARYG",
+        ],
+    )
+    def test_an_alias_after_a_scene_group_is_not_part_of_it(self, name: str) -> None:
+        """guessit 把組名後面整段括號（或括號裡逗號之前）讀進 release_group，同一組在關鍵字訂閱的
+        字幕組清單上變成兩個怪名字。"""
+        assert parse_release(name).group == "VARYG"
+
     def test_the_cjk_group_wins(self) -> None:
         info = parse_release("[Airota][Kamiina Botan][03][1080p AVC AAC][CHT].mp4")
 

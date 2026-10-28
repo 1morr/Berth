@@ -125,7 +125,9 @@ def _parse_release(name: str) -> ReleaseInfo:
     # 詞典認出中文季號時以它為準，就不算多季。
     season_end = span[1] if span is not None and hints.season is None else None
     group = (
-        hints.group or (trailing.group(1) if trailing else "") or _text(guess.get("release_group"))
+        hints.group
+        or (trailing.group(1) if trailing else "")
+        or _scene_group(_text(guess.get("release_group")))
     )
 
     return ReleaseInfo(
@@ -328,6 +330,15 @@ def _resolution_of(name: str, guess: dict[str, Any]) -> str:
         return screen
     found = _RESOLUTION.search(name)
     return f"{found.group(1)}p" if found else ""
+
+
+def _scene_group(group: str) -> str:
+    """guessit 讀到的組名去掉跟在後面的括號別名。
+
+    nyaa 上 scene 式的 `…H.264-VARYG (Tetsuryou! meet with Tetsudou Musume, Multi-Subs)`，guessit 把
+    括號整段（或括號裡逗號之前）讀進 release_group（M5 票 27 實測）；組名本身不會有括號。
+    """
+    return group.split("(", 1)[0].strip()
 
 
 def _text(value: object) -> str:
