@@ -32,7 +32,7 @@ assert 1.74e-05 == 8.7e-06 ± 8.7e-12
 - [x] repro 修之前紅、修之後綠（貼兩次輸出），根因寫在 Comments（產品還是測試）
 - [x] 尖峰與離峰各一條釘時鐘的測試；其他費用測試掃過、該釘的都釘了
 - [x] 在尖峰時段跑一次完整的 `pytest -m 'not e2e'` 綠（現在跑或用時鐘釘的方式證明），全部檢查綠
-- [ ] 回頭補勾：`main` 的 CI 轉綠（協調者 push 後確認）
+- [x] 回頭補勾：`main` 的 CI 轉綠（協調者 push 後確認：run 40626515132 success，sha bf17f0b8）
 - [x] progress.md 已更新
 
 ## Comments
