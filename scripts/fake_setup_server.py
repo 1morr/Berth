@@ -15,7 +15,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sys
 import tempfile
 from collections.abc import Callable, Sequence
@@ -53,8 +52,6 @@ from berth.adapters.anilist import AniList
 from berth.adapters.anilist.fake import FakeAniList
 from berth.adapters.bgm import Bgm
 from berth.adapters.bgm.fake import FakeBgm
-from berth.adapters.fribb import AnimeIds
-from berth.adapters.fribb.fake import FakeAnimeIds
 from berth.adapters.http import (
     AuthFailedError,
     ProtocolMismatchError,
@@ -183,7 +180,6 @@ from berth.models import (
 )
 from berth.models.types import utcnow
 from berth.parser import plan as decide
-from berth.services import agent_tools, skills
 from berth.services.clients import (
     BUNDLED_JELLYFIN_URL,
     BUNDLED_PROWLARR_URL,
@@ -391,12 +387,9 @@ class Scenario:
     clock: datetime | None = None
     #: 側面板的假模型（M5 票 12）：給了就把 AI 打開，每一次模型呼叫由它回答。`None` 是 AI 關著。
     ai_script: Script | None = None
-    #: 模型、網路搜尋與動漫資料（AniList、Fribb、Bangumi）打**真的**（`agent-live`，M5 票 23）。
+    #: 模型、網路搜尋與動漫資料（AniList、Bangumi）打**真的**（`agent-live`，M5 票 23）。
     #: AI 不在這裡打開：驅動腳本照使用者的路徑 `PUT /settings/ai` 填 key。
     live_ai: bool = False
-    #: 精簡組（實驗 `agent_sources_ab.py`）：工具拿掉 AniList、Fribb、Bangumi，`series-mapping` 與
-    #: `new-season-picks` 換成不提它們的那一版（`scripts/experiments/agent_sources_lean_skills/`）。
-    lean_sources: bool = False
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1852,37 +1845,9 @@ class KeepingQbittorrent(FakeQbittorrentClient):
         )
 
 
-def agent_live_lean_scenario() -> Scenario:
-    """同 `agent-live`，但只有 TMDB、網路搜尋與 Berth 原本的工具（實驗，不是產品的樣子）：
-    `_use_lean_sources` 在建 app 之前換掉工具清單與兩份 skill。"""
-    scenario = agent_live_scenario()
-    scenario.lean_sources = True
-    return scenario
-
-
-#: 精簡組拿掉的來源（登錄表名字的前綴）。
-LEAN_DROPPED = ("anilist.", "fribb.", "bgm.")
-LEAN_SKILLS = Path(__file__).resolve().parent / "experiments" / "agent_sources_lean_skills"
-
-
-def _use_lean_sources(config_root: Path) -> None:
-    """換掉模組上的工具清單與 skills 的位置：`visible_tools` 與 `catalog` 都是呼叫時才讀它們。
-
-    skills 照 repo 那一份複製一份，再蓋上精簡版的兩份；其餘兩份（為什麼沒入庫、補缺集）不動。
-    """
-    kept = (name for name in agent_tools.TOOLS if not name.startswith(LEAN_DROPPED))
-    agent_tools.TOOLS = tuple(kept)
-    root = config_root / "lean-skills"
-    shutil.copytree(skills.SKILLS_ROOT, root)
-    for override in LEAN_SKILLS.iterdir():
-        shutil.copyfile(override / skills.FILE_NAME, root / override.name / skills.FILE_NAME)
-    skills.SKILLS_ROOT = root
-    skills.catalog.cache_clear()
-
-
 def agent_live_scenario() -> Scenario:
     """側面板對真模型跑情境（M5 票 23）：同 `search`（真 TMDB、真索引站），另外模型、網路搜尋、
-    AniList、Fribb、Bangumi 都打真的；qBittorrent 是收下就留著的替身（`KeepingQbittorrent`），
+    AniList、Bangumi 都打真的；qBittorrent 是收下就留著的替身（`KeepingQbittorrent`），
     確認卡可以放心按。
 
     AI 一開始關著：驅動腳本 `scripts/experiments/m5_acceptance_scenarios.py` 照使用者的路徑
@@ -2279,7 +2244,6 @@ SCENARIOS = {
     "downloads": downloads_scenario,
     "agent": agent_scenario,
     "agent-live": agent_live_scenario,
-    "agent-live-lean": agent_live_lean_scenario,
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,
@@ -2315,14 +2279,10 @@ class FakeClientFactory:
     既有服務的「測試連線」永遠連得上，用來走通表單那條路徑。
     """
 
-    def __init__(self, scenario: Scenario, *, config_root: Path | None = None) -> None:
+    def __init__(self, scenario: Scenario) -> None:
         self._scenario = scenario
-        #: `live_ai` 時模型、搜尋與動漫資料走正式的那一份；Fribb 的表放在這台的 `config_root`。
-        self._live = (
-            HttpServiceClientFactory(config_root=config_root)
-            if scenario.live_ai and config_root is not None
-            else None
-        )
+        #: `live_ai` 時模型、搜尋與動漫資料走正式的那一份。
+        self._live = HttpServiceClientFactory() if scenario.live_ai else None
         #: 使用者自己那台 Prowlarr，一個位址一台：加進去的站之後再讀要看得到
         #: （M4 票 67 的一鍵加站）。
         self._existing_prowlarr: dict[str, FakeProwlarrClient] = {}
@@ -2414,11 +2374,6 @@ class FakeClientFactory:
             return self._live.anilist()
         return FakeAniList()
 
-    def anime_ids(self) -> AnimeIds:
-        if self._live is not None:
-            return self._live.anime_ids()
-        return FakeAnimeIds()
-
     def bgm(self) -> Bgm:
         if self._live is not None:
             return self._live.bgm()
@@ -2486,9 +2441,7 @@ def main(argv: list[str] | None = None) -> int:
         # 換掉模組上的函式：`services/plan.py` 以 `mediainfo.probe` 呼叫它，它不在 client 工廠裡。
         # mypy 不讓函式被賦值；替身的簽名與它相同。
         mediainfo.probe = _measuring(scenario.measured)  # type: ignore[assignment]
-    if scenario.lean_sources:
-        _use_lean_sources(config_root)
-    factory = FakeClientFactory(scenario, config_root=config.config_root)
+    factory = FakeClientFactory(scenario)
     # 背景迴圈不經過 FastAPI 的相依，所以它要用的 client 從 `create_app` 換掉（票 10）。
     app = create_app(config, clients=factory)
     asyncio.run(_seed(config, scenario, factory))

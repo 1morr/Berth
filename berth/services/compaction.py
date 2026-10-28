@@ -248,6 +248,38 @@ def turn_starts(messages: Sequence[ModelMessage]) -> list[int]:
     ]
 
 
+#: 拿掉前幾輪的網搜結果之後，那一則回應若什麼都不剩，留這一句（Anthropic 不收空的回應）。
+DROPPED_SEARCH_NOTE = "(Searched the web; the pages are no longer in this conversation.)"
+
+
+def without_earlier_searches(messages: Sequence[ModelMessage]) -> list[ModelMessage]:
+    """送給模型的歷史拿掉**前幾輪**的伺服器端 `web_search`（呼叫與結果一起，票 23d）。
+
+    Anthropic 回的是整頁的加密內容，Berth 截不短，卻每次呼叫都重送：Re:Zero 列完清單、下一輪
+    找種子時撞過每輪 400K input 的上限（`docs/research/agent-sources-ab-2026-10-28.md`）。那幾頁
+    讀到的已經寫進那一輪的回答裡；這一輪的搜尋照留，模型還在讀。Tavily 的結果不拿：它已照
+    `Limits.result_chars` 截過，而且是明文，「出自外部來源」比對的就是它。
+    """
+    starts = turn_starts(messages)
+    if not starts:
+        return list(messages)
+    current = starts[-1]
+    kept: list[ModelMessage] = []
+    for index, message in enumerate(messages):
+        if index < current and isinstance(message, ModelResponse):
+            parts = [part for part in message.parts if not _searched(part)]
+            if len(parts) != len(message.parts):
+                message = replace(message, parts=parts or [TextPart(DROPPED_SEARCH_NOTE)])
+        kept.append(message)
+    return kept
+
+
+def _searched(part: object) -> bool:
+    return (
+        isinstance(part, NativeToolCallPart | NativeToolReturnPart) and part.tool_name == WEB_SEARCH
+    )
+
+
 def split(messages: Sequence[ModelMessage], keep: int) -> Split | None:
     """保留最後 `keep` 輪；輪數不比 `keep` 多就沒什麼好壓（`None`）。"""
     starts = turn_starts(messages)

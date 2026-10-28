@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 
 from berth.domain import Role
 from berth.services.registry import commands
@@ -14,12 +15,10 @@ from berth.services.registry import commands
 #: 只有設了 Tavily key 才給模型的那一支。
 TAVILY_TOOL = "web.tavily_search"
 
-#: 推薦新番與整部系列的資料來源（票 16）：社群編的資料站，結果是外部內容。
+#: 推薦新番的資料來源（票 16；整部系列用的搜尋與系列走圖在票 23d 拿掉）：社群編的資料站，
+#: 結果是外部內容。
 ANIME_TOOLS: tuple[str, ...] = (
-    "anilist.search_anime",
-    "anilist.read_franchise",
     "anilist.read_season",
-    "fribb.lookup_anime",
     "bgm.read_calendar",
 )
 
@@ -44,7 +43,7 @@ TOOLS: tuple[str, ...] = (
     "rss.subscribe_mikan",
     "rss.subscribe_search",
     "rss.add_feed",
-    # 票 16：推薦新番與整部系列。
+    # 票 16：推薦新番。
     *ANIME_TOOLS,
     "discover.read_trending",
 )
@@ -151,7 +150,39 @@ def _compact_season(season: object) -> object:
     compact["episodes"] = {status: _ranges(numbers) for status, numbers in by_status.items()}
     if jobs:
         compact["jobs"] = jobs
+    if blocks := _aired_blocks(season["episodes"]):
+        compact["aired_blocks"] = blocks
     return compact
+
+
+#: 相鄰兩集的播出日隔超過這麼多天就算另一段（cour 之間通常隔一季；一季裡停播一兩週不算）。
+AIRING_GAP_DAYS = 28
+
+
+def _aired_blocks(episodes: list[object]) -> list[dict[str, str]]:
+    """播出日連得起來的幾段（票 23d）：沒有網路搜尋時 `series-mapping` 拿它切出各季、各 cour。
+    逐集的日期換成「哪幾集、從哪天到哪天」，還沒定播出日的那幾集不進任何一段。"""
+    dated = sorted(
+        (episode["episode_number"], date.fromisoformat(episode["air_date"]))
+        for episode in episodes
+        if isinstance(episode, dict)
+        and isinstance(episode.get("episode_number"), int)
+        and isinstance(episode.get("air_date"), str)
+    )
+    blocks: list[list[tuple[int, date]]] = []
+    for number, aired in dated:
+        if blocks and (aired - blocks[-1][-1][1]).days <= AIRING_GAP_DAYS:
+            blocks[-1].append((number, aired))
+        else:
+            blocks.append([(number, aired)])
+    return [
+        {
+            "episodes": _ranges([number for number, _ in block]),
+            "from": block[0][1].isoformat(),
+            "to": block[-1][1].isoformat(),
+        }
+        for block in blocks
+    ]
 
 
 def _ranges(numbers: list[int]) -> str:

@@ -22,7 +22,13 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import RequestUsage
 
-from berth.services.compaction import compacted, context_fraction, render, split
+from berth.services.compaction import (
+    compacted,
+    context_fraction,
+    render,
+    split,
+    without_earlier_searches,
+)
 
 
 def user(text: str, *returns: str) -> ModelRequest:
@@ -235,6 +241,24 @@ class TestRender:
         assert "Assistant: done" in text
         assert "external content" in text
         assert long not in text
+
+
+class TestEarlierSearches:
+    """票 23d：送給模型的歷史拿掉前幾輪的伺服器端網搜（整合測試在 `test_agent_web_search`）。"""
+
+    def test_a_reply_that_was_only_a_search_keeps_a_note(self) -> None:
+        """回應只有搜尋（模型搜完就被停下）：拿掉之後不能留一則空回應，Anthropic 不收。"""
+        searched_only = ModelResponse(
+            parts=[
+                NativeToolCallPart("web_search", {"query": "x"}, tool_call_id="s"),
+                NativeToolReturnPart("web_search", [{"url": "u"}], tool_call_id="s"),
+            ]
+        )
+        now = user("second")
+        sent = without_earlier_searches([user("first"), searched_only, now])
+
+        assert [type(part) for part in sent[1].parts] == [TextPart]
+        assert sent[2] is now
 
 
 def _never() -> NoReturn:

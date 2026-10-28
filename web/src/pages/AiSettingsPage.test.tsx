@@ -367,6 +367,30 @@ describe('設定 → AI', () => {
     expect(screen.getByRole('button', { name: '移除 Tavily key' })).toBeVisible()
   })
 
+  it('OpenAI 相容而沒有 Tavily key：建議填，Anthropic 或已有 key 時不提', async () => {
+    const TIP = /整部系列與評價需要網路搜尋/
+    render({}, { ...IN_USE, provider: 'openai' })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    expect(await screen.findByText(TIP)).toBeVisible()
+    // 貼了一把（還沒存）就不再提
+    await user.type(screen.getByLabelText('Tavily API key'), 'tvly-1')
+    expect(screen.queryByText(TIP)).toBeNull()
+    await user.clear(screen.getByLabelText('Tavily API key'))
+    // Anthropic 有自己的伺服器端搜尋
+    await user.click(screen.getByRole('button', { name: 'Anthropic Messages' }))
+    expect(screen.queryByText(TIP)).toBeNull()
+  })
+
+  it('OpenAI 相容、已存 Tavily key：不提', async () => {
+    render({}, { ...IN_USE, provider: 'openai', has_tavily_key: true })
+    renderApp('/settings/ai')
+
+    expect(await screen.findByLabelText('Tavily API key')).toBeVisible()
+    expect(screen.queryByText(/整部系列與評價需要網路搜尋/)).toBeNull()
+  })
+
   it('en：文案與價目', async () => {
     await i18next.changeLanguage('en')
     try {

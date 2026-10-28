@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -286,3 +287,28 @@ class TestWhatTheModelSeesOfAWork:
         )
         assert isinstance(seen, dict)
         assert seen["seasons"][0]["episodes"] == {"missing": "1-85"}
+
+    def test_airing_gaps_split_a_season_into_blocks(self) -> None:
+        """票 23d：沒有網路搜尋時 `series-mapping` 靠 TMDB 各集的播出日切段，給模型的那一份要
+        留得下。
+        像無職轉生第 1 季：E01–E11 冬季每週一集（E03 之後停播一週不算斷開）、E12–E23 秋季；
+        還沒定播出日的 E24 不進任何一段。"""
+        winter = [date(2021, 1, 11) + timedelta(weeks=n + (n >= 3)) for n in range(11)]
+        autumn = [date(2021, 10, 4) + timedelta(weeks=n) for n in range(12)]
+        aired = [*winter, *autumn]
+        episodes = [
+            {
+                "episode_number": n,
+                "status": "missing",
+                "air_date": aired[n - 1].isoformat() if n <= len(aired) else None,
+            }
+            for n in range(1, 25)
+        ]
+        seen = MODEL_VIEWS["media.read_media"](
+            {"seasons": [{"season_number": 1, "episodes": episodes}]}
+        )
+        assert isinstance(seen, dict)
+        assert seen["seasons"][0]["aired_blocks"] == [
+            {"episodes": "1-11", "from": "2021-01-11", "to": "2021-03-29"},
+            {"episodes": "12-23", "from": "2021-10-04", "to": "2021-12-20"},
+        ]

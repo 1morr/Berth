@@ -1,6 +1,6 @@
 # 23d — 拿掉 Fribb 與 AniList 的系列走圖；整部系列改用精簡流程
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 23b
 
@@ -30,12 +30,25 @@
 
 ## 驗收
 
-- [ ] Fribb 與 `anilist.search_anime` / `read_franchise` 從程式、工具、skills、Fake 後端、文件拿乾淨；`read_season` 與 Bangumi 照舊（測試）
-- [ ] `series-mapping` 精簡版含三條補強；有網搜時三部全對、該標的全標；沒網搜時每季都標「沒有網頁核對」、不憑記憶給範圍而不說（真模型逐字稿）
-- [ ] 長系列找種子那一輪不再撞每輪 token 上限（測試或實跑）
-- [ ] AI 設定頁的 Tavily 提示（vitest；playwright 截圖）
-- [ ] brief §15〈offset 建議〉改成 Mikan 開播日的做法；brief §19、§20 與 plan 同步
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；CHANGELOG、progress.md 已更新
-- [ ] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push
+- [x] Fribb 與 `anilist.search_anime` / `read_franchise` 從程式、工具、skills、Fake 後端、文件拿乾淨；`read_season` 與 Bangumi 照舊（測試）
+- [x] `series-mapping` 精簡版含三條補強；有網搜時三部全對、該標的全標；沒網搜時每季都標「沒有網頁核對」、不憑記憶給範圍而不說（真模型逐字稿）
+- [x] 長系列找種子那一輪不再撞每輪 token 上限（測試或實跑）
+- [x] AI 設定頁的 Tavily 提示（vitest；playwright 截圖）
+- [x] brief §15〈offset 建議〉改成 Mikan 開播日的做法；brief §19、§20 與 plan 同步
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；CHANGELOG、progress.md 已更新
+- [x] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push
 
 ## Comments
+
+- **第 3 點選「找種子那一輪前先壓縮」，做法是拿掉前幾輪的伺服器端網搜**（`compaction.without_earlier_searches`，`agent._DropEarlierSearches`）。理由：撞上限的兩次都是 Anthropic 接口，網搜只有 1 次，而同一題 OpenAI 接口（Tavily 搜 2.5 次）的 input 少了約 28 萬；Anthropic 的 `web_search` 回的是整頁加密內容，Berth 截不短，「限制摘錄長度」只管得到 Tavily（它已截在 1000 字）。拿掉的是**送給模型的那一份**、不動存著的歷史：加密內容 Berth 本來就比對不了，存著的照留，`external_texts` 不受影響；那幾頁讀到的已寫進那一輪的回答。不用既有的摘要壓縮：它保留最後兩輪，第二輪時第一輪原封不動，而且多一次模型呼叫。同一輪的搜尋照留。
+- **沒有網搜時的切段要 TMDB 各集播出日，`media.read_media` 給模型的那一份原本把逐集換成「狀態 → 集數範圍」、日期丟了**：補 `aired_blocks`（相鄰兩集隔超過 28 天就算另一段，`agent_tools.AIRING_GAP_DAYS`；一季裡停播一兩週不斷開）。
+- **真模型確認**（$0.121，研究 `docs/research/agent-sources-ab-2026-10-28.md`〈票 23d〉、逐字稿 `t23d-*.md`）：有網搜時三部 × 兩種接口範圍全對；OpenAI + Tavily 的 HxH 第一次 S1 漏標（貪婪之島跨 S01–S02），skill 補「一段跨兩季兩季都標」後重跑三季全標（逐字稿 `t23d-openai-hxh2011-before.md` / `t23d-openai-hxh2011.md`）。沒有網搜時三部每季都標「沒有網頁核對」，Re:Zero 明說季名憑記憶。
+- **長系列找種子那一輪**：照票面只跑到清單，沒有真模型量；由 `test_agent_web_search.py::TestEarlierSearchesLeaveTheContext` 與 `test_compaction.py::TestEarlierSearches` 守。清單那一輪的數字支持判斷：Anthropic 接口 Re:Zero 搜 1 次、5 次呼叫吃 245,821 input。
+- **AI 設定頁 playwright 實跑**（fake 後端 `healthy`，以 `skipper` 登入、選 OpenAI 相容）：Tavily 欄下讀回「OpenAI 相容接口沒有自己的網路搜尋。整部系列與評價需要網路搜尋，建議填 Tavily key；沒有的話，整部系列的每一季都會標「請確認」。」1280 與 390 截圖都看過（`.playwright-mcp/`，不進 repo）。
+- **code-review 未處理的發現**：
+  - `_aired_blocks` 與 `_compact_season` 各自過濾一次同一批集（判斷題，留著：合在一起反而讓 `_compact_season` 多管一件事）。
+  - 已存 Tavily key、在同一頁按「移除」之後，提示要重新整理才出現（影響小）。
+  - skill 裡「matched by title, please check」只寫英文、另兩種標記有中文（票 16 留下的寫法，模型照使用者語言翻，這次實跑都翻對）。
+  - `scripts/experiments/fribb_vs_chaining.py` 的說明還指著已刪的 `services/anilist.read_franchise`（保留的歷史實驗，不改）。
+  - skill 那句「TMDB moved one of that part's episodes to specials」是 review 後收窄的寫法（原本「任何一集在 specials」讓 OpenAI 對 Re:Zero 誤標），改後沒有重跑真模型。
+- **發版建議**（不發版、不 push）：`v0.4.0`。最近的 tag 是 `v0.3.0`，`[Unreleased]` 收的是 M5 整個 AI 側面板（新功能、加了 AI 設定），照 SemVer 0.x 升 minor。CHANGELOG 把 `## [Unreleased]` 那一段原樣改成 `## [0.4.0] - <發版日>`，其中「助理會推薦新番、整理整部系列（M5 票 16、23d）」那一條已是拿掉 Fribb 之後的寫法。

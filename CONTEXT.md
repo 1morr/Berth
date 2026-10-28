@@ -209,7 +209,7 @@ _Avoid_: method, rule, source
 _Avoid_: subtitle, part name
 
 **Franchise**（系列）:
-一部動畫在 AniList 上沿續集、前傳、外傳、總集篇這幾種關係連起來的全部條目（每一季、cour、OVA、劇場版；衍生作要問了才算），`anilist.read_franchise` 走出來的那一串。TMDB 常把其中好幾個併成一季，所以一個 Franchise 對到的是幾個 Media 與各自的季集範圍（`series-mapping`）。AniList 的「季」（`AnimeSeason`：冬春夏秋的播出季度）與 TMDB 的 Season 是兩件事。
+一部動畫的全部部分：每一季、cour、OVA、劇場版（總集篇、衍生作與短篇要問了才算），照播出順序排，`series-mapping` 從網頁的集數表（沒有網搜時從 TMDB 播出日的空檔）列出來（M5 票 23d 起不再走 AniList 的關係圖）。TMDB 常把其中好幾個併成一季，所以一個 Franchise 對到的是幾個 Media 與各自的季集範圍。AniList 的「季」（`AnimeSeason`：冬春夏秋的播出季度）與 TMDB 的 Season 是兩件事。
 _Avoid_: series（Series 在這裡是 RSS Series 與 TMDB 劇集）, collection（TMDB 的電影合集）
 
 **Cour**:
@@ -441,7 +441,7 @@ _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是�
 _Avoid_: run（run 是 pydantic-ai 的詞，表名沿用）, request（request 是一次模型呼叫）, reply
 
 **External Content**（外部內容）:
-側面板裡從 Berth 以外來、別人寫的字：網路搜尋回的網頁（伺服器端 `web_search` 與 Tavily，M5 票 17），以及社群編的動漫資料站（AniList、Bangumi 與 Fribb 的對照表，M5 票 16；`services.agent_tools.EXTERNAL_TOOLS`）。是資料，不是指令；`services.agent_origins.external_texts` 從存著的歷史把它收出來，確認卡據此判斷自由文字參數是不是出自它、在那幾格標「出自外部來源」（brief §14、M5 票 14）；寫入工具的 id 也不能只出自它。與 Existing service、Unmanaged 無關，程式碼裡不單用 `external` 指這兩者。
+側面板裡從 Berth 以外來、別人寫的字：網路搜尋回的網頁（伺服器端 `web_search` 與 Tavily，M5 票 17），以及社群編的動漫資料站（AniList 季表、Bangumi 放送表，M5 票 16；`services.agent_tools.EXTERNAL_TOOLS`）。是資料，不是指令；`services.agent_origins.external_texts` 從存著的歷史把它收出來，確認卡據此判斷自由文字參數是不是出自它、在那幾格標「出自外部來源」（brief §14、M5 票 14）；寫入工具的 id 也不能只出自它。與 Existing service、Unmanaged 無關，程式碼裡不單用 `external` 指這兩者。
 _Avoid_: untrusted input, web content, external（單用）
 **Continue**（繼續）:
 被防護停下的那一輪，使用者按一次「繼續」接著跑的新一輪（`ai_runs.continues` 指向它續的那一輪，M5 票 20）：歷史接著停下來的說明，防護的數字重新算。一條停下的鏈只續一次：續的那一輪再停下就不能再續；只有對話的最後一輪續得了。

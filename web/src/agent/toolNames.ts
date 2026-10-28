@@ -19,11 +19,8 @@ const TOOL_NAMES = {
   // 票 17：設了 Tavily key 才有；`web_search` 是 Anthropic 伺服器端那一種，不經登錄表。
   web_tavily_search: 'agent.tool.names.web_tavily_search',
   web_search: 'agent.tool.names.web_search',
-  // 票 16：推薦新番與整部系列。
-  anilist_search_anime: 'agent.tool.names.anilist_search_anime',
-  anilist_read_franchise: 'agent.tool.names.anilist_read_franchise',
+  // 票 16：推薦新番。
   anilist_read_season: 'agent.tool.names.anilist_read_season',
-  fribb_lookup_anime: 'agent.tool.names.fribb_lookup_anime',
   bgm_read_calendar: 'agent.tool.names.bgm_read_calendar',
   discover_read_trending: 'agent.tool.names.discover_read_trending',
 } as const

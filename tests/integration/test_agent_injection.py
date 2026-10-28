@@ -252,7 +252,7 @@ SPY_ANILIST = 140960
 
 
 def _anilist_title(_client: TestClient, factory: FakeClientFactory) -> Step:
-    """AniList 上的一個條目，日文標題是注入（社群編的資料站，票 16）。系列圖與季表也回它。"""
+    """AniList 季表上的一個條目，日文標題是注入（社群編的資料站，票 16）。"""
     entry = AnimeEntry(
         id=SPY_ANILIST,
         mal_id=None,
@@ -268,11 +268,9 @@ def _anilist_title(_client: TestClient, factory: FakeClientFactory) -> Step:
         genres=("Action",),
     )
     factory.anilist_ = FakeAniList(
-        known={SPY_ANILIST: entry},
-        found={"SPY×FAMILY": [entry]},
         seasons={(AnimeSeason.FALL, 2026): [entry]},
     )
-    return call("anilist_search_anime", query="SPY×FAMILY")
+    return call("anilist_read_season", season="FALL", year=2026)
 
 
 def _bgm_name(_client: TestClient, factory: FakeClientFactory) -> Step:
@@ -298,15 +296,14 @@ TORRENT_TITLE = InjectionEntry("torrent_title", "search_search_torrents", _torre
 FEED_ITEM = InjectionEntry("feed_item", "why_not_explain", _feed_item)
 MIKAN_PAGE = InjectionEntry("mikan_page", "bangumi_search_bangumi", _mikan_page)
 WEB_PAGE = InjectionEntry("web_page", "web_tavily_search", _web_page)
-ANILIST_TITLE = InjectionEntry("anilist_title", "anilist_search_anime", _anilist_title)
+ANILIST_TITLE = InjectionEntry("anilist_title", "anilist_read_season", _anilist_title)
 BGM_NAME = InjectionEntry("bgm_name", "bgm_read_calendar", _bgm_name)
 ENTRIES = (TORRENT_TITLE, FEED_ITEM, MIKAN_PAGE, WEB_PAGE, ANILIST_TITLE, BGM_NAME)
 
 #: 讀取工具裡，結果不是別人寫的字的（Berth 自己的資料：Route、skill 全文）。
 BERTHS_OWN = frozenset({"skills.load_skill", "media.route_choices", "routes.list_routes"})
 #: 讀取工具裡，結果帶別人寫的字、但守法走同一條路而不另外種注入的：TMDB 的簡介與標題（趨勢）、
-#: Job 的發佈名、Mikan 番組頁上的字幕組名、AniList 系列圖與季表的標題（與搜尋同一份資料，入口是
-#: `ANILIST_TITLE`）、Fribb 的對照（只有 id 與數字）。守法只看「出自哪一筆工具結果」，不看是哪一個
+#: Job 的發佈名、Mikan 番組頁上的字幕組名。守法只看「出自哪一筆工具結果」，不看是哪一個
 #: 工具。
 SAME_PATH = frozenset(
     {
@@ -316,9 +313,6 @@ SAME_PATH = frozenset(
         "jobs.list_jobs",
         "jobs.read_job_events",
         "bangumi.read_bangumi",
-        "anilist.read_franchise",
-        "anilist.read_season",
-        "fribb.lookup_anime",
     }
 )
 
@@ -739,10 +733,7 @@ READ_ARGS: dict[str, dict[str, object]] = {
     "routes.list_routes": {},
     "bangumi.search_bangumi": {"term": "SPY×FAMILY"},
     "bangumi.read_bangumi": {"bangumi_id": 4009},
-    "anilist.search_anime": {"query": "SPY×FAMILY"},
-    "anilist.read_franchise": {"anilist_id": SPY_ANILIST},
     "anilist.read_season": {"season": "FALL", "year": 2026},
-    "fribb.lookup_anime": {"anilist_ids": [SPY_ANILIST]},
     "bgm.read_calendar": {},
     "discover.read_trending": {},
 }

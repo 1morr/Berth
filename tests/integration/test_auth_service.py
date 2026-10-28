@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from berth.adapters.ai import AiEndpoint
 from berth.adapters.anilist import AniList
 from berth.adapters.bgm import Bgm
-from berth.adapters.fribb import AnimeIds
 from berth.adapters.http import ServiceUnavailableError
 from berth.adapters.indexer import IndexerSearch
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
@@ -92,9 +91,6 @@ class OneJellyfin:
 
     def anilist(self) -> AniList:
         raise AssertionError("login never asks AniList")
-
-    def anime_ids(self) -> AnimeIds:
-        raise AssertionError("login never maps anime ids")
 
     def bgm(self) -> Bgm:
         raise AssertionError("login never asks Bangumi")

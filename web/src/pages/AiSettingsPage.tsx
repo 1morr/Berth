@@ -316,6 +316,12 @@ function AiForm({ saved }: { saved: AiSettings }) {
                 ? 'settings.aiPage.key.placeholderSet'
                 : 'settings.aiPage.key.placeholder',
             )}
+            // OpenAI 相容接口沒有伺服器端搜尋：沒有 key 就整個沒有網搜（票 23d）。
+            hint={
+              provider === 'openai' && !saved.has_tavily_key && !tavily.trim()
+                ? t('settings.aiPage.search.needed')
+                : undefined
+            }
             onChange={(event) => {
               setTavily(event.target.value)
               setStatus(null)

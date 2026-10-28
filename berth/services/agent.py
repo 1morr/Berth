@@ -104,7 +104,12 @@ from berth.services.agent_tools import (
 )
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
-from berth.services.compaction import Summarizer, compact, context_fraction
+from berth.services.compaction import (
+    Summarizer,
+    compact,
+    context_fraction,
+    without_earlier_searches,
+)
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.jobs import JobRejectedError
 from berth.services.media import route_offer
@@ -1249,6 +1254,18 @@ async def _compact_history(
 
 
 @dataclass
+class _DropEarlierSearches(AbstractCapability[Turn]):
+    """送給模型的那一份拿掉前幾輪的伺服器端網搜（`compaction.without_earlier_searches`）。只改這一次
+    的請求、不改 `ctx.messages`：存著的歷史照留，`external_texts` 仍認得那幾輪讀過的網頁。"""
+
+    async def before_model_request(
+        self, ctx: RunContext[Turn], request_context: ModelRequestContext
+    ) -> ModelRequestContext:
+        request_context.messages = without_earlier_searches(request_context.messages)
+        return request_context
+
+
+@dataclass
 class _Guard(AbstractCapability[Turn]):
     """把每次模型呼叫與工具呼叫交給 `Turn` 的防護與記帳。"""
 
@@ -1421,8 +1438,14 @@ async def open_turn(
         output_type=[str, DeferredToolRequests],
         instructions=_instructions,
         toolsets=[_toolset(actor.role, tavily=tavily)],
-        # 壓縮在每次模型呼叫之前（`before_model_request`），記帳與防護包著呼叫本身。
-        capabilities=[ProcessHistory(_compact_history), _Guard(), *native],
+        # 壓縮與拿掉前幾輪的網搜在每次模型呼叫之前（`before_model_request`，照這個順序），記帳與
+        # 防護包著呼叫本身。
+        capabilities=[
+            ProcessHistory(_compact_history),
+            _DropEarlierSearches(),
+            _Guard(),
+            *native,
+        ],
         name="berth",
     )
     return Turn(

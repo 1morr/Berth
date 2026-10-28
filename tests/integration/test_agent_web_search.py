@@ -397,6 +397,48 @@ class TestExternalContent:
         assert "external content" in texts[1]
 
 
+def native_parts(messages: list[ModelMessage]) -> list[object]:
+    return [
+        part
+        for message in messages
+        for part in message.parts
+        if isinstance(part, NativeToolCallPart | NativeToolReturnPart)
+    ]
+
+
+class TestEarlierSearchesLeaveTheContext:
+    """票 23d：伺服器端 `web_search` 的結果（Anthropic 回的是整頁加密內容）每次呼叫都重送，長系列
+    在找種子那一輪撞過每輪 input 上限。下一輪起送給模型的歷史拿掉它，存著的歷史不動。"""
+
+    def test_the_next_reply_does_not_resend_earlier_search_results(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "anthropic")
+        script.steps = [
+            searched("Re:Zero list of episodes", then=ToolCallPart("jobs_list_jobs", {})),
+            say("Season 1 is 25 episodes."),
+            call("jobs_list_jobs"),
+            say("Nothing is downloading."),
+        ]
+        chat(client, "How do the seasons of Re:Zero line up?")
+        chat(client, "What is downloading?")
+
+        _, later_in_it, next_reply, later_in_next = script.seen
+        # 同一輪裡照留：模型還在讀那幾頁。
+        assert native_parts(later_in_it)
+        # 下一輪起不送；那一輪寫下的結論還在。
+        for seen in (next_reply, later_in_next):
+            assert not native_parts(seen)
+            assert any(
+                isinstance(part, TextPart) and "25 episodes" in part.content
+                for message in seen
+                for part in message.parts
+            )
+        # 存著的歷史不動：「出自外部來源」照樣認得那一輪讀過的網頁。
+        assert native_parts(history(client))
+        assert any(FRIEREN_URL in text for text in external_texts(history(client)))
+
+
 def tool_returns(messages: list[ModelMessage]) -> list[ToolReturnPart]:
     return [
         part
