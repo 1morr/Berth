@@ -17,10 +17,14 @@
   兩種接口都多 `web.tavily_search`；兩種共用每輪的次數上限。搜到的是外部內容（`external_texts`）。
 - **Skills**（票 19，`services.skills`）：instructions 只列這個人用得上的那幾份的名稱與描述，
   全文由工具 `skills.load_skill` 拿（漸進揭露）。
-- **停下來時**（防護、出錯、使用者關掉連線）：歷史留到最後一次模型呼叫之前那一段（每個工具呼叫都有
-  結果），後面接一則說明——哪一條、做到哪——用前端送來的介面語言寫（同 `services.notify` 照收件人
-  的語言組字）。下一輪的模型也看得到它。防護停下的（`CONTINUABLE`）可以「繼續」一次（`open_turn`
-  的 `continues`）。
+- **停下來時**（防護、出錯、按了停止、Berth 重新啟動）：歷史留到最後一次模型呼叫之前那一段（每個
+  工具呼叫都有結果），後面接一則說明——哪一條、做到哪——用前端送來的介面語言寫（同 `services.notify`
+  照收件人的語言組字）。下一輪的模型也看得到它。防護停下的（`CONTINUABLE`）可以「繼續」一次
+  （`open_turn` 的 `continues`）。
+- **一輪不綁在連線上**（M5 票 25，照 Vercel AI SDK 的 resumable streams）：一輪是 `AgentRuntime`
+  名下的 task，送出的片段放進 `agent_live.LiveTurn`，誰來看都從頭重播再跟著；斷線照跑完。停下只有
+  按了停止（`stop_turn`）與關機（`AgentRuntime.aclose`）；崩潰時在跑的由下一次啟動的
+  `close_interrupted` 收尾。
 
 **session**：串流開始時請求的 session 已經收掉，而開輪寫的兩列要在那之前落地，所以開輪、記帳、
 每次工具呼叫、存歷史都各自開一個（`sessions`），各自 commit。
@@ -28,13 +32,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 import time
 import uuid
 from collections import Counter
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any
@@ -89,11 +94,12 @@ from berth.domain import (
     ProposalStatus,
     Role,
 )
-from berth.models import AiConversation, AiRun, AiSettings, AiToolCall
+from berth.models import AiConversation, AiRun, AiSettings, AiToolCall, User
 from berth.models.types import utcnow
 from berth.services import proposals
 from berth.services.agent_books import call_row, elapsed_ms, plus
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
+from berth.services.agent_live import LiveTurn
 from berth.services.agent_origins import Origins
 from berth.services.agent_tools import (
     COMMAND_OF,
@@ -208,8 +214,8 @@ class Limits:
     context_window: int = 128_000
 
 
-#: 防護停下的這幾種，使用者可以按一次「繼續」（研究 C3）。出錯、斷路器、關掉連線的重新問就好；
-#: 斷路器開著的時候也開不了新的一輪。
+#: 防護停下的這幾種，使用者可以按一次「繼續」（研究 C3）。出錯、斷路器、按了停止、重新啟動的
+#: 重新問就好；斷路器開著的時候也開不了新的一輪。
 CONTINUABLE = frozenset(
     {
         AiStopReason.REQUEST_LIMIT,
@@ -268,22 +274,43 @@ class _ToolFailedError(Exception):
         self.payload = payload
 
 
-#: 佔了位子、串流卻一直沒開始的，這麼久之後當作沒人佔（秒）。
-STALE_CLAIM_SECONDS = 60.0
+#: 跑完的那一輪還留著重播多久（秒）：讀對話時說它還在跑、重連到的時候它剛好跑完，照樣接得上。
+LIVE_GRACE_SECONDS = 60.0
+
+
+#: 一輪的片段從哪來：拿到這一輪，給出串流（`api/agent.py` 的 UI message stream）。
+Chunks = Callable[["Turn"], AsyncGenerator[Any]]
+#: 被取消的那一輪最後送給還在看的人的片段：拿到停下的說明與停在哪。
+Ending = Callable[[str, "TurnStop"], Iterable[Any]]
 
 
 @dataclass(slots=True)
-class _Claim:
-    since: float
-    streaming: bool = False
+class _Running:
+    turn: Turn
+    # `Any`：片段的型別由 `api/agent.py` 決定，這裡只排隊。
+    live: LiveTurn[Any] = field(default_factory=LiveTurn)
+    #: 取消這一輪用它（收尾在它外面、擋住取消）。開 task 之前就建好：還沒開始跑就按停止也算數
+    #: （anyio 的 scope 在進去之前就被取消的話，一進去就取消）。
+    scope: anyio.CancelScope = field(default_factory=anyio.CancelScope)
+    task: asyncio.Task[None] | None = None
+    #: 被取消的話記成哪一種：按了停止是 `cancelled`，關機是 `interrupted`。
+    cancelled_as: AiStopReason = AiStopReason.INTERRUPTED
+    ended_at: float | None = None
+
+    def belongs_to(self, user_id: int) -> bool:
+        return self.turn.user_id == user_id
+
+    @property
+    def running(self) -> bool:
+        return self.task is not None and not self.task.done()
 
 
 class AgentRuntime:
-    """一個程序一份：防護的數字、provider 斷路器，與誰正在跑一輪（每人同時 1 輪）。
+    """一個程序一份：防護的數字、provider 斷路器、誰正在跑一輪（每人同時 1 輪），與在跑的那幾輪。
 
-    讓出位子的是串流的收尾（`Turn.close`）。回應沒送出去（commit 失敗、送出之前就斷線）時串流不會
-    開始、收尾也不會跑，所以還沒開始串流的位子 `STALE_CLAIM_SECONDS` 之後自己回來；開始了的佔到
-    收尾為止。
+    一輪是這裡名下的 task（`start`，M5 票 25）：不綁在送出訊息的那一條連線上，斷線照跑完；
+    來看的從 `live` 重播再跟著。只有 `stop`（使用者按了停止）與 `aclose`（關機）會取消它。位子佔到
+    task 收尾（`Turn.close`）為止。
     """
 
     def __init__(
@@ -296,24 +323,101 @@ class AgentRuntime:
         self.limits = limits or Limits()
         self.breaker = breaker or ProviderBreaker()
         self._clock = clock
-        self._claims: dict[int, _Claim] = {}
+        self._claims: set[int] = set()
+        self._running: dict[str, _Running] = {}
 
     def claim(self, user_id: int) -> None:
-        held = self._claims.get(user_id)
-        if held is not None and (
-            held.streaming or self._clock() - held.since < STALE_CLAIM_SECONDS
-        ):
+        if user_id in self._claims:
             raise AgentRefusedError(AgentRefusal.BUSY)
-        self._claims[user_id] = _Claim(self._clock())
-
-    def streaming(self, user_id: int) -> None:
-        """這一輪的串流開始了：位子佔到收尾為止。"""
-        held = self._claims.get(user_id)
-        if held is not None:
-            held.streaming = True
+        self._claims.add(user_id)
 
     def release(self, user_id: int) -> None:
-        self._claims.pop(user_id, None)
+        self._claims.discard(user_id)
+
+    def start(self, turn: Turn, chunks: Chunks, ending: Ending) -> LiveTurn[Any]:
+        """在自己的 task 上跑這一輪：`chunks(turn)` 的每一個放進 `live`，被取消時接上 `ending`
+        給的。
+
+        串流在 task 裡才組（組到一半出錯也照樣收尾、讓出位子）。同一段對話上一輪留著重播的那一份
+        換掉；過了 `LIVE_GRACE_SECONDS` 的都丟掉。
+        """
+        self._forget_old()
+        running = _Running(turn)
+        self._running[turn.conversation_id] = running
+        running.task = asyncio.create_task(
+            self._drive(running, chunks, ending), name=f"agent-turn-{turn.run_id}"
+        )
+        return running.live
+
+    async def _drive(self, running: _Running, chunks: Chunks, ending: Ending) -> None:
+        reason = AiStopReason.ERROR
+        stream: AsyncGenerator[Any] | None = None
+        try:
+            with running.scope:
+                stream = chunks(running.turn)
+                async for chunk in stream:
+                    running.live.push(chunk)
+            if running.scope.cancelled_caught:
+                reason = running.cancelled_as
+        except Exception:
+            # 串流本身壞了（不是模型出錯：那一種在串流裡就換成了停下的說明）。照樣收尾，不留半截。
+            logger.exception("agent turn %s failed", running.turn.run_id)
+        finally:
+            # 收尾擋住取消：`ai_runs` 不可以永遠像還在跑、這個人不可以永遠 `busy`。
+            with anyio.CancelScope(shield=True):
+                try:
+                    if stream is not None:
+                        await stream.aclose()
+                except Exception:
+                    logger.exception("agent turn %s did not close its stream", running.turn.run_id)
+                finally:
+                    closed = await running.turn.close(reason)
+                    if closed is not None:
+                        for chunk in ending(*closed):
+                            running.live.push(chunk)
+                    running.live.end()
+                    running.ended_at = self._clock()
+
+    def live(self, conversation_id: str, turn_id: str, user_id: int) -> LiveTurn[Any] | None:
+        """這個人的這一輪還在跑、或剛跑完還留著重播的話，它的片段。"""
+        self._forget_old()
+        running = self._running.get(conversation_id)
+        if running is None or running.turn.run_id != turn_id or not running.belongs_to(user_id):
+            return None
+        return running.live
+
+    async def stop(self, conversation_id: str, user_id: int) -> None:
+        """取消這段對話正在跑的那一輪、等它收尾。沒有在跑的：`not_running`。
+
+        剛好在收尾的那一輪（答完、存著歷史）取消不到它：照它自己的結果收，這裡照樣算停好了。
+        """
+        running = self._running.get(conversation_id)
+        if running is None or not running.running or not running.belongs_to(user_id):
+            raise AgentRefusedError(AgentRefusal.NOT_RUNNING, conversation_id)
+        assert running.task is not None
+        running.cancelled_as = AiStopReason.CANCELLED
+        running.scope.cancel()
+        await asyncio.wait({running.task})
+
+    async def aclose(self) -> None:
+        """關機：還在跑的每一輪記成 `interrupted`、存到停下之前。
+
+        lifespan 在收掉 engine 之前叫。uvicorn 關機時先等開著的連線收掉，所以有人跟著看的那一輪多半
+        自己跑完；等不到就被強制結束的，由下一次啟動的 `close_interrupted` 收。
+        """
+        tasks = []
+        for running in self._running.values():
+            if running.running and running.task is not None:
+                running.scope.cancel()
+                tasks.append(running.task)
+        if tasks:
+            await asyncio.wait(tasks)
+
+    def _forget_old(self) -> None:
+        now = self._clock()
+        for key, running in list(self._running.items()):
+            if running.ended_at is not None and now - running.ended_at > LIVE_GRACE_SECONDS:
+                del self._running[key]
 
 
 def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
@@ -1109,10 +1213,6 @@ class Turn:
 
     # ---------------------------------------------------------------- 收尾
 
-    def started(self) -> None:
-        """串流開始了：這個人的那一輪佔到收尾為止。"""
-        self.runtime.streaming(self.user_id)
-
     async def completed(self, result: AgentRunResult[str | DeferredToolRequests]) -> None:
         """模型答完，或停在確認卡上：存整份歷史（`on_complete`）。卡片的呼叫留在結尾、沒有結果。"""
         reason = (
@@ -1131,16 +1231,21 @@ class Turn:
         await self._finish(self._kept(note), reason, detail)
         return note, TurnStop.of(self.run_id, reason, self.continues)
 
-    async def close(self) -> None:
-        """串流結束（不論怎麼結束）。沒收尾的是使用者關掉了連線。一定讓出這個人的那一輪。"""
+    async def close(self, reason: AiStopReason) -> tuple[str, TurnStop] | None:
+        """這一輪的 task 收尾（`AgentRuntime._drive`，不論怎麼結束），一定讓出這個人的那一輪。
+
+        還沒收尾的是被取消了（`reason`：按了停止 `cancelled`、關機 `interrupted`）或串流本身壞了
+        （`error`）：存到停下之前、補一則說明，回說明的字與停在哪，給還在看的人。已經收尾的回
+        `None`。
+        呼叫的人要擋住取消（`AgentRuntime._drive`）。
+        """
         try:
-            # 關掉連線時 Starlette 取消整個串流的 scope：不擋住的話第一個 await 就被取消，
-            # `ai_runs` 永遠像還在跑。
-            with anyio.CancelScope(shield=True):
-                if not self.finished:
-                    await self._settle_call(str(AiStopReason.CANCELLED))
-                    note = self._note(AiStopReason.CANCELLED)
-                    await self._finish(self._kept(note), AiStopReason.CANCELLED, "")
+            if self.finished:
+                return None
+            await self._settle_call(str(reason))
+            note = self._note(reason)
+            await self._finish(self._kept(note), reason, "")
+            return note, TurnStop.of(self.run_id, reason, self.continues)
         finally:
             self.runtime.release(self.user_id)
 
@@ -1164,39 +1269,63 @@ class Turn:
         self, messages: Sequence[ModelMessage], reason: AiStopReason, error: str
     ) -> None:
         self.finished = True
-        async with self.sessions() as session:
-            conversation = await session.get_one(AiConversation, self.conversation_id)
-            conversation.history_json = ModelMessagesTypeAdapter.dump_json(list(messages)).decode()
-            conversation.updated_at = utcnow()
-            run = await session.get_one(AiRun, self.run_id)
-            run.stop_reason, run.error, run.ended_at = reason, error, utcnow()
-            await session.commit()
+        # 按了停止剛好落在這裡：等它寫完（歷史與停止原因同一個 commit），取消在之後才生效。
+        with anyio.CancelScope(shield=True):
+            async with self.sessions() as session:
+                conversation = await session.get_one(AiConversation, self.conversation_id)
+                conversation.history_json = ModelMessagesTypeAdapter.dump_json(
+                    list(messages)
+                ).decode()
+                conversation.updated_at = utcnow()
+                run = await session.get_one(AiRun, self.run_id)
+                run.stop_reason, run.error, run.ended_at = reason, error, utcnow()
+                await session.commit()
 
     def _note(self, reason: AiStopReason) -> str:
-        text = _NOTES[self.language]
-        names = ", ".join(dict.fromkeys(self.commands_run))
-        done = text["done"].format(
+        return stop_text(
+            self.language,
+            reason,
+            self.runtime,
             requests=self.requests,
-            tools=self.tool_calls,
-            # 英文分單複數；中文的量詞不變。沒有工具時不印空括號。
-            calls="call" if self.requests == 1 else "calls",
-            tool_calls="call" if self.tool_calls == 1 else "calls",
-            names=text["names"].format(names=names) if names else "",
+            tool_calls=self.tool_calls,
+            commands=self.commands_run,
         )
-        why = text[reason].format(
-            requests=self.runtime.limits.requests,
-            input=self.runtime.limits.input_tokens,
-            output=self.runtime.limits.output_tokens,
-            repeats=self.runtime.limits.abort_at,
-            stale=self.runtime.limits.stale_steps,
-            failures=self.runtime.breaker.threshold,
-            minutes=int(self.runtime.breaker.pause.total_seconds() // 60),
-        )
-        # 中文句子之間不夾空格。
-        return f"{why}{text['join']}{done}"
 
     def _masked(self, text: str) -> str:
         return text.replace(self.secret, _MASK) if self.secret else text
+
+
+def stop_text(
+    language: Language,
+    reason: AiStopReason,
+    runtime: AgentRuntime,
+    *,
+    requests: int,
+    tool_calls: int,
+    commands: Sequence[str],
+) -> str:
+    """停下來的說明：哪一條、做到哪（`commands` 是叫過的登錄表名字，照順序、可重複）。"""
+    text = _NOTES[language]
+    names = ", ".join(dict.fromkeys(commands))
+    done = text["done"].format(
+        requests=requests,
+        tools=tool_calls,
+        # 英文分單複數；中文的量詞不變。沒有工具時不印空括號。
+        calls="call" if requests == 1 else "calls",
+        tool_calls="call" if tool_calls == 1 else "calls",
+        names=text["names"].format(names=names) if names else "",
+    )
+    why = text[reason].format(
+        requests=runtime.limits.requests,
+        input=runtime.limits.input_tokens,
+        output=runtime.limits.output_tokens,
+        repeats=runtime.limits.abort_at,
+        stale=runtime.limits.stale_steps,
+        failures=runtime.breaker.threshold,
+        minutes=int(runtime.breaker.pause.total_seconds() // 60),
+    )
+    # 中文句子之間不夾空格。
+    return f"{why}{text['join']}{done}"
 
 
 #: 停止原因裡是出錯的：`ai_runs.error` 留原文。
@@ -1221,7 +1350,8 @@ _NOTES: dict[Language, dict[str, str]] = {
         AiStopReason.CIRCUIT_OPEN: (
             "這一輪停下來了：AI 服務連續 {failures} 次出錯，先暫停 {minutes} 分鐘，之後再試。"
         ),
-        AiStopReason.CANCELLED: "這一輪停下來了：連線被關掉。",
+        AiStopReason.CANCELLED: "這一輪停下來了：你按了停止。",
+        AiStopReason.INTERRUPTED: "這一輪停下來了：Berth 重新啟動，這一輪沒跑完。",
         "done": "已做：{requests} 次模型呼叫、{tools} 次工具呼叫{names}。",
         "names": "（{names}）",
         "join": "",
@@ -1250,7 +1380,8 @@ _NOTES: dict[Language, dict[str, str]] = {
             "This reply was stopped: the AI service failed {failures} times in a row, so it is "
             "paused for {minutes} minutes before Berth tries again."
         ),
-        AiStopReason.CANCELLED: "This reply was stopped: the connection was closed.",
+        AiStopReason.CANCELLED: "This reply was stopped: you pressed Stop.",
+        AiStopReason.INTERRUPTED: ("This reply was stopped: Berth restarted before it finished."),
         "done": "Done so far: {requests} model {calls}, {tools} tool {tool_calls}{names}.",
         "names": " ({names})",
         "join": " ",
@@ -1402,6 +1533,31 @@ async def open_turn(
         endpoint = current_endpoint(settings)
         if (pause := runtime.breaker.paused(endpoint)) is not None:
             raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
+        # 模型與 agent 在佔位子、寫兩列之前組好：之後到起 task 之間沒有會失敗的步驟（M5 票 25）。
+        model: Model = factory.ai(endpoint)
+        tavily = bool(settings.tavily_api_key)
+        native: list[AbstractCapability[Turn]] = native_web_search(
+            settings.provider,
+            SEARCH_DOMAINS,
+            runtime.limits.web_searches,
+            lambda turn: turn.searches_left() > 0,
+        )
+        agent: Agent[Turn, str | DeferredToolRequests] = Agent(
+            model,
+            deps_type=Turn,
+            output_type=[str, DeferredToolRequests],
+            instructions=_instructions,
+            toolsets=[_toolset(actor.role, tavily=tavily)],
+            # 壓縮與拿掉前幾輪的網搜在每次模型呼叫之前（`before_model_request`，照這個順序），記帳與
+            # 防護包著呼叫本身。
+            capabilities=[
+                ProcessHistory(_compact_history),
+                _DropOldSearches(),
+                _Guard(),
+                *native,
+            ],
+            name="berth",
+        )
         run_id = uuid.uuid4().hex
         runtime.claim(actor.user_id)
         try:
@@ -1416,7 +1572,14 @@ async def open_turn(
                 history = [*history, ModelRequest(parts=closing)]
                 await proposals.detach(session, executor.hub, conversation_id)
             if conversation is None:
-                session.add(AiConversation(id=conversation_id, user_id=actor.user_id))
+                conversation = AiConversation(id=conversation_id, user_id=actor.user_id)
+                session.add(conversation)
+            # 在跑的時候讀對話（重新整理頁面）看到的是這一輪開始前的樣子加上這一則：重連的串流從頭
+            # 重播，剛好接在後面（M5 票 25）。這一輪收尾時整份換掉。
+            prompt = None if text is None else ModelRequest(parts=[UserPromptPart(text)])
+            started = [*history, *([prompt] if prompt is not None else [])]
+            conversation.history_json = ModelMessagesTypeAdapter.dump_json(started).decode()
+            conversation.updated_at = utcnow()
             session.add(
                 AiRun(
                     id=run_id,
@@ -1435,30 +1598,6 @@ async def open_turn(
             if continues is not None and isinstance(exc, IntegrityError):
                 raise AgentRefusedError(AgentRefusal.NOT_CONTINUABLE, continues) from exc
             raise
-    model: Model = factory.ai(endpoint)
-    tavily = bool(settings.tavily_api_key)
-    native: list[AbstractCapability[Turn]] = native_web_search(
-        settings.provider,
-        SEARCH_DOMAINS,
-        runtime.limits.web_searches,
-        lambda turn: turn.searches_left() > 0,
-    )
-    agent: Agent[Turn, str | DeferredToolRequests] = Agent(
-        model,
-        deps_type=Turn,
-        output_type=[str, DeferredToolRequests],
-        instructions=_instructions,
-        toolsets=[_toolset(actor.role, tavily=tavily)],
-        # 壓縮與拿掉前幾輪的網搜在每次模型呼叫之前（`before_model_request`，照這個順序），記帳與
-        # 防護包著呼叫本身。
-        capabilities=[
-            ProcessHistory(_compact_history),
-            _DropOldSearches(),
-            _Guard(),
-            *native,
-        ],
-        name="berth",
-    )
     return Turn(
         runtime=runtime,
         sessions=sessions,
@@ -1471,7 +1610,7 @@ async def open_turn(
         endpoint=endpoint,
         continues=continues,
         history=history,
-        prompt=None if text is None else ModelRequest(parts=[UserPromptPart(text)]),
+        prompt=prompt,
         language=language,
         agent=agent,
         model=model,
@@ -1515,6 +1654,9 @@ class ConversationView:
     #: 「繼續」只接最後一輪
     #: （`_check_continuable`）。側面板照它把停下的說明畫成「停下」與「繼續」。
     stops: Mapping[str, TurnStop]
+    #: 正在跑的那一輪的 id（`stop_reason` 還是 `NULL`，M5 票 25）；`history` 是它開始前的樣子加上
+    #: 那一則使用者訊息，側面板接著重連它的串流。沒有在跑的是 `None`。
+    running: str | None = None
 
 
 # 讀自己的對話（重新載入側面板）。一般使用者也行：只讀得到自己的。
@@ -1540,7 +1682,73 @@ async def read_conversation(
             continue
         last = index == len(runs) - 1
         stops[run.id] = stop if last else replace(stop, continuable=False)
-    return ConversationView(history=tuple(load_history(conversation.history_json)), stops=stops)
+    # 歷史與停止原因是同一個 commit 寫的（`Turn._finish`），所以這裡讀到的兩者一致。
+    running = runs[-1].id if runs and runs[-1].stop_reason is None else None
+    return ConversationView(
+        history=tuple(load_history(conversation.history_json)), stops=stops, running=running
+    )
+
+
+# 開輪之後起它的 task（M5 票 25）：之後的模型呼叫花掉的 token 回不來，同 `open_turn`。收 runtime 與
+# 函式，不是工具。
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL})
+async def start_turn(
+    runtime: AgentRuntime, turn: Turn, chunks: Chunks, ending: Ending
+) -> LiveTurn[Any]:
+    """`open_turn` 開的這一輪在伺服器的 task 上跑到完，不綁在送出訊息的那一條連線上。回它的片段，
+    給這個請求與之後重連的人跟著看（`AgentRuntime.start`）。"""
+    return runtime.start(turn, chunks, ending)
+
+
+# 按了停止（M5 票 25）：那一輪回不來，花掉的 token 也是。收 runtime，不是工具。
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL})
+async def stop_turn(runtime: AgentRuntime, conversation_id: str, *, user_id: int) -> None:
+    """停下這段對話正在跑的那一輪，等它存好停下的說明（`cancelled`）。跟著看的串流都收到那一則。
+
+    沒有在跑的、不是這個人的：`not_running`。
+    """
+    await runtime.stop(conversation_id, user_id)
+
+
+# 只在啟動時跑（`main.py`），同 `jobs.fail_interrupted`。記成停下就回不去。
+@command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL})
+async def close_interrupted(session: AsyncSession, runtime: AgentRuntime) -> int:
+    """上一次程序沒收尾就結束（崩潰）時還在跑的每一輪，記成 `interrupted`。回傳幾輪。
+
+    **只在啟動時跑**（迴圈與 API 都還沒起來）：那一刻 `stop_reason` 還是 `NULL` 的一定是被打斷的；
+    正常關機的已經由 `AgentRuntime.aclose` 收好了。歷史停在開輪時存的那一份（之前的歷史加上那一則
+    使用者訊息，`open_turn`），後面接一則說明，語言照那個人的通知語言（介面語言只在請求裡）；做到哪
+    照 `ai_runs` 的合計與 `ai_tool_calls`。恢復那一輪停在卡片的呼叫上，後面接不了東西，同
+    `Turn._kept` 只記停止原因。壓縮的摘要那一列只記停止原因。
+    """
+    found = list(await session.scalars(select(AiRun).where(AiRun.stop_reason.is_(None))))
+    for run in found:
+        run.stop_reason, run.ended_at = AiStopReason.INTERRUPTED, utcnow()
+        if run.kind is not AiRunKind.CHAT:
+            continue
+        conversation = await session.get_one(AiConversation, run.conversation_id)
+        history = load_history(conversation.history_json)
+        if pending_calls(history):
+            continue
+        user = await session.get_one(User, run.user_id)
+        commands = await session.scalars(
+            select(AiToolCall.command).where(AiToolCall.run_id == run.id).order_by(AiToolCall.id)
+        )
+        note = stop_text(
+            user.notify_language,
+            AiStopReason.INTERRUPTED,
+            runtime,
+            requests=run.requests,
+            tool_calls=run.tool_calls,
+            commands=list(commands),
+        )
+        response = ModelResponse(parts=[TextPart(note)], model_name=NOTE_MODEL, run_id=run.id)
+        conversation.history_json = ModelMessagesTypeAdapter.dump_json(
+            [*history, response]
+        ).decode()
+        conversation.updated_at = utcnow()
+    await session.commit()
+    return len(found)
 
 
 @dataclass(frozen=True, slots=True)

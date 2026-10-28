@@ -35,7 +35,7 @@ from berth.domain import Actor, AgentRefusal, AiToolOutcome, JobState, JobTrigge
 from berth.main import create_app
 from berth.models import AiRun, AiToolCall, Job, User
 from berth.services import proposals
-from berth.services.agent import STALE_CLAIM_SECONDS, AgentRefusedError, AgentRuntime
+from berth.services.agent import AgentRefusedError, AgentRuntime
 from berth.services.agent_guards import ProviderBreaker
 from berth.services.events import EventHub
 from berth.services.skills import list_skills
@@ -431,8 +431,8 @@ class TestCompactHoldsTheTurn:
         tried: list[AgentRefusal | None] = []
 
         def slow(_m: list[ModelMessage], _i: AgentInfo) -> ModelResponse:
-            # 摘要寫了比「佔了位子卻沒開始」的寬限還久。
-            now[0] += STALE_CLAIM_SECONDS + 1
+            # 摘要寫得再久，位子都佔到壓完為止。
+            now[0] += 3600
             try:
                 runtime.claim(OWNER_ID)
                 tried.append(None)

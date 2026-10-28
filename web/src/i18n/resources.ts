@@ -4232,6 +4232,7 @@ const zhHant = {
       circuit_open: 'provider 連續失敗，暫停中',
       error: '模型或 provider 出錯',
       cancelled: '使用者停止',
+      interrupted: 'Berth 重新啟動時中斷',
       running: '還在跑',
     },
     outcome: {
@@ -4256,6 +4257,7 @@ const zhHant = {
         stopped: '停下',
         failed: '出錯',
         cancelled: '已停止',
+        interrupted: '中斷',
         running: '進行中',
       },
       summary: {
@@ -8440,6 +8442,7 @@ const en: Translations<typeof zhHant> = {
       circuit_open: 'Provider kept failing; paused',
       error: 'Model or provider error',
       cancelled: 'Stopped by the user',
+      interrupted: 'Cut off by a Berth restart',
       running: 'Still running',
     },
     outcome: {
@@ -8464,6 +8467,7 @@ const en: Translations<typeof zhHant> = {
         stopped: 'Stopped',
         failed: 'Error',
         cancelled: 'Cancelled',
+        interrupted: 'Interrupted',
         running: 'Running',
       },
       summary: {

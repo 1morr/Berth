@@ -26,6 +26,7 @@ const REASONS: ReasonSet<AgentRefusal> = {
   not_continuable: true,
   unknown_command: true,
   slash_command: true,
+  not_running: true,
 }
 
 export function agentRefusalOf(error: unknown): Refusal<AgentRefusal> | null {
@@ -62,20 +63,28 @@ export function stopOf(part: { type: string; data?: unknown }): TurnStop | null 
 }
 
 /**
- * 一段對話存著的訊息（`useChat` 的 `UIMessage`）。沒有這段（第一次用、換了帳號、被清掉）是 `null`：
- * 面板就從空的開始，不當成錯誤。
+ * 一段對話存著的樣子：訊息（`useChat` 的 `UIMessage`），與正在跑的那一輪（M5 票 25）。
+ * `running` 不是 `null` 時，`messages` 是那一輪開始前的樣子加上那一則使用者訊息，接著重連它的串流。
+ */
+export interface StoredConversation {
+  messages: UIMessage[]
+  running: string | null
+}
+
+/**
+ * 讀一段對話。沒有這段（第一次用、換了帳號、被清掉）是 `null`：面板就從空的開始，不當成錯誤。
  */
 export async function readConversation(
   id: string,
   signal?: AbortSignal,
-): Promise<UIMessage[] | null> {
+): Promise<StoredConversation | null> {
   try {
     const found = await apiGet<Schemas['ConversationOut']>(
       `/agent/conversations/${encodeURIComponent(id)}`,
       { signal },
     )
     // 形狀由後端的 pydantic-ai `dump_messages(sdk_version=7)` 決定，就是 ai 7 的 `UIMessage`。
-    return found.messages as unknown as UIMessage[]
+    return { messages: found.messages as unknown as UIMessage[], running: found.running }
   } catch (error) {
     if (agentRefusalOf(error)?.reason === 'conversation_missing') return null
     throw error
@@ -83,9 +92,26 @@ export async function readConversation(
 }
 
 /**
+ * 按了「停止」（M5 票 25）：伺服器停下那一輪、存好說明才回；說明經還開著的串流送到。
+ * 沒有在跑的是 `not_running`（剛好答完，或還沒開始）。
+ */
+export function stopTurn(conversationId: string): Promise<void> {
+  return apiPost<void>(`/agent/conversations/${encodeURIComponent(conversationId)}/stop`)
+}
+
+/** `resumeStream` 的 `metadata`：要接哪一輪。 */
+export interface ResumeMetadata {
+  turn: string
+}
+
+/**
  * `useChat` 的傳輸：只送最後一則（plan §11.6〈串流〉），帶介面語言（停下來的說明照它寫），
  * 失敗時丟出與其餘 API 同一種 `ApiError`——畫面才分得出 `busy` 與 `ai_disabled`。
  * `sendMessage` 的 `body`（按「繼續」時的 `continues`）併進去。
+ *
+ * **重連**（Vercel AI SDK 的 resumable streams，M5 票 25）：`chat.resumeStream({ metadata: { turn } })`
+ * 打 `GET /agent/conversations/{id}/stream?turn=<id>`。還在跑的從頭重播（`resumeStreamIsReplay`），
+ * 沒有在跑的是 204，`Chat` 回到 `ready`。
  */
 export function agentTransport(language: () => string) {
   return new DefaultChatTransport<UIMessage>({
@@ -101,9 +127,18 @@ export function agentTransport(language: () => string) {
         language: language(),
       },
     }),
+    prepareReconnectToStreamRequest: ({ id, requestMetadata }) => {
+      const { turn } = requestMetadata as ResumeMetadata
+      return {
+        api: `/api/agent/conversations/${encodeURIComponent(id)}/stream?turn=${encodeURIComponent(turn)}`,
+      }
+    },
     fetch: async (input, init) => {
       const response = await fetch(input, init)
-      if (!response.ok) throw await responseError('POST', '/agent/chat', response)
+      if (!response.ok) {
+        const path = new URL(String(input), window.location.origin).pathname.replace(/^\/api/, '')
+        throw await responseError(init?.method ?? 'GET', path, response)
+      }
       return response
     },
   })

@@ -30,6 +30,8 @@ import {
   runSlashCommand,
   slashMatches,
   stopOf,
+  stopTurn,
+  type ResumeMetadata,
   type SlashName,
   type SlashResult,
   type TurnStop,
@@ -60,16 +62,23 @@ import { ToolCall } from './ToolCall'
  *
  * **`Chat` 放在查詢快取裡**（`staleTime` / `gcTime` 無限）：面板跟著每一頁的 `AppShell` 重掛，
  * 換頁時還在串流的那一輪要接得上，所以同一個 id 永遠拿回同一份 `Chat`，而不是重建一份。
+ *
+ * **重新整理、關掉分頁再回來**（M5 票 25）：那一輪在伺服器上照跑。讀到的對話說它還在跑，就重連它的串流
+ * 接著畫（`follow`）。
  */
 export function Conversation({ conversationId }: { conversationId: string }) {
   const chat = useQuery({
     queryKey: ['agent', 'chat', conversationId],
-    queryFn: async ({ signal }) =>
-      new Chat<UIMessage>({
+    queryFn: async ({ signal }) => {
+      const stored = await readConversation(conversationId, signal)
+      const created = new Chat<UIMessage>({
         id: conversationId,
-        messages: (await readConversation(conversationId, signal)) ?? [],
+        messages: stored?.messages ?? [],
         transport: agentTransport(() => i18n.language),
-      }),
+      })
+      if (stored?.running) void follow(created, stored.running)
+      return created
+    },
     staleTime: Infinity,
     gcTime: Infinity,
     // `Chat` 是一個活的物件，不是資料：不要逐欄比對、合併它。
@@ -82,11 +91,19 @@ export function Conversation({ conversationId }: { conversationId: string }) {
 }
 
 /**
- * 按「停止」之後等伺服器存下說明：它在連線關掉時收尾（`Turn.close`），平常幾十毫秒；最多等兩秒，
- * 等不到就算了（重新載入時照樣看得到）。
+ * 接上伺服器上正在跑的那一輪：重連它的串流（從頭重播、跟到答完），答完再讀一次存著的那一份——重連與讀對話
+ * 之間它剛好跑完的話，串流是 204，畫面要從歷史補上。這段時間使用者又送了一則的話不蓋掉。
  */
-const STOP_NOTE_TRIES = 8
-const STOP_NOTE_WAIT_MS = 250
+async function follow(chat: Chat<UIMessage>, turn: string) {
+  await chat.resumeStream({ metadata: { turn } satisfies ResumeMetadata })
+  if (chat.status !== 'ready') return
+  const before = chat.lastMessage?.id
+  const fresh = await readConversation(chat.id).catch(() => null)
+  if (fresh === null || chat.status !== 'ready' || chat.lastMessage?.id !== before) return
+  chat.messages = fresh.messages
+  // 另一個分頁在這之間又開了一輪：接著跟。
+  if (fresh.running !== null && fresh.running !== turn) await follow(chat, fresh.running)
+}
 
 /**
  * 送不出去的那一則：後端說不行的理由，或請求本身為什麼沒成。`restored`：打的字放回輸入欄了
@@ -117,8 +134,6 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   const [running, setRunning] = useState(false)
   // 按過「繼續」、伺服器說不能續的那幾輪：收掉按鈕。
   const [spent, setSpent] = useState<ReadonlySet<string>>(new Set())
-  // 使用者按了「停止」：串流斷了之後，接回伺服器存下的那則說明。
-  const stopping = useRef(false)
   // 提示清單：上下鍵移到哪一列；按了 Esc 就收起，改字才再出現。
   const [active, setActive] = useState(0)
   const [hintClosed, setHintClosed] = useState(false)
@@ -177,13 +192,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
    * 拿掉；打的字放回輸入欄。
    */
   async function send(text: string, continues?: string) {
-    stopping.current = false
     await sendMessage({ text }, continues === undefined ? undefined : { body: { continues } })
-    if (stopping.current) {
-      stopping.current = false
-      await pickUpStopNote()
-      return
-    }
     const error = chat.error
     if (error === undefined) return
     clearError()
@@ -202,30 +211,25 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   }
 
   /**
-   * 按了「停止」之後：連線一關，伺服器存下「連線被關掉」那則說明（`Turn.close`），串流裡已經送不到。
-   * 接回存著的那一份，畫面才與重新載入之後一樣。收尾在伺服器那邊是非同步的，等它一下，等不到就算了。
+   * 按了「停止」（M5 票 25）：請伺服器停下那一輪。停下的說明經這一條串流送到，串流跟著結束。伺服器說沒有在跑
+   * （還沒開始、剛好答完）或請求沒成，就只收掉這一頁的串流。
    */
-  async function pickUpStopNote() {
-    const turn = runIdOf(chat.lastMessage)
-    // 還沒收到這一輪的 id（`start` 之前就按了）：已經畫著的那幾則說明不是這一輪的。
-    const shown = new Set(
-      chat.messages.flatMap((message) => message.parts.map(stopOf)).map((found) => found?.turn_id),
-    )
-    for (let tries = 0; tries < STOP_NOTE_TRIES; tries++) {
-      const fresh = await readConversation(chat.id).catch(() => null)
-      const last = fresh?.at(-1)
-      const stop = last?.parts.map(stopOf).find((found) => found !== null)
-      if (fresh && stop && (turn === null ? !shown.has(stop.turn_id) : stop.turn_id === turn)) {
-        setMessages(fresh)
-        return
-      }
-      await new Promise((resolve) => setTimeout(resolve, STOP_NOTE_WAIT_MS))
+  async function onStop() {
+    try {
+      await stopTurn(chat.id)
+    } catch {
+      void stop()
     }
   }
 
-  function stopTurn() {
-    stopping.current = true
-    void stop()
+  /**
+   * 另一個分頁正在答（`busy`）：接回伺服器的對話，跟上那一輪。
+   */
+  async function catchUp() {
+    const fresh = await readConversation(chat.id).catch(() => null)
+    if (fresh?.running == null) return
+    setMessages(fresh.messages)
+    void follow(chat, fresh.running)
   }
 
   /** 送不出去的那一次（訊息、恢復或指令）：後端說不行的理由各有去處，其餘照請求為什麼沒成說。 */
@@ -244,8 +248,10 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       // 面板頂上那一塊說暫停到幾點（`AgentPanel`）。
       void queryClient.invalidateQueries({ queryKey: agentStatusQueryOptions.queryKey })
     }
-    if (refusal?.reason === 'busy') setFailure({ kind: 'busy', restored })
-    else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused', restored })
+    if (refusal?.reason === 'busy') {
+      setFailure({ kind: 'busy', restored })
+      await catchUp()
+    } else if (refusal?.reason === 'ai_paused') setFailure({ kind: 'paused', restored })
     else if (refusal?.reason === 'unknown_command')
       setFailure({ kind: 'unknown', word: refusal.detail, restored })
     else setFailure({ kind: 'request', error, restored })
@@ -263,7 +269,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
       let after = messages.length
       if (result.command === 'compact' && result.after !== null) {
         // 伺服器換掉了歷史：接回壓縮後的那一份，舊的指令結果跟著不在了。
-        const fresh = (await readConversation(chat.id)) ?? []
+        const fresh = (await readConversation(chat.id))?.messages ?? []
         setMessages(fresh)
         setOutputs([])
         after = fresh.length
@@ -442,7 +448,7 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
             className="grid w-32"
           >
             {streaming ? (
-              <GhostButton type="button" onClick={stopTurn}>
+              <GhostButton type="button" onClick={() => void onStop()}>
                 {t('agent.stop')}
               </GhostButton>
             ) : (

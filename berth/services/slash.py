@@ -203,8 +203,6 @@ async def _compact(call: _Call) -> Compacted:
         raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
     # 佔住這個人的那一輪：壓縮時開不了新的一輪，壓完存回去的才不會蓋掉它的回覆。
     call.runtime.claim(call.user_id)
-    # 摘要可能比 `STALE_CLAIM_SECONDS` 久：標成進行中，位子佔到 `release` 為止（同串流開始的一輪）。
-    call.runtime.streaming(call.user_id)
     try:
         async with call.sessions() as session:
             history = await _history(session, call.conversation_id, call.user_id)

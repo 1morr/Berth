@@ -24,7 +24,6 @@ from pydantic_ai.messages import (
 from berth.adapters.ai import chat_settings
 from berth.domain import AiProvider, Role
 from berth.services.agent import (
-    STALE_CLAIM_SECONDS,
     AgentRefusedError,
     AgentRuntime,
     card_model,
@@ -144,29 +143,6 @@ class TestOneTurnAtATime:
         runtime.claim(2)
         runtime.release(1)
         runtime.claim(1)
-
-    def test_a_claim_whose_stream_never_started_frees_itself(self) -> None:
-        """佔了位子、回應卻沒送出去（commit 失敗、送出前就斷線）。
-
-        串流的收尾不會跑，位子要自己回來。
-        """
-        now = [100.0]
-        runtime = AgentRuntime(clock=lambda: now[0])
-        runtime.claim(1)
-        now[0] += STALE_CLAIM_SECONDS - 1
-        with pytest.raises(AgentRefusedError):
-            runtime.claim(1)
-        now[0] += 2
-        runtime.claim(1)
-
-    def test_a_streaming_turn_holds_its_claim_however_long_it_runs(self) -> None:
-        now = [100.0]
-        runtime = AgentRuntime(clock=lambda: now[0])
-        runtime.claim(1)
-        runtime.streaming(1)
-        now[0] += STALE_CLAIM_SECONDS * 10
-        with pytest.raises(AgentRefusedError):
-            runtime.claim(1)
 
 
 def test_every_call_caps_its_output_and_anthropic_marks_what_to_cache() -> None:

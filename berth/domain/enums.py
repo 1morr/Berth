@@ -1842,6 +1842,8 @@ class AgentRefusal(StrEnum):
     UNKNOWN_COMMAND = "unknown_command"
     #: 送進對話的訊息以 `/` 開頭：那是斜線指令，不交給模型（M5 票 18）。detail 同上。
     SLASH_COMMAND = "slash_command"
+    #: 按了停止，這段對話卻沒有正在跑的那一輪（已經答完、或不是這個人的，M5 票 25）。
+    NOT_RUNNING = "not_running"
 
 
 class SlashCommand(StrEnum):
@@ -1898,8 +1900,10 @@ class AiStopReason(StrEnum):
     CIRCUIT_OPEN = "circuit_open"
     #: 模型或 provider 出錯（連不上、key 被拒、回了壞東西）。
     ERROR = "error"
-    #: 使用者關掉了連線（按停止、關頁）。
+    #: 使用者按了停止（M5 票 25 起；之前關掉連線也算，現在斷線照跑完）。
     CANCELLED = "cancelled"
+    #: Berth 重新啟動時這一輪還在跑（M5 票 25）：關機時收尾，或崩潰之後啟動時補記。
+    INTERRUPTED = "interrupted"
 
 
 class AiToolOutcome(StrEnum):
