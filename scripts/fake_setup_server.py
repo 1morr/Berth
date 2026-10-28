@@ -112,6 +112,7 @@ from berth.adapters.torrent import (
     HttpTorrentFetcher,
     TorrentFetcher,
     TorrentSource,
+    info_hash_of,
     magnet_info_hash,
 )
 from berth.adapters.torrent_fake import FakeTorrentFetcher
@@ -185,6 +186,7 @@ from berth.services.clients import (
     BUNDLED_JELLYFIN_URL,
     BUNDLED_PROWLARR_URL,
     BundledServices,
+    HttpServiceClientFactory,
 )
 from berth.services.compaction import SUMMARY_INSTRUCTIONS
 from berth.services.health import check_health
@@ -387,6 +389,9 @@ class Scenario:
     clock: datetime | None = None
     #: 側面板的假模型（M5 票 12）：給了就把 AI 打開，每一次模型呼叫由它回答。`None` 是 AI 關著。
     ai_script: Script | None = None
+    #: 模型、網路搜尋與動漫資料（AniList、Fribb、Bangumi）打**真的**（`agent-live`，M5 票 23）。
+    #: AI 不在這裡打開：驅動腳本照使用者的路徑 `PUT /settings/ai` 填 key。
+    live_ai: bool = False
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1808,6 +1813,54 @@ def agent_scenario() -> Scenario:
     return scenario
 
 
+class KeepingQbittorrent(FakeQbittorrentClient):
+    """收下的 torrent 就一直在下載、進度 0（`agent-live`，M5 票 23）。
+
+    基底的替身收下只記在 `added`、不放進 `sync`，poller 下一輪就說它「被移除」
+    （`client_removed`）——prototype 的模型照那個結論推成「qBittorrent 拒收」（prototype 第 7 點）。
+    這一台不下載也不完成，「為什麼沒入庫」問到的是「還在路上」。
+    """
+
+    async def add_torrent(self, request: TorrentAdd) -> None:
+        await super().add_torrent(request)
+        info_hash = (
+            magnet_info_hash(request.magnet) if request.magnet else info_hash_of(request.content)
+        )
+        now = int(datetime.now(UTC).timestamp())
+        self.torrents = (
+            *self.torrents,
+            TorrentStatus(
+                hash=info_hash,
+                name=info_hash,
+                state="stalledDL",
+                category=request.category,
+                tags=("berth",),
+                progress=0.0,
+                completion_on=-1,
+                last_activity=now,
+                added_on=now,
+                save_path="",
+                content_path="",
+                total_size=0,
+            ),
+        )
+
+
+def agent_live_scenario() -> Scenario:
+    """側面板對真模型跑情境（M5 票 23）：同 `search`（真 TMDB、真索引站），另外模型、網路搜尋、
+    AniList、Fribb、Bangumi 都打真的；qBittorrent 是收下就留著的替身（`KeepingQbittorrent`），
+    確認卡可以放心按。
+
+    AI 一開始關著：驅動腳本 `scripts/experiments/m5_acceptance_scenarios.py` 照使用者的路徑
+    `PUT /settings/ai` 填 `.env` 的 key 再打開。**每種接口一台全新的**（prototype 的教訓：共用
+    一台時前一個接口的訂閱與送單會干擾後一個）。
+    """
+    scenario = search()
+    scenario.live_ai = True
+    scenario.qbittorrent = KeepingQbittorrent()
+    return scenario
+
+
 #: `agent` 情境的送單卡要送的三集（票 13）。每一包一個正片檔。
 AGENT_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
     f"[Berth-Demo] SPY×FAMILY - {episode:02d} [1080p][CHT]": (
@@ -2191,6 +2244,7 @@ SCENARIOS = {
     "review": review_scenario,
     "downloads": downloads_scenario,
     "agent": agent_scenario,
+    "agent-live": agent_live_scenario,
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,
@@ -2226,8 +2280,14 @@ class FakeClientFactory:
     既有服務的「測試連線」永遠連得上，用來走通表單那條路徑。
     """
 
-    def __init__(self, scenario: Scenario) -> None:
+    def __init__(self, scenario: Scenario, *, config_root: Path | None = None) -> None:
         self._scenario = scenario
+        #: `live_ai` 時模型、搜尋與動漫資料走正式的那一份；Fribb 的表放在這台的 `config_root`。
+        self._live = (
+            HttpServiceClientFactory(config_root=config_root or Path(tempfile.mkdtemp()))
+            if scenario.live_ai
+            else None
+        )
         #: 使用者自己那台 Prowlarr，一個位址一台：加進去的站之後再讀要看得到
         #: （M4 票 67 的一鍵加站）。
         self._existing_prowlarr: dict[str, FakeProwlarrClient] = {}
@@ -2304,19 +2364,29 @@ class FakeClientFactory:
         return self._discord
 
     def ai(self, endpoint: AiEndpoint) -> Model:
+        if self._live is not None:
+            return self._live.ai(endpoint)
         return self._ai.model(endpoint)
 
     def tavily(self, api_key: str) -> WebSearch:
+        if self._live is not None:
+            return self._live.tavily(api_key)
         return self._web_search
 
-    # 演練伺服器沒有動漫資料的情境（票 16）：答空的，不連外。
+    # 動漫資料（票 16）：除了 `agent-live`，演練伺服器答空的、不連外。
     def anilist(self) -> AniList:
+        if self._live is not None:
+            return self._live.anilist()
         return FakeAniList()
 
     def anime_ids(self) -> AnimeIds:
+        if self._live is not None:
+            return self._live.anime_ids()
         return FakeAnimeIds()
 
     def bgm(self) -> Bgm:
+        if self._live is not None:
+            return self._live.bgm()
         return FakeBgm()
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
@@ -2381,7 +2451,7 @@ def main(argv: list[str] | None = None) -> int:
         # 換掉模組上的函式：`services/plan.py` 以 `mediainfo.probe` 呼叫它，它不在 client 工廠裡。
         # mypy 不讓函式被賦值；替身的簽名與它相同。
         mediainfo.probe = _measuring(scenario.measured)  # type: ignore[assignment]
-    factory = FakeClientFactory(scenario)
+    factory = FakeClientFactory(scenario, config_root=config.config_root)
     # 背景迴圈不經過 FastAPI 的相依，所以它要用的 client 從 `create_app` 換掉（票 10）。
     app = create_app(config, clients=factory)
     asyncio.run(_seed(config, scenario, factory))
