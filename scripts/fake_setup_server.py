@@ -93,8 +93,8 @@ from berth.adapters.qbittorrent.fake import FakeQbittorrentClient
 from berth.adapters.rss import FeedFetcher, acgrip
 from berth.adapters.rss.client import HttpFeedFetcher
 from berth.adapters.rss.fake import FakeFeedFetcher
+from berth.adapters.rss.mikan import bangumi_feed_url, bangumi_url, parse_feed
 from berth.adapters.rss.mikan import bangumi_feed_url as mikan_feed_url
-from berth.adapters.rss.mikan import bangumi_url, parse_feed
 from berth.adapters.rss.mikan import search_url as mikan_search_url
 from berth.adapters.tmdb import (
     TmdbClient,
@@ -1784,7 +1784,9 @@ def agent_scenario() -> Scenario:
     「加這個 RSS：<網址>」出一張加 Feed 的卡，
     「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。說「provider 壞了」
     （`provider down`）時替身回 HTTP 503，連續 5 次就讓斷路器暫停 15 分鐘（票 22）。
-    其餘一律說它只演這幾件事。
+    「從 Mikan 訂閱 SPY×FAMILY」出一張 Mikan 訂閱卡，番組頁上三個字幕組讓人選；「在 acg.rip 訂閱
+    SPY×FAMILY」出一張關鍵字訂閱卡，列出每個字幕組的第一批（票 26，`SPY_BANGUMI_PAGE`、
+    `SPY_ACGRIP`）。其餘一律說它只演這幾件事。
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
@@ -1797,6 +1799,17 @@ def agent_scenario() -> Scenario:
     )
     # `/demo/torrent` 只發這裡列的那幾份（`_mount_demo_torrent`）。
     scenario.demo_releases = (*scenario.demo_releases, *AGENT_RELEASES)
+    # 兩種訂閱卡讀的頁（票 26）：番組頁、三個字幕組的單一 feed、acg.rip 的搜尋。
+    scenario.feed_pages = {
+        bangumi_url(SPY_BANGUMI): SPY_BANGUMI_PAGE,
+        **{
+            bangumi_feed_url(SPY_BANGUMI, group): _spy_feed(
+                [_spy_release(name, episode) for episode in range(releases, 0, -1)], mikan=True
+            )
+            for group, (name, releases) in SPY_SUBGROUPS.items()
+        },
+        acgrip.search_url("SPY×FAMILY"): SPY_ACGRIP,
+    }
     scenario.indexer_results = (
         *scenario.indexer_results,
         *(
@@ -1907,6 +1920,88 @@ AGENT_RELEASES: dict[str, tuple[tuple[str, int], ...]] = {
     for episode in (4, 5, 6)
 }
 DEMO_PACKS.update(AGENT_RELEASES)
+
+#: `agent` 情境兩種訂閱卡的 SPY×FAMILY（票 26）：Mikan 番組 3310 上的三個字幕組（id → 名字、集數）。
+SPY_BANGUMI = 3310
+SPY_SUBGROUPS: dict[int, tuple[str, int]] = {
+    583: ("Berth-Demo", 3),
+    584: ("LoliHouse", 12),
+    611: ("北宇治字幕组", 6),
+}
+
+
+def _spy_release(group: str, episode: int) -> str:
+    return f"[{group}] SPY×FAMILY - {episode:02d} [1080p][CHT]"
+
+
+def _spy_feed(titles: list[str], *, mikan: bool) -> bytes:
+    """合成的 feed：Mikan 單一 feed 或 acg.rip 搜尋（兩站的 parser 都讀 RSS 2.0 的 `enclosure`）。
+    下載連結是 magnet（替身 qBittorrent 收下就留著，不必另外發 `.torrent`）。"""
+    items = []
+    for index, title in enumerate(titles):
+        info_hash = hashlib.sha1(title.encode()).hexdigest()
+        moment = datetime(2026, 10, 25, 12, tzinfo=UTC) - timedelta(days=7 * index)
+        published = (
+            f'<torrent xmlns="https://mikanani.me/0.1/"><pubDate>{moment:%Y-%m-%dT%H:%M:%S}'
+            "</pubDate></torrent>"
+            if mikan
+            else f"<pubDate>{moment:%a, %d %b %Y %H:%M:%S} +0000</pubDate>"
+        )
+        link = (
+            f"https://mikanani.me/Home/Episode/{info_hash}"
+            if mikan
+            else f"https://acg.rip/t/{900000 + index}"
+        )
+        items.append(
+            f"<item><title>{escape(title)}</title><guid>{link}</guid><link>{link}</link>"
+            f"{published}"
+            f'<enclosure type="application/x-bittorrent" length="1" '
+            f'url="{escape(f"magnet:?xt=urn:btih:{info_hash}")}" /></item>'
+        )
+    head = '<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel><title>demo</title>'
+    return f"{head}{''.join(items)}</channel></rss>".encode()
+
+
+#: SPY×FAMILY 的番組頁：左欄字幕組名與最近更新，右邊每一組一張發佈表（`mikan.subgroups` 讀的形狀）。
+SPY_BANGUMI_PAGE = (
+    '<p class="bangumi-title">間諜過家家</p>'
+    + "".join(
+        f'<a class="subgroup-name subgroup-{group}">{escape(name)}</a>'
+        '<span class="date">10/25/2026 12:00</span>'
+        for group, (name, _) in SPY_SUBGROUPS.items()
+    )
+    + "".join(
+        f'<div class="subgroup-text" id="{group}">'
+        + "".join(
+            f'<a class="magnet-link-wrap">{escape(_spy_release(name, episode))}</a>'
+            for episode in range(releases, 0, -1)
+        )
+        + "</div>"
+        for group, (name, releases) in SPY_SUBGROUPS.items()
+    )
+).encode()
+
+#: acg.rip 搜「SPY×FAMILY」：三個字幕組，新的在前。
+SPY_ACGRIP = _spy_feed(
+    [
+        *(_spy_release("Berth-Demo", episode) for episode in (3, 2, 1)),
+        *(_spy_release("ToonsHub", episode) for episode in (3, 2)),
+        _spy_release("黒ネズミたち", 3),
+    ],
+    mikan=False,
+)
+
+_SUBSCRIBE_MIKAN = re.compile(
+    r"^(?:從\s*Mikan\s*訂閱|subscribe on mikan:?)\s*(.+?)[。.!！]?$", re.I
+)
+_SUBSCRIBE_ACGRIP = re.compile(
+    r"^(?:在\s*acg\.rip\s*訂閱|subscribe on acg\.rip:?)\s*(.+?)[。.!！]?$", re.I
+)
+
+
+def _subscribed(text: str) -> re.Match[str] | None:
+    return _SUBSCRIBE_MIKAN.search(text.strip()) or _SUBSCRIBE_ACGRIP.search(text.strip())
+
 
 _DOWNLOAD_ASKED = re.compile(r"^(?:下載|download)\s*(.+?)[。.!！]?$", re.I)
 
@@ -2028,7 +2123,7 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
-        wanted = _DOWNLOAD_ASKED.search(text.strip())
+        wanted = _DOWNLOAD_ASKED.search(text.strip()) or _subscribed(text)
         if wanted is not None:
             return ModelResponse(
                 parts=[ToolCallPart("discover_search_media", {"query": wanted.group(1).strip()})]
@@ -2058,6 +2153,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
     if isinstance(last, ToolReturnPart) and last.tool_name == "jobs_list_jobs":
         # 被警告、被擋下也照叫：防護要看到第 4 次。
         return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
+    if isinstance(last, ToolReturnPart) and _subscribed(question):
+        return _subscribe_step(question, messages, last, chinese=chinese)
     if isinstance(last, ToolReturnPart) and _DOWNLOAD_ASKED.search(question.strip()):
         return _download_step(messages, last, chinese=chinese)
     if isinstance(last, ToolReturnPart) and isinstance(last.content, dict):
@@ -2129,6 +2226,86 @@ def _download_step(
             else f"You confirmed: {done} sent, {skipped} unticked by you."
         )
     return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _subscribe_step(
+    question: str, messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
+) -> ModelResponse:
+    """兩種訂閱的下一步（票 26）：搜作品 → 問 Route →（Mikan 讀番組頁）→ 出卡 → 照卡片的結果回答。
+    模型建議的字幕組是 Berth-Demo；卡上由人選。"""
+    # `Any`：工具結果是執行器回的 JSON（`Turn.run_tool`），形狀隨工具，這裡照名字讀。
+    result: Any = last.content
+    mikan = _SUBSCRIBE_MIKAN.search(question.strip()) is not None
+    if last.outcome == "denied":
+        return _say("好，那就不訂。" if chinese else "All right, nothing was subscribed.")
+    if last.tool_name == "discover_search_media":
+        items = result.get("items") or []
+        if not items:
+            return _say("找不到這部作品。" if chinese else "I could not find that title.")
+        return ModelResponse(
+            parts=[ToolCallPart("media_route_choices", {"media_id": items[0]["id"]})]
+        )
+    media_id = _last_call_of(messages, "media_route_choices")["media_id"]
+    if last.tool_name == "media_route_choices":
+        if not result:
+            return _say("沒有放得進的 Route。" if chinese else "No route fits.")
+        if mikan:
+            return ModelResponse(
+                parts=[ToolCallPart("bangumi_read_bangumi", {"bangumi_id": SPY_BANGUMI})]
+            )
+        row = {
+            "kind": "acgrip",
+            "term": "SPY×FAMILY",
+            "subgroup": "Berth-Demo",
+            "media_id": media_id,
+            "route_id": result[0]["id"],
+        }
+        return ModelResponse(parts=[ToolCallPart("rss_subscribe_search", {"rows": [row]})])
+    if last.tool_name == "bangumi_read_bangumi":
+        routes = _last_result_list(messages, "media_route_choices")
+        row = {
+            "bangumi_id": SPY_BANGUMI,
+            "subgroup_id": 583,
+            "subgroup_name": "Berth-Demo",
+            "media_id": media_id,
+            "route_id": routes[0]["id"],
+        }
+        return ModelResponse(parts=[ToolCallPart("rss_subscribe_mikan", {"rows": [row]})])
+    if isinstance(result, dict) and "refused" in result:
+        refused = result["refused"]
+        return _say(f"訂不了：`{refused}`。" if chinese else f"Not subscribed: `{refused}`.")
+    if isinstance(result, dict):
+        rows = result.get("rows") or [{}]
+        picked = rows[0].get("subgroup_chosen_on_card") or "Berth-Demo"
+        return _say(
+            f"訂好了，字幕組是你在卡上選的 {picked}。"
+            if chinese
+            else f"Subscribed, with the subgroup you chose on the card: {picked}."
+        )
+    return _say("（沒有下一步）" if chinese else "(nothing more to do)")
+
+
+def _last_call_of(messages: list[ModelMessage], tool: str) -> dict[str, Any]:
+    """這一輪最後一次叫 `tool` 的參數。"""
+    calls = [
+        call
+        for message in messages
+        if isinstance(message, ModelResponse)
+        for call in message.tool_calls
+        if call.tool_name == tool
+    ]
+    return dict(calls[-1].args_as_dict())
+
+
+def _last_result_list(messages: list[ModelMessage], tool: str) -> list[Any]:
+    found = [
+        part.content
+        for message in messages
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, ToolReturnPart) and part.tool_name == tool
+    ]
+    return cast(list[Any], found[-1])
 
 
 def _feed_step(question: str, last: ToolReturnPart, *, chinese: bool) -> ModelResponse:

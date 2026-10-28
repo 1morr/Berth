@@ -74,5 +74,11 @@ class Proposal(Base):
     #: 核准時逐列在卡片上選的 Route（M5 票 23b）；只有提出時可選的不只一條的列有值，其餘是 `None`。
     #: 整格 `None` 是哪一列都沒選。執行時蓋過存下參數裡的 `route_id`。
     routes_json: Mapped[list[int | None] | None] = mapped_column(JsonText, default=None)
+    #: 核准時逐列在卡片上選的字幕組（M5 票 26）：選項的 `key`；只有提出時存了可選清單的列有值，
+    #: 其餘是 `None`。整格 `None` 是哪一列都沒選。執行時用那個選項的參數蓋過存下的。
+    subgroups_json: Mapped[list[str | None] | None] = mapped_column(JsonText, default=None)
+    #: 核准時逐列選的第一輪（M5 票 26，`PrimeMode` 的值）；只有命令輸入有 `first_batch` 的列有值。
+    #: 整格 `None` 是哪一列都沒選（照存下的，預設「下載這些並追之後的」）。
+    first_batch_json: Mapped[list[str | None] | None] = mapped_column(JsonText, default=None)
     #: 逐列結果（`services.proposals.RowResult`），執行時每做完一列寫一次；還沒執行是 `None`。
     results_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonText, default=None)

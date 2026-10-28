@@ -23,6 +23,9 @@ const REASONS: ReasonSet<ProposalRefusal> = {
   selection_invalid: true,
   route_required: true,
   route_not_offered: true,
+  subgroup_required: true,
+  subgroup_not_offered: true,
+  first_batch_not_offered: true,
 }
 
 export function proposalRefusalOf(error: unknown): Refusal<ProposalRefusal> | null {
@@ -48,15 +51,25 @@ export function proposalsQueryOptions(conversationId: string) {
 }
 
 export type RouteAsk = Schemas['RouteAskOut']
+export type SubgroupAsk = Schemas['SubgroupAskOut']
+export type SubgroupOption = Schemas['SubgroupOptionOut']
+export type SubscriptionRef = Schemas['SubscriptionRefOut']
 
 /**
  * 核准（可帶勾選）或拒絕。**核准就當場執行**，回的是執行完的那一張、逐列結果在裡面。
- * body 不帶參數：執行用伺服器存的那一份。唯一的例外是逐列的 Route（票 23b）：`preview.routes`
- * 有清單的列在卡片上選，只收清單裡的。
+ * body 不帶參數：執行用伺服器存的那一份。例外是逐列的 Route（票 23b）與訂閱的字幕組（票 26）：
+ * `preview.routes`、`preview.subgroups` 有清單的列在卡片上選，只收清單裡的；關鍵字訂閱的第一輪
+ * （`preview.first_batch`）也在卡片上選。
  */
 export function decideProposal(
   id: number,
-  decision: { approve: boolean; selection?: number[] | null; routes?: (number | null)[] },
+  decision: {
+    approve: boolean
+    selection?: number[] | null
+    routes?: (number | null)[]
+    subgroups?: (string | null)[]
+    first_batch?: (Schemas['PrimeMode'] | null)[]
+  },
 ): Promise<Proposal> {
   return apiPost<Proposal>(`/proposals/${id}/decide`, decision)
 }

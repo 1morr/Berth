@@ -1980,3 +1980,11 @@ class ProposalRefusal(StrEnum):
     ROUTE_REQUIRED = "route_required"
     #: 選的 Route 不在提出時存下的那份清單裡、那一列沒有要選 Route，或 `routes` 與列數對不上。
     ROUTE_NOT_OFFERED = "route_not_offered"
+    #: 勾著的那一列字幕組要人選（可選的不只一個，或模型給的不在搜到的裡面），卻沒選（M5 票 26）。
+    #: `detail` 是列號（0 起算）。
+    SUBGROUP_REQUIRED = "subgroup_required"
+    #: 選的字幕組不在提出時存下的那份清單裡、那一列沒有字幕組可選，或 `subgroups` 與列數對不上。
+    SUBGROUP_NOT_OFFERED = "subgroup_not_offered"
+    #: 那一列沒有第一輪可選（命令輸入沒有 `first_batch`），或 `first_batch` 與列數對不上
+    #: （M5 票 26）。
+    FIRST_BATCH_NOT_OFFERED = "first_batch_not_offered"

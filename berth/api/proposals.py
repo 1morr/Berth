@@ -3,16 +3,17 @@
 登入就進得來（一般使用者也是），看得到與按得到的範圍由命令判斷：自己的，管理員是每一張；別人的
 看不到也按不到，是 `proposal_missing`。
 
-**決定的 body 只有核准、勾選與逐列的 Route**（`extra="forbid"`）：執行用伺服器存的那一份參數，前端
-送來的參數一律不收（brief §20.24：`VercelAIAdapter` 預設信任前端，偽造一則核准就能換參數）。唯一的
-例外是 Route（票 23b）：作品放得進的不只一條時人在卡片上選，只收提出時存下的那份清單裡的。
+**決定的 body 只有核准、勾選與逐列的 Route、字幕組**（`extra="forbid"`）：執行用伺服器存的那一份
+參數，前端送來的參數一律不收（brief §20.24：`VercelAIAdapter` 預設信任前端，偽造一則核准就能
+換參數）。例外只有 Route（票 23b）與訂閱的字幕組（票 26）：可選的不只一個時人在卡片上選，
+只收提出時存下的那份清單裡的。
 
 狀態變更經 `GET /events/stream` 的 `event: proposal` 推出去；畫面讓 `['proposals']` 失效再問一次。
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -21,7 +22,14 @@ from pydantic import BaseModel, ConfigDict
 from berth.api.deps import ExecutorDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import ActorKind, ProposalRefusal, ProposalRowOutcome, ProposalStatus
+from berth.domain import (
+    ActorKind,
+    FeedKind,
+    PrimeMode,
+    ProposalRefusal,
+    ProposalRowOutcome,
+    ProposalStatus,
+)
 from berth.services import proposals
 from berth.services.commands import Effect, Flag
 from berth.services.proposals import ProposalRejectedError, ProposalView
@@ -38,6 +46,10 @@ _STATUS: dict[ProposalRefusal, int] = {
     # 要選 Route 的列沒選，或選了清單外的（票 23b）。
     ProposalRefusal.ROUTE_REQUIRED: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ProposalRefusal.ROUTE_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    # 要選字幕組的列沒選，或選了清單外的（票 26）。
+    ProposalRefusal.SUBGROUP_REQUIRED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ProposalRefusal.SUBGROUP_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ProposalRefusal.FIRST_BATCH_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -67,6 +79,44 @@ class RouteAskOut(BaseModel):
     preselected: int | None
 
 
+class SubgroupOptionOut(BaseModel):
+    """訂閱可選的一個字幕組（票 26）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 決定時送回來的那一格：Mikan 是字幕組 id 的字串，關鍵字訂閱是字幕組名。
+    key: str
+    name: str
+    releases: int
+    updated: date | None
+    latest: str
+    #: 關鍵字訂閱的第一批：按下確認就送出的發佈名，新的在前。Mikan 是空清單（整季）。
+    titles: list[str]
+
+
+class SubgroupAskOut(BaseModel):
+    """一列訂閱的字幕組（票 26）。`required` 時勾著的這一列一定要選，`preselected` 是模型建議的
+    那一個。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    options: list[SubgroupOptionOut]
+    preselected: str | None
+    required: bool
+
+
+class SubscriptionRefOut(BaseModel):
+    """這部作品提出那一刻已經有的一條訂閱（票 26）。網址不給：聚合 feed 的網址帶 token。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    feed_id: int
+    name: str
+    kind: FeedKind
+    #: 它收的字幕組；空字串是搜到的每一組都收。
+    subgroup: str
+
+
 class ProposalPreviewOut(BaseModel):
     """提出那一刻伺服器算的。卡片照 `effect` 與 `flags` 說「不可逆」「會送出 torrent」。"""
 
@@ -85,6 +135,12 @@ class ProposalPreviewOut(BaseModel):
     torrents: list[int | None]
     #: 逐列：要人選 Route 的列是可選清單，其餘是 `null`。命令沒有 Route 的是空清單。
     routes: list[RouteAskOut | None]
+    #: 逐列：訂閱的字幕組選項，其餘是 `null`。不是訂閱的命令是空清單。
+    subgroups: list[SubgroupAskOut | None]
+    #: 逐列：這部作品已經有的訂閱。不是訂閱的命令是空清單。
+    existing: list[list[SubscriptionRefOut]]
+    #: 逐列：卡片上能不能選第一輪（關鍵字訂閱）。都不能是空清單。
+    first_batch: list[bool]
 
 
 class ProposalRowOut(BaseModel):
@@ -128,10 +184,14 @@ class ProposalOut(BaseModel):
     detached_at: datetime | None
     #: 核准時逐列在卡片上選的 Route；沒選過是 `null`。
     routes: list[int | None] | None
+    #: 核准時逐列在卡片上選的字幕組（選項的 `key`）；沒選過是 `null`。
+    subgroups: list[str | None] | None
+    #: 核准時逐列選的第一輪；沒選過是 `null`（照存下的：下載這些並追之後的）。
+    first_batch: list[PrimeMode | None] | None
 
 
 class ProposalDecisionIn(BaseModel):
-    """只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 除外（票 23b）。"""
+    """只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 與字幕組除外（票 23b、26）。"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -140,6 +200,12 @@ class ProposalDecisionIn(BaseModel):
     selection: list[int] | None = None
     #: 逐列的 Route，與列對齊；只有 `preview.routes` 有清單的列能給值，勾著的那幾列必給。
     routes: list[int | None] | None = None
+    #: 逐列的字幕組（選項的 `key`），與列對齊；只有 `preview.subgroups` 有選項的列能給值，
+    #: `required` 而勾著的那幾列必給。
+    subgroups: list[str | None] | None = None
+    #: 逐列的第一輪（`all`「下載這些並追之後的」/ `later`「只追之後的」）；只有
+    #: `preview.first_batch` 是真的列能給值，沒給的照存下的。
+    first_batch: list[PrimeMode | None] | None = None
 
 
 @router.get("")
@@ -176,6 +242,8 @@ async def post_decision(
             approve=body.approve,
             selection=body.selection,
             routes=body.routes,
+            subgroups=body.subgroups,
+            first_batch=body.first_batch,
             user_id=user.id,
             role=user.role,
         )

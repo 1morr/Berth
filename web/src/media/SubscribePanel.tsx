@@ -12,9 +12,11 @@ import {
   subscribeSearch,
   workSeriesQueryOptions,
   type BangumiHit,
-  type Feed,
+  type PrimeMode,
   type RssSeries,
+  type SearchSubgroup,
   type Subgroup,
+  searchSubgroupsQueryOptions,
 } from '../api/rss'
 import type { Schemas } from '../api/schemas'
 import { queriesQueryOptions } from '../api/search'
@@ -35,8 +37,8 @@ import { useInPlaceConfirm } from '../components/useInPlaceConfirm'
 import { displayRound } from '../i18n/displayRound'
 import { firstBatchAskText } from '../rss/firstBatchAsk'
 import { groupName } from '../rss/seriesByWork'
-import { FirstRound } from '../rss/FirstRoundSection'
 import { preselect } from '../rss/preselect'
+import { ReleaseTitles } from '../rss/ReleaseTitles'
 import { ExistingDownload, type ExistingTarget } from './ExistingDownload'
 import { excludedText, sentences } from './excludedText'
 import { RssRefusalNotice } from '../rss/RssRefusalNotice'
@@ -58,8 +60,8 @@ export const SUBSCRIBE_ANCHOR = 'media-subscribe'
  *   最穩）→ 選字幕組 → 訂閱。它的單一 feed 當場讀完，整季補齊（同綁定的補舊集，一律補）。
  *   選好字幕組之後也可以不訂閱、「只下載現有的」（M4 票 112）：已完結、字幕組只出合集的作品，訂閱建的
  *   Feed 擋下合集、之後也不會再有新的；訂閱之後有被擋下的，回報那一句也指向它。
- * - **Nyaa / acg.rip**：以這部作品的標題（與搜尋區塊同一份）建搜尋 feed，它長出的 RSS Series 都綁到這部作品
- *   （2026-09-26 拍板）。第一輪照樣等人選，建好之後就地畫 `/rss` 那一塊第一輪預覽。
+ * - **Nyaa / acg.rip**：以這部作品的標題（與搜尋區塊同一份）先搜一次、列出搜到的字幕組，選一組才建搜尋 feed，
+ *   只綁那一組；第一批就在這裡看、按下去就送，不再到 `/rss` 選第一輪（M5 票 26，使用者 2026-10-28）。
  *
  * 只有 admin 畫這一段（呼叫端判斷）：`/rss/*` 整組 admin，後端同時回 403。
  */
@@ -170,12 +172,9 @@ function Subscriber({ media, onDone }: { media: Media; onDone: OnDone }) {
   // `undefined` 是「還沒選過」：那時用預選；選了「不選」是 `null`（同 `SeriesBinder`）。
   const [chosen, setChosen] = useState<number | null | undefined>(undefined)
   const route = chosen === undefined ? preselect(media) : chosen
-  // 建好的搜尋 feed：這一塊換成它的第一輪預覽。
-  const [made, setMade] = useState<Feed | null>(null)
 
   const finish: OnDone = (said) => {
     onDone(said)
-    setMade(null)
     close()
   }
 
@@ -186,26 +185,6 @@ function Subscriber({ media, onDone }: { media: Media; onDone: OnDone }) {
           {t('rss.subscribe.start')}
         </GhostButton>
       </div>
-    )
-  }
-
-  if (made !== null) {
-    return (
-      <ConfirmPanel panelRef={panel} onKeyDown={onKeyDown} labelledBy={headingId}>
-        <p id={headingId} className="max-w-prose text-sm text-ink">
-          {t('rss.subscribe.made', { name: made.name })}
-        </p>
-        <FirstRound feed={made} onDone={(text) => finish({ text, existing: null })} />
-        <div className={CONFIRM_ACTIONS}>
-          <span />
-          <GhostButton
-            type="button"
-            onClick={() => finish({ text: t('rss.subscribe.later'), existing: null })}
-          >
-            {t('rss.subscribe.decideLater')}
-          </GhostButton>
-        </div>
-      </ConfirmPanel>
     )
   }
 
@@ -237,7 +216,7 @@ function Subscriber({ media, onDone }: { media: Media; onDone: OnDone }) {
           kind={source}
           media={media}
           route={route}
-          onMade={setMade}
+          onDone={finish}
           onCancel={close}
         />
       )}
@@ -408,8 +387,15 @@ function MikanPicker({
   )
 }
 
-/** 字幕組那一顆鍵的內容：名字、幾筆、最近更新，最新一筆的發佈名（看得出語言與解析度）。 */
-function SubgroupLine({ group }: { group: Subgroup }) {
+/**
+ * 字幕組那一顆鍵的內容：名字、幾筆、最近更新，最新一筆的發佈名（看得出語言與解析度）。
+ * 確認卡選字幕組也用它（M5 票 26），所以只要這四格。
+ */
+export function SubgroupLine({
+  group,
+}: {
+  group: Pick<Subgroup, 'name' | 'releases' | 'updated' | 'latest'>
+}) {
   const { t, i18n } = useTranslation()
   const updated = group.updated
     ? new Date(`${group.updated}T00:00:00`).toLocaleDateString(i18n.language)
@@ -430,18 +416,21 @@ function SubgroupLine({ group }: { group: Subgroup }) {
   )
 }
 
-/** Nyaa / acg.rip：作品的標題集合一個一顆鍵，下面一格可改的搜尋詞。 */
+/**
+ * Nyaa / acg.rip（M5 票 26）：作品的標題集合一個一顆鍵、一格可改的搜尋詞 → 搜一次、列出搜到的字幕組（照 Mikan
+ * 那一份的樣子）→ 選一組、看它的第一批 → 訂閱並送出。訂閱的是按了「搜尋」的那個詞，不是打到一半的。
+ */
 function SearchFeedPicker({
   kind,
   media,
   route,
-  onMade,
+  onDone,
   onCancel,
 }: {
   kind: FeedKind
   media: Media
   route: number | null
-  onMade: (feed: Feed) => void
+  onDone: OnDone
   onCancel: () => void
 }) {
   const { t } = useTranslation()
@@ -455,19 +444,46 @@ function SearchFeedPicker({
   // `null` 是還沒動過：用標題集合的第一個。
   const [typed, setTyped] = useState<string | null>(null)
   const term = typed ?? titles[0] ?? media.title_en
-  const create = useMutation({
+  // 送出去的那一個詞（同 Mikan：打字不搜，按了才搜）；`null` 是還沒按過，用預填的那一個。
+  const [searched, setSearched] = useState<string | null>(null)
+  const query = (searched ?? term).trim()
+  const [group, setGroup] = useState<SearchSubgroup | null>(null)
+  // 第一輪（同 RSS 頁那兩顆）：預設下載列出的這一批並追之後的。
+  const [round, setRound] = useState<PrimeMode>('all')
+  const found = useQuery({ ...searchSubgroupsQueryOptions(kind, query), enabled: query !== '' })
+  const subscribe = useMutation({
     mutationFn: () => {
-      if (route === null) throw new Error('no route')
-      return subscribeSearch({ media: media.id, route, kind, term: term.trim() })
+      if (route === null || group === null) throw new Error('nothing picked')
+      return subscribeSearch({
+        media: media.id,
+        route,
+        kind,
+        term: query,
+        subgroup: group.name,
+        first_batch: round,
+      })
     },
     onSuccess: async (feed) => {
-      onMade(feed)
+      onDone({
+        text: t(
+          round === 'all'
+            ? 'rss.subscribe.searchSubscribed'
+            : 'rss.subscribe.searchSubscribedLater',
+          { name: feed.name },
+        ),
+        existing: null,
+      })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: RSS_KEY }),
+        queryClient.invalidateQueries({ queryKey: ['jobs'] }),
         queryClient.invalidateQueries({ queryKey: ['media'] }),
       ])
     },
   })
+  const search = (next: string) => {
+    setSearched(next.trim())
+    setGroup(null)
+  }
 
   return (
     <>
@@ -477,21 +493,72 @@ function SearchFeedPicker({
           items={titles}
           keyOf={(title) => title}
           picked={term}
-          onPick={setTyped}
+          onPick={(title) => {
+            setTyped(title)
+            search(title)
+          }}
           render={(title) => <span className="value wrap-anywhere">{title}</span>}
         />
       )}
-      <Field
-        label={t('rss.subscribe.term')}
-        hint={t(`rss.subscribe.termHint.${kind}`)}
-        value={term}
-        onChange={(event) => setTyped(event.target.value)}
-      />
-      <FolderLine media={media} />
+      <form
+        className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+        onSubmit={(event) => {
+          event.preventDefault()
+          search(term)
+        }}
+      >
+        <Field
+          label={t('rss.subscribe.term')}
+          hint={t(`rss.subscribe.termHint.${kind}`)}
+          type="search"
+          value={term}
+          onChange={(event) => setTyped(event.target.value)}
+        />
+        <GhostButton type="submit" busy={found.isFetching}>
+          {found.isFetching ? t('rss.subscribe.searching') : t('rss.subscribe.search')}
+        </GhostButton>
+      </form>
+
+      {found.isError ? (
+        <RssRefusalNotice error={found.error} unreachable={t('rss.subscribe.searchUnreachable')} />
+      ) : found.data && found.data.length === 0 ? (
+        <p className="max-w-prose text-xs text-ink-dim">{t('rss.subscribe.noSearchGroups')}</p>
+      ) : (
+        found.data && (
+          <Options
+            label={t('rss.subscribe.subgroup')}
+            items={found.data}
+            keyOf={(one) => one.name}
+            picked={group}
+            onPick={setGroup}
+            render={(one) => <SubgroupLine group={one} />}
+          />
+        )
+      )}
+
+      {group !== null && (
+        <>
+          <FolderLine media={media} />
+          <div className="grid gap-1">
+            <p className="label text-ink-dim">{t('rss.subscribe.firstBatchLabel')}</p>
+            <ReleaseTitles titles={group.titles} />
+          </div>
+          <FirstRoundChoice value={round} onChange={setRound} />
+        </>
+      )}
+
       <div className={CONFIRM_ACTIONS}>
-        {route !== null && term.trim() !== '' ? (
-          <PrimaryButton type="button" busy={create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? t('rss.subscribe.creating') : t('rss.subscribe.create')}
+        {group !== null && route !== null ? (
+          <PrimaryButton
+            type="button"
+            busy={subscribe.isPending}
+            onClick={() => subscribe.mutate()}
+          >
+            {subscribe.isPending
+              ? t('rss.subscribe.subscribing')
+              : round === 'all'
+                ? t('rss.subscribe.searchConfirm', { count: group.releases })
+                : t('rss.subscribe.searchConfirmLater')}
           </PrimaryButton>
         ) : (
           <span />
@@ -500,8 +567,44 @@ function SearchFeedPicker({
           {t('common.cancel')}
         </GhostButton>
       </div>
-      {create.isError && <Refusal error={create.error} />}
+      {subscribe.isError && (
+        <RssRefusalNotice
+          error={subscribe.error}
+          unreachable={t('rss.subscribe.searchUnreachable')}
+        />
+      )}
     </>
+  )
+}
+
+const ROUNDS: readonly PrimeMode[] = ['all', 'later']
+
+/**
+ * 關鍵字訂閱的第一輪（M5 票 26，協調者 2026-10-28）：「下載這些並追之後的」或「只追之後的」，與 RSS 頁第一輪
+ * 那兩顆同義、走同一支命令。作品頁與確認卡共用；每一個選項下面一句說按下去會怎樣。
+ */
+export function FirstRoundChoice({
+  value,
+  onChange,
+}: {
+  value: PrimeMode
+  onChange: (mode: PrimeMode) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Options
+      label={t('rss.subscribe.round.label')}
+      items={ROUNDS}
+      keyOf={(mode) => mode}
+      picked={value}
+      onPick={onChange}
+      render={(mode) => (
+        <span className="grid min-w-0 gap-0.5">
+          <span>{t(`rss.subscribe.round.${mode}`)}</span>
+          <span className="text-xs text-ink-dim">{t(`rss.subscribe.round.${mode}Hint`)}</span>
+        </span>
+      )}
+    />
   )
 }
 
@@ -521,8 +624,11 @@ function FolderLine({ media }: { media: Media }) {
   )
 }
 
-/** 一串選項，一個一顆鍵，選定的是按下的樣子（同 `rss/WorkChoices.tsx` 的 `Choices`）。 */
-function Options<T>({
+/**
+ * 一串選項，一個一顆鍵，選定的是按下的樣子（同 `rss/WorkChoices.tsx` 的 `Choices`；DESIGN.md「先選再確認」）。
+ * 確認卡選字幕組也用它（M5 票 26）。
+ */
+export function Options<T>({
   label,
   items,
   keyOf,

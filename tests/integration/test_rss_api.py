@@ -932,29 +932,56 @@ class TestSubscribeFromTheDetailPage:
         assert again.status_code == 409
         assert again.json()["detail"]["reason"] == "series_bound"
 
-    def test_a_title_search_feed_opens_its_first_round(
+    def test_the_subgroups_a_title_search_finds_are_listed(
         self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
     ) -> None:
-        route_id = seed(client, roots)
+        """作品頁訂閱 Nyaa / acg.rip（M5 票 26）：先搜、列出字幕組讓人選。只讀，什麼都不建。"""
+        seed(client, roots)
         sign_in(client)
         factory.rss_.pages[acgrip.search_url("Kimi ga Shinu made")] = ACGRIP
 
-        made = client.post(
-            "/api/rss/subscriptions/search",
-            json={
-                "media": KIMI_ID,
-                "route": route_id,
-                "kind": "acgrip",
-                "term": "Kimi ga Shinu made",
-            },
-            headers=BROWSER,
+        found = client.get(
+            "/api/rss/search/subgroups", params={"kind": "acgrip", "q": "Kimi ga Shinu made"}
         )
 
+        assert found.status_code == 200, found.text
+        by_name = {group["name"]: group for group in found.json()}
+        assert by_name["ANi"]["releases"] == len(by_name["ANi"]["titles"]) == 2
+        assert by_name["ANi"]["latest"] == by_name["ANi"]["titles"][0]
+        assert client.get("/api/rss/feeds").json() == []
+
+    def test_a_search_that_cannot_be_read_is_a_refusal(
+        self, client: TestClient, roots: dict[str, Path]
+    ) -> None:
+        seed(client, roots)
+        sign_in(client)
+
+        found = client.get("/api/rss/search/subgroups", params={"kind": "nyaa", "q": "Kimi"})
+
+        assert found.status_code == 502, found.text
+        assert found.json()["detail"]["reason"] == "feed_unreachable"
+
+    def test_a_title_search_feed_takes_one_subgroup_and_sends_its_first_batch(
+        self, client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
+    ) -> None:
+        """選了一組才建、只綁那一組，第一批當場送（不再到 RSS 頁選第一輪，M5 票 26）。"""
+        route_id = seed(client, roots)
+        sign_in(client)
+        factory.rss_.pages[acgrip.search_url("Kimi ga Shinu made")] = ACGRIP
+        body = {"media": KIMI_ID, "route": route_id, "kind": "acgrip", "term": "Kimi ga Shinu made"}
+
+        unpicked = client.post("/api/rss/subscriptions/search", json=body, headers=BROWSER)
+        made = client.post(
+            "/api/rss/subscriptions/search", json=body | {"subgroup": "ANi"}, headers=BROWSER
+        )
+
+        assert unpicked.status_code == 422, unpicked.text
         assert made.status_code == 201, made.text
         feed = made.json()
-        assert (feed["url"], feed["primed_at"]) == (ACGRIP_URL, None)
+        assert feed["url"] == ACGRIP_URL
+        assert feed["primed_at"] is not None
         preview = client.get(f"/api/rss/feeds/{feed['id']}/preview").json()
-        assert "matched" in {row["status"] for row in preview}
+        assert {row["title"].split("]")[0] for row in preview} == {"[ANi"}
         assert "unbound" not in {row["status"] for row in preview}
 
     def test_a_search_feed_of_a_series_asks_for_no_movie_route(
@@ -975,6 +1002,7 @@ class TestSubscribeFromTheDetailPage:
                 "route": route_id,
                 "kind": "acgrip",
                 "term": "Kimi ga Shinu made",
+                "subgroup": "ANi",
             },
             headers=BROWSER,
         ).json()

@@ -814,12 +814,32 @@ class SubscriptionOut(BaseModel):
 
 
 class SearchSubscriptionIn(BaseModel):
-    """以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，它長出的 RSS Series 都綁到這部作品。"""
+    """以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，只收一個字幕組、綁到這部作品（M5 票 26）。"""
 
     media: str = Field(min_length=1)
     route: int
     kind: FeedKind
     term: str = Field(min_length=1)
+    #: 字幕組，照發佈名裡的寫法（`GET /rss/search/subgroups` 的 `name`）。
+    subgroup: str = Field(min_length=1, pattern=r"\S")
+    #: 第一輪（M5 票 26，同 `POST /rss/feeds/{id}/prime`）：`all` 下載搜到的這一組並追之後的
+    #: （預設），`later` 只追之後的。
+    first_batch: PrimeMode = PrimeMode.ALL
+
+
+class SearchSubgroupOut(BaseModel):
+    """一次關鍵字搜尋裡的一個字幕組（M5 票 26）：作品頁訂閱讓人挑的那一個。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 發佈名裡的寫法；訂閱時原樣送回來。
+    name: str
+    releases: int
+    #: 最新一筆的發佈日；站上沒報是 `null`。
+    updated: date | None
+    latest: str
+    #: 這一組的每一筆發佈名，新的在前：訂閱它就送出的第一批。
+    titles: list[str]
 
 
 _BINDING_REFUSALS = (
@@ -862,6 +882,23 @@ async def get_mikan_bangumi(
     return BangumiOut.model_validate(view)
 
 
+@router.get(
+    "/search/subgroups",
+    responses=_responses(RssRefusal.FEED_UNSUPPORTED, RssRefusal.FEED_UNREACHABLE),
+)
+async def get_search_subgroups(
+    run: Annotated[Run, Depends(Command("rss.search_subgroups"))],
+    kind: FeedKind,
+    q: str = Query(min_length=1),
+) -> list[SearchSubgroupOut]:
+    """讀一次 Nyaa / acg.rip 的搜尋 feed，列出裡面的字幕組，筆數多的在前（M5 票 26）。只讀。"""
+    try:
+        found: tuple[object, ...] = await run(kind=kind, term=q)
+    except CommandRefusedError as refusal:
+        raise rss_refusal(refusal) from refusal
+    return [SearchSubgroupOut.model_validate(group) for group in found]
+
+
 @router.post(
     "/subscriptions/mikan",
     status_code=status.HTTP_201_CREATED,
@@ -901,11 +938,16 @@ async def post_mikan_subscription(
 async def post_search_subscription(
     run: Annotated[Run, Depends(Command("rss.subscribe_search"))], body: SearchSubscriptionIn
 ) -> FeedOut:
-    """建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
-    仍是 201，原文在 `poll_error`。"""
+    """建只收一個字幕組的搜尋 feed、當場讀一輪並送出那一組的第一批（M5 票 26：人在作品頁看過了，
+    不再到 RSS 頁選第一輪）。讀不到仍是 201，原文在 `poll_error`，之後的輪詢再讀、照送。"""
     try:
         feed: FeedView = await run(
-            kind=body.kind, term=body.term, media_id=body.media, route_id=body.route
+            kind=body.kind,
+            term=body.term,
+            subgroup=body.subgroup,
+            first_batch=body.first_batch,
+            media_id=body.media,
+            route_id=body.route,
         )
     except CommandRefusedError as refusal:
         raise rss_refusal(refusal) from refusal

@@ -493,6 +493,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 從 Media 頁訂閱（票 19）：詳情頁的「RSS 訂閱」整段只給 admin，同一組的理由。
     ("GET", "/rss/mikan/search"): Access.ADMIN,
     ("GET", "/rss/mikan/bangumi/*"): Access.ADMIN,
+    ("GET", "/rss/search/subgroups"): Access.ADMIN,
     ("POST", "/rss/subscriptions/mikan"): Access.ADMIN,
     ("POST", "/rss/subscriptions/search"): Access.ADMIN,
     # 一般使用者：探索、送單、看自己的 Job、瀏覽媒體庫（brief §11）。重試與重新規劃是送單的

@@ -125,11 +125,20 @@ def series_key(page: str, base_url: str = "https://mikanani.me/") -> tuple[int, 
     finder = _RssLink()
     finder.feed(page)
     for href in finder.hrefs:
-        query = parse_qs(urlsplit(urljoin(base_url, href)).query)
-        bangumi = query.get("bangumiId", [""])[0]
-        subgroup = query.get("subgroupid", [""])[0]
-        if bangumi.isdigit() and subgroup.isdigit():
-            return int(bangumi), int(subgroup)
+        found = feed_ids(urljoin(base_url, href))
+        if found is not None:
+            return found
+    return None
+
+
+def feed_ids(url: str) -> tuple[int, int] | None:
+    """單一 feed 的網址（`/RSS/Bangumi?bangumiId=…&subgroupid=…`）→ （番組 id, 字幕組 id）。
+    不是單一 feed（聚合 feed、別的網址）是 `None`。"""
+    query = parse_qs(urlsplit(url.strip()).query)
+    bangumi = query.get("bangumiId", [""])[0]
+    subgroup = query.get("subgroupid", [""])[0]
+    if bangumi.isdigit() and subgroup.isdigit():
+        return int(bangumi), int(subgroup)
     return None
 
 

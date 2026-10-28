@@ -61,6 +61,7 @@ export type Bangumi = Schemas['BangumiOut']
 
 /** 番組頁上的一個字幕組。 */
 export type Subgroup = Schemas['SubgroupOut']
+export type SearchSubgroup = Schemas['SearchSubgroupOut']
 
 /** 訂閱 Mikan 番組 × 字幕組的結果：Feed 與綁好的 RSS Series。 */
 export type Subscription = Schemas['SubscriptionOut']
@@ -161,6 +162,20 @@ export function bangumiQueryOptions(id: number) {
   return queryOptions({
     queryKey: ['mikan', 'bangumi', id],
     queryFn: () => apiGet<Bangumi>(`/rss/mikan/bangumi/${id}`),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/**
+ * 一次 Nyaa / acg.rip 搜尋裡的字幕組（M5 票 26：作品頁訂閱先搜、讓人選一組）。是查詢：打開就以預填的詞搜一次，
+ * 換詞再搜。理由同 `bangumiSearchQueryOptions`，不在 `RSS_KEY` 底下、不重試。
+ */
+export function searchSubgroupsQueryOptions(kind: Schemas['FeedKind'], q: string) {
+  return queryOptions({
+    queryKey: ['rss-search', kind, q],
+    queryFn: () =>
+      apiGet<SearchSubgroup[]>(`/rss/search/subgroups?${new URLSearchParams({ kind, q })}`),
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
@@ -277,7 +292,9 @@ export function subscribeMikan(body: Schemas['MikanSubscriptionIn']) {
   return apiPost<Subscription>('/rss/subscriptions/mikan', body)
 }
 
-/** 以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，當場讀一輪；長出的 RSS Series 都綁到這部作品。 */
+/**
+ * 以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，只收選的那一個字幕組、綁到這部作品，當場送出第一批（M5 票 26）。
+ */
 export function subscribeSearch(body: Schemas['SearchSubscriptionIn']) {
   return apiPost<Feed>('/rss/subscriptions/search', body)
 }

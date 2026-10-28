@@ -52,15 +52,17 @@ def test_irreversible_tools_need_a_card() -> None:
 
 
 def test_which_writes_need_a_card() -> None:
+    """每一支寫入工具都出卡（M5 票 26 起關鍵字訂閱也是：字幕組要人選、第一批在卡上確認）。"""
     registry = commands()
     writes = {name for name in TOOLS if registry[name].effect is not Effect.READ}
-    assert {name for name in writes if needs_card(registry[name])} == {
+    assert writes == {
         "downloading.add_manual_download",
         "rss.subscribe_mikan",
+        "rss.subscribe_search",
         "rss.add_feed",
+        "rss.delete_feed",
     }
-    # 可逆、沒有旗標：直接做（關鍵字出自網頁時改出卡，`agent_origins`）。
-    assert {name for name in writes if not needs_card(registry[name])} == {"rss.subscribe_search"}
+    assert all(needs_card(registry[name]) for name in writes)
 
 
 def test_route_checks_are_not_tools() -> None:
@@ -202,6 +204,8 @@ class TestSearchTorrentsForTheModel:
                     "whole_season": False,
                     "verdict": "fits",
                     "tags": {"resolution": "1080p", "subs": ["CHT"], "group": "ANi"},
+                    # 票 26：模型要算得出各字幕組多久出一集。
+                    "published_at": "2026-10-01T00:00:00Z",
                 }
             ],
             "counts": [],

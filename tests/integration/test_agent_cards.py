@@ -233,19 +233,23 @@ def cards(client: TestClient, conversation: str = "c1") -> list[dict[str, Any]]:
 def decide(client: TestClient, proposal: int, **body: Any) -> httpx2.Response:
     """按卡片。核准而沒說 `routes` 時，要人選 Route 的列（這台 Berth 有兩條電視 Route，票 23b）選
     存下參數裡的那一條，就像人在卡片上選了模型提的那一條；Route 選擇本身由
-    `test_proposal_routes.py` 守。"""
-    if body.get("approve") and "routes" not in body:
+    `test_proposal_routes.py` 守。沒說 `subgroups` 時同理選預選的那一個字幕組（票 26，
+    `test_proposal_subgroups.py` 守）。"""
+    if body.get("approve") and ("routes" not in body or "subgroups" not in body):
         listed = client.get("/api/proposals")
         assert listed.status_code == 200, listed.text
         found = [card for card in listed.json() if card["id"] == proposal]
         if found:
             [card] = found
             asks = card["preview"]["routes"]
-            if any(ask is not None for ask in asks):
+            if "routes" not in body and any(ask is not None for ask in asks):
                 body["routes"] = [
                     None if ask is None else row["route_id"]
                     for ask, row in zip(asks, card["arguments"], strict=True)
                 ]
+            groups = card["preview"]["subgroups"]
+            if "subgroups" not in body and any(ask is not None for ask in groups):
+                body["subgroups"] = [None if ask is None else ask["preselected"] for ask in groups]
     response: httpx2.Response = client.post(
         f"/api/proposals/{proposal}/decide", json=body, headers=BROWSER
     )

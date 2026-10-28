@@ -101,16 +101,24 @@ def first_round(
     polled = poll_feed(berth, aggregate)
     assert (polled["bound"], polled["submitted"]) == (1, 4), polled
 
-    # 從 Media 頁訂閱 acg.rip 搜尋：建好就讀一輪，第一輪由人選「全部下載」。
+    # 從 Media 頁訂閱 acg.rip 搜尋（M5 票 26）：先搜、列出字幕組，選绿茶字幕组；只綁那一組，
+    # 建好就讀一輪、當場送出第一批（第 11 集），不再到 RSS 頁選第一輪。
+    groups = ok(berth.get("/rss/search/subgroups", params={"kind": "acgrip", "q": "Kamiina Botan"}))
+    assert {row["name"] for row in groups} == {"绿茶字幕组", "千夏字幕组"}, groups
     kamiina = ok(
         berth.post(
             "/rss/subscriptions/search",
-            json={"media": KAMIINA, "route": route, "kind": "acgrip", "term": "Kamiina Botan"},
+            json={
+                "media": KAMIINA,
+                "route": route,
+                "kind": "acgrip",
+                "term": "Kamiina Botan",
+                "subgroup": "绿茶字幕组",
+            },
         )
     )
     assert kamiina["poll_error"] == "", kamiina
-    primed = ok(berth.post(f"/rss/feeds/{kamiina['id']}/prime", json={"mode": "all"}))
-    assert primed["submitted"] == 1, primed
+    assert kamiina["primed_at"] is not None, kamiina
 
     # 一般的 acg.rip 搜尋 feed：沒有番組頁，長出來的留在待綁定，由人綁。
     rezero = ok(berth.post("/rss/feeds", json={"url": REZERO_URL, **routes}))["id"]
@@ -159,15 +167,14 @@ def test_a_mikan_feed_binds_itself_and_fills_in_the_old_episodes(
     ]
 
 
-def test_a_search_subscription_takes_its_first_round_but_not_the_batch(
+def test_a_search_subscription_takes_only_its_subgroup(
     berth: httpx.Client, first_round: FirstRound
 ) -> None:
+    """M5 票 26：選了绿茶字幕组的那一條只收那一組；千夏字幕组的合集不寫成 Item、不長 Series。"""
     items = [row for row in ok(berth.get("/rss/items")) if row["feed_id"] == first_round.kamiina]
-    batch = [row for row in items if "合集" in row["title"]]
-    assert len(batch) == 1, items
-    assert batch[0]["status"] == "excluded", batch
-    assert batch[0]["skip"]["code"] == "not_single", batch
-    assert batch[0]["job_hash"] == "", batch
+    assert items, items
+    assert all(row["title"].startswith("[绿茶字幕组]") for row in items), items
+    assert all(row["job_hash"] for row in items), items
 
     assert [(season, episode) for season, episode, _ in _episodes(berth, KAMIINA)] == [(1, 11)]
 

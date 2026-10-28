@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { isJobRefusal } from '../api/jobs'
 import { mediaQueryOptions } from '../api/media'
 import { routesQueryOptions } from '../api/routes'
-import { isRssRefusal } from '../api/rss'
+import { feedsQueryOptions, isRssRefusal, type PrimeMode } from '../api/rss'
 import {
   decideProposal,
   proposalRefusalOf,
@@ -14,6 +14,9 @@ import {
   type Proposal,
   type ProposalRow,
   type RouteAsk,
+  type SubgroupAsk,
+  type SubgroupOption,
+  type SubscriptionRef,
 } from '../api/proposals'
 import { Checkbox, CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
@@ -22,6 +25,8 @@ import { Timestamp } from '../components/Timestamp'
 import i18n from '../i18n'
 import { formatList } from '../i18n/list'
 import { formatSize } from '../media/searchResult'
+import { FirstRoundChoice, Options, SubgroupLine } from '../media/SubscribePanel'
+import { ReleaseTitles } from '../rss/ReleaseTitles'
 import { useCardActions } from './cards'
 
 /**
@@ -36,6 +41,9 @@ import { useCardActions } from './cards'
  * **作品放得進的 Route 不只一條時，那一列的 Route 由人選**（票 23b）：清單是伺服器提出時存的
  * （`preview.routes`），預選這部作品上次用的那一條、沒用過就不預選；勾著的列沒選齊之前確認鍵不畫
  * （DESIGN.md「先選再確認」），伺服器也只收清單裡的。
+ *
+ * **訂閱的字幕組由人選**（票 26）：選項是伺服器提出時讀番組頁或那一次搜尋存的（`preview.subgroups`），
+ * 預選助理建議的那一個；`required` 的列沒選之前確認鍵同樣不畫。關鍵字訂閱列出選的那一組的第一批。
  */
 export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; toolCallId: string }) {
   const { t } = useTranslation()
@@ -54,6 +62,18 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   // 勾著、而且作品放得進的 Route 不只一條的列：要人選。
   const choosing = (index: number) => asks[index] != null && ticked.has(index)
   const unpicked = rows.filter((_, index) => choosing(index) && picks[index] === null).length
+  const groupAsks = proposal.preview.subgroups
+  const [groupPicks, setGroupPicks] = useState<readonly (string | null)[]>(() =>
+    rows.map((_, index) => groupAsks[index]?.preselected ?? null),
+  )
+  // 勾著、而且字幕組要人選的列。
+  const choosingGroup = (index: number) => groupAsks[index]?.required === true && ticked.has(index)
+  // 關鍵字訂閱的第一輪（票 26）：預設「下載這些並追之後的」。
+  const roundOffers = proposal.preview.first_batch
+  const [rounds, setRounds] = useState<readonly PrimeMode[]>(() => rows.map(() => 'all'))
+  const groupsUnpicked = rows.filter(
+    (_, index) => choosingGroup(index) && groupPicks[index] === null,
+  ).length
   // 按過之後整排鍵收掉：焦點交給卡片標題，不掉回 `body`（WCAG 2.4.3）。只在這一頁按的才搬。
   const title = useRef<HTMLHeadingElement>(null)
   const pressed = useRef(false)
@@ -75,6 +95,21 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         ...(approve && asking
           ? {
               routes: rows.map((_, index) => (choosing(index) ? picks[index] : null)),
+            }
+          : {}),
+        ...(approve && roundOffers.some(Boolean)
+          ? {
+              first_batch: rows.map((_, index) =>
+                roundOffers[index] && ticked.has(index) ? (rounds[index] ?? 'all') : null,
+              ),
+            }
+          : {}),
+        // 字幕組同理；不必選的列送預選的那一個（伺服器沒收到也是用它）。
+        ...(approve && groupAsks.some((ask) => ask !== null)
+          ? {
+              subgroups: rows.map((_, index) =>
+                groupAsks[index] != null && ticked.has(index) ? groupPicks[index] : null,
+              ),
             }
           : {}),
       }),
@@ -116,6 +151,9 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
 
       <Effects proposal={proposal} />
       {waiting && asking ? <p className="text-xs text-ink">{t('agent.card.routeLead')}</p> : null}
+      {waiting && groupAsks.some((ask) => ask?.required) ? (
+        <p className="text-xs text-ink">{t('agent.card.subgroupLead')}</p>
+      ) : null}
       {proposal.command === SUBMIT ? <SubmitFolders rows={rows} /> : null}
 
       <ol className="grid gap-2">
@@ -136,6 +174,25 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
                 editable: waiting && !decide.isPending,
                 onPick: (route) =>
                   setPicks((old) => old.map((value, at) => (at === index ? route : value))),
+              }}
+              subgroup={{
+                ask: groupAsks[index] ?? null,
+                // 按過之後是伺服器記下的那一個；沒記（不必選的列）就是預選的那一個。
+                pick: waiting
+                  ? (groupPicks[index] ?? null)
+                  : (proposal.subgroups?.[index] ?? groupAsks[index]?.preselected ?? null),
+                editable: waiting && !decide.isPending,
+                onPick: (key) =>
+                  setGroupPicks((old) => old.map((value, at) => (at === index ? key : value))),
+              }}
+              existing={proposal.preview.existing[index] ?? []}
+              round={{
+                offered: roundOffers[index] === true,
+                // 按過之後是伺服器記下的那一個；沒記是預設的那一個。
+                pick: waiting ? (rounds[index] ?? 'all') : (proposal.first_batch?.[index] ?? 'all'),
+                editable: waiting && !decide.isPending,
+                onPick: (mode) =>
+                  setRounds((old) => old.map((value, at) => (at === index ? mode : value))),
               }}
             />
           )
@@ -186,7 +243,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
             <RequestFailed error={decide.error} lead={t('agent.card.failed')} />
           ) : null}
           <div className={CONFIRM_ACTIONS}>
-            {ticked.size > 0 && unpicked === 0 ? (
+            {ticked.size > 0 && unpicked === 0 && groupsUnpicked === 0 ? (
               <PrimaryButton
                 type="button"
                 // `busy` 而不是 `disabled`：停用的鍵接不住焦點（DESIGN.md〈Buttons〉）。
@@ -208,7 +265,9 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               <p className="text-xs text-ink-dim">
                 {ticked.size === 0
                   ? t('agent.card.noneTicked')
-                  : t('agent.card.routeMissing', { count: unpicked })}
+                  : unpicked > 0
+                    ? t('agent.card.routeMissing', { count: unpicked })
+                    : t('agent.card.subgroupMissing', { count: groupsUnpicked })}
               </p>
             )}
             <GhostButton
@@ -270,6 +329,7 @@ const COMMAND_TITLES = {
   'rss.subscribe_mikan': 'agent.card.commands.rss_subscribe_mikan',
   'rss.subscribe_search': 'agent.card.commands.rss_subscribe_search',
   'rss.add_feed': 'agent.card.commands.rss_add_feed',
+  'rss.delete_feed': 'agent.card.commands.rss_delete_feed',
 } as const
 
 function commandTitle(command: string): string {
@@ -308,6 +368,9 @@ function RowBody({
   external,
   torrents,
   route,
+  subgroup,
+  existing,
+  round,
 }: {
   command: string
   row: Row
@@ -316,11 +379,23 @@ function RowBody({
   /** 這一列按下去會送出幾個 torrent；`null` 是要送出時才知道，`undefined` 是不送。 */
   torrents: number | null | undefined
   route: RouteSlot
+  subgroup: SubgroupSlot
+  /** 這部作品提出時已經有的訂閱（票 26）。 */
+  existing: readonly SubscriptionRef[]
+  round: RoundSlot
 }) {
   const { t } = useTranslation()
   // `labelled`：勾選框的標籤已經是發佈名，欄位裡不再印一次。
   if (isSubmit(command, row)) return <SubmitRowBody row={row} labelled={labelled} route={route} />
-  if (command === 'rss.add_feed') return <FeedRowBody row={row} external={external} />
+  if (command === 'rss.add_feed') {
+    return (
+      <div className="grid gap-2">
+        <FeedRowBody row={row} external={external} />
+        <Existing found={existing} />
+      </div>
+    )
+  }
+  if (command === 'rss.delete_feed') return <DeleteFeedRowBody row={row} />
   if (command === 'rss.subscribe_mikan' || command === 'rss.subscribe_search') {
     return (
       <SubscribeRowBody
@@ -329,6 +404,9 @@ function RowBody({
         external={external}
         torrents={torrents}
         route={route}
+        subgroup={subgroup}
+        existing={existing}
+        round={round}
       />
     )
   }
@@ -361,6 +439,23 @@ interface RouteSlot {
   pick: number | null
   editable: boolean
   onPick: (route: number | null) => void
+}
+
+/** 一列訂閱的字幕組（票 26）：`ask` 不是 `null` 時有選項；`required` 時由人選。 */
+interface SubgroupSlot {
+  ask: SubgroupAsk | null
+  /** 選了哪一個（選項的 `key`）；`null` 是還沒選。 */
+  pick: string | null
+  editable: boolean
+  onPick: (key: string) => void
+}
+
+/** 一列關鍵字訂閱的第一輪（票 26）：`offered` 時卡上選「下載這些並追之後的」或「只追之後的」。 */
+interface RoundSlot {
+  offered: boolean
+  pick: PrimeMode
+  editable: boolean
+  onPick: (mode: PrimeMode) => void
 }
 
 /**
@@ -468,69 +563,187 @@ function SubscribeRowBody({
   external,
   torrents,
   route,
+  subgroup,
+  existing,
+  round,
 }: {
   command: 'rss.subscribe_mikan' | 'rss.subscribe_search'
   row: Row
   external: readonly string[]
   torrents: number | null | undefined
   route: RouteSlot
+  subgroup: SubgroupSlot
+  existing: readonly SubscriptionRef[]
+  round: RoundSlot
 }) {
   const { t } = useTranslation()
   const mediaId = typeof row.media_id === 'string' ? row.media_id : ''
   const media = useQuery({ ...mediaQueryOptions(mediaId), enabled: mediaId !== '' })
   const given = media.data?.routes.find((choice) => choice.id === row.route_id)
-  const source: Field[] =
-    command === 'rss.subscribe_mikan'
-      ? [
-          {
-            // 番組名是模型給的自由文字（`name`），出自外部內容的話標在這一格。
-            name: 'name',
-            label: t('agent.card.fields.bangumi'),
-            value: text(row.name) === '—' ? `#${String(row.bangumi_id)}` : text(row.name),
-          },
-          {
-            name: 'subgroup_name',
-            label: t('agent.card.fields.subgroup'),
-            value:
-              text(row.subgroup_name) === '—'
-                ? `#${String(row.subgroup_id)}`
-                : text(row.subgroup_name),
-          },
-        ]
-      : [
-          { name: 'kind', label: t('agent.card.fields.site'), value: text(row.kind) },
-          { name: 'term', label: t('agent.card.fields.term'), value: text(row.term), mono: true },
-        ]
+  const mikan = command === 'rss.subscribe_mikan'
+  const { ask } = subgroup
+  const picked = ask?.options.find((option) => option.key === subgroup.pick) ?? null
+  // 沒有選項（番組頁或搜尋上沒有字幕組）：照助理給的那一個訂。
+  const named = mikan
+    ? text(row.subgroup_name) === '—'
+      ? `#${String(row.subgroup_id)}`
+      : text(row.subgroup_name)
+    : text(row.subgroup)
+  const choosing = ask !== null && subgroup.editable && (ask.required || ask.options.length > 1)
+  const source: Field[] = mikan
+    ? [
+        {
+          // 番組名是模型給的自由文字（`name`），出自外部內容的話標在這一格。
+          name: 'name',
+          label: t('agent.card.fields.bangumi'),
+          value: text(row.name) === '—' ? `#${String(row.bangumi_id)}` : text(row.name),
+        },
+      ]
+    : [
+        { name: 'kind', label: t('agent.card.fields.site'), value: text(row.kind) },
+        { name: 'term', label: t('agent.card.fields.term'), value: text(row.term), mono: true },
+      ]
   return (
-    <Fields
-      external={external}
-      fields={[
-        ...source,
-        {
-          name: 'media_id',
-          label: t('agent.card.fields.media'),
-          value: media.data?.title ?? mediaId,
-        },
-        {
-          name: 'route_id',
-          label: t('agent.card.fields.route'),
-          value: <RouteValue route={route} fallback={given?.name ?? `#${String(row.route_id)}`} />,
-        },
-        // 訂閱 Mikan 按下去就當場送整季，不經第一批確認（協調者 2026-10-27）：按的人要知道送多少。
-        ...(command === 'rss.subscribe_mikan'
-          ? [
-              {
-                name: 'sends',
-                label: t('agent.card.fields.sends'),
-                value:
-                  typeof torrents === 'number'
-                    ? t('agent.card.wholeSeason', { count: torrents })
-                    : t('agent.card.wholeSeasonUnknown'),
-              },
-            ]
-          : []),
-      ]}
-    />
+    <div className="grid gap-2">
+      <Fields
+        external={external}
+        fields={[
+          ...source,
+          {
+            name: mikan ? 'subgroup_name' : 'subgroup',
+            label: t('agent.card.fields.subgroup'),
+            value: ask === null ? named : (picked?.name ?? t('agent.card.subgroupNone')),
+          },
+          {
+            name: 'media_id',
+            label: t('agent.card.fields.media'),
+            value: media.data?.title ?? mediaId,
+          },
+          {
+            name: 'route_id',
+            label: t('agent.card.fields.route'),
+            value: (
+              <RouteValue route={route} fallback={given?.name ?? `#${String(row.route_id)}`} />
+            ),
+          },
+          {
+            name: 'sends',
+            label: t('agent.card.fields.sends'),
+            value: mikan
+              ? mikanSends(ask, picked, torrents)
+              : round.pick === 'later'
+                ? t('agent.card.firstBatchLater')
+                : t('agent.card.firstBatch', { count: picked?.titles.length ?? 0 }),
+          },
+        ]}
+      />
+      {choosing ? (
+        <Options
+          label={t('agent.card.subgroupChoose')}
+          items={ask.options}
+          keyOf={(option) => option.key}
+          picked={picked}
+          onPick={(option) => subgroup.onPick(option.key)}
+          render={(option) => <SubgroupLine group={option} />}
+        />
+      ) : null}
+      {mikan ? null : (
+        <FirstBatch option={picked} missing={ask === null} later={round.pick === 'later'} />
+      )}
+      {mikan || !round.offered ? null : round.editable ? (
+        <FirstRoundChoice value={round.pick} onChange={round.onPick} />
+      ) : (
+        <p className="text-xs text-ink">{t(`rss.subscribe.round.${round.pick}`)}</p>
+      )}
+      <Existing found={existing} />
+    </div>
+  )
+}
+
+/** 訂閱 Mikan 按下去就當場送整季，不經第一批確認（協調者 2026-10-27）：按的人要知道送多少。 */
+function mikanSends(
+  ask: SubgroupAsk | null,
+  picked: SubgroupOption | null,
+  torrents: number | null | undefined,
+): string {
+  if (picked !== null) return i18n.t('agent.card.wholeSeason', { count: picked.releases })
+  if (ask !== null) return i18n.t('agent.card.wholeSeasonPick')
+  return typeof torrents === 'number'
+    ? i18n.t('agent.card.wholeSeason', { count: torrents })
+    : i18n.t('agent.card.wholeSeasonUnknown')
+}
+
+/** 關鍵字訂閱的第一批（票 26）：選的那一組這一次搜到的發佈名，按下確認就送出。 */
+function FirstBatch({
+  option,
+  missing,
+  later,
+}: {
+  option: SubgroupOption | null
+  missing: boolean
+  later: boolean
+}) {
+  const { t } = useTranslation()
+  if (missing) return <p className="text-xs text-ink-dim">{t('agent.card.firstBatchNone')}</p>
+  if (option === null)
+    return <p className="text-xs text-ink-dim">{t('agent.card.firstBatchPick')}</p>
+  return (
+    <div className="grid gap-1 text-xs">
+      <p className="label text-ink-dim">{t('agent.card.fields.firstBatch')}</p>
+      <ReleaseTitles titles={option.titles} />
+      <p className="max-w-prose text-ink-dim">
+        {later ? t('rss.subscribe.round.laterHint') : t('agent.card.firstBatchAfter')}
+      </p>
+    </div>
+  )
+}
+
+/** 這部作品已經有的訂閱（票 26）：說出來，要不要再訂一份由人決定。 */
+function Existing({ found }: { found: readonly SubscriptionRef[] }) {
+  const { t } = useTranslation()
+  if (found.length === 0) return null
+  return (
+    <div className="grid gap-0.5 border-2 border-rule-strong p-2 text-xs">
+      <p className="text-ink">{t('agent.card.existingLead')}</p>
+      <ul className="grid gap-0.5">
+        {found.map((ref) => (
+          <li key={`${ref.feed_id}:${ref.subgroup}`} className="text-ink">
+            <span className="value wrap-anywhere">{ref.name}</span>
+            <span className="text-ink-dim">
+              {' · '}
+              {ref.subgroup
+                ? t('agent.card.existingSubgroup', { subgroup: ref.subgroup })
+                : t('agent.card.existingEvery')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** 刪除訂閱（票 26）：哪一條 Feed、刪掉會怎樣。Feed 清單只有管理員讀得到，刪 Feed 也只有管理員。 */
+function DeleteFeedRowBody({ row }: { row: Row }) {
+  const { t } = useTranslation()
+  const feeds = useQuery(feedsQueryOptions())
+  const feed = feeds.data?.find((one) => one.id === row.feed_id)
+  return (
+    <div className="grid gap-1">
+      <Fields
+        external={[]}
+        fields={[
+          {
+            name: 'feed_id',
+            label: t('agent.card.fields.feed'),
+            value: feed?.name ?? `#${String(row.feed_id)}`,
+          },
+          ...(feed ? [{ name: 'kind', label: t('agent.card.fields.site'), value: feed.kind }] : []),
+        ]}
+      />
+      <p className="max-w-prose text-xs text-ink">
+        {t('agent.card.deleteFeed', { count: feed?.items ?? 0 })}
+      </p>
+    </div>
   )
 }
 

@@ -6,7 +6,8 @@ import { shot } from './shot.ts'
 // `agent`：同 `downloads`（SPY×FAMILY 的五筆下載，`- 01` 停在待審核），另外 AI 開著、模型是照腳本回答的
 // 替身（`scripts/fake_setup_server.py` 的 `why_not_script`）：先搜尋作品、再叫「為什麼沒入庫」，用工具結果的
 // 結論分類回答；說「下載 SPY×FAMILY」時出一張三列的送單卡（M5 票 13）；「加這個 RSS：<網址>」出卡、
-// 「上網找網址直接加」被擋（M5 票 14）；「慢慢查」翻三頁、每步等一下（M5 票 25）。一個請求都不出網、不需要金鑰
+// 「上網找網址直接加」被擋（M5 票 14）；「慢慢查」翻三頁、每步等一下（M5 票 25）；兩種訂閱卡要人選字幕組
+// （M5 票 26）。一個請求都不出網、不需要金鑰
 // （M5 票 12）。桌機與手機各跑一次（playwright.config.ts）。
 
 test('側面板問「為什麼沒入庫」得到結論，重新載入之後對話還在', async ({ page }) => {
@@ -279,6 +280,109 @@ test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', 
   expect(feeds).toHaveLength(0)
   await shot(page, 'feed-refused')
 })
+
+test('訂閱 Mikan：字幕組由人在卡上選，送出的集數跟著選的那一組（M5 票 26）', async ({ page }) => {
+  // 假模型說「從 Mikan 訂閱 SPY×FAMILY」時：搜作品、問 Route、讀番組頁，再出一張 Mikan 訂閱卡，
+  // 建議的字幕組是 Berth-Demo（3 集）；番組頁上另有 LoliHouse（12 集）與北宇治字幕组（6 集）。
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('從 Mikan 訂閱 SPY×FAMILY')
+  await input.press('Enter')
+
+  const card = panel.getByRole('region', { name: '訂閱 Mikan 番組' })
+  await expect(card).toContainText('字幕組由你選')
+  const groups = card.getByRole('button', { name: /Berth-Demo|LoliHouse|北宇治字幕组/ })
+  await expect(groups).toHaveCount(3)
+  await expect(card.getByRole('button', { name: /^Berth-Demo/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(card).toContainText('會送出整季：3 個 torrent')
+  await pickRouteIfAsked(card)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'mikan-card')
+
+  await card.getByRole('button', { name: /^LoliHouse/ }).click()
+  await expect(card).toContainText('會送出整季：12 個 torrent')
+  await shot(page, 'mikan-picked')
+  await card.getByRole('button', { name: '確認' }).click()
+
+  await expect(card.getByRole('status')).toHaveText('做完了。')
+  await expect(panel.getByRole('log', { name: '助理' })).toContainText(
+    '訂好了，字幕組是你在卡上選的 LoliHouse。',
+  )
+  const feeds = (await (await page.request.get('/api/rss/feeds')).json()) as { url: string }[]
+  expect(feeds.map((feed) => feed.url)).toContain(
+    'https://mikanani.me/RSS/Bangumi?bangumiId=3310&subgroupid=584',
+  )
+  await shot(page, 'mikan-confirmed')
+})
+
+test('關鍵字訂閱：卡上選字幕組、列出第一批，說出作品已經有的訂閱（M5 票 26）', async ({ page }) => {
+  // 假模型說「在 acg.rip 訂閱 SPY×FAMILY」時：搜作品、問 Route，再出一張關鍵字訂閱卡，建議 Berth-Demo。
+  // 搜到 Berth-Demo（3 筆）、ToonsHub（2 筆）、黒ネズミたち（1 筆）。上一條已經從 Mikan 訂了一份。
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('在 acg.rip 訂閱 SPY×FAMILY')
+  await input.press('Enter')
+
+  const card = panel.getByRole('region', { name: '訂閱關鍵字搜尋' })
+  await expect(card).toContainText('要你確認')
+  await expect(card).toContainText('[Berth-Demo] SPY×FAMILY - 01 [1080p][CHT]')
+  await expect(card).toContainText('按下確認就送出第一批：3 個 torrent')
+  // 這部作品已經有 Mikan 那一份：卡上說出來，由人決定。
+  await expect(card).toContainText('這部作品已經有這幾條訂閱')
+  await expect(card).toContainText('字幕組 LoliHouse')
+  await pickRouteIfAsked(card)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'keyword-card')
+
+  await card.getByRole('button', { name: /^ToonsHub/ }).click()
+  await expect(card).not.toContainText('[Berth-Demo] SPY×FAMILY - 01 [1080p][CHT]')
+  await expect(card).toContainText('[ToonsHub] SPY×FAMILY - 02 [1080p][CHT]')
+  await expect(card).toContainText('按下確認就送出第一批：2 個 torrent')
+  // 第一批的兩個選擇，預設下載這些並追之後的（這一條照預設確認）。
+  await expect(card.getByRole('button', { name: /^下載這些並追之後的/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(card.getByRole('button', { name: /^只追之後的/ })).toBeVisible()
+  await shot(page, 'keyword-picked')
+  await card.getByRole('button', { name: '確認' }).click()
+
+  await expect(card.getByRole('status')).toHaveText('做完了。')
+  await expect(panel.getByRole('log', { name: '助理' })).toContainText(
+    '訂好了，字幕組是你在卡上選的 ToonsHub。',
+  )
+  // 只綁 ToonsHub：那條 Feed 只收它的發佈，第一輪已經選過（不必到 RSS 頁按）。
+  const feeds = (await (await page.request.get('/api/rss/feeds')).json()) as {
+    id: number
+    kind: string
+    primed_at: string | null
+  }[]
+  const keyword = feeds.find((feed) => feed.kind === 'acgrip')
+  expect(keyword?.primed_at).not.toBeNull()
+  const items = (await (
+    await page.request.get(`/api/rss/feeds/${String(keyword?.id)}/preview`)
+  ).json()) as { title: string }[]
+  expect(items.map((item) => item.title).sort()).toEqual([
+    '[ToonsHub] SPY×FAMILY - 02 [1080p][CHT]',
+    '[ToonsHub] SPY×FAMILY - 03 [1080p][CHT]',
+  ])
+  await shot(page, 'keyword-confirmed')
+})
+
+/** 這台有兩條電視 Route：作品送過單的話預選上次那一條，沒有就選 Anime（票 23b）。 */
+async function pickRouteIfAsked(card: import('@playwright/test').Locator) {
+  const picker = card.getByRole('combobox', { name: 'Route' })
+  if ((await picker.count()) > 0 && (await picker.inputValue()) === '') {
+    await picker.selectOption({ label: 'Anime' })
+  }
+}
 
 test('停下的那一輪：說明是 Berth 的「停下」，「繼續」只按得到一次，重新載入後同一個樣子（M5 票 22）', async ({
   page,

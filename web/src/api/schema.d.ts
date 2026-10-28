@@ -1789,6 +1789,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/search/subgroups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Search Subgroups
+         * @description 讀一次 Nyaa / acg.rip 的搜尋 feed，列出裡面的字幕組，筆數多的在前（M5 票 26）。只讀。
+         */
+        get: operations["get_search_subgroups_api_rss_search_subgroups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/subscriptions/mikan": {
         parameters: {
             query?: never;
@@ -1821,8 +1841,8 @@ export interface paths {
         put?: never;
         /**
          * Post Search Subscription
-         * @description 建搜尋 feed 並當場讀一輪：第一輪預覽（`GET /rss/feeds/{id}/preview`）馬上有東西。讀不到
-         *     仍是 201，原文在 `poll_error`。
+         * @description 建只收一個字幕組的搜尋 feed、當場讀一輪並送出那一組的第一批（M5 票 26：人在作品頁看過了，
+         *     不再到 RSS 頁選第一輪）。讀不到仍是 201，原文在 `poll_error`，之後的輪詢再讀、照送。
          */
         post: operations["post_search_subscription_api_rss_subscriptions_search_post"];
         delete?: never;
@@ -5486,7 +5506,7 @@ export interface components {
         };
         /**
          * ProposalDecisionIn
-         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 除外（票 23b）。
+         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 與字幕組除外（票 23b、26）。
          */
         ProposalDecisionIn: {
             /** Approve */
@@ -5495,6 +5515,10 @@ export interface components {
             selection?: number[] | null;
             /** Routes */
             routes?: (number | null)[] | null;
+            /** Subgroups */
+            subgroups?: (string | null)[] | null;
+            /** First Batch */
+            first_batch?: (components["schemas"]["PrimeMode"] | null)[] | null;
         };
         /** ProposalOut */
         ProposalOut: {
@@ -5539,6 +5563,10 @@ export interface components {
             detached_at: string | null;
             /** Routes */
             routes: (number | null)[] | null;
+            /** Subgroups */
+            subgroups: (string | null)[] | null;
+            /** First Batch */
+            first_batch: (components["schemas"]["PrimeMode"] | null)[] | null;
         };
         /**
          * ProposalPreviewOut
@@ -5558,13 +5586,19 @@ export interface components {
             torrents: (number | null)[];
             /** Routes */
             routes: (components["schemas"]["RouteAskOut"] | null)[];
+            /** Subgroups */
+            subgroups: (components["schemas"]["SubgroupAskOut"] | null)[];
+            /** Existing */
+            existing: components["schemas"]["SubscriptionRefOut"][][];
+            /** First Batch */
+            first_batch: boolean[];
         };
         /**
          * ProposalRefusal
          * @description 決定 Proposal 時做不了的理由（`services.proposals`）。
          * @enum {string}
          */
-        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid" | "route_required" | "route_not_offered";
+        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid" | "route_required" | "route_not_offered" | "subgroup_required" | "subgroup_not_offered" | "first_batch_not_offered";
         /**
          * ProposalRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。`proposal_decided` 的 `detail` 是
@@ -6191,8 +6225,24 @@ export interface components {
             evidence: string;
         };
         /**
+         * SearchSubgroupOut
+         * @description 一次關鍵字搜尋裡的一個字幕組（M5 票 26）：作品頁訂閱讓人挑的那一個。
+         */
+        SearchSubgroupOut: {
+            /** Name */
+            name: string;
+            /** Releases */
+            releases: number;
+            /** Updated */
+            updated: string | null;
+            /** Latest */
+            latest: string;
+            /** Titles */
+            titles: string[];
+        };
+        /**
          * SearchSubscriptionIn
-         * @description 以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，它長出的 RSS Series 都綁到這部作品。
+         * @description 以作品的一個標題建 Nyaa / acg.rip 搜尋 feed，只收一個字幕組、綁到這部作品（M5 票 26）。
          */
         SearchSubscriptionIn: {
             /** Media */
@@ -6202,6 +6252,10 @@ export interface components {
             kind: components["schemas"]["FeedKind"];
             /** Term */
             term: string;
+            /** Subgroup */
+            subgroup: string;
+            /** @default all */
+            first_batch?: components["schemas"]["PrimeMode"];
         };
         /**
          * SearchVerdict
@@ -6696,6 +6750,37 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * SubgroupAskOut
+         * @description 一列訂閱的字幕組（票 26）。`required` 時勾著的這一列一定要選，`preselected` 是模型建議的
+         *     那一個。
+         */
+        SubgroupAskOut: {
+            /** Options */
+            options: components["schemas"]["SubgroupOptionOut"][];
+            /** Preselected */
+            preselected: string | null;
+            /** Required */
+            required: boolean;
+        };
+        /**
+         * SubgroupOptionOut
+         * @description 訂閱可選的一個字幕組（票 26）。
+         */
+        SubgroupOptionOut: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Releases */
+            releases: number;
+            /** Updated */
+            updated: string | null;
+            /** Latest */
+            latest: string;
+            /** Titles */
+            titles: string[];
+        };
         /** SubgroupOut */
         SubgroupOut: {
             /** Id */
@@ -6719,6 +6804,19 @@ export interface components {
             series: components["schemas"]["SeriesOut"];
             /** Excluded */
             excluded: components["schemas"]["ExcludedCountOut"][];
+        };
+        /**
+         * SubscriptionRefOut
+         * @description 這部作品提出那一刻已經有的一條訂閱（票 26）。網址不給：聚合 feed 的網址帶 token。
+         */
+        SubscriptionRefOut: {
+            /** Feed Id */
+            feed_id: number;
+            /** Name */
+            name: string;
+            kind: components["schemas"]["FeedKind"];
+            /** Subgroup */
+            subgroup: string;
         };
         /**
          * TagsOut
@@ -9618,7 +9716,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProposalRefusalOut"];
                 };
             };
-            /** @description `selection_invalid` · `route_required` · `route_not_offered` */
+            /** @description `selection_invalid` · `route_required` · `route_not_offered` · `subgroup_required` · `subgroup_not_offered` · `first_batch_not_offered` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11021,6 +11119,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description `feed_unreachable` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    get_search_subgroups_api_rss_search_subgroups_get: {
+        parameters: {
+            query: {
+                kind: components["schemas"]["FeedKind"];
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchSubgroupOut"][];
+                };
+            };
+            /** @description `feed_unsupported` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
                 };
             };
             /** @description `feed_unreachable` */

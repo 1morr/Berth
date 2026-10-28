@@ -89,6 +89,7 @@ from berth.domain import (
     AiRunKind,
     AiStopReason,
     AiToolOutcome,
+    FeedKind,
     JobRefusal,
     Language,
     ProposalStatus,
@@ -96,6 +97,7 @@ from berth.domain import (
 )
 from berth.models import AiConversation, AiRun, AiSettings, AiToolCall, User
 from berth.models.types import utcnow
+from berth.parser.binding import of_group
 from berth.services import proposals
 from berth.services.agent_books import call_row, elapsed_ms, plus
 from berth.services.agent_guards import Progress, ProviderBreaker, clip
@@ -108,6 +110,7 @@ from berth.services.agent_tools import (
     tool_name,
     visible_tools,
 )
+from berth.services.bangumi import read_bangumi
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.compaction import (
@@ -118,14 +121,21 @@ from berth.services.compaction import (
 )
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.jobs import JobRejectedError
-from berth.services.media import route_offer
 from berth.services.proposals import (
     InvalidProposalError,
     ProposalRejectedError,
     ProposalView,
+    SubgroupAsk,
+    SubgroupOption,
 )
 from berth.services.registry import CommandSpec, commands
-from berth.services.rss import mikan_season_size
+from berth.services.rss import (
+    RssRejectedError,
+    SubscriptionRef,
+    list_subscriptions,
+    search_subgroups,
+    subscriptions_of_feed_url,
+)
 from berth.services.settings import read_settings
 from berth.services.skills import menu, skills_for
 from berth.services.usage import SpendCheck, spend_check
@@ -440,9 +450,12 @@ def _toolset(role: Role, *, tavily: bool) -> FunctionToolset[Turn]:
                 )
             )
             continue
+        # 直接做的寫入（plan §11.6「其餘可逆的直接做」）在票 26 之後沒有了：關鍵字訂閱也出卡。
+        # 要再加一支，連同它的守法（外部內容降級、Route 要人選）一起加回來。
+        assert spec.effect is Effect.READ, f"{name} writes without a card"
         tools.append(
             Tool[Turn].from_schema(
-                _runner(name) if spec.effect is Effect.READ else _write_runner(spec),
+                _runner(name),
                 name=tool_name(name),
                 description=spec.about,
                 json_schema=spec.input.model_json_schema(),
@@ -459,25 +472,12 @@ def _runner(name: str) -> Callable[..., Awaitable[object]]:
     return run
 
 
-def _write_runner(spec: CommandSpec) -> Callable[..., Awaitable[object]]:
-    """可逆、不必出卡的寫入（plan §11.6〈確認卡範圍〉的「其餘可逆的直接做」）。自由文字出自外部內容
-    的那一次改出卡，所以它也可能是恢復那一輪的卡片。"""
-
-    async def run(ctx: RunContext[Turn], **arguments: object) -> object:
-        assert ctx.tool_call_id is not None
-        if ctx.tool_call_approved:
-            return await ctx.deps.card_result(ctx.tool_call_id)
-        return await ctx.deps.run_write(spec, arguments, ctx.tool_call_id, ctx.messages)
-
-    return run
-
-
 # ---------------------------------------------------------------- 確認卡（票 13）
 
 
 def needs_card(spec: CommandSpec) -> bool:
     """在對話裡一律出確認卡的命令（plan §11.6〈確認卡範圍〉）：永遠要人的（`needs_person`），
-    與會送出 torrent 的。「自由文字出自外部內容」看的是這一次呼叫（`Turn.run_write`）。"""
+    與會送出 torrent 的。給模型的寫入工具都是這兩種（票 26 起，`test_agent_tools`）。"""
     return spec.needs_person or Flag.DOWNLOADS in spec.flags
 
 
@@ -529,27 +529,139 @@ def _bind_submit(turn: Turn, row: BaseModel) -> dict[str, object]:
     return {"source": source, "media_id": row.media_id, "route_id": row.route_id}
 
 
-async def _one_torrent(_turn: Turn, _row: Mapping[str, object]) -> int | None:
-    return 1
+class SearchSubscriptionRow(BaseModel):
+    """關鍵字訂閱卡的一列，模型給的那一份（票 26）：字幕組一定要說，卡上讓人照這一次搜到的改選。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: FeedKind = Field(description="nyaa or acgrip.")
+    term: str = Field(min_length=1, description="The keyword the feed searches for.")
+    subgroup: str = Field(
+        min_length=1,
+        description=(
+            "The subgroup you recommend, as written in its release names (e.g. ANi). The "
+            "user picks the subgroup on the card; only that one is subscribed."
+        ),
+    )
+    media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
+    route_id: int = Field(description="An id from route_choices for this work.")
 
 
-async def _mikan_season(turn: Turn, row: Mapping[str, object]) -> int | None:
+@dataclass(frozen=True, slots=True)
+class _RowPreview:
+    """提出時逐列算給按卡的人看的（`proposals.ProposalPreview` 的那幾格）。"""
+
+    #: 按下去會送出幾個 torrent；`None` 是不知道。不送 torrent 的命令不看它。
+    torrents: int | None = None
+    subgroups: SubgroupAsk | None = None
+    existing: tuple[SubscriptionRef, ...] = ()
+
+
+_Previewer = Callable[["Turn", AsyncSession, Mapping[str, object]], Awaitable[_RowPreview]]
+
+
+async def _one_torrent(
+    _turn: Turn, _session: AsyncSession, _row: Mapping[str, object]
+) -> _RowPreview:
+    return _RowPreview(torrents=1)
+
+
+async def _mikan_preview(
+    turn: Turn, session: AsyncSession, row: Mapping[str, object]
+) -> _RowPreview:
+    """訂閱 Mikan 的一列（票 26）：番組頁上的字幕組都是選項（已經綁在作品上的除外：訂了也是
+    `series_bound`），模型給的只當預選。送出的筆數照番組頁的發佈表（與單一 feed 同數），人可以改選，
+    所以是選項裡最多的那一個——數量閘看的是上限。讀不到番組頁就不出卡。"""
     bangumi, subgroup = row["bangumi_id"], row["subgroup_id"]
-    assert isinstance(bangumi, int) and isinstance(subgroup, int)
-    return await mikan_season_size(turn.executor.factory, bangumi_id=bangumi, subgroup_id=subgroup)
+    assert isinstance(bangumi, int)
+    try:
+        page = await read_bangumi(session, turn.executor.factory, bangumi)
+    except RssRejectedError as exc:
+        raise CommandRefusedError("rss.subscribe_mikan", exc.reason, exc.detail) from exc
+    options = tuple(
+        SubgroupOption(
+            key=str(group.id),
+            name=group.name,
+            releases=group.releases,
+            updated=group.updated,
+            latest=group.latest,
+            titles=(),
+            arguments={"subgroup_id": group.id, "subgroup_name": group.name},
+        )
+        for group in page.subgroups
+        if group.bound_to is None
+    )
+    picked = str(subgroup) if any(option.key == str(subgroup) for option in options) else None
+    return _RowPreview(
+        torrents=max((option.releases for option in options), default=None),
+        subgroups=_ask(options, picked),
+        existing=await list_subscriptions(session, str(row["media_id"])),
+    )
 
 
-#: 送 torrent 的卡片命令，一列按下去會送出幾個（預覽說給按卡的人聽，協調者 2026-10-27）。
-#: 帶 `downloads` 而沒列的是不知道（`None`）。
-_TORRENTS: dict[str, Callable[[Turn, Mapping[str, object]], Awaitable[int | None]]] = {
+async def _search_preview(
+    turn: Turn, session: AsyncSession, row: Mapping[str, object]
+) -> _RowPreview:
+    """關鍵字訂閱的一列（票 26）：這一次搜到的字幕組都是選項，各帶第一批的發佈名。讀不到就不出卡：
+    列不出第一批，人無從確認。"""
+    kind, term = FeedKind(str(row["kind"])), str(row["term"])
+    try:
+        found = await search_subgroups(turn.executor.factory, kind=kind, term=term)
+    except RssRejectedError as exc:
+        raise CommandRefusedError("rss.subscribe_search", exc.reason, exc.detail) from exc
+    options = tuple(
+        SubgroupOption(
+            key=group.name,
+            name=group.name,
+            releases=group.releases,
+            updated=group.updated,
+            latest=group.latest,
+            titles=group.titles,
+            arguments={"subgroup": group.name},
+        )
+        for group in found
+    )
+    wanted = str(row["subgroup"])
+    picked = next((o.key for o in options if of_group(o.latest, wanted)), None)
+    return _RowPreview(
+        torrents=max((option.releases for option in options), default=0),
+        subgroups=_ask(options, picked),
+        existing=await list_subscriptions(session, str(row["media_id"])),
+    )
+
+
+async def _feed_preview(
+    _turn: Turn, session: AsyncSession, row: Mapping[str, object]
+) -> _RowPreview:
+    """加 Feed 的一列（票 26）：網址是某個 Mikan 番組的單一 feed、而那個番組已經綁在作品上時，
+    說出那部作品已經有的訂閱。其他網址看不出是哪一部。"""
+    return _RowPreview(existing=await subscriptions_of_feed_url(session, str(row["url"])))
+
+
+def _ask(options: tuple[SubgroupOption, ...], picked: str | None) -> SubgroupAsk | None:
+    """沒有選項（番組頁或搜尋上沒有字幕組）是 `None`：照模型給的訂，卡上照樣寫出是哪一個。"""
+    if not options:
+        return None
+    return SubgroupAsk(
+        options=options, preselected=picked, required=len(options) > 1 or picked is None
+    )
+
+
+#: 卡片命令逐列的預覽（按卡的人要知道送多少、選哪個字幕組、作品已經有哪些訂閱）。沒列的什麼都不算。
+_PREVIEWS: dict[str, _Previewer] = {
     "downloading.add_manual_download": _one_torrent,
-    "rss.subscribe_mikan": _mikan_season,
+    "rss.subscribe_mikan": _mikan_preview,
+    "rss.subscribe_search": _search_preview,
+    "rss.add_feed": _feed_preview,
 }
 
 
 #: 輸入要先換過才交給命令的卡片命令。沒列的，模型給的一列就是命令輸入。
 _CARD_INPUTS: dict[str, CardInput] = {
     "downloading.add_manual_download": CardInput(SubmitRow, _bind_submit),
+    "rss.subscribe_search": CardInput(
+        SearchSubscriptionRow, lambda _turn, row: row.model_dump(mode="json")
+    ),
 }
 
 
@@ -588,6 +700,9 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
     """
     shown = len(view.arguments)
     chosen = view.routes or [None] * shown
+    groups = _subgroups_chosen(view)
+    rounds = view.first_batch or [None] * shown
+    existing = view.preview.existing
     held = view.preview.held_back
     later = (
         {
@@ -612,11 +727,41 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
                 "result": row.result,
                 # 人在卡片上選的 Route（票 23b）：蓋過模型給的那一條，模型要照這個說。
                 **({"route_chosen_on_card": chosen[index]} if chosen[index] is not None else {}),
+                # 人在卡片上選的字幕組（票 26）：同上，模型要照這個說。
+                **({"subgroup_chosen_on_card": groups[index]} if groups[index] is not None else {}),
+                # 人在卡片上選的第一輪（票 26）：`later` 是現有的一筆都沒送。
+                **(
+                    {"first_batch_chosen_on_card": rounds[index]}
+                    if rounds[index] is not None
+                    else {}
+                ),
+                # 提出時這部作品已經有的訂閱（票 26）：還留著的話要不要刪由使用者決定。
+                **(
+                    {"existing_subscriptions": to_jsonable_python(existing[index])}
+                    if index < len(existing) and existing[index]
+                    else {}
+                ),
             }
             for index, row in enumerate(view.results or [])
         ],
         **later,
     }
+
+
+def _subgroups_chosen(view: ProposalView) -> list[str | None]:
+    """逐列：人在卡片上選的字幕組名字（選項的 `name`）；沒選、沒得選的是 `None`。"""
+    picks = view.subgroups or [None] * len(view.arguments)
+    asks = view.preview.subgroups
+    named: list[str | None] = []
+    for index, pick in enumerate(picks):
+        ask = asks[index] if index < len(asks) else None
+        found = (
+            next((option for option in ask.options if option.key == pick), None)
+            if ask is not None and pick is not None
+            else None
+        )
+        named.append(found.name if found is not None else None)
+    return named
 
 
 #: 數量閘留下的列（`card_outcome`）。英文：寫給模型的。
@@ -919,12 +1064,18 @@ class Turn:
                 raise failure from exc
         from_pages = [origins.external_fields(row.model_dump(), card.row) for row in wanted]
         async with self.sessions() as session:
-            kept: Sequence[BaseModel] = wanted
-            torrents: list[int | None] = []
-            if Flag.DOWNLOADS in spec.flags:
-                limit = (await read_settings(session, AiSettings)).card_downloads
-                torrents = await self._on_one_card(spec, wanted, limit)
-                kept = wanted[: len(torrents)]
+            limit = (
+                (await read_settings(session, AiSettings)).card_downloads
+                if Flag.DOWNLOADS in spec.flags
+                else None
+            )
+            try:
+                previews = await self._previews(session, spec, wanted, limit)
+            except InvalidProposalError as exc:
+                failure = _failure(exc)
+                failure.payload["row"] = exc.row
+                raise failure from exc
+            kept: Sequence[BaseModel] = wanted[: len(previews)]
             try:
                 rows = [card.bind(self, row) for row in kept]
                 view = await proposals.propose(
@@ -937,7 +1088,15 @@ class Turn:
                     tool_call_id=tool_call_id,
                     external_fields=from_pages[: len(kept)],
                     held_back=len(wanted) - len(kept),
-                    torrents=torrents,
+                    torrents=[p.torrents for p in previews] if limit is not None else [],
+                    subgroups=(
+                        [p.subgroups for p in previews]
+                        if any(p.subgroups for p in previews)
+                        else []
+                    ),
+                    existing=(
+                        [p.existing for p in previews] if any(p.existing for p in previews) else []
+                    ),
                 )
             except InvalidProposalError as exc:
                 failure = _failure(exc)
@@ -947,69 +1106,40 @@ class Turn:
                 raise _failure(exc) from exc
         raise ApprovalRequired(metadata={"proposal": view.id})
 
-    async def _on_one_card(
-        self, spec: CommandSpec, wanted: Sequence[BaseModel], limit: int
-    ) -> list[int | None]:
-        """數量閘（研究 R5，協調者 2026-10-27）：從頭放進這張卡的那幾列，各會送出幾個 torrent。
-
-        一張卡的 torrent 總數最多 `limit`（送單一列 1 個、Mikan 訂閱照單一 feed 的集數）。單獨就超過
-        的一列——讀不到集數（`None`）的也當成超過——自己一張：放在第一列時這張只有它，排在後面的留給
-        下一張。不放上這一張的就不必去讀它的集數。
-        """
-        count = _TORRENTS.get(spec.name)
-        kept: list[int | None] = []
-        total = 0
-        for row in wanted:
-            torrents = await count(self, row.model_dump()) if count is not None else None
-            weight = torrents if torrents is not None else limit + 1
-            if kept and total + weight > limit:
-                break
-            kept.append(torrents)
-            total += weight
-        return kept
-
-    async def run_write(
+    async def _previews(
         self,
+        session: AsyncSession,
         spec: CommandSpec,
-        arguments: Mapping[str, object],
-        tool_call_id: str,
-        messages: Sequence[ModelMessage],
-    ) -> object:
-        """可逆的寫入：守法過了就直接做。兩種情況改出一張單列的卡（plan §11.6）：有自由文字出自外部
-        內容；或作品放得進的 Route 不只一條、又沒有上次用的那一條（票 23b：多條可用就一定問，卡上
-        照送單卡的規則選）。"""
-        origins = Origins.of(messages)
-        try:
-            origins.check(spec.name, arguments, connects_out=Flag.CONNECTS_OUT in spec.flags)
-        except CommandRefusedError as exc:
-            raise _failure(exc) from exc
-        from_pages = origins.external_fields(arguments, spec.input)
-        if not from_pages and not await self._route_unsettled(spec, arguments):
-            return await self.run_tool(spec.name, arguments)
-        async with self.sessions() as session:
-            try:
-                view = await proposals.propose(
-                    session,
-                    self.executor.hub,
-                    spec.name,
-                    [arguments],
-                    actor=self.actor,
-                    conversation_id=self.conversation_id,
-                    tool_call_id=tool_call_id,
-                    external_fields=[from_pages],
-                )
-            except (CommandRefusedError, ValidationError) as exc:
-                raise _failure(exc) from exc
-        raise ApprovalRequired(metadata={"proposal": view.id})
+        wanted: Sequence[BaseModel],
+        limit: int | None,
+    ) -> list[_RowPreview]:
+        """逐列的預覽（`_PREVIEWS`），從頭放進這張卡的那幾列。讀不到（番組頁、搜尋）丟
+        `InvalidProposalError`，說是哪一列。
 
-    async def _route_unsettled(self, spec: CommandSpec, arguments: Mapping[str, object]) -> bool:
-        """這一次寫入的 Route 要人選：作品放得進的不只一條，而且這部作品沒送過單
-        （`default_route_id`）。有上次用的那一條時照舊直接做。"""
-        if not proposals.sends_into_a_route(spec):
-            return False
-        async with self.sessions() as session:
-            offer = await route_offer(session, str(arguments.get("media_id", "")))
-        return len(offer.choices) > 1 and offer.last_used is None
+        **數量閘**（研究 R5，協調者 2026-10-27；送 torrent 的命令才有 `limit`）：一張卡的 torrent
+        總數最多 `limit`（送單一列 1 個、訂閱照那一列選項裡最多的）。單獨就超過的一列——讀不到集數
+        （`None`）的也當成超過——自己一張：放在第一列時這張只有它，排在後面的留給下一張。不放上這一張
+        的就不必去讀它。
+        """
+        preview = _PREVIEWS.get(spec.name)
+        kept: list[_RowPreview] = []
+        total = 0
+        for index, row in enumerate(wanted):
+            try:
+                found = (
+                    await preview(self, session, row.model_dump(mode="json"))
+                    if preview is not None
+                    else _RowPreview()
+                )
+            except CommandRefusedError as exc:
+                raise InvalidProposalError(spec.name, index, exc.reason, exc.detail) from exc
+            if limit is not None:
+                weight = found.torrents if found.torrents is not None else limit + 1
+                if kept and total + weight > limit:
+                    break
+                total += weight
+            kept.append(found)
+        return kept
 
     async def card_result(self, tool_call_id: str) -> object:
         """按過的卡片（恢復那一輪）：核准就當場執行過了（`proposals.decide`），這裡只把結果交給模型。"""

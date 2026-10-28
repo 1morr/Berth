@@ -52,9 +52,11 @@ class ToolRefusal(StrEnum):
     ADDRESS_NOT_FROM_USER = "address_not_from_user"
 
 
-#: 寫入工具的參數裡，算是 id 的那幾格（票 14：media、source、route、bangumi、subgroup）。
+#: 寫入工具的參數裡，算是 id 的那幾格（票 14：media、source、route、bangumi、subgroup；
+#: 票 26：feed）。
 ID_FIELDS = frozenset(
     {
+        "feed_id",
         "media_id",
         "source_id",
         "route_id",

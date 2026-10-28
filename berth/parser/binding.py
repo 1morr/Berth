@@ -151,6 +151,17 @@ def title_key(release_title: str) -> str | None:
     return f"title:{title}:{normalize_title(parse_release(release_title).group)}"
 
 
+def of_group(release_title: str, subgroup: str) -> bool:
+    """這個發佈是不是 `subgroup` 這個字幕組的（M5 票 26：關鍵字訂閱只收一個字幕組）。
+
+    組名照解析器讀，與 `title_key` 的組名那一段同一種正規化，所以「同一個字幕組」與「同一個 RSS
+    Series 的字幕組」是同一件事。聯合發佈（`喵萌奶茶屋&LoliHouse`）是另一個名字，不算其中一員。
+    讀不出組名的、`subgroup` 是空的，都不算。
+    """
+    wanted = normalize_title(subgroup)
+    return bool(wanted) and normalize_title(parse_release(release_title).group) == wanted
+
+
 def search_terms(clues: SeriesClues) -> tuple[str, ...]:
     """拿去搜 TMDB 的字：番組名，接著骨幹從最後一段往前（英文或羅馬字多半在最後），季名拿掉。
     最多三個。"""
