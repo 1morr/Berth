@@ -528,8 +528,10 @@ function FolderLine({ media }: { media: Media }) {
   )
 }
 
-/** 一串選項，一個一顆鍵，選定的是按下的樣子（同 `rss/WorkChoices.tsx` 的 `Choices`）。 */
-/** 一排整行的選項鍵（`aria-pressed`，選中的重線 + `deck` 底；DESIGN.md「先選再確認」）。確認卡選字幕組也用它。 */
+/**
+ * 一串選項，一個一顆鍵，選定的是按下的樣子（同 `rss/WorkChoices.tsx` 的 `Choices`；DESIGN.md「先選再確認」）。
+ * 確認卡選字幕組也用它（M5 票 26）。
+ */
 export function Options<T>({
   label,
   items,

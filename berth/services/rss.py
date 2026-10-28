@@ -48,7 +48,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import PurePosixPath
 from typing import Any, NamedTuple
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -2864,13 +2864,12 @@ async def list_subscriptions(session: AsyncSession, media_id: str) -> tuple[Subs
 async def subscriptions_of_feed_url(session: AsyncSession, url: str) -> tuple[SubscriptionRef, ...]:
     """要加的網址是某個 Mikan 番組的單一 feed、而那個番組（任一個字幕組）已經綁在作品上時，那幾部
     作品現有的訂閱（`list_subscriptions`）。其他網址看不出是哪一部作品，是空的。"""
-    query = parse_qs(urlsplit(url.strip()).query)
-    bangumi = query.get("bangumiId", [""])[0]
-    if kind_of(url.strip()) is not FeedKind.MIKAN or not bangumi.isdigit():
+    ids = mikan.feed_ids(url) if kind_of(url.strip()) is FeedKind.MIKAN else None
+    if ids is None:
         return ()
     works = await session.scalars(
         select(RssSeries.media_id)
-        .where(RssSeries.mikan_bangumi_id == int(bangumi), RssSeries.media_id.is_not(None))
+        .where(RssSeries.mikan_bangumi_id == ids[0], RssSeries.media_id.is_not(None))
         .distinct()
         .order_by(RssSeries.media_id)
     )

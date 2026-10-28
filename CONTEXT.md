@@ -350,6 +350,10 @@ _Avoid_: diagnosis, status（status 是季表那一格）, reason（reason 是�
 一個 RSS 來源（Mikan、Nyaa、acg.rip、generic），有輪詢間隔、排除條件，與自動綁定送進的 Route——劇集、電影各一條。Mikan 的 `MyBangumi` 聚合 feed 是主要用法。對話裡建的關鍵字搜尋 feed 只收一個**字幕組**（使用者在確認卡上選的），別組的發佈不寫成 Feed Item。
 _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作）, source
 
+**訂閱**（Subscription）:
+UI 上「訂閱一部作品」的動作，以及它留下的關係：一部作品 × 一條 Feed × 一個字幕組（空的是那條 Feed 搜到的每一組都收）。Mikan 訂閱是番組 × 字幕組的單一 feed，關鍵字訂閱是 Nyaa / acg.rip 的搜尋 feed；從聚合 feed 綁到作品的 RSS Series 也算那部作品的一條訂閱（`rss.list_subscriptions`）。刪掉一條訂閱就是刪那條 Feed。
+_Avoid_: follow（`follows` 是字幕跟著影片的那個函式）, watch（Watch State 是 Jellyfin 的觀看狀態）
+
 **RSS Series**:
 一部作品 × 一個來源（Mikan 的番組 + 字幕組，或標題骨幹 + 字幕組），由 Feed Item 自動長出，綁到 Media 與 Route，帶季號、offset、排除條件。還沒綁到 Media 的是**待綁定**（unbound）：它的 Feed Item 留著不送，綁定那一刻凍結資料夾名並送出。長出來的那一輪先**自動綁定**（`bound_by = system`）：名字相等、開播日期對得上、只有一部才綁，送進長出它的 Feed 那一種的 Route（Feed 沒說時 Route 只有一條才綁）；沒綁上的記下理由與**候選**（認得出、留給人一鍵選的作品）。不屬於任何一個 Feed。2026-09-24 取代 Rule：字幕組是使用者在來源端挑的，Berth 不再挑一次。
 _Avoid_: rule, subscription, follow（`follows` 是字幕跟著影片的那個函式）

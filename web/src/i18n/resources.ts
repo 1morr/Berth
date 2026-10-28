@@ -3900,7 +3900,6 @@ const zhHant = {
       failed: '沒成功',
       input: '參數',
       output: '結果',
-      // 助理直接建的搜尋 Feed（M5 票 22）：撤銷與選第一輪都在 RSS 頁那一列。
       names: {
         discover_search_media: '搜尋作品',
         why_not_explain: '查為什麼沒入庫',
@@ -4006,7 +4005,8 @@ const zhHant = {
       firstBatchNone: '這次搜尋沒有找到這個字幕組的發佈：先不下載，之後出現的照它下載。',
       firstBatchMore_one: '其餘 {{count}} 筆',
       firstBatchMore_other: '其餘 {{count}} 筆',
-      firstBatchAfter: '已經有的、被排除條件擋下的不再送；之後這個字幕組的新發佈自動下載。',
+      firstBatchAfter:
+        '送的是按下確認那一刻這一組的每一筆（卡片出來之後才發佈的也算），已經有的、被排除條件擋下的不再送；之後這個字幕組的新發佈自動下載。',
       existingLead:
         '這部作品已經有這幾條訂閱。要不要再訂一份由你決定：不要的話按拒絕，或請助理刪掉舊的那條。',
       existingSubgroup: '字幕組 {{subgroup}}',
@@ -8243,7 +8243,7 @@ const en: Translations<typeof zhHant> = {
       firstBatchMore_one: '{{count}} more',
       firstBatchMore_other: '{{count}} more',
       firstBatchAfter:
-        'Releases you already have or that exclusions block are not sent again; new releases from this subgroup download by themselves.',
+        'What is sent is every release from this subgroup at the moment you confirm (including any posted after this card appeared), minus those you already have or that exclusions block; new releases from this subgroup download by themselves.',
       existingLead:
         'This title already has these subscriptions. Whether to add another is up to you: if not, press Reject, or ask the assistant to delete the old one.',
       existingSubgroup: 'subgroup {{subgroup}}',

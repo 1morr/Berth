@@ -20,7 +20,7 @@ from guessit import guessit
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.rss import acgrip
+from berth.adapters.rss import acgrip, mikan
 from berth.adapters.torrent import TorrentSource
 from berth.domain import (
     CollectionType,
@@ -49,6 +49,7 @@ from berth.services.rss import (
     set_feed_routes,
     subscribe_mikan,
     subscribe_search,
+    subscriptions_of_feed_url,
 )
 from tests.conftest import FIXTURES
 from tests.integration.factories import FakeClientFactory
@@ -729,6 +730,23 @@ class TestWhatAWorkIsSubscribedTo:
         [row] = await list_subscriptions(session, media.id)
 
         assert (row.feed_id, row.kind) == (feed_id, FeedKind.MIKAN)
+
+    async def test_a_mikan_feed_url_names_the_work_its_bangumi_is_bound_to(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """加 Feed 的卡（票 26）：要加的是某個番組的單一 feed、而那個番組（任一個字幕組）已經綁在
+        作品上時，說出那部作品現有的訂閱。看不出是哪一部的網址什麼都不說。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=None, now=NOW
+        )
+
+        other_group = await subscriptions_of_feed_url(session, mikan.bangumi_feed_url(4009, 583))
+        other_bangumi = await subscriptions_of_feed_url(session, mikan.bangumi_feed_url(5011, 1))
+
+        assert [row.feed_id for row in other_group] == [feed_id]
+        assert other_bangumi == ()
+        assert await subscriptions_of_feed_url(session, acgrip.search_url(TERM)) == ()
 
     async def test_nothing_for_a_work_with_no_subscription(
         self, session: AsyncSession, roots: dict[str, Path]

@@ -18,6 +18,7 @@ from berth.adapters.rss.mikan import (
     bangumi_feed_url,
     bangumi_page,
     bangumi_url,
+    feed_ids,
     parse_feed,
     parse_single_feed,
     published_at,
@@ -141,6 +142,19 @@ class TestNotAFeed:
         empty = b'<rss version="2.0"><channel><title>Mikan</title></channel></rss>'
 
         assert parse_feed(empty) == ()
+
+
+class TestFeedIds:
+    """單一 feed 的網址 → 番組與字幕組（M5 票 26：加 Feed 的卡認出是哪一個番組）。"""
+
+    def test_a_single_feed_gives_both_ids(self) -> None:
+        url = "https://mikanani.me/RSS/Bangumi?bangumiId=4009&subgroupid=370"
+
+        assert feed_ids(url) == (4009, 370)
+
+    def test_the_aggregate_feed_gives_nothing(self) -> None:
+        assert feed_ids("https://mikanani.me/RSS/MyBangumi?token=abc") is None
+        assert feed_ids("https://mikanani.me/RSS/Bangumi?bangumiId=4009") is None
 
 
 class TestSeriesKey:
