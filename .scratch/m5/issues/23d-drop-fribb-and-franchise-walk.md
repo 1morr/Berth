@@ -63,3 +63,4 @@
   - 紅燈 `test_agent_anime_scenarios.py::TestMissingEpisodes`（一季 14 集、只有單集發佈，修之前模型只看得到第 1–7 集）。
   - 修法：前 10 列之外，之後「符合」而帶來新集數的列也給模型（`agent_tools._rows_to_show`）。選它是因為不靠模型再搜，`scope` 也不必支援指定集數；工具說明同步。單元測試 `test_later_rows_come_in_only_for_episodes_not_yet_shown`。
   - 真模型：新演練情境 `agent-live-missing`（替身索引站、真模型），兩種接口各 1 次到出卡，**卡片 12 列涵蓋第 1–12 集**，$0.024。`docs/research/m5-acceptance-2026-10-28.md`〈票 23d〉。
+- **新番推薦（協調者要求，同日）**：產品現在的樣子（AniList 季表 + Bangumi 放送表 + 網搜），Anthropic 2 次、OpenAI 1 次跑到出卡。三次都是 5/5 有 AniList 分數與人數、Bangumi 4/5（缺的那部是放送表沒收的 ONA，有說明）、都是 2026 秋季、都標出 Edgerunners 2 的跨站分歧，三次都出 Mikan 訂閱卡。與 A/B 研究完整組同一水準，**沒有變差，不用修**。$0.036。`docs/research/m5-acceptance-2026-10-28.md`〈票 23d〉。

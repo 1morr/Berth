@@ -279,6 +279,21 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 | anthropic | 12 | 第 1–12 集全有（Fast 1–6、Slow 7–12） | 5（第 1 次是 `missing` + `season`，其餘是模型自己找整季包） | 0.014 | [`t23d-missing-anthropic.md`](m5-acceptance-2026-10-28/t23d-missing-anthropic.md) |
 | openai | 12 | 第 1–12 集全有 | 3 | 0.010 | [`t23d-missing-openai.md`](m5-acceptance-2026-10-28/t23d-missing-openai.md) |
 
+### 新番推薦：產品現在的樣子（AniList 季表 + Bangumi 放送表 + 網搜）
+
+票 23d 只拿掉整部系列用的 AniList 搜尋、系列走圖與 Fribb，新番推薦的兩個來源照留；這裡確認它沒有跟著變差。`agent_sources_ab.py --only picks`（演練情境 `agent-live`），Anthropic 接口 2 次、OpenAI 接口（Tavily）1 次，跑到確認卡出現。題目同 A/B 研究：「推薦這一季（2026 年秋季）評價好的新番動畫 5 部，附評分與評分人數」→「第一部幫我安排」。
+
+| 次 | 工具 | 5 部都有 AniList 分數與人數 | Bangumi 分數與票數 | 都是 2026 秋季 | 跨站分歧 | 卡片 | 費用 USD |
+|---|---|---|---|---|---|---|---|
+| r1 anthropic | 季表、放送表、`web_search` ×2 | 5/5 | 4/5（JoJo SBR 是 ONA，放送表沒有，有說） | ✅ | Edgerunners 2（AniList 84 / 20,839 人對 Bangumi 5.5 / 4,591 票）標「嚴重分歧」 | `rss.subscribe_mikan` 黑色五葉草 第二季 | 0.015 |
+| r2 anthropic | 季表、放送表、`web_search` ×1 | 5/5 | 4/5（同上） | ✅ | 同上，附 CBR 等評論網址 | `rss.subscribe_mikan` 藥屋少女 第三季 | 0.012 |
+| r1 openai | 季表、放送表、Tavily ×1 | 5/5 | 4/5（同上） | ✅ | 同上，附 Reddit 討論串 | `rss.subscribe_mikan` 藥屋少女 第三季 | 0.009 |
+
+- 三次的五部相同（藥屋少女 第三季、黑色五葉草 第二季、JoJo 飆馬野郎 2nd & 3rd STAGE、冰之城牆 第二季、Edgerunners 2），只有排序不同；Bangumi 128 票的那一部三次都標「樣本偏小」。
+- **對照 A/B 研究的完整組**（`agent-sources-ab-2026-10-28.md`〈評分〉的 Picks：AniList 5/5、Bangumi 4/5、四次榜單幾乎一樣、跨站分歧只有完整組穩定抓得到）：**沒有變差**，三次都和完整組同一個水準。沒有改程式或 skill。
+- 卡片是榜單第一部的 Mikan 訂閱（還在播），三次都出卡、沒有被防護停下。
+- 逐字稿：[`t23d-picks-r1-anthropic.md`](m5-acceptance-2026-10-28/t23d-picks-r1-anthropic.md)、[`t23d-picks-r2-anthropic.md`](m5-acceptance-2026-10-28/t23d-picks-r2-anthropic.md)、[`t23d-picks-r1-openai.md`](m5-acceptance-2026-10-28/t23d-picks-r1-openai.md)。
+
 ### 花費
 
-修之前 $0.131，收窄後的無職轉生 $0.019，修之後 Re:Zero $0.073、無職轉生 $0.024，合計 **$0.247**（使用者把上限放寬到 $1）。補缺集另 $0.024（上限 $0.5）。
+修之前 $0.131，收窄後的無職轉生 $0.019，修之後 Re:Zero $0.073、無職轉生 $0.024，合計 **$0.247**（使用者把上限放寬到 $1）。補缺集另 $0.024（上限 $0.5），新番推薦另 $0.036（上限 $0.3）。
