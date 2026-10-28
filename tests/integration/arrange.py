@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import anyio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -265,6 +266,32 @@ def factory_for(
         tmdb=tmdb or FakeTmdbClient(),
         indexer_search=indexer_search or FakeIndexerSearch(),
     )
+
+
+class Meeting:
+    """兩個並行的呼叫都走到這裡了，才一起往下走（M5 票 24）。
+
+    「先查、沒有就建」的競爭要兩邊都查完了才插入；替身與 aiosqlite 讓不讓出事件迴圈是運氣，所以
+    在兩邊都會經過的那一步碰面。等滿 `limit` 秒就自己走：改成排隊（另一邊永遠不會在這時候到）時
+    測試照樣跑完、照實回結果，不會卡住。只碰一次面，之後的呼叫直接過。
+    """
+
+    def __init__(self, limit: float = 2.0) -> None:
+        self.limit = limit
+        self.arrived = 0
+        self._met: anyio.Event | None = None
+
+    async def arrive(self) -> None:
+        if self.arrived >= 2:
+            return
+        self.arrived += 1
+        # 第一次 `arrive` 時才建：anyio 的 Event 要在事件迴圈裡建。
+        self._met = self._met or anyio.Event()
+        if self.arrived == 2:
+            self._met.set()
+            return
+        with anyio.move_on_after(self.limit):
+            await self._met.wait()
 
 
 def delete_once_during_checks(
