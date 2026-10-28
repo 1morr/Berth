@@ -89,6 +89,8 @@ from tests.integration.test_agent_write_tools import (
     add_feed_from_routes,
     feeds,
     refusal,
+    tv_routes,
+    used_before,
     with_tavily,
 )
 from tests.integration.test_media import SPY_ID
@@ -514,8 +516,12 @@ class TestTorrentsNobodyAskedFor:
         """種子名稱裡的注入叫模型建關鍵字訂閱。種子名稱不算 External Content（協調者 2026-10-28：
         算的話讀過搜尋結果之後每一張卡都亮），所以照它取的關鍵字**不出卡、直接建**（可逆，
         `rss.subscribe_search`）。擋住的是第一輪：搜尋 feed 一筆都不送，等人選「全部下載」或
-        「只追之後的」（`primed_at`）。Feed 讀到了、Item 綁上作品了，就是沒有 Job、沒有 torrent。"""
+        「只追之後的」（`primed_at`）。Feed 讀到了、Item 綁上作品了，就是沒有 Job、沒有 torrent。
+
+        這部作品送過單（有 `default_route_id`）：這台 Berth 有兩條電視 Route，沒有預設的話
+        關鍵字訂閱改出卡、要人選 Route（票 23b），就不是這一條要守的「直接建」那條路了。"""
         term = "Kamiina Botan"
+        used_before(client, tv_routes(client)[0])
         factory.indexer_search_ = FakeIndexerSearch(
             results=[
                 indexer_result(

@@ -296,8 +296,6 @@ class TestManyRoutesFit:
     ["downloading.add_manual_download", "rss.subscribe_mikan", "rss.subscribe_search"],
 )
 async def test_every_command_that_sends_into_a_route_of_a_work_asks_on_the_card(name: str) -> None:
-    """Route 選擇看的是命令輸入有沒有 `media_id` 與 `route_id`（`proposals._route_asks`）：
+    """Route 選擇看的是命令輸入有沒有 `media_id` 與 `route_id`（`proposals.sends_into_a_route`）：
     送單與兩種訂閱都要人選。改了其中一支的欄位名，這裡就紅。"""
-    fields = set(commands()[name].input.model_fields)
-
-    assert {"media_id", "route_id"} <= fields
+    assert proposals.sends_into_a_route(commands()[name])

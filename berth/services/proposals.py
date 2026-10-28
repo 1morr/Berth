@@ -493,12 +493,17 @@ def _settled(results: Sequence[RowResult]) -> ProposalStatus:
     return ProposalStatus.FAILED if done == 0 else ProposalStatus.PARTIAL
 
 
+def sends_into_a_route(spec: CommandSpec) -> bool:
+    """命令把一部作品送進一條 Route（輸入有 `media_id` 與 `route_id`：送單、訂閱 Mikan、
+    關鍵字訂閱）。這幾支在作品放得進的 Route 不只一條時要人選（票 23b）。"""
+    return {"media_id", "route_id"} <= set(spec.input.model_fields)
+
+
 async def _route_asks(
     session: AsyncSession, spec: CommandSpec, arguments: Sequence[Mapping[str, object]]
 ) -> tuple[RouteAsk | None, ...]:
-    """逐列：作品放得進的 Route 不只一條就要人選（票 23b）。命令的輸入要有 `media_id` 與 `route_id`
-    （送單、訂閱 Mikan、關鍵字訂閱）才看。"""
-    if not {"media_id", "route_id"} <= set(spec.input.model_fields):
+    """逐列：作品放得進的 Route 不只一條就要人選（票 23b，`sends_into_a_route` 的命令才看）。"""
+    if not sends_into_a_route(spec):
         return ()
     asks: list[RouteAsk | None] = []
     for row in arguments:
