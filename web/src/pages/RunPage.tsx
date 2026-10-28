@@ -66,6 +66,8 @@ const STOP_CHIP: Record<AiStopReason, { signal: Signal; key: ParseKeys }> = {
   circuit_open: { signal: 'blocked', key: 'usage.run.chip.failed' },
   error: { signal: 'blocked', key: 'usage.run.chip.failed' },
   cancelled: { signal: 'neutral', key: 'usage.run.chip.cancelled' },
+  // Berth 重新啟動時還在跑（M5 票 25）：沒有人要決定什麼，重新問就好。
+  interrupted: { signal: 'neutral', key: 'usage.run.chip.interrupted' },
 }
 
 function RunBody({ run }: { run: Run }) {

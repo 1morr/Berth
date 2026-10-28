@@ -6,7 +6,8 @@ import { shot } from './shot.ts'
 // `agent`：同 `downloads`（SPY×FAMILY 的五筆下載，`- 01` 停在待審核），另外 AI 開著、模型是照腳本回答的
 // 替身（`scripts/fake_setup_server.py` 的 `why_not_script`）：先搜尋作品、再叫「為什麼沒入庫」，用工具結果的
 // 結論分類回答；說「下載 SPY×FAMILY」時出一張三列的送單卡（M5 票 13）；「加這個 RSS：<網址>」出卡、
-// 「上網找網址直接加」被擋（M5 票 14）；兩種訂閱卡要人選字幕組（M5 票 26）。一個請求都不出網、不需要金鑰
+// 「上網找網址直接加」被擋（M5 票 14）；「慢慢查」翻三頁、每步等一下（M5 票 25）；兩種訂閱卡要人選字幕組
+// （M5 票 26）。一個請求都不出網、不需要金鑰
 // （M5 票 12）。桌機與手機各跑一次（playwright.config.ts）。
 
 test('側面板問「為什麼沒入庫」得到結論，重新載入之後對話還在', async ({ page }) => {
@@ -416,6 +417,95 @@ test('停下的那一輪：說明是 Berth 的「停下」，「繼續」只按�
   await expect(log).toContainText('這是演練用的假模型')
   await expect(resume).toHaveCount(0)
   await shot(page, 'stop-continued')
+})
+
+test('重新整理頁面：那一輪在伺服器照跑，回來接著顯示並答完（M5 票 25）', async ({ page }) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  // 替身翻三頁 Job，每一次模型呼叫先等 1.5 秒（`slow_pause`）：重新整理時那一輪一定還在跑。
+  await input.fill('慢慢查一下下載')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  const pages = log.locator('details').filter({ hasText: '列出下載' })
+  await expect(pages.first()).toContainText('完成')
+  await expect(log).not.toContainText('查完了')
+  await shot(page, 'resume-before-reload')
+
+  await page.reload()
+  // 回來：問的那一句在，那一輪接著跑（「停止」在），最後答完。
+  await expect(log).toContainText('慢慢查一下下載')
+  await expect(panel.getByRole('button', { name: '停止' })).toBeVisible()
+  await shot(page, 'resume-following')
+  await expect(log).toContainText('查完了：3 頁 Job 都翻過了。', { timeout: 15_000 })
+  await expect(pages).toHaveCount(3)
+  await expect(panel.getByRole('button', { name: '送出' })).toBeVisible()
+  // 沒有停下的說明：斷線不再停下那一輪。
+  await expect(log.locator('[data-stop]')).toHaveCount(0)
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'resume-finished')
+
+  // 跑完的直接從歷史讀：再重新整理一次是同一個結果，只有一份。
+  await page.reload()
+  await expect(log).toContainText('查完了：3 頁 Job 都翻過了。')
+  await expect(log.getByText('查完了：3 頁 Job 都翻過了。')).toHaveCount(1)
+  await expect(pages).toHaveCount(3)
+})
+
+test('按「停止」：伺服器停下那一輪，說是你按了停止（M5 票 25）', async ({ page }) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('慢慢查一下下載')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  await expect(log.locator('details').filter({ hasText: '列出下載' }).first()).toContainText('完成')
+  await panel.getByRole('button', { name: '停止' }).click()
+
+  const stop = log.locator('[data-stop]')
+  await expect(stop).toContainText('你按了停止')
+  await expect(log.getByRole('button', { name: '繼續' })).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: '送出' })).toBeVisible()
+  await page.reload()
+  await expect(log.locator('[data-stop]')).toContainText('你按了停止')
+  await expect(log).not.toContainText('查完了')
+  await shot(page, 'resume-stopped')
+})
+
+test('另一段對話還在答：說出是哪一段，停掉那一輪之後這一則重送成功（M5 票 25）', async ({
+  page,
+}) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  const log = panel.getByRole('log', { name: '助理' })
+  await input.fill('慢慢查一下下載')
+  await input.press('Enter')
+  await expect(log.locator('details').filter({ hasText: '列出下載' }).first()).toContainText('完成')
+
+  // 開新對話：舊的那一輪還在伺服器上跑。這一頁還在跟著它時輸入欄不收指令（`/new` 要等它答完），
+  // 所以按頁首的「新對話」：同一件事（`startNew`）。
+  await panel.getByRole('button', { name: '新對話' }).click()
+  await expect(log).not.toContainText('慢慢查一下下載')
+  await input.fill('給我一張圖片')
+  await input.press('Enter')
+
+  await expect(panel).toContainText('另一段對話還在回答：「慢慢查一下下載」')
+  await expect(input).toHaveValue('給我一張圖片')
+  await expectNoHorizontalScroll(page)
+  await shot(page, 'busy-elsewhere')
+  await panel.getByRole('button', { name: '停止那一輪' }).click()
+  await expect(panel).toContainText('那一輪停下了')
+
+  await panel.getByRole('button', { name: '送出' }).click()
+  await expect(panel.getByText('圖片沒有載入')).toBeVisible()
+  await expect(log).toContainText('給我一張圖片')
+  await shot(page, 'busy-elsewhere-resent')
 })
 
 // 一般使用者（M5 驗收「同一道門禁」）：`deckhand` 用同一個面板問「為什麼沒入庫」——那支是一般使用者

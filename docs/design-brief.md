@@ -1848,6 +1848,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
     - `ProcessHistory` 在 `before_model_request` 換掉 `ctx.messages`，所以換掉的歷史就是之後 `all_messages()` 的那一份。
     - `RetryPromptPart` 已 deprecated（v3 移除）：工具的重試改成 `ToolReturnPart(outcome='retried')`。
     - 官方的 `pydantic-ai-harness` 0.62.0（Alpha、釘死 `pydantic-ai-slim==2.62.0`）有 `SummarizingCompaction`，但切點以訊息數或 token 數算、不認一輪從哪裡開始，不拿掉孤兒 result，也拿不到摘要那一次的回應來記帳，所以 Berth 自己寫（`services/compaction.py`）。
+- **斷線之後接上（resumable streams）**（2026-10-28 查，M5 票 25）：
+  - Vercel AI SDK 7 的做法（context7 `/vercel/ai/ai_7.0.0` 的 `04-ai-sdk-ui/03-chatbot-resume-streams.mdx`、`09-troubleshooting/15-abort-breaks-resumable-streams.mdx`）：伺服器在沒人看的時候照跑；`useChat` 的 `stop()` 只是中止這一個請求，這種設計下等於斷線，所以**停止要另一個端點**（取消產生串流的工作、清掉對話的 active stream，只在它還指著同一條時）。對話記 `activeStreamId`，重連是 `GET .../{chatId}/stream`，沒有在跑的回 204。
+  - 讀 `ai@7.0.153` 的 `dist/index.js`：`HttpChatTransport.reconnectToStream` 收到 204 回 `null`，`Chat` 回到 `ready`；`prepareReconnectToStreamRequest({ id, requestMetadata })` 可以改網址，`chat.resumeStream({ metadata })` 的 `metadata` 就是 `requestMetadata`。`DefaultChatTransport` 的 `resumeStreamIsReplay` 預設 `true`：重連的串流**從第一個片段重播**，`Chat` 在第一個 `start` 重設那一則（`resetStateOnFirstMessageStart`），不接在上一則助理訊息後面（只有最後一則助理訊息有進行中的工具片段時才接）。
+  - pydantic-ai-slim 2.62 有自己的停法（`CancellationToken`、`RunCancelled`，`on_cancel`）：它保留串流到一半的回應與已完成的工具結果；task 被外部取消（`asyncio.Task.cancel()`、cancel scope）則照樣是 `CancelledError`，兩者同時發生時外部的贏（`pydantic_ai/exceptions.py` 的 `RunCancelled` docstring）。Berth 的停止走後者，停下時存的與其他停下一樣（plan §6〈agent〉）。
+  - Starlette 的 `StreamingResponse` 在 ASGI spec 2.4 之前另開一個 task 聽 `http.disconnect`，收到就取消整個串流；2.4 起改成送出時的 `OSError`（`starlette/responses.py`）。所以一輪若跑在請求裡，斷線就是取消它；要跑完得放在請求之外的 task。
 - **觀測的缺口**：run 中途被中止（`UsageLimitExceeded`、重複呼叫、模型錯誤）時，`on_complete` 不會被呼叫，這一輪的歷史與 token 用量都拿不到。記帳要掛在每次模型呼叫之後。
 - **費用**：
   - ~~`ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表~~（M5 票 21b 改寫成下面這幾條）。

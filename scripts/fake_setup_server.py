@@ -47,7 +47,7 @@ from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
 from berth.adapters.ai import AiEndpoint
-from berth.adapters.ai.fake import FakeAi, Script
+from berth.adapters.ai.fake import FakeAi, Pause, Script
 from berth.adapters.anilist import AniList
 from berth.adapters.anilist.fake import FakeAniList
 from berth.adapters.bgm import Bgm
@@ -387,6 +387,8 @@ class Scenario:
     clock: datetime | None = None
     #: 側面板的假模型（M5 票 12）：給了就把 AI 打開，每一次模型呼叫由它回答。`None` 是 AI 關著。
     ai_script: Script | None = None
+    #: 假模型每一次回答之前等它（`FakeAi.pause`，M5 票 25：演一輪要跑一陣子）。
+    ai_pause: Pause | None = None
     #: 模型、網路搜尋與動漫資料（AniList、Bangumi）打**真的**（`agent-live`，M5 票 23）。
     #: AI 不在這裡打開：驅動腳本照使用者的路徑 `PUT /settings/ai` 填 key。
     live_ai: bool = False
@@ -1777,7 +1779,9 @@ def agent_scenario() -> Scenario:
     說「下載 SPY×FAMILY」（`Download SPY×FAMILY`）時它搜作品、搜發佈、問 Route，再出一張
     三列的送單卡（票 13）；按了之後照逐列結果說送了幾筆。索引站多三筆單集（`AGENT_RELEASES`），
     qBittorrent 收下就留著。說「一直查」（`keep checking`）時同一個呼叫一直叫，第 4 次被防護中止
-    （票 21 的步驟頁）。「加這個 RSS：<網址>」出一張加 Feed 的卡，
+    （票 21 的步驟頁）。說「慢慢查」（`take your time`）時翻三頁 Job、每一次模型呼叫先等
+    `SLOW_SECONDS`，最後說翻完了（票 25：重新整理之後那一輪接著跑完）。
+    「加這個 RSS：<網址>」出一張加 Feed 的卡，
     「上網找網址直接加」拿一個不是使用者打的網址去加、被擋下（票 14）。說「provider 壞了」
     （`provider down`）時替身回 HTTP 503，連續 5 次就讓斷路器暫停 15 分鐘（票 22）。
     「從 Mikan 訂閱 SPY×FAMILY」出一張 Mikan 訂閱卡，番組頁上三個字幕組讓人選；「在 acg.rip 訂閱
@@ -1788,6 +1792,7 @@ def agent_scenario() -> Scenario:
     scenario = downloads_scenario()
     scenario.tmdb = demo_tmdb(search={query: [SPY_ENTRY] for query in SPY_QUERIES})
     scenario.ai_script = why_not_script
+    scenario.ai_pause = slow_pause
     packs = {PLAN_RELEASE: PLAN_FILES, **AGENT_RELEASES}
     scenario.qbittorrent = TricklingQbittorrent(
         packs, version=QbittorrentVersion(app="v5.2.3", webapi="2.15.1")
@@ -2036,6 +2041,56 @@ _WHY_NOT_ASKED = re.compile(
 )
 
 
+#: 「慢慢查」那一輪每一次模型呼叫先等幾秒（M5 票 25）：四次呼叫，重新整理來得及。
+SLOW_SECONDS = 1.5
+#: 「慢慢查」翻幾頁。
+SLOW_PAGES = 3
+
+
+def _slow_asked(text: str) -> bool:
+    return "慢慢查" in text or "take your time" in text.lower()
+
+
+def _question(messages: list[ModelMessage]) -> str:
+    """這一輪的問題：歷史裡最後一則使用者的話。"""
+    return [
+        part.content
+        for message in messages
+        if isinstance(message, ModelRequest)
+        for part in message.parts
+        if isinstance(part, UserPromptPart) and isinstance(part.content, str)
+    ][-1]
+
+
+async def slow_pause(messages: list[ModelMessage]) -> None:
+    """`agent` 情境：「慢慢查」那一輪的每一次模型呼叫先等一下，其餘照常。"""
+    if messages and _slow_asked(_question(messages)):
+        await asyncio.sleep(SLOW_SECONDS)
+
+
+def _slow_step(messages: list[ModelMessage], *, chinese: bool) -> ModelResponse:
+    """「慢慢查」：一頁一頁翻（每頁的參數不同，不算重複呼叫），翻完說一句。翻到第幾頁看這一輪拿到幾筆
+    `jobs_list_jobs` 的結果（最後一則使用者的話之後）。"""
+    asked = max(
+        index
+        for index, message in enumerate(messages)
+        if isinstance(message, ModelRequest)
+        and any(isinstance(part, UserPromptPart) for part in message.parts)
+    )
+    done = sum(
+        isinstance(part, ToolReturnPart) and part.tool_name == "jobs_list_jobs"
+        for message in messages[asked:]
+        for part in message.parts
+    )
+    if done >= SLOW_PAGES:
+        return _say(
+            f"查完了：{SLOW_PAGES} 頁 Job 都翻過了。"
+            if chinese
+            else f"Done: I went through all {SLOW_PAGES} pages of jobs."
+        )
+    return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": done + 1})])
+
+
 def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
     """`agent` 情境的假模型：看最後一則請求是使用者的話還是哪一個工具的結果，決定下一步。"""
     if (info.instructions or "").strip() == SUMMARY_INSTRUCTIONS.strip():
@@ -2063,6 +2118,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         if "provider 壞了" in text or "provider down" in text.lower():
             # 演 provider 斷路器（M5 票 22）：每一次都是 provider 那一側的失敗。
             raise ModelHTTPError(503, "demo", {"error": {"message": "overloaded"}})
+        if _slow_asked(text):
+            return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
@@ -2087,6 +2144,12 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         _FEED_GIVEN.search(question) or _FEED_SEARCHED.search(question)
     ):
         return _feed_step(question, last, chinese=chinese)
+    if (
+        isinstance(last, ToolReturnPart)
+        and last.tool_name == "jobs_list_jobs"
+        and _slow_asked(question)
+    ):
+        return _slow_step(messages, chinese=chinese)
     if isinstance(last, ToolReturnPart) and last.tool_name == "jobs_list_jobs":
         # 被警告、被擋下也照叫：防護要看到第 4 次。
         return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
@@ -2512,6 +2575,7 @@ class FakeClientFactory:
             unknown_models=frozenset({"missing-model"}),
             script=scenario.ai_script,
         )
+        self._ai.pause = scenario.ai_pause
         #: 網路搜尋（M5 票 17）：不打網路，回一頁固定的。
         self._web_search = FakeWebSearch(
             pages=[

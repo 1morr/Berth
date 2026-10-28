@@ -4,6 +4,7 @@ import {
   PanelContext,
   readConversationId,
   readOpen,
+  rememberConversation,
   rememberNewConversation,
   writeOpen,
   type PanelState,
@@ -23,10 +24,14 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     setRestarted(lost)
     setConversationId(rememberNewConversation())
   }, [])
+  const switchTo = useCallback((id: string) => {
+    setRestarted(false)
+    setConversationId(rememberConversation(id))
+  }, [])
 
   const state = useMemo<PanelState>(
-    () => ({ open, setOpen, conversationId, startNew, restarted, draft, setDraft }),
-    [open, setOpen, conversationId, startNew, restarted, draft],
+    () => ({ open, setOpen, conversationId, startNew, switchTo, restarted, draft, setDraft }),
+    [open, setOpen, conversationId, startNew, switchTo, restarted, draft],
   )
   return <PanelContext value={state}>{children}</PanelContext>
 }

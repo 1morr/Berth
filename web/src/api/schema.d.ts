@@ -24,6 +24,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/conversations/{conversation_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resume Stream
+         * @description 重連那一輪的串流（Vercel AI SDK 的 `resumeStream`）：還在跑、或剛跑完的話從頭重播再跟著；
+         *     沒有在跑、不是這一輪、不是這個人的回 204（`useChat` 照「沒有可接的」處理）。
+         */
+        get: operations["resume_stream_api_agent_conversations__conversation_id__stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/conversations/{conversation_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Conversation Turn
+         * @description 停下正在跑的那一輪。停下的說明經跟著看的串流送到，這裡等它存好才回。
+         */
+        post: operations["stop_conversation_turn_api_agent_conversations__conversation_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -2714,7 +2755,7 @@ export interface components {
          * @description 側面板對話的端點不做的理由（`services.agent`、M5 票 11）。
          * @enum {string}
          */
-        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "card_undecided" | "not_continuable" | "unknown_command" | "slash_command";
+        AgentRefusal: "ai_disabled" | "ai_paused" | "busy" | "no_message" | "conversation_missing" | "card_undecided" | "not_continuable" | "unknown_command" | "slash_command" | "not_running";
         /** AgentRefusalOut */
         AgentRefusalOut: {
             reason: components["schemas"]["AgentRefusal"];
@@ -2826,7 +2867,7 @@ export interface components {
          * @description 一輪 agent 為什麼停下（`ai_runs.stop_reason`，研究 C5）。用量頁數的是它（票 21）。
          * @enum {string}
          */
-        AiStopReason: "completed" | "awaiting_confirmation" | "request_limit" | "token_limit" | "repeated_call" | "ping_pong" | "no_progress" | "circuit_open" | "error" | "cancelled";
+        AiStopReason: "completed" | "awaiting_confirmation" | "request_limit" | "token_limit" | "repeated_call" | "ping_pong" | "no_progress" | "circuit_open" | "error" | "cancelled" | "interrupted";
         /**
          * AiTestIn
          * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。
@@ -3257,6 +3298,8 @@ export interface components {
             messages: {
                 [key: string]: unknown;
             }[];
+            /** Running */
+            running: string | null;
         };
         /** CostTallyOut */
         CostTallyOut: {
@@ -7339,7 +7382,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentRefusalOut"];
                 };
             };
-            /** @description `ai_disabled` · `ai_paused` · `card_undecided` · `busy` · `not_continuable` */
+            /** @description `ai_disabled` · `ai_paused` · `card_undecided` · `busy` · `not_continuable` · `not_running` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7355,6 +7398,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+        };
+    };
+    resume_stream_api_agent_conversations__conversation_id__stream_get: {
+        parameters: {
+            query: {
+                turn: string;
+            };
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description 這一輪沒有在跑 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_conversation_turn_api_agent_conversations__conversation_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `not_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

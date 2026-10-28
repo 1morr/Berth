@@ -16,7 +16,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import anyio
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
@@ -38,13 +37,10 @@ from berth.adapters.ai.fake import FakeAi
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import Actor, Language, Role
 from berth.main import create_app
 from berth.models import AiCall, AiConversation, AiRun, AiToolCall
-from berth.services.agent import AgentRuntime, Limits, load_history, open_turn
+from berth.services.agent import AgentRuntime, Limits, load_history
 from berth.services.agent_guards import ProviderBreaker
-from berth.services.executor import Executor
-from berth.services.hints import JobHints
 from tests.integration.arrange import sign_in_crew, sign_in_owner
 from tests.integration.factories import FakeClientFactory, answered
 
@@ -496,7 +492,7 @@ class TestGuards:
         assert [t.truncated for t in recorded(client)[0].tools] == [False]
 
     def test_one_turn_at_a_time_per_person(self, client: TestClient, script: Script) -> None:
-        client.app.state.agent.claim(1)  # type: ignore[attr-defined]  # 同上：擁有者是 1 號
+        client.app.state.agent.claim(1, "c1")  # type: ignore[attr-defined]  # 同上：擁有者是 1 號
         script.steps = [say("Hi.")]
 
         response = chat(client, "Hello?")
@@ -1036,47 +1032,6 @@ class TestTheBooks:
         # 這個人的那一輪讓出來了：下一則照常跑。
         factory.ai_.rejected_keys = frozenset()
         assert chat(client, "Again?").status_code == 200
-
-
-class TestClosingTheConnection:
-    def test_a_turn_cut_off_midway_is_booked_and_frees_its_slot(
-        self, client: TestClient, factory: FakeClientFactory
-    ) -> None:
-        """關掉連線時 Starlette 取消整個串流的 scope；收尾（存歷史、記停止原因、讓出那一輪）不可以
-        跟著被取消，否則 `ai_runs` 永遠像還在跑、這個人一直是 `busy`。"""
-        app: Any = client.app
-        runtime: AgentRuntime = app.state.agent
-
-        async def cut_off() -> None:
-            sessions: async_sessionmaker[AsyncSession] = app.state.session_factory
-            executor = Executor(
-                factory=factory,
-                hub=app.state.events,
-                sources=app.state.sources,
-                plans=JobHints(),
-                imports=JobHints(),
-            )
-            turn = await open_turn(
-                runtime=runtime,
-                sessions=sessions,
-                executor=executor,
-                factory=factory,
-                actor=Actor.ai(1, Role.ADMIN),
-                conversation_id="c1",
-                text="What is downloading?",
-                language=Language.EN,
-            )
-            with anyio.CancelScope() as scope:
-                scope.cancel()
-                await turn.close()
-
-        assert client.portal is not None
-        client.portal.call(cut_off)
-
-        [turn] = recorded(client)
-        assert turn.run.stop_reason == "cancelled"
-        assert "the connection was closed" in stop_note(client)
-        runtime.claim(1)
 
 
 class TestTheSteps:
