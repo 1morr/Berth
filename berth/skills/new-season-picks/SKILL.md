@@ -35,7 +35,9 @@ tools:
    not match exactly, retry with the original or romaji title, and ask the user to confirm
    when more than one result could be it.
 5. Pick the route from `media_read_media` for the work: its `routes` hold this kind of work and
-   `default_route_id` is the one used last. If more than one fits and there is no default, ask.
+   `default_route_id` is the one used last. Pass that one, or any of `routes` when there is
+   none. Do not ask in chat: when more than one fits, the card makes the user choose the route
+   for that row.
 6. Still airing:
    - Find it on Mikan with `bangumi_search_bangumi`, then `bangumi_read_bangumi` to see the
      subgroups. Prefer the subgroup that published most recently and most often, in the

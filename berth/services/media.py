@@ -163,6 +163,30 @@ async def route_choices(session: AsyncSession, media_id: str) -> tuple[RouteChoi
     return () if parsed is None else await _routes(session, parsed[0])
 
 
+@dataclass(frozen=True, slots=True)
+class RouteOffer:
+    """一部作品送單時選得了的 Route，與上次用的那一條（M5 票 23b：卡片上要人選時預選它）。"""
+
+    choices: tuple[RouteChoice, ...]
+    #: 上次送單用的那一條，在 `choices` 裡才算；沒用過、或那一條已經選不了是 `None`。
+    last_used: int | None
+
+
+# 確認卡提出時讀（`proposals.propose`）：只讀。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def route_offer(session: AsyncSession, media_id: str) -> RouteOffer:
+    """`route_choices` 加上這部作品的 `default_route_id`。認不得的 id 是空的。"""
+    parsed = parse_media_id(media_id)
+    if parsed is None:
+        return RouteOffer(choices=(), last_used=None)
+    choices = await _routes(session, parsed[0])
+    row = await session.get(Media, build_media_id(*parsed))
+    last = row.default_route_id if row is not None else None
+    return RouteOffer(
+        choices=choices, last_used=last if last in {choice.id for choice in choices} else None
+    )
+
+
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def read_snapshot(
     session: AsyncSession, factory: ServiceClientFactory, media_id: str

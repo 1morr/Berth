@@ -131,8 +131,11 @@ async function expectPageFits(page: import('@playwright/test').Page) {
   expect(pageWidth).toBeLessThanOrEqual(viewport)
 }
 
-test('送單卡：出卡、重新載入之後照樣按得下去、取消一列再確認，只送出勾著的', async ({ page }) => {
+test('送單卡：出卡、重新載入之後照樣按得下去、取消一列、選 Route 再確認，只送出勾著的', async ({
+  page,
+}) => {
   // 假模型說「下載 SPY×FAMILY」時：搜作品、搜發佈、問 Route，再出一張三列的送單卡（M5 票 13）。
+  // 這台有兩條電視 Route（TV、Anime）、SPY×FAMILY 沒送單過：模型給的是 TV，卡片上逐列要人選（票 23b）。
   await signIn(page, '/jobs')
   await page.getByRole('button', { name: '助理' }).click()
   const panel = page.locator('#agent-panel')
@@ -154,6 +157,16 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   const reloaded = panel.getByRole('region', { name: '送出下載' })
   await expect(reloaded.getByRole('checkbox')).toHaveCount(3)
   await reloaded.getByRole('checkbox', { name: /SPY×FAMILY - 05/ }).uncheck()
+  // 沒預選、沒選齊之前沒有確認鍵；只有勾著的兩列要選。
+  const pickers = reloaded.getByRole('combobox', { name: 'Route' })
+  await expect(pickers).toHaveCount(3)
+  await expect(pickers.first()).toHaveValue('')
+  await expect(reloaded.getByRole('button', { name: /確認/ })).toHaveCount(0)
+  await expect(reloaded).toContainText('還有 2 列沒選 Route。')
+  await shot(page, 'route-unpicked')
+  await pickers.nth(0).selectOption({ label: 'Anime' })
+  await pickers.nth(2).selectOption({ label: 'Anime' })
+  await shot(page, 'route-picked')
   await reloaded.getByRole('button', { name: '確認這 2 項' }).click()
 
   // 逐列結果：勾著的兩列完成，取消的那一列沒做；助理接著說它拿到的結果。
@@ -167,14 +180,14 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   await expectNoHorizontalScroll(page)
   await shot(page, 'confirmed')
 
-  // 只送出勾著的兩筆。
+  // 只送出勾著的兩筆，送進卡片上選的 Anime（不是模型給的 TV）。
   const jobs = (await (await page.request.get('/api/jobs?filter=all')).json()) as {
-    jobs: { name: string }[]
+    jobs: { name: string; route_name: string }[]
   }
-  const names = jobs.jobs.map((job) => job.name)
-  expect(names).toContain('[Berth-Demo] SPY×FAMILY - 04 [1080p][CHT]')
-  expect(names).toContain('[Berth-Demo] SPY×FAMILY - 06 [1080p][CHT]')
-  expect(names).not.toContain('[Berth-Demo] SPY×FAMILY - 05 [1080p][CHT]')
+  const routes = new Map(jobs.jobs.map((job) => [job.name, job.route_name]))
+  expect(routes.get('[Berth-Demo] SPY×FAMILY - 04 [1080p][CHT]')).toBe('Anime')
+  expect(routes.get('[Berth-Demo] SPY×FAMILY - 06 [1080p][CHT]')).toBe('Anime')
+  expect(routes.has('[Berth-Demo] SPY×FAMILY - 05 [1080p][CHT]')).toBe(false)
 })
 
 test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要，重新載入之後摘要還在', async ({

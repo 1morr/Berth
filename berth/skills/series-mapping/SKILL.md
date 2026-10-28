@@ -58,6 +58,7 @@ tools:
    group's name for the show. Prefer `verdict: fits`, more seeders, and whole-season packs.
 8. Pick each row's route from that TMDB entry's `media_read_media`: its `routes` hold that kind
    of work (series or movies) and `default_route_id` is the one used last. A movie and a series
-   never share a route. If more than one fits and there is no default, ask.
+   never share a route. Pass the default, or any of `routes` when there is none. Do not ask in
+   chat: when more than one fits, the card makes the user choose the route for that row.
 9. Put all picks in one `downloading_add_manual_download` proposal, one row per TMDB entry or
    season, each row saying which AniList entries it covers. The user confirms the card.

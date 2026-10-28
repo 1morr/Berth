@@ -6,7 +6,8 @@
 每種接口起一台**全新的** `fake_setup_server.py --scenario agent-live`（真 TMDB、真索引站、
 真模型與動漫資料、收下就留著的替身 qBittorrent），以管理員 `skipper` 登入，照使用者的路徑
 `PUT /settings/ai` 填 `.env` 的 key，再逐句送出。確認卡一律勾全部按確認，與畫面一樣按完就
-送恢復的那一則。每一輪的數字讀 `GET /agent/runs/{id}`（步驟頁讀的那一支）。
+送恢復的那一則；要人選 Route 的列（票 23b：作品放得進的不只一條）照 `ANSWER` 選 Anime 或
+Movies。每一輪的數字讀 `GET /agent/runs/{id}`（步驟頁讀的那一支）。
 
     uv run --env-file .env python scripts/experiments/m5_acceptance_scenarios.py
     uv run --env-file .env python scripts/experiments/m5_acceptance_scenarios.py --providers openai --only S2,S4
@@ -39,6 +40,8 @@ BROWSER = {"X-Requested-With": "berth-acceptance"}
 MISMATCH = "兩種算法不一致"
 #: 模型問 Route、字幕組或來源時的固定回答（腳本不會臨場回話；第一輪實跑 S1、S3 都停在這個問題上）。
 ANSWER = "劇集用 Anime 路線，電影用 Movies；字幕組與來源照你推薦的挑，直接出卡給我確認。"
+#: 卡片上要人選 Route 時腳本選的（同 `ANSWER`）。
+PICKED_ROUTES = ("Anime", "Movies")
 
 
 @dataclass
@@ -103,6 +106,14 @@ SCENARIOS = [
         "冷門作品：宝石の国",
         ["我想看《宝石の国》（Land of the Lustrous），幫我找來源下載。", ANSWER],
         "標題對不對得上；搜不到時怎麼辦；有沒有重複搜同一個詞",
+    ),
+    Scenario(
+        "S7",
+        "兩條電視 Route、作品沒送單過：卡片上選 Route（票 23b）",
+        [
+            "我想看《宝石の国》（Land of the Lustrous），幫我找來源下載，字幕組照你推薦的挑，直接出卡給我確認。"
+        ],
+        "不在對話裡問 Route、直接出卡；卡片那一列要人選 Route、沒有預選；腳本選 Anime 之後送進 Anime",
     ),
     Scenario(
         "S5",
@@ -245,9 +256,12 @@ class Runner:
                 if card is None:
                     log.append(f"> 🟥 確認卡 `{ask['toolCallId']}` 在 proposals 裡找不到\n")
                     continue
-                r = self.http.post(
-                    f"/api/proposals/{card['id']}/decide", json={"approve": True, "selection": None}
-                )
+                body: dict[str, Any] = {"approve": True, "selection": None}
+                wanted: list[dict[str, Any] | None] = card["preview"].get("routes") or []
+                if any(wanted):
+                    body["routes"] = [pick_route(ask) for ask in wanted]
+                    log.append(routes_md(wanted, body["routes"]))
+                r = self.http.post(f"/api/proposals/{card['id']}/decide", json=body)
                 log.append(card_md(r.json() if r.status_code == 200 else card, r.status_code))
                 parts.append(
                     {
@@ -287,6 +301,29 @@ def run_ids(chunks: list[dict[str, Any]]) -> list[str]:
         for c in chunks
         if c.get("type") == "start" and (c.get("messageMetadata") or {}).get("runId")
     ]
+
+
+def pick_route(ask: dict[str, Any] | None) -> int | None:
+    """卡片要人選的那一列照 `ANSWER` 選；清單裡沒有那兩條就選預選的，再沒有選第一條。"""
+    if ask is None:
+        return None
+    for option in ask["options"]:
+        if option["name"] in PICKED_ROUTES:
+            return int(option["id"])
+    return ask["preselected"] or int(ask["options"][0]["id"])
+
+
+def routes_md(asks: list[dict[str, Any] | None], picks: list[int | None]) -> str:
+    lines = []
+    for index, (ask, pick) in enumerate(zip(asks, picks, strict=True)):
+        if ask is None:
+            continue
+        names = {option["id"]: option["name"] for option in ask["options"]}
+        lines.append(
+            f"> 🟦 第 {index + 1} 列要選 Route：{'、'.join(names.values())}；"
+            f"預選 {names.get(ask['preselected'], '無')}；腳本選 {names.get(pick)}"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def card_md(p: dict[str, Any], status: int) -> str:
@@ -385,6 +422,9 @@ def run_one(r: Runner, provider: str, sc: Scenario, cid: str) -> tuple[str, dict
         },
         "tools": [t["command"] for t in tools],
         "cards": [(p["command"], p["status"], len(p["arguments"])) for p in cards],
+        #: 要人選 Route 的列數，與按下去之後選的（票 23b）。
+        "route_asks": sum(1 for p in cards for ask in p["preview"].get("routes") or [] if ask),
+        "routes_chosen": [p.get("routes") for p in cards if p.get("routes")],
     }
     stats["cache_hit"] = round(stats["cache_read"] / stats["input"], 3) if stats["input"] else None
     if sc.expect:
@@ -407,6 +447,7 @@ SUMMARY_KEYS = (
     "outcomes",
     "cards",
     "phrase_seen",
+    "route_asks",
     "crash",
 )
 

@@ -1971,3 +1971,7 @@ class ProposalRefusal(StrEnum):
     PROPOSAL_EXPIRED = "proposal_expired"
     #: 勾選是空的、有重複或超出列數。全部不勾等於拒絕，畫面該送拒絕。
     SELECTION_INVALID = "selection_invalid"
+    #: 勾著的那一列可選的 Route 不只一條，卻沒選（M5 票 23b）。`detail` 是列號（0 起算）。
+    ROUTE_REQUIRED = "route_required"
+    #: 選的 Route 不在提出時存下的那份清單裡、那一列沒有要選 Route，或 `routes` 與列數對不上。
+    ROUTE_NOT_OFFERED = "route_not_offered"

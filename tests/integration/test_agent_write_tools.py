@@ -25,13 +25,15 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 from pydantic_ai.models.function import AgentInfo
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters import fs
 from berth.adapters.rss import mikan
 from berth.adapters.websearch import WebPage
 from berth.config import Config
-from berth.models import DiskSettings
+from berth.domain import CollectionType
+from berth.models import DiskSettings, Media, Route
 from berth.services.jobs import JobSource
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
@@ -138,6 +140,32 @@ def with_tavily(client: TestClient, factory: FakeClientFactory, *pages: WebPage)
     response = client.put("/api/settings/ai", json=body, headers=BROWSER)
     assert response.status_code == 200, response.text
     factory.web_search_.pages = list(pages)
+
+
+def used_before(client: TestClient, route: int) -> None:
+    """SPY×FAMILY 送過單、上次用 `route`（`default_route_id`）。"""
+
+    async def write(session: AsyncSession) -> None:
+        media = await session.get(Media, SPY_ID)
+        assert media is not None
+        media.default_route_id = route
+        await session.commit()
+
+    in_db(client, write)
+
+
+def tv_routes(client: TestClient) -> list[int]:
+    """啟用中、收劇集的 Route（這台 Berth 有 TV 與 Anime 兩條）。"""
+
+    async def read(session: AsyncSession) -> list[int]:
+        found = await session.scalars(
+            select(Route.id).where(
+                Route.collection_type == CollectionType.TVSHOWS, Route.enabled.is_(True)
+            )
+        )
+        return list(found)
+
+    return in_db(client, read)
 
 
 def seen_work(client: TestClient) -> tuple[int, int]:
@@ -301,8 +329,10 @@ class TestExternalContent:
     def test_a_reversible_write_runs_directly(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
-        """可逆、沒有旗標的寫入直接做（plan §11.6〈確認卡範圍〉）：關鍵字是使用者說的。"""
+        """可逆、沒有旗標的寫入直接做（plan §11.6〈確認卡範圍〉）：關鍵字是使用者說的，這部作品也
+        送過單（Route 不只一條而沒有預設的見 `TestTheRouteIsAskedOnACard`）。"""
         tv, _ = seen_work(client)
+        used_before(client, tv)
         script.steps = [
             tool(
                 "rss_subscribe_search",
@@ -584,3 +614,79 @@ class TestTorrentsOnOneCard:
 
         assert [row["subgroup_id"] for row in proposal["arguments"]] == kept
         assert proposal["preview"]["held_back"] == 1
+
+
+# ---------------------------------------------------------------- 關鍵字訂閱的 Route（票 23b）
+
+
+def subscribe(route: int) -> Step:
+    return tool(
+        "rss_subscribe_search",
+        "s1",
+        kind="nyaa",
+        term="SPY×FAMILY",
+        media_id=SPY_ID,
+        route_id=route,
+    )
+
+
+class TestTheRouteIsAskedOnACard:
+    """多條可用 Route 就一定問（使用者，票 23b）：關鍵字訂閱可逆、平常直接做，但作品放得進的 Route
+    不只一條、又沒有 `default_route_id` 時改出卡，卡上照送單卡的規則選 Route。"""
+
+    def test_with_two_routes_and_no_default_it_is_a_card_that_asks_for_the_route(
+        self, client: TestClient, script: Script
+    ) -> None:
+        tv, _ = seen_work(client)
+        script.steps = [subscribe(tv), say("Subscribed.")]
+
+        chat(client, "Subscribe SPY×FAMILY on nyaa.")
+
+        assert feeds(client) == []
+        [proposal] = cards(client)
+        assert proposal["command"] == "rss.subscribe_search"
+        assert proposal["preview"]["external_fields"] == [[]]
+        [ask] = proposal["preview"]["routes"]
+        assert sorted(option["id"] for option in ask["options"]) == sorted(tv_routes(client))
+        assert ask["preselected"] is None
+        assert [t.outcome for t in recorded(client)[-1].tools] == ["proposed"]
+
+        other = next(route for route in tv_routes(client) if route != tv)
+        # 沒選 Route 按不下去（`routes=None`：不讓測試的 `decide` 替人選）。
+        assert decide(client, proposal["id"], approve=True, routes=None).status_code == 422
+        pressed = decide(client, proposal["id"], approve=True, routes=[other])
+        response = resume(client, tool_call_id="s1")
+
+        assert pressed.json()["status"] == "executed", pressed.text
+        assert response.status_code == 200, response.text
+        [feed] = feeds(client)
+        # 送進卡片上選的那一條，不是模型給的。
+        assert feed["tv_route_id"] == other
+
+    def test_with_a_default_it_runs_directly(self, client: TestClient, script: Script) -> None:
+        tv, _ = seen_work(client)
+        used_before(client, tv)
+        script.steps = [subscribe(tv), say("Subscribed.")]
+
+        chat(client, "Subscribe SPY×FAMILY on nyaa.")
+
+        assert cards(client) == []
+        assert len(feeds(client)) == 1
+
+    def test_with_a_single_route_it_runs_directly(self, client: TestClient, script: Script) -> None:
+        tv, _ = seen_work(client)
+
+        async def leave_one(session: AsyncSession) -> None:
+            for route in await session.scalars(
+                select(Route).where(Route.collection_type == CollectionType.TVSHOWS)
+            ):
+                route.enabled = route.id == tv
+            await session.commit()
+
+        in_db(client, leave_one)
+        script.steps = [subscribe(tv), say("Subscribed.")]
+
+        chat(client, "Subscribe SPY×FAMILY on nyaa.")
+
+        assert cards(client) == []
+        assert len(feeds(client)) == 1

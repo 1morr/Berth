@@ -107,6 +107,7 @@ from berth.services.commands import Effect, Flag, command
 from berth.services.compaction import Summarizer, compact, context_fraction
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.jobs import JobRejectedError
+from berth.services.media import route_offer
 from berth.services.proposals import (
     InvalidProposalError,
     ProposalRejectedError,
@@ -377,7 +378,12 @@ class SubmitRow(BaseModel):
 
     source_id: str = Field(description="The source_id of a row from search_torrents.")
     media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
-    route_id: int = Field(description="An id from route_choices for this work.")
+    route_id: int = Field(
+        description=(
+            "An id from route_choices for this work. When more than one fits, the user "
+            "chooses this row's route on the card."
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,6 +467,7 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
     超過一張卡上限的列（數量閘）說是呼叫裡的第幾列：模型的呼叫參數在歷史裡，它認得出是哪幾筆。
     """
     shown = len(view.arguments)
+    chosen = view.routes or [None] * shown
     held = view.preview.held_back
     later = (
         {
@@ -483,6 +490,8 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
                 "reason": row.reason,
                 "detail": row.detail,
                 "result": row.result,
+                # 人在卡片上選的 Route（票 23b）：蓋過模型給的那一條，模型要照這個說。
+                **({"route_chosen_on_card": chosen[index]} if chosen[index] is not None else {}),
             }
             for index, row in enumerate(view.results or [])
         ],
@@ -842,14 +851,16 @@ class Turn:
         tool_call_id: str,
         messages: Sequence[ModelMessage],
     ) -> object:
-        """可逆的寫入：守法過了就直接做；有自由文字出自外部內容就改出一張單列的卡（plan §11.6）。"""
+        """可逆的寫入：守法過了就直接做。兩種情況改出一張單列的卡（plan §11.6）：有自由文字出自外部
+        內容；或作品放得進的 Route 不只一條、又沒有上次用的那一條（票 23b：多條可用就一定問，卡上
+        照送單卡的規則選）。"""
         origins = Origins.of(messages)
         try:
             origins.check(spec.name, arguments, connects_out=Flag.CONNECTS_OUT in spec.flags)
         except CommandRefusedError as exc:
             raise _failure(exc) from exc
         from_pages = origins.external_fields(arguments, spec.input)
-        if not from_pages:
+        if not from_pages and not await self._route_unsettled(spec, arguments):
             return await self.run_tool(spec.name, arguments)
         async with self.sessions() as session:
             try:
@@ -866,6 +877,15 @@ class Turn:
             except (CommandRefusedError, ValidationError) as exc:
                 raise _failure(exc) from exc
         raise ApprovalRequired(metadata={"proposal": view.id})
+
+    async def _route_unsettled(self, spec: CommandSpec, arguments: Mapping[str, object]) -> bool:
+        """這一次寫入的 Route 要人選：作品放得進的不只一條，而且這部作品沒送過單
+        （`default_route_id`）。有上次用的那一條時照舊直接做。"""
+        if not proposals.sends_into_a_route(spec):
+            return False
+        async with self.sessions() as session:
+            offer = await route_offer(session, str(arguments.get("media_id", "")))
+        return len(offer.choices) > 1 and offer.last_used is None
 
     async def card_result(self, tool_call_id: str) -> object:
         """按過的卡片（恢復那一輪）：核准就當場執行過了（`proposals.decide`），這裡只把結果交給模型。"""

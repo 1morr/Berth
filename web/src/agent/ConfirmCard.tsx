@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isJobRefusal } from '../api/jobs'
@@ -13,6 +13,7 @@ import {
   WAITING,
   type Proposal,
   type ProposalRow,
+  type RouteAsk,
 } from '../api/proposals'
 import { Checkbox, CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
@@ -31,6 +32,10 @@ import { useCardActions } from './cards'
  *
  * **按下去就做**：核准的回應裡就是逐列結果（會部分成功），畫在每一列上。之後才告訴對話（`respond`），
  * 讓助理接著說。
+ *
+ * **作品放得進的 Route 不只一條時，那一列的 Route 由人選**（票 23b）：清單是伺服器提出時存的
+ * （`preview.routes`），預選這部作品上次用的那一條、沒用過就不預選；勾著的列沒選齊之前確認鍵不畫
+ * （DESIGN.md「先選再確認」），伺服器也只收清單裡的。
  */
 export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; toolCallId: string }) {
   const { t } = useTranslation()
@@ -41,6 +46,14 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   const [ticked, setTicked] = useState<ReadonlySet<number>>(() => new Set(rows.keys()))
   const waiting = WAITING.has(proposal.status)
   const many = rows.length > 1
+  const asks = proposal.preview.routes
+  const asking = asks.some((ask) => ask !== null)
+  const [picks, setPicks] = useState<readonly (number | null)[]>(() =>
+    rows.map((_, index) => asks[index]?.preselected ?? null),
+  )
+  // 勾著、而且作品放得進的 Route 不只一條的列：要人選。
+  const choosing = (index: number) => asks[index] != null && ticked.has(index)
+  const unpicked = rows.filter((_, index) => choosing(index) && picks[index] === null).length
   // 按過之後整排鍵收掉：焦點交給卡片標題，不掉回 `body`（WCAG 2.4.3）。只在這一頁按的才搬。
   const title = useRef<HTMLHeadingElement>(null)
   const pressed = useRef(false)
@@ -58,6 +71,12 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         // 全勾就是「全部」：不帶勾選，與單項卡同一個形狀。
         selection:
           approve && many && ticked.size < rows.length ? [...ticked].sort((a, b) => a - b) : null,
+        // 沒勾的列不送它的 Route：伺服器只要勾著的那幾列選齊。
+        ...(approve && asking
+          ? {
+              routes: rows.map((_, index) => (choosing(index) ? picks[index] : null)),
+            }
+          : {}),
       }),
     onSuccess: async (decided) => {
       queryClient.setQueryData<Proposal[]>(proposalsKey(proposal.conversation_id ?? ''), (old) =>
@@ -96,11 +115,13 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
       </div>
 
       <Effects proposal={proposal} />
+      {waiting && asking ? <p className="text-xs text-ink">{t('agent.card.routeLead')}</p> : null}
       {proposal.command === SUBMIT ? <SubmitFolders rows={rows} /> : null}
 
       <ol className="grid gap-2">
         {rows.map((row, index) => {
           const ticking = waiting && many
+          const ask = asks[index] ?? null
           const body = (
             <RowBody
               command={proposal.command}
@@ -108,6 +129,14 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               labelled={ticking}
               external={proposal.preview.external_fields[index] ?? []}
               torrents={proposal.preview.torrents[index]}
+              route={{
+                ask,
+                // 等人按的時候是這一頁的選擇，按過之後是伺服器記下的那一條。
+                pick: waiting ? (picks[index] ?? null) : (proposal.routes?.[index] ?? null),
+                editable: waiting && !decide.isPending,
+                onPick: (route) =>
+                  setPicks((old) => old.map((value, at) => (at === index ? route : value))),
+              }}
             />
           )
           const result = proposal.results?.[index]
@@ -157,7 +186,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
             <RequestFailed error={decide.error} lead={t('agent.card.failed')} />
           ) : null}
           <div className={CONFIRM_ACTIONS}>
-            {ticked.size > 0 ? (
+            {ticked.size > 0 && unpicked === 0 ? (
               <PrimaryButton
                 type="button"
                 // `busy` 而不是 `disabled`：停用的鍵接不住焦點（DESIGN.md〈Buttons〉）。
@@ -174,8 +203,13 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
                     : t('agent.card.confirm')}
               </PrimaryButton>
             ) : (
-              // 一列都沒勾：按下去必被拒的鍵不畫（DESIGN.md「先選再確認」），那一格說為什麼。
-              <p className="text-xs text-ink-dim">{t('agent.card.noneTicked')}</p>
+              // 一列都沒勾、或勾著的列還沒選 Route：按下去必被拒的鍵不畫（DESIGN.md「先選再確認」），
+              // 那一格說為什麼。
+              <p className="text-xs text-ink-dim">
+                {ticked.size === 0
+                  ? t('agent.card.noneTicked')
+                  : t('agent.card.routeMissing', { count: unpicked })}
+              </p>
             )}
             <GhostButton
               type="button"
@@ -273,6 +307,7 @@ function RowBody({
   labelled,
   external,
   torrents,
+  route,
 }: {
   command: string
   row: Row
@@ -280,13 +315,22 @@ function RowBody({
   external: readonly string[]
   /** 這一列按下去會送出幾個 torrent；`null` 是要送出時才知道，`undefined` 是不送。 */
   torrents: number | null | undefined
+  route: RouteSlot
 }) {
   const { t } = useTranslation()
   // `labelled`：勾選框的標籤已經是發佈名，欄位裡不再印一次。
-  if (isSubmit(command, row)) return <SubmitRowBody row={row} labelled={labelled} />
+  if (isSubmit(command, row)) return <SubmitRowBody row={row} labelled={labelled} route={route} />
   if (command === 'rss.add_feed') return <FeedRowBody row={row} external={external} />
   if (command === 'rss.subscribe_mikan' || command === 'rss.subscribe_search') {
-    return <SubscribeRowBody command={command} row={row} external={external} torrents={torrents} />
+    return (
+      <SubscribeRowBody
+        command={command}
+        row={row}
+        external={external}
+        torrents={torrents}
+        route={route}
+      />
+    )
   }
   return (
     <div className="grid gap-1">
@@ -306,8 +350,46 @@ function RowBody({
 interface Field {
   name: string
   label: string
-  value: string
+  value: ReactNode
   mono?: boolean
+}
+
+/** 一列的 Route 那一格（票 23b）：`ask` 不是 `null` 時由人選。 */
+interface RouteSlot {
+  ask: RouteAsk | null
+  /** 選了哪一條；`null` 是還沒選（或沒得選）。 */
+  pick: number | null
+  editable: boolean
+  onPick: (route: number | null) => void
+}
+
+/**
+ * Route 的值：要人選的列是必選的下拉（清單只有伺服器存下的那幾條），按過之後是選的那一條；
+ * 沒得選的列照 `fallback`（模型給、伺服器驗過的那一條）。
+ */
+function RouteValue({ route, fallback }: { route: RouteSlot; fallback: string }) {
+  const { t } = useTranslation()
+  const { ask, pick } = route
+  if (ask === null) return fallback
+  if (!route.editable) return ask.options.find((option) => option.id === pick)?.name ?? '—'
+  return (
+    <select
+      aria-label={t('agent.card.fields.route')}
+      required
+      value={pick ?? ''}
+      onChange={(event) =>
+        route.onPick(event.target.value === '' ? null : Number(event.target.value))
+      }
+      className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
+    >
+      <option value="">{t('agent.card.routeChoose')}</option>
+      {ask.options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.name}
+        </option>
+      ))}
+    </select>
+  )
 }
 
 function Fields({ fields, external }: { fields: Field[]; external: readonly string[] }) {
@@ -385,16 +467,18 @@ function SubscribeRowBody({
   row,
   external,
   torrents,
+  route,
 }: {
   command: 'rss.subscribe_mikan' | 'rss.subscribe_search'
   row: Row
   external: readonly string[]
   torrents: number | null | undefined
+  route: RouteSlot
 }) {
   const { t } = useTranslation()
   const mediaId = typeof row.media_id === 'string' ? row.media_id : ''
   const media = useQuery({ ...mediaQueryOptions(mediaId), enabled: mediaId !== '' })
-  const route = media.data?.routes.find((choice) => choice.id === row.route_id)
+  const given = media.data?.routes.find((choice) => choice.id === row.route_id)
   const source: Field[] =
     command === 'rss.subscribe_mikan'
       ? [
@@ -430,7 +514,7 @@ function SubscribeRowBody({
         {
           name: 'route_id',
           label: t('agent.card.fields.route'),
-          value: route?.name ?? `#${String(row.route_id)}`,
+          value: <RouteValue route={route} fallback={given?.name ?? `#${String(row.route_id)}`} />,
         },
         // 訂閱 Mikan 按下去就當場送整季，不經第一批確認（協調者 2026-10-27）：按的人要知道送多少。
         ...(command === 'rss.subscribe_mikan'
@@ -450,11 +534,19 @@ function SubscribeRowBody({
   )
 }
 
-function SubmitRowBody({ row, labelled }: { row: SubmitRow; labelled: boolean }) {
+function SubmitRowBody({
+  row,
+  labelled,
+  route,
+}: {
+  row: SubmitRow
+  labelled: boolean
+  route: RouteSlot
+}) {
   const { t, i18n: i18nInstance } = useTranslation()
   // 作品頁的那一份：作品名與這部作品選得了的 Route（Route 名不必另外問）。
   const media = useQuery(mediaQueryOptions(row.media_id))
-  const route = media.data?.routes.find((choice) => choice.id === row.route_id)
+  const given = media.data?.routes.find((choice) => choice.id === row.route_id)
   return (
     <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
       {labelled ? null : (
@@ -468,7 +560,9 @@ function SubmitRowBody({ row, labelled }: { row: SubmitRow; labelled: boolean })
       <dt className="label text-ink-dim">{t('agent.card.fields.media')}</dt>
       <dd className="text-ink">{media.data?.title ?? row.media_id}</dd>
       <dt className="label text-ink-dim">{t('agent.card.fields.route')}</dt>
-      <dd className="text-ink">{route?.name ?? `#${row.route_id}`}</dd>
+      <dd className="text-ink">
+        <RouteValue route={route} fallback={given?.name ?? `#${row.route_id}`} />
+      </dd>
     </dl>
   )
 }
