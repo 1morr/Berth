@@ -18,7 +18,8 @@
    只收清單裡的（`route_required` / `route_not_offered`）。只有一條的列不收。
    **字幕組也是**（M5 票 26）：訂閱的字幕組可選的不只一個時，提出的一方把選項存進預覽
    （`SubgroupAsk`，模型給的只當預選），核准時勾著的每一列都要選、只收清單裡的
-   （`subgroup_required` / `subgroup_not_offered`）。
+   （`subgroup_required` / `subgroup_not_offered`）。關鍵字訂閱的**第一輪**同理（`first_batch`：
+   「下載這些並追之後的」或「只追之後的」，同 RSS 頁第一輪），不給就照存下的（預設前者）。
 3. **執行**（`execute`）：同樣先搶（核准 → 執行中），再逐列經命令執行器：先重驗（乾跑）、再執行。
    **參數只用存下的那一份**（例外只有卡片上選的 Route 與字幕組），而且先重算雜湊比對卡片上那一份。
    每做完一列就把那一列的結果與它的改動一起 commit：做到一半的總覽卡，做過的那幾列有結果、
@@ -61,6 +62,7 @@ from berth.domain import (
     Actor,
     ActorKind,
     FeedKind,
+    PrimeMode,
     ProposalRefusal,
     ProposalRowOutcome,
     ProposalStatus,
@@ -176,6 +178,9 @@ class ProposalPreview:
     #: 逐列：這部作品提出那一刻已經有的訂閱（M5 票 26）。卡片說出來，由人決定要不要再訂一份。
     #: 不是訂閱的命令、票 26 之前存的卡是空的。
     existing: tuple[tuple[SubscriptionRef, ...], ...] = ()
+    #: 逐列：卡片上能不能選第一輪（命令輸入有 `first_batch` 的：關鍵字訂閱，M5 票 26）。
+    #: 都不能是空的。
+    first_batch: tuple[bool, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +220,8 @@ class ProposalView:
     routes: list[int | None] | None = None
     #: 核准時逐列在卡片上選的字幕組（選項的 `key`）；沒選過是 `None`。
     subgroups: list[str | None] | None = None
+    #: 核准時逐列選的第一輪；沒選過是 `None`。
+    first_batch: list[PrimeMode | None] | None = None
 
 
 def arguments_hash(name: str, arguments: Sequence[Mapping[str, object]]) -> str:
@@ -281,6 +288,9 @@ async def propose(
         routes=await _route_asks(session, spec, arguments),
         subgroups=tuple(subgroups),
         existing=tuple(tuple(found) for found in existing),
+        first_batch=(
+            tuple(True for _ in arguments) if "first_batch" in spec.input.model_fields else ()
+        ),
     )
     proposal = Proposal(
         command=name,
@@ -312,6 +322,7 @@ async def decide(
     selection: Sequence[int] | None = None,
     routes: Sequence[int | None] | None = None,
     subgroups: Sequence[str | None] | None = None,
+    first_batch: Sequence[PrimeMode | None] | None = None,
     user_id: int,
     role: Role,
     now: datetime | None = None,
@@ -339,6 +350,7 @@ async def decide(
     preview = _view(proposal).preview
     picked = _routes(routes, preview.routes, rows, chosen) if approve else None
     groups = _subgroups(subgroups, preview.subgroups, rows, chosen) if approve else None
+    rounds = _first_batches(first_batch, preview.first_batch, rows, chosen) if approve else None
     status = ProposalStatus.APPROVED if approve else ProposalStatus.REJECTED
     moved = await _move(
         session,
@@ -350,6 +362,7 @@ async def decide(
         selection_json=chosen,
         routes_json=picked,
         subgroups_json=groups,
+        first_batch_json=rounds,
     )
     if not moved:
         raise await _decided(session, proposal_id)
@@ -380,6 +393,7 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
     picked = proposal.routes_json or [None] * len(rows)
     asks = _view(proposal).preview.subgroups
     groups = proposal.subgroups_json or [None] * len(rows)
+    rounds = proposal.first_batch_json or [None] * len(rows)
     intact = arguments_hash(name, rows) == proposal.arguments_hash
     actor = await _actor(session, proposal)
     results: list[RowResult] = []
@@ -394,6 +408,8 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
             ask = asks[index] if index < len(asks) else None
             if ask is not None:
                 given = {**given, **_option(ask, groups[index]).arguments}
+            if rounds[index] is not None:
+                given = {**given, "first_batch": rounds[index]}
             outcome = await _run_row(session, executor, name, given, actor)
         results.append(outcome)
         # 這一列的結果與它的改動同一筆 commit。
@@ -632,6 +648,29 @@ def _subgroups(
     return picks if any(pick is not None for pick in picks) else None
 
 
+def _first_batches(
+    picks: Sequence[PrimeMode | None] | None,
+    offers: Sequence[bool],
+    rows: int,
+    chosen: Sequence[int] | None,
+) -> list[str | None] | None:
+    """核准時的逐列第一輪（模組 docstring 第 2 點）。沒得選的列帶了值、或長度對不上是
+    `first_batch_not_offered`；沒勾的列不記；沒給的照存下的。"""
+    if picks is None:
+        return None
+    given = list(picks)
+    if len(given) != rows:
+        raise ProposalRejectedError(ProposalRefusal.FIRST_BATCH_NOT_OFFERED, json.dumps(given))
+    kept: list[str | None] = []
+    for index, pick in enumerate(given):
+        offered = index < len(offers) and offers[index]
+        if pick is not None and not offered:
+            raise ProposalRejectedError(ProposalRefusal.FIRST_BATCH_NOT_OFFERED, str(index))
+        ticked = chosen is None or index in chosen
+        kept.append(PrimeMode(pick).value if pick is not None and ticked else None)
+    return kept if any(pick is not None for pick in kept) else None
+
+
 def _option(ask: SubgroupAsk, pick: str | None) -> SubgroupOption:
     """執行這一列用的字幕組：人選的那一個，沒選（不必選的列）是預選的那一個。`decide` 擋過了，
     所以一定找得到。"""
@@ -738,7 +777,7 @@ def _view(proposal: Proposal) -> ProposalView:
                 )
                 for ask in preview.get("routes") or ()
             ),
-            # 票 26 之前存的卡沒有這兩格。
+            # 票 26 之前存的卡沒有這三格。
             subgroups=tuple(_subgroup_ask(ask) for ask in preview.get("subgroups") or ()),
             existing=tuple(
                 tuple(
@@ -752,6 +791,7 @@ def _view(proposal: Proposal) -> ProposalView:
                 )
                 for refs in preview.get("existing") or ()
             ),
+            first_batch=tuple(preview.get("first_batch") or ()),
         ),
         user_id=proposal.user_id,
         proposer=proposal.proposer,
@@ -779,6 +819,11 @@ def _view(proposal: Proposal) -> ProposalView:
         detached_at=proposal.detached_at,
         routes=proposal.routes_json,
         subgroups=proposal.subgroups_json,
+        first_batch=(
+            None
+            if proposal.first_batch_json is None
+            else [None if pick is None else PrimeMode(pick) for pick in proposal.first_batch_json]
+        ),
     )
 
 

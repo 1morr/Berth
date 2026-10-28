@@ -107,7 +107,10 @@
 - **訂閱的字幕組由你在確認卡上選**（M5 票 26）：Mikan 訂閱卡列出番組頁上的每個字幕組（筆數、最近更新、最新一筆），
   助理建議的只是預選，可選的不只一個時沒選就沒有確認鍵；送出的集數跟著選的那一組。關鍵字訂閱（Nyaa / acg.rip）改成一律出卡：
   卡上選這一次搜到的字幕組、列出它的第一批，按確認就下載，那條 Feed 只收這個字幕組的發佈、第一批記成已確認，不必再到 RSS 頁
-  選第一輪。卡片 API 多 `preview.subgroups`、`preview.existing` 與決定時的 `subgroups`（`subgroup_required`、
+  選第一輪。**作品頁的 Nyaa / acg.rip 訂閱同一條規則**：先搜、列出搜到的字幕組，選一組、看它的第一批，按「訂閱並送出第一批」
+  才建，只綁那一組，不再就地畫第一輪預覽。作品頁與卡片都可以改選「只追之後的」（同 RSS 頁第一輪那一顆，現有的
+  一筆都不送）；決定時多 `first_batch`（`first_batch_not_offered`），訂閱 body 多 `first_batch`；讀不到搜尋就不建。`POST /api/rss/subscriptions/search` 的 `subgroup` 必填，新端點
+  `GET /api/rss/search/subgroups`。卡片 API 多 `preview.subgroups`、`preview.existing` 與決定時的 `subgroups`（`subgroup_required`、
   `subgroup_not_offered`）；`rss_feeds` 多 `subgroup`（migration `d7e1b3a5c926`）。已經綁了好幾個字幕組的舊 Feed 照舊運作。
 - **作品放得進的 Route 不只一條時，確認卡上要你選**（M5 票 23b）：助理出的送單卡與 Mikan、關鍵字訂閱卡，那部作品有兩條以上
   啟用中、收這一種作品的 Route 時，那一列的 Route 換成必選的下拉，預選這部作品上次送單用的那一條（沒用過就不預選），

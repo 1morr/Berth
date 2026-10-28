@@ -22,7 +22,14 @@ from pydantic import BaseModel, ConfigDict
 from berth.api.deps import ExecutorDep, SessionDep
 from berth.api.errors import refusal_responses
 from berth.api.gate import current_user
-from berth.domain import ActorKind, FeedKind, ProposalRefusal, ProposalRowOutcome, ProposalStatus
+from berth.domain import (
+    ActorKind,
+    FeedKind,
+    PrimeMode,
+    ProposalRefusal,
+    ProposalRowOutcome,
+    ProposalStatus,
+)
 from berth.services import proposals
 from berth.services.commands import Effect, Flag
 from berth.services.proposals import ProposalRejectedError, ProposalView
@@ -42,6 +49,7 @@ _STATUS: dict[ProposalRefusal, int] = {
     # 要選字幕組的列沒選，或選了清單外的（票 26）。
     ProposalRefusal.SUBGROUP_REQUIRED: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ProposalRefusal.SUBGROUP_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ProposalRefusal.FIRST_BATCH_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -131,6 +139,8 @@ class ProposalPreviewOut(BaseModel):
     subgroups: list[SubgroupAskOut | None]
     #: 逐列：這部作品已經有的訂閱。不是訂閱的命令是空清單。
     existing: list[list[SubscriptionRefOut]]
+    #: 逐列：卡片上能不能選第一輪（關鍵字訂閱）。都不能是空清單。
+    first_batch: list[bool]
 
 
 class ProposalRowOut(BaseModel):
@@ -176,6 +186,8 @@ class ProposalOut(BaseModel):
     routes: list[int | None] | None
     #: 核准時逐列在卡片上選的字幕組（選項的 `key`）；沒選過是 `null`。
     subgroups: list[str | None] | None
+    #: 核准時逐列選的第一輪；沒選過是 `null`（照存下的：下載這些並追之後的）。
+    first_batch: list[PrimeMode | None] | None
 
 
 class ProposalDecisionIn(BaseModel):
@@ -191,6 +203,9 @@ class ProposalDecisionIn(BaseModel):
     #: 逐列的字幕組（選項的 `key`），與列對齊；只有 `preview.subgroups` 有選項的列能給值，
     #: `required` 而勾著的那幾列必給。
     subgroups: list[str | None] | None = None
+    #: 逐列的第一輪（`all`「下載這些並追之後的」/ `later`「只追之後的」）；只有
+    #: `preview.first_batch` 是真的列能給值，沒給的照存下的。
+    first_batch: list[PrimeMode | None] | None = None
 
 
 @router.get("")
@@ -228,6 +243,7 @@ async def post_decision(
             selection=body.selection,
             routes=body.routes,
             subgroups=body.subgroups,
+            first_batch=body.first_batch,
             user_id=user.id,
             role=user.role,
         )

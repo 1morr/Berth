@@ -1,9 +1,12 @@
 """訂閱只綁一個字幕組（M5 票 26，plan §2.4、§2.6）。
 
 - `rss_feeds.subgroup`：關鍵字搜尋 feed 只收這個字幕組的發佈（照發佈名裡的字幕組比對）；
-  空字串是每一個字幕組都收（票 26 之前的 Feed、從 Media 頁建的、一般的 Feed）。
+  空字串是每一個字幕組都收（票 26 之前的關鍵字訂閱、一般的 Feed）。
 - `proposals.subgroups_json`：核准時人在卡片上逐列選的字幕組（JSON 清單，沒得選的列是 `null`）。
   提出時把可選清單存進 `preview_json`，`decide` 只收清單裡的；執行時用選的那一個蓋過存下的參數。
+- `proposals.first_batch_json`：核准時逐列選的第一輪（`all`「下載這些並追之後的」/
+  `later`「只追之後的」，同 RSS 頁第一輪的兩個選項）；沒得選的列是 `null`。執行時蓋過存下參數
+  裡的 `first_batch`。
 
 既有的列不改：已經綁了好幾個字幕組的關鍵字 Feed 照舊運作（票 26 第 6 點，不做 migration）。
 
@@ -29,11 +32,13 @@ def upgrade() -> None:
     # 原生 `ADD COLUMN`、不重建表（同 `c4e7a9d2b158`）。
     op.add_column("rss_feeds", sa.Column("subgroup", sa.Text(), nullable=False, server_default=""))
     op.add_column("proposals", sa.Column("subgroups_json", sa.Text(), nullable=True))
+    op.add_column("proposals", sa.Column("first_batch_json", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
     # SQLite 刪欄位只能重建表（同 `3f6c0a7d94e2`）。
     with op.batch_alter_table("proposals", schema=None) as batch_op:
+        batch_op.drop_column("first_batch_json")
         batch_op.drop_column("subgroups_json")
     with op.batch_alter_table("rss_feeds", schema=None) as batch_op:
         batch_op.drop_column("subgroup")

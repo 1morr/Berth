@@ -593,6 +593,7 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
     shown = len(view.arguments)
     chosen = view.routes or [None] * shown
     groups = _subgroups_chosen(view)
+    rounds = view.first_batch or [None] * shown
     existing = view.preview.existing
     held = view.preview.held_back
     later = (
@@ -620,6 +621,12 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
                 **({"route_chosen_on_card": chosen[index]} if chosen[index] is not None else {}),
                 # 人在卡片上選的字幕組（票 26）：同上，模型要照這個說。
                 **({"subgroup_chosen_on_card": groups[index]} if groups[index] is not None else {}),
+                # 人在卡片上選的第一輪（票 26）：`later` 是現有的一筆都沒送。
+                **(
+                    {"first_batch_chosen_on_card": rounds[index]}
+                    if rounds[index] is not None
+                    else {}
+                ),
                 # 提出時這部作品已經有的訂閱（票 26）：還留著的話要不要刪由使用者決定。
                 **(
                     {"existing_subscriptions": to_jsonable_python(existing[index])}

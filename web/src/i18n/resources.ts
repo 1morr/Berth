@@ -3430,6 +3430,9 @@ const zhHant = {
   rss: {
     title: 'RSS',
     readFailed: '讀不到 RSS 的清單。',
+    // 一串發佈名收起來的那幾筆（`rss/ReleaseTitles.tsx`，M5 票 26）。
+    releasesMore_one: '其餘 {{count}} 筆',
+    releasesMore_other: '其餘 {{count}} 筆',
     // 一個 RSS Series 的季號與集號偏移（`rss/seriesValues.ts`）：審核的組、計劃、改正之後的那一句共用。
     values: {
       both: '第 {{season}} 季、集號偏移 {{offset}}',
@@ -3465,8 +3468,8 @@ const zhHant = {
       source: '來源',
       about: {
         mikan: '選番組與字幕組；整季補齊，之後的新集自動下載',
-        nyaa: '以作品名搜尋；第一輪先給你看再決定',
-        acgrip: '以作品名搜尋；第一輪先給你看再決定',
+        nyaa: '以作品名搜尋，選一個字幕組；現有的一起送，之後的新集自動下載',
+        acgrip: '以作品名搜尋，選一個字幕組；現有的一起送，之後的新集自動下載',
       },
       mikanSearch: '在 Mikan 搜番組',
       search: '搜尋',
@@ -3506,14 +3509,27 @@ const zhHant = {
       term: '搜尋詞',
       termHint: {
         mikan: '',
-        nyaa: 'Berth 以這個詞建一條 Nyaa 搜尋 feed（全部動畫分類）。',
-        acgrip: 'Berth 以這個詞建一條 acg.rip 搜尋 feed。',
+        nyaa: 'Berth 以這個詞搜 Nyaa（全部動畫分類），訂閱之後也照它搜。',
+        acgrip: 'Berth 以這個詞搜 acg.rip，訂閱之後也照它搜。',
       },
-      create: '建立搜尋 feed',
-      creating: '建立並讀第一輪…',
-      made: '「{{name}}」建好了。它帶來的每一個字幕組都綁在這部作品上；先看第一輪再決定要不要下載舊的。',
-      decideLater: '之後在 RSS 頁決定',
-      later: '搜尋 feed 建好了，第一輪等你在 RSS 頁決定。',
+      // 關鍵字訂閱（M5 票 26）：先搜、列出字幕組，選一組才建，只綁那一組；第一批在這裡看、按下去就送。
+      noSearchGroups: '這次搜尋沒有找到任何字幕組的發佈。換一個搜尋詞試試。',
+      firstBatchLabel: '第一批',
+      searchConfirm_one: '訂閱並送出第一批（{{count}} 筆）',
+      searchConfirm_other: '訂閱並送出第一批（{{count}} 筆）',
+      searchSubscribed: '已訂閱「{{name}}」，第一批送出去了。',
+      searchSubscribedLater: '已訂閱「{{name}}」，只追之後的：現有的一筆都沒送。',
+      searchConfirmLater: '訂閱，只追之後的',
+      // 第一輪的兩個選擇（M5 票 26）：與 RSS 頁第一輪那兩顆同義，作品頁與確認卡共用。
+      round: {
+        label: '第一批',
+        all: '下載這些並追之後的',
+        allHint:
+          '按下去就送出上面這幾筆（按下那一刻才出現的也算），已經有的、被排除條件擋下的不送；之後的新發佈自動下載。',
+        later: '只追之後的',
+        laterHint: '現有的一筆都不送（記成略過）；之後這個字幕組的新發佈自動下載。',
+      },
+      searchUnreachable: '現在讀不到這個站，什麼都沒加。等一下再試。原文：',
       unreachable: '現在讀不到 Mikan，什麼都沒加。等一下再試。原文：',
     },
     // `RssRefusal` 每一種各一句。原文另外印在下面（`detail`）。
@@ -4002,9 +4018,8 @@ const zhHant = {
       firstBatch_one: '按下確認就送出第一批：{{count}} 個 torrent。',
       firstBatch_other: '按下確認就送出第一批：{{count}} 個 torrent。',
       firstBatchPick: '選了字幕組之後，這裡列出它的第一批。',
+      firstBatchLater: '只追之後的：現有的一筆都不送。',
       firstBatchNone: '這次搜尋沒有找到這個字幕組的發佈：先不下載，之後出現的照它下載。',
-      firstBatchMore_one: '其餘 {{count}} 筆',
-      firstBatchMore_other: '其餘 {{count}} 筆',
       firstBatchAfter:
         '送的是按下確認那一刻這一組的每一筆（卡片出來之後才發佈的也算），已經有的、被排除條件擋下的不再送；之後這個字幕組的新發佈自動下載。',
       existingLead:
@@ -4056,6 +4071,7 @@ const zhHant = {
         route_not_offered: '選的 Route 不在這張卡的清單上。重新整理再選一次。',
         subgroup_required: '有一列還沒選字幕組。選好再按一次。',
         subgroup_not_offered: '選的字幕組不在這張卡的清單上。重新整理再選一次。',
+        first_batch_not_offered: '這一列沒有第一批可選。重新整理再按一次。',
       },
     },
     failure: {
@@ -7671,6 +7687,8 @@ const en: Translations<typeof zhHant> = {
   rss: {
     title: 'RSS',
     readFailed: 'Can’t read the RSS lists.',
+    releasesMore_one: '{{count}} more',
+    releasesMore_other: '{{count}} more',
     values: {
       both: 'season {{season}}, episode offset {{offset}}',
       season: 'season {{season}}, no episode offset',
@@ -7705,8 +7723,9 @@ const en: Translations<typeof zhHant> = {
       about: {
         mikan:
           'Pick a show and a fansub group; the whole season is filled in and new episodes download on their own',
-        nyaa: 'Search by title; you see the first round before anything downloads',
-        acgrip: 'Search by title; you see the first round before anything downloads',
+        nyaa: 'Search by title and pick one fansub group; what is out is sent, new episodes download by themselves',
+        acgrip:
+          'Search by title and pick one fansub group; what is out is sent, new episodes download by themselves',
       },
       mikanSearch: 'Search Mikan for the show',
       search: 'Search',
@@ -7747,14 +7766,29 @@ const en: Translations<typeof zhHant> = {
       term: 'Search term',
       termHint: {
         mikan: '',
-        nyaa: 'Berth creates a Nyaa search feed for this term (all anime categories).',
-        acgrip: 'Berth creates an acg.rip search feed for this term.',
+        nyaa: 'Berth searches Nyaa for this term (all anime categories), now and after subscribing.',
+        acgrip: 'Berth searches acg.rip for this term, now and after subscribing.',
       },
-      create: 'Create search feed',
-      creating: 'Creating and reading the first round…',
-      made: '“{{name}}” is created. Every fansub group it brings is bound to this title; look at the first round before deciding whether to download the older releases.',
-      decideLater: 'Decide later on the RSS page',
-      later: 'The search feed is created; its first round waits for you on the RSS page.',
+      noSearchGroups:
+        'This search found no release from any fansub group. Try another search term.',
+      firstBatchLabel: 'First batch',
+      searchConfirm_one: 'Subscribe and send the first batch ({{count}} release)',
+      searchConfirm_other: 'Subscribe and send the first batch ({{count}} releases)',
+      searchSubscribed: 'Subscribed to “{{name}}”; the first batch is on its way.',
+      searchSubscribedLater:
+        'Subscribed to “{{name}}”, following only what comes next: nothing already out was sent.',
+      searchConfirmLater: 'Subscribe, following only what comes next',
+      round: {
+        label: 'First batch',
+        all: 'Download these and follow what comes next',
+        allHint:
+          'Pressing it sends the releases above (including any posted by then), except those you already have or that exclusions block; new releases download by themselves.',
+        later: 'Only follow what comes next',
+        laterHint:
+          'Nothing already out is sent (it is marked passed); new releases from this group download by themselves.',
+      },
+      searchUnreachable:
+        'That site cannot be reached right now, so nothing was added. Try again shortly. Original message:',
       unreachable:
         'Mikan cannot be reached right now, so nothing was added. Try again shortly. Original message:',
     },
@@ -8238,10 +8272,9 @@ const en: Translations<typeof zhHant> = {
       firstBatch_one: 'Confirming sends the first batch: {{count}} torrent.',
       firstBatch_other: 'Confirming sends the first batch: {{count}} torrents.',
       firstBatchPick: 'Choose a subgroup and its first batch is listed here.',
+      firstBatchLater: 'Only what comes next: nothing already out is sent.',
       firstBatchNone:
         'This search found no release from this subgroup: nothing is sent now, and its releases are downloaded as they appear.',
-      firstBatchMore_one: '{{count}} more',
-      firstBatchMore_other: '{{count}} more',
       firstBatchAfter:
         'What is sent is every release from this subgroup at the moment you confirm (including any posted after this card appeared), minus those you already have or that exclusions block; new releases from this subgroup download by themselves.',
       existingLead:
@@ -8293,6 +8326,7 @@ const en: Translations<typeof zhHant> = {
         route_not_offered: 'That route is not on this card. Reload and choose again.',
         subgroup_required: 'A row has no subgroup yet. Choose one and press again.',
         subgroup_not_offered: 'That subgroup is not on this card. Reload and choose again.',
+        first_batch_not_offered: 'This row has no first batch to choose. Reload and press again.',
       },
     },
     failure: {

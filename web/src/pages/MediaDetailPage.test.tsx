@@ -2451,46 +2451,48 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
     expect(within(block).queryByRole('button', { name: '只下載現有的' })).not.toBeInTheDocument()
   })
 
-  it('Nyaa：以標題集合的第一個建搜尋 feed，建好之後就地畫第一輪預覽', async () => {
+  it('Nyaa：先搜、列出字幕組，選一組看第一批，按下去才建、只帶那一組（M5 票 26）', async () => {
     const made: Feed = {
       id: 5,
-      name: 'nyaa.si · SPY x FAMILY',
+      name: 'nyaa.si · SPY x FAMILY · LoliHouse',
       url: 'https://nyaa.si/?page=rss&q=SPY+x+FAMILY&c=1_0&f=0',
       kind: 'nyaa',
       interval_sec: 900,
       last_polled_at: '2026-09-26T12:00:00Z',
       poll_error: '',
       backfill_error: '',
-      items: 1,
+      items: 2,
       exclusions: [],
-      primed_at: null,
+      primed_at: '2026-09-26T12:00:00Z',
       tv_route_id: 2,
       movie_route_id: null,
       route_kinds: ['tv'],
       ever_read: true,
       awaiting_route: { tv: 0, movie: 0 },
     }
+    const loliEleven = '[LoliHouse] SPY x FAMILY - 11 [WebRip 1080p HEVC-10bit AAC]'
     const stub = render({
       [SPY_PATH]: { body: media({ default_route_id: 2 }) },
       [MIKAN_SEARCH]: { body: [] },
-      'POST /api/rss/subscriptions/search': { status: 201, body: made },
-      'GET /api/rss/feeds/5/preview': {
+      [NYAA_GROUPS]: {
         body: [
           {
-            id: 1,
-            feed_id: 5,
-            title: LOLI_TITLE,
-            link: 'https://nyaa.si/view/1',
-            published_at: '2026-09-24T12:00:00Z',
-            series_id: 7,
-            status: 'matched',
-            job_hash: '',
-            error: '',
-            skip: null,
-            size: null,
+            name: 'LoliHouse',
+            releases: 2,
+            updated: '2026-09-24',
+            latest: LOLI_TITLE,
+            titles: [LOLI_TITLE, loliEleven],
+          },
+          {
+            name: 'ANi',
+            releases: 1,
+            updated: '2026-09-23',
+            latest: '[ANi] SPY x FAMILY - 12 [1080P]',
+            titles: ['[ANi] SPY x FAMILY - 12 [1080P]'],
           },
         ],
       },
+      'POST /api/rss/subscriptions/search': { status: 201, body: made },
     })
     renderApp('/media/tv:120089')
 
@@ -2501,7 +2503,14 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       'aria-pressed',
       'true',
     )
-    await userEvent.click(within(block).getByRole('button', { name: '建立搜尋 feed' }))
+    // 以預填的詞搜一次；沒選字幕組之前沒有訂閱鍵。
+    const loli = await within(block).findByRole('button', { name: /^LoliHouse/ })
+    expect(within(block).getByRole('button', { name: /^ANi/ })).toBeVisible()
+    expect(within(block).queryByRole('button', { name: /訂閱並送出第一批/ })).toBeNull()
+
+    await userEvent.click(loli)
+    expect(within(block).getByText(loliEleven)).toBeVisible()
+    await userEvent.click(within(block).getByRole('button', { name: '訂閱並送出第一批（2 筆）' }))
 
     await waitFor(() => expect(sent(stub, 'POST', '/api/rss/subscriptions/search')).toHaveLength(1))
     const [[, init]] = sent(stub, 'POST', '/api/rss/subscriptions/search')
@@ -2510,11 +2519,71 @@ describe('詳情頁的 RSS 訂閱（M3 票 19）', () => {
       route: 2,
       kind: 'nyaa',
       term: 'SPY x FAMILY',
+      subgroup: 'LoliHouse',
+      first_batch: 'all',
     })
-    expect(await within(block).findByRole('button', { name: '只追之後的' })).toBeVisible()
-    expect(within(block).getByText(LOLI_TITLE)).toBeVisible()
+    // 不再畫第一輪預覽：第一批在這裡看過、送出了。
+    expect(
+      await within(block).findByText(
+        '已訂閱「nyaa.si · SPY x FAMILY · LoliHouse」，第一批送出去了。',
+      ),
+    ).toBeVisible()
+    expect(within(block).queryByRole('button', { name: '只追之後的' })).toBeNull()
+  })
+
+  it('Nyaa：也可以只追之後的（同 RSS 頁第一輪那一顆），按鍵與結果照它說', async () => {
+    const stub = render({
+      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [MIKAN_SEARCH]: { body: [] },
+      [NYAA_GROUPS]: {
+        body: [{ name: 'ANi', releases: 1, updated: null, latest: 'x', titles: ['x'] }],
+      },
+      'POST /api/rss/subscriptions/search': {
+        status: 201,
+        body: { id: 6, name: 'nyaa.si · SPY x FAMILY · ANi' },
+      },
+    })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+    await userEvent.click(within(block).getByRole('button', { name: /^NYAA/ }))
+    await userEvent.click(await within(block).findByRole('button', { name: /^ANi/ }))
+    expect(within(block).getByRole('button', { name: /^下載這些並追之後的/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await userEvent.click(within(block).getByRole('button', { name: /^只追之後的/ }))
+    await userEvent.click(within(block).getByRole('button', { name: '訂閱，只追之後的' }))
+
+    await waitFor(() => expect(sent(stub, 'POST', '/api/rss/subscriptions/search')).toHaveLength(1))
+    const [[, init]] = sent(stub, 'POST', '/api/rss/subscriptions/search')
+    expect(JSON.parse(String(init?.body))).toMatchObject({ subgroup: 'ANi', first_batch: 'later' })
+    expect(
+      await within(block).findByText(
+        '已訂閱「nyaa.si · SPY x FAMILY · ANi」，只追之後的：現有的一筆都沒送。',
+      ),
+    ).toBeVisible()
+  })
+
+  it('Nyaa：搜不到任何字幕組時說出來，沒有訂閱鍵', async () => {
+    render({
+      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [MIKAN_SEARCH]: { body: [] },
+      [NYAA_GROUPS]: { body: [] },
+    })
+    renderApp('/media/tv:120089')
+
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+    await userEvent.click(within(block).getByRole('button', { name: /^NYAA/ }))
+
+    expect(await within(block).findByText(/這次搜尋沒有找到任何字幕組的發佈/)).toBeVisible()
+    expect(within(block).queryByRole('button', { name: /訂閱並送出第一批/ })).toBeNull()
   })
 })
+
+const NYAA_GROUPS = 'GET /api/rss/search/subgroups?kind=nyaa&q=SPY+x+FAMILY'
 
 const LOLI_BATCH: OneshotItem = {
   guid: 'batch',
@@ -3017,18 +3086,36 @@ describe('作品頁對 Berth 的請求沒成時說出對的原因（M4 票 90）
     expectFailure(await within(block).findByRole('alert'), /讀不到 RSS 的清單。/, expected)
   })
 
-  it.each(REQUEST_FAILURES)('建立搜尋 feed 沒有成功（%s）', async (_, failure, expected) => {
+  it.each(REQUEST_FAILURES)('關鍵字訂閱沒有成功（%s）', async (_, failure, expected) => {
     render({
       [SPY_PATH]: { body: media({ default_route_id: 2 }) },
       [MIKAN_SEARCH]: { body: [] },
+      [NYAA_GROUPS]: {
+        body: [{ name: 'ANi', releases: 1, updated: null, latest: 'x', titles: ['x'] }],
+      },
       'POST /api/rss/subscriptions/search': failure,
     })
     renderApp('/media/tv:120089')
     const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
     await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
     await userEvent.click(within(block).getByRole('button', { name: /^NYAA/ }))
+    await userEvent.click(await within(block).findByRole('button', { name: /^ANi/ }))
 
-    await userEvent.click(within(block).getByRole('button', { name: '建立搜尋 feed' }))
+    await userEvent.click(within(block).getByRole('button', { name: '訂閱並送出第一批（1 筆）' }))
+
+    expectFailure(await within(block).findByRole('alert'), /沒有成功。/, expected)
+  })
+
+  it.each(REQUEST_FAILURES)('搜不到字幕組的清單（%s）', async (_, failure, expected) => {
+    render({
+      [SPY_PATH]: { body: media({ default_route_id: 2 }) },
+      [MIKAN_SEARCH]: { body: [] },
+      [NYAA_GROUPS]: failure,
+    })
+    renderApp('/media/tv:120089')
+    const block = await screen.findByRole('region', { name: 'RSS 訂閱' })
+    await userEvent.click(within(block).getByRole('button', { name: '新增訂閱' }))
+    await userEvent.click(within(block).getByRole('button', { name: /^NYAA/ }))
 
     expectFailure(await within(block).findByRole('alert'), /沒有成功。/, expected)
   })

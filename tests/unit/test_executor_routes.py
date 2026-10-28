@@ -35,6 +35,7 @@ ROUTED = {
     ("GET", "/rss/mikan/bangumi/{bangumi_id}"): "bangumi.read_bangumi",
     ("POST", "/rss/subscriptions/mikan"): "rss.subscribe_mikan",
     ("POST", "/rss/subscriptions/search"): "rss.subscribe_search",
+    ("GET", "/rss/search/subgroups"): "rss.search_subgroups",
     ("POST", "/rss/feeds"): "rss.add_feed",
     ("GET", "/routes"): "routes.list_routes",
 }

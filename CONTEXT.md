@@ -347,7 +347,7 @@ _Avoid_: diagnosis, status（status 是季表那一格）, reason（reason 是�
 ### RSS
 
 **Feed**:
-一個 RSS 來源（Mikan、Nyaa、acg.rip、generic），有輪詢間隔、排除條件，與自動綁定送進的 Route——劇集、電影各一條。Mikan 的 `MyBangumi` 聚合 feed 是主要用法。對話裡建的關鍵字搜尋 feed 只收一個**字幕組**（使用者在確認卡上選的），別組的發佈不寫成 Feed Item。
+一個 RSS 來源（Mikan、Nyaa、acg.rip、generic），有輪詢間隔、排除條件，與自動綁定送進的 Route——劇集、電影各一條。Mikan 的 `MyBangumi` 聚合 feed 是主要用法。關鍵字訂閱建的搜尋 feed 只收一個**字幕組**（使用者在作品頁或確認卡上從搜到的裡面選的），別組的發佈不寫成 Feed Item。
 _Avoid_: subscription（Subscription 是 UI 上「訂閱一部作品」的動作）, source
 
 **訂閱**（Subscription）:
@@ -370,7 +370,7 @@ _Avoid_: 封存（archived）——沒有人按，也沒有東西被搬走
 Feed 中的一筆項目及其結果：unbound（待綁定）/ matched（綁好還沒送成）/ downloaded（送出去了）/ excluded（**排除條件**擋下）/ duplicate（去重擋下：同一個 torrent 已經送過，或媒體庫已有同一個版本）/ passed（新 Feed 的**第一輪預覽**選了「只追之後的」時已經在 feed 裡的；或綁定時取消**補舊集**、那一刻之前發佈的舊集）。擋下的都不是錯誤，帶著「為什麼沒下載」的理由。
 
 **第一輪預覽**（priming）:
-新的搜尋 feed（Nyaa、acg.rip）第一輪就帶著歷史，所以選過之前一筆都不送：畫面列出每一筆會怎樣，使用者選「全部下載」或「只追之後的」，選的那一刻記在 Feed 的 `primed_at`。Mikan 加的那一刻就算選過；對話裡建的關鍵字訂閱在確認卡上看過第一批，建好就算選過「全部下載」。
+新的搜尋 feed（Nyaa、acg.rip）第一輪就帶著歷史，所以選過之前一筆都不送：畫面列出每一筆會怎樣，使用者選「全部下載」或「只追之後的」，選的那一刻記在 Feed 的 `primed_at`。Mikan 加的那一刻就算選過；關鍵字訂閱在作品頁或確認卡上看過第一批，第一輪就在那裡選（「下載這些並追之後的」＝全部下載、「只追之後的」）。
 _Avoid_: dry-run, backfill（backfill 是 Mikan 的補舊集）
 
 **補舊集**（backfill）:

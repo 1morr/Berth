@@ -1980,3 +1980,6 @@ class ProposalRefusal(StrEnum):
     SUBGROUP_REQUIRED = "subgroup_required"
     #: 選的字幕組不在提出時存下的那份清單裡、那一列沒有字幕組可選，或 `subgroups` 與列數對不上。
     SUBGROUP_NOT_OFFERED = "subgroup_not_offered"
+    #: 那一列沒有第一輪可選（命令輸入沒有 `first_batch`），或 `first_batch` 與列數對不上
+    #: （M5 票 26）。
+    FIRST_BATCH_NOT_OFFERED = "first_batch_not_offered"

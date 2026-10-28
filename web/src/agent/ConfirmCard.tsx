@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { isJobRefusal } from '../api/jobs'
 import { mediaQueryOptions } from '../api/media'
 import { routesQueryOptions } from '../api/routes'
-import { feedsQueryOptions, isRssRefusal } from '../api/rss'
+import { feedsQueryOptions, isRssRefusal, type PrimeMode } from '../api/rss'
 import {
   decideProposal,
   proposalRefusalOf,
@@ -25,7 +25,8 @@ import { Timestamp } from '../components/Timestamp'
 import i18n from '../i18n'
 import { formatList } from '../i18n/list'
 import { formatSize } from '../media/searchResult'
-import { Options, SubgroupLine } from '../media/SubscribePanel'
+import { FirstRoundChoice, Options, SubgroupLine } from '../media/SubscribePanel'
+import { ReleaseTitles } from '../rss/ReleaseTitles'
 import { useCardActions } from './cards'
 
 /**
@@ -67,6 +68,9 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   )
   // 勾著、而且字幕組要人選的列。
   const choosingGroup = (index: number) => groupAsks[index]?.required === true && ticked.has(index)
+  // 關鍵字訂閱的第一輪（票 26）：預設「下載這些並追之後的」。
+  const roundOffers = proposal.preview.first_batch
+  const [rounds, setRounds] = useState<readonly PrimeMode[]>(() => rows.map(() => 'all'))
   const groupsUnpicked = rows.filter(
     (_, index) => choosingGroup(index) && groupPicks[index] === null,
   ).length
@@ -91,6 +95,13 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         ...(approve && asking
           ? {
               routes: rows.map((_, index) => (choosing(index) ? picks[index] : null)),
+            }
+          : {}),
+        ...(approve && roundOffers.some(Boolean)
+          ? {
+              first_batch: rows.map((_, index) =>
+                roundOffers[index] && ticked.has(index) ? (rounds[index] ?? 'all') : null,
+              ),
             }
           : {}),
         // 字幕組同理；不必選的列送預選的那一個（伺服器沒收到也是用它）。
@@ -175,6 +186,14 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
                   setGroupPicks((old) => old.map((value, at) => (at === index ? key : value))),
               }}
               existing={proposal.preview.existing[index] ?? []}
+              round={{
+                offered: roundOffers[index] === true,
+                // 按過之後是伺服器記下的那一個；沒記是預設的那一個。
+                pick: waiting ? (rounds[index] ?? 'all') : (proposal.first_batch?.[index] ?? 'all'),
+                editable: waiting && !decide.isPending,
+                onPick: (mode) =>
+                  setRounds((old) => old.map((value, at) => (at === index ? mode : value))),
+              }}
             />
           )
           const result = proposal.results?.[index]
@@ -351,6 +370,7 @@ function RowBody({
   route,
   subgroup,
   existing,
+  round,
 }: {
   command: string
   row: Row
@@ -362,6 +382,7 @@ function RowBody({
   subgroup: SubgroupSlot
   /** 這部作品提出時已經有的訂閱（票 26）。 */
   existing: readonly SubscriptionRef[]
+  round: RoundSlot
 }) {
   const { t } = useTranslation()
   // `labelled`：勾選框的標籤已經是發佈名，欄位裡不再印一次。
@@ -385,6 +406,7 @@ function RowBody({
         route={route}
         subgroup={subgroup}
         existing={existing}
+        round={round}
       />
     )
   }
@@ -426,6 +448,14 @@ interface SubgroupSlot {
   pick: string | null
   editable: boolean
   onPick: (key: string) => void
+}
+
+/** 一列關鍵字訂閱的第一輪（票 26）：`offered` 時卡上選「下載這些並追之後的」或「只追之後的」。 */
+interface RoundSlot {
+  offered: boolean
+  pick: PrimeMode
+  editable: boolean
+  onPick: (mode: PrimeMode) => void
 }
 
 /**
@@ -535,6 +565,7 @@ function SubscribeRowBody({
   route,
   subgroup,
   existing,
+  round,
 }: {
   command: 'rss.subscribe_mikan' | 'rss.subscribe_search'
   row: Row
@@ -543,6 +574,7 @@ function SubscribeRowBody({
   route: RouteSlot
   subgroup: SubgroupSlot
   existing: readonly SubscriptionRef[]
+  round: RoundSlot
 }) {
   const { t } = useTranslation()
   const mediaId = typeof row.media_id === 'string' ? row.media_id : ''
@@ -599,7 +631,9 @@ function SubscribeRowBody({
             label: t('agent.card.fields.sends'),
             value: mikan
               ? mikanSends(ask, picked, torrents)
-              : t('agent.card.firstBatch', { count: picked?.titles.length ?? 0 }),
+              : round.pick === 'later'
+                ? t('agent.card.firstBatchLater')
+                : t('agent.card.firstBatch', { count: picked?.titles.length ?? 0 }),
           },
         ]}
       />
@@ -613,7 +647,14 @@ function SubscribeRowBody({
           render={(option) => <SubgroupLine group={option} />}
         />
       ) : null}
-      {mikan ? null : <FirstBatch option={picked} missing={ask === null} />}
+      {mikan ? null : (
+        <FirstBatch option={picked} missing={ask === null} later={round.pick === 'later'} />
+      )}
+      {mikan || !round.offered ? null : round.editable ? (
+        <FirstRoundChoice value={round.pick} onChange={round.onPick} />
+      ) : (
+        <p className="text-xs text-ink">{t(`rss.subscribe.round.${round.pick}`)}</p>
+      )}
       <Existing found={existing} />
     </div>
   )
@@ -632,42 +673,27 @@ function mikanSends(
     : i18n.t('agent.card.wholeSeasonUnknown')
 }
 
-/** 第一批前幾筆直接列出，其餘收在 `<details>`：一季幾十筆的話卡片在 390 寬會太長。 */
-const FIRST_SHOWN = 5
-
 /** 關鍵字訂閱的第一批（票 26）：選的那一組這一次搜到的發佈名，按下確認就送出。 */
-function FirstBatch({ option, missing }: { option: SubgroupOption | null; missing: boolean }) {
+function FirstBatch({
+  option,
+  missing,
+  later,
+}: {
+  option: SubgroupOption | null
+  missing: boolean
+  later: boolean
+}) {
   const { t } = useTranslation()
   if (missing) return <p className="text-xs text-ink-dim">{t('agent.card.firstBatchNone')}</p>
   if (option === null)
     return <p className="text-xs text-ink-dim">{t('agent.card.firstBatchPick')}</p>
-  const titles = option.titles
-  const rest = titles.slice(FIRST_SHOWN)
   return (
     <div className="grid gap-1 text-xs">
       <p className="label text-ink-dim">{t('agent.card.fields.firstBatch')}</p>
-      <ul className="grid gap-0.5">
-        {titles.slice(0, FIRST_SHOWN).map((title) => (
-          <li key={title} className="value wrap-anywhere text-ink">
-            {title}
-          </li>
-        ))}
-      </ul>
-      {rest.length > 0 ? (
-        <details>
-          <summary className="cursor-pointer text-ink-dim">
-            {t('agent.card.firstBatchMore', { count: rest.length })}
-          </summary>
-          <ul className="mt-0.5 grid gap-0.5">
-            {rest.map((title) => (
-              <li key={title} className="value wrap-anywhere text-ink">
-                {title}
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      <p className="max-w-prose text-ink-dim">{t('agent.card.firstBatchAfter')}</p>
+      <ReleaseTitles titles={option.titles} />
+      <p className="max-w-prose text-ink-dim">
+        {later ? t('rss.subscribe.round.laterHint') : t('agent.card.firstBatchAfter')}
+      </p>
     </div>
   )
 }

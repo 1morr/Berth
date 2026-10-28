@@ -13,8 +13,17 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import Actor, FeedKind, ProposalRefusal, ProposalStatus, Role
-from berth.models import Media, Proposal, Route, RssFeed, User
+from berth.adapters.rss import acgrip
+from berth.domain import (
+    Actor,
+    FeedItemStatus,
+    FeedKind,
+    PrimeMode,
+    ProposalRefusal,
+    ProposalStatus,
+    Role,
+)
+from berth.models import Job, Media, Proposal, Route, RssFeed, RssItem, User
 from berth.services import proposals
 from berth.services.agent import card_outcome
 from berth.services.proposals import (
@@ -27,6 +36,8 @@ from berth.services.rss import SubscriptionRef
 from tests.integration.arrange import factory_for
 from tests.integration.test_command_dry_run import harbour
 from tests.integration.test_executor import Loops
+from tests.integration.test_jobs import MAGNET
+from tests.integration.test_rss_subscribe import ACGRIP_FEED, TERM
 
 pytestmark = pytest.mark.asyncio
 
@@ -52,11 +63,18 @@ MOUSE = option("黒ネズミたち", "[黒ネズミたち] Kimi - 02 (CR 1920x10
 def keyword_row(media: Media, route: Route, *, subgroup: str = "ANi") -> dict[str, object]:
     return {
         "kind": FeedKind.ACGRIP.value,
-        "term": "Kimi ga Shinu made Koi wo Shitai",
+        "term": TERM,
         "subgroup": subgroup,
         "media_id": media.id,
         "route_id": route.id,
     }
+
+
+def served(roots: dict[str, Path]) -> Loops:
+    """執行器帶著一個讀得到那一次 acg.rip 搜尋的替身（票 26 起訂閱讀不到就不建）。"""
+    factory = factory_for(roots)
+    factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+    return Loops(factory)
 
 
 async def admin(session: AsyncSession) -> User:
@@ -120,7 +138,7 @@ class TestMoreThanOneSubgroup:
     ) -> None:
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(ANI, MOUSE), preselected="ANi", required=True)
 
         card = await propose(session, loops, user, keyword_row(media, anime), ask)
@@ -136,7 +154,7 @@ class TestMoreThanOneSubgroup:
         """模型帶來的那一個不算人選的：沒選就是 `subgroup_required`，即使有預選。"""
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(ANI, MOUSE), preselected="ANi", required=True)
         card = await propose(session, loops, user, keyword_row(media, anime), ask)
 
@@ -154,7 +172,7 @@ class TestMoreThanOneSubgroup:
     ) -> None:
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(ANI, MOUSE), preselected="ANi", required=True)
         card = await propose(session, loops, user, keyword_row(media, anime), ask)
 
@@ -169,7 +187,7 @@ class TestMoreThanOneSubgroup:
     ) -> None:
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(ANI, MOUSE), preselected="ANi", required=True)
         card = await propose(session, loops, user, keyword_row(media, anime), ask)
 
@@ -193,7 +211,7 @@ class TestOneSubgroup:
         """只搜到一個、就是模型給的：卡上只列出來（第一批照樣看得到），按下去就用它。"""
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(ANI,), preselected="ANi", required=False)
         card = await propose(session, loops, user, keyword_row(media, anime), ask)
 
@@ -207,7 +225,7 @@ class TestOneSubgroup:
     ) -> None:
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(MOUSE,), preselected=None, required=True)
         card = await propose(session, loops, user, keyword_row(media, anime), ask)
 
@@ -222,7 +240,7 @@ class TestOneSubgroup:
         """其餘參數照舊不收：沒得選的列不能藉 `subgroups` 換字幕組。"""
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         card = await propose(session, loops, user, keyword_row(media, anime), None)
 
         with pytest.raises(ProposalRejectedError) as refused:
@@ -237,7 +255,7 @@ class TestExistingSubscriptions:
     ) -> None:
         media, anime, _ = await harbour(session, roots)
         user = await admin(session)
-        loops = Loops(factory_for(roots))
+        loops = served(roots)
         ask = SubgroupAsk(options=(ANI,), preselected="ANi", required=False)
         before = SubscriptionRef(
             feed_id=7, name="acg.rip · Kimi", kind=FeedKind.ACGRIP, subgroup=""
@@ -253,3 +271,89 @@ class TestExistingSubscriptions:
         assert row["existing_subscriptions"] == [
             {"feed_id": 7, "name": "acg.rip · Kimi", "kind": "acgrip", "subgroup": ""}
         ]
+
+
+class TestTheFirstRound:
+    """卡上的第一輪（協調者 2026-10-28）：「下載這些並追之後的」（預設）或「只追之後的」，同 RSS 頁
+    第一輪那兩顆，走同一支 `rss.prime_feed`。"""
+
+    async def test_only_what_comes_next_sends_none_of_the_first_batch(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, anime, _ = await harbour(session, roots)
+        user = await admin(session)
+        loops = served(roots)
+        ask = SubgroupAsk(options=(ANI, MOUSE), preselected="ANi", required=True)
+        card = await propose(session, loops, user, keyword_row(media, anime), ask)
+
+        view = await proposals.decide(
+            session,
+            loops.executor,
+            card.id,
+            approve=True,
+            subgroups=["ANi"],
+            first_batch=[PrimeMode.LATER],
+            user_id=user.id,
+            role=user.role,
+        )
+
+        assert card.preview.first_batch == (True,)
+        assert view.status is ProposalStatus.EXECUTED, view.results
+        assert view.first_batch == [PrimeMode.LATER]
+        items = list(await session.scalars(select(RssItem)))
+        assert items and {item.status for item in items} == {FeedItemStatus.PASSED}
+        assert await session.scalar(select(Job.hash)) is None
+        rows = card_outcome(view)["rows"]
+        assert isinstance(rows, list)
+        assert rows[0]["first_batch_chosen_on_card"] == "later"
+
+    async def test_by_default_the_first_batch_is_downloaded(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, anime, _ = await harbour(session, roots)
+        user = await admin(session)
+        loops = served(roots)
+        ask = SubgroupAsk(options=(ANI,), preselected="ANi", required=False)
+        card = await propose(session, loops, user, keyword_row(media, anime), ask)
+
+        view = await decide(session, loops, card, user, None)
+
+        assert view.status is ProposalStatus.EXECUTED, view.results
+        items = list(await session.scalars(select(RssItem)))
+        assert items and FeedItemStatus.PASSED not in {item.status for item in items}
+
+    async def test_a_command_with_no_first_round_takes_none(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """送單沒有第一輪：`first_batch` 帶了值是 `first_batch_not_offered`，其餘參數照舊不收。"""
+        media, anime, _ = await harbour(session, roots)
+        user = await admin(session)
+        loops = served(roots)
+        card = await proposals.propose(
+            session,
+            loops.hub,
+            "downloading.add_manual_download",
+            [
+                {
+                    "source": {"url": MAGNET, "title": "[Sub] Kimi - 01"},
+                    "media_id": media.id,
+                    "route_id": anime.id,
+                }
+            ],
+            actor=Actor.ai(user.id, user.role),
+        )
+
+        with pytest.raises(ProposalRejectedError) as refused:
+            await proposals.decide(
+                session,
+                loops.executor,
+                card.id,
+                approve=True,
+                first_batch=[PrimeMode.LATER],
+                user_id=user.id,
+                role=user.role,
+            )
+
+        assert card.preview.first_batch == ()
+        assert refused.value.reason is ProposalRefusal.FIRST_BATCH_NOT_OFFERED
+        assert await status_of(session, card.id) is ProposalStatus.PENDING

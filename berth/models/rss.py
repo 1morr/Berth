@@ -73,8 +73,8 @@ class RssFeed(Base):
         ForeignKey("media.id", ondelete="SET NULL"), default=None
     )
     #: 只收這個字幕組的發佈（M5 票 26）：關鍵字搜尋 feed 訂閱的是「這部作品 × 這個字幕組」，發佈名
-    #: 裡的字幕組（`parser.binding.release_group`）對不上的不寫成 Item、也不長 RSS Series。空字串是
-    #: 每一個字幕組都收（一般的 Feed、從 Media 頁建的、票 26 之前的）。
+    #: 裡的字幕組（`parser.binding.of_group`）對不上的不寫成 Item、也不長 RSS Series。空字串是
+    #: 每一個字幕組都收（一般的 Feed、票 26 之前的關鍵字訂閱）；`rss.subscribe_search` 一定給。
     subgroup: Mapped[str] = mapped_column(Text, default="", server_default="")
     #: 下面兩欄是自動綁定送進的 Route，劇集與電影各一條（M4 票 105，照 Sonarr Import List 的
     #: Root Folder）。那一種有啟用中的 Route 時加 Feed 就要給；`None` 是那一種沒有 Route、票 105

@@ -206,7 +206,7 @@ class TestSubscribe:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         media, anime, movies = await harbour(session, roots)
-        arguments = {"kind": "nyaa", "term": "Kimi", "media_id": media.id}
+        arguments = {"kind": "nyaa", "term": "Kimi", "subgroup": "ANi", "media_id": media.id}
 
         verdict = await check(session, "rss.subscribe_search", arguments | {"route_id": movies.id})
 
@@ -217,6 +217,7 @@ class TestSubscribe:
                 factory_for(roots),
                 kind=FeedKind.NYAA,
                 term="Kimi",
+                subgroup="ANi",
                 media_id=media.id,
                 route_id=movies.id,
                 user_id=1,

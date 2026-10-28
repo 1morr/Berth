@@ -55,6 +55,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
       routes: [],
       subgroups: [],
       existing: [],
+      first_batch: [],
     },
     user_id: 1,
     proposer: 'ai',
@@ -70,6 +71,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
     detached_at: null,
     routes: null,
     subgroups: null,
+    first_batch: null,
     ...overrides,
   }
 }
@@ -317,6 +319,7 @@ describe('ConfirmCard', () => {
         routes: [],
         subgroups: [],
         existing: [],
+        first_batch: [],
       },
     })
     serve(feed, stored('approval-requested'), () => feed)
@@ -348,6 +351,7 @@ describe('ConfirmCard', () => {
           routes: [],
           subgroups: [],
           existing: [],
+          first_batch: [],
         },
       }),
       stored('approval-requested'),
@@ -385,6 +389,7 @@ describe('ConfirmCard', () => {
         routes: [],
         subgroups: [],
         existing: [],
+        first_batch: [],
       },
       status: 'failed',
       results: [{ outcome: 'refused', reason: 'series_bound', detail: 'tv:1', result: null }],
@@ -421,6 +426,7 @@ describe('ConfirmCard', () => {
           routes: [],
           subgroups: [],
           existing: [],
+          first_batch: [],
         },
       })
     serve(mikan([12]), stored('approval-requested'), () => mikan([12]))
@@ -461,6 +467,7 @@ describe('ConfirmCard', () => {
           routes: Array.from({ length: rows }, () => ask(preselected)),
           subgroups: [],
           existing: [],
+          first_batch: [],
         },
         ...more,
       })
@@ -566,6 +573,7 @@ describe('ConfirmCard', () => {
           routes: [],
           subgroups: [{ options: [ANI, MOUSE], preselected, required: true }],
           existing: [],
+          first_batch: [true],
         },
         ...more,
       })
@@ -585,7 +593,9 @@ describe('ConfirmCard', () => {
       await user.click(within(section).getByRole('button', { name: /黒ネズミたち/ }))
       await user.click(within(section).getByRole('button', { name: '確認' }))
 
-      expect(decisions).toEqual([{ approve: true, selection: null, subgroups: ['黒ネズミたち'] }])
+      expect(decisions).toEqual([
+        { approve: true, selection: null, subgroups: ['黒ネズミたち'], first_batch: ['all'] },
+      ])
     })
 
     it('preselects the assistant’s pick and lists the first batch of whichever is chosen', async () => {
@@ -606,7 +616,29 @@ describe('ConfirmCard', () => {
       expect(within(section).queryByText('[ANi] Kimi - 01 [1080P]')).toBeNull()
       expect(within(section).getByText(/按下確認就送出第一批：1 個 torrent/)).toBeInTheDocument()
       await user.click(within(section).getByRole('button', { name: '確認' }))
-      expect(decisions).toEqual([{ approve: true, selection: null, subgroups: ['黒ネズミたち'] }])
+      expect(decisions).toEqual([
+        { approve: true, selection: null, subgroups: ['黒ネズミたち'], first_batch: ['all'] },
+      ])
+    })
+
+    it('offers to follow only what comes next, which sends none of the first batch', async () => {
+      serve(keyword('ANi'), stored('approval-requested'), () => keyword('ANi'))
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱關鍵字搜尋' })
+      // 預設是「下載這些並追之後的」。
+      expect(within(section).getByRole('button', { name: /^下載這些並追之後的/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      await user.click(within(section).getByRole('button', { name: /^只追之後的/ }))
+
+      expect(within(section).getByText('只追之後的：現有的一筆都不送。')).toBeInTheDocument()
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+      expect(decisions).toEqual([
+        { approve: true, selection: null, subgroups: ['ANi'], first_batch: ['later'] },
+      ])
     })
 
     it('a Mikan card counts the season of the subgroup chosen', async () => {
@@ -641,6 +673,7 @@ describe('ConfirmCard', () => {
             },
           ],
           existing: [],
+          first_batch: [],
         },
       })
       serve(mikan, stored('approval-requested'), () => mikan)
@@ -686,6 +719,7 @@ describe('ConfirmCard', () => {
         routes: [],
         subgroups: [],
         existing: [],
+        first_batch: [],
       },
     })
     serve(gone, stored('approval-requested'), () => gone)

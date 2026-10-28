@@ -82,8 +82,8 @@ function outcomeOf(row: FeedItem): Outcome | null {
   }
 }
 
-/** 一個 Feed 的第一輪。詳情頁從作品建搜尋 feed 之後就地畫它（票 19）。 */
-export function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string) => void }) {
+/** 一個 Feed 的第一輪（RSS 頁）。作品頁的關鍵字訂閱在票 26 起當場選好第一批，不再畫它。 */
+function FirstRound({ feed, onDone }: { feed: Feed; onDone: (said: string) => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const headingId = useId()

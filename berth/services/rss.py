@@ -1332,17 +1332,22 @@ async def _submit_waiting(
     **第一輪還沒選過的 Feed 不送**（`primed_at` 是 `NULL`）：三條送單的路（輪詢、綁定、自動綁定）
     都經過這裡，擋一處就擋住全部。
     """
-    rows = list(
+    ids = list(
         await session.scalars(
-            select(RssItem)
+            select(RssItem.id)
             .join(RssFeed, RssFeed.id == RssItem.feed_id)
             .where(RssItem.status == FeedItemStatus.MATCHED, RssFeed.primed_at.is_not(None), scope)
             .order_by(RssItem.published_at, RssItem.id)
         )
     )
     sent = 0
-    for item in rows:
-        sent += await _submit(session, factory, item, batch)
+    # 一筆一筆重讀：送單被拒時 `add_download` 可能 rollback（並行的兩輪搶同一個 torrent，
+    # M5 票 24），同一個 session 裡先讀好的其餘幾列就全部過期，下一筆讀屬性會變成同步的
+    # lazy load。
+    for item_id in ids:
+        item = await session.get(RssItem, item_id)
+        if item is not None and item.status is FeedItemStatus.MATCHED:
+            sent += await _submit(session, factory, item, batch)
     return sent
 
 
@@ -2680,10 +2685,10 @@ async def _can_subscribe_search(
     term: str,
     media_id: str,
     route_id: int,
-    subgroup: str = "",
+    subgroup: str,
 ) -> None:
-    """`subscribe_search` 的乾跑：建 Feed 之前的檢查。字幕組不在這裡驗：沒搜到的字幕組也訂得了
-    （還沒出第一集的），卡片上的選項才是這一次搜到的（`search_subgroups`）。"""
+    """`subscribe_search` 的乾跑：建 Feed 之前的檢查。字幕組只驗不是空的（輸入模型）：沒搜到的
+    字幕組也訂得了（還沒出第一集的），讓人挑的選項是這一次搜到的（`search_subgroups`）。"""
     await _target(session, media_id, route_id)
     url = _search_url(kind, term)
     if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is not None:
@@ -2693,7 +2698,7 @@ async def _can_subscribe_search(
 @command(
     Effect.REVERSIBLE,
     inverse="rss.delete_feed",
-    # 給了字幕組就當場送第一批（看參數，照最嚴標，同 `choose_service`）。
+    # 建好就送第一批（人在作品頁或卡片上看過了）。
     flags={Flag.DOWNLOADS},
     about=(
         "Subscribe a work to one subgroup's releases in a nyaa or acgrip keyword search feed, "
@@ -2713,35 +2718,40 @@ async def subscribe_search(
     term: str,
     media_id: str,
     route_id: int,
+    subgroup: str,
     user_id: int | None,
-    subgroup: str = "",
+    first_batch: PrimeMode = PrimeMode.ALL,
     now: datetime | None = None,
 ) -> FeedView:
-    """從 Media 頁或對話以作品的標題建一條 Nyaa / acg.rip 搜尋 feed（brief §15、票 19、M5 票 26）。
+    """從 Media 頁或對話以作品的標題建一條 Nyaa / acg.rip 搜尋 feed，只收一個字幕組（brief §15、
+    票 19、M5 票 26）。
 
-    Feed 記下作品、Route 與這個人：它長出的每一個 RSS Series 直接綁上（`_prebind`）。
-    **當場讀一輪**。
+    Feed 記下作品、Route、這個人與字幕組（`RssFeed.subgroup`）：別組的發佈不寫，那一組長出的 RSS
+    Series 直接綁上（`_prebind`）。**當場讀一輪，第一輪也當場選**：第一批（作品頁或卡片上列出的
+    發佈名）人看過了，`first_batch` 是他在那裡選的——「下載這些並追之後的」（`all`，預設）或「只追
+    之後的」（`later`），走 RSS 頁第一輪同一支 `prime_feed`，不必再到 RSS 頁按。選 `all` 時這一輪
+    綁上的 Series 記成第一批已確認（`confirmed`）：人看過的就是要入庫的那幾集；選 `later` 的入庫
+    的是之後的集數，照一般規則走第一批。送出的是按下去那一刻 feed 上的，列出的那一份不是上限：
+    之間新出的也送，已經有 Job 的、被排除條件擋下的不送。
 
-    **沒給字幕組**（Media 頁）：一個字幕組一個 Series、都綁；第一輪停在預覽（票 11），等人選
-    「全部下載」或「只追之後的」；讀不到照一般 Feed 記在 `poll_error`，之後的輪詢再讀。
-
-    **給了字幕組**（確認卡，M5 票 26）：Feed 只收那一組的發佈（`RssFeed.subgroup`），別組的不寫。
-    第一批（卡上列出的發佈名）人在卡上看過了，所以 Feed 建好就算選過「全部下載」（`primed_at`），
-    這一輪綁上的 Series 記成第一批已確認（`confirmed`），不必再到 RSS 頁按。送出的是按下去那一刻
-    feed 上的，所以卡上那一份是上限：已經有 Job 的、被排除條件擋下的不送。
+    **讀不到就不建**（`feed_unreachable`，同 Mikan 的訂閱）：人在場，第一輪選不了的 Feed 不留下。
     """
-    await _can_subscribe_search(session, kind=kind, term=term, media_id=media_id, route_id=route_id)
+    await _can_subscribe_search(
+        session, kind=kind, term=term, media_id=media_id, route_id=route_id, subgroup=subgroup
+    )
+    chosen = subgroup.strip()
+    if not chosen:
+        # 兩個入口都擋了（API 的 `min_length`、卡片那一列的 `SearchSubscriptionRow`）。
+        raise ValueError("a keyword subscription takes exactly one subgroup")
     moment = now or utcnow()
     url = _search_url(kind, term)
-    chosen = subgroup.strip()
     feed = RssFeed(
-        name=" · ".join(part for part in (_default_name(url), term.strip(), chosen) if part),
+        name=f"{_default_name(url)} · {term.strip()} · {chosen}",
         url=url,
         kind=kind,
         media_id=media_id,
         user_id=user_id,
         subgroup=chosen,
-        primed_at=moment if chosen else None,
     )
     # 它只用得到作品那一種（`_route_kinds`）：另一格留空。
     _set_routes(feed, await _subscribed_routes(session, media_id, route_id, others=False))
@@ -2755,8 +2765,12 @@ async def subscribe_search(
         if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is None:
             raise
         raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url) from exc
-    await poll_feed(session, factory, feed.id, user_id=user_id, now=moment)
-    if chosen:
+    polled = await poll_feed(session, factory, feed.id, user_id=user_id, now=moment)
+    if polled.failed:
+        await delete_feed(session, feed.id)
+        raise RssRejectedError(RssRefusal.FEED_UNREACHABLE, polled.failed)
+    await prime_feed(session, factory, feed.id, mode=first_batch, user_id=user_id, now=moment)
+    if first_batch is PrimeMode.ALL:
         await session.execute(
             update(RssSeries)
             .where(
@@ -2783,13 +2797,20 @@ class SearchSubgroup:
     titles: tuple[str, ...]
 
 
-# 確認卡的預覽（M5 票 26）：只讀一次搜尋 feed，不寫任何東西；不是給人或 AI 按的命令。
-@command(Effect.READ, flags={Flag.INTERNAL})
+@command(
+    Effect.READ,
+    about=(
+        "Read one nyaa or acgrip keyword search and list the subgroups releasing in it: "
+        "each one's release count, last update, latest release and every release name."
+    ),
+    refusals=(RssRefusal,),
+)
 async def search_subgroups(
     factory: ServiceClientFactory, *, kind: FeedKind, term: str
 ) -> tuple[SearchSubgroup, ...]:
     """這一次 Nyaa / acg.rip 搜尋裡的字幕組，筆數多的在前（同數照最近更新）。讀不出組名的發佈不算
-    任何一組。讀不到是 `feed_unreachable`：人在場，卡片列不出第一批就不出卡。"""
+    任何一組。作品頁訂閱與確認卡讓人挑的就是這一份（M5 票 26）。讀不到是 `feed_unreachable`：
+    人在場，列不出第一批就不訂。"""
     fetcher = factory.rss()
     try:
         try:
@@ -2833,7 +2854,7 @@ class SubscriptionRef:
     #: Feed 的名字。網址不給：聚合 feed 的網址帶 token。
     name: str
     kind: FeedKind
-    #: 這條訂閱收的字幕組；空字串是搜到的每一組都收（票 26 之前的關鍵字 Feed、Media 頁建的）。
+    #: 這條訂閱收的字幕組；空字串是搜到的每一組都收（票 26 之前的關鍵字 Feed）。
     subgroup: str
 
 

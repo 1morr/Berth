@@ -5,14 +5,15 @@ import { shot } from './shot.ts'
 
 // 從詳情頁訂閱（M3 票 19），`rss` 情境：《与你相恋到生命尽头》的詳情頁。Mikan 以原文標題搜到番組 4009，
 // 訂閱喵萌奶茶屋&LoliHouse 就是它的單一 feed——整季 12 集進下載列表，這一段列出綁好的那個 RSS Series。
-// 接著以英文標題建 acg.rip 搜尋 feed：長出的字幕組都綁在這部作品上，第一輪就地停在預覽。
+// 接著以英文標題訂閱 acg.rip（M5 票 26）：先搜、列出搜到的字幕組，選喵萌奶茶屋&LoliHouse、看它的第一批，
+// 第一批選「只追之後的」，按下去才建、只綁那一組（第一輪就在這裡選，不再到 RSS 頁）。
 //
-// **先等那 12 集入庫再建搜尋 feed**（M4 票 121b）：acg.rip 那一份裡也有喵萌奶茶屋&LoliHouse 的 11、12 集，
-// 發佈名與 Mikan 的一字不差。預覽照當下的帳本去重，入庫了就是「重複」、還沒入庫就是「會送出」；替身
-// qBittorrent 收下就完成，入庫約在訂閱後 5 秒落地，不等的話預覽讀到哪一種看誰先到。
+// **先等那 12 集入庫再訂閱**（M4 票 121b）：acg.rip 那一份裡喵萌奶茶屋&LoliHouse 的 11、12 集發佈名與
+// Mikan 的一字不差。送單前照當下的帳本去重，入庫了就是「重複」、一筆都不送；替身 qBittorrent 收下就完成，
+// 入庫約在訂閱後 5 秒落地，不等的話送不送看誰先到。
 const DETAIL = '/media/tv:262000'
 
-test('詳情頁訂閱 Mikan 番組 × 字幕組，再建 acg.rip 搜尋 feed 看第一輪', async ({ page }) => {
+test('詳情頁訂閱 Mikan 番組 × 字幕組，再訂閱 acg.rip 的一個字幕組', async ({ page }) => {
   await signIn(page, DETAIL)
   const block = page.getByRole('region', { name: 'RSS 訂閱' })
   await expect(block).toContainText('還沒有 RSS Series 綁在這部作品上。')
@@ -47,22 +48,47 @@ test('詳情頁訂閱 Mikan 番組 × 字幕組，再建 acg.rip 搜尋 feed 看
     block.getByRole('button', { name: 'Kimi ga Shinu made Koi wo Shitai' }),
   ).toHaveAttribute('aria-pressed', 'true')
   await block.getByRole('combobox', { name: '入庫到' }).selectOption('Anime')
-  await block.getByRole('button', { name: '建立搜尋 feed' }).click()
-  await expect(block.getByRole('button', { name: '只追之後的' })).toBeVisible()
-  // 長出的字幕組都已經綁在這部作品上：沒有一筆要等綁定。喵萌奶茶屋&LoliHouse 的 11、12 集剛從 Mikan
-  // 入庫，是重複（帳本那一層：acg.rip 不報 info hash），其餘 28 筆會送出。
-  await expect(block).toContainText('會送出 28 · 綁定之後送 0 · 排除 0 · 重複 2')
-  await block.getByRole('button', { name: '看重複（2 筆）' }).click()
-  await expect(block.getByText(/媒體庫裡已經有同一個版本/)).toHaveCount(2)
-  await expect(block).toContainText('S01E11 [WEB][1080p][CHS+CHT+JP][LoliHouse].mkv')
-  await expect(block).toContainText('S01E12 [WEB][1080p][CHS+CHT+JP][LoliHouse].mkv')
-  await shot(page, '3-acgrip-first-round')
+  // 以預填的詞搜一次，列出搜到的字幕組（筆數、最近更新、最新一筆）；沒選之前沒有訂閱鍵。
+  await expect(block.getByRole('button', { name: /^北宇治字幕组\s*6 筆/ })).toBeVisible()
+  await expect(block.getByRole('button', { name: /^ANi\s*2 筆/ })).toBeVisible()
+  await expect(block.getByRole('button', { name: /訂閱並送出第一批/ })).toHaveCount(0)
+  await shot(page, '3-acgrip-subgroups')
 
-  await block.getByRole('button', { name: '只追之後的' }).click()
-  await expect(block.getByRole('button', { name: '只追之後的' })).toHaveCount(0)
-  await shot(page, '4-acgrip-primed')
+  await block.getByRole('button', { name: /^喵萌奶茶屋&LoliHouse/ }).click()
+  // 第一批列出這一組的兩筆（12 也是那一顆鍵上的「最新一筆」，所以看 11）。
+  await expect(block.getByText(/^\[喵萌奶茶屋&LoliHouse\].* - 11 /)).toBeVisible()
+  // 第一批的兩個選擇（同 RSS 頁第一輪那兩顆），預設下載這些並追之後的；這裡選只追之後的。
+  await expect(block.getByRole('button', { name: /^下載這些並追之後的/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(block.getByRole('button', { name: '訂閱並送出第一批（2 筆）' })).toBeVisible()
+  await shot(page, '4-acgrip-picked')
+  await block.getByRole('button', { name: /^只追之後的/ }).click()
+  await shot(page, '5-acgrip-later')
+  await block.getByRole('button', { name: '訂閱，只追之後的' }).click()
 
-  // 「只追之後的」一筆都不送：下載列表仍是 Mikan 的那 12 筆。
+  await expect(
+    block.getByText(
+      '已訂閱「acg.rip · Kimi ga Shinu made Koi wo Shitai · 喵萌奶茶屋&LoliHouse」，只追之後的：現有的一筆都沒送。',
+    ),
+  ).toBeVisible()
+  // 只綁選的那一組：作品這一段多一列 acg.rip；第一輪已經選過，現有的兩筆記成略過。
+  await expect(block.getByRole('listitem').filter({ hasText: 'ACG.RIP' })).toHaveCount(1)
+  const feeds = (await (await page.request.get('/api/rss/feeds')).json()) as {
+    id: number
+    kind: string
+    primed_at: string | null
+  }[]
+  const keyword = feeds.find((feed) => feed.kind === 'acgrip')
+  expect(keyword?.primed_at).not.toBeNull()
+  const items = (await (
+    await page.request.get(`/api/rss/feeds/${String(keyword?.id)}/preview`)
+  ).json()) as { status: string }[]
+  expect(items.map((item) => item.status)).toEqual(['passed', 'passed'])
+  await shot(page, '6-acgrip-subscribed')
+
+  // 只追之後的一筆都不送：下載列表仍是 Mikan 的那 12 筆。
   await page.goto('/jobs?filter=all')
   await expect(jobs).toHaveCount(12)
 })

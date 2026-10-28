@@ -344,6 +344,12 @@ test('關鍵字訂閱：卡上選字幕組、列出第一批，說出作品已�
   await expect(card).not.toContainText('[Berth-Demo] SPY×FAMILY - 01 [1080p][CHT]')
   await expect(card).toContainText('[ToonsHub] SPY×FAMILY - 02 [1080p][CHT]')
   await expect(card).toContainText('按下確認就送出第一批：2 個 torrent')
+  // 第一批的兩個選擇，預設下載這些並追之後的（這一條照預設確認）。
+  await expect(card.getByRole('button', { name: /^下載這些並追之後的/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(card.getByRole('button', { name: /^只追之後的/ })).toBeVisible()
   await shot(page, 'keyword-picked')
   await card.getByRole('button', { name: '確認' }).click()
 

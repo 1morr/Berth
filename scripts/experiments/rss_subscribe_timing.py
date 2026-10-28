@@ -147,6 +147,8 @@ def run(base: str, settle: float, watch: float) -> None:
                     "route": route,
                     "kind": "acgrip",
                     "term": "Kimi ga Shinu made Koi wo Shitai",
+                    # M5 票 26 起關鍵字訂閱只綁一個字幕組：與 Mikan 那一份同一組。
+                    "subgroup": "喵萌奶茶屋&LoliHouse",
                 },
             ),
         )
