@@ -860,6 +860,8 @@ class TestWhoCanUseWhat:
             "media_route_choices",
             "routes_list_routes",
             "rss_add_feed",
+            "rss_delete_feed",
+            "rss_list_subscriptions",
             "rss_subscribe_mikan",
             "rss_subscribe_search",
             "search_search_torrents",

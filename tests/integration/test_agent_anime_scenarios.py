@@ -468,8 +468,12 @@ class TestNewSeasonPicks:
             EDGERUNNERS_ID,
         )
         assert row["route_id"] == route_of(client, "tv")
-        # 預覽：訂下去會當場送 12 集，卡上沒有哪一格自由文字出自外部內容。
-        assert proposal["preview"]["torrents"] == [12]
+        # 預覽：字幕組由人在卡上選（票 26），模型挑的 LoliHouse 只是預選；番組頁上最多的一組 15 集，
+        # 所以按下去最多送 15 個。卡上沒有哪一格自由文字出自外部內容。
+        [ask] = proposal["preview"]["subgroups"]
+        assert (ask["preselected"], ask["required"]) == ("370", True)
+        assert len(ask["options"]) == 11
+        assert proposal["preview"]["torrents"] == [15]
         assert proposal["preview"]["external_fields"] == [[]]
         # 卡片之前什麼都沒訂：Feed 沒建、qBittorrent 沒收到東西。
         assert client.get("/api/rss/feeds").json() == []

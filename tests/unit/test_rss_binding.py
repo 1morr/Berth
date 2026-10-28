@@ -24,6 +24,7 @@ from berth.parser.binding import (
     SeriesClues,
     could_be,
     judge,
+    of_group,
     search_term,
     search_terms,
     skeleton,
@@ -307,6 +308,31 @@ class TestTheTitleKey:
 
     def test_a_title_with_nothing_left_has_no_key(self) -> None:
         assert title_key("[Group] - 12 [1080p]") is None
+
+
+class TestOneSubgroup:
+    """關鍵字訂閱只收一個字幕組（M5 票 26）：照發佈名裡的字幕組比，與 `title_key` 的那一段同一種
+    正規化（大小寫、全半形、簡繁）。"""
+
+    def test_the_named_group_is_in_and_the_others_are_out(self) -> None:
+        ani = "[ANi] Kimi ga Shinu made Koi wo Shitai - 12 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
+        mouse = "[黒ネズミたち] 與妳相戀到生命盡頭 / Kimi ga Shinu made Koi wo Shitai - 12 (CR)"
+
+        assert of_group(ani, "ANi")
+        assert of_group(ani, " ani ")
+        assert not of_group(mouse, "ANi")
+        assert of_group(mouse, "黒ネズミたち")
+
+    def test_a_joint_release_is_not_one_of_its_members(self) -> None:
+        """`喵萌奶茶屋&LoliHouse` 是另一個字幕組的名字（RSS Series 的鍵也分開）。"""
+        joint = "[喵萌奶茶屋&LoliHouse] 与你相恋到生命尽头 / Kimi ga Shinu made Koi wo Shitai - 12"
+
+        assert not of_group(joint, "LoliHouse")
+        assert of_group(joint, "喵萌奶茶屋&LoliHouse")
+
+    def test_no_group_matches_nothing(self) -> None:
+        assert not of_group("Kimi ga Shinu made Koi wo Shitai - 12 [1080p]", "")
+        assert not of_group("[ANi] Kimi ga Shinu made Koi wo Shitai - 12", "")
 
 
 class TestConfident:

@@ -43,6 +43,9 @@ TOOLS: tuple[str, ...] = (
     "rss.subscribe_mikan",
     "rss.subscribe_search",
     "rss.add_feed",
+    # 票 26：重複訂閱要看得到、刪得掉（試用機上同一部作品兩份訂閱，助理只能說「留著」）。
+    "rss.list_subscriptions",
+    "rss.delete_feed",
     # 票 16：推薦新番。
     *ANIME_TOOLS,
     "discover.read_trending",
@@ -77,7 +80,8 @@ def visible_tools(role: Role, *, tavily: bool) -> tuple[str, ...]:
 def _compact_search(result: object) -> object:
     """`search.search_torrents` 給模型的那一份：一次搜尋最多 350 列、每列十幾格（約 220 KB），照原樣
     交的話截斷（`agent_guards.clip`）只留得下前十幾列。挑發佈用不到的格子拿掉（站上的頁面、
-    畫面列表的鍵、怎麼算出季集、發佈時間、空的證據與 tags 的空格）；列的順序不變，「符合」在最前面。
+    畫面列表的鍵、怎麼算出季集、空的證據與 tags 的空格）；列的順序不變，「符合」在最前面。
+    **發佈時間留著**（票 26）：模型拿它算各字幕組多久出一集，在對話裡比較字幕組。
 
     **只給前 `MODEL_SEARCH_ROWS` 列與它們沒涵蓋到的集**（票 23d，`_rows_to_show`），其餘只說有幾列
     （`rows_not_shown`）：結果留在這一輪的上下文裡、之後每次呼叫都重送，Re:Zero 找種子時搜了 19 次，
@@ -143,6 +147,7 @@ _SEARCH_ROW_KEYS = (
     "verdict",
     "evidence",
     "tags",
+    "published_at",
 )
 
 

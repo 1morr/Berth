@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.rss import acgrip
+from berth.adapters.torrent import TorrentSource
 from berth.domain import (
     CollectionType,
     FeedItemStatus,
@@ -31,21 +33,25 @@ from berth.domain import (
     SkipCode,
     label_of,
 )
-from berth.models import Job, Route, RssFeed, RssSeries, User
+from berth.models import Job, Media, Route, RssFeed, RssSeries, User
 from berth.parser import release
 from berth.services.rss import (
     ExcludedCount,
+    FeedView,
     RssRejectedError,
     bind_series,
     list_feeds,
     list_series,
+    list_subscriptions,
     poll_feed,
     preview_feed,
+    search_subgroups,
     set_feed_routes,
     subscribe_mikan,
     subscribe_search,
 )
 from tests.conftest import FIXTURES
+from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import (
     KIMI_KEY,
     NOW,
@@ -516,3 +522,217 @@ class TestSeriesOfAWork:
         newest = max(SEASON, key=lambda item: item.published_at or NOW)
         assert (row.latest_title, row.latest_at) == (newest.title, newest.published_at)
         assert await list_series(session, media_id="tv:1") == ()
+
+
+MOUSE = "黒ネズミたち"
+
+
+def mouse_torrents(factory: FakeClientFactory) -> set[str]:
+    """《与你相恋》acg.rip 搜尋裡黒ネズミたち那 5 筆的 `.torrent`，各一個 hash。"""
+    items = [item for item in acgrip.parse_feed(ACGRIP_FEED) if item.title.startswith(f"[{MOUSE}]")]
+    hashes: set[str] = set()
+    for item in items:
+        assert item.torrent_url
+        info_hash = hashlib.sha1(item.torrent_url.encode()).hexdigest()
+        factory.torrent_.sources[item.torrent_url] = TorrentSource(
+            info_hash=info_hash, content=f"torrent:{info_hash}".encode()
+        )
+        hashes.add(info_hash)
+    return hashes
+
+
+class TestOneSubgroup:
+    """關鍵字訂閱只綁一個字幕組（M5 票 26）：試用機上助理把搜到的每個字幕組都綁上作品，使用者
+    沒選過。指定了字幕組的那一條只收那一組的發佈；第一批由人在確認卡上看過才建，所以建好就送、
+    那個 Series 記成第一批已確認。"""
+
+    async def subscribe(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> tuple[Media, Route, FakeClientFactory, FeedView, set[str]]:
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+        hashes = mouse_torrents(factory)
+        feed = await subscribe_search(
+            session,
+            factory,
+            kind=FeedKind.ACGRIP,
+            term=TERM,
+            subgroup=MOUSE,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            now=NOW,
+        )
+        return media, route, factory, feed, hashes
+
+    async def test_only_the_chosen_subgroup_is_written_and_bound(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, route, _, feed, _ = await self.subscribe(session, roots)
+
+        grown = list(await session.scalars(select(RssSeries)))
+        assert [row.key for row in grown] == ["title:kimigashinumadekoiwoshitai:黒ネズミたち"]
+        assert {(row.media_id, row.route_id) for row in grown} == {(media.id, route.id)}
+        items = await preview_feed(session, feed.id)
+        assert len(items) == 5
+        assert {row.title.split("]")[0] for row in items} == {f"[{MOUSE}"}
+
+    async def test_the_first_batch_was_confirmed_on_the_card_so_it_is_sent(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, _, _, feed, hashes = await self.subscribe(session, roots)
+
+        assert feed.primed_at == NOW
+        assert await rss_jobs(session) == hashes
+        [series] = await session.scalars(select(RssSeries))
+        assert series.confirmed
+
+    async def test_later_rounds_keep_to_the_subgroup(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """之後的輪詢帶到別的字幕組的新發佈，也不寫、不長 Series、不綁。"""
+        _, _, factory, feed, _ = await self.subscribe(session, roots)
+        newer = ACGRIP_FEED.replace(b"- 12 [1080P]", b"- 13 [1080P]").replace(
+            b"https://acg.rip/t/363905", b"https://acg.rip/t/999999"
+        )
+        factory.rss_.pages[acgrip.search_url(TERM)] = newer
+
+        await poll_feed(session, factory, feed.id, now=NOW)
+
+        assert await count(session, RssSeries) == 1
+        assert len(await preview_feed(session, feed.id)) == 5
+
+    async def test_without_a_subgroup_it_is_the_old_feed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """從 Media 頁建的（沒指定字幕組）照舊：每一組都綁、第一輪等人選。票 26 不改那一頁。"""
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+
+        feed = await subscribe_search(
+            session,
+            factory,
+            kind=FeedKind.ACGRIP,
+            term=TERM,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            now=NOW,
+        )
+
+        assert feed.primed_at is None
+        assert await count(session, RssSeries) > 1
+        assert not any(row.confirmed for row in await session.scalars(select(RssSeries)))
+
+
+class TestTheSubgroupsASearchFinds:
+    """確認卡的選項（票 26）：這一次搜到的字幕組，各有幾筆、最近一筆、第一批會下載的發佈名。
+    只讀。"""
+
+    async def test_each_subgroup_with_its_releases_newest_first(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, _, factory = await harbour(session, roots)
+        factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+
+        found = await search_subgroups(factory, kind=FeedKind.ACGRIP, term=TERM)
+
+        by_name = {group.name: group for group in found}
+        mouse = by_name[MOUSE]
+        assert mouse.releases == len(mouse.titles) == 5
+        assert mouse.latest == mouse.titles[0]
+        assert mouse.latest.startswith(f"[{MOUSE}]") and " - 12 " in mouse.latest
+        assert mouse.updated is not None
+        # 最多的在前，同數照最近更新。
+        assert [group.releases for group in found] == sorted(
+            (group.releases for group in found), reverse=True
+        )
+        assert "ANi" in by_name
+        assert await count(session, RssFeed) == 0
+
+    async def test_a_search_that_cannot_be_read_is_refused(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        _, _, factory = await harbour(session, roots)
+
+        with pytest.raises(RssRejectedError) as refused:
+            await search_subgroups(factory, kind=FeedKind.ACGRIP, term=TERM)
+
+        assert refused.value.reason is RssRefusal.FEED_UNREACHABLE
+
+
+class TestWhatAWorkIsSubscribedTo:
+    """重複訂閱（票 26）：訂閱之前說出這部作品已經有的訂閱——哪一條 Feed、哪個來源、哪個字幕組。"""
+
+    async def test_a_keyword_feed_and_a_mikan_subscription_are_both_listed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+        mouse_torrents(factory)
+        keyword = await subscribe_search(
+            session,
+            factory,
+            kind=FeedKind.ACGRIP,
+            term=TERM,
+            subgroup=MOUSE,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            now=NOW,
+        )
+        everything = await subscribe_search(
+            session,
+            factory,
+            kind=FeedKind.NYAA,
+            term=TERM,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            now=NOW,
+        )
+        serve_single(factory)
+        mikan = await subscribe_mikan(
+            session,
+            factory,
+            bangumi_id=4009,
+            subgroup_id=370,
+            media_id=media.id,
+            route_id=route.id,
+            user_id=user_id,
+            actor=label_of(user_id),
+            subgroup_name="LoliHouse",
+            now=NOW,
+        )
+
+        found = await list_subscriptions(session, media.id)
+
+        assert [(row.feed_id, row.kind, row.subgroup) for row in found] == [
+            (keyword.id, FeedKind.ACGRIP, MOUSE),
+            (everything.id, FeedKind.NYAA, ""),
+            (mikan.feed.id, FeedKind.MIKAN, "LoliHouse"),
+        ]
+        assert found[0].name == keyword.name
+
+    async def test_an_aggregate_feed_carrying_a_bound_series_is_listed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """聚合 feed 上綁到這部作品的 RSS Series 也算：刪那條 Feed 會連同別部作品一起停。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=None, now=NOW
+        )
+
+        [row] = await list_subscriptions(session, media.id)
+
+        assert (row.feed_id, row.kind) == (feed_id, FeedKind.MIKAN)
+
+    async def test_nothing_for_a_work_with_no_subscription(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        media, _, _ = await harbour(session, roots)
+
+        assert await list_subscriptions(session, media.id) == ()

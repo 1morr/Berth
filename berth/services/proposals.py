@@ -16,8 +16,11 @@
    **Route 是唯一能在這裡給的參數**（票 23b，放寬票 08 的「存下後不可改」）：作品放得進的 Route
    不只一條時，提出時把那一列的可選清單存進預覽（`RouteAsk`），核准時勾著的每一列都要選一條、
    只收清單裡的（`route_required` / `route_not_offered`）。只有一條的列不收。
+   **字幕組也是**（M5 票 26）：訂閱的字幕組可選的不只一個時，提出的一方把選項存進預覽
+   （`SubgroupAsk`，模型給的只當預選），核准時勾著的每一列都要選、只收清單裡的
+   （`subgroup_required` / `subgroup_not_offered`）。
 3. **執行**（`execute`）：同樣先搶（核准 → 執行中），再逐列經命令執行器：先重驗（乾跑）、再執行。
-   **參數只用存下的那一份**（唯一的例外是卡片上選的 Route），而且先重算雜湊比對卡片上那一份。
+   **參數只用存下的那一份**（例外只有卡片上選的 Route 與字幕組），而且先重算雜湊比對卡片上那一份。
    每做完一列就把那一列的結果與它的改動一起 commit：做到一半的總覽卡，做過的那幾列有結果、
    不會再做一次。
    做的人是提出者（AI 提出的記 `ai:<user id>`），角色照他**現在**的角色重讀。
@@ -45,7 +48,7 @@ import json
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -57,6 +60,7 @@ from berth.domain import (
     WAITING_PROPOSALS,
     Actor,
     ActorKind,
+    FeedKind,
     ProposalRefusal,
     ProposalRowOutcome,
     ProposalStatus,
@@ -68,6 +72,7 @@ from berth.services.events import EventHub, ProposalSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
 from berth.services.media import route_offer
 from berth.services.registry import CommandSpec, Verdict, commands, dry_run, public_arguments
+from berth.services.rss import SubscriptionRef
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +119,39 @@ class RouteAsk:
 
 
 @dataclass(frozen=True, slots=True)
+class SubgroupOption:
+    """訂閱可選的一個字幕組（M5 票 26）：卡片照它畫，選了它就用 `arguments` 蓋過存下的參數。"""
+
+    #: 這一個的身分（決定的 body 送它）：Mikan 是字幕組 id 的字串，關鍵字訂閱是字幕組名。
+    key: str
+    name: str
+    releases: int
+    updated: date | None
+    #: 最新一筆的發佈名（看得出語言與解析度，同 Media 頁的字幕組那一顆鍵）。
+    latest: str
+    #: 關鍵字訂閱的第一批：按下確認就送出的發佈名，新的在前。Mikan 是空的（整季，筆數是
+    #: `releases`）。
+    titles: tuple[str, ...]
+    #: 選了這一個時蓋過存下參數的那幾格（Mikan：`subgroup_id` 與 `subgroup_name`；
+    #: 關鍵字：`subgroup`）。
+    # `Any`：格子的型別隨命令（字幕組 id 是 int、名字是 str）。
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class SubgroupAsk:
+    """一列訂閱的字幕組（M5 票 26）。`preselected` 是模型給的那一個（在選項裡才算）。
+
+    `required`：要人選——選項不只一個，或模型給的不在選項裡。只有一個、而且就是模型給的那一個時
+    只列出來（關鍵字訂閱的第一批照樣列），不必選。
+    """
+
+    options: tuple[SubgroupOption, ...]
+    preselected: str | None
+    required: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ProposalPreview:
     """提出那一刻伺服器算的：命令的效果與旗標（卡片照它說「不可逆」「會送出 torrent」），與逐列
     有沒有乾跑過（命令沒有驗證函式的是 `False`：預覽只看得到參數）。"""
@@ -132,6 +170,12 @@ class ProposalPreview:
     #: 逐列：要人選 Route 的列是 `RouteAsk`，其餘（只有一條、命令沒有 Route）是 `None`。命令的輸入
     #: 沒有 `media_id` 與 `route_id` 的、票 23b 之前存的卡是空的。
     routes: tuple[RouteAsk | None, ...] = ()
+    #: 逐列：訂閱的字幕組選項（`SubgroupAsk`），其餘是 `None`。不是訂閱的命令、票 26 之前存的卡
+    #: 是空的。
+    subgroups: tuple[SubgroupAsk | None, ...] = ()
+    #: 逐列：這部作品提出那一刻已經有的訂閱（M5 票 26）。卡片說出來，由人決定要不要再訂一份。
+    #: 不是訂閱的命令、票 26 之前存的卡是空的。
+    existing: tuple[tuple[SubscriptionRef, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +213,8 @@ class ProposalView:
     detached_at: datetime | None = None
     #: 核准時逐列在卡片上選的 Route（`preview.routes` 有 `RouteAsk` 的列才有值）；沒選過是 `None`。
     routes: list[int | None] | None = None
+    #: 核准時逐列在卡片上選的字幕組（選項的 `key`）；沒選過是 `None`。
+    subgroups: list[str | None] | None = None
 
 
 def arguments_hash(name: str, arguments: Sequence[Mapping[str, object]]) -> str:
@@ -195,13 +241,15 @@ async def propose(
     external_fields: Sequence[Sequence[str]] = (),
     held_back: int = 0,
     torrents: Sequence[int | None] = (),
+    subgroups: Sequence[SubgroupAsk | None] = (),
+    existing: Sequence[Sequence[SubscriptionRef]] = (),
     now: datetime | None = None,
 ) -> ProposalView:
     """建一張卡片（模組 docstring 第 1 點）。輸入格式不對是 pydantic 的 `ValidationError`。
 
     AI 提出的帶 `tool_call_id`（提出它的那一次工具呼叫），恢復那一輪時靠它找回卡片；
-    `external_fields` 與 `held_back` 照實記進預覽（`ProposalPreview`），由提出它的那一方算
-    （`services.agent`）。
+    `external_fields`、`held_back`、`torrents`、`subgroups` 與 `existing` 照實記進預覽
+    （`ProposalPreview`），由提出它的那一方算（`services.agent`：字幕組要讀番組頁或搜尋）。
     """
     if external_fields and len(external_fields) != len(rows):
         raise ValueError("external_fields names the fields of every row")
@@ -231,6 +279,8 @@ async def propose(
         held_back=held_back,
         torrents=tuple(torrents),
         routes=await _route_asks(session, spec, arguments),
+        subgroups=tuple(subgroups),
+        existing=tuple(tuple(found) for found in existing),
     )
     proposal = Proposal(
         command=name,
@@ -261,13 +311,15 @@ async def decide(
     approve: bool,
     selection: Sequence[int] | None = None,
     routes: Sequence[int | None] | None = None,
+    subgroups: Sequence[str | None] | None = None,
     user_id: int,
     role: Role,
     now: datetime | None = None,
 ) -> ProposalView:
     """人按下卡片（模組 docstring 第 2 點）。只收人：AI 沒有這條路。
 
-    `routes` 逐列對齊，只有要選 Route 的列（`preview.routes`）能給值；拒絕時不看它。
+    `routes` 與 `subgroups` 逐列對齊，只有存了選項的列（`preview.routes`、`preview.subgroups`）
+    能給值；拒絕時不看它們。
     """
     moment = now or datetime.now(UTC)
     proposal = await session.get(Proposal, proposal_id, populate_existing=True)
@@ -284,7 +336,9 @@ async def decide(
         raise await _decided(session, proposal_id)
     rows = len(proposal.arguments_json)
     chosen = _selection(selection, rows) if approve else None
-    picked = _routes(routes, _view(proposal).preview.routes, rows, chosen) if approve else None
+    preview = _view(proposal).preview
+    picked = _routes(routes, preview.routes, rows, chosen) if approve else None
+    groups = _subgroups(subgroups, preview.subgroups, rows, chosen) if approve else None
     status = ProposalStatus.APPROVED if approve else ProposalStatus.REJECTED
     moved = await _move(
         session,
@@ -295,6 +349,7 @@ async def decide(
         decided_at=moment,
         selection_json=chosen,
         routes_json=picked,
+        subgroups_json=groups,
     )
     if not moved:
         raise await _decided(session, proposal_id)
@@ -323,6 +378,8 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
     rows = proposal.arguments_json
     selection = proposal.selection_json
     picked = proposal.routes_json or [None] * len(rows)
+    asks = _view(proposal).preview.subgroups
+    groups = proposal.subgroups_json or [None] * len(rows)
     intact = arguments_hash(name, rows) == proposal.arguments_hash
     actor = await _actor(session, proposal)
     results: list[RowResult] = []
@@ -334,6 +391,9 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
         else:
             route = picked[index]
             given = row if route is None else {**row, "route_id": route}
+            ask = asks[index] if index < len(asks) else None
+            if ask is not None:
+                given = {**given, **_option(ask, groups[index]).arguments}
             outcome = await _run_row(session, executor, name, given, actor)
         results.append(outcome)
         # 這一列的結果與它的改動同一筆 commit。
@@ -547,6 +607,38 @@ def _routes(
     return picks if any(pick is not None for pick in picks) else None
 
 
+def _subgroups(
+    subgroups: Sequence[str | None] | None,
+    asks: Sequence[SubgroupAsk | None],
+    rows: int,
+    chosen: Sequence[int] | None,
+) -> list[str | None] | None:
+    """核准時的逐列字幕組（模組 docstring 第 2 點，同 `_routes`）。勾著而要選卻沒選的是
+    `subgroup_required`（`detail` 是列號）；不在清單裡、那一列沒得選、或長度對不上的是
+    `subgroup_not_offered`。不必選的列（`required` 是假）沒給就用預選的那一個。"""
+    picks: list[str | None] = list(subgroups) if subgroups is not None else [None] * rows
+    if len(picks) != rows:
+        raise ProposalRejectedError(ProposalRefusal.SUBGROUP_NOT_OFFERED, json.dumps(picks))
+    for index, pick in enumerate(picks):
+        ask = asks[index] if index < len(asks) else None
+        offered = {option.key for option in ask.options} if ask is not None else set()
+        if pick is not None and pick not in offered:
+            raise ProposalRejectedError(ProposalRefusal.SUBGROUP_NOT_OFFERED, f"{index}:{pick}")
+        if chosen is not None and index not in chosen:
+            # 沒勾的列不做，帶來的字幕組不記。
+            picks[index] = None
+        elif ask is not None and ask.required and pick is None:
+            raise ProposalRejectedError(ProposalRefusal.SUBGROUP_REQUIRED, str(index))
+    return picks if any(pick is not None for pick in picks) else None
+
+
+def _option(ask: SubgroupAsk, pick: str | None) -> SubgroupOption:
+    """執行這一列用的字幕組：人選的那一個，沒選（不必選的列）是預選的那一個。`decide` 擋過了，
+    所以一定找得到。"""
+    key = pick if pick is not None else ask.preselected
+    return next(option for option in ask.options if option.key == key)
+
+
 def _selection(selection: Sequence[int] | None, rows: int) -> list[int] | None:
     if selection is None:
         return None
@@ -646,6 +738,20 @@ def _view(proposal: Proposal) -> ProposalView:
                 )
                 for ask in preview.get("routes") or ()
             ),
+            # 票 26 之前存的卡沒有這兩格。
+            subgroups=tuple(_subgroup_ask(ask) for ask in preview.get("subgroups") or ()),
+            existing=tuple(
+                tuple(
+                    SubscriptionRef(
+                        feed_id=ref["feed_id"],
+                        name=ref["name"],
+                        kind=FeedKind(ref["kind"]),
+                        subgroup=ref["subgroup"],
+                    )
+                    for ref in refs
+                )
+                for refs in preview.get("existing") or ()
+            ),
         ),
         user_id=proposal.user_id,
         proposer=proposal.proposer,
@@ -672,4 +778,27 @@ def _view(proposal: Proposal) -> ProposalView:
         ),
         detached_at=proposal.detached_at,
         routes=proposal.routes_json,
+        subgroups=proposal.subgroups_json,
+    )
+
+
+# `Any`：存在 `preview_json` 裡的 JSON 形狀。
+def _subgroup_ask(ask: dict[str, Any] | None) -> SubgroupAsk | None:
+    if ask is None:
+        return None
+    return SubgroupAsk(
+        options=tuple(
+            SubgroupOption(
+                key=option["key"],
+                name=option["name"],
+                releases=option["releases"],
+                updated=date.fromisoformat(option["updated"]) if option["updated"] else None,
+                latest=option["latest"],
+                titles=tuple(option["titles"]),
+                arguments=option["arguments"],
+            )
+            for option in ask["options"]
+        ),
+        preselected=ask["preselected"],
+        required=ask["required"],
     )

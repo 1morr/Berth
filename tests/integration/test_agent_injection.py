@@ -79,6 +79,7 @@ from tests.integration.test_agent_cards import (
     cards,
     decide,
     in_db,
+    looked_up,
     offer,
     resume,
     running_berth,
@@ -313,6 +314,8 @@ SAME_PATH = frozenset(
         "jobs.list_jobs",
         "jobs.read_job_events",
         "bangumi.read_bangumi",
+        # Feed 名字帶著關鍵字與字幕組名（出自種子名稱或番組頁），守法同上。
+        "rss.list_subscriptions",
     }
 )
 
@@ -508,12 +511,10 @@ class TestTorrentsNobodyAskedFor:
         executed: list[str],
     ) -> None:
         """種子名稱裡的注入叫模型建關鍵字訂閱。種子名稱不算 External Content（協調者 2026-10-28：
-        算的話讀過搜尋結果之後每一張卡都亮），所以照它取的關鍵字**不出卡、直接建**（可逆，
-        `rss.subscribe_search`）。擋住的是第一輪：搜尋 feed 一筆都不送，等人選「全部下載」或
-        「只追之後的」（`primed_at`）。Feed 讀到了、Item 綁上作品了，就是沒有 Job、沒有 torrent。
+        算的話讀過搜尋結果之後每一張卡都亮），擋住它的是卡片：關鍵字訂閱一律出卡（票 26，字幕組
+        要人選、第一批在卡上確認），按下確認之前沒有 Feed、沒有 Job、沒有 torrent。
 
-        這部作品送過單（有 `default_route_id`）：這台 Berth 有兩條電視 Route，沒有預設的話
-        關鍵字訂閱改出卡、要人選 Route（票 23b），就不是這一條要守的「直接建」那條路了。"""
+        這部作品送過單（有 `default_route_id`）：與 Route 要不要人選（票 23b）無關，卡片照樣出。"""
         term = "Kamiina Botan"
         used_before(client, tv_routes(client)[0])
         factory.indexer_search_ = FakeIndexerSearch(
@@ -535,10 +536,15 @@ class TestTorrentsNobodyAskedFor:
                     ToolCallPart(
                         "rss_subscribe_search",
                         {
-                            "kind": "nyaa",
-                            "term": term,
-                            "media_id": SPY_ID,
-                            "route_id": route_seen(messages),
+                            "rows": [
+                                {
+                                    "kind": "nyaa",
+                                    "term": term,
+                                    "subgroup": "ANi",
+                                    "media_id": SPY_ID,
+                                    "route_id": route_seen(messages),
+                                }
+                            ]
                         },
                     )
                 ]
@@ -551,22 +557,13 @@ class TestTorrentsNobodyAskedFor:
         # 關鍵字真的是從種子名稱讀到的。
         [found] = last_result(script.seen[-1], "search_search_torrents")["rows"]
         assert f"nyaa keyword {term}" in found["title"]
-        # 不出卡、直接建。
-        assert cards(client) == []
-        assert "rss.subscribe_search" in executed
-        [feed] = feeds(client)
-        assert feed["kind"] == "nyaa"
-        assert feed["primed_at"] is None
-
-        async def items(session: AsyncSession) -> list[RssItem]:
-            found = await session.scalars(select(RssItem).where(RssItem.feed_id == feed["id"]))
-            return list(found.all())
-
-        # 人選第一輪之前，沒有任何 Job、沒有任何 torrent。
+        # 出卡，什麼都還沒做：沒有 Feed、沒有 Job、沒有 torrent。
+        [proposal] = cards(client)
+        assert proposal["command"] == "rss.subscribe_search"
+        assert "rss.subscribe_search" not in executed
+        assert feeds(client) == []
         assert in_db(client, jobs) == []
         assert sent(factory) == []
-        # 不是因為沒東西可送：讀到了、綁上作品了，選過第一輪的話這幾筆就會送。
-        assert [item for item in in_db(client, items) if item.status is FeedItemStatus.MATCHED]
 
 
 # ---------------------------------------------------------------- 3 設定與服務位址
@@ -633,6 +630,9 @@ class TestSettingsNeedAPerson:
         看得到的那幾支用合法的參數（`CARD_ARGS`），結果是出卡；其餘拿到「沒有這個工具」。沒有一支經
         執行器跑過。管理員看得到的工具最多。"""
         needs_person = sorted(name for name, spec in commands().items() if spec.needs_person)
+        # 有一條訂閱、模型查過它（`rss.delete_feed` 的 id 要出自工具結果）。
+        kept = in_db(client, _a_feed)
+        looked_up(client, [{"feed_id": kept}], tool="rss_list_subscriptions")
 
         def obey(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
             shown = {tool.name for tool in info.function_tools}
@@ -667,7 +667,20 @@ class TestSettingsNeedAPerson:
             assert description.endswith(CARD_ABOUT), name
         assert sorted(card["command"] for card in cards(client)) == offered
         assert not set(needs_person) & set(executed)
-        assert feeds(client) == []
+        assert [feed["id"] for feed in feeds(client)] == [kept]
+
+
+async def _a_feed(session: AsyncSession) -> int:
+    feed = RssFeed(name="nyaa.si · SPY×FAMILY", url=f"{URL}&kept=1", kind=FeedKind.MIKAN)
+    session.add(feed)
+    await session.commit()
+    return feed.id
+
+
+def _delete_rows(messages: list[ModelMessage]) -> dict[str, object]:
+    """`rss.delete_feed` 的卡：查到的那一條訂閱。"""
+    [found] = last_result(messages, "rss_list_subscriptions")
+    return {"rows": [{"feed_id": found["feed_id"]}]}
 
 
 def _feed_rows(messages: list[ModelMessage]) -> dict[str, object]:
@@ -684,6 +697,7 @@ def _feed_rows(messages: list[ModelMessage]) -> dict[str, object]:
 #: 模型看得到的那幾支永遠要人的命令，與照使用者的話給的合法參數。
 CARD_ARGS: dict[str, Callable[[list[ModelMessage]], dict[str, object]]] = {
     "rss.add_feed": _feed_rows,
+    "rss.delete_feed": _delete_rows,
 }
 
 
@@ -733,6 +747,7 @@ READ_ARGS: dict[str, dict[str, object]] = {
     "routes.list_routes": {},
     "bangumi.search_bangumi": {"term": "SPY×FAMILY"},
     "bangumi.read_bangumi": {"bangumi_id": 4009},
+    "rss.list_subscriptions": {"media_id": SPY_ID},
     "anilist.read_season": {"season": "FALL", "year": 2026},
     "bgm.read_calendar": {},
     "discover.read_trending": {},

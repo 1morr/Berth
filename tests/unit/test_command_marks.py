@@ -106,6 +106,8 @@ NAMED: dict[str, CommandMark] = {
     "rss.poll_feed": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS),
     "rss.prime_feed": _mark(Effect.IRREVERSIBLE, Flag.DOWNLOADS),
     "rss.subscribe_mikan": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS),
+    # M5 票 26：給了字幕組就當場送第一批（看參數，照最嚴）。
+    "rss.subscribe_search": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS, inverse="rss.delete_feed"),
     "rss.set_feed_routes": _mark(Effect.REVERSIBLE, Flag.SETTINGS, Flag.DOWNLOADS),
     "downloading.add_manual_download": _mark(Effect.REVERSIBLE, Flag.DOWNLOADS),
     # R6：改設定的。
