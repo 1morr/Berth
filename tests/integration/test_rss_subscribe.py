@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Any
 
+import anyio
 import pytest
 from guessit import guessit
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.rss import acgrip, mikan
+from berth.adapters.rss.fake import FakeFeedFetcher
 from berth.adapters.torrent import TorrentSource
+from berth.db.engine import create_session_factory
 from berth.domain import (
     CollectionType,
     FeedItemStatus,
@@ -35,6 +39,7 @@ from berth.domain import (
 )
 from berth.models import Job, Media, Route, RssFeed, RssSeries, User
 from berth.parser import release
+from berth.services import rss as rss_service
 from berth.services.rss import (
     ExcludedCount,
     FeedView,
@@ -52,6 +57,7 @@ from berth.services.rss import (
     subscriptions_of_feed_url,
 )
 from tests.conftest import FIXTURES
+from tests.integration.arrange import Meeting
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_rss import (
     KIMI_KEY,
@@ -279,6 +285,19 @@ def _feed_without_newest() -> bytes:
     return (raw[:first] + raw[raw.index("</item>", first) + len("</item>") :]).encode()
 
 
+class MeetingFetcher(FakeFeedFetcher):
+    """兩條 Feed 都抓到了才各自往下讀（`Meeting`）：真的抓要幾百毫秒，兩輪會疊在一起。"""
+
+    def __init__(self, pages: dict[str, bytes]) -> None:
+        super().__init__(pages)
+        self.meeting = Meeting()
+
+    async def fetch(self, url: str) -> bytes:
+        page = await super().fetch(url)
+        await self.meeting.arrive()
+        return page
+
+
 class TestSearchFeed:
     async def test_it_is_read_at_once_and_what_it_grows_is_bound_but_waits_for_the_first_round(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -422,6 +441,86 @@ class TestSearchFeed:
             await subscribe_search(session, factory, **arguments)  # type: ignore[arg-type]  # 同上
 
         assert refused.value.reason is RssRefusal.FEED_DUPLICATE
+
+    async def test_the_same_search_twice_at_once_is_one_feed_and_a_duplicate(
+        self,
+        engine: AsyncEngine,
+        session: AsyncSession,
+        roots: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """同一步並行的兩個工具呼叫（M5 票 24）：兩支都過了「已經有這條 Feed 嗎」才建。
+
+        檢查與寫入之間沒有網路，替身插不進去，所以在中間那一步（算 Feed 的兩格 Route）碰面。
+        """
+        meeting = Meeting()
+        routes_of = rss_service._subscribed_routes
+
+        async def met(*args: Any, **kwargs: Any) -> Any:  # `Any`：原樣轉給被包住的那一支
+            await meeting.arrive()
+            return await routes_of(*args, **kwargs)
+
+        monkeypatch.setattr(rss_service, "_subscribed_routes", met)
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        factory.rss_.pages[acgrip.search_url(TERM)] = ACGRIP_FEED
+        sessions = create_session_factory(engine)
+        outcomes: list[object] = []
+
+        async def subscribe() -> None:
+            async with sessions() as own:
+                try:
+                    outcomes.append(
+                        await subscribe_search(
+                            own,
+                            factory,
+                            kind=FeedKind.ACGRIP,
+                            term=TERM,
+                            media_id=media.id,
+                            route_id=route.id,
+                            user_id=user_id,
+                        )
+                    )
+                except RssRejectedError as exc:
+                    outcomes.append(exc.reason)
+
+        async with anyio.create_task_group() as both:
+            both.start_soon(subscribe)
+            both.start_soon(subscribe)
+
+        assert RssRefusal.FEED_DUPLICATE in outcomes
+        assert len(await feeds(session)) == 1
+
+    async def test_two_searches_growing_the_same_series_at_once_both_succeed(
+        self, engine: AsyncEngine, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """兩條不同的搜尋 feed 搜到同一批發佈（M5 票 24）：Series 的鍵是標題骨幹，跨 Feed 共用。"""
+        media, route, factory = await harbour(session, roots)
+        user_id = await skipper(session)
+        terms = (TERM, "Kimi ga Shinu made")
+        factory.rss_ = MeetingFetcher({acgrip.search_url(term): ACGRIP_FEED for term in terms})
+        sessions = create_session_factory(engine)
+
+        async def subscribe(term: str) -> None:
+            async with sessions() as own:
+                await subscribe_search(
+                    own,
+                    factory,
+                    kind=FeedKind.ACGRIP,
+                    term=term,
+                    media_id=media.id,
+                    route_id=route.id,
+                    user_id=user_id,
+                )
+
+        async with anyio.create_task_group() as both:
+            for term in terms:
+                both.start_soon(subscribe, term)
+
+        assert [feed.poll_error for feed in await feeds(session)] == ["", ""]
+        grown = list(await session.scalars(select(RssSeries)))
+        assert grown
+        assert {series.media_id for series in grown} == {media.id}
 
     async def test_when_the_route_went_away_what_grows_waits_for_a_person(
         self, session: AsyncSession, roots: dict[str, Path]

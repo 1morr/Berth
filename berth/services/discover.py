@@ -18,6 +18,7 @@ from datetime import timedelta
 from itertools import zip_longest
 from typing import Protocol
 
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import ServiceError
@@ -277,7 +278,16 @@ async def _read_cache(session: AsyncSession, key: str) -> tuple[MediaCard, ...] 
 
 
 async def _write_cache(session: AsyncSession, key: str, cards: tuple[MediaCard, ...]) -> None:
-    await session.merge(TmdbCache(key=key, value_json=dump_cards(cards), fetched_at=utcnow()))
+    """一句 upsert：同一格可能有別人同時在寫（M5 票 24：同一步並行的工具、側面板與探索頁同時讀
+    趨勢）。`session.merge` 是先查再插，兩邊都查不到就撞主鍵；誰後寫誰的留下，兩份都是剛抓的。"""
+    values = {"key": key, "value_json": dump_cards(cards), "fetched_at": utcnow()}
+    upsert = sqlite_insert(TmdbCache).values(values)
+    await session.execute(
+        upsert.on_conflict_do_update(
+            index_elements=[TmdbCache.key],
+            set_={column: upsert.excluded[column] for column in values if column != "key"},
+        )
+    )
 
 
 async def _wall(session: AsyncSession, cards: tuple[MediaCard, ...]) -> DiscoverResult:
