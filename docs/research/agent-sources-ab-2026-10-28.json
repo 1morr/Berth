@@ -1,0 +1,6730 @@
+{
+ "date": "2026-10-28",
+ "model": "deepseek-flash",
+ "spent_usd": 0.60541,
+ "budget_usd": 1.5,
+ "groups": {
+  "full": "agent-live",
+  "lean": "agent-live-lean"
+ },
+ "rubric": "Franchise：每個 TV part 的範圍對照真值（docs/research/fribb-vs-chaining-2026-10-28.md §Re:Zero/無職/HxH）判定 correct/wrong/missing/both_shown(one correct) — both_shown 指並列 A、B 兩種範圍且不挑邊（full skill 的設計），不算 wrong_silent。拆成 cour 或合併的列，只要合起來的範圍等於真值就算 correct。wrong_silent = 錯的範圍且該列與該季都沒有任何請確認字樣；flag_whole_season 只看應標的季（Re:Zero S01、無職 S02、HxH S01-S03）；false_flags = 範圍正確且所在季不需要標記、卻被標記的 TV 列（電影的「依標題比對」不算）。無職 III Part 2 不在 TMDB，所有跑都正確排除，不計分。Picks：score_and_count = 每部都有分數+評分人數（yes/partial/no；MAL members 不算評分人數）；plausibly_fall_2026 以 anilist_read_season 的榜單與跨跑一致性交叉比對。成本不評。",
+ "runs": [
+  {
+   "task": "picks",
+   "conv": "f1e24d66-da36-4ca1-b6a5-adce9de26abe",
+   "seconds": 52,
+   "turns": 3,
+   "requests": 7,
+   "tool_calls": 9,
+   "input": 205254,
+   "output": 7587,
+   "cache_read": 174208,
+   "web_searches": 2,
+   "tavily_searches": 0,
+   "cost_usd": 0.00973,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "bgm.read_calendar",
+    "anilist.read_season",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "media.read_media",
+    "media.read_media",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "ok": 8,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4106,
+      "media_id": "tv:220542",
+      "name": "藥師少女的獨語",
+      "route_id": 3,
+      "subgroup_id": 382,
+      "subgroup_name": "喵萌奶茶屋"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "yes",
+    "score_and_count_detail": "AniList 分數+人數 5/5；Bangumi 分數+票數 4/5（JoJo 不在 calendar 前 40）",
+    "small_sample_warning": "yes（Bangumi 128、175 標「樣本偏小」）",
+    "sources_cited": "yes（comicbook、cbr、animecorner、ign 等 URL；分數來自工具）",
+    "plausibly_fall_2026": true,
+    "first_pick": "藥屋少女的呢喃 第三季",
+    "first_pick_tmdb": "tv:220542",
+    "card_type": "rss.subscribe_mikan (4106, 喵萌奶茶屋)",
+    "card_sensible": true,
+    "notes": "r1-anthropic-full-picks.md:17-23；:46 指出 Cyberpunk 2 AniList 84 vs Bangumi 5.5 的分歧不選邊。看過 tv:333686 空殼條目後選 220542。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-full-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "cc48c059-07b5-4372-85ff-7820ed3a1e70",
+   "seconds": 134,
+   "turns": 3,
+   "requests": 14,
+   "tool_calls": 17,
+   "input": 236289,
+   "output": 8638,
+   "cache_read": 210560,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.00967,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 16,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "6fd3e8497554f78656a5cc39ebb9561ae14f0b60",
+       "published_at": "2021-04-01T18:38:01Z",
+       "size": 38646086339,
+       "title": "[SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu (01-25) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "c10aecd2b907daff48cb4a7c7700c762108a8c2b",
+       "published_at": "2020-10-01T00:16:01Z",
+       "size": 3324166151,
+       "title": "[Judas] Re.Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "e5fb71a7986fda19d779b9e2faec327936dd0974",
+       "published_at": "2021-03-25T00:26:01Z",
+       "size": 4963102505,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 2) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2b3c3c4f36a0501d1129843b019d60e8bc16687",
+       "published_at": "2025-05-07T21:41:01Z",
+       "size": 5237654717,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "105a92cca46f80104847cf6a9d6a1a4f8588e532",
+       "published_at": "2020-06-27T20:22:01Z",
+       "size": 6275105906,
+       "title": "[Beatrice-Raws] Re Zero kara Hajimeru Isekai Seikatsu - The Frozen Bond [BDRip 1920x1080 HEVC FLAC]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "E26-E38 (chaining) / E27-E39 (Fribb), not picked",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E39-E50",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "S01E51-E66",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "S01E67-E85",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 7,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "整季標記（r1-anthropic-full-rezero.md:36）；S2 兩種範圍並列（:29）。模型自編原因「TMDB 把某一集收進特別篇」（:41），實際上是 Fribb offset 舊了。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-full-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "09c0c157-5c96-449f-aa94-4db5e82e51dd",
+   "seconds": 89,
+   "turns": 2,
+   "requests": 11,
+   "tool_calls": 15,
+   "input": 153609,
+   "output": 7294,
+   "cache_read": 130816,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.00819,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "failed": 3,
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "26ba08f5a0d41a061d7932658685e15be6580430",
+       "published_at": "2022-03-21T03:04:38Z",
+       "size": 42489097869,
+       "title": "[MTBB] Mushoku Tensei – Jobless Reincarnation - 01-23 (Season 1) (BD 1080p)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "75fee0d1f111ee60d2784d85bb7a5157e5a84913",
+       "published_at": "2026-10-18T15:58:46Z",
+       "size": 5845890646,
+       "title": "[Judas] Mushoku Tensei (Jobless Reincarnation) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02E01-E13",
+      "verdict": "wrong",
+      "flagged": false
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02E13-E24 (Fribb) / S02E14-E25 (chaining)",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 1,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "Eris Goblin OVA 放在 S00 特別篇、不勾（不是電影；沒有劇場版）",
+     "ep0": "沒提到在 S00E02"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "II 列 S02E01-E13 沒標記（r1-anthropic-full-mushoku.md:19），只標 Part 2 那一列（:20）→ 整季標記規則沒做到。:28 說法半對（「含一集總集篇性質的編號」）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-full-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "a2f68b1b-9da4-4298-9d50-4705f061a918",
+   "seconds": 106,
+   "turns": 2,
+   "requests": 9,
+   "tool_calls": 16,
+   "input": 145502,
+   "output": 9583,
+   "cache_read": 125440,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01447,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "anilist.search_anime",
+    "media.read_media",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 15,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2377ff592d2f7370123375b3c5336c6fbb921f5",
+       "published_at": "2026-04-13T20:29:05Z",
+       "size": 12428060103,
+       "title": "[BlackRabbit] Hunter x Hunter (2011) - S01 [Bluray-1080p][Opus 2.0][Dual Audio][AV1]"
+      }
+     },
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "6d25a028249d953c806205ba2ebd525382904408",
+       "published_at": "2026-04-14T14:19:32Z",
+       "size": 18582994201,
+       "title": "[BlackRabbit] Hunter x Hunter (2011) - S02 [Bluray-1080p][Opus 2.0][Dual Audio][AV1]"
+      }
+     },
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "7018efbaa4a0c5771b17bc91844e7a2b2aaa1c13",
+       "published_at": "2026-04-14T12:47:36Z",
+       "size": 2396000744,
+       "title": "[BlackRabbit] Hunter x Hunter (2011) - S03 [Bluray-1080p][Opus 2.0][Dual Audio][AV1]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "只有一句總括說明「上面的範圍…未經對照表，請確認」"
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": "partial(S2,S3 explicit; S1 via general note)",
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 5,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "BlackRabbit S01/S02/S03 包：S02 包內部若從 E01 編號需要換算（風險，非錯）"
+    },
+    "notes": "r1-anthropic-full-hxh2011.md:22 三季範圍正確；:28 標 S2/S3、一句總括說明；:29 Fribb 把電影指到 S0，被改成電影條目。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-full-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "90f862c6-dcdf-437b-9816-29575c884655",
+   "seconds": 96,
+   "turns": 3,
+   "requests": 10,
+   "tool_calls": 12,
+   "input": 293872,
+   "output": 9720,
+   "cache_read": 267776,
+   "web_searches": 3,
+   "tavily_searches": 0,
+   "cost_usd": 0.0211,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.read_trending",
+    "discover.search_media",
+    "discover.search_media",
+    "discover.search_media",
+    "discover.search_media",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "media.read_media",
+    "media.read_media",
+    "bangumi.read_bangumi",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "failed": 1,
+    "ok": 10,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4106,
+      "media_id": "tv:220542",
+      "name": "藥師少女的獨語 第3期",
+      "route_id": 3,
+      "subgroup_id": 382,
+      "subgroup_name": "喵萌奶茶屋"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "partial",
+    "score_and_count_detail": "有人數的只有 2/5（豆瓣 562、760）；1/5 是來源可疑的 MAL 5.4 萬（模型自己說不能確認，:32）；其餘「人數未知」",
+    "small_sample_warning": "partial（:20 總括說才播 3-4 週；沒有逐部標記）",
+    "sources_cited": "yes（animestats、acfun、douban doulist、imdb list 等 URL）",
+    "plausibly_fall_2026": true,
+    "first_pick": "藥師少女的獨語 第3期",
+    "first_pick_tmdb": "tv:220542",
+    "card_type": "rss.subscribe_mikan (4106, 喵萌奶茶屋)",
+    "card_sensible": true,
+    "notes": "r1-anthropic-lean-picks.md:24-52；discover_read_trending TLS 失敗（:10,:20）。:28 拿 MAL 8.66 vs Bangumi 7.3 當作「落差大」（不同站、不同尺度，判斷偏弱）。第 1 輪就主動指出 TMDB 兩個條目的問題（:62）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "bb4004f6-2e54-451d-9c29-90c4eb90cf96",
+   "seconds": 164,
+   "turns": 3,
+   "requests": 15,
+   "tool_calls": 29,
+   "input": 658501,
+   "output": 18800,
+   "cache_read": 593920,
+   "web_searches": 1,
+   "tavily_searches": 0,
+   "cost_usd": 0.0455,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "token_limit",
+    "error"
+   ],
+   "guard_stops": [
+    "token_limit",
+    "error"
+   ],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "routes.list_routes",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents"
+   ],
+   "tool_outcomes": {
+    "ok": 29
+   },
+   "card": null,
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "S01E26-E38",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E39-E50",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "E51-E58 + E59-E66 (split by cour)",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "E67-E77 + E78-E85 (split by cour)",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": false,
+     "rows": 0,
+     "ids_match": null,
+     "packs_match": null,
+     "wrong_place": null
+    },
+    "notes": "清單全對（r1-anthropic-lean-rezero.md:26-32），用 wikipedia 集數（:36）。按規則沒有標記，因為加總 = 85。第 2 輪撞到 token_limit（:75），第 3 輪 AI 服務錯誤（:81）→ 沒出卡。按 cour 拆成 7 列，搜尋次數變多。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "6a8f2c7e-0e1c-4b7a-a958-46f8408d9b46",
+   "seconds": 79,
+   "turns": 2,
+   "requests": 9,
+   "tool_calls": 15,
+   "input": 176144,
+   "output": 8892,
+   "cache_read": 148992,
+   "web_searches": 1,
+   "tavily_searches": 0,
+   "cost_usd": 0.01971,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "routes.list_routes",
+    "discover.search_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "failed": 3,
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "26ba08f5a0d41a061d7932658685e15be6580430",
+       "published_at": "2022-03-21T03:04:38Z",
+       "size": 42489097869,
+       "title": "[MTBB] Mushoku Tensei – Jobless Reincarnation - 01-23 (Season 1) (BD 1080p)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "eb9e8bc071ff1ed7aec9733df7695bd93f6831b5",
+       "published_at": "2026-10-27T05:01:48Z",
+       "size": 20249730423,
+       "title": "[SubsPlease] Mushoku Tensei S3 (01-14) (1080p) [Batch]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02E01-E12",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02E13-E24",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "S00E01-E03 整季特別篇不勾",
+     "ep0": "說特別篇在 S00，不會打亂 S2（:36-37）"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "全對（r1-anthropic-lean-mushoku.md:27-31），II 用 wikipedia 的 12 集正片（:37 說明 25 = 24+1 特別篇）。按 lean 規則「有第 0 集」應該整季標記卻沒標（:35）：數字對，但違反 skill。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "8ee8a047-55c0-4097-a4d1-3acf854ce873",
+   "seconds": 98,
+   "turns": 3,
+   "requests": 9,
+   "tool_calls": 13,
+   "input": 182211,
+   "output": 5643,
+   "cache_read": 154368,
+   "web_searches": 1,
+   "tavily_searches": 0,
+   "cost_usd": 0.01605,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "failed": 1,
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "891d48c4da57a73073f2aa5bc1e58b283b7b1821",
+       "published_at": "2020-03-02T18:22:02Z",
+       "size": 30893770878,
+       "title": "[Judas] Hunter x Hunter (2011) (Complete Series + Movies) [BD 1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": "partial(S2,S3)",
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "Judas「Complete Series + Movies」包放在 tv:46298 底下，另加兩列電影 → 劇場版檔案會在 Anime 路線變成未匹配／重複下載（不是匯入到錯的集，但有雜檔）"
+    },
+    "notes": "r1-anthropic-lean-hxh2011.md:22,26。第一次 TMDB 搜尋 TLS 失敗後重試成功（:9-10）。:53 自己點出 Judas 包含電影、會重複。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "32aa2be0-c9df-4cba-aa99-4ec6f2ac1b84",
+   "seconds": 79,
+   "turns": 3,
+   "requests": 8,
+   "tool_calls": 10,
+   "input": 118916,
+   "output": 7409,
+   "cache_read": 105216,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01363,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.read_season",
+    "bgm.read_calendar",
+    "anilist.read_season",
+    "web.tavily_search",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "media.read_media",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "failed": 1,
+    "ok": 8,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4106,
+      "media_id": "tv:220542",
+      "name": "藥師少女的獨語 第三季",
+      "route_id": 3,
+      "subgroup_id": 382,
+      "subgroup_name": "喵萌奶茶屋"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "yes",
+    "score_and_count_detail": "AniList 5/5；Bangumi 4/5",
+    "small_sample_warning": "yes（128 票）",
+    "sources_cited": "partial（tavily 連線失敗 :12，只引用工具資料，沒有 URL）",
+    "plausibly_fall_2026": true,
+    "first_pick": "藥屋少女的呢喃 第三季",
+    "first_pick_tmdb": "tv:220542",
+    "card_type": "rss.subscribe_mikan (4106, 喵萌奶茶屋)",
+    "card_sensible": true,
+    "notes": "r1-openai-full-picks.md:13-40。web search 失敗也不影響，因為分數來自 AniList / Bangumi 工具。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-full-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "2a88de38-8a60-4229-8296-9e3e7c7cae67",
+   "seconds": 164,
+   "turns": 2,
+   "requests": 15,
+   "tool_calls": 23,
+   "input": 347403,
+   "output": 11506,
+   "cache_read": 299008,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.03012,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "discover.search_media",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "anilist.read_franchise",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "failed": 1,
+    "ok": 21,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "46ef643e130cd58d6896769418f066132e8baf89",
+       "published_at": "2019-02-12T19:32:01Z",
+       "size": 7259710100,
+       "title": "[DB] Re:Zero kara Hajimeru Isekai Seikatsu | Re:ZERO -Starting Life in Another World- [Dual Audio 10bit BD1080p][HEVC-x265]"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "c10aecd2b907daff48cb4a7c7700c762108a8c2b",
+       "published_at": "2020-10-01T00:16:01Z",
+       "size": 3324166151,
+       "title": "[Judas] Re.Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "e5fb71a7986fda19d779b9e2faec327936dd0974",
+       "published_at": "2021-03-25T00:26:01Z",
+       "size": 4963102505,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 2) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2b3c3c4f36a0501d1129843b019d60e8bc16687",
+       "published_at": "2025-05-07T21:41:01Z",
+       "size": 5237654717,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "263bc2b74ae530290833c4f22fccaf0e89c72c5e",
+       "published_at": "2021-06-29T19:22:01Z",
+       "size": 1445083480,
+       "title": "[DB] Re:Zero kara Hajimeru Isekai Seikatsu - Hyouketsu no Kizuna | Re:ZERO -Starting Life in Another World- The Frozen Bond [Dual Audio 10bit BD1080p][HEVC-x265]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "E26-E38 (chaining) / E27-E39 (Fribb), not picked",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E39-E50",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "S01E51-E66",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "S01E67-E85",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 7,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "只標 S2 那一列（r1-openai-full-rezero.md:25）；:30 自己推論出 Fribb offset 舊了。卡片在第 2 輪就出（使用者說一次送單）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-full-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "d32bfa83-5d2b-425c-94d5-46410f9466a8",
+   "seconds": 79,
+   "turns": 3,
+   "requests": 11,
+   "tool_calls": 10,
+   "input": 146843,
+   "output": 8012,
+   "cache_read": 130432,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01532,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "routes.list_routes",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 9,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "02276b1850a5176f8ff98d53fa02d83ce9a21cf5",
+       "published_at": "2022-03-24T12:46:01Z",
+       "size": 18204177916,
+       "title": "[EMBER] Mushoku Tensei: Jobless Reincarnation (2021-2022) (Season 1 [Part 01 & Part 02] + Special) [Uncensored] [BDRip] [1080p Dual Audio HEVC 10 bits DDP] (Mushoku Tensei: Isekai Ittara Honki Dasu) (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "eb9e8bc071ff1ed7aec9733df7695bd93f6831b5",
+       "published_at": "2026-10-27T05:01:48Z",
+       "size": 20249730423,
+       "title": "[SubsPlease] Mushoku Tensei S3 (01-14) (1080p) [Batch]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02E01-E13 (both algorithms)",
+      "verdict": "wrong",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02E13-E24 / S02E14-E25",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "Eris Goblin OVA 放在 S00 特別篇、不勾（不是電影；沒有劇場版）"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "整季標記（r1-openai-full-mushoku.md:24）。第 2 輪自稱「Season 2 的集號疑慮自動解決了」（:61），因為整季包 01-24 = TMDB 24 集；這對整季包成立。EMBER S1 包附 Special（Eris OVA）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-full-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "6c434d6b-ca2c-4a0b-8ebb-81ea645ee722",
+   "seconds": 80,
+   "turns": 3,
+   "requests": 8,
+   "tool_calls": 12,
+   "input": 105994,
+   "output": 6626,
+   "cache_read": 89344,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01348,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "discover.search_media",
+    "fribb.lookup_anime",
+    "anilist.read_franchise",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "06915ec5e6a551e7f2dd2c6433fa83fbf6a82365",
+       "published_at": "2020-12-16T02:52:01Z",
+       "size": 102412707114,
+       "title": "Hunter.X.Hunter.S01.1080p.Blu-Ray.10-Bit.Dual-Audio.DTS-HD.x265-iAHD"
+      }
+     },
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "dd0abb7fb63a4933427b859e571ef4920cb9fb02",
+       "published_at": "2020-12-23T03:56:01Z",
+       "size": 155360280601,
+       "title": "Hunter.X.Hunter.2011.S02.1080p.Blu-Ray.10-Bit.Dual-Audio.DTS-HD.x265-iAHD"
+      }
+     },
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "527ddd18735271476d602dbb308815e5753a65ed",
+       "published_at": "2020-12-24T02:26:01Z",
+       "size": 22236312619,
+       "title": "Hunter.X.Hunter.2011.S03.1080p.Blu-Ray.10-Bit.Dual-Audio.DTS-HD.x265-iAHD"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": "partial(S2,S3)",
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 5,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "iAHD S01/S02/S03 是發佈者自己的季號（模型自己在 :59 提到）"
+    },
+    "notes": "r1-openai-full-hxh2011.md:24；:58 說明不用 Judas 包的理由（劇場版會變成未匹配）。合計 286 GB。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-full-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "8235056d-a9fb-4da7-afe4-64892d8650d3",
+   "seconds": 74,
+   "turns": 3,
+   "requests": 11,
+   "tool_calls": 15,
+   "input": 189132,
+   "output": 9256,
+   "cache_read": 172672,
+   "web_searches": 0,
+   "tavily_searches": 3,
+   "cost_usd": 0.01708,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.read_trending",
+    "web.tavily_search",
+    "web.tavily_search",
+    "web.tavily_search",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "bangumi.read_bangumi",
+    "media.route_choices",
+    "search.search_torrents",
+    "downloading.add_manual_download",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "ok": 13,
+    "proposed": 2
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4098,
+      "media_id": "tv:283428",
+      "name": "冰之城牆 第二季",
+      "route_id": 3,
+      "subgroup_id": 203,
+      "subgroup_name": "桜都字幕组"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 1,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "partial",
+    "score_and_count_detail": "有人數的只有 2/5：Bangumi 1,486（生徒會）、MAL「約 69,000 人」（冰之城牆，轉引 IMDb 片單；r2-anthropic-lean 是 7,015 → 很可能讀錯）；其餘人數未知",
+    "small_sample_warning": "yes（:15 總括；Bangumi 少於 10 人不排）",
+    "sources_cited": "yes（MAL、AniList、Bangumi、IMDb URL，:33）",
+    "plausibly_fall_2026": true,
+    "first_pick": "冰之城牆 第2期",
+    "first_pick_tmdb": "tv:283428 (S1 連續 28 集)",
+    "card_type": "rss.subscribe_mikan (4098, 桜都) + 多一張 downloading 卡（S1 01-14 合集）",
+    "card_sensible": true,
+    "notes": "r1-openai-lean-picks.md:15 把 AniList 81% 誤解成「好評比例」。:19 MAL 69,000 可疑。第 1 部安排時問了「要不要補第 1 季」，使用者沒回答，模型卻多出一張 S1 下載卡（:66-70），越權但仍需確認。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "826da4df-281e-4dec-a7d0-2483677ad2fb",
+   "seconds": 136,
+   "turns": 2,
+   "requests": 15,
+   "tool_calls": 33,
+   "input": 441471,
+   "output": 11898,
+   "cache_read": 392320,
+   "web_searches": 0,
+   "tavily_searches": 3,
+   "cost_usd": 0.03138,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "web.tavily_search",
+    "web.tavily_search",
+    "web.tavily_search",
+    "media.read_media",
+    "media.read_media",
+    "routes.list_routes",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 32,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "ac35bb3e2c6b1a8a72bf204854eefb335b4ec0b8",
+       "published_at": "2026-07-07T12:35:00Z",
+       "size": 12884901888,
+       "title": "[7³ACG] Re：从零开始的异世界生活/Re:Zero kara Hajimeru Isekai Seikatsu S01 | 01-25 [简繁字幕] BDrip 1080p x265 OPUS 2.0"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "c10aecd2b907daff48cb4a7c7700c762108a8c2b",
+       "published_at": "2020-10-01T00:16:01Z",
+       "size": 3324166151,
+       "title": "[Judas] Re.Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "e5fb71a7986fda19d779b9e2faec327936dd0974",
+       "published_at": "2021-03-25T00:26:01Z",
+       "size": 4963102505,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 2) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2b3c3c4f36a0501d1129843b019d60e8bc16687",
+       "published_at": "2025-05-07T21:41:01Z",
+       "size": 5237654717,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "83f7ddea176ec965a029b2cd486bdb4f185a7257",
+       "published_at": "2020-04-02T20:02:01Z",
+       "size": 1011395854,
+       "title": "[Judas] Re:Zero Kara Hajimeru Isekai Seikatsu - OVA 02 (Frozen Bonds) [BD 1080p][HEVC x265 10bit][Eng-Subs]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "S01E26-E50 (merged with Part 2)",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E26-E50 (merged)",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "S01E51-E66",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "S01E67-E85",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 7,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "清單全對（r1-openai-lean-rezero.md:26-31）；:35 明說加總 85 吻合所以不標記。來源 wikipedia。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "fc5285ec-c3fc-47a8-9825-9432a201f24c",
+   "seconds": 85,
+   "turns": 2,
+   "requests": 7,
+   "tool_calls": 12,
+   "input": 75026,
+   "output": 9270,
+   "cache_read": 56576,
+   "web_searches": 0,
+   "tavily_searches": 3,
+   "cost_usd": 0.017,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "web.tavily_search",
+    "web.tavily_search",
+    "web.tavily_search",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "02276b1850a5176f8ff98d53fa02d83ce9a21cf5",
+       "published_at": "2022-03-24T12:46:01Z",
+       "size": 18204177916,
+       "title": "[EMBER] Mushoku Tensei: Jobless Reincarnation (2021-2022) (Season 1 [Part 01 & Part 02] + Special) [Uncensored] [BDRip] [1080p Dual Audio HEVC 10 bits DDP] (Mushoku Tensei: Isekai Ittara Honki Dasu) (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "75fee0d1f111ee60d2784d85bb7a5157e5a84913",
+       "published_at": "2026-10-18T15:58:46Z",
+       "size": 5845890646,
+       "title": "[Judas] Mushoku Tensei (Jobless Reincarnation) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02（無範圍）",
+      "verdict": "missing",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02（無範圍）",
+      "verdict": "missing",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "S00 請確認（也把 S00 特別篇另列一列）"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "S2 整季標記、不給範圍（r1-openai-lean-mushoku.md:24-25,32）。第 2 輪沒等使用者選路線就自己用 route 3 出卡（:57），有說明，但違反「沒有預設就問」。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "c715e057-22f5-4200-9c57-d23c1504e3de",
+   "seconds": 76,
+   "turns": 2,
+   "requests": 7,
+   "tool_calls": 13,
+   "input": 102298,
+   "output": 5630,
+   "cache_read": 81152,
+   "web_searches": 0,
+   "tavily_searches": 1,
+   "cost_usd": 0.01359,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "web.tavily_search",
+    "media.read_media",
+    "routes.list_routes",
+    "discover.search_media",
+    "discover.search_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 12,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "891d48c4da57a73073f2aa5bc1e58b283b7b1821",
+       "published_at": "2020-03-02T18:22:02Z",
+       "size": 30893770878,
+       "title": "[Judas] Hunter x Hunter (2011) (Complete Series + Movies) [BD 1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 1,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": "partial(S2,S3)",
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "Judas「Complete Series + Movies」包放在 tv:46298 底下，另加兩列電影 → 劇場版檔案會在 Anime 路線變成未匹配／重複下載（不是匯入到錯的集，但有雜檔）"
+    },
+    "notes": "r1-openai-lean-hxh2011.md:21-23,29。把「不要短篇」理解成不要劇場版（:33），但使用者說「清單上的都要」後仍放入電影。卡片在第 2 輪就出。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "8a1602ea-b599-4d1b-a967-c821b16e1cb9",
+   "seconds": 41,
+   "turns": 3,
+   "requests": 7,
+   "tool_calls": 8,
+   "input": 87507,
+   "output": 5350,
+   "cache_read": 76800,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01009,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "bgm.read_calendar",
+    "anilist.read_season",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "media.read_media",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "ok": 7,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4074,
+      "media_id": "tv:73223",
+      "name": "黑色五葉草 第二季",
+      "route_id": 3,
+      "subgroup_id": 1231,
+      "subgroup_name": "沸班亚马制作组"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "yes",
+    "score_and_count_detail": "AniList 5/5；Bangumi 4/5",
+    "small_sample_warning": "yes（128 票「樣本小」；:13 註明多數才播 4-5 集、是初期分）",
+    "sources_cited": "partial（只寫 AniList / Bangumi，沒有 URL；沒用網路搜尋）",
+    "plausibly_fall_2026": true,
+    "first_pick": "黑色五葉草 第二季",
+    "first_pick_tmdb": "tv:73223 (S2)",
+    "card_type": "rss.subscribe_mikan (4074, 沸班亚马)",
+    "card_sensible": true,
+    "notes": "r2-anthropic-full-picks.md:15-21；:71 說明 Mikan 171-174 = TMDB S2E1-4。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-full-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "a365ff74-c61e-4a0e-bd32-5dc0a862588b",
+   "seconds": 106,
+   "turns": 3,
+   "requests": 11,
+   "tool_calls": 18,
+   "input": 235257,
+   "output": 8636,
+   "cache_read": 203264,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.02118,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "discover.search_media",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "routes.list_routes",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 17,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "6fd3e8497554f78656a5cc39ebb9561ae14f0b60",
+       "published_at": "2021-04-01T18:38:01Z",
+       "size": 38646086339,
+       "title": "[SubsPlease] Re Zero kara Hajimeru Isekai Seikatsu (01-25) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "c10aecd2b907daff48cb4a7c7700c762108a8c2b",
+       "published_at": "2020-10-01T00:16:01Z",
+       "size": 3324166151,
+       "title": "[Judas] Re.Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "e5fb71a7986fda19d779b9e2faec327936dd0974",
+       "published_at": "2021-03-25T00:26:01Z",
+       "size": 4963102505,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 2) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2b3c3c4f36a0501d1129843b019d60e8bc16687",
+       "published_at": "2025-05-07T21:41:01Z",
+       "size": 5237654717,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "c67fdefa40f990fbf95552803d203e3b1e9caf70",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 6797733206,
+       "title": "[FLE] Re ZERO Starting Life in Another World - The Frozen Bond (2019) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO Movie | ReZero | Frozen Bonds"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "E26-E38 (chaining) / E27-E39 (Fribb), not picked",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E39-E50",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "S01E51-E66",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "S01E67-E85",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 7,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "只標 S2 那一列，其他列寫「兩種算法一致」（r2-anthropic-full-rezero.md:21-24），沒有整季標記。:26 正確推論 E26 起是對的，但沒有替使用者決定。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-full-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "c28a9634-0709-4625-abf8-82b7a82fe95a",
+   "seconds": 78,
+   "turns": 2,
+   "requests": 8,
+   "tool_calls": 11,
+   "input": 103274,
+   "output": 4620,
+   "cache_read": 86144,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.0112,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "fribb.lookup_anime",
+    "anilist.read_franchise",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "media.route_choices",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 10,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "26ba08f5a0d41a061d7932658685e15be6580430",
+       "published_at": "2022-03-21T03:04:38Z",
+       "size": 42489097869,
+       "title": "[MTBB] Mushoku Tensei – Jobless Reincarnation - 01-23 (Season 1) (BD 1080p)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "75fee0d1f111ee60d2784d85bb7a5157e5a84913",
+       "published_at": "2026-10-18T15:58:46Z",
+       "size": 5845890646,
+       "title": "[Judas] Mushoku Tensei (Jobless Reincarnation) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02E01-E13",
+      "verdict": "wrong",
+      "flagged": false
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02E13-E24",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 1,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "Eris Goblin OVA 放在 S00 特別篇、不勾（不是電影；沒有劇場版）",
+     "ep0": "沒提"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "最危險的一跑：宣稱「兩種算法結果相同」「13 + 12 = 24」（r2-anthropic-full-mushoku.md:27），算術錯、E13 重疊（:21-22），完全沒標記。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-full-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "4f20f1e6-ae16-4ae3-89aa-619cd935329a",
+   "seconds": 89,
+   "turns": 3,
+   "requests": 12,
+   "tool_calls": 14,
+   "input": 147961,
+   "output": 7722,
+   "cache_read": 132608,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01467,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 13,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "f49d5b2746afc4a6971da912b562f84809811b91",
+       "published_at": "2018-01-30T12:32:01Z",
+       "size": 38728597964,
+       "title": "[AnimeRG] Hunter x Hunter (2011) Complete Series (EP 001-148) [1080p] [BD] [Batch] [x265] [pseudo]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經對照表的偏移核對，請確認（:32）"
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "三季正確（r2-anthropic-full-hxh2011.md:23-25），S1 也註明未核對（:32）。刻意避開 Judas+Movies 包，改用純本篇 AnimeRG 001-148（:63）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-full-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "d81e0a0f-57df-49db-bb6c-8faf45016530",
+   "seconds": 48,
+   "turns": 3,
+   "requests": 7,
+   "tool_calls": 7,
+   "input": 166450,
+   "output": 5692,
+   "cache_read": 146560,
+   "web_searches": 3,
+   "tavily_searches": 0,
+   "cost_usd": 0.01368,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.read_trending",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "media.read_media",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "ok": 6,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4074,
+      "media_id": "tv:73223",
+      "name": "黑色五葉草 第二季",
+      "route_id": 3,
+      "subgroup_id": 1231,
+      "subgroup_name": "沸班亚马制作组"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "yes",
+    "score_and_count_detail": "5/5 都有分數+人數（MAL、Bangumi、Filmarks，透過 anigems 彙整）",
+    "small_sample_warning": "yes（Bangumi 98 標「樣本太小，不列入排序」、531 偏小；:56 總括）",
+    "sources_cited": "yes（anigems 頁面、あにめも日和、アニメハック URL）",
+    "plausibly_fall_2026": true,
+    "first_pick": "黑色五葉草 第二季",
+    "first_pick_tmdb": "tv:73223 (S2)",
+    "card_type": "rss.subscribe_mikan (4074, 沸班亚马)",
+    "card_sensible": true,
+    "notes": "r2-anthropic-lean-picks.md:13-57，八跑裡資料最豐富的一跑。Bangumi 數字和 full 的工具結果接近（藥屋 7.4/531 vs 7.3/608；生徒會 7.5/~2K vs 7.6/2,403），可信。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-lean-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "f303d494-8412-4a14-8ac8-f0d6b097e207",
+   "seconds": 131,
+   "turns": 3,
+   "requests": 14,
+   "tool_calls": 26,
+   "input": 578438,
+   "output": 13852,
+   "cache_read": 518016,
+   "web_searches": 1,
+   "tavily_searches": 0,
+   "cost_usd": 0.03786,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "token_limit",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [
+    "token_limit"
+   ],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "routes.list_routes",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 25,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "69cd2b8736f346c00254a61d30ada9044934717c",
+       "published_at": "2018-08-17T16:02:01Z",
+       "size": 28641564460,
+       "title": "[Erai-raws] Re.Zero kara Hajimeru Isekai Seikatsu - 01 ~ 25 [1080p][Multiple Subtitle]"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "c10aecd2b907daff48cb4a7c7700c762108a8c2b",
+       "published_at": "2020-10-01T00:16:01Z",
+       "size": 3324166151,
+       "title": "[Judas] Re.Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "e5fb71a7986fda19d779b9e2faec327936dd0974",
+       "published_at": "2021-03-25T00:26:01Z",
+       "size": 4963102505,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 2) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2b3c3c4f36a0501d1129843b019d60e8bc16687",
+       "published_at": "2025-05-07T21:41:01Z",
+       "size": 5237654717,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "83f7ddea176ec965a029b2cd486bdb4f185a7257",
+       "published_at": "2020-04-02T20:02:01Z",
+       "size": 1011395854,
+       "title": "[Judas] Re:Zero Kara Hajimeru Isekai Seikatsu - OVA 02 (Frozen Bonds) [BD 1080p][HEVC x265 10bit][Eng-Subs]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "S01E26-E38",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E39-E50",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "E51-E58 + E59-E66",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "E67-E77 + E78-E85",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 7,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "清單全對（r2-anthropic-lean-rezero.md:25-31），來源 moegirl / wikipedia（:35）。第 2 輪 token_limit（:72），第 3 輪仍出卡。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-lean-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "ad90ae91-e0bf-4670-bbad-e7cf6659deb6",
+   "seconds": 129,
+   "turns": 3,
+   "requests": 11,
+   "tool_calls": 20,
+   "input": 289475,
+   "output": 16729,
+   "cache_read": 248832,
+   "web_searches": 2,
+   "tavily_searches": 0,
+   "cost_usd": 0.03376,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "error",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [
+    "error"
+   ],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.route_choices",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "failed": 8,
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "02276b1850a5176f8ff98d53fa02d83ce9a21cf5",
+       "published_at": "2022-03-24T12:46:01Z",
+       "size": 18204177916,
+       "title": "[EMBER] Mushoku Tensei: Jobless Reincarnation (2021-2022) (Season 1 [Part 01 & Part 02] + Special) [Uncensored] [BDRip] [1080p Dual Audio HEVC 10 bits DDP] (Mushoku Tensei: Isekai Ittara Honki Dasu) (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "30171dfb58d670d46eee84da3e20c3e5722aab88",
+       "published_at": "2023-12-30T06:44:50Z",
+       "size": 7475687719,
+       "title": "[EMBER] Mushoku Tensei: Jobless Reincarnation (2023) (Season 2 | Part 1 + Special) [BDRip] [1080p Dual Audio HEVC 10 bits DDP] (Mushoku Tensei II: Isekai Ittara Honki Dasu) (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "00e7fec624837898fe520aaff3df65b4d8f40a08",
+       "published_at": "2024-10-27T09:46:04Z",
+       "size": 8891735008,
+       "title": "[EMBER] Mushoku Tensei: Jobless Reincarnation (2024) (Season 2 | Part 2) [BDRip] [1080p Dual Audio HEVC 10 bits DDP] (Mushoku Tensei II: Isekai Ittara Honki Dasu Part 2) (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "75fee0d1f111ee60d2784d85bb7a5157e5a84913",
+       "published_at": "2026-10-18T15:58:46Z",
+       "size": 5845890646,
+       "title": "[Judas] Mushoku Tensei (Jobless Reincarnation) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02（無範圍）",
+      "verdict": "missing",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02（無範圍）",
+      "verdict": "missing",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "S0，依標題對應請確認",
+     "ep0": "第 0 集獨立一列 → S0（對；真值 S00E02）"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 4,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "S2 拒絕給範圍、整季標記，把兩種可能都講清楚（r2-anthropic-lean-mushoku.md:26-27,34）。第 2 輪 AI 服務錯誤（:63），第 3 輪出卡；4 列（EMBER S2 Part1+Special、Part2 分開）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-lean-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "0cc647b6-ee5c-4519-b807-4051c8d78bbc",
+   "seconds": 110,
+   "turns": 3,
+   "requests": 9,
+   "tool_calls": 12,
+   "input": 241546,
+   "output": 6911,
+   "cache_read": 207232,
+   "web_searches": 1,
+   "tavily_searches": 0,
+   "cost_usd": 0.01983,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "media.read_media",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "routes.list_routes",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "891d48c4da57a73073f2aa5bc1e58b283b7b1821",
+       "published_at": "2020-03-02T18:22:02Z",
+       "size": 30893770878,
+       "title": "[Judas] Hunter x Hunter (2011) (Complete Series + Movies) [BD 1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "anthropic",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": "partial(S2,S3)",
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "Judas「Complete Series + Movies」包放在 tv:46298 底下，另加兩列電影 → 劇場版檔案會在 Anime 路線變成未匹配／重複下載（不是匯入到錯的集，但有雜檔）"
+    },
+    "notes": "r2-anthropic-lean-hxh2011.md:22-24,30；:31 明說 S1 正常不標。:57-58 說明為什麼選 Judas（其他包放不下或不完整），也點出電影會重複。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-anthropic-lean-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "5348db72-d181-42ce-94dd-7ac5e506613c",
+   "seconds": 55,
+   "turns": 3,
+   "requests": 9,
+   "tool_calls": 11,
+   "input": 137963,
+   "output": 5601,
+   "cache_read": 122112,
+   "web_searches": 0,
+   "tavily_searches": 2,
+   "cost_usd": 0.01221,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "bgm.read_calendar",
+    "anilist.read_season",
+    "web.tavily_search",
+    "web.tavily_search",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "media.read_media",
+    "routes.list_routes",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "ok": 10,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4074,
+      "media_id": "tv:73223",
+      "name": "黑色五葉草 第二季",
+      "route_id": 3,
+      "subgroup_id": 1231,
+      "subgroup_name": "沸班亚马制作组"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "yes",
+    "score_and_count_detail": "AniList 5/5；Bangumi 4/5",
+    "small_sample_warning": "yes（128 票；:35 註明是即時分數）",
+    "sources_cited": "yes（Rotten Tomatoes、reddit URL）",
+    "plausibly_fall_2026": true,
+    "first_pick": "黑色五葉草 第二季",
+    "first_pick_tmdb": "tv:73223 (S2)",
+    "card_type": "rss.subscribe_mikan (4074, 沸班亚马)",
+    "card_sensible": true,
+    "notes": "r2-openai-full-picks.md:15-21。四次 full 的榜單幾乎一樣（都來自 anilist_read_season 的同一份資料）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-full-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "d46b9cf7-4b34-49f8-8643-632a94ce697a",
+   "seconds": 126,
+   "turns": 2,
+   "requests": 12,
+   "tool_calls": 23,
+   "input": 307920,
+   "output": 9856,
+   "cache_read": 268288,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.02533,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "discover.search_media",
+    "fribb.lookup_anime",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 22,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "7a9026cb7970d6c9c28f314618a2b6585c8fd693",
+       "published_at": "2025-02-15T00:03:44Z",
+       "size": 32473894151,
+       "title": "[Flugel] Re:ZERO Starting Life in Another World S01 (BD 1080p x264 Opus) [Multi Audio] | Re Zero kara Hajimeru Isekai Seikatsu"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "c10aecd2b907daff48cb4a7c7700c762108a8c2b",
+       "published_at": "2020-10-01T00:16:01Z",
+       "size": 3324166151,
+       "title": "[Judas] Re.Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "e5fb71a7986fda19d779b9e2faec327936dd0974",
+       "published_at": "2021-03-25T00:26:01Z",
+       "size": 4963102505,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Season 2 Part 2) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a2b3c3c4f36a0501d1129843b019d60e8bc16687",
+       "published_at": "2025-05-07T21:41:01Z",
+       "size": 5237654717,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 03) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "c67fdefa40f990fbf95552803d203e3b1e9caf70",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 6797733206,
+       "title": "[FLE] Re ZERO Starting Life in Another World - The Frozen Bond (2019) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO Movie | ReZero | Frozen Bonds"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 2,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "E26-E38 (chaining) / E27-E39 (Fribb), not picked",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E39-E50",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "S01E51-E66",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "S01E67-E85",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 7,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "只標 S2 那一列（r2-openai-full-rezero.md:23）。:34 幻覺：「TMDB Season 1 的第 26 集似乎是特別篇或總集篇」，沒有根據。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-full-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "3745f44e-7959-4538-86ec-8900444f7ced",
+   "seconds": 111,
+   "turns": 2,
+   "requests": 12,
+   "tool_calls": 15,
+   "input": 192742,
+   "output": 8966,
+   "cache_read": 168576,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01902,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "discover.search_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 14,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "b3a894fcd74256f1bec1f69b182dd13944ae0517",
+       "published_at": "2021-12-21T18:52:01Z",
+       "size": 12131871096,
+       "title": "[Judas] Mushoku Tensei - Isekai Ittara Honki Dasu (Jobless Reincarnation) (Season 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "eb9e8bc071ff1ed7aec9733df7695bd93f6831b5",
+       "published_at": "2026-10-27T05:01:48Z",
+       "size": 20249730423,
+       "title": "[SubsPlease] Mushoku Tensei S3 (01-14) (1080p) [Batch]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 2,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02E01-E13 (both)",
+      "verdict": "wrong",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02E13-E24 / S02E14-E25",
+      "verdict": "both_shown(one correct)",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "Eris Goblin OVA 放在 S00 特別篇、不勾（不是電影；沒有劇場版）"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "兩列都標記（r2-openai-full-mushoku.md:22-23）；:30 建議採對照表 S02E13-E24（對），但 II 列仍是 E01-E13（錯）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-full-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "cc5428d9-5c42-4ab6-9ee3-3dc9a12df7cc",
+   "seconds": 114,
+   "turns": 2,
+   "requests": 9,
+   "tool_calls": 16,
+   "input": 134566,
+   "output": 8069,
+   "cache_read": 106752,
+   "web_searches": 0,
+   "tavily_searches": 0,
+   "cost_usd": 0.01867,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "anilist.search_anime",
+    "anilist.read_franchise",
+    "fribb.lookup_anime",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "routes.list_routes",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 15,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "891d48c4da57a73073f2aa5bc1e58b283b7b1821",
+       "published_at": "2020-03-02T18:22:02Z",
+       "size": 30893770878,
+       "title": "[Judas] Hunter x Hunter (2011) (Complete Series + Movies) [BD 1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 2,
+   "provider": "openai",
+   "group": "full",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "這幾個範圍都只是推算出來的，未經對照表，請確認（:29）"
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "兩種算法不一致，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "Judas「Complete Series + Movies」包放在 tv:46298 底下，另加兩列電影 → 劇場版檔案會在 Anime 路線變成未匹配／重複下載（不是匯入到錯的集，但有雜檔）"
+    },
+    "notes": "r2-openai-full-hxh2011.md:22-24,29。卡片用 Judas+Movies 包 + 兩列電影（:53）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-full-hxh2011.md"
+  },
+  {
+   "task": "picks",
+   "conv": "a9d8499f-7484-44d9-8079-159069d12010",
+   "seconds": 65,
+   "turns": 3,
+   "requests": 8,
+   "tool_calls": 10,
+   "input": 108219,
+   "output": 6986,
+   "cache_read": 96384,
+   "web_searches": 0,
+   "tavily_searches": 3,
+   "cost_usd": 0.01251,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.read_trending",
+    "web.tavily_search",
+    "web.tavily_search",
+    "web.tavily_search",
+    "discover.search_media",
+    "bangumi.search_bangumi",
+    "bangumi.read_bangumi",
+    "media.read_media",
+    "rss.subscribe_mikan"
+   ],
+   "tool_outcomes": {
+    "ok": 9,
+    "proposed": 1
+   },
+   "card": {
+    "command": "rss.subscribe_mikan",
+    "rows": [
+     {
+      "bangumi_id": 4106,
+      "media_id": "tv:220542",
+      "name": "藥師少女的獨語 第三季",
+      "route_id": 3,
+      "subgroup_id": 382,
+      "subgroup_name": "喵萌奶茶屋"
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "number_recommended": 5,
+    "score_and_count": "no",
+    "score_and_count_detail": "0/5：只有 MAL 分數 + 會員數（members），模型誠實標明不是評分人數（:15）",
+    "small_sample_warning": "partial（Hotel Inhumans 7,237 會員標樣本偏小）",
+    "sources_cited": "yes（MAL season / schedule URL；只有單一站）",
+    "plausibly_fall_2026": "questionable",
+    "first_pick": "藥師少女的獨語 第三季",
+    "first_pick_tmdb": "tv:220542",
+    "card_type": "rss.subscribe_mikan (4106, 喵萌奶茶屋)",
+    "card_sensible": true,
+    "notes": "r2-openai-lean-picks.md:19-23：五部裡有三部（戀愛魔藥女巫、偵探已經死了 S2、Hotel Inhumans S2）其他七跑都沒出現；評審所知《偵探已經死了》第二季是 2025 年 7 月播出，可能是過期或混入的頁面 → 無法用截斷的工具結果驗證。分數 6.97-7.40，不符合「評價好」，模型自己也承認（:33,:42）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-lean-picks.md"
+  },
+  {
+   "task": "rezero",
+   "conv": "9a81f19b-d153-48a7-af93-1e1c656b5247",
+   "seconds": 100,
+   "turns": 2,
+   "requests": 11,
+   "tool_calls": 21,
+   "input": 233852,
+   "output": 8701,
+   "cache_read": 194560,
+   "web_searches": 0,
+   "tavily_searches": 2,
+   "cost_usd": 0.0234,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "web.tavily_search",
+    "media.read_media",
+    "media.read_media",
+    "media.read_media",
+    "web.tavily_search",
+    "discover.search_media",
+    "discover.search_media",
+    "discover.search_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 20,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "7a9026cb7970d6c9c28f314618a2b6585c8fd693",
+       "published_at": "2025-02-15T00:03:44Z",
+       "size": 32473894151,
+       "title": "[Flugel] Re:ZERO Starting Life in Another World S01 (BD 1080p x264 Opus) [Multi Audio] | Re Zero kara Hajimeru Isekai Seikatsu"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "a13c07388ea6cdf1f5b7c82aed09b59a221f9c98",
+       "published_at": "2023-04-22T18:46:02Z",
+       "size": 28973469415,
+       "title": "[Salieri] ReZero - Starting Life In Another World - S2 - BD (1080P) (HDR) [Dual-Audio]"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "f07946e069986ecb3bbe703444a76306dc54fb7e",
+       "published_at": "2025-07-28T06:47:09Z",
+       "size": 19452218467,
+       "title": "[Headpatter] Re: ZERO, Starting Life in Another World Season 3 (BD 1080p HEVC 10-bit Opus) [Dual Audio] | Re:Zero kara Hajimeru Isekai Seikatsu 3rd Season"
+      }
+     },
+     {
+      "media_id": "tv:65942",
+      "route_id": 3,
+      "source": {
+       "info_hash": "1e9a3b7390ac6a141e27b1e014cc89cdc4136314",
+       "published_at": "2026-10-26T00:55:05Z",
+       "size": 6238876905,
+       "title": "[Judas] Re:Zero kara Hajimeru Isekai Seikatsu (Re:Zero - Starting Life in Another World) (Season 04) [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs] (Batch)"
+      }
+     },
+     {
+      "media_id": "movie:532321",
+      "route_id": 1,
+      "source": {
+       "info_hash": "05ce9fe4ca21073d9e374a622e77f9ebecbd70b8",
+       "published_at": "2025-11-14T10:26:02Z",
+       "size": 3900655726,
+       "title": "[FLE] Re ZERO Starting Life in Another World - Memory Snow (2018) (BD 1080p HEVC FLAC) [Dual Audio] | Re: Zero Kara Hajimeru Isekai Seikatsu OVA | Re:ZERO | ReZero"
+      }
+     },
+     {
+      "media_id": "movie:566451",
+      "route_id": 1,
+      "source": {
+       "info_hash": "263bc2b74ae530290833c4f22fccaf0e89c72c5e",
+       "published_at": "2021-06-29T19:22:01Z",
+       "size": 1445083480,
+       "title": "[DB] Re:Zero kara Hajimeru Isekai Seikatsu - Hyouketsu no Kizuna | Re:ZERO -Starting Life in Another World- The Frozen Bond [Dual Audio 10bit BD1080p][HEVC-x265]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 2,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2016",
+      "truth": "S01E01-E25",
+      "given": "S01E01-E25",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 2020",
+      "truth": "S01E26-E38",
+      "given": "S01E26-E50 (merged)",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S2 Part2 2021",
+      "truth": "S01E39-E50",
+      "given": "S01E26-E50 (merged)",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S3 2024",
+      "truth": "S01E51-E66",
+      "given": "S01E51-E66",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S4 2026",
+      "truth": "S01E67-E85",
+      "given": "S01E67-E85",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": false,
+    "false_flags": 0,
+    "movies_ovas": {
+     "memory_snow": "separate movie:532321 (correct)",
+     "frozen_bond": "separate movie:566451 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 6,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "清單全對（r2-openai-lean-rezero.md:26-29），:36 不標記；:38 提醒發佈組季號與 TMDB 連續集號的差異。卡片 6 列（S2 用一個 Salieri BD 包）。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-lean-rezero.md"
+  },
+  {
+   "task": "mushoku",
+   "conv": "6a67ed97-b646-4251-b450-999e4c27a3a0",
+   "seconds": 115,
+   "turns": 3,
+   "requests": 12,
+   "tool_calls": 18,
+   "input": 265609,
+   "output": 10600,
+   "cache_read": 232576,
+   "web_searches": 0,
+   "tavily_searches": 4,
+   "cost_usd": 0.02403,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "discover.search_media",
+    "web.tavily_search",
+    "media.read_media",
+    "web.tavily_search",
+    "web.tavily_search",
+    "web.tavily_search",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "media.route_choices",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "ok": 17,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "26ba08f5a0d41a061d7932658685e15be6580430",
+       "published_at": "2022-03-21T03:04:38Z",
+       "size": 42489097869,
+       "title": "[MTBB] Mushoku Tensei – Jobless Reincarnation - 01-23 (Season 1) (BD 1080p)"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "408e0aa217248ef99d42457d0885e8060e244f33",
+       "published_at": "2026-10-27T01:33:00Z",
+       "size": 34779228452,
+       "title": "[SubsPlease] Mushoku Tensei S2 (01-24) (1080p) [Batch]"
+      }
+     },
+     {
+      "media_id": "tv:94664",
+      "route_id": 3,
+      "source": {
+       "info_hash": "eb9e8bc071ff1ed7aec9733df7695bd93f6831b5",
+       "published_at": "2026-10-27T05:01:48Z",
+       "size": 20249730423,
+       "title": "[SubsPlease] Mushoku Tensei S3 (01-14) (1080p) [Batch]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 3,
+   "rep": 2,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "S1 2021W",
+      "truth": "S01E01-E11",
+      "given": "S01E01-E11",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "S1 Part2 2021F",
+      "truth": "S01E12-E23",
+      "given": "S01E12-E23",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "II 2023",
+      "truth": "S02E01-E12 (ep0 = S00E02)",
+      "given": "S02E01-E12",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "II Part2 2024",
+      "truth": "S02E13-E24",
+      "given": "S02E13-E24",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "III 2026",
+      "truth": "S03E01-E14",
+      "given": "S03E01-E14",
+      "verdict": "correct",
+      "flagged": false
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": true,
+    "false_flags": 0,
+    "movies_ovas": {
+     "eris_ova": "S00 不列入",
+     "ep0": "推論在 Specials，第 2 輪從種子標題 S00E02 證實（:65）"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": null
+    },
+    "notes": "最佳：範圍全對而且整季標記（r2-openai-lean-mushoku.md:24-25,30），之後從 torrent 標題確認第 0 集 = S00E02（:65）。查了 ja.wikipedia 的 BD 收錄。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-lean-mushoku.md"
+  },
+  {
+   "task": "hxh2011",
+   "conv": "3ef7a780-2106-4a87-9116-73ccc0523dc0",
+   "seconds": 68,
+   "turns": 2,
+   "requests": 8,
+   "tool_calls": 15,
+   "input": 92233,
+   "output": 5498,
+   "cache_read": 75899,
+   "web_searches": 0,
+   "tavily_searches": 1,
+   "cost_usd": 0.01195,
+   "cost_unknown_turns": 0,
+   "stops": [
+    "completed",
+    "awaiting_confirmation"
+   ],
+   "guard_stops": [],
+   "tools": [
+    "skills.load_skill",
+    "discover.search_media",
+    "media.read_media",
+    "web.tavily_search",
+    "discover.search_media",
+    "discover.search_media",
+    "media.read_media",
+    "media.read_media",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "search.search_torrents",
+    "downloading.add_manual_download"
+   ],
+   "tool_outcomes": {
+    "failed": 3,
+    "ok": 11,
+    "proposed": 1
+   },
+   "card": {
+    "command": "downloading.add_manual_download",
+    "rows": [
+     {
+      "media_id": "tv:46298",
+      "route_id": 3,
+      "source": {
+       "info_hash": "891d48c4da57a73073f2aa5bc1e58b283b7b1821",
+       "published_at": "2020-03-02T18:22:02Z",
+       "size": 30893770878,
+       "title": "[Judas] Hunter x Hunter (2011) (Complete Series + Movies) [BD 1080p][HEVC x265 10bit][Dual-Audio][Eng-Subs]"
+      }
+     },
+     {
+      "media_id": "movie:211755",
+      "route_id": 1,
+      "source": {
+       "info_hash": "e1bb379b1b5df94105018584beda5faaee910f05",
+       "published_at": "2020-01-13T04:12:01Z",
+       "size": 2559809502,
+       "title": "Hunter x Hunter: Phantom Rouge (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     },
+     {
+      "media_id": "movie:239523",
+      "route_id": 1,
+      "source": {
+       "info_hash": "f427d9a13fd24e8b7f3cbf8503f531dd715710cb",
+       "published_at": "2020-01-13T05:42:01Z",
+       "size": 3232081872,
+       "title": "Hunter x Hunter: The Last Mission (2013) [1080p x265 HEVC 10bit BluRay Dual Audio AAC 5.1] [Prof]"
+      }
+     }
+    ]
+   },
+   "user_turns_used": 2,
+   "rep": 2,
+   "provider": "openai",
+   "group": "lean",
+   "score": {
+    "series_ok": true,
+    "parts": [
+     {
+      "part": "TMDB S01",
+      "truth": "S01E01-E62",
+      "given": "S01E01-E62",
+      "verdict": "correct",
+      "flagged": false
+     },
+     {
+      "part": "TMDB S02",
+      "truth": "S02E63-E136",
+      "given": "S02E63-E136",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     },
+     {
+      "part": "TMDB S03",
+      "truth": "S03E137-E148",
+      "given": "S03E137-E148",
+      "verdict": "correct",
+      "flagged": true,
+      "flag_text": "未經核對，請確認"
+     }
+    ],
+    "wrong_silent": 0,
+    "flag_whole_season": "partial(S2,S3)",
+    "false_flags": 0,
+    "movies_ovas": {
+     "phantom_rouge": "separate movie:211755 (correct)",
+     "last_mission": "separate movie:239523 (correct)"
+    },
+    "card": {
+     "appeared": true,
+     "rows": 3,
+     "ids_match": true,
+     "packs_match": true,
+     "wrong_place": "Judas「Complete Series + Movies」包放在 tv:46298 底下，另加兩列電影 → 劇場版檔案會在 Anime 路線變成未匹配／重複下載（不是匯入到錯的集，但有雜檔）"
+    },
+    "notes": "r2-openai-lean-hxh2011.md:22-24,30-32。"
+   },
+   "transcript": "agent-sources-ab-2026-10-28/r2-openai-lean-hxh2011.md"
+  }
+ ],
+ "more": {
+  "what": "lean only, list turn only, 14 other works of fribb-vs-chaining, 1 run per interface",
+  "spent_usd": 0.23142,
+  "budget_usd": 0.4,
+  "runs": [
+   {
+    "task": "jujutsu",
+    "conv": "f623f403-fe95-4fa4-bded-57401edc931f",
+    "seconds": 32,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 7,
+    "input": 182573,
+    "output": 3502,
+    "cache_read": 103040,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.02868,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 7
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:95479",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E24",
+       "model": "S01E01–E24",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-jujutsu.md:22"
+      },
+      {
+       "part": "S2",
+       "truth": "S01E25–E47",
+       "model": "S01E25–E47",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-jujutsu.md:24"
+      },
+      {
+       "part": "死滅迴游 前篇",
+       "truth": "S01E48–E59",
+       "model": "S01E48–E59",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-jujutsu.md:27"
+      }
+     ],
+     "parts_judged": 3,
+     "correct": 3,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [
+      "S1",
+      "S2",
+      "死滅迴游 前篇"
+     ],
+     "false_flags": 0,
+     "skipped_parts": [
+      "死滅迴游 後篇（AniList 209895，TMDB 還沒有集數；兩跑都說未播、不列）"
+     ],
+     "movies": [
+      {
+       "title": "劇場版 咒術迴戰 0",
+       "tmdb": "movie:810693",
+       "status": "separate_movie",
+       "evidence": "r1-anthropic-lean-jujutsu.md:23",
+       "note": "與研究的 Fribb 一致"
+      },
+      {
+       "title": "懷玉·玉折 總集篇",
+       "tmdb": "movie:1338799",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-anthropic-lean-jujutsu.md:25"
+      },
+      {
+       "title": "澀谷事變特別編集版×死滅迴游先行",
+       "tmdb": "movie:1539104",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-anthropic-lean-jujutsu.md:26",
+       "note": "研究裡 Fribb 未覆蓋；media_read_media 讀得到"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次（Anthropic 結果加密，看不到內容）；引 weblio（日文維基鏡像）與中文維基 URL（:32）。明說 24+23+12=59、不必標（:30）。研究會因 A≠B 標 S01，lean 三列都對、沒標 → correct_unflagged。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-jujutsu.md"
+   },
+   {
+    "task": "frieren",
+    "conv": "f049c80e-d362-4d5d-b00a-4de80788a39d",
+    "seconds": 29,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 5,
+    "input": 52164,
+    "output": 2276,
+    "cache_read": 41856,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00607,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "media.read_media",
+     "discover.search_media",
+     "discover.search_media"
+    ],
+    "tool_outcomes": {
+     "failed": 1,
+     "ok": 4
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:209867",
+     "parts": [
+      {
+       "part": "S1（28 集）",
+       "truth": "S01E01–E28",
+       "model": "S01E01–E16 + S01E17–E28（拆兩個 cour）",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-frieren.md:20"
+      },
+      {
+       "part": "S2",
+       "truth": "S01E29–E38",
+       "model": "S01E29–E38",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-frieren.md:22"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "第 3 季（AniList 209939 無法判定；兩跑都說 2027-10 才播、不列，日期無法核實）"
+     ],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引中文維基 URL（:16）。一次 TMDB 搜尋 TLS 失敗（:12），換日文標題成功。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-frieren.md"
+   },
+   {
+    "task": "dandadan",
+    "conv": "c634ff12-c7f2-41ba-90ed-47c7b97a16e0",
+    "seconds": 21,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 6,
+    "input": 33530,
+    "output": 2181,
+    "cache_read": 18432,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00726,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 6
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:240411",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-dandadan.md:21"
+      },
+      {
+       "part": "S2",
+       "truth": "S01E13–E24",
+       "model": "S01E13–E24",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-dandadan.md:22"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [
+      "S1",
+      "S2"
+     ],
+     "false_flags": 0,
+     "skipped_parts": [
+      "第 3 季（AniList 198966 無法判定；兩跑都說 2027 未播）"
+     ],
+     "movies": [
+      {
+       "title": "First Encounter（合輯）",
+       "tmdb": "movie:1308681",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-anthropic-lean-dandadan.md:24"
+      },
+      {
+       "title": "Evil Eye（合輯）",
+       "tmdb": "movie:1458844",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-anthropic-lean-dandadan.md:25"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引 en.wikipedia 與 weblio（:15）。Fribb 在這裡錯（給 S02E01–E12），lean 照 TMDB 季集表串接得到正解；研究會標 S01，lean 沒標但兩列都對。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-dandadan.md"
+   },
+   {
+    "task": "aot",
+    "conv": "240a2c2a-717d-4c68-8e84-34d8cd5246b8",
+    "seconds": 41,
+    "turns": 1,
+    "requests": 6,
+    "tool_calls": 13,
+    "input": 84470,
+    "output": 4433,
+    "cache_read": 64768,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.01162,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "routes.list_routes",
+     "discover.search_media"
+    ],
+    "tool_outcomes": {
+     "ok": 13
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:1429",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E25",
+       "model": "S01E01–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-aot.md:30"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-aot.md:31"
+      },
+      {
+       "part": "S3",
+       "truth": "S03E01–E12",
+       "model": "S03E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-aot.md:32"
+      },
+      {
+       "part": "S3 Part 2",
+       "truth": "S03E13–E22",
+       "model": "S03E13–E22",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-aot.md:33"
+      },
+      {
+       "part": "Final Season",
+       "truth": "S04E01–E16",
+       "model": "S04E01–E16",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-aot.md:34"
+      },
+      {
+       "part": "Final Season Part 2",
+       "truth": "S04E17–E28",
+       "model": "S04E17–E28",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-aot.md:35"
+      }
+     ],
+     "parts_judged": 6,
+     "correct": 6,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "完結編 前／後編（AniList SPECIAL，研究不比；Fribb 給前編 S04E29，但 TMDB S04 只有 28 集）"
+     ],
+     "movies": [
+      {
+       "title": "完結編 前編",
+       "tmdb": "tv:313024 S01E01",
+       "status": "separate_tv_entry",
+       "evidence": "r1-anthropic-lean-aot.md:36",
+       "note": "TMDB 上存在（讀得到），但只有日文標題、overview 空，可能是另開的條目；tv:1429 S00 是否也有無法核實"
+      },
+      {
+       "title": "完結編 後編",
+       "tmdb": "tv:313028 S01E01",
+       "status": "separate_tv_entry",
+       "evidence": "r1-anthropic-lean-aot.md:37",
+       "note": "同上"
+      },
+      {
+       "title": "紅蓮的弓矢／自由之翼／覺醒的咆哮／CHRONICLE／THE LAST ATTACK（總集篇）",
+       "tmdb": "movie:379088/330081/492999/714194/1333100",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-anthropic-lean-aot.md:45",
+       "note": "CHRONICLE 714194 與研究一致"
+      },
+      {
+       "title": "OVA（無悔的選擇、Lost Girls 等）",
+       "tmdb": "tv:1429 S00",
+       "status": "excluded_short",
+       "evidence": "r1-anthropic-lean-aot.md:56",
+       "note": "整個 S0 不列，說要的話另外找"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引中文維基、百度百科（:39）。**整段回覆用粵語**（:22 起），語言漂移。完結編當正篇列入、另立條目，合理。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-aot.md"
+   },
+   {
+    "task": "kaguya",
+    "conv": "775dfa60-4e3a-4e66-98cb-c7fdb51c861f",
+    "seconds": 72,
+    "turns": 1,
+    "requests": 7,
+    "tool_calls": 12,
+    "input": 121760,
+    "output": 3825,
+    "cache_read": 95616,
+    "web_searches": 2,
+    "tavily_searches": 0,
+    "cost_usd": 0.01301,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "failed": 1,
+     "ok": 11
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:83121",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-kaguya.md:33"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-kaguya.md:34"
+      },
+      {
+       "part": "S3 Ultra Romantic",
+       "truth": "S03E01–E13",
+       "model": "S03E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-kaguya.md:35"
+      }
+     ],
+     "parts_judged": 3,
+     "correct": 3,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "First Kiss wa Owaranai（AniList 記成 4 集 TV，研究無法判定；Fribb 對到 movie:997317，兩跑都用同一部電影）"
+     ],
+     "movies": [
+      {
+       "title": "永不結束的初吻",
+       "tmdb": "movie:997317",
+       "status": "separate_movie",
+       "evidence": "r1-anthropic-lean-kaguya.md:36",
+       "note": "與 Fribb 一致；4 集分割版 tv:332819 當重複排除（:42）"
+      },
+      {
+       "title": "大人への階段（特別篇 2 集）",
+       "tmdb": "tv:330287 S01E01–E02",
+       "status": "separate_tv_entry",
+       "evidence": "r1-anthropic-lean-kaguya.md:37",
+       "note": "Fribb 給 tv:83121 S00E05–E06；lean 選另一個 TMDB 劇集（另有重複條目 tv:333504）。兩處都在 TMDB 上，哪個是 Jellyfin 會對到的無法核實"
+      },
+      {
+       "title": "完結篇（未上映）",
+       "tmdb": "movie:1608013",
+       "status": "noted_unreleased",
+       "evidence": "r1-anthropic-lean-kaguya.md:39"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 2 次，引 en.wikipedia 與 fashion-press（:39、:47）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-kaguya.md"
+   },
+   {
+    "task": "spyfamily",
+    "conv": "7dc32bcc-10e7-481f-8dbd-1adaaf1a528d",
+    "seconds": 22,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 6,
+    "input": 32196,
+    "output": 2058,
+    "cache_read": 18688,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00663,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 6
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:120089",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-spyfamily.md:22"
+      },
+      {
+       "part": "S1 Part 2",
+       "truth": "S01E13–E25",
+       "model": "S01E13–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-spyfamily.md:23"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-spyfamily.md:24"
+      },
+      {
+       "part": "S3",
+       "truth": "S03E01–E13",
+       "model": "S03E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-spyfamily.md:25"
+      }
+     ],
+     "parts_judged": 4,
+     "correct": 4,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "CODE: White",
+       "tmdb": "movie:1062807",
+       "status": "separate_movie",
+       "evidence": "r1-anthropic-lean-spyfamily.md:26"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引 en.wikipedia（:32）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-spyfamily.md"
+   },
+   {
+    "task": "bleach",
+    "conv": "cb151377-bac6-4bdf-970f-5350d485707f",
+    "seconds": 42,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 10,
+    "input": 95932,
+    "output": 4123,
+    "cache_read": 63872,
+    "web_searches": 2,
+    "tavily_searches": 0,
+    "cost_usd": 0.01495,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 10
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:30984",
+     "parts": [
+      {
+       "part": "本篇 366 集",
+       "truth": "S01E01–E366",
+       "model": "S01E01–E366",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-bleach.md:26"
+      },
+      {
+       "part": "千年血戰篇",
+       "truth": "S02E01–E13",
+       "model": "S02E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-bleach.md:27"
+      },
+      {
+       "part": "訣別譚",
+       "truth": "S02E14–E26",
+       "model": "S02E14–E26",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-bleach.md:28"
+      },
+      {
+       "part": "相剋譚",
+       "truth": "S02E27–E40",
+       "model": "S02E27–E40",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-bleach.md:29"
+      },
+      {
+       "part": "禍進譚",
+       "truth": "S02E41–E50",
+       "model": "S02E41–E50",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-bleach.md:30"
+      }
+     ],
+     "parts_judged": 5,
+     "correct": 5,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "Memories of Nobody / DiamondDust / Fade to Black / 地獄篇",
+       "tmdb": "movie:15575/17101/17165/73245",
+       "status": "separate_movie",
+       "evidence": "r1-anthropic-lean-bleach.md:31",
+       "note": "4/4 與研究一致"
+      },
+      {
+       "title": "禍進譚 先行上映",
+       "tmdb": "movie:1669841",
+       "status": "excluded_recap",
+       "evidence": "r1-anthropic-lean-bleach.md:40"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 2 次，引中／日文維基（:36）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-bleach.md"
+   },
+   {
+    "task": "uchouten",
+    "conv": "cd2203c3-b188-4251-9b05-5dba6db79c21",
+    "seconds": 19,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 4,
+    "input": 32179,
+    "output": 1627,
+    "cache_read": 17792,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00638,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 4
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:61338",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E13",
+       "model": "S01E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-uchouten.md:22"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-uchouten.md:23"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引中文維基（:25）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-uchouten.md"
+   },
+   {
+    "task": "maou",
+    "conv": "1cae3c4c-8d7f-438e-bd14-13ac3bea287e",
+    "seconds": 20,
+    "turns": 1,
+    "requests": 3,
+    "tool_calls": 3,
+    "input": 28936,
+    "output": 1975,
+    "cache_read": 12672,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00733,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 3
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:45997",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E13",
+       "model": "S01E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-maou.md:18"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-maou.md:19"
+      },
+      {
+       "part": "S2 2nd Season",
+       "truth": "S02E13–E24",
+       "model": "S02E13–E24",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-maou.md:20"
+      }
+     ],
+     "parts_judged": 3,
+     "correct": 3,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引 en.wikipedia 與萌娘百科（:31）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-maou.md"
+   },
+   {
+    "task": "fruitsbasket",
+    "conv": "670613d6-e2e4-49f7-8f16-5c2a2a160e97",
+    "seconds": 24,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 7,
+    "input": 48975,
+    "output": 1785,
+    "cache_read": 36224,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00618,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 7
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:85991",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E25",
+       "model": "S01E01–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-fruitsbasket.md:24"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E25",
+       "model": "S02E01–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-fruitsbasket.md:25"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "The Final（研究無法判定：TMDB 沒有哪一集在開播日 ±1 天；A=B=S03E01–E13，lean 也給 S03E01–E13，r1-anthropic-lean-fruitsbasket.md:26）"
+     ],
+     "movies": [
+      {
+       "title": "-prelude-",
+       "tmdb": "movie:896499",
+       "status": "listed_unticked",
+       "evidence": "r1-anthropic-lean-fruitsbasket.md:27",
+       "note": "列出但預設不勾（說是總集篇＋新作）"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "選 2019 版，明確排除 2001 版 tv:36941（:18）。網搜 1 次，引 pt/en wikipedia（:29）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-fruitsbasket.md"
+   },
+   {
+    "task": "urusei",
+    "conv": "8fa25f46-5647-46ba-a241-1feb9b4e4eef",
+    "seconds": 24,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 4,
+    "input": 43332,
+    "output": 2514,
+    "cache_read": 23040,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00924,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 4
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:154524",
+     "parts": [
+      {
+       "part": "第 1 期",
+       "truth": "S01E01–E23",
+       "model": "S01E01–E23",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-urusei.md:19"
+      },
+      {
+       "part": "第 2 期",
+       "truth": "S01E24–E46",
+       "model": "S01E24–E46",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-urusei.md:20"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "選 2022 版，排除 1981 版 tv:34163（:13）。網搜 1 次，引 anisil.com（:24）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-urusei.md"
+   },
+   {
+    "task": "kino",
+    "conv": "0259cdb7-6234-49b7-8577-889ded977b56",
+    "seconds": 66,
+    "turns": 1,
+    "requests": 8,
+    "tool_calls": 12,
+    "input": 72343,
+    "output": 4602,
+    "cache_read": 60032,
+    "web_searches": 0,
+    "tavily_searches": 0,
+    "cost_usd": 0.00958,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "discover.search_media",
+     "discover.search_media",
+     "media.route_choices",
+     "media.read_media",
+     "skills.load_skill",
+     "search.search_torrents",
+     "why_not.explain",
+     "bangumi.search_bangumi",
+     "bangumi.read_bangumi",
+     "search.search_torrents",
+     "search.search_torrents",
+     "search.search_torrents"
+    ],
+    "tool_outcomes": {
+     "ok": 12
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:74097",
+     "parts": [
+      {
+       "part": "TV 12 集",
+       "truth": "S01E01–E12",
+       "model": "第 1 季＝全部 12 集（沒寫 SxxEyy，但意思明確）",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-kino.md:24"
+      }
+     ],
+     "parts_judged": 1,
+     "correct": 1,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "廃墟の国（AniList SPECIAL，研究不比、Fribb 未覆蓋）"
+     ],
+     "movies": [
+      {
+       "title": "life goes on.（2005）／病気の国（2007）",
+       "tmdb": "—",
+       "status": "excluded_short",
+       "evidence": "r1-anthropic-lean-kino.md:29",
+       "note": "2003 版的短篇劇場版，排除合理；沒給 id"
+      }
+     ],
+     "used_web": false,
+     "cited_url": false,
+     "notes": "選 2017 版，排除 2003 版 tv:34166（:28）。**沒網搜**（web_searches 0），也沒說清單是憑記憶。**違反 skill 第 6 步**：列表前就跑了 4 次 search_search_torrents、還載入 missing-episodes skill（:12–19），回覆直接是種子候選表（:33–45）；沒送單。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-kino.md"
+   },
+   {
+    "task": "tamako",
+    "conv": "0a774cd8-5d53-48ba-8929-649aca992b3e",
+    "seconds": 22,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 6,
+    "input": 34996,
+    "output": 1463,
+    "cache_read": 23808,
+    "web_searches": 1,
+    "tavily_searches": 0,
+    "cost_usd": 0.00525,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 6
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:48561",
+     "parts": [
+      {
+       "part": "TV",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-tamako.md:23"
+      }
+     ],
+     "parts_judged": 1,
+     "correct": 1,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "Tamako Love Story",
+       "tmdb": "movie:257475",
+       "status": "separate_movie",
+       "evidence": "r1-anthropic-lean-tamako.md:24",
+       "note": "Fribb 給 tv:48561 S00E01；lean 用獨立 TMDB 電影（讀得到、2014-04-26），比較合理"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 1 次，引中／英文維基（:29）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-tamako.md"
+   },
+   {
+    "task": "abyss",
+    "conv": "190f8c61-ef2f-49ec-b107-eeb585141036",
+    "seconds": 39,
+    "turns": 1,
+    "requests": 7,
+    "tool_calls": 9,
+    "input": 101538,
+    "output": 2921,
+    "cache_read": 82432,
+    "web_searches": 2,
+    "tavily_searches": 0,
+    "cost_usd": 0.00973,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 9
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "anthropic",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:72636",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E13",
+       "model": "S01E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-abyss.md:27"
+      },
+      {
+       "part": "S2 烈日的黃金鄉",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-anthropic-lean-abyss.md:31"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "深き魂の黎明",
+       "tmdb": "movie:573730",
+       "status": "separate_movie",
+       "evidence": "r1-anthropic-lean-abyss.md:30",
+       "note": "與研究一致"
+      },
+      {
+       "title": "覺醒的神秘（2026-10-23 上映）",
+       "tmdb": "movie:1526917",
+       "status": "listed_warned",
+       "evidence": "r1-anthropic-lean-abyss.md:32"
+      },
+      {
+       "title": "總集篇 前／後編",
+       "tmdb": "movie:526426 / 526429",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-anthropic-lean-abyss.md:28"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "網搜 2 次，引 en.wikipedia、kadokawa-animation（:37、:42）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-anthropic-lean-abyss.md"
+   },
+   {
+    "task": "jujutsu",
+    "conv": "f0ae3b71-60e5-4a42-903c-ecc56123226a",
+    "seconds": 25,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 8,
+    "input": 27868,
+    "output": 3202,
+    "cache_read": 20352,
+    "web_searches": 0,
+    "tavily_searches": 1,
+    "cost_usd": 0.00622,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "web.tavily_search",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 8
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:95479",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E24",
+       "model": "S01E01–E24",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-jujutsu.md:27"
+      },
+      {
+       "part": "S2",
+       "truth": "S01E25–E47",
+       "model": "S01E25–E29 + S01E30–E47（懷玉玉折／澀谷事變拆兩列，合起來對）",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-jujutsu.md:28"
+      },
+      {
+       "part": "死滅迴游 前篇",
+       "truth": "S01E48–E59",
+       "model": "S01E48–E59",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-jujutsu.md:30"
+      }
+     ],
+     "parts_judged": 3,
+     "correct": 3,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [
+      "S1",
+      "S2",
+      "死滅迴游 前篇"
+     ],
+     "false_flags": 0,
+     "skipped_parts": [
+      "死滅迴游 後篇（AniList 209895，TMDB 還沒有集數；兩跑都說未播、不列）"
+     ],
+     "movies": [
+      {
+       "title": "劇場版 咒術迴戰 0",
+       "tmdb": "movie:810693",
+       "status": "separate_movie",
+       "evidence": "r1-openai-lean-jujutsu.md:31"
+      },
+      {
+       "title": "懷玉·玉折 總集篇",
+       "tmdb": "movie:1338799",
+       "status": "excluded_recap",
+       "evidence": "r1-openai-lean-jujutsu.md:40"
+      },
+      {
+       "title": "澀谷事變特別編集版×死滅迴游先行",
+       "tmdb": "movie:1539104",
+       "status": "excluded_recap",
+       "evidence": "r1-openai-lean-jujutsu.md:41"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 1 次，引 en.wikipedia 兩頁（:44）。S2 照篇章拆成兩列，合起來等於正解。明說數字對得上不標（:33）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-jujutsu.md"
+   },
+   {
+    "task": "frieren",
+    "conv": "14acc279-b78c-428d-8152-9b6c90422077",
+    "seconds": 38,
+    "turns": 1,
+    "requests": 6,
+    "tool_calls": 7,
+    "input": 43768,
+    "output": 2881,
+    "cache_read": 34816,
+    "web_searches": 0,
+    "tavily_searches": 3,
+    "cost_usd": 0.00635,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "web.tavily_search"
+    ],
+    "tool_outcomes": {
+     "ok": 7
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:209867",
+     "parts": [
+      {
+       "part": "S1（28 集）",
+       "truth": "S01E01–E28",
+       "model": "S01E01–E28",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-frieren.md:21"
+      },
+      {
+       "part": "S2",
+       "truth": "S01E29–E38",
+       "model": "S01E29–E38",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-frieren.md:22"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "第 3 季（AniList 209939 無法判定；兩跑都說 2027-10 才播、不列，日期無法核實）"
+     ],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 3 次，引 ja/en wikipedia（:29–30）。短片集數說成 11+6+5（研究 AniList 為 12+6+6），已排除、不影響。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-frieren.md"
+   },
+   {
+    "task": "dandadan",
+    "conv": "d366fddd-0da0-4f6f-bd35-d0ffeb3a08d0",
+    "seconds": 43,
+    "turns": 1,
+    "requests": 6,
+    "tool_calls": 11,
+    "input": 52042,
+    "output": 3598,
+    "cache_read": 43520,
+    "web_searches": 0,
+    "tavily_searches": 4,
+    "cost_usd": 0.00714,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "web.tavily_search",
+     "web.tavily_search",
+     "media.read_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 11
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:240411",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-dandadan.md:30"
+      },
+      {
+       "part": "S2",
+       "truth": "S01E13–E24",
+       "model": "S01E13–E24",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-dandadan.md:31"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [
+      "S1",
+      "S2"
+     ],
+     "false_flags": 0,
+     "skipped_parts": [
+      "第 3 季（AniList 198966 無法判定；兩跑都說 2027 未播）"
+     ],
+     "movies": [
+      {
+       "title": "First Encounter（合輯）",
+       "tmdb": "movie:1308681",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-openai-lean-dandadan.md:33"
+      },
+      {
+       "title": "Evil Eye（合輯）",
+       "tmdb": "movie:1458844",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-openai-lean-dandadan.md:34"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 4 次，引 en.wikipedia 多頁與 IMDb（:38–39）。明說 TMDB 只有一季、E13 起是第 2 季（:37）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-dandadan.md"
+   },
+   {
+    "task": "aot",
+    "conv": "dd9b6094-3b1c-4f51-a2a0-994aa6fdd60c",
+    "seconds": 41,
+    "turns": 1,
+    "requests": 6,
+    "tool_calls": 10,
+    "input": 56984,
+    "output": 4210,
+    "cache_read": 47488,
+    "web_searches": 0,
+    "tavily_searches": 2,
+    "cost_usd": 0.00819,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "web.tavily_search",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "web.tavily_search",
+     "discover.search_media",
+     "discover.search_media"
+    ],
+    "tool_outcomes": {
+     "ok": 10
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:1429",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E25",
+       "model": "S01E01–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-aot.md:26"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-aot.md:27"
+      },
+      {
+       "part": "S3",
+       "truth": "S03E01–E12",
+       "model": "S03E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-aot.md:28"
+      },
+      {
+       "part": "S3 Part 2",
+       "truth": "S03E13–E22",
+       "model": "S03E13–E22",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-aot.md:29"
+      },
+      {
+       "part": "Final Season",
+       "truth": "S04E01–E16",
+       "model": "S04E01–E16",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-aot.md:30"
+      },
+      {
+       "part": "Final Season Part 2",
+       "truth": "S04E17–E28",
+       "model": "S04E17–E28",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-aot.md:31"
+      }
+     ],
+     "parts_judged": 6,
+     "correct": 6,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "完結編 前／後編（AniList SPECIAL，研究不比；Fribb 給前編 S04E29，但 TMDB S04 只有 28 集）"
+     ],
+     "movies": [
+      {
+       "title": "完結編 前編",
+       "tmdb": "tv:313024 S01E01",
+       "status": "separate_tv_entry",
+       "evidence": "r1-openai-lean-aot.md:32",
+       "note": "同 anthropic，條目真偽／是否為慣用條目無法核實"
+      },
+      {
+       "title": "完結編 後編",
+       "tmdb": "tv:313028 S01E01",
+       "status": "separate_tv_entry",
+       "evidence": "r1-openai-lean-aot.md:33"
+      },
+      {
+       "title": "總集篇電影 5 部",
+       "tmdb": "movie:379088/330081/492999/714194/1333100",
+       "status": "listed_unticked_recap",
+       "evidence": "r1-openai-lean-aot.md:42"
+      },
+      {
+       "title": "OVA 8 段",
+       "tmdb": "tv:1429 S00",
+       "status": "listed_flagged",
+       "evidence": "r1-openai-lean-aot.md:41",
+       "note": "標「未經核對，請確認」，不猜 S0 集號"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 2 次，引 en.wikipedia（:35）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-aot.md"
+   },
+   {
+    "task": "kaguya",
+    "conv": "533147d9-f260-4bfa-9c3c-ab629493c035",
+    "seconds": 72,
+    "turns": 1,
+    "requests": 10,
+    "tool_calls": 17,
+    "input": 129219,
+    "output": 5627,
+    "cache_read": 113920,
+    "web_searches": 0,
+    "tavily_searches": 5,
+    "cost_usd": 0.01203,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "web.tavily_search",
+     "media.read_media",
+     "discover.search_media",
+     "web.tavily_search",
+     "discover.search_media",
+     "web.tavily_search",
+     "media.read_media",
+     "web.tavily_search",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "why_not.explain",
+     "web.tavily_search",
+     "routes.list_routes"
+    ],
+    "tool_outcomes": {
+     "ok": 17
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:83121",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-kaguya.md:31"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-kaguya.md:32"
+      },
+      {
+       "part": "S3 Ultra Romantic",
+       "truth": "S03E01–E13",
+       "model": "S03E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-kaguya.md:33"
+      }
+     ],
+     "parts_judged": 3,
+     "correct": 3,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "First Kiss wa Owaranai（AniList 記成 4 集 TV，研究無法判定；Fribb 對到 movie:997317，兩跑都用同一部電影）"
+     ],
+     "movies": [
+      {
+       "title": "永不結束的初吻",
+       "tmdb": "movie:997317",
+       "status": "separate_movie",
+       "evidence": "r1-openai-lean-kaguya.md:34",
+       "note": "另列分割版 tv:332819 當替代（:35）"
+      },
+      {
+       "title": "大人への階段（特別篇 2 集）",
+       "tmdb": "tv:330287 S01E01–E02",
+       "status": "separate_tv_entry",
+       "evidence": "r1-openai-lean-kaguya.md:36",
+       "note": "同 anthropic，與 Fribb 的 S00E05–E06 不同，無法核實"
+      },
+      {
+       "title": "OVA",
+       "tmdb": "tv:83121 S00",
+       "status": "listed_flagged",
+       "evidence": "r1-openai-lean-kaguya.md:37",
+       "note": "標「未經核對，請確認」"
+      },
+      {
+       "title": "完結篇（未上映）",
+       "tmdb": "movie:1608013",
+       "status": "noted_unreleased",
+       "evidence": "r1-openai-lean-kaguya.md:38"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 5 次，引 en.wikipedia、MAL（:48）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-kaguya.md"
+   },
+   {
+    "task": "spyfamily",
+    "conv": "c641872d-5062-4e62-b789-b150e01f08c1",
+    "seconds": 38,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 7,
+    "input": 37119,
+    "output": 2414,
+    "cache_read": 30592,
+    "web_searches": 0,
+    "tavily_searches": 2,
+    "cost_usd": 0.00504,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "media.read_media",
+     "discover.search_media",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "ok": 7
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:120089",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-spyfamily.md:19"
+      },
+      {
+       "part": "S1 Part 2",
+       "truth": "S01E13–E25",
+       "model": "S01E13–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-spyfamily.md:20"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-spyfamily.md:21"
+      },
+      {
+       "part": "S3",
+       "truth": "S03E01–E13",
+       "model": "S03E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-spyfamily.md:22"
+      }
+     ],
+     "parts_judged": 4,
+     "correct": 4,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "CODE: White",
+       "tmdb": "movie:1062807",
+       "status": "separate_movie",
+       "evidence": "r1-openai-lean-spyfamily.md:23"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 2 次，引 en.wikipedia（:26）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-spyfamily.md"
+   },
+   {
+    "task": "bleach",
+    "conv": "c0d38209-7d6f-4ebf-a75c-0b35069cbc19",
+    "seconds": 58,
+    "turns": 1,
+    "requests": 7,
+    "tool_calls": 14,
+    "input": 70054,
+    "output": 4677,
+    "cache_read": 58368,
+    "web_searches": 0,
+    "tavily_searches": 2,
+    "cost_usd": 0.00947,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "discover.search_media"
+    ],
+    "tool_outcomes": {
+     "ok": 14
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:30984",
+     "parts": [
+      {
+       "part": "本篇 366 集",
+       "truth": "S01E01–E366",
+       "model": "S01E01–E366",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-bleach.md:28"
+      },
+      {
+       "part": "千年血戰篇",
+       "truth": "S02E01–E13",
+       "model": "S02E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-bleach.md:29"
+      },
+      {
+       "part": "訣別譚",
+       "truth": "S02E14–E26",
+       "model": "S02E14–E26",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-bleach.md:30"
+      },
+      {
+       "part": "相剋譚",
+       "truth": "S02E27–E40",
+       "model": "S02E27–E40",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-bleach.md:31"
+      },
+      {
+       "part": "禍進譚",
+       "truth": "S02E41–E50",
+       "model": "S02E41–E50",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-bleach.md:32"
+      }
+     ],
+     "parts_judged": 5,
+     "correct": 5,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "Memories of Nobody / DiamondDust / Fade to Black / 地獄篇",
+       "tmdb": "movie:15575/17101/17165/73245",
+       "status": "separate_movie",
+       "evidence": "r1-openai-lean-bleach.md:33",
+       "note": "4/4 與研究一致"
+      },
+      {
+       "title": "禍進譚 先行上映",
+       "tmdb": "movie:1669841",
+       "status": "excluded_recap",
+       "evidence": "r1-openai-lean-bleach.md:45"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 2 次，引 en.wikipedia、MAL（:41）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-bleach.md"
+   },
+   {
+    "task": "uchouten",
+    "conv": "62321310-4109-45ab-9af0-154d553f39b5",
+    "seconds": 16,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 5,
+    "input": 23743,
+    "output": 1201,
+    "cache_read": 17792,
+    "web_searches": 0,
+    "tavily_searches": 1,
+    "cost_usd": 0.00333,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search"
+    ],
+    "tool_outcomes": {
+     "ok": 5
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:61338",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E13",
+       "model": "S01E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-uchouten.md:19"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-uchouten.md:20"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 1 次，引日文維基（:22）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-uchouten.md"
+   },
+   {
+    "task": "maou",
+    "conv": "e91efbb6-da1a-4d44-9294-f24a02da4210",
+    "seconds": 28,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 6,
+    "input": 26774,
+    "output": 2590,
+    "cache_read": 20224,
+    "web_searches": 0,
+    "tavily_searches": 3,
+    "cost_usd": 0.00519,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "web.tavily_search"
+    ],
+    "tool_outcomes": {
+     "ok": 6
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:45997",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E13",
+       "model": "S01E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-maou.md:24"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-maou.md:25"
+      },
+      {
+       "part": "S2 2nd Season",
+       "truth": "S02E13–E24",
+       "model": "S02E13–E24",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-maou.md:26"
+      }
+     ],
+     "parts_judged": 3,
+     "correct": 3,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 3 次，引 en.wikipedia（:30）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-maou.md"
+   },
+   {
+    "task": "fruitsbasket",
+    "conv": "ca93cc93-ada9-4006-ba87-b997f25d6503",
+    "seconds": 18,
+    "turns": 1,
+    "requests": 3,
+    "tool_calls": 4,
+    "input": 17679,
+    "output": 1586,
+    "cache_read": 13824,
+    "web_searches": 0,
+    "tavily_searches": 1,
+    "cost_usd": 0.00314,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search"
+    ],
+    "tool_outcomes": {
+     "ok": 4
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:85991",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E25",
+       "model": "S01E01–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-fruitsbasket.md:18"
+      },
+      {
+       "part": "S2",
+       "truth": "S02E01–E25",
+       "model": "S02E01–E25",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-fruitsbasket.md:19"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "The Final（研究無法判定：TMDB 沒有哪一集在開播日 ±1 天；A=B=S03E01–E13，lean 也給 S03E01–E13，r1-openai-lean-fruitsbasket.md:20）"
+     ],
+     "movies": [
+      {
+       "title": "-prelude-",
+       "tmdb": "movie:896499",
+       "status": "excluded_as_short",
+       "evidence": "r1-openai-lean-fruitsbasket.md:26",
+       "note": "88 分鐘的劇場版被當「短篇」不列（有說要的話再加）"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "選 2019 版（:12）。Tavily 1 次，引 en.wikipedia（:22）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-fruitsbasket.md"
+   },
+   {
+    "task": "urusei",
+    "conv": "5cab2d23-0d8b-4c6e-a4e1-0be4fc95c1c6",
+    "seconds": 21,
+    "turns": 1,
+    "requests": 3,
+    "tool_calls": 4,
+    "input": 23699,
+    "output": 2064,
+    "cache_read": 15744,
+    "web_searches": 0,
+    "tavily_searches": 1,
+    "cost_usd": 0.00496,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search"
+    ],
+    "tool_outcomes": {
+     "ok": 4
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:154524",
+     "parts": [
+      {
+       "part": "第 1 期",
+       "truth": "S01E01–E23",
+       "model": "S01E01–E23",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-urusei.md:20"
+      },
+      {
+       "part": "第 2 期",
+       "truth": "S01E24–E46",
+       "model": "S01E24–E46",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-urusei.md:21"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "選 2022 版（:14）。Tavily 1 次，引日文維基（:24）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-urusei.md"
+   },
+   {
+    "task": "kino",
+    "conv": "7a41aa88-fba5-4be6-8cce-241c1461b953",
+    "seconds": 29,
+    "turns": 1,
+    "requests": 4,
+    "tool_calls": 6,
+    "input": 24459,
+    "output": 2658,
+    "cache_read": 20352,
+    "web_searches": 0,
+    "tavily_searches": 0,
+    "cost_usd": 0.00454,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "bangumi.search_bangumi",
+     "discover.search_media",
+     "bangumi.read_bangumi",
+     "media.read_media",
+     "skills.load_skill",
+     "search.search_torrents"
+    ],
+    "tool_outcomes": {
+     "ok": 6
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:74097",
+     "parts": [
+      {
+       "part": "TV 12 集",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-kino.md:20"
+      }
+     ],
+     "parts_judged": 1,
+     "correct": 1,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [
+      "廃墟の国（AniList SPECIAL，研究不比、Fribb 未覆蓋）"
+     ],
+     "movies": [
+      {
+       "title": "life goes on.（2005）／病気の国（2007）",
+       "tmdb": "movie:1173976 / movie:833013",
+       "status": "excluded_short",
+       "evidence": "r1-openai-lean-kino.md:22",
+       "note": "id 沒經 media_read_media 讀過，無法核實"
+      }
+     ],
+     "used_web": false,
+     "cited_url": false,
+     "notes": "選 2017 版（:14）。**沒網搜**、沒說憑記憶。列表前就 search_search_torrents（:13）並列出 Mikan 字幕組來源（:26–41），違反 skill 第 6 步；沒送單。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-kino.md"
+   },
+   {
+    "task": "tamako",
+    "conv": "97e8c049-68aa-42ee-86dc-34fe82f4794e",
+    "seconds": 38,
+    "turns": 1,
+    "requests": 5,
+    "tool_calls": 10,
+    "input": 32855,
+    "output": 2559,
+    "cache_read": 27136,
+    "web_searches": 0,
+    "tavily_searches": 2,
+    "cost_usd": 0.00495,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "web.tavily_search",
+     "jobs.list_jobs",
+     "web.tavily_search",
+     "media.read_media"
+    ],
+    "tool_outcomes": {
+     "failed": 2,
+     "ok": 8
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:48561",
+     "parts": [
+      {
+       "part": "TV",
+       "truth": "S01E01–E12",
+       "model": "S01E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-tamako.md:24"
+      }
+     ],
+     "parts_judged": 1,
+     "correct": 1,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "Tamako Love Story",
+       "tmdb": "movie:257475",
+       "status": "separate_movie",
+       "evidence": "r1-openai-lean-tamako.md:25"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 2 次，引日文維基（:30）。media_read_media 兩次回空標題（:11、:13），第三次才正常（:17）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-tamako.md"
+   },
+   {
+    "task": "abyss",
+    "conv": "223cc330-c301-420b-99c1-ab8d5ab54384",
+    "seconds": 62,
+    "turns": 1,
+    "requests": 7,
+    "tool_calls": 15,
+    "input": 67887,
+    "output": 3761,
+    "cache_read": 54144,
+    "web_searches": 0,
+    "tavily_searches": 5,
+    "cost_usd": 0.00896,
+    "cost_unknown_turns": 0,
+    "stops": [
+     "completed"
+    ],
+    "guard_stops": [],
+    "tools": [
+     "skills.load_skill",
+     "discover.search_media",
+     "discover.search_media",
+     "discover.search_media",
+     "media.read_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "media.read_media",
+     "web.tavily_search",
+     "web.tavily_search",
+     "web.tavily_search"
+    ],
+    "tool_outcomes": {
+     "ok": 15
+    },
+    "card": null,
+    "user_turns_used": 1,
+    "rep": 1,
+    "provider": "openai",
+    "group": "lean",
+    "score": {
+     "group": "lean",
+     "series_ok": true,
+     "tmdb_series": "tv:72636",
+     "parts": [
+      {
+       "part": "S1",
+       "truth": "S01E01–E13",
+       "model": "S01E01–E13",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-abyss.md:29"
+      },
+      {
+       "part": "S2 烈日的黃金鄉",
+       "truth": "S02E01–E12",
+       "model": "S02E01–E12",
+       "verdict": "correct",
+       "flagged": false,
+       "evidence": "r1-openai-lean-abyss.md:31"
+      }
+     ],
+     "parts_judged": 2,
+     "correct": 2,
+     "wrong_flagged": 0,
+     "wrong_silent": 0,
+     "missing_flagged": 0,
+     "missing_silent": 0,
+     "should_flag_missed": 0,
+     "correct_unflagged": [],
+     "false_flags": 0,
+     "skipped_parts": [],
+     "movies": [
+      {
+       "title": "深き魂の黎明",
+       "tmdb": "movie:573730",
+       "status": "separate_movie",
+       "evidence": "r1-openai-lean-abyss.md:30",
+       "note": "與研究一致"
+      },
+      {
+       "title": "覺醒的神秘（2026-10-23 上映）",
+       "tmdb": "movie:1526917",
+       "status": "listed_warned",
+       "evidence": "r1-openai-lean-abyss.md:32"
+      },
+      {
+       "title": "總集篇 前／後編",
+       "tmdb": "movie:526426 / 526429",
+       "status": "excluded_recap",
+       "evidence": "r1-openai-lean-abyss.md:38"
+      }
+     ],
+     "used_web": true,
+     "cited_url": true,
+     "notes": "Tavily 5 次，引 en/zh wikipedia、TMDB（:34、:41）。"
+    },
+    "transcript": "agent-sources-ab-2026-10-28/r1-openai-lean-abyss.md"
+   }
+  ]
+ }
+}

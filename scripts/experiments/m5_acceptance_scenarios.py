@@ -142,7 +142,7 @@ def endpoint_from_env(provider: str) -> dict[str, str]:
 class Server:
     """一台全新的演練 server：自己的暫存 config root，跑完就停。"""
 
-    def __init__(self, port: int, log: Path) -> None:
+    def __init__(self, port: int, log: Path, scenario: str = "agent-live") -> None:
         self.port = port
         self.root = Path(tempfile.mkdtemp(prefix="berth-acceptance-"))
         self._log = log.open("w")
@@ -151,7 +151,7 @@ class Server:
                 sys.executable,
                 str(ROOT / "scripts" / "fake_setup_server.py"),
                 "--scenario",
-                "agent-live",
+                scenario,
                 "--port",
                 str(port),
                 "--config-root",
@@ -189,14 +189,14 @@ class Runner:
             base_url=base, headers=BROWSER, timeout=httpx.Timeout(900, connect=10)
         )
 
-    def sign_in(self, provider: str) -> None:
+    def sign_in(self, provider: str, *, tavily: bool = True) -> None:
         r = self.http.post("/api/auth/login", json={"username": "skipper", "password": "harbour"})
         r.raise_for_status()
         body = {
             "enabled": True,
             "provider": provider,
             **endpoint_from_env(provider),
-            "tavily_api_key": os.environ.get("TAVILY_API_KEY", ""),
+            "tavily_api_key": os.environ.get("TAVILY_API_KEY", "") if tavily else "",
         }
         r = self.http.put("/api/settings/ai", json=body)
         r.raise_for_status()
