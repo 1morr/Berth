@@ -1,6 +1,6 @@
 # 23c — 系列對照的整季標記做進程式（等 A/B 結果決定做或取消）
 
-**Status:** blocked
+**Status:** cancelled
 
 **Blocked by:** 23b；`docs/research/agent-sources-ab-2026-10-28.md`（精簡組 vs 完整組的真模型比較，使用者 2026-10-28 要求）
 
@@ -19,9 +19,11 @@
 
 ## 驗收
 
-- [ ] A/B 結論已讀，決定做或取消寫在 Comments（取消就改 Status 為 cancelled 並開拿掉來源的票）
-- [ ] （做的話）工具在伺服器端算出整季標記，與研究一致（測試，改壞會紅）；skill 照抄
-- [ ] （做的話）真模型重跑三個變體：該標的全標、沒有誤報
-- [ ] 全部檢查、pytest、vitest 綠；progress.md 已更新
+- [x] A/B 結論已讀，決定做或取消寫在 Comments（取消就改 Status 為 cancelled 並開拿掉來源的票）
+- [x] ~~（做的話）工具在伺服器端算出整季標記，與研究一致（測試，改壞會紅）；skill 照抄~~（取消，不做）
+- [x] ~~（做的話）真模型重跑三個變體：該標的全標、沒有誤報~~（取消，不做）
+- [x] ~~全部檢查、pytest、vitest 綠；progress.md 已更新~~（取消，不做）
 
 ## Comments
+
+- 2026-10-28 協調者：**取消**。`docs/research/agent-sources-ab-2026-10-28.md`：17 部的系列對應，精簡組（TMDB + 網路搜尋）錯 0 段，Fribb 錯 4 段、AniList 串接錯 3 段；無職轉生第二季前半 Fribb 與 AniList 同源一起錯，伺服器端整季標記也救不了。使用者決定拿掉 Fribb 與 AniList 的系列走圖、搜尋，改開票 23d。
