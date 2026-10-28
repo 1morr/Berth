@@ -1,6 +1,6 @@
 # 23b — 整季標記做進程式；多條可用 Route 時在卡片上選
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 23
 
@@ -31,11 +31,11 @@ Mikan 訂閱回填同一字幕組同一集的繁日、簡日兩版：使用者�
 
 ## 驗收
 
-- [ ] 對照工具在伺服器端算出整季標記，與研究結論一致（測試，改壞會紅）；`series-mapping` 照抄它
-- [ ] 真模型兩種接口重跑情境 2 的三個變體：該標的季全部標出、沒有誤報（逐字稿）
+- [ ] ~~對照工具在伺服器端算出整季標記，與研究結論一致（測試，改壞會紅）；`series-mapping` 照抄它~~（移到票 23c）
+- [ ] ~~真模型兩種接口重跑情境 2 的三個變體：該標的季全部標出、沒有誤報（逐字稿）~~（移到票 23c）
 - [x] 多條可用 Route 時卡片上必選、伺服器只收存下清單裡的 Route（測試＋playwright 截圖）；真模型的送單情境走到卡片上選 Route
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；plan、brief、CHANGELOG、progress.md 已更新
-- [ ] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push，由協調者問使用者
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；plan、brief、CHANGELOG、progress.md 已更新
+- [x] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push，由協調者問使用者
 
 ## Comments
 
@@ -56,3 +56,8 @@ Mikan 訂閱回填同一字幕組同一集的繁日、簡日兩版：使用者�
 **發版建議**（不發版、不 push，由協調者問使用者）：這張的整季標記還沒做、M5 也還沒收尾，建議**不單獨發版**，併進 M5 的版本；若要先發，屬新行為加 API 欄位與 migration，照 SemVer 0.x 是 minor（例如目前版本的下一個 minor），CHANGELOG 用〈Unreleased〉→〈Changed〉那一條「作品放得進的 Route 不只一條時，確認卡上要你選」。
 
 **驗證輸出**（code-review 修正後）：`uv run pre-commit run --all-files` 全過；`uv run pytest` 5173 passed、1 skipped、28 deselected；`pnpm -C web test` 123 files、2299 passed；`pnpm -C web e2e` 62 passed（3.6m）；`pnpm -C web gen:api` 無 diff；`alembic heads` 只有 `c2f6a8d4e917`。
+
+### 2026-10-28 拆票與關鍵字訂閱（協調者）
+
+- **拆票**：〈做什麼〉第 1、2 點與第 5 點的情境 2 三個變體拆到票 23c（`.scratch/m5/issues/23c-server-side-season-flags.md`，等「只有網搜 + TMDB」與「加 AniList / Fribb / Bangumi」的比較決定做或取消）。驗收的那兩條劃掉、註明移到 23c；這張只剩 Route 卡片，已做完，`Status` 改 `done`。
+- **關鍵字訂閱也要問 Route**（協調者讀了收尾報告後，照使用者「多條可用就一定問」）：`rss.subscribe_search` 平常可逆、直接做，但作品放得進的 Route 不只一條、這部作品又沒有 `default_route_id` 時，改走出卡那條路（與 `term` 出自外部內容時同一條，`Turn.run_write` → `_route_unsettled`），卡上照送單卡的規則選；只有一條或有預設時照舊直接做。「命令有沒有 Route 可選」抽成 `proposals.sends_into_a_route`，出卡與 `_route_asks` 共用。測試 `test_agent_write_tools.py::TestTheRouteIsAskedOnACard`（三條：兩條沒預設出卡、沒選 422、選了照它建 Feed；有預設直接做；只有一條直接做）；變異兩種（拿掉出卡條件、不看預設）各紅過。`test_agent_injection` 的「種子名稱叫模型建關鍵字訂閱」那一條守的是直接建的路，這台 Berth 有兩條電視 Route，所以讓作品先有預設。plan §6、§11.6，brief §14，CHANGELOG 已補。
