@@ -119,3 +119,5 @@ B：CLI 9 檔 0 條；overlay 1280 全部乾淨，390 只有三處中英混排�
 - pytest（`-m "not e2e"`）：5148 passed、1 skipped、28 deselected（11 分 9 秒）。之後只動了 `api/agent._with_stop` 的檢查順序，`test_agent_api.py` 55 passed。
 - vitest：123 檔 2295 passed。
 - 前端 e2e：`agent`、`agent-390`、`media-downloads`、`media-downloads-390`、`issues`、`review` 19 passed（2.1 分）。
+
+- 2026-10-28 協調者判讀：斷路器「關」（正常）時面板不畫、「開」時畫「暫停」說明，符合「開與關的狀態在側面板看得到」；「開 → 關」的自動收掉只有 vitest（`asks again once the pause is over`）守，e2e 只跑得到「關 → 開」。
