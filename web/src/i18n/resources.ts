@@ -3995,6 +3995,12 @@ const zhHant = {
       running: '執行中…',
       reject: '拒絕',
       noneTicked: '一列都沒勾。全部不要的話按「拒絕」。',
+      // 作品放得進的 Route 不只一條（M5 票 23b）：逐列在卡片上選，模型給的那一條不算數。
+      routeLead:
+        '這部作品放得進的 Route 不只一條：按確認前逐列選一條。預選的是這部作品上次用的那一條。',
+      routeChoose: '選一條 Route',
+      routeMissing_one: '還有 {{count}} 列沒選 Route。',
+      routeMissing_other: '還有 {{count}} 列沒選 Route。',
       detached: '對話已經往下走了，這張仍然有效：按了就直接執行，助理下一則會知道結果。',
       failed: '這一下沒送出去',
       status: {
@@ -4019,6 +4025,8 @@ const zhHant = {
         proposal_decided: '這張已經有人按過了（可能在另一個分頁），上面是它現在的樣子。',
         proposal_expired: '按下去的那一刻剛好過期，什麼都沒做。',
         selection_invalid: '勾選對不上這張卡的列數。重新整理再按一次。',
+        route_required: '有一列還沒選 Route。選好再按一次。',
+        route_not_offered: '選的 Route 不在這張卡的清單上。重新整理再選一次。',
       },
     },
     failure: {
@@ -8195,6 +8203,11 @@ const en: Translations<typeof zhHant> = {
       running: 'Running…',
       reject: 'Reject',
       noneTicked: 'Nothing is ticked. To do none of it, press Reject.',
+      routeLead:
+        'More than one route fits this work: choose one per row before confirming. The one it used last is preselected.',
+      routeChoose: 'Choose a route',
+      routeMissing_one: 'Choose a route for {{count}} more row.',
+      routeMissing_other: 'Choose a route for {{count}} more rows.',
       detached:
         'The conversation has moved on, but this card still holds: pressing it runs it right away, and the assistant hears the result in its next reply.',
       failed: 'That press did not go through',
@@ -8221,6 +8234,8 @@ const en: Translations<typeof zhHant> = {
           'Someone already pressed this card (maybe in another tab); above is how it stands now.',
         proposal_expired: 'It expired just as you pressed it. Nothing was done.',
         selection_invalid: 'The ticked rows do not match this card. Reload and press again.',
+        route_required: 'A row has no route yet. Choose one and press again.',
+        route_not_offered: 'That route is not on this card. Reload and choose again.',
       },
     },
     failure: {

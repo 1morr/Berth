@@ -213,3 +213,60 @@ class TestSubmitCards:
         assert response.status_code == 200, response.text
         assert len(response.json()) == 1
         assert PROWLARR_KEY not in response.text
+
+    def test_with_two_routes_for_the_work_the_route_is_chosen_on_the_card(
+        self, client: TestClient
+    ) -> None:
+        """票 23b：這個環境有兩條電視 Route（TV、Anime），作品沒用過哪一條。沒選是 422，選清單外的
+        也是，選了清單裡的照它送。"""
+        sign_in(client, CREW)
+        sign_in(client, ADMIN)
+        assert client.get(f"/api/media/{SPY_ID}").status_code == 200
+
+        async def arrange(session: AsyncSession) -> dict[str, Any]:
+            crew = await session.scalar(select(User).where(User.name == CREW["username"]))
+            assert crew is not None
+            routes = {
+                row.name: row.id for row in await session.scalars(select(Route).order_by(Route.id))
+            }
+            card = await proposals.propose(
+                session,
+                EventHub(),
+                "downloading.add_manual_download",
+                [
+                    {
+                        "source": {"url": PROXY_LINK, "title": "[Sub] SPY x FAMILY - 01 [1080p]"},
+                        "media_id": SPY_ID,
+                        "route_id": routes["TV"],
+                    }
+                ],
+                actor=Actor.ai(crew.id, Role(crew.role)),
+            )
+            return {"card": card.id, "routes": routes}
+
+        made = in_session(client, arrange)
+        routes = made["routes"]
+        sign_in(client, CREW)
+        [listed] = client.get("/api/proposals").json()
+        assert listed["preview"]["routes"] == [
+            {
+                "options": [
+                    {"id": routes["TV"], "name": "TV"},
+                    {"id": routes["Anime"], "name": "Anime"},
+                ],
+                "preselected": None,
+            }
+        ]
+
+        missing = decide(client, made["card"], {"approve": True})
+        outside = decide(client, made["card"], {"approve": True, "routes": [routes["Movies"]]})
+
+        assert missing.status_code == 422
+        assert missing.json()["detail"] == {"reason": "route_required", "detail": "0"}
+        assert outside.status_code == 422
+        assert outside.json()["detail"]["reason"] == "route_not_offered"
+
+        chosen = decide(client, made["card"], {"approve": True, "routes": [routes["Anime"]]})
+
+        assert chosen.status_code == 200, chosen.text
+        assert chosen.json()["routes"] == [routes["Anime"]]

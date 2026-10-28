@@ -5443,13 +5443,15 @@ export interface components {
         };
         /**
          * ProposalDecisionIn
-         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份。
+         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 除外（票 23b）。
          */
         ProposalDecisionIn: {
             /** Approve */
             approve: boolean;
             /** Selection */
             selection?: number[] | null;
+            /** Routes */
+            routes?: (number | null)[] | null;
         };
         /** ProposalOut */
         ProposalOut: {
@@ -5492,6 +5494,8 @@ export interface components {
             results: components["schemas"]["ProposalRowOut"][] | null;
             /** Detached At */
             detached_at: string | null;
+            /** Routes */
+            routes: (number | null)[] | null;
         };
         /**
          * ProposalPreviewOut
@@ -5509,13 +5513,15 @@ export interface components {
             held_back: number;
             /** Torrents */
             torrents: (number | null)[];
+            /** Routes */
+            routes: (components["schemas"]["RouteAskOut"] | null)[];
         };
         /**
          * ProposalRefusal
          * @description 決定 Proposal 時做不了的理由（`services.proposals`）。
          * @enum {string}
          */
-        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid";
+        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid" | "route_required" | "route_not_offered";
         /**
          * ProposalRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。`proposal_decided` 的 `detail` 是
@@ -5811,6 +5817,16 @@ export interface components {
          */
         Role: "admin" | "user";
         /**
+         * RouteAskOut
+         * @description 一列要人在卡片上選的 Route（票 23b）：作品放得進的不只一條。
+         */
+        RouteAskOut: {
+            /** Options */
+            options: components["schemas"]["RouteOptionOut"][];
+            /** Preselected */
+            preselected: number | null;
+        };
+        /**
          * RouteChoiceOut
          * @description 下拉裡的一條 Route。只會出現 `collection_type` 與這部作品相符的。
          *
@@ -5845,6 +5861,13 @@ export interface components {
             library_id: string;
             /** Target Path */
             target_path: string;
+            /** Name */
+            name: string;
+        };
+        /** RouteOptionOut */
+        RouteOptionOut: {
+            /** Id */
+            id: number;
             /** Name */
             name: string;
         };
@@ -9474,7 +9497,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProposalRefusalOut"];
                 };
             };
-            /** @description `selection_invalid` */
+            /** @description `selection_invalid` · `route_required` · `route_not_offered` */
             422: {
                 headers: {
                     [name: string]: unknown;

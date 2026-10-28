@@ -3,8 +3,9 @@
 登入就進得來（一般使用者也是），看得到與按得到的範圍由命令判斷：自己的，管理員是每一張；別人的
 看不到也按不到，是 `proposal_missing`。
 
-**決定的 body 只有核准與勾選**（`extra="forbid"`）：執行用伺服器存的那一份參數，前端送來的參數一律
-不收（brief §20.24：`VercelAIAdapter` 預設信任前端，偽造一則核准就能換參數）。
+**決定的 body 只有核准、勾選與逐列的 Route**（`extra="forbid"`）：執行用伺服器存的那一份參數，前端
+送來的參數一律不收（brief §20.24：`VercelAIAdapter` 預設信任前端，偽造一則核准就能換參數）。唯一的
+例外是 Route（票 23b）：作品放得進的不只一條時人在卡片上選，只收提出時存下的那份清單裡的。
 
 狀態變更經 `GET /events/stream` 的 `event: proposal` 推出去；畫面讓 `['proposals']` 失效再問一次。
 """
@@ -34,6 +35,9 @@ _STATUS: dict[ProposalRefusal, int] = {
     ProposalRefusal.PROPOSAL_EXPIRED: status.HTTP_409_CONFLICT,
     # 勾選本身說不通（空的、重複、超出列數）。
     ProposalRefusal.SELECTION_INVALID: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    # 要選 Route 的列沒選，或選了清單外的（票 23b）。
+    ProposalRefusal.ROUTE_REQUIRED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ProposalRefusal.ROUTE_NOT_OFFERED: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -43,6 +47,24 @@ class ProposalRefusalOut(BaseModel):
 
     reason: ProposalRefusal
     detail: str
+
+
+class RouteOptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    #: 提出那一刻的名字。
+    name: str
+
+
+class RouteAskOut(BaseModel):
+    """一列要人在卡片上選的 Route（票 23b）：作品放得進的不只一條。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    options: list[RouteOptionOut]
+    #: 這部作品上次送單用的那一條；沒用過是 `null`（不預選）。
+    preselected: int | None
 
 
 class ProposalPreviewOut(BaseModel):
@@ -61,6 +83,8 @@ class ProposalPreviewOut(BaseModel):
     #: 逐列：按下去會送出幾個 torrent；`null` 是要送出時才知道（讀不到 Mikan 的單一 feed）。
     #: 不送 torrent 的命令是空清單。
     torrents: list[int | None]
+    #: 逐列：要人選 Route 的列是可選清單，其餘是 `null`。命令沒有 Route 的是空清單。
+    routes: list[RouteAskOut | None]
 
 
 class ProposalRowOut(BaseModel):
@@ -102,16 +126,20 @@ class ProposalOut(BaseModel):
     results: list[ProposalRowOut] | None
     #: 脫離提出它的那一輪的時刻（使用者沒按就繼續說話）；之後按下去當場執行。
     detached_at: datetime | None
+    #: 核准時逐列在卡片上選的 Route；沒選過是 `null`。
+    routes: list[int | None] | None
 
 
 class ProposalDecisionIn(BaseModel):
-    """只有決定本身。參數不在這裡：執行用伺服器存的那一份。"""
+    """只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 除外（票 23b）。"""
 
     model_config = ConfigDict(extra="forbid")
 
     approve: bool
     #: 總覽卡上勾著的那幾列（0 起算）；`null` 是全部。拒絕時不看它。
     selection: list[int] | None = None
+    #: 逐列的 Route，與列對齊；只有 `preview.routes` 有清單的列能給值，勾著的那幾列必給。
+    routes: list[int | None] | None = None
 
 
 @router.get("")
@@ -147,6 +175,7 @@ async def post_decision(
             proposal_id,
             approve=body.approve,
             selection=body.selection,
+            routes=body.routes,
             user_id=user.id,
             role=user.role,
         )

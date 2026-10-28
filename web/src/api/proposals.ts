@@ -21,6 +21,8 @@ const REASONS: ReasonSet<ProposalRefusal> = {
   proposal_decided: true,
   proposal_expired: true,
   selection_invalid: true,
+  route_required: true,
+  route_not_offered: true,
 }
 
 export function proposalRefusalOf(error: unknown): Refusal<ProposalRefusal> | null {
@@ -45,13 +47,16 @@ export function proposalsQueryOptions(conversationId: string) {
   })
 }
 
+export type RouteAsk = Schemas['RouteAskOut']
+
 /**
  * 核准（可帶勾選）或拒絕。**核准就當場執行**，回的是執行完的那一張、逐列結果在裡面。
- * body 不帶參數：執行用伺服器存的那一份。
+ * body 不帶參數：執行用伺服器存的那一份。唯一的例外是逐列的 Route（票 23b）：`preview.routes`
+ * 有清單的列在卡片上選，只收清單裡的。
  */
 export function decideProposal(
   id: number,
-  decision: { approve: boolean; selection?: number[] | null },
+  decision: { approve: boolean; selection?: number[] | null; routes?: (number | null)[] },
 ): Promise<Proposal> {
   return apiPost<Proposal>(`/proposals/${id}/decide`, decision)
 }

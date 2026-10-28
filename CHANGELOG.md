@@ -98,6 +98,12 @@
 
 ### Changed
 
+- **作品放得進的 Route 不只一條時，確認卡上要你選**（M5 票 23b）：助理出的送單卡與 Mikan、關鍵字訂閱卡，那部作品有兩條以上
+  啟用中、收這一種作品的 Route 時，那一列的 Route 換成必選的下拉，預選這部作品上次送單用的那一條（沒用過就不預選），
+  勾著的列沒選齊之前沒有確認鍵；助理不再在對話裡問 Route，它給的那一條也不會被預選。伺服器只收提出時存下的那份清單裡的
+  Route。只有一條時照舊直接帶入。API：`GET /api/proposals` 的 `preview` 多逐列 `routes`（可選清單與預選），卡片多 `routes`
+  （核准時選的）；`POST /api/proposals/{id}/decide` 多選填的 `routes`（與列對齊），要選的列沒選是 422 `route_required`，
+  不在清單上是 422 `route_not_offered`。**資料庫 migration `c2f6a8d4e917`**：`proposals` 多一欄 `routes_json`，既有的列是 `NULL`。
 - **AI 估計費用改用 genai-prices 查價，照端點網址認服務商**（M5 票 21b）：價目改由 Pydantic 維護的
   [genai-prices](https://github.com/pydantic/genai-prices)（隨 Berth 內附的 0.1.13）提供，先照 base URL 認出是哪一家，
   所以「Anthropic 接口 + DeepSeek 端點」照 DeepSeek 的價算，不再照模型名套原廠價；DeepSeek 的尖峰離峰照每次呼叫當時的價。

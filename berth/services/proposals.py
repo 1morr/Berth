@@ -13,9 +13,13 @@
    沒有）。
    **先搶狀態**：compare-and-set 從讀到的那個等待狀態改成核准或拒絕，搶輸的是 `proposal_decided`，
    所以連按兩次只算一次。核准時可以帶逐列選擇。
+   **Route 是唯一能在這裡給的參數**（票 23b，放寬票 08 的「存下後不可改」）：作品放得進的 Route
+   不只一條時，提出時把那一列的可選清單存進預覽（`RouteAsk`），核准時勾著的每一列都要選一條、
+   只收清單裡的（`route_required` / `route_not_offered`）。只有一條的列不收。
 3. **執行**（`execute`）：同樣先搶（核准 → 執行中），再逐列經命令執行器：先重驗（乾跑）、再執行。
-   **參數只用存下的那一份**（沒有收參數的入口），而且先重算雜湊比對卡片上那一份。每做完一列就把
-   那一列的結果與它的改動一起 commit：做到一半的總覽卡，做過的那幾列有結果、不會再做一次。
+   **參數只用存下的那一份**（唯一的例外是卡片上選的 Route），而且先重算雜湊比對卡片上那一份。
+   每做完一列就把那一列的結果與它的改動一起 commit：做到一半的總覽卡，做過的那幾列有結果、
+   不會再做一次。
    做的人是提出者（AI 提出的記 `ai:<user id>`），角色照他**現在**的角色重讀。
 4. **脫離對話**（`detach`）：使用者沒按就繼續說話時，那段對話裡還在等的卡片標成脫離（票 13 叫它）。
 5. **過期清掃**（`expire_due`）：`sweeper` 每分鐘醒來時叫它。決定時也會當場看期限。
@@ -58,11 +62,13 @@ from berth.domain import (
     ProposalStatus,
     Role,
 )
-from berth.models import Proposal, User
+from berth.models import Media, Proposal, User, parse_media_id
+from berth.models import media_id as build_media_id
 from berth.services.commands import Effect, Flag, command
 from berth.services.events import EventHub, ProposalSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
-from berth.services.registry import Verdict, commands, dry_run, public_arguments
+from berth.services.media import route_choices
+from berth.services.registry import CommandSpec, Verdict, commands, dry_run, public_arguments
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +96,25 @@ class InvalidProposalError(CommandRefusedError):
 
 
 @dataclass(frozen=True, slots=True)
+class RouteOption:
+    id: int
+    #: 提出那一刻的名字：卡片照它畫，之後改名不影響這張卡。
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class RouteAsk:
+    """一列要人在卡片上選的 Route（票 23b）：這部作品放得進的不只一條（`media.route_choices`）。
+
+    模型給的那一條不算數（票 23 實測它不問就挑），**預選的是這部作品上次送單用的那一條**
+    （`default_route_id`，在清單裡才算）；沒用過就不預選。
+    """
+
+    options: tuple[RouteOption, ...]
+    preselected: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class ProposalPreview:
     """提出那一刻伺服器算的：命令的效果與旗標（卡片照它說「不可逆」「會送出 torrent」），與逐列
     有沒有乾跑過（命令沒有驗證函式的是 `False`：預覽只看得到參數）。"""
@@ -105,6 +130,9 @@ class ProposalPreview:
     #: 逐列：按下去會送出幾個 torrent（送單一列一個，訂閱 Mikan 是單一 feed 上整季的筆數）；
     #: `None` 是提出時不知道，要送出時才知道。不送 torrent 的命令是空的。
     torrents: tuple[int | None, ...] = ()
+    #: 逐列：要人選 Route 的列是 `RouteAsk`，其餘（只有一條、命令沒有 Route）是 `None`。命令的輸入
+    #: 沒有 `media_id` 與 `route_id` 的、票 23b 之前存的卡是空的。
+    routes: tuple[RouteAsk | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +168,8 @@ class ProposalView:
     results: list[RowResult] | None
     #: 脫離提出它的那一輪的時刻；沒脫離過是 `None`。
     detached_at: datetime | None = None
+    #: 核准時逐列在卡片上選的 Route（`preview.routes` 有 `RouteAsk` 的列才有值）；沒選過是 `None`。
+    routes: list[int | None] | None = None
 
 
 def arguments_hash(name: str, arguments: Sequence[Mapping[str, object]]) -> str:
@@ -201,6 +231,7 @@ async def propose(
         or tuple(() for _ in rows),
         held_back=held_back,
         torrents=tuple(torrents),
+        routes=await _route_asks(session, spec, arguments),
     )
     proposal = Proposal(
         command=name,
@@ -230,11 +261,15 @@ async def decide(
     *,
     approve: bool,
     selection: Sequence[int] | None = None,
+    routes: Sequence[int | None] | None = None,
     user_id: int,
     role: Role,
     now: datetime | None = None,
 ) -> ProposalView:
-    """人按下卡片（模組 docstring 第 2 點）。只收人：AI 沒有這條路。"""
+    """人按下卡片（模組 docstring 第 2 點）。只收人：AI 沒有這條路。
+
+    `routes` 逐列對齊，只有要選 Route 的列（`preview.routes`）能給值；拒絕時不看它。
+    """
     moment = now or datetime.now(UTC)
     proposal = await session.get(Proposal, proposal_id, populate_existing=True)
     if proposal is None or (role is not Role.ADMIN and proposal.user_id != user_id):
@@ -248,7 +283,9 @@ async def decide(
             executor.hub.publish(ProposalSignal(id=proposal_id, status=ProposalStatus.EXPIRED))
             raise ProposalRejectedError(ProposalRefusal.PROPOSAL_EXPIRED)
         raise await _decided(session, proposal_id)
-    chosen = _selection(selection, len(proposal.arguments_json)) if approve else None
+    rows = len(proposal.arguments_json)
+    chosen = _selection(selection, rows) if approve else None
+    picked = _routes(routes, _view(proposal).preview.routes, rows, chosen) if approve else None
     status = ProposalStatus.APPROVED if approve else ProposalStatus.REJECTED
     moved = await _move(
         session,
@@ -258,6 +295,7 @@ async def decide(
         decided_by=user_id,
         decided_at=moment,
         selection_json=chosen,
+        routes_json=picked,
     )
     if not moved:
         raise await _decided(session, proposal_id)
@@ -285,6 +323,7 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
     name = proposal.command
     rows = proposal.arguments_json
     selection = proposal.selection_json
+    picked = proposal.routes_json or [None] * len(rows)
     intact = arguments_hash(name, rows) == proposal.arguments_hash
     actor = await _actor(session, proposal)
     results: list[RowResult] = []
@@ -294,7 +333,9 @@ async def execute(session: AsyncSession, executor: Executor, proposal_id: int) -
         elif not intact:
             outcome = RowResult(ProposalRowOutcome.FAILED, reason=ARGUMENTS_CHANGED)
         else:
-            outcome = await _run_row(session, executor, name, row, actor)
+            route = picked[index]
+            given = row if route is None else {**row, "route_id": route}
+            outcome = await _run_row(session, executor, name, given, actor)
         results.append(outcome)
         # 這一列的結果與它的改動同一筆 commit。
         await session.execute(
@@ -453,6 +494,56 @@ def _settled(results: Sequence[RowResult]) -> ProposalStatus:
     return ProposalStatus.FAILED if done == 0 else ProposalStatus.PARTIAL
 
 
+async def _route_asks(
+    session: AsyncSession, spec: CommandSpec, arguments: Sequence[Mapping[str, object]]
+) -> tuple[RouteAsk | None, ...]:
+    """逐列：作品放得進的 Route 不只一條就要人選（票 23b）。命令的輸入要有 `media_id` 與 `route_id`
+    （送單、訂閱 Mikan、關鍵字訂閱）才看。"""
+    if not {"media_id", "route_id"} <= set(spec.input.model_fields):
+        return ()
+    asks: list[RouteAsk | None] = []
+    for row in arguments:
+        media_id = str(row["media_id"])
+        choices = await route_choices(session, media_id)
+        if len(choices) < 2:
+            asks.append(None)
+            continue
+        parsed = parse_media_id(media_id)
+        media = await session.get(Media, build_media_id(*parsed)) if parsed is not None else None
+        last = media.default_route_id if media is not None else None
+        asks.append(
+            RouteAsk(
+                options=tuple(RouteOption(id=choice.id, name=choice.name) for choice in choices),
+                preselected=last if last in {choice.id for choice in choices} else None,
+            )
+        )
+    return tuple(asks)
+
+
+def _routes(
+    routes: Sequence[int | None] | None,
+    asks: Sequence[RouteAsk | None],
+    rows: int,
+    chosen: Sequence[int] | None,
+) -> list[int | None] | None:
+    """核准時的逐列 Route（模組 docstring 第 2 點）。勾著而沒選的是 `route_required`（`detail` 是
+    列號）；不在清單裡、那一列沒得選、或長度對不上的是 `route_not_offered`。"""
+    picks: list[int | None] = list(routes) if routes is not None else [None] * rows
+    if len(picks) != rows:
+        raise ProposalRejectedError(ProposalRefusal.ROUTE_NOT_OFFERED, json.dumps(picks))
+    for index, pick in enumerate(picks):
+        ask = asks[index] if index < len(asks) else None
+        if ask is None:
+            if pick is not None:
+                raise ProposalRejectedError(ProposalRefusal.ROUTE_NOT_OFFERED, f"{index}:{pick}")
+        elif pick is None:
+            if chosen is None or index in chosen:
+                raise ProposalRejectedError(ProposalRefusal.ROUTE_REQUIRED, str(index))
+        elif pick not in {option.id for option in ask.options}:
+            raise ProposalRejectedError(ProposalRefusal.ROUTE_NOT_OFFERED, f"{index}:{pick}")
+    return picks if any(pick is not None for pick in picks) else None
+
+
 def _selection(selection: Sequence[int] | None, rows: int) -> list[int] | None:
     if selection is None:
         return None
@@ -542,6 +633,16 @@ def _view(proposal: Proposal) -> ProposalView:
             ),
             held_back=preview.get("held_back", 0),
             torrents=tuple(preview.get("torrents") or ()),
+            # 票 23b 之前存的卡沒有這一格。
+            routes=tuple(
+                None
+                if ask is None
+                else RouteAsk(
+                    options=tuple(RouteOption(**option) for option in ask["options"]),
+                    preselected=ask["preselected"],
+                )
+                for ask in preview.get("routes") or ()
+            ),
         ),
         user_id=proposal.user_id,
         proposer=proposal.proposer,
@@ -567,4 +668,5 @@ def _view(proposal: Proposal) -> ProposalView:
             ]
         ),
         detached_at=proposal.detached_at,
+        routes=proposal.routes_json,
     )

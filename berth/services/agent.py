@@ -377,7 +377,12 @@ class SubmitRow(BaseModel):
 
     source_id: str = Field(description="The source_id of a row from search_torrents.")
     media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
-    route_id: int = Field(description="An id from route_choices for this work.")
+    route_id: int = Field(
+        description=(
+            "An id from route_choices for this work. When more than one fits, the user "
+            "chooses this row's route on the card."
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,6 +466,7 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
     超過一張卡上限的列（數量閘）說是呼叫裡的第幾列：模型的呼叫參數在歷史裡，它認得出是哪幾筆。
     """
     shown = len(view.arguments)
+    chosen = view.routes or [None] * shown
     held = view.preview.held_back
     later = (
         {
@@ -483,6 +489,8 @@ def card_outcome(view: ProposalView) -> dict[str, object]:
                 "reason": row.reason,
                 "detail": row.detail,
                 "result": row.result,
+                # 人在卡片上選的 Route（票 23b）：蓋過模型給的那一條，模型要照這個說。
+                **({"route_chosen_on_card": chosen[index]} if chosen[index] is not None else {}),
             }
             for index, row in enumerate(view.results or [])
         ],

@@ -11,6 +11,8 @@
   照他**那一刻**的角色重讀。人不在了，他的卡片也沒有意義（`ON DELETE CASCADE`）。
 - `conversation_id` 是提出它的那段對話；人提出的是 `NULL`。對話表在票 11，所以這裡還沒有外鍵。
 - `tool_call_id` 連回對話裡提出它的那一次工具呼叫（票 13）：恢復時靠它找回卡片。
+- **Route 是唯一能在決定時給的參數**（票 23b）：作品放得進的 Route 不只一條時，提出時把那一列的
+  可選清單存進預覽，人在卡片上選、`routes_json` 記下；只收清單裡的。其餘參數照舊不收。
 """
 
 from __future__ import annotations
@@ -69,5 +71,8 @@ class Proposal(Base):
     detached_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     #: 核准時勾的那幾列（0 起算）；`None` 是全部。
     selection_json: Mapped[list[int] | None] = mapped_column(JsonText, default=None)
+    #: 核准時逐列在卡片上選的 Route（M5 票 23b）；只有提出時可選的不只一條的列有值，其餘是 `None`。
+    #: 整格 `None` 是哪一列都沒選。執行時蓋過存下參數裡的 `route_id`。
+    routes_json: Mapped[list[int | None] | None] = mapped_column(JsonText, default=None)
     #: 逐列結果（`services.proposals.RowResult`），執行時每做完一列寫一次；還沒執行是 `None`。
     results_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonText, default=None)

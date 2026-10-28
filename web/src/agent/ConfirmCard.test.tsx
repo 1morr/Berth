@@ -52,6 +52,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
       external_fields: [[], [], []],
       held_back: 0,
       torrents: [1, 1, 1],
+      routes: [],
     },
     user_id: 1,
     proposer: 'ai',
@@ -65,6 +66,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
     selection: null,
     results: null,
     detached_at: null,
+    routes: null,
     ...overrides,
   }
 }
@@ -306,6 +308,7 @@ describe('ConfirmCard', () => {
         external_fields: [['name']],
         held_back: 0,
         torrents: [],
+        routes: [],
       },
     })
     serve(feed, stored('approval-requested'), () => feed)
@@ -334,6 +337,7 @@ describe('ConfirmCard', () => {
           external_fields: [[], [], []],
           held_back: 2,
           torrents: [1, 1, 1],
+          routes: [],
         },
       }),
       stored('approval-requested'),
@@ -368,6 +372,7 @@ describe('ConfirmCard', () => {
         external_fields: [[]],
         held_back: 0,
         torrents: [12],
+        routes: [],
       },
       status: 'failed',
       results: [{ outcome: 'refused', reason: 'series_bound', detail: 'tv:1', result: null }],
@@ -401,6 +406,7 @@ describe('ConfirmCard', () => {
           external_fields: [[]],
           held_back: 0,
           torrents,
+          routes: [],
         },
       })
     serve(mikan([12]), stored('approval-requested'), () => mikan([12]))
@@ -414,5 +420,100 @@ describe('ConfirmCard', () => {
     renderPanel()
     const unknown = await screen.findByRole('region', { name: '訂閱 Mikan 番組' })
     expect(within(unknown).getByText(/會送出整季.*數量要送出時才知道/)).toBeInTheDocument()
+  })
+
+  describe('a work that fits more than one route (ticket 23b)', () => {
+    const ask = (preselected: number | null) => ({
+      options: [
+        { id: 3, name: 'Anime' },
+        { id: 5, name: 'TV' },
+      ],
+      preselected,
+    })
+    const asking = (
+      rows: number,
+      preselected: number | null = null,
+      more: Partial<Proposal> = {},
+    ) =>
+      card({
+        arguments: [row(1), row(2), row(3)].slice(0, rows),
+        preview: {
+          effect: 'reversible',
+          flags: ['downloads'],
+          checked: Array.from({ length: rows }, () => true),
+          external_fields: Array.from({ length: rows }, () => []),
+          held_back: 0,
+          torrents: Array.from({ length: rows }, () => 1),
+          routes: Array.from({ length: rows }, () => ask(preselected)),
+        },
+        ...more,
+      })
+
+    it('asks for one with nothing preselected and draws no confirm button until it is chosen', async () => {
+      serve(asking(1), stored('approval-requested'), () =>
+        asking(1, null, { status: 'executed', results: [done], routes: [5] }),
+      )
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      const picker = within(section).getByRole('combobox', { name: 'Route' })
+      expect(picker).toHaveValue('')
+      expect(within(section).queryByRole('button', { name: '確認' })).toBeNull()
+      expect(within(section).getByText('還有 1 列沒選 Route。')).toBeInTheDocument()
+
+      await user.selectOptions(picker, 'TV')
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+
+      expect(decisions).toEqual([{ approve: true, selection: null, routes: [5] }])
+      // 做完之後那一格寫的是卡片上選的那一條，不是模型給的 Anime。
+      await waitFor(() => expect(within(section).getByText('完成')).toBeInTheDocument())
+      expect(within(section).queryByRole('combobox')).toBeNull()
+      expect(within(section).getByText('TV')).toBeInTheDocument()
+    })
+
+    it('preselects the route this work used last, which can still be changed', async () => {
+      serve(asking(1, 5), stored('approval-requested'), () => asking(1, 5))
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      const picker = within(section).getByRole('combobox', { name: 'Route' })
+      expect(picker).toHaveValue('5')
+
+      await user.selectOptions(picker, 'Anime')
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+
+      expect(decisions).toEqual([{ approve: true, selection: null, routes: [3] }])
+    })
+
+    it('only the ticked rows need a route', async () => {
+      serve(asking(2), stored('approval-requested'), () => asking(2))
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      const [first, second] = within(section).getAllByRole('combobox', { name: 'Route' })
+      expect(within(section).getByText('還有 2 列沒選 Route。')).toBeInTheDocument()
+
+      await user.selectOptions(second, 'TV')
+      expect(within(section).getByText('還有 1 列沒選 Route。')).toBeInTheDocument()
+      await user.click(within(section).getByRole('checkbox', { name: '[ANi] SPY×FAMILY - 1' }))
+      // 沒勾的那一列不必選：下拉留著（勾回來時不跳版面），送出時那一格是 null。
+      expect(first).toHaveValue('')
+      await user.click(within(section).getByRole('button', { name: '確認這 1 項' }))
+
+      expect(decisions).toEqual([{ approve: true, selection: [1], routes: [null, 5] }])
+    })
+
+    it('a work with a single route shows it as text, with no dropdown', async () => {
+      serve(card({ arguments: [row(1)] }), stored('approval-requested'), () => card())
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      await within(section).findByText('Anime')
+      expect(within(section).queryByRole('combobox')).toBeNull()
+      expect(within(section).getByRole('button', { name: '確認' })).toBeInTheDocument()
+    })
   })
 })

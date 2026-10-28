@@ -31,8 +31,9 @@ in Review, makes a duplicate.
    A pack that also holds episodes already imported is fine; say so. If nothing fits, say which
    episodes have no release and stop there for them.
 5. Pick the route from `media_read_media` for the work: its `routes` are the ones that hold
-   this kind of work, and `default_route_id` is the one used last. Use that one; if there is
-   none and more than one route fits, ask.
+   this kind of work, and `default_route_id` is the one used last. Pass that one, or any of
+   `routes` when there is none. Do not ask in chat: when more than one fits, the card makes the
+   user choose the route for that row.
 6. Put every pick in one `downloading_add_manual_download` proposal, one row per torrent:
    the release picked from the search results, media_id, route_id. Say which episodes each row
    covers. The user confirms the card; do not claim anything was sent before that.
