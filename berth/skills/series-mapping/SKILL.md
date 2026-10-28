@@ -55,11 +55,27 @@ tools:
    The confirmation card has no place for notes, so the table is where the user sees the marks.
    Leave shorts, recaps and spin-offs unticked and ask which rows they want.
 8. Only after they choose, search with `search_search_torrents`, one TMDB entry (or one
-   season) at a time. Anime releases often need a `query` with the romaji or the fansub
-   group's name for the show. Prefer `verdict: fits`, more seeders, and whole-season packs.
+   season) at a time. The language of a search decides which subtitles come back (Chinese
+   titles find mostly Chinese subtitles, English and original titles every language), so
+   search under several names. Without `query` Berth asks the names its search settings turn
+   on (`attempts` shows which); then also:
+   - the original and the English title (`title_original`, `title_en` from `media_read_media`),
+     with `query` for any not in `attempts`;
+   - with `query`, the title in the language the user writes in: `title` for Traditional
+     Chinese, and for Chinese also the Simplified title most subgroups write; for other
+     languages your own knowledge or a web search, saying which (cite the URL, or say it is
+     from memory);
+   - when results are thin, other names with `query`: romaji, the name with the season
+     (`<name> S02`, `<name> Season 2`, `<name> 第2季`), or the name one subgroup uses; here
+     also a part's own name.
+   A `query` search is judged only against the words you typed: check the season and episodes
+   of each row yourself. Follow what the user said about subtitle language and subgroups;
+   when they said nothing, prefer subtitles in the language they write in. Then prefer
+   `verdict: fits`, more seeders, and whole-season packs.
 9. Pick each row's route from that TMDB entry's `media_read_media`: its `routes` hold that kind
    of work (series or movies) and `default_route_id` is the one used last. A movie and a series
    never share a route. Pass the default, or any of `routes` when there is none. Do not ask in
    chat: when more than one fits, the card makes the user choose the route for that row.
 10. Put all picks in one `downloading_add_manual_download` proposal, one row per TMDB entry or
-    season, each row saying which parts it covers. The user confirms the card.
+    season, each row saying which parts it covers and its subgroup and subtitle language. The
+    user confirms the card.

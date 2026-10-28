@@ -108,7 +108,49 @@ MISSING_TASKS = (
     ),
 )
 
-SETS = {"main": TASKS, "more": MORE_TASKS, "missing": MISSING_TASKS}
+#: `--set subscribe`（票 27）：訂閱要列字幕組比較表、等人選、卡上字幕組必選；搜尋要多語言。
+#: 第一句之後就出卡算沒等人選（腳本照樣停在卡上）。英文那題用 TMDB 的英文名，問的人不會寫中文。
+SUBSCRIBE_TASKS = (
+    Task(
+        "sub-zh",
+        ("幫我訂閱鐵旅！meet with 鐵道少女", "就照你推薦的字幕組，出卡給我確認。"),
+    ),
+    Task(
+        "sub-en",
+        (
+            "Subscribe me to TETSURYO! Meet with Tetsudou Musume, I want each new episode as it comes out.",
+            "Go with the subgroup you recommend and give me the card to confirm.",
+        ),
+    ),
+    Task("frieren-zh", ("下載葬送的芙莉蓮第一季", ANSWER)),
+)
+
+SETS = {
+    "main": TASKS,
+    "more": MORE_TASKS,
+    "missing": MISSING_TASKS,
+    "subscribe": SUBSCRIBE_TASKS,
+}
+
+
+def subgroup_asks(card: dict[str, Any]) -> list[dict[str, Any] | None]:
+    """卡上逐列的字幕組選項（票 26 的 `preview.subgroups`）；不能選的列是 `None`。"""
+    return (card.get("preview") or {}).get("subgroups") or []
+
+
+def subgroup_lines(card: dict[str, Any]) -> list[str]:
+    """逐字稿裡卡上每一列的字幕組：幾個選項、預選、要不要人選。"""
+    lines = []
+    for ask in subgroup_asks(card):
+        if not ask:
+            continue
+        options = ask.get("options") or []
+        names = "、".join(option.get("name", "?") for option in options)
+        need = "必選" if ask.get("required") else "不必選"
+        lines.append(
+            f"> - 字幕組：{len(options)} 個選項（{names}），預選 `{ask.get('preselected')}`，{need}\n"
+        )
+    return lines
 
 
 def run_task(
@@ -141,6 +183,7 @@ def run_task(
                         f"> - `{json.dumps(args, ensure_ascii=False)[:300]}`\n"
                         for args in each["arguments"]
                     )
+                    + "".join(subgroup_lines(each))
                 )
             break
     seconds = round(time.monotonic() - started)
@@ -172,7 +215,13 @@ def run_task(
         },
         "card": None
         if card is None
-        else {"command": card.get("command"), "rows": card.get("arguments")},
+        else {
+            "command": card.get("command"),
+            "rows": card.get("arguments"),
+            "subgroups": subgroup_asks(card),
+        },
+        # 第幾句話之後出卡（票 27：訂閱要等人選，第一句就出卡算沒等）。
+        "card_after_step": len(replies) if card is not None else None,
         # 每一輪（使用者的一句）：input 合計、每次呼叫的 input（看上下文怎麼長）、搜了幾次、
         # 種子搜了幾次、截斷了幾筆、為什麼停（票 23d 量「找種子那一輪」用）。
         "per_turn": [
@@ -221,7 +270,7 @@ def main() -> None:
         "--set",
         choices=sorted(SETS),
         default="main",
-        help="main：原本四題；more：其餘 14 部；missing：補缺集",
+        help="main：原本四題；more：其餘 14 部；missing：補缺集；subscribe：訂閱與多語言搜尋",
     )
     ap.add_argument("--groups", default="lean")
     ap.add_argument(

@@ -9,8 +9,6 @@ tools:
   - bgm.read_calendar
   - discover.read_trending
   - discover.search_media
-  - bangumi.search_bangumi
-  - bangumi.read_bangumi
   - media.read_media
   - rss.subscribe_mikan
   - rss.subscribe_search
@@ -38,13 +36,12 @@ tools:
    `default_route_id` is the one used last. Pass that one, or any of `routes` when there is
    none. Do not ask in chat: when more than one fits, the card makes the user choose the route
    for that row.
-6. Still airing:
-   - Find it on Mikan with `bangumi_search_bangumi`, then `bangumi_read_bangumi` to see the
-     subgroups. Prefer the subgroup that published most recently and most often, in the
-     language the user wants.
-   - Propose `rss_subscribe_mikan` with ids from those results.
-   - Not on Mikan: propose `rss_subscribe_search` (a nyaa or acgrip keyword feed) instead.
-7. Finished airing: search with `search_search_torrents` and propose
-   `downloading_add_manual_download`, preferring `verdict: fits` and whole-season packs.
+6. Still airing: load the subscribe skill and follow it. It searches under several names,
+   compares the subgroups in a table, lets the user pick and proposes `rss_subscribe_mikan`,
+   or `rss_subscribe_search` when Mikan does not carry the show.
+7. Finished airing: search with `search_search_torrents` under the original, the English and
+   the user's-language title (`query` for any not in `attempts`), and propose
+   `downloading_add_manual_download`, preferring subtitles the user asked for, `verdict: fits`
+   and whole-season packs.
 8. Every subscription and download is a confirmation card the user decides. Do not say it is
    done before the card is decided; afterwards report what happened per row.

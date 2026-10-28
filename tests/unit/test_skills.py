@@ -34,6 +34,10 @@ from berth.services.skills import (
 
 #: 第一批（票 19）。
 FIRST_BATCH = {"series-mapping", "new-season-picks", "why-not-imported", "missing-episodes"}
+#: repo 裡現在的全部：票 27 加訂閱。
+SKILLS = FIRST_BATCH | {"subscribe"}
+#: 要 `rss.*`（只給管理員）的那幾份。
+ADMIN_ONLY = {"new-season-picks", "subscribe"}
 
 VALID = """\
 ---
@@ -195,7 +199,7 @@ class TestTheSkillsInTheRepo:
 
     def test_they_all_load(self) -> None:
         names = [skill.name for skill in read_skills(SKILLS_ROOT)]
-        assert set(names) >= FIRST_BATCH
+        assert set(names) == SKILLS
         assert len(names) == len(set(names))
 
     def test_every_declared_tool_is_a_panel_tool(self) -> None:
@@ -226,14 +230,14 @@ class TestWhatThePanelOffers:
         listed = {entry.name: entry.description for entry in await list_skills(role=Role.ADMIN)}
         assert "why-not-imported" in listed
         assert listed["why-not-imported"]
-        assert set(listed) <= FIRST_BATCH
+        assert set(listed) <= SKILLS
 
     @pytest.mark.asyncio
     async def test_an_admin_has_every_skill_and_a_user_only_those_their_tools_allow(self) -> None:
-        """一般使用者訂閱不了 Mikan 與關鍵字（`rss.*` 只給管理員），所以沒有推薦新番那一份。"""
-        assert {entry.name for entry in await list_skills(role=Role.ADMIN)} == FIRST_BATCH
+        """一般使用者訂閱不了 Mikan 與關鍵字（`rss.*` 只給管理員）：沒有推薦新番與訂閱。"""
+        assert {entry.name for entry in await list_skills(role=Role.ADMIN)} == SKILLS
         listed = {entry.name for entry in await list_skills(role=Role.USER)}
-        assert listed == FIRST_BATCH - {"new-season-picks"}
+        assert listed == SKILLS - ADMIN_ONLY
 
     @pytest.mark.asyncio
     async def test_load_skill_returns_the_whole_body(self) -> None:
