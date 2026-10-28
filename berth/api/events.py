@@ -117,6 +117,7 @@ async def _signals(hub: EventHub, shutdown: anyio.Event) -> AsyncIterator[dict[s
     """
     with hub.subscribe() as queue:
         stopping = asyncio.ensure_future(shutdown.wait())
+        waiting: asyncio.Future[Signal] | None = None
         try:
             while not shutdown.is_set():
                 waiting = asyncio.ensure_future(queue.get())
@@ -124,11 +125,14 @@ async def _signals(hub: EventHub, shutdown: anyio.Event) -> AsyncIterator[dict[s
                     (waiting, stopping), return_when=asyncio.FIRST_COMPLETED
                 )
                 if waiting not in done:
-                    waiting.cancel()
                     return
                 yield _event(waiting.result())
         finally:
+            # 分頁關掉時 `asyncio.wait` 被取消，但它在等的兩個 future 不會跟著取消：兩個都要收，
+            # 不然 `queue.get()` 的 task 一直 pending，GC 回收時印「Task was destroyed」。
             stopping.cancel()
+            if waiting is not None:
+                waiting.cancel()
 
 
 def _event(signal: Signal) -> dict[str, Any]:

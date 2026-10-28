@@ -1224,7 +1224,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 
 **驗收**：
 - 在側面板走完情境 1、2、3：
-  - Re:Zero 全系列分批入庫正確。這一項要真模型，用使用者的 key 跑 `scripts/experiments/m5_agent_scenarios.py` 那一套，結果記在票上。
+  - Re:Zero 全系列分批送出正確（票 23 收窄：真模型情境的 qBittorrent 是替身、不會真的下載，送出之後到入庫那一段由 M1–M4 的真服務 e2e 守）。這一項要真模型，用使用者的 key 跑 prototype 那一套情境（票 23 改成打產品的 API：`scripts/experiments/m5_acceptance_scenarios.py`，演練情境 `agent-live`），結果記在票上與 `docs/research/`。
   - 不可逆、`connects_out`、`downloads` 的命令只能經確認卡執行（整合測試，含假模型注入）。
 - 重啟之後舊卡片按得下去。
 - `/compact` 與自動壓縮之後，待確認的卡片仍在。

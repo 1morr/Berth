@@ -198,15 +198,25 @@ def chunks(response: httpx2.Response) -> list[dict[str, Any]]:
     return found
 
 
-def tool_result_given(messages: list[ModelMessage]) -> Any:
-    """模型拿到的那一筆工具結果（JSON 解回來）。"""
-    [given] = [
-        part.model_response_str()
+def tool_results(messages: list[ModelMessage]) -> list[Any]:
+    """模型拿到的每一筆工具結果（JSON 解回來），依序。"""
+    return [
+        json.loads(part.model_response_str())
         for message in messages
         for part in message.parts
         if isinstance(part, ToolReturnPart)
     ]
-    return json.loads(given)
+
+
+def tool_result_given(messages: list[ModelMessage]) -> Any:
+    """模型拿到的那一筆工具結果（只有一筆）。"""
+    [given] = tool_results(messages)
+    return given
+
+
+def last_tool_result(messages: list[ModelMessage]) -> Any:
+    """模型這一次拿到的最後一筆工具結果。"""
+    return tool_results(messages)[-1]
 
 
 def texts(messages: list[ModelMessage]) -> list[str]:
@@ -306,6 +316,11 @@ class TestGuards:
         assert turn.run.tool_calls == 4
         assert turn.run.input_tokens == sum(c.input_tokens for c in turn.calls) > 0
         assert turn.run.ended_at is not None
+        # 第 2 次附警告、第 3 次擋下，兩次都告訴模型為什麼（M5 驗收「防護留下說明」）。
+        given = [last_tool_result(script.seen[step]) for step in (1, 2, 3)]
+        assert "warning" not in given[0]
+        assert "will be blocked" in given[1]["warning"]
+        assert "already made 2 times" in given[2]["blocked"]
         # 說明當場串流回去，也留在對話裡。
         assert "第 4 次" in streamed_stop(response)["note"]
         assert "第 4 次" in stop_note(client)
@@ -339,13 +354,16 @@ class TestGuards:
         limit(client, input_tokens=1)
         script.steps = [call("jobs_list_jobs"), say("Nothing is downloading.")]
 
-        chat(client, "What is downloading?")
+        response = chat(client, "What is downloading?")
 
         [turn] = recorded(client)
         assert turn.run.stop_reason == "token_limit"
         assert turn.run.requests == 1
         # 超過上限的那一則還要叫的工具沒有跑。
         assert turn.tools == []
+        note = stop_note(client)
+        assert "用量到了每輪 1 input / 30000 output token 的上限" in note
+        assert note == streamed_stop(response)["note"]
 
     def test_a_finished_answer_past_the_token_limit_is_kept(
         self, client: TestClient, script: Script

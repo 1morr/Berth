@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { signIn } from './login.ts'
+import { CREW, signIn } from './login.ts'
 import { shot } from './shot.ts'
 
 // `agent`：同 `downloads`（SPY×FAMILY 的五筆下載，`- 01` 停在待審核），另外 AI 開著、模型是照腳本回答的
@@ -300,6 +300,25 @@ test('停下的那一輪：說明是 Berth 的「停下」，「繼續」只按�
   await expect(log).toContainText('這是演練用的假模型')
   await expect(resume).toHaveCount(0)
   await shot(page, 'stop-continued')
+})
+
+// 一般使用者（M5 驗收「同一道門禁」）：`deckhand` 用同一個面板問「為什麼沒入庫」——那支是一般使用者
+// 也能用的讀取命令；管理員才有的工具不在他的那一份裡（整合測試 `TestWhoCanUseWhat` 守）。用量頁不給他。
+test('一般使用者也用得到側面板：問「為什麼沒入庫」得到結論，用量頁進不去', async ({ page }) => {
+  await signIn(page, '/jobs', CREW)
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('SPY×FAMILY 為什麼沒入庫')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  await expect(log.locator('details').filter({ hasText: '查為什麼沒入庫' })).toContainText('完成')
+  await expect(log).toContainText('結論 awaiting_review')
+  await shot(page, 'crew-answered')
+
+  const usage = await page.request.get('/api/settings/usage')
+  expect(usage.status()).toBe(403)
 })
 
 // 放在最後：斷路器一開就暫停 15 分鐘，之後的流程都問不了。

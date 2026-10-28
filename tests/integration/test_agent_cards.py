@@ -59,10 +59,12 @@ from tests.integration.test_agent_api import (
     Step,
     chat,
     chunks,
+    limit,
     recorded,
     say,
     turn_ai_on,
 )
+from tests.integration.test_agent_compaction import ALWAYS
 from tests.integration.test_jobs_api import ADMIN, CREW, _seed, sign_in
 from tests.integration.test_media import ORDERING, SEASONS, SPY, SPY_ID
 
@@ -644,6 +646,68 @@ class TestHistoryShape:
         assert outcome_of(resumed)["executed"] is True
         assert [r.run.kind for r in recorded(client)][-2:] == ["compaction", "chat"]
         assert recorded(client)[-1].run.stop_reason == "completed"
+
+    def test_auto_compaction_on_the_resumed_turn_keeps_the_card_and_its_result(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        """自動壓縮（票 18）在恢復那一輪的開頭壓：卡片的呼叫與按下去的結果都留著（M5 驗收）。"""
+        script.steps = [
+            say("Hello."),
+            say("It is a spy comedy."),
+            card(rows(client, 1)),
+            say("SUMMARY: the user wants SPY×FAMILY episode 1."),
+            say("Sent."),
+        ]
+        chat(client, "Hi.")
+        chat(client, "What is SPY×FAMILY?")
+        chat(client, "Download episode 1.")
+        limit(client, compact_at=ALWAYS)
+
+        [proposal] = cards(client)
+        assert proposal["status"] == "pending"
+        pressed = decide(client, proposal["id"], approve=True)
+        response = resume(client)
+
+        assert pressed.json()["status"] == "executed"
+        assert response.status_code == 200, response.text
+        assert sent(factory) == [magnet(1)]
+        # 恢復那一輪先開，摘要在它的第一次呼叫之前（同 `test_agent_compaction`）。
+        runs = recorded(client)
+        assert [r.run.kind for r in runs][-2:] == ["chat", "compaction"]
+        assert runs[-2].run.stop_reason == "completed"
+        resumed = script.seen[-1]
+        assert any(isinstance(p, CompactionPart) for m in resumed for p in m.parts)
+        assert outcome_of(resumed)["executed"] is True
+
+    def test_auto_compaction_while_a_card_waits_leaves_it_pressable(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        """沒按卡片就繼續說話、那一輪開頭自動壓縮：卡片脫離但還在，之後按下去照樣執行。"""
+        script.steps = [
+            say("Hello."),
+            say("It is a spy comedy."),
+            card(rows(client, 1)),
+            say("SUMMARY: the user wants SPY×FAMILY episode 1."),
+            say("Sure."),
+        ]
+        chat(client, "Hi.")
+        chat(client, "What is SPY×FAMILY?")
+        chat(client, "Download episode 1.")
+        limit(client, compact_at=ALWAYS)
+
+        moved_on = chat(client, "Actually, who is in it?")
+
+        assert moved_on.status_code == 200, moved_on.text
+        assert [r.run.kind for r in recorded(client)][-2:] == ["chat", "compaction"]
+        assert any(isinstance(p, CompactionPart) for m in history(client) for p in m.parts)
+        [proposal] = cards(client)
+        assert proposal["status"] == "detached"
+        assert sent(factory) == []
+
+        pressed = decide(client, proposal["id"], approve=True)
+
+        assert pressed.json()["status"] == "executed"
+        assert sent(factory) == [magnet(1)]
 
 
 # ---------------------------------------------------------------- 11

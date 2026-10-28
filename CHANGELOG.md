@@ -108,6 +108,11 @@
   `AiEndpointOut.known_models`；`GET /api/settings/usage` 的 `prices` 每列多 `base_url`。
   **資料庫 migration `a9c3e5f1b742`**：`ai_calls` 多一欄 `base_url`（打的端點），既有的列是 `NULL`。
 
+### Fixed
+
+- 關掉分頁（或換頁、瀏覽器斷線）時，即時更新那條連線（`GET /api/events/stream`）留下一個沒人收的背景 task，
+  log 偶爾出現「Task was destroyed but it is pending!」（M5 票 23）。現在斷線時一起收掉。
+
 ### Removed
 
 - 沒有呼叫端的 `AiPlanner` / `NullAiPlanner` 介面（M5 票 09）；AI 解析在 M6 重新設計（plan §4.5）。
