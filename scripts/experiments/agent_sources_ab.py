@@ -1,12 +1,14 @@
 # 一次性但保留（plan §10）：換模型、或之後要再決定留不留某個資料來源時重量。
 # 中文的情境句子寫成長字串比較好讀，不照行寬折。
 # ruff: noqa: E501
-"""實驗：側面板的資料來源要不要留——「完整組」對「精簡組」，同模型、同提示詞（2026-10-28）。
+"""實驗：側面板的資料來源要不要留（2026-10-28），之後拿來量「產品現在的樣子」。
 
-- 完整組：演練情境 `agent-live`，現在的產品（TMDB、網路搜尋、AniList、Fribb、Bangumi）。
-- 精簡組：`agent-live-lean`，工具拿掉 AniList、Fribb、Bangumi，`series-mapping` 與 `new-season-picks`
-  換成不提它們的那一版（`scripts/experiments/agent_sources_lean_skills/`）；其餘完全相同。
-- 網路搜尋：Anthropic 接口只用伺服器端 `web_search`（不給 Tavily key），OpenAI 接口用 Tavily。兩組一樣。
+- 2026-10-28 比的是「完整組」（當時的產品，多 AniList 的搜尋與系列走圖、Fribb）對「精簡組」（只有 TMDB 與
+  網路搜尋，加 AniList 季表與 Bangumi 給新番推薦）；結論是精簡組，`docs/research/agent-sources-ab-2026-10-28.md`。
+- M5 票 23d 之後產品就是精簡組：演練情境 `agent-live`。當時的 `agent-live-lean` 情境與那份精簡 skill 的副本
+  拿掉了（產品已經是它），完整組也不在了，要重比得從 git 歷史拿回來。
+- 網路搜尋：Anthropic 接口只用伺服器端 `web_search`（不給 Tavily key），OpenAI 接口用 Tavily；
+  `--no-tavily` 讓 OpenAI 接口也不給，量沒有網搜時的樣子（票 23d）。
 
 題目是新番推薦與三部整系列（Re:Zero、無職轉生、HxH 2011），每組每題每種接口兩次；**只跑到確認卡出現**
 （不按、不送單）。模型問 Route 或來源時給一次固定回答。每一次（組 × 接口 × 重複）一台全新的 Berth，
@@ -39,7 +41,8 @@ from m5_acceptance_scenarios import (
 )
 
 OUT = ROOT / ".local" / "experiments" / "results" / "agent_sources_ab"
-GROUPS = {"full": "agent-live", "lean": "agent-live-lean"}
+#: 組名 → 演練情境。`lean` 是 2026-10-28 的精簡組，現在就是產品；逐字稿的檔名照舊帶它。
+GROUPS = {"lean": "agent-live", "missing": "agent-live-missing"}
 #: 完成與等確認之外的停止原因都是防護（或出錯）停下的。
 NORMAL_STOPS = {"completed", "awaiting_confirmation"}
 
@@ -96,7 +99,16 @@ MORE_TASKS = tuple(
         ("abyss", "《來自深淵》"),
     )
 )
-SETS = {"main": TASKS, "more": MORE_TASKS}
+#: `--set missing --groups missing`（票 23d）：補缺集一季只搜一次，一季十幾集各自一個發佈時卡片要
+#: 涵蓋每一集。演練情境 `agent-live-missing` 的替身索引站只有單集發佈。
+MISSING_TASKS = (
+    Task(
+        "missing",
+        ("SPY×FAMILY 第一季缺的集幫我補齊，字幕組照你推薦的挑，直接出卡給我確認。", ANSWER),
+    ),
+)
+
+SETS = {"main": TASKS, "more": MORE_TASKS, "missing": MISSING_TASKS}
 
 
 def run_task(
@@ -161,6 +173,25 @@ def run_task(
         "card": None
         if card is None
         else {"command": card.get("command"), "rows": card.get("arguments")},
+        # 每一輪（使用者的一句）：input 合計、每次呼叫的 input（看上下文怎麼長）、搜了幾次、
+        # 種子搜了幾次、截斷了幾筆、為什麼停（票 23d 量「找種子那一輪」用）。
+        "per_turn": [
+            {
+                "input": run["input_tokens"],
+                "call_inputs": [s["call"]["input_tokens"] for s in run["steps"] if s["call"]],
+                "requests": run["requests"],
+                "web_searches": run["web_searches"],
+                "tavily_searches": run["tavily_searches"],
+                "torrent_searches": sum(
+                    t["command"] == "search.search_torrents"
+                    for s in run["steps"]
+                    for t in s["tools"]
+                ),
+                "truncated": sum(t["truncated"] for s in run["steps"] for t in s["tools"]),
+                "stop": run["stop_reason"],
+            }
+            for run in details
+        ],
         "user_turns_used": len(replies),
     }
     log.append(
@@ -169,11 +200,11 @@ def run_task(
     return "\n".join(log), stats
 
 
-def sign_in(r: Runner, provider: str) -> None:
+def sign_in(r: Runner, provider: str, *, tavily: bool) -> None:
     """登入並填 AI 設定。測試連線偶爾逾時（服務商那一端），再試兩次。"""
     for attempt in range(3):
         try:
-            r.sign_in(provider, tavily=provider == "openai")
+            r.sign_in(provider, tavily=tavily and provider == "openai")
             return
         except RuntimeError:
             if attempt == 2:
@@ -187,9 +218,15 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--only", default="", help="逗號分隔的題目 key，例如 rezero,hxh2011")
     ap.add_argument(
-        "--set", choices=sorted(SETS), default="main", help="main：原本四題；more：其餘 14 部"
+        "--set",
+        choices=sorted(SETS),
+        default="main",
+        help="main：原本四題；more：其餘 14 部；missing：補缺集",
     )
-    ap.add_argument("--groups", default="full,lean")
+    ap.add_argument("--groups", default="lean")
+    ap.add_argument(
+        "--no-tavily", action="store_true", help="OpenAI 接口也不給 Tavily key（沒有網搜）"
+    )
     ap.add_argument("--list-only", action="store_true", help="整部系列只送「先列清單」那一句")
     ap.add_argument("--budget", type=float, default=1.5, help="累計估計費用（USD）到這裡就停")
     ap.add_argument("--port", type=int, default=8600)
@@ -211,7 +248,7 @@ def main() -> None:
                 scenario = GROUPS[group]
                 if stopped:
                     break
-                label = f"r{rep}-{provider}-{group}"
+                label = f"r{rep}-{provider}-{group}" + ("-notavily" if a.no_tavily else "")
                 todo = [
                     task
                     for task in SETS[a.set]
@@ -225,7 +262,7 @@ def main() -> None:
                 try:
                     server.wait()
                     r = Runner(f"http://127.0.0.1:{server.port}")
-                    sign_in(r, provider)
+                    sign_in(r, provider, tavily=not a.no_tavily)
                     for task in todo:
                         if spent >= a.budget:
                             stopped = f"budget ${a.budget} reached before {label} {task.key}"

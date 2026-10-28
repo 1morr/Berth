@@ -156,6 +156,8 @@ class TestWhichSearchToolsTheModelSees:
             assert tool.max_uses is not None and tool.max_uses > 0
         # 搜得到網頁的那幾種才叫模型附網址。
         assert ("URL" in script.instructions[0]) is (native or function)
+        # 伺服器端的網頁只多送一次（票 23d），所以叫模型搜完就寫下來；Tavily 的結果一直在。
+        assert ("write down what you need" in script.instructions[0]) is native
 
 
 def searched(query: str, *, then: ToolCallPart | None = None) -> Step:
@@ -395,6 +397,68 @@ class TestExternalContent:
         assert len(texts) == 2
         assert FRIEREN_URL in texts[0]
         assert "external content" in texts[1]
+
+
+def native_parts(messages: list[ModelMessage]) -> list[object]:
+    return [
+        part
+        for message in messages
+        for part in message.parts
+        if isinstance(part, NativeToolCallPart | NativeToolReturnPart)
+    ]
+
+
+class TestEarlierSearchesLeaveTheContext:
+    """票 23d：伺服器端 `web_search` 的結果（Anthropic 回的是整頁加密內容）每次呼叫都重送，長系列
+    在找種子那一輪撞過每輪 input 上限。下一輪起送給模型的歷史拿掉它，存著的歷史不動。"""
+
+    def test_the_next_reply_does_not_resend_earlier_search_results(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "anthropic")
+        script.steps = [
+            searched("Re:Zero list of episodes", then=ToolCallPart("jobs_list_jobs", {})),
+            say("Season 1 is 25 episodes."),
+            call("jobs_list_jobs"),
+            say("Nothing is downloading."),
+        ]
+        chat(client, "How do the seasons of Re:Zero line up?")
+        chat(client, "What is downloading?")
+
+        _, later_in_it, next_reply, later_in_next = script.seen
+        # 同一輪裡照留：模型還在讀那幾頁。
+        assert native_parts(later_in_it)
+        # 下一輪起不送；那一輪寫下的結論還在。
+        for seen in (next_reply, later_in_next):
+            assert not native_parts(seen)
+            assert any(
+                isinstance(part, TextPart) and "25 episodes" in part.content
+                for message in seen
+                for part in message.parts
+            )
+        # 存著的歷史不動：「出自外部來源」照樣認得那一輪讀過的網頁。
+        assert native_parts(history(client))
+        assert any(FRIEREN_URL in text for text in external_texts(history(client)))
+
+    def test_within_a_reply_the_pages_are_sent_once_more_and_then_dropped(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        """2026-10-28 實跑：Re:Zero 列清單那一輪搜了兩次（約 21 萬 token），之後每次呼叫都重送，
+        一輪 457K。搜完的下一次呼叫照送（模型接著寫清單），再下一次起不送。"""
+        turn_ai_on(client, "anthropic")
+        script.steps = [
+            searched("Re:Zero list of episodes", then=ToolCallPart("jobs_list_jobs", {})),
+            call("jobs_list_jobs", limit=5),
+            call("jobs_list_jobs", limit=6),
+            say("Season 1 is 25 episodes."),
+        ]
+        chat(client, "How do the seasons of Re:Zero line up?")
+
+        _, right_after, then, last = script.seen
+        assert native_parts(right_after)
+        assert not native_parts(then)
+        assert not native_parts(last)
+        assert native_parts(history(client))
 
 
 def tool_returns(messages: list[ModelMessage]) -> list[ToolReturnPart]:

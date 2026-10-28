@@ -847,16 +847,13 @@ class TestWhoCanUseWhat:
         script.steps = [say("Hi.")]
         chat(client, "Hello?")
         assert script.tools[0] == [
-            "anilist_read_franchise",
             "anilist_read_season",
-            "anilist_search_anime",
             "bangumi_read_bangumi",
             "bangumi_search_bangumi",
             "bgm_read_calendar",
             "discover_read_trending",
             "discover_search_media",
             "downloading_add_manual_download",
-            "fribb_lookup_anime",
             "jobs_list_jobs",
             "jobs_read_job_events",
             "media_read_media",
@@ -881,14 +878,11 @@ class TestWhoCanUseWhat:
         assert response.status_code == 200, response.text
         # 一般使用者：讀取，與送自己的單（brief §19「M5 的方向」⑦）。訂閱與加 Feed 是管理員的。
         assert script.tools[0] == [
-            "anilist_read_franchise",
             "anilist_read_season",
-            "anilist_search_anime",
             "bgm_read_calendar",
             "discover_read_trending",
             "discover_search_media",
             "downloading_add_manual_download",
-            "fribb_lookup_anime",
             "media_read_media",
             "media_route_choices",
             "search_search_torrents",

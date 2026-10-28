@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 
 from berth.domain import Role
 from berth.services.registry import commands
@@ -14,12 +15,10 @@ from berth.services.registry import commands
 #: 只有設了 Tavily key 才給模型的那一支。
 TAVILY_TOOL = "web.tavily_search"
 
-#: 推薦新番與整部系列的資料來源（票 16）：社群編的資料站，結果是外部內容。
+#: 推薦新番的資料來源（票 16；整部系列用的搜尋與系列走圖在票 23d 拿掉）：社群編的資料站，
+#: 結果是外部內容。
 ANIME_TOOLS: tuple[str, ...] = (
-    "anilist.search_anime",
-    "anilist.read_franchise",
     "anilist.read_season",
-    "fribb.lookup_anime",
     "bgm.read_calendar",
 )
 
@@ -44,7 +43,7 @@ TOOLS: tuple[str, ...] = (
     "rss.subscribe_mikan",
     "rss.subscribe_search",
     "rss.add_feed",
-    # 票 16：推薦新番與整部系列。
+    # 票 16：推薦新番。
     *ANIME_TOOLS,
     "discover.read_trending",
 )
@@ -78,11 +77,56 @@ def visible_tools(role: Role, *, tavily: bool) -> tuple[str, ...]:
 def _compact_search(result: object) -> object:
     """`search.search_torrents` 給模型的那一份：一次搜尋最多 350 列、每列十幾格（約 220 KB），照原樣
     交的話截斷（`agent_guards.clip`）只留得下前十幾列。挑發佈用不到的格子拿掉（站上的頁面、
-    畫面列表的鍵、怎麼算出季集、發佈時間、空的證據與 tags 的空格），留得下的列多兩三倍；列的順序
-    不變，「符合」在最前面。"""
+    畫面列表的鍵、怎麼算出季集、發佈時間、空的證據與 tags 的空格）；列的順序不變，「符合」在最前面。
+
+    **只給前 `MODEL_SEARCH_ROWS` 列與它們沒涵蓋到的集**（票 23d，`_rows_to_show`），其餘只說有幾列
+    （`rows_not_shown`）：結果留在這一輪的上下文裡、之後每次呼叫都重送，Re:Zero 找種子時搜了 19 次，
+    每次呼叫多約 7K input，撞到每輪 400K。
+    各類的總數在 `counts`，要更準的用 `query` 再搜。"""
     if not isinstance(result, dict) or not isinstance(result.get("rows"), list):
         return result
-    return {**result, "rows": [_compact_row(row) for row in result["rows"]]}
+    rows = result["rows"]
+    shown = _rows_to_show(rows)
+    given = {**result, "rows": [_compact_row(row) for row in shown]}
+    if len(rows) > len(shown):
+        given["rows_not_shown"] = len(rows) - len(shown)
+    return given
+
+
+#: 一次種子搜尋給模型看的列數；前面的列沒涵蓋到的集，後面「符合」的列照樣給（`_rows_to_show`）。
+MODEL_SEARCH_ROWS = 10
+
+
+def _rows_to_show(rows: list[object]) -> list[object]:
+    """前 `MODEL_SEARCH_ROWS` 列，加上之後每一列「符合」而帶來新的集的（照原本的順序）。
+
+    補缺集一季只搜一次（`missing-episodes`）：一季缺十幾集、每集各自一個發佈時，前 10 列常被幾集的
+    好幾個版本佔滿（票 23d 的紅燈）。不靠模型再搜：每一集至少有一列進得來，多的才不給。"""
+    shown: list[object] = []
+    covered: set[tuple[int, int | None]] = set()
+    for index, row in enumerate(rows):
+        spans = _episodes(row)
+        new = {span for span in spans if span not in covered and (span[0], None) not in covered}
+        if index < MODEL_SEARCH_ROWS or new:
+            shown.append(row)
+            covered |= spans
+    return shown
+
+
+def _episodes(row: object) -> set[tuple[int, int | None]]:
+    """一列「符合」的發佈蓋到的（季, 集）；整季包是（季, None）。
+    不是「符合」或看不出季集的是空的。"""
+    if not isinstance(row, dict) or row.get("verdict") != "fits":
+        return set()
+    season, start, end = row.get("season"), row.get("episode_start"), row.get("episode_end")
+    if not isinstance(season, int):
+        return set()
+    if row.get("whole_season"):
+        return {(season, None)}
+    if not isinstance(start, int):
+        return set()
+    last = end if isinstance(end, int) and end >= start else start
+    return {(season, episode) for episode in range(start, last + 1)}
 
 
 #: 給模型的一列留下的格子（`search.SearchResult`）。
@@ -151,7 +195,39 @@ def _compact_season(season: object) -> object:
     compact["episodes"] = {status: _ranges(numbers) for status, numbers in by_status.items()}
     if jobs:
         compact["jobs"] = jobs
+    if blocks := _aired_blocks(season["episodes"]):
+        compact["aired_blocks"] = blocks
     return compact
+
+
+#: 相鄰兩集的播出日隔超過這麼多天就算另一段（cour 之間通常隔一季；一季裡停播一兩週不算）。
+AIRING_GAP_DAYS = 28
+
+
+def _aired_blocks(episodes: list[object]) -> list[dict[str, str]]:
+    """播出日連得起來的幾段（票 23d）：沒有網路搜尋時 `series-mapping` 拿它切出各季、各 cour。
+    逐集的日期換成「哪幾集、從哪天到哪天」，還沒定播出日的那幾集不進任何一段。"""
+    dated = sorted(
+        (episode["episode_number"], date.fromisoformat(episode["air_date"]))
+        for episode in episodes
+        if isinstance(episode, dict)
+        and isinstance(episode.get("episode_number"), int)
+        and isinstance(episode.get("air_date"), str)
+    )
+    blocks: list[list[tuple[int, date]]] = []
+    for number, aired in dated:
+        if blocks and (aired - blocks[-1][-1][1]).days <= AIRING_GAP_DAYS:
+            blocks[-1].append((number, aired))
+        else:
+            blocks.append([(number, aired)])
+    return [
+        {
+            "episodes": _ranges([number for number, _ in block]),
+            "from": block[0][1].isoformat(),
+            "to": block[-1][1].isoformat(),
+        }
+        for block in blocks
+    ]
 
 
 def _ranges(numbers: list[int]) -> str:

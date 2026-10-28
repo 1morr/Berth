@@ -13,16 +13,14 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
 
 from berth.adapters.anilist import (
     API_URL,
-    ENTRIES_QUERY,
     PAGE_SIZE,
-    SEARCH_QUERY,
     SEASON_QUERY,
     AnimeEntry,
     AnimeSeason,
@@ -41,7 +39,7 @@ from berth.adapters.ttl import TtlCache
 #: 目前的上限是 30 次 / 分（brief §20.3）。突發的上限沒有公布，所以桶只放一個：兩秒一個。
 RATE_PER_SECOND = 30 / 60
 
-#: 一個問題記多久。季表的人氣與打分人數一天裡變得不多，條目與關係更少變。
+#: 一個問題記多久。季表的人氣與打分人數一天裡變得不多。
 CACHE_SECONDS = 6 * 60 * 60
 
 #: 收到 429 之後最多再試幾次。封鎖是一分鐘：再試兩次還不行，就是這一刻問不到。
@@ -98,17 +96,6 @@ class HttpAniList:
         self._base_url = base_url
         self._throttle = throttle
         self._cache = cache
-
-    async def search(self, query: str, *, limit: int) -> list[AnimeEntry]:
-        data = await self._ask(SEARCH_QUERY, {"q": query, "n": min(limit, PAGE_SIZE)})
-        return parse_entries(page_media(data))
-
-    async def entries(self, ids: Sequence[int]) -> list[AnimeEntry]:
-        wanted = sorted(set(ids))[:PAGE_SIZE]
-        if not wanted:
-            return []
-        data = await self._ask(ENTRIES_QUERY, {"ids": wanted, "n": PAGE_SIZE})
-        return parse_entries(page_media(data))
 
     async def season(self, season: AnimeSeason, year: int, *, limit: int) -> list[AnimeEntry]:
         data = await self._ask(

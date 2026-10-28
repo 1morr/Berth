@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -230,6 +231,59 @@ class TestSearchTorrentsForTheModel:
             "counts": [],
         }
 
+    def test_only_the_first_rows_reach_the_model_and_it_is_told_how_many_more(self) -> None:
+        """票 23d 實跑：找種子那一輪搜了 19 次、13 次被截在 12,000 字，每次呼叫多約 7K input，
+        Re:Zero 撞到每輪 400K。列已照「符合」在前排好，`counts` 有各類的總數；給模型前幾列就夠，
+        要更準的用 `query` 再搜。"""
+        rows = [
+            {"source_id": f"s-{n}", "title": f"[Grp] Show - {n:02d} [1080p]", "verdict": verdict}
+            for n, verdict in enumerate(["fits"] * 12 + ["other"] * 30, start=1)
+        ]
+
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": rows, "counts": []})
+
+        assert isinstance(given, dict)
+        assert [row["source_id"] for row in given["rows"]] == [f"s-{n}" for n in range(1, 11)]
+        assert given["rows_not_shown"] == 32
+
+    def test_later_rows_come_in_only_for_episodes_not_yet_shown(self) -> None:
+        """補缺集一季只搜一次：前 10 列沒蓋到的集，後面「符合」的列照樣給；重複的、不符合的不給。"""
+
+        def row(
+            n: int, start: int, *, verdict: str = "fits", whole: bool = False
+        ) -> dict[str, object]:
+            return {
+                "source_id": f"s-{n}",
+                "verdict": verdict,
+                "season": 1,
+                "episode_start": None if whole else start,
+                "episode_end": None if whole else start,
+                "whole_season": whole,
+            }
+
+        first_ten = [row(n, 1 + n % 5) for n in range(10)]  # 只蓋第 1–5 集
+        later = [
+            row(10, 3),  # 第 3 集已經有了
+            row(11, 6),  # 新的
+            row(12, 7, verdict="other"),  # 不符合
+            row(13, 6),  # 第 6 集剛剛有了
+            row(14, 0, whole=True),  # 整季包：新的
+            row(15, 8),  # 整季包已經蓋到
+        ]
+
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": first_ten + later, "counts": []})
+
+        assert isinstance(given, dict)
+        shown = [r["source_id"] for r in given["rows"]]
+        assert shown == [f"s-{n}" for n in range(10)] + ["s-11", "s-14"]
+        assert given["rows_not_shown"] == 4
+
+    def test_a_short_search_is_given_whole(self) -> None:
+        rows = [{"source_id": "s-1", "title": "x", "verdict": "fits"}]
+        given = MODEL_VIEWS["search.search_torrents"]({"rows": rows, "counts": []})
+        assert isinstance(given, dict)
+        assert "rows_not_shown" not in given
+
 
 class TestWhatTheModelSeesOfAWork:
     """`media.read_media` 給模型的那一份（票 16）：逐集換成狀態 → 集數範圍。"""
@@ -286,3 +340,28 @@ class TestWhatTheModelSeesOfAWork:
         )
         assert isinstance(seen, dict)
         assert seen["seasons"][0]["episodes"] == {"missing": "1-85"}
+
+    def test_airing_gaps_split_a_season_into_blocks(self) -> None:
+        """票 23d：沒有網路搜尋時 `series-mapping` 靠 TMDB 各集的播出日切段，給模型的那一份要
+        留得下。
+        像無職轉生第 1 季：E01–E11 冬季每週一集（E03 之後停播一週不算斷開）、E12–E23 秋季；
+        還沒定播出日的 E24 不進任何一段。"""
+        winter = [date(2021, 1, 11) + timedelta(weeks=n + (n >= 3)) for n in range(11)]
+        autumn = [date(2021, 10, 4) + timedelta(weeks=n) for n in range(12)]
+        aired = [*winter, *autumn]
+        episodes = [
+            {
+                "episode_number": n,
+                "status": "missing",
+                "air_date": aired[n - 1].isoformat() if n <= len(aired) else None,
+            }
+            for n in range(1, 25)
+        ]
+        seen = MODEL_VIEWS["media.read_media"](
+            {"seasons": [{"season_number": 1, "episodes": episodes}]}
+        )
+        assert isinstance(seen, dict)
+        assert seen["seasons"][0]["aired_blocks"] == [
+            {"episodes": "1-11", "from": "2021-01-11", "to": "2021-03-29"},
+            {"episodes": "12-23", "from": "2021-10-04", "to": "2021-12-20"},
+        ]

@@ -3143,6 +3143,8 @@ const zhHant = {
         label: 'Tavily API key',
         remove: '移除 Tavily key',
         removeWarning: '這把 key 會從 Berth 刪掉，網路搜尋工具跟著不見。',
+        needed:
+          'OpenAI 相容接口沒有自己的網路搜尋。整部系列與評價需要網路搜尋，建議填 Tavily key；沒有的話，整部系列的每一季都會標「請確認」。',
       },
       refusal: {
         base_url_invalid: '這不是 http(s) 的完整網址。',
@@ -3918,10 +3920,7 @@ const zhHant = {
         rss_add_feed: '新增 RSS Feed',
         web_tavily_search: '網路搜尋（Tavily）',
         web_search: '網路搜尋',
-        anilist_search_anime: '在 AniList 搜尋動畫',
-        anilist_read_franchise: '讀 AniList 的整部系列',
         anilist_read_season: '讀 AniList 的當季清單',
-        fribb_lookup_anime: '對照 AniList 與 TMDB',
         bgm_read_calendar: '讀 Bangumi 放送表',
         discover_read_trending: '讀本週趨勢',
       },
@@ -7349,6 +7348,8 @@ const en: Translations<typeof zhHant> = {
         label: 'Tavily API key',
         remove: 'Remove Tavily key',
         removeWarning: 'The key is deleted from Berth, and the web search tool goes with it.',
+        needed:
+          'OpenAI-compatible connections have no web search of their own. Whole series and reviews need web search, so a Tavily key is recommended; without one, every season of a whole series is marked “please check”.',
       },
       refusal: {
         base_url_invalid: 'This is not a full http(s) address.',
@@ -8129,10 +8130,7 @@ const en: Translations<typeof zhHant> = {
         rss_add_feed: 'Add an RSS feed',
         web_tavily_search: 'Web search (Tavily)',
         web_search: 'Web search',
-        anilist_search_anime: 'Search AniList',
-        anilist_read_franchise: 'Read a franchise on AniList',
         anilist_read_season: 'Read the season on AniList',
-        fribb_lookup_anime: 'Map AniList to TMDB',
         bgm_read_calendar: 'Read the Bangumi schedule',
         discover_read_trending: 'Read this week’s trending',
       },

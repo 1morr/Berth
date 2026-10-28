@@ -1,6 +1,6 @@
 # 23d — 拿掉 Fribb 與 AniList 的系列走圖；整部系列改用精簡流程
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 23b
 
@@ -30,12 +30,37 @@
 
 ## 驗收
 
-- [ ] Fribb 與 `anilist.search_anime` / `read_franchise` 從程式、工具、skills、Fake 後端、文件拿乾淨；`read_season` 與 Bangumi 照舊（測試）
-- [ ] `series-mapping` 精簡版含三條補強；有網搜時三部全對、該標的全標；沒網搜時每季都標「沒有網頁核對」、不憑記憶給範圍而不說（真模型逐字稿）
-- [ ] 長系列找種子那一輪不再撞每輪 token 上限（測試或實跑）
-- [ ] AI 設定頁的 Tavily 提示（vitest；playwright 截圖）
-- [ ] brief §15〈offset 建議〉改成 Mikan 開播日的做法；brief §19、§20 與 plan 同步
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；CHANGELOG、progress.md 已更新
-- [ ] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push
+- [x] Fribb 與 `anilist.search_anime` / `read_franchise` 從程式、工具、skills、Fake 後端、文件拿乾淨；`read_season` 與 Bangumi 照舊（測試）
+- [x] `series-mapping` 精簡版含三條補強；有網搜時三部全對、該標的全標；沒網搜時每季都標「沒有網頁核對」、不憑記憶給範圍而不說（真模型逐字稿）
+- [x] 長系列找種子那一輪不再撞每輪 token 上限（測試或實跑）
+- [x] AI 設定頁的 Tavily 提示（vitest；playwright 截圖）
+- [x] brief §15〈offset 建議〉改成 Mikan 開播日的做法；brief §19、§20 與 plan 同步
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；CHANGELOG、progress.md 已更新
+- [x] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push
 
 ## Comments
+
+- **第 3 點選「找種子那一輪前先壓縮」，做法是拿掉前幾輪的伺服器端網搜**（`compaction.without_earlier_searches`，`agent._DropEarlierSearches`）。理由：撞上限的兩次都是 Anthropic 接口，網搜只有 1 次，而同一題 OpenAI 接口（Tavily 搜 2.5 次）的 input 少了約 28 萬；Anthropic 的 `web_search` 回的是整頁加密內容，Berth 截不短，「限制摘錄長度」只管得到 Tavily（它已截在 1000 字）。拿掉的是**送給模型的那一份**、不動存著的歷史：加密內容 Berth 本來就比對不了，存著的照留，`external_texts` 不受影響；那幾頁讀到的已寫進那一輪的回答。不用既有的摘要壓縮：它保留最後兩輪，第二輪時第一輪原封不動，而且多一次模型呼叫。同一輪的搜尋照留。
+- **沒有網搜時的切段要 TMDB 各集播出日，`media.read_media` 給模型的那一份原本把逐集換成「狀態 → 集數範圍」、日期丟了**：補 `aired_blocks`（相鄰兩集隔超過 28 天就算另一段，`agent_tools.AIRING_GAP_DAYS`；一季裡停播一兩週不斷開）。
+- **真模型確認**（$0.121，研究 `docs/research/agent-sources-ab-2026-10-28.md`〈票 23d〉、逐字稿 `t23d-*.md`）：有網搜時三部 × 兩種接口範圍全對；OpenAI + Tavily 的 HxH 第一次 S1 漏標（貪婪之島跨 S01–S02），skill 補「一段跨兩季兩季都標」後重跑三季全標（逐字稿 `t23d-openai-hxh2011-before.md` / `t23d-openai-hxh2011.md`）。沒有網搜時三部每季都標「沒有網頁核對」，Re:Zero 明說季名憑記憶。
+- **長系列找種子那一輪**：照票面只跑到清單，沒有真模型量（後來補量了，見最後一條）；由 `test_agent_web_search.py::TestEarlierSearchesLeaveTheContext` 與 `test_compaction.py::TestEarlierSearches` 守。清單那一輪的數字支持判斷：Anthropic 接口 Re:Zero 搜 1 次、5 次呼叫吃 245,821 input。
+- **AI 設定頁 playwright 實跑**（fake 後端 `healthy`，以 `skipper` 登入、選 OpenAI 相容）：Tavily 欄下讀回「OpenAI 相容接口沒有自己的網路搜尋。整部系列與評價需要網路搜尋，建議填 Tavily key；沒有的話，整部系列的每一季都會標「請確認」。」1280 與 390 截圖都看過（`.playwright-mcp/`，不進 repo）。
+- **code-review 未處理的發現**：
+  - `_aired_blocks` 與 `_compact_season` 各自過濾一次同一批集（判斷題，留著：合在一起反而讓 `_compact_season` 多管一件事）。
+  - 已存 Tavily key、在同一頁按「移除」之後，提示要重新整理才出現（影響小）。
+  - skill 裡「matched by title, please check」只寫英文、另兩種標記有中文（票 16 留下的寫法，模型照使用者語言翻，這次實跑都翻對）。
+  - `scripts/experiments/fribb_vs_chaining.py` 的說明還指著已刪的 `services/anilist.read_franchise`（保留的歷史實驗，不改）。
+  - skill 那句「TMDB moved one of that part's episodes to specials」是 review 後收窄的寫法（原本「任何一集在 specials」讓 OpenAI 對 Re:Zero 誤標），改後沒有重跑真模型。
+- **發版建議**（不發版、不 push）：`v0.4.0`。最近的 tag 是 `v0.3.0`，`[Unreleased]` 收的是 M5 整個 AI 側面板（新功能、加了 AI 設定），照 SemVer 0.x 升 minor。CHANGELOG 把 `## [Unreleased]` 那一段原樣改成 `## [0.4.0] - <發版日>`，其中「助理會推薦新番、整理整部系列（M5 票 16、23d）」那一條已是拿掉 Fribb 之後的寫法。
+- **發版前補量（協調者要求，2026-10-28；`docs/research/m5-acceptance-2026-10-28.md`〈票 23d〉）**：Re:Zero、Anthropic 接口跑到出卡 2 次，**修之前兩次都超過每輪 400K**：
+  - 第 1 次找種子那一輪 409K（`token_limit`）：種子搜尋 19 次、13 次頂到 12,000 字，結果在這一輪累積。
+  - 第 2 次列清單那一輪 457K：同一輪搜兩次網頁（約 21 萬 token），之後每次呼叫都重送；原本的「前幾輪不送」管不到同一輪。
+  - **修法**：種子搜尋給模型只看前 10 列加 `rows_not_shown`（`agent_tools.MODEL_SEARCH_ROWS`）；伺服器端網搜只送最近一則回應裡的（`compaction.latest_searches_only`，取代 `without_earlier_searches`），掛伺服器端搜尋時 instructions 叫模型搜完就寫下要的。沒選限制搜尋次數（一次就可能 10 萬 token）、沒選換摘要（加密內容讀不到）。測試各補一條，變異各紅過。
+  - **修之後** 2 次都出卡、清單全對：每輪最多 166K（42%）與 143K（36%），種子搜尋 15、10 次，沒有一筆被截斷。
+  - **無職轉生**（skill 收窄後）兩種接口各跑 2 次（修上下文前後各 1 次）：第二季 S02E01–E12、整季標「未經核對」，四次都對。
+  - 花費 $0.247（上限放寬到 $1）。逐字稿 `docs/research/m5-acceptance-2026-10-28/t23d-*.md`。
+- **補缺集（協調者要求，同日）**：「只給前 10 列」之後，補缺集一季只搜一次，一季十幾集各自一個發佈時前 10 列蓋不完。
+  - 紅燈 `test_agent_anime_scenarios.py::TestMissingEpisodes`（一季 14 集、只有單集發佈，修之前模型只看得到第 1–7 集）。
+  - 修法：前 10 列之外，之後「符合」而帶來新集數的列也給模型（`agent_tools._rows_to_show`）。選它是因為不靠模型再搜，`scope` 也不必支援指定集數；工具說明同步。單元測試 `test_later_rows_come_in_only_for_episodes_not_yet_shown`。
+  - 真模型：新演練情境 `agent-live-missing`（替身索引站、真模型），兩種接口各 1 次到出卡，**卡片 12 列涵蓋第 1–12 集**，$0.024。`docs/research/m5-acceptance-2026-10-28.md`〈票 23d〉。
+- **新番推薦（協調者要求，同日）**：產品現在的樣子（AniList 季表 + Bangumi 放送表 + 網搜），Anthropic 2 次、OpenAI 1 次跑到出卡。三次都是 5/5 有 AniList 分數與人數、Bangumi 4/5（缺的那部是放送表沒收的 ONA，有說明）、都是 2026 秋季、都標出 Edgerunners 2 的跨站分歧，三次都出 Mikan 訂閱卡。與 A/B 研究完整組同一水準，**沒有變差，不用修**。$0.036。`docs/research/m5-acceptance-2026-10-28.md`〈票 23d〉。

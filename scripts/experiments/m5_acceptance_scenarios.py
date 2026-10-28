@@ -36,8 +36,8 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / ".local" / "experiments" / "results" / "m5_acceptance"
 BROWSER = {"X-Requested-With": "berth-acceptance"}
-#: 情境 2 的變體要看的那一句（`berth/skills/series-mapping/SKILL.md`）。
-MISMATCH = "兩種算法不一致"
+#: 情境 2 的變體要看的那一句（`berth/skills/series-mapping/SKILL.md`；票 23d 之前是「兩種算法不一致」）。
+MISMATCH = "未經核對"
 #: 模型問 Route、字幕組或來源時的固定回答（腳本不會臨場回話；第一輪實跑 S1、S3 都停在這個問題上）。
 ANSWER = "劇集用 Anime 路線，電影用 Movies；字幕組與來源照你推薦的挑，直接出卡給我確認。"
 #: 卡片上要人選 Route 時腳本選的（同 `ANSWER`）。
@@ -77,21 +77,21 @@ SCENARIOS = [
             "/compact",
             "剛剛送出了哪幾項？每項對到 TMDB 的哪一季哪幾集？",
         ],
-        "TMDB 把第 2–4 季併進 S01 有沒有講清楚；Fribb 與串接不一致的 S01 整季標記；劇場版是不是獨立條目；總覽卡粒度；壓縮後還記不記得",
+        "TMDB 把第 2–4 季併進 S01 有沒有講清楚；集數表串接加總是不是 85（不該標）；劇場版是不是獨立條目；總覽卡粒度；壓縮後還記不記得",
         expect=MISMATCH,
     ),
     Scenario(
         "S2-mushoku",
         "無職轉生全系列：只列清單",
         ["幫我下載《無職轉生》全系列（不要短篇）。先列清單給我看，不要直接送。"],
-        "第二季（第 0 集在 Specials、Part 2 串接超出 24 集）整季標「兩種算法不一致，請確認」、兩種範圍並列",
+        "第二季（第 0 集在 Specials，S02E01–E12）整季標「未經核對，請確認」",
         expect=MISMATCH,
     ),
     Scenario(
         "S2-hxh",
         "HUNTER×HUNTER (2011) 全系列：只列清單",
         ["幫我下載《HUNTER×HUNTER》2011 年版全系列（不要短篇）。先列清單給我看，不要直接送。"],
-        "撞名挑對 2011；Fribb 沒有季、串接超出 S01 的 62 集、S02 從 E63 起：整季標記",
+        "撞名挑對 2011；S02 從 E63 起、貪婪之島跨 S01 與 S02：三季都標記",
         expect=MISMATCH,
     ),
     Scenario(
