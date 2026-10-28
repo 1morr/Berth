@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import time_machine
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import (
     ModelMessage,
@@ -245,7 +246,10 @@ class TestTheBooks:
             lambda _m, _i: ModelResponse(parts=[TextPart("Hello.")], timestamp=OFF_PEAK)
         ]
 
-        chat(client, "Hi")
+        # 串流那條路徑重建的回應帶的是當下的時間，不是腳本給的：不固定時鐘的話，在 DeepSeek
+        # 的尖峰時段跑就算成兩倍的價（票 22 合併 main 時在 02:56 UTC 撞到）。
+        with time_machine.travel(OFF_PEAK, tick=True):
+            chat(client, "Hi")
 
         [turn] = recorded(client)
         [call_row] = turn.calls
