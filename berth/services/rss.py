@@ -51,6 +51,7 @@ from typing import Any, NamedTuple
 from urllib.parse import urlsplit
 
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
@@ -1172,18 +1173,29 @@ async def _series_key(fetcher: FeedFetcher, kind: FeedKind, item: FeedItem) -> s
 
 
 async def _series(session: AsyncSession, key: str, item: FeedItem) -> tuple[RssSeries, bool]:
-    """找到或長出這個鍵的 RSS Series。回（那一列, 是不是這一輪長出來的）。"""
+    """找到或長出這個鍵的 RSS Series。回（那一列, 是不是這一輪長出來的）。
+
+    鍵跨 Feed 共用（nyaa / acg.rip 是標題骨幹），所以**別的 Feed 可能同時在長同一個**（M5 票 24：
+    同一步並行的兩個搜尋訂閱；背景輪詢與「立即輪詢」不同 Feed 時也一樣）。`_rounds` 只排同一個
+    Feed。長出交給資料庫的 unique：`INSERT … ON CONFLICT DO NOTHING`，搶輸的讀回別人長的那一列、
+    不算這一輪長出來的（與它晚一輪才讀到是同一個結果）。
+    """
     row = await session.scalar(select(RssSeries).where(RssSeries.key == key))
     if row is not None:
         return row, False
-    row = RssSeries(key=key, title_raw=item.title)
+    values: dict[str, object] = {"key": key, "title_raw": item.title}
     if key.startswith("mikan:"):
         _, bangumi, subgroup = key.split(":")
-        row.mikan_bangumi_id = int(bangumi)
-        row.mikan_subgroup_id = int(subgroup)
-    session.add(row)
-    await session.flush()
-    return row, True
+        values |= {"mikan_bangumi_id": int(bangumi), "mikan_subgroup_id": int(subgroup)}
+    grown = await session.scalar(
+        sqlite_insert(RssSeries)
+        .values(values)
+        .on_conflict_do_nothing(index_elements=[RssSeries.key])
+        .returning(RssSeries.id)
+    )
+    row = await session.scalar(select(RssSeries).where(RssSeries.key == key))
+    assert row is not None  # 剛插入，或搶贏的那一邊已經 commit
+    return row, grown is not None
 
 
 # --- 補舊集 -------------------------------------------------------------
@@ -2711,7 +2723,15 @@ async def subscribe_search(
     # 它只用得到作品那一種（`_route_kinds`）：另一格留空。
     _set_routes(feed, await _subscribed_routes(session, media_id, route_id, others=False))
     session.add(feed)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        # 檢查之後、commit 之前別人建了同一條（M5 票 24：同一步並行的兩個工具呼叫）：
+        # 由 `rss_feeds.url` 的 unique 判，與檢查擋下的是同一個拒絕；別的約束照原樣丟。
+        await session.rollback()
+        if await session.scalar(select(RssFeed.id).where(RssFeed.url == url)) is None:
+            raise
+        raise RssRejectedError(RssRefusal.FEED_DUPLICATE, url) from exc
     await poll_feed(session, factory, feed.id, user_id=user_id, now=now)
     return await _feed_view_of(session, feed.id)
 

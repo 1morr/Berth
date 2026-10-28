@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.http import NotFoundError, ServiceError
@@ -397,24 +398,34 @@ async def _store(session: AsyncSession, row: Media | None, snapshot: MediaSnapsh
     `folder_name` 跟著標題走：這一列上還沒有任何檔案依賴它，而畫面要說的是「**現在**送單
     的話會是這串字」。**送單成功之後就不動了**（`folder_frozen`，票 09）——那一刻起磁碟上
     真的有一個那樣的資料夾，而 TMDB 改標題不該讓 Berth 的檔案跟著改名（brief §4.5）。
+
+    **還沒有這一列時可能有別人同時在建**（M5 票 24）：`row` 是抓 TMDB 之前讀的，抓的那幾百毫秒裡
+    另一個 session（同一步並行的工具、另一個分頁）可能已經建好了。所以建列交給資料庫的主鍵：
+    `INSERT … ON CONFLICT DO NOTHING`，之後一律讀回那一列再更新——誰先建都一樣，`folder_frozen`
+    也照讀回的那一列算。不在 agent 那邊把同一步的工具排隊：作品頁、自動綁定與規劃器也各開
+    session 走到這裡，排隊只擋得住其中一種。
     """
     if row is None:
-        row = Media(
-            id=build_media_id(snapshot.kind, snapshot.tmdb_id),
-            tmdb_id=snapshot.tmdb_id,
-            kind=snapshot.kind,
-            title_en=snapshot.title_en,
-            title_original=snapshot.title_original,
-            year=snapshot.year,
-            folder_name=folder_name(snapshot),
+        media_id = build_media_id(snapshot.kind, snapshot.tmdb_id)
+        await session.execute(
+            sqlite_insert(Media)
+            .values(
+                id=media_id,
+                tmdb_id=snapshot.tmdb_id,
+                kind=snapshot.kind,
+                title_en=snapshot.title_en,
+                title_original=snapshot.title_original,
+                year=snapshot.year,
+                folder_name=folder_name(snapshot),
+            )
+            .on_conflict_do_nothing(index_elements=[Media.id])
         )
-        session.add(row)
-    else:
-        row.title_en = snapshot.title_en
-        row.title_original = snapshot.title_original
-        row.year = snapshot.year
-        if not row.folder_frozen:
-            row.folder_name = folder_name(snapshot)
+        row = await session.get_one(Media, media_id)
+    row.title_en = snapshot.title_en
+    row.title_original = snapshot.title_original
+    row.year = snapshot.year
+    if not row.folder_frozen:
+        row.folder_name = folder_name(snapshot)
     row.tmdb_snapshot_json = snapshot.model_dump(mode="json")
     row.tmdb_fetched_at = utcnow()
     await session.commit()
