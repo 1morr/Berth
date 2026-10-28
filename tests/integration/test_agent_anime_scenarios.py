@@ -38,8 +38,9 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import AgentInfo
 
-from berth.adapters.anilist import API_URL
+from berth.adapters.anilist import API_URL, AnimeEntry, AnimeTitle
 from berth.adapters.anilist.client import HttpAniList, Throttle
+from berth.adapters.anilist.fake import FakeAniList
 from berth.adapters.bgm import API_URL as BGM_URL
 from berth.adapters.bgm.client import HttpBgm
 from berth.adapters.fribb import LIST_URL
@@ -571,6 +572,105 @@ def table_and_card(table: str) -> Callable[..., Any]:
     return step
 
 
+def skill_mark(starts: str) -> str:
+    """`series-mapping` 要模型標的那幾個字（skill 改了，用到它的測試跟著紅）。"""
+    skill = next(skill for skill in catalog() if skill.name == "series-mapping")
+    found = re.search(rf'"({starts}[^"]*)"', skill.body)
+    assert found is not None, f"series-mapping no longer says to mark {starts}"
+    return found.group(1)
+
+
+def tv_entries(walked: dict[str, Any]) -> list[dict[str, Any]]:
+    return [e for e in walked["entries"] if e["format"] == "TV"]
+
+
+def by_table(mapped: dict[str, Any], walked: dict[str, Any]) -> dict[int, tuple[int, int]]:
+    """A：Fribb 的 `first_tmdb_episode` 加 AniList 的集數。"""
+    counts = {e["anilist_id"]: e["episodes"] for e in tv_entries(walked)}
+    return {
+        e["anilist_id"]: (
+            e["first_tmdb_episode"],
+            e["first_tmdb_episode"] + counts[e["anilist_id"]] - 1,
+        )
+        for e in mapped["entries"]
+        if e["anilist_id"] in counts
+    }
+
+
+def by_chaining(walked: dict[str, Any]) -> dict[int, tuple[int, int]]:
+    """B：照開播順序從 E01 串（Re:Zero 全在 TMDB 第 1 季）。"""
+    chained, cursor = {}, 1
+    for entry in tv_entries(walked):
+        chained[entry["anilist_id"]] = (cursor, cursor + entry["episodes"] - 1)
+        cursor += entry["episodes"]
+    return chained
+
+
+def season_table(messages: list[ModelMessage], mark: str) -> str:
+    """模型照 skill 寫的表：兩種範圍並列，第 1 季有一列不一致，整季每一列都標。"""
+    walked = last_result(messages, "anilist_read_franchise")
+    mapped = last_result(messages, "fribb_lookup_anime")
+    a, b = by_table(mapped, walked), by_chaining(walked)
+    rows = [
+        f"| {i} | S01E{a[i][0]:02d}–E{a[i][1]:02d} | S01E{b[i][0]:02d}–E{b[i][1]:02d} | {mark} |"
+        for i in a
+    ]
+    return "| AniList | A | B | |\n" + "\n".join(rows)
+
+
+def assistant_texts(client: TestClient) -> list[str]:
+    return [
+        part.content
+        for message in stored_history(client)
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+        if isinstance(part, TextPart)
+    ]
+
+
+FRUBA_ANILIST = 105334
+FRUBA_ID = "tv:85991"
+
+
+def arrange_fruits_basket(factory: FakeClientFactory) -> None:
+    """AniList 上的 2019 年版（替身，沒有錄這一部），TMDB 上同名的三部。"""
+    entry = AnimeEntry(
+        id=FRUBA_ANILIST,
+        mal_id=38680,
+        title=AnimeTitle("Fruits Basket: 1st Season", "Fruits Basket (2019)", "フルーツバスケット"),
+        format="TV",
+        status="FINISHED",
+        episodes=25,
+        season="SPRING",
+        season_year=2019,
+        start_date="2019-04-06",
+        average_score=79,
+        popularity=300000,
+        genres=("Drama",),
+    )
+    factory.anilist_ = FakeAniList(
+        known={FRUBA_ANILIST: entry}, found={"Fruits Basket 2019": [entry]}
+    )
+    tmdb = factory.tmdb_
+    tmdb.search_results["fruits basket (2019)"] = (
+        TmdbEntry(36941, MediaKind.TV, "Fruits Basket", "フルーツバスケット", 2001, "", True),
+        TmdbEntry(900001, MediaKind.TV, "Fruits Basket", "Fruits Basket", 2019, "", False),
+        TmdbEntry(85991, MediaKind.TV, "Fruits Basket", "フルーツバスケット", 2019, "", True),
+    )
+    detail = tv(85991, "Fruits Basket", "フルーツバスケット", 2019, season_entry(1, 25, 2019))
+    tmdb.details[(detail.kind, detail.tmdb_id)] = detail
+    tmdb.season_rows[(85991, 1)] = season_rows(1, 25, 2019)
+
+
+def picked(messages: list[ModelMessage]) -> str:
+    """照 skill 的規則從搜尋結果挑：只留動畫，首播年最接近 AniList 第一季開播的那一年。"""
+    walked = last_result(messages, "anilist_read_franchise")
+    started = int(str(tv_entries(walked)[0]["start_date"])[:4])
+    found = last_result(messages, "discover_search_media")
+    animated = [item for item in found["items"] if item["animation"] is True]
+    return str(min(animated, key=lambda item: abs(item["year"] - started))["id"])
+
+
 def guarded_write(script: Script) -> list[Any]:
     """查了 Route、搜了 torrent，但**沒讀過**作品：`tv:65942` 只在 Fribb 的結果裡。"""
     return [
@@ -677,6 +777,79 @@ class TestWholeFranchise:
             if isinstance(part, TextPart)
         ]
         assert any(mark in reply for reply in replies)
+
+    def test_when_the_table_and_chaining_disagree_the_whole_season_is_marked(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """Fribb 可用時也串接一次（`series-mapping` 第 3 步）：Re:Zero 第 2 季 Fribb 給 E27 起、串接
+        給 E26 起，兩種不一致，TMDB 第 1 季整季標「兩種算法不一致」，不自己挑一邊；卡片照樣出。"""
+        mark = skill_mark("兩種算法不一致")
+        script.steps = [
+            *to_fribb(script),
+            call("media_read_media", media_id=REZERO_ID),
+            call("search_search_torrents", media_id=REZERO_ID, query="Re:Zero S01"),
+            lambda messages, info: table_and_card(season_table(messages, mark))(messages, info),
+        ]
+
+        chat(client, "幫我把 Re:Zero 全系列都抓下來")
+
+        # 模型看得到的兩種算法真的不一致：A 從 Fribb 的結果算、B 從 AniList 的集數串。
+        [walked] = returned(script, "anilist_read_franchise")
+        [mapped] = returned(script, "fribb_lookup_anime")
+        a, b = by_table(mapped, walked), by_chaining(walked)
+        assert a[108632] == (27, 39) and b[108632] == (26, 38)
+        [proposal] = cards(client)
+        assert proposal["command"] == "downloading.add_manual_download"
+        reply = "\n".join(assistant_texts(client))
+        # 整季都標：第 1 季的五個條目每一列都有標記，不只不一致的那一列。
+        assert reply.count(mark) == len(a)
+
+    def test_without_the_table_a_remake_is_found_by_animation_and_the_closest_year(
+        self, client: TestClient, script: Script, outside: Outside, factory: FakeClientFactory
+    ) -> None:
+        """Fribb 抓不到、作品只能靠標題搜：「Fruits Basket」在 TMDB 有 2001 年的舊作、2019 年的
+        重製版與同年的真人版。照 skill 只留動畫、取首播年最接近 AniList 第一季（2019）的那一部。"""
+        outside.fribb.mock(return_value=httpx.Response(503))
+        arrange_fruits_basket(factory)
+        skill = next(skill for skill in catalog() if skill.name == "series-mapping")
+        assert "`animation: true`" in skill.body and "`year` is closest" in skill.body
+        script.steps = [
+            call("skills_load_skill", name="series-mapping"),
+            call("anilist_search_anime", query="Fruits Basket 2019"),
+            call("anilist_read_franchise", anilist_id=FRUBA_ANILIST),
+            call("fribb_lookup_anime", anilist_ids=[FRUBA_ANILIST]),
+            call("discover_search_media", query="Fruits Basket (2019)"),
+            lambda messages, info: ModelResponse(
+                parts=[ToolCallPart("media_read_media", {"media_id": picked(messages)})]
+            ),
+            call("search_search_torrents", media_id=FRUBA_ID, query="Fruits Basket 2019"),
+            call_with(
+                "downloading_add_manual_download",
+                lambda messages: {
+                    "rows": [
+                        {
+                            "source_id": first_value(
+                                last_result(messages, "search_search_torrents"), "source_id"
+                            ),
+                            "media_id": picked(messages),
+                            "route_id": tv_route(messages),
+                        }
+                    ]
+                },
+            ),
+        ]
+
+        chat(client, "幫我把 Fruits Basket 2019 全部抓下來")
+
+        [found] = returned(script, "discover_search_media")
+        # 三部都在結果裡、各帶首播年與「是不是動畫」：規則才挑得出來。
+        assert [(item["id"], item["year"], item["animation"]) for item in found["items"]] == [
+            ("tv:36941", 2001, True),
+            ("tv:900001", 2019, False),
+            (FRUBA_ID, 2019, True),
+        ]
+        [proposal] = cards(client)
+        assert proposal["arguments"][0]["media_id"] == FRUBA_ID
 
     def test_an_ova_that_fribb_puts_in_specials_is_found_as_a_movie_by_title(
         self, client: TestClient, script: Script

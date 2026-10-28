@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -201,6 +202,21 @@ class TestCache:
         await read_trending(session, factory)
 
         assert client.requests == []
+
+    async def test_a_search_result_carries_its_year_and_whether_it_is_animation(
+        self, session: AsyncSession
+    ) -> None:
+        """側面板挑動畫、比首播年要的兩格（`series-mapping` 的退路，M5 票 16 之後）。"""
+        anime = dataclasses.replace(SPY_FAMILY, animation=True)
+        client = tmdb(search={"spy x family": [anime, dataclasses.replace(SILO, animation=False)]})
+        factory = await credentialled(session, client)
+
+        result = await search_media(session, factory, "spy x family")
+
+        assert [(item.id, item.year, item.animation) for item in result.items] == [
+            ("tv:120089", 2022, True),
+            ("tv:125988", 2023, False),
+        ]
 
     async def test_the_same_search_normalises_to_one_row(self, session: AsyncSession) -> None:
         """大小寫與多餘空白不該各佔一格快取。"""

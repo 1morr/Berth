@@ -52,6 +52,8 @@ class TmdbEntry:
     year: int | None
     #: TMDB 的相對路徑（`/abc.jpg`）。完整網址由 `configuration` 的 base 組出來。
     poster_path: str
+    #: `genre_ids` 有 16（Animation）。回應沒有 `genre_ids` 這一格時是 `None`（不知道）。
+    animation: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,7 +220,16 @@ def _entry(row: dict[str, Any], kind: MediaKind | None) -> TmdbEntry | None:
         original_title=original,
         year=_year(_text(row, "first_air_date" if kind is MediaKind.TV else "release_date")),
         poster_path=_text(row, "poster_path"),
+        animation=_animation(row.get("genre_ids")),
     )
+
+
+#: TMDB 的 Animation 類型（`genre/tv/list`、`genre/movie/list` 兩邊都是 16）。
+ANIMATION_GENRE = 16
+
+
+def _animation(genre_ids: Any) -> bool | None:
+    return ANIMATION_GENRE in genre_ids if isinstance(genre_ids, list) else None
 
 
 def parse_detail(payload: Any, kind: MediaKind) -> TmdbDetail:

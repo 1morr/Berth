@@ -63,6 +63,9 @@ class DiscoverItem:
     year: int | None
     poster_url: str
     poster_url_en: str
+    #: TMDB 的類型有 Animation；不知道是 `None`。給側面板挑動畫用，畫面的 API 不帶它
+    #: （`api/discover.DiscoverItemOut` 照它自己的欄位讀）。
+    animation: bool | None = None
     #: Berth 已經為這部作品做過事（`CONTEXT.md` 的 Tracked Media）。**不進 `tmdb_cache`**：
     #: 它是本地事實而且會當場改掉，而那份快取一小時才換一次（plan §8.3）。
     tracked: bool = False
@@ -132,8 +135,9 @@ async def read_popular(session: AsyncSession, factory: ServiceClientFactory) -> 
     audience=Role.USER,
     about=(
         "Search TMDB for series and movies by title. Each result's id (tv:<tmdb id> or "
-        "movie:<tmdb id>) is the media_id other tools take; tracked says Berth has done "
-        "something for it."
+        "movie:<tmdb id>) is the media_id other tools take; year is the first air or release "
+        "year, animation says TMDB files it under Animation (null when unknown), and tracked "
+        "says Berth has done something for it."
     ),
 )
 async def search_media(
@@ -233,6 +237,7 @@ def _card(
         year=entry.year,
         poster_url=_poster(shown.poster_path or entry.poster_path, base),
         poster_url_en=_poster(entry.poster_path, base),
+        animation=entry.animation,
     )
 
 
