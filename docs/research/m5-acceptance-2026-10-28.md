@@ -197,3 +197,21 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 - 情境 4、5、6 都達預期：S4 只讀且說對狀態，S5 預覽擋下 `route_required`，S6 沒有塞網址、改走 Berth 自己的訂閱。
 - 沒有發現需要立刻修的產品錯誤。要處理的有兩項：整季標記規則的遵守度（新發現 1），以及確認 Mikan 回填的同集多版本是不是設計（新發現 5）。
 - 未測：Anthropic 與 OpenAI 官方端點、伺服器端壓縮、卡片的「讀過外部內容」警示。
+
+## 票 23b：兩條電視 Route、作品沒有預設，卡片上選 Route
+
+票：[`.scratch/m5/issues/23b-flag-seasons-and-ask-route.md`](../../.scratch/m5/issues/23b-flag-seasons-and-ask-route.md)。上面新發現第 3 點是起因：anthropic 在兩條電視 Route、作品沒有 `default_route_id` 時不問就選了 Anime。使用者決定多條可用就一律要人選，**由程式強制、做在確認卡上**：提出時把那一列的可選清單存進 Proposal（`preview.routes`），`decide` 只收清單裡的，沒選是 422 `route_required`；skill 第 8 步（與 `missing-episodes`、`new-season-picks` 的同一步）改成「不要在對話裡問，卡片會讓使用者選」。
+
+- **情境 S7**：「我想看《宝石の国》（Land of the Lustrous），幫我找來源下載，字幕組照你推薦的挑，直接出卡給我確認。」句子裡**不提 Route**。`agent-live` 有 TV、Anime 兩條電視 Route，每種接口一台全新的 Berth（作品沒送過單）。驅動按卡時，要人選的列照 `ANSWER` 選 Anime（`PICKED_ROUTES`）並寫進逐字稿。
+- **時間**：2026-10-28，模型與端點同上（DeepSeek `deepseek-flash`，兩種接口）。
+- 逐字稿：[`anthropic-S7.md`](m5-acceptance-2026-10-28/anthropic-S7.md)、[`openai-S7.md`](m5-acceptance-2026-10-28/openai-S7.md)，總表 [`summary-23b.md`](m5-acceptance-2026-10-28/summary-23b.md)。
+
+| 接口 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 費用 USD | 卡片 | 要選 Route 的列 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| anthropic | 31 | 2 | 8 | 12 | 62,533 | 88% | 2,811 | 0.0060 | add_manual_download，executed，1 | 1（TV、Anime，無預選） |
+| openai | 48 | 2 | 6 | 12 | 48,061 | 83% | 2,597 | 0.0058 | add_manual_download，executed，1 | 1（TV、Anime，無預選） |
+
+- **兩種接口都沒在對話裡問 Route，直接出卡**；卡片那一列要人選、沒有預選，選 Anime 之後 `done`。合計約 $0.012。
+- 模型給的 `route_id` 兩邊都是 3（Anime），與腳本選的同一條，所以這一次分不出「照卡片上選的送」與「照模型給的送」；那一點由 `tests/integration/test_proposal_routes.py::TestManyRoutesFit::test_the_route_chosen_on_the_card_is_the_one_sent`（模型給 Anime、卡片選 TV、送進 TV）與前端 e2e `agent`（模型給 TV、卡片選 Anime、Job 在 Anime）守。
+- openai 的回覆寫了「下載到 Anime 資料夾（你另有 TV 資料夾，卡片上可改）」：它從工具說明知道卡片會讓人選。anthropic 照卡片結果說了 Anime。
+- 情境 2 的三個變體（整季標記）**這一次沒有重跑**：協調者暫停票 23b 的系列對照工具，等「只有網路搜尋 + TMDB」與「再加 AniList / Fribb / Bangumi」的比較結果決定。
