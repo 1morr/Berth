@@ -47,9 +47,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import PurePosixPath
-from typing import Any, NamedTuple
+from typing import Annotated, Any, NamedTuple
 from urllib.parse import urlsplit
 
+from pydantic import Field
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
@@ -2718,7 +2719,7 @@ async def subscribe_search(
     term: str,
     media_id: str,
     route_id: int,
-    subgroup: str,
+    subgroup: Annotated[str, Field(min_length=1, pattern=r"\S")],
     user_id: int | None,
     first_batch: PrimeMode = PrimeMode.ALL,
     now: datetime | None = None,
@@ -2740,9 +2741,6 @@ async def subscribe_search(
         session, kind=kind, term=term, media_id=media_id, route_id=route_id, subgroup=subgroup
     )
     chosen = subgroup.strip()
-    if not chosen:
-        # 兩個入口都擋了（API 的 `min_length`、卡片那一列的 `SearchSubscriptionRow`）。
-        raise ValueError("a keyword subscription takes exactly one subgroup")
     moment = now or utcnow()
     url = _search_url(kind, term)
     feed = RssFeed(
