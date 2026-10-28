@@ -53,6 +53,8 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
       held_back: 0,
       torrents: [1, 1, 1],
       routes: [],
+      subgroups: [],
+      existing: [],
     },
     user_id: 1,
     proposer: 'ai',
@@ -67,6 +69,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
     results: null,
     detached_at: null,
     routes: null,
+    subgroups: null,
     ...overrides,
   }
 }
@@ -129,6 +132,9 @@ function serve(
           { route: { id: 3, name: 'Anime' }, usage: {} },
           { route: { id: 4, name: 'Movies' }, usage: {} },
         ])
+      }
+      if (path === '/api/rss/feeds') {
+        return json([{ id: 9, name: 'acg.rip · Kimi · ANi', kind: 'acgrip', items: 5 }])
       }
       if (path === '/api/media/tv%3A120089') {
         return json({
@@ -309,6 +315,8 @@ describe('ConfirmCard', () => {
         held_back: 0,
         torrents: [],
         routes: [],
+        subgroups: [],
+        existing: [],
       },
     })
     serve(feed, stored('approval-requested'), () => feed)
@@ -338,6 +346,8 @@ describe('ConfirmCard', () => {
           held_back: 2,
           torrents: [1, 1, 1],
           routes: [],
+          subgroups: [],
+          existing: [],
         },
       }),
       stored('approval-requested'),
@@ -373,6 +383,8 @@ describe('ConfirmCard', () => {
         held_back: 0,
         torrents: [12],
         routes: [],
+        subgroups: [],
+        existing: [],
       },
       status: 'failed',
       results: [{ outcome: 'refused', reason: 'series_bound', detail: 'tv:1', result: null }],
@@ -407,6 +419,8 @@ describe('ConfirmCard', () => {
           held_back: 0,
           torrents,
           routes: [],
+          subgroups: [],
+          existing: [],
         },
       })
     serve(mikan([12]), stored('approval-requested'), () => mikan([12]))
@@ -445,6 +459,8 @@ describe('ConfirmCard', () => {
           held_back: 0,
           torrents: Array.from({ length: rows }, () => 1),
           routes: Array.from({ length: rows }, () => ask(preselected)),
+          subgroups: [],
+          existing: [],
         },
         ...more,
       })
@@ -515,5 +531,170 @@ describe('ConfirmCard', () => {
       expect(within(section).queryByRole('combobox')).toBeNull()
       expect(within(section).getByRole('button', { name: '確認' })).toBeInTheDocument()
     })
+  })
+
+  describe('the subgroup is the user’s to choose (ticket 26)', () => {
+    const option = (key: string, name: string, titles: string[]) => ({
+      key,
+      name,
+      releases: titles.length,
+      updated: '2026-10-20',
+      latest: titles[0] ?? '',
+      titles,
+    })
+    const ANI = option('ANi', 'ANi', ['[ANi] Kimi - 02 [1080P]', '[ANi] Kimi - 01 [1080P]'])
+    const MOUSE = option('黒ネズミたち', '黒ネズミたち', ['[黒ネズミたち] Kimi - 02 (CR)'])
+    const keyword = (preselected: string | null, more: Partial<Proposal> = {}) =>
+      card({
+        command: 'rss.subscribe_search',
+        arguments: [
+          {
+            kind: 'acgrip',
+            term: 'Kimi ga Shinu made Koi wo Shitai',
+            subgroup: 'ANi',
+            media_id: 'tv:120089',
+            route_id: 3,
+          },
+        ],
+        preview: {
+          effect: 'reversible',
+          flags: ['downloads'],
+          checked: [true],
+          external_fields: [[]],
+          held_back: 0,
+          torrents: [2],
+          routes: [],
+          subgroups: [{ options: [ANI, MOUSE], preselected, required: true }],
+          existing: [],
+        },
+        ...more,
+      })
+
+    it('draws no confirm button until a subgroup is chosen, then sends the one chosen', async () => {
+      serve(keyword(null), stored('approval-requested'), () =>
+        keyword(null, { status: 'executed', results: [done], subgroups: ['黒ネズミたち'] }),
+      )
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱關鍵字搜尋' })
+      expect(within(section).queryByRole('button', { name: '確認' })).toBeNull()
+      expect(within(section).getByText('還有 1 列沒選字幕組。')).toBeInTheDocument()
+      expect(within(section).getByText('選了字幕組之後，這裡列出它的第一批。')).toBeInTheDocument()
+
+      await user.click(within(section).getByRole('button', { name: /黒ネズミたち/ }))
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+
+      expect(decisions).toEqual([{ approve: true, selection: null, subgroups: ['黒ネズミたち'] }])
+    })
+
+    it('preselects the assistant’s pick and lists the first batch of whichever is chosen', async () => {
+      serve(keyword('ANi'), stored('approval-requested'), () => keyword('ANi'))
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱關鍵字搜尋' })
+      expect(within(section).getByRole('button', { name: /^ANi/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(within(section).getByText('[ANi] Kimi - 01 [1080P]')).toBeInTheDocument()
+      expect(within(section).getByText(/按下確認就送出第一批：2 個 torrent/)).toBeInTheDocument()
+
+      await user.click(within(section).getByRole('button', { name: /黒ネズミたち/ }))
+
+      expect(within(section).queryByText('[ANi] Kimi - 01 [1080P]')).toBeNull()
+      expect(within(section).getByText(/按下確認就送出第一批：1 個 torrent/)).toBeInTheDocument()
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+      expect(decisions).toEqual([{ approve: true, selection: null, subgroups: ['黒ネズミたち'] }])
+    })
+
+    it('a Mikan card counts the season of the subgroup chosen', async () => {
+      const mikan = card({
+        command: 'rss.subscribe_mikan',
+        arguments: [
+          {
+            bangumi_id: 3310,
+            subgroup_id: 583,
+            media_id: 'tv:120089',
+            route_id: 3,
+            name: '',
+            subgroup_name: '',
+          },
+        ],
+        preview: {
+          effect: 'reversible',
+          flags: ['downloads'],
+          checked: [true],
+          external_fields: [[]],
+          held_back: 0,
+          torrents: [15],
+          routes: [],
+          subgroups: [
+            {
+              options: [
+                { ...option('583', 'ANi', []), releases: 12, latest: '[ANi] SPY - 12' },
+                { ...option('584', 'LoliHouse', []), releases: 15, latest: '[LoliHouse] SPY - 15' },
+              ],
+              preselected: '583',
+              required: true,
+            },
+          ],
+          existing: [],
+        },
+      })
+      serve(mikan, stored('approval-requested'), () => mikan)
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱 Mikan 番組' })
+      expect(within(section).getByText(/會送出整季：12 個 torrent/)).toBeInTheDocument()
+      await user.click(within(section).getByRole('button', { name: /LoliHouse/ }))
+      expect(within(section).getByText(/會送出整季：15 個 torrent/)).toBeInTheDocument()
+      await user.click(within(section).getByRole('button', { name: '確認' }))
+      expect(decisions).toEqual([{ approve: true, selection: null, subgroups: ['584'] }])
+    })
+
+    it('says which subscriptions the work already has', async () => {
+      const twice = keyword('ANi', {
+        preview: {
+          ...keyword('ANi').preview,
+          existing: [[{ feed_id: 9, name: 'acg.rip · Kimi', kind: 'acgrip', subgroup: '' }]],
+        },
+      })
+      serve(twice, stored('approval-requested'), () => twice)
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱關鍵字搜尋' })
+      expect(within(section).getByText(/這部作品已經有這幾條訂閱/)).toBeInTheDocument()
+      expect(within(section).getByText('acg.rip · Kimi')).toBeInTheDocument()
+      expect(within(section).getByText(/每個字幕組都收/)).toBeInTheDocument()
+    })
+  })
+
+  it('a card deleting a subscription names the feed and says the files stay', async () => {
+    const gone = card({
+      command: 'rss.delete_feed',
+      arguments: [{ feed_id: 9 }],
+      preview: {
+        effect: 'irreversible',
+        flags: ['settings'],
+        checked: [false],
+        external_fields: [[]],
+        held_back: 0,
+        torrents: [],
+        routes: [],
+        subgroups: [],
+        existing: [],
+      },
+    })
+    serve(gone, stored('approval-requested'), () => gone)
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '刪除訂閱（RSS Feed）' })
+    expect(await within(section).findByText('acg.rip · Kimi · ANi')).toBeInTheDocument()
+    expect(within(section).getByText(/它的 5 筆紀錄一起刪/)).toBeInTheDocument()
+    expect(within(section).getByText(/已經下載、入庫的檔案留著/)).toBeInTheDocument()
+    expect(within(section).getByText('不可逆')).toBeInTheDocument()
   })
 })

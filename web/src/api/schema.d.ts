@@ -5443,7 +5443,7 @@ export interface components {
         };
         /**
          * ProposalDecisionIn
-         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 除外（票 23b）。
+         * @description 只有決定本身。參數不在這裡：執行用伺服器存的那一份，Route 與字幕組除外（票 23b、26）。
          */
         ProposalDecisionIn: {
             /** Approve */
@@ -5452,6 +5452,8 @@ export interface components {
             selection?: number[] | null;
             /** Routes */
             routes?: (number | null)[] | null;
+            /** Subgroups */
+            subgroups?: (string | null)[] | null;
         };
         /** ProposalOut */
         ProposalOut: {
@@ -5496,6 +5498,8 @@ export interface components {
             detached_at: string | null;
             /** Routes */
             routes: (number | null)[] | null;
+            /** Subgroups */
+            subgroups: (string | null)[] | null;
         };
         /**
          * ProposalPreviewOut
@@ -5515,13 +5519,17 @@ export interface components {
             torrents: (number | null)[];
             /** Routes */
             routes: (components["schemas"]["RouteAskOut"] | null)[];
+            /** Subgroups */
+            subgroups: (components["schemas"]["SubgroupAskOut"] | null)[];
+            /** Existing */
+            existing: components["schemas"]["SubscriptionRefOut"][][];
         };
         /**
          * ProposalRefusal
          * @description 決定 Proposal 時做不了的理由（`services.proposals`）。
          * @enum {string}
          */
-        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid" | "route_required" | "route_not_offered";
+        ProposalRefusal: "proposal_missing" | "proposal_decided" | "proposal_expired" | "selection_invalid" | "route_required" | "route_not_offered" | "subgroup_required" | "subgroup_not_offered";
         /**
          * ProposalRefusalOut
          * @description 與其他群組的拒絕同形：`reason` 挑句子，`detail` 是原文。`proposal_decided` 的 `detail` 是
@@ -6653,6 +6661,37 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * SubgroupAskOut
+         * @description 一列訂閱的字幕組（票 26）。`required` 時勾著的這一列一定要選，`preselected` 是模型建議的
+         *     那一個。
+         */
+        SubgroupAskOut: {
+            /** Options */
+            options: components["schemas"]["SubgroupOptionOut"][];
+            /** Preselected */
+            preselected: string | null;
+            /** Required */
+            required: boolean;
+        };
+        /**
+         * SubgroupOptionOut
+         * @description 訂閱可選的一個字幕組（票 26）。
+         */
+        SubgroupOptionOut: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Releases */
+            releases: number;
+            /** Updated */
+            updated: string | null;
+            /** Latest */
+            latest: string;
+            /** Titles */
+            titles: string[];
+        };
         /** SubgroupOut */
         SubgroupOut: {
             /** Id */
@@ -6676,6 +6715,19 @@ export interface components {
             series: components["schemas"]["SeriesOut"];
             /** Excluded */
             excluded: components["schemas"]["ExcludedCountOut"][];
+        };
+        /**
+         * SubscriptionRefOut
+         * @description 這部作品提出那一刻已經有的一條訂閱（票 26）。網址不給：聚合 feed 的網址帶 token。
+         */
+        SubscriptionRefOut: {
+            /** Feed Id */
+            feed_id: number;
+            /** Name */
+            name: string;
+            kind: components["schemas"]["FeedKind"];
+            /** Subgroup */
+            subgroup: string;
         };
         /**
          * TagsOut
@@ -9497,7 +9549,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProposalRefusalOut"];
                 };
             };
-            /** @description `selection_invalid` · `route_required` · `route_not_offered` */
+            /** @description `selection_invalid` · `route_required` · `route_not_offered` · `subgroup_required` · `subgroup_not_offered` */
             422: {
                 headers: {
                     [name: string]: unknown;

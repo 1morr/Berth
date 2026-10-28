@@ -3901,8 +3901,6 @@ const zhHant = {
       input: '參數',
       output: '結果',
       // 助理直接建的搜尋 Feed（M5 票 22）：撤銷與選第一輪都在 RSS 頁那一列。
-      subscribed: '還沒開始下載：到 RSS 頁選第一輪（全部下載或只追之後的），不要的話在那裡刪掉。',
-      subscribedLink: '到 RSS 頁那一列',
       names: {
         discover_search_media: '搜尋作品',
         why_not_explain: '查為什麼沒入庫',
@@ -3918,6 +3916,8 @@ const zhHant = {
         rss_subscribe_mikan: '訂閱 Mikan 番組',
         rss_subscribe_search: '訂閱關鍵字搜尋',
         rss_add_feed: '新增 RSS Feed',
+        rss_list_subscriptions: '列出作品的訂閱',
+        rss_delete_feed: '刪除訂閱',
         web_tavily_search: '網路搜尋（Tavily）',
         web_search: '網路搜尋',
         anilist_read_season: '讀 AniList 的當季清單',
@@ -3945,6 +3945,7 @@ const zhHant = {
         rss_subscribe_mikan: '訂閱 Mikan 番組',
         rss_subscribe_search: '訂閱關鍵字搜尋',
         rss_add_feed: '新增 RSS Feed',
+        rss_delete_feed: '刪除訂閱（RSS Feed）',
       },
       // 提出時伺服器算的效果（命令的標記與旗標）。
       effects: {
@@ -3982,12 +3983,39 @@ const zhHant = {
         site: '站',
         term: '搜尋詞',
         sends: '送出',
+        firstBatch: '第一批',
+        feed: 'Feed',
       },
       // 訂閱 Mikan：整季一律補，按下去就送（單一 feed 上的筆數是上限，已經有的不再送）。
       wholeSeason_one: '會送出整季：{{count}} 個 torrent，按下確認就送，不經第一批確認。',
       wholeSeason_other: '會送出整季：{{count}} 個 torrent，按下確認就送，不經第一批確認。',
       wholeSeasonUnknown:
         '會送出整季，按下確認就送、不經第一批確認；現在讀不到 Mikan，數量要送出時才知道。',
+      wholeSeasonPick: '會送出整季，按下確認就送、不經第一批確認；選了字幕組就知道幾個。',
+      // 訂閱的字幕組由人選（M5 票 26）：選項是伺服器讀番組頁或那一次搜尋存的，助理建議的預選。
+      subgroupLead:
+        '字幕組由你選：助理建議的那一個已經預選，按確認前看一下其他字幕組的筆數、最近更新與最新一筆。',
+      subgroupChoose: '選一個字幕組',
+      subgroupNone: '還沒選',
+      subgroupMissing_one: '還有 {{count}} 列沒選字幕組。',
+      subgroupMissing_other: '還有 {{count}} 列沒選字幕組。',
+      // 關鍵字訂閱的第一批（票 26）：卡上確認，不再到 RSS 頁選第一輪。
+      firstBatch_one: '按下確認就送出第一批：{{count}} 個 torrent。',
+      firstBatch_other: '按下確認就送出第一批：{{count}} 個 torrent。',
+      firstBatchPick: '選了字幕組之後，這裡列出它的第一批。',
+      firstBatchNone: '這次搜尋沒有找到這個字幕組的發佈：先不下載，之後出現的照它下載。',
+      firstBatchMore_one: '其餘 {{count}} 筆',
+      firstBatchMore_other: '其餘 {{count}} 筆',
+      firstBatchAfter: '已經有的、被排除條件擋下的不再送；之後這個字幕組的新發佈自動下載。',
+      existingLead:
+        '這部作品已經有這幾條訂閱。要不要再訂一份由你決定：不要的話按拒絕，或請助理刪掉舊的那條。',
+      existingSubgroup: '字幕組 {{subgroup}}',
+      existingEvery: '每個字幕組都收',
+      // 刪除訂閱（票 26）：刪的是 Feed 與它的紀錄，檔案與綁定留著（`rss.delete_feed`）。
+      deleteFeed_one:
+        '刪掉之後不再輪詢，它的 {{count}} 筆紀錄一起刪、加回來也找不回。已經下載、入庫的檔案留著，綁好的作品也留著。',
+      deleteFeed_other:
+        '刪掉之後不再輪詢，它的 {{count}} 筆紀錄一起刪、加回來也找不回。已經下載、入庫的檔案留著，綁好的作品也留著。',
       confirm: '確認',
       confirmCount_one: '確認這 {{count}} 項',
       confirmCount_other: '確認這 {{count}} 項',
@@ -4026,6 +4054,8 @@ const zhHant = {
         selection_invalid: '勾選對不上這張卡的列數。重新整理再按一次。',
         route_required: '有一列還沒選 Route。選好再按一次。',
         route_not_offered: '選的 Route 不在這張卡的清單上。重新整理再選一次。',
+        subgroup_required: '有一列還沒選字幕組。選好再按一次。',
+        subgroup_not_offered: '選的字幕組不在這張卡的清單上。重新整理再選一次。',
       },
     },
     failure: {
@@ -8110,9 +8140,6 @@ const en: Translations<typeof zhHant> = {
       failed: 'Did not work',
       input: 'Arguments',
       output: 'Result',
-      subscribed:
-        'Nothing is downloading yet: choose the first round on the RSS page (everything, or only what comes next), or delete it there.',
-      subscribedLink: 'Its row on the RSS page',
       names: {
         discover_search_media: 'Search titles',
         why_not_explain: 'Why it is not imported',
@@ -8128,6 +8155,8 @@ const en: Translations<typeof zhHant> = {
         rss_subscribe_mikan: 'Subscribe to a Mikan bangumi',
         rss_subscribe_search: 'Subscribe to a keyword search',
         rss_add_feed: 'Add an RSS feed',
+        rss_list_subscriptions: 'List a title’s subscriptions',
+        rss_delete_feed: 'Delete a subscription',
         web_tavily_search: 'Web search (Tavily)',
         web_search: 'Web search',
         anilist_read_season: 'Read the season on AniList',
@@ -8155,6 +8184,7 @@ const en: Translations<typeof zhHant> = {
         rss_subscribe_mikan: 'Subscribe to a Mikan bangumi',
         rss_subscribe_search: 'Subscribe to a keyword search',
         rss_add_feed: 'Add an RSS feed',
+        rss_delete_feed: 'Delete a subscription (RSS feed)',
       },
       effects: {
         irreversible: 'Cannot be undone',
@@ -8188,6 +8218,8 @@ const en: Translations<typeof zhHant> = {
         site: 'Site',
         term: 'Search term',
         sends: 'Sends',
+        firstBatch: 'First batch',
+        feed: 'Feed',
       },
       wholeSeason_one:
         'The whole season: {{count}} torrent, sent as soon as you confirm, with no first-batch check.',
@@ -8195,6 +8227,31 @@ const en: Translations<typeof zhHant> = {
         'The whole season: {{count}} torrents, sent as soon as you confirm, with no first-batch check.',
       wholeSeasonUnknown:
         'The whole season, sent as soon as you confirm, with no first-batch check. Mikan cannot be read right now, so how many is known only when it is sent.',
+      wholeSeasonPick:
+        'The whole season, sent as soon as you confirm, with no first-batch check. Choose a subgroup to see how many.',
+      subgroupLead:
+        'You choose the subgroup: the one the assistant suggests is preselected. Before confirming, look at the others’ release counts, last update and latest release.',
+      subgroupChoose: 'Choose a subgroup',
+      subgroupNone: 'Not chosen yet',
+      subgroupMissing_one: 'Choose a subgroup for {{count}} more row.',
+      subgroupMissing_other: 'Choose a subgroup for {{count}} more rows.',
+      firstBatch_one: 'Confirming sends the first batch: {{count}} torrent.',
+      firstBatch_other: 'Confirming sends the first batch: {{count}} torrents.',
+      firstBatchPick: 'Choose a subgroup and its first batch is listed here.',
+      firstBatchNone:
+        'This search found no release from this subgroup: nothing is sent now, and its releases are downloaded as they appear.',
+      firstBatchMore_one: '{{count}} more',
+      firstBatchMore_other: '{{count}} more',
+      firstBatchAfter:
+        'Releases you already have or that exclusions block are not sent again; new releases from this subgroup download by themselves.',
+      existingLead:
+        'This title already has these subscriptions. Whether to add another is up to you: if not, press Reject, or ask the assistant to delete the old one.',
+      existingSubgroup: 'subgroup {{subgroup}}',
+      existingEvery: 'every subgroup',
+      deleteFeed_one:
+        'Once deleted it is no longer polled, and its {{count}} record goes with it for good, even if you add it back. Downloaded and imported files stay, and so do the titles it was bound to.',
+      deleteFeed_other:
+        'Once deleted it is no longer polled, and its {{count}} records go with it for good, even if you add it back. Downloaded and imported files stay, and so do the titles it was bound to.',
       confirm: 'Confirm',
       confirmCount_one: 'Confirm {{count}} item',
       confirmCount_other: 'Confirm these {{count}}',
@@ -8234,6 +8291,8 @@ const en: Translations<typeof zhHant> = {
         selection_invalid: 'The ticked rows do not match this card. Reload and press again.',
         route_required: 'A row has no route yet. Choose one and press again.',
         route_not_offered: 'That route is not on this card. Reload and choose again.',
+        subgroup_required: 'A row has no subgroup yet. Choose one and press again.',
+        subgroup_not_offered: 'That subgroup is not on this card. Reload and choose again.',
       },
     },
     failure: {

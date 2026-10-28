@@ -408,8 +408,15 @@ function MikanPicker({
   )
 }
 
-/** 字幕組那一顆鍵的內容：名字、幾筆、最近更新，最新一筆的發佈名（看得出語言與解析度）。 */
-function SubgroupLine({ group }: { group: Subgroup }) {
+/**
+ * 字幕組那一顆鍵的內容：名字、幾筆、最近更新，最新一筆的發佈名（看得出語言與解析度）。
+ * 確認卡選字幕組也用它（M5 票 26），所以只要這四格。
+ */
+export function SubgroupLine({
+  group,
+}: {
+  group: Pick<Subgroup, 'name' | 'releases' | 'updated' | 'latest'>
+}) {
   const { t, i18n } = useTranslation()
   const updated = group.updated
     ? new Date(`${group.updated}T00:00:00`).toLocaleDateString(i18n.language)
@@ -522,7 +529,8 @@ function FolderLine({ media }: { media: Media }) {
 }
 
 /** 一串選項，一個一顆鍵，選定的是按下的樣子（同 `rss/WorkChoices.tsx` 的 `Choices`）。 */
-function Options<T>({
+/** 一排整行的選項鍵（`aria-pressed`，選中的重線 + `deck` 底；DESIGN.md「先選再確認」）。確認卡選字幕組也用它。 */
+export function Options<T>({
   label,
   items,
   keyOf,

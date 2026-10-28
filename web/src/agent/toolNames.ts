@@ -16,6 +16,9 @@ const TOOL_NAMES = {
   rss_subscribe_mikan: 'agent.tool.names.rss_subscribe_mikan',
   rss_subscribe_search: 'agent.tool.names.rss_subscribe_search',
   rss_add_feed: 'agent.tool.names.rss_add_feed',
+  // 票 26：重複的訂閱看得到、刪得掉。
+  rss_list_subscriptions: 'agent.tool.names.rss_list_subscriptions',
+  rss_delete_feed: 'agent.tool.names.rss_delete_feed',
   // 票 17：設了 Tavily key 才有；`web_search` 是 Anthropic 伺服器端那一種，不經登錄表。
   web_tavily_search: 'agent.tool.names.web_tavily_search',
   web_search: 'agent.tool.names.web_search',
