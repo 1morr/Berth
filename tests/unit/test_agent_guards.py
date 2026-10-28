@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any
 
 from berth.services.agent import Limits
-from berth.services.agent_guards import Cut, clip
+from berth.services.agent_guards import Cut, ProviderBreaker, clip
 
 
 def size(value: object) -> int:
@@ -90,8 +91,9 @@ class TestClip:
 
 
 def test_the_default_limits_are_the_ones_in_the_plan() -> None:
-    """plan §11.6〈防護〉那張表：整合測試都換成小的數字，預設值只在這裡守（M5 驗收）。"""
+    """plan §11.6〈防護〉那張表與網搜上限：整合測試都換成小的數字，預設值只在這裡守（M5 驗收）。"""
     limits = Limits()
+    breaker = ProviderBreaker()
 
     assert limits.max_tokens == 4096
     assert limits.requests == 20
@@ -100,3 +102,4 @@ def test_the_default_limits_are_the_ones_in_the_plan() -> None:
     assert limits.stale_steps == 3
     assert limits.result_chars == 12_000
     assert limits.web_searches == 5
+    assert (breaker.threshold, breaker.pause) == (5, timedelta(minutes=15))

@@ -49,7 +49,8 @@ class Scenario:
     watch: str
     #: 接在哪一個情境的對話後面（S4 接 S2）。
     after: str = ""
-    #: 回覆裡要找的字（情境 2 的變體：整季標記）。
+    #: 回覆裡要找的字（情境 2 的變體：整季標記的字樣）。只看有沒有出現，**分不出整季標了還是只標一列**，
+    #: 那要讀逐字稿的表。
     expect: str = ""
 
 
@@ -222,12 +223,16 @@ class Runner:
 
     def approve_all(
         self, cid: str, chunks: list[dict[str, Any]], log: list[str], runs: list[str]
-    ) -> None:
-        """串流停在確認卡：每張卡勾全部按確認，再送恢復的那一則（同 `Conversation.cardActions`）。"""
+    ) -> str:
+        """串流停在確認卡：每張卡勾全部按確認，再送恢復的那一則（同 `Conversation.cardActions`）。
+
+        回恢復之後那幾輪回覆的字。找不到卡片時不送恢復（伺服器會回 409 `card_undecided`）。
+        """
+        replies = ""
         for _ in range(4):
             asks = [c for c in chunks if c.get("type") == "tool-approval-request"]
             if not asks:
-                return
+                return replies
             by_call = {p["tool_call_id"]: p for p in self.proposals(cid)}
             names = {
                 c["toolCallId"]: c["toolName"]
@@ -256,6 +261,8 @@ class Runner:
                         },
                     }
                 )
+            if not parts:
+                return replies
             log.append("**（腳本：全部按確認）**\n")
             chunks = self.chat(
                 {
@@ -266,6 +273,8 @@ class Runner:
             )
             log.extend(render(chunks))
             runs.extend(run_ids(chunks))
+            replies += reply_text(chunks)
+        return replies
 
     def run(self, run_id: str) -> dict[str, Any]:
         found: dict[str, Any] = self.http.get(f"/api/agent/runs/{run_id}").json()
@@ -347,7 +356,7 @@ def run_one(r: Runner, provider: str, sc: Scenario, cid: str) -> tuple[str, dict
         replies += reply_text(chunks)
         log.extend(render(chunks))
         runs.extend(run_ids(chunks))
-        r.approve_all(cid, chunks, log, runs)
+        replies += r.approve_all(cid, chunks, log, runs)
     details = [r.run(run_id) for run_id in dict.fromkeys(runs)]
     tools = [tool for run in details for step in run["steps"] for tool in step["tools"]]
     known_cost = [run["cost_usd"] for run in details if run["cost_usd"] is not None]
@@ -379,7 +388,7 @@ def run_one(r: Runner, provider: str, sc: Scenario, cid: str) -> tuple[str, dict
     }
     stats["cache_hit"] = round(stats["cache_read"] / stats["input"], 3) if stats["input"] else None
     if sc.expect:
-        stats["expect_found"] = sc.expect in replies
+        stats["phrase_seen"] = sc.expect in replies
     log.append(
         "\n## 數字\n\n```json\n" + json.dumps(stats, ensure_ascii=False, indent=1) + "\n```\n"
     )
@@ -397,7 +406,7 @@ SUMMARY_KEYS = (
     "stops",
     "outcomes",
     "cards",
-    "expect_found",
+    "phrase_seen",
     "crash",
 )
 
@@ -438,9 +447,9 @@ def main() -> None:
                 )
         finally:
             server.stop()
-    head = "| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 網搜 | 費用 USD | 停止 | 工具結果 | 卡片 | 整季標記 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+    head = "| 接口 | 情境 | 秒 | 輪 | 模型呼叫 | 工具 | input | 快取命中 | output | 網搜 | 費用 USD | 停止 | 工具結果 | 卡片 | 出現標記字樣 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
     rows = "".join(
-        f"| {s['provider']} | {s['scenario']} | {s.get('seconds')} | {s.get('runs')} | {s.get('requests')} | {s.get('tool_calls')} | {s.get('input', 0):,} | {s.get('cache_hit')} | {s.get('output', 0):,} | {s.get('web_searches', 0) + s.get('tavily_searches', 0)} | {s.get('cost_usd')} | {' '.join(s.get('stops') or [])} | {s.get('outcomes') or s.get('crash')} | {s.get('cards')} | {s.get('expect_found', '')} |\n"
+        f"| {s['provider']} | {s['scenario']} | {s.get('seconds')} | {s.get('runs')} | {s.get('requests')} | {s.get('tool_calls')} | {s.get('input', 0):,} | {s.get('cache_hit')} | {s.get('output', 0):,} | {s.get('web_searches', 0) + s.get('tavily_searches', 0)} | {s.get('cost_usd')} | {' '.join(s.get('stops') or [])} | {s.get('outcomes') or s.get('crash')} | {s.get('cards')} | {s.get('phrase_seen', '')} |\n"
         for s in summary
     )
     (a.out / "summary.md").write_text(head + rows)

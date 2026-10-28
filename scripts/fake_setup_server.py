@@ -1817,7 +1817,8 @@ class KeepingQbittorrent(FakeQbittorrentClient):
     """收下的 torrent 就一直在下載、進度 0（`agent-live`，M5 票 23）。
 
     基底的替身收下只記在 `added`、不放進 `sync`，poller 下一輪就說它「被移除」
-    （`client_removed`）——prototype 的模型照那個結論推成「qBittorrent 拒收」（prototype 第 7 點）。
+    （`client_removed`）——prototype 的模型照那個結論推成「qBittorrent 拒收」
+    （`docs/research/m5-prototype-2026-10-27.md`〈實跑才抓到的問題〉第 7 點）。
     這一台不下載也不完成，「為什麼沒入庫」問到的是「還在路上」。
     """
 
@@ -2284,8 +2285,8 @@ class FakeClientFactory:
         self._scenario = scenario
         #: `live_ai` 時模型、搜尋與動漫資料走正式的那一份；Fribb 的表放在這台的 `config_root`。
         self._live = (
-            HttpServiceClientFactory(config_root=config_root or Path(tempfile.mkdtemp()))
-            if scenario.live_ai
+            HttpServiceClientFactory(config_root=config_root)
+            if scenario.live_ai and config_root is not None
             else None
         )
         #: 使用者自己那台 Prowlarr，一個位址一台：加進去的站之後再讀要看得到

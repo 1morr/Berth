@@ -198,26 +198,25 @@ def chunks(response: httpx2.Response) -> list[dict[str, Any]]:
     return found
 
 
-def tool_result_given(messages: list[ModelMessage]) -> Any:
-    """模型拿到的那一筆工具結果（JSON 解回來）。"""
-    [given] = [
-        part.model_response_str()
+def tool_results(messages: list[ModelMessage]) -> list[Any]:
+    """模型拿到的每一筆工具結果（JSON 解回來），依序。"""
+    return [
+        json.loads(part.model_response_str())
         for message in messages
         for part in message.parts
         if isinstance(part, ToolReturnPart)
     ]
-    return json.loads(given)
+
+
+def tool_result_given(messages: list[ModelMessage]) -> Any:
+    """模型拿到的那一筆工具結果（只有一筆）。"""
+    [given] = tool_results(messages)
+    return given
 
 
 def last_tool_result(messages: list[ModelMessage]) -> Any:
-    """模型這一次拿到的最後一筆工具結果（JSON 解回來）。"""
-    given = [
-        part.model_response_str()
-        for message in messages
-        for part in message.parts
-        if isinstance(part, ToolReturnPart)
-    ]
-    return json.loads(given[-1])
+    """模型這一次拿到的最後一筆工具結果。"""
+    return tool_results(messages)[-1]
 
 
 def texts(messages: list[ModelMessage]) -> list[str]:
