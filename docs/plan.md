@@ -1315,7 +1315,7 @@ M3 收尾帶過來的兩條：巡檢的「一直失敗的 Feed」要分得出是
 | Jellyfin 首次啟動較慢，精靈頁 1 呼叫 `/Startup/*` 時服務尚未就緒 | 精靈失敗 | 選了套件內之後每 3 秒重測至就緒（上限 2 分鐘）才給擁有者表單；每步可重試 |
 | 既有 Jellyfin 使用者把媒體庫搬到新路徑而不是加路徑 | 觀看紀錄歸零 | 精靈只提供「加入路徑」，文件明說不要搬；健康檢查不會建議改既有路徑 |
 | 既有服務的容器路徑各不相同（`/downloads`、`/tv`、`/movies` 分開掛） | 硬鏈接 `EXDEV`、探測檔看不到 | 檢查訊息附那一台要多加的 `/data`（compose、`docker run` 與 Unraid 模板，帶著 Berth 的 `DATA_ROOT` 的值，M4 票 63）；頁 1、頁 2 就問 Jellyfin 與 qBittorrent 看不看得到 `/data`（M4 票 46、63）；`docs/guide/existing-services.md` 用 NAS 範例說明「原本的掛載不動、多加一條」（M4 票 36） |
-| TMDB 與字幕組的動漫季編號不一致 | medium 誤入庫 | benchmark 分開報告 medium 錯誤率；offset 偵測；M3 的 RSS Series offset 與第一批審核；後續接 anime-lists |
+| TMDB 與字幕組的動漫季編號不一致 | medium 誤入庫 | benchmark 分開報告 medium 錯誤率；offset 偵測；M3 的 RSS Series offset 與第一批審核；Fribb / AniList 的 offset 建議是候選（brief §15〈offset 建議〉） |
 | Jellyfin 的大版本再跳一次（12 → 13）：版本分組、版本名算法或 `/Startup/*` 那幾支 deprecated 端點被移除 | 多版本顯示、精靈頁 1 與頁 3 | 支援下限寫在一處（`adapters/jellyfin.MIN_VERSION`）；版本名讀 Jellyfin 回的而不是自己算；`/Startup/*` 在 13.0 前要換成設定端點（brief §20.9） |
 | Mikan / Nyaa feed 欄位與假設不同 | M3 | 先抓 fixture 再寫 adapter |
 | qBittorrent 版本差異（`paused` / `stopped`、`save_path` 鍵名） | 送單失敗 | 契約測試涵蓋 4.4 與 5.x |
