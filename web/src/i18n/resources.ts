@@ -3997,7 +3997,7 @@ const zhHant = {
       noneTicked: '一列都沒勾。全部不要的話按「拒絕」。',
       // 作品放得進的 Route 不只一條（M5 票 23b）：逐列在卡片上選，模型給的那一條不算數。
       routeLead:
-        '這部作品放得進的 Route 不只一條：按確認前逐列選一條。預選的是這部作品上次用的那一條。',
+        '這部作品放得進的 Route 不只一條：按確認前逐列選一條。這部作品送單過的話，預選上次用的那一條。',
       routeChoose: '選一條 Route',
       routeMissing_one: '還有 {{count}} 列沒選 Route。',
       routeMissing_other: '還有 {{count}} 列沒選 Route。',
@@ -8204,7 +8204,7 @@ const en: Translations<typeof zhHant> = {
       reject: 'Reject',
       noneTicked: 'Nothing is ticked. To do none of it, press Reject.',
       routeLead:
-        'More than one route fits this work: choose one per row before confirming. The one it used last is preselected.',
+        'More than one route fits this work: choose one per row before confirming. If it was sent before, the route it used last is preselected.',
       routeChoose: 'Choose a route',
       routeMissing_one: 'Choose a route for {{count}} more row.',
       routeMissing_other: 'Choose a route for {{count}} more rows.',

@@ -18,6 +18,7 @@ from berth.models import Job, Media, Proposal, Route, User
 from berth.services import proposals
 from berth.services.agent import card_outcome
 from berth.services.proposals import ProposalRejectedError, ProposalView, RouteAsk, RouteOption
+from berth.services.registry import commands
 from tests.integration.arrange import factory_for
 from tests.integration.test_command_dry_run import harbour
 from tests.integration.test_executor import Loops
@@ -243,7 +244,8 @@ class TestManyRoutesFit:
             submit_row(media, anime, url=OTHER_MAGNET),
         )
 
-        view = await decide(session, loops, card, crew, routes=[None, tv.id], selection=[1])
+        # 沒勾的那一列帶了 Route 也不記：那一列不做，不該說它選了哪一條。
+        view = await decide(session, loops, card, crew, routes=[anime.id, tv.id], selection=[1])
 
         assert view.results is not None
         assert [row.outcome for row in view.results] == [
@@ -251,6 +253,7 @@ class TestManyRoutesFit:
             ProposalRowOutcome.DONE,
         ]
         assert await job_route(session, OTHER_HASH) == tv.id
+        assert view.routes == [None, tv.id]
 
     async def test_routes_that_do_not_cover_every_row_are_refused(
         self, session: AsyncSession, roots: dict[str, Path]
@@ -286,3 +289,15 @@ class TestManyRoutesFit:
         )
 
         assert view.status is ProposalStatus.REJECTED
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["downloading.add_manual_download", "rss.subscribe_mikan", "rss.subscribe_search"],
+)
+async def test_every_command_that_sends_into_a_route_of_a_work_asks_on_the_card(name: str) -> None:
+    """Route 選擇看的是命令輸入有沒有 `media_id` 與 `route_id`（`proposals._route_asks`）：
+    送單與兩種訂閱都要人選。改了其中一支的欄位名，這裡就紅。"""
+    fields = set(commands()[name].input.model_fields)
+
+    assert {"media_id", "route_id"} <= fields

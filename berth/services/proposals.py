@@ -62,12 +62,11 @@ from berth.domain import (
     ProposalStatus,
     Role,
 )
-from berth.models import Media, Proposal, User, parse_media_id
-from berth.models import media_id as build_media_id
+from berth.models import Proposal, User
 from berth.services.commands import Effect, Flag, command
 from berth.services.events import EventHub, ProposalSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
-from berth.services.media import route_choices
+from berth.services.media import route_offer
 from berth.services.registry import CommandSpec, Verdict, commands, dry_run, public_arguments
 
 logger = logging.getLogger(__name__)
@@ -503,19 +502,14 @@ async def _route_asks(
         return ()
     asks: list[RouteAsk | None] = []
     for row in arguments:
-        media_id = str(row["media_id"])
-        choices = await route_choices(session, media_id)
-        if len(choices) < 2:
-            asks.append(None)
-            continue
-        parsed = parse_media_id(media_id)
-        media = await session.get(Media, build_media_id(*parsed)) if parsed is not None else None
-        last = media.default_route_id if media is not None else None
+        offer = await route_offer(session, str(row["media_id"]))
         asks.append(
             RouteAsk(
-                options=tuple(RouteOption(id=choice.id, name=choice.name) for choice in choices),
-                preselected=last if last in {choice.id for choice in choices} else None,
+                options=tuple(RouteOption(id=c.id, name=c.name) for c in offer.choices),
+                preselected=offer.last_used,
             )
+            if len(offer.choices) > 1
+            else None
         )
     return tuple(asks)
 
@@ -536,9 +530,13 @@ def _routes(
         if ask is None:
             if pick is not None:
                 raise ProposalRejectedError(ProposalRefusal.ROUTE_NOT_OFFERED, f"{index}:{pick}")
+        elif chosen is not None and index not in chosen:
+            # 沒勾的列不做，帶來的 Route 不記（清單外的照樣拒絕，上一個分支之外）。
+            if pick is not None and pick not in {option.id for option in ask.options}:
+                raise ProposalRejectedError(ProposalRefusal.ROUTE_NOT_OFFERED, f"{index}:{pick}")
+            picks[index] = None
         elif pick is None:
-            if chosen is None or index in chosen:
-                raise ProposalRejectedError(ProposalRefusal.ROUTE_REQUIRED, str(index))
+            raise ProposalRejectedError(ProposalRefusal.ROUTE_REQUIRED, str(index))
         elif pick not in {option.id for option in ask.options}:
             raise ProposalRejectedError(ProposalRefusal.ROUTE_NOT_OFFERED, f"{index}:{pick}")
     return picks if any(pick is not None for pick in picks) else None

@@ -33,8 +33,26 @@ Mikan 訂閱回填同一字幕組同一集的繁日、簡日兩版：使用者�
 
 - [ ] 對照工具在伺服器端算出整季標記，與研究結論一致（測試，改壞會紅）；`series-mapping` 照抄它
 - [ ] 真模型兩種接口重跑情境 2 的三個變體：該標的季全部標出、沒有誤報（逐字稿）
-- [ ] 多條可用 Route 時卡片上必選、伺服器只收存下清單裡的 Route（測試＋playwright 截圖）；真模型的送單情境走到卡片上選 Route
+- [x] 多條可用 Route 時卡片上必選、伺服器只收存下清單裡的 Route（測試＋playwright 截圖）；真模型的送單情境走到卡片上選 Route
 - [ ] 全部檢查、pytest、vitest、前端 e2e 綠；`gen:api` 無 diff；plan、brief、CHANGELOG、progress.md 已更新
 - [ ] 收尾列出發版建議（版本號、CHANGELOG 段落），不發版、不 push，由協調者問使用者
 
 ## Comments
+
+### 2026-10-28 第一個 session：Route 卡片必選做完，整季標記暫停
+
+**協調者改順序**（session 途中）：使用者要先用真模型比較「只有網路搜尋 + TMDB」與「再加 AniList / Fribb / Bangumi」，可能拿掉那三個來源。所以**第 1、2 點（系列對照工具、`series-mapping` 第 3 步照抄）與第 5 點的情境 2 三個變體重跑暫停**，等比較結果再決定做不做。本 session 沒動那兩點（沒有半成品），研究的回應快取 `.local/experiments/cache/fribb_vs_chaining/` 在這個 worktree 與主 checkout 都已不在，之後要做的話得重錄（需要 `TMDB_API_KEY`，AniList 約 100 次、每次間隔 2.5 秒）。所以 `Status` 維持 `ready-for-agent`。
+
+**做完的（第 3、4 點，第 5 點的送單情境，第 6 點）**：
+
+- 後端：`proposals.propose` 對輸入有 `media_id` 與 `route_id` 的命令（送單、Mikan 與關鍵字訂閱）逐列讀 `media.route_offer`，兩條以上就把清單與預選（`default_route_id`，在清單裡才算；模型給的那一條不算）存進 `preview.routes`；`decide` 收 `routes`（與列對齊），勾著的要選的列沒選是 422 `route_required`，清單外、沒得選的列帶了值、長度不對是 422 `route_not_offered`；沒勾的列帶來的 Route 不記；`execute` 用選的蓋過存下的 `route_id`，雜湊仍比存下的那一份。新欄 `proposals.routes_json`（migration `c2f6a8d4e917`）。卡片結果給模型多 `route_chosen_on_card`。
+- 前端：要選的列是必選的下拉（只列伺服器存的清單、預選上次用的），**勾著的列沒選齊時確認鍵不畫**、改說「還有 N 列沒選 Route」——票面寫「按不下去」，照 DESIGN.md「先選再確認」（按了必被拒的鍵不畫；停用的鍵接不住焦點）做成不畫，與「一列都沒勾」同一個做法。一條的照舊是文字。
+- skills（`series-mapping` 第 8 步、`missing-episodes` 與 `new-season-picks` 的同一步）：不在對話裡問 Route，卡片會讓人選。
+- 測試：`tests/integration/test_proposal_routes.py`（13 條：一條時不問、多條沒選 422、清單外 422、選了照它送且 `default_route_id` 跟著改、預選、沒勾的列、長度不對、拒絕不必選、三支命令都有 `media_id`/`route_id`）；變異三種（拿掉沒選就拒、拿掉清單外就拒、執行不套用選的）各紅過。`test_proposals_api.py` 的 422 形狀；`test_agent_cards.decide` 在沒說 `routes` 時選存下的那一條（那台 Berth 有兩條電視 Route）。vitest 4 條；e2e `agent` 的送單卡改成逐列選 Route 再按，驗 Job 在選的 Anime（模型給的是 TV），1280 / 390 截圖 `route-unpicked.png`、`route-picked.png`。
+- 真模型 S7（兩條電視 Route、宝石の国沒送過單，兩種接口）：都沒在對話裡問、直接出卡，卡片那一列要人選（TV、Anime、無預選），約 $0.012。研究檔新的一節。
+
+**code-review（`02993d56...HEAD`）**：已處理——下拉照 DESIGN.md〈Select〉的尺寸；「可選清單 + 上次用的」搬進 `media.route_offer`（原本 proposals 自己解析 media id、讀 Media）；前端「這一列要不要選」只判斷一次；`routeLead` 改成沒預選時也成立；沒勾的列帶來的 Route 不記（否則 `route_chosen_on_card` 會出現在沒做的列）；補三支命令的欄位守門；plan §6 黏句。未處理（判斷題）：`routes` 的「整格 `None`」與「逐列 `None`」兩種表示在 `execute`、`_routes`、`card_outcome` 各轉一次（API 形狀是 `null` = 沒選過，留著）；`route_not_offered` 也涵蓋長度不對（`selection_invalid` 是勾選的形狀，分開較清楚）；`SubmitRowBody` / `SubscribeRowBody` 各自算 fallback 名字；提出到決定之間 Route 被停用沒有專門測試（清單凍結在提出時，執行前重驗讓那一列 `refused`，與其他參數同一個機制）。
+
+**發版建議**（不發版、不 push，由協調者問使用者）：這張的整季標記還沒做、M5 也還沒收尾，建議**不單獨發版**，併進 M5 的版本；若要先發，屬新行為加 API 欄位與 migration，照 SemVer 0.x 是 minor（例如目前版本的下一個 minor），CHANGELOG 用〈Unreleased〉→〈Changed〉那一條「作品放得進的 Route 不只一條時，確認卡上要你選」。
+
+**驗證輸出**（code-review 修正後）：`uv run pre-commit run --all-files` 全過；`uv run pytest` 5173 passed、1 skipped、28 deselected；`pnpm -C web test` 123 files、2299 passed；`pnpm -C web e2e` 62 passed（3.6m）；`pnpm -C web gen:api` 無 diff；`alembic heads` 只有 `c2f6a8d4e917`。

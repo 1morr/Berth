@@ -51,7 +51,9 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   const [picks, setPicks] = useState<readonly (number | null)[]>(() =>
     rows.map((_, index) => asks[index]?.preselected ?? null),
   )
-  const unpicked = [...ticked].filter((index) => asks[index] && picks[index] === null).length
+  // 勾著、而且作品放得進的 Route 不只一條的列：要人選。
+  const choosing = (index: number) => asks[index] != null && ticked.has(index)
+  const unpicked = rows.filter((_, index) => choosing(index) && picks[index] === null).length
   // 按過之後整排鍵收掉：焦點交給卡片標題，不掉回 `body`（WCAG 2.4.3）。只在這一頁按的才搬。
   const title = useRef<HTMLHeadingElement>(null)
   const pressed = useRef(false)
@@ -72,9 +74,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         // 沒勾的列不送它的 Route：伺服器只要勾著的那幾列選齊。
         ...(approve && asking
           ? {
-              routes: rows.map((_, index) =>
-                asks[index] && ticked.has(index) ? picks[index] : null,
-              ),
+              routes: rows.map((_, index) => (choosing(index) ? picks[index] : null)),
             }
           : {}),
       }),
@@ -380,7 +380,7 @@ function RouteValue({ route, fallback }: { route: RouteSlot; fallback: string })
       onChange={(event) =>
         route.onPick(event.target.value === '' ? null : Number(event.target.value))
       }
-      className="value w-full max-w-xs border-2 border-rule-strong bg-hull px-2 py-1.5 text-xs text-ink focus:border-ink"
+      className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink"
     >
       <option value="">{t('agent.card.routeChoose')}</option>
       {ask.options.map((option) => (
