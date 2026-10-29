@@ -1,9 +1,10 @@
 ---
 name: missing-episodes
 description: >-
-  Fill in the aired episodes a series is missing: find out which are missing and why, search
-  for releases and put the picks on one confirmation card. Use when the user asks to fill gaps,
-  complete a season, or get the episodes they do not have yet.
+  Download one season the library does not have yet, or fill in the aired episodes a series is
+  missing: find out which are missing and why, search for releases under several names, and
+  put the picks on one confirmation card. Use when the user asks to download a season, fill
+  gaps, complete a season, or get the episodes they do not have yet.
 tools:
   - discover.search_media
   - why_not.explain
@@ -24,18 +25,41 @@ in Review, makes a duplicate.
    - `import_failed`: the file is here but importing failed; point to that job.
 3. Tell the user which episodes you will look for, by season with ranges, before searching.
 4. Search one season at a time with `search_search_torrents`: media_id and
-   `scope: {missing: true, season: <n>}`. Prefer, in order:
+   `scope: {missing: true, season: <n>}`. That asks the names Berth's search settings turn on;
+   `attempts` shows which. The language of a search decides which subtitles come back (Chinese
+   titles find mostly Chinese subtitles, English and original titles every language), so
+   search under several names:
+   - the original and the English title (`title_original`, `title_en` from `media_read_media`),
+     with `query` for any not in `attempts`;
+   - with `query`, the title in the language the user writes in: `title` for Traditional
+     Chinese, and for Chinese also the Simplified title most subgroups write; for other
+     languages your own knowledge or a web search, saying which (cite the URL, or say it is
+     from memory);
+   - when results are thin, other names with `query`: romaji, the name with the season
+     (`<name> S02`, `<name> Season 2`, `<name> 第2季`), or the name one subgroup uses.
+   A `query` search replaces `scope`, so its rows are judged only against the words you typed:
+   check each row's season and episodes yourself.
+5. Pick releases. Follow what the user said about subtitle language and subgroups first; when
+   they said nothing, prefer subtitles in the language they write in. Then, in order:
    - `verdict: fits`;
    - one season pack covering several missing episodes over many single episodes;
    - more seeders, then smaller size for the same quality.
    A pack that also holds episodes already imported is fine; say so. If nothing fits, say which
    episodes have no release and stop there for them.
-5. Pick the route from `media_read_media` for the work: its `routes` are the ones that hold
+   Write a short table of the candidates in your reply, grouped by subtitle language
+   (subgroup, episodes covered, resolution, seeders, size), and say which you would pick and
+   why: the card shows only the picks, so the table is where the user sees what else there was.
+   If the user has not said which subtitles or subgroup they want and the candidates come in
+   more than one subtitle language, end that reply by asking and stop there: no
+   `downloading_add_manual_download` call until they answer. Otherwise propose the card right
+   after the table.
+6. Pick the route from `media_read_media` for the work: its `routes` are the ones that hold
    this kind of work, and `default_route_id` is the one used last. Pass that one, or any of
    `routes` when there is none. Do not ask in chat: when more than one fits, the card makes the
    user choose the route for that row.
-6. Put every pick in one `downloading_add_manual_download` proposal, one row per torrent:
+7. Put every pick in one `downloading_add_manual_download` proposal, one row per torrent:
    the release picked from the search results, media_id, route_id. Say which episodes each row
-   covers. The user confirms the card; do not claim anything was sent before that.
-7. After the card is decided, report per row what happened; some rows can fail while others
+   covers and its subgroup and subtitle language. The user confirms the card; do not claim
+   anything was sent before that.
+8. After the card is decided, report per row what happened; some rows can fail while others
    succeed.

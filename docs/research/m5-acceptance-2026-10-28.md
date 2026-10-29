@@ -297,3 +297,80 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 ### 花費
 
 修之前 $0.131，收窄後的無職轉生 $0.019，修之後 Re:Zero $0.073、無職轉生 $0.024，合計 **$0.247**（使用者把上限放寬到 $1）。補缺集另 $0.024（上限 $0.5），新番推薦另 $0.036（上限 $0.3）。
+
+## 票 27：訂閱的 skill 與多語言搜尋（2026-10-29）
+
+演練情境 `agent-live`（真 TMDB、真索引站、真 Mikan / Nyaa / acg.rip、真模型；qBittorrent 收下就留著），`scripts/experiments/agent_sources_ab.py --set subscribe`，每一次一台全新的 Berth，只跑到確認卡出現（不按）。三題：
+
+- `sub-zh`：「幫我訂閱鐵旅！meet with 鐵道少女」→「就照你推薦的字幕組，出卡給我確認。」
+- `sub-en`：「Subscribe me to TETSURYO! Meet with Tetsudou Musume, I want each new episode as it comes out.」→「Go with the subgroup you recommend and give me the card to confirm.」（TMDB 的英文名；問的人不會寫中文）
+- `frieren-zh`：「下載葬送的芙莉蓮第一季」→ 固定回答（Route 與來源照推薦、直接出卡）
+
+看的是：有沒有用原名、英文名與對話語言的名字搜；訂閱有沒有列字幕組比較表、等人選（第一句之後就出卡算沒等）、卡上字幕組必選；下載有沒有在對話裡列出中文字幕的發佈。
+
+**「搜了哪些名字」怎麼讀**：不帶 `query` 的那一次問的是搜尋設定開著的名字，全新 Berth 是出廠值英文名與原名（`SearchSettings`）；逐字稿截掉了工具結果，`attempts` 看不到，這一格是照設定推的。表裡其餘的字是模型自己用 `query`（種子搜尋）或 `term`（Mikan 搜番組）打的，照逐字稿抄。
+
+### 最終版（第 4、5 輪）
+
+訂閱（第 4 輪，最終版 `subscribe`，兩種接口各 1 次）：
+
+| 接口 | 題 | 搜了哪些名字 | 比較表 | 等人選 | 卡片 | 費用 USD | 逐字稿 |
+|---|---|---|---|---|---|---|---|
+| anthropic | sub-zh | 預設（英文、原名）；`鐵旅`、`铁旅！meet with 铁道少女`；Mikan `鐵旅！meet with 鐵道少女` | 5 組，推薦繁中的 ANi | ✅ 結尾「你想訂哪一組？」 | Mikan，ANi 預選，2 選 1 必選 | 0.004 | [`t27-r4-anthropic-sub-zh.md`](m5-acceptance-2026-10-28/t27-r4-anthropic-sub-zh.md) |
+| anthropic | sub-en | 預設；`铁旅！邂逅铁道少女`、`鐵旅！meet with 鐵道少女`；Mikan 同上 | 5 組（英文字幕 4 組），推薦 SubsPlease | ✅ | nyaa 關鍵字，SubsPlease 預選，8 選 1 必選 | 0.004 | [`t27-r4-anthropic-sub-en.md`](m5-acceptance-2026-10-28/t27-r4-anthropic-sub-en.md) |
+| openai | sub-zh | 預設；`铁旅`；Mikan `鐵旅` | 5 組，推薦 ANi | ✅ | Mikan，ANi，2 選 1 必選 | 0.003 | [`t27-r4-openai-sub-zh.md`](m5-acceptance-2026-10-28/t27-r4-openai-sub-zh.md) |
+| openai | sub-en | 預設；`铁旅`；Mikan `鐵旅！meet with 鐵道少女` | 6 組（英文字幕 4 組），推薦 SubsPlease | ✅ | nyaa 關鍵字，SubsPlease，8 選 1 必選 | 0.004 | [`t27-r4-openai-sub-en.md`](m5-acceptance-2026-10-28/t27-r4-openai-sub-en.md) |
+
+四次都沒在列表那一則說「卡片已備好」。英文對話推薦的英文字幕組不在 Mikan，所以走 nyaa 關鍵字訂閱；中文對話選的 ANi 在 Mikan，走 Mikan。
+
+下載（第 5 輪，最終版 `missing-episodes`，兩種接口各 2 次）：
+
+| 次 | 接口 | 搜了哪些名字 | 列表 | 等人選 | 卡片 | 費用 USD | 逐字稿 |
+|---|---|---|---|---|---|---|---|
+| 1 | anthropic | `scope: missing`（英文、原名）；`葬送的芙莉蓮`、`葬送的芙莉莲`、`葬送のフリーレン 第1季`、`葬送的芙莉莲 01-28`、`Frieren 繁日双语 BDRip` | ✅ 中文字幕 / 英文多語兩組 | ✅ 問字幕要哪種、要不要 29–38 | ❀拨雪寻春❀ 01–28 簡繁日內封 | 0.005 | [`t27-r5-r1-anthropic-frieren-zh.md`](m5-acceptance-2026-10-28/t27-r5-r1-anthropic-frieren-zh.md) |
+| 1 | openai | `scope: missing`；`葬送的芙莉蓮`、`葬送的芙莉莲`、`送葬者芙莉莲` 等 8 次 | ✅ | ✅ | 喵萌奶茶屋&LoliHouse 01–28 修正合集 | 0.006 | [`t27-r5-r1-openai-frieren-zh.md`](m5-acceptance-2026-10-28/t27-r5-r1-openai-frieren-zh.md) |
+| 2 | anthropic | `scope: missing`；`葬送のフリーレン`、`葬送的芙莉蓮`、`葬送的芙莉莲` 等 7 次 | ✅ | ✅ | 喵萌奶茶屋&LoliHouse 01–28 | 0.006 | [`t27-r5-r2-anthropic-frieren-zh.md`](m5-acceptance-2026-10-28/t27-r5-r2-anthropic-frieren-zh.md) |
+| 2 | openai | `Frieren Beyond Journey's End`、`葬送のフリーレン`、`scope: missing`、`葬送的芙莉莲` 等 8 次 | ✅ | ✅ 另問要不要 29–38 | 喵萌奶茶屋&LoliHouse 01–28 | 0.006 | [`t27-r5-r2-openai-frieren-zh.md`](m5-acceptance-2026-10-28/t27-r5-r2-openai-frieren-zh.md) |
+
+四次都載入 `missing-episodes`、說明 TMDB 第 1 季收了 38 集（29–38 是 2026 年播的第二季）而「第一季」取 01–28，卡上都是中文字幕的合集。
+
+### 怎麼改到最終版（第 1–3 輪）
+
+| 輪 | skill 的樣子 | 看到的問題 | 改了什麼 |
+|---|---|---|---|
+| 1 | 初版 | 訂閱：中文兩次都在列表那一則說「訂閱卡已準備好 / 已預選 ANi」（其實還沒出卡）；openai 英文沒列表、第一句就出 Mikan 卡、預選繁中的 ANi。下載：兩種接口都**沒載入任何 skill**（`missing-episodes` 的描述只寫補缺集），沒列候選；openai 挑了英文字幕的 EMBER | `subscribe`：列表那一則不叫訂閱工具、不說卡已備好；`missing-episodes`：描述涵蓋「下載一季」，出卡前列候選 |
+| 2 | 上面兩處 | 訂閱四次都對。下載兩次都載入了 skill、挑了中文字幕，但出卡那一步只叫工具、不寫字，表沒出現 | 「表寫在叫 `downloading_add_manual_download` 之前」 |
+| 3 | 同上（只跑下載） | 兩次都列了表 | — |
+| 4 | 描述收窄成「一季」（不搶 `series-mapping` 的整部系列）、`subscribe` 第 6 步改字（卡上只有一個選項時不必選，照票 26） | 訂閱四次都對；下載 openai 又沒寫表（1/2） | 沒說字幕偏好、候選又有不同字幕語言時，列表、推薦、**問完再出卡** |
+| 5 | 最終版 | 四次都對 | — |
+
+逐字稿：第 1 輪 `t27-r1-*`、第 2 輪 `t27-r2-*`、第 3 輪 `t27-r3-*`、第 4 輪的下載題 `t27-r4-*-frieren-zh.md`。
+
+### 其他看到的
+
+- **字幕組名讀錯一個**：nyaa 關鍵字卡的選項裡有 `VARYG (Tetsuryou! meet with Tetsudou Musume`（`rss.search_subgroups` 把組名後面的括號一起讀進來），其餘 7 個正常。屬票 26 的組名解析，記在票 27 Comments。
+- **Mikan 卡的 `name`**：第 2 輪 anthropic sub-zh 把 Feed 名寫成字幕組名 `ANi`，其餘是作品名。只影響 RSS 頁上 Feed 的名字。
+- **繁中全名沒拿去搜種子**：多數次只用短名（`鐵旅`、`铁旅`）或 Mikan 的簡中番組名搜索引站，繁中全名只拿去搜 Mikan。這部在索引站上只有英文名的發佈，中文名怎麼搜都沒有可用的，比較表不受影響；skill 說「每個不在 `attempts` 裡的名字都用 `query` 再搜」，這一點只做到一部分。
+- **種子搜尋次數**：第 2 輪 anthropic 的下載題搜了 20 次（$0.009，每輪最多 85K input），沒有撞上限；最終版 6–9 次。
+- **`new-season-picks` 改成載入 `subscribe`**，沒有另外用真模型跑推薦新番。
+
+### Re:Zero 整部系列：多語言搜尋之後的每輪用量（協調者追加）
+
+票 23d 修完之後的基準：找種子那一輪 166K / 103K、種子搜尋 15 / 10 次。這張票的 `series-mapping` 加了「多個名字都搜、不夠再換」，整部系列會把它乘上季數，所以重量一次。`agent_sources_ab.py --set main --only rezero --providers anthropic --reps 2`（同 23d 的三句：先列清單 → 都要、找來源一次送單 → 固定回答），跑到確認卡出現。
+
+| 次 | `series-mapping` | 列清單那一輪 input（每次呼叫最大） | 網搜 | 找種子那一輪 input（每次呼叫最大） | 種子搜尋 / 被截斷 | 結果 | 費用 USD | 逐字稿 |
+|---|---|---|---|---|---|---|---|---|
+| 修前 1 | 多個名字都搜 | 69,973（31K） | 3 | **280,691**（55K），上限的 70% | **26** / 1 | 出卡，6 列 | 0.019 | [`t27-rezero-before-r1-anthropic.md`](m5-acceptance-2026-10-28/t27-rezero-before-r1-anthropic.md) |
+| 修前 2 | 同上 | 76,465（32K） | 1 | 129,397（34K） | 10 / 1 | 出卡，6 列 | 0.012 | [`t27-rezero-before-r2-anthropic.md`](m5-acceptance-2026-10-28/t27-rezero-before-r2-anthropic.md) |
+| 修後 1 | 每部分一個名字 | 61,798（42K） | 2 | **95,233**（33K），上限的 24% | **9** / 1 | 出卡，6 列 | 0.013 | [`t27-rezero-r1-anthropic.md`](m5-acceptance-2026-10-28/t27-rezero-r1-anthropic.md) |
+| 修後 2 | 同上 | 76,441（32K） | 2 | **87,339**（29K），上限的 22% | **7** / 1 | 出卡，6 列 | 0.011 | [`t27-rezero-r2-anthropic.md`](m5-acceptance-2026-10-28/t27-rezero-r2-anthropic.md) |
+
+- **修前第 1 次明顯變差**（沒超過 400K）：同一部作品每一季都用英文批次名、簡中季名，再加 `合集`、`BIG5`、字幕組名的變體輪流搜，26 次、280K，比 23d 多七成。第 2 次只用簡中季名，10 次。
+- **修法**（`series-mapping` 第 8 步）：每個 TMDB 條目先不帶 `query` 搜一次（設定的名字一次問所有季）；還沒有合適發佈的部分**只用一個名字**（對話語言的名字加季）搜一次；還沒有才換一個名字再一次，之後就說這部分沒有，不再試其他拼法或「batch」「合集」。
+- **修後**兩次都只用簡中季名補四季（第 1 次另用羅馬字補了兩季），7–9 次，找種子那一輪 87–95K，比 23d 的 166K / 103K 還少。四次的清單都對（S01E01–E25、E26–E38、E39–E50、E51–E58、E59–E66、E67–E77、E78–E85，兩部劇場版是獨立電影），卡片都涵蓋四季加兩部劇場版，挑的多是中文字幕的季包。
+- **被截斷的那一次**：四次都是不帶 `query` 的整部 Re:Zero（85 集）種子搜尋（`ai_tool_calls.truncated`）。給模型的列是前 10 列加「之後符合而帶來新集數的列」（票 23d 的 `_rows_to_show`），85 集的單集發佈幾乎每一集都帶一列進來，再加上票 26 留下的 `published_at`，放不進截斷上限。沒有因此撞到每輪上限，模型也照樣用季名找到季包，**這張沒改**；要改的話，「新集數的列」只在補缺集（結果帶 `batch`）時加，記在票 Comments。
+- 花費：修前 $0.031、修後 $0.024，合計 $0.055（上限 $0.4）。
+
+### 花費
+
+第 1 輪 $0.022、第 2 輪 $0.027、第 3 輪 $0.012、第 4 輪 $0.024、第 5 輪 $0.023，合計 **$0.107**（上限 $1）；Re:Zero 另 $0.055（上限 $0.4）。

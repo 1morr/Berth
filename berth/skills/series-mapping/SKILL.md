@@ -54,12 +54,27 @@ tools:
    part | format | episodes | TMDB entry and SxxEyy range | already imported | mark.
    The confirmation card has no place for notes, so the table is where the user sees the marks.
    Leave shorts, recaps and spin-offs unticked and ask which rows they want.
-8. Only after they choose, search with `search_search_torrents`, one TMDB entry (or one
-   season) at a time. Anime releases often need a `query` with the romaji or the fansub
-   group's name for the show. Prefer `verdict: fits`, more seeders, and whole-season packs.
+8. Only after they choose, search with `search_search_torrents`. A franchise has many parts,
+   and every search stays in this turn's context, so keep the searches few. The language of a
+   search decides which subtitles come back (Chinese titles find mostly Chinese subtitles,
+   English and original titles every language):
+   - First, one search without `query` for each TMDB entry: it asks the names Berth's search
+     settings turn on (`attempts` shows which) for every season at once.
+   - Then, only for parts with no fitting release yet, **one** `query` per part with one name:
+     the title in the language the user writes in, with the part's season (`<name> 第2季`,
+     `<name> S02`). For Chinese use the Simplified title most subgroups write; for other
+     languages your own knowledge or a web search, saying which.
+   - Only for a part still without one, one more `query` with another name (the original,
+     English or romaji title, or the name one subgroup uses). Then stop for that part and say
+     it has no release; do not try more spellings or keywords like "batch" or "合集".
+   A `query` search is judged only against the words you typed: check the season and episodes
+   of each row yourself. Follow what the user said about subtitle language and subgroups;
+   when they said nothing, prefer subtitles in the language they write in. Then prefer
+   `verdict: fits`, more seeders, and whole-season packs.
 9. Pick each row's route from that TMDB entry's `media_read_media`: its `routes` hold that kind
    of work (series or movies) and `default_route_id` is the one used last. A movie and a series
    never share a route. Pass the default, or any of `routes` when there is none. Do not ask in
    chat: when more than one fits, the card makes the user choose the route for that row.
 10. Put all picks in one `downloading_add_manual_download` proposal, one row per TMDB entry or
-    season, each row saying which parts it covers. The user confirms the card.
+    season, each row saying which parts it covers and its subgroup and subtitle language. The
+    user confirms the card.
