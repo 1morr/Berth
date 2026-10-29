@@ -31,6 +31,11 @@ ROUTED = {
     ("POST", "/jobs/{job_hash}/retry"): "jobs.retry_job",
     ("POST", "/jobs/{job_hash}/replan"): "plan.replan_job",
     ("GET", "/search"): "search.search_torrents",
+    # M5 票 28：要這個人看得到的 Jellyfin（`JellyfinAccess`），由執行器照 actor 打開。
+    ("GET", "/search/queries"): "search.plan_queries",
+    ("GET", "/media/{media_id}"): "media.read_media",
+    ("POST", "/media/{media_id}/refresh"): "media.refresh_media",
+    ("POST", "/media/{media_id}/resolve"): "media.read_media",
     ("GET", "/rss/mikan/search"): "bangumi.search_bangumi",
     ("GET", "/rss/mikan/bangumi/{bangumi_id}"): "bangumi.read_bangumi",
     ("POST", "/rss/subscriptions/mikan"): "rss.subscribe_mikan",

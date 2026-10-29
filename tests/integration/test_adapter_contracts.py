@@ -3558,6 +3558,47 @@ async def test_jellyfin_episodes_of_a_show_this_user_cannot_see_are_not_found() 
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_jellyfin_episodes_of_a_whole_show_come_in_one_request() -> None:
+    """不帶 `seasonId`：兩季五集一次回來（M5 票 28，12.1.0 錄）。季集號不靠 `fields`。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/{ALPHA_SHOW}/Episodes").respond(
+        200, text=read_fixture("http/jellyfin/shows-episodes.series.json")
+    )
+
+    episodes = await jellyfin_call(
+        lambda client: client.series_episodes(user_id=RESTRICTED_USER, series_id=ALPHA_SHOW)
+    )
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "isMissing": "false",
+    }
+    assert [(item.season, item.episode_start, item.season_id) for item in episodes] == [
+        (1, 1, ALPHA_SEASON_ONE),
+        (1, 2, ALPHA_SEASON_ONE),
+        (1, 3, ALPHA_SEASON_ONE),
+        (2, 1, ALPHA_SEASON_TWO),
+        (2, 2, ALPHA_SEASON_TWO),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_episodes_of_a_whole_show_this_user_cannot_see_are_not_found() -> None:
+    """不帶 `seasonId` 一樣套權限：同一個 404 與 `"Series not found"`。"""
+    respx.get(f"{JELLYFIN_URL}/Shows/{FORBIDDEN_FRIEREN}/Episodes").respond(
+        404, text=read_fixture("http/jellyfin/shows-episodes.series.forbidden.json")
+    )
+
+    with pytest.raises(NotFoundError):
+        await jellyfin_call(
+            lambda client: client.series_episodes(
+                user_id=RESTRICTED_USER, series_id=FORBIDDEN_FRIEREN
+            )
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("fixture", "series", "expected"),
     [

@@ -18,13 +18,15 @@
 from __future__ import annotations
 
 import asyncio
+import unicodedata
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import PurePosixPath
-from typing import Protocol
+from typing import Annotated, Protocol
 
-from sqlalchemy import func, select
+from pydantic import Field
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin import JellyfinItem
@@ -37,6 +39,7 @@ from berth.domain import (
     EpisodeSnapshot,
     EpisodeStatus,
     FileKind,
+    InJellyfin,
     InventoryStatus,
     JellyfinPresence,
     JobState,
@@ -45,6 +48,7 @@ from berth.domain import (
     MediaSnapshot,
     PlanAction,
     PlanStatus,
+    Role,
     Tags,
 )
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, media_id
@@ -52,7 +56,9 @@ from berth.models.types import utcnow
 from berth.services.commands import Effect, Flag, command
 from berth.services.jellyfin_access import (
     BrowsableLibrary,
+    ItemNotVisibleError,
     JellyfinAccess,
+    JellyfinUnreachableError,
     WallQuery,
 )
 from berth.services.routes import owning_route, target_prefix
@@ -244,6 +250,19 @@ class Holdings:
     awaiting_review: int
 
 
+@dataclass(frozen=True, slots=True)
+class JellyfinHolding:
+    """這部作品在這位使用者看得到的 Jellyfin 裡有什麼，不管帳本（M5 票 28）。"""
+
+    lookup: InJellyfin
+    #: Jellyfin 有的（季, 集）。電影、不在、問不到時是空的。
+    episodes: frozenset[tuple[int, int]] = frozenset()
+
+
+#: 沒能問 Jellyfin：集的狀態照帳本與 Job 說。
+UNKNOWN_HOLDING = JellyfinHolding(InJellyfin.UNKNOWN)
+
+
 class Covers(Protocol):
     """帳本一筆或計劃一列：兩者都用 `season` / `episode_start` / `episode_end` 說它蓋到哪幾集。"""
 
@@ -304,6 +323,164 @@ async def read_wall(
     )
 
 
+# --- 給模型：用名字查媒體庫裡有沒有（M5 票 28）-------------------------------------
+
+#: 一個名字在一個媒體庫裡最多回幾部。名字是模型給的、通常很準；回多了只是佔上下文。
+FIND_LIMIT = 5
+#: 一次最多幾個名字：新番推薦一季二三十部，每部可能要兩三種寫法。
+FIND_NAMES = 60
+#: 名字（查的或媒體庫裡的，去掉標點之後）短於這麼多字時，只在整個名字相同時算對上：否則「K」、
+#: 「ID」這種名字會對上每一部。中文名多半三四個字，所以門檻是 3。
+FIND_SHORTEST = 3
+
+
+@dataclass(frozen=True, slots=True)
+class LibraryTitle:
+    """媒體庫裡對上一個名字的一部。"""
+
+    #: Jellyfin 的名稱。
+    title: str
+    year: int | None
+    kind: MediaKind
+    #: 在哪一個媒體庫（Jellyfin 的名稱）。
+    library: str
+    #: Jellyfin 認得它的 TMDB id 時是 `tv:<id>` / `movie:<id>`（`media.read_media` 收的那一種），
+    #: 否則是空字串。
+    media_id: str
+    #: Berth 的帳本有沒有它的檔案。Jellyfin 有、帳本沒有的是自己複製進去的或舊安裝入庫的。
+    in_ledger: bool
+    #: 整個名字相同（不分大小寫、空白、標點）。`False` 是只對上一段：媒體庫裡的是前一季、或名字
+    #: 較長的另一部——不能直接說「已經有這一部」。
+    exact: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FoundUnderName:
+    name: str
+    #: 空的就是這個人看得到的媒體庫裡沒有。
+    titles: tuple[LibraryTitle, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FoundInLibrary:
+    #: 找過的媒體庫（這個人在 Jellyfin 看得到、Berth 瀏覽得了的那幾個）。
+    libraries: tuple[str, ...]
+    names: tuple[FoundUnderName, ...]
+
+
+@command(
+    Effect.READ,
+    about=(
+        "Look up works by name in the user's Jellyfin libraries (only the ones this user may "
+        "see): does the user already have X? Pass every name to check in one call, several "
+        "per work (romaji, English, native, Chinese): folder names may be in any of them. "
+        "Case, spaces and punctuation are ignored, and a name inside a longer title matches "
+        "(an earlier season's folder matches a sequel's name; exact is false then). Each "
+        "match says its "
+        "library, its media_id when Jellyfin knows the TMDB id, and in_ledger: whether "
+        "Berth's records have its files (false means it was copied in by hand or imported "
+        "before Berth's records were lost)."
+    ),
+    audience=Role.USER,
+)
+async def find_in_library(
+    session: AsyncSession,
+    access: JellyfinAccess,
+    *,
+    names: Annotated[list[str], Field(min_length=1, max_length=FIND_NAMES)],
+) -> FoundInLibrary:
+    """每個名字在這個人看得到的每一個媒體庫裡找（`access.index`：媒體庫先對允許清單驗過才變成
+    `parentId`，brief §12）。重複與空白的名字只找一次。
+
+    不列整個媒體庫：上千部截斷之後模型看到的是前幾十部，答不了「有沒有 X」。
+    """
+    # 只差大小寫、空白或標點的是同一個名字：留第一種寫法。
+    spelled = {_folded(name): name.strip() for name in reversed(names)}
+    wanted = [spelled[key] for key in dict.fromkeys(_folded(name) for name in names) if key]
+    libraries = access.libraries
+    # 一個媒體庫一份整份清單（只有 id、名稱、年份、TMDB id），名字在 Berth 這邊比：
+    # Jellyfin 的 `searchTerm` 不認「少了冒號」的寫法，而自己複製進去的資料夾名常常就少了它。
+    indexes = await asyncio.gather(*(access.index(library.id) for library in libraries))
+    found = [
+        (name, library, item, exact)
+        for name in wanted
+        for library, index in zip(libraries, indexes, strict=True)
+        for item, exact in _matches(name, index)[:FIND_LIMIT]
+    ]
+    ledger = await _in_ledger(session, [(library.kind, item) for _, library, item, _ in found])
+    by_name: dict[str, list[LibraryTitle]] = {name: [] for name in wanted}
+    for name, library, item, exact in found:
+        work = _media_id_of(library.kind, item)
+        by_name[name].append(
+            LibraryTitle(
+                title=item.name,
+                year=item.year,
+                kind=library.kind,
+                library=library.name,
+                media_id=work,
+                in_ledger=item.id in ledger or work in ledger,
+                exact=exact,
+            )
+        )
+    return FoundInLibrary(
+        libraries=tuple(library.name for library in libraries),
+        names=tuple(FoundUnderName(name, tuple(rows)) for name, rows in by_name.items()),
+    )
+
+
+def _folded(text: str) -> str:
+    """比名字用的樣子：NFKC、不分大小寫，只留字母與數字（CJK 也是字母）。"""
+    return "".join(
+        char for char in unicodedata.normalize("NFKC", text).casefold() if char.isalnum()
+    )
+
+
+def _matches(name: str, index: Sequence[JellyfinItem]) -> list[tuple[JellyfinItem, bool]]:
+    """`index` 裡對得上 `name` 的，整個名字相同的排前面：查詢是名字的一段（`Edgerunners`），或名字是
+    查詢的一段（媒體庫裡是 `Kusuriya no Hitorigoto`、查的是它的第三季）。"""
+    wanted = _folded(name)
+    exact: list[JellyfinItem] = []
+    partial: list[JellyfinItem] = []
+    for item in index:
+        have = _folded(item.name)
+        if not have:
+            continue
+        if have == wanted:
+            exact.append(item)
+        elif (len(wanted) >= FIND_SHORTEST and wanted in have) or (
+            len(have) >= FIND_SHORTEST and have in wanted
+        ):
+            partial.append(item)
+    return [(item, True) for item in exact] + [(item, False) for item in partial]
+
+
+def _media_id_of(kind: MediaKind, item: JellyfinItem) -> str:
+    return media_id(kind, int(item.tmdb_id)) if item.tmdb_id.isdigit() else ""
+
+
+async def _in_ledger(
+    session: AsyncSession, found: Sequence[tuple[MediaKind, JellyfinItem]]
+) -> frozenset[str]:
+    """`found` 裡帳本認得的：回的是 Jellyfin 的 id 與 `media_id` 混在一起的集合。照牆的規矩，
+    帳本記下的 Jellyfin id 與 TMDB id 都算（Jellyfin 認錯 TMDB id 時前者才對）。"""
+    if not found:
+        return frozenset()
+    item_ids = [item.id for _, item in found]
+    works = [work for kind, item in found if (work := _media_id_of(kind, item))]
+    rows = await session.execute(
+        select(LedgerEntry.media_id, LedgerEntry.jellyfin_series_id, LedgerEntry.jellyfin_item_id)
+        .where(LedgerEntry.action == PlanAction.IMPORT)
+        .where(
+            or_(
+                LedgerEntry.media_id.in_(works),
+                LedgerEntry.jellyfin_series_id.in_(item_ids),
+                LedgerEntry.jellyfin_item_id.in_(item_ids),
+            )
+        )
+    )
+    return frozenset(value for row in rows for value in row if value)
+
+
 @command(Effect.READ)
 async def libraries_with_imports(
     session: AsyncSession, library_ids: Sequence[str]
@@ -334,12 +511,64 @@ async def libraries_with_imports(
     return frozenset(found)
 
 
+# 收 ORM 列，給 `media` 用。
 @command(Effect.READ, flags={Flag.INTERNAL})
-async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnapshot) -> Holdings:
+async def read_jellyfin_holding(
+    session: AsyncSession, access: JellyfinAccess | None, media: Media
+) -> JellyfinHolding:
+    """Jellyfin 裡這部作品有哪幾集（M5 票 28）。`access` 是 `None`、或問的途中連不上，都是
+    `UNKNOWN_HOLDING`，不丟例外：作品頁不因為 Jellyfin 而打不開。
+
+    找作品照觀看區（`watch_area.read_watch_area`）：帳本記下的 id 先比，`locate` 不帶 `parentId`
+    （看不到的媒體庫與不在是同一個答案）；集只問確認過的那一部。季集號是 Jellyfin 讀出來的，
+    與 TMDB 的編法不同時（絕對編號、季的切法）對到的是別的集——那時人在季表上看得到。
+    """
+    if access is None:
+        return UNKNOWN_HOLDING
+    links = await jellyfin_links(session, media.id, media.kind)
+    try:
+        found = await access.locate(media.kind, media.tmdb_id, links=links)
+        if found is None:
+            return JellyfinHolding(InJellyfin.ABSENT)
+        if media.kind is MediaKind.MOVIE:
+            return JellyfinHolding(InJellyfin.FOUND)
+        rows = await access.series_episodes(found.id)
+    except JellyfinUnreachableError:
+        return UNKNOWN_HOLDING
+    except ItemNotVisibleError:
+        # 確認與問集之間被收回權限（或劇被刪了）。
+        return JellyfinHolding(InJellyfin.ABSENT)
+    return JellyfinHolding(
+        InJellyfin.FOUND, frozenset(pair for row in rows for pair in episodes_of(row))
+    )
+
+
+# 只給 `read_jellyfin_holding` 與觀看區：帳本裡的 Jellyfin id 由 Berth 自己寫下。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def jellyfin_links(session: AsyncSession, media_id: str, kind: MediaKind) -> frozenset[str]:
+    """帳本記下的這部作品在 Jellyfin 的 id（劇集是 Series、電影是 Movie）。媒體庫牆的同一條規則：
+    Jellyfin 認錯 TMDB id 時，Berth 自己寫下的那一個才是對的（票 03）。"""
+    entries = await session.scalars(
+        select(LedgerEntry).where(
+            LedgerEntry.media_id == media_id, LedgerEntry.action == PlanAction.IMPORT
+        )
+    )
+    return frozenset(link for entry in entries if (link := jellyfin_link(entry, kind)))
+
+
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def read_holdings(
+    session: AsyncSession,
+    media: Media,
+    snapshot: MediaSnapshot,
+    jellyfin: frozenset[tuple[int, int]] = frozenset(),
+) -> Holdings:
     """這部作品在媒體庫與管線裡的樣子（Media 詳情頁）。
 
     一集算不算已入庫看帳本，算不算卡住或在路上看 Job 與它現在那一份計劃——與牆上那一格
-    同一組分類。
+    同一組分類。`jellyfin` 是 Jellyfin 有的季集（`read_jellyfin_holding`）：帳本沒有、也沒有下載
+    在處理的那幾集是 `in_jellyfin`，不是缺（M5 票 28）。沒給的呼叫端（背景迴圈、為什麼沒入庫）
+    照帳本說。
     """
     entries = sorted(
         await session.scalars(select(LedgerEntry).where(LedgerEntry.media_id == media.id)),
@@ -419,6 +648,8 @@ async def read_holdings(session: AsyncSession, media: Media, snapshot: MediaSnap
             return EpisodeStatus.STUCK
         if pair in under_way:
             return EpisodeStatus.DOWNLOADING
+        if pair in jellyfin:
+            return EpisodeStatus.IN_JELLYFIN
         if _aired(episode, today):
             return EpisodeStatus.MISSING
         return EpisodeStatus.UNAIRED

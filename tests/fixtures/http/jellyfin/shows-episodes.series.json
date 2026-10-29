@@ -1,0 +1,261 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "f33fb9f2cecad5b489d1a572a99558bf",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "a593331f5aab988b34a282845166f4ca": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "a593331f5aab988b34a282845166f4ca": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "a593331f5aab988b34a282845166f4ca": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentBackdropImageTags": [
+        "a593331f5aab988b34a282845166f4ca"
+      ],
+      "ParentBackdropItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "e287646874088d4b73b9578d6fc51da6",
+      "SeasonName": "第 1 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ServerId": "60ec1c4c7ef54dabb8c5f3cd227bd99f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "f33fb9f2cecad5b489d1a572a99558bf",
+        "Key": "f33fb9f2-ceca-d5b4-89d1-a572a99558bf",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "cd2f059cd4fdef1da23617e86514232e",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "a593331f5aab988b34a282845166f4ca": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "a593331f5aab988b34a282845166f4ca": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "a593331f5aab988b34a282845166f4ca": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentBackdropImageTags": [
+        "a593331f5aab988b34a282845166f4ca"
+      ],
+      "ParentBackdropItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "e287646874088d4b73b9578d6fc51da6",
+      "SeasonName": "第 1 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ServerId": "60ec1c4c7ef54dabb8c5f3cd227bd99f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "cd2f059cd4fdef1da23617e86514232e",
+        "Key": "cd2f059c-d4fd-ef1d-a236-17e86514232e",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "af186255fbb0f0673dcb32978970c192",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "a593331f5aab988b34a282845166f4ca": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "a593331f5aab988b34a282845166f4ca": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "a593331f5aab988b34a282845166f4ca": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 3,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentBackdropImageTags": [
+        "a593331f5aab988b34a282845166f4ca"
+      ],
+      "ParentBackdropItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentIndexNumber": 1,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "e287646874088d4b73b9578d6fc51da6",
+      "SeasonName": "第 1 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ServerId": "60ec1c4c7ef54dabb8c5f3cd227bd99f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "af186255fbb0f0673dcb32978970c192",
+        "Key": "af186255-fbb0-f067-3dcb-32978970c192",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "88ddb6afc747bd6ea3170bfcafdfef46",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "a593331f5aab988b34a282845166f4ca": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "a593331f5aab988b34a282845166f4ca": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "a593331f5aab988b34a282845166f4ca": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentBackdropImageTags": [
+        "a593331f5aab988b34a282845166f4ca"
+      ],
+      "ParentBackdropItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentIndexNumber": 2,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "8d54712028c27d182218a373dd4e6460",
+      "SeasonName": "第 2 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ServerId": "60ec1c4c7ef54dabb8c5f3cd227bd99f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "88ddb6afc747bd6ea3170bfcafdfef46",
+        "Key": "88ddb6af-c747-bd6e-a317-0bfcafdfef46",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "Container": "mkv",
+      "Id": "3904599ec825fb77a9d730e63c58b3f7",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "a593331f5aab988b34a282845166f4ca": "W23V}qptfQptfQptqBfkfQfkfQfkfQfQfQfQfQfQqBfkfQfkfQfk"
+        },
+        "Primary": {
+          "a593331f5aab988b34a282845166f4ca": "d23KQ.pLfQpLktfkfQfkfQfQfQfQktfkfQfkfQfQfQfQ"
+        },
+        "Thumb": {
+          "a593331f5aab988b34a282845166f4ca": "W2FgQ{=vfQ=vfQ=v}qj@fQj@fQj@fQfQfQfQfQfQ}qj@fQj@fQj@"
+        }
+      },
+      "ImageTags": {},
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "Alpha Show",
+      "ParentBackdropImageTags": [
+        "a593331f5aab988b34a282845166f4ca"
+      ],
+      "ParentBackdropItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentIndexNumber": 2,
+      "ParentPrimaryImageItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "ParentPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ParentThumbItemId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "PrimaryImageAspectRatio": 0.6666666666666666,
+      "ProductionYear": 2022,
+      "RunTimeTicks": 6000000000,
+      "SeasonId": "8d54712028c27d182218a373dd4e6460",
+      "SeasonName": "第 2 季",
+      "SeriesId": "2a9857e656bbd18b7c3c3a3b4ee5eef1",
+      "SeriesName": "Alpha Show",
+      "SeriesPrimaryImageTag": "a593331f5aab988b34a282845166f4ca",
+      "ServerId": "60ec1c4c7ef54dabb8c5f3cd227bd99f",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "3904599ec825fb77a9d730e63c58b3f7",
+        "Key": "3904599e-c825-fb77-a9d7-30e63c58b3f7",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 5
+}

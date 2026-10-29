@@ -575,6 +575,12 @@ class JellyfinClient(Protocol):
         （`NotFoundError`）。"""
         ...
 
+    async def series_episodes(self, *, user_id: str, series_id: str) -> tuple[JellyfinItem, ...]:
+        """`GET /Shows/{id}/Episodes?userId=&isMissing=false`：不帶 `seasonId`，整部劇每一季的集
+        （含 Specials）一次回來。看不到這部劇時 404（`NotFoundError`），與帶 `seasonId` 的同一個答案
+        （M5 票 28，12.1.0 實測，brief §20.8）。"""
+        ...
+
     async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
         """`GET /Shows/NextUp?userId=&seriesId=`：這部劇接下來看哪一集，全部看完是 `None`。
 

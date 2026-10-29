@@ -3520,14 +3520,14 @@ export interface components {
         };
         /**
          * EpisodeStatus
-         * @description Media 詳情集表上一集的入庫狀態（票 13，使用者拍板五種）。
+         * @description Media 詳情集表上一集的入庫狀態（票 13，使用者拍板五種；M5 票 28 加 `in_jellyfin`）。
          *
          *     **宣告順序就是優先序**：第二個版本在下載的那一集已經看得了，所以是已入庫。
          *     「卡住」與「下載中」分開、「未播出」與「缺」分開：停在待審的那一集說成下載中是騙人，
          *     還沒播的集說成缺也是。
          * @enum {string}
          */
-        EpisodeStatus: "imported" | "stuck" | "downloading" | "missing" | "unaired";
+        EpisodeStatus: "imported" | "stuck" | "downloading" | "in_jellyfin" | "missing" | "unaired";
         /**
          * EpisodeVerdictOut
          * @description 一集（電影是整部，季集都是 `null`）的結論與蓋到它的那幾筆。
@@ -3855,6 +3855,14 @@ export interface components {
                 number
             ][];
         };
+        /**
+         * InJellyfin
+         * @description 這部作品在這位使用者看得到的 Jellyfin 裡有沒有（M5 票 28，`MediaView.jellyfin`）。
+         *
+         *     與 `JellyfinPresence` 不同：那一個問的是 Berth 入庫的檔案 Jellyfin 收錄了沒，這一個不管帳本。
+         * @enum {string}
+         */
+        InJellyfin: "found" | "absent" | "unknown";
         /** IndexerApplyIn */
         IndexerApplyIn: {
             /**
@@ -4891,6 +4899,7 @@ export interface components {
             versions: components["schemas"]["VersionGroupOut"][];
             /** Awaiting Review */
             awaiting_review: number;
+            jellyfin: components["schemas"]["InJellyfin"];
         };
         /**
          * MikanSubscriptionIn

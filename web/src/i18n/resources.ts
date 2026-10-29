@@ -1527,6 +1527,8 @@ const zhHant = {
         imported: '已入庫',
         downloading: '下載中',
         stuck: '卡住',
+        // Jellyfin 裡有、Berth 的帳本沒有（自己複製進去的、舊安裝入庫的，M5 票 28）：不算缺。
+        in_jellyfin: 'Jellyfin 已有',
         missing: '缺',
         unaired: '未播出',
       },
@@ -5879,6 +5881,7 @@ const en: Translations<typeof zhHant> = {
         imported: 'Imported',
         downloading: 'Downloading',
         stuck: 'Stuck',
+        in_jellyfin: 'In Jellyfin',
         missing: 'Missing',
         unaired: 'Not aired',
       },

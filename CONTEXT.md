@@ -272,6 +272,10 @@ _Avoid_: sync, lookup, match
 一條「來源檔案 → 目標硬鏈接」的紀錄，含 hash、來源相對路徑、目標路徑、inode、Media / 季 / 集、Tags、plan item、Jellyfin item id。
 _Avoid_: link record, file record, history
 
+**Jellyfin Holding**（Jellyfin 已有）:
+使用者看得到的 Jellyfin 裡有、帳本沒有的作品或集：自己複製進去的、舊安裝入庫而帳本遺失的（M5 票 28）。季表上是「Jellyfin 已有」（`EpisodeStatus.IN_JELLYFIN`），不算缺，缺集搜尋不問它；作品那一格是 `InJellyfin`（`found` / `absent` / `unknown`）。量多時的解法是從媒體庫重建帳本，不是再下載一次。
+_Avoid_: lookup（那是 Resolve 避開的詞）, untracked, orphan（Orphan 是 complete 裡沒人認領的目錄）
+
 **Benchmark Corpus**（語料）:
 凍結的真實 torrent 檔案清單加上逐檔正解與 TMDB 快照（`tests/fixtures/parser/`）。`berth bench` 在它上面量解析器，門檻是 `auto_wrong`（自動處置但處置錯）不得上升。e2e 也從它取三包發佈。
 _Avoid_: dataset, test data

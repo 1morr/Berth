@@ -48,6 +48,7 @@ function media(overrides: Partial<Media> = {}): Media {
     unmatched: [],
     versions: [],
     awaiting_review: 0,
+    jellyfin: 'absent',
     ...overrides,
   }
 }

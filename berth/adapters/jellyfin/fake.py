@@ -642,6 +642,17 @@ class FakeJellyfinClient:
             replace(row, user_data=self._user_data(name, row)) for row in self._episodes(season)
         )
 
+    async def series_episodes(self, *, user_id: str, series_id: str) -> tuple[JellyfinItem, ...]:
+        self._checkpoint(always=True)
+        self.watch_area_queries.append(("series_episodes", user_id, series_id))
+        name = self._username(user_id)
+        series = self._seen_by(name, series_id)
+        if series is None or series.type != ITEM_SERIES:
+            raise NotFoundError(f"GET /Shows/{series_id}/Episodes: 404 Series not found")
+        return tuple(
+            replace(row, user_data=self._user_data(name, row)) for row in self._episodes(series)
+        )
+
     async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
         """**不看權限**：帶 `seriesId` 的 NextUp 在真的 Jellyfin 也不套（研究 §2）。"""
         self._checkpoint(always=True)

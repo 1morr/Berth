@@ -11,6 +11,8 @@
 4. 對 Series / Season 標已看，會不會遞迴到底下的集
 5. 帳號被 Jellyfin 停用之後，API key 代讀是否照樣回資料
 6. 研究當時在 12.0.0 上量過的行為，這一版是否相同
+7. `/Shows/{id}/Episodes` 不帶 `seasonId`（一次拿整部劇的集，M5 票 28）：每一季都回嗎、
+   沒權限的劇仍是 404 嗎、`isMissing` 真的有過濾嗎、不帶 `fields` 還有沒有集數欄位
 
 媒體庫關掉網路 metadata：類型、年份、評分、分級與 TMDB id 都寫在 NFO 裡，排序與篩選的
 預期才算得出來，結果也不隨 TMDB 變動。跑完刪掉容器與工作目錄（`--keep` 保留，除錯用）。
@@ -1368,6 +1370,108 @@ def record_title_watch(
         fixtures.write(name, srv.send(api, "/Shows/NextUp", params=params))
 
 
+# --- 7. 整部劇的集（M5 票 28） -------------------------------------------------------
+
+#: 第七節自己加的劇：有第 0 季、第 1 季少一集（E02）、一個雙集檔（E04-E05）。
+#: 在所有 fixture 錄完**之後**才放進 TV 媒體庫，不影響其他節與 fixture。
+GAP_SHOW = "Gap Show (2017)"
+GAP_FILES = (
+    "Season 00/Gap Show (2017) - S00E01.mkv",
+    "Season 01/Gap Show (2017) - S01E01.mkv",
+    "Season 01/Gap Show (2017) - S01E03.mkv",
+    "Season 01/Gap Show (2017) - S01E04-E05.mkv",
+)
+EPISODE_KEYS = ("ParentIndexNumber", "IndexNumber", "IndexNumberEnd", "LocationType")
+
+
+def episode_rows(resp: Response) -> list[dict[str, Any]]:
+    rows = rows_of(resp.json()) if resp.ok else None
+    return [{k: r.get(k) for k in EPISODE_KEYS} for r in rows or []]
+
+
+def run_series_episodes(
+    srv: Server,
+    api: Credential,
+    setup: Jellyfin,
+    c: Catalog,
+    user_id: str,
+    report: Report,
+    fixtures: Fixtures,
+    workdir: Path,
+) -> None:
+    report.heading("7. /Shows/{id}/Episodes 不帶 seasonId")
+    user = {"userId": user_id}
+    out: dict[str, Any] = {"version": srv.json(api, "/System/Info").get("Version")}
+    report.note(f"伺服器版本 {out['version']}")
+
+    def fetch(series: str, extra: Mapping[str, str]) -> Response:
+        return srv.send(api, f"/Shows/{series}/Episodes", params={**user, **extra})
+
+    def probe(label: str, series: str, extra: Mapping[str, str]) -> Response:
+        resp = fetch(series, extra)
+        query = "&".join(f"{k}={v}" for k, v in {**user, **extra}.items())
+        entry: dict[str, Any] = {"url": f"/Shows/{series}/Episodes?{query}", "status": resp.status}
+        if resp.ok:
+            rows = episode_rows(resp)
+            entry["count"] = len(rows)
+            entry["episodes"] = rows
+            entry["total_record_count"] = resp.json().get("TotalRecordCount")
+            entry["location_types"] = sorted({str(r["LocationType"]) for r in rows})
+        else:
+            entry["body"] = resp.text[:120]
+        out[label] = entry
+        shown = f"{entry.get('count', '-')} 筆 {entry.get('location_types', '')}"
+        report.note(f"{label}: {entry['url']} -> {resp.status}，{shown}")
+        return resp
+
+    alpha = c.title_id("TV", "Alpha Show")
+    season_two = c.season("TV", "Alpha Show", 2)
+    base = {"isMissing": "false"}
+    allowed = probe("alpha 不帶 seasonId, isMissing=false", alpha, base)
+    fixtures.write("shows-episodes.series.json", allowed)
+    for row in episode_rows(allowed):
+        report.note(f"  {row}")
+    probe("alpha 不帶 seasonId, 不帶 isMissing", alpha, {})
+    probe("alpha 不帶 seasonId, isMissing=true", alpha, {"isMissing": "true"})
+    probe("alpha seasonId=S2, isMissing=false", alpha, {**base, "seasonId": season_two})
+    with_fields = probe(
+        "alpha 不帶 seasonId, fields=Overview,PrimaryImageAspectRatio",
+        alpha,
+        {**base, "fields": "Overview,PrimaryImageAspectRatio"},
+    )
+    out["fields_same_episode_keys"] = episode_rows(with_fields) == episode_rows(allowed)
+    report.note(f"帶 / 不帶 fields 的集數欄位相同：{out['fields_same_episode_keys']}")
+
+    delta = c.title_id(FORBIDDEN, "Delta Mecha")
+    delta_season = c.season(FORBIDDEN, "Delta Mecha", 1)
+    forbidden = probe("forbidden 不帶 seasonId, isMissing=false", delta, base)
+    fixtures.write("shows-episodes.series.forbidden.json", forbidden)
+    probe("forbidden 不帶 seasonId, 不帶 isMissing", delta, {})
+    probe("forbidden seasonId, isMissing=false", delta, {**base, "seasonId": delta_season})
+
+    # 第 0 季、缺集、雙集檔：放進 TV 媒體庫再掃一次。
+    folder = workdir / "media" / "tv" / GAP_SHOW
+    seed = workdir / "seeds" / "seed-10.mkv"
+    for name in GAP_FILES:
+        target = folder / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(seed, target)
+    report.note(f"掃描完成，共 {setup.wait_for_scan()} 個 item")
+
+    def find_gap() -> str | None:
+        params = {**user, "parentId": c.libraries["TV"], "includeItemTypes": "Series"}
+        rows = srv.json(api, "/Items", params={**params, "searchTerm": "Gap"})["Items"]
+        return str(rows[0]["Id"]) if rows else None
+
+    gap = poll(find_gap, what="Gap Show 出現", timeout=120)
+    # 掃描結束不代表這一部的季與集都建好了，等 4 個檔都變成集。
+    poll(lambda: len(episode_rows(fetch(gap, {}))) >= 4 or None, what="Gap Show 的集", timeout=120)
+    probe("gap 不帶 seasonId, isMissing=false", gap, base)
+    probe("gap 不帶 seasonId, 不帶 isMissing", gap, {})
+    probe("gap 不帶 seasonId, isMissing=true", gap, {"isMissing": "true"})
+    report.record("series_episodes", out)
+
+
 # --- main ------------------------------------------------------------------------
 
 
@@ -1438,6 +1542,7 @@ def main() -> int:
         run_regression(srv, api, catalog, user_id, report, fixtures)
         run_played_recursion(srv, api, catalog, user_id, report, fixtures)
         run_disabled(srv, admin, creds, catalog, user_id, report, fixtures)
+        run_series_episodes(srv, api, setup, catalog, user_id, report, fixtures, workdir)
     report.write()
     return 0
 

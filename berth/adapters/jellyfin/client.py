@@ -449,6 +449,14 @@ class HttpJellyfinClient:
         }
         return tuple(_item(row) for row in _rows(await self._found(path, params=params), path))
 
+    async def series_episodes(self, *, user_id: str, series_id: str) -> tuple[JellyfinItem, ...]:
+        path = f"/Shows/{series_id}/Episodes"
+        # 只讀季集號：不要 `fields`（季集號不靠它，12.1.0 實測）。`isMissing=false` 擋 metadata
+        # 補出來的虛擬缺集：伺服器認得這個參數（`true` 回 0 筆），會不會真的濾掉虛擬集沒有量到
+        # （brief §20.8）。
+        params = {"userId": user_id, "isMissing": "false"}
+        return tuple(_item(row) for row in _rows(await self._found(path, params=params), path))
+
     async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
         # 只送 jellyfin-web 劇集頁送的那兩個，其餘吃伺服器預設（研究 §7.3）。
         payload = await self._get(

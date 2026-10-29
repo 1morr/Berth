@@ -374,3 +374,110 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 ### 花費
 
 第 1 輪 $0.022、第 2 輪 $0.027、第 3 輪 $0.012、第 4 輪 $0.024、第 5 輪 $0.023，合計 **$0.107**（上限 $1）；Re:Zero 另 $0.055（上限 $0.4）。
+
+## 票 28：助理看得到 Jellyfin 已有的作品（2026-10-30）
+
+演練情境 `agent-live-jellyfin`（同 `agent-live-missing` 的替身 TMDB 與單集發佈索引站，動漫資料 AniList / Bangumi 與模型、網搜打真的；qBittorrent 收下就留著），`scripts/experiments/agent_sources_ab.py --set jellyfin --groups jellyfin --reps 1 --budget 0.5`，每種接口一台全新的 Berth（兩題共用），只跑到確認卡出現（不按）。
+
+**擺了什麼**：替身 Jellyfin 的 Anime 媒體庫（`skipper` 看得到，路徑在 `_moor` 建的 `library_root/anime` 底下）有三部手動複製進去的作品，帳本一列都沒有：
+
+- SPY×FAMILY：Series（TMDB id 120089）、Season 1、S01E01–S01E04。
+- 這一季最熱門的兩部，Series、**沒有** TMDB id：資料夾 `Cyberpunk Edgerunners 2`、`Kusuriya no Hitorigoto 3rd Season`。2026-10-30 對 AniList 公開 GraphQL 查一次（`season: FALL, seasonYear: 2026, sort: POPULARITY_DESC`）取前兩名；AniList 的標題是 `Cyberpunk: Edgerunners 2`（有冒號），資料夾名我寫成沒有冒號的樣子。
+
+**開跑前不花錢的驗證**（以 `skipper` 登入打演練伺服器的 HTTP API）：
+
+- `GET /api/media/tv:120089`：`jellyfin: found`；第 1 季第 1–4 集 `in_jellyfin`，第 5 集起 `missing`。
+- `GET /api/search?media=tv:120089&missing=true&season=1`：`batch` 是 `seasons: [1]`，查詢是整季的名字（`SPY x FAMILY S01` 等），**不點集名**，所以沒有「問第 1–4 集」。但 18 列結果裡 `[Fast]` 與 `[Slow]` 的第 1–4 集發佈照樣在（搜尋不依集數過濾列，只決定問哪幾季），這件事要靠模型自己不選。
+
+兩題：
+
+- `missing-jf`：「SPY×FAMILY 第一季缺的集幫我補齊，字幕組照你推薦的挑，直接出卡給我確認。」→ 固定回答。
+- `picks-jf`：「推薦這一季（2026 年秋季）評價好的新番動畫 5 部，附評分與評分人數，說明為什麼推薦。」（只有一句）
+
+### 結果
+
+| 接口 | 題 | 費用 USD | 工具呼叫 | 判定 | 逐字稿 |
+|---|---|---|---|---|---|
+| anthropic | missing-jf | 0.0043 | 12：`load_skill`、`discover_search_media` x4、`inventory_find_in_library`、`why_not_explain`、`media_read_media`、`search_torrents` x3、出卡 | 卡片部分過，「告訴使用者 1–4 已有」看不到 | [`t28-r1-anthropic-missing-jf.md`](m5-acceptance-2026-10-28/t28-r1-anthropic-missing-jf.md) |
+| anthropic | picks-jf | 0.0062 | 6：`load_skill`、`anilist_read_season` x2、`bgm_read_calendar`、`inventory_find_in_library`、`rss_list_subscriptions`、`web_search` | **不過**：兩部都沒標已有 | [`t28-r1-anthropic-picks-jf.md`](m5-acceptance-2026-10-28/t28-r1-anthropic-picks-jf.md) |
+| openai | missing-jf | 0.0062 | 18：同上加 `search_torrents` x9 | 卡片部分過，「告訴使用者」看不到 | [`t28-r1-openai-missing-jf.md`](m5-acceptance-2026-10-28/t28-r1-openai-missing-jf.md) |
+| openai | picks-jf | 0.0040 | 5：`load_skill`、`bgm_read_calendar`、`anilist_read_season`、`inventory_find_in_library`、`rss_list_subscriptions` | **不過**：兩部都沒標已有 | [`t28-r1-openai-picks-jf.md`](m5-acceptance-2026-10-28/t28-r1-openai-picks-jf.md) |
+
+合計 **0.0206 USD**（預算 0.5）。
+
+**missing-jf（兩種接口）**：先 `inventory_find_in_library` 找到 `{"title": "SPY x FAMILY", "year": 2022, "kind": "tv", "library": "Anime", "media_id": "tv:120089", "in_ledger": false}`，再 `media_read_media`、`search_torrents` 帶 `scope: {"missing": true, "season": 1}`。確認卡都是 **8 列，第 5–12 集**（`[Fast]` 05、06，`[Slow]` 07–12），沒有第 1–4 集的列，字幕組挑的是同一批發佈。**但兩次的逐字稿在出卡前都沒有任何文字**：模型直接出卡，腳本停在卡上，所以「回覆告訴使用者 Jellyfin 已有 1–4」這一項沒有證據，不能算過。（腳本在卡前只能收到卡前的文字；卡之後的說明要按確認或另外續一輪才看得到。）openai 另外搜了 9 次（含 `SPY×FAMILY - 05`、`- 06` 逐集查詢）。
+
+**picks-jf（兩種接口都不過）**：兩種接口都叫了 `inventory_find_in_library` 與 `rss_list_subscriptions`（回 `[]`），但 `find_in_library` 對 Cyberpunk: Edgerunners 2 與藥屋第三季都回空，最後的回覆都寫成沒有標任何一部已有：
+
+- anthropic：「先說前提：你的 Jellyfin 裡這批候選全都查不到，Berth 也沒有任何相關訂閱，所以這 5 部對你都是全新的。」
+- openai：「這 5 部（以及上面提到的作品）在你的 Jellyfin（Movies／TV／Anime 三個媒體庫）裡都**沒有**，Berth 也沒有任何相關的 RSS 訂閱，所以不需要跳過任何一部。」
+
+兩次的名字清單（逐字稿截在 300 字，只看得到前面）都是英文名、中文名、日文原名：anthropic 的 `Cyberpunk: Edgerunners 2`、`The Apothecary Diaries Season 3`、`薬屋のひとりごと 第3期`、`Black Clover 2nd Season` 等；openai 的 `薬屋のひとりごと`、`The Apothecary Diaries` 等。**兩次都看不到羅馬字 `Kusuriya no Hitorigoto 3rd Season`**，而資料夾名正是那個；Edgerunners 那部 anthropic 傳了有冒號的 `Cyberpunk: Edgerunners 2`，資料夾是 `Cyberpunk Edgerunners 2`，替身的 `searchTerm` 是子字串比對，所以也對不上。SKILL 第 2 步有寫「Chinese, romaji, English, native」，模型都沒把 AniList 的 `title_romaji` 傳進去。
+
+### 其他看到的
+
+- 失敗的原因有兩個，分得開：(a) 這份 fixture 的資料夾名我拿掉了冒號，與 AniList 的 `Cyberpunk: Edgerunners 2` 差一個字元；(b) 沒有 TMDB id 的資料夾名只能靠名字對上，而模型挑的名字沒有羅馬字。哪一個要改（fixture、skill 要不要明講「每個候選的 `title_romaji` 一定要傳」、`find_in_library` 要不要把標點與空白正規化）是設計決定，這一輪沒動。
+- `missing-jf` 的卡片是對的，但靠的是模型讀 `media_read_media`；`search_torrents` 帶 `missing` 時列仍包含第 1–4 集的發佈（見上），`[Fast]` 的第 1 集排在最前面。
+
+### 第 2 輪：`find_in_library` 改成在 Berth 比對、skill 要求傳每個候選的全部名字（2026-10-30）
+
+只重跑 `picks-jf`，兩種接口各 1 次，同一個情境、一台全新的 Berth，fixture 不動（資料夾名沒有冒號是刻意的：手動複製的資料夾常常沒有）。自第 1 輪起產品的變動：`inventory.find_in_library` 不再用 Jellyfin 的 `searchTerm`，讀一次每個看得到的媒體庫、在 Berth 內比（NFKC + casefold、只留字母與數字，大小寫、空白、標點都不算；完全相同的排前面；名字是較長標題的一部分時雙向都算，媒體庫那邊的名字至少 3 個字元）；`new-season-picks` 第 2 步改成每個候選有的名字全傳（AniList 羅馬字／英文／原文、Bangumi 中文）。這一輪起逐字稿不截斷 `inventory_find_in_library` 的參數與結果（`m5_acceptance_scenarios.render`）。
+
+| 接口 | 費用 USD | 判定 | 逐字稿 |
+|---|---|---|---|
+| anthropic | 0.0048 | **過** | [`t28-r2-anthropic-picks-jf.md`](m5-acceptance-2026-10-28/t28-r2-anthropic-picks-jf.md) |
+| openai | 0.0055 | **過** | [`t28-r2-openai-picks-jf.md`](m5-acceptance-2026-10-28/t28-r2-openai-picks-jf.md) |
+
+第 2 輪 $0.0103，兩輪合計 **$0.0309**。
+
+**anthropic**：傳了 44 個名字，每個候選的羅馬字、英文、日文、中文都在（含 `Cyberpunk: Edgerunners 2`、`Kusuriya no Hitorigoto`）。結果：`Cyberpunk: Edgerunners 2` → `{"title": "Cyberpunk Edgerunners 2", "library": "Anime", "in_ledger": false}`；`Kusuriya no Hitorigoto` → `{"title": "Kusuriya no Hitorigoto 3rd Season", "library": "Anime", "in_ledger": false}`。回覆開頭單獨一段標出：
+
+> **你已經有的（不用再抓）** — 本季 AniList 最高分的兩部，你 Jellyfin 的 Anime 媒體庫裡已經有了：
+> - **Cyberpunk: Edgerunners 2** …
+> - **藥屋少女的呢喃 第三季** …
+
+並提醒 `in_ledger: false`，建議按「從媒體庫重建帳本」。推薦的 5 部不含這兩部。
+
+**openai**：傳了 36 個名字，第一個就是 `Kusuriya no Hitorigoto 3rd Season`，另有 `Cyberpunk: Edgerunners 2`。兩個都有命中（`in_ledger: false`）。回覆：
+
+> **你 Jellyfin 的 Anime 媒體庫裡已經有這一季了（資料夾 Kusuriya no Hitorigoto 3rd Season），可以直接開來看，不用再下載。**
+>
+> **賽博朋克：邊緣行者 2**（你 Jellyfin 的 Anime 媒體庫裡已有）
+
+同樣提到 `in_ledger: false` 與重建帳本。藥屋在 5 部之內並標出已有，邊緣行者 2 放在「其他」並標出已有。
+
+兩次都叫了 `rss_list_subscriptions`（`[]`）。
+
+### 第 1 輪失敗的原因（保留）
+
+1. 標點：anthropic 傳 `Cyberpunk: Edgerunners 2`，資料夾沒有冒號，`searchTerm` 子字串對不上。
+2. 羅馬字：沒有 TMDB id 的資料夾只能靠名字，模型當時傳的是英文／中文／日文名，沒有 `title_romaji`。
+
+第 2 輪的比對把標點正規化，加上 skill 要求傳全部名字，兩個原因都處理了。
+
+### 第 3 輪：`exact` 與出卡前的一句話（2026-10-30）
+
+兩題 × 兩種接口各 1 次，fresh Berth，fixture、產品碼、skill 都沒動。自第 2 輪起的變動：`find_in_library` 的每個命中帶 `exact`；`new-season-picks` 說只有 exact 才是那部作品，非 exact 用媒體庫裡的標題描述；`missing-episodes` 第 2 步要求出卡前先在回覆用一行說 Jellyfin 已有哪幾集，第 5 步說整季搜尋仍可能回已有集的列、要略過。逐字稿：`t28-r3-{anthropic,openai}-{missing-jf,picks-jf}.md`。
+
+| 接口 | 題 | 費用 USD | 判定 |
+|---|---|---|---|
+| anthropic | missing-jf | 0.0065 | **不過**：卡對，出卡前沒有文字 |
+| anthropic | picks-jf | 0.0058 | 過 |
+| openai | missing-jf | 0.0053 | **不過**：卡對，出卡前沒有文字 |
+| openai | picks-jf | 0.0055 | 過 |
+
+第 3 輪 $0.0231，三輪合計 **$0.0540**。
+
+**missing-jf（兩種接口）**：確認卡都是 8 列、第 5–12 集（Fast 05、06，Slow 07–12），沒有第 1–4 集。`find_in_library` 都回 `{"title": "SPY x FAMILY", "year": 2022, "kind": "tv", "library": "Anime", "media_id": "tv:120089", "in_ledger": false, "exact": true}`。**但兩次逐字稿裡出卡之前一個字都沒有**（轉錄的是同一個串流：picks 題的文字同一條路徑就看得到，所以不是腳本漏掉）。模型從 `load_skill` 一路呼叫工具到出卡，沒有那一行「Jellyfin 已有第 1–4 集」。anthropic 18 次工具呼叫（搜種子 9 次，含 `SPY×FAMILY - 05`、`- 06` 逐集查詢）、openai 16 次（含第二次 `find_in_library` 查 `SPY x FAMILY Part 2`，回 `exact: false`）。
+
+**picks-jf（兩種接口都過）**：
+- anthropic 的 `find_in_library` 參數 28 個名字，含 `"Cyberpunk: Edgerunners 2"`、`"Kusuriya no Hitorigoto 3rd Season"`；兩個都 `exact: true`（另有 `"Cyberpunk Edgerunners"` 回 `exact: false`）。回覆表格多一欄「你的媒體庫」：
+  > 藥屋少女的呢喃 第三季 … | **已有**（Anime 資料庫）
+  > Cyberpunk: Edgerunners 2 … | **已有**（Anime 資料庫）
+
+  其餘三部標「未收藏」，並說兩部 `in_ledger: false`、建議按「從媒體庫重建帳本」。
+- openai 的參數 37 個名字，同樣兩個 `exact: true`。回覆：
+  > **你片庫裡已經有的兩部（這次不重複推薦下載）** - **Cyberpunk: Edgerunners 2**（賽博朋克：邊緣行者 2）— Anime 媒體庫已有資料夾。… - **藥屋少女的呢喃 第三季**（薬屋のひとりごと 第3期）— Anime 媒體庫也已有。
+
+  推薦的 5 部是「你都還沒有的」，同樣提醒 `in_ledger: false`。
+- 兩次都叫了 `rss_list_subscriptions`（`[]`）；完整的參數與結果都在逐字稿。

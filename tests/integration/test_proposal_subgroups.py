@@ -269,7 +269,15 @@ class TestExistingSubscriptions:
         assert isinstance(rows, list)
         [row] = rows
         assert row["existing_subscriptions"] == [
-            {"feed_id": 7, "name": "acg.rip · Kimi", "kind": "acgrip", "subgroup": ""}
+            {
+                "feed_id": 7,
+                "name": "acg.rip · Kimi",
+                "kind": "acgrip",
+                "subgroup": "",
+                # 這張卡的 ref 是直接給的，沒有作品（票 28 的兩格預設是空的）。
+                "media_id": "",
+                "title": "",
+            }
         ]
 
 

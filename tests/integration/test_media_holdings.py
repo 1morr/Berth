@@ -24,6 +24,7 @@ from berth.domain import (
     Tags,
 )
 from berth.models import Media
+from berth.services.inventory import read_holdings
 from berth.services.media import MediaView, read_media
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_inventory import film, job, linked, plan, route, season, title
@@ -59,6 +60,30 @@ class TestEpisodes:
             4: EpisodeStatus.MISSING,
             5: EpisodeStatus.UNAIRED,
         }
+
+    async def test_what_berth_knows_outranks_what_jellyfin_has(self, session: AsyncSession) -> None:
+        """Jellyfin 有每一集時（M5 票 28）：帳本、下載中、卡住照 Berth 說；只有原本是缺與未播出的
+        那兩集換成 `in_jellyfin`。"""
+        tv = await route(session)
+        spy = await title(session, seasons=(season(1, aired=4, unaired=1),))
+        await linked(session, spy, tv, episode=1)
+        coming = await job(session, spy, tv, JobState.DOWNLOADING, hash="a" * 40)
+        await plan(session, coming, (PlanAction.IMPORT, 1, 2), status=PlanStatus.PREPLAN)
+        held = await job(session, spy, tv, JobState.REVIEW, hash="b" * 40)
+        await plan(session, held, (PlanAction.IMPORT, 1, 3), status=PlanStatus.PENDING_REVIEW)
+        everything = frozenset((1, number) for number in range(1, 6))
+
+        holdings = await read_holdings(session, spy, spy.snapshot(), everything)
+
+        assert {row.episode_number: row.status for row in holdings.seasons[0].episodes} == {
+            1: EpisodeStatus.IMPORTED,
+            2: EpisodeStatus.DOWNLOADING,
+            3: EpisodeStatus.STUCK,
+            4: EpisodeStatus.IN_JELLYFIN,
+            5: EpisodeStatus.IN_JELLYFIN,
+        }
+        # 季表的「已入庫 N / M」只數帳本。
+        assert (holdings.seasons[0].imported, holdings.seasons[0].aired) == (1, 4)
 
     async def test_a_failed_import_holds_its_episodes_as_stuck(self, session: AsyncSession) -> None:
         tv = await route(session)

@@ -164,6 +164,7 @@ function media(overrides: Partial<Media> = {}): Media {
     unmatched: [],
     versions: [],
     awaiting_review: 0,
+    jellyfin: 'absent',
     ...overrides,
   }
 }
@@ -1075,6 +1076,35 @@ describe('Media 詳情頁', () => {
       await userEvent.click(screen.getByRole('button', { name: '只看缺集' }))
       expect(screen.getByText('OPERATION STRIX')).toBeVisible()
       expect(screen.getByText('FOLLOW MAMA AND PAPA')).toBeVisible()
+    })
+
+    it('Jellyfin 已有、帳本沒有的集照它說，不算缺（M5 票 28）', async () => {
+      const [first, second] = media().seasons
+      render({
+        [SPY_PATH]: {
+          body: media({
+            jellyfin: 'found',
+            seasons: [
+              {
+                ...first,
+                episodes: [
+                  { ...episode, status: 'in_jellyfin' },
+                  { ...episode, episode_number: 2, name: 'SECURE A WIFE', status: 'missing' },
+                ],
+              },
+              second,
+            ],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+      await userEvent.click(await screen.findByText('Season 1'))
+
+      const row = (await screen.findByText('OPERATION STRIX')).closest('tr')!
+      expect(within(row).getByText('Jellyfin 已有')).toBeVisible()
+      await userEvent.click(screen.getByRole('button', { name: '只看缺集' }))
+      expect(screen.getByText('共缺 1 集')).toBeVisible()
+      expect(screen.queryByText('OPERATION STRIX')).not.toBeInTheDocument()
     })
 
     it('整部作品都沒有缺集時工具列說得出來', async () => {

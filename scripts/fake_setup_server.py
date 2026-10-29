@@ -355,6 +355,8 @@ class Scenario:
     route_settings_demo: bool = False
     #: 媒體庫頁的整庫瀏覽與受限使用者（M1.5 票 03）。見 `_seed_library`。
     library_demo: bool = False
+    #: `agent-live-jellyfin`（票 28）：Jellyfin 上有帳本沒有的作品（`_seed_jellyfin_holding`）。
+    jellyfin_holding: bool = False
     #: 待處理頁與對帳（M2 票 05）。見 `_seed_issues`：真的入庫一包、真的刪掉其中一個
     #: 媒體庫檔案，所以按下「立刻對帳」真的會偵測到，按下「重新鏈接」真的會把它接回來。
     issues_demo: bool = False
@@ -1893,6 +1895,59 @@ def agent_live_missing_scenario() -> Scenario:
     return scenario
 
 
+def agent_live_jellyfin_scenario() -> Scenario:
+    """Jellyfin 已經有、帳本沒有（M5 票 28）：同 `agent-live-missing`（替身 TMDB 的 SPY×FAMILY
+    第一季 12 集都播過、帳本一集都沒有、替身索引站只有單集發佈），但動漫資料（AniList、Bangumi）
+    也打真的，推薦新番才走得通。替身 Jellyfin 的 Anime 媒體庫（`skipper` 看得到）裡有人手動
+    複製進去的三部（`_seed_jellyfin_holding`）：
+
+    - SPY×FAMILY：有 TMDB id（120089）的 Series，S01E01-E04；Berth 一列紀錄都沒有。
+    - 兩部這一季（2026 秋）最熱門的新番，**沒有** TMDB id、資料夾名是複製進來時的羅馬字或英文名。
+      2026-10-30 對 AniList 公開 GraphQL 查一次：`season: FALL, seasonYear: 2026,
+      sort: POPULARITY_DESC`，取前兩名（Cyberpunk: Edgerunners 2、Kusuriya no Hitorigoto 3rd
+      Season；資料夾名沒有冒號）。
+
+    驅動：`scripts/experiments/agent_sources_ab.py --set jellyfin --groups jellyfin`。
+    **會花模型的錢**
+    """
+    scenario = agent_live_missing_scenario()
+    scenario.jellyfin_holding = True
+    return scenario
+
+
+def _seed_jellyfin_holding(scenario: Scenario, paths: PathSettings) -> None:
+    """`agent-live-jellyfin` 的 Jellyfin 內容：放在 `_moor` 建的 Anime 媒體庫底下。"""
+    anime = f"{paths.library_root}/anime"
+    spy = f"{anime}/SPY x FAMILY (2022) [tmdbid-120089]"
+    spy_id = _scanned_id(spy)
+    season_id = _scanned_id(f"{spy}/Season 01")
+    items = [
+        JellyfinItem(spy_id, ITEM_SERIES, "SPY x FAMILY", spy, "120089", year=2022),
+        JellyfinItem(
+            season_id, ITEM_SEASON, "Season 1", f"{spy}/Season 01", "", series_id=spy_id, season=1
+        ),
+        *(
+            JellyfinItem(
+                _scanned_id(f"{spy}/Season 01/S01E{n:02d}.mkv"),
+                ITEM_EPISODE,
+                f"MISSION:{n}",
+                f"{spy}/Season 01/S01E{n:02d}.mkv",
+                "",
+                series_id=spy_id,
+                season_id=season_id,
+                season=1,
+                episode_start=n,
+                series_name="SPY x FAMILY",
+            )
+            for n in range(1, 5)
+        ),
+    ]
+    for folder in ("Cyberpunk Edgerunners 2", "Kusuriya no Hitorigoto 3rd Season"):
+        path = f"{anime}/{folder}"
+        items.append(JellyfinItem(_scanned_id(path), ITEM_SERIES, folder, path, ""))
+    scenario.jellyfin.items_ = items
+
+
 def _single_episode(group: str, episode: int, seeders: int) -> IndexerResult:
     title = f"[{group}] SPY×FAMILY - {episode:02d} [1080p][CHT]"
     info_hash = hashlib.sha1(title.encode()).hexdigest()
@@ -2519,6 +2574,7 @@ SCENARIOS = {
     "agent": agent_scenario,
     "agent-live": agent_live_scenario,
     "agent-live-missing": agent_live_missing_scenario,
+    "agent-live-jellyfin": agent_live_jellyfin_scenario,
     "rss-sweep": rss_sweep_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,
@@ -3006,6 +3062,8 @@ async def _moor(
         await _seed_route_settings(session, scenario, paths)
     if scenario.library_demo:
         await _seed_library(session, scenario, paths)
+    if scenario.jellyfin_holding:
+        _seed_jellyfin_holding(scenario, paths)
     if scenario.issues_demo:
         await _seed_issues(session, paths)
         await _seed_jellyfin_mismatch(session, scenario)

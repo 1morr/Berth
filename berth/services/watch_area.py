@@ -14,15 +14,14 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.jellyfin import JellyfinItem, JellyfinSeason
-from berth.domain import JellyfinImageType, MediaKind, PlanAction
-from berth.models import LedgerEntry, parse_media_id
+from berth.domain import JellyfinImageType, MediaKind
 from berth.models import media_id as build_media_id
+from berth.models import parse_media_id
 from berth.services.commands import Effect, command
-from berth.services.inventory import jellyfin_link
+from berth.services.inventory import jellyfin_links
 from berth.services.jellyfin_access import ItemNotVisibleError, JellyfinAccess
 from berth.services.watch import WatchState, watch_state
 from berth.services.watching import CardImage
@@ -80,7 +79,7 @@ async def read_watch_area(
     if parsed is None:
         return None
     kind, tmdb_id = parsed
-    links = await _links(session, build_media_id(kind, tmdb_id), kind)
+    links = await jellyfin_links(session, build_media_id(kind, tmdb_id), kind)
     found = await access.locate(kind, tmdb_id, links=links)
     if found is None:
         return None
@@ -133,14 +132,3 @@ def _watch(item: JellyfinItem) -> WatchState:
 
 def _season(row: JellyfinSeason) -> WatchSeason:
     return WatchSeason(id=row.id, name=row.name, number=row.number)
-
-
-async def _links(session: AsyncSession, media_id: str, kind: MediaKind) -> frozenset[str]:
-    """帳本記下的這部作品在 Jellyfin 的 id（劇集是 Series、電影是 Movie）。媒體庫牆的同一條規則：
-    Jellyfin 認錯 TMDB id 時，Berth 自己寫下的那一個才是對的（票 03）。"""
-    entries = await session.scalars(
-        select(LedgerEntry).where(
-            LedgerEntry.media_id == media_id, LedgerEntry.action == PlanAction.IMPORT
-        )
-    )
-    return frozenset(link for entry in entries if (link := jellyfin_link(entry, kind)))

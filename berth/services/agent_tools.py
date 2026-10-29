@@ -46,6 +46,8 @@ TOOLS: tuple[str, ...] = (
     # 票 26：重複訂閱要看得到、刪得掉（試用機上同一部作品兩份訂閱，助理只能說「留著」）。
     "rss.list_subscriptions",
     "rss.delete_feed",
+    # 票 28：Jellyfin 裡已有、Berth 沒紀錄的作品（推薦、補缺集、整部系列前先看）。
+    "inventory.find_in_library",
     # 票 16：推薦新番。
     *ANIME_TOOLS,
     "discover.read_trending",

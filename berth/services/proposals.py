@@ -786,6 +786,9 @@ def _view(proposal: Proposal) -> ProposalView:
                         name=ref["name"],
                         kind=FeedKind(ref["kind"]),
                         subgroup=ref["subgroup"],
+                        # 票 28 之前存的沒有這兩格。
+                        media_id=ref.get("media_id", ""),
+                        title=ref.get("title", ""),
                     )
                     for ref in refs
                 )

@@ -2854,48 +2854,75 @@ class SubscriptionRef:
     kind: FeedKind
     #: 這條訂閱收的字幕組；空字串是搜到的每一組都收（票 26 之前的關鍵字 Feed）。
     subgroup: str
+    #: 綁的是哪一部（票 28：不帶作品列每一條時模型要它）。Feed 還沒綁任何作品是空字串；
+    #: 票 28 之前存的確認卡沒有這兩格。
+    media_id: str = ""
+    #: 那一部的標題（TMDB 快照的顯示用標題）。
+    title: str = ""
 
 
 @command(
     Effect.READ,
     about=(
-        "List the RSS subscriptions a work already has: each feed's id, name, site and the "
-        "subgroup it takes (empty means every subgroup the search finds). Check before "
-        "subscribing a work again; delete_feed removes one."
+        "List RSS subscriptions: each feed's id, name, site, the subgroup it takes (empty "
+        "means every subgroup the search finds) and the work it is for (media_id, title). "
+        "Pass media_id for one work's subscriptions; leave it empty for every subscription. "
+        "Check before subscribing a work again; delete_feed removes one."
     ),
 )
-async def list_subscriptions(session: AsyncSession, media_id: str) -> tuple[SubscriptionRef, ...]:
+async def list_subscriptions(
+    session: AsyncSession, media_id: str = ""
+) -> tuple[SubscriptionRef, ...]:
     """這部作品現在被哪幾條 Feed 訂著，照 Feed 建立的順序：預先綁定它的關鍵字 Feed，與帶著綁到它的
     RSS Series 的 Feed（Mikan 的單一 feed、聚合 feed）。一條 Feed 帶著好幾個綁到它的 Series 時
-    一個字幕組一列。"""
-    bound = list(await session.scalars(select(RssSeries).where(RssSeries.media_id == media_id)))
-    carried = await session.execute(
-        select(RssItem.feed_id, RssItem.series_id)
-        .where(RssItem.series_id.in_([row.id for row in bound]))
-        .distinct()
-    )
-    series_of: dict[int, set[int]] = {}
-    for feed_id, series_id in carried.tuples():
-        if series_id is not None:  # `in_` 已經擋掉 NULL，型別上 `series_id` 仍可為空
-            series_of.setdefault(feed_id, set()).add(series_id)
-    feeds = await session.scalars(
-        select(RssFeed)
-        .where(or_(RssFeed.media_id == media_id, RssFeed.id.in_(list(series_of))))
-        .order_by(RssFeed.created_at, RssFeed.id)
-    )
-    by_id = {row.id: row for row in bound}
+    一個字幕組一列。`media_id` 空的是每一條訂閱（`_every_subscription`，票 28）。"""
+    every = await _every_subscription(session)
+    return every if not media_id else tuple(row for row in every if row.media_id == media_id)
+
+
+async def _every_subscription(session: AsyncSession) -> tuple[SubscriptionRef, ...]:
+    """每一條 Feed，照建立的順序：預先綁定作品的一列；帶著綁到（別的）作品的 RSS Series 的，一部作品
+    一個字幕組一列；兩者都沒有的（還沒綁的聚合 feed、手動加的）照 Feed 自己一列，作品空的。
+    一部作品的那幾列（`list_subscriptions(media_id)`）就是從這裡挑，兩種問法的答案一致。"""
+    feeds = list(await session.scalars(select(RssFeed).order_by(RssFeed.created_at, RssFeed.id)))
+    carried = (
+        await session.execute(
+            select(RssItem.feed_id, RssSeries)
+            .join(RssSeries, RssSeries.id == RssItem.series_id)
+            .where(RssSeries.media_id.is_not(None))
+            .distinct()
+        )
+    ).tuples()
+    series_of: dict[int, set[tuple[str, str]]] = {}
+    for feed_id, series in carried:
+        assert series.media_id is not None  # `where` 擋掉了 NULL
+        series_of.setdefault(feed_id, set()).add((series.media_id, _subgroup_of(series)))
+    works = {feed.media_id for feed in feeds if feed.media_id} | {
+        work for pairs in series_of.values() for work, _ in pairs
+    }
+    title = await _titles(session, sorted(works))
     found: list[SubscriptionRef] = []
     for feed in feeds:
-        names = (
-            [feed.subgroup]
-            if feed.media_id == media_id
-            else sorted({_subgroup_of(by_id[i]) for i in series_of.get(feed.id, set())})
-        )
+        own = [(feed.media_id, feed.subgroup)] if feed.media_id else []
+        others = sorted(pair for pair in series_of.get(feed.id, set()) if pair[0] != feed.media_id)
+        pairs = own + others or [("", feed.subgroup)]
         found.extend(
-            SubscriptionRef(feed_id=feed.id, name=feed.name, kind=feed.kind, subgroup=name)
-            for name in names
+            SubscriptionRef(
+                feed_id=feed.id,
+                name=feed.name,
+                kind=feed.kind,
+                subgroup=subgroup,
+                media_id=work,
+                title=title.get(work, ""),
+            )
+            for work, subgroup in pairs
         )
     return tuple(found)
+
+
+async def _titles(session: AsyncSession, works: Sequence[str]) -> dict[str, str]:
+    rows = await session.scalars(select(Media).where(Media.id.in_(list(works))))
+    return {row.id: row.snapshot().title for row in rows}
 
 
 # 加 Feed 的確認卡預覽（M5 票 26）：只讀；不是給人或 AI 按的命令。

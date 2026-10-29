@@ -581,6 +581,7 @@ class TestATurnThatBreaks:
                     sources=app.state.sources,
                     plans=JobHints(),
                     imports=JobHints(),
+                    access=app.state.jellyfin_access,
                 ),
                 factory=factory,
                 actor=Actor.ai(1, Role.ADMIN),
