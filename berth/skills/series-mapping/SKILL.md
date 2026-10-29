@@ -54,20 +54,19 @@ tools:
    part | format | episodes | TMDB entry and SxxEyy range | already imported | mark.
    The confirmation card has no place for notes, so the table is where the user sees the marks.
    Leave shorts, recaps and spin-offs unticked and ask which rows they want.
-8. Only after they choose, search with `search_search_torrents`, one TMDB entry (or one
-   season) at a time. The language of a search decides which subtitles come back (Chinese
-   titles find mostly Chinese subtitles, English and original titles every language), so
-   search under several names. Without `query` Berth asks the names its search settings turn
-   on (`attempts` shows which); then also:
-   - the original and the English title (`title_original`, `title_en` from `media_read_media`),
-     with `query` for any not in `attempts`;
-   - with `query`, the title in the language the user writes in: `title` for Traditional
-     Chinese, and for Chinese also the Simplified title most subgroups write; for other
-     languages your own knowledge or a web search, saying which (cite the URL, or say it is
-     from memory);
-   - when results are thin, other names with `query`: romaji, the name with the season
-     (`<name> S02`, `<name> Season 2`, `<name> 第2季`), or the name one subgroup uses; here
-     also a part's own name.
+8. Only after they choose, search with `search_search_torrents`. A franchise has many parts,
+   and every search stays in this turn's context, so keep the searches few. The language of a
+   search decides which subtitles come back (Chinese titles find mostly Chinese subtitles,
+   English and original titles every language):
+   - First, one search without `query` for each TMDB entry: it asks the names Berth's search
+     settings turn on (`attempts` shows which) for every season at once.
+   - Then, only for parts with no fitting release yet, **one** `query` per part with one name:
+     the title in the language the user writes in, with the part's season (`<name> 第2季`,
+     `<name> S02`). For Chinese use the Simplified title most subgroups write; for other
+     languages your own knowledge or a web search, saying which.
+   - Only for a part still without one, one more `query` with another name (the original,
+     English or romaji title, or the name one subgroup uses). Then stop for that part and say
+     it has no release; do not try more spellings or keywords like "batch" or "合集".
    A `query` search is judged only against the words you typed: check the season and episodes
    of each row yourself. Follow what the user said about subtitle language and subgroups;
    when they said nothing, prefer subtitles in the language they write in. Then prefer
