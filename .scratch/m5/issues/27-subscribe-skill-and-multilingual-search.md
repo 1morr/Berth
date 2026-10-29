@@ -65,3 +65,12 @@
 - **code-review**（Spec / Standards）已改：Mikan 分流記成決定、CHANGELOG 措辭、`subscribe` 第 6 步與票 26 的 `required` 一致、`missing-episodes` 描述收窄、研究表照逐字稿的實際搜尋字重寫、逐字稿標題的輪次、三份 skill 的名字規則收成同一段、過長的一行、實驗腳本的命名。沒改：skill 裡 release 一詞（CONTEXT.md 的 Search Result 建議少用，既有 skill 都這樣寫，要改就四份一起）；三份 skill 的名字規則沒有測試守一致（只斷言含某段字的測試過不了雙向變異），改其中一份要三份一起改；`new-season-picks` 叫 `subscribe` 靠內文，沒有「被引用的 skill 也看得到」的測試（兩份都只給管理員，現在不會出事）。
 
 **驗證**：pre-commit 全過、`pytest -m "not e2e"` 5195 passed / 1 skipped、`pnpm -C web test` 2316 passed、`pnpm -C web e2e` 72 passed（先 `pnpm -C web build`）。真模型五輪合計 $0.107（上限 $1）。不發版、不 push。
+
+### 2026-10-29 第二個 session（協調者追加兩件、跟上 main）
+
+- **跟上 main**（`3f64aa25`，票 26b：登錄表保留 `Annotated` 限制）：預設訊息合併，無衝突。
+- **Re:Zero 整部系列到出卡**（Anthropic 接口，修前 2 次、修後 2 次，$0.055）：修前第 1 次找種子那一輪 280K、種子搜尋 26 次（23d 是 166K / 15 次）——多語言搜尋在整部系列乘上季數，每一季英文批次名、簡中季名、`合集`、`BIG5`、字幕組名輪流試。**修根因**：`series-mapping` 第 8 步改成每個 TMDB 條目先不帶 `query` 一次，沒有合適發佈的部分只用一個名字（對話語言加季）搜一次，還沒有才換一個名字再一次，之後就說沒有。修後 95K / 9 次、87K / 7 次，比 23d 還少；四次清單都對、卡片涵蓋四季加兩部劇場版。研究檔〈票 27〉〈Re:Zero 整部系列〉。
+- **截斷（沒改）**：四次都有一次被截斷，都是不帶 `query` 的整部 Re:Zero 種子搜尋：`_rows_to_show` 的「之後帶來新集數的列」在 85 集的單集發佈上幾乎每集一列，加上 `published_at` 放不進截斷上限。不影響結果、沒撞每輪上限；要改的話讓那條規則只在補缺集（結果帶 `batch`）時生效。
+- **字幕組名把括號讀進來**（修）：nyaa 的 `…H.264-VARYG (Tetsuryou! meet with Tetsudou Musume, Multi-Subs)` 與不帶 `, Multi-Subs` 的那一種，guessit 的 `release_group` 分別讀成 `VARYG (Tetsuryou! meet with Tetsudou Musume` 與帶右括號的整段，同一組在卡上變兩個名字。紅燈 `test_parser_release.py::TestFields::test_an_alias_after_a_scene_group_is_not_part_of_it`（兩筆實際發佈名紅、沒括號的對照綠）→ `parser.release._scene_group` 切掉組名裡 `(` 之後的部分。變異：改成切逗號，兩筆紅。`berth bench` 前後相同（`auto_wrong` 0，904 檔）。
+
+**驗證**（合併 main 後）：pre-commit 全過、`pytest -m "not e2e"` 5202 passed / 1 skipped、`pnpm -C web test` 2316 passed、`pnpm -C web build` 成功、`pnpm -C web e2e` 72 passed、`pnpm -C web gen:api` 無 diff（機器重開後於 2026-10-30 重跑）
