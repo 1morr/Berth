@@ -22,8 +22,10 @@ in Review, or already in the user's Jellyfin makes a duplicate.
    (copied in by hand, or imported before Berth's records were lost): they are not missing, so
    do not search or download them unless the user asks for another version. In your reply
    before any card, say in one line which episodes Jellyfin already has (by season, with
-   ranges). If `jellyfin` is `unknown`, Berth could not ask Jellyfin:
-   say so before searching. When a whole season or more is `in_jellyfin`, say Berth does not
+   ranges). Episodes marked `jellyfin_maybe` are still missing: Jellyfin has an episode with
+   that number whose air date matches no TMDB episode (`jellyfin_unmatched`), so search them as
+   usual and tell the user it may be a numbering mismatch. If `jellyfin` is `unknown`, Berth
+   could not ask Jellyfin: say so before searching. When a whole season or more is `in_jellyfin`, say Berth does not
    know those files and suggest rebuilding the ledger: the button "從媒體庫重建帳本" ("Rebuild
    the ledger from the library") at the top of Berth's Issues page (待處理); a non-admin asks
    an admin. If the work is not found on TMDB, `inventory_find_in_library` tells whether the

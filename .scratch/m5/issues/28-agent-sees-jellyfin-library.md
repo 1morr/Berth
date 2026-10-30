@@ -82,3 +82,17 @@
 
 - **補缺集**（「SPY×FAMILY 第一季缺的集幫我補齊…直接出卡給我確認」）：三輪、兩種接口，確認卡都只有 E05–E12（8 列），**沒有重下 E01–E04**。兩種接口都先叫 `inventory_find_in_library`（`in_ledger: false`、`exact: true`）。**沒做到的**：出卡前那一則沒寫「Jellyfin 已有 1–4」（第 3 輪 skill 已要求，仍是只叫工具就出卡）；題目本身說「直接出卡」，票 27 也量過模型在這種時候不寫字。卡上逐列寫了蓋到哪幾集，所以使用者看得到少了 1–4，但沒被告知原因。
 - **推薦新番**：第 1 輪兩種接口都**沒標出**已有的兩部（Jellyfin 的 `searchTerm` 對不上少了冒號的資料夾名；模型沒傳羅馬字）→ 改成 Berth 自己比對名字、skill 叫模型傳每一種名字；第 2、3 輪兩種接口都標出兩部「已有」並建議從媒體庫重建帳本，第 3 輪的結果帶 `exact`，兩部都是 `exact: true`。原文：「藥屋少女的呢喃 第三季 … | **已有**（Anime 資料庫）」（Anthropic）、「**你片庫裡已經有的兩部（這次不重複推薦下載）**」（OpenAI）。
+
+### 2026-10-30 協調者追加（使用者對 Heads up 與兩題的決定）
+
+**(1) 對集不照 Jellyfin 的季集號。** 使用者要的順序是「集的 TMDB id → 播出日 ±1 天 → 都對不上不算有、標『Jellyfin 可能有』」。
+- **實測**（子代理，12.1.0 一次性容器、網路 metadata 開著、TMDB 對上的 SPY×FAMILY 四集）：**集的 `ProviderIds` 沒有 `Tmdb`**（只有 Tvdb、Imdb，值等於 TMDB 那一集的 `external_ids`；要 `fields=ProviderIds` 才回），`PremiereDate` 不帶 `fields` 也有、等於 TMDB 的 `air_date`。補 brief §20.8，腳本 `scripts/experiments/jellyfin_episode_providers.py`，fixture `shows-episodes.series.providers.json`。
+- **所以只照播出日**（偏離使用者的第一步，記在 progress「偏差與決定」）：TMDB id 那一步拿掉（連同快照裡為它加的集 id），照 Tvdb / Imdb 對要 TMDB 逐集的 `external_ids`（一集一個請求）不做。`inventory.match_episodes`：差一天內、TMDB 只有一集；特典只與特典比；一集 TMDB 被兩個 Jellyfin 的集對到時都不算；多集檔只算對到的那一集；對不上的回 `jellyfin_unmatched`（Jellyfin 的編號），同編號的 TMDB 那一集 `jellyfin_maybe`。
+- **先紅的測試**：`test_media_in_jellyfin.TestTheNumbering`（Jellyfin 的 S02E01 其實是 TMDB 的 S01E14：照日期算 S01E14、TMDB 的 S02E01 不算有；對不上時 S02E01 照舊缺、標可能有、缺集搜尋照問），改之前照 Jellyfin 季集號的實作紅過；`tests/unit/test_match_episodes.py` 七條（code-review 抓到的特典認領正片、兩集認領同一集、多集檔往後數，改之前四條紅）。
+- **畫面與模型**：季表那一集「缺」旁標「Jellyfin 可能有」；季表上方一句說出 Jellyfin 的哪幾集對不上（最多列 10 集，其餘說總數）；給模型的作品多 `jellyfin_unmatched`（照季收成範圍）與每季 `jellyfin_maybe` 範圍；`missing-episodes`、`series-mapping` 各多一句。
+
+**(2) 送單卡逐列標出已有的集。** 提出卡片時 `agent._submit_preview` 經執行器讀作品（Jellyfin 照提出卡片的那個人打開，同一張卡同一部作品讀一次），那一列的發佈照結果表的預估（`search.estimate`）蓋到的集裡帳本有或 `in_jellyfin` 的存進 `preview.held`（`search.held_in_release`），卡片那一列寫「含已有的第 1 季第 4 集」（zh-Hant / en）。測試：`test_card_held_episodes.py`（把 `in_jellyfin` 從「已有」拿掉會紅）、vitest、e2e `agent` / `agent-390` 的送單卡（第 4、5 集那兩列有、第 6 集沒有）。截圖：`web/test-results/agent-送單卡…-agent/card.png`（1280）與 `…-agent-390/card.png`（390），複本 `.playwright-mcp/t28-card-{1280,390}.png`（不進 repo）。
+
+**真模型第 4 輪**（`--set jellyfin`，情境多一個整季合集，$0.014，上限 $0.2）：兩種接口都挑了合集、卡上那一列的 `held` 正好是 E01–E04，所以卡寫出「含已有的第 1 季第 1–4 集」，而模型出卡前仍一個字都沒說——標示來自伺服器。兩種接口都只出一列合集，「只蓋 E05–E12 的列沒有 `held`」這一半由 e2e 的第 6 集那一列守。四輪合計 $0.068。
+
+**code-review（opus，一軸看兩邊）處理了**：特典認領正片、兩集認領同一集、多集檔往後數（都會漏一集）→ 改規則並補測試；送單卡逐列各讀一次作品（13 列 26 次 Jellyfin）→ 同一張卡共用；Jellyfin 認不到 metadata 時整部劇都對不上、清單上千筆 → 給模型的照季收成範圍、畫面最多列 10 集；為什麼不用 Tvdb / Imdb、「差一天」沒量過 → 寫進 brief 與 docstring；實驗腳本與兩處註解說錯的改正。**沒處理**：同一天兩集（雙集首播、整季同日上架）整段對不上、照舊下載——照使用者的「寧可多下一集」，要放寬（例如同一天時看 Jellyfin 的集號挑）得使用者再決定；`jellyfin_maybe` 的集不在卡上標（卡只標確定已有的）。

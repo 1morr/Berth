@@ -137,6 +137,7 @@ function media(overrides: Partial<Media> = {}): Media {
             absolute_number: 1,
             status: 'imported',
             job: null,
+            jellyfin_maybe: false,
           },
         ],
       },
@@ -156,6 +157,7 @@ function media(overrides: Partial<Media> = {}): Media {
             absolute_number: 26,
             status: 'stuck',
             job: 'c'.repeat(40),
+            jellyfin_maybe: false,
           },
         ],
       },
@@ -165,6 +167,7 @@ function media(overrides: Partial<Media> = {}): Media {
     versions: [],
     awaiting_review: 0,
     jellyfin: 'absent',
+    jellyfin_unmatched: [],
     ...overrides,
   }
 }
@@ -1105,6 +1108,73 @@ describe('Media 詳情頁', () => {
       await userEvent.click(screen.getByRole('button', { name: '只看缺集' }))
       expect(screen.getByText('共缺 1 集')).toBeVisible()
       expect(screen.queryByText('OPERATION STRIX')).not.toBeInTheDocument()
+    })
+
+    it('Jellyfin 有、播出日卻對不上 TMDB 的那一集：照舊算缺，標「可能有」並說出是哪一集（M5 票 28）', async () => {
+      const [first, second] = media().seasons
+      render({
+        [SPY_PATH]: {
+          body: media({
+            jellyfin: 'found',
+            jellyfin_unmatched: [
+              { season: 1, episode_start: 2, episode_end: null, premiere_date: null },
+              { season: 3, episode_start: 1, episode_end: 2, premiere_date: '2025-10-04' },
+            ],
+            seasons: [
+              {
+                ...first,
+                episodes: [
+                  episode,
+                  {
+                    ...episode,
+                    episode_number: 2,
+                    name: 'SECURE A WIFE',
+                    status: 'missing',
+                    jellyfin_maybe: true,
+                  },
+                ],
+              },
+              second,
+            ],
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      expect(
+        await screen.findByText(
+          'Jellyfin 有 2 集對不上 TMDB 的任何一集：S01E02、S03E01-E02（Jellyfin 的編號）。它們照舊算缺，缺集搜尋照搜。',
+        ),
+      ).toBeVisible()
+      await userEvent.click(screen.getByText('Season 1'))
+      const row = (await screen.findByText('SECURE A WIFE')).closest('tr')!
+      expect(within(row).getByText('缺')).toBeVisible()
+      expect(within(row).getByText('Jellyfin 可能有')).toBeVisible()
+      const strix = screen.getByText('OPERATION STRIX').closest('tr')!
+      expect(within(strix).queryByText('Jellyfin 可能有')).toBeNull()
+    })
+
+    it('對不上的集很多時只列前 10 集，其餘說幾集（M5 票 28）', async () => {
+      render({
+        [SPY_PATH]: {
+          body: media({
+            jellyfin: 'found',
+            jellyfin_unmatched: Array.from({ length: 12 }, (_, at) => ({
+              season: 1,
+              episode_start: at + 1,
+              episode_end: null,
+              premiere_date: null,
+            })),
+          }),
+        },
+      })
+      renderApp('/media/tv:120089')
+
+      expect(
+        await screen.findByText(
+          'Jellyfin 有 12 集對不上 TMDB 的任何一集：S01E01、S01E02、S01E03、S01E04、S01E05、S01E06、S01E07、S01E08、S01E09、S01E10 等 12 集（Jellyfin 的編號）。它們照舊算缺，缺集搜尋照搜。',
+        ),
+      ).toBeVisible()
     })
 
     it('整部作品都沒有缺集時工具列說得出來', async () => {
@@ -2967,6 +3037,7 @@ describe('下載段（M4 票 12，`.scratch/m4/media-downloads-shape.md`）', ()
                   absolute_number: null,
                   status: 'downloading',
                   job: DOWNLOADING.hash,
+                  jellyfin_maybe: false,
                 },
               ],
             },

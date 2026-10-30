@@ -49,6 +49,7 @@ function media(overrides: Partial<Media> = {}): Media {
     versions: [],
     awaiting_review: 0,
     jellyfin: 'absent',
+    jellyfin_unmatched: [],
     ...overrides,
   }
 }
@@ -1160,6 +1161,7 @@ describe('搜尋 torrent 與結果表', () => {
                 absolute_number: null,
                 status: 'missing',
                 job: null,
+                jellyfin_maybe: false,
               },
             ],
           },

@@ -481,3 +481,22 @@ plan §11.6〈驗收〉的真模型那一條「情境 1、2、3 走完；Re:Zero
 
   推薦的 5 部是「你都還沒有的」，同樣提醒 `in_ledger: false`。
 - 兩次都叫了 `rss_list_subscriptions`（`[]`）；完整的參數與結果都在逐字稿。
+
+### 第 4 輪（卡上的已有標示）（2026-10-30）
+
+自第 3 輪起的變動：Berth 不再信 Jellyfin 的季集號，Jellyfin 的一集要在 TMDB 播出日 ±1 天內對到唯一一集才算（`jellyfin_unmatched` / `jellyfin_maybe` 記對不上的）；替身 Jellyfin 的集帶 `premiere_date`（TMDB 每週一集）；送單卡每一列由伺服器算 `preview.held`（這一列的發佈蓋到、作品已經有的集），不是模型寫的。`agent-live-jellyfin` 另外多一個整季合集 `[Pack] SPY×FAMILY S01 01-12 [1080p][CHT]`（500 個種子，比單集多；`agent-live-missing` 不變）。
+
+開跑前驗證（`skipper` 登入）：`GET /api/media/tv:120089`：`jellyfin: found`、`jellyfin_unmatched: []`，第 1 季第 1–4 集 `in_jellyfin`、第 5–12 集 `missing`；`GET /api/search?...&missing=true&season=1` 的列裡有合集。
+
+只跑 `missing-jf`，兩種接口各 1 次，逐字稿在每張卡的每一列下面記 `preview.held`（`GET /api/proposals`）：`t28-r4-{anthropic,openai}-missing-jf.md`。
+
+| 接口 | 費用 USD | 卡 | `preview.held` | 判定 |
+|---|---|---|---|---|
+| anthropic | 0.0076 | 1 列：`[Pack] SPY×FAMILY S01 01-12 [1080p][CHT]` | `[{"season":1,"episode":1},{"season":1,"episode":2},{"season":1,"episode":3},{"season":1,"episode":4}]` | 過 |
+| openai | 0.0063 | 同上，1 列 | 同上 | 過 |
+
+本輪 $0.0139，四輪合計 **$0.0679**。
+
+兩次模型都挑了合集（`search_torrents` 帶 `scope: {missing: true, season: 1}` 回的 `fits` 第一列就是它，`episode_start: 1, episode_end: 12`），沒有拆成第 5–12 集的單集，所以卡上唯一一列蓋到第 1–4 集，`held` 正好是這四集；沒有「只蓋第 5–12 集」的列，那一半的判準這輪沒有東西可測（兩次都沒有這種列）。
+
+出卡前的回覆：兩次都**沒有文字**（逐字稿裡出卡之前一個字都沒有），所以「回覆說 Jellyfin 已有 1–4」這項沒有（資訊項，不計入判定）。兩次都先叫 `inventory_find_in_library`，回 `{"title":"SPY x FAMILY","year":2022,"kind":"tv","library":"Anime","media_id":"tv:120089","in_ledger":false,"exact":true}`，再讀 `media_read_media`。

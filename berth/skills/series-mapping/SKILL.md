@@ -51,7 +51,8 @@ tools:
    own TMDB movie. Mark that row "matched by title, please check".
 6. Read every TMDB entry with `media_read_media`: confirm it exists and see which episodes the
    user already has: `imported` (in Berth's records) and `in_jellyfin` (in the user's Jellyfin
-   but not in Berth's records). Do not offer either again. For movies and OVAs, `jellyfin:
+   but not in Berth's records). Do not offer either again. `jellyfin_maybe` episodes are still
+   missing (a Jellyfin episode with that number matches no TMDB air date): offer them, and say so. For movies and OVAs, `jellyfin:
    found` means the user has it. If `jellyfin` is `unknown`, say Berth could not check Jellyfin.
    One `inventory_find_in_library` call with the parts' titles finds what Jellyfin holds under
    other names; a match with `exact: false` may be another part, so check its title. When several parts are only in Jellyfin, suggest rebuilding the ledger: the

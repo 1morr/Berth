@@ -50,6 +50,17 @@ from berth.services.watch_area import read_watch_area
 router = APIRouter(prefix="/media", tags=["media"])
 
 
+class UnmatchedEpisodeOut(BaseModel):
+    """Jellyfin 裡對不上 TMDB 的一集，照 Jellyfin 的編號（M5 票 28）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    premiere_date: date | None
+
+
 class EpisodeOut(BaseModel):
     """一集。"""
 
@@ -63,11 +74,14 @@ class EpisodeOut(BaseModel):
     runtime: int | None
     #: Absolute episode group 給的絕對編號。沒有那種 group 的作品整欄是 `None`。
     absolute_number: int | None
-    #: 這一集在媒體庫裡的樣子（票 13）。依序取：已入庫 → 卡住 → 下載中 → 缺 / 未播出。
+    #: 這一集在媒體庫裡的樣子（票 13）。依序取：已入庫 → 卡住 → 下載中 → Jellyfin 已有（M5 票 28）
+    #: → 缺 / 未播出。
     status: EpisodeStatus
     #: 「卡住」「下載中」的那一集是哪一筆 Job 的 hash（兩筆蓋到時是最新送的那一筆）；季表的標籤連到
     #: `/jobs/{hash}`（M4 票 12）。其餘是 `null`。
     job: str | None
+    #: Jellyfin 有一集編號是這一集、卻對不上 TMDB 的任何一集（M5 票 28）：可能已經有，狀態照舊。
+    jellyfin_maybe: bool
 
 
 class SeasonOut(BaseModel):
@@ -232,6 +246,8 @@ class MediaOut(BaseModel):
     awaiting_review: int
     #: 這位使用者看得到的 Jellyfin 裡有沒有這部（M5 票 28）；`unknown` 是沒能問。
     jellyfin: InJellyfin
+    #: Jellyfin 的集裡對不上 TMDB 任何一集的（照 Jellyfin 的季集號與播出日）。不算有。
+    jellyfin_unmatched: list[UnmatchedEpisodeOut]
 
 
 # 經執行器：它照登入的人打開他看得到的 Jellyfin，集才分得出 `in_jellyfin`（M5 票 28）。

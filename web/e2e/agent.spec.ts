@@ -151,6 +151,15 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   // 作品名與 Route 名照作品頁的那一份畫，不是 id。
   await expect(card).toContainText('SPY×FAMILY 間諜家家酒')
   await expect(card).not.toContainText('tv:120089')
+  // 這部作品第 4、5 集已經有（`agent` 情境：Jellyfin 有這兩集，`downloads` 那兩筆也送過）：伺服器在那兩列
+  // 標出來，第 6 集那一列不標（M5 票 28）。
+  const rowOf = (episode: string) =>
+    card
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('checkbox', { name: new RegExp(`- ${episode} `) }) })
+  await expect(rowOf('04')).toContainText('含已有的第 1 季第 4 集')
+  await expect(rowOf('05')).toContainText('含已有的第 1 季第 5 集')
+  await expect(rowOf('06')).not.toContainText('含已有')
   await shot(page, 'card')
 
   // 還沒按就重新載入：卡片從伺服器接回來，照樣按得下去。

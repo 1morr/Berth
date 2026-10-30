@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceError, ServiceTimeoutError
 from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
+    EpisodeStatus,
     IndexerProblem,
     MappingStrategy,
     MediaSnapshot,
@@ -61,6 +62,7 @@ from berth.parser import (
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
+from berth.services.inventory import SeasonView
 from berth.services.jellyfin_access import JellyfinAccess
 from berth.services.jobs import JobSource
 from berth.services.media import read_media, read_snapshot
@@ -621,6 +623,38 @@ class Estimate:
     episode_end: int | None
     whole_season: bool
     strategy: MappingStrategy | None
+
+
+@dataclass(frozen=True, slots=True)
+class HeldEpisode:
+    """這部作品已經有的一集（帳本有或 Jellyfin 已有）。TMDB 的季集號。"""
+
+    season: int
+    episode: int
+
+
+#: 「已經有」：帳本有，或這個人的 Jellyfin 有（M5 票 28）。
+HELD = frozenset({EpisodeStatus.IMPORTED, EpisodeStatus.IN_JELLYFIN})
+
+
+def held_in_release(guess: Estimate, seasons: Sequence[SeasonView]) -> tuple[HeldEpisode, ...]:
+    """一個發佈（預估的季集）蓋到的集裡，這部作品已經有的（送單確認卡逐列標，M5 票 28）。
+    整季包是那一季的每一集；看不出季集的什麼都不說——卡片不替判斷不出來的發佈下結論。"""
+    season = next((row for row in seasons if row.season_number == guess.season), None)
+    if season is None:
+        return ()
+    if guess.whole_season:
+        covered = {row.episode_number for row in season.episodes}
+    elif guess.episode_start is not None:
+        last = guess.episode_end if guess.episode_end is not None else guess.episode_start
+        covered = set(range(guess.episode_start, last + 1))
+    else:
+        return ()
+    return tuple(
+        HeldEpisode(season.season_number, row.episode_number)
+        for row in season.episodes
+        if row.episode_number in covered and row.status in HELD
+    )
 
 
 def estimate(title: str, published_at: datetime | None, snapshot: MediaSnapshot | None) -> Estimate:

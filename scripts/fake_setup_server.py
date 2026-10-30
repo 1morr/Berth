@@ -355,8 +355,10 @@ class Scenario:
     route_settings_demo: bool = False
     #: 媒體庫頁的整庫瀏覽與受限使用者（M1.5 票 03）。見 `_seed_library`。
     library_demo: bool = False
-    #: `agent-live-jellyfin`（票 28）：Jellyfin 上有帳本沒有的作品（`_seed_jellyfin_holding`）。
-    jellyfin_holding: bool = False
+    #: Jellyfin 上有、帳本沒有的（票 28，`_seed_jellyfin_holding`）：SPY×FAMILY 第一季的哪幾集
+    #: （播出日照 `spy_aired`，Berth 照它對 TMDB），與複製進去、沒有 TMDB id 的資料夾。
+    jellyfin_holding: tuple[int, ...] = ()
+    jellyfin_copied: tuple[str, ...] = ()
     #: 待處理頁與對帳（M2 票 05）。見 `_seed_issues`：真的入庫一包、真的刪掉其中一個
     #: 媒體庫檔案，所以按下「立刻對帳」真的會偵測到，按下「重新鏈接」真的會把它接回來。
     issues_demo: bool = False
@@ -713,6 +715,37 @@ class RecoveringQbittorrent(FakeQbittorrentClient):
         )
 
 
+#: SPY×FAMILY 第一季的第 1 集播出日；`SPY_WEEKLY_SEASONS` 之後每週一集。
+SPY_FIRST_AIRED = date(2022, 4, 9)
+
+
+def spy_aired(episode: int) -> date:
+    return SPY_FIRST_AIRED + timedelta(weeks=episode - 1)
+
+
+#: 替身 TMDB 的 SPY×FAMILY，第一季 12 集每週一集（其他季照 `SPY_SEASONS`）。
+SPY_WEEKLY_SEASONS = {
+    120089: [
+        *(row for row in SPY_SEASONS[120089] if row.season_number != 1),
+        TmdbSeason(
+            season_number=1,
+            name="Season 1",
+            air_date=SPY_FIRST_AIRED,
+            episodes=tuple(
+                TmdbEpisode(
+                    season_number=1,
+                    episode_number=number,
+                    name=f"MISSION:{number}",
+                    air_date=spy_aired(number),
+                    runtime=24,
+                )
+                for number in range(1, 13)
+            ),
+        ),
+    ]
+}
+
+
 def rss_sweep_scenario() -> Scenario:
     """每日巡檢的 RSS 三項（M4 票 130）：`/rss` 的 Feed 列分開說輪詢與補漏的失敗，`/issues` 上
     一直失敗的 Feed（兩種）、缺集、同一集多份各一件。
@@ -724,29 +757,8 @@ def rss_sweep_scenario() -> Scenario:
     scenario.tmdb_credential = "00000000000000000000000000000010"
     # 第一季每一集都在（其他情境的替身只有第 1、25 集）：缺集看的是作品頁的「缺」，快照裡沒有的
     # 那一集說不上缺。
-    first = date(2022, 4, 9)
     scenario.tmdb = demo_tmdb(
-        search={"spy": [SPY_ENTRY], "SPY": [SPY_ENTRY]},
-        seasons={
-            120089: [
-                *(row for row in SPY_SEASONS[120089] if row.season_number != 1),
-                TmdbSeason(
-                    season_number=1,
-                    name="Season 1",
-                    air_date=first,
-                    episodes=tuple(
-                        TmdbEpisode(
-                            season_number=1,
-                            episode_number=number,
-                            name=f"MISSION:{number}",
-                            air_date=first + timedelta(weeks=number - 1),
-                            runtime=24,
-                        )
-                        for number in range(1, 13)
-                    ),
-                ),
-            ]
-        },
+        search={"spy": [SPY_ENTRY], "SPY": [SPY_ENTRY]}, seasons=SPY_WEEKLY_SEASONS
     )
     scenario.feed_pages = {"https://demo.invalid/unused": b""}
     scenario.rss_sweep_demo = True
@@ -1717,8 +1729,9 @@ class _SeededDownload:
     progress: float = 0.0
 
 
-#: `downloads` 情境的五筆，最舊的在前。替身 TMDB 的第一季只列 E01 與 E25（`demo_tmdb`），
-#: 所以下載中的是 25、待審核的是 01——季表上那兩集的標籤連得到它們。
+#: `downloads` 情境的五筆，最舊的在前。替身 TMDB 的第一季只列 E01 與 E25（`demo_tmdb`；`agent`
+#: 情境換成每週一集的 12 集，`SPY_WEEKLY_SEASONS`），所以下載中的是 25、待審核的是 01——季表上那兩集
+#: 的標籤連得到它們。
 DOWNLOADS: tuple[_SeededDownload, ...] = (
     _SeededDownload(
         "d5" * 20, "[ANi] SPY×FAMILY - 04 [1080P][WEB-DL][AAC AVC][CHT]", JobState.IMPORTED, 4
@@ -1792,7 +1805,12 @@ def agent_scenario() -> Scenario:
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
-    scenario.tmdb = demo_tmdb(search={query: [SPY_ENTRY] for query in SPY_QUERIES})
+    # 第一季每週一集，Jellyfin 有第 4、5 集（帳本沒有）：送單卡上那兩列由伺服器標「含已有」
+    # （票 28）。
+    scenario.tmdb = demo_tmdb(
+        search={query: [SPY_ENTRY] for query in SPY_QUERIES}, seasons=SPY_WEEKLY_SEASONS
+    )
+    scenario.jellyfin_holding = (4, 5)
     scenario.ai_script = why_not_script
     scenario.ai_pause = slow_pause
     packs = {PLAN_RELEASE: PLAN_FILES, **AGENT_RELEASES}
@@ -1911,12 +1929,17 @@ def agent_live_jellyfin_scenario() -> Scenario:
     **會花模型的錢**
     """
     scenario = agent_live_missing_scenario()
-    scenario.jellyfin_holding = True
+    scenario.jellyfin_holding = (1, 2, 3, 4)
+    scenario.jellyfin_copied = ("Cyberpunk Edgerunners 2", "Kusuriya no Hitorigoto 3rd Season")
+    # 另有一個整季合集（做種最多）：模型挑它時，那一列蓋到已有的第 1–4 集（`preview.held`）。
+    scenario.indexer_results = (*MISSING_RELEASES, SEASON_PACK)
     return scenario
 
 
 def _seed_jellyfin_holding(scenario: Scenario, paths: PathSettings) -> None:
-    """`agent-live-jellyfin` 的 Jellyfin 內容：放在 `_moor` 建的 Anime 媒體庫底下。"""
+    """Jellyfin 上有、帳本沒有的（`agent`、`agent-live-jellyfin`）：放在 `_moor` 建的 Anime
+    媒體庫底下。集帶播出日（Jellyfin 從 metadata 拿到的 `PremiereDate`）：Berth 照它對 TMDB
+    的集。"""
     anime = f"{paths.library_root}/anime"
     spy = f"{anime}/SPY x FAMILY (2022) [tmdbid-120089]"
     spy_id = _scanned_id(spy)
@@ -1938,11 +1961,12 @@ def _seed_jellyfin_holding(scenario: Scenario, paths: PathSettings) -> None:
                 season=1,
                 episode_start=n,
                 series_name="SPY x FAMILY",
+                premiere_date=spy_aired(n),
             )
-            for n in range(1, 5)
+            for n in scenario.jellyfin_holding
         ),
     ]
-    for folder in ("Cyberpunk Edgerunners 2", "Kusuriya no Hitorigoto 3rd Season"):
+    for folder in scenario.jellyfin_copied:
         path = f"{anime}/{folder}"
         items.append(JellyfinItem(_scanned_id(path), ITEM_SERIES, folder, path, ""))
     scenario.jellyfin.items_ = items
@@ -1964,6 +1988,18 @@ def _single_episode(group: str, episode: int, seeders: int) -> IndexerResult:
 MISSING_RELEASES = (
     *(_single_episode("Fast", n, 300 - n) for n in range(1, 7)),
     *(_single_episode("Slow", n, 100 - n) for n in range(1, 13)),
+)
+
+#: 只有 `agent-live-jellyfin` 有的整季合集（票 28 第 4 輪）：第 1–12 集一包、做種比單集多。
+_PACK_TITLE = "[Pack] SPY×FAMILY S01 01-12 [1080p][CHT]"
+_PACK_HASH = hashlib.sha1(_PACK_TITLE.encode()).hexdigest()
+SEASON_PACK = IndexerResult(
+    title=_PACK_TITLE,
+    indexer="berth-demo",
+    size=7_200_000_000,
+    seeders=500,
+    download_url=f"magnet:?xt=urn:btih:{_PACK_HASH}",
+    info_hash=_PACK_HASH,
 )
 
 
@@ -3062,7 +3098,7 @@ async def _moor(
         await _seed_route_settings(session, scenario, paths)
     if scenario.library_demo:
         await _seed_library(session, scenario, paths)
-    if scenario.jellyfin_holding:
+    if scenario.jellyfin_holding or scenario.jellyfin_copied:
         _seed_jellyfin_holding(scenario, paths)
     if scenario.issues_demo:
         await _seed_issues(session, paths)

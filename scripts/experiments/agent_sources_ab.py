@@ -195,11 +195,14 @@ def run_task(
             cards = [found[a["toolCallId"]] for a in asks if a["toolCallId"] in found]
             card = cards[0] if cards else {"missing": True}
             for each in cards:
+                held = (each.get("preview") or {}).get("held") or []
                 log.append(
                     f"> 🟨 **確認卡**（停在這裡，不按）`{each['command']}`，{len(each['arguments'])} 列\n"
                     + "".join(
                         f"> - `{json.dumps(args, ensure_ascii=False)[:300]}`\n"
-                        for args in each["arguments"]
+                        # `preview.held`（票 28）：這一列的發佈蓋到、作品已經有的集。
+                        f">   - held: {json.dumps(held[i] if i < len(held) else None)}\n"
+                        for i, args in enumerate(each["arguments"])
                     )
                     + "".join(subgroup_lines(each))
                 )

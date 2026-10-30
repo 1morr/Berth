@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.domain import (
     CollectionType,
     EpisodeStatus,
+    InJellyfin,
     JellyfinPresence,
     JobState,
     LedgerStatus,
@@ -24,7 +25,7 @@ from berth.domain import (
     Tags,
 )
 from berth.models import Media
-from berth.services.inventory import read_holdings
+from berth.services.inventory import JellyfinHolding, read_holdings
 from berth.services.media import MediaView, read_media
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_inventory import film, job, linked, plan, route, season, title
@@ -71,7 +72,9 @@ class TestEpisodes:
         await plan(session, coming, (PlanAction.IMPORT, 1, 2), status=PlanStatus.PREPLAN)
         held = await job(session, spy, tv, JobState.REVIEW, hash="b" * 40)
         await plan(session, held, (PlanAction.IMPORT, 1, 3), status=PlanStatus.PENDING_REVIEW)
-        everything = frozenset((1, number) for number in range(1, 6))
+        everything = JellyfinHolding(
+            InJellyfin.FOUND, frozenset((1, number) for number in range(1, 6))
+        )
 
         holdings = await read_holdings(session, spy, spy.snapshot(), everything)
 

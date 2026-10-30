@@ -19,9 +19,10 @@ from __future__ import annotations
 
 import asyncio
 import unicodedata
+from collections import Counter
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import PurePosixPath
 from typing import Annotated, Protocol
 
@@ -161,6 +162,8 @@ class EpisodeView:
     status: EpisodeStatus
     #: 「卡住」「下載中」的那一集是哪一筆 Job（最新送的那一筆），其餘 `None`（M4 票 12）。
     job: str | None
+    #: Jellyfin 有一集編號是這一集、卻對不上 TMDB 的任何一集（M5 票 28）：可能已經有，狀態照舊。
+    jellyfin_maybe: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,12 +254,31 @@ class Holdings:
 
 
 @dataclass(frozen=True, slots=True)
+class UnmatchedEpisode:
+    """Jellyfin 裡對不上 TMDB 任何一集的那一集，照 **Jellyfin 的**編號與播出日（M5 票 28）。"""
+
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    premiere_date: date | None
+
+
+@dataclass(frozen=True, slots=True)
 class JellyfinHolding:
     """這部作品在這位使用者看得到的 Jellyfin 裡有什麼，不管帳本（M5 票 28）。"""
 
     lookup: InJellyfin
-    #: Jellyfin 有的（季, 集）。電影、不在、問不到時是空的。
+    #: Jellyfin 有的（TMDB 的季, 集）。電影、不在、問不到時是空的。
     episodes: frozenset[tuple[int, int]] = frozenset()
+    #: Jellyfin 的集裡對不上 TMDB 的那幾集。它們不算有（寧可多下一集，不要漏一集）。
+    unmatched: tuple[UnmatchedEpisode, ...] = ()
+
+    @property
+    def maybe(self) -> frozenset[tuple[int, int]]:
+        """與對不上的那幾集同一個季集號的 TMDB 的集：「Jellyfin 可能有、編號對不上」。"""
+        return frozenset(
+            pair for row in self.unmatched for pair in episodes_of(row) if pair not in self.episodes
+        )
 
 
 #: 沒能問 Jellyfin：集的狀態照帳本與 Job 說。
@@ -514,14 +536,14 @@ async def libraries_with_imports(
 # 收 ORM 列，給 `media` 用。
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def read_jellyfin_holding(
-    session: AsyncSession, access: JellyfinAccess | None, media: Media
+    session: AsyncSession, access: JellyfinAccess | None, media: Media, snapshot: MediaSnapshot
 ) -> JellyfinHolding:
     """Jellyfin 裡這部作品有哪幾集（M5 票 28）。`access` 是 `None`、或問的途中連不上，都是
     `UNKNOWN_HOLDING`，不丟例外：作品頁不因為 Jellyfin 而打不開。
 
     找作品照觀看區（`watch_area.read_watch_area`）：帳本記下的 id 先比，`locate` 不帶 `parentId`
-    （看不到的媒體庫與不在是同一個答案）；集只問確認過的那一部。季集號是 Jellyfin 讀出來的，
-    與 TMDB 的編法不同時（絕對編號、季的切法）對到的是別的集——那時人在季表上看得到。
+    （看不到的媒體庫與不在是同一個答案）；集只問確認過的那一部。集怎麼對到 TMDB 見
+    `match_episodes`：**不照 Jellyfin 的季集號**。
     """
     if access is None:
         return UNKNOWN_HOLDING
@@ -538,9 +560,62 @@ async def read_jellyfin_holding(
     except ItemNotVisibleError:
         # 確認與問集之間被收回權限（或劇被刪了）。
         return JellyfinHolding(InJellyfin.ABSENT)
-    return JellyfinHolding(
-        InJellyfin.FOUND, frozenset(pair for row in rows for pair in episodes_of(row))
+    held, unmatched = match_episodes(rows, snapshot)
+    return JellyfinHolding(InJellyfin.FOUND, held, unmatched)
+
+
+#: Jellyfin 的播出日與 TMDB 的差幾天內算同一集。Jellyfin 存的是那一天的 00:00 UTC、TMDB 是播出地的
+#: 日期；**差一天沒有量過**（brief §20.8 量到的四集是同一天、只量了台灣地區），是使用者定的寬度。
+AIR_DATE_SLACK = timedelta(days=1)
+
+
+def match_episodes(
+    rows: Sequence[JellyfinItem], snapshot: MediaSnapshot
+) -> tuple[frozenset[tuple[int, int]], tuple[UnmatchedEpisode, ...]]:
+    """Jellyfin 的每一集對到 TMDB 的哪幾集（使用者 2026-10-30）。**Jellyfin 的季集號不算數**：
+    它可能照 TVDB 編（它的 S02E01 是 TMDB 的 S01E14）。寧可多下一集，不要漏一集：拿不準的一律
+    回到 `unmatched`（不算有、照舊缺）。
+
+    - 照播出日（`PremiereDate`）：差一天內、TMDB **只有一集**的那一集；同一天兩集（雙集首播、
+      整季同日上架）拿不準。
+    - **特典只與特典比**：Jellyfin 的 S00 只對 TMDB 的 S00，其餘只對正片——TMDB 沒列的特典在
+      某一集的隔天播，不能把那一集算成有。這是唯一看 Jellyfin 季號的地方，只分特典與正片。
+    - **一集 TMDB 只能被一個 Jellyfin 的集認走**：兩個都對到同一集時兩個都不算。
+    - 多集檔（`IndexNumberEnd`）只算對到的那一集：往後數會在 TMDB 把雙集首播併成一集時把下一週的
+      那一集算進來；而同一天播的下一集會讓起點本身就拿不準。
+
+    使用者原本要的第一步「先照集的 TMDB id」做不了：Jellyfin 12.1.0 的集只帶 Tvdb 與 Imdb。照那兩個
+    對要 TMDB 逐集的 `external_ids`（一集一個請求，長篇上百個），不做（brief §20.8）。
+    """
+    dated = [
+        (episode.air_date, (season.season_number, episode.episode_number))
+        for season in snapshot.seasons
+        for episode in season.episodes
+        if episode.air_date is not None
+    ]
+    covers: dict[int, tuple[int, int]] = {}
+    for index, row in enumerate(rows):
+        aired = row.premiere_date
+        if aired is None:
+            continue
+        special = row.season == 0
+        near = [
+            pair
+            for day, pair in dated
+            if (pair[0] == 0) == special and abs(day - aired) <= AIR_DATE_SLACK
+        ]
+        if len(near) != 1:
+            continue
+        covers[index] = near[0]
+    claimed = Counter(covers.values())
+    kept = {index for index, pair in covers.items() if claimed[pair] == 1}
+    held = frozenset(covers[index] for index in kept)
+    unmatched = tuple(
+        UnmatchedEpisode(row.season, row.episode_start, row.episode_end, row.premiere_date)
+        for index, row in enumerate(rows)
+        if index not in kept
     )
+    return held, unmatched
 
 
 # 只給 `read_jellyfin_holding` 與觀看區：帳本裡的 Jellyfin id 由 Berth 自己寫下。
@@ -561,14 +636,14 @@ async def read_holdings(
     session: AsyncSession,
     media: Media,
     snapshot: MediaSnapshot,
-    jellyfin: frozenset[tuple[int, int]] = frozenset(),
+    jellyfin: JellyfinHolding = UNKNOWN_HOLDING,
 ) -> Holdings:
     """這部作品在媒體庫與管線裡的樣子（Media 詳情頁）。
 
     一集算不算已入庫看帳本，算不算卡住或在路上看 Job 與它現在那一份計劃——與牆上那一格
-    同一組分類。`jellyfin` 是 Jellyfin 有的季集（`read_jellyfin_holding`）：帳本沒有、也沒有下載
-    在處理的那幾集是 `in_jellyfin`，不是缺（M5 票 28）。沒給的呼叫端（背景迴圈、為什麼沒入庫）
-    照帳本說。
+    同一組分類。`jellyfin` 是 Jellyfin 有的（`read_jellyfin_holding`）：帳本沒有、也沒有下載
+    在處理的那幾集是 `in_jellyfin`，不是缺；對不上的那幾集照舊，只多一個 `jellyfin_maybe`
+    （M5 票 28）。沒給的呼叫端（背景迴圈、為什麼沒入庫）照帳本說。
     """
     entries = sorted(
         await session.scalars(select(LedgerEntry).where(LedgerEntry.media_id == media.id)),
@@ -648,7 +723,7 @@ async def read_holdings(
             return EpisodeStatus.STUCK
         if pair in under_way:
             return EpisodeStatus.DOWNLOADING
-        if pair in jellyfin:
+        if pair in jellyfin.episodes:
             return EpisodeStatus.IN_JELLYFIN
         if _aired(episode, today):
             return EpisodeStatus.MISSING
@@ -662,6 +737,7 @@ async def read_holdings(
         job = stuck.get(pair) or under_way.get(pair)
         return job.hash if job is not None else None
 
+    maybe = jellyfin.maybe
     seasons = []
     for season in snapshot.seasons:
         aired = [row for row in season.episodes if _aired(row, today)]
@@ -684,6 +760,8 @@ async def read_holdings(
                         absolute_number=episode.absolute_number,
                         status=status(season.season_number, episode),
                         job=holder(season.season_number, episode),
+                        jellyfin_maybe=(season.season_number, episode.episode_number) in maybe
+                        and (season.season_number, episode.episode_number) not in imported,
                     )
                     for episode in season.episodes
                 ),

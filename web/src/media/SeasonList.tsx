@@ -237,6 +237,9 @@ function EpisodeRow({
           {/* 窄版鍵排在色塊下面：並排時這一格 `nowrap`，會把集表撐得比畫面寬（票 22 critique 實量）。 */}
           <span className="inline-flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
             <EpisodeState status={episode.status} job={episode.job} />
+            {episode.jellyfin_maybe ? (
+              <span className="label text-ink-dim">{t('media.episode.jellyfinMaybe')}</span>
+            ) : null}
             {askable !== null ? (
               <button
                 type="button"

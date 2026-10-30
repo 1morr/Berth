@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -237,6 +237,9 @@ class JellyfinItem:
     #: `ParentBackdropItemId` + `ParentBackdropImageTags[0]`。
     parent_thumb: ParentImage | None = None
     parent_backdrop: ParentImage | None = None
+    #: `PremiereDate` 的日期那一段（Jellyfin 存成那一天的 00:00 UTC）。Jellyfin 的集對 TMDB 的集
+    #: 時用（M5 票 28）；Jellyfin 不知道是 `None`。
+    premiere_date: date | None = None
 
     @property
     def source_paths(self) -> tuple[str, ...]:

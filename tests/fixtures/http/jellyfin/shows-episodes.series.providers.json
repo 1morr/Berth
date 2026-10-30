@@ -1,0 +1,270 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 8.4,
+      "Container": "mkv",
+      "Id": "e668af172ce270e51f53dab851abc40e",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "8d99f3c79d3a1988e8404a949246158f": "WLGSfJFvb_-UR%%g?]-;E2tR%2NGb]soaLNGxtt7.8M{%2NGj[s:"
+        },
+        "Logo": {
+          "415ac79e977f861196f5d7d2cddd6fdf": "PeMaV1Rk%L_3RjM{Rjof~qRjofofRjRjayfQ9Ft7t8M{ofaxayj["
+        },
+        "Primary": {
+          "3bb5471ae6478edcf15d4566ca327213": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@",
+          "457d1fc1098bd6e14c352cdbad3977eb": "WeOL#}O6X|_1Vr-:-oIoM|$iRkW=VYx[t7wJOXRP}?W,SdxtbEs,",
+          "fb490ad29ad06406f571cd3ca9a2dbee": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@"
+        },
+        "Thumb": {
+          "901d11d19882901dd8779bb8b7fbe4a3": "WZJS8@_3fitlNbtR_NozM{t7aeV[.8NGRjxus:xa_Ms:t7t7Rjof"
+        }
+      },
+      "ImageTags": {
+        "Primary": "457d1fc1098bd6e14c352cdbad3977eb"
+      },
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "行動代號〈梟〉",
+      "OriginalLanguage": "ja",
+      "ParentBackdropImageTags": [
+        "8d99f3c79d3a1988e8404a949246158f"
+      ],
+      "ParentBackdropItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentIndexNumber": 1,
+      "ParentLogoImageTag": "415ac79e977f861196f5d7d2cddd6fdf",
+      "ParentLogoItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentPrimaryImageItemId": "242bbbaee3a46bca4409d6dee7e804e9",
+      "ParentPrimaryImageTag": "3bb5471ae6478edcf15d4566ca327213",
+      "ParentThumbImageTag": "901d11d19882901dd8779bb8b7fbe4a3",
+      "ParentThumbItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "PremiereDate": "2022-04-09T00:00:00.0000000Z",
+      "ProductionYear": 2022,
+      "ProviderIds": {
+        "Imdb": "tt15818830",
+        "Tvdb": "8811841"
+      },
+      "RunTimeTicks": 100000000,
+      "SeasonId": "242bbbaee3a46bca4409d6dee7e804e9",
+      "SeasonName": "第 1 季",
+      "SeriesId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "SeriesName": "SPY×FAMILY 間諜家家酒",
+      "SeriesPrimaryImageTag": "fb490ad29ad06406f571cd3ca9a2dbee",
+      "ServerId": "90cc00cbde394d268a82088b37aae528",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "e668af172ce270e51f53dab851abc40e",
+        "Key": "e668af17-2ce2-70e5-1f53-dab851abc40e",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 8.4,
+      "Container": "mkv",
+      "Id": "de8582999d02588ea0974a5f282bab59",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "8d99f3c79d3a1988e8404a949246158f": "WLGSfJFvb_-UR%%g?]-;E2tR%2NGb]soaLNGxtt7.8M{%2NGj[s:"
+        },
+        "Logo": {
+          "415ac79e977f861196f5d7d2cddd6fdf": "PeMaV1Rk%L_3RjM{Rjof~qRjofofRjRjayfQ9Ft7t8M{ofaxayj["
+        },
+        "Primary": {
+          "3bb5471ae6478edcf15d4566ca327213": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@",
+          "d659670d9837fd18e3646f4f59465a90": "WqH1$6-;,+o{%1xs_4XTnMt8n-WV%3R*IpbJNIWC?Gs:WCbaaxt6",
+          "fb490ad29ad06406f571cd3ca9a2dbee": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@"
+        },
+        "Thumb": {
+          "901d11d19882901dd8779bb8b7fbe4a3": "WZJS8@_3fitlNbtR_NozM{t7aeV[.8NGRjxus:xa_Ms:t7t7Rjof"
+        }
+      },
+      "ImageTags": {
+        "Primary": "d659670d9837fd18e3646f4f59465a90"
+      },
+      "IndexNumber": 2,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "找好扮演妻子的人吧",
+      "OriginalLanguage": "ja",
+      "ParentBackdropImageTags": [
+        "8d99f3c79d3a1988e8404a949246158f"
+      ],
+      "ParentBackdropItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentIndexNumber": 1,
+      "ParentLogoImageTag": "415ac79e977f861196f5d7d2cddd6fdf",
+      "ParentLogoItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentPrimaryImageItemId": "242bbbaee3a46bca4409d6dee7e804e9",
+      "ParentPrimaryImageTag": "3bb5471ae6478edcf15d4566ca327213",
+      "ParentThumbImageTag": "901d11d19882901dd8779bb8b7fbe4a3",
+      "ParentThumbItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "PremiereDate": "2022-04-16T00:00:00.0000000Z",
+      "ProductionYear": 2022,
+      "ProviderIds": {
+        "Imdb": "tt19413856",
+        "Tvdb": "9066746"
+      },
+      "RunTimeTicks": 100000000,
+      "SeasonId": "242bbbaee3a46bca4409d6dee7e804e9",
+      "SeasonName": "第 1 季",
+      "SeriesId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "SeriesName": "SPY×FAMILY 間諜家家酒",
+      "SeriesPrimaryImageTag": "fb490ad29ad06406f571cd3ca9a2dbee",
+      "ServerId": "90cc00cbde394d268a82088b37aae528",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "de8582999d02588ea0974a5f282bab59",
+        "Key": "de858299-9d02-588e-a097-4a5f282bab59",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.9,
+      "Container": "mkv",
+      "Id": "a085061238aeaeaa8f7e5706b62b496d",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "8d99f3c79d3a1988e8404a949246158f": "WLGSfJFvb_-UR%%g?]-;E2tR%2NGb]soaLNGxtt7.8M{%2NGj[s:"
+        },
+        "Logo": {
+          "415ac79e977f861196f5d7d2cddd6fdf": "PeMaV1Rk%L_3RjM{Rjof~qRjofofRjRjayfQ9Ft7t8M{ofaxayj["
+        },
+        "Primary": {
+          "3bb5471ae6478edcf15d4566ca327213": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@",
+          "5bdc38b6d0f49856857c221096cf647a": "W[KLK[xuIpX6NJt7.TbHt6s:WFogbwjExFRjR+WXx[s,adNGWAax",
+          "fb490ad29ad06406f571cd3ca9a2dbee": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@"
+        },
+        "Thumb": {
+          "901d11d19882901dd8779bb8b7fbe4a3": "WZJS8@_3fitlNbtR_NozM{t7aeV[.8NGRjxus:xa_Ms:t7t7Rjof"
+        }
+      },
+      "ImageTags": {
+        "Primary": "5bdc38b6d0f49856857c221096cf647a"
+      },
+      "IndexNumber": 3,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "做好考前準備吧",
+      "OriginalLanguage": "ja",
+      "ParentBackdropImageTags": [
+        "8d99f3c79d3a1988e8404a949246158f"
+      ],
+      "ParentBackdropItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentIndexNumber": 1,
+      "ParentLogoImageTag": "415ac79e977f861196f5d7d2cddd6fdf",
+      "ParentLogoItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentPrimaryImageItemId": "242bbbaee3a46bca4409d6dee7e804e9",
+      "ParentPrimaryImageTag": "3bb5471ae6478edcf15d4566ca327213",
+      "ParentThumbImageTag": "901d11d19882901dd8779bb8b7fbe4a3",
+      "ParentThumbItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "PremiereDate": "2022-04-23T00:00:00.0000000Z",
+      "ProductionYear": 2022,
+      "ProviderIds": {
+        "Imdb": "tt19721094",
+        "Tvdb": "9066747"
+      },
+      "RunTimeTicks": 100000000,
+      "SeasonId": "242bbbaee3a46bca4409d6dee7e804e9",
+      "SeasonName": "第 1 季",
+      "SeriesId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "SeriesName": "SPY×FAMILY 間諜家家酒",
+      "SeriesPrimaryImageTag": "fb490ad29ad06406f571cd3ca9a2dbee",
+      "ServerId": "90cc00cbde394d268a82088b37aae528",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "a085061238aeaeaa8f7e5706b62b496d",
+        "Key": "405920001003",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    },
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "CommunityRating": 7.6,
+      "Container": "mkv",
+      "Id": "6c39d61a8e3007dbab03dbbc17c15859",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "8d99f3c79d3a1988e8404a949246158f": "WLGSfJFvb_-UR%%g?]-;E2tR%2NGb]soaLNGxtt7.8M{%2NGj[s:"
+        },
+        "Logo": {
+          "415ac79e977f861196f5d7d2cddd6fdf": "PeMaV1Rk%L_3RjM{Rjof~qRjofofRjRjayfQ9Ft7t8M{ofaxayj["
+        },
+        "Primary": {
+          "551a16d319a18a07ee252b5b323f18f7": "dPM%o{.RKj_N8GoyF1WC~XxuE*W?_NoJb^Rk%hNGt7ah",
+          "b4a52f00cdd2d6daab9b3b9c05837175": "WOL:ff[n~U$M%LX-}qV]Na-p%2I:tjb^kVf5VtsT.RtP%2ofRQnO",
+          "fb490ad29ad06406f571cd3ca9a2dbee": "dHEzDmtRu3?]IofQxaV[pIt7Q.IUxaWBX8j[VsW;R*V@"
+        },
+        "Thumb": {
+          "901d11d19882901dd8779bb8b7fbe4a3": "WZJS8@_3fitlNbtR_NozM{t7aeV[.8NGRjxus:xa_Ms:t7t7Rjof"
+        }
+      },
+      "ImageTags": {
+        "Primary": "b4a52f00cdd2d6daab9b3b9c05837175"
+      },
+      "IndexNumber": 1,
+      "IsFolder": false,
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "Name": "跟蹤父親與母親吧",
+      "OriginalLanguage": "ja",
+      "ParentBackdropImageTags": [
+        "8d99f3c79d3a1988e8404a949246158f"
+      ],
+      "ParentBackdropItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentIndexNumber": 2,
+      "ParentLogoImageTag": "415ac79e977f861196f5d7d2cddd6fdf",
+      "ParentLogoItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "ParentPrimaryImageItemId": "92a161e23ec60ff2c4346e7c36f00125",
+      "ParentPrimaryImageTag": "551a16d319a18a07ee252b5b323f18f7",
+      "ParentThumbImageTag": "901d11d19882901dd8779bb8b7fbe4a3",
+      "ParentThumbItemId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "PremiereDate": "2023-10-07T00:00:00.0000000Z",
+      "ProductionYear": 2023,
+      "ProviderIds": {
+        "Imdb": "tt25134892",
+        "Tvdb": "10025174"
+      },
+      "RunTimeTicks": 100000000,
+      "SeasonId": "92a161e23ec60ff2c4346e7c36f00125",
+      "SeasonName": "第 2 季",
+      "SeriesId": "4bb530a55ea897f6cb0f0cc4e6c38939",
+      "SeriesName": "SPY×FAMILY 間諜家家酒",
+      "SeriesPrimaryImageTag": "fb490ad29ad06406f571cd3ca9a2dbee",
+      "ServerId": "90cc00cbde394d268a82088b37aae528",
+      "Type": "Episode",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "6c39d61a8e3007dbab03dbbc17c15859",
+        "Key": "6c39d61a-8e30-07db-ab03-dbbc17c15859",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": "VideoFile"
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 4
+}

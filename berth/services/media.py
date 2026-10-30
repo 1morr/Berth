@@ -54,6 +54,7 @@ from berth.services.discover import POSTER_SIZE, image_base
 from berth.services.inventory import (
     LedgerFileView,
     SeasonView,
+    UnmatchedEpisode,
     UnmatchedFileView,
     VersionGroupView,
     read_holdings,
@@ -134,6 +135,9 @@ class MediaView:
     #: 這位使用者看得到的 Jellyfin 裡有沒有這部（M5 票 28）。劇集逐集的那一份在 `seasons`
     #: （`in_jellyfin`）；電影只有這一格。
     jellyfin: InJellyfin = InJellyfin.UNKNOWN
+    #: Jellyfin 的集裡對不上 TMDB 的（照 Jellyfin 的編號）：不算有，季表上同編號的那一集標
+    #: 「Jellyfin 可能有」（M5 票 28）。
+    jellyfin_unmatched: tuple[UnmatchedEpisode, ...] = ()
 
 
 # 快照是 TMDB 的快取：過期順手重抓不算改東西。作品頁登入就看得到（M5 票 14：一般使用者補缺集要它）。
@@ -144,8 +148,10 @@ class MediaView:
         "imported (imported), are downloading or stuck, are only in the user's Jellyfin and not "
         "in Berth's records (in_jellyfin: the user already has them), are missing or not aired "
         "yet, whether the user's Jellyfin has the work at all (jellyfin: found, absent, or "
-        "unknown when Jellyfin could not be asked), the routes it can go to (routes) and the "
-        "one used last (default_route_id), and the files Berth imported."
+        "unknown when Jellyfin could not be asked), Jellyfin episodes that match no TMDB "
+        "episode (jellyfin_unmatched, in Jellyfin's numbering; the TMDB episodes with the same "
+        "numbers are jellyfin_maybe: maybe there, still counted as missing), the routes it can "
+        "go to (routes) and the one used last (default_route_id), and the files Berth imported."
     ),
     audience=Role.USER,
 )
@@ -540,8 +546,8 @@ async def _view(
 ) -> MediaView:
     snapshot = row.snapshot()
     # 這部作品在媒體庫裡有什麼（票 13）。與媒體庫的牆共用同一組判定，所以住在 inventory。
-    jellyfin = await read_jellyfin_holding(session, access, row)
-    holdings = await read_holdings(session, row, snapshot, jellyfin.episodes)
+    jellyfin = await read_jellyfin_holding(session, access, row, snapshot)
+    holdings = await read_holdings(session, row, snapshot, jellyfin)
     return MediaView(
         id=row.id,
         tmdb_id=row.tmdb_id,
@@ -572,6 +578,7 @@ async def _view(
         versions=holdings.versions,
         awaiting_review=holdings.awaiting_review,
         jellyfin=jellyfin.lookup,
+        jellyfin_unmatched=jellyfin.unmatched,
     )
 
 

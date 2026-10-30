@@ -3517,6 +3517,8 @@ export interface components {
             status: components["schemas"]["EpisodeStatus"];
             /** Job */
             job: string | null;
+            /** Jellyfin Maybe */
+            jellyfin_maybe: boolean;
         };
         /**
          * EpisodeStatus
@@ -3820,6 +3822,16 @@ export interface components {
          * @enum {string}
          */
         HealthStatus: "unknown" | "ok" | "failed";
+        /**
+         * HeldEpisodeOut
+         * @description 作品已經有的一集，TMDB 的季集號（M5 票 28）。
+         */
+        HeldEpisodeOut: {
+            /** Season */
+            season: number;
+            /** Episode */
+            episode: number;
+        };
         /**
          * HostDataRootOut
          * @description Berth 的 `/data` 在宿主上是哪個資料夾（`host_mount.HostDataRoot`，M4 票 63）。
@@ -4900,6 +4912,8 @@ export interface components {
             /** Awaiting Review */
             awaiting_review: number;
             jellyfin: components["schemas"]["InJellyfin"];
+            /** Jellyfin Unmatched */
+            jellyfin_unmatched: components["schemas"]["UnmatchedEpisodeOut"][];
         };
         /**
          * MikanSubscriptionIn
@@ -5601,6 +5615,8 @@ export interface components {
             existing: components["schemas"]["SubscriptionRefOut"][][];
             /** First Batch */
             first_batch: boolean[];
+            /** Held */
+            held: components["schemas"]["HeldEpisodeOut"][][];
         };
         /**
          * ProposalRefusal
@@ -6913,6 +6929,20 @@ export interface components {
             category: string;
             /** State */
             state: string;
+        };
+        /**
+         * UnmatchedEpisodeOut
+         * @description Jellyfin 裡對不上 TMDB 的一集，照 Jellyfin 的編號（M5 票 28）。
+         */
+        UnmatchedEpisodeOut: {
+            /** Season */
+            season: number | null;
+            /** Episode Start */
+            episode_start: number | null;
+            /** Episode End */
+            episode_end: number | null;
+            /** Premiere Date */
+            premiere_date: string | null;
         };
         /**
          * UnmatchedFileOut

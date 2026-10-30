@@ -54,6 +54,7 @@ export type RouteAsk = Schemas['RouteAskOut']
 export type SubgroupAsk = Schemas['SubgroupAskOut']
 export type SubgroupOption = Schemas['SubgroupOptionOut']
 export type SubscriptionRef = Schemas['SubscriptionRefOut']
+export type HeldEpisode = Schemas['HeldEpisodeOut']
 
 /**
  * 核准（可帶勾選）或拒絕。**核准就當場執行**，回的是執行完的那一張、逐列結果在裡面。
