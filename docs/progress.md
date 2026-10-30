@@ -45,6 +45,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 05a plan §0–§2 去歷史 | §0–§2 歷史標記 118 → 0；照 `berth/models/` 補通知、週報、`duplicate_of` 等缺的欄位；Spec 軸比對補回 6 項；對照表在票 Comments | `/implement` 票 05b |
 | 2026-10-30 | docs-diet 05b plan §3–§5 去歷史 | §3–§5 歷史標記 79 → 1；長表格列拆成條列；`AiPlanner` 與數個識別符照程式修正；Spec 軸比對補回 5 項；對照表在票 Comments | `/implement` 票 05c |
 | 2026-10-30 | docs-diet 04c brief §10–§18 去歷史 | 歷史標記 90 → 3（只剩研究檔名）；269 行 82 KB → 545 行 75 KB；號碼不變；Spec 軸補回 8 項；對照表與 3 條矛盾（§18 的 AI 里程碑等）在票 Comments 問使用者 | `/implement` 票 05c |
+| 2026-10-30 | docs-diet 05c plan §6–§7 去歷史 | §6–§7 歷史標記 253 → 2（連結檔名）；長表格列拆成每群一節；對照 `schema.d.ts` 與程式補 `/settings/ai`、`/weekly`、`setup/*` 門禁等；Spec 軸比對補回 7 項；對照表在票 Comments | `/implement` 票 05d |
 
 ## 偏差與決定
 
