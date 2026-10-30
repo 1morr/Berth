@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-30
+
+**從 0.4.0 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變，沒有資料庫
+migration。image 是 `ghcr.io/1morr/berth:0.4.1`，同時是 `:0.4` 與 `:latest`。升級之後重新整理一次頁面。
+
 ### Fixed
 
 - **用區網 IP 走 HTTP 開 Berth（例如 `http://192.168.1.10:8383`）時整頁顯示「Something went wrong!」**：0.4.0 的助理面板用了
