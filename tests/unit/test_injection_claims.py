@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PLAN = ROOT / "docs" / "plan.md"
+PLAN = ROOT / "docs" / "archive" / "m5.md"  # plan §11.6 驗收後搬到這裡
 INJECTION_TESTS = "tests/integration/test_agent_injection.py"
 
 _TITLE = "**注入的防線與守它的測試**"
