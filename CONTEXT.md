@@ -106,7 +106,7 @@ _Avoid_: mode, service type
 使用者選「套件內」的服務：這套 compose 起的那一台（容器名 `berth-*`，Berth 以 compose 服務名連它）。
 Berth 在它上面做的與 Existing service 同一條——只建立與管理 Berth 擁有的物件——差別只在 Berth 讓它有人登得進去：
 Jellyfin 的管理員與初始設定（含伺服器名稱「Berth」）、qBittorrent 與 Prowlarr 的介面登入，以及讓 Berth 自己進得去的免密白名單與掛載的 API key。
-套件內 Jellyfin 的媒體庫照精靈的清單由 Berth 建，也算 Berth 擁有的物件。全域偏好不寫（brief §19 D1、D2，M4 票 32、33）。
+套件內 Jellyfin 的媒體庫照精靈的清單由 Berth 建，也算 Berth 擁有的物件。全域偏好不寫（[ADR-0013](docs/adr/0013-berth-manages-only-its-own-objects.md)）。
 套件內 Prowlarr 的「移除」只給 Berth 加的站（`added_sites`）；使用者自己加的、票 47 之前沒有紀錄的都不給（M4 票 66）。
 已經初始化過的（重裝保留 config）照樣是套件內，只是改成登入。
 _Avoid_: managed, built-in, ours
@@ -116,7 +116,7 @@ _Avoid_: managed, built-in, ours
 Jellyfin 的 API key「Berth」、媒體庫上的 Berth 路徑、使用者在頁 3 勾選後新建的媒體庫（M4 票 64）、`berth-*` 分類與它的目錄、使用者勾選加入的站、檢查用的暫時探測 torrent 與探測檔。
 執行期還有（M4 票 66）：送出的 torrent 帶 tag `berth`（刪 Job 時請 qBittorrent 只移除 torrent、不刪檔；勾了刪檔是 Berth 自己刪）；送單前 `ensure_category`，使用者刪掉的 `berth-*` 分類會照 Route 重建；登入過 Berth 的每位 Jellyfin 使用者在 Jellyfin 留一筆裝置「Berth」。
 入庫之後 Berth 也會請 Jellyfin 去看它寫的路徑：通知路徑、只刷新那個媒體庫；Berth 的路徑 Jellyfin 還沒列出過任何東西時是整台的全庫掃描（brief §16.4、§20.1，M4 票 62）。
-帳密、全域偏好、使用者原有的媒體庫與站都不碰；唯一例外是那台 Jellyfin 還沒跑過初始精靈時，由擁有者建它的管理員、跑完它的初始設定（語言、地區、遠端存取；不給伺服器名稱，brief §16.4、§19 D1）。
+帳密、全域偏好、使用者原有的媒體庫與站都不碰；唯一例外是那台 Jellyfin 還沒跑過初始精靈時，由擁有者建它的管理員、跑完它的初始設定（語言、地區、遠端存取；不給伺服器名稱，brief §16.4、ADR-0013）。
 Jellyfin 與 qBittorrent 必須與 Berth 同一台主機、把同一個父目錄掛在 `/data`。
 _Avoid_: external, remote, byo
 
