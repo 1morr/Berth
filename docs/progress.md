@@ -26,6 +26,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - session 紀錄一列、偏差一條都 ≤ 200 字（整行的字元數，Python `len`）。細節放票的 `## Comments` 或 `docs/research/`，這裡只寫結論與連結。
 - 每列、每條標里程碑：票欄寫 `<里程碑> <票號> <短標題>`（沒有票的工作省略票號），偏差寫 `- <日期> <里程碑> 票 <NN>：…`。
 - 偏差只記跨票的決定：推翻 plan / brief、改流程、影響後續的票。票內取捨記在票的 `## Comments`。
+- 大小：整檔 ≤ 20,000 字（`CLAUDE.md` ≤ 6,000 字），由 `tests/unit/test_reading_budget.py` 守。超過時，把進行中里程碑較舊的列與條也封存到 `docs/archive/<里程碑>.md`（同下面的做法），不要縮短措辭湊數。
 - 只留進行中的里程碑：驗收票收尾時，把那個里程碑的列與條搬到 `docs/archive/<里程碑>.md`，用 `scripts/docs_moved_lines.py` 證明沒丟（遺失 0），里程碑表那一列改成「已驗收（日期），封存於 `docs/archive/<里程碑>.md`」。
 
 ## Session 紀錄
@@ -37,6 +38,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 02 plan §11.1–§11.6 封存 | 六節搬到 `docs/archive/`（遺失 0 行），plan 留標題加一行；遺留 11 條歸 §11.9，判不出的列在票 Comments 問使用者 | `/implement` 票 07 |
 | 2026-10-30 | docs-diet 04a brief §19 改成 ADR | 54 列判定完：32 列寫成 16 篇 `docs/adr/`，20 列正文已有、2 列被取代；原文封存進 `docs/archive/`（遺失 0 行）；§19 留 ADR 索引；正文加 ADR 連結 | `/implement` 票 04b |
 | 2026-10-30 | docs-diet 06 development.md 拆分 | 834 行拆成主檔 152 行加 `docs/development/` 五個子檔（遺失 0 行；工具改成忽略連結的 `../` 深度）；引用改指子檔，連結檢查涵蓋子檔 | `/implement` 票 03a |
+| 2026-10-30 | docs-diet 07 閱讀預算閘門 | `test_reading_budget.py` 守 CLAUDE.md ≤ 6,000 字、progress.md ≤ 20,000 字；雙向變異（補到上限 + 1 紅、重排不紅）跑過；做法寫進〈寫法與封存〉 | `/implement` 票 03a |
 
 ## 偏差與決定
 
