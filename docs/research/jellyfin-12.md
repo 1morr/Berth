@@ -647,3 +647,55 @@ movies/Berth Movie Plan (2019) [tmdbid-27205]/
   Berth 現行命名在 12.0.0 與 12.1.0 **沒有插件就合併成 1 個 Episode、多個 MediaSources**，版本標籤變成「去掉共同前綴」的部分。【實測 + 原始碼 + 文件】
 - **MergeVersions**：有 `12.0.0`（`targetAbi 12.0`），真環境已裝且 Active；12.x 上對 Berth 的樹是空跑，不需要，也不建議裝；10.10 / 10.11 仍需要。【實測 + 原始碼】
 - **必改**：多版本相關的事實（brief、PRODUCT、README）、劇集版本標籤的預覽、精靈第 3 步重試遇到 403。**建議**：依版本拿掉插件流程、寫明支援版本、釘 image 大版本線、多集檔衝突的規則。
+
+
+## 從 brief 搬來（§20.1）
+
+從 design-brief §20.1 搬來（原文逐字，brief 內只留結論與連結）。
+
+### 20.1 Jellyfin 命名、extras、字幕、多版本、API
+
+來源：jellyfin.org 官方文件、api.jellyfin.org OpenAPI、jellyfin GitHub issues。標「未證實」者需實測。
+
+**命名**
+
+- 劇集資料夾 `Series Name (2018) [tmdbid-12345]`，年份與 ID 皆可選但官方建議加；可疊多個 ID。季資料夾必須是 `Season NN`（不可 `S01`），Specials 放 `Season 00`。集檔名支援 `S01E01`、`S01E01-E02`、`S02E03 Part 1`。（[identifiers](https://jellyfin.org/docs/general/server/metadata/identifiers)、[shows](https://jellyfin.org/docs/general/server/media/shows)）
+- 純數字或數字開頭的劇名會讓 metadata 搜尋失敗（[#15860](https://github.com/jellyfin/jellyfin/issues/15860)）→ 用 `[tmdbid-…]` 鎖定可迴避。
+- 集號後面接方括號 tag 曾造成 AniDB 插件誤判（[anidb#11](https://github.com/jellyfin/jellyfin-plugin-anidb/issues/11)）；**核心解析器沒有這個問題**：方括號與 `+` 不會滲進 Series 或 Episode 名稱，Jellyfin 根本不從檔名取集標題（2026-09-07 實測，§20.6）。
+- 檔名中的 ` - ` 會觸發「多版本」regex：沒有 Season 資料夾時不同集會被誤併為版本（[#7855](https://github.com/jellyfin/jellyfin/issues/7855)）。本系統一律有 Season 資料夾，§7.1 的格式已實測無誤（§20.6）。
+- Extras 子資料夾名：`extras`、`behind the scenes`、`deleted scenes`、`interviews`、`scenes`、`samples`、`shorts`、`featurettes`、`clips`、`other`、`trailers`、`theme-music`、`backdrops`；**劇集層與季層都可放**。也支援 `-trailer`、`-short`、`-extra` 等檔名後綴。（[_video-external-extras.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-extras.md)）
+- 空的 `.ignore` 檔會讓整個資料夾被掃描排除；10.11 起非空 `.ignore` 支援 gitignore 語法。（[excluding-directory](https://jellyfin.org/docs/general/server/media/excluding-directory)）
+
+**外掛字幕**
+
+- 格式 `<影片名>.{flags}.{language}.{ext}`，flags 有 `default`、`forced`、`sdh`/`cc`/`hi`，另可放自由文字標題，例如 `… S01E01 Title.commentary.ja.aac`。（[_video-external-streams.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-streams.md)）
+- **中文語言碼是已知痛點**：`chi`/`zh`/`zho`/`zh-hk` 只被辨識為泛「中文」，`cht`/`zh-cn`/`zh-cht` 不被辨識（[#6302](https://github.com/jellyfin/jellyfin/issues/6302)）。`zh-Hant`/`zh-Hans` **只有 10.11 認得**（顯示為 Chinese (Traditional) / (Simplified)），10.10 完全不認、退化成「未定義」（2026-09-07 實測，§20.6）。
+- 沒有可靠的語言碼能區分繁簡。**已實測採用**：語言用 `zh`，繁簡放自由文字標題欄位 —— `<stem>.CHT.zh.ass` 在 10.10 顯示為 `CHT - Chi - ASS - 外部`、在 10.11 顯示為 `CHT - Chinese - ASS - 外部`，自由文字排在最前面，兩個版本都分得出繁簡（§20.6）。
+
+**多版本**
+
+- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含**方括號與 `+` 已實測可用**（§20.6）；**標籤內含中文在 12.x 已實測是純 tag**（中文組名 `喵萌奶茶屋`，`docs/research/jellyfin-12.md`；10.10 / 10.11 未測，本系統只支援 12 以上）。
+- **劇集原生多版本在 10.x 不可靠**（12.0 起原生支援，§20.9）：10.8 起要求每集自己一個子資料夾才會視為版本，且社群回報同一集兩個檔案通常變成重複條目而非版本選單（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[discussion#16063](https://github.com/orgs/jellyfin/discussions/16063)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論（10.x）：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
+- MergeVersions 插件持續維護到 10.11 與 12.0（12.0.0 版 `targetAbi 12.0`；12.x 上對本系統的樹是空跑、不裝，§20.9），透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統用 Jellyfin 的排程任務 API 觸發（任務名已實測，§20.7）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
+
+**API**
+
+- `GET /Library/VirtualFolders` 回傳 `Name`、`Locations[]`、`CollectionType`（movies / tvshows / music / mixed …）、`ItemId`、`LibraryOptions`（含 `TypeOptions[].MetadataFetchers`，可用來偵測 TVDB 插件）。
+- 觸發掃描：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}` 做路徑級通知；`POST /Library/Refresh` 是全庫掃描。沒有「掃描單一資料夾」的專用端點。**`UpdateType` 不影響行為**：`LibraryController.PostUpdatedMedia` 對每一條都呼叫 `ILibraryMonitor.ReportFileSystemChanged(path)`，不看型別（2026-09-23 讀 jellyfin master 的原始碼，<https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs>）。所以 rematch 拆掉的舊路徑照樣以 `Created` 通知（M2 票 08）。【原始碼】
+- **路徑通知對「從來沒掃到過內容」的媒體庫無效**（2026-09-15 對 `lscr.io/linuxserver/jellyfin:latest` = **12.0.0** 實測，並查核 master 的 [`FileRefresher.GetAffectedBaseItem`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/FileRefresher.cs)）：等 `LibraryMonitorDelay`（預設 60 秒）之後，它從通知的路徑往上找第一個已存在的 item；初次掃描時是空的媒體庫資料夾不會成為 item（log：`Library folder "/data/library/tv" is inaccessible or empty, skipping`），於是找不到、**不做事也不寫 log**，而 `POST` 照樣回 204。套件內的媒體庫一開始一定是空的，所以**第一次入庫一定踩到**。實測三個媒體庫送了三輪通知，四分鐘後仍是 0 個 item。這條與 `EnableRealtimeMonitor` 無關——`ReportFileSystemChanged` 不看它（同日查核 [`LibraryMonitor`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/LibraryMonitor.cs)）。
+- **只刷新一個媒體庫：`POST /Items/{媒體庫 ItemId}/Refresh?metadataRefreshMode=Default&imageRefreshMode=Default`**（2026-10-13 對 12.1.0 實測加查核 v12.1 原始碼，M4 票 62，`scripts/experiments/jellyfin_scan_scope.py`）。OpenAPI 上和刷新、掃描有關的只有它、`POST /Library/Media/Updated` 與 `POST /Library/Refresh` 三支；它沒有 `Recursive` 參數，但對媒體庫用不著：`ProviderManager.RefreshItem` 遇到 `CollectionFolder` 時對它的每個**實體資料夾** `ValidateChildren`（遞迴，[`ProviderManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Providers/Manager/ProviderManager.cs) `RefreshCollectionFolderChildren`）。網頁控制台媒體庫卡片的「掃描媒體庫」送的就是這一支加兩個 `Default`（[`LibraryCard.tsx`](https://github.com/jellyfin/jellyfin-web/blob/master/src/apps/dashboard/features/libraries/components/LibraryCard.tsx) 的 `mode: 'scan'`、[`refreshdialog.js`](https://github.com/jellyfin/jellyfin-web/blob/master/src/components/refreshdialog/refreshdialog.js)；它另帶的 `Recursive: true` 伺服器不收）——Berth 照它的慣例。收下就回（204，0.08 秒），排進 Jellyfin 的刷新佇列；新的集與新的劇約 2 秒出現，**同時放進另一個媒體庫的檔案沒被掃到**。
+- **它只認得 Jellyfin 已經有的實體資料夾**：實體資料夾是全庫掃描驗證根目錄時建的，而那時是空的資料夾直接略過、不建成 item（[`Folder.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Controller/Entities/Folder.cs) `IsLibraryFolderAccessible`：「Library folder … is inaccessible or empty, skipping」）。所以**第一次掃描時是空的路徑，之後放了檔案，單一刷新與路徑通知都看不到它**：實測空的電影媒體庫刷新後 90 秒、再送路徑通知後 90 秒都是 0 個 item；兩個路徑的媒體庫刷新時，有內容的那個路徑的新集 2 秒出現，空的那個路徑的新劇一直沒有。**只有全庫掃描建得出它**（`LibraryManager.ValidateTopLibraryFolders` 只由全庫掃描與新增、移除媒體庫呼叫）；那之後同一個路徑再放檔，單一刷新 2 秒就看到。2026-09-15 那一次「對媒體庫 id 呼叫只刷新那一個 item、不找新的子資料夾」量的是空的媒體庫，結論寫錯了範圍。**Berth 怎麼判斷**：Jellyfin 已經在 Route 的寫入目標底下列出過東西（Series 或 Movie 的 `Path`）就只刷新那個媒體庫，否則跑全庫掃描——在空的媒體庫第一次入庫、既有 Jellyfin 的媒體庫剛加上 Berth 路徑時都是後者。
+- `POST /Library/Refresh` 在請求裡**等整次掃描做完**（[`LibraryController.RefreshLibrary`](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs) `await ValidateMediaLibrary`），**掃的是整台伺服器的所有媒體庫**。要「現在掃」又不把呼叫端卡住，用內建排程任務 **`RefreshLibrary`**（「Scan Media Library」／「重新掃描媒體庫」）：`POST /ScheduledTasks/Running/{id}` 收下就回；id 從 `GET /ScheduledTasks` 以 `Key` 找（12.0.0 實測 `7738148ffcd07979c7ceb148e06b3aed`）。它同樣掃整台（12.1.0 實測另一個媒體庫的新檔一起被掃到，四個小媒體庫 4 秒跑完）。**還在跑時再送一次是空操作**：一樣回 204，`ScheduledTaskWorker.ExecuteInternal` 對執行中的任務丟例外而不排隊（[`ScheduledTaskWorker.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ScheduledTasks/ScheduledTaskWorker.cs)）。
+- `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）**注意**：取集時不要用 `parentId=<series>` —— 10.11 在第一次掃描後對「已被 provider 認出來的」Series 會回 0 筆，`/Shows/{id}/Episodes` 同樣回 0，要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。12.0.0 沒有重現（2026-09-15，§20.8）。
+- **`DELETE /Items/{id}` 會刪除磁碟檔案**（`DeleteFileLocation = true`），本系統絕不呼叫它。（[LibraryController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs)）
+- 登入 `POST /Users/AuthenticateByName` 回 `AccessToken`、`ServerId`、`User`；`POST /Auth/Keys` 建 API key。
+- 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 **都能開到詳細頁**，前端會正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
+- **`serverId` 可以不帶**：12.0.0 上登入後直接開 `{server}/web/#/details?id={seriesId}`（沒有 `serverId`）照樣畫出該作品的詳細頁與季列（2026-09-15 playwright 實測，Series `大熊餐廳`）。10.10 / 10.11 沒有測過不帶的形式。Berth 產生的連結不帶它（票 13）。
+- **`GET /Items` 的每一筆都帶 `ServerId`，Episode 另帶 `SeriesId` 與 `SeasonId`**，不必另外在 `fields` 要（2026-09-15 對 12.0.0 實測）。反查一集時順手就知道它屬於哪個 Series，媒體庫的深連結靠它開到作品而不是某一集（票 13）。
+- **剛掃進來的 item 有一段時間還沒認完**（2026-09-26 試跑環境，12.1，BLACK TORCH 一季 12 集；記錄在 `docs/archive/m3.md` 同日「M3 後的全面審查」）：`GET /Items` 已經列出這個 Episode、`Path` 對得上，但 `Name` 是作品名、`ParentIndexNumber` / `IndexNumber` 是空的，所屬 Series 沒有 `ProviderIds.Tmdb`；同一個 item 之後讀回 `Episode S01E10`、Series 帶 Tmdb。這一段落在新檔案觸發的重掃上，試跑量到的上界是入庫後約 12 分鐘（那是下一次反查碰巧讀到的時間，不是 Jellyfin 真正花的時間）。反查因此先問「認完了沒」再比（`resolver.still_identifying`，M4 票 02）。
+- Webhook 插件有 `ItemAdded` / `ItemDeleted`，但走排程批次且社群長期回報不可靠（[#252](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/252)、[#367](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/367)）→ 支持 §9 以排程對帳為主。
+
+**Provider**
+
+- 內建劇集 provider 預設 TMDb（另有 OMDb 與 .nfo）；TheTVDB、AniDB、AniList 都是插件。TVDB 與 TMDB 混用時 Specials 編號錯配有實例（[#13294](https://github.com/jellyfin/jellyfin/issues/13294)）；多 provider 同時啟用時鎖定 ID 也可能被覆寫（[#16268](https://github.com/jellyfin/jellyfin/issues/16268)）→ 支持 §10 單一 TMDB。
+- AniDB / AniList 插件的編號語意沒有文件 → 不納入第一階段。

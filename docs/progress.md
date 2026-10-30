@@ -39,6 +39,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 04a brief §19 改成 ADR | 54 列判定完：32 列寫成 16 篇 `docs/adr/`，20 列正文已有、2 列被取代；原文封存進 `docs/archive/`（遺失 0 行）；§19 留 ADR 索引；正文加 ADR 連結 | `/implement` 票 04b |
 | 2026-10-30 | docs-diet 06 development.md 拆分 | 834 行拆成主檔 152 行加 `docs/development/` 五個子檔（遺失 0 行；工具改成忽略連結的 `../` 深度）；引用改指子檔，連結檢查涵蓋子檔 | `/implement` 票 03a |
 | 2026-10-30 | docs-diet 07 閱讀預算閘門 | `test_reading_budget.py` 守 CLAUDE.md ≤ 6,000 字、progress.md ≤ 20,000 字；雙向變異（補到上限 + 1 紅、重排不紅）跑過；做法寫進〈寫法與封存〉 | `/implement` 票 03a |
+| 2026-10-30 | docs-diet 03a brief §20.1–§20.7 壓縮 | 七節留結論加來源，細節搬進 `docs/research/`（三個新檔、四個補〈從 brief 搬來〉；遺失 0 行）；brief 1,875 → 1,615 行；§20.7 只縮 11% | `/implement` 票 03b |
 
 ## 偏差與決定
 
