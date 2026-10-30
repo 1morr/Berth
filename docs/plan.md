@@ -987,45 +987,69 @@ Session 以 httpOnly cookie（`berth_session`）承載，`SameSite=Strict`、`Pa
 
 | 服務 | Image | 掛載 | 備註 |
 | --- | --- | --- | --- |
-| `berth` | `ghcr.io/<owner>/berth` | `${CONFIG_ROOT}/berth:/config`、`${DATA_ROOT}:/data`、`${CONFIG_ROOT}/prowlarr:/ext/prowlarr:ro` | port `${BERTH_PORT}:8383`；`PUID` / `PGID` / `TZ`，加上 `JELLYFIN_PORT`、`QBITTORRENT_WEBUI_PORT`（深連結的 port、套件內 qBittorrent 的位址，`config.py`）與 `HOST_DATA_ROOT: ${DATA_ROOT}`（既有服務的補法印出它，M4 票 63；`tests/unit/test_deploy_mounts.py` 守著它與 berth 掛在 `/data` 的是同一個值）；唯讀掛 Prowlarr 設定以讀取其 API key |
+| `berth` | `ghcr.io/<owner>/berth` | `${CONFIG_ROOT}/berth:/config`、`${DATA_ROOT}:/data`、`${CONFIG_ROOT}/prowlarr:/ext/prowlarr:ro` | port `${BERTH_PORT}:8383`；環境變數 `PUID` / `PGID` / `TZ`、`JELLYFIN_PORT`（深連結的 port）、`QBITTORRENT_WEBUI_PORT`（套件內 qBittorrent 的位址，`config.py`）、`HOST_DATA_ROOT: ${DATA_ROOT}`（既有服務的補法印出它；`tests/unit/test_deploy_mounts.py` 守它與掛在 `/data` 的是同一個值）；唯讀掛 Prowlarr 設定以讀取其 API key |
 | `qbittorrent` | `lscr.io/linuxserver/qbittorrent` | `${CONFIG_ROOT}/qbittorrent:/config`、`${DATA_ROOT}:/data`；預置腳本以頂層 `configs` 寫進 `/custom-cont-init.d/10-berth.sh`（`mode: 0555`） | port `${QBITTORRENT_WEBUI_PORT}`（WebUI）、`${QBITTORRENT_BT_PORT}`（BT，TCP 與 UDP），**兩者都是內外兩側同一個號碼**，並設成 `WEBUI_PORT` / `TORRENTING_PORT`；預置腳本見 §9.2 |
-| `jellyfin` | `lscr.io/linuxserver/jellyfin:version-12.1ubu2604`（釘在 12.1 這條線，brief §19；票 14b 改的） | `${CONFIG_ROOT}/jellyfin:/config`、`${DATA_ROOT}:/data` | port `${JELLYFIN_PORT}:8096` |
+| `jellyfin` | `lscr.io/linuxserver/jellyfin:version-12.1ubu2604`（釘在 12.1 線，[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)） | `${CONFIG_ROOT}/jellyfin:/config`、`${DATA_ROOT}:/data` | port `${JELLYFIN_PORT}:8096` |
 | `prowlarr` | `lscr.io/linuxserver/prowlarr` | `${CONFIG_ROOT}/prowlarr:/config` | port `${PROWLARR_PORT}:9696` |
 
-- 選 linuxserver 系列 image 的理由：四個容器都支援 `PUID` / `PGID` / `UMASK`，檔案擁有者一致；qBittorrent 官方 image 沒有這兩個變數（brief §20.7）。
-- compose network `berth` 指定固定子網 `172.28.0.0/16`，`berth` 容器再固定在 `172.28.0.2`（`ipv4_address`），qBittorrent 的免密白名單就寫這一個位址的 `/32`。**白名單不能放整個網段**：Docker Desktop 把發佈 port 進來的流量的來源位址改寫成閘道 `172.28.0.1`，而閘道也在網段內，開放整段等於 LAN 上任何人都能免密打 qBittorrent 的 API（2026-09-07 實測，見 brief §20.7）。動態配發用 `ip_range: 172.28.1.0/24` 隔開，`berth` 的固定 IP 才不會被先啟動的容器領走。
-- 三個外部服務在 compose 內各有 healthcheck（qBittorrent 打 WebUI 首頁、Jellyfin `/health`、Prowlarr `/ping`）；`berth` 的 healthcheck 在 image 的 `HEALTHCHECK` 裡，用 venv 的 python 打自己的 `/api/health`。
-- image 是多階段 build：`node:24-slim` 產出前端靜態檔 → `python:3.13-slim` 用 uv 把 venv 建在 `/app/.venv` → runtime 只複製 venv 與 `dist`。非 root 執行：入口腳本以 root 起，用 `usermod` / `groupmod` 把內建的 `berth` 使用者對到 `PUID` / `PGID`，遞迴 chown `/config`，再 `setpriv` 降權 exec。`/data` 只在它還是空目錄時接手擁有者（Docker 替 bind mount 新建的目錄是 `root:root`），已經有內容的媒體根一律不碰。
-- `.env.example`：`DATA_ROOT`、`CONFIG_ROOT`、`PUID=1000`、`PGID=1000`、`UMASK=022`、`TZ=Asia/Taipei`、五個對外 port（`BERTH_PORT=8383`、`JELLYFIN_PORT=8096`、`QBITTORRENT_WEBUI_PORT=8080`、`QBITTORRENT_BT_PORT=6881`、`PROWLARR_PORT=9696`）、`COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr`。沒有任何秘密要填。compose 裡每個 port 變數都有同值的預設，舊的 `.env` 照樣能用；`tests/unit/test_deploy_ports.py` 守著五個變數都在、都被用到、兩個傳給 `berth`、qBittorrent 內外一致。
-- **`.env` 只放 Berth 在容器裡看不到的宿主端事實，也就是這五個 port**（brief §19 2026-09-24）；服務位址與憑證、下載目錄與媒體庫根、Route、對外網址、磁碟門檻都在精靈與設定頁。套件內 Jellyfin 的深連結（brief §12 推導第 3 條）用 `JELLYFIN_PORT`，不從 `base_url` 取 port——那是容器內的 8096。
-- `jellyfin`、`qbittorrent`、`prowlarr` 各掛在同名 profile 下，`berth` 永遠啟動；已有某服務的人把它從 `COMPOSE_PROFILES` 拿掉，在精靈那一頁選「既有」（§9.3、§9.5）；選既有時那一頁只說套件內那一台用不到了，要拿掉哪幾個在完成頁照整份選擇說一次（M4 票 103），忘了拿掉也不致命。
-- **容器名加 `berth-` 前綴**（brief §19 2026-09-29，M4 票 16）：`container_name` 是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`，`berth` 維持；compose 服務名（也就是 compose 網路上的 DNS 名 `jellyfin`、`qbittorrent`、`prowlarr`）不變。同一台主機上既有的容器多半就叫那三個名字，沒有前綴時撞名會讓 `docker compose up -d` 連 `berth` 在內整套都起不來；撞 port 仍可能發生，只有那一台起不來（票 16 實測，brief §20.14）。`tests/unit/test_deploy_names.py` 守著容器名、服務名、profile 與下一條的 `extra_hosts`。
-- **`berth` 服務帶 `extra_hosts: ["host.docker.internal:host-gateway"]`**（M4 票 16）：Linux 上 Berth 才連得到宿主上的既有服務；Docker Desktop 本來就有這個名字（§9.5〈連線位址〉）。
-- Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 會以 9p/drvfs 掛進容器；實測 NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，`docs/guide/requirements.md` 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設即可。
+**Image 與網路**
+
+- 選 linuxserver 系列 image：四個容器都支援 `PUID` / `PGID` / `UMASK`，檔案擁有者一致；qBittorrent 官方 image 沒有這兩個變數（brief §20.7）。
+- compose network `berth` 固定子網 `172.28.0.0/16`，`berth` 容器固定在 `172.28.0.2`（`ipv4_address`）；動態配發用 `ip_range: 172.28.1.0/24` 隔開，固定 IP 才不會被先啟動的容器領走。
+- qBittorrent 的免密白名單只寫 `172.28.0.2/32`，**不能放整個網段**：Docker Desktop 把發佈 port 進來的流量的來源位址改寫成閘道 `172.28.0.1`，閘道也在網段內，開放整段等於 LAN 上任何人都能免密打 qBittorrent 的 API（brief §20.7）。
+- 三個外部服務在 compose 內各有 healthcheck（qBittorrent 打 WebUI 首頁、Jellyfin `/health`、Prowlarr `/ping`）；`berth` 的 healthcheck 在 image 的 `HEALTHCHECK`，用 venv 的 python 打自己的 `/api/health`。
+- image 是多階段 build：`node:24-slim` 產出前端靜態檔 → `python:3.13-slim` 用 uv 把 venv 建在 `/app/.venv` → runtime 只複製 venv 與 `dist`。
+- 非 root 執行：入口腳本以 root 起，用 `usermod` / `groupmod` 把內建的 `berth` 使用者對到 `PUID` / `PGID`，遞迴 chown `/config`，再 `setpriv` 降權 exec。`/data` 只在它還是空目錄時接手擁有者（Docker 替 bind mount 新建的目錄是 `root:root`），已經有內容的媒體根一律不碰。
+
+**`.env` 與 profile**（[ADR-0009](adr/0009-deploy-compose-and-env.md)）
+
+- `.env.example` 的內容：`DATA_ROOT`、`CONFIG_ROOT`、`PUID=1000`、`PGID=1000`、`UMASK=022`、`TZ=Asia/Taipei`、五個對外 port（`BERTH_PORT=8383`、`JELLYFIN_PORT=8096`、`QBITTORRENT_WEBUI_PORT=8080`、`QBITTORRENT_BT_PORT=6881`、`PROWLARR_PORT=9696`）、`COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr`。沒有任何秘密要填。
+- compose 裡每個 port 變數都有同值的預設，舊的 `.env` 照樣能用；`tests/unit/test_deploy_ports.py` 守五個變數都在、都被用到、兩個傳給 `berth`、qBittorrent 內外一致。
+- **`.env` 只放 Berth 在容器裡看不到的主機端事實，也就是這五個 port**。服務位址與憑證、下載目錄與媒體庫根、Route、對外網址、磁碟門檻都在精靈與設定頁。套件內 Jellyfin 的深連結（brief §12 推導第 3 條）用 `JELLYFIN_PORT`，不從 `base_url` 取 port——那是容器內的 8096。
+- `jellyfin`、`qbittorrent`、`prowlarr` 各掛在同名 profile 下，`berth` 永遠啟動。已有某服務的人把它從 `COMPOSE_PROFILES` 拿掉，在精靈那一頁選「既有」（§9.3、§9.5）。選既有時那一頁只說套件內那一台用不到了；要拿掉哪幾個，在完成頁照整份選擇說一次。忘了拿掉不致命。
+
+**容器名與主機**
+
+- **容器名加 `berth-` 前綴**：`container_name` 是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`，`berth` 維持；compose 服務名（compose 網路上的 DNS 名 `jellyfin`、`qbittorrent`、`prowlarr`）不變。
+  - 同一台主機上既有的容器多半就叫那三個名字，沒有前綴時撞名會讓 `docker compose up -d` 連 `berth` 在內整套都起不來。
+  - 撞 port 仍可能發生，只有那一台起不來（brief §20.14）。
+  - `tests/unit/test_deploy_names.py` 守容器名、服務名、profile 與下一條的 `extra_hosts`。
+- **`berth` 服務帶 `extra_hosts: ["host.docker.internal:host-gateway"]`**：Linux 上 Berth 才連得到宿主上的既有服務；Docker Desktop 本來就有這個名字（§9.5〈連線位址〉）。
+
+**平台與發佈**
+
+- Windows：`DATA_ROOT=C:\Berth\data` 這種路徑可直接寫在 `.env`，Docker Desktop 以 9p/drvfs 掛進容器；NTFS bind mount 的硬鏈接可用（brief §20.7）。exFAT 隨身碟不支援硬鏈接，`docs/guide/requirements.md` 明說。`PUID` / `PGID` 在 Windows 掛載上沒有意義，保留預設。
 - 只有一份 `docker-compose.yml`，Linux 與 Windows 共用；`.env.example` 內附兩種路徑寫法的註解。
-- **部署只有 compose 檔加 `.env`**（M4 票 71，brief §19 E4 2026-10-09 推翻 release 的 zip，§20.18；票 97 恢復兩個純文字附件）：使用者把兩個檔貼進 Unraid 的 Compose Manager（檔案在隨身碟上）或放進任何資料夾，旁邊不放別的東西。所以 compose 裡的宿主路徑一律是 `${CONFIG_ROOT}` / `${DATA_ROOT}` 開頭或絕對路徑（`tests/unit/test_deploy_mounts.py` 守著），預置腳本內嵌在 compose 裡（§9.2），`.env.example` 寫明 Unraid 上兩個根要用絕對路徑。Release 頁放 CHANGELOG 那一段，並附上這兩個檔（`docker-compose.yml`、`example.env`，取自那一版的 tag；M4 票 97 推翻票 71 的不附檔案，§20.17）；README 連到 `github.com/1morr/Berth/releases/latest/download/<附件名>`，永遠是最新正式版的附件，不指 `main`（compose 才不會比 `:latest` 的 image 新）、也不寫死版號（發版不必改連結）；`tests/unit/test_readme_docs.py` 守著連結的寫法與 release workflow 附上的兩個檔。需要 Compose 2.23.1 以上（`configs.content`）。
-- incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`（`PathSettings` 的預設值，沒有 API 或 UI 改它，M4 票 22）；媒體庫路徑讀自 Jellyfin。要換宿主上的位置改 `DATA_ROOT` 掛到哪裡，容器路徑不變。
+- **部署只有 compose 檔加 `.env`**（ADR-0009；brief §20.17、§20.18）：使用者把兩個檔貼進 Unraid 的 Compose Manager 或放進任何資料夾，旁邊不放別的東西。
+  - compose 裡的宿主路徑一律是 `${CONFIG_ROOT}` / `${DATA_ROOT}` 開頭或絕對路徑（`tests/unit/test_deploy_mounts.py` 守）；預置腳本內嵌在 compose 裡（§9.2）；`.env.example` 寫明 Unraid 上兩個根要用絕對路徑。
+  - Release 頁放 CHANGELOG 那一段，並附 `docker-compose.yml` 與 `example.env`（取自那一版的 tag）。README 連到 `github.com/1morr/Berth/releases/latest/download/<附件名>`：永遠是最新正式版，不指 `main`（compose 才不會比 `:latest` 的 image 新）、不寫死版號（發版不必改連結）。`tests/unit/test_readme_docs.py` 守連結的寫法與 release workflow 附上的兩個檔。
+  - 需要 Compose 2.23.1 以上（`configs.content`）。
+
+**目錄**
+
+- incomplete / complete 根目錄固定在 `/data/torrent/{incomplete,complete}`（`PathSettings` 的預設值，沒有 API 或 UI 改它）；媒體庫路徑讀自 Jellyfin。要換宿主上的位置改 `DATA_ROOT` 掛到哪裡，容器路徑不變。
 - 目錄骨架由 Berth 啟動時建立：`<complete root>/..`、`<incomplete root>`。套件內 Jellyfin 的媒體庫目錄（`<library_root>/<資料夾>`，預設 `movies` / `tv` / `anime`）在精靈的媒體庫與路徑頁建立媒體庫之前才建（§9.4 第 4 步）。
 
 ### 9.2 預置設定
 
 預置的原則：**只放沒有它 Berth 就進不去的東西**，其餘一律由精靈按鈕經 API 完成、按前顯示差異、可重按。
 
-**qBittorrent**（compose 頂層 `configs.qbittorrent-preseed` 的 `content`，Compose 建容器時寫成 `/custom-cont-init.d/10-berth.sh`、`mode: 0555`；linuxserver 的 `custom-cont-init.d` 機制，在服務啟動前執行，只跑有執行位元的檔，brief §20.18）：在 `/config/qBittorrent/qBittorrent.conf` 的 `[Preferences]` 補上這兩個鍵，**已經有值的鍵一律不動**：
+**qBittorrent**：compose 頂層 `configs.qbittorrent-preseed` 的 `content`，Compose 建容器時寫成 `/custom-cont-init.d/10-berth.sh`（`mode: 0555`）。linuxserver 的 `custom-cont-init.d` 在服務啟動前執行，只跑有執行位元的檔（brief §20.18）。腳本在 `/config/qBittorrent/qBittorrent.conf` 的 `[Preferences]` 補上這兩個鍵，**已經有值的鍵一律不動**：
 
 ```ini
 WebUI\AuthSubnetWhitelistEnabled=true
 WebUI\AuthSubnetWhitelist=172.28.0.2/32
 ```
 
-- 為什麼非預置不可：4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 沒有 docker socket 讀不到；要使用者去 `docker logs` 抄密碼正是要避免的事。
-- 為什麼是「缺鍵才補」而不是「檔案不存在才寫」：linuxserver image 自己的 `init-qbittorrent-config` 排在 `init-custom-files` 之前，已經把 `/defaults/qBittorrent.conf` 複製進 `/config`，所以「不存在」永遠不成立；整份覆蓋會掉 `LegalNotice\Accepted=true` 這類讓 qbittorrent-nox 起得來的鍵（2026-09-07 實測，brief §20.7）。缺鍵才補同時滿足冪等：重建容器不會改動任何既有內容。
 - 白名單是 `/32` 不是整個網段，理由見 §9.1；`berth` 的 IP 由 compose 固定並用環境變數 `BERTH_IP` 傳給腳本，避免兩處寫死。
-- `WebUI\ServerDomains` **不預置**：linuxserver image 的預設值是 `*`，Host 檢查本來就過得了；寫成 `qbittorrent` 確實讓 `http://qbittorrent:8080` 通過，但同時讓使用者從 `localhost:8080` 與 `127.0.0.1:8080` 都吃 401（2026-09-07 實測，brief §20.7）。也**不需要** `HostHeaderValidation=false`。
-- **qBittorrent 的 WebUI port 內外兩側一起換**：Host 檢查除了網域還比對 port，`*` 也不放過 port 不符。發佈成 `18080:8080` 之類的偏移，使用者開 `localhost:18080` 會直接吃 401，而原因只寫在容器 log 裡（brief §20.7）。所以 compose 以 `QBITTORRENT_WEBUI_PORT` 同時設發佈的兩側與 `WEBUI_PORT`，compose 內網上那一台也跟著在這個 port；Berth 從同名環境變數組出偵測的位址（`http://qbittorrent:<port>`），判成套件內之後第 4 步與 Route 檢查連的是判定記下的那一條。**不預置 `HostHeaderValidation=false`**：它是防 DNS rebinding 的那一道，內外一致之後本來就用不到。README 的疑難排解有這一條。
-- save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、temp path 都**不預置、也不套用**（M4 票 22、32）：Berth 送單時逐個 torrent 帶 `autoTMM=true`，路徑與未完成目錄開在 Berth 的分類上，所以全域預設值不影響正確性。密碼不預置，由精靈 qBittorrent 頁設（§9.3）。
+- 為什麼非預置不可：4.6.1 起首次啟動的隨機密碼只印在容器 log，Berth 沒有 docker socket 讀不到；要使用者去 `docker logs` 抄密碼正是要避免的事。
+- 為什麼是「缺鍵才補」而不是「檔案不存在才寫」：linuxserver image 的 `init-qbittorrent-config` 排在 `init-custom-files` 之前，已經把 `/defaults/qBittorrent.conf` 複製進 `/config`，「不存在」永遠不成立；整份覆蓋會掉 `LegalNotice\Accepted=true` 這類讓 qbittorrent-nox 起得來的鍵（brief §20.7）。缺鍵才補同時滿足冪等：重建容器不改動任何既有內容。
+- **`WebUI\ServerDomains` 不預置**：linuxserver image 的預設值是 `*`，Host 檢查本來就過得了；寫成 `qbittorrent` 讓 `http://qbittorrent:8080` 通過，卻讓使用者從 `localhost:8080` 與 `127.0.0.1:8080` 都吃 401（brief §20.7）。也不需要 `HostHeaderValidation=false`。
+- **WebUI port 內外兩側一起換**：Host 檢查除了網域還比對 port，`*` 也不放過 port 不符。發佈成 `18080:8080` 之類的偏移，使用者開 `localhost:18080` 會直接吃 401，原因只寫在容器 log（brief §20.7）。所以 compose 以 `QBITTORRENT_WEBUI_PORT` 同時設發佈的兩側與 `WEBUI_PORT`，compose 內網上那一台也在這個 port。Berth 從同名環境變數組出偵測的位址（`http://qbittorrent:<port>`）；判成套件內之後，第 4 步與 Route 檢查連的是判定記下的那一條。**不預置 `HostHeaderValidation=false`**：它是防 DNS rebinding 的那一道，內外一致之後用不到。README 的疑難排解有這一條。
+- save path、autoTMM（`DisableAutoTMMByDefault` 預設 `true`，即關閉）、temp path 都**不預置、也不套用**：Berth 送單時逐個 torrent 帶 `autoTMM=true`，路徑與未完成目錄開在 Berth 的分類上，全域預設值不影響正確性。密碼不預置，由精靈 qBittorrent 頁設（§9.3）。
 - 使用者在 qBittorrent 介面改任何東西都可以，Berth 不看它的全域偏好。
-- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（M4 票 53 實跑，brief §20.7）。所以套件內 qBittorrent 回 `auth_required` 時，補法說 WebUI「選項 → WebUI → 驗證」那一格（`connection.fix.whitelist`），不給重啟指令：重啟只在兩個鍵整個不在設定檔裡時有用，照著按多半白跑。兩個鍵整個不在的那一種是 compose 沒完整複製、腳本根本沒跑（漏了 `configs` 或 `mode`，log 只有一行 `is not an executable file`）：同一句接著說重新完整複製 compose、`up -d --force-recreate qbittorrent`（M4 票 71）。
+- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（brief §20.7）。所以套件內 qBittorrent 回 `auth_required` 時，補法說 WebUI「選項 → WebUI → 驗證」那一格（`connection.fix.whitelist`），不給重啟指令：重啟只在兩個鍵整個不在設定檔時有用。
+  - 兩個鍵整個不在，是 compose 沒完整複製、腳本根本沒跑（漏了 `configs` 或 `mode`，log 只有一行 `is not an executable file`）：同一句接著說重新完整複製 compose，再 `up -d --force-recreate qbittorrent`。
 
 **Prowlarr**：不預置。Berth 從唯讀掛載的 `/ext/prowlarr/config.xml` 讀 `<ApiKey>`（Prowlarr 首次啟動自動產生）；讀不到時精靈退回手動貼上。也支援 `PROWLARR__AUTH__APIKEY` 環境變數的部署方式。
 
@@ -1033,110 +1057,373 @@ WebUI\AuthSubnetWhitelist=172.28.0.2/32
 
 ### 9.3 精靈流程
 
-> **2026-09-29 改（brief §19「精靈改為每個服務手動選擇」）**：Jellyfin、qBittorrent、Prowlarr 各一頁，使用者手動選「套件內」或「既有」，拿掉「偵測服務」那一步，Prowlarr 與索引站併成一頁。M4 票 15 做完了選擇、服務頁與頁序，16（compose）、17（既有服務防呆）、08（媒體庫與路徑按鈕觸發）、09（Prowlarr 頁的索引站先測再加）也做完了。舊的八步全文見 `git show bd4216b:docs/plan.md` 的 §9.3。
->
-> 2026-09-26 改：第 1 步改為連 Jellyfin、成為擁有者（M4 票 06）；套件內 qBittorrent / Prowlarr 的介面登入在各自的泊位（M4 票 07）。
-
-每一頁都是冪等的 `services/setup.py` 命令；精靈跑完之後設定頁呼叫的是同一批命令（票 06i）。**來源由使用者逐服務選**（brief §16.3）：三個服務每一個不是「套件內」就是「既有」，可任意組合。選擇存在 `settings.setup.choices`（§2.1），從此「套件內 / 既有」由它決定——取代偵測判定（票 15 刪掉了判定、釘住、`POST /setup/detect` 與 `probe_targets`）。票 05 的保護（既有服務不寫帳密、不改全域偏好、不替它加站）保留，改讀選擇；**還沒選的服務，寫入它的命令一律拒絕**。
+來源由使用者逐服務手動選，不偵測（brief §16.3、[ADR-0010](adr/0010-wizard-manual-service-selection.md)）。五頁加完成頁：
 
 | 頁 | 泊位 | 做什麼 | 要先有 |
 | --- | --- | --- | --- |
-| 1 | Jellyfin（BTH 1） | 選來源 → 建立管理員或以管理員登入 → 擁有者 → Berth 建 API key（既有那一台位址與管理員帳密同一張表單、一顆「連線並登入」，M4 票 67）；建套件內那一台的管理員時預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」（M4 票 40） | 無 |
-| 2 | qBittorrent（BTH 2） | 選來源 → 測試（連線、版本，再問它看不看得到 `/data`，M4 票 46）→ 套件內設介面登入（那一台自己設過就不必）；既有填位址與 WebUI 帳密，測試通過即完成 | 擁有者 |
-| 3 | 媒體庫與路徑（BTH 3） | 套件內建媒體庫 / 既有加 Berth 路徑 → Route → 每一條檢查；套件內第一次來、清單沒改過時進頁自動跑（M4 票 43），其餘按鈕觸發 | Jellyfin、qBittorrent |
+| 1 | Jellyfin（BTH 1） | 選來源 → 建立管理員或以管理員登入 → 擁有者 → Berth 建 API key。既有那一台的位址與管理員帳密同一張表單、一顆「連線並登入」。建套件內那一台的管理員時，預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」 | 無 |
+| 2 | qBittorrent（BTH 2） | 選來源 → 測試（連線、版本，再問它看不看得到 `/data`）→ 套件內設介面登入（那一台自己設過就不必）；既有填位址與 WebUI 帳密，測試通過即完成 | 擁有者 |
+| 3 | 媒體庫與路徑（BTH 3） | 套件內建媒體庫 / 既有加 Berth 路徑 → Route → 每一條檢查；套件內第一次來、清單沒改過時進頁自動跑，其餘按鈕觸發 | Jellyfin、qBittorrent |
 | 4 | Prowlarr 與索引站（BTH 4） | 選來源 → 套件內讀 key、設介面登入、挑索引站 / 既有貼 API key | 擁有者 |
-| 5 | TMDB（BTH 5） | 貼 key、測試（「前往下一個泊位」自己先測，M4 票 67） | 擁有者 |
-| 6 | 完成 | 說出跳過了什麼、之後拿什麼登入（套件內兩台的介面登入照 `web_ui_login_by_berth` 說是精靈設的、原本就有的或還沒設，M4 票 40；沿用 Jellyfin 帳密的照 `web_ui_login_reuses_owner` 說與 Jellyfin 同一組，M4 票 68）；選了既有而套件內那一台還解得到主機名時，再給一次 `COMPOSE_PROFILES` 與 `docker compose stop`（M4 票 68） | 前五頁照頁序再問一次（M4 票 31） |
+| 5 | TMDB（BTH 5） | 貼 key、測試（「前往下一個泊位」自己先測） | 擁有者 |
+| 6 | 完成 | 說出跳過了什麼、之後拿什麼登入（套件內兩台的介面登入照 `web_ui_login_by_berth` 說是精靈設的、原本就有的或還沒設；沿用 Jellyfin 帳密的照 `web_ui_login_reuses_owner` 說與 Jellyfin 同一組）；選了既有而套件內那一台還解得到主機名時，再給一次 `COMPOSE_PROFILES` 與 `docker compose stop` | 前五頁照頁序再問一次 |
 
-媒體庫與路徑維持在 qBittorrent 之後、Prowlarr 之前（票 06d：它只依賴 Jellyfin 與 qBittorrent，掛載設錯是最常卡住的地方，越早知道越好；2026-09-29 使用者再確認）。Berth 沒有自己的帳號頁（brief §11）。
+- 每一頁都是冪等的 `services/setup.py` 命令；精靈跑完之後設定頁呼叫的是同一批命令。
+- **來源由使用者逐服務選**：三個服務每一個不是「套件內」就是「既有」，可任意組合。選擇存在 `settings.setup.choices`（§2.1），從此「套件內 / 既有」由它決定；沒有偵測判定、釘住、`POST /setup/detect` 與 `probe_targets`。
+- 既有服務不寫帳密、不改全域偏好（[ADR-0013](adr/0013-berth-manages-only-its-own-objects.md)）；站只在使用者按了加入時才加；**還沒選的服務，寫入它的命令一律拒絕**。
+- 媒體庫與路徑維持在 qBittorrent 之後、Prowlarr 之前：它只依賴 Jellyfin 與 qBittorrent，掛載設錯是最常卡住的地方，越早知道越好。
+- Berth 沒有自己的帳號頁（brief §11）。
 
-**服務頁的共同形狀**（頁 1、2、4）：
+#### 服務頁的共同形狀（頁 1、2、4）
 
-- **頁首二選一**「套件內」/「既有」（Seerr 與 Sonarr / Radarr 都是手動填、按 Test，brief §20.14），**不預選**（票 15 shape 時使用者拍板：猜錯正是這一輪要消滅的；`.scratch/m4/service-pages-shape.md`）。點「套件內」就存下並測（唯讀；qBittorrent 的測試另外放一個當場收掉的探針，M4 票 46）；點「既有」只展開表單，按「測試連線」才存下並測（頁 1 還沒有擁有者時是「連線並登入」，見頁 1）。**送出那一刻就有回饋**（M4 票 80）：回來之前被點的那一格就是選中的、另一格停用（不送第二個），套件內第一次選先畫一條與連線列同形的「測試中」加一句「正在設定套件內 X，連線測試中…」，讀屏由同一個宣告區說；回來時同一個位置換成結果。「既有」旁說明條件：Jellyfin 與 qBittorrent 要與 Berth 在同一台主機、把 Berth 的 `DATA_ROOT` 也掛在容器路徑 `/data`（只能是 `/data`，原本的掛載不動；`DATA_ROOT` 要建得了硬鏈接；缺某類型的媒體庫時頁 3 勾了才建，M4 票 64，brief §16.4；Prowlarr 不碰檔案，沒有這一條）；選既有時說出要從 `.env` 的 `COMPOSE_PROFILES` 拿掉哪一個（`jellyfin` / `qbittorrent` / `prowlarr`），**再給 `docker compose stop <服務>`**——只改 profile 再 `up -d` 停不掉已經在跑的那一台（M4 票 36，brief §20.14）。不叫人改 compose 檔，忘了也不致命。**「既有」說明不多說撞 port 的事**（票 16 實測，brief §20.14）：容器名改成 `berth-*` 之後撞名消失；撞 port 時只有撞到的那一台套件內容器停在 `created`，`berth` 與其他照常跑，而那個錯在終端機跑 `docker compose up -d` 時就印出來、早於精靈，起不來的正是使用者不要的那一台。疑難排解寫在 README〈部署疑難排解〉。
-- **套件內**連 compose 主機名（`services.clients.bundled_targets`：`jellyfin:8096`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}`、`prowlarr:9696`；compose 服務名不變，容器名是 `berth-*`，票 16）。**既有**填位址與那個服務要的憑證（brief §16.4）：Jellyfin 的管理員帳密、qBittorrent 的 WebUI 帳密、Prowlarr 的 API key。填 `localhost` / `127.0.0.0/8` / `::1` 時位址欄下就地提示改成 `host.docker.internal` 或區網 IP（票 17：前端純函式 `setup/loopback.ts` 的 `pointsAtBerth`，只提示不擋；測過的位址是它而連不上時，補法說同一句——那時位址欄下的提示收起來，不說兩遍，M4 票 63）。「既有」選項旁說出版本下限（Jellyfin 12.0 連到 12.0 發佈文的升級注意、qBittorrent 4.4、Prowlarr 1.3.2）。
-- **進頁只查主機名**（M4 票 30，brief §19 2026-10-01）：服務頁進頁問 `GET /setup/compose`，Berth 解析三個套件內主機名（`services.setup.resolve_bundled` → `adapters.dns`，`getaddrinfo`、10 秒上限、逾時當作解得到），**不造任何服務的 client**——這不算「選之前發請求」。解不到的那一張「套件內」卡片寫「這套 compose 的 X 沒在跑」：停掉的容器與不在 `COMPOSE_PROFILES` 裡的服務一樣解不到、分不出來（不另外掛 Docker socket），所以還沒選時卡片下兩種補法都給——停了就 `docker compose start X`，不在就加回 `COMPOSE_PROFILES` 那一行再 `docker compose up -d`（M4 票 35）；不預選、不停用，選了照舊測（紅的是下面那一條 `not_deployed`，補法是同一組 `bringBack`）。那一頁每次選擇或重新測試完都再問一次主機名，起回來、測試轉綠之後加註跟著消失（票 35）。
-- **選完就測，不偵測；既有的測過才存**（M4 票 45，審計 E-6；Home Assistant 驗過才 `create_entry`、Sonarr 存之前再測一次）：套件內的選擇與連線資訊先存進 `settings.setup` 與它們平常住的 `settings.services.*` 再測（位址是 compose 主機名，啟動中要靠存下的選擇輪詢）。**既有的先拿表單那一組測，測過才存**；測不過是 400 `connection_failed`（`setup.ConnectionFailedError`），**什麼都不存**——選擇、連線、那一頁的結果、Route 檢查都還是原本的，已經有一台測過的在用時照舊用它（原本測不過也存，設定頁打錯一個字下載就停擺）；那一次的結論帶在拒絕的 `attempt`（`ServiceOut` 同形狀），前端標在欄位上（見〈錯誤分三層〉）。改一格再按靠的是表單留著打的字。例外是擁有者之後 Jellyfin 的 `auth_required`：說的是 Berth 自己那一把 key，位址已經答出 ServerId，照樣存下（擁有者重新登入要有地方送）。套件內測不過要分開說：
-  - 主機名解不到（`socket.gaierror`）＝那個服務的容器沒在跑或不在 compose 裡（停掉的容器不在 compose 的網路上，解不到的是同一件事，M4 票 25 實測 B9）→ 兩種補法並列（分不出是哪一種，M4 票 35）：停了就 `docker compose start qbittorrent`；不在的話把 `qbittorrent` 加回 `.env` 的 `COMPOSE_PROFILES` 再 `docker compose up -d`。
-  - 解得到但連不上、回 503「載入中」、回的東西不像它自己（`protocol_mismatch`）＝容器還在啟動 → 照舊每 3 秒再測、到 2 分鐘上限（M3 票 06g 量到的三種樣子），逾時給重試；過了上限仍是 `protocol_mismatch` 就說那個主機名上是別的東西。
-  - **位址的協定寫錯不是連不上**（M4 票 25）：`https://` 打到講 http 的 port（Jellyfin、Prowlarr 回 HTTP 400，握手讀到它而 `WRONG_VERSION_NUMBER`；qBittorrent 不回、握手逾時，鏈上是 `SSLWantReadError`，brief §20.14；`adapters.http.SchemeMismatchError`）是 `scheme_mismatch`，說「這個 port 講的是 http」；沒寫 `http://`（httpx 的 `UnsupportedProtocol`，`SchemeMissingError`）是 `scheme_missing`。兩者都不等、當場紅，纜繩的代碼同名。反方向（`http://` 打到講 https 的 port）認不出來：實測伺服器只是重設連線，與別的斷線分不開，照舊是 `unreachable`。位址欄送出前先驗（`setup/address.ts`），照 *arr 不自動補，直接說要以 `http://` 或 `https://` 開頭。
-  - 既有的當場給結論。版本低於下限（Jellyfin 12.0、qBittorrent 4.4、Prowlarr 1.3.2，brief §20.14）停在這一頁，說出「至少要 X，這一台是 Y」（Jellyfin 附升級注意，brief §20.9）。**Jellyfin 的版本在測試時就擋**（`version_unsupported`，M4 票 18；原本到登入才 502），套件內那一台太舊也當場紅；登入那一段的版本閘門留著當後備。
-- **表單跟著那一台的狀態走，選擇決定 Berth 之後寫什麼**（brief §16.3）：套件內但已經初始化過（重裝保留 config、精靈中途中斷）時，Jellyfin 已有管理員就給登入表單、不再建立；qBittorrent / Prowlarr 已設過介面登入就不強迫再設（「已設過」各怎麼認由票 15 查證）。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣給建立管理員的表單——它上面沒有任何人的帳號可以蓋掉。
-- **點選才算數，方向鍵只是瀏覽**（M4 票 09，票 15 audit 的 P2）：radio 在兩格間移動就會選中，而選中「套件內」原本就是一次存下與測試。只有指標點下去的那一次當場送（方向鍵與空白鍵不送 pointerdown）；鍵盤選到的是草稿，另給一顆「使用套件內的 X」。草稿由頁面持有（`setup/choiceDraft.ts`），**標題與 lede 在確認之前就跟著草稿**。
-- **回頭改選擇**（票 15 shape 時使用者拍板）：**Jellyfin 在擁有者成立之後鎖住來源與伺服器**——擁有者是那一台上的帳號，換一台等於換擁有者；改來源後端回 409（`ChoiceRefusal.jellyfin_owned`）。位址換得了，**但只能換到同一台**（M4 票 18）：新位址先測，`/System/Info/Public` 的 `Id`（ServerId，brief §20.15）要與擁有者成立時記下的（`settings.setup.owner.jellyfin_server_id`）相同才存，然後以 Berth 的 key 打 `/Auth/Keys` 重驗——被撤了測試紅在 `auth_required`，擁有者就地重新登入換一把（頁 1 與設定頁都有那一格）；另一台是 409 `other_server`；既有的新位址不回答是測過才存的 400 `connection_failed`、標在位址欄（M4 票 45），套件內 compose 位址換了而不回答、或原本那一台認不出（票 18 之前的擁有者）是 409 `unverified`；都什麼都不存。存下的位址後面換成另一台時，重新測試紅在 `other_server`。票 18 之前成立、沒記 ServerId 的擁有者，下一次測到的那一台就記成它。設定頁的連線區走同一支，但不畫二選一：Jellyfin 是唯讀摘要（來源、位址、版本、狀態與換不了的理由），既有的那一台多一顆「改位址」（M4 票 78，`settings/JellyfinConnection.tsx`）。**qBittorrent / Prowlarr 隨時可改**：這一頁有結果時換另一格先就地確認（`ConfirmPanel`：焦點進去、Esc 收起回到原本那一格；換成既有時後果、表單與取消在同一個確認區，按「測試連線」就是確認），說出這一頁要重做，並**列出 Berth 在原本那一台擁有的物件**（M4 票 47，brief §16.4〈換一台時〉：`berth-*` 分類與 torrent 數、Berth 加的站、Berth 設的介面登入；連不到時列 Berth 記得的，可一鍵移除空的 `berth-*` 分類；`setup/LeftoverList.tsx`）。頁 2 選過一台就先確認（原本看頁 2 的纜繩，既有的那一台自票 38 起沒有纜繩，換走時一句都不說）；換了之後那一頁的結果清掉重做（`setup._start_over`）。qBittorrent 換了，所有 Route 的檢查標成未檢查、逐條明細一起清掉（`routes.forget_route_checks`：分類建在原本那一台上；明細留著的話畫面寫「尚未檢查」卻仍是上一台的通過數與錯誤，M4 票 24），頁 3 要重新檢查才走得過去。
-- **錯誤分三層**（M4 票 21，`.scratch/m4/error-layers-shape.md`，照 Home Assistant config flow 與 *arr：已知的失敗用代碼、前端翻成人話、掛在造成它的那一條上）：後端的失敗回封閉的代碼加少量參數——纜繩是 `SetupStep.failure` / `params`（`StepFailure`，`services.steps.failure_of` 照 adapter 的例外分類；Berth 自己判斷的丟 `StepFailedError` 帶代碼），連線測試是 `ConnectionReason`，讀清單與讀差異的失敗是 `failure`，對 Berth 自己的請求照狀態碼分（`requestProblem`：送不到 / 422 / 409 / 其餘；**門禁的 401 / 403 各一句**，M4 票 25：前端的 client 一律帶 CSRF 標頭，所以擁有者成立之後的 403 只會是不是管理員——讀不到精靈狀態時說「精靈只有 Jellyfin 管理員能繼續」並給登出；擁有者成立之前的 403 是門禁的「先做完頁 1」，當成與現狀衝突；401 時這一頁還以為沒有擁有者（頁 1 的擁有者表單）就是擁有者在別處搶先成立了，其餘是登入失效，兩者都給登入連結，按下先重問 `/health` 再去登入頁）。畫面一句人話（發生什麼）在上，補法照代碼與來源挑（`docker compose` 指令只給套件內那一台），**原文、HTTP 狀態、端點、`dev=` / `inode=` 收進預設收起的「技術細節」**（`TechnicalDetails`；通過的那一列在行尾，失敗的在補法之後）。認不出的例外是 `unexpected`，原文照樣在技術細節。`web/eslint.config.js` 擋精靈、設定頁與健康頁把 `.error` / `.message` 直接畫成子節點（`src/lint.test.ts` 雙向驗）。**換來源、換位址、按重新測試、改表單的一格時，那一格上一次的結果與錯誤不畫**（`SetupPage.forgetResults`、測試中不畫上一次的理由、介面登入的 `edits`）；服務頁上選著、還沒存下的那一格由 `SetupPage` 持有，泊位板跟著它。**qBittorrent 的版本也在測連線時擋**（`version_unsupported`，與 Jellyfin、Prowlarr 同一個時機；原本連線卡綠、泊位卡紅）。**連錯預警**：`SetupQbittorrent.auth_failures` 以位址為鍵，數 Berth 對那個位址連續幾次帳密不被接受（同一個位址改帳密再測接著數、成功歸零、別的位址各數各的；**跟著位址、不跟著選擇**——測不過的那一次不存，次數照樣記，M4 票 45），第 3 次起在密碼欄下說「再錯 N 次會被封」；被封了說等 60 分鐘或重啟 qBittorrent（brief §20.2）。**既有表單測不過的錯誤標在欄位上**（M4 票 45，Sonarr 與 Home Assistant 的 `errors[欄位]`；`setup/signals.connectionField`）：位址類（`unreachable`、`not_deployed`、`scheme_*`、`protocol_mismatch`，填 localhost 的那一句也在這裡）標在位址欄，憑證類（`auth_required`、`ip_banned`、`api_key_missing`）標在憑證欄——qBittorrent 帳號、密碼兩格都標、那一句寫一次、兩格的 `aria-describedby` 都指到它；Jellyfin 的表單只有位址，它的 `auth_required` 不算。其餘（版本太舊等）在表單裡、送出鍵之上。那一句與連線卡紅燈的補法同一句；下面說「這一組沒有存下」（已經有一台在用時說它照舊在用）與預設收起的技術細節。連線卡（`TestLine`）畫的是存下的那一台。
-- **「已經設過介面登入」怎麼認**（票 15 查證，brief §20.14）：qBittorrent 的 `app/preferences` 讀不到密碼，只有 `web_ui_username`——全新的那一台是 `admin`，所以帳號不是 `admin` 就當設過了，還是 `admin` 的一律當沒設過；Prowlarr 的 `config/host` 全新是 `authenticationMethod: none`、帳號空白。設過的那一台，頁上說出帳號、給「更換登入」，不強迫再設。
+**來源二選一**
 
-1. **Jellyfin**（擁有者；M4 票 06、15，brief §11、§19；Seerr 的慣例：先連媒體伺服器，它的管理員就是擁有者）。
-   - 選來源、測試照上面的共同形狀。沒有「先探一下 Jellyfin」：選了才測。
-   - **還沒跑過初始精靈**（`StartupWizardCompleted=false`）：「建立 Jellyfin 管理員」，帳號、密碼、再輸入一次（前端比對，Jellyfin 自己的啟動精靈也是），文案說明 Berth 沒有自己的帳號、之後登入 Berth 就用這一組。**已經有管理員**：「用你的 Jellyfin 管理員登入」，密碼一次（`SetupStatus.owner_signs_in`）。
-   - **既有那一台：位址與管理員帳密同一張表單、一顆「連線並登入」**（M4 票 67，審計 C1；Seerr 也是伺服器位址與管理員帳密同一頁、一顆 Sign In）：`POST /setup/owner/existing` → `services.setup.sign_in_existing_owner` 先照共同形狀選既有、測過才存（`choose_service`），已經有管理員就以剛測過的那一台當目標接著 `claim_owner`——一次呼叫，原本是測試連線、長出登入表單、再按登入。錯誤照 M4 票 45 分到欄位：位址那一段（400 `connection_failed` 的 `attempt.reason`，`connectionField`）標位址，`invalid_credentials` 標帳密兩格（送出時空著的那一格照空說：「都要填」或「不收沒有密碼的擁有者」），版本太舊、不是管理員、Jellyfin 那一段失敗在表單層級。帳密被拒時位址已經存下（測過才存），畫面上照留同一張表單、位址帶回來。**還沒初始化的那一台照原本的分支**：只存下選擇、不登入，表單換成下面的建立管理員（語言與遠端存取要在畫面上問），所以帳密可以留空。套件內那一台已經有管理員（重裝保留 config）時照舊是另一張登入表單。
-   - `POST /setup/owner` → `services.setup.claim_owner` → `jellyfin.claim_jellyfin`：建立跑 §9.4 的前六步（版本、語言、建管理員、遠端存取、完成初始精靈、登入換 API key），登入跑版本與登入換 key。**帳密一律交給 Jellyfin 驗**，即使已經有一把 key；不是管理員就拒絕（`OwnerRefusal`：`jellyfin_unresolved` 409、`invalid_credentials` 401、`not_administrator` 403、`jellyfin_failed` 502 帶原文、`target_changed` 409）；**帳密只送到畫面上測過的那一台**（M4 票 28）：body 帶 `GET /setup/status` 那一列的 `base_url` 與 `server_id`（`ServiceTest.server_id`，brief §20.15），與存下的選擇不同（或存下的那一次沒記到 ServerId）就 409、Jellyfin 一個請求都不發；比對過之後序列釘在那個位址上（`JellyfinTarget`），第一步答的 ServerId 不同就停在帳密那幾步之前，收尾時位址已被改選就不把換來的 key 寫給新位址，寫擁有者時在寫鎖內再比一次位址，也再確認還沒有擁有者（兩人同時送，後寫的 409 `owner_exists`）。前端的表單以 `base_url`＋`server_id` 為 key：畫面重讀到另一台時打好的帳密清掉；`target_changed` 的那一句旁有「重新測試」；**擁有者已經在是 409 `owner_exists`**，登入中的管理員也一樣（M4 票 18）——換 key 的重新登入是 `POST /setup/jellyfin/connect`。建立時的語言與地區、遠端存取由 body 帶（`ui_culture` / `metadata_language` / `metadata_country` / `remote_access`，§9.4 第 2、5 步）。成功時 `settings.setup.owner` 記 Jellyfin 的 user id、名字與 ServerId，並發 Berth session（與 `/auth/login` 同一種 cookie，`auth.open_session`）。Berth 自己建 API key「Berth」（§9.4 第 7 步），使用者不必貼 key。畫面照〈前端的導覽〉停在結果上（「擁有者：名字」），按了才去下一頁。
-   - **帳密不存下來**：只用來建立或登入 Jellyfin、換 API key（M4 票 06 的 migration `e8a1c4d7b293` 拿掉了舊的 `SetupAdmin`）。
-   - **門禁**（`api/gate.py`）：擁有者成立之前只開精靈的開場（`SETUP_OPENING_PATHS`：`GET /setup/status`、`GET /setup/compose`、`POST /setup/services/jellyfin` 與它的 `/test`、`POST /setup/owner` 與 `POST /setup/owner/existing`），其餘 `setup/*` 一律 403「先做完第 1 步」；成立之後整組要管理員的 session，與精靈跑完之後相同。**安全面**：誰先到誰建立，與 Jellyfin 自己的啟動精靈、Seerr 一樣；但成立之前 `/auth/login` 不發 session（`auth.OwnerPendingError` → 403，M4 票 28，實測 E12：頁 1 一選 Jellyfin 就存了位址，那一台上任何帳號原本都能直接拿 session），帳密也只送到畫面上那一台（見上）。匿名的 `GET /health` 帶 `owner_established`，前端守衛靠它在精靈跑完之前就把沒有 session 的人送去 `/login?redirect=/setup`。
-   - **既有那一台成為擁有者之後就問它看不看得到 `/data`**（M4 票 63，審計 C7）：原本要到頁 3 加 Berth 路徑才紅。`claim_owner` 拿剛換到的 key 對畫面上那一台再測一次（`_test_jellyfin` → `_jellyfin_sees`：在共用根目錄寫探測檔、`ValidatePath`，與頁 3 同一種問法，當場收掉），看不到是 `data_unseen`，頁 1 那一條紅、補法同頁 2 與頁 3（`connection.fix.jellyfinDataUnseen` + `MountFix`）。**不擋頁 2**：擁有者照樣成立（頁 1 的事是擁有者），頁 3 照舊擋。之後每次重新測試、設定頁換位址都問；`ValidatePath` 要管理員憑證，所以擁有者成立之前不問；套件內那一台由 compose 掛 `/data`，不問。
-   - 設定頁換位址或 key 仍然是登入換 key（`POST /setup/jellyfin/connect`）。套件內 Jellyfin 的媒體庫不在這一頁建，在頁 3。
-2. **qBittorrent**：
-   - **套件內**：設介面登入，全域偏好一個都不寫（M4 票 32，brief §19 D2）——與既有那一台只差這一格。Berth 自己靠免密白名單連它（§9.2），用不到這組登入。
-     - **介面登入可「沿用 Jellyfin 帳密」**（brief §16.3、§19 2026-09-29；M4 票 80 起不預設勾）：勾選時帳號是擁有者的名字，密碼請使用者**打一次**，Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入；不勾就是票 07 的欄位——帳號預填擁有者的名字、密碼打兩次。擁有者的名字不合 qBittorrent 的規則時那一格停用、說原因（`interfaceLogin.reuseUnfit`）。**頁 1 勾了「也用這組」時不問**（M4 票 40，brief §19 D4）：頁 1 建套件內 Jellyfin 的管理員時那一格預設勾著，密碼由 `SetupPage` 留在 React state（不寫 storage、不送給 Berth 存；重新整理就沒了），這一頁那一台還沒有 WebUI 帳號時自動送一次 `reuse_owner`（`interfaceLogin.useCarriedLogin`），欄位與主鍵換成「設定中」，設好之後只說「已沿用 Jellyfin 帳密（擁有者）」加「改用另一組」（打開自設的三格）；「已沿用」照後端記的 `web_ui_login_reuses_owner`，重新整理前後同一句（M4 票 104，推翻票 80 的 `CarriedLogin.inUse`），不看帳號。頁 1 的帳號與密碼照 qBittorrent 的規則邊打邊看（`reuseUnfit`），不合就勾不起來、帶不過來，這一頁不再看規則（M4 票 80）。Jellyfin 拒絕那一組（`owner_password`）時丟掉它、欄位打開在沿用那一格，頁 4 也不再自動送；同一個請求還在飛（走開又回來）時不重送。頁 4 套件內 Prowlarr 的介面登入同一套，送出中（Prowlarr 設完會自行重啟）「加入」與「之後再說」先停用。**必填**：不設的話使用者自己打開它的介面時只剩容器 log 裡每次重啟都換的臨時密碼。帳密跟著「設定介面登入」送（`POST /setup/qbittorrent/apply` 的 `login`）；不帶 `login` 是「登入照舊」，設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。**那一台自己就設過的**（重裝保留它的 config）在連線測試時就讀到帳號、記成 `skipped`（`qbittorrent.note_qbittorrent_login`，M4 票 38），測試通過即完成；**「設定介面登入」只在欄位開著時出現**（還沒設、或按了「更換登入」），沒有按下去什麼都不寫的「套用這 0 項」（brief §19 D5）。
-      - **照 qBittorrent 的規則先擋**（M4 票 26，brief §20.2）：帳號至少 3 字元、不能有冒號，密碼至少 6 字元；沿用時也檢查（Jellyfin 密碼太短、擁有者的名字不合就說不能沿用、請另設），設定頁的「更新登入」同一套。Berth **先送密碼、再送帳號**（5.2 帳號先寫、密碼後驗），兩個都進去了才記帳號；qBittorrent 仍回 400 時那一條是 `login_rejected`、原文進技術細節，欄位不收起來。
-     - **Berth 只記帳號與密碼的加鹽雜湊**（夠比對「已經是這一組」；票 15 把票 07 存的明文換掉，附 migration）。回頭看時欄位收起來、只說帳號是誰，按「更換登入」才打開。設定頁 → qBittorrent 的「介面登入」一區是一般的改帳密表單（M4 票 78：目前的帳號、帳號預填它、新密碼兩次、「儲存」；沒有「沿用」，`reuse_owner` 只剩精靈在送），`PUT /setup/qbittorrent/login`（`qbittorrent.set_interface_login`）只換登入。設定頁的介面登入那一區讀頁 2 的 `GET /setup/qbittorrent/diff`（路徑名是票 32 之前留下的）。
-   - **測試也問它看不看得到 `/data`**（M4 票 46，審計 P2-4）：連得上、版本夠之後，Berth 在共用根目錄（`routes.shared_root_of`，compose 裡的 `/data`）寫一個兩片的探測檔，請它停住校驗一次（`setup._data_sight`，頁 3 `download_visible` 那一支探針的 `unfinished=True`）。**校驗不完**：最後一片的雜湊對不上，看得到的那一台停在 50%，所以不觸發「torrent 完成時執行外部程式」（brief §20.2 對 4.4.5 與 5.2.3 實測）；5.x 的「加入時執行外部程式」照樣觸發一次，既有那一台的說明寫明：獨立一行，表單打開時在測試鍵上方、收起時在測試結果底下（`ServiceChoice` 的 `ProbeNote`，M4 票 104；套件內不提，同頁 3）。看不到是 `data_unseen`（讀不了 `data_unreadable`、一直排隊 `data_unsettled`），頁 2 紅、停在這一頁，補法與頁 3 那一條同一組（既有只多加一條 `/data`：`MountFix` 給 compose、`docker run` 與 Unraid 模板三種寫法，帶著 `host_data_root` 的值，M4 票 36、63）。既有表單測過才存（M4 票 45），這一種也是測不過、不存。Berth 自己沒有那個目錄或寫不進去時不問，留給頁 3 Berth 那一條（`directory_missing` / `berth_cannot_write`）。探針 torrent 與探測檔當場收掉。
-   - **既有**：位址 + WebUI 帳密 → 測試。一個全域鍵都不寫（M4 票 05，照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（M4 票 22：它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；原本的「temp path 未啟用只警告」一併撤掉），**測試通過就做完**（M4 票 38，brief §19 D5）：畫面上沒有確認鍵——原本的「確認，不改任何設定」按下去什麼都不寫，只是要人多按一次（照 Sonarr / Home Assistant「測試與儲存合一」的慣例）。沒有介面登入那一格，直接打 `apply` 帶了 `login` 回 422。
-   - Berth 的路徑全靠分類（建立時帶 save path 與未完成目錄）與逐個 torrent 的 `autoTMM=true`，所以全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。**套件內那一台同一條**（M4 票 32）：票 32 之前寫過的 `save_path` 與兩個 autoTMM 開關 Berth 沒存原值，不改回去；`setup.qbittorrent.steps` 裡那三條舊紀錄讀的時候丟掉（`SetupQbittorrent` 的寬鬆讀取，不寫 migration：下一次套用整份換掉）。頁 2 的纜繩只剩 `web_ui_password` 一條。
-3. **媒體庫與路徑**（票 06d 把它排在 qBittorrent 之後；票 08 改成按鈕觸發；M4 票 43 讓套件內第一次來自動跑）：
-   - **套件內 Jellyfin 的媒體庫由使用者列**（票 06f，Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：一張可編輯的清單，預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）；資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元），名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填；名稱與資料夾各自不可重複（不分大小寫）。規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號），停手就存。**已經在 Jellyfin 建好的列鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的——改名與刪除要去 Jellyfin，後端回 `built_changed`。媒體庫以第 1 頁存下的 API key 建（§9.4 第 1、4 步，`bootstrap_jellyfin`；沒有 key 就拒絕）。**沒有安裝插件的按鈕**（票 14b）。
-   - **既有 Jellyfin**：使用者勾選媒體庫，每個媒體庫從它回報的路徑裡選寫入目標；還沒有 Berth 路徑的，寫入目標多一個「新的 Berth 路徑」選項（§9.5），**按下「建立並檢查」時才加**、再建 Route（票 08 shape 時使用者拍板把確認併進同一個動作，`.scratch/m4/route-berth-shape.md`：沒有「確認加入」那種做了一半、走得過去的狀態）。預選的是 Berth 路徑（加過的話），否則只有一條路徑時是那一條（brief §4.3，票 06h）。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。勾了卻還沒選目標、或一個都沒勾時，主鈕擋住並說出還差哪一步。
-   - **Route**：每個選到的（套件內是清單上的，§9.5〈套件內的 Route 範圍〉）電影或劇集媒體庫各一個 Route，寫入目標取自 **Jellyfin 回報的** `locations`；slug 由媒體庫名稱算，空白換成 `-`（票 08；已經存在的 Route 與分類不改名）；**套件內改由使用者在清單上填的資料夾名算**（寫入目標的最後一段），媒體庫叫「電影」、資料夾填 films 時分類是 `berth-films`（M4 票 31）。套件內的 Route 照清單的順序建。**進這一頁不送任何寫入**（票 08：它會建媒體庫、加路徑、建分類、寫探測檔與硬鏈接測試檔，有副作用的動作由人按），**例外是套件內什麼都還沒做的那一次**（M4 票 43，brief §19 D7，`.scratch/m4/route-auto-run-shape.md`）：清單是預設（`GET /setup/jellyfin` 的 `bundled_default`）、一個都還沒建、沒有 Route、建媒體庫那一步從沒跑過、版本夠新、這一頁還沒做完時，進頁就照存下的清單送一次下面的整段（前端 `autoDock.startsOnItsOwn`；這一次不另外做進頁的重讀，整段自己先重讀），清單收起，工作面說一句為什麼沒按就開始了。跑過一次（哪怕紅了）、改過清單、既有 Jellyfin，一律等人按；**重裝**（清單上的已經建好、這個 Berth 卻從沒跑過建媒體庫那一步、還沒有 Route）時工作面說為什麼沒有自己開跑、要按「建立並檢查」（`autoDock.heldBack`，M4 票 68，審計 P2-11）。**進度靠輪詢已有的 `running`**（沒有 SSE）：Route 的每一條檢查開跑前把那一列寫成 `running` 並 commit（`routes._run_checks` 的 `progress`，總結的 `health_status` 跑完才換；健康頁與 Route 設定頁的重新檢查同一條路），頁 3 在送出中、或伺服器讀到建媒體庫那一步或某條纜繩還是 `running` 時每 1.5 秒重讀（跑到一半重新整理也接得上，而且不再自動送）；跑的時候這一輪的每條 Route 在按下那一刻就畫成一列，還沒建出來、還沒輪到的「等待中」，跑著的那一列色塊是「檢查中」、摘要說「第 k / 6 條 · 纜繩名」，建媒體庫那一段在列表上方是 Jellyfin 那一條纜繩（進行中）。一顆「建立並檢查」（有新的可建）/「重新檢查 N 條 Route」，上面一份「按下之後會」列出這一輪真的會做的事（建哪幾個媒體庫、在哪個媒體庫加哪一條路徑、建或核對幾個 `berth-` 分類、在幾個寫入目標寫測試檔）。按下之後照順序做（前端 `SetupPage` 的 `dock`，各段仍是各自的命令）：套件內重讀媒體庫 → 存清單 → 存下回來的清單上有還沒建的才 `bootstrap` → `POST /setup/routes`（M4 票 24）；既有先建勾了的新媒體庫（`POST /setup/jellyfin/libraries`，M4 票 64）→ 逐個加 Berth 路徑 → `POST /setup/routes`（新媒體庫的寫入目標取自建好之後 Jellyfin 回報的路徑）。**一段失敗就停**，後面的不送（建媒體庫或加路徑的失敗是 Jellyfin 那一份 `libraries` 那一步變紅，就地給一句人話與手動步驟，原文收進技術細節）。每個 Route 立即建立 qBittorrent category 並跑 §9.5 的每一項檢查；**每一條都綠燈**才走得到完成——紅的那個 Route 送單一定失敗（brief §4.4）。每條 Route 收成一列（`RouteRow`：健康、名稱、分類、寫入目標、「6 / 6 通過」），紅的那條自動展開、全過的收起；全過又沒有新的時，Route 列排在前、「重新檢查」降成次要排在後。健康頁與 Route 設定頁用同一個列元件。套件內的清單全部建好時收成一列（「媒體庫清單 · N 個已建立」），要加一個再展開。剖面只放 Route 列沒有的：兩個根目錄與這一輪將建立的 Route 寫到哪裡。
-   - **重跑只新增、不改不刪**（票 14）：已經有 Route 的媒體庫在勾選表上鎖住、它的選擇略過，slug 與整張表比；寫入目標已經被別的 Route（或同一批前面的選擇）佔用的選擇也略過，不回 422（票 14a）。重跑的意思只剩「補上新勾的、全部重驗」。精靈跑完之前新建的 Route 直接啟用（紅著就擋完成）；跑完之後重跑新建的**先停用建立，檢查綠了才啟用**（票 14a）。重讀既有 Route、`_plan` 與插入在同一把寫鎖裡。認媒體庫用 `ItemId`（沒有 id 的舊資料才用名字）。選錯了的出路是每條 Route 底下明確的刪除（`DELETE /setup/routes/{id}`，被引用時拒絕）；精靈跑完之後在 `/settings/routes` 逐條管理。
-4. **Prowlarr 與索引站**（併成一頁，brief §19 2026-09-29；票 15 併頁，票 09 做索引站那一半）：
-   - **套件內**：API key 讀自唯讀掛載的 `/ext/prowlarr/config.xml`（零輸入，§9.2），選了就讀、存進 `settings.services.indexer`，M1 的搜尋從同一個地方拿憑證；**每次「重新測試」都重讀**（M4 票 27：在 Prowlarr 重新產生 key 之後，那是畫面上唯一的出口；讀不到時不動存下的——那是使用者貼的），key 被拒的補法說掛載、不說 qBittorrent 的白名單；連線卡綠而站清單讀不到時這一頁說讀不到、給「重新讀取」（＝重新測試）；讀不到時先問匿名的 `/ping` 確認它在（M4 票 25：只有 Berth 時根本沒有那個容器，該說主機名解不到，不是缺 key），在才就地給貼 key 的欄位，貼了仍是套件內。**介面登入**與 qBittorrent 同一條規則（可「沿用 Jellyfin 帳密」、只存雜湊、必填），以 `config/host` 設 Forms 登入（回 202 後它會自行重啟，要等 `/ping` 回來）；**介面登入是自己的一區與按鈕**（M4 票 20：加站不該被登入欄擋住）：精靈與設定頁都走 `PUT /setup/indexers/login`（`indexer.set_interface_login`），「加入」不帶登入、只記那一條現在的狀態（設過 `skipped`、沒設過 `pending`）；套件內 Prowlarr 要那一條有結論這一頁才算做完（`_indexer_settled`）。那一台自己就設過介面登入的（重裝保留它的 config），連線測試時就記成 `skipped`（`indexer.note_instance_login`，M4 票 27：站都在了的話沒有東西可加，原本要到「加入」才記）。**站那一半是「Prowlarr 上至少一站」，不論是不是 Berth 加的**（M4 票 27：重裝保留 Prowlarr 設定時已有的站不在候選清單、加不了）：Berth 加站成功的纜繩，或最後一次連線測試數到的站數（加站與移除之後 `_recount` 跟著改）。這一頁還沒做完時，前進鍵的位置列出還差什麼（加站、介面登入），按了把焦點送到那一區（`indexerGaps`，條件照 `_indexer_settled`）；站數前端看這一次讀到的清單、後端看上一次連線測試記的數，清單上有站而記的是 0（使用者到 Prowlarr 自己的介面加了站）時前端自動重新測試一次（與頁 2 的票 25 同一個做法）。說明寫明必填與理由：現行版本的 Prowlarr 第一次打開介面就跳出關不掉的設定視窗（brief §20.14）。
-   - **主鍵**（M4 票 44，審計 E-5；既有的那一台 M4 票 67 起也有，審計 C3）：「測試推薦站，加入通過的」一次做完——`indexer.add_recommended_indexers`（`POST /setup/indexers/recommended`；既有的那一台不讀不寫 `config/host`，沒有登入那一條）測推薦清單上**還沒加入**的站（同 `verify_sites`），通過的逐站新增（同 `apply_default_indexers`），結論逐站記成纜繩：加進去 `ok`；測試就沒過 `failed`、不送新增；測過而新增被拒 `failed`。兩種沒加進去的靠 `SiteCheck.stage`（`test` / `add`，存在纜繩的 `params`）分開說——後者是 Prowlarr 加之前自己再連一次沒連上（審計實測 Internet Archive），畫面上單獨一段、不算已加入。結果照纜繩畫，重新整理還在。**Prowlarr 已經有站時不給這顆鍵**（重跑、重裝保留設定），後端也只碰還沒加入的站；新增前再讀一次清單，另一個分頁剛加的不重加。下面那一段（逐站測試與勾選、其他公開站）收進預設收起的「進階」，「加入」在那裡是次要的鍵。介面登入照舊是自己的一區（頁 1 帶過來的密碼自動送，M4 票 40），送出中主鍵停用；主鍵還在時套件內那一台登入的送出鍵是次要樣式（M4 票 119：一屏一顆調度黃）。 **推薦站不在 Prowlarr 的定義裡**（M4 票 73）：`IndexerSetup.unlisted` 列出推薦清單上、`indexer/schema` 與已加入的站裡都找不到的 `definitionName`。一個都不在（Prowlarr 連不上 `indexers.prowlarr.com`，只剩磁碟上的定義，brief §20.14）時主鍵的位置換成原因與下一步（套件內與既有都是）：網路通了按「重新讀取」（服務頁的重新測試，schema 每次現場重拿，不必重啟 Prowlarr）、連到 Prowlarr 的 System → Events、之後再說，「進階」照舊；只缺幾站時主鍵照舊測找得到的，結論裡多一行缺的那幾站。既有的那一台一站都沒有、推薦站又一個都不在時，`NoSites` 不畫，由同一段說「這一台沒有站、Berth 搜不到」並多給「到 Prowlarr 自己加站後重新讀取」（兩段各有一顆「重新讀取」，`NoSites` 又叫人在下面測推薦站，M4 票 73 合併票 67 時決定，`RecommendedSites.noRecommendedListed`）。
-   - **套件內的索引站（「進階」）**（票 09，`.scratch/m4/indexer-berth-shape.md`，使用者拍板三題：結果逐列行內、推薦在上其他公開站用搜尋叫出來、「已加入」一段在上）：「加站」一段是推薦清單 Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay（AniDex 拿掉了，brief §20.7）與「其他公開站」——`indexer/schema` 裡 privacy = public 的 torrent 站（依 `definitionName` 去重，usenet 不收），輸入名稱或選語言才列出來。**一站都不預勾，先測試通過才勾得起來**：「測試」是 `read` 命令 `indexer.verify_sites`（`POST /setup/indexers/test`，`indexer/test` 測還沒加入的定義，什麼都不建立，brief §20.7；一次最多 4 站併發），每一列一顆、推薦清單一顆「測試全部」。結果長在那一列：未測 / 測試中 / 通過 / 沒通過；沒通過是中性色塊加一句 i18n 理由（Cloudflare / 查無結果 / 連不上 / 其他，`SiteFailure`，由 Prowlarr 原文分出來），原文收進「技術細節」（M4 票 21 起與其他纜繩同一個元件）。清單上方一條摘要（`assigned` 色塊「N 站沒通過」+ 各理由的站數），**整段只有這一個 live 區**；紅色不用在這裡——一站沒通過不擋這一頁。「加入 N 個站」（套件內收在「進階」裡，是次要的鍵）只數勾著、還沒加的。加入是 `indexer` 新增（Prowlarr 加之前自己會再連一次，加不進去的回到沒通過、理由同一套，`IndexerSetupStatus.checks`）；**一站失敗不影響其他站**。私有 / 半私有站連到 Prowlarr 自己的介面去加：連結是**瀏覽器現在的主機名 + `PROWLARR_PORT`**（compose 傳給 Berth，同 Jellyfin 深連結；`setup/prowlarrWeb.ts`），給不出就不給。每一列顯示語言（BCP 47 代碼照 UI 語言換成語言名，`Intl.DisplayNames`）與定義自帶的英文說明（不翻）。
-   - **「已加入」與試搜，不要的移除**（票 06e、09）：Prowlarr 只搜得到已經加入的站（`indexerIds` 只認已加入的，brief §20.7）。「已加入」列出 Prowlarr 裡的**每一站**（Berth 加的、使用者在 Prowlarr 自己加的都算，`IndexerSetupStatus.sites`），每列一顆「搜尋」、段頭一顆「搜尋全部」共用一個關鍵字欄（預設留白）。試搜是 `read` 命令 `indexer.search_indexers`（`GET /setup/indexers/search?query=&indexer_id=`，不帶 id 是全部）：逐站各發一個 `GET /api/v1/search?indexerIds=<id>`、併發，一站失敗寫在那一站上；回每站筆數與前三筆標題。移除是 `indexer.remove_indexer`（`DELETE /setup/indexers/{id}`），就地確認，只對套件內、只對 **Berth 加的站**（`SetupIndexer.added_sites`，M4 票 66；使用者自己加的、票 47 之前沒有紀錄的回 422，列上說 Berth 沒有加這一站的紀錄、到 Prowlarr 移除）；最後一站也移除時這一頁回到未完成。
-   - **進頁只讀**（票 09）：精靈這一頁與設定頁的索引站分頁都只發 `GET /setup/indexers`（讀已加入的站、schema 與介面登入），不測任何一站、不送任何寫入。
-   - **既有**：Prowlarr 位址 + API key（M4 票 37 起只支援 Prowlarr，不再接任一 Torznab 端點）。**表單、測試那一條與補法是頁 1、2 那一份**（`ServiceChoice` 的 `ExistingForm` 與 `TestLine`，送 `POST /setup/services/prowlarr`，M4 票 39）：key 錯時與頁 1、2 同一個錯誤版面，有「測試結果」那一列；右欄的 API key 那一格跟著最近一次連線測試，連上才寫「已取得」、key 被拒寫「不被接受」、其餘是「已存下，還沒驗證」。設定頁的 Prowlarr 分頁同樣用連線區（`ServiceConnection`）。Berth 用使用者已有的索引站；「已加入」列出它已有的站與站數（既有 Prowlarr 讀 `GET /api/v1/indexer`），沒有移除，試搜照樣可用。**既有 Prowlarr 也有「加站」**（M4 票 20，brief §19 2026-09-30）：同一套先測再勾、按一次加入，按鈕旁寫明「會加進你的 Prowlarr（主機）：哪幾站」，不讀也不寫它的 `config/host`。**主鍵與套件內同一個條件**（M4 票 67，審計 C3）：一站都沒有時給「測試推薦站，加入通過的」，上面那一句列出推薦的站名與它的位址、說 Berth 不移除站；逐站測試與勾選收進「進階」，已經有站時只剩它。**一站都沒有時這一頁待處理**：連線纜繩是 `pending`（`indexer.existing_prowlarr_step`，三條入口共用），畫面說出下一步——到 Prowlarr 加站（連結是瀏覽器開得了的位址）後按「重新讀取」（就是服務頁的重新測試）、在下面加推薦站，或之後再說。加站與移除之後，連線測試記下的站數跟著清單（`_recount`），連線卡與泊位卡不再停在舊的數字。沒有介面登入那一格。
-   - **可以跳過**（「之後再說」，連介面登入一起）：沒有索引站只是搜尋不到東西。完成頁的那一句照 Prowlarr 上實際的站數說（M4 票 27：有站就說搜尋用得到它們，讀不到清單就說讀不到）。**精靈之後也有出口**（M4 票 61，審計 E3）：設定 → Prowlarr 頁尾的「不用 Prowlarr」（就地確認）寫的是同一個 `setup.indexer.skipped`（`POST /setup/indexers/skip`，`indexer.skip_indexers`，可逆）；不用時那一頁收成一塊說明加「改回使用 Prowlarr」，不讀站的清單（那要現場問 Prowlarr）。用不用由健康那一列的 `unused` 告訴前端：讀的時候從 `skipped` 算、不看紀錄，所以選下去的那一刻 BTH 4 就是「沒有使用」、不算降級；`health_checker` 不連它；搜尋回 `not_configured`，作品頁給「前往設定：Prowlarr」與同頁的「RSS 訂閱」兩條路。完成照頁序再驗時這一格算完成。既有 Prowlarr 再測一次連線會清掉 `skipped`（`_existing_indexer_step`，票 20 起就是）。
-5. **TMDB**：使用者貼自己的 API key（v3 key 或 v4 token 都收），按「測試」。**「前往下一個泊位」自己會先測**（M4 票 67，審計 C4；Sonarr 的 Save 也會再測一次）：它是那張 key 表單的另一個送出鍵（`BerthNav` 的 `nextForm`），欄位裡有還沒測過的 key 就先測、通過才走，沒通過留在原地照舊說為什麼；欄位空著而存下的那一把驗過了就直接走。「測試 TMDB」照留、降成次要。**這一頁是必填的閘門**：`configuration` 綠燈才走得到完成，畫面同時要說得出去哪裡申請（themoviedb.org → 設定 → API）。完成那一頁再擋一次，閘門看的是存下來的那一條綠燈。**測過才存**（M4 票 45，審計 E-6）：測不過的那一把與它的紅燈只回給畫面，已經有一把驗過的在用就照舊在用（票 06i：設定頁換 key 貼錯一把不該讓探索與入庫停擺），沒有就還是沒有；`GET /setup/tmdb` 的 `api_key_present` 因此與 `verified` 同真同假（欄位保留），「已存下，沒通過驗證」不再出現。0.1.0 測不過也存下的舊 key 不寫 migration，讀的時候當作沒有（使用者拍板），下一次測過就蓋掉。
-6. **完成**：`POST /setup/complete` 寫 `settings.setup.completed`（照〈續行與跳過〉的頁序把每一頁再問一次，有一頁不再成立就回 422——另一個分頁回頭改了頁 2 或頁 4 也擋得住；前端收到 422 就重讀進度、回到那一頁，M4 票 31；問過的那些結論寫進 `settings.health`，健康頁一打開就有「上次檢查：剛才」，迴圈一個間隔之後才跑下一輪，M4 票 59），說出跳過了什麼與在哪裡補，並說出之後拿什麼登入（擁有者的 Jellyfin 帳號），然後回首頁——擁有者從第 1 頁起就登入著，直接落在探索；`/` 從那一刻起不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
+- 頁首二選一「套件內」/「既有」（Seerr 與 Sonarr / Radarr 都是手動填、按 Test，brief §20.14），**不預選**：猜錯正是要消滅的事（`.scratch/m4/service-pages-shape.md`）。
+- 點「套件內」就存下並測（唯讀；qBittorrent 的測試另外放一個當場收掉的探針）；點「既有」只展開表單，按「測試連線」才存下並測（頁 1 還沒有擁有者時是「連線並登入」）。
+- **送出那一刻就有回饋**：回來之前被點的那一格就是選中的、另一格停用（不送第二個）。套件內第一次選先畫一條與連線列同形的「測試中」，加一句「正在設定套件內 X，連線測試中…」，讀屏由同一個宣告區說；回來時同一個位置換成結果。
+- 「既有」旁說明條件與補法（brief §16.4）：
+  - Jellyfin 與 qBittorrent 要與 Berth 在同一台主機，並把 Berth 的 `DATA_ROOT` 也掛在容器路徑 `/data`（只能是 `/data`，原本的掛載不動；`DATA_ROOT` 要建得了硬鏈接）。缺某類型的媒體庫時，頁 3 勾了才建。Prowlarr 不碰檔案，沒有這一條。
+  - 版本下限：Jellyfin 12.0（連到 12.0 發佈文的升級注意）、qBittorrent 4.4、Prowlarr 1.3.2。
+  - 選既有時說出要從 `.env` 的 `COMPOSE_PROFILES` 拿掉哪一個（`jellyfin` / `qbittorrent` / `prowlarr`），**再給 `docker compose stop <服務>`**：只改 profile 再 `up -d` 停不掉已經在跑的那一台（brief §20.14）。不叫人改 compose 檔。
+  - **不多說撞 port 的事**：容器名改成 `berth-*` 之後撞名消失；撞 port 時只有撞到的那一台套件內容器停在 `created`，`berth` 與其他照常跑，而那個錯在終端機跑 `docker compose up -d` 時就印出來、早於精靈，起不來的正是使用者不要的那一台（brief §20.14）。疑難排解寫在 README〈部署疑難排解〉。
 
-**續行與跳過**：精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一頁。**步驟由狀態導出，不存游標**：擁有者未成立 → 頁 1；qBittorrent 沒選、最後一次測試不是綠的，或套件內那一台的登入沒結論 → 頁 2（既有的那一台測試綠了就算做完，M4 票 38；測試要綠是 M4 票 25：設好之後它停了，重新測試紅了，頁 2 就不算做完；前端讀差異或套用時發現連不上而連線卡還是綠的，自動重新測試一次，卡片照實際的例外變紅、出現「重新測試」）；Route 沒有或沒全綠、或套件內清單有一列不在 Jellyfin 上 → 頁 3（後者看媒體庫快照而不是「建媒體庫那一步跑過沒」，與剖面的「已建立」同一條 `jellyfin.libraries_built`：保留 Jellyfin 重裝 Berth 時清單全部已建立、那一步從不執行，M4 票 24）；Prowlarr 沒結論也沒跳過 → 頁 4；TMDB 沒綠燈 → 頁 5；否則完成。**可跳過的只有頁 4**，完成頁說出跳過了什麼與在哪裡補；頁 2、3、5 不可跳。兩者不同級：沒有索引站只是搜尋不到東西，沒有 TMDB 則探索、季集快照與命名全部停擺（M1 票 02b）。
+**位址與連線**
 
-**前端的導覽**（票 06d；Material Stepper 的 linear 模式，Jellyfin 自己的啟動精靈有「上一步」）。後端的步驟仍然是導出的、前端不改它；前端只決定「畫面停在哪一頁」，進出規則全部是 `web/src/setup/navigation.ts` 的純函式：
+- **套件內**連 compose 主機名（`services.clients.bundled_targets`：`jellyfin:8096`、`qbittorrent:${QBITTORRENT_WEBUI_PORT}`、`prowlarr:9696`）。**既有**填位址與那個服務要的憑證（brief §16.4）：Jellyfin 的管理員帳密、qBittorrent 的 WebUI 帳密、Prowlarr 的 API key。
+- 填 `localhost` / `127.0.0.0/8` / `::1` 時，位址欄下就地提示改成 `host.docker.internal` 或區網 IP（前端純函式 `setup/loopback.ts` 的 `pointsAtBerth`，只提示不擋）。測過的位址是它而連不上時，補法說同一句；那時位址欄下的提示收起來，不說兩遍。
 
-- **畫面上那一頁就是網址的 `/setup?step=N`**（M4 票 30，實測 B3-01、B3-03、E10-06；NN/g 的精靈準則要能回上一步）：進頁沒寫就以後端那一頁補上（`replace`），點泊位板、上一個 / 前往下一個、回到目前這一步都進瀏覽器的歷史，所以瀏覽器的上一頁回到上一個看過的頁、不離開精靈，重新整理留在原頁。網址指到後端還沒到的頁（手打的、後端退回去了）就拉回後端那一頁，網址一起改。
-- **做完停在結果上**：網址一直寫著畫面上那一頁，後端前進之後畫面不動，出現「前往下一個泊位」才走（原本靠按下動作那一刻釘住的覆寫，票 30 由網址取代）。例外是頁 5（M4 票 67）：還差的那一件一按就做得完，前進鍵就是送出它、做成了才走。
-- **走過的點得回去，沒到的點不過去**：泊位板五格（Jellyfin、qBittorrent、媒體庫與路徑、Prowlarr、TMDB），走過的與目前的那幾格是按鈕，還沒到的是純文字——前進只能靠把事做完。原本板上方的前置列（擁有者、偵測）拿掉：擁有者就是 Jellyfin 那一格的結果，偵測不存在了。回頭看 Jellyfin 那一格說擁有者是誰、密碼在 Jellyfin 裡改。健康頁同一塊板，不可點。
+**進頁只查主機名**（ADR-0010）
+
+- 服務頁進頁問 `GET /setup/compose`：Berth 解析三個套件內主機名（`services.setup.resolve_bundled` → `adapters.dns`，`getaddrinfo`、10 秒上限、逾時當作解得到），**不造任何服務的 client**——這不算「選之前發請求」。
+- 解不到的那一張「套件內」卡片寫「這套 compose 的 X 沒在跑」。停掉的容器與不在 `COMPOSE_PROFILES` 裡的服務一樣解不到、分不出來（不掛 Docker socket），所以還沒選時卡片下兩種補法都給：停了就 `docker compose start X`，不在就加回 `COMPOSE_PROFILES` 那一行再 `docker compose up -d`。不預選、不停用，選了照舊測（紅的是下面的 `not_deployed`，補法是同一組 `bringBack`）。
+- 那一頁每次選擇或重新測試完都再問一次主機名；起回來、測試轉綠之後加註跟著消失。
+
+**選完就測；既有的測過才存**（Home Assistant 驗過才 `create_entry`、Sonarr 存之前再測一次）
+
+- 套件內的選擇與連線資訊先存進 `settings.setup` 與它們平常住的 `settings.services.*` 再測（位址是 compose 主機名，啟動中要靠存下的選擇輪詢）。
+- **既有的先拿表單那一組測，測過才存**。測不過是 400 `connection_failed`（`setup.ConnectionFailedError`），**什麼都不存**：選擇、連線、那一頁的結果、Route 檢查都維持原樣，已經有一台測過的在用時照舊用它（設定頁打錯一個字下載就停擺是要避免的事）。那一次的結論帶在拒絕的 `attempt`（`ServiceOut` 同形狀），前端標在欄位上（見〈錯誤分三層〉）；改一格再按靠表單留著打的字。
+- 例外：擁有者之後 Jellyfin 的 `auth_required` 說的是 Berth 自己那一把 key，位址已經答出 ServerId，照樣存下（擁有者重新登入要有地方送）。
+- 套件內測不過要分開說：
+  - 主機名解不到（`socket.gaierror`）＝那個服務的容器沒在跑或不在 compose 裡（停掉的容器不在 compose 的網路上，是同一件事）→ 兩種補法並列（分不出是哪一種）：停了就 `docker compose start qbittorrent`；不在就把 `qbittorrent` 加回 `.env` 的 `COMPOSE_PROFILES` 再 `docker compose up -d`。
+  - 解得到但連不上、回 503「載入中」、回的東西不像它自己（`protocol_mismatch`）＝容器還在啟動 → 每 3 秒再測、到 2 分鐘上限，逾時給重試；過了上限仍是 `protocol_mismatch` 就說那個主機名上是別的東西。
+  - **位址的協定寫錯不是連不上**：`https://` 打到講 http 的 port 是 `scheme_mismatch`，說「這個 port 講的是 http」（Jellyfin、Prowlarr 回 HTTP 400，握手讀到它而 `WRONG_VERSION_NUMBER`；qBittorrent 不回、握手逾時，鏈上是 `SSLWantReadError`，brief §20.14；`adapters.http.SchemeMismatchError`）。沒寫 `http://`（httpx 的 `UnsupportedProtocol`，`SchemeMissingError`）是 `scheme_missing`。兩者都不等、當場紅，纜繩的代碼同名。反方向（`http://` 打到講 https 的 port）認不出來：伺服器只是重設連線，與別的斷線分不開，照舊是 `unreachable`。位址欄送出前先驗（`setup/address.ts`），照 *arr 不自動補，直接說要以 `http://` 或 `https://` 開頭。
+- 既有的當場給結論。版本低於下限（Jellyfin 12.0、qBittorrent 4.4、Prowlarr 1.3.2，brief §20.14）停在這一頁，說出「至少要 X，這一台是 Y」（Jellyfin 附升級注意，brief §20.9）。**版本在測試時就擋**（`version_unsupported`；Jellyfin、qBittorrent、Prowlarr 同一個時機），套件內那一台太舊也當場紅；Jellyfin 登入那一段的版本閘門留著當後備。
+
+**表單與狀態**
+
+- **表單跟著那一台的狀態走，選擇決定 Berth 之後寫什麼**（brief §16.3）：套件內但已經初始化過（重裝保留 config、精靈中途中斷）時，Jellyfin 已有管理員就給登入表單、不再建立；qBittorrent / Prowlarr 已設過介面登入就不強迫再設。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣給建立管理員的表單——它上面沒有任何人的帳號可以蓋掉。
+- **「已經設過介面登入」怎麼認**（brief §20.14）：qBittorrent 的 `app/preferences` 讀不到密碼，只有 `web_ui_username`，全新的那一台是 `admin`，所以帳號不是 `admin` 就當設過，還是 `admin` 的一律當沒設過。Prowlarr 的 `config/host` 全新是 `authenticationMethod: none`、帳號空白。設過的那一台，頁上說出帳號、給「更換登入」，不強迫再設。
+- **點選才算數，方向鍵只是瀏覽**：radio 在兩格間移動就會選中，而選中「套件內」是一次存下與測試。只有指標點下去的那一次當場送（方向鍵與空白鍵不送 pointerdown）；鍵盤選到的是草稿，另給一顆「使用套件內的 X」。草稿由頁面持有（`setup/choiceDraft.ts`），**標題與 lede 在確認之前就跟著草稿**。
+
+**回頭改選擇**
+
+- **Jellyfin 在擁有者成立之後鎖住來源與伺服器**：擁有者是那一台上的帳號，換一台等於換擁有者（[ADR-0012](adr/0012-owner-is-jellyfin-admin.md)）；改來源後端回 409（`ChoiceRefusal.jellyfin_owned`）。
+- 位址換得了，**但只能換到同一台**：新位址先測，`/System/Info/Public` 的 `Id`（ServerId，brief §20.15）要與擁有者成立時記下的（`settings.setup.owner.jellyfin_server_id`）相同才存，然後以 Berth 的 key 打 `/Auth/Keys` 重驗。
+  - 被撤了測試紅在 `auth_required`，擁有者就地重新登入換一把（頁 1 與設定頁都有那一格）。
+  - 另一台是 409 `other_server`；既有的新位址不回答是測過才存的 400 `connection_failed`、標在位址欄；套件內 compose 位址換了而不回答、或原本那一台認不出（沒記 ServerId 的擁有者）是 409 `unverified`。都什麼都不存。
+  - 存下的位址後面換成另一台時，重新測試紅在 `other_server`。沒記 ServerId 的擁有者，下一次測到的那一台就記成它。
+- 設定頁的連線區走同一支，但不畫二選一：Jellyfin 是唯讀摘要（來源、位址、版本、狀態與換不了的理由），既有的那一台多一顆「改位址」（`settings/JellyfinConnection.tsx`）。
+- **qBittorrent / Prowlarr 隨時可改**：這一頁有結果時換另一格，先就地確認（`ConfirmPanel`：焦點進去、Esc 收起回到原本那一格；換成既有時後果、表單與取消在同一個確認區，按「測試連線」就是確認）。
+  - 確認區說出這一頁要重做，並**列出 Berth 在原本那一台擁有的物件**（brief §16.4〈換一台時〉：`berth-*` 分類與 torrent 數、Berth 加的站、Berth 設的介面登入；連不到時列 Berth 記得的，可一鍵移除空的 `berth-*` 分類；`setup/LeftoverList.tsx`）。
+  - 頁 2 選過一台就先確認；確認區說的纜繩只有套件內那一台有，既有的那一台沒有纜繩，換走時一句都不說。
+  - 換了之後那一頁的結果清掉重做（`setup._start_over`）。qBittorrent 換了，所有 Route 的檢查標成未檢查、逐條明細一起清掉（`routes.forget_route_checks`：分類建在原本那一台上，明細留著會寫「尚未檢查」卻仍是上一台的通過數與錯誤），頁 3 要重新檢查才走得過去。
+
+#### 錯誤分三層
+
+照 Home Assistant config flow 與 *arr：已知的失敗用代碼、前端翻成人話、掛在造成它的那一條上（`.scratch/m4/error-layers-shape.md`）。
+
+- **後端回封閉的代碼加少量參數**：
+  - 纜繩是 `SetupStep.failure` / `params`（`StepFailure`，`services.steps.failure_of` 照 adapter 的例外分類；Berth 自己判斷的丟 `StepFailedError` 帶代碼）。
+  - 連線測試是 `ConnectionReason`；讀清單與讀差異的失敗是 `failure`。
+  - 認不出的例外是 `unexpected`，原文照樣在技術細節。
+- **對 Berth 自己的請求照狀態碼分**（`requestProblem`：送不到 / 422 / 409 / 其餘）。門禁的 401 / 403 各一句：
+  - 前端的 client 一律帶 CSRF 標頭，所以擁有者成立之後的 403 只會是不是管理員：讀不到精靈狀態時說「精靈只有 Jellyfin 管理員能繼續」並給登出。
+  - 擁有者成立之前的 403 是門禁的「先做完頁 1」，當成與現狀衝突。
+  - 401 時這一頁還以為沒有擁有者（頁 1 的擁有者表單），就是擁有者在別處搶先成立了；其餘是登入失效。兩者都給登入連結，按下先重問 `/health` 再去登入頁。
+- **畫面**：一句人話（發生什麼）在上，補法照代碼與來源挑（`docker compose` 指令只給套件內那一台）；**原文、HTTP 狀態、端點、`dev=` / `inode=` 收進預設收起的「技術細節」**（`TechnicalDetails`；通過的那一列在行尾，失敗的在補法之後）。`web/eslint.config.js` 擋精靈、設定頁與健康頁把 `.error` / `.message` 直接畫成子節點（`src/lint.test.ts` 雙向驗）。
+- **換來源、換位址、按重新測試、改表單的一格時，那一格上一次的結果與錯誤不畫**（`SetupPage.forgetResults`、測試中不畫上一次的理由、介面登入的 `edits`）。服務頁上選著、還沒存下的那一格由 `SetupPage` 持有，泊位板跟著它。
+- **連錯預警**：`SetupQbittorrent.auth_failures` 以位址為鍵，數 Berth 對那個位址連續幾次帳密不被接受。同一個位址改帳密再測接著數、成功歸零、別的位址各數各的；**跟著位址、不跟著選擇**（測不過的那一次不存，次數照樣記）。第 3 次起在密碼欄下說「再錯 N 次會被封」；被封了說等 60 分鐘或重啟 qBittorrent（brief §20.2）。
+- **既有表單測不過的錯誤標在欄位上**（Sonarr 與 Home Assistant 的 `errors[欄位]`；`setup/signals.connectionField`）：
+  - 位址類（`unreachable`、`not_deployed`、`scheme_*`、`protocol_mismatch`，填 localhost 的那一句也在這裡）標在位址欄。
+  - 憑證類（`auth_required`、`ip_banned`、`api_key_missing`）標在憑證欄：qBittorrent 帳號、密碼兩格都標、那一句寫一次、兩格的 `aria-describedby` 都指到它；Jellyfin 的表單只有位址，它的 `auth_required` 不算。
+  - 其餘（版本太舊等）在表單裡、送出鍵之上。
+  - 那一句與連線卡紅燈的補法同一句；下面說「這一組沒有存下」（已經有一台在用時說它照舊在用）與預設收起的技術細節。連線卡（`TestLine`）畫的是存下的那一台。
+
+#### 各頁
+
+##### 1. Jellyfin（擁有者）
+
+Seerr 的慣例：先連媒體伺服器，它的管理員就是擁有者（brief §11、[ADR-0012](adr/0012-owner-is-jellyfin-admin.md)）。
+
+- 選來源、測試照上面的共同形狀。沒有「先探一下 Jellyfin」：選了才測。
+- **還沒跑過初始精靈**（`StartupWizardCompleted=false`）：「建立 Jellyfin 管理員」，帳號、密碼、再輸入一次（前端比對，Jellyfin 自己的啟動精靈也是），文案說明 Berth 沒有自己的帳號、之後登入 Berth 就用這一組。**已經有管理員**：「用你的 Jellyfin 管理員登入」，密碼一次（`SetupStatus.owner_signs_in`）。
+- **既有那一台：位址與管理員帳密同一張表單、一顆「連線並登入」**（Seerr 也是伺服器位址與管理員帳密同一頁、一顆 Sign In）：
+  - `POST /setup/owner/existing` → `services.setup.sign_in_existing_owner` 先照共同形狀選既有、測過才存（`choose_service`），已經有管理員就以剛測過的那一台當目標接著 `claim_owner`，一次呼叫。
+  - 錯誤分到欄位：位址那一段（400 `connection_failed` 的 `attempt.reason`，`connectionField`）標位址；`invalid_credentials` 標帳密兩格（送出時空著的那一格照空說：「都要填」或「不收沒有密碼的擁有者」）；版本太舊、不是管理員、Jellyfin 那一段失敗在表單層級。
+  - 帳密被拒時位址已經存下（測過才存），畫面照留同一張表單、位址帶回來。
+  - **還沒初始化的那一台照原本的分支**：只存下選擇、不登入，表單換成建立管理員（語言與遠端存取要在畫面上問），所以帳密可以留空。套件內那一台已經有管理員（重裝保留 config）時是另一張登入表單。
+- **`POST /setup/owner` → `services.setup.claim_owner` → `jellyfin.claim_jellyfin`**：
+  - 建立跑 §9.4 的前六步（版本、語言、建管理員、遠端存取、完成初始精靈、登入換 API key）；登入跑版本與登入換 key。建立時的語言與地區、遠端存取由 body 帶（`ui_culture` / `metadata_language` / `metadata_country` / `remote_access`，§9.4 第 2、5 步）。
+  - **帳密一律交給 Jellyfin 驗**，即使已經有一把 key；不是管理員就拒絕（`OwnerRefusal`：`jellyfin_unresolved` 409、`invalid_credentials` 401、`not_administrator` 403、`jellyfin_failed` 502 帶原文、`target_changed` 409）。
+  - **帳密只送到畫面上測過的那一台**：body 帶 `GET /setup/status` 那一列的 `base_url` 與 `server_id`（`ServiceTest.server_id`，brief §20.15），與存下的選擇不同（或存下的那一次沒記到 ServerId）就 409、Jellyfin 一個請求都不發。比對過之後序列釘在那個位址上（`JellyfinTarget`）：第一步答的 ServerId 不同就停在帳密那幾步之前；收尾時位址已被改選就不把換來的 key 寫給新位址；寫擁有者時在寫鎖內再比一次位址，也再確認還沒有擁有者（兩人同時送，後寫的 409 `owner_exists`）。
+  - 前端的表單以 `base_url` + `server_id` 為 key：畫面重讀到另一台時打好的帳密清掉；`target_changed` 的那一句旁有「重新測試」。
+  - **擁有者已經在是 409 `owner_exists`**，登入中的管理員也一樣；換 key 的重新登入是 `POST /setup/jellyfin/connect`（設定頁換位址或 key 也走它）。
+  - 成功時 `settings.setup.owner` 記 Jellyfin 的 user id、名字與 ServerId，並發 Berth session（與 `/auth/login` 同一種 cookie，`auth.open_session`）。Berth 自己建 API key「Berth」（§9.4 第 7 步），使用者不必貼 key。畫面照〈前端的導覽〉停在結果上（「擁有者：名字」），按了才去下一頁。
+- **帳密不存下來**：只用來建立或登入 Jellyfin、換 API key。
+- **門禁**（`api/gate.py`）：
+  - 擁有者成立之前只開精靈的開場（`SETUP_OPENING_PATHS`：`GET /setup/status`、`GET /setup/compose`、`POST /setup/services/jellyfin` 與它的 `/test`、`POST /setup/owner` 與 `POST /setup/owner/existing`），其餘 `setup/*` 一律 403「先做完第 1 步」；成立之後整組要管理員的 session，與精靈跑完之後相同。
+  - **安全面**：誰先到誰建立，與 Jellyfin 自己的啟動精靈、Seerr 一樣。但成立之前 `/auth/login` 不發 session（`auth.OwnerPendingError` → 403）——頁 1 一選 Jellyfin 就存了位址，那一台上任何帳號原本都能直接拿 session；帳密也只送到畫面上那一台（見上）。
+  - 匿名的 `GET /health` 帶 `owner_established`，前端守衛靠它在精靈跑完之前就把沒有 session 的人送去 `/login?redirect=/setup`。
+- **既有那一台成為擁有者之後就問它看不看得到 `/data`**：`claim_owner` 拿剛換到的 key 對畫面上那一台再測一次（`_test_jellyfin` → `_jellyfin_sees`：在共用根目錄寫探測檔、`ValidatePath`，與頁 3 同一種問法，當場收掉）。看不到是 `data_unseen`，頁 1 那一條紅、補法同頁 2 與頁 3（`connection.fix.jellyfinDataUnseen` + `MountFix`）。
+  - **不擋頁 2**：擁有者照樣成立（頁 1 的事是擁有者），頁 3 照舊擋。
+  - 之後每次重新測試、設定頁換位址都問；`ValidatePath` 要管理員憑證，所以擁有者成立之前不問；套件內那一台由 compose 掛 `/data`，不問。
+- 套件內 Jellyfin 的媒體庫不在這一頁建，在頁 3。
+
+##### 2. qBittorrent
+
+**套件內**：設介面登入，全域偏好一個都不寫（[ADR-0013](adr/0013-berth-manages-only-its-own-objects.md)）——與既有那一台只差這一格。Berth 自己靠免密白名單連它（§9.2），用不到這組登入。
+
+- **介面登入可「沿用 Jellyfin 帳密」**（brief §16.3、ADR-0010；不預設勾）：
+  - 勾選時帳號是擁有者的名字，密碼請使用者**打一次**；Berth 先以 `POST /Users/AuthenticateByName` 向 Jellyfin 驗過這組帳密（不對就拒絕、不寫）再寫入。不勾就是自設：帳號預填擁有者的名字、密碼打兩次。
+  - 擁有者的名字不合 qBittorrent 的規則時那一格停用、說原因（`interfaceLogin.reuseUnfit`）。
+- **頁 1 勾了「也用這組」時不問**：
+  - 頁 1 建套件內 Jellyfin 的管理員時那一格預設勾著，密碼由 `SetupPage` 留在 React state（不寫 storage、不送給 Berth 存；重新整理就沒了）。
+  - 這一頁那一台還沒有 WebUI 帳號時自動送一次 `reuse_owner`（`interfaceLogin.useCarriedLogin`），欄位與主鍵換成「設定中」；設好之後只說「已沿用 Jellyfin 帳密（擁有者）」加「改用另一組」（打開自設的三格）。
+  - 「已沿用」照後端記的 `web_ui_login_reuses_owner`，重新整理前後同一句，不看帳號。
+  - 頁 1 的帳號與密碼照 qBittorrent 的規則邊打邊看（`reuseUnfit`），不合就勾不起來、帶不過來，這一頁不再看規則。
+  - Jellyfin 拒絕那一組（`owner_password`）時丟掉它、欄位打開在沿用那一格，頁 4 也不再自動送；同一個請求還在飛（走開又回來）時不重送。
+  - 頁 4 套件內 Prowlarr 的介面登入同一套；送出中（Prowlarr 設完會自行重啟）「加入」與「之後再說」先停用。
+- **必填**：不設的話，使用者自己打開它的介面時只剩容器 log 裡每次重啟都換的臨時密碼。
+  - 帳密跟著「設定介面登入」送（`POST /setup/qbittorrent/apply` 的 `login`）。不帶 `login` 是「登入照舊」：設過的那一條是 `skipped`、細節是帳號，沒設過的是 `pending`，精靈停在這一頁。
+  - **那一台自己就設過的**（重裝保留它的 config）在連線測試時就讀到帳號、記成 `skipped`（`qbittorrent.note_qbittorrent_login`），測試通過即完成。
+  - **「設定介面登入」只在欄位開著時出現**（還沒設、或按了「更換登入」），沒有按下去什麼都不寫的「套用這 0 項」。
+- **照 qBittorrent 的規則先擋**（brief §20.2）：帳號至少 3 字元、不能有冒號，密碼至少 6 字元；沿用時也檢查（Jellyfin 密碼太短、擁有者的名字不合就說不能沿用、請另設）；設定頁的「更新登入」同一套。Berth **先送密碼、再送帳號**（5.2 帳號先寫、密碼後驗），兩個都進去了才記帳號；qBittorrent 仍回 400 時那一條是 `login_rejected`、原文進技術細節，欄位不收起來。
+- **Berth 只記帳號與密碼的加鹽雜湊**（夠比對「已經是這一組」）。回頭看時欄位收起來、只說帳號是誰，按「更換登入」才打開。
+- **設定頁 → qBittorrent 的「介面登入」**是一般的改帳密表單（目前的帳號、帳號預填它、新密碼兩次、「儲存」；沒有「沿用」，`reuse_owner` 只有精靈在送）。`PUT /setup/qbittorrent/login`（`qbittorrent.set_interface_login`）只換登入；那一區讀頁 2 的 `GET /setup/qbittorrent/diff`（路徑名是舊的）。
+
+**測試也問它看不看得到 `/data`**：連得上、版本夠之後，Berth 在共用根目錄（`routes.shared_root_of`，compose 裡的 `/data`）寫一個兩片的探測檔，請它停住校驗一次（`setup._data_sight`，頁 3 `download_visible` 那一支探針的 `unfinished=True`）。
+
+- **校驗不完**：最後一片的雜湊對不上，看得到的那一台停在 50%，所以不觸發「torrent 完成時執行外部程式」（brief §20.2 對 4.4.5 與 5.2.3 實測）。5.x 的「加入時執行外部程式」照樣觸發一次，所以既有那一台的說明寫明：獨立一行，表單打開時在測試鍵上方、收起時在測試結果底下（`ServiceChoice` 的 `ProbeNote`；套件內不提，同頁 3）。
+- 看不到是 `data_unseen`（讀不了 `data_unreadable`、一直排隊 `data_unsettled`），頁 2 紅、停在這一頁。補法與頁 3 那一條同一組：既有只多加一條 `/data`，`MountFix` 給 compose、`docker run` 與 Unraid 模板三種寫法，帶著 `host_data_root` 的值。
+- 既有表單測過才存，這一種也是測不過、不存。Berth 自己沒有那個目錄或寫不進去時不問，留給頁 3 Berth 那一條（`directory_missing` / `berth_cannot_write`）。探針 torrent 與探測檔當場收掉。
+
+**既有**：位址 + WebUI 帳密 → 測試。
+
+- 一個全域鍵都不寫（照 Sonarr / Radarr 對下載器只用分類的慣例）：不列偏好表（它的全域偏好沒有一個影響 Berth，列套件內的建議值只會讓人以為該去改；temp path 未啟用也不警告）。
+- **測試通過就做完**：畫面上沒有確認鍵（按下去什麼都不寫只是要人多按一次；照 Sonarr / Home Assistant「測試與儲存合一」的慣例）。沒有介面登入那一格，直接打 `apply` 帶了 `login` 回 422。
+
+**全域偏好為什麼不寫**：Berth 的路徑全靠分類（建立時帶 save path 與未完成目錄）與逐個 torrent 的 `autoTMM=true`。全域 `save_path` / `temp_path` / `temp_path_enabled`、`auto_tmm_enabled`、`category_changed_tmm_enabled` 動了會改掉使用者不經 Berth 加的 torrent 落在哪裡，而 Berth 自己用不到它們。
+
+- 套件內那一台同一條：舊版本寫過的 `save_path` 與兩個 autoTMM 開關 Berth 沒存原值，不改回去；`setup.qbittorrent.steps` 裡那三條舊紀錄讀的時候丟掉（`SetupQbittorrent` 的寬鬆讀取，不寫 migration：下一次套用整份換掉）。
+- 頁 2 的纜繩只剩 `web_ui_password` 一條。
+
+##### 3. 媒體庫與路徑
+
+**套件內 Jellyfin 的媒體庫由使用者列**（Jellyfin 啟動精靈「新增媒體庫」的慣例：內容類型 + 顯示名稱 + 資料夾）：
+
+- 一張可編輯的清單，預設 Movies・電影、TV・劇集、Anime・劇集三列，可以改名、改類型、改資料夾、刪列、加列，至少一列。
+- 類型只有電影與劇集（Berth 的 `SUPPORTED_TYPES`）。資料夾是 `library_root` 底下的一層（不能有 `/`、`\`、不能是 `.`、`..`，也不能有 Windows 不收的字元）；名稱是 ASCII 時由它推導（照 `library_slug`），不是 ASCII 時要使用者填。名稱與資料夾各自不可重複（不分大小寫）。
+- 規則在 `services.jellyfin.check_bundled_libraries`，前端 `web/src/setup/libraryRules.ts` 用同一組在送出之前擋。清單存在 `settings.setup.jellyfin.bundled`（`PUT /setup/jellyfin/bundled`，拒絕是 `BundledLibraryRefusal` 帶列號），停手就存。
+- **已經在 Jellyfin 建好的列鎖住**：bootstrap 以名稱認媒體庫，改了名重跑會多建一個指向同一個資料夾的；改名與刪除要去 Jellyfin，後端回 `built_changed`。
+- 媒體庫以第 1 頁存下的 API key 建（§9.4 第 1、4 步，`bootstrap_jellyfin`；沒有 key 就拒絕）。**沒有安裝插件的按鈕。**
+
+**既有 Jellyfin**：使用者勾選媒體庫，每個媒體庫從它回報的路徑裡選寫入目標。
+
+- 還沒有 Berth 路徑的，寫入目標多一個「新的 Berth 路徑」選項（§9.5），**按下「建立並檢查」時才加**、再建 Route：確認併進同一個動作，沒有「確認加入」那種做了一半、走得過去的狀態（`.scratch/m4/route-berth-shape.md`）。
+- 預選的是 Berth 路徑（加過的話），否則只有一條路徑時是那一條（brief §4.3）。目標只能從那個媒體庫回報的路徑裡選，送別的路徑回 422。
+- 勾了卻還沒選目標、或一個都沒勾時，主鈕擋住並說出還差哪一步。
+
+**Route**：每個選到的（套件內是清單上的，§9.5〈套件內的 Route 範圍〉）電影或劇集媒體庫各一個 Route。
+
+- 寫入目標取自 **Jellyfin 回報的** `locations`。slug 由媒體庫名稱算，空白換成 `-`（已經存在的 Route 與分類不改名）。**套件內改由使用者在清單上填的資料夾名算**（寫入目標的最後一段）：媒體庫叫「電影」、資料夾填 films 時分類是 `berth-films`。套件內的 Route 照清單的順序建。
+- 每個 Route 立即建立 qBittorrent category 並跑 §9.5 的每一項檢查；**每一條都綠燈**才走得到完成——紅的那個 Route 送單一定失敗（brief §4.4）。
+- 畫面：每條 Route 收成一列（`RouteRow`：健康、名稱、分類、寫入目標、「6 / 6 通過」），紅的那條自動展開、全過的收起；全過又沒有新的時，Route 列排在前、「重新檢查」降成次要排在後。健康頁與 Route 設定頁用同一個列元件。套件內的清單全部建好時收成一列（「媒體庫清單 · N 個已建立」），要加一個再展開。剖面只放 Route 列沒有的：兩個根目錄與這一輪將建立的 Route 寫到哪裡。
+
+**進這一頁不送任何寫入**（建媒體庫、加路徑、建分類、寫探測檔與硬鏈接測試檔都有副作用，由人按）。例外是**套件內什麼都還沒做的那一次**（brief §19 D7，`.scratch/m4/route-auto-run-shape.md`）：
+
+- 條件：清單是預設（`GET /setup/jellyfin` 的 `bundled_default`）、一個都還沒建、沒有 Route、建媒體庫那一步從沒跑過、版本夠新、這一頁還沒做完。進頁就照存下的清單送一次下面的整段（前端 `autoDock.startsOnItsOwn`；這一次不另外做進頁的重讀，整段自己先重讀），清單收起，工作面說一句為什麼沒按就開始了。
+- 跑過一次（哪怕紅了）、改過清單、既有 Jellyfin，一律等人按。
+- **重裝**（清單上的已經建好、這個 Berth 卻從沒跑過建媒體庫那一步、還沒有 Route）時，工作面說為什麼沒有自己開跑、要按「建立並檢查」（`autoDock.heldBack`）。
+- **進頁時重讀媒體庫**不算寫入（`POST /setup/routes/libraries`，另有一顆「重新讀取」；套件內也重讀，按「建立並檢查」之前再讀一次）：它只讀 Jellyfin、換 Berth 自己的快照，不寫任何服務。頁 1 之後在 Jellyfin 改的掛載、路徑與媒體庫要看得到。
+
+**按鈕與執行順序**
+
+- 一顆「建立並檢查」（有新的可建）/「重新檢查 N 條 Route」，上面一份「按下之後會」列出這一輪真的會做的事：建哪幾個媒體庫、在哪個媒體庫加哪一條路徑、建或核對幾個 `berth-` 分類、在幾個寫入目標寫測試檔。
+- 按下之後照順序做（前端 `SetupPage` 的 `dock`，各段仍是各自的命令）：
+  - 套件內：重讀媒體庫 → 存清單 → 存下回來的清單上有還沒建的才 `bootstrap` → `POST /setup/routes`。
+  - 既有：先建勾了的新媒體庫（`POST /setup/jellyfin/libraries`）→ 逐個加 Berth 路徑 → `POST /setup/routes`（新媒體庫的寫入目標取自建好之後 Jellyfin 回報的路徑）。
+- **一段失敗就停**，後面的不送。建媒體庫或加路徑的失敗是 Jellyfin 那一份 `libraries` 那一步變紅，就地給一句人話與手動步驟，原文收進技術細節。
+
+**進度靠輪詢已有的 `running`**（沒有 SSE）：
+
+- Route 的每一條檢查開跑前把那一列寫成 `running` 並 commit（`routes._run_checks` 的 `progress`，總結的 `health_status` 跑完才換）；健康頁與 Route 設定頁的重新檢查同一條路。
+- 頁 3 在送出中、或伺服器讀到建媒體庫那一步或某條纜繩還是 `running` 時，每 1.5 秒重讀（跑到一半重新整理也接得上，而且不再自動送）。
+- 跑的時候這一輪的每條 Route 在按下那一刻就畫成一列：還沒建出來、還沒輪到的是「等待中」，跑著的那一列色塊是「檢查中」、摘要說「第 k / 6 條 · 纜繩名」；建媒體庫那一段在列表上方是 Jellyfin 那一條纜繩（進行中）。
+
+**重跑只新增、不改不刪**：
+
+- 已經有 Route 的媒體庫在勾選表上鎖住、它的選擇略過，slug 與整張表比；寫入目標已經被別的 Route（或同一批前面的選擇）佔用的選擇也略過，不回 422。重跑的意思只剩「補上新勾的、全部重驗」。
+- 精靈跑完之前新建的 Route 直接啟用（紅著就擋完成）；跑完之後重跑新建的**先停用建立，檢查綠了才啟用**。
+- 重讀既有 Route、`_plan` 與插入在同一把寫鎖裡。認媒體庫用 `ItemId`（沒有 id 的舊資料才用名字）。
+- 選錯了的出路是每條 Route 底下明確的刪除（`DELETE /setup/routes/{id}`，被引用時拒絕）；精靈跑完之後在 `/settings/routes` 逐條管理。
+
+##### 4. Prowlarr 與索引站
+
+併成一頁。
+
+**套件內**：API key 讀自唯讀掛載的 `/ext/prowlarr/config.xml`（零輸入，§9.2），選了就讀、存進 `settings.services.indexer`，搜尋從同一個地方拿憑證。
+
+- **每次「重新測試」都重讀**：在 Prowlarr 重新產生 key 之後，那是畫面上唯一的出口；讀不到時不動存下的——那是使用者貼的。
+- key 被拒的補法說掛載，不說 qBittorrent 的白名單。連線卡綠而站清單讀不到時，這一頁說讀不到、給「重新讀取」（＝重新測試）。
+- 讀不到 key 時先問匿名的 `/ping` 確認它在（只有 Berth 時根本沒有那個容器，該說主機名解不到，不是缺 key），在才就地給貼 key 的欄位，貼了仍是套件內。
+
+**介面登入**與 qBittorrent 同一條規則（可「沿用 Jellyfin 帳密」、只存雜湊、必填），以 `config/host` 設 Forms 登入（回 202 後它會自行重啟，要等 `/ping` 回來）。
+
+- **介面登入是自己的一區與按鈕**（加站不該被登入欄擋住）：精靈與設定頁都走 `PUT /setup/indexers/login`（`indexer.set_interface_login`）；「加入」不帶登入、只記那一條現在的狀態（設過 `skipped`、沒設過 `pending`）。套件內 Prowlarr 要那一條有結論這一頁才算做完（`_indexer_settled`）。
+- 那一台自己就設過介面登入的（重裝保留它的 config），連線測試時就記成 `skipped`（`indexer.note_instance_login`）：站都在了的話沒有東西可加。
+- 說明寫明必填與理由：現行版本的 Prowlarr 第一次打開介面就跳出關不掉的設定視窗（brief §20.14）。
+
+**站那一半是「Prowlarr 上至少一站」，不論是不是 Berth 加的**（重裝保留 Prowlarr 設定時已有的站不在候選清單、加不了）：Berth 加站成功的纜繩，或最後一次連線測試數到的站數（加站與移除之後 `_recount` 跟著改）。
+
+- 這一頁還沒做完時，前進鍵的位置列出還差什麼（加站、介面登入），按了把焦點送到那一區（`indexerGaps`，條件照 `_indexer_settled`）。
+- 站數前端看這一次讀到的清單、後端看上一次連線測試記的數；清單上有站而記的是 0（使用者到 Prowlarr 自己的介面加了站）時，前端自動重新測試一次（與頁 2 同一個做法）。
+
+**主鍵「測試推薦站，加入通過的」**（套件內與既有都有；既有的那一台不讀不寫 `config/host`，沒有登入那一條）：
+
+- 一次做完：`indexer.add_recommended_indexers`（`POST /setup/indexers/recommended`）測推薦清單上**還沒加入**的站（同 `verify_sites`），通過的逐站新增（同 `apply_default_indexers`），結論逐站記成纜繩：
+  - 加進去 `ok`；測試就沒過 `failed`、不送新增；測過而新增被拒 `failed`。
+  - 兩種沒加進去的靠 `SiteCheck.stage`（`test` / `add`，存在纜繩的 `params`）分開說——後者是 Prowlarr 加之前自己再連一次沒連上（Internet Archive 實測），畫面上單獨一段、不算已加入。結果照纜繩畫，重新整理還在。
+- **Prowlarr 已經有站時不給這顆鍵**（重跑、重裝保留設定），後端也只碰還沒加入的站；新增前再讀一次清單，另一個分頁剛加的不重加。
+- 下面「進階」那一段（逐站測試與勾選、其他公開站）預設收起，「加入」在那裡是次要的鍵。介面登入照舊是自己的一區（頁 1 帶過來的密碼自動送），送出中主鍵停用；主鍵還在時套件內那一台登入的送出鍵是次要樣式（一屏一顆調度黃）。
+- **推薦站不在 Prowlarr 的定義裡**：`IndexerSetup.unlisted` 列出推薦清單上、`indexer/schema` 與已加入的站裡都找不到的 `definitionName`。
+  - 一個都不在（Prowlarr 連不上 `indexers.prowlarr.com`，只剩磁碟上的定義，brief §20.14）時，主鍵的位置換成原因與下一步（套件內與既有都是）：網路通了按「重新讀取」（服務頁的重新測試，schema 每次現場重拿，不必重啟 Prowlarr）、連到 Prowlarr 的 System → Events、之後再說；「進階」照舊。
+  - 只缺幾站時主鍵照舊測找得到的，結論裡多一行缺的那幾站。
+  - 既有的那一台一站都沒有、推薦站又一個都不在時，`NoSites` 不畫，由同一段說「這一台沒有站、Berth 搜不到」並多給「到 Prowlarr 自己加站後重新讀取」（兩段各有一顆「重新讀取」；`RecommendedSites.noRecommendedListed`）。
+
+**「進階」的加站**（`.scratch/m4/indexer-berth-shape.md`；結果逐列行內、推薦在上其他公開站用搜尋叫出來、「已加入」一段在上）：
+
+- 「加站」一段是推薦清單 Nyaa.si、dmhy、Anime Tosho、ACG.RIP、Mikan、1337x、YTS、EZTV、The Pirate Bay（AniDex 拿掉了，brief §20.7）與「其他公開站」——`indexer/schema` 裡 privacy = public 的 torrent 站（依 `definitionName` 去重，usenet 不收），輸入名稱或選語言才列出來。
+- **一站都不預勾，先測試通過才勾得起來**。「測試」是 `read` 命令 `indexer.verify_sites`（`POST /setup/indexers/test`，`indexer/test` 測還沒加入的定義，什麼都不建立，brief §20.7；一次最多 4 站併發），每一列一顆、推薦清單一顆「測試全部」。
+- 結果長在那一列：未測 / 測試中 / 通過 / 沒通過。沒通過是中性色塊加一句 i18n 理由（Cloudflare / 查無結果 / 連不上 / 其他，`SiteFailure`，由 Prowlarr 原文分出來），原文收進「技術細節」。
+- 清單上方一條摘要（`assigned` 色塊「N 站沒通過」+ 各理由的站數），**整段只有這一個 live 區**；紅色不用在這裡——一站沒通過不擋這一頁。
+- 「加入 N 個站」（套件內收在「進階」裡，是次要的鍵）只數勾著、還沒加的。加入是 `indexer` 新增（Prowlarr 加之前自己會再連一次，加不進去的回到沒通過、理由同一套，`IndexerSetupStatus.checks`）；**一站失敗不影響其他站**。
+- 私有 / 半私有站連到 Prowlarr 自己的介面去加：連結是**瀏覽器現在的主機名 + `PROWLARR_PORT`**（compose 傳給 Berth，同 Jellyfin 深連結；`setup/prowlarrWeb.ts`），給不出就不給。
+- 每一列顯示語言（BCP 47 代碼照 UI 語言換成語言名，`Intl.DisplayNames`）與定義自帶的英文說明（不翻）。
+
+**「已加入」與試搜，不要的移除**：
+
+- Prowlarr 只搜得到已經加入的站（`indexerIds` 只認已加入的，brief §20.7）。「已加入」列出 Prowlarr 裡的**每一站**（Berth 加的、使用者在 Prowlarr 自己加的都算，`IndexerSetupStatus.sites`），每列一顆「搜尋」、段頭一顆「搜尋全部」，共用一個關鍵字欄（預設留白）。
+- 試搜是 `read` 命令 `indexer.search_indexers`（`GET /setup/indexers/search?query=&indexer_id=`，不帶 id 是全部）：逐站各發一個 `GET /api/v1/search?indexerIds=<id>`、併發，一站失敗寫在那一站上；回每站筆數與前三筆標題。
+- 移除是 `indexer.remove_indexer`（`DELETE /setup/indexers/{id}`），就地確認，只對套件內、只對 **Berth 加的站**（`SetupIndexer.added_sites`）。使用者自己加的、沒有紀錄的回 422，列上說 Berth 沒有這一站的紀錄、到 Prowlarr 移除。最後一站也移除時這一頁回到未完成。
+
+**進頁只讀**：精靈這一頁與設定頁的索引站分頁都只發 `GET /setup/indexers`（讀已加入的站、schema 與介面登入），不測任何一站、不送任何寫入。
+
+**既有**：Prowlarr 位址 + API key（只支援 Prowlarr，不接任一 Torznab 端點）。
+
+- **表單、測試那一條與補法是頁 1、2 那一份**（`ServiceChoice` 的 `ExistingForm` 與 `TestLine`，送 `POST /setup/services/prowlarr`）：key 錯時與頁 1、2 同一個錯誤版面，有「測試結果」那一列。右欄的 API key 那一格跟著最近一次連線測試：連上才寫「已取得」、key 被拒寫「不被接受」、其餘是「已存下，還沒驗證」。設定頁的 Prowlarr 分頁同樣用連線區（`ServiceConnection`）。
+- Berth 用使用者已有的索引站；「已加入」列出它已有的站與站數（讀 `GET /api/v1/indexer`），沒有移除，試搜照樣可用。
+- **既有 Prowlarr 也有「加站」**（ADR-0013）：同一套先測再勾、按一次加入，按鈕旁寫明「會加進你的 Prowlarr（主機）：哪幾站」，不讀也不寫它的 `config/host`。
+  - **主鍵與套件內同一個條件**：一站都沒有時給「測試推薦站，加入通過的」，上面一句列出推薦的站名與它的位址、說 Berth 不移除站；逐站測試與勾選收進「進階」，已經有站時只剩它。
+- **一站都沒有時這一頁待處理**：連線纜繩是 `pending`（`indexer.existing_prowlarr_step`，三條入口共用），畫面說出下一步——到 Prowlarr 加站（連結是瀏覽器開得了的位址）後按「重新讀取」（就是服務頁的重新測試）、在下面加推薦站，或之後再說。
+- 加站與移除之後，連線測試記下的站數跟著清單（`_recount`），連線卡與泊位卡不再停在舊的數字。沒有介面登入那一格。
+
+**可以跳過**（「之後再說」，連介面登入一起）：沒有索引站只是搜尋不到東西。
+
+- 完成頁的那一句照 Prowlarr 上實際的站數說：有站就說搜尋用得到它們，讀不到清單就說讀不到。
+- **精靈之後也有出口**：設定 → Prowlarr 頁尾的「不用 Prowlarr」（就地確認）寫的是同一個 `setup.indexer.skipped`（`POST /setup/indexers/skip`，`indexer.skip_indexers`，可逆）。不用時那一頁收成一塊說明加「改回使用 Prowlarr」，不讀站的清單（那要現場問 Prowlarr）。
+- 用不用由健康那一列的 `unused` 告訴前端：讀的時候從 `skipped` 算、不看紀錄，所以選下去的那一刻 BTH 4 就是「沒有使用」、不算降級。`health_checker` 不連它；搜尋回 `not_configured`，作品頁給「前往設定：Prowlarr」與同頁的「RSS 訂閱」兩條路。完成照頁序再驗時這一格算完成。
+- 既有 Prowlarr 再測一次連線會清掉 `skipped`（`_existing_indexer_step`）。
+
+##### 5. TMDB
+
+使用者貼自己的 API key（v3 key 或 v4 token 都收），按「測試」。
+
+- **「前往下一個泊位」自己會先測**（Sonarr 的 Save 也會再測一次）：它是那張 key 表單的另一個送出鍵（`BerthNav` 的 `nextForm`），欄位裡有還沒測過的 key 就先測、通過才走，沒通過留在原地說為什麼；欄位空著而存下的那一把驗過了就直接走。「測試 TMDB」照留、降成次要。
+- **這一頁是必填的閘門**（[ADR-0011](adr/0011-wizard-accepted-frictions.md)）：`configuration` 綠燈才走得到完成，畫面同時要說得出去哪裡申請（themoviedb.org → 設定 → API）。完成那一頁再擋一次，閘門看的是存下來的那一條綠燈。
+- **測過才存**：測不過的那一把與它的紅燈只回給畫面，已經有一把驗過的在用就照舊在用（設定頁換 key 貼錯一把不該讓探索與入庫停擺），沒有就還是沒有。`GET /setup/tmdb` 的 `api_key_present` 因此與 `verified` 同真同假（欄位保留），沒有「已存下，沒通過驗證」。
+- 0.1.0 測不過也存下的舊 key 不寫 migration，讀的時候當作沒有，下一次測過就蓋掉。
+
+##### 6. 完成
+
+`POST /setup/complete` 寫 `settings.setup.completed`。
+
+- 照〈續行與跳過〉的頁序把每一頁再問一次，有一頁不再成立就回 422——另一個分頁回頭改了頁 2 或頁 4 也擋得住；前端收到 422 就重讀進度、回到那一頁。
+- 問過的那些結論寫進 `settings.health`，健康頁一打開就有「上次檢查：剛才」，迴圈一個間隔之後才跑下一輪。
+- 說出跳過了什麼與在哪裡補，並說出之後拿什麼登入（擁有者的 Jellyfin 帳號），然後回首頁——擁有者從第 1 頁起就登入著，直接落在探索。`/` 從那一刻起不再導向精靈，所以前端要就地把 `GET /health` 的那一個位元改掉再導航。
+
+#### 續行與跳過
+
+精靈狀態存在 `settings.setup`，關掉瀏覽器再回來回到原本那一頁。**步驟由狀態導出，不存游標**：
+
+| 停在 | 條件 |
+| --- | --- |
+| 頁 1 | 擁有者未成立 |
+| 頁 2 | qBittorrent 沒選、最後一次測試不是綠的，或套件內那一台的登入沒結論 |
+| 頁 3 | Route 沒有或沒全綠，或套件內清單有一列不在 Jellyfin 上 |
+| 頁 4 | Prowlarr 沒結論也沒跳過 |
+| 頁 5 | TMDB 沒綠燈 |
+| 完成 | 以上都不成立 |
+
+- 頁 2：既有的那一台測試綠了就算做完；測試要綠，所以設好之後它停了、重新測試紅了，頁 2 就不算做完。前端讀差異或套用時發現連不上而連線卡還是綠的，自動重新測試一次，卡片照實際的例外變紅、出現「重新測試」。
+- 頁 3：「清單有一列不在 Jellyfin 上」看媒體庫快照，不看「建媒體庫那一步跑過沒」，與剖面的「已建立」同一條 `jellyfin.libraries_built`——保留 Jellyfin 重裝 Berth 時清單全部已建立、那一步從不執行。
+- **可跳過的只有頁 4**，完成頁說出跳過了什麼與在哪裡補；頁 2、3、5 不可跳。兩者不同級：沒有索引站只是搜尋不到東西，沒有 TMDB 則探索、季集快照與命名全部停擺。
+
+#### 前端的導覽
+
+Material Stepper 的 linear 模式，Jellyfin 自己的啟動精靈有「上一步」。後端的步驟仍然是導出的、前端不改它；前端只決定「畫面停在哪一頁」，進出規則全部是 `web/src/setup/navigation.ts` 的純函式：
+
+- **畫面上那一頁就是網址的 `/setup?step=N`**（NN/g 的精靈準則要能回上一步）：進頁沒寫就以後端那一頁補上（`replace`），點泊位板、上一個 / 前往下一個、回到目前這一步都進瀏覽器的歷史，所以瀏覽器的上一頁回到上一個看過的頁、不離開精靈，重新整理留在原頁。網址指到後端還沒到的頁（手打的、後端退回去了）就拉回後端那一頁，網址一起改。
+- **做完停在結果上**：網址一直寫著畫面上那一頁，後端前進之後畫面不動，出現「前往下一個泊位」才走。例外是頁 5：還差的那一件一按就做得完，前進鍵就是送出它、做成了才走。
+- **走過的點得回去，沒到的點不過去**：泊位板五格（Jellyfin、qBittorrent、媒體庫與路徑、Prowlarr、TMDB），走過的與目前的那幾格是按鈕，還沒到的是純文字——前進只能靠把事做完。板上方沒有前置列：擁有者就是 Jellyfin 那一格的結果。回頭看 Jellyfin 那一格說擁有者是誰、密碼在 Jellyfin 裡改。健康頁同一塊板，不可點。
 - **每一頁有「上一個泊位」**；前往下一個一頁一頁走得回後端那一頁，所以回頭之後永遠走得回來。回頭看得比「剛做完的那一格」更前面時，板下一條帶子給「回到目前這一步」。
 - **回頭看的那一頁說出能改什麼、不能改的去哪裡**：每一頁都是冪等命令，回頭照樣重跑，做過的標「已經是這樣」。
-- **「重新測試」放在出問題的那一頁**：測試那一條是紅燈時才有（`POST /setup/services/{kind}/test` 帶 `restart`），取代原本的「重新偵測這個服務」。
-- **頁 3 是一個畫面**（票 08 使用者拍板）：套件內的清單與 Route 在同一頁，一顆「建立並檢查」做完；原本的「開始靠泊」「前往 Route 與檢查」「媒體庫清單」三顆鈕與兩個畫面的切換拿掉。
-- **手機寬度（< 640px）泊位板收成一列摘要**（M4 票 30，`.scratch/m4/wizard-navigation-shape.md`，實測 B11-08、B11-09）：五個帶泊位號的小色塊＋目前那一格＋「展開」，紅了的其他格用字說出；按了就地展開整塊 2+2+1 板，換頁就收起、不記。桌機不變，健康頁的板不收。
-- **「上一個 / 前往下一個泊位」有下一個時不分寬度固定在工作面底部**（票 08：頁 3 做完是四條 Route，1280 × 720 上它被擠出畫面；DESIGN.md 記了這個例外）。
-- 只管第一次設定：精靈跑完之後的修改由設定頁接手（票 06i）。跑完之後 `/setup` 導向 `/settings`，精靈沒有「從外面直接跳到某個泊位」的深連結。
+- **「重新測試」放在出問題的那一頁**：測試那一條是紅燈時才有（`POST /setup/services/{kind}/test` 帶 `restart`）。
+- **頁 3 是一個畫面**：套件內的清單與 Route 在同一頁，一顆「建立並檢查」做完。
+- **手機寬度（< 640px）泊位板收成一列摘要**（`.scratch/m4/wizard-navigation-shape.md`）：五個帶泊位號的小色塊＋目前那一格＋「展開」，紅了的其他格用字說出；按了就地展開整塊 2+2+1 板，換頁就收起、不記。桌機不變，健康頁的板不收。
+- 「上一個 / 前往下一個泊位」有下一個時，不分寬度固定在工作面底部：頁 3 做完是四條 Route，1280 × 720 上它被擠出畫面（DESIGN.md 記了這個例外）。
+- 只管第一次設定：精靈跑完之後的修改由設定頁接手。跑完之後 `/setup` 導向 `/settings`，精靈沒有「從外面直接跳到某個泊位」的深連結。
 
 ### 9.4 Jellyfin 自動初始化序列
 
 依 brief §20.7：`/Startup/*` 與 `/Library/VirtualFolders` 在精靈完成前不需憑證；插件與排程任務需要管理員 token。
 
-**分兩半跑**（M4 票 06；2026-09-29 起第二半在媒體庫與路徑頁）：Jellyfin 頁（擁有者）跑下面的 1–3、5–7——帳密只在那一刻出現；媒體庫與路徑頁跑 1 與 4，用 Jellyfin 頁存下的 API key（`services.jellyfin` 的 `OWNER_STEPS` / `BERTH_STEPS`）。`JellyfinStep` 的宣告順序就是這個執行順序（媒體庫排最後）；畫面只列頁 3 建媒體庫那一步（M4 票 54 刪掉前端照序列七步的查表）。所以媒體庫是在 Jellyfin 的初始精靈跑完之後、以 API key 建的——第 4 步原本的「初始精靈跑完之後這一支要管理員憑證」從重按的特例變成常態。
+**分兩半跑**：Jellyfin 頁（擁有者）跑下面的 1–3、5–7——帳密只在那一刻出現；媒體庫與路徑頁跑 1 與 4，用 Jellyfin 頁存下的 API key（`services.jellyfin` 的 `OWNER_STEPS` / `BERTH_STEPS`）。`JellyfinStep` 的宣告順序就是這個執行順序（媒體庫排最後）；畫面只列頁 3 建媒體庫那一步。所以媒體庫是在 Jellyfin 的初始精靈跑完之後、以 API key 建的。
 
 1. `GET /System/Info/Public` → **先確認版本 ≥ 12.0**（低於就整段停在這裡，brief §16.4），再看 `StartupWizardCompleted`：`false` 給建立管理員的表單、跑 2–7；`true`（既有，或套件內但已初始化過）給登入表單、只跑 7。選套件內或既有不影響這一條（§9.3 的「表單跟著那一台的狀態走」）。
-2. `POST /Startup/Configuration` `{ UICulture, MetadataCountryCode, PreferredMetadataLanguage }`，**套件內那一台另帶 `ServerName = "Berth"`**（M4 票 52，使用者 2026-10-06 拍板；`jellyfin.BUNDLED_SERVER_NAME`）：不帶的話 Jellyfin 寫成空字串，用戶端看到的是容器 ID（brief §20.9）。伺服器名稱是全域設定，既有那一台即使還沒初始化也不帶（brief §16.4）；已經初始化的整步跳過，本來就不寫。不帶等於清成空字串：既有而還沒初始化的那一台要是事先在 `system.xml` 放了名字，會被這一步清掉——票 52 之前就是這樣，要保住得先 `GET /Startup/Configuration` 讀回原值再送，目前不做。**既有那一台在擁有者表單上問**「語言與地區」（一組代碼，預設跟著 UI 語言），**套件內的不問**，帶 UI 語言（`zh-Hant` → `zh-TW` / `TW`，`en` → `en-US` / `US` / `en`）（M4 票 18，使用者 2026-09-30 拍板；`jellyfin.JellyfinStartup`）。第 4 步的媒體庫照 Jellyfin 自己的 metadata 語言與國家建（M4 票 29），也就是這一步寫進去的那一組。**寫給還沒初始化的那一台的選擇記在 `setup.jellyfin.startup`**（M4 票 29）：管理員建好之後某一步失敗，那一台的初始精靈還沒跑完，頁 1 仍是建立表單、照它重填——只有走到第 6 步（`StartupWizardCompleted`）才改成登入，否則登入表單不帶語言，重試會拿預設值蓋掉使用者選的（實測 E12）。
-3. **先 `GET /Startup/User`**（它會跑 `UserManager.InitializeAsync()` 建立預設使用者），再 `POST /Startup/User` `{ Name, Password }` = 擁有者在 Jellyfin 頁填的那一組。少了 GET，POST 會回 500（brief §20.7）。**12.0 起第一個使用者已經有密碼時這一支回 403**，那是「已經設過了」而不是失敗（票 14b、brief §20.9）：第 3 步成功、後面某一步失敗、Jellyfin 沒重啟時按重試就會走到這裡，翻成錯誤的話重試永遠走不完。密碼對不對由第 7 步的登入驗證——所以管理員已經在時，同一組帳密就是登入，別的密碼過不了第 7 步。
-4. **先 `GET /Library/VirtualFolders` 看有沒有同名的**：同名不會被拒，會建出 `Movies2` 指向同一個路徑（brief §20.7），所以清單上（§9.3 頁 3，`settings.setup.jellyfin.bundled`）同名已經在的標「已經是這樣」，只建其餘的。目錄由 Berth 建（`library_root` 之下那一列的資料夾，預設 `movies` / `tv` / `anime`），然後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=<library_root>/movies&refreshLibrary=false`，body 是 `AddVirtualFolderDto`，也就是 **`{"LibraryOptions": { … }}`（要包一層）**：`PathInfos`、`PreferredMetadataLanguage` 與 `MetadataCountryCode`（取自 `GET /System/Configuration`：頁 1 寫進去的，或重裝保留下來的那一台原本就有的，brief §20.7）、`EnableRealtimeMonitor=false`（Berth 主動通知）、`SeasonZeroDisplayName="Specials"`、`TypeOptions[]`。直接送 `LibraryOptions` 物件一樣回 204，但整份設定會被靜默丟掉（brief §20.7）。清單上每一列各一次，預設就是 `Movies`（`movies`）、`TV`（`tvshows`）、`Anime`（`tvshows`）。
-   - `TypeOptions[]` 的 **`MetadataFetchers` 是設定值**（`services.jellyfin.metadata_fetchers`，鍵是那一列的資料夾；沒寫的依內容類型落回 `DEFAULT_METADATA_FETCHERS`，目前兩種都是 TMDB，票 06f），**`ImageFetchers` 取自 `GET /Libraries/AvailableOptions?libraryContentType=`**。兩個都要給：只給 metadata 的話 image fetcher 會被存成空陣列，該類型從此不抓圖（實測，brief §20.7）。`AvailableOptions` 掛 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。
-   - **初始精靈跑完之後這一支要管理員憑證**：M4 票 06 起一律用 Jellyfin 頁存下的 API key（見本節開頭的分兩半），沒有 key 就不建。
-5. `POST /Startup/RemoteAccess` `{ EnableRemoteAccess }`：**預設不開**，既有那一台在擁有者表單上問、套件內的不問（M4 票 18）——Berth 從同一台主機的容器連進來，用不到它。
+2. `POST /Startup/Configuration` `{ UICulture, MetadataCountryCode, PreferredMetadataLanguage }`。
+   - **套件內那一台另帶 `ServerName = "Berth"`**（`jellyfin.BUNDLED_SERVER_NAME`）：不帶的話 Jellyfin 寫成空字串，用戶端看到的是容器 ID（brief §20.9）。
+   - 伺服器名稱是全域設定，**既有那一台即使還沒初始化也不帶**（brief §16.4）；已經初始化的整步跳過，本來就不寫。已知取捨：不帶等於清成空字串，既有而還沒初始化的那一台若事先在 `system.xml` 放了名字會被這一步清掉；要保住得先 `GET /Startup/Configuration` 讀回原值再送，目前不做。
+   - **既有那一台在擁有者表單上問**「語言與地區」（一組代碼，預設跟著 UI 語言），**套件內的不問**，帶 UI 語言（`zh-Hant` → `zh-TW` / `TW`，`en` → `en-US` / `US` / `en`；`jellyfin.JellyfinStartup`）。
+   - 第 4 步的媒體庫照 Jellyfin 自己的 metadata 語言與國家建，也就是這一步寫進去的那一組。
+   - **寫給還沒初始化的那一台的選擇記在 `setup.jellyfin.startup`**：管理員建好之後某一步失敗，那一台的初始精靈還沒跑完，頁 1 仍是建立表單、照它重填。只有走到第 6 步（`StartupWizardCompleted`）才改成登入，否則登入表單不帶語言，重試會拿預設值蓋掉使用者選的。
+3. **先 `GET /Startup/User`**（它會跑 `UserManager.InitializeAsync()` 建立預設使用者），再 `POST /Startup/User` `{ Name, Password }` = 擁有者在 Jellyfin 頁填的那一組。少了 GET，POST 會回 500（brief §20.7）。
+   - **12.0 起第一個使用者已經有密碼時這一支回 403**，那是「已經設過了」而不是失敗（brief §20.9）：第 3 步成功、後面某一步失敗、Jellyfin 沒重啟時按重試就會走到這裡，翻成錯誤的話重試永遠走不完。
+   - 密碼對不對由第 7 步的登入驗證：管理員已經在時，同一組帳密就是登入，別的密碼過不了第 7 步。
+4. **先 `GET /Library/VirtualFolders` 看有沒有同名的**：同名不會被拒，會建出 `Movies2` 指向同一個路徑（brief §20.7），所以清單上（§9.3 頁 3，`settings.setup.jellyfin.bundled`）同名已經在的標「已經是這樣」，只建其餘的。
+   - 目錄由 Berth 建（`library_root` 之下那一列的資料夾，預設 `movies` / `tv` / `anime`），然後 `POST /Library/VirtualFolders?name=Movies&collectionType=movies&paths=<library_root>/movies&refreshLibrary=false`。清單上每一列各一次，預設就是 `Movies`（`movies`）、`TV`（`tvshows`）、`Anime`（`tvshows`）。
+   - body 是 `AddVirtualFolderDto`，也就是 **`{"LibraryOptions": { … }}`（要包一層）**：直接送 `LibraryOptions` 物件一樣回 204，但整份設定會被靜默丟掉（brief §20.7）。內容：
+     - `PathInfos`；
+     - `PreferredMetadataLanguage` 與 `MetadataCountryCode`（取自 `GET /System/Configuration`：頁 1 寫進去的，或重裝保留下來的那一台原本就有的，brief §20.7）；
+     - `EnableRealtimeMonitor=false`（Berth 主動通知）；
+     - `SeasonZeroDisplayName="Specials"`；
+     - `TypeOptions[]`。
+   - `TypeOptions[]` 的 **`MetadataFetchers` 是設定值**（`services.jellyfin.metadata_fetchers`，鍵是那一列的資料夾；沒寫的依內容類型落回 `DEFAULT_METADATA_FETCHERS`，目前兩種都是 TMDB），**`ImageFetchers` 取自 `GET /Libraries/AvailableOptions?libraryContentType=`**。兩個都要給：只給 metadata 的話 image fetcher 會被存成空陣列，該類型從此不抓圖（brief §20.7）。`AvailableOptions` 掛 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。
+   - **初始精靈跑完之後這一支要管理員憑證**：一律用 Jellyfin 頁存下的 API key，沒有 key 就不建。
+5. `POST /Startup/RemoteAccess` `{ EnableRemoteAccess }`：**預設不開**，既有那一台在擁有者表單上問、套件內的不問——Berth 從同一台主機的容器連進來，用不到它。
 6. `POST /Startup/Complete`。
 7. `POST /Users/AuthenticateByName` 取 token → **先 `GET /Auth/Keys` 找 `AppName == "Berth"`**，沒有才 `POST /Auth/Keys?app=Berth`，建完再列一次把 key 讀回來。那一支回 204 而且**不回傳 key**，也不檢查重複——按兩次就有兩把同名的（brief §20.7）。key 存入 `settings.services.jellyfin`，之後的請求改用它（與登入 token 同一個標頭形狀）。
 
-**原本還有第 8、9 步**（加 danieladov 插件庫、裝 MergeVersions、重啟 Jellyfin、記下兩個合併任務的 `Id`）。票 14b 整段移除：只支援 Jellyfin 12，而 12.x 原生合併多版本，那個插件在上面是空跑（brief §19、§20.9）。少了它，這個序列不再重啟任何人的 Jellyfin，也不再依賴 GitHub 下載得動。
+**不做的事**：加插件庫、裝 MergeVersions、重啟 Jellyfin。只支援 Jellyfin 12，12.x 原生合併多版本，那個插件在上面是空跑（[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)、brief §20.9）。所以這個序列不重啟任何人的 Jellyfin，也不依賴 GitHub 下載得動。
 
 ### 9.5 既有服務的接入（brief §16.4）
 
-「既有」由使用者在那個服務的頁面選（§9.3，2026-09-29 起），不再由偵測判定；這一節是選了既有之後 Berth 怎麼接。
+「既有」由使用者在那個服務的頁面選（§9.3），不由偵測判定；這一節是選了既有之後 Berth 怎麼接。
 
-**掛載規則**：Berth、qBittorrent、Jellyfin 在**同一台主機**，把同一個宿主目錄（Berth 的 `DATA_ROOT`）掛在容器路徑 **`/data`**——只能是 `/data`：Berth 的三層路徑固定在它底下（`/data/torrent/{incomplete,complete}`、`/data/library`，`models.setting.PathSettings`，沒有設定可改；TRaSH 的單一 `/data`，brief §20.14）。**既有服務原本的掛載不動，多加這一條就好**（M4 票 36，審計 §C2）：Berth 只在 `/data` 底下讀寫，舊 torrent 照常在 `/downloads` 做種，Jellyfin 的 `/tv`、`/movies` 不能改（項目 ID 由路徑導出）。**不做 remote path mapping**（brief §18）：既有服務在另一台主機的接不上。「既有」選項旁說明這一條（容器路徑只能是 `/data`、`DATA_ROOT` 要建得了硬鏈接；缺某類型的媒體庫時頁 3 勾了才建），媒體庫與路徑頁的檢查失敗時給那一台要多加的那一條（compose 與 `docker run` 各一種）。
+**掛載規則**：Berth、qBittorrent、Jellyfin 在**同一台主機**，把同一個宿主目錄（Berth 的 `DATA_ROOT`）掛在容器路徑 **`/data`**——只能是 `/data`：Berth 的三層路徑固定在它底下（`/data/torrent/{incomplete,complete}`、`/data/library`，`models.setting.PathSettings`，沒有設定可改；TRaSH 的單一 `/data`，brief §20.14）。
+
+- **既有服務原本的掛載不動，多加這一條就好**：Berth 只在 `/data` 底下讀寫，舊 torrent 照常在 `/downloads` 做種，Jellyfin 的 `/tv`、`/movies` 不能改（項目 ID 由路徑導出）。
+- **不做 remote path mapping**（brief §18）：既有服務在另一台主機的接不上。
+- 「既有」選項旁說明這一條（容器路徑只能是 `/data`、`DATA_ROOT` 要建得了硬鏈接；缺某類型的媒體庫時頁 3 勾了才建）；媒體庫與路徑頁的檢查失敗時，給那一台要多加的那一條（compose 與 `docker run` 各一種）。
 
 NAS 範例：媒體在 `/volume1/media`、下載在 `/volume1/downloads`，Berth 的 `.env` 設 `DATA_ROOT=/volume1/berth`。使用者原本那一份只多加一條，其餘不動：
 
@@ -1156,50 +1443,88 @@ services:
 
 `docker run` 起的在原本的指令多加 `-v /volume1/berth:/data`。`/volume1/berth` 與 `/volume1/media` 不必在同一個檔案系統：硬鏈接只發生在 `/volume1/berth` 裡面（complete → library）。
 
-**選了既有之後停掉套件內那一台**：從 `COMPOSE_PROFILES` 拿掉只讓之後的 `up -d` 不再起它，停不掉已經在跑的容器（brief §20.14 實測），所以精靈完成頁的「閒著的套件內容器」（M4 票 103 起只在那裡給）、`docs/guide/existing-services.md` 與 `deploy/.env.example` 都另給 `docker compose stop <服務>`。
+**選了既有之後停掉套件內那一台**：從 `COMPOSE_PROFILES` 拿掉只讓之後的 `up -d` 不再起它，停不掉已經在跑的容器（brief §20.14），所以精靈完成頁的「閒著的套件內容器」（只在那裡給）、`docs/guide/existing-services.md` 與 `deploy/.env.example` 都另給 `docker compose stop <服務>`。
 
-**連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成宿主的區網 IP 或 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1），宿主上的服務要監聽 `0.0.0.0`；rootless Docker 上只有區網 IP 會通（brief §20.14，票 16、17、72）。
+**連線位址**：Berth 在容器裡，使用者填 `localhost` / `127.0.0.1` 指的是 Berth 自己。位址欄下就地提示改成宿主的區網 IP 或 `host.docker.internal`（Docker Desktop 內建；Linux 靠 `berth` 服務的 `extra_hosts: ["host.docker.internal:host-gateway"]`，§9.1）。宿主上的服務要監聽 `0.0.0.0`；rootless Docker 上只有區網 IP 會通（brief §20.14）。
 
-**既有 Jellyfin**
+#### 既有 Jellyfin
 
-- 要的是位址 + **管理員**帳密（Berth 以它登入、自己建 API key，§9.4 第 7 步）；不是管理員就拒絕（票 06）。
+- 要的是位址 + **管理員**帳密（Berth 以它登入、自己建 API key，§9.4 第 7 步）；不是管理員就拒絕。
 - 不搬媒體庫：Jellyfin 的項目 ID 由路徑導出，改路徑等於觀看紀錄歸零。
-- 「加入 Berth 路徑」按鈕：對選定媒體庫呼叫 `POST /Library/VirtualFolders/Paths?refreshLibrary=false`，body `{Name: <library>, Path: <library_root>/<slug>, PathInfo: {Path: …}}`；Route 指向這個新路徑，舊路徑只讀（辨識已存在媒體與 unmanaged 檔案）。**送出前兩件事要先擋掉**：目錄不存在會回 404（所以 Berth 先建），同一條路徑送兩次會讓媒體庫出現兩個一樣的 location（所以先看 `Locations`）。兩者都是 2026-09-07 實測（brief §20.7）。
-- 使用者也可以不加路徑，直接在既有路徑中選一個當寫入目標；兩種都跑同樣的檢查。**預選的是 Berth 路徑**，只有一條既有路徑時也是（M4 票 19）。
-- **加路徑之前先問 Jellyfin 看不看得到**（M4 票 19）：它對加不上的路徑只回 404 `Error processing request.`，媒體庫不存在也是同一句（brief §20.7）。Berth 建目錄、寫探測檔、`ValidatePath {IsFile: true}`；看不到就是 `BerthPathFailure.jellyfin_cannot_see`，不送那一支、收回剛建的目錄（`fs.missing_directories` / `remove_empty_directories`，只收自己建的那幾層）。一次送好幾個媒體庫（`{libraries: [...]}`），逐個試、逐個記在 `setup.jellyfin.berth_paths`；有一個沒加上，`libraries` 那一步就紅，精靈不建 Route。**畫面上 `jellyfin_cannot_see` 合併成一則**（`AddPathFailures`，M4 票 63，審計 C5）：那是整台 Jellyfin 沒掛 `/data`，列出受影響的媒體庫、補法只給一次；其餘原因只關那一個媒體庫，一個一條。
-- **頁 3 進頁時重讀媒體庫**（`POST /setup/routes/libraries`，另有一顆「重新讀取」，M4 票 19；**套件內也重讀**，按「建立並檢查」之前再讀一次，M4 票 24）：頁 1 之後在 Jellyfin 改的掛載、路徑與媒體庫要看得到。它只讀 Jellyfin、換 Berth 自己的快照，不寫任何服務，所以不算票 08「進頁不送寫入」的例外（真正的例外是套件內第一次來的自動建立，M4 票 43；那一次不另外重讀，整段自己先讀）。
-- **類型對得上的媒體庫預設勾選**（電影、劇集；`LibraryChoice.preselected`，審計 C2，M4 票 64），寫入目標照舊預設 Berth 路徑。Route 刪掉之後那個媒體庫明確記成沒勾，不回到預設。
-- **缺某類型的媒體庫：勾選表最後一張「新建一個媒體庫」**（M4 票 64，`.scratch/m4/existing-new-library-shape.md`）：預設不勾；勾了展開類型（預設那台還沒有的那一種）、名稱（照類型與介面語言預填）、資料夾（`<library root>/<slug>`，只顯示）。建在 `_Runner._libraries`，與套件內同一條路徑，同名的已經在就略過（重按不長出 `電影2`）。名稱與已有的只差大小寫、資料夾已經是別的媒體庫的路徑，前端就地擋、後端 422。建成之後那一張收回成沒勾，新的媒體庫出現在清單上、已經有 Route。
-- **同一個資料夾不給第二個媒體庫**（M4 票 64）：兩個名字算出同一個 slug 時，加 Berth 路徑的那一個失敗（`path_taken`）；同一輪兩個都要加時，後面那個看得到前面剛加的。勾選表上已經是別的媒體庫路徑的那一條新 Berth 路徑選不了。
-- 絕不自動建立媒體庫（只建頁 3 勾了的那一個）、安裝插件或改既有媒體庫的 `LibraryOptions`。**adapter 的介面上根本沒有插件那幾支**（票 14b），所以「安裝插件」與「重啟」在這一層就做不到。
-- 版本低於 12.0 的既有 Jellyfin 接不進來（brief §16.4）：Jellyfin 頁紅燈、健康檢查紅燈，訊息說出目前版本與升級前後要做的事。
+- 版本低於 12.0 接不進來（brief §16.4）：Jellyfin 頁紅燈、健康檢查紅燈，訊息說出目前版本與升級前後要做的事。
+- 絕不自動建立媒體庫（只建頁 3 勾了的那一個）、安裝插件或改既有媒體庫的 `LibraryOptions`。**adapter 的介面上根本沒有插件那幾支**，所以「安裝插件」與「重啟」在這一層就做不到。
 
-**既有 qBittorrent**
+**「加入 Berth 路徑」**：對選定媒體庫呼叫 `POST /Library/VirtualFolders/Paths?refreshLibrary=false`，body `{Name: <library>, Path: <library_root>/<slug>, PathInfo: {Path: …}}`；Route 指向這個新路徑，舊路徑只讀（辨識已存在媒體與 unmanaged 檔案）。使用者也可以不加路徑，直接在既有路徑中選一個當寫入目標；兩種都跑同樣的檢查。**預選的是 Berth 路徑**，只有一條既有路徑時也是。
 
-- 要的是位址 + WebUI 帳密（5.2 起的 API key 這一輪不做，brief §16.4）。
+- **送出前兩件事要先擋掉**（brief §20.7）：目錄不存在會回 404（所以 Berth 先建）；同一條路徑送兩次會讓媒體庫出現兩個一樣的 location（所以先看 `Locations`）。
+- **加路徑之前先問 Jellyfin 看不看得到**：它對加不上的路徑只回 404 `Error processing request.`，媒體庫不存在也是同一句（brief §20.7）。Berth 建目錄、寫探測檔、`ValidatePath {IsFile: true}`；看不到就是 `BerthPathFailure.jellyfin_cannot_see`，不送那一支、收回剛建的目錄（`fs.missing_directories` / `remove_empty_directories`，只收自己建的那幾層）。
+- 一次送好幾個媒體庫（`{libraries: [...]}`），逐個試、逐個記在 `setup.jellyfin.berth_paths`；有一個沒加上，`libraries` 那一步就紅，精靈不建 Route。
+- **畫面上 `jellyfin_cannot_see` 合併成一則**（`AddPathFailures`）：那是整台 Jellyfin 沒掛 `/data`，列出受影響的媒體庫、補法只給一次；其餘原因只關那一個媒體庫，一個一條。
+- **同一個資料夾不給第二個媒體庫**：兩個名字算出同一個 slug 時，加 Berth 路徑的那一個失敗（`path_taken`）；同一輪兩個都要加時，後面那個看得到前面剛加的。勾選表上已經是別的媒體庫路徑的那一條新 Berth 路徑選不了。
+
+**勾選表**
+
+- **類型對得上的媒體庫預設勾選**（電影、劇集；`LibraryChoice.preselected`），寫入目標照舊預設 Berth 路徑。Route 刪掉之後那個媒體庫明確記成沒勾，不回到預設。
+- **缺某類型的媒體庫：勾選表最後一張「新建一個媒體庫」**（`.scratch/m4/existing-new-library-shape.md`）：
+  - 預設不勾；勾了展開類型（預設那台還沒有的那一種）、名稱（照類型與介面語言預填）、資料夾（`<library root>/<slug>`，只顯示）。
+  - 建在 `_Runner._libraries`，與套件內同一條路徑，同名的已經在就略過（重按不長出 `電影2`）。
+  - 名稱與已有的只差大小寫、資料夾已經是別的媒體庫的路徑，前端就地擋、後端 422。建成之後那一張收回成沒勾，新的媒體庫出現在清單上、已經有 Route。
+
+#### 既有 qBittorrent
+
+- 要的是位址 + WebUI 帳密（5.2 起的 API key 目前不做，brief §16.4）。
 - 不搬舊種：Berth 只用自己建立的 `berth-*` category，忽略其他分類的 torrent；舊 torrent 留在原目錄。
-- 使用者原本只掛 `/downloads` 的，多加一條 `${DATA_ROOT}:/data` 即可、`/downloads` 留著；Berth 的 category save path 落在 `/data/torrent/complete` 下（M4 票 36）。
-- **不改全域偏好**（M4 票 05；套件內同一條，M4 票 32）：全域 `save_path`、temp path、autoTMM 都是使用者的，Berth 一個都不寫、也不列；送單時逐個 torrent `autoTMM=true`，路徑由 Berth 的分類決定，未完成目錄也是（`downloadPath`，M4 票 22）。
+- 使用者原本只掛 `/downloads` 的，多加一條 `${DATA_ROOT}:/data` 即可、`/downloads` 留著；Berth 的 category save path 落在 `/data/torrent/complete` 下。
+- **不改全域偏好**（套件內同一條，ADR-0013）：全域 `save_path`、temp path、autoTMM 都是使用者的，Berth 一個都不寫、也不列；送單時逐個 torrent `autoTMM=true`，路徑由 Berth 的分類決定，未完成目錄也是（`downloadPath`）。
 - 版本低於 4.4（API 2.8.4）拒絕接入並提示升級。
 
-**既有 Prowlarr**
+#### 既有 Prowlarr
 
 - 要的是位址 + **API key**（Prowlarr 的 API 只收 API key，帳密只給瀏覽器，brief §20.14）。
-- 用使用者已有的索引站；使用者按了「加入」才加勾的那幾站（M4 票 20），Berth 不移除它的站、不設它的登入（422）。**0 站不算完成**：頁 4 待處理，加站、重新讀取或之後再說才往下。
-- **版本下限 1.3.2**（brief §20.14：卡住它的是匿名的 `GET /ping`，其餘端點從 0.1 就有）。版本讀 `GET /api/v1/system/status` 的 `version`（`ProwlarrStatus.supported`，形狀照 Jellyfin 的 `public_info().supported`）。`indexer.probe_indexer`（健康檢查；M4 票 39 之前頁 4 的既有表單也用它）與 `setup._test_connection`（服務頁的二選一與「重新測試」；有 key 時）**不問 `/ping`、直接問它**（M4 票 20：1.3.2 之前沒有 `/ping`，回的是介面的 HTML，先問它就說不出版本），401 是 `AUTH_REQUIRED`（補法說 API key 在「設定 → 一般」），太舊寫 `indexer.outdated_step`：細節是它的版本、原文是 `prowlarr.unsupported_message`，理由 `ConnectionReason.VERSION_UNSUPPORTED`（不等，套件內也當場紅）。
+- 用使用者已有的索引站；使用者按了「加入」才加勾的那幾站，Berth 不移除它的站、不設它的登入（422）。**0 站不算完成**：頁 4 待處理，加站、重新讀取或之後再說才往下。
+- **版本下限 1.3.2**（brief §20.14：卡住它的是匿名的 `GET /ping`，其餘端點從 0.1 就有）。版本讀 `GET /api/v1/system/status` 的 `version`（`ProwlarrStatus.supported`，形狀照 Jellyfin 的 `public_info().supported`）。
+  - `indexer.probe_indexer`（健康檢查）與 `setup._test_connection`（服務頁的二選一與「重新測試」；有 key 時）**不問 `/ping`、直接問它**：1.3.2 之前沒有 `/ping`，回的是介面的 HTML，先問它就說不出版本。
+  - 401 是 `AUTH_REQUIRED`（補法說 API key 在「設定 → 一般」）；太舊寫 `indexer.outdated_step`：細節是它的版本、原文是 `prowlarr.unsupported_message`，理由 `ConnectionReason.VERSION_UNSUPPORTED`（不等，套件內也當場紅）。
 
-**檢查與訊息**（精靈的媒體庫與路徑頁與 `health_checker` 共用）。一個 Route 六條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
+#### 檢查與訊息
+
+精靈的媒體庫與路徑頁與 `health_checker` 共用。一個 Route 六條纜繩，前一條失敗就不跑下一條——後面的檢查測的會是錯的路徑。`RouteCheck` 是它們的封閉值集合，結果逐條存進 `routes.health_detail_json`。
 
 1. `category`：`torrents/createCategory` 建 `berth-<slug>`（save path 為 `<complete root>/<slug>`）。已存在且路徑相同就跳過；路徑不同 → 回報衝突且**不覆寫**（改 category 路徑會搬走該分類所有 torrent，brief §20.2）。
-2. `download_path`：**qBittorrent 回報的**這個 category 的兩個路徑（第 1 步的 `torrents/categories`：save path 與分類自己的未完成目錄；票 22 之前建的分類沒有後者，就不看）`stat` 得到。`stat` 的必須是服務報出來的字串——拿 Berth 自己算出來、而且剛剛才建好的目錄去 `stat` 一定會過，等於沒檢查。**全域 `save_path` 不看，兩種來源都一樣**（M4 票 05、32）：那是使用者自己的預設路徑，Berth 不寫它、送單也不落在那裡。套件內那一台原本另外現查它，使用者一改，三條 Route 全紅、送單被擋，錯誤還掛在分類路徑底下（審計 S5）。
-3. `download_visible`：**反過來問**（M4 票 19）：Berth 在 qBittorrent 報的分類路徑寫探測檔，做成探針 torrent 請它校驗（`qbittorrent.probe_sight`，brief §20.2），100% 才過。第 2 條只證明 Berth 看得到那個字串，而那個目錄是 Berth 自己在第 1 條建的——既有 qBittorrent 只掛 `/downloads` 時它照樣在。讀到 `error` 是權限，逾時是它忙著校驗別的，理由各自說。**`health_checker` 不跑這一條、沿用上一次的結論**（`check_routes(probe_qbittorrent=False)`）：校驗到 100% 會觸發 qBittorrent 的「完成時執行外部程式」（brief §20.2 實測）；精靈、新增 Route、「重新檢查」照樣真的問。**真的問到的結論另存一份**（`RouteHealth.probe` 與 `probed_at`，M4 票 50）：`checks` 裡那一條會被斷在它之前的一輪洗成 `pending`，沿用的是另存的那一份；API 的 Route 多 `probed_at` 與 `probe_carried`，纜繩上說「沿用上一次的結論」與那一次的時間、要再問到 Route 設定按「重新檢查」；跑到一半（有 `running`）不說沿用，探到的結論當下就存，之後被打斷也不退回上一次的。從沒問到過的才是「尚未執行」，**那一條 Route 的總結是 `unknown`、畫面寫「要重新檢查」，不算進「已繫上」**（`routes._verdict`：有一條紅就紅，每一條都問到結論才綠；M4 票 59，審計 S4 換回套件內的 5/6）。**換一台 qBittorrent 之後**（`forget_route_checks` 作廢所有 Route 的檢查）設定 → qBittorrent 在新那台測過之後自動送一次「全部重新檢查」（`POST /routes/check`），逐條照頁 3 的進度畫；套件內那一台還在啟動的話等之後的重新測試轉綠再送。精靈裡換台（頁 2）不自動跑，頁 3 本來就是閘門。Route 設定頁另有「全部重新檢查」；健康頁的 Route 總結是「要重新檢查」時給管理員同一顆鍵。結果出來之前送單照 `jobs.check_route`：`unknown` 放行（送單自己 `ensure_category`，在空的新那一台也建得出分類，2026-10-08 實跑），`failed` 才擋。
-4. `library_path`：**向 Jellyfin 現查**這個 Route 的寫入目標仍是媒體庫的路徑之一，而且 Berth `stat` 得到。不吃存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。**只驗寫入目標，不驗媒體庫的其他路徑**（M4 票 19 定案）：Berth 只在寫入目標底下讀寫（`services/reconcile.py` 走的是 Route 的目標，媒體庫的作品經 Jellyfin 的 API 讀），「舊路徑不動、加一條 Berth 路徑」時舊的 `/movies` Berth 看不到並不礙事。
+2. `download_path`：**qBittorrent 回報的**這個 category 的兩個路徑（第 1 步的 `torrents/categories`：save path 與分類自己的未完成目錄；較早建的分類沒有後者，就不看）`stat` 得到。
+   - `stat` 的必須是服務報出來的字串：拿 Berth 自己算出來、而且剛剛才建好的目錄去 `stat` 一定會過，等於沒檢查。
+   - **全域 `save_path` 不看，套件內與既有一樣**：那是使用者自己的預設路徑，Berth 不寫它、送單也不落在那裡。現查它的話，使用者一改，所有 Route 全紅、送單被擋，錯誤還掛在分類路徑底下。
+3. `download_visible`：**反過來問**。Berth 在 qBittorrent 報的分類路徑寫探測檔，做成探針 torrent 請它校驗（`qbittorrent.probe_sight`，brief §20.2），100% 才過。第 2 條只證明 Berth 看得到那個字串，而那個目錄是 Berth 自己在第 1 條建的——既有 qBittorrent 只掛 `/downloads` 時它照樣在。讀到 `error` 是權限，逾時是它忙著校驗別的，理由各自說。
+   - **`health_checker` 不跑這一條、沿用上一次的結論**（`check_routes(probe_qbittorrent=False)`）：校驗到 100% 會觸發 qBittorrent 的「完成時執行外部程式」（brief §20.2）。精靈、新增 Route、「重新檢查」照樣真的問。
+   - **真的問到的結論另存一份**（`RouteHealth.probe` 與 `probed_at`）：`checks` 裡那一條會被斷在它之前的一輪洗成 `pending`，沿用的是另存的那一份。API 的 Route 多 `probed_at` 與 `probe_carried`；纜繩上說「沿用上一次的結論」與那一次的時間，要再問到 Route 設定按「重新檢查」。跑到一半（有 `running`）不說沿用，探到的結論當下就存，之後被打斷也不退回上一次的。
+   - 從沒問到過的才是「尚未執行」，**那一條 Route 的總結是 `unknown`、畫面寫「要重新檢查」，不算進「已繫上」**（`routes._verdict`：有一條紅就紅，每一條都問到結論才綠）。
+   - **換一台 qBittorrent 之後**（`forget_route_checks` 作廢所有 Route 的檢查），設定 → qBittorrent 在新那台測過之後自動送一次「全部重新檢查」（`POST /routes/check`），逐條照頁 3 的進度畫；套件內那一台還在啟動的話，等之後的重新測試轉綠再送。精靈裡換台（頁 2）不自動跑，頁 3 本來就是閘門。Route 設定頁另有「全部重新檢查」；健康頁的 Route 總結是「要重新檢查」時給管理員同一顆鍵。
+   - 結果出來之前送單照 `jobs.check_route`：`unknown` 放行（送單自己 `ensure_category`，在空的新那一台也建得出分類），`failed` 才擋。
+4. `library_path`：**向 Jellyfin 現查**這個 Route 的寫入目標仍是媒體庫的路徑之一，而且 Berth `stat` 得到。不吃存下來的快照——使用者可能在那之後改了路徑或刪了媒體庫。**只驗寫入目標，不驗媒體庫的其他路徑**：Berth 只在寫入目標底下讀寫（`services/reconcile.py` 走的是 Route 的目標，媒體庫的作品經 Jellyfin 的 API 讀），「舊路徑不動、加一條 Berth 路徑」時舊的 `/movies` Berth 看不到並不礙事。
 5. `probe_visible`：在 Route 目標寫探測檔，`POST /Environment/ValidatePath` `{Path, IsFile: true}` 請 Jellyfin 確認看得到同一條路徑（看得到 204、看不到 404），問完就刪。
 6. `hardlink`：在 `<complete root>/<slug>` 建暫存檔並 `link()` 到 Route 目標，確認同 device、同 inode，之後兩邊都清乾淨（`fs.link_test`）。
-7. 任一步失敗 → 精靈與健康頁指出「哪個容器少了哪個掛載」，附**要改的那一台**的 compose `volumes:` 修正片段（`routeChecks.remedyFor`，M4 票 19）：`download_path` 與 `hardlink` 的 `EXDEV` 是 berth；`download_visible` 是 qbittorrent；`library_path` 與 `probe_visible` 是 jellyfin（Berth 早就掛著共用目錄，叫人改 berth 是白改）；不是 `EXDEV` 的硬鏈接失敗不附片段。`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。**精靈頁 3 對既有服務給那一台自己的版本**（票 08、19，`RouteCheckList` 的 `existing`）：片段是「你原本那一份」要**多加**的一條（`Remedy.mount` → `MountFix`）：compose、`docker run -v`、Unraid 模板「Add another Path」的欄位三種寫法，宿主那一側是 `host_data_root` 的值（M4 票 63：原本是 `${DATA_ROOT}`，要人自己去 `.env` 找；相對路徑說它相對於 Berth 的 docker-compose.yml、要換成絕對路徑；不知道值時照舊 `${DATA_ROOT}`），容器路徑是 Berth 的 `complete_root` 與 `library_root` 的共同父目錄，也就是 `/data`，說明講原本的掛載不動、不做 remote path mapping（M4 票 36：原本叫人把下載目錄移到 `/data` 底下，照做舊 torrent 會找不到檔案）；`download_path`（既有 qBittorrent）另說同一個字串的條件，`hardlink` 的 `EXDEV`（任一既有）另說 berth 只能用一條掛載蓋住 `/data`、你的服務原本的掛載留著。Route 設定頁照 `GET /setup/status` 的選擇給同一份（票 36）；健康頁給套件內那一份。
-8. **補法先看原因、再看是哪一條**（M4 票 25，實測 B5、E12）：與掛載無關的原因不給任何片段——`berth_cannot_write`（Berth 在自己的容器裡建不了目錄、寫不進探測檔，第 1、3、5 條都會撞上）說 PUID / PGID 與目錄權限，rootless Docker 另說填 `PUID=0`、`PGID=0`（票 72）；`directory_missing`（`_visible` 讀到 `FileNotFoundError` 而那條路徑在 Berth 自己的共用根目錄底下——`complete_root` 與 `library_root` 的共同父目錄，Berth 掛著它：目錄被刪或改名；不看「上面幾層在不在」，image 本來就有 `/media`、`/mnt`）說把它建回來或改回原路徑，與不在共用根目錄底下的 `path_not_visible`（沒掛進 Berth）分開；位址的協定寫錯與連不上、帳密、被封同一類。`library_path` 的掛載補法說 Route 建好之後寫入目標就鎖住了，要先刪掉這條 Route 再選新的路徑。
 
-**套件內的 Route 範圍**（M4 票 24 定案）：套件內 Jellyfin 只替**清單上的媒體庫**建 Route（`jellyfin.is_listed`：名稱相同，或它的路徑之一是那一列的資料夾——與「已建立」同一條比對；`LibraryChoice.listed` 讓剖面照同一條列「將建立」）。使用者自己在那台 Jellyfin 加的媒體庫（重裝時保留下來的、路徑不在 `/data` 的）不自動建 Route：原本照樣建、紅著擋住頁 3，刪掉之後下一次「建立並檢查」又長回來（實測 R-04～06）。沒選另一個做法「記下使用者刪過的媒體庫」：要多存一份墓碑，而且第一次照樣先建出一條紅的。代價：清單上的媒體庫刪了 Route 會在下一次按下時再建——要它不再出現就在 Jellyfin 刪掉媒體庫、重讀之後從清單拿掉那一列；精靈跑完之後在 `/settings/routes` 逐條管理。
+**任一步失敗**：精靈與健康頁指出「哪個容器少了哪個掛載」，附**要改的那一台**的 compose `volumes:` 修正片段（`routeChecks.remedyFor`）。
+
+- 對應：`download_path` 與 `hardlink` 的 `EXDEV` 是 berth；`download_visible` 是 qbittorrent；`library_path` 與 `probe_visible` 是 jellyfin（Berth 早就掛著共用目錄，叫人改 berth 是白改）；不是 `EXDEV` 的硬鏈接失敗不附片段。`EXDEV` 另附「兩個目錄在 Berth 內是不同掛載」的說明。
+- **精靈頁 3 對既有服務給那一台自己的版本**（`RouteCheckList` 的 `existing`）：片段是「你原本那一份」要**多加**的一條（`Remedy.mount` → `MountFix`）。
+  - compose、`docker run -v`、Unraid 模板「Add another Path」的欄位三種寫法。宿主那一側是 `host_data_root` 的值（相對路徑說它相對於 Berth 的 docker-compose.yml、要換成絕對路徑；不知道值時照舊 `${DATA_ROOT}`）。
+  - 容器路徑是 Berth 的 `complete_root` 與 `library_root` 的共同父目錄，也就是 `/data`。說明講原本的掛載不動、不做 remote path mapping（叫人把下載目錄移到 `/data` 底下的話，舊 torrent 會找不到檔案）。
+  - `download_path`（既有 qBittorrent）另說同一個字串的條件；`hardlink` 的 `EXDEV`（任一既有）另說 berth 只能用一條掛載蓋住 `/data`、你的服務原本的掛載留著。
+  - Route 設定頁照 `GET /setup/status` 的選擇給同一份；健康頁給套件內那一份。
+- **補法先看原因、再看是哪一條**：與掛載無關的原因不給任何片段。
+  - `berth_cannot_write`（Berth 在自己的容器裡建不了目錄、寫不進探測檔，第 1、3、5 條都會撞上）說 PUID / PGID 與目錄權限；rootless Docker 另說填 `PUID=0`、`PGID=0`。
+  - `directory_missing`（`_visible` 讀到 `FileNotFoundError` 而那條路徑在 Berth 自己的共用根目錄底下——`complete_root` 與 `library_root` 的共同父目錄，Berth 掛著它：目錄被刪或改名）說把它建回來或改回原路徑。不看「上面幾層在不在」，image 本來就有 `/media`、`/mnt`。它與不在共用根目錄底下的 `path_not_visible`（沒掛進 Berth）分開。
+  - 位址的協定寫錯與連不上、帳密、被封同一類。
+  - `library_path` 的掛載補法說 Route 建好之後寫入目標就鎖住了，要先刪掉這條 Route 再選新的路徑。
+
+#### 套件內的 Route 範圍
+
+套件內 Jellyfin 只替**清單上的媒體庫**建 Route（`jellyfin.is_listed`：名稱相同，或它的路徑之一是那一列的資料夾——與「已建立」同一條比對；`LibraryChoice.listed` 讓剖面照同一條列「將建立」）。
+
+- 使用者自己在那台 Jellyfin 加的媒體庫（重裝時保留下來的、路徑不在 `/data` 的）不自動建 Route：自動建的話照樣紅著擋住頁 3，刪掉之後下一次「建立並檢查」又長回來。
+- 沒選另一個做法「記下使用者刪過的媒體庫」：要多存一份墓碑，而且第一次照樣先建出一條紅的。
+- 代價：清單上的媒體庫刪了 Route 會在下一次按下時再建——要它不再出現就在 Jellyfin 刪掉媒體庫、重讀之後從清單拿掉那一列；精靈跑完之後在 `/settings/routes` 逐條管理。
 
 **不支援**：既有 qBittorrent 或 Jellyfin 與 Berth 不在同一台主機、或沒有把 Berth 的 `DATA_ROOT` 掛在容器路徑 `/data`；remote path mapping。
 
