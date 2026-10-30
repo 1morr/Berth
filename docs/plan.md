@@ -307,40 +307,62 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
 | --- | --- | --- | --- |
 | — | `add_download` | `requested` | 建 job、event `created` |
 | `requested` | qBittorrent 接受 | `submitted` | event `submitted`（category、save_path） |
-| `requested` | qBittorrent 拒絕 / 不可達 | `submit_failed` | event；可手動重試回 `requested`。**暫時與否分兩種**（M4 票 03）：**暫時的**是 `adapters.http.is_transient`——連不上、逾時（含 `ReadTimeout`）、解不到主機名、429、5xx，qBittorrent 與重送時抓 `.torrent` 那一站都算；event 多寫 `attempt`（第幾次）與 `retry_at`（下一次自動重送的時刻，次數用完是 `null`），由下一列自動重送。**再問也一樣的**——`.torrent` 404、qBittorrent 明確拒絕（415 等 4xx）、同名 category 指向別處、憑證被拒——不寫 `attempt`，照舊等人 |
-| `submit_failed`（暫時的） | `qbit_poller` 問得到 qBittorrent 的那一輪、`retry_at` 已過（`jobs.retry_due`） | `requested` → `submitted` / `submit_failed` | event `retried`（actor `system`），之後與人按的重試同一段收尾，`attempt` 接著數。**退避 1 分鐘、10 分鐘、1 小時、6 小時**（`jobs.SUBMIT_RETRIES`，照 `jellyfin_resolver` 反查排程的先密後疏），一筆最多送 1 + 4 次，第五次失敗寫 `retry_at = null` 停下等人。**qBittorrent 停機不花次數**：poll 失敗的那一輪走不到重送，停機一整夜的那一批在服務回來的第一輪接上；放在 poll 之後，客戶端其實收下了的已由同一輪的接回（下面 `submit_failed` → `submitted` 那一列）認回、不會再送一次。前提與人按的重試同一組（Route、磁碟門檻），不成立的留在原地不花次數，磁碟不夠時整輪停下。**一輪遇到第一筆又失敗就收手**：poll 答得了不代表送得進去（M3 票 21 真站一次送近兩百個時 qBittorrent 逾時），照送下去一整批會在同一刻各燒掉一次次數；收手之後每一輪只花一筆，其餘留到下一輪。次數與 `retry_at` 在拿到 `job_lock` 之後重讀，等鎖時被人按過的重試不會被蓋掉。人按的重試（與 Issue 的重新送單）`attempt` 從 1 重新數 |
-| `requested` | **程序啟動時仍停在這裡**（送單途中被打斷） | `submit_failed` | `error = interrupted: …`、event `submit_failed`（`jobs.fail_interrupted`，lifespan 在迴圈與 API 起來之前跑，M3 票 02）。**落到 `submit_failed` 而不是當場重送**：被打斷的正是等 qBittorrent 回應的那一段，它可能已經收下了——那一種由下一列認回；qBittorrent 在啟動那一刻多半還沒起來（compose 的啟動順序）。**它算暫時的**（M4 票 03，`attempt = 1`）：沒收下的由上一列在 poller 問得到 qBittorrent 之後自動重送，不再等人。只在啟動時跑：平常跑會把正在送的那一筆判成失敗 |
-| `submit_failed` | poller 在客戶端看到同一個 hash | `submitted` | event `recovered(from, state, client_state)`；凍結資料夾名、記下「上次用的 Route」——它其實送成功了（brief §4.5）。之後同一輪照常往前走；它有 Job，所以不是 `unknown_torrent`（M3 票 02） |
-| `submitted` | `torrents/files` 非空且 state 不是 `metaDL` | `metadata_ready` | 建 `job_files` + event `metadata_received`（票 10）；pre-plan 由 `planner_runner` 在下一輪補上（`plans.status = preplan` + event `preplan`，票 11）——poller 那一輪不算 Plan，兩件事的失敗理由不該綁在一起 |
+| `requested` | qBittorrent 拒絕 / 不可達 | `submit_failed` | event；可手動重試回 `requested`。失敗分兩種，見下方〈送單失敗的暫時與否〉 |
+| `submit_failed`（暫時的） | `qbit_poller` 問得到 qBittorrent 的那一輪、`retry_at` 已過（`jobs.retry_due`） | `requested` → `submitted` / `submit_failed` | event `retried`（actor `system`），之後與人按的重試同一段收尾，`attempt` 接著數。規則見〈自動重送〉 |
+| `requested` | **程序啟動時仍停在這裡**（送單途中被打斷） | `submit_failed` | `error = interrupted: …`、event `submit_failed`（`jobs.fail_interrupted`，lifespan 在迴圈與 API 起來之前跑，只在啟動時跑——平常跑會把正在送的那一筆判成失敗）。**落到 `submit_failed` 而不是當場重送**：被打斷的正是等 qBittorrent 回應的那一段，它可能已經收下了（由下一列認回）；qBittorrent 在啟動那一刻多半還沒起來（compose 的啟動順序）。它算暫時的（`attempt = 1`）：沒收下的由自動重送在 poller 問得到 qBittorrent 之後接手 |
+| `submit_failed` | poller 在客戶端看到同一個 hash | `submitted` | event `recovered(from, state, client_state)`；凍結資料夾名、記下「上次用的 Route」——它其實送成功了（brief §4.5）。之後同一輪照常往前走；它有 Job，所以不是 `unknown_torrent` |
+| `submitted` | `torrents/files` 非空且 state 不是 `metaDL` | `metadata_ready` | 建 `job_files` + event `metadata_received`；pre-plan 由 `planner_runner` 在下一輪補上（`plans.status = preplan` + event `preplan`）——poller 那一輪不算 Plan，兩件事的失敗理由不該綁在一起 |
 | `metadata_ready` | 有進度 | `downloading` | event `progress`（每跨 25% 一筆） |
 | `downloading` | `stalledDL` 超過 N 分鐘 | `stalled` | event；恢復進度即回 `downloading` |
 | `downloading` / `stalled` | client state `missingFiles` / `error` | `missing_files` / `client_error` | issue |
 | 任何活躍狀態 | torrent 從客戶端消失 | `client_removed` | issue `client_removed`；可 `reimport` 若 complete 檔案仍在 |
-| `imported` / `import_failed` / `removed` / `client_removed` | `POST /jobs/{hash}/reimport`（`REIMPORTABLE`） | `completed` | complete 裡那一包讀得到才動（否則 409 `content_missing`，Job 不動）；`job_files` 照磁碟上現在的樣子重寫（不在的刪、新的補、還在的留 id 與優先序）；event `retried(state=completed, action=reimport)`——它是去重界線。之後規劃器與 importer 照常一輪，帳本以來源冪等（M2 票 10） |
-| — | Issue `orphan_complete` 的「重新入庫」 | `completed` | 建一筆 `trigger = reimport` 的 Job，主鍵是那個目錄路徑的 SHA-1（`claims.adopted_hash`，同一個目錄同一筆），Route 由它在哪一條 Route 的 complete 子目錄決定，作品由管理員選；event `created`（M2 票 10） |
-| — | Issue `unknown_torrent` 的「認領」 | `submitted` | 按下去重問 qBittorrent；Route 由 category 決定（只掛 `berth` tag 的不猜）、作品由管理員選；event `created` + `submitted`，之後 poller 照常（M2 票 10） |
-| `missing_files` / `client_error` / `client_removed` | poller 在客戶端看到它好好的（使用者在 qBittorrent 裡自己 recheck、重新開始、把 torrent 加回去） | `metadata_ready`（沒有 `job_files` 的回 `submitted`） | event `recovered(from, state, client_state)`，它是事件去重的界線（接回之後一分鐘內又壞一次的那一筆與第一次一字不差）。「好好的」：`client_removed` 是看得到就接回（接回之後若是壞的，下一步照常轉進壞掉的狀態）；另外兩種要客戶端狀態不是壞掉、**而且它說做完了的話檔案真的在磁碟上**——Berth 自己發現的 `missing_files` 客戶端說的是 `stalledUP`，只看字串會每一輪「恢復」再壞一次。掛著的 Issue 由系統收（§2.4，M3 票 02） |
-| `missing_files` / `client_error` | Issue 的「重新校驗」/「重試」 | `metadata_ready`（沒有 `job_files` 的回 `submitted`） | 先向 qBittorrent 送 `start` 再送 `recheck`（重試只送 `start`，brief §20.2；**順序不能反**：5.x 對停住的 torrent recheck 完會再停下來，校驗中送到的 start 清不掉，M3 票 03），問不到就整顆不做、Job 不動；event `retried(state, action)`。之後由 poller 照常往前推，校驗完仍缺檔就照常再開一件（M2 票 09c） |
-| `client_removed` / `submit_failed` | Issue 的「重新送單」 | `requested` → `submitted` / `submit_failed` | Route 前提、下載連結（**要拿回同一個 hash**）、qBittorrent 在不在**先問完才動 Job**；之後與 `submit_failed` 的重試同一段收尾。`submit_failed` 在起點是因為上一次重新送單被拒的那一筆落在那裡，那一件 Issue 仍然開著（M2 票 09c） |
-| `missing_files` / `client_removed` / `submit_failed` | Issue 的「承認遺失」/「承認移除」 | `removed` | 就是 `delete_job`、四個旗標全不勾：磁碟與 qBittorrent 都不動，event `deleted`（M2 票 09c，使用者拍板） |
+| `imported` / `import_failed` / `removed` / `client_removed` | `POST /jobs/{hash}/reimport`（`REIMPORTABLE`） | `completed` | complete 裡那一包讀得到才動（否則 409 `content_missing`，Job 不動）；`job_files` 照磁碟上現在的樣子重寫（不在的刪、新的補、還在的留 id 與優先序）；event `retried(state=completed, action=reimport)`——它是去重界線。之後規劃器與 importer 照常一輪，帳本以來源冪等 |
+| — | Issue `orphan_complete` 的「重新入庫」 | `completed` | 建一筆 `trigger = reimport` 的 Job，主鍵是那個目錄路徑的 SHA-1（`claims.reimport_hash`，同一個目錄同一筆），Route 由它在哪一條 Route 的 complete 子目錄決定，作品由管理員選；event `created` |
+| — | Issue `unknown_torrent` 的「認領」 | `submitted` | 按下去重問 qBittorrent；Route 由 category 決定（只掛 `berth` tag 的不猜）、作品由管理員選；event `created` + `submitted`，之後 poller 照常 |
+| `missing_files` / `client_error` / `client_removed` | poller 在客戶端看到它好好的（使用者在 qBittorrent 裡自己 recheck、重新開始、把 torrent 加回去） | `metadata_ready`（沒有 `job_files` 的回 `submitted`） | event `recovered(from, state, client_state)`，它是事件去重的界線（接回之後一分鐘內又壞一次的那一筆與第一次一字不差）。「好好的」：`client_removed` 是看得到就接回（接回之後若是壞的，下一步照常轉進壞掉的狀態）；另外兩種要客戶端狀態不是壞掉、**而且它說做完了的話檔案真的在磁碟上**——Berth 自己發現的 `missing_files` 客戶端說的是 `stalledUP`，只看字串會每一輪「恢復」再壞一次。掛著的 Issue 由系統收（§2.4） |
+| `missing_files` / `client_error` | Issue 的「重新校驗」/「重試」 | `metadata_ready`（沒有 `job_files` 的回 `submitted`） | 先向 qBittorrent 送 `start` 再送 `recheck`（重試只送 `start`，brief §20.2；**順序不能反**：5.x 對停住的 torrent recheck 完會再停下來，校驗中送到的 start 清不掉），問不到就整顆不做、Job 不動；event `retried(state, action)`。之後由 poller 照常往前推，校驗完仍缺檔就照常再開一件 |
+| `client_removed` / `submit_failed` | Issue 的「重新送單」 | `requested` → `submitted` / `submit_failed` | Route 前提、下載連結（**要拿回同一個 hash**）、qBittorrent 在不在**先問完才動 Job**；之後與 `submit_failed` 的重試同一段收尾。`submit_failed` 在起點是因為上一次重新送單被拒的那一筆落在那裡，那一件 Issue 仍然開著 |
+| `missing_files` / `client_removed` / `submit_failed` | Issue 的「承認遺失」/「承認移除」 | `removed` | 就是 `delete_job`、四個旗標全不勾：磁碟與 qBittorrent 都不動，event `deleted` |
 | `downloading` | 完成條件（brief §5.1） | `completed` | event `completed` |
-| `completed` | planner_runner 取得 | `planning` | 讀 mediainfo、更新 `job_files`（`kind` 與 `mediainfo_json`）。**進了 `planning` 就先 commit**，畫面才說得出它正在做什麼；算到一半被關掉的那一列停在這裡，下一輪掃到它會從頭再算一次（票 11） |
-| `planning` | Plan 全 high/medium 且 Route 允許 | `importing` | `plans.status = auto`、event `plan_generated`；medium 的 item 掛 `audit`。**`unmatched` 不算在「全 high/medium」裡**（票 11）：它一律是 low，但那不是低信心而是一個**已經做完的決定**——「這是一個節目，但它不是 TMDB 上的任何一集」（brief §7.6），檔案留在 complete 原位由 Unmatched 清單處理。動漫批次幾乎每一包都夾著一兩個這種 SP，擋下去等於 §11.2 T1.6 的「不經人工入庫」永遠達不到；它仍然數進 `summary.low`，畫面上看得見 |
-| `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required(reason)`。理由是封閉集合（`ReviewReason`）：`low_confidence` / `medium_not_allowed` / `nothing_to_import`——三種的下一步不同（票 11）；M3 票 14 加 `air_date_conflict`（播出日比對擋下的，§4.4），它排在最前面——被擋的那幾列信心仍是 high / medium，下一步是改季集而不是點頭。M3 票 15 加 `runtime_conflict`（片長驗證擋下的，§4.1），排在它之後、同一個道理——一列兩條都犯時先改季集。**不另外寫 `plan_generated`**：一個轉換一筆事件，兩筆說的是同一件事 |
-| `review` | 使用者核准 | `importing` | `plans.status = approved`、event `review_decided(decision=approved, files)`。**核准＝照提案入庫**（M2 票 07，2026-09-23 使用者拍板）：待審核的列季集完整就變成 `import`，寫下的目標路徑就是 `pending_review` 時畫面上顯示的那一條（`parser.promote` + `parser.revise`，`services/plan_view.landing`）；還有沒提案的列或兩列撞同一條路徑時拒絕（`PlanRefusal.undecided` / `target_clash`）。檔案由 importer 照這一份鏈接，核准不另走一條入庫的路 |
-| `review` | 使用者拒絕 | `completed` | `plans.status = rejected`、event `review_decided(decision=rejected)`；規劃器被叫醒、**整份重算**（逐列改過的不留），所以拒絕的意思是「丟掉這一份、重來」。檔案不動。`review_decided` 是事件去重的界線（同 `retried`）：重算出來的 `review_required` 與第一份一字不差，不設界線會被吞掉（票 07） |
-| `importing` | 全部 item 套用完 | `imported` | event `linked` ×N（一個檔案一筆，鏈接當下寫）；**狀態落地之後**才通知 Jellyfin：`jellyfin_scan_requested`，失敗是 `jellyfin_request_failed(request=scan)` 且不擋（§3.3）。反查在 `jellyfin_resolver`（§3.2）：這一筆的正片**全部**在 Jellyfin 找到的那一輪寫 event `jellyfin_item_resolved(count)`，`count` 是這一筆的正片數，**一筆 Job 只寫一次**——M4 的「可以看了」就是它（M4 票 02）。「找到」是帳本那一列有 item、不再排反查：還在認的不算；認成別的、或六次都認不出而開了 `jellyfin_item_mismatch` 的算（它在 Jellyfin 裡打得開，錯在哪由那一件說）；有一集放棄了（`jellyfin_item_unresolved`，Jellyfin 沒列出它）就不寫 |
-| `importing` | 任一 item 失敗且不可跳過 | `import_failed` | event `link_failed`（逐檔，帶 `errno` 與原文）；重試回 `importing`，已完成的 item 跳過。**「不可跳過」是正片**（`import`）：字幕與特典鏈接不成只記在那一列上、不擋整筆——那一集仍然看得了（票 12） |
-| `importing` | 目標已存在且 inode 不同 | `review` | item 標 `target_unmanaged`、`plans.status = pending_review`、event `review_required(target_exists)`。其餘不衝突的檔案照樣鏈接；人決定之後重來一次它們會被跳過（§3.3，票 12） |
-| `imported` | Issue `job_without_files` 的「重新規劃」 | `completed` | 帳本一列都沒有時才走得通（CAS + `job_lock`）；event `retried(state=completed)`——它是事件去重的界線，重算出來的 `plan_generated` 才不會被吞掉。之後由規劃器與 importer 照常的一輪接手，帳本以來源冪等（M2 票 09）。**不併進 `replan_job`**：那一支是 Job 頁上那一顆（`REPLANNABLE`），把 `imported` 加進去等於每一筆入庫完的 Job 都多一顆會重鏈一次的按鈕 |
-| 任何狀態 | `delete_job` | `removed` | 依範圍刪除（brief §9.2 的四個旗標）；event `deleted`，payload 說的是**真的**做掉了什麼（`links` / `sources` / `torrent` / `purged` / `freed` / `unmanaged`）而不是勾了哪幾個。勾了 `purge` 的話連這一列與它的事件一起消失，所以那一次沒有時間線可看（票 04）。**轉換是鎖裡的第一件事**（M3 票 01）：CAS 的 `expected` 是請求進來時讀到的狀態（使用者按下去時看到的那一個），輸了是 409 `moved_on`、什麼都沒動——兩個分頁同時刪同一筆時，後到的那一個不會對著剛刪過的 Job 再刪一次、回報成功；先到的那一個勾了 `purge` 時後到的是 `job_missing`。之後的步驟被拒絕（qBittorrent 問不到）時連這一次轉換一起 rollback。媒體庫那一側只拆 Berth 放的那一個（brief §9.2），沒拆的列在 `unmanaged`。`delete_files` 刪的是資料現在所在：`content_path` 落在 incomplete 根目錄底下（還沒下完）時是那裡的 `job_files`、只收內容路徑底下的，其餘是 `save_path` 底下的；守衛的根是 complete 與 incomplete 兩個（M4 票 74）
+| `completed` | planner_runner 取得 | `planning` | 讀 mediainfo、更新 `job_files`（`kind` 與 `mediainfo_json`）。**進了 `planning` 就先 commit**，畫面才說得出它正在做什麼；算到一半被關掉的那一列停在這裡，下一輪掃到它會從頭再算一次 |
+| `planning` | Plan 全 high/medium 且 Route 允許 | `importing` | `plans.status = auto`、event `plan_generated`；medium 的 item 掛 `audit`。**`unmatched` 不算在「全 high/medium」裡**：它一律是 low，但那不是低信心而是一個**已經做完的決定**——「這是一個節目，但它不是 TMDB 上的任何一集」（brief §7.6），檔案留在 complete 原位由 Unmatched 清單處理。動漫批次幾乎每一包都夾著一兩個這種 SP，擋下去等於驗收的「不經人工入庫」（§11.2 T1.6，封存於 `docs/archive/m1.md`）永遠達不到；它仍然數進 `summary.low`，畫面上看得見 |
+| `planning` | 否則 | `review` | `plans.status = pending_review`、event `review_required(reason)`。理由是封閉集合 `ReviewReason`，三種的下一步不同：`low_confidence` / `medium_not_allowed` / `nothing_to_import`；另有 `air_date_conflict`（播出日比對擋下，§4.4）與 `runtime_conflict`（片長驗證擋下，§4.1）——被擋的那幾列信心仍是 high / medium，下一步是改季集而不是點頭，所以兩者排在前面，`air_date_conflict` 在 `runtime_conflict` 之前（一列兩條都犯時先改季集）。**不另外寫 `plan_generated`**：一個轉換一筆事件，兩筆說的是同一件事 |
+| `review` | 使用者核准 | `importing` | `plans.status = approved`、event `review_decided(decision=approved, files)`。**核准＝照提案入庫**：待審核的列季集完整就變成 `import`，寫下的目標路徑就是 `pending_review` 時畫面上顯示的那一條（`parser.promote` + `parser.revise`，`services/plan_view.landing`）；還有沒提案的列或兩列撞同一條路徑時拒絕（`PlanRefusal.undecided` / `target_clash`）。檔案由 importer 照這一份鏈接，核准不另走一條入庫的路 |
+| `review` | 使用者拒絕 | `completed` | `plans.status = rejected`、event `review_decided(decision=rejected)`；規劃器被叫醒、**整份重算**（逐列改過的不留），所以拒絕的意思是「丟掉這一份、重來」。檔案不動。`review_decided` 是事件去重的界線（同 `retried`）：重算出來的 `review_required` 與第一份一字不差，不設界線會被吞掉 |
+| `importing` | 全部 item 套用完 | `imported` | event `linked` ×N（一個檔案一筆，鏈接當下寫）；**狀態落地之後**才通知 Jellyfin：`jellyfin_scan_requested`，失敗是 `jellyfin_request_failed(request=scan)` 且不擋（§3.3）。反查在 `jellyfin_resolver`（§3.2）：這一筆的正片**全部**在 Jellyfin 找到的那一輪寫 event `jellyfin_item_resolved(count)`，`count` 是這一筆的正片數，**一筆 Job 只寫一次**——「可以看了」（§11.5）就是它。「找到」是帳本那一列有 item、不再排反查：還在認的不算；認成別的、或六次都認不出而開了 `jellyfin_item_mismatch` 的算（它在 Jellyfin 裡打得開，錯在哪由那一件說）；有一集放棄了（`jellyfin_item_unresolved`，Jellyfin 沒列出它）就不寫 |
+| `importing` | 任一 item 失敗且不可跳過 | `import_failed` | event `link_failed`（逐檔，帶 `errno` 與原文）；重試回 `importing`，已完成的 item 跳過。**「不可跳過」是正片**（`import`）：字幕與特典鏈接不成只記在那一列上、不擋整筆——那一集仍然看得了 |
+| `importing` | 目標已存在且 inode 不同 | `review` | item 標 `target_unmanaged`、`plans.status = pending_review`、event `review_required(target_exists)`。其餘不衝突的檔案照樣鏈接；人決定之後重來一次它們會被跳過（§3.3） |
+| `imported` | Issue `job_without_files` 的「重新規劃」 | `completed` | 帳本一列都沒有時才走得通（CAS + `job_lock`）；event `retried(state=completed)`——它是事件去重的界線，重算出來的 `plan_generated` 才不會被吞掉。之後由規劃器與 importer 照常的一輪接手，帳本以來源冪等。**不併進 `replan_job`**：那一支是 Job 頁上那一顆（`REPLANNABLE`），把 `imported` 加進去等於每一筆入庫完的 Job 都多一顆會重鏈一次的按鈕 |
+| 任何狀態 | `delete_job` | `removed` | 依範圍刪除（brief §9.2 的四個旗標）；見〈刪除〉 |
 
-- **帳本以來源冪等**（M2 票 10，brief §9.3）：importer 先以目標路徑、再以「同一筆 Job 的同一個 `source_rel_path`」找那一列。後者命中而路徑換了（TMDB 改了集名）時那一列改寫、舊路徑上**與來源同 inode** 的那條鏈接收掉；帳本仍說 `ok` 而鏈接是這一次才新建的（媒體庫被刪而對帳還沒跑）也重寫那一列、重排反查、寫 `linked`。
+#### 送單失敗的暫時與否
+
+- **暫時的**：`adapters.http.is_transient`——連不上、逾時（含 `ReadTimeout`）、解不到主機名、429、5xx。qBittorrent 與重送時抓 `.torrent` 那一站都算。event 多寫 `attempt`（第幾次）與 `retry_at`（下一次自動重送的時刻，次數用完是 `null`），由〈自動重送〉接手。
+- **再問也一樣的**：`.torrent` 404、qBittorrent 明確拒絕（415 等 4xx）、同名 category 指向別處、憑證被拒。不寫 `attempt`，等人。
+
+#### 自動重送
+
+- **退避 1 分鐘、10 分鐘、1 小時、6 小時**（`jobs.SUBMIT_RETRIES`，先密後疏，與 `jellyfin_resolver` 的反查排程同一個形狀）。一筆最多送 1 + 4 次，第五次失敗寫 `retry_at = null` 停下等人。人按的重試（與 Issue 的重新送單）`attempt` 從 1 重新數。
+- **qBittorrent 停機不花次數**：poll 失敗的那一輪走不到重送，停機一整夜的那一批在服務回來的第一輪接上。重送放在 poll 之後，客戶端其實收下了的已由同一輪的接回（`submit_failed` → `submitted` 那一列）認回，不會再送一次。
+- 前提與人按的重試同一組（Route、磁碟門檻）；不成立的留在原地不花次數，磁碟不夠時整輪停下。
+- **一輪遇到第一筆又失敗就收手**：poll 答得了不代表送得進去（真站一次送近兩百個時 qBittorrent 逾時），照送下去一整批會在同一刻各燒掉一次次數。收手之後每一輪只花一筆，其餘留到下一輪。
+- 次數與 `retry_at` 在拿到 `job_lock` 之後重讀，等鎖時被人按過的重試不會被蓋掉。
+
+#### 刪除
+
+- event `deleted` 的 payload 說的是**真的**做掉了什麼（`links` / `sources` / `torrent` / `purged` / `freed` / `unmanaged`），不是勾了哪幾個。勾了 `purge` 的話連這一列與它的事件一起消失，所以那一次沒有時間線可看。
+- **轉換是鎖裡的第一件事**：CAS 的 `expected` 是請求進來時讀到的狀態（使用者按下去時看到的那一個），輸了是 409 `moved_on`、什麼都沒動。兩個分頁同時刪同一筆時，後到的不會對著剛刪過的 Job 再刪一次、回報成功；先到的勾了 `purge` 時後到的是 `job_missing`。之後的步驟被拒絕（qBittorrent 問不到）時連這一次轉換一起 rollback。
+- 媒體庫那一側只拆 Berth 放的那一個（brief §9.2），沒拆的列在 `unmanaged`。
+- `delete_files` 刪的是資料現在所在：`content_path` 落在 incomplete 根目錄底下（還沒下完）時是那裡的 `job_files`、只收內容路徑底下的，其餘是 `save_path` 底下的；守衛的根是 complete 與 incomplete 兩個。
+
+#### 其他規則
+
+- **帳本以來源冪等**（brief §9.3）：importer 先以目標路徑、再以「同一筆 Job 的同一個 `source_rel_path`」找那一列。後者命中而路徑換了（TMDB 改了集名）時那一列改寫、舊路徑上**與來源同 inode** 的那條鏈接收掉；帳本仍說 `ok` 而鏈接是這一次才新建的（媒體庫被刪而對帳還沒跑）也重寫那一列、重排反查、寫 `linked`。
 - 轉換一律 compare-and-set：`UPDATE jobs SET state=:to WHERE hash=:h AND state=:from`，影響 0 列即放棄本次操作。
 - 每個 job 在程序內另有 `asyncio.Lock`，避免 poller 與 importer 同時處理。
-- **迴圈吞掉的例外寫在那一筆身上**（M3 票 02）：planner 與 importer 的一筆 Job 爆掉時（`jobs.guarded`）那一輪放棄、下一輪再試，同時寫 `Job.error`（型別加原文）與一筆 `round_failed`。**同一個錯誤只寫一次**：`Job.error` 還是那一句就是同一件事——迴圈每 60 秒重試，否則一天一千四百筆；成功的轉換清掉 `error`。
-- **一輪可以走好幾步**（票 10）：已經做完種的 torrent 加進來時，同一輪裡它會走完 `submitted → metadata_ready → downloading → completed`。輪詢的間隔不該決定使用者看到幾個階段，而時間線仍然說得出它經過了哪些站。
-- **多集檔與同起始集的單集送 review**（票 14b、brief §7.8）：新 Plan 的正片與同一份 Plan 的其他正片、或與同一部作品同一季的帳本 Entry，**起始集相同而結束集不同**時一律停下來等人。Jellyfin 12 的版本分組鍵只有季號與集號，`S01E03-E04` 與 `S01E03` 會被併成同一集的兩個版本，第 4 集從集列表上消失（brief §20.9 實測）。同一包裡的那一半是純函式（`parser/planner.py`，benchmark 量得到），對帳本的那一半在 `services/plan.py`。
+- **迴圈吞掉的例外寫在那一筆身上**：planner 與 importer 的一筆 Job 爆掉時（`jobs.guarded`）那一輪放棄、下一輪再試，同時寫 `Job.error`（型別加原文）與一筆 `round_failed`。**同一個錯誤只寫一次**：`Job.error` 還是那一句就是同一件事——迴圈每 60 秒重試，否則一天一千四百筆；成功的轉換清掉 `error`。
+- **一輪可以走好幾步**：已經做完種的 torrent 加進來時，同一輪裡它會走完 `submitted → metadata_ready → downloading → completed`。輪詢的間隔不該決定使用者看到幾個階段，而時間線仍然說得出它經過了哪些站。
+- **多集檔與同起始集的單集送 review**（brief §7.8）：新 Plan 的正片與同一份 Plan 的其他正片、或與同一部作品同一季的帳本 Entry，**起始集相同而結束集不同**時一律停下來等人。Jellyfin 12 的版本分組鍵只有季號與集號，`S01E03-E04` 與 `S01E03` 會被併成同一集的兩個版本，第 4 集從集列表上消失（brief §20.9 實測）。同一包裡的那一半是純函式（`parser/planner.py`，benchmark 量得到），對帳本的那一半在 `services/plan.py`。
 - **壞掉優先**：`missingFiles` / `error` 的 torrent 也可能報 `progress == 1`，先問完成的話它會被當成下載好了，而磁碟上根本沒有那些檔案。
 - `stalled` 的「超過 N 分鐘」量的是 qBittorrent 自己的 `last_activity`（**10 分鐘**），不是 Berth 另存一個「什麼時候變成 `stalledDL` 的」——客戶端本來就在量同一件事。
 
@@ -348,36 +370,141 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
 
 | 迴圈 | 間隔 | 工作 |
 | --- | --- | --- |
-| `qbit_poller` | 有活躍 job 時 5s，否則 30s；連續失敗退避到 5 分鐘 | `sync/maindata`（帶 rid）；只看本系統 category **或 `berth` tag** 的 torrent（兩道篩子的聯集：Route 被刪掉之後它送出去的那些 torrent 仍然認得出來）；更新進度與 client state；驅動 §3.1 中由客戶端狀態觸發的轉換（含 `submit_failed` 與三種壞掉狀態的接回，M3 票 02）；**問得到 qBittorrent 的那一輪之後**把到時間的暫時送單失敗再送一次（`jobs.retry_due`，M4 票 03，§3.1）；每一輪收掉 Job 已經不在那個壞掉狀態的管線 Issue（§2.4）；發現無 job 的 torrent → issue `unknown_torrent`（**M1 先寫一筆 `issue_detected` 事件並列在健康頁的「下載迴圈」區塊**，`issues` 表在 M2，票 10） |
+| `qbit_poller` | 有活躍 job 時 5s，否則 30s；連續失敗退避到 5 分鐘 | 同步 qBittorrent，驅動 §3.1 由客戶端狀態觸發的轉換 |
 | `planner_runner` | 事件驅動（提示）+ 每 60s 掃 `completed` **與 `planning`** | 讀 mediainfo → 解析（§4）→ 建 Plan → 決定 auto / review；順手替下載中、還沒有 Plan 的 job 算 pre-plan |
 | `importer` | 事件驅動（planner 算完、使用者按入庫重試）+ 每 60s 掃 `importing` | 逐 item：建目錄 → `link()` → 寫 ledger → event，**一個檔案 commit 一次**；完成後 `POST /Library/Media/Updated`；一次只處理一個 job（依序：同一個作品資料夾可能同時是兩筆 Job 的目標） |
-| `jellyfin_resolver` | 每 15s 醒一次；每筆帳本自己的排程 30s → 1m → 10m → 1h → 1h → 1h，共 6 次（`ledger.resolve_after`；第二次原本是 2m，M4 票 62 改） | 為到時間的 ledger 找 item（brief §20.1 的兩段查詢，也比 `MediaSources[].Path`——第二個版本不是 item 自己的 `Path`）；找到之後把那一條來源的 `Name` 抄進帳本（版本名是 Jellyfin 算的，票 14b），並**回驗**：Jellyfin 認的季號、集號（多集檔是範圍）與所屬作品的 `ProviderIds.Tmdb`（Episode 看它 `SeriesId` 那一個 Series，Movie 看自己）要與帳本一致，不一致開 `jellyfin_item_mismatch`、一致了收掉（`resolver.disagreement`，M3 票 17）。**Jellyfin 還在認的不算找到**（M4 票 02，`resolver.still_identifying`：Episode 季集 `None` 或作品沒有 Tmdb）：不抄 item、不比，照同一份排程再問但**最晚 10 分鐘**（同請它掃描之後，`SCAN_SETTLE`），也不再通知它（它已經列出這個檔案，再掃只會從頭認起）；六次都還認不出（入庫後約 42 分鐘）才照它讀成的樣子比。**間隔的依據**：2026-09-26 試跑量到的上界是入庫後約 12 分鐘（brief §20.1，那是下一次反查碰巧讀到的時間），落在第 3 次附近（當時 12.5 分鐘；票 62 把第二次改成 1 分鐘之後是 11.5 分鐘，還在認的第 4 次是 21.5 分鐘）；而季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，都不必連網，43 分鐘還認不完的就是認不出——原本的一小時間隔只會讓真服務 e2e 的 1200 秒等不到。**一筆 Job 的正片全部找到時寫一筆 `jellyfin_item_resolved(count)`，之後不再寫**（M4 的「可以看了」，§3.1）。**新版本入庫時只把同一集的其他版本排回反查**（`importer.restate_versions`：同一個資料夾、同一季、集號範圍重疊，那是 Jellyfin 12 的版本分組；電影是同一個資料夾），版本名才跟著 Jellyfin 改——以前是整個資料夾，一季每入庫一集就把前面每一集重反查一次；**沒找到的那幾條每一輪再通知一次**（入庫當下那一次可能沒送到）；**通知不夠時請 Jellyfin 掃描，之後最晚 10 分鐘再看**（`adapters.jellyfin.scan_libraries`，M4 票 62）：Jellyfin 已經在 Route 的路徑底下列出過 Series 或 Movie 時，**沒找到兩次以上只刷新那一個媒體庫**（`POST /Items/{媒體庫}/Refresh`）；**還沒列出過時第一次沒找到就跑整台的「重新掃描媒體庫」排程任務**（`RefreshLibrary`）——路徑通知與只刷新媒體庫都找不到第一次全庫掃描時還空著的路徑，而套件內的媒體庫一開始一定是空的、既有媒體庫剛加上的 Berth 路徑也是（brief §20.1，票 12 實跑抓到、票 62 對 12.1.0 實測）。這樣空的媒體庫第一次入庫在 30 秒那一次就請它掃、1 分半那一次看到（原本是 2.5 分鐘才請、Unraid 上請完又等 10 分鐘）。問不到媒體庫裡有什麼的那一輪只通知、不掃；耗盡寫 `issue_detected(jellyfin_item_unresolved)`（`issues` 表在 M2）。**不是事件驅動**（票 12）：第一次反查本來就排在入庫 30 秒後，importer 那一刻叫醒它也只會看到「還沒到」。**作品頁打開時提前問一次**（M4 票 51，`resolver.resolve_early`，`POST /media/{id}/resolve`）：退避中最多要等 10 分鐘，而觀看區與媒體庫頁直接問 Jellyfin，審計 S6 看到兩邊說法不同；這部作品還在排反查的帳本先問一次，**找到而且認完的走上面同一條路**（記 item、不再排程、回驗、`jellyfin_item_resolved`），**沒找到、還在認、問不到的不動**——不算一次、不改排程、不通知（打開頁面就會跑，算次數的話開幾次頁面就用完了） |
-| `reconciler` | 每日 04:00（容器的 `TZ`，compose 範本預設 `Etc/UTC`）+ 手動 `POST /reconcile` | brief §9.1 全部檢查，寫 `issues`（冪等鍵見 §2.4）。**一輪是一個可觀察的工作**（2026-09-22 定）：`POST /reconcile` 回 202 並給這一輪的 id，`GET /reconcile` 回上一輪與進行中的進度（哪一方比到哪、幾筆），上一輪還在跑時再按是 409 `reconcile_running`——不排隊，因為排隊的那一輪看到的會是同一份磁碟；e2e 的「三種破壞都能偵測」靠輪詢它。四方各自走完才寫下 Issue，任一方問不到（qBittorrent 掛了、Route 目錄沒掛上）就跳過那一方並在這一輪的結果上說出來，不把「問不到」誤判成「不見了」（brief §16.2）。**每一種檢查只用它需要的那幾方，缺一方就整種不做**（M2 票 09）：`orphan_complete` 要 qBittorrent 與 complete 兩方都問到（問不到 qBittorrent 的那一刻每一個目錄看起來都沒有主），`unknown_torrent` 要 qBittorrent（與 `qbit_poller` 共用冪等鍵與內容），媒體庫那四種逐 Route，`job_without_files` 只看帳本。complete 那一方只看**每一條 Route 的 complete 子目錄**，不看整個 complete root（它可能與 Sonarr 共用，brief §16.4）。**第五方是 Jellyfin**（票 09）：把反查過的正片照 Jellyfin 現在的樣子重對一次——補上票 13 之前沒有的 `jellyfin_series_id`、換掉 Jellyfin 12 合併之後不再是主條目的 `jellyfin_item_id`（brief §20.9）；找不到的不動，問不到一樣跳過並說出來。**M3 票 17 起它也回驗**：找得到的那幾條與反查比同一份，不一致開 `jellyfin_item_mismatch`、一致了收掉，件數算進這一輪的結果。大媒體庫分不分批由 §11.3 的量測票決定：**M2 票 11 量過，1,000 部 × 12 集一輪 27–31 秒，不分批**（門檻 10 分鐘；時間在 `resolver.locate` 的逐條線性比對，下一次重量的條件見 `docs/research/large-library.md` §3） |
-| `rss_poller` | 每 30 秒醒一次，到時間的 Feed（上次輪詢滿自己的 `interval_sec`，預設 15 分鐘；改間隔不當場輪，下一輪是 `last_polled_at` 加上新的間隔，M4 票 109）各輪一次；精靈跑完之前不做事 | 抓 feed → 解析 → 新的 Item（同 Feed 的 GUID 去重）讀單集頁認出 RSS Series，找到或長出一列 → 寫 Item（Series 待綁定時 `unbound`、留著不送）→ 綁好的送 `add_download`（`trigger = rss`、`trigger_ref` = Series id，時間線的 actor 是 `rss:<id>`）。**單集頁抓不到的那一筆不寫**，下一輪再試（寫了就是見過）；Feed 抓不到記在那一列的 `poll_error`；一個 Feed 爆掉不拖累其他的。送單被拒的那一筆留在 `matched` 帶著原文，下一輪再送（M3 票 08）。**寫 Item 時看排除條件**（全域、Feed、Series 三層聯集，擋下的是 `excluded`），**送單前去重**（同一個 info hash 的 Job 在了、或另一筆 Item 送過；帳本已有同 Media / 季 / 集 / Tags——擋下的是 `duplicate`，M3 票 10）。**每日補漏**（M3 票 12，brief §15「補舊集」）：一個 Feed 輪完、送單之前，以它為 home（最早帶到那個 Series、還在的 Mikan Feed，綁定時補舊集寫的也是它）的**已綁定、還沒完結的 Mikan RSS Series** 裡 `backfilled_at` 是 `NULL` 或滿一天的，各讀一次單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`），寫成**這個 Feed 的 Item**（`(feed_id, guid)` 去重、同樣看排除條件、同一次 `_submit_waiting` 送出）。讀不到的記在 Feed 的 `backfill_error`、`backfilled_at` 不動，下一輪（Feed 的間隔）再試；該補的都讀到了就清掉那一欄（M4 票 130） |
-| `health_checker` | 每 30 秒醒來，上一輪滿 5 分鐘才真的跑；也可手動觸發（`POST /health/check`）。**連不上 Prowlarr 時提早重測**（M4 票 61，審計 P1-2）：還沒到整輪的那幾次醒來，上一次 Prowlarr 紅、而且已過 30 秒（`RECHECK_INTERVAL`）就只重測它（`recheck_due` → `check_service`），整輪的時間不動；不用 Prowlarr 時不重測。只給 Prowlarr：qBittorrent 與 Jellyfin 牽動 Route 那一項，單獨轉綠會與 Route 不一致，qBittorrent 重試登入還會重算 IP 封鎖時間（brief §20.2） | 四項：Jellyfin（連線 + API key 列得出媒體庫）、qBittorrent（連線 + Web API 版本；全域偏好不看，M4 票 32）、索引站（Prowlarr；M4 票 37 起不再有 Torznab 端點）、Route（§9.5 的每一條纜繩重跑一次；探針沿用上一次的結論，從沒問過的那一條 Route 是 `unknown`「要重新檢查」，不算綠，M4 票 59）。四項之後量兩件會變成 Issue 的事（M2 票 09c，`services/health_issues.py`）：每條 Route 的媒體庫掛不掛 TVDB（`library_uses_tvdb`）、incomplete / complete 剩的空間夠不夠（`low_disk_space`，門檻 `settings.disk.min_free_gb`）。條件解除時由系統收掉，問不到不算解除 |
-| `notify_sender` | 每 10 秒醒一次（M4 票 123） | 待送表（`notifications`）上到時間、還沒送的每一則各送一次（`services.notify.send_due`）：先讀完收掉讀的交易，逐則送、逐則 commit 結果；沒設 bot token 時什麼都不送、留著。沒送到的記 `attempts` 與 `error`。**故障分三層**（M4 票 128，§11.5「故障」）：管道（`401` 整個暫停到換了 token、連不上照連續失敗的輪數退避 30 秒起加倍到 1 小時、整個 bot 被限速照 `retry_after` 等）記在自己那一列 `settings.notify_sender`，遇到就停這一輪；這一則自己的限速照 `retry_after` 延後那一則（`retry_at`），超長被拒與組不成句子當場放棄；收件人到不了當場放棄、記在 `users.notify_unreachable_*`。每一輪先把滿 24 小時（`GIVE_UP_AFTER`，從 `not_before` 算）還沒送到的放棄（`abandoned`，`error` 留上一次的原因）。一則出例外記在那一則上、接著送下一則。寫入在觸發它的那一筆交易裡（「可以看了」是 `resolver._announce`），寫不成只記 log、不讓那一筆交易失敗；不經提示。**每一輪先看守「等你處理」**（`watch_waiting`，M4 票 127）：三份清單上有誰與上一輪（`settings.notify_waiting`）比，新出現的排給訂閱了的管理員；一樣就什麼都不寫；也記下每一件第一次看到的時刻（`NotifyWatchSettings.since`，M4 票 129 的「放太久」讀它） |
-| `sweeper` | 每分鐘醒一次，每日 05:00（容器的 `TZ`）跑一輪；**每一次醒來先收過期的確認卡**（`proposals.expire_due`，M5 票 08：期限以分鐘計，不等 05:00，推 `event: proposal`）；形狀照 `reconciler`：啟動那一刻的前一個 05:00 算跑過了（重啟不立刻跑）、錯過的不補跑、精靈跑完之前不跑；一輪的門檻照排定的 05:00 算、不照醒來的那一秒（M4 票 129） | 每日巡檢（§11.5〈巡檢〉，`services.sweep.sweep_once`）：幾項檢查依序跑完、一起 commit。**卡住的**：還沒確認的 RSS Series 有 Job 停在 `submit_failed` / `client_error` 超過 24 小時（從那一筆最後一次 `submit_failed` / `issue_detected` 事件算），而且沒有開著或被忽略的管線 Issue 說著它這個狀態，開一件 `first_batch_stuck`（一個 Series 一件），不再卡住或 Series 確認了由系統收掉。**放太久**：「等你處理」最舊的一件等滿 3 天，給訂閱了「等你處理」的管理員排一則提醒（`notify.queue_lingering`），同一件 3 天內只提醒一次（`settings.sweep`）。05:00 與 04:00 的對帳錯開，巡檢看到的是對帳寫完的 Issue。**一直失敗的 Feed、RSS Series 缺集、同一集意外多份**（M4 票 130，§11.5〈巡檢〉）同一輪接著跑。一輪佔用事件迴圈最久 5–37 ms（票 129）、加上 RSS 三項後暖機時 16–84 ms（`scripts/experiments/sweep_loop_lag.py`，門檻 100 ms），不移出迴圈。**週報**（M4 票 131）：每一次醒來接著看最新一份該有的週報（在最近的週一 05:00 結束的那一週，`weekly.week_ending`）有沒有，沒有就產生（`weekly.compose_weekly`）——週一那一份排在巡檢之後、看到的是當天開完的 Issue；與巡檢不同，**重啟之後補上漏掉的那一週**（同一週再產生什麼都不寫），只有一份都還沒有的新裝不補 |
+| `jellyfin_resolver` | 每 15s 醒一次；每筆帳本自己的排程 | 為到時間的 ledger 找 Jellyfin item |
+| `reconciler` | 每日 04:00（容器的 `TZ`，compose 範本預設 `Etc/UTC`）+ 手動 `POST /reconcile` | brief §9.1 的全部檢查，寫 `issues` |
+| `rss_poller` | 每 30 秒醒一次，到時間的 Feed 各輪一次；精靈跑完之前不做事 | 抓 feed → 認 RSS Series → 寫 Item → 送單 |
+| `health_checker` | 每 30 秒醒來，上一輪滿 5 分鐘才真的跑；也可手動觸發（`POST /health/check`） | 四項健康檢查，再量兩件會變成 Issue 的事 |
+| `notify_sender` | 每 10 秒醒一次 | 送出待送表（`notifications`）上到時間的通知 |
+| `sweeper` | 每分鐘醒一次，每日 05:00（容器的 `TZ`）跑一輪巡檢 | 每日巡檢與週報（§11.5〈巡檢〉） |
 
-- 每個迴圈是一個 `asyncio.Task`（`main.py` 的 lifespan 啟動，關閉時 cancel 並 await，不留 pending task；cancel 落在一輪中途時那一輪先做完再收，`pipeline/ticks.py`——async SQLAlchemy 不支援 IO 半途 cancel，M4 票 71b）；例外只記 log 不讓迴圈死掉；連續失敗次數與最後錯誤寫入**自己那一列設定**供健康頁顯示（`settings.health` / `settings.poller`）。原文寫的是「寫入 `settings.health`」，但那一列每 5 分鐘被 `health_checker` 整組覆寫一次，而 poller 每 5 秒寫一次——兩個迴圈共用一列會互相蓋掉（票 10；理由與當初把健康結果從 `settings.services.*` 分出來時一樣）。
-- `qbit_poller` **醒得比問頻繁**（與 `health_checker` 同一個形狀，票 10）：每 5 秒醒一次，但只有距離上一輪滿了它該等的間隔才真的問，而那個間隔**每次醒來重算**。沿用上一輪算出來的答案的話，使用者按下送單的那一刻多半落在一個 30 秒的閒置間隔中間，他要對著那一列等最多半分鐘才看到第一個變化。
-- `qbit_poller` **把 qBittorrent 的 HTTP client 握著不放**：`sync/maindata` 的 `rid` 增量掛在那條連線的 session 上（brief §20.2 實測），每輪重造一個 client 等於每輪都要一份全量。失敗那一輪才丟掉重造——重造就是重新開始，而重新開始本來就會拿到一次全量，兩邊自然對齊。
-- `qbit_poller` 的**推播在 commit 之後**（票 10 實跑抓到）：反過來的話前端收到「這一筆完成了」就立刻重問一次，而那一次讀到的是還沒 commit 的舊狀態，畫面因此永遠慢一步。
-- **每日補漏排在 `rss_poller` 裡、以每個 RSS Series 自己的 `backfilled_at` 滾動一天，不是固定鐘點**（M3 票 12）：它與輪詢同一個形狀（醒來看誰到時間了），重試的節奏直接用 Feed 的間隔；補漏的讀者只有綁好的 Mikan RSS Series，而它們一定掛在某個 Mikan Feed 上——Feed 刪掉就是不再訂閱，補漏跟著停。滾動而不是 `reconciler` 那種每日 04:00：一次打一個單一 feed，分散在一天裡；固定鐘點會讓 N 個 RSS Series 同一刻打 Mikan。一天一次、每個綁好的 RSS Series 一個請求，**完結就停**（M4 票 108，推翻原本的「季末之後照樣讀」——那樣量隨綁過的部數線性長、永遠不停）：完結照 `list_series` 同一份現況算（`parser.series_finished`，`rss._finished`），不是存下來的狀態，新的一筆出現時條件自己不成立、補漏跟著恢復。**完結後再補最後一次就停**（M4 票 116，`rss._backfill_settled`：現在已完結、而且上次補漏那一刻也已完結才跳過，兩個時間點用同一支 `_finished_now`）：`QUIET_AFTER` 從最近一筆的發佈時間算、不是從停機算，停機跨過它時被聚合 feed 捲掉的最後幾集靠這一次接住；代價是每部作品完結後多讀一次單一 feed。不加開關（使用者 2026-10-19 拍板）：問題是看不見，關掉的代價是停機期間被捲掉的集數補不回來而且察覺不到；畫面上 RSS Series 列說上次補漏、尚未補漏、已完結不再補漏（`SeriesOut.backfilled_at`）。
-- **沒有站點請求預算**（M4 票 107，推翻 M3 票 20 與 M4 票 77；研究 `docs/research/request-budget.md` 留著當紀錄）：票 20 曾讓輪詢、補漏、搜尋與人按的讀取以主機名共用一份「每站每小時 60 個」的滾動窗，用完的請求被拒。2026-10-19 使用者拍板全刪：60 不是量出來的（brief §20.13：Mikan、Nyaa、acg.rip 都沒有公開的限速或封鎖紀錄）；實際擋到人的只有 Berth 自己的計數（票 77：訂閱 MyBangumi 後 Mikan 一小時的額度被 RSS 用完）；搜尋經過 Prowlarr，而它每個索引站本來就有使用者看得到、調得了的 Query Limit。站點真的回 429 / 5xx 時，既有退路照樣接得住：Feed、單集頁與單一 feed「讀不到、記 `poll_error` / `backfill_error`、下一輪再試」，自動綁定照下一段的 `lookup_retry` 退避。**仍然沒做的兩件**：每秒幾個的節流（Cardigann 的 `requestDelay`）與以**站台**為單位的逐級退避（Sonarr 的 `EscalationBackOff`），沒有 repro。`.torrent` 的下載本來就不設上限（M4 票 03）。升版時 migration `c1d7e4a9b302` 把還帶 `lookup_deferred` 的 Series 改成到期的 `lookup_retry`、`attempt` 0（不算一次失敗）。
-- **自動綁定暫時查不到時有限重認**（M4 票 14，brief §15「綁定」、§19 2026-09-26）：番組頁或 TMDB 這一次讀不到，而且是**暫時的**（`adapters.http.is_transient`：連不上、逾時、解不到主機名、429、5xx——**429 與 503 以外的 5xx 從 M4 票 14 起歸 `ServiceUnavailableError`**，以前是 `ProtocolMismatchError`，一次 502 就永遠待綁定），理由寫 `lookup_retry`（`site` 是那一站的主機名；`attempt` 已經算進上限的失敗次數；`at` 下一次的時刻；`detail` 原文），`rss._due_lookups` 在輪到帶著它的 Feed、而且過了 `at` 時再認。**退避 1、4、12 小時（`rss.LOOKUP_RETRIES`），一個 Series 最多認 1 + 3 次、分散在 17 小時裡**，用完落到 `lookup_failed`；再問也一樣的（404、回的不是那個服務、憑證被拒）當場落到 `lookup_failed`。原本「只認一次」的顧慮是壞掉的番組頁每 15 分鐘打一次——現在同一頁最多四次（`tests/integration/test_rss_auto_bind_retry.py` 數了番組頁的請求數）。數字的理由：試跑那一次 TMDB 同日稍後就讀得到，第一次重認一小時後；最後一次在隔天，隔夜的站台維護也等得過。TMDB 那一頭的 `unreachable`（`TmdbProblem`）也包含「回的不是 TMDB」——`services.media` 把 `ServiceError` 一概歸成它，分不開，照暫時的算，多的只是上限內的幾次重認。**一部候選讀不到不拖垮整次**：一個搜尋詞、一部作品的詳情讀不到就跳過，其餘照判；判得出來就綁，判不出來而缺的那一部是暫時讀不到的照上面重認，一部都沒讀到才是查不到。
-- `health_checker` **醒得比檢查頻繁**：兩層的理由是精靈剛跑完的那一刻——迴圈在啟動時就在轉，那時候還沒有東西可檢查，如果醒來的間隔就是檢查的間隔，使用者按完「完成」會對著一個空的健康頁等五分鐘。精靈跑完之前它什麼都不做（那時候正在接的服務被打只會得到假的紅燈）。
-- `health_checker` 的**磁碟空間**是一件 `low_disk_space` Issue（M2 票 09c）。門檻在設定裡（`settings.disk`，設定的 qBittorrent 那一頁可改，改了立刻重量一次），**形狀照 Sonarr 的 Minimum Free Space**（一個全域數字）而單位與預設不同：Sonarr 擋的是入庫時複製（MB、預設 100），Berth 以硬鏈接入庫不佔空間、吃空間的是下載，所以是 GB、預設 10，`0` 是不量。Route 的 `hardlink` 纜繩上的 `free=` 照舊是實測值。**同一個門檻也擋送單**（M3 票 04）：RSS 送單沒有人按確認，所以 `add_download` 與送單的重試在要 torrent **之前**量 incomplete 那一側（下載長在那裡），低於門檻是 409 `low_disk_space`、一個 Job 都不建，手動與 RSS 同一個判斷（`jobs.check_disk`）。門檻 `0` 不量；看不到那個目錄不擋——那是 `download_path` 纜繩要報的事。Issue 的「重新送單」不看（票的 Comments）。**比的是「剩餘空間 − 在途量」**（M4 票 03，`jobs._in_flight`）：在途是 `submitted` / `metadata_ready` / `downloading` / `stalled` 的 Job 還沒下完的量，`total_size × (1 − progress)`；qBittorrent 報得出之前 `total_size` 是送單時來源報的大小（搜尋結果、RSS Item 的 `size`），兩邊都不知道的不算、在 log 說有幾筆。只扣在途、不扣這一次要送的大小：門檻說的是「開新下載之前至少留多少」，與 Sonarr 的 Minimum Free Space 同一個意思。拒絕理由仍是 `low_disk_space`，`detail` 說出在途多少、幾筆。2026-09-26 試跑一次送 144 個，每一個當下都過門檻、下載途中才滿。
-- `health_checker` **沒有逐服務的間隔退避**（票 10 改）：每一項各自 try/except 加上 adapter 的 5 秒逾時就足夠隔離，而 5 分鐘一次的檢查本來就打不爆任何服務；退避只會延後「服務回來之後自動變綠」。連續失敗次數仍然記錄並顯示。
-- 迴圈之間用一個 in-process 的**喚醒訊號**傳「有東西動了，去看看」（`services/hints.py`，票 11）。plan 原文寫的是一條裝著「請處理 job X」的 `asyncio.Queue`，但同一段的下半句是「DB 狀態才是真相；程序重啟後由定時掃描補上」——而一旦掃描本來就找得到同一批 job，佇列裡那個 hash 就不帶任何資訊，只留下三個要回答的問題（重複的 hash 去不去重、滿了丟哪一筆、重啟之後裡面那幾筆誰來補）。訊號會自己合併：poller 一輪動了 40 筆也只是「去看看」一次。
+#### `qbit_poller`
+
+- `sync/maindata`（帶 rid）；只看本系統 category **或 `berth` tag** 的 torrent（兩道篩子的聯集：Route 被刪掉之後它送出去的那些 torrent 仍然認得出來）。更新進度與 client state。
+- 驅動 §3.1 由客戶端狀態觸發的轉換，含 `submit_failed` 與三種壞掉狀態的接回。**問得到 qBittorrent 的那一輪之後**，把到時間的暫時送單失敗再送一次（`jobs.retry_due`，§3.1〈自動重送〉）。
+- 每一輪收掉 Job 已經不在那個壞掉狀態的管線 Issue（§2.4）。
+- 發現無 job 的 torrent → issue `unknown_torrent`。
+- **醒得比問頻繁**（與 `health_checker` 同一個形狀）：每 5 秒醒一次，但只有距離上一輪滿了它該等的間隔才真的問，而那個間隔**每次醒來重算**。沿用上一輪算出來的答案的話，使用者按下送單的那一刻多半落在一個 30 秒的閒置間隔中間，要對著那一列等最多半分鐘才看到第一個變化。
+- **把 qBittorrent 的 HTTP client 握著不放**：`sync/maindata` 的 `rid` 增量掛在那條連線的 session 上（brief §20.2 實測），每輪重造一個 client 等於每輪都要一份全量。失敗那一輪才丟掉重造——重造就是重新開始，本來就會拿到一次全量，兩邊自然對齊。
+- **推播在 commit 之後**：反過來的話前端收到「這一筆完成了」就立刻重問一次，讀到的是還沒 commit 的舊狀態，畫面永遠慢一步。
+- 寫交易的紀律見 §3.3。
+
+#### `jellyfin_resolver`
+
+- **排程**：每筆帳本自己的排程 30s → 1m → 10m → 1h → 1h → 1h，共 6 次（常數 `RESOLVE_DELAYS` 在 `services/resolve_schedule.py`，下一次時刻存在 `ledger.resolve_after`）。
+  - 依據：試跑量到的上界是入庫後約 12 分鐘（brief §20.1，那是下一次反查碰巧讀到的時間），落在第 3 次附近（累計 11.5 分鐘）；還在認的第 4 次是 21.5 分鐘（受 `SCAN_SETTLE` 封頂）。
+  - 季集讀自檔名、作品讀自資料夾的 `[tmdbid-…]`，都不必連網，43 分鐘還認不完的就是認不出。
+  - 間隔太長會讓真服務 e2e 的 1200 秒等不到。
+- **找 item**：用 brief §20.1 的兩段查詢，也比 `MediaSources[].Path`——第二個版本不是 item 自己的 `Path`。
+- **找到之後**：把那一條來源的 `Name` 抄進帳本（版本名是 Jellyfin 算的）。
+- **回驗**（`resolver.disagreement`）：Jellyfin 認的季號、集號（多集檔是範圍）與所屬作品的 `ProviderIds.Tmdb`（Episode 看它 `SeriesId` 那一個 Series，Movie 看自己）要與帳本一致。不一致開 `jellyfin_item_mismatch`，一致了收掉。
+- **Jellyfin 還在認的不算找到**（`resolver.still_identifying`：Episode 季集 `None` 或作品沒有 Tmdb）：
+  - 不抄 item、不比；照同一份排程再問，但**最晚 10 分鐘**（`SCAN_SETTLE`，同請它掃描之後）。
+  - 也不再通知它——它已經列出這個檔案，再掃只會從頭認起。
+  - 六次都還認不出（入庫後約 42 分鐘）才照它讀成的樣子比。
+- **一筆 Job 的正片全部找到時寫一筆 `jellyfin_item_resolved(count)`，之後不再寫**（「可以看了」，§3.1）。
+- **新版本入庫時只把同一集的其他版本排回反查**（`importer.restate_versions`）：同一個資料夾、同一季、集號範圍重疊，那是 Jellyfin 12 的版本分組；電影是同一個資料夾。版本名才跟著 Jellyfin 改。
+- **沒找到的那幾條每一輪再通知一次**（入庫當下那一次可能沒送到）。
+- **通知不夠時請 Jellyfin 掃描，之後最晚 10 分鐘再看**（`adapters.jellyfin.scan_libraries`）：
+  - Jellyfin 已經在 Route 的路徑底下列出過 Series 或 Movie 時，**沒找到兩次以上只刷新那一個媒體庫**（`POST /Items/{媒體庫}/Refresh`）。
+  - **還沒列出過時，第一次沒找到就跑整台的「重新掃描媒體庫」排程任務**（`RefreshLibrary`）。路徑通知與只刷新媒體庫都找不到第一次全庫掃描時還空著的路徑，而套件內的媒體庫一開始一定是空的、既有媒體庫剛加上的 Berth 路徑也是（brief §20.1，對 12.1.0 實測）。這樣空的媒體庫第一次入庫在 30 秒那一次就請它掃、1 分半那一次看到。
+  - 問不到媒體庫裡有什麼的那一輪只通知、不掃。
+  - 耗盡寫 `issue_detected(jellyfin_item_unresolved)`。
+- **不是事件驅動**：第一次反查本來就排在入庫 30 秒後，importer 那一刻叫醒它也只會看到「還沒到」。
+- **作品頁打開時提前問一次**（`resolver.resolve_early`，`POST /media/{id}/resolve`）：退避中最多要等 10 分鐘，而觀看區與媒體庫頁直接問 Jellyfin，兩邊會說法不同。這部作品還在排反查的帳本先問一次：
+  - **找到而且認完的**走上面同一條路（記 item、不再排程、回驗、`jellyfin_item_resolved`）。
+  - **沒找到、還在認、問不到的不動**——不算一次、不改排程、不通知（打開頁面就會跑，算次數的話開幾次頁面就用完了）。
+
+#### `reconciler`
+
+- **一輪是一個可觀察的工作**：`POST /reconcile` 回 202 並給這一輪的 id；`GET /reconcile` 回上一輪與進行中的進度（哪一方比到哪、幾筆）；上一輪還在跑時再按是 409 `reconcile_running`——不排隊，因為排隊的那一輪看到的會是同一份磁碟。e2e 的「三種破壞都能偵測」靠輪詢它。
+- 四方各自走完才寫下 Issue（冪等鍵見 §2.4）。任一方問不到（qBittorrent 掛了、Route 目錄沒掛上）就跳過那一方並在這一輪的結果上說出來，不把「問不到」誤判成「不見了」（brief §16.2）。
+- **每一種檢查只用它需要的那幾方，缺一方就整種不做**：
+  - `orphan_complete` 要 qBittorrent 與 complete 兩方都問到（問不到 qBittorrent 的那一刻每一個目錄看起來都沒有主）。
+  - `unknown_torrent` 要 qBittorrent（與 `qbit_poller` 共用冪等鍵與內容）。
+  - 媒體庫那四種逐 Route。
+  - `job_without_files` 只看帳本。
+- complete 那一方只看**每一條 Route 的 complete 子目錄**，不看整個 complete root（它可能與 Sonarr 共用，brief §16.4）。
+- **第五方是 Jellyfin**：把反查過的正片照 Jellyfin 現在的樣子重對一次——補上 `jellyfin_series_id`、換掉 Jellyfin 12 合併之後不再是主條目的 `jellyfin_item_id`（brief §20.9）。找不到的不動；問不到一樣跳過並說出來。找得到的那幾條與反查比同一份回驗：不一致開 `jellyfin_item_mismatch`、一致了收掉，件數算進這一輪的結果。
+- 大媒體庫不分批：1,000 部 × 12 集一輪 27–31 秒（門檻 10 分鐘）；時間在 `resolver.locate` 的逐條線性比對，下一次重量的條件見 `docs/research/large-library.md` §3。
+
+#### `rss_poller`
+
+- 到時間的 Feed：上次輪詢滿自己的 `interval_sec`（預設 15 分鐘）。改間隔不當場輪，下一輪是 `last_polled_at` 加上新的間隔。
+- 流程：抓 feed → 解析 → 新的 Item（同 Feed 的 GUID 去重）讀單集頁認出 RSS Series，找到或長出一列 → 寫 Item（Series 待綁定時 `unbound`、留著不送）→ 綁好的送 `add_download`（`trigger = rss`、`trigger_ref` = Series id，時間線的 actor 是 `rss:<id>`）。
+- **單集頁抓不到的那一筆不寫**，下一輪再試（寫了就是見過）。Feed 抓不到記在那一列的 `poll_error`；一個 Feed 爆掉不拖累其他的。送單被拒的那一筆留在 `matched` 帶著原文，下一輪再送。
+- **寫 Item 時看排除條件**（全域、Feed、Series 三層聯集，擋下的是 `excluded`）。**送單前去重**：同一個 info hash 的 Job 在了、或另一筆 Item 送過；帳本已有同 Media / 季 / 集 / Tags——擋下的是 `duplicate`。
+- **每日補漏**（brief §15「補舊集」）：
+  - 一個 Feed 輪完、送單之前，以它為 home（最早帶到那個 Series、還在的 Mikan Feed，綁定時補舊集寫的也是它）的**已綁定、還沒完結的 Mikan RSS Series** 裡，`backfilled_at` 是 `NULL` 或滿一天的，各讀一次單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）。
+  - 寫成**這個 Feed 的 Item**（`(feed_id, guid)` 去重、同樣看排除條件、同一次 `_submit_waiting` 送出）。
+  - 讀不到的記在 Feed 的 `backfill_error`、`backfilled_at` 不動，下一輪（Feed 的間隔）再試；該補的都讀到了就清掉那一欄。
+  - **排在 `rss_poller` 裡、以每個 RSS Series 自己的 `backfilled_at` 滾動一天，不是固定鐘點**：與輪詢同一個形狀（醒來看誰到時間了），重試節奏直接用 Feed 的間隔。補漏的讀者只有綁好的 Mikan RSS Series，它們一定掛在某個 Mikan Feed 上——Feed 刪掉就是不再訂閱，補漏跟著停。不用 `reconciler` 那種每日 04:00，是因為固定鐘點會讓 N 個 RSS Series 同一刻打 Mikan。
+  - **完結就停**：完結照 `list_series` 同一份現況算（`parser.series_finished`，`rss._finished`），不是存下來的狀態，新的一筆出現時條件自己不成立、補漏跟著恢復。否則量隨綁過的部數線性長、永遠不停。
+  - **完結後再補最後一次就停**（`rss._backfill_settled`）：現在已完結、而且上次補漏那一刻也已完結才跳過，兩個時間點用同一支 `_finished_now`。`QUIET_AFTER` 從最近一筆的發佈時間算、不是從停機算，停機跨過它時被聚合 feed 捲掉的最後幾集靠這一次接住；代價是每部作品完結後多讀一次單一 feed。
+  - **不加開關**：問題是看不見，關掉的代價是停機期間被捲掉的集數補不回來而且察覺不到。畫面上 RSS Series 列說上次補漏、尚未補漏、已完結不再補漏（`SeriesOut.backfilled_at`）。
+- **沒有站點請求預算**（[ADR 0014](adr/0014-no-site-request-budget.md)，`docs/research/request-budget.md`）：輪詢、補漏、搜尋與人按的讀取都不共用「每站每小時 N 個」的窗。站點真的回 429 / 5xx 時，既有退路接得住：Feed、單集頁與單一 feed「讀不到、記 `poll_error` / `backfill_error`、下一輪再試」，自動綁定照下一節退避。**仍然沒做的兩件**：每秒幾個的節流（Cardigann 的 `requestDelay`）與以站台為單位的逐級退避（Sonarr 的 `EscalationBackOff`），沒有 repro。`.torrent` 的下載不設上限。
+- **自動綁定暫時查不到時有限重認**（brief §15「綁定」）：
+  - 番組頁或 TMDB 這一次讀不到，而且是**暫時的**（`adapters.http.is_transient`；**429 與 503 以外的 5xx 歸 `ServiceUnavailableError`**，不歸 `ProtocolMismatchError`，否則一次 502 就永遠待綁定），理由寫 `lookup_retry`：`site`（那一站的主機名）、`attempt`（已經算進上限的失敗次數）、`at`（下一次的時刻）、`detail`（原文）。
+  - `rss._due_lookups` 在輪到帶著它的 Feed、而且過了 `at` 時再認。
+  - **退避 1、4、12 小時**（`rss.LOOKUP_RETRIES`），一個 Series 最多認 1 + 3 次、分散在 17 小時裡，用完落到 `lookup_failed`。再問也一樣的（404、回的不是那個服務、憑證被拒）當場落到 `lookup_failed`。
+  - 為什麼有限重認：壞掉的番組頁若每 15 分鐘打一次太多，同一頁最多四次（`tests/integration/test_rss_auto_bind_retry.py` 數了番組頁的請求數）。數字的依據：試跑那一次 TMDB 同日稍後就讀得到，第一次重認一小時後；最後一次在隔天，隔夜的站台維護也等得過。
+  - TMDB 那一頭的 `unreachable`（`TmdbProblem`）也包含「回的不是 TMDB」——`services.media` 把 `ServiceError` 一概歸成它，分不開，照暫時的算，多的只是上限內的幾次重認。
+  - **一部候選讀不到不拖垮整次**：一個搜尋詞、一部作品的詳情讀不到就跳過，其餘照判；判得出來就綁，判不出來而缺的那一部是暫時讀不到的照上面重認，一部都沒讀到才是查不到。
+
+#### `health_checker`
+
+- 四項：
+  - Jellyfin（連線 + API key 列得出媒體庫）。
+  - qBittorrent（連線 + Web API 版本；全域偏好不看）。
+  - 索引站（Prowlarr；不再有 Torznab 端點）。
+  - Route（§9.5 的每一條纜繩重跑一次；探針沿用上一次的結論，從沒問過的那一條 Route 是 `unknown`「要重新檢查」，不算綠）。
+- 四項之後量兩件會變成 Issue 的事（`services/health_issues.py`）：每條 Route 的媒體庫掛不掛 TVDB（`library_uses_tvdb`）、incomplete / complete 剩的空間夠不夠（`low_disk_space`，門檻 `settings.disk.min_free_gb`）。條件解除時由系統收掉，問不到不算解除。
+- **醒得比檢查頻繁**：精靈剛跑完的那一刻，迴圈在啟動時就在轉但還沒有東西可檢查；醒來的間隔若就是檢查的間隔，使用者按完「完成」會對著一個空的健康頁等五分鐘。精靈跑完之前它什麼都不做（那時候正在接的服務被打只會得到假的紅燈）。
+- **連不上 Prowlarr 時提早重測**：還沒到整輪的那幾次醒來，上一次 Prowlarr 紅、而且已過 30 秒（`RECHECK_INTERVAL`）就只重測它（`recheck_due` → `check_service`），整輪的時間不動；不用 Prowlarr 時不重測。只給 Prowlarr：qBittorrent 與 Jellyfin 牽動 Route 那一項，單獨轉綠會與 Route 不一致，qBittorrent 重試登入還會重算 IP 封鎖時間（brief §20.2）。
+- **沒有逐服務的間隔退避**：每一項各自 try/except 加上 adapter 的 5 秒逾時就足夠隔離，5 分鐘一次的檢查本來就打不爆任何服務；退避只會延後「服務回來之後自動變綠」。連續失敗次數仍然記錄並顯示。
+- **磁碟空間**：
+  - 門檻在 `settings.disk`（設定的 qBittorrent 那一頁可改，改了立刻重量一次）。**形狀照 Sonarr 的 Minimum Free Space**（一個全域數字），單位與預設不同：Sonarr 擋的是入庫時複製（MB、預設 100），Berth 以硬鏈接入庫不佔空間、吃空間的是下載，所以是 GB、預設 10，`0` 是不量。Route 的 `hardlink` 纜繩上的 `free=` 是實測值。
+  - **同一個門檻也擋送單**：RSS 送單沒有人按確認，所以 `add_download` 與送單的重試在要 torrent **之前**量 incomplete 那一側（下載長在那裡）。低於門檻是 409 `low_disk_space`、一個 Job 都不建，手動與 RSS 同一個判斷（`jobs._check_disk`）。看不到那個目錄不擋——那是 `download_path` 纜繩要報的事。Issue 的「重新送單」不看。
+  - **比的是「剩餘空間 − 在途量」**（`jobs._in_flight`）：在途是 `submitted` / `metadata_ready` / `downloading` / `stalled` 的 Job 還沒下完的量，`total_size × (1 − progress)`；qBittorrent 報得出之前 `total_size` 是送單時來源報的大小（搜尋結果、RSS Item 的 `size`），兩邊都不知道的不算、在 log 說有幾筆。只扣在途、不扣這一次要送的大小：門檻說的是「開新下載之前至少留多少」，與 Sonarr 同一個意思。拒絕理由仍是 `low_disk_space`，`detail` 說出在途多少、幾筆。為什麼要扣在途：一次送 144 個時，每一個當下都過門檻、下載途中才滿。
+
+#### `notify_sender`
+
+- 待送表（`notifications`）上到時間、還沒送的每一則各送一次（`services.notify.send_due`）：先讀完收掉讀的交易，逐則送、逐則 commit 結果；沒設 bot token 時什麼都不送、留著。沒送到的記 `attempts` 與 `error`。
+- **故障分三層**（§11.5「故障」）：
+  - 管道：`401` 整個暫停到換了 token；連不上照連續失敗的輪數退避 30 秒起加倍到 1 小時；整個 bot 被限速照 `retry_after` 等。記在自己那一列 `settings.notify_sender`，遇到就停這一輪。
+  - 這一則自己：限速照 `retry_after` 延後那一則（`retry_at`）；超長被拒與組不成句子當場放棄。
+  - 收件人到不了：當場放棄、記在 `users.notify_unreachable_*`。
+- 每一輪先把滿 24 小時（`GIVE_UP_AFTER`，從 `not_before` 算）還沒送到的放棄（`abandoned`，`error` 留上一次的原因）。一則出例外記在那一則上、接著送下一則。
+- 寫入在觸發它的那一筆交易裡（「可以看了」是 `resolver._announce`），寫不成只記 log、不讓那一筆交易失敗；不經提示。
+- **每一輪先看守「等你處理」**（`watch_waiting`）：三份清單上有誰與上一輪（`settings.notify_waiting`）比，新出現的排給訂閱了的管理員；一樣就什麼都不寫。也記下每一件第一次看到的時刻（`NotifyWatchSettings.since`，「放太久」讀它）。
+
+#### `sweeper`
+
+- **每一次醒來先收過期的確認卡**（`proposals.expire_due`）：期限以分鐘計，不等 05:00，推 `event: proposal`。
+- 形狀照 `reconciler`：啟動那一刻的前一個 05:00 算跑過了（重啟不立刻跑）、錯過的不補跑、精靈跑完之前不跑；一輪的門檻照排定的 05:00 算、不照醒來的那一秒。05:00 與 04:00 的對帳錯開，巡檢看到的是對帳寫完的 Issue。
+- 每日巡檢（§11.5〈巡檢〉，`services.sweep.sweep_once`）：幾項檢查依序跑完、一起 commit。
+  - **卡住的**：還沒確認的 RSS Series 有 Job 停在 `submit_failed` / `client_error` 超過 24 小時（從那一筆最後一次 `submit_failed` / `issue_detected` 事件算），而且沒有開著或被忽略的管線 Issue 說著它這個狀態，開一件 `first_batch_stuck`（一個 Series 一件）；不再卡住或 Series 確認了由系統收掉。
+  - **放太久**：「等你處理」最舊的一件等滿 3 天，給訂閱了「等你處理」的管理員排一則提醒（`notify.queue_lingering`），同一件 3 天內只提醒一次（`settings.sweep`）。
+  - **一直失敗的 Feed、RSS Series 缺集、同一集意外多份**（§11.5〈巡檢〉）同一輪接著跑。
+- 一輪佔用事件迴圈最久 5–37 ms，加上 RSS 三項後暖機時 16–84 ms（`scripts/experiments/sweep_loop_lag.py`，門檻 100 ms），不移出迴圈。
+- **週報**：每一次醒來接著看最新一份該有的週報（在最近的週一 05:00 結束的那一週，`weekly.week_ending`）有沒有，沒有就產生（`weekly.compose_weekly`）。週一那一份排在巡檢之後，看到的是當天開完的 Issue。與巡檢不同，**重啟之後補上漏掉的那一週**（同一週再產生什麼都不寫），只有一份都還沒有的新裝不補。
+
+#### 所有迴圈
+
+- 每個迴圈是一個 `asyncio.Task`（`main.py` 的 lifespan 啟動，關閉時 cancel 並 await，不留 pending task）。cancel 落在一輪中途時那一輪先做完再收（`pipeline/ticks.py`）——async SQLAlchemy 不支援 IO 半途 cancel。
+- 例外只記 log 不讓迴圈死掉。連續失敗次數與最後錯誤寫入**自己那一列設定**供健康頁顯示（`settings.health` / `settings.poller`）。不共用一列，因為 `health_checker` 每 5 分鐘整組覆寫那一列，而 poller 每 5 秒寫一次，共用會互相蓋掉（理由與健康結果不放 `settings.services.*` 一樣）。
+- 迴圈之間用一個 in-process 的**喚醒訊號**傳「有東西動了，去看看」（`services/hints.py`），不用裝著「請處理 job X」的 `asyncio.Queue`。DB 狀態才是真相、程序重啟後由定時掃描補上，而掃描本來就找得到同一批 job，佇列裡那個 hash 不帶資訊，只留下重複的 hash 去不去重、滿了丟哪一筆、重啟後裡面那幾筆誰補三個問題。訊號會自己合併：poller 一輪動了 40 筆也只是「去看看」一次。
 
 ### 3.3 冪等與重入
 
-- `add_download`：同 hash 已存在 → 回傳既有 job，不重複送單。**那一筆是 `removed` 時拒絕**（409 `job_removed`，`detail` 是那一筆的 hash，M3 票 04）：刪除過而紀錄還在就是還沒決定要不要再下載——回傳它的話送單的人以為成功了，而 RSS 下一輪看到同一個條目會再送、再拿回同一列。重新入庫，或連紀錄一起刪掉（`purge`）之後再送，兩者都是 admin 的事；清掉紀錄之後同一個 hash 是一筆新的下載。
-- importer：目標已存在且 inode 等於來源 → 視為已完成，補 ledger 若缺；目標存在但 inode 不同 → item 標 `error: target_unmanaged`（原文 `target_exists_foreign`；票 12 依 CONTEXT.md 的 Unmanaged 改名），進 review。
-- ledger 的 `target_path` unique；event 寫入用 `(job_hash, type, payload hash)` 在同一分鐘內去重，避免重啟後重複「completed」事件。**使用者按下的重試是界線**：之後發生的事就算與之前一模一樣也照寫（票 12）。
+- `add_download`：同 hash 已存在 → 回傳既有 job，不重複送單。**那一筆是 `removed` 時拒絕**（409 `job_removed`，`detail` 是那一筆的 hash）：刪除過而紀錄還在就是還沒決定要不要再下載——回傳它的話送單的人以為成功了，而 RSS 下一輪看到同一個條目會再送、再拿回同一列。重新入庫，或連紀錄一起刪掉（`purge`）之後再送，兩者都是 admin 的事；清掉紀錄之後同一個 hash 是一筆新的下載。
+- importer：目標已存在且 inode 等於來源 → 視為已完成，補 ledger 若缺；目標存在但 inode 不同 → item 標 `error: target_unmanaged`（名稱照 CONTEXT.md 的 Unmanaged），進 review。
+- ledger 的 `target_path` unique；event 寫入用 `(job_hash, type, payload hash)` 在同一分鐘內去重，避免重啟後重複「completed」事件。**使用者按下的重試是界線**：之後發生的事就算與之前一模一樣也照寫。
 - Jellyfin 通知失敗只記 event，不阻擋 `imported`；resolver 之後會再嘗試。
-- **寫交易紀律**（M4 票 01，2026-09-26 試跑爆 `database is locked`）：SQLite 一次一個寫者，其他寫者最多等 `busy_timeout`（5 秒）。**先拿 `job_lock`、再開寫；網路呼叫不在寫交易裡。** 寫交易從第一個 UPDATE / INSERT（含 autoflush 送出去的那一次）開始、到 commit 或 rollback 結束；它之前的改動只要還沒 flush 就不算。
-  - 鎖的順序：握著寫交易等 `job_lock` 會與「握著 `job_lock` 等寫鎖」互等（試跑：poller 一輪一個交易、逐筆拿鎖，planner 先拿鎖再寫 pre-plan）。要多把鎖的照 hash 排序一次拿齊（`jobs.job_locks`；poller 的一輪、rematch 的取代）。
+- **寫交易紀律**：SQLite 一次一個寫者，其他寫者最多等 `busy_timeout`（5 秒），否則 `database is locked`。**先拿 `job_lock`、再開寫；網路呼叫不在寫交易裡。** 寫交易從第一個 UPDATE / INSERT（含 autoflush 送出去的那一次）開始、到 commit 或 rollback 結束；它之前的改動只要還沒 flush 就不算。
+  - 鎖的順序：握著寫交易等 `job_lock` 會與「握著 `job_lock` 等寫鎖」互等（poller 一輪一個交易、逐筆拿鎖，planner 先拿鎖再寫 pre-plan）。要多把鎖的照 hash 排序一次拿齊（`jobs.job_locks`；poller 的一輪、rematch 的取代）。
   - `qbit_poller` 一輪三段：網路全部問完（`sync`、要走出 `submitted` 的那幾筆的 `torrents/files`）→ 這一輪要動的每一筆的鎖拿齊 → 一個交易寫完。**不逐筆 commit**：一輪一個交易才有「Job 接回與它的 Issue 收掉是同一刻」（`close_settled`），而下載中的每一筆每一輪都有進度要寫，逐筆 commit 是一輪上百次 fsync；鎖拿齊之後只剩資料庫操作，握不了多久。代價在拿鎖那一段：送單、重試、重新送單握著那一筆的鎖打網路，poller 等它時已經握著排序在前的那幾把，那幾筆的 planner、importer 與 API 跟著等——asyncio 的等待，不會爆 `database is locked`。
   - 要打網路的命令先打再寫，或寫完 commit 再打：`rss` 的單集頁在寫 Item 之前抓完（`_series_keys`）、綁定的補舊集在改 Series 之前讀單一 feed（`_read_season`）、刪除在向 qBittorrent 移除之後才轉 `removed`（鎖裡先比對狀態）、重試與重新送單在進 `requested` 之後 commit 再抓 `.torrent` 與送 qBittorrent（與 `add_download` 同形）。`tests/integration/test_write_discipline.py` 在這幾處與 poller 的替身上量 SQLite 寫鎖。
   - `round_failed` 寫下的 `Job.error` 由下一次成功的一輪清掉，時間線記一筆 `recovered`（`from = round_failed`）：成功的一輪不一定有狀態轉換（pre-plan 算完之後那一筆還在下載）。
@@ -402,79 +529,172 @@ files ─► classify ─► (video | subtitle | font | audio | image | archive 
 
 | 階段 | 輸入 → 輸出 | 要點 |
 | --- | --- | --- |
-| `classify` | `[FileEntry]` → 加 `kind` | brief §6.2 的表；`sample` 以「檔名含 sample 且大小 < 最大影片 10%」判定——比的是**同目錄**最大的影片，同目錄只有它自己時退回整包最大的那一個——sample 幾乎都獨立放在自己的 `Sample/` 資料夾裡，只比同目錄的話這條規則永遠不成立（M1 票 05 補的推論；那一輪掃過的真實 torrent **一個 sample 都沒有**，所以規則只有單元測試守著，沒有語料）；`extra` 以關鍵字（NCOP/NCED/OP/ED 無集號、PV、CM、Menu、Preview、Trailer、Making、Interview、特典、映像特典）與資料夾（`SPs/` 內非 SP 編號，加上 Jellyfin 認得的那一串 extras 資料夾名——`Extras/`、`Bonus/`、`Featurettes/`、`Behind the Scenes/`…，brief §20.1）判定；`disc` 是**整包**的判定：任何一個檔案落在 `BDMV/` 或 `VIDEO_TS/` 底下，整個 torrent 都是 disc；mediainfo 可把時長 < 5 分鐘的「正片」降為 `extra` |
-| `normalize_cjk` | 檔名 → 乾淨字串 + `CjkHints` | 從 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 移植：剝離 ★前綴、招募廣告、地區限制、【】括號正規化為 []、中文標題與英文標題並列時保留英文；抽出 `subs`（CHT/CHS/JP/EN 集合）、`subtitle_kind`（內嵌 / 內封 / 外掛）、`season_cn`（第N季/期）、`episode_cn`（第N話/集）、`collection`（合集/全集/全N話）、`special`（番外/特別篇/SP/OVA/OAD）、`movie`（劇場版/電影版）、`group_cn`。**季號要認全形羅馬數字**（`无职转生Ⅱ`、`Ⅲ`，U+2160 起）與**不以空白收邊的半形羅馬數字**（`Mushoku Tensei II]`）——實測這兩種寫法漏掉會造成整輪播出的錯置（M1 票 01） |
-| `parse_release` | 乾淨字串 → `ReleaseInfo` | guessit 打底；後處理動漫模式：`- 01`、`[01]`、`01v2`、`E01` 無季、`01-12` 區間、`S01 \| 01-28+SPx11`、`第01話`；多季一包 `S01 + S02` / `S1-S2` → `season`–`season_end`（不是 S01E02，M4 票 48）；`release_kind` 由集號區間、多季與 `collection` 決定 |
+| `classify` | `[FileEntry]` → 加 `kind` | brief §6.2 的表，細節見下方〈classify〉 |
+| `normalize_cjk` | 檔名 → 乾淨字串 + `CjkHints` | 從 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 移植，細節見下方〈normalize_cjk〉 |
+| `parse_release` | 乾淨字串 → `ReleaseInfo` | guessit 打底；後處理動漫模式：`- 01`、`[01]`、`01v2`、`E01` 無季、`01-12` 區間、`S01 \| 01-28+SPx11`、`第01話`；多季一包 `S01 + S02` / `S1-S2` → `season`–`season_end`（不是 S01E02）；`release_kind` 由集號區間、多季與 `collection` 決定 |
 | `structure_hints` | 相對路徑 → hints | 資料夾名 `Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2` / `Specials` / `SPs`；`Subs/` `字幕/` 與其下的語言子資料夾 |
-| `map_episode` | → `[Candidate]` | brief §6.4 的順序；絕對編號換算三法（episode group absolute、累計集數、air_date 虛擬季 offset）各自產 Candidate 並附理由；只有集號而有發佈時間時先推測那時在播的那一輪（§4.4「以發佈時間推測虛擬季」）；**篇章名 → 季號**（§4.4，比對各季 `name`）也產一個 Candidate；上下文 Media 缺時先做標題比對（正規化後與 `name` / `original_name` / alternative titles / translations 比對，年份加權） |
-| `match_subtitle` | → 附掛 | brief §6.7 順序；語言由後綴（`.tc` `.cht` `.zh-Hant` `.sc` `.chs` `.jp` `.jpsc` `.jptc`，加上真實語料寫的 ISO 639-2 式 `.Cht` `.Chs` `.Jpn` `.Eng`）或資料夾決定，都缺時看 CjkHints。**不看 torrent 名**——`附官方日英简繁中字幕` 說的是這一包有四種字幕，不是這一個檔案有四種（M1 票 07 實測）。第二條規則（資料夾裡的集號）也接受**語言資料夾**（`繁體/`）：它一樣說了「這一格底下的東西是側掛字幕」 |
-| `plan` | → `Plan` | 為每個影片選最佳 Candidate；產生目標路徑（§5）；衝突偵測（brief §6.4 第 5 點）；extras 與 unmatched 的處置。**brief §7.8 的「與帳本既有版本重複」不在這裡**：解析器沒有 IO，看不到既有 Entry——那個判斷在規劃那一步的 services 那一半（`services/plan._against_ledger`，M1 票 14b 起比範圍、M2 票 08 起也比 Tags），不在 importer：規劃時就知道的話，重複的那一列略過、其餘照常入庫，不必等到鏈接那一刻撞上路徑才把整筆停下來。**字幕排在影片之後**：字幕自己說不出它是第幾集，配到影片就繼承它的答案，影片沒入庫字幕就跟著 unmatched / review |
+| `map_episode` | → `[Candidate]` | brief §6.4 的順序；絕對編號換算三法（episode group absolute、累計集數、air_date 虛擬季 offset）各自產 Candidate 並附理由；只有集號而有發佈時間時先推測那時在播的那一輪（§4.4〈以發佈時間推測虛擬季〉）；**篇章名 → 季號**（§4.4，比對各季 `name`）也產一個 Candidate；上下文 Media 缺時先做標題比對（正規化後與 `name` / `original_name` / alternative titles / translations 比對，年份加權） |
+| `match_subtitle` | → 附掛 | brief §6.7 順序，細節見下方〈match_subtitle〉 |
+| `plan` | → `Plan` | 為每個影片選最佳 Candidate；產生目標路徑（§5）；衝突偵測（brief §6.4 第 5 點）；extras 與 unmatched 的處置。細節見下方〈plan〉 |
 | `score` | → confidence | brief §6.5 的三級定義；批次一致性檢查在此（同模式、連續集號、數量吻合） |
 
-**片長驗證**（M3 票 15，`parser.runtime.check_runtime`，§11.4「三道程式檢查」②）：mediainfo 量到的片長（`FileEntry.duration_s`）對 TMDB 那一集的 `runtime`（多集檔是各集相加），差超過 `max(180 秒, 15% × TMDB 片長)`（`RUNTIME_SLACK`、`RUNTIME_RATIO`）的那一列送審核（`action = review`，季集與目標路徑留著），理由 `runtime_mismatch` 帶量到的片長與 TMDB 的分鐘數，Plan 的 `review_reason` 是 `runtime_conflict`（§3.1）。抓的是分類錯誤——SP / OVA、兩集合併的檔案被當成一集正片；同一季裡算錯的集號它看不出來（每一集差不多一樣長）。**與 `classify` 的分工**（2026-09-26 使用者拍板）：短於 5 分鐘的「正片」仍由 `classify` 自動降成 extra，不送審核；片長驗證管分類器看不出來的那些。純函式、只吃 Plan Item、量到的片長與快照，所以 M6 的 AI 結果也過同一條；在 `services/plan.py` 裡與播出日比對同一個入口（`_checked`，播出日在前），排在 Route 政策之前，`_plan`、`_preplan`、`held_proposal` 都跑，`proposal`（票 13 的改正）不跑。不看來源：認領與重新入庫一樣比。缺資料不擋：TMDB 沒有那一集（或範圍裡任何一集）的片長 → 記一筆 `runtime_missing`；mediainfo 沒量到（§8.7 失敗不阻擋；pre-plan 那一輪檔案還在下載）→ 不擋也不記，否則 pre-plan 每一列都是雜訊。門檻的量測見 `scripts/experiments/runtime_gap.py`（87 集對得上的正片比例 0.94–1.03、差 −84 到 +41 秒；兩集合併檔 1.86–2.04 倍）。**已知盲點**：與正片一樣長的番外被當成正片它看不出來（量到的 One Piece 外傳就是這樣）。
+#### classify
+
+- `sample`：檔名含 sample 且大小 < 最大影片 10%。比的是**同目錄**最大的影片，同目錄只有它自己時退回整包最大的那一個——sample 幾乎都獨立放在自己的 `Sample/` 資料夾裡，只比同目錄的話這條規則永遠不成立。掃過的真實 torrent 一個 sample 都沒有，所以規則只有單元測試守著，沒有語料。
+- `extra`：
+  - 關鍵字：NCOP/NCED/OP/ED 無集號、PV、CM、Menu、Preview、Trailer、Making、Interview、特典、映像特典。
+  - 資料夾：`SPs/` 內非 SP 編號，加上 Jellyfin 認得的那一串 extras 資料夾名（`Extras/`、`Bonus/`、`Featurettes/`、`Behind the Scenes/`…，brief §20.1）。
+- `disc` 是**整包**的判定：任何一個檔案落在 `BDMV/` 或 `VIDEO_TS/` 底下，整個 torrent 都是 disc。
+- mediainfo 可把時長 < 5 分鐘的「正片」降為 `extra`。
+
+#### normalize_cjk
+
+- 剝離 ★前綴、招募廣告、地區限制；【】括號正規化為 []；中文標題與英文標題並列時保留英文。
+- 抽出：`subs`（CHT/CHS/JP/EN 集合）、`subtitle_kind`（內嵌 / 內封 / 外掛）、`season_cn`（第N季/期）、`episode_cn`（第N話/集）、`collection`（合集/全集/全N話）、`special`（番外/特別篇/SP/OVA/OAD）、`movie`（劇場版/電影版）、`group_cn`。
+- **季號要認全形羅馬數字**（`无职转生Ⅱ`、`Ⅲ`，U+2160 起）與**不以空白收邊的半形羅馬數字**（`Mushoku Tensei II]`）——漏掉這兩種寫法會造成整輪播出的錯置。
+
+#### match_subtitle
+
+- 語言由後綴決定：`.tc` `.cht` `.zh-Hant` `.sc` `.chs` `.jp` `.jpsc` `.jptc`，加上真實語料寫的 ISO 639-2 式 `.Cht` `.Chs` `.Jpn` `.Eng`；或由資料夾決定。都缺時看 CjkHints。
+- **不看 torrent 名**——`附官方日英简繁中字幕` 說的是這一包有四種字幕，不是這一個檔案有四種。
+- 第二條規則（資料夾裡的集號）也接受**語言資料夾**（`繁體/`）：它一樣說了「這一格底下的東西是側掛字幕」。
+
+#### plan
+
+- **brief §7.8 的「與帳本既有版本重複」不在這裡**：解析器沒有 IO，看不到既有 Entry。那個判斷在規劃那一步的 services 那一半（`services/plan._against_ledger`，比範圍也比 Tags），不在 importer。規劃時就知道的話，重複的那一列略過、其餘照常入庫，不必等到鏈接那一刻撞上路徑才把整筆停下來。
+- **字幕排在影片之後**：字幕自己說不出它是第幾集，配到影片就繼承它的答案；影片沒入庫字幕就跟著 unmatched / review。
+
+#### 片長驗證
+
+`parser.runtime.check_runtime`（§11.4「三道程式檢查」②）。
+
+- **判準**：mediainfo 量到的片長（`FileEntry.duration_s`）對 TMDB 那一集的 `runtime`（多集檔是各集相加），差超過 `max(180 秒, 15% × TMDB 片長)`（`RUNTIME_SLACK`、`RUNTIME_RATIO`）的那一列送審核。
+- **處置**：`action = review`，季集與目標路徑留著；理由 `runtime_mismatch` 帶量到的片長與 TMDB 的分鐘數；Plan 的 `review_reason` 是 `runtime_conflict`（§3.1）。
+- **抓的是分類錯誤**：SP / OVA、兩集合併的檔案被當成一集正片。同一季裡算錯的集號它看不出來（每一集差不多一樣長）。
+- **與 `classify` 的分工**：短於 5 分鐘的「正片」仍由 `classify` 自動降成 extra，不送審核；片長驗證管分類器看不出來的那些。
+- **位置**：純函式，只吃 Plan Item、量到的片長與快照，所以 M6 的 AI 結果也過同一條。在 `services/plan.py` 裡與播出日比對同一個入口（`_program_checks`，播出日在前），排在 Route 政策之前，`_plan`、`_preplan`、`held_proposal` 都跑，`proposal`（人改正的季集）不跑。不看來源：認領與重新入庫一樣比。
+- **缺資料不擋**：TMDB 沒有那一集（或範圍裡任何一集）的片長 → 記一筆 `runtime_missing`；mediainfo 沒量到（§8.7 失敗不阻擋；pre-plan 那一輪檔案還在下載）→ 不擋也不記，否則 pre-plan 每一列都是雜訊。
+- **門檻依據**：`scripts/experiments/runtime_gap.py`——87 集對得上的正片比例 0.94–1.03、差 −84 到 +41 秒；兩集合併檔 1.86–2.04 倍。
+- **已知盲點**：與正片一樣長的番外被當成正片它看不出來（量到的 One Piece 外傳就是這樣）。
 
 ### 4.2 核心型別（`domain/`）
 
-- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`、`duration_s`（mediainfo 量到的秒數，票 11）。`duration_s` **`None` 是「還沒量」不是 0**：pre-plan 那一輪檔案還在下載，一個訊號都沒有，而分類器拿它把短的正片降為 extra（§4.1、brief §6.2），片長驗證拿它比 TMDB 那一集的片長（§4.1，M3 票 15）。解析器仍然沒有 IO——量的人是 `services/plan.py`，這裡收的是它量到的結果
+- `FileEntry`：`rel_path`（相對於 torrent 內容根）、`size`、`kind`、`priority`、`duration_s`（mediainfo 量到的秒數）。`duration_s` **`None` 是「還沒量」不是 0**：pre-plan 那一輪檔案還在下載，一個訊號都沒有，而分類器拿它把短的正片降為 extra（§4.1、brief §6.2），片長驗證拿它比 TMDB 那一集的片長。解析器仍然沒有 IO——量的人是 `services/plan.py`，這裡收的是它量到的結果
 - `CjkHints`：`subs: frozenset[Lang]`、`subtitle_kind`、`season: int | None`、`episode: int | None`、`episode_end`、`collection`、`special: SpecialKind | None`、`movie: bool`、`group: str`、`matched: tuple[str, ...]`（認出來的原文，往上併進 `ReleaseInfo.matched_tokens`）
 - `ReleaseInfo`：brief §6.3 欄位 + `raw_title`、`matched_tokens`、`part`（`Part.2` / `第二部分` 的 cour 序號，§4.4）、`air_date`（檔名寫的播出日，絕對編號換算的反證，§4.4；與 `episode_end` 一樣跟著集號走——檔名自己寫了集號時，不從 torrent 名補日期，包名上的日期說的不是這一集）。`season_hint_from_folder` **不在這裡**——資料夾提示是 `structure_hints` 的輸出，兩個階段的產物不混進同一個型別
 - `Tags`：`source`、`resolution`、`subs: tuple[Lang, ...]`、`hardsub`、`group`、`version`、`edition`；`render()` 依 brief §6.8
 - `StructureHints`（`parser/structure.py`）：`season`、`part`、`special`、`subtitle_folder`、`subtitle_lang`、`matched`。只讀資料夾，不讀檔名
 - `Candidate`：`season`、`episode_start`、`episode_end`、`strategy`、`confidence`、`reasons: tuple[ItemReason, ...]`
-- `ItemReason`（M2 票 07）：`code: ReasonCode` + `params`。**理由是封閉集合的 code 加參數，句子只在前端**（`jobs.plan.why.*`，zh-Hant / en）；參數是檔名、季集標記（`episode_label`）、日期這種不翻譯的事實。每一種 code 帶哪幾個參數寫死在 `REASON_PARAMS`，`why()` 組的那一刻核對；前端兩份語言的佔位符由 `tests/unit/test_reason_codes.py` 逐句比對。沒有叫 `count` 的參數（i18next 會把它當單複數）
+- `ItemReason`：`code: ReasonCode` + `params`。**理由是封閉集合的 code 加參數，句子只在前端**（`jobs.plan.why.*`，zh-Hant / en）；參數是檔名、季集標記（`episode_label`）、日期這種不翻譯的事實。每一種 code 帶哪幾個參數寫死在 `REASON_PARAMS`，`why()` 組的那一刻核對；前端兩份語言的佔位符由 `tests/unit/test_reason_codes.py` 逐句比對。沒有叫 `count` 的參數（i18next 會把它當單複數）
 - `Decision`（`parser/score.py`）：`item: PlanItem` + `strategy`。批次一致性要比的是策略，而 `PlanItem` 沒有這個欄位，所以逐檔的結果先攤成它再進 `score`
-- `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`target_path`、`confidence`、`reasons`（`ItemReason`）。`target_path` **只有真的會被寫出去的檔案有值**（`import` / `extra` / `subtitle`）——unmatched 留在 complete 原位（brief §7.4），review 還沒有決定，兩者都是空字串。`media_id` 還不在這裡：Job 一路都帶著同一個 Media，等 Plan 存進資料庫（§11.2 票 11）才有第二個來源需要它；§2.3 是它最終的樣子
-- `PlanSummary`（`domain/parser.py`，票 11）：一份 Plan 的一句話（`plans.summary_json`）——會被寫進媒體庫的檔案數、逐信心的計數、逐 `PlanAction` 的計數、`review_reason`。住在 `domain/` 的理由與 `MediaSnapshot` 一樣（§2.2 的同一條偏差）：`models` 拿它當一個 `*_json` 欄位的型別、`services` 算它、`api` 直接把它送出去，而 `api` 依契約不 import `models`（§1.3）。信心只數**不是 `skip` 的那些**：字型與海報雙方都同意可以忽略，算進 high 會稀釋「這一包有多可信」
-- `EDITABLE_ACTIONS`（M2 票 07）：Review Queue 上一列依分類改得成哪幾種處置——影片與特典可互換（入庫 / 特典 / 對不到 / 略過），字幕只能跟著影片或略過，光碟結構只能對不到或略過，其餘只能略過；`review` 不在任何一格裡（它是「還沒決定」）。**人改過之後重算**走 `parser.revise`（與規劃同一份 `_target_of` / `_subtitle`，已經鏈接的列路徑不動、字幕重新找影片）；核准前把待審核列升成入庫走 `parser.promote`（判準是「算得出目標路徑」）
-- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`、`MappingStrategy`、`PlanStatus`、`PlanEngine`、`ReviewReason`（票 11）、`ReasonCode`（M2 票 07）（explicit / folder / context / arc_name / single_season / absolute_group / absolute_cumulative / air_date_offset / cour_offset / published_run / movie）
+- `PlanItem`：`rel_path`、`kind`、`action`、`season`、`episode_start`、`episode_end`、`tags`、`target_path`、`confidence`、`reasons`（`ItemReason`）。`target_path` **只有真的會被寫出去的檔案有值**（`import` / `extra` / `subtitle`）——unmatched 留在 complete 原位（brief §7.4），review 還沒有決定，兩者都是空字串。`media_id` 不在這裡：Job 一路都帶著同一個 Media，Plan 存進資料庫後才有第二個來源需要它；§2.3 是它最終的樣子
+- `PlanSummary`（`domain/parser.py`）：一份 Plan 的一句話（`plans.summary_json`）——會被寫進媒體庫的檔案數、逐信心的計數、逐 `PlanAction` 的計數、`review_reason`。住在 `domain/` 的理由與 `MediaSnapshot` 一樣：`models` 拿它當一個 `*_json` 欄位的型別、`services` 算它、`api` 直接把它送出去，而 `api` 依契約不 import `models`（§1.3）。信心只數**不是 `skip` 的那些**：字型與海報雙方都同意可以忽略，算進 high 會稀釋「這一包有多可信」
+- `EDITABLE_ACTIONS`：Review Queue 上一列依分類改得成哪幾種處置——影片與特典可互換（入庫 / 特典 / 對不到 / 略過），字幕只能跟著影片或略過，光碟結構只能對不到或略過，其餘只能略過；`review` 不在任何一格裡（它是「還沒決定」）。**人改過之後重算**走 `parser.revise`（與規劃同一份 `_target_of` / `_subtitle`，已經鏈接的列路徑不動、字幕重新找影片）；核准前把待審核列升成入庫走 `parser.promote`（判準是「算得出目標路徑」）
+- 封閉集合一律 `StrEnum`：`FileKind`、`Lang`、`Source`、`SubtitleKind`、`SpecialKind`（SP/OVA/OAD/Movie/NC）、`ReleaseKind`、`Confidence`、`PlanAction`、`MappingStrategy`、`PlanStatus`、`PlanEngine`、`ReviewReason`、`ReasonCode`（值見 `berth/domain/parser.py`；`MappingStrategy` 的值是 explicit / folder / context / arc_name / … / published_run）
 
 ### 4.3 上下文與 TMDB 快照
 
-`ParseContext`：`media: MediaSnapshot | None`、`candidates: tuple[MediaSnapshot, ...]`、`season_hint`、`episode_offset`、`published_at`（Job 的發佈時間，只有集號時推測虛擬季用，§4.4，M3 票 16）。`candidates` 是 `media` 缺席時可以比對的作品（brief §6.4 第 2 點的 RSS 與重新入庫）。**RSS 那一半沒有走這裡**（M3 票 09）：RSS Series 的作品在綁定那一刻就決定（`parser.binding.judge`，線索多了 Mikan 番組頁的名字與開播日期，而且要的是「相等 + 開播日期」而不是解析器的分數），綁好之後規劃拿到的是 `media`；`candidates` 仍然只給沒有上下文的重新入庫用——解析器沒有 IO，認得出作品的前提是呼叫端先把候選搜好遞進來；認出來時信心上限是 medium，「標題 **+ 年份**精確命中」才配得上 high（brief §6.5）。`MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `names`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
+`ParseContext`：`media: MediaSnapshot | None`、`candidates: tuple[MediaSnapshot, ...]`、`season_hint`、`episode_offset`、`published_at`（Job 的發佈時間，只有集號時推測虛擬季用，§4.4）。
 
-`SeasonSnapshot.name` 是英文季名（會進畫面），`names` 是**同一季在三輪語言下的名字**（`en-US` / `zh-TW` / `zh-CN`，去重）。要三套是因為篇章名比對的對手是真實發佈寫的那一種字：`Hashira Training Arc` / `柱訓練篇` / `柱训练篇` 指的是同一季，而簡體字幕組佔了失敗案例的多數（M1 票 06，§4.4）。多打的那一輪是 `tv/{id}` 的 `zh-CN`，只取季名，電影不打。
+- `candidates` 是 `media` 缺席時可以比對的作品（brief §6.4 第 2 點的重新入庫）。解析器沒有 IO，認得出作品的前提是呼叫端先把候選搜好遞進來。認出來時信心上限是 medium，「標題 **+ 年份**精確命中」才配得上 high（brief §6.5）。
+- **RSS 沒有走 `candidates`**：RSS Series 的作品在綁定那一刻就決定（`parser.binding.judge`，線索多了 Mikan 番組頁的名字與開播日期，而且要的是「相等 + 開播日期」而不是解析器的分數），綁好之後規劃拿到的是 `media`。
+- `MediaSnapshot` 是 `media.tmdb_snapshot_json` 的型別化版本，含各季集數、**各季的 `names`**（§4.4 的篇章名比對靠它）、每集 `air_date` 與 `name`、absolute 排序（若有）、標題集合。解析器不知道 TMDB API 的存在。
+
+`SeasonSnapshot.name` 是英文季名（會進畫面），`names` 是**同一季在三輪語言下的名字**（`en-US` / `zh-TW` / `zh-CN`，去重）。要三套是因為篇章名比對的對手是真實發佈寫的那一種字：`Hashira Training Arc` / `柱訓練篇` / `柱训练篇` 指的是同一季，而簡體字幕組佔了失敗案例的多數（§4.4）。多打的那一輪是 `tv/{id}` 的 `zh-CN`，只取季名，電影不打。
 
 ### 4.4 Offset 偵測與季號來源【決定】
 
-移植 AutoBangumi `offset_detector.py` 的想法：以季內各集 `air_date` 的間隔 > 180 天切出「虛擬季」，若檔名的季/集落在某個虛擬季內，換算為 TMDB 的實際季/集，Candidate 標 `strategy = air_date_offset`、confidence 至多 medium。RSS Series 的 `episode_offset` 若有值則優先（brief §15：新 RSS Series 的第一批一律進審核，確認過之後才照信心走）。**offset 由人改正一集時算出**（M3 票 13）：人說的集號減去檔名寫的集號（`parser.written_episode`，與規劃同一個讀法——檔名說了算、torrent 名補空缺），季號就是人說的那一季；寫回 Series 之後還沒確認的集數由 `plan.proposal`（不寫、不動狀態，快照與片長用存下來的）回答該在哪一集，再走 rematch 搬過去。
+移植 AutoBangumi `offset_detector.py` 的想法：以季內各集 `air_date` 的間隔 > 180 天切出「虛擬季」，若檔名的季/集落在某個虛擬季內，換算為 TMDB 的實際季/集，Candidate 標 `strategy = air_date_offset`、confidence 至多 medium。
 
-**180 天這個門檻已被量測支持，不要調小**（M1 票 01，7,833 筆真實釋出）：180 天時整體換算失敗率 8.0%，改成 60 天會惡化到 9.7%。原因是一季內分割兩 cour 的間隔常常不到 180 天，門檻調小會把一季切成兩個虛擬季，季號提示就對不上了（`docs/research/anime-episode-source.md` §6.4）。
+- RSS Series 的 `episode_offset` 若有值則優先（brief §15：新 RSS Series 的第一批一律進審核，確認過之後才照信心走）。
+- **offset 由人改正一集時算出**：人說的集號減去檔名寫的集號（`parser.written_episode`，與規劃同一個讀法——檔名說了算、torrent 名補空缺），季號就是人說的那一季。寫回 Series 之後還沒確認的集數由 `plan.proposal`（不寫、不動狀態，快照與片長用存下來的）回答該在哪一集，再走 rematch 搬過去。
 
-同一份量測指出，**換季集來源（TVDB aired 或 absolute）只能改善 0.4 個百分點**，brief §10 據此結案為維持 TMDB。真正的槓桿是下面兩條，兩條都不需要第二個 provider：
+**180 天這個門檻已被量測支持，不要調小**（7,833 筆真實釋出）：180 天時整體換算失敗率 8.0%，改成 60 天會惡化到 9.7%。原因是一季內分割兩 cour 的間隔常常不到 180 天，門檻調小會把一季切成兩個虛擬季，季號提示就對不上了（`docs/research/anime-episode-source.md` §6.4）。
 
-- **篇章名 → 季號**：九成的失敗是檔名只有篇章名沒有季號（「柱訓練篇」「最終季」「死滅迴游」「無限列車篇」）。用 `MediaSnapshot` 各季的 `names` 比對**發佈名與檔名的原文**，命中則等同季號提示，Candidate 標 `strategy = arc_name`、confidence 至多 medium。「最終季 / Final Season」對到最後一季。三條實作規則（M1 票 06）：
-  - **季名要三輪語言**（§4.3）。只留英文的話，真實發佈裡最常見的簡體篇章名一個都對不到。
-  - **只是季號翻譯的季名不算篇章名**（`Season 1`、`第 1 季`），**與作品標題相同的季名也不算**（Overlord 的第一季就叫 `Overlord`，每一個發佈的名字裡都有它）——兩種都不帶新資訊，卻會到處命中。
-  - 多個季名同時命中時取**最長的那一個**：`Overlord II` 比 `Overlord` 說得更多。
-- **`第二部分` / `Part.2` 當 cour 偏移**：唯一「檔名有季號卻還是三家一起錯」的一類（`[星空字幕组][进击的巨人 第三季 第二部分 / Shingeki no Kyojin Season 3 Part.2][01-10]`）。看到這個標記就把同一季前面幾個 cour 的長度加上去。它與字幕組的「季內連號」（第二 cour 直接從 13 接下去）是同一件事的兩種寫法，所以（M1 票 06）：
-  - cour 怎麼切**與虛擬季同一條規則**（間隔 > 180 天）——它們本來就是同一件事：一季裡的兩輪播出。進擊的巨人第三季實測 12 + 10 集，中間隔 196 天。
-  - 加上偏移之後超出該季時**回頭照字面讀**：那表示這一組其實是季內連號。所以「季內連號」與「每 cour 重數」兩種寫法用同一條規則就都對了。
-  - 看到 cour 標記時，**照字面讀的那個候選不再產生**——不是排序問題，兩種讀法在 TMDB 裡都存在。
-- **絕對編號換算**：TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況即可，但要標 confidence 至多 medium。**降到 low 看證據，不看 Route**（M1 票 14d，`mapping._doubts`，brief §6.4）：集號 ≤ 第一個正規季的集數（也讀得成後面某季從 01 重數），或檔名的播出日（`ReleaseInfo.air_date`；guessit 開 `date_year_first`，韓國電視台的 `150524` 才讀得成 2015-05-24）與換算出的那一集的 `air_date` 不是同一天（不容忍），兩條各自附一句理由。前一條收窄成「而且標題有認不出的多餘字」量過不成立（`docs/research/profile-effect.md` §6.1.1）。**三種換算不在同一個分支**（M1 票 06）：`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路，而虛擬季換算要有一個季號才索引得到那一輪播出（`第二季` 對不到任何一季時才輪到它）。累加換算另外也在有季號提示時當印證用，見下面「季號明寫、集號跨季累計」（票 106）。
-- **季號明寫、集號跨季累計**（票 106，`mapping._from_hint`）：ANi 的 `黑色五葉草 Season 2 - 171`、`SPY×FAMILY Season 3 - 50`——季號照實寫，集號卻從第一季數下來。提示的那一季存在、字面那一集不在那一季時，同一個集號走 `absolute_cumulative` 的累加換算；**換算結果落在提示的那一季才採用**（季號提示與換算互相印證），Candidate 標 `strategy = absolute_cumulative`、confidence 至多 medium，理由是提示那一句加上換算那一句；檔名明說的播出日對不上換算出的那一集時降到 low（`_date_doubt`，與只有集號的累加換算同一條）。落在別季或換算不出來時照舊：字面讀法、low、`episode_not_on_tmdb`。字面那一集存在時不換算——第 2 季比第 1 季長時 `Season 2 - 13` 兩種讀法都落在第 2 季，明說的照字面（brief §6.4）。
-- **以發佈時間推測虛擬季**（brief §6.4，AutoBangumi v3.2 的做法，M3 票 16，`mapping._published_run`）：字幕組每一輪播出從 01 重數，而 TMDB 把好幾輪放在同一季（或同一部作品的好幾季）時，發佈時間（`ParseContext.published_at`，即 Job 的 `published_at`，§2.3）挑得出是哪一輪，集號就照那一輪從 01 數。Candidate 標 `strategy = published_run`、confidence 至多 medium、理由 `published_in_run` 帶發佈日、全部幾輪裡的第幾輪與那一輪的第一集。它分開的是「照字面讀的那一集」與「後面某輪從 01 重數的第 N 集」——上面「集號 ≤ 第一個正規季的集數」分不開的那兩種（`docs/research/profile-effect.md` §4）。
-  - **判準是「剛播」**：新的發佈發的是剛播的那一集。每一種讀法換算出的那一集（區間取最後一集）播出日落在發佈日往前 `BEHIND_LATEST`、往後 `RELEASE_TOLERANCE` 之間才算剛播，門檻與播出日比對同一組（`parser/publishing.py`）。**剛好一種讀法剛播、而它是某一輪的重數**才推測；沒有一種剛播（BD、補檔、重播、慢六週以上的字幕組）或不只一種（前一季三集就播完、第二季緊接著開播）都是分不開，照舊。只看「那一輪還在播」不夠：shincaps 在 Re:Zero 第三輪播完兩週後錄的 `- 01`（nyaa 1957100）會被讀成第三輪第 1 集，而它多半是第一季的重播。
-  - **兩個入口**：沒有季號提示時（`_from_number`），候選是全部正片的季各自按 > 180 天切出的每一輪，字面讀法是「只有一季」或絕對編號換算的那幾個；第一輪的重數與字面讀法常常是同一集，剛播時一樣算數（2022 年的 `Spy x Family - 05` 因此不再被「集號 ≤ 第一季集數」送審核）。**季號來自篇章名、而那一季裡有好幾輪時**（`_restarted_within`），候選只有那一季的第二輪以後，字面讀法是「這一季第 N 集」——《死神》千年血戰篇的中文組 `千年血战篇 [08]` 對到第 2 季，TMDB 的第 2 季是四輪，照字面讀是 2022 年的 S02E08，票 16 之前以 medium 自動入錯（benchmark 語料 `bleach-tybw-kashin-tan-08-sakurato`）。只限篇章名：篇章名說的是哪一段故事，不是字幕組怎麼編號，而明說的季號（`S02E08`、`第二季`）、資料夾與 RSS Series 的季號（`context`）是照發佈或人自己的編號寫的，照字面採用（brief §6.4）；明說了分部（`Part.1` 也算）的不推測；RSS Series 的 offset 有值也不推測（人說的優先）；集號 `00` 不是任何一輪從 01 數的集數；檔名明說的播出日對不上推測出的那一集照樣降到 low（`_date_doubt`）。
-  - **推測之後照樣過播出日比對，但比對幾乎擋不到它**：推測只收「剛播」的讀法，而剛播正是規則一放行的條件，所以規則一永遠不會擋；規則二（只對 RSS）只在「最近播出的一集」落在發佈後兩天內、而且比推測出的那一集晚六週以上時擋得下——一集停播六週、下一集剛好在發佈後才播的那種邊角（`tests/integration/test_air_date_check.py::TestPublishedRun` 守著「推測出的集數沒有繞過比對」）。兩者沒有互相抵銷，但也不是互相把關：推測錯了的主要防線是 medium 的 audit 旗標與 RSS Series 第一批一律審核（brief §15），不是播出日比對。
-  - **已知盲點**：那一輪正在播時發的前一季舊集補檔（檔名 `- 03`、這一輪也剛播完第 3 集）會被讀成這一輪的第 3 集，驗證也看不出來；手動送單不過規則二。兩者都是 medium，入庫時帶 audit 旗標。
-- **季名的寫法是一份規則**（M4 票 14，`parser.seasons`）：`第N季 / 第N期`、`Season N / Season.N / SN`、`Nth Season` 與中文數字表。解析器從發佈名撈季號（`cjk`）、讀資料夾名（`structure`，整個資料夾名就是它才算）、自動綁定把季名從搜尋詞與比對的線索裡拆掉（`binding`）都讀它——TMDB 的作品名不帶季名。**自動綁定讀季號與規劃同一個讀法**（`mapping.season_airing`）：TMDB 有那一季就是那一季，沒有時是依 > 180 天間隔切出的第 N 輪（虛擬季，同 `_virtual`）；比的是那一季**播出的期間**（任何一集前後 14 天），不只首播，因為 Mikan 把一季的第二個 cour 另開番組、寫它自己的開播日（brief §15「綁定」、§20.12）。羅馬數字（`II`、`Ⅲ`）與 `第N部分` / `Part N` 不在這份裡：前者只在解析器那一頭有用（「`Mushoku Tensei III`」與「`S3`」要對得起來），後者是 cour 不是季。
-- **數量明顯不符就交給人**（brief §6.5 的 low，M1 票 06）：一季十二集卻對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review 而不是挑一個代罪的。
-- **播出日比對**（M3 票 14，`parser.airing.check_airing`，§11.4「三道程式檢查」①）：規則層有把握卻算錯的集數，拿 Job 的 `published_at`（§2.3）對換算出的那一集的 TMDB 播出日。純函式、只吃 Plan Item、快照與一個發佈時間，所以 M6 的 AI 結果也過同一條；在 `services/plan.py` 裡排在 Route 政策之前，`_plan`、`_preplan` 都跑，`proposal`（票 13 的改正）不跑——那是人說的季集。
-  - **規則一**：發佈日早於那一集（範圍取最後一集）的播出日**超過兩天**就送審核，理由 `released_before_airing` 帶兩個日期。兩天是 TMDB 的當地日期對 UTC 的發佈時間、深夜檔跨日的容忍（`RELEASE_TOLERANCE`）。手動送單與 RSS 都套。
-  - **規則二**：只對 RSS Series、只對正片的季（S00 不照播出順序）。「發佈當時最近播出的一集」＝播出日不晚於發佈日加兩天的最後一集；對到的那一集比它早**超過 `BEHIND_LATEST`**、**而且**它離發佈不超過 `BEHIND_LATEST`（作品在發佈時還在連載）就送審核，理由 `behind_latest_episode` 帶兩組集與日期。第二個條件讓播完很久之後的 BD、補檔不被擋；第一個條件讓慢幾週的字幕組不被擋。門檻的量測見 `scripts/experiments/air_date_lag.py`。
-  - 被擋的那一列 `action = review`，**季集與目標路徑留著**：BD 版晚幾個月才發這種對的也會落在這裡，核准就照畫面上的位置入庫（`parser.promote`）。Plan 的 `review_reason` 是 `air_date_conflict`（§3.1）。
-  - 缺資料不擋、記一筆：發佈時間是 `None` → `published_missing`；TMDB 沒有那一集的播出日 → `air_date_missing`。**沒有來源的 Job 不比**（認領 `unknown_torrent`、從 complete 目錄重新入庫的那一種，`source_url` 是空的）：逐列記「來源沒給」只是雜訊。既有 Job 的 `POST /jobs/{hash}/reimport` 留著來源，所以**照樣再比一次**——與拒絕之後重算同一個取向：上一次核准過的（BD 晚發）要再核准一次，Berth 不記「這一集的日期已經有人看過」。
-  - **抓不到反方向**：新一季被當成第一季時換算出的是早就播過的集數，發佈晚於它是正常的——所以它不是「只有一季 → 第一季」升 high 的前提（§11.4 ①的「待議」）。
+同一份量測指出，**換季集來源（TVDB aired 或 absolute）只能改善 0.4 個百分點**，brief §10 據此維持 TMDB。真正的槓桿是下面幾條，都不需要第二個 provider。
+
+#### 篇章名 → 季號
+
+九成的失敗是檔名只有篇章名沒有季號（「柱訓練篇」「最終季」「死滅迴游」「無限列車篇」）。用 `MediaSnapshot` 各季的 `names` 比對**發佈名與檔名的原文**，命中則等同季號提示，Candidate 標 `strategy = arc_name`、confidence 至多 medium。「最終季 / Final Season」對到最後一季。三條實作規則：
+
+- **季名要三輪語言**（§4.3）。只留英文的話，真實發佈裡最常見的簡體篇章名一個都對不到。
+- **只是季號翻譯的季名不算篇章名**（`Season 1`、`第 1 季`），**與作品標題相同的季名也不算**（Overlord 的第一季就叫 `Overlord`，每一個發佈的名字裡都有它）——兩種都不帶新資訊，卻會到處命中。
+- 多個季名同時命中時取**最長的那一個**：`Overlord II` 比 `Overlord` 說得更多。
+
+#### `第二部分` / `Part.2` 當 cour 偏移
+
+唯一「檔名有季號卻還是三家一起錯」的一類（`[星空字幕组][进击的巨人 第三季 第二部分 / Shingeki no Kyojin Season 3 Part.2][01-10]`）。看到這個標記就把同一季前面幾個 cour 的長度加上去。它與字幕組的「季內連號」（第二 cour 直接從 13 接下去）是同一件事的兩種寫法：
+
+- cour 怎麼切**與虛擬季同一條規則**（間隔 > 180 天）——它們本來就是同一件事：一季裡的兩輪播出。進擊的巨人第三季實測 12 + 10 集，中間隔 196 天。
+- 加上偏移之後超出該季時**回頭照字面讀**：那表示這一組其實是季內連號。所以「季內連號」與「每 cour 重數」兩種寫法用同一條規則就都對了。
+- 看到 cour 標記時，**照字面讀的那個候選不再產生**——不是排序問題，兩種讀法在 TMDB 裡都存在。
+
+#### 絕對編號換算
+
+TMDB 沒有 absolute 欄位，只能數播出序位，而 TMDB 與 TVDB 收錄的集數不一定一致（航海王 1181 vs 1177）。這條只影響 16% 的釋出、失敗率 4.4%，維持現況，但 confidence 至多 medium。
+
+- **降到 low 看證據，不看 Route**（`mapping._doubts`，brief §6.4）：集號 ≤ 第一個正規季的集數（也讀得成後面某季從 01 重數），或檔名的播出日（`ReleaseInfo.air_date`）與換算出的那一集的 `air_date` 不是同一天（不容忍），兩條各自附一句理由。guessit 開 `date_year_first`，韓國電視台的 `150524` 才讀得成 2015-05-24。前一條收窄成「而且標題有認不出的多餘字」量過不成立（`docs/research/profile-effect.md` §6.1.1）。
+- **三種換算不在同一個分支**：`absolute_group` 與 `absolute_cumulative` 是「只有集號」時的兩條路；虛擬季換算要有一個季號才索引得到那一輪播出（`第二季` 對不到任何一季時才輪到它）。累加換算另外也在有季號提示時當印證用，見下一節。
+
+#### 季號明寫、集號跨季累計
+
+`mapping._from_hint`。ANi 的 `黑色五葉草 Season 2 - 171`、`SPY×FAMILY Season 3 - 50`——季號照實寫，集號卻從第一季數下來。
+
+- 提示的那一季存在、字面那一集不在那一季時，同一個集號走 `absolute_cumulative` 的累加換算；**換算結果落在提示的那一季才採用**（季號提示與換算互相印證）。Candidate 標 `strategy = absolute_cumulative`、confidence 至多 medium，理由是提示那一句加上換算那一句。
+- 檔名明說的播出日對不上換算出的那一集時降到 low（`_date_doubt`，與只有集號的累加換算同一條）。
+- 落在別季或換算不出來時照舊：字面讀法、low、`episode_not_on_tmdb`。
+- 字面那一集存在時不換算——第 2 季比第 1 季長時 `Season 2 - 13` 兩種讀法都落在第 2 季，明說的照字面（brief §6.4）。
+
+#### 以發佈時間推測虛擬季
+
+brief §6.4，AutoBangumi v3.2 的做法，`mapping._published_run`。字幕組每一輪播出從 01 重數，而 TMDB 把好幾輪放在同一季（或同一部作品的好幾季）時，發佈時間（`ParseContext.published_at`，即 Job 的 `published_at`，§2.3）挑得出是哪一輪，集號就照那一輪從 01 數。Candidate 標 `strategy = published_run`、confidence 至多 medium、理由 `published_in_run` 帶發佈日、全部幾輪裡的第幾輪與那一輪的第一集。它分開的是「照字面讀的那一集」與「後面某輪從 01 重數的第 N 集」——「集號 ≤ 第一個正規季的集數」分不開的那兩種（`docs/research/profile-effect.md` §4）。
+
+- **判準是「剛播」**：新的發佈發的是剛播的那一集。每一種讀法換算出的那一集（區間取最後一集）播出日落在發佈日往前 `BEHIND_LATEST`、往後 `RELEASE_TOLERANCE` 之間才算剛播，門檻與播出日比對同一組（`parser/publishing.py`）。
+  - **剛好一種讀法剛播、而它是某一輪的重數**才推測。沒有一種剛播（BD、補檔、重播、慢六週以上的字幕組）或不只一種（前一季三集就播完、第二季緊接著開播）都是分不開，照舊。
+  - 只看「那一輪還在播」不夠：shincaps 在 Re:Zero 第三輪播完兩週後錄的 `- 01`（nyaa 1957100）會被讀成第三輪第 1 集，而它多半是第一季的重播。
+- **兩個入口**：
+  - 沒有季號提示時（`_from_number`），候選是全部正片的季各自按 > 180 天切出的每一輪，字面讀法是「只有一季」或絕對編號換算的那幾個。第一輪的重數與字面讀法常常是同一集，剛播時一樣算數（2022 年的 `Spy x Family - 05` 因此不被「集號 ≤ 第一季集數」送審核）。
+  - **季號來自篇章名、而那一季裡有好幾輪時**（`_restarted_within`），候選只有那一季的第二輪以後，字面讀法是「這一季第 N 集」。例：《死神》千年血戰篇的中文組 `千年血战篇 [08]` 對到第 2 季，TMDB 的第 2 季是四輪，照字面讀是 2022 年的 S02E08，會以 medium 自動入錯（推測虛擬季之前的行為）（benchmark 語料 `bleach-tybw-kashin-tan-08-sakurato`）。
+- **不推測的情況**：
+  - 只限篇章名：篇章名說的是哪一段故事，不是字幕組怎麼編號；明說的季號（`S02E08`、`第二季`）、資料夾與 RSS Series 的季號（`context`）是照發佈或人自己的編號寫的，照字面採用（brief §6.4）。
+  - 明說了分部（`Part.1` 也算）。
+  - RSS Series 的 offset 有值（人說的優先）。
+  - 集號 `00`（不是任何一輪從 01 數的集數）。
+- 檔名明說的播出日對不上推測出的那一集照樣降到 low（`_date_doubt`）。
+- **推測之後照樣過播出日比對，但比對幾乎擋不到它**：推測只收「剛播」的讀法，而剛播正是規則一放行的條件，所以規則一永遠不會擋；規則二（只對 RSS）只在「最近播出的一集」落在發佈後兩天內、而且比推測出的那一集晚六週以上時擋得下——一集停播六週、下一集剛好在發佈後才播的邊角（`tests/integration/test_air_date_check.py::TestPublishedRun` 守著「推測出的集數沒有繞過比對」）。推測錯了的主要防線是 medium 的 audit 旗標與 RSS Series 第一批一律審核（brief §15），不是播出日比對。
+- **已知盲點**：那一輪正在播時發的前一季舊集補檔（檔名 `- 03`、這一輪也剛播完第 3 集）會被讀成這一輪的第 3 集，驗證也看不出來；手動送單不過規則二。兩者都是 medium，入庫時帶 audit 旗標。
+
+#### 季名的寫法
+
+一份規則（`parser.seasons`）：`第N季 / 第N期`、`Season N / Season.N / SN`、`Nth Season` 與中文數字表。
+
+- 讀它的三處：解析器從發佈名撈季號（`cjk`）、讀資料夾名（`structure`，整個資料夾名就是它才算）、自動綁定把季名從搜尋詞與比對的線索裡拆掉（`binding`）。TMDB 的作品名不帶季名。
+- **自動綁定讀季號與規劃同一個讀法**（`mapping.season_airing`）：TMDB 有那一季就是那一季，沒有時是依 > 180 天間隔切出的第 N 輪（虛擬季，同 `_virtual`）。比的是那一季**播出的期間**（任何一集前後 14 天），不只首播，因為 Mikan 把一季的第二個 cour 另開番組、寫它自己的開播日（brief §15「綁定」、§20.12）。
+- 羅馬數字（`II`、`Ⅲ`）與 `第N部分` / `Part N` 不在這份裡：前者只在解析器那一頭有用（「`Mushoku Tensei III`」與「`S3`」要對得起來），後者是 cour 不是季。
+
+#### 數量明顯不符
+
+交給人（brief §6.5 的 low）：一季十二集卻對出二十個檔案時，是哪一個檔案讀錯了看不出來，所以整季一起進 review 而不是挑一個代罪的。
+
+#### 播出日比對
+
+`parser.airing.check_airing`（§11.4「三道程式檢查」①）。規則層有把握卻算錯的集數，拿 Job 的 `published_at`（§2.3）對換算出的那一集的 TMDB 播出日。純函式、只吃 Plan Item、快照與一個發佈時間，所以 M6 的 AI 結果也過同一條；在 `services/plan.py` 裡排在 Route 政策之前，`_plan`、`_preplan` 都跑，`proposal`（人改正的季集）不跑。
+
+- **規則一**：發佈日早於那一集（範圍取最後一集）的播出日**超過兩天**就送審核，理由 `released_before_airing` 帶兩個日期。兩天是 TMDB 的當地日期對 UTC 的發佈時間、深夜檔跨日的容忍（`RELEASE_TOLERANCE`）。手動送單與 RSS 都套。
+- **規則二**：只對 RSS Series、只對正片的季（S00 不照播出順序）。「發佈當時最近播出的一集」＝播出日不晚於發佈日加兩天的最後一集；對到的那一集比它早**超過 `BEHIND_LATEST`**、**而且**它離發佈不超過 `BEHIND_LATEST`（作品在發佈時還在連載）就送審核，理由 `behind_latest_episode` 帶兩組集與日期。第二個條件讓播完很久之後的 BD、補檔不被擋；第一個條件讓慢幾週的字幕組不被擋。門檻的量測見 `scripts/experiments/air_date_lag.py`。
+- 被擋的那一列 `action = review`，**季集與目標路徑留著**：BD 版晚幾個月才發這種對的也會落在這裡，核准就照畫面上的位置入庫（`parser.promote`）。Plan 的 `review_reason` 是 `air_date_conflict`（§3.1）。
+- **缺資料不擋、記一筆**：發佈時間是 `None` → `published_missing`；TMDB 沒有那一集的播出日 → `air_date_missing`。
+- **沒有來源的 Job 不比**（認領 `unknown_torrent`、從 complete 目錄重新入庫的那一種，`source_url` 是空的）：逐列記「來源沒給」只是雜訊。既有 Job 的 `POST /jobs/{hash}/reimport` 留著來源，所以**照樣再比一次**——與拒絕之後重算同一個取向：上一次核准過的（BD 晚發）要再核准一次，Berth 不記「這一集的日期已經有人看過」。
+- **抓不到反方向**：新一季被當成第一季時換算出的是早就播過的集數，發佈晚於它是正常的——所以它不是「只有一季 → 第一季」升 high 的前提（§11.4 ①的「待議」）。
 
 ### 4.5 AI 解析（M6 的第一種 AI 任務）
 
-介面在 M1 就定好：`AiPlanner.propose(context, files, rules_plan) -> Plan | None`（`adapters/ai.py`），M1 的實作是 `NullAiPlanner`，**至今沒有呼叫端**，M5 票 09 刪掉（R15），M6 照下面的形狀重設計。
+舊的 `AiPlanner.propose(context, files, rules_plan) -> Plan | None` 介面已刪、程式碼裡沒有；M6 照下面的形狀重新設計。它不是 `services/plan.py` 裡同步呼叫、結果一律進 review 的 fallback，而是 M6 的 AI 任務「規則層 low 的 Plan」（brief §6.10、§11.7）：
 
-2026-09-24 起它不是 `services/plan.py` 裡同步呼叫、結果一律進 review 的 fallback，而是 M6 的 AI 任務「規則層 low 的 Plan」（brief §6.10、§11.7）：
 - planner 判出 low 時開任務，`ai_worker` 叫模型，驗證通過後依決定點的開關（影子 / AI）記錄或套用。
 - 背景任務**不給工具**：程式組資料包，模型只輸出固定 schema 的 Plan。
 - 輸入壓縮（同模式的檔案只送樣本 + 數量）、schema 驗證、快取鍵與 provider 無關，住在 services。
-- 要補的缺口：用量走 M5 的 `ai_calls` 記帳；理由除了封閉的 `ReasonCode` 還要一欄自由文字；「猜作品」是另一種任務（`PlanItem` 沒有 `media_id`）。
+- 要補的缺口：用量走 `ai_calls` 記帳；理由除了封閉的 `ReasonCode` 還要一欄自由文字；「猜作品」是另一種任務（`PlanItem` 沒有 `media_id`）。
 
 ### 4.6 Benchmark【決定】
 
@@ -497,12 +717,18 @@ fixture 一筆一個 JSON：
 }
 ```
 
-- `torrent_name` 是**索引站上的發佈標題**（Berth 從搜尋結果拿到的那一個），`files[].path` 是**相對於 torrent 內容根**的路徑。兩者各知道一半：CJK 的字幕語言與季號幾乎只寫在前者，集號只寫在後者（M1 票 05 實測）。
-- `expected` 逐檔一筆，含 `kind`（brief §6.2 的分類）——分類是第一層，錯在這裡後面每一層都白算。`tags` 缺席表示這一筆不比對 tag。`target` 是相對於 Route 目標的目標路徑（§5）：`import` / `extra` / `subtitle` 三種處置**一定要寫**，其餘一定是空的，兩種都比（M1 票 07）——季集對了但檔名錯了，Jellyfin 那一端還是入錯，而多版本的判定、繁簡的分辨與多集檔的表示法全都只寫在檔名裡。`min_confidence` **不參與比對**：信心低於期望不是做錯事，那件事由 `review` 與 high / medium 誤判率回答。
+- `torrent_name` 是**索引站上的發佈標題**（Berth 從搜尋結果拿到的那一個），`files[].path` 是**相對於 torrent 內容根**的路徑。兩者各知道一半：CJK 的字幕語言與季號幾乎只寫在前者，集號只寫在後者。
+- `expected` 逐檔一筆，含 `kind`（brief §6.2 的分類）——分類是第一層，錯在這裡後面每一層都白算。
+  - `tags` 缺席表示這一筆不比對 tag。
+  - `target` 是相對於 Route 目標的目標路徑（§5）：`import` / `extra` / `subtitle` 三種處置**一定要寫**，其餘一定是空的，兩種都比。季集對了但檔名錯了，Jellyfin 那一端還是入錯，而多版本的判定、繁簡的分辨與多集檔的表示法全都只寫在檔名裡。
+  - `min_confidence` **不參與比對**：信心低於期望不是做錯事，那件事由 `review` 與 high / medium 誤判率回答。
 - `tests/fixtures/tmdb/<id>.json` 是 TMDB 快照，錄一次即凍結（`scripts/record_tmdb_snapshots.py`）。
-- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`、`subtitle_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）；**八個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。`subtitle_correct` 與 `extra_correct` 同一個道理（M1 票 07）：外掛字幕也是自動搬進媒體庫的檔案，混進 `auto_correct` 會讓「入對幾集」這個數字說不清楚。另列分類正確率、tag 正確率與**信心達標率**（語料寫的 `min_confidence` 有沒有達到；不達標不是做錯事，但它說得出「本來該自動入庫的少了幾個」），以及 high 與 medium 的錯誤率（brief §6.5）。
-- CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct`、`extra_correct`、`subtitle_correct` 三格都不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。三格都要守是因為**字幕或 extras 整批掉出來時 `auto_wrong` 一格都不會動**（M1 票 07），只守兩個數字的話那種退步在 CI 上看不見。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
-- v0 語料：20 筆，來源 brief §20.4 的樣本清單（動漫 8、非動漫劇集 8、電影 4）；票 06 補三筆動漫（篇章名、cour 偏移、單檔多集），共 23 筆；票 14c 補五筆「只有集號、TMDB 上多季」（動漫 3、非動漫 2，§4.4 絕對編號換算那一支第一次有語料走到），共 28 筆；票 14d 補兩筆動漫（集號 ≤ 第一季集數的兩個方向），共 30 筆；票 14f 補兩筆動漫（季號剛好等於方括號集號，TMDB 一季與多季各一），共 32 筆，逐步擴到 100+。出處與涵蓋範圍逐筆記在 `tests/fixtures/parser/README.md`。
+- `berth bench` 輸出：整體與分類別（anime / tv / movie）的 `auto_correct`、`auto_wrong`（自動處置但錯，最嚴重）、`review`、`unmatched_correct`、`extra_correct`、`subtitle_correct`，加上 `missed`（該入庫的被丟成 unmatched / skip）與 `skipped`（雙方都同意可忽略）。
+  - **八個桶互斥且窮盡，加起來等於檔案數**——加不起來的報表會讓沒被數到的檔案看起來不存在。
+  - `subtitle_correct` 與 `extra_correct` 同一個道理：外掛字幕也是自動搬進媒體庫的檔案，混進 `auto_correct` 會讓「入對幾集」這個數字說不清楚。
+  - 另列分類正確率、tag 正確率與**信心達標率**（語料寫的 `min_confidence` 有沒有達到；不達標不是做錯事，但它說得出「本來該自動入庫的少了幾個」），以及 high 與 medium 的錯誤率（brief §6.5）。
+- CI 規則：`auto_wrong` 不得高於 `tests/fixtures/parser/baseline.json`，`auto_correct`、`extra_correct`、`subtitle_correct` 三格都不得低於 baseline 減 1 筆；改善時更新 baseline 並在 PR 說明。三格都要守是因為**字幕或 extras 整批掉出來時 `auto_wrong` 一格都不會動**。門檻與報表是同一支（`services/bench.py`），單元測試與 `berth bench` 共用，所以 CI 不另開 job。
+- 語料目標逐步擴到 100+ 筆。目前的筆數與涵蓋範圍、出處逐筆記在 `tests/fixtures/parser/README.md`（brief §20.4 的樣本清單是起點：動漫、非動漫劇集、電影；之後補了篇章名、cour 偏移、單檔多集、只有集號而 TMDB 上多季、集號 ≤ 第一季集數的兩個方向、季號剛好等於方括號集號）。
 
 ---
 
@@ -516,16 +742,16 @@ fixture 一筆一個 JSON：
 | 季資料夾 | `Season {season:02d}` |
 | 劇集檔 | `{title} ({year}) - S{s:02d}E{e:02d}[-E{e2:02d}][ - {episode_title}][ {tags}].{ext}` |
 | 電影檔 | `{title} ({year}) [tmdbid-{id}][ - {tags}].{ext}`（無 tags 時檔名等於資料夾名；` - ` 之前**必須**與資料夾名一字不差，否則 Jellyfin 會當成兩部片） |
-| 外掛字幕 | `{影片檔名主幹}.{SUBTOKEN}[.default].{lang}.{ext}`（旗標在語言碼**之前**：實測的是 `.CHT.default.zh.ass`，brief §20.1 的官方格式也是 `<flags>.<language>`。M1 沒有人決定得了哪一軌是預設，所以那一段不產生——等有字幕語言偏好設定的那一票再加） |
+| 外掛字幕 | `{影片檔名主幹}.{SUBTOKEN}[.default].{lang}.{ext}`（旗標在語言碼**之前**：實測的是 `.CHT.default.zh.ass`，brief §20.1 的官方格式也是 `<flags>.<language>`。沒有人決定得了哪一軌是預設，所以 `.default` 那一段不產生——等有字幕語言偏好設定再加） |
 | Extras | `{作品資料夾}/extras/{原檔名}` |
 
 - `title` 依 brief §7.5；`folder_name` 一旦寫進 `media` 就只從那裡讀。**標題自己帶著同一個年份時不再接一次**（`GTO (2026)` 不寫成 `GTO (2026) (2026)`，語料 `tv/gto-2026-magicstar`）；年份不同的兩個數字說的是兩件事（`Show (1999)` 的 2020 重製版），照樣兩個都留。
 - 側掛字幕是**唯一可以超過 200 位元組**的檔名：它靠影片的完整主幹配對，截短它換來的是一個掛不上去的字幕；多出來的語言段最多 22 位元組，仍遠低於 ext4 的 255。
-- `SUBTOKEN` 只在中文才出現：Jellyfin 沒有一個分得出繁簡而且 10.10 與 10.11 都認得的語言碼（§20.6），所以中文一律 `zh` 加自由文字 `CHT` / `CHS`，日文與英文直接用 `ja` / `en`。語言說不出來時整段省略，字幕仍然掛在影片旁邊。
+- `SUBTOKEN` 只在中文才出現：Jellyfin 沒有一個分得出繁簡而且 10.10 與 10.11 都認得的語言碼（brief §20.6），所以中文一律 `zh` 加自由文字 `CHT` / `CHS`，日文與英文直接用 `ja` / `en`。語言說不出來時整段省略，字幕仍然掛在影片旁邊。
 - `episode_title` 來自快照；缺、空、或符合 `^Episode \d+$` 即省略；長度上限 80 字元。
 - `sanitize`：移除 `/ \ : * ? " < > |` 與控制字元，連續空白合一，去尾端 `.` 與空白，整體 ≤ 200 bytes（UTF-8）。**逐段套用**（資料夾、季資料夾、檔名各一次），而且檔名的上限先扣掉副檔名——截到一半的 `.mk` 不是影片檔，Jellyfin 連掃都不會掃它。
 - `Tags.render()`：brief §6.8 的順序與 token；缺欄位直接省略；`subs` 依 `CHS < CHT < JP < EN` 排序後以 `+` 連接。
-- **模板已凍結**（2026-09-07，M0 票 04 的實驗，brief §20.6 / §20.7）。實測確認：方括號與 `+` 不會滲進 Jellyfin 的 Series 或 Episode 名稱；電影檔名含 `[tmdbid-{id}]` 才會被當成同一部片的多版本（brief §7.2 的舊範例是錯的）；`{SUBTOKEN}.{lang}` 用 `CHT.zh` / `CHS.zh` 在 10.10 與 10.11 都分得出繁簡，`zh-Hant` 只有 10.11 認得所以不用。之後要改模板只改 `naming/`，不影響其他模組。
+- **模板已凍結**（brief §20.6 / §20.7 的實驗）。實測確認：方括號與 `+` 不會滲進 Jellyfin 的 Series 或 Episode 名稱；電影檔名含 `[tmdbid-{id}]` 才會被當成同一部片的多版本；`{SUBTOKEN}.{lang}` 用 `CHT.zh` / `CHS.zh` 在 10.10 與 10.11 都分得出繁簡，`zh-Hant` 只有 10.11 認得所以不用。之後要改模板只改 `naming/`，不影響其他模組。
 
 ---
 

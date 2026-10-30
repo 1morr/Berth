@@ -42,6 +42,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 03a brief §20.1–§20.7 壓縮 | 七節留結論加來源，細節搬進 `docs/research/`（三個新檔、四個補〈從 brief 搬來〉；遺失 0 行）；brief 1,875 → 1,615 行；§20.7 只縮 11% | `/implement` 票 03b |
 | 2026-10-30 | docs-diet 03b brief §20.8–§20.24 壓縮 | 十七節留結論加來源，細節逐字搬進 `docs/research/`（四個新檔、十一個補段；遺失 0 行）；§20 846 → 696 行，brief 1,615 → 1,465 行；§20.10、§20.22 不動 | `/implement` 票 04b |
 | 2026-10-30 | docs-diet 05a plan §0–§2 去歷史 | §0–§2 歷史標記 118 → 0；照 `berth/models/` 補通知、週報、`duplicate_of` 等缺的欄位；Spec 軸比對補回 6 項；對照表在票 Comments | `/implement` 票 05b |
+| 2026-10-30 | docs-diet 05b plan §3–§5 去歷史 | §3–§5 歷史標記 79 → 1；長表格列拆成條列；`AiPlanner` 與數個識別符照程式修正；Spec 軸比對補回 5 項；對照表在票 Comments | `/implement` 票 05c |
 
 ## 偏差與決定
 
