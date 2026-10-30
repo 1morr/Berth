@@ -10,7 +10,7 @@ uv run berth serve          # 啟動程序（--reload 為開發模式）
 uv run berth openapi        # 印出 OpenAPI 文件（--output 寫檔）；前端型別的上游
 uv run berth bench          # 解析基準測試（見下）；離線跑，離開碼是 CI 的門檻
 uv run berth rebuild-ledger # 從媒體庫的 inode 把帳本長回來（見下）
-uv run pytest               # 測試
+uv run pytest -n auto       # 測試，一個 CPU 一個 worker（pytest-xdist）；單檔或 -k 不必加
 uv run ruff check .         # lint
 uv run ruff format .        # 格式化（CI 用 --check）
 uv run mypy                 # 型別檢查（strict）

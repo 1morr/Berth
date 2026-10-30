@@ -31,7 +31,9 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run lint-imports
-      - run: uv run pytest
+      # 平行跑（pytest-xdist）：單一程序要 17 分鐘、是 CI 最慢的一段。測試之間不共用狀態，
+      # 所以不設 --dist；e2e（`-m e2e`，`tests/e2e/stack.py`）照舊單一程序，它們共用一套 compose。
+      - run: uv run pytest -n auto
 
   web:
     name: web
