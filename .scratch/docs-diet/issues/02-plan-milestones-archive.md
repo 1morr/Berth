@@ -51,3 +51,15 @@ plan §11 有 432 行。M0–M5 的六節（§11.1–§11.6，約 374 行 85 KB�
 - 規劃資料夾 `docs/research/m5-ai-direction-2026-10-27/02-leftovers-m0-m3.md`、`03-…` 有 502 條歸類可對。
 
 引用：CLAUDE.md、progress.md 里程碑表、brief §17 都沒有指到 §11.1–§11.6，無需改。
+
+### code-review（`81360460`..`5c1bbc68`）處理
+
+- **已修（commit 後補）**：測試改讀 archive 會讓「注入的防線」表凍結成快照。表是現況契約，改複製到 plan §10 末，`test_injection_claims.py` 改回讀 `docs/plan.md`（archive 保留原文，遺失 0 不變）。
+- **已修**：「全站頁面標題都是 Berth」確認沒做（`web/src` 無 `document.title`），補進 §11.9。
+- **未處理，請使用者決定**：
+  - m4 §11.5：規劃與輪詢的解析 CPU 跑在事件迴圈上（原文「先量再決定」），只有 mediainfo 有 `to_thread`，疑未做，未量測。
+  - m5 §11.6「不在 M5」：TMDB discover / recommendations / collection 新端點，找不到實作也沒歸位。
+  - m4 約 40 條仍列「判不出」，逐條判定留給後續（對照 `docs/research/m5-ai-direction-2026-10-27/03-leftovers-m4-and-deviations.md`）。
+  - m3 Jellyfin 帳密錯訊息（票 06h）：i18n 有 `invalid_credentials`，判為做了，原本漏列於遺留表。
+- **未處理（範圍外）**：`docs/development.md` 有 4 處引用 §11.3–§11.5 小節內文（第 99、265、270、600 行），現在落到標題那一行，歸票 06。archive 開頭說明只寫自 progress.md 封存，未提 plan §11 段，可接受。
+- Standards 軸其餘項目（stub 的日期、`PLAN` 命名）為判斷題，不處理。
