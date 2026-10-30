@@ -13,7 +13,7 @@
 - 語言：程式碼、識別符、commit、log 一律英文；文件與註解繁體中文。例外是給使用者的 README 與 `docs/guide/`：README 英文為主、`README.zh-Hant.md` 是同內容的繁中版，guide 英文（brief §19 第四輪審計 E7、M4 票 57）。
 - Commit：Conventional Commits，subject ≤ 72 字元。分支 `feat/…`、`fix/…`、`docs/…`。
 - 每個里程碑結束時 `main` 可部署、CI 綠燈、README 可照著跑。
-- 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README（兩份）與 `docs/guide/`（使用者）、`docs/development.md`（開發指令）、`.env.example`、CHANGELOG、專案 `CLAUDE.md`。
+- 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README（兩份）與 `docs/guide/`（使用者）、`docs/development.md`、`docs/development/`（開發指令）、`.env.example`、CHANGELOG、專案 `CLAUDE.md`。
 - 型別：後端 mypy strict（第三方缺型別時局部放寬並註明）；前端 TypeScript strict。
 - 行為變更同步補測試；解析器改動必跑 benchmark（§4.6）。
 

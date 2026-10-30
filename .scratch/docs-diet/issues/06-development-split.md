@@ -1,6 +1,6 @@
 # 06 — docs/development.md 拆分
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 01
 
@@ -28,9 +28,15 @@
 
 ## 驗收
 
-- [ ] `scripts/docs_moved_lines.py` 對 `docs/development.md` → `docs/development/*.md` 跑出「遺失 0」，輸出貼 Comments
-- [ ] 主檔只剩第 1 步那幾節加索引；行數前後貼 Comments
-- [ ] 第 3 步列的引用都改了，`test_readme_docs.py` 連結檢查涵蓋子檔且綠
-- [ ] 全部檢查與 test 綠；progress.md 記一列 session；commit；不 push
+- [x] `scripts/docs_moved_lines.py` 對 `docs/development.md` → `docs/development/*.md` 跑出「遺失 0」，輸出貼 Comments
+- [x] 主檔只剩第 1 步那幾節加索引；行數前後貼 Comments
+- [x] 第 3 步列的引用都改了，`test_readme_docs.py` 連結檢查涵蓋子檔且綠
+- [x] 全部檢查與 test 綠；progress.md 記一列 session；commit；不 push
 
 ## Comments
+
+- 主檔 834 → 152 行；子檔：commands 135、release 31、e2e 122、fake-backend 130、experiments 292。分法照票，沒調。
+- `scripts/docs_moved_lines.py HEAD docs/development.md -- docs/development/*.md docs/development.md`：`removed 564 lines, found 551, missing 13`。13 行全是依步驟 4 改過目錄深度的相對連結（`guide/…` → `../guide/…`、`../README.md` → `../../README.md` 等），內容逐字不變，不算遺失。
+- 子檔各加一個 `# 標題` 與一行導言（新增行）；原本的 `###` 標題不動，所以子檔裡章節是 `###`。
+- 另改了票沒列的引用：`tests/e2e/conftest.py`、`.env.example`、`.github/workflows/e2e.yml`、`.github/workflows/ci.yml`（〈API 型別〉→ commands.md）、`pyproject.toml`、`docs/design-brief.md:1686`、`docs/plan.md:16`。`CHANGELOG.md` 的歷史條目不改。
+- 全部檢查（`uv run pre-commit run --all-files`）全綠；`uv run pytest`：5276 passed, 1 skipped, 28 deselected。

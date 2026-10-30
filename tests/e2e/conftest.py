@@ -7,7 +7,7 @@ M2 那一組會拆掉、換掉媒體庫裡的檔案，所以排在只讀它們�
 停掉再起來，等它回來才結束。M3 的 RSS（`test_4_`）與 M4 的通知（`test_5_`）共用 `settle`：
 M4 接著 M3 的替身站輪次與 RSS Series 往下走。
 
-前提是 `tests/e2e/compose.yml` 那一套已經起來（指令在 docs/development.md〈e2e〉）。
+前提是 `tests/e2e/compose.yml` 那一套已經起來（指令在 docs/development/e2e.md〈e2e〉）。
 """
 
 from __future__ import annotations

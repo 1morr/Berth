@@ -12,7 +12,7 @@ body 與 header，以及只私訊時邀請連結要哪些 scope 與 permissions�
     DISCORD_USER_ID     收件人的 user ID（開發者模式 → 右鍵自己 → 複製使用者 ID）
 
 步驟（每一步各自一次 run；使用者在 Discord 上動手的步驟夾在中間，
-順序見 docs/development.md，坑見 scripts/experiments/README.md）：
+順序見 docs/development/experiments.md，坑見 scripts/experiments/README.md）：
 
     uv run python scripts/experiments/discord_dm.py invite          # 最小權限的邀請連結
     uv run python scripts/experiments/discord_dm.py send <label>    # 開 DM 送一則（可 --length）
