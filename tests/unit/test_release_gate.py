@@ -70,12 +70,31 @@ def problems(release: str, called: dict[str, str]) -> list[str]:
     publishing = [name for name, job in jobs.items() if _publishes(job)]
     if not publishing:
         found.append("release.yml has no job that pushes the image or creates the Release")
+    chain: set[str] = set()
     for name in publishing:
-        waited = {calls[up] for up in _upstream(jobs, name) if up in calls}
+        upstream = _upstream(jobs, name)
+        chain |= {name} | upstream
+        waited = {calls[up] for up in upstream if up in calls}
         for gate in GATES:
             if gate not in waited:
                 found.append(f"release.yml job `{name}` publishes without waiting for {gate}")
+    # `if: always()` 之類會讓 job 在上游紅了之後照跑：整條鏈都不准有 job 層的 `if`。
+    for job in sorted(chain):
+        if "if" in jobs[job]:
+            found.append(f"release.yml job `{job}` has an `if:` on the way to publishing")
+    # CHANGELOG 那一段漏寫要在幾秒內紅，不是等一小時的閘門跑完、image 推完才紅。
+    for name, gate in calls.items():
+        if gate == "ci.yml" and not any(
+            "CHANGELOG.md" in step.get("run", "")
+            for up in _upstream(jobs, name)
+            for step in jobs[up].get("steps", [])
+        ):
+            found.append("release.yml checks the CHANGELOG section only after the gates")
     for gate, text in called.items():
+        # 被呼叫的 workflow 裡 job 全被 skip，呼叫端不算失敗：閘門的 job 不准有條件。
+        for job_name, job in _load(text)["jobs"].items():
+            if "if" in job:
+                found.append(f"{gate} job `{job_name}` has an `if:`: skipped counts as passed")
         triggers = _triggers(_load(text))
         if "workflow_call" not in triggers:
             found.append(f"{gate} cannot be called by release.yml (no workflow_call)")
@@ -122,6 +141,32 @@ class TestTheGateItself:
         )
         assert problems(release, called) == [
             "e2e.yml also runs on tag push: a second, ungated run of the same tag"
+        ]
+
+    def test_publishing_even_if_a_gate_failed_is_caught(self) -> None:
+        release, called = self._real()
+        forced = release.replace("    needs: e2e\n", "    needs: e2e\n    if: ${{ always() }}\n", 1)
+        assert problems(forced, called) == [
+            "release.yml job `image` has an `if:` on the way to publishing"
+        ]
+
+    def test_a_gate_that_skips_itself_is_caught(self) -> None:
+        release, called = self._real()
+        called["e2e.yml"] = called["e2e.yml"].replace(
+            "    timeout-minutes: 90\n",
+            "    timeout-minutes: 90\n    if: github.event_name != 'push'\n",
+            1,
+        )
+        assert problems(release, called) == [
+            "e2e.yml job `e2e` has an `if:`: skipped counts as passed"
+        ]
+
+    def test_checking_the_changelog_last_is_caught(self) -> None:
+        release, called = self._real()
+        late = release.replace("    needs: preflight\n", "", 1)
+        assert late != release
+        assert problems(late, called) == [
+            "release.yml checks the CHANGELOG section only after the gates"
         ]
 
     def test_unrelated_edits_stay_green(self) -> None:

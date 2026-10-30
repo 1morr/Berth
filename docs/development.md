@@ -68,7 +68,7 @@ uv run pre-commit run --all-files
 ```
 
 ruff、mypy、import-linter，加上 `web/` 的 prettier、eslint 與 knip。CI（`.github/workflows/ci.yml`）在 push 到
-`main` 與所有 PR 上跑同一組檢查。
+`main`、所有 PR 與發版（`release.yml` 呼叫，[發版](development/release.md)）時跑同一組檢查。
 
 - **knip 擋 `web/` 沒人用的檔案、export 與依賴**（M4 票 93）：`pnpm -C web exec knip` 要 0 條。只在同一個檔裡用到的
   東西就不要 `export`——刻意不開 `ignoreExportsUsedInFile`，export 面保持最小。`web/knip.json` 只排除兩樣：

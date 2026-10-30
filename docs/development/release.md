@@ -12,13 +12,19 @@
 1. `CHANGELOG.md` 的 `[Unreleased]` 改成 `[0.2.5] - <日期>`，寫清楚從上一版升級要注意的；`pyproject.toml` 的
    `version` 改成 `0.2.5`，`uv lock`。
 2. 合進 `main`、全部檢查與 test 綠燈之後 `git tag v0.2.5 && git push origin v0.2.5`。預發佈（`v0.3.0-rc1`）一樣要先有
-   `## [0.3.0-rc1]` 那一段，否則 image 推完、Release 才失敗。
+   `## [0.3.0-rc1]` 那一段；沒有的話 Release run 的第一個 job（`preflight`）幾秒內就紅。
 
 `v*` tag 上 `.github/workflows/release.yml` **先過閘門**：對這個 tag 的 commit 跑完整的 CI（`ci.yml`），再跑真服務的
 e2e（`e2e.yml`，約 50 分鐘），兩個都綠了才推 image 到 GHCR（`:0.2.5`、`:0.2`、`:latest`），再建 Release：
 說明是 CHANGELOG 的 `## [0.2.5]` 那一段（相對連結換成這個 tag 底下的 blob），找不到那一段就失敗；附件取自這個 tag。
-任何一段紅了，什麼都不發佈：修好之後推新的 patch 版 tag，不要移動已經推出去的 tag。整個 Release run 約一小時，
-進度在 Actions 的那一個 Release run 裡（CI 與 e2e 是它的子 job）。`tests/unit/test_release_gate.py` 守著這個順序。
+整個 Release run 約一小時，進度在 Actions 的那一個 Release run 裡（CI 與 e2e 是它的子 job）。
+`tests/unit/test_release_gate.py` 守著這個順序（發佈的 job 前面整條鏈不准有 `if:`，閘門裡的 job 也不准有）。
+任何一段紅了，什麼都不發佈：
+
+- **偶發失敗**（真服務的 e2e 逾時之類）：在那一個 Release run 按「Re-run failed jobs」，跑的是同一個 commit。
+- **真的壞了**：不要移動已經推出去的 tag。修好之後在 `[Unreleased]` 寫修正，發下一個 patch 版；沒發出去的那一版
+  的 CHANGELOG 段落已經在 tag 上，`test_changelog_released.py` 不准再改，就讓它留著，下一版的升級說明從上一個
+  **真的發出去的**版本寫起。
 `-rc` 標成 prerelease，不動 `:latest`，`releases/latest` 也不會指到它。發完確認：
 
 - Release run 綠（含 ci 與 e2e 兩段），Release 頁有 `docker-compose.yml` 與 `example.env` 兩個附件。
@@ -27,8 +33,7 @@ e2e（`e2e.yml`，約 50 分鐘），兩個都綠了才推 image 到 GHCR（`:0.
   `download/v0.3.0-rc1` 再比。
 - 匿名查 GHCR `:latest` 與 `:0.2.5` 是同一個 digest。
 
-發版那次 push 到 `main` 的 CI，以及 tag 的 release run 還在跑時，不要再 push `main`：ci.yml 的 `concurrency`
-（`cancel-in-progress: true`，同一個 ref 一組）會取消 `main` 上進行中的 CI run，那一版就少了一次完整的綠燈。
-release.yml 沒有 `concurrency`，不會被取消，但等它綠了再動 `main` 比較清楚。
+tag 的 Release run 自己帶一份 CI（concurrency group `ci-refs/tags/v…`），push `main` 取消不到它；`main` 上那次 CI
+被下一個 push 取消也不影響發版。
 
 使用者那一面（tag 的意思、升級步驟、固定在某一版）在 [`guide/upgrading.md`](../guide/upgrading.md)。

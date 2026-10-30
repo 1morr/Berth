@@ -8,6 +8,7 @@ describe('測試環境像 HTTP 下的瀏覽器', () => {
   it('沒有只在 secure context 才有的 API', () => {
     expect(window.isSecureContext).toBe(false)
     expect(crypto.randomUUID).toBeUndefined()
+    expect(crypto.subtle).toBeUndefined()
     expect(navigator.clipboard).toBeUndefined()
   })
 

@@ -9,8 +9,25 @@ on:
     tags: ['v*']
 
 jobs:
+  # 幾秒就跑完：CHANGELOG 漏寫這一版的段落時當場紅，不必等一小時的閘門。
+  preflight:
+    name: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! grep -qF "## [${TAG#v}]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no '## [${TAG#v}]' section" >&2
+            exit 1
+          fi
+
   ci:
     name: ci
+    needs: preflight
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read

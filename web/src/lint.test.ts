@@ -136,10 +136,12 @@ describe('只在 HTTPS / localhost 才有的 API', () => {
   const digest = await crypto.subtle.digest('SHA-256', new Uint8Array())
   await navigator.serviceWorker.register('/sw.js')
   await navigator.share({ text })
-  return [id, viaWindow, randomUUID, digest]
+  const camera = await navigator.mediaDevices.getUserMedia({ video: true })
+  const login = await navigator.credentials.get()
+  return [id, viaWindow, randomUUID, digest, camera, login]
 }
 `
-    expect(await secureOnly(source)).toBe(7)
+    expect(await secureOnly(source)).toBe(9)
   })
 
   it('同名但不相干的寫法、與包好的那一個檔案不擋', { timeout: 60_000 }, async () => {
