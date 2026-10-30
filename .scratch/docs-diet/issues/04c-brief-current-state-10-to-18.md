@@ -65,3 +65,16 @@
 ### 驗證
 
 `uv run pre-commit run --all-files` 全過；`pytest tests/unit` 2180 passed。
+
+### 補驗證（最後一個 commit `4e79324a` 之上）
+
+- `uv run pytest -q`（含 integration；`pyproject.toml` 預設排除 `e2e` 標記）：5280 passed, 1 skipped, 28 deselected。
+- `uv run pre-commit run --all-files`：13 項全 Passed。
+
+### 「§19 列名」舊引用（04a 留下的）
+
+- **brief §10–§18**：已無「§19 某列」引用（grep 為 0），本票範圍完成。
+- **`CONTEXT.md`**（04a 指定 04b/04c 一併改，04b 沒動）：兩處「brief §19 D1、D2」「§19 D1」改連 ADR-0013，本次補改。
+- **brief §20.x 約 6 處**（第 1482、1674、1741 行附近的「結論維持 §19」「§19『精靈改為每個服務手動選擇』那一列」「§19 E4」等）：屬 03a/03b 範圍、那兩張已封，沒人接手。建議併入票 08 收尾，改連 ADR-0001 / 0010 / 0009。
+- **plan 約 23 處 §19 引用**：05c–05e 改寫各節時改連 ADR（04a 已指明對應：D1–D7→0012/0013/0001、E4→0009、手動選擇→0010、RSS 呈現→0007）。
+- **`berth/`（約 40 處，如 `models/setting.py`「§19『M5 的方向』⑧」）**：spec 規則 5 這輪不改程式碼，只有兩個 docstring 例外。建議票 08 驗收時列為「後續程式碼註解清理」交使用者排。
