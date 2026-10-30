@@ -133,15 +133,26 @@ const FLOWS = [
     port: 8511,
     viewport: NARROW,
   },
+  {
+    name: 'insecure-origin',
+    spec: 'insecure-origin',
+    scenario: 'agent',
+    port: 8530,
+    insecure: true,
+  },
 ] as const satisfies readonly {
   name: string
   spec: string
   scenario: string
   port: number
   viewport?: { width: number; height: number }
+  /** 開 `http://berth.test:<port>` 而不是 `127.0.0.1`：瀏覽器不把它當 secure context，像區網 IP 走 HTTP。 */
+  insecure?: boolean
 }[]
 
 const origin = (port: number) => `http://127.0.0.1:${port}`
+/** `.test` 不是 localhost，走 HTTP 時不是 secure context；Chromium 把它解析回本機。 */
+const INSECURE_HOST = 'berth.test'
 
 export default defineConfig({
   testDir: './e2e',
@@ -164,6 +175,12 @@ export default defineConfig({
     use: {
       baseURL: origin(flow.port),
       ...('viewport' in flow ? { viewport: flow.viewport } : {}),
+      ...('insecure' in flow
+        ? {
+            baseURL: `http://${INSECURE_HOST}:${flow.port}`,
+            launchOptions: { args: [`--host-resolver-rules=MAP ${INSECURE_HOST} 127.0.0.1`] },
+          }
+        : {}),
     },
   })),
   webServer: FLOWS.map(({ name, scenario, port }) => ({
