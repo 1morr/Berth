@@ -1177,24 +1177,26 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 2026-09-15 查證；全文、端點範例與原始碼連結見 [`docs/research/library-browsing.md`](research/library-browsing.md)。2026-09-15 在 **12.0.0** 上實測，2026-09-17 在一次性的 **12.1.0** 上以只開放部分媒體庫的使用者補測權限、過濾排序、TMDB 反查、標記遞迴與停用帳號（M1.5 票 01，`scripts/experiments/jellyfin_permissions.py`，研究 §0、§2、§3.1、§5、§10、§11；12.0.0 量過的行為在 12.1.0 上沒看到不同，只有圖片 CORS 標頭的條件判定不了）。原始碼對照 tag `v10.10.7`、`v10.11.11`、`v12.0`。
 
-- **伺服器 API key 可以代讀代寫任何使用者**：API key 在驗證層一律算 Administrator，帶哪個 `userId` 就是誰（三版一致）。繼續觀看 `GET /UserItems/Resume?userId=&mediaTypes=Video`（不帶 `mediaTypes` 會混進 Season 與 Series）、下一集 `GET /Shows/NextUp?userId=`、附 `UserData` 的項目 `GET /Items?userId=`、已看 / 未看 `POST|DELETE /UserPlayedItems/{id}?userId=`。不帶 `userId` 時 Resume、NextUp、PlayedItems 回 400，`/Items` 回整台伺服器且沒有 `UserData`。舊路徑 `/Users/{userId}/...` 還能用但已不在 12.0.0 的 OpenAPI；NextUp 的 `disableFirstEpisode` 在 12.0 移除。【實測 12.0.0 + 原始碼】
-- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套，這一條只讀原始碼）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、不帶 `parentId` 的 Resume / NextUp / `/Items/Latest` / `/Genres`、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserItems/{id}/UserData?userId=`、`/UserPlayedItems` 會照使用者的權限（無權時不列或 404）；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及帶 `parentId` 的 `/Genres`、`/Years`、`/Items/Filters`、`/Items/Filters2`、`/Items/Latest` 不會**。而且**使用者自己的 token 也只擋下 `/Items?parentId=<無權的媒體庫>`（401）**：劇或季當 `parentId`、`ids`，以及 Resume、NextUp、`/Genres`、`/Years`、`/Items/Filters(2)`、`/Items/Latest` 帶 `parentId`（NextUp 帶 `seriesId`）時，使用者 token 一樣照回。所以權限要由 Berth 自己擋，`parentId` 只放對 `UserViews` 驗證過的媒體庫 id（§12、plan §11.2b）。【實測 12.1.0 + 原始碼】
+下面每條只留結論、數值與來源；被壓縮的那幾條逐字原文在 [`library-browsing.md`](research/library-browsing.md#從-brief-搬來208)（大媒體庫那條在 [`large-library.md`](research/large-library.md#從-brief-搬來208)）。
+
+- **伺服器 API key 可以代讀代寫任何使用者**：API key 在驗證層一律算 Administrator，帶哪個 `userId` 就是誰（三版一致）。用到的端點：繼續觀看 `GET /UserItems/Resume?userId=&mediaTypes=Video`（不帶 `mediaTypes` 會混進 Season 與 Series）、下一集 `GET /Shows/NextUp?userId=`、附 `UserData` 的 `GET /Items?userId=`、已看 / 未看 `POST|DELETE /UserPlayedItems/{id}?userId=`。不帶 `userId` 時 Resume、NextUp、PlayedItems 回 400，`/Items` 回整台伺服器且沒有 `UserData`。NextUp 的 `disableFirstEpisode` 在 12.0 移除。【實測 12.0.0 + 原始碼；研究 §1】
+- **媒體庫存取權限只有一部分會套用**（家長分級只要帶 `userId` 就套，這一條只讀原始碼）：`/UserViews?userId=`、不帶 `parentId` / `ids` 的 `/Items`、`/Items/{id}?userId=`、`/Shows/{id}/Seasons|Episodes?userId=`、`/UserPlayedItems` 等會照使用者的權限；**帶 `parentId` / `ids` / `seriesId` 的查詢，以及帶 `parentId` 的 `/Genres`、`/Years`、`/Items/Filters(2)`、`/Items/Latest` 不會**。而且**使用者自己的 token 也只擋下 `/Items?parentId=<無權的媒體庫>`（401）**，其餘一樣照回。所以權限要由 Berth 自己擋，`parentId` 只放對 `UserViews` 驗證過的媒體庫 id（§12、plan §11.2b）。完整端點表見研究 §2。【實測 12.1.0 + 原始碼】
 - **`/Items` 靜默忽略不存在的參數**：實測帶 `seriesId` 或 `ancestorIds` 都回整台伺服器的集，打錯字的 `genre=`、`year=` 回全部（12.0.0、12.1.0）。每個過濾參數都要測「伺服器真的有過濾」。
 - **漏帶 `userId`**：`/Shows/{id}/Seasons|Episodes` 回 200 並**略過權限**（無聲洩漏），`/Items/{id}` 回 400，Resume、NextUp、`UserPlayedItems` 回 400。【實測 12.1.0】
-- **排序與篩選**：`sortBy`（逗號、多鍵）加 `sortOrder`；`genres` 以 `|` 分隔（「或」）、`years` 以逗號（「或」），兩個參數之間是「且」。類型與年份清單用 `GET /Items/Filters?userId=&parentId=&includeItemTypes=Series|Movie`（三版形狀一致，jellyfin-web 的篩選面板用這支；**不帶 `parentId` 四份清單全空**；`Filters2` 沒有年份；`/Years` 不帶 `includeItemTypes` 會混進集的播出年）。劇集的「新集加入」排序是 `DateLastContentAdded`、「最近看過」是 `SeriesDatePlayed`；電影的「最近看過」是 `DatePlayed`。**jellyfin-web 的排序選單兩種媒體庫不同**（`tvshows.js` / `movies.js`，v10.10.7 與 v10.11.11 相同）：劇集庫 `SortName`、`Random`、`CommunityRating`、`DateCreated`、`DateLastContentAdded`、`SeriesDatePlayed`、`OfficialRating`、`PremiereDate`，每項後接 `,SortName`；電影庫 `SortName`、`Random`、`CommunityRating`、`CriticRating`、`DateCreated`、`DatePlayed`、`OfficialRating`、`PlayCount`、`PremiereDate`、`Runtime`，每項後接 `,SortName,ProductionYear`（`Random` 不接）。`sortOrder` 只送一個時套在每一個鍵上。12.1.0 逐一驗過 `parentId`、`includeItemTypes`、`genres`、`years`、`startIndex` / `limit` 真的有過濾；排序鍵除了劇集庫的 `DateCreated`（值的順序剛好等於名稱順序，證明不了）、`OfficialRating`（只驗到升降冪互為反序）與 `Random` 之外，都驗到照值排序（電影庫的 `DatePlayed` 是 M1.5 票 06 補驗的）；`sortBy`、`sortOrder`、`genres`、`years` 各有一份錄製給契約測試（票 06）。**`searchTerm` 是名字裡的任一段、不分大小寫**（`show` 與 `SHOW` 同樣 3 部、`lpha` 找得到 Alpha Show），照權限過濾，而且照樣照 `sortBy` 排、不換成相關度；參數名打錯（`search=`）被靜默忽略（2026-09-24 在 12.1.0 實測，M2 票 14，研究 §3.1 的表、錄製 `items.tv.series.search.json`）。沒有值的排在升冪最前；劇集的分級照高低（`TV-G < TV-PG < TV-14 < TV-MA`）不是照字串。`sortBy=SortName` 與不帶 `sortBy` 回的順序相同；`enableImages=false`、`enableUserData=false` 真的拿掉 `ImageTags` 與 `UserData`，而 `enableTotalRecordCount=false` 在不帶 `limit` 時照樣回 `TotalRecordCount`（M1.5 票 03 加錄的 fixture）。【實測 12.1.0】
+- **排序與篩選**（研究 §3）：`sortBy`（逗號、多鍵）加 `sortOrder`；`genres` 以 `|` 分隔（「或」）、`years` 以逗號（「或」），兩個參數之間是「且」。類型與年份清單用 `GET /Items/Filters?userId=&parentId=&includeItemTypes=Series|Movie`（**不帶 `parentId` 四份清單全空**；`Filters2` 沒有年份；`/Years` 不帶 `includeItemTypes` 會混進集的播出年）。劇集的「新集加入」排序是 `DateLastContentAdded`、「最近看過」是 `SeriesDatePlayed`；電影的「最近看過」是 `DatePlayed`。jellyfin-web 的排序選單兩種媒體庫不同（`tvshows.js` / `movies.js`，v10.10.7 與 v10.11.11 相同，清單見研究 §3.1）；`sortOrder` 只送一個時套在每一個鍵上。12.1.0 逐一驗過 `parentId`、`includeItemTypes`、`genres`、`years`、`startIndex` / `limit` 真的有過濾；排序鍵除了劇集庫的 `DateCreated`、`OfficialRating`（只驗到升降冪互為反序）與 `Random` 之外，都驗到照值排序；`sortBy`、`sortOrder`、`genres`、`years` 各有一份錄製給契約測試（票 06）。**`searchTerm` 是名字裡的任一段、不分大小寫**，照權限過濾，照 `sortBy` 排、不換成相關度；參數名打錯（`search=`）被靜默忽略（2026-09-24 在 12.1.0 實測，M2 票 14）。沒有值的排在升冪最前；劇集的分級照高低（`TV-G < TV-PG < TV-14 < TV-MA`）不是照字串。`enableImages=false`、`enableUserData=false` 真的拿掉 `ImageTags` 與 `UserData`，而 `enableTotalRecordCount=false` 在不帶 `limit` 時照樣回 `TotalRecordCount`。【實測 12.1.0】
 - **選季選集**：`/Shows/{id}/Seasons?userId=` 與 `/Shows/{id}/Episodes?userId=&seasonId=`（jellyfin-web 詳細頁的查法，會套權限）。§20.1 的「10.11 第一次掃描後回 0」**在 12.0.0 沒有重現**（一次性容器：掃完當下、兩分鐘後、第二次掃描後都對）；10.11 沒有重測，那一條仍成立，後備是媒體庫遞迴查詢照 `Path` 分群（三版都驗過）。
-- **一部劇的每一集**（M5 票 28，作品頁與助理分得出「Jellyfin 已有、帳本沒有」）：`/Shows/{id}/Episodes?userId=&isMissing=false` **不帶 `seasonId`** 一次回整部劇每一季的集（含 S00；多集檔帶 `IndexNumberEnd`；回來的都是 `LocationType: FileSystem`），筆數等於逐季加總；**權限照套**：無權的劇一樣 404 `"Series not found"`。不帶 `fields` 也有 `ParentIndexNumber` / `IndexNumber` / `IndexNumberEnd`。`isMissing` 伺服器認得（`true` 回 0 筆，不是被忽略），但 `false` 真的會濾掉 metadata 補出來的虛擬缺集**沒有量到**：一次性的樹關了網路 metadata，造不出虛擬集。Berth 仍只問 `locate` 確認過的劇（同 NextUp 的規矩）。【實測 12.1.0，`scripts/experiments/jellyfin_permissions.py` 第 7 節，fixture `shows-episodes.series*.json`；參數出自 OpenAPI stable】
+- **一部劇的每一集**（M5 票 28，作品頁與助理分得出「Jellyfin 已有、帳本沒有」）：`/Shows/{id}/Episodes?userId=&isMissing=false` **不帶 `seasonId`** 一次回整部劇每一季的集（含 S00；多集檔帶 `IndexNumberEnd`；都是 `LocationType: FileSystem`），筆數等於逐季加總；**權限照套**：無權的劇一樣 404 `"Series not found"`。不帶 `fields` 也有 `ParentIndexNumber` / `IndexNumber` / `IndexNumberEnd`。`isMissing` 伺服器認得（`true` 回 0 筆，不是被忽略），但 `false` 真的會濾掉 metadata 補出來的虛擬缺集**沒有量到**：一次性的樹關了網路 metadata，造不出虛擬集。Berth 仍只問 `locate` 確認過的劇（同 NextUp 的規矩）。【實測 12.1.0，`scripts/experiments/jellyfin_permissions.py` 第 7 節，fixture `shows-episodes.series*.json`】
 - **集對 TMDB 的鍵**（M5 票 28，2026-10-30；網路 metadata 開著、TMDB 對上的 SPY×FAMILY 四集）：**集的 `ProviderIds` 沒有 `Tmdb`**，只有 `Tvdb` 與 `Imdb`（值等於 TMDB 那一集的 `external_ids`；`Tmdb` 只在 Series 上），而且要帶 `fields=ProviderIds` 才回。**`PremiereDate` 不帶 `fields` 也有**，形狀是 `YYYY-MM-DDT00:00:00.0000000Z`（那一天的 00:00 UTC），四集都等於 TMDB 的 `air_date`（只量了 `MetadataCountryCode=TW`、`zh-TW`，別的地區有沒有差一天沒量）。metadata 對不上的集 `ProviderIds` 是 `{}`、沒有 `PremiereDate`。所以 Berth 照播出日對（差一天內、TMDB 只有一集的那一集；使用者 2026-10-30 定的「先照 TMDB 的集 id」做不了；照 Tvdb / Imdb 對要 TMDB 逐集的 `external_ids`，一集一個請求，不做），Jellyfin 的季集號不算數（可能照 TVDB 編），只分特典與正片（特典只與特典比）；同一天兩集、兩個 Jellyfin 的集對到同一集、對不上的都不算有，寧可多下一集。「差一天」是使用者定的寬度，沒有量過時區造成的差。【實測 12.1.0，`scripts/experiments/jellyfin_episode_providers.py`，fixture `shows-episodes.series.providers.json`】
 - **圖片不需要驗證**：`GET /Items/{id}/Images/{Primary|Backdrop|Thumb}` 匿名 200，請求帶 `Origin` 時回 `Access-Control-Allow-Origin: *`；縮放用 `fillWidth` / `fillHeight` / `quality` / `format=Webp`。`tag` 只是快取鍵（錯的也回圖），URL 要帶 DTO 的 `ImageTags` 才會在換圖時失效。瀏覽器直連的前提是連得到 Jellyfin（與深連結同一個主機），HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content（§19 已定由 Berth 代理）。
-- **經 Berth 代理的圖**（M1.5 票 04，研究 §6.1，12.1.0 實測）：2:3 的原圖帶 `fillWidth=342&fillHeight=513` 回 342×513；**不帶 `format` 時照 `Accept` 挑格式**，Berth 的 httpx（`*/*`）拿到 JPEG、瀏覽器的 `Accept` 拿到 WebP，所以代理固定送 `format=Webp`；`quality=90` 約 23 KB，`quality=96`（jellyfin-web 的值）是它的兩倍多。**Jellyfin 自己存縮好的圖**（`/config/cache/images/resized-images`，同一張第二次從約 250 ms 掉到 25 ms），所以 Berth 端不另存。`/Items` 帶 `enableImageTypes=Primary&imageTypeLimit=1` 時連 `ImageBlurHashes` 一起回。
-- **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了原本的次數與時間。**對 Series / Season 標記會遞迴到底下每一集**：標已看把看到一半的位置歸零，標未看連之前單獨看過的集一起清掉；對季只動那一季。**遞迴的結果只有清單端點讀得到**（M1.5 票 11 的 e2e）：一集的 `UserData` 在 `/Items/{集}?userId=` 用的是 provider 導出的 `Key`、在 `/Shows/{劇}/Episodes?userId=` 與 `/Items?ids=` 用的是 item id，對整部劇標記之後前者仍回 `Played=false`（單集自己標記時兩邊都會更新）。Berth 讀集一律走 `/Shows/{id}/Episodes`，與寫入那一側一致。【實測 12.1.0】
-- **由 TMDB id 找作品**：`/Items` 沒有 provider id 過濾參數（猜的參數名都被忽略），但有 `hasTmdbId`。`GET /Items?userId=&recursive=true&includeItemTypes=Series,Movie&hasTmdbId=true&fields=ProviderIds` **不帶 `parentId`** 就會套權限，在 Berth 端比 `ProviderIds.Tmdb`；同一個 TMDB id 在沒權限的媒體庫裡的那一份不會回來。已知 item id 時用 `/Items/{id}?userId=` 驗可見性（研究 §10）。【實測 12.1.0】
-- **jellyfin-web 卡片上的觀看標記**（M1.5 票 05，研究 §7.1，讀 v10.11.11 原始碼）：劇集只要 `UnplayedItemCount` 非 0 就畫集數（沒開始看的也畫），否則 `Played` 或 `PlayedPercentage >= 100` 畫勾；進度條只給影片（`MediaType=Video`），劇集沒有。已看切換兩個方向都不確認，切換之後就地改那一格、不重抓。Berth 的判定照它（`services/watch.py`），但標為未看先確認（上一條：復原不了）。【原始碼】
-- **繼續觀看與下一集**（M1.5 票 07，研究 §7.2）：jellyfin-web 首頁兩列（v10.11.11 `resume.ts` / `nextUp.ts`）一次取 12 / 24 項（桌機的 overflow 版），`imageTypeLimit=1`、`enableImageTypes=Primary,Backdrop,Thumb`；NextUp 另送 `enableResumable=false`（**伺服器預設是 `true`**，不送的話看到一半的集兩列都出現）與 `nextUpDateCutoff=今天 − maxDaysForNextUp`（使用者設定，預設 365；伺服器預設沒有截止日）。NextUp 只挑最後觀看日期在截止日之後的劇、每部取最後看過那一集之後還沒看的第一集，照劇的最後觀看日期新的在前；Resume 照 `DatePlayed` 新的在前（v12.0 原始碼）。`mediaTypes=Video`、`parentId`、`nextUpDateCutoff` 各有一份對照錄製證明伺服器真的過濾（12.1.0，`useritems-resume.watching*.json`、`shows-nextup.watching*.json`）；`enableResumable` 的效果只讀原始碼。**橫卡取圖**（`cardBuilder.getCardImageUrl`，`preferThumb`、`inheritThumb` 預設成立）：自己的 Thumb → `SeriesThumbImageTag` → `ParentThumbItemId` / `ParentThumbImageTag` → 自己的 `BackdropImageTags[0]` → `ParentBackdropItemId` / `ParentBackdropImageTags[0]`（只有集）→ 自己的 Primary → 劇與季的 Primary……；上層借來的那幾格只在 `enableImageTypes` 開了那一種時才回（v12.0 `DtoService`），Thumb 先找季、劇自己有就換成劇的，Backdrop 取往上找到的第一個。**12.1.0 沒有回 `SeriesThumbImageTag`**，劇的 Thumb 在 `ParentThumb*` 那一對。Berth 照這個順序取到集自己的 Primary 為止（電影不取 Primary：2:3 海報填進 16:9 只剩中間一條）。【原始碼 + 實測 12.1.0】
-- **劇集詳情頁：這部劇的下一集**（M1.5 票 08，研究 §7.3）：jellyfin-web 劇集頁的 Next Up 只送 `SeriesId` 與 `UserId`，其餘吃伺服器預設。帶 `seriesId` 時**截止日不套用**，`enableResumable` 預設 `true`——候選那一集看到一半就照樣回它與它的位置；「最後看過」是已標記看過的最大季集號，取它之後第一個還沒看完的，Specials 與缺片不算；**從沒看過回 S01E01**，看完了回空。12.1.0 三種情況各錄一份（`shows-nextup.series*.json`）。jellyfin-web 的主按鈕文字只看那一項自己的 `PlaybackPositionTicks`，劇集頁因此幾乎永遠是「Play」；它的季頁把集列成清單，集沒有自己的 `Primary` 時退回劇的海報。`/Items/{id}?userId=` 沒有 `fields` 參數，不必要就帶 `ProviderIds` 與 `UserData`（v12.0 `new DtoOptions()`，12.1.0 錄製）。Berth 照 §10 找作品、以 `/Items/{id}?userId=` 確認看得到之後才問這部劇的 NextUp（帶 `seriesId` 不套權限）。【原始碼 + 實測 12.1.0】
+- **經 Berth 代理的圖**（M1.5 票 04，研究 §6.1，12.1.0 實測）：2:3 的原圖帶 `fillWidth=342&fillHeight=513`；**不帶 `format` 時照 `Accept` 挑格式**，所以代理固定送 `format=Webp`；`quality=90` 約 23 KB，jellyfin-web 的 `quality=96` 是它的兩倍多。**Jellyfin 自己存縮好的圖**，所以 Berth 端不另存。`/Items` 帶 `enableImageTypes=Primary&imageTypeLimit=1` 時連 `ImageBlurHashes` 一起回。
+- **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了。**對 Series / Season 標記會遞迴到底下每一集**：標已看把看到一半的位置歸零，標未看連之前單獨看過的集一起清掉；對季只動那一季。**遞迴的結果只有清單端點讀得到**（M1.5 票 11 的 e2e）：對整部劇標記之後，`/Items/{集}?userId=` 仍回 `Played=false`，`/Shows/{劇}/Episodes?userId=` 與 `/Items?ids=` 才對（單集自己標記時兩邊都更新）。Berth 讀集一律走 `/Shows/{id}/Episodes`。【實測 12.1.0】
+- **由 TMDB id 找作品**：`/Items` 沒有 provider id 過濾參數（猜的參數名都被忽略），但有 `hasTmdbId`。`GET /Items?userId=&recursive=true&includeItemTypes=Series,Movie&hasTmdbId=true&fields=ProviderIds` **不帶 `parentId`** 就會套權限，在 Berth 端比 `ProviderIds.Tmdb`；沒權限的媒體庫裡的那一份不會回來。已知 item id 時用 `/Items/{id}?userId=` 驗可見性（研究 §10）。【實測 12.1.0】
+- **jellyfin-web 卡片上的觀看標記**（M1.5 票 05，研究 §7.1，v10.11.11 原始碼）：劇集 `UnplayedItemCount` 非 0 就畫集數，否則 `Played` 或 `PlayedPercentage >= 100` 畫勾；進度條只給影片（`MediaType=Video`）。已看切換不確認、就地改那一格。Berth 的判定照它（`services/watch.py`），但標為未看先確認（上一條：復原不了）。【原始碼】
+- **繼續觀看與下一集**（M1.5 票 07，研究 §7.2）：jellyfin-web 首頁兩列一次取 12 / 24 項；NextUp 另送 `enableResumable=false`（**伺服器預設是 `true`**，不送的話看到一半的集兩列都出現）與 `nextUpDateCutoff=今天 − maxDaysForNextUp`（使用者設定，預設 365；伺服器預設沒有截止日）。`mediaTypes=Video`、`parentId`、`nextUpDateCutoff` 各有對照錄製證明伺服器真的過濾（12.1.0）；`enableResumable` 的效果只讀原始碼。**橫卡取圖**順序（自己的 Thumb → 上層的 Thumb → Backdrop → 自己的 Primary → 劇與季的 Primary）與條件見研究 §7.2；**12.1.0 沒有回 `SeriesThumbImageTag`**，劇的 Thumb 在 `ParentThumb*` 那一對。Berth 照這個順序取到集自己的 Primary 為止（電影不取 Primary：2:3 海報填進 16:9 只剩中間一條）。【原始碼 + 實測 12.1.0】
+- **劇集詳情頁：這部劇的下一集**（M1.5 票 08，研究 §7.3）：jellyfin-web 只送 `SeriesId` 與 `UserId`。帶 `seriesId` 時**截止日不套用**，`enableResumable` 預設 `true`；「最後看過」是已標記看過的最大季集號，取它之後第一個還沒看完的，Specials 與缺片不算；**從沒看過回 S01E01**，看完了回空（三種情況各錄一份）。`/Items/{id}?userId=` 沒有 `fields` 參數，不必要就帶 `ProviderIds` 與 `UserData`。Berth 照 §10 找作品、以 `/Items/{id}?userId=` 確認看得到之後才問這部劇的 NextUp（帶 `seriesId` 不套權限）。【原始碼 + 實測 12.1.0】
 - **沒有直接開始播放的網址**（§12 維持）：三版的 `#/video` 都不吃 item id，「播放某一集」只能深連結到那一集的 `#/details?id=`。
-- **帳號狀態**：Jellyfin 停用帳號之後，**API key 代讀這位使用者的 `UserViews`、`/Items`、Resume、NextUp、Seasons 照常回資料，`UserPlayedItems` 照常寫入**；只有他自己的 token 回 401、重新登入回 403。`GET /Users/{id}` 讀得到 `Policy.IsDisabled` 與 `EnabledFolders`（與 `UserViews` 的 `Id` 同一種格式）。所以 Berth 要自己讀 `Policy`（§19 已定）。【實測 12.1.0】**刪除的帳號**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md) §4）與停用不同：API key 代讀他的**每一支都是 404**——`GET /Users/{id}` 回 JSON 字串 `"User not found"`，`UserViews`、`/Items` 回 `Error processing request.`，Resume、NextUp、`/Items/{id}`、`POST /UserPlayedItems` 回 problem details（沒有寫入）；重新登入 Berth 是帳密錯。Berth 只把 `Users/{id}` 的 404 當成與停用同一種處置（`UserViews` 的 404 可能是位址設錯，仍是問不到）（刪掉他的每一張 session、401 `account_disabled`，使用者拍板）。【實測 12.1.0】
-- **大媒體庫的代價**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md)；1,000 部 × 12 集、全部由 Berth 經手，Docker Desktop 上的量級）：整份清單（`library_index`）1,000 部 318 KB、p95 35 ms；不帶 `parentId` 的 `hasTmdbId` 反查 303 KB、p95 39 ms；**帶整份 `MediaSources` 的集清單 12,000 列 25.9 MB、p95 5.0 s**（不帶是 8.3 MB、0.55 s），約 8 萬集會撞上 Berth 30 s 的 Jellyfin 逾時，分段取（`startIndex` + `limit`）總時間不減、只讓單一請求變短；**Series 的觀看紀錄很貴**：整份清單打開 `enableUserData` 從 31 ms 變 1.95 s（`UnplayedItemCount`），牆的一頁 100 部帶觀看紀錄 250 ms，`ids=` 只取 50 部 150 ms、200 部 450 ms、500 部回 **414 URI Too Long**。plan §11.3 決定 2 的門檻：`GET /inventory/{id}` p95 修正前 3.4 s（Berth 的分組是二次方，不是 Jellyfin）、修正後 0.66–0.68 s；對帳一輪 27–31 s（Jellyfin 那一方 25–29 s，其中 Jellyfin 的回應只占 4.5 s）。不做快取、不做分段取。【實測 12.1.0】
+- **帳號狀態**：Jellyfin 停用帳號之後，**API key 代讀這位使用者的 `UserViews`、`/Items`、Resume、NextUp、Seasons 照常回資料，`UserPlayedItems` 照常寫入**；只有他自己的 token 回 401、重新登入回 403。`GET /Users/{id}` 讀得到 `Policy.IsDisabled` 與 `EnabledFolders`（與 `UserViews` 的 `Id` 同一種格式）。所以 Berth 要自己讀 `Policy`（§19 已定）。【實測 12.1.0】**刪除的帳號**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md) §4）與停用不同：API key 代讀他的**每一支都是 404**（沒有寫入），重新登入 Berth 是帳密錯。Berth 只把 `Users/{id}` 的 404 當成與停用同一種處置（`UserViews` 的 404 可能是位址設錯，仍是問不到）（刪掉他的每一張 session、401 `account_disabled`，使用者拍板）。【實測 12.1.0】
+- **大媒體庫的代價**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md)；1,000 部 × 12 集、全部由 Berth 經手，Docker Desktop 上的量級）：整份清單（`library_index`）1,000 部 318 KB、p95 35 ms；不帶 `parentId` 的 `hasTmdbId` 反查 303 KB、p95 39 ms；**帶整份 `MediaSources` 的集清單 12,000 列 25.9 MB、p95 5.0 s**（不帶是 8.3 MB、0.55 s），約 8 萬集會撞上 Berth 30 s 的 Jellyfin 逾時，分段取總時間不減；**Series 的觀看紀錄很貴**：整份清單打開 `enableUserData` 從 31 ms 變 1.95 s，`ids=` 500 部回 **414 URI Too Long**。plan §11.3 決定 2 的門檻：`GET /inventory/{id}` p95 修正前 3.4 s（Berth 的分組是二次方，不是 Jellyfin）、修正後 0.66–0.68 s；對帳一輪 27–31 s（Jellyfin 那一方 25–29 s）。不做快取、不做分段取。【實測 12.1.0】
 
 ### 20.10 Sonarr 怎麼替一集組查詢（2026-09-19 查證）
 
@@ -1212,17 +1214,12 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 全文、原始碼行號與實測紀錄見 [`docs/research/jellyfin-12.md`](research/jellyfin-12.md)。實測對象是一次性的 linuxserver `12.0ubu2604-ls48`（12.0.0）與 `12.1ubu2604-ls49`（12.1.0），跑完即刪；10.x 的對照引 §20.6 與 `m0-experiments.md`。
 
+下面「從 10.11 升級的阻力」逐條原文在 [`jellyfin-12.md`](research/jellyfin-12.md#從-brief-搬來209)（研究 §4）；其餘各條維持原文。
+
 - **版號**：12.0 就是原本的 10.12，只拿掉永遠不變的 `10`（2026-09-08 發佈；12.1 在 2026-09-15 發佈）。【文件】
 - **升級注意的出處**：官方發佈文 [Jellyfin 12.0](https://jellyfin.org/posts/jellyfin-release-12.0/) 的 TL;DR 段（`#tl-dr`：先停機完整備份、移除第三方插件、升級後完整掃描、不能降級）；精靈「既有」選項旁的版本下限連到它（M4 票 17）。【文件】
 - **升級是單向的**：10.10.7 或任何 10.11.x 可直接升；資料庫改動讓降級只能靠備份還原。第三方插件要對 .NET 10 重建，10.11 的插件在 12 載入不了。升級後要完整掃描一次，自動分組的版本才會回來。item id 的算法（`MD5(型別全名 + 路徑)`）在 10.11.11 與 12.1 逐字相同，所以一般 Movie / Episode 主條目升級後 id 不變；型別被修正的條目（含自動分組的次要版本）會換 id，缺檔與孤立的條目會被刪。沒有做升級前後逐筆比對的實測。【文件 + 原始碼】
-- **從 10.11 升級的阻力**（2026-09-15 補查，`jellyfin-12.md` §4）：
-  - **遷移會失敗**：12.0 發佈一週內仍有 12 條遷移、啟動、媒體庫變空的 open issue，多數沒有維護者回應，其中 #17862 是 12.1 啟動不了。內建的遷移前備份只保護資料庫。
-  - **舊客戶端與整合要升級才能用**：舊式驗證關閉之後，Jellyfin for Kodi 要 v2.0.0 以上、Seerr 要 v3.0.0，Sonarr / Radarr 要最近的版本。Ombi 與 Jellyfin Vue 的播放仍然壞著。暫時打開舊式驗證要手改 `system.xml` 的 `EnableLegacyAuthorization`，後台沒有開關，官方也預告下一個大版本移除。
-  - **升級前後要做的事**：第三方插件要先移除；只差大小寫的兩個使用者名稱會讓遷移失敗；全域字幕設定改到各媒體庫。
-  - **一鍵管道沒到齊**：binhex（unRAID）與 QNAP 社群套件還停在 10.11.11；SynoCommunity、TrueNAS 是 12.0；Debian 11 / Ubuntu 20.04 的 apt 已經沒有 12。Docker `latest`、官方 apt、Windows / macOS installer 已是 12.1。
-  - **保留的資料**：帳號、API key、觀看紀錄保留；armhf 在 10.11 就沒有官方建置，12 沒有新增 CPU 架構門檻。
-  - **反向推力**：Kotlin SDK 1.9.0 已把最低伺服器版本拉到 12，Android 與 Android TV 換上它之後，新版 app 可能反過來要求伺服器是 12【推論】。
-  - 【文件 + 原始碼 + 官方 issue】
+- **從 10.11 升級的阻力**（2026-09-15 補查，`jellyfin-12.md` §4）：**遷移會失敗**（12.0 發佈一週內仍有 12 條遷移、啟動、媒體庫變空的 open issue，其中 #17862 是 12.1 啟動不了；內建的遷移前備份只保護資料庫）；**舊客戶端與整合要升級才能用**（舊式驗證關閉後 Kodi 要 v2.0.0 以上、Seerr v3.0.0、Sonarr / Radarr 要最近的版本；Ombi 與 Jellyfin Vue 的播放仍壞；暫時打開舊式驗證要手改 `system.xml` 的 `EnableLegacyAuthorization`，官方預告下一個大版本移除）；**升級前後**要先移除第三方插件、只差大小寫的兩個使用者名稱會讓遷移失敗、全域字幕設定改到各媒體庫；**一鍵管道沒到齊**（binhex、QNAP 停在 10.11.11；SynoCommunity、TrueNAS 是 12.0；Debian 11 / Ubuntu 20.04 的 apt 已沒有 12；Docker `latest`、官方 apt、Windows / macOS installer 已是 12.1）；帳號、API key、觀看紀錄保留，12 沒有新增 CPU 架構門檻；Kotlin SDK 1.9.0 已把最低伺服器版本拉到 12，新版 Android app 可能反過來要求伺服器是 12【推論】。【文件 + 原始碼 + 官方 issue】
 - **劇集原生多版本**（[PR #16828](https://github.com/jellyfin/jellyfin/pull/16828)、官方文件 [`_video-multiversion.md`](https://github.com/jellyfin/jellyfin.org/blob/187351cd69c532a833c9ed57de036297012f5e9e/docs/general/server/media/_video-multiversion.md)）：同一個季資料夾裡解析出同一個 `S/E` 的檔案，併成同一集的多個 MediaSource。
   - **分組鍵只有季號與集號，不含集名與結束集**：`S01E03-E04` 與 `S01E03` 同季時被當成同一集的兩個版本，第 4 集從集列表消失（實測；本系統的處理見 §7.8）。
   - 12.1 起季號與集號都要解析得出才分組（[PR #17890](https://github.com/jellyfin/jellyfin/pull/17890)）。
@@ -1248,255 +1245,172 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 播出日比對（M3 票 14）與之後可能的「發佈離播出多近」都要一個發佈時間。試跑環境（Prowlarr 預設公開站）實測：
 
-- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC）：搜「Kamiina Botan」534 筆，Mikan 261、Anime Tosho 100、dmhy 80、The Pirate Bay 63、ACG.RIP 30，缺值 0。Berth 的 adapter 已經解析成 `published_at`（`adapters/indexer/prowlarr.py`；M4 票 37 前另有 `torznab.py`，Torznab 的 `pubDate` 是 RFC 822），但**之後沒有任何地方用到**：不在搜尋結果的 API 裡，送單也沒存。【實測】**M3 票 14 起接上**：搜尋結果帶 `published_at`、送單存進 `jobs.published_at`，規劃時做播出日比對（plan §4.4）。
+- **Prowlarr 搜尋結果每一筆都有 `publishDate`**（ISO 8601、UTC），缺值 0（搜「Kamiina Botan」534 筆，五個站的筆數見研究檔）。Berth 的 adapter 解析成 `published_at`（`adapters/indexer/prowlarr.py`；M4 票 37 前另有 `torznab.py`，Torznab 的 `pubDate` 是 RFC 822）。**M3 票 14 起接上**：搜尋結果帶 `published_at`、送單存進 `jobs.published_at`，規劃時做播出日比對（plan §4.4）。【實測；原文在 [`publish-time-indexers-and-rss.md`](research/publish-time-indexers-and-rss.md)】
 - **ACG.RIP 的 RSS** 是標準的 `<item><pubDate>`，RFC 822 帶時區（`Thu, 24 Sep 2026 06:01:00 -0700`）。【實測 `https://acg.rip/.xml`】
 - **Mikan 的 RSS 沒有標準的 `<item><pubDate>`**：日期在 `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區**（`2026-09-24T21:01:00.760219`）。同一個發佈在 ACG.RIP 是 13:01 UTC，所以 Mikan 的值是 **UTC+8**；當成 UTC 讀會差 8 小時。【實測 `https://mikanani.me/RSS/Classic`，與 ACG.RIP 同一筆對照】
 - Nyaa 的 RSS 從試跑機器連不上（連線失敗），沒有量到。**2026-09-25 補量**（§20.12）：`<pubDate>` 是 RFC 822 的 `-0000`，即 UTC。
-- **發佈時間是「這一筆條目」貼出的時間，不是這一集的首發**：重新上傳、合集、聚合站晚收錄都會讓它偏晚（Anime Tosho 上 SubsPlease 同一包的 01 與 12 兩個單集檔相隔 4 分鐘）。它只保證「那一集在它之前已經播出」，所以適合當下限（規則一：早於播出日就一定算錯），不適合量「多新」。SubsPlease《上伊那牡丹》01–12 合集在 Anime Tosho 是 2026-08-15，TMDB 第一季末集 2026-06-27。【實測】
+- **發佈時間是「這一筆條目」貼出的時間，不是這一集的首發**：重新上傳、合集、聚合站晚收錄都會讓它偏晚。它只保證「那一集在它之前已經播出」，所以適合當下限（規則一：早於播出日就一定算錯），不適合量「多新」（SubsPlease《上伊那牡丹》01–12 合集在 Anime Tosho 是 2026-08-15，TMDB 第一季末集 2026-06-27）。【實測】
 
 ### 20.12 RSS 來源的欄位（2026-09-25 查證，M3 票 07）
 
 完整的欄位表、範例原文與逐條來源在 [`docs/research/rss-sources.md`](research/rss-sources.md)；
-fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 token 的方式見同目錄 README）。
+fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 token 的方式見同目錄 README）。以下只留結論。
 
-**2026-09-24 試跑時的五條實測**（當時是使用者與 agent 的觀察，2026-09-25 的 fixture 都重現了）：
+**2026-09-24 試跑時的五條實測**（2026-09-25 的 fixture 都重現了，[§10](research/rss-sources.md)）：
 
-- **Mikan 聚合 feed（`/RSS/MyBangumi?token=`）只有最近的集數**：12 筆、跨 6.6 天，同一部作品 × 字幕組只剩最近兩集。上限是筆數還是時間窗，一份樣本分不出來。【實測 fixture `rss-mybangumi.xml`】
-- **單集頁反查得到番組 id 與字幕組 id**：`/Home/Episode/<hash>` 頁上的 `a.mikan-rss` 就是 `/RSS/Bangumi?bangumiId=…&subgroupid=…`。feed 本身不帶這兩個 id，所以聚合 feed 的每一筆第一次出現都要多抓一次單集頁。【實測】
-- **單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）有整季**：4009 × 370 的 01–12 都在。【實測】
-- **acg.rip 的搜尋 feed 夾合集**：搜「Kamiina Botan」30 筆裡 8 筆；Nyaa 的搜尋 feed 同樣（75 筆裡 14 筆）。**三站都沒有標示合集的欄位**，只能看標題（`[01-12 合集]`、`(01-12) … [Batch]`、`[Vol.1][BDRemux]`…）。【實測】
-- **Nyaa 從開發機連不上**：TLS 握手失敗（curl 報 `SEC_E_INVALID_TOKEN`，Python 與 Node 報 `WRONG_VERSION_NUMBER`）；同時 Mikan 與 acg.rip 回 200。瀏覽器（playwright）連得上，fixture 是在頁內 `fetch()` 取得的。部署環境連不連得上取決於使用者的網路。【實測】
+- **Mikan 聚合 feed（`/RSS/MyBangumi?token=`）只有最近的集數**：12 筆、跨 6.6 天，同一部作品 × 字幕組只剩最近兩集。
+- **單集頁反查得到番組 id 與字幕組 id**：`/Home/Episode/<hash>` 頁上的 `a.mikan-rss` 就是 `/RSS/Bangumi?bangumiId=…&subgroupid=…`；feed 本身不帶，所以聚合 feed 的每一筆第一次出現都要多抓一次單集頁（[§2.7](research/rss-sources.md)）。
+- **單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）有整季**：4009 × 370 的 01–12 都在。
+- **三站都沒有標示合集的欄位**，只能看標題；acg.rip 搜尋 feed 30 筆裡 8 筆是合集，Nyaa 75 筆裡 14 筆（[§6](research/rss-sources.md)）。
+- **Nyaa 從開發機連不上**（TLS 握手失敗；Mikan、acg.rip 同時 200），瀏覽器連得上；部署環境連不連得上取決於使用者的網路（[§3.5](research/rss-sources.md)）。
 
-**三站的欄位**：
+**三站的欄位**（逐欄對照在研究檔 §9）：
 
-| | Mikan | Nyaa | acg.rip |
-| --- | --- | --- | --- |
-| guid | `<guid isPermaLink="false">` **就是標題**，改標題會跟著變 | `https://nyaa.si/view/<id>` | `https://acg.rip/t/<id>` |
-| info hash | `link`（`/Home/Episode/<40 hex>`）與 enclosure 檔名的末段就是 info hash（124/124 筆一致，抽一個 `.torrent` 算 info dict 的 SHA-1 相同） | `nyaa:infoHash` | **沒有**（feed 與單集頁都沒有），只能下載 `.torrent` 算 |
-| torrent / magnet | `<enclosure type="application/x-bittorrent">`；沒有 magnet | **沒有 enclosure**，`<link>` 是 `.torrent`（`&m` 參數時換成 magnet）；單集頁在 `<guid>` | `<enclosure type="application/x-bittorrent">`（沒有 `length`）；沒有 magnet |
-| 大小 | `contentLength` 與 enclosure `length` **不是位元組**（描述裡十進位 MB 的數字乘 1024^k，多出約 5%）；描述後綴 `[518.65 MB]` 比較準 | `nyaa:size` 是人類可讀字串（`240.5 MiB`，1024 進位） | `torrent:contentLength` 是位元組 |
-| 發佈時間 | `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區、實際是 UTC+8**（同一筆在 acg.rip 對照差 +7:59:59），小數秒 0、3、6 位都有 | `<pubDate>` RFC 822 `-0000`（UTC） | `<pubDate>` RFC 822 `-0700` |
-| 做種數 | 沒有 | `nyaa:seeders` / `leechers` / `downloads` | 沒有 |
+- **guid**：Mikan 的 `<guid isPermaLink="false">` **就是標題**，改標題會跟著變，不能拿來去重；Nyaa 是 `https://nyaa.si/view/<id>`，acg.rip 是 `https://acg.rip/t/<id>`。
+- **info hash**：Mikan 的 `link`（`/Home/Episode/<40 hex>`）與 enclosure 檔名末段就是（124/124 筆一致，§2.3）；Nyaa 有 `nyaa:infoHash`；acg.rip **沒有**，只能下載 `.torrent` 算。
+- **torrent / magnet**：Mikan、acg.rip 是 `<enclosure type="application/x-bittorrent">`、都沒有 magnet；Nyaa 沒有 enclosure，`<link>` 是 `.torrent`（`&m` 時換成 magnet）。
+- **大小**：Mikan 的 `contentLength` 與 enclosure `length` **不是位元組**（多出約 5%），描述後綴 `[518.65 MB]` 比較準；Nyaa 是人類可讀字串（`240.5 MiB`）；acg.rip 的 `torrent:contentLength` 是位元組。三站都只當顯示用的近似值（§2.4）。
+- **發佈時間**：Mikan 的 `https://mikanani.me/0.1/` 命名空間 `<torrent><pubDate>` 是 ISO 8601 **不帶時區、實際是 UTC+8**（同一筆在 acg.rip 對照差 +7:59:59），小數秒 0、3、6 位都有；Nyaa 是 RFC 822 `-0000`（UTC）；acg.rip 是 RFC 822 `-0700`（§5）。
+- **做種數**：只有 Nyaa 有（`nyaa:seeders` / `leechers` / `downloads`）。
 
-**feedparser 6.0.14**（2026-07-30，PyPI 最新）三站都讀得動、不丟欄位，但 Mikan 有兩處會安靜地讀錯：`published_parsed` 把不帶時區的 `<torrent><pubDate>` 當 UTC（差 8 小時，要讀 `published` 字串自己補 UTC+8）；`<torrent>` 的命名空間被抹掉（`pubDate` → `published`、`contentLength` → `contentlength`、`link` 變成第二個 `links`），哪天 Mikan 加上標準的 `<item><pubDate>` 會撞名。Nyaa 的欄位是 `nyaa_infohash` 這種 key，前綴取自 feed 自己宣告的 `xmlns:nyaa`。【實測 fixture；context7 `/kurtmckee/feedparser`】
+**feedparser 6.0.14**（2026-07-30，PyPI 最新）三站都讀得動、不丟欄位，但 Mikan 有兩處會安靜地讀錯：`published_parsed` 把不帶時區的 `<torrent><pubDate>` 當 UTC（差 8 小時，要讀 `published` 字串自己補 UTC+8）；`<torrent>` 的命名空間被抹掉（`pubDate` → `published`、`link` 變成第二個 `links`），哪天 Mikan 加上標準的 `<item><pubDate>` 會撞名（[§7](research/rss-sources.md)）。【實測 fixture；context7 `/kurtmckee/feedparser`】
 
-**Mikan 的番組搜尋**（2026-09-26 查證，M3 票 19）：`/Home/Search?searchstr=<詞>` 回一整頁 HTML，搜尋結果那一格是 `ul.an-ul` 裡連到 `/Home/Bangumi/<id>` 的 `<a>`，番組名在 `div.an-text` 的 `title`（簡中全名）；同一頁底下另附最多 1000 筆發佈，整頁 1–4 MB、約 1.5 秒。**英文、羅馬字、日文、繁中都搜得到**：`Frieren`、`Sousou no Frieren`、`葬送のフリーレン`、`葬送的芙莉蓮` 四種寫法都回同樣兩個番組（3141、3821），`Kimi ga Shinu made Koi wo Shitai` 回 4009。番組頁左欄 `a.subgroup-name.subgroup-<字幕組 id>` 是字幕組名、緊接的 `span.date` 是最近一次發佈（M/D/YYYY）；右邊每一組是 `div.subgroup-text#<字幕組 id>` 帶一張發佈表（`a.magnet-link-wrap`，新的在前）。【實測 fixture `home-search.frieren.html`、`home-search.none.html`、`home-bangumi.4009.html`】
+**Mikan 的番組搜尋**（2026-09-26 查證，M3 票 19）：`/Home/Search?searchstr=<詞>` 回整頁 HTML（1–4 MB、約 1.5 秒），結果在 `ul.an-ul` 連到 `/Home/Bangumi/<id>` 的 `<a>`。**英文、羅馬字、日文、繁中都搜得到**：`Frieren`、`Sousou no Frieren`、`葬送のフリーレン`、`葬送的芙莉蓮` 四種寫法都回同樣兩個番組（3141、3821）。番組頁左欄 `a.subgroup-name.subgroup-<字幕組 id>` 是字幕組名、緊接的 `span.date` 是最近一次發佈（M/D/YYYY）。【[原文](research/rss-sources.md#從-brief-搬來2012)；fixture `home-search.frieren.html`、`home-bangumi.4009.html`】
 
 **Mikan 的番組頁**（`/Home/Bangumi/<id>`）有中文標題、「放送开始」（`M/D/YYYY`）與 bgm.tv 連結，選擇器在研究檔 §2.7。字幕組 id（`subgroupid=370`）與單集頁上的發佈組 id 不是同一套編號。
 
-**Mikan 的番組是 cour，TMDB 的季可能是好幾輪播出併成的**（2026-09-26 查證，M4 票 14）：Re:Zero 第四季的第二個 cour 在 Mikan 是另一個番組（4052「Re：从零开始的异世界生活 第四季 夺还篇」，放送开始 8/12/2026），而 TMDB 65942 把四季 85 集全部放在第 1 季，第四季是第 67–77 集（2026-04-08 起）與停播 56 天之後的第 78–85 集（2026-08-12 起）；TMDB 以「Re：从零开始的异世界生活 第四季」搜不到它，拿掉季名就搜得到。發佈名只寫「第四季」、不寫篇名。所以自動綁定的季號線索要比那一季**播出的期間**，不能只比首播（§15「綁定」）。【實測 `scripts/experiments/rss_auto_bind.py`，TMDB `tv/65942/season/1` 的 `episodes[].air_date`；量測結果 [`docs/research/rss-sources.md`](research/rss-sources.md) §2.8】
+**Mikan 的番組是 cour，TMDB 的季可能是好幾輪播出併成的**（2026-09-26 查證，M4 票 14）：Re:Zero 第四季的第二個 cour 在 Mikan 是另一個番組（4052，放送开始 8/12/2026），而 TMDB 65942 把四季 85 集全放第 1 季（第四季是第 67–77 集與停播 56 天後的第 78–85 集）；發佈名只寫「第四季」、不寫篇名。所以自動綁定的季號線索要比那一季**播出的期間**，不能只比首播（§15「綁定」）。【[原文與量測](research/rss-sources.md#從-brief-搬來2012)、§2.8】
 
-**跨 feed 以 info hash 去重：做，不多發請求**（plan §8.5）。Mikan 與 Nyaa 在輪詢時就有 hash；acg.rip 不在輪詢時預抓 `.torrent`，送單時 `TorrentFetcher` 本來就要下載並算 hash，`jobs.hash` 是主鍵。**未證實**：同一個發佈在 Mikan 與 acg.rip 是不是同一個 info hash（時間差不到 1 秒、大小對得上，但沒有下載 acg.rip 的 `.torrent` 算）；不同的話由帳本「同 Media / 季 / 集 / Tags」那一層擋。
+**跨 feed 以 info hash 去重：做，不多發請求**（plan §8.5）。Mikan 與 Nyaa 在輪詢時就有 hash；acg.rip 不預抓 `.torrent`，送單時 `TorrentFetcher` 本來就要下載並算 hash，`jobs.hash` 是主鍵。**未證實**：同一個發佈在 Mikan 與 acg.rip 是不是同一個 info hash；不同的話由帳本「同 Media / 季 / 集 / Tags」那一層擋。
 
-**排除條件的格式照 Sonarr 的 release profile**（2026-09-25 查證，M3 票 10）：「Must Not Contain」的每一條是字詞、不分大小寫；要正則就寫成 `/regex/`，預設分大小寫，`/regex/i` 不分。【[Servarr Wiki：Sonarr Settings › Release Profiles](https://wiki.servarr.com/sonarr/settings)】Berth 照搬這個寫法（`parser.exclusion`），比對的是整個標題（Sonarr 只看作品名之後那一段）。
+**排除條件的格式照 Sonarr 的 release profile**（2026-09-25 查證，M3 票 10）：每一條是字詞、不分大小寫；要正則寫成 `/regex/`（預設分大小寫，`/regex/i` 不分）。【[Servarr Wiki：Sonarr Settings › Release Profiles](https://wiki.servarr.com/sonarr/settings)】Berth 照搬（`parser.exclusion`），比對整個標題。
 
 ### 20.13 公開站的請求限制：Prowlarr、Sonarr、AutoBangumi 的慣例（2026-09-26 查證，M3 票 20）
 
 研究檔 [`docs/research/request-budget.md`](research/request-budget.md)，逐條附原始碼或文件連結。M3 票 20 照這幾條定了一個站一份的請求預算（已拿掉，[ADR-0014](adr/0014-no-site-request-budget.md)）；**M4 票 107 整個拿掉**（§19 2026-10-19、plan §3.2），最後一條是拿掉的主要理由：
 
-- **Prowlarr 的 Query Limit 是滾動窗**：`IndexerLimitService` 數「過去 N 小時」的歷史（`Limits Unit` 只有 `Hour` 與預設的 `Day`），**RSS 與查詢算在同一份**（`IndexerQuery` + `IndexerRss`），打滿時那一站那一次跳過，重試時間＝窗裡最早那一筆 + 窗長 − 現在（實例 `Request Limit reached for BitSearch. Disabled for 01:00:00`）。Grab Limit 是另一份。預設不限，要使用者自己填。
-- **Cardigann 定義的請求間隔**：`nyaasi.yml` 有 `requestDelay: 2`，`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有——Prowlarr 不替 Mikan 節流。
-- **輪詢間隔**：Sonarr 的 RSS Sync Interval 10–120 分鐘（預設值在文件與原始碼都找不到，社群慣用 15 分鐘）；AutoBangumi 的 `rss_time` 預設 900 秒，輪的是 Mikan 聚合 feed。FreshRSS 每個 Feed 可以設自己的間隔，單一 Feed 下限 15 分鐘，理由是避免被來源站封 IP（[Refreshing feeds](https://freshrss.github.io/FreshRSS/en/users/09_refreshing_feeds.html)）；Berth 照它每個 Feed 各自設、只收固定檔位（M4 票 109）。
+- **Prowlarr 的 Query Limit 是滾動窗**（[§1](research/request-budget.md)）：數「過去 N 小時」的歷史（`Limits Unit` 只有 `Hour` 與預設的 `Day`），**RSS 與查詢算在同一份**，打滿時那一站那一次跳過；Grab Limit 是另一份。預設不限，要使用者自己填。
+- **Cardigann 定義的請求間隔**（[§2](research/request-budget.md)）：只有 `nyaasi.yml` 有 `requestDelay: 2`；`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有。
+- **輪詢間隔**（[§3、§4](research/request-budget.md)）：Sonarr 的 RSS Sync Interval 10–120 分鐘（預設值查不到，社群慣用 15 分鐘）；AutoBangumi 的 `rss_time` 預設 900 秒，輪 Mikan 聚合 feed。FreshRSS 每個 Feed 各自設間隔、下限 15 分鐘（[Refreshing feeds](https://freshrss.github.io/FreshRSS/en/users/09_refreshing_feeds.html)）；Berth 照它每個 Feed 各自設、只收固定檔位（M4 票 109）。
 - **出錯退避是另一回事**：Sonarr 的 `EscalationBackOff` 0 秒 → 1 分 → … → 24 小時逐級加重，與配額分開計時。
-- **Berth 的搜尋曾照「那一站那一次跳過」**（M4 票 77）；票 107 之後搜尋問全部的站，各站的配額交給 Prowlarr 自己的
-  Query Limit（使用者看得到、調得了）。
-- **三站都沒有公開的限速或封鎖事故紀錄**（Mikan、acg.rip 找不到；Nyaa 只有上面那 2 秒的間接證據）。票 20 的「每站每小時 60 個」因此不是量出來的，是照 Berth 的用量推的；實際擋到人的只有 Berth 自己的計數（票 77），所以票 107 拿掉。
+- **Berth 的搜尋曾照「那一站那一次跳過」**（M4 票 77）；票 107 之後搜尋問全部的站，各站的配額交給 Prowlarr 自己的 Query Limit（使用者看得到、調得了）。
+- **三站都沒有公開的限速或封鎖事故紀錄**（[§5](research/request-budget.md)；Nyaa 只有 2 秒間隔的間接證據）。票 20 的「每站每小時 60 個」因此不是量出來的，是照 Berth 的用量推的；實際擋到人的只有 Berth 自己的計數（票 77），所以票 107 拿掉。
 
 ### 20.14 精靈手動選擇的慣例與既有服務的條件（2026-09-29 查證）
 
-§19「精靈改為每個服務手動選擇」那一列的依據，查證紀錄在 `.scratch/m4/wizard-manual-choice-decision.md`。
+§19「精靈改為每個服務手動選擇」那一列的依據，查證紀錄在 `.scratch/m4/wizard-manual-choice-decision.md`。慣例與各項實測的完整原文在 [`docs/research/wizard-existing-services.md`](research/wizard-existing-services.md)；三次實跑／查證另有自己的研究檔，下面只留結論。
 
 - **Seerr 連媒體伺服器與加 Sonarr / Radarr 全程手動**：填位址與金鑰 → Test → Save，沒有自動偵測。【[Seerr：Media Server](https://docs.seerr.dev/using-seerr/settings/mediaserver)、[Seerr：Services](https://docs.seerr.dev/using-seerr/settings/services)】
 - **Sonarr / Radarr 的 Download Client 也是手動**：Host、Port、Username、Password、Category，按 Test。【[Servarr Wiki：Sonarr System](https://wiki.servarr.com/sonarr/system)】
-- **硬鏈接的前提是單一 `/data` 掛載**：下載器與媒體庫共用同一個掛載，硬鏈接與 atomic move 才成立；分開掛或下載器在別台主機就要 Remote Path Mapping，而且硬鏈接失效。【[TRaSH Guides：Docker 目錄結構](https://trash-guides.info/File-and-Folder-Structure/How-to-set-up/Docker)、[TRaSH Guides：Sonarr Remote Path Mapping](https://trash-guides.info/Sonarr/Tips/Sonarr-remote-path-mapping)】Berth 不做 Remote Path Mapping（§18），所以既有服務必須與 Berth 同主機、同容器路徑（§16.4）。
-- **qBittorrent 5.2 起有 API key**：以 `Authorization: Bearer <key>` 取代 cookie 登入；Berth 這一輪只做 WebUI 帳密（版本下限 4.4 不變）。【[qbittorrent-api：Behavior & Configuration](https://qbittorrent-api.readthedocs.io/en/latest/behavior%26configuration.html)】
-- **Prowlarr 的 API 只收 API key**（Settings → General → Security）；表單登入的帳密只給瀏覽器。所以既有 Prowlarr 要的是位址 + API key，不是帳密。【[Servarr Wiki：Prowlarr Settings](https://wiki.servarr.com/prowlarr/settings)】
-- **容器裡的 `localhost` 是容器自己**：要連宿主上的服務，Docker Desktop 內建 `host.docker.internal`；Linux 要在 compose 加 `extra_hosts: ["host.docker.internal:host-gateway"]`，而且宿主上的服務要監聽 `0.0.0.0`，只監聽 `127.0.0.1` 的從容器連不到。【[Nick Janetakis：Connect to a Service Running on Your Docker Host from a Container](https://nickjanetakis.com/blog/connect-to-a-service-running-on-your-docker-host-from-a-container)】
+- **硬鏈接的前提是單一 `/data` 掛載**；分開掛或下載器在別台主機就要 Remote Path Mapping，而且硬鏈接失效。【[TRaSH Guides：Docker 目錄結構](https://trash-guides.info/File-and-Folder-Structure/How-to-set-up/Docker)、[TRaSH Guides：Sonarr Remote Path Mapping](https://trash-guides.info/Sonarr/Tips/Sonarr-remote-path-mapping)】Berth 不做 Remote Path Mapping（§18），所以既有服務必須與 Berth 同主機、同容器路徑（§16.4）。
+- **qBittorrent 5.2 起有 API key**（`Authorization: Bearer <key>`）；Berth 這一輪只做 WebUI 帳密（版本下限 4.4 不變）。【[qbittorrent-api：Behavior & Configuration](https://qbittorrent-api.readthedocs.io/en/latest/behavior%26configuration.html)】
+- **Prowlarr 的 API 只收 API key**（Settings → General → Security），帳密只給瀏覽器；既有 Prowlarr 要的是位址 + API key。【[Servarr Wiki：Prowlarr Settings](https://wiki.servarr.com/prowlarr/settings)】
+- **容器裡的 `localhost` 是容器自己**：Docker Desktop 內建 `host.docker.internal`；Linux 要在 compose 加 `extra_hosts: ["host.docker.internal:host-gateway"]`，宿主上的服務要監聽 `0.0.0.0`（只聽 `127.0.0.1` 的連不到）。【[Nick Janetakis](https://nickjanetakis.com/blog/connect-to-a-service-running-on-your-docker-host-from-a-container)】
 - **套件內那一台「已經設過介面登入」怎麼認**（M4 票 15，2026-09-29 查證＋實測）：
-  - qBittorrent：`app/preferences` 讀得到 `web_ui_username`，**讀不到密碼**——`web_ui_password` 自 Web API 2.3.0 起「not readable, write-only」。全新的 linuxserver 那一台 `qBittorrent.conf` 沒有 `WebUI\Username` / `WebUI\Password_PBKDF2`，讀回來的帳號是預設的 `admin`，log 印「The WebUI administrator password was not set. A temporary password is provided」；設過的那一台（berth-lab `bundled`，5.2.3）conf 有 `Password_PBKDF2`、帳號是設下的那一個。所以**帳號不是 `admin` 就當設過了**；還是 `admin` 而另設了密碼的認不出來，一律當沒設過、要使用者設一組（寧可多問一次）。【[qBittorrent Wiki：WebUI API (4.1) → Get application preferences](https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1))】
-  - Prowlarr：`GET /api/v1/config/host` 全新是 `authenticationMethod: "none"`、`username: ""`（berth-trial 的 2.6.5 實測）；設過是 `forms`（或 `basic`）加帳號，`password` 讀回來是雜湊（berth-lab `bundled` 實測）。**方法不是 `none` 就當設過了**。
-- **撞名撞 port 時 `docker compose up -d` 的行為**（M4 票 16 實測，2026-09-29；Docker Engine 29.6.2、Compose v5.3.1、Docker Desktop on WSL2 6.18.33.2；`scripts/experiments/compose_collisions.py`，隔離的 compose project）：社群的說法「撞到的那一台起不來、其他照常起」**只對撞 port 成立**。
-  - **撞名**（宿主上已有同名容器）：`up -d` 結束碼 1，`Error response from daemon: Conflict. The container name "/…jellyfin" is already in use by container "…". You have to remove (or rename) that container to be able to reuse that name.`；**其他容器（連 `berth` 在內）都只建立、停在 `created`，一個都沒啟動**。票 16 之前忘了從 `COMPOSE_PROFILES` 拿掉，整套 Berth 就起不來。容器名改成 `berth-*` 之後同一個情境四個都起來。
-  - **撞 port**（宿主上的容器佔了 `JELLYFIN_PORT`）：`up -d` 結束碼 1，`Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint …jellyfin (…): Bind for 0.0.0.0:<port> failed: port is already allocated`；**只有那一台停在 `created`**，`berth` 與其他兩台照常 `running`。
+  - qBittorrent：`app/preferences` 讀得到 `web_ui_username`、**讀不到密碼**（`web_ui_password` 自 Web API 2.3.0 起 write-only）。全新的 linuxserver 那一台帳號是預設的 `admin`。所以**帳號不是 `admin` 就當設過了**；還是 `admin` 的一律當沒設過、要使用者設一組（寧可多問一次）。【[qBittorrent Wiki：WebUI API (4.1)](https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1))】
+  - Prowlarr：`GET /api/v1/config/host` 全新是 `authenticationMethod: "none"`、`username: ""`（2.6.5 實測）；設過是 `forms`（或 `basic`）加帳號。**方法不是 `none` 就當設過了**。
+- **撞名撞 port 時 `docker compose up -d` 的行為**（M4 票 16 實測，2026-09-29；Docker Engine 29.6.2、Compose v5.3.1、Docker Desktop on WSL2；`scripts/experiments/compose_collisions.py`）：社群的說法「撞到的那一台起不來、其他照常起」**只對撞 port 成立**。
+  - **撞名**：`up -d` 結束碼 1（`Conflict. The container name … is already in use`），**其他容器（連 `berth` 在內）都只建立、停在 `created`**。容器名改成 `berth-*` 之後同一個情境四個都起來。
+  - **撞 port**：結束碼 1（`port is already allocated`），**只有那一台停在 `created`**，其餘照常 `running`。
   - `COMPOSE_PROFILES=`（空字串，三個都接既有）只起 `berth`。
-- **從 `COMPOSE_PROFILES` 拿掉服務再 `up -d`，停不掉已經在跑的那一台**（M4 票 36，2026-10-06 實測；Docker Engine 29.6.2、Compose v5.3.1、Docker Desktop；`scripts/experiments/compose_profile_removal.py`，隔離的 compose project）。四個都起來之後把 `COMPOSE_PROFILES` 改成 `prowlarr`：
-  - `up -d` 結束碼 0，只列 `berth` 與 `prowlarr` 是 `Running`；**jellyfin 與 qbittorrent 照樣 `running`**——Compose 不動不在啟用 profile 裡的服務。加 `--remove-orphans` 也一樣：它們還在 compose 檔裡，不算 orphan。
-  - `docker compose stop jellyfin qbittorrent`（指名不在啟用 profile 裡的服務）結束碼 0，兩台變 `exited`；之後再 `up -d`，它們**留在 `exited`**，不會被叫起來。
-  - 不帶 `--profile '*'` 的 `docker compose down` 只收 `berth`、`prowlarr` 與網路，停掉的那兩台留著（`exited`）。
-  - 所以「選了既有」的指示是兩步：改 `COMPOSE_PROFILES`（之後的 `up -d` 不再起它）＋`docker compose stop <服務>`（停掉已經在跑的）。2026-10-06 審計 S2 照舊的 README 做完，`berth-jellyfin`、`berth-qbittorrent` 一直在跑。
-- **`extra_hosts: host.docker.internal:host-gateway` 在 Docker Desktop 上不蓋掉內建的解析**（同一次實測）：沒有這一行的容器由 Docker Desktop 的 DNS 解成 `192.168.65.254`；有這一行時 `/etc/hosts` 多出 `192.168.65.254` 與 `fdc4:f303:9324::254` 兩列（`getent hosts` 先回 IPv6 那一個），`berth` 容器以 `http://host.docker.internal:<port>/` 連宿主上發佈的 port 回 200。原生 Linux 的結果見下面 Unraid 那一條；Linux 的條件見上面「容器裡的 `localhost`」那一條。
-- **Unraid 實跑**（M4 票 55，2026-10-08；Unraid 7.1.4、Docker 27.5.1、Compose v2.40.3（Compose Manager 外掛帶的）；全文、指令與輸出在 [`docs/research/unraid-trial-2026-10-08.md`](research/unraid-trial-2026-10-08.md)）：官方 compose 原樣、只改 `.env`，S1 三個套件內走完並入庫一部。實跑的那一套 2026-10-09 依使用者要求已全部退回（14 個既有容器一致、三個路徑已不存在、五個 port 已釋放；研究檔 §8），下面是當時量到的事實。
-  - **user share（shfs）上的硬鏈接成立**，前提是全域「Tunable (support Hard Links)」＝ Yes（`/boot/config/share.cfg` 的 `fuse_useino="yes"`，`ShareSettings.page` 的介面名稱）。`sh hardlink.sh /mnt/user/Roxy/Berth` PASS；入庫的兩個名字 `st_dev` 42、同 inode、links 2，底下都在 `/mnt/cache`（btrfs）。**shfs 回報的 inode 是合成的**：`11258999075244504 = 40 << 48 | 6818264`，高位是底下那顆碟的 `st_dev`、低位是它的 inode，所以帳本記的 `(dev, inode)` 是這個合成值。
-  - **cache → array 的 mover 保住硬鏈接**：21:00 的排程 mover 把兩個名字一起搬到 disk3（xfs），仍是 links 2、同一個 inode；Jellyfin 照樣 stream、qBittorrent 照常 `stalledUP`、Berth 對帳 0 件、Route 6/6。**shfs 的 inode 跟著換碟而變**（`11258999075244504` → `649362777713998419 = 2307 << 48 | 6442515027`），帳本記的那一個從此過期：對帳比的是來源與目標現在的值所以不受影響，只有刪除時的「是不是 Berth 放的」在「來源已被使用者刪掉＋搬過碟」時認不出、把媒體庫那一份留著（研究檔 §6 U4）。mover 不搬正被開著的檔（`/usr/local/sbin/mover` 的註解：`in_use` 看 `fuser` 與 `losetup`），做種中被讀的那一次留在 cache、下一輪再搬。【[TRaSH Guides：Unraid](https://trash-guides.info/File-and-Folder-Structure/How-to-set-up/Unraid)】
-  - **`PUID=99`、`PGID=100` 照 `.env` 生效**：`DATA_ROOT`、`CONFIG_ROOT` 底下 Berth 與三個服務建的全部是 `nobody:users`；只有 Docker 自己建的 `CONFIG_ROOT` 本身是 `root:root`。
-  - **`host-gateway` 在原生 Linux 上成立**：`berth` 容器裡 `getent hosts host.docker.internal` 是 `172.17.0.1`（docker0 的位址，Berth 自己在 172.28 的網路上也走得到），打宿主上既有的 qBittorrent `/api/v2/app/version` 回 403（帶 qBittorrent 的 CSP，連到了、沒登入）、Emby `/System/Info/Public` 200。
-  - **Compose Manager 的 stack 預設存在隨身碟**（`/boot/config/plugins/compose.manager/projects/<名字>/`，vfat、`fmask=0177`）；它的 Indirect Path 讓 stack 指到別的目錄，以 `-p <stack 名>` 跑那個目錄裡所有 `*compose*.yml`、`.env` 從那裡讀（讀外掛 2025.11.01 的 `php/exec.php`、`php/compose_util.php`、`scripts/compose.sh`，沒有在 UI 上實按）。所以 README 叫人把部署目錄放 appdata、stack 名填 `berth`。
-- **既有服務已經把別的資料夾掛在 `/data` 底下時再多掛一條 `DATA_ROOT:/data`**（M4 票 63，2026-10-14 實測；Docker Desktop 29.6.2 on Windows、`alpine:latest`；`scripts/experiments/nested_data_mount.sh`；**沒有在 Unraid 上跑**——使用者以前用的 CA `jellyfin/jellyfin` 模板預設 `/data/tvshows`、`/data/movies`，票 55 的 U6）：
-  - 兩條並存，`-v` 的先後不影響：容器裡 `/data` 是 `DATA_ROOT`，`/data/tvshows` 是原本那個資料夾，裡面的東西照舊看得到（Docker 照目的地的深度排掛載順序）。
-  - Docker 在 `DATA_ROOT` 裡建出同名的空資料夾（`tvshows`）當掛載點，跑完留著。
-  - `DATA_ROOT` 裡原本就有同名資料夾時，容器裡被子掛載蓋住（宿主上不動）。Berth 只用 `/data/torrent` 與 `/data/library`，所以只有子掛載叫這兩個名字時才會蓋住 Berth 的目錄；補法的 Unraid 那一段照這樣說。
-- **原生 Linux、rootless Docker 實跑**（M4 票 42，2026-10-09；Ubuntu 26.04 LTS、kernel 7.0、Docker 29.7.1 rootless（slirp4netns、`--disable-host-loopback`、builtin port driver）、Compose v5.3.1、ext4；使用者電腦上 VMware Workstation 的 VM，不能免密 sudo；全文、指令與輸出在 [`docs/research/linux-trial-2026-10-09.md`](research/linux-trial-2026-10-09.md)）：v0.2.0 的 zip 照英文 README 部署。S1 精靈頁 1–6 走完（三條 Route 各 6/6）、送單成功；S2（既有 Jellyfin 與既有 qBittorrent 各多掛一條 `/data`）頁 3 兩條各 6/6。**沒有入庫**：下載 40 分鐘只到 19.8%（連上 3 個 peer，原因沒查清），使用者決定不等；入庫的端到端由 Unraid（票 55）與 Docker Desktop（票 58）實證。中途 VM 自己的代理（Clash Verge TUN）節點不通過一段，換節點之後才接著做。
-  - **rootless 的 `PUID` / `PGID` 要填 `0` / `0`**：容器裡的 uid 1000 對到宿主的 subuid（`cppt:100000:65536` → 100999），照 README 填 `id -u` 時整套照常（硬鏈接兩端同一個擁有者），但 `DATA_ROOT` 與 `CONFIG_ROOT/*` 在宿主上全是 100999，宿主上的帳號寫不進、刪不掉。容器裡的 root 才是宿主上跑 dockerd 的帳號：`PUID=0` 時 Berth 與三個 linuxserver image 寫的全是 `cppt:cppt`。linuxserver 官方不支援 rootless（論壇團隊回覆：<https://discourse.linuxserver.io/t/setting-puid-and-pgid-to-root/3726>），`0` / `0` 在 jellyfin 12.1、qbittorrent 5.2.4、prowlarr 2.6.5 上實測可用。已經是 100999 的檔案不用 sudo 也拿得回來：`docker run --rm -v <路徑>:/d alpine chown -R 0:0 /d`。
-  - **PUID / PGID 與 `DATA_ROOT` 擁有者不一致時**（`DATA_ROOT` 不空、擁有者是宿主帳號、容器裡看是 `0:0`、`PUID=1000`）：頁 3 三條 Route 都停在第一項 `category` 的 `berth_cannot_write`（`[Errno 13] Permission denied: '/data/torrent'`），文案說是 Berth 自己寫不進、點名 `.env` 的 PUID / PGID；它給的「在宿主上 chown 給那組 PUID / PGID」在 rootless 上做不到，票 72 起多說一句 rootless 不要 chown、改填 `PUID=0`、`PGID=0`。
-  - **rootless 上 `host.docker.internal` 連不到宿主**：`host-gateway` 照樣解成 `172.17.0.1`，但那是 RootlessKit 網路命名空間裡的 docker0。宿主上的原生服務、其他 rootless 容器發佈的 port 都是 connection refused（`scripts/experiments/rootless_host_probe.sh` 重量）；宿主的區網 IP 都通（只聽 `127.0.0.1` 的除外，`--disable-host-loopback`）。rootless 上既有服務填區網 IP（M4 票 72 改精靈的提示）。
-  - **qBittorrent 的免密白名單在 rootless 上仍安全**：rootless 的 `-p` 預設不保留來源位址（Docker 文件 Rootless mode › Troubleshooting：<https://docs.docker.com/engine/security/rootless/troubleshoot/>），但白名單只有 Berth 的 `172.28.0.2/32`；從宿主與區網不登入打 API 都是 403。
-  - Prowlarr 拿不到 `indexers.prowlarr.com` 的站定義時只剩磁碟上的 5 個，推薦清單上的站一個都不在，頁 4 的主鍵跟著消失、不說原因（M4 票 73 起說出原因與下一步）。**網路通了之後不必重啟 Prowlarr**（M4 票 73，2026-10-14 讀 Prowlarr develop 原始碼，未實跑）：`indexer/schema` 經 `Cardigann.DefaultDefinitions` 每次呼叫 `IndexerDefinitionUpdateService.All()`，它每次先向 `https://indexers.prowlarr.com/master/12` 拿清單、失敗才記一筆 Warn「Error while getting indexer definitions, fallback to reading from disk.」並讀磁碟；啟動時與排程的整包更新失敗記 Error「Definition update failed」。所以 Berth 的「重新讀取」（重讀 schema）就拿得到。Prowlarr 的介面是 BrowserRouter（`createBrowserHistory`），事件頁是 `/system/events`、不走 `#/`。**2026-10-14 對 linuxserver 2.6.5 實開**（M4 票 102）：`/#/settings/general` 與 `/#/indexers` 都落在首頁（頁面標題「Indexers - Prowlarr」，後者只是碰巧對）、`/settings/general` 是「General Settings - Prowlarr」、`/indexers` 是找不到頁（「MIA」）；索引站清單就是首頁 `/`（`AppRoutes.tsx`）。前端連到 Prowlarr 的那幾頁收在 `web/src/setup/serviceWeb.ts` 的 `PROWLARR_PAGE`。【[AppRoutes.tsx](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/App/AppRoutes.tsx)】【[IndexerDefinitionUpdateService.cs](https://github.com/Prowlarr/Prowlarr/blob/develop/src/NzbDrone.Core/IndexerVersions/IndexerDefinitionUpdateService.cs)、[Cardigann.cs](https://github.com/Prowlarr/Prowlarr/blob/develop/src/NzbDrone.Core/Indexers/Definitions/Cardigann/Cardigann.cs)、[bootstrap.tsx](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/bootstrap.tsx)、[PageSidebar.js](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/Components/Page/Sidebar/PageSidebar.js)】
-- **Prowlarr 的版本下限是 1.3.2**（M4 票 17，2026-09-29 查證；全表與來源在 [`docs/research/prowlarr-version-floor.md`](research/prowlarr-version-floor.md)，讀的是 Prowlarr 各 tag 的原始碼，沒有對 1.3.x 實跑）：
-  - 卡住下限的只有匿名的 `GET /ping`：[`5abb5ad`](https://github.com/Prowlarr/Prowlarr/commit/5abb5ada4991142e871dcfa94c32c8e4cb0ea247)「New: Ping Endpoint」第一個進的是 1.3.0.2757（develop），第一個 stable 是 **1.3.2.3006**（2023-04-07）。1.2.2.2699 雖然較晚發佈，但不含這個 commit。
-  - 其餘端點與欄位從第一個 tag 0.1.0.361（2021-06）就有：`/api/v1` 前綴；`indexer` 的列、建（帶 `appProfileId`，內建 id 1）、`schema`、`test`、刪；`config/host` 的 `authenticationMethod` / `username` / `password`；`search` 的 `query` / 重複的 `indexerIds` 與 Berth 讀的每一個回應欄位；`system/status` 的 `version`。`type=search` 是 0.1.4.1155、`authenticationRequired` 是 1.0.0.2171。【原始碼】
-  - `passwordConfirmation` 要到 1.10.5.4116 才有，但不推高下限：Berth 只替套件內那一台設登入，而舊版的 JSON 設定不拒收多的欄位（讀序列化設定推論，未實跑）。
-  - 版本從 **`GET /api/v1/system/status` 的 `version`** 讀，四段（`2.6.5.5623`，berth-lab 實測錄成 `tests/fixtures/http/prowlarr/system-status.json`）。它**要 API key**（不帶是 401，實測），所以這一支也順便驗了 key。
-  - **比下限舊的那一台也讀得到版本**（M4 票 20，2026-09-30 對 `berth-existing` 的 `bad-prowlarr-old` 1.0.1.2220 實測，驗證方式 `authentication: none`）：`GET /ping` 回 **200 `text/html`**（介面的 HTML，所以先問它只會得到「不是 JSON」）；`GET /api/v1/system/status` 帶 `X-Api-Key` 回 200、`version` 是 `1.0.1.2220`，不帶或帶錯的 key 都是 **401**。2.6.5 的 `ok-prowlarr` 同樣是錯的 key 401。所以 Berth 的連線測試從 `system/status` 問起、不問 `/ping`：版本、key 與「是不是它」一支答完。
-  - **介面登入在現行版本是必填**（M4 票 20，讀 v2.6.5.5623 原始碼）：`frontend/src/Components/Page/Page.js` 在驗證沒開時掛 `AuthenticationRequiredModal`，它的 `ModalContent` 是 `showCloseButton={false}`——第一次打開介面就是一個關不掉、要人設登入的視窗（`AuthenticationRequiredWarning`：「{appName} now requires authentication to be enabled」）。精靈因此把套件內那一台的介面登入寫成必填，理由照這一條說。【[Page.js @ v2.6.5.5623](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/frontend/src/Components/Page/Page.js)、[AuthenticationRequiredModalContent.tsx](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/frontend/src/FirstRun/AuthenticationRequiredModalContent.tsx)】
+- **從 `COMPOSE_PROFILES` 拿掉服務再 `up -d`，停不掉已經在跑的那一台**（M4 票 36，2026-10-06 實測；同上版本；`scripts/experiments/compose_profile_removal.py`）：Compose 不動不在啟用 profile 裡的服務（`--remove-orphans` 也一樣）；`docker compose stop <服務>` 才停得掉，之後再 `up -d` 留在 `exited`；不帶 `--profile '*'` 的 `down` 不收它們。所以「選了既有」的指示是兩步：改 `COMPOSE_PROFILES` ＋ `docker compose stop <服務>`。
+- **`extra_hosts: host.docker.internal:host-gateway` 在 Docker Desktop 上不蓋掉內建的解析**（同一次實測）：容器照樣連得到宿主發佈的 port（回 200）；原生 Linux 的結果見下面 Unraid 那一條。
+- **Unraid 實跑**（M4 票 55，2026-10-08；Unraid 7.1.4、Docker 27.5.1、Compose v2.40.3；全文在 [`docs/research/unraid-trial-2026-10-08.md`](research/unraid-trial-2026-10-08.md)）：官方 compose 原樣、只改 `.env`，S1 三個套件內走完並入庫一部；實跑的那一套 2026-10-09 已全部退回（研究檔 §8）。
+  - **user share（shfs）上的硬鏈接成立**，前提是全域「Tunable (support Hard Links)」＝ Yes（`fuse_useino="yes"`）；入庫的兩個名字同 inode、links 2。**shfs 回報的 inode 是合成的**（高位是底下那顆碟的 `st_dev`），帳本記的 `(dev, inode)` 是這個合成值。
+  - **cache → array 的 mover 保住硬鏈接**（links 2、同一個 inode；Jellyfin 照樣 stream、qBittorrent 照常做種、Berth 對帳 0 件）。**shfs 的 inode 跟著換碟而變**，帳本記的那一個從此過期：只有刪除時的「是不是 Berth 放的」在「來源已被使用者刪掉＋搬過碟」時認不出、把媒體庫那一份留著（研究檔 §6 U4）。mover 不搬正被開著的檔，做種中被讀的那一次留在 cache。【[TRaSH Guides：Unraid](https://trash-guides.info/File-and-Folder-Structure/How-to-set-up/Unraid)】
+  - **`PUID=99`、`PGID=100` 照 `.env` 生效**（建出來的全是 `nobody:users`）。
+  - **`host-gateway` 在原生 Linux 上成立**：`host.docker.internal` 解成 `172.17.0.1`（docker0），打得到宿主上既有的 qBittorrent 與 Emby。
+  - **Compose Manager 的 stack 預設存在隨身碟**（`/boot/config/plugins/compose.manager/projects/<名字>/`）；它的 Indirect Path 讓 stack 指到別的目錄（讀外掛 2025.11.01 原始碼，沒有在 UI 上實按）。所以 README 叫人把部署目錄放 appdata、stack 名填 `berth`。
+- **既有服務已經把別的資料夾掛在 `/data` 底下時再多掛一條 `DATA_ROOT:/data`**（M4 票 63，2026-10-14 實測；Docker Desktop 29.6.2 on Windows；`scripts/experiments/nested_data_mount.sh`；**沒有在 Unraid 上跑**，票 55 的 U6）：
+  - 兩條並存，`-v` 的先後不影響：`/data` 是 `DATA_ROOT`，`/data/tvshows` 是原本那個資料夾，裡面的東西照舊看得到。
+  - Docker 在 `DATA_ROOT` 裡建出同名的空資料夾當掛載點，跑完留著；`DATA_ROOT` 裡原本就有同名資料夾時被子掛載蓋住（宿主上不動）。Berth 只用 `/data/torrent` 與 `/data/library`，所以只有子掛載叫這兩個名字時才會蓋住 Berth 的目錄。
+- **原生 Linux、rootless Docker 實跑**（M4 票 42，2026-10-09；Ubuntu 26.04 LTS、Docker 29.7.1 rootless、Compose v5.3.1；VM；全文在 [`docs/research/linux-trial-2026-10-09.md`](research/linux-trial-2026-10-09.md)）：v0.2.0 的 zip 照英文 README 部署，S1 精靈頁 1–6 走完、送單成功；S2 頁 3 兩條各 6/6。**沒有入庫**（下載 40 分鐘只到 19.8%，原因沒查清）；入庫的端到端由 Unraid（票 55）與 Docker Desktop（票 58）實證。
+  - **rootless 的 `PUID` / `PGID` 要填 `0` / `0`**：填 `id -u` 時整套照常，但 `DATA_ROOT` 與 `CONFIG_ROOT/*` 在宿主上全是 subuid（100999），宿主帳號寫不進、刪不掉。linuxserver 官方不支援 rootless（[論壇回覆](https://discourse.linuxserver.io/t/setting-puid-and-pgid-to-root/3726)），`0` / `0` 在 jellyfin 12.1、qbittorrent 5.2.4、prowlarr 2.6.5 上實測可用。
+  - **PUID / PGID 與 `DATA_ROOT` 擁有者不一致時**：頁 3 三條 Route 都停在第一項 `category` 的 `berth_cannot_write`（`Permission denied: '/data/torrent'`），文案點名 `.env` 的 PUID / PGID；票 72 起多說一句 rootless 不要 chown、改填 `PUID=0`、`PGID=0`。
+  - **rootless 上 `host.docker.internal` 連不到宿主**：`host-gateway` 解成 `172.17.0.1`，但那是 RootlessKit 網路命名空間裡的 docker0；宿主的區網 IP 都通（只聽 `127.0.0.1` 的除外）。rootless 上既有服務填區網 IP（M4 票 72）。
+  - **qBittorrent 的免密白名單在 rootless 上仍安全**：白名單只有 Berth 的 `172.28.0.2/32`；從宿主與區網不登入打 API 都是 403。【[Docker：Rootless mode › Troubleshooting](https://docs.docker.com/engine/security/rootless/troubleshoot/)】
+  - Prowlarr 拿不到 `indexers.prowlarr.com` 的站定義時只剩磁碟上的 5 個，推薦清單上的站一個都不在，頁 4 的主鍵跟著消失（M4 票 73 起說出原因與下一步）。**網路通了之後不必重啟 Prowlarr**（2026-10-14 讀 Prowlarr develop 原始碼，未實跑）：每次讀 `indexer/schema` 都先向 `https://indexers.prowlarr.com/master/12` 拿清單、失敗才讀磁碟，所以 Berth 的「重新讀取」就拿得到。Prowlarr 的介面是 BrowserRouter、不走 `#/`。**2026-10-14 對 linuxserver 2.6.5 實開**（M4 票 102）：`/#/settings/general` 與 `/#/indexers` 都落在首頁，`/settings/general` 是「General Settings - Prowlarr」，`/indexers` 是找不到頁；索引站清單就是首頁 `/`。前端連到 Prowlarr 的那幾頁收在 `web/src/setup/serviceWeb.ts` 的 `PROWLARR_PAGE`。【[原文](research/linux-trial-2026-10-09.md#從-brief-搬來2014)；[AppRoutes.tsx](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/App/AppRoutes.tsx)】
+- **Prowlarr 的版本下限是 1.3.2**（M4 票 17，2026-09-29 查證；全表與來源在 [`docs/research/prowlarr-version-floor.md`](research/prowlarr-version-floor.md)，讀各 tag 原始碼，沒有對 1.3.x 實跑）：
+  - 卡住下限的只有匿名的 `GET /ping`（[`5abb5ad`](https://github.com/Prowlarr/Prowlarr/commit/5abb5ada4991142e871dcfa94c32c8e4cb0ea247)），第一個 stable 是 **1.3.2.3006**（2023-04-07）；其餘端點與欄位從第一個 tag 0.1.0.361（2021-06）就有。`passwordConfirmation` 要到 1.10.5.4116 才有，但不推高下限（舊版 JSON 設定不拒收多的欄位，未實跑）。
+  - 版本從 **`GET /api/v1/system/status` 的 `version`** 讀，四段（`2.6.5.5623`）；它**要 API key**（不帶是 401），所以順便驗了 key。
+  - **比下限舊的那一台也讀得到版本**（M4 票 20，2026-09-30 對 1.0.1.2220 實測）：`GET /ping` 回 **200 `text/html`**（所以先問它只會得到「不是 JSON」），`system/status` 帶 `X-Api-Key` 回 200、不帶或錯的 key 是 **401**。Berth 的連線測試因此從 `system/status` 問起、不問 `/ping`。
+  - **介面登入在現行版本是必填**（M4 票 20，讀 v2.6.5.5623 原始碼）：第一次打開介面就是一個關不掉、要人設登入的視窗（`AuthenticationRequiredModal`）。精靈因此把套件內那一台的介面登入寫成必填。【[原文](research/prowlarr-version-floor.md#從-brief-搬來2014)】
   - 目前最新 stable 是 2.6.5.5623（2026-09-16）。2.6.3 起多了 Allowed Hosts：使用者自己設了清單時，Berth 用別的主機名連可能被擋，回什麼沒查。
-- **位址的協定寫錯時三個服務的樣子**（M4 票 25，2026-10-01 實測；berth image 的 Python 3.13 + OpenSSL 3.5.7、httpx 0.28.1，從容器裡以 `https://host.docker.internal:<port>` 打 `berth-existing` 的 `ok-*`，各自只講 http）：
-  - **Jellyfin 12.1、Prowlarr 2.6.5** 對 TLS 的 ClientHello 回一段 HTTP 400：握手讀到它，`ssl.SSLError` 的理由是 `WRONG_VERSION_NUMBER`（httpx 包成 `ConnectError`）。
-  - **qBittorrent 5.2.3** 的 WebUI 不回、等一個 HTTP 請求：握手一直等到連線逾時（httpx 的 `ConnectTimeout`，鏈上是 `ssl.SSLWantReadError`）。
+- **位址的協定寫錯時三個服務的樣子**（M4 票 25，2026-10-01 實測；berth image 的 Python 3.13 + OpenSSL 3.5.7、httpx 0.28.1）：
+  - **Jellyfin 12.1、Prowlarr 2.6.5** 對 TLS 的 ClientHello 回 HTTP 400：`ssl.SSLError` 理由 `WRONG_VERSION_NUMBER`（httpx 包成 `ConnectError`）。**qBittorrent 5.2.3** 不回、等 HTTP 請求：握手一直等到連線逾時（`ConnectTimeout`，鏈上是 `ssl.SSLWantReadError`）。
   - 反方向（`http://` 打到講 https 的 port）只做了本機的 Python `ssl` 伺服器：它重設連線（`ReadError` / `ConnectionResetError`），與別的斷線分不開，Berth 不認它。
-  - **位址沒寫協定**（`nas:8080`、`192.168.1.5:8080`、`localhost:8096`、`qbittorrent`）：httpx 連都不連就丟 `UnsupportedProtocol`——`nas:8080` 被讀成協定 `nas`。
-- **停掉的 compose 容器，主機名解不到**（同一天實測，qa-bundled：`docker stop` 套件內 qBittorrent 之後，Berth 的連線測試是 `socket.gaierror`，與那個服務不在 compose 裡同一個樣子）：Docker 的內建 DNS 只解析在跑的容器。所以套件內「主機名解不到」的補法要同時說容器停了與不在 compose 裡。
-- **解不到要多久**（M4 票 30，2026-10-03 實測，qa-bundled 只起 `berth`、`COMPOSE_PROFILES=`、Docker Desktop 29.6.2，從 `berth` 容器裡 `socket.getaddrinfo`）：`jellyfin`、`qbittorrent`、`prowlarr` 都是 `gaierror -5`（`EAI_NODATA`），各約 1.27 秒；三個並行問的 `GET /setup/compose` 約 2.6 秒。三個都起來之後同一支 8 毫秒內回、三個都解得到。宿主上的行為不同、不能拿來推：Windows 開發機的 `getaddrinfo("jellyfin")` 要 7 秒才 gaierror，代理工具的 fake-IP DNS 連 `berth-not-deployed.invalid` 都答一個 198.18.x。`adapters.dns` 因此以 10 秒為上限、逾時當作解得到（說不出結論就不說「沒在跑」）。
-
+  - **位址沒寫協定**（`nas:8080`、`localhost:8096`…）：httpx 連都不連就丟 `UnsupportedProtocol`（`nas:8080` 被讀成協定 `nas`）。
+- **停掉的 compose 容器，主機名解不到**（同一天實測）：Docker 的內建 DNS 只解析在跑的容器，連線測試是 `socket.gaierror`。所以套件內「主機名解不到」的補法要同時說容器停了與不在 compose 裡。
+- **解不到要多久**（M4 票 30，2026-10-03 實測，Docker Desktop 29.6.2，從 `berth` 容器裡 `socket.getaddrinfo`）：三個名字都是 `gaierror -5`（`EAI_NODATA`），各約 1.27 秒，三個並行問的 `GET /setup/compose` 約 2.6 秒；都起來之後 8 毫秒內回。宿主上的行為不同、不能拿來推（Windows 開發機要 7 秒，代理工具的 fake-IP DNS 連 `.invalid` 都答一個 198.18.x）。`adapters.dns` 因此以 10 秒為上限、逾時當作解得到（說不出結論就不說「沒在跑」）。
 
 ### 20.15 「同一台 Jellyfin」怎麼認：ServerId（2026-09-30 查證＋實測，M4 票 18）
 
-- **`GET /System/Info/Public` 的 `Id` 就是伺服器的 `SystemId`**，匿名讀得到。原始碼：`SystemManager` 把 `Id` 設成 `ApplicationHost.SystemId`，它是 `DeviceId.Value`——第一次啟動時產生一個 GUID 寫進 **`<DataPath>/device.txt`**，之後都從那個檔讀（類別說明「the persistent unique identifier of this server installation」）。【[DeviceId.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Devices/DeviceId.cs)、[ApplicationHost.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ApplicationHost.cs)（`SystemId => _deviceId.Value`）】
-- **實測（berth-existing，linuxserver 12.1.0 與 10.10.7；`scripts/experiments/jellyfin_server_id.py`）**：同一台用 `localhost`、`127.0.0.1`、從另一個容器用 `host.docker.internal` 連，`Id` 都一樣；`docker restart` 之後不變；`docker compose up -d --force-recreate` 重建容器之後也不變（`/config` 掛載還在），`device.txt` 的內容就是那個值。三台不同的 Jellyfin 各自不同。
-- **`ServerName` 不能拿來認**：沒設過時它是容器的 hostname，重建容器就變（同一次實測 `dc2288726bbe` → `135a4ae43523`）。
-- 所以 Berth 以 `Id` 判「同一台」：擁有者成立時記下，之後換位址只接受 `Id` 相同的（[ADR-0012](adr/0012-owner-is-jellyfin-admin.md)、plan §9.3）。擁有者成立**之前**也用它：頁 1 的表單帶回測過的位址與 `Id`，與存下的不同就不送帳密（M4 票 28；未初始化的那一台也有 `Id`）。清掉 `/config`（或複製別人的 `/config`）的那一台會換 `Id`（或撞 `Id`）——前者等於一台新的伺服器，擁有者帳號也不在了；後者不防。
+全文與來源在 [`docs/research/deploy-and-jellyfin-identity.md`](research/deploy-and-jellyfin-identity.md)。
 
+- **`GET /System/Info/Public` 的 `Id` 就是伺服器的 `SystemId`**，匿名讀得到；它是第一次啟動時寫進 `<DataPath>/device.txt` 的 GUID（[DeviceId.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Devices/DeviceId.cs)、[ApplicationHost.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ApplicationHost.cs)）。
+- **實測**（linuxserver 12.1.0 與 10.10.7；`scripts/experiments/jellyfin_server_id.py`）：同一台換位址連（`localhost`、`127.0.0.1`、`host.docker.internal`）、`docker restart`、`--force-recreate`（`/config` 還在），`Id` 都不變；三台不同的 Jellyfin 各自不同。
+- **`ServerName` 不能拿來認**：沒設過時是容器的 hostname，重建容器就變。
+- 所以 Berth 以 `Id` 判「同一台」：擁有者成立時記下，之後換位址只接受 `Id` 相同的（[ADR-0012](adr/0012-owner-is-jellyfin-admin.md)、plan §9.3）。擁有者成立**之前**也用它：頁 1 的表單帶回測過的位址與 `Id`，與存下的不同就不送帳密（M4 票 28；未初始化的那一台也有 `Id`）。清掉 `/config`（或複製別人的 `/config`）的那一台會換 `Id`（或撞 `Id`）——前者等於一台新的伺服器，擁有者帳號也不在了；後者不防。
 
 ### 20.16 搜尋結果怎麼用年份與類型篩：Radarr 與 Sonarr（2026-10-07 查證，M4 票 49）
 
-- **Radarr 要年份完全相同，但認兩個年份**：`movie.Year == year || movie.MovieMetadata.Value.SecondaryYear == year`（`AllWithYear`），標題的每一種比對（clean、原文、別名、翻譯）都套這一條；互動搜尋的 `TryGetMovieBySearchCriteria` 同一個判準：`parsedMovieInfo.Year < 1800 || …Year == … || …SecondaryYear == …`。**發佈名沒有年份照收**（`Year < 1800` 那一條放行，只比標題）。【`src/NzbDrone.Core/Movies/QueryExtensions.cs`、`Parser/ParsingService.cs`，[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)，2026-10-07 讀】
-- **Radarr 沒有「這是劇集的一集」那一道**：`Parser.ParseMovieTitle` 不看季集，`Show.S01E02` 被拒是因為標題對不上（`UnknownMovie`），不是因為 `S01E02`。Berth 的粗篩只看「名字出現在發佈名裡」（`mentions`），《Below Deck Down Under S04E02 Night of the Living Dead》過得了那一道，所以電影要另外擋季集記號。
-- **Sonarr 不以年份拒絕**：`FindByTitle(TitleWithoutYear, Year)` 只在純標題找不到時才拿年份來分同名劇（`Parser/ParsingService.cs`，[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core)）。也沒有「這是電影」那一道。
-- **Berth 的做法**（`parser.title.fits`）：年份容許差一年，代替 Berth 快照沒有的「第二年份」（影展與各國上映跨年）；劇集的年份範圍是首播年到最後一季的首播年（各放寬一年），只擋播出期間之外的（《Doctor Who》1963 與 2005 是兩部）；片名自己帶的數字（`Blade Runner 2049`）不算年份。劇集**不**擋沒有季集記號的：`Title - 05`、`[01-12]` 是動漫的常態，`Movie` 又可能是 S00（§6.3 `special_kind`）。篩掉的收著不丟，畫面說數量、可展開（判斷只看發佈名，可能看錯）。
+來源：[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)、[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core)（`Movies/QueryExtensions.cs`、`Parser/ParsingService.cs`）；原文在 [`docs/research/search-results.md`](research/search-results.md)。
+
+- **Radarr 年份要完全相同，但認 `Year` 與 `SecondaryYear` 兩個**；發佈名沒有年份照收（`Year < 1800` 放行，只比標題）。
+- **Radarr 沒有「這是劇集的一集」那一道**：`Show.S01E02` 被拒是因為標題對不上。Berth 的粗篩只看 `mentions`，所以電影要另外擋季集記號。
+- **Sonarr 不以年份拒絕**（只在純標題找不到時用年份分同名劇），也沒有「這是電影」那一道。
+- **Berth 的做法**（`parser.title.fits`）：年份容許差一年，代替沒有的「第二年份」；劇集年份範圍是首播年到最後一季首播年（各放寬一年）；片名自帶的數字（`Blade Runner 2049`）不算年份。劇集**不**擋沒有季集記號的（`Title - 05`、`[01-12]` 是動漫常態，`Movie` 又可能是 S00，§6.3 `special_kind`）。篩掉的收著不丟，畫面說數量、可展開。
 
 ### 20.17 部署檔的 release 附件與「最新版」連結（2026-10-08 查證，M4 票 56）
 
+全文與來源在 [`docs/research/deploy-and-jellyfin-identity.md`](research/deploy-and-jellyfin-identity.md)。
+
 > **2026-10-09 被取代、2026-10-13 部分恢復**：M4 票 71 把部署改成只用 compose 檔加 `.env`、不附檔案（zip 拿掉，見 §20.18 與 §19 E4）；M4 票 97 恢復附件，但只附那兩個純文字檔 `docker-compose.yml`、`example.env`，不附 zip（§19 2026-10-13 那一列）。下面講 `latest/download` 那一條裡的 zip 已不存在，其餘事實照用。
 
-- **開頭是 `.` 的附件名會被 GitHub 改掉**（2026-10-13 查證，M4 票 97）：REST API〈Upload a release asset〉——「GitHub renames asset filenames that have special characters, non-alphanumeric characters, and leading or trailing periods」，改成什麼沒有寫，「List release assets」回的是改過的名字（[docs.github.com](https://docs.github.com/en/rest/releases/assets#upload-a-release-asset)）；同名附件再傳是 422，要先刪（`gh release upload --clobber` 就是先刪再傳）。所以 `deploy/.env.example` 照 Immich 以 `example.env` 上傳，名字由 Berth 決定、不靠 GitHub 改。`gh release upload` 的附件名就是本機檔名（`#` 後面只是顯示用的 label），release workflow 先把兩個檔 `cp` 成要的名字再傳。
-
-- **`https://github.com/<owner>/<repo>/releases/latest/download/<附件名>` 直接下載最新版本的那個附件**：GitHub 文件〈Linking to releases〉寫明手動上傳的附件用這個後綴（[docs.github.com](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)）。所以每一版都要有一個**同名**的附件，README 才能寫死連結；Berth 每一版附兩份同內容的 zip：`berth-deploy-<版本>.zip` 與 `berth-deploy.zip`。Immich 的安裝步驟就是這樣拿 compose 與 `example.env`（`wget -O docker-compose.yml https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml`，[docs.immich.app](https://docs.immich.app/install/docker-compose)；審計 R2 §1.6）。
-- **「最新」只算正式版本**：REST API〈Get the latest release〉——「the most recent non-prerelease, non-draft release, sorted by the `created_at` attribute」；`make_latest` 對草稿與預發佈無效（「Drafts and prereleases cannot be set as latest」）（[docs.github.com](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)）。所以 `-rc` 的 release 標成 prerelease 就不會動到 `latest/download`，與 GHCR 的 `:latest` 規則一致。
-- **`gh release create`**：`--prerelease`、`--verify-tag`（tag 不在遠端就中止）；`gh release upload --clobber` 先刪同名附件再傳（[cli.github.com](https://cli.github.com/manual/gh_release_create)）。**帶附件的 `create` 先建草稿、傳完附件才發佈，失敗時刪掉草稿**（`draftWhileUploading`，[create.go](https://github.com/cli/cli/blob/trunk/pkg/cmd/release/create/create.go)），所以 `latest/download/` 不會有一段指到還沒有附件的新版。release workflow 用它建 release；release 已存在（重跑、手動先建）時改用 `upload --clobber`。
+- **開頭是 `.` 的附件名會被 GitHub 改掉**（2026-10-13 查證，M4 票 97）：REST API〈Upload a release asset〉——「GitHub renames asset filenames that have special characters, non-alphanumeric characters, and leading or trailing periods」，改成什麼沒有寫（[docs.github.com](https://docs.github.com/en/rest/releases/assets#upload-a-release-asset)）；同名附件再傳是 422，要先刪（`gh release upload --clobber`）。所以 `deploy/.env.example` 照 Immich 以 `example.env` 上傳，release workflow 先把兩個檔 `cp` 成要的名字再傳。
+- **`https://github.com/<owner>/<repo>/releases/latest/download/<附件名>` 直接下載最新版本的同名附件**（[Linking to releases](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)）；每一版都要有同名附件，README 才能寫死連結。Immich 的安裝步驟就是這樣拿 compose 與 `example.env`（[docs.immich.app](https://docs.immich.app/install/docker-compose)）。
+- **「最新」只算正式版本**：非 prerelease、非 draft，依 `created_at` 排（[Get the latest release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)）。所以 `-rc` 的 release 標成 prerelease 就不會動到 `latest/download`，與 GHCR 的 `:latest` 規則一致。
+- **`gh release create`**：`--prerelease`、`--verify-tag`；帶附件的 `create` 先建草稿、傳完附件才發佈，失敗時刪掉草稿（`draftWhileUploading`，[create.go](https://github.com/cli/cli/blob/trunk/pkg/cmd/release/create/create.go)），所以 `latest/download/` 不會指到還沒有附件的新版。release 已存在時改用 `upload --clobber`。
 
 ### 20.18 preseed 腳本內嵌進 compose：`configs.content` 加 `mode`（2026-10-09 查證＋實測，M4 票 70）
 
-部署要只剩 compose 檔加 `.env`（使用者 2026-10-09 拍板，推翻 §19 E4），qBittorrent 的白名單腳本因此不能再是 compose 旁邊的 `preseed/` 目錄。
+全文、實測表與來源在 [`docs/research/deploy-and-jellyfin-identity.md`](research/deploy-and-jellyfin-identity.md)。部署要只剩 compose 檔加 `.env`（使用者 2026-10-09 拍板，推翻 §19 E4），qBittorrent 的白名單腳本因此內嵌進 compose，不再是旁邊的 `preseed/` 目錄。
 
-- **Docker 文件**：頂層 `configs` 的 `content` 從 Compose 2.23.1 起支援，內容會做變數展開（[configs](https://docs.docker.com/reference/compose-file/configs/)、[v2.23.1](https://github.com/docker/compose/releases/tag/v2.23.1)）；預設擁有者是容器執行的使用者、權限 0444。服務 `configs` 長語法的 `uid` / `gid` / `mode` 可覆寫，「Writable bit must be ignored. The executable bit can be set.」（[services#configs](https://docs.docker.com/reference/compose-file/services/#configs)）。文件沒說非 swarm 下 `mode` 有沒有效。
-- **linuxserver 的 init 只執行 `-x` 的檔**：image 內 `/etc/s6-overlay/s6-rc.d/init-custom-files/run` 對 `/custom-cont-init.d/*` 做 `[[ -x ]]`，不是就印 `is not an executable file` 跳過，是就 `/bin/bash <檔>`（shebang 無關）。`/docker-mods` 的 `tamper_check`（`MOD_SCRIPT_VER 3.20250825`）對非 root 擁有、others 可寫只印警告框，**不擋**。所以 0444 的預設一定不會跑，`mode` 是成敗關鍵。讀法：`docker run --rm --entrypoint cat lscr.io/linuxserver/qbittorrent:latest /etc/s6-overlay/s6-rc.d/init-custom-files/run`（`/docker-mods` 同理）。票上列的替代寫法（入口改 `bash /custom-cont-init.d/...`、`content` 只放一行 `exec bash` 呼叫）放在 `/custom-cont-init.d` 裡同樣要過 `[[ -x ]]`，救不了沒有執行位元的情況；`mode` 成立，所以沒有量它們。
-- **實測**（`scripts/experiments/inline_preseed.py`，`.local/experiments/results/inline-preseed-<label>.json`）：內嵌當下的 `deploy/preseed/qbittorrent/10-berth.sh`（`$` 寫成 `$$`），qbittorrent 照部署檔放在 `profiles: [qbittorrent]` 底下、旁邊一個沒有 profile 的服務代替 `berth`；每次全新的 CONFIG_ROOT，量首次啟動、`restart`、`up -d --force-recreate` 三個階段，另跑一次 `COMPOSE_PROFILES` 空的。
-
-  | 環境 | Compose | Docker | qBittorrent image（`:latest` 當時） |
-  | --- | --- | --- | --- |
-  | 本機 Docker Desktop（Windows） | v5.3.1 | 29.6.2 | 5.2.3_v2.0.15-ls478 |
-  | 同一台，官方獨立二進位（使用者 Unraid 同版） | v2.40.3 | 29.6.2 | 同上 |
-  | 票 42 的 VM，rootless Docker | v5.3.1 | 29.7.1 | 5.2.4_v2.0.15-ls479 |
-
-  三個環境結果相同：
-
-  - `mode: 0555`：檔案 `root:root 0:0 555`，**內容與原檔 sha256 相同**（`$$` 都展開回 `$`）；log `10-berth.sh: executing...` → `[berth-preseed] added to …` → `exited 0`，沒有 tamper 警告；兩個鍵各一行；`/api/v2/app/version` 從 `BERTH_IP` 200、宿主經 published port 403、同網段另一個位址 403。`restart` 與 `--force-recreate` 之後都是 `already configured`、鍵仍各一行、狀態碼不變。
-  - profile 關掉（`COMPOSE_PROFILES=`，使用者選了既有 qBittorrent）：`up -d` 回 0、沒有警告，只起沒有 profile 的那個服務；頂層 `configs` 沒人用不報錯。
-  - 不寫 `mode`（對照組）：`root:root 444`，log 只有 `10-berth.sh: is not an executable file`，qBittorrent 照常起來但沒有白名單，`BERTH_IP` 也 403。**唯一的徵兆是那一行 log**。
-  - 不是掛載：`docker inspect` 的 `Mounts` 只有 `/config`，Compose 在建立容器時把檔案寫進容器的檔案系統；`restart` 留著，重建時重新寫入。執行期不讀 compose 所在目錄，所以**推論** stack 目錄在 Unraid 隨身碟（vfat、不能執行）上也無妨——三個環境的 compose 目錄都不是 vfat，Unraid 上沒有實測（票 71 不碰 Unraid，使用者自己部署時會驗到）。
-  - 不需要 `uid` / `gid`：預設就是 root（linuxserver 的 init 以 root 跑）。舊的 bind mount 在 Windows 上印的「write permissions for others」警告（票 56 Comments）也跟著消失。
-- **坑**：`docker compose config` 的輸出會把 `$` 再轉義成 `$$`，拿它驗內容等於什麼都沒驗；從 compose 抽出腳本做測試時要把 `$$` 還原成 `$`。`mode` 寫 `0555` 這種前導 0 的八進位，v2.40.3 與 v5.3.1 都讀成 555。比 2.40.3 舊的 Compose（2.23.1 起有 `content`）沒有量。
-- **決定的寫法**（票 71 照抄；`content` 底下是 `10-berth.sh` 全文，每個 `$` 寫成 `$$`）：
-
-  ```yaml
-  configs:
-    qbittorrent-preseed:
-      content: |
-        #!/usr/bin/env bash
-        # …10-berth.sh 全文，`${BERTH_IP:-}` 寫成 `$${BERTH_IP:-}`…
-
-  services:
-    qbittorrent:
-      # …其餘不變，拿掉 `./preseed/qbittorrent:/custom-cont-init.d:ro` 那條掛載…
-      configs:
-        - source: qbittorrent-preseed
-          target: /custom-cont-init.d/10-berth.sh
-          mode: 0555
-  ```
-
-  漏掉 `mode` 不會報錯、只會讓 Berth 進不去，所以票 71 的閘門要守著 `mode` 帶執行位元。重量：`docs/development/experiments.md`。
-- **票 71 照抄進部署檔之後的閘門**：`tests/unit/test_qbittorrent_preseed.py` 從 compose 抽出腳本（`$$` 還原）跑原有的行為斷言，並守著 `content` 裡沒有未轉義的 `$`、target 在 `/custom-cont-init.d/`、`mode` 帶執行位元；`tests/unit/test_deploy_mounts.py` 守著 compose 的宿主路徑沒有相對的。
+- **Docker 文件**：頂層 `configs` 的 `content` 從 Compose 2.23.1 起支援，內容會做變數展開（[configs](https://docs.docker.com/reference/compose-file/configs/)、[v2.23.1](https://github.com/docker/compose/releases/tag/v2.23.1)）；預設權限 0444，服務 `configs` 長語法的 `mode` 可覆寫（[services#configs](https://docs.docker.com/reference/compose-file/services/#configs)）。
+- **`mode` 是成敗關鍵**：linuxserver 的 init 只執行 `-x` 的檔（`/etc/s6-overlay/s6-rc.d/init-custom-files/run` 對 `/custom-cont-init.d/*` 做 `[[ -x ]]`），0444 的預設一定不會跑，log 只有 `10-berth.sh: is not an executable file`，qBittorrent 照常起來但沒有白名單，Berth 進不去。漏掉 `mode` 不會報錯。
+- **實測**（`scripts/experiments/inline_preseed.py`）：Docker Desktop Windows（Compose v5.3.1）、獨立二進位（v2.40.3）、rootless VM（v5.3.1）三個環境結果相同。`mode: 0555` 時內容與原檔 sha256 相同、首次啟動依序印 `executing`、`added`、`exited 0`，之後 `restart`、`--force-recreate` 都 `already configured`，且鍵各一行、`BERTH_IP` 200 而宿主 403；`COMPOSE_PROFILES=` 空時 `up -d` 回 0 無警告；不需要 `uid` / `gid`。Unraid 隨身碟（vfat）上沒有實測，推論無妨（執行期不讀 compose 目錄）。
+- **坑**：`docker compose config` 的輸出會把 `$` 再轉義成 `$$`，拿它驗內容等於沒驗；抽出腳本做測試時要把 `$$` 還原成 `$`。`mode` 寫 `0555` 的前導 0，兩個版本都讀成 555。比 2.40.3 舊的 Compose 沒有量。
+- **決定的寫法**：compose 頂層 `configs.qbittorrent-preseed.content` 放 `10-berth.sh` 全文（每個 `$` 寫成 `$$`），服務的 `configs` 用 `source: qbittorrent-preseed`、`target: /custom-cont-init.d/10-berth.sh`、`mode: 0555`（完整 YAML 在研究檔）。
+- **閘門**（票 71）：`tests/unit/test_qbittorrent_preseed.py` 守著 `content` 沒有未轉義的 `$`、target 在 `/custom-cont-init.d/`、`mode` 帶執行位元；`tests/unit/test_deploy_mounts.py` 守著 compose 的宿主路徑沒有相對的。重量：`docs/development/experiments.md`。
 
 ### 20.19 搜尋的年份、片名裡的 `&` 與成人分類（2026-10-10 查證，M4 票 69）
 
-- **TMDB 的 `search/multi` 沒有年份參數**：只收 `query`、`include_adult`、`language`、`page`；搜「Nosferatu 1922」是把整串字當片名比，0 筆（2026-10-10 實測兩次，M4 票 69、85）。帶年份的是分開的兩支：`search/movie` 有 `year` 與 `primary_release_year`，`search/tv` 有 `year`（「Search the first air date and all episode air dates」）與 `first_air_date_year`（「Search only the first air date」）。【[search-movie](https://developer.themoviedb.org/reference/search-movie)、[search-tv](https://developer.themoviedb.org/reference/search-tv)、[search-multi](https://developer.themoviedb.org/reference/search-multi)，2026-10-10 讀】
-- **Jellyseerr 帶年份時用 `primary_release_year` 與 `first_air_date_year`**（`server/api/themoviedb/index.ts` 的 `searchMovies` / `searchTvShows`），但它的一般搜尋（`server/routes/search.ts`）不從字串拆年份，直接 `searchMulti`。【[jellyseerr develop](https://github.com/fallenbagel/jellyseerr/tree/develop/server)】
-- **Berth 的做法：不用帶年份的那兩支**（M4 票 85，使用者拍板，推翻票 69 的年份拆分）。探索搜尋與 Jellyseerr 的一般搜尋一樣，打的字整串原樣問 `search/multi`，結尾的數字不拆成年份。理由：使用者搜尋時不加年份，同名不同年的作品看卡片上的年份就認得出來；而拆開問會把片名本身以數字結尾的作品擠掉——票 69 的做法下「Space 1999」拆成 `space` 與 1999 年，帶 1999 年的那兩支回 24 部別的 Space 片、沒有它（它 1975 年首播），票 69 只在那兩支沒有東西時才問原字串，所以找不到它；兩種都問、合併的版本把它排到第 25 筆（2026-10-10 實測）。代價是「Nosferatu 1922」0 筆；搜「Nosferatu」列得出 1922、1979、2024 各年的那幾部。上面兩條事實留著，要做年份篩選時從這裡起。
-- **Sonarr / Radarr 送查詢前把 `&` 換成 `and`**：`SearchCriteriaBase.GetCleanSceneTitle` 是 `cleanTitle.Replace("&", "and")`，再把非字元換成 `+`，所以《Law & Order》送出去是 `Law+and+Order`；**取代**，不另外多問一組。兩邊的這一支逐行相同。比對用的 clean title（`Parser.CleanSeriesTitle` / `CleanTitle`）用 `NormalizeRegex` 把 `a`、`an`、`the`、`and`、`or`、`of`（不在頭尾時）與所有非字元一起刪掉，所以 `Law & Order` 與 `Law and Order` 清成同一串 `laworder`。【`src/NzbDrone.Core/IndexerSearch/Definitions/SearchCriteriaBase.cs`、`Parser/Parser.cs`，[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core)、[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)，2026-10-10 讀】
-- **兩種站各認一種寫法**（2026-10-10 實測）：The Pirate Bay（經 Prowlarr）對 `Law & Order` 回 0 筆、對 `Law and Order` 回 100 筆；Mikan 的 RSS 搜尋對 `TIGER & BUNNY` 回 81 筆、對 `TIGER and BUNNY` 回 0 筆（`Spice & Wolf` 與 `Spice and Wolf` 都是 100 筆）。字幕組照官方的拉丁字片名寫 `&`，scene 寫 `and`。
-- **Berth 的做法**（`parser.title.spell_ampersand`、`services/search_queries.py` 的 `_spellings`）：**不照 Sonarr 只送寫開的**——那會丟掉 Mikan 那一邊。有 `&` 的名字原樣問一次、再問寫成 `and` 的一次，兩者各配開了的季（M4 票 84 起名字與季由人開關，`&` 這一個照舊自動多一個、列在預覽裡，算進一次搜尋的上限 `MAX_QUERIES`）。有 CJK 字的名字不換。比對不學 Sonarr 刪掉每一個 `and`（`Pride and Prejudice` 的發佈名照舊要寫出 `and`），只替帶 `&` 的名字多認一種寫開的寫法。
-- **Newznab 的成人分類是 6000–6090**：Prowlarr `NewznabStandardCategory` 的 `XXX = 6000` 與子分類 `XXX/DVD` 6010 到 `XXX/WEB-DL` 6090。搜尋結果的 `categories` 帶站定義映射到的標準碼加 `100000 + 站碼` 的自訂碼（`IndexerCapabilitiesCategories.MapTrackerCatToNewznab`），標準碼是定義檔寫的那一個、不自動補父分類。The Pirate Bay 的定義把 Porn 各類映射到 `XXX`、`XXX/x264`、`XXX/Other` 等（`definitions/v11/thepiratebay.yml`）。【[Prowlarr develop](https://github.com/Prowlarr/Prowlarr/tree/develop/src/NzbDrone.Core/Indexers)、[Prowlarr/Indexers](https://github.com/Prowlarr/Indexers/blob/master/definitions/v11/thepiratebay.yml)，2026-10-10 讀；回應的形狀沒有實際呼叫驗證，錄製的 `search.*.json` 裡沒有成人類】
-- **Berth 的做法**（`services/search.py` 的 `ADULT_CATEGORIES`）：分類碼落在 6000–6999 的歸成「成人分類」（M4 票 83 起是 Search Verdict 的一類），不丟。分類碼不拿來查（plan §8.4：各站映射自訂），拿來歸類是因為歸錯了按一下就看得到（畫面預設只列「符合」，其他類照樣送）；沒有映射成人類的站（多數動漫站）擋不到，那時只剩發佈名。
+來源與完整原文：[`docs/research/search-results.md`](research/search-results.md)。外部：[TMDB search-multi](https://developer.themoviedb.org/reference/search-multi)、[search-movie](https://developer.themoviedb.org/reference/search-movie)、[search-tv](https://developer.themoviedb.org/reference/search-tv)；[Sonarr develop](https://github.com/Sonarr/Sonarr/tree/develop/src/NzbDrone.Core) `SearchCriteriaBase.GetCleanSceneTitle`；[Prowlarr develop](https://github.com/Prowlarr/Prowlarr/tree/develop/src/NzbDrone.Core/Indexers)。
+
+- **TMDB `search/multi` 沒有年份參數**：「Nosferatu 1922」整串當片名比，0 筆（2026-10-10 實測兩次，M4 票 69、85）。帶年份的是 `search/movie`（`year`、`primary_release_year`）與 `search/tv`（`year`、`first_air_date_year`）。Jellyseerr 的一般搜尋也不拆年份，直接 `searchMulti`。
+- **Berth 的做法：不用帶年份的那兩支**（M4 票 85，使用者拍板，推翻票 69 的年份拆分）。打的字整串原樣問 `search/multi`，結尾數字不拆成年份。理由：使用者搜尋不加年份，同名作品看卡片年份認；拆開問會擠掉片名以數字結尾的作品（「Space 1999」拆成 1999 年後回 24 部別的 Space 片、沒有它，兩種都問合併也只排第 25 筆，2026-10-10 實測）。代價是「Nosferatu 1922」0 筆；搜「Nosferatu」列得出各年份。要做年份篩選時從這裡起。
+- **Sonarr / Radarr 送查詢前把 `&` 換成 `and`**（取代，不多問一組；兩邊逐行相同）：`Law & Order` 送出 `Law+and+Order`。比對用的 clean title 把 `and` 等與非字元刪掉，`Law & Order` 與 `Law and Order` 同為 `laworder`（2026-10-10 讀）。
+- **兩種站各認一種寫法**（2026-10-10 實測）：The Pirate Bay（經 Prowlarr）`Law & Order` 0 筆、`Law and Order` 100 筆；Mikan RSS `TIGER & BUNNY` 81 筆、`TIGER and BUNNY` 0 筆。字幕組照官方拉丁字片名寫 `&`，scene 寫 `and`。
+- **Berth 的做法**（`parser.title.spell_ampersand`、`services/search_queries.py` 的 `_spellings`）：**不照 Sonarr 只送寫開的**；有 `&` 的名字原樣問一次、再問寫成 `and` 的一次，各配開了的季（列在預覽裡，算進上限 `MAX_QUERIES`）。有 CJK 字的名字不換。比對不學 Sonarr 刪每個 `and`（`Pride and Prejudice` 照舊要寫 `and`）。
+- **Newznab 成人分類是 6000–6090**（`XXX = 6000`，子分類 `XXX/DVD` 6010 到 `XXX/WEB-DL` 6090）；結果的 `categories` 帶標準碼加 `100000 + 站碼` 的自訂碼，不自動補父分類。The Pirate Bay 把 Porn 各類映射到 `XXX*`（`definitions/v11/thepiratebay.yml`）。2026-10-10 讀；回應形狀沒實呼叫驗證，錄製的 `search.*.json` 沒有成人類。
+- **Berth 的做法**（`services/search.py` 的 `ADULT_CATEGORIES`）：分類碼落在 6000–6999 歸成「成人分類」（M4 票 83 起是 Search Verdict 的一類），不丟。分類碼不拿來查（plan §8.4：各站映射自訂），只拿來歸類（歸錯了按一下就看得到，畫面預設只列「符合」，其他類照樣送）；沒映射成人類的站（多數動漫站）擋不到，只剩發佈名。
 
 ### 20.20 搜尋結果怎麼說出「為什麼不像這部作品」：Sonarr 的互動搜尋（2026-10-10 查證，M4 票 83）
 
-- **被拒的發佈照樣列出**：`ReleaseController.GetEpisodeReleases` 把 `EpisodeSearch` 的每一個 decision 都 `MapDecisions` 回傳，
-  不濾掉被拒的；被拒的那一列在 rejected 欄一個紅色圖示，`Popover`（標題 `ReleaseRejected`）逐條列出 `rejections` 字串。後端與
-  畫面都**沒有筆數上限**，上限只在索引站的分頁（Newznab `PageSize = 100`）。
-  【`src/Sonarr.Api.V3/Indexers/ReleaseController.cs`、`frontend/src/InteractiveSearch/InteractiveSearchRow.tsx`、
-  `src/NzbDrone.Core/Indexers/Newznab/NewznabRequestGenerator.cs`，[Sonarr v4.0.20.3014](https://github.com/Sonarr/Sonarr/tree/v4.0.20.3014)，2026-10-10 讀】
-- **預設篩選是「全部」**：預先定義的篩選只有 `all`、`season-pack`、`not-season-pack`（`selectedFilterKey: 'all'`）；要藏起被拒的
-  得自建 `rejectionCount EQUAL 0`。自訂篩選的欄位有 `indexerId`（只看某個站）、`rejectionCount`、`quality`、`seeders` 等。
-  【`frontend/src/Store/Actions/releaseActions.js`，同上】
-- **片名比對是「季集記號前面那一段」清過之後完全相等**：`ParsingService.FindSeries` 在有 `searchCriteria` 時比
-  `searchCriteria.Series.CleanTitle == parsedEpisodeInfo.SeriesTitle.CleanSeriesTitle()`（不是包含），再退到 tvdbId / imdbId；
-  `SeriesTitle` 是 `Parser.ParseTitle` 取季集記號前面那一段。找到的是別部是 `Wrong series`
-  （`DecisionEngine/Specifications/Search/SeriesSpecification.cs`），整庫都找不到是 `Unknown Series`
-  （`DecisionEngine/DownloadDecisionMaker.cs`）。所以搜《Law & Order》回來的 `Law.and.Order.SVU.S28E01` 片名清成
-  `laworder svu` 一類，與 `laworder` 不等而被拒（讀程式推得，沒有實跑）。Radarr 的對應是 `Wrong movie` 與
-  `Unknown Movie. Unable to match to correct movie using release title.`，年份不符沒有獨立的拒絕字串。
-  【`src/NzbDrone.Core/Parser/ParsingService.cs`，同上；[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)】
-- **Berth 的做法**（`services/search.py` 的 `_judge`、`parser.title.misfit` / `partial_title`，`.scratch/m4/search-filter-shape.md`）：
-  照 Sonarr 每一筆都送、每一筆說得出理由；不同的是**一筆一類、一句話**（判斷是排了先後的粗篩：名字對不上 → 成人分類 → 不是電影
-  → 年份不符 → 只對上部分名字 → 符合），**畫面預設只開「符合」**（The Pirate Bay 對查不到的字回熱門清單，全開等於沒篩），
-  每類各有上限（符合 100、其餘 50，逐站輪流取）。「只對上部分名字」照 Sonarr 取第一個記號（季集、字幕組集號、年份）前面那一段，
-  但先照 `/`、`|`、括號與文字系統（CJK／非 CJK）切成一個一個名字再比——字幕組把中文名與拉丁字名寫在一起（`SPY×FAMILY 間諜家家酒 - 05`），
-  整段比的話每一筆都像衍生劇。有一個名字相等就算這一部，沒有相等但有一個包住這部作品的名字才算「部分」；讀不出記號時不判。
-- **自己打關鍵字的搜尋**（2026-10-14 補查，M4 票 83b）：Prowlarr 的手動搜尋頁就是打字搜，預先定義的篩選只有 `all`
-  （`selectedFilterKey: 'all'`），自訂篩選的欄位有 `title`（使用者自己填的字串比較）、`indexerId`、`seeders` 等，**沒有拿發佈名比對
-  查詢的判斷**——The Pirate Bay 的熱門清單在它那裡一樣全列。【`frontend/src/Store/Actions/releaseActions.js`，
-  [Prowlarr develop](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/Store/Actions/releaseActions.js)，2026-10-14 讀】
-  Berth 推翻票 83 的「自己打的關鍵字一律 `unjudged`、不分類」：只分**對得上**（`typed_match`：正規化後發佈名含打的那串字，或含這部作品的
-  某個名字——後者補繁簡，專案沒有轉換）與**對不上**（`typed_miss`），預設只開對得上；仍不判是不是這部作品（票 08 的理由）。有 CJK 的字串
-  不設長度下限，不到四個字的拉丁字要整詞相等（`parser.typed_fits`，`.scratch/m4/search-typed-filter-shape.md`）。`unjudged` 拿掉：
-  沒有快照時只看打的字，照作品名搜沒有快照時根本沒有查詢。
+來源：[Sonarr v4.0.20.3014](https://github.com/Sonarr/Sonarr/tree/v4.0.20.3014)（`ReleaseController.cs`、`InteractiveSearchRow.tsx`、`releaseActions.js`、`ParsingService.cs`、`SeriesSpecification.cs`）、[Radarr develop](https://github.com/Radarr/Radarr/tree/develop/src/NzbDrone.Core)、[Prowlarr releaseActions.js](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/Store/Actions/releaseActions.js)；原文在 [`docs/research/search-results.md`](research/search-results.md)。
+
+- **被拒的發佈照樣列出**：每個 decision 都回傳，被拒的一列紅圖示、Popover 逐條列 `rejections`；後端與畫面**沒有筆數上限**（只有 Newznab 分頁 `PageSize = 100`）。預設篩選是「全部」（`all`、`season-pack`、`not-season-pack`）。
+- **片名比對是「季集記號前面那一段」清過之後完全相等**（不是包含）：`searchCriteria.Series.CleanTitle == SeriesTitle.CleanSeriesTitle()`，再退到 tvdbId / imdbId。找到別部是 `Wrong series`，整庫都找不到是 `Unknown Series`；`Law.and.Order.SVU.S28E01` 清成 `laworder svu`，與 `laworder` 不等而被拒（讀程式推得，沒實跑）。Radarr 對應 `Wrong movie` 與 `Unknown Movie. …`，年份不符沒有獨立拒絕字串。
+- **Berth 的做法**（`services/search.py` 的 `_judge`、`parser.title.misfit` / `partial_title`，`.scratch/m4/search-filter-shape.md`）：照 Sonarr 每一筆都送、都說得出理由；不同的是**一筆一類、一句話**（粗篩先後：名字對不上 → 成人分類 → 不是電影 → 年份不符 → 只對上部分名字 → 符合），**畫面預設只開「符合」**（The Pirate Bay 對查不到的字回熱門清單），每類各有上限（符合 100、其餘 50，逐站輪流取）。「只對上部分名字」取第一個記號（季集、字幕組集號、年份）前面那一段，但先照 `/`、`|`、括號與文字系統（CJK／非 CJK）切成一個個名字再比；有一個名字相等就算這一部，沒有相等但有一個包住這部作品的名字才算「部分」；讀不出記號時不判。
+- **自己打關鍵字的搜尋**（2026-10-14 補查，M4 票 83b）：Prowlarr 手動搜尋頁預設篩選只有 `all`，自訂篩選欄位有 `title`、`indexerId`、`seeders` 等，**沒有拿發佈名比對查詢的判斷**（The Pirate Bay 熱門清單照樣全列）。Berth 推翻票 83 的「自己打的關鍵字一律 `unjudged`」：只分**對得上**（`typed_match`：正規化後發佈名含打的字串，或含這部作品的某個名字，後者補繁簡）與**對不上**（`typed_miss`），預設只開對得上；仍不判是不是這部作品（票 08 的理由）。有 CJK 的字串不設長度下限，不到四個字的拉丁字要整詞相等（`parser.typed_fits`，`.scratch/m4/search-typed-filter-shape.md`）。`unjudged` 拿掉。
 
 ### 20.21 季的搜尋記號：`Season N` 與 `SNN` 實跑比較（2026-10-13 實測，M4 票 84）
 
-腳本 `scripts/experiments/season_token_compare.py`，隔離的 Prowlarr（The Pirate Bay、Mikan、dmhy；Nyaa 與 YTS 那天從容器連不上），
-每一對查詢逐站數「總筆數 / 發佈名真的含那部作品名字的筆數」（The Pirate Bay 對查不到的字回熱門清單，純筆數會騙人）：
+腳本 `scripts/experiments/season_token_compare.py`，隔離的 Prowlarr（The Pirate Bay、Mikan、dmhy；Nyaa 與 YTS 當天連不上）；逐站數「總筆數 / 發佈名含作品名字的筆數」。完整比較表在 [`docs/research/search-results.md`](research/search-results.md)。
 
-| 查詢 | The Pirate Bay | Mikan | dmhy |
-| --- | --- | --- | --- |
-| `The Bear Season 3` | 23 / 11 | — | — |
-| `The Bear S03` | 6 / 6 | — | — |
-| `Severance Season 2` | 4 / 4 | — | — |
-| `Severance S02` | 11 / 11 | — | — |
-| `SPY x FAMILY Season 2` | 21 / 21 | 189 / 162 | 80 / 56 |
-| `SPY x FAMILY S02` | — | 2 / 2 | 2 / 2 |
-| `Frieren Season 2` | 1 / 1 | 114 / 114 | 75 / 75 |
-| `Frieren S02` | — | 11 / 11 | 11 / 11 |
-| `Oshi no Ko Season 2` | 1 / 1 | 47 / 47 | — |
-| `Oshi no Ko S02` | — | 8 / 7 | — |
-| `间谍过家家 第2季` | 100 / 0 | — | — |
-| `间谍过家家 S02` | — | 1 / 1 | — |
-
-- **美劇 `SNN` 比較準**：The Pirate Bay 對 `The Bear Season 3` 回的名字對得上的 11 筆裡只有 3 筆寫 `S03`，其餘是別季；
-  `The Bear S03` 的 6 筆全是第三季。`Severance S02` 11 筆、`Season 2` 4 筆。
-- **動畫站的 `SNN` 少一個數量級**：Mikan、dmhy 對 `Season 2` 是寬鬆比對，`SPY x FAMILY Season 2` 在 Mikan 回的 162 筆名字對得上
-  的裡有 90 筆發佈名真的寫 `Season 2`（只有 1 筆寫 `S02`），`S02` 只回 2 筆。字幕組寫的是 `Season 2`、`第2季`，不是 scene 的 `S02`。
-- **Berth 的做法**（`parser.title.season_tokens`）：照票面「`SNN` 比較少就兩種都留」，**拉丁字名字一季問 `S03` 與 `Season 3`
-  兩個**，有 CJK 字的名字問 `第3季`；按搜尋與搜缺的集共用這一個函式。一次搜尋的上限因此從 5 個改成 10 個（使用者 2026-10-13
-  拍板）：動畫的英文名、原名配「不指定季」與最新一季是 6 個，再開兩種中文名是 10 個。CJK 那一對兩邊都只有 0–1 筆，樣本太小，只當參考。
+- **美劇 `SNN` 比較準**：`The Bear Season 3` 在 The Pirate Bay 名字對得上的 11 筆裡只有 3 筆寫 `S03`；`The Bear S03` 的 6 筆全是第三季。
+- **動畫站的 `SNN` 少一個數量級**：Mikan、dmhy 對 `Season 2` 是寬鬆比對；`SPY x FAMILY Season 2` 在 Mikan 對得上的 162 筆裡 90 筆真寫 `Season 2`（1 筆寫 `S02`），`S02` 只回 2 筆。字幕組寫 `Season 2`、`第2季`，不是 `S02`。
+- **Berth 的做法**（`parser.title.season_tokens`）：`SNN` 比較少就兩種都留——**拉丁字名字一季問 `S03` 與 `Season 3` 兩個**，有 CJK 字的名字問 `第3季`；按搜尋與搜缺的集共用這一個函式。一次搜尋上限因此從 5 改成 10（使用者 2026-10-13 拍板）：動畫的英文名、原名配「不指定季」與最新一季是 6 個，再開兩種中文名是 10 個。CJK 那一對兩邊都只有 0–1 筆，樣本太小，只當參考。
 
 ### 20.22 Berth 登入 Jellyfin 留下的裝置（2026-10-14 查證，M4 票 66）
 
@@ -1512,104 +1426,40 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - 頻道 webhook 只綁頻道、不能私訊，使用者手動建的不能帶互動按鈕。Overseerr、Jellyseerr、Sonarr 都用它（Overseerr 系另有選填的 Discord ID 用來 @mention）。
 - 429 的 body 有 `retry_after`（秒、浮點）與 `global`，header 有 `Retry-After`、`X-RateLimit-*`；`content` ≤ 2000 字元、一則最多 10 個 embed、所有 embed 文字合計 ≤ 6000。
 
-**實測**（2026-10-21，M4 票 121，API v10，`scripts/experiments/discord_dm.py`；回應錄在 `tests/fixtures/http/discord/`）。兩個新建的 bot、一個只有使用者與 bot 的測試伺服器；第二個 bot 從頭到尾沒連過 gateway：
 
-- **從沒連過 gateway 的 bot 私訊得到**：開 DM channel `200`、純文字與帶 embed 的訊息都 `200`，回完整的 message 物件。沒有任何 intent。
-- **開 DM channel 什麼情況都回 `200`**（沒有共同伺服器、收件人關了私訊、bot 被踢出之後都是），擋下來的是送訊息那一步。所以「按測試」要真的送一則，只開 channel 證明不了什麼。
-- **沒有共同伺服器與關了私訊回的是同一個錯**：`403`、`{"code": 50278, "message": "Cannot send messages to this user due to having no mutual guilds"}`。三種情況都量到這一個：bot 還沒被邀請、使用者在唯一的共同伺服器關掉「私人訊息」（已經聊過也一樣）、bot 被踢出伺服器。`50007` 一次都沒出現。Discord 算共同伺服器時只算開著私訊的那幾個，Berth 分不出是哪一種，提示要把兩個補法一起說：把 bot 加進同一個伺服器、在那個伺服器的隱私設定打開「私人訊息」。
-- **伺服器的「私人訊息」預設可能是關的**：它跟著使用者的全域設定（使用者設定 → 私訊權限 →「加入伺服器後允許私訊」）。這次的測試帳號全域是關的，新建的伺服器也就是關的，第一次私訊就是 `50278`。打開後訊息直接進私訊清單；同時開著的「訊息請求」沒有把它攔下。
-- **超過長度是 `400` / `50035` `Invalid Form Body`**，`errors` 指出欄位：`content` 2001 字元是 `errors.content._errors[].code = "BASE_TYPE_MAX_LENGTH"`（`Must be 2000 or fewer in length.`）；兩個 embed 的 description 合計 6001 字元是 `errors.embeds._errors[].code = "MAX_EMBED_SIZE_EXCEEDED"`（`Embed size exceeds maximum size of 6000`）。長度檢查在共同伺服器檢查之前：bot 被踢出之後送 2001 字元照樣先回 `400`，同一刻的純文字回 `403` / `50278`（`send too-long-no-mutual-guild --length 2001`）。
-- **token 錯是 `401`**、`{"message": "401: Unauthorized", "code": 0}`，沒有 `X-RateLimit-*` header。
-- **送訊息的 bucket 一次 5 則**（`X-RateLimit-Limit: 5`；兩個 bot、兩個 channel 的 `X-RateLimit-Bucket` 是同一個 hash，這次每個 bot 只量了一個 channel，分不出是按 channel 還是按 bot 算），失敗的請求（`400`、`403`）也扣額度；`X-RateLimit-Reset` 每送一則往後推約 1 秒，額度是一則一則補回來的，不是 5 秒整批重置。baseline 送完 4 則之後接著連續送、不間隔，第 7 則遇到 `429`。`429` 的 body 是 `{"message": "You are being rate limited.", "retry_after": 0.3, "global": false}`（**沒有 `code`**），header 有 `Retry-After: 5`（整數秒）、`X-RateLimit-Scope: user`、`X-RateLimit-Remaining: 0`、`X-RateLimit-Reset-After: 4.177`。body 的 `retry_after` 是下一個空位（浮點），header 的 `Retry-After` 是整個 bucket 重置、無條件進位成整數。開 DM channel 是另一個 bucket，`X-RateLimit-Limit: 100`。
-- **只私訊的邀請連結**是 `https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=0`：`bot` scope 才會讓 bot 進伺服器（共同伺服器），私訊不需要任何伺服器權限。application id 由 `GET /applications/@me` 以 bot token 取得。新建的 application `bot_public` 預設 `true`、`bot_require_code_grant` 預設 `false`。
-- **`GET /applications/@me` 回 Application Object**，Berth 只讀 `id` 與 `name`（官方文件 Application Resource〈Get Current Application〉與〈Application Object〉，https://discord.com/developers/docs/resources/application ，2026-10-21 經 context7 查 `discord/discord-api-docs`；M4 票 123）。這一份回應沒有錄：裡面有 application 擁有者的帳號（票 121 刻意不存），契約測試只用這兩格。錯的 token 在這一支同樣是 `401`。
-- **embed 的 `url` 不收沒有點的主機名**（2026-10-21，M4 票 124，`discord_dm.py embed-url`；摘要在 `.local/experiments/results/discord_dm/embed-url-summary.json`，不進版控）：官方文件的 Embed Structure 只寫 `url?` string「url of embed」（經 context7 查 `discord/discord-api-docs`），沒寫檢查規則。對九種自架網址形狀（路徑 `/media/tv:120089`）各送一則：網域、子路徑、`*.ts.net`、`nas.local`、`192.168.1.10`、`127.0.0.1`、`localhost`、`[::1]` 都 `200`，回的 embed 原樣帶著 `url`；**`http://berth:8000/…` 是 `400` / `50035`、`errors.embeds.0.url._errors[].code = "URL_TYPE_INVALID_URL"`（`Not a well formed URL.`）**，整則送不出。同一個網址寫成 description 裡的 Markdown 連結（`[打開](http://berth:8000/…)`）九種都 `200`，所以 Berth 的連結放在 description（`adapters/notify/discord._description`）。手機上 Markdown 連結是否每一種都可點沒有逐一看。
+**實測**（2026-10-21，M4 票 121，API v10，`scripts/experiments/discord_dm.py`；回應錄在 `tests/fixtures/http/discord/`；逐條原文在 [研究檔〈從 brief 搬來（§20.23）〉](research/discord-notifications.md#從-brief-搬來2023)）。兩個新建的 bot、一個只有使用者與 bot 的測試伺服器：
+
+- **從沒連過 gateway 的 bot 私訊得到**：開 DM channel `200`、純文字與帶 embed 的訊息都 `200`，不需要 intent。開 DM channel 什麼情況都回 `200`，擋下來的是送訊息那一步，所以「按測試」要真的送一則。
+- **沒有共同伺服器、使用者在共同伺服器關了私訊、bot 被踢出，回的是同一個錯**：`403` / `50278`；`50007` 一次都沒出現。Berth 分不出是哪一種，提示要把兩個補法一起說：把 bot 加進同一個伺服器、在那個伺服器打開「私人訊息」。伺服器的「私人訊息」跟著使用者的全域設定，預設可能是關的。
+- **超過長度是 `400` / `50035`**：`content` 2001 字元是 `BASE_TYPE_MAX_LENGTH`；embed 合計 6001 字元是 `MAX_EMBED_SIZE_EXCEEDED`。長度檢查在共同伺服器檢查之前。**token 錯是 `401`**，沒有 `X-RateLimit-*` header。
+- **送訊息的 bucket 一次 5 則**（`X-RateLimit-Limit: 5`），**失敗的請求（`400`、`403`）也扣額度**；額度一則一則補回（約 1 秒一則），連續送第 7 則遇到 `429`。`429` 的 body 是 `{"message", "retry_after", "global"}`（**沒有 `code`**），`retry_after` 是下一個空位（浮點），header `Retry-After` 是整個 bucket 重置、無條件進位成整數。開 DM channel 是另一個 bucket（`X-RateLimit-Limit: 100`）。
+- **只私訊的邀請連結**是 `https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=0`；application id 由 `GET /applications/@me` 以 bot token 取得，Berth 只讀回應的 `id` 與 `name`（M4 票 123；[Application Resource](https://discord.com/developers/docs/resources/application)，2026-10-21 經 context7 查）。這一份回應沒有錄（含擁有者帳號），契約測試只用這兩格。
+- **embed 的 `url` 不收沒有點的主機名**（M4 票 124，`discord_dm.py embed-url`）：`http://berth:8000/…` 是 `400` / `50035`（`URL_TYPE_INVALID_URL`），整則送不出；網域、`*.ts.net`、`nas.local`、IP、`localhost`、`[::1]` 都 `200`。同一個網址寫成 description 裡的 Markdown 連結九種都 `200`，所以 Berth 的連結放在 description（`adapters/notify/discord._description`）。手機上 Markdown 連結是否每一種都可點沒有逐一看。
 
 ### 20.24 pydantic-ai 的確認卡與 Vercel AI SDK 串流（2026-10-27 實測，M5 prototype）
 
-全文、selftest 輸出與用到的版本在 [`docs/research/m5-prototype-2026-10-27.md`](research/m5-prototype-2026-10-27.md)，腳本是 `scripts/experiments/m5_agent_chat.py`。版本：pydantic-ai-slim 2.61.0、ai 7.0.138、@ai-sdk/react 4.0.141。
+全文、selftest 輸出與用到的版本在 [`docs/research/m5-prototype-2026-10-27.md`](research/m5-prototype-2026-10-27.md)，腳本是 `scripts/experiments/m5_agent_chat.py`。版本：pydantic-ai-slim 2.61.0、ai 7.0.138、@ai-sdk/react 4.0.141。後續各票讀的細節（2.62.0、ai 7.0.153）在同檔末尾〈從 brief 搬來（§20.24）〉，下面各條的粗體標籤就是那裡的條目名。
 
-- **deferred tool 可以存成一列、重啟之後接著跑**：
-  - 工具丟 `ApprovalRequired` 時，run 以 `DeferredToolRequests` 結束。這需要 `output_type` 含 `DeferredToolRequests`。
-  - 歷史用 `ModelMessagesTypeAdapter` 存成 JSON。
-  - 另一個請求、甚至另一個行程，帶 `message_history` 與 `DeferredToolResults` 就能恢復。核准用 `ToolApproved(override_args=...)`，參數以伺服器存的為準。（Berth 的正式版改成核准就由伺服器當場執行，恢復只交結果，M5 票 13，見下方〈確認卡的恢復〉。）
-  - 恢復時工具裡的 `ctx.tool_call_approved` 為真，所以「丟之前跑防護、算預覽」與「核准後執行」是同一個函式。
-  - 待確認的呼叫**必須一次全部解決**，否則 `UserError`。使用者沒按就繼續說話時，pydantic-ai 會自己補一句 "interrupted"。
-  - 所以 **Proposal 的生命週期要獨立於 agent run**。卡片脫離對話之後再按，由伺服器直接執行，下一輪告訴模型結果。
-- **`VercelAIAdapter` 預設信任前端**：
-  - 前端送回的核准與工具參數都照收。偽造一則「已核准」的助理訊息，工具就會用偽造的參數執行。官方文件明說這是設計。
-  - `sdk_version` 預設 5，沒有核准串流，要傳 6 或 7（兩者 wire 相同）。
-  - Berth 的做法：歷史放伺服器，前端只送最後一則；`deferred_tool_results` 從 Proposal 表組好再傳給 `run_stream`，前端的 approval 只當觸發。
-  - `dump_messages(..., sdk_version=7)` 把沒有結果的 tool call 轉成 `approval-requested`，所以重新載入頁面後卡片照樣按得下去。
-- **壓縮**：
-  - `ProcessHistory` 改過的歷史就是 `all_messages()` 回傳的那份。
-  - 切點落在使用者訊息上，待確認的 tool call 一定留在尾巴；被切掉的 tool call 留下的孤兒 tool result 要一起拿掉，否則 Anthropic 會拒收。
-  - `AnthropicCompaction`（伺服器端，beta）與 `OpenAICompaction`（只適用 Responses API）沒有採用。
-  - 2026-10-27 讀 pydantic-ai-slim 2.62.0 原始碼（M5 票 18）：
-    - 摘要放在 `ModelRequest` 裡的 `CompactionPart(content=...)`：每一家都以使用者語氣送出、包在 `<conversation_summary>` 並說明是另一個模型寫的（`models/__init__.py` 的 `_conversation_summary_text`），不當 system prompt。`VercelAIAdapter.dump_messages` 把它轉成 `data-compaction` 片段（`data.content` 是摘要）。
-    - `RunContext.context_window_used` 是上一則回應的 token 對 `model.context_window`；模型資料（genai-prices）沒有這個模型的 window、或還沒有回應時是 `None`，不是 0。
-    - `ProcessHistory` 在 `before_model_request` 換掉 `ctx.messages`，所以換掉的歷史就是之後 `all_messages()` 的那一份。
-    - `RetryPromptPart` 已 deprecated（v3 移除）：工具的重試改成 `ToolReturnPart(outcome='retried')`。
-    - 官方的 `pydantic-ai-harness` 0.62.0（Alpha、釘死 `pydantic-ai-slim==2.62.0`）有 `SummarizingCompaction`，但切點以訊息數或 token 數算、不認一輪從哪裡開始，不拿掉孤兒 result，也拿不到摘要那一次的回應來記帳，所以 Berth 自己寫（`services/compaction.py`）。
-- **斷線之後接上（resumable streams）**（2026-10-28 查，M5 票 25）：
-  - Vercel AI SDK 7 的做法（context7 `/vercel/ai/ai_7.0.0` 的 `04-ai-sdk-ui/03-chatbot-resume-streams.mdx`、`09-troubleshooting/15-abort-breaks-resumable-streams.mdx`）：伺服器在沒人看的時候照跑；`useChat` 的 `stop()` 只是中止這一個請求，這種設計下等於斷線，所以**停止要另一個端點**（取消產生串流的工作、清掉對話的 active stream，只在它還指著同一條時）。對話記 `activeStreamId`，重連是 `GET .../{chatId}/stream`，沒有在跑的回 204。
-  - 讀 `ai@7.0.153` 的 `dist/index.js`：`HttpChatTransport.reconnectToStream` 收到 204 回 `null`，`Chat` 回到 `ready`；`prepareReconnectToStreamRequest({ id, requestMetadata })` 可以改網址，`chat.resumeStream({ metadata })` 的 `metadata` 就是 `requestMetadata`。`DefaultChatTransport` 的 `resumeStreamIsReplay` 預設 `true`：重連的串流**從第一個片段重播**，`Chat` 在第一個 `start` 重設那一則（`resetStateOnFirstMessageStart`），不接在上一則助理訊息後面（只有最後一則助理訊息有進行中的工具片段時才接）。
-  - pydantic-ai-slim 2.62 有自己的停法（`CancellationToken`、`RunCancelled`，`on_cancel`）：它保留串流到一半的回應與已完成的工具結果；task 被外部取消（`asyncio.Task.cancel()`、cancel scope）則照樣是 `CancelledError`，兩者同時發生時外部的贏（`pydantic_ai/exceptions.py` 的 `RunCancelled` docstring）。Berth 的停止走後者，停下時存的與其他停下一樣（plan §6〈agent〉）。
-  - Starlette 的 `StreamingResponse` 在 ASGI spec 2.4 之前另開一個 task 聽 `http.disconnect`，收到就取消整個串流；2.4 起改成送出時的 `OSError`（`starlette/responses.py`）。所以一輪若跑在請求裡，斷線就是取消它；要跑完得放在請求之外的 task。
+- **deferred tool 可以存成一列、重啟之後接著跑**：工具丟 `ApprovalRequired`，run 以 `DeferredToolRequests` 結束（`output_type` 要含它）；歷史用 `ModelMessagesTypeAdapter` 存成 JSON；另一個請求或行程帶 `message_history` 與 `DeferredToolResults` 就能恢復，核准用 `ToolApproved(override_args=...)`，參數以伺服器存的為準（正式版改成核准就由伺服器當場執行，恢復只交結果，M5 票 13）。恢復時 `ctx.tool_call_approved` 為真，所以「丟之前跑防護、算預覽」與「核准後執行」是同一個函式。
+- 待確認的呼叫**必須一次全部解決**，否則 `UserError`。所以 **Proposal 的生命週期要獨立於 agent run**：卡片脫離對話之後再按，由伺服器直接執行，下一輪告訴模型結果。
+- **`VercelAIAdapter` 預設信任前端**：前端送回的核准與工具參數都照收，偽造一則「已核准」的助理訊息就會用偽造的參數執行（官方文件明說是設計）。`sdk_version` 預設 5，沒有核准串流，要傳 6 或 7（wire 相同）。Berth 的做法：歷史放伺服器，前端只送最後一則；`deferred_tool_results` 從 Proposal 表組好再傳給 `run_stream`，前端的 approval 只當觸發。`dump_messages(..., sdk_version=7)` 把沒有結果的 tool call 轉成 `approval-requested`，重新載入頁面後卡片照樣按得下去。
+- **壓縮**：`ProcessHistory` 改過的歷史就是 `all_messages()` 的那份；切點落在使用者訊息上，待確認的 tool call 一定留在尾巴，被切掉的 tool call 留下的孤兒 tool result 要一起拿掉，否則 Anthropic 會拒收。`AnthropicCompaction`（伺服器端，beta）與 `OpenAICompaction`（只適用 Responses API）沒有採用。2026-10-27 讀 pydantic-ai-slim 2.62.0 原始碼（M5 票 18）：摘要放 `CompactionPart`，各家以使用者語氣送出，不當 system prompt；`RunContext.context_window_used` 沒資料時是 `None`；`RetryPromptPart` 已 deprecated；官方 `pydantic-ai-harness` 0.62.0（Alpha）的 `SummarizingCompaction` 不認一輪從哪裡開始、不拿掉孤兒 result、拿不到摘要的回應記帳，所以 Berth 自己寫（`services/compaction.py`）。
+- **斷線之後接上（resumable streams）**（2026-10-28 查，M5 票 25）：Vercel AI SDK 7 的做法是伺服器在沒人看的時候照跑，`useChat` 的 `stop()` 只中止這一個請求（等於斷線），所以**停止要另一個端點**；對話記 `activeStreamId`，重連是 `GET .../{chatId}/stream`，沒有在跑的回 204；重連的串流從第一個片段重播（`ai@7.0.153`）。pydantic-ai 的 `CancellationToken` 保留串流到一半的回應，外部 `Task.cancel()` 則是 `CancelledError`，兩者同時時外部贏；Berth 的停止走後者（plan §6〈agent〉）。Starlette 的 `StreamingResponse` 在 ASGI spec 2.4 之前聽到 `http.disconnect` 就取消串流，所以一輪要跑完得放在請求之外的 task。
 - **觀測的缺口**：run 中途被中止（`UsageLimitExceeded`、重複呼叫、模型錯誤）時，`on_complete` 不會被呼叫，這一輪的歷史與 token 用量都拿不到。記帳要掛在每次模型呼叫之後。
-- **費用**：
-  - ~~`ModelResponse.cost()`（genai_prices）不認得的模型要有自己的價目表~~（M5 票 21b 改寫成下面這幾條）。
-  - **價目用 genai-prices**（[pydantic/genai-prices](https://github.com/pydantic/genai-prices)，pydantic-ai-slim 2.62.0 的相依，要求 `>=0.1.13`；2026-10-28 讀 0.1.13 原始碼與實測，M5 票 21b）：
-    - `calc_price(usage, model_ref, provider_id=..., provider_api_url=...)` 先用 `provider_api_url` 對每家的 `api_pattern`（regex）認服務商、再找模型；認不得網址或模型是 `LookupError`。`https://api.deepseek.com/anthropic` + `deepseek-flash` 認成 `deepseek`（100 萬 input + 100 萬 output 在離峰是 $0.75）；同一組改傳 `provider_id=anthropic` 查不到，所以**接口種類不能當服務商**，只在網址認不得時退一步用。pydantic-ai 的查價順序也是網址 → provider 名（`_genai_prices.iter_provider_references`），但它遇到任何 `LookupError` 都退回，連「網址認得、那一家沒有這個模型」也是；Berth 在這種情況當查不到（M5 票 21b 的 code-review）。
-    - 價錢帶時間：DeepSeek 的尖峰（UTC 01–04、06–10）是離峰的兩倍，`genai_request_timestamp` 決定套哪一段（週末全天離峰它還表達不了，那時的價是上限）；Anthropic 的長 context 與 OpenAI 的 gpt-5.5 有分級價（`+tiers`）。
-    - 「回應的時間」就是收到的那一刻（pydantic-ai 2.62 原始碼 `models/anthropic/_streaming.py` 的 `AnthropicStreamedResponse`、`models/openai.py` 的 `OpenAIStreamedResponse`，票 21c 讀）：`AnthropicModel` 與 `OpenAIChatModel` 的串流回應在第一個片段到了之後才建，`timestamp` 一律是那時的本機時鐘（`_utils.now_utc()`）；服務端的 `created` 只進 `provider_details`。所以記帳照回應時間查價，等於照收到第一個片段那一刻；測試用的 `FunctionModel` 串流同樣用本機時鐘，腳本給的 `timestamp` 留不下來，控制時段要釘時鐘。
-    - **DeepSeek 官方價目**（[api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing)，2026-10-28 協調者讀）：`deepseek-flash` 尖峰 $0.3 / $1.2（每百萬 input / output），離峰減半 $0.15 / $0.6；尖峰是週一到週五 UTC 01:00–04:00、06:00–10:00，其餘時間（含週末與中國國定假日）都是離峰。與 genai-prices 0.1.13 的資料一致，只差它把週末與假日的那兩段也當尖峰（只會高估）。所以設定頁與用量頁出現的半價是**離峰價，不是過時的價**；M5 票 09 手寫表的 $0.3 / $1.2 是尖峰價。
-    - `usage.input_tokens` 含快取讀寫；快取比 input 還多是 `ValueError`。沒有快取寫價的服務（DeepSeek）快取寫照輸入價算。
-    - **自動更新是 opt-in**：只有 `UpdatePrices().start()`（或 pydantic-ai 的 `prices.update_in_background()`）會每小時從 GitHub 抓 `data.json`，抓到的換掉全域 snapshot（`data_snapshot.get_snapshot()`）；不開就不連網。Berth 自己用套件內附的資料建一份 `DataSnapshot(providers=genai_prices.data.providers, from_auto_update=False)`，別人開了自動更新也不受影響。
-    - 0.1.13 已認得 M5 票 09 手寫表上的全部模型（Claude 5.5 家族、`claude-fable-5-1`、DeepSeek V4 與 `deepseek-flash`），Berth 的補位表因此是空的。
-  - Anthropic 的 `input_tokens` 已經包含快取讀與寫。
-  - `web_search` 的次數在 `usage.details['web_search_requests']`，每次 $0.01。
-- **provider**：
-  - `AnthropicProvider(base_url=...)` 不含 `/v1`（SDK 會自己接 `/v1/messages`）；`OpenAIProvider(base_url=...)` 照那家服務的文件（OpenAI 官方含 `/v1`，DeepSeek 的 `https://api.deepseek.com` 不含也能用）。
-  - **anthropic SDK 2.x 把 `api_key` 放在 `Authorization: Bearer`**，不是舊版的 `x-api-key`（2026-10-27 讀 anthropic 2.3.0 的 `_client.py` 與 M5 票 09 的 MockTransport 測試）。只認 `x-api-key` 的相容閘道會回 401，測試連線照實說「key 被拒」。
-  - 兩家 SDK 在 `api_key` / `base_url` 沒給時讀環境變數（`ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`、`OPENAI_BASE_URL`，anthropic 另讀 `ANTHROPIC_CONFIG_DIR` 底下的 profile）；Berth 一律明給（M5 票 09）。
-  - pydantic-ai-slim 2.62.0（2026-10-27 的 stable）的 provider 吃 `httpx2.AsyncClient`；`ModelSettings` 可以逐次給 `max_retries` 與 `timeout`。錯誤分類：`ModelAuthenticationError`、`ModelNotFoundError`、`ModelConnectionError`（含逾時）都是 `ModelAPIError` 的子類，帶 HTTP 狀態碼的同時是 `ModelHTTPError`（`body` 是服務回的原文）。
-  - 伺服器端 `web_search` 走 Anthropic Messages 才有（Anthropic 官方，以及 DeepSeek 的相容端點）；Chat Completions 沒有，要另接 Tavily 這類工具。
-- **真模型實測**（DeepSeek `deepseek-flash`，Anthropic 與 OpenAI 兩種相容接口各跑六個情境；TMDB 與索引站是真的，qBittorrent 是替身）：
-  - **完成度**：兩種接口都跑完全部情境，沒有接口相關的錯誤。
-  - **品質**：
-    - Re:Zero 全系列能講清楚「TMDB 把 S1–S4 併成 S01 共 85 集、劇場版是獨立 movie」，總覽卡 7 列。
-    - 壓縮之後追問「剛剛送了什麼」答得出來。
-    - 新番推薦的評分都附人數。
-    - 要 AI 自己找 RSS 網址時，兩種接口都拒絕，改用 Mikan 番組訂閱。
-  - **用量**：
-    - 一個情境 3–16 次模型呼叫；Re:Zero 那個最重，約 220K input、11K output、2.5 分鐘。
-    - 快取命中 46–98%。
-    - 六個情境合計約 $0.07–0.08（DeepSeek 尖峰價）；換成 Claude Sonnet 5.5 的價目推估約 $0.5–0.6。
-    - 單輪最多 9 次模型呼叫，所以對話的往返上限 10 太緊，建議 15–20。
-- **實跑抓到、正式版要照做的**：
-  - 確認後的工具結果要明說已核准、已執行，否則模型會說「卡片已出，等你按」。
-  - 待確認的呼叫要找「最後一則模型回應裡還沒有結果的」：平行呼叫時，別的工具的結果會排在它後面。
-  - 卡片預覽要先跑命令的驗證：`route_required`、`route_kind_mismatch` 都是按了確認才被擋下，只好再出一張卡。
-  - 總覽卡要逐列顯示結果，因為會部分成功。
-  - 失敗後的重試不算重複呼叫。
-  - 「讀過外部內容」的警示要縮小到「自由文字參數出自外部內容」，否則每張卡都亮。
-- **串流時的 capability hook**（2026-10-27 M5 票 11 實測，pydantic-ai-slim 2.62.0、`VercelAIAdapter.run_stream`）：
-  - `wrap_model_request` 每次呼叫都拿得到完整的 `ModelResponse`（含 `usage`），記帳掛在這裡就夠。
-  - 模型串流到一半出錯時，`wrap_model_request` 的 handler 丟的是 `CancelledError`，真正的例外只到 `on_run_error`。
-  - run 出錯（含 capability 自己丟的例外）時，串流送 `error`（`errorText` 是例外的字串）、`finish-step`、`finish`（`finishReason: error`），`on_complete` 不跑。
-  - `SubmitMessage` 是 `extra='allow'`：`useChat` 透過 transport 的 `body` 加的欄位（Berth 的 `language`）在 `model_extra`。
-  - `FunctionModel` 要另給 `stream_function` 才能串流（`adapters/ai/fake.py` 從同一則回答拆出片段）。
-- **確認卡的恢復**（2026-10-28 M5 票 13 讀原始碼與整合測試；pydantic-ai-slim 2.62.0、ai 7.0.153）：
-  - `ToolApproved.override_args` 只換掉傳進工具的參數，**不改歷史裡的 `ToolCallPart`**（`pydantic_ai/_tool_execution.py` 的 `_validate_approved_call` 用 `dataclasses.replace` 複製一份）。
-  - `DeferredToolResults` 與新的使用者訊息可以同一輪給（`_agent_graph.py` 的 `_handle_deferred_tool_results` 直接進 `CallToolsNode`）；但經 `VercelAIAdapter` 時新訊息是放進 `message_history` 的，工具結果會排在它後面。
-  - `dump_messages` 把沒有結果的呼叫轉成 `approval-requested` 時，`approval.id` 就是 `tool_call_id`（`ui/vercel_ai/_adapter.py`）。
-  - **ai 7 的前端只在當前那一則助理訊息裡找工具呼叫**：串流對上一則訊息裡的呼叫送 `tool-output-*` 時丟 `UIMessageStreamError`「No tool invocation found」（`ai/src/ui/process-ui-message-stream.ts` 的 `getToolInvocation`）。恢復時最後一則是助理的，串流接在那一則上，所以沒事；使用者沒按卡就送新訊息時會出事——Berth 改成由伺服器替那幾個呼叫補上結果、再接新訊息（`tests/integration/test_agent_cards.py::TestMovingOn`）。
-  - `addToolApprovalResponse` 之後 `sendMessage()`（不帶訊息）送出恢復的那一則，接在那一則助理訊息上（`ai/src/ui/chat.ts`）。
-- **還沒測**：Claude 與 OpenAI 的官方端點（這次兩組 key 都是 DeepSeek）、`AnthropicCompaction`。
-- DeepSeek 的 Anthropic 相容端點會忽略 `cache_control` 但自己快取，也會執行伺服器端 `web_search`（`usage.server_tool_use.web_search_requests`）。
+- **費用**（M5 票 21b 改寫）：價目用 genai-prices（[pydantic/genai-prices](https://github.com/pydantic/genai-prices)，pydantic-ai-slim 2.62.0 的相依，`>=0.1.13`；2026-10-28 讀 0.1.13 原始碼與實測）。
+  - `calc_price(usage, model_ref, provider_id=..., provider_api_url=...)` 先用 `provider_api_url` 認服務商、再找模型，認不得是 `LookupError`；`https://api.deepseek.com/anthropic` + `deepseek-flash` 認成 `deepseek`，改傳 `provider_id=anthropic` 查不到，所以**接口種類不能當服務商**，只在網址認不得時退一步用。「網址認得、那一家沒有這個模型」Berth 當查不到。
+  - 價錢帶時間：DeepSeek 尖峰（UTC 01–04、06–10）是離峰的兩倍，`genai_request_timestamp` 決定套哪一段（週末全天離峰它表達不了，那時的價是上限）；Anthropic 長 context 與 OpenAI gpt-5.5 有分級價。回應時間就是收到第一個片段那一刻的本機時鐘（2.62 原始碼，票 21c）；測試控制時段要釘時鐘。
+  - **DeepSeek 官方價目**（[api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing)，2026-10-28）：`deepseek-flash` 尖峰 $0.3 / $1.2（每百萬 input / output），離峰減半 $0.15 / $0.6；尖峰是週一到週五 UTC 01:00–04:00、06:00–10:00，其餘（含週末與中國國定假日）離峰。與 genai-prices 0.1.13 一致，只差它把週末與假日也當尖峰（只會高估）。設定頁與用量頁出現的半價是**離峰價，不是過時的價**；M5 票 09 手寫表的 $0.3 / $1.2 是尖峰價。
+  - `usage.input_tokens` 含快取讀寫（Anthropic 同），快取比 input 還多是 `ValueError`；沒有快取寫價的服務（DeepSeek）快取寫照輸入價算。`web_search` 次數在 `usage.details['web_search_requests']`，每次 $0.01。
+  - **自動更新是 opt-in**（`UpdatePrices().start()` 才會每小時抓 `data.json`）；Berth 自己用套件內附資料建一份 `DataSnapshot(..., from_auto_update=False)`。0.1.13 已認得 M5 票 09 手寫表的全部模型，Berth 的補位表是空的。
+- **provider**：`AnthropicProvider(base_url=...)` 不含 `/v1`；`OpenAIProvider(base_url=...)` 照那家文件。**anthropic SDK 2.x 把 `api_key` 放在 `Authorization: Bearer`**（讀 2.3.0 的 `_client.py`），只認 `x-api-key` 的閘道會回 401，測試連線照實說「key 被拒」。兩家 SDK 沒給 `api_key` / `base_url` 時讀環境變數，Berth 一律明給（M5 票 09）。pydantic-ai-slim 2.62.0 的 provider 吃 `httpx2.AsyncClient`；錯誤分類 `ModelAuthenticationError`、`ModelNotFoundError`、`ModelConnectionError` 都是 `ModelAPIError` 的子類。伺服器端 `web_search` 只有 Anthropic Messages 才有（含 DeepSeek 的相容端點），Chat Completions 要另接 Tavily 這類。
+- **真模型實測**（DeepSeek `deepseek-flash`，Anthropic 與 OpenAI 兩種相容接口各跑六個情境；TMDB 與索引站是真的，qBittorrent 是替身）：兩種接口都跑完全部情境，沒有接口相關的錯誤；一個情境 3–16 次模型呼叫，Re:Zero 最重（約 220K input、11K output、2.5 分鐘）；快取命中 46–98%；六個情境合計約 $0.07–0.08（DeepSeek 尖峰價），換成 Claude Sonnet 5.5 價目推估約 $0.5–0.6；單輪最多 9 次模型呼叫，所以對話的往返上限 10 太緊，建議 15–20。品質逐項在研究檔〈結果：真模型〉。
+- **實跑抓到、正式版要照做的**：確認後的工具結果要明說已核准、已執行；待確認的呼叫要找「最後一則模型回應裡還沒有結果的」（平行呼叫時別的工具的結果會排在後面）；卡片預覽要先跑命令的驗證（`route_required`、`route_kind_mismatch` 都是按了確認才被擋下）；總覽卡要逐列顯示結果（會部分成功；Re:Zero 全系列的總覽卡 7 列）；失敗後的重試不算重複呼叫；「讀過外部內容」的警示要縮小到「自由文字參數出自外部內容」。
+- **串流時的 capability hook**（2026-10-27 M5 票 11 實測，pydantic-ai-slim 2.62.0、`VercelAIAdapter.run_stream`）：`wrap_model_request` 每次呼叫都拿得到完整 `ModelResponse`（含 `usage`），記帳掛在這裡就夠；模型串流到一半出錯時 handler 丟的是 `CancelledError`，真正的例外只到 `on_run_error`；run 出錯時串流送 `error`、`finish-step`、`finish`（`finishReason: error`），`on_complete` 不跑；`SubmitMessage` 是 `extra='allow'`，`useChat` 的 `body` 加的欄位（`language`）在 `model_extra`；`FunctionModel` 要另給 `stream_function` 才能串流。
+- **確認卡的恢復**（2026-10-28 M5 票 13 讀原始碼與整合測試；pydantic-ai-slim 2.62.0、ai 7.0.153）：`ToolApproved.override_args` 只換掉傳進工具的參數，**不改歷史裡的 `ToolCallPart`**；經 `VercelAIAdapter` 時新訊息放進 `message_history`，工具結果會排在它後面；`approval.id` 就是 `tool_call_id`。**ai 7 的前端只在當前那一則助理訊息裡找工具呼叫**，對上一則訊息的呼叫送 `tool-output-*` 會丟 `UIMessageStreamError`；恢復時最後一則是助理的所以沒事，使用者沒按卡就送新訊息時會出事，Berth 改成由伺服器替那幾個呼叫補上結果再接新訊息（`tests/integration/test_agent_cards.py::TestMovingOn`）。
+- **還沒測**：Claude 與 OpenAI 的官方端點（這次兩組 key 都是 DeepSeek）、`AnthropicCompaction`。DeepSeek 的 Anthropic 相容端點會忽略 `cache_control` 但自己快取，也會執行伺服器端 `web_search`。
 - **網路搜尋**（2026-10-27，M5 票 17）：
-  - Anthropic `web_search`：**$10 / 1,000 次**，另外搜尋結果算輸入 token；出錯的那次不收費。`max_uses` 是**每個請求**的上限，超過時那一次的結果是 `max_uses_exceeded` 錯誤（HTTP 照樣 200）。`allowed_domains` 與 `blocked_domains` 二選一，**自動含子網域**（`example.com` 涵蓋 `docs.example.com`），組織在 Console 設了允許清單時，請求的 `allowed_domains` 必須是它的子集，否則 400。和自己的工具平行呼叫時 API 先不跑搜尋、回 `tool_use`，下一個請求才搜。`web_search_20260209` 以後的版本經 code execution 做動態過濾（pydantic-ai 依模型自己選版本）。（[Web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)、[Server tools〈Domain filtering〉](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools)）
-  - **改工具定義（名字、說明、參數）會讓整段 prompt 快取失效**（快取的順序是 tools → system → messages）。所以 `max_uses` 每次請求固定，不照這一輪剩幾次調。（[Prompt caching〈What invalidates the cache〉](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)）
-  - pydantic-ai-slim 2.62.0：`NativeTool` 可以給一個函式，每次模型呼叫前回 `WebSearchTool` 或 `None`（這一步不掛）；`usage.details['web_search_requests']` 只在大於 0 時有；`FunctionModel` 接受全部 native tool，但串流版的 usage 是它自己估的，報不出網搜次數。`OpenAIChatModel` 送出歷史時略過伺服器端工具的片段，同一段對話換接口不會壞。
-  - Tavily `POST https://api.tavily.com/search`：`Authorization: Bearer <key>`；`search_depth` 的 `basic` / `fast` / `ultra-fast` 1 credit、`advanced` 2 credit；`max_results` 0–20；`include_domains` 最多 300 個，**實測含子網域**（`wikipedia.org` 回 `en.wikipedia.org`、`reddit.com` 回 `www.reddit.com`）。成功回 `query`、`results[]`（`title`、`url`、`content`、`score`、`raw_content`、`id`）、`answer`、`images`、`request_id`、`response_time`（實測約 2 秒），每頁 `content` 約 1,300–1,500 字。錯誤的 body 是 `{"detail": {"error": "..."}}`：401 key 錯、400 參數錯（實測：`include_domains_mode` 不帶 `include_domains`）、429 限流帶 `Retry-After`、432 / 433 額度。免費每月 1,000 credit。（[Search API](https://docs.tavily.com/api-reference/endpoint/search)、[Rate limits](https://docs.tavily.com/documentation/rate-limits)、[Credits](https://docs.tavily.com/documentation/api-credits)；實測錄在 `tests/fixtures/http/tavily/`，`scripts/experiments/tavily_search.py`）
+  - Anthropic `web_search`：**$10 / 1,000 次**，搜尋結果另算輸入 token，出錯的那次不收費。`max_uses` 是**每個請求**的上限，超過時結果是 `max_uses_exceeded` 錯誤（HTTP 仍 200）。`allowed_domains` 與 `blocked_domains` 二選一，**自動含子網域**，組織在 Console 設了允許清單時請求的必須是它的子集否則 400。與自己的工具平行呼叫時 API 先不跑搜尋、回 `tool_use`，下一個請求才搜。（[Web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)、[Server tools〈Domain filtering〉](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools)）
+  - **改工具定義（名字、說明、參數）會讓整段 prompt 快取失效**（順序 tools → system → messages），所以 `max_uses` 每次請求固定，不照剩幾次調。（[Prompt caching〈What invalidates the cache〉](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)）
+  - pydantic-ai-slim 2.62.0：`NativeTool` 可以給函式，每次模型呼叫前回 `WebSearchTool` 或 `None`；`usage.details['web_search_requests']` 只在大於 0 時有；`FunctionModel` 串流版的 usage 報不出網搜次數；`OpenAIChatModel` 送出歷史時略過伺服器端工具片段，同一段對話換接口不會壞。
+  - Tavily `POST https://api.tavily.com/search`：`Authorization: Bearer <key>`；`basic` / `fast` / `ultra-fast` 1 credit、`advanced` 2 credit；`include_domains` 最多 300 個，**實測含子網域**；成功回 `results[]`（`title`、`url`、`content`、`score`）等，每頁 `content` 約 1,300–1,500 字；錯誤 body 是 `{"detail": {"error": "..."}}`：401 key 錯、400 參數錯、429 限流帶 `Retry-After`、432 / 433 額度；免費每月 1,000 credit。（[Search API](https://docs.tavily.com/api-reference/endpoint/search)、[Rate limits](https://docs.tavily.com/documentation/rate-limits)、[Credits](https://docs.tavily.com/documentation/api-credits)；實測錄在 `tests/fixtures/http/tavily/`，`scripts/experiments/tavily_search.py`）

@@ -162,3 +162,10 @@ Berth 原本的行為（修正前，20 部的小規模量測）：`user_policy` 
   一次最多 200 個 id（500 個是 414）。`ids=` 不套媒體庫權限（研究 library-browsing.md §2），id 只能來自這一次
   `library_index` 回的、已驗過媒體庫的那一份。
 - **被刪掉的帳號與停用同一種處置**，前端不必改（`account_disabled` 本來就照「登入失效」處理）。
+
+
+## 從 brief 搬來（§20.8）
+
+從 design-brief §20.8 搬來（原文不改字；brief 內只留結論與來源）。
+
+- **大媒體庫的代價**（M2 票 11，[`docs/research/large-library.md`](../research/large-library.md)；1,000 部 × 12 集、全部由 Berth 經手，Docker Desktop 上的量級）：整份清單（`library_index`）1,000 部 318 KB、p95 35 ms；不帶 `parentId` 的 `hasTmdbId` 反查 303 KB、p95 39 ms；**帶整份 `MediaSources` 的集清單 12,000 列 25.9 MB、p95 5.0 s**（不帶是 8.3 MB、0.55 s），約 8 萬集會撞上 Berth 30 s 的 Jellyfin 逾時，分段取（`startIndex` + `limit`）總時間不減、只讓單一請求變短；**Series 的觀看紀錄很貴**：整份清單打開 `enableUserData` 從 31 ms 變 1.95 s（`UnplayedItemCount`），牆的一頁 100 部帶觀看紀錄 250 ms，`ids=` 只取 50 部 150 ms、200 部 450 ms、500 部回 **414 URI Too Long**。plan §11.3 決定 2 的門檻：`GET /inventory/{id}` p95 修正前 3.4 s（Berth 的分組是二次方，不是 Jellyfin）、修正後 0.66–0.68 s；對帳一輪 27–31 s（Jellyfin 那一方 25–29 s，其中 Jellyfin 的回應只占 4.5 s）。不做快取、不做分段取。【實測 12.1.0】

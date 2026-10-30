@@ -68,3 +68,9 @@
 - 1.10.5 之前的 `GET config/host` 會把 `password` 以雜湊原樣回傳，Berth 送的新密碼會直接 Upsert。這是讀程式碼推出來的，沒有實跑。
 - linuxserver 的 Docker image 是否還保留 `1.3.2.3006` 這類舊 tag 沒有查。
 - Servarr wiki 沒有列出 API 的版本歷史，本文件的版本全部來自 git tag，沒有 wiki 來源可以交叉比對。
+
+## 從 brief 搬來（§20.14）
+
+從 design-brief §20.14 搬來（原文不改字；其餘條目研究檔已有）。
+
+  - **介面登入在現行版本是必填**（M4 票 20，讀 v2.6.5.5623 原始碼）：`frontend/src/Components/Page/Page.js` 在驗證沒開時掛 `AuthenticationRequiredModal`，它的 `ModalContent` 是 `showCloseButton={false}`——第一次打開介面就是一個關不掉、要人設登入的視窗（`AuthenticationRequiredWarning`：「{appName} now requires authentication to be enabled」）。精靈因此把套件內那一台的介面登入寫成必填，理由照這一條說。【[Page.js @ v2.6.5.5623](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/frontend/src/Components/Page/Page.js)、[AuthenticationRequiredModalContent.tsx](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/frontend/src/FirstRun/AuthenticationRequiredModalContent.tsx)】

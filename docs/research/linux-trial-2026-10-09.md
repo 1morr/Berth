@@ -249,3 +249,9 @@ image（`ghcr.io/1morr/berth:latest`、四個 linuxserver 的 `ghcr.io` 與 `lsc
 - LinuxServer.io discourse「Setting PUID and PGID to root」：團隊回覆「We also do not support rootless」；使用者回報
   rootless 下 PUID / PGID 改 0 解決權限問題。<https://discourse.linuxserver.io/t/setting-puid-and-pgid-to-root/3726>
 - LinuxServer.io，Understanding PUID and PGID。<https://docs.linuxserver.io/general/understanding-puid-and-pgid>
+
+## 從 brief 搬來（§20.14）
+
+從 design-brief §20.14 搬來（原文不改字；其餘條目研究檔已有）。
+
+  - Prowlarr 拿不到 `indexers.prowlarr.com` 的站定義時只剩磁碟上的 5 個，推薦清單上的站一個都不在，頁 4 的主鍵跟著消失、不說原因（M4 票 73 起說出原因與下一步）。**網路通了之後不必重啟 Prowlarr**（M4 票 73，2026-10-14 讀 Prowlarr develop 原始碼，未實跑）：`indexer/schema` 經 `Cardigann.DefaultDefinitions` 每次呼叫 `IndexerDefinitionUpdateService.All()`，它每次先向 `https://indexers.prowlarr.com/master/12` 拿清單、失敗才記一筆 Warn「Error while getting indexer definitions, fallback to reading from disk.」並讀磁碟；啟動時與排程的整包更新失敗記 Error「Definition update failed」。所以 Berth 的「重新讀取」（重讀 schema）就拿得到。Prowlarr 的介面是 BrowserRouter（`createBrowserHistory`），事件頁是 `/system/events`、不走 `#/`。**2026-10-14 對 linuxserver 2.6.5 實開**（M4 票 102）：`/#/settings/general` 與 `/#/indexers` 都落在首頁（頁面標題「Indexers - Prowlarr」，後者只是碰巧對）、`/settings/general` 是「General Settings - Prowlarr」、`/indexers` 是找不到頁（「MIA」）；索引站清單就是首頁 `/`（`AppRoutes.tsx`）。前端連到 Prowlarr 的那幾頁收在 `web/src/setup/serviceWeb.ts` 的 `PROWLARR_PAGE`。【[AppRoutes.tsx](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/App/AppRoutes.tsx)】【[IndexerDefinitionUpdateService.cs](https://github.com/Prowlarr/Prowlarr/blob/develop/src/NzbDrone.Core/IndexerVersions/IndexerDefinitionUpdateService.cs)、[Cardigann.cs](https://github.com/Prowlarr/Prowlarr/blob/develop/src/NzbDrone.Core/Indexers/Definitions/Cardigann/Cardigann.cs)、[bootstrap.tsx](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/bootstrap.tsx)、[PageSidebar.js](https://github.com/Prowlarr/Prowlarr/blob/develop/frontend/src/Components/Page/Sidebar/PageSidebar.js)】
