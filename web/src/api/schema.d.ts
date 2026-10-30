@@ -2001,7 +2001,7 @@ export interface paths {
          * Get Compose
          * @description 服務頁進頁時問的：套件內那幾台在不在這套 compose 的網路上（M4 票 30）。
          *
-         *     只做主機名解析，不對服務發請求（brief §19）。擁有者成立之前就問得到：頁 1 的卡片要用。
+         *     只做主機名解析，不對服務發請求（ADR-0010）。擁有者成立之前就問得到：頁 1 的卡片要用。
          */
         get: operations["get_compose_api_setup_compose_get"];
         put?: never;
@@ -5190,7 +5190,7 @@ export interface components {
          * OwnerRefusal
          * @description 精靈第 1 步「擁有者」做不下去（`services/setup.claim_owner`、M4 票 06）。
          *
-         *     擁有者就是 Jellyfin 的管理員（brief §11、§19 2026-09-26）：帳密交給 Jellyfin 驗，
+         *     擁有者就是 Jellyfin 的管理員（brief §11、ADR-0012）：帳密交給 Jellyfin 驗，
          *     Berth 自己不存。
          * @enum {string}
          */
