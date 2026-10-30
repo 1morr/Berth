@@ -3,7 +3,9 @@
     python scripts/docs_moved_lines.py <base-ref> <source> -- <destination>...
 
 "Removed" is what `git diff <base-ref> -- <source>` deletes. Lines are compared stripped; blank
-lines and table separator rows (`| --- | --- |`) are skipped. Exits 1 and lists the missing lines
+lines and table separator rows (`| --- | --- |`) are skipped. Markdown link targets are compared
+without their leading `./` / `../` prefixes, so a file moved one directory deeper still matches
+once its relative links gain a `../`. Exits 1 and lists the missing lines
 if any is not found.
 """
 
@@ -16,6 +18,12 @@ from collections.abc import Iterable
 from pathlib import Path
 
 _TABLE_RULE = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
+_LINK_PREFIX = re.compile(r"(\]\()(?:\.{1,2}/)+")
+
+
+def _normalized(line: str) -> str:
+    """The line with the `./` / `../` prefix dropped from each markdown link target."""
+    return _LINK_PREFIX.sub(r"\1", line.strip())
 
 
 def removed_lines(diff: str) -> list[str]:
@@ -32,8 +40,8 @@ def removed_lines(diff: str) -> list[str]:
 
 def missing_lines(removed: Iterable[str], destinations: Iterable[str]) -> list[str]:
     """The removed lines that appear (stripped) in none of the destination texts."""
-    present = {line.strip() for text in destinations for line in text.splitlines()}
-    return [line for line in removed if line not in present]
+    present = {_normalized(line) for text in destinations for line in text.splitlines()}
+    return [line for line in removed if _normalized(line) not in present]
 
 
 def main(argv: list[str]) -> int:

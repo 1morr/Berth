@@ -36,7 +36,7 @@
 ## Comments
 
 - 主檔 834 → 152 行；子檔：commands 135、release 31、e2e 122、fake-backend 130、experiments 292。分法照票，沒調。
-- `scripts/docs_moved_lines.py HEAD docs/development.md -- docs/development/*.md docs/development.md`：`removed 564 lines, found 551, missing 13`。13 行全是依步驟 4 改過目錄深度的相對連結（`guide/…` → `../guide/…`、`../README.md` → `../../README.md` 等），內容逐字不變，不算遺失。
+- `scripts/docs_moved_lines.py HEAD docs/development.md -- docs/development/*.md docs/development.md`：舊版工具 `missing 13`（13 行是依步驟 4 改過目錄深度的連結）。已讓 `scripts/docs_moved_lines.py` 比對前去掉連結目標的 `./` `../` 前綴（`tests/unit/test_docs_moved_lines.py` 補兩個測試：只差深度→找到；文字或目標名變了→仍遺失）。在搬移 commit `55bfe60a` 上重跑：`removed 564 lines, found 564, missing 0`。之後的 `cf50d38f` 為審查改寫主檔兩行（導言、目錄結構），那兩行是刻意改字，對最新工作樹跑會多報這 2 行。
 - 子檔各加一個 `# 標題` 與一行導言（新增行）；原本的 `###` 標題不動，所以子檔裡章節是 `###`。
 - 另改了票沒列的引用：`tests/e2e/conftest.py`、`.env.example`、`.github/workflows/e2e.yml`、`.github/workflows/ci.yml`（〈API 型別〉→ commands.md）、`pyproject.toml`、`docs/design-brief.md:1686`、`docs/plan.md:16`。`CHANGELOG.md` 的歷史條目不改。
 - 全部檢查（`uv run pre-commit run --all-files`）全綠；`uv run pytest`：5276 passed, 1 skipped, 28 deselected。

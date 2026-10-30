@@ -1,4 +1,7 @@
-"""`scripts/docs_moved_lines.py`：搬走的行都找得到時綠，少一行就紅；空行、表格分隔列與縮排不算。"""
+"""`scripts/docs_moved_lines.py`：搬走的行都找得到時綠，少一行就紅。
+
+空行、表格分隔列與縮排不算；連結目標只差 `./` `../` 前綴也算找到。
+"""
 
 from __future__ import annotations
 
@@ -40,6 +43,23 @@ def test_found_when_every_line_is_in_some_destination() -> None:
 def test_missing_line_is_reported() -> None:
     removed = moved.removed_lines(DIFF)
     assert moved.missing_lines(removed, ["| 2026-09-07 | 文件 | 完成 |\n"]) == ["- 縮排的續行"]
+
+
+def test_link_targets_differing_only_in_relative_depth_are_found() -> None:
+    removed = [
+        "見 [指南](guide/a.md) 與 [README](../README.md#x)。",
+        "[外部](https://example.com/a)",
+    ]
+    moved_deeper = [
+        "見 [指南](../guide/a.md) 與 [README](../../README.md#x)。\n[外部](https://example.com/a)"
+    ]
+    assert moved.missing_lines(removed, moved_deeper) == []
+
+
+def test_link_text_or_target_name_changes_are_still_missing() -> None:
+    removed = ["見 [指南](guide/a.md)。", "[R](../README.md#x)", "[E](https://e.com/a)"]
+    changed = ["見 [說明](../guide/a.md)。\n[R](../../README.md#y)\n[E](https://e.com/../a)"]
+    assert moved.missing_lines(removed, changed) == removed
 
 
 def test_main_exits_1_on_a_lost_line_and_0_when_all_found(
