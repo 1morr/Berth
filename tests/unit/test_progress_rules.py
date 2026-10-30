@@ -20,9 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROGRESS = ROOT / "docs" / "progress.md"
 MAX_LENGTH = 200
-_MILESTONE = r"(M1\.5|M[0-7]|docs-diet)"
-_SESSION_TAG = re.compile(_MILESTONE + r"(?=\s|$)")
-_DEVIATION_TAG = re.compile(r"- \d{4}-\d\d-\d\d " + _MILESTONE + r"(?=\s|：)")
+_DEVIATION = re.compile(r"- \d{4}-\d\d-\d\d (\S+?)：?(?:\s|$)")
 
 
 def _section(text: str, heading: str) -> list[str]:
@@ -41,10 +39,11 @@ def accepted_milestones(text: str) -> set[str]:
 
 
 def table_milestones(text: str) -> set[str]:
+    """里程碑表第一欄：標記只認這張表，新增里程碑不必改這裡。"""
     return {
         line.split("|")[1].strip()
         for line in _section(text, "里程碑與閱讀指引")
-        if re.match(r"\| " + _MILESTONE + r" \|", line)
+        if re.match(r"\| \S+ \| `\.scratch/", line)
     }
 
 
@@ -52,24 +51,23 @@ def problems(text: str) -> list[str]:
     found: list[str] = []
     accepted, known = accepted_milestones(text), table_milestones(text)
 
-    def check(line: str, tag: re.Match[str] | None) -> None:
+    def check(line: str, tag: str | None) -> None:
         shown = line[:60]
         if len(line) > MAX_LENGTH:
             found.append(f"{len(line)} 字，上限 {MAX_LENGTH}：{shown}")
-        if tag is None:
-            found.append(f"開頭沒有標里程碑：{shown}")
-        elif tag.group(1) not in known:
-            found.append(f"{tag.group(1)} 不在里程碑表：{shown}")
-        elif tag.group(1) in accepted:
-            found.append(f"{tag.group(1)} 已驗收，該搬去 docs/archive：{shown}")
+        if tag not in known:
+            found.append(f"開頭沒有標里程碑表裡的里程碑（{tag}）：{shown}")
+        elif tag in accepted:
+            found.append(f"{tag} 已驗收，該搬去 docs/archive：{shown}")
 
     for line in _section(text, "Session 紀錄"):
         if re.match(r"\| \d{4}-\d\d-\d\d \|", line):
             ticket = line.split("|")[2].strip()
-            check(line, _SESSION_TAG.match(ticket))
+            check(line, ticket.split(" ")[0])
     for line in _section(text, "偏差與決定"):
         if line.startswith("- "):
-            check(line, _DEVIATION_TAG.match(line))
+            match = _DEVIATION.match(line)
+            check(line, match.group(1) if match else None)
     return found
 
 
@@ -97,23 +95,28 @@ class TestTheGatesThemselves:
 
     def test_a_row_without_a_milestone_is_caught(self) -> None:
         row = "| 2026-10-31 | 99 沒標里程碑 | 結果 | 下一步 |"
-        assert any("沒有標里程碑" in item for item in problems(self.with_row(row)))
+        assert any("沒有標里程碑表裡的里程碑" in item for item in problems(self.with_row(row)))
 
     def test_a_deviation_without_a_milestone_is_caught(self) -> None:
-        assert problems(self.text() + "- 2026-10-31 票 99：沒標\n") != []
+        assert any(
+            "沒有標里程碑表裡的里程碑" in item
+            for item in problems(self.text() + "- 2026-10-31 票 99：沒標\n")
+        )
 
     def test_a_row_for_an_accepted_milestone_is_caught(self) -> None:
         row = "| 2026-10-31 | M4 999 已驗收的里程碑 | 結果 | 下一步 |"
         assert any("已驗收" in item for item in problems(self.with_row(row)))
 
     def test_a_deviation_for_an_accepted_milestone_is_caught(self) -> None:
-        assert problems(self.text() + "- 2026-10-31 M4 票 999：已驗收\n") != []
+        assert any(
+            "已驗收" in item for item in problems(self.text() + "- 2026-10-31 M4 票 999：已驗收\n")
+        )
 
     def test_a_milestone_missing_from_the_table_is_caught(self) -> None:
         text = "\n".join(
             line for line in self.text().splitlines() if not line.startswith("| docs-diet |")
         )
-        assert any("不在里程碑表" in item for item in problems(text))
+        assert any("docs-diet" in item for item in problems(text))
 
     def test_unrelated_formatting_is_not_caught(self) -> None:
         text = self.text()

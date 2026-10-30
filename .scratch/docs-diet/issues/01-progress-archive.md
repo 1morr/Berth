@@ -55,14 +55,14 @@
 `python scripts/docs_moved_lines.py fb81c86d docs/progress.md -- docs/archive/*.md`
 
 ```
-刪 1786 行、找到 1786 行、遺失 0 行
+removed 1786 lines, found 1786, missing 0
 ```
 
 搬走 session 列 314、偏差 1,189 條（m0 14/157、m1 29/254、m1.5 13/75、m2 22/92、m3 33/131、m4 153/365、m5 50/115）。progress.md 剩 docs-diet 的兩列 session 與一條偏差。
 
 ### 分類
 
-分類用一次性腳本做（未留在 repo）。
+里程碑標記只認里程碑表第一欄（code-review 的 Spec 軸建議，新增里程碑不必改測試）。分類用一次性腳本做（未留在 repo）。
 
 - 明寫 `M0`…`M5` 的照寫：session 257 列、偏差 733 條。
 - 沒寫的，先照票號對 `.scratch/<里程碑>/issues/` 的檔名（日期要落在該里程碑區間）：session 45 列、偏差 423 條。區間：M0 09-07–09-08、M1 09-09–09-17、M1.5 09-17–09-19、M2 09-21–09-24、M3 09-24–09-26、M4 09-26–10-23、M5 10-24 起。
@@ -97,3 +97,7 @@
 ### 驗證
 
 pre-commit 全過；pytest 全部通過。CLAUDE.md 流程第 5 步「由測試強制」只對三條（長度、里程碑標記、標的里程碑未驗收）說，與 `test_progress_rules.py` 逐條對得上；「封存這個里程碑」只是流程，沒宣稱由測試守。
+
+### code-review
+
+Standards 軸：腳本輸出改英文；`docs/development.md` 補 `docs_moved_lines.py` 一條；CLAUDE.md〈文件〉補 `docs/archive/`；〈寫法與封存〉註明沒有票的工作省略票號——都已處理。Spec 軸：archive 開頭寫的是封存前最後一版 `fb81c86d`（比封存 commit 自己更有用，`git show` 取得原文），不是票字面的「commit 之後填」，保留；測試的里程碑名單改成讀表；偏差兩條變異的斷言加強。未處理：無。

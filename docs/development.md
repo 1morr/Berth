@@ -209,6 +209,10 @@ ruff、mypy、import-linter，加上 `web/` 的 prettier、eslint 與 knip。CI�
 - **commit-msg hook 擋格式不對的 subject**：`scripts/check_commit_msg.py` 要求 Conventional Commits 的 type
   與小寫開頭，subject ≤ 72 字元；`Merge `、`Revert "`、`fixup!`、`squash!`、`amend!` 開頭的放行。
   `tests/unit/test_commit_msg.py` 雙向驗它。歷史上有幾條超長的 commit，不回溯。
+- **搬文件要證明沒丟**：`uv run python scripts/docs_moved_lines.py <base-ref> <來源檔> -- <目的檔...>` 列出
+  `git diff <base-ref>` 從來源檔刪掉的每一行，檢查都在目的檔裡（去頭尾空白、略過空行與表格分隔列），
+  有遺失就 exit 1。封存里程碑（`docs/archive/`，見 `docs/progress.md`〈寫法與封存〉）與拆文件時用；
+  `tests/unit/test_docs_moved_lines.py` 驗它。
 - **CI hygiene 的 `SKIP` 跟 `language: system` 的 hook 一致**：`tests/unit/test_hygiene_skip.py` 比
   `.pre-commit-config.yaml` 裡會在 pre-commit 階段跑的 `language: system` hook 與 ci.yml hygiene 那一步的
   `SKIP`；新增這類 hook 忘了加進 `SKIP`，這裡紅（不然 CI 的 hygiene 才紅）。

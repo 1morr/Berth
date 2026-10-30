@@ -49,9 +49,9 @@ def main(argv: list[str]) -> int:
     ).stdout
     removed = removed_lines(diff)
     lost = missing_lines(removed, (Path(path).read_text(encoding="utf-8") for path in destinations))
-    print(f"刪 {len(removed)} 行、找到 {len(removed) - len(lost)} 行、遺失 {len(lost)} 行")
+    print(f"removed {len(removed)} lines, found {len(removed) - len(lost)}, missing {len(lost)}")
     for line in lost:
-        print(f"  遺失：{line}")
+        print(f"  missing: {line}")
     return 1 if lost else 0
 
 
