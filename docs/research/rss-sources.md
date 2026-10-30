@@ -614,20 +614,28 @@ MyBangumi 聚合 feed 的每一筆第一次出現時，都要多抓一次單集�
 
 ## 從 brief 搬來（§20.12，逐字）
 
+從 design-brief §20.12 搬來（原文不改字）；brief 留的是濃縮版。
+
 fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 token 的方式見同目錄 README）。
+
 **2026-09-24 試跑時的五條實測**（當時是使用者與 agent 的觀察，2026-09-25 的 fixture 都重現了）：
+
 - **Mikan 聚合 feed（`/RSS/MyBangumi?token=`）只有最近的集數**：12 筆、跨 6.6 天，同一部作品 × 字幕組只剩最近兩集。上限是筆數還是時間窗，一份樣本分不出來。【實測 fixture `rss-mybangumi.xml`】
 - **單集頁反查得到番組 id 與字幕組 id**：`/Home/Episode/<hash>` 頁上的 `a.mikan-rss` 就是 `/RSS/Bangumi?bangumiId=…&subgroupid=…`。feed 本身不帶這兩個 id，所以聚合 feed 的每一筆第一次出現都要多抓一次單集頁。【實測】
 - **單一 feed（`/RSS/Bangumi?bangumiId=&subgroupid=`）有整季**：4009 × 370 的 01–12 都在。【實測】
 - **acg.rip 的搜尋 feed 夾合集**：搜「Kamiina Botan」30 筆裡 8 筆；Nyaa 的搜尋 feed 同樣（75 筆裡 14 筆）。**三站都沒有標示合集的欄位**，只能看標題（`[01-12 合集]`、`(01-12) … [Batch]`、`[Vol.1][BDRemux]`…）。【實測】
 - **Nyaa 從開發機連不上**：TLS 握手失敗（curl 報 `SEC_E_INVALID_TOKEN`，Python 與 Node 報 `WRONG_VERSION_NUMBER`）；同時 Mikan 與 acg.rip 回 200。瀏覽器（playwright）連得上，fixture 是在頁內 `fetch()` 取得的。部署環境連不連得上取決於使用者的網路。【實測】
+
 **三站的欄位**：
+
 | | Mikan | Nyaa | acg.rip |
+| --- | --- | --- | --- |
 | guid | `<guid isPermaLink="false">` **就是標題**，改標題會跟著變 | `https://nyaa.si/view/<id>` | `https://acg.rip/t/<id>` |
 | info hash | `link`（`/Home/Episode/<40 hex>`）與 enclosure 檔名的末段就是 info hash（124/124 筆一致，抽一個 `.torrent` 算 info dict 的 SHA-1 相同） | `nyaa:infoHash` | **沒有**（feed 與單集頁都沒有），只能下載 `.torrent` 算 |
 | torrent / magnet | `<enclosure type="application/x-bittorrent">`；沒有 magnet | **沒有 enclosure**，`<link>` 是 `.torrent`（`&m` 參數時換成 magnet）；單集頁在 `<guid>` | `<enclosure type="application/x-bittorrent">`（沒有 `length`）；沒有 magnet |
 | 大小 | `contentLength` 與 enclosure `length` **不是位元組**（描述裡十進位 MB 的數字乘 1024^k，多出約 5%）；描述後綴 `[518.65 MB]` 比較準 | `nyaa:size` 是人類可讀字串（`240.5 MiB`，1024 進位） | `torrent:contentLength` 是位元組 |
 | 發佈時間 | `https://mikanani.me/0.1/` 命名空間的 `<torrent><pubDate>`，ISO 8601 **不帶時區、實際是 UTC+8**（同一筆在 acg.rip 對照差 +7:59:59），小數秒 0、3、6 位都有 | `<pubDate>` RFC 822 `-0000`（UTC） | `<pubDate>` RFC 822 `-0700` |
 | 做種數 | 沒有 | `nyaa:seeders` / `leechers` / `downloads` | 沒有 |
+
 **feedparser 6.0.14**（2026-07-30，PyPI 最新）三站都讀得動、不丟欄位，但 Mikan 有兩處會安靜地讀錯：`published_parsed` 把不帶時區的 `<torrent><pubDate>` 當 UTC（差 8 小時，要讀 `published` 字串自己補 UTC+8）；`<torrent>` 的命名空間被抹掉（`pubDate` → `published`、`contentLength` → `contentlength`、`link` 變成第二個 `links`），哪天 Mikan 加上標準的 `<item><pubDate>` 會撞名。Nyaa 的欄位是 `nyaa_infohash` 這種 key，前綴取自 feed 自己宣告的 `xmlns:nyaa`。【實測 fixture；context7 `/kurtmckee/feedparser`】
 **跨 feed 以 info hash 去重：做，不多發請求**（plan §8.5）。Mikan 與 Nyaa 在輪詢時就有 hash；acg.rip 不在輪詢時預抓 `.torrent`，送單時 `TorrentFetcher` 本來就要下載並算 hash，`jobs.hash` 是主鍵。**未證實**：同一個發佈在 Mikan 與 acg.rip 是不是同一個 info hash（時間差不到 1 秒、大小對得上，但沒有下載 acg.rip 的 `.torrent` 算）；不同的話由帳本「同 Media / 季 / 集 / Tags」那一層擋。

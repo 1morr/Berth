@@ -120,6 +120,8 @@ AutoBangumi 官方文件。找不到的一律標「未找到」，不用記憶�
 
 ## 從 brief 搬來（§20.13，逐字）
 
+從 design-brief §20.13 搬來（原文不改字）；brief 留的是濃縮版。
+
 - **Prowlarr 的 Query Limit 是滾動窗**：`IndexerLimitService` 數「過去 N 小時」的歷史（`Limits Unit` 只有 `Hour` 與預設的 `Day`），**RSS 與查詢算在同一份**（`IndexerQuery` + `IndexerRss`），打滿時那一站那一次跳過，重試時間＝窗裡最早那一筆 + 窗長 − 現在（實例 `Request Limit reached for BitSearch. Disabled for 01:00:00`）。Grab Limit 是另一份。預設不限，要使用者自己填。
 - **Cardigann 定義的請求間隔**：`nyaasi.yml` 有 `requestDelay: 2`，`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有——Prowlarr 不替 Mikan 節流。
 - **Berth 的搜尋曾照「那一站那一次跳過」**（M4 票 77）；票 107 之後搜尋問全部的站，各站的配額交給 Prowlarr 自己的

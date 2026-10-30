@@ -222,7 +222,7 @@
 
 ## 從 brief 搬來（§20.24）
 
-以下是 brief 原有、本檔上文沒有逐字寫過的段落（原文不改字）；「真模型實測」「實跑抓到」「觀測的缺口」「還沒測」在上文〈結果：真模型〉〈發現〉〈兩種接口的差異〉已有。
+以下是 brief 原有、本檔上文沒有逐字寫過的段落（原文不改字）；「真模型實測」「實跑抓到」「觀測的缺口」「還沒測」的概要在上文〈結果：真模型〉〈發現〉〈兩種接口的差異〉，brief 原文的逐字版在文末〈從 brief 搬來（§20.24，逐字）〉。
 
 - **deferred tool 可以存成一列、重啟之後接著跑**：
   - 工具丟 `ApprovalRequired` 時，run 以 `DeferredToolRequests` 結束。這需要 `output_type` 含 `DeferredToolRequests`。
@@ -289,7 +289,9 @@
 
 ## 從 brief 搬來（§20.24，逐字）
 
-全文、selftest 輸出與用到的版本在 [`docs/research/m5-prototype-2026-10-27.md`](research/m5-prototype-2026-10-27.md)，腳本是 `scripts/experiments/m5_agent_chat.py`。版本：pydantic-ai-slim 2.61.0、ai 7.0.138、@ai-sdk/react 4.0.141。
+從 design-brief §20.24 搬來（原文不改字）；brief 留的是濃縮版。
+
+全文、selftest 輸出與用到的版本在 [`docs/research/m5-prototype-2026-10-27.md`](../research/m5-prototype-2026-10-27.md)，腳本是 `scripts/experiments/m5_agent_chat.py`。版本：pydantic-ai-slim 2.61.0、ai 7.0.138、@ai-sdk/react 4.0.141。
 - **真模型實測**（DeepSeek `deepseek-flash`，Anthropic 與 OpenAI 兩種相容接口各跑六個情境；TMDB 與索引站是真的，qBittorrent 是替身）：
   - **完成度**：兩種接口都跑完全部情境，沒有接口相關的錯誤。
   - **品質**：
