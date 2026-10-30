@@ -4,8 +4,6 @@
 
 M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session 紀錄與偏差在 `docs/archive/<里程碑>.md`（`m0`、`m1`、`m1.5`、`m2`、`m3`、`m4`、`m5`）；舊文件與舊票指到「progress.md 的偏差與決定」的，到那裡找。
 
-docs-diet（文件瘦身）也已驗收，封存於 `docs/archive/docs-diet.md`。
-
 ## 里程碑與閱讀指引
 
 | 里程碑 | 票目錄 | 拆票前讀 | 備註 |

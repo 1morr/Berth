@@ -24,7 +24,7 @@
 - [x] 必讀範圍量測與結論貼 Comments
 - [x] 閘門評估寫了建議
 - [x] `scripts/docs_moved_lines.py` 對 docs-diet 的封存跑出「遺失 0」，輸出貼 Comments
-- [ ] 全部檢查與 test 綠；commit；不 push
+- [x] 全部檢查與 test 綠；commit；不 push
 
 ## Comments
 
@@ -98,4 +98,9 @@ docs-diet 的 15 列 session 紀錄、1 條偏差、1 列閱讀指引搬到 `doc
 票 04a 把 §19 改成 ADR 索引後，沒人接手的舊引用在本票處理：
 - brief §20：6 處加 3 處（§20.7 兩處、§20.8 兩處、§20.12–§20.13 起）共 9 處「§19 …」改連對應 ADR（0001、0002、0004、0009、0010、0012、0014）。
 - `berth/` 41 處註解與 docstring 的「brief §19 …」改成 `ADR-00NN`，只動註解文字，不動邏輯。
-- 對應是我依 ADR 的〈來源〉列判的；`D5`（既有那台測試通過）、`D7`（頁 3 預設媒體庫）在 ADR-0013 來源列沒列，我歸 0013，不確定，請抽看 `services/setup.py` 與 `services/jellyfin.py` 兩處。`⑤`（介面密碼加鹽雜湊）歸 ADR-0010，`Policy` 與 session 的歸 ADR-0004 / 0012。
+- 對應是我依 ADR 的〈來源〉列判的；`D5`、`D7` 沒有 ADR（只在 brief §16.3 與 archive/m4），審查指出後改指 brief §16.3。`⑤`（介面密碼加鹽雜湊）歸 ADR-0010，`Policy` 與 session 的歸 ADR-0004 / 0012。
+
+### 7. code-review（`/code-review 1d0efda5`）
+
+Standards 軸已處理：D5、D7 改指 brief §16.3；brief §20.8 的 `Policy` 改連 ADR-0004；progress.md 重複的一句刪掉；封存檔頭註明最後一列是直接寫的。`berth/` 29 個 `.py` 的 AST（去 docstring）前後相同。
+**未處理**：`tests/` 約 20 處、`web/src` 22 處仍有「brief §19 …」舊引用（spec 範圍規則 5 不許動 `web/`，`tests/` 的也沒在協調者指示內），請決定要不要開票；`03857521` 單看 test 紅、`3606359c` 才綠（已知，未改歷史）。

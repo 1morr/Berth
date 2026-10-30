@@ -1,6 +1,6 @@
 # docs-diet 封存
 
-從 `docs/progress.md` 封存（封存前最後一版是 commit `1d0efda5`）；原文不改字，順序照原檔。
+從 `docs/progress.md` 封存（封存前最後一版是 commit `1d0efda5`）；原文不改字，順序照原檔（只有最後一列，docs-diet 08 自己的 session 紀錄，是直接寫在這裡的）。
 
 ## 閱讀指引
 

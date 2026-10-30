@@ -1156,7 +1156,7 @@ def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
     """頁 2 做完了沒：選過、最後一次測試連得上；套件內那一台另外要介面登入有結論。
 
-    **既有的那一台測試通過就做完了**（M4 票 38，ADR-0013）：Berth 對它什麼都不寫，原本那一顆
+    **既有的那一台測試通過就做完了**（M4 票 38，brief §16.3）：Berth 對它什麼都不寫，原本那一顆
     「確認，不改任何設定」按下去也什麼都不做，只是要人多按一次。
 
     套件內的登入必填（M4 票 07 shape）：沒設過時那一條是 `pending`，精靈停在這裡；設好是 `ok`，
