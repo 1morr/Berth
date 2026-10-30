@@ -1,7 +1,8 @@
 """e2e 那一整套 compose 的起停（M4 票 34）：`uv run --env-file .env python -m tests.e2e.stack`。
 
-一條指令走完 docs/development.md〈e2e〉那一串：先拆掉上一輪留下的 → build → `up`（不加 `--wait`，
-冷啟動閘門）→ `pytest -m e2e tests/e2e` → 失敗時印出容器狀態與 log → 不論結果都 `down --volumes`。
+一條指令走完 docs/development/e2e.md〈e2e〉那一串：先拆掉上一輪留下的 → build →
+`up`（不加 `--wait`，冷啟動閘門）→ `pytest -m e2e tests/e2e` → 失敗時印出容器狀態與 log →
+不論結果都 `down --volumes`。
 多給的參數原樣交給 pytest（`-k`、`-x`）。
 
 **與同一台機器上的試跑環境並存**：專案名、容器名、網路與子網在 `compose.yml` 換掉，host port 與

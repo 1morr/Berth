@@ -2,8 +2,8 @@
 
 - `README.md`（英文）與 `README.zh-Hant.md` 段落一一對應：標題的層級一節一節相同、連出去的東西
   相同（兩份互連的那一條與同檔錨點除外）。改了一份忘了另一份，這裡紅。
-- README 兩份、`docs/guide/`、`docs/development.md`、`docs/progress.md`、`docs/archive/` 裡的
-  相對連結都指得到檔案，帶錨點的指得到
+- README 兩份、`docs/guide/`、`docs/development.md`、`docs/development/`、`docs/progress.md`、
+  `docs/archive/` 裡的相對連結都指得到檔案，帶錨點的指得到
   那一份 Markdown 裡的標題（GitHub 的錨點算法）。
 - 同一批文件裡指向部署檔的連結一律是最新 Release 的附件（`releases/latest/download/<附件名>`，
   M4 票 97）：不指 `main`（compose 不能比使用者拉到的 image 新），也不寫死版號（每次發版都要改）。
@@ -127,10 +127,12 @@ def deploy_link_violations(markdown: str) -> list[str]:
 def user_docs() -> list[Path]:
     guides = sorted((ROOT / "docs" / "guide").glob("*.md"))
     archive = sorted((ROOT / "docs" / "archive").glob("*.md"))
+    development = sorted((ROOT / "docs" / "development").glob("*.md"))
     return [
         README,
         README_ZH,
         ROOT / "docs" / "development.md",
+        *development,
         ROOT / "docs" / "progress.md",
         *guides,
         *archive,

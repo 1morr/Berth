@@ -60,7 +60,7 @@
 
 ## 指令
 
-開發指令的單一來源是 `docs/development.md`。README 只給使用者：英文為主，`README.zh-Hant.md` 是同內容的繁中版，改一份就同輪改另一份（兩份的標題層級與連結要一致，`tests/unit/test_readme_docs.py` 守）；部署與操作的細節在 `docs/guide/`（英文）。
+開發指令的單一來源是 `docs/development.md` 與 `docs/development/`（子檔，索引在主檔）。README 只給使用者：英文為主，`README.zh-Hant.md` 是同內容的繁中版，改一份就同輪改另一份（兩份的標題層級與連結要一致，`tests/unit/test_readme_docs.py` 守）；部署與操作的細節在 `docs/guide/`（英文）。
 
 ## Agent skills
 

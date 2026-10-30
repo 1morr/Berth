@@ -1,7 +1,7 @@
 # 實驗腳本
 
-M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11、M3 票 03 的實驗。**指令在 [`docs/development.md`](../../docs/development.md#實驗腳本)**（那份是本專案
-開發指令的單一來源）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
+M0 票 04、M1 票 01（brief §20.6）、M1 票 14d、M1.5 票 01 與 04、M2 票 09c 與 11、M3 票 03 的實驗。**指令在 [`docs/development/experiments.md`](../../docs/development/experiments.md)**（那份是本專案
+開發指令的單一來源之一）；這裡寫的是每個腳本在回答什麼、為什麼這樣寫、有哪些坑。
 
 結論在 [`docs/research/m0-experiments.md`](../../docs/research/m0-experiments.md)、
 [`docs/research/anime-episode-source.md`](../../docs/research/anime-episode-source.md) 與
@@ -164,7 +164,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
   「加入伺服器後允許私訊」，關著時新建的伺服器也是關的，而 Discord 回的 `50278` 與「沒有共同伺服器」一字不差——
   2026-10-21 就是被它誤導，才以為是 gateway 的問題。
 - **`discord_dm.py` 的每一步之間要使用者在 Discord 上動手**（邀請、關私訊、踢 bot），順序在
-  [`docs/development.md`](../../docs/development.md#實驗腳本)。`baseline` 與 `ratelimit` 會私訊收件人約 10 則。
+  [`docs/development/experiments.md`](../../docs/development/experiments.md)。`baseline` 與 `ratelimit` 會私訊收件人約 10 則。
   `fixtures` 只收 `FIXTURE_NAMES` 那九份，其他 `send` 的結果只留在 `.local/experiments/results/discord_dm/`。
 - **`m5_agent_chat.py` 的對話紀錄在 `.local/experiments/m5-agent-PROTOTYPE-wipe-me.db`**，跨重啟保留（重啟後按舊卡片正是要驗的）；
   要從頭來就刪掉它。頁面的 React 與 AI SDK 從 esm.sh 載入：`ai` 與 `@ai-sdk/react` 要帶 `deps=zod@3.25.76`，

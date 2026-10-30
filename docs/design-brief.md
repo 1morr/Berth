@@ -1683,7 +1683,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
           mode: 0555
   ```
 
-  漏掉 `mode` 不會報錯、只會讓 Berth 進不去，所以票 71 的閘門要守著 `mode` 帶執行位元。重量：`docs/development.md`〈實驗腳本〉。
+  漏掉 `mode` 不會報錯、只會讓 Berth 進不去，所以票 71 的閘門要守著 `mode` 帶執行位元。重量：`docs/development/experiments.md`。
 - **票 71 照抄進部署檔之後的閘門**：`tests/unit/test_qbittorrent_preseed.py` 從 compose 抽出腳本（`$$` 還原）跑原有的行為斷言，並守著 `content` 裡沒有未轉義的 `$`、target 在 `/custom-cont-init.d/`、`mode` 帶執行位元；`tests/unit/test_deploy_mounts.py` 守著 compose 的宿主路徑沒有相對的。
 
 ### 20.19 搜尋的年份、片名裡的 `&` 與成人分類（2026-10-10 查證，M4 票 69）
