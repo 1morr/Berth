@@ -111,3 +111,49 @@ export function Line({ step }: { step: { error: string; failure: string | null }
     },
   )
 })
+
+/**
+ * 只在 secure context 才有的 API（0.4.0 的 crash：用區網 IP 走 HTTP 開 Berth 時 `crypto.randomUUID` 是
+ * `undefined`）。`eslint.config.js` 的 `no-restricted-properties` 擋直接用，要走包好的工具
+ * （`components/clipboard.ts`）。用真正的設定檔跑：規則被拿掉、名單少一個、或豁免範圍寫寬了，第一組就紅；
+ * 第二組是同名但不相干的寫法，不該紅。**擋不到的**：`window.navigator.clipboard`、先把 `navigator` 賦給別的變數
+ * ——規則只認 `navigator.` 開頭；這類由 e2e 的 `insecure-origin` 專案在真的 HTTP 下抓。
+ */
+const SECURE_ONLY = 'no-restricted-properties'
+
+async function secureOnly(source: string, filePath = 'src/agent/panelState.ts'): Promise<number> {
+  const [result] = await new ESLint().lintText(source, { filePath })
+  return result.messages.filter((message) => message.ruleId === SECURE_ONLY).length
+}
+
+describe('只在 HTTPS / localhost 才有的 API', () => {
+  it('直接用會被擋，換成解構或可選鏈也一樣', { timeout: 60_000 }, async () => {
+    const source = `export async function probe(text: string) {
+  const id = crypto.randomUUID()
+  const viaWindow = window.crypto.randomUUID()
+  const { randomUUID } = crypto
+  await navigator.clipboard?.writeText(text)
+  const digest = await crypto.subtle.digest('SHA-256', new Uint8Array())
+  await navigator.serviceWorker.register('/sw.js')
+  await navigator.share({ text })
+  return [id, viaWindow, randomUUID, digest]
+}
+`
+    expect(await secureOnly(source)).toBe(7)
+  })
+
+  it('同名但不相干的寫法、與包好的那一個檔案不擋', { timeout: 60_000 }, async () => {
+    const unrelated = `export function probe(init: RequestInit, share: { clipboard: string }) {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const clipboard = share.clipboard
+  return { credentials: init.credentials, bytes, clipboard, language: navigator.language }
+}
+`
+    expect(await secureOnly(unrelated)).toBe(0)
+    const wrapper = `export async function copy(text: string) {
+  await navigator.clipboard.writeText(text)
+}
+`
+    expect(await secureOnly(wrapper, 'src/components/clipboard.ts')).toBe(0)
+  })
+})

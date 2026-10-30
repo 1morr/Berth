@@ -23,6 +23,24 @@ const RAW_TEXT_SELECTORS = [
   `${CHILD} > ConditionalExpression > MemberExpression.alternate${RAW}`,
 ]
 
+/**
+ * 只在 secure context（HTTPS、localhost）才有的 API（0.4.0 的 crash）：使用者多半用區網 IP 走 HTTP 開 Berth，
+ * 這時它們是 `undefined`。要用就包一層有備案的工具（剪貼簿：`src/components/clipboard.ts`）。
+ * `randomUUID`、`subtle` 只認屬性名（`window.crypto.` 也擋得到）；`navigator` 的幾個名字太常見，只認 `navigator.`。
+ * `src/lint.test.ts` 用這份設定檔雙向驗它。
+ */
+const SECURE_CONTEXT_ONLY = [
+  ...['randomUUID', 'subtle'].map((property) => ({ property })),
+  ...['clipboard', 'serviceWorker', 'share', 'mediaDevices', 'credentials'].map((property) => ({
+    object: 'navigator',
+    property,
+  })),
+].map((restriction) => ({
+  ...restriction,
+  message:
+    'Only exists over HTTPS or localhost; Berth is usually opened by LAN IP over plain HTTP. Use a wrapper with a fallback (e.g. components/clipboard.ts).',
+}))
+
 export default defineConfig([
   // `src/api/schema.d.ts` 是 `pnpm gen:api` 的產物：不 lint、不格式化，只由 tsc 檢查。
   globalIgnores(['dist', 'src/api/schema.d.ts']),
@@ -49,12 +67,18 @@ export default defineConfig([
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
       '@eslint-react/jsx-no-comment-textnodes': 'error',
+      'no-restricted-properties': ['error', ...SECURE_CONTEXT_ONLY],
     },
     languageOptions: {
       ecmaVersion: 2023,
       globals: globals.browser,
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
+  },
+  {
+    // 包好的那一層，與測試（它們要 stub 這些 API 來模擬 HTTP）。
+    files: ['src/components/clipboard.ts', '**/*.test.{ts,tsx}', 'e2e/**/*.ts'],
+    rules: { 'no-restricted-properties': 'off' },
   },
   {
     files: [
