@@ -1,6 +1,6 @@
 # 07 — 閱讀預算閘門：CLAUDE.md 與 progress.md 的大小上限
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 01
 
@@ -27,9 +27,14 @@ plan / brief 的章節大小不設閘門：要等 04、05 改寫完才有基線�
 
 ## 驗收
 
-- [ ] 上限值與理由在 Comments
-- [ ] 測試兩條綠；雙向變異紅 / 不紅都跑過，記在 Comments
-- [ ] 〈寫法與封存〉與 CLAUDE.md 的宣稱對得上測試
-- [ ] 全部檢查與 test 綠；progress.md 記一列 session；commit；不 push
+- [x] 上限值與理由在 Comments
+- [x] 測試兩條綠；雙向變異紅 / 不紅都跑過，記在 Comments
+- [x] 〈寫法與封存〉與 CLAUDE.md 的宣稱對得上測試
+- [x] 全部檢查與 test 綠；progress.md 記一列 session；commit；不 push
 
 ## Comments
+
+- 上限：`CLAUDE.md` ≤ 6,000 字（量到 3,875，留約 55% 餘裕給後續票）；`docs/progress.md` ≤ 20,000 字（量到 2,965；一次 Read 不帶 offset 讀得完）。採用建議值，沒有調整。
+- 雙向變異（手動，各檔各一次，跑完還原）：補 `x` 到上限 + 1 → 該檔那條紅、另一條綠；換行與空行重排、總字數不變 → 兩條綠。
+- CLAUDE.md 沒有「由測試強制」的宣稱涉及此上限，不改；上限與超過時的做法寫在 progress.md〈寫法與封存〉，測試失敗訊息同一說法。
+- 沒有 code-review 未處理的發現（見 session 結尾的審查）。
