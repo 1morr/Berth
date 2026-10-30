@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.4.2-rc1] - 2026-10-30
+
+**預發佈，不必升級**：演練新的發版流程（tag 先過完整 CI 與真服務 e2e，都綠了才推 image、建 Release）。程式與 0.4.1
+相同，只多了測試與 CI 的改動；image 是 `ghcr.io/1morr/berth:0.4.2-rc1`，不動 `:0.4` 與 `:latest`。
+
 ## [0.4.1] - 2026-10-30
 
 **從 0.4.0 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變，沒有資料庫
