@@ -1,6 +1,6 @@
 """M0 的五張表：users、sessions、settings、routes、events。
 
-其餘 plan §2 的表在需要它們的里程碑增量加（progress.md 偏差與決定）。
+其餘 plan §2 的表在需要它們的里程碑增量加（docs/archive/m0.md 偏差與決定）。
 
 Revision ID: 8b1e1dc5336b
 Revises:

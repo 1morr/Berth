@@ -88,7 +88,7 @@ class TestJsonText:
 
 
 def test_metadata_holds_exactly_the_tables_built_so_far() -> None:
-    """表是**按里程碑增量加**的（progress.md 偏差與決定）：M0 五張，
+    """表是**按里程碑增量加**的（`docs/archive/m0.md` 偏差與決定）：M0 五張，
     M1 票 03、09、11 各加兩張，票 12 加帳本，M2 票 05 加 `issues`，M3 票 08 加 RSS 三張，
     M4 票 123 加通知的待送表，票 131 加週報，M5 票 08 加 Proposal、票 11 加 AI 的對話與觀測四張。
 
