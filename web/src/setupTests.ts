@@ -18,3 +18,16 @@ afterEach(cleanup)
 beforeEach(() => {
   void i18n.changeLanguage('zh-Hant')
 })
+
+// 像用區網 IP 走 HTTP 開 Berth 的瀏覽器（使用者多半這樣開）：只在 secure context 才有的 API 不存在。
+// jsdom 預設都給，0.4.0 的 `crypto.randomUUID` crash 因此綠著出貨。每個測試重設一次：個別測試可以自己
+// 裝回來（`userEvent.setup()` 會裝一個假的剪貼簿）。`src/insecureContext.test.ts` 守著。
+beforeEach(() => {
+  for (const [target, key, value] of [
+    [window, 'isSecureContext', false],
+    [crypto, 'randomUUID', undefined],
+    [navigator, 'clipboard', undefined],
+  ] as const) {
+    Object.defineProperty(target, key, { value, configurable: true, writable: true })
+  }
+})

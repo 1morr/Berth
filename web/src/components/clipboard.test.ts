@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { copyText } from './clipboard'
 
-// 區網 IP 走 HTTP 時不是 secure context：`navigator.clipboard` 是 `undefined`，只剩舊的 `execCommand('copy')`。
+// 區網 IP 走 HTTP 時不是 secure context：`navigator.clipboard` 是 `undefined`（測試環境預設也是，`setupTests.ts`），
+// 只剩舊的 `execCommand('copy')`。
 describe('copyText', () => {
   let copied: string | null
   let execCommand: ReturnType<typeof vi.fn>
@@ -23,12 +24,7 @@ describe('copyText', () => {
 
   afterEach(() => {
     Reflect.deleteProperty(document, 'execCommand')
-    Reflect.deleteProperty(navigator, 'clipboard')
   })
-
-  function withoutClipboardApi() {
-    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
-  }
 
   it('有 Clipboard API 就用它', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
@@ -40,8 +36,6 @@ describe('copyText', () => {
   })
 
   it('沒有 Clipboard API（HTTP）時改用選取再複製', async () => {
-    withoutClipboardApi()
-
     await expect(copyText('berth doctor')).resolves.toBe(true)
     expect(copied).toBe('berth doctor')
     // 借來選取的那一塊用完就拿掉。
@@ -57,7 +51,6 @@ describe('copyText', () => {
   })
 
   it('兩條路都不通就回 false', async () => {
-    withoutClipboardApi()
     execCommand.mockReturnValue(false)
 
     await expect(copyText('berth doctor')).resolves.toBe(false)
