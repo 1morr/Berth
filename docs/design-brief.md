@@ -37,9 +37,9 @@
 | --- | --- | --- |
 | 播放、轉碼、觀看紀錄的儲存、刮削圖片與簡介 | Jellyfin | 本系統讀取 Jellyfin 的媒體庫、項目、圖片與每位使用者的觀看紀錄來呈現媒體庫（§12）；唯一寫回的是已看 / 未看標記。播放一律深連結到 Jellyfin |
 | 下載協定、做種、限速、分享率、種子清理 | qBittorrent | 做種策略用 qBittorrent 的分類設定，本系統只處理「種子被移除後」的善後 |
-| 索引站接入 | 只支援 Prowlarr（套件內或既有） | 搜尋走 Prowlarr REST（`GET /api/v1/search`），加站、移除、測站也走它的 REST。開箱即用套件預設打包 Prowlarr（§16.3）。**2026-10-06 改（§19 D3，M4 票 37）**：原本「只依賴 Torznab 協定、已有 Jackett 的使用者直接填 Torznab 端點」不採用，Jackett 與單站 Torznab 網址沒有路徑，要先裝 Prowlarr |
+| 索引站接入 | 只支援 Prowlarr（套件內或既有；為什麼見 [ADR-0001](adr/0001-indexer-manager-prowlarr-only.md)） | 搜尋走 Prowlarr REST（`GET /api/v1/search`），加站、移除、測站也走它的 REST。開箱即用套件預設打包 Prowlarr（§16.3）。**2026-10-06 改（§19 D3，M4 票 37）**：原本「只依賴 Torznab 協定、已有 Jackett 的使用者直接填 Torznab 端點」不採用，Jackett 與單站 Torznab 網址沒有路徑，要先裝 Prowlarr |
 | Metadata | TMDB | 第一階段唯一的 provider，見 §10 |
-| 同一集多版本的合併顯示 | Jellyfin（12 起原生合併；本系統只支援 12 以上） | 本系統只保證命名讓 Jellyfin 能合併；不裝 MergeVersions（§7.7、§19） |
+| 同一集多版本的合併顯示 | Jellyfin（12 起原生合併；本系統只支援 12 以上） | 本系統只保證命名讓 Jellyfin 能合併；不裝 MergeVersions（§7.7、[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)） |
 
 刻意不做的事（第一階段）：品質檔案自動升級替換（Sonarr 的 quality profile upgrade）、內嵌播放器、多人審批、非影片媒體。巡檢與通知、AI 核心、側面板與外部對話排在 M4–M7（§14、§17，2026-09-24 重排）。見 §18。
 
@@ -232,7 +232,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 - 不用單一浮點數黑箱。每個 Plan item 帶 `confidence ∈ {high, medium, low}` 與 `reasons[]`。
 - **high**：Media 由上下文或「標題 + 年份精確命中」決定；每個影片檔都有顯式季/集或資料夾提示；季/集都存在於 TMDB；無衝突；批次一致性通過。
-- **medium**：Media 確定，但季/集靠推論（絕對編號換算、air_date offset、標題季名比對），或批次一致性只部分通過（少數檔案例外）。絕對編號換算要**沒有反證**才是 medium：集號超過第一季的集數，而且檔名若帶播出日就要與換算出的那一集相同（§6.4）。
+- **medium**：Media 確定，但季/集靠推論（絕對編號換算、air_date offset、標題季名比對），或批次一致性只部分通過（少數檔案例外）。絕對編號換算要**沒有反證**才是 medium（[ADR-0003](adr/0003-remove-route-profile.md)）：集號超過第一季的集數，而且檔名若帶播出日就要與換算出的那一集相同（§6.4）。
 - **low**：Media 不確定、有衝突、影片數量與 TMDB 集數明顯不符，或絕對編號換算有反證（§6.4 的兩條）。
 - **high 與 medium 都自動入庫**（owner 決定，所有 Route 預設開啟；可在 Route 上關閉 medium）。medium 入庫的檔案帶 `audit` 旗標，在審核佇列以「已入庫待確認」列出，一鍵撤銷（拆鏈接、清帳本）或確認。硬鏈接讓撤銷幾乎零成本，這是敢於自動入庫 medium 的前提。
 - low 進 review，並在啟用 AI 時觸發 §6.10。
@@ -289,7 +289,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 ### 6.10 AI 的角色【決定，2026-09-24 改】
 
-2026-09-24 使用者定下目標「AI native，出錯幾乎不需要人工處理」（§14、§19），原本「fallback 解析器：只產出 Plan、一律進 review」改成下面這樣。**AI 解析沒有拿掉，它是 M5 第一種 AI 任務**。
+2026-09-24 使用者定下目標「AI native，出錯幾乎不需要人工處理」（§14、[ADR-0008](adr/0008-ai-autonomy-and-optional-ai.md)），原本「fallback 解析器：只產出 Plan、一律進 review」改成下面這樣。**AI 解析沒有拿掉，它是 M5 第一種 AI 任務**。
 
 - **三層漏斗**：規則層（解析器、比對）是主力——免費、確定、有 benchmark 守著；AI 只接規則層的例外；人只處理 AI 交上來的與不可撤銷的。AI 掛掉或超出預算時退回沒有 AI 的行為，系統照樣能用。
 - **規則層自己知道沒把握的**（信心 low、Unmatched、目標衝突、RSS Series 待綁定）→ 開一個 AI 任務，而不是直接進審核。
@@ -299,7 +299,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 - **執行**：通過驗證、且這種任務在自動模式 → 直接套用（入庫可撤銷：硬鏈接，原檔在 complete）；影子模式只記錄 AI 會怎麼做。AI 的結果照樣走上面的程式檢查，不通過的不套用、交給人。
 - **修正回流**：人或 AI 的改正寫回結構化的地方（RSS Series 的季號與 offset、標題別名、排除條件），規則層下一次就用得到；改正過的案例進 benchmark 的候選語料，讓例外慢慢變成規則層的常態。
 - 快取鍵：`torrent hash + 解析器版本 + prompt 版本`；同一 torrent 不重複付費。
-- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。~~設定頁有月預算上限，超過即停用並提示~~（2026-10-27 拿掉，§19）：不以總花費切斷 AI，改用防護——每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器；花費只做可見與提醒（§14）。提醒有兩種（M5 票 21，`domain/spend.py`）：今天的估計費用到了管理員設的每日提醒值；今天是近 14 天（不含今天）**有用量那幾天**的日中位數 5 倍以上，那樣的日子少於 3 天不比（使用者 2026-10-27 選定：家用幾天才問一次，沒用的日子算 0 的話中位數常是 0）。費用只用知道的那部分，**所以費用未知的呼叫（有回應、有 token，但查不到價目）提醒看不見**；出錯、沒有回應的呼叫沒有花費可算，不算未知：今天或前 14 天有這種呼叫時，用量頁與側面板明說有幾次沒算進去（未知不當 0；協調者 2026-10-27）。提醒出現在用量頁與側面板（只給管理員），不推 Discord。
+- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。~~設定頁有月預算上限，超過即停用並提示~~（[ADR-0016](adr/0016-ai-agent-architecture.md)）（2026-10-27 拿掉，§19）：不以總花費切斷 AI，改用防護——每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器；花費只做可見與提醒（§14）。提醒有兩種（M5 票 21，`domain/spend.py`）：今天的估計費用到了管理員設的每日提醒值；今天是近 14 天（不含今天）**有用量那幾天**的日中位數 5 倍以上，那樣的日子少於 3 天不比（使用者 2026-10-27 選定：家用幾天才問一次，沒用的日子算 0 的話中位數常是 0）。費用只用知道的那部分，**所以費用未知的呼叫（有回應、有 token，但查不到價目）提醒看不見**；出錯、沒有回應的呼叫沒有花費可算，不算未知：今天或前 14 天有這種呼叫時，用量頁與側面板明說有幾次沒算進去（未知不當 0；協調者 2026-10-27）。提醒出現在用量頁與側面板（只給管理員），不推 Discord。
 - 引入時機：§17 的 M5（2026-09-24 排在巡檢與通知之後），在 benchmark 存在之後，才能量化 AI 帶來的增益與誤判。
 
 ---
@@ -349,7 +349,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 `Title` = TMDB 英文 `name`；英文缺或與 `original_name` 相同時用 `original_name`。資料夾名決定後凍結（§4.5）。
 
-**畫面上的顯示用標題、簡介與海報跟著 UI 語言走**（2026-09-17 決定，§19；海報由 M1.5 票 11 補上——TMDB 的海報也分語言，中文標題配英文海報是兩個來源拼出來的東西）：`zh-Hant` 取 TMDB `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。這一條只管畫面；檔名、資料夾名與季名比對用的字串不跟 UI 走。**媒體庫牆上已在 Jellyfin 裡的作品例外**，顯示 Jellyfin 的名稱（M1.5 拆票時決定，§19）：牆上多數作品不是 Berth 經手的，Berth 手上沒有它們的 TMDB 快照，而 Jellyfin 的名稱與使用者在 Jellyfin 裡看到的一致；還沒進 Jellyfin 的卡片照樣跟著 UI 語言。
+**畫面上的顯示用標題、簡介與海報跟著 UI 語言走**（2026-09-17 決定，[ADR-0005](adr/0005-display-title-follows-ui-language.md)；海報由 M1.5 票 11 補上——TMDB 的海報也分語言，中文標題配英文海報是兩個來源拼出來的東西）：`zh-Hant` 取 TMDB `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。這一條只管畫面；檔名、資料夾名與季名比對用的字串不跟 UI 走。**媒體庫牆上已在 Jellyfin 裡的作品例外**，顯示 Jellyfin 的名稱（M1.5 拆票時決定，§19）：牆上多數作品不是 Berth 經手的，Berth 手上沒有它們的 TMDB 快照，而 Jellyfin 的名稱與使用者在 Jellyfin 裡看到的一致；還沒進 Jellyfin 的卡片照樣跟著 UI 語言。
 
 ### 7.6 Specials / OVA / OAD / SP
 
@@ -359,7 +359,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 ### 7.7 多版本並存
 
-- 同一集不同 tags 的檔案並存在同一季資料夾。**Jellyfin 12.0 起原生合併**：同一個季資料夾裡解析出同一個 `S/E` 的檔案就是同一集的版本，本系統現行命名不裝插件就合併成 1 個 Episode、多個 MediaSource（2026-09-15 對 12.0.0 / 12.1.0 實測，§20.9）。**本系統只支援 Jellyfin 12 以上，不裝 MergeVersions**（§19）：10.10 / 10.11 原生不可靠（實測會變成兩個重複的 Episode 條目，§20.6），得靠這個插件；而它在 12.x 上對本系統的樹是空跑，卻要多一次 Jellyfin 重啟、依賴 GitHub 下載，還會跨媒體庫誤併。
+- 同一集不同 tags 的檔案並存在同一季資料夾。**Jellyfin 12.0 起原生合併**：同一個季資料夾裡解析出同一個 `S/E` 的檔案就是同一集的版本，本系統現行命名不裝插件就合併成 1 個 Episode、多個 MediaSource（2026-09-15 對 12.0.0 / 12.1.0 實測，§20.9）。**本系統只支援 Jellyfin 12 以上，不裝 MergeVersions**（[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)）：10.10 / 10.11 原生不可靠（實測會變成兩個重複的 Episode 條目，§20.6），得靠這個插件；而它在 12.x 上對本系統的樹是空跑，卻要多一次 Jellyfin 重啟、依賴 GitHub 下載，還會跨媒體庫誤併。
 - 版本標籤：**電影**是 tags 字串本身（` - ` 之後的部分）。**劇集**是「去掉各版本檔名的共同前綴」剩下的部分（有集名時是 `集名 + tags`，沒有集名時是 `S01E01 + tags`；算法跟標點有關，12.0 與 12.1 也不同，§20.9）。所以 UI 不自己重算劇集的版本名，Jellyfin 收錄之後讀它回的 `MediaSources[].Name`（M1 票 14b）。tags 詞彙仍要短且可讀，但 UI 文案不能說「使用者看到的就是 tags」。版本先後依解析度降冪，再依檔名。
 - 命名唯一必須保證的事：同一集所有版本的檔名在 `S01E01` 之前的部分完全相同，且互相只差 tags。
 
@@ -500,8 +500,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 沿用 Seerr 做法：以 Jellyfin 帳號登入本系統。
 
-- 初次設定：輸入 Jellyfin 位址 → 以 Jellyfin **管理員**帳號登入 → 該帳號成為本系統 admin，並產生本系統用的 Jellyfin API key。
-- 其他 Jellyfin 使用者可登入，預設角色 `user`（可探索、可送單到指定 Route、可看自己的 Job；送單只能送這次搜尋記下的結果，不收網址，也拿不到索引站的 API key，M4 票 79）；admin 可改 Route、刪除、審核。**2026-09-22 明確**（M2 拆票前）：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳一律只有 admin（plan §6 的門禁與 `api/gate.py` 同輪補上）；`user` 送單的 Job 停在 review 時只能等，畫面上說「等管理員審核」。
+- 初次設定（[ADR-0012](adr/0012-owner-is-jellyfin-admin.md)）：輸入 Jellyfin 位址 → 以 Jellyfin **管理員**帳號登入 → 該帳號成為本系統 admin，並產生本系統用的 Jellyfin API key。
+- 其他 Jellyfin 使用者可登入，預設角色 `user`（可探索、可送單到指定 Route、可看自己的 Job；送單只能送這次搜尋記下的結果，不收網址，也拿不到索引站的 API key，M4 票 79）；admin 可改 Route、刪除、審核。**2026-09-22 明確**（M2 拆票前；[ADR-0006](adr/0006-review-and-issues-split.md)）：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳一律只有 admin（plan §6 的門禁與 `api/gate.py` 同輪補上）；`user` 送單的 Job 停在 review 時只能等，畫面上說「等管理員審核」。
 - 不自建密碼系統；本系統的 `users` 表只存 Jellyfin user id 與偏好。
 - 未來的審批、配額、通知都掛在這個角色模型上。
 - 取捨：Jellyfin 掛掉時無法登入。可接受，Seerr 同樣如此。
@@ -521,7 +521,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 頁面 | 目的 | 關鍵內容 |
 | --- | --- | --- |
 | 設定精靈 | 首次啟動（只管第一次，跑完之後導向設定，2026-09-25） | Jellyfin、qBittorrent、Prowlarr 各一頁，每頁由使用者選套件內或既有、選完當場測試（不偵測，2026-09-29）：Jellyfin → 以它的管理員成為擁有者（套件內或還沒初始化的那一台由擁有者建，2026-09-26）→ qBittorrent → 媒體庫路徑與 Route（建立並跑檢查）→ Prowlarr 與索引站 → TMDB → 完成。兩種來源都只建 Berth 擁有的物件（§16.3、§16.4） |
-| 探索（首頁 `/`） | 找東西 | **只放 TMDB 牆**（2026-09-24 拍板、M3 票 06 實作）：趨勢 / 熱門 / 搜尋；繼續觀看與下一集只在媒體庫頁，登入後預設落在媒體庫、媒體庫裡還沒有 Berth 入庫的東西時落在這裡（2026-09-26，M4 票 10；M1.5 票 07 原本把那兩列放在這裡上方）；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
+| 探索（首頁 `/`） | 找東西 | **只放 TMDB 牆**（[ADR-0004](adr/0004-library-browsing-and-discovery.md)；2026-09-24 拍板、M3 票 06 實作）：趨勢 / 熱門 / 搜尋；繼續觀看與下一集只在媒體庫頁，登入後預設落在媒體庫、媒體庫裡還沒有 Berth 入庫的東西時落在這裡（2026-09-26，M4 票 10；M1.5 票 07 原本把那兩列放在這裡上方）；卡片顯示狀態（未追蹤 / 部分 / 完整 / 下載中，**四種都由 Job 與帳本推導**，所以卡片上的狀態要等 M1 票 09 才畫得出來） |
 | Media 詳情 | 決策中心與觀看入口 | 探索與媒體庫點進的是**同一頁**（2026-09-15 使用者拍板，不另建媒體庫詳情頁）。作品已在 Jellyfin 裡時最上面是**觀看區**（M1.5）：繼續看 / 下一集的深連結、選季選集、各集劇照與已看標記。其下：TMDB 資訊、各季各集入庫狀態、**搜尋 torrent**（按搜尋前用 chip 選要問的名字與季、說出會發幾個查詢，M4 票 84；結果表：大小、做種、來源、解析出的 tags、預估匹配；作品已入庫時收合）、選 Route 送單、RSS 訂閱、**這部作品的下載**（M4 票 12，排在 RSS 訂閱之後、季集之前：每一筆 Job 的狀態、進度、大小、來源與字幕組、Route、時間，展開看它的檔案、大小與計劃對到的季集，連到 Job 詳情；預設只列還沒了結的——在路上的加上已入庫而還有檔案待確認的，其餘在「全部」；從沒送過下載的作品整段不畫；季表的「下載中 / 卡住」連到蓋到那一集的那一筆）、檔案清單（含 Unmatched 與 rematch）、版本並存清單 |
 | 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（M1.5，不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序；Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上；篩選：待審 / 對不到（只給 admin，M2 票 14）。原本還有一個「有 Issue」，2026-09-24 使用者拍板拿掉：`/issues` 已經是獨立頁（M3 票 01）。M1（票 13）是依 Route 分頁、只列 Berth 經手的作品＋深連結 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
@@ -543,7 +543,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 **AI native**（2026-09-24 使用者拍板，推翻 2026-09-22 的「改狀態的命令一律先提案」）：目標是綁不到 TMDB、解析不出集數、offset 錯、解析錯這類問題**幾乎不需要人工處理**，外加定期巡檢。原則：
 
 - **沒有 AI 也完整可用**（2026-09-24 使用者補充）：AI 只是替使用者按審核頁、待處理頁上的那些按鈕，讓人專心看片——平常用 Jellyfin App 看，只在要加新作品時打開 Berth。所以每一種 AI 任務都有同一個命令的人工版本；不需要 AI 的檢查（Jellyfin 回驗、片長驗證、每日程式檢查）與通知是核心功能，不綁在 AI 上；沒有 AI 時要靠規則、批次動作與通知把人工降到最少。
-- **三層漏斗**：規則層 → AI → 人（§6.10）。沒有 AI 時是兩層：播出日比對、片長驗證與 Jellyfin 回驗在 M3，每日檢查與通知在 M4，都不靠 AI。
+- **三層漏斗**（[ADR-0008](adr/0008-ai-autonomy-and-optional-ai.md)）：規則層 → AI → 人（§6.10）。沒有 AI 時是兩層：播出日比對、片長驗證與 Jellyfin 回驗在 M3，每日檢查與通知在 M4，都不靠 AI。
 - **自主權看可不可以撤銷**：每個命令在**命令登錄表**裡標明副作用等級（讀取 / 可逆 / 不可逆）與反向命令。可逆的（綁定作品、改季號與 offset、核准或改寫計劃、rematch、確認 audit、重試、recheck、重新反查、在預算與磁碟門檻內補下載）通過驗證後 AI 自己做；不可逆的（刪 complete 檔案、移除 torrent、purge）與改設定、Route **永遠要人**，做成 Proposal——標記上是 `irreversible`，或帶「連到新位址」「對外發訊息」「改設定」任一個旗標（M5 票 02，`services/commands.py` 的 `needs_person`）；「忽略 Issue」會把問題藏起來，也做成 Proposal。M3 起新增的命令都要先標好等級、反向命令與旗標。
 - **AI 說了不算，要經過驗證**：AI 的結果與規則層的結果走同一組程式檢查（播出日、片長、TMDB 集存在、不撞目標路徑），不通過的不套用。
 - **信任逐步放開**：每種任務先**影子模式**（只記錄 AI 會怎麼做、統計與人的決定一致率），使用者看數字後切自動，可隨時切回。
@@ -553,7 +553,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 | 里程碑 | 內容 | 為什麼在這個位置 |
 | --- | --- | --- |
-| **M4 巡檢與通知** | 每日程式檢查 + 每週週報；`events` 的訂閱者 + channel adapter（第一個是 Discord，2026-10-21）+ 每人的訂閱設定；「可以看了」「有 N 件等你處理」 | 不需要 AI；平常不打開 Berth 的前提是有事時它會說（2026-09-24 排到 AI 之前） |
+| **M4 巡檢與通知** | 每日程式檢查 + 每週週報；`events` 的訂閱者 + channel adapter（第一個是 Discord，2026-10-21，[ADR-0015](adr/0015-notifications-discord-dm.md)）+ 每人的訂閱設定；「可以看了」「有 N 件等你處理」 | 不需要 AI；平常不打開 Berth 的前提是有事時它會說（2026-09-24 排到 AI 之前） |
 | **M5 AI 地基與對話 agent**（2026-10-27 改） | 命令登錄表與執行器、Proposal（兩者不需要 AI 也成立）；provider（Anthropic 與 OpenAI 相容，各自可設 base URL 與 key）、防護與記帳、觀測頁；每一頁都叫得出的側面板對話：工具、確認卡、外部資料（AniList 當季清單、Bangumi 放送表、網搜；Fribb 與 AniList 的系列走圖在票 23d 拿掉）、skills、上下文壓縮、斜線指令 | 有人在場的對話最適合讓核心第一次碰到真實模型；確認卡就是 Proposal 的第一個介面 |
 | **M6 人工接管開關**（2026-10-27 改） | 以決定點為單位的人 / 影子 / AI 三段開關；背景 AI 任務（規則層 low 的 Plan、Unmatched 與待綁定猜作品、offset 修正、audit 確認或撤銷、可疑入庫、Issue）；影子一致率；AI 活動頁與撤銷 | 影子模式要等核心在 M5 穩了才開始累積真實資料 |
 | **M7 Discord 與 MCP**（2026-10-27 改） | M4 的 Discord bot 接上同一個核心：同樣的對話體驗，確認卡是帶按鈕的訊息，身分用個人 API token（§16.2）；命令登錄表另外包成 MCP server | 只多兩個入口，核心與 Proposal 共用 |
@@ -568,7 +568,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 15. RSS 設計要點
 
-**2026-09-24 重寫**（§19）：原本以「Rule 先綁一部作品，再挑字幕組白名單與優先序」為中心，與實際用法不合——使用者在 Mikan 上選好作品與字幕組，聚合 feed 裡出現的就是要的（Mikan 的 `MyBangumi` 實測：同一部作品訂兩個字幕組是常態）。Berth 的工作因此是**認出每一筆是哪部作品**，而不是再挑一次。
+**2026-09-24 重寫**（[ADR-0007](adr/0007-rss-series-model.md)）：原本以「Rule 先綁一部作品，再挑字幕組白名單與優先序」為中心，與實際用法不合——使用者在 Mikan 上選好作品與字幕組，聚合 feed 裡出現的就是要的（Mikan 的 `MyBangumi` 實測：同一部作品訂兩個字幕組是常態）。Berth 的工作因此是**認出每一筆是哪部作品**，而不是再挑一次。
 
 - **Feed**：URL、輪詢間隔、來源類型、排除條件。【決定】第一批支援 **Mikan**（`/RSS/MyBangumi?token=` 聚合 feed、`/RSS/Bangumi?bangumiId=&subgroupid=` 單一 feed）、**Nyaa**（搜尋 feed、使用者 feed）與 **acg.rip**（搜尋 feed）；之後加 dmhy 與 generic。每種來源一個 adapter，負責解析該站的 RSS 擴充欄位並輸出統一的 Feed Item；各站的欄位與取法見 §20.12。
 - **RSS Series**（取代原本的 Rule）：一部作品 × 一個來源，由 Feed Item **自動長出**。鍵：Mikan 用（番組 id, 字幕組 id）——item 的 `link` 是單集頁，單集頁上有 `/RSS/Bangumi?bangumiId=…&subgroupid=…`；其他來源用標題骨幹（去掉字幕組、集號、tags）+ 字幕組（AutoBangumi 的做法）；骨幹有羅馬字那一個名字就取它——同一組的简日、繁日發佈中文名常常不同，是同一個 Series（M3 票 11）。標題中間的括號註記後面還接著 ` / ` 與下一個名字時（`尼古喵喵 (邪竜解放版) / ヤニねこ / Yani Neko / Chainsmoker Cat`），搜尋與比對用的骨幹丟掉那一格註記、後面的名字照讀；**鍵不跟著改**，仍讀到第一個括號為止——鍵存在資料庫裡，改了它既有的 Series 下一輪會另長一個（M4 票 98）。這些來源沒有番組頁，自動綁定的候選只從標題來，一律留給人。帶著 Media、Route、季號、集號 offset、排除條件、是否已確認。
@@ -624,7 +624,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 目標：新手使用者下載 compose 範本、`docker compose up`、開瀏覽器，之後所有設定都在 Berth 的精靈裡完成，不需要分別打開 qBittorrent、Jellyfin、Prowlarr 的介面。做法是「預置設定檔 + Berth 透過各服務 API 代為設定」，兩者都冪等，可重複按。
 
-**唯一要離開 Berth 的一步是 TMDB 憑證**【決定 2026-09-09】：使用者得先去 themoviedb.org 註冊、在「設定 → API」申請一把 key，貼進精靈的 TMDB 泊位。Berth **不內建任何 provider 的 API key** —— 不替所有使用者背一把共用憑證（原本沿用 Seerr 的內建 key，§20.7）。代價是「開箱即用」缺了這一角，這是知情且接受的；相對地兩個 metadata provider（TMDB 與 §10 評估過的 TVDB）在「使用者自備 key」這件事上是對稱的。
+**唯一要離開 Berth 的一步是 TMDB 憑證**【決定 2026-09-09，閘門見 [ADR-0011](adr/0011-wizard-accepted-frictions.md)】：使用者得先去 themoviedb.org 註冊、在「設定 → API」申請一把 key，貼進精靈的 TMDB 泊位。Berth **不內建任何 provider 的 API key** —— 不替所有使用者背一把共用憑證（原本沿用 Seerr 的內建 key，§20.7）。代價是「開箱即用」缺了這一角，這是知情且接受的；相對地兩個 metadata provider（TMDB 與 §10 評估過的 TVDB）在「使用者自備 key」這件事上是對稱的。
 
 | 服務 | 預置（compose 範本） | Berth 一鍵設定（API） | 使用者仍需自己做 |
 | --- | --- | --- | --- |
@@ -634,13 +634,13 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | TMDB | 無 —— **Berth 不內建任何 provider 的 key**【決定 2026-09-09】 | 無 | **必要**：自己申請一把 API key 貼進精靈的 TMDB 泊位（§20.7） |
 | 索引站 / RSS | 無 | Mikan、Nyaa feed 由使用者貼 URL | 貼自己的 Mikan 訂閱 URL |
 
-- **每個服務由使用者選來源，不偵測**（§19 2026-09-29）：Jellyfin、qBittorrent、Prowlarr 各一頁，頁首二選一「套件內」/「既有」。Seerr 連 Jellyfin、加 Sonarr / Radarr，Sonarr / Radarr 加下載器，全都是手動填位址與憑證、按 Test，沒有自動偵測（§20.14）。選擇存下來，從此「套件內 / 既有」由它決定：套件內的連 compose 主機名，既有的填位址與憑證。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。原本的偵測（2026-09-26 起「只有 compose 主機名上探到的才可能是套件內」）說不出服務是誰的，只能靠「免密可進」「無索引站」這類跡象猜，猜錯就會寫使用者的服務（M4 票 05 的 bug）。
+- **每個服務由使用者選來源，不偵測**（[ADR-0010](adr/0010-wizard-manual-service-selection.md)）：Jellyfin、qBittorrent、Prowlarr 各一頁，頁首二選一「套件內」/「既有」。Seerr 連 Jellyfin、加 Sonarr / Radarr，Sonarr / Radarr 加下載器，全都是手動填位址與憑證、按 Test，沒有自動偵測（§20.14）。選擇存下來，從此「套件內 / 既有」由它決定：套件內的連 compose 主機名，既有的填位址與憑證。NAS 使用者常見的組合是既有 Jellyfin + 套件內 qBittorrent 與 Prowlarr。原本的偵測（2026-09-26 起「只有 compose 主機名上探到的才可能是套件內」）說不出服務是誰的，只能靠「免密可進」「無索引站」這類跡象猜，猜錯就會寫使用者的服務（M4 票 05 的 bug）。
 - **不偵測、不判定，但選完要測試**：選了套件內而 compose 沒起那個服務（`COMPOSE_PROFILES` 拿掉了）時，測試失敗要說出怎麼補：「把 `qbittorrent` 加回 `.env` 的 `COMPOSE_PROFILES` 再 `docker compose up -d`」。容器還在啟動的輪詢規則照舊（plan §9.3）。
 - **只存驗過的憑證、錯誤標在欄位上**（M4 票 45，審計 E-6；§E 共同慣例 2、5：Home Assistant 驗過才 `create_entry`、`errors[欄位]`，Sonarr 存之前再測一次、錯誤綁欄位）：既有服務的位址與憑證、TMDB 的 key 都測過才存；測不過什麼都不換，已經有一組驗過的在用就照舊用它。錯誤分兩類標在各自的欄位旁——位址類（連不上、解不到、協定寫錯、回的不是這個服務、填了 localhost）標位址，憑證類（帳密或 key 被拒、被封、key 沒填）標憑證——其餘留在表單層級；人話、手動步驟、技術細節的分層照舊（M4 票 21、25）。
 - **兩種來源接下來做的事一樣，只差誰讓服務登得進去**（§19 D1，M4 票 33）：Berth 只建立與管理自己擁有的物件——Jellyfin 的 API key「Berth」、Berth 路徑（既有）或清單上的媒體庫（套件內）、`berth-*` 分類、勾選加入的站——不碰全域偏好與帳密（清單與能不能撤回見 §16.4）。套件內多出來的只有 bootstrap：Jellyfin 的管理員與初始設定、qBittorrent 與 Prowlarr 的介面登入、免密白名單（預置）、掛載的 Prowlarr API key；既有由使用者給憑證。
 - **表單跟著那一台的狀態走**：套件內但已經初始化過（重裝保留了 config、精靈中途中斷）時，Jellyfin 已有管理員就改成「用管理員登入」、不再建立；qBittorrent / Prowlarr 已設過介面登入同理，不強迫再設——連線測試時就讀到它設過的帳號，頁 2 測試通過即完成，不必再按一次「套用」（D5，M4 票 38；Prowlarr 那一頁的站另算）。選既有而那台 Jellyfin 還沒跑過初始精靈時，一樣由擁有者建管理員、跑完它的初始設定（語言與地區、遠端存取在畫面上問）——它上面沒有任何人的帳號可以蓋掉（2026-09-26 的「Jellyfin 例外」，理由不變）；這是既有服務唯一的 bootstrap。
 - **「沿用 Jellyfin 帳密」**：精靈裡套件內 qBittorrent / Prowlarr 的介面登入上的一個勾選，**不預設勾**（M4 票 80：頁 1 帶了一組過來時那兩頁自動送、不出現欄位，沒帶時預設勾就等於再問一次 Jellyfin 密碼；**只在精靈**：設定頁是一般的改帳密表單——目前的帳號、帳號、新密碼兩次、儲存——頁 1 沒打過密碼，「沿用」在那裡讀起來像沿用上次的設定，M4 票 78）。勾選時帳號帶入擁有者的名字，Berth 先向 Jellyfin 驗證這組帳密正確再寫入；不勾就自設一組、密碼打兩次（M4 票 07 的欄位）。擁有者的名字不合 qBittorrent 的規則時頁 2 的勾選停用並說原因（不是勾了才紅）。**密碼只問一次**（§19 D4，M4 票 40）：頁 1 建套件內 Jellyfin 的管理員時預設勾「套件內 qBittorrent 與 Prowlarr 的介面也用這組」，密碼只留在精靈那一個瀏覽器分頁的記憶體裡（不寫 storage、不送給 Berth 存），頁 2、頁 4 那一台還沒有介面登入時自動以沿用送出，不出現密碼欄，設好之後只說「已沿用 Jellyfin 帳密（擁有者）」與「改用另一組」（M4 票 80）；重新整理、沒勾、頁 1 是登入既有的管理員（沒有「設一組」）、或 Jellyfin 不再收那一組時，那兩頁照舊問介面登入：沒帶的是自設的三格，勾起「沿用」就只打一次 Jellyfin 密碼；Jellyfin 不再收那一組時欄位打開在「沿用」，打的是新的 Jellyfin 密碼。「已沿用」照後端記的 `web_ui_login_reuses_owner`（M4 票 104，推翻票 80 的「看這個分頁最後一次設下的是不是帶過來的那一組」：重新整理之後同一個狀態說成「帳號：擁有者」＋「更換登入」），不看帳號（「改用另一組」只換密碼時帳號一樣）；手動勾「沿用」設的也說已沿用。頁 1 的帳號與密碼不合 qBittorrent 的規則（M4 票 26）時頁 1 就擋：「也用這組」邊打邊停用並說原因，帶不過去（M4 票 80，推翻票 40 的「到頁 2 才說不能沿用」——同一件事在頁 2 又被表單的預設勾選說一次）；只有 qBittorrent 不合時也整格停用，不拆成只給 Prowlarr——那一格答應的是「兩台都用這組」，頁 4 照樣勾得起「沿用」。完成頁照 `web_ui_login_by_berth`（Berth 記著那一組的密碼雜湊）說登入是精靈設的、那一台原本就有的（重裝保留 config，並說忘了去「設定 → 該服務」的「介面登入」換一組），或還沒設；精靈設的那一組是沿用 Jellyfin 帳密時（`web_ui_login_reuses_owner`，寫進去的那一刻記下，M4 票 68）直接說「與 Jellyfin 同一組」；不看登入那一條纜繩——Prowlarr 的「加入」每次以不帶登入重算它，Berth 設好的也記成 `skipped`。**Berth 不存這兩組介面密碼的明文**，只記帳號與加鹽雜湊，夠比對「已經是這一組」（§19 2026-09-29：勾了沿用時那就是 Jellyfin 的密碼，存明文會推翻 M4 票 06「資料庫裡沒有擁有者的明文密碼」；Berth 連套件內 qBittorrent 靠免密白名單，本來就用不到它）。
-- compose 用 profiles：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起。選「既有」時精靈說出要從 `COMPOSE_PROFILES` 拿掉哪幾個（不叫人改 compose 檔）：那一頁只說套件內那一台用不到了，那一行與停掉的指令照整份選擇在完成頁給一次（M4 票 103；原本頁 1、2、4 各給一次，一頁比一頁短）；忘了拿掉也不致命。套件的容器名是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`（`berth` 維持；compose 服務名與 DNS 名不變）：同一台主機上既有的容器多半就叫 `jellyfin` / `qbittorrent` / `prowlarr`、用 8096 / 8080 / 9696 / 6881。沒有前綴時撞名會讓**整套**起不來（連 `berth`），所以加了前綴；撞 port 仍可能發生，只有撞到的那一個套件內容器起不來（M4 票 16 實測，§20.14）。
+- compose 用 profiles（[ADR-0009](adr/0009-deploy-compose-and-env.md)）：`.env` 的 `COMPOSE_PROFILES=jellyfin,qbittorrent,prowlarr` 預設全起。選「既有」時精靈說出要從 `COMPOSE_PROFILES` 拿掉哪幾個（不叫人改 compose 檔）：那一頁只說套件內那一台用不到了，那一行與停掉的指令照整份選擇在完成頁給一次（M4 票 103；原本頁 1、2、4 各給一次，一頁比一頁短）；忘了拿掉也不致命。套件的容器名是 `berth-jellyfin` / `berth-qbittorrent` / `berth-prowlarr`（`berth` 維持；compose 服務名與 DNS 名不變）：同一台主機上既有的容器多半就叫 `jellyfin` / `qbittorrent` / `prowlarr`、用 8096 / 8080 / 9696 / 6881。沒有前綴時撞名會讓**整套**起不來（連 `berth`），所以加了前綴；撞 port 仍可能發生，只有撞到的那一個套件內容器起不來（M4 票 16 實測，§20.14）。
 - 預置只補設定檔裡沒有的鍵（缺鍵才補，§20.7），已經有值的不動，之後使用者在各服務介面改什麼都行——包括關掉白名單，那時重啟補不回來，補法在 qBittorrent 的 WebUI（M4 票 53）。沒有「建議設定」可漂移：Berth 不寫也不看 qBittorrent 的全域偏好（D2，M4 票 32；原本的漂移檢查與「還原建議設定」一起拿掉）。精靈的 qBittorrent 頁會列出「已預置的項目」。
 - 每顆按鈕都顯示「將會做什麼」與執行結果，失敗給出可複製的手動步驟。
 - 各服務 API 的可行性與細節見 §20.7；手動選擇的慣例與既有服務的條件見 §20.14。
@@ -657,7 +657,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 允許接入既有服務；NAS 使用者是主要客群，Seerr 與 Sonarr 也都支援。問題只有一類：路徑與檔案系統邊界。
 
-**接管＝只建立與管理 Berth 擁有的物件**（§19 D1，2026-10-06 使用者拍板，M4 票 33）。套件內與既有是同一條，差在套件內由 Berth 讓服務有人登得進去（§16.3）。理由是 2026-09-26 `berth-lab` 的兩件事（§19）：使用者自己的 Prowlarr 被覆寫登入、既有 qBittorrent 的全域 `save_path` 被改成 Berth 的目錄；Sonarr / Radarr 對下載器同樣只用自己的分類、不碰全域。Berth 擁有的物件都是獨立的一件，刪掉它不動使用者原有的任何東西：
+**接管＝只建立與管理 Berth 擁有的物件**（[ADR-0013](adr/0013-berth-manages-only-its-own-objects.md)，§19 D1，2026-10-06 使用者拍板，M4 票 33）。套件內與既有是同一條，差在套件內由 Berth 讓服務有人登得進去（§16.3）。理由是 2026-09-26 `berth-lab` 的兩件事（§19）：使用者自己的 Prowlarr 被覆寫登入、既有 qBittorrent 的全域 `save_path` 被改成 Berth 的目錄；Sonarr / Radarr 對下載器同樣只用自己的分類、不碰全域。Berth 擁有的物件都是獨立的一件，刪掉它不動使用者原有的任何東西：
 
 | 物件 | 套件內 | 既有 | 在 Berth 能撤回嗎 | 撤不回時怎麼辦 |
 | --- | --- | --- | --- | --- |
@@ -738,71 +738,32 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 19. 決策紀錄與待決問題
 
-已由 owner 拍板（2026-09-07 起，之後的決定在項目欄註明日期）：
+決定的「為什麼」在 `docs/adr/`（下表）；正文只寫現況。2026-09-07 起的 54 列決策紀錄原文封存在 `docs/archive/<里程碑>.md` 的 `## brief §19` 段，里程碑照列的日期。
 
-| 項目 | 決定 | 落點 |
-| --- | --- | --- |
-| 產品名稱 | Berth | §1.4、§20.5 |
-| 技術棧 | Python（FastAPI + worker + SQLite）+ React | §16.1 |
-| 檔名 tag | 英文 token（CHT / CHS / JP / EN 等） | §6.8 |
-| 第一批 RSS 來源 | Mikan、Nyaa | §15、§17 M3 |
-| medium 信心 | 所有 Route 預設自動入庫，帶 audit 旗標 | §6.5、§13 |
-| 集標題 | 有正式標題才進檔名，不自動改名 | §7.1 |
-| UI 語言 | zh-Hant 與 en 並列，跟隨瀏覽器 | §16.2、`PRODUCT.md` |
-| 授權 | MIT | §16.2 |
-| 目標環境 | Linux 與 Windows 的 Docker；NAS 與一般電腦使用者；套件內含 Jellyfin / qBittorrent / Prowlarr，開箱即用 | §16.1、§16.3 |
-| 索引站管理器 | 套件預設 Prowlarr（有文件化 REST API 可一鍵加索引站）。~~Jackett 以 Torznab 端點接入~~ 已不採用（2026-10-06 D3，M4 票 37）：只支援 Prowlarr | §3、§16.3、§20.7 |
-| 媒體庫的角色（2026-09-15） | 像 Jellyfin 那樣瀏覽，播放跳 Jellyfin；牆上是整個 Jellyfin 媒體庫疊上 Berth 狀態；已看 / 未看可切換並寫回 Jellyfin；探索與媒體庫共用同一個 Media 詳情頁，作品在 Jellyfin 裡時觀看區在最上；排在 M1 驗收後、M2 之前（M1.5） | §1.1、§1.2、§12、§13、§17、plan §11.2b |
-| Jellyfin 支援版本（2026-09-15） | **只支援 Jellyfin 12 以上**（同日稍早定的「兩條版本線都支援、13.0 發佈才拿掉 10.x」被使用者改掉，為了降低複雜度）。MergeVersions 的精靈步驟、既有服務按鈕、resolver 的合併觸發與任務 id 整段移除；既有 Jellyfin 低於 12 時，精靈與健康檢查紅燈，說出目前版本並附升級注意（§20.9），不往下做。代價是已知的：從 10.11 升到 12 有遷移失敗的 open issue、舊客戶端要升級、binhex（unRAID）與 QNAP 社群套件還沒有 12，那些使用者要先升級才能接本系統 | §1.2、§7.7、§16.4、§20.9、M1 票 14b |
-| 套件內 Jellyfin image（2026-09-15） | 釘在 12.1 這條線（linuxserver `version-12.1ubu2604`）：跟得上 12.1 的修正與重建，但 pull 時不會默默跨到下一版；本系統實測過新版才調高，`docs/guide/upgrading.md` 寫升級步驟（先備份 Jellyfin 的 `/config`、升級後完整掃描） | §16.3、§20.9、plan §9.1、M1 票 14b |
-| 多集檔與同起始集的單集（2026-09-15） | 同一季已有、或同一批要入的正片裡，有同起始集而結束集不同的，送審核不自動入庫；理由要說出 Jellyfin 12 會把它們併成一集、藏掉後面的集 | §7.8、§20.9、M1 票 14b |
-| Route profile（2026-09-16） | **移除**。量測（§20.4）顯示它唯一的作用是「只有集號、TMDB 多季」時絕對編號換算自動入庫（anime）還是送審核（standard），而「是不是動漫」預測不了換算對錯。改由兩條證據決定：集號 ≤ 第一季集數、或檔名的播出日與換算出的那一集對不上，就送審核，其餘 medium。季號搜尋變體改成對所有劇集都做。代價：多季作品第一季的無季號發佈送審核。**14d 量過**（M1 票 01 的真實發佈，§20.4）：規則 1 擋下的 1,095 個檔案裡 928 個其實是第一季；「標題有認不出的多餘字」分不開兩者——連 TMDB 別名一起比會讓 14 個後面季的自動入錯，只比主標題時一個不漏卻是靠 TMDB 英文標題碰巧夠長。**2026-09-17 維持規則 1 原形** | §6.4、§6.5、§20.4、`docs/research/profile-effect.md` §6.1、M1 票 14d（解析器，已完成）/ 14e（拿掉欄位、API、介面與語料，已完成） |
-| M1.5 拆票前的四條（2026-09-15） | 媒體庫頁一個 Jellyfin 媒體庫一頁，只列這位使用者 `UserViews` 裡有的，Route 退成卡片上入庫狀態的來源；首頁上方放這位使用者的繼續觀看與下一集（沒有內容就不出現），下面維持探索；瀏覽時取允許清單一併讀 Jellyfin 帳號的 `Policy`（同一份短時間快取），帳號被停用就結束 Berth 的 session，不縮短 session 效期；Jellyfin 的圖片由 Berth 代理，快取鍵用 `tag` | §12、§13、§20.8、plan §11.2b |
-| 顯示用標題的語言（2026-09-17） | **跟著 UI 語言走**，不另做「片庫語言」設定：`zh-Hant` 介面顯示 TMDB `zh-TW` 那一輪的標題與簡介，EN 介面顯示 `en-US` 那一輪的。檔名與資料夾名照舊只用英文（§7.5），不跟 UI 走。M1 票 15 的 critique（2026-09-17）量到 EN 介面上海報牆、詳情頁 h1 與簡介全是中文，與「英文是一等公民」（`PRODUCT.md`）衝突。**例外**（同日 M1.5 拆票時拍板）：媒體庫牆上已在 Jellyfin 裡的作品顯示 Jellyfin 的名稱，不為每一部去查 TMDB——牆上多數作品 Berth 沒有快照，大媒體庫第一次載入要打上千個請求；代價是 EN 介面從牆上點進 Media 詳情時標題可能換成另一種語言 | §7.5、plan §8.3、§11.2b（M1.5 票 02、03） |
-| TMDB 連不上時的精靈（2026-09-17） | **接受**：TMDB 憑證維持精靈第 6 步的閘門（M1 票 02b），`api.themoviedb.org` 被防火牆擋住的使用者裝不起來是這個決定的代價，不另開「先完成精靈、探索與入庫停擺」的路 | §16.3、README〈先申請一把 TMDB API key〉 |
-| 審核、修正與刪除的權限（2026-09-22） | **一律 admin**：Review Queue、Issue 的動作、rematch、刪除範圍、手動對帳。plan §6 與 `api/gate.py` 原本只擋 `settings/*`、`routes/*`，與本文件 §11、`PRODUCT.md` 矛盾，M2 補齊；`user` 的 Job 停在 review 時畫面說「等管理員審核」 | §11、plan §6、§11.3 |
-| M2 拆票前的九題（2026-09-22） | 全部照建議：`/jobs/:hash` 獨立頁；快取門檻寫進量測票；Issue 型別十一種聯集與依型別的冪等鍵、`/issues` 獨立頁；刪除旗標預設全不勾、同步 `stat` 估算；reconciler 手動 202 + 輪詢、正在跑 409；`GET /review` 一支一列一件事不分頁；rematch 內部建單 item Plan；rebuild-ledger 配不到的建 Issue 不猜 | §9、plan §2.4、§3.2、§6、§7、§11.3 |
-| AI 與通知的里程碑（2026-09-22；**2026-09-24 被「AI native」那一列重排**） | M2 → M3 → M4 fallback（維持小範圍）→ **M5 通知 → M6 AI 助理 → M7 外部對話**。owner 要的四件事拆成三個里程碑：通知不是 AI；Review Queue 的 AI 模式、側面板、外部對話是同一個 agent 核心的三個介面，核心的形狀是「提案 → 人確認 → 執行」 | §14、§17、§18、plan §11.6–§11.8 |
-| 精靈的兩個產品問題（2026-09-22，M0 票 11 的 critique 留下） | **維持現狀**：建管理員的密碼只有一格、靠「顯示密碼」（GitHub / Vercel 的慣例，二次確認欄防的是看不見的輸入錯誤）；套件內十個索引站預設全勾（一鍵加入就是精靈那一步的目的，不想要的取消勾） | plan §9.3、M0 票 11 |
-| M2 後的全面審查（2026-09-24） | 四條：① **探索頁只放 TMDB 牆**，繼續觀看與下一集只在媒體庫頁，登入後預設落在媒體庫——推翻上面「M1.5 拆票前的四條」裡的首頁那一半（§13 探索頁的目的與 `GET /jellyfin/watching` 在實作票改掉）；② **`/review` 不再列 Issue**：Issue 只在 `/issues`，`/review` 原位留一行「另有 N 件待處理」——兩頁的分工是「入庫要人決定」對「Berth 與外界對不上」（Sonarr 的 Queue / Interactive Import 對 Health），原本 Issue 同時出現在兩頁；③ M3 開工前先做一批修補（清單在 plan §11.4）；④ **RSS 的 v2 並存不取代**：同組同集的 v1 與 v2 兩份都入庫，使用者在 Jellyfin 選版本（§7.7、§18） | §13、§15、plan §11.4 |
-| RSS 的形狀（2026-09-24） | 以 **RSS Series** 取代 Rule：由 Feed Item 自動長出（Mikan 用番組 id + 字幕組 id，其他來源用標題骨幹 + 字幕組）；**全部接受、只排除**（三層關鍵字或正則，預設只排合集），不做字幕組白名單與優先序；有把握自動綁定 TMDB、沒把握進待綁定；Mikan 綁定時預設補舊集、每天補漏；季號與 offset 放在 RSS Series 上、規劃時讀、第一批進審核，改正時可套用到整個 RSS Series 並重算。同一集兩個字幕組都要（使用者實際訂閱就是這樣） | §15、plan §2.4、§11.4 |
-| AI native（2026-09-24） | 目標是出錯幾乎不需要人工處理：規則層 → AI → 人的三層漏斗；**AI 對可撤銷的命令通過驗證後自己執行**，不可撤銷的永遠要人（推翻 2026-09-22「改狀態的命令一律先提案」）；每種任務先影子模式、看一致率再切自動；AI 活動頁的逐筆撤銷（「Jellyfin 回驗」的角色同日更正，見「沒有 AI 時把人工降到最少」那一列）；每日程式檢查 + 每週巡檢；里程碑重排為 M4 巡檢與通知 → M5 AI 核心 → M6 Issue 與側面板 → M7 外部對話與 MCP（同日「沒有 AI 也完整可用」之後再把通知排到 AI 之前）；M3 起新命令先標副作用等級與反向命令，命令登錄表本身在 M5 開頭做。AI 解析保留，是 M5 的第一種任務 | §6.10、§14、§17、plan §4.5、§11.5–§11.8 |
-| 沒有 AI 也完整可用（2026-09-24） | AI 只替代人在審核與待處理頁上的手動操作；Berth 平常不必打開（看片用 Jellyfin App，只在加新作品時開）。不靠 AI 的檢查與通知是核心功能，每種 AI 任務都有人工版本 | §14 |
-| 部署的 port 進 `.env`（2026-09-24） | 使用者試跑時，套件的預設 port 與開發環境相撞：手改 compose 之後，深連結仍開到容器內的 8096，qBittorrent 的 WebUI 也回 401。**只有 Berth 在容器裡看不到的主機端事實進 `.env`**，也就是五個對外 port；Jellyfin 的 port 同時交給 Berth 推導深連結，qBittorrent 的 WebUI port 內外兩側一起換。**其餘設定不搬進 `.env`**：同一個值有兩個來源時必須選邊（Immich 設了 `IMMICH_CONFIG_FILE` 就把 UI 整個鎖住，[文件](https://docs.immich.app/install/config-file)；Servarr 只把少數 key 開放成 `APP__SECTION__KEY` 環境變數）；Route 是動態的；`.env` 不放秘密（秘密在 DB，§16.2）；精靈「打開 8383 就能設定完」的價值要留著 | §12、§16.3、plan §9.1–§9.2、§11.4、M3 票 06b |
-| 精靈的泊位與媒體庫（2026-09-24） | 使用者重跑精靈時拍板三件。**TMDB 從「來源」拆成自己的泊位**：泊位板變 5 格（Jellyfin、qBittorrent、Prowlarr、TMDB、媒體庫路徑），每格一個服務、用產品名；原本一格兩半只能叫「來源」，看不出底下是 Prowlarr，又夾著 TMDB。**套件內 Jellyfin 的媒體庫由使用者命名、增刪**，不只預設的 Movies / TV / Anime（照 Jellyfin 啟動精靈「新增媒體庫」的內容類型 + 名稱 + 資料夾）；精靈之後新增媒體庫仍是在 Jellyfin 建、再到 Route 設定頁接。**精靈要有導覽**：泊位做完停在結果上、上一個 / 下一個泊位、走過的泊位可點（線性 stepper 的慣例），步驟仍由狀態導出。**套件內的 Route 那一步自動跑**（2026-09-25）：媒體庫是 Berth 自己建的，沒有要選的東西，那一顆按鈕只是儀式；每一條檢查照樣逐條顯示，既有 Jellyfin 仍要勾選。那一步只依賴 Jellyfin 與 qBittorrent，要不要移到 qBittorrent 之後由 06d 的 shape 決定。**精靈只管第一次，跑完之後的修改在設定頁**（2026-09-25）：設定頁分五頁對應五個泊位、與精靈共用同一批元件（Jellyseerr 的做法；Sonarr / Radarr / Prowlarr 的設定頁按領域分頁、每頁可增刪測）。原本「精靈跑完之後它就是設定入口」讓調整索引站要按「改位址或憑證」跳回靠泊流程的中間，字與流程都不對 | §16.3、plan §6、§9.3–§9.4、§11.4、M3 票 06d–06f、06i |
-| 沒有 AI 時把人工降到最少（2026-09-24） | 播出日比對、片長驗證與 Jellyfin 回驗放進 M3（不需要 AI；同日更正：抓集數算錯的是播出日比對，Jellyfin 回驗抓不到——它認集數靠 Berth 取的檔名）；里程碑改為 **M4 巡檢與通知 → M5 AI 核心**；審核頁加同一個 Job / RSS Series 的批次確認，以及 audit 段的整段確認（M3 前的修補；整段確認是同日試跑時加的）；已確認的 RSS Series 之後的 medium 入庫不再進 audit 清單，改由回驗與每日檢查守著 | §14、§15、plan §11.4–§11.6 |
-| RSS 自動綁定送進哪一條 Route（2026-09-26；**「兩條以上啟用中才問」與「沒選的留給人」2026-10-16 被「Feed 的 Route 必填」那一列取代**） | M3 驗收時發現預設安裝的 TV 與 Anime 兩條 Route 都收劇集，自動綁定一律停在 `route_ambiguous`。**Feed 帶一條 Route**：照 Sonarr Import List 的 Root Folder，加 Feed 時選（兩條以上啟用中才問），收得下那部作品的 Route 不只一條時用它；沒選的留給人。不採「作品上次用的 Route」：追新番時作品多半沒送過單。 | §15「綁定」、plan §2.4 `rss_feeds.route_id`、§6 rss |
-| 精靈改為 Jellyfin 優先（2026-09-26；**「其他服務每一個泊位偵測」那一半 2026-09-29 被「精靈改為每個服務手動選擇」那一列取代**） | 使用者試跑時看不懂第 1 步「建立 Berth 管理員」：Berth 沒有自己的帳號（§11），這組帳密卻身兼精靈門鎖、套件內 Jellyfin 管理員、qBittorrent 與 Prowlarr 的介面登入三職；接既有服務時它在精靈結束後登不進 Berth，唯一的用途是門鎖。**照 Seerr：第 1 步就是連 Jellyfin**——套件內建立 Jellyfin 管理員並說明 Berth 用 Jellyfin 的帳號，既有的以它的管理員登入；成功的人就是擁有者，精靈從那一刻起要登入。安全面不變（誰先到誰建立，Jellyfin 的啟動精靈與 Seerr 相同）。其他服務每一個泊位「偵測 → 連線或登入 → 檢查」，套件內 qBittorrent / Prowlarr 的介面帳密在它們自己的泊位、預設帶入擁有者那一組 | §16.3、plan §9.3；M4 票 06、07 |
-| 既有服務不被改動（2026-09-26；**判定規則那一半 2026-09-29 被「精靈改為每個服務手動選擇」那一列取代**，不寫帳密、不改全域偏好那一半保留） | `berth-lab` 實測：使用者自己的 Prowlarr 還沒加索引站就被判成套件內，登入被覆寫成第 1 步的帳密；既有 qBittorrent 的全域下載路徑被改成 Berth 的目錄。**只有 compose 主機名上探到的才可能是套件內，使用者填的位址一律既有（Jellyfin 例外：沒跑過初始精靈的那一台沒有任何人的帳號可蓋，M4 票 05 定）；既有服務不寫帳密、不改全域偏好，只用 Berth 自己的分類**（Sonarr / Radarr 對下載器的慣例） | §16.3、§16.4、plan §9.3、§9.5；M4 票 05 |
-| 第一批審核證據夠強時跳過（2026-09-26） | 使用者試跑：第一批每一集都對，逐一展開看不出要在意什麼。**季集照字面對應、理由只限白名單、播出日比對拿得到而且通過、那一集剛播的第一批不再掛 audit，系統自動確認那個 RSS Series**（M4 票 11 定案：「規則層有把握」改成白名單加剛播，理由在 §15）；有一列不符合就照舊整批等人，審核頁整組說一句話。split-cour 與重數仍要停住（M3 驗收那一條） | §15、plan §11.4；M4 票 11 |
-| 精靈與探索的試跑回饋（2026-09-26） | 使用者試跑提出、同意照做：媒體庫路徑泊位進入時不自動跑（它會建分類、寫測試檔），每條 Route 收成一列、失敗才展開；索引站推薦清單預設不勾、先測試通過才勾得起來、加入後逐站 / 全部試搜、另列 Prowlarr 的全部公開站（私有站連到 Prowlarr 自己加），設定頁同樣不自動檢查；**精靈剛完成或媒體庫裡還沒有 Berth 入庫的東西時落在探索**，其餘照 2026-09-24 落在媒體庫（M4 票 10 實作：「還沒有」＝這個人看得到的媒體庫裡帳本一筆都沒有，下載中不算；精靈剛完成時必然如此，不另判；`?redirect=` 照舊優先）；作品頁加「下載」段列出這部作品的 torrent 與檔案 | plan §7、§9.3；M4 票 08、09、10、12 |
-| RSS Series 保留、以作品呈現（2026-09-26） | 使用者試跑時問 Series 有沒有必要（當季播完就永遠留著、畫面上是 Mikan 的數字 id）。**保留**：它是「番組 × 字幕組 → 作品、Route、季號與 offset、第一批」的記憶，拿掉就得每一筆 Item 重認作品、修正沒地方存（AutoBangumi 同樣每個番組 × 字幕組一筆紀錄）。**改的是呈現**：RSS 頁以作品分組、顯示番組與字幕組名稱、「最近」是最近發佈的一筆、展開看得到它的 Item；完結的自動收進「已完結」（紀錄不刪）；Series 層排除收進進階 | §15、plan §2.4、§6、§7；M4 票 13 |
-| 補舊集維持預設全補（2026-09-26） | 同一輪討論過「Mikan 聚合 feed 只下載 feed 裡有的、每個 Series 一顆補齊按鈕」與 Feed 層開關，**使用者拍板維持 2026-09-24 的決定：綁定時一律補齊舊集，不加開關**。一次綁定送出上百個 torrent 的後果由 M4 票 03 的在途量磁碟門檻與暫時失敗的有限重試承接 | §15；M4 票 03 |
-| 自動綁定的兩種失敗（2026-09-26） | 試跑 10 個 Series 有 2 個沒綁上：TMDB 一次讀取失敗就永久 `lookup_failed`（同日稍後讀得到），發佈名帶「第四季」時搜不到候選（拿掉就找到）。**暫時失敗有退避、有上限地重試，一個候選壞掉不拖垮整次，季名從搜尋詞拆出來交給判斷當線索**；「壞掉的番組頁不要每 15 分鐘打一次」的顧慮保留 | §15、plan §3.2、§4.4；M4 票 14 |
-| 精靈改為每個服務手動選擇（2026-09-29） | 使用者試跑全新環境後拍板：**Jellyfin、qBittorrent、Prowlarr 各一頁，進頁先手動選「套件內」或「既有」，不再偵測**；選擇存下來、選完要測試（選了套件內而 compose 沒起那個服務時說出怎麼補 `COMPOSE_PROFILES`）；套件內但已初始化過改成登入；compose 裡用不到的服務拿掉，忘了拿掉也不致命。頁面順序：Jellyfin（擁有者）→ qBittorrent → 媒體庫與路徑 → Prowlarr 與索引站（併成一頁）→ TMDB → 完成，拿掉「偵測服務」那一步；媒體庫與路徑維持在 qBittorrent 之後（M3 票 06d 的理由：掛載設錯最常卡住，越早知道越好）。同日拍板：① Jellyfin 版本下限維持 12.0；② 不做 remote path mapping，把「既有服務要與 Berth 在同一台主機、把同一個父目錄掛在同一個容器路徑」講清楚；③ 套件容器名改成 `berth-*` 前綴；④ Prowlarr 與索引站併成一頁，套件內 qBittorrent / Prowlarr 的介面登入預設「沿用 Jellyfin 帳密」；⑤ Berth 寫進那兩台的介面密碼只存加鹽雜湊（勾了沿用時那就是 Jellyfin 密碼，存明文會推翻 M4 票 06 的「資料庫裡沒有擁有者的明文密碼」；取代 M4 票 07 存明文的做法）。**推翻** 2026-09-26 的兩件：「既有服務不被改動」的判定規則（只有 compose 主機名上探到的才可能是套件內），與「精靈改為 Jellyfin 優先」的「其他服務每一個泊位偵測」；票 05 的保護（既有服務不寫帳密、不改全域偏好）保留，改讀使用者的選擇。慣例照 Seerr 與 Sonarr / Radarr 的「手動填 → Test → Save」、TRaSH 的單一 `/data`（§20.14） | §16.3、§16.4、§18、§20.14、plan §9.1、§9.3–§9.5；M4 票 15、16、17、08、09；`.scratch/m4/wizard-manual-choice-decision.md` |
-| 擁有者鎖到同一台 Jellyfin（2026-09-30，精靈審查；M4 票 18） | 擁有者成立之後 Jellyfin 的位址只能換到**同一台伺服器**（`/System/Info/Public` 的 `Id`，§20.15），另一台與不回答的新位址一律不存；`POST /setup/owner` 不再重建擁有者（409）；版本在測連線時就擋。替還沒初始化的**既有** Jellyfin 建立擁有者時，語言與地區、遠端存取**在畫面上問**（使用者拍板；預設 UI 語言、不開遠端存取），套件內的不問（沿用 UI 語言、不開遠端存取——原本開） | 審查時兩位測試員各自把擁有者換到另一台而且存下來了；Seerr 換媒體伺服器＝重裝（`docs/research/wizard-review-2026-09-30.md`）。plan §9.3、§9.4 |
-| 既有 Prowlarr 也能加公開站；0 站不算完成（2026-09-30，精靈審查；M4 票 20） | 既有 Prowlarr 連上而一站都沒有時頁 4 **待處理**：到 Prowlarr 加站後重新讀取，或「之後再說」。精靈也給既有的那一台同一套「推薦站預設不勾、先測試、通過才勾、按一次加入」，畫面寫清楚會加進使用者的哪一台、加哪幾站（2026-10-14 M4 票 67，審計 C3：0 站時也有套件內那一顆「測試推薦站，加入通過的」，那一句列出站名與位址，逐站那一套收進「進階」）；**移除仍交給 Prowlarr 自己的介面**，介面登入只屬於套件內。推翻 M4 票 05「不替既有 Prowlarr 加站」那一半（選了既有就不寫帳密、不改全域偏好照舊）。套件內的介面登入從「加入」拆成自己的一顆按鈕 | 使用者拍板（按一次確認）。審查時接一台 0 站的既有 Prowlarr 標「已完成」、精靈裡加不了站，零站的 Berth 什麼都搜不到（`docs/research/wizard-review-2026-09-30.md`）。plan §9.3 頁 4、§9.5 |
-| 一套服務只配一個 Berth（2026-10-01，精靈實測；使用者拍板） | 兩個 Berth 接同一台 qBittorrent / Jellyfin 時共用 `berth-*` 分類與「Berth」API key，**不區分**：重裝 Berth 接回原本的服務時沿用正是要的行為；*arr 也不替接同一台的多個實例自動分開 | `docs/research/wizard-qa-2026-10-01.md` |
-| 只有 Berth 時的「套件內」卡片先查主機名（2026-10-01，精靈實測；使用者拍板；M4 票 30） | 服務頁進頁只做 `jellyfin` / `qbittorrent` / `prowlarr` 的主機名解析，**不對服務發請求**；解不到的卡片寫「這套 compose 的 X 沒在跑」並附起回來的兩種指令（2026-10-06 審計 S3、M4 票 35：停掉的容器一樣解不到，原本的「沒有起」對它是錯的；那一頁每次測完重問）；**不預選、不停用**。「每個服務手動選擇、選之前不發請求」不變 | plan §9.3、`docs/research/wizard-qa-2026-10-01.md` |
-| 擁有者成立之前沒有人登得進來、帳密只送到畫面上那一台（2026-10-01，精靈實測第 14、15 條；M4 票 28） | 「誰先到誰建立」不變（Jellyfin、Seerr、Home Assistant 的首次設定都是這樣）；要堵的是提早登入與目標被換：擁有者成立前 `/auth/login` 一律拒絕；`POST /setup/owner` 帶畫面上測過的位址與 ServerId（§20.15），與存下的不同就不送帳密、請使用者重新測試。 | plan §6、§9.3 頁 1 |
-| 精靈審計後的八項（2026-10-06，使用者拍板 D1–D8 全照建議；`docs/research/wizard-audit-2026-10-06.md`） | **D1 接管＝只建立與管理 Berth 擁有的物件**（Jellyfin API key「Berth」、`berth-*` 分類、Berth 路徑、使用者確認加入的站），全域偏好與帳密不碰；套件內與既有共用這條，差別只在套件內由 Berth 讓它有人登得進去（Jellyfin 管理員、介面登入、白名單、掛載的 key）。**D2 套件內 qBittorrent 也不寫三個全域鍵**（`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`；它們不影響 Berth，留著只讓 Route 為了 Berth 不用的路徑轉紅），頁 2 差異表、漂移與「還原建議設定」一起拿掉。**D3 BTH 4 只支援 Prowlarr**，拿掉通用 Torznab 端點（推翻 §3 的「只依賴 Torznab 協定、支援 Jackett」），已存 `torznab` 的安裝要資料 migration、頁 4 回到待處理；泊位名改「Prowlarr」。**D4 密碼只問一次**：頁 1 建擁有者時預設勾「套件內 qBittorrent 與 Prowlarr 也用這組」，精靈期間只留在前端記憶體、不落地，到頁 2、頁 4 照舊先向 Jellyfin 驗過再寫。**D5 拿掉不寫入的確認鍵**（既有 qBittorrent 的「確認，不改任何設定」、重跑時的「套用這 0 項」），測試通過即可前進。**D6 換一台 qBittorrent / Prowlarr 時列出 Berth 在舊那台建的東西**，可一鍵移除 Berth 建的空分類。**D7 頁 3 套件內**預設清單沒改時進頁自動建立並檢查、顯示進度（M4 票 08「進頁不寫」只留給既有）。**D8 P0 修完才發第一個正式 image** | §3、§16.3、§16.4（D1 已寫進 §16.3、§16.4 與 `CONTEXT.md` 的 Existing / Bundled service，M4 票 33；D2–D7 由 M4 票 32、37、38、40、43、47 寫進本文，M4 票 53 逐列核對）；`docs/research/wizard-audit-2026-10-06.md` 改進清單 P0-1–P2-11 |
-| 第四輪可用性審計的八項（2026-10-08，使用者拍板 E1–E7 照建議、E8 提供機器；`docs/research/usability-audit-2026-10-07.md` §2） | **E1 既有 Jellyfin 缺某類型的媒體庫時，頁 3 多一列「新建一個媒體庫」，勾了才建**：新建的媒體庫是獨立物件，納入「Berth 擁有的物件」（推翻 §16.4「既有不建媒體庫」）。**E2 Jellyfin 掃描收斂成只刷新 Berth 寫入的那個媒體庫**；Jellyfin 沒有可用的單一媒體庫端點時，退而把全庫掃描寫進 §16.4 物件表與既有服務卡片（先查 OpenAPI）。**E3 設定 → Prowlarr 加「不用 Prowlarr」**：健康不再檢查、搜尋改說明走 RSS。**E4 部署檔改成 release 附件**（compose、`.env.example`、`preseed/` 一個 zip，Immich 的做法），不內嵌 preseed、不叫人 clone。**2026-10-09 使用者推翻 E4：部署只用 compose 檔加 `.env`**（貼進 Unraid Compose Manager 或任何資料夾就能 `up`，不下載 zip、不放額外檔案）；preseed 腳本內嵌進 compose（§20.18），Release 頁保留、只放那一版的說明不附檔案，README 連到這一版 tag 底下的原始檔（M4 票 70、71）。**E5 現在發 0.2.0**（含 M4 票 43–54）。**E6 偵測到媒體庫裡有 Berth 不認得的檔案時，在畫面上給「從媒體庫重建帳本」**（`rebuild-ledger`）。**E7 README 安裝頁只留必讀**（取得檔案、改 2–4 個值、`up -d`、先申請 TMDB key、精靈每頁一句），其餘搬到 `docs/`。**E8 原生 Linux 實跑用使用者電腦上 VMware Workstation 的 Linux VM**（M4 票 42 的機器）。同日補充：**使用者實際要跑 Berth 的機器是 Unraid**，另開一張 Unraid 實跑，結果會影響 E4 的部署檔與 E7 的 README。那台現在跑的是 Emby 與 Jackett；**使用者選 (a)：Berth 帶自己的 Jellyfin 與 Emby 並存**（不支援 Emby、不改回 Jackett，換到 Jellyfin 之後再決定），Unraid 實跑是 M4 票 55。 | 本報告 §2、§9；拆票從 M4 票 55 起 |
-| Feed 的 Route 必填，劇集、電影各一條（2026-10-16，使用者以兩台 `rss` 演練情境對照後拍板；M4 票 105） | 「不指定」只多一次摩擦：同類型有兩條以上 Route 收得下的作品停在待綁定（`route_ambiguous`），使用者按一鍵候選再選 Route，結果與自動綁定一樣——Sonarr 的 Import List 本來就把 Root Folder 列為必填，票 21 抄它時多留了一個「不指定」。**Feed 帶劇集、電影各一條 Route**（Route 分類型，一條只收一種；Mikan 的劇場版不會因為有兩條電影 Route 而停住），那一種有啟用中的 Route 就必填、只有一條時畫面預填，零條時那一格不收。自動綁定**先看 Feed 那一種的那一條**（依據 `feed_route`），那一格是空的或那條停用了才退回「只有一條」。舊資料能推就推：migration 在某一種只有一條啟用中的 Route 時填它，推不出來的 Feed 列標「要選 Route」；選了或改了 Route 當場綁上那個 Feed 長出（它最早那一筆 Feed Item 的 Feed）、理由含 `route_ambiguous` 的待綁定列，用存著的候選，不重新上網查；已綁定的不搬家。手動綁定的「入庫到」先預選長出它的 Feed 那一種的 Route，再來才是作品上次用的、只有一條。**從作品頁訂閱建的搜尋 Feed 只看那部作品那一種**（2026-10-17 使用者拍板）：它長出的都綁到那一部，另一格永遠用不到——不標「要選 Route」、選 Route 時不要求、自動綁定不讀；標成待處理是假提示，還逼人選一條沒用的 Route。 | §15「綁定」、plan §2.4 `rss_feeds`、§6 rss |
-| 部署檔改成最新 Release 的附件（2026-10-13，使用者；M4 票 97） | 每一版的 Release 附上 `docker-compose.yml` 與 `example.env`（取自那一版的 tag），README 連 `releases/latest/download/<附件名>`，發版不必改連結；要固定某一版把 `latest/download` 換成 `download/v<版號>`。推翻票 71 的「Release 頁只放說明、不附檔案」：使用者先前在意的是 zip，兩個純文字附件不在此限。Immich 的慣例（§20.17） | §20.17；plan §9.1；`docs/development.md`〈發版〉 |
-| 刪除站點請求預算（2026-10-19，使用者；M4 票 107） | 推翻 M3 票 20 與 M4 票 77：輪詢、補漏、搜尋與人按的讀取不再共用「每站每小時 60 個」，`GET /health/budget`、健康頁那一張卡、搜尋的 `skipped` / `retry_at` / `next_at` / `budget_exhausted`、自動綁定的 `lookup_deferred` 都拿掉。理由：60 不是量出來的（§20.13 三站沒有公開的限速紀錄）；擋到人的只有 Berth 自己的計數；搜尋經過 Prowlarr，它每站有使用者調得了的 Query Limit，Berth 再管一層是雙重限制。站點真的回 429 / 5xx 時照既有退路：讀不到記 `last_error` 下一輪再試、自動綁定 `lookup_retry`。升版的 migration 把 `lookup_deferred` 改成到期的 `lookup_retry`、不算一次失敗 | plan §3.2、§8.4 |
-| 通知的管道是 Discord bot 私訊（2026-10-21，使用者） | M4 只做 Discord，不做 Telegram，也不做頻道 webhook：頻道裡每個人看得到全部，破壞媒體庫權限；M7 要收訊息與按鈕非 bot 不可。代價是管理員要在 Discord 開發者後台建一個 bot、每人填自己的 user ID。事實在 §20.23 與 `docs/research/discord-notifications.md` | §14、§17、plan §11.5 |
-| 「Issue 新增」併進「有 N 件等你處理」（2026-10-21，使用者） | 新的 Issue 本來就算進等你處理，分開推同一件事會收到兩則；那一則說出這一波新增了什麼 | plan §11.5 |
-| M4 不改號（2026-10-21，使用者） | 票 01–120 是「M4 之前先做的修補」，以 v0.2.9 結案；巡檢與通知（M4 本體）仍叫 M4、從票 121 起編，M5–M7 不動。理由：程式碼註解、舊票與已發版的 CHANGELOG 有數千處「M4 票 NN」、數百處指 AI 的「M5」，改號之後分不清 | plan §11.5、`docs/archive/m4.md` |
-| 通知用每個人自己的語言寫（2026-10-21，使用者，M4 票 123） | 收件人不在瀏覽器上，後端原本不知道誰用哪個語言；存 Discord ID 的那一刻記下當下的介面語言（`users.notify_language`），送出時照它組字。這是後端第一個自己組人話的地方（`services.notify`），句子 zh-Hant 與 en 並列。另兩個選項：全站一個語言、只用繁中；沒選：英文使用者收到中文 | plan §11.5、§20.23 |
-| M5 的方向（2026-10-27，使用者拍板；`docs/research/m5-ai-direction-2026-10-27.md`） | ① 上一輪 M5（2026-10-24 撤銷，分支 `backup/m5-attempt-1-20261024`）**設計太簡單**：很多情況沒考慮，沒有搜尋、skills、上下文壓縮；這一輪重寫，舊程式碼只稍微參考。② **架構**：內建 agent 加之後匯出的 MCP；內建的 loop 用 pydantic-ai（prototype 不過就自己寫），不用 Claude Agent SDK、不用 LiteLLM。③ **拿掉月預算上限**，改成防護加只提醒的花費可見性（§6.10）。④ **里程碑**：M5 AI 地基與對話 agent → M6 人工接管開關 → M7 Discord 與 MCP（推翻 2026-09-24 的 M5 核心 / M6 Issue 與側面板 / M7 外部對話）。⑤ 對話裡哪些動作出確認卡（§14）。⑥ 外部資料：AniList + Fribb + Bangumi；網路搜尋預設 Anthropic `web_search`，Tavily 可選。**2026-10-28 改（使用者決定，M5 票 23d）**：Fribb 與 AniList 的標題搜尋、系列走圖拿掉，AniList 只留當季清單、Bangumi 放送表照留（新番推薦要它們）；整部系列改用網搜集數表加 TMDB 季集表，沒有網搜時照 TMDB 播出日切段、每一季都標「請確認」（`docs/research/agent-sources-ab-2026-10-28.md`）。⑦ 卡住而沒有 Issue 的三種 Job（重試用完的 `submit_failed`、`import_failed`、停滯）**開 Issue**；一般使用者**可以用側面板**，但只能讀取與處理自己的送單。⑧ **provider 兩種都做**：Anthropic 與 OpenAI 相容，各自設 base URL 與 key。⑨ prototype 與 e2e 的 TMDB、模型金鑰由使用者填進 `.env`。⑩ 三個備份分支留著當參考 | §6.10、§14、§17、§20.24；plan §11.6–§11.8 在 M5 拆票時改寫 |
-| 前端沒有 shadcn/ui、沒有腳本化的 playwright e2e（2026-09-22 結案） | plan §1.4 / §7 原本寫 shadcn/ui 為元件基礎，M0 票 05 起沒有引入、三個里程碑沒有一個元件需要它，plan 已改；plan §10 原本寫「playwright 對 Fake 後端跑精靈與 M1 流程」但從未寫過，UI 驗證是每張票用 playwright 實跑演練情境並貼結果，plan 已改成實話，腳本化是 M2 的候選票 | plan §1.4、§7、§10、§11.3 |
+### ADR 索引
 
-M1.5 拆票前的四條待決，2026-09-15 已全數照推薦拍板（上表「M1.5 拆票前的四條」那一列），這裡留著當時的理由：
+| 編號 | 決定 |
+| --- | --- |
+| [0001](adr/0001-indexer-manager-prowlarr-only.md) | 索引站只接 Prowlarr，不支援 Jackett 與通用 Torznab |
+| [0002](adr/0002-jellyfin-12-minimum-pinned-image.md) | 只支援 Jellyfin 12 以上，套件內 image 釘在 12.1 線 |
+| [0003](adr/0003-remove-route-profile.md) | 移除 Route profile，改由兩條證據決定絕對編號換算是否自動入庫 |
+| [0004](adr/0004-library-browsing-and-discovery.md) | 媒體庫像 Jellyfin 那樣瀏覽：一庫一頁、Berth 代理圖片、探索頁只放 TMDB 牆 |
+| [0005](adr/0005-display-title-follows-ui-language.md) | 顯示用標題跟著 UI 語言走，檔名只用英文 |
+| [0006](adr/0006-review-and-issues-split.md) | `/review` 只列入庫決定，Issue 只在 `/issues` |
+| [0007](adr/0007-rss-series-model.md) | RSS 以 RSS Series 為單位：全部接受只排除、補齊舊集、Feed 必選 Route |
+| [0008](adr/0008-ai-autonomy-and-optional-ai.md) | AI 對可撤銷的命令自己執行；沒有 AI 也完整可用 |
+| [0009](adr/0009-deploy-compose-and-env.md) | 部署只用 compose 檔加 `.env`，`.env` 只放主機端事實 |
+| [0010](adr/0010-wizard-manual-service-selection.md) | 精靈每個服務手動選「套件內」或「既有」；精靈只管第一次 |
+| [0011](adr/0011-wizard-accepted-frictions.md) | 精靈刻意保留的兩個摩擦：TMDB 閘門、建管理員的密碼只有一格 |
+| [0012](adr/0012-owner-is-jellyfin-admin.md) | 擁有者就是 Jellyfin 管理員，鎖在同一台 Jellyfin |
+| [0013](adr/0013-berth-manages-only-its-own-objects.md) | 接管只建立與管理 Berth 擁有的物件 |
+| [0014](adr/0014-no-site-request-budget.md) | 不做站點請求預算 |
+| [0015](adr/0015-notifications-discord-dm.md) | 通知走 Discord bot 私訊，用收件人自己的語言寫 |
+| [0016](adr/0016-ai-agent-architecture.md) | AI agent 架構：內建 agent 加匯出的 MCP、pydantic-ai、無月預算上限 |
 
-- **媒體庫頁的分頁單位**：票 13 是一條 Route 一頁，但牆上改成整個 Jellyfin 媒體庫之後，一個 Jellyfin 媒體庫可以有多條 Route（§4.3、M1 票 14），也可以有 Berth 路徑以外的舊路徑——照 Route 分頁會讓同一批作品出現在兩頁。**推薦**：一個 Jellyfin 媒體庫一頁（Jellyfin 自己的慣例），並且只列這位使用者 `UserViews` 裡有的；Route 退成卡片上入庫狀態的來源。
-- **首頁 `/`**：現在是探索頁；Jellyfin 的首頁是繼續觀看與下一集。**推薦**：首頁上方放繼續觀看與下一集兩列（沒有內容就不出現），下面維持探索——找片與接著看是同一位使用者最常做的兩件事。
-- **帳號狀態跟不上**：Berth 的 session 活 30 天、只在登入時向 Jellyfin 驗證，而 API key 代讀被停用的帳號照常回資料（§20.8，2026-09-17 在 12.1.0 實測）。**推薦**：瀏覽請求取 `UserViews` 允許清單時，一起讀 `GET /Users/{id}` 的 `Policy`，兩者同一份短時間快取；帳號被停用就結束 Berth 的 session。不縮短 session，因為管理類頁面（下載、設定）也會一起被迫重新登入。
-- **圖片怎麼到瀏覽器**：瀏覽器直連 Jellyfin（最簡單，但瀏覽器要連得到它，HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content），還是由 Berth 代理（頻寬與快取自己處理）。**推薦**：Berth 代理，快取鍵用 `tag`。瀏覽器只要連得到 Berth，不依賴深連結的主機推導、也沒有 mixed content；縮圖後一張約 45 KB（§20.8 實測），代價可接受。
+### 待決問題
+
+目前沒有。
 
 ---
 
@@ -1591,7 +1552,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 ### 20.13 公開站的請求限制：Prowlarr、Sonarr、AutoBangumi 的慣例（2026-09-26 查證，M3 票 20）
 
-研究檔 [`docs/research/request-budget.md`](research/request-budget.md)，逐條附原始碼或文件連結。M3 票 20 照這幾條定了一個站一份的請求預算；**M4 票 107 整個拿掉**（§19 2026-10-19、plan §3.2），最後一條是拿掉的主要理由：
+研究檔 [`docs/research/request-budget.md`](research/request-budget.md)，逐條附原始碼或文件連結。M3 票 20 照這幾條定了一個站一份的請求預算（已拿掉，[ADR-0014](adr/0014-no-site-request-budget.md)）；**M4 票 107 整個拿掉**（§19 2026-10-19、plan §3.2），最後一條是拿掉的主要理由：
 
 - **Prowlarr 的 Query Limit 是滾動窗**：`IndexerLimitService` 數「過去 N 小時」的歷史（`Limits Unit` 只有 `Hour` 與預設的 `Day`），**RSS 與查詢算在同一份**（`IndexerQuery` + `IndexerRss`），打滿時那一站那一次跳過，重試時間＝窗裡最早那一筆 + 窗長 − 現在（實例 `Request Limit reached for BitSearch. Disabled for 01:00:00`）。Grab Limit 是另一份。預設不限，要使用者自己填。
 - **Cardigann 定義的請求間隔**：`nyaasi.yml` 有 `requestDelay: 2`，`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有——Prowlarr 不替 Mikan 節流。
@@ -1662,7 +1623,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **`GET /System/Info/Public` 的 `Id` 就是伺服器的 `SystemId`**，匿名讀得到。原始碼：`SystemManager` 把 `Id` 設成 `ApplicationHost.SystemId`，它是 `DeviceId.Value`——第一次啟動時產生一個 GUID 寫進 **`<DataPath>/device.txt`**，之後都從那個檔讀（類別說明「the persistent unique identifier of this server installation」）。【[DeviceId.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/Devices/DeviceId.cs)、[ApplicationHost.cs @ v12.1](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ApplicationHost.cs)（`SystemId => _deviceId.Value`）】
 - **實測（berth-existing，linuxserver 12.1.0 與 10.10.7；`scripts/experiments/jellyfin_server_id.py`）**：同一台用 `localhost`、`127.0.0.1`、從另一個容器用 `host.docker.internal` 連，`Id` 都一樣；`docker restart` 之後不變；`docker compose up -d --force-recreate` 重建容器之後也不變（`/config` 掛載還在），`device.txt` 的內容就是那個值。三台不同的 Jellyfin 各自不同。
 - **`ServerName` 不能拿來認**：沒設過時它是容器的 hostname，重建容器就變（同一次實測 `dc2288726bbe` → `135a4ae43523`）。
-- 所以 Berth 以 `Id` 判「同一台」：擁有者成立時記下，之後換位址只接受 `Id` 相同的（§19「擁有者鎖到同一台 Jellyfin」、plan §9.3）。擁有者成立**之前**也用它：頁 1 的表單帶回測過的位址與 `Id`，與存下的不同就不送帳密（M4 票 28；未初始化的那一台也有 `Id`）。清掉 `/config`（或複製別人的 `/config`）的那一台會換 `Id`（或撞 `Id`）——前者等於一台新的伺服器，擁有者帳號也不在了；後者不防。
+- 所以 Berth 以 `Id` 判「同一台」：擁有者成立時記下，之後換位址只接受 `Id` 相同的（[ADR-0012](adr/0012-owner-is-jellyfin-admin.md)、plan §9.3）。擁有者成立**之前**也用它：頁 1 的表單帶回測過的位址與 `Id`，與存下的不同就不送帳密（M4 票 28；未初始化的那一台也有 `Id`）。清掉 `/config`（或複製別人的 `/config`）的那一台會換 `Id`（或撞 `Id`）——前者等於一台新的伺服器，擁有者帳號也不在了；後者不防。
 
 
 ### 20.16 搜尋結果怎麼用年份與類型篩：Radarr 與 Sonarr（2026-10-07 查證，M4 票 49）
