@@ -40,3 +40,4 @@
 - 子檔各加一個 `# 標題` 與一行導言（新增行）；原本的 `###` 標題不動，所以子檔裡章節是 `###`。
 - 另改了票沒列的引用：`tests/e2e/conftest.py`、`.env.example`、`.github/workflows/e2e.yml`、`.github/workflows/ci.yml`（〈API 型別〉→ commands.md）、`pyproject.toml`、`docs/design-brief.md:1686`、`docs/plan.md:16`。`CHANGELOG.md` 的歷史條目不改。
 - 全部檢查（`uv run pre-commit run --all-files`）全綠；`uv run pytest`：5276 passed, 1 skipped, 28 deselected。
+- code-review（`991ee2d4`）：已修〈development.md〉導言與〈目錄結構〉補 `docs/development/`，`scripts/experiments/README.md` 的「單一來源」措辭。未處理：`commands.md:24`、`commands.md:99`、`e2e.md:79` 的〈章節〉引用現在指到別的子檔且沒連結（票要求原文搬，不改字）；子檔 `#` 直接接 `###` 跳級（刻意，保留原標題）；驗收「遺失 0」照字面是 13，原因見上。

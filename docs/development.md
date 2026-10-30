@@ -1,6 +1,6 @@
 # 開發
 
-給要改 Berth 程式碼的人：開發環境、指令、測試、演練伺服器與實驗腳本。**本檔是開發指令的單一來源**；新增或改動指令時同輪更新這裡。使用者的部署與操作在根目錄 [README](../README.md) 與 [`docs/guide/`](guide/)。
+給要改 Berth 程式碼的人：開發環境、指令、測試、演練伺服器與實驗腳本。**本檔與 `docs/development/` 是開發指令的單一來源**（子檔索引在〈索引〉）；新增或改動指令時同輪更新對應那一份。使用者的部署與操作在根目錄 [README](../README.md) 與 [`docs/guide/`](guide/)。
 
 ## 環境需求
 
@@ -131,7 +131,7 @@ tests/            後端測試
   fixtures/mediainfo/  ffmpeg 造的一份真 Matroska（2 秒、17 KB），mediainfo adapter 的輸入
   fixtures/parser/  解析基準測試的語料（真實 torrent 的檔案清單）
   fixtures/tmdb/    語料用到的 TMDB 快照，錄一次即凍結
-docs/             設計綱要、實作計劃、進度、本檔
+docs/             設計綱要、實作計劃、進度、本檔與 development/（開發指令子檔）
   guide/          給使用者的英文 guide（README 連過去的那幾份）
   research/       查證與實驗的完整結果
 .scratch/         各里程碑的票
