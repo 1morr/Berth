@@ -111,3 +111,9 @@ Standards 軸已處理：D5、D7 改指 brief §16.3；brief §20.8 的 `Policy`
 - `uv run pre-commit run --all-files`：13 項全 Passed。
 - 之後的修正 commit 再跑 `pre-commit run --all-files` 全過、`pytest tests/unit` 2182 passed。
 - Spec 軸審查已處理：brief §20.8 改連 ADR-0004；D5、D7 改指 brief §16.3；重量表數字更正。
+
+### 9. CI 紅燈：docstring 進了 OpenAPI（run 41035038041，job api-types）
+
+- 原因：`berth/api/` 與 `berth/services/` 的 docstring 會進 OpenAPI `description`，所以第 6 節改的 `get_compose`（「brief §19」→「ADR-0010」）與 `OwnerRefusal`（「§19 2026-09-26」→「ADR-0012」）讓 `web/src/api/schema.d.ts` 與原始碼不一致。我當時只跑 pytest 與 pre-commit，這兩個都不重產型別，所以沒抓到；CI 的 `pnpm gen:api` 加 `git diff --exit-code -- src/api/schema.d.ts` 才抓得到。
+- **規則：改 `berth/` 的 docstring（不只 pydantic model）要重跑 `pnpm -C web gen:api`，並把 `schema.d.ts` 一起 commit。** 動 `berth/` 註解的工作收尾時，順手跑 `pnpm -C web gen:api && git diff --exit-code -- web/src/api/schema.d.ts`。
+- 修正：`git merge main`（fast-forward，無衝突）；重產後 diff 只有 2 行 docstring 文字（`schema.d.ts` 兩處），commit `chore: regenerate api schema after docstring changes`；再產一次 `git diff --exit-code` 乾淨；`pre-commit run --all-files` 全過；`pytest -q` 5282 passed, 1 skipped, 28 deselected。`web/` 只改產生檔。
