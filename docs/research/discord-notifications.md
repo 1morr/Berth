@@ -155,3 +155,18 @@
 4. 不再追：理由同上。bot 私訊的速率限制已實測（送訊息的 bucket 一次 5 則，開 DM channel 100）。
 5. 未測，M7 的事：只有走 Interactions Endpoint URL 時才需要知道；沒有公開網址時 M7 走 gateway。
 6. 未測，M4 用不到：身分綁定定為使用者手動填 user ID（plan §11.5）。
+
+## 從 brief 搬來（§20.23）
+
+**實測**（2026-10-21，M4 票 121，API v10，`scripts/experiments/discord_dm.py`；回應錄在 `tests/fixtures/http/discord/`）。兩個新建的 bot、一個只有使用者與 bot 的測試伺服器；第二個 bot 從頭到尾沒連過 gateway：
+
+- **從沒連過 gateway 的 bot 私訊得到**：開 DM channel `200`、純文字與帶 embed 的訊息都 `200`，回完整的 message 物件。沒有任何 intent。
+- **開 DM channel 什麼情況都回 `200`**（沒有共同伺服器、收件人關了私訊、bot 被踢出之後都是），擋下來的是送訊息那一步。所以「按測試」要真的送一則，只開 channel 證明不了什麼。
+- **沒有共同伺服器與關了私訊回的是同一個錯**：`403`、`{"code": 50278, "message": "Cannot send messages to this user due to having no mutual guilds"}`。三種情況都量到這一個：bot 還沒被邀請、使用者在唯一的共同伺服器關掉「私人訊息」（已經聊過也一樣）、bot 被踢出伺服器。`50007` 一次都沒出現。Discord 算共同伺服器時只算開著私訊的那幾個，Berth 分不出是哪一種，提示要把兩個補法一起說：把 bot 加進同一個伺服器、在那個伺服器的隱私設定打開「私人訊息」。
+- **伺服器的「私人訊息」預設可能是關的**：它跟著使用者的全域設定（使用者設定 → 私訊權限 →「加入伺服器後允許私訊」）。這次的測試帳號全域是關的，新建的伺服器也就是關的，第一次私訊就是 `50278`。打開後訊息直接進私訊清單；同時開著的「訊息請求」沒有把它攔下。
+- **超過長度是 `400` / `50035` `Invalid Form Body`**，`errors` 指出欄位：`content` 2001 字元是 `errors.content._errors[].code = "BASE_TYPE_MAX_LENGTH"`（`Must be 2000 or fewer in length.`）；兩個 embed 的 description 合計 6001 字元是 `errors.embeds._errors[].code = "MAX_EMBED_SIZE_EXCEEDED"`（`Embed size exceeds maximum size of 6000`）。長度檢查在共同伺服器檢查之前：bot 被踢出之後送 2001 字元照樣先回 `400`，同一刻的純文字回 `403` / `50278`（`send too-long-no-mutual-guild --length 2001`）。
+- **token 錯是 `401`**、`{"message": "401: Unauthorized", "code": 0}`，沒有 `X-RateLimit-*` header。
+- **送訊息的 bucket 一次 5 則**（`X-RateLimit-Limit: 5`；兩個 bot、兩個 channel 的 `X-RateLimit-Bucket` 是同一個 hash，這次每個 bot 只量了一個 channel，分不出是按 channel 還是按 bot 算），失敗的請求（`400`、`403`）也扣額度；`X-RateLimit-Reset` 每送一則往後推約 1 秒，額度是一則一則補回來的，不是 5 秒整批重置。baseline 送完 4 則之後接著連續送、不間隔，第 7 則遇到 `429`。`429` 的 body 是 `{"message": "You are being rate limited.", "retry_after": 0.3, "global": false}`（**沒有 `code`**），header 有 `Retry-After: 5`（整數秒）、`X-RateLimit-Scope: user`、`X-RateLimit-Remaining: 0`、`X-RateLimit-Reset-After: 4.177`。body 的 `retry_after` 是下一個空位（浮點），header 的 `Retry-After` 是整個 bucket 重置、無條件進位成整數。開 DM channel 是另一個 bucket，`X-RateLimit-Limit: 100`。
+- **只私訊的邀請連結**是 `https://discord.com/oauth2/authorize?client_id=<application id>&scope=bot&permissions=0`：`bot` scope 才會讓 bot 進伺服器（共同伺服器），私訊不需要任何伺服器權限。application id 由 `GET /applications/@me` 以 bot token 取得。新建的 application `bot_public` 預設 `true`、`bot_require_code_grant` 預設 `false`。
+- **`GET /applications/@me` 回 Application Object**，Berth 只讀 `id` 與 `name`（官方文件 Application Resource〈Get Current Application〉與〈Application Object〉，https://discord.com/developers/docs/resources/application ，2026-10-21 經 context7 查 `discord/discord-api-docs`；M4 票 123）。這一份回應沒有錄：裡面有 application 擁有者的帳號（票 121 刻意不存），契約測試只用這兩格。錯的 token 在這一支同樣是 `401`。
+- **embed 的 `url` 不收沒有點的主機名**（2026-10-21，M4 票 124，`discord_dm.py embed-url`；摘要在 `.local/experiments/results/discord_dm/embed-url-summary.json`，不進版控）：官方文件的 Embed Structure 只寫 `url?` string「url of embed」（經 context7 查 `discord/discord-api-docs`），沒寫檢查規則。對九種自架網址形狀（路徑 `/media/tv:120089`）各送一則：網域、子路徑、`*.ts.net`、`nas.local`、`192.168.1.10`、`127.0.0.1`、`localhost`、`[::1]` 都 `200`，回的 embed 原樣帶著 `url`；**`http://berth:8000/…` 是 `400` / `50035`、`errors.embeds.0.url._errors[].code = "URL_TYPE_INVALID_URL"`（`Not a well formed URL.`）**，整則送不出。同一個網址寫成 description 裡的 Markdown 連結（`[打開](http://berth:8000/…)`）九種都 `200`，所以 Berth 的連結放在 description（`adapters/notify/discord._description`）。手機上 Markdown 連結是否每一種都可點沒有逐一看。

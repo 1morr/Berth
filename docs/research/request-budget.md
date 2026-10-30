@@ -111,3 +111,17 @@ AutoBangumi 官方文件。找不到的一律標「未找到」，不用記憶�
    `IndexerLimitService` 算配額精確的 retry-after，`EscalationBackOff` 針對連線/服務錯誤
    逐級加重且封頂 24 小時。Berth 的三個呼叫方共用同一個站點 budget 時，也該分開「等窗口
    讓出名額」與「錯誤退避、逐次加重」兩個計時器，不要共用一個。
+
+## 從 brief 搬來（§20.13）
+
+從 design-brief §20.13 搬來（原文不改字；其餘條目研究檔已有）。
+
+- **輪詢間隔**：Sonarr 的 RSS Sync Interval 10–120 分鐘（預設值在文件與原始碼都找不到，社群慣用 15 分鐘）；AutoBangumi 的 `rss_time` 預設 900 秒，輪的是 Mikan 聚合 feed。FreshRSS 每個 Feed 可以設自己的間隔，單一 Feed 下限 15 分鐘，理由是避免被來源站封 IP（[Refreshing feeds](https://freshrss.github.io/FreshRSS/en/users/09_refreshing_feeds.html)）；Berth 照它每個 Feed 各自設、只收固定檔位（M4 票 109）。
+
+## 從 brief 搬來（§20.13，逐字）
+
+- **Prowlarr 的 Query Limit 是滾動窗**：`IndexerLimitService` 數「過去 N 小時」的歷史（`Limits Unit` 只有 `Hour` 與預設的 `Day`），**RSS 與查詢算在同一份**（`IndexerQuery` + `IndexerRss`），打滿時那一站那一次跳過，重試時間＝窗裡最早那一筆 + 窗長 − 現在（實例 `Request Limit reached for BitSearch. Disabled for 01:00:00`）。Grab Limit 是另一份。預設不限，要使用者自己填。
+- **Cardigann 定義的請求間隔**：`nyaasi.yml` 有 `requestDelay: 2`，`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有——Prowlarr 不替 Mikan 節流。
+- **Berth 的搜尋曾照「那一站那一次跳過」**（M4 票 77）；票 107 之後搜尋問全部的站，各站的配額交給 Prowlarr 自己的
+  Query Limit（使用者看得到、調得了）。
+- **三站都沒有公開的限速或封鎖事故紀錄**（Mikan、acg.rip 找不到；Nyaa 只有上面那 2 秒的間接證據）。票 20 的「每站每小時 60 個」因此不是量出來的，是照 Berth 的用量推的；實際擋到人的只有 Berth 自己的計數（票 77），所以票 107 拿掉。

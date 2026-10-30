@@ -699,3 +699,17 @@ movies/Berth Movie Plan (2019) [tmdbid-27205]/
 
 - 內建劇集 provider 預設 TMDb（另有 OMDb 與 .nfo）；TheTVDB、AniDB、AniList 都是插件。TVDB 與 TMDB 混用時 Specials 編號錯配有實例（[#13294](https://github.com/jellyfin/jellyfin/issues/13294)）；多 provider 同時啟用時鎖定 ID 也可能被覆寫（[#16268](https://github.com/jellyfin/jellyfin/issues/16268)）→ 支持 §10 單一 TMDB。
 - AniDB / AniList 插件的編號語意沒有文件 → 不納入第一階段。
+
+
+## 從 brief 搬來（§20.9）
+
+從 design-brief §20.9 搬來（原文不改字；brief 內只留結論與來源）。
+
+- **從 10.11 升級的阻力**（2026-09-15 補查，`jellyfin-12.md` §4）：
+  - **遷移會失敗**：12.0 發佈一週內仍有 12 條遷移、啟動、媒體庫變空的 open issue，多數沒有維護者回應，其中 #17862 是 12.1 啟動不了。內建的遷移前備份只保護資料庫。
+  - **舊客戶端與整合要升級才能用**：舊式驗證關閉之後，Jellyfin for Kodi 要 v2.0.0 以上、Seerr 要 v3.0.0，Sonarr / Radarr 要最近的版本。Ombi 與 Jellyfin Vue 的播放仍然壞著。暫時打開舊式驗證要手改 `system.xml` 的 `EnableLegacyAuthorization`，後台沒有開關，官方也預告下一個大版本移除。
+  - **升級前後要做的事**：第三方插件要先移除；只差大小寫的兩個使用者名稱會讓遷移失敗；全域字幕設定改到各媒體庫。
+  - **一鍵管道沒到齊**：binhex（unRAID）與 QNAP 社群套件還停在 10.11.11；SynoCommunity、TrueNAS 是 12.0；Debian 11 / Ubuntu 20.04 的 apt 已經沒有 12。Docker `latest`、官方 apt、Windows / macOS installer 已是 12.1。
+  - **保留的資料**：帳號、API key、觀看紀錄保留；armhf 在 10.11 就沒有官方建置，12 沒有新增 CPU 架構門檻。
+  - **反向推力**：Kotlin SDK 1.9.0 已把最低伺服器版本拉到 12，Android 與 Android TV 換上它之後，新版 app 可能反過來要求伺服器是 12【推論】。
+  - 【文件 + 原始碼 + 官方 issue】
