@@ -2350,7 +2350,7 @@ services:
 | 部署腳本 | pytest + bash 替身 | `deploy/` 的 shell：preseed 的「缺鍵才補」規則（從 compose 的 `configs` 抽出腳本、`$$` 還原成 `$` 再跑）、entrypoint 的擁有者接手。真的跑腳本，把 `chown` / `setpriv` 換成會記錄參數的替身；路徑用 `BERTH_*` 的測試 seam 覆寫 |
 | 實驗 | `scripts/experiments/` | brief §20.6，一次性但保留腳本，結果寫回 brief |
 
-- CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、前端 e2e、image build；e2e 在 nightly、`v*` tag 與手動觸發時跑（`.github/workflows/e2e.yml`，TMDB 憑證是 repo secret）。
+- CI（GitHub Actions）：lint、type、unit + integration、benchmark 門檻、前端 build、前端 e2e、image build；e2e 在 nightly 與手動觸發時跑（`.github/workflows/e2e.yml`，TMDB 憑證是 repo secret）；`v*` tag 的 `release.yml` 先呼叫 CI 與 e2e，都綠了才推 image、建 Release（0.4.1 之後，`docs/development/release.md`）。前端 e2e 有一條開非 localhost 的 HTTP 網址（`insecure-origin`），單元測試的瀏覽器也照 HTTP 下的樣子（沒有 secure context 才有的 API）。
 - 覆蓋率不設硬門檻，但 `parser/`、`naming/`、`services/` 的新程式碼必須有測試。
 
 ### 前端 e2e
