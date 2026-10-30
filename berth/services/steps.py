@@ -60,7 +60,7 @@ class InterfaceLogin:
 
 
 def hash_password(password: str) -> str:
-    """Berth 寫進套件內服務的介面密碼只存這個（brief §19 2026-09-29 ⑤）：加鹽的 scrypt。
+    """Berth 寫進套件內服務的介面密碼只存這個（ADR-0010）：加鹽的 scrypt。
 
     勾了「沿用 Jellyfin 帳密」時那一組就是擁有者的 Jellyfin 密碼，存明文會推翻票 06 的「資料庫裡
     沒有擁有者的明文密碼」。雜湊只拿來比對「已經是這一組了」（`password_matches`）。

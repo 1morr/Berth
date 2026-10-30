@@ -76,7 +76,7 @@ class InventoryLibraryChoiceOut(InventoryLibraryOut):
     """切換列上的一格。"""
 
     #: 帳本至少一列落在它底下（`services.inventory.libraries_with_imports`）。登入後沒有指定去處時，
-    #: 這個人看得到的每一個都是 `false` 就落在探索而不是媒體庫（brief §19 2026-09-26）。
+    #: 這個人看得到的每一個都是 `false` 就落在探索而不是媒體庫（ADR-0004）。
     has_imports: bool
 
 

@@ -4,7 +4,7 @@
 每個命令都冪等：精靈的每一步之後都能在設定頁重跑，狀態全部在 `settings.setup` 那一列，
 所以重跑只是覆寫同一份值，不會長出第二份資料。
 
-**來源由使用者選，不偵測**（brief §16.3、§19 2026-09-29，M4 票 15）：Jellyfin、qBittorrent、
+**來源由使用者選，不偵測**（brief §16.3、ADR-0010，M4 票 15）：Jellyfin、qBittorrent、
 Prowlarr 各一頁，使用者選「套件內」或「既有」，選擇存在 `settings.setup.choices`，從此「套件內 /
 既有」由它決定。選之前 Berth 不對那個服務發任何請求；選完當場測一次。
 """
@@ -280,7 +280,7 @@ async def claim_owner(
     password: str,
     startup: JellyfinStartup = DEFAULT_STARTUP,
 ) -> ClaimedOwner:
-    """頁 1：Jellyfin 的管理員就是 Berth 的擁有者（brief §11、§19 2026-09-26，M4 票 06）。
+    """頁 1：Jellyfin 的管理員就是 Berth 的擁有者（brief §11、ADR-0012，M4 票 06）。
 
     照 Seerr：那一台還沒跑過初始精靈就由 Berth 以這組帳密建立管理員，已經有管理員就要它登入；
     兩者都換 Berth 的 API key（`jellyfin.claim_jellyfin`）。選套件內或既有不影響走哪一條
@@ -553,10 +553,10 @@ async def retest_service(
 async def resolve_bundled(
     bundled: BundledServices, resolver: HostResolver
 ) -> dict[ServiceKind, bool]:
-    """套件內三個主機名各自解不解得到（M4 票 30，brief §19 2026-10-01）。
+    """套件內三個主機名各自解不解得到（M4 票 30，ADR-0010）。
 
     解不到就是那個服務不在這套 compose 裡（或停著）：服務頁的「套件內」卡片照它加註。**只查 DNS**，
-    不造任何服務的 client——選之前不對服務發請求（brief §19）不變。
+    不造任何服務的 client——選之前不對服務發請求（ADR-0010）不變。
     """
     kinds = list(bundled.targets)
     answers = await asyncio.gather(
@@ -1156,7 +1156,7 @@ def _current_step(setup: SetupSettings, *, berthed: bool) -> int:
 def _qbittorrent_secured(setup: SetupSettings) -> bool:
     """頁 2 做完了沒：選過、最後一次測試連得上；套件內那一台另外要介面登入有結論。
 
-    **既有的那一台測試通過就做完了**（M4 票 38，brief §19 D5）：Berth 對它什麼都不寫，原本那一顆
+    **既有的那一台測試通過就做完了**（M4 票 38，ADR-0013）：Berth 對它什麼都不寫，原本那一顆
     「確認，不改任何設定」按下去也什麼都不做，只是要人多按一次。
 
     套件內的登入必填（M4 票 07 shape）：沒設過時那一條是 `pending`，精靈停在這裡；設好是 `ok`，

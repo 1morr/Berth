@@ -2,7 +2,7 @@
 
 2026-09-29 起「套件內 / 既有」由使用者在服務頁選（brief §16.3），`settings.setup.services`（逐服務的
 偵測判定）與 `probe_started_at` 換成 `settings.setup.choices`。同日起 Berth 寫進套件內 qBittorrent /
-Prowlarr 的介面密碼只存加鹽雜湊（brief §19 2026-09-29 ⑤）。
+Prowlarr 的介面密碼只存加鹽雜湊（ADR-0010）。
 
 **判定怎麼轉**：
 

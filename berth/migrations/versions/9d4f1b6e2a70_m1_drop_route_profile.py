@@ -1,7 +1,7 @@
 """拿掉 routes.profile（票 14e）。
 
 Route profile（`standard` / `anime`）已經沒有讀者：解析器改看證據（票 14d），搜尋的季號變體
-對所有劇集都做（brief §19）。
+對所有劇集都做（ADR-0003）。
 
 **升版不用 batch**。`jobs.route_id` 與 `media.default_route_id` 都是 `ON DELETE SET NULL`，而
 migration 跑的時候外鍵開著：batch 重建 `routes` 會在 `DROP TABLE` 那一步把它們全部清成 NULL

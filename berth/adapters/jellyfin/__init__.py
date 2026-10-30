@@ -18,7 +18,7 @@ from berth.domain import CollectionType, SortOrder
 
 #: 支援下限（brief §16.4、§20.9）。**12.0 就是原本的 10.12**——Jellyfin 只是把版號前面
 #: 永遠不變的 `10` 拿掉了，所以比的是 `12.0` 而不是 `10.12`。10.x 上同一集的兩個版本是兩個
-#: 重複的條目，要靠 MergeVersions 插件；12.0 起原生合併，Berth 只支援這一邊（brief §19）。
+#: 重複的條目，要靠 MergeVersions 插件；12.0 起原生合併，Berth 只支援這一邊（ADR-0002）。
 MIN_VERSION = (12, 0)
 
 
@@ -322,7 +322,7 @@ class JellyfinClient(Protocol):
     """一台 Jellyfin。憑證是可變狀態：初始精靈期間匿名，之後帶 token 或 API key。
 
     **沒有插件那幾支**（`/Repositories`、`/Packages`、`/Plugins`、`/System/Restart`）：Berth 只支援
-    Jellyfin 12，而 12.x 原生合併多版本，不需要裝任何插件（brief §19、§20.9）。介面上沒有它們，
+    Jellyfin 12，而 12.x 原生合併多版本，不需要裝任何插件（ADR-0002、§20.9）。介面上沒有它們，
     所以 Berth 也就不會重啟別人的 Jellyfin。
     """
 

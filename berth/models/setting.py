@@ -132,7 +132,7 @@ class AiEndpointSettings(BaseModel):
 
 
 class AiSettings(SettingsGroup):
-    """AI provider（brief §14〈provider〉、§19「M5 的方向」⑧，M5 票 09）。
+    """AI provider（brief §14〈provider〉、ADR-0016，M5 票 09）。
 
     兩種接口**各自**記 base URL、key、模型：切換接口不會丟掉另一邊填好的那一組。`provider` 是現在
     用的那一種；`enabled` 關著就是沒有 AI，其餘功能與 M4 相同（plan §11.6）。存在資料庫，跟 TMDB
@@ -262,7 +262,7 @@ class PathSettings(SettingsGroup):
 
 
 class SetupOwner(BaseModel):
-    """精靈第 1 步成立的擁有者：一個 Jellyfin 管理員（brief §11、§19 2026-09-26，M4 票 06）。
+    """精靈第 1 步成立的擁有者：一個 Jellyfin 管理員（brief §11、ADR-0012，M4 票 06）。
 
     **只記是誰，不記密碼**：Berth 沒有自己的帳號，登入一律交給 Jellyfin。擁有者的帳密在第 1 步
     只用來建立（套件內）或登入（既有）Jellyfin、換 Berth 的 API key，用完就丟。

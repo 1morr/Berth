@@ -13,7 +13,7 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
 - **繼續觀看與下一集**（`resume` / `next_up`，票 07）：媒體庫頁要的那個 id 同樣先驗過允許清單才帶
   `parentId`——帶了 Jellyfin 就不套這個人的媒體庫權限，所以驗證得由這裡做。
 - **允許清單與 `Policy` 同一份短時間快取**（`AccessCache`）。帳號被停用或刪除（M2 票 11）就結束
-  這個人的每一張 Berth session，而不是縮短 session 的效期（brief §19）。
+  這個人的每一張 Berth session，而不是縮短 session 的效期（ADR-0004）。
 - **寫入只有標記已看 / 未看**（`JellyfinAccess.mark_played`，票 05）。它不先查可見性：
   `UserPlayedItems` 自己查，看不到的回 404 而且沒有寫入（研究 §5 的原始碼；12.1.0 打完立刻讀回，
   研究 §2 的表）。

@@ -1,4 +1,4 @@
-"""Feed 的 Route 拆成劇集、電影各一欄（M4 票 105、brief §19 2026-10-16）。
+"""Feed 的 Route 拆成劇集、電影各一欄（M4 票 105、ADR-0007）。
 
 `rss_feeds.route_id` 改名為 `tv_route_id`，加 `movie_route_id`。Route 分類型，一條只收一種，
 所以 Feed 上兩格都要填：Mikan 的劇場版不會因為有兩條電影 Route 而停在待綁定。

@@ -10,7 +10,7 @@
 
 每一步都冪等——媒體庫先看再建、API key 先列再建。重按只會把已經對的那幾步標成 `skipped`。
 
-**第一步是版本閘門**（brief §16.4、§19、§20.9）：低於 Jellyfin 12.0 就停在那裡，不往下做。
+**第一步是版本閘門**（brief §16.4、ADR-0002、§20.9）：低於 Jellyfin 12.0 就停在那裡，不往下做。
 10.x 上同一集的兩個版本是兩個重複的條目，要靠 MergeVersions 插件；12.0 起原生合併，所以
 Berth 只支援 12 以上，序列裡也不再有「裝插件」與「重啟」那兩步（票 14b）。
 
@@ -209,7 +209,7 @@ class JellyfinSetupStatus:
     #: 套件內路徑要建的媒體庫（票 06f）。既有路徑照樣帶著，只是畫面不讀它。
     bundled: tuple[BundledLibraryView, ...]
     #: 清單還是沒人動過的那三列（`DEFAULT_BUNDLED_LIBRARIES`）。頁 3 只在這時進頁自動建立並檢查
-    #: （M4 票 43，brief §19 D7）；改回一模一樣的也算。
+    #: （M4 票 43，ADR-0013）；改回一模一樣的也算。
     bundled_default: bool
     #: 媒體庫資料夾的父目錄。剖面上每一列的完整路徑是 `<library_root>/<folder>`。
     library_root: str
@@ -539,7 +539,7 @@ async def bootstrap_jellyfin(
 async def create_libraries(
     session: AsyncSession, factory: ServiceClientFactory, *, libraries: Sequence[LibraryRequest]
 ) -> JellyfinSetupStatus:
-    """既有 Jellyfin 的「新建一個媒體庫」：使用者在頁 3 勾了才建（M4 票 64，brief §19 E1）。
+    """既有 Jellyfin 的「新建一個媒體庫」：使用者在頁 3 勾了才建（M4 票 64，ADR-0013）。
 
     新建的媒體庫是獨立物件，刪掉它不動使用者原有的任何東西，所以算 Berth 擁有的物件（brief §16.4）。
     與套件內建清單**同一條路徑**（`_Runner._libraries`）：同名的已經在就略過，`libraries` 那一步的
@@ -971,7 +971,7 @@ class _Runner:
                 f"this Jellyfin is {info.server_id}, not the {expected} that was tested",
             )
         if not info.supported:
-            # 版本閘門就在第一步，後面的步驟因此一步都不會跑（brief §16.4、§19）。
+            # 版本閘門就在第一步，後面的步驟因此一步都不會跑（brief §16.4、ADR-0002）。
             raise StepFailedError(
                 StepFailure.VERSION_UNSUPPORTED,
                 unsupported_message(info.version),

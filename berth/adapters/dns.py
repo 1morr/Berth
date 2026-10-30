@@ -1,7 +1,7 @@
 """主機名解不解得到（M4 票 30）。
 
 套件內三台的位址是 compose 的服務名；容器不在這套 compose 裡（從 `COMPOSE_PROFILES` 拿掉）或停著，
-它的名字就不在 compose 的網路上。服務頁進頁時只問這一件事——不對服務發任何請求（brief §19）。
+它的名字就不在 compose 的網路上。服務頁進頁時只問這一件事——不對服務發任何請求（ADR-0010）。
 """
 
 from __future__ import annotations

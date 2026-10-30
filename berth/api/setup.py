@@ -295,7 +295,7 @@ class ComposeOut(BaseModel):
 async def get_compose(bundled: BundledServicesDep, resolver: HostResolverDep) -> ComposeOut:
     """服務頁進頁時問的：套件內那幾台在不在這套 compose 的網路上（M4 票 30）。
 
-    只做主機名解析，不對服務發請求（brief §19）。擁有者成立之前就問得到：頁 1 的卡片要用。
+    只做主機名解析，不對服務發請求（ADR-0010）。擁有者成立之前就問得到：頁 1 的卡片要用。
     """
     return ComposeOut(resolvable=await resolve_bundled(bundled, resolver))
 

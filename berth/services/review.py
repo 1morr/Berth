@@ -4,7 +4,7 @@
 review 的那幾份 Plan（票 07），`audit` 來自帳本上的旗標（importer 抄過去的）；票 08 填進
 `unmatched`（Job 那一份定案了的 Plan 裡對不到的檔案）與 `duplicate`（規劃時與帳本重複而被略過
 的那幾列，`plan_items.duplicate_of`）。各自一個 `_Producer`，排序與上限不動。**Issue 不在這裡**
-（M3 票 05，brief §19 2026-09-24）：它只在 `/issues`，這一頁原位只留一個數字
+（M3 票 05，ADR-0006）：它只在 `/issues`，這一頁原位只留一個數字
 （`services/issues.count_open`）。Plan 的三支命令（逐列改、核准、拒絕）在
 `services/plan_review.py`，rematch 在 `services/rematch.py`，重複版本的三顆在
 `services/duplicates.py`。
