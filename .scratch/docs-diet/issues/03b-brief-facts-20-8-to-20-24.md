@@ -1,6 +1,6 @@
 # 03b — brief §20 壓縮（下）：§20.8–§20.24
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 03a
 
@@ -19,10 +19,41 @@
 
 ## 驗收
 
-- [ ] `scripts/docs_moved_lines.py` 對 `docs/design-brief.md` → `docs/research/*.md` 跑出「遺失 0」，輸出貼 Comments
-- [ ] §20.8–§20.24 每節前後行數表、§20 全章前後行數貼 Comments
-- [ ] 引用點清單與檢查結果貼 Comments（`grep -n '§20\.\(8\|9\|1[0-9]\|2[0-4]\)\b'`）
-- [ ] brief 到 research 的連結都指得到檔與錨點（跑一次檢查，貼輸出）
-- [ ] 全部檢查與 test 綠；progress.md 記一列 session；commit；不 push
+- [x] `scripts/docs_moved_lines.py` 對 `docs/design-brief.md` → `docs/research/*.md` 跑出「遺失 0」，輸出貼 Comments
+- [x] §20.8–§20.24 每節前後行數表、§20 全章前後行數貼 Comments
+- [x] 引用點清單與檢查結果貼 Comments（`grep -n '§20\.\(8\|9\|1[0-9]\|2[0-4]\)\b'`）
+- [x] brief 到 research 的連結都指得到檔與錨點（跑一次檢查，貼輸出）
+- [x] 全部檢查與 test 綠；progress.md 記一列 session；commit；不 push
 
 ## Comments
+
+- 做法：A–D 四個 sonnet 子代理分組壓縮（A：§20.8–11；B：§20.12–14；C：§20.15、17、18、22–24；D：§20.16、19–21），各自把細節搬進 `docs/research/` 並產出新節文字，主對話接回 brief；原文缺口（子代理意譯的條目）由腳本把 `c22168b2` 的原行逐字補進研究檔〈從 brief 搬來（§20.x，逐字）〉。
+- 併檔：§20.10 不動（12 行全是結論）；§20.11 → 新 `publish-time-indexers-and-rss.md`；§20.14 → 新 `wizard-existing-services.md`（三個既有研究檔補段）；§20.15、17、18 → 新 `deploy-and-jellyfin-identity.md`；§20.16、19、20、21 → 新 `search-results.md`。§20.9 排在 §20.10 後面，順序沒理（號碼照舊）。
+- `docs_moved_lines.py c22168b2 docs/design-brief.md -- docs/research/*.md`：`removed 292 lines, found 292, missing 0`。
+- 前後（行 / 位元組）：
+
+| 節 | 行 | 位元組 |
+| --- | --- | --- |
+| 20.8 | 23 → 25 | 15,808 → 12,845 |
+| 20.9 | 36 → 31 | 7,416 → 7,312 |
+| 20.10 | 12 → 12 | 979 → 979 |
+| 20.11 | 10 → 10 | 2,024 → 1,900 |
+| 20.12 | 36 → 34 | 6,659 → 5,418 |
+| 20.13 | 12 → 11 | 2,248 → 2,071 |
+| 20.14 | 56 → 47 | 20,597 → 13,057 |
+| 20.15 | 8 → 9 | 1,884 → 1,548 |
+| 20.16 | 7 → 9 | 2,026 → 1,323 |
+| 20.17 | 10 → 11 | 3,153 → 2,317 |
+| 20.18 | 43 → 11 | 5,471 → 2,557 |
+| 20.19 | 11 → 12 | 5,083 → 3,296 |
+| 20.20 | 33 → 9 | 4,488 → 3,020 |
+| 20.21 | 28 → 8 | 2,133 → 1,323 |
+| 20.22 | 5 → 5 | 1,056 → 1,056 |
+| 20.23 | 22 → 19 | 6,322 → 3,857 |
+| 20.24 | 88 → 27 | 17,696 → 11,508 |
+
+§20 全章 846 行 / 197,528 B → 696 行 / 167,872 B；brief 整檔 1,615 → 1,465 行。
+- 引用點：各子代理逐節 grep `§20.x`，每條對到新 brief 一行（子代理報告未逐條貼入）；Spec 軸另抽查約 60 條，無遺失。
+- 連結檢查：brief → research 100 個連結的檔與錨點全部存在（檢查腳本一次性，未入庫）；研究檔內的 `](research/…)` 改成 `](../research/…)`、`](adr/…)` 改成 `](../adr/…)`。
+- 全部檢查：`uv run pre-commit run --all-files` 全過；pytest 5280 passed、1 skipped、28 deselected。
+- `/code-review c22168b2`（Spec、Standards 各一個 opus 子代理）。已處理：研究檔壞連結；rss-sources 逐字段落的空行與表格分隔列；兩份研究檔說明句與內容矛盾；§20.18 首次啟動的輸出（`executing`→`added`→`exited 0`，之後才 `already configured`）；§20.24 補回「總覽卡 7 列」。**未處理**：(a) §20.24 `ToolReturnPart(outcome='retried')` 替代寫法與 §20.14「帳號是 admin 但另設密碼認不出來」的但書只在研究檔逐字段；(b) `berth/adapters/prowlarr/fake.py:17` 引用的「berth-trial」只在研究檔；(c) 追加段落在 11 個既有研究檔尾巴，違反「研究檔是歷史快照」的字面，03a 有先例；(d) 子代理意譯過的 brief 條目與研究檔原有概要語意重複；(e) §20.14 只縮 37%、§20.24 縮 35%，因引用點咬具體數字。
