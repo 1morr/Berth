@@ -1,6 +1,6 @@
 """SQLAlchemy ORM 與設定分組模型（plan §2）。
 
-M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加（progress.md 偏差與決定）。
+M0 只建這五張表；其餘在需要它們的里程碑用 Alembic 增量加（docs/archive/m0.md 偏差與決定）。
 """
 
 from berth.models.ai import AiCall, AiConversation, AiRun, AiToolCall

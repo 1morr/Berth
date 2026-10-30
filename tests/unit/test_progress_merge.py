@@ -3,8 +3,9 @@
 平行的票各在 session 紀錄與「偏差與決定」的結尾追加一行，union 讓合併時兩邊都留、不停下來問。
 它的失效方式是安靜的：兩邊改的位置靠得太近時，git 把它們當成同一塊，整段（含 `##` 標題）抄兩份、
 不報衝突；追加的一列也可能落在表格結尾的空行之後，GitHub 就不再把它當成表格的一列。
-所以這裡守三件事：三個 `##` 段各出現一次、依序；非空行沒有重複（表格的分隔列除外，每張表
+所以這裡守三件事：四個 `##` 段各出現一次、依序；非空行沒有重複（表格的分隔列除外，每張表
 都有一條一樣的）；session 紀錄是一整張表，列與列之間沒有空行。
+每列 / 每條的字數與里程碑標記在 `test_progress_rules.py`，這裡只管合併不弄壞檔案的結構。
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PROGRESS = ROOT / "docs" / "progress.md"
-SECTIONS = ["里程碑與閱讀指引", "Session 紀錄", "偏差與決定"]
+SECTIONS = ["里程碑與閱讀指引", "寫法與封存", "Session 紀錄", "偏差與決定"]
 _TABLE_RULE = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
 
 

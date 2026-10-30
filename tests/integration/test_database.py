@@ -1,6 +1,6 @@
 """啟動時的資料庫行為：建檔、套 migration、WAL、可重複執行（票 02 驗收）。
 
-M1 的表由後續的 migration 增量加上去（progress.md 偏差與決定），所以「升得上去」與
+M1 的表由後續的 migration 增量加上去（`docs/archive/m0.md` 偏差與決定），所以「升得上去」與
 「降得回來」兩個方向都要驗——降不回來的 migration 等於沒有退路。
 """
 

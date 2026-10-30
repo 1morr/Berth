@@ -15,11 +15,11 @@
 
 工作單位是**票**：`.scratch/<里程碑>/issues/NN-slug.md`，由 `/to-tickets docs/plan.md` 在每個里程碑開頭產生一次（使用者參與拆分）。一個 session 只做一張票。
 
-1. 讀 `docs/progress.md` 的 session 紀錄與偏差，再讀票；只讀票列出的 plan / brief 章節，其他按需讀。
+1. 讀 `docs/progress.md`（只含進行中的里程碑，讀得完；M0–M5 在 `docs/archive/`，按需查），再讀票；只讀票列出的 plan / brief 章節，其他按需讀。
 2. `/implement <票路徑>`：tdd、定期 typecheck、結尾 `/code-review <開工時的 commit>`、commit。
 3. 驗證：`docs/development.md`〈全部檢查〉（`pre-commit run --all-files`：lint、type 與檔案衛生）加 test；貼指令輸出。
-4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一行。
-5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一行 session 紀錄；commit；提醒使用者開新 session。
+4. 實作若推翻 plan 或 brief，同一 commit 改文件，並在 progress.md「偏差與決定」記一條（≤ 200 字，帶里程碑標記）；票內的取捨記在票的 `## Comments`。
+5. 票的 `Status:` 改為 `done`、勾掉驗收條件、code-review 未處理的發現記到票的 `## Comments`；progress.md 加一列 session 紀錄（≤ 200 字，帶里程碑標記；每列每條的字數與標記由 `tests/unit/test_progress_rules.py` 守）；驗收票多一步「封存這個里程碑」（做法在 progress.md〈寫法與封存〉，用 `scripts/docs_moved_lines.py` 證明沒丟）；commit；提醒使用者開新 session。
 
 完成標準：票上每個驗收條件打勾、全部檢查與 test 綠燈、progress.md 已更新、已 commit。缺一就還沒完成。
 
