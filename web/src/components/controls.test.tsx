@@ -1,9 +1,9 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '../test/render'
-import { ConfirmAction, Field, PrimaryButton } from './controls'
+import { ConfirmAction, CopyLine, Field, PrimaryButton } from './controls'
 
 function renderConfirm(onConfirm = vi.fn()) {
   renderWithProviders(
@@ -121,5 +121,24 @@ describe('送出中的按鈕', () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('button', { name: '套用' })).not.toHaveAttribute('aria-disabled')
+  })
+})
+
+describe('CopyLine', () => {
+  // 區網 IP 走 HTTP 時沒有 `navigator.clipboard`；`userEvent` 會自己裝一個假的剪貼簿，所以這裡用 `fireEvent`。
+  it('HTTP 下（沒有 Clipboard API）照樣複製得到', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    Object.defineProperty(document, 'execCommand', { value: vi.fn(() => true), configurable: true })
+    try {
+      renderWithProviders(<CopyLine command="berth doctor" />)
+
+      fireEvent.click(screen.getByRole('button', { name: '複製' }))
+
+      expect(await screen.findByRole('button', { name: '已複製' })).toBeInTheDocument()
+      expect(document.execCommand).toHaveBeenCalledWith('copy')
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand')
+      Reflect.deleteProperty(navigator, 'clipboard')
+    }
   })
 })

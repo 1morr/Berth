@@ -30,6 +30,7 @@ import {
   PrimaryButton,
   TEXT_LINK,
 } from '../components/controls'
+import { copyText } from '../components/clipboard'
 import { RequestFailed } from '../components/RequestFailed'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { Timestamp } from '../components/Timestamp'
@@ -334,13 +335,8 @@ function Invite({ url }: { url: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-    } catch {
-      // 沒有剪貼簿權限就算了，網址本身選得起來。
-      setCopied(false)
-    }
+    // 複製不了就算了，網址本身選得起來。
+    setCopied(await copyText(url))
   }
 
   return (

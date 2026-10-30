@@ -1,6 +1,7 @@
 import { useId, useState, type ComponentPropsWithRef, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { copyText } from './clipboard'
 import { SIGNAL_FILL, type Signal } from './signal'
 import { ConfirmPanel } from './ConfirmPanel'
 import { useInPlaceConfirm } from './useInPlaceConfirm'
@@ -294,13 +295,8 @@ export function CopyLine({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-    } catch {
-      // 沒有剪貼簿權限就算了，指令本身仍然選得起來。
-      setCopied(false)
-    }
+    // 複製不了就算了，指令本身仍然選得起來。
+    setCopied(await copyText(command))
   }
 
   return (

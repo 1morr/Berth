@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **用區網 IP 走 HTTP 開 Berth（例如 `http://192.168.1.10:8383`）時整頁顯示「Something went wrong!」**：0.4.0 的助理面板用了
+  瀏覽器只在 HTTPS 或 localhost 才提供的 `crypto.randomUUID`，一打開就出錯。現在 HTTP 下照常運作。同一個原因讓「複製」鍵
+  （手動步驟的指令、Discord bot 邀請連結）在 HTTP 下按了沒反應，現在也複製得到。
+
 ## [0.4.0] - 2026-10-30
 
 **從 0.3.0 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。

@@ -91,7 +91,19 @@ export function readConversationId(): string {
 }
 
 export function rememberNewConversation(): string {
-  return rememberConversation(crypto.randomUUID())
+  return rememberConversation(randomUuid())
+}
+
+/**
+ * UUID v4。不用 `crypto.randomUUID`：它只在 secure context（HTTPS、localhost）才有，
+ * 區網 IP 走 HTTP 開 Berth 時是 `undefined`，0.4.0 因此整頁 crash；`getRandomValues` 哪裡都有。
+ */
+function randomUuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // 版本 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 4122 variant
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 export function rememberConversation(id: string): string {
