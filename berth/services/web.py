@@ -82,7 +82,7 @@ async def _tavily_key(session: AsyncSession) -> str:
 
 
 # 只讀：打的是固定的 Tavily，不是新位址；花的是使用者 Tavily 帳號的 credit（1 次 1 credit）。
-# 一般使用者也行：側面板對他就是讀取（brief §19「M5 的方向」⑦），次數由每輪的上限管。
+# 一般使用者也行：側面板對他就是讀取（ADR-0016），次數由每輪的上限管。
 @command(
     Effect.READ,
     audience=Role.USER,

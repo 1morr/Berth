@@ -1,4 +1,4 @@
-"""頁 4 只接 Prowlarr：拿掉通用 Torznab 端點（M4 票 37、brief §19 D3）。
+"""頁 4 只接 Prowlarr：拿掉通用 Torznab 端點（M4 票 37、ADR-0001）。
 
 `settings.services.indexer` 的 `kind` 拿掉了。存著 `torznab` 的安裝，那條位址是 Jackett 之類的
 Torznab 網址，Berth 現在只會把它當 Prowlarr 去連，所以連同頁 4 的結論一起清掉：

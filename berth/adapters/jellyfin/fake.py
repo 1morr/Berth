@@ -133,7 +133,7 @@ class FakeJellyfinClient:
         self,
         *,
         base_url: str = "http://jellyfin:8096",
-        #: 預設是支援下限之上的那一條線（`deploy/` 釘的 12.1，brief §19）。低於 12.0 的值
+        #: 預設是支援下限之上的那一條線（`deploy/` 釘的 12.1，ADR-0002）。低於 12.0 的值
         #: 讓精靈與健康檢查的版本閘門測得出來。
         version: str = "12.1.0",
         server_name: str = "jellyfin",

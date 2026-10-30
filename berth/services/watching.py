@@ -1,4 +1,4 @@
-"""繼續觀看與下一集：媒體庫頁上方的兩列（M1.5 票 07、brief §13、§19）。
+"""繼續觀看與下一集：媒體庫頁上方的兩列（M1.5 票 07、brief §13、ADR-0004）。
 
 資料原樣來自 Jellyfin——`/UserItems/Resume` 與 `/Shows/NextUp`，參數照 jellyfin-web 首頁
 （研究 library-browsing.md §7）——Berth 不疊入庫狀態，只替每一項挑一張橫圖、說出它是哪一集、看到哪。

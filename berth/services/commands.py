@@ -12,7 +12,7 @@ M5 票 06）讀它：要不要人確認看 `needs_person`，規則只有那一�
   狀態；不行就丟命令自己的拒絕例外（`reason` 在 `refusals` 裡），可以就回 `None`。命令本身走同一組
   檢查（先呼叫它，或共用它呼叫的那幾支），卡片預覽與真的執行才擋得一樣。
 - `audience`：誰做得了（M5 票 07）。預設 `Role.ADMIN`；`Role.USER` 是一般使用者也行——讀取類，與
-  處理自己送單的那幾支（brief §19「M5 的方向」⑦），「自己的」由命令看注入的 `user_id` 與 `role`。
+  處理自己送單的那幾支（ADR-0016），「自己的」由命令看注入的 `user_id` 與 `role`。
   命令執行器照它擋；API 路由經執行器時門禁要與它一致（`tests/unit/test_executor_routes.py`）。
 
 **反向命令（inverse）有三種寫法**：

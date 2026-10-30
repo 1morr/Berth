@@ -968,7 +968,7 @@ class JellyfinStep(StrEnum):
 
     前六步在精靈第 1 步成立擁有者時跑，建媒體庫在泊位 1（M4 票 06，`services/jellyfin.py`
     的 `OWNER_STEPS` / `BERTH_STEPS`）。原本有第 8、9 步（裝 MergeVersions、記下兩個合併任務的
-    Id）。12.x 原生合併多版本，插件在上面是空跑，所以整段移除了（票 14b、brief §19、§20.9）。
+    Id）。12.x 原生合併多版本，插件在上面是空跑，所以整段移除了（票 14b、ADR-0002、§20.9）。
     """
 
     PUBLIC_INFO = "public_info"
@@ -1005,7 +1005,7 @@ class RouteCheck(StrEnum):
 class QbittorrentStep(StrEnum):
     """頁 2 的纜繩（plan §9.3、§8.1）。值是 `app/setPreferences` 的鍵名。
 
-    **只剩介面登入**（M4 票 32，brief §19 D2）：Berth 不寫任何全域偏好。送單逐個 torrent 帶
+    **只剩介面登入**（M4 票 32，ADR-0013）：Berth 不寫任何全域偏好。送單逐個 torrent 帶
     分類與 `autoTMM=true`，路徑與未完成目錄都開在 Berth 的分類上，全域的哪一個鍵都不影響它。
     """
 
@@ -1139,8 +1139,8 @@ class ReviewKind(StrEnum):
     """Review Queue 上一列是哪一種事（plan §6 review 群組，2026-09-22 定）。
 
     M2 開頭定了五種，雖然票 06 只填 `audit` 與 `issue`：佇列的排序與畫面的分組都照這幾種定
-    （`REVIEW_PRIORITY`），後面兩票只是把列填進去，不改形狀。**`issue` 在 M3 票 05 拿掉**（brief
-    §19 2026-09-24）：Issue 只在 `/issues`，這一頁是「入庫要人決定」的那幾種。
+    （`REVIEW_PRIORITY`），後面兩票只是把列填進去，不改形狀。**`issue` 在 M3 票 05 拿掉**（
+    ADR-0006）：Issue 只在 `/issues`，這一頁是「入庫要人決定」的那幾種。
     """
 
     #: 低信心的 Plan，逐檔可改（票 07）。
@@ -1411,7 +1411,7 @@ class InterfaceLoginRefusal(StrEnum):
 class OwnerRefusal(StrEnum):
     """精靈第 1 步「擁有者」做不下去（`services/setup.claim_owner`、M4 票 06）。
 
-    擁有者就是 Jellyfin 的管理員（brief §11、§19 2026-09-26）：帳密交給 Jellyfin 驗，
+    擁有者就是 Jellyfin 的管理員（brief §11、ADR-0012）：帳密交給 Jellyfin 驗，
     Berth 自己不存。
     """
 

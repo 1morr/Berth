@@ -466,7 +466,7 @@ async def add_download(
 # 讀一筆 Job 給要動它的命令；不改東西。
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def own_job(session: AsyncSession, job_hash: str, *, user_id: int | None, role: Role) -> Job:
-    """這一筆 Job，按的人動得了的話。一般使用者只動得了自己送的（brief §19「M5 的方向」⑦）；
+    """這一筆 Job，按的人動得了的話。一般使用者只動得了自己送的（ADR-0016）；
     別人的與不存在的是同一個回應 `job_missing`，與 Jellyfin 的「看不到就是沒有」同一個規矩。"""
     job = await session.get(Job, job_hash)
     if job is None or (role is not Role.ADMIN and job.user_id != user_id):
@@ -474,7 +474,7 @@ async def own_job(session: AsyncSession, job_hash: str, *, user_id: int | None, 
     return job
 
 
-# 用存下來的下載連結再送一次，不連新位址。一般使用者重試得了自己送的（brief §19「M5 的方向」⑦）。
+# 用存下來的下載連結再送一次，不連新位址。一般使用者重試得了自己送的（ADR-0016）。
 @command(Effect.REVERSIBLE, flags={Flag.DOWNLOADS}, refusals=(JobRefusal,), audience=Role.USER)
 async def retry_job(
     session: AsyncSession,

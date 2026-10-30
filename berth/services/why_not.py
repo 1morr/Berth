@@ -14,7 +14,7 @@
 - 電影沒有季集：這部作品的每一筆 Job、每一筆 Feed Item 都蓋到它。
 - 已入庫與已刪除的 Job 也算蓋到，列在回答裡（「有人送過、後來刪了」也是答案），結論不看它們。
 
-**一般使用者看得到的範圍**（brief §19「M5 的方向」⑦）：只有自己送的 Job；Issue 與 RSS 那一側
+**一般使用者看得到的範圍**（ADR-0016）：只有自己送的 Job；Issue 與 RSS 那一側
 是管理員的頁面（`api/gate.py`），對他是 `None`。**結論照全部的事實算**：季表本來就對每個人說
 「下載中」「卡住」，結論只是同一件事說得更細，不會多洩漏哪一筆 Job 是誰的。RSS 那一側推出的
 結論（待綁定、被排除）在季表上只是「缺」，一般使用者因此多知道一個類別，但看不到是哪個 Feed、
@@ -248,7 +248,7 @@ class _Episodes:
         return [pair for row in rows for pair in episodes_of(row) if pair in self.known]
 
 
-# 一般使用者也問得了，只看得到自己送的 Job（brief §19「M5 的方向」⑦，見 `_visible`）。
+# 一般使用者也問得了，只看得到自己送的 Job（ADR-0016，見 `_visible`）。
 @command(
     Effect.READ,
     refusals=(WhyNotRefusal,),

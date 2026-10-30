@@ -1,6 +1,6 @@
 """精靈頁 2：qBittorrent（plan §9.3、§8.1、§9.5）。
 
-**Berth 不寫任何全域偏好**（M4 票 32，brief §19 D2）：送單逐個 torrent 帶 Berth 的分類與
+**Berth 不寫任何全域偏好**（M4 票 32，ADR-0013）：送單逐個 torrent 帶 Berth 的分類與
 `autoTMM=true`，分類建立時帶自己的 save path 與未完成目錄（M4 票 22），全域的哪一個鍵都不影響
 Berth——與 Sonarr / Radarr 對下載器的做法相同。套件內與既有因此只差一件事：
 

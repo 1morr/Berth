@@ -169,7 +169,7 @@ async def sweep_plans(
 
 
 # 退回 `completed` 重算：檔案不動，再核准或改寫就回去；沒有單一反向命令。一般使用者重算得了
-# 自己送的（brief §19「M5 的方向」⑦）。
+# 自己送的（ADR-0016）。
 @command(Effect.REVERSIBLE, refusals=(JobRefusal,), audience=Role.USER)
 async def replan_job(
     session: AsyncSession,

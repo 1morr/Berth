@@ -1,4 +1,4 @@
-"""Jellyfin 的圖由 Berth 轉給瀏覽器（M1.5 票 04、brief §19、plan §6）。
+"""Jellyfin 的圖由 Berth 轉給瀏覽器（M1.5 票 04、ADR-0004、plan §6）。
 
 瀏覽器只連 Berth：它不必連得到 Jellyfin，HTTPS 的 Berth 配 HTTP 的 Jellyfin 也沒有 mixed content。
 

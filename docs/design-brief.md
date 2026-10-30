@@ -1428,7 +1428,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 - 既有媒體庫加路徑 `POST /Library/VirtualFolders/Paths?refreshLibrary=`，body `MediaPathDto {Name, Path, PathInfo{Path}}`；移除 `DELETE /Library/VirtualFolders/Paths?name=&path=`。路徑驗證 `POST /Environment/ValidatePath`，body `{ValidateWritable, Path, IsFile}`；另有 `GET /Environment/DirectoryContents?path=`。兩組皆 `FirstTimeSetupOrElevated`（OpenAPI 直接查核，2026-09-07）。
 - **`ValidatePath` 看得到回 204、看不到回 404**：`IsFile: true` 走 `File.Exists`、`false` 走 `Directory.Exists`、不給則兩者皆否才算沒有（[EnvironmentController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/EnvironmentController.cs)，2026-09-08）。**404 是答案不是失敗**，adapter 翻成 `False` 不丟例外。Berth 不送 `ValidateWritable: true`（Jellyfin 會自己建暫存檔再刪）。
 - 需管理員（`RequiresElevation`）：`GET/POST /Repositories`（`{Name, Url, Enabled}`）、`POST /Packages/Installed/{name}?assemblyGuid=&version=&repositoryUrl=`、`POST /System/Restart`、`GET /ScheduledTasks`、`POST /ScheduledTasks/Running/{taskId}`。
-- MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`、套件名 `Merge Versions`、GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` / `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)）。**觸發要用 `GET /ScheduledTasks` 回的 `Id`，不是 `Key`**；`Id` 不跨安裝相同（實測那台 `MergeMoviesTask=fd957c84b0cfc2380becf2893e4b76fc`、`MergeEpisodesTask=dcaf151dd1af25aefe775c58e214477e`），一律現讀。本系統只支援 12 以上、不再安裝它（§19、§20.9）。
+- MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`、套件名 `Merge Versions`、GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` / `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)）。**觸發要用 `GET /ScheduledTasks` 回的 `Id`，不是 `Key`**；`Id` 不跨安裝相同（實測那台 `MergeMoviesTask=fd957c84b0cfc2380becf2893e4b76fc`、`MergeEpisodesTask=dcaf151dd1af25aefe775c58e214477e`），一律現讀。本系統只支援 12 以上、不再安裝它（[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)、§20.9）。
 
 **Jellyfin 精靈序列實測**（2026-09-07，票 06；`jellyfin/jellyfin:10.11.11`，Berth adapter 跑完 plan §9.4 全序列，fixture 在 `tests/fixtures/http/jellyfin/`；[細節](research/setup-api-facts.md#jellyfin-精靈序列實測)）
 
@@ -1479,7 +1479,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 **Jackett**（[repo](https://github.com/Jackett/Jackett)；[細節](research/setup-api-facts.md#jackett)）
 
 - API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面、無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml`。
-- ~~結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。~~ **已不採用**（2026-10-06 D3、M4 票 37）：只支援 Prowlarr；以上留作紀錄（[ADR-0001](adr/0001-indexer-manager-prowlarr-only.md)）。
+- ~~結論維持原決定：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。~~ **已不採用**（2026-10-06 D3、M4 票 37）：只支援 Prowlarr；以上留作紀錄（[ADR-0001](adr/0001-indexer-manager-prowlarr-only.md)）。
 
 **compose 套件實測**（2026-09-07，Windows 11 + Docker Desktop 29.6.2，票 03；[細節](research/setup-api-facts.md#compose-套件實測)）
 
@@ -1513,7 +1513,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 - **外掛字幕**：`<stem>.CHT.zh.ass` 在 10.10 顯示 `CHT - Chi - ASS - 外部`、10.11 `CHT - Chinese - ASS - 外部`（繁簡分得出來）；`.default.` 兩版都生效；`zh-Hant`/`zh-Hans` **只有 10.11 認得**，10.10 顯示「未定義」→ 不採用。
 - 深連結 `#!/details?id=…&serverId=…` 兩版都開得到詳細頁。
 - **精靈**：`POST /Startup/User` 之前**必須先 `GET /Startup/User`**（它建立預設使用者），否則回 **500**（`Sequence contains no elements`）。`POST /Library/VirtualFolders` 的 body 是 `AddVirtualFolderDto`，`LibraryOptions` **要包一層**（`{"LibraryOptions": {...}}`），直接送一樣回 204 但整份設定被靜默丟掉。
-- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本（10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`）；下載由 Jellyfin 連 GitHub，遇過 TLS 中斷回 500，要能重試。以上是 M0 對 10.x 的紀錄；本系統只支援 12 以上、不再安裝（§19）。排程任務 `Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
+- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本（10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`）；下載由 Jellyfin 連 GitHub，遇過 TLS 中斷回 500，要能重試。以上是 M0 對 10.x 的紀錄；本系統只支援 12 以上、不再安裝（[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)）。排程任務 `Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
 - **重啟後不能只等 `/System/Info/Public`**：它在伺服器載入中就回 200，這時管理員 API（如 `/ScheduledTasks`）回 **503「Jellyfin 伺服器載入中」**；要輪詢真正要用的端點回 200 才算完成。
 - **`find_episodes` 陷阱**：10.11 第一次掃描後，已被 provider 認出的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10、12.0.0 沒有（§20.8）。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
 
@@ -1560,7 +1560,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 - **選季選集**：`/Shows/{id}/Seasons?userId=` 與 `/Shows/{id}/Episodes?userId=&seasonId=`（jellyfin-web 詳細頁的查法，會套權限）。§20.1 的「10.11 第一次掃描後回 0」**在 12.0.0 沒有重現**（一次性容器：掃完當下、兩分鐘後、第二次掃描後都對）；10.11 沒有重測，那一條仍成立，後備是媒體庫遞迴查詢照 `Path` 分群（三版都驗過）。
 - **一部劇的每一集**（M5 票 28，作品頁與助理分得出「Jellyfin 已有、帳本沒有」）：`/Shows/{id}/Episodes?userId=&isMissing=false` **不帶 `seasonId`** 一次回整部劇每一季的集（含 S00；多集檔帶 `IndexNumberEnd`；都是 `LocationType: FileSystem`），筆數等於逐季加總；**權限照套**：無權的劇一樣 404 `"Series not found"`。不帶 `fields` 也有 `ParentIndexNumber` / `IndexNumber` / `IndexNumberEnd`。`isMissing` 伺服器認得（`true` 回 0 筆，不是被忽略），但 `false` 真的會濾掉 metadata 補出來的虛擬缺集**沒有量到**：一次性的樹關了網路 metadata，造不出虛擬集。Berth 仍只問 `locate` 確認過的劇（同 NextUp 的規矩）。【實測 12.1.0，`scripts/experiments/jellyfin_permissions.py` 第 7 節，fixture `shows-episodes.series*.json`】
 - **集對 TMDB 的鍵**（M5 票 28，2026-10-30；網路 metadata 開著、TMDB 對上的 SPY×FAMILY 四集）：**集的 `ProviderIds` 沒有 `Tmdb`**，只有 `Tvdb` 與 `Imdb`（值等於 TMDB 那一集的 `external_ids`；`Tmdb` 只在 Series 上），而且要帶 `fields=ProviderIds` 才回。**`PremiereDate` 不帶 `fields` 也有**，形狀是 `YYYY-MM-DDT00:00:00.0000000Z`（那一天的 00:00 UTC），四集都等於 TMDB 的 `air_date`（只量了 `MetadataCountryCode=TW`、`zh-TW`，別的地區有沒有差一天沒量）。metadata 對不上的集 `ProviderIds` 是 `{}`、沒有 `PremiereDate`。所以 Berth 照播出日對（差一天內、TMDB 只有一集的那一集；使用者 2026-10-30 定的「先照 TMDB 的集 id」做不了；照 Tvdb / Imdb 對要 TMDB 逐集的 `external_ids`，一集一個請求，不做），Jellyfin 的季集號不算數（可能照 TVDB 編），只分特典與正片（特典只與特典比）；同一天兩集、兩個 Jellyfin 的集對到同一集、對不上的都不算有，寧可多下一集。「差一天」是使用者定的寬度，沒有量過時區造成的差。【實測 12.1.0，`scripts/experiments/jellyfin_episode_providers.py`，fixture `shows-episodes.series.providers.json`】
-- **圖片不需要驗證**：`GET /Items/{id}/Images/{Primary|Backdrop|Thumb}` 匿名 200，請求帶 `Origin` 時回 `Access-Control-Allow-Origin: *`；縮放用 `fillWidth` / `fillHeight` / `quality` / `format=Webp`。`tag` 只是快取鍵（錯的也回圖），URL 要帶 DTO 的 `ImageTags` 才會在換圖時失效。瀏覽器直連的前提是連得到 Jellyfin（與深連結同一個主機），HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content（§19 已定由 Berth 代理）。
+- **圖片不需要驗證**：`GET /Items/{id}/Images/{Primary|Backdrop|Thumb}` 匿名 200，請求帶 `Origin` 時回 `Access-Control-Allow-Origin: *`；縮放用 `fillWidth` / `fillHeight` / `quality` / `format=Webp`。`tag` 只是快取鍵（錯的也回圖），URL 要帶 DTO 的 `ImageTags` 才會在換圖時失效。瀏覽器直連的前提是連得到 Jellyfin（與深連結同一個主機），HTTPS 的 Berth 配 HTTP 的 Jellyfin 是 mixed content（[ADR-0004](adr/0004-library-browsing-and-discovery.md) 已定由 Berth 代理）。
 - **經 Berth 代理的圖**（M1.5 票 04，研究 §6.1，12.1.0 實測）：2:3 的原圖帶 `fillWidth=342&fillHeight=513`；**不帶 `format` 時照 `Accept` 挑格式**，所以代理固定送 `format=Webp`；`quality=90` 約 23 KB，jellyfin-web 的 `quality=96` 是它的兩倍多。**Jellyfin 自己存縮好的圖**，所以 Berth 端不另存。`/Items` 帶 `enableImageTypes=Primary&imageTypeLimit=1` 時連 `ImageBlurHashes` 一起回。
 - **標為未看會清掉 `PlayCount` 與 `LastPlayedDate`**，復原不了。**對 Series / Season 標記會遞迴到底下每一集**：標已看把看到一半的位置歸零，標未看連之前單獨看過的集一起清掉；對季只動那一季。**遞迴的結果只有清單端點讀得到**（M1.5 票 11 的 e2e）：對整部劇標記之後，`/Items/{集}?userId=` 仍回 `Played=false`，`/Shows/{劇}/Episodes?userId=` 與 `/Items?ids=` 才對（單集自己標記時兩邊都更新）。Berth 讀集一律走 `/Shows/{id}/Episodes`。【實測 12.1.0】
 - **由 TMDB id 找作品**：`/Items` 沒有 provider id 過濾參數（猜的參數名都被忽略），但有 `hasTmdbId`。`GET /Items?userId=&recursive=true&includeItemTypes=Series,Movie&hasTmdbId=true&fields=ProviderIds` **不帶 `parentId`** 就會套權限，在 Berth 端比 `ProviderIds.Tmdb`；沒權限的媒體庫裡的那一份不會回來。已知 item id 時用 `/Items/{id}?userId=` 驗可見性（研究 §10）。【實測 12.1.0】
@@ -1568,7 +1568,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 - **繼續觀看與下一集**（M1.5 票 07，研究 §7.2）：jellyfin-web 首頁兩列一次取 12 / 24 項；NextUp 另送 `enableResumable=false`（**伺服器預設是 `true`**，不送的話看到一半的集兩列都出現）與 `nextUpDateCutoff=今天 − maxDaysForNextUp`（使用者設定，預設 365；伺服器預設沒有截止日）。`mediaTypes=Video`、`parentId`、`nextUpDateCutoff` 各有對照錄製證明伺服器真的過濾（12.1.0）；`enableResumable` 的效果只讀原始碼。**橫卡取圖**順序（自己的 Thumb → 上層的 Thumb → Backdrop → 自己的 Primary → 劇與季的 Primary）與條件見研究 §7.2；**12.1.0 沒有回 `SeriesThumbImageTag`**，劇的 Thumb 在 `ParentThumb*` 那一對。Berth 照這個順序取到集自己的 Primary 為止（電影不取 Primary：2:3 海報填進 16:9 只剩中間一條）。【原始碼 + 實測 12.1.0】
 - **劇集詳情頁：這部劇的下一集**（M1.5 票 08，研究 §7.3）：jellyfin-web 只送 `SeriesId` 與 `UserId`。帶 `seriesId` 時**截止日不套用**，`enableResumable` 預設 `true`；「最後看過」是已標記看過的最大季集號，取它之後第一個還沒看完的，Specials 與缺片不算；**從沒看過回 S01E01**，看完了回空（三種情況各錄一份）。`/Items/{id}?userId=` 沒有 `fields` 參數，不必要就帶 `ProviderIds` 與 `UserData`。Berth 照 §10 找作品、以 `/Items/{id}?userId=` 確認看得到之後才問這部劇的 NextUp（帶 `seriesId` 不套權限）。【原始碼 + 實測 12.1.0】
 - **沒有直接開始播放的網址**（§12 維持）：三版的 `#/video` 都不吃 item id，「播放某一集」只能深連結到那一集的 `#/details?id=`。
-- **帳號狀態**：Jellyfin 停用帳號之後，**API key 代讀這位使用者的 `UserViews`、`/Items`、Resume、NextUp、Seasons 照常回資料，`UserPlayedItems` 照常寫入**；只有他自己的 token 回 401、重新登入回 403。`GET /Users/{id}` 讀得到 `Policy.IsDisabled` 與 `EnabledFolders`（與 `UserViews` 的 `Id` 同一種格式）。所以 Berth 要自己讀 `Policy`（§19 已定）。【實測 12.1.0】**刪除的帳號**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md) §4）與停用不同：API key 代讀他的**每一支都是 404**（沒有寫入），重新登入 Berth 是帳密錯。Berth 只把 `Users/{id}` 的 404 當成與停用同一種處置（`UserViews` 的 404 可能是位址設錯，仍是問不到）（刪掉他的每一張 session、401 `account_disabled`，使用者拍板）。【實測 12.1.0】
+- **帳號狀態**：Jellyfin 停用帳號之後，**API key 代讀這位使用者的 `UserViews`、`/Items`、Resume、NextUp、Seasons 照常回資料，`UserPlayedItems` 照常寫入**；只有他自己的 token 回 401、重新登入回 403。`GET /Users/{id}` 讀得到 `Policy.IsDisabled` 與 `EnabledFolders`（與 `UserViews` 的 `Id` 同一種格式）。所以 Berth 要自己讀 `Policy`（[ADR-0004](adr/0004-library-browsing-and-discovery.md) 已定）。【實測 12.1.0】**刪除的帳號**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md) §4）與停用不同：API key 代讀他的**每一支都是 404**（沒有寫入），重新登入 Berth 是帳密錯。Berth 只把 `Users/{id}` 的 404 當成與停用同一種處置（`UserViews` 的 404 可能是位址設錯，仍是問不到）（刪掉他的每一張 session、401 `account_disabled`，使用者拍板）。【實測 12.1.0】
 - **大媒體庫的代價**（M2 票 11，[`docs/research/large-library.md`](research/large-library.md)；1,000 部 × 12 集、全部由 Berth 經手，Docker Desktop 上的量級）：整份清單（`library_index`）1,000 部 318 KB、p95 35 ms；不帶 `parentId` 的 `hasTmdbId` 反查 303 KB、p95 39 ms；**帶整份 `MediaSources` 的集清單 12,000 列 25.9 MB、p95 5.0 s**（不帶是 8.3 MB、0.55 s），約 8 萬集會撞上 Berth 30 s 的 Jellyfin 逾時，分段取總時間不減；**Series 的觀看紀錄很貴**：整份清單打開 `enableUserData` 從 31 ms 變 1.95 s，`ids=` 500 部回 **414 URI Too Long**。plan §11.3 決定 2 的門檻：`GET /inventory/{id}` p95 修正前 3.4 s（Berth 的分組是二次方，不是 Jellyfin）、修正後 0.66–0.68 s；對帳一輪 27–31 s（Jellyfin 那一方 25–29 s）。不做快取、不做分段取。【實測 12.1.0】
 
 ### 20.10 Sonarr 怎麼替一集組查詢（2026-09-19 查證）
@@ -1660,7 +1660,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 ### 20.13 公開站的請求限制：Prowlarr、Sonarr、AutoBangumi 的慣例（2026-09-26 查證，M3 票 20）
 
-研究檔 [`docs/research/request-budget.md`](research/request-budget.md)，逐條附原始碼或文件連結。M3 票 20 照這幾條定了一個站一份的請求預算（已拿掉，[ADR-0014](adr/0014-no-site-request-budget.md)）；**M4 票 107 整個拿掉**（§19 2026-10-19、plan §3.2），最後一條是拿掉的主要理由：
+研究檔 [`docs/research/request-budget.md`](research/request-budget.md)，逐條附原始碼或文件連結。M3 票 20 照這幾條定了一個站一份的請求預算（已拿掉，[ADR-0014](adr/0014-no-site-request-budget.md)）；**M4 票 107 整個拿掉**（[ADR-0014](adr/0014-no-site-request-budget.md)、plan §3.2），最後一條是拿掉的主要理由：
 
 - **Prowlarr 的 Query Limit 是滾動窗**（[§1](research/request-budget.md)）：數「過去 N 小時」的歷史（`Limits Unit` 只有 `Hour` 與預設的 `Day`），**RSS 與查詢算在同一份**，打滿時那一站那一次跳過；Grab Limit 是另一份。預設不限，要使用者自己填。
 - **Cardigann 定義的請求間隔**（[§2](research/request-budget.md)）：只有 `nyaasi.yml` 有 `requestDelay: 2`；`mikan.yml`、`dmhy.yml`、`acgrip.yml` 都沒有。
@@ -1671,7 +1671,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 ### 20.14 精靈手動選擇的慣例與既有服務的條件（2026-09-29 查證）
 
-§19「精靈改為每個服務手動選擇」那一列的依據，查證紀錄在 `.scratch/m4/wizard-manual-choice-decision.md`。慣例與各項實測的完整原文在 [`docs/research/wizard-existing-services.md`](research/wizard-existing-services.md)；三次實跑／查證另有自己的研究檔，下面只留結論。
+[ADR-0010](adr/0010-wizard-manual-service-selection.md) 的依據，查證紀錄在 `.scratch/m4/wizard-manual-choice-decision.md`。慣例與各項實測的完整原文在 [`docs/research/wizard-existing-services.md`](research/wizard-existing-services.md)；三次實跑／查證另有自己的研究檔，下面只留結論。
 
 - **Seerr 連媒體伺服器與加 Sonarr / Radarr 全程手動**：填位址與金鑰 → Test → Save，沒有自動偵測。【[Seerr：Media Server](https://docs.seerr.dev/using-seerr/settings/mediaserver)、[Seerr：Services](https://docs.seerr.dev/using-seerr/settings/services)】
 - **Sonarr / Radarr 的 Download Client 也是手動**：Host、Port、Username、Password、Category，按 Test。【[Servarr Wiki：Sonarr System](https://wiki.servarr.com/sonarr/system)】
@@ -1738,7 +1738,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 全文與來源在 [`docs/research/deploy-and-jellyfin-identity.md`](research/deploy-and-jellyfin-identity.md)。
 
-> **2026-10-09 被取代、2026-10-13 部分恢復**：M4 票 71 把部署改成只用 compose 檔加 `.env`、不附檔案（zip 拿掉，見 §20.18 與 §19 E4）；M4 票 97 恢復附件，但只附那兩個純文字檔 `docker-compose.yml`、`example.env`，不附 zip（§19 2026-10-13 那一列）。下面講 `latest/download` 那一條裡的 zip 已不存在，其餘事實照用。
+> **2026-10-09 被取代、2026-10-13 部分恢復**：M4 票 71 把部署改成只用 compose 檔加 `.env`、不附檔案（zip 拿掉，見 §20.18 與 [ADR-0009](adr/0009-deploy-compose-and-env.md)）；M4 票 97 恢復附件，但只附那兩個純文字檔 `docker-compose.yml`、`example.env`，不附 zip（[ADR-0009](adr/0009-deploy-compose-and-env.md)）。下面講 `latest/download` 那一條裡的 zip 已不存在，其餘事實照用。
 
 - **開頭是 `.` 的附件名會被 GitHub 改掉**（2026-10-13 查證，M4 票 97）：REST API〈Upload a release asset〉——「GitHub renames asset filenames that have special characters, non-alphanumeric characters, and leading or trailing periods」，改成什麼沒有寫（[docs.github.com](https://docs.github.com/en/rest/releases/assets#upload-a-release-asset)）；同名附件再傳是 422，要先刪（`gh release upload --clobber`）。所以 `deploy/.env.example` 照 Immich 以 `example.env` 上傳，release workflow 先把兩個檔 `cp` 成要的名字再傳。
 - **`https://github.com/<owner>/<repo>/releases/latest/download/<附件名>` 直接下載最新版本的同名附件**（[Linking to releases](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)）；每一版都要有同名附件，README 才能寫死連結。Immich 的安裝步驟就是這樣拿 compose 與 `example.env`（[docs.immich.app](https://docs.immich.app/install/docker-compose)）。
@@ -1747,7 +1747,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 ### 20.18 preseed 腳本內嵌進 compose：`configs.content` 加 `mode`（2026-10-09 查證＋實測，M4 票 70）
 
-全文、實測表與來源在 [`docs/research/deploy-and-jellyfin-identity.md`](research/deploy-and-jellyfin-identity.md)。部署要只剩 compose 檔加 `.env`（使用者 2026-10-09 拍板，推翻 §19 E4），qBittorrent 的白名單腳本因此內嵌進 compose，不再是旁邊的 `preseed/` 目錄。
+全文、實測表與來源在 [`docs/research/deploy-and-jellyfin-identity.md`](research/deploy-and-jellyfin-identity.md)。部署要只剩 compose 檔加 `.env`（使用者 2026-10-09 拍板，推翻 [ADR-0009](adr/0009-deploy-compose-and-env.md) 記的前一版決定），qBittorrent 的白名單腳本因此內嵌進 compose，不再是旁邊的 `preseed/` 目錄。
 
 - **Docker 文件**：頂層 `configs` 的 `content` 從 Compose 2.23.1 起支援，內容會做變數展開（[configs](https://docs.docker.com/reference/compose-file/configs/)、[v2.23.1](https://github.com/docker/compose/releases/tag/v2.23.1)）；預設權限 0444，服務 `configs` 長語法的 `mode` 可覆寫（[services#configs](https://docs.docker.com/reference/compose-file/services/#configs)）。
 - **`mode` 是成敗關鍵**：linuxserver 的 init 只執行 `-x` 的檔（`/etc/s6-overlay/s6-rc.d/init-custom-files/run` 對 `/custom-cont-init.d/*` 做 `[[ -x ]]`），0444 的預設一定不會跑，log 只有 `10-berth.sh: is not an executable file`，qBittorrent 照常起來但沒有白名單，Berth 進不去。漏掉 `mode` 不會報錯。
