@@ -363,3 +363,30 @@ Prowlarr 2.5.2.5491。`GET /api/v1/config/host` 回 39 個欄位，認證相關�
 - **benchmark v0 的 20 筆真實 torrent fixture** 與 **Mikan / Nyaa 的 RSS fixture**：
   不屬於本票（分別在 M1 的解析器票與 M3 的 RSS 票），brief §20.6 保留。
 - **絕對編號換算的失敗率量化**：同上，M1 的解析器票。
+
+## 從 brief 搬來（§20.6）
+
+從 design-brief §20.6 搬來（原文不改字）。
+
+**已完成（2026-09-07，票 04）**。完整結果與量測方式在
+[`docs/research/m0-experiments.md`](../research/m0-experiments.md)，腳本在 `scripts/experiments/`，
+可重跑。以下只留結論與尚未完成的項目。
+
+- ~~在 Windows Docker Desktop 的 NTFS bind mount 測硬鏈接~~、~~在 Linux 的 ext4 bind mount 跑同一腳本~~
+  **都通過**（`hardlink.sh`：NTFS 9p bind mount 與 ext4 bind mount 皆 nlink=2、inode 相同；
+  分成兩個 volume 則回 `Cross-device link` 並退出 1）。**但 ext4 那一輪跑的是 Docker Desktop
+  自己的 Linux VM（`docker-desktop` 發行版）**，是 daemon 端的檔案系統，不是另一台實體 Linux
+  宿主。原生 Linux 已在 2026-10-09 跑過（M4 票 42，§20.14）；**剩下：至少一台 NAS**（Synology / QNAP / TrueNAS 其一），
+  `sh hardlink.sh /volume1/<share>` 即可。Unraid 7.1.4 的 user share 已在 2026-10-08 跑過（M4 票 55，§20.14）。
+- ~~標籤內含中文~~ **12.x 已實測是純 tag**（`docs/research/jellyfin-12.md`），見 §20.1「多版本」。
+- ~~qBittorrent 4.4 與 5.x 的參數相容測試~~ **完成**，見 §20.7「qBittorrent 版本矩陣」。
+- ~~Jellyfin 10.10/10.11 的命名實測~~ **完成**，見 §20.7「Jellyfin 命名實測」。§7.2 的電影範例與
+  §7.7 的版本標籤說法已據此更正；plan §5 的模板凍結。
+- ~~`WebUI\ServerDomains=qbittorrent` 是否足以通過 Host 檢查~~ **完成**：足夠，但代價是使用者從
+  `localhost:8080` 進不了 WebUI，所以維持不預置（§20.7、plan §9.2）。
+- ~~Prowlarr `config/host` 設定 Forms 帳密的欄位名~~ **完成**，見 §20.7「Prowlarr」。
+- 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。→ M1 解析器票。
+- ~~抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
+  （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。~~ **完成（2026-09-25，M3 票 07）**，
+  連 acg.rip 一起，見 §20.12。
+- ~~抽 10 部動漫，量化**字幕組編號**對三種來源的換算失敗率：TMDB 季集、TVDB default(aired) season、TVDB absolute~~ **完成（2026-09-09，M1 票 01）**：7,833 筆真實釋出，TMDB 8.0% / TVDB aired 7.6% / TVDB absolute 7.6%。§10 的【研究】據此結案為**維持 TMDB**，完整結果與方法在 [`docs/research/anime-episode-source.md`](../research/anime-episode-source.md)，腳本 `scripts/experiments/anime_episode_source.py` 可重跑。順帶推翻兩件事：§20.3 的合併政策比原記載更激進（TMDB 連**獨立的連續季**也在併，咒術 3 季→1 季、Re:Zero 4 季→1 季），以及 **TVDB 的 absolute 會把 OVA 與劇場版也編號**（SPY×FAMILY 的 CODE: White 佔掉 absolute 38），所以 absolute ≠ 正篇第幾集。

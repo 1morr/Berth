@@ -465,3 +465,92 @@ high: 0/83 wrong (0.0%)  medium: 1/88 wrong (1.1%)
 - `tv/return-of-superman-e079-limo` `The.Return.of.Superman.E079.150524.HDTV.H264.720p-LIMO.avi`: review -> auto_correct
 
 </details>
+
+## 從 brief 搬來（§20.4）
+
+從 design-brief §20.4 搬來的原文（整節，不改字；brief 只留結論與來源）。
+
+
+**解析庫現況（2026-09）**
+
+| 庫 | 語言 | 狀態 | 欄位 | CJK / 字幕組 |
+| --- | --- | --- | --- | --- |
+| [guessit](https://github.com/guessit-io/guessit) | Python | 活躍，v4.4.0（2026-07） | title / season / episode / absolute_episode / version / release_group / source / screen_size / video_codec / subtitle_language / edition / other 等極完整 | 弱：[#929](https://github.com/guessit-io/guessit/issues/929) 仍開著，fansub 括號格式常錯 |
+| [anitopy](https://github.com/igorcmoura/anitopy) | Python | 停滯（2022） | anime_title / episode_number / release_group / release_version / video_resolution 等 | 無專門處理 |
+| [anitomy](https://github.com/erengy/anitomy) | C++ | develop 分支重寫中（C++23） | 同上 | 無專門處理 |
+| [anitomyscript](https://github.com/skiptirengu/anitomyscript) | JS/WASM | 2019 版本，落後上游 | 同上 | 無 |
+| [@ctrl/video-filename-parser](https://github.com/scttcper/video-filename-parser) | TS | 活躍，v5.11（2026-07），Radarr 風格 | title / year / resolution / sources / videoCodec / revision / group / edition / languages；TV 模式 seasons / episodeNumbers | 無 |
+| [parse-torrent-title](https://github.com/clement-escolano/parse-torrent-title) | JS | 活躍 | title / season / episode / resolution / codec / source / group，可擴充 handler | 無 |
+| [dreulavelle/PTT](https://github.com/dreulavelle/PTT)（pip `parsett`） | Python | 活躍 | 西方 scene 命名 | 無 |
+| torrent-name-parser | Rust | 停滯（2023） | 基本欄位 | 無 |
+
+**結論**：沒有現成庫能處理中文字幕組命名，CJK 詞典一定要自己維護；西方命名交給 guessit（Python）或 @ctrl/video-filename-parser（TS）。可直接借鑑的 CJK regex 有兩處：
+
+- **AutoBangumi `tokenizer/classic.py`**（[repo](https://github.com/EstrellaXD/Auto_Bangumi)，`backend/src/module/parser/analyser/tokenizer/classic.py`）：`_CJK_SUBTITLE_TAG`（简/繁/日/双语/内嵌/内封/外挂/多国）、`_SUBTITLE`（CHS/CHT/GB/Big5/JPSC/JPTC/Multi-Subs/PGS）、`_CHINESE_SEASON`（第N季/期，含中文數字）、`_CHINESE_EPISODE`（第N话/集）、`_FULL_COLLECTION` / `_COLLECTION`（全N话/合集/全集/总集篇/特典）、`_SPECIAL_CJK`（番外/特別篇）、`_MOVIE_CJK`（劇場版/電影版）、`_PREFIX`（★1月新番★）、`_RECRUIT`（招募廣告）、`_REGION`（僅限港澳台）、`_SOURCE`（Baha/B-Global/Bilibili/CR/AT-X/Abema/AMZN/NF/…）、`_CODEC`、`_AUDIO`。
+- **Sonarr `Parser.cs`**（[raw](https://raw.githubusercontent.com/Sonarr/Sonarr/develop/src/NzbDrone.Core/Parser/Parser.cs)）：約 8 條中文動漫 pre-substitution（以 `[一-鿌]` 剝離中文標題、LoliHouse / Lilith-Raws / Skymoon-Raws 無括號格式、GM-Team 多括號格式、`第?(\d+)(话|集)?( END|完| Fin)?`），以及韓劇 `\.E(\d{2,4})\.\d{6}\.(.*-NEXT)$ → S01E$1` 規則。
+
+**AutoBangumi 現況（main，2026-08）**
+
+- 解析輸出 `ParsedRelease`：`title_en / title_zh / title_jp / group / season / episode / episode_end / media_type(EPISODE|MOVIE|OVA|OAD|SPECIAL|PV|OPENING|ENDING) / release_kind(SINGLE|RANGE|BATCH|COLLECTION) / resolution / source / subtitle / codecs / audio / version / tags / evidence`。§6.3 的欄位設計與此對齊。
+- LLM 解析支援 OpenAI / Anthropic / Gemini，兩種模式：`primary`（LLM 為主但仍合併規則層的結構提示）與 `fallback`（只在規則層失敗或只得到弱標題時呼叫）；有記憶體快取、斷路器、併發上限。§6.10 的設計與其 `fallback` 模式一致，並多加了 schema 驗證與預算。
+- `offset_detector.py`：以 TMDB 各集 `air_date`、播出間隔 > 6 個月切「虛擬季」，算出 season_offset 與 episode_offset。
+- 明確限制：**不支援合集/批次**（FAQ：「AB 目前不支持解析合集」）、OVA 與電影 RSS 不支援、路徑必須是 `Title/Season X/`。這三點正是本系統 §6.6 要超越的地方。
+- RSS 預設過濾 regex `720|\d+-\d+`（排除 720p 與區間合集）；建議一部作品只訂一個字幕組；繁簡二選一靠 Mikan 訂閱時選或 filter。§15 的 Rule 預設沿用「排除合集、字幕組白名單」。
+
+**真實內容樣本（都取自現場列表，作為 benchmark v0 的種子）**
+
+- 單集：`[Erai-raws] Yani Neko - 07 [1080p NF WEB-DL AVC AAC][MultiSub][A5D38B89]`；`[三明治摆烂组] … - 08 - [繁日内嵌][AVC 8bit 1080P]` 與同集的 `[简日内嵌]`、`[简繁日内封]` 三個 torrent（內嵌 vs 內封的實例）；`【楓葉字幕組】[寵物小精靈/ 寶可夢地平線烈空坐飛升][089][繁體][1080P][MP4]`；`【悠哈璃羽字幕社】[碧蓝航线 微速前进 S2_Azur Lane - Bisoku Zenshin! S2][x264 1080p][CHT]`；`[DHR Fansub][Little Busters!_リトルバスターズ!][04][JPN&BIG5][720P][AVC_Hi10P_AAC][MKV]`；`[LoliHouse] Re:Zero … - 81 v2 WebRip 1080p HEVC-10bit AAC`。
+- 合集 / BD：`[7³ACG] 葬送的芙莉莲/Sousou no Frieren S01 | 01-28+SPx11 [简繁字幕] BDrip 1080p x265 OPUS 2.0`（28 集 + 11 個 SP）；`[7³ACG] 日常/Nichijou S01 | 01-26+SPx1 …`；`…★百姓贵族★29~40(完)★1920x1080★…★繁体中文`（`★` 分隔、`完` 標記）；`jibaketa TVB Honzuki no Gekokujou - S1 S2 S3 BD 1920x1080 x264 AACx2 SRT TVB CHT`（多季合一）；`Solo Leveling S01 + S02 BDRIP …`。
+- 外掛字幕：`sub/スレイヤーズTRY第01話(DVD 640x480).gb.ass` / `.big5.ass`；`[11番小队][十二国记]…tc.ass`；Mikan 的「生肉/不明字幕」標記。
+- 西方劇集：RARBG 季包 `Show/Subs/Episode 1/2_English.srt, 3_English.srt, 2_French.srt`（[renamer README](https://github.com/img02/Rarbg-Subtitle-Renamer)）；Sonarr Daily 型 `Some.Daily.Show.2021.03.04.1080p.HDTV.x264-GROUP`；`S01E01E02` 多集檔。
+- 電影：`Oppenheimer (2023) [1080p] [BluRay] [5.1] [YTS.MX]/Oppenheimer.2023.1080p.BluRay.x264.AAC5.1-[YTS.MX].mp4` + `www.YTS.MX.jpg` + `YTSProxies.com.txt`；Jellyfin 官方多片段 `Movie Name-cd1.mkv`（parttype：cd/dvd/part/pt/disc/disk）。
+- 韓劇：`Show.E01.YYMMDD.1080p…-NEXT` 無季編號（Sonarr 特別處理），`E01-16 COMPLETE (HDTV NEXT)` 全季字幕包。
+- **已證實（2026-09-10，M1 票 05，抓真實 torrent metadata）**：BD 包的附屬資料夾名兩家不同，社群轉述的那一串只對了一半。
+  - [VCB-Studio 魔王2099](https://share.dmhy.org/topics/view/726629_VCB-Studio_2099_Demon_Lord_2099_10-bit_1080p_HEVC_BDRip_Fin.html)（223 個檔案）：`SPs/`、`CDs/`（每張碟一個子資料夾，內含 flac 與 webp）、`CDs/…/Scans/`、`Scans/`（`BDBOX`、`Vol.1`…）。**沒有** `Fonts/` 與 `Menu/`。
+  - [DBD-Raws 不死者之王 第二季](https://share.dmhy.org/topics/view/668157_DBD-Raws_Overlord_Overlord_S2_01-13TV_SP_1080P_BDRip_HEVC-10bit_FLAC_MKV.html)（106 個檔案）：`SP/`（帶 SP 編號，每個配 `.sc.ass` / `.tc.ass`）、`PV/`、`NCOP&NCED/`、`menu/`（小寫）、`Fonts/Fonts.zip`（字型是壓縮檔不是散檔）。
+  - 兩份都成了 §6.9 的語料（`tests/fixtures/parser/`），分類規則因此有真實輸入可以釘。
+
+**只有集號、TMDB 上多季的真實發佈（2026-09-16，M1 票 14c，[研究](../research/profile-effect.md)）**：
+§6.4「只有集號 → 絕對編號」那一支在 v1 的 23 筆語料上一次都沒走到（34 次全是 TMDB 只有一季），
+補了 5 筆走得到的才量得出 Route profile 的作用。
+
+- **動漫的跨季連號換算得對**：SubsPlease `Spy x Family - 26`–`37`（S02E01–12）、`Boku no Hero Academia - 139`
+  （S07E01）、Erai-raws `One Piece - 1089 ~ 1104`。**TMDB 的航海王第 22 季沿用官方集數當 `episode_number`**
+  （S22E1089–1155），所以只有 absolute group 換對，各季累加換成 S22E01 是錯的。
+- **非動漫的「集號」可能是另一套數法**：《Home and Away》`Episode.8214.2024-02-29` 累加換成 S37E32，
+  但 TMDB 的 S37E39 集名就是 `Episode 8214`、播於同一天——TMDB 前 36 季比官方編號多收 7 集。
+  韓國電視台的 `The.Return.of.Superman.E079.150524` 累加換成 S03E21，播出日與檔名一致，是對的。
+- **字幕組每 cour 重數、篇章名只寫羅馬字時會被當成絕對編號**：Erai-raws
+  `Bleach - Sennen Kessen Hen - Soukoku Tan - 01 ~ 14` 換成 S01E01–14，正解 S02E27–40（TMDB 季名是
+  `Thousand-Year Blood War` / `千年血戰篇`，比不到羅馬字）。
+- **`guessit` 預設把韓國電視台的 `YYMMDD` 讀錯**：`150524` 讀成 2024-05-15（本機 guessit 實測），要加
+  `date_year_first`——官方說明「If short date is found, consider the first digits as the year」
+  （[guessit 文件](https://guessit-io.github.io/guessit)的 `-Y, --date-year-first`；設定檔裡是 `date_year_first`）。
+  加上之後讀成 2015-05-24，`2024-02-29` 這種四位數年份不受影響。
+- 韓劇第二季以後、檔名沒有季號的 `Show.2.E01.YYMMDD` 在 TPB、Knaben、dmhy 都沒找到，公開索引站上的
+  第二季發佈全部帶 `S02E`。
+- **「集號 ≤ 第一季集數就送審核」擋下的多半是對的**（2026-09-17，M1 票 14d，[研究 §6.1.1](../research/profile-effect.md)，
+  `scripts/experiments/absolute_rule_cost.py`）：M1 票 01 那批以發佈時間判定正解的 Mikan 發佈，取 TMDB 上 ≥ 2 季的
+  5 部（SPY×FAMILY、無職轉生、鬼滅之刃、進擊的巨人、航海王），每筆當成以標題為檔名的單檔 torrent 丟進 `plan`、
+  合集逐集展開。走到絕對編號換算的檔案裡，集號 ≤ 第一季集數的**正解在第一季 928 個、在後面某季 167 個**；
+  超過第一季集數的 1,219 對、54 錯，錯的 54 個正解全是播出日對不上、退回序位的那種，本身存疑。
+  「標題有認不出的多餘字」（guessit 的標題候選不等於作品的已知名字）分不開兩者：連 TMDB 的 `titles` 一起比，
+  放行 793 個第一季、漏掉 14 個後面季的——`Kimetsu no Yaiba: Katanakaji no Sato-hen` 本身就是 TMDB 別名，
+  `Mushoku Tensei S2 [02]` 的季號被 Berth 丟掉（季號等於方括號集號時；M1 票 14f 已修，這 5 個之後
+  讀得出季號、不再走到絕對編號換算）；只比三個主標題，放行 328 個、一個不漏，
+  但無職轉生那 5 個是因為 TMDB 英文標題 `Mushoku Tensei: Jobless Reincarnation` 比羅馬字長才擋下，同一種寫法換成
+  英文標題就是 `SPY x FAMILY` 的作品就會入錯。近似的限制：Mikan 只有標題沒有檔名、樣本以中文字幕組與動漫為主。
+
+**Jellyfin 動漫命名的社群痛點**
+
+- One Piece / Detective Conan 這類長篇：TVDB arc 順序 vs 絕對編號長期無解（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1sny587/one_piece_tvdb_arc_order_vs_absolute_episode)、[tvdb-plugin#91](https://github.com/jellyfin/jellyfin-plugin-tvdb/issues/91)）。本系統只承諾「與 TMDB 一致」，不承諾符合任何一種社群偏好。
+- Split-cour 被 Jellyfin 併成一季的抱怨很多（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1r5sk02/any_way_to_have_anime_seasons_shown_in_parts_like)）；本系統不對抗 provider，只做正確對應。
+- Sonarr FAQ 也承認 Bleach TYBW 這類新 arc 只有在編號與 TVDB 對上時才會自動匹配；絕對編號缺失時需等 TVDB 更新。
+
+**mediainfo（pymediainfo 7.0.1，2026-09-11 對真檔案實測）**
+
+- `pip install pymediainfo` 的 wheel **內含 libmediainfo**，不需要系統套件（[README](https://github.com/sbraz/pymediainfo)）；在這台 Windows 上 `MediaInfo.can_parse()` 直接回 `True`。
+- `MediaInfo.parse(path)` 回一份 track 清單，`track.to_data()` 是那一條的所有欄位。**同一個 `duration` 在不同 track 上型別不同**：General 上是整數毫秒（`2023`），Video 上是字串（`"2000.000000"`）——照抄任一邊的型別去讀另一邊都會拿到錯的值。
+- 布林是字串 `"Yes"` / `"No"`（`forced`、`default`）；語言是兩碼（`ja` / `en` / `zh`），`other_language` 另有一組別名。繁簡分不出來，所以字幕軌的繁簡只寫在 `title` 裡（與 §20.1 的 Jellyfin 同一個限制）。
+- 讀得完但不是媒體的檔案（例如一個 `.txt`）**不會丟例外**，回的是一份只有 General 的清單——所以「有沒有影像軌」才是「這是不是一個影片」的判準，而不是例外。
+- 證據：`tests/fixtures/mediainfo/two-second-episode.mkv`（ffmpeg 造的 17 KB Matroska：10 bit AVC + 兩條標了語言的音軌 + 兩條標了 forced / default 的字幕軌）與 `tests/unit/test_mediainfo.py`。

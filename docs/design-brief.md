@@ -771,46 +771,48 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 （本節由查證子任務填入，附來源。）
 
+細節在 `docs/research/`，本章只留結論與來源。
+
 ### 20.1 Jellyfin 命名、extras、字幕、多版本、API
 
-來源：jellyfin.org 官方文件、api.jellyfin.org OpenAPI、jellyfin GitHub issues。標「未證實」者需實測。
+來源：jellyfin.org 官方文件、api.jellyfin.org OpenAPI、jellyfin GitHub issues、原始碼。標「未證實」者需實測。每條的完整原文（含 issue / 原始碼連結與實測細節）在 [`docs/research/jellyfin-12.md`](research/jellyfin-12.md#從-brief-搬來201)，下稱〈研究檔〉。
 
 **命名**
 
-- 劇集資料夾 `Series Name (2018) [tmdbid-12345]`，年份與 ID 皆可選但官方建議加；可疊多個 ID。季資料夾必須是 `Season NN`（不可 `S01`），Specials 放 `Season 00`。集檔名支援 `S01E01`、`S01E01-E02`、`S02E03 Part 1`。（[identifiers](https://jellyfin.org/docs/general/server/metadata/identifiers)、[shows](https://jellyfin.org/docs/general/server/media/shows)）
+- 劇集資料夾 `Series Name (2018) [tmdbid-12345]`（年份與 ID 可選但建議加，可疊多個 ID）；季資料夾必須是 `Season NN`（不可 `S01`），Specials 放 `Season 00`；集檔名支援 `S01E01`、`S01E01-E02`、`S02E03 Part 1`。（[identifiers](https://jellyfin.org/docs/general/server/metadata/identifiers)、[shows](https://jellyfin.org/docs/general/server/media/shows)）
 - 純數字或數字開頭的劇名會讓 metadata 搜尋失敗（[#15860](https://github.com/jellyfin/jellyfin/issues/15860)）→ 用 `[tmdbid-…]` 鎖定可迴避。
-- 集號後面接方括號 tag 曾造成 AniDB 插件誤判（[anidb#11](https://github.com/jellyfin/jellyfin-plugin-anidb/issues/11)）；**核心解析器沒有這個問題**：方括號與 `+` 不會滲進 Series 或 Episode 名稱，Jellyfin 根本不從檔名取集標題（2026-09-07 實測，§20.6）。
-- 檔名中的 ` - ` 會觸發「多版本」regex：沒有 Season 資料夾時不同集會被誤併為版本（[#7855](https://github.com/jellyfin/jellyfin/issues/7855)）。本系統一律有 Season 資料夾，§7.1 的格式已實測無誤（§20.6）。
-- Extras 子資料夾名：`extras`、`behind the scenes`、`deleted scenes`、`interviews`、`scenes`、`samples`、`shorts`、`featurettes`、`clips`、`other`、`trailers`、`theme-music`、`backdrops`；**劇集層與季層都可放**。也支援 `-trailer`、`-short`、`-extra` 等檔名後綴。（[_video-external-extras.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-extras.md)）
-- 空的 `.ignore` 檔會讓整個資料夾被掃描排除；10.11 起非空 `.ignore` 支援 gitignore 語法。（[excluding-directory](https://jellyfin.org/docs/general/server/media/excluding-directory)）
+- 集號後接方括號 tag 曾讓 AniDB 插件誤判；**核心解析器沒有這個問題**：方括號與 `+` 不滲進 Series / Episode 名稱，Jellyfin 不從檔名取集標題（2026-09-07 實測，§20.6）。
+- 檔名中的 ` - ` 會觸發多版本 regex，沒有 Season 資料夾時不同集會被誤併（[#7855](https://github.com/jellyfin/jellyfin/issues/7855)）。本系統一律有 Season 資料夾，§7.1 的格式已實測無誤（§20.6）。
+- Extras 子資料夾名：`extras`、`behind the scenes`、`deleted scenes`、`interviews`、`scenes`、`samples`、`shorts`、`featurettes`、`clips`、`other`、`trailers`、`theme-music`、`backdrops`；劇集層與季層都可放；也支援 `-trailer`、`-short`、`-extra` 檔名後綴。（[官方文件原文](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-extras.md)）
+- 空的 `.ignore` 檔讓整個資料夾被掃描排除；10.11 起非空 `.ignore` 支援 gitignore 語法。（[excluding-directory](https://jellyfin.org/docs/general/server/media/excluding-directory)）
 
 **外掛字幕**
 
-- 格式 `<影片名>.{flags}.{language}.{ext}`，flags 有 `default`、`forced`、`sdh`/`cc`/`hi`，另可放自由文字標題，例如 `… S01E01 Title.commentary.ja.aac`。（[_video-external-streams.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-streams.md)）
-- **中文語言碼是已知痛點**：`chi`/`zh`/`zho`/`zh-hk` 只被辨識為泛「中文」，`cht`/`zh-cn`/`zh-cht` 不被辨識（[#6302](https://github.com/jellyfin/jellyfin/issues/6302)）。`zh-Hant`/`zh-Hans` **只有 10.11 認得**（顯示為 Chinese (Traditional) / (Simplified)），10.10 完全不認、退化成「未定義」（2026-09-07 實測，§20.6）。
-- 沒有可靠的語言碼能區分繁簡。**已實測採用**：語言用 `zh`，繁簡放自由文字標題欄位 —— `<stem>.CHT.zh.ass` 在 10.10 顯示為 `CHT - Chi - ASS - 外部`、在 10.11 顯示為 `CHT - Chinese - ASS - 外部`，自由文字排在最前面，兩個版本都分得出繁簡（§20.6）。
+- 格式 `<影片名>.{flags}.{language}.{ext}`，flags 有 `default`、`forced`、`sdh`/`cc`/`hi`，另可放自由文字標題（旗標在語言碼**之前**）。（[官方文件原文](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-external-streams.md)）
+- 中文語言碼是已知痛點：`chi`/`zh`/`zho`/`zh-hk` 只被辨識為泛「中文」，`cht`/`zh-cn`/`zh-cht` 不被辨識（[#6302](https://github.com/jellyfin/jellyfin/issues/6302)）；`zh-Hant`/`zh-Hans` **只有 10.11 認得**，10.10 退化成「未定義」（2026-09-07 實測，§20.6）。
+- 沒有可靠的語言碼能區分繁簡。**已實測採用**：語言用 `zh`，繁簡放自由文字標題，如 `<stem>.CHT.zh.ass`；10.10 顯示 `CHT - Chi - ASS - 外部`、10.11 顯示 `CHT - Chinese - ASS - 外部`，自由文字排最前，兩版都分得出繁簡（§20.6）。
 
 **多版本**
 
-- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤會依解析度排序，否則字母排序。（[_video-multiversion.md](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含**方括號與 `+` 已實測可用**（§20.6）；**標籤內含中文在 12.x 已實測是純 tag**（中文組名 `喵萌奶茶屋`，`docs/research/jellyfin-12.md`；10.10 / 10.11 未測，本系統只支援 12 以上）。
-- **劇集原生多版本在 10.x 不可靠**（12.0 起原生支援，§20.9）：10.8 起要求每集自己一個子資料夾才會視為版本，且社群回報同一集兩個檔案通常變成重複條目而非版本選單（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[discussion#16063](https://github.com/orgs/jellyfin/discussions/16063)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論（10.x）：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
-- MergeVersions 插件持續維護到 10.11 與 12.0（12.0.0 版 `targetAbi 12.0`；12.x 上對本系統的樹是空跑、不裝，§20.9），透過排程任務或設定頁手動觸發；沒有公開 API 可由外部呼叫，本系統用 Jellyfin 的排程任務 API 觸發（任務名已實測，§20.7）。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)、[releases](https://github.com/danieladov/jellyfin-plugin-mergeversions/releases)）已知問題：偶發錯誤、無法停用、跨媒體庫合併。
+- 電影：同資料夾內 `Movie (2021) [tmdbid-…] - 1080p.mkv`，檔名必須與資料夾名完全一致直到 ` - `；` - ` 之後為版本標籤，結尾為 `p`/`i` 的標籤依解析度排序，否則字母排序。（[官方文件原文](https://github.com/jellyfin/jellyfin.org/blob/master/docs/general/server/media/_video-multiversion.md)）標籤內含方括號與 `+` 已實測可用（§20.6）；標籤內含中文在 12.x 已實測是純 tag（中文組名 `喵萌奶茶屋`，[jellyfin-12.md](research/jellyfin-12.md)；10.10 / 10.11 未測，本系統只支援 12 以上）。
+- 劇集原生多版本在 10.x 不可靠（12.0 起原生支援，§20.9）：10.8 起要求每集自己一個子資料夾才視為版本，社群回報同一集兩檔通常變成重複條目（[discussion#7900](https://github.com/orgs/jellyfin/discussions/7900)、[#13432](https://github.com/jellyfin/jellyfin/issues/13432)）。結論（10.x）：**劇集多版本必須靠 MergeVersions 插件**，本系統命名只需保證同集檔名的 `S01E01` 部分一致。
+- MergeVersions 插件維護到 10.11 與 12.0（12.0.0 版 `targetAbi 12.0`；12.x 上對本系統的樹是空跑、不裝，§20.9）。靠排程任務或設定頁手動觸發，沒有公開 API；本系統用 Jellyfin 排程任務 API 觸發（任務名已實測，§20.7）。已知問題：偶發錯誤、無法停用、跨媒體庫合併。（[README](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/README.md)）
 
 **API**
 
-- `GET /Library/VirtualFolders` 回傳 `Name`、`Locations[]`、`CollectionType`（movies / tvshows / music / mixed …）、`ItemId`、`LibraryOptions`（含 `TypeOptions[].MetadataFetchers`，可用來偵測 TVDB 插件）。
-- 觸發掃描：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}` 做路徑級通知；`POST /Library/Refresh` 是全庫掃描。沒有「掃描單一資料夾」的專用端點。**`UpdateType` 不影響行為**：`LibraryController.PostUpdatedMedia` 對每一條都呼叫 `ILibraryMonitor.ReportFileSystemChanged(path)`，不看型別（2026-09-23 讀 jellyfin master 的原始碼，<https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs>）。所以 rematch 拆掉的舊路徑照樣以 `Created` 通知（M2 票 08）。【原始碼】
-- **路徑通知對「從來沒掃到過內容」的媒體庫無效**（2026-09-15 對 `lscr.io/linuxserver/jellyfin:latest` = **12.0.0** 實測，並查核 master 的 [`FileRefresher.GetAffectedBaseItem`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/FileRefresher.cs)）：等 `LibraryMonitorDelay`（預設 60 秒）之後，它從通知的路徑往上找第一個已存在的 item；初次掃描時是空的媒體庫資料夾不會成為 item（log：`Library folder "/data/library/tv" is inaccessible or empty, skipping`），於是找不到、**不做事也不寫 log**，而 `POST` 照樣回 204。套件內的媒體庫一開始一定是空的，所以**第一次入庫一定踩到**。實測三個媒體庫送了三輪通知，四分鐘後仍是 0 個 item。這條與 `EnableRealtimeMonitor` 無關——`ReportFileSystemChanged` 不看它（同日查核 [`LibraryMonitor`](https://github.com/jellyfin/jellyfin/blob/master/Emby.Server.Implementations/IO/LibraryMonitor.cs)）。
-- **只刷新一個媒體庫：`POST /Items/{媒體庫 ItemId}/Refresh?metadataRefreshMode=Default&imageRefreshMode=Default`**（2026-10-13 對 12.1.0 實測加查核 v12.1 原始碼，M4 票 62，`scripts/experiments/jellyfin_scan_scope.py`）。OpenAPI 上和刷新、掃描有關的只有它、`POST /Library/Media/Updated` 與 `POST /Library/Refresh` 三支；它沒有 `Recursive` 參數，但對媒體庫用不著：`ProviderManager.RefreshItem` 遇到 `CollectionFolder` 時對它的每個**實體資料夾** `ValidateChildren`（遞迴，[`ProviderManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Providers/Manager/ProviderManager.cs) `RefreshCollectionFolderChildren`）。網頁控制台媒體庫卡片的「掃描媒體庫」送的就是這一支加兩個 `Default`（[`LibraryCard.tsx`](https://github.com/jellyfin/jellyfin-web/blob/master/src/apps/dashboard/features/libraries/components/LibraryCard.tsx) 的 `mode: 'scan'`、[`refreshdialog.js`](https://github.com/jellyfin/jellyfin-web/blob/master/src/components/refreshdialog/refreshdialog.js)；它另帶的 `Recursive: true` 伺服器不收）——Berth 照它的慣例。收下就回（204，0.08 秒），排進 Jellyfin 的刷新佇列；新的集與新的劇約 2 秒出現，**同時放進另一個媒體庫的檔案沒被掃到**。
-- **它只認得 Jellyfin 已經有的實體資料夾**：實體資料夾是全庫掃描驗證根目錄時建的，而那時是空的資料夾直接略過、不建成 item（[`Folder.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Controller/Entities/Folder.cs) `IsLibraryFolderAccessible`：「Library folder … is inaccessible or empty, skipping」）。所以**第一次掃描時是空的路徑，之後放了檔案，單一刷新與路徑通知都看不到它**：實測空的電影媒體庫刷新後 90 秒、再送路徑通知後 90 秒都是 0 個 item；兩個路徑的媒體庫刷新時，有內容的那個路徑的新集 2 秒出現，空的那個路徑的新劇一直沒有。**只有全庫掃描建得出它**（`LibraryManager.ValidateTopLibraryFolders` 只由全庫掃描與新增、移除媒體庫呼叫）；那之後同一個路徑再放檔，單一刷新 2 秒就看到。2026-09-15 那一次「對媒體庫 id 呼叫只刷新那一個 item、不找新的子資料夾」量的是空的媒體庫，結論寫錯了範圍。**Berth 怎麼判斷**：Jellyfin 已經在 Route 的寫入目標底下列出過東西（Series 或 Movie 的 `Path`）就只刷新那個媒體庫，否則跑全庫掃描——在空的媒體庫第一次入庫、既有 Jellyfin 的媒體庫剛加上 Berth 路徑時都是後者。
-- `POST /Library/Refresh` 在請求裡**等整次掃描做完**（[`LibraryController.RefreshLibrary`](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs) `await ValidateMediaLibrary`），**掃的是整台伺服器的所有媒體庫**。要「現在掃」又不把呼叫端卡住，用內建排程任務 **`RefreshLibrary`**（「Scan Media Library」／「重新掃描媒體庫」）：`POST /ScheduledTasks/Running/{id}` 收下就回；id 從 `GET /ScheduledTasks` 以 `Key` 找（12.0.0 實測 `7738148ffcd07979c7ceb148e06b3aed`）。它同樣掃整台（12.1.0 實測另一個媒體庫的新檔一起被掃到，四個小媒體庫 4 秒跑完）。**還在跑時再送一次是空操作**：一樣回 204，`ScheduledTaskWorker.ExecuteInternal` 對執行中的任務丟例外而不排隊（[`ScheduledTaskWorker.cs`](https://github.com/jellyfin/jellyfin/blob/v12.1/Emby.Server.Implementations/ScheduledTasks/ScheduledTaskWorker.cs)）。
-- `GET /Items` **沒有 `path` 篩選**。反查方式：以 `parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。（[ItemsController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/ItemsController.cs)）**注意**：取集時不要用 `parentId=<series>` —— 10.11 在第一次掃描後對「已被 provider 認出來的」Series 會回 0 筆，`/Shows/{id}/Episodes` 同樣回 0，要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。12.0.0 沒有重現（2026-09-15，§20.8）。
-- **`DELETE /Items/{id}` 會刪除磁碟檔案**（`DeleteFileLocation = true`），本系統絕不呼叫它。（[LibraryController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/LibraryController.cs)）
+- `GET /Library/VirtualFolders` 回 `Name`、`Locations[]`、`CollectionType`、`ItemId`、`LibraryOptions`（含 `TypeOptions[].MetadataFetchers`，可偵測 TVDB 插件）。
+- 路徑通知：`POST /Library/Media/Updated` 帶 `{Updates:[{Path, UpdateType: Created|Modified|Deleted}]}`；`POST /Library/Refresh` 是全庫掃描；沒有「掃描單一資料夾」的端點。**`UpdateType` 不影響行為**（`LibraryController.PostUpdatedMedia` 對每條都呼叫 `ReportFileSystemChanged(path)`，2026-09-23 讀 master 原始碼），所以 rematch 拆掉的舊路徑照樣以 `Created` 通知（M2 票 08）。【原始碼】
+- **路徑通知對「從來沒掃到過內容」的媒體庫無效**（2026-09-15 對 12.0.0 實測 + master `FileRefresher.GetAffectedBaseItem` 原始碼）：等 `LibraryMonitorDelay`（預設 60 秒）後從路徑往上找第一個已存在的 item，初次掃描時空的媒體庫資料夾不成為 item（log `Library folder … is inaccessible or empty, skipping`），於是**不做事也不寫 log**，`POST` 照回 204。套件內媒體庫一開始必空，**第一次入庫一定踩到**（三個媒體庫送三輪，四分鐘後仍 0 item）。與 `EnableRealtimeMonitor` 無關。
+- **只刷新一個媒體庫：`POST /Items/{媒體庫 ItemId}/Refresh?metadataRefreshMode=Default&imageRefreshMode=Default`**（2026-10-13 對 12.1.0 實測 + v12.1 原始碼，M4 票 62，`scripts/experiments/jellyfin_scan_scope.py`）。OpenAPI 上與刷新、掃描有關的只有它、`/Library/Media/Updated`、`/Library/Refresh` 三支；它沒有 `Recursive` 參數，但 `ProviderManager.RefreshItem` 對 `CollectionFolder` 會對每個**實體資料夾**遞迴 `ValidateChildren`。網頁控制台「掃描媒體庫」送的就是這一支加兩個 `Default`（它另帶的 `Recursive: true` 伺服器不收），Berth 照它的慣例。收下即回 204（0.08 秒）排進刷新佇列，新集與新劇約 2 秒出現，**同時放進另一個媒體庫的檔案沒被掃到**。
+- **它只認得 Jellyfin 已經有的實體資料夾**：實體資料夾由全庫掃描驗證根目錄時建立，而空資料夾當時被略過（`Folder.IsLibraryFolderAccessible`）。所以**第一次掃描時是空的路徑，之後放了檔案，單一刷新與路徑通知都看不到它**（空的電影媒體庫刷新後 90 秒、再送路徑通知後 90 秒都是 0 item）；**只有全庫掃描建得出它**（`ValidateTopLibraryFolders` 只由全庫掃描與新增、移除媒體庫呼叫），建好之後同路徑再放檔，單一刷新 2 秒就看到。**Berth 怎麼判斷**：Jellyfin 已在 Route 的寫入目標底下列出過東西（Series 或 Movie 的 `Path`）就只刷新那個媒體庫，否則跑全庫掃描——空的媒體庫第一次入庫、既有 Jellyfin 的媒體庫剛加上 Berth 路徑時都是後者。（2026-09-15 那次「只刷新那一個 item」量的是空媒體庫，結論範圍寫錯，已更正。）
+- `POST /Library/Refresh` 在請求裡**等整次掃描做完**且**掃整台伺服器所有媒體庫**。要「現在掃」又不卡住呼叫端，用內建排程任務 **`RefreshLibrary`**：`POST /ScheduledTasks/Running/{id}` 收下就回；id 從 `GET /ScheduledTasks` 以 `Key` 找（12.0.0 實測 `7738148ffcd07979c7ceb148e06b3aed`）。它同樣掃整台（12.1.0 實測另一媒體庫的新檔一起被掃，四個小媒體庫 4 秒）。**還在跑時再送是空操作**：一樣回 204，`ScheduledTaskWorker.ExecuteInternal` 對執行中任務丟例外而不排隊（v12.1 原始碼）。
+- `GET /Items` **沒有 `path` 篩選**。反查：`parentId=<library>&includeItemTypes=Series&fields=ProviderIds,Path` 找 Series（比對 tmdb id 或路徑），再取集並用 `Path` 比對。取集**不要用 `parentId=<series>`**：10.11 第一次掃描後對已被 provider 認出的 Series 回 0 筆（`/Shows/{id}/Episodes` 同），要再掃一次才正常；改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對（2026-09-07 實測，§20.6）。12.0.0 沒有重現（2026-09-15，§20.8）。
+- **`DELETE /Items/{id}` 會刪除磁碟檔案**（`DeleteFileLocation = true`），本系統絕不呼叫它。【原始碼】
 - 登入 `POST /Users/AuthenticateByName` 回 `AccessToken`、`ServerId`、`User`；`POST /Auth/Keys` 建 API key。
-- 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 **都能開到詳細頁**，前端會正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
-- **`serverId` 可以不帶**：12.0.0 上登入後直接開 `{server}/web/#/details?id={seriesId}`（沒有 `serverId`）照樣畫出該作品的詳細頁與季列（2026-09-15 playwright 實測，Series `大熊餐廳`）。10.10 / 10.11 沒有測過不帶的形式。Berth 產生的連結不帶它（票 13）。
-- **`GET /Items` 的每一筆都帶 `ServerId`，Episode 另帶 `SeriesId` 與 `SeasonId`**，不必另外在 `fields` 要（2026-09-15 對 12.0.0 實測）。反查一集時順手就知道它屬於哪個 Series，媒體庫的深連結靠它開到作品而不是某一集（票 13）。
-- **剛掃進來的 item 有一段時間還沒認完**（2026-09-26 試跑環境，12.1，BLACK TORCH 一季 12 集；記錄在 `docs/archive/m3.md` 同日「M3 後的全面審查」）：`GET /Items` 已經列出這個 Episode、`Path` 對得上，但 `Name` 是作品名、`ParentIndexNumber` / `IndexNumber` 是空的，所屬 Series 沒有 `ProviderIds.Tmdb`；同一個 item 之後讀回 `Episode S01E10`、Series 帶 Tmdb。這一段落在新檔案觸發的重掃上，試跑量到的上界是入庫後約 12 分鐘（那是下一次反查碰巧讀到的時間，不是 Jellyfin 真正花的時間）。反查因此先問「認完了沒」再比（`resolver.still_identifying`，M4 票 02）。
+- 深連結：`{server}/web/index.html#!/details?id={itemId}&serverId={serverId}` 在 10.10.7 與 10.11.11 都能開到詳細頁，前端正規化成 `#/details?id=…`；客戶端自己產生的連結一律不帶 `!`（2026-09-07 playwright 實測，§20.6）。沒有「直接開始播放」的穩定 URL。
+- **`serverId` 可以不帶**：12.0.0 登入後直接開 `{server}/web/#/details?id={seriesId}` 照樣畫出詳細頁與季列（2026-09-15 playwright 實測）；10.10 / 10.11 沒測過不帶的形式。Berth 產生的連結不帶它（票 13）。
+- **`GET /Items` 每筆都帶 `ServerId`，Episode 另帶 `SeriesId` 與 `SeasonId`**，不必在 `fields` 要（2026-09-15 對 12.0.0 實測）；反查一集時順手知道所屬 Series，媒體庫深連結靠它開到作品而非某一集（票 13）。
+- **剛掃進來的 item 有一段時間還沒認完**（2026-09-26 試跑環境 12.1，BLACK TORCH 一季 12 集，記錄在 `docs/archive/m3.md`「M3 後的全面審查」）：`GET /Items` 已列出該 Episode、`Path` 對得上，但 `Name` 是作品名、`ParentIndexNumber` / `IndexNumber` 為空、所屬 Series 沒有 `ProviderIds.Tmdb`；之後同一 item 讀回 `Episode S01E10`、Series 帶 Tmdb。上界約入庫後 12 分鐘（下一次反查碰巧讀到的時間，不是 Jellyfin 真正花的時間）。反查因此先問「認完了沒」再比（`resolver.still_identifying`，M4 票 02）。
 - Webhook 插件有 `ItemAdded` / `ItemDeleted`，但走排程批次且社群長期回報不可靠（[#252](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/252)、[#367](https://github.com/jellyfin/jellyfin-plugin-webhook/issues/367)）→ 支持 §9 以排程對帳為主。
 
 **Provider**
@@ -820,195 +822,66 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ### 20.2 qBittorrent Web API 與硬鏈接 / Docker 限制
 
-來源：qBittorrent master 原始碼（`torrentscontroller.cpp`、`serialize_torrent.cpp`）、`WebAPI_Changelog.md`、qbittorrent-api 客戶端文件、TRaSH Guides、Servarr wiki、man pages。**社群 wiki 的 API 頁面已過時**（連「5.0」頁面都還列 `paused` / `root_folder`），以原始碼為準。
+細節（逐字原文、實測表格、原始碼行號）在 [qbittorrent-web-api.md](research/qbittorrent-web-api.md)，下面只留結論與來源。來源：qBittorrent master 原始碼（`torrentscontroller.cpp`、`serialize_torrent.cpp`）、`WebAPI_Changelog.md`、qbittorrent-api、TRaSH Guides、Servarr wiki、man pages。**社群 wiki 的 API 頁面已過時**（連「5.0」頁面都還列 `paused` / `root_folder`），以原始碼為準。【決定】支援下限 qBittorrent 4.4（API 2.8.4，2022），以 5.x 為主要測試目標。
 
-**`torrents/add` 現行參數**（[torrentscontroller.cpp](https://raw.githubusercontent.com/qbittorrent/qBittorrent/master/src/webui/api/torrentscontroller.cpp)）
+**`torrents/add` 與改名**（[細節](research/qbittorrent-web-api.md#torrentsadd-參數與回應)）
 
-- `urls` / `torrents`、`savepath`、`downloadPath` + `useDownloadPath`、`category`、`tags`、`rename`、`autoTMM`、`contentLayout`（`Original` / `Subfolder` / `NoSubfolder`，API 2.7 / qB 4.3.2 起，取代 `root_folder`）、`stopped`（API 2.11.0 起取代 `paused`）、`stopCondition`、`seedMode`（API 2.16.0 起，同時移除 `skip_checking`）、`filePriorities`、`ratioLimit` / `seedingTimeLimit`（API 2.8.1）。
-- master 已不讀 `paused` / `root_folder`。adapter 必須先讀 `app/webapiVersion`，依版本送 `paused` 或 `stopped`；`torrents/pause|resume` 在 5.0 改名 `stop|start`。
+- 現行參數：`urls` / `torrents`、`savepath`、`downloadPath` + `useDownloadPath`、`category`、`tags`、`rename`、`autoTMM`、`contentLayout`（API 2.7 起，取代 `root_folder`）、`stopped`（API 2.11.0 起取代 `paused`）、`stopCondition`、`seedMode`（API 2.16.0 起，同時移除 `skip_checking`）、`filePriorities`、`ratioLimit` / `seedingTimeLimit`。master 已不讀 `paused` / `root_folder`。
+- adapter 必須先讀 `app/webapiVersion`，依版本送 `paused` 或 `stopped`；`torrents/pause|resume` 在 5.0 改名 `stop|start`，5.x 的 `torrents/resume` 是 404、沒有別名（實測 4.4.5 / 5.2.3，細節見 [recheck](research/qbittorrent-web-api.md#torrentsrecheck-與重新開始)）。
 - **回應形狀兩版不同**（2026-09-10 票 09 實測，見 §20.7）：4.4.5 回 `200` + `Ok.`，5.2.3 回 `200` 加一份 JSON 摘要。只認 `Ok.` 的用戶端會把 5.x 上每一次成功的送單都判成失敗。
-- 【決定】支援下限 qBittorrent 4.4（API 2.8.4，2022）；以 5.x 為主要測試目標。
 
-**分類與路徑**
+**分類與路徑**（[細節](research/qbittorrent-web-api.md#分類與路徑)）
 
-- `createCategory` / `editCategory` 參數：`category`、`savePath`、`downloadPathEnabled`、`downloadPath`。per-category 未完成路徑自 API 2.8.4 / qB 4.4.0 即存在，但 WebUI 直到 **5.2.0** 才有介面管理（[Changelog](https://raw.githubusercontent.com/qbittorrent/qBittorrent/master/Changelog)）。本系統用它取代全域 `temp_path`（M4 票 22，§4.1）。
-- **分類的 `downloadPath` 實測**（M4 票 22，`scripts/experiments/qbittorrent_category_download_path.py` 對 4.4.5 與 5.2.3 各跑一次，兩版結論相同；一台做種的 5.2.3 以 `addPeers` 直連、限速讓下載中看得到，torrent 照 Berth 的送單形狀加：`category` + `autoTMM=true`、不送 `savepath`）：
-
-  | 情境 | 下載中檔案在 | 完成後 |
-  | --- | --- | --- |
-  | 分類 `downloadPathEnabled=true` + `downloadPath`，全域 `temp_path_enabled=false` | 分類的 `downloadPath`（torrent 報的 `download_path` 就是它） | 搬到分類的 `savePath` |
-  | 同上，全域開著、指向另一個目錄 | 分類的 `downloadPath`：分類的贏 | 搬到 `savePath` |
-  | 分類 `downloadPathEnabled=false`，全域開著 | 直接寫在 `savePath`：分類可以明說不走全域 | — |
-  | 分類兩個欄位都不送，全域關著 | 直接寫在 `savePath` | — |
-  | 分類兩個欄位都不送，全域開著 | 全域 temp path（5.2.3 在底下多一層分類名，4.4.5 不多） | 搬到 `savePath` |
-
-  讀回 `torrents/categories` 的鍵是 **`download_path`**（不是駝峰）：設了是字串；停用兩版都是 `false`；沒設 5.2.3 是 `null`、4.4.5 **整個鍵不出現**。對已存在的分類再送 `createCategory` 兩版都是 409 `Unable to create category`。
-- `torrents/categories` 回傳鍵在 4.4.0–4.4.1 曾在 `savePath` / `save_path` 之間反覆，adapter 兩者都要接受。
-- `torrents/removeCategories`：表單欄位 `categories`，多個以 `
-` 分隔，任何情況都回 200（[WebUI API（qBittorrent 5.0）](https://github.com/qbittorrent/qbittorrent/wiki/WebUI-API-(qBittorrent-5.0)#remove-categories)，4.1 起的文件同一支；context7 `/qbittorrent/qbittorrent` 查核，2026-10-07）。分類裡的 torrent 會變成沒有分類，所以 Berth 只送重數過是空的 `berth-*`（M4 票 47）。
-- `createCategory` 的表單鍵是 `category`、`savePath`（Berth 另帶 `downloadPathEnabled`、`downloadPath`）；名稱空字串回 **400** `Category cannot be empty`，名稱不合法或建不起來（含同名已存在）回 **409** `Unable to create category`（查核 master 的 [torrentscontroller.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/api/torrentscontroller.cpp)，2026-09-08）。所以冪等要靠呼叫端先 `torrents/categories` 讀一次。
-- autoTMM 開啟時 save path 跟隨 category；`category_changed_tmm_enabled` 為真時改 category 路徑會**自動搬移所有該分類 torrent**。→ 本系統建立 category 後不再改其 savePath；使用者改 Route 目標時建立新 category，舊 Job 維持原位。
+- `createCategory` / `editCategory` 參數：`category`、`savePath`、`downloadPathEnabled`、`downloadPath`。per-category 未完成路徑自 API 2.8.4 / qB 4.4.0 即存在，WebUI 到 **5.2.0** 才有介面（[Changelog](https://raw.githubusercontent.com/qbittorrent/qBittorrent/master/Changelog)）。本系統用它取代全域 `temp_path`（M4 票 22，§4.1）。
+- **分類的 `downloadPath` 實測**（M4 票 22，4.4.5 與 5.2.3 結論相同）：分類 `downloadPathEnabled=true` + `downloadPath` 時，下載中檔案在分類的 `downloadPath`，完成後搬到分類的 `savePath`；全域 `temp_path` 開或關都是**分類的贏**。分類 `downloadPathEnabled=false` 時直接寫在 `savePath`（可明說不走全域）；兩個欄位都不送時跟全域（開著就在全域 temp path，5.2.3 底下多一層分類名）。torrent 照 Berth 的送單形狀加：`category` + `autoTMM=true`、不送 `savepath`。
+- 讀回 `torrents/categories` 的鍵是 **`download_path`**（不是駝峰）：設了是字串；停用兩版都是 `false`；沒設 5.2.3 是 `null`、4.4.5 **整個鍵不出現**。儲存路徑的鍵在 4.4.0–4.4.1 曾在 `savePath` / `save_path` 之間反覆，adapter 兩者都要接受（4.4.5 / 5.2.3 實測是 `savePath`）。
+- `createCategory`：表單鍵 `category`、`savePath`（Berth 另帶 `downloadPathEnabled`、`downloadPath`）；名稱空字串回 **400** `Category cannot be empty`，名稱不合法或建不起來（含同名已存在）回 **409** `Unable to create category`（master 原始碼，2026-09-08）。所以冪等要靠呼叫端先 `torrents/categories` 讀一次。
+- `torrents/removeCategories`：表單欄位 `categories`，多個以換行分隔，任何情況都回 200（[WebUI API 5.0](https://github.com/qbittorrent/qbittorrent/wiki/WebUI-API-(qBittorrent-5.0)#remove-categories)，context7 查核 2026-10-07）。分類裡的 torrent 會變成沒有分類，所以 Berth 只送重數過是空的 `berth-*`（M4 票 47）。
+- **autoTMM 開啟時 save path 跟隨 category；`category_changed_tmm_enabled` 為真時改 category 路徑會自動搬移所有該分類 torrent。** → 建立 category 後不再改其 savePath；使用者改 Route 目標時建立新 category，舊 Job 維持原位；已存在但路徑不同回報衝突、不覆寫。
 - TRaSH 明確要求 category 模式必須 `Automatic`（autoTMM），否則下載不會進分類資料夾（[Basic-Setup](https://trash-guides.info/Downloaders/qBittorrent/Basic-Setup)）。
 
-**狀態與檔案**
+**狀態與檔案**（[細節](research/qbittorrent-web-api.md#狀態與檔案)）
 
-- `torrents/info` 欄位含 `hash`、`name`、`state`、`progress`、`save_path`、`content_path`（API 2.6.1）、`download_path`（原始碼有、wiki 未列）、`completion_on`、`category`、`tags`、`added_on`。
-- `state` 值：`error`、`missingFiles`、`uploading`、`pausedUP`/`stoppedUP`、`queuedUP`、`stalledUP`、`checkingUP`、`forcedUP`、`allocating`、`downloading`、`metaDL`、`pausedDL`/`stoppedDL`、`queuedDL`、`stalledDL`、`checkingDL`、`forcedDL`、`checkingResumeData`、`moving`、`unknown`。「完成」判定：`progress == 1` 且 `completion_on > 0` 且 state **不是** `moving` / `checking*`（從 temp path 搬到 save path 期間 state 為 `moving`，此時不可入庫）。
-- `torrents/files` 回傳 `index`、`name`（含相對路徑）、`size`、`progress`、`priority`（0 = 不下載）、`availability`。`name` 相對於 `save_path` 還是 `content_path` 文件未明 → adapter 以 `stat` 驗證組出的絕對路徑，兩種都試。`priority == 0` 的檔案要從 Plan 排除。
+- `torrents/info` 欄位：`hash`、`name`、`state`、`progress`、`save_path`、`content_path`（API 2.6.1）、`download_path`（原始碼有、wiki 未列）、`completion_on`、`category`、`tags`、`added_on`。`state` 全值清單見研究檔。
+- **「完成」判定**：`progress == 1` 且 `completion_on > 0` 且 state **不是** `moving` / `checking*`（temp path 搬到 save path 期間 state 為 `moving`，此時不可入庫）。`completion_on` 未完成時 4.4.5 是 `0`、5.2.3 是 `-1`：寫 `> 0` 兩版都對，寫 `!= 0` 會讓 5.x 上每個剛加入的 torrent 被當成已完成。`total_size` 在 metadata 到手前同樣是 `-1` / `0`。
+- `torrents/files` 回 `index`、`name`（相對路徑）、`size`、`progress`、`priority`（0 = 不下載，要從 Plan 排除）、`availability`。`name` 相對 `save_path` 還是 `content_path` 文件未明，adapter 以 `stat` 驗證組出的絕對路徑（實測見 §20.7）。**`metaDL` 期間回 `200` + `[]`**（兩版皆然），與「torrent 不存在」同形，所以 `metadata_ready` 要 state 與清單兩個條件都成立。
 - 其他端點：`setLocation`、`rename`、`renameFile` / `renameFolder`（API 2.8.0）、`delete(deleteFiles)`、`setCategory`（category 不存在回 409）、`addTags`、`recheck`。
-- **`torrents/delete` 的確切形狀**（2026-09-22 對 `release-4.1.0` 到 `release-5.2.3` 共十個 tag 逐一核對原始碼，M2 票 04）：
+- **`torrents/delete`**（2026-09-22 對 `release-4.1.0` 到 `release-5.2.3` 十個 tag 逐一核對原始碼，M2 票 04，[細節](research/qbittorrent-web-api.md#torrentsdelete-的確切形狀)）：一律 POST（4.5.0 起 GET 是 405）；`hashes`（`|` 分隔、`all`）與 `deleteFiles` **兩個都必填**，少一個回 400；`deleteFiles` **只認字面 `true` / `false`**（`1` 不是真，解析不出來退回 `false`，檔案沒刪而呼叫端以為刪了）；成功 `200` + 空 body；**不認得的 hash 靜默成功**，所以對早已不在客戶端的那一筆不必先問。Berth 因此不用 `deleteFiles=true` 刪檔，由自己刪磁碟上的東西、數刪了幾個與空出多少（§9.2、`services/deletion.py`）。
+- **`torrents/recheck` 與重新開始**（2026-09-23 M2 票 09c，原始碼逐行核對加兩版容器實測，[細節](research/qbittorrent-web-api.md#torrentsrecheck-與重新開始)）：重新開始 4.4.5 是 `torrents/resume`、5.x 是 `torrents/start`；參數 `hashes` 必填；5.x 只收 POST，4.4.5 GET 也行；成功 `200` + 空 body；不認得的 hash 靜默成功；有錯誤先 `clear_error()`、缺檔先 `reload()`。recheck 之後停住的 torrent 校驗完會**再停下來**。資料刪掉、容器重啟後 torrent 是 `missingFiles`；資料放回去之後 recheck → start 與 start → recheck 兩版都回到做種中，資料不在則是 `stalledDL`。`client_error` 的「重試」只送 start（錯誤不是資料的問題，重新校驗幾十 GB 只是更晚回來）。
+- **停住的 torrent 做 recheck：5.x 上 recheck → start 救不回來**（2026-09-24 M3 票 03，5.2.3 與對照 4.4.5，[細節](research/qbittorrent-web-api.md#停住的-torrent-做-recheck)）：5.2.3 的 `forceRecheck()` 對停住的 torrent 自己先 `start()` 再掛 `StopCondition::FilesChecked`，校驗中送到的 `start()` 看它沒停就什麼都不做，校驗完照樣 `stop()`，於是停在 `stoppedUP`（資料齊）或 `stoppedDL`（缺檔，progress 0.5）；`stoppedDL` 既不轉 `stalled` 也不開 Issue，畫面上看不出事。**start → recheck 順序兩版都落在做種中或 `stalledDL`。Berth 用 start 先於 recheck（`missing_files` 的「重新校驗」），順序不能反。**
 
-  | 項目 | 事實 |
-  | --- | --- |
-  | 方法 | **一律 POST**。4.4.4 引入「方法不對回 405」的機制但 delete 不在白名單上（4.4.5 仍可 GET）；**4.5.0 起 delete 進了 POST 白名單，GET 從此是 405**（[`webapplication.h` 的 `m_allowedMethod`](https://github.com/qbittorrent/qBittorrent/blob/release-4.5.0/src/webui/webapplication.h)） |
-  | 參數 | `hashes`（多個以 `\|` 分隔，特殊值 `all` 是全部）與 `deleteFiles`，**兩個都是必填**（`requireParams`），少一個回 400 |
-  | `deleteFiles` 的值 | 只認字面 `true` / `false`（大小寫不敏感，`Utils::String::parseBool`）。**`1` 不是真**——解析不出來就退回 `false`，於是呼叫端以為檔案刪了而磁碟上還在。四個大版本都沒改過這一段 |
-  | 回應 | 成功是 `200` + 空 body |
-  | 不認得的 hash | **靜默成功**（`applyToTorrents` 找不到就跳過，整個請求仍是 200）。所以「移除 torrent」對早就不在客戶端的那一筆是成立的，不必先問一次 |
+**輪詢與登入**（[細節](research/qbittorrent-web-api.md#輪詢與-syncmaindata)）
 
-  5.0.0 的內部重構（`deleteTorrent` → `removeTorrent`）沒有改動對外的參數與回應。Berth 據此
-  **不用 `deleteFiles=true` 刪檔**：那一筆 torrent 可能早就不在客戶端了（`client_removed`），
-  而刪除範圍仍然要刪得掉磁碟上的東西、數得出刪了幾個、空出多少（§9.2、`services/deletion.py`）。
-- **`torrents/recheck` 與「重新開始」**（2026-09-23 M2 票 09c：原始碼對 `release-4.4.5` / `release-5.2.3` 逐行核對，
-  再對兩版容器實測，`scripts/experiments/qbittorrent_recovery.py`，錄製在 `tests/fixtures/http/qbittorrent/`）：
+- **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作「喚醒輪詢」的加速手段，非必要。
+- **`rid` 的狀態掛在 session（SID cookie）上**（2026-09-10 票 10 對 4.4.5 與 5.2.3 實測）：不帶 cookie 則每次請求都是新 session，回的永遠是 `full_update: true`。所以輪詢那一側必須把 HTTP client 握著不放（Berth 的 `Downloader`）。
+- **增量那一輪的 `torrents[hash]` 只帶變動的欄位**（實測有的只剩 `{"num_leechs", "time_active"}`），呼叫端一定要併回上一份完整快照再讀，否則得到沒有 category、沒有 state 的空殼。被刪掉的在 `torrents_removed`（hash 陣列）。
+- 登入 `auth/login` 回 `SID` cookie，且 **`Referer` / `Origin` 必須與 `Host` 一致**（m0 實測的更準確說法見 [m0-experiments.md](research/m0-experiments.md)）；可設 `bypass_local_auth` 與子網白名單。
+- **`auth/login` 的成敗形狀跨大版本不同**（2026-09-08 對 `lscr.io/linuxserver/qbittorrent` 的 4.4.5 與 5.2.3 實測，票 11）：4.4.5 成功 `200` + `Ok.` + `Set-Cookie: SID=…`，帳密錯 `200` + `Fails.`（**狀態碼不變**）；5.2.3 成功 `204` + 空 body + `Set-Cookie: QBT_SID_<port>=…`，帳密錯 `401` + `Unauthorized`。所以判定只能認 4.x 那個「200 卻是失敗」的 `Fails.`，不能認「成功等於 `Ok.`」。來源 IP 在 `WebUI\AuthSubnetWhitelist` 上時 5.x **一律回 204，連錯的帳密也是**——免密白名單本來就繞過驗證，這正是套件內 Berth 的處境（§16.3、§20.7）。
+- **IP 封鎖與帳密不對是兩件事**（2026-09-10 票 10 對兩版各實測一輪，解掉 plan T1.9 的第四條）：帳密錯第 1–5 次是 `200` + `Fails.`（4.4.5）/ `401`（5.2.3）；**第 6 次 IP 被封回 `403` + `Your IP address has been banned after too many failed authentication attempts.`，兩版一字不差**；被封之後其他端點回 `403` + `Forbidden`。因此 **`auth/login` 上的 403 只有一個意思**（被封），其他端點上的 403 與「沒有登入」同形、分不出來。下一步不同才是分開的理由：帳密不對要改設定，被封要等過期或重啟 qBittorrent——改帳密只會再失敗五次，把封鎖時間重算一輪。
+- **封鎖的偏好鍵與預設值**（2026-09-30 讀 `release-4.4.5` 與 `release-5.0.4` 原始碼，M4 票 21，兩版相同，[細節含行號](research/qbittorrent-web-api.md#封鎖的偏好鍵與預設值)）：門檻 `web_ui_max_auth_fail_count` 預設 **5**（連續失敗），封鎖 `web_ui_ban_duration` 預設 **3600 秒**；計數與封鎖表只在記憶體（`m_clientFailedLogins`），重啟容器就清；**登入成功才把該 IP 移除**，不隨時間衰減；**被封期間連對的帳密也被拒**；`max_auth_fail_count = 0` 不計也不封。WebUI 與 API 都沒有解除封鎖的介面。被封時 Berth 讀不到偏好，所以精靈說預設值（`components/services.BAN_DEFAULTS`），並從第 3 次連錯起預警。
+- **`auth/login` 在 session 還活著時直接回成功，連密碼都不看**（帶著 SID 打八次錯的密碼全是 `200` + `Ok.`）。所以「驗一次帳密對不對」必須從沒有 cookie 的狀態發起。
 
-  | 項目 | 4.4.5（Web API 2.8.5） | 5.2.3（Web API 2.15.1） |
-  | --- | --- | --- |
-  | 重新開始的端點 | `torrents/resume` | `torrents/start`；**`torrents/resume` 是 `404 Endpoint does not exist`**，沒有別名。改名在 5.0.0（Web API 2.11.x，與 `paused` → `stopped` 同一次，[discussion #21554](https://github.com/qbittorrent/qBittorrent/discussions/21554)） |
-  | 參數 | `hashes`（`\|` 分隔、`all`），必填，少了是 400 | 同左 |
-  | 方法 | GET 也行（4.4.5 的 POST 白名單只有 `add` 那幾支，[`webapplication.h`](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/webui/webapplication.h)） | **只收 POST**，`recheck` / `start` / `stop` 都在白名單上，GET 是 405（[`webapplication.h`](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.3/src/webui/webapplication.h)） |
-  | 成功 | `200` + 空 body（兩支都是） | `200` + 空 body（實測；changelog 說 2.15.0 起空結果回 204，這兩支沒有） |
-  | 不認得的 hash | 靜默成功（`applyToTorrents` 跳過） | 同左 |
-  | recheck 之後 | state 先是 `checkingDL` / `checkingUP`；停住的 torrent 校驗完會**再停下來**（`stop_when_ready`） | 同左，機制換成 `StopCondition::FilesChecked`（[`torrentimpl.cpp`](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.3/src/base/bittorrent/torrentimpl.cpp)） |
-  | 重新開始對壞掉的 torrent | 有錯誤先 `clear_error()`；缺檔的先 `reload()` | 同左 |
+**qBittorrent 看不看得到分類路徑：探針 torrent**（2026-09-30 實測 4.4.5 與 5.2.3，M4 票 19；`scripts/experiments/qbittorrent_visibility_probe.py`，[細節與表格](research/qbittorrent-web-api.md#探針-torrent看不看得到分類路徑)）
 
-  **資料被刪掉、容器重啟之後，那個 torrent 就是 `missingFiles`**（兩版實測）。救回來兩種順序都成立：資料放回去之後
-  recheck → start 與 start → recheck 兩版都回到做種中（`stalledUP`、progress 1）；資料不在的話兩種都是 `stalledDL`、
-  progress 0（在等 peer 重新下載）。`client_error` 的「重試」只送 start——錯誤不是資料的問題，重新校驗一次幾十 GB
-  只是讓它晚一點回來。
-- **停住的 torrent 做 recheck：5.x 上 recheck → start 救不回來**（2026-09-24 M3 票 03，
-  `scripts/experiments/qbittorrent_stopped_recheck.py`；每包兩個全零稀疏檔共 8 GiB，校驗約 14–21 秒，兩支請求
-  之間 < 0.1 秒。版本：`5.2.3`（`lscr.io/linuxserver/qbittorrent:5.2.3`，Web API 2.15.1），當天的 `:latest` 就是
-  同一版（`5.2.3_v2.0.14-ls476`），兩次結果一致；`4.4.5`（Web API 2.8.5）作對照。上一條的四包都是重啟前在跑的
-  `missingFiles`，量不到這一種）。每包先做種到完成，再照情境停住、刪掉第二個檔：
+- Web API 沒有「這條路徑你看不看得到」（`app/getDirectoryContent` 5.0 才有，且只說目錄在不在）。反過來證明：Berth 在分類路徑寫小檔、做成單檔 torrent（`private`、不掛 tracker），`torrents/add` 明送 `savepath`、`autoTMM=false`、停住，`torrents/recheck`，看 `progress`；之後 `torrents/delete` 帶 `deleteFiles=false`，小檔由 Berth 刪。
+- 結果（兩版相同，state 名 `paused*` / `stopped*` 之別）：檔在 → recheck 後 100%（約 1–1.4 秒）；檔或目錄不在 → 0%；檔在但 `chmod 000` → **`error`**（權限，與看不到分得開）；開了全域 temp path 照樣 100%。**停住加入不會自己校驗**，一定要 recheck。
+- **`torrents/add` 回來時它還不一定列在 `torrents/info` 裡**，而對還不在的 hash 送 recheck 是靜默成功（校驗沒發生，停在 0% 與看不到一模一樣）。所以先等它列出、離開 `checkingResumeData`，再 recheck。
+- 看不到時 qBittorrent 不替它建目錄。看不到沒有「校驗完了」的狀態可等，所以 Berth 以「不在校驗或排隊中、進度不到 100%、state 3 秒不變」判看不到，整個探針最多等 20 秒（預設一次只校驗一個 torrent）。
+- **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，兩版實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**（否則每條 Route 每 5 分鐘一次，成為使用者那邊的通知洪水；M4 票 50，使用者 2026-10-06 確認）。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理，沒有另外實測。
+- 探針 torrent 不掛分類、不帶 tag（`berth` tag 會讓 poller 把它當成 Berth 的下載），名字 `.berth-probe-*`，停住、幾秒內移除。
 
-  | 前置 → 動作 | 5.2.3 的 state 序列 | 4.4.5 的 state 序列 |
-  | --- | --- | --- |
-  | 停住 → recheck | `stoppedUP` → `checkingUP` → `stoppedUP`（不會自己開始） | `pausedUP` → `checkingUP` → `pausedUP` |
-  | 停住 → recheck → start | `stoppedUP` → `checkingUP` → **`stoppedUP`** | `pausedUP` → `checkingUP` → `stalledUP` |
-  | 停住 → start → recheck | `stoppedUP` → `checkingUP` → `stalledUP` | 同左 |
-  | 停住、缺一檔 → recheck | `stoppedUP` → `checkingUP` → `stoppedDL`（progress 0.5） | `pausedUP` → `checkingUP` → `pausedDL`（0.5） |
-  | 停住、缺一檔 → recheck → start | `stoppedUP` → `checkingUP` → **`stoppedDL`**（0.5） | `pausedUP` → `checkingUP` → `stalledDL`（0.5） |
-  | 停住、缺一檔 → start → recheck | `stoppedUP` → `checkingUP` → `stalledDL`（0.5） | 同左 |
-  | 做種中、缺一檔 → recheck → start | `stalledUP` → `checkingUP` → `stalledDL`（0.5） | 同左 |
-  | 做種中、缺一檔 → start → recheck | 同上 | 同左 |
+**校驗不完的探針：頁 2 問「看不看得到 `/data`」**（2026-10-07 實測 4.4.5 與 5.2.3，M4 票 46；`scripts/experiments/qbittorrent_unfinished_probe.py`，[細節與表格](research/qbittorrent-web-api.md#校驗不完的探針)）
 
-  原因在原始碼：5.2.3 的 `forceRecheck()` 對停住的 torrent **自己先呼叫 `start()`**（`m_isStopped` 變假）再掛
-  `StopCondition::FilesChecked`；校驗中送到的 `start()` 看它沒停就什麼都不做，條件留著，校驗完
-  `handleTorrentChecked` 照樣 `stop()`（[`torrentimpl.cpp`](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.3/src/base/bittorrent/torrentimpl.cpp)）。
-  4.4.5 的 `forceRecheck` 只掛 `stop_when_ready`、不改 `m_isStopped`，`resume()` 看到還停著就把旗標清掉
-  （[`torrentimpl.cpp`](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/base/bittorrent/torrentimpl.cpp)）。
-  start 若晚到校驗做完之後就又生效——所以是一個跟校驗長度賽跑的窗口，幾十 GB 的真實下載一定落在裡面。
+- 探測檔兩片（32 KiB），第二片雜湊算在反相內容上。結果：檔在 → 停在 **`progress` 0.5**（不是 1）；檔不在 → 0；`chmod 000` → `error`；對照單片 → 1。**「完成時執行」只有對照組觸發**；5.x 的「加入時執行」四包都觸發（4.4.5 沒有這個設定）。
+- 所以 Berth 判「看得到」改成 **`progress` 大於 0**（`probe_sight`），兩種探針同一條（單片本來就是 0 或 1）。頁 2 測連線用這一種（M4 票 46）：不觸發「完成時執行」；「加入時執行」擋不掉（任何加進去的 torrent 都觸發），表單照實說觸發一次。頁 3 的 Route 檢查仍是單片那一種。
 
-  對 Berth 的後果：資料都回來的那一種停在 `stoppedUP`、progress 1，poller 照樣判完成並入庫，只是不做種；**缺檔的
-  那一種停在 `stoppedDL`**，Job 回到 `metadata_ready` 之後進 `downloading` 就永遠不動——`stoppedDL` 不是
-  `stalledDL`（不會轉 `stalled`），也不是壞掉的狀態（不會再開 Issue），畫面上看不出任何事。
-  **Berth 用 start → recheck**（`missing_files` 的「重新校驗」）：先開起來，recheck 時它已經在跑，不掛條件；兩版、
-  停住與否、資料回不回來都落在做種中或 `stalledDL`，poller 都接得住（上一條的 `missingFiles` 兩種順序也都成立）。
-- **沒有 webhook**；`sync/maindata` 以 `rid` 做增量輪詢。`autorun_enabled` / `autorun_program`（完成時執行外部程式，可帶 `%f` `%n`）可作為「喚醒輪詢」的加速手段，非必要。
-- **`rid` 的狀態掛在 session（SID cookie）上**（2026-09-10 票 10 對 4.4.5 與 5.2.3 實測）：不帶 cookie 的話每一次請求都是新 session，回的永遠是 `full_update: true`。所以輪詢那一側必須把 HTTP client 握著不放（Berth 的 `Downloader`）。
-- **增量那一輪的 `torrents[hash]` 只帶變動的欄位**（實測有的只剩 `{"num_leechs", "time_active"}`），所以呼叫端一定要把它併回上一份完整快照再讀——照字面讀會得到一個沒有 category、沒有 state 的空殼。被刪掉的 torrent 在 `torrents_removed`（hash 陣列）。
-- **未完成時的 `completion_on` 兩版不同**：4.4.5 是 `0`、5.2.3 是 `-1`。完成判定寫 `> 0` 對兩版都成立，寫 `!= 0` 會讓 5.x 上每一個剛加入的 torrent 都被當成已完成。`total_size` 在 metadata 到手之前同樣是 `-1` / `0`。
-- **`metaDL` 期間 `torrents/files` 回 `200` + `[]`**（兩版皆然），與「這個 torrent 不存在」同形——所以 `metadata_ready` 的判定要 state 與清單兩個條件都成立。
-- 登入 `auth/login` 回 `SID` cookie，且 **`Referer` / `Origin` 必須與 `Host` 一致**；可設 `bypass_local_auth` 與子網白名單。
-- **`auth/login` 的成敗形狀跨大版本不同**（2026-09-08 對 `lscr.io/linuxserver/qbittorrent` 的 4.4.5 與 5.2.3 各實測一輪，票 11）：
+**WebUI 帳密規則**（2026-10-01 讀原始碼＋實測，M4 票 26；`scripts/experiments/qbittorrent_webui_login_rules.py`，[細節](research/qbittorrent-web-api.md#webui-帳密規則)）
 
-  | 版本 | 成功 | 帳密錯 |
-  | --- | --- | --- |
-  | 4.4.5 | `200` + body `Ok.` + `Set-Cookie: SID=…` | `200` + body `Fails.`（**狀態碼不變**） |
-  | 5.2.3 | `204` + 空 body + `Set-Cookie: QBT_SID_<port>=…` | `401` + body `Unauthorized` |
+- **5.2.0 起 `app/setPreferences` 才驗**：`web_ui_username` 至少 3 字元、不能有冒號，`web_ui_password` 至少 6 字元；違反回 `400` + 一行英文原文。4.4.5 什麼都收；release-5.1.4 原始碼還沒有這段（[appcontroller.cpp @ release-5.2.0](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.0/src/webui/api/appcontroller.cpp)）。字數是 QString 長度（UTF-16 code unit），與瀏覽器 `String.length` 同算法。
+- **帳號先驗先寫、密碼後驗**（不看 JSON 鍵序）：帳號合規而密碼太短的那次回 `400`，帳號**已經寫進去**、密碼沒有。所以 Berth 先單獨送密碼、成功才送帳號（`qbittorrent._apply_password`），兩支都過了才記下帳號。
+- 【決定】精靈與設定頁照 5.2 的規則先擋，不分版本：4.4–5.1 自己的設定頁（WebUI JS）也要求帳號 3、密碼 6 字元（只少冒號那條），套件內那一台又一定是新版。
 
-  所以判定只能認 4.x 那個「200 卻是失敗」的 `Fails.`，不能認「成功等於 `Ok.`」。另外，來源 IP 在
-  `WebUI\AuthSubnetWhitelist` 上時 5.x **一律回 204，連錯的帳密也是**——免密白名單本來就繞過驗證，
-  而那正是套件內 Berth 的處境（§16.3、§20.7）。
-
-- **IP 封鎖與帳密不對是兩件事**（2026-09-10 票 10 對兩版各實測一輪，解掉 plan T1.9 的第四條）：
-
-  | 情況 | 4.4.5 | 5.2.3 |
-  | --- | --- | --- |
-  | 帳密錯（第 1–5 次） | `200` + `Fails.` | `401` + `Unauthorized` |
-  | 第 6 次（IP 被封） | `403` + `Your IP address has been banned after too many failed authentication attempts.` | 同左，**一字不差** |
-  | 被封之後的其他端點 | `403` + `Forbidden` | 同左 |
-
-  也就是說：**`auth/login` 上的 403 只有一個意思**（被封），因為帳密錯在兩版都不是 403；
-  而其他端點上的 403 與「沒有登入」完全同形，分不出來。門檻是連續 5 次
-  （`WebUI\MaxAuthenticationFailCount`），封鎖時間預設 3600 秒（`WebUI\BanDuration`），
-  兩者都存在記憶體裡，重啟容器就清掉。下一步不同是分開的理由：帳密不對要去改設定，
-  被封要等過期或重啟 qBittorrent——改帳密只會再失敗五次，把封鎖時間重新算一輪。
-
-  **偏好鍵與預設值**（2026-09-30 讀原始碼查證，M4 票 21；tag `release-4.4.5` 與 `release-5.0.4`，兩版相同）：
-  Web API 的鍵是 `web_ui_max_auth_fail_count`（次數，預設 5，設定檔 `Preferences/WebUI/MaxAuthenticationFailCount`）
-  與 `web_ui_ban_duration`（**秒**，預設 3600，`Preferences/WebUI/BanDuration`）——`src/webui/api/appcontroller.cpp`
-  讀寫這兩個鍵（4.4.5 第 248–249、667–670 行；5.0.4 第 316–317、876–879 行），預設值在 `src/base/preferences.cpp`
-  （4.4.5 第 662、672 行；5.0.4 第 797、810 行）。計數與封鎖表是 `src/webui/api/authcontroller.h` 的
-  `m_clientFailedLogins`（記憶體裡的 `QHash`，重啟清空），**登入成功才把那個 IP 移除**（`authcontroller.cpp`
-  5.0.4 第 82 行、4.4.5 第 69 行），不隨時間衰減；**被封期間連對的帳密也被拒**（`isBanned()` 在驗密碼之前，
-  5.0.4 第 68–75 行）。`max_auth_fail_count = 0` 不計也不封（5.0.4 第 90–91 行）。WebUI 沒有解除封鎖的介面，
-  API 也沒有：只能等期滿或重啟 qBittorrent（桌面版的「封鎖的 IP」是對 peer 的，無關）。被封時 Berth 讀不到那一台
-  的偏好，所以精靈說的是預設值（`components/services.BAN_DEFAULTS`），並從第 3 次連錯起預警。原始碼：
-  [appcontroller.cpp 5.0.4](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.4/src/webui/api/appcontroller.cpp)、
-  [authcontroller.cpp 5.0.4](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.4/src/webui/api/authcontroller.cpp)、
-  [preferences.cpp 4.4.5](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/base/preferences.cpp)。
-
-- **`auth/login` 在 session 還活著時直接回成功，連密碼都不看**（同一輪實測：帶著 SID 打八次錯的
-  密碼全部是 `200` + `Ok.`）。所以「驗一次帳密對不對」必須從沒有 cookie 的狀態發起。
-
-**qBittorrent 看不看得到分類路徑：探針 torrent**（2026-09-30 實測 4.4.5 與 5.2.3，M4 票 19；`scripts/experiments/qbittorrent_visibility_probe.py`，一次性容器，分類路徑是一個 volume，「Berth 寫的檔」以 `docker cp` 放進去）
-
-Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5.0 才有，而且只說目錄在不在——qBittorrent 自己的檔案層裡剛好有同名空目錄也算。所以反過來證明：Berth 在分類路徑寫一個小檔，做成單檔 torrent（`private`、不掛 tracker），`torrents/add` 明送 `savepath`、`autoTMM=false`、停住，`torrents/recheck`，看校驗之後的 `progress`；之後 `torrents/delete` 帶 `deleteFiles=false`，小檔由 Berth 刪。
-
-| 情境 | 4.4.5（API 2.8.5） | 5.2.3（API 2.15.1） |
-| --- | --- | --- |
-| 檔在、停住加入、**不** recheck | `checkingResumeData` → `pausedDL`，**0%** | `checkingResumeData` → `stoppedDL`，**0%** |
-| 檔在、recheck | → `pausedUP`，100%，約 1 秒 | → `stoppedUP`，100%，約 1.4 秒 |
-| 目錄與檔都不在 | 第一次讀就是 `pausedDL` 0% | → `stoppedDL` 0% |
-| 目錄在（qBittorrent 自己的層）、檔不在 | `pausedDL` 0% | `stoppedDL` 0% |
-| 檔在、`chmod 000` root 所有 | → `checkingDL` → **`error`** | 同左 |
-| 開了全域 temp path（`download_path` 變成它） | 100%：校驗照樣找 save path 裡的檔 | 同左 |
-| 同上、加入時 `useDownloadPath=false` | 100%，`download_path` 空 | 同左 |
-
-- **停住加入不會自己校驗**，一定要 recheck。
-- **`torrents/add` 回來時它還不一定列在 `torrents/info` 裡**（2026-09-30 對 5.2.3 經 Berth 實跑：第一次讀回空陣列；一次性容器的實驗剛好沒撞上），而對還不在的 hash 送 recheck 是靜默成功——校驗沒發生，停在 0% 與看不到一模一樣。所以先等它列出、離開 `checkingResumeData`，再 recheck。
-- 看不到時 qBittorrent **不替它建目錄**，移除之後兩版都沒留下任何東西；`deleteFiles=false` 之後小檔還在。
-- `error` 是「檔在、讀不了」（權限），與看不到分得開；Berth 把它說成權限問題而不是掛載。
-- 看不到的那一面沒有一個「校驗完了」的狀態可等（4.4.5 第一次讀就已經是結論），所以 Berth 以「不在校驗或排隊中、進度不到 100%、state 3 秒不變」判看不到，整個探針最多等 20 秒（qBittorrent 預設一次只校驗一個 torrent，別的在校驗時要排隊）。
-- **校驗到 100% 會觸發「torrent 完成時執行外部程式」**（`autorun_enabled` / `autorun_program`，4.4.5 與 5.2.3 同一個實驗裡實測，每個看得到的探針各觸發一次）。所以探針只在精靈「建立並檢查」、新增 Route 與「重新檢查」時跑；**5 分鐘的健康迴圈不跑，`download_visible` 沿用上一次的結論**——每條 Route 每 5 分鐘一次，會變成使用者那邊的通知洪水。「按下之後會」說出這件事；健康頁那一條說「沿用上一次的結論」與那一次的時間（M4 票 50，使用者 2026-10-06 確認）。5.x 另有「加入時執行」（`autorun_on_torrent_added_enabled`），同理只在那幾個時機觸發，沒有另外實測。
-- 探針 torrent 不掛分類、不帶 tag（tag 一建就留在使用者的清單裡；`berth` 那一個會讓 poller 把它當成 Berth 的下載），名字是 `.berth-probe-*`，停住、幾秒內就移除。
-
-**校驗不完的探針：頁 2 問「看不看得到 `/data`」**（2026-10-07 實測 4.4.5 與 5.2.3，M4 票 46；`scripts/experiments/qbittorrent_unfinished_probe.py`，送的是 Berth 自己的 `probe_torrent(unfinished=True)`，報告 `.local/experiments/results/qbittorrent-unfinished-probe-*.json`）
-
-探測檔兩片（32 KiB），torrent 的第二片雜湊算在反相的內容上。開著「完成時執行」（`autorun_program`）與「加入時執行」（`autorun_on_torrent_added_program`，各寫不同的檔），每個情境一包新的 torrent、停住加入、等它列出再 recheck：
-
-| 情境 | 4.4.5（API 2.8.5） | 5.2.3（API 2.15.1） |
-| --- | --- | --- |
-| 檔在、校驗不完 | `pausedDL`，**0.5** | `stoppedDL` → `checkingDL` → `stoppedDL`，**0.5** |
-| 檔不在 | `pausedDL` 0 | `stoppedDL` 0 |
-| 檔在、`chmod 000` | → `checkingDL` → `error` | → `error` |
-| 對照：單片（票 19 那一種）、檔在 | → `pausedUP` 1 | → `stoppedUP` 1 |
-| 「完成時執行」被觸發 | 只有對照組 | 只有對照組 |
-| 「加入時執行」被觸發 | （4.4.5 沒有這個設定） | 四包都觸發 |
-
-- 看得到與看不到照樣分得開（0.5 對 0），讀不了照樣是 `error`。所以 Berth 判「看得到」改成**進度大於 0**（`probe_sight`），兩種探針同一條；單片的那一種本來就是 0 或 1。
-- 頁 2 測連線時用這一種（M4 票 46）：不觸發「完成時執行」。「加入時執行」擋不掉——任何加進去的 torrent 都觸發，既有表單照實說會觸發一次。頁 3 的 Route 檢查仍是單片那一種（沒改：它的「按下之後會」照票 19 的說法）。
-
-**WebUI 帳密規則**（2026-10-01 讀原始碼＋實測，M4 票 26；`scripts/experiments/qbittorrent_webui_login_rules.py` 對 4.4.5 與 5.2.3，報告 `.local/experiments/results/qbittorrent-webui-login-rules-*.json`）
-
-- **5.2.0 起 `app/setPreferences` 才驗**：`web_ui_username` 至少 3 字元、不能有冒號，`web_ui_password` 至少 6 字元；違反回 `400` + 一行英文原文（`WebUI password must be at least 6 characters long`、`WebUI username must be at least 3 characters long`、`WebUI username cannot contain a colon`）。4.4.5 什麼都收（實測 2 字元帳號、含冒號、5 字元密碼都 `200`）；release-5.1.4 的原始碼還沒有這段。【[appcontroller.cpp @ release-5.2.0](https://github.com/qbittorrent/qBittorrent/blob/release-5.2.0/src/webui/api/appcontroller.cpp)、[@ release-5.1.4](https://github.com/qbittorrent/qBittorrent/blob/release-5.1.4/src/webui/api/appcontroller.cpp)】
-- 字數是 QString 的長度（UTF-16 code unit），與瀏覽器的 `String.length` 同一種算法：六個中文字的密碼 5.2.3 收。
-- **帳號先驗先寫、密碼後驗**，照原始碼的順序，不看 JSON 的鍵序：帳號合規而密碼太短的那一次回 `400`，帳號**已經寫進去**、密碼沒有（實測，兩種鍵序都一樣）。所以 Berth 先單獨送密碼、成功了才送帳號（`qbittorrent._apply_password`）；兩支都過了才記下帳號。
-- 【決定】精靈與設定頁照 5.2 的規則先擋，不分版本：4.4–5.1 自己的設定頁（WebUI 的 JS）也要求帳號 3、密碼 6 字元（只少了冒號那一條），套件內那一台又一定是新版。【[preferences.html @ release-4.4.5](https://github.com/qbittorrent/qBittorrent/blob/release-4.4.5/src/webui/www/private/views/preferences.html)】
-
-**硬鏈接與 Docker**（[TRaSH Hardlinks](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)、[Servarr docker-guide](https://wiki.servarr.com/docker-guide)、[link(2)](https://man7.org/linux/man-pages/man2/link.2.html)）
+**硬鏈接與 Docker**（[TRaSH Hardlinks](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)、[Servarr docker-guide](https://wiki.servarr.com/docker-guide)、[link(2)](https://man7.org/linux/man-pages/man2/link.2.html)；[細節](research/qbittorrent-web-api.md#硬鏈接與-docker)）
 
 - 硬鏈接不能跨檔案系統、分割區、volume、**mount**；`link()` 即使同一個檔案系統掛兩次也會 `EXDEV`。Docker 把兩個 volume 當成兩個檔案系統，所以 `/downloads` + `/media` 分開掛一定失敗；解法是單一 `/data` 掛載。
 - exFAT 不支援硬鏈接；btrfs 子卷、ZFS dataset 各自是 mount 邊界，跨越即失敗；mergerfs 在 path-preserving 建立策略下跨 branch 回 `EXDEV`，其 FAQ 同樣要求單一掛載根（[mergerfs FAQ](https://trapexit.github.io/mergerfs/latest/faq/why_isnt_it_working/)）。
@@ -1016,422 +889,289 @@ Web API 沒有「這條路徑你看不看得到」：`app/getDirectoryContent` 5
 - Docker Desktop（Windows）：文獻無定論，本機實測 NTFS bind mount 硬鏈接可用（§20.7）。macOS VirtioFS 未查到硬鏈接限制，也未實測。
 - `stat().st_dev` 相同是必要條件但不充分（同 FS 多次掛載仍失敗），所以 §4.4 的檢查一律真的做一次 `link()`。
 
-**Sonarr / Radarr 先例**（[sonarr/faq](https://wiki.servarr.com/sonarr/faq)、[radarr/settings](https://wiki.servarr.com/radarr/settings)、[quick-start](https://wiki.servarr.com/sonarr/quick-start-guide)）
+**Sonarr / Radarr 先例**（[sonarr/faq](https://wiki.servarr.com/sonarr/faq)、[radarr/settings](https://wiki.servarr.com/radarr/settings)、[quick-start](https://wiki.servarr.com/sonarr/quick-start-guide)；[細節](research/qbittorrent-web-api.md#sonarr-與-radarr-先例)）
 
-- Completed Download Handling：只在下載客戶端回報完成後才入庫；要求客戶端完成後**暫停而非移除**，並保留至少 14 天的歷史。
-- 「Remove Completed」只在客戶端回報做種完成且 torrent 已停止時才移除 torrent 與檔案。本系統不做自動移除（§1.2），做種上限交給 qBittorrent 分類的 share limit；移除後的善後由 Reconciler 處理。
+- Completed Download Handling：只在客戶端回報完成後才入庫；要求客戶端完成後**暫停而非移除**，並保留至少 14 天歷史。「Remove Completed」只在客戶端回報做種完成且 torrent 已停止時才移除 torrent 與檔案。本系統不做自動移除（§1.2），做種上限交給 qBittorrent 分類的 share limit；移除後的善後由 Reconciler 處理。
 - 入庫預設硬鏈接，失敗時 Sonarr 會**退回複製**。【決定】本系統**不退回複製**：硬鏈接失敗即 Route 不健康並拒絕送單，因為複製會讓刪除範圍與空間估算失真。
-- 人工入庫的官方名稱是 **Interactive Import**（逐檔指定作品/季/集，可選 Move 或 Copy/Hardlink）；「unmapped files」只是社群俗稱。本系統的 Review Queue 對應這個概念。
-- Root Folder = 媒體庫根目錄，明文規定不可與下載目錄相同。
+- 人工入庫的官方名稱是 **Interactive Import**（逐檔指定作品/季/集，可選 Move 或 Copy/Hardlink）；Review Queue 對應這個概念。Root Folder = 媒體庫根目錄，明文規定不可與下載目錄相同。
 
-- **同一台 qBittorrent 認不出來**（M4 票 102，2026-10-14 讀 master 原始碼）：WebAPI 沒有持久的實例識別碼——`app/` 底下只有版本、build info、偏好、預設路徑、網卡清單之類（`appcontroller.h`），沒有 Jellyfin `ServerId`（§20.15）那種東西。最接近的是 `app/processInfo` 的 `launch_time`，但它 2026-01 才加（commit `09fdbe47b`，版本下限 4.4 的那幾版沒有）、每次重啟就變，而且 IP 換了的時候舊位址多半已經連不到，沒得比。版本加 `save_path` 也不行：兩台預設安裝的一模一樣。所以位址變了就當換台（§16.4）。【[appcontroller.h](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/api/appcontroller.h)、[appcontroller.cpp `processInfoAction`](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/api/appcontroller.cpp)】
-- **WebUI 沒有通往「選項」的網址**（M4 票 102，2026-10-14 對 linuxserver 5.2.4 實開）：`/#/settings` 登入後落在主畫面的 torrent 清單；`client.js` 只讀 `#download=` 這一種 hash（註冊磁力連結處理器用）。選項是 MochaUI 視窗，從「工具 → 選項」開。所以補法只給 WebUI 本身，文案說在哪個選單。【[client.js](https://github.com/qbittorrent/qBittorrent/blob/master/src/webui/www/private/scripts/client.js)】
-- **下到一半的檔是 sparse 檔**（M4 票 102，票 42 實測與 Linux 上的測試）：qBittorrent 預設不預先配置，下到一半的檔表觀大小（`st_size`）已經是整個檔案，實際佔用（`st_blocks` × 512）只有下載了的部分——票 42 那一筆表觀 970 MB、實際約 192 MB。刪除的「可空出空間」與 `freed` 量的是實際佔用（`fs.PathFacts.allocated`），complete 那一側同一條規則，所以數字以區塊取整。Windows 的 `os.stat` 沒有 `st_blocks`（等價的是 `GetCompressedFileSizeW`），Berth 只在 Linux 容器裡跑，開發機上退回表觀大小。
+**其他**（[細節](research/qbittorrent-web-api.md#其他同一台認不出來選項頁網址sparse-檔)）
+
+- **同一台 qBittorrent 認不出來**（M4 票 102，2026-10-14 讀 master 原始碼）：WebAPI 沒有持久的實例識別碼（`app/` 底下只有版本、build info、偏好、預設路徑、網卡清單；沒有 Jellyfin `ServerId`〔§20.15〕那種東西）。最接近的 `app/processInfo` 的 `launch_time` 2026-01 才加（4.4 下限的版本沒有）、每次重啟就變；版本加 `save_path` 也不行（兩台預設安裝一模一樣）。所以位址變了就當換台（§16.4）。
+- **WebUI 沒有通往「選項」的網址**（M4 票 102，2026-10-14 對 linuxserver 5.2.4 實開）：`/#/settings` 登入後落在 torrent 清單；`client.js` 只讀 `#download=`。選項是 MochaUI 視窗，從「工具 → 選項」開，所以補法只給 WebUI 本身，文案說在哪個選單。
+- **下到一半的檔是 sparse 檔**（M4 票 102，票 42 實測）：qBittorrent 預設不預先配置，表觀大小（`st_size`）已是整個檔案，實際佔用（`st_blocks` × 512）只有下載了的部分（票 42 那筆表觀 970 MB、實際約 192 MB）。刪除的「可空出空間」與 `freed` 量實際佔用（`fs.PathFacts.allocated`），以區塊取整。Windows 的 `os.stat` 沒有 `st_blocks`，Berth 只在 Linux 容器跑，開發機上退回表觀大小。
 
 ### 20.3 Metadata provider 與動漫 ID 對應
 
-**TMDB**
+細節（逐筆實測、數字、原文引用）在 [`docs/research/anime-episode-source.md`](research/anime-episode-source.md#從-brief-搬來203)；下面只留結論與來源。
 
-- 季/集 schema：`season_number: 0` 為 Specials；每集有 `episode_number`、`name`、`air_date`、`episode_type`、`runtime`。（[tv-season-details](https://developer.themoviedb.org/reference/tv-season-details)）
-- Episode Groups 類型：Original air date / **Absolute** / DVD / Digital / Story arc / Production / TV。Absolute 只在有人替該劇建立 group 時存在，不是每部都有。（[episode-group-details](https://developer.themoviedb.org/reference/tv-episode-group-details)）
-- 標題：`name` 依 `language`（預設 `en-US`）回傳，翻譯缺時可能是空字串，**要自己 fallback 到 `original_name`**；`alternative_titles` 是各國別名，與 translations 無關，兩者都應納入標題比對。（[translations](https://developer.themoviedb.org/reference/tv-series-translations)、[alternative-titles](https://developer.themoviedb.org/reference/tv-series-alternative-titles)）
+**TMDB**（細節：[研究](research/anime-episode-source.md#203-tmdb)）
+
+- 季/集 schema：`season_number: 0` 為 Specials；每集有 `episode_number`、`name`、`air_date`、`episode_type`、`runtime`（未播的集 `runtime` 是 `null`）。（[tv-season-details](https://developer.themoviedb.org/reference/tv-season-details)；2026-09-09 實測）
+- Episode Groups 類型：Original air date / **Absolute** / DVD / Digital / Story arc / Production / TV。Absolute 只在有人替該劇建立 group 時存在（實測 10 部只有 6 部）。（[episode-group-details](https://developer.themoviedb.org/reference/tv-episode-group-details)）
+- **Absolute group 不能當備援，絕對編號要自己從 0-based 的 `order` 推**（2026-09-08 / 09-09 實測）：group 內 `episode_number` 保留播出序原值（SPY×FAMILY S02E01 仍是 `episode_number: 1`，絕對編號 26、`order: 25`）；有的部有多個互相衝突的 Absolute group（進擊的巨人四個，集數 89/97/97/97），柯南那個叫 "China Online Version"；同一部作品有五個 group，只有 `type: 2` 是絕對編號。
+- 標題：`name` 依 `language`（預設 `en-US`）回傳，翻譯缺時可能是空字串，**要自己 fallback 到 `original_name`**；2026-09-09 實測 `zh-TW` 未翻譯時回英文，兩種都當「顯示英文」。`alternative_titles` 是各國別名、與 translations 無關，兩者都應納入標題比對。（[translations](https://developer.themoviedb.org/reference/tv-series-translations)、[alternative-titles](https://developer.themoviedb.org/reference/tv-series-alternative-titles)）
 - `find/{external_id}` 支援 `imdb_id`、`tvdb_id` 等反查。（[find-by-id](https://developer.themoviedb.org/reference/find-by-id)）
-- 速率：官方文件未列；TMDB 員工在論壇稱約 50 req/s、20 併發/IP。條款：非商業免費、需顯示 TMDB logo 與聲明「This product uses the TMDB API but is not endorsed or certified by TMDB.」（[faq](https://developer.themoviedb.org/docs/faq)）
-- **探索三支端點的形狀**（2026-09-09 對真 API 錄，fixture 在 `tests/fixtures/http/tmdb/`）：`trending/{tv,movie}/week` 與 `search/multi` 的每一筆帶 `media_type`，`{tv,movie}/popular` **不帶**（型別由端點決定）。劇集用 `name` / `original_name` / `first_air_date`，電影用 `title` / `original_title` / `release_date`。`search/multi` 也回人物——`?query=miyazaki` 那一輪 20 筆裡 16 筆是 `person`。
-- **`language` 換掉的不只是文字，還有清單的成員與順序**（2026-09-09 實測）：`trending/tv/week` 的 `en-US` 與 `zh-TW` 兩輪各 20 筆，只有 17 筆相同。所以清單要以 `en-US` 那一輪為準，`zh-TW` 只當「這一部叫什麼」的查表（plan §8.3）。`{tv,movie}/popular` 與 `search/multi` 在同一輪實測裡成員一致。
-- **回應裡的 `popularity` 不是清單的排序依據**（2026-09-09 實測）：`trending` 與 `popular` 兩支的 `results[]` 都不是照 `popularity` 降冪排的（`tv/popular` 首五筆是 583 / 440 / 692 / 417 / 398）。要照 TMDB 的排名就直接用陣列順序，拿 `popularity` 重排會得到第三種順序。
-- **未翻譯時 `name` 回英文而不是空字串**（2026-09-09 實測 `zh-TW`）：`tv/popular` 那一輪的 `Watch What Happens Live with Andy Cohen`、`El conquistador` 都原樣回來。所以「翻譯缺」與「同名」在回應上分不出來，兩種都當成「顯示英文」即可。
-- **詳情四支端點的形狀**（2026-09-09 對真 API 錄，fixture 在 `tests/fixtures/http/tmdb/`，票 04）：`tv/{id}` 的 `seasons[]` 每筆有 `season_number` / `name` / `episode_count` / `air_date`，`season_number: 0` 就是 Specials；`tv/{id}/season/{n}` 的 `episodes[]` 每筆有 `episode_number` / `name` / `air_date` / `runtime`（未播的集數 `runtime` 是 `null`）；`movie/{id}` 有 `runtime` 而完全沒有 `seasons`。不存在的 id 回 **404 加 `status_code: 34`**，與「TMDB 壞了」是兩件事。
-- **劇集的 `status`**（2026-09-27 查證，M4 票 13）：六種字串 `Returning Series`、`Planned`、`In Production`、`Ended`、`Canceled`、`Pilot`——官方文件沒有列，TMDB 維護者在論壇確認過這份清單（[TMDB Talk: Status for TV and Movies](https://www.themoviedb.org/talk/6685c10585e1cbe90c4a5fe0)）；錄下的 `tv-detail.spy-x-family.*.json` 是 `"Ended"`。Berth 把 `Ended` 與 `Canceled` 讀成「不會再播了」（`MediaSnapshot.ended`，RSS Series 的完結看它，§15「呈現」）。
-- **Absolute episode group 的絕對編號要自己從 0-based 的 `order` 推**（2026-09-09 實測 SPY×FAMILY 的 `689a2aec017d0bc9ecc6fac8`）：group 裡的 `episode_number` **保留播出序的原值**，所以第一季二十五集之後，S02E01 在 group 裡仍然是 `episode_number: 1`，而它的絕對編號是 26（`order: 25`）。照 `episode_number` 讀會把整個第二季算成第 1–12 集。同一部作品有五個 episode group（Cours / 兩個 type 1 / Absolute / Blu-ray / Story Arcs），只有 `type: 2` 是絕對編號——這與「有的部有多個互相衝突的 Absolute group」是同一件事的兩面。
-- **動漫 split-cour 正被 TMDB 與 TVDB 同步合併成單季連續編號**（例如 Dandadan S2 併入 S1），字幕組編號則多數按 cour 重新從 01 起算。（[TMDB talk](https://www.themoviedb.org/talk/697d0680d564e13094e4e270)、[TVDB KB](https://support.thetvdb.com/kb/faq.php?id=61)）**2026-09-09 實測修正兩點**：（一）TMDB 的合併比這段原記載更激進，**連獨立的連續季也在併** —— 咒術迴戰 3 季併成 1 季 59 集、Re:Zero 4 季併成 1 季 85 集、芙莉蓮 2 季併成 1 季 38 集、柯南 34 季併成 1 季 1213 集；TVDB 這幾部都維持分季。（二）**這不是主要錯誤來源** —— 量化後合併只造成 0.4 個百分點的差距，真正的主要來源是檔名沒有季號（§10、`docs/research/anime-episode-source.md`）。
-- **季名逐語言翻譯，而且三套字都有人用**（2026-09-10 實測 `tv/85937`、`tv/1429`，票 06）：同一季的 `name` 在 `en-US` / `zh-TW` / `zh-CN` 分別是 `Hashira Training Arc` / `柱訓練篇` / `柱训练篇`，進擊的巨人第四季則是 `The Final Season` / `第4季` / `最终季`。**篇章名比對必須三套都留**：真實發佈裡最常見的寫法是簡體（`[Up to 21°C] 鬼灭之刃 柱训练篇 - 08`），只留英文季名的話 plan §4.4 那條規則對它一個都不會命中。代價是 `tv/{id}` 多打一輪 `zh-CN`（只取季名，電影不打，plan §4.3、§8.3）。
-- **`alternative_titles` 帶篇章名但不帶季號**（2026-09-10 實測 `tv/85937`）：CN 只有 `鬼灭之刃 锻刀村篇` / `鬼灭之刃 游郭篇` 兩筆，TW 五個篇章齊全，JP 是羅馬字（`Kimetsu no Yaiba: Hashira Geiko-hen`）。它們對不出「這是第幾季」——那個對應只有 `seasons[].name` 給得出來，所以比對的主力是季名，別名只是補充。
-- **split-cour 的兩個 cour 之間可以超過半年**（2026-09-10 實測 `tv/1429/season/3`）：進擊的巨人第三季 E12 播於 2018-10-15、E13 播於 2019-04-29，相隔 196 天。所以 plan §4.4 的 180 天門檻同時切得出「虛擬季」與「同一季裡的 cour」——它們本來就是同一件事。
-- **字幕組的編號習慣有四種，同一部作品會並存**（2026-09-09 實測 7,833 筆）：每 cour 從 01 重新起算（68%）、官方編號（16%）、正篇序位（13%）、季內連號（分割兩 cour 的第二 cour 從 13 接下去，3%）。Dandadan 第二季同時存在 `S01 | 01-24`、`[13-24]`、`S2 - 10`、`S2 - 20`（季號 + 絕對編號）四種寫法。解析器不能假設編號一致。
+- 速率：官方未列；員工在論壇稱約 50 req/s、20 併發/IP。條款：**非商業免費，需顯示 TMDB logo 與聲明「This product uses the TMDB API but is not endorsed or certified by TMDB.」**（[faq](https://developer.themoviedb.org/docs/faq)）
+- 探索三支端點（2026-09-09 實測，fixture `tests/fixtures/http/tmdb/`）：`trending/{tv,movie}/week` 與 `search/multi` 的每筆帶 `media_type`，`{tv,movie}/popular` 不帶；劇集用 `name` / `original_name` / `first_air_date`，電影用 `title` / `original_title` / `release_date`；`search/multi` 也回 `person`（`?query=miyazaki` 20 筆中 16 筆）。
+- `language` 換掉的不只文字，還有清單成員與順序（2026-09-09 實測：`trending/tv/week` 的 `en-US` 與 `zh-TW` 各 20 筆只有 17 筆相同）→ 清單以 `en-US` 為準，`zh-TW` 只當「這一部叫什麼」的查表（plan §8.3）。`popularity` **不是**清單排序依據（`tv/popular` 首五筆 583 / 440 / 692 / 417 / 398），要照 TMDB 排名就用陣列順序。
+- 詳情四支端點（2026-09-09 實測，票 04）：`tv/{id}` 的 `seasons[]` 有 `season_number` / `name` / `episode_count` / `air_date`；`movie/{id}` 有 `runtime` 無 `seasons`；不存在的 id 回 **404 加 `status_code: 34`**，與「TMDB 壞了」是兩件事。
+- 劇集 `status`（2026-09-27 查證，M4 票 13；官方未列，維護者在[論壇](https://www.themoviedb.org/talk/6685c10585e1cbe90c4a5fe0)確認）：`Returning Series`、`Planned`、`In Production`、`Ended`、`Canceled`、`Pilot`。Berth 把 `Ended` 與 `Canceled` 讀成「不會再播了」（`MediaSnapshot.ended`，RSS Series 完結看它，§15「呈現」）。
+- 動漫 split-cour 正被 TMDB 與 TVDB 同步合併成單季連續編號（[TMDB talk](https://www.themoviedb.org/talk/697d0680d564e13094e4e270)、[TVDB KB](https://support.thetvdb.com/kb/faq.php?id=61)），字幕組多數按 cour 從 01 重算。2026-09-09 實測：TMDB 連獨立的連續季也併（咒術迴戰 3 季→1 季 59 集、Re:Zero 4→1 共 85 集、芙莉蓮 2→1 共 38 集、柯南 34→1 共 1213 集），TVDB 這幾部維持分季；但合併只造成 0.4 個百分點差距，**主要錯誤來源是檔名沒有季號**（§10、[研究](research/anime-episode-source.md#0-結論)）。
+- **季名逐語言翻譯，三套字都有人用**（2026-09-10 實測 `tv/85937`、`tv/1429`，票 06）：同一季 `name` 在 `en-US` / `zh-TW` / `zh-CN` 分別是 `Hashira Training Arc` / `柱訓練篇` / `柱训练篇`；進擊的巨人第四季為 `The Final Season` / `第4季` / `最终季`。**篇章名比對必須三套都留**（真實發佈最常見是簡體，只留英文則 plan §4.4 規則一個都不會命中）；代價是 `tv/{id}` 多打一輪 `zh-CN`（只取季名，電影不打，plan §4.3、§8.3）。
+- `alternative_titles` 帶篇章名但不帶季號（2026-09-10 實測）：CN 只有兩筆、TW 五個篇章齊全、JP 是羅馬字；「第幾季」只有 `seasons[].name` 給得出來，比對主力是季名，別名只補充。
+- split-cour 兩個 cour 之間可超過半年（2026-09-10 實測：進擊的巨人 S3 E12 播於 2018-10-15、E13 播於 2019-04-29，相隔 196 天）→ plan §4.4 的 180 天門檻同時切得出「虛擬季」與「同一季裡的 cour」。
+- **字幕組編號習慣有四種且同一部並存**（2026-09-09 實測 7,833 筆）：每 cour 從 01 重算 68%、官方編號 16%、正篇序位 13%、季內連號 3%（第二 cour 從 13 接下去）。Dandadan 第二季同時有 `S01 | 01-24`、`[13-24]`、`S2 - 10`、`S2 - 20` 四種寫法。解析器不能假設編號一致。
 
-**TheTVDB v4**
+**TheTVDB v4**（細節：[研究](research/anime-episode-source.md#203-thetvdb-v4)）
 
-- 存取模型（2026-09-07 重查，**原記載過度，已更正**）：申請 v4 key **免費**，dashboard → API Keys → Create a v4 API Key；選 End-User Subscriptions 者「your key will be automatically approved and ready for use」（[KB#81](https://support.thetvdb.com/kb/faq.php?id=81)）。`/login` 的 `pin` 是**選填**，官方文檔原話「provide your API key as "apikey". If you have a user-supported key, **also** provide your subscriber PIN as "pin". Otherwise…」（[v4-api swagger](https://thetvdb.github.io/v4-api/)）；不帶 PIN 可取得 token 並讀資料（本機實測）。
-- 但**授權模型未變**：所有 key 必須「either a commercial license, or have subscriptions enabled for end users」（[KB#62](https://support.thetvdb.com/kb/faq.php?id=62)）；README 明說 user-supported 模式「requires that each of your users has a $12/year TheTVDB subscription」（[v4-api](https://github.com/thetvdb/v4-api)）；KB#81 另警告開發者自用 PIN「prohibited from sharing a PIN for multiple users… Your access may be shut off at any time, and/or legal action may be pursued」。→ **個人自用沒問題；Berth 內建一把 key 給所有使用者是靠執行寬鬆，隨時可能被關。** 若採用，走「使用者自己申請免費 key」而非內建。
-- Jellyfin 官方 TVDB 插件是同一個形狀：`PluginConfiguration.cs` 有唯讀的「tvdb api key **for project**」（插件內建）與選填的「tvdb api key for user, this is the **subscriber's pin**」（[jellyfin-plugin-tvdb](https://github.com/jellyfin/jellyfin-plugin-tvdb/blob/master/Jellyfin.Plugin.Tvdb/Configuration/PluginConfiguration.cs)）。→ 使用者把 Jellyfin 媒體庫切成 TVDB 刮削**不需付費**，§10 的「Jellyfin 同源」理由因此被削弱。
-- 季類型：default(aired) / absolute / dvd / alternate / regional，**每部劇都有**；對比 TMDB 的 Absolute episode group 只在有人替該劇手動建立時才存在。這是 TVDB 對動漫絕對編號換算的實質優勢。Sonarr 只用 TVDB（經 Skyhook 代理），並靠 TheXEM 做 scene 編號對應（[xem-guide](https://wiki.servarr.com/sonarr/xem-guide)）。
-- **`absolute` 會把 OVA 與劇場版也編進去**（2026-09-09 實測 10 部）：SPY×FAMILY 的劇場版 CODE: White 佔掉 absolute 38，正篇第 38 集的 absolute 是 39；無職轉生兩支 OVA 佔掉 17 與 25；航海王的跨作品特別篇佔掉 590。**absolute ≠ 正篇第幾集**，而字幕組「接著往下算」時數的是正篇。
-- 取資料要打兩次：`/series/{id}/extended` 只回 default order，絕對編號要另外打 `/series/{id}/episodes/absolute`（`page` 必填、每頁 100 筆），且 `absoluteNumber` 只在 `EpisodeBaseRecord`、`EpisodeExtendedRecord` 沒有。「一次拿多種排序」的 [issue #98](https://github.com/thetvdb/v4-api/issues/98) 開了五年未做。（2026-09-08 查 [v4-api swagger](https://thetvdb.github.io/v4-api/) 4.7.10）
-- **授權是硬牆**：ToS 第 2 節寫 key 為 "non-transferable"、"solely for the product or project for which you have been provided access"，並禁止 "transfer, assign"（[tos](https://www.thetvdb.com/tos)）。官方對「終端使用者直連」只給談約或 subscriber-supported key（每位使用者 $11.99/年）兩條路；「每人自己申請一把免費 key」官方從未表態，**未證實**。
+- 存取（2026-09-07 重查，原記載過度已更正）：v4 key **免費**自助申請（[KB#81](https://support.thetvdb.com/kb/faq.php?id=81)）；`/login` 的 `pin` **選填**，不帶可取 token 並讀資料（本機實測；[v4-api swagger](https://thetvdb.github.io/v4-api/)）。
+- **授權是硬牆，模型未變**：key 須「commercial license 或 subscriptions enabled for end users」（[KB#62](https://support.thetvdb.com/kb/faq.php?id=62)）；user-supported 模式每位使用者 $12/年（[v4-api](https://github.com/thetvdb/v4-api)）；ToS 第 2 節 key "non-transferable"、"solely for the product or project…"（[tos](https://www.thetvdb.com/tos)）。→ 個人自用沒問題；**Berth 內建一把 key 給所有使用者靠執行寬鬆、隨時可能被關**；若採用走「使用者自己申請免費 key」。「每人自己申請一把免費 key」官方從未表態，**未證實**。
+- Jellyfin 官方 TVDB 插件同形狀：內建 project key 加選填 subscriber's pin（[PluginConfiguration.cs](https://github.com/jellyfin/jellyfin-plugin-tvdb/blob/master/Jellyfin.Plugin.Tvdb/Configuration/PluginConfiguration.cs)）→ Jellyfin 媒體庫切 TVDB 刮削不需付費，§10「Jellyfin 同源」理由被削弱。
+- 季類型 default(aired) / absolute / dvd / alternate / regional，**每部都有**（TMDB 的 Absolute group 要有人手動建）；Sonarr 只用 TVDB（經 Skyhook），靠 TheXEM 做 scene 編號（[xem-guide](https://wiki.servarr.com/sonarr/xem-guide)）。
+- **`absolute` 把 OVA 與劇場版也編進去**（2026-09-09 實測 10 部）：SPY×FAMILY 劇場版佔掉 absolute 38，正篇第 38 集是 39；absolute ≠ 正篇第幾集，而字幕組「接著往下算」數的是正篇。
+- 取資料要打兩次：`/series/{id}/extended` 只回 default order，絕對編號另打 `/series/{id}/episodes/absolute`（`page` 必填、每頁 100 筆），`absoluteNumber` 只在 `EpisodeBaseRecord`；[issue #98](https://github.com/thetvdb/v4-api/issues/98) 開了五年未做。（2026-09-08，swagger 4.7.10）
 
-**Jellyfin 對絕對編號的支援（2026-09-08 讀原始碼）**
+**Jellyfin 對絕對編號的支援**（2026-09-08 讀原始碼；細節：[研究](research/anime-episode-source.md#203-jellyfin-絕對編號skyhook-與-sonarr)）
 
-- **Jellyfin 沒有「絕對編號」這個概念。** `Emby.Naming` 解析得出 `Show - 128.mkv` 的數字，但 `EpisodeInfo` 只有 `EpisodeNumber` / `SeasonNumber`；沒有季資料夾時 `EpisodeResolver` 直接把季號設成 1。
-- 要走 absolute 得把**整部劇**的 `Series.DisplayOrder` 設成 `absolute`（`tvshow.nfo` 的 `<displayorder>`，或 `POST /Items/{id}` 但會觸發整劇 FullRefresh + ReplaceAllMetadata）。jellyfin-plugin-tvdb 的 `PluginConfiguration.cs` 12 個欄位裡**沒有任何排序設定**，排序只來自 `Series.DisplayOrder`。
-- absolute + specials 目前是壞的：插件把 absolute 的特輯打回 `official` season 0 查詢，[issue #91](https://github.com/jellyfin/jellyfin-plugin-tvdb/issues/91) 從 2023 open 至今。
+- **Jellyfin 沒有「絕對編號」概念**：`EpisodeInfo` 只有 `EpisodeNumber` / `SeasonNumber`，沒有季資料夾時 `EpisodeResolver` 把季號設成 1。走 absolute 得把**整部劇**的 `Series.DisplayOrder` 設成 `absolute`（`tvshow.nfo` 的 `<displayorder>`，或 `POST /Items/{id}` 但會觸發整劇 FullRefresh + ReplaceAllMetadata）；jellyfin-plugin-tvdb 沒有任何排序設定。absolute + specials 目前壞的（[issue #91](https://github.com/jellyfin/jellyfin-plugin-tvdb/issues/91)，2023 起 open）。
 
-**TMDB 的 Absolute episode group 不能當備援**（2026-09-08 實測 10 部）：只有 6 部有；有的部有多個互相衝突（進擊的巨人四個 Absolute group，集數 89/97/97/97），柯南的那個叫 "China Online Version"。而且 group 內的 `episode_number` 保持 aired order 原值，絕對編號要自己從 0-based 的 `order` 推。
-
-**Sonarr Skyhook 不能寫進產品**：`https://skyhook.sonarr.tv/v1/tvdb/shows/en/{tvdbId}` 免認證、有 `absoluteEpisodeNumber`，適合當量測替身（本專案的實驗就是這樣用的，10/10 與 thetvdb.com 網頁一致）；但它封閉源（Team Sonarr 官方論壇："It is not open source and we don't have plans to open source it."）、無文檔、無 SLA，servarr 對同類 metadata proxy 的政策是 "We do not support directly hitting any metadata service that isn't our own"。
+**Sonarr Skyhook 不能寫進產品**：`https://skyhook.sonarr.tv/v1/tvdb/shows/en/{tvdbId}` 免認證、有 `absoluteEpisodeNumber`，只適合當量測替身（10/10 與 thetvdb.com 一致）；封閉源、無文檔、無 SLA，servarr 政策 "We do not support directly hitting any metadata service that isn't our own"。
 
 **Sonarr 作為先例**
 
-- Series Type：Standard / Daily / Anime（絕對編號）。預設動漫命名：`{Series TitleYear} - S{season:00}E{episode:00} - {absolute:000} - {Episode CleanTitle} [{Custom Formats}{Quality Full}]…{-Release Group}`。（[settings](https://wiki.servarr.com/sonarr/settings)）
-- v4 以 Custom Formats 取代 Preferred Words；Release Profiles 保留 must / must-not contain。
-- EpisodeFile（帳本先例）欄位：`relativePath`、`path`、`size`、`dateAdded`、`sceneName`、`releaseGroup`、`language`、`quality`、`mediaInfo`、`qualityVersion`（1 一般、2 proper、3+ 可用於動漫 v3）。（[starr sonarr](https://pkg.go.dev/golift.io/starr/sonarr)）§8 的 `ledger` 至少要涵蓋這些。
+- Series Type：Standard / Daily / Anime（絕對編號）；預設動漫命名含 `S{season:00}E{episode:00} - {absolute:000}`。（[settings](https://wiki.servarr.com/sonarr/settings)）v4 以 Custom Formats 取代 Preferred Words，Release Profiles 保留 must / must-not contain。
+- EpisodeFile（帳本先例）欄位：`relativePath`、`path`、`size`、`dateAdded`、`sceneName`、`releaseGroup`、`language`、`quality`、`mediaInfo`、`qualityVersion`。（[starr sonarr](https://pkg.go.dev/golift.io/starr/sonarr)）**§8 的 `ledger` 至少要涵蓋這些。**
 
-**動漫 ID 對應**
+**動漫 ID 對應**（細節：[研究](research/anime-episode-source.md#203-動漫-id-對應)）
 
-- **Fribb/anime-lists** `anime-list-full.json`（由 anime-offline-database + Anime-Lists 自動產生）：每筆含 `anidb_id`、`anilist_id`、`mal_id`、`kitsu_id`、`imdb_id`、`themoviedb_id`、`tvdb_id`，並有 `season {tvdb, tmdb}` 與 `episode_offset {tvdb, tmdb}`。**這就是「AniList/MAL 條目 → TMDB 季 + 集 offset」的直接資料**。（[Fribb/anime-lists](https://github.com/Fribb/anime-lists)）更新頻率未證實。**M5 票 23d 拿掉**：實測會錯在季與 offset，研究見 `docs/research/fribb-vs-chaining-2026-10-28.md`、`docs/research/agent-sources-ab-2026-10-28.md`。
-- Anime-Lists 的 `anime-list.xml` 只有 AniDB→TVDB（`defaulttvdbseason`、`episodeoffset`、`mapping-list`），無 TMDB。新專案 [anibridge-mappings](https://github.com/anibridge/anibridge-mappings) 目標是 AniDB/AniList/MAL/TMDB/TVDB 集級對應，可觀察。
-- AutoBangumi v3.2 加入「Episode Offset Auto-Detection」：用 TMDB 各集 `air_date` 偵測「虛擬季」並建議 offset。（[autobangumi bangumi](https://www.autobangumi.org/en/feature/bangumi.html)）本系統 §6.4 的絕對編號換算應同時用「累計集數」與「air_date 區間」兩種訊號。
-- Shoko + Shokofin 以 AniDB ED2K hash 辨識檔案，是動漫 metadata 的「黃金標準」但整套獨立生態，與 TMDB 路線不相容，不納入。
+- **Fribb/anime-lists** `anime-list-full.json`：每筆含 `anidb_id` / `anilist_id` / `mal_id` / `kitsu_id` / `imdb_id` / `themoviedb_id` / `tvdb_id`，另有 `season` 與 `episode_offset`（`{tvdb, tmdb}`）。（[Fribb/anime-lists](https://github.com/Fribb/anime-lists)）**M5 票 23d 拿掉**：實測錯在季與 offset，見 [fribb-vs-chaining](research/fribb-vs-chaining-2026-10-28.md)、[agent-sources-ab](research/agent-sources-ab-2026-10-28.md)。
+- Anime-Lists `anime-list.xml` 只有 AniDB→TVDB，無 TMDB；[anibridge-mappings](https://github.com/anibridge/anibridge-mappings) 目標是集級對應，可觀察。
+- AutoBangumi v3.2 的 Episode Offset Auto-Detection 用 TMDB 各集 `air_date` 偵測虛擬季並建議 offset。（[autobangumi](https://www.autobangumi.org/en/feature/bangumi.html)）**§6.4 的絕對編號換算應同時用「累計集數」與「air_date 區間」兩種訊號。**
+- Shoko + Shokofin（AniDB ED2K hash）自成生態、與 TMDB 路線不相容，不納入。
 
-**動漫資料來源：AniList、Bangumi、Fribb（2026-10-28 查證＋實測，M5 票 16）**
+**動漫資料來源：AniList、Bangumi、Fribb**（2026-10-28 查證＋實測，M5 票 16；細節：[研究](research/anime-episode-source.md#203-動漫資料來源-anilist-bangumi-fribb)、[m5-anime-sources](research/m5-anime-sources-2026-10-28.md)）
 
-**M5 票 23d 拿掉 Fribb 與 AniList 的標題搜尋、系列走圖**（`docs/research/agent-sources-ab-2026-10-28.md`）：Berth 只用 AniList 的季表與 Bangumi 放送表。下面 Fribb 與 `relations` 的事實留作紀錄；fixture 只剩 `anilist/`、`bgm/`。
+**M5 票 23d 拿掉 Fribb 與 AniList 的標題搜尋、系列走圖**（[agent-sources-ab](research/agent-sources-ab-2026-10-28.md)）：Berth 只用 AniList 的季表與 Bangumi 放送表；fixture 只剩 `tests/fixtures/http/{anilist,bgm}/`，`scripts/experiments/anime_sources.py` 錄的。
 
-側面板的推薦新番與整部系列要的三個來源（研究 `docs/research/m5-ai-direction-2026-10-27/08-scenario-data-sources.md` §2、`docs/research/m5-anime-sources-2026-10-28.md`；fixture 當時在 `tests/fixtures/http/{anilist,bgm,fribb}/`，`scripts/experiments/anime_sources.py` 錄的）。
+- **AniList**（`POST https://graphql.anilist.co`，免 key、不要求 User-Agent）：文件寫 90 次 / 分，頁首警告**目前降級成 30 次 / 分**（[Rate Limiting](https://docs.anilist.co/guide/rate-limiting)；實測 `X-RateLimit-Limit: 30`）；超過就**封一分鐘**，期間全回 429 帶 `Retry-After` 與 `X-RateLimit-Reset`，所以重試要全程序一起停。錯誤寫在 `errors`（錯參數回 400），`Page.media(id_in)` 問不存在的 id 回 200 加空清單；`Page` 一頁最多 50 筆（要 60 回 50）。條款（[Terms of Use](https://docs.anilist.co/guide/terms-of-use)）：月營收 < $150 免費；**禁止當備份 / 儲存服務、禁止 hoarding**，所以 Berth 只按需問、程序內快取 6 小時、不落地。`relations` 用 `relationType(version: 2)`。打分人數是 `stats.scoreDistribution[].amount` 加總。
+- **Bangumi**（`GET https://api.bgm.tv/calendar`，免 key）：**非瀏覽器要帶 User-Agent（開發者 ID 與應用名，分發的帶版本、開源的帶主頁）**，預設的可能被擋（[user agent.md](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)）；Berth 送 `1morr/berth/<版本> (https://github.com/1morr/Berth)`。`/calendar` 在 `open-api/api.yml`（不在 `v0.yaml`），欄位全非必填（112 部裡 57 部有 `rank`、93 部有 `rating.score`）；回 `cache-control: max-age=3600`，Berth 記一小時；無公布速率上限。
+- **Fribb**（`raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json`，7.5 MB、39,579 筆）：**倉庫無授權檔**，上游 anime-offline-database 為 **ODbL 1.0**；判讀（非法律意見）嚴格說保留所有權利，Berth 的結論是執行時下載到使用者自己的 `CONFIG_ROOT`、只自己查詢，**不打包進 repo 或 image**（那才是再散布），不加 ODbL 署名（無公開使用，§4.3）。每週二約 16:04 UTC 更新，下載會斷（要先解得開才換舊檔）；僅約兩成條目有 TMDB id；`episode_offset.tmdb` 差一集（Re:Zero 第 2 季寫 26，實際 E26–E38）。17 部實測見 [fribb-vs-chaining](research/fribb-vs-chaining-2026-10-28.md)：Fribb 錯在季與 offset，只靠集數串接錯在 Specials 與 TMDB 拆條目，所以 `series-mapping` 兩種都算、不一致整季交給人。
 
-- **AniList**（`POST https://graphql.anilist.co`，免 key、不要求 User-Agent）：文件寫 90 次 / 分，頁首警告**目前降級成 30 次 / 分**、不收提高上限的申請，另有沒公布數字的突發限制（[Rate Limiting](https://docs.anilist.co/guide/rate-limiting)）；實測回應帶 `X-RateLimit-Limit: 30`、`X-RateLimit-Remaining`。超過就**封一分鐘**，封鎖期間每個請求都回 429 帶 `Retry-After`（秒）與 `X-RateLimit-Reset`，body `{"data": null, "errors": [{"message": "Too Many Requests.", "status": 429}]}`——所以重試要全程序一起停，各自重試只會延長封鎖。錯誤寫在 `errors`（實測錯的參數回 400 加 `Unknown argument …`），`Page.media(id_in: […])` 問不存在的 id 回 200 加空清單。條款（[Terms of Use](https://docs.anilist.co/guide/terms-of-use)）：月營收 < $150 免費；禁止當備份 / 儲存服務、禁止 hoarding（大量收集），所以 Berth 只按需問、程序內快取 6 小時、不落地。`relations` 用 `relationType(version: 2)`（2026-10-28 對 schema 內省：`SOURCE`、`COMPILATION`、`CONTAINS` 的說明是「Version 2 only」，另有 version 3 多一個 `SAME_UNIVERSE`）；`Page` 一頁最多 50 筆（實測要 60 筆回 50、`pageInfo.perPage: 50`）；同一層的條目用 `id_in` 一次問完，Re:Zero 不含衍生作的六個條目五次問完（原型一個節點一次要十二次）。季表的打分人數是 `stats.scoreDistribution[].amount` 的加總（實測 Fall 2026 第一名 Cyberpunk: Edgerunners 2 人氣 107,511、打分 19,544 人）。
-- **Bangumi**（`GET https://api.bgm.tv/calendar`，免 key）：**非瀏覽器要帶 User-Agent，含開發者 ID 與應用名，分發的應用帶版本、開源的帶主頁**，預設的可能被擋（[user agent.md](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)）；Berth 送 `1morr/berth/<版本> (https://github.com/1morr/Berth)`。`/calendar` 記在官方 OpenAPI 的 `open-api/api.yml`（不在 `v0.yaml`），所有欄位都不是必填：實測 112 部裡只有 57 部有 `rank`、93 部有 `rating.score`。回 `cache-control: max-age=3600`，Berth 照它記一小時；沒有公布的速率上限。
-- **Fribb/anime-lists**（`https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json`，7.5 MB、39,579 筆）：**倉庫沒有授權檔**（GitHub 的 license 是 `null`），資料出自 anime-offline-database（**ODbL 1.0** + DbCL 1.0）與 Anime-Lists（也沒有授權檔）。判讀（不是法律意見）：**沒有明文授權，嚴格說等於保留所有權利**；Berth 要的那幾格（TMDB 的季與 offset）多半出自同樣沒有授權檔的 Anime-Lists，或 Fribb 自己用 TMDB API 補的，不全來自 ODbL 的那一份。站得住的理由是用法：倉庫公開、README 說明它就是給人對照 id 用的、社群工具普遍這樣抓，而沒有任何條款禁止；ODbL 那一部分明文允許使用與重製（§3.1），署名與 share-alike 只在**公開傳遞**資料庫或公開使用產出時才適用。**結論：照票面用 Fribb**——使用者的 Berth 在執行時下載到自己的 `CONFIG_ROOT`、只自己查詢，不打包進 repo 或 image（那才是再散布）；fixture 只留測試要的 17 筆原文（少量摘錄，當契約測試的證據）。不加 ODbL 署名：自託管、只給自己人看，沒有公開使用（§4.3）；Berth 若哪天公開展示查到的結果再加。要內建一份快照的話，先請作者補授權（在別人的倉庫開 issue，要當次同意）。上游每週二約 16:04 UTC 自動更新一次（最近十次都是 `automated list update`），Berth 每週重抓一次。**下載會斷**：實測一次 `curl` 只拿到 6.6 MB 就結束，所以先解得開才換掉舊檔。只有約兩成條目有 TMDB id；`episode_offset.tmdb` 是「這一輪在那一季的起點前一集」，但會差一集（Re:Zero 第 2 季寫 26，照 offset + 1 讀是 E27–E39：與第 1 季的 25 集之間空一集、又與下一輪（offset 38，E39 起）重疊一集；TMDB 實際是 E26–E38——換算要用 AniList 的集數串起來對 TMDB 的總集數，`series-mapping`）。17 部的實測（`docs/research/fribb-vs-chaining-2026-10-28.md`）：Fribb 的作品 id 沒錯過，錯在季與 offset（TMDB 併季之後 Fribb 照舊分季、offset 差一集）；只靠集數串接則錯在 Specials 裡的一集與 TMDB 把一個條目拆成好幾季——所以 `series-mapping` 兩種都算、不一致就整季交給人。Re:Zero 的 OVA（Memory Snow / Frozen Bond 所在的 100049）對到 TMDB 的 Specials（第 0 季），兩部劇場版在 TMDB 是獨立電影、Fribb 沒有，要用標題搜尋。
+**Seerr（前 Jellyseerr / Overseerr）**（細節：[研究](research/anime-episode-source.md#203-seerr)）
 
-**Seerr（前 Jellyseerr / Overseerr）**
-
-- 2026 年 3 月起 Jellyseerr 與 Overseerr 合併為 **Seerr**（[seerr-release](https://docs.seerr.dev/blog/seerr-release)）；本文件所有「Seerr」指它。
-- 登入：以 Jellyfin / Emby / Plex 帳號登入，可選本地帳號；第一個以媒體伺服器**管理員**身分登入者成為 owner；權限為細粒度旗標（Manage Users、Manage Requests、Auto-Request…）。（[users](https://docs.seerr.dev/using-seerr/settings/users)）
-- 可用性判定（來源碼 `server/lib/scanners/jellyfin/index.ts`）：讀 Jellyfin item 的 `ProviderIds.Tmdb`，缺則 `Imdb` → TMDB find，再缺則 `AniDB` → 內建 anime-list 對應。本系統 §9 認領 unmanaged 檔案時可沿用這條鏈。
-- 深連結（來源碼 `server/entity/Media.ts`）：`{externalUrl}/web/index.html#!/details?id={itemId}&context=home&serverId={serverId}`。§12 採用此格式。
+- 2026 年 3 月起 Jellyseerr 與 Overseerr 合併為 **Seerr**（[seerr-release](https://docs.seerr.dev/blog/seerr-release)）；本文件所有「Seerr」指它。以 Jellyfin / Emby / Plex 帳號登入，第一個以媒體伺服器管理員登入者成為 owner，權限為細粒度旗標（[users](https://docs.seerr.dev/using-seerr/settings/users)）。
+- 可用性判定（來源碼 `server/lib/scanners/jellyfin/index.ts`）：`ProviderIds.Tmdb`，缺則 `Imdb` → TMDB find，再缺則 `AniDB` → 內建 anime-list。§9 認領 unmanaged 檔案可沿用這條鏈。
+- 深連結（`server/entity/Media.ts`）：`{externalUrl}/web/index.html#!/details?id={itemId}&context=home&serverId={serverId}`。§12 採用此格式。
 
 ### 20.4 解析先例與真實 torrent 內容
 
-**解析庫現況（2026-09）**
+細節與逐字原文在 [research/profile-effect.md](research/profile-effect.md#從-brief-搬來204)（本檔 §6.4 絕對編號量測見同檔 [§0](research/profile-effect.md#0-結論)、[§6.1.1](research/profile-effect.md#611-規則-1-的代價m1-票-14d-第-1-步2026-09-17)）。
 
-| 庫 | 語言 | 狀態 | 欄位 | CJK / 字幕組 |
-| --- | --- | --- | --- | --- |
-| [guessit](https://github.com/guessit-io/guessit) | Python | 活躍，v4.4.0（2026-07） | title / season / episode / absolute_episode / version / release_group / source / screen_size / video_codec / subtitle_language / edition / other 等極完整 | 弱：[#929](https://github.com/guessit-io/guessit/issues/929) 仍開著，fansub 括號格式常錯 |
-| [anitopy](https://github.com/igorcmoura/anitopy) | Python | 停滯（2022） | anime_title / episode_number / release_group / release_version / video_resolution 等 | 無專門處理 |
-| [anitomy](https://github.com/erengy/anitomy) | C++ | develop 分支重寫中（C++23） | 同上 | 無專門處理 |
-| [anitomyscript](https://github.com/skiptirengu/anitomyscript) | JS/WASM | 2019 版本，落後上游 | 同上 | 無 |
-| [@ctrl/video-filename-parser](https://github.com/scttcper/video-filename-parser) | TS | 活躍，v5.11（2026-07），Radarr 風格 | title / year / resolution / sources / videoCodec / revision / group / edition / languages；TV 模式 seasons / episodeNumbers | 無 |
-| [parse-torrent-title](https://github.com/clement-escolano/parse-torrent-title) | JS | 活躍 | title / season / episode / resolution / codec / source / group，可擴充 handler | 無 |
-| [dreulavelle/PTT](https://github.com/dreulavelle/PTT)（pip `parsett`） | Python | 活躍 | 西方 scene 命名 | 無 |
-| torrent-name-parser | Rust | 停滯（2023） | 基本欄位 | 無 |
+**解析庫現況（2026-09）**：guessit（Python，v4.4.0，2026-07）欄位最完整但 CJK 弱（[#929](https://github.com/guessit-io/guessit/issues/929) 仍開著，fansub 括號格式常錯）；anitopy（2022 停滯）、anitomy（C++，重寫中）、anitomyscript（2019，落後）無 CJK 專門處理；[@ctrl/video-filename-parser](https://github.com/scttcper/video-filename-parser)（TS，v5.11，Radarr 風格）、parse-torrent-title（JS）、[PTT](https://github.com/dreulavelle/PTT)（pip `parsett`）、torrent-name-parser（Rust，2023 停滯）都只管西方 scene 命名。
 
 **結論**：沒有現成庫能處理中文字幕組命名，CJK 詞典一定要自己維護；西方命名交給 guessit（Python）或 @ctrl/video-filename-parser（TS）。可直接借鑑的 CJK regex 有兩處：
 
-- **AutoBangumi `tokenizer/classic.py`**（[repo](https://github.com/EstrellaXD/Auto_Bangumi)，`backend/src/module/parser/analyser/tokenizer/classic.py`）：`_CJK_SUBTITLE_TAG`（简/繁/日/双语/内嵌/内封/外挂/多国）、`_SUBTITLE`（CHS/CHT/GB/Big5/JPSC/JPTC/Multi-Subs/PGS）、`_CHINESE_SEASON`（第N季/期，含中文數字）、`_CHINESE_EPISODE`（第N话/集）、`_FULL_COLLECTION` / `_COLLECTION`（全N话/合集/全集/总集篇/特典）、`_SPECIAL_CJK`（番外/特別篇）、`_MOVIE_CJK`（劇場版/電影版）、`_PREFIX`（★1月新番★）、`_RECRUIT`（招募廣告）、`_REGION`（僅限港澳台）、`_SOURCE`（Baha/B-Global/Bilibili/CR/AT-X/Abema/AMZN/NF/…）、`_CODEC`、`_AUDIO`。
-- **Sonarr `Parser.cs`**（[raw](https://raw.githubusercontent.com/Sonarr/Sonarr/develop/src/NzbDrone.Core/Parser/Parser.cs)）：約 8 條中文動漫 pre-substitution（以 `[一-鿌]` 剝離中文標題、LoliHouse / Lilith-Raws / Skymoon-Raws 無括號格式、GM-Team 多括號格式、`第?(\d+)(话|集)?( END|完| Fin)?`），以及韓劇 `\.E(\d{2,4})\.\d{6}\.(.*-NEXT)$ → S01E$1` 規則。
+- **AutoBangumi `backend/src/module/parser/analyser/tokenizer/classic.py`**（[repo](https://github.com/EstrellaXD/Auto_Bangumi)）：字幕標記、季 / 集（含中文數字）、合集 / 特典、番外、劇場版、★前綴、招募廣告、僅限港澳台、來源（Baha / B-Global / Bilibili / CR / AT-X / Abema / AMZN / NF…）、codec、audio 的 regex（`_CJK_SUBTITLE_TAG`、`_SUBTITLE`、`_CHINESE_SEASON`、`_CHINESE_EPISODE`、`_FULL_COLLECTION` / `_COLLECTION`、`_SPECIAL_CJK`、`_MOVIE_CJK`、`_PREFIX`、`_RECRUIT`、`_REGION`、`_SOURCE`、`_CODEC`、`_AUDIO`）。
+- **Sonarr `Parser.cs`**（[raw](https://raw.githubusercontent.com/Sonarr/Sonarr/develop/src/NzbDrone.Core/Parser/Parser.cs)）：約 8 條中文動漫 pre-substitution（LoliHouse / Lilith-Raws / Skymoon-Raws 無括號、GM-Team 多括號、`第?(\d+)(话|集)?( END|完| Fin)?`），以及韓劇 `\.E(\d{2,4})\.\d{6}\.(.*-NEXT)$ → S01E$1`。
 
-**AutoBangumi 現況（main，2026-08）**
+**AutoBangumi 現況（main，2026-08）**：
 
-- 解析輸出 `ParsedRelease`：`title_en / title_zh / title_jp / group / season / episode / episode_end / media_type(EPISODE|MOVIE|OVA|OAD|SPECIAL|PV|OPENING|ENDING) / release_kind(SINGLE|RANGE|BATCH|COLLECTION) / resolution / source / subtitle / codecs / audio / version / tags / evidence`。§6.3 的欄位設計與此對齊。
-- LLM 解析支援 OpenAI / Anthropic / Gemini，兩種模式：`primary`（LLM 為主但仍合併規則層的結構提示）與 `fallback`（只在規則層失敗或只得到弱標題時呼叫）；有記憶體快取、斷路器、併發上限。§6.10 的設計與其 `fallback` 模式一致，並多加了 schema 驗證與預算。
-- `offset_detector.py`：以 TMDB 各集 `air_date`、播出間隔 > 6 個月切「虛擬季」，算出 season_offset 與 episode_offset。
-- 明確限制：**不支援合集/批次**（FAQ：「AB 目前不支持解析合集」）、OVA 與電影 RSS 不支援、路徑必須是 `Title/Season X/`。這三點正是本系統 §6.6 要超越的地方。
-- RSS 預設過濾 regex `720|\d+-\d+`（排除 720p 與區間合集）；建議一部作品只訂一個字幕組；繁簡二選一靠 Mikan 訂閱時選或 filter。§15 的 Rule 預設沿用「排除合集、字幕組白名單」。
+- 解析輸出 `ParsedRelease`（title_en / zh / jp、group、season、episode、episode_end、media_type、release_kind(SINGLE|RANGE|BATCH|COLLECTION)、resolution、source、subtitle、codecs、audio、version、tags、evidence）；§6.3 的欄位設計與此對齊。
+- LLM 解析支援 OpenAI / Anthropic / Gemini，`primary` 與 `fallback` 兩種模式（記憶體快取、斷路器、併發上限）；§6.10 與其 `fallback` 一致，並多加 schema 驗證與預算。
+- `offset_detector.py`：以 TMDB 各集 `air_date`、播出間隔 > 6 個月切「虛擬季」算 season_offset / episode_offset。
+- 明確限制：**不支援合集 / 批次**、OVA 與電影 RSS 不支援、路徑必須是 `Title/Season X/`——正是 §6.6 要超越的地方。
+- RSS 預設過濾 regex `720|\d+-\d+`；建議一部作品只訂一個字幕組；§15 的 Rule 預設沿用「排除合集、字幕組白名單」。
 
-**真實內容樣本（都取自現場列表，作為 benchmark v0 的種子）**
+**真實內容樣本**（現場列表，benchmark v0 的種子；v0 語料 20 筆 = 動漫 8、非動漫劇集 8、電影 4，清單與逐字原文在 [研究檔](research/profile-effect.md#從-brief-搬來204)「真實內容樣本」，逐筆出處在 `tests/fixtures/parser/README.md`）：
 
-- 單集：`[Erai-raws] Yani Neko - 07 [1080p NF WEB-DL AVC AAC][MultiSub][A5D38B89]`；`[三明治摆烂组] … - 08 - [繁日内嵌][AVC 8bit 1080P]` 與同集的 `[简日内嵌]`、`[简繁日内封]` 三個 torrent（內嵌 vs 內封的實例）；`【楓葉字幕組】[寵物小精靈/ 寶可夢地平線烈空坐飛升][089][繁體][1080P][MP4]`；`【悠哈璃羽字幕社】[碧蓝航线 微速前进 S2_Azur Lane - Bisoku Zenshin! S2][x264 1080p][CHT]`；`[DHR Fansub][Little Busters!_リトルバスターズ!][04][JPN&BIG5][720P][AVC_Hi10P_AAC][MKV]`；`[LoliHouse] Re:Zero … - 81 v2 WebRip 1080p HEVC-10bit AAC`。
-- 合集 / BD：`[7³ACG] 葬送的芙莉莲/Sousou no Frieren S01 | 01-28+SPx11 [简繁字幕] BDrip 1080p x265 OPUS 2.0`（28 集 + 11 個 SP）；`[7³ACG] 日常/Nichijou S01 | 01-26+SPx1 …`；`…★百姓贵族★29~40(完)★1920x1080★…★繁体中文`（`★` 分隔、`完` 標記）；`jibaketa TVB Honzuki no Gekokujou - S1 S2 S3 BD 1920x1080 x264 AACx2 SRT TVB CHT`（多季合一）；`Solo Leveling S01 + S02 BDRIP …`。
-- 外掛字幕：`sub/スレイヤーズTRY第01話(DVD 640x480).gb.ass` / `.big5.ass`；`[11番小队][十二国记]…tc.ass`；Mikan 的「生肉/不明字幕」標記。
-- 西方劇集：RARBG 季包 `Show/Subs/Episode 1/2_English.srt, 3_English.srt, 2_French.srt`（[renamer README](https://github.com/img02/Rarbg-Subtitle-Renamer)）；Sonarr Daily 型 `Some.Daily.Show.2021.03.04.1080p.HDTV.x264-GROUP`；`S01E01E02` 多集檔。
-- 電影：`Oppenheimer (2023) [1080p] [BluRay] [5.1] [YTS.MX]/Oppenheimer.2023.1080p.BluRay.x264.AAC5.1-[YTS.MX].mp4` + `www.YTS.MX.jpg` + `YTSProxies.com.txt`；Jellyfin 官方多片段 `Movie Name-cd1.mkv`（parttype：cd/dvd/part/pt/disc/disk）。
+- 單集：Erai-raws `- 07 [1080p NF WEB-DL AVC AAC][MultiSub][A5D38B89]`；三明治摆烂组同集三個 torrent（`[繁日内嵌]`、`[简日内嵌]`、`[简繁日内封]`，內嵌 vs 內封）；楓葉字幕組 `[089][繁體][1080P][MP4]`；悠哈璃羽字幕社 `S2_…[x264 1080p][CHT]`；DHR Fansub `[04][JPN&BIG5][720P][AVC_Hi10P_AAC][MKV]`；LoliHouse `- 81 v2 WebRip 1080p HEVC-10bit AAC`。
+- 合集 / BD：7³ACG `S01 | 01-28+SPx11`、`S01 | 01-26+SPx1`；`★百姓贵族★29~40(完)★1920x1080★`（`★` 分隔、`完` 標記）；`jibaketa TVB … S1 S2 S3 BD`（多季合一）；`Solo Leveling S01 + S02 BDRIP`。
+- 外掛字幕：`sub/…第01話(DVD 640x480).gb.ass` / `.big5.ass`；`[十二国记]…tc.ass`；Mikan 的「生肉 / 不明字幕」標記。
+- 西方劇集：RARBG 季包 `Show/Subs/Episode 1/2_English.srt`（[renamer README](https://github.com/img02/Rarbg-Subtitle-Renamer)）；Sonarr Daily 型 `Some.Daily.Show.2021.03.04.1080p.HDTV.x264-GROUP`；`S01E01E02` 多集檔。
+- 電影：`Oppenheimer (2023) [1080p] [BluRay] [5.1] [YTS.MX]/…mp4` + `www.YTS.MX.jpg` + `YTSProxies.com.txt`；Jellyfin 多片段 `Movie Name-cd1.mkv`（parttype：cd/dvd/part/pt/disc/disk）。
 - 韓劇：`Show.E01.YYMMDD.1080p…-NEXT` 無季編號（Sonarr 特別處理），`E01-16 COMPLETE (HDTV NEXT)` 全季字幕包。
-- **已證實（2026-09-10，M1 票 05，抓真實 torrent metadata）**：BD 包的附屬資料夾名兩家不同，社群轉述的那一串只對了一半。
-  - [VCB-Studio 魔王2099](https://share.dmhy.org/topics/view/726629_VCB-Studio_2099_Demon_Lord_2099_10-bit_1080p_HEVC_BDRip_Fin.html)（223 個檔案）：`SPs/`、`CDs/`（每張碟一個子資料夾，內含 flac 與 webp）、`CDs/…/Scans/`、`Scans/`（`BDBOX`、`Vol.1`…）。**沒有** `Fonts/` 與 `Menu/`。
-  - [DBD-Raws 不死者之王 第二季](https://share.dmhy.org/topics/view/668157_DBD-Raws_Overlord_Overlord_S2_01-13TV_SP_1080P_BDRip_HEVC-10bit_FLAC_MKV.html)（106 個檔案）：`SP/`（帶 SP 編號，每個配 `.sc.ass` / `.tc.ass`）、`PV/`、`NCOP&NCED/`、`menu/`（小寫）、`Fonts/Fonts.zip`（字型是壓縮檔不是散檔）。
-  - 兩份都成了 §6.9 的語料（`tests/fixtures/parser/`），分類規則因此有真實輸入可以釘。
+- **已證實（2026-09-10，M1 票 05，抓真實 torrent metadata）**：BD 包附屬資料夾名兩家不同，成了 §6.9 的語料（`tests/fixtures/parser/`）。
+  - [VCB-Studio 魔王2099](https://share.dmhy.org/topics/view/726629_VCB-Studio_2099_Demon_Lord_2099_10-bit_1080p_HEVC_BDRip_Fin.html)（223 檔）：`SPs/`、`CDs/`（每碟一子資料夾，flac + webp）、`CDs/…/Scans/`、`Scans/`；**沒有** `Fonts/` 與 `Menu/`。
+  - [DBD-Raws 不死者之王 第二季](https://share.dmhy.org/topics/view/668157_DBD-Raws_Overlord_Overlord_S2_01-13TV_SP_1080P_BDRip_HEVC-10bit_FLAC_MKV.html)（106 檔）：`SP/`（帶編號，各配 `.sc.ass` / `.tc.ass`）、`PV/`、`NCOP&NCED/`、`menu/`（小寫）、`Fonts/Fonts.zip`（壓縮檔不是散檔）。
 
-**只有集號、TMDB 上多季的真實發佈（2026-09-16，M1 票 14c，[研究](research/profile-effect.md)）**：
-§6.4「只有集號 → 絕對編號」那一支在 v1 的 23 筆語料上一次都沒走到（34 次全是 TMDB 只有一季），
-補了 5 筆走得到的才量得出 Route profile 的作用。
+**只有集號、TMDB 上多季的真實發佈（2026-09-16，M1 票 14c，[研究](research/profile-effect.md#0-結論)）**：§6.4「只有集號 → 絕對編號」在 v1 的 23 筆語料上一次都沒走到（34 次全是 TMDB 只有一季），補 5 筆走得到的才量得出 Route profile 的作用。
 
-- **動漫的跨季連號換算得對**：SubsPlease `Spy x Family - 26`–`37`（S02E01–12）、`Boku no Hero Academia - 139`
-  （S07E01）、Erai-raws `One Piece - 1089 ~ 1104`。**TMDB 的航海王第 22 季沿用官方集數當 `episode_number`**
-  （S22E1089–1155），所以只有 absolute group 換對，各季累加換成 S22E01 是錯的。
-- **非動漫的「集號」可能是另一套數法**：《Home and Away》`Episode.8214.2024-02-29` 累加換成 S37E32，
-  但 TMDB 的 S37E39 集名就是 `Episode 8214`、播於同一天——TMDB 前 36 季比官方編號多收 7 集。
-  韓國電視台的 `The.Return.of.Superman.E079.150524` 累加換成 S03E21，播出日與檔名一致，是對的。
-- **字幕組每 cour 重數、篇章名只寫羅馬字時會被當成絕對編號**：Erai-raws
-  `Bleach - Sennen Kessen Hen - Soukoku Tan - 01 ~ 14` 換成 S01E01–14，正解 S02E27–40（TMDB 季名是
-  `Thousand-Year Blood War` / `千年血戰篇`，比不到羅馬字）。
-- **`guessit` 預設把韓國電視台的 `YYMMDD` 讀錯**：`150524` 讀成 2024-05-15（本機 guessit 實測），要加
-  `date_year_first`——官方說明「If short date is found, consider the first digits as the year」
-  （[guessit 文件](https://guessit-io.github.io/guessit)的 `-Y, --date-year-first`；設定檔裡是 `date_year_first`）。
-  加上之後讀成 2015-05-24，`2024-02-29` 這種四位數年份不受影響。
-- 韓劇第二季以後、檔名沒有季號的 `Show.2.E01.YYMMDD` 在 TPB、Knaben、dmhy 都沒找到，公開索引站上的
-  第二季發佈全部帶 `S02E`。
-- **「集號 ≤ 第一季集數就送審核」擋下的多半是對的**（2026-09-17，M1 票 14d，[研究 §6.1.1](research/profile-effect.md)，
-  `scripts/experiments/absolute_rule_cost.py`）：M1 票 01 那批以發佈時間判定正解的 Mikan 發佈，取 TMDB 上 ≥ 2 季的
-  5 部（SPY×FAMILY、無職轉生、鬼滅之刃、進擊的巨人、航海王），每筆當成以標題為檔名的單檔 torrent 丟進 `plan`、
-  合集逐集展開。走到絕對編號換算的檔案裡，集號 ≤ 第一季集數的**正解在第一季 928 個、在後面某季 167 個**；
-  超過第一季集數的 1,219 對、54 錯，錯的 54 個正解全是播出日對不上、退回序位的那種，本身存疑。
-  「標題有認不出的多餘字」（guessit 的標題候選不等於作品的已知名字）分不開兩者：連 TMDB 的 `titles` 一起比，
-  放行 793 個第一季、漏掉 14 個後面季的——`Kimetsu no Yaiba: Katanakaji no Sato-hen` 本身就是 TMDB 別名，
-  `Mushoku Tensei S2 [02]` 的季號被 Berth 丟掉（季號等於方括號集號時；M1 票 14f 已修，這 5 個之後
-  讀得出季號、不再走到絕對編號換算）；只比三個主標題，放行 328 個、一個不漏，
-  但無職轉生那 5 個是因為 TMDB 英文標題 `Mushoku Tensei: Jobless Reincarnation` 比羅馬字長才擋下，同一種寫法換成
-  英文標題就是 `SPY x FAMILY` 的作品就會入錯。近似的限制：Mikan 只有標題沒有檔名、樣本以中文字幕組與動漫為主。
+- **動漫跨季連號換算得對**：SubsPlease `Spy x Family - 26`–`37`、`Boku no Hero Academia - 139`、Erai-raws `One Piece - 1089 ~ 1104`；TMDB 航海王第 22 季沿用官方集數當 `episode_number`（S22E1089–1155），所以只有 absolute group 換對，各季累加換成 S22E01 是錯的。
+- **非動漫的「集號」可能是另一套數法**：《Home and Away》`Episode.8214.2024-02-29` 累加換成 S37E32，TMDB 的 S37E39 才是 `Episode 8214`（TMDB 前 36 季比官方多收 7 集）；`The.Return.of.Superman.E079.150524` 換成 S03E21 是對的。**「是不是動漫」預測不了換算對錯**（ADR 0003 移除 Route profile 的依據，見研究檔 §0）。
+- **字幕組每 cour 重數、篇章名只寫羅馬字會被當絕對編號**：Erai-raws `Bleach - Sennen Kessen Hen - Soukoku Tan - 01 ~ 14` 換成 S01E01–14，正解 S02E27–40。
+- **`guessit` 預設把韓國電視台 `YYMMDD` 讀錯**：`150524` 讀成 2024-05-15（本機實測），要加 `date_year_first`（[guessit 文件](https://guessit-io.github.io/guessit) `-Y, --date-year-first`）；加上後讀成 2015-05-24，四位數年份不受影響。
+- 韓劇第二季以後、檔名沒有季號的 `Show.2.E01.YYMMDD` 在 TPB、Knaben、dmhy 都沒找到，第二季發佈全部帶 `S02E`。
+- **「集號 ≤ 第一季集數就送審核」擋下的多半是對的**（2026-09-17，M1 票 14d，[研究 §6.1.1](research/profile-effect.md#611-規則-1-的代價m1-票-14d-第-1-步2026-09-17)，`scripts/experiments/absolute_rule_cost.py`）：5 部 ≥ 2 季的 Mikan 發佈走到絕對編號換算的檔案裡，集號 ≤ 第一季集數的**正解在第一季 928 個、在後面某季 167 個**；超過的 1,219 對、54 錯（錯的全是播出日對不上、退回序位，本身存疑）。「標題有認不出的多餘字」分不開兩者（連 TMDB `titles` 比放行 793 個第一季、漏 14 個後面季；只比三個主標題放行 328 個不漏，但英文標題同寫法的作品會入錯），故維持原形。限制：Mikan 只有標題沒有檔名、樣本以中文字幕組與動漫為主。
 
-**Jellyfin 動漫命名的社群痛點**
+**Jellyfin 動漫命名的社群痛點**：
 
-- One Piece / Detective Conan 這類長篇：TVDB arc 順序 vs 絕對編號長期無解（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1sny587/one_piece_tvdb_arc_order_vs_absolute_episode)、[tvdb-plugin#91](https://github.com/jellyfin/jellyfin-plugin-tvdb/issues/91)）。本系統只承諾「與 TMDB 一致」，不承諾符合任何一種社群偏好。
+- One Piece / Detective Conan 這類長篇的 TVDB arc 順序 vs 絕對編號長期無解（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1sny587/one_piece_tvdb_arc_order_vs_absolute_episode)、[tvdb-plugin#91](https://github.com/jellyfin/jellyfin-plugin-tvdb/issues/91)）；本系統只承諾「與 TMDB 一致」，不承諾符合任何社群偏好。
 - Split-cour 被 Jellyfin 併成一季的抱怨很多（[r/jellyfin](https://www.reddit.com/r/jellyfin/comments/1r5sk02/any_way_to_have_anime_seasons_shown_in_parts_like)）；本系統不對抗 provider，只做正確對應。
-- Sonarr FAQ 也承認 Bleach TYBW 這類新 arc 只有在編號與 TVDB 對上時才會自動匹配；絕對編號缺失時需等 TVDB 更新。
+- Sonarr FAQ 承認 Bleach TYBW 這類新 arc 只有編號與 TVDB 對上才自動匹配。
 
-**mediainfo（pymediainfo 7.0.1，2026-09-11 對真檔案實測）**
+**mediainfo（pymediainfo 7.0.1，2026-09-11 對真檔案實測）**：
 
-- `pip install pymediainfo` 的 wheel **內含 libmediainfo**，不需要系統套件（[README](https://github.com/sbraz/pymediainfo)）；在這台 Windows 上 `MediaInfo.can_parse()` 直接回 `True`。
-- `MediaInfo.parse(path)` 回一份 track 清單，`track.to_data()` 是那一條的所有欄位。**同一個 `duration` 在不同 track 上型別不同**：General 上是整數毫秒（`2023`），Video 上是字串（`"2000.000000"`）——照抄任一邊的型別去讀另一邊都會拿到錯的值。
-- 布林是字串 `"Yes"` / `"No"`（`forced`、`default`）；語言是兩碼（`ja` / `en` / `zh`），`other_language` 另有一組別名。繁簡分不出來，所以字幕軌的繁簡只寫在 `title` 裡（與 §20.1 的 Jellyfin 同一個限制）。
-- 讀得完但不是媒體的檔案（例如一個 `.txt`）**不會丟例外**，回的是一份只有 General 的清單——所以「有沒有影像軌」才是「這是不是一個影片」的判準，而不是例外。
-- 證據：`tests/fixtures/mediainfo/two-second-episode.mkv`（ffmpeg 造的 17 KB Matroska：10 bit AVC + 兩條標了語言的音軌 + 兩條標了 forced / default 的字幕軌）與 `tests/unit/test_mediainfo.py`。
+- `pip install pymediainfo` 的 wheel **內含 libmediainfo**，不需系統套件（[README](https://github.com/sbraz/pymediainfo)）。
+- `MediaInfo.parse(path)` 回 track 清單，`track.to_data()` 是該條所有欄位。**同一個 `duration` 型別不同**：General 是整數毫秒（`2023`），Video 是字串（`"2000.000000"`）。
+- 布林是字串 `"Yes"` / `"No"`（`forced`、`default`）；語言兩碼（`ja` / `en` / `zh`），`other_language` 另有別名；繁簡分不出來，字幕軌繁簡只寫在 `title`（與 §20.1 的 Jellyfin 同一限制）。
+- 讀得完但不是媒體的檔案（如 `.txt`）**不丟例外**，回只有 General 的清單——所以「有沒有影像軌」才是「是不是影片」的判準。
+- 證據：`tests/fixtures/mediainfo/two-second-episode.mkv`、`tests/unit/test_mediainfo.py`。
 
 ### 20.5 名稱衝突檢查
 
-以 tavily basic 搜尋 GitHub / npm / PyPI / Docker Hub / App Store，非窮盡商標檢索。
+以 tavily basic 搜尋 GitHub / npm / PyPI / Docker Hub / App Store，非窮盡商標檢索。完整比對表在 [`docs/research/name-conflict-check.md`](research/name-conflict-check.md#205-名稱衝突檢查)。
 
-| 名稱 | 評級 | 證據 |
-| --- | --- | --- |
-| Berth | 可用（已定案） | 精確比對（2026-09-07）：GitHub 無同領域專案，最接近的是 macOS SSH 客戶端 xinghelee/Berth（31★）；PyPI `berth` 是 2017 年停更的打包工具；npm `berth` 已標記 deprecated；Docker Hub 有 `berth/` 組織（舊 OpenStack 容器化專案，已停）。本系統以 `ghcr.io/<owner>/berth` 發佈，不需要這三個註冊名。 |
-| Lading | 可用 | 未找到同名軟體專案 |
-| Cleat | 可用 | 未找到同名軟體專案 |
-| Longshore | 可用 | 僅人名 |
-| Mooring | 可用 | 未找到同名軟體專案 |
-| Keelhaul | 可用 | 僅文化典故 |
-| Wharf | 輕微 | 數個小型不活躍專案（iver-wharf 等） |
-| Gangway | 輕微 | VMware 已封存的 k8s OIDC 工具 |
-| Drayage | 輕微 | 小型 Docker volume 遷移工具 |
-| Dockhand | **衝突** | 現役自託管 Docker 管理工具，5.8k★，同為 homelab 領域（[Finsys/dockhand](https://github.com/Finsys/dockhand)） |
-| Stow | **衝突** | GNU Stow |
-| Quay | **衝突** | Red Hat Quay |
-| Tally | **衝突** | TallyPrime 會計軟體與同名自託管記帳 App |
-| Stevedore | **衝突** | OpenStack stevedore（PyPI plugin 載入套件） |
+- **Berth：可用（已定案）**。精確比對（2026-09-07）：GitHub 無同領域專案，最接近的是 macOS SSH 客戶端 xinghelee/Berth（31★）；PyPI `berth` 是 2017 年停更的打包工具；npm `berth` 已標記 deprecated；Docker Hub 有 `berth/` 組織（舊 OpenStack 容器化專案，已停）。本系統以 `ghcr.io/<owner>/berth` 發佈，不需要這三個註冊名。
+- 備選名稱：Lading、Cleat、Longshore、Mooring、Keelhaul 可用；Wharf、Gangway、Drayage 輕微衝突；Dockhand（5.8k★ 自託管 Docker 管理工具）、Stow、Quay、Tally、Stevedore **衝突**。
 
 ### 20.6 實作前必做的實驗【研究】
 
-**已完成（2026-09-07，票 04）**。完整結果與量測方式在
-[`docs/research/m0-experiments.md`](research/m0-experiments.md)，腳本在 `scripts/experiments/`，
-可重跑。以下只留結論與尚未完成的項目。
+**已完成（2026-09-07，票 04）**。完整結果與量測方式在 [`docs/research/m0-experiments.md`](research/m0-experiments.md)，腳本在 `scripts/experiments/`，可重跑；brief 原記載的逐條清單在同檔 [〈從 brief 搬來（§20.6）〉](research/m0-experiments.md#從-brief-搬來206)。結論與尚未完成的項目：
 
-- ~~在 Windows Docker Desktop 的 NTFS bind mount 測硬鏈接~~、~~在 Linux 的 ext4 bind mount 跑同一腳本~~
-  **都通過**（`hardlink.sh`：NTFS 9p bind mount 與 ext4 bind mount 皆 nlink=2、inode 相同；
-  分成兩個 volume 則回 `Cross-device link` 並退出 1）。**但 ext4 那一輪跑的是 Docker Desktop
-  自己的 Linux VM（`docker-desktop` 發行版）**，是 daemon 端的檔案系統，不是另一台實體 Linux
-  宿主。原生 Linux 已在 2026-10-09 跑過（M4 票 42，§20.14）；**剩下：至少一台 NAS**（Synology / QNAP / TrueNAS 其一），
-  `sh hardlink.sh /volume1/<share>` 即可。Unraid 7.1.4 的 user share 已在 2026-10-08 跑過（M4 票 55，§20.14）。
-- ~~標籤內含中文~~ **12.x 已實測是純 tag**（`docs/research/jellyfin-12.md`），見 §20.1「多版本」。
-- ~~qBittorrent 4.4 與 5.x 的參數相容測試~~ **完成**，見 §20.7「qBittorrent 版本矩陣」。
-- ~~Jellyfin 10.10/10.11 的命名實測~~ **完成**，見 §20.7「Jellyfin 命名實測」。§7.2 的電影範例與
-  §7.7 的版本標籤說法已據此更正；plan §5 的模板凍結。
-- ~~`WebUI\ServerDomains=qbittorrent` 是否足以通過 Host 檢查~~ **完成**：足夠，但代價是使用者從
-  `localhost:8080` 進不了 WebUI，所以維持不預置（§20.7、plan §9.2）。
-- ~~Prowlarr `config/host` 設定 Forms 帳密的欄位名~~ **完成**，見 §20.7「Prowlarr」。
-- 建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0。→ M1 解析器票。
-- ~~抓一份 Mikan（我的訂閱、單作品 + 字幕組）與 Nyaa（搜尋）的實際 RSS，確認擴充欄位名
-  （infoHash、大小、做種數、enclosure、發佈時間），寫成 adapter 的 fixture。~~ **完成（2026-09-25，M3 票 07）**，
-  連 acg.rip 一起，見 §20.12。
-- ~~抽 10 部動漫，量化**字幕組編號**對三種來源的換算失敗率：TMDB 季集、TVDB default(aired) season、TVDB absolute~~ **完成（2026-09-09，M1 票 01）**：7,833 筆真實釋出，TMDB 8.0% / TVDB aired 7.6% / TVDB absolute 7.6%。§10 的【研究】據此結案為**維持 TMDB**，完整結果與方法在 [`docs/research/anime-episode-source.md`](research/anime-episode-source.md)，腳本 `scripts/experiments/anime_episode_source.py` 可重跑。順帶推翻兩件事：§20.3 的合併政策比原記載更激進（TMDB 連**獨立的連續季**也在併，咒術 3 季→1 季、Re:Zero 4 季→1 季），以及 **TVDB 的 absolute 會把 OVA 與劇場版也編號**（SPY×FAMILY 的 CODE: White 佔掉 absolute 38），所以 absolute ≠ 正篇第幾集。
+- **硬鏈接通過**（`hardlink.sh`）：NTFS 9p bind mount 與 ext4 bind mount 皆 nlink=2、inode 相同；分成兩個 volume 回 `Cross-device link` 並退出 1。但 ext4 那一輪跑的是 Docker Desktop 自己的 Linux VM（`docker-desktop` 發行版），不是另一台實體 Linux 宿主。原生 Linux 已在 2026-10-09 跑過（M4 票 42，§20.14）；Unraid 7.1.4 user share 已在 2026-10-08 跑過（M4 票 55，§20.14）。**剩下：至少一台 NAS**（Synology / QNAP / TrueNAS 其一），`sh hardlink.sh /volume1/<share>` 即可。
+- 標籤含中文：12.x 已實測是純 tag（`docs/research/jellyfin-12.md`），見 §20.1「多版本」。
+- qBittorrent 4.4 與 5.x 參數相容：完成，見 §20.7「qBittorrent 版本矩陣」。`WebUI\ServerDomains=qbittorrent` 足以通過 Host 檢查，但使用者從 `localhost:8080` 進不了 WebUI，所以維持不預置（§20.7、plan §9.2）。Prowlarr `config/host` Forms 帳密欄位名：完成，見 §20.7「Prowlarr」。
+- Jellyfin 10.10/10.11 命名實測：完成，見 §20.7「Jellyfin 命名實測」。§7.2 電影範例與 §7.7 版本標籤說法已據此更正；plan §5 的模板凍結。
+- Mikan / Nyaa 實際 RSS 擴充欄位（infoHash、大小、做種數、enclosure、發佈時間）：完成（2026-09-25，M3 票 07，含 acg.rip），見 §20.12。
+- **未完成**：建立 20 筆真實 torrent fixture（動漫 8、美劇/韓劇 8、電影 4）作為 benchmark v0 → M1 解析器票。
+- 字幕組編號換算失敗率：完成（2026-09-09，M1 票 01）。7,833 筆真實釋出，TMDB 8.0% / TVDB aired 7.6% / TVDB absolute 7.6%；§10 的【研究】據此結案為**維持 TMDB**。方法與結果在 [`docs/research/anime-episode-source.md`](research/anime-episode-source.md)，腳本 `scripts/experiments/anime_episode_source.py`。順帶推翻兩件事：§20.3 合併政策比原記載更激進（TMDB 連獨立的連續季也併，咒術 3 季→1 季、Re:Zero 4 季→1 季）；**TVDB absolute 會把 OVA 與劇場版也編號**（SPY×FAMILY 的 CODE: White 佔掉 absolute 38），所以 absolute ≠ 正篇第幾集。
 
 ### 20.7 開箱即用所需的 API 與 Windows Docker 事實
 
-**Windows Docker Desktop 硬鏈接（本機實測，2026-09-07）**
+細節（完整實測原文、fixture 位置、原始碼連結）在 [`research/setup-api-facts.md`](research/setup-api-facts.md)；本節只留結論、決定性的數字 / 參數 / 狀態碼與查證日期。
 
-- 環境：Windows 11、Docker Desktop 29.6.2（WSL2 後端）、NTFS 系統碟。把同一個 Windows 目錄 bind mount 為 `/data`，容器內對 `/data/torrent/complete/a.bin` 做 `ln` 到 `/data/library/b.bin`：**成功**，兩者 `dev=70`、inode 相同、`nlink=2`；掛載型態為 `9p (aname=drvfs)`。宿主端 `fsutil hardlink list` 列出兩個路徑，證明是真正的 NTFS 硬鏈接。
-- 把 `torrent/` 與 `library/` 分開掛成兩個 bind mount：`ln: Cross-device link`，與 Linux 行為一致（單一掛載根的規則不變）。
-- Docker named volume（WSL2 內 ext4）：成功。
-- 結論：**Windows 使用者可以用一般的 bind mount**（`DATA_ROOT=D:\Berth\data`），不需要 named volume；exFAT 隨身碟不支援硬鏈接（[TRaSH](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)）。§4.4 的「不退回複製」維持。
-- 其他查證：named volume 可從 `\\wsl.localhost\docker-desktop\mnt\docker-desktop-disk\data\docker\volumes\` 瀏覽；WSL2 VHD 預設上限 1 TB（[Microsoft](https://learn.microsoft.com/en-us/windows/wsl/disk-space)）；搬移 VHD 的設定介面有多起失效回報（[docker/for-win#13269](https://github.com/docker/for-win/issues/13269)）→ 這些都是不用 named volume 的理由。bind mount 經 9p 的吞吐比 volume 低（[Docker blog](https://www.docker.com/blog/file-sharing-with-docker-desktop)），下載寫入會慢一些，硬鏈接本身是 metadata 操作不受影響。
+**Windows Docker Desktop 硬鏈接**（本機實測，2026-09-07；Windows 11、Docker Desktop 29.6.2 WSL2、NTFS；[細節](research/setup-api-facts.md#windows-docker-desktop-硬鏈接)）
 
-**Jellyfin 初始化與插件 API**（[OpenAPI](https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json)、[FirstTimeSetupHandler.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Auth/FirstTimeSetupPolicy/FirstTimeSetupHandler.cs)）
+- 同一個 Windows 目錄 bind mount 成 `/data`，容器內 `ln` 成功（`dev=70`、inode 相同、`nlink=2`，掛載型態 `9p (aname=drvfs)`，宿主端 `fsutil hardlink list` 證實是真 NTFS 硬鏈接）。`torrent/` 與 `library/` 拆成兩個 bind mount：`ln: Cross-device link`，與 Linux 相同（單一掛載根的規則不變）。named volume（WSL2 ext4）也成功。
+- 結論：**Windows 用一般 bind mount**（`DATA_ROOT=D:\Berth\data`），不需要 named volume；exFAT 不支援硬鏈接（[TRaSH](https://trash-guides.info/File-and-Folder-Structure/Hardlinks-and-Instant-Moves/)）；§4.4 的「不退回複製」維持。
+- 不用 named volume 的理由：WSL2 VHD 預設上限 1 TB（[Microsoft](https://learn.microsoft.com/en-us/windows/wsl/disk-space)）、搬 VHD 的設定介面多起失效（[docker/for-win#13269](https://github.com/docker/for-win/issues/13269)）。bind mount 經 9p 吞吐較低（[Docker blog](https://www.docker.com/blog/file-sharing-with-docker-desktop)），下載寫入較慢，硬鏈接是 metadata 操作不受影響。
+
+**Jellyfin 初始化與插件 API**（[OpenAPI](https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json)、[FirstTimeSetupHandler.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Auth/FirstTimeSetupPolicy/FirstTimeSetupHandler.cs)；[細節](research/setup-api-facts.md#jellyfin-初始化與插件-api)）
 
 - `GET /System/Info/Public` 無需憑證，回 `StartupWizardCompleted`。
-- `POST /Startup/Configuration`（`ServerName`、`UICulture`、`MetadataCountryCode`、`PreferredMetadataLanguage`）、`POST /Startup/User`（`Name`、`Password`）、`POST /Startup/RemoteAccess`（只有 `EnableRemoteAccess`，沒有 `EnableAutomaticPortMapping`）、`POST /Startup/Complete`，以及 **`GET/POST/DELETE /Library/VirtualFolders`**，都掛 `FirstTimeSetupOrElevated` 政策：精靈未完成時匿名可呼叫，完成後需管理員 token。
-- `POST /Library/VirtualFolders?name=&collectionType=&paths=&refreshLibrary=`，`collectionType` 可為 `movies` / `tvshows` / `music` / `musicvideos` / `homevideos` / `boxsets` / `books` / `mixed`；body `{LibraryOptions}` 含 `PathInfos`、`EnableRealtimeMonitor`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`TypeOptions[]`、`SeasonZeroDisplayName`、`EnableAutomaticSeriesGrouping`、`EnableEmbeddedTitles`、`AutomaticRefreshIntervalDays`。
-- 為既有媒體庫加路徑：`POST /Library/VirtualFolders/Paths?refreshLibrary=`，body `MediaPathDto {Name, Path, PathInfo{Path}}`；移除為 `DELETE /Library/VirtualFolders/Paths?name=&path=`。路徑驗證：`POST /Environment/ValidatePath`，body `{ValidateWritable, Path, IsFile}`；另有 `GET /Environment/DirectoryContents?path=`。兩組都是 `FirstTimeSetupOrElevated`（本機對 OpenAPI 直接查核，2026-09-07）。
-- **`POST /Environment/ValidatePath` 看得到回 204、看不到回 404**：`IsFile: true` 時走 `File.Exists`、`false` 時走 `Directory.Exists`、不給則兩者皆否才算沒有；`ValidateWritable: true` 會讓 Jellyfin 自己在那裡建一個暫存檔再刪掉，Berth 不送它——要問的只是「你看不看得到我寫的這一個」（查核 master 的 [EnvironmentController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/EnvironmentController.cs)，2026-09-08）。**404 是答案不是失敗**，adapter 因此把它翻成 `False` 而不是例外。
-- `GET/POST /Repositories`（`{Name, Url, Enabled}`）、`POST /Packages/Installed/{name}?assemblyGuid=&version=&repositoryUrl=`、`POST /System/Restart`、`GET /ScheduledTasks`、`POST /ScheduledTasks/Running/{taskId}` 都需管理員（`RequiresElevation`）。
-- MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`，套件名 `Merge Versions`，GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` 與 `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)），觸發時要用 `GET /ScheduledTasks` 回傳的 `Id`，不是 `Key`。
+- `POST /Startup/Configuration`（`ServerName`、`UICulture`、`MetadataCountryCode`、`PreferredMetadataLanguage`）、`POST /Startup/User`（`Name`、`Password`）、`POST /Startup/RemoteAccess`、`POST /Startup/Complete`，以及 **`GET/POST/DELETE /Library/VirtualFolders`**，都掛 `FirstTimeSetupOrElevated`：精靈未完成時匿名可呼叫，完成後需管理員 token。`POST /Startup/RemoteAccess` Berth 只送 `EnableRemoteAccess`（10.11.11 schema 其實也有 `EnableAutomaticPortMapping`）。
+- `POST /Library/VirtualFolders?name=&collectionType=&paths=&refreshLibrary=`：`collectionType` 為 `movies` / `tvshows` / `music` / `musicvideos` / `homevideos` / `boxsets` / `books` / `mixed`；body `{LibraryOptions}` 含 `PathInfos`、`EnableRealtimeMonitor`、`PreferredMetadataLanguage`、`MetadataCountryCode`、`TypeOptions[]`、`SeasonZeroDisplayName`、`EnableAutomaticSeriesGrouping`、`EnableEmbeddedTitles`、`AutomaticRefreshIntervalDays`。
+- 既有媒體庫加路徑 `POST /Library/VirtualFolders/Paths?refreshLibrary=`，body `MediaPathDto {Name, Path, PathInfo{Path}}`；移除 `DELETE /Library/VirtualFolders/Paths?name=&path=`。路徑驗證 `POST /Environment/ValidatePath`，body `{ValidateWritable, Path, IsFile}`；另有 `GET /Environment/DirectoryContents?path=`。兩組皆 `FirstTimeSetupOrElevated`（OpenAPI 直接查核，2026-09-07）。
+- **`ValidatePath` 看得到回 204、看不到回 404**：`IsFile: true` 走 `File.Exists`、`false` 走 `Directory.Exists`、不給則兩者皆否才算沒有（[EnvironmentController.cs](https://github.com/jellyfin/jellyfin/blob/master/Jellyfin.Api/Controllers/EnvironmentController.cs)，2026-09-08）。**404 是答案不是失敗**，adapter 翻成 `False` 不丟例外。Berth 不送 `ValidateWritable: true`（Jellyfin 會自己建暫存檔再刪）。
+- 需管理員（`RequiresElevation`）：`GET/POST /Repositories`（`{Name, Url, Enabled}`）、`POST /Packages/Installed/{name}?assemblyGuid=&version=&repositoryUrl=`、`POST /System/Restart`、`GET /ScheduledTasks`、`POST /ScheduledTasks/Running/{taskId}`。
+- MergeVersions：manifest `https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json`、套件名 `Merge Versions`、GUID `f21bbed8-3a97-4d8b-88b2-48aaa65427cb`；排程任務 `Key` 為 `MergeMoviesTask` / `MergeEpisodesTask`（[RefreshLibraryTask.cs](https://github.com/danieladov/jellyfin-plugin-mergeversions/blob/master/Jellyfin.Plugin.MergeVersions/ScheduledTasks/RefreshLibraryTask.cs)）。**觸發要用 `GET /ScheduledTasks` 回的 `Id`，不是 `Key`**；`Id` 不跨安裝相同（實測那台 `MergeMoviesTask=fd957c84b0cfc2380becf2893e4b76fc`、`MergeEpisodesTask=dcaf151dd1af25aefe775c58e214477e`），一律現讀。本系統只支援 12 以上、不再安裝它（§19、§20.9）。
 
-**Jellyfin 精靈序列實測**（2026-09-07，票 06；`jellyfin/jellyfin:10.11.11`，由 Berth 自己的 adapter 跑完 plan §9.4 全序列並錄下回應，fixture 在 `tests/fixtures/http/jellyfin/`）
+**Jellyfin 精靈序列實測**（2026-09-07，票 06；`jellyfin/jellyfin:10.11.11`，Berth adapter 跑完 plan §9.4 全序列，fixture 在 `tests/fixtures/http/jellyfin/`；[細節](research/setup-api-facts.md#jellyfin-精靈序列實測)）
 
-- **`POST /Auth/Keys?app=` 回 204 而且不回傳 key**，只能再 `GET /Auth/Keys` 從 `Items[].AppName` 找回來。它**不檢查重複**：同一個 `app` 按兩次就有兩把 `AppName="Berth"` 的 key。所以要先列再建、建完再列。
-- **`POST /Library/VirtualFolders` 同名不會被拒**：第二次一樣回 204，並建出名為 `Movies2` 的第二個媒體庫指向同一個路徑。冪等要靠呼叫端先 `GET /Library/VirtualFolders`。
-- **`POST /Library/VirtualFolders/Paths` 不去重**：同一條路徑送兩次，該媒體庫的 `Locations` 就有兩個一樣的字串。目錄不存在時回 **404**（`Error processing request.`），所以路徑要先由 Berth 建好——Berth 與 Jellyfin 掛同一個宿主目錄在同一個容器路徑（§16.4），建完 Jellyfin 立刻看得到。**那一句說不出原因**（2026-09-30 對 12.1 的 `bad-jellyfin-elsewhere` 再測，M4 票 19）：Jellyfin 看不到目錄與**媒體庫不存在**回的是同一個 `404` + `Error processing request.`（`text/plain`），`The path does not exist` 只在它自己的 log。所以 Berth 在送之前先寫探測檔、以 `ValidatePath {IsFile: true}` 問它。**不問目錄本身**：linuxserver 的 Jellyfin image 自己就有一個空的 `/data`，沒掛任何東西時 `ValidatePath {Path: "/data", IsFile: false}` 也是 204。
-- **`LibraryOptions.TypeOptions[]` 省略 `ImageFetchers` 會被存成空陣列**（實測送 `{Type, MetadataFetchers, MetadataFetcherOrder}` 讀回來 `ImageFetchers: []`），該類型從此不抓圖。要嘛整個 `TypeOptions` 留空用 Jellyfin 的預設，要嘛兩種 fetcher 都給值。
-- **`GET /Libraries/AvailableOptions?libraryContentType=movies|tvshows`** 回這台伺服器實際裝了哪些 fetcher（`{Name, Type}` 物件陣列），政策是 `FirstTimeSetupOrDefault`，精靈期間匿名讀得到。乾淨的 10.11.11：Movie 的 metadata 是 `TheMovieDb` / `The Open Movie Database`，image 多了 `Embedded Image Extractor` / `Screen Grabber`；tvshows 分 Series / Season / Episode 三個型別。裝了官方 TVDB 插件之後每個型別各多一個 `TheTVDB`，Series 還多 `Missing Episode Fetcher` —— 這正是「image fetcher 不可以寫死」的證據。
-- **登入 token 與 API key 在標頭裡是同一個形狀**：`Authorization: MediaBrowser Client="…", Device="…", DeviceId="…", Version="…", Token="<token 或 key>"`，兩者都吃得下 `RequiresElevation` 的端點。
-- **重啟的三個階段**：`POST /System/Restart` 當下連線直接被切（httpx 的 `RemoteProtocolError`）→ 一段時間所有端點回 **503** → 才回 200。所以「還沒好」有兩種形狀（連不上與 503），輪詢兩種都要當成繼續等。
-- `StartupRemoteAccessDto` 在 10.11.11 的 schema **有** `EnableAutomaticPortMapping`（本節前面說「沒有」是過時的），但 Berth 只送 `EnableRemoteAccess`。
-- MergeVersions 的排程任務 `Id` 在這台是 `MergeMoviesTask=fd957c84b0cfc2380becf2893e4b76fc`、`MergeEpisodesTask=dcaf151dd1af25aefe775c58e214477e`。**不要假設它跨安裝相同**，一律從 `GET /ScheduledTasks` 讀。
-- 整段九步對真伺服器跑完 **69 秒**（大半花在插件下載與重啟）；第二次跑 **0.2 秒**，除了第 1 步之外全部是 `skipped`。
+- **`POST /Auth/Keys?app=` 回 204 且不回傳 key**，只能再 `GET /Auth/Keys` 從 `Items[].AppName` 找；**不檢查重複**，按兩次就有兩把 `AppName="Berth"`。所以先列再建、建完再列。
+- **`POST /Library/VirtualFolders` 同名不會被拒**：第二次也回 204，建出 `Movies2` 指向同一路徑；冪等靠呼叫端先 `GET /Library/VirtualFolders`。
+- **`POST /Library/VirtualFolders/Paths` 不去重**（同路徑送兩次 `Locations` 有兩個一樣的字串）；目錄不存在回 **404** `Error processing request.`，所以 Berth 先建目錄（與 Jellyfin 掛同一個容器路徑，§16.4）。
+- **404 說不出原因**（2026-09-30 對 12.1 的 `bad-jellyfin-elsewhere` 再測，M4 票 19）：Jellyfin 看不到目錄與**媒體庫不存在**是同一個 `404` + `Error processing request.`（`text/plain`），`The path does not exist` 只在它自己的 log。所以 Berth 送之前先寫探測檔、以 `ValidatePath {IsFile: true}` 問。**不問目錄本身**：linuxserver 的 Jellyfin image 自帶空的 `/data`，沒掛任何東西時 `{Path: "/data", IsFile: false}` 也回 204。
+- **`LibraryOptions.TypeOptions[]` 省略 `ImageFetchers` 會被存成空陣列**（送 `{Type, MetadataFetchers, MetadataFetcherOrder}` 讀回 `ImageFetchers: []`），該類型從此不抓圖。要嘛整個 `TypeOptions` 留空用預設，要嘛兩種 fetcher 都給。
+- **`GET /Libraries/AvailableOptions?libraryContentType=movies|tvshows`** 回伺服器實際裝了哪些 fetcher（`{Name, Type}` 陣列），政策 `FirstTimeSetupOrDefault`，精靈期間匿名可讀。乾淨 10.11.11 的 Movie metadata 是 `TheMovieDb` / `The Open Movie Database`，image 多 `Embedded Image Extractor` / `Screen Grabber`；tvshows 分 Series / Season / Episode。裝官方 TVDB 插件後每型別多一個 `TheTVDB`，Series 另多 `Missing Episode Fetcher` —— 「image fetcher 不可寫死」的證據。
+- **登入 token 與 API key 標頭同形**：`Authorization: MediaBrowser Client="…", Device="…", DeviceId="…", Version="…", Token="<token 或 key>"`，兩者都吃得下 `RequiresElevation`。
+- **重啟三階段**：`POST /System/Restart` 當下連線被切（httpx `RemoteProtocolError`）→ 一段時間所有端點回 **503** → 才回 200；輪詢要把「連不上」與 503 都當繼續等。
+- 九步序列對真伺服器 **69 秒**（多花在插件下載與重啟）；第二次 **0.2 秒**，除第 1 步外全 `skipped`。
 
-**Prowlarr**（[OpenAPI](https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/src/Prowlarr.Api.V1/openapi.json)、[supported-indexers](https://wiki.servarr.com/prowlarr/supported-indexers)、[environment-variables](https://wiki.servarr.com/prowlarr/environment-variables)）
+**Prowlarr**（[OpenAPI](https://raw.githubusercontent.com/Prowlarr/Prowlarr/develop/src/Prowlarr.Api.V1/openapi.json)、[supported-indexers](https://wiki.servarr.com/prowlarr/supported-indexers)、[environment-variables](https://wiki.servarr.com/prowlarr/environment-variables)；[細節](research/setup-api-facts.md#prowlarr-api)）
 
-- `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`DELETE /api/v1/indexer/{id}`（回 200，OpenAPI）、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**，單站 Torznab 為 `/{id}/api?t=search&apikey=`。
-- **`indexer/schema` 的第一次呼叫很慢**（2026-09-08 票 11 M0 驗收實測）：容器剛起來時它要把 627 份 Cardigann 定義從 `/config` 讀進來再組出 **5.6 MB** 的回應，Windows Docker Desktop 的 9p bind mount 上量到 **9.42 秒**；同一支端點第二次 0.34 秒。慢的儲存（NAS）只會更久，所以這一支必須有自己的逾時，不能沿用探測用的 5 秒。**未量測**：成因是冷容器從 `/config` 讀那 627 份定義，不是回應大小，所以同一時刻的 `config/host` 理論上也慢；它目前仍用 5 秒，沒有數據支持那樣安全。
-- API key 在 `config.xml` 的 `<ApiKey>`，可用 `PROWLARR__AUTH__APIKEY` 預設。
+- `GET /api/v1/indexer/schema`、`GET/POST /api/v1/indexer`、`DELETE /api/v1/indexer/{id}`（回 200）、`POST /api/v1/indexer/test`；`GET /api/v1/search?query=&indexerIds=&categories=&type=` 回 `ReleaseResource`（`title`、`size`、`seeders`、`leechers`、`downloadUrl`、`magnetUrl`、`infoHash`、`indexer`、`categories`、`publishDate`、`guid`、`infoUrl`、`tmdbId` …）。Prowlarr 明言**不提供跨站聚合 Torznab**（所以搜尋走 REST），單站 Torznab 為 `/{id}/api?t=search&apikey=`。
+- **`indexer/schema` 第一次呼叫很慢**（2026-09-08 票 11 M0 驗收）：容器剛起來要從 `/config` 讀 **627 份** Cardigann 定義、組出 **5.6 MB** 回應，Windows Docker Desktop 9p bind mount 上 **9.42 秒**；第二次 0.34 秒。NAS 只會更久，所以這一支要有自己的逾時（現為 60 秒），不沿用探測的 5 秒。**未量測**：成因是冷讀定義而非回應大小，同時刻 `config/host` 理論上也慢，目前仍用 5 秒、沒有數據證明安全。
+- API key 在 `config.xml` 的 `<ApiKey>`（首次啟動即產生，32 字元），可用 `PROWLARR__AUTH__APIKEY` 預設。
 - 支援的公開索引站含：Nyaa.si、dmhy、AniDex、Anime Tosho、ACG.RIP、**Mikan**、1337x、YTS、EZTV、The Pirate Bay；TorrentGalaxy 目前不在清單。
 
-**Prowlarr 索引站與 TMDB 憑證實測**（2026-09-08，票 08；Prowlarr 2.5.2.5491，fixture 在
-`tests/fixtures/http/prowlarr/` 與 `tests/fixtures/http/tmdb/`）
+**Prowlarr 索引站與 TMDB 憑證實測**（2026-09-08，票 08；Prowlarr 2.5.2.5491，fixture 在 `tests/fixtures/http/prowlarr/` 與 `tests/fixtures/http/tmdb/`；[細節](research/setup-api-facts.md#prowlarr-索引站與-tmdb-憑證實測)）
 
-- **`POST /api/v1/indexer` 會先連一次那個站再存**：成功回 201 與整份資源；連不上回 **400 加一個陣列**，
-  每列是 `{isWarning, propertyName, errorMessage, severity}`。站沒有被建立。所以「逐站成敗」來自新增
-  那一支，`indexer/test` 是給**已經存在**的站用的（回 200 空物件）。`?forceSave=true` **不會**跳過這個檢查。
-  **測試通過不保證新增成功**：新增那一次是另一次連站，時好時壞的站兩次結果可能不同（2026-10-06 審計實測
-  Internet Archive：`indexer/test` 通過、緊接著新增回「連不上」，`docs/research/wizard-audit-2026-10-06.md` S1 頁 4）。
-  頁 4 的主鍵因此把「測過而加不進去」與「測試就沒過」分開記（M4 票 44）。
-- **同名的第二個站被拒**：400 `{"propertyName": "Name", "errorMessage": "Should be unique"}`。冪等只能靠
-  呼叫端先 `GET /api/v1/indexer`。
-- schema 的 `appProfileId` 是 **0**，原樣送回去建不起來；要換成 `1`（Prowlarr 內建的同步設定檔）。
-- 十個預設站的 `definitionName` 實測為 `nyaasi`、`dmhy`、**`Anidex`**（不是文件寫的 `AniDex`）、
-  `animetosho-xyz`（唯一 `semiPrivate`）、`acgrip`、`mikan`、`1337x`、`yts`、`eztv`、`thepiratebay`。
-  站名 Prowlarr 自己會改，機器名不會，所以清單釘 `definitionName`。
-- 本機這一輪十個站有五個加得起來、五個失敗（`nyaasi` 查得到但沒有結果、`Anidex` 與
-  `animetosho-xyz` 連不上、`1337x` 與 `eztv` 被 CloudFlare 擋）。**幾個公開站連不上是常態**，UI 因此逐站顯示而不是整批成敗。
-  另外：容器預設的憑證驗證會擋下 TLS 被攔截的環境（`config/host.certificateValidation`），那是使用者
-  環境的事，Berth 不改它。
-- **每個定義帶 `language` 與 `description`**（2026-09-24 / 09-25 在 Prowlarr 2.5.2.5491 實測，OpenAPI 的
-  `IndexerResource` 兩者皆為 nullable string）：`language` 是 BCP 47（dmhy `zh-TW`、ACG.RIP / Mikan `zh-CN`、
-  其餘 `en-US`），`description` 是一句英文（「dmhy is a TAIWANESE Public magnet tracker for ANIME」）。
-- **AniDex 的定義還在、站連不上**（2026-09-25 實測，票 06e）：`Anidex` 是 C# 內建實作，2.5.2.5491 的
-  schema 照樣有它；拿它去 `indexer/test` 回 `Unable to connect to indexer ... [502:BadGateway]`，anidex.info
-  直接打也是 502（09-08 那一輪也連不上）。預設清單因此拿掉它，理由是站掛了，不是定義消失。
-- **空白查詢回各站最新的發佈**（2026-09-25 實測）：`GET /api/v1/search?query=&indexerIds=<id>&type=search`
-  對 dmhy 回 80 筆、YTS 96 筆，各約 1.3 秒。精靈的試搜（票 06e）以它當預設：不必先想一個標題也證明得了
-  那一站回得出東西。`indexerIds` 限定那一站，逐站各發一個才分得出哪一站失敗。
-- **`indexerIds` 可以一次帶好幾站，空的是每一個啟用中的站**（2026-10-09 查證，M4 票 77）：`SearchResource`
-  的 `IndexerIds` 是 `List<int>`，查詢字串重複帶（`indexerIds=3&indexerIds=7`）綁得進去；控制器交給
-  `_releaseSearchService.Search(request, payload.IndexerIds, true)`，空的時是全部啟用中的站；帶的每一站都不可用時回 400
-  （上一條）。M4 票 77 曾靠它跳過請求預算放不下的站；M4 票 107 拿掉請求預算之後搜尋不帶它（問全部），只剩精靈的逐站試搜在用。
-  【原始碼 [`SearchResource.cs`](https://github.com/Prowlarr/Prowlarr/blob/develop/src/Prowlarr.Api.V1/Search/SearchResource.cs)、
-  [`_autodocs/api-reference/search.md`](https://github.com/Prowlarr/Prowlarr/blob/develop/_autodocs/api-reference/search.md)，經 context7】
-- **`indexer/test` 也測得了還沒加入的定義；搜尋只吃已加入的站**（2026-09-30 berth-lab `bundled` 的
-  Prowlarr 2.6.5.5623 實測，M4 票 09；OpenAPI 的 `POST /api/v1/indexer/test` body 是 `IndexerResource`、
-  另有 `forceTest` 查詢參數）：把 `indexer/schema` 的定義原樣送（`appProfileId` 換 1），通過回 **200 `{}`**
-  （YTS 1.9 秒、dmhy 1.1 秒），不通過回 **400 加逐條理由**，形狀與新增那一支相同；兩種都**不建立任何東西**
-  （測完 `GET /api/v1/indexer` 仍是 0 站）。這就是 Prowlarr 自己「新增索引站」對話框的 Test。
-  `GET /api/v1/search?indexerIds=99999` 回 400「Search failed due to all selected indexers being unavailable」：
-  `indexerIds` 只認已加入的站，所以「加入之前先搜」做不到，流程是「測試 → 勾通過的 → 加入 → 逐站 / 全部試搜
-  → 不要的移除」。錄下的原文在 `tests/fixtures/http/prowlarr/indexer-test.rejected.*.json`：
-  `Unable to access 1337x.to, blocked by CloudFlare Protection.`、`Unable to connect to indexer. This is
-  typically caused by DNS/SSL issues. …`（nyaasi 的 SSL 失敗）；加上 09-08 那一份
-  `Query successful, but no results were returned …`，畫面分成 Cloudflare / 查無結果 / 連不上 / 其他四種理由。
-- **schema 裡的公開站**（同一次實測）：645 個定義，privacy 是 `public` 88、`semiPrivate` 64、`private` 493。
-  公開站裡 NZBIndex 是 usenet（`protocol: usenet`，Berth 只接 qBittorrent），`Torrent RSS Feed` 的
-  `definitionName` 出現兩次（它自己與 preset showRSS）。所以「全部公開站」只收 `protocol == torrent`、依
-  `definitionName` 去重。語言分布：`en-US` 59、`ru-RU` 15、`zh-CN` 5、其餘各 1–2。
-- **TMDB 的兩種憑證都打得動 v3 端點**：v4 的 read access token 走 `Authorization: Bearer`（官方建議、
-  不進網址），v3 的 32 字元 API key 走 `?api_key=`；key 不對回 401。Berth 認憑證的**形狀**，
-  所以使用者貼哪一種都成立。
+- **`POST /api/v1/indexer` 先連一次那個站再存**：成功 201 與整份資源；連不上 **400 加陣列**（每列 `{isWarning, propertyName, errorMessage, severity}`），站沒建立。「逐站成敗」因此來自新增那一支；`indexer/test` 給**已存在**的站（200 空物件）。`?forceSave=true` **不會**跳過檢查。**測試通過不保證新增成功**（新增是另一次連站，時好時壞的站兩次可能不同；2026-10-06 審計 Internet Archive：test 通過、緊接新增回「連不上」，[wizard-audit](research/wizard-audit-2026-10-06.md) S1 頁 4）；頁 4 主鍵因此把「測過而加不進去」與「測試就沒過」分開記（M4 票 44）。
+- **同名第二個站被拒**：400 `{"propertyName": "Name", "errorMessage": "Should be unique"}`；冪等靠呼叫端先 `GET /api/v1/indexer`。
+- schema 的 `appProfileId` 是 **0**，原樣送建不起來，要換成 `1`（內建同步設定檔）。
+- 十個預設站的 `definitionName`：`nyaasi`、`dmhy`、**`Anidex`**（不是文件寫的 `AniDex`）、`animetosho-xyz`（唯一 `semiPrivate`）、`acgrip`、`mikan`、`1337x`、`yts`、`eztv`、`thepiratebay`。站名 Prowlarr 會改、機器名不會，清單釘 `definitionName`。
+- 這一輪十站五成五敗（`nyaasi` 查得到但沒結果、`Anidex` 與 `animetosho-xyz` 連不上、`1337x` 與 `eztv` 被 CloudFlare 擋）。**幾個公開站連不上是常態**，UI 逐站顯示。容器預設憑證驗證會擋 TLS 被攔截的環境（`config/host.certificateValidation`），是使用者環境的事，Berth 不改。
+- 每個定義帶 `language`（BCP 47：dmhy `zh-TW`、ACG.RIP / Mikan `zh-CN`、其餘 `en-US`）與 `description`（一句英文），皆 nullable string（2026-09-24 / 09-25，2.5.2.5491）。
+- **AniDex 定義還在、站連不上**（2026-09-25，票 06e）：`Anidex` 是 C# 內建，2.5.2.5491 schema 仍有；`indexer/test` 回 `Unable to connect to indexer ... [502:BadGateway]`，anidex.info 直打也 502（09-08 也連不上）。預設清單因此拿掉它，理由是站掛了、不是定義消失。
+- **空白查詢回各站最新發佈**（2026-09-25）：`GET /api/v1/search?query=&indexerIds=<id>&type=search` 對 dmhy 80 筆、YTS 96 筆，各約 1.3 秒。精靈試搜（票 06e）以它當預設；`indexerIds` 限定單站才分得出哪站失敗。
+- **`indexerIds` 可帶多站（重複帶 `indexerIds=3&indexerIds=7`），空的是每一個啟用中的站**（2026-10-09，M4 票 77，原始碼 [`SearchResource.cs`](https://github.com/Prowlarr/Prowlarr/blob/develop/src/Prowlarr.Api.V1/Search/SearchResource.cs)）；帶的站全不可用回 400。M4 票 107 拿掉請求預算後搜尋不帶它（問全部），只剩精靈逐站試搜在用。
+- **`indexer/test` 也測得了還沒加入的定義；搜尋只吃已加入的站**（2026-09-30，berth-lab `bundled` 的 Prowlarr 2.6.5.5623，M4 票 09）：把 schema 定義原樣送（`appProfileId` 換 1），通過 **200 `{}`**（YTS 1.9 秒、dmhy 1.1 秒），不通過 **400 加逐條理由**；都**不建立任何東西**（測完 `GET /api/v1/indexer` 仍 0 站）。`GET /api/v1/search?indexerIds=99999` 回 400「Search failed due to all selected indexers being unavailable」——`indexerIds` 只認已加入的站，所以「加入之前先搜」做不到；流程是「測試 → 勾通過的 → 加入 → 逐站 / 全部試搜 → 不要的移除」。錄下的拒絕原文在 `tests/fixtures/http/prowlarr/indexer-test.rejected.*.json`，畫面分 Cloudflare（`Unable to access 1337x.to, blocked by CloudFlare Protection.`）/ 查無結果（`Query successful, but no results were returned …`）/ 連不上（`Unable to connect to indexer. This is typically caused by DNS/SSL issues. …`）/ 其他四種。
+- **schema 的公開站**：645 個定義，privacy `public` 88、`semiPrivate` 64、`private` 493。NZBIndex 是 usenet（`protocol: usenet`，Berth 只接 qBittorrent）；`Torrent RSS Feed` 的 `definitionName` 出現兩次。所以「全部公開站」只收 `protocol == torrent`、依 `definitionName` 去重。
+- **TMDB 兩種憑證都打得動 v3 端點**：v4 read access token 走 `Authorization: Bearer`（官方建議、不進網址），v3 的 32 字元 API key 走 `?api_key=`；key 不對回 401。Berth 認憑證**形狀**，貼哪種都成立。
 
-**索引站搜尋實測**（2026-09-10，票 08；Prowlarr 2.5.2.5491 + 五個公開站 acgrip / dmhy / mikan /
-thepiratebay / yts，fixture 在 `tests/fixtures/http/prowlarr/search.*.json` 與
-`tests/fixtures/http/torznab/` 已刪，M4 票 37）
+**索引站搜尋實測**（2026-09-10，票 08；Prowlarr 2.5.2.5491 + 五個公開站 acgrip / dmhy / mikan / thepiratebay / yts；Torznab fixture 已刪，M4 票 37；[細節](research/setup-api-facts.md#索引站搜尋實測)）
 
-- **`GET /api/v1/search` 很慢而且不吃 `limit`**：單次冷查詢 60–85 秒（Prowlarr 現場去連五個站），
-  `limit=20` 仍然回 1200 筆。**三個查詢併發共 35 秒**，所以逐標題併發是對的，逾時要給到 120 秒。
-- **`downloadUrl` / `magnetUrl` 每次請求都不一樣**：`link=` 的密文帶 nonce，同一個查詢連跑兩次
-  1021 筆只有 1 筆重疊。`guid` 穩定（1200/1200）。所以身分是 infohash 或 `guid`，不是下載網址。
-  兩者都是 Prowlarr **自己的代理網址**（主機來自它的 `config/host`，不是 Berth 打過去的位址），
-  磁力站（TPB、dmhy）沒有 `downloadUrl`，只有被包成代理網址的 `magnetUrl`。
-  **兩者都帶 `?apikey=<Prowlarr API key>`**（M4 票 76 實作時發現；拿到它就能改 Prowlarr 的設定、索引站與帳密），
-  所以不出伺服器（M4 票 79）：搜尋把每一列的連結記在 Berth 程序裡，前端只拿 id，送單收 id 換回連結。
-  慣例照 Sonarr 的 interactive search（`Sonarr.Api.V3/Indexers/ReleaseController.cs`：搜尋結果以
-  `{indexerId}_{guid}` 放進快取 30 分鐘，送單只帶 `guid` 與 `indexerId`，找不到回 404「try searching again」），
-  Berth 的 id 是隨機的、記兩小時（理由在 `berth/services/sources.py`）。
-- **info hash 有兩種寫法**：同一個發佈在 Mikan 是 40 字十六進位、在 dmhy 是 32 字 base32，
-  base32 解碼後位元組相同。不正規化的話單次查詢的 1200 筆裡有 47 筆會重複顯示。
-- **多標題是真的多一批東西**：`Spy x Family` / `SPY×FAMILY` / `间谍过家家` 各搜出 1200 / 908 / 1210 筆，
-  聯集 1854 筆，各自帶來 391 / 196 / 169 筆另外兩個問不到的結果。
-- **tmdbid 是私站的功能**：627 份 Cardigann 定義裡 93 份的 `tvSearchParams` / `movieSearchParams`
-  含 `tmdbId`，**全部是 private 或 semiPrivate**；十個預設公開站一個都沒有（YTS 只有 `imdbid`）。
-  所以 `q=` 才是常態（Prowlarr 的 REST 本來就只收關鍵字；M4 票 37 前 Torznab 端點依 `t=caps` 選問法）。
-- **分類碼不是可靠的篩子**：dmhy 對 `cat=5000`、`cat=5070` 與不帶 `cat` 都回同樣 80 筆；
-  它一筆帶 5070 / 100002 / 2020 而沒有 5000。Berth 因此不送 `categories`，只把分類當顯示資料。
-- **The Pirate Bay 對搜不到的關鍵字會回它自己的熱門清單**：搜 SPY×FAMILY 時前六筆是 Spider-Man、
-  Lanterns、Ted Lasso、Reacher，做種四千到六千。純做種排序時它們會把真正的結果整批擠出前 100 筆，
-  所以 Berth 先用標題粗篩再逐站輪流取。
-- **公開中文站的做種數是個位數**：Mikan / ACG.RIP / dmhy 的發佈多半 0–2 個做種，TPB 的 scene 發佈
-  28–86 個。取「做種前 100 筆」等於把中文字幕組整批刪掉。
-- **`parse_release` 每筆 14 毫秒**（1200 筆 17.4 秒，含 guessit）。一兩千筆全解析會把事件迴圈卡住
-  半分鐘，所以粗篩要用純字串比對，解析只跑在留下來的那一百筆上。
+- **`GET /api/v1/search` 很慢且不吃 `limit`**：單次冷查詢 60–85 秒，`limit=20` 仍回 1200 筆；三個查詢併發共 35 秒，所以逐標題併發、逾時給 120 秒。
+- **`downloadUrl` / `magnetUrl` 每次請求都不同**（`link=` 密文帶 nonce，連跑兩次 1021 筆只重疊 1 筆），`guid` 穩定（1200/1200）：身分是 infohash 或 `guid`，不是下載網址。兩者是 Prowlarr **自己的代理網址**（主機來自它的 `config/host`）；磁力站（TPB、dmhy）沒有 `downloadUrl`，只有包成代理網址的 `magnetUrl`。**兩者帶 `?apikey=<Prowlarr API key>`**（M4 票 76），能改 Prowlarr 設定，所以不出伺服器（M4 票 79）：搜尋把每列連結記在 Berth 程序，前端只拿 id，送單收 id 換回連結（慣例照 Sonarr interactive search 的 `ReleaseController.cs`：`{indexerId}_{guid}` 快取 30 分鐘、找不到回 404「try searching again」；Berth 的 id 隨機、記兩小時，理由在 `berth/services/sources.py`）。
+- **info hash 兩種寫法**：同一發佈在 Mikan 是 40 字十六進位、dmhy 是 32 字 base32，解碼後位元組相同；不正規化的話 1200 筆裡 47 筆重複顯示。
+- **多標題是真的多一批東西**：`Spy x Family` / `SPY×FAMILY` / `间谍过家家` 各 1200 / 908 / 1210 筆，聯集 1854，各自帶來 391 / 196 / 169 筆另兩者問不到的結果。
+- **tmdbid 是私站的功能**：627 份定義裡 93 份的 `tvSearchParams` / `movieSearchParams` 含 `tmdbId`，**全是 private 或 semiPrivate**；十個預設公開站一個都沒有（YTS 只有 `imdbid`）。所以 `q=` 才是常態（Prowlarr REST 本來只收關鍵字）。
+- **分類碼不是可靠篩子**：dmhy 對 `cat=5000`、`cat=5070`、不帶 `cat` 都回同樣 80 筆，且一筆帶 5070 / 100002 / 2020 而沒有 5000。Berth 不送 `categories`，分類只當顯示資料。
+- **The Pirate Bay 對搜不到的關鍵字回自己的熱門清單**（搜 SPY×FAMILY 前六筆是 Spider-Man、Ted Lasso 等，做種四千到六千），純做種排序會把真結果擠出前 100 筆；Berth 先用標題粗篩再逐站輪流取。
+- **公開中文站做種數是個位數**：Mikan / ACG.RIP / dmhy 多半 0–2 個，TPB scene 28–86；取「做種前 100 筆」等於把中文字幕組整批刪掉。
+- **`parse_release` 每筆 14 毫秒**（1200 筆 17.4 秒，含 guessit），全解析會卡事件迴圈半分鐘，所以粗篩用純字串比對，解析只跑留下的 100 筆。
 
-**Jackett**（[repo](https://github.com/Jackett/Jackett)）
+**Jackett**（[repo](https://github.com/Jackett/Jackett)；[細節](research/setup-api-facts.md#jackett)）
 
-- API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面，無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml` 定義。
-- ~~結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。~~ **已不採用**（2026-10-06 D3、M4 票 37）：只支援 Prowlarr；以上來源與事實留作紀錄。
+- API key 在 `ServerConfig.json` 的 `APIKey`；聚合 Torznab `/api/v2.0/indexers/all/results/torznab/api?t=search` 有文件（上限 1000 筆、站專屬分類不可用）；`GET/POST /api/v2.0/indexers/{id}/Config` 只是 UI 內部介面、無文件。有 `mikan.yml`、`dmhy.yml`、`nyaasi.yml`、`acgrip.yml`。
+- ~~結論維持 §19：套件預設 Prowlarr，Jackett 以 Torznab 端點接入。~~ **已不採用**（2026-10-06 D3、M4 票 37）：只支援 Prowlarr；以上留作紀錄（[ADR-0001](adr/0001-indexer-manager-prowlarr-only.md)）。
 
-**compose 套件實測（2026-09-07，Windows 11 + Docker Desktop 29.6.2，票 03）**
+**compose 套件實測**（2026-09-07，Windows 11 + Docker Desktop 29.6.2，票 03；[細節](research/setup-api-facts.md#compose-套件實測)）
 
-- **發佈 port 的來源位址**：Docker Desktop 把 `-p 8080:8080` 進來的流量 SNAT 成 bridge 閘道位址（`172.28.0.1`），而閘道本身就在 compose 網段內。所以 `WebUI\AuthSubnetWhitelist=172.28.0.0/16` 等於讓宿主與 LAN 上任何人免密打 qBittorrent 的 API —— 實測 `curl http://localhost:8080/api/v2/app/version` 直接回 `v5.2.3`。白名單縮成 Berth 容器固定 IP 的 `172.28.0.2/32` 之後：berth 容器回 200、宿主 403、同網段的其他容器 403。§16.3「LAN 使用者開 8080 仍要密碼」只有在白名單是單一位址時才成立。
-- Docker 的動態 IP 從網段開頭配發（實測 `172.28.0.2` 給了先啟動的 prowlarr），固定 IP 要靠 `ip_range` 把動態池隔到別的段，否則會撞。
-- **linuxserver/qbittorrent 的啟動順序**：`init-qbittorrent-config`（依賴 `init-config`）排在 `init-custom-files`（依賴 `init-mods-end`，而該鏈在 `init-config-end` → `init-qbittorrent-config` 之後）之前。custom-cont-init.d 的腳本跑到時 `/config/qBittorrent/qBittorrent.conf` **一定已經存在**，由 image 從 `/defaults/qBittorrent.conf` 複製。因此「檔案不存在才寫」的預置條件永遠不成立，改為「缺鍵才補」。
-- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（M4 票 53，2026-10-07 實跑 `5.2.3_v2.0.15-ls478`）：首次啟動腳本印 `added to …`；以 WebUI API（`app/setPreferences` 的 `bypass_auth_subnet_whitelist_enabled: false`）關掉之後 `docker restart`，腳本印 `already configured`，`WebUI\AuthSubnetWhitelistEnabled=false` 不變，而 `WebUI\AuthSubnetWhitelist=172.28.0.2/32` 那一行留著。所以補法在 WebUI：「選項 → WebUI → 驗證」的「讓已在白名單中的 IP 子網路略過驗證」（英文 *Bypass authentication for clients in whitelisted IP subnets*；標籤取自 qBittorrent `release-5.0.0` 的 [`preferences.html`](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.0/src/webui/www/private/views/preferences.html) 與 [`webui_zh_TW.ts`](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.0/src/webui/www/translations/webui_zh_TW.ts)）。
-- `/defaults/qBittorrent.conf` 的內容：`LegalNotice\Accepted=true`、`WebUI\Address=*`、`WebUI\ServerDomains=*`、`Downloads\SavePath=/downloads/`、`Downloads\TempPath=/downloads/incomplete/`、`Connection\UPnP=false`、`Connection\PortRangeMin=6881`。整份覆蓋會掉 `LegalNotice\Accepted`，qbittorrent-nox 會卡在法律聲明；而 `ServerDomains` 既然預設是 `*`，Host 檢查本來就過得了，寫死成 `qbittorrent` 反而讓使用者從 `localhost:8080` 進不去。
-- `init-custom-files` 只檢查 executable bit（不檢查擁有者），以 `/bin/bash <script>` 執行（[docker-baseimage-alpine](https://github.com/linuxserver/docker-baseimage-alpine/blob/master/root/etc/s6-overlay/s6-rc.d/init-custom-files/run)、[container-customization](https://docs.linuxserver.io/general/container-customization/)）。
-- `lscr.io/linuxserver/qbittorrent:latest` 目前是 qBittorrent v5.2.3。
-- Berth image（node:24-slim build → python:3.13-slim runtime）：281 MB 未壓縮、62.8 MB gzip，遠低於 400 MB 的上限。
-- `python:3.13-slim`（Debian 13 trixie）內建 `setpriv`、`usermod`、`groupmod`、`getent` 與 tzdata，`PUID` / `PGID` 降權不需要額外裝 gosu；但沒有 curl。
-- 空的 named volume 與 Docker 替 bind mount 新建的目錄都是 `root:root`，非 root 的容器寫不進去。入口腳本因此只在 `/data` 還是空目錄時接手擁有者，已經有內容的媒體根不碰（實測：空目錄 → 檔案為 `1500:1500`、`umask 002`；非空目錄 → 維持 `root:root`）。
-- compose 內再次確認 `/data` 的硬鏈接：`dev=70`、inode 相同、`nlink=2`（與 §20.7 開頭的 Windows 實測一致）。
+- **發佈 port 的來源位址**：Docker Desktop 把 `-p 8080:8080` 進來的流量 SNAT 成 bridge 閘道（`172.28.0.1`），閘道本身就在 compose 網段內。所以 `WebUI\AuthSubnetWhitelist=172.28.0.0/16` 等於讓宿主與 LAN 任何人免密打 qBittorrent API（實測 `curl http://localhost:8080/api/v2/app/version` 直接回 `v5.2.3`）。縮成 Berth 容器固定 IP `172.28.0.2/32` 後：berth 容器 200、宿主 403、同網段其他容器 403。§16.3「LAN 使用者開 8080 仍要密碼」只有白名單是單一位址時才成立。
+- Docker 動態 IP 從網段開頭配發（`172.28.0.2` 給了先啟動的 prowlarr），固定 IP 要靠 `ip_range` 把動態池隔到別段，否則會撞。
+- **linuxserver/qbittorrent 啟動順序**：`init-qbittorrent-config` 排在 `init-custom-files`（custom-cont-init.d）之前，腳本跑到時 `/config/qBittorrent/qBittorrent.conf` **一定已存在**（image 從 `/defaults/qBittorrent.conf` 複製）。所以「檔案不存在才寫」永不成立，改「缺鍵才補」。
+- **缺鍵才補的另一面：在 WebUI 關掉或改掉白名單，重啟補不回來**（M4 票 53，2026-10-07，`5.2.3_v2.0.15-ls478`）：以 `app/setPreferences` 的 `bypass_auth_subnet_whitelist_enabled: false` 關掉後 `docker restart`，腳本印 `already configured`，`WebUI\AuthSubnetWhitelistEnabled=false` 不變。補法在 WebUI「選項 → WebUI → 驗證」的「讓已在白名單中的 IP 子網路略過驗證」（英文 *Bypass authentication for clients in whitelisted IP subnets*；標籤取自 qBittorrent `release-5.0.0` 的 [`preferences.html`](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.0/src/webui/www/private/views/preferences.html) 與 [`webui_zh_TW.ts`](https://github.com/qbittorrent/qBittorrent/blob/release-5.0.0/src/webui/www/translations/webui_zh_TW.ts)）。
+- `/defaults/qBittorrent.conf`：`LegalNotice\Accepted=true`、`WebUI\Address=*`、`WebUI\ServerDomains=*`、`Downloads\SavePath=/downloads/`、`Downloads\TempPath=/downloads/incomplete/`、`Connection\UPnP=false`、`Connection\PortRangeMin=6881`。整份覆蓋會掉 `LegalNotice\Accepted`（qbittorrent-nox 卡在法律聲明）；`ServerDomains` 預設 `*` 本來就過 Host 檢查，寫死 `qbittorrent` 反讓使用者從 `localhost:8080` 進不去。
+- `init-custom-files` 只檢查 executable bit（不檢查擁有者），以 `/bin/bash <script>` 執行（[docker-baseimage-alpine](https://github.com/linuxserver/docker-baseimage-alpine/blob/master/root/etc/s6-overlay/s6-rc.d/init-custom-files/run)、[container-customization](https://docs.linuxserver.io/general/container-customization/)）。`lscr.io/linuxserver/qbittorrent:latest` 當時是 v5.2.3。
+- Berth image（node:24-slim build → python:3.13-slim runtime）：281 MB 未壓縮、62.8 MB gzip，遠低於 400 MB 上限。`python:3.13-slim`（Debian 13 trixie）內建 `setpriv`、`usermod`、`groupmod`、`getent` 與 tzdata，`PUID` / `PGID` 降權不需裝 gosu；但沒有 curl。
+- 空 named volume 與 Docker 替 bind mount 新建的目錄都是 `root:root`，非 root 容器寫不進去。入口腳本因此只在 `/data` 還是空目錄時接手擁有者，有內容的媒體根不碰（實測：空目錄 → `1500:1500`、`umask 002`；非空 → 維持 `root:root`）。
+- compose 內 `/data` 硬鏈接再確認：`dev=70`、inode 相同、`nlink=2`（與本節開頭 Windows 實測一致）。
 
-**TMDB 憑證由使用者自備**（2026-09-09 決定，推翻本節原本的「沿用 Seerr 的專案級 key」）
+**TMDB 憑證由使用者自備**（2026-09-09 決定，推翻本節原本的「沿用 Seerr 的專案級 key」；[細節](research/setup-api-facts.md#tmdb-憑證由使用者自備)）
 
-- Jellyseerr / Seerr 在 `server/api/themoviedb/index.ts` 寫死一把專案 key，使用者無處填自己的 key（[overseerr#3887](https://github.com/sct/overseerr/issues/3887)）；Jellyfin 團隊也曾討論專案級 key（[jellyfin#36](https://github.com/jellyfin/jellyfin/issues/36)）。TMDB 條款只區分商業與非商業，未明文規範「一 app 一 key」，所以那條路是走得通的。
-- **本系統仍然不走**：一把發給所有使用者的共用憑證由專案背著它的用量與行為，而 TVDB 的 ToS 明文擋的也正是這件事（§20.3）。兩個 provider 在「使用者自己申請一把」上對稱，於是這裡也對稱處理。憑證的唯一來源是 `settings.services.tmdb.api_key`，精靈第 6 步是**必填的閘門**（plan §9.3）。
-- 申請路徑：themoviedb.org 免費帳號 → 設定 → API → 用途選 Personal / Education，即時核發。同一頁同時給 v3 API key 與 v4 read access token，兩種形狀 Berth 都收（plan §8.3，2026-09-08 實測）。
+- Jellyseerr / Seerr 在 `server/api/themoviedb/index.ts` 寫死專案 key（[overseerr#3887](https://github.com/sct/overseerr/issues/3887)）；Jellyfin 團隊也討論過（[jellyfin#36](https://github.com/jellyfin/jellyfin/issues/36)）。TMDB 條款只區分商業與非商業，未明文規範「一 app 一 key」，那條路走得通，**本系統仍不走**：共用憑證由專案背用量與行為，TVDB ToS 明文擋的正是這件事（§20.3），兩個 provider 在「使用者自己申請」上對稱。
+- 憑證唯一來源 `settings.services.tmdb.api_key`，精靈第 6 步是**必填閘門**（plan §9.3）。申請：themoviedb.org 免費帳號 → 設定 → API → 用途選 Personal / Education，即時核發；同一頁給 v3 key 與 v4 read access token，兩種形狀 Berth 都收（plan §8.3，2026-09-08）。
 
-**qBittorrent 預置**（[sessionimpl.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/base/bittorrent/sessionimpl.cpp)、[linuxserver/qbittorrent](https://docs.linuxserver.io/images/docker-qbittorrent)、[qbittorrent-nox](https://github.com/qbittorrent/docker-qbittorrent-nox)）
+**qBittorrent 預置**（[sessionimpl.cpp](https://github.com/qbittorrent/qBittorrent/blob/master/src/base/bittorrent/sessionimpl.cpp)、[linuxserver/qbittorrent](https://docs.linuxserver.io/images/docker-qbittorrent)、[qbittorrent-nox](https://github.com/qbittorrent/docker-qbittorrent-nox)；[細節](research/setup-api-facts.md#qbittorrent-預置)）
 
-- 4.6.1 起首次啟動用隨機臨時密碼印在 log；已知密碼要預置 `WebUI\Password_PBKDF2`（PBKDF2-HMAC-SHA512、100000 次）。官方 image 沒有密碼環境變數，也沒有 `PUID` / `PGID`；linuxserver image 有，且設定檔在 `/config/qBittorrent/qBittorrent.conf`。
+- 4.6.1 起首次啟動用隨機臨時密碼印在 log；已知密碼要預置 `WebUI\Password_PBKDF2`（PBKDF2-HMAC-SHA512、100000 次）。官方 image 沒有密碼環境變數，也沒有 `PUID` / `PGID`；linuxserver image 有，設定檔在 `/config/qBittorrent/qBittorrent.conf`。
 - `[Preferences]`：`WebUI\Port`、`WebUI\AuthSubnetWhitelistEnabled`、`WebUI\AuthSubnetWhitelist`、`WebUI\LocalHostAuth`、`WebUI\HostHeaderValidation`、`WebUI\CSRFProtection`；`[BitTorrent]`：`Session\DefaultSavePath`、`Session\TempPath`、`Session\TempPathEnabled`、`Session\DisableAutoTMMByDefault`（**預設 true，即 autoTMM 關閉**）、`Session\DisableAutoTMMTriggers\CategorySavePathChanged`、`Session\Port`。
-- Web API `app/setPreferences` 對應鍵：`temp_path_enabled`、`temp_path`、`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`、`bypass_auth_subnet_whitelist(_enabled)`、`bypass_local_auth`、`web_ui_password`（只寫）。
+- Web API `app/setPreferences` 對應鍵：`temp_path_enabled`、`temp_path`、`save_path`、`auto_tmm_enabled`、`category_changed_tmm_enabled`、`bypass_auth_subnet_whitelist(_enabled)`、`bypass_local_auth`、`web_ui_password`（只寫，讀回來的偏好沒有它）。
 
-**Jellyfin 命名實測**（2026-09-07，票 04；`jellyfin/jellyfin:10.10.7` 與 `:10.11.11`，dummy 檔 + API 查驗，[完整結果](research/m0-experiments.md#1-jellyfin-命名10107-與-101111)）
+**Jellyfin 命名實測**（2026-09-07，票 04；`jellyfin/jellyfin:10.10.7` 與 `:10.11.11`，dummy 檔 + API 查驗；[完整結果](research/m0-experiments.md#1-jellyfin-命名10107-與-101111)、[原文](research/setup-api-facts.md#jellyfin-命名實測)）
 
-- **`S01E01` 一律認得**，`S01E03-E04` 解析為 `IndexNumber=3` + `IndexNumberEnd=4`，`S00E01` 進 `Specials` 季。**方括號與 `+` 不會滲進 Series 或 Episode 名稱** —— Jellyfin 根本不從檔名取集標題（TMDB 對不上的作品，帶 tag 與不帶 tag 的兩集名稱完全相同）。
-- **電影多版本**：檔名在 ` - ` 之前必須與資料夾名一字不差（含 `[tmdbid-<id>]`），否則變成兩部獨立的電影。標籤含方括號沒問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Sakurato]`；結尾 `p`/`i` 的標籤依解析度降冪（`2160p` → `1080p` → `720p`），其餘字母序。§7.2 已據此更正。
-- **劇集多版本**：未裝插件 → 同一集的兩個檔案變成**兩個重複的 Episode 條目**。裝 MergeVersions 跑 `MergeEpisodesTask` → 合併成 1 個 Episode、2 個 MediaSource，但**版本標籤是整個檔名主幹**而非只有 tags，且順序不保證（10.10 與 10.11 相反）。§7.7 已據此更正。12.x 不裝插件就原生合併，見 §20.9。
-- **extras**：劇集層 `<作品>/extras/`、季層 `<作品>/Season 01/extras/`、電影層 `<電影>/extras/` 三者都成立，分別掛在 Series / Season / Movie 的 `SpecialFeatures`，不會被當成正片集數。
-- **外掛字幕**：`<stem>.CHT.zh.ass` 在 10.10 顯示 `CHT - Chi - ASS - 外部`、10.11 顯示 `CHT - Chinese - ASS - 外部`（`Title` 欄排最前面，繁簡分得出來）。`.default.` 旗標兩版都生效。`zh-Hant`/`zh-Hans` **只有 10.11 認得**，10.10 顯示「未定義」→ 不採用。
-- **深連結** `#!/details?id=…&serverId=…` 在兩個版本都開得到詳細頁（前端正規化成 `#/details?id=…`）。
-- **精靈**：`POST /Startup/User` 之前**必須先 `GET /Startup/User`**，否則回 500（`Sequence contains no elements`）—— GET 會先建立預設使用者。`POST /Library/VirtualFolders` 的 body 是 `AddVirtualFolderDto`，`LibraryOptions` **要包一層**（`{"LibraryOptions": {...}}`），直接送會靜默丟掉整份設定。
-- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本，10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`；下載由 Jellyfin 連 GitHub，實測遇過 TLS 中斷回 500，要能重試。以上是 M0 時對 10.x 的紀錄；本系統只支援 12 以上、不再安裝它（§19）。排程任務 `Key` 為 `MergeEpisodesTask` / `MergeMoviesTask`，`Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
-- **重啟後不能只等 `/System/Info/Public`**：它在伺服器還在載入時就回 200，這時管理員 API（如 `/ScheduledTasks`）回 **503「Jellyfin 伺服器載入中」**。要輪詢真正要用的那個端點回 200 才算重啟完成（實測踩到過）。
-- **`find_episodes` 的陷阱**：10.11 在第一次掃描後，對已被 provider 認出來的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10 沒有這個問題，12.0.0 也沒有重現（§20.8）。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
+- `S01E01` 一律認得，`S01E03-E04` → `IndexNumber=3` + `IndexNumberEnd=4`，`S00E01` 進 `Specials`。**方括號與 `+` 不會滲進 Series 或 Episode 名稱**（Jellyfin 不從檔名取集標題）。
+- **電影多版本**：檔名在 ` - ` 之前必須與資料夾名一字不差（含 `[tmdbid-<id>]`），否則成兩部獨立電影；標籤含方括號沒問題（版本選單顯示 `[BD][2160p][CHT+JP][Sakurato]`），結尾 `p`/`i` 的標籤依解析度降冪，其餘字母序。§7.2 已據此更正。
+- **劇集多版本**：未裝插件 → 同集兩檔變兩個重複 Episode；裝 MergeVersions 跑 `MergeEpisodesTask` → 合成 1 個 Episode、2 個 MediaSource，但**版本標籤是整個檔名主幹**非只有 tags，順序不保證（10.10 與 10.11 相反）。§7.7 已據此更正；12.x 不裝插件就原生合併，見 §20.9。
+- **extras**：`<作品>/extras/`、`<作品>/Season 01/extras/`、`<電影>/extras/` 三者都成立，掛在 Series / Season / Movie 的 `SpecialFeatures`，不當正片。
+- **外掛字幕**：`<stem>.CHT.zh.ass` 在 10.10 顯示 `CHT - Chi - ASS - 外部`、10.11 `CHT - Chinese - ASS - 外部`（繁簡分得出來）；`.default.` 兩版都生效；`zh-Hant`/`zh-Hans` **只有 10.11 認得**，10.10 顯示「未定義」→ 不採用。
+- 深連結 `#!/details?id=…&serverId=…` 兩版都開得到詳細頁。
+- **精靈**：`POST /Startup/User` 之前**必須先 `GET /Startup/User`**（它建立預設使用者），否則回 **500**（`Sequence contains no elements`）。`POST /Library/VirtualFolders` 的 body 是 `AddVirtualFolderDto`，`LibraryOptions` **要包一層**（`{"LibraryOptions": {...}}`），直接送一樣回 204 但整份設定被靜默丟掉。
+- **MergeVersions**：`POST /Packages/Installed/Merge%20Versions?assemblyGuid=…` 不必指定版本（10.10.7 裝到 `10.10.0.5`、10.11.11 裝到 `10.11.0.1`）；下載由 Jellyfin 連 GitHub，遇過 TLS 中斷回 500，要能重試。以上是 M0 對 10.x 的紀錄；本系統只支援 12 以上、不再安裝（§19）。排程任務 `Name` 為 `Merge All Episodes` / `Merge All Movies`，`Category` 為 `Merge Versions`。
+- **重啟後不能只等 `/System/Info/Public`**：它在伺服器載入中就回 200，這時管理員 API（如 `/ScheduledTasks`）回 **503「Jellyfin 伺服器載入中」**；要輪詢真正要用的端點回 200 才算完成。
+- **`find_episodes` 陷阱**：10.11 第一次掃描後，已被 provider 認出的 Series，`/Items?parentId=<seriesId>` 與 `/Shows/{id}/Episodes` **都回 0**，再掃一次才正常；10.10、12.0.0 沒有（§20.8）。改用 `parentId=<library>&recursive=true` 再照 `Path` 前綴篩選，四種情況都對。
 
-**qBittorrent 版本矩陣**（2026-09-07，票 04；`lscr.io/linuxserver/qbittorrent:4.4.5`（API 2.8.5）與 `:5.2.3`（API 2.15.1），[完整結果](research/m0-experiments.md#2-qbittorrent-445-與-523)）
+**qBittorrent 版本矩陣**（2026-09-07，票 04；`lscr.io/linuxserver/qbittorrent:4.4.5`（API 2.8.5）與 `:5.2.3`（API 2.15.1）；[完整結果](research/m0-experiments.md#2-qbittorrent-445-與-523)、[原文](research/setup-api-facts.md#qbittorrent-版本矩陣)）
 
-- **`torrents/add` 的回應形狀兩版不同**（2026-09-10 票 09 對 5.2.3 / 4.4.5 兩台乾淨容器實測，fixture 在 `tests/fixtures/http/qbittorrent/torrents-add.*`）：4.4.5 成功回 `200` + `Ok.`；**5.2.3 成功回 `200` 加一份 JSON 摘要**（`{"added_torrent_ids": […], "failure_count": 0, "pending_count": 0, "success_count": 1}`）。**這推翻本節原本記的「一律回 200 `Ok.`」**——那句話只對 4.4.x 成立。失敗也說得出話：同一個磁力連結送第二次在 5.2.3 是 `409 Conflict`（4.4.5 照樣回 `Ok.`），category 的 save path 當下用不了也是 `409`；multipart 上傳一份不是 torrent 的東西是 `415` 加檔名與原因。
-- **交一條 http 網址給 `torrents/add` 是背景抓取**：5.2.3 回 `202` + `pending_count: 1`，抓失敗之後**永遠沒有下文**——torrent 不會出現，而用戶端已經回過 2xx 了。所以 Berth 自己先把 torrent 抓下來（`adapters/torrent.py`），交出去的一律是磁力連結或位元組，這樣「收不收」當場就有答案（票 09）。
-- **`paused` 與 `stopped` 各版本只認一個，送錯的那個會靜默地開始下載**：4.4.5 `paused=true` → `pausedDL`、`stopped=true` → `queuedDL`（沒暫停）；5.2.3 `paused=true` → `stalledDL`（沒暫停）、`stopped=true` → `stoppedDL`。`torrents/add` 一律回 200，不認得的參數不報錯。plan §8.1 的版本判斷是必要條件，不是最佳化。
-- **`torrents/files[].name` 相對 `save_path`**（多檔會含 torrent 根目錄那一層），四種 `contentLayout` 組合都成立；`content_path` = save_path + 根目錄，單檔時指向檔案、多檔時指向目錄。單檔 + `Subfolder` 的子資料夾名是去掉副檔名的 torrent 名。**`save_path` 的尾斜線兩版不同**（4.4.5 `/downloads/`、5.2.3 `/downloads`），組路徑前要正規化。
-- **還沒下完時 `content_path` 落在分類的未完成目錄，`save_path` 已經是下完要搬去的那一個**（2026-10-13 M4 票 74 對 5.2.4 實測，e2e 套件內那一台）：`berth-tv` 分類底下停在 `stalledDL` 的一包，`torrents/info` 回 `save_path=/data/torrent/complete/tv`、`download_path=/data/torrent/incomplete/tv`、`content_path=/data/torrent/incomplete/tv/<根目錄>`。`torrents/files[].name` 照樣相對那一層（同上一條，只是那一層換成未完成目錄）。所以刪掉下到一半的那一包看的是 `content_path`，不是 `save_path`（`services/deletion._where_files_are`）。
-- `torrents/files` 的鍵兩版相同：`index`、`name`、`size`、`progress`、`priority`、`is_seed`、`piece_range`、`availability`。
-- **`torrents/categories` 兩版都回 `savePath`**（駝峰），沒有出現 `save_path`；5.2.3 另有 `download_path`、`ratio_limit`、`seeding_time_limit`、`inactive_seeding_time_limit`、`share_limit_action`。
-- **Host 檢查除了網域還比對 port**：`ServerDomains=*` 也擋 port 不符的 Host（實測 `Host: localhost:18080` → 401，容器 log 寫 `Invalid Host header, port mismatch`）。設成 `qbittorrent` 之後 `localhost:8080` 與 `127.0.0.1:8080` 全被擋。沒有 port 的 Host 一律放行。偏好鍵是 `web_ui_host_header_validation_enabled`（兩版都有）。實驗改的是 Web API 的 runtime 偏好 `web_ui_domain_list`，它對應設定檔的 `WebUI\ServerDomains`（同一個設定的兩種寫法），沒有另外測「預置 ini 鍵」那條路徑。→ compose 的 qBittorrent **發佈 port 只能內外兩側一起改**（只改外側，使用者就開不了 WebUI）：M3 票 06b 以 `QBITTORRENT_WEBUI_PORT` 同時設兩側與 `WEBUI_PORT`（plan §9.2）。
-- **CSRF**：送了 `Origin`/`Referer` 就必須與 Host 一致（不一致 → 401），完全不送則放行。兩版相同。
+- **`torrents/add` 回應形狀兩版不同**（2026-09-10 票 09 對兩台乾淨容器實測，fixture `tests/fixtures/http/qbittorrent/torrents-add.*`）：4.4.5 成功 `200` + `Ok.`；**5.2.3 成功 `200` 加 JSON 摘要**（`{"added_torrent_ids": […], "failure_count": 0, "pending_count": 0, "success_count": 1}`），推翻原本「一律回 `Ok.`」。失敗也說得出話：同一磁力連結第二次送在 5.2.3 是 `409 Conflict`（4.4.5 照回 `Ok.`），category 的 save path 當下用不了也是 `409`；multipart 上傳非 torrent 是 `415` 加檔名與原因。
+- **交 http 網址給 `torrents/add` 是背景抓取**：5.2.3 回 `202` + `pending_count: 1`，抓失敗後**永遠沒有下文**，用戶端已回過 2xx。所以 Berth 自己先抓 torrent（`adapters/torrent.py`），交出去的一律是磁力連結或位元組，「收不收」當場有答案（票 09）。
+- **`paused` 與 `stopped` 各版本只認一個，送錯的靜默地開始下載**（`torrents/add` 一律 200，不認得的參數不報錯）：4.4.5 `paused=true` → `pausedDL`、`stopped=true` → `queuedDL`；5.2.3 `paused=true` → `stalledDL`、`stopped=true` → `stoppedDL`。plan §8.1 的版本判斷是必要條件，不是最佳化。
+- **`torrents/files[].name` 相對 `save_path`**（多檔含 torrent 根目錄那一層），四種 `contentLayout` 組合都成立；`content_path` = save_path + 根目錄，單檔指向檔案、多檔指向目錄。單檔 + `Subfolder` 的子資料夾名是去掉副檔名的 torrent 名。**`save_path` 尾斜線兩版不同**（4.4.5 `/downloads/`、5.2.3 `/downloads`），組路徑前要正規化。
+- **沒下完時 `content_path` 在分類的未完成目錄，`save_path` 已是完成後的位置**（2026-10-13 M4 票 74，5.2.4）：`berth-tv` 分類下 `stalledDL` 的一包，`save_path=/data/torrent/complete/tv`、`download_path=/data/torrent/incomplete/tv`、`content_path=/data/torrent/incomplete/tv/<根目錄>`；`torrents/files[].name` 仍相對那一層。刪下到一半的包看 `content_path`（`services/deletion._where_files_are`）。
+- `torrents/files` 的鍵兩版相同：`index`、`name`、`size`、`progress`、`priority`、`is_seed`、`piece_range`、`availability`。`torrents/categories` 兩版都回駝峰 `savePath`（沒有 `save_path`）；5.2.3 另有 `download_path`、`ratio_limit`、`seeding_time_limit`、`inactive_seeding_time_limit`、`share_limit_action`。
+- **Host 檢查除網域還比對 port**：`ServerDomains=*` 也擋 port 不符（`Host: localhost:18080` → **401**，容器 log `Invalid Host header, port mismatch`）。設成 `qbittorrent` 後 `localhost:8080`、`127.0.0.1:8080` 全被擋；沒有 port 的 Host 一律放行。偏好鍵 `web_ui_host_header_validation_enabled`（兩版都有）。實驗改的是 runtime 偏好 `web_ui_domain_list`（對應 `WebUI\ServerDomains`），沒另測「預置 ini 鍵」路徑。→ compose 的 qBittorrent **發佈 port 只能內外兩側一起改**（只改外側使用者開不了 WebUI）：M3 票 06b 以 `QBITTORRENT_WEBUI_PORT` 同時設兩側與 `WEBUI_PORT`（plan §9.2）。
+- **CSRF**：送了 `Origin`/`Referer` 就必須與 Host 一致（不一致 → 401），完全不送則放行；兩版相同。
 
-**Prowlarr `config/host`**（2026-09-07，票 04；Prowlarr 2.5.2.5491）
+**Prowlarr `config/host`**（2026-09-07，票 04；Prowlarr 2.5.2.5491；[細節](research/setup-api-facts.md#prowlarr-host-config)）
 
-- `GET /api/v1/config/host` 回 39 個欄位；認證相關為 `authenticationMethod`（`none`/`basic`/`forms`/`external`）、`authenticationRequired`（`enabled`/`disabledForLocalAddresses`）、`username`、`password`、`passwordConfirmation`、`apiKey`。
-- 設 Forms 帳密：`PUT /api/v1/config/host/1`，body 是完整的 config/host 物件加上上述五個欄位（**少了 `passwordConfirmation` 會被拒**）→ 回 **202**，Prowlarr 隨即自行重啟，要等它回來才能繼續。
-- 設完之後：不帶 `X-Api-Key` 的 API 回 401，**`GET /ping` 仍然匿名 200**（所以健康檢查不會因為使用者加了密碼而變紅）。`password` 讀回來是雜湊。
-- API key 從 `config.xml` 的 `<ApiKey>` 讀得到（首次啟動即產生，32 字元），與 plan §9.2 的做法一致。
+- `GET /api/v1/config/host` 回 39 個欄位；認證相關：`authenticationMethod`（`none`/`basic`/`forms`/`external`）、`authenticationRequired`（`enabled`/`disabledForLocalAddresses`）、`username`、`password`、`passwordConfirmation`、`apiKey`。
+- 設 Forms 帳密：`PUT /api/v1/config/host/1`，body 是完整 config/host 物件加上述五欄位（**少了 `passwordConfirmation` 會被拒**）→ 回 **202**，Prowlarr 隨即自行重啟，要等它回來。
+- 設完後不帶 `X-Api-Key` 的 API 回 401，**`GET /ping` 仍匿名 200**（健康檢查不會因加密碼變紅，也是「回來了沒」的判準）；`password` 讀回來是雜湊。API key 從 `config.xml` 的 `<ApiKey>` 讀（與 plan §9.2 一致）。
 
-**Jellyfin 帳號規則與伺服器的 metadata 語言**（2026-10-03，M4 票 29；原始碼 v12.1 的 [UserManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Server.Implementations/Users/UserManager.cs)、[StartupController.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/StartupController.cs)、[ConfigurationController.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/ConfigurationController.cs)、[ServerConfiguration.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Model/Configuration/ServerConfiguration.cs)；實測 `scripts/experiments/jellyfin_username_rules.py`）
+**Jellyfin 帳號規則與伺服器的 metadata 語言**（2026-10-03，M4 票 29；原始碼 v12.1 的 [UserManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Server.Implementations/Users/UserManager.cs)、[StartupController.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/StartupController.cs)、[ConfigurationController.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/Jellyfin.Api/Controllers/ConfigurationController.cs)、[ServerConfiguration.cs](https://github.com/jellyfin/jellyfin/blob/v12.1/MediaBrowser.Model/Configuration/ServerConfiguration.cs)；實測 `scripts/experiments/jellyfin_username_rules.py`；[細節](research/setup-api-facts.md#jellyfin-帳號規則與-metadata-語言)）
 
-- **帳號**：`ThrowIfInvalidUsername` 要求不是空白、符合 `ValidUsernameRegex` = `^(?!\s)[\w\ \-'._@+]+(?<!\s)$`、而且不是 `.` 或 `..`；違規丟 `ArgumentException`（`Usernames can contain unicode symbols, numbers (0-9), dashes (-), underscores (_), apostrophes ('), and periods (.)`）→ HTTP 400。.NET 的 `\w` 是 `[\p{L}\p{Mn}\p{Nd}\p{Pc}]`，所以中日文帳號照收；`< > & " / \ : #`、空格以外的空白（tab）都不收，前後不能是空白。master 與 release-12.z 同一條。建立（`CreateUserAsync`）與改名（`RenameUser`）都過它。前端照它先擋（`web/src/setup/jellyfinUsername.ts`）。
-- **`POST /Startup/User` 的順序**：第一個使用者已經有密碼 → 403；密碼 `IsNullOrWhiteSpace` → 400 `Password must not be empty`；然後 `UpdateUserAsync`、**名字不同才 `RenameUser`**（帳號在這裡被拒）、最後才 `ChangePassword`。所以帳號被拒時密碼沒設，第一個使用者仍是「沒有密碼」，改個名字再送就好。
-- **`GET /System/Configuration`** 掛 `[Authorize]`（任何登入的使用者，API key 也行），回 `ServerConfiguration`：`PreferredMetadataLanguage`（預設 `en`）、`MetadataCountryCode`（預設 `US`）、`UICulture`（預設 `en-US`）——`/Startup/Configuration` 寫的就是這三格。套件內媒體庫照前兩格建（plan §9.4 第 4 步），fixture 在 `tests/fixtures/http/jellyfin/system-configuration.json`。
-- **實測**（`lscr.io/linuxserver/jellyfin:version-12.1ubu2604`，一次性容器）：初始精靈期間 `POST /Startup/User` 對 `a<b`、`a>b`、`a&b`、`a"b`、`a/b`、`a`、`a:b`、`a#b`、含 tab、`.`、`..` 都回 **400 `Error processing request.`**（原文不說是帳號的問題，這就是畫面只能說「那一段沒做完」的原因），每一次之後照樣能再試；只有空白的密碼回 400 `Password must not be empty`；`船長 01` 回 204。管理員之後以 `POST /Users/New` 試：`skipper`、`o'brien`、`a.b@c+d-e_f`、`José`、`ナミ`、`..x` 收（200），`a<b`、`.`、` lead`（前導空白）拒（400）。`GET /System/Configuration` 帶 token 200、讀回剛寫的 `zh-TW` / `TW`，匿名 401。
+- **帳號**：`ThrowIfInvalidUsername` 要求不空白、符合 `ValidUsernameRegex` = `^(?!\s)[\w\ \-'._@+]+(?<!\s)$`、不是 `.` 或 `..`；違規丟 `ArgumentException` → HTTP 400。.NET 的 `\w` 是 `[\p{L}\p{Mn}\p{Nd}\p{Pc}]`，中日文帳號照收；`< > & " / \ : #` 與空格以外的空白（tab）不收，前後不能是空白。master 與 release-12.z 同一條；建立（`CreateUserAsync`）與改名（`RenameUser`）都過它。前端照它先擋（`web/src/setup/jellyfinUsername.ts`）。
+- **`POST /Startup/User` 的順序**：第一個使用者已有密碼 → **403**；密碼 `IsNullOrWhiteSpace` → **400** `Password must not be empty`；然後 `UpdateUserAsync`、**名字不同才 `RenameUser`**（帳號在這裡被拒）、最後 `ChangePassword`。帳號被拒時密碼沒設，第一個使用者仍「沒有密碼」，改名再送即可。
+- **`GET /System/Configuration`** 掛 `[Authorize]`（任何登入使用者，API key 也行），回 `ServerConfiguration`：`PreferredMetadataLanguage`（預設 `en`）、`MetadataCountryCode`（預設 `US`）、`UICulture`（預設 `en-US`）——`/Startup/Configuration` 寫的就是這三格。套件內媒體庫照前兩格建（plan §9.4 第 4 步），fixture `tests/fixtures/http/jellyfin/system-configuration.json`。
+- **實測**（`lscr.io/linuxserver/jellyfin:version-12.1ubu2604`，一次性容器）：精靈期間 `POST /Startup/User` 對 `a<b`、`a>b`、`a&b`、`a"b`、`a/b`、`a`、`a:b`、`a#b`、含 tab、`.`、`..` 都回 **400 `Error processing request.`**（原文不說是帳號問題，所以畫面只能說「那一段沒做完」），每次之後都能再試；只有空白的密碼回 400 `Password must not be empty`；`船長 01` 回 204。管理員之後 `POST /Users/New`：`skipper`、`o'brien`、`a.b@c+d-e_f`、`José`、`ナミ`、`..x` 收（200），`a<b`、`.`、` lead` 拒（400）。`GET /System/Configuration` 帶 token 200、讀回剛寫的 `zh-TW` / `TW`，匿名 401。
 
-**硬鏈接腳本**（`scripts/experiments/hardlink.sh`，2026-09-07）
+**硬鏈接腳本**（`scripts/experiments/hardlink.sh`，2026-09-07；[細節](research/setup-api-facts.md#硬鏈接腳本)）
 
-- Linux ext4 單一掛載根：PASS（nlink=2、inode 相同）。Windows NTFS bind mount（9p）：PASS（dev=70）。`torrent/` 與 `library/` 分成兩個 volume：`ln: Cross-device link`，退出碼 1。
-- ext4 那一輪的來源是 **Docker Desktop 自己的 Linux VM**（`/mnt/docker-desktop-disk/...`），daemon 端的檔案系統，與原生 Linux 宿主是同一條 `link()` 路徑，但**不是另一台實體 Linux**。
-- 腳本沒有相依，NAS 上 `sh hardlink.sh /volume1/<share>` 可直接跑。2026-10-08 在 Unraid 7.1.4 的 user share 上直接跑 PASS（§20.14 的 Unraid 那一條）；其他原生 Linux 宿主與 NAS 尚未實測（§20.6）。
+- Linux ext4 單一掛載根：PASS（nlink=2、inode 相同）。Windows NTFS bind mount（9p）：PASS（dev=70）。`torrent/` 與 `library/` 分兩個 volume：`ln: Cross-device link`，退出碼 1。
+- ext4 那一輪來源是 **Docker Desktop 自己的 Linux VM**（daemon 端檔案系統，與原生 Linux 宿主同一條 `link()` 路徑，但**不是另一台實體 Linux**）。腳本無相依，NAS 上 `sh hardlink.sh /volume1/<share>` 可跑。2026-10-08 在 Unraid 7.1.4 user share 上 PASS（§20.14）；其他原生 Linux 宿主與 NAS 尚未實測（§20.6）。
 
 ### 20.8 媒體庫瀏覽用的 Jellyfin API（M1.5 前置）
 
