@@ -5,16 +5,16 @@ name: e2e
 # （tests/e2e/，一輪 compose 五個模組共享；公開 RSS 站由 `sites` 容器冒充，Discord 由 `discord` 容器冒充）。
 # 一輪約 50 分鐘（票 133 本機實跑）——套件內的媒體庫一開始是空的，Jellyfin 的反查要等 Berth 請它掃描之後那一輪；M4 還要等
 # 通知的合併與收齊時間窗——
-# 所以不在每個 push 上跑，只在 nightly 與發版。
+# 所以不在每個 push 上跑，只在 nightly 與發版（release.yml 呼叫，綠了才推 image）。
 on:
   schedule:
     - cron: '23 18 * * *'
-  push:
-    tags: ['v*']
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # 寫死名字：被 release.yml 呼叫時 `github.workflow` 是呼叫端的 `Release`，會跟 CI 那一段同組。
+  group: e2e-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

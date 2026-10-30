@@ -14,11 +14,14 @@
 2. 合進 `main`、全部檢查與 test 綠燈之後 `git tag v0.2.5 && git push origin v0.2.5`。預發佈（`v0.3.0-rc1`）一樣要先有
    `## [0.3.0-rc1]` 那一段，否則 image 推完、Release 才失敗。
 
-`v*` tag 上 `.github/workflows/release.yml` 先推 image 到 GHCR（`:0.2.5`、`:0.2`、`:latest`），再建 Release：
+`v*` tag 上 `.github/workflows/release.yml` **先過閘門**：對這個 tag 的 commit 跑完整的 CI（`ci.yml`），再跑真服務的
+e2e（`e2e.yml`，約 50 分鐘），兩個都綠了才推 image 到 GHCR（`:0.2.5`、`:0.2`、`:latest`），再建 Release：
 說明是 CHANGELOG 的 `## [0.2.5]` 那一段（相對連結換成這個 tag 底下的 blob），找不到那一段就失敗；附件取自這個 tag。
+任何一段紅了，什麼都不發佈：修好之後推新的 patch 版 tag，不要移動已經推出去的 tag。整個 Release run 約一小時，
+進度在 Actions 的那一個 Release run 裡（CI 與 e2e 是它的子 job）。`tests/unit/test_release_gate.py` 守著這個順序。
 `-rc` 標成 prerelease，不動 `:latest`，`releases/latest` 也不會指到它。發完確認：
 
-- Release run 綠，Release 頁有 `docker-compose.yml` 與 `example.env` 兩個附件。
+- Release run 綠（含 ci 與 e2e 兩段），Release 頁有 `docker-compose.yml` 與 `example.env` 兩個附件。
 - 匿名 `curl -fsSL https://github.com/1morr/Berth/releases/latest/download/example.env` 拿得到，內容與 tag 底下的
   `deploy/.env.example` 相同（`docker-compose.yml` 同樣比一次）。預發佈不會是 `latest`，把 `latest/download` 換成
   `download/v0.3.0-rc1` 再比。

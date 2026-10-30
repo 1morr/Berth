@@ -71,7 +71,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 - 通知不送真的 Discord：`discord` 容器（`tests/e2e/discord.py`）回 Berth 會打的三支 API（bot 身分、開 DM
   channel、送訊息），把每一則私訊記進自己的 volume，Berth 由 `DISCORD_API_URL` 指過去（`compose.yml`）。
   測試在容器裡寫 `mode` 檔切成每一支回 503，或直接 `docker stop` 它；停掉再起來前面記的還在。
-- GitHub Actions 的 `.github/workflows/e2e.yml` 在 nightly、`v*` tag 與手動觸發時跑同一組指令，
+- GitHub Actions 的 `.github/workflows/e2e.yml` 在 nightly、手動觸發與發版（`release.yml` 呼叫，綠了才推 image）時跑同一組指令，
   TMDB 憑證是 repo secret `TMDB_API_KEY`。
 
 ### 前端 e2e

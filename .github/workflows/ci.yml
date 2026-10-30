@@ -6,9 +6,12 @@ on:
   pull_request:
   # 在任一分支上手動跑一次（例如故意改壞一個選擇器，看 web-e2e 紅得起來、證據撿得到）。
   workflow_dispatch:
+  # release.yml 發版前先跑一次（閘門）。
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # 寫死名字：被 release.yml 呼叫時 `github.workflow` 是呼叫端的 `Release`，會跟 e2e 那一段同組。
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

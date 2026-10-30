@@ -1,13 +1,31 @@
 name: Release
 
 # 版本 tag 才發佈；日常的 image 是否 build 得起來由 CI 的 image job 顧。
+# **測試是閘門**：這個 tag 的 commit 先跑完整的 CI、再跑真服務的 e2e（約 50 分鐘），都綠了才推 image、建 Release。
+# 0.4.0 以前三個 workflow 各自由 tag 觸發、互不等待，image 推完 e2e 才開始跑。e2e build 自己的 Berth
+# （tests/e2e/stack.py），不用這裡推的 image，所以不必先推再驗。tests/unit/test_release_gate.py 守著這個順序。
 on:
   push:
     tags: ['v*']
 
 jobs:
+  ci:
+    name: ci
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  e2e:
+    name: e2e
+    needs: ci
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
+    secrets: inherit
+
   image:
     name: image
+    needs: e2e
     runs-on: ubuntu-latest
     permissions:
       contents: read
