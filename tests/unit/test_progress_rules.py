@@ -85,12 +85,12 @@ class TestTheGatesThemselves:
         return self.text().replace("\n\n## 偏差與決定", f"\n{row}\n\n## 偏差與決定", 1)
 
     def test_an_over_long_row_is_caught(self) -> None:
-        row = "| 2026-10-31 | docs-diet 99 太長 | " + "字" * 200 + " | 下一步 |"
+        row = "| 2026-10-31 | M6 99 太長 | " + "字" * 200 + " | 下一步 |"
         assert len(row) > MAX_LENGTH
         assert any("上限" in item for item in problems(self.with_row(row)))
 
     def test_an_over_long_deviation_is_caught(self) -> None:
-        line = "- 2026-10-31 docs-diet 票 99：" + "字" * 200
+        line = "- 2026-10-31 M6 票 99：" + "字" * 200
         assert any("上限" in item for item in problems(self.text() + line + "\n"))
 
     def test_a_row_without_a_milestone_is_caught(self) -> None:
@@ -114,9 +114,11 @@ class TestTheGatesThemselves:
 
     def test_a_milestone_missing_from_the_table_is_caught(self) -> None:
         text = "\n".join(
-            line for line in self.text().splitlines() if not line.startswith("| docs-diet |")
+            line
+            for line in self.with_row("| 2026-10-31 | M6 1 甲 | 結果 | 下一步 |").splitlines()
+            if not line.startswith("| M6 |")
         )
-        assert any("docs-diet" in item for item in problems(text))
+        assert any("M6" in item for item in problems(text))
 
     def test_unrelated_formatting_is_not_caught(self) -> None:
         text = self.text()
@@ -124,7 +126,8 @@ class TestTheGatesThemselves:
         assert problems(reformatted) == []
 
     def test_reordering_rows_is_not_caught(self) -> None:
-        lines = self.text().splitlines()
-        first = next(i for i, line in enumerate(lines) if line.startswith("| 2026-10-30 |"))
+        rows = "| 2026-10-31 | M6 1 甲 | 結果 | 下一步 |\n| 2026-11-01 | M6 2 乙 | 結果 | 下一步 |"
+        lines = self.with_row(rows).splitlines()
+        first = next(i for i, line in enumerate(lines) if line.startswith("| 2026-10-31 |"))
         lines[first], lines[first + 1] = lines[first + 1], lines[first]
         assert problems("\n".join(lines)) == []
