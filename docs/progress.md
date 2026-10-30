@@ -45,6 +45,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 05a plan §0–§2 去歷史 | §0–§2 歷史標記 118 → 0；照 `berth/models/` 補通知、週報、`duplicate_of` 等缺的欄位；Spec 軸比對補回 6 項；對照表在票 Comments | `/implement` 票 05b |
 | 2026-10-30 | docs-diet 05b plan §3–§5 去歷史 | §3–§5 歷史標記 79 → 1；長表格列拆成條列；`AiPlanner` 與數個識別符照程式修正；Spec 軸比對補回 5 項；對照表在票 Comments | `/implement` 票 05c |
 | 2026-10-30 | docs-diet 04c brief §10–§18 去歷史 | 歷史標記 90 → 3（只剩研究檔名）；269 行 82 KB → 545 行 75 KB；號碼不變；Spec 軸補回 8 項；對照表與 3 條矛盾（§18 的 AI 里程碑等）在票 Comments 問使用者 | `/implement` 票 05c |
+| 2026-10-30 | docs-diet 05e plan §9 去歷史 | §9 歷史標記 102 行 → 0；長段拆清單，88.6 → 83.7 KB；號碼不變；Spec 軸補回 6 處；對照表與 6 條矛盾（偵測用語、`stop` 在哪給等）在票 Comments 問使用者 | `/implement` 票 05d |
 | 2026-10-30 | docs-diet 05c plan §6–§7 去歷史 | §6–§7 歷史標記 253 → 2（連結檔名）；長表格列拆成每群一節；對照 `schema.d.ts` 與程式補 `/settings/ai`、`/weekly`、`setup/*` 門禁等；Spec 軸比對補回 7 項；對照表在票 Comments | `/implement` 票 05d |
 | 2026-10-30 | docs-diet 05d plan §8、§10、§11.7–§12 去歷史 | 歷史標記 107 → 3（只剩研究檔名）；長段與 e2e 表格列拆成條列；錯誤映射、前端 e2e 範圍等照程式修正；Spec 軸補回 3 項；對照表在票 Comments | `/implement` 票 05e |
 
