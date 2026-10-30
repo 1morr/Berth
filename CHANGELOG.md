@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
+**從 0.3.0 升級**：`docker compose pull && docker compose up -d` 就好；`docker-compose.yml` 與 `.env` 沒有變。
+image 是 `ghcr.io/1morr/berth:0.4.0`，同時是 `:0.4` 與 `:latest`——固定在 `:0.3` 的不會自動升到這一版，要把
+`berth` 的 image 改成 `:0.4`。下面改到的 API 只有 Berth 自己的畫面在用，升級之後重新整理一次頁面即可。
+**這一版有九個資料庫 migration**（Berth 啟動時自動依序套用一次，各自寫在下面那一條）；升級前備份一次
+`${CONFIG_ROOT}/berth`。
+這一版是 M5「AI 助理」：頁首多一個「助理」側面板，要先在設定 → AI 填你自己的模型服務（Anthropic 或 OpenAI 相容）
+與 key；不填也照舊運作，只是沒有助理。選 OpenAI 相容接口時建議另填 Tavily key，整部系列與評價要用網路搜尋。
+助理改東西（送單、訂閱、刪訂閱）一律先出確認卡，你按了才做。
+
 ### Added
 
 - **助理看得到 Jellyfin 裡已有的東西**（M5 票 28）：自己複製進 Jellyfin、或舊安裝入庫而 Berth 沒有紀錄的集，作品頁季表標成
