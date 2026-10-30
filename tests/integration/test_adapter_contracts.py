@@ -3558,6 +3558,71 @@ async def test_jellyfin_episodes_of_a_show_this_user_cannot_see_are_not_found() 
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_jellyfin_episodes_of_a_whole_show_come_in_one_request() -> None:
+    """不帶 `seasonId`：兩季五集一次回來（M5 票 28，12.1.0 錄）。季集號不靠 `fields`。"""
+    route = respx.get(f"{JELLYFIN_URL}/Shows/{ALPHA_SHOW}/Episodes").respond(
+        200, text=read_fixture("http/jellyfin/shows-episodes.series.json")
+    )
+
+    episodes = await jellyfin_call(
+        lambda client: client.series_episodes(user_id=RESTRICTED_USER, series_id=ALPHA_SHOW)
+    )
+
+    assert dict(route.calls.last.request.url.params) == {
+        "userId": RESTRICTED_USER,
+        "isMissing": "false",
+    }
+    assert [(item.season, item.episode_start, item.season_id) for item in episodes] == [
+        (1, 1, ALPHA_SEASON_ONE),
+        (1, 2, ALPHA_SEASON_ONE),
+        (1, 3, ALPHA_SEASON_ONE),
+        (2, 1, ALPHA_SEASON_TWO),
+        (2, 2, ALPHA_SEASON_TWO),
+    ]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_episodes_carry_their_premiere_date_and_no_tmdb_episode_id() -> None:
+    """網路 metadata 開著的媒體庫（M5 票 28，12.1.0 錄）：集的 `PremiereDate` 就是 TMDB 的播出日，
+    Berth 照它對 TMDB 的集；集的 `ProviderIds` 沒有 `Tmdb`（只有 Tvdb、Imdb），所以 `tmdb_id`
+    是空的。"""
+    show = "4bb530a55ea897f6cb0f0cc4e6c38939"
+    respx.get(f"{JELLYFIN_URL}/Shows/{show}/Episodes").respond(
+        200, text=read_fixture("http/jellyfin/shows-episodes.series.providers.json")
+    )
+
+    episodes = await jellyfin_call(
+        lambda client: client.series_episodes(user_id=RESTRICTED_USER, series_id=show)
+    )
+
+    assert [(item.season, item.episode_start, item.premiere_date) for item in episodes] == [
+        (1, 1, date(2022, 4, 9)),
+        (1, 2, date(2022, 4, 16)),
+        (1, 3, date(2022, 4, 23)),
+        (2, 1, date(2023, 10, 7)),
+    ]
+    assert {item.tmdb_id for item in episodes} == {""}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_jellyfin_episodes_of_a_whole_show_this_user_cannot_see_are_not_found() -> None:
+    """不帶 `seasonId` 一樣套權限：同一個 404 與 `"Series not found"`。"""
+    respx.get(f"{JELLYFIN_URL}/Shows/{FORBIDDEN_FRIEREN}/Episodes").respond(
+        404, text=read_fixture("http/jellyfin/shows-episodes.series.forbidden.json")
+    )
+
+    with pytest.raises(NotFoundError):
+        await jellyfin_call(
+            lambda client: client.series_episodes(
+                user_id=RESTRICTED_USER, series_id=FORBIDDEN_FRIEREN
+            )
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("fixture", "series", "expected"),
     [

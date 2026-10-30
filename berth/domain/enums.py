@@ -605,7 +605,7 @@ class InventoryStatus(StrEnum):
 
 
 class EpisodeStatus(StrEnum):
-    """Media 詳情集表上一集的入庫狀態（票 13，使用者拍板五種）。
+    """Media 詳情集表上一集的入庫狀態（票 13，使用者拍板五種；M5 票 28 加 `in_jellyfin`）。
 
     **宣告順序就是優先序**：第二個版本在下載的那一集已經看得了，所以是已入庫。
     「卡住」與「下載中」分開、「未播出」與「缺」分開：停在待審的那一集說成下載中是騙人，
@@ -618,10 +618,26 @@ class EpisodeStatus(StrEnum):
     STUCK = "stuck"
     #: 有一筆還在路上的 Job，它的計劃（含下載中的預估）蓋到這一集。
     DOWNLOADING = "downloading"
-    #: 已經播出，而上面三件都不成立。
+    #: Jellyfin 有這一集（這位使用者看得到的那一份），Berth 的帳本沒有：自己複製進去的、舊安裝入庫的
+    #: （M5 票 28）。不算缺：缺集搜尋不搜它，播了沒播都一樣。
+    IN_JELLYFIN = "in_jellyfin"
+    #: 已經播出，而上面四件都不成立。
     MISSING = "missing"
     #: 還沒播，或 TMDB 還沒有播出日。
     UNAIRED = "unaired"
+
+
+class InJellyfin(StrEnum):
+    """這部作品在這位使用者看得到的 Jellyfin 裡有沒有（M5 票 28，`MediaView.jellyfin`）。
+
+    與 `JellyfinPresence` 不同：那一個問的是 Berth 入庫的檔案 Jellyfin 收錄了沒，這一個不管帳本。
+    """
+
+    FOUND = "found"
+    #: 不在，或在一個這個人看不到的媒體庫裡（同一個答案，觀看區的規矩）。
+    ABSENT = "absent"
+    #: 沒能問 Jellyfin（沒設定、連不上、帳號停用）。集的狀態照帳本與 Job 說，沒有 `in_jellyfin`。
+    UNKNOWN = "unknown"
 
 
 class JellyfinPresence(StrEnum):

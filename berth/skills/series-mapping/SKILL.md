@@ -6,6 +6,7 @@ description: >-
   series, "every season", a franchise, or asks how its seasons line up with TMDB.
 tools:
   - discover.search_media
+  - inventory.find_in_library
   - media.read_media
   - search.search_torrents
   - downloading.add_manual_download
@@ -48,10 +49,17 @@ tools:
 5. Movies, and many OVAs, are separate TMDB movies or land in TMDB's specials (season 0).
    Search each one's title with `discover_search_media`: a theatrical release is usually its
    own TMDB movie. Mark that row "matched by title, please check".
-6. Read every TMDB entry with `media_read_media`: confirm it exists and see how many episodes
-   are already imported. Do not offer what is already there.
+6. Read every TMDB entry with `media_read_media`: confirm it exists and see which episodes the
+   user already has: `imported` (in Berth's records) and `in_jellyfin` (in the user's Jellyfin
+   but not in Berth's records). Do not offer either again. `jellyfin_maybe` episodes are still
+   missing (a Jellyfin episode with that number matches no TMDB air date): offer them, and say so. For movies and OVAs, `jellyfin:
+   found` means the user has it. If `jellyfin` is `unknown`, say Berth could not check Jellyfin.
+   One `inventory_find_in_library` call with the parts' titles finds what Jellyfin holds under
+   other names; a match with `exact: false` may be another part, so check its title. When several parts are only in Jellyfin, suggest rebuilding the ledger: the
+   button "從媒體庫重建帳本" ("Rebuild the ledger from the library") at the top of Berth's Issues
+   page (待處理); a non-admin asks an admin.
 7. Show the user one table before searching for any release:
-   part | format | episodes | TMDB entry and SxxEyy range | already imported | mark.
+   part | format | episodes | TMDB entry and SxxEyy range | already have | mark.
    The confirmation card has no place for notes, so the table is where the user sees the marks.
    Leave shorts, recaps and spin-offs unticked and ask which rows they want.
 8. Only after they choose, search with `search_search_torrents`. A franchise has many parts,

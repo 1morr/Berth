@@ -117,6 +117,15 @@ class SubscriptionRefOut(BaseModel):
     subgroup: str
 
 
+class HeldEpisodeOut(BaseModel):
+    """作品已經有的一集，TMDB 的季集號（M5 票 28）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: int
+    episode: int
+
+
 class ProposalPreviewOut(BaseModel):
     """提出那一刻伺服器算的。卡片照 `effect` 與 `flags` 說「不可逆」「會送出 torrent」。"""
 
@@ -141,6 +150,8 @@ class ProposalPreviewOut(BaseModel):
     existing: list[list[SubscriptionRefOut]]
     #: 逐列：卡片上能不能選第一輪（關鍵字訂閱）。都不能是空清單。
     first_batch: list[bool]
+    #: 逐列：這個發佈蓋到的集裡作品已經有的（帳本或 Jellyfin，M5 票 28）。不是送單的命令是空清單。
+    held: list[list[HeldEpisodeOut]]
 
 
 class ProposalRowOut(BaseModel):

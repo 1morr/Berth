@@ -75,6 +75,7 @@ from berth.services.executor import CommandRefusal, CommandRefusedError, Executo
 from berth.services.media import route_offer
 from berth.services.registry import CommandSpec, Verdict, commands, dry_run, public_arguments
 from berth.services.rss import SubscriptionRef
+from berth.services.search import HeldEpisode
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,9 @@ class ProposalPreview:
     #: 逐列：卡片上能不能選第一輪（命令輸入有 `first_batch` 的：關鍵字訂閱，M5 票 26）。
     #: 都不能是空的。
     first_batch: tuple[bool, ...] = ()
+    #: 逐列：這個發佈蓋到的集裡作品已經有的（帳本或 Jellyfin，M5 票 28）。由伺服器算、卡片照標
+    #: 「含已有的第 N 集」，不靠模型說。不是送單的命令、票 28 之前存的卡是空的。
+    held: tuple[tuple[HeldEpisode, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,12 +254,13 @@ async def propose(
     torrents: Sequence[int | None] = (),
     subgroups: Sequence[SubgroupAsk | None] = (),
     existing: Sequence[Sequence[SubscriptionRef]] = (),
+    held: Sequence[Sequence[HeldEpisode]] = (),
     now: datetime | None = None,
 ) -> ProposalView:
     """建一張卡片（模組 docstring 第 1 點）。輸入格式不對是 pydantic 的 `ValidationError`。
 
     AI 提出的帶 `tool_call_id`（提出它的那一次工具呼叫），恢復那一輪時靠它找回卡片；
-    `external_fields`、`held_back`、`torrents`、`subgroups` 與 `existing` 照實記進預覽
+    `external_fields`、`held_back`、`torrents`、`subgroups`、`existing` 與 `held` 照實記進預覽
     （`ProposalPreview`），由提出它的那一方算（`services.agent`：字幕組要讀番組頁或搜尋）。
     """
     if external_fields and len(external_fields) != len(rows):
@@ -291,6 +296,7 @@ async def propose(
         first_batch=(
             tuple(True for _ in arguments) if "first_batch" in spec.input.model_fields else ()
         ),
+        held=tuple(tuple(found) for found in held),
     )
     proposal = Proposal(
         command=name,
@@ -786,12 +792,20 @@ def _view(proposal: Proposal) -> ProposalView:
                         name=ref["name"],
                         kind=FeedKind(ref["kind"]),
                         subgroup=ref["subgroup"],
+                        # 票 28 之前存的沒有這兩格。
+                        media_id=ref.get("media_id", ""),
+                        title=ref.get("title", ""),
                     )
                     for ref in refs
                 )
                 for refs in preview.get("existing") or ()
             ),
             first_batch=tuple(preview.get("first_batch") or ()),
+            # 票 28 之前存的卡沒有這一格。
+            held=tuple(
+                tuple(HeldEpisode(**episode) for episode in row)
+                for row in preview.get("held") or ()
+            ),
         ),
         user_id=proposal.user_id,
         proposer=proposal.proposer,

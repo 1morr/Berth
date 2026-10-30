@@ -56,6 +56,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
       subgroups: [],
       existing: [],
       first_batch: [],
+      held: [],
     },
     user_id: 1,
     proposer: 'ai',
@@ -226,6 +227,38 @@ describe('ConfirmCard', () => {
     expect(await screen.findByText('送出了第 2、3 集。')).toBeInTheDocument()
   })
 
+  it('marks each row that includes episodes this title already has (M5 ticket 28)', async () => {
+    serve(
+      card({
+        preview: {
+          ...card().preview,
+          held: [
+            [{ season: 1, episode: 1 }],
+            [],
+            [
+              { season: 1, episode: 3 },
+              { season: 1, episode: 4 },
+              { season: 1, episode: 5 },
+              { season: 2, episode: 1 },
+            ],
+          ],
+        },
+      }),
+      stored('approval-requested'),
+      () => card({ status: 'rejected' }),
+    )
+    renderPanel()
+
+    const section = await screen.findByRole('region', { name: '送出下載' })
+
+    const first = within(section).getByRole('checkbox', { name: '[ANi] SPY×FAMILY - 1' })
+    expect(first.closest('li')).toHaveTextContent('含已有的第 1 季第 1 集')
+    const second = within(section).getByRole('checkbox', { name: '[ANi] SPY×FAMILY - 2' })
+    expect(second.closest('li')).not.toHaveTextContent('含已有')
+    const third = within(section).getByRole('checkbox', { name: '[ANi] SPY×FAMILY - 3' })
+    expect(third.closest('li')).toHaveTextContent('含已有的第 1 季第 3–5 集、第 2 季第 1 集')
+  })
+
   it('says once which folder the first send will fix for good, as the title page does', async () => {
     serve(card(), stored('approval-requested'), () => card({ status: 'rejected' }))
     renderPanel()
@@ -320,6 +353,7 @@ describe('ConfirmCard', () => {
         subgroups: [],
         existing: [],
         first_batch: [],
+        held: [],
       },
     })
     serve(feed, stored('approval-requested'), () => feed)
@@ -352,6 +386,7 @@ describe('ConfirmCard', () => {
           subgroups: [],
           existing: [],
           first_batch: [],
+          held: [],
         },
       }),
       stored('approval-requested'),
@@ -390,6 +425,7 @@ describe('ConfirmCard', () => {
         subgroups: [],
         existing: [],
         first_batch: [],
+        held: [],
       },
       status: 'failed',
       results: [{ outcome: 'refused', reason: 'series_bound', detail: 'tv:1', result: null }],
@@ -427,6 +463,7 @@ describe('ConfirmCard', () => {
           subgroups: [],
           existing: [],
           first_batch: [],
+          held: [],
         },
       })
     serve(mikan([12]), stored('approval-requested'), () => mikan([12]))
@@ -468,6 +505,7 @@ describe('ConfirmCard', () => {
           subgroups: [],
           existing: [],
           first_batch: [],
+          held: [],
         },
         ...more,
       })
@@ -574,6 +612,7 @@ describe('ConfirmCard', () => {
           subgroups: [{ options: [ANI, MOUSE], preselected, required: true }],
           existing: [],
           first_batch: [true],
+          held: [],
         },
         ...more,
       })
@@ -674,6 +713,7 @@ describe('ConfirmCard', () => {
           ],
           existing: [],
           first_batch: [],
+          held: [],
         },
       })
       serve(mikan, stored('approval-requested'), () => mikan)
@@ -720,6 +760,7 @@ describe('ConfirmCard', () => {
         subgroups: [],
         existing: [],
         first_batch: [],
+        held: [],
       },
     })
     serve(gone, stored('approval-requested'), () => gone)

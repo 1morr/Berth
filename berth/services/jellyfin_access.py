@@ -357,6 +357,19 @@ class JellyfinAccess:
             except NotFoundError as exc:
                 raise ItemNotVisibleError("no such season, or not yours to see") from exc
 
+    async def series_episodes(self, series_id: str) -> tuple[JellyfinItem, ...]:
+        """這部劇每一季的集（M5 票 28）。Jellyfin 自己也查可見性（不帶 `seasonId` 一樣 404，12.1.0
+        實測），仍只問 `locate` 確認過的劇：與 `series_next_up` 同一條規矩，閘門不靠別人。"""
+        if series_id not in self._confirmed:
+            raise ItemNotVisibleError("not confirmed as visible to this user")
+        with reachable():
+            try:
+                return await self._client.series_episodes(
+                    user_id=self._user_id, series_id=series_id
+                )
+            except NotFoundError as exc:
+                raise ItemNotVisibleError("no such show, or not yours to see") from exc
+
     async def series_next_up(self, series_id: str) -> JellyfinItem | None:
         """這部劇接下來看哪一集（看到一半的、沒看過的第一集都算），看完了是 `None`。
 

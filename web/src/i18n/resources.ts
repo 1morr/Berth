@@ -1497,6 +1497,13 @@ const zhHant = {
       numbering: '季與集照 TMDB 的編號，入庫的檔名也照這一份。',
       numberingWatched:
         '季與集照 TMDB 的編號，入庫的檔名也照這一份。上面「觀看」的季與集是 Jellyfin 的，兩邊的編號可能不同。',
+      // Jellyfin 的集照播出日對 TMDB（M5 票 28）：對不上的不算有，寧可多下一集。`episodes` 是 Jellyfin 的編號。
+      jellyfinUnmatched_one:
+        'Jellyfin 有 {{count}} 集對不上 TMDB 的任何一集：{{episodes}}（Jellyfin 的編號）。它照舊算缺，缺集搜尋照搜。',
+      jellyfinUnmatched_other:
+        'Jellyfin 有 {{count}} 集對不上 TMDB 的任何一集：{{episodes}}（Jellyfin 的編號）。它們照舊算缺，缺集搜尋照搜。',
+      // 對不上的太多時只列前幾集（Jellyfin 認不到 metadata 時整部劇都對不上）。
+      jellyfinUnmatchedMore: '{{episodes}} 等 {{total}} 集',
       missingTotal_one: '共缺 {{count}} 集',
       missingTotal_other: '共缺 {{count}} 集',
       noneMissingAnywhere: '這部作品沒有缺集',
@@ -1523,10 +1530,14 @@ const zhHant = {
       airDateValue: '播出 {{value}}',
       // 這一集在媒體庫裡的樣子（票 13，使用者拍板五種）。
       inLibrary: '入庫',
+      // 狀態照舊（多半是缺），只是 Jellyfin 有一集編號相同、播出日卻對不上（M5 票 28）。
+      jellyfinMaybe: 'Jellyfin 可能有',
       state: {
         imported: '已入庫',
         downloading: '下載中',
         stuck: '卡住',
+        // Jellyfin 裡有、Berth 的帳本沒有（自己複製進去的、舊安裝入庫的，M5 票 28）：不算缺。
+        in_jellyfin: 'Jellyfin 已有',
         missing: '缺',
         unaired: '未播出',
       },
@@ -4026,6 +4037,9 @@ const zhHant = {
         '這部作品已經有這幾條訂閱。要不要再訂一份由你決定：不要的話按拒絕，或請助理刪掉舊的那條。',
       existingSubgroup: '字幕組 {{subgroup}}',
       existingEvery: '每個字幕組都收',
+      // 送單的一列蓋到作品已經有的集（帳本或 Jellyfin，M5 票 28）：伺服器算的，不是模型說的。
+      held: '含已有的{{episodes}}',
+      heldSeason: '第 {{season}} 季第 {{episodes}} 集',
       // 刪除訂閱（票 26）：刪的是 Feed 與它的紀錄，檔案與綁定留著（`rss.delete_feed`）。
       deleteFeed_one:
         '刪掉之後不再輪詢，它的 {{count}} 筆紀錄一起刪、加回來也找不回。已經下載、入庫的檔案留著，綁好的作品也留著。',
@@ -5853,6 +5867,11 @@ const en: Translations<typeof zhHant> = {
       numbering: 'Seasons and episodes follow TMDB’s numbering, as do the imported file names.',
       numberingWatched:
         'Seasons and episodes follow TMDB’s numbering, as do the imported file names. Watch above uses Jellyfin’s, and the numbers may differ.',
+      jellyfinUnmatched_one:
+        'Jellyfin has {{count}} episode that matches no TMDB episode: {{episodes}} (Jellyfin’s numbering). It still counts as missing, and the missing-episode search still asks for it.',
+      jellyfinUnmatched_other:
+        'Jellyfin has {{count}} episodes that match no TMDB episode: {{episodes}} (Jellyfin’s numbering). They still count as missing, and the missing-episode search still asks for them.',
+      jellyfinUnmatchedMore: '{{episodes}} and more ({{total}} in all)',
       missingTotal_one: '{{count}} episode missing',
       missingTotal_other: '{{count}} episodes missing',
       noneMissingAnywhere: 'Nothing missing',
@@ -5879,9 +5898,11 @@ const en: Translations<typeof zhHant> = {
         imported: 'Imported',
         downloading: 'Downloading',
         stuck: 'Stuck',
+        in_jellyfin: 'In Jellyfin',
         missing: 'Missing',
         unaired: 'Not aired',
       },
+      jellyfinMaybe: 'Maybe in Jellyfin',
       cause: {
         button: 'Why',
         missing: 'Why is it missing?',
@@ -8290,6 +8311,8 @@ const en: Translations<typeof zhHant> = {
         'This title already has these subscriptions. Whether to add another is up to you: if not, press Reject, or ask the assistant to delete the old one.',
       existingSubgroup: 'subgroup {{subgroup}}',
       existingEvery: 'every subgroup',
+      held: 'Includes {{episodes}}, which you already have',
+      heldSeason: 'season {{season}} episode {{episodes}}',
       deleteFeed_one:
         'Once deleted it is no longer polled, and its {{count}} record goes with it for good, even if you add it back. Downloaded and imported files stay, and so do the titles it was bound to.',
       deleteFeed_other:

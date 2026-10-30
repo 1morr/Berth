@@ -214,6 +214,8 @@ Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分
 | `jellyfin/shows-nextup.watching.movies.json` | 同上，加 `parentId=<Movies>`：空 |
 | `jellyfin/shows-seasons.json` | `GET /Shows/{Alpha}/Seasons?userId=U&fields=ItemCounts,PrimaryImageAspectRatio`。兩季，季名是伺服器 UI 語言的「第 1 季」 |
 | `jellyfin/shows-episodes.json` | `GET /Shows/{Alpha}/Episodes?userId=U&seasonId=<第一季>&fields=Overview,PrimaryImageAspectRatio`。三集；集名來自檔名（沒有集的 NFO） |
+| `jellyfin/shows-episodes.series.json` | `GET /Shows/{Alpha}/Episodes?userId=U&isMissing=false`（不帶 `seasonId`，M5 票 28，12.1.0）。兩季五集一次回來；不帶 `fields` 也有季集號 |
+| `jellyfin/shows-episodes.series.providers.json` | `GET /Shows/{SPY x FAMILY}/Episodes?userId=U&isMissing=false&fields=ProviderIds`（M5 票 28 之後，12.1.0，`jellyfin_episode_providers.py --record`）。**與上一列不同：這一台的 TV 媒體庫開著網路 metadata（預設 fetcher），樹是 `SPY x FAMILY (2022) [tmdbid-120089]` 的 S01E01–E03 與 S02E01**。四集都帶 `PremiereDate`（`YYYY-MM-DDT00:00:00.0000000Z`，等於 TMDB 的 `air_date`）與 `ProviderIds` 的 `Imdb`、`Tvdb`——**沒有 `Tmdb`**（Series 才有）。使用者 id、`ServerId`、日期與 item id 都是那一輪一次性容器的 |
 | `jellyfin/items.tmdb-lookup.series.json` | **M1.5 票 08 加錄**（`--record --only`，另一輪一次性容器：使用者 id、`ServerId`、日期與 `ImageTags` 和這一組其他檔案不同；item id 相同）。`GET /Items?userId=U&recursive=true&includeItemTypes=Series&hasTmdbId=true&fields=ProviderIds&enableImages=false&enableUserData=false`（Media 詳情由 TMDB id 找作品，研究 §10，**不帶 `parentId`**）：Alpha、Bravo 與 TV 的 Frieren——Anime 裡同一個 TMDB id 的那一份不在（照這個人的 `UserViews` 限縮），沒有 TMDB id 的 Hotel Show 不在（`hasTmdbId` 真的有過濾） |
 | `jellyfin/items-id.{series,movie}.json` | 同上一輪。`GET /Items/{Alpha Show}?userId=U` 與 `/Items/{Foxtrot Movie}?userId=U` 的 200：不帶 `fields` 就有 `ProviderIds` 與 `UserData`（劇 `UnplayedItemCount` 4、`PlayedPercentage` 20；看到一半的片 `PlayedPercentage` 50）。看不到時的 404 是 `items-id.forbidden.json` |
 | `jellyfin/shows-nextup.series{,.resumable,.unwatched}.json` | 同上一輪。`GET /Shows/NextUp?userId=U&seriesId=<劇>`（jellyfin-web 劇集頁只送這兩個，研究 §7.3）：Alpha 看過 E01 → E02；TV 的 Frieren E01 看到 3 分鐘 → 回 E01 與 `PlayedPercentage` 30（`enableResumable` 伺服器預設 `true`）；Hotel Show 沒看過 → S01E01 |
@@ -230,6 +232,7 @@ Alpha Show 與 Bravo Show 看過第一集、Frieren（TV）第一集看到 3 分
 | `jellyfin/items-id.forbidden.json` | `GET /Items/{無權的劇}?userId=U` 的 **404**。body 是 problem details（`type`、`title`、`status`、`traceId`） |
 | `jellyfin/shows-seasons.forbidden.json` | `GET /Shows/{無權的劇}/Seasons?userId=U` 的 **404**，problem details |
 | `jellyfin/shows-episodes.forbidden.json` | `GET /Shows/{無權的劇}/Episodes?userId=U` 的 **404**。body 是**一個 JSON 字串** `"Series not found"`，不是 problem details——解析 404 不能假設是物件 |
+| `jellyfin/shows-episodes.series.forbidden.json` | 同上不帶 `seasonId`、無權的劇：一樣是 **404** 與 `"Series not found"`（權限照套） |
 | `jellyfin/userplayeditems.forbidden.json` | `POST /UserPlayedItems/{無權的集}?userId=U` 的 **404**，problem details；打完立刻讀回（`ids=` 不檢查權限）確認沒有寫入 |
 | `jellyfin/items.parent-forbidden.json` | `GET /Items?userId=U&parentId=<Anime>&recursive=true` 的 **200**：Anime 的劇、季、集與一個 `Folder` 共 10 筆。**這是洩漏的證據**，不是正常回應——API key 帶 `parentId` 時 Jellyfin 不套權限，所以 Berth 要先對 `UserViews` 驗 `parentId` |
 

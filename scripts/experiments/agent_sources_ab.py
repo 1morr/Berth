@@ -42,7 +42,11 @@ from m5_acceptance_scenarios import (
 
 OUT = ROOT / ".local" / "experiments" / "results" / "agent_sources_ab"
 #: 組名 → 演練情境。`lean` 是 2026-10-28 的精簡組，現在就是產品；逐字稿的檔名照舊帶它。
-GROUPS = {"lean": "agent-live", "missing": "agent-live-missing"}
+GROUPS = {
+    "lean": "agent-live",
+    "missing": "agent-live-missing",
+    "jellyfin": "agent-live-jellyfin",
+}
 #: 完成與等確認之外的停止原因都是防護（或出錯）停下的。
 NORMAL_STOPS = {"completed", "awaiting_confirmation"}
 
@@ -125,11 +129,25 @@ SUBSCRIBE_TASKS = (
     Task("frieren-zh", ("下載葬送的芙莉蓮第一季", ANSWER)),
 )
 
+#: `--set jellyfin --groups jellyfin`（票 28）：Jellyfin 有、帳本沒有。補缺集不該重下 Jellyfin 已有的前四集；
+#: 新番推薦該標出 Jellyfin 已有的兩部。演練情境 `agent-live-jellyfin`。
+JELLYFIN_TASKS = (
+    Task(
+        "missing-jf",
+        ("SPY×FAMILY 第一季缺的集幫我補齊，字幕組照你推薦的挑，直接出卡給我確認。", ANSWER),
+    ),
+    Task(
+        "picks-jf",
+        ("推薦這一季（2026 年秋季）評價好的新番動畫 5 部，附評分與評分人數，說明為什麼推薦。",),
+    ),
+)
+
 SETS = {
     "main": TASKS,
     "more": MORE_TASKS,
     "missing": MISSING_TASKS,
     "subscribe": SUBSCRIBE_TASKS,
+    "jellyfin": JELLYFIN_TASKS,
 }
 
 
@@ -177,11 +195,14 @@ def run_task(
             cards = [found[a["toolCallId"]] for a in asks if a["toolCallId"] in found]
             card = cards[0] if cards else {"missing": True}
             for each in cards:
+                held = (each.get("preview") or {}).get("held") or []
                 log.append(
                     f"> 🟨 **確認卡**（停在這裡，不按）`{each['command']}`，{len(each['arguments'])} 列\n"
                     + "".join(
                         f"> - `{json.dumps(args, ensure_ascii=False)[:300]}`\n"
-                        for args in each["arguments"]
+                        # `preview.held`（票 28）：這一列的發佈蓋到、作品已經有的集。
+                        f">   - held: {json.dumps(held[i] if i < len(held) else None)}\n"
+                        for i, args in enumerate(each["arguments"])
                     )
                     + "".join(subgroup_lines(each))
                 )
@@ -270,7 +291,7 @@ def main() -> None:
         "--set",
         choices=sorted(SETS),
         default="main",
-        help="main：原本四題；more：其餘 14 部；missing：補缺集；subscribe：訂閱與多語言搜尋",
+        help="main：原本四題；more：其餘 14 部；missing：補缺集；subscribe：訂閱與多語言搜尋；jellyfin：Jellyfin 有帳本沒有",
     )
     ap.add_argument("--groups", default="lean")
     ap.add_argument(

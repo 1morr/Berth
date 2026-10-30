@@ -359,8 +359,12 @@ def render(chunks: list[dict[str, Any]]) -> list[str]:
         elif t in ("tool-output-available", "tool-output-error"):
             name, inp = inputs.get(c["toolCallId"], ("?", {}))
             res = c.get("output", c.get("errorText"))
+            # `inventory_find_in_library`（票 28）：傳了哪些名字、回了什麼，是判對錯的證據，不截斷。
+            full = name.endswith("find_in_library")
+            args = json.dumps(inp, ensure_ascii=False)
+            body = json.dumps(res, ensure_ascii=False)
             out.append(
-                f"- 🔧 `{name}({json.dumps(inp, ensure_ascii=False)[:200]})` → {json.dumps(res, ensure_ascii=False)[:260]}"
+                f"- 🔧 `{name}({args if full else args[:200]})` → {body if full else body[:260]}"
             )
         elif t == "tool-approval-request":
             name, inp = inputs.get(c["toolCallId"], ("?", {}))

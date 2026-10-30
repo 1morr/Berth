@@ -92,6 +92,7 @@ from berth.domain import (
     FeedKind,
     JobRefusal,
     Language,
+    MediaSnapshot,
     ProposalStatus,
     Role,
 )
@@ -121,6 +122,7 @@ from berth.services.compaction import (
 )
 from berth.services.executor import CommandRefusedError, Executor
 from berth.services.jobs import JobRejectedError
+from berth.services.media import MediaView, read_snapshot
 from berth.services.proposals import (
     InvalidProposalError,
     ProposalRejectedError,
@@ -136,6 +138,7 @@ from berth.services.rss import (
     search_subgroups,
     subscriptions_of_feed_url,
 )
+from berth.services.search import HeldEpisode, estimate, held_in_release
 from berth.services.settings import read_settings
 from berth.services.skills import menu, skills_for
 from berth.services.usage import SpendCheck, spend_check
@@ -557,15 +560,32 @@ class _RowPreview:
     torrents: int | None = None
     subgroups: SubgroupAsk | None = None
     existing: tuple[SubscriptionRef, ...] = ()
+    held: tuple[HeldEpisode, ...] = ()
 
 
 _Previewer = Callable[["Turn", AsyncSession, Mapping[str, object]], Awaitable[_RowPreview]]
 
 
-async def _one_torrent(
-    _turn: Turn, _session: AsyncSession, _row: Mapping[str, object]
+async def _submit_preview(
+    turn: Turn, session: AsyncSession, row: Mapping[str, object]
 ) -> _RowPreview:
-    return _RowPreview(torrents=1)
+    """送單的一列（M5 票 28）：一個 torrent，與它蓋到的集裡這部作品已經有的——帳本或 Jellyfin
+    （作品經執行器讀，Jellyfin 照提出卡片的那個人打開；同一張卡的同一部作品只讀一次）。集照結果表的
+    同一個預估。來源過期的這裡不擋：換成命令輸入那一步（`_bind_submit`）說得出理由。"""
+    try:
+        source = turn.executor.sources.recall(str(row["source_id"]))
+    except JobRejectedError:
+        return _RowPreview(torrents=1)
+    media_id = str(row["media_id"])
+    if media_id not in turn.card_works:
+        view = await turn.executor.execute(
+            session, "media.read_media", {"media_id": media_id}, turn.actor
+        )
+        snapshot = await read_snapshot(session, turn.executor.factory, media_id)
+        turn.card_works[media_id] = (view, snapshot)
+    view, snapshot = turn.card_works[media_id]
+    guess = estimate(source.title, source.published_at, snapshot)
+    return _RowPreview(torrents=1, held=held_in_release(guess, view.seasons))
 
 
 async def _mikan_preview(
@@ -651,7 +671,7 @@ def _ask(options: tuple[SubgroupOption, ...], picked: str | None) -> SubgroupAsk
 
 #: 卡片命令逐列的預覽（按卡的人要知道送多少、選哪個字幕組、作品已經有哪些訂閱）。沒列的什麼都不算。
 _PREVIEWS: dict[str, _Previewer] = {
-    "downloading.add_manual_download": _one_torrent,
+    "downloading.add_manual_download": _submit_preview,
     "rss.subscribe_mikan": _mikan_preview,
     "rss.subscribe_search": _search_preview,
     "rss.add_feed": _feed_preview,
@@ -962,6 +982,9 @@ class Turn:
     progress: Progress = field(default_factory=Progress)
     #: 這一輪開頭看過要不要壓縮了（每輪最多一次，M5 票 18）。
     compaction_checked: bool = False
+    #: 出一張卡時讀過的作品（`media_id` → 作品與快照，`_submit_preview`）：同一部作品的每一列共用
+    #: 一份，不必每列各問一次 TMDB 與 Jellyfin。每張卡從頭算（`_previews`）。
+    card_works: dict[str, tuple[MediaView, MediaSnapshot | None]] = field(default_factory=dict)
     finished: bool = False
 
     @property
@@ -1099,6 +1122,7 @@ class Turn:
                     existing=(
                         [p.existing for p in previews] if any(p.existing for p in previews) else []
                     ),
+                    held=[p.held for p in previews] if any(p.held for p in previews) else [],
                 )
             except InvalidProposalError as exc:
                 failure = _failure(exc)
@@ -1124,6 +1148,7 @@ class Turn:
         的就不必去讀它。
         """
         preview = _PREVIEWS.get(spec.name)
+        self.card_works.clear()
         kept: list[_RowPreview] = []
         total = 0
         for index, row in enumerate(wanted):

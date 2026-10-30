@@ -46,6 +46,8 @@ TOOLS: tuple[str, ...] = (
     # 票 26：重複訂閱要看得到、刪得掉（試用機上同一部作品兩份訂閱，助理只能說「留著」）。
     "rss.list_subscriptions",
     "rss.delete_feed",
+    # 票 28：Jellyfin 裡已有、Berth 沒紀錄的作品（推薦、補缺集、整部系列前先看）。
+    "inventory.find_in_library",
     # 票 16：推薦新番。
     *ANIME_TOOLS,
     "discover.read_trending",
@@ -172,6 +174,8 @@ def _compact_media(result: object) -> object:
     kept = {k: v for k, v in result.items() if k not in _MEDIA_DROPPED}
     if isinstance(kept.get("seasons"), list):
         kept["seasons"] = [_compact_season(season) for season in kept["seasons"]]
+    if isinstance(kept.get("jellyfin_unmatched"), list):
+        kept["jellyfin_unmatched"] = _compact_unmatched(kept["jellyfin_unmatched"])
     if isinstance(kept.get("files"), list):
         kept["files"] = [
             {key: row[key] for key in _FILE_KEYS if key in row} if isinstance(row, dict) else row
@@ -184,11 +188,33 @@ _MEDIA_DROPPED = frozenset({"poster_url", "poster_url_en", "overview_en"})
 _FILE_KEYS = ("season", "episode_start", "episode_end", "tags", "status", "presence")
 
 
+def _compact_unmatched(rows: list[object]) -> dict[str, object]:
+    """Jellyfin 對不上 TMDB 的那幾集（票 28），照 Jellyfin 的季收成集數範圍（多集檔算它蓋到的
+    每一集）；沒有季集號的只說幾集（`no_number`）。Jellyfin 認不到 metadata 時整部劇都對不上，
+    長篇上千筆。"""
+    by_season: dict[str, list[int]] = {}
+    numberless = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        season, start, end = row.get("season"), row.get("episode_start"), row.get("episode_end")
+        if not isinstance(season, int) or not isinstance(start, int):
+            numberless += 1
+            continue
+        last = end if isinstance(end, int) and end >= start else start
+        by_season.setdefault(str(season), []).extend(range(start, last + 1))
+    compact: dict[str, object] = {season: _ranges(numbers) for season, numbers in by_season.items()}
+    if numberless:
+        compact["no_number"] = numberless
+    return compact
+
+
 def _compact_season(season: object) -> object:
     if not isinstance(season, dict) or not isinstance(season.get("episodes"), list):
         return season
     by_status: dict[str, list[int]] = {}
     jobs: dict[str, str] = {}
+    maybe: list[int] = []
     for episode in season["episodes"]:
         if not isinstance(episode, dict) or not isinstance(episode.get("episode_number"), int):
             continue
@@ -196,10 +222,15 @@ def _compact_season(season: object) -> object:
         by_status.setdefault(status, []).append(episode["episode_number"])
         if episode.get("job"):
             jobs[str(episode["episode_number"])] = str(episode["job"])
+        if episode.get("jellyfin_maybe"):
+            maybe.append(episode["episode_number"])
     compact = {k: v for k, v in season.items() if k != "episodes"}
     compact["episodes"] = {status: _ranges(numbers) for status, numbers in by_status.items()}
     if jobs:
         compact["jobs"] = jobs
+    # 票 28：狀態照舊（多半是缺），只是 Jellyfin 有一集編號相同、卻對不上 TMDB。
+    if maybe:
+        compact["jellyfin_maybe"] = _ranges(maybe)
     if blocks := _aired_blocks(season["episodes"]):
         compact["aired_blocks"] = blocks
     return compact

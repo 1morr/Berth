@@ -16,6 +16,7 @@ import {
   type RouteAsk,
   type SubgroupAsk,
   type SubgroupOption,
+  type HeldEpisode,
   type SubscriptionRef,
 } from '../api/proposals'
 import { Checkbox, CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
@@ -186,6 +187,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
                   setGroupPicks((old) => old.map((value, at) => (at === index ? key : value))),
               }}
               existing={proposal.preview.existing[index] ?? []}
+              held={proposal.preview.held[index] ?? []}
               round={{
                 offered: roundOffers[index] === true,
                 // 按過之後是伺服器記下的那一個；沒記是預設的那一個。
@@ -370,6 +372,7 @@ function RowBody({
   route,
   subgroup,
   existing,
+  held,
   round,
 }: {
   command: string
@@ -382,11 +385,20 @@ function RowBody({
   subgroup: SubgroupSlot
   /** 這部作品提出時已經有的訂閱（票 26）。 */
   existing: readonly SubscriptionRef[]
+  /** 這個發佈蓋到的集裡作品已經有的（帳本或 Jellyfin，票 28）。 */
+  held: readonly HeldEpisode[]
   round: RoundSlot
 }) {
   const { t } = useTranslation()
   // `labelled`：勾選框的標籤已經是發佈名，欄位裡不再印一次。
-  if (isSubmit(command, row)) return <SubmitRowBody row={row} labelled={labelled} route={route} />
+  if (isSubmit(command, row)) {
+    return (
+      <div className="grid gap-1">
+        <SubmitRowBody row={row} labelled={labelled} route={route} />
+        <Held episodes={held} />
+      </div>
+    )
+  }
   if (command === 'rss.add_feed') {
     return (
       <div className="grid gap-2">
@@ -696,6 +708,48 @@ function FirstBatch({
       </p>
     </div>
   )
+}
+
+/**
+ * 這一列的發佈蓋到的集裡，作品已經有的（票 28，使用者 2026-10-30）：伺服器提出時算的（帳本或這個人的
+ * Jellyfin），不靠模型說。照季分組、連續的集收成區間。
+ */
+function Held({ episodes }: { episodes: readonly HeldEpisode[] }) {
+  const { t, i18n: i18nInstance } = useTranslation()
+  if (episodes.length === 0) return null
+  const language = i18nInstance.language
+  const seasons = [...new Set(episodes.map((one) => one.season))].sort((a, b) => a - b)
+  const parts = seasons.map((season) =>
+    t('agent.card.heldSeason', {
+      season,
+      episodes: formatList(
+        spans(episodes.filter((one) => one.season === season).map((one) => one.episode)),
+        language,
+      ),
+    }),
+  )
+  return (
+    <p className="label text-xs text-ink">
+      {t('agent.card.held', { episodes: formatList(parts, language) })}
+    </p>
+  )
+}
+
+/** `[3, 4, 5, 7]` → `['3–5', '7']`。 */
+function spans(numbers: readonly number[]): string[] {
+  const ordered = [...new Set(numbers)].sort((a, b) => a - b)
+  const found: string[] = []
+  let start = ordered[0]
+  let previous = start
+  for (const number of [...ordered.slice(1), null]) {
+    if (number !== null && number === previous + 1) {
+      previous = number
+      continue
+    }
+    found.push(start === previous ? `${start}` : `${start}–${previous}`)
+    if (number !== null) start = previous = number
+  }
+  return found
 }
 
 /** 這部作品已經有的訂閱（票 26）：說出來，要不要再訂一份由人決定。 */

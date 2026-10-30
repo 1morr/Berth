@@ -16,14 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from berth.api.commands import Command, Run
-from berth.api.deps import ClientFactoryDep, SessionDep
+from berth.api.deps import SessionDep
 from berth.api.schemas import StepOut
 from berth.domain import IndexerProblem, MappingStrategy, NameKind, SearchVerdict, Source
 from berth.services.search import (
     QueryPlan,
     QueryScope,
     SearchView,
-    plan_queries,
     remember_names,
 )
 from berth.services.search_queries import QueryChoice
@@ -234,8 +233,8 @@ AnySeasonParam = Annotated[
 
 @router.get("/queries")
 async def get_queries(
-    session: SessionDep,
-    factory: ClientFactoryDep,
+    # 經執行器：缺集要看這個人的 Jellyfin 有哪幾集，與搜尋同一條（M5 票 28）。
+    plan: Annotated[Run, Depends(Command("search.plan_queries"))],
     media: Annotated[str, Query(description="`tv:<tmdb>` / `movie:<tmdb>`。")],
     missing: MissingParam = False,
     season: SeasonParam = None,
@@ -245,13 +244,12 @@ async def get_queries(
     any_season: AnySeasonParam = True,
 ) -> SearchQueriesOut:
     """不打索引站，只讀快照、記住的名字種類與這部作品的入庫狀態。"""
-    plan = await plan_queries(
-        session,
-        factory,
-        media_id=media,
-        scope=_scope(missing, season, from_season, _choice(name, in_season, any_season)),
+    return _plan_out(
+        await plan(
+            media_id=media,
+            scope=_scope(missing, season, from_season, _choice(name, in_season, any_season)),
+        )
     )
-    return _plan_out(plan)
 
 
 @router.put("/names")

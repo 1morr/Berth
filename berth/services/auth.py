@@ -243,6 +243,14 @@ async def _find_mirror(session: AsyncSession, jellyfin_user_id: str) -> User | N
     return row
 
 
+# 執行器替 actor 打開他的 Jellyfin 時讀（M5 票 28）：身分，不是工具。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def read_user(session: AsyncSession, user_id: int) -> AuthenticatedUser | None:
+    """`users` 的一列。不在了是 `None`。"""
+    row = await session.get(User, user_id)
+    return None if row is None else _view(row)
+
+
 def _view(user: User) -> AuthenticatedUser:
     return AuthenticatedUser(
         id=user.id, name=user.name, role=user.role, jellyfin_user_id=user.jellyfin_user_id

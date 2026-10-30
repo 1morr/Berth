@@ -878,7 +878,10 @@ class TestExistingSubscriptionsAreSaid:
         decide(client, second["id"], approve=True)
         resume(client, tool_call_id="m1")
         [outcome] = outcome_of_call(script, "m1")["rows"]
-        assert outcome["existing_subscriptions"] == [said]
+        # 給模型的那一份另外說是哪一部（票 28），卡片上不畫。
+        assert outcome["existing_subscriptions"] == [
+            {**said, "media_id": SPY_ID, "title": "SPY x FAMILY"}
+        ]
 
     def test_a_work_with_no_subscription_says_nothing(
         self, client: TestClient, script: Script, factory: FakeClientFactory

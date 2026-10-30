@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from berth.adapters.http import AuthFailedError, ServiceError, ServiceTimeoutError
 from berth.adapters.indexer import IndexerResult, IndexerSearch, SearchQuery
 from berth.domain import (
+    EpisodeStatus,
     IndexerProblem,
     MappingStrategy,
     MediaSnapshot,
@@ -61,6 +62,8 @@ from berth.parser import (
 from berth.parser.structure import StructureHints
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
+from berth.services.inventory import SeasonView
+from berth.services.jellyfin_access import JellyfinAccess
 from berth.services.jobs import JobSource
 from berth.services.media import read_media, read_snapshot
 from berth.services.search_queries import (
@@ -248,13 +251,15 @@ class QueryPlan:
     limit: int = MAX_QUERIES
 
 
-@command(Effect.READ)
+# 搜尋前的預覽：與搜尋本身同一群人（`search_torrents`）。
+@command(Effect.READ, audience=Role.USER)
 async def plan_queries(
     session: AsyncSession,
     factory: ServiceClientFactory,
     *,
     media_id: str,
     scope: QueryScope = DEFAULT_SCOPE,
+    access: JellyfinAccess | None = None,
 ) -> QueryPlan:
     """按下搜尋之前，Berth 會拿哪幾個名字去問（PRODUCT 原則 2：動手前先給看）。
 
@@ -268,7 +273,7 @@ async def plan_queries(
     """
     snapshot = await read_snapshot(session, factory, media_id)
     chosen = scope.choice or await _default(session, snapshot)
-    batches, queries = await _texts(session, factory, media_id, snapshot, scope, chosen)
+    batches, queries = await _texts(session, factory, access, media_id, snapshot, scope, chosen)
     ready = await _indexer(session) is not None
     return QueryPlan(
         queries,
@@ -309,6 +314,7 @@ async def _default(session: AsyncSession, snapshot: MediaSnapshot | None) -> Que
 async def _texts(
     session: AsyncSession,
     factory: ServiceClientFactory,
+    access: JellyfinAccess | None,
     media_id: str,
     snapshot: MediaSnapshot | None,
     scope: QueryScope,
@@ -317,13 +323,16 @@ async def _texts(
     """要問的查詢（與缺集時的每一批）。預覽與搜尋共用**這一份**（票 10、84）。
 
     `chosen` 是 `scope.choice` 補上預設之後的那一份：呼叫端自己也要它（預覽回給畫面）。
+    `access` 是這個人看得到的 Jellyfin：Jellyfin 已有的集不算缺（M5 票 28）。
     """
     if snapshot is None:
         return (), ()
     if not scope.missing:
         return (), title_queries(snapshot, chosen)
     names = chosen_names(snapshot, chosen)
-    batches = await _missing(session, factory, media_id, names, scope.season, scope.from_season)
+    batches = await _missing(
+        session, factory, access, media_id, names, scope.season, scope.from_season
+    )
     return batches, (batches[0].queries if batches else ())
 
 
@@ -339,6 +348,7 @@ async def _indexer(session: AsyncSession) -> IndexerSettings | None:
 async def _missing(
     session: AsyncSession,
     factory: ServiceClientFactory,
+    access: JellyfinAccess | None,
     media_id: str,
     names: tuple[str, ...],
     season: int | None,
@@ -350,10 +360,12 @@ async def _missing(
     季還是那幾季。
 
     缺集那一種要的是現在的帳本與 Job 說了什麼（`read_media` 的季表），不是快照上的季集——
-    快照只知道 TMDB 有幾集，缺哪幾集是這一台機器上的事。
+    快照只知道 TMDB 有幾集，缺哪幾集是這一台機器上的事。**Jellyfin 已有、帳本沒有的集不問**
+    （`in_jellyfin`，M5 票 28）：缺集搜尋問的是「我沒有的集」；要換版本的人照名字搜。問不到
+    Jellyfin（`access` 是 `None`）時照帳本當缺。
     """
     # 快照由呼叫端讀過了（那一趟已經套過 24 小時的規則），所以這一趟只讀資料庫，不打 TMDB。
-    view = await read_media(session, factory, media_id)
+    view = await read_media(session, factory, media_id, access)
     later = [row for row in view.seasons if row.season_number >= from_season]
     return missing_batches(names, later, season=season)
 
@@ -377,7 +389,8 @@ def _batch(batches: tuple[QueryBatch, ...]) -> BatchView | None:
         "Search the user's indexers for releases of one work (media_id from search_media). "
         "Leave query empty to search by the work's names; pass query to search one exact "
         "phrase instead. To look only for the episodes the library is missing, pass "
-        "scope: {missing: true, season: <n>} (season works only together with missing). "
+        "scope: {missing: true, season: <n>} (season works only together with missing); "
+        "episodes the user's Jellyfin already has (in_jellyfin) are not missing. "
         "Each row has a source_id: pass it to send that release as a download. "
         "Rows come grouped by verdict, best matches first. You see the first 10, plus any "
         "later fits row for an episode those do not cover; rows_not_shown says how many more "
@@ -394,6 +407,7 @@ async def search_torrents(
     query: str = "",
     scope: QueryScope = DEFAULT_SCOPE,
     timeout: float = QUERY_TIMEOUT_SECONDS,
+    access: JellyfinAccess | None = None,
 ) -> SearchView:
     """一部作品現在有哪些發佈可以下載。
 
@@ -423,7 +437,7 @@ async def search_torrents(
         return _blank(IndexerProblem.NO_QUERY)
     else:
         chosen = scope.choice or await _default(session, snapshot)
-        batches, texts = await _texts(session, factory, media_id, snapshot, scope, chosen)
+        batches, texts = await _texts(session, factory, access, media_id, snapshot, scope, chosen)
         judge = partial(_judge, snapshot=snapshot)
     if not texts:
         return _blank(IndexerProblem.NO_QUERY)
@@ -609,6 +623,38 @@ class Estimate:
     episode_end: int | None
     whole_season: bool
     strategy: MappingStrategy | None
+
+
+@dataclass(frozen=True, slots=True)
+class HeldEpisode:
+    """這部作品已經有的一集（帳本有或 Jellyfin 已有）。TMDB 的季集號。"""
+
+    season: int
+    episode: int
+
+
+#: 「已經有」：帳本有，或這個人的 Jellyfin 有（M5 票 28）。
+HELD = frozenset({EpisodeStatus.IMPORTED, EpisodeStatus.IN_JELLYFIN})
+
+
+def held_in_release(guess: Estimate, seasons: Sequence[SeasonView]) -> tuple[HeldEpisode, ...]:
+    """一個發佈（預估的季集）蓋到的集裡，這部作品已經有的（送單確認卡逐列標，M5 票 28）。
+    整季包是那一季的每一集；看不出季集的什麼都不說——卡片不替判斷不出來的發佈下結論。"""
+    season = next((row for row in seasons if row.season_number == guess.season), None)
+    if season is None:
+        return ()
+    if guess.whole_season:
+        covered = {row.episode_number for row in season.episodes}
+    elif guess.episode_start is not None:
+        last = guess.episode_end if guess.episode_end is not None else guess.episode_start
+        covered = set(range(guess.episode_start, last + 1))
+    else:
+        return ()
+    return tuple(
+        HeldEpisode(season.season_number, row.episode_number)
+        for row in season.episodes
+        if row.episode_number in covered and row.status in HELD
+    )
 
 
 def estimate(title: str, published_at: datetime | None, snapshot: MediaSnapshot | None) -> Estimate:

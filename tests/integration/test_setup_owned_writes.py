@@ -141,6 +141,7 @@ READS: dict[ServiceKind, frozenset[str]] = {
             "item",
             "seasons",
             "episodes",
+            "series_episodes",
             "series_next_up",
             "image",
             "aclose",

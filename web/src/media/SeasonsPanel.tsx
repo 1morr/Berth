@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next'
 
 import type { Media } from '../api/media'
 import { COMPACT_BUTTON, NAV_BOX, NAV_BOX_ACTIVE } from '../components/controls'
+import { formatJellyfinEpisode } from '../components/episodes'
 import { SectionHeading } from '../components/SectionHeading'
+import { formatList } from '../i18n/list'
+import type { TFunction } from 'i18next'
 import { missingOf } from './missing'
 import { SeasonList } from './SeasonList'
 
@@ -31,7 +34,7 @@ export function SeasonsPanel({
   /** 缺集一鍵搜：整部作品是 `null`，一季是那一季的季號（M1.5 票 10）。 */
   onSearchMissing: (season: number | null) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const headingId = useId()
   const [missingOnly, setMissingOnly] = useState(false)
   const listed = media.kind !== 'movie' && media.seasons.length > 0
@@ -57,6 +60,16 @@ export function SeasonsPanel({
       {listed && (
         <p className="max-w-prose text-xs text-ink-dim">
           {watched ? t('media.season.numberingWatched') : t('media.season.numbering')}
+        </p>
+      )}
+      {/* Jellyfin 的集照播出日對 TMDB（票 28）：對不上的不算有。說出是哪幾集（Jellyfin 的編號），
+          季表上同編號的那一集另標「Jellyfin 可能有」。 */}
+      {listed && media.jellyfin_unmatched.length > 0 && (
+        <p className="max-w-prose text-xs text-ink">
+          {t('media.season.jellyfinUnmatched', {
+            count: media.jellyfin_unmatched.length,
+            episodes: unmatchedList(media.jellyfin_unmatched, i18n.language, t),
+          })}
         </p>
       )}
 
@@ -102,4 +115,17 @@ export function SeasonsPanel({
       )}
     </section>
   )
+}
+
+/** 季表上方那一句最多列幾集：Jellyfin 認不到 metadata 時整部劇都對不上，長篇上千集（票 28）。 */
+const UNMATCHED_SHOWN = 10
+
+function unmatchedList(rows: Media['jellyfin_unmatched'], language: string, t: TFunction): string {
+  const shown = formatList(
+    rows.slice(0, UNMATCHED_SHOWN).map((one) => formatJellyfinEpisode(one) || '?'),
+    language,
+  )
+  return rows.length > UNMATCHED_SHOWN
+    ? t('media.season.jellyfinUnmatchedMore', { episodes: shown, total: rows.length })
+    : shown
 }

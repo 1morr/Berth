@@ -25,6 +25,7 @@ from berth.models import Event, Job, User
 from berth.services.events import EventHub, JobSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
 from berth.services.hints import JobHints
+from berth.services.jellyfin_access import AccessCache
 from berth.services.jobs import JobRejectedError, JobSource
 from berth.services.sources import SourceCache
 from tests.integration.arrange import factory_for
@@ -55,6 +56,7 @@ class Loops:
             sources=SourceCache(),
             plans=self.plans,
             imports=self.imports,
+            access=AccessCache(),
         )
 
 
@@ -280,8 +282,8 @@ class TestSubmitting:
     async def test_a_command_needing_what_the_executor_lacks_says_so(
         self, session: AsyncSession
     ) -> None:
-        """`watching.read_watching` 要那個人的 Jellyfin 存取（`JellyfinAccess`）：執行器還給不出，
-        照實說，不帶著缺的那一格硬叫。"""
+        """`watching.read_watching` 要那個人的 Jellyfin 存取（`JellyfinAccess`，必填）：`system`
+        沒有人，執行器給不出，照實說，不帶著缺的那一格硬叫。"""
         with pytest.raises(RuntimeError, match="cannot supply access"):
             await Loops().executor.execute(
                 session, "watching.read_watching", {"library_id": "x"}, SYSTEM_ACTOR

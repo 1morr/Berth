@@ -859,3 +859,28 @@ class TestWhatAWorkIsSubscribedTo:
         media, _, _ = await harbour(session, roots)
 
         assert await list_subscriptions(session, media.id) == ()
+
+    async def test_without_a_work_every_subscription_says_which_work_it_is_for(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """新番推薦一次標出已經訂閱的（票 28）：不帶 `media_id` 列每一條，各自說綁的是哪一部。
+        聚合 feed 上綁到作品的 RSS Series 照作品列；什麼都還沒綁的 Feed 也列，作品是空的。"""
+        media, route, factory, feed_id, series_id = await subscribed(session, roots)
+        await bind_series(
+            session, factory, series_id, media_id=media.id, route_id=route.id, user_id=None, now=NOW
+        )
+        loose = RssFeed(
+            name="nyaa.si · Frieren", url="https://nyaa.si/?page=rss&q=Frieren", kind=FeedKind.NYAA
+        )
+        session.add(loose)
+        await session.commit()
+
+        found = await list_subscriptions(session)
+
+        assert [(row.feed_id, row.media_id, row.title) for row in found] == [
+            (feed_id, media.id, media.snapshot().title),
+            (loose.id, "", ""),
+        ]
+        # 帶 `media_id` 的那一種照舊，一樣說得出是哪一部。
+        [mine] = await list_subscriptions(session, media.id)
+        assert (mine.feed_id, mine.media_id) == (feed_id, media.id)

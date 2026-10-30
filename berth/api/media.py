@@ -14,10 +14,12 @@ Jellyfin 才畫得出來，而看不到的作品連 item id 都不會出現在�
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
 
+from berth.api.commands import Command, Run
 from berth.api.deps import AccessCacheDep, ClientFactoryDep, ConfigDep, SessionDep
 from berth.api.jellyfin import (
     access_refusal,
@@ -29,6 +31,7 @@ from berth.api.schemas import JellyfinWebOut, WatchEpisodeOut, WatchStateOut
 from berth.domain import (
     CollectionType,
     EpisodeStatus,
+    InJellyfin,
     JellyfinPresence,
     LedgerStatus,
     MediaKind,
@@ -41,11 +44,21 @@ from berth.services.jellyfin_access import (
     JellyfinUnreachableError,
     jellyfin_access,
 )
-from berth.services.media import read_media, refresh_media
 from berth.services.resolver import resolve_early
 from berth.services.watch_area import read_watch_area
 
 router = APIRouter(prefix="/media", tags=["media"])
+
+
+class UnmatchedEpisodeOut(BaseModel):
+    """Jellyfin 裡對不上 TMDB 的一集，照 Jellyfin 的編號（M5 票 28）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: int | None
+    episode_start: int | None
+    episode_end: int | None
+    premiere_date: date | None
 
 
 class EpisodeOut(BaseModel):
@@ -61,11 +74,14 @@ class EpisodeOut(BaseModel):
     runtime: int | None
     #: Absolute episode group 給的絕對編號。沒有那種 group 的作品整欄是 `None`。
     absolute_number: int | None
-    #: 這一集在媒體庫裡的樣子（票 13）。依序取：已入庫 → 卡住 → 下載中 → 缺 / 未播出。
+    #: 這一集在媒體庫裡的樣子（票 13）。依序取：已入庫 → 卡住 → 下載中 → Jellyfin 已有（M5 票 28）
+    #: → 缺 / 未播出。
     status: EpisodeStatus
     #: 「卡住」「下載中」的那一集是哪一筆 Job 的 hash（兩筆蓋到時是最新送的那一筆）；季表的標籤連到
     #: `/jobs/{hash}`（M4 票 12）。其餘是 `null`。
     job: str | None
+    #: Jellyfin 有一集編號是這一集、卻對不上 TMDB 的任何一集（M5 票 28）：可能已經有，狀態照舊。
+    jellyfin_maybe: bool
 
 
 class SeasonOut(BaseModel):
@@ -228,29 +244,41 @@ class MediaOut(BaseModel):
     versions: list[VersionGroupOut]
     #: 停在 `review` 的下載筆數。`user` 按不了審核，畫面對他說「等管理員審核」（M2 票 06）。
     awaiting_review: int
+    #: 這位使用者看得到的 Jellyfin 裡有沒有這部（M5 票 28）；`unknown` 是沒能問。
+    jellyfin: InJellyfin
+    #: Jellyfin 的集裡對不上 TMDB 任何一集的（照 Jellyfin 的季集號與播出日）。不算有。
+    jellyfin_unmatched: list[UnmatchedEpisodeOut]
+
+
+# 經執行器：它照登入的人打開他看得到的 Jellyfin，集才分得出 `in_jellyfin`（M5 票 28）。
+ReadMedia = Annotated[Run, Depends(Command("media.read_media"))]
 
 
 @router.get("/{media_id}")
-async def get_media(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
+async def get_media(read: ReadMedia, media_id: str) -> MediaOut:
     """快照超過 24 小時就順手重抓（plan §8.3）。使用者不必按任何東西。"""
-    return MediaOut.model_validate(await read_media(session, factory, media_id))
+    return MediaOut.model_validate(await read(media_id=media_id))
 
 
 @router.post("/{media_id}/refresh")
-async def post_refresh(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
+async def post_refresh(
+    refresh: Annotated[Run, Depends(Command("media.refresh_media"))], media_id: str
+) -> MediaOut:
     """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。"""
-    return MediaOut.model_validate(await refresh_media(session, factory, media_id))
+    return MediaOut.model_validate(await refresh(media_id=media_id))
 
 
 @router.post("/{media_id}/resolve")
-async def post_resolve(session: SessionDep, factory: ClientFactoryDep, media_id: str) -> MediaOut:
+async def post_resolve(
+    session: SessionDep, factory: ClientFactoryDep, read: ReadMedia, media_id: str
+) -> MediaOut:
     """作品頁打開時，還在等 Jellyfin 的檔案先問一次（M4 票 51）。
 
     回這部作品的詳情：Jellyfin 已經列出的那幾列換成「已收錄」，還沒列出的照舊、也不算 resolver
     的一次。不擋 `GET`：檔案清單先照帳本畫，這一支回了再換（觀看區的同一個取捨）。
     """
     await resolve_early(session, factory, media_id)
-    return MediaOut.model_validate(await read_media(session, factory, media_id))
+    return MediaOut.model_validate(await read(media_id=media_id))
 
 
 class WatchSeasonOut(BaseModel):

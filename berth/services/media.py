@@ -36,6 +36,7 @@ from berth.adapters.tmdb import (
 from berth.domain import (
     CollectionType,
     EpisodeSnapshot,
+    InJellyfin,
     MediaKind,
     MediaSnapshot,
     Role,
@@ -53,10 +54,13 @@ from berth.services.discover import POSTER_SIZE, image_base
 from berth.services.inventory import (
     LedgerFileView,
     SeasonView,
+    UnmatchedEpisode,
     UnmatchedFileView,
     VersionGroupView,
     read_holdings,
+    read_jellyfin_holding,
 )
+from berth.services.jellyfin_access import JellyfinAccess
 from berth.services.settings import read_settings
 from berth.services.steps import message
 from berth.services.tmdb import credential, tmdb_problem
@@ -128,23 +132,41 @@ class MediaView:
     versions: tuple[VersionGroupView, ...] = ()
     #: 停在 `review`、等管理員審核的下載筆數（M2 票 06）。
     awaiting_review: int = 0
+    #: 這位使用者看得到的 Jellyfin 裡有沒有這部（M5 票 28）。劇集逐集的那一份在 `seasons`
+    #: （`in_jellyfin`）；電影只有這一格。
+    jellyfin: InJellyfin = InJellyfin.UNKNOWN
+    #: Jellyfin 的集裡對不上 TMDB 的（照 Jellyfin 的編號）：不算有，季表上同編號的那一集標
+    #: 「Jellyfin 可能有」（M5 票 28）。
+    jellyfin_unmatched: tuple[UnmatchedEpisode, ...] = ()
 
 
 # 快照是 TMDB 的快取：過期順手重抓不算改東西。作品頁登入就看得到（M5 票 14：一般使用者補缺集要它）。
 @command(
     Effect.READ,
     about=(
-        "Read one work (media_id from search_media): titles, seasons with which episodes are "
-        "in the library, downloading or missing, the routes it can go to (routes) and the one "
-        "used last (default_route_id), and the files Berth imported."
+        "Read one work (media_id from search_media): titles, seasons with which episodes Berth "
+        "imported (imported), are downloading or stuck, are only in the user's Jellyfin and not "
+        "in Berth's records (in_jellyfin: the user already has them), are missing or not aired "
+        "yet, whether the user's Jellyfin has the work at all (jellyfin: found, absent, or "
+        "unknown when Jellyfin could not be asked), Jellyfin episodes that match no TMDB "
+        "episode (jellyfin_unmatched, in Jellyfin's numbering; the TMDB episodes with the same "
+        "numbers are jellyfin_maybe: maybe there, still counted as missing), the routes it can "
+        "go to (routes) and the one used last (default_route_id), and the files Berth imported."
     ),
     audience=Role.USER,
 )
 async def read_media(
-    session: AsyncSession, factory: ServiceClientFactory, media_id: str
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    access: JellyfinAccess | None = None,
 ) -> MediaView:
-    """詳情頁要的一整份。快照過期（或還沒有）時順手重抓一次。"""
-    return await _load(session, factory, media_id, force=False)
+    """詳情頁要的一整份。快照過期（或還沒有）時順手重抓一次。
+
+    `access` 是這個人看得到的 Jellyfin（執行器照 actor 打開）：有了才分得出 `in_jellyfin`。
+    沒有（背景、問不到）時 `jellyfin` 是 `unknown`，集的狀態照帳本說（M5 票 28）。
+    """
+    return await _load(session, factory, media_id, force=False, access=access)
 
 
 # 作品頁的 Route 下拉（`MediaView.routes`）單獨一支：側面板送單要 Route id（M5 票 13）。
@@ -246,16 +268,26 @@ async def snapshot_for_planning(
 
 # 按它就是要換成 TMDB 現在的標題，`folder_name` 跟著改、之後的落點跟著改；沒有單一反向命令
 # （舊標題 TMDB 不會再給）。`read_media` 過期順手重抓不算：那是快取。
-@command(Effect.REVERSIBLE)
+# 作品頁的「重新抓取」登入就按得到（門禁），M5 票 28 起經執行器。
+@command(Effect.REVERSIBLE, audience=Role.USER)
 async def refresh_media(
-    session: AsyncSession, factory: ServiceClientFactory, media_id: str
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    access: JellyfinAccess | None = None,
 ) -> MediaView:
-    """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。"""
-    return await _load(session, factory, media_id, force=True)
+    """不管幾歲都重抓一次。TMDB 改了標題，`folder_name` 就跟著改（票 04b 驗收）。
+    `access` 同 `read_media`：重抓回來的那一份與詳情頁讀的同一個樣子。"""
+    return await _load(session, factory, media_id, force=True, access=access)
 
 
 async def _load(
-    session: AsyncSession, factory: ServiceClientFactory, media_id: str, *, force: bool
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    *,
+    force: bool,
+    access: JellyfinAccess | None = None,
 ) -> MediaView:
     parsed = parse_media_id(media_id)
     if parsed is None:
@@ -265,24 +297,26 @@ async def _load(
     row = await session.get(Media, build_media_id(kind, tmdb_id))
 
     if row is not None and not force and _fresh(row):
-        return await _view(session, row)
+        return await _view(session, row, access=access)
 
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
     if not key_in_hand:
-        return await _problem(session, row, *tmdb_problem(None), kind, tmdb_id)
+        return await _problem(session, row, *tmdb_problem(None), kind, tmdb_id, access)
 
     client = factory.tmdb(key_in_hand)
     try:
         snapshot = await _fetch(session, client, kind, tmdb_id)
     except NotFoundError as exc:
-        return await _problem(session, row, TmdbProblem.NOT_FOUND, message(exc), kind, tmdb_id)
+        return await _problem(
+            session, row, TmdbProblem.NOT_FOUND, message(exc), kind, tmdb_id, access
+        )
     except ServiceError as exc:
-        return await _problem(session, row, *tmdb_problem(exc), kind, tmdb_id)
+        return await _problem(session, row, *tmdb_problem(exc), kind, tmdb_id, access)
     finally:
         await client.aclose()
 
-    return await _view(session, await _store(session, row, snapshot))
+    return await _view(session, await _store(session, row, snapshot), access=access)
 
 
 async def _fetch(
@@ -439,6 +473,7 @@ async def _problem(
     detail: str,
     kind: MediaKind,
     tmdb_id: int,
+    access: JellyfinAccess | None,
 ) -> MediaView:
     """拿不到 TMDB 時還剩下什麼。
 
@@ -446,7 +481,7 @@ async def _problem(
     一列都沒有時只剩下 id 與那句話。
     """
     if row is not None:
-        return await _view(session, row, problem=problem, detail=detail)
+        return await _view(session, row, problem=problem, detail=detail, access=access)
     return MediaView(
         id=build_media_id(kind, tmdb_id),
         tmdb_id=tmdb_id,
@@ -507,10 +542,12 @@ async def _view(
     *,
     problem: TmdbProblem | None = None,
     detail: str = "",
+    access: JellyfinAccess | None = None,
 ) -> MediaView:
     snapshot = row.snapshot()
     # 這部作品在媒體庫裡有什麼（票 13）。與媒體庫的牆共用同一組判定，所以住在 inventory。
-    holdings = await read_holdings(session, row, snapshot)
+    jellyfin = await read_jellyfin_holding(session, access, row, snapshot)
+    holdings = await read_holdings(session, row, snapshot, jellyfin)
     return MediaView(
         id=row.id,
         tmdb_id=row.tmdb_id,
@@ -540,6 +577,8 @@ async def _view(
         unmatched=holdings.unmatched,
         versions=holdings.versions,
         awaiting_review=holdings.awaiting_review,
+        jellyfin=jellyfin.lookup,
+        jellyfin_unmatched=jellyfin.unmatched,
     )
 
 

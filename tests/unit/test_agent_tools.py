@@ -311,6 +311,23 @@ class TestWhatTheModelSeesOfAWork:
             {"season": 1, "episode_start": 1, "episode_end": 3, "status": "linked"}
         ]
 
+    def test_jellyfin_episodes_matching_nothing_become_ranges_per_season(self) -> None:
+        """Jellyfin 認不到 metadata 時整部劇每一集都對不上（票 28）：長篇是上千筆，照季收成範圍，
+        沒有編號的只說幾集。"""
+        unmatched = [
+            {"season": 1, "episode_start": n, "episode_end": None, "premiere_date": None}
+            for n in (*range(1, 200), 250)
+        ]
+        unmatched += [
+            {"season": 2, "episode_start": 1, "episode_end": 2, "premiere_date": "2024-01-01"},
+            {"season": None, "episode_start": None, "episode_end": None, "premiere_date": None},
+        ]
+
+        seen = MODEL_VIEWS["media.read_media"]({"seasons": [], "jellyfin_unmatched": unmatched})
+
+        assert isinstance(seen, dict)
+        assert seen["jellyfin_unmatched"] == {"1": "1-199, 250", "2": "1-2", "no_number": 1}
+
     def test_an_eighty_five_episode_season_fits_far_under_the_clip(self) -> None:
         episodes = [
             {"episode_number": n, "name": "x" * 40, "status": "missing"} for n in range(1, 86)

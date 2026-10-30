@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from berth.adapters.http import (
@@ -449,6 +449,15 @@ class HttpJellyfinClient:
         }
         return tuple(_item(row) for row in _rows(await self._found(path, params=params), path))
 
+    async def series_episodes(self, *, user_id: str, series_id: str) -> tuple[JellyfinItem, ...]:
+        path = f"/Shows/{series_id}/Episodes"
+        # 對 TMDB 的集只看 `PremiereDate`（不帶 `fields` 也有）；集沒有 TMDB 的集 id（只有 Tvdb、
+        # Imdb，而且要 `fields=ProviderIds`），季集號只拿來顯示（M5 票 28，12.1.0 實測）。
+        # `isMissing=false` 擋 metadata 補出來的虛擬缺集：伺服器認得這個參數（`true` 回 0 筆），
+        # 會不會真的濾掉虛擬集沒有量到（brief §20.8）。
+        params = {"userId": user_id, "isMissing": "false"}
+        return tuple(_item(row) for row in _rows(await self._found(path, params=params), path))
+
     async def series_next_up(self, *, user_id: str, series_id: str) -> JellyfinItem | None:
         # 只送 jellyfin-web 劇集頁送的那兩個，其餘吃伺服器預設（研究 §7.3）。
         payload = await self._get(
@@ -558,7 +567,18 @@ def _item(row: dict[str, Any]) -> JellyfinItem:
         parent_backdrop=_parent_image(
             row.get("ParentBackdropItemId"), _first(row.get("ParentBackdropImageTags"))
         ),
+        premiere_date=_day(row.get("PremiereDate")),
     )
+
+
+def _day(value: object) -> date | None:
+    """`2022-04-09T00:00:00.0000000Z` → 那一天。讀不出來是 `None`。"""
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
 
 
 def _season(row: dict[str, Any]) -> JellyfinSeason:

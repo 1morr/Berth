@@ -134,9 +134,12 @@ def get_executor(
     sources: SourceCacheDep,
     plans: PlanHintsDep,
     imports: ImportHintsDep,
+    access: AccessCacheDep,
 ) -> Executor:
     """命令執行器（`services/executor.py`）。拿的是上面那幾支相依，測試換掉的 Fake 它也跟著用。"""
-    return Executor(factory=factory, hub=hub, sources=sources, plans=plans, imports=imports)
+    return Executor(
+        factory=factory, hub=hub, sources=sources, plans=plans, imports=imports, access=access
+    )
 
 
 ExecutorDep = Annotated[Executor, Depends(get_executor)]
