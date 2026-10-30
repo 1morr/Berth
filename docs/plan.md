@@ -10,7 +10,7 @@
 
 ## 0. 工程慣例
 
-- 語言：程式碼、識別符、commit、log 一律英文；文件與註解繁體中文。例外是給使用者的 README 與 `docs/guide/`：README 英文為主、`README.zh-Hant.md` 是同內容的繁中版，guide 英文（brief §19 第四輪審計 E7、M4 票 57）。
+- 語言：程式碼、識別符、commit、log 一律英文；文件與註解繁體中文。例外是給使用者的 README 與 `docs/guide/`：README 英文為主、`README.zh-Hant.md` 是同內容的繁中版，guide 英文。
 - Commit：Conventional Commits，subject ≤ 72 字元。分支 `feat/…`、`fix/…`、`docs/…`。
 - 每個里程碑結束時 `main` 可部署、CI 綠燈、README 可照著跑。
 - 改動指令、環境變數、目錄結構、對外介面或資料格式時，同輪更新 README（兩份）與 `docs/guide/`（使用者）、`docs/development.md`、`docs/development/`（開發指令）、`.env.example`、CHANGELOG、專案 `CLAUDE.md`。
@@ -25,10 +25,12 @@
 
 - **一個容器、一個 Python 程序**：FastAPI 提供 HTTP API 與靜態前端；背景迴圈（§3.2）以 asyncio task 在同一程序內跑，於 lifespan 啟動與關閉。
 - **SQLite**（WAL 模式），檔案 `/config/berth.db`；Alembic migration 在啟動時自動套用。
-- **前端 React SPA**，build 產物由 FastAPI 以靜態檔案提供；開發時 Vite dev server 代理 `/api`。回應一律 gzip（Starlette `GZipMiddleware`，M3 票 06：前端一整包 760 KB 傳輸降到約 216 KB，前面不一定有代理替它壓）；SSE 與已壓縮的圖不壓（Starlette 的預設排除，`test_events_api.py` 守著 SSE 那一條）。路由拆分量過（入口 760 → 458 KB）但沒做，理由在 M3 票 06 的 Comments。
+- **前端 React SPA**，build 產物由 FastAPI 以靜態檔案提供；開發時 Vite dev server 代理 `/api`。
+- 回應一律 gzip（Starlette `GZipMiddleware`）：前面不一定有代理替它壓，整包前端傳輸從 760 KB 降到約 216 KB。SSE 與已壓縮的圖不壓（Starlette 的預設排除，`test_events_api.py` 守 SSE 那一條）。前端不做路由拆分（量過，入口 760 → 458 KB；壓縮後只再省約 70 KB，區網上看不出差別，而拆分要把 `AppShell` 改成版面路由或每頁各包一層）。
 - 對外只有一個 port，預設 `8383`。
-- 路徑常數：`CONFIG_ROOT`（預設 `/config`：DB、設定、log）、`PORT`（預設 `8383`），全部可用環境變數覆寫以便本機開發。媒體根 `/data` 不是環境變數：三層路徑是 `PathSettings` 的預設值（§9.1），`DATA_ROOT` 只是 compose 掛到 `/data` 的宿主目錄，Berth 不拿它找檔案（M4 票 93）；compose 另把它原樣傳成 `HOST_DATA_ROOT`，只用來在既有服務的掛載補法裡印出那個資料夾（M4 票 63）。
-- 前端產物的位置是第四個變數 `WEB_ROOT`，預設 repo 佈局的 `<repo>/web/dist`；裝成 wheel 之後那個路徑不存在，所以 image 的 Dockerfile（§9.1）指到它自己的複製位置。找不到時只提供 API。
+- 路徑常數：`CONFIG_ROOT`（預設 `/config`：DB、設定、log）、`PORT`（預設 `8383`），全部可用環境變數覆寫以便本機開發。
+- 前端產物的位置是變數 `WEB_ROOT`，預設 repo 佈局的 `<repo>/web/dist`；裝成 wheel 之後那個路徑不存在，所以 image 的 Dockerfile（§9.1）指到它自己的複製位置。找不到時只提供 API。
+- 媒體根 `/data` 不是環境變數：三層路徑是 `PathSettings` 的預設值（§9.1）。compose 的 `DATA_ROOT` 只是掛到 `/data` 的宿主目錄，Berth 不拿它找檔案；compose 另把它原樣傳成 `HOST_DATA_ROOT`，只用來在既有服務的掛載補法裡印出那個資料夾。
 
 理由：單使用者到單家庭的規模，一個程序足夠；Seerr 與 AutoBangumi 都是這種形態。之後若解析或對帳變重，先把背景迴圈拆成第二個程序，不改架構。
 
@@ -44,9 +46,9 @@ berth/
   domain/              純資料型別與狀態機，無 IO：JobState、ReleaseInfo、Tags、Candidate、PlanItem、Confidence
   parser/              純函式：classify、cjk、release、structure、mapper、subtitles、planner、confidence
   naming/              純函式：title 選擇、sanitize、tag 渲染、路徑模板
-  adapters/            外部服務：qbittorrent、jellyfin、tmdb、prowlarr、rss/{mikan,nyaa,acgrip,generic}、fs、mediainfo、ai（模型與價目，M5 票 09）
+  adapters/            外部服務：qbittorrent、jellyfin、tmdb、prowlarr、rss/{mikan,nyaa,acgrip,generic}、fs、mediainfo、ai（模型與價目）
   services/            命令（use case）：setup、routes、discover、search、download、plan、import_、review、rematch、delete、rss、reconcile、health、ai；
-                       命令標記（commands）與命令登錄表（registry，M5 票 06）
+                       命令標記（commands）與命令登錄表（registry）
   pipeline/            背景迴圈：qbit_poller、planner_runner、importer、jellyfin_resolver、reconciler、rss_poller、health_checker
   api/                 FastAPI routers：auth、setup、settings、routes、discover、media、search、jobs、plans、review、files、rss、issues、health、events
   events.py            Event 寫入與 SSE 廣播
@@ -73,9 +75,9 @@ adapters ──► domain                  （不 import services、models；回
 ```
 
 - 所有會改變狀態的操作都是 `services` 內的命令函式，名稱即 brief §14 的命令名（`add_download`、`generate_plan`、`apply_plan`、`rematch_file`、`delete_job`…）。API 與 pipeline 只呼叫 services，兩者都不直接碰 adapters 或 models。
-- **`naming` 在 `parser` 之下**（M1 票 07）：`plan` 階段要產出目標路徑（§4.1），而衝突偵測比的就是那條路徑——兩個檔案指到同一個檔名時誰都不能自動入庫。反向不成立，`naming` 只認 `domain` 的快照與 `Tags`，`import-linter` 另有一條契約守著。
+- **`naming` 在 `parser` 之下**：`plan` 階段要產出目標路徑（§4.1），而衝突偵測比的就是那條路徑——兩個檔案指到同一個檔名時誰都不能自動入庫。反向不成立，`naming` 只認 `domain` 的快照與 `Tags`，`import-linter` 另有一條契約守著。
 - `db`（engine、session factory）在 `models` 之下、`domain` 之上；`api`、`pipeline`、`parser`、`naming`、`adapters` 都不得 import 它。Alembic 的 `env.py` 需要 `models` 的 metadata，因此放在 `migrations/`（不納入層級契約）。
-- **命令登錄表**（M5 票 06）在 `services/registry.py`：從 `services` 各模組的命令標記與簽名收集非 `internal` 的命令（輸入模型、結果型別、拒絕理由、標記、說明、乾跑的 `validate`）。它屬於 `services` 層，AI 的工具、確認卡（M5）與 MCP server（M7）在 `api` 讀它，依賴方向不變。注入的參數（session、client factory、source cache、actor 這類）不進輸入模型；推不出輸入模型的命令讓 `tests/unit/test_command_registry.py` 紅。
+- **命令登錄表**在 `services/registry.py`：從 `services` 各模組的命令標記與簽名收集非 `internal` 的命令（輸入模型、結果型別、拒絕理由、標記、說明、乾跑的 `validate`）。它屬於 `services` 層，AI 的工具、確認卡與 MCP server（M7）在 `api` 讀它，依賴方向不變。注入的參數（session、client factory、source cache、actor 這類）不進輸入模型；推不出輸入模型的命令讓 `tests/unit/test_command_registry.py` 紅。
 - 用 `import-linter` 在 CI 強制上述方向，契約寫在 `pyproject.toml` 的 `[tool.importlinter]`。
 - 每個 adapter 有一個 `Protocol` 介面與一個 `Fake` 實作（放在 `adapters/<name>/fake.py`），整合測試與 e2e 用 Fake 取代真服務。
 
@@ -94,82 +96,205 @@ adapters ──► domain                  （不 import services、models；回
 | 執行環境 | Python 3.13（`.python-version`）、Node 24 | 計劃內的依賴都有 cp313 wheel；`python:3.13-slim` 供 §9.1 的 image 使用 |
 | CLI | argparse（stdlib） | 只有數個子指令與旗標，不值得引入 typer / click |
 | 套件管理與工具 | uv、ruff、mypy、pytest、pytest-asyncio、respx、import-linter | — |
-| 前端 | React 19、TypeScript、Vite、TanStack Query、TanStack Router、Tailwind v4、react-i18next | 通用、可長期維護。**不引入 shadcn/ui**（M0 票 05 起，2026-09-22 結案）：三個里程碑下來沒有一個元件需要 Radix 的行為原語，原生 `input` / `button` / `details` 的無障礙比重寫的好；要 dropdown / dialog 時再議 |
+| 前端 | React 19、TypeScript、Vite、TanStack Query、TanStack Router、Tailwind v4、react-i18next | 通用、可長期維護。**不引入 shadcn/ui**：沒有一個元件需要 Radix 的行為原語，原生 `input` / `button` / `details` 的無障礙比重寫的好；要 dropdown / dialog 時再議 |
 | 前端工具 | pnpm、eslint、prettier、vitest | 沒有腳本化的 playwright e2e，見 §10 |
 
 ---
 
 ## 2. 資料模型
 
-表名與欄位。型別以 SQLite 慣例（TEXT / INTEGER / REAL / JSON 以 TEXT 存），時間一律 UTC ISO 8601。`*_json` 欄位對應一個 pydantic model，序列化集中在 `models/`。
+表名與欄位，對照 `berth/models/`。型別以 SQLite 慣例（TEXT / INTEGER / REAL / JSON 以 TEXT 存），時間一律 UTC ISO 8601。`*_json` 欄位對應一個 pydantic model，序列化集中在 `models/`。
+
+標「稽核欄位」的欄位目前沒有讀者，保留作為事後追查用。
 
 ### 2.1 使用者與設定
 
-- `users`：`id`、`jellyfin_user_id`（unique）、`name`、`role`（`admin` / `user`）、`created_at`、`last_login_at`。`last_login_at` 是稽核欄位：記下這個帳號最近一次登入 Berth 的時間，目前沒有讀者（M4 票 95 決定保留）。
+- `users`：`id`、`jellyfin_user_id`（unique）、`name`、`role`（`admin` / `user`）、`created_at`、`last_login_at`（稽核欄位：最近一次登入 Berth 的時間）。通知用的五欄（brief §16.2、[ADR 0015](adr/0015-notifications-discord-dm.md)）：
+  - `discord_user_id`：收私訊的 Discord ID，空字串是沒填。
+  - `notify_language`：通知用的語言，存 Discord ID 那一刻的介面語言。
+  - `notify_kinds_json`：要收哪幾種通知（`NotificationKind` 的值），新使用者的預設依角色（`domain.default_notify_kinds`）。
+  - `notify_unreachable_at` / `notify_unreachable_detail`：Discord 送不到這個人的時間與原文；送到一則（含測試）或換了 Discord ID 就清掉。
 - `sessions`：`id`、`user_id`、`token_hash`、`expires_at`、`created_at`。token 是 256 bit 亂數，只存 SHA-256 雜湊；壽命 30 天且**不滑動續期**，過期的列在下一次被用到時就地刪掉。
-- `settings`：`key`（unique）、`value_json`、`updated_at`（稽核欄位：這一組上一次被寫的時間，ORM 的 `onupdate` 自動寫，目前沒有讀者，M4 票 95 決定保留）。key 分組：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`parser`、`ai`、`rss`、`setup`、`health`。每組一個 pydantic model；`services.*` 只含**連線資訊**。
-  - `health`：`health_checker` 上一輪的結果——逐服務的 `status` / `detail` / `error` / `checked_at` / `last_ok_at` / `failures` / `configured` / `banned` / `unsupported` / `library_count`（API 另有 `unused`：不存，讀的時候從 `setup.indexer.skipped` 算，M4 票 61），加上這一輪的時間。Route 的總結**不存**，讀的時候從 `routes` 表算（`routes_health`，M4 票 59：換一台 qBittorrent 之後存著的那一份還說「已繫上」）。完成精靈時頁上測過的結論抄進來（M4 票 59）。**與 `services.*` 分開存**：那幾組是整組覆寫的使用者設定，把迴圈每 5 分鐘寫一次的狀態混進去，兩邊會互相蓋掉（票 10 改，原文是「`services.*` 含連線資訊與最後健康狀態」）。
-  - `services.jellyfin` 另含 `public_url`（選填的對外網址，媒體庫深連結的主機；空的時候由 `services/deeplink.py` 推導——既有服務用 `base_url`、套件內用瀏覽器的主機名加 `base_url` 的 port，Seerr 的 `externalHostname` 慣例，票 13）、`api_key`、`metadata_fetchers`（鍵是套件內媒體庫的資料夾名，沒寫的依內容類型落回預設，票 06f；值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）。**沒有 MergeVersions 的任務 id**：票 14b 起只支援 Jellyfin 12，而 12.x 原生合併多版本（brief §19、§20.9）。舊資料庫裡那兩個鍵還在，`extra="ignore"` 讓它照樣讀得回來，所以沒有 migration。
-  - `ai`（M5 票 09）：`enabled`（關著就沒有 AI）、`provider`（`anthropic` / `openai`，現在用的那一種）、`anthropic` 與 `openai` 各一組 `base_url` / `api_key` / `model`（兩種各自保存，切換不丟另一邊；`base_url` 空的是官方端點，Anthropic 存之前拿掉結尾的 `/v1`）、`tavily_api_key`（選填，票 17）、`daily_alert_usd`（每日花費提醒值，`null` 是不提醒；只提醒不停用，票 21）。**key 只進不出**：API 回 `has_key` / `has_tavily_key`；PUT 的 key 欄空著是不動，清掉走 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`（清的是現用接口的 key 時一併關掉 AI）。不從環境變數讀。
-  - `rss`（M3 票 10）：排除條件的全域那一層——`exclude_not_single`（預設 `true`：不是單集的不自動下載）與 `exclude`（規則清單，格式同 `rss_feeds.exclude_json`）。
-  - `paths` 另含 `library_root`（套件內媒體庫的資料夾與既有媒體庫「加入 Berth 路徑」的父目錄，預設 `/data/library`）。
+- `settings`：`key`（unique）、`value_json`、`updated_at`（稽核欄位，ORM 的 `onupdate` 自動寫）。每個 key 對應 `models/setting.py` 的一個 pydantic model（`SettingsGroup`，多餘的鍵忽略，舊欄位拿掉後仍讀得回來）。分兩類：
+  - **使用者設定**：`services.jellyfin`、`services.qbittorrent`、`services.indexer`、`services.tmdb`、`paths`、`ai`、`rss`、`search`、`notify`、`berth`、`disk`、`setup`。`services.*` 只含**連線資訊**。
+  - **迴圈的紀錄**：`health`、`poller`、`notify_sender`、`notify_waiting`、`sweep`。每個迴圈各寫自己那一列，不與使用者設定混在一起——混進去會互相蓋掉（設定是整組覆寫，迴圈每幾秒到幾分鐘寫一次）。
+  - `health`：`health_checker` 上一輪的結果——逐服務的 `status` / `detail` / `error` / `checked_at` / `last_ok_at` / `failures` / `configured` / `banned` / `unsupported` / `library_count`，加上這一輪的時間。API 另有 `unused`：不存，讀的時候從 `setup.indexer.skipped` 算。Route 的總結**不存**，讀的時候從 `routes` 表算（`routes_health`）：換一台 qBittorrent 之後存著的那一份會說錯。完成精靈時頁上測過的結論抄進來。
+  - `poller`：`qbit_poller` 上一輪的 `checked_at`、連續失敗次數 `failures`、最後一次失敗的原文 `error`，與**這一輪的完整** `unknown_torrents` 清單（不累積：在 qBittorrent 上清掉之後下一輪就消失）。與 `health` 分開是因為 poller 每 5 秒寫、`health_checker` 每 5 分鐘整組覆寫。
+  - `notify_sender`（送出迴圈的管道狀態）：`rejected_token`（Discord 回 `401` 的那把 token 的**指紋**；存指紋不存旗標，換了 token 就自己恢復）、`failures`、`resume_at`、`error`、`failed_at`、`last_sent_at`。
+  - `notify_waiting`（「有 N 件等你處理」的看守）：`seen`（上一輪看到的那幾件的身分，`None` 是還沒看過；存身分不存數字，鍵的形狀在 `services.waiting`）與 `since`（每一件從何時開始等）。
+  - `sweep`：`reminded`，「放太久」提醒過的那幾件與時刻，同一件 `sweep.REMIND_EVERY` 內不再提醒。
+  - `services.jellyfin` 另含 `public_url`（選填的對外網址，媒體庫深連結的主機；空的時候由 `services/deeplink.py` 推導——既有服務用 `base_url`、套件內用瀏覽器的主機名加 `base_url` 的 port，Seerr 的 `externalHostname` 慣例）、`api_key`、`metadata_fetchers`（鍵是套件內媒體庫的資料夾名，沒寫的依內容類型落回預設；值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）。沒有 MergeVersions 的任務 id：只支援 Jellyfin 12，12.x 原生合併多版本（[ADR 0002](adr/0002-jellyfin-12-minimum-pinned-image.md)、brief §20.9）。
+  - `ai`：`enabled`（關著就沒有 AI）、`provider`（`anthropic` / `openai`，現在用的那一種）、`anthropic` 與 `openai` 各一組 `base_url` / `api_key` / `model`（兩種各自保存，切換不丟另一邊；`base_url` 空的是官方端點，Anthropic 存之前拿掉結尾的 `/v1`）、`tavily_api_key`（選填）、`card_downloads`（一張確認卡送出的 torrent 總數上限，預設 13；設定頁沒有這一格）、`daily_alert_usd`（每日花費提醒值，`null` 是不提醒；只提醒不停用）。**key 只進不出**：API 回 `has_key` / `has_tavily_key`；PUT 的 key 欄空著是不動，清掉走 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`（清的是現用接口的 key 時一併關掉 AI）。不從環境變數讀。
+  - `rss`：排除條件的全域那一層——`exclude_not_single`（預設 `true`：不是單集的不自動下載）與 `exclude`（規則清單，格式同 `rss_feeds.exclude_json`）。
+  - `search`：搜尋面板記住的名字種類 `names`（`NameKind` → 開關；全域、存在伺服器；出廠值英文名與原名開、兩種中文名關；別名不記）。
+  - `notify`：通知管道——`discord_bot_token`（只寫不讀，API 只回「已設定」）、`discord_application_id`、`discord_bot_name`（後兩個是存 token 那一刻向 Discord 問來的）。
+  - `berth`：`public_url`，Berth 從外面看的網址，通知裡的連結照它組（`services/deeplink.berth_link`）；空的是不附連結，存的時候拿掉結尾的 `/`。
+  - `disk`：`min_free_gb`（預設 10，`0` 是不量），incomplete 與 complete 兩個根目錄的可用空間門檻；送單前也看 incomplete 那一側。形狀照 Sonarr 的 Minimum Free Space，單位用 GB 因為會吃滿磁碟的是下載。
+  - `paths`：`incomplete_root`、`complete_root`（固定值，沒有 API 或 UI 改它）與 `library_root`（套件內媒體庫的資料夾與既有媒體庫「加入 Berth 路徑」的父目錄，預設 `/data/library`）。
   - `setup.jellyfin`：Jellyfin 的七步（頁 1 的擁有者那一半與頁 3 的媒體庫）各自的 `key` / `status` / `detail` / `error`，以及 Jellyfin 回報的媒體庫與各自路徑。每一步在做**之前**就寫入 `running` 並 commit，前端才輪詢得到進度。版本號不另外存：它是 `public_info` 那一步的 `detail`（失敗的那一輪也帶著，版本閘門就是靠它顯示）。
-  - `setup.choices`（M4 票 15）：鍵是 `ServiceKind`，值是 `ServiceChoice`——使用者選的 `origin`（`bundled` / `existing`）、Berth 連的 `base_url`（套件內是 compose 主機名），與最後一次測試 `test`（`state`：`ok` / `failed` / `waiting` / `timeout`；`reason` 是 `ConnectionReason`；`detail` 是版本或站數；`waiting_since` 是套件內那一台還在啟動時這一輪 2 分鐘的起點）。沒有那一列就是還沒選，寫入那個服務的命令一律拒絕。取代原本的 `setup.services`（偵測判定）與 `probe_started_at`，migration `f3c9a1d6b2e8` 把有結論的判定轉成同一個來源的選擇、其餘丟掉。
-  - `setup.qbittorrent.web_ui_username` / `web_ui_password_hash`、`setup.indexer.web_ui_username` / `web_ui_password_hash`（M4 票 15）：Berth 寫進套件內那兩台的介面登入，**只記帳號與加鹽 scrypt 雜湊**（`services.steps.hash_password`），夠比對「已經是這一組」；帳號在、雜湊空的是那一台自己就設過的。套件內 qBittorrent 的 `services.qbittorrent` 帳密是空的：Berth 連它靠免密白名單；既有那一台的帳密是 Berth 的連線憑證，照舊存（brief §16.2）。
+  - `setup.choices`：鍵是 `ServiceKind`，值是 `ServiceChoice`——使用者選的 `origin`（`bundled` / `existing`）、Berth 連的 `base_url`（套件內是 compose 主機名），與最後一次測試 `test`（`state`：`ok` / `failed` / `waiting` / `timeout`；`reason` 是 `ConnectionReason`；`detail` 是版本或站數；`waiting_since` 是套件內那一台還在啟動時這一輪 2 分鐘的起點）。沒有那一列就是還沒選，寫入那個服務的命令一律拒絕。
+  - `setup.qbittorrent.web_ui_username` / `web_ui_password_hash`、`setup.indexer.web_ui_username` / `web_ui_password_hash`：Berth 寫進套件內那兩台的介面登入，**只記帳號與加鹽 scrypt 雜湊**（`services.steps.hash_password`），夠比對「已經是這一組」；帳號在、雜湊空的是那一台自己就設過的。套件內 qBittorrent 的 `services.qbittorrent` 帳密是空的：Berth 連它靠免密白名單；既有那一台的帳密是 Berth 的連線憑證，照舊存（brief §16.2）。
 
 ### 2.2 Route 與 Media
 
-- `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。`health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。**slug 與 `target_path` 建立之後不可改**：category 與 complete 子目錄由 slug 導出，帳本以目標路徑認 Route（`owning_route`）；要換目標就新增一條、刪掉舊的（票 14）。`enabled` 是設定頁的啟用：新建或從停用到啟用都要每一條纜繩那一輪全綠；停用的 Route 不收新的送單，也不算進健康總結與精靈第 7 步的完成條件。被 Job、帳本或 RSS 綁定（Feed 的 `tv_route_id` / `movie_route_id`、RSS Series 的 `route_id`）引用的 Route 刪不得：那幾個外鍵是 `SET NULL`，刪得掉的話它們會無聲失去 Route（M4 票 115）。
-- `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`、`folder_frozen`、`default_route_id`、`tmdb_snapshot_json`（含**各季的 `name`**——`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源——與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在）、`tmdb_fetched_at`。`tmdb_snapshot_json` 的型別化版本是 `domain/media.py` 的 `MediaSnapshot`（§4.3）——它住在 `domain/` 是因為 `naming` 與 `parser` 都要它，而那兩個依契約只 import `domain`（§1.3）。
-  **點進詳情頁就會寫下一列**（快照要有地方放），所以有這一列不代表 Berth 為它做過任何事。「追蹤過」是**推導**出來的（`CONTEXT.md`）：票 09 起是 `EXISTS(jobs)`，票 12 加帳本，M3 加 Rule——不存成欄位。
-  `folder_name` 因此**跟著標題走**（畫面上它是「將會是」的預覽），每次刷新快照都重算；**第一次真的通向磁碟那一刻凍結**：手動送單成功時（票 09）或建 RSS Rule 時（M3），兩個都有人在場、都要一次明確確認。凍結之後 refresh 一律不動它（§5、brief §4.5、票 04b）。不拖到入庫才凍——importer 是背景迴圈，那時候沒有人看著。
-  開關是 `folder_frozen`（票 09），**推導不出來**：送單失敗的 Job 也是一列 `jobs`，而那一刻磁碟上什麼都沒發生；刪掉那筆 Job 也不該讓資料夾名重新開始跟著 TMDB 跑。**送單那一步不刷新快照**（§8.3 的六小時規則留給 planning）：凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字。
-- `tmdb_cache`：`key`（`discover:trending` / `discover:popular` / `search:<正規化查詢>`）、`value_json`（已經合併好的卡片陣列：tmdb id、kind、顯示用標題、英文標題、年份、完整海報網址）、`fetched_at`。探索頁與搜尋結果的短期快取，一小時；Media 詳情走 `media` 表
+- `routes`：`id`、`slug`（unique）、`name`、`jellyfin_library_id`、`jellyfin_library_name`、`collection_type`（`movies` / `tvshows`）、`target_path`、`category`、`medium_auto_import`（預設 true）、`enabled`、`health_status`、`health_detail_json`、`created_at`。
+  - `health_detail_json` 是 `RouteHealth`：逐項檢查（形狀同精靈的步驟：`key` 是 `RouteCheck`、`status`、`detail`、`error`）與 `cross_device`。
+  - category 的 save path 不存欄位，它一律是 `<complete root>/<slug>`（brief §4.1）。
+  - **slug 與 `target_path` 建立之後不可改**：category 與 complete 子目錄由 slug 導出，帳本以目標路徑認 Route（`owning_route`）；要換目標就新增一條、刪掉舊的。
+  - `enabled` 是設定頁的啟用：新建或從停用到啟用都要每一條纜繩那一輪全綠；停用的 Route 不收新的送單，也不算進健康總結與精靈第 7 步的完成條件。
+  - 被 Job、帳本或 RSS 綁定（Feed 的 `tv_route_id` / `movie_route_id`、RSS Series 的 `route_id`）引用的 Route 刪不得：Job 與 RSS 的外鍵是 `SET NULL`，刪得掉的話它們會無聲失去 Route；帳本沒有 Route 欄，靠 `target_path` 認（`owning_route`）。
+- `media`：`id`（`tv:<tmdb>` / `movie:<tmdb>`）、`tmdb_id`、`kind`、`title_en`、`title_original`、`year`、`folder_name`、`folder_frozen`、`default_route_id`、`tmdb_snapshot_json`、`tmdb_fetched_at`。
+  - `tmdb_snapshot_json` 含**各季的 `name`**（`Hashira Training Arc` 這種篇章名是 §4.4 的季號來源）與各季各集：number、name、air_date、runtime；episode groups 的 absolute 排序若存在。型別化版本是 `domain/media.py` 的 `MediaSnapshot`（§4.3）——它住在 `domain/` 是因為 `naming` 與 `parser` 都要它，而那兩個依契約只 import `domain`（§1.3）。
+  - **點進詳情頁就會寫下一列**（快照要有地方放），所以有這一列不代表 Berth 為它做過任何事。「追蹤過」是**推導**出來的（`CONTEXT.md`）：有 Job、有帳本，或有 RSS Rule——不存成欄位。
+  - `folder_name` **跟著標題走**（畫面上它是「將會是」的預覽），每次刷新快照都重算；**第一次真的通向磁碟那一刻凍結**：手動送單成功時，或建 RSS Rule 時，兩個都有人在場、都要一次明確確認。凍結之後 refresh 一律不動它（§5、brief §4.5）。不拖到入庫才凍——importer 是背景迴圈，那時候沒有人看著。
+  - 開關是 `folder_frozen`，**推導不出來**：送單失敗的 Job 也是一列 `jobs`，而那一刻磁碟上什麼都沒發生；刪掉那筆 Job 也不該讓資料夾名重新開始跟著 TMDB 跑。**送單那一步不刷新快照**（§8.3 的六小時規則留給 planning）：凍下去的必須就是使用者剛剛在確認畫面上看到的那一串字。
+- `tmdb_cache`：`key`（`discover:trending` / `discover:popular` / `search:<正規化查詢>`）、`value_json`（已經合併好的卡片陣列：tmdb id、kind、顯示用標題、英文標題、年份、完整海報網址）、`fetched_at`。探索頁與搜尋結果的短期快取，一小時；Media 詳情走 `media` 表。
 
 ### 2.3 Job、檔案、計劃、帳本
 
-- `jobs`：`hash`（pk，info hash）、`name`、`source_url`、`trigger`（`manual` / `rss` / `reimport`）、`trigger_ref`（RSS Series 的 id 或 import source 路徑）、`user_id`、`media_id`、`route_id`、`state`（§3.1）、`error`、`save_path`、`content_path`、`total_size`、`progress`、`client_state`、`published_at`、`added_at`、`completed_at`、`imported_at`。原本還有一欄 `last_seen_in_client_at`（上一次在客戶端清單裡看到它），說好要用它的「torrent 消失時說最後一次是何時」從沒做，M4 票 95 以 migration 拿掉。
-  `source_url` 是索引站上那一條下載連結，**存著是為了重試**（§3.1 的 `submit_failed` → `requested`）：送單失敗之後畫面上那一輪搜尋早就不在了，而 Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條（票 09）。
-  `published_at`（M3 票 14）是來源說它什麼時候發佈的：索引站結果的 `publishDate`、或 Feed Item 的發佈時間，送單時存下來，規劃時比播出日（§4.4）。**住在 Job 而不是規劃時回頭讀 `rss_items`**：手動送單沒有 Feed Item，兩條路徑要同一個地方；既有的 RSS Job 由 migration 從 `rss_items` 回填（最早帶到它的那一筆）。認領與重新入庫沒有來源，是 `NULL`。
-- `job_files`：`id`、`job_hash`、`rel_path`（與 hash 合併 unique）、`size`、`priority`、`kind`（§4.1）、`mediainfo_json`。原本還有一欄 `release_info_json`，M1 起就沒人寫，M3 票 01 以 migration 拿掉（使用者 2026-09-24 拍板）：解析結果落在 `plan_items`，RSS 要的那一份在 `rss_items` 自己那一欄；`updated_at` 只有量 mediainfo 與重新入庫改大小兩條路徑寫、其他改這張表的路徑不寫，說不清它代表什麼，M4 票 95 拿掉
-- `plans`：`id`、`job_hash`（nullable、**unique**）、`source_path`（單列 Plan 的那個檔案）、`engine`（`rules` / `ai` / `user`）、`engine_version`、`status`（`preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`）、`summary_json`（各信心等級數量、原因摘要、`review_reason`）、`rss_series_id` / `season_hint` / `episode_offset`（M3 票 13：算這一份時交給解析器的 RSS Series 與它當時的季號、offset——值是規劃時讀的，同一個 Series 前後兩份計劃可能不同；不是 RSS 送的三格都是 `NULL`，既有的 Plan 不回填；`rss_series_id` 是弱引用）、`created_at`、`decided_by`、`decided_at`。`decided_by` / `decided_at` 是稽核欄位：誰、什麼時候批准或駁回了這份計劃（review 與 rematch 寫），目前沒有讀者（M4 票 95 決定保留）。
-  **一個 Job 只有一份「現在的計劃」**（票 11）：`job_hash` 上是 unique index，重跑 planning 把它整份改寫而不是再長一列。兩個理由：`GET /api/plans/{id}` 不必先回答「哪一個 id 才是現在那一份」，而 `plan_items` 不會在每次重跑之後多一份重複的決定（§3.3 的重入）。上一份計劃留在時間線上（`events`）。`created_at` 因此是**算出這一份的時間**，跟著重跑換。`job_hash` 仍可為 NULL——rematch 與重複版本的決定各記一份單列 Plan（`engine = user`，以 `source_path` 說是哪個檔案），而 SQLite 的 unique 容得下多個 NULL。重新入庫自 M2 票 10 起有自己的 Job（M3 票 01 更正）。
-- `plan_items`：`id`、`plan_id`、`job_file_id`（nullable）、`rel_path`、`action`（`import` / `extra` / `subtitle` / `skip` / `unmatched` / `review`）、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`target_path`、`confidence`（`high` / `medium` / `low`）、`reasons_json`、`audit`（medium 自動入庫為 true；RSS Series 送的另有一條——第一批確認之前 high 也是 true、確認之後 medium 也是 false，M3 票 13）、`applied_at`、`error`
-- `ledger`：`id`、`job_hash`（nullable）、`source_rel_path`、`source_abs_path`、`source_dev`、`target_path`（unique）、`target_inode`、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`plan_item_id`、`action`、`jellyfin_item_id`、`jellyfin_series_id`、`resolve_attempts`、`resolve_after`、`status`（`ok` / `target_missing` / `source_missing` / `inode_mismatch` / `unlinked`）、`audit`、`created_at`、`checked_at`。
-  **帳本自己站得住**（票 12）：`job_hash` 是弱引用（刪 Job 與清帳本是刪除範圍裡兩個獨立的旗標）；`action`、季集與 Tags 抄一份進來，因為 review 之後重新規劃會把 `plan_items` 整份換掉，`plan_item_id` 因此是 `SET NULL`。`resolve_attempts` / `resolve_after` 是 `jellyfin_resolver` 的排程（§3.2），要活過重啟所以落在這一列；`None` 代表沒有要反查的事（找到了、用完了，或本來就不是一個 item——字幕與特典）。**inode 與 device 存 TEXT**：Windows 的 `st_dev` 實測 `11550084160259632778`，超過 SQLite INTEGER 的有號上限，而這兩欄只比相等。`target_path` 是容器裡的 POSIX 路徑，也就是 Jellyfin 回報 `Path` 的形狀。
-  原本還有 `source_inode` 與 `link_mode` 兩欄（M4 票 95 以 migration 拿掉）：硬鏈接的兩端是同一個 inode，判 inode 不符與刪除檢查讀的是 `source_dev` 加 `target_inode`；鏈接方式只有硬鏈接（失敗不退回複製，brief §4.4），那一欄永遠是 `hardlink`。
-  `jellyfin_series_id`（票 13）是劇集正片那一集所屬的 Series item：媒體庫的深連結開的是作品而不是某一集，而反查時 `/Items` 的 Episode 自己帶 `SeriesId`，所以與 item id 一起寫下，讀頁面時不必再問 Jellyfin。
-  `jellyfin_version_name`（票 14b）是同一個道理：Jellyfin 12 起劇集也原生合併多版本，而版本選單上的名字是**它算的**（去掉各版本檔名的共同前綴，12.0 與 12.1 的算法還不一樣）。反查那一刻 `MediaSources[].Name` 就在手上，抄下來就不必自己重算，也不必為了一行字再問一次（brief §7.7、§20.9）。空字串＝還沒收錄。
-- `events`：`id`、`job_hash`（nullable）、`media_id`（nullable）、`type`、`actor`（user id / `system` / `rss:<series>` / `ai:<user id>`：AI 替那個人做的；寫法在 `domain/actor.py`，M5 票 07）、`payload_json`、`created_at`。索引 `(job_hash, created_at)`。
+- `jobs`：`hash`（pk，info hash）、`name`、`source_url`、`trigger`（`manual` / `rss` / `reimport`）、`trigger_ref`（RSS Series 的 id 或 import source 路徑）、`user_id`、`media_id`、`route_id`、`state`（§3.1）、`error`、`save_path`、`content_path`、`total_size`、`progress`、`client_state`、`published_at`、`added_at`、`completed_at`、`imported_at`。
+  - `source_url` 是索引站上那一條下載連結，**存著是為了重試**（§3.1 的 `submit_failed` → `requested`）：送單失敗之後畫面上那一輪搜尋早就不在了，而 Prowlarr 的代理連結每次搜尋都不一樣（brief §20.7），重新搜一次不會給出同一條。
+  - `published_at` 是來源說它什麼時候發佈的：索引站結果的 `publishDate`、或 Feed Item 的發佈時間，送單時存下來，規劃時比播出日（§4.4）。**住在 Job 而不是規劃時回頭讀 `rss_items`**：手動送單沒有 Feed Item，兩條路徑要同一個地方。認領與重新入庫沒有來源，是 `NULL`。
+- `job_files`：`id`、`job_hash`、`rel_path`（與 hash 合併 unique）、`size`、`priority`、`kind`（§4.1）、`mediainfo_json`。解析結果落在 `plan_items`；RSS 要的那一份在 `rss_items` 自己的欄位。
+- `plans`：`id`、`job_hash`（nullable、**unique**）、`source_path`（單列 Plan 的那個檔案）、`engine`（`rules` / `ai` / `user`）、`engine_version`、`status`（`preplan` / `auto` / `pending_review` / `approved` / `rejected` / `applied` / `failed`）、`summary_json`（各信心等級數量、原因摘要、`review_reason`）、`rss_series_id` / `season_hint` / `episode_offset`、`created_at`、`decided_by`、`decided_at`。
+  - `rss_series_id` / `season_hint` / `episode_offset` 是算這一份時交給解析器的 RSS Series 與它當時的季號、offset：值是規劃時讀的，同一個 Series 前後兩份計劃可能不同；不是 RSS 送的三格都是 `NULL`。`rss_series_id` 是弱引用。
+  - `decided_by` / `decided_at` 是稽核欄位：誰、什麼時候批准或駁回了這份計劃（review 與 rematch 寫）。
+  - **一個 Job 只有一份「現在的計劃」**：`job_hash` 上是 unique index，重跑 planning 把它整份改寫而不是再長一列。這樣 `GET /api/plans/{id}` 不必先回答「哪一個 id 才是現在那一份」，`plan_items` 也不會在每次重跑之後多一份重複的決定（§3.3 的重入）。上一份計劃留在時間線上（`events`）。`created_at` 因此是**算出這一份的時間**，跟著重跑換。
+  - `job_hash` 仍可為 NULL：rematch 與重複版本的決定各記一份單列 Plan（`engine = user`，以 `source_path` 說是哪個檔案），SQLite 的 unique 容得下多個 NULL。重新入庫有自己的 Job。
+- `plan_items`：`id`、`plan_id`、`job_file_id`（nullable）、`rel_path`、`action`（`import` / `extra` / `subtitle` / `skip` / `unmatched` / `review`）、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`target_path`、`confidence`（`high` / `medium` / `low`）、`reasons_json`、`audit`、`duplicate_of`、`applied_at`、`error`。
+  - `audit`：medium 自動入庫為 true；RSS Series 送的另有一條——第一批確認之前 high 也是 true、確認之後 medium 也是 false。
+  - `duplicate_of`：指向帳本裡已有的同一個版本（`ledger.id`，`SET NULL`）。Review Queue 上它是一列 `duplicate`，管理員決定之後清掉；那一列帳本不在了這格跟著變 `None`，也就不再等人。
+- `ledger`：`id`、`job_hash`（nullable）、`source_rel_path`、`source_abs_path`、`source_dev`、`target_path`（unique）、`target_inode`、`media_id`、`season`、`episode_start`、`episode_end`、`tags_json`、`plan_item_id`、`action`、`jellyfin_item_id`、`jellyfin_series_id`、`jellyfin_version_name`、`resolve_attempts`、`resolve_after`、`status`（`ok` / `target_missing` / `source_missing` / `inode_mismatch` / `unlinked`）、`audit`、`created_at`、`checked_at`。
+  - **帳本自己站得住**：`job_hash` 是弱引用（刪 Job 與清帳本是刪除範圍裡兩個獨立的旗標）；`action`、季集與 Tags 抄一份進來，因為 review 之後重新規劃會把 `plan_items` 整份換掉，`plan_item_id` 因此是 `SET NULL`。
+  - `resolve_attempts` / `resolve_after` 是 `jellyfin_resolver` 的排程（§3.2），要活過重啟所以落在這一列；`None` 代表沒有要反查的事（找到了、用完了，或本來就不是一個 item——字幕與特典）。
+  - **inode 與 device 存 TEXT**：Windows 的 `st_dev` 實測 `11550084160259632778`，超過 SQLite INTEGER 的有號上限，而這兩欄只比相等。
+  - `target_path` 是容器裡的 POSIX 路徑，也就是 Jellyfin 回報 `Path` 的形狀。
+  - 硬鏈接的兩端是同一個 inode，判 inode 不符與刪除檢查讀的是 `source_dev` 加 `target_inode`；鏈接方式只有硬鏈接（失敗不退回複製，brief §4.4），所以沒有 `link_mode` 欄。
+  - `jellyfin_series_id`：劇集正片那一集所屬的 Series item。媒體庫的深連結開的是作品而不是某一集，反查時 `/Items` 的 Episode 自己帶 `SeriesId`，與 item id 一起寫下，讀頁面時不必再問 Jellyfin。
+  - `jellyfin_version_name`：Jellyfin 12 起劇集也原生合併多版本，版本選單上的名字是**它算的**（去掉各版本檔名的共同前綴，12.0 與 12.1 的算法不同）。反查那一刻 `MediaSources[].Name` 就在手上，抄下來就不必自己重算（brief §7.7、§20.9）。空字串＝還沒收錄。
+  - `status`：`source_missing` 與 `unlinked` 是**使用者決定過的現況**，對帳看到就不再為那一列開 Issue（細節見 §2.4 的 `issues`）。
+- `events`：`id`、`job_hash`（nullable）、`media_id`（nullable）、`type`、`actor`（user id / `system` / `rss:<series>` / `ai:<user id>`：AI 替那個人做的；寫法在 `domain/actor.py`）、`payload_json`、`created_at`。索引 `(job_hash, created_at)`。
+- `notifications`（`models/notification.py`）：待送表，一列是送給某一個人的一則通知。`id`、`user_id`（`CASCADE`）、`kind`（`NotificationKind`：`ready` / `downloading` / `waiting` / `weekly`；後兩種只送管理員，`ADMIN_ONLY_KINDS`）、`content_json`、`merge_key`、`not_before`、`status`（`pending` / `sent` / `abandoned`）、`attempts`、`retry_at`、`error`（`DeliveryFailure` 的值加 Discord 原文）、`created_at`、`sent_at`。索引 `(status, not_before)`、`user_id`。放棄不再送的條件：收件人到不了、Discord 拒收這一則、組不成句子，收件人已看不到該媒體庫或帳號停用、管理員專屬種類的收件人已不是管理員、「等你處理」送出前全部處理完，或滿 `notify.GIVE_UP_AFTER` 還沒送到。
+- `weekly_reports`（`models/weekly.py`）：週報，一週一筆，產生那一刻算好存下來。`id`、`week_of`（這一週第一天，容器時區的週一，ISO 日期，unique）、`starts_at` / `ends_at`（週一 05:00 起、下一個週一 05:00 止，不含）、`content_json`（三段事實，`services.weekly`）、`created_at`。
 
 ### 2.4 RSS 與問題
 
-**M3 票 08 只建了用得到的欄位**（`models/rss.py`，migration `b7e2c4d9a813`）：下面標「（票 NN）」的欄位等到用它的那一票再加。票 08 另加兩欄不在原表上的：`rss_feeds.created_at`（Feed 清單的順序）、`rss_items.error`（送單被拒的原文，`reason: detail`；送成了清空）。三張的關係是 Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 Feed**，所以刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與綁定留著（`.scratch/m3/rss-shape.md` §4）。
-- `rss_feeds`：`id`、`name`、`url`（unique）、`kind`（`mikan` / `nyaa` / `acgrip`，票 11 加後兩種；`generic` 之後——由網址的主機認出來）、`interval_sec`（預設 900；**M4 票 109** 起只收固定檔位 15、30 分，1、3、6、12、24 小時——`models.rss.FEED_INTERVALS`，照 FreshRSS 單一 Feed 下限 15 分鐘、免得來源站封 IP；沒有全域預設、沒有停用、不收自由輸入，使用者 2026-10-19 拍板）、`exclude_json`（票 10：這一層的排除條件，字串清單、`parser.exclusion` 的格式；全域那一層在 `settings.rss`，不是表）、`enabled`（沒有消費者，未建）、`last_polled_at`、`poll_error` / `poll_failing_since` 與 `backfill_error` / `backfill_failing_since`（輪詢與每日補漏各自上一輪失敗的原文、從由好轉壞的那一輪起算的「一直失敗」，成功清掉；M4 票 130 從 M3 票 12 的 `last_error` 拆出來，migration `c5f2a8e4d917` 把舊值搬到輪詢那一欄，舊值不是空的從 `last_polled_at` 起算）、`primed_at`（第一輪預覽選過的那一刻，brief §15，票 11：`NULL` 的 Feed 一筆都不送；**Mikan 加的那一刻就寫**——聚合 feed 只有最近的集數，單一 feed 的整季由票 12 的補舊集處理；migration `c3e9a7f1b204` 把既有的 Feed 補成 `created_at`）、`media_id` / `user_id`（票 19，migration `f4b9d2e6a157`：從 Media 頁建的搜尋 feed 預先綁定的作品與建它的人，它長出的 RSS Series 直接以作品那一種的 Route 走 `bind_series`；綁不上時照一般的路去認作品；一般的 Feed 兩欄都是 `NULL`）、`tv_route_id` / `movie_route_id`（自動綁定送進的 Route，劇集、電影各一條，brief §15「綁定」。票 21 是一欄 `route_id`；**M4 票 105** 改名加欄，migration `bec5947663f5`：原本那一條寫進它那一種的那一欄，之後還空著的那一欄在那一種只有一條啟用中的 Route 時補上，否則留 `NULL` 給人選。那一種有啟用中的 Route 時加 Feed 必填，零條時存 `NULL`；從 Media 頁訂閱建的 Feed 把選的那一條寫在作品那一種的那一欄；Mikan 單一 feed 的另一欄同 migration 的規則，搜尋 feed（`media_id` 有值）的另一欄留空、永遠不讀——`services.rss._route_kinds`：它只用得到作品那一種）、`created_at`、`subgroup`（M5 票 26，migration `d7e1b3a5c926`：關鍵字搜尋 feed 只收這個字幕組的發佈——`parser.binding.of_group` 照發佈名裡的組名比，與 `title_key` 的組名同一種正規化；別組的不寫成 Item、不長 Series；空字串是每一組都收：一般的 Feed、票 26 之前的關鍵字訂閱；`rss.subscribe_search` 一定要給）
-- `rss_series`（2026-09-24 取代 `rss_rules`，brief §15）：`id`、`key`（Mikan 是 `mikan:<番組 id>:<字幕組 id>`，其他是 `title:<骨幹>:<字幕組>`，兩段都 `normalize_title` 過、骨幹有羅馬字那一個名字就取它——同一組的简日、繁日發佈中文名常常不同（票 11，`parser.binding.title_key`）；骨幹讀到第一個括號為止——搜尋與比對的骨幹（`skeleton`）會讀過後面接著 ` / ` 與下一個名字的括號註記，鍵不跟，免得既有的 Series 分裂（M4 票 98）；unique）、`mikan_bangumi_id`、`mikan_subgroup_id`、`title_raw`（長出它的那一筆 Item 的標題）、`group`（未建：`title_raw` 已經帶著）、`media_id`（nullable = 待綁定）、`route_id`、`season`、`episode_offset`、`exclude_json`（票 10，同 Feed 那一欄）、`confirmed`（第一批審核確認過了沒，票 13：`false` 期間它送的集數入庫後一律掛 audit，確認之後 medium 也不掛；migration `a4f7c2e9d168` 把既有的補成 `false`——還沒有人以 Series 為單位看過它們）、`bound_by`（`system` / 使用者 id，`events.actor` 的形狀；沒綁是空字串）、`reasons_json`（票 09：自動綁定查到的 `domain.BindReason`，綁上時是依據、待綁定時是為什麼；`NULL` 是沒查過、或人拆掉了自動綁定。**重認的排程也在這裡**，不另開欄位：`lookup_deferred`（M3 票 20）與 `lookup_retry` 的 `attempt`、`at`（M4 票 14）就是 `rss._due_lookups` 讀的狀態）、`candidates_json`（票 09：給人一鍵選的作品 id）、`backfilled_at`（票 12：上一次讀 Mikan 單一 feed 補舊集或補漏的那一刻；`NULL` 是還沒補過，下一輪就補）、`mikan_bangumi_name` / `mikan_subgroup_name`（M4 票 13，migration `d5c8e2a7f391`：RSS 頁的來源說名字、不說 id；番組名來自自動綁定讀的番組頁與單一 feed 的 channel 標題（`mikan.parse_single_feed`，補舊集與每日補漏時沒有名字就補上），字幕組名來自番組頁與從 Media 頁訂閱時畫面送來的 `subgroup_name`；讀不到的那一格不蓋掉已有的；既有的是空字串）、`passed_before`（票 12 加、**M4 票 78 拿掉**（migration `d71e4b9a3c58`）：補舊集一律補，沒有取消勾選；因它略過的舊集在升級時放回 `matched` / `unbound`）、`enabled`（未建）、`created_at`。**完結不是欄位**（M4 票 13，brief §15「呈現」）：`list_series` 照現況算（`parser.series_finished`）——TMDB 快照 `ended` 而且這個 Series 的 Job 入庫過的那幾季、TMDB 上每一集都在帳本裡（這部作品的 `import` 列，誰入庫的都算），沒有 `unbound` / `matched` 或送出去而 Job 在 `/jobs`「在路上」那一組的 Item，最近一筆也發佈超過 7 天（`SETTLED_AFTER`：任何一筆新的——排除、重複、v2 都算——把它帶回清單一週，code-review 時加）；或最近一筆的發佈時間（沒寫的用 `seen_at`，一筆都沒有用 `created_at`）到現在超過 **30 天**（`QUIET_AFTER`，2026-09-27 shape 拍板：試跑 10 個 Series、146 筆，相鄰兩筆最長隔 22 天）。
-- `rss_items`：`id`、`feed_id`、`guid`（與 feed 合併 unique）、`title`、`link`、`torrent_url`（來源只給 magnet 時存 magnet——Nyaa 的 `&m`，送單兩種都收）、`info_hash`、`size`（近似位元組，只供預覽顯示，票 11）、`published_at`、`seen_at`、`series_id`、`job_hash`（弱引用）、`status`（`unbound` 待綁定、`matched` 綁好還沒送成、`downloaded` 送出去了；`excluded` 排除條件擋下、`duplicate` 去重擋下，票 10；`passed` 新 Feed 第一輪選了「只追之後的」時已經在 feed 裡的，票 11；`new` 沒有建——寫下的那一刻就認出 Series、看過排除條件）、`error`、`skip_json`（票 10：`excluded` / `duplicate` 的那一條 `domain.SkipReason`，其他狀態是 NULL）。**`release_info_json` 沒有建**（票 10）：排除與帳本那一層去重要的季集與 Tags 由標題當場解析（純函式），沒有第二個讀者。
-- `issues`：`id`、`type`（**十四種**，2026-09-22 定十一種、M2 票 09c 加兩種、M3 票 17 加一種：brief §9.1 對帳的七種 `library_link_missing` / `source_missing` / `inode_mismatch` / `orphan_complete` / `unknown_torrent` / `unmanaged_library_file` / `job_without_files`，管線自己發現的四種 `missing_files` / `client_error` / `client_removed` / `jellyfin_item_unresolved`——M1 `issue_detected` 事件已經在用的 `IssueType`——與 `health_checker` 量出來的兩種 `library_uses_tvdb` / `low_disk_space`，以及 Jellyfin 回驗的 `jellyfin_item_mismatch`（§11.4 ③：反查與對帳的 Jellyfin 那一方比同一份，只寫 `issues`、不寫事件）；`issues.type` 與事件共用同一個封閉集合）、`job_hash`、`ledger_id`、`path`、`detail_json`、`status`（`open` / `resolved` / `ignored`）、`detected_at`、`resolved_at`、`resolved_by`。 條件自己解除的由系統收（`resolved_by = system`）：健康檢查那兩種；importer 接回帳本某一列時掛在那一列（`ledger_id`）上的 `library_link_missing` / `source_missing` / `inode_mismatch`，與入庫長回帳本時那一筆的 `job_without_files`（M2 票 10）；管線那三種（`missing_files` / `client_error` / `client_removed`）在 Job 已經不在那個壞掉狀態時（poller 接回、別的路徑推走、被刪掉）由 poller 每一輪收（`issues.close_settled`，M3 票 02）；`jellyfin_item_mismatch` 在下一次反查或對帳**比到**一致時收，找不到 item 不算一致（M3 票 17）；**Jellyfin 還在認也不算比到**（M4 票 02）：Episode 讀不出季號或集號、或作品沒有 `ProviderIds.Tmdb`（`resolver.still_identifying`）時不開也不收，反查照還沒找到的節奏再問，**六次都還認不出才開 `jellyfin_item_mismatch`**——不是 `jellyfin_item_unresolved`，Jellyfin 列出了這個檔案，`detail_json` 並排兩邊正說得出它讀成了空的；對帳遇到還在認的與找不到同一個待遇（不動）——「還在那個狀態」與按鈕按得下去是同一份定義（`issues.STANDS_WHILE`，`client_removed` 多收一個 `submit_failed`：重新送單被拒的那一筆落在那裡）。
-  **冪等鍵**是 `(type, subject)`，`subject` 依型別取：有路徑的用 `path`（`library_link_missing` / `source_missing` / `inode_mismatch` / `unmanaged_library_file` 用帳本或檔案的路徑，`orphan_complete` 用目錄路徑）、`unknown_torrent` 與 `client_*` 用 `job_hash` 或 info hash、`job_without_files` 與 `jellyfin_item_unresolved` 用 `job_hash` / `ledger_id`，`jellyfin_item_mismatch` 用 `ledger_id`（同一個 Series 被認成別的作品時每一集各一件），`library_uses_tvdb` 用那條 Route 的目標路徑（一條 Route 一件，使用者 2026-09-23 拍板），`low_disk_space` 用量的那個根目錄（同一個檔案系統只量一次，complete 先）。**`missing_files` 用 `job_hash`**（2026-09-22 票 05 實作時改判，原本列在「用路徑」那一組）：它有兩條偵測路徑，而 qBittorrent 報 `missingFiles` 的那一條手上一條路徑都沒有——多半正是因為它看不到那個掛載；而它的下一步（重新 recheck / 承認遺失）本來就是整包 torrent 的事。少了哪幾個放在 `detail_json.missing`。**`subject` 是一個存下來的欄位**（票 05）：取出來的值要落在某處，資料庫的 partial unique index 才守得住它（只蓋 `status = 'open'`，決定過的留著當歷史）——同一個 `(type, subject)` 只有一筆 `open`，再偵測到就更新 `detail_json` 與 `detected_at`。`ledger.status.target_missing` 與 Issue 的 `library_link_missing` 是同一件事的兩個角度：帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件，resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。**`source_missing` 反過來**（M2 票 09）：帳本那一欄是**按下「標記為已無來源」之後**才改，改了之後對帳就不再為它開 Issue——它是使用者決定過的現況（同刪除範圍只勾「刪 complete 檔案」的結果）；偵測時就改的話，「忽略」之後下一輪就再也不會問了。**`unlinked` 同一個先例**（M3 票 01）：刪除範圍只勾「移除鏈接」拆掉的那幾列寫 `unlinked` 而不是 `target_missing`——磁碟上兩者一樣是目標不在，差別只在有人決定過——對帳不再為它開 `library_link_missing`。
+Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 Feed**：刪 Feed 連它的 Item 一起刪（`CASCADE`），Series 與綁定留著。
 
-### 2.6 AI 對話與觀測（M5 票 11）
+- `rss_feeds`：`id`、`name`、`url`（unique）、`kind`（`mikan` / `nyaa` / `acgrip`；由網址的主機認出來；`generic` 還沒有 adapter）、`interval_sec`、`exclude_json`、`last_polled_at`、`poll_error` / `poll_failing_since`、`backfill_error` / `backfill_failing_since`、`primed_at`、`media_id` / `user_id`、`tv_route_id` / `movie_route_id`、`subgroup`、`created_at`（Feed 清單的排序）。
+  - `interval_sec`：預設 900，只收固定檔位 15、30 分，1、3、6、12、24 小時（`models.rss.FEED_INTERVALS`）。照 FreshRSS 單一 Feed 下限 15 分鐘，免得來源站封 IP；沒有全域預設、沒有停用、不收自由輸入。
+  - `exclude_json`：這一層的排除條件，字串清單、`parser.exclusion` 的格式；全域那一層在 `settings.rss`。
+  - `poll_error` / `poll_failing_since` 與 `backfill_error` / `backfill_failing_since`：輪詢與每日補漏各自上一輪失敗的原文、從由好轉壞的那一輪起算的「一直失敗」；成功清掉。
+  - `primed_at`（brief §15）：第一輪預覽選過的那一刻；`NULL` 的 Feed 一筆都不送。**Mikan 加的那一刻就寫**——聚合 feed 只有最近的集數，單一 feed 的整季由補舊集處理。
+  - `media_id` / `user_id`：從 Media 頁建的搜尋 feed 預先綁定的作品與建它的人，它長出的 RSS Series 直接以作品那一種的 Route 走 `bind_series`；綁不上時照一般的路去認作品；一般的 Feed 兩欄都是 `NULL`。
+  - `tv_route_id` / `movie_route_id`：自動綁定送進的 Route，劇集、電影各一條（brief §15「綁定」）。那一種有啟用中的 Route 時加 Feed 必填，零條時存 `NULL`；從 Media 頁訂閱建的 Feed 把選的那一條寫在作品那一種的那一欄。Mikan 單一 feed 的另一欄，在那一種只有一條啟用中的 Route 時補上，否則留 `NULL` 給人選；搜尋 feed 的另一欄留空、永遠不讀（`services.rss._route_kinds`）。
+  - `subgroup`：關鍵字搜尋 feed 只收這個字幕組的發佈——`parser.binding.of_group` 照發佈名裡的組名比，與 `title_key` 的組名同一種正規化；別組的不寫成 Item、不長 Series。空字串是每一組都收（一般的 Feed 與沒指定字幕組的關鍵字訂閱）；`rss.subscribe_search` 一定要給。
+- `rss_series`（[ADR 0007](adr/0007-rss-series-model.md)、brief §15）：`id`、`key`、`mikan_bangumi_id`、`mikan_subgroup_id`、`mikan_bangumi_name`、`mikan_subgroup_name`、`title_raw`、`media_id`（nullable = 待綁定）、`route_id`、`season`、`episode_offset`、`exclude_json`、`confirmed`、`bound_by`、`reasons_json`、`candidates_json`、`backfilled_at`、`created_at`。
+  - `key`（unique）：Mikan 是 `mikan:<番組 id>:<字幕組 id>`，其他是 `title:<骨幹>:<字幕組>`，兩段都 `normalize_title` 過，骨幹有羅馬字那一個名字就取它——同一組的简日、繁日發佈中文名常常不同（`parser.binding.title_key`）。骨幹讀到第一個括號為止；搜尋與比對的骨幹（`skeleton`）會讀過後面接著 ` / ` 與下一個名字的括號註記，鍵不跟，免得既有的 Series 分裂。
+  - `title_raw`：長出它的那一筆 Item 的標題（字幕組名已在裡面，沒有 `group` 欄）。
+  - `exclude_json`：同 Feed 那一欄。
+  - `confirmed`：第一批審核確認過了沒；`false` 期間它送的集數入庫後一律掛 audit，確認之後 medium 也不掛。
+  - `bound_by`：`system` / 使用者 id，`events.actor` 的形狀；沒綁是空字串。
+  - `reasons_json`：自動綁定查到的 `domain.BindReason`，綁上時是依據、待綁定時是為什麼；`NULL` 是沒查過、或人拆掉了自動綁定。**重認的排程也在這裡**，不另開欄位：`lookup_deferred` 與 `lookup_retry` 的 `attempt`、`at` 就是 `rss._due_lookups` 讀的狀態。
+  - `candidates_json`：給人一鍵選的作品 id。
+  - `backfilled_at`：上一次讀 Mikan 單一 feed 補舊集或補漏的那一刻；`NULL` 是還沒補過，下一輪就補。補舊集一律補，沒有取消勾選。
+  - `mikan_bangumi_name` / `mikan_subgroup_name`：RSS 頁的來源說名字、不說 id。番組名來自自動綁定讀的番組頁與單一 feed 的 channel 標題（`mikan.parse_single_feed`，補舊集與每日補漏時沒有名字就補上），字幕組名來自番組頁與從 Media 頁訂閱時畫面送來的 `subgroup_name`；讀不到的那一格不蓋掉已有的。
+  - **完結不是欄位**（brief §15「呈現」）：`list_series` 照現況算（`parser.series_finished`），下面兩條擇一成立：
+    - TMDB 快照 `ended`，而且這個 Series 的 Job 入庫過的那幾季、TMDB 上每一集都在帳本裡（這部作品的 `import` 列，誰入庫的都算），沒有 `unbound` / `matched` 或送出去而 Job 在 `/jobs`「在路上」那一組的 Item，最近一筆也發佈超過 7 天（`SETTLED_AFTER`：任何一筆新的——排除、重複、v2 都算——把它帶回清單一週）。
+    - 最近一筆的發佈時間（沒寫的用 `seen_at`，一筆都沒有用 `created_at`）到現在超過 **30 天**（`QUIET_AFTER`；試跑 10 個 Series、146 筆，相鄰兩筆最長隔 22 天）。
+- `rss_items`：`id`、`feed_id`、`guid`（與 feed 合併 unique）、`title`、`link`、`torrent_url`、`info_hash`、`size`、`published_at`、`seen_at`、`series_id`、`job_hash`（弱引用）、`status`、`error`、`skip_json`。
+  - `torrent_url`：來源只給 magnet 時存 magnet（Nyaa 的 `&m`），送單兩種都收。`size` 是近似位元組，只供預覽顯示。
+  - `status`（`FeedItemStatus`）：`unbound` 待綁定、`matched` 綁好還沒送成、`downloaded` 送出去了；`excluded` 排除條件擋下、`duplicate` 去重擋下；`passed` 新 Feed 第一輪選了「只追之後的」時已經在 feed 裡的。沒有 `new`：一筆 Item 寫下的那一刻就認出 Series、看過排除條件。
+  - `error`：送單被拒的原文，`reason: detail`；送成了清空。
+  - `skip_json`：`excluded` / `duplicate` 的那一條 `domain.SkipReason`，其他狀態是 NULL。
+  - 沒有 `release_info_json`：排除與帳本那一層去重要的季集與 Tags 由標題當場解析（純函式），沒有第二個讀者。
+- `issues`：`id`、`type`、`subject`、`job_hash`、`ledger_id`、`path`、`detail_json`、`status`（`open` / `resolved` / `ignored`）、`detected_at`、`resolved_at`、`resolved_by`。
+  - `type` 是封閉集合 `IssueType`（十九種），與事件共用同一個集合。加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。依來源分組：
 
-`models/ai.py`，migration `78a62163b817`（票 20 的兩欄在 `c4e7a9d2b158`）。刪人連他的對話與 run 一起刪，刪對話連它的 run 一起刪（`CASCADE`）。
+    | 來源 | 型別 |
+    | --- | --- |
+    | 對帳（brief §9.1，七種） | `library_link_missing`、`source_missing`、`inode_mismatch`、`orphan_complete`、`unknown_torrent`、`unmanaged_library_file`、`job_without_files` |
+    | 管線自己發現 | `missing_files`、`client_error`、`client_removed`、`jellyfin_item_unresolved` |
+    | `health_checker` | `library_uses_tvdb`、`low_disk_space` |
+    | Jellyfin 回驗（反查與對帳的 Jellyfin 那一方比同一份，只寫 `issues`、不寫事件） | `jellyfin_item_mismatch` |
+    | 每日巡檢（`sweeper`） | `first_batch_stuck`、`feed_poll_failing`、`feed_backfill_failing`、`series_episodes_missing`、`series_episodes_collide` |
+
+    `unknown_torrent` 的兩個生產者（`qbit_poller` 與對帳）寫同一個 `(type, subject)`，冪等鍵把它們收成一筆。
+  - **冪等鍵**是 `(type, subject)`。`subject` 是一個存下來的欄位：資料庫的 partial unique index 只蓋 `status = 'open'`（決定過的留著當歷史），所以同一個 `(type, subject)` 只有一筆 `open`，再偵測到就更新 `detail_json` 與 `detected_at`。`subject` 依型別取：
+
+    | 取什麼 | 型別 |
+    | --- | --- |
+    | `path` | `library_link_missing`、`source_missing`、`inode_mismatch`、`unmanaged_library_file`（帳本或檔案的路徑）、`orphan_complete`（目錄路徑） |
+    | `job_hash` 或 info hash | `unknown_torrent`、`client_*`、`missing_files` |
+    | `job_hash` | `job_without_files` |
+    | `ledger_id` | `jellyfin_item_unresolved`、`jellyfin_item_mismatch`（同一個 Series 被認成別的作品時每一集各一件） |
+    | Route 的目標路徑 | `library_uses_tvdb`（一條 Route 一件） |
+    | 量的那個根目錄 | `low_disk_space`（同一個檔案系統只量一次，complete 先） |
+    | RSS Series 的 id | `first_batch_stuck`、`series_episodes_missing`、`series_episodes_collide` |
+    | RSS Feed 的 id | `feed_poll_failing`、`feed_backfill_failing` |
+
+    `missing_files` 用 `job_hash` 而不是路徑：它有兩條偵測路徑，qBittorrent 報 `missingFiles` 的那一條手上一條路徑都沒有——多半正是因為它看不到那個掛載；下一步（重新 recheck / 承認遺失）本來就是整包 torrent 的事。少了哪幾個放在 `detail_json.missing`。
+  - **誰來收**（`resolved_by = system`）：條件自己解除的由系統收。
+    - 健康檢查那兩種：`health_checker` 下一輪。
+    - importer 接回帳本某一列時，掛在那一列（`ledger_id`）上的 `library_link_missing` / `source_missing` / `inode_mismatch`，與入庫長回帳本時那一筆的 `job_without_files`。
+    - 管線那三種（`missing_files` / `client_error` / `client_removed`）：Job 已經不在那個壞掉狀態時（poller 接回、別的路徑推走、被刪掉）由 poller 每一輪收（`issues.close_settled`）。
+    - `jellyfin_item_mismatch`：下一次反查或對帳**比到**一致時收；找不到 item 不算一致。
+  - **Jellyfin 還在認也不算比到**：Episode 讀不出季號或集號、或作品沒有 `ProviderIds.Tmdb`（`resolver.still_identifying`）時不開也不收，反查照還沒找到的節奏再問，**六次都還認不出才開 `jellyfin_item_mismatch`**——不是 `jellyfin_item_unresolved`：Jellyfin 列出了這個檔案，`detail_json` 並排兩邊正說得出它讀成了空的。對帳遇到還在認的與找不到同一個待遇（不動）。「還在那個狀態」與按鈕按得下去是同一份定義（`issues.STANDS_WHILE`，`client_removed` 多收一個 `submit_failed`：重新送單被拒的那一筆落在那裡）。
+  - **`ledger.status` 與 Issue 的關係**：`target_missing` 與 `library_link_missing` 是同一件事的兩個角度——帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件；resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。
+  - **`source_missing` 與 `unlinked` 反過來**：帳本那一欄是**使用者決定之後**才改——按下「標記為已無來源」改 `source_missing`（同刪除範圍只勾「刪 complete 檔案」的結果），刪除範圍只勾「移除鏈接」拆掉的那幾列寫 `unlinked`（磁碟上與 `target_missing` 一樣是目標不在，差別只在有人決定過）。改了之後對帳不再為它開 Issue。偵測時就改的話，「忽略」之後下一輪就再也不會問了。
+
+### 2.6 AI 對話與觀測
+
+`models/ai.py`。刪人連他的對話與 run 一起刪，刪對話連它的 run 一起刪（`CASCADE`）。
 
 - `ai_conversations`：`id`（前端 `useChat` 的 chat id，`[A-Za-z0-9_-]{1,64}`；第一次送訊息時替這個人建）、`user_id`、`history_json`（pydantic-ai 的 `ModelMessagesTypeAdapter`，**只有伺服器寫**：前端送來的歷史、工具結果與核准都不採用，brief §20.24）、`created_at`、`updated_at`。是別人的對話一律當作沒有（404 `conversation_missing`）。
-- `ai_runs`：一則回覆一列。`id`（也是 pydantic-ai 的 `run_id`）、`conversation_id`、`user_id`（AI 替誰跑）、`provider`、`model`（設定裡的名字）、`started_at`、`ended_at`、`stop_reason`（`AiStopReason`：`completed` / `request_limit` / `token_limit` / `repeated_call` / `ping_pong` / `no_progress` / `circuit_open` / `error` / `cancelled`（使用者按了停止）/ `interrupted`（Berth 重新啟動時還在跑，M5 票 25）；`NULL` 是還在跑；每一種防護停下都有自己的一種，用量頁數它）、`error`（key 已遮掉；`error` 與 `circuit_open` 才有）、`requests`、`tool_calls`、`input_tokens`（含快取讀寫）、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`、`web_searches`（伺服器端網搜的合計，票 17；Tavily 是工具呼叫，在 `ai_tool_calls`）、`continues`（使用者對哪一輪按了「繼續」，票 20；唯一索引，一輪只續得了一次；沒有外鍵，指的是同一段對話裡的一輪）。**每次模型呼叫之後當場寫**（不等 `on_complete`：中止的那一輪它不會被呼叫）。合計裡有一次不知道（`NULL`）就是不知道。
-- `ai_calls`：每次模型呼叫一列，成敗都記：`run_id`、`step`（從 1 起）、`model`（服務報的名字）、`base_url`（實際打的端點，官方的也寫出來，`adapters.ai.effective_base_url`；查價先用它認服務商；`NULL` 是 M5 票 21b 之前記的，migration `a9c3e5f1b742`）、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`（**原樣存，`NULL` 是接口沒報**：Chat Completions 沒有快取寫這一格，`adapters/ai/usage.py`）、`cost_usd`（照端點、模型名與回應的時間查價，查不到是 `NULL`，`prices.cost_of`；含價錢知道的網搜；票 21b 之前的列不回填）、`web_searches`（這次呼叫伺服器端搜了幾次，`usage.web_searches_of`）、`web_search_cost_usd`（沒搜是 0；`NULL` 是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點不計進 `cost_usd`，畫面要說明；migration `c3e7a1f9d524`）、`finish_reason`、`duration_ms`、`error`、`created_at`。
-- `ai_tool_calls`：每次工具呼叫一列：`run_id`、`step`（發出它的那次模型呼叫）、`command`（登錄表的名字，不是給模型的工具名）、`args_json`（截在 2000 字）、`outcome`（`AiToolOutcome`：`ok` / `warned` / `blocked` / `aborted` / `refused` / `failed`）、`detail`、`duration_ms`、`truncated`（交給模型的結果是截過的，票 20）、`created_at`。
+- `ai_runs`：一則回覆一列。`id`（也是 pydantic-ai 的 `run_id`）、`conversation_id`、`user_id`（AI 替誰跑）、`kind`、`provider`、`model`（設定裡的名字）、`started_at`、`ended_at`、`stop_reason`、`error`、`requests`、`tool_calls`、`input_tokens`（含快取讀寫）、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`、`web_searches`、`continues`。
+  - `kind`（`AiRunKind`）：`chat`（一則使用者訊息的回覆）或 `compaction`（上下文壓縮的摘要，自動的或 `/compact`）。用量頁分開數；「最後一輪」（「繼續」、停在哪）只看 `chat`。
+  - `stop_reason`（`AiStopReason`）：`completed` / `awaiting_confirmation`（停在確認卡上，按了之後由下一個請求恢復，那是另一輪）/ `request_limit` / `token_limit` / `repeated_call` / `ping_pong` / `no_progress` / `circuit_open` / `error` / `cancelled`（使用者按了停止）/ `interrupted`（Berth 重新啟動時還在跑）。`NULL` 是還在跑；每一種防護停下都有自己的一種，用量頁數它。
+  - `error`：key 已遮掉；`error` 與 `circuit_open` 才有。
+  - `web_searches`：伺服器端網搜的合計；Tavily 是工具呼叫，在 `ai_tool_calls`。
+  - `continues`：使用者對哪一輪按了「繼續」；唯一索引，一輪只續得了一次；沒有外鍵，指的是同一段對話裡的一輪。
+  - **每次模型呼叫之後當場寫**（不等 `on_complete`：中止的那一輪它不會被呼叫）。合計裡有一次不知道（`NULL`）就是不知道。
+- `ai_calls`：每次模型呼叫一列，成敗都記：`run_id`、`step`（從 1 起）、`model`（服務報的名字）、`base_url`、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`、`web_searches`、`web_search_cost_usd`、`finish_reason`、`duration_ms`、`error`、`created_at`。
+  - `base_url`：實際打的端點，官方的也寫出來（`adapters.ai.effective_base_url`）；查價先用它認服務商；`NULL` 是沒記的舊列。
+  - 四種 token 欄**原樣存，`NULL` 是接口沒報**：Chat Completions 沒有快取寫這一格（`adapters/ai/usage.py`）。
+  - `cost_usd`：照端點、模型名與回應的時間查價，查不到是 `NULL`（`prices.cost_of`）；含價錢知道的網搜。
+  - `web_searches`：這次呼叫伺服器端搜了幾次（`usage.web_searches_of`）。
+  - `web_search_cost_usd`：沒搜是 0；`NULL` 是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點不計進 `cost_usd`，畫面要說明。
+- `ai_tool_calls`：每次工具呼叫一列：`run_id`、`step`（發出它的那次模型呼叫）、`command`（登錄表的名字，不是給模型的工具名）、`args_json`（截在 2000 字）、`outcome`（`AiToolOutcome`：`ok` / `warned` / `blocked` / `aborted` / `refused` / `failed` / `proposed`）、`detail`、`duration_ms`、`truncated`（交給模型的結果是截過的）、`created_at`。
 
 ### 2.5 不做的事
 
 - 不建 `episodes` 表：季集結構存在 `media.tmdb_snapshot_json`，查詢在 Python 做；帳本以 `(media_id, season, episode)` 引用。理由：TMDB 是唯一來源，快照整體更新比逐列同步簡單。
 - 不做軟刪除：刪除範圍（brief §9.2）決定哪些列真的刪；歷史靠 `events`。
 
-### 2.6 Proposal（M5 票 08）
+### 2.6 Proposal
 
-- `proposals`（`models/proposal.py`，migration `b5d2e8f4a716`）：`id`、`command`（登錄表的名字）、`arguments_json`（**每一列一份命令輸入**，過了輸入模型的那一份：單項卡一列、總覽卡多列）、`arguments_hash`（命令名與參數的 SHA-256，執行前重算比對）、`preview_json`（提出那一刻伺服器算的：命令的 `effect`、`flags`，逐列 `checked`＝跑過驗證沒有；M5 票 14 多逐列 `external_fields`＝出自外部內容的欄位名、`held_back`＝數量閘留給下一張的列數、逐列 `torrents`＝按下去會送出幾個 torrent（`null` 是要送出時才知道），舊的列讀成空的、0 與空清單；M5 票 23b 多逐列 `routes`＝要人選 Route 的列的 `{options: [{id, name}], preselected}`，其餘 `null`，命令沒有 `media_id` 與 `route_id` 的是空清單；M5 票 26 多逐列 `subgroups`＝訂閱的字幕組 `{options: [{key, name, releases, updated, latest, titles, arguments}], preselected, required}`（`arguments` 是選了它時蓋過存下參數的那幾格，`titles` 是關鍵字訂閱的第一批）與逐列 `existing`＝這部作品提出時已有的訂閱 `[{feed_id, name, kind, subgroup}]`，不是訂閱的命令兩格都是空清單）、`user_id`（替誰提出、按得到的那個人，`CASCADE`）、`proposer`（`person` / `ai`，執行時的 Actor 照它與那個人**現在**的角色重建）、`conversation_id`（提出它的那段對話；人提出的是 `NULL`；對話表在票 11，還沒有外鍵）、`status`、`created_at`、`expires_at`（提出後 24 小時，`services.proposals.PROPOSAL_TTL`）、`decided_by`（`SET NULL`）、`decided_at`、`selection_json`（核准時勾的列，`NULL` 是全部）、`results_json`（逐列 `{outcome, reason, detail, result}`，`outcome` 是 `done` / `refused` / `failed` / `skipped`；每做完一列寫一次）。`routes_json`（M5 票 23b，migration `c2f6a8d4e917`：核准時逐列在卡片上選的 Route，沒得選的列是 `null`；整格 `NULL` 是哪一列都沒選，舊的列也是；執行時蓋過存下參數裡的 `route_id`，）、`subgroups_json`（M5 票 26，migration `d7e1b3a5c926`：核准時逐列選的字幕組 `key`，同上；執行時用那個選項的 `arguments` 蓋過存下的參數。）、`first_batch_json`（M5 票 26，同一個 migration：核准時逐列選的第一輪 `all` / `later`，只有命令輸入有 `first_batch` 的列（關鍵字訂閱）能給，預覽逐列 `first_batch` 是真假；執行時蓋過存下參數裡的 `first_batch`。**Route、字幕組與第一輪是存下的參數僅有能在決定時改的三格**）。`tool_call_id`（M5 票 13，migration `d8a4f1c6e273`：AI 提出的那一次 tool call，唯一；恢復那一輪靠它找回卡片）、`detached_at`（脫離那一輪的時刻；之後每一輪的 instructions 帶上這幾張的近況）。索引 `(status, expires_at)`、`user_id`、`conversation_id`、`tool_call_id`（唯一）。給瀏覽器與模型的參數去掉標了 `Private` 的格子（`registry.public_arguments`；送單來源的下載連結帶 Prowlarr 的 API key，M4 票 79），執行讀存著的完整那一份。
-- **狀態**：`pending` → `approved` / `rejected` / `expired`；`pending` → `detached`（對話往下走了）→ 同上；`approved` → `executing` → `executed` / `partial` / `failed`。每一步都是 compare-and-set，搶輸的是 `proposal_decided`，所以連按兩次只執行一次。`executing` 不在原本的清單上：執行要先搶一次，行程死在執行中的那一張停在那裡、不重跑（送出去的不能再送一次）。
-- **什麼時候執行**：**核准就當場執行**（M5 票 13 改：原本還在那一輪對話裡的只記決定、由對話恢復時執行）。對話恢復那一輪只把逐列結果交給模型，所以 AI 之後被關掉、恢復那一輪送不出去，都不會留下「核准了卻沒做」的卡；只有行程死在核准與執行之間的才停在 `approved`，恢復那一輪或下一則訊息補執行。執行經命令執行器、每列先重驗（乾跑），參數只用存下的那一份；雜湊對不上就一列都不做（`arguments_changed`）。
+- `proposals`（`models/proposal.py`）：`id`、`command`（登錄表的名字）、`arguments_json`、`arguments_hash`、`preview_json`、`user_id`、`proposer`、`conversation_id`、`tool_call_id`、`status`、`created_at`、`expires_at`、`decided_by`、`decided_at`、`detached_at`、`selection_json`、`routes_json`、`subgroups_json`、`first_batch_json`、`results_json`。
+  - `arguments_json`：**每一列一份命令輸入**，過了輸入模型的那一份：單項卡一列、總覽卡多列。
+  - `arguments_hash`：命令名與參數的 SHA-256，執行前重算比對。
+  - `preview_json`：提出那一刻伺服器算的。整體有命令的 `effect`、`flags`；逐列有：
+    - `checked`：跑過驗證沒有。
+    - `external_fields`：出自外部內容的欄位名。
+    - `held_back`：數量閘留給下一張的列數。
+    - `torrents`：按下去會送出幾個 torrent（`null` 是要送出時才知道）。
+    - `routes`：要人選 Route 的列的 `{options: [{id, name}], preselected}`，其餘 `null`；命令沒有 `media_id` 與 `route_id` 的是空清單。
+    - `subgroups`：訂閱的字幕組 `{options: [{key, name, releases, updated, latest, titles, arguments}], preselected, required}`（`arguments` 是選了它時蓋過存下參數的那幾格，`titles` 是關鍵字訂閱的第一批）。
+    - `existing`：這部作品提出時已有的訂閱 `[{feed_id, name, kind, subgroup}]`。不是訂閱的命令 `subgroups` 與 `existing` 都是空清單。
+    - `first_batch`：命令輸入有 `first_batch` 的列（關鍵字訂閱）才有，真假。
+  - `user_id`：替誰提出、按得到的那個人（`CASCADE`）。
+  - `proposer`（`person` / `ai`）：執行時的 Actor 照它與那個人**現在**的角色重建。
+  - `conversation_id`：提出它的那段對話；人提出的是 `NULL`；沒有外鍵，刪對話不帶走 Proposal。
+  - `tool_call_id`：AI 提出的那一次 tool call；恢復那一輪靠 `(conversation_id, tool_call_id)` 找回卡片（id 不保證唯一，取最新一張）。
+  - `expires_at`：提出後 24 小時（`services.proposals.PROPOSAL_TTL`）。
+  - `decided_by`（`SET NULL`）、`decided_at`、`detached_at`（脫離那一輪的時刻；之後每一輪的 instructions 帶上這幾張的近況）。
+  - `selection_json`：核准時勾的列，`NULL` 是全部。
+  - `routes_json` / `subgroups_json` / `first_batch_json`：核准時逐列選的 Route id、字幕組 `key`、第一輪 `all` / `later`；沒得選的列是 `null`，整格 `NULL` 是哪一列都沒選。執行時蓋過存下參數裡的 `route_id`、字幕組選項的 `arguments`、`first_batch`。**這三格是存下的參數僅有能在決定時改的**。
+  - `results_json`：逐列 `{outcome, reason, detail, result}`，`outcome` 是 `done` / `refused` / `failed` / `skipped`；每做完一列寫一次。
+  - 索引 `(status, expires_at)`、`user_id`、`conversation_id`、`(conversation_id, tool_call_id)`。
+  - 給瀏覽器與模型的參數去掉標了 `Private` 的格子（`registry.public_arguments`；送單來源的下載連結帶 Prowlarr 的 API key），執行讀存著的完整那一份。
+- **狀態**：`pending` → `approved` / `rejected` / `expired`；`pending` → `detached`（對話往下走了）→ 同上；`approved` → `executing` → `executed` / `partial` / `failed`。每一步都是 compare-and-set，搶輸的是 `proposal_decided`，所以連按兩次只執行一次。`executing` 是執行前先搶的一次：行程死在執行中的那一張停在那裡、不重跑（送出去的不能再送一次）。
+- **什麼時候執行**：**核准就當場執行**。對話恢復那一輪只把逐列結果交給模型，所以 AI 之後被關掉、恢復那一輪送不出去，都不會留下「核准了卻沒做」的卡；只有行程死在核准與執行之間的才停在 `approved`，恢復那一輪或下一則訊息補執行。執行經命令執行器、每列先重驗（乾跑），參數只用存下的那一份；雜湊對不上就一列都不做（`arguments_changed`）。
 - 決定、執行、脫離、過期清掃都標 `internal`：不進命令登錄表，AI 的工具裡永遠沒有「核准」。過期清掃由 `sweeper` 每一次醒來時跑（每分鐘），決定時也當場看期限。
 
 ---
