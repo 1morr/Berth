@@ -41,6 +41,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 07 閱讀預算閘門 | `test_reading_budget.py` 守 CLAUDE.md ≤ 6,000 字、progress.md ≤ 20,000 字；雙向變異（補到上限 + 1 紅、重排不紅）跑過；做法寫進〈寫法與封存〉 | `/implement` 票 03a |
 | 2026-10-30 | docs-diet 03a brief §20.1–§20.7 壓縮 | 七節留結論加來源，細節搬進 `docs/research/`（三個新檔、四個補〈從 brief 搬來〉；遺失 0 行）；brief 1,875 → 1,615 行；§20.7 只縮 11% | `/implement` 票 03b |
 | 2026-10-30 | docs-diet 03b brief §20.8–§20.24 壓縮 | 十七節留結論加來源，細節逐字搬進 `docs/research/`（四個新檔、十一個補段；遺失 0 行）；§20 846 → 696 行，brief 1,615 → 1,465 行；§20.10、§20.22 不動 | `/implement` 票 04b |
+| 2026-10-30 | docs-diet 04b brief §0–§9 去歷史 | 歷史標記 43 → 0，455 行 54.5 KB → 549 行 52.4 KB（長段拆清單）；標題與號碼不變；對照表與 8 條舊有矛盾（Issue 14 vs 19 種等）在票 Comments 問使用者 | `/implement` 票 04c |
 | 2026-10-30 | docs-diet 05a plan §0–§2 去歷史 | §0–§2 歷史標記 118 → 0；照 `berth/models/` 補通知、週報、`duplicate_of` 等缺的欄位；Spec 軸比對補回 6 項；對照表在票 Comments | `/implement` 票 05b |
 
 ## 偏差與決定

@@ -37,18 +37,18 @@
 | --- | --- | --- |
 | 播放、轉碼、觀看紀錄的儲存、刮削圖片與簡介 | Jellyfin | 本系統讀取 Jellyfin 的媒體庫、項目、圖片與每位使用者的觀看紀錄來呈現媒體庫（§12）；唯一寫回的是已看 / 未看標記。播放一律深連結到 Jellyfin |
 | 下載協定、做種、限速、分享率、種子清理 | qBittorrent | 做種策略用 qBittorrent 的分類設定，本系統只處理「種子被移除後」的善後 |
-| 索引站接入 | 只支援 Prowlarr（套件內或既有；為什麼見 [ADR-0001](adr/0001-indexer-manager-prowlarr-only.md)） | 搜尋走 Prowlarr REST（`GET /api/v1/search`），加站、移除、測站也走它的 REST。開箱即用套件預設打包 Prowlarr（§16.3）。**2026-10-06 改（§19 D3，M4 票 37）**：原本「只依賴 Torznab 協定、已有 Jackett 的使用者直接填 Torznab 端點」不採用，Jackett 與單站 Torznab 網址沒有路徑，要先裝 Prowlarr |
+| 索引站接入 | 只支援 Prowlarr（套件內或既有；為什麼見 [ADR-0001](adr/0001-indexer-manager-prowlarr-only.md)） | 搜尋走 Prowlarr REST（`GET /api/v1/search`），加站、移除、測站也走它的 REST。開箱即用套件預設打包 Prowlarr（§16.3）。Jackett 與單站 Torznab 網址沒有路徑，要先裝 Prowlarr |
 | Metadata | TMDB | 第一階段唯一的 provider，見 §10 |
 | 同一集多版本的合併顯示 | Jellyfin（12 起原生合併；本系統只支援 12 以上） | 本系統只保證命名讓 Jellyfin 能合併；不裝 MergeVersions（§7.7、[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)） |
 
-刻意不做的事（第一階段）：品質檔案自動升級替換（Sonarr 的 quality profile upgrade）、內嵌播放器、多人審批、非影片媒體。巡檢與通知、AI 核心、側面板與外部對話排在 M4–M7（§14、§17，2026-09-24 重排）。見 §18。
+刻意不做的事（第一階段）：品質檔案自動升級替換（Sonarr 的 quality profile upgrade）、內嵌播放器、多人審批、非影片媒體。巡檢與通知、AI 核心、側面板與外部對話排在 M4–M7（§14、§17）。見 §18。
 
 ### 1.3 參考的成熟產品與採用的慣例
 
 | 面向 | 借鑑 | 採用的慣例 |
 | --- | --- | --- |
 | 目錄與硬鏈接 | TRaSH Guides、Sonarr/Radarr | 單一掛載根 `/data`；「qBittorrent category = 一個目標媒體庫」 |
-| 探索頁與帳號 | Seerr（2026 年起 Jellyseerr 與 Overseerr 的合併專案） | TMDB 媒體牆；用 Jellyfin 帳號登入，Jellyfin 管理員即本系統管理員；深連結格式 |
+| 探索頁與帳號 | Seerr（Jellyseerr 與 Overseerr 的合併專案） | TMDB 媒體牆；用 Jellyfin 帳號登入，Jellyfin 管理員即本系統管理員；深連結格式 |
 | 入庫管線 | Sonarr/Radarr | Completed Download Handling、Interactive Import（人工入庫）、Root Folder、健康檢查 |
 | RSS | AutoBangumi | 訂閱 + 規則 + 解析 + 重命名；一次性 RSS 連結 |
 | 檔案命名 | Jellyfin 官方命名文件 | `[tmdbid-…]` 鎖定 ID、`Season 00` 放 Specials、extras 資料夾 |
@@ -68,11 +68,9 @@
 
 ## 3. 外部服務與整合邊界
 
-> **2026-10-06 改（§19「精靈審計後的八項」D3）**：只支援 Prowlarr，拿掉通用 Torznab 端點與 Jackett；下表 Prowlarr 那一列、§16.4 與 §20 的 Jackett 結論已在 M4 票 37 改寫（Jackett 結論標「已不採用」，來源保留）。
-
 | 服務 | 用途 | 整合方式 | 備註 |
 | --- | --- | --- | --- |
-| Prowlarr | torrent 搜尋 | REST API（`/api/v1/search`、`/api/v1/indexer*`、`/api/v1/system/status`）；搜尋與由 Berth 自動加入索引站（§16.3）都走它（M4 票 37 起不再有 Torznab 端點） | 搜尋結果短暫快取 |
+| Prowlarr | torrent 搜尋 | REST API（`/api/v1/search`、`/api/v1/indexer*`、`/api/v1/system/status`）；搜尋與由 Berth 自動加入索引站（§16.3）都走它，沒有 Torznab 端點 | 搜尋結果短暫快取 |
 | qBittorrent | 下載 | Web API v2：新增、分類、輪詢 `sync/maindata`、檔案清單、刪除、搬移 | 無 webhook，用輪詢；活躍時短間隔、閒置時退避。支援下限 4.4（API 2.8.4），adapter 依 `webapiVersion` 切換 `paused`/`stopped` 等改名參數（§20.2） |
 | Jellyfin | 媒體庫與播放 | 伺服器 API key 做媒體庫操作；使用者以 Jellyfin 帳號登入本系統 | 讀 VirtualFolders 得到媒體庫與路徑；針對路徑觸發掃描；用路徑反查 item id |
 | TMDB | metadata | REST v3，本地快取 | 探索、搜尋、季集結構、別名與翻譯、episode groups |
@@ -91,15 +89,15 @@
 /data/library/<Jellyfin 媒體庫路徑>/<Media 資料夾>/...     由 Jellyfin 推導，不讓使用者重填
 ```
 
-- `incomplete` 與 `complete` 的根目錄固定在 `/data/torrent/{incomplete,complete}`，沒有 API、UI 或環境變數改它（M4 票 22：原本寫「在 WebUI 設定」，程式從來沒有那個設定；要換宿主位置改的是 `DATA_ROOT` 掛到哪裡）。
-- 未完成目錄開在 Berth 的每個 category 上（`downloadPath`，M4 票 22），不寫 qBittorrent 的全域 `temp_path`：既有 qBittorrent 不必改全域設定，下載中的檔也不會落在 complete 那一側。兩版實測全域關著也生效、開著時分類的贏（§20.2）。
+- `incomplete` 與 `complete` 的根目錄固定在 `/data/torrent/{incomplete,complete}`，沒有 API、UI 或環境變數改它；要換宿主位置，改 `DATA_ROOT` 掛到哪裡。
+- 未完成目錄開在 Berth 的每個 category 上（`downloadPath`），不寫 qBittorrent 的全域 `temp_path`：既有 qBittorrent 不必改全域設定，下載中的檔也不會落在 complete 那一側。全域關著也生效、開著時分類的贏（§20.2）。
 - `complete/<route-slug>` 對應一個 qBittorrent category；category 名稱預設 `berth-<route-slug>`，可改。
-  `route-slug` 由媒體庫名稱算：換掉路徑不收的字元、空白換成 `-`、小寫，中日文照留（「TV Shows」→ `tv-shows`，M4 票 08；之前建的 Route 保留自己帶空白的 slug 與分類，不改名——改分類路徑會搬走 torrent，§20.2）。
+- `route-slug` 由媒體庫名稱算：換掉路徑不收的字元、空白換成 `-`、小寫，中日文照留（「TV Shows」→ `tv-shows`）。依舊算法建的 Route，slug 可能帶空白；它保留自己的 slug 與分類，不改名——改分類路徑會搬走 torrent（§20.2）。
 - library 路徑一律從 Jellyfin `VirtualFolders` 讀取，使用者只做「選擇」，不做「輸入」。
 
 ### 4.2 為什麼 incomplete / complete **不**鏡像 library 結構【決定】
 
-原始想法：`complete/<library>/<media title>/<torrent name>`，讓人在檔案系統就能看出哪個 torrent 屬於哪部作品。不採用，理由：
+不採用 `complete/<library>/<media title>/<torrent name>`（讓人在檔案系統就能看出哪個 torrent 屬於哪部作品），理由：
 
 1. 送單時對「這是哪部作品」的判斷可能是錯的（RSS 誤判、選錯季），之後修正就得搬 torrent 資料，做種中搬移是最容易出事的操作。
 2. 目錄名會鎖死在送單當下的標題，TMDB 改名、使用者改匹配都會讓目錄說謊。
@@ -107,27 +105,37 @@
 4. 「這個 torrent 是哪部作品」由本系統的 Job 頁與帳本回答；檔案系統層面用 `find -samefile` 也能反查。
 5. incomplete 是暫態，qBittorrent 完成時自行從分類的未完成目錄搬到 save path；鏡像它沒有任何收益。
 
-保留的替代：Job 頁提供「開啟 complete 目錄」與「顯示所有硬鏈接目標」，滿足「我想知道這堆檔案是什麼」的需求。
+替代：Job 頁提供「開啟 complete 目錄」與「顯示所有硬鏈接目標」，滿足「我想知道這堆檔案是什麼」的需求。
 
 ### 4.3 一個 Jellyfin 媒體庫有多個路徑【決定】
 
 - Library Route = （Jellyfin 媒體庫, **一個**寫入目標路徑）。
-- 建立 Route 時從媒體庫的路徑選一個作為寫入目標。既有 Jellyfin **預選 Berth 路徑**（「加入 Berth 路徑」加的那一條，還沒加的也是——按下「建立並檢查」時才加）：那一條本來就是為 Berth 加的，其餘路徑是使用者自己的（M3 票 06h）。**只有一個路徑時也不自動選它**（M4 票 19 推翻原本的「自動選定」）：旁邊的說明叫人別讓 Berth 寫進既有的資料夾，預設選它方向相反；要寫進去，使用者自己選。套件內的 Route 由 Berth 建的媒體庫導出，不用選。
+- 建立 Route 時從媒體庫的路徑選一個作為寫入目標。
+  - 既有 Jellyfin **預選 Berth 路徑**（「加入 Berth 路徑」加的那一條，還沒加的也是——按下「建立並檢查」時才加）：那一條本來就是為 Berth 加的，其餘路徑是使用者自己的。
+  - **只有一個路徑時也不自動選它**：旁邊的說明叫人別讓 Berth 寫進既有的資料夾，預設選它方向相反；要寫進去，使用者自己選。
+  - 套件內的 Route 由 Berth 建的媒體庫導出，不用選。
 - 該媒體庫的其他路徑視為唯讀：用來辨識「已存在的媒體」與偵測孤兒，不寫入。
 - 同一個 Jellyfin 媒體庫可以建立多個 Route（例如兩顆碟各一個 Route），但每個 Route 有自己的 category 與 complete 子目錄，硬鏈接檢查各自獨立。
-- Route 的 slug 與寫入目標建立之後不可改；刪除是明確、要二次確認的動作，被 Job 或帳本引用時拒絕，出路是停用（票 14）。
+- Route 的 slug 與寫入目標建立之後不可改；刪除是明確、要二次確認的動作，被 Job 或帳本引用時拒絕，出路是停用。
 
 ### 4.4 硬鏈接能力驗證【決定】
 
 - 每個 Route 建立時與每次啟動時執行：在 `complete/<route-slug>` 建暫存檔 → 真的呼叫 `link()` 鏈接到目標路徑 → 比對 inode 與 device → 刪除。失敗即 Route 標記為不健康，拒絕送單。只比 `st_dev` 不夠（同一檔案系統掛兩次、btrfs 子卷、ZFS dataset、mergerfs 都會 `EXDEV`，§20.2），所以一定實際鏈接一次。
-- 也檢查：目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到、**反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，M4 票 19，§20.2）、Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔、category 為 autoTMM 模式、帶自己的未完成目錄（M4 票 22）。
+- 也檢查：
+  - 目標路徑對本系統可寫、qBittorrent 回報的 save path 在本系統看得到。
+  - **反過來 qBittorrent 讀得到本系統寫進分類路徑的探測檔**（探針 torrent 校驗到 100%，§20.2）。
+  - Jellyfin 以 `Environment/ValidatePath` 確認看得到探測檔。
+  - category 為 autoTMM 模式，且帶自己的未完成目錄。
 - **硬鏈接失敗不退回複製**（與 Sonarr 不同）：複製會讓刪除範圍與空間估算失真，違反「避免複製檔案」的需求。
-- Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；容器路徑固定是 `/data`：Berth 的 incomplete / complete 根目錄在 `/data/torrent/…`、媒體庫根目錄在 `/data/library`，都沒有設定可改，所以既有服務也要把共用父目錄掛在 `/data`（§16.4；原本寫「路徑字串可以是 `/data` 以外的任何值」，程式從來沒有那個設定，M4 票 33 改）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
+- Docker 部署要求三個容器（qBittorrent、Jellyfin、本系統）以**相同容器路徑**掛載同一個宿主父目錄（TRaSH 的單一掛載慣例）；容器路徑固定是 `/data`：Berth 的 incomplete / complete 根目錄在 `/data/torrent/…`、媒體庫根目錄在 `/data/library`，都沒有設定可改，所以既有服務也要把共用父目錄掛在 `/data`（§16.4）。第一階段不做 remote path mapping，設定精靈直接驗證「你看到的路徑 qBittorrent 與 Jellyfin 也看得到」。
 - 已知限制要寫進使用者文件（README 與 `docs/guide/requirements.md`）：Docker Desktop（Windows/macOS）bind mount 的硬鏈接支援與 mergerfs / 跨 dataset 情境，見 §20 的查證結果。
 
 ### 4.5 檔名與目錄安全
 
-- Media 資料夾名在**第一次真的通向磁碟那一刻**決定並寫入 DB——手動送單成功時，或 RSS Series 綁定到作品時（M1 票 04b；2026-09-24 起 RSS 改為自動綁定，§15——那一刻不一定有人在場，靠審核與「重新命名」補）。手動送單有人在場、要一次明確確認；不拖到入庫，那時是背景迴圈在跑，沒有人看著。在那之前它跟著 TMDB 的標題走，畫面上是「將會是」的預覽。凍結之後 TMDB 改名不自動改資料夾（避免 Jellyfin 重掃與帳本漂移）；提供「重新命名」的顯式動作。
+- Media 資料夾名在**第一次真的通向磁碟那一刻**決定並寫入 DB：
+  - 手動送單成功時：有人在場，要一次明確確認。
+  - RSS Series 綁定到作品時：RSS 自動綁定（§15），那一刻不一定有人在場，靠審核與「重新命名」補。
+- 不拖到入庫，那時是背景迴圈在跑，沒有人看著。在那之前它跟著 TMDB 的標題走，畫面上是「將會是」的預覽。凍結之後 TMDB 改名不自動改資料夾（避免 Jellyfin 重掃與帳本漂移）；提供「重新命名」的顯式動作。
 - 去除 `/ \ : * ? " < > |` 與控制字元，尾端不留 `.` 與空白（相容 SMB/Windows 掛載）；長度上限 200 bytes。
 
 ---
@@ -145,7 +153,7 @@ importing  ─► import_failed（可重試）
 任何狀態 ─► removed（使用者刪除，帳本保留或清除依刪除範圍）
 ```
 
-- **metadata_ready 做預先計劃（pre-plan）**：一拿到檔案清單就用規則跑一次 Plan，不動檔案。目的：在下載完成前就發現「這個 torrent 根本不是那一季」或「全部是 OST」，讓使用者可以立刻取消。這一步是原流程沒有的，成本極低。
+- **metadata_ready 做預先計劃（pre-plan）**：一拿到檔案清單就用規則跑一次 Plan，不動檔案。目的：在下載完成前就發現「這個 torrent 根本不是那一季」或「全部是 OST」，讓使用者可以立刻取消。成本極低。
 - **completed 的判定**：qBittorrent `progress == 1` 且 `completion_on > 0` 且 state 不是 `moving` / `checking*`（temp path 搬到 save path 期間會是 `moving`，§20.2）；再以 `stat` 確認每個檔案存在於 save path 下。`priority == 0`（不下載）的檔案不進 Plan。
 - **completed 觸發正式 planning**：此時可讀 mediainfo（時長、音軌、內封字幕語言），信心明顯高於只看檔名。
 - **planning 的產出是 Plan，不是副作用**。高信心 Plan 自動進 importing；否則進 review。
@@ -158,7 +166,9 @@ importing  ─► import_failed（可重試）
 
 `created(trigger, user, media, route)`、`submitted(client, category, save_path)`、`metadata_received(file_count, total_size)`、`preplan(result, confidence)`、`progress(每 25% 一筆)`、`completed`、`plan_generated(engine=rules|ai, confidence, model, tokens, cost)`、`review_required(reason)`、`review_decided(user, changes)`、`linked(file, target)`、`link_failed(file, error)`、`jellyfin_scan_requested(paths)`、`jellyfin_item_resolved(count)`、`issue_detected(type)`、`deleted(links, sources, torrent, purged, freed, unmanaged)`。
 
-`jellyfin_item_resolved` 是**一筆 Job 一行、說找到了幾個**（`count`），不是逐檔帶 item id：一季 24 集的時間線不該被 24 行「找到了」淹沒，而 item id 已經寫在帳本那幾列上（`services/resolver.py`，M3 票 01 照程式碼更正）。**它是「這一筆的正片全部在 Jellyfin 認出來了」，一筆 Job 只寫一次**（M4 票 02）：`count` 是整筆的正片數；之後的重新反查找到的不再寫，有一集放棄了就不寫。M4 通知的「可以看了」讀的就是它。`deleted` 說的是真的做掉了什麼而不是勾了哪幾格（§9.2），誰按的在事件的 `actor`。
+- `jellyfin_item_resolved` 是**一筆 Job 一行、說找到了幾個**（`count`），不是逐檔帶 item id：一季 24 集的時間線不該被 24 行「找到了」淹沒，item id 已經寫在帳本那幾列上（`services/resolver.py`）。
+- 它的意思是「這一筆的正片全部在 Jellyfin 認出來了」，一筆 Job 只寫一次：`count` 是整筆的正片數；之後的重新反查找到的不再寫，有一集放棄了就不寫。M4 通知的「可以看了」讀的就是它。
+- `deleted` 說的是真的做掉了什麼而不是勾了哪幾格（§9.2），誰按的在事件的 `actor`。
 
 Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了什麼」的介面。
 
@@ -206,7 +216,7 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 
 `title_candidates[]`、`season`（顯式）/`season_end`（多季一包 `S01 + S02` 的最後一季）、`episode`/`episode_range`、`absolute_number`、`version`（v2/v3）、`group`、`source`（BD/WEB/DVD/HDTV/Remux）、`resolution`、`subtitle_langs[]`、`subtitle_kind`（hardsub/softsub/external/unknown）、`edition`（Remaster/Director's Cut/Uncut/…）、`year`、`air_date`（檔名寫的播出日，§6.4）、`season_hint_from_folder`、`special_kind`（SP/OVA/OAD/Movie/NC）。
 
-編碼、位深、音軌不從名字解析（M4 票 91 拿掉）：沒有消費者，留著容易被誤認成「已支援依編碼挑版本」。檔案本身的這些屬性由 mediainfo 量（plan §8.7）。
+編碼、位深、音軌不從名字解析：沒有消費者，留著容易被誤認成「已支援依編碼挑版本」。檔案本身的這些屬性由 mediainfo 量（plan §8.7）。
 
 - 沒有現成庫能處理中文字幕組命名（§20.4）。【決定】解析分兩段：先用本系統維護的 **CJK 字幕組詞典**（簡繁/繁日/簡日/BIG5/GB/CHT/CHS/內嵌/內封/外掛/第 N 話/第 N 集/全集/合集/第 N 季/劇場版/番外/重製/★前綴/招募廣告/地區限制…，起點是 AutoBangumi `classic.py` 與 Sonarr `Parser.cs` 的規則）做正規化與 CJK 欄位抽取，再把剩餘字串交給成熟的西方命名解析庫（Python 用 guessit，TS 用 @ctrl/video-filename-parser）。
 - 欄位定義對齊 AutoBangumi 的 `ParsedRelease`（含 `media_type` 與 `release_kind = single | range | batch | collection`），讓 benchmark 可以互相比較。
@@ -222,11 +232,24 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
    - 顯式 `SxxEyy` → 直接採用（並用 TMDB 驗證該集存在）。
    - 資料夾提示（`Season 2` / `S2` / `第二季` / `2nd Season` / `Part 2`）+ 檔內集號。
    - 標題含季名（`Title 2nd Season`、`Title Part 2`、`Title: Subtitle`）→ 用 TMDB 該劇各季的 `name` 與首播年比對決定季。
-   - 只有集號（動漫常見）→ TMDB 只有一季而且那一集存在 → 該季；否則視為 **絕對編號**，TMDB episode group（Absolute 類型）與各季累計集數兩種換算各產一個候選，換算過程寫入理由。**信心看證據，不看 Route**（2026-09-16，§19）：預設 medium，遇到任一條降到 low 送審核並附理由——(1) **集號 ≤ 第一個正規季的集數**：這個數字同時讀得成「第一季第 N 集」與「後面某季從 01 重數的第 N 集」，檔名分不出來（Erai-raws《死神》相剋譚 01–14 是後者）；§20.4 量過它擋下的多半其實是第一季，但「標題有認不出的多餘字」分不開兩者，2026-09-17 維持原形。(2) **檔名帶播出日，而換算出的那一集在 TMDB 上不是那一天播的**：日期是明說的，換算是推論的；沒有容忍範圍，因為日播的劇差一集就是差一天。**以發佈時間推測「虛擬季」**（AutoBangumi v3.2 的做法，M3 票 16）：各讀法換算出的那一集裡，只有「某一輪從 01 重數」那一個是發佈前六週內播的，就照那一輪數，至多 medium——它分得開 (1) 分不開的兩種讀法；季號來自篇章名、而 TMDB 把那一季的好幾輪放在一起時也適用（明說的季號照字面）。沒有一種讀法剛播（BD、補檔、重播）或不只一種都是分不開，照舊。推測出的集數照樣過播出日比對，但那一道幾乎擋不到它——推測錯了靠 medium 的 audit 與第一批審核（plan §4.4、`docs/research/profile-effect.md` §4）。
-   - 已知陷阱：TMDB 與 TVDB 近年都把 split-cour 動漫併成單季連續編號，而字幕組每個 cour 從 01 重數（§20.3）。RSS Series 因此必須帶得了季號與 offset（§15）；用 Mikan 番組的開播日對 TMDB 播出日給 offset 建議值是候選、未排程，做法與觸發條件見 §15〈offset 建議〉。
+   - 只有集號（動漫常見）→ TMDB 只有一季而且那一集存在 → 該季；否則視為 **絕對編號**，TMDB episode group（Absolute 類型）與各季累計集數兩種換算各產一個候選，換算過程寫入理由。
    - 韓劇常見 `E01` 無季 → 視為 Season 1（多數韓劇單季）並驗證集數。
+
+   **絕對編號的信心看證據，不看 Route**：預設 medium，遇到任一條降到 low 送審核並附理由。
+   1. **集號 ≤ 第一個正規季的集數**：這個數字同時讀得成「第一季第 N 集」與「後面某季從 01 重數的第 N 集」，檔名分不出來（Erai-raws《死神》相剋譚 01–14 是後者）。§20.4 量過這條擋下的多半其實是第一季，但「標題有認不出的多餘字」分不開兩者，所以仍降 low。
+   2. **檔名帶播出日，而換算出的那一集在 TMDB 上不是那一天播的**：日期是明說的，換算是推論的；沒有容忍範圍，因為日播的劇差一集就是差一天。
+
+   **以發佈時間推測「虛擬季」**（AutoBangumi v3.2 的做法）：各讀法換算出的那一集裡，只有「某一輪從 01 重數」那一個是發佈前六週內播的，就照那一輪數，至多 medium。
+   - 它分得開上面第 1 條分不開的兩種讀法；季號來自篇章名、而 TMDB 把那一季的好幾輪放在一起時也適用（明說的季號照字面）。
+   - 沒有一種讀法剛播（BD、補檔、重播）或不只一種都是分不開，照舊。
+   - 推測出的集數照樣過播出日比對，但那一道幾乎擋不到它——推測錯了靠 medium 的 audit 與第一批審核（plan §4.4、`docs/research/profile-effect.md` §4）。
+
+   已知陷阱：TMDB 與 TVDB 近年都把 split-cour 動漫併成單季連續編號，而字幕組每個 cour 從 01 重數（§20.3）。RSS Series 因此必須帶得了季號與 offset（§15）；用 Mikan 番組的開播日對 TMDB 播出日給 offset 建議值是候選、未排程，做法與觸發條件見 §15〈offset 建議〉。
 4. **批次一致性**：同一 torrent 內所有影片以同一種模式解析成功、集號連續、數量與 TMDB 該季集數吻合 → 大幅加分；只有少數檔案解析失敗 → 那些檔案進 review，其餘照常入庫（不因為一顆 NCOP 卡住整季）。
-5. **重複與衝突**：兩個檔案會被寫到**同一條目標路徑**（§7.1 / §7.2 的檔名已經含 tags）→ 標記衝突進 review，兩個都不自動入庫——誰對誰錯解析器答不出來，而蓋掉是不可逆的；與帳本既有版本同 tags → 標記 `duplicate`（§7.8）。比路徑而不是比（季, 集, tags）是因為那正是「會不會蓋掉對方」的定義，而**同一集不同 tags 的檔案本來就該並存**（§7.7）：简繁分軌、1080p 與 720p 同包都是常態（M1 票 07）。
+5. **重複與衝突**：
+   - 兩個檔案會被寫到**同一條目標路徑**（§7.1 / §7.2 的檔名已經含 tags）→ 標記衝突進 review，兩個都不自動入庫——誰對誰錯解析器答不出來，而蓋掉是不可逆的。
+   - 與帳本既有版本同 tags → 標記 `duplicate`（§7.8）。
+   - 比路徑而不是比（季, 集, tags），因為那正是「會不會蓋掉對方」的定義；而**同一集不同 tags 的檔案本來就該並存**（§7.7）：简繁分軌、1080p 與 720p 同包都是常態。
 
 ### 6.5 信心與門檻【決定】
 
@@ -234,14 +257,16 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 - **high**：Media 由上下文或「標題 + 年份精確命中」決定；每個影片檔都有顯式季/集或資料夾提示；季/集都存在於 TMDB；無衝突；批次一致性通過。
 - **medium**：Media 確定，但季/集靠推論（絕對編號換算、air_date offset、標題季名比對），或批次一致性只部分通過（少數檔案例外）。絕對編號換算要**沒有反證**才是 medium（[ADR-0003](adr/0003-remove-route-profile.md)）：集號超過第一季的集數，而且檔名若帶播出日就要與換算出的那一集相同（§6.4）。
 - **low**：Media 不確定、有衝突、影片數量與 TMDB 集數明顯不符，或絕對編號換算有反證（§6.4 的兩條）。
-- **high 與 medium 都自動入庫**（owner 決定，所有 Route 預設開啟；可在 Route 上關閉 medium）。medium 入庫的檔案帶 `audit` 旗標，在審核佇列以「已入庫待確認」列出，一鍵撤銷（拆鏈接、清帳本）或確認。硬鏈接讓撤銷幾乎零成本，這是敢於自動入庫 medium 的前提。
+- **high 與 medium 都自動入庫**（所有 Route 預設開啟；可在 Route 上關閉 medium）。medium 入庫的檔案帶 `audit` 旗標，在審核佇列以「已入庫待確認」列出，一鍵撤銷（拆鏈接、清帳本）或確認。硬鏈接讓撤銷幾乎零成本，這是敢於自動入庫 medium 的前提。
 - low 進 review，並在啟用 AI 時觸發 §6.10。
 - 取捨：medium 自動入庫會提高誤入庫率。§6.9 的 benchmark 必須分開報告 high 與 medium 的誤判率，若 medium 誤判率明顯高於 high，回頭收緊 medium 的定義而不是關掉自動入庫。
 
 ### 6.6 多集檔、合集、多季
 
 - 單檔多集（`S01E01-E02`、`01-02`）→ 目標檔名用 Jellyfin 支援的 `S01E01-E02` 形式，帳本一筆對多集。
-- 一個 torrent 多季（子資料夾分季或絕對編號連續）→ Plan 逐檔決定季，允許一個 Job 寫入同一 Media 的多季。發佈名寫兩個季號（`S01 + S02`、`S1-S2`、`Season 1 + Season 2`，兩邊都要有季的前綴）讀成多季一包：`season`–`season_end`、`release_kind = batch`，所以 RSS 的「合集預設排除」擋得到；它說不出其中一個檔案是哪一季，檔名沒寫季號時不從發佈名補（M4 票 48）。
+- 一個 torrent 多季（子資料夾分季或絕對編號連續）→ Plan 逐檔決定季，允許一個 Job 寫入同一 Media 的多季。
+  - 發佈名寫兩個季號（`S01 + S02`、`S1-S2`、`Season 1 + Season 2`，兩邊都要有季的前綴）讀成多季一包：`season`–`season_end`、`release_kind = batch`，所以 RSS 的「合集預設排除」擋得到。
+  - 它說不出其中一個檔案是哪一季，檔名沒寫季號時不從發佈名補。
 - 一個 torrent 多部作品（系列合集）→ 第一階段不自動處理：所有影片對不到上下文 Media 的檔案進 review，使用者在 review 時可把檔案指派給其他 Media。
 - 分割光碟 `CD1/CD2` 電影 → 第一階段進 review。
 
@@ -250,16 +275,19 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 匹配順序：
 
 1. 檔名主幹與某影片完全相同（去掉語言後綴後）→ 該影片。
-2. 位於 `Subs/` `字幕/` **或語言資料夾**（`繁體/`、`简体/`）且檔名含集號 → 以集號對應影片。語言資料夾算同一種證據：它一樣說了「這一格底下的東西是側掛字幕」。**要有那個資料夾**——光有一個數字不算，一包裡任何帶數字的檔案都會對到某一集（M1 票 07）。同一集對到兩個以上的影片時不選：多版本並存時這一份字幕是誰旁邊的那一個，路徑沒有說。
-3. 從檔名後綴或資料夾名判斷語言：`.tc` `.cht` `.zh-Hant` `繁體/` → zh-Hant；`.sc` `.chs` `.zh-Hans` `简体/` → zh-Hans；`.jp` `ja`；`JPSC` / `JPTC` → 雙語。真實語料另外寫 ISO 639-2 式的 `.Cht` `.Chs` `.Jpn` `.Eng`（`tv/gto-2026-magicstar`），一併認得。三者都沒說時才看檔名裡的詞典；**torrent 名不算**——`附官方日英简繁中字幕` 說的是這一包有四種字幕，不是這一個檔案有四種（M1 票 07 實測）。
+2. 位於 `Subs/` `字幕/` **或語言資料夾**（`繁體/`、`简体/`）且檔名含集號 → 以集號對應影片。
+   - 語言資料夾算同一種證據：它一樣說了「這一格底下的東西是側掛字幕」。
+   - **要有那個資料夾**——光有一個數字不算，一包裡任何帶數字的檔案都會對到某一集。
+   - 同一集對到兩個以上的影片時不選：多版本並存時這一份字幕是誰旁邊的那一個，路徑沒有說。
+3. 從檔名後綴或資料夾名判斷語言：`.tc` `.cht` `.zh-Hant` `繁體/` → zh-Hant；`.sc` `.chs` `.zh-Hans` `简体/` → zh-Hans；`.jp` `ja`；`JPSC` / `JPTC` → 雙語。ISO 639-2 式的 `.Cht` `.Chs` `.Jpn` `.Eng` 也認得（真實語料 `tv/gto-2026-magicstar`）。三者都沒說時才看檔名裡的詞典；**torrent 名不算**——`附官方日英简繁中字幕` 說的是這一包有四種字幕，不是這一個檔案有四種。
 4. 對不到影片的字幕 → Unmatched。影片自己沒有入庫（Unmatched / review）時字幕跟著它走，人在佇列裡看到的才是一對。
 
-輸出：以 Jellyfin sidecar 慣例命名 `<影片檔名主幹>.<標題>.<語言碼>.ass`。Jellyfin 無法用語言碼區分繁簡（§20.1），所以語言碼一律 `zh`，繁簡放在自由文字標題欄位，用 §6.8 的 token：`….CHT.zh.ass`、`….CHS.zh.ass`、日文 `….ja.ass`、英文 `….en.ass`、預設軌加 `.default`（旗標排在語言碼**之前**：`….CHT.default.zh.ass`，§20.6 實測。M1 沒有任何東西決定得了哪一軌是預設——沒有字幕語言偏好設定——所以那一段先不產生，plan §5）。標題欄位在播放器字幕選單的顯示方式列入 §20.6 實測。字型不入庫。
+輸出：以 Jellyfin sidecar 慣例命名 `<影片檔名主幹>.<標題>.<語言碼>.ass`。Jellyfin 無法用語言碼區分繁簡（§20.1），所以語言碼一律 `zh`，繁簡放在自由文字標題欄位，用 §6.8 的 token：`….CHT.zh.ass`、`….CHS.zh.ass`、日文 `….ja.ass`、英文 `….en.ass`、預設軌加 `.default`（旗標排在語言碼**之前**：`….CHT.default.zh.ass`，§20.6 實測）。目前沒有字幕語言偏好設定，決定不了哪一軌是預設，所以不產生 `.default`（plan §5）。標題欄位在播放器字幕選單的顯示方式列入 §20.6 實測。字型不入庫。
 
 ### 6.8 Tag 的保留方式【決定】
 
 - 所有 tag 以**結構化欄位**存在 Ledger Entry 與 Plan item（§6.3 的欄位），檔名只是這些欄位的一種呈現。
-- 檔名用固定順序與固定詞彙渲染，缺的片段直接省略【決定，owner 選英文 token】：
+- 檔名用固定順序與固定詞彙渲染（英文 token），缺的片段直接省略：
 
 ```
 [<source>][<resolution>][<subtitle>][Hardsub]?[<group>][<version>][<edition>]
@@ -287,20 +315,30 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
 - CI 跑基準並輸出：整體與分類別（anime / tv / movie）的正確率、誤判率（錯誤自動入庫最嚴重，要單獨列）、需 review 比例。
 - 目標：**誤自動入庫率趨近 0**，其次才是提高自動入庫率。先有 benchmark 才允許調整門檻或引入 AI。
 
-### 6.10 AI 的角色【決定，2026-09-24 改】
+### 6.10 AI 的角色【決定】
 
-2026-09-24 使用者定下目標「AI native，出錯幾乎不需要人工處理」（§14、[ADR-0008](adr/0008-ai-autonomy-and-optional-ai.md)），原本「fallback 解析器：只產出 Plan、一律進 review」改成下面這樣。**AI 解析沒有拿掉，它是 M5 第一種 AI 任務**。
+目標是「AI native，出錯幾乎不需要人工處理」（§14、[ADR-0008](adr/0008-ai-autonomy-and-optional-ai.md)）。AI 解析是 M5 的第一種 AI 任務。
 
 - **三層漏斗**：規則層（解析器、比對）是主力——免費、確定、有 benchmark 守著；AI 只接規則層的例外；人只處理 AI 交上來的與不可撤銷的。AI 掛掉或超出預算時退回沒有 AI 的行為，系統照樣能用。
 - **規則層自己知道沒把握的**（信心 low、Unmatched、目標衝突、RSS Series 待綁定）→ 開一個 AI 任務，而不是直接進審核。
-- **規則層有把握卻錯了的**（high / medium 入錯）規則層自己看不出來，靠不花 token 的程式檢查抓（plan §11.4）：**播出日比對**（Feed Item 的發佈時間對換算出的那一集的播出日，抓集數與 offset 算錯——主要的一道）、**片長驗證**（抓預告、SP、合併檔被當成正片這類分類錯誤）、每日檢查（RSS Series 缺號、同一集意外多份）。**Jellyfin 回驗抓不到集數算錯**：Jellyfin 認集數靠 Berth 取的檔名，錯的集數會原樣抄過去；它只是抓 Jellyfin 那邊意外的保險。抓到的開 AI 任務：撤銷、rematch、必要時把 offset 寫回 RSS Series 並重算同一 RSS Series 未確認的集數。**不讓 AI 逐筆重看每一次入庫**——那是規則層該做的事，也付不起。
+- **規則層有把握卻錯了的**（high / medium 入錯）規則層自己看不出來，靠不花 token 的程式檢查抓（plan §11.4）：
+  - **播出日比對**（Feed Item 的發佈時間對換算出的那一集的播出日，抓集數與 offset 算錯——主要的一道）。
+  - **片長驗證**（抓預告、SP、合併檔被當成正片這類分類錯誤）。
+  - 每日檢查（RSS Series 缺號、同一集意外多份）。
+  - **Jellyfin 回驗抓不到集數算錯**：Jellyfin 認集數靠 Berth 取的檔名，錯的集數會原樣抄過去；它只是抓 Jellyfin 那邊意外的保險。
+  - 抓到的開 AI 任務：撤銷、rematch、必要時把 offset 寫回 RSS Series 並重算同一 RSS Series 未確認的集數。**不讓 AI 逐筆重看每一次入庫**——那是規則層該做的事，也付不起。
 - 輸入（壓縮後）：torrent 名、檔案清單（同模式的檔案只送樣本 + 數量）、規則層的部分解析與理由、TMDB 季集結構（集數、集名、首播日、片長）、命名規則、使用者偏好。不送檔案內容與帳密。
 - 輸出：JSON schema 固定的 Plan（逐檔分類、季、集、tags、confidence、理由）。程式做**結構與約束驗證**：集必須存在、不得兩檔同目標、副檔名與分類一致、片長相符；驗證失敗即丟棄並交給人。
 - **執行**：通過驗證、且這種任務在自動模式 → 直接套用（入庫可撤銷：硬鏈接，原檔在 complete）；影子模式只記錄 AI 會怎麼做。AI 的結果照樣走上面的程式檢查，不通過的不套用、交給人。
 - **修正回流**：人或 AI 的改正寫回結構化的地方（RSS Series 的季號與 offset、標題別名、排除條件），規則層下一次就用得到；改正過的案例進 benchmark 的候選語料，讓例外慢慢變成規則層的常態。
 - 快取鍵：`torrent hash + 解析器版本 + prompt 版本`；同一 torrent 不重複付費。
-- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。~~設定頁有月預算上限，超過即停用並提示~~（[ADR-0016](adr/0016-ai-agent-architecture.md)）（2026-10-27 拿掉，§19）：不以總花費切斷 AI，改用防護——每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器；花費只做可見與提醒（§14）。提醒有兩種（M5 票 21，`domain/spend.py`）：今天的估計費用到了管理員設的每日提醒值；今天是近 14 天（不含今天）**有用量那幾天**的日中位數 5 倍以上，那樣的日子少於 3 天不比（使用者 2026-10-27 選定：家用幾天才問一次，沒用的日子算 0 的話中位數常是 0）。費用只用知道的那部分，**所以費用未知的呼叫（有回應、有 token，但查不到價目）提醒看不見**；出錯、沒有回應的呼叫沒有花費可算，不算未知：今天或前 14 天有這種呼叫時，用量頁與側面板明說有幾次沒算進去（未知不當 0；協調者 2026-10-27）。提醒出現在用量頁與側面板（只給管理員），不推 Discord。
-- 引入時機：§17 的 M5（2026-09-24 排在巡檢與通知之後），在 benchmark 存在之後，才能量化 AI 帶來的增益與誤判。
+- 每次呼叫記錄 model、tokens、快取命中與估計費用（`ai_runs` / `ai_calls` / `ai_tool_calls`）。不以總花費切斷 AI，沒有月預算上限（[ADR-0016](adr/0016-ai-agent-architecture.md)）；改用防護：每次呼叫的 `max_tokens`、每個任務的往返與 token 上限、同一呼叫重複偵測、背景任務的並發與冷卻、provider 斷路器。花費只做可見與提醒（§14）。
+- 花費提醒有兩種（`domain/spend.py`）：
+  - 今天的估計費用到了管理員設的每日提醒值。
+  - 今天是近 14 天（不含今天）**有用量那幾天**的日中位數 5 倍以上；那樣的日子少於 3 天不比。家用幾天才問一次，沒用的日子算 0 的話中位數常是 0。
+  - 費用只用知道的那部分，**所以費用未知的呼叫（有回應、有 token，但查不到價目）提醒看不見**；出錯、沒有回應的呼叫沒有花費可算，不算未知。今天或前 14 天有這種呼叫時，用量頁與側面板明說有幾次沒算進去（未知不當 0）。
+  - 提醒出現在用量頁與側面板（只給管理員），不推 Discord。
+- 引入時機：§17 的 M5，排在巡檢與通知之後；要在 benchmark 存在之後，才能量化 AI 帶來的增益與誤判。
 
 ---
 
@@ -316,8 +354,6 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
   extras/<原檔名>.mkv
 ```
 
-與原提案的差異與理由：
-
 - 資料夾加 `(<Year>) [tmdbid-<id>]`：Jellyfin 以 ID 鎖定辨識，杜絕同名作品與翻譯差異造成的誤刮削。這是「動漫、電影、劇集互不污染」最重要的一招。
 - 集標題只在 TMDB 已有正式標題時加入；缺或為佔位（`Episode 5`）時省略。不因 TMDB 後來補了標題而自動改名，提供顯式「依最新 metadata 重新命名」動作。
 - 使用 `Season 01`（兩位數）；Specials 放 `Season 00`，集號沿用 TMDB season 0 的編號。
@@ -331,25 +367,31 @@ Event 是 Job 頁時間線的資料來源，也是未來 AI 理解「發生了�
   <Title> (<Year>) [tmdbid-<id>] - [WEB][1080p][CHS][Group2].mkv
 ```
 
-同資料夾內以 ` - <版本標籤>` 區分多版本，這是 Jellyfin 原生支援的多版本方式，不需插件；檔名在 ` - ` 之前必須與資料夾名**完全一致，包含 `[tmdbid-<id>]`**。2026-09-07 實測（§20.6）：檔名少了 `[tmdbid-<id>]` 就不是多版本，而是兩部獨立的電影；本節原本的範例是錯的，已更正。標籤內含方括號與 `+` 沒有問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Group]`。Jellyfin 對結尾為 `p`/`i` 的標籤依解析度降冪排序、其他字母排序（§20.1，已實測）。
+同資料夾內以 ` - <版本標籤>` 區分多版本，這是 Jellyfin 原生支援的多版本方式，不需插件。
 
-### 7.3 Extras【決定，取代原「unmatch 資料夾」的一部分】
+- 檔名在 ` - ` 之前必須與資料夾名**完全一致，包含 `[tmdbid-<id>]`**。實測（§20.6）：檔名少了 `[tmdbid-<id>]` 就不是多版本，而是兩部獨立的電影。
+- 標籤內含方括號與 `+` 沒有問題，版本選單顯示的就是 `[BD][2160p][CHT+JP][Group]`。
+- Jellyfin 對結尾為 `p`/`i` 的標籤依解析度降冪排序、其他字母排序（§20.1，已實測）。
+
+### 7.3 Extras【決定】
 
 NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容，硬鏈接到 Jellyfin 支援的 extras 資料夾（名稱與位置依 §20 查證），讓 Jellyfin 把它們顯示為該作品的額外內容，而不是污染集列表。
 
-### 7.4 Unmatched【決定，取代原「unmatch 資料夾」】
+### 7.4 Unmatched【決定】
 
-真正對不到 metadata 的影片與字幕**不入庫**，留在 `complete` 原位；本系統在 Media 頁與 Job 頁列出它們，提供「指派到某季某集」「標記為 extra」「忽略」三種動作。理由：
+真正對不到 metadata 的影片與字幕**不入庫**，留在 `complete` 原位；本系統在 Media 頁與 Job 頁列出它們，提供「指派到某季某集」「標記為 extra」「忽略」三種動作。使用者能在媒體庫頁面重新匹配，資料來源是 complete 目錄 + 帳本。不放進 `unmatch/` 資料夾，理由：
 
 - Jellyfin 會嘗試把媒體庫內任何影片解析成集數，`unmatch/` 資料夾裡的 `[Group] Title - 25.mkv` 很可能被當成第 25 集，反而製造錯誤。
 - 把不確定的東西鏈接進去再要求使用者清理，比不鏈接更難維護。
-- 原需求「使用者能在媒體庫頁面重新匹配」完全保留，只是資料來源改成 complete 目錄 + 帳本。
 
 ### 7.5 標題語言【決定】
 
 `Title` = TMDB 英文 `name`；英文缺或與 `original_name` 相同時用 `original_name`。資料夾名決定後凍結（§4.5）。
 
-**畫面上的顯示用標題、簡介與海報跟著 UI 語言走**（2026-09-17 決定，[ADR-0005](adr/0005-display-title-follows-ui-language.md)；海報由 M1.5 票 11 補上——TMDB 的海報也分語言，中文標題配英文海報是兩個來源拼出來的東西）：`zh-Hant` 取 TMDB `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。這一條只管畫面；檔名、資料夾名與季名比對用的字串不跟 UI 走。**媒體庫牆上已在 Jellyfin 裡的作品例外**，顯示 Jellyfin 的名稱（M1.5 拆票時決定，§19）：牆上多數作品不是 Berth 經手的，Berth 手上沒有它們的 TMDB 快照，而 Jellyfin 的名稱與使用者在 Jellyfin 裡看到的一致；還沒進 Jellyfin 的卡片照樣跟著 UI 語言。
+**畫面上的顯示用標題、簡介與海報跟著 UI 語言走**（[ADR-0005](adr/0005-display-title-follows-ui-language.md)）：`zh-Hant` 取 TMDB `zh-TW` 那一輪，`en` 取 `en-US` 那一輪。海報也分語言，中文標題配英文海報是兩個來源拼出來的東西，所以一起跟。
+
+- 這一條只管畫面；檔名、資料夾名與季名比對用的字串不跟 UI 走。
+- **媒體庫牆上已在 Jellyfin 裡的作品例外**，顯示 Jellyfin 的名稱：牆上多數作品不是 Berth 經手的，Berth 手上沒有它們的 TMDB 快照，而 Jellyfin 的名稱與使用者在 Jellyfin 裡看到的一致。還沒進 Jellyfin 的卡片照樣跟著 UI 語言。
 
 ### 7.6 Specials / OVA / OAD / SP
 
@@ -359,15 +401,27 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 ### 7.7 多版本並存
 
-- 同一集不同 tags 的檔案並存在同一季資料夾。**Jellyfin 12.0 起原生合併**：同一個季資料夾裡解析出同一個 `S/E` 的檔案就是同一集的版本，本系統現行命名不裝插件就合併成 1 個 Episode、多個 MediaSource（2026-09-15 對 12.0.0 / 12.1.0 實測，§20.9）。**本系統只支援 Jellyfin 12 以上，不裝 MergeVersions**（[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)）：10.10 / 10.11 原生不可靠（實測會變成兩個重複的 Episode 條目，§20.6），得靠這個插件；而它在 12.x 上對本系統的樹是空跑，卻要多一次 Jellyfin 重啟、依賴 GitHub 下載，還會跨媒體庫誤併。
-- 版本標籤：**電影**是 tags 字串本身（` - ` 之後的部分）。**劇集**是「去掉各版本檔名的共同前綴」剩下的部分（有集名時是 `集名 + tags`，沒有集名時是 `S01E01 + tags`；算法跟標點有關，12.0 與 12.1 也不同，§20.9）。所以 UI 不自己重算劇集的版本名，Jellyfin 收錄之後讀它回的 `MediaSources[].Name`（M1 票 14b）。tags 詞彙仍要短且可讀，但 UI 文案不能說「使用者看到的就是 tags」。版本先後依解析度降冪，再依檔名。
+- 同一集不同 tags 的檔案並存在同一季資料夾。**Jellyfin 12.0 起原生合併**：同一個季資料夾裡解析出同一個 `S/E` 的檔案就是同一集的版本，本系統的命名不裝插件就合併成 1 個 Episode、多個 MediaSource（對 12.0.0 / 12.1.0 實測，§20.9）。
+- **本系統只支援 Jellyfin 12 以上，不裝 MergeVersions**（[ADR-0002](adr/0002-jellyfin-12-minimum-pinned-image.md)）：10.10 / 10.11 原生不可靠（實測會變成兩個重複的 Episode 條目，§20.6），得靠這個插件；而它在 12.x 上對本系統的樹是空跑，卻要多一次 Jellyfin 重啟、依賴 GitHub 下載，還會跨媒體庫誤併。
+- 版本標籤：
+  - **電影**是 tags 字串本身（` - ` 之後的部分）。
+  - **劇集**是「去掉各版本檔名的共同前綴」剩下的部分（有集名時是 `集名 + tags`，沒有集名時是 `S01E01 + tags`；算法跟標點有關，12.0 與 12.1 也不同，§20.9）。所以 UI 不自己重算劇集的版本名，Jellyfin 收錄之後讀它回的 `MediaSources[].Name`。
+  - tags 詞彙仍要短且可讀，但 UI 文案不能說「使用者看到的就是 tags」。
+  - 版本先後依解析度降冪，再依檔名。
 - 命名唯一必須保證的事：同一集所有版本的檔名在 `S01E01` 之前的部分完全相同，且互相只差 tags。
 
 ### 7.8 重複版本
 
-新 Plan item 與帳本既有 Entry 的（Media, 季, 集, tags）完全相同 → `duplicate`。自動模式預設 **跳過並記事件**；review 提供「取代舊版」「保留兩者（加 `[v2]` 類 tag 者本來就不同）」「跳過」。**保留兩者時新的那一份檔名多一個序號標籤**（`[2]`、`[3]`…，存在 Tags 的 `edition`，2026-09-23 使用者拍板）：Tags 完全相同的兩份檔名一模一樣，不改名就放不進同一個資料夾；Jellyfin 12 把它們當同一集的兩個版本。判斷在**規劃時**（比帳本，M2 票 08），不在入庫時。
+新 Plan item 與帳本既有 Entry 的（Media, 季, 集, tags）完全相同 → `duplicate`。自動模式預設 **跳過並記事件**；review 提供「取代舊版」「保留兩者」「跳過」。Tags 不同的（例如加 `[v2]` 類 tag）本來就不是 `duplicate`。
 
-**多集檔與同起始集的單集**（2026-09-15 使用者拍板）：新 Plan item 的正片與同一季的帳本既有 Entry、或同一份 Plan 的其他正片**起始集相同、結束集不同**（`S01E03-E04` 對 `S01E03`）→ 送 review，不自動入庫，理由要說出後果。與帳本撞的那一種 M2 票 08 起走上面那一條（略過那一列、Review Queue 上一列 `duplicate`，同一包其餘照常入庫）；同一包之內互撞的照舊整份送 review。Jellyfin 12 的版本分組鍵只有季號與集號，會把它們併成同一集的兩個版本，後面那一集從集列表消失（§20.9）。規則不分 Jellyfin 版本：同一集有兩份涵蓋範圍不同的正片，本來就該由人決定留哪一份。
+- **保留兩者時新的那一份檔名多一個序號標籤**（`[2]`、`[3]`…，存在 Tags 的 `edition`）：Tags 完全相同的兩份檔名一模一樣，不改名就放不進同一個資料夾；Jellyfin 12 把它們當同一集的兩個版本。
+- 判斷在**規劃時**（比帳本），不在入庫時。
+
+**多集檔與同起始集的單集**：新 Plan item 的正片與同一季的帳本既有 Entry、或同一份 Plan 的其他正片**起始集相同、結束集不同**（`S01E03-E04` 對 `S01E03`）→ 送 review，不自動入庫，理由要說出後果。
+
+- 與帳本撞的那一種：照上面的 `duplicate` 處理——略過那一列、Review Queue 上一列 `duplicate`，同一包其餘照常入庫。
+- 同一包之內互撞的：整份送 review。
+- 原因：Jellyfin 12 的版本分組鍵只有季號與集號，會把它們併成同一集的兩個版本，後面那一集從集列表消失（§20.9）。規則不分 Jellyfin 版本：同一集有兩份涵蓋範圍不同的正片，本來就該由人決定留哪一份。
 
 ### 7.9 是否必須在資料庫記錄檔案？
 
@@ -390,7 +444,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 - `jobs`：hash、名稱、trigger、user、media、route、狀態、qBittorrent 的 save/content path、時間戳。
 - `job_files`：hash + 相對路徑、大小、分類、ReleaseInfo、mediainfo 摘要。
 - `plans` / `plan_items`：job 或 import source、引擎（rules/ai/user）、版本、每檔決策、confidence、reasons、審核狀態與審核者。
-- `ledger`：來源（hash、相對路徑、device）、目標路徑、目標 inode（硬鏈接兩端同一個 inode，來源不另存，M4 票 95）、media/季/集、tags、plan item、Jellyfin item id、狀態（ok / target_missing / source_missing / inode_mismatch）。
+- `ledger`：來源（hash、相對路徑、device）、目標路徑、目標 inode（硬鏈接兩端同一個 inode，來源不另存）、media/季/集、tags、plan item、Jellyfin item id、狀態（ok / target_missing / source_missing / inode_mismatch）。
 - `events`：job、類型、時間、actor、payload。
 - `rss_feeds` / `rss_rules` / `rss_items`：見 §15。
 - `issues`：孤兒與斷鏈清單，見 §9。
@@ -420,15 +474,39 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 | `jellyfin_item_unresolved` | 管線：入庫後六次反查都沒在 Jellyfin 找到那個檔案 | 重新反查 / 重新掃描媒體庫 |
 | `library_uses_tvdb` | 健康檢查：一條 Route 的 Jellyfin 媒體庫掛著 TVDB 的 metadata fetcher（§16.4 的警告） | 只列出；在 Jellyfin 拿掉之後系統自己收掉 |
 | `low_disk_space` | 健康檢查：incomplete 或 complete 所在的檔案系統剩下的空間低於門檻（設定裡，預設 10 GB） | 只列出；空間回來之後系統自己收掉 |
-| `jellyfin_item_mismatch` | Jellyfin 回驗（M3 票 17）：反查或對帳找到的 item，Jellyfin 認的季號、集號（多集檔是範圍）或所屬作品的 TMDB id 與帳本不同 | 重新反查（在 Jellyfin 修好之後）；下一次比到一致時系統自己收掉 |
+| `jellyfin_item_mismatch` | Jellyfin 回驗：反查或對帳找到的 item，Jellyfin 認的季號、集號（多集檔是範圍）或所屬作品的 TMDB id 與帳本不同 | 重新反查（在 Jellyfin 修好之後）；下一次比到一致時系統自己收掉 |
 
-中間四種是管線自己發現的（M1 以 `issue_detected` 事件記著，M2 起與對帳的七種共用 `issues` 表與同一個封閉集合，plan §2.4，2026-09-22 定）；再兩種是 `health_checker` 每 5 分鐘量出來的（M2 票 09c，使用者拍板由健康檢查偵測而不是對帳），最後一種是 Jellyfin 回驗（M3 票 17，反查與對帳的 Jellyfin 那一方比同一份），十四種共用一個集合。`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接，M3 票 01）是**使用者決定過的**現況，對帳看到就不再開 Issue。
+十四種共用 `issues` 表與同一個封閉集合（plan §2.4），來源分四組：
 
-**認領類三顆（M2 票 10 做完）**：都走既有的入庫路線、都不刪東西。「重新入庫」與「認領」**由管理員在列上選作品**（2026-09-23 使用者拍板：沒有作品的 Job 規劃出來只會整份停在 review 而且核准不了）；孤兒目錄建一筆 `trigger = reimport` 的 Job 停在 `completed`，無主 torrent 建一筆停在 `submitted`（Route 由它的 category 決定，只掛 `berth` tag 的說不出要入庫到哪裡，拒絕）。「認領進帳本」是單一檔案的 `berth rebuild-ledger`：inode 反查 complete、路徑照命名模板反解，配不上的拒絕、那一件開著。
+- 前七種：對帳。
+- 中間四種（`missing_files` 到 `jellyfin_item_unresolved`）：管線自己發現，另以 `issue_detected` 事件記著。
+- `library_uses_tvdb`、`low_disk_space`：`health_checker` 每 5 分鐘量出來，由健康檢查偵測而不是對帳。
+- `jellyfin_item_mismatch`：Jellyfin 回驗，反查與對帳的 Jellyfin 那一方比同一份。
 
-2026-09-23（M2 票 09 開工時使用者拍板）：「認領」類的三顆——`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file` 的認領進帳本——在**票 10** 與 `reimport` / `rebuild-ledger` 一起做（同一組原語，先做一份會變成兩條入庫路徑）；管線那三種（`missing_files` / `client_error` / `client_removed`）的動作在**票 09c** 做完：重新校驗與重試讓 Job 回到檔案清單到手之後那一站（還沒有清單的回 `submitted`），由 poller 照常往前推；重新送單照存下來的下載連結再加一次，**先問過 Route、連結與 qBittorrent 才動 Job**；兩顆「承認」走刪除範圍四個旗標全不勾（Job 進 `removed`，磁碟與 qBittorrent 都不動，使用者 2026-09-23 拍板）。它們只在 Job 還停在那個壞掉的狀態時按得了。
+`ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接）是**使用者決定過的**現況，對帳看到就不再開 Issue。
 
-健康檢查那兩種**沒有 Berth 按得了的修法**，所以條件解除時系統自己收掉（`resolved_by = system`）；問不到 Jellyfin、量不到那個目錄不算解除。它們的**「忽略」在條件持續期間有效**（2026-09-23 使用者拍板）：其餘幾種忽略之後下一次偵測就開新的一筆，對 5 分鐘量一次的東西那等於忽略無效，而故意掛 TVDB 的使用者會被一直問。條件解除過一次、之後再發生才重開。**`jellyfin_item_mismatch` 與 `unknown_torrent` 照同一條**（2026-10-21，M4 票 122）：前者每日對帳比一次，後者 poller 每 5 秒寫一次，照「這一次」的話「等你處理」會為同一件事每天推、忽略 5 秒就重開；其餘對帳的六種仍是「這一次不處理」。會刪東西的按鈕（連 complete 一起刪、刪除孤兒目錄、以硬鏈接取代）按下去之前再確認一次世界：偵測在早上，按下去在下午。`job_without_files` 的判定有兩個例外（票 09）：那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，§7.8）不算；使用者對那一筆按過「承認刪除並清帳本」的不算——帳本是他自己清的，再問他要不要重新規劃等於讓剛決定過的事自己回來。
+**認領類三顆**（`orphan_complete` 的重新入庫、`unknown_torrent` 的認領、`unmanaged_library_file` 的認領進帳本）：與 `reimport` / `rebuild-ledger` 同一組原語，都走既有的入庫路線、都不刪東西。
+
+- 「重新入庫」與「認領」**由管理員在列上選作品**：沒有作品的 Job 規劃出來只會整份停在 review 而且核准不了。
+- 孤兒目錄建一筆 `trigger = reimport` 的 Job 停在 `completed`；無主 torrent 建一筆停在 `submitted`（Route 由它的 category 決定，只掛 `berth` tag 的說不出要入庫到哪裡，拒絕）。
+- 「認領進帳本」是單一檔案的 `berth rebuild-ledger`：inode 反查 complete、路徑照命名模板反解，配不上的拒絕、那一件開著。
+
+**管線三種的動作**（`missing_files` / `client_error` / `client_removed`）只在 Job 還停在那個壞掉的狀態時按得了：
+
+- 重新校驗與重試讓 Job 回到檔案清單到手之後那一站（還沒有清單的回 `submitted`），由 poller 照常往前推。
+- 重新送單照存下來的下載連結再加一次，**先問過 Route、連結與 qBittorrent 才動 Job**。
+- 兩顆「承認」走刪除範圍四個旗標全不勾（Job 進 `removed`，磁碟與 qBittorrent 都不動）。
+
+**「忽略」的有效期**：
+
+- 預設是「這一次不處理」：忽略之後下一次偵測就開新的一筆。
+- 健康檢查那兩種**沒有 Berth 按得了的修法**，所以條件解除時系統自己收掉（`resolved_by = system`）；問不到 Jellyfin、量不到那個目錄不算解除。它們的「忽略」在條件持續期間有效：5 分鐘量一次的東西，照「這一次」的話忽略等於無效，故意掛 TVDB 的使用者會被一直問。條件解除過一次、之後再發生才重開。
+- `jellyfin_item_mismatch` 與 `unknown_torrent` 照同一條：前者每日對帳比一次，後者 poller 每 5 秒寫一次，照「這一次」會為同一件事每天推、忽略 5 秒就重開。對帳的其餘六種仍是「這一次不處理」。
+
+**按鈕與判定的細節**：
+
+- 會刪東西的按鈕（連 complete 一起刪、刪除孤兒目錄、以硬鏈接取代）按下去之前再確認一次世界：偵測在早上，按下去在下午。
+- `job_without_files` 有兩個例外：那一份 Plan 本來就沒有要鏈的檔案（全是重複的那一包自動落地，§7.8）不算；使用者對那一筆按過「承認刪除並清帳本」的不算——帳本是他自己清的，再問他要不要重新規劃等於讓剛決定過的事自己回來。
 
 ### 9.2 刪除範圍【決定】
 
@@ -436,24 +514,40 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 - 移除 library 硬鏈接（Jellyfin 會在下次掃描少掉它）
 - 從 qBittorrent 移除 torrent（不刪檔）
-- 刪除下載目錄裡的檔案（要求先移除 torrent，否則拒絕）：下完的在 complete；還沒下完的在 Route 自己的 incomplete 目錄，只刪 qBittorrent 報的內容路徑（`content_path`）底下屬於這個 torrent 的檔案，沒報過內容路徑的不照 slug 猜（M4 票 74）
+- 刪除下載目錄裡的檔案（要求先移除 torrent，否則拒絕）：下完的在 complete；還沒下完的在 Route 自己的 incomplete 目錄，只刪 qBittorrent 報的內容路徑（`content_path`）底下屬於這個 torrent 的檔案，沒報過內容路徑的不照 slug 猜
 - 清除帳本與 Job 紀錄（否則保留為歷史）
 
-顯示「預估可釋放空間」：只有當來源與所有鏈接都刪掉時才真的釋放，UI 要說清楚。
+四個旗標**預設全不勾**：Sonarr 的對話框預設勾「同時刪除檔案」，但這裡的刪除以 Job 為單位而不是作品，預設刪檔會誤刪還在做種的東西。
 
-實作（M2 票 04，`services/deletion.py`）：順序是**移除 torrent → 移除鏈接 → 刪來源 → 清紀錄**，移除 torrent 排第一是因為它是唯一可能失敗的一步，問不到那一台時整次刪除不做而不是刪到一半才發現；`unlink` / `delete_files` 之後帳本那幾列留著當歷史（清帳本是另一個旗標），只把 `status` 改成 `unlinked` / `source_missing`（M3 票 01 之前是 `target_missing`，見下）；空掉的目錄跟著收（留著 `Show/Season 01/` 兩層空目錄的話 Jellyfin 的牆上那部作品還在）；刪除與鏈接**同一道路徑守衛**（plan §8.6），帳本被改壞、指到媒體庫外面的那一條不刪而其餘照樣做完。
+空間估算：顯示「預估可釋放空間」，只有當來源與所有鏈接都刪掉時才真的釋放，UI 要說清楚。**同步 `stat` 每一個來源與目標**（慢而準，畫面上說「正在算」），不用來源大小去猜。
 
-2026-09-24（M3 票 01，M2 後的審查找到）：**媒體庫裡只拆 Berth 放下去的那一個**。使用者把硬鏈接換成自己的檔案之後（一份複製品、一個重新壓制的版本），那條路徑上的是 Unmanaged，§5.3 的不變量說它永不刪——而「移除鏈接」、audit 撤銷、rematch 拆舊鏈接三條路原本都照路徑刪。三條現在共用一個判斷（`deletion.Placed.holds`）：目標的 inode 等於帳本記的、或等於來源現在的，才是 Berth 放的；都不等就不刪，回應與時間線列出沒刪的那幾個（`unmanaged`），帳本那一列的現況交給下一輪對帳（`inode_mismatch`）。撤銷與 rematch 其餘照做（帳本那一列照樣移走、Job 照樣回 review），那個檔案下一輪對帳是 `unmanaged_library_file`——它本來就是。只勾「移除鏈接」拆掉的那幾列寫 `unlinked` 而不是 `target_missing`：同 `source_missing` 的先例（§9.1），那是使用者決定過的現況，對帳不再為它開 `library_link_missing`。兩個分頁同時刪同一筆時後到的那一個是 409 `moved_on`，不是回報成功（plan §3.1）。
+對話框住在 Job 詳情頁與 Media 詳情的版本清單，同一個元件；對帳發現的 `library_link_missing` 選「連 complete 一起刪」時走同一組旗標。
 
-2026-09-24（M3 票 04）：**沒勾「清除帳本與 Job 紀錄」的那一筆，同一個 torrent 再送單會被拒**（`job_removed`，手動與 RSS 都是），而不是回傳那一筆當成「本來就在了」——紀錄還在就是還沒決定要不要再下載，RSS 下一輪會一直拿回同一列。要再下載：complete 裡還有檔案就重新入庫（§9.3），否則連紀錄一起刪掉之後再送。
+實作（`services/deletion.py`）：
 
-2026-09-22 定：四個旗標**預設全不勾**——Sonarr 的對話框預設勾「同時刪除檔案」，但這裡的刪除以 Job 為單位而不是作品，預設刪檔會誤刪還在做種的東西；空間估算**同步 `stat` 每一個來源與目標**（慢而準，畫面上說「正在算」），不用來源大小去猜；對話框住在 Job 詳情頁與 Media 詳情的版本清單，同一個元件；對帳發現的 `library_link_missing` 選「連 complete 一起刪」時走同一組旗標。
+- 順序是**移除 torrent → 移除鏈接 → 刪來源 → 清紀錄**。移除 torrent 排第一是因為它是唯一可能失敗的一步，問不到那一台時整次刪除不做，而不是刪到一半才發現。
+- `unlink` / `delete_files` 之後帳本那幾列留著當歷史（清帳本是另一個旗標），只把 `status` 改成 `unlinked` / `source_missing`。`unlinked` 是使用者決定過的現況，同 `source_missing`（§9.1），對帳不再為它開 `library_link_missing`。
+- 空掉的目錄跟著收：留著 `Show/Season 01/` 兩層空目錄的話，Jellyfin 的牆上那部作品還在。
+- 刪除與鏈接**同一道路徑守衛**（plan §8.6）：帳本被改壞、指到媒體庫外面的那一條不刪，其餘照樣做完。
+
+**媒體庫裡只拆 Berth 放下去的那一個**：使用者把硬鏈接換成自己的檔案之後（一份複製品、一個重新壓制的版本），那條路徑上的是 Unmanaged，§5.3 的不變量說它永不刪。「移除鏈接」、audit 撤銷、rematch 拆舊鏈接三條路共用一個判斷（`deletion.Placed.holds`）：
+
+- 目標的 inode 等於帳本記的、或等於來源現在的，才是 Berth 放的；都不等就不刪。
+- 回應與時間線列出沒刪的那幾個（`unmanaged`），帳本那一列的現況交給下一輪對帳（`inode_mismatch`）。
+- 撤銷與 rematch 其餘照做（帳本那一列照樣移走、Job 照樣回 review），那個檔案下一輪對帳是 `unmanaged_library_file`——它本來就是。
+
+兩個分頁同時刪同一筆時，後到的那一個是 409 `moved_on`，不是回報成功（plan §3.1）。
+
+**沒勾「清除帳本與 Job 紀錄」的那一筆，同一個 torrent 再送單會被拒**（`job_removed`，手動與 RSS 都是），而不是回傳那一筆當成「本來就在了」：紀錄還在就是還沒決定要不要再下載，RSS 下一輪會一直拿回同一列。要再下載：complete 裡還有檔案就重新入庫（§9.3），否則連紀錄一起刪掉之後再送。
 
 ### 9.3 重新入庫
 
 Import Source 可以是「complete 內任一資料夾」，不要求 torrent 仍存在。流程與正常入庫相同（planning → review/importing），帳本以來源相對路徑冪等，所以「刪了 library、保留 complete、再重新入庫」是一鍵動作。
 
-實作（M2 票 10）：兩個入口——Job 頁的 `POST /jobs/{hash}/reimport`（那一筆的 complete 目錄），與 `orphan_complete` 的「重新入庫」（沒有 Job 的目錄，建一筆 `trigger = reimport` 的 Job）。**Import Source 是磁碟上那一包**：`job_files` 照資料夾裡現在的樣子重寫，少了一集就少規劃一集，而不是照 torrent 的清單在 importer 那一步失敗。帳本冪等的鍵是「Job + 來源相對路徑」，所以 TMDB 在兩次之間改了集名時，那一列換到新路徑、舊的鏈接被收掉，Jellyfin 不會多一個同一集的版本。
+兩個入口：Job 頁的 `POST /jobs/{hash}/reimport`（那一筆的 complete 目錄），與 `orphan_complete` 的「重新入庫」（沒有 Job 的目錄，建一筆 `trigger = reimport` 的 Job）。
+
+- **Import Source 是磁碟上那一包**：`job_files` 照資料夾裡現在的樣子重寫，少了一集就少規劃一集，而不是照 torrent 的清單在 importer 那一步失敗。
+- 帳本冪等的鍵是「Job + 來源相對路徑」，所以 TMDB 在兩次之間改了集名時，那一列換到新路徑、舊的鏈接被收掉，Jellyfin 不會多一個同一集的版本。
 
 帳本本身沒了的時候（還原舊備份、手動清掉）是 `berth rebuild-ledger`：媒體庫裡帳本不認得的檔案，complete 裡有同一個 inode 的來源、而且路徑照命名模板讀得回季集與 Tags 才長回一列；**配不上的一律變成 `unmanaged_library_file`，不猜**（plan §11.3 決定 9）。
 
