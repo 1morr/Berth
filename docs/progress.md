@@ -35,6 +35,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-30 | docs-diet 拆票 | 重量文件後拆成 16 張票（`.scratch/docs-diet/`），規則在 spec.md；03、04、05 按章節再拆，加 08 收尾 | `/implement .scratch/docs-diet/issues/01-progress-archive.md` |
 | 2026-10-30 | docs-diet 01 progress.md 封存 M0–M5 | 314 列、1,189 條搬到 `docs/archive/`（遺失 0 行）；寫法與上限由 `test_progress_rules.py` 守；CLAUDE.md 流程第 1、4、5 步改好 | `/implement` 票 07 |
 | 2026-10-30 | docs-diet 02 plan §11.1–§11.6 封存 | 六節搬到 `docs/archive/`（遺失 0 行），plan 留標題加一行；遺留 11 條歸 §11.9，判不出的列在票 Comments 問使用者 | `/implement` 票 07 |
+| 2026-10-30 | docs-diet 04a brief §19 改成 ADR | 54 列判定完：32 列寫成 16 篇 `docs/adr/`，20 列正文已有、2 列被取代；原文封存進 `docs/archive/`（遺失 0 行）；§19 留 ADR 索引；正文加 ADR 連結 | `/implement` 票 04b |
 
 ## 偏差與決定
 
