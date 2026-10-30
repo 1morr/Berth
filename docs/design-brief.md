@@ -769,8 +769,6 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 
 ## 20. 研究與查證結果
 
-（本節由查證子任務填入，附來源。）
-
 細節在 `docs/research/`，本章只留結論與來源。
 
 ### 20.1 Jellyfin 命名、extras、字幕、多版本、API
@@ -823,6 +821,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 ### 20.2 qBittorrent Web API 與硬鏈接 / Docker 限制
 
 細節（逐字原文、實測表格、原始碼行號）在 [qbittorrent-web-api.md](research/qbittorrent-web-api.md)，下面只留結論與來源。來源：qBittorrent master 原始碼（`torrentscontroller.cpp`、`serialize_torrent.cpp`）、`WebAPI_Changelog.md`、qbittorrent-api、TRaSH Guides、Servarr wiki、man pages。**社群 wiki 的 API 頁面已過時**（連「5.0」頁面都還列 `paused` / `root_folder`），以原始碼為準。【決定】支援下限 qBittorrent 4.4（API 2.8.4，2022），以 5.x 為主要測試目標。
+
+**版本對照**（留作版本行為的前提，原文在研究檔）：4.4.5 = Web API 2.8.5、5.2.3 = Web API 2.15.1；`contentLayout` 自 API 2.7 / qB 4.3.2 起，取代 `root_folder`；4.4.4 引入「方法不對回 405」，`torrents/delete` 到 4.5.0 才進 POST 白名單（4.4.5 仍可 GET）；changelog 說 API 2.15.0 起空結果回 204，`recheck` / `start` 實測沒有（仍 `200` + 空 body）。
 
 **`torrents/add` 與改名**（[細節](research/qbittorrent-web-api.md#torrentsadd-參數與回應)）
 

@@ -22,3 +22,7 @@
 | Quay | **衝突** | Red Hat Quay |
 | Tally | **衝突** | TallyPrime 會計軟體與同名自託管記帳 App |
 | Stevedore | **衝突** | OpenStack stevedore（PyPI plugin 載入套件） |
+
+## 原 §20 開頭佔位句
+
+（本節由查證子任務填入，附來源。）
