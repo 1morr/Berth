@@ -91,7 +91,7 @@ complete/incomplete 鏡像 library 結構、remote path mapping、TVDB / AniList
 | M3 RSS | Mikan / Nyaa / acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結（2026-09-24 重新設計） |
 | M4 巡檢與通知 | 每日程式檢查、每週週報；「可以看了」「有 N 件等你處理」；`events` 訂閱者、channel adapter（Telegram / Discord 擇一）、每人的訂閱設定（不需要 AI） |
 | M5 AI 核心 | 規則層 → AI → 人的三層漏斗；AI 替人按審核頁的按鈕：可逆的通過驗證後自己做、不可逆的要人；影子模式、AI 活動與撤銷（2026-09-24 改） |
-| M5.5 新番與導覽 | 頁首收斂、新番時間表、追更頁、訂閱作品遲到的提醒（不需要 AI） |
+| M5.5 新番與導覽 | 頁首收斂、新番時間表、追更頁、訂閱作品遲到的提醒（不需要 AI）；助理的模型清單、搜尋結果、推理、對話清單 |
 | M6 Issue 與側面板 | Issue 交給 AI、側面板對話、不可逆的動作以提案確認 |
 | M7 外部對話與 MCP | 聊天軟體裡與助理對話，提案卡帶按鈕，個人 API token；MCP server |
 

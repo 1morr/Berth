@@ -1084,7 +1084,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 | **M3 RSS**（已驗收，[`docs/archive/m3.md`](archive/m3.md)） | Mikan、Nyaa、acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結（§15） | 聚合 feed 加一個搜尋 feed 全自動追完，中途訂閱的補齊舊集 |
 | **M4 巡檢與通知**（已驗收，[`docs/archive/m4.md`](archive/m4.md)） | 每日程式檢查、每週週報；`events` 訂閱者、channel adapter（Discord）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」；週報說得出這週入庫與修正了什麼 |
 | **M5 AI 地基與對話 agent**（已驗收，[`docs/archive/m5.md`](archive/m5.md)） | 命令登錄表與執行器、Proposal、provider、防護與記帳、側面板對話（工具、確認卡、外部資料、skills、壓縮、斜線指令）、觀測頁（§6.10、§14） | 側面板說「下載 Re:Zero 全系列」得到逐列可勾的總覽卡，按確認後送單；「為什麼這集沒入庫」答得出卡在哪；AI 不能在沒人確認下執行不可逆的命令；重啟之後舊卡片按得下去；關掉 AI 時與 M4 相同 |
-| **M5.5 新番與導覽** | 頁首收斂成五項加帳號選單、新番時間表、追更頁、訂閱作品遲到的提醒（細節在 plan §11.6b） | 找得到當季新番並一鍵走到訂閱；訂閱的作品播出滿兩天沒入庫會收到一件 Issue，說得出卡在哪（字幕組沒發、下載停滯、入庫失敗都算，已在等你處理的不重複開）；接了 Discord 的管理員收到寫明作品與集數的私訊，沒接的在追更頁看得到提示；字幕組沒遲到（下一個 cour 沒訂）不誤報；關掉 AI 也完整可用 |
+| **M5.5 新番與導覽** | 頁首收斂成五項加帳號選單、新番時間表、追更頁、訂閱作品遲到的提醒；助理的模型清單、搜尋結果、推理、對話清單（細節在 plan §11.6b） | 找得到當季新番並一鍵走到訂閱；訂閱的作品播出滿兩天沒入庫會收到一件 Issue，說得出卡在哪（字幕組沒發、下載停滯、入庫失敗都算，已在等你處理的不重複開）；接了 Discord 的管理員收到寫明作品與集數的私訊，沒接的在追更頁看得到提示；字幕組沒遲到（下一個 cour 沒訂）不誤報；關掉 AI 也完整可用；設定頁存檔前選得到該端點的模型，換瀏覽器接得回對話，看得到推理並設得了程度 |
 | **M6 人工接管開關** | 決定點的人 / 影子 / AI 開關、背景 AI 任務（含 Issue）、影子一致率、AI 活動與撤銷（§6.10、§14） | 影子模式一週與人一致率達標；benchmark `auto_wrong` 不升、review 比例下降；一件 `library_link_missing` 不經人修好；刪 complete 的請求停在 Proposal |
 | **M7 Discord 與 MCP** | M4 的 Discord bot 接上同一個核心、確認卡帶按鈕、個人 API token、MCP server（§14、§16.2） | 手機上收到通知、回一句話、按確認之後完成；Claude Code 經 MCP 查得到本週入庫 |
 | 之後 | RSS 的 offset 建議（§15〈offset 建議〉，看第一批改正的頻率決定）、Jellyfin Webhook（§9.5，社群回報不可靠）、字型與字幕解壓、多使用者審批、非影片媒體 | — |
@@ -1848,3 +1848,14 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 - **Secure context**：網址是 HTTPS 或 loopback（`localhost`、`127.0.0.1`）的頁面才是 secure context；使用者用區網 IP 走 HTTP 開 Berth（`http://192.168.x.x:8383`）時不是。只在 secure context 才有的 API 這時是 `undefined`：`crypto.randomUUID`、`crypto.subtle`、`navigator.clipboard`、`navigator.serviceWorker` 等。`crypto.getRandomValues` 哪裡都有。【[MDN〈Secure contexts〉](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts)、[`Crypto.randomUUID()`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID)】0.4.0 因此在 HTTP 下整頁 crash；實測（Edge 156、`http://192.168.50.150:8383`）`isSecureContext` 是 `false`、`crypto.randomUUID` 是 `undefined`。playwright 開 `127.0.0.1` 與 jsdom 都看不到這一類錯；`.test` 網域經 Chromium 的 `--host-resolver-rules` 指回本機時不是 secure context（`web/e2e/insecure-origin.spec.ts` 先斷言這一點）。
 - **GitHub Actions 的 reusable workflow**：被呼叫的 workflow 裡 `github` context 屬於呼叫端，`github.workflow` 是呼叫端的名字，所以 concurrency group 用 `${{ github.workflow }}` 會與呼叫端或另一個被呼叫的撞在同一組；`uses: ./.github/workflows/x.yml` 用的是呼叫端同一個 commit 的檔；`secrets: inherit` 把 repo secret 傳下去。【[Reusing workflow configurations](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations)】`release.yml` 因此呼叫 `ci.yml`、`e2e.yml` 當閘門，兩邊的 group 寫死成 `ci-` / `e2e-` 開頭（`docs/development/release.md`）。
+
+### 20.26 助理的工具清單、推理與模型清單（2026-11-01 查證與實測，M5.5 規劃）
+
+細節與時間線在 [`docs/research/assistant-feedback-2026-11-01.md`](research/assistant-feedback-2026-11-01.md)。
+
+- **模型會誤報自己有什麼工具**（正式環境 `deepseek-flash`，0.4.1）：Tavily key 在該輪開始前 8 秒已存回，`open_turn` 每則訊息重讀設定、重建工具清單（臨時整合測試：填、清、再填時依序看得到、看不到、看得到），它仍連答兩輪「沒有」。送出的工具清單當時沒有記錄，所以這是推論，不是線上直接量到的。助理對工具的說法不能當事實，要查就讀設定或步驟頁。
+- **DeepSeek 的 Anthropic 接口**：`thinking` 支援但忽略 `budget_tokens`；`output_config` 只支援 `effort`。（[Using the Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)）`deepseek-flash` 不送 `thinking` 時也會回推理文字（實測）。
+- **pydantic-ai-slim 2.62.0 的推理**：統一的 `thinking` 設定要模型 profile 有 `anthropic_supports_effort` 才轉成 effort，否則是 `budget_tokens`；可明寫 `anthropic_effort`、`anthropic_thinking` 蓋過。`deepseek-flash` 走 `AnthropicModel` 實際送什麼還沒驗（讀 `models/anthropic/__init__.py`）。Vercel 串流與 `dump_messages` 都會帶 `reasoning` 片段。
+- **`web_search` 結果的 `encrypted_content`**：DeepSeek 的 Anthropic 接口每筆都帶，再加 `title`、`url`、`page_age`、`type`。一次 10 筆的 JSON 實測 22,628–41,654 字，幾乎都是它。
+- **模型清單端點**：未帶 key 時 `api.anthropic.com/v1/models`、`api.deepseek.com/anthropic/v1/models`、`api.deepseek.com/models` 都回 401，代表路由存在；帶 key 的回應形狀還沒驗，做 M5.5 那張票時補在這裡。
+- **Open WebUI 的慣例**：連線填 URL 與 key，從 `/models` 自動偵測模型；服務不支援時才手動填模型 id。（[OpenAI-Compatible](https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-openai-compatible)）

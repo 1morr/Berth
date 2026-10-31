@@ -2453,7 +2453,9 @@ services:
 
 ### 11.6b M5.5 新番與導覽
 
-使用者要找得到當季新番、看得出訂閱的作品有沒有按時入庫；頁首的按鈕也太多了（2026-10-31 使用者定）。不需要 AI，排在 M6 前。
+使用者要找得到當季新番、看得出訂閱的作品有沒有按時入庫；頁首的按鈕也太多了（2026-10-31 使用者定）。這部分不需要 AI，排在 M6 前。
+
+另外收助理側面板的五點修正（2026-11-01 使用者定，查證在 [`docs/research/assistant-feedback-2026-11-01.md`](research/assistant-feedback-2026-11-01.md)）：模型清單與搜尋結果排在最前面先修，其餘排在新番之後。
 
 範圍：
 
@@ -2489,8 +2491,28 @@ services:
 - **追更頁**：依作品一列：字幕組、已播到、已入庫到、狀態（`domain.WhyNot` 的結論，加「晚 N 天」與「可能是下一輪」）。要人動手的在前，準時的在後，「斷更很久」收起。
   - **下載停滯要說出來**：`WhyNot` 把 `stalled` 算成 `DOWNLOADING`，這一頁要另外顯示「下載停滯」。
   - **收不到通知時頁首說一句**：這位管理員沒有 bot、沒填 Discord ID、沒訂閱「等你處理」或 Discord 到不了時，頁首提示遲到只會顯示在這裡、不會通知，連到 `/settings/notifications`；讀 `GET /me/notifications` 就夠，不加端點。不另做其他通知管道（[ADR-0015](adr/0015-notifications-discord-dm.md)）。
+- **模型清單**（先修）：照 Open WebUI 連線設定的做法，向填的端點問模型，問不到就照打（brief §20.26）。
+  - `POST /settings/ai/models`（命令 `ai.list_models`，`Effect.READ`、`CONNECTS_OUT`）：收表單上還沒存的接口、base URL 與 key，key 欄空著用這個接口存著的那把，語意同 `POST /settings/ai/test`。不要模型名。
+  - 打 Anthropic 接口的 `{base}/v1/models`（有分頁）或 OpenAI 接口的 `{base}/models`，回 `models`、`source`（`endpoint` / `prices`）與失敗原因。問不到不算請求錯：退回 `known_models(表單的 base URL)`，並說明為什麼。
+  - 設定頁：base URL 或 key 改了，舊清單立刻收掉；有 key 時去問，沒有 key 時用本機表。模型欄仍可自由輸入，AI 開著時模型名仍必填。
+- **搜尋結果**（先修）：`web_search` 每筆的 `encrypted_content` 只給服務端用，不給瀏覽器。
+  - 串流（`_relay`）與 `GET /agent/conversations/{id}` 兩條路都在 `api/agent.py` 拿掉；`history_json` 不動，模型重播要用。
+  - `ToolCall` 把 `web_search` 的結果畫成清單：標題、網址、`page_age`。其他工具照舊。
+- **搜尋工具查得到**：工具清單本來就是每則訊息重建，**不做 reload 指令**。
+  - `/status` 多列這一刻搜得到什麼（伺服器端 `web_search`、Tavily），答案不經過模型。
+  - `_instructions` 加一句：工具可能在兩則訊息之間變動，只以當下的清單為準，不沿用先前的說法。
+  - `ai_calls` 新增可為空的 `tools_json`（這次呼叫送出的工具名），步驟頁顯示，舊列是「未記錄」。
+- **推理**：
+  - 面板把 `reasoning` 片段畫成預設收起的區塊，串流時也一樣；重新載入後仍在。
+  - `AiEndpointSettings` 新增 `reasoning`（`default`、`off`、`low`、`medium`、`high`，預設 `default` 即不送），兩種接口各記各的；設定頁模型欄下面一格。
+  - 由 `chat_settings` 轉成請求參數。第一步先用錄下的請求確認參數真的送出（brief §20.26：`deepseek-flash` 走 Anthropic 接口時統一的 `thinking` 不一定帶 effort），不行就明寫 `anthropic_effort`。
+- **對話清單**：
+  - `GET /agent/conversations`：只列自己的，新的在前，上限 50 段；回 id、標題（第一則使用者訊息，截短）、`updated_at`、有沒有在跑。不加標題欄位（沿用 `BusyElsewhere` 的做法）。
+  - 面板頁首多一顆「對話」，開清單，選了走現有的 `switchTo`；在跑的那一段標出來。
+  - 斜線指令 `/history`（`domain.SlashCommand`，Discord 共用）回同一份清單。**不叫 `/resume`**：`CONTEXT.md` 把 resume 留給 Jellyfin 的繼續觀看。
+  - 新瀏覽器自動接上這個人最近的一段：本機沒有 id，或本機的 id 在伺服器上沒有、也不是這個瀏覽器按「新對話」開的（`localStorage` 記一個旗標，第一則訊息送出後清掉）。沒有任何對話才開空白。
 
-同輪要改：brief §9.1 的 Issue 表與 §13 頁面清單、plan §2.4 與 §7 路由表、`CONTEXT.md`（追更、遲到、換輪的名詞與 Issue 種數）、`DESIGN.md`〈Navigation〉與〈Layout〉。新頁面先 `/impeccable shape`，收尾 `critique`、`audit`、`polish`。
+同輪要改：brief §9.1 的 Issue 表與 §13 頁面清單、plan §2.4 與 §7 路由表、`CONTEXT.md`（追更、遲到、換輪的名詞與 Issue 種數）、`DESIGN.md`〈Navigation〉與〈Layout〉；助理修正另改 plan §2.6（`ai_calls.tools_json`）、§6〈settings〉〈agent〉、§7〈側面板〉、`CONTEXT.md`（對話清單）與 brief §20.26（模型清單 API 的實測）。新頁面先 `/impeccable shape`，收尾 `critique`、`audit`、`polish`。
 
 驗收：
 
@@ -2506,8 +2528,13 @@ services:
 - `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）；播出超過 60 天的不開。
 - 刷新失敗的作品，開著的 Issue 不被收掉、也不開新的。
 - 一輪巡檢的 TMDB 請求數有上界（fake client 計數）；`/waiting`、`/schedule/tracking` 對一般使用者 403 或導向（`TestWhoEachEndpointIsFor`）。
+- 設定頁填 DeepSeek 的 base URL 與 key、還沒存，模型欄的建議就是該端點回的模型；端點問不到時退回本機表並說明，仍可照打。base URL 改了之後，舊清單不留著。
+- 展開 `web_search` 看到標題、網址與日期，串流和重新載入的回應裡都沒有 `encrypted_content`；下一輪模型呼叫的歷史不受影響。
+- 清掉 Tavily key、再填回：`/status` 當場說得對，下一則訊息的工具清單跟著變，步驟頁看得到這次送出的工具名。
+- 模型回推理文字時，面板收在預設收起的區塊，重新載入後還在；設成低或高時，錄下的請求帶著對應參數；`default` 不送。
+- 同一帳號換瀏覽器打開面板，接上最近的一段對話；「對話」清單與 `/history` 都能切回舊對話；按「新對話」後重新整理仍是空白的新對話；看不到別人的對話。
 
-票序：① 導覽收斂 ② 時間表資料源實驗 ③ 時間表最小版（只用 TMDB）④ 遲到判定與巡檢前刷新 ⑤ `episodes_overdue` 與追更頁 ⑥ 時刻與評分 ⑦ 驗收。①與②可平行。
+票序：① 模型清單 ② 搜尋結果 ③ 導覽收斂 ④ 時間表資料源實驗 ⑤ 時間表最小版（只用 TMDB）⑥ 遲到判定與巡檢前刷新 ⑦ `episodes_overdue` 與追更頁 ⑧ 時刻與評分 ⑨ 搜尋工具查得到 ⑩ 推理 ⑪ 對話清單 ⑫ 驗收。①②最先做（現在每次用都會碰到）；③與④可平行。
 
 ### 11.7 M6 人工接管開關
 
