@@ -15,7 +15,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | M3 | `.scratch/m3/issues/` | — | 已驗收（2026-09-26），封存於 `docs/archive/m3.md` |
 | M4 | `.scratch/m4/issues/` | — | 已驗收（2026-10-23），封存於 `docs/archive/m4.md` |
 | M5 | `.scratch/m5/issues/` | — | 已驗收（2026-10-28），封存於 `docs/archive/m5.md` |
-| M5.5 | `.scratch/m5.5/issues/` | plan §11.6b；brief §13、§9.1、§20.3 | 新番時間表、追更、遲到提醒與導覽收斂（2026-10-31 加入，排在 M6 前） |
+| M5.5 | `.scratch/m5.5/issues/` | plan §11.6b；brief §13、§9.1、§20.3、§20.26 | 新番時間表、追更、遲到提醒與導覽收斂（2026-10-31 加入，排在 M6 前）；助理五點修正（2026-11-01 加入） |
 | M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10 | 人工接管開關與背景 AI 任務（含 Issue）、影子模式（2026-10-27 改） |
 | M7 | `.scratch/m7/issues/` | plan §11.8；brief §14、§16.2 | Discord 與 MCP（2026-09-22 加入、09-24 加 MCP、10-27 改名） |
 | docs-diet | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
@@ -39,6 +39,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-10-31 | M5.5 規劃 | 新番時間表、追更與遲到提醒、導覽收斂排在 M6 前，寫進 plan §11.6b、brief §17 與 §20.3 | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
 | 2026-11-01 | M5.5 規劃 | 遲到提醒補上下載停滯與入庫失敗，已在等你處理的不重複開；通知寫作品與集數，沒接 Discord 時追更頁提示（plan §11.6b、§11.7、brief §17） | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
 | 2026-11-01 | M5.5 助理回饋調查 | 五點查完未改碼：Tavily 判定為模型誤報、推理未畫未接、下拉用本機價目表、`encrypted_content` 原樣印、對話 id 只在瀏覽器（`docs/research/assistant-feedback-2026-11-01.md`） | 等使用者：這五點要先修還是排進 M5.5 |
+| 2026-11-01 | M5.5 規劃 | 助理五點修正寫進 plan §11.6b 與 brief §17、§20.26：模型清單、搜尋結果排最前面，其餘排在新番之後；不做 reload，指令用 `/history` | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
 
 ## 偏差與決定
 
@@ -46,3 +47,4 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 
 - 2026-10-31 M6 流程：M6 起 spec 由開工 session 寫到 `.scratch/<里程碑>/spec.md`，plan §11 對應節縮成一行連結、編號不變（改 plan §11 導言、`CLAUDE.md`〈Skills〉）；M0–M5 與 docs-diet 不補。
 - 2026-10-31 M5.5 排程：M6 之前插入 M5.5（使用者定），M6 改在它驗收後開工；改 plan §11.6b、brief §17、`PRODUCT.md` 里程碑表、`CLAUDE.md` 的 spec 起始里程碑。
+- 2026-11-01 M5.5 範圍：助理五點修正併入 M5.5（使用者定），模型清單與搜尋結果最先做；改 plan §11.6b、brief §17 與 §20.26、`PRODUCT.md`。
