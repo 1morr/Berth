@@ -2471,17 +2471,24 @@ services:
 - **遲到判定**（純函式 `parser/overdue.py`，一部作品一個結果）：
   - 對象：有綁好的 RSS Series 的作品；第 0 季不看；季集用 TMDB 編號（帳本本來就是）。
   - 基準：作品最後入庫的一集，不分來源；還沒入庫過時，從作品最早的 RSS Series 的 `created_at` 之後播出的第一集算。
-  - 缺的：基準之後已到播出日、`read_holdings` 說 `missing` 的集。下載中、卡住、等審核的不開 Issue，只在追更頁說卡在哪。
+  - 缺的：基準之後已到播出日、還沒入庫的集。超過門檻就算晚，不管卡在哪一步，只有兩種例外：
+    - **下載還在動**：蓋到它的 Job 在 `UNDER_WAY_STATES` 裡，但 `stalled` 不算。
+    - **已經在等你處理**：蓋到它的 Job 是 `review`（已在審核佇列），或 Job 有開著或被忽略、說著它現在這個狀態的 Issue（`missing_files`、`client_error`、`client_removed`，查法同 `sweep._covered`）。那件 Issue 收掉而這一集還缺時，下一輪巡檢照常開。M6 的三種 Issue（§11.7）開了也走這一條。
+  - 所以字幕組沒發、送單失敗、下載停滯（`stalled`）、入庫失敗（`import_failed`）都會開。`read_holdings` 的 `missing` 不帶 Job，`stalled` 又算在 `downloading`，光看它分不出來；每一集蓋到哪些 Job 用 `services/why_not.py` 的 `_job_claims` 那一份。
   - 晚：TMDB 只有日期，從播出日隔天 00:00（容器 `TZ`）起算滿門檻。門檻預設 2 天，在設定裡改；單一 RSS Series 可覆寫（`rss_series.overdue_days`，新增可為空的欄位）；一部作品多條訂閱取最大值。例：10/28 播出，10/31 05:00 巡檢才開。
   - 換輪：基準那一集與下一集播出日相隔超過 21 天，理由是 `next_run`（可能是下一個 cour，Mikan 是另一個番組，brief §20.12），不是字幕組遲到；作品上有一條比基準那一集入庫更晚建立的 RSS Series 時回到一般判定。
   - **不讀 `series_finished`**：RSS 頁的「已完結」與每日補漏照舊，安靜 30 天不影響這裡。
   - 視窗：最後一集缺集播出滿 60 天後不再提醒，留在追更頁「斷更很久」；上線第一天舊缺集也走這一條。
   - 中間的洞仍歸 `series_episodes_missing`（7 天寬限），這裡只看最新一集之後（`services/sweep.py` 的 `_missing_episodes` 不看的那一段）。
-- **提醒**：新 Issue 型別 `episodes_overdue`，每日巡檢開，條件解除時系統收掉，一部作品一件（`IssueSubject` 新增作品）；`detail_json` 帶 `reason`（`late` / `next_run`）、缺的集、卡在哪。通知、放太久、週報沿用現有路徑。下一步：搜這一集或去訂閱（連 Media 詳情）、忽略（條件持續期間有效）。
+- **提醒**：新 Issue 型別 `episodes_overdue`，每日巡檢開，條件解除時系統收掉，一部作品一件（`IssueSubject` 新增作品）；`detail_json` 帶 `reason`（`late` / `next_run`）、作品名、缺的集、卡在哪（字幕組沒發、送單失敗、下載停滯、入庫失敗）。下一步：搜這一集或去訂閱（連 Media 詳情）、處理卡住的 Job（連 `/jobs/{hash}`）、忽略（條件持續期間有效）。
+- **通知**：走現有的「等你處理」與「放太久」，不加通知種類，收件人同樣是訂閱了它、有 Discord ID 的管理員；週報也沿用。
+  - **訊息要寫作品名與集數**：現有訊息只寫種類與數量（`notify._part`），只知道「1 個 Issue（遲到）」還得點進去。這一波有 `episodes_overdue` 時，內文列出作品名與晚的集（`describe_spans`），最多五部，其餘寫「等 N 部」；zh-Hant 與 en 並列，送出時照 `detail_json` 組字。
 - **巡檢前刷新**：在巡檢的交易之前、獨立 session 刷新有綁定作品的快照。
   - 跳過：6 小時內刷新過的（`PLANNING_TTL`）、TMDB 說完結且都在庫的。量級：一部 5–7 次請求，20 部約 100–150 次，全域桶每秒 40 次。
   - **刷新失敗的作品這一輪不開也不收**：`_load` 把錯誤吞成回傳值，要看 `tmdb_fetched_at`；`_settle` 收掉「沒被標出」的件，要排除這些作品。`_store` 自己會 commit，所以不能放進 `sweep_once`。
 - **追更頁**：依作品一列：字幕組、已播到、已入庫到、狀態（`domain.WhyNot` 的結論，加「晚 N 天」與「可能是下一輪」）。要人動手的在前，準時的在後，「斷更很久」收起。
+  - **下載停滯要說出來**：`WhyNot` 把 `stalled` 算成 `DOWNLOADING`，這一頁要另外顯示「下載停滯」。
+  - **收不到通知時頁首說一句**：這位管理員沒有 bot、沒填 Discord ID、沒訂閱「等你處理」或 Discord 到不了時，頁首提示遲到只會顯示在這裡、不會通知，連到 `/settings/notifications`；讀 `GET /me/notifications` 就夠，不加端點。不另做其他通知管道（[ADR-0015](adr/0015-notifications-discord-dm.md)）。
 
 同輪要改：brief §9.1 的 Issue 表與 §13 頁面清單、plan §2.4 與 §7 路由表、`CONTEXT.md`（追更、遲到、換輪的名詞與 Issue 種數）、`DESIGN.md`〈Navigation〉與〈Layout〉。新頁面先 `/impeccable shape`，收尾 `critique`、`audit`、`polish`。
 
@@ -2491,6 +2498,10 @@ services:
 - 時間表列出本週當季新番，未訂閱的卡片點進作品頁訂閱成功，下一次打開變「已訂閱」。
 - 訂閱的作品 10/28 播出而字幕組沒發：10/30 不開，10/31 巡檢開一件，發了入庫後系統收掉。
 - 另一個字幕組或手動下載已入庫那一集時不開。
+- 過了門檻的集，下載停滯或入庫失敗時開一件並說出卡在哪，入庫後系統收掉；追更頁把停滯顯示成「下載停滯」，不是「下載中」。
+- 下載還在動、等審核、Job 有開著或被忽略的 Issue 時不開；那件 Issue 收掉而這一集還缺時，下一輪開。
+- Discord 訊息寫出作品名與晚的集（zh-Hant、en）；超過五部時其餘寫「等 N 部」。
+- 沒接 Discord 時 Issue 照開、追更頁頁首有提示；收得到通知的管理員看不到提示。
 - Re:Zero fixture（E77 之後停播 56 天）開的是 `next_run`；同一輪停播 14 天仍是 `late`。
 - `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）；播出超過 60 天的不開。
 - 刷新失敗的作品，開著的 Issue 不被收掉、也不開新的。
@@ -2521,7 +2532,7 @@ services:
   - 三道程式檢查標出的可疑入庫。
   - 接著是 Issue 的各型別：可逆的自動，刪檔與放棄追蹤做成 Proposal。
   - 再來是每週巡檢把程式檢查標出的項目交給 AI。
-- **卡住而沒有 Issue 的三種 Job 開 Issue**：重試用完的 `submit_failed`、`import_failed`、停滯（[ADR 0016](adr/0016-ai-agent-architecture.md)）。
+- **卡住而沒有 Issue 的三種 Job 開 Issue**：重試用完的 `submit_failed`、`import_failed`、停滯（[ADR 0016](adr/0016-ai-agent-architecture.md)）。它們涵蓋所有 Job；M5.5 的遲到提醒（§11.6b）只管訂閱的作品，遇到這幾件 Issue 就不再為同一筆另開。
 - **AI 活動頁**：做了什麼、理由、花費，逐筆撤銷。審核頁每一件附 AI 的理由。
 - **修正回流**：寫回 RSS Series、標題別名、排除條件；改正過的案例進 benchmark 候選語料。
 
