@@ -1855,7 +1855,12 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 - **模型會誤報自己有什麼工具**（正式環境 `deepseek-flash`，0.4.1）：Tavily key 在該輪開始前 8 秒已存回，`open_turn` 每則訊息重讀設定、重建工具清單（臨時整合測試：填、清、再填時依序看得到、看不到、看得到），它仍連答兩輪「沒有」。送出的工具清單當時沒有記錄，所以這是推論，不是線上直接量到的。助理對工具的說法不能當事實，要查就讀設定或步驟頁。
 - **DeepSeek 的 Anthropic 接口**：`thinking` 支援但忽略 `budget_tokens`；`output_config` 只支援 `effort`。（[Using the Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)）`deepseek-flash` 不送 `thinking` 時也會回推理文字（實測）。
-- **pydantic-ai-slim 2.62.0 的推理**：統一的 `thinking` 設定要模型 profile 有 `anthropic_supports_effort` 才轉成 effort，否則是 `budget_tokens`；可明寫 `anthropic_effort`、`anthropic_thinking` 蓋過。`deepseek-flash` 走 `AnthropicModel` 實際送什麼還沒驗（讀 `models/anthropic/__init__.py`）。Vercel 串流與 `dump_messages` 都會帶 `reasoning` 片段。
+- **DeepSeek 的推理程度**：只分 `low`、`high`、`max`，預設 `high`，思考模式預設開。`minimal`→`low`，`medium`、`xhigh`→`high`，`ultra`→`max`，所以設 `medium` 跟現在不送一樣。Anthropic 格式用 `output_config.effort`，開關是 `thinking.type`。（[Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode)）
+- **pydantic-ai-slim 2.62.0 的推理**（實測 profile、讀 `models/__init__.py` 與 `models/anthropic/__init__.py`，實際請求還沒錄）：
+  - `AnthropicModel('deepseek-flash')`：`supports_thinking` 真、`anthropic_supports_effort` 假。統一的 `thinking='low'` 會變成 `budget_tokens`（DeepSeek 忽略），effort 不會送；`thinking=False` 在這個 profile 下省略 `thinking`（模型照樣思考）。所以要明寫 `anthropic_effort` 與 `anthropic_thinking`。
+  - `AnthropicModel('claude-sonnet-5-5')`：`anthropic_supports_effort` 真，統一設定就夠。
+  - `OpenAIChatModel` 配 `OpenAIProvider`：`deepseek-flash`、`gpt-4o-mini`、自訂名字的 `supports_thinking` 都是假，統一的 `thinking` 被靜靜拿掉，不會 400，但也沒有效果。`DeepSeekProvider` 才認 `deepseek-flash`，Berth 用的是 `OpenAIProvider`。
+  - Vercel 串流與 `dump_messages` 都會帶 `reasoning` 片段。
 - **`web_search` 結果的 `encrypted_content`**：DeepSeek 的 Anthropic 接口每筆都帶，再加 `title`、`url`、`page_age`、`type`。一次 10 筆的 JSON 實測 22,628–41,654 字，幾乎都是它。
 - **模型清單端點**：未帶 key 時 `api.anthropic.com/v1/models`、`api.deepseek.com/anthropic/v1/models`、`api.deepseek.com/models` 都回 401，代表路由存在；帶 key 的回應形狀還沒驗，做 M5.5 那張票時補在這裡。
 - **Open WebUI 的慣例**：連線填 URL 與 key，從 `/models` 自動偵測模型；服務不支援時才手動填模型 id。（[OpenAI-Compatible](https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-openai-compatible)）

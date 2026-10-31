@@ -30,14 +30,14 @@
 - [DeepSeek 的 Anthropic 接口](https://api-docs.deepseek.com/guides/anthropic_api)支援 `thinking`（忽略 `budget_tokens`）與 `output_config.effort`。
 - 注意：pydantic-ai 的統一設定 `thinking` 要在模型 profile 有 `anthropic_supports_effort` 時才轉成 effort，`deepseek-flash` 走 Anthropic 接口時可能不會帶上。實作時要驗實際送出的內容，必要時明寫 `anthropic_effort`。
 
-**建議**：面板把推理畫成預設收起的區塊；設定頁加「推理程度」（預設、關、低、中、高）。
+**定案**：面板把推理畫成預設收起的區塊；設定頁加「推理程度」（關、低、中、高），預設中，沒有「預設」這一級（使用者定）。DeepSeek 的中等於高，跟現在不送的行為一樣（brief §20.26）。
 
 ## 3. 模型下拉選單
 
 - 下拉選單來自 `known_models(base_url, provider)`，那是 **genai-prices 的本機價目表**，用**已存**的 base URL 認服務商，既不連網，也不看表單上剛打的網址。所以存之前是 Claude，存之後才是 DeepSeek。自架閘道認不出服務商，而補位表 `FALLBACK` 是空的，會完全沒有建議。
 - AI 開著時模型名必填（`_require_key_and_model`），所以形成先有雞還是先有蛋。
 
-**建議**：加 `POST /settings/ai/models`，收表單上未存的 base URL 與 key（語意同「測試連線」），打那個端點的模型清單 API，失敗退回本機表。未帶 key 時 `api.anthropic.com/v1/models`、`api.deepseek.com/anthropic/v1/models`、`api.deepseek.com/models` 都回 401，代表路由存在；帶 key 的回應內容還沒驗，查到後補進 brief §20。
+**定案**：模型欄旁加「取得模型」按鈕（使用者定：自動問的話，打到一半的網址會收到存著的 key），按了才打 `POST /settings/ai/models`，失敗退回本機表；沒按之前依表單網址查本機表，不連外。另外補上 key 的外送規則：key 欄空著時，網址與存著的相同才用存著的那把，不同就是 `key_missing`，取得模型、測試連線、儲存三處都守（現在的測試連線與儲存都沒有比對網址）。未帶 key 時 `api.anthropic.com/v1/models`、`api.deepseek.com/anthropic/v1/models`、`api.deepseek.com/models` 都回 401，代表路由存在；帶 key 的回應內容還沒驗，查到後補進 brief §20。
 
 ## 4. 網路搜尋展開內容很長
 

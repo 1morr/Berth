@@ -2491,10 +2491,14 @@ services:
 - **追更頁**：依作品一列：字幕組、已播到、已入庫到、狀態（`domain.WhyNot` 的結論，加「晚 N 天」與「可能是下一輪」）。要人動手的在前，準時的在後，「斷更很久」收起。
   - **下載停滯要說出來**：`WhyNot` 把 `stalled` 算成 `DOWNLOADING`，這一頁要另外顯示「下載停滯」。
   - **收不到通知時頁首說一句**：這位管理員沒有 bot、沒填 Discord ID、沒訂閱「等你處理」或 Discord 到不了時，頁首提示遲到只會顯示在這裡、不會通知，連到 `/settings/notifications`；讀 `GET /me/notifications` 就夠，不加端點。不另做其他通知管道（[ADR-0015](adr/0015-notifications-discord-dm.md)）。
-- **模型清單**（先修）：照 Open WebUI 連線設定的做法，向填的端點問模型，問不到就照打（brief §20.26）。
-  - `POST /settings/ai/models`（命令 `ai.list_models`，`Effect.READ`、`CONNECTS_OUT`）：收表單上還沒存的接口、base URL 與 key，key 欄空著用這個接口存著的那把，語意同 `POST /settings/ai/test`。不要模型名。
-  - 打 Anthropic 接口的 `{base}/v1/models`（有分頁）或 OpenAI 接口的 `{base}/models`，回 `models`、`source`（`endpoint` / `prices`）與失敗原因。問不到不算請求錯：退回 `known_models(表單的 base URL)`，並說明為什麼。
-  - 設定頁：base URL 或 key 改了，舊清單立刻收掉；有 key 時去問，沒有 key 時用本機表。模型欄仍可自由輸入，AI 開著時模型名仍必填。
+- **模型清單**（先修）：按鈕才連外，不自動問（使用者定：打到一半的網址不該收到 key）。內容照 Open WebUI 連線設定的做法，向填的端點問模型，問不到就照打（brief §20.26）。
+  - 模型欄旁一顆「取得模型」，按了才打 `POST /settings/ai/models`（命令 `ai.list_models`，`Effect.READ`、`CONNECTS_OUT`）：收表單上還沒存的接口、base URL 與 key。不要模型名。
+  - 打 Anthropic 接口的 `{base}/v1/models`（有分頁）或 OpenAI 接口的 `{base}/models`，回 `models`、`source`（`endpoint` / `prices`）與失敗原因。問不到不算請求錯：退回本機表，並說明為什麼。
+  - 沒按之前的建議：`known_models(表單的 base URL)`，要多一支只讀本機表、不帶 key、不連外的端點（或併進同一支、`key` 不送時只查本機），改網址就換。按鈕取得的清單在 base URL 或 key 改了時收掉。模型欄仍可自由輸入，AI 開著時模型名仍必填。
+- **key 只送到存它的那個端點**（先修，與模型清單同一張票；三支共用一個函式，`effective_base_url` 比對，留空與填官方網址算同一個）：key 欄空著時，表單的 base URL 與存著的相同才用存著的那把，不同就是 `key_missing`。
+  - `ai.list_models` 與 `ai.test_ai`：照上面。現在的「測試連線」沒有比對網址，改了網址按測試會把舊 key 送過去。
+  - `ai.set_ai`：這個接口有存著的 key、網址改了、key 欄空著時拒絕，什麼都不存；只守前兩支的話，先存再按就繞過去了。
+  - `settings.aiPage.test.hint` 與 key 欄的提示改說這條規則，錯誤標在 key 欄（zh-Hant、en）。
 - **搜尋結果**（先修）：`web_search` 每筆的 `encrypted_content` 只給服務端用，不給瀏覽器。
   - 串流（`_relay`）與 `GET /agent/conversations/{id}` 兩條路都在 `api/agent.py` 拿掉；`history_json` 不動，模型重播要用。
   - `ToolCall` 把 `web_search` 的結果畫成清單：標題、網址、`page_age`。其他工具照舊。
@@ -2504,8 +2508,9 @@ services:
   - `ai_calls` 新增可為空的 `tools_json`（這次呼叫送出的工具名），步驟頁顯示，舊列是「未記錄」。
 - **推理**：
   - 面板把 `reasoning` 片段畫成預設收起的區塊，串流時也一樣；重新載入後仍在。
-  - `AiEndpointSettings` 新增 `reasoning`（`default`、`off`、`low`、`medium`、`high`，預設 `default` 即不送），兩種接口各記各的；設定頁模型欄下面一格。
-  - 由 `chat_settings` 轉成請求參數。第一步先用錄下的請求確認參數真的送出（brief §20.26：`deepseek-flash` 走 Anthropic 接口時統一的 `thinking` 不一定帶 effort），不行就明寫 `anthropic_effort`。
+  - `AiEndpointSettings` 新增 `reasoning`（`off`、`low`、`medium`、`high`，**預設 `medium`，沒有「預設」這一級**，使用者定），兩種接口各記各的；舊資料沒有這一格就是 `medium`，不用 migration。設定頁模型欄下面一格，提示說 DeepSeek 只分低與高，中等於高（brief §20.26）。
+  - 由 `chat_settings` 轉成請求參數，**只用統一的 `thinking` 不夠**（brief §20.26 實測）：Anthropic 接口上 `deepseek-flash` 的 effort 要明寫 `anthropic_effort`，`off` 要明寫 `anthropic_thinking={'type': 'disabled'}`；profile 有 `anthropic_supports_effort` 的 Claude 用統一設定。OpenAI 接口的 profile 認不得的模型不送（送了不支援的模型會 400），設定頁說明這個模型的程度沒有效果。以錄下的請求為準。
+  - 服務拒絕這個參數（400）時，停下的說明指到設定頁改程度。
 - **對話清單**：
   - `GET /agent/conversations`：只列自己的，新的在前，上限 50 段；回 id、標題（第一則使用者訊息，截短）、`updated_at`、有沒有在跑。不加標題欄位（沿用 `BusyElsewhere` 的做法）。
   - 面板頁首多一顆「對話」，開清單，選了走現有的 `switchTo`；在跑的那一段標出來。
@@ -2528,10 +2533,11 @@ services:
 - `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）；播出超過 60 天的不開。
 - 刷新失敗的作品，開著的 Issue 不被收掉、也不開新的。
 - 一輪巡檢的 TMDB 請求數有上界（fake client 計數）；`/waiting`、`/schedule/tracking` 對一般使用者 403 或導向（`TestWhoEachEndpointIsFor`）。
-- 設定頁填 DeepSeek 的 base URL 與 key、還沒存，模型欄的建議就是該端點回的模型；端點問不到時退回本機表並說明，仍可照打。base URL 改了之後，舊清單不留著。
+- 設定頁填 DeepSeek 的 base URL、還沒存，模型欄的建議馬上換成本機表的 DeepSeek 模型，過程沒有請求帶 key、也沒有連外；按「取得模型」後才是該端點回的模型；問不到時退回本機表並說明，仍可照打。base URL 改了之後，取得的清單不留著。
+- 存著 key、把 base URL 改掉、key 欄空著：取得模型、測試連線、儲存都是 `key_missing`，fake 記不到任何帶舊 key 的請求；網址沒改時三者照常用存著的那把；留空與填官方網址算沒改。
 - 展開 `web_search` 看到標題、網址與日期，串流和重新載入的回應裡都沒有 `encrypted_content`；下一輪模型呼叫的歷史不受影響。
 - 清掉 Tavily key、再填回：`/status` 當場說得對，下一則訊息的工具清單跟著變，步驟頁看得到這次送出的工具名。
-- 模型回推理文字時，面板收在預設收起的區塊，重新載入後還在；設成低或高時，錄下的請求帶著對應參數；`default` 不送。
+- 模型回推理文字時，面板收在預設收起的區塊，重新載入後還在；沒設過的設定讀回來是 `medium`；錄下的請求在 DeepSeek（Anthropic 接口）上低與高帶 `output_config.effort`、關帶 `thinking.type=disabled`；OpenAI 接口上 profile 認不得的模型不帶參數。
 - 同一帳號換瀏覽器打開面板，接上最近的一段對話；「對話」清單與 `/history` 都能切回舊對話；按「新對話」後重新整理仍是空白的新對話；看不到別人的對話。
 
 票序：① 模型清單 ② 搜尋結果 ③ 導覽收斂 ④ 時間表資料源實驗 ⑤ 時間表最小版（只用 TMDB）⑥ 遲到判定與巡檢前刷新 ⑦ `episodes_overdue` 與追更頁 ⑧ 時刻與評分 ⑨ 搜尋工具查得到 ⑩ 推理 ⑪ 對話清單 ⑫ 驗收。①②最先做（現在每次用都會碰到）；③與④可平行。
