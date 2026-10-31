@@ -2451,6 +2451,53 @@ services:
 
 已驗收（2026-10-28），內容在 `docs/archive/m5.md`。
 
+### 11.6b M5.5 新番與導覽
+
+使用者要找得到當季新番、看得出訂閱的作品有沒有按時入庫；頁首的按鈕也太多了（2026-10-31 使用者定）。不需要 AI，排在 M6 前。
+
+範圍：
+
+- **導覽收斂**（不動後端邏輯，所有網址不變：Discord 週報連 `/weekly/{id}`，`services/deeplink.py`）：
+  - 主導覽：探索、新番、媒體庫、下載、待處理（只有 admin，帶數字）。外面留助理開關與帳號選單。
+  - 帳號選單：設定、健康、週報（只有 admin）、語言、登出，上面寫名字與角色。Berth 第一個下拉選單；`web/` 沒有 Radix，先用原生元素（`DESIGN.md`〈Navigation〉）。
+  - 待處理：頁內兩個分頁「審核」`/review`、「Issue」`/issues`，兩頁仍分開（ADR-0006）。數字是 `services.waiting.waiting_now` 的件數，文字標出、不只靠顏色；要多一支 admin 的讀取端點，新增 `/waiting` 進 `api/gate.py` 的 `ADMIN_PREFIXES`。
+- **新番區塊**：導覽「新番」連 `/schedule`，分頁為時間表 `/schedule`（每個人）、追更 `/schedule/tracking`（admin）、訂閱 `/rss`（admin，原 RSS 頁）。
+- **時間表**：版面照 AutoBangumi Calendar（brief §20.3）。
+  - 週一到週日分欄、今天標出，手機單日清單；預設列全部（AutoBangumi 只列已訂閱，這裡要拿來找新番），可切「只看已訂閱」。
+  - 卡片：海報、顯示用標題（Display Round）、第幾集、狀態（未訂閱 / 已訂閱 / 已入庫 / 晚 N 天），點進 `/media/:id` 走現有訂閱流程。一般使用者看得到狀態類別，看不到字幕組與 Feed（比照 `services/why_not.py` 的範圍）。
+  - 資料：以 TMDB 為主幹（有作品 id、海報、zh-TW）。第一張票先做實驗 `scripts/experiments/schedule_sources.py`，比對 TMDB 列得出的與 Bangumi 放送表；**低於九成就改以 Bangumi 為主幹**、再對 TMDB。結論與 discover 參數寫回 brief §20.3。
+  - 放送時刻與評分是第二層：AniList 只給未來的精確時刻、Bangumi 補評分，對不上就不顯示。
+  - 請求：有人打開才抓，結果存程序內 `TtlCache`（6–24 小時），不為卡片寫 `media` 列。
+- **遲到判定**（純函式 `parser/overdue.py`，一部作品一個結果）：
+  - 對象：有綁好的 RSS Series 的作品；第 0 季不看；季集用 TMDB 編號（帳本本來就是）。
+  - 基準：作品最後入庫的一集，不分來源；還沒入庫過時，從作品最早的 RSS Series 的 `created_at` 之後播出的第一集算。
+  - 缺的：基準之後已到播出日、`read_holdings` 說 `missing` 的集。下載中、卡住、等審核的不開 Issue，只在追更頁說卡在哪。
+  - 晚：TMDB 只有日期，從播出日隔天 00:00（容器 `TZ`）起算滿門檻。門檻預設 2 天，在設定裡改；單一 RSS Series 可覆寫（`rss_series.overdue_days`，新增可為空的欄位）；一部作品多條訂閱取最大值。例：10/28 播出，10/31 05:00 巡檢才開。
+  - 換輪：基準那一集與下一集播出日相隔超過 21 天，理由是 `next_run`（可能是下一個 cour，Mikan 是另一個番組，brief §20.12），不是字幕組遲到；作品上有一條比基準那一集入庫更晚建立的 RSS Series 時回到一般判定。
+  - **不讀 `series_finished`**：RSS 頁的「已完結」與每日補漏照舊，安靜 30 天不影響這裡。
+  - 視窗：最後一集缺集播出滿 60 天後不再提醒，留在追更頁「斷更很久」；上線第一天舊缺集也走這一條。
+  - 中間的洞仍歸 `series_episodes_missing`（7 天寬限），這裡只看最新一集之後（`services/sweep.py` 的 `_missing_episodes` 不看的那一段）。
+- **提醒**：新 Issue 型別 `episodes_overdue`，每日巡檢開，條件解除時系統收掉，一部作品一件（`IssueSubject` 新增作品）；`detail_json` 帶 `reason`（`late` / `next_run`）、缺的集、卡在哪。通知、放太久、週報沿用現有路徑。下一步：搜這一集或去訂閱（連 Media 詳情）、忽略（條件持續期間有效）。
+- **巡檢前刷新**：在巡檢的交易之前、獨立 session 刷新有綁定作品的快照。
+  - 跳過：6 小時內刷新過的（`PLANNING_TTL`）、TMDB 說完結且都在庫的。量級：一部 5–7 次請求，20 部約 100–150 次，全域桶每秒 40 次。
+  - **刷新失敗的作品這一輪不開也不收**：`_load` 把錯誤吞成回傳值，要看 `tmdb_fetched_at`；`_settle` 收掉「沒被標出」的件，要排除這些作品。`_store` 自己會 commit，所以不能放進 `sweep_once`。
+- **追更頁**：依作品一列：字幕組、已播到、已入庫到、狀態（`domain.WhyNot` 的結論，加「晚 N 天」與「可能是下一輪」）。要人動手的在前，準時的在後，「斷更很久」收起。
+
+同輪要改：brief §9.1 的 Issue 表與 §13 頁面清單、plan §2.4 與 §7 路由表、`CONTEXT.md`（追更、遲到、換輪的名詞與 Issue 種數）、`DESIGN.md`〈Navigation〉與〈Layout〉。新頁面先 `/impeccable shape`，收尾 `critique`、`audit`、`polish`。
+
+驗收：
+
+- 一般使用者的頁首只有探索、新番、媒體庫、下載與帳號選單，管理員多待處理；舊網址與 Discord 週報連結都打得開（e2e，桌機與 390px）。
+- 時間表列出本週當季新番，未訂閱的卡片點進作品頁訂閱成功，下一次打開變「已訂閱」。
+- 訂閱的作品 10/28 播出而字幕組沒發：10/30 不開，10/31 巡檢開一件，發了入庫後系統收掉。
+- 另一個字幕組或手動下載已入庫那一集時不開。
+- Re:Zero fixture（E77 之後停播 56 天）開的是 `next_run`；同一輪停播 14 天仍是 `late`。
+- `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）；播出超過 60 天的不開。
+- 刷新失敗的作品，開著的 Issue 不被收掉、也不開新的。
+- 一輪巡檢的 TMDB 請求數有上界（fake client 計數）；`/waiting`、`/schedule/tracking` 對一般使用者 403 或導向（`TestWhoEachEndpointIsFor`）。
+
+票序：① 導覽收斂 ② 時間表資料源實驗 ③ 時間表最小版（只用 TMDB）④ 遲到判定與巡檢前刷新 ⑤ `episodes_overdue` 與追更頁 ⑥ 時刻與評分 ⑦ 驗收。①與②可平行。
+
 ### 11.7 M6 人工接管開關
 
 背景 AI 任務與影子模式在這一里程碑；側面板已在 M5（brief §14、§17）。

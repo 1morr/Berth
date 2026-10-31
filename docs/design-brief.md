@@ -1073,7 +1073,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 
 ## 17. 里程碑（tracer bullet）
 
-每個里程碑結束時 repo 都可運作、可部署。已驗收的里程碑封存在 `docs/archive/<里程碑>.md`；M6、M7 尚未驗收。
+每個里程碑結束時 repo 都可運作、可部署。已驗收的里程碑封存在 `docs/archive/<里程碑>.md`；M5.5、M6、M7 尚未驗收。
 
 | 里程碑 | 內容 | 驗收 |
 | --- | --- | --- |
@@ -1084,6 +1084,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 | **M3 RSS**（已驗收，[`docs/archive/m3.md`](archive/m3.md)） | Mikan、Nyaa、acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結（§15） | 聚合 feed 加一個搜尋 feed 全自動追完，中途訂閱的補齊舊集 |
 | **M4 巡檢與通知**（已驗收，[`docs/archive/m4.md`](archive/m4.md)） | 每日程式檢查、每週週報；`events` 訂閱者、channel adapter（Discord）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」；週報說得出這週入庫與修正了什麼 |
 | **M5 AI 地基與對話 agent**（已驗收，[`docs/archive/m5.md`](archive/m5.md)） | 命令登錄表與執行器、Proposal、provider、防護與記帳、側面板對話（工具、確認卡、外部資料、skills、壓縮、斜線指令）、觀測頁（§6.10、§14） | 側面板說「下載 Re:Zero 全系列」得到逐列可勾的總覽卡，按確認後送單；「為什麼這集沒入庫」答得出卡在哪；AI 不能在沒人確認下執行不可逆的命令；重啟之後舊卡片按得下去；關掉 AI 時與 M4 相同 |
+| **M5.5 新番與導覽** | 頁首收斂成五項加帳號選單、新番時間表、追更頁、訂閱作品遲到的提醒（細節在 plan §11.6b） | 找得到當季新番並一鍵走到訂閱；訂閱的作品播出滿兩天沒入庫會收到一件 Issue，說得出卡在哪；字幕組沒遲到（下一個 cour 沒訂）不誤報；關掉 AI 也完整可用 |
 | **M6 人工接管開關** | 決定點的人 / 影子 / AI 開關、背景 AI 任務（含 Issue）、影子一致率、AI 活動與撤銷（§6.10、§14） | 影子模式一週與人一致率達標；benchmark `auto_wrong` 不升、review 比例下降；一件 `library_link_missing` 不經人修好；刪 complete 的請求停在 Proposal |
 | **M7 Discord 與 MCP** | M4 的 Discord bot 接上同一個核心、確認卡帶按鈕、個人 API token、MCP server（§14、§16.2） | 手機上收到通知、回一句話、按確認之後完成；Claude Code 經 MCP 查得到本週入庫 |
 | 之後 | RSS 的 offset 建議（§15〈offset 建議〉，看第一批改正的頻率決定）、Jellyfin Webhook（§9.5，社群回報不可靠）、字型與字幕解壓、多使用者審批、非影片媒體 | — |
@@ -1330,6 +1331,12 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 - **AniList**（`POST https://graphql.anilist.co`，免 key、不要求 User-Agent）：文件寫 90 次 / 分，頁首警告**目前降級成 30 次 / 分**（[Rate Limiting](https://docs.anilist.co/guide/rate-limiting)；實測 `X-RateLimit-Limit: 30`）；超過就**封一分鐘**，期間全回 429 帶 `Retry-After` 與 `X-RateLimit-Reset`，所以重試要全程序一起停。錯誤寫在 `errors`（錯參數回 400），`Page.media(id_in)` 問不存在的 id 回 200 加空清單；`Page` 一頁最多 50 筆（要 60 回 50）。條款（[Terms of Use](https://docs.anilist.co/guide/terms-of-use)）：月營收 < $150 免費；**禁止當備份 / 儲存服務、禁止 hoarding**，所以 Berth 只按需問、程序內快取 6 小時、不落地。`relations` 用 `relationType(version: 2)`。打分人數是 `stats.scoreDistribution[].amount` 加總。
 - **Bangumi**（`GET https://api.bgm.tv/calendar`，免 key）：**非瀏覽器要帶 User-Agent（開發者 ID 與應用名，分發的帶版本、開源的帶主頁）**，預設的可能被擋（[user agent.md](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)）；Berth 送 `1morr/berth/<版本> (https://github.com/1morr/Berth)`。`/calendar` 在 `open-api/api.yml`（不在 `v0.yaml`），欄位全非必填（112 部裡 57 部有 `rank`、93 部有 `rating.score`）；回 `cache-control: max-age=3600`，Berth 記一小時；無公布速率上限。
 - **Fribb**（`raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json`，7.5 MB、39,579 筆）：**倉庫無授權檔**，上游 anime-offline-database 為 **ODbL 1.0**；判讀（非法律意見）嚴格說保留所有權利，Berth 的結論是執行時下載到使用者自己的 `CONFIG_ROOT`、只自己查詢，**不打包進 repo 或 image**（那才是再散布），不加 ODbL 署名（無公開使用，§4.3）。每週二約 16:04 UTC 更新，下載會斷（要先解得開才換舊檔）；僅約兩成條目有 TMDB id；`episode_offset.tmdb` 差一集（Re:Zero 第 2 季寫 26，實際 E26–E38）。17 部實測見 [fribb-vs-chaining](research/fribb-vs-chaining-2026-10-28.md)：Fribb 錯在季與 offset，只靠集數串接錯在 Specials 與 TMDB 拆條目，所以 `series-mapping` 兩種都算、不一致整季交給人。
+
+**放送時間表的來源**（2026-10-31 查證，M5.5 規劃，plan §11.6b）
+
+- **AniList `AiringSchedule`**：`airingAt`、`timeUntilAiring`、`episode`、`mediaId`；官方註明**只保證未來的放送資料存在且準確**，所以不能拿它當「該入庫了沒」的基準。（[AiringSchedule](https://docs.anilist.co/reference/object/airingschedule)）
+- **AutoBangumi Calendar**（v3.2 起）：只列已訂閱的作品，週一到週日加一欄「未知」，放送資料來自 Bangumi.tv，同一部作品多條規則合成一張。（[Calendar View](https://www.autobangumi.org/en/feature/calendar.html)）
+- **TMDB `tv/on_the_air`**：未來 7 天會播的劇集，官方說它只是 discover 的包裝，要調條件就用 discover。（[On The Air](https://developer.themoviedb.org/reference/tv-series-on-the-air-list)）discover 的條件與對當季新番的覆蓋率**還沒實測**，由 M5.5 第二張票的實驗回答，結論補在這裡。
 
 **Seerr（前 Jellyseerr / Overseerr）**（細節：[研究](research/anime-episode-source.md#203-seerr)）
 

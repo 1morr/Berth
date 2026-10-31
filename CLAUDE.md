@@ -7,7 +7,7 @@
 - `docs/design-brief.md`：需求、決定、查證過的事實（§20，附來源）。決定衝突時以它為準。
 - `docs/plan.md`：架構、資料模型、狀態機、解析器、API。§11 是路線圖：沒開工的里程碑各一小節，開工後縮成一行連到 spec。
 - `docs/progress.md`：進行中里程碑的閱讀指引、session 紀錄、偏差與決定。每個 session 的起點與終點。已驗收的里程碑封存在 `docs/archive/<里程碑>.md`。
-- `.scratch/<里程碑>/spec.md`：進行中里程碑的規格，開工 session 寫（M6 起；`tests/unit/test_scratch_specs.py` 守）。
+- `.scratch/<里程碑>/spec.md`：進行中里程碑的規格，開工 session 寫（M5.5 起；`tests/unit/test_scratch_specs.py` 守）。
 - `.scratch/<里程碑>/issues/`：票，執行單位；狀態在票的 `Status:` 行。
 - `CONTEXT.md`：名詞表，唯一來源；命名一律用它的詞。
 - `PRODUCT.md`、`DESIGN.md`：impeccable 維護的產品與設計脈絡（第一個 UI 票起）。

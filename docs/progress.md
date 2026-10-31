@@ -15,6 +15,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | M3 | `.scratch/m3/issues/` | — | 已驗收（2026-09-26），封存於 `docs/archive/m3.md` |
 | M4 | `.scratch/m4/issues/` | — | 已驗收（2026-10-23），封存於 `docs/archive/m4.md` |
 | M5 | `.scratch/m5/issues/` | — | 已驗收（2026-10-28），封存於 `docs/archive/m5.md` |
+| M5.5 | `.scratch/m5.5/issues/` | plan §11.6b；brief §13、§9.1、§20.3 | 新番時間表、追更、遲到提醒與導覽收斂（2026-10-31 加入，排在 M6 前） |
 | M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10 | 人工接管開關與背景 AI 任務（含 Issue）、影子模式（2026-10-27 改） |
 | M7 | `.scratch/m7/issues/` | plan §11.8；brief §14、§16.2 | Discord 與 MCP（2026-09-22 加入、09-24 加 MCP、10-27 改名） |
 | docs-diet | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
@@ -35,9 +36,11 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 日期 | 票 | 結果 | 下一步 |
 | --- | --- | --- | --- |
 | 2026-10-31 | M6 流程 | 里程碑開工改成一個指令，所有 session 結尾給下一步指令；閘門 `test_scratch_specs.py`、`test_progress_rules.py` | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
+| 2026-10-31 | M5.5 規劃 | 新番時間表、追更與遲到提醒、導覽收斂排在 M6 前，寫進 plan §11.6b、brief §17 與 §20.3 | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
 
 ## 偏差與決定
 
 實作中推翻 plan / brief 的事，一行一條，附 commit hash 與改動的章節。
 
 - 2026-10-31 M6 流程：M6 起 spec 由開工 session 寫到 `.scratch/<里程碑>/spec.md`，plan §11 對應節縮成一行連結、編號不變（改 plan §11 導言、`CLAUDE.md`〈Skills〉）；M0–M5 與 docs-diet 不補。
+- 2026-10-31 M5.5 排程：M6 之前插入 M5.5（使用者定），M6 改在它驗收後開工；改 plan §11.6b、brief §17、`PRODUCT.md` 里程碑表、`CLAUDE.md` 的 spec 起始里程碑。
