@@ -4,7 +4,7 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 
 ## Conventions
 
-- One milestone per directory: `.scratch/<milestone>/` (`m0`, `m1`, `m1.5`, `m2`, …); the spec is `docs/plan.md` §11 for that milestone, there is no `spec.md`
+- One milestone per directory: `.scratch/<milestone>/` (`m0`, `m1`, `m1.5`, `m2`, …); M0–M5 have no spec (history); from M6 on the spec is `.scratch/<milestone>/spec.md`, written by the first step of the milestone's kickoff session
 - Implementation issues are one file per ticket at `.scratch/<milestone>/issues/<NN>-<slug>.md`, numbered from `01` — never a single combined tickets file; a ticket inserted later takes the previous number plus a letter (`14b`, `09b`)
 - `/impeccable shape` output for a page lives next to the tickets as `.scratch/<milestone>/<page>-shape.md`
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)

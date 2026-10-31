@@ -1,15 +1,18 @@
 """`docs/progress.md` 的寫法規則（該檔〈寫法與封存〉）：每列 / 每條的長度與里程碑標記。
 
 分工：`test_progress_merge.py` 守 union 合併不弄壞檔案結構（段落、重複、表格連續）；
-這裡守內容的三條：
+這裡守內容的四條：
 
 - session 紀錄的每一列、偏差的每一條，整行 ≤ 200 字（Python `len`）。
 - 每一列 / 每一條開頭標里程碑：票欄 `<里程碑> <票號> <短標題>`，
   偏差 `- <日期> <里程碑> 票 <NN>：…`。
 - 標的里程碑在里程碑表裡不是「已驗收」：已驗收的搬去 `docs/archive/<里程碑>.md`，
   不再追加在這裡。
+- session 紀錄最後一列的「下一步」含反引號包住、`/` 開頭的指令，或以 `等使用者：` 開頭。
+  紀錄是空的不算違規（封存後會空）。
 
-只比字數與開頭的標記，不比措辭；空行、表格分隔列的寫法、列的順序都不影響結果。
+只比字數、開頭的標記與最後一列的下一步，不比措辭；空行、表格分隔列的寫法都不影響結果，
+列的順序只決定哪一列算最後一列。
 """
 
 from __future__ import annotations
@@ -17,10 +20,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 PROGRESS = ROOT / "docs" / "progress.md"
 MAX_LENGTH = 200
 _DEVIATION = re.compile(r"- \d{4}-\d\d-\d\d (\S+?)：?(?:\s|$)")
+_ROW = re.compile(r"\| \d{4}-\d\d-\d\d \|")
+_COMMAND = re.compile(r"`/[^`\s][^`]*`")
+_WAITING = "等使用者："
 
 
 def _section(text: str, heading: str) -> list[str]:
@@ -60,10 +68,14 @@ def problems(text: str) -> list[str]:
         elif tag in accepted:
             found.append(f"{tag} 已驗收，該搬去 docs/archive：{shown}")
 
-    for line in _section(text, "Session 紀錄"):
-        if re.match(r"\| \d{4}-\d\d-\d\d \|", line):
-            ticket = line.split("|")[2].strip()
-            check(line, ticket.split(" ")[0])
+    rows = [line for line in _section(text, "Session 紀錄") if _ROW.match(line)]
+    for line in rows:
+        ticket = line.split("|")[2].strip()
+        check(line, ticket.split(" ")[0])
+    if rows:
+        next_step = rows[-1].rstrip().rstrip("|").rsplit("|", 1)[-1].strip()
+        if not (_COMMAND.search(next_step) or next_step.startswith(_WAITING)):
+            found.append(f"最後一列的下一步沒有指令也不是「{_WAITING}」：{next_step[:60]}")
     for line in _section(text, "偏差與決定"):
         if line.startswith("- "):
             match = _DEVIATION.match(line)
@@ -126,8 +138,51 @@ class TestTheGatesThemselves:
         assert problems(reformatted) == []
 
     def test_reordering_rows_is_not_caught(self) -> None:
-        rows = "| 2026-10-31 | M6 1 甲 | 結果 | 下一步 |\n| 2026-11-01 | M6 2 乙 | 結果 | 下一步 |"
+        rows = (
+            "| 2099-10-31 | M6 1 甲 | 結果 | `/implement 甲` |\n"
+            "| 2099-11-01 | M6 2 乙 | 結果 | `/implement 乙` |"
+        )
         lines = self.with_row(rows).splitlines()
-        first = next(i for i, line in enumerate(lines) if line.startswith("| 2026-10-31 |"))
+        first = next(i for i, line in enumerate(lines) if line.startswith("| 2099-10-31 |"))
         lines[first], lines[first + 1] = lines[first + 1], lines[first]
+        assert problems("\n".join(lines)) == []
+
+    def next_step_problems(self, next_step: str) -> list[str]:
+        row = f"| 2099-10-31 | M6 1 甲 | 結果 | {next_step} |"
+        return [item for item in problems(self.with_row(row)) if "下一步" in item]
+
+    @pytest.mark.parametrize(
+        "next_step",
+        [
+            "下一張票",
+            "/implement .scratch/m6/issues/02-x.md",
+            "開工 `docs/plan.md`",
+            "`implement`",
+            "先等使用者：要不要發版",
+            "",
+        ],
+    )
+    def test_a_last_row_without_a_next_command_is_caught(self, next_step: str) -> None:
+        assert self.next_step_problems(next_step) != []
+
+    @pytest.mark.parametrize(
+        "next_step",
+        [
+            "`/implement .scratch/m6/issues/02-x.md`",
+            "新 session 下 `/to-tickets docs/plan.md 拆 M6 的票`",
+            "等使用者：要不要發版",
+        ],
+    )
+    def test_a_named_next_step_is_not_caught(self, next_step: str) -> None:
+        assert self.next_step_problems(next_step) == []
+
+    def test_only_the_last_row_needs_a_next_command(self) -> None:
+        rows = (
+            "| 2099-10-31 | M6 1 甲 | 結果 | 寫成散文的舊列 |\n"
+            "| 2099-11-01 | M6 2 乙 | 結果 | `/implement 乙` |"
+        )
+        assert problems(self.with_row(rows)) == []
+
+    def test_an_empty_log_is_not_caught(self) -> None:
+        lines = [line for line in self.text().splitlines() if not _ROW.match(line)]
         assert problems("\n".join(lines)) == []
