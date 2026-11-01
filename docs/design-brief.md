@@ -1864,3 +1864,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 - **`web_search` 結果的 `encrypted_content`**：DeepSeek 的 Anthropic 接口每筆都帶，再加 `title`、`url`、`page_age`、`type`。一次 10 筆的 JSON 實測 22,628–41,654 字，幾乎都是它。
 - **模型清單端點**：未帶 key 時 `api.anthropic.com/v1/models`、`api.deepseek.com/anthropic/v1/models`、`api.deepseek.com/models` 都回 401，代表路由存在；帶 key 的回應形狀還沒驗，做 M5.5 那張票時補在這裡。
 - **Open WebUI 的慣例**：連線填 URL 與 key，從 `/models` 自動偵測模型；服務不支援時才手動填模型 id。（[OpenAI-Compatible](https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-openai-compatible)）
+
+### 20.27 地上波先行配信與 TMDB 的播出日（2026-11-01 查證，審核佇列調查）
+
+細節在 [`docs/research/review-queue-2026-11-01.md`](research/review-queue-2026-11-01.md)。
+
+- **TMDB 記的是電視台的日期，字幕組常從更早的平台取片**：2026 秋季的 ABEMA「地上波 1 週間先行」有 [転生したら剣でしたII](https://prtimes.jp/main/html/rd/p/000004053.000064643.html)、[転生した大聖女](https://prtimes.jp/main/html/rd/p/000004029.000064643.html)、[転生ゴブリン](https://prtimes.jp/main/html/rd/p/000004076.000064643.html)，[野生のラスボス第 2 期](https://gamebiz.jp/news/433310)同樣先行 1 週。
+- **正式環境量到發佈比 TMDB 早 4–8 天**（5 部 16 集）：深夜檔的 TMDB 日期常再晚一天，所以先行一週會量到 8 天。裝備仔早 4–5 天，沒有查到官方的先行公告。
+- **所以「發佈早於播出日超過兩天就一定算錯」不成立**（§20.11 的規則一、`parser/airing.py`）：照字面的讀法會被誤擋。改法還沒定。
