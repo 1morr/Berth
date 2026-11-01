@@ -1084,7 +1084,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 | **M3 RSS**（已驗收，[`docs/archive/m3.md`](archive/m3.md)） | Mikan、Nyaa、acg.rip adapter、RSS Series 自動綁定、排除條件、去重、補舊集、一次性連結（§15） | 聚合 feed 加一個搜尋 feed 全自動追完，中途訂閱的補齊舊集 |
 | **M4 巡檢與通知**（已驗收，[`docs/archive/m4.md`](archive/m4.md)） | 每日程式檢查、每週週報；`events` 訂閱者、channel adapter（Discord）、每人的訂閱設定（§14） | RSS 命中 → 入庫 → Jellyfin 可見的全程，手機收到「正在下載」與「可以看了」；週報說得出這週入庫與修正了什麼 |
 | **M5 AI 地基與對話 agent**（已驗收，[`docs/archive/m5.md`](archive/m5.md)） | 命令登錄表與執行器、Proposal、provider、防護與記帳、側面板對話（工具、確認卡、外部資料、skills、壓縮、斜線指令）、觀測頁（§6.10、§14） | 側面板說「下載 Re:Zero 全系列」得到逐列可勾的總覽卡，按確認後送單；「為什麼這集沒入庫」答得出卡在哪；AI 不能在沒人確認下執行不可逆的命令；重啟之後舊卡片按得下去；關掉 AI 時與 M4 相同 |
-| **M5.5 新番與導覽** | 頁首收斂成五項加帳號選單、新番時間表、追更頁、訂閱作品遲到的提醒；助理的模型清單、搜尋結果、推理、對話清單（細節在 plan §11.6b） | 找得到當季新番並一鍵走到訂閱；訂閱的作品播出滿兩天沒入庫會收到一件 Issue，說得出卡在哪（字幕組沒發、下載停滯、入庫失敗都算，已在等你處理的不重複開）；接了 Discord 的管理員收到寫明作品與集數的私訊，沒接的在追更頁看得到提示；字幕組沒遲到（下一個 cour 沒訂）不誤報；關掉 AI 也完整可用；設定頁存檔前選得到該端點的模型，換瀏覽器接得回對話，看得到推理並設得了程度 |
+| **M5.5 新番與導覽** | 頁首收斂成五項加帳號選單、新番時間表、追更頁、訂閱作品遲到的提醒；助理的模型清單、搜尋結果、推理、對話清單；審核佇列減量（細節在 plan §11.6b） | 找得到當季新番並一鍵走到訂閱；地上波先行的集數自動入庫、不進審核，升級後不必手動重新規劃；訂閱的作品播出滿兩天沒入庫會收到一件 Issue，說得出卡在哪（字幕組沒發、下載停滯、入庫失敗都算，已在等你處理的不重複開）；接了 Discord 的管理員收到寫明作品與集數的私訊，沒接的在追更頁看得到提示；字幕組沒遲到（下一個 cour 沒訂）不誤報；關掉 AI 也完整可用；設定頁存檔前選得到該端點的模型，換瀏覽器接得回對話，看得到推理並設得了程度 |
 | **M6 人工接管開關** | 決定點的人 / 影子 / AI 開關、背景 AI 任務（含 Issue）、影子一致率、AI 活動與撤銷（§6.10、§14） | 影子模式一週與人一致率達標；benchmark `auto_wrong` 不升、review 比例下降；一件 `library_link_missing` 不經人修好；刪 complete 的請求停在 Proposal |
 | **M7 Discord 與 MCP** | M4 的 Discord bot 接上同一個核心、確認卡帶按鈕、個人 API token、MCP server（§14、§16.2） | 手機上收到通知、回一句話、按確認之後完成；Claude Code 經 MCP 查得到本週入庫 |
 | 之後 | RSS 的 offset 建議（§15〈offset 建議〉，看第一批改正的頻率決定）、Jellyfin Webhook（§9.5，社群回報不可靠）、字型與字幕解壓、多使用者審批、非影片媒體 | — |
@@ -1336,7 +1336,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 
 - **AniList `AiringSchedule`**：`airingAt`、`timeUntilAiring`、`episode`、`mediaId`；官方註明**只保證未來的放送資料存在且準確**，所以不能拿它當「該入庫了沒」的基準。（[AiringSchedule](https://docs.anilist.co/reference/object/airingschedule)）
 - **AutoBangumi Calendar**（v3.2 起）：只列已訂閱的作品，週一到週日加一欄「未知」，放送資料來自 Bangumi.tv，同一部作品多條規則合成一張。（[Calendar View](https://www.autobangumi.org/en/feature/calendar.html)）
-- **TMDB `tv/on_the_air`**：未來 7 天會播的劇集，官方說它只是 discover 的包裝，要調條件就用 discover。（[On The Air](https://developer.themoviedb.org/reference/tv-series-on-the-air-list)）discover 的條件與對當季新番的覆蓋率**還沒實測**，由 M5.5 第二張票的實驗回答，結論補在這裡。
+- **TMDB `tv/on_the_air`**：未來 7 天會播的劇集，官方說它只是 discover 的包裝，要調條件就用 discover。（[On The Air](https://developer.themoviedb.org/reference/tv-series-on-the-air-list)）discover 的條件與對當季新番的覆蓋率**還沒實測**，由 M5.5 時間表資料源那張票的實驗回答，結論補在這裡。
 
 **Seerr（前 Jellyseerr / Overseerr）**（細節：[研究](research/anime-episode-source.md#203-seerr)）
 
@@ -1871,4 +1871,4 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 - **TMDB 記的是電視台的日期，字幕組常從更早的平台取片**：2026 秋季的 ABEMA「地上波 1 週間先行」有 [転生したら剣でしたII](https://prtimes.jp/main/html/rd/p/000004053.000064643.html)、[転生した大聖女](https://prtimes.jp/main/html/rd/p/000004029.000064643.html)、[転生ゴブリン](https://prtimes.jp/main/html/rd/p/000004076.000064643.html)，[野生のラスボス第 2 期](https://gamebiz.jp/news/433310)同樣先行 1 週。
 - **正式環境量到發佈比 TMDB 早 4–8 天**（5 部 16 集）：深夜檔的 TMDB 日期常再晚一天，所以先行一週會量到 8 天。裝備仔早 4–5 天，沒有查到官方的先行公告。
-- **所以「發佈早於播出日超過兩天就一定算錯」不成立**（§20.11 的規則一、`parser/airing.py`）：照字面的讀法會被誤擋。改法還沒定。
+- **所以「發佈早於播出日超過兩天就一定算錯」不成立**（§20.11 的規則一、`parser/airing.py`）：照字面的讀法會被誤擋。改法在 plan §11.6b（2026-11-01 使用者定）。

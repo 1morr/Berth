@@ -2457,6 +2457,8 @@ services:
 
 另外收助理側面板的五點修正（2026-11-01 使用者定，查證在 [`docs/research/assistant-feedback-2026-11-01.md`](research/assistant-feedback-2026-11-01.md)）：模型清單與搜尋結果排在最前面先修，其餘排在新番之後。
 
+也收審核佇列減量（2026-11-01 使用者定，查證在 [`docs/research/review-queue-2026-11-01.md`](research/review-queue-2026-11-01.md)）：正式環境 33 件都不需要 AI。排在模型清單與搜尋結果之後、導覽之前，因為被誤擋的集數進不了 Jellyfin。
+
 範圍：
 
 - **導覽收斂**（不動後端邏輯，所有網址不變：Discord 週報連 `/weekly/{id}`，`services/deeplink.py`）：
@@ -2502,6 +2504,20 @@ services:
 - **搜尋結果**（先修）：`web_search` 每筆的 `encrypted_content` 只給服務端用，不給瀏覽器。
   - 串流（`_relay`）與 `GET /agent/conversations/{id}` 兩條路都在 `api/agent.py` 拿掉；`history_json` 不動，模型重播要用。
   - `ToolCall` 把 `web_search` 的結果畫成清單：標題、網址、`page_age`。其他工具照舊。
+- **播出日比對認得地上波先行**（brief §20.27）：改 §4.4 的規則一。
+  - **照字面的列**容忍 `RELEASE_TOLERANCE` 加 `SIMULCAST_LEAD`（7 天，共 9 天），放行時記一條新理由 `released_ahead_of_airing`（兩個日期，zh-Hant、en）。超過 9 天照舊擋。
+  - **照字面**與第一批同一個定義，抽成一支共用：`written_episode` 等於對到的集號、沒有換算類的理由、季號寫明或對到第一季。`check_airing` 因此要多收發佈名。人在 Series 上設了季號或 offset 就不算照字面。
+  - **有換算的列維持兩天**：換算差一集也剛好早一週，只看日期分不開。
+  - **第一批要認這個窗口**：`released_ahead_of_airing` 進 `VOUCHED`，照字面的「剛播」上緣跟著放寬。`mapping._just_aired`（推測虛擬季）不動，所以 `publishing.just_aired` 要拆成兩個窗口。
+  - 還被擋的列可能仍是對的（先行超過 9 天），`released_before_airing` 與 `air_date_conflict` 的文案補一句「平台先行的核准就好」（zh-Hant、en）。
+- **第一批擔保收累計編號**（brief §15）：擔保的條件多一種讀法，其餘條件不變。
+  - 條件：理由是 `absolute_cumulative`、季號寫明、Series 沒設季號與 offset、檔名集號剛好等於前面各季集數加對到的集號，而且那一集剛播（上緣維持兩天）。其他絕對編號與重數推測仍不擔保。
+  - **閘門**：`scripts/experiments/first_batch_rule.py` 的語料與對抗輪都要擔保錯 0；不是 0 就不收這一條、回報使用者，這一項視為做完。
+  - 已入庫的舊列不另外掃：下一集自動落地時，整批照 `first_batch.vouch` 一起看。已經完結、不會再有下一集的，留給人按確認。
+- **升級後自動重算**：啟動時只重算 `state = review`、`plans.engine != user`、`plans.engine_version != VERSION` 的 Job，**每次啟動全部重算不做**（會蓋掉人改的列、重設等候時間，同版本結果也一樣）。
+  - `review_reason = audit_undone` 的排除：人已經說過那一列不對。
+  - 新命令標 `Flag.INTERNAL`，走 `REVIEW → COMPLETED`（同 `replan_job`），交給 `PlannerRunner` 背景算，不拖慢啟動；TMDB 連不上時照它現有的方式下一輪再算。
+  - 算完的計劃蓋上新版本，所以同版本重啟不再重算。已入庫的不動。
 - **搜尋工具查得到**：工具清單本來就是每則訊息重建，**不做 reload 指令**。
   - `/status` 多列這一刻搜得到什麼（伺服器端 `web_search`、Tavily），答案不經過模型。
   - `_instructions` 加一句：工具可能在兩則訊息之間變動，只以當下的清單為準，不沿用先前的說法。
@@ -2517,7 +2533,7 @@ services:
   - 斜線指令 `/history`（`domain.SlashCommand`，Discord 共用）回同一份清單。**不叫 `/resume`**：`CONTEXT.md` 把 resume 留給 Jellyfin 的繼續觀看。
   - 新瀏覽器自動接上這個人最近的一段：本機沒有 id，或本機的 id 在伺服器上沒有、也不是這個瀏覽器按「新對話」開的（`localStorage` 記一個旗標，第一則訊息送出後清掉）。沒有任何對話才開空白。
 
-同輪要改：brief §9.1 的 Issue 表與 §13 頁面清單、plan §2.4 與 §7 路由表、`CONTEXT.md`（追更、遲到、換輪的名詞與 Issue 種數）、`DESIGN.md`〈Navigation〉與〈Layout〉；助理修正另改 plan §2.6（`ai_calls.tools_json`）、§6〈settings〉〈agent〉、§7〈側面板〉、`CONTEXT.md`（對話清單）與 brief §20.26（模型清單 API 的實測）。新頁面先 `/impeccable shape`，收尾 `critique`、`audit`、`polish`。
+同輪要改：brief §9.1 的 Issue 表與 §13 頁面清單、plan §2.4 與 §7 路由表、`CONTEXT.md`（追更、遲到、換輪的名詞與 Issue 種數）、`DESIGN.md`〈Navigation〉與〈Layout〉；助理修正另改 plan §2.6（`ai_calls.tools_json`）、§6〈settings〉〈agent〉、§7〈側面板〉、`CONTEXT.md`（對話清單）與 brief §20.26（模型清單 API 的實測）；審核佇列減量另改 plan §3.1（`review → completed` 多一個系統觸發）、§4.4、§11.4 與 brief §15、`parser/airing.py` 與 `parser/first_batch.py` 開頭的條件說明。新頁面先 `/impeccable shape`，收尾 `critique`、`audit`、`polish`。
 
 驗收：
 
@@ -2533,6 +2549,9 @@ services:
 - `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）；播出超過 60 天的不開。
 - 刷新失敗的作品，開著的 Issue 不被收掉、也不開新的。
 - 一輪巡檢的 TMDB 請求數有上界（fake client 計數）；`/waiting`、`/schedule/tracking` 對一般使用者 403 或導向（`TestWhoEachEndpointIsFor`）。
+- 播出日比對：照字面早 8 天放行並記 `released_ahead_of_airing`，早 10 天仍擋；有換算的早 7 天仍擋。正式環境那 16 列做成 fixture 全部放行。`berth bench` 的 `auto_wrong` 不升。
+- 第一批：哥布林、裝備仔、野生的大魔王那種照字面先行的 Series 由系統確認；累計編號的（夜櫻 40 → S2E13）在閘門過了時由系統確認，重數推測與其他絕對編號仍要人確認。
+- 升級後自動重算（整合測試）：舊版本的 `review` 重算成新版本；人改過的（`engine = user`）與 `audit_undone` 不動；同版本重啟不重算、`tmdb` 請求數為 0。
 - 設定頁填 DeepSeek 的 base URL、還沒存，模型欄的建議馬上換成本機表的 DeepSeek 模型，過程沒有請求帶 key、也沒有連外；按「取得模型」後才是該端點回的模型；問不到時退回本機表並說明，仍可照打。base URL 改了之後，取得的清單不留著。
 - 存著 key、把 base URL 改掉、key 欄空著：取得模型、測試連線、儲存都是 `key_missing`，fake 記不到任何帶舊 key 的請求；網址沒改時三者照常用存著的那把；留空與填官方網址算沒改。
 - 展開 `web_search` 看到標題、網址與日期，串流和重新載入的回應裡都沒有 `encrypted_content`；下一輪模型呼叫的歷史不受影響。
@@ -2540,7 +2559,7 @@ services:
 - 模型回推理文字時，面板收在預設收起的區塊，重新載入後還在；沒設過的設定讀回來是 `medium`；錄下的請求在 DeepSeek（Anthropic 接口）上低與高帶 `output_config.effort`、關帶 `thinking.type=disabled`；OpenAI 接口上 profile 認不得的模型不帶參數。
 - 同一帳號換瀏覽器打開面板，接上最近的一段對話；「對話」清單與 `/history` 都能切回舊對話；按「新對話」後重新整理仍是空白的新對話；看不到別人的對話。
 
-票序：① 模型清單 ② 搜尋結果 ③ 導覽收斂 ④ 時間表資料源實驗 ⑤ 時間表最小版（只用 TMDB）⑥ 遲到判定與巡檢前刷新 ⑦ `episodes_overdue` 與追更頁 ⑧ 時刻與評分 ⑨ 搜尋工具查得到 ⑩ 推理 ⑪ 對話清單 ⑫ 驗收。①②最先做（現在每次用都會碰到）；③與④可平行。
+票序：① 模型清單 ② 搜尋結果 ③ 播出日比對認得先行 ④ 第一批收累計編號 ⑤ 升級後自動重算 ⑥ 導覽收斂 ⑦ 時間表資料源實驗 ⑧ 時間表最小版（只用 TMDB）⑨ 遲到判定與巡檢前刷新 ⑩ `episodes_overdue` 與追更頁 ⑪ 時刻與評分 ⑫ 搜尋工具查得到 ⑬ 推理 ⑭ 對話清單 ⑮ 驗收。①②最先做（現在每次用都會碰到）；③到⑤接著做（被誤擋的集數進不了 Jellyfin）；⑥與⑦可平行。
 
 ### 11.7 M6 人工接管開關
 
