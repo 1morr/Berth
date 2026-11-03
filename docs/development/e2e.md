@@ -76,7 +76,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十三條流程（除了送單、審核、待處理與非安全環境那四條，各有 1280 與 390 兩份，共四十二個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十四條流程（除了送單、審核、待處理與非安全環境那四條，各有 1280 與 390 兩份，共四十四個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -85,14 +85,15 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | 既有服務：三頁都選既有（說出同主機條件與 `COMPOSE_PROFILES` 那一行）、位址與既有 Jellyfin 的管理員帳密一次「連線並登入」成為擁有者（打錯密碼標在帳密兩格）、填 qBittorrent 帳密（測試通過就做完、沒有確認鍵）、頁 3 電影與劇集預設勾好（取消一個）、加 Berth 路徑並選它當寫入目標、勾「新建一個媒體庫」建一個劇集媒體庫、貼 Prowlarr 的 key（先貼錯的：與頁 1、2 同一個錯誤版面、右欄不寫「已取得」）、TMDB 貼上 key 直接按「前往下一個泊位」（先測再走）；完成之後設定頁的 Jellyfin 連線是摘要、改位址打開又收回 | `mixed` | 8495 / 8505 |
 | 冷啟動：服務還在啟動時選套件內，Jellyfin 與 qBittorrent 各自每 3 秒重測到連上，不按重新測試 | `starting` | 8496 / 8506 |
 | 精靈跑完之後：`/setup` 導向設定頁，加一個索引站並試搜、改兩個介面登入、看 Jellyfin 的連線摘要、換 TMDB key；AI 從沒設定過時側面板只說明：管理員有「到 AI 設定」、一般使用者只看到「管理員還沒設定」（M5 票 23） | `healthy` | 8497 / 8507 |
-| 設定 → 通知：被拒的 bot token 就地標在欄位上、貼正常的 token 存下（說出 bot 的名字與邀請連結）、收件人到不了時兩個補法一起說（原因留在「我的通知」、重新整理還在）、換成送得到的 ID 後測試送出、那一句收掉；接著以一般使用者 `deckhand` 登入：只有「我的通知」與測試（沒有分頁列、bot、Berth 的網址），填 ID、勾「正在下載」、重新整理還在、測試送出，頁首「設定」通到這一頁、Jellyfin 分頁進不去 | `healthy` | 8524 / 8525 |
+| 設定 → 通知：被拒的 bot token 就地標在欄位上、貼正常的 token 存下（說出 bot 的名字與邀請連結）、收件人到不了時兩個補法一起說（原因留在「我的通知」、重新整理還在）、換成送得到的 ID 後測試送出、那一句收掉；接著以一般使用者 `deckhand` 登入：只有「我的通知」與測試（沒有分頁列、bot、Berth 的網址），填 ID、勾「正在下載」、重新整理還在、測試送出，帳號選單的「設定」通到這一頁、Jellyfin 分頁進不去 | `healthy` | 8524 / 8525 |
 | 從作品頁送單，一路走到已入庫 | `import` | 8492 |
 | `/review` 確認一筆 audit | `review` | 8493 |
 | 作品頁的「下載」段：列出還沒了結的四筆、進度自己動、展開看檔案與季集、季表標籤連到那一筆、「全部」多一筆 | `downloads` | 8517 / 8518 |
 | 側面板：問「SPY×FAMILY 為什麼沒入庫」得到結論分類、工具一行一個、重新載入接回對話、外部圖片不載入、沒有橫向捲動；送單卡出卡、重新載入之後照樣按得下去、取消一列、逐列選 Route（這台有 TV、Anime 兩條電視 Route，沒選齊沒有確認鍵，M5 票 23b）再確認，只送出勾著的、送進選的那一條；斜線指令（同一台 server 的另一條）：打 `/` 列出六個、上下鍵選 `/usage` 看用量、`/compact` 換成摘要、重新載入之後摘要還在；「加這個 RSS：<網址>」出卡（會連到新位址、沒有「出自網頁」），「上網找網址直接加」在出卡之前被擋下、一個 Feed 都沒加；「從 Mikan 訂閱 SPY×FAMILY」出卡、番組頁的三個字幕組由人選（預選助理建議的，送出的集數跟著選的那一組），「在 acg.rip 訂閱 SPY×FAMILY」出卡、改選字幕組時第一批跟著換、第一批的兩個選擇預設「下載這些並追之後的」、說出作品已經有 Mikan 那一份，確認之後那條 Feed 只收選的字幕組（M5 票 26）；被防護中止的那一輪從「步驟」連到步驟頁、用量頁數得到它（M5 票 21）；一般使用者 `deckhand` 用同一個面板問「為什麼沒入庫」得到結論、用量頁 403（M5 票 23）；「慢慢查」送出之後重新整理，那一輪接著跑完、只有一份答案，按「停止」說是你按的、重新整理之後照舊；「慢慢查」還在跑時按「新對話」再送，面板說另一段對話「慢慢查一下下載」還在答，停掉那一輪之後重送成功（M5 票 25） | `agent` | 8528 / 8529 |
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
 | 非安全環境：開 `http://berth.test:<port>`（Chromium 的 `--host-resolver-rules` 指回本機）而不是 `127.0.0.1`，像使用者用區網 IP 走 HTTP 開——瀏覽器不把它當 secure context，`crypto.randomUUID`、`navigator.clipboard` 都不在（先斷言這一點）；登入、問助理、按「新對話」、在 Job 詳情頁複製 hash，整頁不出錯（0.4.0 的 crash）。其他流程都開 `127.0.0.1`，看不到這一類錯 | `agent` | 8530 |
-| `/weekly`（M4 票 131）：管理員從頁首導覽進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
+| `/weekly`（M4 票 131）：管理員從帳號選單進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
+| 頁首（M5.5 票 07）：管理員的五個導覽項帶件數（與 `GET /api/waiting` 對得上）、帳號選單 Enter 打開、Tab 進第一項、`Esc` 收起焦點回觸發鍵、從待處理切到 Issue 分頁仍是當前區塊、舊網址（`/rss`、`/review`、`/issues`、`/settings`、`/health`、`/weekly`、`/weekly/{id}`）都打得開；一般使用者只有探索、媒體庫、下載與帳號選單（沒有週報）、`/api/waiting` 403、點外面收起選單；兩種寬度都沒有橫向捲動 | `weekly` | 8531 / 8532 |
 | `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
@@ -110,7 +111,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 2 分鐘（四十二台替身）
+pnpm -C web e2e                                            # 約 2 分鐘（四十四台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```

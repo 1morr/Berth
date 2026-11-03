@@ -859,7 +859,8 @@ describe('誰看得到審核佇列', () => {
     render()
     renderApp('/review')
 
-    expect(await screen.findByRole('link', { name: '審核' })).toBeInTheDocument()
+    const nav = within(await screen.findByRole('navigation', { name: '主要導覽' }))
+    expect(nav.getByRole('link', { name: '待處理' })).toBeInTheDocument()
   })
 
   it('user 看不到入口，直接開網址會被送走', async () => {
@@ -867,7 +868,7 @@ describe('誰看得到審核佇列', () => {
     const { router } = renderApp('/review')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/health'))
-    expect(screen.queryByRole('link', { name: '審核' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '待處理' })).not.toBeInTheDocument()
   })
 })
 

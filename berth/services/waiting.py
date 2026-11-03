@@ -10,12 +10,16 @@
 長出來、解除綁定，還有作品被刪時資料庫的 `SET NULL`——最後那一條根本沒有程式碼可掛。清單上有的
 就是頁面上看得到的，新增與總數永遠和頁面對得上。
 
+頁首的件數（`waiting_counts`，M5.5 票 07）也讀這一份：待處理那一格是審核加 Issue、新番那一格是
+待綁定，三格加起來就是「有 N 件等你處理」的 N。
+
 每一件的鍵是 `<來源>:<id>`（審核多一段種類：`review:audit:12`），錨點是那一列在頁面上的 `id`
 （`#audit-12`、`#issue-5`、`#series-7`），前端照同一個形狀給列加 `id`。
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -73,3 +77,23 @@ async def waiting_now(session: AsyncSession) -> dict[str, Waiting]:
     for id_ in await unbound_series(session):
         found[f"rss:{id_}"] = Waiting(WaitingSource.RSS, id_, f"{RSS_PAGE}#series-{id_}")
     return found
+
+
+@dataclass(frozen=True, slots=True)
+class WaitingCounts:
+    """每一份清單現在等著幾件（`GET /waiting`，頁首與區塊分頁的數字）。"""
+
+    review: int
+    issue: int
+    rss: int
+
+
+@command(Effect.READ)
+async def waiting_counts(session: AsyncSession) -> WaitingCounts:
+    """`waiting_now` 照來源數。三格的和就是「有 N 件等你處理」的 N（同一份清單）。"""
+    count = Counter(one.source for one in (await waiting_now(session)).values())
+    return WaitingCounts(
+        review=count[WaitingSource.REVIEW],
+        issue=count[WaitingSource.ISSUE],
+        rss=count[WaitingSource.RSS],
+    )

@@ -53,10 +53,8 @@ test('側面板問「為什麼沒入庫」得到結論，重新載入之後對�
 
   // 換頁：桌機上兩邊都能操作，面板與對話跟著走。
   if ((page.viewportSize()?.width ?? 0) >= 1024) {
-    await page
-      .getByRole('navigation', { name: '主要導覽' })
-      .getByRole('link', { name: '健康' })
-      .click()
+    await page.getByRole('button', { name: '帳號：skipper' }).click()
+    await page.getByRole('link', { name: '健康' }).click()
     await expect(page).toHaveURL('/health')
     // 網址先換、頁面後畫：等健康頁真的畫出來，才不會在轉場的那一瞬間打字。
     await expect(page.getByRole('heading', { level: 1, name: '健康' })).toBeVisible()

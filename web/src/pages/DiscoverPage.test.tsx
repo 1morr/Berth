@@ -6,6 +6,7 @@ import type { Discover, DiscoverItem } from '../api/discover'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute, type StubRoutes } from '../test/fetch'
 import { discoverWall as wall } from '../test/fixtures'
 import { renderApp } from '../test/render'
+import { switchToEnglish } from '../test/language'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -103,7 +104,7 @@ describe('探索頁', () => {
     const card = await screen.findByRole('link', { name: /綠燈軍團/ })
     const fetched = api.mock.calls.length
 
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish()
 
     expect(card).not.toHaveTextContent('綠燈軍團')
     expect(within(card).getAllByText('Lanterns')).toHaveLength(1)
@@ -117,7 +118,7 @@ describe('探索頁', () => {
     const poster = () => within(card).getByRole('presentation', { hidden: true })
     expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/lanterns.jpg')
 
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish()
 
     expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/lanterns-en.jpg')
   })
@@ -235,7 +236,7 @@ describe('探索頁的搜尋', () => {
     const card = await screen.findByRole('link', { name: /海洋奇緣2/ })
     const fetched = api.mock.calls.length
 
-    await user.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish(user)
 
     expect(card).not.toHaveTextContent('海洋奇緣2')
     expect(within(card).getAllByText('Moana 2')).toHaveLength(1)

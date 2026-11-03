@@ -231,24 +231,25 @@ describe('週報頁', () => {
     expect(await screen.findByText(/讀不到週報/)).toBeVisible()
   })
 
-  it('一般使用者：導覽沒有週報，直接打網址被導走', async () => {
+  it('一般使用者：帳號選單沒有週報，直接打網址被導走', async () => {
     render({}, 'user')
     const { router } = renderApp('/weekly')
 
-    expect(await screen.findByRole('navigation', { name: '主要導覽' })).toBeVisible()
+    await userEvent.click(await screen.findByRole('button', { name: /^帳號：/ }))
+    expect(screen.getByRole('link', { name: '健康' })).toBeVisible()
     expect(screen.queryByRole('link', { name: '週報' })).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/health')
   })
 
-  it('管理員的導覽有週報，排在 RSS 之後、健康之前', async () => {
+  it('管理員的帳號選單有週報，排在健康之後（M5.5 票 07）', async () => {
     render()
     renderApp('/health')
 
-    const nav = await screen.findByRole('navigation', { name: '主要導覽' })
-    const names = within(nav)
+    await userEvent.click(await screen.findByRole('button', { name: /^帳號：/ }))
+    const names = screen
       .getAllByRole('link')
       .map((link) => link.textContent)
-    expect(names.indexOf('週報')).toBe(names.indexOf('RSS') + 1)
-    expect(names.indexOf('健康')).toBe(names.indexOf('週報') + 1)
+      .filter((name) => name === '健康' || name === '週報')
+    expect(names).toEqual(['健康', '週報'])
   })
 })

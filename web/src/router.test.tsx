@@ -163,9 +163,9 @@ describe('角色', () => {
 
     renderApp('/')
 
-    expect(await screen.findByRole('link', { name: '設定' })).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: '帳號：skipper' }))
+    expect(screen.getByRole('link', { name: '設定' })).toBeInTheDocument()
     expect(screen.getByText('管理員')).toBeInTheDocument()
-    expect(screen.getByText('skipper')).toBeInTheDocument()
   })
 
   it('/settings 轉到第一個分頁 Jellyfin；頁首的「設定」在每個設定頁都標成當前頁（票 14a、06i）', async () => {
@@ -174,12 +174,12 @@ describe('角色', () => {
     const { router } = renderApp('/settings')
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/jellyfin'))
-    expect(await screen.findByRole('link', { name: '設定' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
+    await userEvent.click(await screen.findByRole('button', { name: '帳號：skipper' }))
+    expect(screen.getByRole('link', { name: '設定' })).toHaveAttribute('aria-current', 'page')
     await router.navigate({ to: '/settings/routes' })
     await waitFor(() => expect(router.state.location.pathname).toBe('/settings/routes'))
+    // 每一頁各包一層 `AppShell`：換頁之後選單是收著的。
+    await userEvent.click(await screen.findByRole('button', { name: '帳號：skipper' }))
     expect(screen.getByRole('link', { name: '設定' })).toHaveAttribute('aria-current', 'page')
   })
 
@@ -202,7 +202,8 @@ describe('角色', () => {
 
     renderApp('/')
 
-    expect(await screen.findByText('deckhand')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: '帳號：deckhand' }))
+    expect(screen.getByText('deckhand', { selector: 'p > span' })).toBeInTheDocument()
     expect(screen.getByText('使用者')).toBeInTheDocument()
   })
 
@@ -245,7 +246,8 @@ describe('角色', () => {
     })
     const { router } = renderApp('/')
 
-    await userEvent.click(await screen.findByRole('button', { name: '登出' }))
+    await userEvent.click(await screen.findByRole('button', { name: '帳號：skipper' }))
+    await userEvent.click(screen.getByRole('button', { name: '登出' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
   })
@@ -267,8 +269,8 @@ describe('角色', () => {
  */
 describe('一般使用者看不到修正與對帳的入口', () => {
   const NAV = {
-    admin: ['探索', '媒體庫', '下載', '審核', '待處理', 'RSS', '週報', '健康', '設定'],
-    user: ['探索', '媒體庫', '下載', '健康', '設定'],
+    admin: ['探索', '新番', '媒體庫', '下載', '待處理'],
+    user: ['探索', '媒體庫', '下載'],
   }
 
   it.each([

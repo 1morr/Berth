@@ -15,7 +15,7 @@
 - **導覽收斂**（不動後端邏輯，所有網址不變：Discord 週報連 `/weekly/{id}`，`services/deeplink.py`）：
   - 主導覽：探索、新番、媒體庫、下載、待處理（只有 admin，帶數字）。外面留助理開關與帳號選單。
   - 帳號選單：設定、健康、週報（只有 admin）、語言、登出，上面寫名字與角色。Berth 第一個下拉選單；`web/` 沒有 Radix，先用原生元素（`DESIGN.md`〈Navigation〉）。
-  - 待處理：頁內兩個分頁「審核」`/review`、「Issue」`/issues`，兩頁仍分開（ADR-0006）。數字是 `services.waiting.waiting_now` 的件數，文字標出、不只靠顏色；要多一支 admin 的讀取端點，新增 `/waiting` 進 `api/gate.py` 的 `ADMIN_PREFIXES`。
+  - 待處理：頁內兩個分頁「審核」`/review`、「Issue」`/issues`，兩頁仍分開（ADR-0006）。數字照 `services.waiting.waiting_now` 的來源各歸各頁（2026-11-04 使用者定）：待處理是審核加 Issue、待綁定的 RSS Series 掛在「新番」與「訂閱」分頁，三個數加起來仍是 Discord 那個 N；文字標出、不只靠顏色；要多一支 admin 的讀取端點，新增 `/waiting` 進 `api/gate.py` 的 `ADMIN_PREFIXES`。
 - **新番區塊**：導覽「新番」連 `/schedule`，分頁為時間表 `/schedule`（每個人）、追更 `/schedule/tracking`（admin）、訂閱 `/rss`（admin，原 RSS 頁）。
 - **時間表**：版面照 AutoBangumi Calendar（brief §20.3）。
   - 週一到週日分欄、今天標出，手機單日清單；預設列全部（AutoBangumi 只列已訂閱，這裡要拿來找新番），可切「只看已訂閱」。
