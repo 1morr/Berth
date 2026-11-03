@@ -5,6 +5,7 @@ import { meQueryOptions, SIGN_IN_KEY } from './api/auth'
 import { CLAIM_OWNER_KEY } from './api/setup'
 import { signedOut } from './api/client'
 import { routeTree } from './routes'
+import { waitingQueryOptions } from './api/waiting'
 
 /**
  * 每個查詢一個新的 client；路由守衛（routes.tsx）要用它讀 setup 狀態。
@@ -23,7 +24,22 @@ export function createQueryClient() {
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {
   const router = createRouter({ routeTree, context: { queryClient }, history })
   leaveOnSignOut(queryClient, () => void router.invalidate())
+  recountAfterActions(queryClient)
   return router
+}
+
+/**
+ * 任何動作結束都重讀頁首的件數（M5.5 票 07 code-review）：在 `/issues` 修掉最後一件之後，同一畫面上的
+ * 「Issue 1 件」不該再掛一分鐘。掛在快取上而不是每一個動作：會讓件數變的動作散在審核、Issue、RSS
+ * 三頁，漏一個就對不上。一般使用者的件數查詢沒開，失效不會發請求。
+ */
+function recountAfterActions(queryClient: QueryClient) {
+  queryClient.getMutationCache().subscribe((event) => {
+    if (event.type !== 'updated') return
+    const { status } = event.mutation.state
+    if (status !== 'success' && status !== 'error') return
+    void queryClient.invalidateQueries({ queryKey: waitingQueryOptions.queryKey })
+  })
 }
 
 /**

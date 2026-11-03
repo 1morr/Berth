@@ -7,9 +7,12 @@ import { AgentPanel, AgentToggle } from './agent/AgentPanel'
 import { usePanel } from './agent/panelState'
 import { useNarrow } from './agent/useNarrow'
 import { meQueryOptions } from './api/auth'
-import { GhostButton, NAV_LINK } from './components/controls'
+import { waitingQueryOptions } from './api/waiting'
+import { NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
-import { useSignOut } from './components/useSignOut'
+import { AccountMenu } from './nav/AccountMenu'
+import { SectionLink } from './nav/SectionLink'
+import { AIRING_PAGES, WAITING_PAGES } from './nav/sections'
 
 /**
  * setup 完成之後的頁面共用的外框。
@@ -36,26 +39,38 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Page({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
+  const me = useQuery(meQueryOptions)
 
   return (
     <>
-      {/* 頁首有八個 Tab 停留點；鍵盤使用者每換一頁都要先過完它們（票 15 audit）。
-          平常看不見，拿到焦點才浮出來。`not-sr-only` 會把 padding 歸零，所以浮出時的 padding
-          寫在 `focus:` 那一組（票 15 實跑量到 58×15px）。 */}
+      {/* 鍵盤使用者每換一頁都要先過完頁首的停留點（票 15 audit）。平常看不見，拿到焦點才浮出來。
+          `not-sr-only` 會把 padding 歸零，所以浮出時的 padding 寫在 `focus:` 那一組（票 15 實跑量到 58×15px）。 */}
       <a
         href="#main"
         className="label sr-only border-2 border-rule-strong bg-deck text-ink focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:px-4 focus:py-2.5"
       >
         {t('nav.skip')}
       </a>
+      {/* 桌機一列：應用名、導覽、靠右的助理與帳號選單。窄版導覽自己一整列、放不下就換行
+          （`order-last basis-full`），不收進漢堡選單：每一項與它的件數都看得到（M5.5 票 07）。 */}
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
         <div>
           <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
-          <p className="text-sm text-ink-dim">{t('app.tagline')}</p>
+          {/* 窄版收起副標：第一列才放得下應用名、助理與帳號選單（M5.5 票 07）。 */}
+          <p className="hidden text-sm text-ink-dim sm:block">{t('app.tagline')}</p>
         </div>
-        <span className="ml-auto">
-          <Identity />
-        </span>
+        {me.data && <MainNav admin={me.data.role === 'admin'} />}
+        <div className="ml-auto flex flex-wrap items-stretch gap-x-4 gap-y-2">
+          {me.data ? (
+            <>
+              {/* 不在導覽裡：它不換頁，是一顆開關（`aria-expanded`）。 */}
+              <AgentToggle />
+              <AccountMenu me={me.data} />
+            </>
+          ) : (
+            <LanguageToggle />
+          )}
+        </div>
       </header>
       {/* `tabIndex={-1}`：skip link 跳過來時焦點要真的落在這裡，下一個 Tab 才從內容開始。 */}
       <main id="main" tabIndex={-1} className="outline-none">
@@ -66,28 +81,14 @@ function Page({ children }: { children: ReactNode }) {
 }
 
 /** 導覽的一項。當前頁用重橫線標出來，不是靠顏色（狀態不只靠顏色，PRODUCT.md）。 */
-function NavLink({
-  to,
-  children,
-}: {
-  to:
-    | '/'
-    | '/library'
-    | '/jobs'
-    | '/review'
-    | '/issues'
-    | '/rss'
-    | '/weekly'
-    | '/health'
-    | '/settings'
-  children: ReactNode
-}) {
+function NavLink({ to, children }: { to: '/' | '/library' | '/jobs'; children: ReactNode }) {
   return (
     <Link
       to={to}
       // `/` 是每一條路徑的前綴，預設的模糊比對會讓探索永遠是「當前頁」。
       activeOptions={{ exact: to === '/' }}
-      className={`${NAV_LINK} px-4 py-2.5`}
+      // `inline-flex items-center`：導覽項一律拉到同一列的高度（帶件數的那兩格比較高），字要置中。
+      className={`${NAV_LINK} inline-flex items-center px-4 py-2.5`}
     >
       {children}
     </Link>
@@ -95,48 +96,37 @@ function NavLink({
 }
 
 /**
- * 誰登入了、他是什麼角色、他能去哪裡（票 07）。
+ * 主導覽（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）：探索、新番、媒體庫、下載、待處理。
  *
- * 角色用**中性色塊**：四個信號色各自只有一個意思，角色不是狀態，不能借用它們。
- * 它仍然要看得見——`user` 因此知道自己為什麼沒有「設定」那顆按鈕，而不是以為壞了。
+ * 新番與待處理只有 admin（後端同時回 403）：新番這一票只有訂閱（聚合 feed 的網址帶 token，綁定會替
+ * 整個家送單），M5.5 票 09 加了時間表才給每個人。件數各歸各頁：待處理是審核加 Issue、新番是待綁定，
+ * 加起來就是 Discord「有 N 件等你處理」的 N。
+ *
+ * 導覽是 landmark：螢幕閱讀器的地標清單跳得到它（M0 的 critique 記過，票 15 收掉）。
  */
-function Identity() {
+function MainNav({ admin }: { admin: boolean }) {
   const { t } = useTranslation()
-  const me = useQuery(meQueryOptions)
-  const leave = useSignOut()
+  const counts = useQuery({ ...waitingQueryOptions, enabled: admin }).data
 
-  if (!me.data) return <LanguageToggle />
-
-  // `items-stretch`：語言切換原本比旁邊兩顆按鈕矮一截，這一列才對得齊。
   return (
-    <div className="flex flex-wrap items-stretch gap-x-4 gap-y-2">
-      <span className="flex items-center gap-2">
-        <span className="label bg-deck px-2 py-1.5 text-ink">{t(`role.${me.data.role}`)}</span>
-        <span className="value text-sm text-ink">{me.data.name}</span>
-      </span>
-      {/* 導覽是 landmark：螢幕閱讀器的地標清單跳得到它（M0 的 critique 記過，票 15 收掉）。 */}
-      <nav aria-label={t('nav.label')} className="flex flex-wrap items-stretch gap-x-4 gap-y-2">
-        <NavLink to="/">{t('nav.discover')}</NavLink>
-        <NavLink to="/library">{t('nav.inventory')}</NavLink>
-        <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
-        {/* 審核與待處理同一個規則：審核與修正是 admin 的事（plan §6），後端同時回 403。 */}
-        {me.data.role === 'admin' && <NavLink to="/review">{t('nav.review')}</NavLink>}
-        {me.data.role === 'admin' && <NavLink to="/issues">{t('nav.issues')}</NavLink>}
-        {/* RSS 同一個規則（M3 票 08）：聚合 feed 的網址帶 token，綁定會替整個家送單。 */}
-        {me.data.role === 'admin' && <NavLink to="/rss">{t('nav.rss')}</NavLink>}
-        {/* 週報同一個規則（M4 票 131）：後端的門禁在 `/weekly`。 */}
-        {me.data.role === 'admin' && <NavLink to="/weekly">{t('nav.weekly')}</NavLink>}
-        <NavLink to="/health">{t('nav.health')}</NavLink>
-        {/* 連 `/settings` 而不是第一個分頁：前綴比對讓它在兩個設定頁上都是當前頁（票 14a）。
-            每個人都有：一般使用者的設定只有通知那一頁，`/settings` 把他帶到那裡（M4 票 125）。 */}
-        <NavLink to="/settings">{t('nav.settings')}</NavLink>
-      </nav>
-      {/* 不在導覽裡：它不換頁，是一顆開關（`aria-expanded`）。 */}
-      <AgentToggle />
-      <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>
-        {leave.isPending ? t('nav.signingOut') : t('nav.signOut')}
-      </GhostButton>
-      <LanguageToggle />
-    </div>
+    <nav
+      aria-label={t('nav.label')}
+      className="order-last flex basis-full flex-wrap items-stretch gap-2 sm:order-none sm:basis-auto sm:gap-x-4"
+    >
+      <NavLink to="/">{t('nav.discover')}</NavLink>
+      {admin && (
+        <SectionLink to="/rss" pages={AIRING_PAGES} label={t('nav.airing')} count={counts?.rss} />
+      )}
+      <NavLink to="/library">{t('nav.inventory')}</NavLink>
+      <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
+      {admin && (
+        <SectionLink
+          to="/review"
+          pages={WAITING_PAGES}
+          label={t('nav.waiting')}
+          count={counts && counts.review + counts.issue}
+        />
+      )}
+    </nav>
   )
 }

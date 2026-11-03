@@ -365,8 +365,9 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 
 ## Layout
 
-**外框。** 頁首是一條 `border-b-2 border-rule-strong` 的重橫線帶，左側應用名與副標，右側依序是
-角色色塊、導覽、登出、`ZH / EN` 語言鍵。`main` 不設寬度上限：泊位板是整寬橫幅，每一頁自己決定內文欄寬。
+**外框。** 頁首是一條 `border-b-2 border-rule-strong` 的重橫線帶：應用名與副標、主導覽，靠右是助理開關與帳號選單
+（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）。窄版（`sm` 以下）收起副標，主導覽自己一整列（`order-last basis-full`）、
+放不下就換行，不收進漢堡選單：每一項與它的件數都看得到。`main` 不設寬度上限：泊位板是整寬橫幅，每一頁自己決定內文欄寬。
 頁首之前有一條 skip link（平常 `sr-only`，拿到焦點才以 `deck` 底 + `rule-strong` 框浮在左上角），
 跳到 `main#main`（`tabIndex={-1}`，焦點真的落在內容上，下一個 Tab 才從內容開始）。
 
@@ -645,7 +646,20 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。單選的篩選列
   （媒體庫、下載列表、作品頁的下載段）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
-- `設定` 只對 `admin` 顯示；角色本身以中性色塊呈現，讓 `user` 知道自己為什麼沒有那顆按鈕。
+- **主導覽五項**（M5.5 票 07）：探索、新番、媒體庫、下載、待處理；新番與待處理只有 `admin`。一項管一個區塊：區塊裡任一頁都是當前
+  （`nav/SectionLink`，`NAV_BOX_ACTIVE`），連結指的那一頁是 `aria-current="page"`、區塊的別頁是 `"true"`。區塊頁在 `<h1>` 上方掛一條
+  分頁列（`nav/SectionTabs`，形狀同 `SettingsTabs`）：待處理是審核 `/review`、Issue `/issues`，新番是訂閱 `/rss`。
+- **件數**（`nav/CountChip`）：標籤後面一塊 `assigned` 的 `.value` 數字（不是 `.label`：數字不要刻度），0 件、讀不到時不畫。
+  每分鐘重讀，任何動作結束也重讀（`router.ts` 的 `recountAfterActions`）。
+  看得見的是數字（`aria-hidden`），聽得見的是連結的 `aria-label`「待處理 3 件」——不用 sr-only 補字，標籤與它之間的空白在 jsdom
+  與瀏覽器的無障礙樹裡留不留得住不一樣。各歸各頁：待處理是審核加 Issue、新番是待綁定的 RSS Series，加起來是 Discord 的 N。
+  有 `.label` 的方塊裡不要用 `gap` 排件數：刻度是 `::before`，在 flex 裡是一個 flex 項，`gap` 會把它和字拆開（件數用 `ml-2`）。
+- **帳號選單**（`nav/AccountMenu`，Berth 第一個下拉）：觸發鍵是 `NAV_BOX`，內容是名字（`.value`，不被 `.label` 大寫）加 `▾`，
+  `aria-expanded`、可存取名稱「帳號：<名字>」；設定、健康、週報是當前頁時畫成當前並掛 `aria-current="true"`（展開不換漆）。面板在觸發鍵下方靠右，`deck` 底 +
+  `border-2 border-rule-strong`（沒有陰影）：名字與角色色塊、設定 / 健康 / 週報（`admin`）一列一個 `NAV_LINK`、語言鍵、登出。
+  是 disclosure 不是 `role="menu"`（WAI-ARIA APG 的 Disclosure Navigation Menu）：Tab 依序走、不搶方向鍵。`Esc` 收起、焦點回到觸發鍵；
+  Tab 走出去或點外面收起、焦點不動；點連結收起，換語言不收。不用 `<details>`（`Esc` 與點外面不收）也不用 `popover`（jsdom 沒有）。
+- 角色以中性色塊呈現（在帳號選單裡），讓 `user` 知道自己為什麼沒有那幾顆按鈕。
 - 語言鍵（`LanguageToggle`）是 `role="group"` 加兩顆 `aria-pressed` 按鈕，選中那顆是 `deck` 底 + `ink` 字
   （同角色色塊的中性方塊），未選中沉一階到 `well` 底 + `ink-dim` 字，兩顆之間 1px 縫。語言是角色不是狀態
   （The Role Is Not A State Rule），所以這裡沒有信號色；閘門是 `LanguageToggle.test.tsx`。

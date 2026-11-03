@@ -435,6 +435,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 週報（M4 票 131）。
     ("GET", "/weekly"): Access.ADMIN,
     ("GET", "/weekly/*"): Access.ADMIN,
+    ("GET", "/waiting"): Access.ADMIN,
     ("GET", "/reconcile"): Access.ADMIN,
     ("POST", "/reconcile"): Access.ADMIN,
     ("DELETE", "/jobs/*"): Access.ADMIN,

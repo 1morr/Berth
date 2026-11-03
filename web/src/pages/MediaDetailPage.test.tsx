@@ -17,6 +17,7 @@ import {
 } from '../test/fetch'
 import { FakeEventSource } from '../test/eventSource'
 import { renderApp } from '../test/render'
+import { switchToEnglish } from '../test/language'
 
 /** 每日補漏的說明（M4 票 108）：與 RSS 頁 RSS Series 段落那一句相同（`RssPage.test.tsx`）。 */
 const BACKFILL_LEDE =
@@ -322,7 +323,7 @@ describe('Media 詳情頁', () => {
     await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
     const fetched = api.mock.calls.length
 
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish()
 
     const heading = await screen.findByRole('heading', { level: 1, name: 'SPY x FAMILY' })
     // 標題那一組裡只印一次（搜尋區塊的關鍵字預覽裡也有這串字，那不算）。
@@ -346,7 +347,7 @@ describe('Media 詳情頁', () => {
     await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
     expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/spy.jpg')
 
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish()
 
     await screen.findByRole('heading', { level: 1, name: 'SPY x FAMILY' })
     expect(poster()).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/spy-en.jpg')
@@ -394,7 +395,7 @@ describe('Media 詳情頁', () => {
     renderApp('/media/tv:120089')
     await screen.findByRole('heading', { level: 1, name: 'SPY×FAMILY 間諜家家酒' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish()
 
     await screen.findByRole('heading', { level: 1, name: 'SPY x FAMILY' })
     expect(screen.queryByText('互相隱藏了真實身份的新家庭。')).not.toBeInTheDocument()

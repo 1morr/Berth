@@ -9,12 +9,10 @@ import { shot } from './shot.ts'
 
 // `weekly`：產品自己的 `compose_weekly` 產生最近兩週（M4 票 131）。上一週入庫一部、什麼都沒修、
 // 沒有等人的；最新一週入庫三部（芙莉蓮、一部作品名很長的、一部電影），修了九件，產生當下等著七件。
-test('/weekly 從導覽進去，看最新一週三段、翻到上一週、找不到的那一週', async ({ page }) => {
+test('/weekly 從帳號選單進去，看最新一週三段、翻到上一週、找不到的那一週', async ({ page }) => {
   await signIn(page, '/health')
-  await page
-    .getByRole('navigation', { name: '主要導覽' })
-    .getByRole('link', { name: '週報' })
-    .click()
+  await page.getByRole('button', { name: '帳號：skipper' }).click()
+  await page.getByRole('link', { name: '週報' }).click()
   await expect(page).toHaveURL('/weekly')
   await expect(page.getByRole('heading', { level: 1, name: '週報' })).toBeVisible()
 

@@ -2684,6 +2684,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Waiting */
+        get: operations["read_waiting_api_waiting_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/weekly": {
         parameters: {
             query?: never;
@@ -7149,6 +7166,18 @@ export interface components {
             tags: string;
             /** Job Hash */
             job_hash: string;
+        };
+        /**
+         * WaitingCountsOut
+         * @description 三格加起來就是 Discord「有 N 件等你處理」的 N。
+         */
+        WaitingCountsOut: {
+            /** Review */
+            review: number;
+            /** Issue */
+            issue: number;
+            /** Rss */
+            rss: number;
         };
         /**
          * WatchAreaOut
@@ -12777,6 +12806,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_waiting_api_waiting_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingCountsOut"];
                 };
             };
         };

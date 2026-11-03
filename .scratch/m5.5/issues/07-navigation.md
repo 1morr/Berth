@@ -1,6 +1,6 @@
 # 07 — 導覽收斂
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None (can start immediately)
 
@@ -23,8 +23,22 @@
 
 ## 驗收
 
-- [ ] 一般使用者的頁首只有探索、媒體庫、下載與帳號選單；管理員多新番（只有「訂閱」分頁）與帶數字的待處理（e2e，桌機與 390px）
-- [ ] 舊網址（`/rss`、`/review`、`/issues`、`/settings`、`/health`、`/weekly`）與 Discord 週報的 `/weekly/{id}` 連結都打得開（e2e）
-- [ ] 帳號選單用鍵盤打得開、關得掉，焦點回到按鈕（vitest 或 e2e）
-- [ ] `/waiting` 對一般使用者 403（`TestWhoEachEndpointIsFor`）
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+- [x] 一般使用者的頁首只有探索、媒體庫、下載與帳號選單；管理員多新番（只有「訂閱」分頁）與帶數字的待處理（e2e，桌機與 390px）
+- [x] 舊網址（`/rss`、`/review`、`/issues`、`/settings`、`/health`、`/weekly`）與 Discord 週報的 `/weekly/{id}` 連結都打得開（e2e）
+- [x] 帳號選單用鍵盤打得開、關得掉，焦點回到按鈕（vitest 或 e2e）
+- [x] `/waiting` 對一般使用者 403（`TestWhoEachEndpointIsFor`）
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+
+## Comments
+
+- 2026-11-04 件數各歸各頁（使用者定）：待處理＝審核＋Issue、待綁定掛在新番與訂閱分頁；三格加總等於 Discord 的 N，`tests/integration/test_notify_waiting.py` 守。偏差記在 progress.md。
+- `/issues` 的標題改成「Issue」、`/rss` 的標題改成「訂閱」：「待處理」「新番」留給區塊，分頁名與頁名一致。
+- 窄版收起副標（實跑 390 時頁首變三列），寫回 shape。
+- 帳號選單是 disclosure（APG Disclosure Navigation Menu），不是 `role="menu"`。
+- code-review 已處理：`Esc` 多餘的 `stopPropagation`、動作後件數不失效（改成 `router.ts` 的 `recountAfterActions`）、觸發鍵展開與當前同一個樣子（改成只在選單頁上畫當前並掛 `aria-current="true"`）、`countedName` 走不到的分支、英文「Waiting, 3 waiting」、`waiting_counts` 改用 `Counter`；補測新番只有訂閱分頁、`/review` 上 `aria-current="page"`。
+- code-review 未處理：
+  - 區塊的設定散在 `sections.ts`、`SectionLink` 的 `to` 型別、`SectionTabs`、`AppShell` 四處（Shotgun Surgery）。票 09 加 `/schedule` 時收成一個區塊物件（`to`、`pages`、分頁、件數怎麼算），一起改。
+  - `SectionTabs` 的 `Tab` 與 `SectionLink` 形狀相近，但一個用 `NAV_LINK` 的 `data-status`、一個自己算區塊當前，先不合。
+  - 焦點從選單最後一項 Tab 到瀏覽器介面（`relatedTarget` 是 `null`）時選單不收；與點選單內不可聚焦處同一條路，接受。
+
+驗證（2026-11-04）：`uv run pre-commit run --all-files` 全過；`uv run pytest -n auto` 5432 passed、1 skipped；`pnpm -C web test` 2354 passed；`pnpm -C web e2e` 81 passed（含 `navigation` 與 `navigation-390`）。

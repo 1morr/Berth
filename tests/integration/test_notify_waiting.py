@@ -24,6 +24,7 @@ from berth.models import BerthSettings, Issue, RssSeries, User
 from berth.services.issues import ignore_issue, note_cleared, record_issue
 from berth.services.notify import WAIT_WINDOW, send_due, set_mine, watch_waiting
 from berth.services.settings import write_settings
+from berth.services.waiting import waiting_counts
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_notify import ADMIN_ID, CREW_ID, SECOND_ADMIN_ID, person, with_bot
 from tests.integration.test_plan import NOW
@@ -113,6 +114,10 @@ class TestOneMessagePerWave:
             "新增 3 件：1 件待審核、1 個 Issue（無主目錄）、1 個 RSS Series 待綁定"
         )
         assert message.fields == (("待審核", "1"), ("Issue", "1"), ("待綁定", "1"))
+        # 頁首的件數（M5.5 票 07）分在待處理與新番兩格，三格加起來仍是標題那個 N。
+        counts = await waiting_counts(session)
+        assert (counts.review, counts.issue, counts.rss) == (1, 1, 1)
+        assert f"有 {counts.review + counts.issue + counts.rss} 件等你處理" == message.title
         # 沒存 Berth 的網址：照送、不附連結。
         assert message.links == ()
         # 一則就是一則：之後再跑也不重送。

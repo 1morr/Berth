@@ -796,6 +796,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 | rss | `/rss/*`（細節見下） | `rss.*` |
 | issues | `GET /issues`、`POST /issues/{id}/resolve`、`/ignore`、`POST\|GET /reconcile`、`GET\|POST /issues/rebuild-ledger` | `reconcile`、`issues.<action>`（每顆一個）、`issues.ignore_issue`、`ledger_rebuild.read_ledger_gap`、`ledger_rebuild.rebuild_ledger` |
 | weekly | `GET /weekly`、`GET /weekly/{id}` | `weekly.*` |
+| waiting | `GET /waiting` | `waiting.waiting_counts` |
 | agent | `POST /agent/chat`、`/agent/conversations/{id}`（`GET`、`/stream`、`/stop`、`/commands`）、`GET /agent/status`、`GET /agent/runs/{id}` | `agent.open_turn`、`agent.start_turn`、`agent.read_conversation`、`agent.stop_turn`、`agent.read_status`、`usage.read_run`、`slash.run_slash` |
 | proposals | `GET /proposals`、`POST /proposals/{id}/decide` | `proposals.*` |
 | health | `GET /health`、`GET /health/detail`、`POST /health/check` | `health.*` |
@@ -1140,6 +1141,10 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - `GET /weekly`：每一份一列，最新的一週在前。`first_day` / `last_day` 是容器時區的週一到週日；`works`、`episodes`、`fixed`、`waiting` 是三段的數。
 - `GET /weekly/{id}`：產生那一刻存下的三段：`imported`（依作品的季集範圍）、`fixed`、`waiting`；沒有這一份 404。
 
+#### waiting
+
+只有 admin（M5.5 票 07）。`GET /waiting` 回 `{review, issue, rss}`：「有 N 件等你處理」那一份清單（`waiting.waiting_now`）照來源數，三格加起來就是 N。頁首的「待處理」是 `review + issue`、「新番」是 `rss`，區塊分頁各自一格。
+
 #### agent
 
 登入就能用（[ADR-0016](adr/0016-ai-agent-architecture.md)）。
@@ -1244,13 +1249,13 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 | `/library` | 導向這位使用者的第一個媒體庫 |
 | `/library/:libraryId` | 媒體庫的牆。`?page=`；`?filter=review\|unmatched`（只有 admin）；`?sort=&order=&genres=&years=`；`?q=`（按名字找）。舊的 `/library/:routeSlug` 不留轉址 |
 | `/jobs`、`/jobs/:hash` | 下載列表、Job 詳情 |
-| `/review` | 審核佇列 |
-| `/rss` | 只有 admin。由上而下：待綁定 → Feed → 綁好的 RSS Series → 最近的 Feed Item。綁定在待綁定那一列就地展開（設計理由：`.scratch/m3/rss-shape.md`、`.scratch/m4/rss-series-shape.md`）。綁好的 Series 作品一塊、字幕組一列，展開看它的 Item；Series 層排除條件在展開區的「進階」；完結的收在段尾預設收起的「已完結」。Feed Item 每一列說出 Feed 與 Series |
-| `/issues` | Issue |
-| `/weekly`、`/weekly/:reportId` | 週報（admin） |
-| `/health` | 健康頁，唯讀診斷，一般使用者也進得去 |
+| `/review` | 審核佇列。頁首「待處理」連這裡；與 `/issues` 共用一條分頁列（審核、Issue，各帶件數），兩頁仍分開（ADR-0006） |
+| `/rss` | 只有 admin。「新番」區塊的「訂閱」分頁（M5.5 票 07；票 09 起區塊另有時間表 `/schedule`）。由上而下：待綁定 → Feed → 綁好的 RSS Series → 最近的 Feed Item。綁定在待綁定那一列就地展開（設計理由：`.scratch/m3/rss-shape.md`、`.scratch/m4/rss-series-shape.md`）。綁好的 Series 作品一塊、字幕組一列，展開看它的 Item；Series 層排除條件在展開區的「進階」；完結的收在段尾預設收起的「已完結」。Feed Item 每一列說出 Feed 與 Series |
+| `/issues` | Issue，屬於「待處理」區塊 |
+| `/weekly`、`/weekly/:reportId` | 週報（admin），入口在帳號選單 |
+| `/health` | 健康頁，唯讀診斷，一般使用者也進得去；入口在帳號選單 |
 | `/agent/runs/:runId` | 一輪的步驟；側面板每一則回覆連過來。登入就進得來，後端只給這個人自己的（管理員看得到全部） |
-| `/settings` | 管理員導向 `/settings/jellyfin`，一般使用者導向 `/settings/notifications`。頁首的「設定」連這裡，在每個設定頁上都是當前頁 |
+| `/settings` | 管理員導向 `/settings/jellyfin`，一般使用者導向 `/settings/notifications`。帳號選單的「設定」連這裡，在每個設定頁上都是當前頁 |
 | `/settings/jellyfin`、`/qbittorrent`、`/routes`、`/indexers`、`/tmdb` | **一格泊位一頁，分頁照泊位板的順序**，共用一條子分頁列（對應表在 `components/berths.ts`；`.scratch/m3/settings-shape.md`） |
 | `/settings/notifications` | 通知；每一位登入的人都進得來（每個人有自己的那一半：Discord ID、要收的種類），bot 那一半由頁面照角色收起來，後端的 `/settings/notifications` 照樣 403 |
 | `/settings/ai`、`/settings/usage` | AI provider、AI 用量；不是泊位，只有管理員 |
@@ -1267,7 +1272,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - **任何請求回 401**（讀資料或按鈕）都重跑守衛、同一條路送回登入頁，登入後回到原本那一頁（`router.ts`）。
 - `/settings/*` 只放行 `admin`（通知例外，見上表）。精靈完成後 `/setup` 把 `admin` 導向 `/settings`、其他人導向 `/`：**精靈只管第一次**。
 - 缺憑證、缺 Route、服務紅燈這類「去補上」的連結一律指設定頁的那一頁，只給 `admin`（`SettingsHint`）。
-- 頁首顯示角色、導覽（健康 / 設定）與登出，`admin` 才看得到設定入口。前端隱藏不是安全機制，後端同時回 403。
+- 頁首（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）：主導覽是探索、新番（admin）、媒體庫、下載、待處理（admin），外面是助理開關與帳號選單（名字與角色、設定、健康、週報（admin）、語言、登出）。新番與待處理帶件數（`GET /waiting`）：待處理是審核加 Issue、新番是待綁定，各歸點進去看得到的那一頁。前端隱藏不是安全機制，後端同時回 403。
 
 ### 資料與互動
 
