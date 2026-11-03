@@ -54,8 +54,8 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05b-cumulative-next-aired-guard.md` |
 | 2026-11-04 | M5.5 05b 累計編號下一集已播 | 累計編號的第一批要下一集晚於發佈加兩天才擔保，TMDB 前季多記一集改擋下；照字面不套。閘門前後相同、擔保錯 0，SPY×FAMILY 仍擔保；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
 | 2026-11-04 | M5.5 06 升級後自動重算 | 啟動時舊版本的 review（排除 user、audit_undone）退回 completed，規劃器在背景重算並蓋新版本；同版本重啟 TMDB 0 次 | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
-| 2026-11-04 | M5.5 06 CI 偶發紅 | RSS 少送因送單門檻量到 CI 機器真實磁碟（`low_disk_space`），非本票；測試預設 1 TiB（`test_host_disk.py`） | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
 | 2026-11-04 | M5.5 08 時間表資料源 | 這週有集的日本作品 TMDB 列得出 93.4% / 90.8%，主幹照 TMDB；漏的是迷你番與兒童節目（brief §20.3） | 新 session 下 `/implement .scratch/m5.5/issues/09-schedule.md` |
+| 2026-11-04 | M5.5 06 CI 偶發紅 | RSS 少送因送單門檻量到 CI 機器真實磁碟（`low_disk_space`），非本票；測試預設 1 TiB（`test_host_disk.py`） | 新 session 下 `/implement .scratch/m5.5/issues/10-overdue-issue.md` |
 
 ## 偏差與決定
 
