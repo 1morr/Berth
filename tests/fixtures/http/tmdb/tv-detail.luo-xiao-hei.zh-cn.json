@@ -1,0 +1,149 @@
+{
+  "adult": false,
+  "backdrop_path": "/zAozwV3l9bvcGzDUsDYvbOryBKY.jpg",
+  "created_by": [
+    {
+      "id": 2377386,
+      "credit_id": "5d76d48112970c00139c3b66",
+      "name": "MTJJ",
+      "original_name": "MTJJ",
+      "gender": 2,
+      "profile_path": "/efpX3wZCpQ24uzUpKrWHxQXhc2m.jpg"
+    }
+  ],
+  "episode_run_time": [
+    7
+  ],
+  "first_air_date": "2011-03-17",
+  "genres": [
+    {
+      "id": 16,
+      "name": "动画"
+    },
+    {
+      "id": 10765,
+      "name": "Sci-Fi & Fantasy"
+    }
+  ],
+  "homepage": "https://www.bilibili.com/bangumi/media/md1733",
+  "id": 88319,
+  "in_production": true,
+  "languages": [
+    "zh"
+  ],
+  "last_air_date": "2026-10-30",
+  "last_episode_to_air": {
+    "id": 6803610,
+    "name": "开始学习吧小黑同学",
+    "overview": "",
+    "vote_average": 10.0,
+    "vote_count": 1,
+    "air_date": "2026-10-30",
+    "episode_number": 41,
+    "episode_type": "standard",
+    "production_code": "",
+    "runtime": 11,
+    "season_number": 1,
+    "show_id": 88319,
+    "still_path": "/kyzMzkreyeK22HI2oGWeMWtG19c.jpg"
+  },
+  "name": "罗小黑战记",
+  "next_episode_to_air": {
+    "id": 7976425,
+    "name": "第 2 集",
+    "overview": "",
+    "vote_average": 0.0,
+    "vote_count": 0,
+    "air_date": "2026-11-06",
+    "episode_number": 2,
+    "episode_type": "standard",
+    "production_code": "",
+    "runtime": null,
+    "season_number": 2,
+    "show_id": 88319,
+    "still_path": null
+  },
+  "networks": [
+    {
+      "id": 1605,
+      "logo_path": "/cdRh1NZIUaqDUhwjgqWbp6zhWHK.png",
+      "name": "bilibili",
+      "origin_country": "CN"
+    }
+  ],
+  "number_of_episodes": 51,
+  "number_of_seasons": 2,
+  "origin_country": [
+    "CN"
+  ],
+  "original_language": "zh",
+  "original_name": "罗小黑战记",
+  "overview": "《罗小黑战记》是中国大陆独立动画制作人MTJJ及其工作室制作的网络连载漫画及动画剧集系列作品。\n\n猫妖小黑盗取天明珠被谛听发现，被打回原形重伤而逃，在流落街头之时被罗小白带回了家，起名罗小黑。有一天小黑突然变成了人形，告诉小白自己要暂时离开去完成师父交给自己的任务。却在离开之后因为师傅交给自己的任务又回到了小白身边，等待着他们的会是什么呢……",
+  "popularity": 11.3347,
+  "poster_path": "/1BfuESuEwnahwRwIXQeLLv87lB.jpg",
+  "production_companies": [
+    {
+      "id": 152035,
+      "logo_path": "/uh2Q6PLOOy9HZPIM5Hn92IPn2XY.png",
+      "name": "HMCH",
+      "origin_country": "CN"
+    },
+    {
+      "id": 130588,
+      "logo_path": "/xg3PzKFsYxTsbqWlYVR70HNZNI9.png",
+      "name": "MTJJ",
+      "origin_country": ""
+    }
+  ],
+  "production_countries": [
+    {
+      "iso_3166_1": "CN",
+      "name": "China"
+    }
+  ],
+  "seasons": [
+    {
+      "air_date": "2011-07-10",
+      "episode_count": 5,
+      "id": 132679,
+      "name": "特别篇",
+      "overview": "",
+      "poster_path": "/bDhBjhFknuPx3mcCInuTa3XaQmw.jpg",
+      "season_number": 0,
+      "vote_average": 0.0
+    },
+    {
+      "air_date": "2011-03-17",
+      "episode_count": 45,
+      "id": 122001,
+      "name": "第 1 季",
+      "overview": "雨夜，一只流落街头的小黑猫，被少女罗小白（山新 配音）带回家，起名罗小黑。罗小黑不是一只普通的猫咪，它极通人性，会上厕所，不吃猫粮，长长的尾巴甚至会分裂成一个个名为“嘿咻”的不明生物体。另一方面，名为“谛听”（皇贞季 配音）的神秘人物，发动手下三匹会幻化成鸟的狼，搜寻着罗小黑的下落。不久，罗小白带着小黑到乡下探望堂哥阿根和爷爷，由此发生了种种离奇玄幻事件。",
+      "poster_path": "/1BfuESuEwnahwRwIXQeLLv87lB.jpg",
+      "season_number": 1,
+      "vote_average": 10.0
+    },
+    {
+      "air_date": "2026-10-30",
+      "episode_count": 6,
+      "id": 441305,
+      "name": "学前篇",
+      "overview": "",
+      "poster_path": "/egintNFPx01rVMkXC2Bwo0I6aYS.jpg",
+      "season_number": 2,
+      "vote_average": 8.0
+    }
+  ],
+  "softcore": false,
+  "spoken_languages": [
+    {
+      "english_name": "Mandarin",
+      "iso_639_1": "zh",
+      "name": "普通话"
+    }
+  ],
+  "status": "Returning Series",
+  "tagline": "",
+  "type": "Scripted",
+  "vote_average": 9.2,
+  "vote_count": 24
+}

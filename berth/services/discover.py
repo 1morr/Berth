@@ -236,15 +236,15 @@ def _card(
         title=shown.title or entry.title,
         title_en=entry.title,
         year=entry.year,
-        poster_url=_poster(shown.poster_path or entry.poster_path, base),
-        poster_url_en=_poster(entry.poster_path, base),
+        poster_url=poster_url(shown.poster_path or entry.poster_path, base),
+        poster_url_en=poster_url(entry.poster_path, base),
         animation=entry.animation,
     )
 
 
-def _poster(path: str, base: str) -> str:
-    """沒有海報路徑或沒有圖片基底時是空字串——半條網址只會變成一個破圖。"""
-    return f"{base}{POSTER_SIZE}{path}" if path and base else ""
+def poster_url(path: str, base: str, size: str = POSTER_SIZE) -> str:
+    """沒有海報路徑或沒有圖片基底時是空字串——半條網址只會變成一個破圖。時間表的縮圖另給 `size`。"""
+    return f"{base}{size}{path}" if path and base else ""
 
 
 def _interleave(*lists: tuple[MediaCard, ...]) -> tuple[MediaCard, ...]:

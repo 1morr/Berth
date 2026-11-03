@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
+from datetime import date
 
 from berth.adapters.http import NotFoundError
 from berth.adapters.tmdb import (
@@ -11,6 +12,7 @@ from berth.adapters.tmdb import (
     TmdbConfiguration,
     TmdbDetail,
     TmdbEntry,
+    TmdbPage,
     TmdbSeason,
     TmdbSeasonEntry,
 )
@@ -41,6 +43,8 @@ class FakeTmdbClient:
         details: Sequence[TmdbDetail] = (),
         seasons: Mapping[int, Sequence[TmdbSeason]] | None = None,
         ordering: Mapping[str, Mapping[tuple[int, int], int]] | None = None,
+        airing: Sequence[TmdbEntry] = (),
+        page_size: int = 20,
     ) -> None:
         self._configuration = configuration or TmdbConfiguration(
             image_base_url="https://image.tmdb.org/t/p/"
@@ -78,6 +82,12 @@ class FakeTmdbClient:
             for season in rows
         }
         self._ordering = {key: dict(value) for key, value in (ordering or {}).items()}
+        #: `discover/tv` 回的劇集（時間表，M5.5 票 09），照 `page_size` 分頁。條件不篩：測試要的是
+        #: 「這一週 TMDB 列得出哪幾部」，那是錄進來的答案，不是替身算出來的。公開的，同 `details`。
+        self.airing = list(airing)
+        self._page_size = page_size
+        #: 每一次 `discover/tv` 帶的 `(aired_from, aired_to, 原文)`。
+        self.discover_queries: list[tuple[date, date, tuple[str, ...]]] = []
 
     async def configuration(self) -> TmdbConfiguration:
         self.calls += 1
@@ -98,6 +108,24 @@ class FakeTmdbClient:
         self.requests.append((f"search/{query}", language))
         self._raise()
         return self._localised(self.search_results.get(query, ()), language)
+
+    async def discover_tv(
+        self,
+        *,
+        genre: int,
+        original_languages: Sequence[str],
+        aired_from: date,
+        aired_to: date,
+        page: int,
+        language: str,
+    ) -> TmdbPage:
+        self.requests.append((f"discover/tv/{page}", language))
+        self.discover_queries.append((aired_from, aired_to, tuple(original_languages)))
+        self._raise()
+        start = (page - 1) * self._page_size
+        rows = self.airing[start : start + self._page_size]
+        pages = max(1, -(-len(self.airing) // self._page_size))
+        return TmdbPage(self._localised(rows, language), page=page, total_pages=pages)
 
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
         self.requests.append((f"detail/{kind.value}/{tmdb_id}", language))

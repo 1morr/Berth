@@ -24,6 +24,7 @@ from berth.api import (
     review,
     routes,
     rss,
+    schedule,
     search,
     settings,
     setup,
@@ -54,6 +55,7 @@ router.include_router(proposals.router)
 router.include_router(review.router)
 router.include_router(routes.router)
 router.include_router(rss.router)
+router.include_router(schedule.router)
 router.include_router(search.router)
 router.include_router(settings.router)
 router.include_router(setup.router)

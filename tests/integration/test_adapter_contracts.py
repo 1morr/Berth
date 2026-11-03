@@ -53,7 +53,13 @@ from berth.adapters.qbittorrent import (
 )
 from berth.adapters.qbittorrent.client import HttpQbittorrentClient
 from berth.adapters.rate import TokenBucket
-from berth.adapters.tmdb import TmdbEntry, parse_absolute_ordering, parse_detail, parse_entries
+from berth.adapters.tmdb import (
+    TmdbEntry,
+    TmdbEpisode,
+    parse_absolute_ordering,
+    parse_detail,
+    parse_entries,
+)
 from berth.adapters.tmdb.client import RATE_PER_SECOND, HttpTmdbClient
 from berth.domain import CollectionType, MediaKind, SiteFailure, SortOrder
 from berth.services.indexer import DEFAULT_INDEXERS
@@ -3660,3 +3666,75 @@ async def test_jellyfin_next_up_of_one_show_is_where_this_user_carries_on(
         found.episode_start,
         found.user_data.played_percentage,
     ) == expected
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_discover_tv_sends_the_schedule_filters_and_reads_the_page_count() -> None:
+    """時間表的條件（M5.5 票 09，brief §20.3）：動畫、`ja|zh`、`air_date` 一段期間；
+    `total_pages` 決定再讀幾頁。
+
+    discover 的每一筆沒有 `media_type`（同 `{tv,movie}/popular`），型別由端點決定。
+    """
+    route = respx.get(f"{TMDB_URL}/discover/tv").respond(
+        200, text=read_fixture("http/tmdb/discover-tv.airing.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        found = await client.discover_tv(
+            genre=16,
+            original_languages=("ja", "zh"),
+            aired_from=date(2026, 11, 1),
+            aired_to=date(2026, 11, 9),
+            page=1,
+            language="en-US",
+        )
+    finally:
+        await client.aclose()
+
+    sent = route.calls.last.request.url.params
+    assert sent["with_genres"] == "16"
+    assert sent["with_original_language"] == "ja|zh"
+    assert (sent["air_date.gte"], sent["air_date.lte"]) == ("2026-11-01", "2026-11-09")
+    assert (sent["page"], sent["language"]) == ("1", "en-US")
+    assert (found.page, found.total_pages) == (1, 9)
+    assert [entry.tmdb_id for entry in found.entries][:2] == [57775, 30983]
+    assert {entry.kind for entry in found.entries} == {MediaKind.TV}
+    assert found.entries[0].original_title == "ちびまる子ちゃん"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_tmdb_tv_detail_reads_the_last_and_the_next_episode() -> None:
+    """時間表靠這兩格才知道哪一天、第幾集（discover 的每一筆沒有，brief §20.3）。
+
+    `next_episode_to_air` 的 `runtime` 是 `null`（還沒播）；完結的作品這一格本身是 `null`。
+    """
+    respx.get(f"{TMDB_URL}/tv/88319").respond(
+        200, text=read_fixture("http/tmdb/tv-detail.luo-xiao-hei.zh-cn.json")
+    )
+    respx.get(f"{TMDB_URL}/tv/120089").respond(
+        200, text=read_fixture("http/tmdb/tv-detail.spy-x-family.en.json")
+    )
+
+    client = HttpTmdbClient(V4_READ_TOKEN, base_url=TMDB_URL)
+    try:
+        airing = await client.detail(MediaKind.TV, 88319, language="zh-TW")
+        finished = await client.detail(MediaKind.TV, 120089, language="en-US")
+    finally:
+        await client.aclose()
+
+    assert airing.last_episode == TmdbEpisode(
+        season_number=1,
+        episode_number=41,
+        name="开始学习吧小黑同学",
+        air_date=date(2026, 10, 30),
+        runtime=11,
+    )
+    assert airing.next_episode == TmdbEpisode(
+        season_number=2, episode_number=2, name="第 2 集", air_date=date(2026, 11, 6), runtime=None
+    )
+    assert finished.last_episode is not None
+    assert (finished.last_episode.season_number, finished.last_episode.episode_number) == (3, 13)
+    assert finished.next_episode is None
