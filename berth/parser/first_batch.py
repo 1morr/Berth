@@ -11,18 +11,22 @@
 1. Series 沒有設季號與 offset——設了就是人說過話，不是照字面。
 2. 要入庫的每一列是正片（`import`）或跟著正片走的字幕；特典、留在原位、等人決定的列一出現就不算
    （這裡替它們擔保不了什麼）。至少要有一集正片。
-3. **季集照字面**：對到的集號就是檔名寫的集號（`written_episode`，沒有 offset、絕對編號換算、
-   重數推測），季號是發佈名或資料夾寫明的、或只寫集號而對到第一季。
-4. **理由只有這幾種**（`VOUCHED`）：標題對上、年份對上、季號的字面來源、只有一季、發佈時間落在
-   第一輪、TMDB 沒有片長。其餘的每一條——篇章名、絕對編號、cour、虛擬季、Series 的季號、人改過、
-   任何一條壓低信心的疑點——都不在裡面，**之後新加的理由預設也不在**。
+3. **照字面**（`parser.literal.is_literal`，與播出日比對放行先行同一個定義）：對到的集號就是檔名寫的
+   集號（`written_episode`，沒有 offset、絕對編號換算、重數推測），季號是發佈名或資料夾寫明的、
+   或只寫集號而對到第一季。
+4. **理由只有這幾種**（`VOUCHED`，在 `parser.literal`）：標題對上、年份對上、季號的字面來源、只有
+   一季、發佈時間落在第一輪、地上波先行（`released_ahead_of_airing`）、TMDB 沒有片長。其餘的每一條
+   ——篇章名、絕對編號、cour、虛擬季、Series 的季號、人改過、任何一條壓低信心的疑點——都不在裡面，
+   **之後新加的理由預設也不在**。
 5. **播出日比對拿得到那一集的播出日而且通過**：發佈時間有、TMDB 有那一集的播出日（缺一樣，
    比對只記一筆放行，那不是「通過」）；比對擋下的列是 `review`，第 2 條已經不算。
-6. **那一集剛播**：播出日落在發佈日往前 `BEHIND_LATEST`、往後 `RELEASE_TOLERANCE` 之間（與
-   `publishing.just_aired` 同一個窗口）。票面的起點是「信心 high」，但只寫集號的單季作品——正是
-   BLACK TORCH——解析器給的是 medium：TMDB 還沒建新的一季、字幕組沿用標題從 01 重數時，照字面讀成
-   第一季是錯的，而播出日比對抓不到這個方向（發佈晚於播出是正常的，plan §11.4 ①）。「剛播」補上
-   那一個方向：新一季的第 3 集發佈時，第一季的第 3 集早就播完了。
+6. **那一集剛播**：播出日落在發佈日往前 `BEHIND_LATEST`、往後 `RELEASE_TOLERANCE` 加
+   `SIMULCAST_LEAD` 之間（`publishing.just_aired(literal=True)`，上緣與播出日比對放行照字面的列
+   相同；M5.5 票 04 前是兩天，地上波先行的第一批因此擔保不了）。推測虛擬季用兩天的那一個窗口。
+   票面的起點是「信心 high」，但只寫集號的單季作品——正是 BLACK TORCH——解析器給的是 medium：
+   TMDB 還沒建新的一季、字幕組沿用標題從 01 重數時，照字面讀成第一季是錯的，而播出日比對抓不到
+   這個方向（發佈晚於播出是正常的，plan §11.4 ①）。「剛播」補上那一個方向：
+   新一季的第 3 集發佈時，第一季的第 3 集早就播完了。
 
 片長驗證通過或量不出隱含在第 2 條裡：它擋下的列是 `review`。
 
@@ -36,30 +40,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from berth.domain import Confidence, MediaSnapshot, PlanAction, PlanItem
-from berth.domain import ReasonCode as Code
-from berth.parser.planner import episode_span, written_episode
+from berth.domain import MediaSnapshot, PlanAction, PlanItem
+from berth.parser.literal import is_literal
+from berth.parser.planner import episode_span
 from berth.parser.publishing import just_aired
-
-#: 一列正片可以帶著的理由。**白名單**：沒列在這裡的理由一出現，那一列就不算照字面。
-VOUCHED: frozenset[Code] = frozenset(
-    {
-        Code.TITLE_EXACT,
-        Code.TITLE_CONTAINED,
-        Code.TITLE_PARTIAL,
-        Code.YEAR_MATCHES,
-        Code.SEASON_FROM_RELEASE,
-        Code.SEASON_FROM_FOLDER,
-        Code.SINGLE_SEASON,
-        # 單季作品只寫集號、剛播時解析器走的是這一條（第一輪的重數就是字面那一集）。重數到後面
-        # 某一輪的那一種由第 3 條擋下：對到的集號不是檔名寫的。
-        Code.PUBLISHED_IN_RUN,
-        Code.RUNTIME_MISSING,
-    }
-)
-
-#: 季號是寫明的：發佈名或資料夾說了第幾季。沒有的話只寫集號的那一種要對到第一季才算照字面。
-_WRITTEN_SEASON: frozenset[Code] = frozenset({Code.SEASON_FROM_RELEASE, Code.SEASON_FROM_FOLDER})
 
 #: 跟著正片走、本身不必擔保什麼的列；`skip` 不寫進媒體庫。
 _ALONGSIDE: frozenset[PlanAction] = frozenset({PlanAction.SUBTITLE, PlanAction.SKIP})
@@ -86,33 +70,22 @@ def vouch_first_batch(
         if item.action in _ALONGSIDE:
             continue
         span = episode_span(item)
-        if span is None or not _literal(torrent_name, item, media, published):
+        if span is None or not _vouched(torrent_name, item, media, published):
             return None
         spans.append(span)
     return tuple(spans) or None
 
 
-def _literal(torrent_name: str, item: PlanItem, media: MediaSnapshot, published: datetime) -> bool:
+def _vouched(torrent_name: str, item: PlanItem, media: MediaSnapshot, published: datetime) -> bool:
     """條件 3–6：這一列照字面、理由乾淨、播出日對得上而且剛播。"""
-    codes = {reason.code for reason in item.reasons}
-    if item.confidence is Confidence.LOW or not codes <= VOUCHED:
-        return False
-    if written_episode(torrent_name, item.rel_path) != item.episode_start:
-        return False
-    if not codes & _WRITTEN_SEASON and item.season != _first_season(media):
-        return False
-    return _just_aired(item, media, published)
-
-
-def _first_season(media: MediaSnapshot) -> int | None:
-    regular = [season.season_number for season in media.seasons if season.season_number > 0]
-    return min(regular) if regular else None
+    return is_literal(torrent_name, item, media) and _just_aired(item, media, published)
 
 
 def _just_aired(item: PlanItem, media: MediaSnapshot, published: datetime) -> bool:
-    """TMDB 有那一集（區間取最後一集）的播出日，而且它剛播。窗口的上緣就是播出日比對的規則一。"""
+    """TMDB 有那一集（區間取最後一集）的播出日，而且它剛播。窗口的上緣就是播出日比對放行照字面的
+    列的那一個（`RELEASE_TOLERANCE` 加 `SIMULCAST_LEAD`）。"""
     span = episode_span(item)
     found = media.episode(span[0], span[2]) if span is not None else None
     if found is None or found.air_date is None:
         return False
-    return just_aired(found.air_date, published.date())
+    return just_aired(found.air_date, published.date(), literal=True)

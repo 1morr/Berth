@@ -1,0 +1,133 @@
+{
+ "ended": false,
+ "first_air_date": "2026-10-02",
+ "kind": "tv",
+ "overview": "無論是現實世界還是遊戲世界中，他都是最底層的存在！\n\n然而鹹魚翻身的機會終於來了！\n\n只要能夠找到遊戲中的最強裝備，就能獲得超20億玩家中唯一一個成為傳說中最強職業電競選手的機會！\n\n他能否在假想現實遊戲世界中創造新的傳奇，成功脫離如同噩夢般的悲慘人生呢？",
+ "overview_en": "Escape everyday life in SATISFY, a VR game where players earn real-world fame and fortune. One player, Grid, can't seem to catch a break in the game or in real life. That all changes when a challenging quest leads him to becoming the heir to a legendary blacksmith. His stats are reset to zero, but he's leveling up and crafting some seriously god-tier goods.",
+ "poster_url": "https://image.tmdb.org/t/p/w342/brqnKFqqKoG4i3nRYhmnvqGib1W.jpg",
+ "poster_url_en": "https://image.tmdb.org/t/p/w342/94GLmulA9qVGsuo9kLpVKi01E2Z.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2026-10-02",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-02",
+     "episode_number": 1,
+     "name": "Legendary Class",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-09",
+     "episode_number": 2,
+     "name": "First Step Towards Being a Blacksmith",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-16",
+     "episode_number": 3,
+     "name": "Second Class",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-23",
+     "episode_number": 4,
+     "name": "Item Crafting Face-Off",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-30",
+     "episode_number": 5,
+     "name": "Family's Trust",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-06",
+     "episode_number": 6,
+     "name": "First Boss Raid",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-08",
+     "episode_number": 7,
+     "name": "Episode 7",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-15",
+     "episode_number": 8,
+     "name": "Episode 8",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-22",
+     "episode_number": 9,
+     "name": "Episode 9",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-29",
+     "episode_number": 10,
+     "name": "Episode 10",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-06",
+     "episode_number": 11,
+     "name": "Episode 11",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-13",
+     "episode_number": 12,
+     "name": "Episode 12",
+     "runtime": null
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  }
+ ],
+ "title": "裝備仔",
+ "title_en": "Overgeared",
+ "title_original": "テムパル～アイテムの力～",
+ "title_zh_cn": "装备我最强",
+ "titles": [
+  "Overgeared",
+  "テムパル～アイテムの力～",
+  "Tempal: Item no Chikara",
+  "TEMPAL ~Item no Chikara~",
+  "Tempal Item no Chikara",
+  "템빨",
+  "템빨 ~아이템의 힘~",
+  "Overgeared: The Power of Items",
+  "Tempal ~The Power of Items~",
+  "Overgeared ~The Power of Items~",
+  "装备我最强",
+  "تمبال: قوة الأدوات",
+  "Во всеоружии: Сила артефактов",
+  "Преоборудван",
+  "裝備仔",
+  "Thợ Rèn Huyền Thoại",
+  "Overgeared เจ้าแห่งยุทธภัณฑ์"
+ ],
+ "tmdb_id": 324502,
+ "year": 2026
+}

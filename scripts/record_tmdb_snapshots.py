@@ -40,12 +40,20 @@ CORPUS, SNAPSHOTS, _BASELINE = paths(Path(__file__).resolve().parent.parent)
 CREDENTIAL_ENV = "TMDB_API_KEY"
 
 
+#: 播出日比對的 fixture（M5.5 票 04 起）：正式環境被誤擋的列，每一列的 `tmdb` 也要一份快照。
+AIRING = CORPUS.parent / "airing"
+
+
 def wanted() -> dict[str, str]:
-    """語料指到的每一份快照：`tv-209867` → `tv:209867`。
+    """語料與播出日比對 fixture 指到的每一份快照：`tv-209867` → `tv:209867`。
 
     語料怎麼讀由 `services/bench` 說了算——這裡再刻一份的話，語料目錄或欄位一改就要動兩處。
     """
-    return {fixture.tmdb: fixture.context_media for fixture in load_corpus(CORPUS)}
+    found = {fixture.tmdb: fixture.context_media for fixture in load_corpus(CORPUS)}
+    for path in sorted(AIRING.glob("*.json")):
+        for row in json.loads(path.read_text(encoding="utf-8"))["rows"]:
+            found[row["tmdb"]] = row["tmdb"].replace("-", ":", 1)
+    return found
 
 
 async def record(credential: str, *, force: bool) -> int:

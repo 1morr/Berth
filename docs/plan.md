@@ -678,9 +678,11 @@ brief §6.4，AutoBangumi v3.2 的做法，`mapping._published_run`。字幕組�
 
 #### 播出日比對
 
-`parser.airing.check_airing`（§11.4「三道程式檢查」①）。規則層有把握卻算錯的集數，拿 Job 的 `published_at`（§2.3）對換算出的那一集的 TMDB 播出日。純函式、只吃 Plan Item、快照與一個發佈時間，所以 M6 的 AI 結果也過同一條；在 `services/plan.py` 裡排在 Route 政策之前，`_plan`、`_preplan` 都跑，`proposal`（人改正的季集）不跑。
+`parser.airing.check_airing`（§11.4「三道程式檢查」①）。規則層有把握卻算錯的集數，拿 Job 的 `published_at`（§2.3）對換算出的那一集的 TMDB 播出日。純函式、只吃發佈名、Plan Item、快照與一個發佈時間（發佈名用來判斷照字面，M5.5 票 04），所以 M6 的 AI 結果也過同一條；在 `services/plan.py` 裡排在 Route 政策之前，`_plan`、`_preplan` 都跑，`proposal`（人改正的季集）不跑。
 
-- **規則一**：發佈日早於那一集（範圍取最後一集）的播出日**超過兩天**就送審核，理由 `released_before_airing` 帶兩個日期。兩天是 TMDB 的當地日期對 UTC 的發佈時間、深夜檔跨日的容忍（`RELEASE_TOLERANCE`）。手動送單與 RSS 都套。
+- **規則一**：發佈日早於那一集（範圍取最後一集）的播出日超過容忍就送審核，理由 `released_before_airing` 帶兩個日期。手動送單與 RSS 都套。容忍分兩種（M5.5 票 04，brief §20.27）：
+  - **有換算的列兩天**：TMDB 的當地日期對 UTC 的發佈時間、深夜檔跨日（`RELEASE_TOLERANCE`）。換算差一集也剛好早一週，只看日期分不開先行與算錯。
+  - **照字面的列九天**：兩天加地上波先行（`SIMULCAST_LEAD` 7 天）。平台比電視台先播一週，字幕組從平台取片，TMDB 記的是電視台的日期。照字面與第一批同一個定義（`parser/literal.py`：理由只在白名單內、對到的集號就是檔名寫的、季號寫明或對到第一季），Series 設了季號或非 0 的 offset 就不算。超過兩天而放行時記 `released_ahead_of_airing`（兩個日期），不無聲；超過九天照擋，文案說平台先行的核准就好。
 - **規則二**：只對 RSS Series、只對正片的季（S00 不照播出順序）。「發佈當時最近播出的一集」＝播出日不晚於發佈日加兩天的最後一集；對到的那一集比它早**超過 `BEHIND_LATEST`**、**而且**它離發佈不超過 `BEHIND_LATEST`（作品在發佈時還在連載）就送審核，理由 `behind_latest_episode` 帶兩組集與日期。第二個條件讓播完很久之後的 BD、補檔不被擋；第一個條件讓慢幾週的字幕組不被擋。門檻的量測見 `scripts/experiments/air_date_lag.py`。
 - 被擋的那一列 `action = review`，**季集與目標路徑留著**：BD 版晚幾個月才發這種對的也會落在這裡，核准就照畫面上的位置入庫（`parser.promote`）。Plan 的 `review_reason` 是 `air_date_conflict`（§3.1）。
 - **缺資料不擋、記一筆**：發佈時間是 `None` → `published_missing`；TMDB 沒有那一集的播出日 → `air_date_missing`。

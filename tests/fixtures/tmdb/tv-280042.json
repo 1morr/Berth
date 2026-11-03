@@ -1,0 +1,217 @@
+{
+ "ended": false,
+ "first_air_date": "2025-10-04",
+ "kind": "tv",
+ "overview": "《野生的大魔王出現了！》故事中，主角曾一時攀上超熱門線上遊戲「艾克斯之門 Online」的巔峰。在完成某次重大故事後的隔天，想登入遊戲時，卻突然收到「賦予你全新使命」的提示訊息。當他按下「ＹＥＳ」的瞬間，世界被反轉了，醒來後，映入主角眼簾的是！？",
+ "overview_en": "An MMO gamer awakens as the Black-Winged Tyrant, Lufas Maphaahl, rising from her sealed fate—only to find this is very real. Her defeat 200 years ago unleashed monsters of death, and the legend is one of terror. Now, trapped in the body of history's most feared conqueror, he must survive a world that wants her dead…and uncover why he's here.",
+ "poster_url": "https://image.tmdb.org/t/p/w342/6DVVjBh6XKMYbNe50u39x03o4Jj.jpg",
+ "poster_url_en": "https://image.tmdb.org/t/p/w342/xh9lu8gDgzwMBiByTRtTsclluZf.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2025-10-04",
+   "episode_count": 24,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-04",
+     "episode_number": 1,
+     "name": "A Wild Last Boss Appears!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-11",
+     "episode_number": 2,
+     "name": "We Came to Svel!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-18",
+     "episode_number": 3,
+     "name": "Aries Has Attacked!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-10-25",
+     "episode_number": 4,
+     "name": "They Were Pulling Strings Behind the Scenes!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-01",
+     "episode_number": 5,
+     "name": "A Wild Hot Spring Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-08",
+     "episode_number": 6,
+     "name": "Libra of the Scales Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-15",
+     "episode_number": 7,
+     "name": "I was... a Savior!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-22",
+     "episode_number": 8,
+     "name": "Hey! 5%?! Seriously?!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-11-29",
+     "episode_number": 9,
+     "name": "The Masses Have Rioted!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-06",
+     "episode_number": 10,
+     "name": "Who Are You?",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-13",
+     "episode_number": 11,
+     "name": "A Wild Lufas Maphaal And a Wild Devil King Have Appeared at the Same Time!!!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2025-12-20",
+     "episode_number": 12,
+     "name": "There Was Something Incredible in My Homeland!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-03",
+     "episode_number": 13,
+     "name": "Mobile Capital Blutgang Has Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-10",
+     "episode_number": 14,
+     "name": "A Rampant Scorpius Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-10",
+     "episode_number": 15,
+     "name": "A Flying, Handsome Man Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-17",
+     "episode_number": 16,
+     "name": "The Blacksmith King Mizar Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-24",
+     "episode_number": 17,
+     "name": "The Hunting Festival Contestants Have Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-31",
+     "episode_number": 18,
+     "name": "The Twelve Heavenly Star, Sagittarius Appeared!",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-07",
+     "episode_number": 19,
+     "name": "Episode 19",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-14",
+     "episode_number": 20,
+     "name": "Episode 20",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-21",
+     "episode_number": 21,
+     "name": "Episode 21",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-28",
+     "episode_number": 22,
+     "name": "Episode 22",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-05",
+     "episode_number": 23,
+     "name": "Episode 23",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-12",
+     "episode_number": 24,
+     "name": "Episode 24",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  }
+ ],
+ "title": "野生的大魔王出現了！",
+ "title_en": "A Wild Last Boss Appeared!",
+ "title_original": "野生のラスボスが現れた！",
+ "title_zh_cn": "野生的大魔王出现了！",
+ "titles": [
+  "A Wild Last Boss Appeared!",
+  "野生のラスボスが現れた！",
+  "野生的LAST BOSS出现了!",
+  "野生的最终BOSS出现了！",
+  "野生的大魔王出现了！第二季",
+  "A Wild Last Boss Appears!",
+  "Yasei no Last Boss ga Arawareta!",
+  "Yasei no Rasu Bosu ga Arawareta!",
+  "野生のラスボスが現れた！(第2期)",
+  "야생의 라스트 보스가 나타났다!",
+  "Шальной последний босс явился!",
+  "野生的大魔王出现了！",
+  "野生的大魔王出現了！",
+  "อุบัติการณ์ลาสบอสสุดแกร่ง",
+  "בוס אחרון פרוע הופיע!",
+  "Trùm Cuối Hoang Dã Xuất Hiện!",
+  "Ratu Terakhir Telah Tiba!"
+ ],
+ "tmdb_id": 280042,
+ "year": 2025
+}

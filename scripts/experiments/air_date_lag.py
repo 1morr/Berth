@@ -437,7 +437,9 @@ def _print_real_rule_check(measurements: list[Measurement]) -> None:
     reviewed = 0
     reason_counts: Counter[str] = Counter()
     for m in measurements:
-        (checked,) = check_airing((m.plan_item,), m.snapshot, m.published_at, from_series=True)
+        (checked,) = check_airing(
+            m.release_title, (m.plan_item,), m.snapshot, m.published_at, from_series=True
+        )
         if checked.action != PlanAction.REVIEW:
             continue
         reviewed += 1
@@ -459,7 +461,7 @@ def _print_real_rule_check(measurements: list[Measurement]) -> None:
             flagged: list[tuple[Measurement, PlanItem]] = []
             for m in measurements:
                 (checked,) = check_airing(
-                    (m.plan_item,), m.snapshot, m.published_at, from_series=True
+                    m.release_title, (m.plan_item,), m.snapshot, m.published_at, from_series=True
                 )
                 held_by_rule2 = (
                     checked.action == PlanAction.REVIEW

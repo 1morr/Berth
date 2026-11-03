@@ -233,7 +233,7 @@ _Avoid_: draft plan, preview
 _Avoid_: error, message
 
 **Air-date check**（UI 顯示「播出日比對」）:
-規劃時拿來源的**發佈時間**（索引站的 `publishDate`、Feed Item 的發佈時間，存在 Job 上）比換算出的那一集的 TMDB 播出日：發佈早於播出日超過兩天，或 RSS Series 對到的那一集比作品在發佈當時最近播出的一集早很多，那一列就停下來等人，Plan 的 Review Reason 是 `air_date_conflict`。抓的是規則層有把握卻算錯的集數（offset、絕對編號），不是信心。
+規劃時拿來源的**發佈時間**（索引站的 `publishDate`、Feed Item 的發佈時間，存在 Job 上）比換算出的那一集的 TMDB 播出日：發佈早於播出日超過容忍（有換算的讀法兩天，照字面的九天，因為平台常比電視台先播一週），或 RSS Series 對到的那一集比作品在發佈當時最近播出的一集早很多，那一列就停下來等人，Plan 的 Review Reason 是 `air_date_conflict`。抓的是規則層有把握卻算錯的集數（offset、絕對編號），不是信心。
 _Avoid_: freshness, age score
 
 **Runtime check**（UI 顯示「片長驗證」）:

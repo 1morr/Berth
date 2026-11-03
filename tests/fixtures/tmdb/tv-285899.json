@@ -1,0 +1,135 @@
+{
+ "ended": false,
+ "first_air_date": "2026-10-03",
+ "kind": "tv",
+ "overview": "儘管被人說「沒有劍術的才華」，少女菲亞依然立志成為騎士。就在瀕死之際，她突然回想起了前世的記憶。而她的前世，竟是擁有超乎常人力量的「大聖女」！？\n\n那是距今300年前的過往──身為大聖女的她曾與騎士們並肩作戰，最後卻慘遭魔王的左右手殘忍殺害。\n\n隨著前世記憶甦醒，菲亞身為「大聖女」的力量也隨之復甦。然而，她同時想起前世曾遭魔王的左右手威脅：「要是轉世後又成為聖女，我就殺了妳。」\n\n因此，菲亞下定決心隱藏自己的力量，以一名騎士的身分活下去。\n\n然而，只要看見有人受傷，菲亞就無法坐視不管，更在接連遭遇的各種事件中，一次又一次使出聖女的力量。\n\n她究竟能否一直隱瞞自己身為聖女的祕密呢……！？",
+ "overview_en": "Fia always dreamed of being a great knight, despite her lack of talent as a swordswoman. Then, a brush with death in battle awakens memories of her past life as the legendary Saint who defeated the Demon King. Her powers return, but so do the enemies who killed her once before. Fia vows to conceal her true identity to survive. But how can a knight resist using her powers to help those in need?",
+ "poster_url": "https://image.tmdb.org/t/p/w342/dwnkFRVIpT2eJEhfFsiVG1I4Crv.jpg",
+ "poster_url_en": "https://image.tmdb.org/t/p/w342/1ETsQwBbwtaPN9SeczbQzg2mo0n.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2026-10-03",
+   "episode_count": 13,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-03",
+     "episode_number": 1,
+     "name": "The Great Saint Awakens",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-10",
+     "episode_number": 2,
+     "name": "Fia and the Knight Brigade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-17",
+     "episode_number": 3,
+     "name": "The Saint's State of Being",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-24",
+     "episode_number": 4,
+     "name": "The Fourth Monster Tamer Knight Brigade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-31",
+     "episode_number": 5,
+     "name": "Calamitous Monsters",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-07",
+     "episode_number": 6,
+     "name": "A Plan to Capture the Black King",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-14",
+     "episode_number": 7,
+     "name": "Zavilia",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-21",
+     "episode_number": 8,
+     "name": "Episode 8",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-28",
+     "episode_number": 9,
+     "name": "Episode 9",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-05",
+     "episode_number": 10,
+     "name": "Episode 10",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-12",
+     "episode_number": 11,
+     "name": "Episode 11",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-19",
+     "episode_number": 12,
+     "name": "Episode 12",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-26",
+     "episode_number": 13,
+     "name": "Episode 13",
+     "runtime": null
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  }
+ ],
+ "title": "轉生後的大聖女，極力隱瞞聖女的身分",
+ "title_en": "A Tale of the Secret Saint",
+ "title_original": "転生した大聖女は、聖女であることをひた隠す",
+ "title_zh_cn": "转生后的大圣女，极力隐瞒圣女的身份",
+ "titles": [
+  "A Tale of the Secret Saint",
+  "転生した大聖女は、聖女であることをひた隠す",
+  "转生了的大圣女，拼死隐瞒自己身为圣女",
+  "轉生後的大聖女，極力隱瞞聖女的身分",
+  "转生后的大圣女，极力隐瞒圣女的身份",
+  "Tensei Shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu",
+  "Tensei shita Dai Seijo wa Seijo de Aru Koto wo Hita Kakusu",
+  "Tensei shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu",
+  "전생한 대성녀는 성녀임을 숨긴다",
+  "Переродившаяся великая святая скрывает, что она святая",
+  "สตรีศักดิ์สิทธิ์เกิดใหม่ แต่ไม่ขอบอกใครนะคะ",
+  "Chuyện Về Thánh Nữ Bí Mật"
+ ],
+ "tmdb_id": 285899,
+ "year": 2026
+}

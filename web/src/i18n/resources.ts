@@ -2078,7 +2078,8 @@ const zhHant = {
         nothing_to_import: '這一包沒有東西會進媒體庫，多半送錯了 torrent',
         target_exists: '媒體庫的目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了，那一列要重新決定',
-        air_date_conflict: '發佈時間與換算出的集數的播出日對不上，季集多半算錯了',
+        air_date_conflict:
+          '發佈時間與換算出的集數的播出日對不上，季集多半算錯了；平台先行的核准就好',
         runtime_conflict: '量到的片長與 TMDB 那一集差太多，多半是特典或合併檔被當成正片',
       },
       waitingSince: '等候於 {{value}}',
@@ -2659,7 +2660,7 @@ const zhHant = {
         audit_undone:
           '管理員從審核佇列撤銷了一個 medium 自動入庫的檔案：那個檔案已經不在媒體庫裡，complete 裡的來源還在。這份計劃回來等人決定那一列該是哪一集。',
         air_date_conflict:
-          '有檔案的發佈時間與換算出的那一集的播出日對不上：發佈比播出早，或比這部作品正在播的集數早很多。季號、offset 或絕對編號多半算錯了。管理員在審核佇列逐列改正季集；晚幾個月才發的 BD 版這種其實沒錯的，核准就會照畫面上的位置入庫。',
+          '有檔案的發佈時間與換算出的那一集的播出日對不上：發佈比播出早，或比這部作品正在播的集數早很多。季號、offset 或絕對編號多半算錯了。管理員在審核佇列逐列改正季集；晚幾個月才發的 BD 版這種其實沒錯的，核准就會照畫面上的位置入庫。平台比電視台先播（地上波先行）的核准就好。',
         runtime_conflict:
           'mediainfo 量到的片長與 TMDB 上那一集的片長差太多：多半是 SP、OVA 或兩集合併的檔案被當成了一集正片。管理員在審核佇列把那一列改成特典、對不到或正確的季集；片長其實沒錯的（TMDB 寫錯、剪輯版），核准就會照畫面上的位置入庫。',
       },
@@ -2713,7 +2714,9 @@ const zhHant = {
         range_spans_seasons: '發佈涵蓋 {{start}}–{{end}}，但那一段放不進同一季',
         specials_numbering: '字幕組的特典編號與 TMDB 的 S00 不一定一致',
         released_before_airing:
-          '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早了兩天以上：集數多半換算錯了',
+          '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早太多：集數多半換算錯了；平台先行的核准就好',
+        released_ahead_of_airing:
+          '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早，在地上波先行的範圍內：多半是平台比電視台先播',
         behind_latest_episode:
           '{{episode}} 在 {{aired}} 播出，而發佈當時這部作品最近播出的是 {{latest}}（{{latest_aired}}）：季號或 offset 多半錯了',
         air_date_missing: 'TMDB 沒有 {{episode}} 的播出日，沒有比對發佈時間',
@@ -6393,7 +6396,7 @@ const en: Translations<typeof zhHant> = {
         target_exists: 'Another file already sits at a target in the library',
         audit_undone: 'An auto-imported file was undone; that row needs a new decision',
         air_date_conflict:
-          'The release date does not fit the air date of the episode it was mapped to; the episode is likely wrong',
+          'The release date does not fit the air date of the episode it was mapped to; the episode is likely wrong. If a streaming platform aired it first, just approve',
         runtime_conflict:
           'The measured runtime is far from TMDB’s for that episode; likely a special or a merged file taken for an episode',
       },
@@ -6930,7 +6933,7 @@ const en: Translations<typeof zhHant> = {
         audit_undone:
           'An administrator undid a medium-confidence import from the review queue: that file has left the library, and its source under complete is untouched. The plan is back, waiting for someone to decide which episode that row really is.',
         air_date_conflict:
-          'A file’s release date does not fit the air date of the episode it was mapped to: it came out before that episode aired, or far behind the episode this title is airing now. The season, offset or absolute numbering is most likely wrong. An administrator corrects each row’s episode in the review queue; if it is actually right, such as a BD release months later, approving imports it where shown.',
+          'A file’s release date does not fit the air date of the episode it was mapped to: it came out before that episode aired, or far behind the episode this title is airing now. The season, offset or absolute numbering is most likely wrong. An administrator corrects each row’s episode in the review queue; if it is actually right, such as a BD release months later, approving imports it where shown. If a streaming platform aired it before TV, just approve.',
         runtime_conflict:
           'A file’s measured runtime is far from TMDB’s runtime for the episode it was mapped to: most likely a special, an OVA or two episodes in one file was taken for a single episode. An administrator changes that row to an extra, unmatched or the right episode in the review queue; if the runtime is actually fine (a wrong TMDB entry, a different cut), approving imports it where shown.',
       },
@@ -6984,7 +6987,9 @@ const en: Translations<typeof zhHant> = {
           'The release covers {{start}}–{{end}}, which does not fit in one season',
         specials_numbering: 'Release groups number specials differently from TMDB’s season 0',
         released_before_airing:
-          'released on {{published}}, more than two days before TMDB’s air date for {{episode}} ({{aired}}): the episode was most likely worked out wrong',
+          'released on {{published}}, too far before TMDB’s air date for {{episode}} ({{aired}}): the episode was most likely worked out wrong. If a streaming platform aired it first, just approve',
+        released_ahead_of_airing:
+          'released on {{published}}, before TMDB’s air date for {{episode}} ({{aired}}) but within a streaming head start: most likely a platform aired it before TV',
         behind_latest_episode:
           '{{episode}} aired on {{aired}}, but when this came out the title’s latest episode was {{latest}} ({{latest_aired}}): the season or offset is most likely wrong',
         air_date_missing:
