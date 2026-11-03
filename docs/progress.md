@@ -51,7 +51,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 02 模型清單 | 沒按時建議照表單網址查本機表、不帶 key；按「取得模型」才問端點，問不到退回本機表。實測 DeepSeek 的 Anthropic 接口沒有模型清單（404，brief §20.26） | 新 session 下 `/implement .scratch/m5.5/issues/03-search-results.md` |
 | 2026-11-04 | M5.5 03 搜尋結果 | `encrypted_content` 在 API 層拿掉（串流、重連、重新載入），歷史照留給模型；`web_search` 畫成標題、網址、日期的清單 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
 | 2026-11-04 | M5.5 07 導覽收斂 | 頁首五項加帳號選單（第一個下拉，disclosure、Esc 回觸發鍵）；待處理與新番帶件數（`GET /waiting`，admin）；審核/Issue、訂閱掛區塊分頁，網址不變 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
-| 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05b-cumulative-next-aired-guard.md` |
+| 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
 
 ## 偏差與決定
 
