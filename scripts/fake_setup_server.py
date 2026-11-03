@@ -1647,6 +1647,99 @@ KIMI_SPLIT_COUR = _split_cour(date(2025, 1, 9), date(2025, 7, 3))
 KIMI_SPLIT_COUR_AIRING = _split_cour(date(2026, 1, 8), date(2026, 7, 2))
 
 
+#: 時間表（M5.5 票 09）那一週另外播的幾部：
+#: `(TMDB id, 英文名, zh-TW 名, 季, 集, 這一週的第幾天)`。名字取自票 08 錄下的那一週 discover
+#: （`tests/fixtures/http/tmdb/discover-tv.airing.json`），集數是演練用的。
+SCHEDULE_OTHERS = (
+    (220542, "The Apothecary Diaries", "藥師少女的獨語", 2, 17, 1),
+    (110181, "Lord of all Lords", "武神主宰", 1, 512, 1),
+    (45790, "JoJo's Bizarre Adventure", "JOJO的奇妙冒險", 6, 4, 3),
+    (312359, "Dragon Ball DAIMA", "七龍珠DAIMA", 1, 9, 4),
+    (30983, "Case Closed", "名偵探柯南", 1, 1180, 5),
+    (57775, "Chibi Maruko-chan", "櫻桃小丸子", 2, 1460, 6),
+)
+
+
+def schedule_scenario() -> Scenario:
+    """`/schedule`（M5.5 票 09）：同 `rss`（時鐘停在 2026-09-25 週五），加上這一週 TMDB 上播的幾部。
+
+    《与你相恋》整季往後挪一週，第 12 集落在這一週的週四（09-24）：時間表上點它進作品頁，用 acg.rip
+    的「只追之後的」訂閱（一筆都不送，所以不會被入庫搶先變成「已入庫」），回到時間表那張卡就是「已訂閱」。
+    其餘幾部（`SCHEDULE_OTHERS`）分在週一到週日，沒有 Berth 的紀錄；週一那一天有兩部。海報都是空的：
+    演練不連外。
+    """
+    shift = timedelta(days=7)
+    season = replace(
+        KIMI_SEASON,
+        air_date=date(2026, 7, 9),
+        episodes=tuple(
+            replace(episode, air_date=episode.air_date + shift)
+            for episode in KIMI_SEASON.episodes
+            if episode.air_date is not None
+        ),
+    )
+    detail = replace(
+        KIMI_DETAIL,
+        first_air_date=season.air_date,
+        seasons=(replace(KIMI_DETAIL.seasons[0], air_date=season.air_date),),
+        last_episode=season.episodes[-1],
+    )
+    scenario = rss_scenario(detail, (season,))
+    monday = date(2026, 9, 21)
+    others = [
+        (
+            TmdbEntry(
+                tmdb_id=tmdb_id,
+                kind=MediaKind.TV,
+                title=title,
+                original_title=title,
+                year=2026,
+                poster_path="",
+                animation=True,
+            ),
+            TmdbDetail(
+                tmdb_id=tmdb_id,
+                kind=MediaKind.TV,
+                title=title,
+                original_title=title,
+                year=2026,
+                first_air_date=None,
+                overview="",
+                poster_path="",
+                last_episode=TmdbEpisode(
+                    season_number=season_number,
+                    episode_number=number,
+                    name="",
+                    air_date=monday + timedelta(days=offset),
+                    runtime=24,
+                ),
+            ),
+            translation,
+        )
+        for tmdb_id, title, translation, season_number, number, offset in SCHEDULE_OTHERS
+    ]
+    kimi = TmdbEntry(
+        tmdb_id=detail.tmdb_id,
+        kind=MediaKind.TV,
+        title=detail.title,
+        original_title=detail.original_title,
+        year=2026,
+        poster_path="",
+        animation=True,
+    )
+    scenario.tmdb = FakeTmdbClient(
+        details=[detail, *(row for _, row, _ in others)],
+        seasons={detail.tmdb_id: (season,)},
+        search=scenario.tmdb.search_results,
+        translations={
+            detail.tmdb_id: "與妳相戀到生命盡頭",
+            **{entry.tmdb_id: name for entry, _, name in others},
+        },
+        airing=[kimi, *(entry for entry, _, _ in others)],
+    )
+    return scenario
+
+
 def rss_legacy_feed_scenario() -> Scenario:
     """舊 Feed 選 Route（M4 票 105）：同 `rss`，但聚合 feed 已經在了，是票 105 之前加的那種——TV 與
     Anime 兩條都收劇集，migration 推不出劇集那一格（電影只有 Movies，補上了）。Feed 列標「要選
@@ -2684,6 +2777,7 @@ SCENARIOS = {
     "tmdb-down": tmdb_down,
     "healthy": healthy,
     "rss": rss_scenario,
+    "schedule": schedule_scenario,
     "rss-legacy-feed": rss_legacy_feed_scenario,
     "rss-split-cour": rss_split_cour_scenario,
     "rss-split-cour-airing": rss_split_cour_airing_scenario,

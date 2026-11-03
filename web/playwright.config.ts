@@ -62,6 +62,15 @@ const FLOWS = [
     port: 8532,
     viewport: NARROW,
   },
+  // 時間表（M5.5 票 09）：兩條測試照順序跑，第二條（一般使用者）看得到第一條訂閱的結果。
+  { name: 'schedule', spec: 'schedule', scenario: 'schedule', port: 8533 },
+  {
+    name: 'schedule-390',
+    spec: 'schedule',
+    scenario: 'schedule',
+    port: 8534,
+    viewport: NARROW,
+  },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },

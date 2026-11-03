@@ -40,6 +40,7 @@ import { UsagePage } from './pages/UsagePage'
 import { QbittorrentSettingsPage } from './pages/QbittorrentSettingsPage'
 import { RouteSettingsPage } from './pages/RouteSettingsPage'
 import { RssPage } from './pages/RssPage'
+import { SchedulePage } from './pages/SchedulePage'
 import { WeeklyPage } from './pages/WeeklyPage'
 import { SetupPage } from './pages/SetupPage'
 import { stepOf } from './setup/navigation'
@@ -442,6 +443,23 @@ const rssRoute = createRoute({
   ),
 })
 
+/**
+ * 時間表 `/schedule`（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）：「新番」區塊的第一頁，**每個人**
+ * 都進得來（找新番不是管理動作）。卡片只帶狀態類別，字幕組與 Feed 在只有管理員的 `/rss`。
+ */
+const scheduleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedule',
+  beforeLoad: async ({ context, location }) => {
+    await requireSignedInPage(context.queryClient, location)
+  },
+  component: () => (
+    <AppShell>
+      <SchedulePage />
+    </AppShell>
+  ),
+})
+
 /** 管理員才進得來的頁面的守衛（`/issues`、`/review`、`/rss`、`/weekly`）；後端同時回 403。 */
 async function requireAdminPage(context: { queryClient: QueryClient }, location: ParsedLocation) {
   const me = await requireSignedInPage(context.queryClient, location)
@@ -578,6 +596,7 @@ export const routeTree = rootRoute.addChildren([
   issuesRoute,
   reviewRoute,
   rssRoute,
+  scheduleRoute,
   weeklyRoute,
   weeklyReportRoute,
   jobsRoute,

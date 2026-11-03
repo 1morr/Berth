@@ -19,7 +19,7 @@ export function SectionLink({
   label,
   count,
 }: {
-  to: '/review' | '/rss'
+  to: '/review' | '/schedule'
   pages: readonly string[]
   label: string
   count: number | undefined

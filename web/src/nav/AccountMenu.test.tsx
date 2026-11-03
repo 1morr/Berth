@@ -128,7 +128,7 @@ describe('頁首的件數', () => {
     const nav = within(await screen.findByRole('navigation', { name: '主要導覽' }))
 
     expect(await nav.findByRole('link', { name: '待處理 3 件' })).toHaveAttribute('href', '/review')
-    expect(nav.getByRole('link', { name: '新番 1 件' })).toHaveAttribute('href', '/rss')
+    expect(nav.getByRole('link', { name: '新番 1 件' })).toHaveAttribute('href', '/schedule')
   })
 
   it('0 件不畫那一塊；一般使用者不問', async () => {
