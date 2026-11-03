@@ -8,8 +8,8 @@ import type { TFunction } from 'i18next'
 /** 待處理：審核與 Issue 仍是兩頁（ADR-0006），共用一條分頁列。 */
 export const WAITING_PAGES = ['/review', '/issues'] as const
 
-/** 新番：這一票只有訂閱（原 RSS 頁）；M5.5 票 09 加時間表 `/schedule`。 */
-export const AIRING_PAGES = ['/rss'] as const
+/** 新番：時間表（每個人，M5.5 票 09）與訂閱（原 RSS 頁，只有 admin）；票 12 加追更。 */
+export const AIRING_PAGES = ['/schedule', '/rss'] as const
 
 /** 帳號選單裡的頁面。 */
 export const ACCOUNT_PAGES = ['/settings', '/health', '/weekly'] as const

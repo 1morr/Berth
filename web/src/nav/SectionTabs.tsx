@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { meQueryOptions } from '../api/auth'
 import { waitingQueryOptions } from '../api/waiting'
 import { NAV_LINK } from '../components/controls'
 import { CountChip } from './CountChip'
@@ -29,9 +30,9 @@ function Tab({
   label,
   count,
 }: {
-  to: '/review' | '/issues' | '/rss'
+  to: '/review' | '/issues' | '/rss' | '/schedule'
   label: string
-  count: number | undefined
+  count?: number | undefined
 }) {
   const { t } = useTranslation()
   return (
@@ -55,14 +56,19 @@ export function WaitingTabs() {
   )
 }
 
-/** 新番：這一票只有訂閱（原 RSS 頁）；時間表與追更是 M5.5 票 09、12。 */
+/**
+ * 新番：時間表 `/schedule`（每個人，M5.5 票 09）、訂閱 `/rss`（只有 admin，帶待綁定的件數）；追更是票 12。
+ * 一般使用者只有一個分頁也照畫：區塊的形狀與管理員看到的一樣，少的那一格是他進不去的頁。
+ */
 export function AiringTabs() {
   const { t } = useTranslation()
-  const counts = useQuery(waitingQueryOptions).data
+  const admin = useQuery(meQueryOptions).data?.role === 'admin'
+  const counts = useQuery({ ...waitingQueryOptions, enabled: admin }).data
 
   return (
     <Tabs label={t('nav.airing')}>
-      <Tab to="/rss" label={t('nav.subscriptions')} count={counts?.rss} />
+      <Tab to="/schedule" label={t('nav.schedule')} />
+      {admin && <Tab to="/rss" label={t('nav.subscriptions')} count={counts?.rss} />}
     </Tabs>
   )
 }

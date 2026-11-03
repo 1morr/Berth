@@ -646,7 +646,8 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 媒體庫 | 瀏覽與修正 | 像 Jellyfin 那樣瀏覽**整個 Jellyfin 媒體庫**（不只 Berth 經手的）：一個 Jellyfin 媒體庫一頁、只列這位使用者在 Jellyfin 看得到的；繼續觀看、下一集、卡片牆附已看 / 未看、依類型或年份排序。Berth 經手的作品疊上入庫狀態，還沒進 Jellyfin 的（下載中、待審）也在牆上。篩選：待審 / 對不到（只給 admin）。不放「有 Issue」篩選：`/issues` 是獨立頁 |
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
 | Job 詳情 | 可觀測性 | **獨立頁 `/jobs/:hash`**：**時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
-| 頁首 | 到處去 | 主導覽：探索、新番（admin）、媒體庫、下載、待處理（admin）；外面是助理開關與帳號選單（名字與角色、設定、健康、週報（admin）、語言、登出）。待處理與新番帶件數：待處理是審核加 Issue、新番是待綁定的 RSS Series，加起來是「有 N 件等你處理」的 N。待處理區塊的分頁是審核 `/review`、Issue `/issues`（兩頁仍分開，ADR-0006），新番區塊是訂閱 `/rss`（M5.5 票 09 起加時間表） |
+| 頁首 | 到處去 | 主導覽：探索、新番（M5.5 票 09 起每個人）、媒體庫、下載、待處理（admin）；外面是助理開關與帳號選單（名字與角色、設定、健康、週報（admin）、語言、登出）。待處理與新番帶件數（只有 admin 看得到）：待處理是審核加 Issue、新番是待綁定的 RSS Series，加起來是「有 N 件等你處理」的 N。待處理區塊的分頁是審核 `/review`、Issue `/issues`（兩頁仍分開，ADR-0006），新番區塊是時間表 `/schedule`（每個人）與訂閱 `/rss`（admin） |
+| 時間表（`/schedule`） | 找當季新番 | 這一週 TMDB 上播的動畫（brief §20.3），週一到週日分欄、今天標出，窄版一次一天；預設列全部（含長壽、兒童節目與國產動畫，篩不篩等用過再定），可切「只看已訂閱」。一集一張卡：小海報、顯示用標題、季集、狀態（已入庫 / 已訂閱，未訂閱不畫）；點進 Media 詳情走現有的訂閱流程。一般使用者看得到狀態類別，看不到字幕組與 Feed（`.scratch/m5.5/schedule-shape.md`） |
 | 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷；同一個 Job 一組一顆「全部確認」、整段一顆，收起時說出為什麼是 medium）、Unmatched、重複版本；批次核准。**Issue 不在這裡**：只在 `/issues`，這一頁原位一行「另有 N 件待處理」連過去。**一列一件事的清單，不是牆**：篩出來常常只有一兩件，卡片牆說不出「有幾件事在等你」。只有 admin 進得來 |
 | 訂閱（RSS，`/rss`） | 自動化 | Feed 清單、RSS Series 清單（待綁定排最前、就地綁定作品與 Route）、最近的 Feed Item、一次性 RSS 連結、新 Feed 的第一輪預覽（§15） |
 | 健康與問題 | 維運 | 服務連線、Route 硬鏈接檢查、Reconciler 結果、磁碟空間 |
@@ -1353,6 +1354,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
   - 漏掉的作品（這一週）：猫猫のひとりごと 第3期、ミニアニメ「ホタルの嫁入り」ちょいたし、ダークサモナーとデキている ミニアニメ劇場（三部 WEB 迷你動畫，TMDB 沒有或只有本篇），シルバニアファミリー フレアのカラフル・エブリデイ（兒童，TMDB 查不到），ぷにるんず ぷに４（TMDB 的集停在 2025-12-27）。上一週另漏歯ならび～ズ（WEB 短篇）、凶乱令嬢 ニア・リストンミニ（WEB 迷你動畫）。沒有一般的深夜番。
   - 反方向：這一週 164 部裡 85 部不在 Bangumi 放送表上（國產 65、日本 20，日本的是長壽 / 兒童節目與夏季開播仍在播的作品）。Bangumi 放送表本身也不完整，它是對照、不是正解。
   - discover 的每筆沒有集與播出日：要放進週幾的欄、寫第幾集，每部再讀 `tv/{id}` 的 `last_episode_to_air` / `next_episode_to_air`。
+  - 回應形狀（票 08 錄下、票 09 做成 fixture `tests/fixtures/http/tmdb/discover-tv.airing.json` 與 `tv-detail.luo-xiao-hei.zh-cn.json`）：discover 帶 `page`、`total_pages`、`total_results`，每筆沒有 `media_type`；`last_episode_to_air` / `next_episode_to_air` 與季詳情的 `episodes[]` 同一種形狀（`season_number`、`episode_number`、`air_date`、`runtime`，未播的 `runtime` 是 `null`），完結的作品 `next_episode_to_air` 是 `null`。
 
 **Seerr（前 Jellyseerr / Overseerr）**（細節：[研究](research/anime-episode-source.md#203-seerr)）
 

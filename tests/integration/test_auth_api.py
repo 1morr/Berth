@@ -527,6 +527,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/discover/popular"): Access.SIGNED_IN,
     ("GET", "/discover/search"): Access.SIGNED_IN,
     ("GET", "/discover/trending"): Access.SIGNED_IN,
+    ("GET", "/schedule"): Access.SIGNED_IN,
     ("GET", "/events/stream"): Access.SIGNED_IN,
     ("POST", "/health/check"): Access.SIGNED_IN,
     ("GET", "/health/detail"): Access.SIGNED_IN,

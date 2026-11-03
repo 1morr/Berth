@@ -98,9 +98,8 @@ function NavLink({ to, children }: { to: '/' | '/library' | '/jobs'; children: R
 /**
  * 主導覽（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）：探索、新番、媒體庫、下載、待處理。
  *
- * 新番與待處理只有 admin（後端同時回 403）：新番這一票只有訂閱（聚合 feed 的網址帶 token，綁定會替
- * 整個家送單），M5.5 票 09 加了時間表才給每個人。件數各歸各頁：待處理是審核加 Issue、新番是待綁定，
- * 加起來就是 Discord「有 N 件等你處理」的 N。
+ * 新番連時間表、每個人都有（M5.5 票 09）；件數（待綁定）與待處理只有 admin（後端同時回 403）。件數各歸
+ * 各頁：待處理是審核加 Issue、新番是待綁定，加起來就是 Discord「有 N 件等你處理」的 N。
  *
  * 導覽是 landmark：螢幕閱讀器的地標清單跳得到它（M0 的 critique 記過，票 15 收掉）。
  */
@@ -114,9 +113,12 @@ function MainNav({ admin }: { admin: boolean }) {
       className="order-last flex basis-full flex-wrap items-stretch gap-2 sm:order-none sm:basis-auto sm:gap-x-4"
     >
       <NavLink to="/">{t('nav.discover')}</NavLink>
-      {admin && (
-        <SectionLink to="/rss" pages={AIRING_PAGES} label={t('nav.airing')} count={counts?.rss} />
-      )}
+      <SectionLink
+        to="/schedule"
+        pages={AIRING_PAGES}
+        label={t('nav.airing')}
+        count={admin ? counts?.rss : undefined}
+      />
       <NavLink to="/library">{t('nav.inventory')}</NavLink>
       <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
       {admin && (

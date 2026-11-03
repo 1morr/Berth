@@ -1,0 +1,145 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/vuajwjep1FxphPhMEWKv4bfrCnf.jpg",
+      "genre_ids": [
+        16,
+        35
+      ],
+      "id": 57775,
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "ちびまる子ちゃん",
+      "overview": "小丸子是一名小学二年级的女生，她活泼、好动、懒惰、什么事情都拖到最后一刻才做、学习不认真、成绩平平、经常和姐姐斗气、爱幻想、做事没恒心……在小丸子身上我们或多或少都看到了自己童年的影子。如果小丸子算是一个“怪人”的话，那么她的周围可谓“怪人”多多，有点神经质的班长丸尾同学、权利欲极强的女副班长、经常和小丸子一起疯的爷爷，讨人厌的宾治同学等等，这群性格各异、精力充沛的小孩、大人们，每天都在演绎着生活的趣事，伴随着小丸子一天天长大。",
+      "popularity": 184.0386,
+      "poster_path": "/zKFr5sAMBGwu9Scv5e6v5c7oU1I.jpg",
+      "first_air_date": "1990-01-07",
+      "softcore": false,
+      "name": "樱桃小丸子",
+      "vote_average": 7.76,
+      "vote_count": 25
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/z67lpMtm8YGykJO4p89meuNMvj8.jpg",
+      "genre_ids": [
+        16,
+        80,
+        9648,
+        35
+      ],
+      "id": 30983,
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "名探偵コナン",
+      "overview": "高中生侦探工藤新一与毛利兰在游乐园游玩时发现两个行动诡异的黑衣男子，便跟踪他们，不料被灌下一种叫「APTX4869」的神秘毒药，然而因为药物副作用，新一的身体竟回到孩童状态。为不使周围的人受到牵连，他化名为「江户川柯南」，寄住在毛利兰家中，用阿笠博士发明的手表型麻醉枪让毛利小五郎睡着，接着用蝴蝶结变声器模仿他的声音来进行推理，解决了许多案件，并一直寻找着黑衣组织的人的下落，希望有朝一日将其绳之以法，并变回原来的样子。",
+      "popularity": 125.2514,
+      "poster_path": "/mCfswh8wgMW8rzUrSEdviUGu5Ax.jpg",
+      "first_air_date": "1996-01-08",
+      "softcore": false,
+      "name": "名侦探柯南",
+      "vote_average": 8.0,
+      "vote_count": 800
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/8phLVFEXOe02JgFmH9ldn3j4tXW.jpg",
+      "genre_ids": [
+        16,
+        10759,
+        10765
+      ],
+      "id": 312359,
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "ドラゴンボール超 ビルス",
+      "overview": "魔人布欧之战结束数年后，地球重归和平。沉睡已久的破坏神比鲁斯苏醒，听闻打败弗利萨的赛亚人孙悟空后，突然现身地球。面对拥有毁灭星球之力的比鲁斯，悟空和伙伴们迎来关乎地球存亡的宇宙级战斗。",
+      "popularity": 124.8316,
+      "poster_path": "/pXmJoNdWldb43N8P6EdDzDpsb7u.jpg",
+      "first_air_date": "2026-10-11",
+      "softcore": false,
+      "name": "龙珠超：比鲁斯",
+      "vote_average": 9.652,
+      "vote_count": 388
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/l2gc2dPRUPe3bAfYCRTjc6uAMmB.jpg",
+      "genre_ids": [
+        16,
+        10759,
+        10765
+      ],
+      "id": 45790,
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "ジョジョの奇妙な冒険",
+      "overview": "乔斯达家族的数代人都有一个相同的绰号“JOJO”，他们在不同的时代与各种拥有超自然力量的反派战斗不休。",
+      "popularity": 110.7329,
+      "poster_path": "/v3tg5I7DkyXjSVgV0MINbNaeR12.jpg",
+      "first_air_date": "2012-10-06",
+      "softcore": false,
+      "name": "JOJO的奇妙冒险",
+      "vote_average": 8.6,
+      "vote_count": 1698
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/gffVOVZ2Y9cmVIZ26Gt9ByMGCYH.jpg",
+      "genre_ids": [
+        16,
+        9648,
+        18
+      ],
+      "id": 220542,
+      "origin_country": [
+        "JP"
+      ],
+      "original_language": "ja",
+      "original_name": "薬屋のひとりごと",
+      "overview": "花街出身的药师少女猫猫被拐入后宫做下人，凭借对毒药与药物的丰富知识和敏锐的洞察力，卷入宫中接连发生的疑难事件，并与神秘宦官壬氏一同揭开重重谜团。",
+      "popularity": 104.1232,
+      "poster_path": "/nUFTbH417TqmCbw2b2mPSAESoTb.jpg",
+      "first_air_date": "2023-10-22",
+      "softcore": false,
+      "name": "药屋少女的呢喃",
+      "vote_average": 8.662,
+      "vote_count": 699
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/iWS5Z9wsQT8hC0HYAUN6WXLmFNP.jpg",
+      "genre_ids": [
+        10759,
+        10765,
+        16
+      ],
+      "id": 110181,
+      "origin_country": [
+        "CN"
+      ],
+      "original_language": "zh",
+      "original_name": "武神主宰",
+      "overview": "主角秦尘本是武域中最顶尖的天才强者，却遭歹人暗算，陨落大陆禁地死亡峡谷。必死无疑的秦尘，却意外触发神秘古剑的力量…… 三百年后，天武大陆偏僻之地，一位同名少年意外继承了秦尘的意志。作为大齐国军神定武王的爱孙，却因生父来历成迷，母子二人在定武王府中受尽冷遇，相依为命。 为了重写往日的强者神话，也为了守护自己所爱的一切，秦尘毅然决然扛起维护天下五国的大任，再度踏上武道之路。",
+      "popularity": 92.2261,
+      "poster_path": "/ihVkKv0QBPK8kf8SUajc4cK1Km6.jpg",
+      "first_air_date": "2020-03-07",
+      "softcore": false,
+      "name": "武神主宰",
+      "vote_average": 7.4,
+      "vote_count": 9
+    }
+  ],
+  "total_pages": 9,
+  "total_results": 164
+}

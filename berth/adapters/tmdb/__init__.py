@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Protocol
@@ -113,6 +113,19 @@ class TmdbDetail:
     #: 劇集不會再播了：`status` 是 `ENDED_STATUSES` 之一（brief §20.3）。
     #: 電影一律 `False`。
     ended: bool = False
+    #: `last_episode_to_air` / `next_episode_to_air`：時間表靠這兩格才知道哪一天、
+    #: 第幾集（M5.5 票 09，discover 的每一筆沒有）。完結的劇集沒有下一集，電影兩格都是 `None`。
+    last_episode: TmdbEpisode | None = None
+    next_episode: TmdbEpisode | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TmdbPage:
+    """分頁清單的一頁（`discover/tv`）。`total_pages` 說還要再讀幾頁。"""
+
+    entries: tuple[TmdbEntry, ...]
+    page: int
+    total_pages: int
 
 
 #: `episode_groups` 的 `type`：1 播出序、**2 絕對編號**、3 DVD、4 數位、5 故事線、6 製作、7 電視
@@ -147,6 +160,24 @@ class TmdbClient(Protocol):
 
     async def search(self, query: str, *, language: str) -> tuple[TmdbEntry, ...]:
         """`search/multi`，只留劇集與電影（它也回人物）。"""
+        ...
+
+    async def discover_tv(
+        self,
+        *,
+        genre: int,
+        original_languages: Sequence[str],
+        aired_from: date,
+        aired_to: date,
+        page: int,
+        language: str,
+    ) -> TmdbPage:
+        """`discover/tv` 的一頁：這個類型、這幾種原文、`aired_from`–`aired_to` 之間有一集播出的
+        劇集。
+
+        `air_date.gte/lte` 官方沒寫篩什麼，實測是「這段期間有一集播出」（brief §20.3）。順序照 TMDB
+        的預設（熱門度）。
+        """
         ...
 
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
@@ -264,6 +295,32 @@ def parse_detail(payload: Any, kind: MediaKind) -> TmdbDetail:
         seasons=_seasons(payload.get("seasons")) if series else (),
         absolute_group_id=_absolute_group_id(payload.get("episode_groups")),
         ended=series and _text(payload, "status") in ENDED_STATUSES,
+        last_episode=_episode(payload.get("last_episode_to_air")),
+        next_episode=_episode(payload.get("next_episode_to_air")),
+    )
+
+
+def parse_page(payload: Any, kind: MediaKind) -> TmdbPage:
+    """分頁清單（`discover/*`）的一頁。每一筆沒有 `media_type`，型別由端點決定。"""
+    if not isinstance(payload, dict):
+        raise ProtocolMismatchError("discover: response is not a JSON object")
+    page = _int(payload.get("page"))
+    total = _int(payload.get("total_pages"))
+    if page is None or total is None:
+        raise ProtocolMismatchError("discover: payload carries no page count")
+    return TmdbPage(parse_entries(payload.get("results"), kind=kind), page=page, total_pages=total)
+
+
+def _episode(row: Any) -> TmdbEpisode | None:
+    """`episodes[]` 的一筆，或 `last_episode_to_air` 那一格（同一種形狀）。不是物件就是沒有。"""
+    if not isinstance(row, dict):
+        return None
+    return TmdbEpisode(
+        season_number=_int(row.get("season_number")) or 0,
+        episode_number=_int(row.get("episode_number")) or 0,
+        name=_text(row, "name"),
+        air_date=_date(_text(row, "air_date")),
+        runtime=_int(row.get("runtime")),
     )
 
 
@@ -273,15 +330,9 @@ def parse_season(payload: Any) -> TmdbSeason:
         raise ProtocolMismatchError("season: response is not a JSON object")
     rows = payload.get("episodes")
     episodes = tuple(
-        TmdbEpisode(
-            season_number=_int(row.get("season_number")) or 0,
-            episode_number=_int(row.get("episode_number")) or 0,
-            name=_text(row, "name"),
-            air_date=_date(_text(row, "air_date")),
-            runtime=_int(row.get("runtime")),
-        )
+        episode
         for row in (rows if isinstance(rows, list) else [])
-        if isinstance(row, dict)
+        if (episode := _episode(row)) is not None
     )
     return TmdbSeason(
         season_number=_int(payload.get("season_number")) or 0,

@@ -2055,3 +2055,18 @@ class ProposalRefusal(StrEnum):
     #: 那一列沒有第一輪可選（命令輸入沒有 `first_batch`），或 `first_batch` 與列數對不上
     #: （M5 票 26）。
     FIRST_BATCH_NOT_OFFERED = "first_batch_not_offered"
+
+
+class ScheduleStatus(StrEnum):
+    """時間表上一張卡的狀態（M5.5 票 09，spec〈範圍〉「時間表」）。
+
+    **宣告順序就是優先序**：那一集入庫了就不必再說它訂閱了。每次照資料庫算，不進時間表的快取：
+    訂閱完下一次打開就要變。「晚 N 天」是票 12 的層。
+    """
+
+    #: 帳本裡有正片蓋到卡片上的那一集（同 `EpisodeStatus.IMPORTED`）。
+    IMPORTED = "imported"
+    #: 作品現在有一條訂閱（`CONTEXT.md`：預先綁定它的 Feed，或帶著綁到它的 RSS Series 的 Feed；
+    #: `rss.subscribed_media`）。
+    SUBSCRIBED = "subscribed"
+    UNSUBSCRIBED = "unsubscribed"

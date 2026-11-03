@@ -56,6 +56,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 06 升級後自動重算 | 啟動時舊版本的 review（排除 user、audit_undone）退回 completed，規劃器在背景重算並蓋新版本；同版本重啟 TMDB 0 次 | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
 | 2026-11-04 | M5.5 08 時間表資料源 | 這週有集的日本作品 TMDB 列得出 93.4% / 90.8%，主幹照 TMDB；漏的是迷你番與兒童節目（brief §20.3） | 新 session 下 `/implement .scratch/m5.5/issues/09-schedule.md` |
 | 2026-11-04 | M5.5 06 CI 偶發紅 | RSS 少送因送單門檻量到 CI 機器真實磁碟（`low_disk_space`），非本票；測試預設 1 TiB（`test_host_disk.py`） | 新 session 下 `/implement .scratch/m5.5/issues/10-overdue-issue.md` |
+| 2026-11-04 | M5.5 09 時間表 | `/schedule` 給每個人：TMDB discover 加每部的上下一集，程序內快取 6 小時；全部列、小海報橫列；已訂閱照〈訂閱〉算 | 新 session 下 `/implement .scratch/m5.5/issues/14-airing-time-and-rating.md` |
 | 2026-11-04 | M5.5 10 遲到 Issue | 巡檢開 `episodes_overdue`，一部作品一件：最後入庫之後播出滿門檻未入庫，在路上、審核、有 Issue 管著的除外，說出卡在哪；門檻在訂閱頁 | 新 session 下 `/implement .scratch/m5.5/issues/11-next-run-window-refresh.md` |
 
 ## 偏差與決定
@@ -72,4 +73,5 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - 2026-11-04 M5.5 票 07：頁首件數各歸各頁（使用者定）：待處理＝審核＋Issue、待綁定掛在新番，頁首數字才對得上點進去的件數；三格加總仍是 Discord 的 N（`test_notify_waiting.py` 守）。改 spec〈範圍〉、plan §6–7、DESIGN.md、brief §13。
 - 2026-11-04 M5.5 票 04b：規則一擋下的照字面列早 ≤14 天記 `released_far_ahead_of_airing`（說平台先行），更早記 `released_too_early_for_simulcast`；`released_before_airing` 只剩有換算的（改 plan §4.4、brief §20.27、spec）。
 - 2026-11-04 M5.5 票 08：時間表覆蓋率只算日本作品（使用者定），TMDB 主幹不換；discover 用 `ja|zh`、窗口前後放寬一天，每部再讀 `tv/{id}` 才知道哪天第幾集（改 brief §20.3、spec〈範圍〉、票 09）。
+- 2026-11-04 M5.5 票 09：時間表的「已訂閱」照 `CONTEXT.md`〈訂閱〉（預先綁定的 Feed 或帶著綁好 Series 的 Feed，刪 Feed 就不算），不是「有綁好的 RSS Series」；票 07 留下的區塊設定收斂轉給票 12（改 plan §6–7、brief §13、shape）。
 - 2026-11-04 M5.5 票 10：遲到門檻放訂閱頁全域區、存 `RssSettings.overdue_days`（使用者定，票寫設定頁）；卡在哪多一種 `download_failed`；`IssueSubject` 加作品（改 plan §2.1、§2.4、§3.2、§6，brief §9.1，`CONTEXT.md`）。

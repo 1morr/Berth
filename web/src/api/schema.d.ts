@@ -1899,6 +1899,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Schedule */
+        get: operations["get_schedule_api_schedule_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/queries": {
         parameters: {
             query?: never;
@@ -6276,6 +6293,69 @@ export interface components {
             /** Tools */
             tools: components["schemas"]["StepToolOut"][];
         };
+        /**
+         * ScheduleCardOut
+         * @description 一部作品這一週的一集。
+         */
+        ScheduleCardOut: {
+            /** Media Id */
+            media_id: string;
+            /** Tmdb Id */
+            tmdb_id: number;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Poster Url */
+            poster_url: string;
+            /** Poster Url En */
+            poster_url_en: string;
+            /**
+             * Air Date
+             * Format: date
+             */
+            air_date: string;
+            /** Season */
+            season: number;
+            /** Episode */
+            episode: number;
+            status: components["schemas"]["ScheduleStatus"];
+        };
+        /**
+         * ScheduleOut
+         * @description 這一週。**失敗也是 200**，同探索頁：畫面要分得出沒填憑證與 TMDB 連不上。
+         */
+        ScheduleOut: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Cards */
+            cards: components["schemas"]["ScheduleCardOut"][];
+            problem: components["schemas"]["TmdbProblem"] | null;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * ScheduleStatus
+         * @description 時間表上一張卡的狀態（M5.5 票 09，spec〈範圍〉「時間表」）。
+         *
+         *     **宣告順序就是優先序**：那一集入庫了就不必再說它訂閱了。每次照資料庫算，不進時間表的快取：
+         *     訂閱完下一次打開就要變。「晚 N 天」是票 12 的層。
+         * @enum {string}
+         */
+        ScheduleStatus: "imported" | "subscribed" | "unsubscribed";
         /**
          * SearchOut
          * @description 一次搜尋的回應。
@@ -11534,6 +11614,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    get_schedule_api_schedule_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"];
                 };
             };
         };

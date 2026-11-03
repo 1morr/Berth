@@ -646,9 +646,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。單選的篩選列
   （媒體庫、下載列表、作品頁的下載段）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
-- **主導覽五項**（M5.5 票 07）：探索、新番、媒體庫、下載、待處理；新番與待處理只有 `admin`。一項管一個區塊：區塊裡任一頁都是當前
+- **主導覽五項**（M5.5 票 07）：探索、新番、媒體庫、下載、待處理；待處理只有 `admin`，新番票 09 起每個人都有（連 `/schedule`，件數只給 `admin`）。一項管一個區塊：區塊裡任一頁都是當前
   （`nav/SectionLink`，`NAV_BOX_ACTIVE`），連結指的那一頁是 `aria-current="page"`、區塊的別頁是 `"true"`。區塊頁在 `<h1>` 上方掛一條
-  分頁列（`nav/SectionTabs`，形狀同 `SettingsTabs`）：待處理是審核 `/review`、Issue `/issues`，新番是訂閱 `/rss`。
+  分頁列（`nav/SectionTabs`，形狀同 `SettingsTabs`）：待處理是審核 `/review`、Issue `/issues`，新番是時間表 `/schedule`（每個人）與訂閱 `/rss`（`admin`；一般使用者的分頁列只有一格，照畫）。
 - **件數**（`nav/CountChip`）：標籤後面一塊 `assigned` 的 `.value` 數字（不是 `.label`：數字不要刻度），0 件、讀不到時不畫。
   每分鐘重讀，任何動作結束也重讀（`router.ts` 的 `recountAfterActions`）。
   看得見的是數字（`aria-hidden`），聽得見的是連結的 `aria-label`「待處理 3 件」——不用 sr-only 補字，標籤與它之間的空白在 jsdom
@@ -761,6 +761,20 @@ Prowlarr 已經有站時不給。結果一句摘要（唯一的 live 區）、�
   原生勾選框、`repeat(auto-fill,minmax(9rem,1fr))`），一次開一份，勾了就換網址、焦點留在那一格（換網址時牆先留著上一份，
   不換成空位格）。**不用 `<details>`**：內容只能長在它自己裡面，展開時旁邊的開關被擠到下一行、清單困在半欄寬（票 06 實跑）。
   「待審」「Unmatched」時整組不畫；篩類型或年份時「還沒進 Jellyfin」那一條不畫。
+
+### 時間表（`SchedulePage` / `ScheduleDay` / `ScheduleCardRow`，M5.5 票 09）
+
+`.scratch/m5.5/schedule-shape.md`。版面照 AutoBangumi Calendar（週一到週日分欄），但預設列全部：這一頁是找新番的。
+
+- **欄:** `lg` 以上七欄（`grid-cols-7 gap-3`），每欄一個 `<section>`，`<h2>` 是 `.label` 星期 + `.value` 日期 + 部數。
+  **今天**那一欄頂端 `border-t-4 border-rule-strong`（其他欄同寬的透明線，基線對齊）加一塊中性「今天」字塊，`aria-current="date"`。
+  「今天」照伺服器的 `today`。沒有卡的一天留著，一行 `ink-dim`「這天沒有」。
+- **窄版（`lg` 以下）一次一天:** 七顆 `FILTER` 日期鍵（`aria-pressed`，單選、預設今天，今天那一顆後面 `ink-dim`「今天」），下面那一天的清單，標題寫星期全名。
+- **卡（小海報橫列）:** 一天十幾到三十部，2:3 直卡會把一週拉到七、八個螢幕高，所以是一列一部：`w-12` 的 `ArtSlot` + 標題
+  （`.value text-sm line-clamp-2`）+ `S02E05`（`.value text-xs ink-dim`）+ 狀態。框同牆卡片（`border-2 border-rule` + `well`，hover 換
+  `rule-strong`），整列一條連結到作品頁，名字是作品名、季集與狀態是 `aria-describedby`。
+- **狀態:** 未訂閱不畫（The Usual Stays Unpainted Rule），已訂閱、已入庫是中性小色塊——是事實，不是信號。
+- 「只看已訂閱」是一顆 `aria-pressed` 的 `FILTER`。頁尾 `TmdbAttribution`。
 
 ### 橫卡（`WatchingRows`，繼續觀看與下一集）
 

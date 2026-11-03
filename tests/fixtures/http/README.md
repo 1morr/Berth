@@ -79,6 +79,8 @@ plan §9.4 的序列之後那台伺服器的狀態，不是手排出來的場景
 | `tmdb/tv-season.spy-x-family.s00.json` | 同上，`season/0`。`season_number: 0` 是 Specials，它是一季不是特例 |
 | `tmdb/tv-episode-group.spy-x-family.absolute.json` | `GET /3/tv/episode_group/689a2aec017d0bc9ecc6fac8`。`groups[0].episodes` 裁到前 30 筆——第 25 筆（`order: 24`）是 S01E25、第 26 筆（`order: 25`）是 S02E01，跨季那一步正是絕對編號要守的行為 |
 | `tmdb/movie-detail.moana-2.{en,zh}.json` | `GET /3/movie/1241982?language=…`，英文那一份帶 `append_to_response=alternative_titles,translations`（同樣裁到前 6 筆翻譯）。電影有 `runtime`、沒有 `seasons` |
+| `tmdb/discover-tv.airing.json` | `GET /3/discover/tv?with_genres=16&with_original_language=ja\|zh&air_date.gte=2026-11-01&air_date.lte=2026-11-09&language=zh-CN&page=1`（M5.5 票 08 的實驗 `scripts/experiments/schedule_sources.py` 錄的，2026-11-04；票 09 搬進來）。`results` 只留前 6 筆，`total_pages: 9` 原樣——時間表要讀全部頁數靠它。每一筆沒有 `media_type` |
+| `tmdb/tv-detail.luo-xiao-hei.zh-cn.json` | `GET /3/tv/88319?language=zh-CN`（同一輪實驗錄的，不帶 append）。`last_episode_to_air` 是 S01E41（10-30）、`next_episode_to_air` 是 S02E02（11-06，`runtime: null`）：時間表放哪一天、第幾集靠這兩格 |
 | `tmdb/tv-detail.not-found.json` | `GET /3/tv/99999999`，回 404 與 `status_code: 34`。「這個 id 不存在」與「TMDB 壞了」的下一步不同，所以它有自己的一份 |
 
 2026-09-10（M1 票 08），對真的 Prowlarr 2.5.2.5491 錄的。那台上有五個加得起來的公開站

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import date
 from typing import Any
 
 from berth.adapters.http import (
@@ -18,11 +20,13 @@ from berth.adapters.tmdb import (
     TmdbConfiguration,
     TmdbDetail,
     TmdbEntry,
+    TmdbPage,
     TmdbSeason,
     credential_auth,
     parse_absolute_ordering,
     parse_detail,
     parse_entries,
+    parse_page,
     parse_season,
 )
 from berth.domain import MediaKind
@@ -70,6 +74,27 @@ class HttpTmdbClient:
         )
         return parse_entries(payload.get("results"))
 
+    async def discover_tv(
+        self,
+        *,
+        genre: int,
+        original_languages: Sequence[str],
+        aired_from: date,
+        aired_to: date,
+        page: int,
+        language: str,
+    ) -> TmdbPage:
+        payload = await self._get(
+            "/discover/tv",
+            language=language,
+            page=str(page),
+            with_genres=str(genre),
+            # `|` 是 OR（`,` 是 AND），一部作品只有一種原文。
+            with_original_language="|".join(original_languages),
+            **{"air_date.gte": aired_from.isoformat(), "air_date.lte": aired_to.isoformat()},
+        )
+        return parse_page(payload, MediaKind.TV)
+
     async def detail(self, kind: MediaKind, tmdb_id: int, *, language: str) -> TmdbDetail:
         """`tv/{id}` 或 `movie/{id}`。
 
@@ -78,9 +103,9 @@ class HttpTmdbClient:
         """
         payload = await self._get(
             f"/{kind.value}/{tmdb_id}",
+            NotFoundError(f"{kind.value}/{tmdb_id}: no such title on TMDB"),
             language=language,
             append_to_response=DETAIL_APPENDS[kind],
-            missing=NotFoundError(f"{kind.value}/{tmdb_id}: no such title on TMDB"),
         )
         return parse_detail(payload, kind)
 
@@ -96,7 +121,13 @@ class HttpTmdbClient:
         await self._session.aclose()
 
     async def _get(
-        self, path: str, *, missing: NotFoundError | None = None, **params: str
+        # 位置參數：`air_date.gte` 這種帶點的參數名只能用 `**` 傳，`missing` 才不會跟著
+        # 被當成它的一格。
+        self,
+        path: str,
+        missing: NotFoundError | None = None,
+        /,
+        **params: str,
     ) -> dict[str, Any]:
         """每一支端點都先過令牌桶，再要求回應是一個 JSON 物件。
 
