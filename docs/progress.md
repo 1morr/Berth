@@ -53,6 +53,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 07 導覽收斂 | 頁首五項加帳號選單（第一個下拉，disclosure、Esc 回觸發鍵）；待處理與新番帶件數（`GET /waiting`，admin）；審核/Issue、訂閱掛區塊分頁，網址不變 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
 | 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05b-cumulative-next-aired-guard.md` |
 | 2026-11-04 | M5.5 05b 累計編號下一集已播 | 累計編號的第一批要下一集晚於發佈加兩天才擔保，TMDB 前季多記一集改擋下；照字面不套。閘門前後相同、擔保錯 0，SPY×FAMILY 仍擔保；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
+| 2026-11-04 | M5.5 06 升級後自動重算 | 啟動時舊版本的 review（排除 user、audit_undone）退回 completed，規劃器在背景重算並蓋新版本；同版本重啟 TMDB 0 次 | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
 
 ## 偏差與決定
 
