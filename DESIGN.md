@@ -1041,6 +1041,9 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 - **工具一行一個**：`<details>`，`well` 底 `border-2 border-rule`；摘要是 `.label`「工具」+ 人話名稱 + 狀態——執行中是 `working`
   小色塊，完成是 `ink-dim` 字（常態不塗漆），沒成功是 `ink-dim` 字且框換 `rule-strong`（助理自己會看結果，不是阻擋，不塗紅）。
   展開沉到 `hull`，「參數」「結果」是 `.value text-xs` 的 JSON 原文。
+  **網路搜尋（`web_search`）的結果是清單**（M5.5 票 03）：`ol` 一筆一格，標題 `text-sm` 連到那一頁（`INLINE_LINK`：標題會換行，
+  `TEXT_LINK` 換行會疊行），下面網址 `.value text-xs ink-dim wrap-anywhere`、服務給的日期（`page_age`）`text-xs ink-dim`，沒有就不印；
+  一筆都沒有是一行 `ink-dim`「沒有搜到網頁」。服務拒絕的搜尋（`web_search_tool_result_error`）算沒成功，照原文印。
 - **確認卡**（`agent/ConfirmCard`，M5 票 13）：畫在提出它的那一格工具呼叫上（有 Proposal 對得上 `tool_call_id` 的那一格），長相由命令決定、不由模型決定。
   等人按時是 `well` 底 + `border-2 border-rule-strong`、抬頭一塊 `assigned` 色塊「要你確認」+ 命令的人話名稱；按過之後色塊拿掉、框退回 `rule`、底沉到 `hull`。
   抬頭下是效果（`.label`：不可逆、會送出 torrent……，照伺服器提出時算的效果與旗標）與「期限：」+ `Timestamp`。

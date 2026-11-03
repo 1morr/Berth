@@ -3943,6 +3943,7 @@ const zhHant = {
       failed: '沒成功',
       input: '參數',
       output: '結果',
+      noPages: '沒有搜到網頁',
       names: {
         discover_search_media: '搜尋作品',
         why_not_explain: '查為什麼沒入庫',
@@ -8237,6 +8238,7 @@ const en: Translations<typeof zhHant> = {
       failed: 'Did not work',
       input: 'Arguments',
       output: 'Result',
+      noPages: 'No pages found',
       names: {
         discover_search_media: 'Search titles',
         why_not_explain: 'Why it is not imported',

@@ -33,6 +33,8 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    NativeToolCallPart,
+    NativeToolReturnPart,
     RetryPromptPart,
     TextPart,
     ToolCallPart,
@@ -1804,7 +1806,8 @@ def agent_scenario() -> Scenario:
     （`provider down`）時替身回 HTTP 503，連續 5 次就讓斷路器暫停 15 分鐘（票 22）。
     「從 Mikan 訂閱 SPY×FAMILY」出一張 Mikan 訂閱卡，番組頁上三個字幕組讓人選；「在 acg.rip 訂閱
     SPY×FAMILY」出一張關鍵字訂閱卡，列出每個字幕組的第一批（票 26，`SPY_BANGUMI_PAGE`、
-    `SPY_ACGRIP`）。其餘一律說它只演這幾件事。
+    `SPY_ACGRIP`）。問「評價」（`reviews`）時用伺服器端的 `web_search` 搜一次再答（M5.5 票 03，
+    `WEB_SEARCH_RESULTS`）。其餘一律說它只演這幾件事。
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
@@ -2141,6 +2144,51 @@ SLOW_SECONDS = 1.5
 SLOW_PAGES = 3
 
 
+#: 「Frieren 第二季評價如何」：假模型用伺服器端的 `web_search` 搜一次（M5.5 票 03）。
+_REVIEWS_ASKED = re.compile(r"評價|reviews?\b", re.I)
+#: 那一次搜到的網頁，形狀照 Anthropic 的 `web_search_result`（brief §20.26）；`encrypted_content`
+#: 照真的一樣長，面板上不該出現（API 拿掉）。
+WEB_SEARCH_RESULTS: tuple[dict[str, str], ...] = (
+    {
+        "type": "web_search_result",
+        "title": "Frieren: Beyond Journey's End season 2 – Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Frieren",
+        "page_age": "October 3, 2026",
+        "encrypted_content": "Eq" + "x" * 4000,
+    },
+    {
+        "type": "web_search_result",
+        "title": "Frieren Season 2 Episode 1 Review",
+        "url": "https://www.animenewsnetwork.com/review/frieren-beyond-journeys-end/season-2/episode-1",
+        "page_age": "October 10, 2026",
+        "encrypted_content": "Eq" + "y" * 4000,
+    },
+    {
+        "type": "web_search_result",
+        "title": "葬送的芙莉蓮 第二季",
+        "url": "https://zh.wikipedia.org/wiki/葬送的芙莉蓮",
+        "encrypted_content": "Eq" + "z" * 4000,
+    },
+)
+
+
+def _web_searched(text: str, *, chinese: bool) -> ModelResponse:
+    """伺服器端搜了一次、接著答完（同一則回應：Anthropic 的 `server_tool_use` 與結果）。"""
+    return ModelResponse(
+        parts=[
+            NativeToolCallPart("web_search", {"query": text}, tool_call_id="srv-demo"),
+            NativeToolReturnPart(
+                "web_search", [dict(row) for row in WEB_SEARCH_RESULTS], tool_call_id="srv-demo"
+            ),
+            TextPart(
+                "評價普遍很好（https://en.wikipedia.org/wiki/Frieren）。"
+                if chinese
+                else "Reviews are warm (https://en.wikipedia.org/wiki/Frieren)."
+            ),
+        ]
+    )
+
+
 def _slow_asked(text: str) -> bool:
     return "慢慢查" in text or "take your time" in text.lower()
 
@@ -2214,6 +2262,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             raise ModelHTTPError(503, "demo", {"error": {"message": "overloaded"}})
         if _slow_asked(text):
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
+        if _REVIEWS_ASKED.search(text):
+            return _web_searched(text, chinese=chinese)
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
@@ -2226,11 +2276,12 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         if found is None:
             return _say(
                 "這是演練用的假模型，只演這幾件事：問「SPY×FAMILY 為什麼沒入庫」、"
-                "說「下載 SPY×FAMILY」、「加這個 RSS：<網址>」，或「上網找 RSS 網址直接加」。"
+                "說「下載 SPY×FAMILY」、「加這個 RSS：<網址>」、「上網找 RSS 網址直接加」，"
+                "或問「Frieren 第二季評價如何」。"
                 if chinese
                 else "This is the demo model. It only acts out: “Why isn't SPY×FAMILY in the "
                 "library?”, “Download SPY×FAMILY”, “Add this RSS: <address>” and “Find an RSS "
-                "address on the web and add it”."
+                "address on the web and add it” and “How are the reviews of Frieren season 2?”."
             )
         title = (found.group(1) or found.group(2) or "").strip()
         return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": title})])

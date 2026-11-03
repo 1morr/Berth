@@ -1861,7 +1861,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - `AnthropicModel('claude-sonnet-5-5')`：`anthropic_supports_effort` 真，統一設定就夠。
   - `OpenAIChatModel` 配 `OpenAIProvider`：`deepseek-flash`、`gpt-4o-mini`、自訂名字的 `supports_thinking` 都是假，統一的 `thinking` 被靜靜拿掉，不會 400，但也沒有效果。`DeepSeekProvider` 才認 `deepseek-flash`，Berth 用的是 `OpenAIProvider`。
   - Vercel 串流與 `dump_messages` 都會帶 `reasoning` 片段。
-- **`web_search` 結果的 `encrypted_content`**：DeepSeek 的 Anthropic 接口每筆都帶，再加 `title`、`url`、`page_age`、`type`。一次 10 筆的 JSON 實測 22,628–41,654 字，幾乎都是它。
+- **`web_search` 結果的 `encrypted_content`**：DeepSeek 的 Anthropic 接口每筆都帶，再加 `title`、`url`、`page_age`、`type`。一次 10 筆的 JSON 實測 22,628–41,654 字，幾乎都是它。Berth 在 API 層拿掉它再給瀏覽器（M5.5 票 03），存著的歷史照留給模型重播。
 - **模型清單端點**（M5.5 票 02 實測 2026-11-04，`scripts/experiments/ai_models.py`，回應在 `tests/fixtures/http/ai_models/`）：
   - **DeepSeek 的 OpenAI 接口** `GET https://api.deepseek.com/models`（`Authorization: Bearer`）：200 `{object: "list", data: [...]}`，每筆 `id`、`object`、`owned_by`、`name`、`context_window`、`max_output_tokens`、`effort` 等；當時列 `deepseek-flash`、`deepseek-v4-pro`，沒有分頁。key 錯是 401 `{error: {message, type: "authentication_error", ...}}`，訊息裡的 key 已被服務遮成 `****`。（[Lists Models](https://api-docs.deepseek.com/api/list-models)）
   - **DeepSeek 的 Anthropic 接口不提供模型清單**：`{base}/v1/models` 帶對的 key，`x-api-key` 與 `Authorization: Bearer` 都是 404、空 body，不帶 `/v1` 也一樣；key 錯時先回 401。文件也沒寫這支（[Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)）。所以 Berth 沿用 `x-api-key`（同 SDK 與聊天），404、405、501 說成「這個端點不提供模型清單」、退回本機價目表（它認得 DeepSeek），401 / 403 才說 key 被拒。
