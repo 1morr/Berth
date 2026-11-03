@@ -1149,7 +1149,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 #### schedule
 
-登入就能讀（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）。`GET /schedule` 回這一週（容器時區的週一到週日）：`start`、`end`、`today` 與 `cards`，一張卡是一部作品的一集（`media_id`、兩輪的標題與海報、`air_date`、`season`、`episode`、`status`）。`status` 是 `imported`（帳本蓋到那一集）、`subscribed`（作品現在有一條訂閱，同 `rss.list_subscriptions` 的來源：刪掉 Feed 就不算）或 `unsubscribed`，每次照資料庫算；字幕組與 Feed 不送（比照 `why_not` 的範圍）。資料是 TMDB `discover/tv` 全部頁數加每部的 `tv/{id}`（brief §20.3），存程序內 6 小時，不寫 `media` 列。拿不到 TMDB 時照探索頁回 200 帶 `problem`。
+登入就能讀（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）。`GET /schedule` 回這一週（容器時區的週一到週日）：`start`、`end`、`today` 與 `cards`，一張卡是一部作品的一集（`media_id`、兩輪的標題與海報、`air_date`、`season`、`episode`、`status`、`airs_at`、`score`、`votes`）。`status` 是 `imported`（帳本蓋到那一集）、`subscribed`（作品現在有一條訂閱，同 `rss.list_subscriptions` 的來源：刪掉 Feed 就不算）或 `unsubscribed`，每次照資料庫算；字幕組與 Feed 不送（比照 `why_not` 的範圍）。資料是 TMDB `discover/tv` 全部頁數加每部的 `tv/{id}`（brief §20.3），存程序內 6 小時，不寫 `media` 列。拿不到 TMDB 時照探索頁回 200 帶 `problem`。第二層（票 14）：`airs_at` 是 AniList 的放送時刻（帶時區，只給未來的），`score` / `votes` 是 Bangumi 的評分；原文名對不上（brief §20.3）就是 `null`。兩個來源與 TMDB 同時抓，失敗或 10 秒沒回只少那幾格，快取在各自的 adapter（AniList 6 小時、Bangumi 1 小時）。
 
 #### waiting
 
@@ -1260,7 +1260,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 | `/library/:libraryId` | 媒體庫的牆。`?page=`；`?filter=review\|unmatched`（只有 admin）；`?sort=&order=&genres=&years=`；`?q=`（按名字找）。舊的 `/library/:routeSlug` 不留轉址 |
 | `/jobs`、`/jobs/:hash` | 下載列表、Job 詳情 |
 | `/review` | 審核佇列。頁首「待處理」連這裡；與 `/issues` 共用一條分頁列（審核、Issue，各帶件數），兩頁仍分開（ADR-0006） |
-| `/schedule` | 時間表，每個人。「新番」區塊的第一個分頁、頁首「新番」連這裡（M5.5 票 09）：這一週週一到週日分欄、今天標出，窄版一次一天；預設列全部，可切「只看已訂閱」；卡片點進 `/media/:id` 訂閱 |
+| `/schedule` | 時間表，每個人。「新番」區塊的第一個分頁、頁首「新番」連這裡（M5.5 票 09）：這一週週一到週日分欄、今天標出，窄版一次一天；預設列全部，可切「只看已訂閱」；卡片寫放送時刻與 Bangumi 評分（票 14，對得上才寫），點進 `/media/:id` 訂閱 |
 | `/rss` | 只有 admin。「新番」區塊的「訂閱」分頁（M5.5 票 07）。由上而下：待綁定 → Feed → 綁好的 RSS Series → 最近的 Feed Item。綁定在待綁定那一列就地展開（設計理由：`.scratch/m3/rss-shape.md`、`.scratch/m4/rss-series-shape.md`）。綁好的 Series 作品一塊、字幕組一列，展開看它的 Item；Series 層排除條件在展開區的「進階」；完結的收在段尾預設收起的「已完結」。Feed Item 每一列說出 Feed 與 Series |
 | `/issues` | Issue，屬於「待處理」區塊 |
 | `/weekly`、`/weekly/:reportId` | 週報（admin），入口在帳號選單 |

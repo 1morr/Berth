@@ -1224,6 +1224,11 @@ const zhHant = {
       imported: '已入庫',
       subscribed: '已訂閱',
     },
+    rating: 'Bangumi {{score}}',
+    votes_one: '{{count}} 人打分',
+    votes_other: '{{count}} 人打分',
+    ratingSpoken_one: 'Bangumi 評分 {{score}}，{{count}} 人打分',
+    ratingSpoken_other: 'Bangumi 評分 {{score}}，{{count}} 人打分',
   },
   weekly: {
     title: '週報',
@@ -5697,6 +5702,11 @@ const en: Translations<typeof zhHant> = {
       imported: 'Imported',
       subscribed: 'Subscribed',
     },
+    rating: 'Bangumi {{score}}',
+    votes_one: '{{count}} vote',
+    votes_other: '{{count}} votes',
+    ratingSpoken_one: 'Bangumi score {{score}}, {{count}} vote',
+    ratingSpoken_other: 'Bangumi score {{score}}, {{count}} votes',
   },
   weekly: {
     title: 'Weekly report',

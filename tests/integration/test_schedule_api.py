@@ -9,12 +9,14 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from berth.adapters.anilist.fake import FakeAniList
+from berth.adapters.bgm.fake import FakeBgm
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.ttl import TtlCache
 from berth.api.deps import get_client_factory
@@ -36,7 +38,16 @@ from tests.integration.arrange import (
     sign_in_owner,
 )
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_schedule import APOTHECARY, DETAILS, FRIEREN, TODAY
+from tests.integration.test_schedule import (
+    APOTHECARY,
+    DETAILS,
+    FRIEREN,
+    NOW,
+    SATURDAY_NIGHT,
+    TODAY,
+    airs,
+    rated,
+)
 
 #: 卡片的每一格。多一格（例如字幕組）就要有人看一眼：一般使用者也拿得到這一份。
 CARD_FIELDS = {
@@ -50,12 +61,17 @@ CARD_FIELDS = {
     "season",
     "episode",
     "status",
+    "airs_at",
+    "score",
+    "votes",
 }
 
 
 @pytest.fixture(autouse=True)
 def this_week(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(schedule, "local_today", lambda: TODAY)
+    monkeypatch.setattr(schedule, "utc_now", lambda: NOW)
+    monkeypatch.setattr(schedule, "_LEFT_OUT", TtlCache(ttl=schedule.LEFT_OUT_SECONDS, size=2))
     monkeypatch.setattr(
         schedule, "_CACHE", TtlCache(ttl=schedule.CACHE_SECONDS, size=schedule.CACHE_WEEKS)
     )
@@ -63,11 +79,15 @@ def this_week(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def factory(roots: dict[str, Path]) -> FakeClientFactory:
-    return factory_for(
+    factory = factory_for(
         roots,
         jellyfin=fake_jellyfin(bundled_libraries(roots["library"])),
         tmdb=FakeTmdbClient(airing=[APOTHECARY, FRIEREN], details=DETAILS),
     )
+    # 測試的 TMDB 原文名就是英文名（`test_schedule.show`）
+    factory.anilist_ = FakeAniList(airings=[airs(10, FRIEREN.original_title, SATURDAY_NIGHT)])
+    factory.bgm_ = FakeBgm(items=[rated(500, FRIEREN.original_title)])
+    return factory
 
 
 @pytest.fixture
@@ -141,3 +161,18 @@ def test_an_ordinary_user_sees_the_week_and_the_status_but_no_subgroup(client: T
         ("tv:209867", "unsubscribed"),
     ]
     assert date.fromisoformat(body["cards"][0]["air_date"]) == date(2026, 11, 3)
+
+
+def test_the_airing_time_is_an_instant_and_the_rating_carries_its_votes(
+    client: TestClient,
+) -> None:
+    """時刻帶時區送（畫面照瀏覽器的時區寫），對不上的那一張三格都是 null。"""
+    sign_in_owner(client)
+
+    cards = {card["media_id"]: card for card in client.get("/api/schedule").json()["cards"]}
+
+    frieren = cards["tv:209867"]
+    assert datetime.fromisoformat(frieren["airs_at"]) == SATURDAY_NIGHT
+    assert (frieren["score"], frieren["votes"]) == (8.1, 900)
+    apothecary = cards["tv:220542"]
+    assert (apothecary["airs_at"], apothecary["score"], apothecary["votes"]) == (None, None, None)

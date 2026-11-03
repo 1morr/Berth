@@ -24,6 +24,7 @@ from html import escape
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 from urllib.parse import quote, urlsplit
+from zoneinfo import ZoneInfo
 
 import time_machine
 import uvicorn
@@ -51,9 +52,9 @@ from berth.adapters import mediainfo
 from berth.adapters.ai import AiEndpoint
 from berth.adapters.ai.catalog import ModelCatalog
 from berth.adapters.ai.fake import FakeAi, Pause, Script
-from berth.adapters.anilist import AniList
+from berth.adapters.anilist import Airing, AniList
 from berth.adapters.anilist.fake import FakeAniList
-from berth.adapters.bgm import Bgm
+from berth.adapters.bgm import Bgm, CalendarItem
 from berth.adapters.bgm.fake import FakeBgm
 from berth.adapters.http import (
     AuthFailedError,
@@ -400,6 +401,9 @@ class Scenario:
     #: 模型、網路搜尋與動漫資料（AniList、Bangumi）打**真的**（`agent-live`，M5 票 23）。
     #: AI 不在這裡打開：驅動腳本照使用者的路徑 `PUT /settings/ai` 填 key。
     live_ai: bool = False
+    #: 時間表第二層的放送時刻與評分（M5.5 票 14）。沒給就答空的（演練不連外）。
+    anilist: FakeAniList = field(default_factory=FakeAniList)
+    bgm: FakeBgm = field(default_factory=FakeBgm)
 
     def bundled(self) -> BundledServices:
         """選了「套件內」時連的三個 compose 位址（與正式的預設 port 相同）與掛載讀到的 key。"""
@@ -1648,15 +1652,55 @@ KIMI_SPLIT_COUR_AIRING = _split_cour(date(2026, 1, 8), date(2026, 7, 2))
 
 
 #: 時間表（M5.5 票 09）那一週另外播的幾部：
-#: `(TMDB id, 英文名, zh-TW 名, 季, 集, 這一週的第幾天)`。名字取自票 08 錄下的那一週 discover
-#: （`tests/fixtures/http/tmdb/discover-tv.airing.json`），集數是演練用的。
+#: `(TMDB id, 英文名, 原文名, zh-TW 名, 季, 集, 這一週的第幾天)`。名字取自票 08 錄下的那一週
+#: discover（`tests/fixtures/http/tmdb/discover-tv.airing.json`），集數是演練用的。
 SCHEDULE_OTHERS = (
-    (220542, "The Apothecary Diaries", "藥師少女的獨語", 2, 17, 1),
-    (110181, "Lord of all Lords", "武神主宰", 1, 512, 1),
-    (45790, "JoJo's Bizarre Adventure", "JOJO的奇妙冒險", 6, 4, 3),
-    (312359, "Dragon Ball DAIMA", "七龍珠DAIMA", 1, 9, 4),
-    (30983, "Case Closed", "名偵探柯南", 1, 1180, 5),
-    (57775, "Chibi Maruko-chan", "櫻桃小丸子", 2, 1460, 6),
+    (220542, "The Apothecary Diaries", "薬屋のひとりごと", "藥師少女的獨語", 2, 17, 1),
+    (110181, "Lord of all Lords", "武神主宰", "武神主宰", 1, 512, 1),
+    (45790, "JoJo's Bizarre Adventure", "ジョジョの奇妙な冒険", "JOJO的奇妙冒險", 6, 4, 3),
+    (312359, "Dragon Ball DAIMA", "ドラゴンボールDAIMA", "七龍珠DAIMA", 1, 9, 4),
+    (30983, "Case Closed", "名探偵コナン", "名偵探柯南", 1, 1180, 5),
+    (57775, "Chibi Maruko-chan", "ちびまる子ちゃん", "櫻桃小丸子", 2, 1460, 6),
+)
+
+#: 時間表第二層（M5.5 票 14）的假資料，時鐘停在 09-25（五）。柯南（週六）對得上 AniList 與
+#: Bangumi：有時刻也有評分；藥師少女（週一，已播）只有評分；小丸子（週日）兩邊都對不上：兩格都沒有。
+_JST = ZoneInfo("Asia/Tokyo")
+SCHEDULE_AIRINGS = (
+    Airing(
+        media_id=235,
+        episode=1180,
+        airs_at=datetime(2026, 9, 26, 18, 0, tzinfo=_JST),
+        native_title="名探偵コナン",
+    ),
+    Airing(
+        media_id=161645,
+        episode=41,
+        airs_at=datetime(2026, 9, 21, 23, 40, tzinfo=_JST),
+        native_title="薬屋のひとりごと",
+    ),
+)
+SCHEDULE_RATINGS = (
+    CalendarItem(
+        id=899,
+        name="名探偵コナン",
+        name_cn="名侦探柯南",
+        air_date="1996-01-08",
+        weekday=6,
+        score=8.0,
+        votes=12873,
+        rank=None,
+    ),
+    CalendarItem(
+        id=465955,
+        name="薬屋のひとりごと",
+        name_cn="药屋少女的呢喃",
+        air_date="2026-10-03",
+        weekday=1,
+        score=7.6,
+        votes=2104,
+        rank=None,
+    ),
 )
 
 
@@ -1666,7 +1710,7 @@ def schedule_scenario() -> Scenario:
     《与你相恋》整季往後挪一週，第 12 集落在這一週的週四（09-24）：時間表上點它進作品頁，用 acg.rip
     的「只追之後的」訂閱（一筆都不送，所以不會被入庫搶先變成「已入庫」），回到時間表那張卡就是「已訂閱」。
     其餘幾部（`SCHEDULE_OTHERS`）分在週一到週日，沒有 Berth 的紀錄；週一那一天有兩部。海報都是空的：
-    演練不連外。
+    演練不連外。時刻與評分（票 14）見 `SCHEDULE_AIRINGS`、`SCHEDULE_RATINGS`。
     """
     shift = timedelta(days=7)
     season = replace(
@@ -1692,7 +1736,7 @@ def schedule_scenario() -> Scenario:
                 tmdb_id=tmdb_id,
                 kind=MediaKind.TV,
                 title=title,
-                original_title=title,
+                original_title=original,
                 year=2026,
                 poster_path="",
                 animation=True,
@@ -1701,7 +1745,7 @@ def schedule_scenario() -> Scenario:
                 tmdb_id=tmdb_id,
                 kind=MediaKind.TV,
                 title=title,
-                original_title=title,
+                original_title=original,
                 year=2026,
                 first_air_date=None,
                 overview="",
@@ -1716,7 +1760,9 @@ def schedule_scenario() -> Scenario:
             ),
             translation,
         )
-        for tmdb_id, title, translation, season_number, number, offset in SCHEDULE_OTHERS
+        for tmdb_id, title, original, translation, season_number, number, offset in (
+            SCHEDULE_OTHERS
+        )
     ]
     kimi = TmdbEntry(
         tmdb_id=detail.tmdb_id,
@@ -1737,6 +1783,8 @@ def schedule_scenario() -> Scenario:
         },
         airing=[kimi, *(entry for entry, _, _ in others)],
     )
+    scenario.anilist = FakeAniList(airings=list(SCHEDULE_AIRINGS))
+    scenario.bgm = FakeBgm(items=list(SCHEDULE_RATINGS))
     return scenario
 
 
@@ -2924,12 +2972,12 @@ class FakeClientFactory:
     def anilist(self) -> AniList:
         if self._live is not None:
             return self._live.anilist()
-        return FakeAniList()
+        return self._scenario.anilist
 
     def bgm(self) -> Bgm:
         if self._live is not None:
             return self._live.bgm()
-        return FakeBgm()
+        return self._scenario.bgm
 
     def indexer_search(self, base_url: str, api_key: str) -> IndexerSearch:
         if self._scenario.prowlarr.ping_error is not None:

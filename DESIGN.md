@@ -774,6 +774,9 @@ Prowlarr 已經有站時不給。結果一句摘要（唯一的 live 區）、�
   （`.value text-sm line-clamp-2`）+ `S02E05`（`.value text-xs ink-dim`）+ 狀態。框同牆卡片（`border-2 border-rule` + `well`，hover 換
   `rule-strong`），整列一條連結到作品頁，名字是作品名、季集與狀態是 `aria-describedby`。
 - **狀態:** 未訂閱不畫（The Usual Stays Unpainted Rule），已訂閱、已入庫是中性小色塊——是事實，不是信號。
+- **時刻與評分（票 14）:** 對得上 AniList / Bangumi 的卡片，季集後面 `Dot` + `<time>`（`.value text-xs ink-dim`，瀏覽器時區、24 小時制；
+  那一刻的本地日期不是卡片那一天時前面寫星期，例如「週六 00:30」），最後一格 `.value text-xs ink-dim`「Bangumi 8.1」，人數在 `title`；
+  念的是一整句「Bangumi 評分 8.1，900 人打分」（畫面那一份 `aria-hidden`）。對不上的兩格都不畫、不留位置。
 - 「只看已訂閱」是一顆 `aria-pressed` 的 `FILTER`。頁尾 `TmdbAttribution`。
 
 ### 橫卡（`WatchingRows`，繼續觀看與下一集）

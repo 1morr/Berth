@@ -1,12 +1,14 @@
 """時間表（M5.5 票 09，plan §6〈schedule〉）：這一週 TMDB 上播的動畫，一集一張卡。
 
+時刻（AniList）與評分（Bangumi）是第二層（票 14），對不上就是 null。
+
 登入就進得來（不在 `api/gate.py` 的 `ADMIN_PREFIXES`）：時間表給每個人。卡片只帶狀態類別，
 字幕組與 Feed 是管理員的頁面，這裡不送（比照 `services/why_not.py` 的範圍）。
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
@@ -38,6 +40,11 @@ class ScheduleCardOut(BaseModel):
     episode: int
     #: 每次照資料庫算：卡片上那一集入庫了、作品訂閱了，或都沒有。
     status: ScheduleStatus
+    #: AniList 的放送時刻（帶時區，畫面照瀏覽器的時區寫）。只給還沒播、原文名對得上的；否則 null。
+    airs_at: datetime | None
+    #: Bangumi 的評分（1–10）與打分人數。原文名對不上或沒人打分是 null。
+    score: float | None
+    votes: int | None
 
 
 class ScheduleOut(BaseModel):

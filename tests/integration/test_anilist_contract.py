@@ -11,20 +11,25 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 import respx
 
 from berth.adapters.anilist import (
+    AIRING_QUERY,
     API_URL,
     SEASON_QUERY,
+    Airing,
     AnimeSeason,
     parse_entry,
 )
 from berth.adapters.anilist.client import (
     DEFAULT_RETRY_AFTER,
+    MAX_AIRING_PAGES,
     MAX_RETRY_AFTER,
     RETRIES,
     HttpAniList,
@@ -105,6 +110,100 @@ async def test_the_season_carries_scorers_and_the_next_episode(fake: FakeTime) -
     for item in raw:
         total = sum(b["amount"] for b in item["stats"]["scoreDistribution"])
         assert by_id[item["id"]].scorers == total
+
+
+# --- 放送（時間表的第二層，M5.5 票 14） -----------------------------------------------------------
+
+JST = ZoneInfo("Asia/Tokyo")
+#: fixture 錄的那一段：日本時間 11/01 00:00 到 11/10 00:00（2026-11-02 那一週前後各寬一天）。
+WEEK_FROM = datetime(2026, 11, 1, tzinfo=JST)
+WEEK_TO = datetime(2026, 11, 10, tzinfo=JST)
+
+
+def last_page(*items: Any) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "data": {"Page": {"pageInfo": {"hasNextPage": False}, "airingSchedules": list(items)}}
+        },
+    )
+
+
+def airing_item(media: int, at: int, *, adult: bool = False, native: str | None = "x") -> Any:
+    return {
+        "airingAt": at,
+        "episode": 3,
+        "media": {"id": media, "isAdult": adult, "title": {"native": native}},
+    }
+
+
+@respx.mock
+async def test_airing_reads_every_page_of_the_window(fake: FakeTime) -> None:
+    route = respx.post(API_URL).mock(
+        side_effect=[recorded("airing.week-2026-11-02"), last_page(airing_item(1, 1793900000))]
+    )
+
+    found = await client(fake).airing(WEEK_FROM, WEEK_TO)
+
+    sent = [json.loads(call.request.content) for call in route.calls]
+    assert sent[0] == record("airing.week-2026-11-02")["request"]
+    assert sent[0]["query"] == AIRING_QUERY
+    assert sent[1]["variables"] == {**sent[0]["variables"], "p": 2}
+    assert len(found) == 51
+    assert found[0] == Airing(
+        media_id=191656,
+        episode=5,
+        airs_at=datetime.fromtimestamp(1793460600, UTC),
+        native_title="生徒会にも穴はある！",
+    )
+    assert found[0].airs_at.astimezone(JST) == datetime(2026, 11, 1, 0, 30, tzinfo=JST)
+    assert found[-1].media_id == 1
+
+
+@respx.mock
+async def test_airing_leaves_out_adult_entries_and_entries_without_a_media(
+    fake: FakeTime,
+) -> None:
+    respx.post(API_URL).mock(
+        return_value=last_page(
+            airing_item(1, 1793900000, adult=True),
+            {"airingAt": 1793900000, "episode": 1, "media": None},
+            airing_item(2, 1793900000, native=None),
+        )
+    )
+
+    found = await client(fake).airing(WEEK_FROM, WEEK_TO)
+
+    # 沒有原文標題的那一筆留著（對不上就不顯示是時間表的事），成人向與沒有作品的不留
+    assert [(a.media_id, a.native_title) for a in found] == [(2, "")]
+
+
+@respx.mock
+async def test_an_odd_shape_inside_an_airing_is_a_protocol_mismatch_or_skipped(
+    fake: FakeTime,
+) -> None:
+    """轉譯層只丟 `ServiceError`：時間表接得住它，接不住 `AttributeError`（整頁會 500）。"""
+    respx.post(API_URL).mock(
+        return_value=last_page(
+            {"airingAt": 1793900000, "episode": 1, "media": {"id": 3, "title": "x"}},
+            "not an object",
+        )
+    )
+
+    found = await client(fake).airing(WEEK_FROM, WEEK_TO)
+
+    assert [(a.media_id, a.native_title) for a in found] == [(3, "")]
+
+
+@respx.mock
+async def test_airing_stops_at_the_page_cap(fake: FakeTime) -> None:
+    """AniList 一直說還有下一頁時只讀到上限：一週實測三頁，上限只防離譜的回答。"""
+    route = respx.post(API_URL).mock(return_value=recorded("airing.week-2026-11-02"))
+
+    found = await client(fake).airing(WEEK_FROM, WEEK_TO)
+
+    assert route.call_count == MAX_AIRING_PAGES
+    assert len(found) == 50 * MAX_AIRING_PAGES
 
 
 async def test_partial_dates_keep_only_the_known_parts() -> None:

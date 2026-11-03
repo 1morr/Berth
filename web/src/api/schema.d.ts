@@ -6320,6 +6320,12 @@ export interface components {
             /** Episode */
             episode: number;
             status: components["schemas"]["ScheduleStatus"];
+            /** Airs At */
+            airs_at: string | null;
+            /** Score */
+            score: number | null;
+            /** Votes */
+            votes: number | null;
         };
         /**
          * ScheduleOut
