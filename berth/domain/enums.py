@@ -1820,7 +1820,8 @@ class AiRefusal(StrEnum):
 
     #: base URL 不是 http(s) 的絕對網址。
     BASE_URL_INVALID = "base_url_invalid"
-    #: 要開啟或測試，但這個接口還沒有 key。
+    #: 要開啟或測試，但這個接口還沒有 key；或 key 欄空著、網址卻與存著的不同（存著的那把只送到
+    #: 存它的端點，M5.5 票 01）。
     KEY_MISSING = "key_missing"
     #: 要開啟或測試，但沒填模型名稱。
     MODEL_MISSING = "model_missing"

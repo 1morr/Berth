@@ -2,7 +2,7 @@
 
 **key 只進不出**：讀回去的是 `has_key`，原文永遠不離開資料庫；服務的錯誤訊息若原樣貼回 key，
 給畫面之前遮掉。測試連線照 Sonarr 的「Test」：測的是表單上還沒存的那一份，key 欄空著就拿這個
-接口存著的那一把。
+接口存著的那一把，但只在表單的網址與存著的相同時（M5.5 票 01，`_key_for`）。
 """
 
 from __future__ import annotations
@@ -53,7 +53,8 @@ class AiView:
 
 @dataclass(frozen=True, slots=True)
 class AiForm:
-    """表單上的一種接口。`api_key` 是 `None` 或空白表示沒動（存的時候留著、測試時拿存著的）。
+    """表單上的一種接口。`api_key` 是 `None` 或空白表示沒動（存的時候留著、測試時拿存著的；
+    兩者都只在網址沒改時，見 `_key_for`）。
 
     清掉 key 是另一個命令（`forget_ai_key`）：空欄在存檔與測試裡是同一個意思。
     """
@@ -102,6 +103,21 @@ def _base_url(form: AiForm) -> str:
     return normalize_base_url(form.provider, checked)
 
 
+def _key_for(
+    provider: AiProvider, base_url: str, typed_key: str | None, saved: AiEndpointSettings
+) -> str:
+    """這次用哪把 key（M5.5 票 01）。key 欄有填就用填的；空著時，表單的網址與存著的經
+    `effective_base_url` 相同才用存著的那把（留空與填官方網址算同一個）。沒有能用的回空字串。
+
+    打到一半的網址不該收到 key：存著的那把只送到存它的那個端點。`base_url` 是 `_base_url` 整理過的。
+    """
+    typed = (typed_key or "").strip()
+    if typed:
+        return typed
+    same = effective_base_url(provider, base_url) == effective_base_url(provider, saved.base_url)
+    return saved.api_key if same else ""
+
+
 def _require_key_and_model(api_key: str, model: str) -> None:
     """開啟與測試的前提：有 key、有模型名。"""
     if not api_key:
@@ -124,7 +140,9 @@ async def set_ai(
 ) -> AiView:
     """存表單上那一種接口、把它設成現在用的那一種，並開或關 AI。另一種接口存著的不動。
 
-    開啟要這個接口有 key 與模型名，否則拒絕、什麼都不存；關閉什麼都不要求。
+    開啟要這個接口有 key 與模型名，否則拒絕、什麼都不存；關閉什麼都不要求。存著 key、改了網址、
+    key 欄又空著時，開或關都拒絕（M5.5 票 01）：存著的那把只送到存它的端點，只守測試的話，
+    先存再按就繞過去了。
     """
     base_url = _base_url(form)
     model = form.model.strip()
@@ -132,7 +150,10 @@ async def set_ai(
 
     def change(settings: AiSettings) -> None:
         endpoint = settings.endpoint(form.provider)
-        api_key = (form.api_key or "").strip() or endpoint.api_key
+        api_key = _key_for(form.provider, base_url, form.api_key, endpoint)
+        if endpoint.api_key and not api_key:
+            refusal.append(AiRefusedError(AiRefusal.KEY_MISSING))
+            return
         if enabled:
             try:
                 _require_key_and_model(api_key, model)
@@ -175,10 +196,8 @@ async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: Ai
     """照表單打一次最小呼叫，不存任何東西。服務回的錯誤是結果，不是拒絕。"""
     base_url = _base_url(form)
     model = form.model.strip()
-    api_key = (form.api_key or "").strip()
-    if not api_key:
-        saved = await read_settings(session, AiSettings)
-        api_key = saved.endpoint(form.provider).api_key
+    saved = await read_settings(session, AiSettings)
+    api_key = _key_for(form.provider, base_url, form.api_key, saved.endpoint(form.provider))
     _require_key_and_model(api_key, model)
     result = await probe(factory.ai(AiEndpoint(form.provider, base_url, api_key, model)))
     return AiTest(

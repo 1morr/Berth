@@ -269,6 +269,74 @@ class TestConnectionTest:
         assert KEY not in got.text
 
 
+class TestSavedKeyStaysOnItsEndpoint:
+    """key 欄空著代表沿用存著的那把，但只在存它的那個網址上（M5.5 票 01）。
+
+    打到一半的網址不該收到 key：改了 base URL 又沒貼新 key，測試與儲存都是 `key_missing`。
+    """
+
+    def test_testing_a_changed_address_sends_no_key(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        save(client, api_key=KEY, base_url="https://gw.example/anthropic")
+        got = press_test(client, base_url="https://evil.example/anthropic")
+        assert got.status_code == 422
+        assert got.json()["detail"]["reason"] == "key_missing"
+        assert factory.ai_.endpoints == []
+
+    @pytest.mark.parametrize(
+        ("saved_at", "tested_at"),
+        [
+            ("https://gw.example/anthropic", "https://gw.example/anthropic/v1/"),
+            ("", "https://api.anthropic.com"),
+            ("https://api.anthropic.com/v1", ""),
+        ],
+    )
+    def test_testing_the_same_address_uses_the_saved_key(
+        self, client: TestClient, factory: FakeClientFactory, saved_at: str, tested_at: str
+    ) -> None:
+        save(client, api_key=KEY, base_url=saved_at)
+        assert press_test(client, base_url=tested_at).json()["ok"] is True
+        assert factory.ai_.endpoints[-1].api_key == KEY
+
+    @pytest.mark.parametrize("enabled", [True, False])
+    def test_saving_a_changed_address_without_a_key_keeps_nothing(
+        self, client: TestClient, enabled: bool
+    ) -> None:
+        """只守測試的話，先存再按就繞過去了：存的時候一樣拒絕，關著 AI 也一樣。"""
+        save(client, api_key=KEY, base_url="https://gw.example/anthropic", enabled=True)
+        before = client.get(BASE).json()
+        got = save(
+            client, base_url="https://evil.example/anthropic", model="other", enabled=enabled
+        )
+        assert got.status_code == 422
+        assert got.json()["detail"]["reason"] == "key_missing"
+        assert client.get(BASE).json() == before
+
+    def test_saving_the_same_address_without_a_key_keeps_the_saved_one(
+        self, client: TestClient
+    ) -> None:
+        save(client, api_key=KEY)
+        got = save(client, base_url="https://api.anthropic.com/v1", enabled=True)
+        assert got.status_code == 200, got.text
+        assert got.json()["anthropic"]["has_key"] is True
+
+    def test_a_new_address_with_a_new_key_is_saved(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        save(client, api_key=KEY, base_url="https://gw.example/anthropic")
+        got = save(client, api_key=OTHER_KEY, base_url="https://api.deepseek.com/anthropic")
+        assert got.status_code == 200, got.text
+        press_test(client, base_url="https://api.deepseek.com/anthropic")
+        assert factory.ai_.endpoints[-1].api_key == OTHER_KEY
+
+    def test_a_new_address_is_fine_when_no_key_was_saved(self, client: TestClient) -> None:
+        save(client, base_url="https://gw.example/anthropic")
+        got = save(client, base_url="https://api.deepseek.com/anthropic")
+        assert got.status_code == 200, got.text
+        assert got.json()["anthropic"]["base_url"] == "https://api.deepseek.com/anthropic"
+
+
 class TestNoKeyInLogs:
     def test_keys_are_in_no_response_and_no_debug_log(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
