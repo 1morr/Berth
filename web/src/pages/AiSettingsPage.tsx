@@ -153,9 +153,9 @@ function AiForm({ saved }: { saved: AiSettings }) {
     onError: (error) => setRefused(aiRefusalOf(error)),
   })
 
-  function edit(change: Partial<Draft>, clears: AiRefusal) {
+  function edit(change: Partial<Draft>, ...clears: AiRefusal[]) {
     setDrafts((was) => ({ ...was, [provider]: { ...was[provider], ...change } }))
-    if (refused?.reason === clears) setRefused(null)
+    if (refused && clears.includes(refused.reason)) setRefused(null)
     test.reset()
     setStatus(null)
   }
@@ -178,6 +178,11 @@ function AiForm({ saved }: { saved: AiSettings }) {
   }
   const errorOf = (reason: AiRefusal) =>
     refused?.reason === reason ? t(REFUSAL_TEXT[reason]) : undefined
+  // 存著 key 還說沒有 key，只會是網址改了：存著的那把只送到存它的端點（M5.5 票 01）。
+  const keyError =
+    refused?.reason === 'key_missing' && endpoint.has_key
+      ? t('settings.aiPage.key.savedElsewhere')
+      : errorOf('key_missing')
 
   return (
     <form
@@ -226,7 +231,10 @@ function AiForm({ saved }: { saved: AiSettings }) {
             placeholder={OFFICIAL_BASE_URL[provider]}
             hint={t(PROVIDER_TEXT[provider].baseUrl)}
             error={errorOf('base_url_invalid')}
-            onChange={(event) => edit({ base_url: event.target.value }, 'base_url_invalid')}
+            // key_missing 也收：存著的 key 用不用得上看網址。
+            onChange={(event) =>
+              edit({ base_url: event.target.value }, 'base_url_invalid', 'key_missing')
+            }
           />
 
           <div className="grid gap-2">
@@ -240,7 +248,7 @@ function AiForm({ saved }: { saved: AiSettings }) {
                   : 'settings.aiPage.key.placeholder',
               )}
               hint={t('settings.aiPage.key.hint')}
-              error={errorOf('key_missing')}
+              error={keyError}
               onChange={(event) => edit({ api_key: event.target.value }, 'key_missing')}
             />
             {endpoint.has_key && (
