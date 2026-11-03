@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import Actor, CollectionType, JobState, JobTrigger, Role
-from berth.models import Job, Route, User
+from berth.domain import Actor, CollectionType, EventType, JobState, JobTrigger, Role
+from berth.models import Event, Job, Route, User
 from berth.services import proposals
 from berth.services.events import EventHub
 from tests.integration.test_media import SPY_ID
@@ -70,10 +70,20 @@ def decide(client: TestClient, card: int, body: dict[str, Any]) -> Any:
     return client.post(f"/api/proposals/{card}/decide", json=body, headers=BROWSER)
 
 
-async def job_state(session: AsyncSession, job_hash: str) -> JobState:
-    job = await session.get(Job, job_hash)
-    assert job is not None
-    return job.state
+async def retried_events(
+    session: AsyncSession, job_hash: str
+) -> list[tuple[str, dict[str, Any] | None]]:
+    """那一筆 Job 時間線上的 `retried`：誰按的、重試成哪一種。
+
+    「卡片跑過沒有」看這個，不看 Job 的狀態：核准之後 Job 歸 importer 管（見
+    `test_approving_runs_it_and_answers_with_each_rows_result`）。
+    """
+    rows = await session.execute(
+        select(Event.actor, Event.payload_json)
+        .where(Event.job_hash == job_hash, Event.type == EventType.RETRIED.value)
+        .order_by(Event.id)
+    )
+    return [(actor, payload) for actor, payload in rows]
 
 
 class TestWhoSeesWhat:
@@ -112,8 +122,19 @@ class TestWhoSeesWhat:
 
 class TestDecide:
     def test_approving_runs_it_and_answers_with_each_rows_result(self, client: TestClient) -> None:
+        """跑過的證據是命令自己寫的那筆「再入庫一次」，**不是 Job 現在的狀態**。
+
+        核准把 Job 放進 `importing` 就叫醒 importer（`executor._after`），而這台 Berth 的迴圈
+        真的在跑：這裡造的 Job 沒有 Plan 也沒有 Route，importer 一輪就把它打回 `import_failed`
+        （「no import plan or route any more」）。所以讀資料庫時看到哪一站取決於 importer 跑完
+        了沒（M5.5 票 01b）；正式環境的 Job 進得了 `importing` 一定有這兩樣。
+        """
         made = cards(client)
         sign_in(client, CREW)
+        crew = in_session(
+            client, lambda s: s.scalar(select(User.id).where(User.name == CREW["username"]))
+        )
+        assert crew is not None
 
         response = decide(client, made[CREW["username"]], {"approve": True})
 
@@ -123,7 +144,9 @@ class TestDecide:
         [row] = body["results"]
         assert (row["outcome"], row["reason"]) == ("done", "")
         assert row["result"]["state"] == "importing"
-        assert in_session(client, lambda s: job_state(s, CREWS_JOB)) is JobState.IMPORTING
+        assert in_session(client, lambda s: retried_events(s, CREWS_JOB)) == [
+            (Actor.ai(crew, Role.USER).label, {"state": "importing"})
+        ]
 
     def test_the_body_takes_no_arguments(self, client: TestClient) -> None:
         """執行用存下的那一份：送參數來是請求本身說不通，卡片也還在等。"""
@@ -135,7 +158,7 @@ class TestDecide:
 
         assert response.status_code == 422
         assert client.get("/api/proposals").json()[0]["status"] == "pending"
-        assert in_session(client, lambda s: job_state(s, ADMINS_JOB)) is JobState.IMPORT_FAILED
+        assert in_session(client, lambda s: retried_events(s, ADMINS_JOB)) == []
 
     def test_someone_elses_card_is_missing(self, client: TestClient) -> None:
         made = cards(client)
@@ -145,7 +168,7 @@ class TestDecide:
 
         assert response.status_code == 404
         assert response.json()["detail"]["reason"] == "proposal_missing"
-        assert in_session(client, lambda s: job_state(s, ADMINS_JOB)) is JobState.IMPORT_FAILED
+        assert in_session(client, lambda s: retried_events(s, ADMINS_JOB)) == []
 
     def test_an_admin_may_decide_anyones(self, client: TestClient) -> None:
         made = cards(client)
