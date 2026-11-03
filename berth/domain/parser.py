@@ -254,9 +254,14 @@ class ReasonCode(StrEnum):
     SPECIALS_NUMBERING = "specials_numbering"
 
     # --- 播出日比對（M3 票 14，`parser.airing`） ----------------------------------------
-    #: 發佈於 `{published}`，比 TMDB 上 `{episode}` 的播出日 `{aired}` 早太多（有換算的讀法兩天、
-    #: 照字面的九天，`parser.airing`）：集數多半換算錯了。
+    #: 有換算的一列發佈於 `{published}`，比 TMDB 上 `{episode}` 的播出日 `{aired}` 早超過兩天
+    #: （`parser.airing`）：季號、offset 或絕對編號多半換算錯了。換算差一集也剛好早一週，所以句子
+    #: 不說平台先行（M5.5 票 04b）。
     RELEASED_BEFORE_AIRING = "released_before_airing"
+    #: 照字面的一列（`parser.literal`）發佈於 `{published}`，比 TMDB 上 `{episode}` 的播出日
+    #: `{aired}` 早超過九天、超過地上波先行的窗口。沒有換算可以過頭，所以仍可能是平台先行，
+    #: 句子說先行的核准就好（M5.5 票 04b）。
+    RELEASED_FAR_AHEAD_OF_AIRING = "released_far_ahead_of_airing"
     #: 發佈於 `{published}`，比 TMDB 上 `{episode}` 的播出日 `{aired}` 早，但在地上波先行的
     #: 窗口內：照字面的讀法沒有換算可以過頭，多半是平台比電視台先播（M5.5 票 04、brief §20.27）。
     RELEASED_AHEAD_OF_AIRING = "released_ahead_of_airing"
@@ -354,6 +359,7 @@ REASON_PARAMS: dict[ReasonCode, frozenset[str]] = {
     _C.RANGE_SPANS_SEASONS: frozenset({"start", "end"}),
     _C.SPECIALS_NUMBERING: frozenset(),
     _C.RELEASED_BEFORE_AIRING: frozenset({"published", "episode", "aired"}),
+    _C.RELEASED_FAR_AHEAD_OF_AIRING: frozenset({"published", "episode", "aired"}),
     _C.RELEASED_AHEAD_OF_AIRING: frozenset({"published", "episode", "aired"}),
     _C.BEHIND_LATEST_EPISODE: frozenset({"episode", "aired", "latest", "latest_aired"}),
     _C.AIR_DATE_MISSING: frozenset({"episode"}),

@@ -205,7 +205,17 @@ class TestSimulcastLead:
 
         assert nine.action is PlanAction.IMPORT
         assert ten.action is PlanAction.REVIEW
-        assert ten.reasons[-1].code is ReasonCode.RELEASED_BEFORE_AIRING
+
+    def test_a_literal_row_held_past_the_lead_says_it_was_read_literally(self) -> None:
+        """早超過九天仍可能是平台先行：理由要讓畫面說得出「照字面讀的」（票 04b）。"""
+        [ten] = check_airing(TORRENT, [literal(5)], media(), ahead(10), from_series=True)
+
+        assert ten.reasons[-1] == why(
+            ReasonCode.RELEASED_FAR_AHEAD_OF_AIRING,
+            published=ahead(10).date().isoformat(),
+            episode="S01E05",
+            aired=_aired(5).isoformat(),
+        )
 
     def test_within_two_days_says_nothing(self) -> None:
         """跨日的那兩天本來就是同一次播出，不是先行。"""
@@ -233,11 +243,13 @@ class TestSimulcastLead:
         [found] = check_airing(TORRENT, [shifted], media(), ahead(7), from_series=True)
 
         assert found.action is PlanAction.REVIEW
+        assert found.reasons[-1].code is ReasonCode.RELEASED_BEFORE_AIRING
 
     def test_a_season_from_the_series_is_not_literal(self) -> None:
         [found] = check_airing(TORRENT, [item(5)], media(), ahead(7), from_series=True)
 
         assert found.action is PlanAction.REVIEW
+        assert found.reasons[-1].code is ReasonCode.RELEASED_BEFORE_AIRING
 
     def test_a_bare_number_mapped_past_the_first_season_is_not_literal(self) -> None:
         """只寫集號、季號沒寫明，卻對到第一季以外：那個季號是推出來的。"""

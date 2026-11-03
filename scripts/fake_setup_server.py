@@ -1679,6 +1679,35 @@ def rss_split_cour_airing_scenario() -> Scenario:
     return _split_cour_scenario(KIMI_SPLIT_COUR_AIRING)
 
 
+#: 播出日比 feed 晚很多（M5.5 票 04b）：TMDB 把《与你相恋》整季往後挪五週，發佈比播出早兩到三週，
+#: 超過地上波先行的一週。
+KIMI_LATE_FIRST_AIR_DATE = date(2026, 8, 6)
+
+
+def rss_simulcast_scenario() -> Scenario:
+    """「平台先行的核准就好」只給照字面的列（M5.5 票 04b）：同 `rss`，但 TMDB 的播出日晚五週。
+
+    首播日與 Mikan 寫的對不上，所以不自動綁定：在待綁定按「選」再「綁定並送出」，補舊集的 12 集
+    照字面讀成 S01E01–E12，發佈早於播出超過九天，播出日比對整批擋在 `/review`，
+    逐列理由說「照字面讀的，平台先行的核准就好」。在其中一份把那一集改成下一集並「套用到這個 RSS
+    Series」（offset +1），其餘 11 份重新規劃：有換算了，照樣被擋，理由改叫人查季號與 offset。
+    """
+    season = replace(
+        KIMI_SEASON,
+        air_date=KIMI_LATE_FIRST_AIR_DATE,
+        episodes=tuple(
+            replace(episode, air_date=KIMI_LATE_FIRST_AIR_DATE + timedelta(days=7 * index))
+            for index, episode in enumerate(KIMI_SEASON.episodes)
+        ),
+    )
+    detail = replace(
+        KIMI_DETAIL,
+        first_air_date=KIMI_LATE_FIRST_AIR_DATE,
+        seasons=(replace(KIMI_DETAIL.seasons[0], air_date=KIMI_LATE_FIRST_AIR_DATE),),
+    )
+    return rss_scenario(detail=detail, seasons=(season,))
+
+
 def rss_runtime_scenario() -> Scenario:
     """片長驗證（M3 票 15）：同 `rss`，但 mediainfo 是替身——第 11 集量到 12:05，其餘 24 分鐘。
 
@@ -2658,6 +2687,7 @@ SCENARIOS = {
     "rss-split-cour": rss_split_cour_scenario,
     "rss-split-cour-airing": rss_split_cour_airing_scenario,
     "rss-runtime": rss_runtime_scenario,
+    "rss-simulcast": rss_simulcast_scenario,
     "issues": issues_scenario,
     "review": review_scenario,
     "downloads": downloads_scenario,

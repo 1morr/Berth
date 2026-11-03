@@ -364,12 +364,13 @@ class TestManual:
     async def test_a_publish_date_before_the_air_date_waits_in_review(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """手動送單沒有 Series 的季號，12 照字面讀；早兩個月超過先行的窗口，照擋（M5.5 票 04b）。"""
         job = await submit_manually(session, roots, aired_from(date(2026, 9, 3)), published(12))
 
         assert job.state is JobState.REVIEW
         assert job.published_at == published(12)
         [reasons] = await held_reasons(session)
-        assert reasons[-1]["code"] == ReasonCode.RELEASED_BEFORE_AIRING.value
+        assert reasons[-1]["code"] == ReasonCode.RELEASED_FAR_AHEAD_OF_AIRING.value
 
     async def test_a_matching_publish_date_imports(
         self, session: AsyncSession, roots: dict[str, Path]

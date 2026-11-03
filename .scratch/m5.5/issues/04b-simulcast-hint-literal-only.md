@@ -1,6 +1,6 @@
 # 04b — 「平台先行的核准就好」只給照字面的列
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 05（同一塊：`parser/airing.py`、`parser/first_batch.py`、審核理由的文案）
 
@@ -23,7 +23,18 @@
 
 ## 驗收
 
-- [ ] 照字面而早超過 9 天被擋的列，文案有「平台先行的核准就好」；有換算的列沒有，改提醒查季號／offset（測試）
-- [ ] 審核頁實跑看得到兩種文案（playwright，桌機與 390px）
-- [ ] `berth bench` 的 `auto_wrong` 不升（貼數字）
-- [ ] 全部檢查、pytest、vitest 綠；progress.md 已更新
+- [x] 照字面而早超過 9 天被擋的列，文案有「平台先行的核准就好」；有換算的列沒有，改提醒查季號／offset（測試）
+- [x] 審核頁實跑看得到兩種文案（playwright，桌機與 390px）
+- [x] `berth bench` 的 `auto_wrong` 不升（貼數字）
+- [x] 全部檢查、pytest、vitest 綠；progress.md 已更新
+
+## Comments
+
+- **分成兩個理由，不加參數**：照字面而早超過九天被擋的列記新的 `released_far_ahead_of_airing`（同樣三個日期參數），有換算的留在 `released_before_airing`。理由的句子由前端照 code 挑，參數是不翻譯的事實（`domain/parser.py` 的 `REASON_PARAMS` 說明）；拿一個布林參數切句子會違反這條，`reasonText` 也得多一層分支。兩個 code 都在 `HELD_BY_AIRING`，所以整份計劃仍是 `air_date_conflict`。`check_airing` 改成先問 `is_literal`（同一份定義），再看有沒有超過九天。
+- **舊名沒改**：審查提到三個名字靠天數區分、真正的分界是照字面與否。`released_before_airing` 已存在資料庫的 `reasons_json` 裡，改名要 migration，不值得；語意寫在 `domain/parser.py` 的註解與 plan §4.4。已存的舊列（04b 前算的照字面列）仍是舊碼、顯示查季號的句子，06 升級後自動重算會把它們換成新碼。
+- **整份計劃的兩句**（審核頁短句 `review.plan.reason`、下載頁長說明 `jobs.plan.reason`）不知道是哪一種列，改寫成「有換算的先查季號與 offset；照字面讀的若是平台先行就核准」。
+- **手動送單的整合測試**（`TestManual`）那一筆只寫集號、單季，是照字面列，早兩個月，斷言改成新碼。RSS 那一筆帶 Series 的季號，不算照字面，仍是舊碼。
+- **實跑**：新演練情境 `rss-simulcast`（`docs/development/fake-backend.md`）。綁定後 12 列都顯示「平台先行的核准就好」（zh-Hant、en，桌機與 390px，無水平捲動）；把一列改成下一集並套用到 RSS Series（offset +1）後，其餘 11 列都換成「先查季號、offset 或絕對編號」，沒有平台先行。截圖在 `.playwright-mcp/04b-*.png`（gitignore）。
+- **前後數字**：`berth bench` 前後相同（40 份、904 檔、`auto_wrong` 0 → 0；前一版是把 HEAD 抽到暫存目錄跑的。bench 不跑播出日比對）。
+- **變異驗證**：`simulcastCopy.test.ts` 改文案前 8 個紅；樣式本身另有雙向檢查。
+- **code-review 未處理的發現**：CHANGELOG `[Unreleased]` 沒加條目（M5.5 的票都沒寫，發版時一起寫）；`airing.py` 開頭也講了一次兩種理由的文案方向，與 plan §4.4 重複，留著方便讀程式的人。
