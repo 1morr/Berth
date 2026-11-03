@@ -641,7 +641,7 @@ def _airing(
     """
     if not job.source_url:
         return tuple(items)
-    return check_airing(items, snapshot, job.published_at, from_series=series is not None)
+    return check_airing(job.name, items, snapshot, job.published_at, from_series=series is not None)
 
 
 def _apply_policy(items: Sequence[PlannedFile], route: Route | None) -> tuple[PlannedFile, ...]:
