@@ -31,3 +31,4 @@
 - playwright 實跑（`agent` 情境、範圍外的 port 8611）：`/status` 寫「網路搜尋：伺服器端 web_search」；步驟頁「送出的工具 22 支」展開是 21 支函式工具加 `web_search`；把那一列 `tools_json` 設成 NULL 後寫「未記錄」。
 - code-review 已處理：`open_turn` 的 `can_search` / `native_search` 改讀 `search.web_search`（原本另算 `bool(native)`）；`Turn.call_tools` 改名 `sent_tools`；測試改用 `test_agent_slash.in_portal`；清單 key 帶位置；補「出錯那次也記」與「摘要記 `[]`」的斷言。
 - code-review 未處理：`web_search` / `tavily` 這一對在 `SearchTools`、`slash.Status`、`StatusOut`、前端各出現一次（Data Clumps）；API 維持平鋪，`slash.Status` 也照其他欄位平鋪，先不包。
+- 2026-11-04 前端 e2e（協調者要求，合併前）：`pnpm -C web build` 後 `pnpm -C web e2e` 全部 project，**87 passed**（2.9m），0 failed、0 flaky。開跑前 port 8484–8534 有 t12 的 e2e 在用，等整段空下來 30 秒才跑。
