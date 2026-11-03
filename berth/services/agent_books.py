@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import json
 import time
+from collections.abc import Sequence
 
 from pydantic_ai.messages import ModelResponse
 
@@ -25,8 +27,10 @@ def call_row(
     response: ModelResponse | None,
     started: float,
     error: str,
+    tools: Sequence[str],
 ) -> AiCall:
-    """`response` 是 `None`：出錯、沒有回應（`error` 是原文，key 要先遮掉）。"""
+    """`response` 是 `None`：出錯、沒有回應（`error` 是原文，key 要先遮掉）。`tools` 是這次送出的
+    工具名，出錯的那一次也照送出的記（M5.5 票 15）。"""
     base_url = effective_base_url(endpoint.provider, endpoint.base_url)
     row = AiCall(
         run_id=run_id,
@@ -35,6 +39,7 @@ def call_row(
         base_url=base_url,
         duration_ms=elapsed_ms(started),
         error=error,
+        tools_json=json.dumps(list(tools)),
         # 沒有回應時也明寫：呼叫的人照這一列加總，不等 flush 才填預設值。
         input_tokens=0,
         output_tokens=0,

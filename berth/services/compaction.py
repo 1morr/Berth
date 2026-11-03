@@ -213,6 +213,8 @@ async def _settle(
         response=response,
         started=started,
         error=error,
+        # 摘要不掛工具。
+        tools=(),
     )
     with anyio.CancelScope(shield=True):
         await _write(summarizer, run_id, row, reason, error)

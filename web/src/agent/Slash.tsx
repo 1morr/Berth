@@ -1,3 +1,4 @@
+import type { ParseKeys } from 'i18next'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -163,6 +164,20 @@ function Usage({ result }: { result: Extract<Shown, { command: 'usage' }> }) {
   )
 }
 
+type Search = 'both' | 'server' | 'tavily' | 'none'
+
+const SEARCH_TEXT = {
+  both: 'agent.slash.status.searchBoth',
+  server: 'agent.slash.status.searchServer',
+  tavily: 'agent.slash.status.searchTavily',
+  none: 'agent.slash.status.searchNone',
+} as const satisfies Record<Search, ParseKeys>
+
+function searchOf({ web_search, tavily }: { web_search: boolean; tavily: boolean }): Search {
+  if (web_search) return tavily ? 'both' : 'server'
+  return tavily ? 'tavily' : 'none'
+}
+
 function Status({ result }: { result: Extract<Shown, { command: 'status' }> }) {
   const { t } = useTranslation()
   const { number, percent } = useFormat()
@@ -184,6 +199,8 @@ function Status({ result }: { result: Extract<Shown, { command: 'status' }> }) {
         {t('agent.slash.status.compactAtValue', { percent: percent(result.compact_at) })}
       </Fact>
       <Fact label={t('agent.slash.status.messages')}>{number(result.messages)}</Fact>
+      {/* 下一則訊息搜得到什麼（M5.5 票 15）：伺服器照設定說的，不是模型說的。 */}
+      <Fact label={t('agent.slash.status.search')}>{t(SEARCH_TEXT[searchOf(result)])}</Fact>
       {result.paused_until ? (
         <Fact label={t('agent.slash.status.pausedUntil')}>
           <Timestamp at={result.paused_until} />

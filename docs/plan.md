@@ -257,12 +257,13 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
   - `web_searches`：伺服器端網搜的合計；Tavily 是工具呼叫，在 `ai_tool_calls`。
   - `continues`：使用者對哪一輪按了「繼續」；唯一索引，一輪只續得了一次；沒有外鍵，指的是同一段對話裡的一輪。
   - **每次模型呼叫之後當場寫**（不等 `on_complete`：中止的那一輪它不會被呼叫）。合計裡有一次不知道（`NULL`）就是不知道。
-- `ai_calls`：每次模型呼叫一列，成敗都記：`run_id`、`step`（從 1 起）、`model`（服務報的名字）、`base_url`、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`、`web_searches`、`web_search_cost_usd`、`finish_reason`、`duration_ms`、`error`、`created_at`。
+- `ai_calls`：每次模型呼叫一列，成敗都記：`run_id`、`step`（從 1 起）、`model`（服務報的名字）、`base_url`、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`cost_usd`、`web_searches`、`web_search_cost_usd`、`tools_json`、`finish_reason`、`duration_ms`、`error`、`created_at`。
   - `base_url`：實際打的端點，官方的也寫出來（`adapters.ai.effective_base_url`）；查價先用它認服務商；`NULL` 是沒記的舊列。
   - 四種 token 欄**原樣存，`NULL` 是接口沒報**：Chat Completions 沒有快取寫這一格（`adapters/ai/usage.py`）。
   - `cost_usd`：照端點、模型名與回應的時間查價，查不到是 `NULL`（`prices.cost_of`）；含價錢知道的網搜。
   - `web_searches`：這次呼叫伺服器端搜了幾次（`usage.web_searches_of`）。
   - `web_search_cost_usd`：沒搜是 0；`NULL` 是價錢不知道——只有 Anthropic 官方端點每次 $0.01，其他端點不計進 `cost_usd`，畫面要說明。
+  - `tools_json`：這次呼叫送出的工具名（JSON 陣列，給模型的名字；伺服器端的寫 `web_search`；壓縮的摘要是 `[]`），出錯的那一次也照送出的記。模型說自己沒有某個工具時從這裡查（brief §20.26，M5.5 票 15）；`NULL` 是票 15 之前的列，步驟頁寫「未記錄」。
 - `ai_tool_calls`：每次工具呼叫一列：`run_id`、`step`（發出它的那次模型呼叫）、`command`（登錄表的名字，不是給模型的工具名）、`args_json`（截在 2000 字）、`outcome`（`AiToolOutcome`：`ok` / `warned` / `blocked` / `aborted` / `refused` / `failed` / `proposed`）、`detail`、`duration_ms`、`truncated`（交給模型的結果是截過的）、`created_at`。
 
 ### 2.5 不做的事
@@ -1179,8 +1180,8 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - `enabled`：一般使用者讀不到 `/settings/ai`，側面板靠它分「可以問」與「AI 沒開」。
   - 斷路器的 `paused_until`（一般使用者也讀得到前兩格）與 `pause_error`（讓它暫停的那一次的錯誤原文，只給管理員）。
   - `spend`：今天的花費提醒與沒算進去的呼叫數，只給管理員，其他人 `null`。
-- `GET /agent/runs/{id}`：一輪的步驟，每一次模型呼叫與它叫的工具、各自的數字、停止原因。一般使用者只看得到自己的，別人的與不存在的是 404 `run_missing`。每一則助理訊息的 `metadata.runId` 指到它那一輪：串流時在開頭的 `start`，重新載入時每一則都有。
-- `POST /agent/conversations/{id}/commands`：斜線指令，body 同 Slack 只帶 `{text}`，整則是 `/<名字>` 才算，否則 422 `unknown_command`。回照 `command` 分的結構（`new`、`compact`、`usage`、`status`、`pending`、`skills`）。AI 關著 409 `ai_disabled`；別人的對話 404 `conversation_missing`；`/compact` 另有 409 `ai_paused` 與 `busy`。
+- `GET /agent/runs/{id}`：一輪的步驟，每一次模型呼叫與它叫的工具、各自的數字、停止原因；每一次呼叫的 `tools` 是送出的工具名（`ai_calls.tools_json`，`null` 是沒記的舊列）。一般使用者只看得到自己的，別人的與不存在的是 404 `run_missing`。每一則助理訊息的 `metadata.runId` 指到它那一輪：串流時在開頭的 `start`，重新載入時每一則都有。
+- `POST /agent/conversations/{id}/commands`：斜線指令，body 同 Slack 只帶 `{text}`，整則是 `/<名字>` 才算，否則 422 `unknown_command`。回照 `command` 分的結構（`new`、`compact`、`usage`、`status`、`pending`、`skills`）。`status` 的 `web_search`、`tavily` 是下一則訊息搜得到什麼，照設定直接說、不經過模型（`agent.search_tools`，與 `open_turn` 掛工具同一份，M5.5 票 15）。AI 關著 409 `ai_disabled`；別人的對話 404 `conversation_missing`；`/compact` 另有 409 `ai_paused` 與 `busy`。
 
 #### proposals
 

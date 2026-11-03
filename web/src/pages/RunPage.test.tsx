@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Run } from '../api/usage'
@@ -45,6 +46,7 @@ const STOPPED: Run = {
         cache_write_tokens: null,
         cost_usd: 0.006,
         web_searches: 0,
+        tools: ['jobs_list_jobs', 'web_tavily_search', 'web_search'],
         finish_reason: 'tool_call',
         duration_ms: 1400,
         error: '',
@@ -71,6 +73,7 @@ const STOPPED: Run = {
         cache_write_tokens: null,
         cost_usd: null,
         web_searches: 0,
+        tools: null,
         finish_reason: 'tool_call',
         duration_ms: 900,
         error: '',
@@ -137,6 +140,24 @@ describe('一輪的步驟', () => {
     expect(within(steps[1]).getByText('skills.load_skill')).toBeVisible()
     // 這一次的價錢不知道：未知，不是 $0。
     expect(within(steps[1]).getByText('未知')).toBeVisible()
+  })
+
+  it('每一次模型呼叫送出了哪些工具；票 15 之前的呼叫說未記錄（M5.5 票 15）', async () => {
+    render({ 'GET /api/agent/runs/run-1': { body: STOPPED } })
+    const user = userEvent.setup()
+    renderApp('/agent/runs/run-1')
+
+    await screen.findByRole('heading', { name: '第 1 次模型呼叫' })
+    const steps = screen.getAllByRole('listitem').filter((item) => item.querySelector('h3'))
+    const sent = within(steps[0]).getByText('送出的工具')
+    expect(within(steps[0]).getByText('3 支')).toBeVisible()
+    expect(within(steps[0]).getByText('web_tavily_search')).not.toBeVisible()
+    await user.click(sent)
+    // 給模型的名字照原文：模型說「沒有某個工具」時，要對得上它看到的那一份。
+    for (const name of ['jobs_list_jobs', 'web_tavily_search', 'web_search']) {
+      expect(within(steps[0]).getByText(name)).toBeVisible()
+    }
+    expect(within(steps[1]).getByText('送出的工具').nextSibling).toHaveTextContent('未記錄')
   })
 
   it('出錯的一輪說出錯，原文收在技術細節', async () => {

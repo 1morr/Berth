@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -389,6 +390,8 @@ class StepCall:
     cache_write_tokens: int | None
     cost_usd: float | None
     web_searches: int
+    #: 這次呼叫送出的工具名（M5.5 票 15）；`None` 是票 15 之前的呼叫，當時沒有記。
+    tools: list[str] | None
     #: 模型說它為什麼停（原樣）；出錯是空字串。
     finish_reason: str
     duration_ms: int
@@ -512,6 +515,7 @@ def _step_call(call: AiCall) -> StepCall:
         cache_write_tokens=call.cache_write_tokens,
         cost_usd=call.cost_usd,
         web_searches=call.web_searches,
+        tools=json.loads(call.tools_json) if call.tools_json is not None else None,
         finish_reason=call.finish_reason,
         duration_ms=call.duration_ms,
         error=call.error,
