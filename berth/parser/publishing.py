@@ -22,6 +22,14 @@ RELEASE_TOLERANCE = timedelta(days=2)
 #: **有換算的讀法不加**：換算差一集也剛好早一週，只看日期分不開先行與算錯。
 SIMULCAST_LEAD = timedelta(days=7)
 
+#: 照字面的列早於播出日多久以內還像平台先行（M5.5 票 04b，協調者 2026-11-04 定）。超過
+#: `tolerance(literal=True)` 的照擋，這個上限只決定畫面說什麼：以內說「平台先行的核准就好」，
+#: 更早的叫人先查作品與 TMDB 的日期。依據只有正式環境量到的先行 4–8 天（brief §20.27）；
+#: `scripts/experiments/air_date_lag.py` 的 198 筆沒有一筆早於播出超過兩天（M3 票 14），沒有更長的
+#: 先行樣本。取 14 天：最大值 8 天加約一週餘裕。**改這裡要一起改文案的「兩週」**
+#: （`web/src/i18n/resources.ts` 裡 `released_too_early_for_simulcast` 那兩句）。
+PLAUSIBLE_SIMULCAST_LEAD = timedelta(days=14)
+
 #: 規則二的「早很多」，同時是「還在連載」的窗口。量測（`scripts/experiments/air_date_lag.py`，
 #: 票 07 的三站 fixture 149 集 + 真的 TMDB）：28–56 天之間每一個門檻都只擋下同一筆慢發的補檔，
 #: 而 split-cour 從 01 重數時對到的那一集至少落後一整個 cour（每週一集就是 10–13 週）。

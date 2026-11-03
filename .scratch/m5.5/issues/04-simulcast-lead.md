@@ -35,4 +35,4 @@
 - **放行的列不再看規則二**：播出日在發佈之後，發佈當時「最近播出的一集」不會比它晚。
 - **前後數字**：`berth bench` 前後完全相同（40 份、904 檔、`auto_wrong` 0 → 0；bench 只跑解析器、不跑播出日比對）。`scripts/experiments/first_batch_rule.py` 前後輸出逐字相同（擔保錯 0）。前一版是把 HEAD 抽到暫存目錄、用 `PYTHONPATH` 跑的。
 - **變異驗證**：`SIMULCAST_LEAD` 改成 0 時三個測試檔 36 個測試紅。
-- **code-review 未處理的發現**：`released_before_airing` 與 `air_date_conflict` 的「平台先行的核准就好」也會出現在有換算的列上，而換算差一集同樣早一週，那一句可能把算錯的列引去核准；這是票面要求的文案，照做、留給使用者決定。`VOUCHED` 留著原名（票面用這個名字），沒改成 `LITERAL_REASONS`；`publishing.tolerance(literal=...)` 的布林參數沒改成兩個常數。
+- **code-review 未處理的發現**：`released_before_airing` 與 `air_date_conflict` 的「平台先行的核准就好」也會出現在有換算的列上，而換算差一集同樣早一週，那一句可能把算錯的列引去核准；這是票面要求的文案，照做、留給使用者決定。（票 04b 處理：只對照字面的列說。）`VOUCHED` 留著原名（票面用這個名字），沒改成 `LITERAL_REASONS`；`publishing.tolerance(literal=...)` 的布林參數沒改成兩個常數。
