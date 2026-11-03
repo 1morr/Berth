@@ -298,6 +298,8 @@ class SeriesView:
     candidates: tuple[CandidateView, ...]
     #: 這一層的排除條件。
     exclusions: tuple[str, ...]
+    #: 這個字幕組的遲到門檻（天，M5.5 票 11）；`None` 用全域的。
+    overdue_days: int | None
     #: 第一批確認過了沒（票 13）。
     confirmed: bool
     #: 綁定時搜尋框預填的字：`title_raw` 讀出的作品名（`binding.search_term`，M4 票 88）。
@@ -1639,6 +1641,23 @@ async def set_overdue_days(
     return (await update_settings(session, RssSettings, change)).overdue_days
 
 
+# 帶回原本的值（含 `None`）就回去；同 `set_overdue_days`，這裡不動 Issue。
+@command(Effect.REVERSIBLE, inverse="rss.set_series_overdue_days", flags={Flag.SETTINGS})
+async def set_series_overdue_days(
+    session: AsyncSession,
+    series_id: int,
+    days: Annotated[int, Field(ge=0, le=OVERDUE_DAYS_MAX)] | None,
+) -> SeriesView:
+    """覆寫這個 RSS Series 的遲到門檻（天，M5.5 票 11）；`None` 回到全域的。一部作品多條訂閱時巡檢
+    取最大值。"""
+    row = await session.get(RssSeries, series_id)
+    if row is None:
+        raise RssRejectedError(RssRefusal.SERIES_MISSING, str(series_id))
+    row.overdue_days = days
+    await session.commit()
+    return await _series_view(session, row)
+
+
 # --- 排除條件 -----------------------------------------------------------
 #
 # 三支都是可逆但**沒有單一反向命令**：規則本身用同一支帶回原本的值就還原了，但收緊時擋下的 Item
@@ -2323,6 +2342,7 @@ async def _series_view(
         episode_offset=row.episode_offset,
         bound_by=row.bound_by,
         waiting=tally.waiting,
+        overdue_days=row.overdue_days,
         reasons=_reasons(row),
         candidates=await _candidate_views(session, row.candidates_json or ()),
         exclusions=tuple(row.exclude_json),

@@ -1956,6 +1956,9 @@ const zhHant = {
       submit_failed: '送單失敗',
       not_released: '沒有下載在處理（字幕組沒發，或發了沒送出）',
     },
+    overdueReason: '原因',
+    overdueNextRun:
+      '可能是下一輪：上一集與這一集隔了三週以上，多半是下一個 cour，Mikan 上是另一個番組，訂著的這一條收不到。到作品頁訂下一輪的番組；訂了之後晚了就照一般的遲到說。',
     overdueJob: '處理卡住的下載',
     overdueSearch: '到作品頁搜這一集或去訂閱',
     nextOverdue:
@@ -3824,6 +3827,12 @@ const zhHant = {
       saving: '儲存中…',
       saved: '已儲存，下一次巡檢照新的門檻。',
       failed: '門檻沒存成。',
+      // 單一 RSS Series 覆寫（M5.5 票 11），在 RSS Series 展開區的「進階」。
+      seriesLabel: '這個字幕組的遲到門檻（天）',
+      seriesHint: '留空用全域的 {{days}} 天。同一部作品訂了幾個字幕組時取最大的。',
+      seriesHintPlain: '留空用全域的門檻。同一部作品訂了幾個字幕組時取最大的。',
+      seriesInvalid: '填 0 到 30 的整數，或留空。',
+      seriesSave: '儲存這個字幕組的門檻',
     },
     // 排除條件（票 10）：三層共用一組字。
     rules: {
@@ -6352,6 +6361,9 @@ const en: Translations<typeof zhHant> = {
       submit_failed: 'sending failed',
       not_released: 'nothing downloading (not released, or not sent)',
     },
+    overdueReason: 'Reason',
+    overdueNextRun:
+      'Possibly the next run: more than three weeks passed between the last episode and this one, usually the next cour, which Mikan lists as a separate show your subscription does not receive. Subscribe to the next run on the title page; once you do, lateness is reported as usual.',
     overdueJob: 'Handle the stuck download',
     overdueSearch: 'Search for it or subscribe on the title page',
     nextOverdue:
@@ -8258,6 +8270,13 @@ const en: Translations<typeof zhHant> = {
       saving: 'Saving…',
       saved: 'Saved. The next sweep uses the new threshold.',
       failed: 'The threshold was not saved.',
+      seriesLabel: 'Overdue threshold for this group (days)',
+      seriesHint:
+        'Leave empty to use the global {{days}} days. With several groups on one title, the largest applies.',
+      seriesHintPlain:
+        'Leave empty to use the global threshold. With several groups on one title, the largest applies.',
+      seriesInvalid: 'Enter a whole number from 0 to 30, or leave it empty.',
+      seriesSave: 'Save threshold for this group',
     },
     rules: {
       title: 'Exclusions',

@@ -322,6 +322,10 @@ function Measured({ issue }: { issue: Issue }) {
     return (
       <>
         <WorkLine issue={issue} />
+        {/* 換輪（M5.5 票 11）：上一集與這一集隔了三週以上，多半是下一個 cour。 */}
+        {issue.detail.reason === 'next_run' && (
+          <DetailLine term={t('issues.overdueReason')}>{t('issues.overdueNextRun')}</DetailLine>
+        )}
         {(Array.isArray(issue.detail.episodes) ? issue.detail.episodes.map(record) : []).map(
           (one) => (
             <OverdueLine key={`${String(one.season)}-${String(one.episode)}`} episode={one} />

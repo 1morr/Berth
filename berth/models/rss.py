@@ -133,6 +133,9 @@ class RssSeries(Base):
     #: 上一次讀 Mikan 單一 feed 補舊集或補漏的那一刻（票 12）。`None` 是還沒補過：綁好的 Mikan
     #: RSS Series 下一輪輪詢就補；之後滿一天再補一次（plan §3.2）。
     backfilled_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    #: 這個字幕組的遲到門檻（天，M5.5 票 11）；`None` 用全域的 `RssSettings.overdue_days`。一部作品
+    #: 多條訂閱時巡檢取最大值（`services.sweep`）。
+    overdue_days: Mapped[int | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 

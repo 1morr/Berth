@@ -131,6 +131,7 @@ from berth.domain import (
     ConnectionState,
     EpisodeSnapshot,
     EventType,
+    FeedItemStatus,
     FeedKind,
     FileEntry,
     HealthStatus,
@@ -173,6 +174,7 @@ from berth.models import (
     QbittorrentSettings,
     Route,
     RssFeed,
+    RssItem,
     RssSeries,
     ServiceChoice,
     ServiceTest,
@@ -3373,6 +3375,18 @@ async def _seed_rss_sweep(session: AsyncSession, factory: FakeClientFactory) -> 
     )
     session.add(series)
     await session.flush()
+    # 它是 Mikan 聚合 feed 帶來的：遲到只看還訂著的作品（`rss.subscribed_media`，M5.5 票 11）。
+    mikan = await session.scalar(select(RssFeed).where(RssFeed.kind == FeedKind.MIKAN))
+    assert mikan is not None
+    session.add(
+        RssItem(
+            feed_id=mikan.id,
+            guid="demo-spy-01",
+            title=series.title_raw,
+            series_id=series.id,
+            status=FeedItemStatus.PASSED,
+        )
+    )
     folder = f"{route.target_path}/SPY x FAMILY (2022) [tmdbid-120089]/Season 01"
     landed = now - timedelta(days=10)
     for written, episode in ((1, 1), (2, 2), (4, 4), (5, 5), (6, 5)):

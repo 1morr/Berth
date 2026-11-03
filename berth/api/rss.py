@@ -60,6 +60,7 @@ from berth.services.rss import (
     set_feed_routes,
     set_overdue_days,
     set_series_exclusions,
+    set_series_overdue_days,
     unbind_series,
 )
 
@@ -320,6 +321,8 @@ class SeriesOut(BaseModel):
     candidates: list[CandidateOut]
     #: 這一層的排除條件。
     exclusions: list[str]
+    #: 這個字幕組的遲到門檻（天，M5.5 票 11）；`null` 用全域的（`GET /rss/overdue`）。
+    overdue_days: int | None
     #: 第一批確認過了沒（票 13）：還沒的期間每一集入庫之後都等人看一眼。
     confirmed: bool
     #: 綁定時搜尋框預填的字：發佈名讀出的作品名，季名拿掉、英文或羅馬字優先（M4 票 88）。
@@ -394,6 +397,11 @@ class OverdueIn(BaseModel):
 
 class OverdueOut(BaseModel):
     days: int
+
+
+class SeriesOverdueIn(BaseModel):
+    #: 天；`null` 回到全域的門檻。
+    days: int | None = Field(ge=0, le=OVERDUE_DAYS_MAX)
 
 
 class ItemOut(BaseModel):
@@ -723,6 +731,19 @@ async def put_binding(
 async def delete_binding(session: SessionDep, series_id: int) -> SeriesOut:
     try:
         return SeriesOut.model_validate(await unbind_series(session, series_id))
+    except RssRejectedError as refusal:
+        raise rss_refusal(refusal) from refusal
+
+
+@router.put("/series/{series_id}/overdue", responses=_responses(RssRefusal.SERIES_MISSING))
+async def put_series_overdue(
+    session: SessionDep, series_id: int, body: SeriesOverdueIn
+) -> SeriesOut:
+    """覆寫這個 RSS Series 的遲到門檻；`null` 用全域的。一部作品多條訂閱時巡檢取最大值。"""
+    try:
+        return SeriesOut.model_validate(
+            await set_series_overdue_days(session, series_id, body.days)
+        )
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
 

@@ -21,6 +21,7 @@ import { firstBatchAskText } from './firstBatchAsk'
 import { Grounds } from './GroundsList'
 import { ItemLine } from './ItemLine'
 import { RulesToggle } from './RulesEditor'
+import { SeriesOverdue } from './SeriesOverdue'
 import { SectionHeading } from '../components/SectionHeading'
 import {
   byWork,
@@ -36,7 +37,7 @@ import {
  * 完結的收在段尾預設收起的「已完結」（紀錄照舊，新的一筆出現時後端說它沒完結，它就回到上面）。
  *
  * 一列說得出這個字幕組下了什麼（已入庫 / 下載中 / 排除）與最近發佈的是哪一集；展開看它的每一筆 Item。
- * Series 層的排除條件、季號與 offset、解除綁定收在展開區的「進階」——多半只想要 Feed 層的（試跑回饋）。
+ * Series 層的排除條件、季號與 offset、遲到門檻（M5.5 票 11）、解除綁定收在展開區的「進階」——多半只想要 Feed 層的（試跑回饋）。
  */
 export function SeriesSection({
   rows,
@@ -230,6 +231,7 @@ function SeriesRow({
               </p>
             )}
             <SeriesRules row={row} />
+            <SeriesOverdue row={row} />
             {unbind.isError && <RequestFailed error={unbind.error} lead={t('request.notDone')} />}
             <div className="flex flex-wrap items-start gap-2">
               <ConfirmAction

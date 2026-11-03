@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from datetime import date, datetime, timedelta, timezone
+from collections.abc import Collection, Mapping, Sequence
+from datetime import date, datetime, time, timedelta, timezone
 
 from berth.domain import (
     EpisodeSnapshot,
@@ -56,27 +56,39 @@ def snapshot(*seasons: dict[int, date | None]) -> MediaSnapshot:
 WEEKLY = snapshot({}, {n: AIRED + timedelta(weeks=n - 4) for n in range(1, 13)})
 
 
+#: 帳本那一列寫下的時刻；換輪要比「比基準那一集入庫更晚建立的 RSS Series」時才看得到它。
+LANDED = datetime(2026, 10, 2, 12, 0, tzinfo=TZ)
+
+
+def noon(day: date) -> datetime:
+    return datetime.combine(day, time(12), TZ)
+
+
 def judge(
     *,
     now: datetime,
     media: MediaSnapshot = WEEKLY,
-    imported: set[tuple[int, int]] | None = None,
+    imported: Collection[tuple[int, int]] | Mapping[tuple[int, int], datetime] | None = None,
     claims: Mapping[tuple[int, int], Sequence[OverdueJob]] | None = None,
     watched_since: date = SUBSCRIBED,
+    subscribed: Sequence[datetime] = (),
     threshold_days: int = 2,
 ) -> Overdue | None:
+    held = {(1, 1), (1, 2), (1, 3)} if imported is None else imported
     return judge_overdue(
         media,
-        imported={(1, 1), (1, 2), (1, 3)} if imported is None else imported,
+        imported=held if isinstance(held, Mapping) else dict.fromkeys(held, LANDED),
         claims=claims or {},
-        watched_since=watched_since,
+        subscribed=subscribed or (noon(watched_since),),
         now=now,
         threshold_days=threshold_days,
     )
 
 
-def late(result: Overdue | None) -> list[tuple[int, int, OverdueStall]]:
-    assert result is None or result.reason is OverdueReason.LATE
+def late(
+    result: Overdue | None, reason: OverdueReason = OverdueReason.LATE
+) -> list[tuple[int, int, OverdueStall]]:
+    assert result is None or result.reason is reason
     return [] if result is None else [(e.season, e.episode, e.stall) for e in result.episodes]
 
 
@@ -139,7 +151,7 @@ class TestWhichEpisodesCount:
     def test_the_next_season_follows_the_last_one(self) -> None:
         media = snapshot(
             {},
-            {n: date(2026, 6, 1) + timedelta(weeks=n) for n in range(1, 4)},
+            {n: AIRED - timedelta(weeks=4 - n) for n in range(1, 4)},
             {1: AIRED, 2: AIRED + timedelta(weeks=1)},
         )
         assert late(judge(media=media, imported={(1, 1), (1, 2), (1, 3)}, now=at(31))) == [
@@ -192,3 +204,131 @@ class TestWhatIsAlreadyBeingHandled:
     def test_one_moving_download_is_enough(self) -> None:
         claims = {(1, 4): [job(JobState.IMPORT_FAILED, name="i"), job(JobState.DOWNLOADING)]}
         assert judge(claims=claims, now=at(31)) is None
+
+
+def weekly(first: date, count: int, start: int = 1) -> dict[int, date | None]:
+    return {start + n: first + timedelta(weeks=n) for n in range(count)}
+
+
+#: Re:Zero（TMDB 65942）第四季的形狀：第 67–77 集 4 月起每週一集，停播 56 天之後第 78–85 集 8/12 起
+#: （brief §20.12）。Mikan 上第二個 cour 是另一個番組，訂了前一個不會收到這一個。
+REZERO_BREAK = date(2026, 8, 12) - date(2026, 6, 17)
+
+
+def rezero(gap: timedelta = REZERO_BREAK) -> MediaSnapshot:
+    first = weekly(date(2026, 4, 8), 11, start=67)
+    return snapshot({}, {**first, **weekly(date(2026, 6, 17) + gap, 8, start=78)})
+
+
+#: 第 67–77 集都入庫了，第 77 集 6/18 入庫；訂閱是 4/1 建的。
+REZERO_HELD = {(1, n): datetime(2026, 6, 18, 9, 0, tzinfo=TZ) for n in range(67, 78)}
+REZERO_SUBSCRIBED = (datetime(2026, 4, 1, 12, 0, tzinfo=TZ),)
+
+
+class TestNextRun:
+    """換輪：基準那一集與下一集播出日相隔超過 21 天，可能是下一個 cour（Mikan 是另一個番組），
+    不是字幕組遲到。"""
+
+    def test_rezero_after_the_56_day_break_is_the_next_run(self) -> None:
+        assert timedelta(days=56) == REZERO_BREAK
+        result = judge(
+            media=rezero(),
+            imported=REZERO_HELD,
+            subscribed=REZERO_SUBSCRIBED,
+            now=at(20, month=8),
+        )
+        assert late(result, OverdueReason.NEXT_RUN) == [(1, 78, OverdueStall.NOT_RELEASED)]
+
+    def test_a_14_day_break_in_the_same_run_is_still_late(self) -> None:
+        media = rezero(timedelta(days=14))
+        aired = date(2026, 7, 1)
+        result = judge(
+            media=media,
+            imported=REZERO_HELD,
+            subscribed=REZERO_SUBSCRIBED,
+            now=datetime.combine(aired + timedelta(days=3), time(5), TZ),
+        )
+        assert late(result) == [(1, 78, OverdueStall.NOT_RELEASED)]
+
+    def test_21_days_is_the_same_run_and_22_is_not(self) -> None:
+        def reason(gap: int) -> OverdueReason:
+            result = judge(
+                media=rezero(timedelta(days=gap)),
+                imported=REZERO_HELD,
+                subscribed=REZERO_SUBSCRIBED,
+                now=at(20, month=8),
+            )
+            assert result is not None
+            return result.reason
+
+        assert reason(21) is OverdueReason.LATE
+        assert reason(22) is OverdueReason.NEXT_RUN
+
+    def test_a_series_created_after_the_baseline_landed_brings_back_late(self) -> None:
+        """訂了第二個 cour 的番組：那一條比第 77 集入庫更晚建立，晚了就是晚了。"""
+        resubscribed = (*REZERO_SUBSCRIBED, datetime(2026, 8, 10, 20, 0, tzinfo=TZ))
+        result = judge(
+            media=rezero(), imported=REZERO_HELD, subscribed=resubscribed, now=at(20, month=8)
+        )
+        assert late(result) == [(1, 78, OverdueStall.NOT_RELEASED)]
+
+    def test_the_next_season_after_a_long_break_is_the_next_run(self) -> None:
+        media = snapshot(
+            {},
+            {n: date(2026, 6, 1) + timedelta(weeks=n) for n in range(1, 4)},
+            {1: AIRED, 2: AIRED + timedelta(weeks=1)},
+        )
+        result = judge(media=media, imported={(1, 1), (1, 2), (1, 3)}, now=at(31))
+        assert late(result, OverdueReason.NEXT_RUN) == [(2, 1, OverdueStall.NOT_RELEASED)]
+
+    def test_nothing_imported_yet_has_no_baseline_to_break_from(self) -> None:
+        result = judge(
+            media=rezero(), imported=set(), watched_since=date(2026, 8, 1), now=at(20, month=8)
+        )
+        assert late(result) == [(1, 78, OverdueStall.NOT_RELEASED)]
+
+
+#: 只到第 4 集的一季：第 4 集 10/28 播出之後沒有下一集。
+SHORT = snapshot({}, {n: AIRED + timedelta(weeks=n - 4) for n in range(1, 5)})
+
+
+class TestWindow:
+    """最後一集缺集播出滿 60 天後不再提醒（追更頁的「斷更很久」）；上線第一天的舊缺集也走這一條。"""
+
+    def test_sixty_days_after_the_last_late_episode_aired_it_stops(self) -> None:
+        assert late(judge(media=SHORT, now=at(26, month=12))) == [(1, 4, OverdueStall.NOT_RELEASED)]
+        assert judge(media=SHORT, now=at(27, month=12)) is None
+
+    def test_old_gaps_from_before_berth_are_not_reminded(self) -> None:
+        old = snapshot({}, weekly(date(2024, 1, 3), 12))
+        assert judge(media=old, imported={(1, 1), (1, 2)}, now=at(31)) is None
+
+    def test_an_old_late_episode_still_shows_while_a_recent_one_is_late(self) -> None:
+        """視窗看最後一集缺集：還在提醒的一件照實列出它之前晚的每一集。"""
+        assert late(judge(imported={(1, 1)}, now=at(31))) == [
+            (1, 2, OverdueStall.NOT_RELEASED),
+            (1, 3, OverdueStall.NOT_RELEASED),
+            (1, 4, OverdueStall.NOT_RELEASED),
+        ]
+        stale = snapshot({}, {1: date(2026, 8, 1), 2: date(2026, 8, 8), 3: AIRED})
+        assert [
+            episode for _, episode, _ in late(judge(media=stale, imported={(1, 1)}, now=at(31)))
+        ] == [2, 3]
+
+
+class TestWindowAnchor:
+    def test_the_window_follows_the_last_missing_episode_not_the_last_late_one(self) -> None:
+        """第 4 集昨天才播（還沒過門檻）：最後一集缺集是它，70 天前的第 3 集照樣提醒。"""
+        today = date(2026, 10, 31)
+        media = snapshot(
+            {},
+            {
+                1: today - timedelta(days=84),
+                2: today - timedelta(days=77),
+                3: today - timedelta(days=70),
+                4: today - timedelta(days=1),
+            },
+        )
+        assert late(judge(media=media, imported={(1, 1), (1, 2)}, now=at(31))) == [
+            (1, 3, OverdueStall.NOT_RELEASED)
+        ]

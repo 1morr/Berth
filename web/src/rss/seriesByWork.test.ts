@@ -25,6 +25,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     reasons: [],
     candidates: [],
     exclusions: [],
+    overdue_days: null,
     confirmed: true,
     search_term: '与你相恋到生命尽头',
     source: 'mikan',

@@ -58,6 +58,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 06 CI 偶發紅 | RSS 少送因送單門檻量到 CI 機器真實磁碟（`low_disk_space`），非本票；測試預設 1 TiB（`test_host_disk.py`） | 新 session 下 `/implement .scratch/m5.5/issues/10-overdue-issue.md` |
 | 2026-11-04 | M5.5 09 時間表 | `/schedule` 給每個人：TMDB discover 加每部的上下一集，程序內快取 6 小時；全部列、小海報橫列；已訂閱照〈訂閱〉算 | 新 session 下 `/implement .scratch/m5.5/issues/14-airing-time-and-rating.md` |
 | 2026-11-04 | M5.5 10 遲到 Issue | 巡檢開 `episodes_overdue`，一部作品一件：最後入庫之後播出滿門檻未入庫，在路上、審核、有 Issue 管著的除外，說出卡在哪；門檻在訂閱頁 | 新 session 下 `/implement .scratch/m5.5/issues/11-next-run-window-refresh.md` |
+| 2026-11-04 | M5.5 11 換輪、視窗與刷新 | 隔 >21 天開 `next_run`、缺集播出滿 60 天不提醒、門檻可逐條覆寫取最大；巡檢前刷新快照，失敗的不開不收；協調者追加：退訂（刪 Feed）後不再開 | 新 session 下 `/implement .scratch/m5.5/issues/12-tracking-page.md` |
 
 ## 偏差與決定
 
@@ -75,3 +76,4 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - 2026-11-04 M5.5 票 08：時間表覆蓋率只算日本作品（使用者定），TMDB 主幹不換；discover 用 `ja|zh`、窗口前後放寬一天，每部再讀 `tv/{id}` 才知道哪天第幾集（改 brief §20.3、spec〈範圍〉、票 09）。
 - 2026-11-04 M5.5 票 09：時間表的「已訂閱」照 `CONTEXT.md`〈訂閱〉（預先綁定的 Feed 或帶著綁好 Series 的 Feed，刪 Feed 就不算），不是「有綁好的 RSS Series」；票 07 留下的區塊設定收斂轉給票 12（改 plan §6–7、brief §13、shape）。
 - 2026-11-04 M5.5 票 10：遲到門檻放訂閱頁全域區、存 `RssSettings.overdue_days`（使用者定，票寫設定頁）；卡在哪多一種 `download_failed`；`IssueSubject` 加作品（改 plan §2.1、§2.4、§3.2、§6，brief §9.1，`CONTEXT.md`）。
+- 2026-11-04 M5.5 票 11：遲到只看還訂著的作品、帶著 Item 的 Series（協調者追加，`rss.subscribed_media`）；`rss-sweep` 替身的 SPY×FAMILY 過了 60 天視窗不再開遲到，票 12、13 要遲到的替身得另做（改 plan §2.4、§3.2，fake-backend.md）。

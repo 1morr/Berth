@@ -9,6 +9,11 @@
 - **例外只有兩種**：下載還在動（蓋到它的 Job 在 `UNDER_WAY_STATES`，停滯不算），或已經在等你處理
   （Job 在審核、或有 Issue 說著它現在這個狀態：`OverdueJob.waiting`，呼叫端查）。其餘不管卡在
   哪一步都算晚，卡在哪寫在 `LateEpisode.stall`。
+- **換輪**（票 11）：基準那一集與下一集播出日相隔超過 `NEXT_RUN_GAP`，理由是 `next_run`、不是
+  字幕組遲到；作品上有一條比基準那一集入庫更晚建立的 RSS Series（訂了下一輪）時回到 `late`。還沒
+  入庫過就沒有基準，一律 `late`。
+- **視窗**（票 11）：最後一集缺集（基準之後已播、沒入庫的最新一集，不管過門檻沒）播出滿
+  `WINDOW`（從播出日算）就不再提醒。
 - **不讀 `series_finished`**：RSS 頁的「已完結」安靜 30 天就成立，那時候缺的集正是要說的。
 """
 
@@ -28,6 +33,13 @@ from berth.domain import (
 
 #: 下載還在動：送單到入庫之間的每一站，停滯不算（它不會自己好，正是要說的）。
 _MOVING = UNDER_WAY_STATES - {JobState.STALLED}
+
+#: 基準那一集與下一集播出日相隔超過這麼久是換輪（`OverdueReason.NEXT_RUN`）：多半是下一個 cour，
+#: Mikan 上是另一個番組，訂了前一個收不到（brief §20.12）。兩週停播（年末、特別節目）還是同一輪。
+NEXT_RUN_GAP = timedelta(days=21)
+
+#: 最後一集缺集播出滿這麼久就不再提醒（追更頁收進「斷更很久」）。上線第一天的舊缺集也走這一條。
+WINDOW = timedelta(days=60)
 
 #: 停在哪個狀態說成哪一種。不在表上的（已入庫、已刪除）等於沒有下載蓋到它。
 _STALL_OF: dict[JobState, OverdueStall] = {
@@ -70,16 +82,16 @@ class Overdue:
 def judge_overdue(
     media: MediaSnapshot,
     *,
-    imported: Collection[tuple[int, int]],
+    imported: Mapping[tuple[int, int], datetime],
     claims: Mapping[tuple[int, int], Sequence[OverdueJob]],
-    watched_since: date,
+    subscribed: Collection[datetime],
     now: datetime,
     threshold_days: int,
 ) -> Overdue | None:
     """這部作品晚了沒；沒有晚的集是 `None`。
 
-    `imported` 是帳本有正片蓋到的季集；`watched_since` 是最早的 RSS Series 建立那天（容器時區）；
-    `now` 是容器時區的現在，日界照它的日期。
+    `imported` 是帳本有正片蓋到的季集與它入庫的那一刻；`subscribed` 是作品上每一條 RSS Series 建立
+    的那一刻（不可為空）；`now` 是容器時區的現在，日界照它的日期。
     """
     aired = sorted(
         ((season.season_number, row.episode_number), row.air_date)
@@ -88,11 +100,19 @@ def judge_overdue(
         for row in season.episodes
         if row.air_date is not None
     )
-    held = [pair for pair, _ in aired if pair in imported]
+    held = [(pair, day) for pair, day in aired if pair in imported]
+    reason = OverdueReason.LATE
     if held:
-        baseline = max(held)
+        baseline, baseline_aired = max(held)
         after = [(pair, day) for pair, day in aired if pair > baseline]
+        if (
+            after
+            and after[0][1] - baseline_aired > NEXT_RUN_GAP
+            and max(subscribed) <= imported[baseline]
+        ):
+            reason = OverdueReason.NEXT_RUN
     else:
+        watched_since = min(subscribed).astimezone(now.tzinfo).date()
         after = [(pair, day) for pair, day in aired if day >= watched_since]
 
     found: list[LateEpisode] = []
@@ -103,7 +123,12 @@ def judge_overdue(
         episode = _late(pair, day, claims.get(pair, ()))
         if episode is not None:
             found.append(episode)
-    return Overdue(reason=OverdueReason.LATE, episodes=tuple(found)) if found else None
+    # 視窗看最後一集缺集（還沒過門檻、下載中的也算）：它播出滿 `WINDOW` 就整部不提醒，還在提醒時
+    # 照實列出之前晚的每一集。
+    missing = [day for pair, day in after if pair not in imported and day <= now.date()]
+    if not found or now.date() >= max(missing) + WINDOW:
+        return None
+    return Overdue(reason=reason, episodes=tuple(found))
 
 
 def _late(pair: tuple[int, int], aired: date, jobs: Sequence[OverdueJob]) -> LateEpisode | None:
