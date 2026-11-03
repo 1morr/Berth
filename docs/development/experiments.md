@@ -85,6 +85,14 @@ uv run --env-file .env python scripts/experiments/first_batch_rule.py --online  
 uv run --env-file .env python scripts/experiments/next_aired_guard.py --online          # 不加 --online 只跑語料
 ```
 
+時間表的資料源（M5.5 票 08）：TMDB discover 幾組條件列得出幾成 Bangumi 放送表上這一週有集的作品、漏掉哪些。
+只用標準庫，連 TMDB 與 Bangumi；換季時重跑。結果見 [`docs/research/schedule-sources-2026-11-04.md`](../research/schedule-sources-2026-11-04.md)：
+
+```bash
+uv run --env-file .env python scripts/experiments/schedule_sources.py                         # 這一週與上一週
+uv run --env-file .env python scripts/experiments/schedule_sources.py --param with_status=0   # 多比一組自訂條件
+```
+
 前端 e2e `rss-subscribe` 的第一輪預覽為什麼慢（M4 票 13b）：起一台 `rss` 情境的演練 server，打那條 spec 同一串 API、
 逐步計時；不連網。結果記在 `.scratch/m4/issues/13b-rss-subscribe-e2e-preview.md`。預覽裡的「重複」為什麼時有時無
 （M4 票 121b）用 `--watch`：建好 feed 之後反覆讀預覽與 `/jobs`，各狀態筆數、重複的理由或入庫集數一變就印一行，

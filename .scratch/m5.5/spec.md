@@ -20,7 +20,7 @@
 - **時間表**：版面照 AutoBangumi Calendar（brief §20.3）。
   - 週一到週日分欄、今天標出，手機單日清單；預設列全部（AutoBangumi 只列已訂閱，這裡要拿來找新番），可切「只看已訂閱」。
   - 卡片：海報、顯示用標題（Display Round）、第幾集、狀態（未訂閱 / 已訂閱 / 已入庫 / 晚 N 天），點進 `/media/:id` 走現有訂閱流程。一般使用者看得到狀態類別，看不到字幕組與 Feed（比照 `services/why_not.py` 的範圍）。
-  - 資料：以 TMDB 為主幹（有作品 id、海報、zh-TW）。第一張票先做實驗 `scripts/experiments/schedule_sources.py`，比對 TMDB 列得出的與 Bangumi 放送表；**低於九成就改以 Bangumi 為主幹**、再對 TMDB。結論與 discover 參數寫回 brief §20.3。
+  - 資料：以 TMDB 為主幹（有作品 id、海報、zh-TW）。票 08 的實驗 `scripts/experiments/schedule_sources.py` 量過（brief §20.3）：這週有集的日本作品列得出 93.4% / 90.8%，過九成，主幹不換。條件 `with_genres=16`、`with_original_language=ja|zh`，`air_date` 從週一前一天到週日後一天；每部要再讀 `tv/{id}` 才知道哪一天、第幾集。
   - 放送時刻與評分是第二層：AniList 只給未來的精確時刻、Bangumi 補評分，對不上就不顯示。
   - 請求：有人打開才抓，結果存程序內 `TtlCache`（6–24 小時），不為卡片寫 `media` 列。
 - **遲到判定**（純函式 `parser/overdue.py`，一部作品一個結果）：

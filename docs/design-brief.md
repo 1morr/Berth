@@ -1344,7 +1344,13 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 
 - **AniList `AiringSchedule`**：`airingAt`、`timeUntilAiring`、`episode`、`mediaId`；官方註明**只保證未來的放送資料存在且準確**，所以不能拿它當「該入庫了沒」的基準。（[AiringSchedule](https://docs.anilist.co/reference/object/airingschedule)）
 - **AutoBangumi Calendar**（v3.2 起）：只列已訂閱的作品，週一到週日加一欄「未知」，放送資料來自 Bangumi.tv，同一部作品多條規則合成一張。（[Calendar View](https://www.autobangumi.org/en/feature/calendar.html)）
-- **TMDB `tv/on_the_air`**：未來 7 天會播的劇集，官方說它只是 discover 的包裝，要調條件就用 discover。（[On The Air](https://developer.themoviedb.org/reference/tv-series-on-the-air-list)）discover 的條件與對當季新番的覆蓋率**還沒實測**，由 M5.5 時間表資料源那張票的實驗回答，結論補在這裡。
+- **TMDB `tv/on_the_air`**：未來 7 天會播的劇集，官方說它只是 discover 的包裝，要調條件就用 discover。（[On The Air](https://developer.themoviedb.org/reference/tv-series-on-the-air-list)）它不分類型（2026-11-04 實測 1703 筆、86 頁），時間表改用 discover。
+- **時間表以 TMDB 為主幹【決定】**（2026-11-04 實測，M5.5 票 08；細節：[研究](research/schedule-sources-2026-11-04.md)，`scripts/experiments/schedule_sources.py`）：
+  - 條件：`discover/tv`，`with_genres=16`、`with_original_language=ja|zh`，`air_date.gte` 為週一前一天、`air_date.lte` 為週日後一天。實驗另帶 `language=zh-CN`，只為了對 Bangumi 的中文名；時間表的語言照 plan §8.3。`air_date.*` 官方沒寫篩什麼（[Discover TV](https://developer.themoviedb.org/reference/discover-tv)），實測是「這段期間有一集播出」。放寬一天是因為深夜檔兩邊常差一天。
+  - 覆蓋率：分母是 Bangumi 放送表上 Bangumi 說這一週有一集的日本作品（只算日本，使用者定）。2026-11-02 那一週 71/76 = 93.4%，上一週 69/76 = 90.8%；不放寬是 92.1% / 89.5%（上一週靠放寬一天才過線，結論在線邊，換季要重量）。不分產地是 88.4% / 84.1%。
+  - 漏掉的作品（這一週）：猫猫のひとりごと 第3期、ミニアニメ「ホタルの嫁入り」ちょいたし、ダークサモナーとデキている ミニアニメ劇場（三部 WEB 迷你動畫，TMDB 沒有或只有本篇），シルバニアファミリー フレアのカラフル・エブリデイ（兒童，TMDB 查不到），ぷにるんず ぷに４（TMDB 的集停在 2025-12-27）。上一週另漏歯ならび～ズ（WEB 短篇）、凶乱令嬢 ニア・リストンミニ（WEB 迷你動畫）。沒有一般的深夜番。
+  - 反方向：這一週 164 部裡 85 部不在 Bangumi 放送表上（國產 65、日本 20，日本的是長壽 / 兒童節目與夏季開播仍在播的作品）。Bangumi 放送表本身也不完整，它是對照、不是正解。
+  - discover 的每筆沒有集與播出日：要放進週幾的欄、寫第幾集，每部再讀 `tv/{id}` 的 `last_episode_to_air` / `next_episode_to_air`。
 
 **Seerr（前 Jellyseerr / Overseerr）**（細節：[研究](research/anime-episode-source.md#203-seerr)）
 

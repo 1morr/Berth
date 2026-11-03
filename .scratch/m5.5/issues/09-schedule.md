@@ -13,7 +13,10 @@
 ## 做什麼
 
 1. **先 `/impeccable shape`**：版面照 AutoBangumi Calendar（brief §20.3）。輸出 `.scratch/m5.5/schedule-shape.md`。
-2. **資料**：照 08 定的主幹（預定 TMDB）列本週當季新番。
+2. **資料**：TMDB 當主幹（08 量過，brief §20.3、`docs/research/schedule-sources-2026-11-04.md`）列本週當季新番。
+   - `discover/tv`：`with_genres=16`、`with_original_language=ja|zh`，`air_date.gte` 為週一前一天、`air_date.lte` 為週日後一天（深夜檔兩邊差一天），全部頁數。
+   - discover 的每筆沒有集與播出日：每部再讀 `tv/{id}` 的 `last_episode_to_air` / `next_episode_to_air`，照 TMDB 的 `air_date` 放進那一天的欄。
+   - 約一半是長壽 / 兒童節目與國產動畫（Bangumi 放送表沒有的）；要不要篩看版面再定，篩的話記在票的 Comments。
    - 有人打開才抓，結果存程序內 `TtlCache`（6–24 小時），不為卡片寫 `media` 列。
    - 卡片的狀態每次照資料庫算，不進快取，所以訂閱完下一次打開就變。
    - 讀取命令 `Effect.READ`，每個人都能讀；端點進路由表。
