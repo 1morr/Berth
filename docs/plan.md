@@ -125,7 +125,7 @@ adapters ──► domain                  （不 import services、models；回
   - `sweep`：`reminded`，「放太久」提醒過的那幾件與時刻，同一件 `sweep.REMIND_EVERY` 內不再提醒。
   - `services.jellyfin` 另含 `public_url`（選填的對外網址，媒體庫深連結的主機；空的時候由 `services/deeplink.py` 推導——既有服務用 `base_url`、套件內用瀏覽器的主機名加 `base_url` 的 port，Seerr 的 `externalHostname` 慣例）、`api_key`、`metadata_fetchers`（鍵是套件內媒體庫的資料夾名，沒寫的依內容類型落回預設；值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）。沒有 MergeVersions 的任務 id：只支援 Jellyfin 12，12.x 原生合併多版本（[ADR 0002](adr/0002-jellyfin-12-minimum-pinned-image.md)、brief §20.9）。
   - `ai`：`enabled`（關著就沒有 AI）、`provider`（`anthropic` / `openai`，現在用的那一種）、`anthropic` 與 `openai` 各一組 `base_url` / `api_key` / `model`（兩種各自保存，切換不丟另一邊；`base_url` 空的是官方端點，Anthropic 存之前拿掉結尾的 `/v1`）、`tavily_api_key`（選填）、`card_downloads`（一張確認卡送出的 torrent 總數上限，預設 13；設定頁沒有這一格）、`daily_alert_usd`（每日花費提醒值，`null` 是不提醒；只提醒不停用）。**key 只進不出**：API 回 `has_key` / `has_tavily_key`；PUT 的 key 欄空著是不動，但存著的 key 只送到存它的端點：key 欄空著、`base_url` 與存著的經 `effective_base_url` 比對不同（留空與填官方網址算同一個）時，測試連線與 PUT 都回 `key_missing`，PUT 什麼都不存（M5.5 票 01，`services/ai.py` 的 `_key_for`）；清掉走 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`（清的是現用接口的 key 時一併關掉 AI）。不從環境變數讀。
-  - `rss`：排除條件的全域那一層——`exclude_not_single`（預設 `true`：不是單集的不自動下載）與 `exclude`（規則清單，格式同 `rss_feeds.exclude_json`）。
+  - `rss`：排除條件的全域那一層——`exclude_not_single`（預設 `true`：不是單集的不自動下載）與 `exclude`（規則清單，格式同 `rss_feeds.exclude_json`）。另有遲到門檻 `overdue_days`（預設 2，0–30 天，訂閱頁全域區改；M5.5 票 10）。
   - `search`：搜尋面板記住的名字種類 `names`（`NameKind` → 開關；全域、存在伺服器；出廠值英文名與原名開、兩種中文名關；別名不記）。
   - `notify`：通知管道——`discord_bot_token`（只寫不讀，API 只回「已設定」）、`discord_application_id`、`discord_bot_name`（後兩個是存 token 那一刻向 Discord 問來的）。
   - `berth`：`public_url`，Berth 從外面看的網址，通知裡的連結照它組（`services/deeplink.berth_link`）；空的是不附連結，存的時候拿掉結尾的 `/`。
@@ -209,7 +209,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
   - `skip_json`：`excluded` / `duplicate` 的那一條 `domain.SkipReason`，其他狀態是 NULL。
   - 沒有 `release_info_json`：排除與帳本那一層去重要的季集與 Tags 由標題當場解析（純函式），沒有第二個讀者。
 - `issues`：`id`、`type`、`subject`、`job_hash`、`ledger_id`、`path`、`detail_json`、`status`（`open` / `resolved` / `ignored`）、`detected_at`、`resolved_at`、`resolved_by`。
-  - `type` 是封閉集合 `IssueType`（十九種），與事件共用同一個集合。加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。依來源分組：
+  - `type` 是封閉集合 `IssueType`（二十種），與事件共用同一個集合。加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的是 `SUBJECT_OF` 與 `ISSUE_ACTIONS` 那兩條閘門。依來源分組：
 
     | 來源 | 型別 |
     | --- | --- |
@@ -217,7 +217,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
     | 管線自己發現 | `missing_files`、`client_error`、`client_removed`、`jellyfin_item_unresolved` |
     | `health_checker` | `library_uses_tvdb`、`low_disk_space` |
     | Jellyfin 回驗（反查與對帳的 Jellyfin 那一方比同一份，只寫 `issues`、不寫事件） | `jellyfin_item_mismatch` |
-    | 每日巡檢（`sweeper`） | `first_batch_stuck`、`feed_poll_failing`、`feed_backfill_failing`、`series_episodes_missing`、`series_episodes_collide` |
+    | 每日巡檢（`sweeper`） | `first_batch_stuck`、`feed_poll_failing`、`feed_backfill_failing`、`series_episodes_missing`、`series_episodes_collide`、`episodes_overdue` |
 
     `unknown_torrent` 的兩個生產者（`qbit_poller` 與對帳）寫同一個 `(type, subject)`，冪等鍵把它們收成一筆。
   - **冪等鍵**是 `(type, subject)`。`subject` 是一個存下來的欄位：資料庫的 partial unique index 只蓋 `status = 'open'`（決定過的留著當歷史），所以同一個 `(type, subject)` 只有一筆 `open`，再偵測到就更新 `detail_json` 與 `detected_at`。`subject` 依型別取：
@@ -232,6 +232,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
     | 量的那個根目錄 | `low_disk_space`（同一個檔案系統只量一次，complete 先） |
     | RSS Series 的 id | `first_batch_stuck`、`series_episodes_missing`、`series_episodes_collide` |
     | RSS Feed 的 id | `feed_poll_failing`、`feed_backfill_failing` |
+    | 作品的 id（`tv:1429`） | `episodes_overdue`（一部作品一件：好幾個字幕組晚的是同一集） |
 
     `missing_files` 用 `job_hash` 而不是路徑：它有兩條偵測路徑，qBittorrent 報 `missingFiles` 的那一條手上一條路徑都沒有——多半正是因為它看不到那個掛載；下一步（重新 recheck / 承認遺失）本來就是整包 torrent 的事。少了哪幾個放在 `detail_json.missing`。
   - **誰來收**（`resolved_by = system`）：條件自己解除的由系統收。
@@ -239,6 +240,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
     - importer 接回帳本某一列時，掛在那一列（`ledger_id`）上的 `library_link_missing` / `source_missing` / `inode_mismatch`，與入庫長回帳本時那一筆的 `job_without_files`。
     - 管線那三種（`missing_files` / `client_error` / `client_removed`）：Job 已經不在那個壞掉狀態時（poller 接回、別的路徑推走、被刪掉）由 poller 每一輪收（`issues.close_settled`）。
     - `jellyfin_item_mismatch`：下一次反查或對帳**比到**一致時收；找不到 item 不算一致。
+    - 巡檢那六種：下一輪巡檢量到條件不在時收。`episodes_overdue` 是晚的集都入庫了、或作品不再有綁好的 RSS Series。
   - **Jellyfin 還在認也不算比到**：Episode 讀不出季號或集號、或作品沒有 `ProviderIds.Tmdb`（`resolver.still_identifying`）時不開也不收，反查照還沒找到的節奏再問，**六次都還認不出才開 `jellyfin_item_mismatch`**——不是 `jellyfin_item_unresolved`：Jellyfin 列出了這個檔案，`detail_json` 並排兩邊正說得出它讀成了空的。對帳遇到還在認的與找不到同一個待遇（不動）。「還在那個狀態」與按鈕按得下去是同一份定義（`issues.STANDS_WHILE`，`client_removed` 多收一個 `submit_failed`：重新送單被拒的那一筆落在那裡）。
   - **`ledger.status` 與 Issue 的關係**：`target_missing` 與 `library_link_missing` 是同一件事的兩個角度——帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件；resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。
   - **`source_missing` 與 `unlinked` 反過來**：帳本那一欄是**使用者決定之後**才改——按下「標記為已無來源」改 `source_missing`（同刪除範圍只勾「刪 complete 檔案」的結果），刪除範圍只勾「移除鏈接」拆掉的那幾列寫 `unlinked`（磁碟上與 `target_missing` 一樣是目標不在，差別只在有人決定過）。改了之後對帳不再為它開 Issue。偵測時就改的話，「忽略」之後下一輪就再也不會問了。
@@ -489,6 +491,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
   - **卡住的**：還沒確認的 RSS Series 有 Job 停在 `submit_failed` / `client_error` 超過 24 小時（從那一筆最後一次 `submit_failed` / `issue_detected` 事件算），而且沒有開著或被忽略的管線 Issue 說著它這個狀態，開一件 `first_batch_stuck`（一個 Series 一件）；不再卡住或 Series 確認了由系統收掉。
   - **放太久**：「等你處理」最舊的一件等滿 3 天，給訂閱了「等你處理」的管理員排一則提醒（`notify.queue_lingering`），同一件 3 天內只提醒一次（`settings.sweep`）。
   - **一直失敗的 Feed、RSS Series 缺集、同一集意外多份**（§11.5〈巡檢〉）同一輪接著跑。
+  - **遲到**（M5.5 票 10，判定在 `parser.overdue`）：有綁好的 RSS Series 的作品，最後入庫的一集之後（沒入庫過時從最早的 Series 建立那天起）播出、從播出日隔天 00:00（容器時區）起算滿 `settings.rss.overdue_days` 還沒入庫的集，開一件 `episodes_overdue`（一部作品一件，`detail_json` 帶 `reason`、作品名、晚的集與卡在哪：`not_released` / `submit_failed` / `stalled` / `download_failed` / `import_failed`）。蓋到那一集的 Job 照 `why_not.claims_by_episode`；在路上（停滯不算）、`review`、或有開著或被忽略的管線 Issue 說著它這個狀態（同「卡住的」）的那一集不算。第 0 季不看，不讀 `series_finished`。
 - 一輪佔用事件迴圈最久 5–37 ms，加上 RSS 三項後暖機時 16–84 ms（`scripts/experiments/sweep_loop_lag.py`，門檻 100 ms），不移出迴圈。
 - **週報**：每一次醒來接著看最新一份該有的週報（在最近的週一 05:00 結束的那一週，`weekly.week_ending`）有沒有，沒有就產生（`weekly.compose_weekly`）。週一那一份排在巡檢之後，看到的是當天開完的 Issue。與巡檢不同，**重啟之後補上漏掉的那一週**（同一週再產生什麼都不寫），只有一份都還沒有的新裝不補。
 
@@ -1104,6 +1107,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 **排除條件**
 
 - `GET /rss/exclusions`、`PUT /rss/exclusions`（`{not_single, rules}`，全域那一層）、`PUT /rss/feeds/{id}/exclusions`、`PUT /rss/series/{id}/exclusions`（`{rules}`，回那一列）。
+- `GET /rss/overdue`、`PUT /rss/overdue`（`{days}`，0–30）：遲到門檻（`settings.rss.overdue_days`，M5.5 票 10），下一輪巡檢照新的門檻開或收。
 - 整組覆寫，寫壞的那一條讓整組不存（422 `rule_invalid`，`detail` 是 `<規則>: <Python re 的原因>`）。改完之後那一層還沒送出去的 Item 照新規則再看一次（只收緊）。
 
 **一次性連結與訂閱**

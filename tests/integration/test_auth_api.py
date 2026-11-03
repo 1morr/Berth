@@ -489,6 +489,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     # 排除條件（票 10）：三層都是 admin，同一組的理由。
     ("GET", "/rss/exclusions"): Access.ADMIN,
     ("PUT", "/rss/exclusions"): Access.ADMIN,
+    ("GET", "/rss/overdue"): Access.ADMIN,
+    ("PUT", "/rss/overdue"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/exclusions"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/routes"): Access.ADMIN,
     ("PUT", "/rss/feeds/*/interval"): Access.ADMIN,

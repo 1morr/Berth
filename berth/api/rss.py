@@ -38,6 +38,7 @@ from berth.services.oneshot import read_oneshot
 from berth.services.rss import (
     DEFAULT_INTERVAL_SEC,
     FEED_INTERVALS,
+    OVERDUE_DAYS_MAX,
     FeedView,
     RssRejectedError,
     Subscription,
@@ -51,11 +52,13 @@ from berth.services.rss import (
     preview_feed,
     prime_feed,
     read_exclusions,
+    read_overdue_days,
     release_item,
     set_exclusions,
     set_feed_exclusions,
     set_feed_interval,
     set_feed_routes,
+    set_overdue_days,
     set_series_exclusions,
     unbind_series,
 )
@@ -384,6 +387,15 @@ class ExclusionsOut(BaseModel):
     rules: list[str]
 
 
+class OverdueIn(BaseModel):
+    #: 天，從播出日隔天 00:00 起算。
+    days: int = Field(ge=0, le=OVERDUE_DAYS_MAX)
+
+
+class OverdueOut(BaseModel):
+    days: int
+
+
 class ItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -643,6 +655,18 @@ async def put_exclusions(session: SessionDep, body: ExclusionsIn) -> ExclusionsO
     except RssRejectedError as refusal:
         raise rss_refusal(refusal) from refusal
     return ExclusionsOut.model_validate(view)
+
+
+@router.get("/overdue")
+async def get_overdue(session: SessionDep) -> OverdueOut:
+    """遲到門檻（M5.5 票 10）。"""
+    return OverdueOut(days=await read_overdue_days(session))
+
+
+@router.put("/overdue")
+async def put_overdue(session: SessionDep, body: OverdueIn) -> OverdueOut:
+    """改遲到門檻；下一輪巡檢照新的門檻開或收。"""
+    return OverdueOut(days=await set_overdue_days(session, body.days))
 
 
 @router.get("/series")

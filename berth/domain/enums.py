@@ -237,11 +237,11 @@ class JellyfinRequest(StrEnum):
 class IssueType(StrEnum):
     """一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
 
-    **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-    各加一種，M4 票 130 加四種）：
+    **二十種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+    各加一種，M4 票 130 加四種，M5.5 票 10 加一種）：
     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
+    是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再六種是每日巡檢
     （`sweeper`）。各邊共用同一個
     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
     與 `ISSUE_ACTIONS` 那兩條閘門。
@@ -308,9 +308,14 @@ class IssueType(StrEnum):
     #: 它們的發佈名寫的集號不同（兩個不同的發佈被對到同一集）。版本並存（brief §7.7、§7.8）不算。
     #: 一個 Series 一件；改正了或刪掉了，下一輪巡檢由系統收掉。
     SERIES_EPISODES_COLLIDE = "series_episodes_collide"
+    #: 每日巡檢（M5.5 票 10）：訂閱的作品（有綁好的 RSS Series）最後入庫的一集之後，有集播出滿門檻
+    #: （`RssSettings.overdue_days`，從播出日隔天 00:00 起算）還沒入庫，而且沒有下載還在動、沒有已經
+    #: 在等人的（審核、管線 Issue）。一部作品一件，列出晚的集與卡在哪（`OverdueStall`）；都入庫了、
+    #: 或作品不再有綁好的 Series，下一輪巡檢由系統收掉。判定在 `parser.overdue`。
+    EPISODES_OVERDUE = "episodes_overdue"
 
 
-#: 每日巡檢（`sweeper`）開的那幾種（M4 票 129、130）。週報的「還有什麼等人」另外點出它們
+#: 每日巡檢（`sweeper`）開的那幾種（M4 票 129、130，M5.5 票 10）。週報的「還有什麼等人」另外點出它們
 #: （M4 票 131）：別的 Issue 是管線或對帳撞到的，這幾種是巡檢事後量出來的。
 SWEPT_ISSUE_TYPES = frozenset(
     {
@@ -319,8 +324,36 @@ SWEPT_ISSUE_TYPES = frozenset(
         IssueType.FEED_BACKFILL_FAILING,
         IssueType.SERIES_EPISODES_MISSING,
         IssueType.SERIES_EPISODES_COLLIDE,
+        IssueType.EPISODES_OVERDUE,
     }
 )
+
+
+class OverdueReason(StrEnum):
+    """`episodes_overdue` 為什麼開（`detail_json.reason`，M5.5 票 10、11）。"""
+
+    #: 播出滿門檻還沒入庫。
+    LATE = "late"
+    #: 基準那一集與下一集隔太久，可能是下一個 cour（Mikan 是另一個番組），不是字幕組遲到（票 11）。
+    NEXT_RUN = "next_run"
+
+
+class OverdueStall(StrEnum):
+    """晚的那一集卡在哪（`episodes_overdue` 的 `detail_json.episodes[].stall`）。
+
+    宣告順序就是一集同時有好幾筆 Job 時說哪一種：要人動手、離入庫越近的在前。
+    """
+
+    #: 入庫那一步失敗（`import_failed`）。
+    IMPORT_FAILED = "import_failed"
+    #: 下載停滯（`stalled`）：`UNDER_WAY_STATES` 算它在路上，這裡不算。
+    STALLED = "stalled"
+    #: 下載沒成而且沒有 Issue 管著（`missing_files` / `client_error` / `client_removed`）。
+    DOWNLOAD_FAILED = "download_failed"
+    #: 送單失敗（`submit_failed`）。
+    SUBMIT_FAILED = "submit_failed"
+    #: 沒有下載蓋到它：字幕組還沒發，或發了沒送出（入庫過又刪掉的 Job 也算沒有）。
+    NOT_RELEASED = "not_released"
 
 
 class IssueStatus(StrEnum):
@@ -350,6 +383,8 @@ class IssueSubject(StrEnum):
     RSS_SERIES = "rss_series"
     #: Feed 的 id（M4 票 130），同 `RSS_SERIES`：`detail_json.feed` 另存一份整數。
     RSS_FEED = "rss_feed"
+    #: 作品的 id（`tv:1429`，M5.5 票 10），同 `RSS_SERIES`：`detail_json.media` 另存一份。
+    MEDIA = "media"
 
 
 #: 逐型別的冪等鍵來源（plan §2.4 那一段逐型別寫死了取哪一欄）。
@@ -394,6 +429,9 @@ SUBJECT_OF: dict[IssueType, IssueSubject] = {
     # 缺集也是**一個 Series 一件**：缺的那幾集列在 `detail_json`，補上一集是同一件變短。
     IssueType.SERIES_EPISODES_MISSING: IssueSubject.RSS_SERIES,
     IssueType.SERIES_EPISODES_COLLIDE: IssueSubject.RSS_SERIES,
+    # 遲到是**一部作品一件**（M5.5 票 10）：同一部作品可以有好幾個字幕組的 Series，晚的是那一集，
+    # 誰入庫都算數。
+    IssueType.EPISODES_OVERDUE: IssueSubject.MEDIA,
 }
 
 
@@ -494,6 +532,8 @@ ISSUE_ACTIONS: dict[IssueType, tuple[IssueAction, ...]] = {
     IssueType.SERIES_EPISODES_MISSING: (),
     # 改正在作品頁的檔案與版本（「修正」走 rematch）；哪一份放錯要人看發佈名才知道。
     IssueType.SERIES_EPISODES_COLLIDE: (),
+    # 出路是連結（M5.5 票 10）：搜這一集或去訂閱在作品頁，卡住的 Job 在 Job 頁；剩「忽略」。
+    IssueType.EPISODES_OVERDUE: (),
 }
 
 #: 按下去會不會刪掉磁碟上的東西。**要涵蓋整個 `IssueAction`**（`test_issue_types.py` 守著）：

@@ -76,6 +76,9 @@ class RssSettings(SettingsGroup):
     exclude_not_single: bool = True
     #: 全域的排除條件（`parser.exclusion` 的格式），與 Feed、RSS Series 那兩層取聯集。
     exclude: list[str] = []
+    #: 遲到門檻（M5.5 票 10）：訂閱的作品一集從播出日隔天 00:00 起算滿這幾天還沒入庫，每日巡檢開
+    #: `episodes_overdue`（`parser.overdue`）。預設 2 天：字幕組多半播出當天到隔天發。
+    overdue_days: int = 2
 
 
 #: 搜尋面板記住的名字種類與它們的出廠值（`SearchSettings`）。

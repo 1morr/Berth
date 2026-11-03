@@ -19,6 +19,7 @@ import { SIGNAL_FILL } from '../components/signal'
 import { useFocusAfterRemoval } from '../components/useFocusAfterRemoval'
 import { useHashTarget } from '../components/useHashTarget'
 import { ExclusionsSection } from '../rss/ExclusionsSection'
+import { OverdueSection } from '../rss/OverdueSection'
 import { FeedSection } from '../rss/FeedSection'
 import { FirstRoundSection } from '../rss/FirstRoundSection'
 import { Grounds } from '../rss/GroundsList'
@@ -82,6 +83,7 @@ export function RssPage() {
           <FeedSection feeds={feeds.data ?? []} />
           <OneshotSection />
           {exclusions.data && <ExclusionsSection exclusions={exclusions.data} />}
+          <OverdueSection />
           {bound.length > 0 && <SeriesSection rows={bound} onDone={setSaid} />}
           {/* 沒有 Feed 時整頁只有 Feed 段（shape §5）：還不會有任何 Item。 */}
           {(feeds.data ?? []).length > 0 && (

@@ -3219,6 +3219,9 @@ async def _seed_rss_sweep(session: AsyncSession, factory: FakeClientFactory) -> 
     - 一個綁在 SPY×FAMILY 的 RSS Series：第 1、2、4、5 集十天前入庫（第 3 集是洞），第 5 集另有一個
       寫著 `- 06` 的發佈也被對到這一集（同一集多份）。帳本只是列，媒體庫裡沒有檔案——這一情境看的是
       巡檢寫出的 Issue，不是對帳。
+    - 第 7 集有一筆入庫失敗（M5.5 票 10）：第 5 集之後都播過了，巡檢開一件遲到，第 6 集以後說字幕組
+      還沒發、第 7 集說入庫失敗並連到那一筆。不用下載停滯：替身 qBittorrent 沒有那一包，poller
+      會把它判成被移除。
     """
     now = utcnow()
     anime = await session.scalar(select(Route).where(Route.slug == "anime"))
@@ -3314,6 +3317,20 @@ async def _seed_rss_sweep(session: AsyncSession, factory: FakeClientFactory) -> 
                 created_at=landed,
             )
         )
+    failed = "[喵萌奶茶屋&LoliHouse] SPY×FAMILY - 07 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]"
+    session.add(
+        Job(
+            hash=hashlib.sha1(failed.encode()).hexdigest(),
+            name=failed,
+            source_url="",
+            trigger=JobTrigger.RSS,
+            trigger_ref=str(series.id),
+            media_id=tv,
+            route_id=route.id,
+            state=JobState.IMPORT_FAILED,
+            added_at=landed,
+        )
+    )
     await session.commit()
     await sweep_once(session)
 

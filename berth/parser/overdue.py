@@ -1,0 +1,124 @@
+"""訂閱的作品有沒有按時入庫（M5.5 票 10，spec〈範圍〉「遲到判定」）。
+
+一部作品一個結果，呼叫端（`services.sweep`）把它寫成一件 `episodes_overdue`。
+
+- **基準**：作品最後入庫的一集，不分來源（另一個字幕組、手動送的都算）；還沒入庫過時，從作品
+  最早的 RSS Series 建立那天之後播出的第一集算。基準之前的洞歸 `series_episodes_missing`。
+- **晚**：基準之後播出、還沒入庫，從播出日隔天 00:00（容器時區，`now` 的時區）起算滿
+  `threshold_days`。TMDB 只有日期，隔天才確定那一集已經播完。第 0 季不看。
+- **例外只有兩種**：下載還在動（蓋到它的 Job 在 `UNDER_WAY_STATES`，停滯不算），或已經在等你處理
+  （Job 在審核、或有 Issue 說著它現在這個狀態：`OverdueJob.waiting`，呼叫端查）。其餘不管卡在
+  哪一步都算晚，卡在哪寫在 `LateEpisode.stall`。
+- **不讀 `series_finished`**：RSS 頁的「已完結」安靜 30 天就成立，那時候缺的集正是要說的。
+"""
+
+from __future__ import annotations
+
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+
+from berth.domain import (
+    UNDER_WAY_STATES,
+    JobState,
+    MediaSnapshot,
+    OverdueReason,
+    OverdueStall,
+)
+
+#: 下載還在動：送單到入庫之間的每一站，停滯不算（它不會自己好，正是要說的）。
+_MOVING = UNDER_WAY_STATES - {JobState.STALLED}
+
+#: 停在哪個狀態說成哪一種。不在表上的（已入庫、已刪除）等於沒有下載蓋到它。
+_STALL_OF: dict[JobState, OverdueStall] = {
+    JobState.IMPORT_FAILED: OverdueStall.IMPORT_FAILED,
+    JobState.STALLED: OverdueStall.STALLED,
+    JobState.MISSING_FILES: OverdueStall.DOWNLOAD_FAILED,
+    JobState.CLIENT_ERROR: OverdueStall.DOWNLOAD_FAILED,
+    JobState.CLIENT_REMOVED: OverdueStall.DOWNLOAD_FAILED,
+    JobState.SUBMIT_FAILED: OverdueStall.SUBMIT_FAILED,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class OverdueJob:
+    """蓋到一集的一筆 Job（`why_not` 的那一份「誰蓋到哪一集」）。"""
+
+    hash: str
+    state: JobState
+    #: 已經在等你處理：有開著或被忽略、說著它現在這個狀態的 Issue（`sweep._covered`）。
+    waiting: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LateEpisode:
+    season: int
+    episode: int
+    air_date: date
+    stall: OverdueStall
+    #: 卡在 `stall` 的那幾筆 Job（畫面連到 `/jobs/{hash}`）；沒有下載時是空的。
+    jobs: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Overdue:
+    reason: OverdueReason
+    #: 晚的集，照季集排。
+    episodes: tuple[LateEpisode, ...]
+
+
+def judge_overdue(
+    media: MediaSnapshot,
+    *,
+    imported: Collection[tuple[int, int]],
+    claims: Mapping[tuple[int, int], Sequence[OverdueJob]],
+    watched_since: date,
+    now: datetime,
+    threshold_days: int,
+) -> Overdue | None:
+    """這部作品晚了沒；沒有晚的集是 `None`。
+
+    `imported` 是帳本有正片蓋到的季集；`watched_since` 是最早的 RSS Series 建立那天（容器時區）；
+    `now` 是容器時區的現在，日界照它的日期。
+    """
+    aired = sorted(
+        ((season.season_number, row.episode_number), row.air_date)
+        for season in media.seasons
+        if season.season_number > 0
+        for row in season.episodes
+        if row.air_date is not None
+    )
+    held = [pair for pair, _ in aired if pair in imported]
+    if held:
+        baseline = max(held)
+        after = [(pair, day) for pair, day in aired if pair > baseline]
+    else:
+        after = [(pair, day) for pair, day in aired if day >= watched_since]
+
+    found: list[LateEpisode] = []
+    for pair, day in after:
+        # 播出日隔天 00:00 起算滿門檻：比牆上的日期，夏令時間那一天也不差一小時。
+        if pair in imported or now.date() < day + timedelta(days=1 + threshold_days):
+            continue
+        episode = _late(pair, day, claims.get(pair, ()))
+        if episode is not None:
+            found.append(episode)
+    return Overdue(reason=OverdueReason.LATE, episodes=tuple(found)) if found else None
+
+
+def _late(pair: tuple[int, int], aired: date, jobs: Sequence[OverdueJob]) -> LateEpisode | None:
+    """過了門檻的一集：例外是 `None`，否則說出卡在哪。"""
+    if any(job.state in _MOVING or job.state is JobState.REVIEW or job.waiting for job in jobs):
+        return None
+    stuck = [job for job in jobs if job.state in _STALL_OF]
+    order = list(OverdueStall)
+    stall = min(
+        (_STALL_OF[job.state] for job in stuck), key=order.index, default=OverdueStall.NOT_RELEASED
+    )
+    return LateEpisode(
+        season=pair[0],
+        episode=pair[1],
+        air_date=aired,
+        stall=stall,
+        jobs=tuple(job.hash for job in stuck if _STALL_OF[job.state] is stall),
+    )

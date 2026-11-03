@@ -40,6 +40,7 @@ def subject_of(
     ledger_id: int | None = None,
     series_id: int | None = None,
     feed_id: int | None = None,
+    media_id: str | None = None,
 ) -> str:
     """這一件的冪等鍵取哪一格的值（plan §2.4 的 `SUBJECT_OF`）。
 
@@ -55,6 +56,8 @@ def subject_of(
         return "" if series_id is None else str(series_id)
     if column is IssueSubject.RSS_FEED:
         return "" if feed_id is None else str(feed_id)
+    if column is IssueSubject.MEDIA:
+        return media_id or ""
     return "" if ledger_id is None else str(ledger_id)
 
 
@@ -76,7 +79,8 @@ class Issue(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     type: Mapped[IssueType] = mapped_column(enum_column(IssueType))
-    #: 冪等鍵的後半，由 `subject_of()` 依型別從下面三欄之一取；RSS Series 那一種是 Series 的 id。
+    #: 冪等鍵的後半，由 `subject_of()` 依型別從下面三欄之一取；RSS Series、Feed、作品那幾種
+    #: 是它們的 id。
     subject: Mapped[str] = mapped_column(Text)
     #: 弱引用（沒有外鍵）。管線那四種一定有，對帳那幾種看情況。
     job_hash: Mapped[str | None] = mapped_column(Text, default=None)

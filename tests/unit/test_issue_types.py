@@ -1,5 +1,5 @@
-"""十九種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
-M4 票 129、130）。
+"""二十種 Issue 的封閉集合，以及掛在它上面的兩張表（plan §2.4、brief §9.1、M2 票 05 / 09c、票 17、
+M4 票 129、130、M5.5 票 10）。
 
 `IssueType` 有兩個呼叫端：管線寫 `issue_detected` 事件時用它，對帳寫 `issues` 表時也用它。
 **共用一個集合**是票 05 的驗收條件之一，而共用的代價是「加一種型別」要回答兩個問題——
@@ -58,14 +58,15 @@ FROM_SWEEP = {
     IssueType.FEED_BACKFILL_FAILING,
     IssueType.SERIES_EPISODES_MISSING,
     IssueType.SERIES_EPISODES_COLLIDE,
+    IssueType.EPISODES_OVERDUE,
 }
 
 
 class TestTheClosedSet:
     def test_it_is_the_union_of_the_three_producers(self) -> None:
-        """十九種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的五種（plan §2.4）。
+        """二十種＝對帳的七種 ∪ 管線的四種 ∪ 健康檢查的兩種 ∪ 回驗的一種 ∪ 巡檢的六種（plan §2.4）。
 
-        分別列一次而不是數 19：多一種而各邊都沒登記它時，說得出少的是哪一種。
+        分別列一次而不是數 20：多一種而各邊都沒登記它時，說得出少的是哪一種。
         """
         assert set(IssueType) == (
             FROM_RECONCILING
@@ -144,6 +145,12 @@ class TestTheIdempotencyKey:
         by_feed = {kind for kind, column in SUBJECT_OF.items() if column is IssueSubject.RSS_FEED}
 
         assert by_feed == {IssueType.FEED_POLL_FAILING, IssueType.FEED_BACKFILL_FAILING}
+
+    def test_an_overdue_work_is_one_work(self) -> None:
+        """遲到是一部作品一件（M5.5 票 10）：好幾個字幕組的 Series 晚的是同一集。"""
+        by_work = {kind for kind, column in SUBJECT_OF.items() if column is IssueSubject.MEDIA}
+
+        assert by_work == {IssueType.EPISODES_OVERDUE}
 
 
 class TestWhatEachTypeCanBeResolvedWith:

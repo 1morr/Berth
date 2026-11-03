@@ -1614,6 +1614,31 @@ async def library_copy(
     return None
 
 
+# --- 遲到門檻 -----------------------------------------------------------
+
+#: 遲到門檻的上限：晚一個月的早就不是遲到。端點與命令登錄表的輸入都照它。
+OVERDUE_DAYS_MAX = 30
+
+
+@command(Effect.READ)
+async def read_overdue_days(session: AsyncSession) -> int:
+    """遲到門檻（天，`RssSettings.overdue_days`）。"""
+    return (await read_settings(session, RssSettings)).overdue_days
+
+
+# 帶回原本的值就回去；下一輪巡檢照新門檻開或收，這裡不動 Issue。
+@command(Effect.REVERSIBLE, inverse="rss.set_overdue_days", flags={Flag.SETTINGS})
+async def set_overdue_days(
+    session: AsyncSession, days: Annotated[int, Field(ge=0, le=OVERDUE_DAYS_MAX)]
+) -> int:
+    """改遲到門檻（天）。"""
+
+    def change(value: RssSettings) -> None:
+        value.overdue_days = days
+
+    return (await update_settings(session, RssSettings, change)).overdue_days
+
+
 # --- 排除條件 -----------------------------------------------------------
 #
 # 三支都是可逆但**沒有單一反向命令**：規則本身用同一支帶回原本的值就還原了，但收緊時擋下的 Item
