@@ -77,8 +77,9 @@ uv run python scripts/experiments/first_batch_rule.py                           
 uv run --env-file .env python scripts/experiments/first_batch_rule.py --online          # Windows 主控台加 PYTHONIOENCODING=utf-8
 ```
 
-候選守衛「發佈時下一集已經播了就不擔保」的代價（M5.5 票 05，沒採用）：包住上面那一支，同樣三段，數守衛會多擋
-幾筆。結果記在 `.scratch/m5.5/issues/05-first-batch-cumulative.md`：
+守衛「發佈時下一集已經播了就不擔保」套到照字面的列上的代價（M5.5 票 05 量；票 05b 只採用在累計編號上，所以
+累計編號那一行應是 0）：包住上面那一支，同樣三段，數守衛會多擋幾筆。結果記在
+`.scratch/m5.5/issues/05-first-batch-cumulative.md` 與 `05b-cumulative-next-aired-guard.md`：
 
 ```bash
 uv run --env-file .env python scripts/experiments/next_aired_guard.py --online          # 不加 --online 只跑語料

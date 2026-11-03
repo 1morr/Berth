@@ -33,26 +33,37 @@
    這個方向（發佈晚於播出是正常的，plan §11.4 ①）。「剛播」補上那一個方向：
    新一季的第 3 集發佈時，第一季的第 3 集早就播完了。
 
+7. **累計編號的下一集還沒播**（只看有 3b 那一種列的份，M5.5 票 05b）：整份最後一集的下一集，TMDB
+   播出日晚於發佈日加 `RELEASE_TOLERANCE`。TMDB 把前幾季多記一集（總集篇只有它算）時，換算早一集，
+   對到的那一集仍是剛播；但它的「下一集」就是真的那一集，一定播過（最多早發 `RELEASE_TOLERANCE`
+   也算進去）。TMDB 沒有下一集、或下一集沒有播出日，算還沒播：最新一集正是第一批最常見的形狀，
+   而多記一集時真的那一集已經播了，TMDB 通常已有它的播出日（沒有的話這一條擋不下）。
+   照字面的列不看這一條，否則慢發的字幕組與一週播兩集的劇都得等人
+   （`scripts/experiments/next_aired_guard.py`：真 RSS 115 筆擋 22 筆）。
+   擋下時不另記理由，照舊等人確認；「在問什麼」已經說出這一批是絕對編號換算的
+   （`services/first_batch.asks`）。
+
 片長驗證通過或量不出隱含在第 2 條裡：它擋下的列是 `review`。
 
 **已知盲點**：前一季短到幾集、緊接著開播 TMDB 還沒建的新一季時，新一季的第 1 集照字面讀成的舊的
 第 1 集也可能在六週之內播過。那時確認的是錯的 Series，之後的集數靠播出日比對與「TMDB 沒有那一集」
 接住。
 
-**已知盲點（3b）**：字幕組與 TMDB 的前幾季集數差一集時（總集篇只有一邊算），換算仍落在寫明的那一季、
-晚一週也在 `BEHIND_LATEST` 之內，擔保的會差一集（brief §15）。
+字幕組與 TMDB 的前幾季集數差一集時（3b 原本的已知盲點，brief §15）：TMDB 少記的，換算晚一集，比發佈
+晚一週播，第 6 條（與播出日比對）擋下；多記的由第 7 條擋下。
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Literal
 
 from berth.domain import Confidence, MediaSnapshot, PlanAction, PlanItem
 from berth.domain import ReasonCode as Code
 from berth.parser.literal import WRITTEN_SEASON, is_literal
 from berth.parser.planner import episode_span, written_episode
-from berth.parser.publishing import just_aired
+from berth.parser.publishing import RELEASE_TOLERANCE, just_aired
 
 #: 跟著正片走、本身不必擔保什麼的列；`skip` 不寫進媒體庫。
 _ALONGSIDE: frozenset[PlanAction] = frozenset({PlanAction.SUBTITLE, PlanAction.SKIP})
@@ -89,22 +100,46 @@ def vouch_first_batch(
     if media is None or published is None or season_hint is not None or episode_offset is not None:
         return None
     spans: list[tuple[int, int, int]] = []
+    has_cumulative = False
     for item in items:
         if item.action in _ALONGSIDE:
             continue
         span = episode_span(item)
-        if span is None or not _vouched(torrent_name, item, media, published):
+        reading = _reading(torrent_name, item, media, published) if span is not None else None
+        if span is None or reading is None:
             return None
+        has_cumulative |= reading == "cumulative"
         spans.append(span)
-    return tuple(spans) or None
+    if not spans or (has_cumulative and _next_aired(media, spans, published)):
+        return None
+    return tuple(spans)
 
 
-def _vouched(torrent_name: str, item: PlanItem, media: MediaSnapshot, published: datetime) -> bool:
-    """條件 3–6：這一列照字面或是寫明季號的累計編號、理由乾淨、播出日對得上而且剛播。"""
+def _reading(
+    torrent_name: str, item: PlanItem, media: MediaSnapshot, published: datetime
+) -> Literal["literal", "cumulative"] | None:
+    """條件 3–6：這一列照字面或是寫明季號的累計編號、理由乾淨、播出日對得上而且剛播；回讀法，
+    擔保不了是 `None`。"""
     if is_literal(torrent_name, item, media):
-        return _just_aired(item, media, published, literal=True)
-    return _counted_from_first_season(torrent_name, item, media) and _just_aired(
+        return "literal" if _just_aired(item, media, published, literal=True) else None
+    if _counted_from_first_season(torrent_name, item, media) and _just_aired(
         item, media, published, literal=False
+    ):
+        return "cumulative"
+    return None
+
+
+def _next_aired(
+    media: MediaSnapshot, spans: Sequence[tuple[int, int, int]], published: datetime
+) -> bool:
+    """條件 7：整份最後一集的下一集，在發佈日加 `RELEASE_TOLERANCE` 之前已經播了。TMDB 沒有下一集、
+    或下一集沒有播出日，算還沒播。只看整份的最後一集：同一份裡的前幾集，下一集就在這一份裡。"""
+    season, _, end = max(spans, key=lambda span: (span[0], span[2]))
+    found = media.episode(season, end + 1)
+    return (
+        found is not None
+        and found.air_date is not None
+        and found.air_date <= published.date() + RELEASE_TOLERANCE
     )
 
 
