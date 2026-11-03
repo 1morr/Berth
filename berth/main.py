@@ -40,6 +40,7 @@ from berth.services.events import EventHub
 from berth.services.hints import JobHints
 from berth.services.jellyfin_access import AccessCache
 from berth.services.jobs import fail_interrupted
+from berth.services.plan import replan_outdated
 from berth.services.reconcile import ReconcileRunner
 from berth.services.sources import SourceCache
 
@@ -140,6 +141,10 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         # 同理：`stop_reason` 還是 `NULL` 的是上一次程序崩潰時在跑的那一輪（M5 票 25）。
         async with app.state.session_factory() as session:
             await close_interrupted(session, app.state.agent)
+        # 升級之後：舊版本算的 review 退回 `completed`（M5.5 票 06）。只退回不算，下面叫醒
+        # `planner_runner` 在背景算，啟動不等 TMDB。
+        async with app.state.session_factory() as session:
+            outdated = await replan_outdated(session)
         # 迴圈之間的提示（票 11）：poller 動了什麼就叫醒 `planner_runner`。**在這裡建而不是
         # 在 `create_app`**：它裡面是一個 `asyncio.Event`，而 Event 認第一次 await 它的那個
         # 事件迴圈——同一個 app 起兩次（測試就是這樣跑的）會拿到「bound to a different
@@ -149,6 +154,8 @@ def _lifespan(config: Config) -> Lifespan[FastAPI]:
         # 正在忙的那一個清掉訊號時，另一個就漏掉了它（`asyncio.Event` 是大家一起清的）。
         plans = JobHints()
         imports = JobHints()
+        if outdated:
+            plans.nudge()
         # 入庫重試與核准的端點也要叫醒 importer，拒絕要叫醒規劃器（`api/deps.py`）。
         app.state.import_hints = imports
         app.state.plan_hints = plans

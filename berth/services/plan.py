@@ -207,6 +207,55 @@ async def replan_job(
     return view
 
 
+# 只在啟動時跑（`main.py`），同 `jobs.fail_interrupted`。退回 `completed` 由規劃器重算，
+# 同 `replan_job` 沒有單一反向命令。
+@command(Effect.REVERSIBLE, flags={Flag.INTERNAL})
+async def replan_outdated(session: AsyncSession) -> int:
+    """升級之後：舊版本算的 `review` 退回 `completed`，由規劃器用新規則重算（M5.5 票 06）。回幾筆。
+
+    **只退回、不算**：算要問 TMDB 與 mediainfo，啟動等不起；`planner_runner` 下一輪接手
+    （`main.py` 叫醒它），TMDB 連不上時照它平常的方式處理。算完的那一份蓋上新版本，所以同版本
+    重啟挑不到它。
+
+    不挑的：人逐列改過的（`engine = user`，整份重算會蓋掉）、撤銷回來的（`audit_undone`：人已經
+    說過那一列不對，重算多半又算回同一個答案）。已入庫的不在 `review`，不動。
+    """
+    found = await session.execute(
+        select(Job, Plan)
+        .join(Plan, Plan.job_hash == Job.hash)
+        .where(
+            Job.state == JobState.REVIEW,
+            Plan.engine != PlanEngine.USER,
+            Plan.engine_version != VERSION,
+        )
+        .order_by(Job.added_at, Job.hash)
+    )
+    moved = 0
+    for job, plan in found.tuples().all():
+        summary = PlanSummary.model_validate(plan.summary_json or {})
+        if summary.review_reason is ReviewReason.AUDIT_UNDONE:
+            continue
+        with job_context(job.hash):
+            async with job_lock(job.hash):
+                if not await transition(session, job, JobState.COMPLETED, expected=JobState.REVIEW):
+                    continue
+                await record_event(
+                    session,
+                    job,
+                    EventType.RETRIED,
+                    actor=SYSTEM,
+                    payload={
+                        "state": JobState.COMPLETED.value,
+                        "engine_version": plan.engine_version,
+                    },
+                )
+        moved += 1
+    await session.commit()
+    if moved:
+        logger.info("outdated reviews sent back to planning", extra={"jobs": moved})
+    return moved
+
+
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def proposal(session: AsyncSession, job: Job) -> dict[str, PlannedFile]:
     """這一筆**現在**會被規劃成什麼（`job_files.rel_path` → 那一列）。不寫、不動狀態。
