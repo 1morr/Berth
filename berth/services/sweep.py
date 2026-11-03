@@ -446,7 +446,7 @@ async def _overdue_works(
             session,
             IssueType.EPISODES_OVERDUE,
             media_id=media_id,
-            detail=_overdue_detail(media_id, snapshot.title, found),
+            detail=_overdue_detail(media_id, snapshot.title, snapshot.title_en, found),
             now=moment,
         )
         flagged.add((IssueType.EPISODES_OVERDUE, media_id))
@@ -468,12 +468,14 @@ async def _watched_series(session: AsyncSession) -> list[RssSeries]:
     return [row for row in bound if row.media_id in live and row.id in carrying]
 
 
-def _overdue_detail(media_id: str, title: str, found: Overdue) -> dict[str, Any]:
-    """`episodes_overdue` 的 `detail_json`：清單上那一列的標題是作品名，晚的集各說卡在哪。"""
+def _overdue_detail(media_id: str, title: str, title_en: str, found: Overdue) -> dict[str, Any]:
+    """`episodes_overdue` 的 `detail_json`：清單上那一列的標題是作品名，晚的集各說卡在哪。
+    `title_en` 給英文的通知（`notify._overdue_lines`，M5.5 票 13）。"""
     return {
         "reason": found.reason.value,
         "media": media_id,
         "title": title,
+        "title_en": title_en,
         "name": title,
         "episodes": [
             {
