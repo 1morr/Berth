@@ -27,7 +27,7 @@ from berth.adapters.http import (
     ServiceError,
     ServiceUnavailableError,
 )
-from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode
+from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode, TmdbSeasonEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.ttl import TtlCache
 from berth.domain import (
@@ -73,9 +73,14 @@ def episode(season: int, number: int, aired: date) -> TmdbEpisode:
     )
 
 
+#: 測試作品每一季的開播日（評分的季別守衛拿它對 Bangumi 的開播日）。
+SEASON_START = date(2026, 10, 4)
+
+
 def detail(
     entry: TmdbEntry, last: TmdbEpisode | None, upcoming: TmdbEpisode | None = None
 ) -> TmdbDetail:
+    numbers = sorted({e.season_number for e in (last, upcoming) if e is not None})
     return TmdbDetail(
         tmdb_id=entry.tmdb_id,
         kind=MediaKind.TV,
@@ -87,6 +92,10 @@ def detail(
         poster_path=entry.poster_path,
         last_episode=last,
         next_episode=upcoming,
+        seasons=tuple(
+            TmdbSeasonEntry(season_number=n, name="", episode_count=12, air_date=SEASON_START)
+            for n in numbers
+        ),
     )
 
 
@@ -541,6 +550,26 @@ class TestAiringTimeAndRating:
         future = by_media(await read_schedule(session, factory))["tv:209867"]
 
         assert (future.airs_at, future.score, future.votes) == (None, None, None)
+
+    @pytest.mark.parametrize("bgm_start", ["2023-09-29", ""])
+    async def test_a_bangumi_entry_of_another_season_or_without_a_date_has_no_rating(
+        self, session: AsyncSession, bgm_start: str
+    ) -> None:
+        """TMDB 多季併成一部、原文名是系列名；Bangumi 一季一條，第一季常用系列名。開播日要對得上
+        卡片那一季（差一天以內），否則第二季的卡會掛上第一季的分數。"""
+        bgm = FakeBgm(items=[replace(rated(500, "葬送のフリーレン"), air_date=bgm_start)])
+        factory = await credentialled(session, japanese_tmdb(), bgm=bgm)
+
+        future = by_media(await read_schedule(session, factory))["tv:209867"]
+
+        assert (future.score, future.votes) == (None, None)
+
+    async def test_a_late_night_premiere_a_day_off_still_rates(self, session: AsyncSession) -> None:
+        """深夜檔：Bangumi 記 10/03（日本的「24:30」前一天），TMDB 記 10/04。"""
+        bgm = FakeBgm(items=[replace(rated(500, "葬送のフリーレン"), air_date="2026-10-03")])
+        factory = await credentialled(session, japanese_tmdb(), bgm=bgm)
+
+        assert by_media(await read_schedule(session, factory))["tv:209867"].score == 8.1
 
     async def test_titles_match_regardless_of_width_case_and_punctuation(
         self, session: AsyncSession

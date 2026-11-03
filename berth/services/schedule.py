@@ -72,6 +72,9 @@ THUMB_SIZE = "w154"
 #: 第二層（時刻、評分）最多等幾秒。AniList 被限流時會停下來等一分鐘（`anilist.client`），
 #: 時間表不陪它等；一週三頁、兩秒一頁，冷快取約六秒。
 SECOND_LAYER_TIMEOUT = 10.0
+#: Bangumi 條目的開播日與 TMDB 那一季的開播日差幾天以內算同一季（評分）。2026-11-04 那一週原文名
+#: 對到的 48 部全在一天以內（深夜檔差一天），放寬到 60 天也沒有多對到（票 14 Comments）。
+SEASON_START_SLACK = timedelta(days=1)
 #: 第二層的來源失敗或逾時之後幾秒內不再問它。
 LEFT_OUT_SECONDS = 5 * 60
 #: TMDB 的播出日是日本的日期：AniList 的時刻換成日本時間再比。
@@ -93,6 +96,9 @@ class ScheduleSlot:
     title_en: str
     #: TMDB 的 `original_name`：第二層照它對 AniList 與 Bangumi。
     original_title: str
+    #: 卡片那一季的開播日（`tv/{id}` 的 `seasons[]`）：評分照它認 Bangumi 的哪一季。
+    #: TMDB 沒寫是 `None`。
+    season_air_date: date | None
     poster_url: str
     poster_url_en: str
     air_date: date
@@ -272,6 +278,14 @@ async def _fetch(client: TmdbClient, start: date, end: date, base: str) -> tuple
                     title=found.title or entry.title,
                     title_en=entry.title,
                     original_title=entry.original_title,
+                    season_air_date=next(
+                        (
+                            s.air_date
+                            for s in found.seasons
+                            if s.season_number == aired.season_number
+                        ),
+                        None,
+                    ),
                     poster_url=poster_url(found.poster_path or entry.poster_path, base, THUMB_SIZE),
                     poster_url_en=poster_url(entry.poster_path, base, THUMB_SIZE),
                     air_date=aired.air_date,
@@ -361,7 +375,7 @@ async def _cards(
 
     def card(slot: ScheduleSlot) -> ScheduleCard:
         key = match_key(slot.original_title)
-        found = _rating(ratings.get(key, []))
+        found = _rating(slot, ratings.get(key, []))
         return ScheduleCard(
             media_id=slot.media_id,
             tmdb_id=slot.tmdb_id,
@@ -399,12 +413,26 @@ def _by_match_key[T](items: tuple[T, ...], title: Callable[[T], str]) -> dict[st
     return grouped
 
 
-def _rating(same_title: list[CalendarItem]) -> CalendarItem | None:
-    """原文名相同的只有一部、有分數也有人數才給（少了 `total` 不寫「0 人打分」）。"""
+def _rating(slot: ScheduleSlot, same_title: list[CalendarItem]) -> CalendarItem | None:
+    """原文名相同的只有一部、開播日對得上卡片那一季、有分數也有人數才給。
+
+    季別：TMDB 多季併成一部、原文名是系列名，Bangumi 一季一條、第一季常用系列名；不比開播日的話，
+    第二季的卡會掛上第一季的分數。任一邊沒有日期就不給。少了 `total` 不寫「0 人打分」。
+    """
     if len({item.id for item in same_title}) != 1:
         return None
     item = same_title[0]
+    if not _same_season(slot.season_air_date, item.air_date):
+        return None
     return item if item.score is not None and item.votes > 0 else None
+
+
+def _same_season(tmdb_start: date | None, bgm_start: str) -> bool:
+    try:
+        started = date.fromisoformat(bgm_start)
+    except ValueError:
+        return False
+    return tmdb_start is not None and abs(started - tmdb_start) <= SEASON_START_SLACK
 
 
 def _airs_at(slot: ScheduleSlot, same_title: list[Airing], now: datetime) -> datetime | None:

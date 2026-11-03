@@ -190,6 +190,15 @@ def cards(start: date, end: date) -> list[dict[str, Any]]:
                     "season": ep["season_number"],
                     "episode": ep["episode_number"],
                     "wikidata_id": (detail.get("external_ids") or {}).get("wikidata_id"),
+                    # 卡片那一季的開播日：評分的季別守衛拿它對 Bangumi 條目的開播日。
+                    "season_air_date": next(
+                        (
+                            s.get("air_date") or ""
+                            for s in detail.get("seasons") or []
+                            if s.get("season_number") == ep["season_number"]
+                        ),
+                        "",
+                    ),
                 }
             )
     return found
@@ -240,8 +249,58 @@ def run(start: date) -> dict[str, Any]:
         card["title_anilist"] = sorted(anilist_by_title.get(key, ())) if key else []
         card["title_bangumi"] = sorted(bgm_by_title.get(key, ())) if key else []
         card["future"] = card["air_date"] >= TODAY.isoformat()
+        card["bgm_air_dates"] = [bgm_by_id[b].get("air_date") or "" for b in card["title_bangumi"]]
+        rating = (
+            (bgm_by_id[card["title_bangumi"][0]].get("rating") or {})
+            if card["title_bangumi"]
+            else {}
+        )
+        card["bgm_rated"] = bool(rating.get("score")) and bool(rating.get("total"))
 
     return {"week": start.isoformat(), "cards": week, "anilist_media": len(anilist_by_id)}
+
+
+#: 評分的季別守衛（M5.5 票 14）：Bangumi 開播日與 TMDB 那一季開播日相差幾天以內算同一季。
+SEASON_TOLERANCES = (0, 1, 3, 7, 14, 30, 60)
+#: 產品用的容差（`services/schedule.SEASON_START_SLACK`）。
+SEASON_SLACK = 1
+
+
+def season_gap(card: dict[str, Any]) -> int | None:
+    """原文名對到唯一一筆 Bangumi 時，它的開播日與 TMDB 那一季開播日差幾天；缺日期是 None。"""
+    if len(card["title_bangumi"]) != 1 or not card["season_air_date"]:
+        return None
+    bgm_date = card["bgm_air_dates"][0]
+    if not bgm_date:
+        return None
+    return (date.fromisoformat(bgm_date) - date.fromisoformat(card["season_air_date"])).days
+
+
+def report_season_guard(week: list[dict[str, Any]]) -> None:
+    sub = [c for c in week if c["language"] == "ja"]
+    matched = [c for c in sub if len(c["title_bangumi"]) == 1]
+    print(
+        f"\n評分的季別守衛（日本 {len(sub)} 張，原文名對到唯一一筆 Bangumi 的 {len(matched)} 張）"
+    )
+    for tolerance in SEASON_TOLERANCES:
+        kept = [c for c in matched if (g := season_gap(c)) is not None and abs(g) <= tolerance]
+        print(
+            f"  容差 ±{tolerance:>2} 天：{len(kept)}/{len(sub)} = {100 * len(kept) / len(sub):.1f}%"
+        )
+    rated = [c for c in matched if c["bgm_rated"]]
+    guarded = [c for c in rated if (g := season_gap(c)) is not None and abs(g) <= SEASON_SLACK]
+    n = len(sub)
+    print(
+        f"  會顯示評分（有分數也有人數）：守衛前 {len(rated)}/{n} = {100 * len(rated) / n:.1f}%，"
+    )
+    print(f"    守衛後（±{SEASON_SLACK} 天）{len(guarded)}/{n} = {100 * len(guarded) / n:.1f}%")
+    print("  差距（Bangumi − TMDB 那一季，天）：")
+    for c in sorted(matched, key=lambda c: abs(season_gap(c) or 10**6)):
+        print(
+            f"    {season_gap(c)!s:>6}  tmdb {c['tmdb_id']} S{c['season']:02d} "
+            f"{c['season_air_date'] or '-'} / bgm {c['title_bangumi'][0]} "
+            f"{c['bgm_air_dates'][0] or '-'}  {c['original_name'][:28]}"
+        )
 
 
 def report(result: dict[str, Any]) -> None:
@@ -307,6 +366,7 @@ def main() -> None:
     out = RESULTS / f"{start.isoformat()}-{datetime.now(UTC):%Y%m%dT%H%M%S}.json"
     out.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     report(result)
+    report_season_guard(result["cards"])
     print(f"\n結果：{out.relative_to(REPO)}", file=sys.stderr)
 
 

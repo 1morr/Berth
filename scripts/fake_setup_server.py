@@ -1663,6 +1663,9 @@ SCHEDULE_OTHERS = (
     (57775, "Chibi Maruko-chan", "ちびまる子ちゃん", "櫻桃小丸子", 2, 1460, 6),
 )
 
+#: 這一季的開播日（`tv/{id}` 的 `seasons[]`）：Bangumi 評分的季別守衛照它對（只給有評分的兩部）。
+SCHEDULE_SEASON_STARTS = {220542: date(2026, 7, 6), 30983: date(1996, 1, 8)}
+
 #: 時間表第二層（M5.5 票 14）的假資料，時鐘停在 09-25（五）。柯南（週六）對得上 AniList 與
 #: Bangumi：有時刻也有評分；藥師少女（週一，已播）只有評分；小丸子（週日）兩邊都對不上：兩格都沒有。
 _JST = ZoneInfo("Asia/Tokyo")
@@ -1695,7 +1698,7 @@ SCHEDULE_RATINGS = (
         id=465955,
         name="薬屋のひとりごと",
         name_cn="药屋少女的呢喃",
-        air_date="2026-10-03",
+        air_date="2026-07-06",
         weekday=1,
         score=7.6,
         votes=2104,
@@ -1756,6 +1759,14 @@ def schedule_scenario() -> Scenario:
                     name="",
                     air_date=monday + timedelta(days=offset),
                     runtime=24,
+                ),
+                seasons=(
+                    TmdbSeasonEntry(
+                        season_number=season_number,
+                        name="",
+                        episode_count=number,
+                        air_date=SCHEDULE_SEASON_STARTS.get(tmdb_id),
+                    ),
                 ),
             ),
             translation,

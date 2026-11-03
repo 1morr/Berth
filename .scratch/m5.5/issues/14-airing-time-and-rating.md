@@ -33,8 +33,8 @@
 - 時刻 API 一律送 UTC，畫面照瀏覽器時區、24 小時制；那一刻的本地日期不是卡片那一天時前面寫星期（「週六 00:30」）。評分畫面寫「Bangumi 8.1」、人數在 `title`，念一整句「Bangumi 評分 8.1，900 人打分」（Chrome 會在 `sr-only` 前多算一個空白，所以不拆成兩段念）。
 - Bangumi `/calendar` 的名字是 HTML 跳脫過的，adapter 改成還原（側面板的 `bgm.read_calendar` 也跟著拿到還原後的名字）。
 - code-review 已處理：轉譯層遇到怪形狀丟 `AttributeError`（時間表接不住、整頁 500）→ AniList 與 Bangumi 都改成跳過；有分數沒人數不寫「0 人打分」；讀到頁數上限記 log；替身的時段兩端改成不含（同 AniList）；`title_key` 與 `parser/binding.title_key` 撞名 → `match_key`，評分與時刻的「同名只一部」抽出來；DESIGN.md〈時間表〉補時刻與評分。
+- 2026-11-04 **評分的季別守衛**（協調者要求補）：TMDB 多季併一部、原文名是系列名，Bangumi 一季一條、第一季常用系列名，只比名字的話續作會掛上第一季的分數。評分另外要 Bangumi 條目的 `air_date` 與卡片那一季的 `seasons[].air_date` 差一天以內，任一邊沒日期就不顯示（`SEASON_START_SLACK`）。容差依數據：原文名對到唯一一筆的 48 張差距全是 0（36）或 −1 天（12，深夜檔），±0 剩 36、±1 到 ±60 都是 48，取 ±1。重量（`schedule_mapping.py`，日本作品卡片 93 張）會顯示評分的：**守衛前 46/93 = 49.5%，守衛後 46/93 = 49.5%**。這週守衛沒擋到任何一張：第二季以後的卡 17 張原文名都沒對到 Bangumi（續作條目帶季號、舊季不在放送表），它是防線。修前會紅的測試：`test_a_bangumi_entry_of_another_season_or_without_a_date_has_no_rating`。
 - code-review 未處理：
-  - 評分沒有季別條件：TMDB 一部多季共用一條，Bangumi 放送表上若有一條同名但其實是另一季的（續作沿用原名、沒加「第N期」），評分會掛上去。放送表只有這一季的作品，機率低。
   - 時刻前有 `Dot`、評分前沒有（狀態色塊前也沒有）：評分與狀態是色塊與標籤，接在後面不用分隔；照 DESIGN.md〈中點分隔〉只用在值與值之間。
   - 人數只在 `title`，觸控裝置看不到；卡片窄，桌機一欄放不下「（900 人）」。
   - `fake_setup_server.SCHEDULE_OTHERS` 從 6 欄的位置 tuple 變 7 欄（Data Clumps）：演練資料，先不包。
