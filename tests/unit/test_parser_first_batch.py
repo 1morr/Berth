@@ -327,7 +327,9 @@ YOZAKURA_S2 = date(2026, 7, 4)
 YOZAKURA = "[LoliHouse] 夜樱家的大作战 第二季 / Yozakura-san Chi no Daisakusen Season 2 - {number} [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]"  # noqa: E501  # 真的發佈名，不拆
 
 
-def yozakura() -> MediaSnapshot:
+def yozakura(*, first_season: int = 27) -> MediaSnapshot:
+    """`first_season` 不是 27 時是 TMDB 把第一季記多或記少的形狀（字幕組照真的 27 集累加）。"""
+
     def block(number: int, count: int, start: date, aired: int) -> SeasonSnapshot:
         return SeasonSnapshot(
             season_number=number,
@@ -346,7 +348,7 @@ def yozakura() -> MediaSnapshot:
         title_original="夜桜さんちの大作戦",
         titles=("Yozakura-san Chi no Daisakusen", "夜樱家的大作战"),
         seasons=(
-            block(1, 27, date(2024, 4, 6), 27),
+            block(1, first_season, date(2024, 4, 6), first_season),
             block(2, 24, YOZAKURA_S2, 15),
         ),
     )
@@ -369,6 +371,20 @@ class TestCumulativeReadings:
         """只寫集號的絕對編號：季號是換算推出來的，仍等人。"""
         name = "[LoliHouse] Yozakura-san Chi no Daisakusen - 40 [WebRip 1080p HEVC-10bit AAC]"
         assert _read(name, yozakura(), yozakura_aired(13)) is None
+
+    def test_tmdb_counting_one_episode_fewer_before(self) -> None:
+        """TMDB 第一季少記一集：40 換算成 S02E14，比發佈晚一週播，播出日比對擋下（有換算的只容忍
+        兩天）；最新那一集換算到 TMDB 還沒有播出日的集，擔保也不收。"""
+        short = yozakura(first_season=26)
+        assert _read(YOZAKURA.format(number=40), short, yozakura_aired(13)) is None
+        assert _read(YOZAKURA.format(number=42), short, yozakura_aired(15)) is None
+
+    def test_tmdb_counting_one_episode_more_before_is_a_known_blind_spot(self) -> None:
+        """TMDB 第一季多記一集（總集篇只有它算）：40 換算成 S02E12，真的是 S02E13。早一週播的那一集
+        仍在「剛播」的六週內、也不比最新一集落後太多，**擔保的是錯的那一集**（brief §15 已知盲點）。
+        這條固定現況；規則收緊時改成 `is None`。"""
+        long = yozakura(first_season=28)
+        assert _read(YOZAKURA.format(number=40), long, yozakura_aired(13)) == ((2, 12, 12),)
 
     def test_a_cumulative_number_long_after_it_aired(self) -> None:
         name = YOZAKURA.format(number=40)
