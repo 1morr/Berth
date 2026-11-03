@@ -113,6 +113,7 @@ class Sweeper:
                 "failing": outcome.failing,
                 "missing": outcome.missing,
                 "colliding": outcome.colliding,
+                "overdue": outcome.overdue,
                 "cleared": outcome.cleared,
                 "reminded": outcome.reminded,
                 "elapsed_ms": round((time.perf_counter() - started) * 1000),

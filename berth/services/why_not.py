@@ -59,7 +59,7 @@ from berth.models import Issue, Job, Media, Plan, PlanItem, RssItem, RssSeries, 
 from berth.models import media_id as build_media_id
 from berth.models.types import utcnow
 from berth.parser import parse_release
-from berth.services.commands import Effect, command
+from berth.services.commands import Effect, Flag, command
 from berth.services.inventory import Covers, Holdings, LedgerFileView, episodes_of, read_holdings
 from berth.services.jobs import JobEventView, read_job_events, series_id_of
 from berth.services.plan import guess_from_title
@@ -351,6 +351,34 @@ async def explain(
         ),
         rss=_rss(series, items, guesses, verdicts) if admin else None,
     )
+
+
+# 巡檢的遲到判定讀它（`services.sweep`，M5.5 票 10）：收 ORM 列，不進登錄表。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def claims_by_episode(
+    session: AsyncSession, media: Media
+) -> dict[tuple[int, int], list[Job]]:
+    """這部劇集每一集被哪幾筆 Job 蓋到，與 `explain` 同一份（含已入庫、已刪除的）。
+
+    季表（`read_holdings`）說不出是哪一筆、`stalled` 又併在「下載中」，遲到要說出卡在哪就讀這一份。
+    電影沒有季集，是空的。
+    """
+    if media.kind is MediaKind.MOVIE:
+        return {}
+    jobs = list(
+        await session.scalars(
+            select(Job).where(Job.media_id == media.id).order_by(Job.added_at.desc(), Job.hash)
+        )
+    )
+    claims = await _job_claims(
+        session,
+        media,
+        media.stored_snapshot(),
+        jobs,
+        await _series(session, media.id),
+        _episodes(media, media.snapshot(), utcnow().date()),
+    )
+    return {key: rows for key, rows in claims.by_key.items() if key is not None}
 
 
 # --- 哪幾集 ---------------------------------------------------------------------

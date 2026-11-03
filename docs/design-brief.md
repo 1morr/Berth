@@ -475,13 +475,15 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 | `library_uses_tvdb` | 健康檢查：一條 Route 的 Jellyfin 媒體庫掛著 TVDB 的 metadata fetcher（§16.4 的警告） | 只列出；在 Jellyfin 拿掉之後系統自己收掉 |
 | `low_disk_space` | 健康檢查：incomplete 或 complete 所在的檔案系統剩下的空間低於門檻（設定裡，預設 10 GB） | 只列出；空間回來之後系統自己收掉 |
 | `jellyfin_item_mismatch` | Jellyfin 回驗：反查或對帳找到的 item，Jellyfin 認的季號、集號（多集檔是範圍）或所屬作品的 TMDB id 與帳本不同 | 重新反查（在 Jellyfin 修好之後）；下一次比到一致時系統自己收掉 |
+| `episodes_overdue` | 每日巡檢：訂閱的作品最後入庫的一集之後，有集播出滿門檻（從播出日隔天 00:00 起算，預設 2 天）還沒入庫；下載還在動、等審核、Job 已有 Issue 管著的不算（M5.5 票 10） | 搜這一集或去訂閱（作品頁）/ 處理卡住的 Job（Job 頁）/ 忽略（條件持續期間有效）；都入庫了系統自己收掉 |
 
-十四種共用 `issues` 表與同一個封閉集合（plan §2.4），來源分四組：
+表上十五種與巡檢另外五種（`first_batch_stuck` 等，plan §2.4）共用 `issues` 表與同一個封閉集合，表上的來源分五組：
 
 - 前七種：對帳。
 - 中間四種（`missing_files` 到 `jellyfin_item_unresolved`）：管線自己發現，另以 `issue_detected` 事件記著。
 - `library_uses_tvdb`、`low_disk_space`：`health_checker` 每 5 分鐘量出來，由健康檢查偵測而不是對帳。
 - `jellyfin_item_mismatch`：Jellyfin 回驗，反查與對帳的 Jellyfin 那一方比同一份。
+- `episodes_overdue`：每日巡檢，一部作品一件，說出晚的集與卡在哪（字幕組沒發、送單失敗、下載停滯、入庫失敗）。不讀 RSS 頁的「已完結」：安靜 30 天正是要說的時候。
 
 `ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接）是**使用者決定過的**現況，對帳看到就不再開 Issue。
 
@@ -501,7 +503,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 
 - 預設是「這一次不處理」：忽略之後下一次偵測就開新的一筆。
 - 健康檢查那兩種**沒有 Berth 按得了的修法**，所以條件解除時系統自己收掉（`resolved_by = system`）；問不到 Jellyfin、量不到那個目錄不算解除。它們的「忽略」在條件持續期間有效：5 分鐘量一次的東西，照「這一次」的話忽略等於無效，故意掛 TVDB 的使用者會被一直問。條件解除過一次、之後再發生才重開。
-- `jellyfin_item_mismatch` 與 `unknown_torrent` 照同一條：前者每日對帳比一次，後者 poller 每 5 秒寫一次，照「這一次」會為同一件事每天推、忽略 5 秒就重開。對帳的其餘六種仍是「這一次不處理」。
+- `jellyfin_item_mismatch`、`unknown_torrent` 與巡檢那幾種（含 `episodes_overdue`）照同一條：回驗每日對帳比一次、巡檢每天量一次，`unknown_torrent` 的 poller 每 5 秒寫一次，照「這一次」會為同一件事每天推、忽略 5 秒就重開。對帳的其餘六種仍是「這一次不處理」。
 
 **按鈕與判定的細節**：
 

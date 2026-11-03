@@ -316,6 +316,28 @@ function Measured({ issue }: { issue: Issue }) {
       </>
     )
   }
+  if (issue.type === 'episodes_overdue') {
+    // 訂閱的作品遲到（M5.5 票 10）：晚的每一集說卡在哪，卡住的下載連到 Job 頁；搜這一集或去訂閱在作品頁。
+    const media = text(issue.detail.media)
+    return (
+      <>
+        <WorkLine issue={issue} />
+        {(Array.isArray(issue.detail.episodes) ? issue.detail.episodes.map(record) : []).map(
+          (one) => (
+            <OverdueLine key={`${String(one.season)}-${String(one.episode)}`} episode={one} />
+          ),
+        )}
+        <DetailLine term={t('issues.next')}>
+          {t('issues.nextOverdue')}{' '}
+          {media !== '' && (
+            <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
+              {t('issues.overdueSearch')}
+            </Link>
+          )}
+        </DetailLine>
+      </>
+    )
+  }
   if (issue.type === 'series_episodes_collide') {
     // 同一集意外多份（M4 票 130）：撞在哪一集、哪幾個發佈名；改正在作品頁檔案與版本的「修正」。
     const collisions = Array.isArray(issue.detail.collisions)
@@ -393,6 +415,45 @@ function WorkLine({ issue }: { issue: Issue }) {
       </Link>
     </DetailLine>
   )
+}
+
+/** `episodes_overdue` 的一集：`S01E04`、播出日、卡在哪，卡住的下載連到 Job 頁。 */
+function OverdueLine({ episode }: { episode: Record<string, unknown> }) {
+  const { t, i18n } = useTranslation()
+  const season = numeric(episode.season)
+  const number = numeric(episode.episode)
+  const stall = overdueStall(episode.stall)
+  if (season === null || number === null || stall === null) return null
+  const aired = text(episode.air_date)
+  const jobs = Array.isArray(episode.jobs) ? episode.jobs.map(text).filter(Boolean) : []
+  return (
+    <DetailLine term={formatEpisode({ season, episode_start: number, episode_end: number })}>
+      {aired === ''
+        ? t('issues.overdueNoDay', { stall: t(`issues.overdueStall.${stall}`) })
+        : t('issues.overdueEpisode', {
+            day: new Date(`${aired}T00:00:00`).toLocaleDateString(i18n.language),
+            stall: t(`issues.overdueStall.${stall}`),
+          })}
+      {jobs.map((hash) => (
+        <span key={hash}>
+          {' · '}
+          <JobLink hash={hash}>{t('issues.overdueJob')}</JobLink>
+        </span>
+      ))}
+    </DetailLine>
+  )
+}
+
+const OVERDUE_STALLS = [
+  'import_failed',
+  'stalled',
+  'download_failed',
+  'submit_failed',
+  'not_released',
+] as const
+
+function overdueStall(value: unknown): (typeof OVERDUE_STALLS)[number] | null {
+  return OVERDUE_STALLS.find((stall) => stall === value) ?? null
 }
 
 /** 缺集的 `detail.missing`（`[{season, episode}]`）照季寫成 `S01 E03–E04, E06`，季與季以 `; ` 隔開。 */

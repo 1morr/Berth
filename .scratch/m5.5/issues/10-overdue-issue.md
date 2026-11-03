@@ -1,6 +1,6 @@
 # 10 — 遲到判定與 `episodes_overdue`
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None (can start immediately)
 
@@ -28,10 +28,23 @@
 
 ## 驗收
 
-- [ ] 訂閱的作品 10/28 播出而字幕組沒發：10/30 不開，10/31 巡檢開一件，發了入庫後系統收掉（測試）
-- [ ] 另一個字幕組或手動下載已入庫那一集時不開（測試）
-- [ ] 過了門檻的集，下載停滯或入庫失敗時開一件並說出卡在哪，入庫後系統收掉（測試）
-- [ ] 下載還在動、等審核、Job 有開著或被忽略的 Issue 時不開；那件 Issue 收掉而這一集還缺時，下一輪開（測試）
-- [ ] `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）
-- [ ] Issue 頁顯示作品名、缺的集、卡在哪與三個下一步（playwright 實跑）
-- [ ] 全部檢查、pytest、vitest 綠；progress.md 已更新
+- [x] 訂閱的作品 10/28 播出而字幕組沒發：10/30 不開，10/31 巡檢開一件，發了入庫後系統收掉（測試）
+- [x] 另一個字幕組或手動下載已入庫那一集時不開（測試）
+- [x] 過了門檻的集，下載停滯或入庫失敗時開一件並說出卡在哪，入庫後系統收掉（測試）
+- [x] 下載還在動、等審核、Job 有開著或被忽略的 Issue 時不開；那件 Issue 收掉而這一集還缺時，下一輪開（測試）
+- [x] `series_finished` 為真而 TMDB 有最近播出、未入庫的集時仍開（守「不讀」的測試）
+- [x] Issue 頁顯示作品名、缺的集、卡在哪與三個下一步（playwright 實跑）
+- [x] 全部檢查、pytest、vitest 綠；progress.md 已更新
+
+## Comments
+
+- 2026-11-04 門檻放訂閱頁全域區（使用者定），存 `RssSettings.overdue_days`（0–30，`GET`／`PUT /rss/overdue`）；票 11 的單一 Series 覆寫在同一頁。
+- 卡在哪多一種 `download_failed`（`missing_files` / `client_error` / `client_removed` 而沒有 Issue 管著）；`not_released` 也含「發了沒送出」與刪掉的 Job，文案說「沒有下載在處理」。
+- 遲到判定比容器時區的日期（`now.date() >= 播出日 + 1 + 門檻`），夏令時間那天不差一小時。
+- playwright：`rss-sweep` 替身情境（第 7 集改成入庫失敗）實跑 `/issues` 桌機與 390px，作品、晚的集、卡在哪、Job 連結、作品頁連結、忽略都在；`/rss` 存門檻 3 讀回 `{"days":3}`。e2e 81 綠。舊集（2022）也列出，60 天視窗在票 11。
+- code-review 未處理（判斷題，留著）：
+  - 忽略是整部作品一件：忽略後只要還有晚的集就不重開，新晚的集也不開（同 `series_episodes_missing` 的 STAYS_IGNORED）；文案已照實寫。要「晚的集變多就重開」得改 `record_issue`，等使用者決定。
+  - `OverdueSection` 與設定頁的 `DiskThreshold` 幾乎同形，未抽共用元件（兩個實例，等第三個）。
+  - `claims_by_episode` 內部用 UTC 日期判整季合集蓋到哪幾集，與巡檢的本地日界差最多一天，影響只在合集。
+  - `OverdueReason.NEXT_RUN` 先放在列舉裡，票 11 才產生。
+  - 「不讀 `series_finished`」的測試先證明它為真再照開；sweep 本來就不呼叫它。

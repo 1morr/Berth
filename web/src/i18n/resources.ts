@@ -1927,7 +1927,21 @@ const zhHant = {
     collisions: '撞在同一集',
     nextCollide:
       '同一個字幕組的兩個發佈寫的是不同集，卻都入庫成了這一集，多半是集號換算或 offset 錯了，其中一份其實是別集。看發佈名認出放錯的那一份，到作品頁的「檔案與版本」按它的「修正」，指派到正確的集。改好之後，下一次每日巡檢會自己收掉這一件。',
-    // 十九種型別各一句（brief §9.1）。
+    // 訂閱的作品遲到（M5.5 票 10）：晚的每一集與卡在哪。
+    overdueEpisode: '{{day}} 播出，{{stall}}',
+    overdueNoDay: '{{stall}}',
+    overdueStall: {
+      import_failed: '入庫失敗',
+      stalled: '下載停滯',
+      download_failed: '下載沒成',
+      submit_failed: '送單失敗',
+      not_released: '沒有下載在處理（字幕組沒發，或發了沒送出）',
+    },
+    overdueJob: '處理卡住的下載',
+    overdueSearch: '到作品頁搜這一集或去訂閱',
+    nextOverdue:
+      '這部作品有集播出已過門檻還沒入庫。字幕組還沒發的，到作品頁搜這一集，或換一個字幕組訂閱；卡住的下載，到它的 Job 頁重試或刪掉。不用管就按「忽略」：這部作品還有晚的集的期間不會再開，晚的集都入庫過一次之後再晚才會重開。都入庫之後，下一次每日巡檢會自己收掉這一件。',
+    // 二十種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
       source_missing: 'complete 裡的來源檔不見了',
@@ -1948,6 +1962,7 @@ const zhHant = {
       feed_backfill_failing: '這個 Feed 的每日補漏一直讀不到，超過一天了',
       series_episodes_missing: '這個 RSS Series 已入庫的集數中間缺了幾集',
       series_episodes_collide: '這個 RSS Series 有兩個不同的發佈被入庫成同一集',
+      episodes_overdue: '訂閱的作品有集播出滿門檻還沒入庫',
     },
     typeLabel: {
       library_link_missing: '鏈接遺失',
@@ -1969,6 +1984,7 @@ const zhHant = {
       feed_backfill_failing: '補漏一直失敗',
       series_episodes_missing: '缺集',
       series_episodes_collide: '同一集多份',
+      episodes_overdue: '遲到',
     },
     action: {
       relink: '重新鏈接',
@@ -3777,6 +3793,18 @@ const zhHant = {
       lookup_retry: '{{site}} 這一次讀不到（{{detail}}），{{at}} 再認一次（第 {{attempt}} 次重試）',
       route_ambiguous: '作品認出來了，但 {{routes}} 都收得下它',
       no_route: '作品認出來了，但沒有啟用中的 Route 收得下它',
+    },
+    // 遲到門檻（M5.5 票 10）：訂閱的作品播出後幾天沒入庫就開一件 Issue。
+    overdue: {
+      title: '遲到門檻',
+      lede: '訂閱的作品有一集從播出日隔天 00:00 起算滿這幾天還沒入庫，每天 05:00 的巡檢就開一件「遲到」到待處理。下載還在跑、等審核或已經有 Issue 管著的那一集不算。',
+      label: '播出後幾天',
+      hint: '0 到 30 天，預設 2。0 是播出日隔天就算晚。',
+      invalid: '填 0 到 30 的整數。',
+      save: '儲存門檻',
+      saving: '儲存中…',
+      saved: '已儲存，下一次巡檢照新的門檻。',
+      failed: '門檻沒存成。',
     },
     // 排除條件（票 10）：三層共用一組字。
     rules: {
@@ -6276,6 +6304,19 @@ const en: Translations<typeof zhHant> = {
     collisions: 'Landed as one episode',
     nextCollide:
       'Two releases from the same group name different episodes but were both imported as this one, usually because an episode conversion or offset went wrong and one of them is really another episode. Use the release names to spot the misplaced one, then press Fix on it under Files and versions on the title page and assign the right episode. Once fixed, the next daily sweep closes this on its own.',
+    overdueEpisode: 'Aired {{day}}: {{stall}}',
+    overdueNoDay: '{{stall}}',
+    overdueStall: {
+      import_failed: 'import failed',
+      stalled: 'download stalled',
+      download_failed: 'download failed',
+      submit_failed: 'sending failed',
+      not_released: 'nothing downloading (not released, or not sent)',
+    },
+    overdueJob: 'Handle the stuck download',
+    overdueSearch: 'Search for it or subscribe on the title page',
+    nextOverdue:
+      'Episodes of this title aired past the threshold and are not in the library. If the group has not released one, search for it on the title page or subscribe to another group; if a download is stuck, retry or delete it on its job page. Press Ignore if it does not matter: nothing reopens while this title still has a late episode, only after they have all been imported and one is late again. Once they are all imported, the next daily sweep closes this on its own.',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -6296,6 +6337,7 @@ const en: Translations<typeof zhHant> = {
       feed_backfill_failing: 'This feed’s daily backfill has kept failing for over a day',
       series_episodes_missing: 'Episodes are missing between the ones this RSS series imported',
       series_episodes_collide: 'Two different releases from this RSS series landed as one episode',
+      episodes_overdue: 'A subscribed title has episodes past the threshold that are not imported',
     },
     typeLabel: {
       library_link_missing: 'LINK MISSING',
@@ -6317,6 +6359,7 @@ const en: Translations<typeof zhHant> = {
       feed_backfill_failing: 'BACKFILL KEEPS FAILING',
       series_episodes_missing: 'EPISODES MISSING',
       series_episodes_collide: 'EPISODES COLLIDE',
+      episodes_overdue: 'OVERDUE',
     },
     action: {
       relink: 'Link it again',
@@ -8165,6 +8208,17 @@ const en: Translations<typeof zhHant> = {
     },
     series: {
       page: 'Mikan show page',
+    },
+    overdue: {
+      title: 'Overdue threshold',
+      lede: 'When an episode of a subscribed title is still not imported this many days after midnight following its air date, the 05:00 daily sweep opens an Overdue issue. Episodes still downloading, awaiting review or already covered by an issue do not count.',
+      label: 'Days after airing',
+      hint: '0 to 30 days, 2 by default. 0 counts it late from the day after it aired.',
+      invalid: 'Enter a whole number from 0 to 30.',
+      save: 'Save threshold',
+      saving: 'Saving…',
+      saved: 'Saved. The next sweep uses the new threshold.',
+      failed: 'The threshold was not saved.',
     },
     rules: {
       title: 'Exclusions',
