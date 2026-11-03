@@ -733,6 +733,37 @@ describe('待處理頁', () => {
     expect(within(row).getByRole('button', { name: '忽略' })).toBeInTheDocument()
   })
 
+  it('換輪說可能是下一輪，晚的是不是字幕組遲到由人判斷（M5.5 票 11）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'episodes_overdue',
+            subject: 'tv:65942',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              reason: 'next_run',
+              media: 'tv:65942',
+              title: 'Re：從零開始的異世界生活',
+              name: 'Re：從零開始的異世界生活',
+              episodes: [
+                { season: 1, episode: 78, air_date: '2026-08-12', stall: 'not_released', jobs: [] },
+              ],
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    await userEvent.click(within(row).getByRole('heading', { name: 'Re：從零開始的異世界生活' }))
+    expect(within(row).getByText(/可能是下一輪/)).toBeInTheDocument()
+  })
+
   it('同一集意外多份說出哪一集、撞在一起的發佈名，連到作品頁（M4 票 130）', async () => {
     render({
       [ISSUES]: {

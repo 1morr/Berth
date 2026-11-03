@@ -35,7 +35,7 @@ AFTER = datetime.combine(DAY, SWEEP_AT, tzinfo=UTC) + timedelta(minutes=30)
 
 
 def build(engine: AsyncEngine, clock: Clock) -> Sweeper:
-    return Sweeper(create_session_factory(engine), EventHub(), now=clock)
+    return Sweeper(create_session_factory(engine), FakeClientFactory(), EventHub(), now=clock)
 
 
 async def stuck(session: AsyncSession) -> None:
@@ -143,7 +143,7 @@ class TestProposalExpiry:
             actor=Actor.person(crew.id, crew.role),
             now=BEFORE - PROPOSAL_TTL,
         )
-        loop = Sweeper(create_session_factory(engine), hub, now=Clock(BEFORE))
+        loop = Sweeper(create_session_factory(engine), FakeClientFactory(), hub, now=Clock(BEFORE))
 
         with hub.subscribe() as tab:
             assert await loop.expire_proposals() == [card.id]

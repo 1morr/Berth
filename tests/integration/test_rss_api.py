@@ -509,6 +509,32 @@ class TestTheFirstRound:
         assert client.get("/api/rss/feeds").json()[0]["primed_at"] is None
 
 
+class TestSeriesOverdue:
+    """單一 RSS Series 的遲到門檻（M5.5 票 11）：留空用全域，0–30 天，越界存不進去。"""
+
+    def test_it_round_trips_and_clears(self, client: TestClient, roots: dict[str, Path]) -> None:
+        route_id = seed(client, roots)
+        sign_in(client)
+        feed = add(client, route_id)
+        client.post(f"/api/rss/feeds/{feed['id']}/poll", headers=BROWSER)
+        series = next(row for row in client.get("/api/rss/series").json() if row["key"] == KIMI_KEY)
+        assert series["overdue_days"] is None
+        url = f"/api/rss/series/{series['id']}/overdue"
+
+        saved = client.put(url, json={"days": 5}, headers=BROWSER)
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["overdue_days"] == 5
+        assert client.put(url, json={"days": 31}, headers=BROWSER).status_code == 422
+        cleared = client.put(url, json={"days": None}, headers=BROWSER)
+        assert cleared.json()["overdue_days"] is None
+
+    def test_an_unknown_series_is_404(self, client: TestClient, roots: dict[str, Path]) -> None:
+        seed(client, roots)
+        sign_in(client)
+        missing = client.put("/api/rss/series/999/overdue", json={"days": 3}, headers=BROWSER)
+        assert missing.status_code == 404
+
+
 class TestExclusions:
     """排除條件的三層（票 10）：存得進去、清單說得出為什麼沒下載、寫壞的存不進去。"""
 

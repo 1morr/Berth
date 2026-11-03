@@ -12,10 +12,12 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.domain import (
     EpisodeSnapshot,
+    FeedKind,
     IssueStatus,
     IssueType,
     JobState,
@@ -26,9 +28,21 @@ from berth.domain import (
     PlanStatus,
     SeasonSnapshot,
 )
-from berth.models import Issue, Job, LedgerEntry, Media, Plan, PlanItem, RssSeries, RssSettings
+from berth.models import (
+    Issue,
+    Job,
+    LedgerEntry,
+    Media,
+    Plan,
+    PlanItem,
+    RssFeed,
+    RssItem,
+    RssSeries,
+    RssSettings,
+)
 from berth.parser import series_finished
 from berth.services.issues import IssueView, ignore_issue, list_issues
+from berth.services.rss import delete_feed
 from berth.services.settings import read_settings, write_settings
 from berth.services.sweep import sweep_once
 
@@ -85,7 +99,8 @@ async def work(session: AsyncSession, *, ended: bool = False) -> None:
 async def subscribed(
     session: AsyncSession, *, key: str = "mikan:3600:583", created: datetime = SUBSCRIBED
 ) -> RssSeries:
-    """作品有一條綁好的 Series（預設 10/1 建的）；第 1–3 集已經由它入庫。"""
+    """作品有一條綁好的 Series（預設 10/1 建的），帶著它的 Feed 有它的 Item（訂閱還在）；第 1–3 集
+    已經由它入庫。"""
     if await session.get(Media, MEDIA) is None:
         await work(session)
     series = RssSeries(
@@ -95,7 +110,10 @@ async def subscribed(
         media_id=MEDIA,
         created_at=created,
     )
-    session.add(series)
+    feed = RssFeed(name=key, url=f"https://mikanani.me/RSS/{key}", kind=FeedKind.MIKAN)
+    session.add_all([series, feed])
+    await session.flush()
+    session.add(RssItem(feed_id=feed.id, guid=key, title=series.title_raw, series_id=series.id))
     await session.commit()
     for number in (1, 2, 3):
         await landed(session, series, number)
@@ -336,3 +354,136 @@ class TestAlreadyBeingHandled:
 
         (issue,) = await overdue(session)
         assert late(issue) == [(4, "download_failed")]
+
+
+class TestUnsubscribed:
+    """刪掉訂閱（`delete_feed`）只刪 Feed，RSS Series 與綁定留著（協調者追加，票 10 的缺陷）：對象與
+    作品頁的訂閱清單同一套判定（`rss.subscribed_media`），退訂了就不再提醒。"""
+
+    async def test_deleting_the_feed_stops_and_closes_the_reminder(
+        self, session: AsyncSession
+    ) -> None:
+        series = await subscribed(session)
+        await sweep_once(session, now=wall(31))
+        (issue,) = await overdue(session)
+
+        feed = await session.scalar(select(RssFeed))
+        assert feed is not None
+        await delete_feed(session, feed.id)
+        assert (await session.get(RssSeries, series.id)) is not None
+
+        await sweep_once(session, now=wall(31, 6))
+        assert await overdue(session) == []
+        closed = await session.get(Issue, issue.id)
+        assert closed is not None and closed.status is IssueStatus.RESOLVED
+
+    async def test_an_unsubscribed_work_is_never_opened(self, session: AsyncSession) -> None:
+        await subscribed(session)
+        feed = await session.scalar(select(RssFeed))
+        assert feed is not None
+        await delete_feed(session, feed.id)
+
+        await sweep_once(session, now=wall(31))
+
+        assert await overdue(session) == []
+
+
+class TestSeriesThreshold:
+    """單一 RSS Series 覆寫門檻（`rss_series.overdue_days`，留空用全域）；一部作品多條取最大值。"""
+
+    async def test_a_series_override_beats_the_global_setting(self, session: AsyncSession) -> None:
+        series = await subscribed(session)
+        series.overdue_days = 3
+        await session.commit()
+
+        await sweep_once(session, now=wall(31))
+        assert await overdue(session) == []
+
+        await sweep_once(session, now=datetime(2026, 11, 1, 5, 0).astimezone())
+        assert len(await overdue(session)) == 1
+
+    async def test_several_series_take_the_largest(self, session: AsyncSession) -> None:
+        """全域 2 天、一條覆寫 1 天、一條留空（等於 2 天）：取 2 天，10/30 不開、10/31 開。"""
+        first = await subscribed(session)
+        first.overdue_days = 1
+        await session.commit()
+        await subscribed(session, key="mikan:3600:370")
+
+        await sweep_once(session, now=wall(30))
+        assert await overdue(session) == []
+        await sweep_once(session, now=wall(31))
+        assert len(await overdue(session)) == 1
+
+    async def test_a_larger_override_on_another_series_wins(self, session: AsyncSession) -> None:
+        await subscribed(session)
+        other = await subscribed(session, key="mikan:3600:370")
+        other.overdue_days = 4
+        await session.commit()
+
+        await sweep_once(session, now=datetime(2026, 11, 1, 5, 0).astimezone())
+        assert await overdue(session) == []
+        await sweep_once(session, now=datetime(2026, 11, 2, 5, 0).astimezone())
+        assert len(await overdue(session)) == 1
+
+
+class TestNextRunThroughTheSweep:
+    """換輪寫進 `detail_json.reason`：帳本與 Series 的 `created_at` 從資料庫讀回來比。"""
+
+    async def weeks_apart(self, session: AsyncSession) -> None:
+        """第 3 集 9/9 播出、第 4 集 10/28：隔了七週。第 1–3 集 10/2 入庫。"""
+        row = await session.get(Media, MEDIA)
+        assert row is not None
+        shot = row.stored_snapshot()
+        assert shot is not None
+        episodes = tuple(
+            e.model_copy(
+                update={"air_date": date(2026, 9, 9) - timedelta(weeks=3 - e.episode_number)}
+            )
+            if e.episode_number <= 3
+            else e
+            for e in shot.seasons[0].episodes
+        )
+        row.tmdb_snapshot_json = shot.model_copy(
+            update={"seasons": (shot.seasons[0].model_copy(update={"episodes": episodes}),)}
+        ).model_dump(mode="json")
+        for entry in await session.scalars(select(LedgerEntry)):
+            entry.created_at = datetime(2026, 10, 2, 3, 0, tzinfo=UTC)
+        await session.commit()
+
+    async def test_a_long_break_opens_next_run(self, session: AsyncSession) -> None:
+        await subscribed(session)
+        await self.weeks_apart(session)
+
+        await sweep_once(session, now=wall(31))
+
+        (issue,) = await overdue(session)
+        assert issue.detail["reason"] == "next_run"
+
+    async def test_subscribing_to_the_next_run_brings_back_late(
+        self, session: AsyncSession
+    ) -> None:
+        await subscribed(session)
+        await subscribed(session, key="mikan:3700:583", created=datetime(2026, 10, 20, tzinfo=UTC))
+        await self.weeks_apart(session)
+
+        await sweep_once(session, now=wall(31))
+
+        (issue,) = await overdue(session)
+        assert issue.detail["reason"] == "late"
+
+
+class TestSeriesOfADeletedFeed:
+    """作品還訂著，但其中一條的 Feed 刪了：那一條不再算（門檻、換輪、起算日都不看它）。"""
+
+    async def test_its_override_no_longer_raises_the_threshold(self, session: AsyncSession) -> None:
+        gone = await subscribed(session)
+        gone.overdue_days = 5
+        await session.commit()
+        await subscribed(session, key="mikan:3600:370")
+        feed = await session.scalar(select(RssFeed).where(RssFeed.name == gone.key))
+        assert feed is not None
+        await delete_feed(session, feed.id)
+
+        await sweep_once(session, now=wall(31))
+
+        assert len(await overdue(session)) == 1

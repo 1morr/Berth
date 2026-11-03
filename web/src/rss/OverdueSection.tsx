@@ -3,7 +3,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../api/client'
-import { overdueQueryOptions, saveOverdue } from '../api/rss'
+import { OVERDUE_DAYS_MAX, overdueQueryOptions, saveOverdue } from '../api/rss'
 import { Field, GhostButton } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { SectionHeading } from '../components/SectionHeading'
@@ -23,7 +23,7 @@ export function OverdueSection() {
   const [draft, setDraft] = useState<string | null>(null)
   const value = draft ?? (current.data ? String(current.data.days) : '')
   const trimmed = value.trim()
-  const valid = /^\d+$/.test(trimmed) && Number(trimmed) <= 30
+  const valid = /^\d+$/.test(trimmed) && Number(trimmed) <= OVERDUE_DAYS_MAX
 
   const save = useMutation({
     mutationFn: () => saveOverdue(Number(trimmed)),

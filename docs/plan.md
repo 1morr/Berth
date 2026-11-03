@@ -189,7 +189,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
   - `media_id` / `user_id`：從 Media 頁建的搜尋 feed 預先綁定的作品與建它的人，它長出的 RSS Series 直接以作品那一種的 Route 走 `bind_series`；綁不上時照一般的路去認作品；一般的 Feed 兩欄都是 `NULL`。
   - `tv_route_id` / `movie_route_id`：自動綁定送進的 Route，劇集、電影各一條（brief §15「綁定」）。那一種有啟用中的 Route 時加 Feed 必填，零條時存 `NULL`；從 Media 頁訂閱建的 Feed 把選的那一條寫在作品那一種的那一欄。Mikan 單一 feed 的另一欄，在那一種只有一條啟用中的 Route 時補上，否則留 `NULL` 給人選；搜尋 feed 的另一欄留空、永遠不讀（`services.rss._route_kinds`）。
   - `subgroup`：關鍵字搜尋 feed 只收這個字幕組的發佈——`parser.binding.of_group` 照發佈名裡的組名比，與 `title_key` 的組名同一種正規化；別組的不寫成 Item、不長 Series。空字串是每一組都收（一般的 Feed 與沒指定字幕組的關鍵字訂閱）；`rss.subscribe_search` 一定要給。
-- `rss_series`（[ADR 0007](adr/0007-rss-series-model.md)、brief §15）：`id`、`key`、`mikan_bangumi_id`、`mikan_subgroup_id`、`mikan_bangumi_name`、`mikan_subgroup_name`、`title_raw`、`media_id`（nullable = 待綁定）、`route_id`、`season`、`episode_offset`、`exclude_json`、`confirmed`、`bound_by`、`reasons_json`、`candidates_json`、`backfilled_at`、`created_at`。
+- `rss_series`（[ADR 0007](adr/0007-rss-series-model.md)、brief §15）：`id`、`key`、`mikan_bangumi_id`、`mikan_subgroup_id`、`mikan_bangumi_name`、`mikan_subgroup_name`、`title_raw`、`media_id`（nullable = 待綁定）、`route_id`、`season`、`episode_offset`、`exclude_json`、`confirmed`、`bound_by`、`reasons_json`、`candidates_json`、`backfilled_at`、`overdue_days`（nullable，這個字幕組的遲到門檻，留空用全域；M5.5 票 11）、`created_at`。
   - `key`（unique）：Mikan 是 `mikan:<番組 id>:<字幕組 id>`，其他是 `title:<骨幹>:<字幕組>`，兩段都 `normalize_title` 過，骨幹有羅馬字那一個名字就取它——同一組的简日、繁日發佈中文名常常不同（`parser.binding.title_key`）。骨幹讀到第一個括號為止；搜尋與比對的骨幹（`skeleton`）會讀過後面接著 ` / ` 與下一個名字的括號註記，鍵不跟，免得既有的 Series 分裂。
   - `title_raw`：長出它的那一筆 Item 的標題（字幕組名已在裡面，沒有 `group` 欄）。
   - `exclude_json`：同 Feed 那一欄。
@@ -240,7 +240,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
     - importer 接回帳本某一列時，掛在那一列（`ledger_id`）上的 `library_link_missing` / `source_missing` / `inode_mismatch`，與入庫長回帳本時那一筆的 `job_without_files`。
     - 管線那三種（`missing_files` / `client_error` / `client_removed`）：Job 已經不在那個壞掉狀態時（poller 接回、別的路徑推走、被刪掉）由 poller 每一輪收（`issues.close_settled`）。
     - `jellyfin_item_mismatch`：下一次反查或對帳**比到**一致時收；找不到 item 不算一致。
-    - 巡檢那六種：下一輪巡檢量到條件不在時收。`episodes_overdue` 是晚的集都入庫了、或作品不再有綁好的 RSS Series。
+    - 巡檢那六種：下一輪巡檢量到條件不在時收。`episodes_overdue` 是晚的集都入庫了、作品不再有綁好的 RSS Series、或退訂了（Feed 刪了，同作品頁的訂閱清單）；巡檢前刷新失敗的作品那一輪不收。
   - **Jellyfin 還在認也不算比到**：Episode 讀不出季號或集號、或作品沒有 `ProviderIds.Tmdb`（`resolver.still_identifying`）時不開也不收，反查照還沒找到的節奏再問，**六次都還認不出才開 `jellyfin_item_mismatch`**——不是 `jellyfin_item_unresolved`：Jellyfin 列出了這個檔案，`detail_json` 並排兩邊正說得出它讀成了空的。對帳遇到還在認的與找不到同一個待遇（不動）。「還在那個狀態」與按鈕按得下去是同一份定義（`issues.STANDS_WHILE`，`client_removed` 多收一個 `submit_failed`：重新送單被拒的那一筆落在那裡）。
   - **`ledger.status` 與 Issue 的關係**：`target_missing` 與 `library_link_missing` 是同一件事的兩個角度——帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件；resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。
   - **`source_missing` 與 `unlinked` 反過來**：帳本那一欄是**使用者決定之後**才改——按下「標記為已無來源」改 `source_missing`（同刪除範圍只勾「刪 complete 檔案」的結果），刪除範圍只勾「移除鏈接」拆掉的那幾列寫 `unlinked`（磁碟上與 `target_missing` 一樣是目標不在，差別只在有人決定過）。改了之後對帳不再為它開 Issue。偵測時就改的話，「忽略」之後下一輪就再也不會問了。
@@ -482,6 +482,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
 - 每一輪先把滿 24 小時（`GIVE_UP_AFTER`，從 `not_before` 算）還沒送到的放棄（`abandoned`，`error` 留上一次的原因）。一則出例外記在那一則上、接著送下一則。
 - 寫入在觸發它的那一筆交易裡（「可以看了」是 `resolver._announce`），寫不成只記 log、不讓那一筆交易失敗；不經提示。
 - **每一輪先看守「等你處理」**（`watch_waiting`）：三份清單上有誰與上一輪（`settings.notify_waiting`）比，新出現的排給訂閱了的管理員；一樣就什麼都不寫。也記下每一件第一次看到的時刻（`NotifyWatchSettings.since`，「放太久」讀它）。
+  - 內文說種類與數量；這一波（或「放太久」那一件）有 `episodes_overdue` 時，下面一部一行寫作品名與晚的集（`notify._overdue_lines`），換輪的說「可能是下一輪」，最多五部、其餘「等 N 部」（M5.5 票 13）。
 
 #### `sweeper`
 
@@ -491,7 +492,11 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
   - **卡住的**：還沒確認的 RSS Series 有 Job 停在 `submit_failed` / `client_error` 超過 24 小時（從那一筆最後一次 `submit_failed` / `issue_detected` 事件算），而且沒有開著或被忽略的管線 Issue 說著它這個狀態，開一件 `first_batch_stuck`（一個 Series 一件）；不再卡住或 Series 確認了由系統收掉。
   - **放太久**：「等你處理」最舊的一件等滿 3 天，給訂閱了「等你處理」的管理員排一則提醒（`notify.queue_lingering`），同一件 3 天內只提醒一次（`settings.sweep`）。
   - **一直失敗的 Feed、RSS Series 缺集、同一集意外多份**（§11.5〈巡檢〉）同一輪接著跑。
-  - **遲到**（M5.5 票 10，判定在 `parser.overdue`）：有綁好的 RSS Series 的作品，最後入庫的一集之後（沒入庫過時從最早的 Series 建立那天起）播出、從播出日隔天 00:00（容器時區）起算滿 `settings.rss.overdue_days` 還沒入庫的集，開一件 `episodes_overdue`（一部作品一件，`detail_json` 帶 `reason`、作品名、晚的集與卡在哪：`not_released` / `submit_failed` / `stalled` / `download_failed` / `import_failed`）。蓋到那一集的 Job 照 `why_not.claims_by_episode`；在路上（停滯不算）、`review`、或有開著或被忽略的管線 Issue 說著它這個狀態（同「卡住的」）的那一集不算。第 0 季不看，不讀 `series_finished`。
+  - **遲到**（M5.5 票 10，判定在 `parser.overdue`）：有綁好的 RSS Series 的作品，最後入庫的一集之後（沒入庫過時從最早的 Series 建立那天起）播出、從播出日隔天 00:00（容器時區）起算滿 `settings.rss.overdue_days` 還沒入庫的集，開一件 `episodes_overdue`（一部作品一件，`detail_json` 帶 `reason`、作品名（`title`，英文的通知讀 `title_en`）、晚的集與卡在哪：`not_released` / `submit_failed` / `stalled` / `download_failed` / `import_failed`）。蓋到那一集的 Job 照 `why_not.claims_by_episode`；在路上（停滯不算）、`review`、或有開著或被忽略的管線 Issue 說著它這個狀態（同「卡住的」）的那一集不算。第 0 季不看，不讀 `series_finished`。
+    - 對象是現在還訂著的作品（`rss.subscribed_media`，與作品頁的訂閱清單同一套：刪掉 Feed 就不算，即使 Series 與綁定還在）；作品還訂著時，Feed 被刪、不再帶著 Item 的那幾條 Series 也不算。門檻是作品上每一條 Series 的 `overdue_days`（留空用全域）取最大值（M5.5 票 11）。
+    - **換輪**：基準那一集與下一集播出日相隔超過 21 天，`reason = next_run`（多半是下一個 cour，Mikan 是另一個番組，brief §20.12）；作品上有一條比基準那一集入庫更晚建立的 Series 時回到 `late`。還沒入庫過沒有基準，一律 `late`。
+    - **視窗**：最後一集缺集（基準之後已播、沒入庫的最新一集，過不過門檻都算）播出滿 60 天就不再提醒（上線第一天的舊缺集也是）。
+    - **巡檢前刷新**（`sweep.refresh_watched`）：巡檢的交易之前、獨立 session 刷新訂閱作品的快照（`media.refresh_snapshot`，`_store` 每部自己 commit）；跳過 `PLANNING_TTL`（6 小時）內刷新過的與 TMDB 說完結且正片都在庫的。刷新失敗的作品（含刷新時拋出的非服務錯誤，逐部隔離）這一輪不開也不收（`sweep_once(unrefreshed=…)`）。量級：一部 5–7 次請求。
 - 一輪佔用事件迴圈最久 5–37 ms，加上 RSS 三項後暖機時 16–84 ms（`scripts/experiments/sweep_loop_lag.py`，門檻 100 ms），不移出迴圈。
 - **週報**：每一次醒來接著看最新一份該有的週報（在最近的週一 05:00 結束的那一週，`weekly.week_ending`）有沒有，沒有就產生（`weekly.compose_weekly`）。週一那一份排在巡檢之後，看到的是當天開完的 Issue。與巡檢不同，**重啟之後補上漏掉的那一週**（同一週再產生什麼都不寫），只有一份都還沒有的新裝不補。
 
@@ -1109,6 +1114,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 - `GET /rss/exclusions`、`PUT /rss/exclusions`（`{not_single, rules}`，全域那一層）、`PUT /rss/feeds/{id}/exclusions`、`PUT /rss/series/{id}/exclusions`（`{rules}`，回那一列）。
 - `GET /rss/overdue`、`PUT /rss/overdue`（`{days}`，0–30）：遲到門檻（`settings.rss.overdue_days`，M5.5 票 10），下一輪巡檢照新的門檻開或收。
+- `PUT /rss/series/{id}/overdue`（`{days}`，0–30 或 `null`）：這個 RSS Series 的遲到門檻，`null` 回到全域；回那一列（`overdue_days`），404 `series_missing`（M5.5 票 11）。
 - 整組覆寫，寫壞的那一條讓整組不存（422 `rule_invalid`，`detail` 是 `<規則>: <Python re 的原因>`）。改完之後那一層還沒送出去的 Item 照新規則再看一次（只收緊）。
 
 **一次性連結與訂閱**

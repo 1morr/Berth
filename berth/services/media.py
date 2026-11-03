@@ -259,11 +259,28 @@ async def snapshot_for_planning(
     parsed = parse_media_id(media_id)
     if parsed is None:
         return None
+    await refresh_snapshot(session, factory, media_id, ttl=PLANNING_TTL)
     row = await session.get(Media, build_media_id(*parsed))
-    if row is None or not _fresh(row, PLANNING_TTL):
-        await _load(session, factory, media_id, force=True)
-        row = await session.get(Media, build_media_id(*parsed))
     return row.stored_snapshot() if row is not None else None
+
+
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def refresh_snapshot(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    media_id: str,
+    *,
+    ttl: timedelta = PLANNING_TTL,
+) -> bool:
+    """快照比 `ttl` 舊就向 TMDB 重抓（巡檢前刷新，M5.5 票 11）。回現在手上的快照夠不夠新：重抓失敗
+    是 `False`，存著的那一份照舊留著。不組詳情頁那一份視圖，一部作品只花抓 TMDB 的那幾次請求。"""
+    parsed = parse_media_id(media_id)
+    if parsed is None:
+        return False
+    row = await session.get(Media, build_media_id(*parsed))
+    if row is not None and _fresh(row, ttl):
+        return True
+    return isinstance(await _pull(session, factory, *parsed, row), Media)
 
 
 # 按它就是要換成 TMDB 現在的標題，`folder_name` 跟著改、之後的落點跟著改；沒有單一反向命令
@@ -299,24 +316,35 @@ async def _load(
     if row is not None and not force and _fresh(row):
         return await _view(session, row, access=access)
 
+    pulled = await _pull(session, factory, kind, tmdb_id, row)
+    if isinstance(pulled, Media):
+        return await _view(session, pulled, access=access)
+    return await _problem(session, row, *pulled, kind, tmdb_id, access)
+
+
+async def _pull(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    kind: MediaKind,
+    tmdb_id: int,
+    row: Media | None,
+) -> Media | tuple[TmdbProblem, str]:
+    """向 TMDB 重抓並存下（`_store` 會 commit）；拿不到時回原因與原文，不丟例外。"""
     settings = await read_settings(session, TmdbSettings)
     key_in_hand = credential(settings)
     if not key_in_hand:
-        return await _problem(session, row, *tmdb_problem(None), kind, tmdb_id, access)
+        return tmdb_problem(None)
 
     client = factory.tmdb(key_in_hand)
     try:
         snapshot = await _fetch(session, client, kind, tmdb_id)
     except NotFoundError as exc:
-        return await _problem(
-            session, row, TmdbProblem.NOT_FOUND, message(exc), kind, tmdb_id, access
-        )
+        return TmdbProblem.NOT_FOUND, message(exc)
     except ServiceError as exc:
-        return await _problem(session, row, *tmdb_problem(exc), kind, tmdb_id, access)
+        return tmdb_problem(exc)
     finally:
         await client.aclose()
-
-    return await _view(session, await _store(session, row, snapshot), access=access)
+    return await _store(session, row, snapshot)
 
 
 async def _fetch(

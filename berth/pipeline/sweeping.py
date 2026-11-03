@@ -29,10 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.pipeline.reconciling import local_now, previous
 from berth.pipeline.ticks import Clock, Sleeper, whole_tick
+from berth.services.clients import ServiceClientFactory
 from berth.services.events import EventHub
 from berth.services.proposals import expire_due
 from berth.services.setup import is_setup_complete
-from berth.services.sweep import sweep_once
+from berth.services.sweep import refresh_watched, sweep_once
 from berth.services.weekly import compose_weekly, has_reports, week_ending
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class Sweeper:
     def __init__(
         self,
         sessions: async_sessionmaker[AsyncSession],
+        clients: ServiceClientFactory,
         hub: EventHub,
         *,
         tick: timedelta = TICK,
@@ -58,6 +60,7 @@ class Sweeper:
         now: Clock = local_now,
     ) -> None:
         self._sessions = sessions
+        self._clients = clients
         self._hub = hub
         self._tick = tick
         self._at = at
@@ -103,9 +106,12 @@ class Sweeper:
             if not await is_setup_complete(session):
                 return False
             started = time.perf_counter()
+            # 巡檢前刷新（M5.5 票 11）：每一部自己 commit，所以在巡檢的交易之外、另一個 session。
+            unrefreshed = await refresh_watched(session, self._clients)
+        async with self._sessions() as session:
             # 門檻照排定的那一刻算，不照醒來的那一刻：每分鐘醒一次，跨過 05:00 的那一次落在哪一秒
             # 不一定，照醒來算的話「3 天」有時是 4 天（code-review）。
-            outcome = await sweep_once(session, now=due)
+            outcome = await sweep_once(session, now=due, unrefreshed=unrefreshed)
         logger.info(
             "sweep round",
             extra={
@@ -116,6 +122,7 @@ class Sweeper:
                 "overdue": outcome.overdue,
                 "cleared": outcome.cleared,
                 "reminded": outcome.reminded,
+                "unrefreshed": len(unrefreshed),
                 "elapsed_ms": round((time.perf_counter() - started) * 1000),
             },
         )
