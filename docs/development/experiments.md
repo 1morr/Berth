@@ -77,6 +77,13 @@ uv run python scripts/experiments/first_batch_rule.py                           
 uv run --env-file .env python scripts/experiments/first_batch_rule.py --online          # Windows 主控台加 PYTHONIOENCODING=utf-8
 ```
 
+候選守衛「發佈時下一集已經播了就不擔保」的代價（M5.5 票 05，沒採用）：包住上面那一支，同樣三段，數守衛會多擋
+幾筆。結果記在 `.scratch/m5.5/issues/05-first-batch-cumulative.md`：
+
+```bash
+uv run --env-file .env python scripts/experiments/next_aired_guard.py --online          # 不加 --online 只跑語料
+```
+
 前端 e2e `rss-subscribe` 的第一輪預覽為什麼慢（M4 票 13b）：起一台 `rss` 情境的演練 server，打那條 spec 同一串 API、
 逐步計時；不連網。結果記在 `.scratch/m4/issues/13b-rss-subscribe-e2e-preview.md`。預覽裡的「重複」為什麼時有時無
 （M4 票 121b）用 `--watch`：建好 feed 之後反覆讀預覽與 `/jobs`，各狀態筆數、重複的理由或入庫集數一變就印一行，

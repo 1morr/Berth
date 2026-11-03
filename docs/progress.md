@@ -47,6 +47,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 04 地上波先行 | 照字面容忍 9 天並記 `released_ahead_of_airing`，有換算的仍兩天，第一批同窗口；正式環境 16 列 fixture 全放行；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
 | 2026-11-04 | M5.5 01 key 防護 | key 欄空著時網址與存著的相同才用存著的 key（`_key_for`，02 共用）；測試連線與儲存都守，設定頁錯誤標在 key 欄、提示說出規則；plan §6 同步 | 新 session 下 `/implement .scratch/m5.5/issues/02-model-list.md` |
 | 2026-11-04 | M5.5 01b 核准測試賽跑 | 測試的問題：核准叫醒 importer，fixture 的 Job 沒 Plan 被打回 `import_failed`；改斷言 `retried` 事件；repro 修前必紅，壓力 40 次綠 | 新 session 下 `/implement .scratch/m5.5/issues/02-model-list.md` |
+| 2026-11-04 | M5.5 05 第一批累計編號 | 閘門過（含線上輪，擔保錯皆 0；累計編號只語料 2 筆）：寫明季號的累計編號由系統確認；TMDB 前季多記一集時擔保錯，測試固定，守衛候選在票上；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
 | 2026-11-04 | M5.5 02 模型清單 | 沒按時建議照表單網址查本機表、不帶 key；按「取得模型」才問端點，問不到退回本機表。實測 DeepSeek 的 Anthropic 接口沒有模型清單（404，brief §20.26） | 新 session 下 `/implement .scratch/m5.5/issues/03-search-results.md` |
 | 2026-11-04 | M5.5 03 搜尋結果 | `encrypted_content` 在 API 層拿掉（串流、重連、重新載入），歷史照留給模型；`web_search` 畫成標題、網址、日期的清單 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
 
