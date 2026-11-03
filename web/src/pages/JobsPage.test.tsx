@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Job, JobEvent, JobPage } from '../api/jobs'
 import { HEALTHY, REQUEST_FAILURES, stubApi, type StubRoute } from '../test/fetch'
 import { renderApp } from '../test/render'
+import { switchToEnglish } from '../test/language'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -136,7 +137,7 @@ describe('下載列表頁', () => {
     await screen.findByRole('link', { name: 'SPY×FAMILY 間諜家家酒' })
     const fetched = api.mock.calls.length
 
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+    await switchToEnglish()
 
     const details = within(row.closest('details') as HTMLElement)
     expect(await details.findByRole('link', { name: 'SPY x FAMILY' })).toBeInTheDocument()

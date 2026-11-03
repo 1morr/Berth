@@ -103,11 +103,9 @@ test('一般使用者的通知：自己的 Discord ID、要收的種類、測試
   await expect(test_.getByText('已送出', { exact: true })).toBeVisible()
   await shot(page, 'crew-2-delivered')
 
-  // 頁首的「設定」通到這一頁；Jellyfin 那一頁他進不去（帶他到健康頁說被擋下）。
-  await page
-    .getByRole('navigation', { name: '主要導覽' })
-    .getByRole('link', { name: '設定' })
-    .click()
+  // 帳號選單的「設定」通到這一頁；Jellyfin 那一頁他進不去（帶他到健康頁說被擋下）。
+  await page.getByRole('button', { name: '帳號：deckhand' }).click()
+  await page.getByRole('link', { name: '設定' }).click()
   await expect(page).toHaveURL('/settings/notifications')
   await page.goto('/settings/jellyfin')
   await expect(page).toHaveURL(/\/health\?denied=true/)

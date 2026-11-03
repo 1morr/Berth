@@ -1191,11 +1191,17 @@ const zhHant = {
     discover: '探索',
     inventory: '媒體庫',
     jobs: '下載',
-    issues: '待處理',
+    airing: '新番',
+    waiting: '待處理',
+    issues: 'Issue',
     review: '審核',
+    subscriptions: '訂閱',
+    // 導覽項帶件數時念出來的一句。
+    counted_one: '{{label}} {{count}} 件',
+    counted_other: '{{label}} {{count}} 件',
+    account: '帳號：{{name}}',
     health: '健康',
     settings: '設定',
-    rss: 'RSS',
     weekly: '週報',
     signOut: '登出',
     signingOut: '登出中…',
@@ -1861,7 +1867,7 @@ const zhHant = {
   // 下載列表頁與送單（票 09、`.scratch/m1/jobs-shape.md`）。發佈名、hash、路徑、category
   // 與 `client_state` 不是文案——它們是機器字串，原樣顯示（The Machine String Rule）。
   issues: {
-    title: '待處理',
+    title: 'Issue',
     count_one: '{{count}} 件',
     count_other: '{{count}} 件',
     // 這一頁最好的狀態是沒有東西。空的時候說的是「都對得上」，不是「沒有資料」。
@@ -3459,7 +3465,7 @@ const zhHant = {
     },
   },
   rss: {
-    title: 'RSS',
+    title: '訂閱',
     readFailed: '讀不到 RSS 的清單。',
     // 一串發佈名收起來的那幾筆（`rss/ReleaseTitles.tsx`，M5 票 26）。
     releasesMore_one: '其餘 {{count}} 筆',
@@ -5611,11 +5617,16 @@ const en: Translations<typeof zhHant> = {
     discover: 'Discover',
     inventory: 'Library',
     jobs: 'Downloads',
+    airing: 'Airing',
+    waiting: 'Waiting',
     issues: 'Issues',
     review: 'Review',
+    subscriptions: 'Subscriptions',
+    counted_one: '{{label}}, {{count}} to do',
+    counted_other: '{{label}}, {{count}} to do',
+    account: 'Account: {{name}}',
     health: 'Health',
     settings: 'Settings',
-    rss: 'RSS',
     weekly: 'Weekly',
     signOut: 'Sign out',
     signingOut: 'Signing out…',
@@ -7757,7 +7768,7 @@ const en: Translations<typeof zhHant> = {
     },
   },
   rss: {
-    title: 'RSS',
+    title: 'Subscriptions',
     readFailed: 'Can’t read the RSS lists.',
     releasesMore_one: '{{count}} more',
     releasesMore_other: '{{count}} more',

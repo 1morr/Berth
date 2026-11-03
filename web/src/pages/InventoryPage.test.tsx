@@ -15,6 +15,7 @@ import {
 } from '../test/fetch'
 import { expectCurrentByStateOnly } from '../test/navState'
 import { renderApp } from '../test/render'
+import { switchToEnglish } from '../test/language'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -313,7 +314,7 @@ describe('媒體庫頁', () => {
       await findTile('Alpha Show')
       const fetched = api.mock.calls.length
 
-      await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+      await switchToEnglish()
 
       expect(await screen.findByRole('navigation', { name: 'Libraries' })).toBeVisible()
       expect(within(tile('Alpha Show')).getAllByText('Alpha Show')).toHaveLength(1)
@@ -669,7 +670,7 @@ describe('媒體庫頁', () => {
       renderApp(`/library/${TV}`)
       await findTile('SPY×FAMILY')
 
-      await userEvent.click(screen.getByRole('button', { name: 'EN' }))
+      await switchToEnglish()
 
       const spy = await findTile('SPY x FAMILY')
       expect(spy).not.toHaveTextContent('間諜家家酒')

@@ -52,6 +52,8 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 03 搜尋結果 | `encrypted_content` 在 API 層拿掉（串流、重連、重新載入），歷史照留給模型；`web_search` 畫成標題、網址、日期的清單 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
 | 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05b-cumulative-next-aired-guard.md` |
 | 2026-11-04 | M5.5 05b 累計編號下一集已播 | 累計編號的第一批要下一集晚於發佈加兩天才擔保，TMDB 前季多記一集改擋下；照字面不套。閘門前後相同、擔保錯 0，SPY×FAMILY 仍擔保；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
+| 2026-11-04 | M5.5 07 導覽收斂 | 頁首五項加帳號選單（第一個下拉，disclosure、Esc 回觸發鍵）；待處理與新番帶件數（`GET /waiting`，admin）；審核/Issue、訂閱掛區塊分頁，網址不變 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
+| 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
 
 ## 偏差與決定
 
@@ -64,4 +66,5 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - 2026-11-01 M5.5 範圍：存著的 key 只送到存它的端點（使用者定按鈕，範圍由調查補上），改既有的 `ai.test_ai` 與 `ai.set_ai`；改 plan §11.6b。
 - 2026-11-03 M5.5 票序：原①拆成 01 key 防護與 02 模型清單（仍共用一支函式），⑨⑩重切成 10–13；「新番」在 07 只給 admin、只有訂閱分頁，09 才對所有人顯示（使用者定；`.scratch/m5.5/spec.md`〈票序〉）。
 - 2026-11-04 M5.5 票 04：規則一改成照字面的列九天、有換算的兩天（改 plan §4.4、brief §15、§20.11、§20.27、`CONTEXT.md`）；「照字面」抽成 `parser/literal.py` 與第一批共用，`check_airing` 多收發佈名，`publishing.just_aired` 分兩個窗口；offset 設 0 算照字面。
+- 2026-11-04 M5.5 票 07：頁首件數各歸各頁（使用者定）：待處理＝審核＋Issue、待綁定掛在新番，頁首數字才對得上點進去的件數；三格加總仍是 Discord 的 N（`test_notify_waiting.py` 守）。改 spec〈範圍〉、plan §6–7、DESIGN.md、brief §13。
 - 2026-11-04 M5.5 票 04b：規則一擋下的照字面列早 ≤14 天記 `released_far_ahead_of_airing`（說平台先行），更早記 `released_too_early_for_simulcast`；`released_before_airing` 只剩有換算的（改 plan §4.4、brief §20.27、spec）。

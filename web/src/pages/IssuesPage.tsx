@@ -11,6 +11,7 @@ import { useHashTarget } from '../components/useHashTarget'
 import { IssueRow } from '../issues/IssueRow'
 import { LedgerGapNotice } from '../issues/LedgerGapNotice'
 import { ReconcileBanner } from '../issues/ReconcileBanner'
+import { WaitingTabs } from '../nav/SectionTabs'
 
 /**
  * 待處理頁 `/issues`（`.scratch/m2/issues-shape.md`，M2 票 05）。
@@ -36,6 +37,7 @@ export function IssuesPage() {
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-4 px-6 py-8">
+      <WaitingTabs />
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 border-rule-strong pb-2">
         <h1 tabIndex={-1} className={PAGE_TITLE}>
           {t('issues.title')}
