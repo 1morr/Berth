@@ -44,7 +44,6 @@ from berth.domain import (
     ParseContext,
     Role,
     SearchVerdict,
-    SeasonSnapshot,
     StepFailure,
     StepStatus,
     Tags,
@@ -729,15 +728,9 @@ def _whole_season(
     rows = next((row for row in snapshot.seasons if row.season_number == season), None)
     if rows is None:
         return False
-    known = _known_episodes(rows)
+    known = rows.length
     # TMDB 還不知道這一季有幾集時說不出「全季」——那是一句沒有根據的話。
     return known > 0 and end >= known
-
-
-def _known_episodes(season: SeasonSnapshot) -> int:
-    """TMDB 對這一季報的集數。兩個來源取大的——未播的集數已經先列進 `episode_count`，
-    而 `episodes` 偶爾比它多（TMDB 加了集但沒更新計數）。都是 0 就是「還不知道」。"""
-    return max(season.episode_count, len(season.episodes))
 
 
 def _problem(exc: ServiceError) -> IndexerProblem:

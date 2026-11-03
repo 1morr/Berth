@@ -43,7 +43,7 @@ VOUCHED: frozenset[Code] = frozenset(
 )
 
 #: 季號是寫明的：發佈名或資料夾說了第幾季。沒有的話只寫集號的那一種要對到第一季才算照字面。
-_WRITTEN_SEASON: frozenset[Code] = frozenset({Code.SEASON_FROM_RELEASE, Code.SEASON_FROM_FOLDER})
+WRITTEN_SEASON: frozenset[Code] = frozenset({Code.SEASON_FROM_RELEASE, Code.SEASON_FROM_FOLDER})
 
 
 def is_literal(torrent_name: str, item: PlanItem, media: MediaSnapshot) -> bool:
@@ -53,7 +53,7 @@ def is_literal(torrent_name: str, item: PlanItem, media: MediaSnapshot) -> bool:
         return False
     if written_episode(torrent_name, item.rel_path) != item.episode_start:
         return False
-    return bool(codes & _WRITTEN_SEASON) or item.season == _first_season(media)
+    return bool(codes & WRITTEN_SEASON) or item.season == _first_season(media)
 
 
 def _first_season(media: MediaSnapshot) -> int | None:

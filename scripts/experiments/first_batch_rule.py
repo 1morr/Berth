@@ -39,6 +39,7 @@ from berth.domain import (
     ParseContext,
     PlanAction,
     PlanItem,
+    ReasonCode,
 )
 from berth.parser import check_airing, episode_span, plan, vouch_first_batch
 from berth.services.bench import Fixture, load_corpus, load_snapshot, paths
@@ -54,6 +55,14 @@ def _vouch(
     items = check_airing(name, plan(name, entries, context), snapshot, at, from_series=True)
     vouched = vouch_first_batch(name, items, snapshot, at, season_hint=None, episode_offset=None)
     return items, vouched
+
+
+def _reading(items: tuple[PlanItem, ...]) -> str:
+    """擔保了的那一份是哪一種讀法：寫明季號的累計編號（M5.5 票 05）或照字面。"""
+    cumulative = any(
+        reason.code is ReasonCode.ABSOLUTE_CUMULATIVE for item in items for reason in item.reasons
+    )
+    return "cumulative" if cumulative else "literal"
 
 
 def _codes(items: tuple[PlanItem, ...]) -> str:
@@ -133,7 +142,9 @@ def corpus(*, adversarial: bool = False) -> Counter[str]:
                 or span != (row.season, row.episode, row.episode_end or row.episode)
             )
         ]
-        counts[f"{kind}: vouched {'WRONG' if wrong else 'correct'}"] += 1
+        verdict = "WRONG" if wrong else "correct"
+        counts[f"{kind}: vouched {verdict}"] += 1
+        counts[f"{kind}: vouched {verdict} ({_reading(items)})"] += 1
         print(f"   [{'WRONG' if wrong else 'yes'}] {fixture.id}: {vouched} {wrong or ''}")
     return counts
 
@@ -203,6 +214,10 @@ async def rss(session, lag: ModuleType) -> Counter[str]:  # type: ignore[no-unty
         entry = (FileEntry(rel_path=f"{name}.mkv", size=1 << 30),)
         items, vouched = _vouch(name, entry, found.snapshot, found.published_at)  # type: ignore[attr-defined]  # 同上
         counts["vouched" if vouched else "not vouched"] += 1
+        if vouched is not None:
+            counts[f"vouched ({_reading(items)})"] += 1
+            if _reading(items) == "cumulative":
+                print(f"   [cumulative] {name[:70]} pub={found.pub}: {vouched}")  # type: ignore[attr-defined]  # 同上
         if vouched is None:
             print(f"   [no] {name[:70]} pub={found.pub}: {_codes(items)[:140]}")  # type: ignore[attr-defined]  # 同上
     return counts

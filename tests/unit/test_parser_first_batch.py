@@ -3,6 +3,8 @@
 **逐條件雙向**：`TestEachCondition` 從一份會被擔保的第一批出發，每一次只拿掉一個條件，它就不再被
 擔保；`TestRealReadings` 用真的解析器走一遍，守住「解析器對一般的每週發佈給的理由」沒有跑出白名單
 （跑出去的話跳過會安靜地失效），以及 split-cour、虛擬季、新一季被當成第一季仍然不算。
+`TestCumulativeConditions`、`TestCumulativeReadings` 對寫明季號的累計編號（M5.5 票 05）
+做同樣兩件事。
 """
 
 from __future__ import annotations
@@ -315,3 +317,179 @@ class TestRealReadings:
         assert aired is not None and aired.air_date is not None
         at = datetime.combine(aired.air_date + timedelta(days=1), datetime.min.time(), UTC)
         assert _read("[ANi] BLACK TORCH - 03 [1080P][Baha][WEB-DL]", second, at) is None
+
+
+# --- 累計編號（M5.5 票 05） -------------------------------------------------------------
+
+#: 夜櫻家的大作戰：TMDB 第一季 27 集，第二季每週一集；LoliHouse 的集號從第一季一路數下來，
+#: 40 是 S02E13（研究 `review-queue-2026-11-01.md` §2）。
+YOZAKURA_S2 = date(2026, 7, 4)
+YOZAKURA = "[LoliHouse] 夜樱家的大作战 第二季 / Yozakura-san Chi no Daisakusen Season 2 - {number} [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]"  # noqa: E501  # 真的發佈名，不拆
+
+
+def yozakura(*, first_season: int = 27) -> MediaSnapshot:
+    """`first_season` 不是 27 時是 TMDB 把第一季記多或記少的形狀（字幕組照真的 27 集累加）。"""
+
+    def block(number: int, count: int, start: date, aired: int) -> SeasonSnapshot:
+        return SeasonSnapshot(
+            season_number=number,
+            episode_count=count,
+            episodes=tuple(
+                EpisodeSnapshot(episode_number=n, air_date=start + timedelta(weeks=n - 1))
+                for n in range(1, aired + 1)
+            ),
+        )
+
+    return MediaSnapshot(
+        tmdb_id=2,
+        kind=MediaKind.TV,
+        title="夜櫻家的大作戰",
+        title_en="Mission: Yozakura Family",
+        title_original="夜桜さんちの大作戦",
+        titles=("Yozakura-san Chi no Daisakusen", "夜樱家的大作战"),
+        seasons=(
+            block(1, first_season, date(2024, 4, 6), first_season),
+            block(2, 24, YOZAKURA_S2, 15),
+        ),
+    )
+
+
+def yozakura_aired(episode: int, *, days: int = 1) -> datetime:
+    """第二季第 `episode` 集播出之後 `days` 天發佈。"""
+    aired = YOZAKURA_S2 + timedelta(weeks=episode - 1, days=days)
+    return datetime.combine(aired, datetime.min.time(), UTC)
+
+
+class TestCumulativeReadings:
+    """真的解析器：季號寫明、集號從第一季數下來的，第一批擔保；其他絕對編號仍等人。"""
+
+    def test_a_written_season_counted_from_the_first(self) -> None:
+        name = YOZAKURA.format(number=40)
+        assert _read(name, yozakura(), yozakura_aired(13)) == ((2, 13, 13),)
+
+    def test_a_cumulative_number_without_a_written_season(self) -> None:
+        """只寫集號的絕對編號：季號是換算推出來的，仍等人。"""
+        name = "[LoliHouse] Yozakura-san Chi no Daisakusen - 40 [WebRip 1080p HEVC-10bit AAC]"
+        assert _read(name, yozakura(), yozakura_aired(13)) is None
+
+    def test_tmdb_counting_one_episode_fewer_before(self) -> None:
+        """TMDB 第一季少記一集：40 換算成 S02E14，比發佈晚一週播，播出日比對擋下（有換算的只容忍
+        兩天）；最新那一集換算到 TMDB 還沒有播出日的集，擔保也不收。"""
+        short = yozakura(first_season=26)
+        assert _read(YOZAKURA.format(number=40), short, yozakura_aired(13)) is None
+        assert _read(YOZAKURA.format(number=42), short, yozakura_aired(15)) is None
+
+    def test_tmdb_counting_one_episode_more_before_is_a_known_blind_spot(self) -> None:
+        """TMDB 第一季多記一集（總集篇只有它算）：40 換算成 S02E12，真的是 S02E13。早一週播的那一集
+        仍在「剛播」的六週內、也不比最新一集落後太多，**擔保的是錯的那一集**（brief §15 已知盲點）。
+        這條固定現況；規則收緊時改成 `is None`。"""
+        long = yozakura(first_season=28)
+        assert _read(YOZAKURA.format(number=40), long, yozakura_aired(13)) == ((2, 12, 12),)
+
+    def test_a_cumulative_number_long_after_it_aired(self) -> None:
+        name = YOZAKURA.format(number=40)
+        late = yozakura_aired(13, days=BEHIND_LATEST.days + 1)
+        assert _read(name, yozakura(), late) is None
+
+
+def cumulative(**update: object) -> PlanItem:
+    """一列會被擔保的累計編號：季號寫明、40 換算成 S02E13。"""
+    name = YOZAKURA.format(number=40)
+    row = PlanItem(
+        rel_path=f"{name}.mkv",
+        kind=FileKind.VIDEO,
+        action=PlanAction.IMPORT,
+        season=2,
+        episode_start=13,
+        episode_end=13,
+        confidence=Confidence.MEDIUM,
+        reasons=(
+            why(Code.SEASON_FROM_RELEASE, season=2),
+            why(Code.ABSOLUTE_CUMULATIVE, number=40, episode="S02E13"),
+            why(Code.TITLE_EXACT, title="Yozakura-san Chi no Daisakusen"),
+        ),
+    )
+    return row.model_copy(update=update)
+
+
+def vouch_cumulative(
+    row: PlanItem, *, at: datetime | None = None, number: int = 40
+) -> tuple[tuple[int, int, int], ...] | None:
+    return vouch(
+        (row,),
+        snapshot=yozakura(),
+        at=at if at is not None else yozakura_aired(13),
+        torrent=YOZAKURA.format(number=number),
+    )
+
+
+class TestCumulativeConditions:
+    """從一列會被擔保的累計編號出發，每次只拿掉一個條件。"""
+
+    def test_the_baseline_is_vouched_for(self) -> None:
+        assert vouch_cumulative(cumulative()) == ((2, 13, 13),)
+
+    def test_a_season_set_on_the_series(self) -> None:
+        name = YOZAKURA.format(number=40)
+        assert (
+            vouch(
+                (cumulative(),),
+                snapshot=yozakura(),
+                at=yozakura_aired(13),
+                torrent=name,
+                season_hint=2,
+            )
+            is None
+        )
+
+    def test_the_file_number_is_not_the_count_so_far(self) -> None:
+        """檔名寫 41、對到 S02E13：前面 27 集加 13 是 40，對不上。"""
+        row = cumulative(rel_path=f"{YOZAKURA.format(number=41)}.mkv")
+        assert vouch_cumulative(row, number=41) is None
+
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            why(Code.ABSOLUTE_GROUP, number=40, episode="S02E13"),
+            why(Code.ABSOLUTE_WITHIN_FIRST_SEASON, number=40, episodes=27, season=1),
+            why(Code.AIR_DATE_RUN, season=2, runs=2, episode="S02E01"),
+            why(Code.PUBLISHED_IN_RUN, published="2026-09-27", run=2, runs=2, episode="S02E01"),
+            why(
+                Code.RELEASED_AHEAD_OF_AIRING,
+                published="2026-09-20",
+                episode="S02E13",
+                aired="2026-09-26",
+            ),
+            why(Code.SEASON_FROM_JOB, season=2),
+        ],
+        ids=lambda reason: reason.code.value,
+    )
+    def test_a_reason_outside_the_list(self, reason: ItemReason) -> None:
+        tainted = cumulative(reasons=(*cumulative().reasons, reason))
+        assert vouch_cumulative(tainted) is None
+
+    def test_a_season_written_on_the_folder(self) -> None:
+        folder = cumulative(
+            reasons=(why(Code.SEASON_FROM_FOLDER, season=2), *cumulative().reasons[1:])
+        )
+        assert vouch_cumulative(folder) == ((2, 13, 13),)
+
+    def test_the_written_season_is_another(self) -> None:
+        """發佈名寫第三季、換算落在第二季：兩者沒有互相印證。"""
+        other = cumulative(
+            reasons=(why(Code.SEASON_FROM_RELEASE, season=3), *cumulative().reasons[1:])
+        )
+        assert vouch_cumulative(other) is None
+
+    def test_no_written_season(self) -> None:
+        bare = cumulative(reasons=cumulative().reasons[1:])
+        assert vouch_cumulative(bare) is None
+
+    def test_low_confidence(self) -> None:
+        assert vouch_cumulative(cumulative(confidence=Confidence.LOW)) is None
+
+    def test_released_before_it_aired(self) -> None:
+        """上緣維持兩天：地上波先行的寬限只給照字面的列。"""
+        edge = RELEASE_TOLERANCE.days
+        assert vouch_cumulative(cumulative(), at=yozakura_aired(13, days=-edge - 1)) is None
+        assert vouch_cumulative(cumulative(), at=yozakura_aired(13, days=-edge)) == ((2, 13, 13),)
