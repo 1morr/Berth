@@ -26,7 +26,14 @@ from berth.domain import (
     why,
 )
 from berth.domain import ReasonCode as Code
-from berth.parser import BEHIND_LATEST, RELEASE_TOLERANCE, check_airing, plan, vouch_first_batch
+from berth.parser import (
+    BEHIND_LATEST,
+    RELEASE_TOLERANCE,
+    SIMULCAST_LEAD,
+    check_airing,
+    plan,
+    vouch_first_batch,
+)
 from berth.parser.planner import hold
 
 #: 第一季第 1 集播出的那一天；每週一集。
@@ -235,8 +242,20 @@ class TestEachCondition:
         assert vouch((episode(),), snapshot=blank) is None
 
     def test_released_before_it_aired(self) -> None:
-        assert vouch((episode(),), at=published(3, days=-3)) is None
-        assert vouch((episode(),), at=published(3, days=-RELEASE_TOLERANCE.days)) == ((1, 3, 3),)
+        """上緣是播出日比對放行照字面的那一個：容忍加上地上波先行（M5.5 票 04）。"""
+        edge = (RELEASE_TOLERANCE + SIMULCAST_LEAD).days
+        assert vouch((episode(),), at=published(3, days=-edge - 1)) is None
+        assert vouch((episode(),), at=published(3, days=-edge)) == ((1, 3, 3),)
+
+    def test_a_simulcast_lead_noted_by_the_air_date_check(self) -> None:
+        ahead = why(
+            Code.RELEASED_AHEAD_OF_AIRING,
+            published="2026-07-12",
+            episode="S01E03",
+            aired="2026-07-19",
+        )
+        row = episode(reasons=(*episode().reasons, ahead))
+        assert vouch((row,), at=published(3, days=-7)) == ((1, 3, 3),)
 
     def test_not_just_aired(self) -> None:
         """一集播完很久之後才發的（補檔、BD、或新一季被讀成第一季）。"""
@@ -251,7 +270,7 @@ def _read(
     """真的解析器 + 播出日比對（規劃時的那一份），再問它擔不擔保。"""
     context = ParseContext(media=snapshot, published_at=at)
     items = plan(name, (FileEntry(rel_path=f"{name}.mkv", size=500_000_000),), context)
-    checked = check_airing(items, snapshot, at, from_series=True)
+    checked = check_airing(name, items, snapshot, at, from_series=True)
     return vouch_first_batch(name, checked, snapshot, at, season_hint=None, episode_offset=None)
 
 
@@ -260,6 +279,11 @@ class TestRealReadings:
         assert _read("[ANi] BLACK TORCH - 03 [1080P][Baha][WEB-DL]", media(), published(3)) == (
             (1, 3, 3),
         )
+
+    def test_a_simulcast_lead_of_eight_days(self) -> None:
+        """平台先播一週、TMDB 的深夜檔日期再晚一天：比對放行，第一批也認（brief §20.27）。"""
+        name = "[LoliHouse] BLACK TORCH - 03 [WebRip 1080p HEVC-10bit AAC]"
+        assert _read(name, media(), published(3, days=-8)) == ((1, 3, 3),)
 
     def test_a_written_season(self) -> None:
         name = "[Nekomoe kissaten&LoliHouse] BLACK TORCH S01E03 [WebRip 1080p HEVC-10bit AAC]"

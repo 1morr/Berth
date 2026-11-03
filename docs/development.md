@@ -123,7 +123,7 @@ deploy/           部署檔（compose、.env.example，使用者只拿這兩個�
 scripts/
   experiments/    對真實外部服務的驗證腳本（可重跑，結果在 docs/research/）
   fake_setup_server.py  以 Fake adapter 起一台 Berth，用來實跑驗證設定精靈
-  record_tmdb_snapshots.py  錄 tests/fixtures/tmdb/ 的快照（語料加了新作品時跑）
+  record_tmdb_snapshots.py  錄 tests/fixtures/tmdb/ 的快照（語料或 fixtures/airing/ 加了新作品時跑）
 tests/            後端測試
   e2e/              對真服務跑整條 M1 路徑（compose 覆寫檔、下載替身、pytest -m e2e）
   fixtures/e2e/     e2e 用的兩支 330 秒種子影片與冒充 RSS 站的測試 CA

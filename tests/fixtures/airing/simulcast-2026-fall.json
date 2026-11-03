@@ -1,0 +1,202 @@
+{
+ "about": [
+  "正式環境 0.4.1 審核佇列裡被播出日比對規則一誤擋的 16 列（docs/research/review-queue-2026-11-01.md §1、M5.5 票 04）。",
+  "發佈名、檔名、發佈時間與出處是 2026-11-04 從 ACG.RIP（裝備仔是 Mikan）查回的同一筆發佈，發佈日（UTC）與正式環境的 published_at 逐列相同；檔名取自 .torrent。",
+  "tmdb_aired 是正式環境當時的 TMDB 播出日。快照 tests/fixtures/tmdb/ 是 2026-11-04 錄的：野生的大魔王（tv-280042）的日期已被 TMDB 改早一週，所以測試以 tmdb_aired 為準；其餘 14 列兩者相同。",
+  "reading 是正式環境那一列的季號來源理由。"
+ ],
+ "rows": [
+  {
+   "id": "wild-last-boss-ani-16",
+   "source_url": "https://acg.rip/t/365442",
+   "torrent_name": "[ANi] Yasei no Last Boss ga Arawareta /  野生的大魔王出現了！ - 16 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+   "file": "[ANi] 野生的大魔王出現了！ - 16 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+   "published_at": "2026-10-17T13:31:14+00:00",
+   "tmdb": "tv-280042",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 16,
+   "tmdb_aired": "2026-10-24"
+  },
+  {
+   "id": "wild-last-boss-ani-18",
+   "source_url": "https://acg.rip/t/366629",
+   "torrent_name": "[ANi] Yasei no Last Boss ga Arawareta /  野生的大魔王出現了！ - 18 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+   "file": "[ANi] 野生的大魔王出現了！ - 18 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+   "published_at": "2026-10-31T13:30:50+00:00",
+   "tmdb": "tv-280042",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 18,
+   "tmdb_aired": "2026-11-07"
+  },
+  {
+   "id": "tenken-s2-ani-02",
+   "source_url": "https://acg.rip/t/364678",
+   "torrent_name": "[ANi] Tensei Shitara Ken Deshita S02 /  轉生就是劍 第二季 - 02 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+   "file": "[ANi] 轉生就是劍 第二季 - 02 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+   "published_at": "2026-10-07T15:30:55+00:00",
+   "tmdb": "tv-134667",
+   "reading": "season_from_release",
+   "season": 2,
+   "episode": 2,
+   "tmdb_aired": "2026-10-15"
+  },
+  {
+   "id": "tenken-s2-ani-03",
+   "source_url": "https://acg.rip/t/365260",
+   "torrent_name": "[ANi] Tensei Shitara Ken Deshita S02 /  轉生就是劍 第二季 - 03 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+   "file": "[ANi] 轉生就是劍 第二季 - 03 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+   "published_at": "2026-10-14T15:31:06+00:00",
+   "tmdb": "tv-134667",
+   "reading": "season_from_release",
+   "season": 2,
+   "episode": 3,
+   "tmdb_aired": "2026-10-22"
+  },
+  {
+   "id": "tenken-s2-ani-04",
+   "source_url": "https://acg.rip/t/365842",
+   "torrent_name": "[ANi] Tensei Shitara Ken Deshita S02 /  轉生就是劍 第二季 - 04 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+   "file": "[ANi] 轉生就是劍 第二季 - 04 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+   "published_at": "2026-10-21T15:31:07+00:00",
+   "tmdb": "tv-134667",
+   "reading": "season_from_release",
+   "season": 2,
+   "episode": 4,
+   "tmdb_aired": "2026-10-29"
+  },
+  {
+   "id": "tenken-s2-ani-05",
+   "source_url": "https://acg.rip/t/366433",
+   "torrent_name": "[ANi] Tensei Shitara Ken Deshita S02 /  轉生就是劍 第二季 - 05 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
+   "file": "[ANi] 轉生就是劍 第二季 - 05 [1080P][Baha][WEB-DL][AAC AVC][CHT].mp4",
+   "published_at": "2026-10-28T15:31:06+00:00",
+   "tmdb": "tv-134667",
+   "reading": "season_from_release",
+   "season": 2,
+   "episode": 5,
+   "tmdb_aired": "2026-11-05"
+  },
+  {
+   "id": "daiseijo-lolihouse-02",
+   "source_url": "https://acg.rip/t/364546",
+   "torrent_name": "[LoliHouse] 转生后的大圣女，极力隐瞒圣女的身份 / 转生了的大圣女，拼死隐瞒自己身为圣女的身份 / Daiseijo - 02 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu - 02 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-05T13:23:59+00:00",
+   "tmdb": "tv-285899",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 2,
+   "tmdb_aired": "2026-10-10"
+  },
+  {
+   "id": "daiseijo-lolihouse-03",
+   "source_url": "https://acg.rip/t/364926",
+   "torrent_name": "[LoliHouse] 转生后的大圣女，极力隐瞒圣女的身份 / 转生了的大圣女，拼死隐瞒自己身为圣女的身份 / Daiseijo - 03 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu - 03 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-10T15:56:11+00:00",
+   "tmdb": "tv-285899",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 3,
+   "tmdb_aired": "2026-10-17"
+  },
+  {
+   "id": "daiseijo-lolihouse-04",
+   "source_url": "https://acg.rip/t/365456",
+   "torrent_name": "[LoliHouse] 转生后的大圣女，极力隐瞒圣女的身份 / 转生了的大圣女，拼死隐瞒自己身为圣女的身份 / Daiseijo - 04 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu - 04 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-17T15:20:31+00:00",
+   "tmdb": "tv-285899",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 4,
+   "tmdb_aired": "2026-10-24"
+  },
+  {
+   "id": "daiseijo-lolihouse-05",
+   "source_url": "https://acg.rip/t/366069",
+   "torrent_name": "[LoliHouse] 转生后的大圣女，极力隐瞒圣女的身份 / 转生了的大圣女，拼死隐瞒自己身为圣女的身份 / Daiseijo - 05 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu - 05 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-24T15:06:27+00:00",
+   "tmdb": "tv-285899",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 5,
+   "tmdb_aired": "2026-10-31"
+  },
+  {
+   "id": "daiseijo-lolihouse-06",
+   "source_url": "https://acg.rip/t/366696",
+   "torrent_name": "[LoliHouse] 转生后的大圣女，极力隐瞒圣女的身份 / 转生了的大圣女，拼死隐瞒自己身为圣女的身份 / Daiseijo - 06 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei shita Daiseijo wa, Seijo de Aru Koto wo Hitakakusu - 06 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-11-01T05:34:43+00:00",
+   "tmdb": "tv-285899",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 6,
+   "tmdb_aired": "2026-11-07"
+  },
+  {
+   "id": "tensei-goblin-lolihouse-03",
+   "source_url": "https://acg.rip/t/365122",
+   "torrent_name": "[LoliHouse] 转生哥布林有问题吗？ / Tensei Goblin dakedo Shitsumon Aru? - 03 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei Goblin dakedo Shitsumon Aru - 03 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-12T23:43:31+00:00",
+   "tmdb": "tv-316694",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 3,
+   "tmdb_aired": "2026-10-19"
+  },
+  {
+   "id": "tensei-goblin-lolihouse-04",
+   "source_url": "https://acg.rip/t/365686",
+   "torrent_name": "[LoliHouse] 转生哥布林有问题吗？ / Tensei Goblin dakedo Shitsumon Aru? - 04 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei Goblin dakedo Shitsumon Aru - 04 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-19T14:37:48+00:00",
+   "tmdb": "tv-316694",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 4,
+   "tmdb_aired": "2026-10-26"
+  },
+  {
+   "id": "tensei-goblin-lolihouse-05",
+   "source_url": "https://acg.rip/t/366266",
+   "torrent_name": "[LoliHouse] 转生哥布林有问题吗？ / Tensei Goblin dakedo Shitsumon Aru? - 05 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+   "file": "[LoliHouse] Tensei Goblin dakedo Shitsumon Aru - 05 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv",
+   "published_at": "2026-10-26T14:39:10+00:00",
+   "tmdb": "tv-316694",
+   "reading": "single_season",
+   "season": 1,
+   "episode": 5,
+   "tmdb_aired": "2026-11-02"
+  },
+  {
+   "id": "overgeared-nix-raws-03",
+   "source_url": "https://mikanani.me/Home/Episode/93445c832ae81926c8726fe72911e85069c5b05a",
+   "torrent_name": "[Nix-Raws] 装备我最强 / 装备我最强 / テムパル～アイテムの力～ / Tempal Item no Chikara S01E03 [CR WEB-DL 1080p AVC AAC][简繁内封]",
+   "file": "[Nix-Raws] Tempal Item no Chikara S01E03 [CR WEB-DL 1080p AVC AAC][SC_TC].mkv",
+   "published_at": "2026-10-11T16:17:50+00:00",
+   "tmdb": "tv-324502",
+   "reading": "season_from_release",
+   "season": 1,
+   "episode": 3,
+   "tmdb_aired": "2026-10-16"
+  },
+  {
+   "id": "overgeared-nix-raws-04",
+   "source_url": "https://mikanani.me/Home/Episode/8894d2f74fd552a64a3158f21f0ac097bcded7ab",
+   "torrent_name": "[Nix-Raws] 装备我最强 / 装备我最强 / テムパル～アイテムの力～ / Tempal Item no Chikara S01E04 [CR WEB-DL 1080p AVC AAC][简繁内封]",
+   "file": "[Nix-Raws] Tempal Item no Chikara S01E04 [CR WEB-DL 1080p AVC AAC][SC_TC].mkv",
+   "published_at": "2026-10-19T00:55:39+00:00",
+   "tmdb": "tv-324502",
+   "reading": "season_from_release",
+   "season": 1,
+   "episode": 4,
+   "tmdb_aired": "2026-10-23"
+  }
+ ]
+}

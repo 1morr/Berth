@@ -7,10 +7,11 @@ from berth.parser.airing import HELD_BY_AIRING, check_airing
 from berth.parser.cjk import langs_in, normalize_cjk
 from berth.parser.classify import SAMPLE_RATIO, SHORT_FEATURE, classify, kind_by_extension
 from berth.parser.finished import QUIET_AFTER, SETTLED_AFTER, series_finished
-from berth.parser.first_batch import VOUCHED, vouch_first_batch
+from berth.parser.first_batch import vouch_first_batch
+from berth.parser.literal import VOUCHED
 from berth.parser.mapping import VIRTUAL_SEASON_GAP, map_episode
 from berth.parser.planner import episode_span, plan, promote, revise, written_episode
-from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE
+from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE, SIMULCAST_LEAD
 from berth.parser.release import merge_release, parse_release, tags_of
 from berth.parser.runtime import HELD_BY_RUNTIME, RUNTIME_RATIO, RUNTIME_SLACK, check_runtime
 from berth.parser.structure import StructureHints, structure_hints
@@ -40,6 +41,7 @@ __all__ = [
     "SAMPLE_RATIO",
     "SETTLED_AFTER",
     "SHORT_FEATURE",
+    "SIMULCAST_LEAD",
     "VIRTUAL_SEASON_GAP",
     "VOUCHED",
     "MediaMatch",

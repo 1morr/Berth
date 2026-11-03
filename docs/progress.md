@@ -44,6 +44,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-01 | M5.5 審核佇列調查 | 33 件查完未改碼：16 件是地上波先行被播出日比對誤擋，17 件是第一批確認，都不需要 M6（`docs/research/review-queue-2026-11-01.md`、brief §20.27） | 等使用者：要不要把規則一放寬、第一批收累計編號、升級後自動重算排進 M5.5 |
 | 2026-11-01 | M5.5 規劃 | 審核佇列減量寫進 plan §11.6b 與 brief §17：照字面的先行放寬到 9 天、第一批收累計編號（量過才收）、升級後只重算舊版本的 review；票序排在搜尋結果之後 | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
 | 2026-11-03 | M5.5 開工 | spec 寫好、拆 20 張票：原①拆成 key 防護與模型清單，⑨⑩重切成遲到 Issue、換輪與刷新、追更頁、通知，加 UI 收尾；plan §11.6b 縮成連結 | 新 session 下 `/implement .scratch/m5.5/issues/01-saved-key-endpoint-guard.md` |
+| 2026-11-04 | M5.5 04 地上波先行 | 照字面容忍 9 天並記 `released_ahead_of_airing`，有換算的仍兩天，第一批同窗口；正式環境 16 列 fixture 全放行；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
 
 ## 偏差與決定
 
@@ -55,3 +56,4 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - 2026-11-01 M5.5 範圍：審核佇列減量併入 M5.5（使用者定），排在模型清單與搜尋結果之後；規則一「早於播出日就一定算錯」不成立（brief §20.27），實作時改 plan §4.4、brief §15。
 - 2026-11-01 M5.5 範圍：存著的 key 只送到存它的端點（使用者定按鈕，範圍由調查補上），改既有的 `ai.test_ai` 與 `ai.set_ai`；改 plan §11.6b。
 - 2026-11-03 M5.5 票序：原①拆成 01 key 防護與 02 模型清單（仍共用一支函式），⑨⑩重切成 10–13；「新番」在 07 只給 admin、只有訂閱分頁，09 才對所有人顯示（使用者定；`.scratch/m5.5/spec.md`〈票序〉）。
+- 2026-11-04 M5.5 票 04：規則一改成照字面的列九天、有換算的兩天（改 plan §4.4、brief §15、§20.11、§20.27、`CONTEXT.md`）；「照字面」抽成 `parser/literal.py` 與第一批共用，`check_airing` 多收發佈名，`publishing.just_aired` 分兩個窗口；offset 設 0 算照字面。

@@ -51,7 +51,7 @@ def _vouch(
 ) -> tuple[tuple[PlanItem, ...], tuple[tuple[int, int, int], ...] | None]:
     """規劃時的那一份（解析器 + 播出日比對，RSS Series 送的），再問它擔不擔保。"""
     context = ParseContext(media=snapshot, published_at=at)
-    items = check_airing(plan(name, entries, context), snapshot, at, from_series=True)
+    items = check_airing(name, plan(name, entries, context), snapshot, at, from_series=True)
     vouched = vouch_first_batch(name, items, snapshot, at, season_hint=None, episode_offset=None)
     return items, vouched
 

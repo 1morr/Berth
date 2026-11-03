@@ -1,0 +1,238 @@
+{
+ "ended": false,
+ "first_air_date": "2022-10-05",
+ "kind": "tv",
+ "overview": "一回神，主角發現自己已經轉生至異世界了。不是作為普通人類，而是一把劍。當他環顧周圍，月發現這裡是個魔物猖獗，險象環生的草原地帶。覺得性命受到威脅的主角，運用讓自己身體飄浮的能力，逐步獵殺魔物。就在這時，主角為了休息而插進地面的瞬間，能力居然破功，動彈不得。然而就無計可施的主角面前，突如其來出現一名奴隸打扮的貓耳少女……",
+ "overview_en": "Reincarnated as a sentient weapon with memories of his past life, but not his name, a magical sword saves a young beastgirl from a life of slavery. Fran, the cat-eared girl, becomes his wielder, and wants only to grow stronger, while the sword wants to know why he is here. Together, the strange duo's journey has only just begun!",
+ "poster_url": "https://image.tmdb.org/t/p/w342/lUfTXwl3HANWoSpZyHzyJUpDNy.jpg",
+ "poster_url_en": "https://image.tmdb.org/t/p/w342/yZ3VZVc7iyF7KtIjERBGEedVXqA.jpg",
+ "runtime": null,
+ "seasons": [
+  {
+   "air_date": "2022-10-05",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-05",
+     "episode_number": 1,
+     "name": "Catgirl Meets Sword",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-12",
+     "episode_number": 2,
+     "name": "The Hellish Trial at the Adventurer's Guild",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-19",
+     "episode_number": 3,
+     "name": "The Grizzled Old Blacksmith",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-10-26",
+     "episode_number": 4,
+     "name": "The Terrifying Goblin Stampede",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-02",
+     "episode_number": 5,
+     "name": "The Feeble First Dungeon",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-09",
+     "episode_number": 6,
+     "name": "The Greater Demon Cheated",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-16",
+     "episode_number": 7,
+     "name": "The Horrible Lieutenant of the Knights Brigade",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-23",
+     "episode_number": 8,
+     "name": "The Villainous Blue Cat",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-11-30",
+     "episode_number": 9,
+     "name": "The Monstrous Rank A Adventurer",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-12-07",
+     "episode_number": 10,
+     "name": "The Totally Unfair Spider Traps",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-12-14",
+     "episode_number": 11,
+     "name": "The Wolf Summoned Hither",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2022-12-21",
+     "episode_number": 12,
+     "name": "An Excited Fran Sets Off",
+     "runtime": 24
+    }
+   ],
+   "name": "Season 1",
+   "names": [
+    "Season 1",
+    "第 1 季"
+   ],
+   "season_number": 1
+  },
+  {
+   "air_date": "2026-10-08",
+   "episode_count": 12,
+   "episodes": [
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-08",
+     "episode_number": 1,
+     "name": "The Floating Island",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-15",
+     "episode_number": 2,
+     "name": "Jean du Vix Knows His Stuff",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-22",
+     "episode_number": 3,
+     "name": "The Undead Monster Was Tough as Nails",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-10-29",
+     "episode_number": 4,
+     "name": "The Hopeless Battle Against the Undead King",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-05",
+     "episode_number": 5,
+     "name": "A Smiling Farewell",
+     "runtime": 24
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-12",
+     "episode_number": 6,
+     "name": "The Briny Beach Experience",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-19",
+     "episode_number": 7,
+     "name": "Episode 7",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-11-26",
+     "episode_number": 8,
+     "name": "Episode 8",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-03",
+     "episode_number": 9,
+     "name": "Episode 9",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-10",
+     "episode_number": 10,
+     "name": "Episode 10",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-17",
+     "episode_number": 11,
+     "name": "Episode 11",
+     "runtime": null
+    },
+    {
+     "absolute_number": null,
+     "air_date": "2026-12-24",
+     "episode_number": 12,
+     "name": "Episode 12",
+     "runtime": null
+    }
+   ],
+   "name": "Season 2",
+   "names": [
+    "Season 2",
+    "第 2 季"
+   ],
+   "season_number": 2
+  }
+ ],
+ "title": "轉生就是劍",
+ "title_en": "Reincarnated as a Sword",
+ "title_original": "転生したら剣でした",
+ "title_zh_cn": "转生成为魔剑了",
+ "titles": [
+  "Reincarnated as a Sword",
+  "転生したら剣でした",
+  "Reencarnado como una espada",
+  "转生就是剑",
+  "我转生成剑之后发生的事",
+  "轉生成為魔劍",
+  "转生成为魔剑",
+  "轉生就是劍",
+  "转生成为魔剑了",
+  "轉生成為魔劍了",
+  "Reencarné como una espada",
+  "Tensei Shitara Ken Deshita",
+  "Tenken",
+  "転生したら剣でしたⅡ",
+  "전생검",
+  "轉生就是劍 第二季",
+  "I Became the Sword by Transmigrating",
+  "Tenken - Reincarnato in una spada",
+  "전생했더니 검이었습니다",
+  "Chuyển Sinh Thành Kiếm",
+  "Moi quand je me réincarne en épée",
+  "ซวยเหลือหลายเกิดใหม่กลายเป็นดาบ",
+  "Моє переродження в меч",
+  "تينسي شيتارا كين ديشيتا",
+  "О моём перерождении в меч",
+  "Прероден като меч"
+ ],
+ "tmdb_id": 134667,
+ "year": 2022
+}
