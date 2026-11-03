@@ -1,9 +1,9 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { AiSettings, AiTest } from '../api/ai'
+import type { AiModels, AiSettings, AiTest } from '../api/ai'
 import { HEALTHY, stubApi, type StubRoutes } from '../test/fetch'
 import { renderApp } from '../test/render'
 
@@ -14,6 +14,16 @@ afterEach(() => {
 const READ = 'GET /api/settings/ai'
 const SAVE = 'PUT /api/settings/ai'
 const TEST = 'POST /api/settings/ai/test'
+const FETCH = 'POST /api/settings/ai/models'
+
+/** 沒按「取得模型」之前那一支：本機價目表照表單上的網址查。 */
+function suggestKey(provider: string, baseUrl: string) {
+  return `GET /api/settings/ai/models?${new URLSearchParams({ provider, base_url: baseUrl })}`
+}
+
+function fromPrices(models: string[]): AiModels {
+  return { models, source: 'prices', failure: null, status: null, detail: '' }
+}
 
 const SONNET_PRICE = {
   input: '2',
@@ -24,12 +34,21 @@ const SONNET_PRICE = {
 } as const
 
 const SUGGESTED = ['claude-haiku-5-5', 'claude-sonnet-5-5']
+const DEEPSEEK = 'https://api.deepseek.com'
+const DEEPSEEK_SUGGESTED = ['deepseek-flash', 'deepseek-pro']
+
+/** 本機價目表的建議：Anthropic 官方、OpenAI 官方與 DeepSeek 的網址各一份。 */
+const SUGGESTIONS: StubRoutes = {
+  [suggestKey('anthropic', '')]: { body: fromPrices(SUGGESTED) },
+  [suggestKey('openai', '')]: { body: fromPrices(['gpt-5.5']) },
+  [suggestKey('openai', DEEPSEEK)]: { body: fromPrices(DEEPSEEK_SUGGESTED) },
+}
 
 const UNSET: AiSettings = {
   enabled: false,
   provider: 'anthropic',
-  anthropic: { base_url: '', model: '', has_key: false, price: null, known_models: SUGGESTED },
-  openai: { base_url: '', model: '', has_key: false, price: null, known_models: [] },
+  anthropic: { base_url: '', model: '', has_key: false, price: null },
+  openai: { base_url: '', model: '', has_key: false, price: null },
   has_tavily_key: false,
 }
 
@@ -42,14 +61,12 @@ const IN_USE: AiSettings = {
     model: 'claude-sonnet-5-5',
     has_key: true,
     price: SONNET_PRICE,
-    known_models: SUGGESTED,
   },
   openai: {
-    base_url: 'https://api.deepseek.com',
+    base_url: DEEPSEEK,
     model: 'some-local-model',
     has_key: true,
     price: null,
-    known_models: ['deepseek-flash'],
   },
 }
 
@@ -70,6 +87,7 @@ function render(routes: StubRoutes = {}, ai: AiSettings = UNSET) {
     'GET /api/health': { body: HEALTHY },
     'GET /api/auth/me': { body: { name: 'skipper', role: 'admin' } },
     [READ]: { body: ai },
+    ...SUGGESTIONS,
     ...routes,
   })
 }
@@ -80,6 +98,11 @@ function sent(stub: ReturnType<typeof stubApi>, key: string): unknown {
     ([input, init]) => `${init?.method ?? 'GET'} ${String(input)}` === key,
   )
   return JSON.parse(String(call?.[1]?.body))
+}
+
+/** 模型欄 datalist 現在的建議。 */
+function suggestions() {
+  return [...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))
 }
 
 function calls(stub: ReturnType<typeof stubApi>, key: string): number {
@@ -157,17 +180,164 @@ describe('設定 → AI', () => {
     expect(await screen.findByText('價目來源：Berth 補位表（2026-10-28 查證）')).toBeVisible()
   })
 
-  it('模型欄的建議是這個端點查得到價的模型', async () => {
+  it('模型欄的建議是本機價目表照這個端點認得的模型；切換接口跟著換', async () => {
     render({}, IN_USE)
     const user = userEvent.setup()
     renderApp('/settings/ai')
 
-    const suggestions = () =>
-      [...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))
     await screen.findByLabelText('模型')
-    expect(suggestions()).toEqual(SUGGESTED)
+    await waitFor(() => expect(suggestions()).toEqual(SUGGESTED))
     await user.click(screen.getByRole('button', { name: 'OpenAI 相容' }))
+    await waitFor(() => expect(suggestions()).toEqual(DEEPSEEK_SUGGESTED))
+  })
+
+  it('填了 DeepSeek 的網址、還沒存：建議馬上換成 DeepSeek 的，沒有請求帶 key、也沒有問端點', async () => {
+    const stub = render()
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: 'OpenAI 相容' }))
+    await waitFor(() => expect(suggestions()).toEqual(['gpt-5.5']))
+    await user.type(screen.getByLabelText('API key'), 'sk-typed-not-sent')
+    await user.type(screen.getByLabelText('Base URL'), DEEPSEEK)
+
+    await waitFor(() => expect(suggestions()).toEqual(DEEPSEEK_SUGGESTED))
+    expect(calls(stub, FETCH)).toBe(0)
+    const sentAnywhere = stub.mock.calls.filter(
+      ([input, init]) =>
+        String(input).includes('sk-typed-not-sent') ||
+        String(init?.body ?? '').includes('sk-typed-not-sent'),
+    )
+    expect(sentAnywhere).toEqual([])
+  })
+
+  it('取得模型：送表單上的接口、網址與 key（不送模型名），建議換成端點列的', async () => {
+    const stub = render({
+      [FETCH]: {
+        body: {
+          models: ['deepseek-flash', 'deepseek-v4-pro'],
+          source: 'endpoint',
+          failure: null,
+          status: null,
+          detail: '',
+        },
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: 'OpenAI 相容' }))
+    await user.type(screen.getByLabelText('Base URL'), DEEPSEEK)
+    await user.type(screen.getByLabelText('API key'), 'sk-deepseek')
+    await user.click(screen.getByRole('button', { name: '取得模型' }))
+
+    expect(await screen.findByText('這個端點列了 2 個模型，放進模型欄的清單了。')).toBeVisible()
+    expect(suggestions()).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
+    expect(sent(stub, FETCH)).toEqual({
+      provider: 'openai',
+      base_url: DEEPSEEK,
+      api_key: 'sk-deepseek',
+    })
+  })
+
+  it('問不到：說明原因、退回本機表，模型名照樣能打；改了 base URL 之後取得的清單不留著', async () => {
+    render(
+      {
+        [FETCH]: {
+          body: {
+            models: ['claude-fallback-from-prices'],
+            source: 'prices',
+            failure: 'key_rejected',
+            status: 401,
+            detail: '{"error":{"message":"invalid x-api-key"}}',
+          },
+        },
+      },
+      IN_USE,
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '取得模型' }))
+
+    expect(await screen.findByText('服務不接受這把 key。')).toBeVisible()
+    expect(screen.getByText(/模型欄改用本機價目表的建議/)).toBeVisible()
+    expect(suggestions()).toEqual(['claude-fallback-from-prices'])
+    const model = screen.getByLabelText('模型')
+    await user.clear(model)
+    await user.type(model, 'my-own-model')
+    expect(model).toHaveValue('my-own-model')
+    // 改模型名不收：清單就是拿來選的。
+    expect(suggestions()).toEqual(['claude-fallback-from-prices'])
+
+    await user.type(screen.getByLabelText('Base URL'), 'https://gw.example')
+
+    expect(screen.queryByText('服務不接受這把 key。')).not.toBeInTheDocument()
+    expect(suggestions()).not.toContain('claude-fallback-from-prices')
+  })
+
+  it('端點不提供模型清單（DeepSeek 的 Anthropic 接口回 404）：說的是這個，不是 key 被拒', async () => {
+    render(
+      {
+        [FETCH]: {
+          body: {
+            models: ['deepseek-flash'],
+            source: 'prices',
+            failure: 'not_found',
+            status: 404,
+            detail: '',
+          },
+        },
+      },
+      IN_USE,
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '取得模型' }))
+
+    expect(
+      await screen.findByText('這個端點不提供模型清單（也可能是 Base URL 的路徑不對）。'),
+    ).toBeVisible()
+    expect(screen.queryByText('服務不接受這把 key。')).not.toBeInTheDocument()
     expect(suggestions()).toEqual(['deepseek-flash'])
+  })
+
+  it('端點列出空的：退回本機表，說端點沒有列模型', async () => {
+    render({ [FETCH]: { body: fromPrices(SUGGESTED) } }, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '取得模型' }))
+
+    expect(await screen.findByText(/這個端點沒有列出模型/)).toBeVisible()
+  })
+
+  it('取得的清單在改了 key 之後也收掉', async () => {
+    render({ [FETCH]: { body: { ...fromPrices(['from-endpoint']), source: 'endpoint' } } }, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '取得模型' }))
+    await waitFor(() => expect(suggestions()).toEqual(['from-endpoint']))
+    await user.type(screen.getByLabelText('API key'), 'sk-another')
+
+    await waitFor(() => expect(suggestions()).toEqual(SUGGESTED))
+  })
+
+  it('存著 key、改了網址就按取得模型：key 欄說存著的只送到原本的網址', async () => {
+    render({ [FETCH]: refusal(422, 'key_missing') }, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.type(await screen.findByLabelText('Base URL'), 'https://evil.example')
+    await user.click(screen.getByRole('button', { name: '取得模型' }))
+
+    expect(
+      await screen.findByText(
+        '存著的 key 只送到存它的那個網址。要用這個網址，貼上它的 key，或先移除存著的那把。',
+      ),
+    ).toBeVisible()
   })
 
   it('切換接口：換成那一種存著的值；認不得的模型價目寫未知，不當 0', async () => {

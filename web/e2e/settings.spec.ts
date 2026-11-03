@@ -97,3 +97,53 @@ test('AI 沒設定：側面板只說明，管理員有路去設定、一般使�
   await expect(panel.getByRole('textbox', { name: '問助理' })).toHaveCount(0)
   await shot(page, 'agent-off-crew')
 })
+
+// 模型清單（M5.5 票 02）：沒按之前建議照表單上的網址查本機價目表，不帶 key、不問端點；
+// 按了「取得模型」才問（替身列兩個 `fake-model-*`，key `rejected` 被拒）；改網址就收掉取得的。
+test('AI 設定的模型清單：網址一改建議就換、按了才問端點、問不到退回本機表', async ({ page }) => {
+  await signIn(page, '/settings/ai')
+  const outbound: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.origin !== new URL(page.url()).origin) outbound.push(request.url())
+    if (request.method() === 'POST' && url.pathname === '/api/settings/ai/models') {
+      outbound.push(`POST ${url.pathname} ${request.postData() ?? ''}`)
+    }
+  })
+  const main = page.getByRole('main')
+  const options = main.locator('datalist option')
+  const suggestions = async () =>
+    (await options.evaluateAll((all) => all.map((o) => o.getAttribute('value')))).join(' ')
+
+  await main.getByRole('button', { name: 'OpenAI 相容' }).click()
+  await expect.poll(suggestions).toContain('gpt-')
+  await main.getByLabel('API key', { exact: true }).fill('sk-typed-not-sent')
+  await main.getByLabel('Base URL').fill('https://api.deepseek.com')
+
+  await expect.poll(suggestions).toContain('deepseek-')
+  expect(await suggestions()).not.toContain('gpt-')
+  expect(outbound).toEqual([])
+  await shot(page, 'ai-models-suggested')
+
+  await main.getByRole('button', { name: '取得模型' }).click()
+  await expect(main.getByText('這個端點列了 2 個模型，放進模型欄的清單了。')).toBeVisible()
+  expect(await suggestions()).toBe('fake-model-large fake-model-small')
+  expect(outbound).toEqual([
+    'POST /api/settings/ai/models {"provider":"openai","base_url":"https://api.deepseek.com","api_key":"sk-typed-not-sent"}',
+  ])
+  await shot(page, 'ai-models-fetched')
+
+  await main.getByLabel('API key', { exact: true }).fill('rejected')
+  await expect(main.getByText('這個端點列了 2 個模型')).toHaveCount(0)
+  await main.getByRole('button', { name: '取得模型' }).click()
+  await expect(main.getByText('服務不接受這把 key。')).toBeVisible()
+  await expect(main.getByText('模型欄改用本機價目表的建議，模型名照樣可以自己填。')).toBeVisible()
+  await expect.poll(suggestions).toContain('deepseek-')
+  await main.getByLabel('模型', { exact: true }).fill('my-own-model')
+  await expect(main.getByLabel('模型', { exact: true })).toHaveValue('my-own-model')
+  await shot(page, 'ai-models-failed')
+
+  await main.getByLabel('Base URL').fill('https://api.openai.com/v1')
+  await expect(main.getByText('服務不接受這把 key。')).toHaveCount(0)
+  await expect.poll(suggestions).toContain('gpt-')
+})

@@ -9,15 +9,31 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 
 from berth.api.deps import ClientFactoryDep, SessionDep
 from berth.api.errors import refusal_responses
-from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret, PriceTable
-from berth.services.ai import AiForm, AiRefusedError, forget_ai_key, read_ai, set_ai, test_ai
+from berth.domain import (
+    AiModelSource,
+    AiProbeFailure,
+    AiProvider,
+    AiRefusal,
+    AiSecret,
+    PriceTable,
+)
+from berth.services.ai import (
+    AiForm,
+    AiRefusedError,
+    forget_ai_key,
+    list_models,
+    read_ai,
+    set_ai,
+    suggest_models,
+    test_ai,
+)
 
 router = APIRouter(prefix="/settings/ai", tags=["settings"])
 
@@ -80,8 +96,6 @@ class AiEndpointOut(BaseModel):
     has_key: bool
     #: 這個端點上查不到這個模型的價是 `null`：費用未知，不當 0。
     price: AiPriceOut | None
-    #: 這個端點查得到價的模型名（排序過），給模型欄當建議；不在裡面的照樣可以填。
-    known_models: list[str]
 
 
 class AiOut(BaseModel):
@@ -127,6 +141,31 @@ class AiTestOut(BaseModel):
     model: str
 
 
+class AiModelsIn(BaseModel):
+    """「取得模型」：表單上還沒存的接口、base URL 與 key，不要模型名。`api_key` 的規則同
+    `AiTestIn`：空著時網址與存著的相同才用存著的那把。"""
+
+    provider: AiProvider
+    #: 空字串是官方端點。
+    base_url: str
+    api_key: str | None = None
+
+
+class AiModelsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    #: 模型欄的建議；不在裡面的照樣可以填。端點列的照它的順序，本機表排序過。
+    models: list[str]
+    #: `endpoint` 是端點列的；`prices` 是本機價目表（沒按、問不到、或端點列出空的）。
+    source: AiModelSource
+    #: 「取得模型」沒問到的分類；問到了或只查本機表是 `null`。
+    failure: AiProbeFailure | None
+    #: 服務回的 HTTP 狀態碼；成功或沒有回應是 `null`。
+    status: int | None
+    #: 服務回的原文（key 若被貼回來已遮掉）。
+    detail: str
+
+
 def _form(body: AiTestIn) -> AiForm:
     return AiForm(body.provider, body.base_url, body.model, body.api_key)
 
@@ -162,3 +201,23 @@ async def post_ai_test(session: SessionDep, factory: ClientFactoryDep, body: AiT
     except AiRefusedError as exc:
         raise ai_refusal(exc) from exc
     return AiTestOut.model_validate(result)
+
+
+@router.get("/models")
+async def get_ai_models(
+    provider: AiProvider, base_url: Annotated[str, Query()] = ""
+) -> AiModelsOut:
+    """沒按「取得模型」之前的建議：本機價目表照這個網址認出的那一家。不帶 key、不連外。"""
+    return AiModelsOut.model_validate(await suggest_models(provider, base_url))
+
+
+@router.post("/models", responses=_responses())
+async def post_ai_models(
+    session: SessionDep, factory: ClientFactoryDep, body: AiModelsIn
+) -> AiModelsOut:
+    """向表單上的端點問模型，不存。問不到也是 200：退回本機價目表並帶著原因。"""
+    try:
+        result = await list_models(session, factory, body.provider, body.base_url, body.api_key)
+    except AiRefusedError as exc:
+        raise ai_refusal(exc) from exc
+    return AiModelsOut.model_validate(result)

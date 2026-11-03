@@ -47,6 +47,7 @@ from starlette.routing import Route as StarletteRoute
 
 from berth.adapters import mediainfo
 from berth.adapters.ai import AiEndpoint
+from berth.adapters.ai.catalog import ModelCatalog
 from berth.adapters.ai.fake import FakeAi, Pause, Script
 from berth.adapters.anilist import AniList
 from berth.adapters.anilist.fake import FakeAniList
@@ -121,6 +122,7 @@ from berth.config import Config, load_config
 from berth.db import create_engine, create_session_factory, upgrade_to_head
 from berth.domain import (
     SYSTEM,
+    AiProvider,
     CollectionType,
     Confidence,
     ConnectionReason,
@@ -2731,6 +2733,11 @@ class FakeClientFactory:
         if self._live is not None:
             return self._live.ai(endpoint)
         return self._ai.model(endpoint)
+
+    def ai_models(self, provider: AiProvider, base_url: str, api_key: str) -> ModelCatalog:
+        if self._live is not None:
+            return self._live.ai_models(provider, base_url, api_key)
+        return self._ai.catalog(provider, base_url, api_key)
 
     def tavily(self, api_key: str) -> WebSearch:
         if self._live is not None:

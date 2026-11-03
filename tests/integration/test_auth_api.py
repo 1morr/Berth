@@ -457,6 +457,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/settings/ai"): Access.ADMIN,
     ("PUT", "/settings/ai"): Access.ADMIN,
     ("POST", "/settings/ai/test"): Access.ADMIN,
+    ("GET", "/settings/ai/models"): Access.ADMIN,
+    ("POST", "/settings/ai/models"): Access.ADMIN,
     ("DELETE", "/settings/ai/keys/*"): Access.ADMIN,
     # AI 用量（M5 票 21）：花的是管理員設的 key。
     ("GET", "/settings/usage"): Access.ADMIN,

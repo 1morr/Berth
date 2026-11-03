@@ -19,6 +19,8 @@ export type AiProbeFailure = Schemas['AiProbeFailure']
 
 export type AiTest = Schemas['AiTestOut']
 
+export type AiModels = Schemas['AiModelsOut']
+
 export type AiSecret = Schemas['AiSecret']
 
 export type AiRefusal = Schemas['AiRefusal']
@@ -48,6 +50,27 @@ export function saveAi(body: Schemas['AiIn']): Promise<AiSettings> {
 /** 照表單打一次最小呼叫，不存。服務拒絕也是 200，結果在 `ok` 與 `failure`。 */
 export function testAi(body: Schemas['AiTestIn']): Promise<AiTest> {
   return apiPost<AiTest>('/settings/ai/test', body)
+}
+
+/**
+ * 模型欄沒按「取得模型」之前的建議（M5.5 票 02）：本機價目表照這個網址認出的那一家。不帶 key、
+ * 後端也不連外，所以跟著表單上的網址換。
+ */
+export function aiSuggestionsQueryOptions(provider: AiProvider, baseUrl: string) {
+  return queryOptions({
+    queryKey: ['settings', 'ai', 'models', provider, baseUrl],
+    queryFn: () =>
+      apiGet<AiModels>(
+        `/settings/ai/models?${new URLSearchParams({ provider, base_url: baseUrl })}`,
+      ),
+    // 本機表跟著 Berth 的版本走，開著頁面時不會變。
+    staleTime: Infinity,
+  })
+}
+
+/** 「取得模型」：向表單上的端點問，不存。問不到也是 200，退回本機表並帶著原因。 */
+export function fetchAiModels(body: Schemas['AiModelsIn']): Promise<AiModels> {
+  return apiPost<AiModels>('/settings/ai/models', body)
 }
 
 /** 清掉一把 key。清的是現在用的接口的 key 時，後端一併關掉 AI。 */

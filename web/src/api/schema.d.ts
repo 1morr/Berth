@@ -206,6 +206,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ai Models
+         * @description 沒按「取得模型」之前的建議：本機價目表照這個網址認出的那一家。不帶 key、不連外。
+         */
+        get: operations["get_ai_models_api_settings_ai_models_get"];
+        put?: never;
+        /**
+         * Post Ai Models
+         * @description 向表單上的端點問模型，不存。問不到也是 200：退回本機價目表並帶著原因。
+         */
+        post: operations["post_ai_models_api_settings_ai_models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -2781,8 +2805,6 @@ export interface components {
             /** Has Key */
             has_key: boolean;
             price: components["schemas"]["AiPriceOut"] | null;
-            /** Known Models */
-            known_models: string[];
         };
         /** AiIn */
         AiIn: {
@@ -2797,6 +2819,35 @@ export interface components {
             enabled: boolean;
             /** Tavily Api Key */
             tavily_api_key?: string | null;
+        };
+        /**
+         * AiModelSource
+         * @description 模型欄的建議從哪來（M5.5 票 02）。
+         * @enum {string}
+         */
+        AiModelSource: "endpoint" | "prices";
+        /**
+         * AiModelsIn
+         * @description 「取得模型」：表單上還沒存的接口、base URL 與 key，不要模型名。`api_key` 的規則同
+         *     `AiTestIn`：空著時網址與存著的相同才用存著的那把。
+         */
+        AiModelsIn: {
+            provider: components["schemas"]["AiProvider"];
+            /** Base Url */
+            base_url: string;
+            /** Api Key */
+            api_key?: string | null;
+        };
+        /** AiModelsOut */
+        AiModelsOut: {
+            /** Models */
+            models: string[];
+            source: components["schemas"]["AiModelSource"];
+            failure: components["schemas"]["AiProbeFailure"] | null;
+            /** Status */
+            status: number | null;
+            /** Detail */
+            detail: string;
         };
         /** AiOut */
         AiOut: {
@@ -7777,6 +7828,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiTestOut"];
+                };
+            };
+            /** @description `base_url_invalid` · `key_missing` · `model_missing` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    get_ai_models_api_settings_ai_models_get: {
+        parameters: {
+            query: {
+                provider: components["schemas"]["AiProvider"];
+                base_url?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiModelsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_ai_models_api_settings_ai_models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiModelsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiModelsOut"];
                 };
             };
             /** @description `base_url_invalid` · `key_missing` · `model_missing` */

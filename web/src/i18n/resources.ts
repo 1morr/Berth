@@ -3110,7 +3110,18 @@ const zhHant = {
       },
       model: {
         label: '模型',
-        hint: '服務那邊的模型名稱。清單是這個端點查得到價目的模型，不在清單上的照樣可以填。',
+        hint: '服務那邊的模型名稱。清單先是本機價目表認得的模型，按「取得模型」換成這個端點列的；不在清單上的照樣可以填。',
+      },
+      models: {
+        button: '取得模型',
+        fetching: '取得中…',
+        fetched_one: '這個端點列了 {{count}} 個模型，放進模型欄的清單了。',
+        fetched_other: '這個端點列了 {{count}} 個模型，放進模型欄的清單了。',
+        empty: '這個端點沒有列出模型。模型欄改用本機價目表的建議，模型名照樣可以自己填。',
+        failed: '沒取得模型',
+        noList: '這個端點不提供模型清單（也可能是 Base URL 的路徑不對）。',
+        fallback: '模型欄改用本機價目表的建議，模型名照樣可以自己填。',
+        didNotRun: '取得模型沒有走完。',
       },
       price: {
         label: '價目',
@@ -7381,7 +7392,20 @@ const en: Translations<typeof zhHant> = {
       },
       model: {
         label: 'Model',
-        hint: 'The model name on that service. The list holds the models with a known price on this endpoint; any other name works too.',
+        hint: 'The model name on that service. The list starts with the models in the local price table; Fetch models replaces it with what this endpoint lists. Any other name works too.',
+      },
+      models: {
+        button: 'Fetch models',
+        fetching: 'Fetching…',
+        fetched_one: 'This endpoint listed {{count}} model; it is in the model list now.',
+        fetched_other: 'This endpoint listed {{count}} models; they are in the model list now.',
+        empty:
+          'This endpoint listed no models. The model list falls back to the local price table, and you can still type any name.',
+        failed: 'Could not fetch models',
+        noList: 'This endpoint does not offer a model list (or the Base URL path is wrong).',
+        fallback:
+          'The model list falls back to the local price table, and you can still type any name.',
+        didNotRun: 'Fetching models did not finish.',
       },
       price: {
         label: 'Price',

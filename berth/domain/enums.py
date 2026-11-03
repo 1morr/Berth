@@ -1805,7 +1805,8 @@ class AiProbeFailure(StrEnum):
 
     #: `401` / `403`：key 錯、被撤銷或沒有權限。
     KEY_REJECTED = "key_rejected"
-    #: `404`：模型名稱不存在，或 base URL 的路徑不對。
+    #: `404`：模型名稱不存在，或 base URL 的路徑不對。「取得模型」時是這個端點不提供模型清單
+    #: （`404`、`405`、`501`，`adapters.ai.catalog`）。
     NOT_FOUND = "not_found"
     #: 其餘的 4xx / 5xx（含限流、額度用完、服務過載）。
     SERVICE_ERROR = "service_error"
@@ -1813,6 +1814,15 @@ class AiProbeFailure(StrEnum):
     UNREACHABLE = "unreachable"
     #: 回了東西但不是 API 的形狀（base URL 指到一個網頁）。
     BAD_RESPONSE = "bad_response"
+
+
+class AiModelSource(StrEnum):
+    """模型欄的建議從哪來（M5.5 票 02）。"""
+
+    #: 按了「取得模型」，那個端點列出來的。
+    ENDPOINT = "endpoint"
+    #: 本機價目表照網址認出的那一家（`adapters.ai.prices.known_models`）：沒按、或問不到時。
+    PRICES = "prices"
 
 
 class AiRefusal(StrEnum):

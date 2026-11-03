@@ -876,6 +876,8 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - `GET|PUT /settings/ai`：現在用的接口（`provider`）、兩種各自的 `base_url` / `api_key` / `model`、`tavily_api_key`、`enabled`（§2.1）。**key 只進不出**：回的是 `has_key` 與 `has_tavily_key`；送進來的 key 欄位是 `null` 或空字串表示沒動。`PUT` 存表單上那一種接口並設成現在用的，另一種不動；開啟要有 key 與模型名。
 - `DELETE /settings/ai/keys/{key}`：清掉一把 key；清的是現在用的接口的 key 時一併關掉 AI。
 - `POST /settings/ai/test`：照表單打一次最小呼叫，不存。服務拒絕也是 200（那是測試的結果，不是請求錯了）。
+- `GET /settings/ai/models?provider=&base_url=`：模型欄沒按「取得模型」之前的建議，本機價目表照這個網址認出的那一家；不帶 key、不連外，打到一半的網址也照查（M5.5 票 02）。
+- `POST /settings/ai/models`：`{provider, base_url, api_key}`（不收模型名），向表單上的端點問模型、不存；key 規則同測試連線。回 `models`、`source`（`endpoint` / `prices`）與 `failure` / `status` / `detail`。問不到也是 200：退回本機表並帶著原因（404、405、501 是端點不提供模型清單），端點列出空的也退回、不帶原因。不跟轉址（brief §20.26）。
 - `/settings/ai` 的拒絕：422 `base_url_invalid` / `key_missing` / `model_missing`。
 
 **每個人自己的那一半在 `/me/notifications`**（登入就行，不在 `/settings` 底下）：

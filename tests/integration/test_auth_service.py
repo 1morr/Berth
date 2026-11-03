@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from berth.adapters.ai import AiEndpoint
+from berth.adapters.ai.catalog import ModelCatalog
 from berth.adapters.anilist import AniList
 from berth.adapters.bgm import Bgm
 from berth.adapters.http import ServiceUnavailableError
@@ -30,7 +31,7 @@ from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.websearch import WebSearch
 from berth.db import create_session_factory
-from berth.domain import Role
+from berth.domain import AiProvider, Role
 from berth.models import JellyfinSettings, User, UserSession
 from berth.services import auth as auth_service
 from berth.services.auth import (
@@ -85,6 +86,9 @@ class OneJellyfin:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         raise AssertionError("login never talks to an AI provider")
+
+    def ai_models(self, provider: AiProvider, base_url: str, api_key: str) -> ModelCatalog:
+        raise AssertionError("login never asks an AI provider for its models")
 
     def tavily(self, api_key: str) -> WebSearch:
         raise AssertionError("login never searches the web")

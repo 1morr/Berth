@@ -9,6 +9,7 @@ from __future__ import annotations
 from pydantic_ai.models import Model
 
 from berth.adapters.ai import AiEndpoint
+from berth.adapters.ai.catalog import ModelCatalog
 from berth.adapters.ai.fake import FakeAi
 from berth.adapters.anilist import AniList
 from berth.adapters.anilist.fake import FakeAniList
@@ -33,7 +34,7 @@ from berth.adapters.torrent import TorrentFetcher
 from berth.adapters.torrent_fake import FakeTorrentFetcher
 from berth.adapters.websearch import WebSearch
 from berth.adapters.websearch.fake import FakeWebSearch
-from berth.domain import ServiceKind
+from berth.domain import AiProvider, ServiceKind
 from berth.services.clients import BUNDLED_JELLYFIN_URL, BUNDLED_PROWLARR_URL
 
 #: 精靈第 2 步探的三個 compose 位址（`clients.bundled_targets`，port 是預設值）。
@@ -120,6 +121,9 @@ class FakeClientFactory:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         return self.ai_.model(endpoint)
+
+    def ai_models(self, provider: AiProvider, base_url: str, api_key: str) -> ModelCatalog:
+        return self.ai_.catalog(provider, base_url, api_key)
 
     def tavily(self, api_key: str) -> WebSearch:
         self.web_search_.api_key = api_key

@@ -45,6 +45,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-01 | M5.5 規劃 | 審核佇列減量寫進 plan §11.6b 與 brief §17：照字面的先行放寬到 9 天、第一批收累計編號（量過才收）、升級後只重算舊版本的 review；票序排在搜尋結果之後 | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
 | 2026-11-03 | M5.5 開工 | spec 寫好、拆 20 張票：原①拆成 key 防護與模型清單，⑨⑩重切成遲到 Issue、換輪與刷新、追更頁、通知，加 UI 收尾；plan §11.6b 縮成連結 | 新 session 下 `/implement .scratch/m5.5/issues/01-saved-key-endpoint-guard.md` |
 | 2026-11-04 | M5.5 01 key 防護 | key 欄空著時網址與存著的相同才用存著的 key（`_key_for`，02 共用）；測試連線與儲存都守，設定頁錯誤標在 key 欄、提示說出規則；plan §6 同步 | 新 session 下 `/implement .scratch/m5.5/issues/02-model-list.md` |
+| 2026-11-04 | M5.5 02 模型清單 | 沒按時建議照表單網址查本機表、不帶 key；按「取得模型」才問端點，問不到退回本機表。實測 DeepSeek 的 Anthropic 接口沒有模型清單（404，brief §20.26） | 新 session 下 `/implement .scratch/m5.5/issues/03-search-results.md` |
 
 ## 偏差與決定
 

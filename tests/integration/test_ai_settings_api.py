@@ -109,7 +109,6 @@ class TestSaving:
             "model": "claude-sonnet-5-5",
             "has_key": True,
             "price": got["anthropic"]["price"],
-            "known_models": got["anthropic"]["known_models"],
         }
 
     def test_anthropic_loses_a_pasted_v1(self, client: TestClient) -> None:
@@ -157,16 +156,6 @@ class TestSaving:
         got = save(client, base_url="https://api.deepseek.com/anthropic", model="deepseek-flash")
         price = got.json()["anthropic"]["price"]
         assert price["source"]["vendor"] == "Deepseek"
-
-    def test_the_models_with_a_price_are_offered_as_suggestions(self, client: TestClient) -> None:
-        save(client, provider="openai", base_url="https://api.deepseek.com", model="deepseek-flash")
-        got = client.get(BASE).json()
-        anthropic, openai = got["anthropic"]["known_models"], got["openai"]["known_models"]
-        assert "claude-sonnet-5-5" in anthropic
-        assert anthropic == sorted(anthropic)
-        # 端點是 DeepSeek：建議的是 DeepSeek 的模型，不是 OpenAI 的。
-        assert "deepseek-flash" in openai
-        assert "gpt-5.5" not in openai
 
     def test_the_tavily_key_is_write_only_too(self, client: TestClient) -> None:
         got = save(client, tavily_api_key=TAVILY)
@@ -337,6 +326,141 @@ class TestSavedKeyStaysOnItsEndpoint:
         assert got.json()["anthropic"]["base_url"] == "https://api.deepseek.com/anthropic"
 
 
+def suggest(client: TestClient, provider: str, base_url: str) -> httpx2.Response:
+    response: httpx2.Response = client.get(
+        f"{BASE}/models", params={"provider": provider, "base_url": base_url}
+    )
+    return response
+
+
+def fetch_models(client: TestClient, **fields: object) -> httpx2.Response:
+    body: dict[str, object] = {"provider": "anthropic", "base_url": ""}
+    response: httpx2.Response = client.post(f"{BASE}/models", json=body | fields, headers=BROWSER)
+    return response
+
+
+class TestSuggestedModels:
+    """沒按「取得模型」之前的建議（M5.5 票 02）：本機價目表照表單上的網址查，不帶 key、不連外。"""
+
+    def test_the_suggestions_follow_the_typed_address_before_it_is_saved(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        save(client, provider="openai", api_key=OTHER_KEY, model="gpt-5.5")
+        got = suggest(client, "openai", "https://api.deepseek.com")
+        assert got.status_code == 200, got.text
+        body = got.json()
+        assert body["source"] == "prices"
+        assert body["failure"] is None
+        # 網址是 DeepSeek：建議的是 DeepSeek 的模型，不是 OpenAI 的，雖然存著的還是 OpenAI 官方。
+        assert "deepseek-flash" in body["models"]
+        assert "gpt-5.5" not in body["models"]
+        assert factory.ai_.endpoints == []
+
+    def test_the_official_address_suggests_that_providers_models(self, client: TestClient) -> None:
+        models = suggest(client, "anthropic", "").json()["models"]
+        assert "claude-sonnet-5-5" in models
+        assert models == sorted(models)
+
+    def test_a_half_typed_address_is_not_an_error(self, client: TestClient) -> None:
+        """打到一半的網址只是認不出是哪一家，照接口種類建議；不連外，所以不用先驗。"""
+        got = suggest(client, "anthropic", "https://api.deeps")
+        assert got.status_code == 200, got.text
+        assert "claude-sonnet-5-5" in got.json()["models"]
+
+
+class TestFetchingModels:
+    """按了「取得模型」才向表單上的端點問（M5.5 票 02、brief §20.26）。"""
+
+    def test_the_models_come_from_the_endpoint_on_the_form(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        factory.ai_.listed = ("deepseek-flash", "deepseek-pro")
+        got = fetch_models(
+            client, provider="openai", base_url="https://api.deepseek.com", api_key=OTHER_KEY
+        )
+        assert got.status_code == 200, got.text
+        assert got.json() == {
+            "models": ["deepseek-flash", "deepseek-pro"],
+            "source": "endpoint",
+            "failure": None,
+            "status": None,
+            "detail": "",
+        }
+        endpoint = factory.ai_.endpoints[-1]
+        assert endpoint.provider is AiProvider.OPENAI
+        assert (endpoint.base_url, endpoint.api_key) == ("https://api.deepseek.com", OTHER_KEY)
+
+    def test_nothing_is_saved(self, client: TestClient) -> None:
+        fetch_models(client, base_url="https://gw.example/anthropic", api_key=KEY)
+        assert client.get(BASE).json()["anthropic"] == {
+            "base_url": "",
+            "model": "",
+            "has_key": False,
+            "price": None,
+        }
+
+    def test_anthropic_loses_a_pasted_v1(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        fetch_models(client, base_url="https://api.deepseek.com/anthropic/v1/", api_key=KEY)
+        assert factory.ai_.endpoints[-1].base_url == "https://api.deepseek.com/anthropic"
+
+    def test_a_failure_falls_back_to_the_price_table_and_says_why(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """問不到不是請求錯：200，照本機表建議，並帶服務回的原因。"""
+        got = fetch_models(
+            client, provider="openai", base_url="https://api.deepseek.com", api_key="wrong-key"
+        )
+        assert got.status_code == 200, got.text
+        body = got.json()
+        assert body["source"] == "prices"
+        assert body["failure"] == "key_rejected"
+        assert body["status"] == 401
+        assert "invalid" in body["detail"]
+        assert "deepseek-flash" in body["models"]
+
+    def test_an_endpoint_that_lists_nothing_falls_back_without_a_failure(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        factory.ai_.listed = ()
+        body = fetch_models(client, api_key=KEY).json()
+        assert (body["source"], body["failure"]) == ("prices", None)
+        assert "claude-sonnet-5-5" in body["models"]
+
+    def test_a_service_echoing_the_key_does_not_carry_it_back(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        factory.ai_.rejected_keys = frozenset({KEY})
+        factory.ai_.echo_key = True
+        got = fetch_models(client, api_key=KEY)
+        assert got.json()["failure"] == "key_rejected"
+        assert KEY not in got.text
+
+    def test_a_blank_key_uses_the_saved_one_on_the_same_address(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        save(client, api_key=KEY, base_url="https://gw.example/anthropic")
+        got = fetch_models(client, base_url="https://gw.example/anthropic/v1")
+        assert got.json()["source"] == "endpoint"
+        assert factory.ai_.endpoints[-1].api_key == KEY
+
+    def test_a_changed_address_with_a_blank_key_sends_no_key(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """存著 key、改了 base URL、key 欄空著：`key_missing`，替身記不到帶舊 key 的請求。"""
+        save(client, api_key=KEY, base_url="https://gw.example/anthropic")
+        got = fetch_models(client, base_url="https://evil.example/anthropic", api_key="  ")
+        assert got.status_code == 422
+        assert got.json()["detail"]["reason"] == "key_missing"
+        assert factory.ai_.endpoints == []
+
+    def test_an_address_that_is_not_http_is_refused(self, client: TestClient) -> None:
+        got = fetch_models(client, base_url="api.deepseek.com", api_key=KEY)
+        assert got.status_code == 422
+        assert got.json()["detail"]["reason"] == "base_url_invalid"
+
+
 class TestNoKeyInLogs:
     def test_keys_are_in_no_response_and_no_debug_log(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
@@ -348,6 +472,8 @@ class TestNoKeyInLogs:
             client.get(BASE),
             press_test(client),
             press_test(client, api_key="wrong-key"),
+            fetch_models(client),
+            suggest(client, "anthropic", ""),
         ]
         assert all(r.status_code == 200 for r in responses), [r.text for r in responses]
         assert caplog.records, "DEBUG 什麼都沒抓到：這條測試量不到洩漏"
