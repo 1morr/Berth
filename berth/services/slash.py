@@ -41,6 +41,7 @@ from berth.services.agent import (
     AgentRuntime,
     current_endpoint,
     load_history,
+    search_tools,
 )
 from berth.services.agent_books import plus
 from berth.services.clients import ServiceClientFactory
@@ -99,6 +100,9 @@ class Status:
     compact_at: float
     #: provider 斷路器暫停到什麼時候；`None` 是沒有暫停。
     paused_until: datetime | None
+    #: 下一則訊息搜得到什麼（M5.5 票 15）：照設定直接說，不問模型。
+    web_search: bool
+    tavily: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,6 +274,7 @@ async def _status(call: _Call) -> Status:
     endpoint = current_endpoint(call.settings)
     window = call.factory.ai(endpoint).context_window or call.runtime.limits.context_window
     pause = call.runtime.breaker.paused(endpoint)
+    search = search_tools(call.settings)
     return Status(
         provider=call.settings.provider,
         model=endpoint.model,
@@ -278,6 +283,8 @@ async def _status(call: _Call) -> Status:
         context_window=window,
         compact_at=call.runtime.limits.compact_at,
         paused_until=pause.until if pause is not None else None,
+        web_search=search.web_search,
+        tavily=search.tavily,
     )
 
 

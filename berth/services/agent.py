@@ -70,7 +70,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai.models import Model, ModelRequestContext
+from pydantic_ai.models import Model, ModelRequestContext, ModelRequestParameters
 from pydantic_ai.run import AgentRunResult
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
@@ -80,7 +80,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import AiEndpoint, chat_settings, native_web_search
+from berth.adapters.ai import AiEndpoint, chat_settings, has_native_web_search, native_web_search
 from berth.domain import (
     WAITING_PROPOSALS,
     Actor,
@@ -162,6 +162,9 @@ put several cours into one season, or split one into two. Say which numbering yo
 language titles, and retry with other names when results are thin (the skills say how).
 - Credentials (API keys, passwords, tokens) never enter this conversation: no tool returns them. \
 Never ask the user for one; point them to Berth's settings pages instead.
+- Your tools can change between messages: an admin may add or remove a search key at any time. \
+Go by only the tools you have now, not by what you or earlier replies said about them. The user \
+can check what search is available with /status.
 """
 
 #: 搜得到網頁時才加的那一段（票 17）。
@@ -972,6 +975,8 @@ class Turn:
     tavily_searches: int = 0
     #: 防護停下時是哪一條。
     stop: AiStopReason | None = None
+    #: 這一次（或出錯、還沒記帳的那一次）模型呼叫送出的工具名（`ai_calls.tools_json`）。
+    sent_tools: tuple[str, ...] = ()
     #: 出錯、還沒記帳的那次模型呼叫從什麼時候開始（`time.monotonic`）。
     pending_call_started: float | None = None
     #: 同一個呼叫做過幾次（登錄表名字 + 參數），失敗的不計。
@@ -1294,11 +1299,13 @@ class Turn:
     async def guard_request(
         self,
         messages: Sequence[ModelMessage],
+        tools: Sequence[str],
         call: Callable[[], Awaitable[ModelResponse]],
     ) -> ModelResponse:
-        """一次模型呼叫：先看次數、做完當場記帳、再看 token。"""
+        """一次模型呼叫：先看次數、做完當場記帳、再看 token。`tools` 是這一次送出的工具名。"""
         limits = self.runtime.limits
         self.prefix = list(messages)
+        self.sent_tools = tuple(tools)
         if (stuck := self.progress.verdict(limits.stale_steps)) is not None:
             self.stop = stuck
             raise TurnStoppedError(stuck)
@@ -1350,6 +1357,7 @@ class Turn:
             response=response,
             started=started,
             error=error,
+            tools=self.sent_tools,
         )
         if response is not None:
             self.web_searches += row.web_searches
@@ -1579,7 +1587,11 @@ class _Guard(AbstractCapability[Turn]):
         request_context: ModelRequestContext,
         handler: Callable[[ModelRequestContext], Awaitable[ModelResponse]],
     ) -> ModelResponse:
-        return await ctx.deps.guard_request(ctx.messages, lambda: handler(request_context))
+        return await ctx.deps.guard_request(
+            ctx.messages,
+            _sent_tools(request_context.model_request_parameters),
+            lambda: handler(request_context),
+        )
 
     async def wrap_tool_execute(
         self,
@@ -1597,6 +1609,13 @@ class _Guard(AbstractCapability[Turn]):
     ) -> AgentRunResult[Any]:  # `Any`：照 pydantic-ai 的簽名；這裡從不回結果，只記下再丟回去
         await ctx.deps.failed(error)
         raise error
+
+
+def _sent_tools(parameters: ModelRequestParameters) -> list[str]:
+    """這次呼叫送出的工具名：函式工具用給模型的名字，伺服器端的用它的種類（`web_search`）。"""
+    return [tool.name for tool in parameters.function_tools] + [
+        tool.kind for tool in parameters.native_tools
+    ]
 
 
 def _failure(error: CommandRefusedError | ValidationError) -> _ToolFailedError:
@@ -1696,7 +1715,7 @@ async def open_turn(
             raise AgentRefusedError(AgentRefusal.AI_PAUSED, pause.until.isoformat())
         # 模型與 agent 在佔位子、寫兩列之前組好：之後到起 task 之間沒有會失敗的步驟（M5 票 25）。
         model: Model = factory.ai(endpoint)
-        tavily = bool(settings.tavily_api_key)
+        search = search_tools(settings)
         native: list[AbstractCapability[Turn]] = native_web_search(
             settings.provider,
             SEARCH_DOMAINS,
@@ -1708,7 +1727,7 @@ async def open_turn(
             deps_type=Turn,
             output_type=[str, DeferredToolRequests],
             instructions=_instructions,
-            toolsets=[_toolset(actor.role, tavily=tavily)],
+            toolsets=[_toolset(actor.role, tavily=search.tavily)],
             # 壓縮與拿掉前幾輪的網搜在每次模型呼叫之前（`before_model_request`，照這個順序），記帳與
             # 防護包著呼叫本身。
             capabilities=[
@@ -1777,10 +1796,27 @@ async def open_turn(
         model=model,
         secret=endpoint.api_key,
         today=datetime.now().astimezone().date(),
-        can_search=tavily or bool(native),
-        native_search=bool(native),
+        can_search=search.tavily or search.web_search,
+        native_search=search.web_search,
         deferred=deferred,
         card_notes=notes,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SearchTools:
+    """這一刻搜得到什麼（M5.5 票 15）：下一則訊息照它掛工具，`/status` 照它說，不問模型。"""
+
+    #: 伺服器端的 `web_search`（Anthropic 接口）。
+    web_search: bool
+    #: Tavily（設了 key，兩種接口都有）。
+    tavily: bool
+
+
+def search_tools(settings: AiSettings) -> SearchTools:
+    return SearchTools(
+        web_search=has_native_web_search(settings.provider),
+        tavily=bool(settings.tavily_api_key),
     )
 
 
