@@ -19,9 +19,9 @@ from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.ttl import TtlCache
 from berth.api.deps import get_client_factory
 from berth.config import Config
-from berth.domain import MediaKind
+from berth.domain import FeedKind, MediaKind
 from berth.main import create_app
-from berth.models import Media, RssSeries, TmdbSettings
+from berth.models import Media, RssFeed, TmdbSettings
 from berth.services import schedule
 from berth.services.routes import build_routes
 from berth.services.settings import write_settings
@@ -82,7 +82,7 @@ def client(
 
 
 def _seed(client: TestClient, roots: dict[str, Path], factory: FakeClientFactory) -> None:
-    """精靈跑完、憑證存好，《藥師少女》有一條綁好的 RSS Series。"""
+    """精靈跑完、憑證存好，《藥師少女》有一條訂閱（預先綁定它的關鍵字 Feed，字幕組 ANi）。"""
 
     async def run() -> None:
         # `TestClient.app` 是 Starlette 的 `ASGIApp`，型別上沒有 `state`（實際是 FastAPI）。
@@ -107,7 +107,15 @@ def _seed(client: TestClient, roots: dict[str, Path], factory: FakeClientFactory
                 )
             )
             await session.flush()
-            session.add(RssSeries(key="mikan:1:2", title_raw="[ANi] x", media_id="tv:220542"))
+            session.add(
+                RssFeed(
+                    name="acg.rip",
+                    url="https://acg.rip/.xml?term=x",
+                    kind=FeedKind.ACGRIP,
+                    media_id="tv:220542",
+                    subgroup="ANi",
+                )
+            )
             await session.commit()
 
     asyncio.run(run())

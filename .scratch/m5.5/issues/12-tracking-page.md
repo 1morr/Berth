@@ -21,6 +21,7 @@
 3. **收不到通知時頁首說一句**：這位管理員沒有 bot、沒填 Discord ID、沒訂閱「等你處理」或 Discord 到不了時，提示遲到只會顯示在這裡、不會通知，連到 `/settings/notifications`。讀 `GET /me/notifications` 就夠，不加端點，不另做其他通知管道（ADR-0015）。
 4. **時間表卡片**多「晚 N 天」狀態（只有 admin 看得到字幕組相關的部分，比照 09）。
 5. 文件：brief §13、plan §7 路由表、`CONTEXT.md`（追更）。
+6. **區塊設定收成一份**（票 07 code-review 留下、票 09 轉來）：一個區塊的連結、頁面清單、分頁與件數現在散在 `nav/sections.ts`、`SectionLink` 的 `to` 型別、`SectionTabs`、`AppShell` 四處；加「追更」分頁時收成一個區塊物件，加一頁只改一處。
 
 ## 驗收
 

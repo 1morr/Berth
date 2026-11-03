@@ -32,12 +32,13 @@ from berth.adapters.tmdb import (
 )
 from berth.adapters.ttl import TtlCache
 from berth.domain import MediaKind, PlanAction, Role, ScheduleStatus, TmdbProblem
-from berth.models import LedgerEntry, RssSeries, TmdbSettings
+from berth.models import LedgerEntry, TmdbSettings
 from berth.models import media_id as build_media_id
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.discover import image_base, poster_url
 from berth.services.inventory import episodes_of
+from berth.services.rss import subscribed_media
 from berth.services.settings import read_settings
 from berth.services.tmdb import credential, tmdb_problem
 
@@ -55,7 +56,7 @@ MAX_PAGES = 20
 #: 同時讀幾部的詳情。TMDB 每個 IP 約 20 併發（brief §20.3），速率另有全域的桶。
 CONCURRENCY = 8
 #: 小海報（`w-12` 的縮圖，2× 也夠）。
-POSTER_SIZE = "w154"
+THUMB_SIZE = "w154"
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,12 +140,13 @@ async def read_schedule(session: AsyncSession, factory: ServiceClientFactory) ->
     start, end = week_of(today)
     key = start.isoformat()
 
+    # 憑證每次都看：拿掉之後快取裡的這一週也不再給，與探索頁、作品頁說同一句。
+    key_in_hand = credential(await read_settings(session, TmdbSettings))
+    if not key_in_hand:
+        return ScheduleWeek(start, end, today, (), *tmdb_problem(None))
+
     slots = _CACHE.get(key)
     if slots is None:
-        settings = await read_settings(session, TmdbSettings)
-        key_in_hand = credential(settings)
-        if not key_in_hand:
-            return ScheduleWeek(start, end, today, (), *tmdb_problem(None))
         client = factory.tmdb(key_in_hand)
         try:
             slots = await _fetch(client, start, end, await image_base(session, client))
@@ -179,10 +181,8 @@ async def _fetch(client: TmdbClient, start: date, end: date, base: str) -> tuple
                     tmdb_id=entry.tmdb_id,
                     title=found.title or entry.title,
                     title_en=entry.title,
-                    poster_url=poster_url(
-                        found.poster_path or entry.poster_path, base, POSTER_SIZE
-                    ),
-                    poster_url_en=poster_url(entry.poster_path, base, POSTER_SIZE),
+                    poster_url=poster_url(found.poster_path or entry.poster_path, base, THUMB_SIZE),
+                    poster_url_en=poster_url(entry.poster_path, base, THUMB_SIZE),
                     air_date=aired.air_date,
                     season=aired.season_number,
                     episode=aired.episode_number,
@@ -242,17 +242,12 @@ async def _details(client: TmdbClient, entries: list[TmdbEntry]) -> list[TmdbDet
 async def _cards(
     session: AsyncSession, slots: tuple[ScheduleSlot, ...]
 ) -> tuple[ScheduleCard, ...]:
-    """骨架加上這一刻的狀態，一次問一整週（不是逐張一句查詢）。"""
+    """骨架加上這一刻的狀態，一次問一整週（不是逐張一句查詢）。
+
+    已訂閱是 `CONTEXT.md` 的訂閱（`rss.subscribed_media`，與作品頁的訂閱清單同一個來源）。
+    """
     wanted = list({slot.media_id for slot in slots})
-    subscribed = (
-        set(
-            await session.scalars(
-                select(RssSeries.media_id).where(RssSeries.media_id.in_(wanted)).distinct()
-            )
-        )
-        if wanted
-        else set()
-    )
+    subscribed = await subscribed_media(session, wanted)
     imported: set[tuple[str, int, int]] = set()
     if wanted:
         for row in await session.scalars(

@@ -18,8 +18,15 @@ from berth.adapters.http import NotFoundError, ServiceUnavailableError
 from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.ttl import TtlCache
-from berth.domain import MediaKind, PlanAction, ScheduleStatus, TmdbProblem
-from berth.models import LedgerEntry, Media, RssSeries, TmdbSettings
+from berth.domain import (
+    FeedItemStatus,
+    FeedKind,
+    MediaKind,
+    PlanAction,
+    ScheduleStatus,
+    TmdbProblem,
+)
+from berth.models import LedgerEntry, Media, RssFeed, RssItem, RssSeries, TmdbSettings
 from berth.services import schedule
 from berth.services.schedule import read_schedule
 from berth.services.settings import write_settings
@@ -127,6 +134,26 @@ async def add_media(session: AsyncSession, entry: TmdbEntry) -> str:
     return media_id
 
 
+async def subscribe(session: AsyncSession, media_id: str, key: str = "mikan:1:2") -> RssFeed:
+    """一條 Feed 帶著一筆 Item，Item 長出一個綁到這部作品的 RSS Series
+    （Mikan 單一 feed 的形狀）。"""
+    feed = RssFeed(name=key, url=f"https://mikanani.me/RSS/{key}", kind=FeedKind.MIKAN)
+    series = RssSeries(key=key, title_raw="[ANi] x", media_id=media_id)
+    session.add_all([feed, series])
+    await session.flush()
+    session.add(
+        RssItem(
+            feed_id=feed.id,
+            guid=key,
+            title="[ANi] x - 01",
+            series_id=series.id,
+            status=FeedItemStatus.PASSED,
+        )
+    )
+    await session.flush()
+    return feed
+
+
 class TestTheWeek:
     async def test_each_episode_sits_on_the_day_tmdb_says_it_airs(
         self, session: AsyncSession
@@ -204,8 +231,7 @@ class TestTheCache:
         before = await read_schedule(session, factory)
         assert {card.status for card in before.cards} == {ScheduleStatus.UNSUBSCRIBED}
 
-        media_id = await add_media(session, APOTHECARY)
-        session.add(RssSeries(key="mikan:1:2", title_raw="[ANi] 藥師少女的獨語", media_id=media_id))
+        await subscribe(session, await add_media(session, APOTHECARY))
         await session.commit()
         asked = len(client.requests)
 
@@ -240,7 +266,7 @@ class TestStatus:
         factory = await credentialled(session, client)
         apothecary = await add_media(session, APOTHECARY)
         frieren = await add_media(session, FRIEREN)
-        session.add(RssSeries(key="mikan:1:2", title_raw="x", media_id=apothecary))
+        await subscribe(session, apothecary)
         session.add_all(
             [
                 ledger(apothecary, season=2, start=4, end=5, path="a"),
@@ -282,13 +308,64 @@ class TestStatus:
             ),
         )
         factory = await credentialled(session, client)
-        media_id = await add_media(session, second)
-        session.add(RssSeries(key="mikan:3:4", title_raw="x", media_id=media_id))
+        await subscribe(session, await add_media(session, second), "mikan:3:4")
         await session.commit()
 
         week = await read_schedule(session, factory)
 
         assert [card.media_id for card in week.cards] == ["tv:300003", "tv:220542"]
+
+    async def test_a_keyword_feed_bound_to_the_work_is_a_subscription(
+        self, session: AsyncSession
+    ) -> None:
+        """訂閱是 `CONTEXT.md` 那一個：預先綁定作品的關鍵字 Feed 還沒長出 RSS Series 也算
+        （acg.rip 的「只追之後的」就是這樣）。"""
+        client = tmdb()
+        factory = await credentialled(session, client)
+        media_id = await add_media(session, APOTHECARY)
+        session.add(
+            RssFeed(
+                name="acg.rip",
+                url="https://acg.rip/.xml?term=x",
+                kind=FeedKind.ACGRIP,
+                media_id=media_id,
+            )
+        )
+        await session.commit()
+
+        week = await read_schedule(session, factory)
+
+        assert week.cards[0].status is ScheduleStatus.SUBSCRIBED
+
+    async def test_deleting_the_feed_unsubscribes_even_though_the_series_stays(
+        self, session: AsyncSession
+    ) -> None:
+        """刪掉一條訂閱就是刪那條 Feed（`CONTEXT.md`）；RSS Series 與它的綁定留著
+        （`rss.delete_feed`），但卡片要說未訂閱，與作品頁的訂閱清單一致。"""
+        client = tmdb()
+        factory = await credentialled(session, client)
+        feed = await subscribe(session, await add_media(session, APOTHECARY))
+        await session.commit()
+        await session.delete(feed)
+        await session.commit()
+
+        week = await read_schedule(session, factory)
+
+        assert week.cards[0].status is ScheduleStatus.UNSUBSCRIBED
+
+    async def test_without_a_credential_a_cached_week_is_not_served(
+        self, session: AsyncSession
+    ) -> None:
+        """憑證拿掉了：快取裡還有這一週也照實說沒有憑證，與探索頁、作品頁同一句。"""
+        client = tmdb()
+        factory = await credentialled(session, client)
+        await read_schedule(session, factory)
+        await write_settings(session, TmdbSettings())
+        await session.commit()
+
+        week = await read_schedule(session, factory)
+
+        assert (week.cards, week.problem) == ((), TmdbProblem.CREDENTIAL_MISSING)
 
 
 class TestNoTmdb:

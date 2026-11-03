@@ -43,7 +43,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import PurePosixPath
@@ -2878,6 +2878,29 @@ async def list_subscriptions(
     一個字幕組一列。`media_id` 空的是每一條訂閱（`_every_subscription`，票 28）。"""
     every = await _every_subscription(session)
     return every if not media_id else tuple(row for row in every if row.media_id == media_id)
+
+
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def subscribed_media(session: AsyncSession, media_ids: Iterable[str]) -> frozenset[str]:
+    """這幾部作品裡，哪幾部現在有一條訂閱（時間表的「已訂閱」，M5.5 票 09）。
+
+    與 `_every_subscription` 同一個來源：預先綁定作品的 Feed，或帶著綁到它的 RSS Series 的 Feed（經
+    Feed Item 走過去）。所以刪掉 Feed 就不算了，即使 RSS Series 與它的綁定還留著（`delete_feed`）。
+    一次問一整週，不逐部組清單。
+    """
+    wanted = {media_id for media_id in media_ids if media_id}
+    if not wanted:
+        return frozenset()
+    bound = await session.scalars(
+        select(RssFeed.media_id).where(RssFeed.media_id.in_(wanted)).distinct()
+    )
+    carried = await session.scalars(
+        select(RssSeries.media_id)
+        .join(RssItem, RssItem.series_id == RssSeries.id)
+        .where(RssSeries.media_id.in_(wanted))
+        .distinct()
+    )
+    return frozenset(media_id for media_id in (*bound, *carried) if media_id is not None)
 
 
 async def _every_subscription(session: AsyncSession) -> tuple[SubscriptionRef, ...]:

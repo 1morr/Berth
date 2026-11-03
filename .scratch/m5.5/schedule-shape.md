@@ -46,7 +46,7 @@
   `border-2 border-rule`，hover / focus 換 `rule-strong`。
 - **狀態**（每次照資料庫算，不進快取）：
   - 未訂閱：**不畫色塊**（The Usual Stays Unpainted Rule：大多數卡片都是它）。
-  - 已訂閱：中性小色塊（`deck` + `ink`）。作品上有綁好的 RSS Series。
+  - 已訂閱：中性小色塊（`deck` + `ink`）。作品現在有一條訂閱（`CONTEXT.md`〈訂閱〉；code-review 後改，原寫「有綁好的 RSS Series」）。
   - 已入庫：中性小色塊。卡片上那一集在帳本裡。蓋過「已訂閱」。
   - 「晚 N 天」是票 12 的層，這一票不畫。
 - **一般使用者**：看到同樣的卡片與狀態；不顯示字幕組、Feed（API 也不送）。

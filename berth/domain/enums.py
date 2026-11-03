@@ -2026,6 +2026,7 @@ class ScheduleStatus(StrEnum):
 
     #: 帳本裡有正片蓋到卡片上的那一集（同 `EpisodeStatus.IMPORTED`）。
     IMPORTED = "imported"
-    #: 作品上有綁好的 RSS Series。
+    #: 作品現在有一條訂閱（`CONTEXT.md`：預先綁定它的 Feed，或帶著綁到它的 RSS Series 的 Feed；
+    #: `rss.subscribed_media`）。
     SUBSCRIBED = "subscribed"
     UNSUBSCRIBED = "unsubscribed"

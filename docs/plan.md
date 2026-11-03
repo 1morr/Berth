@@ -1145,7 +1145,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 #### schedule
 
-登入就能讀（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）。`GET /schedule` 回這一週（容器時區的週一到週日）：`start`、`end`、`today` 與 `cards`，一張卡是一部作品的一集（`media_id`、兩輪的標題與海報、`air_date`、`season`、`episode`、`status`）。`status` 是 `imported`（帳本蓋到那一集）、`subscribed`（作品上有綁好的 RSS Series）或 `unsubscribed`，每次照資料庫算；字幕組與 Feed 不送（比照 `why_not` 的範圍）。資料是 TMDB `discover/tv` 全部頁數加每部的 `tv/{id}`（brief §20.3），存程序內 6 小時，不寫 `media` 列。拿不到 TMDB 時照探索頁回 200 帶 `problem`。
+登入就能讀（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）。`GET /schedule` 回這一週（容器時區的週一到週日）：`start`、`end`、`today` 與 `cards`，一張卡是一部作品的一集（`media_id`、兩輪的標題與海報、`air_date`、`season`、`episode`、`status`）。`status` 是 `imported`（帳本蓋到那一集）、`subscribed`（作品現在有一條訂閱，同 `rss.list_subscriptions` 的來源：刪掉 Feed 就不算）或 `unsubscribed`，每次照資料庫算；字幕組與 Feed 不送（比照 `why_not` 的範圍）。資料是 TMDB `discover/tv` 全部頁數加每部的 `tv/{id}`（brief §20.3），存程序內 6 小時，不寫 `media` 列。拿不到 TMDB 時照探索頁回 200 帶 `problem`。
 
 #### waiting
 

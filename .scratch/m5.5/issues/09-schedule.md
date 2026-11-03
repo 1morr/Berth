@@ -1,6 +1,6 @@
 # 09 — 時間表最小版
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 07, 08
 
@@ -31,7 +31,24 @@
 
 ## 驗收
 
-- [ ] 時間表列出本週當季新番；未訂閱的卡片點進作品頁訂閱成功，下一次打開變「已訂閱」（e2e，桌機與 390px）
-- [ ] 一般使用者看得到時間表與狀態，看不到字幕組與 Feed；看不到「訂閱」分頁（測試＋e2e）
-- [ ] 同一個快取期間內再打開不再打外部來源（fake client 計數）
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+- [x] 時間表列出本週當季新番；未訂閱的卡片點進作品頁訂閱成功，下一次打開變「已訂閱」（e2e，桌機與 390px）
+- [x] 一般使用者看得到時間表與狀態，看不到字幕組與 Feed；看不到「訂閱」分頁（測試＋e2e）
+- [x] 同一個快取期間內再打開不再打外部來源（fake client 計數）
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+
+## Comments
+
+- 2026-11-04 shape（`.scratch/m5.5/schedule-shape.md`）使用者定兩件：**全部列、不篩**（長壽 / 兒童節目與國產動畫都留著，等用過再定），卡片是**小海報橫列**（一天十幾到三十部，2:3 直卡會把一週拉到七、八個螢幕高）。
+- 放哪一天、第幾集：每部只看 TMDB 的上一集與下一集，落在這一週的才列。一週播兩集、兩集都播過的，較早那一集不出現（票上定的做法，接受）。
+- 詳情讀 `zh-TW`（顯示用標題、海報、上一集與下一集一次拿到），discover 讀 `en-US`（清單本身與英文標題），一週約 9 頁 + 160 部；並行 8 部，速率走全域的桶。快取 6 小時（spec 說 6–24，取下限：季初 TMDB 一天裡會補集）。
+- 縮圖用 `w154`（`THUMB_SIZE`）；`poster_url` 從 `discover` 抽成公開的、多收一個尺寸。
+- Fake 情境 `schedule`（以 `rss` 為底、時鐘 2026-09-25）：《与你相恋》整季往後挪一週，第 12 集落在這一週；e2e 用 acg.rip「只追之後的」訂閱，一筆都不送，不會被入庫搶先變成「已入庫」。
+- code-review 已處理：「已訂閱」原本只看 `rss_series.media_id`，與 `CONTEXT.md`〈訂閱〉不一致（刪掉 Feed 後仍說已訂閱、預先綁定的關鍵字 Feed 說未訂閱），改成 `rss.subscribed_media`（與 `list_subscriptions` 同一個來源）並補兩條測試；拿掉憑證後快取命中仍出資料，改成每次先看憑證；兩個同名不同值的 `POSTER_SIZE` 改名；`docs/guide/setup-wizard.md` 的頁面表補 Schedule。
+- code-review 未處理：
+  - 快取未命中時同時打開的人各抓一輪（每輪約 170 次請求）。沒做 in-flight 合併：同一個程序跨 event loop 的鎖要另外處理，一個家同時第一次打開的機會小，速率有全域桶擋著。
+  - 「只看已訂閱」也留著沒訂閱但已入庫的卡（狀態只有一格，入庫蓋過訂閱）。接受：那一集已經在庫裡，也是「我在追」的訊號。
+  - `ScheduleSlot` 與 `ScheduleCard` 九欄重複（Data Clumps）：API 的 `from_attributes` 要平的欄位，先不包。
+  - `image_base`、`poster_url` 住在 `services/discover`（Feature Envy），時間表與作品頁都從那裡拿；搬到 `services/tmdb` 是另一張整理票的事。
+  - `parse_page` 帶 `kind`、`discover_tv` 收 `genre` 參數：條件是 services 的決定，adapter 不寫死，留著。
+  - `read_schedule` 標 `Effect.READ`，但 `image_base` 第一次可能寫設定，沿用 discover 的既有標法。
+  - 票 07 留下的「區塊設定散在 `sections.ts`、`SectionLink`、`SectionTabs`、`AppShell` 四處」這一票加了 `/schedule` 仍是四處改；票 12 加追更分頁時形狀才定，屆時收成一個區塊物件。
