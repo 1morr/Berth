@@ -8,6 +8,7 @@
 adapter 真的會送的那幾句的回應，抄一份會漂移。其餘只用標準庫（`lib.py`）。
 
     uv run python scripts/experiments/anime_sources.py record     # 原始回應落在 .local
+    uv run python scripts/experiments/anime_sources.py record-airing 2026-11-02   # 只錄放送
     uv run python scripts/experiments/anime_sources.py fixtures   # 裁標頭，寫進 fixture
 
 AniList 目前限 30 次 / 分：`record` 每次之間等 2.5 秒。**不錄 429**：
@@ -22,8 +23,10 @@ import argparse
 import json
 import sys
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from lib import Response, request
 
@@ -31,13 +34,14 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 
-from berth.adapters.anilist import SEASON_QUERY  # noqa: E402
+from berth.adapters.anilist import AIRING_QUERY, SEASON_QUERY  # noqa: E402
 
 RESULTS = REPO / ".local" / "experiments" / "results" / "anime_sources"
 FIXTURES = REPO / "tests" / "fixtures" / "http"
 
 ANILIST = "https://graphql.anilist.co"
 BGM = "https://api.bgm.tv/calendar"
+JST = ZoneInfo("Asia/Tokyo")
 USER_AGENT = "1morr/berth-experiment (https://github.com/1morr/Berth)"
 
 KEPT_HEADERS = {
@@ -86,6 +90,17 @@ def cmd_record() -> None:
     save("bgm/calendar", None, resp)
 
 
+def cmd_record_airing(monday: date) -> None:
+    """時間表的放送（M5.5 票 14）：那一週（日本時間的週一前一天到週日後一天）的第一頁。
+
+    第一頁就夠契約測試用（50 筆，`hasNextPage` 是真的）；翻頁另外用替身測。
+    """
+    start = datetime.combine(monday - timedelta(days=1), datetime.min.time(), JST)
+    end = datetime.combine(monday + timedelta(days=8), datetime.min.time(), JST)
+    variables = {"p": 1, "a": int(start.timestamp()), "b": int(end.timestamp())}
+    anilist("anilist/airing.week-2026-11-02", AIRING_QUERY, variables)
+
+
 def raw(name: str) -> dict[str, Any]:
     record: dict[str, Any] = json.loads((RESULTS / f"{name}.json").read_text(encoding="utf-8"))
     return record
@@ -112,6 +127,8 @@ def cmd_fixtures() -> None:
                 "body": rec["body"],
             },
         )
+    if not (RESULTS / "bgm" / "calendar.json").exists():
+        return
     rec = raw("bgm/calendar")
     headers = {k.lower(): v for k, v in rec["headers"].items() if k.lower() in KEPT_HEADERS}
     write("bgm/calendar", {"status": rec["status"], "headers": headers, "body": rec["body"]})
@@ -121,8 +138,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("command", choices=("record", "fixtures"))
+    parser.add_argument("command", choices=("record", "record-airing", "fixtures"))
+    parser.add_argument("monday", nargs="?", type=date.fromisoformat, help="record-airing 的週一")
     args = parser.parse_args()
+    if args.command == "record-airing":
+        cmd_record_airing(args.monday or date.today() - timedelta(days=date.today().weekday()))
+        return
     {"record": cmd_record, "fixtures": cmd_fixtures}[args.command]()
 
 

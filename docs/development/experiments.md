@@ -93,6 +93,14 @@ uv run --env-file .env python scripts/experiments/schedule_sources.py           
 uv run --env-file .env python scripts/experiments/schedule_sources.py --param with_status=0   # 多比一組自訂條件
 ```
 
+時間表的時刻與評分用什麼對（M5.5 票 14）：卡片對 AniList 放送與 Bangumi 放送表，Wikidata 的 id 對原文名完全相同。
+只用標準庫；換季時重跑。結果見 [`docs/research/schedule-mapping-2026-11-04.md`](../research/schedule-mapping-2026-11-04.md)：
+
+```bash
+uv run --env-file .env python scripts/experiments/schedule_mapping.py                    # 這一週
+uv run --env-file .env python scripts/experiments/schedule_mapping.py --week 2026-11-02  # 指定週一
+```
+
 前端 e2e `rss-subscribe` 的第一輪預覽為什麼慢（M4 票 13b）：起一台 `rss` 情境的演練 server，打那條 spec 同一串 API、
 逐步計時；不連網。結果記在 `.scratch/m4/issues/13b-rss-subscribe-e2e-preview.md`。預覽裡的「重複」為什麼時有時無
 （M4 票 121b）用 `--watch`：建好 feed 之後反覆讀預覽與 `/jobs`，各狀態筆數、重複的理由或入庫集數一變就印一行，

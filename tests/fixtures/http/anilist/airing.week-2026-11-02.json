@@ -1,0 +1,578 @@
+{
+  "request": {
+    "query": "query($p:Int,$a:Int,$b:Int){Page(page:$p,perPage:50){pageInfo{hasNextPage}airingSchedules(airingAt_greater:$a,airingAt_lesser:$b,sort:TIME){airingAt episode media{id isAdult title{native}}}}}",
+    "variables": {
+      "p": 1,
+      "a": 1793458800,
+      "b": 1794236400
+    }
+  },
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "cache-control": "no-cache, private",
+    "x-ratelimit-limit": "30",
+    "x-ratelimit-remaining": "29"
+  },
+  "body": {
+    "data": {
+      "Page": {
+        "pageInfo": {
+          "hasNextPage": true
+        },
+        "airingSchedules": [
+          {
+            "airingAt": 1793460600,
+            "episode": 5,
+            "media": {
+              "id": 191656,
+              "isAdult": false,
+              "title": {
+                "native": "生徒会にも穴はある！"
+              }
+            }
+          },
+          {
+            "airingAt": 1793462160,
+            "episode": 5,
+            "media": {
+              "id": 209872,
+              "isAdult": false,
+              "title": {
+                "native": "らんま1/2 (2024) 第3期"
+              }
+            }
+          },
+          {
+            "airingAt": 1793464200,
+            "episode": 5,
+            "media": {
+              "id": 202250,
+              "isAdult": false,
+              "title": {
+                "native": "貸した魔力は【リボ払い】で強制徴収"
+              }
+            }
+          },
+          {
+            "airingAt": 1793484000,
+            "episode": 30,
+            "media": {
+              "id": 204269,
+              "isAdult": false,
+              "title": {
+                "native": "おでかけ子ザメ シーズン2"
+              }
+            }
+          },
+          {
+            "airingAt": 1793484000,
+            "episode": 5,
+            "media": {
+              "id": 213298,
+              "isAdult": false,
+              "title": {
+                "native": "ゆるゆる図鑑"
+              }
+            }
+          },
+          {
+            "airingAt": 1793484000,
+            "episode": 5,
+            "media": {
+              "id": 218011,
+              "isAdult": false,
+              "title": {
+                "native": "タヌキとキツネ"
+              }
+            }
+          },
+          {
+            "airingAt": 1793487600,
+            "episode": 83,
+            "media": {
+              "id": 185646,
+              "isAdult": false,
+              "title": {
+                "native": "コウペンちゃん"
+              }
+            }
+          },
+          {
+            "airingAt": 1793492160,
+            "episode": 5,
+            "media": {
+              "id": 216860,
+              "isAdult": false,
+              "title": {
+                "native": "ぷにるんず ぷに４"
+              }
+            }
+          },
+          {
+            "airingAt": 1793493000,
+            "episode": 31,
+            "media": {
+              "id": 206523,
+              "isAdult": false,
+              "title": {
+                "native": "おねがいアイプリ"
+              }
+            }
+          },
+          {
+            "airingAt": 1793494800,
+            "episode": 5,
+            "media": {
+              "id": 217787,
+              "isAdult": false,
+              "title": {
+                "native": "ポップパップポルターズ"
+              }
+            }
+          },
+          {
+            "airingAt": 1793498400,
+            "episode": 429,
+            "media": {
+              "id": 155723,
+              "isAdult": false,
+              "title": {
+                "native": "武神主宰 大威篇"
+              }
+            }
+          },
+          {
+            "airingAt": 1793498400,
+            "episode": 59,
+            "media": {
+              "id": 196613,
+              "isAdult": false,
+              "title": {
+                "native": "斗破苍穹 年番4"
+              }
+            }
+          },
+          {
+            "airingAt": 1793498400,
+            "episode": 2,
+            "media": {
+              "id": 218493,
+              "isAdult": false,
+              "title": {
+                "native": "万圣街特别篇 古堡的秘密"
+              }
+            }
+          },
+          {
+            "airingAt": 1793498400,
+            "episode": 3,
+            "media": {
+              "id": 218493,
+              "isAdult": false,
+              "title": {
+                "native": "万圣街特别篇 古堡的秘密"
+              }
+            }
+          },
+          {
+            "airingAt": 1793520000,
+            "episode": 5,
+            "media": {
+              "id": 191788,
+              "isAdult": false,
+              "title": {
+                "native": "アオアシ 第2期"
+              }
+            }
+          },
+          {
+            "airingAt": 1793520000,
+            "episode": 4,
+            "media": {
+              "id": 213657,
+              "isAdult": false,
+              "title": {
+                "native": "夜桜さんちの大作戦 第2期 第2クール"
+              }
+            }
+          },
+          {
+            "airingAt": 1793521800,
+            "episode": 4,
+            "media": {
+              "id": 213658,
+              "isAdult": false,
+              "title": {
+                "native": "ダイヤのA actⅡ -Second Season- 第2クール"
+              }
+            }
+          },
+          {
+            "airingAt": 1793523600,
+            "episode": 390,
+            "media": {
+              "id": 118123,
+              "isAdult": false,
+              "title": {
+                "native": "ホロのぐらふぃてぃ"
+              }
+            }
+          },
+          {
+            "airingAt": 1793525400,
+            "episode": 2856,
+            "media": {
+              "id": 2406,
+              "isAdult": false,
+              "title": {
+                "native": "サザエさん"
+              }
+            }
+          },
+          {
+            "airingAt": 1793534400,
+            "episode": 6,
+            "media": {
+              "id": 215835,
+              "isAdult": false,
+              "title": {
+                "native": "うまゆるふるげ〜と!"
+              }
+            }
+          },
+          {
+            "airingAt": 1793536200,
+            "episode": 5,
+            "media": {
+              "id": 186541,
+              "isAdult": false,
+              "title": {
+                "native": "目覚めたら最強装備と宇宙船持ちだったので、一戸建て目指して傭兵として自由に生きたい"
+              }
+            }
+          },
+          {
+            "airingAt": 1793538000,
+            "episode": 5,
+            "media": {
+              "id": 202079,
+              "isAdult": false,
+              "title": {
+                "native": "おじさんはカワイイものがお好き。"
+              }
+            }
+          },
+          {
+            "airingAt": 1793539800,
+            "episode": 5,
+            "media": {
+              "id": 209032,
+              "isAdult": false,
+              "title": {
+                "native": "魔法の姉妹ルルットリリィ 第2クール"
+              }
+            }
+          },
+          {
+            "airingAt": 1793541600,
+            "episode": 5,
+            "media": {
+              "id": 209499,
+              "isAdult": false,
+              "title": {
+                "native": "TANK CHAIR-戦車椅子-"
+              }
+            }
+          },
+          {
+            "airingAt": 1793542560,
+            "episode": 4,
+            "media": {
+              "id": 206814,
+              "isAdult": false,
+              "title": {
+                "native": "ドラゴンボール超 ビルス"
+              }
+            }
+          },
+          {
+            "airingAt": 1793543400,
+            "episode": 6,
+            "media": {
+              "id": 185756,
+              "isAdult": false,
+              "title": {
+                "native": "転生貴族、鑑定スキルで成り上がる 第3期"
+              }
+            }
+          },
+          {
+            "airingAt": 1793543400,
+            "episode": 4,
+            "media": {
+              "id": 205896,
+              "isAdult": false,
+              "title": {
+                "native": "信者ゼロの女神サマと始める異世界攻略"
+              }
+            }
+          },
+          {
+            "airingAt": 1793543400,
+            "episode": 5,
+            "media": {
+              "id": 200455,
+              "isAdult": false,
+              "title": {
+                "native": "弱気MAX令嬢なのに、辣腕婚約者様の賭けに乗ってしまった"
+              }
+            }
+          },
+          {
+            "airingAt": 1793543400,
+            "episode": 6,
+            "media": {
+              "id": 212888,
+              "isAdult": false,
+              "title": {
+                "native": "テムパル～アイテムの力～"
+              }
+            }
+          },
+          {
+            "airingAt": 1793544300,
+            "episode": 5,
+            "media": {
+              "id": 199426,
+              "isAdult": false,
+              "title": {
+                "native": "ホテル・インヒューマンズ 第2期"
+              }
+            }
+          },
+          {
+            "airingAt": 1793545200,
+            "episode": 5,
+            "media": {
+              "id": 209463,
+              "isAdult": false,
+              "title": {
+                "native": "彼方から"
+              }
+            }
+          },
+          {
+            "airingAt": 1793548800,
+            "episode": 4,
+            "media": {
+              "id": 206774,
+              "isAdult": false,
+              "title": {
+                "native": "マウスカーソルで現実を操作できるようになったので、女の子をいっぱいクリックしまーす"
+              }
+            }
+          },
+          {
+            "airingAt": 1793549100,
+            "episode": 5,
+            "media": {
+              "id": 211877,
+              "isAdult": false,
+              "title": {
+                "native": "彼女の友達"
+              }
+            }
+          },
+          {
+            "airingAt": 1793549820,
+            "episode": 5,
+            "media": {
+              "id": 217782,
+              "isAdult": false,
+              "title": {
+                "native": "彼女の友達 ミニアニメ劇場"
+              }
+            }
+          },
+          {
+            "airingAt": 1793550000,
+            "episode": 5,
+            "media": {
+              "id": 208025,
+              "isAdult": false,
+              "title": {
+                "native": "ダークサモナーとデキている"
+              }
+            }
+          },
+          {
+            "airingAt": 1793556000,
+            "episode": 5,
+            "media": {
+              "id": 218217,
+              "isAdult": false,
+              "title": {
+                "native": "JKダークサモナーとデキ。。。。。。でいない!?"
+              }
+            }
+          },
+          {
+            "airingAt": 1793584800,
+            "episode": 165,
+            "media": {
+              "id": 137653,
+              "isAdult": false,
+              "title": {
+                "native": "仙逆"
+              }
+            }
+          },
+          {
+            "airingAt": 1793584800,
+            "episode": 9,
+            "media": {
+              "id": 214593,
+              "isAdult": false,
+              "title": {
+                "native": "ゆうさんち！from 遊ハち"
+              }
+            }
+          },
+          {
+            "airingAt": 1793588400,
+            "episode": 5,
+            "media": {
+              "id": 218532,
+              "isAdult": false,
+              "title": {
+                "native": "猫猫のひとりごと 第3期"
+              }
+            }
+          },
+          {
+            "airingAt": 1793610000,
+            "episode": 4,
+            "media": {
+              "id": 218938,
+              "isAdult": false,
+              "title": {
+                "native": "ホタルの嫁入り ちょいたし"
+              }
+            }
+          },
+          {
+            "airingAt": 1793622600,
+            "episode": 5,
+            "media": {
+              "id": 207191,
+              "isAdult": false,
+              "title": {
+                "native": "どうも、好きな人に惚れ薬を依頼された魔女です。"
+              }
+            }
+          },
+          {
+            "airingAt": 1793624400,
+            "episode": 6,
+            "media": {
+              "id": 209219,
+              "isAdult": false,
+              "title": {
+                "native": "転生ゴブリンだけど質問ある？"
+              }
+            }
+          },
+          {
+            "airingAt": 1793638800,
+            "episode": 5,
+            "media": {
+              "id": 160803,
+              "isAdult": false,
+              "title": {
+                "native": "魔法少女育成計画 restart"
+              }
+            }
+          },
+          {
+            "airingAt": 1793671200,
+            "episode": 22,
+            "media": {
+              "id": 213188,
+              "isAdult": false,
+              "title": {
+                "native": "绝世战魂 第2季"
+              }
+            }
+          },
+          {
+            "airingAt": 1793708760,
+            "episode": 5,
+            "media": {
+              "id": 206949,
+              "isAdult": false,
+              "title": {
+                "native": "凶乱令嬢ニア・リストン"
+              }
+            }
+          },
+          {
+            "airingAt": 1793710800,
+            "episode": 5,
+            "media": {
+              "id": 209502,
+              "isAdult": false,
+              "title": {
+                "native": "塩対応の佐藤さんが俺にだけ甘い"
+              }
+            }
+          },
+          {
+            "airingAt": 1793714400,
+            "episode": 5,
+            "media": {
+              "id": 200294,
+              "isAdult": false,
+              "title": {
+                "native": "超巡！超条先輩"
+              }
+            }
+          },
+          {
+            "airingAt": 1793714400,
+            "episode": 5,
+            "media": {
+              "id": 187990,
+              "isAdult": false,
+              "title": {
+                "native": "Battle Spirits [Re] 絶界の空"
+              }
+            }
+          },
+          {
+            "airingAt": 1793714400,
+            "episode": 4,
+            "media": {
+              "id": 198727,
+              "isAdult": false,
+              "title": {
+                "native": "千歳くんはラムネ瓶のなか 2クール"
+              }
+            }
+          },
+          {
+            "airingAt": 1793716200,
+            "episode": 5,
+            "media": {
+              "id": 187316,
+              "isAdult": false,
+              "title": {
+                "native": "幻想水滸伝"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

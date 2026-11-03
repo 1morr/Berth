@@ -10,17 +10,28 @@
 
 **全部列，不篩**（使用者 2026-11-04 定，票的 Comments）：discover 約一半是長壽 / 兒童節目與
 國產動畫，篩不篩等用過再定。
+
+**第二層：時刻與評分**（票 14）。AniList `AiringSchedule` 給未來的放送時刻，Bangumi `/calendar` 給
+評分；兩邊都沒有 TMDB id，Berth 也沒有對照表（brief §20.3），所以**原文名壓平後完全相同**才算
+同一部；時刻另外要那一筆的日本日期與 TMDB 的播出日差一天以內。對不上、同名不只一部就不顯示，不猜。
+兩個來源與 TMDB 同時抓，各自失敗或太慢就只少那一格，卡片照常（快取在各自的 adapter 裡）。
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import unicodedata
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from berth.adapters.anilist import Airing
+from berth.adapters.bgm import CalendarItem
 from berth.adapters.http import NotFoundError, ServiceError
 from berth.adapters.tmdb import (
     ANIMATION_GENRE,
@@ -58,6 +69,21 @@ CONCURRENCY = 8
 #: 小海報（`w-12` 的縮圖，2× 也夠）。
 THUMB_SIZE = "w154"
 
+#: 第二層（時刻、評分）最多等幾秒。AniList 被限流時會停下來等一分鐘（`anilist.client`），
+#: 時間表不陪它等；一週三頁、兩秒一頁，冷快取約六秒。
+SECOND_LAYER_TIMEOUT = 10.0
+#: Bangumi 條目的開播日與 TMDB 那一季的開播日差幾天以內算同一季（評分）。2026-11-04 那一週原文名
+#: 對到的 48 部全在一天以內（深夜檔差一天），放寬到 60 天也沒有多對到（票 14 Comments）。
+SEASON_START_SLACK = timedelta(days=1)
+#: 第二層的來源失敗或逾時之後幾秒內不再問它。
+LEFT_OUT_SECONDS = 5 * 60
+#: TMDB 的播出日是日本的日期：AniList 的時刻換成日本時間再比。
+AIRING_ZONE = ZoneInfo("Asia/Tokyo")
+#: 放送與 TMDB 播出日差幾天以內算同一集（深夜檔的「25:00」兩邊常差一天）。
+AIRING_SLACK = timedelta(days=1)
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class ScheduleSlot:
@@ -68,11 +94,24 @@ class ScheduleSlot:
     #: Display Round：`zh-TW` 那一輪的標題與海報；`_en` 是 `en-US` 那一輪（`CONTEXT.md`）。
     title: str
     title_en: str
+    #: TMDB 的 `original_name`：第二層照它對 AniList 與 Bangumi。
+    original_title: str
+    #: 卡片那一季的開播日（`tv/{id}` 的 `seasons[]`）：評分照它認 Bangumi 的哪一季。
+    #: TMDB 沒寫是 `None`。
+    season_air_date: date | None
     poster_url: str
     poster_url_en: str
     air_date: date
     season: int
     episode: int
+
+
+@dataclass(frozen=True, slots=True)
+class SecondLayer:
+    """這一週 AniList 的放送與 Bangumi 的放送表；來源失敗的那一份是空的。"""
+
+    airings: tuple[Airing, ...] = ()
+    ratings: tuple[CalendarItem, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +131,11 @@ class ScheduleCard:
     season: int
     episode: int
     status: ScheduleStatus
+    #: AniList 的放送時刻（UTC），只給還沒播的；對不上是 `None`。
+    airs_at: datetime | None
+    #: Bangumi 的評分（1–10）與打分人數；對不上或沒人打分是 `None`。
+    score: float | None
+    votes: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,11 +155,18 @@ class ScheduleWeek:
 
 
 _CACHE: TtlCache[tuple[ScheduleSlot, ...]] = TtlCache(ttl=CACHE_SECONDS, size=CACHE_WEEKS)
+#: 第二層這一陣子問不到的來源（`"AniList"`、`"Bangumi"`）。
+_LEFT_OUT: TtlCache[bool] = TtlCache(ttl=LEFT_OUT_SECONDS, size=2)
 
 
 def local_today() -> date:
     """容器時區的今天（`TZ`）。週一到週日、哪一欄是今天都照它。"""
     return datetime.now().astimezone().date()
+
+
+def utc_now() -> datetime:
+    """「未來的放送」照它（測試換掉它）。"""
+    return datetime.now(UTC)
 
 
 def week_of(day: date) -> tuple[date, date]:
@@ -131,32 +182,77 @@ def week_of(day: date) -> tuple[date, date]:
     about=(
         "This week's airing anime on TMDB (Japanese or Chinese originals), one card per episode "
         "on the day TMDB says it airs. Each card's media_id is the id other tools take; status "
-        "says whether that episode is imported, the work is subscribed, or neither."
+        "says whether that episode is imported, the work is subscribed, or neither. airs_at "
+        "(AniList, future episodes only) and score (Bangumi, 1-10 with votes) are present only "
+        "when the original title matches exactly."
     ),
 )
 async def read_schedule(session: AsyncSession, factory: ServiceClientFactory) -> ScheduleWeek:
     """這一週的時間表。同一週第二次打開不打 TMDB（快取 `CACHE_SECONDS`）。"""
     today = local_today()
     start, end = week_of(today)
-    key = start.isoformat()
 
     # 憑證每次都看：拿掉之後快取裡的這一週也不再給，與探索頁、作品頁說同一句。
     key_in_hand = credential(await read_settings(session, TmdbSettings))
     if not key_in_hand:
         return ScheduleWeek(start, end, today, (), *tmdb_problem(None))
 
-    slots = _CACHE.get(key)
+    # 第二層與 TMDB 同時抓：冷快取時兩邊都要好幾秒。它自己吞掉錯誤，TMDB 失敗時收掉。
+    second = asyncio.create_task(_second_layer(factory, start, end))
+    try:
+        slots = await _slots(session, factory, key_in_hand, start, end)
+        layer = await second
+    except ServiceError as exc:
+        return ScheduleWeek(start, end, today, (), *tmdb_problem(exc))
+    finally:
+        second.cancel()
+
+    return ScheduleWeek(start, end, today, await _cards(session, slots, layer, utc_now()))
+
+
+async def _slots(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    credential_value: str,
+    start: date,
+    end: date,
+) -> tuple[ScheduleSlot, ...]:
+    cache_key = start.isoformat()
+    slots = _CACHE.get(cache_key)
     if slots is None:
-        client = factory.tmdb(key_in_hand)
+        client = factory.tmdb(credential_value)
         try:
             slots = await _fetch(client, start, end, await image_base(session, client))
-        except ServiceError as exc:
-            return ScheduleWeek(start, end, today, (), *tmdb_problem(exc))
         finally:
             await client.aclose()
-        _CACHE.put(key, slots)
+        _CACHE.put(cache_key, slots)
+    return slots
 
-    return ScheduleWeek(start, end, today, await _cards(session, slots))
+
+async def _second_layer(factory: ServiceClientFactory, start: date, end: date) -> SecondLayer:
+    """這一週（日本時間，前後各寬一天）的放送與 Bangumi 放送表。時段整週固定，快取才接得住。"""
+    since = datetime.combine(start - WINDOW_SLACK, time(), AIRING_ZONE)
+    until = datetime.combine(end + WINDOW_SLACK + timedelta(days=1), time(), AIRING_ZONE)
+    airings, ratings = await asyncio.gather(
+        _quietly("AniList", lambda: factory.anilist().airing(since, until)),
+        _quietly("Bangumi", factory.bgm().calendar),
+    )
+    return SecondLayer(tuple(airings), tuple(ratings))
+
+
+async def _quietly[T](source: str, ask: Callable[[], Awaitable[list[T]]]) -> list[T]:
+    """失敗或太慢就是空的：卡片照常，只少這一格（票 14）。
+
+    失敗的來源記 `LEFT_OUT_SECONDS`，這段時間不再問：否則它掛著時每一次打開都要等到逾時。
+    """
+    if _LEFT_OUT.get(source):
+        return []
+    try:
+        return await asyncio.wait_for(ask(), SECOND_LAYER_TIMEOUT)
+    except (ServiceError, TimeoutError) as exc:
+        logger.warning("schedule: %s left out: %s", source, str(exc) or type(exc).__name__)
+        _LEFT_OUT.put(source, True)
+        return []
 
 
 async def _fetch(client: TmdbClient, start: date, end: date, base: str) -> tuple[ScheduleSlot, ...]:
@@ -181,6 +277,15 @@ async def _fetch(client: TmdbClient, start: date, end: date, base: str) -> tuple
                     tmdb_id=entry.tmdb_id,
                     title=found.title or entry.title,
                     title_en=entry.title,
+                    original_title=entry.original_title,
+                    season_air_date=next(
+                        (
+                            s.air_date
+                            for s in found.seasons
+                            if s.season_number == aired.season_number
+                        ),
+                        None,
+                    ),
                     poster_url=poster_url(found.poster_path or entry.poster_path, base, THUMB_SIZE),
                     poster_url_en=poster_url(entry.poster_path, base, THUMB_SIZE),
                     air_date=aired.air_date,
@@ -240,7 +345,7 @@ async def _details(client: TmdbClient, entries: list[TmdbEntry]) -> list[TmdbDet
 
 
 async def _cards(
-    session: AsyncSession, slots: tuple[ScheduleSlot, ...]
+    session: AsyncSession, slots: tuple[ScheduleSlot, ...], layer: SecondLayer, now: datetime
 ) -> tuple[ScheduleCard, ...]:
     """骨架加上這一刻的狀態，一次問一整週（不是逐張一句查詢）。
 
@@ -265,8 +370,13 @@ async def _cards(
             return ScheduleStatus.SUBSCRIBED
         return ScheduleStatus.UNSUBSCRIBED
 
-    cards = [
-        ScheduleCard(
+    airings = _by_match_key(layer.airings, lambda airing: airing.native_title)
+    ratings = _by_match_key(layer.ratings, lambda item: item.name)
+
+    def card(slot: ScheduleSlot) -> ScheduleCard:
+        key = match_key(slot.original_title)
+        found = _rating(slot, ratings.get(key, []))
+        return ScheduleCard(
             media_id=slot.media_id,
             tmdb_id=slot.tmdb_id,
             title=slot.title,
@@ -277,10 +387,66 @@ async def _cards(
             season=slot.season,
             episode=slot.episode,
             status=status(slot),
+            airs_at=_airs_at(slot, airings.get(key, []), now),
+            score=found.score if found else None,
+            votes=found.votes if found else None,
         )
-        for slot in slots
-    ]
+
+    cards = [card(slot) for slot in slots]
     # 一天之內：有事的（已入庫、已訂閱）在前，其餘照 TMDB 的順序（`sorted` 是穩定的）。
     return tuple(
         sorted(cards, key=lambda card: (card.air_date, card.status is ScheduleStatus.UNSUBSCRIBED))
     )
+
+
+def match_key(title: str) -> str:
+    """比對用的原文名：NFKC、不分大小寫、只留字母與數字（全形、空白、標點不算差別）。"""
+    text = unicodedata.normalize("NFKC", title).casefold()
+    return "".join(ch for ch in text if ch.isalnum())
+
+
+def _by_match_key[T](items: tuple[T, ...], title: Callable[[T], str]) -> dict[str, list[T]]:
+    grouped: dict[str, list[T]] = {}
+    for item in items:
+        if key := match_key(title(item)):
+            grouped.setdefault(key, []).append(item)
+    return grouped
+
+
+def _rating(slot: ScheduleSlot, same_title: list[CalendarItem]) -> CalendarItem | None:
+    """原文名相同的只有一部、開播日對得上卡片那一季、有分數也有人數才給。
+
+    季別：TMDB 多季併成一部、原文名是系列名，Bangumi 一季一條、第一季常用系列名；不比開播日的話，
+    第二季的卡會掛上第一季的分數。任一邊沒有日期就不給。少了 `total` 不寫「0 人打分」。
+    """
+    if len({item.id for item in same_title}) != 1:
+        return None
+    item = same_title[0]
+    if not _same_season(slot.season_air_date, item.air_date):
+        return None
+    return item if item.score is not None and item.votes > 0 else None
+
+
+def _same_season(tmdb_start: date | None, bgm_start: str) -> bool:
+    try:
+        started = date.fromisoformat(bgm_start)
+    except ValueError:
+        return False
+    return tmdb_start is not None and abs(started - tmdb_start) <= SEASON_START_SLACK
+
+
+def _airs_at(slot: ScheduleSlot, same_title: list[Airing], now: datetime) -> datetime | None:
+    """原文名相同、日本日期與 TMDB 差一天以內的那一筆；不只一部、或兩筆一樣近就不給。
+
+    只給未來的：AniList 只保證未來的放送準確（brief §20.3）。一律換成 UTC，API 送出的形狀才一致。
+    """
+
+    def distance(airing: Airing) -> int:
+        return abs((airing.airs_at.astimezone(AIRING_ZONE).date() - slot.air_date).days)
+
+    near = sorted((a for a in same_title if distance(a) <= AIRING_SLACK.days), key=distance)
+    if not near or len({a.media_id for a in near}) != 1:
+        return None
+    if len(near) > 1 and distance(near[0]) == distance(near[1]):
+        return None
+    return near[0].airs_at.astimezone(UTC) if near[0].airs_at > now else None

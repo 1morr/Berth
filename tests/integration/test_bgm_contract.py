@@ -64,6 +64,31 @@ async def test_an_item_with_a_score_has_votes_and_a_rank() -> None:
 
 
 @respx.mock
+async def test_names_come_with_their_html_entities_decoded() -> None:
+    """`/calendar` 的名字是 HTML 跳脫過的（`&amp;`）；時間表照原文名對 TMDB，要先還原。"""
+    respx.get(CALENDAR).mock(return_value=recorded())
+
+    items = {item.id: item for item in await client().calendar()}
+
+    assert items[701782].name == "Welsh & Shedar"
+    assert items[701782].name_cn == "苍蓝传承 威尔什&榭达"
+
+
+@respx.mock
+async def test_an_odd_weekday_or_rating_is_not_an_attribute_error() -> None:
+    respx.get(CALENDAR).mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"weekday": "Mon", "items": [{"id": 1, "name": "x", "rating": "high"}]}],
+        )
+    )
+
+    (item,) = await client().calendar()
+
+    assert (item.weekday, item.score, item.votes) == (0, None, 0)
+
+
+@respx.mock
 async def test_missing_rank_and_score_are_none_not_zero() -> None:
     respx.get(CALENDAR).mock(return_value=recorded())
 

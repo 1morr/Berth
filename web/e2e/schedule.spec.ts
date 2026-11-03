@@ -10,14 +10,18 @@ import { shot } from './shot.ts'
 
 const KIMI = '與妳相戀到生命盡頭'
 
-/** 桌機是七欄；窄版（< lg）一次一天，預設今天（週五），所以先選週四。 */
-async function thursday(page: Page): Promise<Locator> {
+/** 桌機是七欄；窄版（< lg）一次一天，預設今天（週五），所以先選那一天。 */
+async function day(page: Page, name: string): Promise<Locator> {
   // 先等資料到（讀取中兩種版面都還沒有），再看是哪一種。
   await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible()
   const wide = page.getByTestId('schedule-week')
   if (await wide.isVisible()) return wide
-  await page.getByRole('group', { name: '選一天' }).getByRole('button', { name: '週四' }).click()
+  await page.getByRole('group', { name: '選一天' }).getByRole('button', { name }).click()
   return page.getByTestId('schedule-day')
+}
+
+async function thursday(page: Page): Promise<Locator> {
+  return day(page, '週四')
 }
 
 /** 窄版的日期鍵預設按著今天（週五）；桌機沒有這一排。 */
@@ -71,6 +75,29 @@ test('時間表：點未訂閱的卡片進作品頁訂閱，下一次打開那�
   await shot(page, '3-subscribed-only')
 })
 
+test('時刻與評分：對得上的卡片寫放送時刻與 Bangumi 評分，對不上的兩格都沒有（M5.5 票 14）', async ({
+  page,
+}) => {
+  await signIn(page, '/schedule')
+
+  // 柯南週六 18:00（日本時間）播，AniList 與 Bangumi 都對得上；時刻照瀏覽器的時區寫。
+  const conan = (await day(page, '週六')).getByRole('link', { name: '名偵探柯南' })
+  const time = conan.getByRole('time')
+  await expect(time).toHaveAttribute('datetime', '2026-09-26T09:00:00Z')
+  await expect(time).toHaveText(/^(週. )?\d{2}:\d{2}$/)
+  await expect(conan.getByText('Bangumi 8.0')).toHaveAttribute('title', '12873 人打分')
+  await expect(conan).toHaveAccessibleDescription(
+    /^S01E1180 \S*\s?\d{2}:\d{2}\s+Bangumi 評分 8\.0，12873 人打分$/,
+  )
+  expect(await fitsWidth(page)).toBe(true)
+  await shot(page, '5-airing-time-and-rating')
+
+  // 小丸子：兩邊都對不上原文名，兩格都沒有。
+  const maruko = (await day(page, '週日')).getByRole('link', { name: '櫻桃小丸子' })
+  await expect(maruko).toHaveAccessibleDescription('S02E1460')
+  await expect(maruko.getByRole('time')).toHaveCount(0)
+})
+
 test('一般使用者：看得到時間表與狀態，沒有「訂閱」分頁，回應裡沒有字幕組與 Feed', async ({
   page,
 }) => {
@@ -97,15 +124,18 @@ test('一般使用者：看得到時間表與狀態，沒有「訂閱」分頁�
     expect(Object.keys(row).sort()).toEqual(
       [
         'air_date',
+        'airs_at',
         'episode',
         'media_id',
         'poster_url',
         'poster_url_en',
+        'score',
         'season',
         'status',
         'title',
         'title_en',
         'tmdb_id',
+        'votes',
       ].sort(),
     )
   }

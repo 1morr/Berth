@@ -12,19 +12,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Any
 
 import httpx
 
 from berth.adapters.anilist import (
+    AIRING_QUERY,
     API_URL,
     PAGE_SIZE,
     SEASON_QUERY,
+    Airing,
     AnimeEntry,
     AnimeSeason,
     page_media,
+    parse_airings,
     parse_entries,
 )
 from berth.adapters.http import (
@@ -51,6 +56,11 @@ DEFAULT_RETRY_AFTER = 60.0
 MAX_RETRY_AFTER = 90.0
 
 _TIMEOUT_SECONDS = 30.0
+
+logger = logging.getLogger(__name__)
+
+#: 放送最多讀幾頁。一週（前後各寬一天）實測三頁（2026-11-04，117 部）；上限只防離譜的回答。
+MAX_AIRING_PAGES = 6
 
 
 class Throttle:
@@ -102,6 +112,18 @@ class HttpAniList:
             SEASON_QUERY, {"s": season.value, "y": year, "n": min(limit, PAGE_SIZE)}
         )
         return parse_entries(page_media(data))
+
+    async def airing(self, start: datetime, end: datetime) -> list[Airing]:
+        """每一頁各自快取：同一段時間再問不打 AniList，讀到一半失敗的下次從快取接著讀。"""
+        bounds = {"a": int(start.timestamp()), "b": int(end.timestamp())}
+        found: list[Airing] = []
+        for page in range(1, MAX_AIRING_PAGES + 1):
+            items, more = parse_airings(await self._ask(AIRING_QUERY, {"p": page, **bounds}))
+            found += items
+            if not more:
+                return found
+        logger.warning("AniList: airing stopped at %d pages; later slots have no time", page)
+        return found
 
     async def _ask(self, query: str, variables: dict[str, Any]) -> Any:
         key = json.dumps([query, variables], sort_keys=True)

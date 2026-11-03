@@ -4,11 +4,12 @@
 叫 `bgm` 不叫 `bangumi`：`services/bangumi.py` 是 Mikan 的番組（它的番組名本來就出自 bgm.tv）。
 
 所有欄位在官方 OpenAPI 都不是必填，實測也有缺（`rank` 一半沒有、`rating.score` 有的沒有），
-所以這裡每一格都可能是空的。
+所以這裡每一格都可能是空的。名字是 HTML 跳脫過的（`Welsh &amp; Shedar`），這裡還原。
 """
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -53,7 +54,8 @@ def parse_calendar(answer: Any) -> list[CalendarItem]:
     for day in answer:
         if not isinstance(day, dict):
             continue
-        weekday = (day.get("weekday") or {}).get("id")
+        weekday_info = day.get("weekday")
+        weekday = weekday_info.get("id") if isinstance(weekday_info, dict) else None
         for item in day.get("items") or ():
             if isinstance(item, dict) and isinstance(item.get("id"), int):
                 items.append(_item(item, weekday if isinstance(weekday, int) else 0))
@@ -67,8 +69,8 @@ def _item(item: dict[str, Any], weekday: int) -> CalendarItem:
     rank = item.get("rank")
     return CalendarItem(
         id=int(item["id"]),
-        name=str(item.get("name") or ""),
-        name_cn=str(item.get("name_cn") or ""),
+        name=html.unescape(str(item.get("name") or "")),
+        name_cn=html.unescape(str(item.get("name_cn") or "")),
         air_date=str(item.get("air_date") or ""),
         weekday=weekday,
         score=float(score) if isinstance(score, int | float) and score > 0 else None,

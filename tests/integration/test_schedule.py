@@ -8,14 +8,26 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
-from datetime import date
+from dataclasses import replace
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.http import NotFoundError, ServiceUnavailableError
-from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode
+from berth.adapters.anilist import Airing
+from berth.adapters.anilist.fake import FakeAniList
+from berth.adapters.bgm import CalendarItem
+from berth.adapters.bgm.fake import FakeBgm
+from berth.adapters.http import (
+    NotFoundError,
+    ProtocolMismatchError,
+    ServiceError,
+    ServiceUnavailableError,
+)
+from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode, TmdbSeasonEntry
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.ttl import TtlCache
 from berth.domain import (
@@ -35,8 +47,12 @@ from tests.integration.factories import FakeClientFactory
 
 pytestmark = pytest.mark.asyncio
 
+JST = ZoneInfo("Asia/Tokyo")
+
 #: 這一週是 2026-11-02（一）到 11-08（日），今天是週三。
 TODAY = date(2026, 11, 4)
+#: 「現在」：週三中午（日本時間）。比它晚的放送才是未來的。
+NOW = datetime(2026, 11, 4, 12, 0, tzinfo=JST)
 
 
 def show(tmdb_id: int, title: str) -> TmdbEntry:
@@ -57,9 +73,14 @@ def episode(season: int, number: int, aired: date) -> TmdbEpisode:
     )
 
 
+#: 測試作品每一季的開播日（評分的季別守衛拿它對 Bangumi 的開播日）。
+SEASON_START = date(2026, 10, 4)
+
+
 def detail(
     entry: TmdbEntry, last: TmdbEpisode | None, upcoming: TmdbEpisode | None = None
 ) -> TmdbDetail:
+    numbers = sorted({e.season_number for e in (last, upcoming) if e is not None})
     return TmdbDetail(
         tmdb_id=entry.tmdb_id,
         kind=MediaKind.TV,
@@ -71,6 +92,10 @@ def detail(
         poster_path=entry.poster_path,
         last_episode=last,
         next_episode=upcoming,
+        seasons=tuple(
+            TmdbSeasonEntry(season_number=n, name="", episode_count=12, air_date=SEASON_START)
+            for n in numbers
+        ),
     )
 
 
@@ -106,16 +131,24 @@ def tmdb(**overrides: object) -> FakeTmdbClient:
 def this_week(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """今天固定在 11/04，快取每個測試一份（它是程序內的，測試之間不能共用）。"""
     monkeypatch.setattr(schedule, "local_today", lambda: TODAY)
+    monkeypatch.setattr(schedule, "utc_now", lambda: NOW)
     monkeypatch.setattr(
         schedule, "_CACHE", TtlCache(ttl=schedule.CACHE_SECONDS, size=schedule.CACHE_WEEKS)
     )
+    monkeypatch.setattr(schedule, "_LEFT_OUT", TtlCache(ttl=schedule.LEFT_OUT_SECONDS, size=2))
     yield
 
 
-async def credentialled(session: AsyncSession, client: FakeTmdbClient) -> FakeClientFactory:
+async def credentialled(
+    session: AsyncSession,
+    client: FakeTmdbClient,
+    *,
+    anilist: FakeAniList | None = None,
+    bgm: FakeBgm | None = None,
+) -> FakeClientFactory:
     await write_settings(session, TmdbSettings(api_key=TMDB_API_KEY))
     await session.commit()
-    return FakeClientFactory(tmdb=client)
+    return FakeClientFactory(tmdb=client, anilist=anilist, bgm=bgm)
 
 
 async def add_media(session: AsyncSession, entry: TmdbEntry) -> str:
@@ -399,3 +432,277 @@ def ledger(media_id: str, *, season: int, start: int, end: int, path: str) -> Le
         episode_start=start,
         episode_end=end,
     )
+
+
+# --- 第二層：時刻與評分（M5.5 票 14） ----------------------------------------------------------
+
+#: 原文名是日文的兩部：週二播過一集（過去的）、週六要播一集（未來的）。
+PAST = replace(APOTHECARY, original_title="薬屋のひとりごと")
+FUTURE = replace(FRIEREN, original_title="葬送のフリーレン")
+
+
+def japanese_tmdb() -> FakeTmdbClient:
+    return tmdb(
+        airing=[PAST, FUTURE],
+        details=(
+            detail(PAST, episode(2, 5, date(2026, 11, 3)), episode(2, 6, date(2026, 11, 10))),
+            detail(FUTURE, episode(2, 4, date(2026, 11, 1)), episode(2, 5, date(2026, 11, 7))),
+        ),
+    )
+
+
+def airs(media: int, native: str, at: datetime, episode: int = 5) -> Airing:
+    return Airing(media_id=media, episode=episode, airs_at=at, native_title=native)
+
+
+def rated(bgm_id: int, name: str, score: float | None = 8.1, votes: int = 900) -> CalendarItem:
+    return CalendarItem(
+        id=bgm_id,
+        name=name,
+        name_cn="",
+        air_date="2026-10-04",
+        weekday=6,
+        score=score,
+        votes=votes,
+        rank=None,
+    )
+
+
+#: 週六 23:00（日本時間）：TMDB 說 11/07 那一集。
+SATURDAY_NIGHT = datetime(2026, 11, 7, 23, 0, tzinfo=JST)
+
+
+def by_media(week: schedule.ScheduleWeek) -> dict[str, schedule.ScheduleCard]:
+    return {card.media_id: card for card in week.cards}
+
+
+class TestAiringTimeAndRating:
+    async def test_a_future_episode_shows_its_time_and_the_work_its_rating(
+        self, session: AsyncSession
+    ) -> None:
+        """原文名與 AniList / Bangumi 的原文名相同才算同一部（brief §20.3）。"""
+        anilist = FakeAniList(
+            airings=[
+                airs(10, "葬送のフリーレン", SATURDAY_NIGHT),
+                airs(11, "薬屋のひとりごと", datetime(2026, 11, 3, 23, 0, tzinfo=JST)),
+            ]
+        )
+        bgm = FakeBgm(
+            items=[rated(500, "葬送のフリーレン"), rated(501, "薬屋のひとりごと", 7.5, 40)]
+        )
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist, bgm=bgm)
+
+        cards = by_media(await read_schedule(session, factory))
+
+        future, past = cards["tv:209867"], cards["tv:220542"]
+        assert (future.airs_at, future.score, future.votes) == (SATURDAY_NIGHT, 8.1, 900)
+        assert future.airs_at is not None and future.airs_at.tzinfo is UTC  # API 一律送 UTC
+        # 過去的集不給時刻（AniList 只保證未來的準確），評分是作品的，照樣給
+        assert (past.airs_at, past.score, past.votes) == (None, 7.5, 40)
+
+    async def test_the_fake_window_excludes_both_ends_like_anilist(self) -> None:
+        """`airingAt_greater` / `_lesser` 兩端都不含：替身要一樣，時段剛好在午夜的才對得上。"""
+        midnight = datetime(2026, 11, 1, tzinfo=JST)
+        anilist = FakeAniList(airings=[airs(10, "x", midnight)])
+
+        assert await anilist.airing(midnight, datetime(2026, 11, 2, tzinfo=JST)) == []
+
+    async def test_it_asks_anilist_for_the_week_a_day_wider_on_each_side_in_japan(
+        self, session: AsyncSession
+    ) -> None:
+        """深夜檔兩邊常差一天，同 discover；查詢的時段整週固定，快取才接得住。"""
+        anilist = FakeAniList()
+        await read_schedule(session, await credentialled(session, japanese_tmdb(), anilist=anilist))
+
+        assert anilist.asked == [
+            (
+                "airing",
+                (datetime(2026, 11, 1, tzinfo=JST), datetime(2026, 11, 10, tzinfo=JST)),
+            )
+        ]
+
+    async def test_a_late_night_slot_a_day_after_tmdbs_date_still_matches(
+        self, session: AsyncSession
+    ) -> None:
+        """「25:00」：TMDB 寫 11/07，AniList 是 11/08 01:00。差一天以內算那一集。"""
+        late = datetime(2026, 11, 8, 1, 0, tzinfo=JST)
+        anilist = FakeAniList(airings=[airs(10, "葬送のフリーレン", late)])
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist)
+
+        assert by_media(await read_schedule(session, factory))["tv:209867"].airs_at == late
+
+    async def test_an_airing_two_days_off_is_another_episode_and_is_not_shown(
+        self, session: AsyncSession
+    ) -> None:
+        anilist = FakeAniList(
+            airings=[airs(10, "葬送のフリーレン", datetime(2026, 11, 9, 23, 0, tzinfo=JST))]
+        )
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist)
+
+        assert by_media(await read_schedule(session, factory))["tv:209867"].airs_at is None
+
+    async def test_a_title_that_differs_is_not_guessed(self, session: AsyncSession) -> None:
+        """續作的「第2期」、迷你動畫的「ミニ」：原文名不同就不顯示，不猜。"""
+        anilist = FakeAniList(airings=[airs(10, "葬送のフリーレン 第2期", SATURDAY_NIGHT)])
+        bgm = FakeBgm(items=[rated(500, "葬送のフリーレン 第2期")])
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist, bgm=bgm)
+
+        future = by_media(await read_schedule(session, factory))["tv:209867"]
+
+        assert (future.airs_at, future.score, future.votes) == (None, None, None)
+
+    @pytest.mark.parametrize("bgm_start", ["2023-09-29", ""])
+    async def test_a_bangumi_entry_of_another_season_or_without_a_date_has_no_rating(
+        self, session: AsyncSession, bgm_start: str
+    ) -> None:
+        """TMDB 多季併成一部、原文名是系列名；Bangumi 一季一條，第一季常用系列名。開播日要對得上
+        卡片那一季（差一天以內），否則第二季的卡會掛上第一季的分數。"""
+        bgm = FakeBgm(items=[replace(rated(500, "葬送のフリーレン"), air_date=bgm_start)])
+        factory = await credentialled(session, japanese_tmdb(), bgm=bgm)
+
+        future = by_media(await read_schedule(session, factory))["tv:209867"]
+
+        assert (future.score, future.votes) == (None, None)
+
+    async def test_a_late_night_premiere_a_day_off_still_rates(self, session: AsyncSession) -> None:
+        """深夜檔：Bangumi 記 10/03（日本的「24:30」前一天），TMDB 記 10/04。"""
+        bgm = FakeBgm(items=[replace(rated(500, "葬送のフリーレン"), air_date="2026-10-03")])
+        factory = await credentialled(session, japanese_tmdb(), bgm=bgm)
+
+        assert by_media(await read_schedule(session, factory))["tv:209867"].score == 8.1
+
+    async def test_titles_match_regardless_of_width_case_and_punctuation(
+        self, session: AsyncSession
+    ) -> None:
+        anilist = FakeAniList(airings=[airs(10, "葬送の フリーレン！", SATURDAY_NIGHT)])
+        bgm = FakeBgm(items=[rated(500, "葬送のフリーレン!")])
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist, bgm=bgm)
+
+        future = by_media(await read_schedule(session, factory))["tv:209867"]
+
+        assert (future.airs_at, future.score) == (SATURDAY_NIGHT, 8.1)
+
+    async def test_two_works_with_the_same_title_are_not_told_apart(
+        self, session: AsyncSession
+    ) -> None:
+        anilist = FakeAniList(
+            airings=[
+                airs(10, "葬送のフリーレン", SATURDAY_NIGHT),
+                airs(12, "葬送のフリーレン", SATURDAY_NIGHT),
+            ]
+        )
+        bgm = FakeBgm(items=[rated(500, "葬送のフリーレン"), rated(502, "葬送のフリーレン")])
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist, bgm=bgm)
+
+        future = by_media(await read_schedule(session, factory))["tv:209867"]
+
+        assert (future.airs_at, future.score) == (None, None)
+
+    async def test_two_airings_of_the_same_work_take_the_nearest_day(
+        self, session: AsyncSession
+    ) -> None:
+        """一週播兩集的：TMDB 那一天的那一筆，不是隔天的那一筆。"""
+        anilist = FakeAniList(
+            airings=[
+                airs(10, "葬送のフリーレン", datetime(2026, 11, 6, 23, 0, tzinfo=JST), 4),
+                airs(10, "葬送のフリーレン", SATURDAY_NIGHT, 5),
+            ]
+        )
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist)
+
+        assert by_media(await read_schedule(session, factory))["tv:209867"].airs_at == (
+            SATURDAY_NIGHT
+        )
+
+    @pytest.mark.parametrize(("score", "votes"), [(None, 0), (7.2, 0)])
+    async def test_a_rating_without_a_score_or_its_votes_is_not_shown(
+        self, session: AsyncSession, score: float | None, votes: int
+    ) -> None:
+        """有分數沒人數是 Bangumi 少了 `total`：不寫「0 人打分」。"""
+        bgm = FakeBgm(items=[rated(500, "葬送のフリーレン", score=score, votes=votes)])
+        factory = await credentialled(session, japanese_tmdb(), bgm=bgm)
+
+        future = by_media(await read_schedule(session, factory))["tv:209867"]
+
+        assert (future.score, future.votes) == (None, None)
+
+
+class Stuck(FakeAniList):
+    """一直不回答的 AniList（被限流時 `Throttle` 會停下來等）。"""
+
+    calls: int = 0
+
+    async def airing(self, start: datetime, end: datetime) -> list[Airing]:
+        self.calls += 1
+        await asyncio.sleep(60)
+        return []
+
+
+class TestSecondLayerFailures:
+    """外部來源失敗時卡片照常顯示，只少這兩格（票 14 驗收）。"""
+
+    async def test_a_failed_source_is_not_asked_again_for_a_while(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """掛掉的來源記一陣子（`LEFT_OUT_SECONDS`）：不讓每一次打開都等它到逾時。"""
+        monkeypatch.setattr(schedule, "SECOND_LAYER_TIMEOUT", 0.01)
+        anilist = Stuck()
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist)
+
+        await read_schedule(session, factory)
+        await read_schedule(session, factory)
+
+        assert anilist.calls == 1
+
+    @pytest.mark.parametrize(
+        "error", [ServiceUnavailableError("AniList is down"), ProtocolMismatchError("odd")]
+    )
+    async def test_anilist_failing_leaves_the_times_out_and_keeps_the_ratings(
+        self, session: AsyncSession, error: ServiceError
+    ) -> None:
+        anilist = FakeAniList(airings=[airs(10, "葬送のフリーレン", SATURDAY_NIGHT)], error=error)
+        bgm = FakeBgm(items=[rated(500, "葬送のフリーレン")])
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist, bgm=bgm)
+
+        week = await read_schedule(session, factory)
+
+        assert (week.problem, len(week.cards)) == (None, 2)
+        future = by_media(week)["tv:209867"]
+        assert (future.airs_at, future.score) == (None, 8.1)
+
+    async def test_bangumi_failing_leaves_the_ratings_out_and_keeps_the_times(
+        self, session: AsyncSession
+    ) -> None:
+        anilist = FakeAniList(airings=[airs(10, "葬送のフリーレン", SATURDAY_NIGHT)])
+        bgm = FakeBgm(error=ServiceUnavailableError("bgm.tv is down"))
+        factory = await credentialled(session, japanese_tmdb(), anilist=anilist, bgm=bgm)
+
+        week = await read_schedule(session, factory)
+
+        assert (week.problem, len(week.cards)) == (None, 2)
+        future = by_media(week)["tv:209867"]
+        assert (future.airs_at, future.score) == (SATURDAY_NIGHT, None)
+
+    async def test_a_source_that_does_not_answer_in_time_is_left_out(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """AniList 被限流時會停下來等一分鐘（`anilist.client.Throttle`）：時間表不陪它等。"""
+        monkeypatch.setattr(schedule, "SECOND_LAYER_TIMEOUT", 0.01)
+        bgm = FakeBgm(items=[rated(500, "葬送のフリーレン")])
+        factory = await credentialled(session, japanese_tmdb(), anilist=Stuck(), bgm=bgm)
+
+        week = await asyncio.wait_for(read_schedule(session, factory), timeout=5)
+
+        future = by_media(week)["tv:209867"]
+        assert (future.airs_at, future.score) == (None, 8.1)
+
+    async def test_tmdb_failing_does_not_wait_for_the_second_layer(
+        self, session: AsyncSession
+    ) -> None:
+        """第二層與 TMDB 同時抓；TMDB 失敗就整頁說問題，不等還沒回來的 AniList。"""
+        client = tmdb(error=ServiceUnavailableError("TMDB is down"))
+        factory = await credentialled(session, client, anilist=Stuck())
+
+        week = await asyncio.wait_for(read_schedule(session, factory), timeout=5)
+
+        assert week.problem is TmdbProblem.UNREACHABLE

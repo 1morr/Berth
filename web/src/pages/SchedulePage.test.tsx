@@ -22,6 +22,9 @@ function card(overrides: Partial<ScheduleCard>): ScheduleCard {
     season: 1,
     episode: 1,
     status: 'unsubscribed',
+    airs_at: null,
+    score: null,
+    votes: null,
     ...overrides,
   }
 }
@@ -43,7 +46,15 @@ const WEEK: Schedule = {
       status: 'subscribed',
     }),
     card({ media_id: 'tv:57775', title: '櫻桃小丸子', air_date: '2026-11-04', episode: 1500 }),
-    card({ media_id: 'tv:209867', title: '葬送的芙莉蓮', air_date: '2026-11-07', season: 2 }),
+    card({
+      media_id: 'tv:209867',
+      title: '葬送的芙莉蓮',
+      air_date: '2026-11-07',
+      season: 2,
+      airs_at: '2026-11-07T14:00:00Z',
+      score: 8.1,
+      votes: 900,
+    }),
   ],
 }
 
@@ -91,6 +102,24 @@ describe('時間表', () => {
     expect(within(week).getByRole('link', { name: '櫻桃小丸子' })).toHaveAccessibleDescription(
       'S01E1500',
     )
+  })
+
+  it('對得上的卡片寫放送時刻與 Bangumi 評分（M5.5 票 14），對不上的不寫', async () => {
+    render()
+    renderApp('/schedule')
+
+    const week = await screen.findByTestId('schedule-week')
+    const frieren = within(week).getByRole('link', { name: '葬送的芙莉蓮' })
+    const time = within(frieren).getByRole('time')
+    expect(time).toHaveAttribute('datetime', '2026-11-07T14:00:00Z')
+    expect(within(frieren).getByText('Bangumi 8.1')).toHaveAttribute('title', '900 人打分')
+    expect(frieren).toHaveAccessibleDescription(
+      expect.stringMatching(/^S02E01 \S*\s?\d{2}:\d{2}\s+Bangumi 評分 8\.1，900 人打分$/),
+    )
+
+    const maruko = within(week).getByRole('link', { name: '櫻桃小丸子' })
+    expect(within(maruko).queryByRole('time')).not.toBeInTheDocument()
+    expect(within(maruko).queryByText(/Bangumi/)).not.toBeInTheDocument()
   })
 
   it('窄版一次一天，預設今天，換一天就換清單', async () => {

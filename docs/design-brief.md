@@ -647,7 +647,7 @@ Media 頁對某個檔案（已入庫或 Unmatched）選「改指派為 SxxEyy / 
 | 下載與活動 | 全域狀態 | 所有 Job 列表：狀態、進度、Route、trigger；點入 Job 頁 |
 | Job 詳情 | 可觀測性 | **獨立頁 `/jobs/:hash`**：**時間線**（§5.2）、檔案清單與各檔決策、Plan 歷史、動作（重新解析、重新入庫、刪除範圍） |
 | 頁首 | 到處去 | 主導覽：探索、新番（M5.5 票 09 起每個人）、媒體庫、下載、待處理（admin）；外面是助理開關與帳號選單（名字與角色、設定、健康、週報（admin）、語言、登出）。待處理與新番帶件數（只有 admin 看得到）：待處理是審核加 Issue、新番是待綁定的 RSS Series，加起來是「有 N 件等你處理」的 N。待處理區塊的分頁是審核 `/review`、Issue `/issues`（兩頁仍分開，ADR-0006），新番區塊是時間表 `/schedule`（每個人）與訂閱 `/rss`（admin） |
-| 時間表（`/schedule`） | 找當季新番 | 這一週 TMDB 上播的動畫（brief §20.3），週一到週日分欄、今天標出，窄版一次一天；預設列全部（含長壽、兒童節目與國產動畫，篩不篩等用過再定），可切「只看已訂閱」。一集一張卡：小海報、顯示用標題、季集、狀態（已入庫 / 已訂閱，未訂閱不畫）；點進 Media 詳情走現有的訂閱流程。一般使用者看得到狀態類別，看不到字幕組與 Feed（`.scratch/m5.5/schedule-shape.md`） |
+| 時間表（`/schedule`） | 找當季新番 | 這一週 TMDB 上播的動畫（brief §20.3），週一到週日分欄、今天標出，窄版一次一天；預設列全部（含長壽、兒童節目與國產動畫，篩不篩等用過再定），可切「只看已訂閱」。一集一張卡：小海報、顯示用標題、季集、放送時刻（AniList，只有未來的）、狀態（已入庫 / 已訂閱，未訂閱不畫）、Bangumi 評分；時刻與評分只在原文名對得上時顯示（§20.3），來源失敗只少這兩格；點進 Media 詳情走現有的訂閱流程。一般使用者看得到狀態類別，看不到字幕組與 Feed（`.scratch/m5.5/schedule-shape.md`） |
 | 審核佇列 | 人工介入 | 低信心 Plan（逐檔可改）、已入庫待確認（medium 自動入庫的 audit 清單，可一鍵撤銷；同一個 Job 一組一顆「全部確認」、整段一顆，收起時說出為什麼是 medium）、Unmatched、重複版本；批次核准。**Issue 不在這裡**：只在 `/issues`，這一頁原位一行「另有 N 件待處理」連過去。**一列一件事的清單，不是牆**：篩出來常常只有一兩件，卡片牆說不出「有幾件事在等你」。只有 admin 進得來 |
 | 訂閱（RSS，`/rss`） | 自動化 | Feed 清單、RSS Series 清單（待綁定排最前、就地綁定作品與 Route）、最近的 Feed Item、一次性 RSS 連結、新 Feed 的第一輪預覽（§15） |
 | 健康與問題 | 維運 | 服務連線、Route 硬鏈接檢查、Reconciler 結果、磁碟空間 |
@@ -1337,7 +1337,7 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
 
 **動漫資料來源：AniList、Bangumi、Fribb**（2026-10-28 查證＋實測，M5 票 16；細節：[研究](research/anime-episode-source.md#203-動漫資料來源-anilist-bangumi-fribb)、[m5-anime-sources](research/m5-anime-sources-2026-10-28.md)）
 
-**M5 票 23d 拿掉 Fribb 與 AniList 的標題搜尋、系列走圖**（[agent-sources-ab](research/agent-sources-ab-2026-10-28.md)）：Berth 只用 AniList 的季表與 Bangumi 放送表；fixture 只剩 `tests/fixtures/http/{anilist,bgm}/`，`scripts/experiments/anime_sources.py` 錄的。
+**M5 票 23d 拿掉 Fribb 與 AniList 的標題搜尋、系列走圖**（[agent-sources-ab](research/agent-sources-ab-2026-10-28.md)）：Berth 只用 AniList 的季表（M5.5 票 14 起加上放送 `airingSchedules`）與 Bangumi 放送表；fixture 只剩 `tests/fixtures/http/{anilist,bgm}/`，`scripts/experiments/anime_sources.py` 錄的。
 
 - **AniList**（`POST https://graphql.anilist.co`，免 key、不要求 User-Agent）：文件寫 90 次 / 分，頁首警告**目前降級成 30 次 / 分**（[Rate Limiting](https://docs.anilist.co/guide/rate-limiting)；實測 `X-RateLimit-Limit: 30`）；超過就**封一分鐘**，期間全回 429 帶 `Retry-After` 與 `X-RateLimit-Reset`，所以重試要全程序一起停。錯誤寫在 `errors`（錯參數回 400），`Page.media(id_in)` 問不存在的 id 回 200 加空清單；`Page` 一頁最多 50 筆（要 60 回 50）。條款（[Terms of Use](https://docs.anilist.co/guide/terms-of-use)）：月營收 < $150 免費；**禁止當備份 / 儲存服務、禁止 hoarding**，所以 Berth 只按需問、程序內快取 6 小時、不落地。`relations` 用 `relationType(version: 2)`。打分人數是 `stats.scoreDistribution[].amount` 加總。
 - **Bangumi**（`GET https://api.bgm.tv/calendar`，免 key）：**非瀏覽器要帶 User-Agent（開發者 ID 與應用名，分發的帶版本、開源的帶主頁）**，預設的可能被擋（[user agent.md](https://github.com/bangumi/api/blob/master/docs-raw/user%20agent.md)）；Berth 送 `1morr/berth/<版本> (https://github.com/1morr/Berth)`。`/calendar` 在 `open-api/api.yml`（不在 `v0.yaml`），欄位全非必填（112 部裡 57 部有 `rank`、93 部有 `rating.score`）；回 `cache-control: max-age=3600`，Berth 記一小時；無公布速率上限。
@@ -1354,6 +1354,11 @@ RSS 依賴解析器與管線，因此排在 M3 而非 M1（§17）。
   - 漏掉的作品（這一週）：猫猫のひとりごと 第3期、ミニアニメ「ホタルの嫁入り」ちょいたし、ダークサモナーとデキている ミニアニメ劇場（三部 WEB 迷你動畫，TMDB 沒有或只有本篇），シルバニアファミリー フレアのカラフル・エブリデイ（兒童，TMDB 查不到），ぷにるんず ぷに４（TMDB 的集停在 2025-12-27）。上一週另漏歯ならび～ズ（WEB 短篇）、凶乱令嬢 ニア・リストンミニ（WEB 迷你動畫）。沒有一般的深夜番。
   - 反方向：這一週 164 部裡 85 部不在 Bangumi 放送表上（國產 65、日本 20，日本的是長壽 / 兒童節目與夏季開播仍在播的作品）。Bangumi 放送表本身也不完整，它是對照、不是正解。
   - discover 的每筆沒有集與播出日：要放進週幾的欄、寫第幾集，每部再讀 `tv/{id}` 的 `last_episode_to_air` / `next_episode_to_air`。
+  - **第二層：時刻與評分**（2026-11-04 實測，M5.5 票 14；細節：[研究](research/schedule-mapping-2026-11-04.md)，`scripts/experiments/schedule_mapping.py`）：
+    - 時刻：AniList `Page(page, perPage: 50){pageInfo{hasNextPage} airingSchedules(airingAt_greater, airingAt_lesser, sort: TIME){airingAt episode media{id isAdult title{native}}}}`，`airingAt` 是 Unix 秒。一週（日本時間的週一前一天 00:00 到週日後兩天 00:00）三頁、117 部；過去的也回，Berth 只顯示未來的。fixture `tests/fixtures/http/anilist/airing.week-2026-11-02.json`。評分：Bangumi `/calendar` 的 `rating.score` 與 `total`，名字是 HTML 跳脫過的（`&amp;`）。
+    - **對應【決定】**：TMDB `original_name` 與 AniList `title.native`、Bangumi `name` 壓平後（NFKC、不分大小寫、只留字母與數字）完全相同才算同一部；時刻另外要日本日期與 TMDB 播出日差一天以內；評分另外要 Bangumi 條目的開播日與卡片那一季的開播日（`seasons[].air_date`）差一天以內（TMDB 多季併一部、Bangumi 一季一條，否則續作會掛上第一季的分數；這一週 48 部全在一天以內），沒有日期就不顯示。同名不只一部就不顯示。這一週日本作品的卡片 AniList 對到 57.0%、Bangumi 51.6%，對不到的多半是續作（一季一條、名字帶「第2期」）。
+    - Wikidata（`tv/{id}` 的 `external_ids.wikidata_id` → P8729 AniList、P5732 Bangumi）只對到 46.2% / 16.1%：Wikidata 多半只記第一季的 id。與標題都對到的 52 部 0 件不一致，只多 6 部，不接。
+    - 標準庫 `urllib` 預設的 User-Agent 打 AniList 被 Cloudflare 擋（403、`error code: 1010`），帶一個 User-Agent 就過。
   - 回應形狀（票 08 錄下、票 09 做成 fixture `tests/fixtures/http/tmdb/discover-tv.airing.json` 與 `tv-detail.luo-xiao-hei.zh-cn.json`）：discover 帶 `page`、`total_pages`、`total_results`，每筆沒有 `media_type`；`last_episode_to_air` / `next_episode_to_air` 與季詳情的 `episodes[]` 同一種形狀（`season_number`、`episode_number`、`air_date`、`runtime`，未播的 `runtime` 是 `null`），完結的作品 `next_episode_to_air` 是 `null`。
 
 **Seerr（前 Jellyseerr / Overseerr）**（細節：[研究](research/anime-episode-source.md#203-seerr)）
