@@ -11,6 +11,8 @@
   跟著看，斷線照跑完。`GET /agent/conversations/{id}/stream?turn=<id>` 重連（Vercel AI SDK 的
   `resumeStream`），從第一個片段重播再跟著，沒有在跑的 204；`POST /agent/conversations/{id}/stop`
   停下它，說明經每一條跟著看的串流送到。
+- 伺服器端工具（Anthropic `web_search`）的結果每筆帶 `encrypted_content`，只給服務端重播：串流與
+  重新載入兩條路都在這裡拿掉（M5.5 票 03），存著的歷史不動。
 - `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
   斷路器暫停到什麼時候、為什麼（票 20）。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
@@ -48,6 +50,7 @@ from pydantic_ai.ui.vercel_ai.response_types import (
     ErrorChunk,
     FinishChunk,
     StartChunk,
+    ToolOutputAvailableChunk,
 )
 
 from berth.api.deps import (
@@ -399,7 +402,23 @@ async def _relay(adapter: ServerHistoryAdapter, turn: Turn) -> AsyncGenerator[Ba
             note, stop = await turn.stopped(chunk.error_text)
             yield _stop_chunk(TurnStopOut.of(stop, note))
             continue
+        if isinstance(chunk, ToolOutputAvailableChunk) and chunk.provider_executed:
+            chunk.output = _unsealed(chunk.output)
         yield chunk
+
+
+#: 伺服器端工具（Anthropic `web_search`）每筆結果帶的不透明內容：只給服務端重播，一次 10 筆就有
+#: 兩三萬字。送到瀏覽器之前拿掉（M5.5 票 03），存著的歷史不動，下一次模型呼叫要用。
+_SEALED = "encrypted_content"
+
+
+def _unsealed(output: Any) -> Any:
+    """伺服器端工具的結果拿掉 `encrypted_content`（`web_search` 是一串結果，錯誤是一個物件）。"""
+    if isinstance(output, list):
+        return [_unsealed(item) for item in output]
+    if isinstance(output, dict):
+        return {key: value for key, value in output.items() if key != _SEALED}
+    return output
 
 
 def _ending(note: str, stop: TurnStop) -> list[BaseChunk]:
@@ -505,8 +524,12 @@ def _stop_chunk(stop: TurnStopOut) -> DataChunk:
 
 
 def _with_stop(message: UIMessage, stops: Mapping[str, TurnStop]) -> dict[str, Any]:
-    """停下的說明那一則換成與串流同一個 `data-stop`；其餘照原樣。"""
+    """停下的說明那一則換成與串流同一個 `data-stop`；伺服器端工具的結果拿掉 `encrypted_content`
+    （同串流）；其餘照原樣。"""
     dumped = message.model_dump(mode="json", by_alias=True, exclude_none=True)
+    for part in dumped["parts"]:
+        if part.get("providerExecuted") and "output" in part:
+            part["output"] = _unsealed(part["output"])
     metadata = dumped.get("metadata") or {}
     if not metadata.pop(_STOP_NOTE, False):
         return dumped
