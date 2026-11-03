@@ -1,6 +1,6 @@
 # 06 — 升級後自動重算
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** None (can start immediately；排在 04、05 之後做，升級時才會用新規則重算被誤擋的列)
 
@@ -19,7 +19,15 @@
 
 ## 驗收
 
-- [ ] 整合測試：舊版本的 `review` 重算成新版本；`engine = user` 與 `audit_undone` 不動
-- [ ] 同版本重啟不重算，`tmdb` 請求數為 0（fake client 計數）
-- [ ] 啟動不等重算做完（測試）
-- [ ] 全部檢查、pytest 綠；progress.md 已更新
+- [x] 整合測試：舊版本的 `review` 重算成新版本；`engine = user` 與 `audit_undone` 不動
+- [x] 同版本重啟不重算，`tmdb` 請求數為 0（fake client 計數）
+- [x] 啟動不等重算做完（測試）
+- [x] 全部檢查、pytest 綠；progress.md 已更新
+
+## Comments
+
+- **做法**：`plan.replan_outdated` 只把挑到的列 CAS 退回 `completed`、寫 `retried(state=completed, engine_version=舊版本)`（actor `system`，時間線照「重新規劃」那一句顯示），lifespan 在迴圈起來前呼叫、有挑到才 `nudge` 規劃器。算在 `planner_runner` 那一輪，啟動不碰 TMDB。
+- **測試**：`tests/integration/test_replan_outdated.py`。啟動那一條用讀詳情時停住的 TMDB 替身：lifespan 五秒內起來、Job 停在 `planning`，放行後落回 `review` 且蓋上新版本；連跑 20 次綠。變異：拿掉 `engine` / `audit_undone` / 版本條件、啟動同步算一輪，各自有測試變紅；`requests == []` 單獨也抓得到。
+- **TMDB 連不上**：沿用 `snapshot_for_planning` 的「失敗不擋」，用存著的快照照算、照樣蓋上新版本，不是字面上的「下一輪再算」；規劃本身爆掉才由 `guarded` 下一輪再算。
+- **code-review 未處理的發現**：importer 擋下的 `target_exists` 也會被挑中，重算後多半入庫時又撞回 `review`（時間線多三筆）；spec 只排除 `audit_undone`，照 spec 沒排除。`engine_version` 是空字串的舊列也算舊版本。`PlanEngine.AI` 現在沒人寫，將來有 AI 計劃時這裡要重想（目前條件是 `!= user`，會被規則蓋掉）。`PlanSummary.model_validate(plan.summary_json or {})` 在 services 裡第七次出現，沒收成 helper。
+- **驗證**：`uv run pre-commit run --all-files` 全過；`uv run pytest -q -n auto` 5467 passed, 1 skipped。

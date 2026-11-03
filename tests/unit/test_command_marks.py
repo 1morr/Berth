@@ -179,6 +179,7 @@ NAMED: dict[str, CommandMark] = {
     "plan.sweep_plans": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
     "reconcile.reconcile_once": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
     "jobs.fail_interrupted": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
+    "plan.replan_outdated": _mark(Effect.REVERSIBLE, Flag.INTERNAL),
     # 排「可以看了」的通知，同 `sweep.sweep_once`。
     "resolver.sweep_resolutions": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL, Flag.SENDS_OUT),
     # 詳情頁的讀：快照是 TMDB 的快取，過期順手重抓不算改東西。按「重新整理」就是要換標題與
