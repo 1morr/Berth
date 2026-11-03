@@ -47,12 +47,14 @@ from berth.domain import (
     NotificationKind,
     NotificationStatus,
     NotifyRefusal,
+    OverdueReason,
     PlanAction,
     Role,
 )
 from berth.logs import job_context
 from berth.models import (
     BerthSettings,
+    Issue,
     JellyfinSettings,
     Job,
     LedgerEntry,
@@ -112,6 +114,9 @@ _TEXT: dict[Language, dict[str, str]] = {
         "issue_list": "打開 Issue",
         "rss_list": "打開 RSS",
         "lingering": "有一件等了 {days} 天",
+        "overdue_late": "{title} {episodes}",
+        "overdue_next_run": "{title} {episodes}（可能是下一輪）",
+        "overdue_more": "等 {count} 部",
         "weekly": "週報：{first} – {last}",
         "weekly_body": "入庫 {works} 部（{episodes} 集）· 修了 {fixed} 件 · 等你處理 {waiting} 件",
         "weekly_open": "打開週報",
@@ -138,6 +143,9 @@ _TEXT: dict[Language, dict[str, str]] = {
         "issue_list": "Open issues",
         "rss_list": "Open RSS",
         "lingering": "Waiting for {days} days",
+        "overdue_late": "{title} {episodes}",
+        "overdue_next_run": "{title} {episodes} (possibly the next run)",
+        "overdue_more": "and {count} more",
         "weekly": "Weekly report: {first} – {last}",
         "weekly_body": (
             "{works} titles imported ({episodes} episodes) · {fixed} fixed · {waiting} waiting"
@@ -194,6 +202,10 @@ _ISSUE_LABEL: dict[Language, dict[IssueType, str]] = {
         IssueType.EPISODES_OVERDUE: "overdue",
     },
 }
+
+#: 「等你處理」的內文最多列幾部遲到的作品（M5.5 票 13），其餘寫「等 N 部」：一波遲到多半是同一個
+#: 早上巡檢開的，一次十幾部時訊息只是一張清單，點進追更頁看比較清楚。
+_OVERDUE_SHOWN = 5
 
 #: 這幾種是管道本身送不出去，不是這一位收件人的事：這一輪不再送下一則。
 _CHANNEL_DOWN = frozenset(
@@ -782,6 +794,7 @@ async def send_due(
         if any(notification.kind is NotificationKind.WAITING for notification, _ in rows)
         else {}
     )
+    overdue = await _overdue_details(session, current)
     await session.commit()
     if not rows:
         return SendOutcome(sent=0, failed=0)
@@ -808,7 +821,7 @@ async def send_due(
         ):
             await session.commit()
             continue
-        delivery = await _deliver(bot, notification, user, berth_url, current)
+        delivery = await _deliver(bot, notification, user, berth_url, current, overdue)
         if delivery is None:
             failed += 1
             await session.commit()
@@ -913,12 +926,15 @@ async def _deliver(
     user: User,
     berth_url: str,
     current: dict[str, Waiting],
+    overdue: dict[int, dict[str, Any]],
 ) -> Delivery | None:
     """組字、送出。出了例外記在那一則上、回 `None`：組不成句子的再組也一樣，當場放棄；管道丟出來的
     （說好不丟）不知道送到了沒，留著下一輪再送，滿 `GIVE_UP_AFTER` 才放棄。"""
     try:
         if notification.kind is NotificationKind.WAITING:
-            message = _render_waiting(notification, user.notify_language, berth_url, current)
+            message = _render_waiting(
+                notification, user.notify_language, berth_url, current, overdue
+            )
         elif notification.kind is NotificationKind.WEEKLY:
             message = _render_weekly(notification, user.notify_language, berth_url)
         else:
@@ -1072,12 +1088,17 @@ def _render(notification: Notification, language: Language, berth_url: str) -> M
 
 
 def _render_waiting(
-    notification: Notification, language: Language, berth_url: str, current: dict[str, Waiting]
+    notification: Notification,
+    language: Language,
+    berth_url: str,
+    current: dict[str, Waiting],
+    overdue: dict[int, dict[str, Any]],
 ) -> Message:
     """「有 N 件等你處理」（M4 票 127）：標題是現在的總數，內文是這一波新增、還沒處理掉的那幾件
-    （種類與數量），每一種現在幾件放在欄位。只剩一件時連到那一件，否則每一種一條清單連結。"""
+    （種類與數量），每一種現在幾件放在欄位。只剩一件時連到那一件，否則每一種一條清單連結。
+    這一波有遲到的，內文下面再一部一行（`_overdue_lines`，M5.5 票 13）。"""
     if notification.merge_key == _LINGER_KEY:
-        return _render_lingering(notification, language, berth_url, current)
+        return _render_lingering(notification, language, berth_url, current, overdue)
     text = _TEXT[language]
     still = [current[key] for key in notification.content_json.get(_NEW) or () if key in current]
     by_source = {source: [one for one in still if one.source is source] for source in WaitingSource}
@@ -1097,8 +1118,11 @@ def _render_waiting(
     links = tuple(Link(label, url) for label, path in paths if (url := berth_link(berth_url, path)))
     return Message(
         title=text["waiting"].format(count=len(current)),
-        description=text["waiting_new"].format(
-            count=len(still), parts=text["waiting_gap"].join(parts)
+        description="\n".join(
+            [
+                text["waiting_new"].format(count=len(still), parts=text["waiting_gap"].join(parts)),
+                *_overdue_lines(text, language, still, overdue),
+            ]
         ),
         fields=tuple(
             (text[f"{source.value}_field"], str(count)) for source, count in totals.items() if count
@@ -1108,7 +1132,11 @@ def _render_waiting(
 
 
 def _render_lingering(
-    notification: Notification, language: Language, berth_url: str, current: dict[str, Waiting]
+    notification: Notification,
+    language: Language,
+    berth_url: str,
+    current: dict[str, Waiting],
+    overdue: dict[int, dict[str, Any]],
 ) -> Message:
     """「有一件等了 3 天」（M4 票 129）：說出是哪一種、連到那一件，每一種現在幾件放在欄位。
     呼叫之前 `_settled_wave` 已經確定它還在。"""
@@ -1122,7 +1150,12 @@ def _render_lingering(
     }
     return Message(
         title=text["lingering"].format(days=notification.content_json[_DAYS]),
-        description=_part(text, language, one.source, [one]),
+        description="\n".join(
+            [
+                _part(text, language, one.source, [one]),
+                *_overdue_lines(text, language, [one], overdue),
+            ]
+        ),
         fields=tuple(
             (text[f"{source.value}_field"], str(count)) for source, count in totals.items() if count
         ),
@@ -1169,3 +1202,49 @@ def _part(
         for kind, times in sorted(tally.items(), key=lambda pair: -pair[1])
     )
     return template.format(count=count, types=types)
+
+
+async def _overdue_details(
+    session: AsyncSession, current: dict[str, Waiting]
+) -> dict[int, dict[str, Any]]:
+    """現在開著的遲到 Issue 各自的 `detail_json`（Issue id → 它），內文寫作品名與集數用
+    （M5.5 票 13）。一部作品一件，件數就是遲到的作品數；送出一輪讀一次，在讀的交易裡。"""
+    ids = [one.ref for one in current.values() if one.issue_type is IssueType.EPISODES_OVERDUE]
+    if not ids:
+        return {}
+    rows = await session.execute(select(Issue.id, Issue.detail_json).where(Issue.id.in_(ids)))
+    return {id_: about for id_, about in rows.tuples() if about}
+
+
+def _overdue_lines(
+    text: dict[str, str],
+    language: Language,
+    items: Sequence[Waiting],
+    overdue: dict[int, dict[str, Any]],
+) -> list[str]:
+    """這幾件裡遲到的作品，一部一行：「葬送的芙莉蓮 S02E05–E06」；換輪的多說「可能是下一輪」，
+    不說成晚了。最多 `_OVERDUE_SHOWN` 部，其餘一行「等 N 部」。沒有遲到的回空的：其他種類的訊息
+    不變。句子照 `detail_json` 組（巡檢寫的 `sweep._overdue_detail`）；英文用 `title_en`，沒有的
+    （票 13 以前開的件）退回 `title`。"""
+    works = [
+        overdue[one.ref]
+        for one in items
+        if one.issue_type is IssueType.EPISODES_OVERDUE and one.ref in overdue
+    ]
+    lines = []
+    for work in works[:_OVERDUE_SHOWN]:
+        title = (
+            (work.get("title_en") or work["title"]) if language is Language.EN else work["title"]
+        )
+        episodes = describe_spans(
+            _collapse(
+                (each["season"], each["episode"], each["episode"]) for each in work["episodes"]
+            )
+        )
+        sentence = (
+            "overdue_next_run" if work.get("reason") == OverdueReason.NEXT_RUN else "overdue_late"
+        )
+        lines.append(text[sentence].format(title=title, episodes=episodes))
+    if len(works) > _OVERDUE_SHOWN:
+        lines.append(text["overdue_more"].format(count=len(works) - _OVERDUE_SHOWN))
+    return lines
