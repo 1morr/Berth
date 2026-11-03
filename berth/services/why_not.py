@@ -304,11 +304,7 @@ async def explain(
     today = utcnow().date()
     episodes = _episodes(media, snapshot, today)
 
-    jobs = list(
-        await session.scalars(
-            select(Job).where(Job.media_id == media.id).order_by(Job.added_at.desc(), Job.hash)
-        )
-    )
+    jobs = await _jobs_of(session, media)
     series = await _series(session, media.id)
     job_claims = await _job_claims(session, media, fetched, jobs, series, episodes)
     items = await _items(session, series)
@@ -382,11 +378,7 @@ async def claims_by_episode(
     """
     if media.kind is MediaKind.MOVIE:
         return {}
-    jobs = list(
-        await session.scalars(
-            select(Job).where(Job.media_id == media.id).order_by(Job.added_at.desc(), Job.hash)
-        )
-    )
+    jobs = await _jobs_of(session, media)
     claims = await _job_claims(
         session,
         media,
@@ -410,11 +402,7 @@ async def account_missing(
         return {}
     fetched = media.stored_snapshot()
     known = _episodes(media, media.snapshot(), utcnow().date())
-    jobs = list(
-        await session.scalars(
-            select(Job).where(Job.media_id == media.id).order_by(Job.added_at.desc(), Job.hash)
-        )
-    )
+    jobs = await _jobs_of(session, media)
     series = await _series(session, media.id)
     job_claims = await _job_claims(session, media, fetched, jobs, series, known)
     items = await _items(session, series, limit=TRACK_ITEM_SCAN)
@@ -578,6 +566,15 @@ async def _job_claims(
 
         claims.add(episodes.cover(planned.get(job.hash, ()), job.name, guess), job)
     return claims
+
+
+async def _jobs_of(session: AsyncSession, media: Media) -> list[Job]:
+    """這部作品的每一筆 Job，最新的在前。"""
+    return list(
+        await session.scalars(
+            select(Job).where(Job.media_id == media.id).order_by(Job.added_at.desc(), Job.hash)
+        )
+    )
 
 
 async def _series(session: AsyncSession, media_id: str) -> list[RssSeries]:

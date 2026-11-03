@@ -109,7 +109,7 @@ function WorkLink({ work }: { work: TrackedWork }) {
 function Groups({ work }: { work: TrackedWork }) {
   const { t } = useTranslation()
   if (work.groups.length === 0) return <span className="text-ink-dim">{t('tracking.noGroup')}</span>
-  return <span className="wrap-anywhere">{work.groups.join(t('weekly.typeJoin'))}</span>
+  return <span className="wrap-anywhere">{work.groups.join(t('tracking.groupJoin'))}</span>
 }
 
 function Aired({ work }: { work: TrackedWork }) {

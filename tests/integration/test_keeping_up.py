@@ -34,6 +34,7 @@ from tests.integration.test_sweep_overdue import (
     overdue,
     subscribed,
     wall,
+    work,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -87,6 +88,32 @@ class TestOneRowPerWork:
         assert work.conclusion is WhyNot.IMPORTED
         assert work.section is KeepingUpSection.ON_TIME
         assert work.imported == EpisodeMark(1, 4, AIRED)
+
+    async def test_subscribed_mid_season_with_nothing_new_since_is_caught_up(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """10/29 才訂（第 4 集 10/28 播過了），之後還沒有新的一集：沒有缺，是跟上了，不是還沒播。"""
+        await work(session)
+        series = RssSeries(
+            key="mikan:3600:583",
+            title_raw="[mikan:3600:583] Kimi to Koishitai - 01",
+            reasons_json=[],
+            media_id=MEDIA,
+            created_at=datetime(2026, 10, 29, 3, 0).astimezone(),
+        )
+        feed = RssFeed(name="mikan", url="https://mikanani.me/RSS/x", kind=FeedKind.MIKAN)
+        session.add_all([series, feed])
+        await session.flush()
+        session.add(RssItem(feed_id=feed.id, guid="x", title=series.title_raw, series_id=series.id))
+        await session.commit()
+        at(wall(31), monkeypatch)
+
+        work_row = await only(session)
+
+        assert work_row.aired == EpisodeMark(1, 4, AIRED)
+        assert work_row.imported is None
+        assert work_row.conclusion is WhyNot.IMPORTED
+        assert work_row.section is KeepingUpSection.ON_TIME
 
     async def test_unsubscribed_works_are_not_listed(
         self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch

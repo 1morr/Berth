@@ -18,7 +18,7 @@ from berth.domain import (
     OverdueStall,
     SeasonSnapshot,
 )
-from berth.parser.overdue import Overdue, OverdueJob, Watch, judge_overdue, watch_overdue
+from berth.parser.overdue import Overdue, OverdueJob, Watch, watch_overdue
 
 #: 容器時區（台北）：牆上的時刻才是門檻的單位。
 TZ = timezone(timedelta(hours=8))
@@ -75,14 +75,14 @@ def judge(
     threshold_days: int = 2,
 ) -> Overdue | None:
     held = {(1, 1), (1, 2), (1, 3)} if imported is None else imported
-    return judge_overdue(
+    return watch_overdue(
         media,
         imported=held if isinstance(held, Mapping) else dict.fromkeys(held, LANDED),
         claims=claims or {},
         subscribed=subscribed or (noon(watched_since),),
         now=now,
         threshold_days=threshold_days,
-    )
+    ).overdue
 
 
 def late(
@@ -365,7 +365,7 @@ class TestWatch:
     def test_late_once_past_the_threshold_matches_the_judgement(self) -> None:
         seen = watch(now=at(31))
         assert [(one.season, one.episode) for one in seen.late] == [(1, 4)]
-        assert seen.overdue == judge(now=at(31))
+        assert late(seen.overdue) == [(1, 4, OverdueStall.NOT_RELEASED)]
 
     def test_caught_up_has_nothing_missing(self) -> None:
         seen = watch(now=at(27), imported=((1, 1), (1, 2), (1, 3)))

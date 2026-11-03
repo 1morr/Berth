@@ -1,6 +1,7 @@
 """訂閱的作品有沒有按時入庫（M5.5 票 10，spec〈範圍〉「遲到判定」）。
 
-一部作品一個結果，呼叫端（`services.sweep`）把它寫成一件 `episodes_overdue`。
+一部作品一個結果（`watch_overdue`）：巡檢（`services.sweep`）把它寫成一件 `episodes_overdue`，追更頁
+（`services.keeping_up`，M5.5 票 12）照它分段。
 
 - **基準**：作品最後入庫的一集，不分來源（另一個字幕組、手動送的都算）；還沒入庫過時，從作品
   最早的 RSS Series 建立那天之後播出的第一集算。基準之前的洞歸 `series_episodes_missing`。
@@ -58,7 +59,7 @@ class OverdueJob:
 
     hash: str
     state: JobState
-    #: 已經在等你處理：有開著或被忽略、說著它現在這個狀態的 Issue（`sweep._covered`）。
+    #: 已經在等你處理：有開著或被忽略、說著它現在這個狀態的 Issue（`issues.covered_jobs`）。
     waiting: bool = False
 
 
@@ -81,8 +82,8 @@ class Overdue:
 
 @dataclass(frozen=True, slots=True)
 class Watch:
-    """一部作品這一刻的追更（M5.5 票 12）：遲到判定的每一段都留著，追更頁照它分段，`judge_overdue`
-    從它收成一件 Issue。"""
+    """一部作品這一刻的追更（M5.5 票 12）：遲到判定的每一段都留著，追更頁照它分段，巡檢
+    從它收成一件 Issue（`overdue`）。"""
 
     reason: OverdueReason
     #: 過了門檻、不在兩種例外裡的集，照季集排；視窗過了也照列（`dormant` 說不提醒）。
@@ -98,26 +99,6 @@ class Watch:
         if not self.late or self.dormant:
             return None
         return Overdue(reason=self.reason, episodes=self.late)
-
-
-def judge_overdue(
-    media: MediaSnapshot,
-    *,
-    imported: Mapping[tuple[int, int], datetime],
-    claims: Mapping[tuple[int, int], Sequence[OverdueJob]],
-    subscribed: Collection[datetime],
-    now: datetime,
-    threshold_days: int,
-) -> Overdue | None:
-    """這部作品晚了沒；沒有晚的集（或過了視窗）是 `None`。參數同 `watch_overdue`。"""
-    return watch_overdue(
-        media,
-        imported=imported,
-        claims=claims,
-        subscribed=subscribed,
-        now=now,
-        threshold_days=threshold_days,
-    ).overdue
 
 
 def watch_overdue(

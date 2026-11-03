@@ -114,7 +114,7 @@ function MainNav({ admin }: { admin: boolean }) {
       <SectionLink section={AIRING} admin={admin} />
       <NavLink to="/library">{t('nav.inventory')}</NavLink>
       <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
-      {(admin || !WAITING.adminOnly) && <SectionLink section={WAITING} admin={admin} />}
+      <SectionLink section={WAITING} admin={admin} />
     </nav>
   )
 }

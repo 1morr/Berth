@@ -9,7 +9,7 @@ import { countedName, inSection, sectionCount, sectionPages, type Section } from
 
 /**
  * 管一整個區塊的導覽項：連到區塊的第一頁，在區塊的每一頁上都是當前。件數是各分頁件數的和，
- * 只有 admin（`GET /waiting` 對其他人 403）。
+ * 只有 admin（`GET /waiting` 對其他人 403）。只給 admin 的區塊（待處理）對其他人不畫。
  *
  * 不用 `NAV_LINK` 的 `data-status`：TanStack 只在連結自己那條路徑上掛它，在 `/issues` 上「待處理」
  * （連 `/review`）不會亮。`aria-current` 照實說：在它連的那一頁是 `page`，在區塊的別頁是 `true`——它不是
@@ -25,6 +25,8 @@ export function SectionLink({ section, admin }: { section: Section; admin: boole
   const exact = pathname === to
   const label = t(section.label)
   const count = admin ? sectionCount(section, counts) : undefined
+  // 誰看得到這一項由區塊說（`sections.ts`），呼叫端不另外判斷；後端同時回 403。
+  if (section.adminOnly && !admin) return null
 
   return (
     <Link

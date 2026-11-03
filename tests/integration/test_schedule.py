@@ -50,7 +50,7 @@ from berth.models import (
     RssSettings,
     TmdbSettings,
 )
-from berth.services import keeping_up, schedule
+from berth.services import schedule
 from berth.services.schedule import read_schedule
 from berth.services.settings import read_settings, write_settings
 from tests.conftest import TMDB_API_KEY
@@ -449,11 +449,8 @@ class TestLate:
     """卡片那一集是遲到判定裡晚的集時是「晚 N 天」（M5.5 票 12），N 從播出日算；已入庫仍優先。"""
 
     async def test_a_late_episode_says_how_many_days_since_it_aired(
-        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+        self, session: AsyncSession
     ) -> None:
-        monkeypatch.setattr(
-            keeping_up, "local_now", lambda: datetime(2026, 11, 4, 5, 0).astimezone()
-        )
         factory = await credentialled(session, tmdb())
         apothecary = await add_media(session, APOTHECARY)
         media = await session.get(Media, apothecary)

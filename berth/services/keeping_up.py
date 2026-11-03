@@ -2,7 +2,7 @@
 `.scratch/m5.5/tracking-shape.md`）。頁面在 `/schedule/tracking`；它不是 Tracked Media
 （`services.tracking`）。
 
-**對象與遲到提醒同一群**（`watched_series`）：現在還訂著、帶著 Item 的綁好的 RSS Series 的作品。
+**對象與遲到提醒同一群**（`watched_works`）：現在還訂著、帶著 Item 的綁好的 RSS Series 的作品。
 頁面與每日巡檢開的 `episodes_overdue` 說的是同一群作品、同一套判定（`parser.overdue.watch_overdue`，
 `watch_work` 是兩邊共用的那一支），所以頁上「晚 N 天」的那幾部就是 Issue 上的那幾部。
 
@@ -119,7 +119,7 @@ async def read_keeping_up(session: AsyncSession) -> KeepingUpView:
     now = local_now()
     fallback = (await read_settings(session, RssSettings)).overdue_days
     works: list[TrackedWork] = []
-    for media_id, rows in sorted(_by_work(await watched_series(session)).items()):
+    for media_id, rows in (await watched_works(session)).items():
         media = await session.get(Media, media_id)
         if media is None:
             continue
@@ -133,18 +133,18 @@ async def _track(
     session: AsyncSession, media: Media, rows: Sequence[RssSeries], *, now: datetime, fallback: int
 ) -> TrackedWork:
     snapshot = media.stored_snapshot()
-    shown = media.snapshot()
+    display = media.snapshot()
     imported = await imported_episodes(session, media.id)
     groups = _groups(rows)
-    held = max((pair for pair in imported if pair[0] > 0), default=None)
+    newest = max((pair for pair in imported if pair[0] > 0), default=None)
     if snapshot is None:
         return TrackedWork(
             media_id=media.id,
-            title=shown.title,
-            title_en=shown.title_en,
+            title=display.title,
+            title_en=display.title_en,
             groups=groups,
             aired=None,
-            imported=None if held is None else EpisodeMark(*held, None),
+            imported=None if newest is None else EpisodeMark(*newest, None),
             conclusion=None,
             stalled=False,
             section=KeepingUpSection.ON_TIME,
@@ -159,7 +159,7 @@ async def _track(
     accounts = await account_missing(
         session, media, [pair for pair in on_air if pair not in imported]
     )
-    seen = await watch_work(
+    watch = await watch_work(
         session,
         snapshot,
         rows,
@@ -168,31 +168,32 @@ async def _track(
         now=now,
         fallback=fallback,
     )
-    missing = [accounts[pair] for pair in seen.missing if pair in accounts]
+    missing = [accounts[pair] for pair in watch.missing if pair in accounts]
+    latest = max(on_air, default=None)
     if missing:
         conclusion = overall(account.conclusion for account in missing)
     else:
-        conclusion = WhyNot.IMPORTED if held is not None else WhyNot.UNAIRED
+        # 基準之後沒有缺：跟上了（季中訂閱、之後還沒有新的一集也是）；一集都還沒播才是還沒播。
+        conclusion = WhyNot.IMPORTED if latest is not None else WhyNot.UNAIRED
     stalled = any(account.stalled for account in missing)
-    late = () if seen.dormant else seen.late
-    if seen.dormant:
+    late = () if watch.dormant else watch.late
+    if watch.dormant:
         section = KeepingUpSection.DORMANT
     elif late or stalled or conclusion in _NEEDS_YOU:
         section = KeepingUpSection.ACTION
     else:
         section = KeepingUpSection.ON_TIME
-    latest = max(on_air, default=None)
     return TrackedWork(
         media_id=media.id,
-        title=shown.title,
-        title_en=shown.title_en,
+        title=display.title,
+        title_en=display.title_en,
         groups=groups,
         aired=None if latest is None else EpisodeMark(*latest, dates[latest]),
-        imported=None if held is None else EpisodeMark(*held, dates.get(held)),
+        imported=None if newest is None else EpisodeMark(*newest, dates.get(newest)),
         conclusion=conclusion,
         stalled=stalled,
         section=section,
-        reason=seen.reason if late else None,
+        reason=watch.reason if late else None,
         late_days=(today - min(one.air_date for one in late)).days if late else None,
         late=late,
     )
@@ -237,30 +238,25 @@ def _air_dates(snapshot: MediaSnapshot) -> dict[tuple[int, int], date | None]:
     }
 
 
-def _by_work(rows: Sequence[RssSeries]) -> dict[str, list[RssSeries]]:
-    by_work: dict[str, list[RssSeries]] = {}
-    for row in rows:
-        # `watched_series` 只回綁好的。
-        assert row.media_id is not None
-        by_work.setdefault(row.media_id, []).append(row)
-    return by_work
-
-
 # --- 與巡檢共用 ---------------------------------------------------------------------
 
 
 # 巡檢（`services.sweep`）與時間表讀它：回 ORM 列，不進登錄表。
 @command(Effect.READ, flags={Flag.INTERNAL})
-async def watched_series(session: AsyncSession) -> list[RssSeries]:
-    """遲到看的對象：綁好、還帶著 Item 的 RSS Series，而且它那部作品現在有訂閱
-    （`rss.subscribed_media`，與作品頁的訂閱清單同一套判定）。刪掉 Feed 只刪 Feed，Series 與綁定
-    留著（`delete_feed`），退訂了就不看（協調者追加，票 10 的缺陷）。"""
+async def watched_works(session: AsyncSession) -> dict[str, list[RssSeries]]:
+    """遲到看的對象，照作品分好（作品 id 排序）：綁好、還帶著 Item 的 RSS Series，而且它那部作品
+    現在有訂閱（`rss.subscribed_media`，與作品頁的訂閱清單同一套判定）。刪掉 Feed 只刪 Feed，Series
+    與綁定留著（`delete_feed`），退訂了就不看（協調者追加，票 10 的缺陷）。"""
     bound = list(await session.scalars(select(RssSeries).where(RssSeries.media_id.is_not(None))))
     live = await subscribed_media(session, [row.media_id for row in bound if row.media_id])
     # 作品還訂著時，Feed 被刪的那幾條也不算（門檻、換輪、起算日都不看它）：刪 Feed 連 Item 一起刪，
     # 還掛著 Item 的才是還在送的那一條。
     carrying = set(await session.scalars(select(RssItem.series_id).distinct()))
-    return [row for row in bound if row.media_id in live and row.id in carrying]
+    works: dict[str, list[RssSeries]] = {}
+    for row in bound:
+        if row.media_id in live and row.id in carrying:
+            works.setdefault(row.media_id, []).append(row)
+    return dict(sorted(works.items()))
 
 
 @command(Effect.READ, flags={Flag.INTERNAL})
@@ -281,7 +277,7 @@ async def imported_episodes(
     return landed
 
 
-def threshold_of(rows: Collection[RssSeries], fallback: int) -> int:
+def _threshold_of(rows: Collection[RssSeries], fallback: int) -> int:
     """作品的門檻：每一條 Series 的門檻（沒覆寫的用全域 `fallback`）取最大值。"""
     return max(fallback if row.overdue_days is None else row.overdue_days for row in rows)
 
@@ -315,39 +311,56 @@ async def watch_work(
         },
         subscribed=[row.created_at for row in rows],
         now=now,
-        threshold_days=threshold_of(rows, fallback),
+        threshold_days=_threshold_of(rows, fallback),
+    )
+
+
+# 巡檢（`services.sweep`）與時間表讀它：收 ORM 列，不進登錄表。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def watch_of(
+    session: AsyncSession,
+    media: Media,
+    rows: Collection[RssSeries],
+    *,
+    now: datetime,
+    fallback: int,
+) -> Watch | None:
+    """`watch_work` 加上它要的材料（帳本與 `why_not.claims_by_episode`）；沒有 TMDB 快照的作品說不出
+    哪一集播了，是 `None`。追更頁另外要每一集的結論，自己湊材料（`_track`）。"""
+    snapshot = media.stored_snapshot()
+    if snapshot is None:
+        return None
+    return await watch_work(
+        session,
+        snapshot,
+        rows,
+        imported=await imported_episodes(session, media.id),
+        claimed=await claims_by_episode(session, media),
+        now=now,
+        fallback=fallback,
     )
 
 
 # 時間表（`services.schedule`）讀它。
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def late_by_work(
-    session: AsyncSession, media_ids: Collection[str]
+    session: AsyncSession, media_ids: Collection[str], *, now: datetime
 ) -> dict[str, dict[tuple[int, int], date]]:
     """`media_ids` 裡訂閱著的作品各有哪幾集晚了（季集 → 播出日），同追更頁的「晚 N 天」：過了
-    60 天視窗的不算。沒有晚的集的作品不在裡面。"""
+    60 天視窗的不算。沒有晚的集的作品不在裡面。`now` 是呼叫端的容器時區現在（時間表的那一支
+    時鐘）。"""
     wanted = set(media_ids)
     if not wanted:
         return {}
-    now = local_now()
     fallback = (await read_settings(session, RssSettings)).overdue_days
     found: dict[str, dict[tuple[int, int], date]] = {}
-    for media_id, rows in sorted(_by_work(await watched_series(session)).items()):
-        if media_id not in wanted:
+    for media_id, rows in (await watched_works(session)).items():
+        media = await session.get(Media, media_id) if media_id in wanted else None
+        if media is None:
             continue
-        media = await session.get(Media, media_id)
-        snapshot = media.stored_snapshot() if media is not None else None
-        if media is None or snapshot is None:
-            continue
-        seen = await watch_work(
-            session,
-            snapshot,
-            rows,
-            imported=await imported_episodes(session, media_id),
-            claimed=await claims_by_episode(session, media),
-            now=now,
-            fallback=fallback,
-        )
-        if seen.late and not seen.dormant:
+        seen = await watch_of(session, media, rows, now=now, fallback=fallback)
+        if seen is not None and seen.late and not seen.dormant:
             found[media_id] = {(one.season, one.episode): one.air_date for one in seen.late}
+        # 一部要猜好幾個發佈名的季集，一部讓出一次迴圈（同 `read_keeping_up`）。
+        await asyncio.sleep(0)
     return found

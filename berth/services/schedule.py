@@ -210,7 +210,9 @@ async def read_schedule(session: AsyncSession, factory: ServiceClientFactory) ->
     finally:
         second.cancel()
 
-    return ScheduleWeek(start, end, today, await _cards(session, slots, layer, utc_now(), today))
+    # 「晚了沒」與卡片的天數照同一支時鐘（`local_today`）：牆上這一刻換成時間表的今天。
+    moment = datetime.combine(today, datetime.now().astimezone().timetz())
+    return ScheduleWeek(start, end, today, await _cards(session, slots, layer, utc_now(), moment))
 
 
 async def _slots(
@@ -352,7 +354,7 @@ async def _cards(
     slots: tuple[ScheduleSlot, ...],
     layer: SecondLayer,
     now: datetime,
-    today: date,
+    moment: datetime,
 ) -> tuple[ScheduleCard, ...]:
     """骨架加上這一刻的狀態，一次問一整週（不是逐張一句查詢）。
 
@@ -361,7 +363,7 @@ async def _cards(
     """
     wanted = list({slot.media_id for slot in slots})
     subscribed = await subscribed_media(session, wanted)
-    late = await late_by_work(session, subscribed)
+    late = await late_by_work(session, subscribed, now=moment)
     imported: set[tuple[str, int, int]] = set()
     if wanted:
         for row in await session.scalars(
@@ -387,7 +389,6 @@ async def _cards(
     def card(slot: ScheduleSlot) -> ScheduleCard:
         key = match_key(slot.original_title)
         found = _rating(slot, ratings.get(key, []))
-        shown = status(slot)
         return ScheduleCard(
             media_id=slot.media_id,
             tmdb_id=slot.tmdb_id,
@@ -398,8 +399,8 @@ async def _cards(
             air_date=slot.air_date,
             season=slot.season,
             episode=slot.episode,
-            status=shown,
-            late_days=(today - slot.air_date).days if shown is ScheduleStatus.LATE else None,
+            status=status(slot),
+            late_days=_late_days(late, slot, moment.date()),
             airs_at=_airs_at(slot, airings.get(key, []), now),
             score=found.score if found else None,
             votes=found.votes if found else None,
@@ -410,6 +411,14 @@ async def _cards(
     return tuple(
         sorted(cards, key=lambda card: (card.air_date, card.status is ScheduleStatus.UNSUBSCRIBED))
     )
+
+
+def _late_days(
+    late: dict[str, dict[tuple[int, int], date]], slot: ScheduleSlot, today: date
+) -> int | None:
+    """卡片那一集晚了幾天：從遲到判定看到的播出日（作品的快照）算到今天，與追更頁同一個數。"""
+    aired = late.get(slot.media_id, {}).get((slot.season, slot.episode))
+    return None if aired is None else (today - aired).days
 
 
 def match_key(title: str) -> str:

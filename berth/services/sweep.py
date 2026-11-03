@@ -74,12 +74,11 @@ from berth.services.issues import (
     record_issue,
     still_ignored,
 )
-from berth.services.keeping_up import imported_episodes, watch_work, watched_series
+from berth.services.keeping_up import imported_episodes, watch_of, watched_works
 from berth.services.media import refresh_snapshot
 from berth.services.notify import queue_lingering
 from berth.services.settings import read_settings, write_settings
 from berth.services.waiting import WaitingSource, waiting_now
-from berth.services.why_not import claims_by_episode
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +172,7 @@ async def refresh_watched(session: AsyncSession, factory: ServiceClientFactory) 
     庫的（不會再有新的一集）。量級：一部 5–7 次請求，20 部約 100–150 次，全域桶每秒 40 次。
     """
     failed: set[str] = set()
-    for media_id in sorted({row.media_id for row in await watched_series(session) if row.media_id}):
+    for media_id in await watched_works(session):
         media = await session.get(Media, media_id)
         snapshot = media.stored_snapshot() if media is not None else None
         if (
@@ -397,44 +396,33 @@ async def _overdue_works(
 
     日界照容器時區（`moment.astimezone()`）：巡檢迴圈給的就是牆上的 05:00。每一集蓋到哪幾筆 Job
     讀 `why_not.claims_by_episode`；Job 已經有 Issue 說著它現在這個狀態的，查法同第一批卡住
-    （`_covered`）。門檻是作品上每一條 Series 的門檻（沒覆寫的用全域）取最大值。沒有 TMDB 快照的
-    作品說不出哪一集播了，不開。**`unrefreshed` 的作品這一輪不開也不收**（巡檢前刷新失敗，
-    `refresh_watched`）：舊快照看不到剛播出的集，也可能讓已經對的那一件被收掉。
+    （`issues.covered_jobs`）。判定與追更頁共用 `keeping_up.watch_of`。門檻是作品上每一條 Series 的
+    門檻（沒覆寫的用全域）取最大值。沒有 TMDB 快照的作品說不出哪一集播了，不開。
+    **`unrefreshed` 的作品這一輪不開也不收**（巡檢前刷新失敗，`refresh_watched`）：舊快照看不到
+    剛播出的集，也可能讓已經對的那一件被收掉。
     """
     local = moment.astimezone()
-    by_work: dict[str, list[RssSeries]] = {}
-    for series in await watched_series(session):
-        # `watched_series` 只回綁好的。
-        assert series.media_id is not None
-        by_work.setdefault(series.media_id, []).append(series)
     fallback = (await read_settings(session, RssSettings)).overdue_days
 
     flagged: set[tuple[IssueType, str]] = set()
-    for media_id, rows in sorted(by_work.items()):
+    for media_id, rows in (await watched_works(session)).items():
         if media_id in unrefreshed:
             continue
         media = await session.get(Media, media_id)
-        snapshot = media.stored_snapshot() if media is not None else None
-        if media is None or snapshot is None:
+        watch = (
+            await watch_of(session, media, rows, now=local, fallback=fallback)
+            if media is not None
+            else None
+        )
+        found = watch.overdue if watch is not None else None
+        if media is None or found is None:
             continue
-        found = (
-            await watch_work(
-                session,
-                snapshot,
-                rows,
-                imported=await imported_episodes(session, media_id),
-                claimed=await claims_by_episode(session, media),
-                now=local,
-                fallback=fallback,
-            )
-        ).overdue
-        if found is None:
-            continue
+        shown = media.snapshot()
         await record_issue(
             session,
             IssueType.EPISODES_OVERDUE,
             media_id=media_id,
-            detail=_overdue_detail(media_id, snapshot.title, snapshot.title_en, found),
+            detail=_overdue_detail(media_id, shown.title, shown.title_en, found),
             now=moment,
         )
         flagged.add((IssueType.EPISODES_OVERDUE, media_id))

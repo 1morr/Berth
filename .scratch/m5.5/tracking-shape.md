@@ -11,7 +11,7 @@
 
 ## 對象與欄位
 
-- **哪幾部**：與遲到提醒同一份對象（`sweep._watched_series`：現在還訂著、帶著 Item 的綁好的 RSS Series 的作品）。頁面與 Issue 說的是同一群作品。
+- **哪幾部**：與遲到提醒同一份對象（`keeping_up.watched_works`：現在還訂著、帶著 Item 的綁好的 RSS Series 的作品）。頁面與 Issue 說的是同一群作品。
 - **作品**：顯示用標題（Display Round），連 `/media/:id`。
 - **字幕組**：作品上每一條 Series 的字幕組名（Mikan 的 subgroup，沒有就從發佈名讀），多條以 `、` / `, ` 接。
 - **已播到**：TMDB 上最新播出的一集（第 0 季不看）`S02E05` 加播出日；沒播過寫「還沒播」。

@@ -87,11 +87,12 @@ test('管理員：五個導覽項帶件數、帳號選單用鍵盤開關、舊�
     ['/weekly', '/weekly', '週報'],
     [`/weekly/${latest!.id}`, `/weekly/${latest!.id}`, '週報'],
   ]
-  // 新番：時間表與訂閱兩個分頁（M5.5 票 09），訂閱帶待綁定的件數。
+  // 新番：時間表、追更（M5.5 票 12）與訂閱三個分頁，訂閱帶待綁定的件數。
   await page.goto('/rss')
   const airing = page.getByRole('navigation', { name: '新番' })
-  await expect(airing.getByRole('link')).toHaveCount(2)
+  await expect(airing.getByRole('link')).toHaveCount(3)
   await expect(airing.getByRole('link', { name: '時間表' })).toBeVisible()
+  await expect(airing.getByRole('link', { name: '追更' })).toBeVisible()
   await expect(airing.getByRole('link', { name: `訂閱 ${counts.rss} 件` })).toHaveAttribute(
     'aria-current',
     'page',
