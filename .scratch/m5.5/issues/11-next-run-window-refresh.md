@@ -38,6 +38,7 @@
 - 巡檢前刷新：`media.refresh_snapshot`（`_load` 抽出不組視圖的 `_pull`；`snapshot_for_planning` 也改走它）、`sweep.refresh_watched`，`Sweeper` 多收 `clients`。失敗看 `_pull` 的回傳型別（與看 `tmdb_fetched_at` 等價）；非服務錯誤逐部接住、rollback、記成那一部失敗。**沒設 TMDB key 時每一部都算刷新失敗**，已開的遲到不會被收掉，直到有 key（照「不開也不收」的字面）。
 - Issue 頁 `reason = next_run` 時多一行「可能是下一輪」（票 12 的追更頁另做）。
 - `rss-sweep` 替身情境：SPY×FAMILY 是 2022 年播的，過了 60 天視窗，不再開遲到；Series 掛到 Mikan 聚合 feed 的一筆「略過」Item 上（還訂著）。票 12、13 若要遲到的替身，要另做有近期播出日的作品。
+- 前端 e2e（協調者要求，合併前）：重新 build 後 `pnpm -C web exec playwright test` 85 passed（2.7 分），8484–8534 跑前沒人佔。
 - playwright：`rss-sweep` 實跑 `/rss`，展開 SPY×FAMILY 的字幕組，「進階」裡存 5 讀回 `overdue_days: 5`、清空存讀回 `null`、填 31 欄位下說「填 0 到 30 的整數，或留空」不送出；390px 版面正常。
 - code-review 已處理：`snapshot_for_planning` 改呼叫 `refresh_snapshot`、刷新失敗的排除抽成具名變數、前端共用 `OVERDUE_DAYS_MAX`、刪 Feed 的 Series 逐條排除、刷新例外逐部隔離、視窗錨點改成最後一集缺集、補 `sweep_once` 的換輪整合測試。未處理（判斷題）：
   - `_watched_series` 一輪跑兩次（刷新一次、巡檢一次），`_imported` 在刷新的跳過檢查多查一次；量級小。
