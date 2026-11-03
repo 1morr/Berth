@@ -4,7 +4,7 @@
 擔保；`TestRealReadings` 用真的解析器走一遍，守住「解析器對一般的每週發佈給的理由」沒有跑出白名單
 （跑出去的話跳過會安靜地失效），以及 split-cour、虛擬季、新一季被當成第一季仍然不算。
 `TestCumulativeConditions`、`TestCumulativeReadings` 對寫明季號的累計編號（M5.5 票 05）
-做同樣兩件事。
+做同樣兩件事，包括 TMDB 前一季多記一集時由「下一集還沒播」擋下（票 05b）。
 """
 
 from __future__ import annotations
@@ -265,6 +265,11 @@ class TestEachCondition:
         assert vouch((episode(),), at=late) is None
         assert vouch((episode(),), at=published(3, days=BEHIND_LATEST.days)) == ((1, 3, 3),)
 
+    def test_the_next_episode_already_aired(self) -> None:
+        """照字面的列不看下一集（M5.5 票 05b 只套在累計編號）：慢發的字幕組在第 4 集播了之後才發
+        第 3 集，仍然擔保。"""
+        assert vouch((episode(),), at=published(4)) == ((1, 3, 3),)
+
 
 def _read(
     name: str, snapshot: MediaSnapshot, at: datetime
@@ -379,12 +384,18 @@ class TestCumulativeReadings:
         assert _read(YOZAKURA.format(number=40), short, yozakura_aired(13)) is None
         assert _read(YOZAKURA.format(number=42), short, yozakura_aired(15)) is None
 
-    def test_tmdb_counting_one_episode_more_before_is_a_known_blind_spot(self) -> None:
+    def test_tmdb_counting_one_episode_more_before(self) -> None:
         """TMDB 第一季多記一集（總集篇只有它算）：40 換算成 S02E12，真的是 S02E13。早一週播的那一集
-        仍在「剛播」的六週內、也不比最新一集落後太多，**擔保的是錯的那一集**（brief §15 已知盲點）。
-        這條固定現況；規則收緊時改成 `is None`。"""
+        仍在「剛播」的六週內，擋下它的是「下一集已經播了」：S02E13 就是真的那一集
+        （M5.5 票 05b）。"""
         long = yozakura(first_season=28)
-        assert _read(YOZAKURA.format(number=40), long, yozakura_aired(13)) == ((2, 12, 12),)
+        assert _read(YOZAKURA.format(number=40), long, yozakura_aired(13)) is None
+        assert _read(YOZAKURA.format(number=42), long, yozakura_aired(15)) is None
+
+    def test_the_latest_episode_on_tmdb(self) -> None:
+        """S02E15 是 TMDB 上最後一集，沒有下一集：算還沒播，照樣擔保。"""
+        name = YOZAKURA.format(number=42)
+        assert _read(name, yozakura(), yozakura_aired(15)) == ((2, 15, 15),)
 
     def test_a_cumulative_number_long_after_it_aired(self) -> None:
         name = YOZAKURA.format(number=40)
@@ -493,3 +504,79 @@ class TestCumulativeConditions:
         edge = RELEASE_TOLERANCE.days
         assert vouch_cumulative(cumulative(), at=yozakura_aired(13, days=-edge - 1)) is None
         assert vouch_cumulative(cumulative(), at=yozakura_aired(13, days=-edge)) == ((2, 13, 13),)
+
+    def test_the_next_episode_already_aired(self) -> None:
+        """下一集（S02E14）在發佈日加 `RELEASE_TOLERANCE` 之前播了就不擔保（M5.5 票 05b）：TMDB 把
+        前一季多記一集時，下一集就是真的那一集。"""
+        edge = RELEASE_TOLERANCE.days
+        assert vouch_cumulative(cumulative(), at=yozakura_aired(14, days=-edge)) is None
+        assert vouch_cumulative(cumulative(), at=yozakura_aired(14, days=-edge - 1)) == (
+            (2, 13, 13),
+        )
+
+    def test_a_batch_of_two_looks_past_its_last_episode(self) -> None:
+        """一份兩集（40、41 → S02E13–E14），在 S02E14 播出後一天發佈：S02E13 的下一集就在這一份裡，
+        看的是整份最後一集的下一集 S02E15，還沒播。"""
+        batch = YOZAKURA.format(number="40-41")
+        rows = (
+            cumulative(),
+            cumulative(
+                rel_path=f"{YOZAKURA.format(number=41)}.mkv",
+                episode_start=14,
+                episode_end=14,
+                reasons=(
+                    why(Code.SEASON_FROM_RELEASE, season=2),
+                    why(Code.ABSOLUTE_CUMULATIVE, number=41, episode="S02E14"),
+                    why(Code.TITLE_EXACT, title="Yozakura-san Chi no Daisakusen"),
+                ),
+            ),
+        )
+        at = yozakura_aired(14)
+        assert vouch(rows, snapshot=yozakura(), at=at, torrent=batch) == (
+            (2, 13, 13),
+            (2, 14, 14),
+        )
+        assert vouch(rows[::-1], snapshot=yozakura(), at=at, torrent=batch) == (
+            (2, 14, 14),
+            (2, 13, 13),
+        )
+
+    def test_overlapping_rows_look_past_the_one_that_ends_last(self) -> None:
+        """S02E13–E15 與 S02E14 同一份：最後一集是 E15（下一集 E16 TMDB 還沒有），
+        不是起點最大的 E14。"""
+        rows = (
+            cumulative(episode_end=15),
+            cumulative(
+                rel_path=f"{YOZAKURA.format(number=41)}.mkv",
+                episode_start=14,
+                episode_end=14,
+                reasons=(
+                    why(Code.SEASON_FROM_RELEASE, season=2),
+                    why(Code.ABSOLUTE_CUMULATIVE, number=41, episode="S02E14"),
+                    why(Code.TITLE_EXACT, title="Yozakura-san Chi no Daisakusen"),
+                ),
+            ),
+        )
+        name = YOZAKURA.format(number="40-42")
+        assert vouch(rows, snapshot=yozakura(), at=yozakura_aired(15), torrent=name) == (
+            (2, 13, 15),
+            (2, 14, 14),
+        )
+
+    def test_the_next_episode_has_no_air_date(self) -> None:
+        """TMDB 還沒排下一集的播出日：算還沒播。"""
+        snapshot = yozakura()
+        second = snapshot.seasons[1]
+        unscheduled = second.model_copy(
+            update={
+                "episodes": tuple(
+                    row.model_copy(update={"air_date": None}) if row.episode_number == 14 else row
+                    for row in second.episodes
+                )
+            }
+        )
+        undated = snapshot.model_copy(update={"seasons": (snapshot.seasons[0], unscheduled)})
+        name = YOZAKURA.format(number=40)
+        assert vouch((cumulative(),), snapshot=undated, at=yozakura_aired(14), torrent=name) == (
+            (2, 13, 13),
+        )

@@ -1,4 +1,7 @@
-"""候選守衛「發佈時對到那一集的下一集已經播了就不擔保」會多擋幾筆已擔保的第一批（M5.5 票 05）。
+"""守衛「發佈時對到那一集的下一集已經播了就不擔保」會多擋幾筆已擔保的第一批（M5.5 票 05 量）。
+
+票 05b 只把它採用在累計編號上（`parser.first_batch._next_aired`），所以現在累計編號那一行的「會擋」
+應是 0，照字面那一行量的是「如果也套到照字面」的代價。
 
 不改規則：包住 `first_batch_rule._vouch`，照它的三段（語料、對抗輪、`--online` 的 split-cour
 與真 RSS）各跑一次，依讀法（照字面 / 累計編號）數擔保了幾筆、守衛會擋幾筆。TMDB 把前一季多記一集時，
@@ -18,7 +21,10 @@ from datetime import datetime
 from pathlib import Path
 
 from berth.domain import FileEntry, MediaSnapshot, PlanItem
-from berth.parser import RELEASE_TOLERANCE, episode_span
+from berth.parser import episode_span
+
+# 規則本身那一支，量的才是同一個條件；底線開頭是因為它只在 parser 內用。
+from berth.parser.first_batch import _next_aired
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -34,20 +40,6 @@ hits: Counter[str] = Counter()
 original = rule._vouch
 
 
-def _next_aired(items: tuple[PlanItem, ...], snapshot: MediaSnapshot, at: datetime) -> bool:
-    """整份最後一集的下一集，在發佈日加 `RELEASE_TOLERANCE` 之前已經播了。"""
-    spans = [span for item in items if (span := episode_span(item)) is not None]
-    if not spans:
-        return False
-    season, _, end = max(spans)
-    found = snapshot.episode(season, end + 1)
-    return (
-        found is not None
-        and found.air_date is not None
-        and (found.air_date <= at.date() + RELEASE_TOLERANCE)
-    )
-
-
 def _vouch(
     name: str, entries: tuple[FileEntry, ...], snapshot: MediaSnapshot, at: datetime
 ) -> tuple[tuple[PlanItem, ...], tuple[tuple[int, int, int], ...] | None]:
@@ -55,7 +47,8 @@ def _vouch(
     if vouched is not None:
         reading = rule._reading(items)
         hits[f"{reading}: vouched"] += 1
-        if _next_aired(items, snapshot, at):
+        spans = [span for item in items if (span := episode_span(item)) is not None]
+        if spans and _next_aired(snapshot, spans, at):
             hits[f"{reading}: guard would block"] += 1
             print(f"   [guard] {reading} {name[:80]} pub={at.date()} {vouched}")
     return items, vouched
