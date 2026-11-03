@@ -163,6 +163,7 @@ function render(routes: Record<string, StubRoute | (() => StubRoute | Promise<St
     'GET /api/rss/series': { body: [series()] },
     'GET /api/rss/items': { body: [item()] },
     'GET /api/rss/exclusions': { body: { not_single: true, rules: [] } },
+    'GET /api/rss/overdue': { body: { days: 2 } },
     'GET /api/routes': { body: [] },
     ...routes,
   })
@@ -1061,6 +1062,30 @@ describe('RSS 頁', () => {
       not_single: false,
       rules: [],
     })
+  })
+
+  it('遲到門檻：讀出現在的天數，改了存回去；超出 0–30 不送（M5.5 票 10）', async () => {
+    const stub = render({ 'PUT /api/rss/overdue': { body: { days: 3 } } })
+    renderApp('/rss')
+
+    const section = await screen.findByRole('region', { name: '遲到門檻' })
+    const days = await within(section).findByRole('textbox', { name: '播出後幾天' })
+    expect(days).toHaveValue('2')
+
+    await userEvent.clear(days)
+    await userEvent.type(days, '31')
+    await userEvent.click(within(section).getByRole('button', { name: '儲存門檻' }))
+    expect(within(section).getByText('填 0 到 30 的整數。')).toBeInTheDocument()
+    expect(sent(stub, 'PUT', '/api/rss/overdue')).toHaveLength(0)
+
+    await userEvent.clear(days)
+    await userEvent.type(days, '3')
+    await userEvent.click(within(section).getByRole('button', { name: '儲存門檻' }))
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/overdue')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'PUT', '/api/rss/overdue')[0][1]?.body))).toEqual({
+      days: 3,
+    })
+    expect(await within(section).findByText(/已儲存/)).toBeInTheDocument()
   })
 
   it('正則寫壞時在欄位下說出原因，打的字留著', async () => {

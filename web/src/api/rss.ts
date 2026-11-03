@@ -114,6 +114,19 @@ export function exclusionsQueryOptions() {
   })
 }
 
+/** 遲到門檻（M5.5 票 10，天）。 */
+export function overdueQueryOptions() {
+  return queryOptions({
+    queryKey: [...RSS_KEY, 'overdue'],
+    queryFn: () => apiGet<Schemas['OverdueOut']>('/rss/overdue'),
+  })
+}
+
+/** 存遲到門檻；0–30 以外回 422。下一輪巡檢照新的門檻開或收，Issue 不當場動。 */
+export function saveOverdue(days: number) {
+  return apiPut<Schemas['OverdueOut']>('/rss/overdue', { days } satisfies Schemas['OverdueIn'])
+}
+
 export function feedsQueryOptions() {
   return queryOptions({
     queryKey: [...RSS_KEY, 'feeds'],

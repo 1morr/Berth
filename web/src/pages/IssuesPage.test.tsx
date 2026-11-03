@@ -683,6 +683,56 @@ describe('待處理頁', () => {
     expect(within(row).getByText(/搜這部作品缺的集/)).toBeInTheDocument()
   })
 
+  it('遲到說出作品、晚的集與卡在哪，三個下一步都在（M5.5 票 10）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'episodes_overdue',
+            subject: 'tv:120089',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              reason: 'late',
+              media: 'tv:120089',
+              title: '与你相恋',
+              name: '与你相恋',
+              episodes: [
+                {
+                  season: 1,
+                  episode: 4,
+                  air_date: '2026-10-28',
+                  stall: 'stalled',
+                  jobs: ['a'.repeat(40)],
+                },
+                { season: 1, episode: 5, air_date: '2026-11-04', stall: 'not_released', jobs: [] },
+              ],
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('遲到')).toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('heading', { name: '与你相恋' }))
+    expect(within(row).getByText('S01E04')).toBeInTheDocument()
+    expect(within(row).getByText(/下載停滯/)).toBeInTheDocument()
+    expect(within(row).getByText(/沒有下載在處理/)).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: '處理卡住的下載' })).toHaveAttribute(
+      'href',
+      `/jobs/${'a'.repeat(40)}`,
+    )
+    expect(within(row).getByRole('link', { name: '到作品頁搜這一集或去訂閱' })).toHaveAttribute(
+      'href',
+      '/media/tv%3A120089',
+    )
+    expect(within(row).getByRole('button', { name: '忽略' })).toBeInTheDocument()
+  })
+
   it('同一集意外多份說出哪一集、撞在一起的發佈名，連到作品頁（M4 票 130）', async () => {
     render({
       [ISSUES]: {

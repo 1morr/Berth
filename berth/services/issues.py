@@ -156,6 +156,7 @@ async def record_issue(
     ledger_id: int | None = None,
     series_id: int | None = None,
     feed_id: int | None = None,
+    media_id: str | None = None,
     detail: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> Recorded:
@@ -174,6 +175,7 @@ async def record_issue(
         ledger_id=ledger_id,
         series_id=series_id,
         feed_id=feed_id,
+        media_id=media_id,
     )
     if not subject:
         # 寫一筆沒有鍵的列的話，同型別的每一件事會互相覆蓋成一列。
@@ -1171,6 +1173,7 @@ STAYS_IGNORED = frozenset(
         IssueType.FEED_BACKFILL_FAILING,
         IssueType.SERIES_EPISODES_MISSING,
         IssueType.SERIES_EPISODES_COLLIDE,
+        IssueType.EPISODES_OVERDUE,
     }
 )
 #: 條件解除過的記號，寫在被忽略的那一筆的 `detail_json` 上（`note_cleared`）。

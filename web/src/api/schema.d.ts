@@ -1650,6 +1650,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/overdue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overdue
+         * @description 遲到門檻（M5.5 票 10）。
+         */
+        get: operations["get_overdue_api_rss_overdue_get"];
+        /**
+         * Put Overdue
+         * @description 改遲到門檻；下一輪巡檢照新的門檻開或收。
+         */
+        put: operations["put_overdue_api_rss_overdue_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/series": {
         parameters: {
             query?: never;
@@ -4294,11 +4318,11 @@ export interface components {
          * IssueType
          * @description 一件「要有人決定」的事是哪一種（brief §9.1、plan §2.4）。
          *
-         *     **十九種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
-         *     各加一種，M4 票 130 加四種）：
+         *     **二十種的聯集，一個封閉集合**（2026-09-22 定，M2 票 05；票 09c 加兩種，M3 票 17、M4 票 129
+         *     各加一種，M4 票 130 加四種，M5.5 票 10 加一種）：
          *     前五種是管線自己在路上發現的（M1 起寫 `issue_detected` 事件，M2 起同時寫一列 `issues`），
          *     中間六種是對帳比完四方之後才知道的，再兩種是 `health_checker` 每 5 分鐘量出來的，最後一種
-         *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再五種是每日巡檢
+         *     是 Jellyfin 回驗（反查與對帳的 Jellyfin 那一方共用一份比對，只寫 `issues`），再六種是每日巡檢
          *     （`sweeper`）。各邊共用同一個
          *     集合，所以加一種型別而沒替它決定 `subject` 取哪一欄、或沒給它動作，紅的會是 `SUBJECT_OF`
          *     與 `ISSUE_ACTIONS` 那兩條閘門。
@@ -4308,7 +4332,7 @@ export interface components {
          *     而冪等鍵會把它們收成一筆。
          * @enum {string}
          */
-        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide";
+        IssueType: "missing_files" | "client_error" | "client_removed" | "unknown_torrent" | "jellyfin_item_unresolved" | "library_link_missing" | "source_missing" | "inode_mismatch" | "orphan_complete" | "unmanaged_library_file" | "job_without_files" | "library_uses_tvdb" | "low_disk_space" | "jellyfin_item_mismatch" | "first_batch_stuck" | "feed_poll_failing" | "feed_backfill_failing" | "series_episodes_missing" | "series_episodes_collide" | "episodes_overdue";
         /**
          * ItemEditIn
          * @description 一列要改成什麼。季集只屬於劇集的入庫，其餘處置三格都不帶（帶了是 `episode_not_allowed`）。
@@ -5224,6 +5248,16 @@ export interface components {
             kind: components["schemas"]["FeedKind"];
             /** Items */
             items: components["schemas"]["OneshotItemOut"][];
+        };
+        /** OverdueIn */
+        OverdueIn: {
+            /** Days */
+            days: number;
+        };
+        /** OverdueOut */
+        OverdueOut: {
+            /** Days */
+            days: number;
         };
         /**
          * OwnerIn
@@ -11036,6 +11070,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+        };
+    };
+    get_overdue_api_rss_overdue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverdueOut"];
+                };
+            };
+        };
+    };
+    put_overdue_api_rss_overdue_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverdueIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverdueOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

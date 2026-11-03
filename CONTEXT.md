@@ -314,7 +314,7 @@ _Avoid_: re-run, resync
 _Avoid_: scanner, sync, health check（Health Check 指服務與 Route 連線）
 
 **Issue**:
-Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）、Jellyfin 回驗的一種（jellyfin_item_mismatch）與巡檢的五種（first_batch_stuck：RSS Series 的第一批被停住的 Job 卡住，M4 票 129；feed_poll_failing、feed_backfill_failing：Feed 的輪詢或每日補漏一直失敗超過一天；series_episodes_missing：RSS Series 已入庫的集數中間缺了幾集；series_episodes_collide：同一集意外多份，同一個 RSS Series 兩個發佈名寫不同集的發佈被入庫成同一集，M4 票 130）；`issues.type` 與 `issue_detected` 事件共用這十九種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種、回驗那一種與巡檢那五種條件解除時由系統收掉。健康檢查那兩種、回驗那一種、巡檢那五種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。
+Reconciler、管線或健康檢查發現、要有人決定的事，有固定型別——對帳的七種（library_link_missing、source_missing、inode_mismatch、orphan_complete、unknown_torrent、unmanaged_library_file、job_without_files）、管線的四種（missing_files、client_error、client_removed、jellyfin_item_unresolved）健康檢查的兩種（library_uses_tvdb、low_disk_space）、Jellyfin 回驗的一種（jellyfin_item_mismatch）與巡檢的六種（first_batch_stuck：RSS Series 的第一批被停住的 Job 卡住，M4 票 129；feed_poll_failing、feed_backfill_failing：Feed 的輪詢或每日補漏一直失敗超過一天；series_episodes_missing：RSS Series 已入庫的集數中間缺了幾集；series_episodes_collide：同一集意外多份，同一個 RSS Series 兩個發佈名寫不同集的發佈被入庫成同一集，M4 票 130；episodes_overdue：訂閱的作品**遲到**，一部作品一件，M5.5 票 10）；`issues.type` 與 `issue_detected` 事件共用這二十種。同一個 `(type, subject)` 只有一筆 open。健康檢查那兩種、回驗那一種與巡檢那六種條件解除時由系統收掉。健康檢查那兩種、回驗那一種、巡檢那六種與 `unknown_torrent` 的「忽略」在條件持續期間有效，條件解除過一次之後再發生才重開；其餘的忽略是「這一次不處理」。
 _Avoid_: error, problem, orphan（僅作 Issue 型別名的一部分）
 
 **Jellyfin 回驗**:
@@ -433,8 +433,12 @@ AI 做過的每一件事、理由、花費，逐筆可撤銷。
 _Avoid_: log, history
 
 **Sweep**（巡檢）:
-每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M5 起標出來的交給 AI 任務。每日那一輪由 `sweeper` 迴圈在 05:00 跑（M4 票 129）：要人動手的寫成 Issue（第一批卡住；M4 票 130 起還有一直失敗的 Feed、RSS Series 缺集、同一集意外多份——版本並存不算），「等你處理」最舊的一件等滿 3 天再提醒管理員一次（**放太久**，同一件 3 天內一次）。
+每天一次只跑程式檢查（不花 token）、每週一次產出週報。M4 起，不需要 AI；M5 起標出來的交給 AI 任務。每日那一輪由 `sweeper` 迴圈在 05:00 跑（M4 票 129）：要人動手的寫成 Issue（第一批卡住；M4 票 130 起還有一直失敗的 Feed、RSS Series 缺集、同一集意外多份——版本並存不算；M5.5 票 10 起還有**遲到**），「等你處理」最舊的一件等滿 3 天再提醒管理員一次（**放太久**，同一件 3 天內一次）。
 _Avoid_: audit（audit 是 medium 自動入庫的確認）, reconcile（對帳比的是帳本與磁碟）
+
+**Overdue**（遲到）:
+訂閱的作品（有綁好的 RSS Series）在最後入庫的一集之後，有集從播出日隔天 00:00（容器時區）起算滿門檻（預設 2 天，訂閱頁可改）還沒入庫——不分哪個字幕組或手動送的入庫。下載還在動（停滯不算）、等審核、Job 已經有 Issue 管著的那一集不算；其餘不管卡在哪（字幕組沒發、送單失敗、下載停滯、入庫失敗）都算。巡檢開 `episodes_overdue`，一部作品一件，都入庫了由系統收掉。判定在 `parser/overdue.py`；不讀 RSS 頁的「已完結」。基準之前的洞是「RSS Series 缺集」，不是遲到（M5.5 票 10）。
+_Avoid_: missing（缺集是已入庫集數中間的洞）, late release（說的是 Berth 這邊沒入庫，不一定是字幕組晚）
 
 **Weekly Report**（週報）:
 一週一份、產生那一刻算好存下來的回顧：這一週**入庫了什麼**（依作品，季集範圍）、**修了什麼**（核准的計劃、rematch 的檔案、人解決與系統收掉的 Issue）、**還有什麼等人**（產生那一刻「等你處理」的三份清單，巡檢開的 Issue 另外點出來）。一週是週一 05:00 到下一個週一 05:00（容器時區），週一巡檢跑完接著產生；同一週只有一份，重啟補上漏掉的那一週也不多一份（M4 票 131）。存下來而不是每次重算：purge 會連帳本與事件一起刪，舊週報不跟著變。週報頁 `/weekly` 只有管理員看得到；訂閱了的管理員收到一則摘要，連到那一週。
