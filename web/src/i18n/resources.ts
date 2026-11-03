@@ -3101,7 +3101,9 @@ const zhHant = {
         label: 'API key',
         placeholder: '貼上 key',
         placeholderSet: '已設定，貼上新的就換掉',
-        hint: 'key 存在 Berth 的資料庫，不會再顯示出來。',
+        hint: 'key 存在 Berth 的資料庫，不會再顯示出來。空著就沿用存著的那把，但只送到存它的那個 base URL；改了網址要貼這個網址的 key。',
+        savedElsewhere:
+          '存著的 key 只送到存它的那個網址。要用這個網址，貼上它的 key，或先移除存著的那把。',
         remove: '移除 key',
         removeConfirm: '移除',
         removing: '移除中…',
@@ -3124,7 +3126,7 @@ const zhHant = {
       test: {
         button: '測試連線',
         testing: '測試中…',
-        hint: '測的是表單上現在的值，不必先存；key 欄空著就用存著的那一把。',
+        hint: '測的是表單上現在的值，不必先存；key 欄空著就用存著的那一把，但網址改了就不送。',
         ok: '連上了',
         answeredBy: '回話的模型：',
         didNotRun: '測試沒有走完。',
@@ -7371,7 +7373,9 @@ const en: Translations<typeof zhHant> = {
         label: 'API key',
         placeholder: 'Paste a key',
         placeholderSet: 'Set. Paste a new one to replace it',
-        hint: 'The key is stored in Berth’s database and never shown again.',
+        hint: 'The key is stored in Berth’s database and never shown again. Left empty, the saved key is used, but only at the base URL it was saved with; after changing the address, paste that address’s key.',
+        savedElsewhere:
+          'The saved key only goes to the address it was saved with. To use this address, paste its key, or remove the saved one first.',
         remove: 'Remove key',
         removeConfirm: 'Remove',
         removing: 'Removing…',
@@ -7396,7 +7400,7 @@ const en: Translations<typeof zhHant> = {
       test: {
         button: 'Test connection',
         testing: 'Testing…',
-        hint: 'Tests what the form says right now, no need to save first; an empty key field uses the saved key.',
+        hint: 'Tests what the form says right now, no need to save first; an empty key field uses the saved key, but never at a changed address.',
         ok: 'Connected',
         answeredBy: 'Answered by:',
         didNotRun: 'The test did not go through.',

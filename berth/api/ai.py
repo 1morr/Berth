@@ -97,7 +97,8 @@ class AiOut(BaseModel):
 
 
 class AiTestIn(BaseModel):
-    """表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。"""
+    """表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把；
+    只在 base URL 與存著的相同時（留空與填官方網址算同一個），不同就是 `key_missing`。"""
 
     provider: AiProvider
     #: 空字串是官方端點。

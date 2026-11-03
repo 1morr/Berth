@@ -248,6 +248,25 @@ describe('設定 → AI', () => {
     expect(screen.queryByText('這個接口還沒有 key：貼上一把。')).not.toBeInTheDocument()
   })
 
+  it('存著 key、改了網址被拒：key 欄說存著的只送到原本的網址；改回網址就收掉', async () => {
+    render({ [TEST]: refusal(422, 'key_missing') }, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    const elsewhere =
+      '存著的 key 只送到存它的那個網址。要用這個網址，貼上它的 key，或先移除存著的那把。'
+    expect(await screen.findByLabelText('API key')).toHaveAccessibleDescription(
+      expect.stringContaining('只送到存它的那個 base URL'),
+    )
+    await user.type(screen.getByLabelText('Base URL'), 'https://gw.example')
+    await user.click(screen.getByRole('button', { name: '測試連線' }))
+
+    expect(await screen.findByText(elsewhere)).toBeVisible()
+    expect(screen.getByLabelText('API key')).toHaveAttribute('aria-invalid', 'true')
+    await user.clear(screen.getByLabelText('Base URL'))
+    expect(screen.queryByText(elsewhere)).not.toBeInTheDocument()
+  })
+
   it('base_url_invalid：標在 Base URL 欄下', async () => {
     render({
       [SAVE]: refusal(422, 'base_url_invalid', "'api.deepseek.com' is not an http(s) address"),

@@ -2870,7 +2870,8 @@ export interface components {
         AiStopReason: "completed" | "awaiting_confirmation" | "request_limit" | "token_limit" | "repeated_call" | "ping_pong" | "no_progress" | "circuit_open" | "error" | "cancelled" | "interrupted";
         /**
          * AiTestIn
-         * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把。
+         * @description 表單上的一種接口。`api_key` 是 `null` 或空字串表示沒動：存檔時留著、測試時用存著的那一把；
+         *     只在 base URL 與存著的相同時（留空與填官方網址算同一個），不同就是 `key_missing`。
          */
         AiTestIn: {
             provider: components["schemas"]["AiProvider"];
