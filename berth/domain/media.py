@@ -56,6 +56,12 @@ class SeasonSnapshot(BaseModel):
     air_date: date | None = None
     episodes: tuple[EpisodeSnapshot, ...] = ()
 
+    @property
+    def length(self) -> int:
+        """這一季有幾集：兩個來源取大的。未播的集數已經先列進 `episode_count`，而 `episodes`
+        偶爾比它多（TMDB 加了集但沒更新計數）。都是 0 就是還不知道。"""
+        return max(self.episode_count, len(self.episodes))
+
 
 class MediaSnapshot(BaseModel):
     """一部作品的快照。`media.tmdb_snapshot_json` 存的就是它（plan §2.2）。"""

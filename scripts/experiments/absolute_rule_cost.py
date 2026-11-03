@@ -180,7 +180,7 @@ def main_names(media: MediaSnapshot) -> tuple[str, ...]:
 def first_season_length(media: MediaSnapshot) -> tuple[int, int]:
     """（第一個正規季的季號, 集數）。直接問解析器，規則 1 看的就是這兩個數字。"""
     first = mapping._regular(media)[0]
-    return first.season_number, mapping._length(first)
+    return first.season_number, first.length
 
 
 def regular_seasons(counts: dict[int, int]) -> int:

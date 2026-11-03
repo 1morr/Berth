@@ -485,7 +485,7 @@ def _doubts(
     """
     doubts: list[ItemReason] = []
     first = _regular(media)[0]
-    length = _length(first)
+    length = first.length
     if span.start <= length:
         doubts.append(
             why(
@@ -735,7 +735,7 @@ def _cumulative(seasons: tuple[SeasonSnapshot, ...], span: _Span) -> _Mapped | N
     """各季集數累加。TMDB 沒有絕對編號欄位時只剩這條路（brief §20.3、研究 §6.2）。"""
     offset = 0
     for season in seasons:
-        count = _length(season)
+        count = season.length
         if span.start - offset <= count:
             start = span.start - offset
             end = span.end - offset if span.end is not None else None
@@ -855,11 +855,6 @@ def _regular(media: MediaSnapshot) -> tuple[SeasonSnapshot, ...]:
 
 def _season(media: MediaSnapshot, number: int) -> SeasonSnapshot | None:
     return next((season for season in media.seasons if season.season_number == number), None)
-
-
-def _length(season: SeasonSnapshot) -> int:
-    """這一季有幾集。TMDB 自己報的數字與收錄的集數不一定一樣，取大的。"""
-    return max(season.episode_count, len(season.episodes))
 
 
 def _exists(season: SeasonSnapshot, number: int | None) -> bool:
