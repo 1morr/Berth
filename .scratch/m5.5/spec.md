@@ -60,7 +60,7 @@
   - **照字面**與第一批同一個定義，抽成一支共用：`written_episode` 等於對到的集號、沒有換算類的理由、季號寫明或對到第一季。`check_airing` 因此要多收發佈名。人在 Series 上設了季號或 offset 就不算照字面。
   - **有換算的列維持兩天**：換算差一集也剛好早一週，只看日期分不開。
   - **第一批要認這個窗口**：`released_ahead_of_airing` 進 `VOUCHED`，照字面的「剛播」上緣跟著放寬。`mapping._just_aired`（推測虛擬季）不動，所以 `publishing.just_aired` 要拆成兩個窗口。
-  - 還被擋的列可能仍是對的（先行超過 9 天），`released_before_airing` 與 `air_date_conflict` 的文案補一句「平台先行的核准就好」（zh-Hant、en）。票 04b 改成只對照字面的列說：照字面超過 9 天的另記 `released_far_ahead_of_airing`，有換算的叫人查季號與 offset。
+  - 還被擋的列可能仍是對的（先行超過 9 天），`released_before_airing` 與 `air_date_conflict` 的文案補一句「平台先行的核准就好」（zh-Hant、en）。票 04b 改成只對照字面、早不超過 14 天的列說（`released_far_ahead_of_airing`）；照字面更早的（`released_too_early_for_simulcast`）叫人查作品與 TMDB 的日期，有換算的叫人查季號與 offset。
 - **第一批擔保收累計編號**（brief §15）：擔保的條件多一種讀法，其餘條件不變。
   - 條件：理由是 `absolute_cumulative`、季號寫明、Series 沒設季號與 offset、檔名集號剛好等於前面各季集數加對到的集號，而且那一集剛播（上緣維持兩天）。其他絕對編號與重數推測仍不擔保。
   - **閘門**：`scripts/experiments/first_batch_rule.py` 的語料與對抗輪都要擔保錯 0；不是 0 就不收這一條、回報使用者，這一項視為做完。

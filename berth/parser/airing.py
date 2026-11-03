@@ -9,7 +9,8 @@
   - **照字面的列**（`parser.literal`）：`RELEASE_TOLERANCE` 加 `SIMULCAST_LEAD`，共 9 天。ABEMA 這類
     平台比電視台先播一週，字幕組從平台取片，而 TMDB 記的是電視台的日期。照字面沒有換算可以過頭，
     所以早於播出日只能是先行。超過兩天的放行時記 `released_ahead_of_airing`，不無聲；超過 9 天照擋，
-    理由是 `released_far_ahead_of_airing`：仍可能是先行，畫面說先行的核准就好（票 04b）。
+    理由分兩種（票 04b）：14 天以內（`PLAUSIBLE_SIMULCAST_LEAD`）是 `released_far_ahead_of_airing`，
+    仍像先行；更早的是 `released_too_early_for_simulcast`，比較像作品認錯或 TMDB 的日期錯了。
   - **有換算的列**：兩天（深夜檔跨日、UTC 對當地日期），擋下時的理由是 `released_before_airing`。
     換算差一集也剛好早一週，只看日期分不開先行與算錯，所以畫面只叫人查季號、offset 或絕對編號。
 - **規則二**：連載中的 RSS Series 對到的那一集，比同一部作品在發佈當時最近播出的一集早很多——
@@ -37,12 +38,22 @@ from berth.domain import (
 from berth.domain import ReasonCode as Code
 from berth.parser.literal import is_literal
 from berth.parser.planner import episode_span, hold, note
-from berth.parser.publishing import BEHIND_LATEST, RELEASE_TOLERANCE, tolerance
+from berth.parser.publishing import (
+    BEHIND_LATEST,
+    PLAUSIBLE_SIMULCAST_LEAD,
+    RELEASE_TOLERANCE,
+    tolerance,
+)
 
 #: 播出日比對把一列送審核時留下的理由。規劃器看到其中一條就把整份 Plan 的理由說成
 #: `ReviewReason.AIR_DATE_CONFLICT`（`services/plan._verdict`）。
 HELD_BY_AIRING: frozenset[Code] = frozenset(
-    {Code.RELEASED_BEFORE_AIRING, Code.RELEASED_FAR_AHEAD_OF_AIRING, Code.BEHIND_LATEST_EPISODE}
+    {
+        Code.RELEASED_BEFORE_AIRING,
+        Code.RELEASED_FAR_AHEAD_OF_AIRING,
+        Code.RELEASED_TOO_EARLY_FOR_SIMULCAST,
+        Code.BEHIND_LATEST_EPISODE,
+    }
 )
 
 
@@ -95,7 +106,9 @@ def _checked(
         if early <= tolerance(literal=True):
             # 播出日在發佈之後，規則二的「最近播出的一集」不會比它晚，不必再看。
             return note(item, why(Code.RELEASED_AHEAD_OF_AIRING, **dates))
-        return hold(item, why(Code.RELEASED_FAR_AHEAD_OF_AIRING, **dates))
+        if early <= PLAUSIBLE_SIMULCAST_LEAD:
+            return hold(item, why(Code.RELEASED_FAR_AHEAD_OF_AIRING, **dates))
+        return hold(item, why(Code.RELEASED_TOO_EARLY_FOR_SIMULCAST, **dates))
     latest = _latest(media, day) if from_series and season > 0 else None
     if latest is not None and _far_behind(aired, latest[1], day):
         number, when = latest

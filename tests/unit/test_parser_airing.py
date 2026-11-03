@@ -217,6 +217,25 @@ class TestSimulcastLead:
             aired=_aired(5).isoformat(),
         )
 
+    def test_fourteen_days_is_the_last_that_looks_like_a_head_start(self) -> None:
+        [fourteen] = check_airing(TORRENT, [literal(5)], media(), ahead(14), from_series=True)
+        [fifteen] = check_airing(TORRENT, [literal(5)], media(), ahead(15), from_series=True)
+
+        assert fourteen.reasons[-1].code is ReasonCode.RELEASED_FAR_AHEAD_OF_AIRING
+        assert fifteen.reasons[-1].code is ReasonCode.RELEASED_TOO_EARLY_FOR_SIMULCAST
+
+    def test_two_months_early_is_not_a_head_start(self) -> None:
+        """平台先行一週左右；早兩個月比較像作品認錯或 TMDB 的日期錯了，不叫人核准。"""
+        [found] = check_airing(TORRENT, [literal(5)], media(), ahead(60), from_series=True)
+
+        assert found.action is PlanAction.REVIEW
+        assert found.reasons[-1] == why(
+            ReasonCode.RELEASED_TOO_EARLY_FOR_SIMULCAST,
+            published=ahead(60).date().isoformat(),
+            episode="S01E05",
+            aired=_aired(5).isoformat(),
+        )
+
     def test_within_two_days_says_nothing(self) -> None:
         """跨日的那兩天本來就是同一次播出，不是先行。"""
         [found] = check_airing(TORRENT, [literal(5)], media(), ahead(2), from_series=True)

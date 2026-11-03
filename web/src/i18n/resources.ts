@@ -2079,7 +2079,7 @@ const zhHant = {
         target_exists: '媒體庫的目標位置上已經有別的檔案',
         audit_undone: '有一個自動入庫的檔案被撤銷了，那一列要重新決定',
         air_date_conflict:
-          '發佈時間與換算出的集數的播出日對不上：有換算的列先查季號與 offset；照字面讀的列若是平台先行，核准就好',
+          '發佈時間與換算出的集數的播出日對不上：有換算的列先查季號與 offset；照字面讀而早得像平台先行的列，核准就好',
         runtime_conflict: '量到的片長與 TMDB 那一集差太多，多半是特典或合併檔被當成正片',
       },
       waitingSince: '等候於 {{value}}',
@@ -2660,7 +2660,7 @@ const zhHant = {
         audit_undone:
           '管理員從審核佇列撤銷了一個 medium 自動入庫的檔案：那個檔案已經不在媒體庫裡，complete 裡的來源還在。這份計劃回來等人決定那一列該是哪一集。',
         air_date_conflict:
-          '有檔案的發佈時間與換算出的那一集的播出日對不上：發佈比播出早，或比這部作品正在播的集數早很多。季號、offset 或絕對編號多半算錯了。管理員在審核佇列逐列改正季集；晚幾個月才發的 BD 版這種其實沒錯的，核准就會照畫面上的位置入庫。逐列理由會說那一列是不是照字面讀的：照字面讀的列可能是平台先行（平台比電視台先播），那就核准；有換算的列不是這種，先查季號與 offset。',
+          '有檔案的發佈時間與換算出的那一集的播出日對不上：發佈比播出早，或比這部作品正在播的集數早很多。季號、offset 或絕對編號多半算錯了。管理員在審核佇列逐列改正季集；晚幾個月才發的 BD 版這種其實沒錯的，核准就會照畫面上的位置入庫。逐列理由會說是哪一種：照字面讀、早得像平台先行（平台比電視台先播一週左右）的，核准就好；照字面讀卻早得太多的不像先行，先查作品有沒有認錯、TMDB 的日期對不對；有換算的列先查季號與 offset。',
         runtime_conflict:
           'mediainfo 量到的片長與 TMDB 上那一集的片長差太多：多半是 SP、OVA 或兩集合併的檔案被當成了一集正片。管理員在審核佇列把那一列改成特典、對不到或正確的季集；片長其實沒錯的（TMDB 寫錯、剪輯版），核准就會照畫面上的位置入庫。',
       },
@@ -2717,6 +2717,8 @@ const zhHant = {
           '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早太多：集數多半換算錯了，先查季號、offset 或絕對編號',
         released_far_ahead_of_airing:
           '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早，超過地上波先行的一週；集數是照字面讀的，沒有換算：平台先行的核准就好',
+        released_too_early_for_simulcast:
+          '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早超過兩週，不像平台先行：先查作品有沒有認錯、TMDB 的日期對不對',
         released_ahead_of_airing:
           '發佈於 {{published}}，比 TMDB 上 {{episode}} 的播出日 {{aired}} 早，在地上波先行的範圍內：多半是平台比電視台先播',
         behind_latest_episode:
@@ -6410,7 +6412,7 @@ const en: Translations<typeof zhHant> = {
         target_exists: 'Another file already sits at a target in the library',
         audit_undone: 'An auto-imported file was undone; that row needs a new decision',
         air_date_conflict:
-          'The release date does not fit the air date of the episode it was mapped to. For a worked-out row, check the season and offset; for a row read as written that a streaming platform aired first, just approve',
+          'The release date does not fit the air date of the episode it was mapped to. For a worked-out row, check the season and offset; for a row read as written and early by about a week, as when a streaming platform airs first, just approve',
         runtime_conflict:
           'The measured runtime is far from TMDB’s for that episode; likely a special or a merged file taken for an episode',
       },
@@ -6947,7 +6949,7 @@ const en: Translations<typeof zhHant> = {
         audit_undone:
           'An administrator undid a medium-confidence import from the review queue: that file has left the library, and its source under complete is untouched. The plan is back, waiting for someone to decide which episode that row really is.',
         air_date_conflict:
-          'A file’s release date does not fit the air date of the episode it was mapped to: it came out before that episode aired, or far behind the episode this title is airing now. The season, offset or absolute numbering is most likely wrong. An administrator corrects each row’s episode in the review queue; if it is actually right, such as a BD release months later, approving imports it where shown. Each row’s reason says whether it was read as written: such a row may simply have aired on a streaming platform before TV, so approve it; a worked-out row is not that case, so check its season and offset first.',
+          'A file’s release date does not fit the air date of the episode it was mapped to: it came out before that episode aired, or far behind the episode this title is airing now. The season, offset or absolute numbering is most likely wrong. An administrator corrects each row’s episode in the review queue; if it is actually right, such as a BD release months later, approving imports it where shown. Each row’s reason says which case it is: a row read as written and early by about a week may simply have aired on a streaming platform before TV, so approve it; a row read as written but far earlier is no head start, so check that the title is the right one and that TMDB’s date is right; for a worked-out row, check its season and offset first.',
         runtime_conflict:
           'A file’s measured runtime is far from TMDB’s runtime for the episode it was mapped to: most likely a special, an OVA or two episodes in one file was taken for a single episode. An administrator changes that row to an extra, unmatched or the right episode in the review queue; if the runtime is actually fine (a wrong TMDB entry, a different cut), approving imports it where shown.',
       },
@@ -7004,6 +7006,8 @@ const en: Translations<typeof zhHant> = {
           'released on {{published}}, too far before TMDB’s air date for {{episode}} ({{aired}}): the episode was most likely worked out wrong; check the season, offset or absolute numbering',
         released_far_ahead_of_airing:
           'released on {{published}}, before TMDB’s air date for {{episode}} ({{aired}}) by more than a week’s streaming head start; the episode was read as written, with nothing worked out. If a streaming platform aired it first, just approve',
+        released_too_early_for_simulcast:
+          'released on {{published}}, more than two weeks before TMDB’s air date for {{episode}} ({{aired}}), too early for a streaming head start: check that the title is the right one and that TMDB’s date is right',
         released_ahead_of_airing:
           'released on {{published}}, before TMDB’s air date for {{episode}} ({{aired}}) but within a streaming head start: most likely a platform aired it before TV',
         behind_latest_episode:

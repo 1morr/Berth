@@ -682,7 +682,7 @@ brief §6.4，AutoBangumi v3.2 的做法，`mapping._published_run`。字幕組�
 
 - **規則一**：發佈日早於那一集（範圍取最後一集）的播出日超過容忍就送審核，理由帶兩個日期。手動送單與 RSS 都套。容忍與理由分兩種（M5.5 票 04、04b，brief §20.27）：
   - **有換算的列兩天**：TMDB 的當地日期對 UTC 的發佈時間、深夜檔跨日（`RELEASE_TOLERANCE`）。理由 `released_before_airing`。換算差一集也剛好早一週，只看日期分不開先行與算錯，所以文案不提先行，只叫人查季號、offset 或絕對編號。
-  - **照字面的列九天**：兩天加地上波先行（`SIMULCAST_LEAD` 7 天）。平台比電視台先播一週，字幕組從平台取片，TMDB 記的是電視台的日期。照字面與第一批同一個定義（`parser/literal.py`：理由只在白名單內、對到的集號就是檔名寫的、季號寫明或對到第一季），Series 設了季號或非 0 的 offset 就不算。超過兩天而放行時記 `released_ahead_of_airing`（兩個日期），不無聲；超過九天照擋，理由 `released_far_ahead_of_airing`：沒有換算可以過頭，仍可能是先行，文案說平台先行的核准就好。整份計劃的 `air_date_conflict` 不分列，文案把「平台先行就核准」限定在照字面讀的列。
+  - **照字面的列九天**：兩天加地上波先行（`SIMULCAST_LEAD` 7 天）。平台比電視台先播一週，字幕組從平台取片，TMDB 記的是電視台的日期。照字面與第一批同一個定義（`parser/literal.py`：理由只在白名單內、對到的集號就是檔名寫的、季號寫明或對到第一季），Series 設了季號或非 0 的 offset 就不算。超過兩天而放行時記 `released_ahead_of_airing`（兩個日期），不無聲；超過九天照擋，理由分兩種：十四天以內（`PLAUSIBLE_SIMULCAST_LEAD`）是 `released_far_ahead_of_airing`，沒有換算可以過頭、仍像先行，文案說平台先行的核准就好；更早的是 `released_too_early_for_simulcast`，不像先行，文案叫人先查作品認對沒、TMDB 的日期。十四天的依據是量到的先行最多 8 天加約一週餘裕（brief §20.27）。整份計劃的 `air_date_conflict` 不分列，文案把「平台先行就核准」限定在照字面讀、早得像先行的列。
 - **規則二**：只對 RSS Series、只對正片的季（S00 不照播出順序）。「發佈當時最近播出的一集」＝播出日不晚於發佈日加兩天的最後一集；對到的那一集比它早**超過 `BEHIND_LATEST`**、**而且**它離發佈不超過 `BEHIND_LATEST`（作品在發佈時還在連載）就送審核，理由 `behind_latest_episode` 帶兩組集與日期。第二個條件讓播完很久之後的 BD、補檔不被擋；第一個條件讓慢幾週的字幕組不被擋。門檻的量測見 `scripts/experiments/air_date_lag.py`。
 - 被擋的那一列 `action = review`，**季集與目標路徑留著**：BD 版晚幾個月才發這種對的也會落在這裡，核准就照畫面上的位置入庫（`parser.promote`）。Plan 的 `review_reason` 是 `air_date_conflict`（§3.1）。
 - **缺資料不擋、記一筆**：發佈時間是 `None` → `published_missing`；TMDB 沒有那一集的播出日 → `air_date_missing`。
