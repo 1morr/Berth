@@ -300,3 +300,18 @@ Bangumi（`https://api.bgm.tv`）錄的；結論在 brief §20.3。AniList 與 B
 | `anilist/bad-query.json` | 錄的。故意寫錯的查詢（`media(nope:1)`）：**400**，`errors[].message` 寫明未知的參數 |
 | `anilist/rate-limited.docs-example.json` | **沒有錄**：故意去惹出 429 正是 AniList 條款要求不要做的事。內容是 https://docs.anilist.co/guide/rate-limiting 文件裡的範例（`Retry-After: 30`、`X-RateLimit-*`、`errors[].status: 429`），原樣照抄 |
 | `bgm/calendar.json` | 錄的。`GET /calendar`：七天、112 部，`cache-control: max-age=3600`；有的條目沒有 `rank`，有的 `rating` 是 `null` 或沒有 `score` |
+
+2026-11-04（M5.5 票 02），`scripts/experiments/ai_models.py record --env <.env>` 帶 key 對真的 DeepSeek 錄的模型清單；
+header 只留 `Content-Type`，寫檔前檢查輸出裡沒有 key。Anthropic 與 OpenAI 官方沒有 key，照文件的範例寫、標在最後一欄。
+結論在 brief §20.26。每份是 `{status, headers, body}`：
+
+| 檔案 | 來源 |
+| --- | --- |
+| `ai_models/deepseek.ok.json` | 錄的。`GET https://api.deepseek.com/models`，`Authorization: Bearer`：`{object, data[]}`，兩個模型，沒有分頁 |
+| `ai_models/deepseek.unauthorized.json` | 錄的。同一支、錯的 key：**401** `authentication_error`，訊息裡的 key 已被服務遮掉 |
+| `ai_models/deepseek-anthropic.x-api-key.json` | 錄的。`GET https://api.deepseek.com/anthropic/v1/models?limit=1000`，對的 key 走 `x-api-key`：**404**、空 body，這個端點沒有模型清單 |
+| `ai_models/deepseek-anthropic.bearer.json` | 錄的。同上改走 `Authorization: Bearer`：一樣 **404** |
+| `ai_models/deepseek-anthropic.unauthorized.json` | 錄的。同一支、錯的 key：**401**，認證在找路由之前 |
+| `ai_models/anthropic.page-{1,2}.json` | **沒有錄**：照 https://platform.claude.com/docs/en/api/models/list 的範例，拆成 `has_more: true` 與 `false` 兩頁 |
+| `ai_models/anthropic.unauthorized.json` | 2026-11-03 對 `api.anthropic.com/v1/models` 帶錯的 `x-api-key` 打到的 **401**（不是用腳本錄的） |
+| `ai_models/openai.ok.json` | **沒有錄**：照 https://platform.openai.com/docs/api-reference/models/list 的範例 |

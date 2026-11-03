@@ -1862,7 +1862,11 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
   - `OpenAIChatModel` 配 `OpenAIProvider`：`deepseek-flash`、`gpt-4o-mini`、自訂名字的 `supports_thinking` 都是假，統一的 `thinking` 被靜靜拿掉，不會 400，但也沒有效果。`DeepSeekProvider` 才認 `deepseek-flash`，Berth 用的是 `OpenAIProvider`。
   - Vercel 串流與 `dump_messages` 都會帶 `reasoning` 片段。
 - **`web_search` 結果的 `encrypted_content`**：DeepSeek 的 Anthropic 接口每筆都帶，再加 `title`、`url`、`page_age`、`type`。一次 10 筆的 JSON 實測 22,628–41,654 字，幾乎都是它。
-- **模型清單端點**：未帶 key 時 `api.anthropic.com/v1/models`、`api.deepseek.com/anthropic/v1/models`、`api.deepseek.com/models` 都回 401，代表路由存在；帶 key 的回應形狀還沒驗，做 M5.5 那張票時補在這裡。
+- **模型清單端點**（M5.5 票 02 實測 2026-11-04，`scripts/experiments/ai_models.py`，回應在 `tests/fixtures/http/ai_models/`）：
+  - **DeepSeek 的 OpenAI 接口** `GET https://api.deepseek.com/models`（`Authorization: Bearer`）：200 `{object: "list", data: [...]}`，每筆 `id`、`object`、`owned_by`、`name`、`context_window`、`max_output_tokens`、`effort` 等；當時列 `deepseek-flash`、`deepseek-v4-pro`，沒有分頁。key 錯是 401 `{error: {message, type: "authentication_error", ...}}`，訊息裡的 key 已被服務遮成 `****`。（[Lists Models](https://api-docs.deepseek.com/api/list-models)）
+  - **DeepSeek 的 Anthropic 接口不提供模型清單**：`{base}/v1/models` 帶對的 key，`x-api-key` 與 `Authorization: Bearer` 都是 404、空 body，不帶 `/v1` 也一樣；key 錯時先回 401。文件也沒寫這支（[Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)）。所以 Berth 沿用 `x-api-key`（同 SDK 與聊天），404、405、501 說成「這個端點不提供模型清單」、退回本機價目表（它認得 DeepSeek），401 / 403 才說 key 被拒。
+  - **Anthropic 官方** `GET https://api.anthropic.com/v1/models`：**未實測**（沒有官方 key），照文件：`limit` 預設 20、最多 1,000，`has_more` 為真時帶 `after_id={last_id}` 取下一頁，回 `data`、`first_id`、`last_id`、`has_more`，新的在前；`anthropic-version` 必帶。文件把 `Authorization: Bearer` 列為主要、`x-api-key` 為仍支援的舊法。（[List Models](https://platform.claude.com/docs/en/api/models/list)）錯 key 回 401 `authentication_error` `invalid x-api-key` 是 2026-11-03 實際打到的。
+  - **OpenAI 官方** `GET https://api.openai.com/v1/models`：**未實測**，照文件是 `{object: "list", data: [{id, object, created, owned_by}]}`，沒有分頁。（[List models](https://platform.openai.com/docs/api-reference/models/list)）
 - **Open WebUI 的慣例**：連線填 URL 與 key，從 `/models` 自動偵測模型；服務不支援時才手動填模型 id。（[OpenAI-Compatible](https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-openai-compatible)）
 
 ### 20.27 地上波先行配信與 TMDB 的播出日（2026-11-01 查證，審核佇列調查）

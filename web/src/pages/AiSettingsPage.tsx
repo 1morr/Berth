@@ -1,15 +1,18 @@
 import { useId, useState, type ReactNode } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ParseKeys } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import {
   aiQueryOptions,
   aiRefusalOf,
+  aiSuggestionsQueryOptions,
+  fetchAiModels,
   forgetAiKey,
   saveAi,
   testAi,
   type AiEndpoint,
+  type AiModels,
   type AiProbeFailure,
   type AiProvider,
   type AiRefusal,
@@ -29,11 +32,15 @@ import {
   PrimaryButton,
 } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
+import { useDebounced } from '../components/useDebounced'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { priceSourceText } from '../usage/prices'
 
 type Key = ParseKeys
+
+/** 打網址時等這麼久才查建議：查的是本機表、不連外，只是不必每個按鍵都問一次。 */
+const SUGGEST_DEBOUNCE_MS = 300
 
 const PROVIDERS: readonly AiProvider[] = ['anthropic', 'openai']
 
@@ -80,6 +87,18 @@ const FAILURE_TEXT = {
     fix: 'settings.aiPage.test.failure.bad_response.fix',
   },
 } as const satisfies Record<AiProbeFailure, { what: Key; fix: Key }>
+
+/**
+ * 「取得模型」沒問到的每一種（M5.5 票 02）。與測試連線不同的是 `not_found`：列模型時那是這個端點沒有
+ * 模型清單（DeepSeek 的 Anthropic 接口就是，brief §20.26），不是模型名或網址打錯。少一種是編譯錯誤。
+ */
+const MODELS_FAILURE_TEXT = {
+  key_rejected: 'settings.aiPage.test.failure.key_rejected.what',
+  not_found: 'settings.aiPage.models.noList',
+  service_error: 'settings.aiPage.test.failure.service_error.what',
+  unreachable: 'settings.aiPage.test.failure.unreachable.what',
+  bad_response: 'settings.aiPage.test.failure.bad_response.what',
+} as const satisfies Record<AiProbeFailure, Key>
 
 /** 拒絕理由的一句話。少一種是編譯錯誤。 */
 const REFUSAL_TEXT = {
@@ -152,11 +171,24 @@ function AiForm({ saved }: { saved: AiSettings }) {
     mutationFn: testAi,
     onError: (error) => setRefused(aiRefusalOf(error)),
   })
+  /** 「取得模型」（M5.5 票 02）：base URL、key 或接口一改就收掉，問的已經不是這個端點。 */
+  const fetched = useMutation({
+    mutationFn: fetchAiModels,
+    onError: (error) => setRefused(aiRefusalOf(error)),
+  })
+  const suggestFor = useDebounced(draft.base_url.trim(), SUGGEST_DEBOUNCE_MS)
+  const suggested = useQuery({
+    ...aiSuggestionsQueryOptions(provider, suggestFor),
+    // 換網址時舊的建議留到新的回來，清單不閃空。
+    placeholderData: keepPreviousData,
+  })
+  const models = fetched.data?.models ?? suggested.data?.models ?? []
 
   function edit(change: Partial<Draft>, ...clears: AiRefusal[]) {
     setDrafts((was) => ({ ...was, [provider]: { ...was[provider], ...change } }))
     if (refused && clears.includes(refused.reason)) setRefused(null)
     test.reset()
+    if (change.base_url !== undefined || change.api_key !== undefined) fetched.reset()
     setStatus(null)
   }
 
@@ -218,6 +250,7 @@ function AiForm({ saved }: { saved: AiSettings }) {
               setProvider(next)
               setRefused(null)
               test.reset()
+              fetched.reset()
               setStatus(null)
             }}
           />
@@ -277,10 +310,36 @@ function AiForm({ saved }: { saved: AiSettings }) {
               onChange={(event) => edit({ model: event.target.value }, 'model_missing')}
             />
             <datalist id={modelsId}>
-              {endpoint.known_models.map((model) => (
+              {models.map((model) => (
                 <option key={model} value={model} />
               ))}
             </datalist>
+            <div className="justify-self-start">
+              <GhostButton
+                type="button"
+                busy={fetched.isPending}
+                onClick={() => {
+                  setRefused(null)
+                  fetched.mutate({
+                    provider: form.provider,
+                    base_url: form.base_url,
+                    api_key: form.api_key,
+                  })
+                }}
+              >
+                {t(
+                  fetched.isPending
+                    ? 'settings.aiPage.models.fetching'
+                    : 'settings.aiPage.models.button',
+                )}
+              </GhostButton>
+            </div>
+            <div aria-live="polite" className="grid gap-1">
+              {fetched.data && <FetchedModels result={fetched.data} />}
+              {fetched.isError && aiRefusalOf(fetched.error) === null && (
+                <RequestFailed error={fetched.error} lead={t('settings.aiPage.models.didNotRun')} />
+              )}
+            </div>
             <Price endpoint={endpoint} model={draft.model} baseUrl={draft.base_url} />
           </div>
 
@@ -450,6 +509,37 @@ function Price({
     <p className="text-xs text-ink">
       <span className="label mr-2 text-ink-dim">{t('settings.aiPage.price.label')}</span> {body}
     </p>
+  )
+}
+
+/** 「取得模型」的結果：問到幾個，或為什麼沒問到、建議改用本機表。 */
+function FetchedModels({ result }: { result: AiModels }) {
+  const { t } = useTranslation()
+  if (result.source === 'endpoint') {
+    return (
+      <p className="text-xs text-ink">
+        {t('settings.aiPage.models.fetched', { count: result.models.length })}
+      </p>
+    )
+  }
+  if (result.failure === null) {
+    return <p className="text-xs text-ink">{t('settings.aiPage.models.empty')}</p>
+  }
+  return (
+    <>
+      <Notice signal="blocked" label={t('settings.aiPage.models.failed')}>
+        <span className="grid gap-1">
+          <span>{t(MODELS_FAILURE_TEXT[result.failure])}</span>
+          <span>{t('settings.aiPage.models.fallback')}</span>
+        </span>
+      </Notice>
+      <TechnicalDetails
+        lines={[
+          result.status === null ? result.failure : `HTTP ${result.status} · ${result.failure}`,
+          result.detail,
+        ]}
+      />
+    </>
   )
 }
 

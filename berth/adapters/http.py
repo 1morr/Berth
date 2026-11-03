@@ -117,12 +117,15 @@ class HttpSession:
         *,
         headers: dict[str, str] | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        follow_redirects: bool = True,
     ) -> None:
+        """`follow_redirects=False` 給帶著自訂憑證標頭的請求：httpx 轉到別的主機時只拿掉
+        `Authorization`，`x-api-key` 這種照樣帶過去（`adapters.ai.catalog`）。"""
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers=headers or {},
             timeout=timeout,
-            follow_redirects=True,
+            follow_redirects=follow_redirects,
             verify=_ssl_context(),
         )
 
