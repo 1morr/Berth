@@ -7,12 +7,11 @@ import { AgentPanel, AgentToggle } from './agent/AgentPanel'
 import { usePanel } from './agent/panelState'
 import { useNarrow } from './agent/useNarrow'
 import { meQueryOptions } from './api/auth'
-import { waitingQueryOptions } from './api/waiting'
 import { NAV_LINK } from './components/controls'
 import { LanguageToggle } from './components/LanguageToggle'
 import { AccountMenu } from './nav/AccountMenu'
 import { SectionLink } from './nav/SectionLink'
-import { AIRING_PAGES, WAITING_PAGES } from './nav/sections'
+import { AIRING, WAITING } from './nav/sections'
 
 /**
  * setup 完成之後的頁面共用的外框。
@@ -105,7 +104,6 @@ function NavLink({ to, children }: { to: '/' | '/library' | '/jobs'; children: R
  */
 function MainNav({ admin }: { admin: boolean }) {
   const { t } = useTranslation()
-  const counts = useQuery({ ...waitingQueryOptions, enabled: admin }).data
 
   return (
     <nav
@@ -113,22 +111,10 @@ function MainNav({ admin }: { admin: boolean }) {
       className="order-last flex basis-full flex-wrap items-stretch gap-2 sm:order-none sm:basis-auto sm:gap-x-4"
     >
       <NavLink to="/">{t('nav.discover')}</NavLink>
-      <SectionLink
-        to="/schedule"
-        pages={AIRING_PAGES}
-        label={t('nav.airing')}
-        count={admin ? counts?.rss : undefined}
-      />
+      <SectionLink section={AIRING} admin={admin} />
       <NavLink to="/library">{t('nav.inventory')}</NavLink>
       <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
-      {admin && (
-        <SectionLink
-          to="/review"
-          pages={WAITING_PAGES}
-          label={t('nav.waiting')}
-          count={counts && counts.review + counts.issue}
-        />
-      )}
+      {(admin || !WAITING.adminOnly) && <SectionLink section={WAITING} admin={admin} />}
     </nav>
   )
 }

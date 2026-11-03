@@ -23,7 +23,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
@@ -51,6 +51,7 @@ from berth.domain import (
     WhyNotRefusal,
     conclude,
     overall,
+    stalled,
 )
 from berth.domain import (
     PlanItem as PlannedFile,
@@ -71,6 +72,9 @@ JOB_LIMIT = 50
 ITEM_LIMIT = 50
 #: 往回看幾筆 Feed Item。每一筆要猜一次季集，追了好幾年的 Series 不必全部猜過。
 ITEM_SCAN = 500
+#: 追更頁每部作品往回看幾筆（`account_missing`）：缺的是最新的那幾集，蓋到它們的是最近的 Item；
+#: 一頁二、三十部，每部五百筆要猜一輪就太慢了。
+TRACK_ITEM_SCAN = 60
 
 #: 電影那一格的鍵：它沒有季集。
 _MOVIE = None
@@ -196,6 +200,19 @@ class WhyNotView:
     issues: tuple[WhyNotIssue, ...] | None
     #: RSS 那一側。一般使用者是 `None`（看不到）。
     rss: WhyNotRss | None
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeAccount:
+    """還沒入庫的一集：結論、是不是下載停滯（`domain.stalled`），與蓋到它的 Job。
+
+    追更頁讀它（M5.5 票 12）。
+    """
+
+    conclusion: WhyNot
+    stalled: bool
+    #: 蓋到它的 Job（含已入庫、已刪除的），最新的在前。
+    jobs: tuple[Job, ...]
 
 
 @dataclass(slots=True)
@@ -381,6 +398,46 @@ async def claims_by_episode(
     return {key: rows for key, rows in claims.by_key.items() if key is not None}
 
 
+# 追更頁讀它（`services.keeping_up`，M5.5 票 12）：收 ORM 列，不進登錄表。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def account_missing(
+    session: AsyncSession, media: Media, episodes: Collection[tuple[int, int]]
+) -> dict[tuple[int, int], EpisodeAccount]:
+    """`episodes`（呼叫端說的：播了、帳本沒有的那幾集）各自的結論，與 `explain` 同一套「誰蓋到哪
+    一集」與 `conclude`。不讀季表：它們都還沒入庫。Feed Item 只看最近 `TRACK_ITEM_SCAN` 筆。電影
+    沒有季集，是空的。"""
+    if media.kind is MediaKind.MOVIE or not episodes:
+        return {}
+    fetched = media.stored_snapshot()
+    known = _episodes(media, media.snapshot(), utcnow().date())
+    jobs = list(
+        await session.scalars(
+            select(Job).where(Job.media_id == media.id).order_by(Job.added_at.desc(), Job.hash)
+        )
+    )
+    series = await _series(session, media.id)
+    job_claims = await _job_claims(session, media, fetched, jobs, series, known)
+    items = await _items(session, series, limit=TRACK_ITEM_SCAN)
+    item_claims, _ = _item_claims(media, fetched, items, series, known)
+
+    accounts: dict[tuple[int, int], EpisodeAccount] = {}
+    for pair in episodes:
+        claimed_jobs = job_claims.of(pair)
+        claimed_items = item_claims.of(pair)
+        facts = EpisodeFacts(
+            imported=False,
+            in_jellyfin=False,
+            jobs=frozenset(job.state for job in claimed_jobs),
+            items=frozenset(item.status for item in claimed_items if not _rejected(item)),
+            send_rejected=any(_rejected(item) for item in claimed_items),
+            aired=True,
+        )
+        accounts[pair] = EpisodeAccount(
+            conclusion=conclude(facts), stalled=stalled(facts), jobs=tuple(claimed_jobs)
+        )
+    return accounts
+
+
 # --- 哪幾集 ---------------------------------------------------------------------
 
 
@@ -535,7 +592,9 @@ async def _series(session: AsyncSession, media_id: str) -> list[RssSeries]:
     ]
 
 
-async def _items(session: AsyncSession, series: Sequence[RssSeries]) -> list[RssItem]:
+async def _items(
+    session: AsyncSession, series: Sequence[RssSeries], *, limit: int = ITEM_SCAN
+) -> list[RssItem]:
     if not series:
         return []
     return list(
@@ -543,7 +602,7 @@ async def _items(session: AsyncSession, series: Sequence[RssSeries]) -> list[Rss
             select(RssItem)
             .where(RssItem.series_id.in_([row.id for row in series]))
             .order_by(RssItem.seen_at.desc(), RssItem.id.desc())
-            .limit(ITEM_SCAN)
+            .limit(limit)
         )
     )
 

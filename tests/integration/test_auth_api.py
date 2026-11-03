@@ -436,6 +436,8 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/weekly"): Access.ADMIN,
     ("GET", "/weekly/*"): Access.ADMIN,
     ("GET", "/waiting"): Access.ADMIN,
+    # 追更頁（M5.5 票 12）；時間表 `/schedule` 本身給每個人。
+    ("GET", "/schedule/tracking"): Access.ADMIN,
     ("GET", "/reconcile"): Access.ADMIN,
     ("POST", "/reconcile"): Access.ADMIN,
     ("DELETE", "/jobs/*"): Access.ADMIN,

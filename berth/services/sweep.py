@@ -57,27 +57,26 @@ from berth.models import (
     Media,
     NotifyWatchSettings,
     RssFeed,
-    RssItem,
     RssSeries,
     RssSettings,
     SweepSettings,
 )
 from berth.models.types import utcnow
 from berth.parser import parse_release
-from berth.parser.overdue import Overdue, OverdueJob, judge_overdue
+from berth.parser.overdue import Overdue
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
-from berth.services.inventory import episodes_of, read_holdings
+from berth.services.inventory import read_holdings
 from berth.services.issues import (
-    STANDS_WHILE,
     clear_by_system,
+    covered_jobs,
     note_cleared,
     record_issue,
     still_ignored,
 )
+from berth.services.keeping_up import imported_episodes, watch_work, watched_series
 from berth.services.media import refresh_snapshot
 from berth.services.notify import queue_lingering
-from berth.services.rss import subscribed_media
 from berth.services.settings import read_settings, write_settings
 from berth.services.waiting import WaitingSource, waiting_now
 from berth.services.why_not import claims_by_episode
@@ -174,15 +173,13 @@ async def refresh_watched(session: AsyncSession, factory: ServiceClientFactory) 
     庫的（不會再有新的一集）。量級：一部 5–7 次請求，20 部約 100–150 次，全域桶每秒 40 次。
     """
     failed: set[str] = set()
-    for media_id in sorted(
-        {row.media_id for row in await _watched_series(session) if row.media_id}
-    ):
+    for media_id in sorted({row.media_id for row in await watched_series(session) if row.media_id}):
         media = await session.get(Media, media_id)
         snapshot = media.stored_snapshot() if media is not None else None
         if (
             snapshot is not None
             and snapshot.ended
-            and _all_in(snapshot, await _imported(session, media_id))
+            and _all_in(snapshot, await imported_episodes(session, media_id))
         ):
             continue
         try:
@@ -227,7 +224,7 @@ async def _stuck_first_batches(session: AsyncSession, moment: datetime) -> tuple
             )
         ).tuples()
     )
-    covered = await _covered(session, [job for _, job in rows])
+    covered = await covered_jobs(session, [job for _, job in rows])
     since = await _stopped_at(session, [job for _, job in rows])
     flagged: dict[int, tuple[RssSeries, Job, datetime]] = {}
     for series, job in rows:
@@ -406,8 +403,8 @@ async def _overdue_works(
     """
     local = moment.astimezone()
     by_work: dict[str, list[RssSeries]] = {}
-    for series in await _watched_series(session):
-        # `_watched_series` 只回綁好的。
+    for series in await watched_series(session):
+        # `watched_series` 只回綁好的。
         assert series.media_id is not None
         by_work.setdefault(series.media_id, []).append(series)
     fallback = (await read_settings(session, RssSettings)).overdue_days
@@ -420,26 +417,17 @@ async def _overdue_works(
         snapshot = media.stored_snapshot() if media is not None else None
         if media is None or snapshot is None:
             continue
-        claimed = await claims_by_episode(session, media)
-        covered = await _covered(
-            session, list({job.hash: job for jobs in claimed.values() for job in jobs}.values())
-        )
-        found = judge_overdue(
-            snapshot,
-            imported=await _imported(session, media_id),
-            claims={
-                pair: [
-                    OverdueJob(hash=job.hash, state=job.state, waiting=job.hash in covered)
-                    for job in jobs
-                ]
-                for pair, jobs in claimed.items()
-            },
-            subscribed=[row.created_at for row in rows],
-            now=local,
-            threshold_days=max(
-                fallback if row.overdue_days is None else row.overdue_days for row in rows
-            ),
-        )
+        found = (
+            await watch_work(
+                session,
+                snapshot,
+                rows,
+                imported=await imported_episodes(session, media_id),
+                claimed=await claims_by_episode(session, media),
+                now=local,
+                fallback=fallback,
+            )
+        ).overdue
         if found is None:
             continue
         await record_issue(
@@ -454,18 +442,6 @@ async def _overdue_works(
     kept = {(IssueType.EPISODES_OVERDUE, media_id) for media_id in unrefreshed}
     cleared = await _settle(session, (IssueType.EPISODES_OVERDUE,), flagged | kept, moment)
     return len(flagged), cleared
-
-
-async def _watched_series(session: AsyncSession) -> list[RssSeries]:
-    """遲到看的對象：綁好、還帶著 Item 的 RSS Series，而且它那部作品現在有訂閱
-    （`rss.subscribed_media`，與作品頁的訂閱清單同一套判定）。刪掉 Feed 只刪 Feed，Series 與綁定
-    留著（`delete_feed`），退訂了就不看（協調者追加，票 10 的缺陷）。"""
-    bound = list(await session.scalars(select(RssSeries).where(RssSeries.media_id.is_not(None))))
-    live = await subscribed_media(session, [row.media_id for row in bound if row.media_id])
-    # 作品還訂著時，Feed 被刪的那幾條也不算（門檻、換輪、起算日都不看它）：刪 Feed 連 Item 一起刪，
-    # 還掛著 Item 的才是還在送的那一條。
-    carrying = set(await session.scalars(select(RssItem.series_id).distinct()))
-    return [row for row in bound if row.media_id in live and row.id in carrying]
 
 
 def _overdue_detail(media_id: str, title: str, title_en: str, found: Overdue) -> dict[str, Any]:
@@ -488,21 +464,6 @@ def _overdue_detail(media_id: str, title: str, title_en: str, found: Overdue) ->
             for episode in found.episodes
         ],
     }
-
-
-async def _imported(session: AsyncSession, media_id: str) -> dict[tuple[int, int], datetime]:
-    """這部作品帳本有正片蓋到的季集，不分誰送的，各自最早入庫的那一刻（換輪比它）。"""
-    rows = await session.scalars(
-        select(LedgerEntry).where(
-            LedgerEntry.media_id == media_id, LedgerEntry.action == PlanAction.IMPORT
-        )
-    )
-    landed: dict[tuple[int, int], datetime] = {}
-    for row in rows:
-        for pair in episodes_of(row):
-            if pair not in landed or row.created_at < landed[pair]:
-                landed[pair] = row.created_at
-    return landed
 
 
 async def _written_spans(names: Iterable[str]) -> list[tuple[int, int]]:
@@ -708,28 +669,6 @@ async def _remind_lingering(session: AsyncSession, moment: datetime) -> int:
                 record.reminded[oldest] = moment
     await write_settings(session, record)
     return queued
-
-
-async def _covered(session: AsyncSession, jobs: list[Job]) -> set[str]:
-    """這幾筆裡已經有一件管線 Issue 說著它現在這個狀態的（`client_error`；重新送單被拒、落回
-    `submit_failed` 的 `client_removed`），不再為同一筆開第二件：開著的那一件已經在等人；被忽略的
-    那一件是人看過、說了不用管，換一個型別再問同一筆是噪音（M4 票 129 code-review）。收掉的不算：
-    它說的是過去。"""
-    if not jobs:
-        return set()
-    state = {job.hash: job.state for job in jobs}
-    open_rows = await session.execute(
-        select(Issue.type, Issue.job_hash).where(
-            Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
-            Issue.type.in_(STANDS_WHILE),
-            Issue.job_hash.in_(state),
-        )
-    )
-    return {
-        job_hash
-        for kind, job_hash in open_rows.tuples()
-        if job_hash is not None and state[job_hash] in STANDS_WHILE[kind]
-    }
 
 
 async def _stopped_at(session: AsyncSession, jobs: list[Job]) -> dict[str, datetime]:

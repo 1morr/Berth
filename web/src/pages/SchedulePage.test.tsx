@@ -22,6 +22,7 @@ function card(overrides: Partial<ScheduleCard>): ScheduleCard {
     season: 1,
     episode: 1,
     status: 'unsubscribed',
+    late_days: null,
     airs_at: null,
     score: null,
     votes: null,

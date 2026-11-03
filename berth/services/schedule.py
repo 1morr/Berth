@@ -49,6 +49,7 @@ from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, command
 from berth.services.discover import image_base, poster_url
 from berth.services.inventory import episodes_of
+from berth.services.keeping_up import late_by_work
 from berth.services.rss import subscribed_media
 from berth.services.settings import read_settings
 from berth.services.tmdb import credential, tmdb_problem
@@ -131,6 +132,8 @@ class ScheduleCard:
     season: int
     episode: int
     status: ScheduleStatus
+    #: 狀態是 `late` 時，那一集從播出日到今天（容器時區）的天數；否則 `None`（M5.5 票 12）。
+    late_days: int | None
     #: AniList 的放送時刻（UTC），只給還沒播的；對不上是 `None`。
     airs_at: datetime | None
     #: Bangumi 的評分（1–10）與打分人數；對不上或沒人打分是 `None`。
@@ -207,7 +210,7 @@ async def read_schedule(session: AsyncSession, factory: ServiceClientFactory) ->
     finally:
         second.cancel()
 
-    return ScheduleWeek(start, end, today, await _cards(session, slots, layer, utc_now()))
+    return ScheduleWeek(start, end, today, await _cards(session, slots, layer, utc_now(), today))
 
 
 async def _slots(
@@ -345,14 +348,20 @@ async def _details(client: TmdbClient, entries: list[TmdbEntry]) -> list[TmdbDet
 
 
 async def _cards(
-    session: AsyncSession, slots: tuple[ScheduleSlot, ...], layer: SecondLayer, now: datetime
+    session: AsyncSession,
+    slots: tuple[ScheduleSlot, ...],
+    layer: SecondLayer,
+    now: datetime,
+    today: date,
 ) -> tuple[ScheduleCard, ...]:
     """骨架加上這一刻的狀態，一次問一整週（不是逐張一句查詢）。
 
-    已訂閱是 `CONTEXT.md` 的訂閱（`rss.subscribed_media`，與作品頁的訂閱清單同一個來源）。
+    已訂閱是 `CONTEXT.md` 的訂閱（`rss.subscribed_media`，與作品頁的訂閱清單同一個來源）；晚了是
+    追更頁的同一套判定（`keeping_up.late_by_work`，只問訂閱著的那幾部）。
     """
     wanted = list({slot.media_id for slot in slots})
     subscribed = await subscribed_media(session, wanted)
+    late = await late_by_work(session, subscribed)
     imported: set[tuple[str, int, int]] = set()
     if wanted:
         for row in await session.scalars(
@@ -366,6 +375,8 @@ async def _cards(
     def status(slot: ScheduleSlot) -> ScheduleStatus:
         if (slot.media_id, slot.season, slot.episode) in imported:
             return ScheduleStatus.IMPORTED
+        if (slot.season, slot.episode) in late.get(slot.media_id, {}):
+            return ScheduleStatus.LATE
         if slot.media_id in subscribed:
             return ScheduleStatus.SUBSCRIBED
         return ScheduleStatus.UNSUBSCRIBED
@@ -376,6 +387,7 @@ async def _cards(
     def card(slot: ScheduleSlot) -> ScheduleCard:
         key = match_key(slot.original_title)
         found = _rating(slot, ratings.get(key, []))
+        shown = status(slot)
         return ScheduleCard(
             media_id=slot.media_id,
             tmdb_id=slot.tmdb_id,
@@ -386,7 +398,8 @@ async def _cards(
             air_date=slot.air_date,
             season=slot.season,
             episode=slot.episode,
-            status=status(slot),
+            status=shown,
+            late_days=(today - slot.air_date).days if shown is ScheduleStatus.LATE else None,
             airs_at=_airs_at(slot, airings.get(key, []), now),
             score=found.score if found else None,
             votes=found.votes if found else None,

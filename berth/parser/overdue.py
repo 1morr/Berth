@@ -79,6 +79,27 @@ class Overdue:
     episodes: tuple[LateEpisode, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class Watch:
+    """一部作品這一刻的追更（M5.5 票 12）：遲到判定的每一段都留著，追更頁照它分段，`judge_overdue`
+    從它收成一件 Issue。"""
+
+    reason: OverdueReason
+    #: 過了門檻、不在兩種例外裡的集，照季集排；視窗過了也照列（`dormant` 說不提醒）。
+    late: tuple[LateEpisode, ...]
+    #: 基準之後已播、還沒入庫的集（過不過門檻、下載在不在動都算），照季集排。
+    missing: tuple[tuple[int, int], ...]
+    #: 最後一集缺集播出滿 `WINDOW`：不再提醒，追更頁收進「斷更很久」。
+    dormant: bool
+
+    @property
+    def overdue(self) -> Overdue | None:
+        """寫成 Issue 的那一份：有晚的集、還在視窗裡才有。"""
+        if not self.late or self.dormant:
+            return None
+        return Overdue(reason=self.reason, episodes=self.late)
+
+
 def judge_overdue(
     media: MediaSnapshot,
     *,
@@ -88,7 +109,27 @@ def judge_overdue(
     now: datetime,
     threshold_days: int,
 ) -> Overdue | None:
-    """這部作品晚了沒；沒有晚的集是 `None`。
+    """這部作品晚了沒；沒有晚的集（或過了視窗）是 `None`。參數同 `watch_overdue`。"""
+    return watch_overdue(
+        media,
+        imported=imported,
+        claims=claims,
+        subscribed=subscribed,
+        now=now,
+        threshold_days=threshold_days,
+    ).overdue
+
+
+def watch_overdue(
+    media: MediaSnapshot,
+    *,
+    imported: Mapping[tuple[int, int], datetime],
+    claims: Mapping[tuple[int, int], Sequence[OverdueJob]],
+    subscribed: Collection[datetime],
+    now: datetime,
+    threshold_days: int,
+) -> Watch:
+    """這部作品這一刻缺哪幾集、哪幾集晚了、過了視窗沒。
 
     `imported` 是帳本有正片蓋到的季集與它入庫的那一刻；`subscribed` 是作品上每一條 RSS Series 建立
     的那一刻（不可為空）；`now` 是容器時區的現在，日界照它的日期。
@@ -125,10 +166,13 @@ def judge_overdue(
             found.append(episode)
     # 視窗看最後一集缺集（還沒過門檻、下載中的也算）：它播出滿 `WINDOW` 就整部不提醒，還在提醒時
     # 照實列出之前晚的每一集。
-    missing = [day for pair, day in after if pair not in imported and day <= now.date()]
-    if not found or now.date() >= max(missing) + WINDOW:
-        return None
-    return Overdue(reason=reason, episodes=tuple(found))
+    missing = [(pair, day) for pair, day in after if pair not in imported and day <= now.date()]
+    return Watch(
+        reason=reason,
+        late=tuple(found),
+        missing=tuple(pair for pair, _ in missing),
+        dormant=bool(missing) and now.date() >= max(day for _, day in missing) + WINDOW,
+    )
 
 
 def _late(pair: tuple[int, int], aired: date, jobs: Sequence[OverdueJob]) -> LateEpisode | None:

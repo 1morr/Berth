@@ -896,6 +896,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/schedule/tracking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Keeping Up */
+        get: operations["get_keeping_up_api_schedule_tracking_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/media/{media_id}": {
         parameters: {
             query?: never;
@@ -3630,6 +3647,18 @@ export interface components {
          */
         Effect: "read" | "reversible" | "irreversible";
         /**
+         * EpisodeMarkOut
+         * @description 「已播到」「已入庫到」那一格。
+         */
+        EpisodeMarkOut: {
+            /** Season */
+            season: number;
+            /** Episode */
+            episode: number;
+            /** Air Date */
+            air_date: string | null;
+        };
+        /**
          * EpisodeOut
          * @description 一集。
          */
@@ -4740,6 +4769,24 @@ export interface components {
          * @enum {string}
          */
         JobTrigger: "manual" | "rss" | "reimport";
+        /** KeepingUpOut */
+        KeepingUpOut: {
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Works */
+            works: components["schemas"]["TrackedWorkOut"][];
+        };
+        /**
+         * KeepingUpSection
+         * @description 追更頁的一段（M5.5 票 12，`.scratch/m5.5/tracking-shape.md`）。
+         *
+         *     **宣告順序就是頁上的順序**。
+         * @enum {string}
+         */
+        KeepingUpSection: "action" | "on_time" | "dormant";
         /**
          * KindCountsOut
          * @description 劇集、電影各幾個。
@@ -4769,6 +4816,24 @@ export interface components {
          * @enum {string}
          */
         Language: "zh-Hant" | "en";
+        /**
+         * LateEpisodeOut
+         * @description 晚的一集（同 `episodes_overdue` 的 `detail_json.episodes[]`）。
+         */
+        LateEpisodeOut: {
+            /** Season */
+            season: number;
+            /** Episode */
+            episode: number;
+            /**
+             * Air Date
+             * Format: date
+             */
+            air_date: string;
+            stall: components["schemas"]["OverdueStall"];
+            /** Jobs */
+            jobs: string[];
+        };
         /**
          * LedgerFileOut
          * @description 檔案清單的一列：一筆帳本（CONTEXT.md 的 Ledger Entry）。
@@ -5279,6 +5344,20 @@ export interface components {
             /** Days */
             days: number;
         };
+        /**
+         * OverdueReason
+         * @description `episodes_overdue` 為什麼開（`detail_json.reason`，M5.5 票 10、11）。
+         * @enum {string}
+         */
+        OverdueReason: "late" | "next_run";
+        /**
+         * OverdueStall
+         * @description 晚的那一集卡在哪（`episodes_overdue` 的 `detail_json.episodes[].stall`）。
+         *
+         *     宣告順序就是一集同時有好幾筆 Job 時說哪一種：要人動手、離入庫越近的在前。
+         * @enum {string}
+         */
+        OverdueStall: "import_failed" | "stalled" | "download_failed" | "submit_failed" | "not_released";
         /**
          * OwnerIn
          * @description 擁有者的 Jellyfin 帳密：套件內拿去建管理員，既有拿去登入。只交給 Jellyfin，不存下來。
@@ -6340,6 +6419,8 @@ export interface components {
             /** Episode */
             episode: number;
             status: components["schemas"]["ScheduleStatus"];
+            /** Late Days */
+            late_days: number | null;
             /** Airs At */
             airs_at: string | null;
             /** Score */
@@ -6378,10 +6459,10 @@ export interface components {
          * @description 時間表上一張卡的狀態（M5.5 票 09，spec〈範圍〉「時間表」）。
          *
          *     **宣告順序就是優先序**：那一集入庫了就不必再說它訂閱了。每次照資料庫算，不進時間表的快取：
-         *     訂閱完下一次打開就要變。「晚 N 天」是票 12 的層。
+         *     訂閱完下一次打開就要變。
          * @enum {string}
          */
-        ScheduleStatus: "imported" | "subscribed" | "unsubscribed";
+        ScheduleStatus: "imported" | "late" | "subscribed" | "unsubscribed";
         /**
          * SearchOut
          * @description 一次搜尋的回應。
@@ -7116,6 +7197,31 @@ export interface components {
             counted: number;
             /** Unknown */
             unknown: number;
+        };
+        /**
+         * TrackedWorkOut
+         * @description 追更頁的一列。
+         */
+        TrackedWorkOut: {
+            /** Media Id */
+            media_id: string;
+            /** Title */
+            title: string;
+            /** Title En */
+            title_en: string;
+            /** Groups */
+            groups: string[];
+            aired: components["schemas"]["EpisodeMarkOut"] | null;
+            imported: components["schemas"]["EpisodeMarkOut"] | null;
+            conclusion: components["schemas"]["WhyNot"] | null;
+            /** Stalled */
+            stalled: boolean;
+            section: components["schemas"]["KeepingUpSection"];
+            reason: components["schemas"]["OverdueReason"] | null;
+            /** Late Days */
+            late_days: number | null;
+            /** Late */
+            late: components["schemas"]["LateEpisodeOut"][];
         };
         /**
          * TrackingOut
@@ -9472,6 +9578,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_keeping_up_api_schedule_tracking_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepingUpOut"];
                 };
             };
         };

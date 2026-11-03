@@ -18,7 +18,7 @@ from berth.domain import (
     OverdueStall,
     SeasonSnapshot,
 )
-from berth.parser.overdue import Overdue, OverdueJob, judge_overdue
+from berth.parser.overdue import Overdue, OverdueJob, Watch, judge_overdue, watch_overdue
 
 #: 容器時區（台北）：牆上的時刻才是門檻的單位。
 TZ = timezone(timedelta(hours=8))
@@ -332,3 +332,54 @@ class TestWindowAnchor:
         assert late(judge(media=media, imported={(1, 1), (1, 2)}, now=at(31))) == [
             (1, 3, OverdueStall.NOT_RELEASED)
         ]
+
+
+def watch(
+    *,
+    now: datetime,
+    media: MediaSnapshot = WEEKLY,
+    imported: Collection[tuple[int, int]] = ((1, 1), (1, 2), (1, 3)),
+    claims: Mapping[tuple[int, int], Sequence[OverdueJob]] | None = None,
+) -> Watch:
+    return watch_overdue(
+        media,
+        imported=dict.fromkeys(imported, LANDED),
+        claims=claims or {},
+        subscribed=(noon(SUBSCRIBED),),
+        now=now,
+        threshold_days=2,
+    )
+
+
+class TestWatch:
+    """追更頁讀的那一份（M5.5 票 12）：缺的集、晚的集與視窗，不收成 Issue。"""
+
+    def test_missing_counts_what_aired_after_the_baseline_before_the_threshold(self) -> None:
+        """10/30：第 4 集播了、還沒過門檻：缺它，但還不晚。"""
+        seen = watch(now=at(30))
+        assert seen.missing == ((1, 4),)
+        assert seen.late == ()
+        assert not seen.dormant
+        assert seen.overdue is None
+
+    def test_late_once_past_the_threshold_matches_the_judgement(self) -> None:
+        seen = watch(now=at(31))
+        assert [(one.season, one.episode) for one in seen.late] == [(1, 4)]
+        assert seen.overdue == judge(now=at(31))
+
+    def test_caught_up_has_nothing_missing(self) -> None:
+        seen = watch(now=at(27), imported=((1, 1), (1, 2), (1, 3)))
+        assert seen.missing == ()
+        assert seen.late == ()
+
+    def test_past_the_window_is_dormant_and_still_says_what_is_missing(self) -> None:
+        seen = watch(media=SHORT, now=at(27, month=12))
+        assert seen.dormant
+        assert seen.missing == ((1, 4),)
+        assert seen.overdue is None
+
+    def test_a_moving_download_is_missing_but_not_late(self) -> None:
+        moving = {(1, 4): [OverdueJob(hash="a", state=JobState.DOWNLOADING)]}
+        seen = watch(now=at(31), claims=moving)
+        assert seen.missing == ((1, 4),)
+        assert seen.late == ()
