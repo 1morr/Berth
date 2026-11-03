@@ -67,6 +67,7 @@ ffmpeg 產種子檔），那只影響「造測試素材」這一步，不影響 
 | `anime_sources.py` | M5 票 16：AniList GraphQL（季表）與 Bangumi `/calendar` 對真的服務回什麼，含限流標頭與 400 的 `errors`。兩步：`record`（AniList 每次間隔 2.5 秒，原始回應在 `.local/experiments/results/anime_sources/`）、`fixtures`（只留內容型別與限流標頭，寫 `tests/fixtures/http/{anilist,bgm}/`）。**import berth 的查詢字串**（fixture 要是 adapter 真的會送的那幾句）；不錄 429（要刻意撞上限才拿得到）。結論在 brief §20.3〈動漫資料來源〉 |
 | `tavily_search.py` | M5 票 17：Tavily `POST /search` 對真的服務回什麼——成功的形狀、`include_domains` 收不收子網域、錯 key 的 `401` 與參數錯的 `400`。兩步：`record`（成功那一次花 1 credit，原始回應在 `.local/experiments/results/tavily_search/`）、`fixtures`（只留內容型別標頭，寫 `tests/fixtures/http/tavily/`）。key 只從 `TAVILY_API_KEY` 讀；只用標準庫；結論在 brief §20.24 |
 | `ai_models.py` | M5.5 票 02：AI 端點的模型清單帶 key 時回什麼——Anthropic 接口 `{base}/v1/models` 的 `x-api-key` 與 `Bearer` 各收不收、分頁認不認，OpenAI 接口 `{base}/models` 的形狀，兩支錯 key 的 `401`。`python3 scripts/experiments/ai_models.py record --env <.env>`：key 從那份 `.env` 的 `AI_ANTHROPIC_*`、`AI_OPENAI_*` 讀，不印、寫檔前檢查輸出裡沒有 key；原始回應在 `.local/experiments/results/ai_models/`，只留內容型別標頭的幾份寫 `tests/fixtures/http/ai_models/`。只列模型、不花 token；只用標準庫；結論在 brief §20.26 |
+| `schedule_sources.py` | M5.5 票 08：時間表用 TMDB 當主幹夠不夠——幾組 discover 條件（動畫、原文語言、產地、窗口前後放寬一天）列得出幾成 Bangumi `/calendar` 上的作品，分母分產地與「Bangumi 這一週有集」（`/v0/episodes`）；漏掉的讀 `tv/{id}` 說原因，另列反方向（discover 有、放送表沒有）。每部 Bangumi 作品先找 TMDB id 再比 id，標題只用來找；衍生作記號（迷你動畫、特別篇）兩邊不一致就不算同一部。只用標準庫；憑證讀 `TMDB_API_KEY`；回應快取在 `.local/experiments/cache/schedule_sources/`（清單與放送表的鍵帶日期）；結論在 `docs/research/schedule-sources-2026-11-04.md` |
 | `lib.py` | 共用的 HTTP、輪詢、bencode、報告輸出 |
 
 ## 幾個不明顯的地方

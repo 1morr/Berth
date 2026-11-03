@@ -55,6 +55,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 05b 累計編號下一集已播 | 累計編號的第一批要下一集晚於發佈加兩天才擔保，TMDB 前季多記一集改擋下；照字面不套。閘門前後相同、擔保錯 0，SPY×FAMILY 仍擔保；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
 | 2026-11-04 | M5.5 06 升級後自動重算 | 啟動時舊版本的 review（排除 user、audit_undone）退回 completed，規劃器在背景重算並蓋新版本；同版本重啟 TMDB 0 次 | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
 | 2026-11-04 | M5.5 06 CI 偶發紅 | RSS 少送因送單門檻量到 CI 機器真實磁碟（`low_disk_space`），非本票；測試預設 1 TiB（`test_host_disk.py`） | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
+| 2026-11-04 | M5.5 08 時間表資料源 | 這週有集的日本作品 TMDB 列得出 93.4% / 90.8%，主幹照 TMDB；漏的是迷你番與兒童節目（brief §20.3） | 新 session 下 `/implement .scratch/m5.5/issues/09-schedule.md` |
 
 ## 偏差與決定
 
@@ -69,3 +70,4 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - 2026-11-04 M5.5 票 04：規則一改成照字面的列九天、有換算的兩天（改 plan §4.4、brief §15、§20.11、§20.27、`CONTEXT.md`）；「照字面」抽成 `parser/literal.py` 與第一批共用，`check_airing` 多收發佈名，`publishing.just_aired` 分兩個窗口；offset 設 0 算照字面。
 - 2026-11-04 M5.5 票 07：頁首件數各歸各頁（使用者定）：待處理＝審核＋Issue、待綁定掛在新番，頁首數字才對得上點進去的件數；三格加總仍是 Discord 的 N（`test_notify_waiting.py` 守）。改 spec〈範圍〉、plan §6–7、DESIGN.md、brief §13。
 - 2026-11-04 M5.5 票 04b：規則一擋下的照字面列早 ≤14 天記 `released_far_ahead_of_airing`（說平台先行），更早記 `released_too_early_for_simulcast`；`released_before_airing` 只剩有換算的（改 plan §4.4、brief §20.27、spec）。
+- 2026-11-04 M5.5 票 08：時間表覆蓋率只算日本作品（使用者定），TMDB 主幹不換；discover 用 `ja|zh`、窗口前後放寬一天，每部再讀 `tv/{id}` 才知道哪天第幾集（改 brief §20.3、spec〈範圍〉、票 09）。
