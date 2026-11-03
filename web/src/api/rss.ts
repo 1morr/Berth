@@ -122,6 +122,9 @@ export function overdueQueryOptions() {
   })
 }
 
+/** 遲到門檻的上限（天），同後端的 `OVERDUE_DAYS_MAX`；全域與單一 RSS Series 兩格共用。 */
+export const OVERDUE_DAYS_MAX = 30
+
 /** 存遲到門檻；0–30 以外回 422。下一輪巡檢照新的門檻開或收，Issue 不當場動。 */
 export function saveOverdue(days: number) {
   return apiPut<Schemas['OverdueOut']>('/rss/overdue', { days } satisfies Schemas['OverdueIn'])
@@ -298,6 +301,13 @@ export function saveFeedExclusions(id: number, rules: string[]) {
 
 export function saveSeriesExclusions(id: number, rules: string[]) {
   return apiPut<RssSeries>(`/rss/series/${id}/exclusions`, { rules })
+}
+
+/** 這個 RSS Series 的遲到門檻（M5.5 票 11）；`null` 回到全域的。0–30 以外回 422。 */
+export function saveSeriesOverdue(id: number, days: number | null) {
+  return apiPut<RssSeries>(`/rss/series/${id}/overdue`, {
+    days,
+  } satisfies Schemas['SeriesOverdueIn'])
 }
 
 /** 訂閱 Mikan 番組 × 字幕組並綁到這部作品（票 19），整季一起送（同綁定）。 */

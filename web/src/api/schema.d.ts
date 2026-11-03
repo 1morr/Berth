@@ -1736,6 +1736,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rss/series/{series_id}/overdue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Series Overdue
+         * @description 覆寫這個 RSS Series 的遲到門檻；`null` 用全域的。一部作品多條訂閱時巡檢取最大值。
+         */
+        put: operations["put_series_overdue_api_rss_series__series_id__overdue_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rss/series/{series_id}/exclusions": {
         parameters: {
             query?: never;
@@ -6574,6 +6594,8 @@ export interface components {
             candidates: components["schemas"]["CandidateOut"][];
             /** Exclusions */
             exclusions: string[];
+            /** Overdue Days */
+            overdue_days: number | null;
             /** Confirmed */
             confirmed: boolean;
             /** Search Term */
@@ -6600,6 +6622,11 @@ export interface components {
             /** Submitted */
             submitted: number;
             ask: components["schemas"]["FirstBatchAskOut"] | null;
+        };
+        /** SeriesOverdueIn */
+        SeriesOverdueIn: {
+            /** Days */
+            days: number | null;
         };
         /**
          * ServiceHealthOut
@@ -11261,6 +11288,50 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesOut"];
+                };
+            };
+            /** @description `series_missing` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RssRefusalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_series_overdue_api_rss_series__series_id__overdue_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesOverdueIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

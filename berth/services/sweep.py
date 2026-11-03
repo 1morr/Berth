@@ -15,9 +15,10 @@
   `GAP_GRACE` 才算。
 - **同一集意外多份**（`_colliding_episodes`，M4 票 130）：同一個 Series 兩個發佈名寫的集號不同的 Job
   入庫成同一集。版本並存（別的字幕組、v2、简繁）不算。
-- **訂閱的作品遲到**（`_overdue_works`，M5.5 票 10）：有綁好的 RSS Series 的作品，最後入庫的一集
-  之後播出滿門檻（`RssSettings.overdue_days`）還沒入庫的集，下載還在動、已經在等人的除外；判定在
-  `parser.overdue`，一部作品一件 `episodes_overdue`。
+- **訂閱的作品遲到**（`_overdue_works`，M5.5 票 10、11）：有綁好的 RSS Series、現在還訂著的作品，
+  最後入庫的一集之後播出滿門檻（Series 的 `overdue_days`，留空用 `RssSettings.overdue_days`，取
+  最大值）還沒入庫的集，下載還在動、已經在等人的除外；判定（含換輪與 60 天視窗）在
+  `parser.overdue`，一部作品一件 `episodes_overdue`。快照在巡檢之前由 `refresh_watched` 刷新。
 - **放太久**（`_remind_lingering`）：「等你處理」裡最舊的一件等了超過 `LINGER_AFTER`，給訂閱了
   「等你處理」的管理員再提醒一則（`notify.queue_lingering`）；同一件 `REMIND_EVERY` 內只提醒一次。
   一件從什麼時候開始等是送出迴圈的看守第一次看到它的那一刻（`NotifyWatchSettings.since`）：
@@ -45,6 +46,7 @@ from berth.domain import (
     JobState,
     JobTrigger,
     LedgerStatus,
+    MediaSnapshot,
     PlanAction,
 )
 from berth.models import (
@@ -55,6 +57,7 @@ from berth.models import (
     Media,
     NotifyWatchSettings,
     RssFeed,
+    RssItem,
     RssSeries,
     RssSettings,
     SweepSettings,
@@ -62,6 +65,7 @@ from berth.models import (
 from berth.models.types import utcnow
 from berth.parser import parse_release
 from berth.parser.overdue import Overdue, OverdueJob, judge_overdue
+from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.inventory import episodes_of, read_holdings
 from berth.services.issues import (
@@ -71,7 +75,9 @@ from berth.services.issues import (
     record_issue,
     still_ignored,
 )
+from berth.services.media import refresh_snapshot
 from berth.services.notify import queue_lingering
+from berth.services.rss import subscribed_media
 from berth.services.settings import read_settings, write_settings
 from berth.services.waiting import WaitingSource, waiting_now
 from berth.services.why_not import claims_by_episode
@@ -134,14 +140,16 @@ class SweepOutcome:
 
 # 寫 Issue 與排通知；Issue 由下一輪收、通知送出去收不回來。
 @command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL, Flag.SENDS_OUT})
-async def sweep_once(session: AsyncSession, *, now: datetime | None = None) -> SweepOutcome:
-    """巡檢一輪，最後 commit。"""
+async def sweep_once(
+    session: AsyncSession, *, now: datetime | None = None, unrefreshed: Collection[str] = ()
+) -> SweepOutcome:
+    """巡檢一輪，最後 commit。`unrefreshed` 是巡檢前刷新失敗的作品（`refresh_watched`）。"""
     moment = now or utcnow()
     stuck, cleared = await _stuck_first_batches(session, moment)
     failing, recovered = await _failing_feeds(session, moment)
     missing, filled = await _missing_episodes(session, moment)
     colliding, untangled = await _colliding_episodes(session, moment)
-    overdue, caught_up = await _overdue_works(session, moment)
+    overdue, caught_up = await _overdue_works(session, moment, unrefreshed)
     reminded = await _remind_lingering(session, moment)
     await session.commit()
     return SweepOutcome(
@@ -152,6 +160,51 @@ async def sweep_once(session: AsyncSession, *, now: datetime | None = None) -> S
         overdue=overdue,
         cleared=cleared + recovered + filled + untangled + caught_up,
         reminded=reminded,
+    )
+
+
+# 只更新 TMDB 快照的快取（同 `media.snapshot_for_planning`），不寫 Issue；巡檢的交易之前、獨立
+# session 跑，因為 `_store` 每一部自己 commit。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def refresh_watched(session: AsyncSession, factory: ServiceClientFactory) -> frozenset[str]:
+    """巡檢前刷新訂閱作品的快照（M5.5 票 11），回刷新失敗的作品：那幾部這一輪的遲到不開也不收
+    （`sweep_once(unrefreshed=...)`）。
+
+    舊快照看不到剛播出的那一集。**跳過**：`PLANNING_TTL` 內刷新過的，以及 TMDB 說完結而且每一集都在
+    庫的（不會再有新的一集）。量級：一部 5–7 次請求，20 部約 100–150 次，全域桶每秒 40 次。
+    """
+    failed: set[str] = set()
+    for media_id in sorted(
+        {row.media_id for row in await _watched_series(session) if row.media_id}
+    ):
+        media = await session.get(Media, media_id)
+        snapshot = media.stored_snapshot() if media is not None else None
+        if (
+            snapshot is not None
+            and snapshot.ended
+            and _all_in(snapshot, await _imported(session, media_id))
+        ):
+            continue
+        try:
+            fresh = await refresh_snapshot(session, factory, media_id)
+        # 服務錯誤 `refresh_snapshot` 自己接；其餘的（壞掉的回應、寫入失敗）只算這一部沒刷新到，
+        # 不讓一部作品拖垮整輪巡檢。
+        except Exception:
+            logger.exception("snapshot refresh failed", extra={"media_id": media_id})
+            await session.rollback()
+            fresh = False
+        if not fresh:
+            failed.add(media_id)
+    return frozenset(failed)
+
+
+def _all_in(snapshot: MediaSnapshot, imported: Collection[tuple[int, int]]) -> bool:
+    """正片的每一集都在庫（第 0 季不看）。"""
+    return all(
+        (season.season_number, episode.episode_number) in imported
+        for season in snapshot.seasons
+        if season.season_number > 0
+        for episode in season.episodes
     )
 
 
@@ -339,36 +392,37 @@ async def _colliding_episodes(session: AsyncSession, moment: datetime) -> tuple[
     return len(flagged), cleared
 
 
-async def _overdue_works(session: AsyncSession, moment: datetime) -> tuple[int, int]:
-    """每一部遲到的訂閱作品開（或更新）一件，列出晚的集與卡在哪；都入庫了、或不再有綁好的 Series
-    的收掉。回（開著的件數，收掉的件數）。
+async def _overdue_works(
+    session: AsyncSession, moment: datetime, unrefreshed: Collection[str]
+) -> tuple[int, int]:
+    """每一部遲到的訂閱作品開（或更新）一件，列出晚的集與卡在哪；都入庫了、退訂了或不再有綁好的
+    Series 的收掉。回（開著的件數，收掉的件數）。
 
     日界照容器時區（`moment.astimezone()`）：巡檢迴圈給的就是牆上的 05:00。每一集蓋到哪幾筆 Job
     讀 `why_not.claims_by_episode`；Job 已經有 Issue 說著它現在這個狀態的，查法同第一批卡住
-    （`_covered`）。沒有 TMDB 快照的作品說不出哪一集播了，不開。
+    （`_covered`）。門檻是作品上每一條 Series 的門檻（沒覆寫的用全域）取最大值。沒有 TMDB 快照的
+    作品說不出哪一集播了，不開。**`unrefreshed` 的作品這一輪不開也不收**（巡檢前刷新失敗，
+    `refresh_watched`）：舊快照看不到剛播出的集，也可能讓已經對的那一件被收掉。
     """
     local = moment.astimezone()
-    watched: dict[str, datetime] = {}
-    for media_id, created in (
-        await session.execute(
-            select(RssSeries.media_id, RssSeries.created_at).where(RssSeries.media_id.is_not(None))
-        )
-    ).tuples():
-        # 上面的 where 擋掉了 NULL，查詢結果的型別上看不出來。
-        assert media_id is not None
-        if media_id not in watched or created < watched[media_id]:
-            watched[media_id] = created
-    threshold = (await read_settings(session, RssSettings)).overdue_days
+    by_work: dict[str, list[RssSeries]] = {}
+    for series in await _watched_series(session):
+        # `_watched_series` 只回綁好的。
+        assert series.media_id is not None
+        by_work.setdefault(series.media_id, []).append(series)
+    fallback = (await read_settings(session, RssSettings)).overdue_days
 
     flagged: set[tuple[IssueType, str]] = set()
-    for media_id, since in sorted(watched.items()):
+    for media_id, rows in sorted(by_work.items()):
+        if media_id in unrefreshed:
+            continue
         media = await session.get(Media, media_id)
         snapshot = media.stored_snapshot() if media is not None else None
         if media is None or snapshot is None:
             continue
         claimed = await claims_by_episode(session, media)
         covered = await _covered(
-            session, list({job.hash: job for rows in claimed.values() for job in rows}.values())
+            session, list({job.hash: job for jobs in claimed.values() for job in jobs}.values())
         )
         found = judge_overdue(
             snapshot,
@@ -376,13 +430,15 @@ async def _overdue_works(session: AsyncSession, moment: datetime) -> tuple[int, 
             claims={
                 pair: [
                     OverdueJob(hash=job.hash, state=job.state, waiting=job.hash in covered)
-                    for job in rows
+                    for job in jobs
                 ]
-                for pair, rows in claimed.items()
+                for pair, jobs in claimed.items()
             },
-            watched_since=since.astimezone(local.tzinfo).date(),
+            subscribed=[row.created_at for row in rows],
             now=local,
-            threshold_days=threshold,
+            threshold_days=max(
+                fallback if row.overdue_days is None else row.overdue_days for row in rows
+            ),
         )
         if found is None:
             continue
@@ -394,8 +450,22 @@ async def _overdue_works(session: AsyncSession, moment: datetime) -> tuple[int, 
             now=moment,
         )
         flagged.add((IssueType.EPISODES_OVERDUE, media_id))
-    cleared = await _settle(session, (IssueType.EPISODES_OVERDUE,), flagged, moment)
+    # 刷新失敗的當成「這一輪還量到」：開著的留著，下一輪看得清楚再說。
+    kept = {(IssueType.EPISODES_OVERDUE, media_id) for media_id in unrefreshed}
+    cleared = await _settle(session, (IssueType.EPISODES_OVERDUE,), flagged | kept, moment)
     return len(flagged), cleared
+
+
+async def _watched_series(session: AsyncSession) -> list[RssSeries]:
+    """遲到看的對象：綁好、還帶著 Item 的 RSS Series，而且它那部作品現在有訂閱
+    （`rss.subscribed_media`，與作品頁的訂閱清單同一套判定）。刪掉 Feed 只刪 Feed，Series 與綁定
+    留著（`delete_feed`），退訂了就不看（協調者追加，票 10 的缺陷）。"""
+    bound = list(await session.scalars(select(RssSeries).where(RssSeries.media_id.is_not(None))))
+    live = await subscribed_media(session, [row.media_id for row in bound if row.media_id])
+    # 作品還訂著時，Feed 被刪的那幾條也不算（門檻、換輪、起算日都不看它）：刪 Feed 連 Item 一起刪，
+    # 還掛著 Item 的才是還在送的那一條。
+    carrying = set(await session.scalars(select(RssItem.series_id).distinct()))
+    return [row for row in bound if row.media_id in live and row.id in carrying]
 
 
 def _overdue_detail(media_id: str, title: str, found: Overdue) -> dict[str, Any]:
@@ -418,14 +488,19 @@ def _overdue_detail(media_id: str, title: str, found: Overdue) -> dict[str, Any]
     }
 
 
-async def _imported(session: AsyncSession, media_id: str) -> set[tuple[int, int]]:
-    """這部作品帳本有正片蓋到的季集，不分誰送的。"""
+async def _imported(session: AsyncSession, media_id: str) -> dict[tuple[int, int], datetime]:
+    """這部作品帳本有正片蓋到的季集，不分誰送的，各自最早入庫的那一刻（換輪比它）。"""
     rows = await session.scalars(
         select(LedgerEntry).where(
             LedgerEntry.media_id == media_id, LedgerEntry.action == PlanAction.IMPORT
         )
     )
-    return {pair for row in rows for pair in episodes_of(row)}
+    landed: dict[tuple[int, int], datetime] = {}
+    for row in rows:
+        for pair in episodes_of(row):
+            if pair not in landed or row.created_at < landed[pair]:
+                landed[pair] = row.created_at
+    return landed
 
 
 async def _written_spans(names: Iterable[str]) -> list[tuple[int, int]]:

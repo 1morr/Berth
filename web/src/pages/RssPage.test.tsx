@@ -89,6 +89,7 @@ function series(overrides: Partial<RssSeries> = {}): RssSeries {
     reasons: [],
     candidates: [],
     exclusions: [],
+    overdue_days: null,
     confirmed: false,
     search_term: 'Kimi ga Shinu made Koi wo Shitai',
     source: 'mikan',
@@ -1624,6 +1625,41 @@ describe('RSS 頁：以作品呈現 Series（M4 票 13）', () => {
     expect(within(row).getByText('進階')).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: /標題規則（0 條）/ })).toBeInTheDocument()
     expect(within(row).getByRole('button', { name: '解除綁定' })).toBeInTheDocument()
+  })
+
+  it('進階裡改這個字幕組的遲到門檻，留空回到全域（M5.5 票 11）', async () => {
+    const stub = render({
+      'GET /api/rss/series': { body: [boundKimi()] },
+      'GET /api/rss/series/7/items': { body: [] },
+      'PUT /api/rss/series/7/overdue': { body: boundKimi({ overdue_days: 5 }) },
+    })
+    renderApp('/rss')
+    const row = await screen.findByRole('article', { name: 'LoliHouse' })
+    await userEvent.click(within(row).getByText('展開'))
+
+    const days = within(row).getByRole('textbox', { name: '這個字幕組的遲到門檻（天）' })
+    expect(days).toHaveValue('')
+    expect(await within(row).findByText(/留空用全域的 2 天/)).toBeInTheDocument()
+
+    await userEvent.type(days, '31')
+    await userEvent.click(within(row).getByRole('button', { name: '儲存這個字幕組的門檻' }))
+    expect(within(row).getByText('填 0 到 30 的整數，或留空。')).toBeInTheDocument()
+    expect(sent(stub, 'PUT', '/api/rss/series/7/overdue')).toHaveLength(0)
+
+    await userEvent.clear(days)
+    await userEvent.type(days, '5')
+    await userEvent.click(within(row).getByRole('button', { name: '儲存這個字幕組的門檻' }))
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/overdue')).toHaveLength(1))
+    expect(JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/overdue')[0][1]?.body))).toEqual({
+      days: 5,
+    })
+
+    await userEvent.clear(days)
+    await userEvent.click(within(row).getByRole('button', { name: '儲存這個字幕組的門檻' }))
+    await waitFor(() => expect(sent(stub, 'PUT', '/api/rss/series/7/overdue')).toHaveLength(2))
+    expect(JSON.parse(String(sent(stub, 'PUT', '/api/rss/series/7/overdue')[1][1]?.body))).toEqual({
+      days: null,
+    })
   })
 
   it('讀不到它的 Item 時說出來，給一顆重讀', async () => {
