@@ -39,7 +39,7 @@ WARNING berth.services.importer job import failed  job=cccc…  state=import_fai
 - [x] 有一個在修之前穩定紅、修之後綠的 repro（測試或指令，貼輸出）
 - [x] 壓力跑 30 次以上全綠（貼次數）
 - [x] 全部檢查、pytest 綠；progress.md 已更新
-- [ ] 合併後 main 的 CI 綠，補上票 01 被卡住的 CI 驗收（協調者在 ledger 補記）
+- [x] 合併後 main 的 CI 綠，補上票 01 被卡住的 CI 驗收（協調者在 ledger 補記）
 
 ## Comments
 
@@ -62,3 +62,4 @@ WARNING berth.services.importer job import failed  job=cccc…  state=import_fai
 - **同型的其他測試**：用 `TestClient` 又造 `import_failed` Job 的只有本檔與 `test_agent_slash.py`；後者不核准，不會叫醒 importer。`test_proposals.py`、`test_executor.py` 沒有跑著的迴圈。
 - **code-review 未處理的發現**：`retried_events` 的查詢形狀與 `test_executor.py:109` 相同，兩處而已，沒抽共用 helper。
 - 最後一條（合併後 main 的 CI）要合併之後才看得到，由協調者補記。
+- 2026-11-04 協調者：合併 0e95b3f7 後 CI run 41682777161 success；票 01 的程式碼在 1eb935fe 的 CI run 41678662979 已綠。

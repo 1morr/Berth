@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 
 from pydantic_ai.exceptions import ModelHTTPError
@@ -33,6 +34,8 @@ from pydantic_ai.models.function import (
 )
 
 from berth.adapters.ai import AiEndpoint
+from berth.adapters.ai.catalog import ModelCatalog, ModelListing
+from berth.domain import AiProbeFailure, AiProvider
 
 #: 一次模型呼叫的回答。
 Script = Callable[[list[ModelMessage], AgentInfo], ModelResponse]
@@ -54,8 +57,11 @@ class FakeAi:
         self.script = script
         #: 被拒時把 key 原樣貼回錯誤訊息裡（有的服務會這樣做）。
         self.echo_key = False
-        #: 每次組模型時收到的設定，給測試斷言「用的是哪一把 key、哪個網址」。
+        #: 每次連出去（組模型、列模型）時收到的設定，給測試斷言「用的是哪一把 key、哪個網址」。
+        #: 列模型的那幾筆 `model` 是空字串。
         self.endpoints: list[AiEndpoint] = []
+        #: 「取得模型」時端點列的模型（M5.5 票 02）；`None` 是這個端點沒有列模型的路由（404）。
+        self.listed: tuple[str, ...] | None = ("fake-model-large", "fake-model-small")
         #: 給了的話，每一次串流的模型呼叫先等它（`Pause`）。
         self.pause: Pause | None = None
 
@@ -106,3 +112,24 @@ class FakeAi:
                     yield {index: part}
 
         return FunctionModel(answer, stream_function=stream, model_name=endpoint.model)
+
+    def catalog(self, provider: AiProvider, base_url: str, api_key: str) -> ModelCatalog:
+        self.endpoints.append(AiEndpoint(provider, base_url, api_key, ""))
+        return _FakeCatalog(self, api_key)
+
+
+class _FakeCatalog:
+    def __init__(self, ai: FakeAi, api_key: str) -> None:
+        self._ai = ai
+        self._api_key = api_key
+
+    async def list_models(self) -> ModelListing:
+        if self._api_key in self._ai.rejected_keys:
+            message = "invalid x-api-key"
+            if self._ai.echo_key:
+                message += f": {self._api_key}"
+            body = {"type": "error", "error": {"type": "authentication_error", "message": message}}
+            return ModelListing((), AiProbeFailure.KEY_REJECTED, 401, json.dumps(body))
+        if self._ai.listed is None:
+            return ModelListing((), AiProbeFailure.NOT_FOUND, 404, "404 page not found")
+        return ModelListing(self._ai.listed, None, None, "")

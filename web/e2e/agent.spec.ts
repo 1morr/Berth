@@ -536,6 +536,48 @@ test('一般使用者也用得到側面板：問「為什麼沒入庫」得到�
   expect(usage.status()).toBe(403)
 })
 
+// 伺服器端網搜（M5.5 票 03）：替身回的每筆結果帶四千字的 `encrypted_content`，API 拿掉、面板畫成清單。
+test('網路搜尋：展開看到標題、網址與日期，不是加密內容的原文，重新載入之後一樣', async ({
+  page,
+}) => {
+  const responses: string[] = []
+  page.on('response', async (response) => {
+    if (new URL(response.url()).pathname.startsWith('/api/agent/')) {
+      responses.push(await response.text().catch(() => ''))
+    }
+  })
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('Frieren 第二季評價如何')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  await expect(log).toContainText('評價普遍很好')
+
+  for (const when of ['streamed', 'reloaded']) {
+    const search = log.locator('details').filter({ hasText: '網路搜尋' })
+    await expect(search).toContainText('完成')
+    await search.locator('summary').click()
+    const results = search.getByRole('list', { name: '結果' })
+    await expect(results.getByRole('listitem')).toHaveCount(3)
+    const first = results.getByRole('listitem').first()
+    await expect(
+      first.getByRole('link', { name: "Frieren: Beyond Journey's End season 2 – Wikipedia" }),
+    ).toHaveAttribute('href', 'https://en.wikipedia.org/wiki/Frieren')
+    await expect(first).toContainText('https://en.wikipedia.org/wiki/Frieren')
+    await expect(first).toContainText('October 3, 2026')
+    await expect(search).not.toContainText('encrypted_content')
+    await expectNoHorizontalScroll(page)
+    await shot(page, `web-search-${when}`)
+    if (when === 'streamed') await page.reload()
+  }
+
+  expect(responses.length).toBeGreaterThan(0)
+  for (const body of responses) expect(body).not.toContain('encrypted_content')
+})
+
 // 放在最後：斷路器一開就暫停 15 分鐘，之後的流程都問不了。
 test('provider 連續出錯 5 次：側面板說暫停到幾點，再送被擋下（M5 票 20、22）', async ({ page }) => {
   await signIn(page, '/jobs')

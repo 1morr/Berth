@@ -15,6 +15,7 @@ from pydantic_ai.models import Model
 
 # `api` 拿它當相依的型別，而 `api` 不能 import `adapters`：從這裡明示再匯出。
 from berth.adapters.ai import AiEndpoint, build_model
+from berth.adapters.ai.catalog import HttpModelCatalog, ModelCatalog
 from berth.adapters.anilist import AniList
 from berth.adapters.anilist.client import HttpAniList
 from berth.adapters.bgm import Bgm
@@ -40,7 +41,7 @@ from berth.adapters.torrent import HttpTorrentFetcher, TorrentFetcher
 from berth.adapters.websearch import WebSearch
 from berth.adapters.websearch.tavily import HttpTavily
 from berth.config import DEFAULT_DISCORD_API_URL, Config
-from berth.domain import ServiceKind
+from berth.domain import AiProvider, ServiceKind
 
 
 class ServiceClientFactory(Protocol):
@@ -82,6 +83,10 @@ class ServiceClientFactory(Protocol):
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         """AI provider 的模型物件（M5 票 09）。位址、key、模型名都是設定，接口兩種。"""
+        ...
+
+    def ai_models(self, provider: AiProvider, base_url: str, api_key: str) -> ModelCatalog:
+        """問 AI 端點有哪些模型（M5.5 票 02）。位址與 key 是表單上還沒存的那一份。"""
         ...
 
     def tavily(self, api_key: str) -> WebSearch:
@@ -175,6 +180,9 @@ class HttpServiceClientFactory:
 
     def ai(self, endpoint: AiEndpoint) -> Model:
         return build_model(endpoint)
+
+    def ai_models(self, provider: AiProvider, base_url: str, api_key: str) -> ModelCatalog:
+        return HttpModelCatalog(provider, base_url, api_key)
 
     def tavily(self, api_key: str) -> WebSearch:
         return HttpTavily(api_key)

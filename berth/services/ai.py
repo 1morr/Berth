@@ -1,8 +1,11 @@
-"""AI provider 的設定與「測試連線」（M5 票 09、plan §11.6〈provider〉）。
+"""AI provider 的設定、「測試連線」與模型欄的建議（M5 票 09、plan §11.6〈provider〉）。
 
 **key 只進不出**：讀回去的是 `has_key`，原文永遠不離開資料庫；服務的錯誤訊息若原樣貼回 key，
 給畫面之前遮掉。測試連線照 Sonarr 的「Test」：測的是表單上還沒存的那一份，key 欄空著就拿這個
 接口存著的那一把，但只在表單的網址與存著的相同時（M5.5 票 01，`_key_for`）。
+
+模型欄的建議照 Open WebUI 的連線設定（brief §20.26，M5.5 票 02）：按了「取得模型」才向表單上的
+端點問，問不到退回本機價目表；沒按之前只查本機表，不帶 key、不連外。
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.ai import AiEndpoint, effective_base_url, normalize_base_url, probe
 from berth.adapters.ai.prices import ModelPrice, known_models, price_of
-from berth.domain import AiProbeFailure, AiProvider, AiRefusal, AiSecret
+from berth.domain import AiModelSource, AiProbeFailure, AiProvider, AiRefusal, AiSecret
 from berth.models import AiEndpointSettings, AiSettings
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
@@ -38,8 +41,6 @@ class AiEndpointView:
     has_key: bool
     #: 這個端點上這個模型現在的價目；查不到是 `None`（畫面寫「未知」，不當 0）。
     price: ModelPrice | None
-    #: 這個端點查得到價的模型名，給模型欄當建議（可以不選、照打）。
-    known_models: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +75,25 @@ class AiTest:
     model: str
 
 
+@dataclass(frozen=True, slots=True)
+class AiModels:
+    """模型欄的建議（M5.5 票 02）。可以不選、照打。"""
+
+    models: tuple[str, ...]
+    source: AiModelSource
+    #: 「取得模型」沒問到的分類；問到了、或沒按（只查本機表）是 `None`。
+    failure: AiProbeFailure | None
+    #: 服務回的 HTTP 狀態碼；成功或沒有回應是 `None`。
+    status: int | None
+    #: 服務回的原文（key 若被貼回來已遮掉）。
+    detail: str
+
+
+def _from_prices(provider: AiProvider, base_url: str) -> AiModels:
+    models = known_models(effective_base_url(provider, base_url), provider)
+    return AiModels(models, AiModelSource.PRICES, None, None, "")
+
+
 def _endpoint_view(provider: AiProvider, endpoint: AiEndpointSettings) -> AiEndpointView:
     base_url = effective_base_url(provider, endpoint.base_url)
     return AiEndpointView(
@@ -81,7 +101,6 @@ def _endpoint_view(provider: AiProvider, endpoint: AiEndpointSettings) -> AiEndp
         model=endpoint.model,
         has_key=bool(endpoint.api_key),
         price=price_of(endpoint.model, base_url=base_url, provider=provider),
-        known_models=known_models(base_url, provider),
     )
 
 
@@ -95,12 +114,12 @@ def _view(settings: AiSettings) -> AiView:
     )
 
 
-def _base_url(form: AiForm) -> str:
+def _base_url(provider: AiProvider, base_url: str) -> str:
     try:
-        checked = normalized_public_url(form.base_url)
+        checked = normalized_public_url(base_url)
     except PublicUrlRejectedError as exc:
         raise AiRefusedError(AiRefusal.BASE_URL_INVALID, str(exc)) from exc
-    return normalize_base_url(form.provider, checked)
+    return normalize_base_url(provider, checked)
 
 
 def _key_for(
@@ -144,7 +163,7 @@ async def set_ai(
     key 欄又空著時，開或關都拒絕（M5.5 票 01）：存著的那把只送到存它的端點，只守測試的話，
     先存再按就繞過去了。
     """
-    base_url = _base_url(form)
+    base_url = _base_url(form.provider, form.base_url)
     model = form.model.strip()
     refusal: list[AiRefusedError] = []
 
@@ -194,7 +213,7 @@ async def forget_ai_key(session: AsyncSession, secret: AiSecret) -> AiView:
 @command(Effect.READ, flags={Flag.CONNECTS_OUT})
 async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: AiForm) -> AiTest:
     """照表單打一次最小呼叫，不存任何東西。服務回的錯誤是結果，不是拒絕。"""
-    base_url = _base_url(form)
+    base_url = _base_url(form.provider, form.base_url)
     model = form.model.strip()
     saved = await read_settings(session, AiSettings)
     api_key = _key_for(form.provider, base_url, form.api_key, saved.endpoint(form.provider))
@@ -206,4 +225,40 @@ async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: Ai
         status=result.status,
         detail=result.detail.replace(api_key, _MASK),
         model=result.model,
+    )
+
+
+# 只讀本機價目表：不碰資料庫、不連外、不收 key，打到一半的網址也照查（認不出就照接口種類）。
+@command(Effect.READ)
+async def suggest_models(provider: AiProvider, base_url: str) -> AiModels:
+    """沒按「取得模型」之前模型欄的建議：本機價目表照表單上的網址認出的那一家。"""
+    return _from_prices(provider, normalize_base_url(provider, base_url))
+
+
+# 同 `test_ai`：不改狀態，但連到表單上的任意網址，key 欄空著時帶的是存著的那把：`CONNECTS_OUT`。
+@command(Effect.READ, flags={Flag.CONNECTS_OUT})
+async def list_models(
+    session: AsyncSession,
+    factory: ServiceClientFactory,
+    provider: AiProvider,
+    base_url: str,
+    api_key: str | None = None,
+) -> AiModels:
+    """向表單上的端點問它有哪些模型，不存任何東西。問不到不算拒絕：退回本機價目表，帶著原因；
+    端點列出空的也退回，但沒有原因。key 的規則同測試連線（`_key_for`）。"""
+    checked = _base_url(provider, base_url)
+    saved = await read_settings(session, AiSettings)
+    key = _key_for(provider, checked, api_key, saved.endpoint(provider))
+    if not key:
+        raise AiRefusedError(AiRefusal.KEY_MISSING)
+    listing = await factory.ai_models(provider, checked, key).list_models()
+    if listing.models:
+        return AiModels(listing.models, AiModelSource.ENDPOINT, None, None, "")
+    fallback = _from_prices(provider, checked)
+    return AiModels(
+        fallback.models,
+        AiModelSource.PRICES,
+        listing.failure,
+        listing.status,
+        listing.detail.replace(key, _MASK),
     )

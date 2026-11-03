@@ -9,12 +9,13 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -171,7 +172,15 @@ def searched(query: str, *, then: ToolCallPart | None = None) -> Step:
             NativeToolCallPart("web_search", {"query": query}, tool_call_id="srv-1"),
             NativeToolReturnPart(
                 "web_search",
-                [{"type": "web_search_result", "title": "Frieren", "url": FRIEREN_URL}],
+                [
+                    {
+                        "type": "web_search_result",
+                        "title": "Frieren",
+                        "url": FRIEREN_URL,
+                        "page_age": "October 3, 2026",
+                        "encrypted_content": SEALED,
+                    }
+                ],
                 tool_call_id="srv-1",
             ),
             last,
@@ -180,6 +189,8 @@ def searched(query: str, *, then: ToolCallPart | None = None) -> Step:
 
 
 FRIEREN_URL = "https://en.wikipedia.org/wiki/Frieren"
+#: Anthropic 每筆結果帶的不透明內容（給服務端重播用，實際一筆數千字）。
+SEALED = "EqgfCioIBhgCIiQ3YTk2LWZmMmUtNDQ0ZC05ZTQ4LTI2ZDYzYzUwYTQ3MQ"
 
 
 def history(client: TestClient, conversation: str = "c1") -> list[ModelMessage]:
@@ -483,6 +494,98 @@ def priced(row: AiCall) -> Decimal | None:
         provider=AiProvider.ANTHROPIC,
         at=row.created_at,
     )
+
+
+class TestTheBrowserGetsNoSealedContent:
+    """M5.5 票 03：`encrypted_content` 只給服務端重播，不送到瀏覽器；標題、網址、日期照給。"""
+
+    def test_the_stream_leaves_it_out(self, client: TestClient, script: Seen) -> None:
+        turn_ai_on(client, "anthropic")
+        script.steps = [searched("Frieren season 2 reception")]
+
+        response = chat(client, "Is Frieren season 2 any good?")
+
+        assert response.status_code == 200, response.text
+        assert SEALED not in response.text
+        assert "encrypted_content" not in response.text
+        [output] = [
+            event["output"]
+            for event in stream_events(response.text)
+            if event.get("type") == "tool-output-available"
+        ]
+        assert output == [
+            {
+                "type": "web_search_result",
+                "title": "Frieren",
+                "url": FRIEREN_URL,
+                "page_age": "October 3, 2026",
+            }
+        ]
+
+    def test_a_reconnected_stream_leaves_it_out(self, client: TestClient, script: Seen) -> None:
+        """重連（`resumeStream`）重播的是 `_relay` 送出的同一串片段。"""
+        turn_ai_on(client, "anthropic")
+        script.steps = [searched("Frieren season 2 reception")]
+        chat(client, "Is Frieren season 2 any good?")
+        [turn] = recorded(client)
+
+        followed = client.get(f"/api/agent/conversations/c1/stream?turn={turn.run.id}")
+
+        assert followed.status_code == 200, followed.text
+        assert FRIEREN_URL in followed.text
+        assert SEALED not in followed.text
+
+    def test_the_reloaded_conversation_leaves_it_out(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "anthropic")
+        script.steps = [searched("Frieren season 2 reception")]
+        chat(client, "Is Frieren season 2 any good?")
+
+        got = client.get("/api/agent/conversations/c1")
+
+        assert got.status_code == 200, got.text
+        assert SEALED not in got.text
+        [search] = [
+            part
+            for message in got.json()["messages"]
+            for part in message["parts"]
+            if part["type"] == "tool-web_search"
+        ]
+        assert search["output"] == [
+            {
+                "type": "web_search_result",
+                "title": "Frieren",
+                "url": FRIEREN_URL,
+                "page_age": "October 3, 2026",
+            }
+        ]
+
+    def test_the_model_still_gets_it_back(self, client: TestClient, script: Seen) -> None:
+        """模型重播靠伺服器存的歷史：存著的照留，搜完的下一次呼叫照送（之後的送不送是票 23d）。"""
+        turn_ai_on(client, "anthropic")
+        script.steps = [
+            searched("Frieren season 2 reception", then=ToolCallPart("jobs_list_jobs", {})),
+            say("Reviews are warm."),
+        ]
+
+        chat(client, "Is Frieren season 2 any good?")
+
+        _, right_after = script.seen
+        for messages in (right_after, history(client)):
+            [returned] = [p for p in native_parts(messages) if isinstance(p, NativeToolReturnPart)]
+            assert [
+                result["encrypted_content"] for result in cast(list[Any], returned.content)
+            ] == [SEALED]
+
+
+def stream_events(body: str) -> list[dict[str, Any]]:
+    """UI message stream（SSE）的每一個 JSON 事件。"""
+    return [
+        json.loads(line.removeprefix("data: "))
+        for line in body.splitlines()
+        if line.startswith("data: {")
+    ]
 
 
 def test_a_conversation_with_a_server_side_search_still_reloads(

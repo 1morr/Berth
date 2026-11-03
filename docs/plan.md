@@ -878,6 +878,8 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - `GET|PUT /settings/ai`：現在用的接口（`provider`）、兩種各自的 `base_url` / `api_key` / `model`、`tavily_api_key`、`enabled`（§2.1）。**key 只進不出**：回的是 `has_key` 與 `has_tavily_key`；送進來的 key 欄位是 `null` 或空字串表示沒動。`PUT` 存表單上那一種接口並設成現在用的，另一種不動；開啟要有 key 與模型名。
 - `DELETE /settings/ai/keys/{key}`：清掉一把 key；清的是現在用的接口的 key 時一併關掉 AI。
 - `POST /settings/ai/test`：照表單打一次最小呼叫，不存。服務拒絕也是 200（那是測試的結果，不是請求錯了）。
+- `GET /settings/ai/models?provider=&base_url=`：模型欄沒按「取得模型」之前的建議，本機價目表照這個網址認出的那一家；不帶 key、不連外，打到一半的網址也照查（M5.5 票 02）。
+- `POST /settings/ai/models`：`{provider, base_url, api_key}`（不收模型名），向表單上的端點問模型、不存；key 規則同測試連線。回 `models`、`source`（`endpoint` / `prices`）與 `failure` / `status` / `detail`。問不到也是 200：退回本機表並帶著原因（404、405、501 是端點不提供模型清單），端點列出空的也退回、不帶原因。不跟轉址（brief §20.26）。
 - `/settings/ai` 的拒絕：422 `base_url_invalid` / `key_missing` / `model_missing`。
 
 **每個人自己的那一半在 `/me/notifications`**（登入就行，不在 `/settings` 底下）：
@@ -1146,6 +1148,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - body 是 `useChat` 的 `{id, trigger, messages}` 加 `language`（介面語言，`zh-Hant` / `en`，停下來的說明照它寫）與按「繼續」時的 `continues`（停下的那一輪的 id，訊息是按鈕上的字）。**只取最後一則使用者訊息的字**，其餘以資料庫為準。
   - **這一輪在伺服器的 task 上跑**：這個回應只是跟著看，斷線照跑完。
   - 防護停下時的說明是一則 `data-stop`（`{turn_id, reason, continuable, note}`，`note` 是 Berth 寫的那一句），不是助理的文字，側面板畫成「停下」。
+  - 伺服器端工具（Anthropic `web_search`）的結果拿掉每筆的 `encrypted_content`（只給服務端重播，brief §20.26），`GET /agent/conversations/{id}` 同樣；存著的歷史不動。
   - **最後一則是助理的是恢復**（按了確認卡之後 `useChat` 送的）：它只當觸發，每一張等著的卡照 Proposal 決定；還有沒決定的 409 `card_undecided`，沒有等著的 422 `no_message`。
   - 拒絕：409 `ai_disabled`（AI 關著）、409 `ai_paused`（斷路器暫停中，detail 是到什麼時候）、409 `not_continuable`、409 `busy`（這個人已經有一輪在跑；detail 是在跑的那一段對話的 id，只會是他自己的：位子以人為單位）、422 `no_message`、404 `conversation_missing`（別人的對話）。以 `/` 開頭的訊息送進這裡是 422 `slash_command`。
 - `GET /agent/conversations/{id}`：存著的歷史經 `dump_messages(..., sdk_version=7)` 轉回 UI 訊息，一則回覆可能拆成好幾則。停下的說明那一則換成與串流同一個 `data-stop`，只有最後一輪可能 `continuable`。`running` 是正在跑的那一輪的 id，那時的歷史是它開始前的樣子加上那一則使用者訊息。壓縮過的歷史開頭是一則 `data-compaction`。
@@ -1312,6 +1315,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - 是自己的另一段對話（例如開了新對話）：面板說是哪一段（沒有標題，用它的第一句話），可以「到那一段對話」接過去，或「停止那一輪」（打那一段的 `/stop`）。停掉之後字還在輸入欄，按送出就是重送。
   - 閒著的分頁不會自己發現別的分頁開了一輪，下一次送出或重新整理才接上。
 - 回覆的 markdown 走 react-markdown：原始 HTML 不渲染、`javascript:` 網址拿掉、**圖片不載入**（只印替代文字與網址原文）。
+- 工具呼叫收成一行，展開看參數與結果的原文；`web_search` 的結果畫成清單：標題（連到那一頁，網址規則同回覆的 markdown）、網址、`page_age`（原樣，可能沒有）。服務拒絕的搜尋（`web_search_tool_result_error`）算沒成功。
 - 輸入欄打 `/` 時上方列出斜線指令（`listbox`，焦點留在輸入欄）：上下鍵、Tab 補完、Enter 補完打到一半的、已經完整才執行、點一列直接執行、Esc 收起。指令的結果接在打它那一刻的對話後面、只在這個分頁；`data-compaction` 畫成一行收著的摘要。
 
 ### 確認卡

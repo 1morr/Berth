@@ -1,0 +1,14 @@
+{
+  "body": {
+    "error": {
+      "message": "Authentication Fails, Your api key: ****-key is invalid (request_id: eae1604b-8aa9-40b2-82ee-d14664cd362d)",
+      "type": "authentication_error",
+      "param": null,
+      "code": "invalid_request_error"
+    }
+  },
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "status": 401
+}
