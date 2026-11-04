@@ -30,3 +30,4 @@
 - code-review 已處理：AgentPanel 測試插錯位置、把注入那段的 JSDoc 搶走；DESIGN.md〈側面板〉補「推理」一條；`spoken` 的判斷回 boolean。
 - code-review 未處理：`<details>` 一行的外殼在摘要、工具、推理三處重複（Duplicated Code），三者的狀態與展開內容都不同，先不抽。e2e 的 `streamed` 是串完才檢查（替身一次送完整段推理），「串流途中不展開」只有 vitest 守。推理的 `signature`（`providerMetadata.pydantic_ai.signature`）仍送到瀏覽器，瀏覽器用不到；與票 03 的「不透明資料不給瀏覽器」同類，沒有另外處理。
 - 2026-11-04 驗證：`pre-commit run --all-files` 全過；pytest 5592 passed、1 skipped；vitest 2393 passed；前端 e2e 全部 project **89 passed**（2.5m），0 failed、0 flaky（開跑前 port 8484–8534 有 t12 在用，等整段空下來才跑；跑到一半重建過一次 `web/dist`，內容只差測試註解與一個等價的判斷）。
+- 2026-11-04 合併 main（票 12 追更頁，`f5157ec8`）之後重驗：無衝突；pre-commit 全過；pytest 5617 passed、1 skipped；vitest 2407 passed；`pnpm -C web build` 一次後完整跑前端 e2e **93 passed**（2.5m），0 failed、0 flaky，開跑前 port 8484–8534 沒人用。
