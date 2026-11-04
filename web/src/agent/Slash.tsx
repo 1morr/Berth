@@ -274,7 +274,7 @@ function Skills({ result }: { result: Extract<Shown, { command: 'skills' }> }) {
 function History({ result }: { result: Extract<Shown, { command: 'history' }> }) {
   const { t } = useTranslation()
   if (result.conversations.length === 0) {
-    return <p className="text-sm text-ink">{t('agent.conversations.none')}</p>
+    return <p className="text-sm text-ink-dim">{t('agent.conversations.none')}</p>
   }
   return <ConversationEntries entries={result.conversations} />
 }

@@ -1889,7 +1889,7 @@ async def read_conversation(
 #: 對話清單最多列幾段（M5.5 票 18）：切回舊對話用，不是封存。
 CONVERSATION_LIST_LIMIT = 50
 #: 標題最多幾個字，多的截掉加「…」。
-TITLE_LENGTH = 40
+CONVERSATION_TITLE_LENGTH = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -1909,6 +1909,8 @@ async def list_conversations(session: AsyncSession, *, user_id: int) -> list[Con
 
     沒有標題欄位：標題由存著的歷史算（同 `BusyElsewhere` 原本的做法），不必替舊列回填。
     """
+    # 「有一輪還沒收尾」與 `read_conversation` 的「最後一輪還沒收尾」一致：同一個人同時一輪，較早的
+    # 一輪不會留著 `NULL`（崩潰留下的由啟動時的 `close_interrupted` 收掉）。
     running = (
         select(AiRun.id)
         .where(
@@ -1944,7 +1946,11 @@ def _title(history: Sequence[ModelMessage]) -> str:
                 continue
             line = part.content.strip().split("\n")[0].strip()
             if line:
-                return f"{line[:TITLE_LENGTH]}…" if len(line) > TITLE_LENGTH else line
+                return (
+                    f"{line[:CONVERSATION_TITLE_LENGTH]}…"
+                    if len(line) > CONVERSATION_TITLE_LENGTH
+                    else line
+                )
     return ""
 
 

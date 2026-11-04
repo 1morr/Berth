@@ -20,7 +20,7 @@ export function ConversationPicker({ id, onPicked }: { id: string; onPicked: () 
       {found.isPending ? <PanelLoading /> : null}
       {found.isError ? <PanelFailed error={found.error} /> : null}
       {found.data?.length === 0 ? (
-        <p className="p-4 text-sm text-ink">{t('agent.conversations.none')}</p>
+        <p className="p-4 text-sm text-ink-dim">{t('agent.conversations.none')}</p>
       ) : null}
       {found.data !== undefined && found.data.length > 0 ? (
         <div className="p-2">
@@ -56,7 +56,7 @@ export function ConversationEntries({
               }}
               className={`grid w-full min-w-0 gap-0.5 border-2 px-3 py-2 text-left ${
                 current
-                  ? 'border-rule-strong bg-deck'
+                  ? 'border-transparent bg-deck shadow-[inset_3px_0_0_var(--color-ink)]'
                   : 'border-transparent hover:border-rule-strong'
               }`}
             >
@@ -66,7 +66,7 @@ export function ConversationEntries({
               <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-ink-dim">
                 <Timestamp at={entry.updated_at} past />
                 {entry.running ? (
-                  <span className="label bg-deck px-1.5 py-0.5 text-ink">
+                  <span className="label bg-working px-1.5 py-0.5 text-on-signal">
                     {t('agent.conversations.running')}
                   </span>
                 ) : null}

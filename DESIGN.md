@@ -1065,8 +1065,13 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 放在導覽之後、登出之前——它不換頁，所以不在 `<nav>` 裡。
 - **版面**：`lg` 以上外框變成兩欄，右欄是 `26rem` 寬、`sticky top-0 h-dvh` 的面板（`border-l-2 border-rule-strong`、`hull` 底），
   頁面讓位、兩邊都能操作；以下 `fixed inset-0` 蓋滿視窗，是 `role="dialog" aria-modal`，底下那一頁 `inert`。
-- **抬頭列**是 `deck` 底的 `h2`「助理」+ Ghost「新對話」（AI 開著才有）+ Ghost「關閉」。`Esc` 收起，焦點回到開關；打開時焦點落在輸入欄
+- **抬頭列**是 `deck` 底的 `h2`「助理」+ Ghost「對話」與 Ghost「新對話」（AI 開著才有）+ Ghost「關閉」。`Esc` 收起，焦點回到開關；打開時焦點落在輸入欄
   （對話還在讀時先落在標題，輸入欄出現了再接過去——只接標題上的，換頁重掛不搶焦點）。
+- **對話清單**（M5.5 票 18）：「對話」是 disclosure（`aria-expanded` + `aria-controls`），清單在抬頭列下方就地展開（`hull` 底、
+  `border-b-2 border-rule`、最高 `50dvh` 自己捲），不浮在對話上，所以不因 Tab 走出或點外面收起；選一段、再按「對話」或 `Esc`
+  收起（`Esc` 先收清單、焦點回「對話」，再按才收面板）。一段一顆整列的鍵：標題是散文（空的寫「未命名」），下一行 `ink-dim`
+  的多久前；在跑的接 `bg-working` 的「回答中」（同工具的「執行中」）；現在這段是 `deck` 底加左側 3px `ink` 內線（同斜線清單的
+  這一列）、`aria-current` 與「目前這段」。`/history` 的結果畫同一份清單。
 - **對話紀錄**是 `role="log"`、串流中 `aria-busy`。你說的：`.label`「你」+ `deck` 底一塊散文；助理說的：`.label`「助理」+ markdown
   （標題降成 `.label`、code 走 `.value`、表格只在自己那一格捲、連結是 `INLINE_LINK`）。連著的同一方只標一次。
   自動連結在第一個中日韓字元處結束（GFM 只認空白，「…3310，但」會整段進網址）。
