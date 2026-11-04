@@ -45,3 +45,4 @@
   - 一集停滯、另一集還在下載時，狀態只寫「下載停滯」（整部排進要你動手是對的，文字沒說另一集在動）。
   - 「沒有快照」靠 `conclusion === null` 表示，沒有另一個欄位；API 文件寫明了。
   - 「容器時區的現在」有 `reconciling.local_now`、`schedule.local_today`、`keeping_up.local_now` 三份，各自給測試換；收成一支是另一張整理票的事。
+- 2026-11-04 協調者查證：預先綁定作品的 Feed、字幕組一集都還沒發（還沒長出 RSS Series）的作品不在追更頁。照票 10 的對象（有綁好的 RSS Series 的作品，`keeping_up.watched_works`）不改；要不要另開票等使用者決定。
