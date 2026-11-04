@@ -391,13 +391,15 @@ async def _colliding_episodes(session: AsyncSession, moment: datetime) -> tuple[
 async def _overdue_works(
     session: AsyncSession, moment: datetime, unrefreshed: Collection[str]
 ) -> tuple[int, int]:
-    """每一部遲到的訂閱作品開（或更新）一件，列出晚的集與卡在哪；都入庫了、退訂了或不再有綁好的
-    Series 的收掉。回（開著的件數，收掉的件數）。
+    """每一部遲到的訂閱作品開（或更新）一件，列出晚的集與卡在哪；都入庫了或退訂了的收掉。對象是
+    `keeping_up.watched_works`：綁好的 Series，或預先綁定作品、字幕組一集都還沒發的 Feed
+    （票 12b）。回（開著的件數，收掉的件數）。
 
     日界照容器時區（`moment.astimezone()`）：巡檢迴圈給的就是牆上的 05:00。每一集蓋到哪幾筆 Job
     讀 `why_not.claims_by_episode`；Job 已經有 Issue 說著它現在這個狀態的，查法同第一批卡住
-    （`issues.covered_jobs`）。判定與追更頁共用 `keeping_up.watch_of`。門檻是作品上每一條 Series 的
-    門檻（沒覆寫的用全域）取最大值。沒有 TMDB 快照的作品說不出哪一集播了，不開。
+    （`issues.covered_jobs`）。判定與追更頁共用 `keeping_up.watch_of`。門檻是作品上每一條訂閱的
+    門檻（沒覆寫的 Series 與 Feed 用全域）取最大值（`Subscriptions.threshold`）。沒有 TMDB 快照的
+    作品說不出哪一集播了，不開。
     **`unrefreshed` 的作品這一輪不開也不收**（巡檢前刷新失敗，`refresh_watched`）：舊快照看不到
     剛播出的集，也可能讓已經對的那一件被收掉。
     """
@@ -405,12 +407,12 @@ async def _overdue_works(
     fallback = (await read_settings(session, RssSettings)).overdue_days
 
     flagged: set[tuple[IssueType, str]] = set()
-    for media_id, rows in (await watched_works(session)).items():
+    for media_id, subscriptions in (await watched_works(session)).items():
         if media_id in unrefreshed:
             continue
         media = await session.get(Media, media_id)
         watch = (
-            await watch_of(session, media, rows, now=local, fallback=fallback)
+            await watch_of(session, media, subscriptions, now=local, fallback=fallback)
             if media is not None
             else None
         )

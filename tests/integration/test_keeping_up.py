@@ -32,6 +32,7 @@ from tests.integration.test_sweep_overdue import (
     job,
     landed,
     overdue,
+    prebound,
     subscribed,
     wall,
     work,
@@ -331,3 +332,38 @@ async def _shift(session: AsyncSession, media_id: str, *, days: int) -> None:
         update={"seasons": (season.model_copy(update={"episodes": shifted}),)}
     ).model_dump(mode="json")
     await session.commit()
+
+
+class TestPreBoundFeedWithNothingYet:
+    """預先綁定作品、字幕組一集都還沒發的 Feed 也列一列（M5.5 票 12b），字幕組欄寫它只收的字幕組，
+    沒有就寫 Feed 名。"""
+
+    async def test_past_the_threshold_it_needs_you(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        await prebound(session, subgroup="LoliHouse")
+        at(wall(31), monkeypatch)
+
+        work_row = await only(session)
+
+        assert work_row.media_id == MEDIA
+        assert work_row.groups == ("LoliHouse",)
+        assert work_row.imported is None
+        assert work_row.aired == EpisodeMark(1, 4, AIRED)
+        assert work_row.conclusion is WhyNot.NO_SOURCE
+        assert work_row.section is KeepingUpSection.ACTION
+        assert work_row.late_days == 3
+        assert [(one.episode, one.stall) for one in work_row.late] == [
+            (4, OverdueStall.NOT_RELEASED)
+        ]
+
+    async def test_a_feed_without_a_group_shows_its_name(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        feed = await prebound(session, subgroup="")
+        at(wall(30), monkeypatch)
+
+        work_row = await only(session)
+
+        assert work_row.groups == (feed.name,)
+        assert work_row.section is KeepingUpSection.ON_TIME
