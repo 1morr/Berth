@@ -20,7 +20,8 @@ import { AuditSectionConfirm } from '../review/AuditSectionConfirm'
 import { groupAudits, type ReviewEntry } from '../review/auditGroups'
 import { ReviewItem } from '../review/ReviewItem'
 import type { Said } from '../review/useConfirmAudits'
-import { WaitingTabs } from '../nav/SectionTabs'
+import { WAITING } from '../nav/sections'
+import { SectionTabs } from '../nav/SectionTabs'
 
 /**
  * 審核佇列 `/review`（`.scratch/m2/review-shape.md`，M2 票 06）。
@@ -50,7 +51,7 @@ export function ReviewPage() {
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-6 px-6 py-8">
-      <WaitingTabs />
+      <SectionTabs section={WAITING} />
       <div className="grid gap-1 border-b-2 border-rule-strong pb-2">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 tabIndex={-1} className={PAGE_TITLE}>

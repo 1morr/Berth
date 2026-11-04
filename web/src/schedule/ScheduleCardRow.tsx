@@ -21,8 +21,9 @@ const THUMB_SIZES = '3rem'
  * 第二層（票 14）：放送時刻（AniList，只有還沒播的）接在集數後面，Bangumi 評分排最後；對不上的作品
  * 兩格都沒有。
  *
- * 狀態：未訂閱**不畫色塊**（大多數卡片都是它，The Usual Stays Unpainted Rule），已訂閱與已入庫是
- * 中性小色塊——它們是事實，不是四個信號色裡的任何一個。
+ * 狀態：未訂閱**不畫色塊**（大多數卡片都是它，The Usual Stays Unpainted Rule），已訂閱、已入庫與
+ * 「晚 N 天」（票 12）是中性小色塊——它們是事實，不是四個信號色裡的任何一個；晚了在這一頁也是中性：
+ * 一般使用者也看得到它，而他動不了手，`assigned`（需要你）對他不成立（`.scratch/m5.5/tracking-shape.md`）。
  */
 export function ScheduleCardRow({ card }: { card: ScheduleCard }) {
   const { t, i18n } = useTranslation()
@@ -56,7 +57,9 @@ export function ScheduleCardRow({ card }: { card: ScheduleCard }) {
           {card.status !== 'unsubscribed' && ' '}
           {card.status !== 'unsubscribed' && (
             <span className="label bg-deck px-1.5 py-0.5 text-ink">
-              {t(`schedule.status.${card.status}`)}
+              {card.status === 'late'
+                ? t('schedule.late', { count: card.late_days ?? 0 })
+                : t(`schedule.status.${card.status}`)}
             </span>
           )}
           {card.score !== null && card.votes !== null && (

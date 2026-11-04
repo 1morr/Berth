@@ -29,7 +29,8 @@ import { SectionHeading } from '../components/SectionHeading'
 import { SeriesBinder } from '../rss/SeriesBinder'
 import { groupName, mikanPage, sourceLabel, workTitle } from '../rss/seriesByWork'
 import { SeriesRules, SeriesSection } from '../rss/SeriesSection'
-import { AiringTabs } from '../nav/SectionTabs'
+import { AIRING } from '../nav/sections'
+import { SectionTabs } from '../nav/SectionTabs'
 
 /**
  * RSS `/rss`（`.scratch/m3/rss-shape.md`，M3 票 08）。只有 admin。
@@ -58,7 +59,7 @@ export function RssPage() {
 
   return (
     <div ref={frame} className="mx-auto grid w-full max-w-[80rem] gap-8 px-6 py-8">
-      <AiringTabs />
+      <SectionTabs section={AIRING} />
       <div className="border-b-2 border-rule-strong pb-2">
         <h1 tabIndex={-1} className={PAGE_TITLE}>
           {t('rss.title')}

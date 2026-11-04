@@ -2061,12 +2061,29 @@ class ScheduleStatus(StrEnum):
     """時間表上一張卡的狀態（M5.5 票 09，spec〈範圍〉「時間表」）。
 
     **宣告順序就是優先序**：那一集入庫了就不必再說它訂閱了。每次照資料庫算，不進時間表的快取：
-    訂閱完下一次打開就要變。「晚 N 天」是票 12 的層。
+    訂閱完下一次打開就要變。
     """
 
     #: 帳本裡有正片蓋到卡片上的那一集（同 `EpisodeStatus.IMPORTED`）。
     IMPORTED = "imported"
+    #: 卡片上那一集是作品遲到判定裡晚的集（M5.5 票 12，`services.keeping_up.late_by_work`）：
+    #: 卡片另帶「晚 N 天」。
+    LATE = "late"
     #: 作品現在有一條訂閱（`CONTEXT.md`：預先綁定它的 Feed，或帶著綁到它的 RSS Series 的 Feed；
     #: `rss.subscribed_media`）。
     SUBSCRIBED = "subscribed"
     UNSUBSCRIBED = "unsubscribed"
+
+
+class KeepingUpSection(StrEnum):
+    """追更頁的一段（M5.5 票 12，`.scratch/m5.5/tracking-shape.md`）。
+
+    **宣告順序就是頁上的順序**。
+    """
+
+    #: 要你動手：有晚的集，或卡在入庫失敗、沒下載成、等審核、待綁定、下載停滯（它們不會自己好）。
+    ACTION = "action"
+    #: 其餘：跟上了、字幕組還沒發但沒過門檻、下載還在動。
+    ON_TIME = "on_time"
+    #: 斷更很久：最後一集缺集播出滿 60 天（`parser.overdue.WINDOW`），不再提醒。頁上預設收起。
+    DORMANT = "dormant"

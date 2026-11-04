@@ -61,6 +61,7 @@ CARD_FIELDS = {
     "season",
     "episode",
     "status",
+    "late_days",
     "airs_at",
     "score",
     "votes",
@@ -176,3 +177,15 @@ def test_the_airing_time_is_an_instant_and_the_rating_carries_its_votes(
     assert (frieren["score"], frieren["votes"]) == (8.1, 900)
     apothecary = cards["tv:220542"]
     assert (apothecary["airs_at"], apothecary["score"], apothecary["votes"]) == (None, None, None)
+
+
+def test_keeping_up_is_for_admins_only(client: TestClient) -> None:
+    """追更頁（M5.5 票 12）寫著字幕組與卡住的下載：一般使用者 403，時間表照樣進得去。"""
+    sign_in_owner(client)
+    owner = client.get("/api/schedule/tracking")
+    assert owner.status_code == 200, owner.text
+    assert set(owner.json()) == {"today", "works"}
+
+    sign_in_crew(client)
+    assert client.get("/api/schedule/tracking").status_code == 403
+    assert client.get("/api/schedule").status_code == 200

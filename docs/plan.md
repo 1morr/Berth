@@ -795,7 +795,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 | me | `GET\|PUT /me/notifications`、`POST /me/notifications/test` | `notify.*` |
 | routes | `GET\|POST /routes`、`PUT\|DELETE /routes/{id}`、`POST /routes/check`、`POST /routes/{id}/check`、`GET /jellyfin/libraries` | `routes.*` |
 | discover | `GET /discover/trending`、`/popular`、`/search?q=` | `discover.*` |
-| schedule | `GET /schedule` | `schedule.read_schedule` |
+| schedule | `GET /schedule`、`GET /schedule/tracking`（admin） | `schedule.read_schedule`、`keeping_up.read_keeping_up` |
 | inventory | `GET /inventory`、`/inventory/{library_id}/filters`、`/inventory/{library_id}`、`/inventory/{library_id}/watching` | `inventory.*`、`jellyfin_access`、`watching` |
 | jellyfin | `GET /jellyfin/items/{item_id}/images/{image_type}`、`POST\|DELETE /jellyfin/items/{item_id}/played`、`GET /jellyfin/shows/{series_id}/episodes` | `jellyfin_images`、`jellyfin_access.mark_played`、`watching`、`watch_area` |
 | media | `GET /media/{id}`、`POST /media/{id}/refresh`、`POST /media/{id}/resolve`、`GET /media/{id}/watch`、`GET /media/{id}/why-not` | `media.*`、`watch_area`、`why_not.explain` |
@@ -1156,7 +1156,9 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 #### schedule
 
-登入就能讀（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）。`GET /schedule` 回這一週（容器時區的週一到週日）：`start`、`end`、`today` 與 `cards`，一張卡是一部作品的一集（`media_id`、兩輪的標題與海報、`air_date`、`season`、`episode`、`status`、`airs_at`、`score`、`votes`）。`status` 是 `imported`（帳本蓋到那一集）、`subscribed`（作品現在有一條訂閱，同 `rss.list_subscriptions` 的來源：刪掉 Feed 就不算）或 `unsubscribed`，每次照資料庫算；字幕組與 Feed 不送（比照 `why_not` 的範圍）。資料是 TMDB `discover/tv` 全部頁數加每部的 `tv/{id}`（brief §20.3），存程序內 6 小時，不寫 `media` 列。拿不到 TMDB 時照探索頁回 200 帶 `problem`。第二層（票 14）：`airs_at` 是 AniList 的放送時刻（帶時區，只給未來的），`score` / `votes` 是 Bangumi 的評分（條目開播日要與卡片那一季的開播日差一天以內）；原文名對不上（brief §20.3）就是 `null`。兩個來源與 TMDB 同時抓，失敗或 10 秒沒回只少那幾格，快取在各自的 adapter（AniList 6 小時、Bangumi 1 小時）。
+登入就能讀（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）。`GET /schedule` 回這一週（容器時區的週一到週日）：`start`、`end`、`today` 與 `cards`，一張卡是一部作品的一集（`media_id`、兩輪的標題與海報、`air_date`、`season`、`episode`、`status`、`airs_at`、`score`、`votes`）。`status` 是 `imported`（帳本蓋到那一集）、`subscribed`（作品現在有一條訂閱，同 `rss.list_subscriptions` 的來源：刪掉 Feed 就不算）或 `unsubscribed`，每次照資料庫算；字幕組與 Feed 不送（比照 `why_not` 的範圍）。資料是 TMDB `discover/tv` 全部頁數加每部的 `tv/{id}`（brief §20.3），存程序內 6 小時，不寫 `media` 列。拿不到 TMDB 時照探索頁回 200 帶 `problem`。第二層（票 14）：`airs_at` 是 AniList 的放送時刻（帶時區，只給未來的），`score` / `votes` 是 Bangumi 的評分（條目開播日要與卡片那一季的開播日差一天以內）；原文名對不上（brief §20.3）就是 `null`。兩個來源與 TMDB 同時抓，失敗或 10 秒沒回只少那幾格，快取在各自的 adapter（AniList 6 小時、Bangumi 1 小時）。`status` 多一種 `late`（M5.5 票 12）：卡片那一集是作品遲到判定裡晚的集（同追更頁，`keeping_up.late_by_work`），卡片另帶 `late_days`（從播出日到今天的天數），已入庫仍優先。
+
+`GET /schedule/tracking`（M5.5 票 12，只有 admin，`ADMIN_PREFIXES`）是追更頁：訂閱的作品（對象同遲到提醒，`keeping_up.watched_works`）一部一列，`groups`、`aired`（TMDB 最新播出的一集）、`imported`（帳本最新的一集）、`conclusion`（基準之後已播、沒入庫的那幾集的 `domain.conclude` 取 `overall`；那一段沒有集是 `imported`（跟上了），一集都還沒播是 `unaired`，沒有快照是 `null`）、`stalled`（`domain.stalled`：路上的只有停滯的下載）、`section`（`action` / `on_time` / `dormant`）、`reason`、`late_days`（最早那一集晚的集從播出日算的天數）與 `late`（同 `episodes_overdue` 的 `detail_json.episodes`）。判定與巡檢共用 `keeping_up.watch_work` 與 `parser.overdue.watch_overdue`；只讀資料庫。
 
 #### waiting
 
@@ -1268,6 +1270,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 | `/jobs`、`/jobs/:hash` | 下載列表、Job 詳情 |
 | `/review` | 審核佇列。頁首「待處理」連這裡；與 `/issues` 共用一條分頁列（審核、Issue，各帶件數），兩頁仍分開（ADR-0006） |
 | `/schedule` | 時間表，每個人。「新番」區塊的第一個分頁、頁首「新番」連這裡（M5.5 票 09）：這一週週一到週日分欄、今天標出，窄版一次一天；預設列全部，可切「只看已訂閱」；卡片寫放送時刻與 Bangumi 評分（票 14，對得上才寫），點進 `/media/:id` 訂閱 |
+| `/schedule/tracking` | 追更，只有 admin。「新番」區塊的第二個分頁（M5.5 票 12，`.scratch/m5.5/tracking-shape.md`）：訂閱的作品一部一列（字幕組、已播到、已入庫到、狀態），分要你動手、準時、斷更很久（預設收起）三段；狀態是 `WhyNot` 的結論，下載停滯另外說，晚的寫「晚 N 天」（從播出日算）與「可能是下一輪」；收不到通知（沒有 bot、沒填 Discord ID、沒訂「等你處理」或 Discord 到不了）時頁首一句連到 `/settings/notifications` |
 | `/rss` | 只有 admin。「新番」區塊的「訂閱」分頁（M5.5 票 07）。由上而下：待綁定 → Feed → 綁好的 RSS Series → 最近的 Feed Item。綁定在待綁定那一列就地展開（設計理由：`.scratch/m3/rss-shape.md`、`.scratch/m4/rss-series-shape.md`）。綁好的 Series 作品一塊、字幕組一列，展開看它的 Item；Series 層排除條件在展開區的「進階」；完結的收在段尾預設收起的「已完結」。Feed Item 每一列說出 Feed 與 Series |
 | `/issues` | Issue，屬於「待處理」區塊 |
 | `/weekly`、`/weekly/:reportId` | 週報（admin），入口在帳號選單 |
@@ -1290,7 +1293,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - **任何請求回 401**（讀資料或按鈕）都重跑守衛、同一條路送回登入頁，登入後回到原本那一頁（`router.ts`）。
 - `/settings/*` 只放行 `admin`（通知例外，見上表）。精靈完成後 `/setup` 把 `admin` 導向 `/settings`、其他人導向 `/`：**精靈只管第一次**。
 - 缺憑證、缺 Route、服務紅燈這類「去補上」的連結一律指設定頁的那一頁，只給 `admin`（`SettingsHint`）。
-- 頁首（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）：主導覽是探索、新番（票 09 起每個人，連 `/schedule`）、媒體庫、下載、待處理（admin），外面是助理開關與帳號選單（名字與角色、設定、健康、週報（admin）、語言、登出）。新番與待處理帶件數（`GET /waiting`，只有 admin）：待處理是審核加 Issue、新番是待綁定，各歸點進去看得到的那一頁。前端隱藏不是安全機制，後端同時回 403。
+- 頁首（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）：主導覽是探索、新番（票 09 起每個人，連 `/schedule`；分頁是時間表、追更（admin）、訂閱（admin），區塊設定一份在 `web/src/nav/sections.ts`）、媒體庫、下載、待處理（admin），外面是助理開關與帳號選單（名字與角色、設定、健康、週報（admin）、語言、登出）。新番與待處理帶件數（`GET /waiting`，只有 admin）：待處理是審核加 Issue、新番是待綁定，各歸點進去看得到的那一頁。前端隱藏不是安全機制，後端同時回 403。
 
 ### 資料與互動
 

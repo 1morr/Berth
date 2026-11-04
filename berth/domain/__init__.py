@@ -63,6 +63,7 @@ from berth.domain.enums import (
     JobRefusal,
     JobState,
     JobTrigger,
+    KeepingUpSection,
     Language,
     LedgerStatus,
     LibrarySort,
@@ -152,6 +153,7 @@ from berth.domain.why_not import (
     WhyNot,
     conclude,
     overall,
+    stalled,
 )
 
 __all__ = [
@@ -239,6 +241,7 @@ __all__ = [
     "JobRefusal",
     "JobState",
     "JobTrigger",
+    "KeepingUpSection",
     "Lang",
     "Language",
     "LedgerStatus",
@@ -316,5 +319,6 @@ __all__ = [
     "rss_label",
     "skipped",
     "sort_langs",
+    "stalled",
     "why",
 ]

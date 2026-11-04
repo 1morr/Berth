@@ -76,7 +76,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 
 ### 前端 e2e
 
-`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十四條流程（除了送單、審核、待處理與非安全環境那四條，各有 1280 與 390 兩份，共四十四個 project），一條流程一台 server、各佔一個 port
+`web/e2e/` 以 playwright 對〈UI 的 Fake 後端〉的演練情境跑二十六條流程（除了送單、審核、待處理與非安全環境那四條，各有 1280 與 390 兩份，共四十八個 project），一條流程一台 server、各佔一個 port
 （`web/playwright.config.ts` 自己起、跑完收掉）：
 
 | 流程 | 情境 | port（1280 / 390） |
@@ -93,7 +93,9 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 | `/issues` 修一條 `library_link_missing` | `issues` | 8494 |
 | 非安全環境：開 `http://berth.test:<port>`（Chromium 的 `--host-resolver-rules` 指回本機）而不是 `127.0.0.1`，像使用者用區網 IP 走 HTTP 開——瀏覽器不把它當 secure context，`crypto.randomUUID`、`navigator.clipboard` 都不在（先斷言這一點）；登入、問助理、按「新對話」、在 Job 詳情頁複製 hash，整頁不出錯（0.4.0 的 crash）。其他流程都開 `127.0.0.1`，看不到這一類錯 | `agent` | 8530 |
 | `/weekly`（M4 票 131）：管理員從帳號選單進週報，最新一週的入庫（季集範圍、電影、長作品名不撐開頁面）、修了什麼（0 的不列）、還有什麼等人（連到審核、Issue、RSS，巡檢開的另列）三段，歷史清單點上一週換網址與內容，`/weekly/999` 是「沒有這一週的週報」 | `weekly` | 8526 / 8527 |
-| 頁首（M5.5 票 07）：管理員的五個導覽項帶件數（與 `GET /api/waiting` 對得上）、帳號選單 Enter 打開、Tab 進第一項、`Esc` 收起焦點回觸發鍵、從待處理切到 Issue 分頁仍是當前區塊、舊網址（`/rss`、`/review`、`/issues`、`/settings`、`/health`、`/weekly`、`/weekly/{id}`）都打得開；一般使用者只有探索、媒體庫、下載與帳號選單（沒有週報）、`/api/waiting` 403、點外面收起選單；兩種寬度都沒有橫向捲動 | `weekly` | 8531 / 8532 |
+| 頁首（M5.5 票 07）：管理員的五個導覽項帶件數、新番三個分頁（時間表、追更、訂閱）（與 `GET /api/waiting` 對得上）、帳號選單 Enter 打開、Tab 進第一項、`Esc` 收起焦點回觸發鍵、從待處理切到 Issue 分頁仍是當前區塊、舊網址（`/rss`、`/review`、`/issues`、`/settings`、`/health`、`/weekly`、`/weekly/{id}`）都打得開；一般使用者只有探索、媒體庫、下載與帳號選單（沒有週報）、`/api/waiting` 403、點外面收起選單；兩種寬度都沒有橫向捲動 | `weekly` | 8531 / 8532 |
+| 時間表（M5.5 票 09、14）：點未訂閱的卡片進作品頁用 acg.rip「只追之後的」訂閱，回來那張卡是「已訂閱」、只看已訂閱剩它；對得上的卡片寫放送時刻與 Bangumi 評分；一般使用者看得到狀態、分頁列只有時間表、回應裡沒有字幕組與 Feed | `schedule` | 8533 / 8534 |
+| 追更（M5.5 票 12）：停滯的那一部在「要你動手」寫「晚 4 天」「下載停滯」（不是「下載中」）並連到那一筆下載、跟上的在「準時」、「斷更很久」預設收起展開看得到、沒接 Discord 時頁首有提示連到通知設定；一般使用者的分頁列沒有追更、打開被導走、API 403；兩種寬度都沒有橫向捲動 | `tracking` | 8502 / 8503 |
 | `/rss` 加 Mikan feed 時選劇集送進 Anime、輪詢間隔選 1 小時，再就地改成 24 小時、輪詢，那一部自動綁定並補齊整季，下載列表上 12 集都已入庫 | `rss` | 8498 / 8508 |
 | `/rss` 舊 Feed 的劇集沒有 Route：標「要選 Route」，輪詢之後那一部停在待綁定，「改 Route」選 Anime 當場綁上 | `rss-legacy-feed` | 8516 / 8521 |
 | `/rss` 排除條件：寫壞的正則存不進去、全域與 RSS Series 那一層擋下的、第二個 Feed 帶同一個 hash 的是重複 | `rss` | 8499 / 8509 |
@@ -111,7 +113,7 @@ uv run --env-file .env python -m tests.e2e.stack -k m3 # 多給的參數原樣�
 ```bash
 pnpm -C web build                                          # server 發的是 web/dist
 pnpm -C web exec playwright install chromium               # 第一次
-pnpm -C web e2e                                            # 約 2 分鐘（四十四台替身）
+pnpm -C web e2e                                            # 約 2 分鐘（四十八台替身）
 pnpm -C web e2e --project issues                           # 只跑一條
 pnpm -C web exec playwright show-trace web/test-results/<那一條>/trace.zip   # 失敗時看 trace
 ```

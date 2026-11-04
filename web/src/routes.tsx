@@ -27,6 +27,7 @@ import { IssuesPage } from './pages/IssuesPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { JobDetailPage } from './pages/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
+import { KeepingUpPage } from './pages/KeepingUpPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { InventoryPageRoute } from './pages/InventoryPageRoute'
 import { IndexerSettingsPage } from './pages/IndexerSettingsPage'
@@ -460,7 +461,22 @@ const scheduleRoute = createRoute({
   ),
 })
 
-/** 管理員才進得來的頁面的守衛（`/issues`、`/review`、`/rss`、`/weekly`）；後端同時回 403。 */
+/**
+ * 追更 `/schedule/tracking`（M5.5 票 12，`.scratch/m5.5/tracking-shape.md`）：「新番」區塊的第二頁，**只有
+ * 管理員**（後端 `ADMIN_PREFIXES` 的 `/schedule/tracking`）——一列寫著字幕組與卡住的下載。
+ */
+const keepingUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedule/tracking',
+  beforeLoad: ({ context, location }) => requireAdminPage(context, location),
+  component: () => (
+    <AppShell>
+      <KeepingUpPage />
+    </AppShell>
+  ),
+})
+
+/** 管理員才進得來的頁面的守衛（`/issues`、`/review`、`/rss`、`/schedule/tracking`、`/weekly`）；後端同時回 403。 */
 async function requireAdminPage(context: { queryClient: QueryClient }, location: ParsedLocation) {
   const me = await requireSignedInPage(context.queryClient, location)
   if (me !== null && me.role !== 'admin')
@@ -597,6 +613,7 @@ export const routeTree = rootRoute.addChildren([
   reviewRoute,
   rssRoute,
   scheduleRoute,
+  keepingUpRoute,
   weeklyRoute,
   weeklyReportRoute,
   jobsRoute,
