@@ -18,6 +18,7 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from urllib.parse import urlsplit
 
 import httpx2
 from pydantic_ai import ModelRequest, RunContext
@@ -219,45 +220,67 @@ class _Send(Enum):
     UNIFIED = "unified"
     #: Anthropic 接口明寫 `anthropic_effort` / `anthropic_thinking`。
     EXPLICIT = "explicit"
+    #: 同 `EXPLICIT`，但「關」什麼都不送：認不得的相容閘道。
+    EFFORT_ONLY = "effort_only"
     #: 不送：這個模型的程度沒有效果。
     NOTHING = "nothing"
 
 
-def _how_to_send(provider: AiProvider, model: str, profile: ModelProfile) -> _Send:
-    """推理程度怎麼變成請求參數（M5.5 票 17、brief §20.26，以錄下的請求為準）。
+#: Anthropic 相容端點裡已知兩個參數都收的（`output_config.effort` 與 `thinking.type: disabled`）：
+#: 文件寫了、也實測過（brief §20.26）。以主機認，不以模型名：收不收參數是端點的事，轉送 DeepSeek
+#: 模型的閘道照樣可能認不得。
+_TAKES_THINKING_OFF = frozenset({"api.deepseek.com"})
+
+
+def _how_to_send(endpoint: AiEndpoint, profile: ModelProfile) -> _Send:
+    """推理程度怎麼變成請求參數（M5.5 票 17、17b，brief §20.26，以錄下的請求為準）。
 
     - Anthropic 接口、profile 有 `anthropic_supports_effort`（Claude Opus 4.5 起、Sonnet 4.6 起）：
       統一設定，pydantic-ai 換成 `thinking.type=adaptive` 與 `output_config.effort`。
     - Anthropic 接口、其餘的 Claude（Sonnet 4.5、Haiku 4.5 這類）：不送。官方不收
       `output_config.effort`；統一設定的中、高是 `budget_tokens` 10000 / 16384，大過每次的
       `max_tokens`。不送就與加這一格之前一樣（code-review 追加，偏離票的字面）。
-    - Anthropic 接口、不是 Claude（`deepseek-flash` 這類相容端點）：統一設定會變成 DeepSeek 忽略的
-      `budget_tokens`、關則省略（模型照樣思考），所以明寫。不收 effort 的會 400，停下的說明指到
-      設定頁。
+    - Anthropic 接口、不是 Claude：統一設定會變成 DeepSeek 忽略的 `budget_tokens`、關則省略（模型
+      照樣思考），所以明寫 effort。「關」只對 DeepSeek（`_TAKES_THINKING_OFF`）明寫
+      `thinking: disabled`；認不得的閘道關就不送，送了不收的會 400，而設定頁沒有「不送」一級。
+      低、中、高不收的也會 400，停下的說明指到設定頁、說選關就不送。
     - OpenAI 接口：profile 認得會推理（`supports_thinking`）才送統一設定（`reasoning_effort`）。
       Berth 用的是 `OpenAIProvider`，`deepseek-flash`、`gpt-4o-mini`、自訂名字都認不得。
     """
-    if provider is AiProvider.ANTHROPIC:
+    if endpoint.provider is AiProvider.ANTHROPIC:
         if profile.get("anthropic_supports_effort", False):
             return _Send.UNIFIED
-        return _Send.NOTHING if model.startswith("claude-") else _Send.EXPLICIT
+        if endpoint.model.startswith("claude-"):
+            return _Send.NOTHING
+        host = urlsplit(effective_base_url(endpoint.provider, endpoint.base_url)).hostname
+        return _Send.EXPLICIT if host in _TAKES_THINKING_OFF else _Send.EFFORT_ONLY
     return _Send.UNIFIED if profile.get("supports_thinking", False) else _Send.NOTHING
 
 
-def reasoning_applies(provider: AiProvider, model: str) -> bool:
-    """這個接口上這個模型收不收推理程度（M5.5 票 17）：設定頁照它說「沒有效果」。只看 profile：
-    不連外，key 是佔位的。"""
-    profile = build_model(AiEndpoint(provider, "", "unused", model)).profile
-    return _how_to_send(provider, model, profile) is not _Send.NOTHING
+@dataclass(frozen=True, slots=True)
+class ReasoningSupport:
+    """設定頁與停下的說明要知道的：這個端點上的這個模型，推理程度怎麼送（M5.5 票 17、17b）。"""
+
+    #: 至少有一級會送。假的是四級都不送，設定頁說這個模型的程度沒有效果。
+    applies: bool
+    #: 低、中、高照送，「關」什麼都不送（認不得的 Anthropic 相容閘道）。
+    off_sends_nothing: bool
+
+
+def reasoning_support(provider: AiProvider, base_url: str, model: str) -> ReasoningSupport:
+    """只看 profile 與網址：不連外，key 是佔位的。"""
+    endpoint = AiEndpoint(provider, base_url, "unused", model)
+    how = _how_to_send(endpoint, build_model(endpoint).profile)
+    return ReasoningSupport(how is not _Send.NOTHING, how is _Send.EFFORT_ONLY)
 
 
 def _reasoning(endpoint: AiEndpoint, model: Model) -> ModelSettings:
     """推理程度變成這次請求的參數（怎麼送見 `_how_to_send`）。"""
     level = endpoint.reasoning
-    how = _how_to_send(endpoint.provider, endpoint.model, model.profile)
+    how = _how_to_send(endpoint, model.profile)
     if how is _Send.UNIFIED:
         return {"thinking": _THINKING[level]}
-    if how is _Send.NOTHING:
+    if how is _Send.NOTHING or (how is _Send.EFFORT_ONLY and level is AiReasoning.OFF):
         return {}
     if level is AiReasoning.OFF:
         off: AnthropicModelSettings = {"anthropic_thinking": {"type": "disabled"}}

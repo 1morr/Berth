@@ -25,7 +25,7 @@ from berth.adapters.ai import (
     chat_settings,
     normalize_base_url,
     probe,
-    reasoning_applies,
+    reasoning_support,
     rejects_reasoning,
 )
 from berth.domain import AiProbeFailure, AiProvider, AiReasoning
@@ -247,6 +247,31 @@ class TestReasoning:
         )
         assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {"thinking": {"type": "disabled"}}
 
+    def test_an_unknown_gateway_gets_nothing_when_off(self) -> None:
+        """認不得 `thinking` / `output_config` 的相容閘道會 400，設定頁又沒有「不送」一級：
+        「關」就是不送（M5.5 票 17b，使用者定）。"""
+        endpoint = replace(
+            anthropic("https://llm.example.net/anthropic", "glm-4.6"), reasoning=AiReasoning.OFF
+        )
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {}
+
+    @pytest.mark.parametrize("level", [AiReasoning.LOW, AiReasoning.MEDIUM, AiReasoning.HIGH])
+    def test_an_unknown_gateway_still_gets_the_effort(self, level: AiReasoning) -> None:
+        endpoint = replace(
+            anthropic("https://llm.example.net/anthropic", "glm-4.6"), reasoning=level
+        )
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {
+            "output_config": {"effort": level.value}
+        }
+
+    def test_deepseek_behind_another_host_is_an_unknown_gateway(self) -> None:
+        """收不收參數是端點的事，不是模型名的事：轉送 DeepSeek 模型的閘道照樣認不得。"""
+        endpoint = replace(
+            anthropic("https://llm.example.net/anthropic", "deepseek-flash"),
+            reasoning=AiReasoning.OFF,
+        )
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {}
+
     def test_claude_uses_the_unified_setting(self) -> None:
         endpoint = replace(anthropic(model="claude-sonnet-5-5"), reasoning=AiReasoning.HIGH)
         assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {
@@ -266,16 +291,37 @@ class TestReasoning:
         不送，與升級前一樣（code-review 追加）。"""
         endpoint = replace(anthropic(model=name), reasoning=level)
         assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {}
-        assert reasoning_applies(AiProvider.ANTHROPIC, name) is False
+        assert reasoning_support(AiProvider.ANTHROPIC, "", name).applies is False
 
     def test_sonnet_4_5_has_no_effort_either(self) -> None:
         """不錄請求：SDK 對這個模型發棄用警告。"""
-        assert reasoning_applies(AiProvider.ANTHROPIC, "claude-sonnet-4-5") is False
+        assert reasoning_support(AiProvider.ANTHROPIC, "", "claude-sonnet-4-5").applies is False
 
     def test_a_compatible_endpoint_always_gets_it(self) -> None:
-        assert reasoning_applies(AiProvider.ANTHROPIC, "deepseek-flash") is True
-        assert reasoning_applies(AiProvider.ANTHROPIC, "glm-4.6") is True
-        assert reasoning_applies(AiProvider.ANTHROPIC, "claude-sonnet-5-5") is True
+        assert reasoning_support(AiProvider.ANTHROPIC, "", "deepseek-flash").applies is True
+        assert reasoning_support(AiProvider.ANTHROPIC, "", "glm-4.6").applies is True
+        assert reasoning_support(AiProvider.ANTHROPIC, "", "claude-sonnet-5-5").applies is True
+
+    @pytest.mark.parametrize(
+        ("base_url", "model", "off_sends_nothing"),
+        [
+            ("https://llm.example.net/anthropic", "glm-4.6", True),
+            ("https://llm.example.net/anthropic", "deepseek-flash", True),
+            ("https://api.deepseek.com/anthropic", "deepseek-flash", False),
+            ("", "claude-sonnet-5-5", False),
+            ("", "claude-haiku-4-5", False),
+        ],
+    )
+    def test_off_sends_nothing_only_on_an_unknown_gateway(
+        self, base_url: str, model: str, off_sends_nothing: bool
+    ) -> None:
+        """設定頁與停下的說明照它說「選關就不送」（M5.5 票 17b）。"""
+        support = reasoning_support(AiProvider.ANTHROPIC, base_url, model)
+        assert support.off_sends_nothing is off_sends_nothing
+
+    def test_off_sends_nothing_is_never_said_on_openai(self) -> None:
+        assert reasoning_support(AiProvider.OPENAI, "", "gpt-5.5").off_sends_nothing is False
+        assert reasoning_support(AiProvider.OPENAI, "", "glm-4.6").off_sends_nothing is False
 
     @pytest.mark.parametrize("level", list(AiReasoning))
     @pytest.mark.parametrize("name", ["deepseek-flash", "gpt-4o-mini", "some-local-model"])
@@ -284,7 +330,7 @@ class TestReasoning:
     ) -> None:
         endpoint = replace(openai("https://api.deepseek.com", name), reasoning=level)
         assert reasoning_of(sent(endpoint, OPENAI_OK)) == {}
-        assert reasoning_applies(AiProvider.OPENAI, name) is False
+        assert reasoning_support(AiProvider.OPENAI, "", name).applies is False
 
     @pytest.mark.parametrize(
         ("level", "effort"),
@@ -300,7 +346,7 @@ class TestReasoning:
     ) -> None:
         endpoint = replace(openai(model="gpt-5.5"), reasoning=level)
         assert reasoning_of(sent(endpoint, OPENAI_OK)) == {"reasoning_effort": effort}
-        assert reasoning_applies(AiProvider.OPENAI, "gpt-5.5") is True
+        assert reasoning_support(AiProvider.OPENAI, "", "gpt-5.5").applies is True
 
     def test_the_level_is_medium_unless_set(self) -> None:
         assert anthropic().reasoning is AiReasoning.MEDIUM

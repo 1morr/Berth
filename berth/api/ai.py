@@ -31,7 +31,7 @@ from berth.services.ai import (
     forget_ai_key,
     list_models,
     read_ai,
-    reasoning_takes_effect,
+    reasoning_support_of,
     set_ai,
     suggest_models,
     test_ai,
@@ -173,8 +173,12 @@ class AiModelsOut(BaseModel):
 
 
 class AiReasoningOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     #: 假的是這個接口上的這個模型不收推理程度，Berth 不送（M5.5 票 17）。
     applies: bool
+    #: 真的是認不得的相容閘道：低、中、高照送，「關」什麼都不送（M5.5 票 17b）。
+    off_sends_nothing: bool
 
 
 def _form(body: AiTestIn) -> AiForm:
@@ -225,10 +229,12 @@ async def get_ai_models(
 
 @router.get("/reasoning")
 async def get_ai_reasoning(
-    provider: AiProvider, model: Annotated[str, Query()] = ""
+    provider: AiProvider,
+    base_url: Annotated[str, Query()] = "",
+    model: Annotated[str, Query()] = "",
 ) -> AiReasoningOut:
-    """表單上的模型收不收推理程度。不帶 key、不連外。"""
-    return AiReasoningOut(applies=await reasoning_takes_effect(provider, model))
+    """表單上的端點與模型，推理程度怎麼送。不帶 key、不連外。"""
+    return AiReasoningOut.model_validate(await reasoning_support_of(provider, base_url, model))
 
 
 @router.post("/models", responses=_responses())

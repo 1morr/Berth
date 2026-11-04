@@ -34,6 +34,8 @@
   只分低與高，中等於高；在 Anthropic 接口上關掉就真的不推理。OpenAI 相容接口上 Berth 認不得會推理的模型（包括
   DeepSeek），以及 Claude Sonnet 4.5、Haiku 4.5 這類不支援的 Claude，不送這個設定，設定頁會說沒有效果。服務不接受這個程度時，助理停下的說明下面連到設定頁那一格（一般使用者
   看到請管理員改）。`/api/settings/ai` 每種接口多 `reasoning`，新的 `GET /api/settings/ai/reasoning`（只有管理員）。
+  Anthropic 接口上 Berth 認不得的相容閘道（DeepSeek 官方端點以外），選「關」就什麼推理參數都不送，設定頁與停下的
+  說明都會這樣說；低、中、高照送。`GET /api/settings/ai/reasoning` 多收 `base_url`、多回 `off_sends_nothing`。
 - **側面板畫出助理的推理**：模型回推理文字時（例如 DeepSeek），回答上方多一格「推理」，預設收起、串流中也不展開，
   展開看得到全文；重新載入之後還在。
 - **助理的對話清單**：側面板頁首多一顆「對話」，列出你最近 50 段對話（第一句話當標題、多久前、還在回答的標出來），

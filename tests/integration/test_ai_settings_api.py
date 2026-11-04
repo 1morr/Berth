@@ -218,6 +218,24 @@ class TestReasoningApplies:
         assert reasoning_applies(client, "anthropic", "claude-haiku-4-5") is False
         assert factory.ai_.endpoints == []
 
+    def test_off_sends_nothing_on_a_gateway_it_does_not_know(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """設定頁照它說「選關就不送」（M5.5 票 17b）：只有 DeepSeek 的主機已知收
+        `thinking: disabled`。"""
+
+        def off_sends_nothing(base_url: str) -> bool:
+            params = {"provider": "anthropic", "base_url": base_url, "model": "deepseek-flash"}
+            got = client.get(f"{BASE}/reasoning", params=params)
+            assert got.status_code == 200, got.text
+            assert got.json()["applies"] is True
+            answer: bool = got.json()["off_sends_nothing"]
+            return answer
+
+        assert off_sends_nothing("https://llm.example.net/anthropic") is True
+        assert off_sends_nothing("https://api.deepseek.com/anthropic") is False
+        assert factory.ai_.endpoints == []
+
 
 def forget(client: TestClient, which: str) -> httpx2.Response:
     response: httpx2.Response = client.delete(f"{BASE}/keys/{which}", headers=BROWSER)

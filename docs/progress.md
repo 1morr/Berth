@@ -66,6 +66,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 16 面板畫推理 | 推理收在預設收起的「推理」一格，串流中也不展開，展開看得到全文，重新載入後還在；後端本來就帶，補了替身串流的推理與 fake「想一想」 | 新 session 下 `/implement .scratch/m5.5/issues/17-reasoning-effort.md` |
 | 2026-11-04 | M5.5 18 對話清單 | `GET /agent/conversations` 與 `/history` 列自己的對話（最多 50 段、標回答中），頁首「對話」切換；新瀏覽器接上最近一段，按過「新對話」的仍空白 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 | 2026-11-04 | M5.5 17 推理程度設定 | 設定頁加程度（預設中）；DeepSeek（Anthropic 接口）明寫 effort 與關，實測都收；OpenAI 認不得的、沒 effort 的 Claude 不送；400 連到設定頁 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
+| 2026-11-04 | M5.5 17b 閘道關不送 | Anthropic 接口上主機不是 `api.deepseek.com` 的非 Claude 模型「關」什麼都不送，低中高照送；被拒時停下的說明與設定頁說選關就不送；以主機認 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 
 ## 偏差與決定
 
@@ -88,3 +89,4 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 - 2026-11-04 M5.5 票 13：`episodes_overdue` 的 `detail_json` 多 `title_en`（英文通知用，舊件退回 `title`），票 12 的追更頁也可讀；改 plan §3.2〈`notify_sender`〉〈`sweeper`〉。
 - 2026-11-04 M5.5 票 12：「晚 N 天」從播出日算（使用者定）；追更的程式碼叫 `keeping_up`（`tracking` 是 Tracked Media），遲到判定抽成 `watch_overdue` 與巡檢共用；區塊設定收成 `web/src/nav/sections.ts`（改 plan §6–7、brief §13、`CONTEXT.md`、DESIGN.md）。
 - 2026-11-04 M5.5 票 17：沒有 effort 的官方 Claude（Sonnet 4.5、Haiku 4.5）不送推理程度（code-review 追加，偏離票的字面），壓縮的摘要一律關；改 brief §20.26、plan §2.1 與 §6、`CONTEXT.md`。
+- 2026-11-04 M5.5 票 17b：「已知收推理參數的相容端點」以主機認（只有 `api.deepseek.com`），轉送 DeepSeek 模型的閘道也算認不得；`GET /settings/ai/reasoning` 多收 `base_url`、多回 `off_sends_nothing`（改 brief §20.26、plan §6、`CONTEXT.md`）。

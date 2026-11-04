@@ -1,6 +1,6 @@
 # 17b — 認不得的 Anthropic 相容閘道：推理「關」不送參數
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Blocked by:** 17
 
@@ -22,8 +22,15 @@
 
 ## 驗收
 
-- [ ] 上面三種請求本體的測試（修前紅的那條貼輸出）
-- [ ] 400 的停下說明與設定頁提示說得出「選關就不送」（測試；設定頁 playwright 實跑）
-- [ ] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
+- [x] 上面三種請求本體的測試（修前紅的那條貼輸出）
+- [x] 400 的停下說明與設定頁提示說得出「選關就不送」（測試；設定頁 playwright 實跑）
+- [x] 全部檢查、pytest、vitest、前端 e2e 綠；progress.md 已更新
 
 ## Comments
+
+- **怎麼認 DeepSeek：以主機，不以模型名或 profile**（`adapters.ai._TAKES_THINKING_OFF = {"api.deepseek.com"}`，看 `effective_base_url` 的 hostname）。收不收 `thinking: disabled` 是端點解析請求的事：轉送 `deepseek-flash` 的閘道一樣可能 400，而 brief §20.26 只實測過官方主機。DeepSeek 換主機的話退回「關不送」：模型照樣推理但不會 400，是安全的那一邊。
+- 介面：adapter 的 `reasoning_applies(provider, model)` 換成 `reasoning_support(provider, base_url, model) -> ReasoningSupport(applies, off_sends_nothing)`，`_Send` 多 `EFFORT_ONLY`；services 命令改名 `reasoning_support_of`（多收 `base_url`）；`GET /settings/ai/reasoning` 多收 `base_url`、多回 `off_sends_nothing`。停下的說明在 `Turn._note` 裡、只在 `reasoning_rejected` 時查一次，存進歷史，重新載入同一句。
+- 修前紅（`tests/integration/test_ai_adapter.py::TestReasoning`）：`test_an_unknown_gateway_gets_nothing_when_off` 與 `test_deepseek_behind_another_host_is_an_unknown_gateway` 都是 `AssertionError: assert {'thinking': {'type': 'disabled'}} == {}`（2 failed, 36 passed）。
+- 設定頁 playwright 實跑（fake 後端 `signed-out`，port 8611）：Base URL `https://llm.example.net/anthropic`、模型 `glm-4.6` 時程度那一格多出「Berth 不確定這個服務收不收推理參數：選「關」就不送這個參數；低、中、高照送，不收的服務會拒絕。」；改成 `https://api.deepseek.com/anthropic` 後這句消失。英文由 vitest 守。
+- code-review（兩軸）已處理：`CONTEXT.md`〈Reasoning Level〉還寫舊名、services 命令名回傳型別變了改名、前端 `applies` 改 `support`、`aiReasoningQueryOptions` 註解、停下時只在被拒才查、DeepSeek 不說「選關就不送」補成整合測試。未處理：`Turn._note` 把 `self.endpoint` 拆成三個參數給 `reasoning_support`，它再組回 `AiEndpoint`（Data Clumps；設定頁那一支沒有 endpoint，先不開第二個入口）；`AiReasoningOut` 以 `from_attributes` 吃 adapter 的 dataclass，欄位名綁在一起（同檔其他 Out 一樣做法）。
+- 沒打真的服務：改的只有認不得的閘道，DeepSeek 送出的參數不變（測試錄請求本體守著），手邊也沒有這種閘道的 key。

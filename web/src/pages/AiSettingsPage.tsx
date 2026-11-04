@@ -374,6 +374,7 @@ function AiForm({ saved }: { saved: AiSettings }) {
 
           <ReasoningLevel
             provider={provider}
+            baseUrl={draft.base_url}
             model={draft.model}
             value={draft.reasoning}
             onChange={(reasoning) => edit({ reasoning })}
@@ -509,16 +510,19 @@ function ProviderChoice({
 
 /**
  * 推理程度（M5.5 票 17），模型欄下面一格。DeepSeek 只分低與高（brief §20.26），提示照實說；OpenAI
- * 接口上認不得的模型、沒有 effort 的 Claude，Berth 不送這個參數，說這個模型的程度沒有效果。下拉選單的
- * `id` 是停下的說明連過來的錨點（`#ai-reasoning`）：落在它身上，鍵盤使用者不必再按一次 Tab。
+ * 接口上認不得的模型、沒有 effort 的 Claude，Berth 不送這個參數，說這個模型的程度沒有效果；認不得的
+ * Anthropic 相容閘道說選「關」就不送（票 17b）。下拉選單的 `id` 是停下的說明連過來的錨點
+ * （`#ai-reasoning`）：落在它身上，鍵盤使用者不必再按一次 Tab。
  */
 function ReasoningLevel({
   provider,
+  baseUrl,
   model,
   value,
   onChange,
 }: {
   provider: AiProvider
+  baseUrl: string
   model: string
   value: AiReasoning
   onChange: (next: AiReasoning) => void
@@ -526,7 +530,8 @@ function ReasoningLevel({
   const { t } = useTranslation()
   const id = 'ai-reasoning'
   const typed = useDebounced(model.trim(), SUGGEST_DEBOUNCE_MS)
-  const applies = useQuery(aiReasoningQueryOptions(provider, typed))
+  const typedUrl = useDebounced(baseUrl.trim(), SUGGEST_DEBOUNCE_MS)
+  const support = useQuery(aiReasoningQueryOptions(provider, typedUrl, typed))
 
   return (
     <div className="grid gap-2">
@@ -550,7 +555,10 @@ function ReasoningLevel({
       </select>
       <div id={`${id}-hint`} aria-live="polite" className="grid gap-1 text-xs text-ink-dim">
         <p>{t('settings.aiPage.reasoning.hint')}</p>
-        {applies.data?.applies === false && <p>{t('settings.aiPage.reasoning.noEffect')}</p>}
+        {support.data?.applies === false && <p>{t('settings.aiPage.reasoning.noEffect')}</p>}
+        {support.data?.off_sends_nothing === true && (
+          <p>{t('settings.aiPage.reasoning.offSendsNothing')}</p>
+        )}
       </div>
     </div>
   )

@@ -478,7 +478,7 @@ Conversation 太長時，把最後幾個 Turn 之前的歷史換成一段由模�
 _Avoid_: summarize（摘要是它產出的那段字）, truncate（Truncation 是一筆工具結果太長時只交前一段，票 20）, prune
 
 **Reasoning Level**（推理程度）:
-模型回答前想多久：`off`、`low`、`medium`、`high`，沒有「預設」這一級，沒設過是 `medium`（M5.5 票 17，`AiReasoning`）。兩種接口各記一份；怎麼變成請求參數看接口與模型（`adapters.ai._how_to_send`），有些模型不送，設定頁說「沒有效果」（`reasoning_applies`）。Compaction 的摘要一律關。服務以 400 拒絕這個參數時，停下的說明連到設定頁那一格（`reasoning_rejected`）。
+模型回答前想多久：`off`、`low`、`medium`、`high`，沒有「預設」這一級，沒設過是 `medium`（M5.5 票 17，`AiReasoning`）。兩種接口各記一份；怎麼變成請求參數看接口與模型（`adapters.ai._how_to_send`），有些模型不送，設定頁說「沒有效果」；Anthropic 接口上認不得的相容閘道（主機不是 DeepSeek 的非 Claude 模型）「關」什麼都不送，設定頁與停下的說明說「選關就不送」（`reasoning_support`，票 17b）。Compaction 的摘要一律關。服務以 400 拒絕這個參數時，停下的說明連到設定頁那一格（`reasoning_rejected`）。
 _Avoid_: thinking（pydantic-ai 的統一設定名，只在 adapter 內）, effort（Anthropic 的參數名）, reasoning effort
 
 **Slash Command**（斜線指令）:

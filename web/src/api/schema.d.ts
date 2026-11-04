@@ -259,7 +259,7 @@ export interface paths {
         };
         /**
          * Get Ai Reasoning
-         * @description 表單上的模型收不收推理程度。不帶 key、不連外。
+         * @description 表單上的端點與模型，推理程度怎麼送。不帶 key、不連外。
          */
         get: operations["get_ai_reasoning_api_settings_ai_reasoning_get"];
         put?: never;
@@ -3034,6 +3034,8 @@ export interface components {
         AiReasoningOut: {
             /** Applies */
             applies: boolean;
+            /** Off Sends Nothing */
+            off_sends_nothing: boolean;
         };
         /**
          * AiRefusal
@@ -8299,6 +8301,7 @@ export interface operations {
         parameters: {
             query: {
                 provider: components["schemas"]["AiProvider"];
+                base_url?: string;
                 model?: string;
             };
             header?: never;
