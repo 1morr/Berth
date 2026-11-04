@@ -66,8 +66,8 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 16 面板畫推理 | 推理收在預設收起的「推理」一格，串流中也不展開，展開看得到全文，重新載入後還在；後端本來就帶，補了替身串流的推理與 fake「想一想」 | 新 session 下 `/implement .scratch/m5.5/issues/17-reasoning-effort.md` |
 | 2026-11-04 | M5.5 18 對話清單 | `GET /agent/conversations` 與 `/history` 列自己的對話（最多 50 段、標回答中），頁首「對話」切換；新瀏覽器接上最近一段，按過「新對話」的仍空白 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 | 2026-11-04 | M5.5 17 推理程度設定 | 設定頁加程度（預設中）；DeepSeek（Anthropic 接口）明寫 effort 與關，實測都收；OpenAI 認不得的、沒 effort 的 Claude 不送；400 連到設定頁 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
-| 2026-11-04 | M5.5 17b 閘道關不送 | Anthropic 接口上主機不是 `api.deepseek.com` 的非 Claude 模型「關」什麼都不送，低中高照送；被拒時停下的說明與設定頁說選關就不送；以主機認 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 | 2026-11-04 | M5.5 12b 預先綁定的遲到 | 預先綁定、一集都沒收到的 Feed 也看遲到與追更：綁定時刻用 `rss_feeds.created_at`，起算取較早的，沒 Series 時門檻用全域；刪 Feed 就收 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
+| 2026-11-04 | M5.5 17b 閘道關不送 | Anthropic 接口上主機不是 `api.deepseek.com` 的非 Claude 模型「關」什麼都不送，低中高照送；被拒時停下的說明與設定頁說選關就不送；以主機認 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 
 ## 偏差與決定
 
