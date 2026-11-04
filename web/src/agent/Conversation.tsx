@@ -598,6 +598,7 @@ function Transcript({
             runId={lastOfItsRun(messages, index)}
             // 「繼續」只接最後一輪：只畫在最後一則上，答著、跑指令時不畫。
             offer={index === messages.length - 1 && !busy ? (turn) => !spent.has(turn) : null}
+            live={busy && index === messages.length - 1}
             onContinue={onContinue}
           />
           {outputsAfter(outputs, index + 1)}
@@ -637,11 +638,14 @@ function Message({
   continued,
   runId,
   offer,
+  live,
   onContinue,
 }: {
   message: UIMessage
   continued: boolean
   runId: string | null
+  /** 這一則是最後一則、而且這一輪還在答（推理的「思考中」看它）。 */
+  live: boolean
   /** 這一則是最後一則的話，哪一輪還畫「繼續」；不是最後一則是 `null`。 */
   offer: ((turn: string) => boolean) | null
   onContinue: (turn: string) => void
@@ -691,7 +695,7 @@ function Message({
         const key = `${message.id}:${index}`
         if (isTextUIPart(part)) return part.text ? <Markdown key={key} text={part.text} /> : null
         if (isToolUIPart(part)) return <ToolPart key={key} part={part} />
-        if (isReasoningUIPart(part)) return <Reasoning key={key} part={part} />
+        if (isReasoningUIPart(part)) return <Reasoning key={key} part={part} live={live} />
         const stop = isDataUIPart(part) ? stopOf(part) : null
         if (stop !== null) {
           const offered = stop.continuable && offer !== null && offer(stop.turn_id)

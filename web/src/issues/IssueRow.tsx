@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -13,12 +14,14 @@ import {
 } from '../api/issues'
 import { reviewQueryOptions } from '../api/review'
 import { ConfirmAction, GhostButton, INLINE_LINK } from '../components/controls'
+import { Dot } from '../components/Dot'
 import { DetailLine, QueueRow } from '../components/QueueRow'
 import { problemText } from '../components/requestProblem'
 import { JobLink } from '../jobs/JobLink'
 import { formatCoverage, formatEpisode, formatJellyfinEpisode } from '../components/episodes'
 import { fileName, whenText } from '../components/queueText'
 import { formatSize } from '../media/searchResult'
+import { sentenceGap } from '../i18n/list'
 import { WorkPicker } from './WorkPicker'
 
 /**
@@ -90,13 +93,19 @@ export function IssueRow({
           ? name || issue.subject
           : fileName(issue.path) || name || issue.subject
       }
-      sentence={t(`issues.type.${issue.type}`)}
+      sentence={
+        (issue.type === 'episodes_overdue' && overdueSentence(t, issue.detail)) ||
+        t(`issues.type.${issue.type}`)
+      }
       when={t('issues.detectedAt', { value: whenText(issue.detected_at, i18n.language) })}
       refusal={refusal}
       body={
         // 「認領並建立下載」沒說會做什麼（M4 票 60，審計 S4）：在按鈕上面說一次，不收進展開。
         issue.actions.includes('claim_torrent') ? (
           <p className="max-w-prose text-xs text-ink-dim">{t('issues.claimTorrentHint')}</p>
+        ) : issue.type === 'episodes_overdue' ? (
+          // 「忽略」的後果與那顆鍵放在一起，不混在下一步裡（M5.5 票 19）。
+          <p className="max-w-prose text-xs text-ink-dim">{t('issues.overdueIgnoreHint')}</p>
         ) : undefined
       }
       details={
@@ -318,7 +327,12 @@ function Measured({ issue }: { issue: Issue }) {
   }
   if (issue.type === 'episodes_overdue') {
     // 訂閱的作品遲到（M5.5 票 10）：晚的每一集說卡在哪，卡住的下載連到 Job 頁；搜這一集或去訂閱在作品頁。
+    // 下一步照這幾集卡在哪說（票 19）：沒有下載在處理的叫人去搜，卡住的叫人去 Job 頁，兩種都有就兩句。
     const media = text(issue.detail.media)
+    const episodes = overdueEpisodes(issue.detail)
+    const unreleased = episodes.some((one) => one.stall === 'not_released')
+    const stuck = episodes.some((one) => one.stall !== 'not_released')
+    const gap = sentenceGap(i18n.language)
     return (
       <>
         <WorkLine issue={issue} />
@@ -326,18 +340,33 @@ function Measured({ issue }: { issue: Issue }) {
         {issue.detail.reason === 'next_run' && (
           <DetailLine term={t('issues.overdueReason')}>{t('issues.overdueNextRun')}</DetailLine>
         )}
-        {(Array.isArray(issue.detail.episodes) ? issue.detail.episodes.map(record) : []).map(
-          (one) => (
-            <OverdueLine key={`${String(one.season)}-${String(one.episode)}`} episode={one} />
-          ),
-        )}
+        {episodes.map((one) => (
+          <OverdueLine key={`${String(one.season)}-${String(one.episode)}`} episode={one} />
+        ))}
+        {/* 句與句之間照語言接（`sentenceGap`）：中文句號後面不留空白。 */}
         <DetailLine term={t('issues.next')}>
-          {t('issues.nextOverdue')}{' '}
-          {media !== '' && (
-            <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
-              {t('issues.overdueSearch')}
-            </Link>
+          {unreleased && (
+            <>
+              {t('issues.nextOverdueSearch')}
+              {gap}
+              {media !== '' && (
+                <>
+                  <Link to="/media/$mediaId" params={{ mediaId: media }} className={INLINE_LINK}>
+                    {t('issues.overdueSearch')}
+                  </Link>
+                  {t('issues.sentenceEnd')}
+                </>
+              )}
+              {gap}
+            </>
           )}
+          {stuck && (
+            <>
+              {t('issues.nextOverdueJob')}
+              {gap}
+            </>
+          )}
+          {t('issues.nextOverdueClose')}
         </DetailLine>
       </>
     )
@@ -422,14 +451,9 @@ function WorkLine({ issue }: { issue: Issue }) {
 }
 
 /** `episodes_overdue` 的一集：`S01E04`、播出日、卡在哪，卡住的下載連到 Job 頁。 */
-function OverdueLine({ episode }: { episode: Record<string, unknown> }) {
+function OverdueLine({ episode }: { episode: OverdueEpisode }) {
   const { t, i18n } = useTranslation()
-  const season = numeric(episode.season)
-  const number = numeric(episode.episode)
-  const stall = overdueStall(episode.stall)
-  if (season === null || number === null || stall === null) return null
-  const aired = text(episode.air_date)
-  const jobs = Array.isArray(episode.jobs) ? episode.jobs.map(text).filter(Boolean) : []
+  const { season, episode: number, stall, aired, jobs } = episode
   return (
     <DetailLine term={formatEpisode({ season, episode_start: number, episode_end: number })}>
       {aired === ''
@@ -440,8 +464,8 @@ function OverdueLine({ episode }: { episode: Record<string, unknown> }) {
           })}
       {jobs.map((hash) => (
         <span key={hash}>
-          {' · '}
-          <JobLink hash={hash}>{t('issues.overdueJob')}</JobLink>
+          {' '}
+          <Dot /> <JobLink hash={hash}>{t('issues.overdueJob')}</JobLink>
         </span>
       ))}
     </DetailLine>
@@ -458,6 +482,63 @@ const OVERDUE_STALLS = [
 
 function overdueStall(value: unknown): (typeof OVERDUE_STALLS)[number] | null {
   return OVERDUE_STALLS.find((stall) => stall === value) ?? null
+}
+
+/** `detail.episodes` 裡認得的集，照播出日由早到晚（沒有播出日的排最後）。 */
+interface OverdueEpisode {
+  season: number
+  episode: number
+  stall: (typeof OVERDUE_STALLS)[number]
+  /** `YYYY-MM-DD`；TMDB 沒給時是空字串。 */
+  aired: string
+  /** 卡住的那幾筆下載。 */
+  jobs: string[]
+}
+
+/** `detail.episodes` 裡認得的集，照播出日由早到晚（沒有播出日的排最後）。認不得的略過。 */
+function overdueEpisodes(detail: Record<string, unknown>): OverdueEpisode[] {
+  const known = (Array.isArray(detail.episodes) ? detail.episodes.map(record) : []).flatMap(
+    (one): OverdueEpisode[] => {
+      const season = numeric(one.season)
+      const episode = numeric(one.episode)
+      const stall = overdueStall(one.stall)
+      if (season === null || episode === null || stall === null) return []
+      const jobs = Array.isArray(one.jobs) ? one.jobs.map(text).filter(Boolean) : []
+      return [{ season, episode, stall, aired: text(one.air_date), jobs }]
+    },
+  )
+  return known.sort((a, b) => {
+    if (a.aired === b.aired) return 0
+    if (a.aired === '') return 1
+    if (b.aired === '') return -1
+    return a.aired < b.aired ? -1 : 1
+  })
+}
+
+/**
+ * 收著時那一句（M5.5 票 19）：哪幾集、最早那一集晚幾天，只有一集時連卡在哪一起說——兩件遲到不再是同一句。
+ * 天數從播出日算到今天，**今天照瀏覽器的日曆**：追更頁的「晚 N 天」照伺服器的日曆（`late_days`），Issue 的
+ * `detail` 沒有存天數（每天都在變）。同一個時區時兩頁一樣，瀏覽器與伺服器跨時區時可能差一天。說不出時回 `null`，
+ * 退回型別的那一句。
+ */
+function overdueSentence(t: TFunction, detail: Record<string, unknown>): string | null {
+  const episodes = overdueEpisodes(detail)
+  const first = episodes[0]
+  if (first === undefined || first.aired === '') return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const aired = new Date(`${first.aired}T00:00:00`)
+  const count = Math.max(0, Math.round((today.getTime() - aired.getTime()) / 86_400_000))
+  const episode = formatEpisode({
+    season: first.season,
+    episode_start: first.episode,
+    episode_end: first.episode,
+  })
+  const sentence =
+    episodes.length === 1
+      ? t('issues.overdueOne', { episode, count, stall: t(`issues.overdueStall.${first.stall}`) })
+      : t('issues.overdueMany', { episode, count, total: episodes.length })
+  return detail.reason === 'next_run' ? t('issues.overdueMaybeNextRun', { sentence }) : sentence
 }
 
 /** 缺集的 `detail.missing`（`[{season, episode}]`）照季寫成 `S01 E03–E04, E06`，季與季以 `; ` 隔開。 */

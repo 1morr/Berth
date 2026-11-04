@@ -34,7 +34,7 @@ export function SectionLink({ section, admin }: { section: Section; admin: boole
       activeOptions={{ exact: true }}
       aria-current={current && !exact ? 'true' : undefined}
       aria-label={countedName(t, label, count)}
-      className={`${current ? NAV_BOX_ACTIVE : NAV_BOX} inline-flex items-center px-4 py-2.5`}
+      className={`${current ? NAV_BOX_ACTIVE : NAV_BOX} inline-flex min-h-11 items-center px-4 py-2.5`}
     >
       {label}
       <CountChip count={count} />

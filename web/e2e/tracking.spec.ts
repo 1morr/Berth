@@ -65,6 +65,24 @@ test('追更：停滯說成「下載停滯」、預先綁定沒收到的也列�
   await shot(page, '2-dormant-open')
 })
 
+test('Issue 頁：巡檢開的兩件遲到收著就說哪一集、晚幾天、卡在哪（M5.5 票 19）', async ({ page }) => {
+  await signIn(page, '/issues')
+  const rows = page.getByRole('article')
+  await expect(rows).toHaveCount(2)
+  await expect(page.getByText('S01E05 晚 4 天，下載停滯')).toBeVisible()
+  await expect(
+    page.getByText('S01E03 晚 3 天，沒有下載在處理（字幕組沒發，或發了沒送出）'),
+  ).toBeVisible()
+
+  // 停滯的那一件：下一步只說 Job 頁，不叫人去搜。
+  const stalled = rows.filter({ hasText: '藥師少女的獨語' })
+  await stalled.getByText('展開').click()
+  await expect(stalled.getByText(/卡住的下載，到它的 Job 頁重試或刪掉/)).toBeVisible()
+  await expect(stalled.getByText(/字幕組還沒發的/)).toHaveCount(0)
+  expect(await fitsWidth(page)).toBe(true)
+  await shot(page, '4-overdue-issues')
+})
+
 test('一般使用者：打開追更被導走，分頁列沒有追更，API 403', async ({ page }) => {
   await signIn(page, '/schedule', CREW)
   const tabs = page.getByRole('navigation', { name: '新番' })

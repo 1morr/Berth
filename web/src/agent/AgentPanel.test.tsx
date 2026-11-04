@@ -614,6 +614,18 @@ describe('AgentPanel conversation list (M5.5 票 18)', () => {
     expect(screen.queryByRole('list', { name: '我的對話' })).toBeNull()
   })
 
+  it('puts focus on the current conversation when the list opens (M5.5 ticket 19)', async () => {
+    serve(three())
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.click(await screen.findByRole('button', { name: '對話' }))
+
+    const list = await screen.findByRole('list', { name: '我的對話' })
+    // 清單排在整排抬頭鍵之後：不把焦點交進去，Tab 要先經過「新對話」「關閉」才到得了。
+    expect(within(list).getByRole('button', { current: true })).toHaveFocus()
+  })
+
   it('folds the list up on Escape and gives focus back, without closing the panel', async () => {
     serve(three())
     const user = userEvent.setup()

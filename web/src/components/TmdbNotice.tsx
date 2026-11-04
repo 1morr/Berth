@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { meQueryOptions } from '../api/auth'
 import type { TmdbProblem } from '../api/schemas'
 import { GhostButton, Notice } from './controls'
 import { SettingsHint } from './SettingsHint'
+import { TechnicalDetails } from './TechnicalDetails'
 
 /**
  * 拿不到 TMDB 時畫面說什麼（票 03 驗收：可行動的錯誤，不是空白畫面）。
@@ -12,6 +15,9 @@ import { SettingsHint } from './SettingsHint'
  *
  * 探索頁（票 03）與 Media 詳情頁（票 04）共用這一塊：兩頁問的是同一台服務，
  * 而「憑證缺失要連到 TMDB 那一頁、而且只對 admin 連」這條規則各寫一份遲早會走樣。
+ *
+ * 怎麼申請 key 只對 admin 說：時間表（M5.5 票 09）讓這一塊第一次出現在每個人面前，一般使用者原本先被叫去
+ * 自己申請、接著又被叫去找管理員（票 19 的 critique）。服務的原文收進技術細節（The Original Is Evidence Rule）。
  */
 export function TmdbNotice({
   problem,
@@ -24,13 +30,15 @@ export function TmdbNotice({
 }) {
   const { t } = useTranslation()
   const credential = problem === 'credential_missing' || problem === 'credential_rejected'
+  const admin = useQuery(meQueryOptions).data?.role === 'admin'
 
   return (
     <div className="grid max-w-prose gap-3 py-2">
       <Notice signal="blocked" label={t('common.failed')}>
-        {t(`tmdb.problem.${problem}`)}
+        {problem === 'credential_missing' && admin
+          ? t('tmdb.problem.credentialMissingAdmin')
+          : t(`tmdb.problem.${problem}`)}
       </Notice>
-      {detail && <p className="value text-xs wrap-anywhere text-ink-dim">{detail}</p>}
       {credential ? (
         <SettingsHint slot="tmdb" fallback={t('tmdb.problem.askAdmin')} />
       ) : (
@@ -46,6 +54,7 @@ export function TmdbNotice({
           </span>
         )
       )}
+      <TechnicalDetails lines={[detail]} />
     </div>
   )
 }

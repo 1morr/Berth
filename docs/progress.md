@@ -68,6 +68,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 17 推理程度設定 | 設定頁加程度（預設中）；DeepSeek（Anthropic 接口）明寫 effort 與關，實測都收；OpenAI 認不得的、沒 effort 的 Claude 不送；400 連到設定頁 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 | 2026-11-04 | M5.5 12b 預先綁定的遲到 | 預先綁定、一集都沒收到的 Feed 也看遲到與追更：綁定時刻用 `rss_feeds.created_at`，起算取較早的，沒 Series 時門檻用全域；刪 Feed 就收 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 | 2026-11-04 | M5.5 17b 閘道關不送 | Anthropic 接口上主機不是 `api.deepseek.com` 的非 Claude 模型「關」什麼都不送，低中高照送；被拒時停下的說明與設定頁說選關就不送；以主機認 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
+| 2026-11-04 | M5.5 19 UI 收尾 | critique/audit 六面：偵測 0、對比最低 6.53/5.71；開面板時時間表溢出與頁首折行改看那一欄的寬，取得的模型畫成鍵，遲到收著說集數與天數，key 提示提前說；思考中留著 | 新 session 下 `/implement .scratch/m5.5/issues/20-m5.5-acceptance.md` |
 
 ## 偏差與決定
 

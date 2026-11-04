@@ -67,6 +67,18 @@ const OFFICIAL_BASE_URL: Record<AiProvider, string> = {
   openai: 'https://api.openai.com/v1',
 }
 
+/**
+ * 實際打的網址（`adapters.ai.effective_base_url` 的同一條規則）：去掉空白與結尾的 `/`，Anthropic 另去掉
+ * 結尾的 `/v1`，留空是官方端點。key 欄用它提前說「存著的那把用不上」，後端的 `_key_for` 才是守門的。
+ */
+function effectiveBaseUrl(provider: AiProvider, baseUrl: string): string {
+  const normalized = (url: string) => {
+    const bare = url.trim().replace(/\/+$/, '')
+    return provider === 'anthropic' && bare.endsWith('/v1') ? bare.slice(0, -3) : bare
+  }
+  return normalized(baseUrl) || normalized(OFFICIAL_BASE_URL[provider])
+}
+
 /** 測試沒成功的每一種：人話與補法。少一種是編譯錯誤。 */
 const FAILURE_TEXT = {
   key_rejected: {
@@ -239,6 +251,16 @@ function AiForm({ saved }: { saved: AiSettings }) {
     refused?.reason === 'key_missing' && endpoint.has_key
       ? t('settings.aiPage.key.savedElsewhere')
       : errorOf('key_missing')
+  // 存著的那把只送到存它的網址（M5.5 票 01）：網址一改就先說，不等按了鍵才被拒（票 19）。
+  const savedUrl = effectiveBaseUrl(provider, endpoint.base_url)
+  const keyMovedAway = endpoint.has_key && effectiveBaseUrl(provider, draft.base_url) !== savedUrl
+  // 被拒時錯誤那一句（`savedElsewhere`）已經說了，提示不再講存著的那把。
+  const keyHint =
+    !endpoint.has_key || keyError
+      ? t('settings.aiPage.key.hint')
+      : keyMovedAway
+        ? t('settings.aiPage.key.hintOtherUrl', { url: savedUrl })
+        : t('settings.aiPage.key.hintSaved')
 
   return (
     <form
@@ -305,11 +327,13 @@ function AiForm({ saved }: { saved: AiSettings }) {
               value={draft.api_key}
               autoComplete="off"
               placeholder={t(
-                endpoint.has_key
-                  ? 'settings.aiPage.key.placeholderSet'
-                  : 'settings.aiPage.key.placeholder',
+                keyMovedAway
+                  ? 'settings.aiPage.key.placeholderOtherUrl'
+                  : endpoint.has_key
+                    ? 'settings.aiPage.key.placeholderSet'
+                    : 'settings.aiPage.key.placeholder',
               )}
-              hint={t('settings.aiPage.key.hint')}
+              hint={keyHint}
               error={keyError}
               onChange={(event) => edit({ api_key: event.target.value }, 'key_missing')}
             />
@@ -364,7 +388,13 @@ function AiForm({ saved }: { saved: AiSettings }) {
               </GhostButton>
             </div>
             <div aria-live="polite" className="grid gap-1">
-              {fetched.data && <FetchedModels result={fetched.data} />}
+              {fetched.data && (
+                <FetchedModels
+                  result={fetched.data}
+                  current={draft.model}
+                  onPick={(model) => edit({ model }, 'model_missing')}
+                />
+              )}
               {fetched.isError && aiRefusalOf(fetched.error) === null && (
                 <RequestFailed error={fetched.error} lead={t('settings.aiPage.models.didNotRun')} />
               )}
@@ -605,14 +635,46 @@ function Price({
   )
 }
 
-/** 「取得模型」的結果：問到幾個，或為什麼沒問到、建議改用本機表。 */
-function FetchedModels({ result }: { result: AiModels }) {
+/**
+ * 「取得模型」的結果：問到的畫成一排鍵（按一顆填進模型欄），或為什麼沒問到、建議改用本機表。
+ *
+ * 不只靠模型欄的 `datalist`：瀏覽器拿欄位裡已有的字過濾它，填過模型的人點進欄位什麼都看不到，手機上更找不到
+ * （M5.5 票 19 的 critique）。`datalist` 留著給手打的人補完。
+ */
+function FetchedModels({
+  result,
+  current,
+  onPick,
+}: {
+  result: AiModels
+  current: string
+  onPick: (model: string) => void
+}) {
   const { t } = useTranslation()
   if (result.source === 'endpoint') {
     return (
-      <p className="text-xs text-ink">
-        {t('settings.aiPage.models.fetched', { count: result.models.length })}
-      </p>
+      <>
+        <p className="text-xs text-ink">
+          {t('settings.aiPage.models.fetched', { count: result.models.length })}
+        </p>
+        <div
+          role="group"
+          aria-label={t('settings.aiPage.models.picks')}
+          className="flex flex-wrap gap-2"
+        >
+          {result.models.map((model) => (
+            <button
+              key={model}
+              type="button"
+              aria-pressed={model === current.trim()}
+              onClick={() => onPick(model)}
+              className={model === current.trim() ? FILTER_ACTIVE : FILTER}
+            >
+              <span className="value normal-case">{model}</span>
+            </button>
+          ))}
+        </div>
+      </>
     )
   }
   if (result.failure === null) {
@@ -620,7 +682,8 @@ function FetchedModels({ result }: { result: AiModels }) {
   }
   return (
     <>
-      <Notice signal="blocked" label={t('settings.aiPage.models.failed')}>
+      {/* 不是阻擋：本機表照樣可用、模型名照樣能打（The One Meaning Rule）。 */}
+      <Notice signal="neutral" label={t('settings.aiPage.models.failed')}>
         <span className="grid gap-1">
           <span>{t(MODELS_FAILURE_TEXT[result.failure])}</span>
           <span>{t('settings.aiPage.models.fallback')}</span>

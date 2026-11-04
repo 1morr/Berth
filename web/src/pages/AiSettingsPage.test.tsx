@@ -233,7 +233,7 @@ describe('設定 → AI', () => {
     await user.type(screen.getByLabelText('API key'), 'sk-deepseek')
     await user.click(screen.getByRole('button', { name: '取得模型' }))
 
-    expect(await screen.findByText('這個端點列了 2 個模型，放進模型欄的清單了。')).toBeVisible()
+    expect(await screen.findByText('這個端點列了 2 個模型，點一個填進模型欄。')).toBeVisible()
     expect(suggestions()).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
     expect(sent(stub, FETCH)).toEqual({
       provider: 'openai',
@@ -325,6 +325,71 @@ describe('設定 → AI', () => {
     await user.type(screen.getByLabelText('API key'), 'sk-another')
 
     await waitFor(() => expect(suggestions()).toEqual(SUGGESTED))
+  })
+
+  it('取得的模型畫成一排鍵：模型欄已有名字時也看得到，按一顆就填進去（M5.5 票 19）', async () => {
+    render(
+      {
+        [FETCH]: {
+          body: {
+            models: ['claude-sonnet-5-5', 'claude-opus-5-5'],
+            source: 'endpoint',
+            failure: null,
+            status: null,
+            detail: '',
+          },
+        },
+      },
+      IN_USE,
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.click(await screen.findByRole('button', { name: '取得模型' }))
+
+    const picks = await screen.findByRole('group', { name: '這個端點列的模型' })
+    expect(within(picks).getByRole('button', { name: 'claude-sonnet-5-5' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await user.click(within(picks).getByRole('button', { name: 'claude-opus-5-5' }))
+
+    expect(screen.getByLabelText('模型')).toHaveValue('claude-opus-5-5')
+    expect(within(picks).getByRole('button', { name: 'claude-opus-5-5' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('存著 key、改了網址還沒按任何鍵：key 欄先說存著的那把屬於原本的網址（M5.5 票 19）', async () => {
+    render(
+      { [suggestKey('anthropic', 'https://gateway.example')]: { body: fromPrices([]) } },
+      IN_USE,
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    const key = await screen.findByLabelText('API key')
+    expect(key).toHaveAccessibleDescription(/空著就沿用存著的那把/)
+    await user.type(screen.getByLabelText('Base URL'), 'https://gateway.example/')
+
+    expect(key).toHaveAttribute('placeholder', '貼上這個網址的 key')
+    expect(key).toHaveAccessibleDescription(/存著的那把只送到 https:\/\/api\.anthropic\.com/)
+    expect(key).not.toHaveAccessibleDescription(/空著就沿用/)
+
+    // 填回官方網址（結尾的 `/v1` 與 `/` 不算改）：存著的那把又用得上。
+    await user.clear(screen.getByLabelText('Base URL'))
+    await user.type(screen.getByLabelText('Base URL'), 'https://api.anthropic.com/v1/')
+    expect(key).toHaveAttribute('placeholder', '已設定，貼上新的就換掉')
+  })
+
+  it('沒存過 key：提示不說「沿用存著的那把」', async () => {
+    render()
+    renderApp('/settings/ai')
+
+    const key = await screen.findByLabelText('API key')
+    expect(key).toHaveAccessibleDescription(/不會再顯示出來/)
+    expect(key).not.toHaveAccessibleDescription(/存著的那把/)
   })
 
   it('存著 key、改了網址就按取得模型：key 欄說存著的只送到原本的網址', async () => {
@@ -429,13 +494,17 @@ describe('設定 → AI', () => {
     const elsewhere =
       '存著的 key 只送到存它的那個網址。要用這個網址，貼上它的 key，或先移除存著的那把。'
     expect(await screen.findByLabelText('API key')).toHaveAccessibleDescription(
-      expect.stringContaining('只送到存它的那個 base URL'),
+      expect.stringContaining('空著就沿用存著的那把'),
     )
     await user.type(screen.getByLabelText('Base URL'), 'https://gw.example')
     await user.click(screen.getByRole('button', { name: '測試連線' }))
 
     expect(await screen.findByText(elsewhere)).toBeVisible()
     expect(screen.getByLabelText('API key')).toHaveAttribute('aria-invalid', 'true')
+    // 錯誤那一句已經說了，提示不再講一次。
+    expect(screen.getByLabelText('API key')).not.toHaveAccessibleDescription(
+      /存著的那把只送到 https/,
+    )
     await user.clear(screen.getByLabelText('Base URL'))
     expect(screen.queryByText(elsewhere)).not.toBeInTheDocument()
   })

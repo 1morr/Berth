@@ -51,8 +51,10 @@ function Page({ children }: { children: ReactNode }) {
         {t('nav.skip')}
       </a>
       {/* 桌機一列：應用名、導覽、靠右的助理與帳號選單。窄版導覽自己一整列、放不下就換行
-          （`order-last basis-full`），不收進漢堡選單：每一項與它的件數都看得到（M5.5 票 07）。 */}
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
+          （`order-last basis-full`），不收進漢堡選單：每一項與它的件數都看得到（M5.5 票 07）。
+          窄不窄看頁首自己的寬（`@container`），不看視窗：1280 寬打開側面板時頁首只剩約 51rem，照視窗排會讓
+          助理與帳號鍵單獨掉到第二列（M5.5 票 19）。 */}
+      <header className="@container flex flex-wrap items-center gap-x-6 gap-y-3 border-b-2 border-rule-strong px-6 py-4">
         <div>
           <p className="value text-lg font-semibold tracking-tight">{t('app.name')}</p>
           {/* 窄版收起副標：第一列才放得下應用名、助理與帳號選單（M5.5 票 07）。 */}
@@ -87,7 +89,8 @@ function NavLink({ to, children }: { to: '/' | '/library' | '/jobs'; children: R
       // `/` 是每一條路徑的前綴，預設的模糊比對會讓探索永遠是「當前頁」。
       activeOptions={{ exact: to === '/' }}
       // `inline-flex items-center`：導覽項一律拉到同一列的高度（帶件數的那兩格比較高），字要置中。
-      className={`${NAV_LINK} inline-flex items-center px-4 py-2.5`}
+      // `min-h-11`：與靠右的助理、帳號鍵同高（帳號名是 `text-sm` 的 `.value`，比 `.label` 高），一列不高低不齊。
+      className={`${NAV_LINK} inline-flex min-h-11 items-center px-4 py-2.5`}
     >
       {children}
     </Link>
@@ -108,7 +111,7 @@ function MainNav({ admin }: { admin: boolean }) {
   return (
     <nav
       aria-label={t('nav.label')}
-      className="order-last flex basis-full flex-wrap items-stretch gap-2 sm:order-none sm:basis-auto sm:gap-x-4"
+      className="order-last flex basis-full flex-wrap items-stretch gap-2 @4xl:order-none @4xl:basis-auto @4xl:gap-x-4"
     >
       <NavLink to="/">{t('nav.discover')}</NavLink>
       <SectionLink section={AIRING} admin={admin} />

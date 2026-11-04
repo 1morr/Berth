@@ -444,6 +444,14 @@ const rssRoute = createRoute({
   ),
 })
 
+/** `/schedule` 的網址參數（M5.5 票 19）：預設的今天與全部列都不寫進網址。 */
+interface ScheduleSearch {
+  day?: string
+  subscribed?: true
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+
 /**
  * 時間表 `/schedule`（M5.5 票 09，`.scratch/m5.5/schedule-shape.md`）：「新番」區塊的第一頁，**每個人**
  * 都進得來（找新番不是管理動作）。卡片只帶狀態類別，字幕組與 Feed 在只有管理員的 `/rss`。
@@ -451,6 +459,13 @@ const rssRoute = createRoute({
 const scheduleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/schedule',
+  // 窄版選的那一天與「只看已訂閱」寫進網址：點卡片進作品頁、再回上一頁時還在（M5.5 票 19）。
+  // 日子只驗形狀，不在這一週的由頁面退回今天（週界要等讀到時間表才知道）。
+  validateSearch: (search: Record<string, unknown>): ScheduleSearch => ({
+    day: typeof search.day === 'string' && ISO_DAY.test(search.day) ? search.day : undefined,
+    // 手打的 `?subscribed=true` 被讀成布林；字串的也收（同 `/login` 的 `expired`）。
+    subscribed: search.subscribed === true || search.subscribed === 'true' ? true : undefined,
+  }),
   beforeLoad: async ({ context, location }) => {
     await requireSignedInPage(context.queryClient, location)
   },

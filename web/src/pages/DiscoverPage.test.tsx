@@ -346,6 +346,27 @@ describe('探索頁拿不到 TMDB 時', () => {
 
     expect(await screen.findByText(/請管理員到設定補上/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '前往設定：TMDB' })).not.toBeInTheDocument()
+    // 申請與填 key 是管理員的事：不叫一般使用者自己去申請，再叫他找管理員（M5.5 票 19 的 critique）。
+    expect(screen.getByText('Berth 還沒有 TMDB 憑證。')).toBeInTheDocument()
+    expect(screen.queryByText(/themoviedb\.org/)).not.toBeInTheDocument()
+  })
+
+  it('管理員才看到怎麼申請；服務的原文收進技術細節', async () => {
+    render({
+      [TRENDING]: {
+        body: {
+          items: [],
+          problem: 'credential_missing',
+          detail: 'a TMDB credential is required',
+        } satisfies Discover,
+      },
+    })
+    renderApp('/')
+
+    expect(await screen.findByText(/自己去 themoviedb\.org 申請/)).toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('technical-details')).getByText('a TMDB credential is required'),
+    ).toBeInTheDocument()
   })
 
   it('連不上 TMDB 是另一種：附原文與重試，不連到精靈', async () => {

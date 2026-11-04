@@ -2019,8 +2019,19 @@ const zhHant = {
       '可能是下一輪：上一集與這一集隔了三週以上，多半是下一個 cour，Mikan 上是另一個番組，訂著的這一條收不到。到作品頁訂下一輪的番組；訂了之後晚了就照一般的遲到說。',
     overdueJob: '處理卡住的下載',
     overdueSearch: '到作品頁搜這一集或去訂閱',
-    nextOverdue:
-      '這部作品有集播出已過門檻還沒入庫。字幕組還沒發的，到作品頁搜這一集，或換一個字幕組訂閱；卡住的下載，到它的 Job 頁重試或刪掉。不用管就按「忽略」：這部作品還有晚的集的期間不會再開，晚的集都入庫過一次之後再晚才會重開。都入庫之後，下一次每日巡檢會自己收掉這一件。',
+    nextOverdueSearch: '字幕組還沒發的，到作品頁搜這一集，或換一個字幕組訂閱。',
+    // 句中的連結自成一句時接在它後面的句號。
+    sentenceEnd: '。',
+    nextOverdueJob: '卡住的下載，到它的 Job 頁重試或刪掉。',
+    nextOverdueClose: '都入庫之後，下一次每日巡檢會自己收掉這一件。',
+    overdueIgnoreHint:
+      '按「忽略」之後，這部作品還有晚的集的期間不會再開；晚的集都入庫過一次之後再晚才會重開。',
+    // 收著時那一句（M5.5 票 19）。
+    overdueOne_one: '{{episode}} 晚 {{count}} 天，{{stall}}',
+    overdueOne_other: '{{episode}} 晚 {{count}} 天，{{stall}}',
+    overdueMany_one: '{{episode}} 起 {{total}} 集晚了，最早的晚 {{count}} 天',
+    overdueMany_other: '{{episode}} 起 {{total}} 集晚了，最早的晚 {{count}} 天',
+    overdueMaybeNextRun: '{{sentence}}，可能是下一輪',
     // 二十種型別各一句（brief §9.1）。
     type: {
       library_link_missing: '媒體庫裡少了這個檔案',
@@ -2986,7 +2997,9 @@ const zhHant = {
   // 所以文案也在同一個地方——各寫一份的話兩頁遲早會對同一件事說不同的下一步。
   tmdb: {
     problem: {
-      credential_missing:
+      credential_missing: 'Berth 還沒有 TMDB 憑證。',
+      // 管理員看的那一句（M5.5 票 19）：一般使用者申請了也填不進去，他看 `credential_missing` 加 `askAdmin`。
+      credentialMissingAdmin:
         'Berth 還沒有 TMDB 憑證。它不內建任何一把，要你自己去 themoviedb.org 申請，再填進「設定 → TMDB」。',
       credential_rejected: 'TMDB 不接受這把憑證。它可能被撤銷了，或貼進來時少了幾個字。',
       unreachable: '連不上 TMDB。可能是這台機器沒有對外網路，或 TMDB 正在維護。',
@@ -3207,7 +3220,11 @@ const zhHant = {
         label: 'API key',
         placeholder: '貼上 key',
         placeholderSet: '已設定，貼上新的就換掉',
-        hint: 'key 存在 Berth 的資料庫，不會再顯示出來。空著就沿用存著的那把，但只送到存它的那個 base URL；改了網址要貼這個網址的 key。',
+        placeholderOtherUrl: '貼上這個網址的 key',
+        hint: 'key 存在 Berth 的資料庫，不會再顯示出來。',
+        hintSaved: 'key 存在 Berth 的資料庫，不會再顯示出來。空著就沿用存著的那把。',
+        hintOtherUrl:
+          'key 存在 Berth 的資料庫，不會再顯示出來。存著的那把只送到 {{url}}；這個網址要貼它自己的 key。',
         savedElsewhere:
           '存著的 key 只送到存它的那個網址。要用這個網址，貼上它的 key，或先移除存著的那把。',
         remove: '移除 key',
@@ -3236,8 +3253,9 @@ const zhHant = {
       models: {
         button: '取得模型',
         fetching: '取得中…',
-        fetched_one: '這個端點列了 {{count}} 個模型，放進模型欄的清單了。',
-        fetched_other: '這個端點列了 {{count}} 個模型，放進模型欄的清單了。',
+        fetched_one: '這個端點列了 {{count}} 個模型，點一個填進模型欄。',
+        fetched_other: '這個端點列了 {{count}} 個模型，點一個填進模型欄。',
+        picks: '這個端點列的模型',
         empty: '這個端點沒有列出模型。模型欄改用本機價目表的建議，模型名照樣可以自己填。',
         failed: '沒取得模型',
         noList: '這個端點不提供模型清單（也可能是 Base URL 的路徑不對）。',
@@ -6520,8 +6538,19 @@ const en: Translations<typeof zhHant> = {
       'Possibly the next run: more than three weeks passed between the last episode and this one, usually the next cour, which Mikan lists as a separate show your subscription does not receive. Subscribe to the next run on the title page; once you do, lateness is reported as usual.',
     overdueJob: 'Handle the stuck download',
     overdueSearch: 'Search for it or subscribe on the title page',
-    nextOverdue:
-      'Episodes of this title aired past the threshold and are not in the library. If the group has not released one, search for it on the title page or subscribe to another group; if a download is stuck, retry or delete it on its job page. Press Ignore if it does not matter: nothing reopens while this title still has a late episode, only after they have all been imported and one is late again. Once they are all imported, the next daily sweep closes this on its own.',
+    nextOverdueSearch:
+      'If the group has not released one, search for it on the title page or subscribe to another group.',
+    nextOverdueJob: 'If a download is stuck, retry or delete it on its job page.',
+    sentenceEnd: '.',
+    nextOverdueClose: 'Once they are all imported, the next daily sweep closes this on its own.',
+    overdueIgnoreHint:
+      'After Ignore, nothing reopens while this title still has a late episode; it reopens only after they have all been imported and one is late again.',
+    overdueOne_one: '{{episode}} is {{count}} day late: {{stall}}',
+    overdueOne_other: '{{episode}} is {{count}} days late: {{stall}}',
+    overdueMany_one: '{{total}} episodes from {{episode}} are late, the earliest by {{count}} day',
+    overdueMany_other:
+      '{{total}} episodes from {{episode}} are late, the earliest by {{count}} days',
+    overdueMaybeNextRun: '{{sentence}}; possibly the next run',
     type: {
       library_link_missing: 'This file is missing from the library',
       source_missing: 'The source file under complete is gone',
@@ -7427,7 +7456,8 @@ const en: Translations<typeof zhHant> = {
   },
   tmdb: {
     problem: {
-      credential_missing:
+      credential_missing: 'Berth has no TMDB credential.',
+      credentialMissingAdmin:
         'Berth has no TMDB credential. It ships without one: get your own key at themoviedb.org and paste it under Settings → TMDB.',
       credential_rejected:
         'TMDB rejected this credential. It may have been revoked, or lost a few characters on the way in.',
@@ -7652,7 +7682,12 @@ const en: Translations<typeof zhHant> = {
         label: 'API key',
         placeholder: 'Paste a key',
         placeholderSet: 'Set. Paste a new one to replace it',
-        hint: 'The key is stored in Berth’s database and never shown again. Left empty, the saved key is used, but only at the base URL it was saved with; after changing the address, paste that address’s key.',
+        placeholderOtherUrl: 'Paste this address’s key',
+        hint: 'The key is stored in Berth’s database and never shown again.',
+        hintSaved:
+          'The key is stored in Berth’s database and never shown again. Left empty, the saved key is used.',
+        hintOtherUrl:
+          'The key is stored in Berth’s database and never shown again. The saved key only goes to {{url}}; paste this address’s own key.',
         savedElsewhere:
           'The saved key only goes to the address it was saved with. To use this address, paste its key, or remove the saved one first.',
         remove: 'Remove key',
@@ -7682,8 +7717,9 @@ const en: Translations<typeof zhHant> = {
       models: {
         button: 'Fetch models',
         fetching: 'Fetching…',
-        fetched_one: 'This endpoint listed {{count}} model; it is in the model list now.',
-        fetched_other: 'This endpoint listed {{count}} models; they are in the model list now.',
+        fetched_one: 'This endpoint listed {{count}} model; pick it to fill in the model.',
+        fetched_other: 'This endpoint listed {{count}} models; pick one to fill in the model.',
+        picks: 'Models this endpoint listed',
         empty:
           'This endpoint listed no models. The model list falls back to the local price table, and you can still type any name.',
         failed: 'Could not fetch models',
@@ -8511,9 +8547,9 @@ const en: Translations<typeof zhHant> = {
     toggle: 'Assistant',
     title: 'Assistant',
     close: 'Close',
-    newConversation: 'New conversation',
+    newConversation: 'New chat',
     conversations: {
-      toggle: 'Conversations',
+      toggle: 'Chats',
       label: 'My conversations',
       none: 'No conversations yet.',
       untitled: 'Untitled',

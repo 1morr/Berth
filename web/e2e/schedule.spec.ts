@@ -98,6 +98,47 @@ test('時刻與評分：對得上的卡片寫放送時刻與 Bangumi 評分，�
   await expect(maruko.getByRole('time')).toHaveCount(0)
 })
 
+test('側面板打開時：頁面變窄就一次一天，卡片裡的字不超出卡框，頁首的助理鍵留在第一列（M5.5 票 19）', async ({
+  page,
+  viewport,
+}) => {
+  // 窄版的面板蓋滿視窗、底下的頁面 `inert`，這一條只在桌機（面板是旁邊的一欄）。
+  test.skip((viewport?.width ?? 0) < 1024, '面板在窄版蓋滿視窗')
+  await signIn(page, '/schedule')
+  await expect(page.getByTestId('schedule-week')).toBeVisible()
+
+  await page.getByRole('button', { name: '助理' }).click()
+  await expect(page.getByRole('complementary', { name: '助理' })).toBeVisible()
+
+  // 1280 寬開面板時頁面這一欄約 51rem：七欄一欄只剩 106px，季集與評分會疊進隔壁欄（critique 量到 7–22px）。
+  await expect(page.getByTestId('schedule-week')).toBeHidden()
+  const view = await day(page, '週六')
+  await expect(view.getByRole('link', { name: '名偵探柯南' })).toBeVisible()
+  const spill = await page.evaluate(`(() => {
+    let worst = 0
+    for (const card of document.querySelectorAll('main a[href^="/media/"]')) {
+      if (card.getClientRects().length === 0) continue
+      const edge = card.getBoundingClientRect().right
+      for (const child of card.querySelectorAll('*')) {
+        const box = child.getBoundingClientRect()
+        if (box.width > 0) worst = Math.max(worst, box.right - edge)
+      }
+    }
+    return worst
+  })()`)
+  expect(spill).toBeLessThanOrEqual(0)
+  expect(await fitsWidth(page)).toBe(true)
+
+  // 頁首照自己的寬排：導覽自己一列，助理與帳號鍵不單獨掉到下一列。
+  const banner = page.getByRole('banner')
+  const name = await banner.getByText('Berth', { exact: true }).boundingBox()
+  const toggle = await banner.getByRole('button', { name: '助理' }).boundingBox()
+  expect(name).not.toBeNull()
+  expect(toggle).not.toBeNull()
+  expect(toggle!.y).toBeLessThan(name!.y + name!.height)
+  await shot(page, '6-panel-open')
+})
+
 test('一般使用者：看得到時間表與狀態，沒有「訂閱」分頁，回應裡沒有字幕組與 Feed', async ({
   page,
 }) => {

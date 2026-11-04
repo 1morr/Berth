@@ -41,9 +41,10 @@ export function ScheduleCardRow({ card }: { card: ScheduleCard }) {
     >
       <ArtSlot url={poster} shape="poster" sizes={THUMB_SIZES} />
       <div className="grid min-w-0 content-start gap-1">
-        <h3 className="value line-clamp-2 text-sm leading-snug text-ink">{title}</h3>
+        {/* 長片名換行、不截斷（DESIGN.md〈Layout〉的手機那一條）：英文片名在 129px 的欄裡兩行放不下。 */}
+        <h3 className="value text-sm leading-snug wrap-anywhere text-ink">{title}</h3>
         <p id={factsId} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="value text-xs text-ink-dim">{`${seasonCode(card.season)}${episodeCode(card.episode)}`}</span>
+          <span className="value text-xs wrap-anywhere text-ink-dim">{`${seasonCode(card.season)}${episodeCode(card.episode)}`}</span>
           {/* 空白讓描述念成「S02E05 23:00 已訂閱」而不是黏在一起；畫面上的間距是 `gap`。 */}
           {card.airs_at && (
             <>

@@ -783,7 +783,8 @@ def tracking_scenario() -> Scenario:
     訂閱作品——一部晚了而且下載停滯（要你動手）、一部預先綁定而字幕組一集都還沒發、晚了
     （要你動手，票 12b）、一部跟上了（準時）、一部最後一集缺集播出滿 60 天（斷更很久，預設
     收起）。播出日照真的今天往回算，時鐘不固定。沒有人接 Discord，管理員
-    打開時頁首說遲到只會顯示在這裡。
+    打開時頁首說遲到只會顯示在這裡。起來時由產品的 `sweep_once` 跑一輪，`/issues` 上是
+    要你動手那兩部的 `episodes_overdue`（M5.5 票 19）。
 
     停滯的那一包在替身 qBittorrent 上是 `stalledDL`、一小時沒動：poller 不會把它改回下載中，
     也不會判成被移除。
@@ -3603,7 +3604,8 @@ async def _seed_tracking(session: AsyncSession) -> None:
     三部訂閱的作品，每部一條綁好的 RSS Series 掛在同一個 Mikan 聚合 feed 的一筆「略過」上
     （還訂著），每週一集、最後一集照 `_TRACKING_WORKS` 的天數往回算。入庫的集只有帳本列，媒體庫
     裡沒有檔案（這一頁看的是帳本）。藥師少女第 5 集是一筆停滯的下載（計劃說的季集）。最後加一部
-    預先綁定、一集都還沒收到的（`_seed_tracking_prebound`）。
+    預先綁定、一集都還沒收到的（`_seed_tracking_prebound`）。最後跑一輪 `sweep_once` 開出遲到的
+    Issue。
     """
     now = utcnow()
     today = datetime.now().astimezone().date()
@@ -3744,6 +3746,7 @@ async def _seed_tracking(session: AsyncSession) -> None:
             )
     await _seed_tracking_prebound(session, anime.id)
     await session.commit()
+    await sweep_once(session)
 
 
 async def _seed_tracking_prebound(session: AsyncSession, route_id: int) -> None:

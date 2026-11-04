@@ -28,8 +28,9 @@ export function TrackedRows({
       <table className="hidden w-full table-fixed border-collapse text-left lg:table">
         <caption className="sr-only">{caption}</caption>
         <colgroup>
-          <col className="w-[26%]" />
-          <col className="w-[16%]" />
+          {/* 作品欄大半是空的、狀態欄卻讓「看這筆下載」折行：讓給狀態（M5.5 票 19 量過）。 */}
+          <col className="w-[22%]" />
+          <col className="w-[12%]" />
           <col className="w-[14%]" />
           <col className="w-[12%]" />
           <col />
@@ -72,7 +73,8 @@ export function TrackedRows({
               <WorkLink work={work} />
             </h3>
             <Status work={work} />
-            <dl className="grid grid-cols-[7rem_1fr] items-baseline gap-x-3 gap-y-1">
+            {/* 欄名寬照最長的那一個：英文的 IMPORTED UP TO 在 7rem 裡會折成兩行。 */}
+            <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1">
               <dt className="label text-ink-dim">{t('tracking.column.groups')}</dt>
               <dd className="text-sm text-ink">
                 <Groups work={work} />

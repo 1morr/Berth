@@ -107,8 +107,15 @@ export function AccountMenu({ me }: { me: Me }) {
               </li>
             )}
           </ul>
-          <div className="justify-self-start">
-            <LanguageToggle />
+          {/* 面板是 `deck` 底，語言鍵選中那顆也是 `deck`：直接放上來，選中的與面板融在一起、沒選的反而像按下的
+              （M5.5 票 19 的 critique）。墊一塊 `hull` 底，回到它在頁首時的樣子；前面一行說它是什麼。 */}
+          <div className="flex flex-wrap items-center gap-3">
+            <span aria-hidden="true" className="label text-ink-dim">
+              {t('language.label')}
+            </span>
+            <div className="bg-hull p-1">
+              <LanguageToggle />
+            </div>
           </div>
           <div className="justify-self-start">
             <GhostButton type="button" busy={leave.isPending} onClick={() => leave.mutate()}>

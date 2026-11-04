@@ -366,8 +366,10 @@ primary、uptime 儀表板的折線圖與綠色勾勾牆、訊息塊左緣的粗
 ## Layout
 
 **外框。** 頁首是一條 `border-b-2 border-rule-strong` 的重橫線帶：應用名與副標、主導覽，靠右是助理開關與帳號選單
-（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）。窄版（`sm` 以下）收起副標，主導覽自己一整列（`order-last basis-full`）、
-放不下就換行，不收進漢堡選單：每一項與它的件數都看得到。`main` 不設寬度上限：泊位板是整寬橫幅，每一頁自己決定內文欄寬。
+（M5.5 票 07，`.scratch/m5.5/navigation-shape.md`）。頁首是 `@container`：它自己窄於 `56rem`（`@4xl`）時主導覽自己一整列
+（`order-last basis-full`）、放不下就換行，不收進漢堡選單：每一項與它的件數都看得到；應用名、助理與帳號留在第一列。
+看頁首的寬而不是視窗（M5.5 票 19）：1280 寬打開側面板時頁首只剩約 51rem，照視窗排會讓助理與帳號鍵單獨掉到第二列、
+英文時三列。窄版（`sm` 以下）另收起副標。`main` 不設寬度上限：泊位板是整寬橫幅，每一頁自己決定內文欄寬。
 頁首之前有一條 skip link（平常 `sr-only`，拿到焦點才以 `deck` 底 + `rule-strong` 框浮在左上角），
 跳到 `main#main`（`tabIndex={-1}`，焦點真的落在內容上，下一個 Tab 才從內容開始）。
 
@@ -420,6 +422,14 @@ flex / grid 子項的最小寬度，一串沒有空格的發佈名在 390px 上�
 它會被壓成幾個字寬的直欄。自己會橫向捲動的只有一個東西：展開後的集表那一格（`overflow-x-auto`），不是整頁。
 
 ### Named Rules
+
+**The Column Decides Rule（看那一欄的寬，不看視窗）。** 側面板在桌面是旁邊的一欄（M5 票 12），打開時頁面變窄、視窗沒變。
+所以**會因為寬度換版面的地方**（欄數、一份 DOM 兩種版面、頁首換列）用 container query，量的是自己那一欄：頁首
+（`@container`，`@4xl` 換列）、時間表（`@min-[60rem]` 七欄，以下一次一天）、用量頁的兩張表（`@2xl`）。`sm` / `lg` 只留給
+跟視窗綁在一起的事：面板本身在 `lg` 以上才是一欄、窄版的底部固定列、副標收不收。M5.5 票 19 的 critique 量到的反例：
+時間表照 `lg` 排七欄，開面板時一欄 106px，季集與評分疊進隔壁欄 7–22px。驗法：每個新頁面在 1280 寬開著面板看一次。
+**還沒換的**：追更頁的表格 / 一部一塊（`lg:table` / `lg:hidden`）、Job 詳情頁與搜尋面板的 `lg:grid-cols-*` 仍照視窗；追更頁在票 19
+開著面板實跑過放得下，其餘沒量。改到那幾頁時順手換成 container query。
 
 **The Board Never Scrolls Rule（板不捲動）。** 泊位板永遠五格全在畫面內：窄版 2+2+1，桌機一列五格。
 例外是精靈的窄版：收成一列摘要，但五格仍以小色塊全在那一列上（不捲、不藏掉任何一格的顏色），紅的另用字說出。
@@ -646,7 +656,8 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   `aria-current="page"`，而同一頁的切換列已經有一個「當前頁」；篩選是這一頁裡的一組選項，不是另一頁。單選的篩選列
   （媒體庫、下載列表、作品頁的下載段）都是 `components/FilterBar`（M4 票 92），其餘幾顆由呼叫端畫成 `Link` 或按鈕。
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
-- **主導覽五項**（M5.5 票 07）：探索、新番、媒體庫、下載、待處理；待處理只有 `admin`，新番票 09 起每個人都有（連 `/schedule`，件數只給 `admin`）。一項管一個區塊：區塊裡任一頁都是當前
+- **主導覽五項**（M5.5 票 07）：每一項 `min-h-11`，與靠右的助理、帳號鍵同高（帳號名是 `text-sm` 的 `.value`，比 `.label` 高；
+  不給的話同一列高低差 9px，票 19）。探索、新番、媒體庫、下載、待處理；待處理只有 `admin`，新番票 09 起每個人都有（連 `/schedule`，件數只給 `admin`）。一項管一個區塊：區塊裡任一頁都是當前
   （`nav/SectionLink`，`NAV_BOX_ACTIVE`），連結指的那一頁是 `aria-current="page"`、區塊的別頁是 `"true"`。區塊頁在 `<h1>` 上方掛一條
   分頁列（`nav/SectionTabs`，形狀同 `SettingsTabs`）：待處理是審核 `/review`、Issue `/issues`，新番是時間表 `/schedule`（每個人）、追更 `/schedule/tracking`（`admin`，票 12）與訂閱 `/rss`（`admin`；一般使用者的分頁列只有一格，照畫）。區塊的頁面、分頁、誰看得到與帶哪一格件數只在 `nav/sections.ts` 的區塊物件裡一份；`/schedule/tracking` 在 `/schedule` 底下，分頁與頁首那一項都用 `exact` 比對，免得時間表在追更頁上也亮。
 - **件數**（`nav/CountChip`）：標籤後面一塊 `assigned` 的 `.value` 數字（不是 `.label`：數字不要刻度），0 件、讀不到時不畫。
@@ -656,7 +667,9 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
   有 `.label` 的方塊裡不要用 `gap` 排件數：刻度是 `::before`，在 flex 裡是一個 flex 項，`gap` 會把它和字拆開（件數用 `ml-2`）。
 - **帳號選單**（`nav/AccountMenu`，Berth 第一個下拉）：觸發鍵是 `NAV_BOX`，內容是名字（`.value`，不被 `.label` 大寫）加 `▾`，
   `aria-expanded`、可存取名稱「帳號：<名字>」；設定、健康、週報是當前頁時畫成當前並掛 `aria-current="true"`（展開不換漆）。面板在觸發鍵下方靠右，`deck` 底 +
-  `border-2 border-rule-strong`（沒有陰影）：名字與角色色塊、設定 / 健康 / 週報（`admin`）一列一個 `NAV_LINK`、語言鍵、登出。
+  `border-2 border-rule-strong`（沒有陰影）：名字與角色色塊、設定 / 健康 / 週報（`admin`）一列一個 `NAV_LINK`、語言、登出。
+  **語言那一列**是 `.label ink-dim`「語言」（`aria-hidden`，群組自己有名字）+ 墊在 `hull` 底 `p-1` 裡的 `LanguageToggle`：面板是 `deck` 底，
+  語言鍵選中那顆也是 `deck`，直接放上來選中的會與面板融在一起、沒選的那顆反而像按下的（票 19 的 critique，深淺兩色都看得到）。
   是 disclosure 不是 `role="menu"`（WAI-ARIA APG 的 Disclosure Navigation Menu）：Tab 依序走、不搶方向鍵。`Esc` 收起、焦點回到觸發鍵；
   Tab 走出去或點外面收起、焦點不動；點連結收起，換語言不收。不用 `<details>`（`Esc` 與點外面不收）也不用 `popover`（jsdom 沒有）。
 - 角色以中性色塊呈現（在帳號選單裡），讓 `user` 知道自己為什麼沒有那幾顆按鈕。
@@ -766,12 +779,15 @@ Prowlarr 已經有站時不給。結果一句摘要（唯一的 live 區）、�
 
 `.scratch/m5.5/schedule-shape.md`。版面照 AutoBangumi Calendar（週一到週日分欄），但預設列全部：這一頁是找新番的。
 
-- **欄:** `lg` 以上七欄（`grid-cols-7 gap-3`），每欄一個 `<section>`，`<h2>` 是 `.label` 星期 + `.value` 日期 + 部數。
+- **欄:** 頁面這一欄 `60rem` 以上七欄（`@container` + `@min-[60rem]:grid-cols-7 gap-3`，The Column Decides Rule：開著側面板的 1280 寬
+  是一次一天），每欄一個 `<section>`，`<h2>` 是 `.label` 星期 + `.value` 日期 + 部數。
   **今天**那一欄頂端 `border-t-4 border-rule-strong`（其他欄同寬的透明線，基線對齊）加一塊中性「今天」字塊，`aria-current="date"`。
   「今天」照伺服器的 `today`。沒有卡的一天留著，一行 `ink-dim`「這天沒有」。
-- **窄版（`lg` 以下）一次一天:** 七顆 `FILTER` 日期鍵（`aria-pressed`，單選、預設今天，今天那一顆後面 `ink-dim`「今天」），下面那一天的清單，標題寫星期全名。
+- **窄的時候（`60rem` 以下）一次一天:** 七顆 `FILTER` 日期鍵（`aria-pressed`，單選、預設今天，今天那一顆後面 `ink-dim`「今天」），下面那一天的清單，標題寫星期全名。
+  選的那一天與「只看已訂閱」寫進網址（`?day=2026-09-26`、`?subscribed=true`，`replace` 不堆歷史；預設的今天與全部列不寫）：
+  點卡片進作品頁再回上一頁，還在原來那一天（票 19）。網址上的日子不在這一週時退回今天。
 - **卡（小海報橫列）:** 一天十幾到三十部，2:3 直卡會把一週拉到七、八個螢幕高，所以是一列一部：`w-12` 的 `ArtSlot` + 標題
-  （`.value text-sm line-clamp-2`）+ `S02E05`（`.value text-xs ink-dim`）+ 狀態。框同牆卡片（`border-2 border-rule` + `well`，hover 換
+  （`.value text-sm wrap-anywhere`，**不截斷**：英文片名在約 127px 的欄裡兩行放不下，票 19 拿掉 `line-clamp-2`）+ `S02E05`（`.value text-xs ink-dim wrap-anywhere`）+ 狀態。框同牆卡片（`border-2 border-rule` + `well`，hover 換
   `rule-strong`），整列一條連結到作品頁，名字是作品名、季集與狀態是 `aria-describedby`。
 - **狀態:** 未訂閱不畫（The Usual Stays Unpainted Rule），已訂閱、已入庫是中性小色塊——是事實，不是信號。
 - **時刻與評分（票 14）:** 對得上 AniList / Bangumi 的卡片，季集後面 `Dot` + `<time>`（`.value text-xs ink-dim`，瀏覽器時區、24 小時制；
@@ -785,7 +801,8 @@ Prowlarr 已經有站時不給。結果一句摘要（唯一的 live 區）、�
 `.scratch/m5.5/tracking-shape.md`。頁寬 `max-w-[80rem]`（清單）。
 
 - **三段:** 要你動手、準時各一個 `SectionHeading` 加作品；斷更很久是 `CollapsibleRow`（原生 `<details>`，預設收起，摘要列寫部數）。沒有作品的段不畫；要你動手沒有時一行 `ink-dim`「訂閱的作品都按時」。
-- **同一份資料畫兩次:** `lg` 以上一張 `table-fixed` 的 `<table>`（`caption` 是段名、`sr-only`；欄頭 `.label` + `scope="col"`，作品格是 `th scope="row"`，列之間 `border-b-2 border-rule`，`align-baseline`）；以下一部一塊 `well` + `border-2 border-rule`：作品名、狀態，下面三條 `.label` 欄名 + 值的 `dl`（`items-baseline`）。用 `hidden` 切，不用 CSS 把表格疊成塊：`display: block` 的表格在無障礙樹裡不是表格。
+- **同一份資料畫兩次:** `lg` 以上一張 `table-fixed` 的 `<table>`（`caption` 是段名、`sr-only`；欄頭 `.label` + `scope="col"`，作品格是 `th scope="row"`，列之間 `border-b-2 border-rule`，`align-baseline`）；以下一部一塊 `well` + `border-2 border-rule`：作品名、狀態，下面三條 `.label` 欄名 + 值的 `dl`（`grid-cols-[auto_1fr] items-baseline`：欄名寬照最長的那一個，英文的 IMPORTED UP TO 不折行）。
+  表格欄寬作品 22%、字幕組 12%、已播到 14%、已入庫到 12%，其餘給狀態（「看這筆下載」不折行，票 19 量過）。用 `hidden` 切，不用 CSS 把表格疊成塊：`display: block` 的表格在無障礙樹裡不是表格。
 - **漆:** 只有「晚 N 天」塗 `assigned`（現在需要你）；晚的集（`.value`，`S01 E05–E06`）、「可能是下一輪」、結論與「下載停滯」都是字，`Dot` 隔開，最後一條 `INLINE_LINK`「看這筆下載」連到卡住的那一筆 Job。全部準時的一頁看不到任何信號色。
 - **收不到通知:** `<h1>` 下一塊中性 `Notice`（標籤「通知」），一句話加 `INLINE_LINK` 到 `/settings/notifications`；讀不到「我的通知」時不畫。
 
@@ -1057,6 +1074,10 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 - **`/issues` 的 Jellyfin 回驗（`jellyfin_item_mismatch`，M3 票 17）:** 展開裡四條 `DetailLine` 疊在一起讓兩邊並排對照：
   差在哪（季 / 集 / TMDB）→ 帳本（`S01E05 · TMDB 209867`）→ Jellyfin 認成（同一個寫法，沒有 TMDB 時說「沒有 TMDB id」）→ 下一步
   （修法在 Jellyfin 裡，所以寫在列上）。兩邊用同一個格式化函式，差的那一格一眼對得出來；不塗漆、不畫差異標記。
+- **`/issues` 的遲到（`episodes_overdue`，M5.5 票 10、19）:** 一句話不是型別那一句，而是帶值的：只有一集時「S01E05 晚 4 天，下載停滯」，
+  幾集時「S01E04 起 2 集晚了，最早的晚 7 天」，換輪的接「，可能是下一輪」——兩件遲到收著也分得出來（The Needs-You Floats Up Rule）。
+  天數從播出日算到今天，今天照瀏覽器的日曆（追更頁照伺服器的；Issue 不存天數，跨時區時兩頁可能差一天）。下一步的句與句照語言接（`i18n/list.ts` 的 `sentenceGap`：中文句號後不留空白）。展開的「下一步」照這幾集卡在哪說：沒有下載在處理的叫人去搜，卡住的叫人去 Job 頁，兩種都有才兩句；
+  「忽略」的後果是 `body` 那一行 `text-xs ink-dim`，貼著那顆鍵，不混在下一步裡。
 - **處理完就消失：** 清單外層掛 `useFocusAfterRemoval`（The Focus Takes The Next Row Rule）。
 
 ### 側面板（`agent/AgentPanel`，M5 票 12）
@@ -1069,7 +1090,9 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   （對話還在讀時先落在標題，輸入欄出現了再接過去——只接標題上的，換頁重掛不搶焦點）。
 - **對話清單**（M5.5 票 18）：「對話」是 disclosure（`aria-expanded` + `aria-controls`），清單在抬頭列下方就地展開（`hull` 底、
   `border-b-2 border-rule`、最高 `50dvh` 自己捲），不浮在對話上，所以不因 Tab 走出或點外面收起；選一段、再按「對話」或 `Esc`
-  收起（`Esc` 先收清單、焦點回「對話」，再按才收面板）。一段一顆整列的鍵：標題是散文（空的寫「未命名」），下一行 `ink-dim`
+  收起（`Esc` 先收清單、焦點回「對話」，再按才收面板）。打開時焦點交給目前這段（沒有就第一段）：清單排在整排抬頭鍵之後，
+  不交的話 Tab 要先經過「新對話」「關閉」才進得去（票 19）；`/history` 那一份在對話紀錄裡，不搶焦點。英文抬頭是 Chats / New chat，
+  三顆鍵與標題在 26rem 裡排成一列。一段一顆整列的鍵：標題是散文（空的寫「未命名」），下一行 `ink-dim`
   的多久前；在跑的接 `bg-working` 的「回答中」（同工具的「執行中」）；現在這段是 `deck` 底加左側 3px `ink` 內線（同斜線清單的
   這一列）、`aria-current` 與「目前這段」。`/history` 的結果畫同一份清單。
 - **對話紀錄**是 `role="log"`、串流中 `aria-busy`。你說的：`.label`「你」+ `deck` 底一塊散文；助理說的：`.label`「助理」+ markdown
@@ -1091,7 +1114,8 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
   `TEXT_LINK` 換行會疊行），下面網址 `.value text-xs ink-dim wrap-anywhere`、服務給的日期（`page_age`）`text-xs ink-dim`，沒有就不印；
   一筆都沒有是一行 `ink-dim`「沒有搜到網頁」。服務拒絕的搜尋（`web_search_tool_result_error`）算沒成功，照原文印。
 - **推理**（`agent/Reasoning`，M5.5 票 16）：同工具那一行的外觀，`.label`「推理」+「助理回答前的思考」，**預設收起、串流中也不自動展開**
-  （推理是草稿，回答才是給人看的）；還在串時多一個 `working` 小色塊「思考中」。展開沉到 `hull`，`text-sm ink-dim` 照原文印
+  （推理是草稿，回答才是給人看的）；還在串時多一個 `working` 小色塊「思考中」——收著時它是唯一的進展訊號，與工具的「執行中」同一個語彙
+  （票 19 定案留著）。只在這一段還在串**而且**這一輪還在答、是最後一則時畫：按「停止」由前端中止時那一段會停在 `streaming`。展開沉到 `hull`，`text-sm ink-dim` 照原文印
   （`whitespace-pre-wrap`，不走 markdown）；沒有字的（服務遮掉的推理）不畫，也不為它標「助理」。
 - **確認卡**（`agent/ConfirmCard`，M5 票 13）：畫在提出它的那一格工具呼叫上（有 Proposal 對得上 `tool_call_id` 的那一格），長相由命令決定、不由模型決定。
   等人按時是 `well` 底 + `border-2 border-rule-strong`、抬頭一塊 `assigned` 色塊「要你確認」+ 命令的人話名稱；按過之後色塊拿掉、框退回 `rule`、底沉到 `hull`。
@@ -1134,6 +1158,18 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 - **一步是一格**：`well` 底 `border-2 border-rule`（這次呼叫出錯換 `rule-strong` + `blocked-ink` 一句 + 技術細節），`h3` 是「第 n 次模型呼叫」+ 模型名 + 靠右的耗時，
   底下一行 `Dot` 分隔的 token 與費用。它叫的工具縮排在下面，`hull` 底一列一個：人話名稱（與側面板同一份對照，`agent/toolNames.ts`）+
   結果的字（不只靠色；沒照做的框換 `rule-strong`）+ 截短標記 + 耗時，被擋的理由一行，參數收在 `<details>`。
+
+### AI 設定頁（`AiSettingsPage`，M5 票 06、M5.5 票 01、02、17、19）
+
+設定頁的一個分頁，`SettingsFrame` 的寬與節奏。這裡只記這一頁自己的做法，欄位與 `Notice` 照 Inputs 與訊息塊。
+- **key 欄說得出存著的那把用不用得上**（票 01、19）：存著的 key 只送到存它的網址（後端 `_key_for` 守門）。表單上的網址照
+  `effective_base_url` 的同一條規則（去空白與結尾 `/`，Anthropic 去結尾 `/v1`，留空是官方端點）跟存著的比，一不同 placeholder 就換成
+  「貼上這個網址的 key」、提示說「存著的那把只送到 <網址>」——事前就說，不等按了「取得模型」或「測試連線」才被拒。沒存過 key 時不提
+  「沿用」；被拒時錯誤那一句已經說了，提示不再講一次。提示是完整的句子，不拼接（中文兩句之間沒有空白）。
+- **取得的模型畫成一排鍵**（票 02、19）：「取得模型」底下一句件數 + `role="group"`（「這個端點列的模型」）的 `FILTER` 鍵，模型名 `.value normal-case`，
+  按一顆填進模型欄，與欄位相同的那顆 `FILTER_ACTIVE` + `aria-pressed`。不只靠 `datalist`：瀏覽器拿欄位裡已有的字過濾它，填過模型的人
+  點進去什麼都看不到，手機上更找不到；`datalist` 留著給手打的人補完。
+- **沒取得是中性的 `Notice`**，不是 `blocked`：本機表照樣能用、模型名照樣能打（The One Meaning Rule），原文收進技術細節。
 
 ### 就地確認（`ConfirmAction` / `useInPlaceConfirm` / `ConfirmPanel`）
 
@@ -1253,6 +1289,10 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
   白字配中明度色只有 3.6:1）。以 build 為準——本文件記錄的是共用漆的那一版。
   `web-src-pages-healthpage-tsx.md` 已不再有這句話；setup 那份尚未更新。
 
+- **帳號選單觸發鍵的 `▾` 是一個字元**（M5.5 票 07），而 Shapes 寫著「沒有圖示」。它掛 `aria-hidden`，可存取名稱是「帳號：<名字>」，
+  展開與否由 `aria-expanded` 說；它只是一個「這顆會往下打開」的形狀提示，同泊位板摘要列的「展開 ▾」。新的下拉照抄這一顆，
+  不另造別的字形。
+
 - **排除條件的移除鍵是一個 `×` 字元，建議項與開關上是 `+` / `−`**（`rss/RulesEditor.tsx`），而 Shapes 寫著「沒有圖示」、
   Don't 寫著不用字元當標記。無障礙名稱沒有被污染：移除鍵的名字來自 `aria-label`（「拿掉「720p」」），`+` / `−` 掛
   `aria-hidden`。但它們仍是字形圖示，**不列為系統的做法**：票 10 要求記下的是「一條一格」那一格的形狀（見 Chips），
@@ -1260,7 +1300,8 @@ The Focus Follows The Confirm Rule。**外殼只有一份（`ConfirmPanel`），
 
 - 實測對比下限（2026-09-17，探索、下載、Media 詳情、媒體庫、Route 設定五頁，深淺兩主題 × 1280 / 390 全部量過）：
   **深色最低 6.53:1、亮色最低 5.71:1**；`rule-strong` 見上面「重橫線」那一條（深色 3.33–4.51:1、亮色 6.46:1）。
-  這些是**現況的最低值**，不是目標值；新畫面仍以 AA 數值為驗收條件。
+  這些是**現況的最低值**，不是目標值；新畫面仍以 AA 數值為驗收條件。M5.5 收尾（2026-11-04，頁首與帳號選單、時間表、追更、
+  Issue 的遲到、RSS 門檻欄、AI 設定、側面板、步驟頁，深淺 × 1280 / 390 逐元素量）最低值不變：深色 6.53、亮色 5.71（都是 `ink-dim` 小字）。
 
 - **媒體庫牆的格子跟著自己的內容長，同排下緣不再對齊**（M1.5 票 11）。牆卡片那一節說
   `JellyfinLine` 的 `min-h-10` 讓基線對齊——那句話原本靠 grid 預設的 `stretch` 把同排拉成一樣高。
