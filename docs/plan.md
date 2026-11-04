@@ -240,7 +240,7 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
     - importer 接回帳本某一列時，掛在那一列（`ledger_id`）上的 `library_link_missing` / `source_missing` / `inode_mismatch`，與入庫長回帳本時那一筆的 `job_without_files`。
     - 管線那三種（`missing_files` / `client_error` / `client_removed`）：Job 已經不在那個壞掉狀態時（poller 接回、別的路徑推走、被刪掉）由 poller 每一輪收（`issues.close_settled`）。
     - `jellyfin_item_mismatch`：下一次反查或對帳**比到**一致時收；找不到 item 不算一致。
-    - 巡檢那六種：下一輪巡檢量到條件不在時收。`episodes_overdue` 是晚的集都入庫了、作品不再有綁好的 RSS Series、或退訂了（Feed 刪了，同作品頁的訂閱清單）；巡檢前刷新失敗的作品那一輪不收。
+    - 巡檢那六種：下一輪巡檢量到條件不在時收。`episodes_overdue` 是晚的集都入庫了、作品不再有訂閱（綁好的 RSS Series 或預先綁定的 Feed）、或退訂了（Feed 刪了，同作品頁的訂閱清單）；巡檢前刷新失敗的作品那一輪不收。
   - **Jellyfin 還在認也不算比到**：Episode 讀不出季號或集號、或作品沒有 `ProviderIds.Tmdb`（`resolver.still_identifying`）時不開也不收，反查照還沒找到的節奏再問，**六次都還認不出才開 `jellyfin_item_mismatch`**——不是 `jellyfin_item_unresolved`：Jellyfin 列出了這個檔案，`detail_json` 並排兩邊正說得出它讀成了空的。對帳遇到還在認的與找不到同一個待遇（不動）。「還在那個狀態」與按鈕按得下去是同一份定義（`issues.STANDS_WHILE`，`client_removed` 多收一個 `submit_failed`：重新送單被拒的那一筆落在那裡）。
   - **`ledger.status` 與 Issue 的關係**：`target_missing` 與 `library_link_missing` 是同一件事的兩個角度——帳本那一欄是這一列的現況，Issue 是「要有人決定」的那一件；resolve 之後把帳本那一欄改回 `ok` 或刪掉那一列。
   - **`source_missing` 與 `unlinked` 反過來**：帳本那一欄是**使用者決定之後**才改——按下「標記為已無來源」改 `source_missing`（同刪除範圍只勾「刪 complete 檔案」的結果），刪除範圍只勾「移除鏈接」拆掉的那幾列寫 `unlinked`（磁碟上與 `target_missing` 一樣是目標不在，差別只在有人決定過）。改了之後對帳不再為它開 Issue。偵測時就改的話，「忽略」之後下一輪就再也不會問了。
@@ -493,9 +493,10 @@ Feed 長出 Item、Item 長出或找到 Series，**Series 不屬於任何一個 
   - **卡住的**：還沒確認的 RSS Series 有 Job 停在 `submit_failed` / `client_error` 超過 24 小時（從那一筆最後一次 `submit_failed` / `issue_detected` 事件算），而且沒有開著或被忽略的管線 Issue 說著它這個狀態，開一件 `first_batch_stuck`（一個 Series 一件）；不再卡住或 Series 確認了由系統收掉。
   - **放太久**：「等你處理」最舊的一件等滿 3 天，給訂閱了「等你處理」的管理員排一則提醒（`notify.queue_lingering`），同一件 3 天內只提醒一次（`settings.sweep`）。
   - **一直失敗的 Feed、RSS Series 缺集、同一集意外多份**（§11.5〈巡檢〉）同一輪接著跑。
-  - **遲到**（M5.5 票 10，判定在 `parser.overdue`）：有綁好的 RSS Series 的作品，最後入庫的一集之後（沒入庫過時從最早的 Series 建立那天起）播出、從播出日隔天 00:00（容器時區）起算滿 `settings.rss.overdue_days` 還沒入庫的集，開一件 `episodes_overdue`（一部作品一件，`detail_json` 帶 `reason`、作品名（`title`，英文的通知讀 `title_en`）、晚的集與卡在哪：`not_released` / `submit_failed` / `stalled` / `download_failed` / `import_failed`）。蓋到那一集的 Job 照 `why_not.claims_by_episode`；在路上（停滯不算）、`review`、或有開著或被忽略的管線 Issue 說著它這個狀態（同「卡住的」）的那一集不算。第 0 季不看，不讀 `series_finished`。
-    - 對象是現在還訂著的作品（`rss.subscribed_media`，與作品頁的訂閱清單同一套：刪掉 Feed 就不算，即使 Series 與綁定還在）；作品還訂著時，Feed 被刪、不再帶著 Item 的那幾條 Series 也不算。門檻是作品上每一條 Series 的 `overdue_days`（留空用全域）取最大值（M5.5 票 11）。
-    - **換輪**：基準那一集與下一集播出日相隔超過 21 天，`reason = next_run`（多半是下一個 cour，Mikan 是另一個番組，brief §20.12）；作品上有一條比基準那一集入庫更晚建立的 Series 時回到 `late`。還沒入庫過沒有基準，一律 `late`。
+  - **遲到**（M5.5 票 10，判定在 `parser.overdue`）：有綁好的 RSS Series 或預先綁定的 Feed 的作品，最後入庫的一集之後（沒入庫過時從最早的一條訂閱開始那天起：Series 的 `created_at` 與預先綁定 Feed 的 `rss_feeds.created_at` 取早的，票 12b）播出、從播出日隔天 00:00（容器時區）起算滿 `settings.rss.overdue_days` 還沒入庫的集，開一件 `episodes_overdue`（一部作品一件，`detail_json` 帶 `reason`、作品名（`title`，英文的通知讀 `title_en`）、晚的集與卡在哪：`not_released` / `submit_failed` / `stalled` / `download_failed` / `import_failed`）。蓋到那一集的 Job 照 `why_not.claims_by_episode`；在路上（停滯不算）、`review`、或有開著或被忽略的管線 Issue 說著它這個狀態（同「卡住的」）的那一集不算。第 0 季不看，不讀 `series_finished`。
+    - 對象是現在還訂著的作品（`rss.subscribed_media`，與作品頁的訂閱清單同一套：刪掉 Feed 就不算，即使 Series 與綁定還在）；作品還訂著時，Feed 被刪、不再帶著 Item 的那幾條 Series 也不算。門檻是作品上每一條訂閱的門檻取最大值：Series 的 `overdue_days`（留空用全域），還沒長出 Series 的預先綁定 Feed 用全域（M5.5 票 11、12b）。
+    - **預先綁定、字幕組一集都還沒發**（M5.5 票 12b）：`rss_feeds.media_id` 有值的 Feed 本身就是一條訂閱，還沒長出 RSS Series 也看。綁定時刻用 `rss_feeds.created_at`（`media_id` 只在 `subscribe_search` 建 Feed 時寫，之後不改，所以不加欄位）；長出 Series 之後，起算仍取兩者早的，門檻與追更頁的字幕組欄改由那條 Series 代表；還沒長出時門檻用全域、字幕組欄寫 `rss_feeds.subgroup`（沒有就寫 Feed 名）。比基準那一集入庫更晚綁定的 Feed 同樣算訂了下一輪。三處（巡檢、追更頁、時間表）都讀 `keeping_up.watched_works` 的 `Subscriptions`。
+    - **換輪**：基準那一集與下一集播出日相隔超過 21 天，`reason = next_run`（多半是下一個 cour，Mikan 是另一個番組，brief §20.12）；作品上有一條比基準那一集入庫更晚開始的訂閱（Series 建立或 Feed 預先綁定，票 12b）時回到 `late`。還沒入庫過沒有基準，一律 `late`。
     - **視窗**：最後一集缺集（基準之後已播、沒入庫的最新一集，過不過門檻都算）播出滿 60 天就不再提醒（上線第一天的舊缺集也是）。
     - **巡檢前刷新**（`sweep.refresh_watched`）：巡檢的交易之前、獨立 session 刷新訂閱作品的快照（`media.refresh_snapshot`，`_store` 每部自己 commit）；跳過 `PLANNING_TTL`（6 小時）內刷新過的與 TMDB 說完結且正片都在庫的。刷新失敗的作品（含刷新時拋出的非服務錯誤，逐部隔離）這一輪不開也不收（`sweep_once(unrefreshed=…)`）。量級：一部 5–7 次請求。
 - 一輪佔用事件迴圈最久 5–37 ms，加上 RSS 三項後暖機時 16–84 ms（`scripts/experiments/sweep_loop_lag.py`，門檻 100 ms），不移出迴圈。

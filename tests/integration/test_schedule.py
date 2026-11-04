@@ -488,6 +488,54 @@ class TestLate:
         assert cards[apothecary].late_days == 1
         assert cards["tv:209867"].late_days is None
 
+    async def test_a_pre_bound_feed_with_nothing_yet_is_late_too(
+        self, session: AsyncSession
+    ) -> None:
+        """從作品頁訂了、字幕組一集都還沒發（票 12b）：綁定之後播出的那一集過了門檻也是
+        「晚 N 天」。"""
+        factory = await credentialled(session, tmdb())
+        apothecary = await add_media(session, APOTHECARY)
+        media = await session.get(Media, apothecary)
+        assert media is not None
+        media.tmdb_snapshot_json = MediaSnapshot(
+            tmdb_id=APOTHECARY.tmdb_id,
+            kind=MediaKind.TV,
+            title=APOTHECARY.title,
+            title_en=APOTHECARY.title,
+            title_original=APOTHECARY.title,
+            seasons=(
+                SeasonSnapshot(
+                    season_number=2,
+                    episode_count=6,
+                    episodes=tuple(
+                        EpisodeSnapshot(
+                            episode_number=n, air_date=date(2026, 11, 3) - timedelta(weeks=5 - n)
+                        )
+                        for n in range(1, 7)
+                    ),
+                ),
+            ),
+        ).model_dump(mode="json")
+        session.add(
+            RssFeed(
+                name="Nyaa · Apothecary · LoliHouse",
+                url="https://nyaa.si/?page=rss&q=Apothecary+LoliHouse",
+                kind=FeedKind.NYAA,
+                media_id=apothecary,
+                subgroup="LoliHouse",
+                created_at=datetime(2026, 11, 1, 3, 0).astimezone(),
+            )
+        )
+        settings = await read_settings(session, RssSettings)
+        settings.overdue_days = 0
+        await write_settings(session, settings)
+        await session.commit()
+
+        cards = by_media(await read_schedule(session, factory))
+
+        assert cards[apothecary].status is ScheduleStatus.LATE
+        assert cards[apothecary].late_days == 1
+
 
 # --- 第二層：時刻與評分（M5.5 票 14） ----------------------------------------------------------
 

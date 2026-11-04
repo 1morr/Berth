@@ -779,9 +779,10 @@ def rss_sweep_scenario() -> Scenario:
 
 
 def tracking_scenario() -> Scenario:
-    """追更頁 `/schedule/tracking`（M5.5 票 12）：同 `healthy`，加上 `_seed_tracking` 的三部
-    訂閱作品——一部晚了而且下載停滯（要你動手）、一部跟上了（準時）、一部最後一集缺集播出滿
-    60 天（斷更很久，預設收起）。播出日照真的今天往回算，時鐘不固定。沒有人接 Discord，管理員
+    """追更頁 `/schedule/tracking`（M5.5 票 12）：同 `healthy`，加上 `_seed_tracking` 的四部
+    訂閱作品——一部晚了而且下載停滯（要你動手）、一部預先綁定而字幕組一集都還沒發、晚了
+    （要你動手，票 12b）、一部跟上了（準時）、一部最後一集缺集播出滿 60 天（斷更很久，預設
+    收起）。播出日照真的今天往回算，時鐘不固定。沒有人接 Discord，管理員
     打開時頁首說遲到只會顯示在這裡。
 
     停滯的那一包在替身 qBittorrent 上是 `stalledDL`、一小時沒動：poller 不會把它改回下載中，
@@ -3601,7 +3602,8 @@ async def _seed_tracking(session: AsyncSession) -> None:
 
     三部訂閱的作品，每部一條綁好的 RSS Series 掛在同一個 Mikan 聚合 feed 的一筆「略過」上
     （還訂著），每週一集、最後一集照 `_TRACKING_WORKS` 的天數往回算。入庫的集只有帳本列，媒體庫
-    裡沒有檔案（這一頁看的是帳本）。藥師少女第 5 集是一筆停滯的下載（計劃說的季集）。
+    裡沒有檔案（這一頁看的是帳本）。藥師少女第 5 集是一筆停滯的下載（計劃說的季集）。最後加一部
+    預先綁定、一集都還沒收到的（`_seed_tracking_prebound`）。
     """
     now = utcnow()
     today = datetime.now().astimezone().date()
@@ -3740,7 +3742,66 @@ async def _seed_tracking(session: AsyncSession) -> None:
                     confidence="high",
                 )
             )
+    await _seed_tracking_prebound(session, anime.id)
     await session.commit()
+
+
+async def _seed_tracking_prebound(session: AsyncSession, route_id: int) -> None:
+    """預先綁定、字幕組一集都還沒發的訂閱（M5.5 票 12b）：五天前從作品頁訂了 Sakurato 的 Nyaa 搜尋
+    feed（沒有 Item、也沒有 RSS Series），第 3 集三天前播出 → 「要你動手」、晚 3 天、字幕組還沒發。
+    第 1、2 集在訂之前播出，不算。"""
+    now = utcnow()
+    today = datetime.now().astimezone().date()
+    tmdb_id, title, title_en = 127532, "我獨自升級", "Solo Leveling"
+    tv = media_id(MediaKind.TV, tmdb_id)
+    aired = {
+        number: today - timedelta(days=3) - timedelta(weeks=3 - number) for number in (1, 2, 3)
+    }
+    session.add(
+        Media(
+            id=tv,
+            tmdb_id=tmdb_id,
+            kind=MediaKind.TV,
+            title_en=title_en,
+            title_original=title_en,
+            year=2026,
+            folder_name=f"{title_en} (2026)",
+            tmdb_snapshot_json=MediaSnapshot(
+                tmdb_id=tmdb_id,
+                kind=MediaKind.TV,
+                title=title,
+                title_en=title_en,
+                title_original=title_en,
+                year=2026,
+                seasons=(
+                    SeasonSnapshot(
+                        season_number=1,
+                        episode_count=12,
+                        episodes=tuple(
+                            EpisodeSnapshot(episode_number=number, air_date=aired.get(number))
+                            for number in range(1, 13)
+                        ),
+                    ),
+                ),
+            ).model_dump(mode="json"),
+            tmdb_fetched_at=now,
+        )
+    )
+    await session.flush()
+    session.add(
+        RssFeed(
+            name="Nyaa · Solo Leveling · Sakurato",
+            url="https://nyaa.si/?page=rss&q=Solo+Leveling+Sakurato",
+            kind=FeedKind.NYAA,
+            interval_sec=24 * 60 * 60,
+            last_polled_at=now,
+            primed_at=now - timedelta(days=5),
+            media_id=tv,
+            subgroup="Sakurato",
+            tv_route_id=route_id,
+            created_at=now - timedelta(days=5),
+        )
+    )
 
 
 #: `weekly` 情境的三部作品：一部有季集、一部作品名很長、一部電影。

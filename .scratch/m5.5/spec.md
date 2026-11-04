@@ -24,14 +24,14 @@
   - 放送時刻與評分是第二層：AniList 只給未來的精確時刻、Bangumi 補評分，對不上就不顯示。
   - 請求：有人打開才抓，結果存程序內 `TtlCache`（6–24 小時），不為卡片寫 `media` 列。
 - **遲到判定**（純函式 `parser/overdue.py`，一部作品一個結果）：
-  - 對象：有綁好的 RSS Series 的作品；第 0 季不看；季集用 TMDB 編號（帳本本來就是）。
-  - 基準：作品最後入庫的一集，不分來源；還沒入庫過時，從作品最早的 RSS Series 的 `created_at` 之後播出的第一集算。
+  - 對象：有綁好的 RSS Series 的作品，或預先綁定作品的 Feed（字幕組一集都還沒發也算，票 12b）；第 0 季不看；季集用 TMDB 編號（帳本本來就是）。
+  - 基準：作品最後入庫的一集，不分來源；還沒入庫過時，從作品最早的 RSS Series 的 `created_at` 與預先綁定 Feed 的綁定時刻（`rss_feeds.created_at`）較早的那個之後播出的第一集算（票 12b）。
   - 缺的：基準之後已到播出日、還沒入庫的集。超過門檻就算晚，不管卡在哪一步，只有兩種例外：
     - **下載還在動**：蓋到它的 Job 在 `UNDER_WAY_STATES` 裡，但 `stalled` 不算。
     - **已經在等你處理**：蓋到它的 Job 是 `review`（已在審核佇列），或 Job 有開著或被忽略、說著它現在這個狀態的 Issue（`missing_files`、`client_error`、`client_removed`，查法同 `sweep._covered`）。那件 Issue 收掉而這一集還缺時，下一輪巡檢照常開。M6 的三種 Issue（plan §11.7）開了也走這一條。
   - 所以字幕組沒發、送單失敗、下載停滯（`stalled`）、入庫失敗（`import_failed`）都會開。`read_holdings` 的 `missing` 不帶 Job，`stalled` 又算在 `downloading`，光看它分不出來；每一集蓋到哪些 Job 用 `services/why_not.py` 的 `_job_claims` 那一份。
   - 晚：TMDB 只有日期，從播出日隔天 00:00（容器 `TZ`）起算滿門檻。門檻預設 2 天，在設定裡改；單一 RSS Series 可覆寫（`rss_series.overdue_days`，新增可為空的欄位）；一部作品多條訂閱取最大值。例：10/28 播出，10/31 05:00 巡檢才開。
-  - 換輪：基準那一集與下一集播出日相隔超過 21 天，理由是 `next_run`（可能是下一個 cour，Mikan 是另一個番組，brief §20.12），不是字幕組遲到；作品上有一條比基準那一集入庫更晚建立的 RSS Series 時回到一般判定。
+  - 換輪：基準那一集與下一集播出日相隔超過 21 天，理由是 `next_run`（可能是下一個 cour，Mikan 是另一個番組，brief §20.12），不是字幕組遲到；作品上有一條比基準那一集入庫更晚開始的訂閱（RSS Series 建立或 Feed 預先綁定，票 12b）時回到一般判定。
   - **不讀 `series_finished`**：RSS 頁的「已完結」與每日補漏照舊，安靜 30 天不影響這裡。
   - 視窗：最後一集缺集播出滿 60 天後不再提醒，留在追更頁「斷更很久」；上線第一天舊缺集也走這一條。
   - 中間的洞仍歸 `series_episodes_missing`（7 天寬限），這裡只看最新一集之後（`services/sweep.py` 的 `_missing_episodes` 不看的那一段）。

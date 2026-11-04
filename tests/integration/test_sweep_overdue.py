@@ -471,6 +471,19 @@ class TestNextRunThroughTheSweep:
         (issue,) = await overdue(session)
         assert issue.detail["reason"] == "late"
 
+    async def test_a_feed_bound_to_the_next_run_brings_back_late(
+        self, session: AsyncSession
+    ) -> None:
+        """基準之後才預先綁定作品的 Feed（字幕組還沒發）也是訂了下一輪（票 12b）。"""
+        await subscribed(session)
+        await prebound(session, created=datetime(2026, 10, 20, tzinfo=UTC))
+        await self.weeks_apart(session)
+
+        await sweep_once(session, now=wall(31))
+
+        (issue,) = await overdue(session)
+        assert issue.detail["reason"] == "late"
+
 
 class TestSeriesOfADeletedFeed:
     """作品還訂著，但其中一條的 Feed 刪了：那一條不再算（門檻、換輪、起算日都不看它）。"""
@@ -486,4 +499,99 @@ class TestSeriesOfADeletedFeed:
 
         await sweep_once(session, now=wall(31))
 
+        assert len(await overdue(session)) == 1
+
+
+async def prebound(
+    session: AsyncSession,
+    *,
+    created: datetime = datetime(2026, 10, 25, 3, 0, tzinfo=UTC),
+    subgroup: str = "LoliHouse",
+) -> RssFeed:
+    """從作品頁訂的搜尋 Feed（`RssFeed.media_id` 預先綁到作品），字幕組一集都還沒發：沒有 Item、
+    也沒有 RSS Series。綁定時刻是 Feed 建立的那一刻（預設 10/25，第 4 集 10/28 播出）。"""
+    if await session.get(Media, MEDIA) is None:
+        await work(session)
+    feed = RssFeed(
+        name=f"Nyaa · Kimi to Koishitai · {subgroup}",
+        url=f"https://nyaa.si/?page=rss&q=Kimi+{subgroup}",
+        kind=FeedKind.NYAA,
+        media_id=MEDIA,
+        subgroup=subgroup,
+        created_at=created,
+    )
+    session.add(feed)
+    await session.commit()
+    return feed
+
+
+class TestPreBoundFeedWithNothingYet:
+    """預先綁定作品、字幕組一集都還沒發的 Feed 也算在看這部作品（M5.5 票 12b）：從綁定那天之後播出的
+    第一集算起，門檻用全域的；刪掉 Feed 就不算。"""
+
+    async def test_opens_past_the_threshold_from_the_day_it_was_bound(
+        self, session: AsyncSession
+    ) -> None:
+        await prebound(session)
+
+        await sweep_once(session, now=wall(30))
+        assert await overdue(session) == []
+
+        await sweep_once(session, now=wall(31))
+        (issue,) = await overdue(session)
+        assert issue.detail["reason"] == "late"
+        assert late(issue) == [(4, "not_released")]
+
+    async def test_deleting_the_feed_closes_it_and_it_never_reopens(
+        self, session: AsyncSession
+    ) -> None:
+        feed = await prebound(session)
+        await sweep_once(session, now=wall(31))
+        (issue,) = await overdue(session)
+
+        await delete_feed(session, feed.id)
+        await sweep_once(session, now=wall(31, 6))
+
+        assert await overdue(session) == []
+        closed = await session.get(Issue, issue.id)
+        assert closed is not None and closed.status is IssueStatus.RESOLVED
+        await sweep_once(session, now=wall(31, 7))
+        assert await overdue(session) == []
+
+    async def test_counts_from_the_binding_even_after_the_feed_grew_a_series(
+        self, session: AsyncSession
+    ) -> None:
+        """10/1 綁定，字幕組 10/26 才發第一筆（長出 Series、還沒入庫）：仍從 10/1 之後播出的
+        第一集算，不跳到 Series 建立那天（起算取兩者較早的）。"""
+        feed = await prebound(session, created=SUBSCRIBED)
+        series = RssSeries(
+            key="title:kimi:lolihouse",
+            title_raw="[LoliHouse] Kimi to Koishitai - 04",
+            reasons_json=[],
+            media_id=MEDIA,
+            created_at=datetime(2026, 10, 26, 3, 0, tzinfo=UTC),
+        )
+        session.add(series)
+        await session.flush()
+        session.add(
+            RssItem(feed_id=feed.id, guid="04", title=series.title_raw, series_id=series.id)
+        )
+        await session.commit()
+
+        await sweep_once(session, now=wall(31))
+
+        (issue,) = await overdue(session)
+        assert [episode for episode, _ in late(issue)] == [1, 2, 3, 4]
+
+    async def test_the_threshold_is_the_global_setting(self, session: AsyncSession) -> None:
+        await prebound(session)
+        settings = await read_settings(session, RssSettings)
+        settings.overdue_days = 3
+        await write_settings(session, settings)
+        await session.commit()
+
+        await sweep_once(session, now=wall(31))
+        assert await overdue(session) == []
+
+        await sweep_once(session, now=datetime(2026, 11, 1, 5, 0).astimezone())
         assert len(await overdue(session)) == 1
