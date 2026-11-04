@@ -8,23 +8,26 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import EventType, FirstBatchBasis, JobState, MediaSnapshot
-from berth.models import Event, Job, RssSeries
+from berth.adapters.rss.mikan import parse_feed
+from berth.domain import EventType, FirstBatchBasis, JobState, MediaSnapshot, ReasonCode
+from berth.models import Event, Job, PlanItem, RssSeries
 from berth.services.downloads import poll_downloads
 from berth.services.events import EventHub
 from berth.services.first_batch import Span, asks
 from berth.services.hints import JobHints
 from berth.services.importer import sweep_imports
 from berth.services.plan import sweep_plans
+from tests.integration import test_rss, test_series_review
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_air_date_check import airing_split_cour
-from tests.integration.test_rss import NOW, finish_downloads, kimi_snapshot
+from tests.integration.test_rss import FEED, NOW, finish_downloads, kimi_snapshot
 from tests.integration.test_series_review import audits, delivered, ledger, split_cour, undated
 
 pytestmark = pytest.mark.asyncio
@@ -83,6 +86,111 @@ class TestSureFirstBatch:
             "name": series.title_raw,
             "episodes": ["S01E11", "S01E12"],
         }
+
+
+def aired_on(snapshot: MediaSnapshot, season: int, days: dict[int, date]) -> MediaSnapshot:
+    """`snapshot` 的第 `season` 季裡，`days` 列出的集改成那一天播。"""
+    seasons = tuple(
+        row.model_copy(
+            update={
+                "episodes": tuple(
+                    ep.model_copy(update={"air_date": days.get(ep.episode_number, ep.air_date)})
+                    for ep in row.episodes
+                )
+            }
+        )
+        if row.season_number == season
+        else row
+        for row in snapshot.seasons
+    )
+    return snapshot.model_copy(update={"seasons": seasons})
+
+
+def two_seasons() -> MediaSnapshot:
+    """TMDB 上有兩季、各 12 集：第一季去年播完；第二季第 11 集在發佈（09-22）前一天播，第 12 集
+    在發佈（09-24）後一天播（有換算的列容忍兩天），所以第 11 集發佈時下一集還沒播。"""
+    shot = kimi_snapshot()
+    (first,) = shot.seasons
+    last_year = tuple(
+        ep.model_copy(update={"air_date": ep.air_date - timedelta(days=364)})
+        for ep in first.episodes
+        if ep.air_date is not None
+    )
+    previous = first.model_copy(update={"episodes": last_year, "air_date": last_year[0].air_date})
+    current = first.model_copy(
+        update={"season_number": 2, "name": "Season 2", "names": ("Season 2",)}
+    )
+    shot = shot.model_copy(update={"seasons": (previous, current)})
+    return aired_on(shot, 2, {11: date(2026, 9, 21), 12: date(2026, 9, 25)})
+
+
+@pytest.fixture
+def cumulative_feed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """同一個 feed，喵萌奶茶屋那兩集改寫成季號寫明的累計編號（S2 - 23、S2 - 24），檔名也是。"""
+    feed = FEED
+    for episode in (11, 12):
+        feed = feed.replace(
+            f"Koi wo Shitai - {episode} ".encode(), f"Koi wo Shitai S2 - {episode + 12} ".encode()
+        )
+    items = parse_feed(feed)
+    assert sum(" S2 - " in item.title for item in items) == 2
+
+    def release_file(item_title: str) -> str:
+        episode = item_title.split(" - ")[1].split(" ")[0]
+        return f"[LoliHouse] Kimi ga Shinu made Koi wo Shitai S2 - {episode} [1080p].mkv"
+
+    monkeypatch.setattr(test_rss, "ITEMS", items)
+    monkeypatch.setattr(test_rss, "release_file", release_file)
+    monkeypatch.setattr(test_series_review, "FEED", feed)
+
+
+class TestSimulcastAndCumulativeReadingsConfirm:
+    """M5.5 加的兩種讀法經 services 走到 Series 確認（票 04、05、05b）。
+
+    解析器層的條件逐條在 `tests/unit/test_parser_first_batch.py`；這裡守的是規劃、入庫到確認的接線。
+    """
+
+    async def test_a_literal_row_ahead_of_airing_is_confirmed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """地上波先行：兩集都比 TMDB 的播出日早 7 天發，照字面、在 9 天內，Series 由系統確認。"""
+        early = aired_on(kimi_snapshot(), 1, {11: date(2026, 9, 29), 12: date(2026, 10, 1)})
+        series, _ = await delivered(session, roots, snapshot=early)
+
+        await session.refresh(series)
+        assert series.confirmed is True
+        assert await audits(session) == []
+        reasons = {
+            reason["code"]
+            for row in await session.scalars(select(PlanItem.reasons_json))
+            for reason in row or []
+        }
+        assert ReasonCode.RELEASED_AHEAD_OF_AIRING.value in reasons
+
+    @pytest.mark.usefixtures("cumulative_feed")
+    async def test_a_written_season_counted_from_the_first_is_confirmed(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """累計編號：S2 - 23、24 是前面 12 集加 S02E11、E12，剛播、下一集發佈時還沒播。"""
+        series, _ = await delivered(session, roots, snapshot=two_seasons())
+
+        await session.refresh(series)
+        assert series.confirmed is True
+        assert await audits(session) == []
+        (event, *_) = await confirmations(session)
+        assert (event.payload_json or {}).get("episodes") == ["S02E11", "S02E12"]
+
+    @pytest.mark.usefixtures("cumulative_feed")
+    async def test_a_cumulative_batch_whose_next_episode_already_aired_waits(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """對照組（票 05b）：第 11 集的下一集在它發佈前就播了，整批等人。"""
+        aired = aired_on(two_seasons(), 2, {12: date(2026, 9, 21)})
+        series, _ = await delivered(session, roots, snapshot=aired)
+
+        await session.refresh(series)
+        assert series.confirmed is False
+        assert await confirmations(session) == []
 
 
 class TestTheBatchStillWaits:
