@@ -21,8 +21,9 @@ from berth.services.issues import record_issue
 from berth.services.notify import WAIT_WINDOW, queue_lingering, send_due
 from berth.services.sweep import sweep_once
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_notify import with_bot
+from tests.integration.test_notify import ADMIN_ID, person, with_bot
 from tests.integration.test_notify_waiting import (
+    BOTH,
     admin,
     deliver,
     first_look,
@@ -32,7 +33,7 @@ from tests.integration.test_notify_waiting import (
     wave,
 )
 from tests.integration.test_plan import NOW
-from tests.integration.test_sweep_overdue import subscribed, wall
+from tests.integration.test_sweep_overdue import overdue, subscribed, wall
 
 pytestmark = pytest.mark.asyncio
 
@@ -206,3 +207,27 @@ class TestLingering:
         message = only(factory)
         assert message.title == "有一件等了 3 天"
         assert message.description == "1 個 Issue（遲到）\n葬送的芙莉蓮 S02E05"
+
+
+class TestWithoutDiscord:
+    @pytest.mark.parametrize("bot", [False, True], ids=["no_bot", "no_discord_id"])
+    async def test_the_issue_still_opens_and_nothing_is_sent(
+        self, session: AsyncSession, bot: bool
+    ) -> None:
+        """spec〈驗收〉「沒接 Discord 時 Issue 照開」：沒有 bot，或有 bot 而管理員沒填 Discord ID，
+        巡檢照樣開遲到；看守與送出各一輪，什麼都沒送（追更頁頁首的提示由前端測試守）。"""
+        if bot:
+            await with_bot(session)
+        await person(session, "skipper", discord="" if bot else ADMIN_ID, kinds=BOTH)
+        await watch(session, timedelta(0))
+        await subscribed(session)
+        await sweep_once(session, now=wall(31))
+        factory = FakeClientFactory()
+        seen = wall(31) - NOW + timedelta(minutes=1)
+
+        await watch(session, seen)
+        await deliver(session, factory, seen + WAIT_WINDOW)
+
+        (issue,) = await overdue(session)
+        assert issue.detail["reason"] == "late"
+        assert factory.discord_.sent == []

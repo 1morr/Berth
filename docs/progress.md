@@ -4,6 +4,8 @@
 
 M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session 紀錄與偏差在 `docs/archive/<里程碑>.md`（`m0`、`m1`、`m1.5`、`m2`、`m3`、`m4`、`m5`）；舊文件與舊票指到「progress.md 的偏差與決定」的，到那裡找。
 
+M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
+
 ## 里程碑與閱讀指引
 
 | 里程碑 | 票目錄 | 拆票前讀 | 備註 |
@@ -15,7 +17,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | M3 | `.scratch/m3/issues/` | — | 已驗收（2026-09-26），封存於 `docs/archive/m3.md` |
 | M4 | `.scratch/m4/issues/` | — | 已驗收（2026-10-23），封存於 `docs/archive/m4.md` |
 | M5 | `.scratch/m5/issues/` | — | 已驗收（2026-10-28），封存於 `docs/archive/m5.md` |
-| M5.5 | `.scratch/m5.5/issues/` | `.scratch/m5.5/spec.md`（2026-11-03 開工） | 新番時間表、追更、遲到提醒與導覽收斂（2026-10-31 加入，排在 M6 前）；助理五點修正（2026-11-01 加入） |
+| M5.5 | `.scratch/m5.5/issues/` | — | 已驗收（2026-11-04），封存於 `docs/archive/m5.5.md` |
 | M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10 | 人工接管開關與背景 AI 任務（含 Issue）、影子模式（2026-10-27 改） |
 | M7 | `.scratch/m7/issues/` | plan §11.8；brief §14、§16.2 | Discord 與 MCP（2026-09-22 加入、09-24 加 MCP、10-27 改名） |
 | docs-diet | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
@@ -36,60 +38,10 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 日期 | 票 | 結果 | 下一步 |
 | --- | --- | --- | --- |
 | 2026-10-31 | M6 流程 | 里程碑開工改成一個指令，所有 session 結尾給下一步指令；閘門 `test_scratch_specs.py`、`test_progress_rules.py` | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
-| 2026-10-31 | M5.5 規劃 | 新番時間表、追更與遲到提醒、導覽收斂排在 M6 前，寫進 plan §11.6b、brief §17 與 §20.3 | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
-| 2026-11-01 | M5.5 規劃 | 遲到提醒補上下載停滯與入庫失敗，已在等你處理的不重複開；通知寫作品與集數，沒接 Discord 時追更頁提示（plan §11.6b、§11.7、brief §17） | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
-| 2026-11-01 | M5.5 助理回饋調查 | 五點查完未改碼：Tavily 判定為模型誤報、推理未畫未接、下拉用本機價目表、`encrypted_content` 原樣印、對話 id 只在瀏覽器（`docs/research/assistant-feedback-2026-11-01.md`） | 等使用者：這五點要先修還是排進 M5.5 |
-| 2026-11-01 | M5.5 規劃 | 助理五點修正寫進 plan §11.6b 與 brief §17、§20.26：模型清單、搜尋結果排最前面，其餘排在新番之後；不做 reload，指令用 `/history` | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
-| 2026-11-01 | M5.5 規劃 | 模型清單改成按鈕才連外；key 欄空著時網址相同才用存著的 key，取得模型、測試連線、儲存都守；推理程度預設中，拿掉「預設」一級（plan §11.6b、brief §20.26） | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
-| 2026-11-01 | M5.5 審核佇列調查 | 33 件查完未改碼：16 件是地上波先行被播出日比對誤擋，17 件是第一批確認，都不需要 M6（`docs/research/review-queue-2026-11-01.md`、brief §20.27） | 等使用者：要不要把規則一放寬、第一批收累計編號、升級後自動重算排進 M5.5 |
-| 2026-11-01 | M5.5 規劃 | 審核佇列減量寫進 plan §11.6b 與 brief §17：照字面的先行放寬到 9 天、第一批收累計編號（量過才收）、升級後只重算舊版本的 review；票序排在搜尋結果之後 | 新 session 下 `/to-tickets docs/plan.md 拆 M5.5 的票` |
-| 2026-11-03 | M5.5 開工 | spec 寫好、拆 20 張票：原①拆成 key 防護與模型清單，⑨⑩重切成遲到 Issue、換輪與刷新、追更頁、通知，加 UI 收尾；plan §11.6b 縮成連結 | 新 session 下 `/implement .scratch/m5.5/issues/01-saved-key-endpoint-guard.md` |
-| 2026-11-04 | M5.5 04 地上波先行 | 照字面容忍 9 天並記 `released_ahead_of_airing`，有換算的仍兩天，第一批同窗口；正式環境 16 列 fixture 全放行；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
-| 2026-11-04 | M5.5 01 key 防護 | key 欄空著時網址與存著的相同才用存著的 key（`_key_for`，02 共用）；測試連線與儲存都守，設定頁錯誤標在 key 欄、提示說出規則；plan §6 同步 | 新 session 下 `/implement .scratch/m5.5/issues/02-model-list.md` |
-| 2026-11-04 | M5.5 01b 核准測試賽跑 | 測試的問題：核准叫醒 importer，fixture 的 Job 沒 Plan 被打回 `import_failed`；改斷言 `retried` 事件；repro 修前必紅，壓力 40 次綠 | 新 session 下 `/implement .scratch/m5.5/issues/02-model-list.md` |
-| 2026-11-04 | M5.5 05 第一批累計編號 | 閘門過（含線上輪，擔保錯皆 0；累計編號只語料 2 筆）：寫明季號的累計編號由系統確認；TMDB 前季多記一集時擔保錯，測試固定，守衛候選在票上；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
-| 2026-11-04 | M5.5 02 模型清單 | 沒按時建議照表單網址查本機表、不帶 key；按「取得模型」才問端點，問不到退回本機表。實測 DeepSeek 的 Anthropic 接口沒有模型清單（404，brief §20.26） | 新 session 下 `/implement .scratch/m5.5/issues/03-search-results.md` |
-| 2026-11-04 | M5.5 03 搜尋結果 | `encrypted_content` 在 API 層拿掉（串流、重連、重新載入），歷史照留給模型；`web_search` 畫成標題、網址、日期的清單 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
-| 2026-11-04 | M5.5 07 導覽收斂 | 頁首五項加帳號選單（第一個下拉，disclosure、Esc 回觸發鍵）；待處理與新番帶件數（`GET /waiting`，admin）；審核/Issue、訂閱掛區塊分頁，網址不變 | 新 session 下 `/implement .scratch/m5.5/issues/05-first-batch-cumulative.md` |
-| 2026-11-04 | M5.5 04b 平台先行只給照字面 | 照字面早 10–14 天的說平台先行就核准，更早的叫人查作品與 TMDB 日期，有換算的查季號與 offset；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/05b-cumulative-next-aired-guard.md` |
-| 2026-11-04 | M5.5 05b 累計編號下一集已播 | 累計編號的第一批要下一集晚於發佈加兩天才擔保，TMDB 前季多記一集改擋下；照字面不套。閘門前後相同、擔保錯 0，SPY×FAMILY 仍擔保；auto_wrong 0→0 | 新 session 下 `/implement .scratch/m5.5/issues/06-replan-after-upgrade.md` |
-| 2026-11-04 | M5.5 06 升級後自動重算 | 啟動時舊版本的 review（排除 user、audit_undone）退回 completed，規劃器在背景重算並蓋新版本；同版本重啟 TMDB 0 次 | 新 session 下 `/implement .scratch/m5.5/issues/08-schedule-sources-experiment.md` |
-| 2026-11-04 | M5.5 08 時間表資料源 | 這週有集的日本作品 TMDB 列得出 93.4% / 90.8%，主幹照 TMDB；漏的是迷你番與兒童節目（brief §20.3） | 新 session 下 `/implement .scratch/m5.5/issues/09-schedule.md` |
-| 2026-11-04 | M5.5 06 CI 偶發紅 | RSS 少送因送單門檻量到 CI 機器真實磁碟（`low_disk_space`），非本票；測試預設 1 TiB（`test_host_disk.py`） | 新 session 下 `/implement .scratch/m5.5/issues/10-overdue-issue.md` |
-| 2026-11-04 | M5.5 09 時間表 | `/schedule` 給每個人：TMDB discover 加每部的上下一集，程序內快取 6 小時；全部列、小海報橫列；已訂閱照〈訂閱〉算 | 新 session 下 `/implement .scratch/m5.5/issues/14-airing-time-and-rating.md` |
-| 2026-11-04 | M5.5 10 遲到 Issue | 巡檢開 `episodes_overdue`，一部作品一件：最後入庫之後播出滿門檻未入庫，在路上、審核、有 Issue 管著的除外，說出卡在哪；門檻在訂閱頁 | 新 session 下 `/implement .scratch/m5.5/issues/11-next-run-window-refresh.md` |
-| 2026-11-04 | M5.5 11 換輪、視窗與刷新 | 隔 >21 天開 `next_run`、缺集播出滿 60 天不提醒、門檻可逐條覆寫取最大；巡檢前刷新快照，失敗的不開不收；協調者追加：退訂（刪 Feed）後不再開 | 新 session 下 `/implement .scratch/m5.5/issues/12-tracking-page.md` |
-| 2026-11-04 | M5.5 14 時刻與評分 | 原文名完全相同才對（Fribb 已拿掉，Wikidata 對到太少）：AniList 給未來時刻、Bangumi 給評分，各要日期或開播日差一天內；對不上或掛掉只少兩格 | 新 session 下 `/implement .scratch/m5.5/issues/15-search-tools-status.md` |
-| 2026-11-04 | M5.5 13 通知寫作品與集數 | 「等你處理」與「放太久」遇到遲到時，內文一部一行寫作品名與晚的集，換輪的說「可能是下一輪」，最多五部、其餘「等 N 部」；英文私訊用 `title_en` | 新 session 下 `/implement .scratch/m5.5/issues/12-tracking-page.md` |
-| 2026-11-04 | M5.5 15 搜尋工具查得到 | `/status` 照設定說搜得到什麼，與掛工具共用一支；`ai_calls.tools_json` 記送出的工具名，步驟頁列出、舊列「未記錄」；模型只看當下的工具 | 新 session 下 `/implement .scratch/m5.5/issues/16-reasoning-in-panel.md` |
-| 2026-11-04 | M5.5 12 追更頁 | `/schedule/tracking`（admin）一部一列：字幕組、已播到、已入庫到、狀態；停滯說「下載停滯」、晚的寫「晚 N 天」（從播出日算），斷更很久收起；判定與巡檢共用 | 新 session 下 `/implement .scratch/m5.5/issues/17-reasoning-effort.md` |
-| 2026-11-04 | M5.5 16 面板畫推理 | 推理收在預設收起的「推理」一格，串流中也不展開，展開看得到全文，重新載入後還在；後端本來就帶，補了替身串流的推理與 fake「想一想」 | 新 session 下 `/implement .scratch/m5.5/issues/17-reasoning-effort.md` |
-| 2026-11-04 | M5.5 18 對話清單 | `GET /agent/conversations` 與 `/history` 列自己的對話（最多 50 段、標回答中），頁首「對話」切換；新瀏覽器接上最近一段，按過「新對話」的仍空白 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
-| 2026-11-04 | M5.5 17 推理程度設定 | 設定頁加程度（預設中）；DeepSeek（Anthropic 接口）明寫 effort 與關，實測都收；OpenAI 認不得的、沒 effort 的 Claude 不送；400 連到設定頁 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
-| 2026-11-04 | M5.5 12b 預先綁定的遲到 | 預先綁定、一集都沒收到的 Feed 也看遲到與追更：綁定時刻用 `rss_feeds.created_at`，起算取較早的，沒 Series 時門檻用全域；刪 Feed 就收 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
-| 2026-11-04 | M5.5 17b 閘道關不送 | Anthropic 接口上主機不是 `api.deepseek.com` 的非 Claude 模型「關」什麼都不送，低中高照送；被拒時停下的說明與設定頁說選關就不送；以主機認 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
-| 2026-11-04 | M5.5 19 UI 收尾 | critique/audit 六面：偵測 0、對比最低 6.53/5.71；開面板時時間表溢出與頁首折行改看那一欄的寬，取得的模型畫成鍵，遲到收著說集數與天數，key 提示提前說；思考中留著 | 新 session 下 `/implement .scratch/m5.5/issues/20-m5.5-acceptance.md` |
+| 2026-11-04 | M6 準備 | M5.5 驗收完、封存於 `docs/archive/m5.5.md`；CHANGELOG 定為 0.5.0，tag 與 push 由協調者做。M6 照 plan §11.7 開工 | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 
 ## 偏差與決定
 
 實作中推翻 plan / brief 的事，一行一條，附 commit hash 與改動的章節。
 
 - 2026-10-31 M6 流程：M6 起 spec 由開工 session 寫到 `.scratch/<里程碑>/spec.md`，plan §11 對應節縮成一行連結、編號不變（改 plan §11 導言、`CLAUDE.md`〈Skills〉）；M0–M5 與 docs-diet 不補。
-- 2026-10-31 M5.5 排程：M6 之前插入 M5.5（使用者定），M6 改在它驗收後開工；改 plan §11.6b、brief §17、`PRODUCT.md` 里程碑表、`CLAUDE.md` 的 spec 起始里程碑。
-- 2026-11-01 M5.5 範圍：助理五點修正併入 M5.5（使用者定），模型清單與搜尋結果最先做；改 plan §11.6b、brief §17 與 §20.26、`PRODUCT.md`。
-- 2026-11-01 M5.5 範圍：審核佇列減量併入 M5.5（使用者定），排在模型清單與搜尋結果之後；規則一「早於播出日就一定算錯」不成立（brief §20.27），實作時改 plan §4.4、brief §15。
-- 2026-11-01 M5.5 範圍：存著的 key 只送到存它的端點（使用者定按鈕，範圍由調查補上），改既有的 `ai.test_ai` 與 `ai.set_ai`；改 plan §11.6b。
-- 2026-11-03 M5.5 票序：原①拆成 01 key 防護與 02 模型清單（仍共用一支函式），⑨⑩重切成 10–13；「新番」在 07 只給 admin、只有訂閱分頁，09 才對所有人顯示（使用者定；`.scratch/m5.5/spec.md`〈票序〉）。
-- 2026-11-04 M5.5 票 04：規則一改成照字面的列九天、有換算的兩天（改 plan §4.4、brief §15、§20.11、§20.27、`CONTEXT.md`）；「照字面」抽成 `parser/literal.py` 與第一批共用，`check_airing` 多收發佈名，`publishing.just_aired` 分兩個窗口；offset 設 0 算照字面。
-- 2026-11-04 M5.5 票 07：頁首件數各歸各頁（使用者定）：待處理＝審核＋Issue、待綁定掛在新番，頁首數字才對得上點進去的件數；三格加總仍是 Discord 的 N（`test_notify_waiting.py` 守）。改 spec〈範圍〉、plan §6–7、DESIGN.md、brief §13。
-- 2026-11-04 M5.5 票 04b：規則一擋下的照字面列早 ≤14 天記 `released_far_ahead_of_airing`（說平台先行），更早記 `released_too_early_for_simulcast`；`released_before_airing` 只剩有換算的（改 plan §4.4、brief §20.27、spec）。
-- 2026-11-04 M5.5 票 08：時間表覆蓋率只算日本作品（使用者定），TMDB 主幹不換；discover 用 `ja|zh`、窗口前後放寬一天，每部再讀 `tv/{id}` 才知道哪天第幾集（改 brief §20.3、spec〈範圍〉、票 09）。
-- 2026-11-04 M5.5 票 09：時間表的「已訂閱」照 `CONTEXT.md`〈訂閱〉（預先綁定的 Feed 或帶著綁好 Series 的 Feed，刪 Feed 就不算），不是「有綁好的 RSS Series」；票 07 留下的區塊設定收斂轉給票 12（改 plan §6–7、brief §13、shape）。
-- 2026-11-04 M5.5 票 10：遲到門檻放訂閱頁全域區、存 `RssSettings.overdue_days`（使用者定，票寫設定頁）；卡在哪多一種 `download_failed`；`IssueSubject` 加作品（改 plan §2.1、§2.4、§3.2、§6，brief §9.1，`CONTEXT.md`）。
-- 2026-11-04 M5.5 票 11：遲到只看還訂著的作品、帶著 Item 的 Series（協調者追加，`rss.subscribed_media`）；`rss-sweep` 替身的 SPY×FAMILY 過了 60 天視窗不再開遲到，票 12、13 要遲到的替身得另做（改 plan §2.4、§3.2，fake-backend.md）。
-- 2026-11-04 M5.5 票 14：時刻與評分改用原文名完全相同對 AniList / Bangumi（Fribb 已拿掉，Wikidata 只對到 46% / 16%），時刻要日期、評分要開播日差一天內；改 brief §20.3、plan §6–7、DESIGN.md、`CONTEXT.md`。
-- 2026-11-04 M5.5 票 13：`episodes_overdue` 的 `detail_json` 多 `title_en`（英文通知用，舊件退回 `title`），票 12 的追更頁也可讀；改 plan §3.2〈`notify_sender`〉〈`sweeper`〉。
-- 2026-11-04 M5.5 票 12：「晚 N 天」從播出日算（使用者定）；追更的程式碼叫 `keeping_up`（`tracking` 是 Tracked Media），遲到判定抽成 `watch_overdue` 與巡檢共用；區塊設定收成 `web/src/nav/sections.ts`（改 plan §6–7、brief §13、`CONTEXT.md`、DESIGN.md）。
-- 2026-11-04 M5.5 票 17：沒有 effort 的官方 Claude（Sonnet 4.5、Haiku 4.5）不送推理程度（code-review 追加，偏離票的字面），壓縮的摘要一律關；改 brief §20.26、plan §2.1 與 §6、`CONTEXT.md`。
-- 2026-11-04 M5.5 票 17b：「已知收推理參數的相容端點」以主機認（只有 `api.deepseek.com`），轉送 DeepSeek 模型的閘道也算認不得；`GET /settings/ai/reasoning` 多收 `base_url`、多回 `off_sends_nothing`（改 brief §20.26、plan §6、`CONTEXT.md`）。
-- 2026-11-04 M5.5 票 12b：遲到的對象加預先綁定作品的 Feed（使用者定）；綁定時刻用既有的 `rss_feeds.created_at`（票誤寫沒有），起算、換輪、門檻都把它算一條訂閱（改 plan §3.2、brief §9.1、spec、`CONTEXT.md`）。
