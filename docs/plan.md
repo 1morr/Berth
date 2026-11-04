@@ -808,7 +808,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 | issues | `GET /issues`、`POST /issues/{id}/resolve`、`/ignore`、`POST\|GET /reconcile`、`GET\|POST /issues/rebuild-ledger` | `reconcile`、`issues.<action>`（每顆一個）、`issues.ignore_issue`、`ledger_rebuild.read_ledger_gap`、`ledger_rebuild.rebuild_ledger` |
 | weekly | `GET /weekly`、`GET /weekly/{id}` | `weekly.*` |
 | waiting | `GET /waiting` | `waiting.waiting_counts` |
-| agent | `POST /agent/chat`、`/agent/conversations/{id}`（`GET`、`/stream`、`/stop`、`/commands`）、`GET /agent/status`、`GET /agent/runs/{id}` | `agent.open_turn`、`agent.start_turn`、`agent.read_conversation`、`agent.stop_turn`、`agent.read_status`、`usage.read_run`、`slash.run_slash` |
+| agent | `POST /agent/chat`、`GET /agent/conversations`、`/agent/conversations/{id}`（`GET`、`/stream`、`/stop`、`/commands`）、`GET /agent/status`、`GET /agent/runs/{id}` | `agent.open_turn`、`agent.start_turn`、`agent.list_conversations`、`agent.read_conversation`、`agent.stop_turn`、`agent.read_status`、`usage.read_run`、`slash.run_slash` |
 | proposals | `GET /proposals`、`POST /proposals/{id}/decide` | `proposals.*` |
 | health | `GET /health`、`GET /health/detail`、`POST /health/check` | `health.*` |
 | events | `GET /events/stream`（SSE） | — |
@@ -1175,6 +1175,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - 伺服器端工具（Anthropic `web_search`）的結果拿掉每筆的 `encrypted_content`（只給服務端重播，brief §20.26），`GET /agent/conversations/{id}` 同樣；存著的歷史不動。
   - **最後一則是助理的是恢復**（按了確認卡之後 `useChat` 送的）：它只當觸發，每一張等著的卡照 Proposal 決定；還有沒決定的 409 `card_undecided`，沒有等著的 422 `no_message`。
   - 拒絕：409 `ai_disabled`（AI 關著）、409 `ai_paused`（斷路器暫停中，detail 是到什麼時候）、409 `not_continuable`、409 `busy`（這個人已經有一輪在跑；detail 是在跑的那一段對話的 id，只會是他自己的：位子以人為單位）、422 `no_message`、404 `conversation_missing`（別人的對話）。以 `/` 開頭的訊息送進這裡是 422 `slash_command`。
+- `GET /agent/conversations`：自己的對話，`updated_at` 新的在前、最多 50 段（M5.5 票 18）；每段回 `id`、`title`（第一則使用者訊息的第一行，超過 40 字截斷加「…」；壓縮過的是留下來的第一則；沒有字是空字串）、`updated_at`、`running`（有一輪 `kind = chat` 的 `stop_reason IS NULL`）。沒有標題欄位：從歷史算，舊列不回填。
 - `GET /agent/conversations/{id}`：存著的歷史經 `dump_messages(..., sdk_version=7)` 轉回 UI 訊息，一則回覆可能拆成好幾則。停下的說明那一則換成與串流同一個 `data-stop`，只有最後一輪可能 `continuable`。`running` 是正在跑的那一輪的 id，那時的歷史是它開始前的樣子加上那一則使用者訊息。壓縮過的歷史開頭是一則 `data-compaction`。
 - `GET /agent/conversations/{id}/stream?turn=<id>`：重連那一輪（Vercel AI SDK 的 `resumeStream`）。還在跑、或跑完 60 秒內的，從第一個片段重播再跟著；沒有在跑、不是這一輪、不是這個人的是 204。
 - `POST /agent/conversations/{id}/stop`：按了停止。停下那一輪、存好說明才回 204，說明經每一條跟著看的串流送到；沒有在跑、不是這個人的是 409 `not_running`。
@@ -1183,7 +1184,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - 斷路器的 `paused_until`（一般使用者也讀得到前兩格）與 `pause_error`（讓它暫停的那一次的錯誤原文，只給管理員）。
   - `spend`：今天的花費提醒與沒算進去的呼叫數，只給管理員，其他人 `null`。
 - `GET /agent/runs/{id}`：一輪的步驟，每一次模型呼叫與它叫的工具、各自的數字、停止原因；每一次呼叫的 `tools` 是送出的工具名（`ai_calls.tools_json`，`null` 是沒記的舊列）。一般使用者只看得到自己的，別人的與不存在的是 404 `run_missing`。每一則助理訊息的 `metadata.runId` 指到它那一輪：串流時在開頭的 `start`，重新載入時每一則都有。
-- `POST /agent/conversations/{id}/commands`：斜線指令，body 同 Slack 只帶 `{text}`，整則是 `/<名字>` 才算，否則 422 `unknown_command`。回照 `command` 分的結構（`new`、`compact`、`usage`、`status`、`pending`、`skills`）。`status` 的 `web_search`、`tavily` 是下一則訊息搜得到什麼，照設定直接說、不經過模型（`agent.search_tools`，與 `open_turn` 掛工具同一份，M5.5 票 15）。AI 關著 409 `ai_disabled`；別人的對話 404 `conversation_missing`；`/compact` 另有 409 `ai_paused` 與 `busy`。
+- `POST /agent/conversations/{id}/commands`：斜線指令，body 同 Slack 只帶 `{text}`，整則是 `/<名字>` 才算，否則 422 `unknown_command`。回照 `command` 分的結構（`new`、`compact`、`usage`、`status`、`pending`、`skills`、`history`）。`history` 與 `GET /agent/conversations` 同一份（M5.5 票 18；不叫 `resume`，那是 Jellyfin 的繼續觀看）。`status` 的 `web_search`、`tavily` 是下一則訊息搜得到什麼，照設定直接說、不經過模型（`agent.search_tools`，與 `open_turn` 掛工具同一份，M5.5 票 15）。AI 關著 409 `ai_disabled`；別人的對話 404 `conversation_missing`；`/compact` 另有 409 `ai_paused` 與 `busy`。
 
 #### proposals
 
@@ -1331,6 +1332,8 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 設計理由：`.scratch/m5/side-panel-shape.md`。
 
 - 頁首一顆「助理」開關（`aria-expanded`）。開關記在這個分頁（`sessionStorage`），對話 id 記在這個瀏覽器（`localStorage`）。
+- **接上最近的一段**（M5.5 票 18）：記著的 id 讀不到（新瀏覽器沒有 id、換了帳號），又不是這個瀏覽器按「新對話」開的，就換到 `GET /agent/conversations` 的第一段；一段都沒有（或清單問不到）才開空白。「新對話」與 `/new` 在 `localStorage` 記下新 id（`berth.agent.fresh`），第一則送出去之後清掉：送出前重新整理仍是那段空白的。
+- **對話清單**（M5.5 票 18）：面板頁首「對話」是 disclosure，在頁首下方就地展開這個人的對話（不浮在對話上，所以 Tab 走出、點外面不收），每次打開重問；一段一顆鍵，寫標題（空的寫「未命名」）、多久前，在跑的標「回答中」、現在這段標「目前這段」（`aria-current`）。選了走 `switchTo` 並收起；`Esc` 先收清單、焦點回「對話」，再按才收面板。`/history` 的結果畫同一份清單。
 - `lg` 以上是外框右側 `26rem` 的一欄、頁面讓位；以下蓋滿視窗、底下那一頁 `inert`。
 - 開關與對話放在根路由的 `AgentProvider`（每一頁各包一層 `AppShell`，換頁會重掛），`useChat` 的 `Chat` 放在查詢快取（`['agent', 'chat', id]`，不過期）：換頁時還在串流的那一輪接得上。
 - `DefaultChatTransport` 只送最後一則、帶介面語言。
@@ -1338,7 +1341,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - 「停止」打 `/stop`，說明從同一條串流來；伺服器說沒有在跑就只收掉這一頁的串流。
 - **多個分頁**：各自重連、跟著同一輪，任一個按停止全部收到停下。在跑時另一個分頁送出是 `busy`：
   - 在跑的是同一段對話：面板接回伺服器的對話並跟上那一輪。
-  - 是自己的另一段對話（例如開了新對話）：面板說是哪一段（沒有標題，用它的第一句話），可以「到那一段對話」接過去，或「停止那一輪」（打那一段的 `/stop`）。停掉之後字還在輸入欄，按送出就是重送。
+  - 是自己的另一段對話（例如開了新對話）：面板說是哪一段（對話清單的標題），可以「到那一段對話」接過去，或「停止那一輪」（打那一段的 `/stop`）。停掉之後字還在輸入欄，按送出就是重送。
   - 閒著的分頁不會自己發現別的分頁開了一輪，下一次送出或重新整理才接上。
 - 回覆的 markdown 走 react-markdown：原始 HTML 不渲染、`javascript:` 網址拿掉、**圖片不載入**（只印替代文字與網址原文）。
 - 推理片段（`reasoning`，brief §20.26）畫成收起的一格「推理」，串流中也不自動展開（推理是草稿，回答才是給人看的）；照原文印、不走 markdown，沒有字的（服務遮掉的）不畫。重新載入時 `GET /agent/conversations/{id}` 照樣帶出（M5.5 票 16）。

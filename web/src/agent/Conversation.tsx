@@ -27,6 +27,7 @@ import {
   agentStatusQueryOptions,
   agentTransport,
   isSlashCommand,
+  listConversations,
   readConversation,
   runSlashCommand,
   slashMatches,
@@ -50,7 +51,9 @@ import { Markdown } from './Markdown'
 import { PanelFailed, PanelLoading } from './PanelStates'
 import { Reasoning } from './Reasoning'
 import {
+  forgetFresh,
   INPUT_ID,
+  isFresh,
   PANEL_TITLE_ID,
   SLASH_HINT_ID,
   slashOptionId,
@@ -70,27 +73,61 @@ import { ToolCall } from './ToolCall'
  * 接著畫（`follow`）。
  */
 export function Conversation({ conversationId }: { conversationId: string }) {
-  const chat = useQuery({
-    queryKey: ['agent', 'chat', conversationId],
-    queryFn: async ({ signal }) => {
+  const queryClient = useQueryClient()
+  const { switchTo } = usePanel()
+  const opened = useQuery({
+    queryKey: chatKey(conversationId),
+    queryFn: async ({ signal }): Promise<Opened> => {
       const stored = await readConversation(conversationId, signal)
+      if (stored === null && !isFresh(conversationId)) {
+        const latest = await latestConversation(signal)
+        if (latest !== null && latest !== conversationId) return { latest }
+      }
       const created = new Chat<UIMessage>({
         id: conversationId,
         messages: stored?.messages ?? [],
         transport: agentTransport(() => i18n.language),
       })
       if (stored?.running) void follow(created, stored.running)
-      return created
+      return { chat: created }
     },
     staleTime: Infinity,
     gcTime: Infinity,
     // `Chat` 是一個活的物件，不是資料：不要逐欄比對、合併它。
     structuralSharing: false,
   })
+  const latest = opened.data !== undefined && 'latest' in opened.data ? opened.data.latest : null
+  const chat = opened.data !== undefined && 'chat' in opened.data ? opened.data.chat : null
 
-  if (chat.isPending) return <PanelLoading />
-  if (chat.isError) return <PanelFailed error={chat.error} />
-  return <Chatting chat={chat.data} />
+  useEffect(() => {
+    if (latest === null) return
+    switchTo(latest)
+    // 這個 id 不會再用到（不在伺服器上、不在清單上）：不留著那一份「換過去」。
+    queryClient.removeQueries({ queryKey: chatKey(conversationId), exact: true })
+  }, [latest, switchTo, queryClient, conversationId])
+
+  if (opened.isError) return <PanelFailed error={opened.error} />
+  if (chat === null) return <PanelLoading />
+  return <Chatting chat={chat} />
+}
+
+function chatKey(conversationId: string) {
+  return ['agent', 'chat', conversationId]
+}
+
+/**
+ * 讀到的那一段：接著畫的 `Chat`，或該換過去的那一段（M5.5 票 18）——這個瀏覽器記著的 id 不在伺服器上
+ * （新瀏覽器、換了帳號），又不是在這裡按「新對話」開的，就接上這個人最近的一段。一段都沒有才開空白。
+ */
+type Opened = { chat: Chat<UIMessage> } | { latest: string }
+
+/** 最近的一段的 id；沒有對話、或問不到清單（照樣開空白，不擋著人問）是 `null`。 */
+async function latestConversation(signal: AbortSignal): Promise<string | null> {
+  try {
+    return (await listConversations(signal))[0]?.id ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -199,12 +236,16 @@ function Chatting({ chat }: { chat: Chat<UIMessage> }) {
   async function send(text: string, continues?: string) {
     await sendMessage({ text }, continues === undefined ? undefined : { body: { continues } })
     const error = chat.error
-    if (error === undefined) return
+    if (error === undefined) {
+      forgetFresh(chat.id)
+      return
+    }
     clearError()
     // 回應開始串流之後才斷的，伺服器已經收下這一則（它會存到停下之前）：留著。其餘的伺服器沒收，
     // 從畫面上拿掉——重新載入之後它也不會在。
     const unsent = error instanceof ApiError || chat.lastMessage?.role === 'user'
     if (unsent) setMessages((current) => withoutLastUser(current))
+    else forgetFresh(chat.id)
     const restored = unsent && continues === undefined
     if (restored) setDraft(text)
     if (continues !== undefined && agentRefusalOf(error)?.reason === 'not_continuable') {

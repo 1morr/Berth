@@ -512,6 +512,7 @@ ACCESS: dict[tuple[str, str], Access] = {
     ("GET", "/auth/me"): Access.SIGNED_IN,
     # 側面板的對話（M5 票 11）：一般使用者也用得到；工具照他的角色，對話只有本人讀得到。
     ("POST", "/agent/chat"): Access.SIGNED_IN,
+    ("GET", "/agent/conversations"): Access.SIGNED_IN,
     ("GET", "/agent/conversations/*"): Access.SIGNED_IN,
     # 側面板分「可以問」與「AI 沒開」（M5 票 12）、暫停到什麼時候（票 20）：一般使用者讀不到
     # `/settings/ai`。

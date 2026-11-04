@@ -4045,6 +4045,14 @@ const zhHant = {
     title: '助理',
     close: '關閉',
     newConversation: '新對話',
+    conversations: {
+      toggle: '對話',
+      label: '我的對話',
+      none: '還沒有對話。',
+      untitled: '未命名',
+      running: '回答中',
+      current: '目前這段',
+    },
     loading: '讀取中',
     empty:
       '問 Berth 裡的事，例如「某部作品為什麼還沒入庫」，或請它替你找發佈、送單。會改東西的事一定先出一張卡片，你按了確認才做。',
@@ -4280,6 +4288,7 @@ const zhHant = {
         status: '模型與上下文用了多少',
         pending: '還在等你決定的確認卡',
         skills: '助理會照著做的工作流程',
+        history: '我的對話，點一段切過去',
       },
       compact: {
         done: '已壓縮：{{before}} 則訊息換成一段摘要加最後一輪，剩 {{after}} 則。待確認的卡片不受影響。',
@@ -8477,6 +8486,14 @@ const en: Translations<typeof zhHant> = {
     title: 'Assistant',
     close: 'Close',
     newConversation: 'New conversation',
+    conversations: {
+      toggle: 'Conversations',
+      label: 'My conversations',
+      none: 'No conversations yet.',
+      untitled: 'Untitled',
+      running: 'Answering',
+      current: 'Current',
+    },
     loading: 'Loading',
     empty:
       'Ask about what is in Berth, for example “why isn’t this show in the library yet”, or have it find releases and send downloads. Anything that changes something shows you a card first and only happens once you confirm.',
@@ -8708,6 +8725,7 @@ const en: Translations<typeof zhHant> = {
         status: 'The model and how full the context is',
         pending: 'Confirmation cards waiting for you',
         skills: 'Workflows the assistant follows',
+        history: 'My conversations; pick one to switch to it',
       },
       compact: {
         done: 'Compacted: {{before}} messages became a summary plus the last turn, {{after}} in all. Cards waiting for you are not affected.',

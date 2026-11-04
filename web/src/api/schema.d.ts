@@ -65,6 +65,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversations
+         * @description 自己的對話清單：側面板的「對話」，與新瀏覽器接上最近的一段。
+         */
+        get: operations["get_conversations_api_agent_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -3437,6 +3457,23 @@ export interface components {
          * @enum {string}
          */
         ConnectionState: "ok" | "failed" | "waiting" | "timeout";
+        /**
+         * ConversationEntryOut
+         * @description 對話清單的一段（M5.5 票 18）。
+         */
+        ConversationEntryOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Running */
+            running: boolean;
+        };
         /** ConversationOut */
         ConversationOut: {
             /** Id */
@@ -3990,6 +4027,16 @@ export interface components {
             season: number;
             /** Episode */
             episode: number;
+        };
+        /** HistoryOut */
+        HistoryOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            command: "history";
+            /** Conversations */
+            conversations: components["schemas"]["ConversationEntryOut"][];
         };
         /**
          * HostDataRootOut
@@ -7859,6 +7906,26 @@ export interface operations {
             };
         };
     };
+    get_conversations_api_agent_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationEntryOut"][];
+                };
+            };
+        };
+    };
     get_conversation_api_agent_conversations__conversation_id__get: {
         parameters: {
             query?: never;
@@ -7940,7 +8007,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NewOut"] | components["schemas"]["CompactOut"] | components["schemas"]["UsageOut"] | components["schemas"]["StatusOut"] | components["schemas"]["PendingOut"] | components["schemas"]["SkillsOut"];
+                    "application/json": components["schemas"]["NewOut"] | components["schemas"]["CompactOut"] | components["schemas"]["UsageOut"] | components["schemas"]["StatusOut"] | components["schemas"]["PendingOut"] | components["schemas"]["SkillsOut"] | components["schemas"]["HistoryOut"];
                 };
             };
             /** @description `conversation_missing` */
