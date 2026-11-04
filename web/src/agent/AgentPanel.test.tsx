@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AgentStatus } from '../api/agent'
+import type { AgentStatus, ConversationEntry } from '../api/agent'
 import type { Me } from '../api/auth'
 import { renderInRoute } from '../test/render'
 import { AgentPanel, AgentToggle } from './AgentPanel'
@@ -39,6 +39,8 @@ interface Backend {
   stop: () => Response
   /** 這個人的其他對話（`GET /agent/conversations/{id}` 與停止，M5 票 25 的 `busy`）。 */
   others: Record<string, { messages: unknown[]; running: string | null }>
+  /** `GET /agent/conversations`：對話清單（M5.5 票 18），最後說話的在前。 */
+  list: ConversationEntry[]
 }
 
 let sent: Record<string, unknown>[] = []
@@ -64,6 +66,7 @@ function backend(overrides: Partial<Backend>): Backend {
     resume: () => new Response(null, { status: 204 }),
     stop: () => json({ detail: { reason: 'not_running', detail: CONVERSATION } }, 409),
     others: {},
+    list: [],
     ...overrides,
   }
 }
@@ -154,6 +157,7 @@ function serve(api: Backend) {
       const method = init?.method ?? 'GET'
       const path = typeof input === 'string' ? input : String(input)
       if (method === 'GET' && path === '/api/auth/me') return json(api.me)
+      if (method === 'GET' && path === '/api/agent/conversations') return json(api.list)
       if (method === 'GET' && path === '/api/agent/status')
         return json({
           enabled: api.enabled,
@@ -500,6 +504,152 @@ describe('AgentPanel new conversation', () => {
     expect(id).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
   })
 })
+
+describe('AgentPanel picks up where this person left off (M5.5 票 18)', () => {
+  const LATEST = 'c-latest'
+  const latestSaid = { id: 'l1', role: 'user', parts: [{ type: 'text', text: '最近的一段' }] }
+
+  function elsewhere(overrides: Partial<Backend> = {}): Backend {
+    return backend({
+      others: { [LATEST]: { messages: [latestSaid], running: null } },
+      list: [entry(LATEST, '最近的一段')],
+      ...overrides,
+    })
+  }
+
+  it('attaches to my latest conversation in a browser that has none', async () => {
+    localStorage.clear()
+    serve(elsewhere())
+    renderPanel()
+
+    expect(await within(await screen.findByRole('log')).findByText('最近的一段')).toBeVisible()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(LATEST)
+  })
+
+  it('attaches when the one remembered here is not on the server', async () => {
+    serve(elsewhere())
+    renderPanel()
+
+    expect(await within(await screen.findByRole('log')).findByText('最近的一段')).toBeVisible()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(LATEST)
+  })
+
+  it('stays blank after a new conversation and a reload, until the first message is sent', async () => {
+    serve(elsewhere({ stored: [latestSaid] }))
+    const user = userEvent.setup()
+    const first = renderPanel()
+    expect(await screen.findByText('最近的一段')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '新對話' }))
+    const fresh = localStorage.getItem('berth.agent.conversation')
+    first.unmount()
+
+    renderPanel()
+
+    expect(await screen.findByText(/問 Berth 裡的事/)).toBeInTheDocument()
+    expect(screen.queryByText('最近的一段')).toBeNull()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(fresh)
+    await user.type(screen.getByRole('textbox', { name: '問助理' }), '第一則{Enter}')
+    expect(await screen.findByText('好。')).toBeInTheDocument()
+    // 送出之後它在伺服器上了：旗標收掉。
+    expect(localStorage.getItem('berth.agent.fresh')).toBeNull()
+  })
+
+  it('starts blank when there is no conversation at all', async () => {
+    localStorage.clear()
+    serve(backend({}))
+    renderPanel()
+
+    expect(await screen.findByText(/問 Berth 裡的事/)).toBeInTheDocument()
+  })
+})
+
+describe('AgentPanel conversation list (M5.5 票 18)', () => {
+  const OLD = 'c-old'
+  const RUNNING = 'c-running'
+
+  function three(): Backend {
+    return backend({
+      stored: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: '現在這段' }] }],
+      others: {
+        [OLD]: {
+          messages: [{ id: 'o1', role: 'user', parts: [{ type: 'text', text: '舊的那段' }] }],
+          running: null,
+        },
+        [RUNNING]: { messages: [], running: null },
+      },
+      list: [
+        entry(RUNNING, '還在答的那段', { running: true }),
+        entry(CONVERSATION, '現在這段'),
+        entry(OLD, '舊的那段'),
+        entry('c-untitled', ''),
+      ],
+    })
+  }
+
+  it('lists mine, marks the running and the current one, and switches to the picked one', async () => {
+    serve(three())
+    const user = userEvent.setup()
+    renderPanel()
+    expect(await screen.findByText('現在這段')).toBeInTheDocument()
+
+    const opener = screen.getByRole('button', { name: '對話' })
+    await user.click(opener)
+    expect(opener).toHaveAttribute('aria-expanded', 'true')
+    const list = await screen.findByRole('list', { name: '我的對話' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining('還在答的那段'),
+      expect.stringContaining('現在這段'),
+      expect.stringContaining('舊的那段'),
+      expect.stringContaining('未命名'),
+    ])
+    expect(within(rows[0]).getByText('回答中')).toBeInTheDocument()
+    expect(within(rows[1]).getByRole('button')).toHaveAttribute('aria-current', 'true')
+    expect(within(rows[2]).queryByText('回答中')).toBeNull()
+
+    await user.click(within(rows[2]).getByRole('button'))
+
+    expect(await within(screen.getByRole('log')).findByText('舊的那段')).toBeInTheDocument()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(OLD)
+    expect(screen.queryByRole('list', { name: '我的對話' })).toBeNull()
+  })
+
+  it('folds the list up on Escape and gives focus back, without closing the panel', async () => {
+    serve(three())
+    const user = userEvent.setup()
+    renderPanel()
+
+    const opener = await screen.findByRole('button', { name: '對話' })
+    await user.click(opener)
+    await screen.findByRole('list', { name: '我的對話' })
+    await user.keyboard('{Tab}{Escape}')
+
+    expect(screen.queryByRole('list', { name: '我的對話' })).toBeNull()
+    expect(opener).toHaveFocus()
+    expect(screen.getByRole('complementary')).toBeInTheDocument()
+  })
+
+  it('answers /history with the same list, and a row switches to that conversation', async () => {
+    serve({
+      ...three(),
+      command: () => json({ command: 'history', conversations: three().list }),
+    })
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/history{Enter}')
+
+    const output = await screen.findByRole('region', { name: '/history' })
+    expect(within(output).getByText('回答中')).toBeInTheDocument()
+    await user.click(within(output).getByRole('button', { name: /舊的那段/ }))
+    expect(await within(screen.getByRole('log')).findByText('舊的那段')).toBeInTheDocument()
+    expect(localStorage.getItem('berth.agent.conversation')).toBe(OLD)
+  })
+})
+
+function entry(id: string, title: string, { running = false } = {}): ConversationEntry {
+  return { id, title, updated_at: '2026-11-04T10:00:00Z', running }
+}
 
 describe('AgentPanel when the server turns the message down', () => {
   it('starts a new conversation when this one is gone, and keeps the text', async () => {
@@ -1024,6 +1174,7 @@ describe('AgentPanel when another of my conversations is still answering', () =>
     const api = backend({
       stored: [],
       others: { [OLD]: { messages: [oldAsked], running: 'r-old' } },
+      list: [entry(OLD, '慢慢查一下下載', { running: true })],
     })
     api.chat = () =>
       api.others[OLD].running === null
@@ -1151,6 +1302,7 @@ describe('AgentPanel slash commands', () => {
       '/status模型與上下文用了多少',
       '/pending還在等你決定的確認卡',
       '/skills助理會照著做的工作流程',
+      '/history我的對話，點一段切過去',
     ])
     expect(input).toHaveAttribute('aria-activedescendant', 'agent-slash-hint-new')
 

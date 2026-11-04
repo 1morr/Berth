@@ -15,6 +15,8 @@
   重新載入兩條路都在這裡拿掉（M5.5 票 03），存著的歷史不動。
 - `GET /agent/status`：AI 開著沒有，側面板一打開就分得出「可以問」與「沒開」（票 12）；provider
   斷路器暫停到什麼時候、為什麼（票 20）。
+- `GET /agent/conversations`：自己的對話清單（M5.5 票 18），最後說話的在前、最多 50 段；標題是
+  第一則使用者訊息，`running` 是有一輪在跑。`/history` 回同一份。
 - `GET /agent/conversations/{id}`：存著的歷史轉回 UI 訊息（`dump_messages(..., sdk_version=7)`），
   重新載入頁面時接回來；`running` 是正在跑的那一輪（那時的歷史是它開始前的樣子加上那一則使用者
   訊息）。壓縮過的對話開頭是一則 `data-compaction`（摘要）；停下的說明換成與串流同一個
@@ -78,6 +80,7 @@ from berth.services.agent import (
     AgentRefusedError,
     Turn,
     TurnStop,
+    list_conversations,
     open_turn,
     read_conversation,
     read_status,
@@ -87,6 +90,7 @@ from berth.services.agent import (
 from berth.services.agent_live import LiveTurn
 from berth.services.slash import (
     Compacted,
+    History,
     NewConversation,
     Pending,
     Skills,
@@ -164,6 +168,19 @@ class ConversationOut(BaseModel):
     #: 正在跑的那一輪的 id（M5 票 25）：`messages` 是它開始前的樣子加上那一則使用者訊息，側面板接著
     #: 重連 `/conversations/{id}/stream?turn=<它>`。沒有在跑的是 `null`。
     running: str | None
+
+
+class ConversationEntryOut(BaseModel):
+    """對話清單的一段（M5.5 票 18）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    #: 第一則使用者訊息的第一行（截短）；沒有字是空字串，畫面自己說「未命名」。
+    title: str
+    updated_at: datetime
+    #: 有一輪還在跑。
+    running: bool
 
 
 class SlashIn(BaseModel):
@@ -246,15 +263,20 @@ class SkillsOut(BaseModel):
     skills: list[SkillOut]
 
 
+class HistoryOut(BaseModel):
+    command: Literal["history"]
+    conversations: list[ConversationEntryOut]
+
+
 SlashOut = Annotated[
-    NewOut | CompactOut | UsageOut | StatusOut | PendingOut | SkillsOut,
+    NewOut | CompactOut | UsageOut | StatusOut | PendingOut | SkillsOut | HistoryOut,
     Field(discriminator="command"),
 ]
 
 
 def slash_out(
     result: SlashResult,
-) -> NewOut | CompactOut | UsageOut | StatusOut | PendingOut | SkillsOut:
+) -> NewOut | CompactOut | UsageOut | StatusOut | PendingOut | SkillsOut | HistoryOut:
     match result:
         case NewConversation():
             return NewOut(command="new")
@@ -272,6 +294,13 @@ def slash_out(
             return SkillsOut(
                 command="skills",
                 skills=[SkillOut(name=s.name, description=s.description) for s in result.skills],
+            )
+        case History():
+            return HistoryOut(
+                command="history",
+                conversations=[
+                    ConversationEntryOut.model_validate(entry) for entry in result.conversations
+                ],
             )
 
 
@@ -479,6 +508,15 @@ async def stop_conversation_turn(
         await stop_turn(runtime, conversation_id, user_id=actor.user_id)
     except AgentRefusedError as exc:
         raise agent_refusal(exc) from exc
+
+
+@router.get("/conversations")
+async def get_conversations(request: Request, session: SessionDep) -> list[ConversationEntryOut]:
+    """自己的對話清單：側面板的「對話」，與新瀏覽器接上最近的一段。"""
+    actor = _actor(request)
+    assert actor.user_id is not None
+    found = await list_conversations(session, user_id=actor.user_id)
+    return [ConversationEntryOut.model_validate(entry) for entry in found]
 
 
 @router.get(

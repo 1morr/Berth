@@ -39,7 +39,9 @@ from berth.services.agent import (
     SLASH,
     AgentRefusedError,
     AgentRuntime,
+    ConversationEntry,
     current_endpoint,
+    list_conversations,
     load_history,
     search_tools,
 )
@@ -129,7 +131,14 @@ class Skills:
     skills: tuple[SkillEntry, ...]
 
 
-SlashResult = NewConversation | Compacted | Usage | Status | Pending | Skills
+@dataclass(frozen=True, slots=True)
+class History:
+    """這個人的對話清單，同 `GET /agent/conversations`（`agent.list_conversations`）。"""
+
+    conversations: tuple[ConversationEntry, ...]
+
+
+SlashResult = NewConversation | Compacted | Usage | Status | Pending | Skills | History
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,12 +191,14 @@ async def run_slash(
         settings = await read_settings(session, AiSettings)
         if not settings.enabled:
             raise AgentRefusedError(AgentRefusal.AI_DISABLED)
-        history = await _history(session, conversation_id, actor.user_id)
+        history = await _stored_history(session, conversation_id, actor.user_id)
     call = _Call(runtime, sessions, factory, actor, conversation_id, settings, history)
     return await SLASH_COMMANDS[name](call)
 
 
-async def _history(session: AsyncSession, conversation_id: str, user_id: int) -> list[ModelMessage]:
+async def _stored_history(
+    session: AsyncSession, conversation_id: str, user_id: int
+) -> list[ModelMessage]:
     conversation = await session.get(AiConversation, conversation_id)
     if conversation is None:
         return []
@@ -209,7 +220,7 @@ async def _compact(call: _Call) -> Compacted:
     call.runtime.claim(call.user_id, call.conversation_id)
     try:
         async with call.sessions() as session:
-            history = await _history(session, call.conversation_id, call.user_id)
+            history = await _stored_history(session, call.conversation_id, call.user_id)
         summarizer = Summarizer(
             sessions=call.sessions,
             model=call.factory.ai(endpoint),
@@ -311,6 +322,12 @@ async def _skills(call: _Call) -> Skills:
     return Skills(skills=tuple(await list_skills(role=call.actor.role)))
 
 
+async def _history(call: _Call) -> History:
+    async with call.sessions() as session:
+        found = await list_conversations(session, user_id=call.user_id)
+    return History(conversations=tuple(found))
+
+
 #: 登錄表：每一個 `SlashCommand` 一支（`tests/unit/test_slash.py` 守全不全）。不叫 `COMMANDS`：
 #: 那是 Command Registry（`registry.commands()`）。
 SLASH_COMMANDS: dict[SlashCommand, Callable[[_Call], Awaitable[SlashResult]]] = {
@@ -320,4 +337,5 @@ SLASH_COMMANDS: dict[SlashCommand, Callable[[_Call], Awaitable[SlashResult]]] = 
     SlashCommand.STATUS: _status,
     SlashCommand.PENDING: _pending,
     SlashCommand.SKILLS: _skills,
+    SlashCommand.HISTORY: _history,
 }

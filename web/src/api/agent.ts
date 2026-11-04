@@ -93,6 +93,21 @@ export async function readConversation(
   }
 }
 
+export type ConversationEntry = Schemas['ConversationEntryOut']
+
+/**
+ * 我的對話清單（M5.5 票 18）：最後說話的在前、最多 50 段，標題是第一則使用者訊息（空字串是沒有字）。
+ * 面板頁首的「對話」、`/history` 與新瀏覽器接上最近的一段都讀它。
+ */
+export const conversationsQueryOptions = queryOptions({
+  queryKey: ['agent', 'conversations'],
+  queryFn: ({ signal }) => listConversations(signal),
+})
+
+export function listConversations(signal?: AbortSignal): Promise<ConversationEntry[]> {
+  return apiGet<ConversationEntry[]>('/agent/conversations', { signal })
+}
+
 /**
  * 按了「停止」（M5 票 25）：伺服器停下那一輪、存好說明才回；說明經還開著的串流送到。
  * 沒有在跑的是 `not_running`（剛好答完，或還沒開始）。
@@ -156,6 +171,7 @@ export type SlashResult =
   | Schemas['StatusOut']
   | Schemas['PendingOut']
   | Schemas['SkillsOut']
+  | Schemas['HistoryOut']
 
 export type SlashName = SlashResult['command']
 
@@ -167,6 +183,7 @@ const SLASH: Record<SlashName, true> = {
   status: true,
   pending: true,
   skills: true,
+  history: true,
 }
 
 const SLASH_COMMANDS = Object.keys(SLASH) as SlashName[]

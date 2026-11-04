@@ -1,18 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { isTextUIPart, type UIMessage } from 'ai'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { agentRefusalOf, readConversation, stopTurn } from '../api/agent'
+import { agentRefusalOf, conversationsQueryOptions, stopTurn } from '../api/agent'
 import { GhostButton, Notice, TEXT_LINK } from '../components/controls'
 import { usePanel } from './panelState'
 
-/** 被擋下時說的那一段對話：第一句話最多幾個字。 */
-const TITLE_LENGTH = 40
-
 /**
  * 每人同時一輪（M5 票 25）：送出被擋下（`busy`），而在跑的是另一段對話（例如開了新對話之後）。說出是
- * 哪一段（對話沒有標題，用它的第一句話），可以接過去看它答完，或停掉那一輪再重送這一則。
+ * 哪一段（對話清單的標題：它的第一句話，M5.5 票 18），可以接過去看它答完，或停掉那一輪再重送這一則。
  * `other` 是伺服器說的那一段對話的 id：位子以人為單位，只會是自己的。
  */
 export function BusyElsewhere({ other, onStopped }: { other: string; onStopped: () => void }) {
@@ -20,9 +16,10 @@ export function BusyElsewhere({ other, onStopped }: { other: string; onStopped: 
   const { switchTo } = usePanel()
   const [stopping, setStopping] = useState(false)
   const [failed, setFailed] = useState(false)
+  // 在跑的那一段開輪時更新過，一定排在清單最前面幾段。
   const found = useQuery({
-    queryKey: ['agent', 'conversation-title', other],
-    queryFn: async ({ signal }) => firstLine((await readConversation(other, signal))?.messages),
+    ...conversationsQueryOptions,
+    select: (entries) => entries.find((entry) => entry.id === other)?.title || null,
   })
   const title = found.data ?? t('agent.failure.busyUntitled')
 
@@ -59,19 +56,4 @@ export function BusyElsewhere({ other, onStopped }: { other: string; onStopped: 
       {failed ? <p className="text-sm text-ink">{t('agent.failure.busyStopFailed')}</p> : null}
     </div>
   )
-}
-
-/** 一段對話的第一句使用者的話（第一行，太長截斷）；讀不到、沒有字是 `null`。 */
-function firstLine(messages: UIMessage[] | undefined): string | null {
-  for (const message of messages ?? []) {
-    if (message.role !== 'user') continue
-    const text = message.parts
-      .filter(isTextUIPart)
-      .map((part) => part.text)
-      .join('')
-      .trim()
-      .split('\n')[0]
-    if (text) return text.length > TITLE_LENGTH ? `${text.slice(0, TITLE_LENGTH)}…` : text
-  }
-  return null
 }

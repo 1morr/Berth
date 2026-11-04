@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { CREW, signIn } from './login.ts'
 import { shot } from './shot.ts'
@@ -9,6 +9,18 @@ import { shot } from './shot.ts'
 // 「上網找網址直接加」被擋（M5 票 14）；「慢慢查」翻三頁、每步等一下（M5 票 25）；兩種訂閱卡要人選字幕組
 // （M5 票 26）；「想一想」先回一段推理（M5.5 票 16）；「推理被拒」回 400（M5.5 票 17）。一個請求都不出網、不需要金鑰
 // （M5 票 12）。桌機與手機各跑一次（playwright.config.ts）。
+
+/**
+ * 打開面板、換成一段空白的新對話。同一台替身上前面幾條留下的對話都在，新的瀏覽器 context 會自動接上
+ * 最近的那一段（M5.5 票 18）；第一條是這台替身上的第一段，不必換。
+ */
+async function openBlank(page: Page) {
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  await expect(panel.getByRole('textbox', { name: '問助理' })).toBeVisible()
+  await panel.getByRole('button', { name: '新對話' }).click()
+  await expect(panel.getByText(/問 Berth 裡的事/)).toBeVisible()
+}
 
 test('側面板問「為什麼沒入庫」得到結論，重新載入之後對話還在', async ({ page }) => {
   // 回覆裡的外部圖片一次都不能被請求（brief §14：圖片網址是外洩通道）。
@@ -79,7 +91,7 @@ test('被防護中止的那一輪：從「步驟」看到每一步的數字，�
   page,
 }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('一直查下載')
@@ -136,7 +148,7 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   // 假模型說「下載 SPY×FAMILY」時：搜作品、搜發佈、問 Route，再出一張三列的送單卡（M5 票 13）。
   // 這台有兩條電視 Route（TV、Anime）、SPY×FAMILY 沒送單過：模型給的是 TV，卡片上逐列要人選（票 23b）。
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('下載 SPY×FAMILY')
@@ -202,7 +214,7 @@ test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要�
   page,
 }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   const log = panel.getByRole('log', { name: '助理' })
@@ -215,10 +227,10 @@ test('斜線指令：打 / 給提示，/usage 看用量，/compact 換成摘要�
   await input.press('Enter')
   await expect(panel.getByText('圖片沒有載入')).toBeVisible()
 
-  // 打 `/`：輸入欄上方列出六個指令，上下鍵移動。
+  // 打 `/`：輸入欄上方列出七個指令，上下鍵移動。
   await input.fill('/')
   const hint = panel.getByRole('listbox', { name: '指令' })
-  await expect(hint.getByRole('option')).toHaveCount(6)
+  await expect(hint.getByRole('option')).toHaveCount(7)
   await input.press('ArrowDown')
   await input.press('ArrowDown')
   await expect(hint.getByRole('option', { selected: true })).toContainText('/usage')
@@ -261,7 +273,7 @@ test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', 
   // M5 票 14、prototype S5 / S6：網址必須逐字出自使用者的話（brief §14）。
   const url = 'https://mikanani.me/RSS/MyBangumi?token=berth-demo'
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill(`加這個 RSS：${url}`)
@@ -292,7 +304,7 @@ test('訂閱 Mikan：字幕組由人在卡上選，送出的集數跟著選的�
   // 假模型說「從 Mikan 訂閱 SPY×FAMILY」時：搜作品、問 Route、讀番組頁，再出一張 Mikan 訂閱卡，
   // 建議的字幕組是 Berth-Demo（3 集）；番組頁上另有 LoliHouse（12 集）與北宇治字幕组（6 集）。
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('從 Mikan 訂閱 SPY×FAMILY')
@@ -331,7 +343,7 @@ test('關鍵字訂閱：卡上選字幕組、列出第一批，說出作品已�
   // 假模型說「在 acg.rip 訂閱 SPY×FAMILY」時：搜作品、問 Route，再出一張關鍵字訂閱卡，建議 Berth-Demo。
   // 搜到 Berth-Demo（3 筆）、ToonsHub（2 筆）、黒ネズミたち（1 筆）。上一條已經從 Mikan 訂了一份。
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('在 acg.rip 訂閱 SPY×FAMILY')
@@ -395,7 +407,7 @@ test('停下的那一輪：說明是 Berth 的「停下」，「繼續」只按�
   page,
 }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('一直查下載')
@@ -428,7 +440,7 @@ test('停下的那一輪：說明是 Berth 的「停下」，「繼續」只按�
 
 test('重新整理頁面：那一輪在伺服器照跑，回來接著顯示並答完（M5 票 25）', async ({ page }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   // 替身翻三頁 Job，每一次模型呼叫先等 1.5 秒（`slow_pause`）：重新整理時那一輪一定還在跑。
@@ -463,7 +475,7 @@ test('重新整理頁面：那一輪在伺服器照跑，回來接著顯示並�
 
 test('按「停止」：伺服器停下那一輪，說是你按了停止（M5 票 25）', async ({ page }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('慢慢查一下下載')
@@ -487,7 +499,7 @@ test('另一段對話還在答：說出是哪一段，停掉那一輪之後這�
   page,
 }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   const log = panel.getByRole('log', { name: '助理' })
@@ -519,7 +531,7 @@ test('另一段對話還在答：說出是哪一段，停掉那一輪之後這�
 // 也能用的讀取命令；管理員才有的工具不在他的那一份裡（整合測試 `TestWhoCanUseWhat` 守）。用量頁不給他。
 test('一般使用者也用得到側面板：問「為什麼沒入庫」得到結論，用量頁進不去', async ({ page }) => {
   await signIn(page, '/jobs', CREW)
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('SPY×FAMILY 為什麼沒入庫')
@@ -545,7 +557,7 @@ test('網路搜尋：展開看到標題、網址與日期，不是加密內容�
     }
   })
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('Frieren 第二季評價如何')
@@ -610,7 +622,7 @@ test('推理程度被拒：停下的說明連到 AI 設定的推理程度', asyn
 // 推理（M5.5 票 16）：替身說「想一想」時先回三行推理再答一句。面板收在預設收起的一格，串流完與重新載入都一樣。
 test('推理：收在預設收起的一格，展開看得到全文，重新載入之後還在', async ({ page }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('想一想再回答')
@@ -639,9 +651,82 @@ test('推理：收在預設收起的一格，展開看得到全文，重新載�
 })
 
 // 放在最後：斷路器一開就暫停 15 分鐘，之後的流程都問不了。
+test('對話清單：換瀏覽器接上最近的一段，「對話」與 /history 切回舊的，新對話重新整理仍空白（M5.5 票 18）', async ({
+  page,
+  browser,
+}) => {
+  await signIn(page, '/jobs')
+  await openBlank(page)
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  const log = panel.getByRole('log', { name: '助理' })
+  await input.fill('清單的第一段：你會什麼')
+  await input.press('Enter')
+  await expect(log).toContainText('這是演練用的假模型')
+  await panel.getByRole('button', { name: '新對話' }).click()
+  await input.fill('清單的第二段：你會什麼')
+  await input.press('Enter')
+  await expect(log).toContainText('這是演練用的假模型')
+
+  // 換一個瀏覽器（新的 context：沒有 localStorage），同一個帳號：接上最近的那一段。
+  const { baseURL, viewport } = test.info().project.use
+  const elsewhere = await browser.newContext({ baseURL, viewport, locale: 'zh-TW' })
+  const there = await elsewhere.newPage()
+  await signIn(there, '/jobs')
+  await there.getByRole('button', { name: '助理' }).click()
+  const otherPanel = there.locator('#agent-panel')
+  const otherLog = otherPanel.getByRole('log', { name: '助理' })
+  await expect(otherLog).toContainText('清單的第二段：你會什麼')
+  await expect(otherLog).not.toContainText('清單的第一段')
+  await shot(there, 'conversations-picked-up')
+
+  // 「對話」：現在這一段標出來，選第一段切過去，清單收起。
+  await otherPanel.getByRole('button', { name: '對話', exact: true }).click()
+  const list = otherPanel.getByRole('list', { name: '我的對話' })
+  await expect(list.getByRole('button', { name: /清單的第二段/ })).toHaveAttribute(
+    'aria-current',
+    'true',
+  )
+  await expectNoHorizontalScroll(there)
+  await shot(there, 'conversations-list')
+  await list.getByRole('button', { name: /清單的第一段/ }).click()
+  await expect(list).toHaveCount(0)
+  await expect(otherLog).toContainText('清單的第一段：你會什麼')
+  await expect(otherLog).not.toContainText('清單的第二段')
+
+  // 在跑的那一段標出來：第一個瀏覽器開一輪「慢慢查」（替身每次模型呼叫等 1.5 秒）。
+  await panel.getByRole('button', { name: '新對話' }).click()
+  await input.fill('慢慢查清單的第三段')
+  await input.press('Enter')
+  await expect(log.locator('details').filter({ hasText: '列出下載' }).first()).toContainText('完成')
+
+  // `/history`：同一份清單，第三段在回答中；選第二段切回去。
+  const otherInput = otherPanel.getByRole('textbox', { name: '問助理' })
+  await otherInput.fill('/history')
+  await otherInput.press('Enter')
+  const history = otherPanel.getByRole('region', { name: '/history' })
+  await expect(history.getByRole('button', { name: /慢慢查清單的第三段/ })).toContainText('回答中')
+  await expect(history.getByRole('button', { name: /清單的第一段/ })).not.toContainText('回答中')
+  await shot(there, 'conversations-history')
+  await history.getByRole('button', { name: /清單的第二段/ }).click()
+  await expect(otherLog).toContainText('清單的第二段：你會什麼')
+  await expect(otherLog).not.toContainText('清單的第一段')
+  await panel.getByRole('button', { name: '停止' }).click()
+  await expect(log.locator('[data-stop]')).toContainText('你按了停止')
+
+  // 按「新對話」再重新整理：仍是空白的新對話，不接回最近的一段。
+  await otherPanel.getByRole('button', { name: '新對話' }).click()
+  await there.reload()
+  await expect(otherPanel.getByText(/問 Berth 裡的事/)).toBeVisible()
+  await expect(otherLog).not.toContainText('你會什麼')
+  await expect(otherLog).not.toContainText('慢慢查')
+  await shot(there, 'conversations-fresh-reloaded')
+  await elsewhere.close()
+})
+
 test('provider 連續出錯 5 次：側面板說暫停到幾點，再送被擋下（M5 票 20、22）', async ({ page }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   const log = panel.getByRole('log', { name: '助理' })

@@ -455,8 +455,12 @@ AI 核心對人的介面：M5 的側面板（頁首的「助理」，M5 票 12�
 _Avoid_: agent（對外的說法用助理）, bot（bot 是管道那一端的帳號）, copilot
 
 **Conversation**（對話）:
-側面板裡一個人與 Assistant 的一段往來，歷史只由伺服器保管（`ai_conversations`，M5 票 11）；畫面每次只送最後一則使用者訊息。只有本人讀得到。
+側面板裡一個人與 Assistant 的一段往來，歷史只由伺服器保管（`ai_conversations`，M5 票 11）；畫面每次只送最後一則使用者訊息。只有本人讀得到。沒有標題欄位：要叫它時用第一則使用者訊息。
 _Avoid_: chat（chat 是 `useChat` 的元件）, thread, session（session 是登入）
+
+**Conversation List**（對話清單）:
+一個人自己的 Conversation，最後說話的在前、最多 50 段，在跑的標出來（M5.5 票 18，`agent.list_conversations`）。側面板頁首的「對話」與 `/history` 是同一份；新的瀏覽器打開面板時接上它的第一段。
+_Avoid_: resume（Resume 是 Jellyfin 的繼續觀看）, inbox, archive
 
 **Turn**（一輪）:
 一則使用者訊息到 Assistant 答完或停下：中間可以有好幾次模型呼叫與工具呼叫，一輪一列 `ai_runs`（`kind = chat`；Compaction 的摘要另記一列，不算一輪），帳在每次模型呼叫之後當場記。防護（次數、token、重複呼叫、乒乓、無進展，M5 票 11、20）以一輪為單位；停下時對話裡留一則說明是哪一條、做到哪。每人同時一輪。provider 斷路器不是一輪的事：它以一份 provider 設定為單位，暫停時開不了新的一輪。
@@ -478,7 +482,7 @@ _Avoid_: summarize（摘要是它產出的那段字）, truncate（Truncation �
 _Avoid_: thinking（pydantic-ai 的統一設定名，只在 adapter 內）, effort（Anthropic 的參數名）, reasoning effort
 
 **Slash Command**（斜線指令）:
-人在 Assistant 的輸入欄打的 `/<名字>`：`/new`、`/compact`、`/usage`、`/status`、`/pending`、`/skills`（M5 票 18，`services/slash.py`，M7 的外部管道共用同一份登錄表）。整則訊息就是那個指令才算；不經過模型（`/compact` 的摘要除外），也不進對話歷史。
+人在 Assistant 的輸入欄打的 `/<名字>`：`/new`、`/compact`、`/usage`、`/status`、`/pending`、`/skills`、`/history`（M5 票 18、M5.5 票 18，`services/slash.py`，M7 的外部管道共用同一份登錄表）。整則訊息就是那個指令才算；不經過模型（`/compact` 的摘要除外），也不進對話歷史。
 _Avoid_: command（單用：Command 是 Command Registry 上的命令）, shortcut, macro
 
 **Skill**（流程說明）:
