@@ -483,7 +483,7 @@ NCOP/NCED、PV、CM、Menu、預告、花絮等**可辨識**的非正片內容�
 - 中間四種（`missing_files` 到 `jellyfin_item_unresolved`）：管線自己發現，另以 `issue_detected` 事件記著。
 - `library_uses_tvdb`、`low_disk_space`：`health_checker` 每 5 分鐘量出來，由健康檢查偵測而不是對帳。
 - `jellyfin_item_mismatch`：Jellyfin 回驗，反查與對帳的 Jellyfin 那一方比同一份。
-- `episodes_overdue`：每日巡檢，一部作品一件，說出晚的集與卡在哪（字幕組沒發、送單失敗、下載停滯、入庫失敗）。不讀 RSS 頁的「已完結」：安靜 30 天正是要說的時候。和下一集隔了三週以上的說「可能是下一輪」（換輪）；最後一集缺集播出滿 60 天不再提醒；退訂了就不看（M5.5 票 11）。
+- `episodes_overdue`：每日巡檢，一部作品一件，說出晚的集與卡在哪（字幕組沒發、送單失敗、下載停滯、入庫失敗）。不讀 RSS 頁的「已完結」：安靜 30 天正是要說的時候。和下一集隔了三週以上的說「可能是下一輪」（換輪）；最後一集缺集播出滿 60 天不再提醒；退訂了就不看（M5.5 票 11）。從作品頁預先綁定作品、字幕組一集都還沒發的訂閱也看，從綁定那天之後播出的第一集算（M5.5 票 12b）。
 
 `ledger.status` 的 `target_missing` / `source_missing` / `inode_mismatch` 是帳本那一列的現況，Issue 是「要有人決定」的那一件——同一件事的兩個角度，resolve 之後帳本那一欄跟著改。`source_missing` 與 `unlinked`（刪除範圍拆掉的鏈接）是**使用者決定過的**現況，對帳看到就不再開 Issue。
 

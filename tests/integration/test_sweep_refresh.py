@@ -50,6 +50,7 @@ from tests.integration.test_sweep_overdue import (
     SUBSCRIBED,
     landed,
     overdue,
+    prebound,
     subscribed,
     wall,
 )
@@ -129,6 +130,21 @@ class TestRefreshBeforeTheSweep:
         factory = await credentialled(session, tmdb(120089))
         await sweep_once(session, now=wall(31))
         assert await overdue(session) == []
+
+        failed = await refresh_watched(session, factory)
+        await sweep_once(session, now=wall(31, 6), unrefreshed=failed)
+
+        assert failed == frozenset()
+        (issue,) = await overdue(session)
+        assert [one["episode"] for one in issue.detail["episodes"]] == [4]
+
+    async def test_a_work_with_only_a_pre_bound_feed_is_refreshed_too(
+        self, session: AsyncSession
+    ) -> None:
+        """預先綁定、字幕組一集都還沒發的作品也在對象裡（票 12b），巡檢前一樣刷新。"""
+        await prebound(session)
+        await snapshot_without_episode_4(session)
+        factory = await credentialled(session, tmdb(120089))
 
         failed = await refresh_watched(session, factory)
         await sweep_once(session, now=wall(31, 6), unrefreshed=failed)

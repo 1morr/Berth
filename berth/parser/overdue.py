@@ -4,14 +4,15 @@
 （`services.keeping_up`，M5.5 票 12）照它分段。
 
 - **基準**：作品最後入庫的一集，不分來源（另一個字幕組、手動送的都算）；還沒入庫過時，從作品
-  最早的 RSS Series 建立那天之後播出的第一集算。基準之前的洞歸 `series_episodes_missing`。
+  最早的一條訂閱開始那天（RSS Series 建立、預先綁定作品的 Feed 綁定，票 12b）之後播出的第一集
+  算。基準之前的洞歸 `series_episodes_missing`。
 - **晚**：基準之後播出、還沒入庫，從播出日隔天 00:00（容器時區，`now` 的時區）起算滿
   `threshold_days`。TMDB 只有日期，隔天才確定那一集已經播完。第 0 季不看。
 - **例外只有兩種**：下載還在動（蓋到它的 Job 在 `UNDER_WAY_STATES`，停滯不算），或已經在等你處理
   （Job 在審核、或有 Issue 說著它現在這個狀態：`OverdueJob.waiting`，呼叫端查）。其餘不管卡在
   哪一步都算晚，卡在哪寫在 `LateEpisode.stall`。
 - **換輪**（票 11）：基準那一集與下一集播出日相隔超過 `NEXT_RUN_GAP`，理由是 `next_run`、不是
-  字幕組遲到；作品上有一條比基準那一集入庫更晚建立的 RSS Series（訂了下一輪）時回到 `late`。還沒
+  字幕組遲到；作品上有一條比基準那一集入庫更晚開始的訂閱（訂了下一輪）時回到 `late`。還沒
   入庫過就沒有基準，一律 `late`。
 - **視窗**（票 11）：最後一集缺集（基準之後已播、沒入庫的最新一集，不管過門檻沒）播出滿
   `WINDOW`（從播出日算）就不再提醒。
@@ -112,8 +113,9 @@ def watch_overdue(
 ) -> Watch:
     """這部作品這一刻缺哪幾集、哪幾集晚了、過了視窗沒。
 
-    `imported` 是帳本有正片蓋到的季集與它入庫的那一刻；`subscribed` 是作品上每一條 RSS Series 建立
-    的那一刻（不可為空）；`now` 是容器時區的現在，日界照它的日期。
+    `imported` 是帳本有正片蓋到的季集與它入庫的那一刻；`subscribed` 是作品上每一條訂閱開始的
+    那一刻（RSS Series 建立、預先綁定的 Feed 綁定；不可為空）；`now`
+    是容器時區的現在，日界照它的日期。
     """
     aired = sorted(
         ((season.season_number, row.episode_number), row.air_date)
