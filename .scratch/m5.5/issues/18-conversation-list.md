@@ -34,3 +34,4 @@
 - e2e：同一台替身上前面幾條的對話都在，新的 context 會接上最近的一段，所以 agent 的其他幾條開面板後先按「新對話」（`openBlank`）；第一條是替身上的第一段，不必。
 - code-review 未處理：(1) `berth.agent.fresh` 是整個瀏覽器一把、不分帳號：A 按「新對話」沒送出就登出、B 在同一個瀏覽器登入，B 看到空白而不是自己最近的一段（字面符合票的規則，影響小）。(2) 加一支斜線指令要動七處、`slash_out` 的回傳型別與 `SlashOut` 重複一份，既有模式，未改。(3) 結果型別叫 `History`（照指令命名，同 `Skills`、`Pending`），模組裡 history 也指訊息歷史，未改名。
 - 已處理：DESIGN.md〈側面板〉補對話清單；「回答中」改 `bg-working`（同工具的「執行中」）、目前這段改用斜線清單同款的左側內線；`TITLE_LENGTH` 改名 `CONVERSATION_TITLE_LENGTH`；「在跑」的判斷與 `read_conversation` 為何一致寫在註解。
+- 2026-11-04 合併前（協調者要求）：`pnpm -C web build` 之後跑完整前端 e2e（`pnpm -C web e2e`，全部 project、中途不重 build，開跑前 8484–8534 沒人用）：95 passed、0 failed（3.1m），HEAD `54454de2`。
