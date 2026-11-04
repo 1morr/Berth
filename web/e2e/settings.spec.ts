@@ -126,8 +126,14 @@ test('AI 設定的模型清單：網址一改建議就換、按了才問端點�
   await shot(page, 'ai-models-suggested')
 
   await main.getByRole('button', { name: '取得模型' }).click()
-  await expect(main.getByText('這個端點列了 2 個模型，放進模型欄的清單了。')).toBeVisible()
+  await expect(main.getByText('這個端點列了 2 個模型，點一個填進模型欄。')).toBeVisible()
   expect(await suggestions()).toBe('fake-model-large fake-model-small')
+  // 取得的畫成一排鍵（M5.5 票 19）：datalist 會被欄位裡已有的字濾掉，按一顆就填進模型欄。
+  await main
+    .getByRole('group', { name: '這個端點列的模型' })
+    .getByRole('button', { name: 'fake-model-small' })
+    .click()
+  await expect(main.getByLabel('模型', { exact: true })).toHaveValue('fake-model-small')
   expect(outbound).toEqual([
     'POST /api/settings/ai/models {"provider":"openai","base_url":"https://api.deepseek.com","api_key":"sk-typed-not-sent"}',
   ])

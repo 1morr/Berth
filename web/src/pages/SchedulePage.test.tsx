@@ -146,6 +146,39 @@ describe('時間表', () => {
     ).toEqual([expect.stringContaining('葬送的芙莉蓮')])
   })
 
+  it('選的那一天與「只看已訂閱」記在網址：點進作品頁再回上一頁還在', async () => {
+    render({
+      'GET /api/media/tv:209867': { status: 404, body: { detail: 'not found' } },
+    })
+    const { router } = renderApp('/schedule')
+    const user = userEvent.setup()
+    await screen.findByTestId('schedule-day')
+
+    await user.click(
+      within(screen.getByRole('group', { name: '選一天' })).getAllByRole('button')[5]!,
+    )
+    await user.click(screen.getByRole('button', { name: '只看已訂閱' }))
+    expect(router.state.location.search).toEqual({ day: '2026-11-07', subscribed: true })
+
+    await router.navigate({ to: '/media/$mediaId', params: { mediaId: 'tv:209867' } })
+    router.history.back()
+
+    const keys = within(await screen.findByRole('group', { name: '選一天' })).getAllByRole('button')
+    expect(keys[5]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '只看已訂閱' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('網址上的日子不在這一週時退回今天', async () => {
+    render()
+    renderApp('/schedule?day=2025-01-01')
+
+    const keys = within(await screen.findByRole('group', { name: '選一天' })).getAllByRole('button')
+    expect(keys[2]).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('只看已訂閱', async () => {
     render()
     renderApp('/schedule')

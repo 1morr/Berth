@@ -714,10 +714,17 @@ describe('待處理頁', () => {
         ],
       },
     })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-04T12:00:00'))
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     renderApp('/issues')
     const row = await screen.findByRole('article')
 
     expect(within(row).getByText('遲到')).toBeInTheDocument()
+    // 收著也看得出是哪幾集、晚多久（M5.5 票 19）：最早那一集從播出日算。
+    expect(within(row).getByText('S01E04 起 2 集晚了，最早的晚 7 天')).toBeVisible()
     await userEvent.click(within(row).getByRole('heading', { name: '与你相恋' }))
     expect(within(row).getByText('S01E04')).toBeInTheDocument()
     expect(within(row).getByText(/下載停滯/)).toBeInTheDocument()
@@ -730,7 +737,59 @@ describe('待處理頁', () => {
       'href',
       '/media/tv%3A120089',
     )
+    // 下一步照這幾集卡在哪說：兩種都有就兩句都說。
+    expect(within(row).getByText(/字幕組還沒發的，到作品頁搜這一集/)).toBeInTheDocument()
+    expect(within(row).getByText(/卡住的下載，到它的 Job 頁重試或刪掉/)).toBeInTheDocument()
+    // 中文句號之後不留空白（`sentenceGap`）。
+    expect(row.textContent).toContain(
+      '或換一個字幕組訂閱。到作品頁搜這一集或去訂閱。卡住的下載，到它的 Job 頁重試或刪掉。都入庫之後',
+    )
     expect(within(row).getByRole('button', { name: '忽略' })).toBeInTheDocument()
+    expect(within(row).getByText(/按「忽略」之後，這部作品還有晚的集的期間不會再開/)).toBeVisible()
+  })
+
+  it('遲到只有卡住的下載：下一步只說 Job 頁，不叫人去搜（M5.5 票 19）', async () => {
+    render({
+      [ISSUES]: {
+        body: [
+          issue({
+            type: 'episodes_overdue',
+            subject: 'tv:220542',
+            path: '',
+            job_hash: '',
+            ledger_id: null,
+            detail: {
+              reason: 'late',
+              media: 'tv:220542',
+              title: '藥師少女的獨語',
+              name: '藥師少女的獨語',
+              episodes: [
+                {
+                  season: 1,
+                  episode: 5,
+                  air_date: '2026-10-31',
+                  stall: 'stalled',
+                  jobs: ['b'.repeat(40)],
+                },
+              ],
+            },
+            actions: [],
+          }),
+        ],
+      },
+    })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-04T12:00:00'))
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    renderApp('/issues')
+    const row = await screen.findByRole('article')
+
+    expect(within(row).getByText('S01E05 晚 4 天，下載停滯')).toBeVisible()
+    await userEvent.click(within(row).getByRole('heading', { name: '藥師少女的獨語' }))
+    expect(within(row).getByText(/卡住的下載，到它的 Job 頁重試或刪掉/)).toBeInTheDocument()
+    expect(within(row).queryByText(/字幕組還沒發的/)).not.toBeInTheDocument()
   })
 
   it('換輪說可能是下一輪，晚的是不是字幕組遲到由人判斷（M5.5 票 11）', async () => {
@@ -760,8 +819,11 @@ describe('待處理頁', () => {
     renderApp('/issues')
     const row = await screen.findByRole('article')
 
+    expect(
+      within(row).getByText(/^S01E78 晚 \d+ 天，沒有下載在處理.*，可能是下一輪$/),
+    ).toBeVisible()
     await userEvent.click(within(row).getByRole('heading', { name: 'Re：從零開始的異世界生活' }))
-    expect(within(row).getByText(/可能是下一輪/)).toBeInTheDocument()
+    expect(within(row).getByText(/^可能是下一輪：上一集與這一集隔了三週以上/)).toBeInTheDocument()
   })
 
   it('同一集意外多份說出哪一集、撞在一起的發佈名，連到作品頁（M4 票 130）', async () => {

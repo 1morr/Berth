@@ -24,23 +24,34 @@ export function ConversationPicker({ id, onPicked }: { id: string; onPicked: () 
       ) : null}
       {found.data !== undefined && found.data.length > 0 ? (
         <div className="p-2">
-          <ConversationEntries entries={found.data} onPicked={onPicked} />
+          <ConversationEntries entries={found.data} onPicked={onPicked} takeFocus />
         </div>
       ) : null}
     </div>
   )
 }
 
-/** 一段一列的按鈕。`onPicked`：選了之後（例如收起那一塊）。 */
+/**
+ * 一段一列的按鈕。`onPicked`：選了之後（例如收起那一塊）。
+ *
+ * `takeFocus`：第一次畫出來時把焦點交給目前這段（沒有就第一段）。抬頭列的「對話」打開的清單排在整排抬頭鍵
+ * 之後，不交的話 Tab 要先經過「新對話」「關閉」才進得去（M5.5 票 19 的 critique）；`Esc` 收起時焦點回「對話」。
+ * `/history` 的那一份在對話紀錄裡，不搶焦點。
+ */
 export function ConversationEntries({
   entries,
   onPicked,
+  takeFocus = false,
 }: {
   entries: ConversationEntry[]
   onPicked?: () => void
+  takeFocus?: boolean
 }) {
   const { t } = useTranslation()
   const { conversationId, switchTo } = usePanel()
+  const target = entries.some((entry) => entry.id === conversationId)
+    ? conversationId
+    : entries[0]?.id
   return (
     <ul aria-label={t('agent.conversations.label')} className="grid gap-1">
       {entries.map((entry) => {
@@ -48,6 +59,8 @@ export function ConversationEntries({
         return (
           <li key={entry.id}>
             <button
+              // 只在掛上去的那一刻聚焦：使用者剛按「對話」打開它；之後清單重讀、列還在，不會再搶。
+              autoFocus={takeFocus && entry.id === target}
               type="button"
               aria-current={current ? 'true' : undefined}
               onClick={() => {
