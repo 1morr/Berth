@@ -477,6 +477,10 @@ _Avoid_: resume（Resume 是 Jellyfin 的繼續觀看）, retry, regenerate（�
 Conversation 太長時，把最後幾個 Turn 之前的歷史換成一段由模型寫的摘要（M5 票 18，`services/compaction.py`）：一輪開頭佔了 context window 的六成就自動做（留最後兩輪），`/compact` 只留最後一輪。切點落在使用者訊息上，待確認的工具呼叫留在尾巴；摘要那一次記一列 `ai_runs`（`kind = compaction`）。失敗了歷史照舊。
 _Avoid_: summarize（摘要是它產出的那段字）, truncate（Truncation 是一筆工具結果太長時只交前一段，票 20）, prune
 
+**Reasoning Level**（推理程度）:
+模型回答前想多久：`off`、`low`、`medium`、`high`，沒有「預設」這一級，沒設過是 `medium`（M5.5 票 17，`AiReasoning`）。兩種接口各記一份；怎麼變成請求參數看接口與模型（`adapters.ai._how_to_send`），有些模型不送，設定頁說「沒有效果」（`reasoning_applies`）。Compaction 的摘要一律關。服務以 400 拒絕這個參數時，停下的說明連到設定頁那一格（`reasoning_rejected`）。
+_Avoid_: thinking（pydantic-ai 的統一設定名，只在 adapter 內）, effort（Anthropic 的參數名）, reasoning effort
+
 **Slash Command**（斜線指令）:
 人在 Assistant 的輸入欄打的 `/<名字>`：`/new`、`/compact`、`/usage`、`/status`、`/pending`、`/skills`、`/history`（M5 票 18、M5.5 票 18，`services/slash.py`，M7 的外部管道共用同一份登錄表）。整則訊息就是那個指令才算；不經過模型（`/compact` 的摘要除外），也不進對話歷史。
 _Avoid_: command（單用：Command 是 Command Registry 上的命令）, shortcut, macro

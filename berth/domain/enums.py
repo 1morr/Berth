@@ -1831,6 +1831,16 @@ class AiProvider(StrEnum):
     OPENAI = "openai"
 
 
+class AiReasoning(StrEnum):
+    """推理程度（M5.5 票 17、brief §20.26）。**沒有「預設」這一級**（使用者 2026-11-01 定），
+    沒設過的是 `medium`。怎麼變成請求參數在 `adapters.ai.chat_settings`。"""
+
+    OFF = "off"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class PriceTable(StrEnum):
     """一個價目從哪一份表查到的（`adapters.ai.prices`，M5 票 21b）。"""
 

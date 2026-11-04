@@ -2010,7 +2010,8 @@ def agent_scenario() -> Scenario:
     SPY×FAMILY」出一張關鍵字訂閱卡，列出每個字幕組的第一批（票 26，`SPY_BANGUMI_PAGE`、
     `SPY_ACGRIP`）。問「評價」（`reviews`）時用伺服器端的 `web_search` 搜一次再答（M5.5 票 03，
     `WEB_SEARCH_RESULTS`）。說「想一想」（`think it over`）時先回一段多行的推理再答（M5.5 票 16，
-    `THOUGHT_ZH`、`THOUGHT_EN`）。其餘一律說它只演這幾件事。
+    `THOUGHT_ZH`、`THOUGHT_EN`）。說「推理被拒」（`reasoning refused`）時替身回服務拒絕
+    `output_config.effort` 的 400（M5.5 票 17）。其餘一律說它只演這幾件事。
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
@@ -2392,6 +2393,9 @@ def _web_searched(text: str, *, chinese: bool) -> ModelResponse:
     )
 
 
+#: 「推理被拒」：舊模型收到 `output_config.effort` 時那一類 400（M5.5 票 17）。
+_EFFORT_REFUSED = "output_config.effort: This model does not support the effort parameter."
+
 #: 「想一想」：假模型先回一段推理再答（M5.5 票 16）。`deepseek-flash` 不送 `thinking` 也會回推理
 #: （brief §20.26），面板把它收在預設收起的區塊。
 _THINK_ASKED = re.compile(r"想一想|think it over", re.I)
@@ -2493,6 +2497,9 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
         if "provider 壞了" in text or "provider down" in text.lower():
             # 演 provider 斷路器（M5 票 22）：每一次都是 provider 那一側的失敗。
             raise ModelHTTPError(503, "demo", {"error": {"message": "overloaded"}})
+        if "推理被拒" in text or "reasoning refused" in text.lower():
+            # 演服務拒絕推理參數（M5.5 票 17）：停下的說明連到 AI 設定的推理程度。
+            raise ModelHTTPError(400, "demo", {"error": {"message": _EFFORT_REFUSED}})
         if _slow_asked(text):
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
         if _REVIEWS_ASKED.search(text):

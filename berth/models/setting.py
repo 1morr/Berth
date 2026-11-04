@@ -14,6 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from berth.domain import (
     AiProvider,
+    AiReasoning,
     BerthPathFailure,
     CollectionType,
     ConnectionReason,
@@ -132,6 +133,8 @@ class AiEndpointSettings(BaseModel):
     #: **只進不出**：API 只回 `has_key`，原文不回到瀏覽器（同 Discord bot token）。
     api_key: str = ""
     model: str = ""
+    #: 推理程度（M5.5 票 17）。舊資料沒有這一格就是 `medium`，不用 migration。
+    reasoning: AiReasoning = AiReasoning.MEDIUM
 
 
 class AiSettings(SettingsGroup):

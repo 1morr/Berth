@@ -124,7 +124,7 @@ adapters ──► domain                  （不 import services、models；回
   - `notify_waiting`（「有 N 件等你處理」的看守）：`seen`（上一輪看到的那幾件的身分，`None` 是還沒看過；存身分不存數字，鍵的形狀在 `services.waiting`）與 `since`（每一件從何時開始等）。
   - `sweep`：`reminded`，「放太久」提醒過的那幾件與時刻，同一件 `sweep.REMIND_EVERY` 內不再提醒。
   - `services.jellyfin` 另含 `public_url`（選填的對外網址，媒體庫深連結的主機；空的時候由 `services/deeplink.py` 推導——既有服務用 `base_url`、套件內用瀏覽器的主機名加 `base_url` 的 port，Seerr 的 `externalHostname` 慣例）、`api_key`、`metadata_fetchers`（鍵是套件內媒體庫的資料夾名，沒寫的依內容類型落回預設；值寫進 `LibraryOptions.TypeOptions[].MetadataFetchers`；brief §10 的 TVDB【研究】定案時改這裡而不是改程式）。沒有 MergeVersions 的任務 id：只支援 Jellyfin 12，12.x 原生合併多版本（[ADR 0002](adr/0002-jellyfin-12-minimum-pinned-image.md)、brief §20.9）。
-  - `ai`：`enabled`（關著就沒有 AI）、`provider`（`anthropic` / `openai`，現在用的那一種）、`anthropic` 與 `openai` 各一組 `base_url` / `api_key` / `model`（兩種各自保存，切換不丟另一邊；`base_url` 空的是官方端點，Anthropic 存之前拿掉結尾的 `/v1`）、`tavily_api_key`（選填）、`card_downloads`（一張確認卡送出的 torrent 總數上限，預設 13；設定頁沒有這一格）、`daily_alert_usd`（每日花費提醒值，`null` 是不提醒；只提醒不停用）。**key 只進不出**：API 回 `has_key` / `has_tavily_key`；PUT 的 key 欄空著是不動，但存著的 key 只送到存它的端點：key 欄空著、`base_url` 與存著的經 `effective_base_url` 比對不同（留空與填官方網址算同一個）時，測試連線與 PUT 都回 `key_missing`，PUT 什麼都不存（M5.5 票 01，`services/ai.py` 的 `_key_for`）；清掉走 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`（清的是現用接口的 key 時一併關掉 AI）。不從環境變數讀。
+  - `ai`：`enabled`（關著就沒有 AI）、`provider`（`anthropic` / `openai`，現在用的那一種）、`anthropic` 與 `openai` 各一組 `base_url` / `api_key` / `model` / `reasoning`（兩種各自保存；`reasoning` 是推理程度 `off` / `low` / `medium` / `high`，沒有這一格的舊資料是 `medium`，M5.5 票 17，切換不丟另一邊；`base_url` 空的是官方端點，Anthropic 存之前拿掉結尾的 `/v1`）、`tavily_api_key`（選填）、`card_downloads`（一張確認卡送出的 torrent 總數上限，預設 13；設定頁沒有這一格）、`daily_alert_usd`（每日花費提醒值，`null` 是不提醒；只提醒不停用）。**key 只進不出**：API 回 `has_key` / `has_tavily_key`；PUT 的 key 欄空著是不動，但存著的 key 只送到存它的端點：key 欄空著、`base_url` 與存著的經 `effective_base_url` 比對不同（留空與填官方網址算同一個）時，測試連線與 PUT 都回 `key_missing`，PUT 什麼都不存（M5.5 票 01，`services/ai.py` 的 `_key_for`）；清掉走 `DELETE /api/settings/ai/keys/{anthropic|openai|tavily}`（清的是現用接口的 key 時一併關掉 AI）。不從環境變數讀。
   - `rss`：排除條件的全域那一層——`exclude_not_single`（預設 `true`：不是單集的不自動下載）與 `exclude`（規則清單，格式同 `rss_feeds.exclude_json`）。另有遲到門檻 `overdue_days`（預設 2，0–30 天，訂閱頁全域區改；M5.5 票 10）。
   - `search`：搜尋面板記住的名字種類 `names`（`NameKind` → 開關；全域、存在伺服器；出廠值英文名與原名開、兩種中文名關；別名不記）。
   - `notify`：通知管道——`discord_bot_token`（只寫不讀，API 只回「已設定」）、`discord_application_id`、`discord_bot_name`（後兩個是存 token 那一刻向 Discord 問來的）。
@@ -887,11 +887,12 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - 期間用到的每一組端點與模型現在的價目與來源（`base_url` 是 `null` 的是記帳欄位出現之前的）。
   - `spend`：今天的花費提醒與它沒算進去的呼叫數 `unknown_today` / `unknown_before`。
 - `PUT /settings/usage/alert`：`{daily_usd}`，0 以上或 `null`。
-- `GET|PUT /settings/ai`：現在用的接口（`provider`）、兩種各自的 `base_url` / `api_key` / `model`、`tavily_api_key`、`enabled`（§2.1）。**key 只進不出**：回的是 `has_key` 與 `has_tavily_key`；送進來的 key 欄位是 `null` 或空字串表示沒動。`PUT` 存表單上那一種接口並設成現在用的，另一種不動；開啟要有 key 與模型名。
+- `GET|PUT /settings/ai`：現在用的接口（`provider`）、兩種各自的 `base_url` / `api_key` / `model` / `reasoning`（PUT 不帶或 `null` 是不動）、`tavily_api_key`、`enabled`（§2.1）。**key 只進不出**：回的是 `has_key` 與 `has_tavily_key`；送進來的 key 欄位是 `null` 或空字串表示沒動。`PUT` 存表單上那一種接口並設成現在用的，另一種不動；開啟要有 key 與模型名。
 - `DELETE /settings/ai/keys/{key}`：清掉一把 key；清的是現在用的接口的 key 時一併關掉 AI。
 - `POST /settings/ai/test`：照表單打一次最小呼叫，不存。服務拒絕也是 200（那是測試的結果，不是請求錯了）。
 - `GET /settings/ai/models?provider=&base_url=`：模型欄沒按「取得模型」之前的建議，本機價目表照這個網址認出的那一家；不帶 key、不連外，打到一半的網址也照查（M5.5 票 02）。
 - `POST /settings/ai/models`：`{provider, base_url, api_key}`（不收模型名），向表單上的端點問模型、不存；key 規則同測試連線。回 `models`、`source`（`endpoint` / `prices`）與 `failure` / `status` / `detail`。問不到也是 200：退回本機表並帶著原因（404、405、501 是端點不提供模型清單），端點列出空的也退回、不帶原因。不跟轉址（brief §20.26）。
+- `GET /settings/ai/reasoning?provider=&model=`：`{applies}`，這個接口上這個模型收不收推理程度（OpenAI 接口上 pydantic-ai 認不得會推理的模型、Anthropic 接口上沒有 effort 的 Claude 都不送）；只看 model profile，不帶 key、不連外（M5.5 票 17，brief §20.26）。
 - `/settings/ai` 的拒絕：422 `base_url_invalid` / `key_missing` / `model_missing`。
 
 **每個人自己的那一半在 `/me/notifications`**（登入就行，不在 `/settings` 底下）：
@@ -1171,7 +1172,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - `POST /agent/chat`：Vercel AI SDK 的 UI message stream，`VercelAIAdapter` 的子類別、`sdk_version=7`。
   - body 是 `useChat` 的 `{id, trigger, messages}` 加 `language`（介面語言，`zh-Hant` / `en`，停下來的說明照它寫）與按「繼續」時的 `continues`（停下的那一輪的 id，訊息是按鈕上的字）。**只取最後一則使用者訊息的字**，其餘以資料庫為準。
   - **這一輪在伺服器的 task 上跑**：這個回應只是跟著看，斷線照跑完。
-  - 防護停下時的說明是一則 `data-stop`（`{turn_id, reason, continuable, note}`，`note` 是 Berth 寫的那一句），不是助理的文字，側面板畫成「停下」。
+  - 防護停下時的說明是一則 `data-stop`（`{turn_id, reason, continuable, reasoning_rejected, note}`，`note` 是 Berth 寫的那一句），不是助理的文字，側面板畫成「停下」。`reasoning_rejected` 是服務以 400 拒絕了推理參數（從 `ai_runs.error` 判斷，重新載入也一樣）：管理員看到連到 `/settings/ai#ai-reasoning` 的連結，其他人看到請管理員改（M5.5 票 17）。
   - 伺服器端工具（Anthropic `web_search`）的結果拿掉每筆的 `encrypted_content`（只給服務端重播，brief §20.26），`GET /agent/conversations/{id}` 同樣；存著的歷史不動。
   - **最後一則是助理的是恢復**（按了確認卡之後 `useChat` 送的）：它只當觸發，每一張等著的卡照 Proposal 決定；還有沒決定的 409 `card_undecided`，沒有等著的 422 `no_message`。
   - 拒絕：409 `ai_disabled`（AI 關著）、409 `ai_paused`（斷路器暫停中，detail 是到什麼時候）、409 `not_continuable`、409 `busy`（這個人已經有一輪在跑；detail 是在跑的那一段對話的 id，只會是他自己的：位子以人為單位）、422 `no_message`、404 `conversation_missing`（別人的對話）。以 `/` 開頭的訊息送進這裡是 422 `slash_command`。

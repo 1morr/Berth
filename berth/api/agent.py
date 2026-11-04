@@ -145,12 +145,18 @@ class TurnStopOut(BaseModel):
     turn_id: str
     reason: AiStopReason
     continuable: bool
+    #: 服務以 400 拒絕了推理參數（M5.5 票 17）：面板在說明下面連到 AI 設定頁改程度。
+    reasoning_rejected: bool
     note: str
 
     @classmethod
     def of(cls, stop: TurnStop, note: str) -> TurnStopOut:
         return cls(
-            turn_id=stop.turn_id, reason=stop.reason, continuable=stop.continuable, note=note
+            turn_id=stop.turn_id,
+            reason=stop.reason,
+            continuable=stop.continuable,
+            reasoning_rejected=stop.reasoning_rejected,
+            note=note,
         )
 
 

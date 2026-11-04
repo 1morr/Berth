@@ -3221,6 +3221,16 @@ const zhHant = {
         label: '模型',
         hint: '服務那邊的模型名稱。清單先是本機價目表認得的模型，按「取得模型」換成這個端點列的；不在清單上的照樣可以填。',
       },
+      reasoning: {
+        label: '推理程度',
+        off: '關',
+        low: '低',
+        medium: '中',
+        high: '高',
+        hint: '模型回答前想多久：越高越慢、花的 token 越多。DeepSeek 只分低與高，中等於高。',
+        noEffect:
+          '這個模型的推理程度沒有效果：Berth 認不得它會推理，不送這個參數（送給不支援的模型會被拒絕）。',
+      },
       models: {
         button: '取得模型',
         fetching: '取得中…',
@@ -4265,6 +4275,8 @@ const zhHant = {
     stopped: {
       label: '停下',
       continue: '繼續',
+      reasoningSettings: '到 AI 設定改推理程度',
+      reasoningAskAdmin: '請管理員到 AI 設定改推理程度。',
     },
     // 較早的對話被壓縮成的那段摘要（M5 票 18）。
     summary: {
@@ -7653,6 +7665,16 @@ const en: Translations<typeof zhHant> = {
         label: 'Model',
         hint: 'The model name on that service. The list starts with the models in the local price table; Fetch models replaces it with what this endpoint lists. Any other name works too.',
       },
+      reasoning: {
+        label: 'Reasoning level',
+        off: 'Off',
+        low: 'Low',
+        medium: 'Medium',
+        high: 'High',
+        hint: 'How long the model thinks before it answers: higher is slower and uses more tokens. DeepSeek only has low and high; medium counts as high.',
+        noEffect:
+          "The reasoning level has no effect on this model: Berth doesn't know it can reason, so it doesn't send the setting (models that don't support it reject it).",
+      },
       models: {
         button: 'Fetch models',
         fetching: 'Fetching…',
@@ -8705,6 +8727,8 @@ const en: Translations<typeof zhHant> = {
     stopped: {
       label: 'Stopped',
       continue: 'Continue',
+      reasoningSettings: 'Change the reasoning level in AI settings',
+      reasoningAskAdmin: 'Ask an admin to change the reasoning level in AI settings.',
     },
     summary: {
       label: 'Summary',

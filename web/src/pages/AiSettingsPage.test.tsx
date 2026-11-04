@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { AiModels, AiSettings, AiTest } from '../api/ai'
 import { HEALTHY, stubApi, type StubRoutes } from '../test/fetch'
@@ -47,8 +47,8 @@ const SUGGESTIONS: StubRoutes = {
 const UNSET: AiSettings = {
   enabled: false,
   provider: 'anthropic',
-  anthropic: { base_url: '', model: '', has_key: false, price: null },
-  openai: { base_url: '', model: '', has_key: false, price: null },
+  anthropic: { base_url: '', model: '', has_key: false, reasoning: 'medium', price: null },
+  openai: { base_url: '', model: '', has_key: false, reasoning: 'medium', price: null },
   has_tavily_key: false,
 }
 
@@ -60,12 +60,14 @@ const IN_USE: AiSettings = {
     base_url: '',
     model: 'claude-sonnet-5-5',
     has_key: true,
+    reasoning: 'medium',
     price: SONNET_PRICE,
   },
   openai: {
     base_url: DEEPSEEK,
     model: 'some-local-model',
     has_key: true,
+    reasoning: 'high',
     price: null,
   },
 }
@@ -395,6 +397,7 @@ describe('設定 → AI', () => {
       model: 'claude-sonnet-5-5',
       api_key: 'sk-ant-new',
       enabled: true,
+      reasoning: 'medium',
       tavily_api_key: null,
     })
     expect(screen.getByLabelText('API key')).toHaveValue('')
@@ -597,5 +600,105 @@ describe('設定 → AI', () => {
     } finally {
       await i18next.changeLanguage('zh-Hant')
     }
+  })
+})
+
+/** 表單上的模型收不收推理程度（M5.5 票 17）。 */
+function appliesKey(provider: string, model: string) {
+  return `GET /api/settings/ai/reasoning?${new URLSearchParams({ provider, model })}`
+}
+
+describe('設定 → AI 的推理程度（M5.5 票 17）', () => {
+  it('沒設過是「中」，只有關、低、中、高四級，提示說 DeepSeek 只分低與高', async () => {
+    render()
+    renderApp('/settings/ai')
+
+    const level = await screen.findByLabelText('推理程度')
+    expect(level).toHaveValue('medium')
+    const options = within(level).getAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual(['關', '低', '中', '高'])
+    expect(level).toHaveAccessibleDescription(/DeepSeek 只分低與高，中等於高/)
+  })
+
+  it('存檔帶著選的程度', async () => {
+    const stub = render({ [SAVE]: { body: UNSET } })
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await user.selectOptions(await screen.findByLabelText('推理程度'), '關')
+    await user.click(screen.getByRole('button', { name: '儲存' }))
+
+    await waitFor(() => expect(calls(stub, SAVE)).toBe(1))
+    expect(sent(stub, SAVE)).toMatchObject({ provider: 'anthropic', reasoning: 'off' })
+  })
+
+  it('兩種接口各記各的程度', async () => {
+    render({}, IN_USE)
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    expect(await screen.findByLabelText('推理程度')).toHaveValue('medium')
+    await user.click(screen.getByRole('button', { name: 'OpenAI 相容' }))
+    expect(screen.getByLabelText('推理程度')).toHaveValue('high')
+  })
+
+  it('停下的說明連過來（#ai-reasoning）：落在程度那一格', async () => {
+    render()
+    const scrolled = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrolled
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original
+    })
+    renderApp('/settings/ai#ai-reasoning')
+
+    const level = await screen.findByLabelText('推理程度')
+    await waitFor(() => expect(level).toHaveFocus())
+    expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('OpenAI 接口上認不得的模型：說這個模型的程度沒有效果', async () => {
+    render(
+      {
+        [appliesKey('anthropic', 'claude-sonnet-5-5')]: { body: { applies: true } },
+        [appliesKey('openai', 'some-local-model')]: { body: { applies: false } },
+      },
+      IN_USE,
+    )
+    const user = userEvent.setup()
+    renderApp('/settings/ai')
+
+    await screen.findByLabelText('推理程度')
+    expect(screen.queryByText(/這個模型的推理程度沒有效果/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'OpenAI 相容' }))
+
+    expect(await screen.findByText(/這個模型的推理程度沒有效果/)).toBeVisible()
+  })
+})
+
+describe('AI settings: reasoning level in English (M5.5 ticket 17)', () => {
+  afterEach(async () => {
+    await i18next.changeLanguage('zh-Hant')
+  })
+
+  it('names the four levels and says DeepSeek only has low and high', async () => {
+    await i18next.changeLanguage('en')
+    render(
+      { [appliesKey('openai', 'some-local-model')]: { body: { applies: false } } },
+      { ...IN_USE, provider: 'openai' },
+    )
+    renderApp('/settings/ai')
+
+    const level = await screen.findByLabelText('Reasoning level')
+    expect(
+      within(level)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Off', 'Low', 'Medium', 'High'])
+    expect(level).toHaveValue('high')
+    expect(level).toHaveAccessibleDescription(
+      /DeepSeek only has low and high; medium counts as high/,
+    )
+    expect(await screen.findByText(/no effect on this model/)).toBeVisible()
   })
 })

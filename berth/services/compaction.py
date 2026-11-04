@@ -47,7 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from berth.adapters.ai import AiEndpoint, chat_settings
 from berth.adapters.ai.usage import WEB_SEARCH
-from berth.domain import AiRunKind, AiStopReason
+from berth.domain import AiReasoning, AiRunKind, AiStopReason
 from berth.models import AiCall, AiRun
 from berth.models.types import utcnow
 from berth.services.agent_books import call_row
@@ -178,7 +178,10 @@ async def compact(
     try:
         result = await agent.run(
             f"<transcript>\n{render(cut.head)}\n</transcript>",
-            model_settings=chat_settings(endpoint.provider, SUMMARY_TOKENS),
+            # 摘要不推理：推理吃同一份 `SUMMARY_TOKENS`，設高時摘要會被截斷（M5.5 票 17）。
+            model_settings=chat_settings(
+                replace(endpoint, reasoning=AiReasoning.OFF), summarizer.model, SUMMARY_TOKENS
+            ),
         )
     # 摘要壞掉（provider 出錯、回了怪東西）不擋這一輪：照原本的歷史跑，下一輪再試。
     except Exception as exc:

@@ -19,9 +19,10 @@ from berth.adapters.ai.fake import FakeAi
 from berth.api.deps import get_client_factory
 from berth.api.gate import CSRF_HEADER
 from berth.config import Config
-from berth.domain import AiProvider
+from berth.domain import AiProvider, AiReasoning
 from berth.logs import json_line
 from berth.main import create_app
+from berth.models import AiSettings
 from tests.integration.arrange import sign_in_owner
 from tests.integration.factories import FakeClientFactory
 
@@ -108,6 +109,7 @@ class TestSaving:
             "base_url": "https://gw.example/anthropic",
             "model": "claude-sonnet-5-5",
             "has_key": True,
+            "reasoning": "medium",
             "price": got["anthropic"]["price"],
         }
 
@@ -167,6 +169,54 @@ class TestSaving:
         app = create_app(replace(config, web_root=tmp_path / "never-built"))
         with TestClient(app) as anonymous:
             assert anonymous.get(BASE).status_code == 401
+
+
+class TestReasoning:
+    """推理程度（M5.5 票 17）：`off` / `low` / `medium` / `high`，預設 `medium`，兩種接口各記
+    各的。"""
+
+    def test_it_is_medium_until_set(self, client: TestClient) -> None:
+        got = client.get(BASE).json()
+        assert (got["anthropic"]["reasoning"], got["openai"]["reasoning"]) == ("medium", "medium")
+
+    def test_each_provider_keeps_its_own_level(self, client: TestClient) -> None:
+        save(client, reasoning="off")
+        got = save(client, provider="openai", model="gpt-5.5", reasoning="high").json()
+        assert (got["anthropic"]["reasoning"], got["openai"]["reasoning"]) == ("off", "high")
+
+    def test_leaving_it_out_keeps_the_saved_level(self, client: TestClient) -> None:
+        save(client, reasoning="low")
+        assert save(client).json()["anthropic"]["reasoning"] == "low"
+
+    def test_there_is_no_default_level(self, client: TestClient) -> None:
+        assert save(client, reasoning="default").status_code == 422
+
+
+def reasoning_applies(client: TestClient, provider: str, model: str) -> bool:
+    got = client.get(f"{BASE}/reasoning", params={"provider": provider, "model": model})
+    assert got.status_code == 200, got.text
+    applies: bool = got.json()["applies"]
+    return applies
+
+
+class TestReasoningApplies:
+    """設定頁說得出這個模型的程度有沒有效果（M5.5 票 17）：OpenAI 接口上 pydantic-ai 認不得的
+    模型、Anthropic 接口上沒有 effort 的 Claude 都不送。不連外、不帶 key。"""
+
+    def test_an_openai_reasoning_model_takes_the_level(self, client: TestClient) -> None:
+        assert reasoning_applies(client, "openai", "gpt-5.5") is True
+
+    def test_an_openai_model_it_does_not_know_ignores_the_level(self, client: TestClient) -> None:
+        assert reasoning_applies(client, "openai", "deepseek-flash") is False
+        assert reasoning_applies(client, "openai", "some-local-model") is False
+
+    def test_the_anthropic_interface_sends_it_unless_claude_has_no_effort(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        assert reasoning_applies(client, "anthropic", "deepseek-flash") is True
+        assert reasoning_applies(client, "anthropic", "claude-sonnet-5-5") is True
+        assert reasoning_applies(client, "anthropic", "claude-haiku-4-5") is False
+        assert factory.ai_.endpoints == []
 
 
 def forget(client: TestClient, which: str) -> httpx2.Response:
@@ -396,6 +446,7 @@ class TestFetchingModels:
             "base_url": "",
             "model": "",
             "has_key": False,
+            "reasoning": "medium",
             "price": None,
         }
 
@@ -480,3 +531,11 @@ class TestNoKeyInLogs:
         for secret in (KEY, OTHER_KEY, TAVILY):
             assert [r.text for r in responses if secret in r.text] == []
             assert [json_line(r) for r in caplog.records if secret in json_line(r)] == []
+
+
+def test_settings_saved_before_reasoning_existed_read_back_as_medium() -> None:
+    """舊資料沒有 `reasoning` 這一格：照 `medium` 讀，不用 migration（M5.5 票 17）。"""
+    old = {"anthropic": {"base_url": "", "api_key": "k", "model": "deepseek-flash"}, "openai": {}}
+    settings = AiSettings.model_validate(old)
+    assert settings.anthropic.reasoning is AiReasoning.MEDIUM
+    assert settings.openai.reasoning is AiReasoning.MEDIUM

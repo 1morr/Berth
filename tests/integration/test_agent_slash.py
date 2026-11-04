@@ -43,7 +43,9 @@ from tests.integration.arrange import sign_in_crew, sign_in_owner
 from tests.integration.factories import FakeClientFactory
 from tests.integration.test_agent_api import (
     BROWSER,
+    KEY,
     Script,
+    Step,
     call,
     chat,
     recorded,
@@ -372,6 +374,37 @@ class TestCompact:
         chat(client, "fourth")
         assert texts(script.seen[-1]) == ["third", "fourth"]
         assert summaries(script.seen[-1]) == ["SUMMARY: said hello three times"]
+
+    def test_the_summary_does_not_reason(self, client: TestClient, script: Script) -> None:
+        """摘要的輸出上限只有 `SUMMARY_TOKENS`：不管設定的程度，壓縮一律關（M5.5 票 17）。"""
+        body = {
+            "enabled": True,
+            "provider": "anthropic",
+            "base_url": "https://api.deepseek.com/anthropic",
+            "model": "deepseek-flash",
+            "api_key": KEY,
+            "reasoning": "high",
+        }
+        assert client.put("/api/settings/ai", json=body, headers=BROWSER).status_code == 200
+        settings: list[object] = []
+
+        def answer(text: str) -> Step:
+            def step(_messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+                settings.append(info.model_settings)
+                return ModelResponse(parts=[TextPart(text)])
+
+            return step
+
+        script.steps = [answer("one"), answer("two"), answer("three"), answer("SUMMARY: hi")]
+        for text in ("first", "second", "third"):
+            assert chat(client, text).status_code == 200
+        ok(client, "/compact")
+
+        *turns, summary = settings
+        assert all(isinstance(s, dict) and s.get("anthropic_effort") == "high" for s in turns)
+        assert isinstance(summary, dict)
+        assert summary.get("anthropic_thinking") == {"type": "disabled"}
+        assert "anthropic_effort" not in summary
 
     def test_one_turn_has_nothing_to_compact(self, client: TestClient, script: Script) -> None:
         script.steps = [say("one")]

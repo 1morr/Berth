@@ -6,16 +6,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 
 import httpx2
 import pytest
+from pydantic_ai import ModelRequest
+from pydantic_ai.direct import model_request
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.models import Model
 
-from berth.adapters.ai import AiEndpoint, build_model, normalize_base_url, probe
-from berth.domain import AiProbeFailure, AiProvider
+from berth.adapters.ai import (
+    AiEndpoint,
+    build_model,
+    chat_settings,
+    normalize_base_url,
+    probe,
+    reasoning_applies,
+    rejects_reasoning,
+)
+from berth.domain import AiProbeFailure, AiProvider, AiReasoning
 from berth.logs import json_line
 
 KEY = "sk-test-do-not-leak"
@@ -188,3 +201,146 @@ class TestNoKeyInLogs:
         await probe(wired(openai(), answers(200, OPENAI_OK)))
         assert caplog.records, "DEBUG 什麼都沒抓到：這條測試量不到洩漏"
         assert [json_line(r) for r in caplog.records if KEY in json_line(r)] == []
+
+
+def sent(endpoint: AiEndpoint, ok: object) -> dict[str, object]:
+    """照側面板的設定打一次，回錄下的請求本體（M5.5 票 17：以錄下的請求為準）。"""
+    seen = answers(200, ok)
+    model = wired(endpoint, seen)
+
+    async def call() -> None:
+        await model_request(
+            model,
+            [ModelRequest.user_text_prompt("hi")],
+            model_settings=chat_settings(endpoint, model, 4096),
+        )
+
+    asyncio.run(call())
+    body: dict[str, object] = json.loads(seen.requests[0].content)
+    return body
+
+
+def reasoning_of(body: dict[str, object]) -> dict[str, object]:
+    return {
+        key: body[key] for key in ("thinking", "output_config", "reasoning_effort") if key in body
+    }
+
+
+class TestReasoning:
+    """推理程度變成請求參數（M5.5 票 17、brief §20.26）。統一的 `thinking` 不夠：DeepSeek 的
+    Anthropic 接口忽略 `budget_tokens`，要明寫 effort 與關。"""
+
+    @pytest.mark.parametrize("level", [AiReasoning.LOW, AiReasoning.MEDIUM, AiReasoning.HIGH])
+    def test_deepseek_on_anthropic_gets_the_effort_spelled_out(self, level: AiReasoning) -> None:
+        endpoint = replace(
+            anthropic("https://api.deepseek.com/anthropic", "deepseek-flash"), reasoning=level
+        )
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {
+            "output_config": {"effort": level.value}
+        }
+
+    def test_deepseek_on_anthropic_is_turned_off_explicitly(self) -> None:
+        """不送 `thinking` 的話 DeepSeek 照樣思考（brief §20.26 實測）。"""
+        endpoint = replace(
+            anthropic("https://api.deepseek.com/anthropic", "deepseek-flash"),
+            reasoning=AiReasoning.OFF,
+        )
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {"thinking": {"type": "disabled"}}
+
+    def test_claude_uses_the_unified_setting(self) -> None:
+        endpoint = replace(anthropic(model="claude-sonnet-5-5"), reasoning=AiReasoning.HIGH)
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": "high"},
+        }
+
+    def test_claude_off_thinks_only_between_tools(self) -> None:
+        """Sonnet 5.5 關不掉思考，pydantic-ai 換成它最少的一種。"""
+        endpoint = replace(anthropic(model="claude-sonnet-5-5"), reasoning=AiReasoning.OFF)
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {"thinking": {"type": "between_tools"}}
+
+    @pytest.mark.parametrize("level", list(AiReasoning))
+    @pytest.mark.parametrize("name", ["claude-haiku-4-5", "claude-opus-4-1"])
+    def test_a_claude_without_effort_gets_nothing(self, name: str, level: AiReasoning) -> None:
+        """官方不收 `output_config.effort`，統一設定的 `budget_tokens` 又大過每次的 `max_tokens`：
+        不送，與升級前一樣（code-review 追加）。"""
+        endpoint = replace(anthropic(model=name), reasoning=level)
+        assert reasoning_of(sent(endpoint, ANTHROPIC_OK)) == {}
+        assert reasoning_applies(AiProvider.ANTHROPIC, name) is False
+
+    def test_sonnet_4_5_has_no_effort_either(self) -> None:
+        """不錄請求：SDK 對這個模型發棄用警告。"""
+        assert reasoning_applies(AiProvider.ANTHROPIC, "claude-sonnet-4-5") is False
+
+    def test_a_compatible_endpoint_always_gets_it(self) -> None:
+        assert reasoning_applies(AiProvider.ANTHROPIC, "deepseek-flash") is True
+        assert reasoning_applies(AiProvider.ANTHROPIC, "glm-4.6") is True
+        assert reasoning_applies(AiProvider.ANTHROPIC, "claude-sonnet-5-5") is True
+
+    @pytest.mark.parametrize("level", list(AiReasoning))
+    @pytest.mark.parametrize("name", ["deepseek-flash", "gpt-4o-mini", "some-local-model"])
+    def test_an_openai_model_it_does_not_know_gets_nothing(
+        self, name: str, level: AiReasoning
+    ) -> None:
+        endpoint = replace(openai("https://api.deepseek.com", name), reasoning=level)
+        assert reasoning_of(sent(endpoint, OPENAI_OK)) == {}
+        assert reasoning_applies(AiProvider.OPENAI, name) is False
+
+    @pytest.mark.parametrize(
+        ("level", "effort"),
+        [
+            (AiReasoning.OFF, "none"),
+            (AiReasoning.LOW, "low"),
+            (AiReasoning.MEDIUM, "medium"),
+            (AiReasoning.HIGH, "high"),
+        ],
+    )
+    def test_an_openai_reasoning_model_gets_its_effort(
+        self, level: AiReasoning, effort: str
+    ) -> None:
+        endpoint = replace(openai(model="gpt-5.5"), reasoning=level)
+        assert reasoning_of(sent(endpoint, OPENAI_OK)) == {"reasoning_effort": effort}
+        assert reasoning_applies(AiProvider.OPENAI, "gpt-5.5") is True
+
+    def test_the_level_is_medium_unless_set(self) -> None:
+        assert anthropic().reasoning is AiReasoning.MEDIUM
+
+
+class TestRejectsReasoning:
+    """服務拒絕推理參數的判斷（M5.5 票 17）：只看 400 的 body。"""
+
+    def test_a_400_about_the_effort_is_a_rejection(self) -> None:
+        body = {"error": {"message": "output_config.effort: Extra inputs are not permitted"}}
+        assert rejects_reasoning(str(ModelHTTPError(400, "claude-3-5-haiku-latest", body)))
+
+    def test_the_model_name_alone_does_not_count(self) -> None:
+        body = {"error": {"message": "prompt is too long"}}
+        assert not rejects_reasoning(str(ModelHTTPError(400, "deepseek-reasoner", body)))
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "messages.1.content.0.thinking: Invalid `signature` in `thinking` block",
+            "The `reasoning_content` in the thinking mode must be passed back to the API.",
+        ],
+    )
+    def test_a_400_about_replayed_thinking_is_not(self, message: str) -> None:
+        """重播推理內容的 400 改程度沒有用。"""
+        body = {"error": {"message": message}}
+        assert not rejects_reasoning(str(ModelHTTPError(400, "deepseek-flash", body)))
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "thinking.type: Input tag 'disabled' does not match any of the expected tags",
+            "Unsupported parameter: 'reasoning_effort' is not supported with this model.",
+            "thinking.budget_tokens: must be less than max_tokens",
+        ],
+    )
+    def test_a_400_about_the_parameters_is(self, message: str) -> None:
+        body = {"error": {"message": message}}
+        assert rejects_reasoning(str(ModelHTTPError(400, "some-model", body)))
+
+    def test_only_a_400_counts(self) -> None:
+        body = {"error": {"message": "reasoning backend overloaded"}}
+        assert not rejects_reasoning(str(ModelHTTPError(529, "deepseek-flash", body)))
