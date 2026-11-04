@@ -7,7 +7,7 @@ import { shot } from './shot.ts'
 // 替身（`scripts/fake_setup_server.py` 的 `why_not_script`）：先搜尋作品、再叫「為什麼沒入庫」，用工具結果的
 // 結論分類回答；說「下載 SPY×FAMILY」時出一張三列的送單卡（M5 票 13）；「加這個 RSS：<網址>」出卡、
 // 「上網找網址直接加」被擋（M5 票 14）；「慢慢查」翻三頁、每步等一下（M5 票 25）；兩種訂閱卡要人選字幕組
-// （M5 票 26）。一個請求都不出網、不需要金鑰
+// （M5 票 26）；「想一想」先回一段推理（M5.5 票 16）。一個請求都不出網、不需要金鑰
 // （M5 票 12）。桌機與手機各跑一次（playwright.config.ts）。
 
 test('側面板問「為什麼沒入庫」得到結論，重新載入之後對話還在', async ({ page }) => {
@@ -574,6 +574,37 @@ test('網路搜尋：展開看到標題、網址與日期，不是加密內容�
 
   expect(responses.length).toBeGreaterThan(0)
   for (const body of responses) expect(body).not.toContain('encrypted_content')
+})
+
+// 推理（M5.5 票 16）：替身說「想一想」時先回三行推理再答一句。面板收在預設收起的一格，串流完與重新載入都一樣。
+test('推理：收在預設收起的一格，展開看得到全文，重新載入之後還在', async ({ page }) => {
+  await signIn(page, '/jobs')
+  await page.getByRole('button', { name: '助理' }).click()
+  const panel = page.locator('#agent-panel')
+  const input = panel.getByRole('textbox', { name: '問助理' })
+  await input.fill('想一想再回答')
+  await input.press('Enter')
+
+  const log = panel.getByRole('log', { name: '助理' })
+  await expect(log).toContainText('想好了：推理收在上面那一格')
+
+  for (const when of ['streamed', 'reloaded']) {
+    const thought = log.locator('details[data-reasoning]')
+    await expect(thought).toHaveCount(1)
+    await expect(thought).not.toHaveAttribute('open')
+    await expect(thought.getByText('助理回答前的思考')).toBeVisible()
+    const lastLine = thought.getByText(/最後一行：直接回答/)
+    await expect(lastLine).toBeHidden()
+    await shot(page, `reasoning-${when}-folded`)
+
+    await thought.locator('summary').click()
+    await expect(thought).toHaveAttribute('open')
+    await expect(thought.getByText(/使用者想知道下載為什麼還沒完成/)).toBeVisible()
+    await expect(lastLine).toBeVisible()
+    await expectNoHorizontalScroll(page)
+    await shot(page, `reasoning-${when}-open`)
+    if (when === 'streamed') await page.reload()
+  }
 })
 
 // 放在最後：斷路器一開就暫停 15 分鐘，之後的流程都問不了。

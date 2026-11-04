@@ -4263,6 +4263,12 @@ const zhHant = {
       label: '摘要',
       title: '較早的對話已壓縮成這段摘要',
     },
+    // 模型的推理文字（M5.5 票 16）：預設收起，串流中也不展開。
+    reasoning: {
+      label: '推理',
+      title: '助理回答前的思考',
+      thinking: '思考中',
+    },
     // 斜線指令（M5 票 18）：輸入 `/` 時的提示與各指令的結果。
     slash: {
       hintLabel: '指令',
@@ -8686,6 +8692,11 @@ const en: Translations<typeof zhHant> = {
     summary: {
       label: 'Summary',
       title: 'The earlier conversation was compacted into this summary',
+    },
+    reasoning: {
+      label: 'Reasoning',
+      title: 'What the assistant thought before answering',
+      thinking: 'Thinking',
     },
     slash: {
       hintLabel: 'Commands',

@@ -5,9 +5,10 @@
 
 **腳本**（M5 票 11）：`script` 給了的話，每一次模型呼叫由它回答——它看得到這一次送出去的訊息與
 可用的工具（`AgentInfo.function_tools`），回一則 `ModelResponse`（文字、工具呼叫），或丟例外演出錯。
-側面板是串流的，所以替身同時給串流版：把同一則回答拆成文字、工具呼叫與伺服器端工具（票 17）的
-片段送出去。串流的回應時間是開始串流那一刻，同真的服務（pydantic-ai 的串流回應一律用收到時的
-本機時鐘），腳本給的 `timestamp` 留不下來；要控制時段（DeepSeek 分尖峰離峰）就釘時鐘（票 21c）。
+側面板是串流的，所以替身同時給串流版：把同一則回答拆成推理（M5.5 票 16）、文字、工具呼叫與
+伺服器端工具（票 17）的片段送出去。串流的回應時間是開始串流那一刻，同真的服務（pydantic-ai 的
+串流回應一律用收到時的本機時鐘），腳本給的 `timestamp` 留不下來；要控制時段（DeepSeek 分尖峰離峰）
+就釘時鐘（票 21c）。
 """
 
 from __future__ import annotations
@@ -22,12 +23,15 @@ from pydantic_ai.messages import (
     NativeToolCallPart,
     NativeToolReturnPart,
     TextPart,
+    ThinkingPart,
     ToolCallPart,
 )
 from pydantic_ai.models import Model
 from pydantic_ai.models.function import (
     AgentInfo,
     BuiltinToolCallsReturns,
+    DeltaThinkingCalls,
+    DeltaThinkingPart,
     DeltaToolCall,
     DeltaToolCalls,
     FunctionModel,
@@ -93,12 +97,14 @@ class FakeAi:
 
         async def stream(
             messages: list[ModelMessage], info: AgentInfo
-        ) -> AsyncIterator[str | DeltaToolCalls | BuiltinToolCallsReturns]:
+        ) -> AsyncIterator[str | DeltaToolCalls | DeltaThinkingCalls | BuiltinToolCallsReturns]:
             if self.pause is not None:
                 await self.pause(messages)
             for index, part in enumerate(answer(messages, info).parts):
                 if isinstance(part, TextPart):
                     yield part.content
+                elif isinstance(part, ThinkingPart):
+                    yield {index: DeltaThinkingPart(content=part.content, signature=part.signature)}
                 elif isinstance(part, ToolCallPart):
                     yield {
                         index: DeltaToolCall(

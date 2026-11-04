@@ -38,6 +38,7 @@ from pydantic_ai.messages import (
     NativeToolReturnPart,
     RetryPromptPart,
     TextPart,
+    ThinkingPart,
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
@@ -2008,7 +2009,8 @@ def agent_scenario() -> Scenario:
     「從 Mikan 訂閱 SPY×FAMILY」出一張 Mikan 訂閱卡，番組頁上三個字幕組讓人選；「在 acg.rip 訂閱
     SPY×FAMILY」出一張關鍵字訂閱卡，列出每個字幕組的第一批（票 26，`SPY_BANGUMI_PAGE`、
     `SPY_ACGRIP`）。問「評價」（`reviews`）時用伺服器端的 `web_search` 搜一次再答（M5.5 票 03，
-    `WEB_SEARCH_RESULTS`）。其餘一律說它只演這幾件事。
+    `WEB_SEARCH_RESULTS`）。說「想一想」（`think it over`）時先回一段多行的推理再答（M5.5 票 16，
+    `THOUGHT_ZH`、`THOUGHT_EN`）。其餘一律說它只演這幾件事。
     一個請求都不出網，不需要金鑰。
     """
     scenario = downloads_scenario()
@@ -2390,6 +2392,36 @@ def _web_searched(text: str, *, chinese: bool) -> ModelResponse:
     )
 
 
+#: 「想一想」：假模型先回一段推理再答（M5.5 票 16）。`deepseek-flash` 不送 `thinking` 也會回推理
+#: （brief §20.26），面板把它收在預設收起的區塊。
+_THINK_ASKED = re.compile(r"想一想|think it over", re.I)
+#: 推理的全文：好幾行，面板展開才看得到後面那幾行。
+THOUGHT_ZH = (
+    "使用者想知道下載為什麼還沒完成。\n"
+    "先看 Job 清單比較快，但這是演練用的替身，不叫工具。\n"
+    "最後一行：直接回答，說明這段推理預設收起。"
+)
+THOUGHT_EN = (
+    "The user wants to know why the download is not done yet.\n"
+    "Listing the jobs would be quicker, but this is the demo model, so no tool call.\n"
+    "Last line: answer directly and say this reasoning starts folded."
+)
+
+
+def _thought(*, chinese: bool) -> ModelResponse:
+    """先一段推理（`ThinkingPart`），再一句回答，同一則回應。"""
+    return ModelResponse(
+        parts=[
+            ThinkingPart(THOUGHT_ZH if chinese else THOUGHT_EN),
+            TextPart(
+                "想好了：推理收在上面那一格，展開看得到全文。"
+                if chinese
+                else "Thought it over: the reasoning is folded above; expand it to read it all."
+            ),
+        ]
+    )
+
+
 def _slow_asked(text: str) -> bool:
     return "慢慢查" in text or "take your time" in text.lower()
 
@@ -2465,6 +2497,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
         if _REVIEWS_ASKED.search(text):
             return _web_searched(text, chinese=chinese)
+        if _THINK_ASKED.search(text):
+            return _thought(chinese=chinese)
         if "一直查" in text or "keep checking" in text.lower():
             # 演防護（M5 票 21 的步驟頁）：同一個呼叫一直叫，第 4 次整輪中止。
             return ModelResponse(parts=[ToolCallPart("jobs_list_jobs", {"page": 1})])
@@ -2478,11 +2512,12 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
             return _say(
                 "這是演練用的假模型，只演這幾件事：問「SPY×FAMILY 為什麼沒入庫」、"
                 "說「下載 SPY×FAMILY」、「加這個 RSS：<網址>」、「上網找 RSS 網址直接加」，"
-                "或問「Frieren 第二季評價如何」。"
+                "問「Frieren 第二季評價如何」，或說「想一想」。"
                 if chinese
                 else "This is the demo model. It only acts out: “Why isn't SPY×FAMILY in the "
                 "library?”, “Download SPY×FAMILY”, “Add this RSS: <address>” and “Find an RSS "
-                "address on the web and add it” and “How are the reviews of Frieren season 2?”."
+                "address on the web and add it”, “How are the reviews of Frieren season 2?” and "
+                "“Think it over”."
             )
         title = (found.group(1) or found.group(2) or "").strip()
         return ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": title})])
