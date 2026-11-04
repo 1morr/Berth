@@ -19,7 +19,7 @@ from typing import Any
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -658,18 +658,91 @@ def stop_parts(client: TestClient, conversation: str = "c1") -> list[dict[str, A
 
 
 def stop_of(client: TestClient, conversation: str = "c1") -> Any:
-    """最後一輪停在哪：最後一則訊息是停下的說明的話它的 `data`（不含說明的字），否則 `None`。"""
+    """最後一輪停在哪：最後一則訊息是停下的說明的話它的哪一輪、為什麼、能不能續，否則 `None`。"""
     messages = client.get(f"/api/agent/conversations/{conversation}").json()["messages"]
     stops = [p["data"] for p in messages[-1]["parts"] if p["type"] == "data-stop"]
     if not stops:
         return None
-    return {key: value for key, value in stops[-1].items() if key != "note"}
+    return {key: stops[-1][key] for key in ("turn_id", "reason", "continuable")}
 
 
 def streamed_stop(response: httpx2.Response) -> dict[str, Any]:
     [data] = [c["data"] for c in chunks(response) if c["type"] == "data-stop"]
     found: dict[str, Any] = data
     return found
+
+
+def refuses(status: int, message: str) -> Step:
+    def step(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        body = {"error": {"type": "invalid_request_error", "message": message}}
+        raise ModelHTTPError(status, "claude-3-5-haiku-latest", body)
+
+    return step
+
+
+class TestARefusedReasoningLevel:
+    """服務以 400 拒絕推理參數：停下的說明指到設定頁改程度（M5.5 票 17）。"""
+
+    REFUSED = "output_config.effort: This model does not support the effort parameter."
+
+    def test_the_stop_points_to_the_settings_page(self, client: TestClient, script: Script) -> None:
+        script.steps = [refuses(400, self.REFUSED)]
+
+        streamed = streamed_stop(chat(client, "Hello?", language="en"))
+
+        assert streamed["reason"] == "error"
+        assert streamed["reasoning_rejected"] is True
+        assert "reasoning level" in streamed["note"]
+        reloaded = stop_parts(client)[-1]
+        assert reloaded["reasoning_rejected"] is True
+        assert reloaded["note"] == streamed["note"]
+
+    def test_it_says_so_in_chinese_too(self, client: TestClient, script: Script) -> None:
+        script.steps = [refuses(400, "thinking.type: unsupported value")]
+        assert "推理程度" in streamed_stop(chat(client, "你好"))["note"]
+
+    def test_another_bad_request_does_not(self, client: TestClient, script: Script) -> None:
+        script.steps = [refuses(400, "prompt is too long: 210000 tokens > 200000 maximum")]
+
+        streamed = streamed_stop(chat(client, "Hello?", language="en"))
+
+        assert streamed["reasoning_rejected"] is False
+        assert "reasoning level" not in streamed["note"]
+        assert stop_parts(client)[-1]["reasoning_rejected"] is False
+
+    def test_a_server_error_mentioning_effort_does_not(
+        self, client: TestClient, script: Script
+    ) -> None:
+        script.steps = [refuses(500, "effort service is down")]
+        assert streamed_stop(chat(client, "Hello?"))["reasoning_rejected"] is False
+
+
+class TestTheSavedLevelIsSent:
+    def test_each_model_call_carries_the_saved_level(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """設定頁存的程度真的到了模型呼叫（怎麼變成請求本體在 `test_ai_adapter.py`）。"""
+        body = {
+            "enabled": True,
+            "provider": "anthropic",
+            "base_url": "https://api.deepseek.com/anthropic",
+            "model": "deepseek-flash",
+            "api_key": KEY,
+            "reasoning": "off",
+        }
+        assert client.put("/api/settings/ai", json=body, headers=BROWSER).status_code == 200
+        settings: list[object] = []
+
+        def answer(_messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+            settings.append(info.model_settings)
+            return ModelResponse(parts=[TextPart("Hi.")])
+
+        script.steps = [answer]
+        chat(client, "Hello?")
+
+        [sent] = settings
+        assert isinstance(sent, dict)
+        assert sent.get("anthropic_thinking") == {"type": "disabled"}
 
 
 class TestContinuingAfterAStop:
@@ -687,6 +760,7 @@ class TestContinuingAfterAStop:
             "turn_id": turn.run.id,
             "reason": "request_limit",
             "continuable": True,
+            "reasoning_rejected": False,
         }
         return turn.run.id
 

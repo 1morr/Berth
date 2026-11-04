@@ -21,7 +21,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from berth.adapters.ai import chat_settings
+from berth.adapters.ai import AiEndpoint, build_model, chat_settings
 from berth.domain import AiProvider, Role
 from berth.services.agent import (
     AgentRefusedError,
@@ -148,11 +148,14 @@ class TestOneTurnAtATime:
 
 
 def test_every_call_caps_its_output_and_anthropic_marks_what_to_cache() -> None:
-    anthropic = chat_settings(AiProvider.ANTHROPIC, 4096)
+    claude = AiEndpoint(AiProvider.ANTHROPIC, "", "key", "claude-sonnet-5-5")
+    anthropic = chat_settings(claude, build_model(claude), 4096)
     assert anthropic.get("max_tokens") == 4096
     assert anthropic.get("anthropic_cache_instructions") == "5m"
     assert anthropic.get("anthropic_cache_messages") == "5m"
-    assert chat_settings(AiProvider.OPENAI, 4096) == {"max_tokens": 4096}
+    # 認不得會推理的模型：沒有推理參數（請求本體在 `test_ai_adapter.py::TestReasoning`）。
+    local = AiEndpoint(AiProvider.OPENAI, "http://127.0.0.1:1", "key", "some-local-model")
+    assert chat_settings(local, build_model(local), 4096) == {"max_tokens": 4096}
 
 
 class TestSearchTorrentsForTheModel:

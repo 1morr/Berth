@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import {
   aiQueryOptions,
+  aiReasoningQueryOptions,
   aiRefusalOf,
   aiSuggestionsQueryOptions,
   fetchAiModels,
@@ -15,6 +16,7 @@ import {
   type AiModels,
   type AiProbeFailure,
   type AiProvider,
+  type AiReasoning,
   type AiRefusal,
   type AiSecret,
   type AiSettings,
@@ -33,6 +35,7 @@ import {
 } from '../components/controls'
 import { RequestFailed } from '../components/RequestFailed'
 import { useDebounced } from '../components/useDebounced'
+import { useHashTarget } from '../components/useHashTarget'
 import { TechnicalDetails } from '../components/TechnicalDetails'
 import { SettingsFrame, SettingsSection } from '../settings/SettingsFrame'
 import { priceSourceText } from '../usage/prices'
@@ -107,11 +110,30 @@ const REFUSAL_TEXT = {
   model_missing: 'settings.aiPage.refusal.model_missing',
 } as const satisfies Record<AiRefusal, Key>
 
+/** 推理程度由少到多（M5.5 票 17）。沒有「預設」這一級（使用者定），沒設過是 `medium`。少一種是編譯錯誤。 */
+const REASONING_TEXT = {
+  off: 'settings.aiPage.reasoning.off',
+  low: 'settings.aiPage.reasoning.low',
+  medium: 'settings.aiPage.reasoning.medium',
+  high: 'settings.aiPage.reasoning.high',
+} as const satisfies Record<AiReasoning, Key>
+
+const REASONING_LEVELS = Object.keys(REASONING_TEXT) as AiReasoning[]
+
+function isReasoning(value: string): value is AiReasoning {
+  return value in REASONING_TEXT
+}
+
 /** 一種接口在表單上的樣子。key 欄只放這次貼上的，空著是「不動」。 */
-type Draft = { base_url: string; model: string; api_key: string }
+type Draft = { base_url: string; model: string; api_key: string; reasoning: AiReasoning }
 
 function draftOf(endpoint: AiEndpoint): Draft {
-  return { base_url: endpoint.base_url, model: endpoint.model, api_key: '' }
+  return {
+    base_url: endpoint.base_url,
+    model: endpoint.model,
+    api_key: '',
+    reasoning: endpoint.reasoning,
+  }
 }
 
 /**
@@ -154,6 +176,8 @@ function AiForm({ saved }: { saved: AiSettings }) {
   const draft = drafts[provider]
   const endpoint = saved[provider]
   const modelsId = useId()
+  // 停下的說明連到 `#ai-reasoning`（M5.5 票 17）：表單是讀到設定才畫的，原生的錨點捲動已經錯過。
+  useHashTarget(true)
 
   const save = useMutation({
     mutationFn: saveAi,
@@ -223,7 +247,12 @@ function AiForm({ saved }: { saved: AiSettings }) {
       onSubmit={(event) => {
         event.preventDefault()
         setRefused(null)
-        save.mutate({ ...form, enabled, tavily_api_key: tavily.trim() || null })
+        save.mutate({
+          ...form,
+          enabled,
+          reasoning: draft.reasoning,
+          tavily_api_key: tavily.trim() || null,
+        })
       }}
     >
       <SettingsSection
@@ -342,6 +371,13 @@ function AiForm({ saved }: { saved: AiSettings }) {
             </div>
             <Price endpoint={endpoint} model={draft.model} baseUrl={draft.base_url} />
           </div>
+
+          <ReasoningLevel
+            provider={provider}
+            model={draft.model}
+            value={draft.reasoning}
+            onChange={(reasoning) => edit({ reasoning })}
+          />
 
           <div className="grid gap-2">
             <p className="text-xs text-ink-dim">{t('settings.aiPage.test.hint')}</p>
@@ -466,6 +502,55 @@ function ProviderChoice({
       <div id={hintId} className="grid gap-1 text-xs text-ink-dim">
         <p>{t(PROVIDER_TEXT[provider].hint)}</p>
         <p>{t('settings.aiPage.provider.inUse', { name: t(PROVIDER_TEXT[inUse].name) })}</p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 推理程度（M5.5 票 17），模型欄下面一格。DeepSeek 只分低與高（brief §20.26），提示照實說；OpenAI
+ * 接口上認不得的模型、沒有 effort 的 Claude，Berth 不送這個參數，說這個模型的程度沒有效果。下拉選單的
+ * `id` 是停下的說明連過來的錨點（`#ai-reasoning`）：落在它身上，鍵盤使用者不必再按一次 Tab。
+ */
+function ReasoningLevel({
+  provider,
+  model,
+  value,
+  onChange,
+}: {
+  provider: AiProvider
+  model: string
+  value: AiReasoning
+  onChange: (next: AiReasoning) => void
+}) {
+  const { t } = useTranslation()
+  const id = 'ai-reasoning'
+  const typed = useDebounced(model.trim(), SUGGEST_DEBOUNCE_MS)
+  const applies = useQuery(aiReasoningQueryOptions(provider, typed))
+
+  return (
+    <div className="grid gap-2">
+      <label htmlFor={id} className="label text-ink-dim">
+        {t('settings.aiPage.reasoning.label')}
+      </label>
+      <select
+        id={id}
+        aria-describedby={`${id}-hint`}
+        value={value}
+        onChange={(event) => {
+          if (isReasoning(event.target.value)) onChange(event.target.value)
+        }}
+        className="value w-full border-2 border-rule-strong bg-hull px-3 py-2.5 text-sm text-ink focus:border-ink sm:max-w-xs"
+      >
+        {REASONING_LEVELS.map((level) => (
+          <option key={level} value={level}>
+            {t(REASONING_TEXT[level])}
+          </option>
+        ))}
+      </select>
+      <div id={`${id}-hint`} aria-live="polite" className="grid gap-1 text-xs text-ink-dim">
+        <p>{t('settings.aiPage.reasoning.hint')}</p>
+        {applies.data?.applies === false && <p>{t('settings.aiPage.reasoning.noEffect')}</p>}
       </div>
     </div>
   )

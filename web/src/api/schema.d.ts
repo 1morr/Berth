@@ -230,6 +230,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ai/reasoning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ai Reasoning
+         * @description 表單上的模型收不收推理程度。不帶 key、不連外。
+         */
+        get: operations["get_ai_reasoning_api_settings_ai_reasoning_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -2899,6 +2919,7 @@ export interface components {
             model: string;
             /** Has Key */
             has_key: boolean;
+            reasoning: components["schemas"]["AiReasoning"];
             price: components["schemas"]["AiPriceOut"] | null;
         };
         /** AiIn */
@@ -2912,6 +2933,7 @@ export interface components {
             api_key?: string | null;
             /** Enabled */
             enabled: boolean;
+            reasoning?: components["schemas"]["AiReasoning"] | null;
             /** Tavily Api Key */
             tavily_api_key?: string | null;
         };
@@ -2981,6 +3003,18 @@ export interface components {
          * @enum {string}
          */
         AiProvider: "anthropic" | "openai";
+        /**
+         * AiReasoning
+         * @description 推理程度（M5.5 票 17、brief §20.26）。**沒有「預設」這一級**（使用者 2026-11-01 定），
+         *     沒設過的是 `medium`。怎麼變成請求參數在 `adapters.ai.chat_settings`。
+         * @enum {string}
+         */
+        AiReasoning: "off" | "low" | "medium" | "high";
+        /** AiReasoningOut */
+        AiReasoningOut: {
+            /** Applies */
+            applies: boolean;
+        };
         /**
          * AiRefusal
          * @description AI 設定的命令不做的理由（`services.ai`）。
@@ -8190,6 +8224,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRefusalOut"];
+                };
+            };
+        };
+    };
+    get_ai_reasoning_api_settings_ai_reasoning_get: {
+        parameters: {
+            query: {
+                provider: components["schemas"]["AiProvider"];
+                model?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReasoningOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

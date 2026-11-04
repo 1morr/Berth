@@ -37,6 +37,7 @@ import {
   type SlashResult,
   type TurnStop,
 } from '../api/agent'
+import { meQueryOptions } from '../api/auth'
 import { ApiError, signedOut } from '../api/client'
 import { proposalsKey, proposalsQueryOptions, type Proposal } from '../api/proposals'
 import { GhostButton, Notice, PrimaryButton, TEXT_LINK } from '../components/controls'
@@ -658,6 +659,7 @@ function Message({
               key={key}
               stop={stop}
               onContinue={offered ? () => onContinue(stop.turn_id) : null}
+              onLeave={leave}
             />
           )
         }
@@ -682,13 +684,22 @@ function Message({
  * 防護停下的說明（M5 票 22，`.scratch/m5/side-panel-shape.md`〈面板結構〉）：Berth 說的，不是助理的話。
  * `assigned` 不是 `blocked`：這一輪已經結束，要人決定換個問法、再問，或按一次「繼續」。
  */
-function StopNote({ stop, onContinue }: { stop: TurnStop; onContinue: (() => void) | null }) {
+function StopNote({
+  stop,
+  onContinue,
+  onLeave,
+}: {
+  stop: TurnStop
+  onContinue: (() => void) | null
+  onLeave: () => void
+}) {
   const { t } = useTranslation()
   return (
     <div data-stop={stop.reason} className="grid min-w-0 gap-2">
       <Notice signal="assigned" label={t('agent.stopped.label')}>
         {stop.note}
       </Notice>
+      {stop.reasoning_rejected ? <ReasoningFix onLeave={onLeave} /> : null}
       {onContinue !== null ? (
         <div className="grid w-32">
           <GhostButton type="button" onClick={onContinue}>
@@ -697,6 +708,27 @@ function StopNote({ stop, onContinue }: { stop: TurnStop; onContinue: (() => voi
         </div>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * 服務拒絕了推理參數（M5.5 票 17）：管理員連到 AI 設定的推理程度那一格，其他人進不去設定頁，
+ * 請管理員改。存著的說明不分是誰在看，所以這一句由面板說。
+ */
+function ReasoningFix({ onLeave }: { onLeave: () => void }) {
+  const { t } = useTranslation()
+  const me = useQuery(meQueryOptions)
+  if (me.data?.role !== 'admin')
+    return <p className="text-sm text-ink-dim">{t('agent.stopped.reasoningAskAdmin')}</p>
+  return (
+    <Link
+      to="/settings/ai"
+      hash="ai-reasoning"
+      onClick={onLeave}
+      className={`${TEXT_LINK} justify-self-start`}
+    >
+      {t('agent.stopped.reasoningSettings')}
+    </Link>
   )
 }
 

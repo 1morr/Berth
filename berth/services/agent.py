@@ -80,7 +80,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from berth.adapters.ai import AiEndpoint, chat_settings, has_native_web_search, native_web_search
+from berth.adapters.ai import (
+    AiEndpoint,
+    chat_settings,
+    has_native_web_search,
+    native_web_search,
+    rejects_reasoning,
+)
 from berth.domain import (
     WAITING_PROPOSALS,
     Actor,
@@ -252,18 +258,28 @@ class TurnStop:
     turn_id: str
     reason: AiStopReason
     continuable: bool
+    #: 服務拒絕了推理參數（M5.5 票 17）：說明多一句、面板連到設定頁改程度。
+    reasoning_rejected: bool = False
 
     @classmethod
-    def of(cls, turn_id: str, reason: AiStopReason, continues: str | None) -> TurnStop:
-        """被繼續過的那一輪不會是最後一輪，所以只看它自己是不是續的。"""
-        return cls(turn_id, reason, reason in CONTINUABLE and continues is None)
+    def of(
+        cls, turn_id: str, reason: AiStopReason, continues: str | None, error: str = ""
+    ) -> TurnStop:
+        """被繼續過的那一輪不會是最後一輪，所以只看它自己是不是續的。`error` 是出錯的原文
+        （`ai_runs.error`）：串流當下與重新載入時從同一份判斷。"""
+        return cls(
+            turn_id,
+            reason,
+            reason in CONTINUABLE and continues is None,
+            reason in _ERRORS and rejects_reasoning(error),
+        )
 
 
 def turn_stop(run: AiRun) -> TurnStop | None:
     """`ai_runs` 的一列停在哪；答完的與還在跑的是 `None`。"""
     if run.stop_reason is None or run.stop_reason is AiStopReason.COMPLETED:
         return None
-    return TurnStop.of(run.id, run.stop_reason, run.continues)
+    return TurnStop.of(run.id, run.stop_reason, run.continues, run.error or "")
 
 
 class AgentRefusedError(Exception):
@@ -1003,7 +1019,7 @@ class Turn:
 
     @property
     def model_settings(self) -> ModelSettings:
-        return chat_settings(self.provider, self.runtime.limits.max_tokens)
+        return chat_settings(self.endpoint, self.model, self.runtime.limits.max_tokens)
 
     def summarizer(self) -> Summarizer:
         return Summarizer(
@@ -1395,10 +1411,11 @@ class Turn:
         """這一輪沒有答完（串流送出錯誤的那一刻）。存到停下之前、補一則說明；回說明的字與停在哪。"""
         reason = self.stop or AiStopReason.ERROR
         await self._settle_call(error)
-        note = self._note(reason)
         detail = self._masked(error) if reason in _ERRORS else ""
+        stop = TurnStop.of(self.run_id, reason, self.continues, detail)
+        note = self._note(reason, reasoning_rejected=stop.reasoning_rejected)
         await self._finish(self._kept(note), reason, detail)
-        return note, TurnStop.of(self.run_id, reason, self.continues)
+        return note, stop
 
     async def close(self, reason: AiStopReason) -> tuple[str, TurnStop] | None:
         """這一輪的 task 收尾（`AgentRuntime._drive`，不論怎麼結束），一定讓出這個人的那一輪。
@@ -1450,7 +1467,7 @@ class Turn:
                 run.stop_reason, run.error, run.ended_at = reason, error, utcnow()
                 await session.commit()
 
-    def _note(self, reason: AiStopReason) -> str:
+    def _note(self, reason: AiStopReason, *, reasoning_rejected: bool = False) -> str:
         return stop_text(
             self.language,
             reason,
@@ -1458,6 +1475,7 @@ class Turn:
             requests=self.requests,
             tool_calls=self.tool_calls,
             commands=self.commands_run,
+            reasoning_rejected=reasoning_rejected,
         )
 
     def _masked(self, text: str) -> str:
@@ -1472,8 +1490,10 @@ def stop_text(
     requests: int,
     tool_calls: int,
     commands: Sequence[str],
+    reasoning_rejected: bool = False,
 ) -> str:
-    """停下來的說明：哪一條、做到哪（`commands` 是叫過的登錄表名字，照順序、可重複）。"""
+    """停下來的說明：哪一條、（服務拒絕推理參數時）怎麼改、做到哪（`commands` 是叫過的登錄表
+    名字，照順序、可重複）。"""
     text = _NOTES[language]
     names = ", ".join(dict.fromkeys(commands))
     done = text["done"].format(
@@ -1493,6 +1513,8 @@ def stop_text(
         failures=runtime.breaker.threshold,
         minutes=int(runtime.breaker.pause.total_seconds() // 60),
     )
+    if reasoning_rejected:
+        why = f"{why}{text['join']}{text['reasoning']}"
     # 中文句子之間不夾空格。
     return f"{why}{text['join']}{done}"
 
@@ -1521,6 +1543,8 @@ _NOTES: dict[Language, dict[str, str]] = {
         ),
         AiStopReason.CANCELLED: "這一輪停下來了：你按了停止。",
         AiStopReason.INTERRUPTED: "這一輪停下來了：Berth 重新啟動，這一輪沒跑完。",
+        # 怎麼改由面板說（管理員連到設定頁，其他人請管理員改）：存著的說明不分是誰在看。
+        "reasoning": "服務不接受這個推理程度。",
         "done": "已做：{requests} 次模型呼叫、{tools} 次工具呼叫{names}。",
         "names": "（{names}）",
         "join": "",
@@ -1551,6 +1575,7 @@ _NOTES: dict[Language, dict[str, str]] = {
         ),
         AiStopReason.CANCELLED: "This reply was stopped: you pressed Stop.",
         AiStopReason.INTERRUPTED: ("This reply was stopped: Berth restarted before it finished."),
+        "reasoning": "The service does not accept this reasoning level.",
         "done": "Done so far: {requests} model {calls}, {tools} tool {tool_calls}{names}.",
         "names": " ({names})",
         "join": " ",
@@ -1823,7 +1848,9 @@ def search_tools(settings: AiSettings) -> SearchTools:
 def current_endpoint(settings: AiSettings) -> AiEndpoint:
     """現用接口的那一份設定。"""
     stored = settings.endpoint(settings.provider)
-    return AiEndpoint(settings.provider, stored.base_url, stored.api_key, stored.model)
+    return AiEndpoint(
+        settings.provider, stored.base_url, stored.api_key, stored.model, stored.reasoning
+    )
 
 
 async def _check_continuable(session: AsyncSession, conversation_id: str, turn_id: str) -> None:

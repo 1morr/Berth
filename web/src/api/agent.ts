@@ -50,6 +50,8 @@ export interface TurnStop {
   turn_id: string
   reason: Schemas['AiStopReason']
   continuable: boolean
+  /** 服務以 400 拒絕了推理參數（M5.5 票 17）：面板連到設定頁改程度。 */
+  reasoning_rejected: boolean
   note: string
 }
 

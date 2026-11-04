@@ -14,9 +14,22 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.adapters.ai import AiEndpoint, effective_base_url, normalize_base_url, probe
+from berth.adapters.ai import (
+    AiEndpoint,
+    effective_base_url,
+    normalize_base_url,
+    probe,
+    reasoning_applies,
+)
 from berth.adapters.ai.prices import ModelPrice, known_models, price_of
-from berth.domain import AiModelSource, AiProbeFailure, AiProvider, AiRefusal, AiSecret
+from berth.domain import (
+    AiModelSource,
+    AiProbeFailure,
+    AiProvider,
+    AiReasoning,
+    AiRefusal,
+    AiSecret,
+)
 from berth.models import AiEndpointSettings, AiSettings
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
@@ -39,6 +52,7 @@ class AiEndpointView:
     base_url: str
     model: str
     has_key: bool
+    reasoning: AiReasoning
     #: 這個端點上這個模型現在的價目；查不到是 `None`（畫面寫「未知」，不當 0）。
     price: ModelPrice | None
 
@@ -64,6 +78,8 @@ class AiForm:
     base_url: str
     model: str
     api_key: str | None = None
+    #: `None` 是沒動（存著的留著）。測試連線不看它（`probe` 不送推理參數）。
+    reasoning: AiReasoning | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +116,7 @@ def _endpoint_view(provider: AiProvider, endpoint: AiEndpointSettings) -> AiEndp
         base_url=endpoint.base_url,
         model=endpoint.model,
         has_key=bool(endpoint.api_key),
+        reasoning=endpoint.reasoning,
         price=price_of(endpoint.model, base_url=base_url, provider=provider),
     )
 
@@ -180,6 +197,8 @@ async def set_ai(
                 refusal.append(exc)
                 return
         endpoint.base_url, endpoint.model, endpoint.api_key = base_url, model, api_key
+        if form.reasoning is not None:
+            endpoint.reasoning = form.reasoning
         settings.provider, settings.enabled = form.provider, enabled
         if tavily_api_key and tavily_api_key.strip():
             settings.tavily_api_key = tavily_api_key.strip()
@@ -226,6 +245,13 @@ async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: Ai
         detail=result.detail.replace(api_key, _MASK),
         model=result.model,
     )
+
+
+# 只看 pydantic-ai 的 model profile：不碰資料庫、不連外、不收 key。
+@command(Effect.READ)
+async def reasoning_takes_effect(provider: AiProvider, model: str) -> bool:
+    """這個接口上這個模型收不收推理程度（M5.5 票 17）：設定頁照它說「這個模型的程度沒有效果」。"""
+    return reasoning_applies(provider, model.strip())
 
 
 # 只讀本機價目表：不碰資料庫、不連外、不收 key，打到一半的網址也照查（認不出就照接口種類）。

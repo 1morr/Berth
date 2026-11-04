@@ -615,6 +615,77 @@ function stoppedStream(turnId: string, continuable: boolean): object[] {
   ]
 }
 
+/** 服務以 400 拒絕推理參數的那一則（M5.5 票 17）。 */
+function reasoningRefused(turnId: string) {
+  return {
+    id: 'a1',
+    role: 'assistant',
+    metadata: { runId: turnId },
+    parts: [
+      {
+        type: 'data-stop',
+        data: {
+          turn_id: turnId,
+          reason: 'error',
+          continuable: false,
+          reasoning_rejected: true,
+          note: '這一輪停下來了：AI 服務出錯。服務不接受這個推理程度。已做：1 次模型呼叫、0 次工具呼叫。',
+        },
+      },
+    ],
+  }
+}
+
+describe('AgentPanel when the service refuses the reasoning level', () => {
+  it('links an admin to the reasoning level on the AI settings page', async () => {
+    serve(backend({ stored: [reasoningRefused('r1')] }))
+    renderPanel()
+
+    const log = await screen.findByRole('log')
+    const link = await within(log).findByRole('link', { name: '到 AI 設定改推理程度' })
+    expect(link).toHaveAttribute('href', '/settings/ai#ai-reasoning')
+    expect(link.closest('[data-stop]')).toHaveTextContent('服務不接受這個推理程度')
+  })
+
+  it('asks anyone else to have an admin change it', async () => {
+    serve(backend({ me: USER, stored: [reasoningRefused('r1')] }))
+    renderPanel()
+
+    const log = await screen.findByRole('log')
+    expect(await within(log).findByText('請管理員到 AI 設定改推理程度。')).toBeInTheDocument()
+    expect(within(log).queryByRole('link', { name: /推理程度/ })).toBeNull()
+  })
+
+  it('says nothing about it when another error stopped the turn', async () => {
+    serve(
+      backend({
+        stored: [
+          {
+            id: 'a1',
+            role: 'assistant',
+            metadata: { runId: 'r1' },
+            parts: [
+              {
+                type: 'data-stop',
+                data: {
+                  ...stopData('r1', '這一輪停下來了：AI 服務出錯。'),
+                  reason: 'error',
+                  reasoning_rejected: false,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    renderPanel()
+
+    const log = await screen.findByRole('log')
+    expect(await within(log).findByText('這一輪停下來了：AI 服務出錯。')).toBeInTheDocument()
+    expect(within(log).queryByText(/推理程度/)).toBeNull()
+  })
+})
+
 describe('AgentPanel when a guard stops a turn', () => {
   it('says Berth stopped it, not the assistant, and continues once with the turn it picks up', async () => {
     let calls = 0

@@ -20,6 +20,7 @@ from berth.domain import (
     AiModelSource,
     AiProbeFailure,
     AiProvider,
+    AiReasoning,
     AiRefusal,
     AiSecret,
     PriceTable,
@@ -30,6 +31,7 @@ from berth.services.ai import (
     forget_ai_key,
     list_models,
     read_ai,
+    reasoning_takes_effect,
     set_ai,
     suggest_models,
     test_ai,
@@ -94,6 +96,8 @@ class AiEndpointOut(BaseModel):
     model: str
     #: 存過 key 沒有。key 本身永遠不回來。
     has_key: bool
+    #: 推理程度；沒設過是 `medium`（沒有「預設」這一級）。
+    reasoning: AiReasoning
     #: 這個端點上查不到這個模型的價是 `null`：費用未知，不當 0。
     price: AiPriceOut | None
 
@@ -123,6 +127,8 @@ class AiTestIn(BaseModel):
 
 class AiIn(AiTestIn):
     enabled: bool
+    #: `null` 或不帶是不動。
+    reasoning: AiReasoning | None = None
     #: `null` 或空字串是不動。
     tavily_api_key: str | None = None
 
@@ -166,8 +172,14 @@ class AiModelsOut(BaseModel):
     detail: str
 
 
+class AiReasoningOut(BaseModel):
+    #: 假的是這個接口上的這個模型不收推理程度，Berth 不送（M5.5 票 17）。
+    applies: bool
+
+
 def _form(body: AiTestIn) -> AiForm:
-    return AiForm(body.provider, body.base_url, body.model, body.api_key)
+    reasoning = body.reasoning if isinstance(body, AiIn) else None
+    return AiForm(body.provider, body.base_url, body.model, body.api_key, reasoning)
 
 
 @router.get("")
@@ -209,6 +221,14 @@ async def get_ai_models(
 ) -> AiModelsOut:
     """沒按「取得模型」之前的建議：本機價目表照這個網址認出的那一家。不帶 key、不連外。"""
     return AiModelsOut.model_validate(await suggest_models(provider, base_url))
+
+
+@router.get("/reasoning")
+async def get_ai_reasoning(
+    provider: AiProvider, model: Annotated[str, Query()] = ""
+) -> AiReasoningOut:
+    """表單上的模型收不收推理程度。不帶 key、不連外。"""
+    return AiReasoningOut(applies=await reasoning_takes_effect(provider, model))
 
 
 @router.post("/models", responses=_responses())

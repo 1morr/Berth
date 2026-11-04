@@ -23,6 +23,8 @@ export type AiModels = Schemas['AiModelsOut']
 
 export type AiSecret = Schemas['AiSecret']
 
+export type AiReasoning = Schemas['AiReasoning']
+
 export type AiRefusal = Schemas['AiRefusal']
 
 /** 執行期認得的那幾種。少一種或多一種都是編譯錯誤（同 `api/notify.ts`）。 */
@@ -65,6 +67,23 @@ export function aiSuggestionsQueryOptions(provider: AiProvider, baseUrl: string)
       ),
     // 本機表跟著 Berth 的版本走，開著頁面時不會變。
     staleTime: Infinity,
+  })
+}
+
+/**
+ * 表單上的模型收不收推理程度（M5.5 票 17）：OpenAI 接口上 pydantic-ai 認不得的模型，Berth 不送。
+ * 後端只看 model profile，不帶 key、不連外。
+ */
+export function aiReasoningQueryOptions(provider: AiProvider, model: string) {
+  return queryOptions({
+    queryKey: ['settings', 'ai', 'reasoning', provider, model],
+    queryFn: () =>
+      apiGet<Schemas['AiReasoningOut']>(
+        `/settings/ai/reasoning?${new URLSearchParams({ provider, model })}`,
+      ),
+    // profile 跟著 Berth 的版本走，開著頁面時不會變。
+    staleTime: Infinity,
+    enabled: model !== '',
   })
 }
 

@@ -14,8 +14,10 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 
 import httpx2
 from pydantic_ai import ModelRequest, RunContext
@@ -33,11 +35,13 @@ from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.native_tools import WebSearchTool
+from pydantic_ai.profiles import ModelProfile
+from pydantic_ai.profiles.anthropic import AnthropicEffort
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.settings import ModelSettings
+from pydantic_ai.settings import ModelSettings, ThinkingLevel
 
-from berth.domain import AiProbeFailure, AiProvider
+from berth.domain import AiProbeFailure, AiProvider, AiReasoning
 
 #: base URL 留空時打的官方端點（SDK 的預設值，明寫是為了不讓它去讀環境變數）。
 OFFICIAL_BASE_URL: dict[AiProvider, str] = {
@@ -53,12 +57,13 @@ _PROBE_PROMPT = "Reply with the single word OK."
 
 @dataclass(frozen=True, slots=True)
 class AiEndpoint:
-    """組一個模型要的四樣東西。`base_url` 空的是官方端點。"""
+    """組一個模型要的四樣東西，與每次呼叫帶的推理程度。`base_url` 空的是官方端點。"""
 
     provider: AiProvider
     base_url: str
     api_key: str
     model: str
+    reasoning: AiReasoning = AiReasoning.MEDIUM
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +160,19 @@ async def probe(model: Model) -> Probe:
     return Probe(None, None, "", response.model_name or "")
 
 
+#: 400 的內文提到這些參數，就當成服務拒絕了推理參數：`output_config.effort`、`reasoning_effort`、
+#: `thinking.type`、`thinking.budget_tokens`。只說 `thinking` 或 `reasoning` 的不算：重播推理內容的
+#: 400（簽章不符、DeepSeek 要回傳 `reasoning_content`）改程度沒有用。
+_REASONING_PARAMS = re.compile(r"output_config|effort|thinking\.type|budget_tokens", re.IGNORECASE)
+
+
+def rejects_reasoning(error: str) -> bool:
+    """模型呼叫的錯誤原文（`str(ModelHTTPError)`：`status_code: 400, model_name: …, body: …`）是
+    不是服務拒絕了推理參數（M5.5 票 17）。只看 400 的 body：模型名本身可能帶 `reasoner`。"""
+    head, _, body = error.partition(", body: ")
+    return head.startswith("status_code: 400,") and bool(_REASONING_PARAMS.search(body))
+
+
 def _http_failure(exc: ModelHTTPError) -> AiProbeFailure:
     if isinstance(exc, ModelAuthenticationError) or exc.status_code in (401, 403):
         return AiProbeFailure.KEY_REJECTED
@@ -179,18 +197,89 @@ def _message(exc: BaseException) -> str:
     return ": ".join(part for part in parts if part)
 
 
-def chat_settings(provider: AiProvider, max_tokens: int) -> ModelSettings:
-    """側面板每一次模型呼叫的設定（M5 票 11）：輸出上限，與 Anthropic 的快取標記。
+#: 統一設定（`thinking`）的程度；`off` 是 `False`。
+_THINKING: dict[AiReasoning, ThinkingLevel] = {
+    AiReasoning.OFF: False,
+    AiReasoning.LOW: "low",
+    AiReasoning.MEDIUM: "medium",
+    AiReasoning.HIGH: "high",
+}
+#: Anthropic 接口明寫的 effort（`off` 另外明寫關，見 `_reasoning`）。
+_EFFORT: dict[AiReasoning, AnthropicEffort] = {
+    AiReasoning.LOW: "low",
+    AiReasoning.MEDIUM: "medium",
+    AiReasoning.HIGH: "high",
+}
+
+
+class _Send(Enum):
+    """推理程度怎麼送（`_how_to_send`）。"""
+
+    #: 統一的 `thinking`，pydantic-ai 照 profile 換成那一家的參數。
+    UNIFIED = "unified"
+    #: Anthropic 接口明寫 `anthropic_effort` / `anthropic_thinking`。
+    EXPLICIT = "explicit"
+    #: 不送：這個模型的程度沒有效果。
+    NOTHING = "nothing"
+
+
+def _how_to_send(provider: AiProvider, model: str, profile: ModelProfile) -> _Send:
+    """推理程度怎麼變成請求參數（M5.5 票 17、brief §20.26，以錄下的請求為準）。
+
+    - Anthropic 接口、profile 有 `anthropic_supports_effort`（Claude Opus 4.5 起、Sonnet 4.6 起）：
+      統一設定，pydantic-ai 換成 `thinking.type=adaptive` 與 `output_config.effort`。
+    - Anthropic 接口、其餘的 Claude（Sonnet 4.5、Haiku 4.5 這類）：不送。官方不收
+      `output_config.effort`；統一設定的中、高是 `budget_tokens` 10000 / 16384，大過每次的
+      `max_tokens`。不送就與加這一格之前一樣（code-review 追加，偏離票的字面）。
+    - Anthropic 接口、不是 Claude（`deepseek-flash` 這類相容端點）：統一設定會變成 DeepSeek 忽略的
+      `budget_tokens`、關則省略（模型照樣思考），所以明寫。不收 effort 的會 400，停下的說明指到
+      設定頁。
+    - OpenAI 接口：profile 認得會推理（`supports_thinking`）才送統一設定（`reasoning_effort`）。
+      Berth 用的是 `OpenAIProvider`，`deepseek-flash`、`gpt-4o-mini`、自訂名字都認不得。
+    """
+    if provider is AiProvider.ANTHROPIC:
+        if profile.get("anthropic_supports_effort", False):
+            return _Send.UNIFIED
+        return _Send.NOTHING if model.startswith("claude-") else _Send.EXPLICIT
+    return _Send.UNIFIED if profile.get("supports_thinking", False) else _Send.NOTHING
+
+
+def reasoning_applies(provider: AiProvider, model: str) -> bool:
+    """這個接口上這個模型收不收推理程度（M5.5 票 17）：設定頁照它說「沒有效果」。只看 profile：
+    不連外，key 是佔位的。"""
+    profile = build_model(AiEndpoint(provider, "", "unused", model)).profile
+    return _how_to_send(provider, model, profile) is not _Send.NOTHING
+
+
+def _reasoning(endpoint: AiEndpoint, model: Model) -> ModelSettings:
+    """推理程度變成這次請求的參數（怎麼送見 `_how_to_send`）。"""
+    level = endpoint.reasoning
+    how = _how_to_send(endpoint.provider, endpoint.model, model.profile)
+    if how is _Send.UNIFIED:
+        return {"thinking": _THINKING[level]}
+    if how is _Send.NOTHING:
+        return {}
+    if level is AiReasoning.OFF:
+        off: AnthropicModelSettings = {"anthropic_thinking": {"type": "disabled"}}
+        return off
+    effort: AnthropicModelSettings = {"anthropic_effort": _EFFORT[level]}
+    return effort
+
+
+def chat_settings(endpoint: AiEndpoint, model: Model, max_tokens: int) -> ModelSettings:
+    """側面板（與壓縮）每一次模型呼叫的設定：輸出上限、推理程度（`_reasoning`），與 Anthropic 的
+    快取標記（M5 票 11）。`model` 是照 `endpoint` 組的那一個，推理參數看它的 profile。
 
     Anthropic 明寫 `cache_control`（instructions、工具定義、最後一則訊息各一個）：自架閘道不一定吃
     頂層的自動快取；prototype 實測命中 46–98%（brief §20.24）。Chat Completions 的快取由服務自己做。
     """
-    if provider is AiProvider.ANTHROPIC:
-        anthropic: AnthropicModelSettings = {
-            "max_tokens": max_tokens,
+    settings: ModelSettings = {"max_tokens": max_tokens}
+    settings.update(_reasoning(endpoint, model))
+    if endpoint.provider is AiProvider.ANTHROPIC:
+        cache: AnthropicModelSettings = {
             "anthropic_cache_instructions": "5m",
             "anthropic_cache_tool_definitions": "5m",
             "anthropic_cache_messages": "5m",
         }
-        return anthropic
-    return {"max_tokens": max_tokens}
+        settings.update(cache)
+    return settings
