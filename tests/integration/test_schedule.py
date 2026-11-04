@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -31,17 +31,28 @@ from berth.adapters.tmdb import TmdbDetail, TmdbEntry, TmdbEpisode, TmdbSeasonEn
 from berth.adapters.tmdb.fake import FakeTmdbClient
 from berth.adapters.ttl import TtlCache
 from berth.domain import (
+    EpisodeSnapshot,
     FeedItemStatus,
     FeedKind,
     MediaKind,
+    MediaSnapshot,
     PlanAction,
     ScheduleStatus,
+    SeasonSnapshot,
     TmdbProblem,
 )
-from berth.models import LedgerEntry, Media, RssFeed, RssItem, RssSeries, TmdbSettings
+from berth.models import (
+    LedgerEntry,
+    Media,
+    RssFeed,
+    RssItem,
+    RssSeries,
+    RssSettings,
+    TmdbSettings,
+)
 from berth.services import schedule
 from berth.services.schedule import read_schedule
-from berth.services.settings import write_settings
+from berth.services.settings import read_settings, write_settings
 from tests.conftest import TMDB_API_KEY
 from tests.integration.factories import FakeClientFactory
 
@@ -432,6 +443,50 @@ def ledger(media_id: str, *, season: int, start: int, end: int, path: str) -> Le
         episode_start=start,
         episode_end=end,
     )
+
+
+class TestLate:
+    """卡片那一集是遲到判定裡晚的集時是「晚 N 天」（M5.5 票 12），N 從播出日算；已入庫仍優先。"""
+
+    async def test_a_late_episode_says_how_many_days_since_it_aired(
+        self, session: AsyncSession
+    ) -> None:
+        factory = await credentialled(session, tmdb())
+        apothecary = await add_media(session, APOTHECARY)
+        media = await session.get(Media, apothecary)
+        assert media is not None
+        # 每週一集，第 5 集週二（11/03）播；第 1–4 集入庫了，門檻 0 天：週三就晚了。
+        media.tmdb_snapshot_json = MediaSnapshot(
+            tmdb_id=APOTHECARY.tmdb_id,
+            kind=MediaKind.TV,
+            title=APOTHECARY.title,
+            title_en=APOTHECARY.title,
+            title_original=APOTHECARY.title,
+            seasons=(
+                SeasonSnapshot(
+                    season_number=2,
+                    episode_count=6,
+                    episodes=tuple(
+                        EpisodeSnapshot(
+                            episode_number=n, air_date=date(2026, 11, 3) - timedelta(weeks=5 - n)
+                        )
+                        for n in range(1, 7)
+                    ),
+                ),
+            ),
+        ).model_dump(mode="json")
+        await subscribe(session, apothecary)
+        session.add(ledger(apothecary, season=2, start=1, end=4, path="a"))
+        settings = await read_settings(session, RssSettings)
+        settings.overdue_days = 0
+        await write_settings(session, settings)
+        await session.commit()
+
+        cards = by_media(await read_schedule(session, factory))
+
+        assert cards[apothecary].status is ScheduleStatus.LATE
+        assert cards[apothecary].late_days == 1
+        assert cards["tv:209867"].late_days is None
 
 
 # --- 第二層：時刻與評分（M5.5 票 14） ----------------------------------------------------------

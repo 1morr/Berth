@@ -377,6 +377,8 @@ class Scenario:
     downloads_demo: bool = False
     #: 每日巡檢的 RSS 三項（M4 票 130）。見 `_seed_rss_sweep`。
     rss_sweep_demo: bool = False
+    #: 追更頁（M5.5 票 12）。見 `_seed_tracking`。
+    tracking_demo: bool = False
     #: 週報頁（M4 票 131）。見 `_seed_weekly`：最近兩週的週報由產品自己的 `compose_weekly` 產生。
     weekly_demo: bool = False
     #: 票 105 之前加的 Mikan 聚合 feed（M4 票 105）：劇集 Route 不只一條，migration 推不出來，劇集
@@ -773,6 +775,21 @@ def rss_sweep_scenario() -> Scenario:
     )
     scenario.feed_pages = {"https://demo.invalid/unused": b""}
     scenario.rss_sweep_demo = True
+    return scenario
+
+
+def tracking_scenario() -> Scenario:
+    """追更頁 `/schedule/tracking`（M5.5 票 12）：同 `healthy`，加上 `_seed_tracking` 的三部
+    訂閱作品——一部晚了而且下載停滯（要你動手）、一部跟上了（準時）、一部最後一集缺集播出滿
+    60 天（斷更很久，預設收起）。播出日照真的今天往回算，時鐘不固定。沒有人接 Discord，管理員
+    打開時頁首說遲到只會顯示在這裡。
+
+    停滯的那一包在替身 qBittorrent 上是 `stalledDL`、一小時沒動：poller 不會把它改回下載中，
+    也不會判成被移除。
+    """
+    scenario = healthy()
+    scenario.tracking_demo = True
+    scenario.qbittorrent = FakeQbittorrentClient(torrents=(_tracking_stalled_torrent(),))
     return scenario
 
 
@@ -2887,6 +2904,7 @@ SCENARIOS = {
     "agent-live-missing": agent_live_missing_scenario,
     "agent-live-jellyfin": agent_live_jellyfin_scenario,
     "rss-sweep": rss_sweep_scenario,
+    "tracking": tracking_scenario,
     "weekly": weekly_scenario,
     "routes": routes_scenario,
     "degraded": degraded,
@@ -3393,6 +3411,8 @@ async def _moor(
         await _seed_legacy_feed(session)
     if scenario.rss_sweep_demo:
         await _seed_rss_sweep(session, factory)
+    if scenario.tracking_demo:
+        await _seed_tracking(session)
     if scenario.weekly_demo:
         await _seed_weekly(session)
 
@@ -3535,6 +3555,185 @@ async def _seed_rss_sweep(session: AsyncSession, factory: FakeClientFactory) -> 
     )
     await session.commit()
     await sweep_once(session)
+
+
+#: `tracking` 情境停滯的那一包（藥師少女第 5 集）。
+_TRACKING_STALLED = "[LoliHouse] Kusuriya no Hitorigoto - 05 [WebRip 1080p HEVC-10bit AAC]"
+
+
+def _tracking_stalled_torrent() -> TorrentStatus:
+    """替身 qBittorrent 上停滯的那一包：`stalledDL`、一小時沒動（過了 `STALL_AFTER`）。"""
+    hour_ago = int((datetime.now(UTC) - timedelta(hours=1)).timestamp())
+    return TorrentStatus(
+        hash=hashlib.sha1(_TRACKING_STALLED.encode()).hexdigest(),
+        name=_TRACKING_STALLED,
+        state="stalledDL",
+        category="berth-anime",
+        tags=("berth",),
+        progress=0.4,
+        completion_on=-1,
+        last_activity=hour_ago,
+        added_on=hour_ago,
+        save_path="",
+        content_path="",
+        total_size=1,
+    )
+
+
+#: `tracking` 情境的三部：(tmdb id, 中文名, 英文名, 字幕組, 最後一集是幾天前播的, 播到第幾集,
+#: 入庫到第幾集)。
+_TRACKING_WORKS = (
+    (220542, "藥師少女的獨語", "The Apothecary Diaries", "LoliHouse", 4, 5, 4),
+    (209867, "葬送的芙莉蓮", "Frieren: Beyond Journey's End", "ANi", 2, 6, 6),
+    (90002, "斷了很久的番", "The Long Pause", "Baha", 75, 8, 6),
+)
+
+
+async def _seed_tracking(session: AsyncSession) -> None:
+    """追更頁的材料（M5.5 票 12）。
+
+    三部訂閱的作品，每部一條綁好的 RSS Series 掛在同一個 Mikan 聚合 feed 的一筆「略過」上
+    （還訂著），每週一集、最後一集照 `_TRACKING_WORKS` 的天數往回算。入庫的集只有帳本列，媒體庫
+    裡沒有檔案（這一頁看的是帳本）。藥師少女第 5 集是一筆停滯的下載（計劃說的季集）。
+    """
+    now = utcnow()
+    today = datetime.now().astimezone().date()
+    anime = await session.scalar(select(Route).where(Route.slug == "anime"))
+    assert anime is not None
+    feed = RssFeed(
+        name="Mikan",
+        url="https://mikanani.me/RSS/MyBangumi?token=demo",
+        kind=FeedKind.MIKAN,
+        interval_sec=24 * 60 * 60,
+        last_polled_at=now,
+        primed_at=now - timedelta(days=90),
+        tv_route_id=anime.id,
+    )
+    session.add(feed)
+    await session.flush()
+    for tmdb_id, title, title_en, group, days_ago, episodes, held in _TRACKING_WORKS:
+        last = today - timedelta(days=days_ago)
+        aired = {number: last - timedelta(weeks=episodes - number) for number in range(1, 13)}
+        tv = media_id(MediaKind.TV, tmdb_id)
+        session.add(
+            Media(
+                id=tv,
+                tmdb_id=tmdb_id,
+                kind=MediaKind.TV,
+                title_en=title_en,
+                title_original=title_en,
+                year=2026,
+                folder_name=f"{title_en} (2026)",
+                tmdb_snapshot_json=MediaSnapshot(
+                    tmdb_id=tmdb_id,
+                    kind=MediaKind.TV,
+                    title=title,
+                    title_en=title_en,
+                    title_original=title_en,
+                    year=2026,
+                    seasons=(
+                        SeasonSnapshot(
+                            season_number=1,
+                            episode_count=12,
+                            episodes=tuple(
+                                EpisodeSnapshot(
+                                    episode_number=number,
+                                    # 還沒播的集 TMDB 也有日期；最後一集之後的照每週往後排。
+                                    air_date=day if number <= episodes else None,
+                                )
+                                for number, day in aired.items()
+                            ),
+                        ),
+                    ),
+                ).model_dump(mode="json"),
+                tmdb_fetched_at=now,
+            )
+        )
+        series = RssSeries(
+            key=f"mikan:{tmdb_id}:1",
+            title_raw=f"[{group}] {title_en} - 01 [1080p]",
+            mikan_subgroup_name=group,
+            reasons_json=[],
+            media_id=tv,
+            route_id=anime.id,
+            confirmed=True,
+            bound_by="system",
+            created_at=now - timedelta(weeks=episodes + 1),
+        )
+        session.add(series)
+        await session.flush()
+        session.add(
+            RssItem(
+                feed_id=feed.id,
+                guid=f"demo-tracking-{tmdb_id}",
+                title=series.title_raw,
+                series_id=series.id,
+                status=FeedItemStatus.PASSED,
+            )
+        )
+        for number in range(1, held + 1):
+            release = f"[{group}] {title_en} - {number:02d} [1080p]"
+            job_hash = hashlib.sha1(release.encode()).hexdigest()
+            session.add(
+                Job(
+                    hash=job_hash,
+                    name=release,
+                    source_url="",
+                    trigger=JobTrigger.RSS,
+                    trigger_ref=str(series.id),
+                    media_id=tv,
+                    route_id=anime.id,
+                    state=JobState.IMPORTED,
+                    added_at=now - timedelta(weeks=episodes - number),
+                )
+            )
+            session.add(
+                LedgerEntry(
+                    job_hash=job_hash,
+                    source_rel_path=f"{release}.mkv",
+                    source_abs_path=f"/data/torrent/complete/anime/{release}.mkv",
+                    source_dev="1",
+                    target_path=f"{anime.target_path}/{title_en} (2026)/Season 01/{number:02d}.mkv",
+                    target_inode="1",
+                    media_id=tv,
+                    season=1,
+                    episode_start=number,
+                    episode_end=number,
+                    tags_json={},
+                    action=PlanAction.IMPORT,
+                )
+            )
+        if tmdb_id == 220542:
+            stalled = _tracking_stalled_torrent()
+            session.add(
+                Job(
+                    hash=stalled.hash,
+                    name=_TRACKING_STALLED,
+                    source_url="",
+                    trigger=JobTrigger.RSS,
+                    trigger_ref=str(series.id),
+                    media_id=tv,
+                    route_id=anime.id,
+                    state=JobState.STALLED,
+                    added_at=now - timedelta(days=days_ago),
+                )
+            )
+            plan = Plan(job_hash=stalled.hash, status=PlanStatus.PENDING_REVIEW)
+            session.add(plan)
+            await session.flush()
+            session.add(
+                PlanItem(
+                    plan_id=plan.id,
+                    rel_path=f"{_TRACKING_STALLED}.mkv",
+                    action=PlanAction.IMPORT,
+                    media_id=tv,
+                    season=1,
+                    episode_start=5,
+                    episode_end=5,
+                    confidence="high",
+                )
+            )
+    await session.commit()
 
 
 #: `weekly` 情境的三部作品：一部有季集、一部作品名很長、一部電影。

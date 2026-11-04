@@ -1181,3 +1181,27 @@ CLEARED_AT = "cleared_at"
 _BROKEN_BY: dict[IssueAction, frozenset[JobState]] = {
     action: states for kind, states in STANDS_WHILE.items() for action in ISSUE_ACTIONS[kind]
 }
+
+
+# 巡檢（`services.sweep`）與追更頁（`services.keeping_up`）讀它：收 ORM 列，不進登錄表。
+@command(Effect.READ, flags={Flag.INTERNAL})
+async def covered_jobs(session: AsyncSession, jobs: Sequence[Job]) -> set[str]:
+    """這幾筆裡已經有一件管線 Issue 說著它現在這個狀態的（`client_error`；重新送單被拒、落回
+    `submit_failed` 的 `client_removed`），不再為同一筆開第二件：開著的那一件已經在等人；被忽略的
+    那一件是人看過、說了不用管，換一個型別再問同一筆是噪音（M4 票 129 code-review）。收掉的不算：
+    它說的是過去。"""
+    if not jobs:
+        return set()
+    state = {job.hash: job.state for job in jobs}
+    open_rows = await session.execute(
+        select(Issue.type, Issue.job_hash).where(
+            Issue.status.in_((IssueStatus.OPEN, IssueStatus.IGNORED)),
+            Issue.type.in_(STANDS_WHILE),
+            Issue.job_hash.in_(state),
+        )
+    )
+    return {
+        job_hash
+        for kind, job_hash in open_rows.tuples()
+        if job_hash is not None and state[job_hash] in STANDS_WHILE[kind]
+    }

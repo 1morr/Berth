@@ -648,7 +648,7 @@ hover 與焦點也是同一個語彙（牆卡片、Ghost 按鈕、導覽方塊�
 - 可排序的欄頭同樣靠線：選中的欄頭 `border-b-2 border-rule-strong` + `ink` 字，`aria-sort` 掛在 `th` 上。
 - **主導覽五項**（M5.5 票 07）：探索、新番、媒體庫、下載、待處理；待處理只有 `admin`，新番票 09 起每個人都有（連 `/schedule`，件數只給 `admin`）。一項管一個區塊：區塊裡任一頁都是當前
   （`nav/SectionLink`，`NAV_BOX_ACTIVE`），連結指的那一頁是 `aria-current="page"`、區塊的別頁是 `"true"`。區塊頁在 `<h1>` 上方掛一條
-  分頁列（`nav/SectionTabs`，形狀同 `SettingsTabs`）：待處理是審核 `/review`、Issue `/issues`，新番是時間表 `/schedule`（每個人）與訂閱 `/rss`（`admin`；一般使用者的分頁列只有一格，照畫）。
+  分頁列（`nav/SectionTabs`，形狀同 `SettingsTabs`）：待處理是審核 `/review`、Issue `/issues`，新番是時間表 `/schedule`（每個人）、追更 `/schedule/tracking`（`admin`，票 12）與訂閱 `/rss`（`admin`；一般使用者的分頁列只有一格，照畫）。區塊的頁面、分頁、誰看得到與帶哪一格件數只在 `nav/sections.ts` 的區塊物件裡一份；`/schedule/tracking` 在 `/schedule` 底下，分頁與頁首那一項都用 `exact` 比對，免得時間表在追更頁上也亮。
 - **件數**（`nav/CountChip`）：標籤後面一塊 `assigned` 的 `.value` 數字（不是 `.label`：數字不要刻度），0 件、讀不到時不畫。
   每分鐘重讀，任何動作結束也重讀（`router.ts` 的 `recountAfterActions`）。
   看得見的是數字（`aria-hidden`），聽得見的是連結的 `aria-label`「待處理 3 件」——不用 sr-only 補字，標籤與它之間的空白在 jsdom
@@ -778,6 +778,16 @@ Prowlarr 已經有站時不給。結果一句摘要（唯一的 live 區）、�
   那一刻的本地日期不是卡片那一天時前面寫星期，例如「週六 00:30」），最後一格 `.value text-xs ink-dim`「Bangumi 8.1」，人數在 `title`；
   念的是一整句「Bangumi 評分 8.1，900 人打分」（畫面那一份 `aria-hidden`）。對不上的兩格都不畫、不留位置。
 - 「只看已訂閱」是一顆 `aria-pressed` 的 `FILTER`。頁尾 `TmdbAttribution`。
+- **晚 N 天（票 12）:** 卡片那一集晚了時狀態寫「晚 N 天」，同已訂閱的中性小色塊：一般使用者也看得到這一格，他動不了手，`assigned` 對他不成立。
+
+### 追更（`KeepingUpPage` / `tracking/TrackedRows`，M5.5 票 12）
+
+`.scratch/m5.5/tracking-shape.md`。頁寬 `max-w-[80rem]`（清單）。
+
+- **三段:** 要你動手、準時各一個 `SectionHeading` 加作品；斷更很久是 `CollapsibleRow`（原生 `<details>`，預設收起，摘要列寫部數）。沒有作品的段不畫；要你動手沒有時一行 `ink-dim`「訂閱的作品都按時」。
+- **同一份資料畫兩次:** `lg` 以上一張 `table-fixed` 的 `<table>`（`caption` 是段名、`sr-only`；欄頭 `.label` + `scope="col"`，作品格是 `th scope="row"`，列之間 `border-b-2 border-rule`，`align-baseline`）；以下一部一塊 `well` + `border-2 border-rule`：作品名、狀態，下面三條 `.label` 欄名 + 值的 `dl`（`items-baseline`）。用 `hidden` 切，不用 CSS 把表格疊成塊：`display: block` 的表格在無障礙樹裡不是表格。
+- **漆:** 只有「晚 N 天」塗 `assigned`（現在需要你）；晚的集（`.value`，`S01 E05–E06`）、「可能是下一輪」、結論與「下載停滯」都是字，`Dot` 隔開，最後一條 `INLINE_LINK`「看這筆下載」連到卡住的那一筆 Job。全部準時的一頁看不到任何信號色。
+- **收不到通知:** `<h1>` 下一塊中性 `Notice`（標籤「通知」），一句話加 `INLINE_LINK` 到 `/settings/notifications`；讀不到「我的通知」時不畫。
 
 ### 橫卡（`WatchingRows`，繼續觀看與下一集）
 

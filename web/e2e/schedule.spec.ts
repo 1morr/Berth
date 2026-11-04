@@ -132,6 +132,7 @@ test('一般使用者：看得到時間表與狀態，沒有「訂閱」分頁�
         'score',
         'season',
         'status',
+        'late_days',
         'title',
         'title_en',
         'tmdb_id',

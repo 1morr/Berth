@@ -38,8 +38,10 @@ class ScheduleCardOut(BaseModel):
     air_date: date
     season: int
     episode: int
-    #: 每次照資料庫算：卡片上那一集入庫了、作品訂閱了，或都沒有。
+    #: 每次照資料庫算：卡片上那一集入庫了、晚了（追更頁的同一套判定）、作品訂閱了，或都沒有。
     status: ScheduleStatus
+    #: 狀態是 `late` 時，那一集從播出日到今天的天數（「晚 N 天」，M5.5 票 12）；否則 null。
+    late_days: int | None
     #: AniList 的放送時刻（帶時區，畫面照瀏覽器的時區寫）。只給還沒播、原文名對得上的；否則 null。
     airs_at: datetime | None
     #: Bangumi 的評分（1–10）與打分人數。原文名對不上或沒人打分是 null。

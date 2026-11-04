@@ -71,6 +71,9 @@ const FLOWS = [
     port: 8534,
     viewport: NARROW,
   },
+  // 追更（M5.5 票 12）。
+  { name: 'tracking', spec: 'tracking', scenario: 'tracking', port: 8502 },
+  { name: 'tracking-390', spec: 'tracking', scenario: 'tracking', port: 8503, viewport: NARROW },
   { name: 'rss', spec: 'rss', scenario: 'rss', port: 8498 },
   // 舊 Feed 選 Route（M4 票 105）：聚合 feed 是票 105 之前加的，劇集那一格空著。
   { name: 'rss-auto-bind', spec: 'rss-auto-bind', scenario: 'rss-legacy-feed', port: 8516 },

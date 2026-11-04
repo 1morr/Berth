@@ -102,6 +102,17 @@ def conclude(facts: EpisodeFacts) -> WhyNot:
     return WhyNot.NO_SOURCE if facts.aired else WhyNot.UNAIRED
 
 
+def stalled(facts: EpisodeFacts) -> bool:
+    """結論是「在路上」，而路上的只有停滯的下載（`stalled`）：沒有還在動的 Job，也沒有下一輪就送的
+    Feed Item。`conclude` 把它併進 `DOWNLOADING`（季表也說「下載中」），追更頁拆出「下載停滯」——
+    它不會自己好（M5.5 票 12）。"""
+    return (
+        conclude(facts) is WhyNot.DOWNLOADING
+        and FeedItemStatus.MATCHED not in facts.items
+        and facts.jobs & UNDER_WAY_STATES == {JobState.STALLED}
+    )
+
+
 def overall(conclusions: Iterable[WhyNot]) -> WhyNot | None:
     """一部作品整體的結論：各集裡最前面的那一種。一集都沒有時是 `None`。"""
     order = list(WhyNot)

@@ -8,7 +8,8 @@ import { FILTER, FILTER_ACTIVE, INLINE_LINK, PAGE_TITLE } from '../components/co
 import { RequestFailed } from '../components/RequestFailed'
 import { TmdbAttribution } from '../components/TmdbAttribution'
 import { TmdbNotice } from '../components/TmdbNotice'
-import { AiringTabs } from '../nav/SectionTabs'
+import { AIRING } from '../nav/sections'
+import { SectionTabs } from '../nav/SectionTabs'
 import { ScheduleDay, ScheduleDayPlaceholder } from '../schedule/ScheduleDay'
 import { monthDay, weekDays, weekday } from '../schedule/week'
 
@@ -41,7 +42,7 @@ export function SchedulePage() {
 
   return (
     <div className="mx-auto grid w-full max-w-[110rem] gap-6 px-6 py-8">
-      <AiringTabs />
+      <SectionTabs section={AIRING} />
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b-2 border-rule-strong pb-2">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 tabIndex={-1} className={PAGE_TITLE}>
