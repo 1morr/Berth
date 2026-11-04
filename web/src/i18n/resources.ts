@@ -3230,6 +3230,8 @@ const zhHant = {
         hint: '模型回答前想多久：越高越慢、花的 token 越多。DeepSeek 只分低與高，中等於高。',
         noEffect:
           '這個模型的推理程度沒有效果：Berth 認不得它會推理，不送這個參數（送給不支援的模型會被拒絕）。',
+        offSendsNothing:
+          'Berth 不確定這個服務收不收推理參數：選「關」就不送這個參數；低、中、高照送，不收的服務會拒絕。',
       },
       models: {
         button: '取得模型',
@@ -7674,6 +7676,8 @@ const en: Translations<typeof zhHant> = {
         hint: 'How long the model thinks before it answers: higher is slower and uses more tokens. DeepSeek only has low and high; medium counts as high.',
         noEffect:
           "The reasoning level has no effect on this model: Berth doesn't know it can reason, so it doesn't send the setting (models that don't support it reject it).",
+        offSendsNothing:
+          "Berth doesn't know whether this service takes the reasoning setting: Off sends nothing; Low, Medium and High still send it, and a service that doesn't take it rejects the request.",
       },
       models: {
         button: 'Fetch models',

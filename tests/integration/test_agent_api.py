@@ -680,6 +680,23 @@ def refuses(status: int, message: str) -> Step:
     return step
 
 
+def on_a_gateway(
+    client: TestClient,
+    base_url: str = "https://llm.example.net/anthropic",
+    model: str = "glm-4.6",
+) -> None:
+    """改用一個 Anthropic 相容閘道（預設是 Berth 認不得的那種）。"""
+    body = {
+        "enabled": True,
+        "provider": "anthropic",
+        "base_url": base_url,
+        "model": model,
+        "api_key": KEY,
+    }
+    response = client.put("/api/settings/ai", json=body, headers=BROWSER)
+    assert response.status_code == 200, response.text
+
+
 class TestARefusedReasoningLevel:
     """服務以 400 拒絕推理參數：停下的說明指到設定頁改程度（M5.5 票 17）。"""
 
@@ -700,6 +717,37 @@ class TestARefusedReasoningLevel:
     def test_it_says_so_in_chinese_too(self, client: TestClient, script: Script) -> None:
         script.steps = [refuses(400, "thinking.type: unsupported value")]
         assert "推理程度" in streamed_stop(chat(client, "你好"))["note"]
+
+    def test_on_an_unknown_gateway_it_says_off_sends_nothing(
+        self, client: TestClient, script: Script
+    ) -> None:
+        """認不得的相容閘道上「關」不送參數（M5.5 票 17b）：說明說得出來，重新載入也一樣。"""
+        on_a_gateway(client)
+        script.steps = [refuses(400, self.REFUSED)]
+
+        streamed = streamed_stop(chat(client, "Hello?", language="en"))
+
+        assert "Choose Off to send no reasoning setting at all." in streamed["note"]
+        assert stop_parts(client)[-1]["note"] == streamed["note"]
+
+    def test_on_an_unknown_gateway_it_says_so_in_chinese_too(
+        self, client: TestClient, script: Script
+    ) -> None:
+        on_a_gateway(client)
+        script.steps = [refuses(400, self.REFUSED)]
+        assert "選「關」就不送這個參數。" in streamed_stop(chat(client, "你好"))["note"]
+
+    @pytest.mark.parametrize(
+        ("base_url", "model"),
+        [("", "claude-sonnet-5-5"), ("https://api.deepseek.com/anthropic", "deepseek-flash")],
+    )
+    def test_where_off_still_sends_it_does_not_say_so(
+        self, client: TestClient, script: Script, base_url: str, model: str
+    ) -> None:
+        """官方的 Claude、DeepSeek 的「關」照樣送參數，說了也沒用。"""
+        on_a_gateway(client, base_url, model)
+        script.steps = [refuses(400, self.REFUSED)]
+        assert "Choose Off" not in streamed_stop(chat(client, "Hello?", language="en"))["note"]
 
     def test_another_bad_request_does_not(self, client: TestClient, script: Script) -> None:
         script.steps = [refuses(400, "prompt is too long: 210000 tokens > 200000 maximum")]

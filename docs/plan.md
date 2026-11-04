@@ -893,7 +893,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - `POST /settings/ai/test`：照表單打一次最小呼叫，不存。服務拒絕也是 200（那是測試的結果，不是請求錯了）。
 - `GET /settings/ai/models?provider=&base_url=`：模型欄沒按「取得模型」之前的建議，本機價目表照這個網址認出的那一家；不帶 key、不連外，打到一半的網址也照查（M5.5 票 02）。
 - `POST /settings/ai/models`：`{provider, base_url, api_key}`（不收模型名），向表單上的端點問模型、不存；key 規則同測試連線。回 `models`、`source`（`endpoint` / `prices`）與 `failure` / `status` / `detail`。問不到也是 200：退回本機表並帶著原因（404、405、501 是端點不提供模型清單），端點列出空的也退回、不帶原因。不跟轉址（brief §20.26）。
-- `GET /settings/ai/reasoning?provider=&model=`：`{applies}`，這個接口上這個模型收不收推理程度（OpenAI 接口上 pydantic-ai 認不得會推理的模型、Anthropic 接口上沒有 effort 的 Claude 都不送）；只看 model profile，不帶 key、不連外（M5.5 票 17，brief §20.26）。
+- `GET /settings/ai/reasoning?provider=&base_url=&model=`：`{applies, off_sends_nothing}`。`applies` 是這個接口上這個模型收不收推理程度（OpenAI 接口上 pydantic-ai 認不得會推理的模型、Anthropic 接口上沒有 effort 的 Claude 都不送）；`off_sends_nothing` 是 Anthropic 接口上認不得的相容閘道（主機不是 `api.deepseek.com` 的非 Claude 模型），「關」什麼都不送、設定頁說出來（票 17b）。只看 model profile 與網址，不帶 key、不連外（M5.5 票 17，brief §20.26）。
 - `/settings/ai` 的拒絕：422 `base_url_invalid` / `key_missing` / `model_missing`。
 
 **每個人自己的那一半在 `/me/notifications`**（登入就行，不在 `/settings` 底下）：

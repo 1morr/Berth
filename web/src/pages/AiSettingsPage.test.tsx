@@ -603,9 +603,24 @@ describe('設定 → AI', () => {
   })
 })
 
-/** 表單上的模型收不收推理程度（M5.5 票 17）。 */
-function appliesKey(provider: string, model: string) {
-  return `GET /api/settings/ai/reasoning?${new URLSearchParams({ provider, model })}`
+/** 表單上的端點與模型，推理程度怎麼送（M5.5 票 17、17b）。 */
+function appliesKey(provider: string, model: string, base_url = '') {
+  return `GET /api/settings/ai/reasoning?${new URLSearchParams({ provider, base_url, model })}`
+}
+
+const APPLIES = { applies: true, off_sends_nothing: false }
+const NO_EFFECT = { applies: false, off_sends_nothing: false }
+const OFF_SENDS_NOTHING = { applies: true, off_sends_nothing: true }
+const GATEWAY: AiSettings = {
+  ...UNSET,
+  enabled: true,
+  anthropic: {
+    base_url: 'https://llm.example.net/anthropic',
+    model: 'glm-4.6',
+    has_key: true,
+    reasoning: 'medium',
+    price: null,
+  },
 }
 
 describe('設定 → AI 的推理程度（M5.5 票 17）', () => {
@@ -660,8 +675,8 @@ describe('設定 → AI 的推理程度（M5.5 票 17）', () => {
   it('OpenAI 接口上認不得的模型：說這個模型的程度沒有效果', async () => {
     render(
       {
-        [appliesKey('anthropic', 'claude-sonnet-5-5')]: { body: { applies: true } },
-        [appliesKey('openai', 'some-local-model')]: { body: { applies: false } },
+        [appliesKey('anthropic', 'claude-sonnet-5-5')]: { body: APPLIES },
+        [appliesKey('openai', 'some-local-model', DEEPSEEK)]: { body: NO_EFFECT },
       },
       IN_USE,
     )
@@ -674,6 +689,32 @@ describe('設定 → AI 的推理程度（M5.5 票 17）', () => {
 
     expect(await screen.findByText(/這個模型的推理程度沒有效果/)).toBeVisible()
   })
+
+  it('認不得的相容閘道：說選「關」就不送（M5.5 票 17b）', async () => {
+    render(
+      {
+        [appliesKey('anthropic', 'glm-4.6', GATEWAY.anthropic.base_url)]: {
+          body: OFF_SENDS_NOTHING,
+        },
+      },
+      GATEWAY,
+    )
+    renderApp('/settings/ai')
+
+    const level = await screen.findByLabelText('推理程度')
+    await waitFor(() => expect(level).toHaveAccessibleDescription(/選「關」就不送這個參數/))
+    expect(screen.queryByText(/這個模型的推理程度沒有效果/)).toBeNull()
+  })
+
+  it('DeepSeek 與官方的「關」照樣送：不說選關就不送', async () => {
+    const key = appliesKey('anthropic', 'claude-sonnet-5-5')
+    const stub = render({ [key]: { body: APPLIES } }, IN_USE)
+    renderApp('/settings/ai')
+
+    const level = await screen.findByLabelText('推理程度')
+    await waitFor(() => expect(calls(stub, key)).toBe(1))
+    expect(level).not.toHaveAccessibleDescription(/選「關」就不送/)
+  })
 })
 
 describe('AI settings: reasoning level in English (M5.5 ticket 17)', () => {
@@ -684,7 +725,7 @@ describe('AI settings: reasoning level in English (M5.5 ticket 17)', () => {
   it('names the four levels and says DeepSeek only has low and high', async () => {
     await i18next.changeLanguage('en')
     render(
-      { [appliesKey('openai', 'some-local-model')]: { body: { applies: false } } },
+      { [appliesKey('openai', 'some-local-model', DEEPSEEK)]: { body: NO_EFFECT } },
       { ...IN_USE, provider: 'openai' },
     )
     renderApp('/settings/ai')
@@ -700,5 +741,21 @@ describe('AI settings: reasoning level in English (M5.5 ticket 17)', () => {
       /DeepSeek only has low and high; medium counts as high/,
     )
     expect(await screen.findByText(/no effect on this model/)).toBeVisible()
+  })
+
+  it('says Off sends nothing on a gateway Berth does not know (ticket 17b)', async () => {
+    await i18next.changeLanguage('en')
+    render(
+      {
+        [appliesKey('anthropic', 'glm-4.6', GATEWAY.anthropic.base_url)]: {
+          body: OFF_SENDS_NOTHING,
+        },
+      },
+      GATEWAY,
+    )
+    renderApp('/settings/ai')
+
+    const level = await screen.findByLabelText('Reasoning level')
+    await waitFor(() => expect(level).toHaveAccessibleDescription(/Off sends nothing/))
   })
 })

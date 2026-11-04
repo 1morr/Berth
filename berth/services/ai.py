@@ -16,10 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from berth.adapters.ai import (
     AiEndpoint,
+    ReasoningSupport,
     effective_base_url,
     normalize_base_url,
     probe,
-    reasoning_applies,
+    reasoning_support,
 )
 from berth.adapters.ai.prices import ModelPrice, known_models, price_of
 from berth.domain import (
@@ -247,11 +248,12 @@ async def test_ai(session: AsyncSession, factory: ServiceClientFactory, form: Ai
     )
 
 
-# 只看 pydantic-ai 的 model profile：不碰資料庫、不連外、不收 key。
+# 只看 pydantic-ai 的 model profile 與網址：不碰資料庫、不連外、不收 key。
 @command(Effect.READ)
-async def reasoning_takes_effect(provider: AiProvider, model: str) -> bool:
-    """這個接口上這個模型收不收推理程度（M5.5 票 17）：設定頁照它說「這個模型的程度沒有效果」。"""
-    return reasoning_applies(provider, model.strip())
+async def reasoning_support_of(provider: AiProvider, base_url: str, model: str) -> ReasoningSupport:
+    """這個端點上這個模型的推理程度怎麼送（M5.5 票 17、17b）：設定頁照它說「這個模型的程度沒有
+    效果」與「選關就不送」。"""
+    return reasoning_support(provider, base_url, model.strip())
 
 
 # 只讀本機價目表：不碰資料庫、不連外、不收 key，打到一半的網址也照查（認不出就照接口種類）。

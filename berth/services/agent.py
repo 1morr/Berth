@@ -85,6 +85,7 @@ from berth.adapters.ai import (
     chat_settings,
     has_native_web_search,
     native_web_search,
+    reasoning_support,
     rejects_reasoning,
 )
 from berth.domain import (
@@ -1468,6 +1469,13 @@ class Turn:
                 await session.commit()
 
     def _note(self, reason: AiStopReason, *, reasoning_rejected: bool = False) -> str:
+        endpoint = self.endpoint
+        off_sends_nothing = (
+            reasoning_rejected
+            and reasoning_support(
+                endpoint.provider, endpoint.base_url, endpoint.model
+            ).off_sends_nothing
+        )
         return stop_text(
             self.language,
             reason,
@@ -1476,6 +1484,7 @@ class Turn:
             tool_calls=self.tool_calls,
             commands=self.commands_run,
             reasoning_rejected=reasoning_rejected,
+            off_sends_nothing=off_sends_nothing,
         )
 
     def _masked(self, text: str) -> str:
@@ -1491,9 +1500,11 @@ def stop_text(
     tool_calls: int,
     commands: Sequence[str],
     reasoning_rejected: bool = False,
+    off_sends_nothing: bool = False,
 ) -> str:
     """停下來的說明：哪一條、（服務拒絕推理參數時）怎麼改、做到哪（`commands` 是叫過的登錄表
-    名字，照順序、可重複）。"""
+    名字，照順序、可重複）。`off_sends_nothing` 是認不得的相容閘道（M5.5 票 17b）：多說選關就
+    不送。"""
     text = _NOTES[language]
     names = ", ".join(dict.fromkeys(commands))
     done = text["done"].format(
@@ -1515,6 +1526,8 @@ def stop_text(
     )
     if reasoning_rejected:
         why = f"{why}{text['join']}{text['reasoning']}"
+    if reasoning_rejected and off_sends_nothing:
+        why = f"{why}{text['join']}{text['reasoning_off']}"
     # 中文句子之間不夾空格。
     return f"{why}{text['join']}{done}"
 
@@ -1545,6 +1558,7 @@ _NOTES: dict[Language, dict[str, str]] = {
         AiStopReason.INTERRUPTED: "這一輪停下來了：Berth 重新啟動，這一輪沒跑完。",
         # 怎麼改由面板說（管理員連到設定頁，其他人請管理員改）：存著的說明不分是誰在看。
         "reasoning": "服務不接受這個推理程度。",
+        "reasoning_off": "選「關」就不送這個參數。",
         "done": "已做：{requests} 次模型呼叫、{tools} 次工具呼叫{names}。",
         "names": "（{names}）",
         "join": "",
@@ -1576,6 +1590,7 @@ _NOTES: dict[Language, dict[str, str]] = {
         AiStopReason.CANCELLED: "This reply was stopped: you pressed Stop.",
         AiStopReason.INTERRUPTED: ("This reply was stopped: Berth restarted before it finished."),
         "reasoning": "The service does not accept this reasoning level.",
+        "reasoning_off": "Choose Off to send no reasoning setting at all.",
         "done": "Done so far: {requests} model {calls}, {tools} tool {tool_calls}{names}.",
         "names": " ({names})",
         "join": " ",

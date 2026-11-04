@@ -71,15 +71,15 @@ export function aiSuggestionsQueryOptions(provider: AiProvider, baseUrl: string)
 }
 
 /**
- * 表單上的模型收不收推理程度（M5.5 票 17）：OpenAI 接口上 pydantic-ai 認不得的模型，Berth 不送。
- * 後端只看 model profile，不帶 key、不連外。
+ * 表單上的端點與模型，推理程度怎麼送（M5.5 票 17、17b）：`applies` 假的是 Berth 四級都不送，
+ * `off_sends_nothing` 真的是認不得的相容閘道「關」不送。後端只看 model profile 與網址，不帶 key、不連外。
  */
-export function aiReasoningQueryOptions(provider: AiProvider, model: string) {
+export function aiReasoningQueryOptions(provider: AiProvider, baseUrl: string, model: string) {
   return queryOptions({
-    queryKey: ['settings', 'ai', 'reasoning', provider, model],
+    queryKey: ['settings', 'ai', 'reasoning', provider, baseUrl, model],
     queryFn: () =>
       apiGet<Schemas['AiReasoningOut']>(
-        `/settings/ai/reasoning?${new URLSearchParams({ provider, model })}`,
+        `/settings/ai/reasoning?${new URLSearchParams({ provider, base_url: baseUrl, model })}`,
       ),
     // profile 跟著 Berth 的版本走，開著頁面時不會變。
     staleTime: Infinity,
