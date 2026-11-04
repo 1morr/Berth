@@ -64,6 +64,7 @@ M0–M5 已驗收，只留進行中的里程碑在本檔。M0–M5 的 session �
 | 2026-11-04 | M5.5 15 搜尋工具查得到 | `/status` 照設定說搜得到什麼，與掛工具共用一支；`ai_calls.tools_json` 記送出的工具名，步驟頁列出、舊列「未記錄」；模型只看當下的工具 | 新 session 下 `/implement .scratch/m5.5/issues/16-reasoning-in-panel.md` |
 | 2026-11-04 | M5.5 12 追更頁 | `/schedule/tracking`（admin）一部一列：字幕組、已播到、已入庫到、狀態；停滯說「下載停滯」、晚的寫「晚 N 天」（從播出日算），斷更很久收起；判定與巡檢共用 | 新 session 下 `/implement .scratch/m5.5/issues/17-reasoning-effort.md` |
 | 2026-11-04 | M5.5 16 面板畫推理 | 推理收在預設收起的「推理」一格，串流中也不展開，展開看得到全文，重新載入後還在；後端本來就帶，補了替身串流的推理與 fake「想一想」 | 新 session 下 `/implement .scratch/m5.5/issues/17-reasoning-effort.md` |
+| 2026-11-04 | M5.5 18 對話清單 | `GET /agent/conversations` 與 `/history` 列自己的對話（最多 50 段、標回答中），頁首「對話」切換；新瀏覽器接上最近一段，按過「新對話」的仍空白 | 新 session 下 `/implement .scratch/m5.5/issues/19-m5.5-ui-wrap-up.md` |
 
 ## 偏差與決定
 
