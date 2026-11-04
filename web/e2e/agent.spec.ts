@@ -593,7 +593,7 @@ test('網路搜尋：展開看到標題、網址與日期，不是加密內容�
 // 這一次算進斷路器，下一個成功的回答才歸零（最後那一個測試要從 0 數到 5）。
 test('推理程度被拒：停下的說明連到 AI 設定的推理程度', async ({ page }) => {
   await signIn(page, '/jobs')
-  await page.getByRole('button', { name: '助理' }).click()
+  await openBlank(page)
   const panel = page.locator('#agent-panel')
   const input = panel.getByRole('textbox', { name: '問助理' })
   await input.fill('推理被拒')

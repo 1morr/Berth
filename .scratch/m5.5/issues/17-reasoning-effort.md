@@ -38,3 +38,5 @@
 - 實測真的 DeepSeek（`scripts/experiments/reasoning_levels.py`，key 不落檔）：Anthropic 接口四級都 200，關時沒有推理文字、output 1 token；OpenAI 接口不帶參數、照樣推理（brief §20.26）。
 - fake `agent` 情境：「推理被拒」（`reasoning refused`）回 400，e2e `agent.spec.ts` 守連結與錨點。
 - code-review 未處理：程度被拒的 400 仍算進 provider 斷路器（連拒 5 次會暫停 15 分鐘，其實只要改設定），斷路器的分類不在本票。`rejects_reasoning` 解析 `str(ModelHTTPError)` 的格式（重新載入時只有 `ai_runs.error` 這份原文），pydantic-ai 改了格式要跟著改，測試會紅。同一個概念的名字有 `reasoning_applies`（adapter）與 `reasoning_takes_effect`（services 命令，避免與 import 撞名）。`chat_settings(endpoint, model, …)` 的 `model` 是照 `endpoint` 組的，兩者一起傳（Data Clumps），呼叫端都已經各有一份，先不包。
+- 2026-11-04 驗證：`pre-commit run --all-files` 全過；pytest 5674 passed、1 skipped；vitest 2416 passed；前端 e2e 全部 project **95 passed**（2.6m），0 failed、0 flaky（開跑前 port 8484–8534 有別的 worktree 在用，等空下來才跑）。
+- 2026-11-04 合併 main（票 18 對話清單，`5f60e50f`）之後重驗：無衝突；新增的 e2e 開面板後改呼叫 `openBlank`；progress.md 本票那一列移到票 18 之後、下一步改成票 19；pre-commit 全過；pytest 5684 passed、1 skipped；vitest 2423 passed；`pnpm -C web build` 一次後完整跑前端 e2e **97 passed**（2.6m），0 failed、0 flaky，開跑前 port 8484–8534 沒人用。
