@@ -24,7 +24,7 @@ ONE_OF_EACH: list[SlashResult] = [
     NewConversation(),
     Compacted(before=8, after=3),
     Usage(1, 0, 2, 1, 100, 20, 0, 0, 0, 0.01),
-    Status(AiProvider.ANTHROPIC, "m", 2, 120, 128_000, 0.6, None),
+    Status(AiProvider.ANTHROPIC, "m", 2, 120, 128_000, 0.6, None, web_search=True, tavily=False),
     Pending(cards=()),
     Skills(skills=()),
 ]

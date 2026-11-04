@@ -208,6 +208,10 @@ class StatusOut(BaseModel):
     #: 到了這個比例，下一輪開頭自動壓縮。
     compact_at: float
     paused_until: datetime | None
+    #: 下一則訊息搜得到什麼（M5.5 票 15）：伺服器端 `web_search`（Anthropic 接口）、Tavily。
+    #: 照設定直接說，不經過模型。
+    web_search: bool
+    tavily: bool
 
 
 class PendingCardOut(BaseModel):
@@ -609,6 +613,8 @@ class StepCallOut(BaseModel):
     #: 查不到價目、或出錯沒有回應是 `null`。
     cost_usd: float | None
     web_searches: int
+    #: 這次呼叫送出的工具名（M5.5 票 15）；`null` 是票 15 之前的呼叫，當時沒有記。
+    tools: list[str] | None
     #: 模型說它為什麼停（原樣）；出錯是空字串。
     finish_reason: str
     duration_ms: int

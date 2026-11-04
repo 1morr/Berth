@@ -1107,6 +1107,8 @@ describe('AgentPanel slash commands', () => {
             context_window: 128000,
             compact_at: 0.6,
             paused_until: null,
+            web_search: true,
+            tavily: true,
           }),
       }),
     )
@@ -1120,7 +1122,45 @@ describe('AgentPanel slash commands', () => {
     expect(output.getByText('32,000 / 128,000 token（25%）')).toBeInTheDocument()
     expect(output.getByText('一輪開頭到 60% 時')).toBeInTheDocument()
     expect(output.queryByText('暫停到')).toBeNull()
+    // 搜得到什麼由伺服器照設定直接說（M5.5 票 15），不問模型。
+    expect(output.getByText('網路搜尋').nextSibling).toHaveTextContent(
+      '伺服器端 web_search 與 Tavily',
+    )
   })
+
+  it.each([
+    [true, false, '伺服器端 web_search'],
+    [false, true, 'Tavily'],
+    [false, false, '沒有：下一則訊息搜不到網頁'],
+  ])(
+    'says what the next message can search (web_search %s, Tavily %s)',
+    async (native, tavily, text) => {
+      serve(
+        backend({
+          command: () =>
+            json({
+              command: 'status',
+              provider: native ? 'anthropic' : 'openai',
+              model: 'm',
+              messages: 0,
+              context_tokens: null,
+              context_window: 128000,
+              compact_at: 0.6,
+              paused_until: null,
+              web_search: native,
+              tavily,
+            }),
+        }),
+      )
+      const user = userEvent.setup()
+      renderPanel()
+
+      await user.type(await screen.findByRole('textbox', { name: '問助理' }), '/status{Enter}')
+
+      const output = within(await screen.findByRole('region', { name: '/status' }))
+      expect(output.getByText('網路搜尋').nextSibling).toHaveTextContent(text)
+    },
+  )
 
   it('lists the cards waiting for me, here and elsewhere', async () => {
     const card = { rows: 1, expires_at: '2026-10-28T12:00:00Z', command: 'jobs.retry_job' }

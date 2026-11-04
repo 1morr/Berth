@@ -96,6 +96,11 @@ def is_official(endpoint: AiEndpoint) -> bool:
     return effective_base_url(endpoint.provider, endpoint.base_url) == official
 
 
+def has_native_web_search(provider: AiProvider) -> bool:
+    """這種接口有沒有伺服器端的 `web_search`：只有 Anthropic Messages 有（brief §20.24）。"""
+    return provider is AiProvider.ANTHROPIC
+
+
 def native_web_search[D](
     provider: AiProvider, domains: Sequence[str], max_uses: int, available: Callable[[D], bool]
 ) -> list[AbstractCapability[D]]:
@@ -107,7 +112,7 @@ def native_web_search[D](
     而改工具定義會讓整段 prompt 快取失效（brief §20.24）；照剩幾次調它，每搜一次下一次就整段重寫。
     代價是最後一次呼叫可能多搜幾次（最多 `max_uses - 1`），比重寫快取便宜得多。
     """
-    if provider is not AiProvider.ANTHROPIC:
+    if not has_native_web_search(provider):
         return []
     tool = WebSearchTool(max_uses=max_uses, allowed_domains=list(domains))
 

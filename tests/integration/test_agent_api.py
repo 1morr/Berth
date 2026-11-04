@@ -1029,6 +1029,9 @@ class TestTheBooks:
         assert "401" in turn.run.error
         assert KEY not in turn.run.error
         assert [c.error != "" for c in turn.calls] == [True]
+        # 出錯的那一次也記下送出的工具（M5.5 票 15）。
+        [failed] = turn.calls
+        assert failed.tools_json is not None and "jobs_list_jobs" in json.loads(failed.tools_json)
         assert KEY not in response.text
         assert "the AI service returned an error" in stop_note(client)
         # 這個人的那一輪讓出來了：下一則照常跑。

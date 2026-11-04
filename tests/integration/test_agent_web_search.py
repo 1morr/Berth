@@ -31,6 +31,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import AgentInfo
 from pydantic_ai.native_tools import WebSearchTool
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from time_machine import TimeMachineFixture
 
@@ -60,6 +61,7 @@ from tests.integration.test_agent_api import (
     recorded,
     say,
 )
+from tests.integration.test_agent_slash import in_portal
 
 TAVILY_KEY = "tvly-dev-agent-test-key"
 #: DeepSeek 的尖峰是平日 UTC 01–04、06–10（brief §20.24），價錢是離峰的兩倍。2026-10-28 是週三。
@@ -159,6 +161,88 @@ class TestWhichSearchToolsTheModelSees:
         assert ("URL" in script.instructions[0]) is (native or function)
         # 伺服器端的網頁只多送一次（票 23d），所以叫模型搜完就寫下來；Tavily 的結果一直在。
         assert ("write down what you need" in script.instructions[0]) is native
+
+
+def search_status(client: TestClient) -> dict[str, bool]:
+    response = client.post(
+        "/api/agent/conversations/c1/commands", json={"text": "/status"}, headers=BROWSER
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    return {"web_search": body["web_search"], "tavily": body["tavily"]}
+
+
+def sent_tools(client: TestClient) -> list[list[str] | None]:
+    """最後一輪每次模型呼叫送出的工具名，從步驟頁的端點讀。"""
+    run_id = recorded(client)[-1].run.id
+    steps = client.get(f"/api/agent/runs/{run_id}").json()["steps"]
+    return [step["call"]["tools"] for step in steps]
+
+
+class TestTheSearchToolsRightNow:
+    """M5.5 票 15：正式環境的模型在 Tavily key 存回之後仍說沒有搜尋工具。`/status` 由程式直接說
+    這一刻搜得到什麼；每次模型呼叫記下送出的工具名，事後查得到。"""
+
+    def test_clearing_and_refilling_the_tavily_key_shows_at_once(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "openai", tavily=True)
+        assert search_status(client) == {"web_search": False, "tavily": True}
+
+        forgotten = client.delete("/api/settings/ai/keys/tavily", headers=BROWSER)
+        assert forgotten.status_code == 200, forgotten.text
+        assert search_status(client) == {"web_search": False, "tavily": False}
+        script.steps = [say("No search tools.")]
+        chat(client, "Can you search the web?")
+        [without] = sent_tools(client)
+        assert without is not None and "web_tavily_search" not in without
+
+        turn_ai_on(client, "openai", tavily=True)
+        assert search_status(client) == {"web_search": False, "tavily": True}
+        chat(client, "Now?")
+        [with_key] = sent_tools(client)
+        assert with_key is not None and "web_tavily_search" in with_key
+        # 送出的就是模型看得到的那一份。
+        assert sorted(with_key) == script.tools[-1]
+
+    def test_the_server_side_search_is_listed_on_the_anthropic_interface(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "anthropic")
+        assert search_status(client) == {"web_search": True, "tavily": False}
+        script.steps = [say("Here you go.")]
+
+        chat(client, "Is Frieren season 2 any good?")
+
+        [tools] = sent_tools(client)
+        assert tools is not None and "web_search" in tools
+        assert "web_tavily_search" not in tools
+
+    def test_the_instructions_say_the_tools_can_change_between_messages(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "openai")
+        script.steps = [say("Hi.")]
+
+        chat(client, "Hello?")
+
+        assert "only the tools you have now" in script.instructions[0]
+
+    def test_calls_from_before_ticket_15_say_nothing_was_recorded(
+        self, client: TestClient, script: Seen
+    ) -> None:
+        turn_ai_on(client, "openai")
+        script.steps = [say("Hi.")]
+        chat(client, "Hello?")
+
+        async def forget(session: AsyncSession) -> None:
+            for row in (await session.scalars(select(AiCall))).all():
+                row.tools_json = None
+            await session.commit()
+
+        in_portal(client, forget)
+
+        assert sent_tools(client) == [None]
 
 
 def searched(query: str, *, then: ToolCallPart | None = None) -> Step:
@@ -383,6 +467,13 @@ class TestTheSearchLimit:
         # 伺服器端搜 1 次、Tavily 1 次，額度用完：之後的呼叫不掛 `web_search`。`max_uses` 每次一樣
         # （改工具定義會讓整段快取失效）。
         assert [[t.max_uses for t in seen] for seen in script.native] == [[2], [2], [], []]
+        # 記下的工具名跟著同一份（M5.5 票 15）：額度用完那幾次沒有 `web_search`。
+        assert [("web_search" in (tools or [])) for tools in sent_tools(client)] == [
+            True,
+            True,
+            False,
+            False,
+        ]
         [turn] = recorded(client)
         assert [t.outcome for t in turn.tools] == ["ok", "ok", "blocked"]
         blocked = tool_returns(script.seen[3])[-1]

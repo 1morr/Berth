@@ -207,6 +207,7 @@ function Step({ step }: { step: RunStep }) {
           ))}
         </p>
       ) : null}
+      {call ? <SentTools tools={call.tools} /> : null}
       {failed ? (
         <div className="grid gap-1">
           <p className="text-sm text-blocked-ink">{t('usage.run.callError')}</p>
@@ -221,6 +222,44 @@ function Step({ step }: { step: RunStep }) {
         </ul>
       ) : null}
     </li>
+  )
+}
+
+/**
+ * 這一次送給模型的工具名（M5.5 票 15），照給模型的原名：模型說「沒有某個工具」時，從這裡對得上它
+ * 當時看到的那一份。預設收起：一次二十幾支。票 15 之前的呼叫沒有記，說「未記錄」。
+ */
+function SentTools({ tools }: { tools: string[] | null }) {
+  const { t } = useTranslation()
+  const label = <span className="label text-ink-dim">{t('usage.run.sentTools')}</span>
+  if (tools === null || tools.length === 0) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-2">
+        {label}
+        <span className="text-sm text-ink">
+          {t(tools === null ? 'usage.run.sentToolsUnrecorded' : 'usage.run.sentToolsNone')}
+        </span>
+      </p>
+    )
+  }
+  return (
+    <details className="group min-w-0">
+      <summary className="flex min-h-6 cursor-pointer items-center gap-2 [&::-webkit-details-marker]:hidden">
+        {label}
+        <span className="text-sm text-ink">
+          {t('usage.run.sentToolsCount', { count: tools.length })}
+        </span>
+        <ExpandHint />
+      </summary>
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+        {tools.map((name, index) => (
+          // 函式工具與伺服器端工具理論上可能同名：key 帶上位置。
+          <li key={`${index}-${name}`} className="value text-xs wrap-anywhere text-ink">
+            {name}
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 

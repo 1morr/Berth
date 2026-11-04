@@ -111,6 +111,9 @@ class AiCall(Base):
     #: 或這次呼叫出錯、沒有回應（`error` 不是空字串，分得出來）。預設是 `None`：SQLAlchemy 的
     #: `default` 與 `server_default` 都會蓋掉明設的 `None`（實測），所以記帳那一處每次明寫。
     web_search_cost_usd: Mapped[float | None] = mapped_column(Float, default=None)
+    #: 這次呼叫送出的工具名（JSON 陣列，給模型的名字，伺服器端的寫 `web_search`；M5.5 票 15）：
+    #: 模型說「沒有某個工具」時，從這裡查當時到底送了什麼。`NULL` 是票 15 之前記的呼叫。
+    tools_json: Mapped[str | None] = mapped_column(Text, default=None)
     #: 模型說它為什麼停（`stop`、`length`、`tool_call`…）；出錯是空字串。
     finish_reason: Mapped[str] = mapped_column(Text, default="")
     duration_ms: Mapped[int] = mapped_column(default=0)

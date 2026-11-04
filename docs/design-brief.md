@@ -1877,7 +1877,7 @@ fixture 在 `tests/fixtures/http/{mikan,nyaa,acgrip}/`（來源網址與去掉 t
 
 細節與時間線在 [`docs/research/assistant-feedback-2026-11-01.md`](research/assistant-feedback-2026-11-01.md)。
 
-- **模型會誤報自己有什麼工具**（正式環境 `deepseek-flash`，0.4.1）：Tavily key 在該輪開始前 8 秒已存回，`open_turn` 每則訊息重讀設定、重建工具清單（臨時整合測試：填、清、再填時依序看得到、看不到、看得到），它仍連答兩輪「沒有」。送出的工具清單當時沒有記錄，所以這是推論，不是線上直接量到的。助理對工具的說法不能當事實，要查就讀設定或步驟頁。
+- **模型會誤報自己有什麼工具**（正式環境 `deepseek-flash`，0.4.1）：Tavily key 在該輪開始前 8 秒已存回，`open_turn` 每則訊息重讀設定、重建工具清單（臨時整合測試：填、清、再填時依序看得到、看不到、看得到），它仍連答兩輪「沒有」。送出的工具清單當時沒有記錄，所以這是推論，不是線上直接量到的。助理對工具的說法不能當事實：M5.5 票 15 起 `/status` 照設定說搜得到什麼，每次模型呼叫送出的工具名記在 `ai_calls.tools_json`、步驟頁看得到，instructions 也叫模型只看當下的工具清單。
 - **DeepSeek 的 Anthropic 接口**：`thinking` 支援但忽略 `budget_tokens`；`output_config` 只支援 `effort`。（[Using the Anthropic API](https://api-docs.deepseek.com/guides/anthropic_api)）`deepseek-flash` 不送 `thinking` 時也會回推理文字（實測）。
 - **DeepSeek 的推理程度**：只分 `low`、`high`、`max`，預設 `high`，思考模式預設開。`minimal`→`low`，`medium`、`xhigh`→`high`，`ultra`→`max`，所以設 `medium` 跟現在不送一樣。Anthropic 格式用 `output_config.effort`，開關是 `thinking.type`。（[Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode)）
 - **pydantic-ai-slim 2.62.0 的推理**（實測 profile、讀 `models/__init__.py` 與 `models/anthropic/__init__.py`，實際請求還沒錄）：

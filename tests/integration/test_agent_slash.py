@@ -362,6 +362,8 @@ class TestCompact:
         assert "User: first" in summarized and "User: second" in summarized
         assert "User: third" not in summarized
         assert [r.run.kind for r in recorded(client)][-1] == "compaction"
+        # 摘要不掛工具，記成空的清單，不是「未記錄」（M5.5 票 15）。
+        assert [c.tools_json for c in recorded(client)[-1].calls] == ["[]"]
         # 重新載入的面板看得到摘要在哪。
         messages = client.get("/api/agent/conversations/c1").json()["messages"]
         assert any(p["type"] == "data-compaction" for m in messages for p in m["parts"])

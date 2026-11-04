@@ -6976,6 +6976,10 @@ export interface components {
             compact_at: number;
             /** Paused Until */
             paused_until: string | null;
+            /** Web Search */
+            web_search: boolean;
+            /** Tavily */
+            tavily: boolean;
         };
         /** StepCallOut */
         StepCallOut: {
@@ -6993,6 +6997,8 @@ export interface components {
             cost_usd: number | null;
             /** Web Searches */
             web_searches: number;
+            /** Tools */
+            tools: string[] | null;
             /** Finish Reason */
             finish_reason: string;
             /** Duration Ms */
