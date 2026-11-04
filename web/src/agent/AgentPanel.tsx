@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useEffect, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -16,8 +16,11 @@ import {
 } from '../components/controls'
 import { alertText, unknownText } from '../usage/alerts'
 import { Conversation } from './Conversation'
+import { ConversationPicker } from './ConversationList'
 import { PanelFailed, PanelLoading } from './PanelStates'
 import {
+  CONVERSATIONS_ID,
+  CONVERSATIONS_TOGGLE_ID,
   INPUT_ID,
   PANEL_ID,
   PANEL_TITLE_ID,
@@ -77,14 +80,22 @@ function closePanel(setOpen: (open: boolean) => void) {
 export function AgentPanel({ narrow }: { narrow: boolean }) {
   const { t } = useTranslation()
   const { open, setOpen, conversationId, startNew } = usePanel()
-  // 同一份查詢 `PanelBody` 也在讀；AI 沒開時「新對話」沒有意義，不畫。
+  // 同一份查詢 `PanelBody` 也在讀；AI 沒開時「對話」「新對話」沒有意義，不畫。
   const enabled = useQuery(agentStatusQueryOptions).data?.enabled === true
+  // 「對話」那一塊（M5.5 票 18）：disclosure，同帳號選單。
+  const [listing, setListing] = useState(false)
 
   if (!open) return null
 
   function onKeyDown(event: KeyboardEvent) {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     event.preventDefault()
+    if (listing) {
+      // 先收起清單，焦點回到「對話」；再按一次才收起面板。
+      setListing(false)
+      document.getElementById(CONVERSATIONS_TOGGLE_ID)?.focus()
+      return
+    }
     closePanel(setOpen)
   }
 
@@ -102,14 +113,34 @@ export function AgentPanel({ narrow }: { narrow: boolean }) {
           {t('agent.title')}
         </h2>
         {enabled ? (
-          <GhostButton type="button" onClick={() => startNew()}>
-            {t('agent.newConversation')}
-          </GhostButton>
+          <>
+            <GhostButton
+              id={CONVERSATIONS_TOGGLE_ID}
+              type="button"
+              aria-expanded={listing}
+              aria-controls={CONVERSATIONS_ID}
+              onClick={() => setListing((was) => !was)}
+            >
+              {t('agent.conversations.toggle')}
+            </GhostButton>
+            <GhostButton
+              type="button"
+              onClick={() => {
+                setListing(false)
+                startNew()
+              }}
+            >
+              {t('agent.newConversation')}
+            </GhostButton>
+          </>
         ) : null}
         <GhostButton type="button" onClick={() => closePanel(setOpen)}>
           {t('agent.close')}
         </GhostButton>
       </div>
+      {enabled && listing ? (
+        <ConversationPicker id={CONVERSATIONS_ID} onPicked={() => setListing(false)} />
+      ) : null}
       <PanelBody conversationId={conversationId} />
     </aside>
   )

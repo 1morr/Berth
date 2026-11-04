@@ -1929,6 +1929,9 @@ class SlashCommand(StrEnum):
     PENDING = "pending"
     #: 我用得上的 skills。
     SKILLS = "skills"
+    #: 我的對話清單，與側面板的「對話」同一份（M5.5 票 18）。
+    #: 不叫 `resume`：那是 Jellyfin 的繼續觀看。
+    HISTORY = "history"
 
 
 class AiRunKind(StrEnum):

@@ -1886,6 +1886,68 @@ async def read_conversation(
     )
 
 
+#: 對話清單最多列幾段（M5.5 票 18）：切回舊對話用，不是封存。
+CONVERSATION_LIST_LIMIT = 50
+#: 標題最多幾個字，多的截掉加「…」。
+TITLE_LENGTH = 40
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationEntry:
+    id: str
+    #: 第一則使用者訊息的第一行（截短）；沒有字是空字串。壓縮過的是留下來的第一則。
+    title: str
+    updated_at: datetime
+    #: 有一輪還在跑（`stop_reason` 還是 `NULL`，同 `ConversationView.running`）。
+    running: bool
+
+
+# 對話清單（側面板的「對話」與 `/history`）。一般使用者也行：只列自己的。
+@command(Effect.READ, audience=Role.USER)
+async def list_conversations(session: AsyncSession, *, user_id: int) -> list[ConversationEntry]:
+    """這個人的對話，最後說話的在前，最多 `CONVERSATION_LIST_LIMIT` 段。
+
+    沒有標題欄位：標題由存著的歷史算（同 `BusyElsewhere` 原本的做法），不必替舊列回填。
+    """
+    running = (
+        select(AiRun.id)
+        .where(
+            AiRun.conversation_id == AiConversation.id,
+            AiRun.kind == AiRunKind.CHAT,
+            AiRun.stop_reason.is_(None),
+        )
+        .exists()
+    )
+    rows = await session.execute(
+        select(AiConversation, running)
+        .where(AiConversation.user_id == user_id)
+        .order_by(AiConversation.updated_at.desc(), AiConversation.id)
+        .limit(CONVERSATION_LIST_LIMIT)
+    )
+    return [
+        ConversationEntry(
+            id=conversation.id,
+            title=_title(load_history(conversation.history_json)),
+            updated_at=conversation.updated_at,
+            running=is_running,
+        )
+        for conversation, is_running in rows.tuples()
+    ]
+
+
+def _title(history: Sequence[ModelMessage]) -> str:
+    for message in history:
+        if not isinstance(message, ModelRequest):
+            continue
+        for part in message.parts:
+            if not isinstance(part, UserPromptPart) or not isinstance(part.content, str):
+                continue
+            line = part.content.strip().split("\n")[0].strip()
+            if line:
+                return f"{line[:TITLE_LENGTH]}…" if len(line) > TITLE_LENGTH else line
+    return ""
+
+
 # 開輪之後起它的 task（M5 票 25）：之後的模型呼叫花掉的 token 回不來，同 `open_turn`。收 runtime 與
 # 函式，不是工具。
 @command(Effect.IRREVERSIBLE, flags={Flag.INTERNAL})

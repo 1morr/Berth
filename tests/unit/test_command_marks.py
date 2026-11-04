@@ -267,6 +267,7 @@ NAMED: dict[str, CommandMark] = {
     # M5 票 11：開一輪花掉的 token 回不來，入口不是工具；讀自己的對話是一般的讀取。
     "agent.open_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),
     "agent.read_conversation": _mark(Effect.READ),
+    "agent.list_conversations": _mark(Effect.READ),
     # 一輪在伺服器的 task 上跑、按了停止、啟動時收掉崩潰時在跑的（M5 票 25）：開了就花 token，
     # 停了、記成中斷就回不去（不同 `jobs.fail_interrupted`：那一筆還能重試）。
     "agent.start_turn": _mark(Effect.IRREVERSIBLE, Flag.INTERNAL),

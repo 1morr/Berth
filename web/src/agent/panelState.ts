@@ -13,13 +13,16 @@ export interface PanelState {
   setOpen: (open: boolean) => void
   conversationId: string
   /**
-   * 「新對話」：換一個 id；舊的那段還在伺服器上，只是這張票沒有清單可以回去。`lost` 是伺服器說這段
-   * 對話不在了（換了帳號、被清掉），新的那段開頭要說一句為什麼換了。
+   * 「新對話」：換一個 id；舊的那段還在伺服器上，從「對話」清單回得去（M5.5 票 18）。`lost` 是伺服器說
+   * 這段對話不在了（換了帳號、被清掉），新的那段開頭要說一句為什麼換了。
    */
   startNew: (lost?: boolean) => void
   /** 新的這段是因為舊的不見了才開的。 */
   restarted: boolean
-  /** 換到伺服器上另一段自己的對話（M5 票 25：被擋下時接過去還在跑的那一段）。 */
+  /**
+   * 換到伺服器上另一段自己的對話：被擋下時接過去還在跑的那一段（M5 票 25）、從「對話」清單或 `/history`
+   * 選的、新瀏覽器接上最近的一段（M5.5 票 18）。
+   */
   switchTo: (conversationId: string) => void
   /** 還沒送出的字。放在這一層：換頁、送不出去換了一段新對話，都還在。 */
   draft: string
@@ -32,6 +35,9 @@ export const TOGGLE_ID = 'agent-toggle'
 export const PANEL_ID = 'agent-panel'
 export const PANEL_TITLE_ID = 'agent-panel-title'
 export const INPUT_ID = 'agent-input'
+/** 頁首的「對話」與它打開的清單（M5.5 票 18）：清單收起時焦點回到它。 */
+export const CONVERSATIONS_TOGGLE_ID = 'agent-conversations-toggle'
+export const CONVERSATIONS_ID = 'agent-conversations'
 /** 斜線指令的提示清單（M5 票 18）與它的一列：輸入欄的 `aria-activedescendant` 指著那一列。 */
 export const SLASH_HINT_ID = 'agent-slash-hint'
 
@@ -61,6 +67,8 @@ export function useLeavePanel(): () => void {
 
 const OPEN_KEY = 'berth.agent.open'
 const CONVERSATION_KEY = 'berth.agent.conversation'
+/** 這個瀏覽器按「新對話」開的那一段的 id，送出第一則之前都還不在伺服器上（M5.5 票 18）。 */
+const FRESH_KEY = 'berth.agent.fresh'
 
 /** 開關記在這個分頁（`sessionStorage`）：換頁、重新載入都照舊，另開一個分頁是關著的。 */
 export function readOpen(): boolean {
@@ -79,7 +87,10 @@ export function writeOpen(open: boolean): void {
   }
 }
 
-/** 對話 id 記在這個瀏覽器（`localStorage`）：重新載入、另開分頁都接得回同一段。 */
+/**
+ * 對話 id 記在這個瀏覽器（`localStorage`）：重新載入、另開分頁都接得回同一段。沒有記著的（新瀏覽器）
+ * 給一個不在伺服器上、也不是按「新對話」開的 id：面板讀不到它，就接上這個人最近的一段（`Conversation`）。
+ */
 export function readConversationId(): string {
   try {
     const stored = localStorage.getItem(CONVERSATION_KEY)
@@ -87,11 +98,36 @@ export function readConversationId(): string {
   } catch {
     // 同上：讀不到就開一段新的。
   }
-  return rememberNewConversation()
+  return rememberConversation(randomUuid())
 }
 
+/** 「新對話」：新的 id，並記下它是這個瀏覽器開的——送出第一則之前重新整理，仍是這一段空白的。 */
 export function rememberNewConversation(): string {
-  return rememberConversation(randomUuid())
+  const id = rememberConversation(randomUuid())
+  try {
+    localStorage.setItem(FRESH_KEY, id)
+  } catch {
+    // 同上。記不下的話，重新整理會接上最近的一段。
+  }
+  return id
+}
+
+/** 這一段是這個瀏覽器按「新對話」開的、還沒送出過訊息。 */
+export function isFresh(id: string): boolean {
+  try {
+    return localStorage.getItem(FRESH_KEY) === id
+  } catch {
+    return false
+  }
+}
+
+/** 第一則送出去了：這一段在伺服器上了，不再需要旗標。 */
+export function forgetFresh(id: string): void {
+  try {
+    if (localStorage.getItem(FRESH_KEY) === id) localStorage.removeItem(FRESH_KEY)
+  } catch {
+    // 同上。
+  }
 }
 
 /**

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { SlashName, SlashResult } from '../api/agent'
 import { Timestamp } from '../components/Timestamp'
+import { ConversationEntries } from './ConversationList'
 import { SLASH_HINT_ID, slashOptionId } from './panelState'
 
 /**
@@ -87,6 +88,8 @@ function Body({ result }: { result: Shown }) {
       return <Pending result={result} />
     case 'skills':
       return <Skills result={result} />
+    case 'history':
+      return <History result={result} />
   }
 }
 
@@ -265,4 +268,13 @@ function Skills({ result }: { result: Extract<Shown, { command: 'skills' }> }) {
       <p className="text-xs text-ink-dim">{t('agent.slash.skills.note')}</p>
     </>
   )
+}
+
+/** 我的對話（M5.5 票 18），同頁首的「對話」：點一段切過去。 */
+function History({ result }: { result: Extract<Shown, { command: 'history' }> }) {
+  const { t } = useTranslation()
+  if (result.conversations.length === 0) {
+    return <p className="text-sm text-ink">{t('agent.conversations.none')}</p>
+  }
+  return <ConversationEntries entries={result.conversations} />
 }

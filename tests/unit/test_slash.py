@@ -10,6 +10,7 @@ from berth.domain import AiProvider, SlashCommand
 from berth.services.slash import (
     SLASH_COMMANDS,
     Compacted,
+    History,
     NewConversation,
     Pending,
     Skills,
@@ -27,6 +28,7 @@ ONE_OF_EACH: list[SlashResult] = [
     Status(AiProvider.ANTHROPIC, "m", 2, 120, 128_000, 0.6, None, web_search=True, tavily=False),
     Pending(cards=()),
     Skills(skills=()),
+    History(conversations=()),
 ]
 
 
