@@ -1,0 +1,2 @@
+# Orca 與 Claude Code 建 worktree 時，從主資料夾複製這些被 gitignore 的檔案
+.claude/settings.local.json

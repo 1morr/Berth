@@ -42,6 +42,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-04 | M6 準備 | M5.5 驗收完、封存於 `docs/archive/m5.5.md`；CHANGELOG 定為 0.5.0，tag 與 push 由協調者做。M6 照 plan §11.7 開工 | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-06 | M5.6 方案 | 試用機對話分析與精簡方案 `docs/research/agent-slimming-2026-11-06.md`：Route 卡一部作品問一次、skills 5→3、工具 22→18、C2 季記號 bug | 等使用者：審精簡方案，決定 M5.6 排在 M6 之前或之後 |
 | 2026-11-06 | M5.6 開工 | 方案已審、排在 M6 前；spec 與 11 張票：基準先量、C3 拆兩張、UI 收尾獨立；plan 補 §11.6c、brief §17 加 M5.6 列 | 新 session 下 `/implement .scratch/m5.6/issues/01-baseline.md` |
+| 2026-11-07 | M5.6 工具 | 加 `.worktreeinclude`：Orca 與 Claude Code 新建的 worktree 從主資料夾複製 `.claude/settings.local.json`（本機 router 設定） | 新 session 下 `/implement .scratch/m5.6/issues/01-baseline.md` |
 
 ## 偏差與決定
 
