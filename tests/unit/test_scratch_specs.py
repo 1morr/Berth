@@ -3,6 +3,8 @@
 - 同時有含五段的 `spec.md` 和 `issues/` 裡至少一張票：擋掉「有票沒 spec」和「還沒開工就預建 spec」。
 - 它在 plan §11 的那一節縮成一行、連到 spec：內容只留一份，標題與編號留給程式碼引用。
   不在 §11 的目錄（docs-diet 這類）沒有這一節，不查。
+- 在 §11 有一節的里程碑，`issues/` 裡有一張 `-acceptance.md` 結尾的驗收票；只看有沒有，
+  不看編號（驗收後補的票照樣放行）。
 
 「已驗收」與目錄名都讀 `docs/progress.md` 的里程碑表：M0–M5 與 docs-diet 是歷史快照，
 新增里程碑不必改這裡。只比段落標題與連結，不比措辭；標題層級、多的段落、旁邊的 shape 檔
@@ -54,6 +56,8 @@ def problems(scratch: Path, progress: str, plan: str) -> list[str]:
         if not any((directory / "issues").glob("*.md")):
             found.append(f"{name}/issues/ 沒有票")
         section = _plan_section(plan, milestones.get(name, name))
+        if section is not None and not any((directory / "issues").glob("*-acceptance.md")):
+            found.append(f"{name}/issues/ 沒有驗收票：里程碑最後一張是 NN-{name}-acceptance.md")
         if section is not None:
             body = [line for line in section.splitlines() if line.strip()]
             if len(body) != 1 or f".scratch/{name}/spec.md" not in body[0]:
@@ -77,10 +81,13 @@ class TestTheGateItself:
     def progress(self) -> str:
         return PROGRESS.read_text(encoding="utf-8")
 
-    def kicked_off(self, scratch: Path, name: str = "m6") -> Path:
+    def kicked_off(self, scratch: Path, name: str = "m6", acceptance: bool = True) -> Path:
         directory = scratch / name
         (directory / "issues").mkdir(parents=True)
         (directory / "issues" / "01-first.md").write_text("# 01\n", encoding="utf-8")
+        if acceptance:
+            ticket = directory / "issues" / f"02-{name}-acceptance.md"
+            ticket.write_text("# 02\n", encoding="utf-8")
         spec = "".join(f"## {section}\n\n內文\n\n" for section in SPEC_SECTIONS)
         (directory / "spec.md").write_text(spec, encoding="utf-8")
         return directory
@@ -93,11 +100,11 @@ class TestTheGateItself:
         assert any("沒有 spec.md" in item for item in self.check(tmp_path))
 
     def test_a_spec_without_tickets_is_caught(self, tmp_path: Path) -> None:
-        (self.kicked_off(tmp_path) / "issues" / "01-first.md").unlink()
+        (self.kicked_off(tmp_path, acceptance=False) / "issues" / "01-first.md").unlink()
         assert any("沒有票" in item for item in self.check(tmp_path))
 
     def test_a_spec_without_an_issues_directory_is_caught(self, tmp_path: Path) -> None:
-        directory = self.kicked_off(tmp_path)
+        directory = self.kicked_off(tmp_path, acceptance=False)
         (directory / "issues" / "01-first.md").unlink()
         (directory / "issues").rmdir()
         assert any("沒有票" in item for item in self.check(tmp_path))
@@ -139,12 +146,25 @@ class TestTheGateItself:
         plan = self.PLAN_DONE.replace("內容在 `.scratch/m6/spec.md`。", "內容搬走了。")
         assert any("縮成一行" in item for item in self.check(tmp_path, plan))
 
+    def test_a_milestone_without_an_acceptance_ticket_is_caught(self, tmp_path: Path) -> None:
+        self.kicked_off(tmp_path, acceptance=False)
+        assert any("驗收票" in item for item in self.check(tmp_path))
+
+    def test_the_acceptance_ticket_may_be_renumbered_rewritten_or_followed(
+        self, tmp_path: Path
+    ) -> None:
+        issues = self.kicked_off(tmp_path) / "issues"
+        (issues / "02-m6-acceptance.md").rename(issues / "07-m6-acceptance.md")
+        (issues / "07-m6-acceptance.md").write_text("# 07 驗收\n\n別的內文\n", encoding="utf-8")
+        (issues / "08-after.md").write_text("# 08\n", encoding="utf-8")
+        assert self.check(tmp_path) == []
+
     def test_a_complete_kickoff_is_not_caught(self, tmp_path: Path) -> None:
         self.kicked_off(tmp_path)
         assert self.check(tmp_path) == []
 
     def test_a_directory_outside_plan_11_only_needs_spec_and_tickets(self, tmp_path: Path) -> None:
-        self.kicked_off(tmp_path, "someday")
+        self.kicked_off(tmp_path, "someday", acceptance=False)
         assert self.check(tmp_path) == []
 
     def test_unrelated_formatting_is_not_caught(self, tmp_path: Path) -> None:

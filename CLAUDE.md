@@ -55,7 +55,7 @@
 
 - 里程碑開工：入口是使用者在新 session 下 `/to-tickets docs/plan.md 拆 <里程碑> 的票`。這個 session 依序做完三步，第 3 步 commit 後才算完成：
   1. 把 plan §11 裡它的那一節，依最新的 brief、plan 與上一個里程碑的結果細化成 `.scratch/<里程碑>/spec.md`，段落為〈目標〉〈範圍〉〈共同規則〉〈驗收〉〈票序〉。plan 那一節的內容搬進 spec，標題與章節編號留著，內文縮成一行連結（程式碼引用 §11.x，編號不能變）。文件不足以寫出 spec 時，問使用者並補進文件。
-  2. 照 skill 提出切法，使用者同意後寫票，每張票寫明「讀：plan §x、brief §y」與驗收條件。
+  2. 照 skill 提出切法，使用者同意後寫票，每張票寫明「讀：plan §x、brief §y」與驗收條件。最後一張固定是**驗收票** `NN-<里程碑>-acceptance`，被其他所有票擋：spec〈驗收〉逐條對到證據、里程碑 code-review、各票 Comments 逐條歸到修掉、延後或不做，最後封存（第 5 步）；`tests/unit/test_scratch_specs.py` 守它存在。
   3. 票序寫回 spec〈票序〉，progress.md 加一列 session 紀錄，commit。
 - 之後的里程碑留在 plan，開工時才有 spec。
 - `parser`、`naming`、`domain`、`services` 的新功能與修 bug：`mattpocock-skills:tdd`（紅 → 綠 → 重構，benchmark fixture 就是紅燈）。
