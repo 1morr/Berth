@@ -18,7 +18,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | M4 | `.scratch/m4/issues/` | — | 已驗收（2026-10-23），封存於 `docs/archive/m4.md` |
 | M5 | `.scratch/m5/issues/` | — | 已驗收（2026-10-28），封存於 `docs/archive/m5.md` |
 | M5.5 | `.scratch/m5.5/issues/` | — | 已驗收（2026-11-04），封存於 `docs/archive/m5.5.md` |
-| M5.6 | `.scratch/m5.6/issues/` | `docs/research/agent-slimming-2026-11-06.md` | AI 對話精簡：Route 卡、skills 與工具（方案待審，2026-11-06） |
+| M5.6 | `.scratch/m5.6/issues/` | `.scratch/m5.6/spec.md`；`docs/research/agent-slimming-2026-11-06.md` | AI 對話精簡：Route 卡、skills 與工具（2026-11-06 開工，排在 M6 前） |
 | M6 | `.scratch/m6/issues/` | plan §11.7；brief §14、§6.10 | 人工接管開關與背景 AI 任務（含 Issue）、影子模式（2026-10-27 改） |
 | M7 | `.scratch/m7/issues/` | plan §11.8；brief §14、§16.2 | Discord 與 MCP（2026-09-22 加入、09-24 加 MCP、10-27 改名） |
 | docs-diet | `.scratch/docs-diet/issues/` | — | 已驗收（2026-10-30），封存於 `docs/archive/docs-diet.md` |
@@ -41,6 +41,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-10-31 | M6 流程 | 里程碑開工改成一個指令，所有 session 結尾給下一步指令；閘門 `test_scratch_specs.py`、`test_progress_rules.py` | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-04 | M6 準備 | M5.5 驗收完、封存於 `docs/archive/m5.5.md`；CHANGELOG 定為 0.5.0，tag 與 push 由協調者做。M6 照 plan §11.7 開工 | 新 session 下 `/to-tickets docs/plan.md 拆 M6 的票` |
 | 2026-11-06 | M5.6 方案 | 試用機對話分析與精簡方案 `docs/research/agent-slimming-2026-11-06.md`：Route 卡一部作品問一次、skills 5→3、工具 22→18、C2 季記號 bug | 等使用者：審精簡方案，決定 M5.6 排在 M6 之前或之後 |
+| 2026-11-06 | M5.6 開工 | 方案已審、排在 M6 前；spec 與 11 張票：基準先量、C3 拆兩張、UI 收尾獨立；plan 補 §11.6c、brief §17 加 M5.6 列 | 新 session 下 `/implement .scratch/m5.6/issues/01-baseline.md` |
 
 ## 偏差與決定
 
