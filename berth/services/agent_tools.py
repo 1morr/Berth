@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 
-from berth.domain import Role
+from berth.domain import Role, number_ranges, season_ranges
 from berth.services.registry import commands
 
 #: 只有設了 Tavily key 才給模型的那一支。
@@ -206,7 +206,7 @@ def _compact_unmatched(rows: list[object]) -> dict[str, object]:
     """Jellyfin 對不上 TMDB 的那幾集（票 28），照 Jellyfin 的季收成集數範圍（多集檔算它蓋到的
     每一集）；沒有季集號的只說幾集（`no_number`）。Jellyfin 認不到 metadata 時整部劇都對不上，
     長篇上千筆。"""
-    by_season: dict[str, list[int]] = {}
+    numbered: list[tuple[int, int, int | None]] = []
     numberless = 0
     for row in rows:
         if not isinstance(row, dict):
@@ -215,9 +215,8 @@ def _compact_unmatched(rows: list[object]) -> dict[str, object]:
         if not isinstance(season, int) or not isinstance(start, int):
             numberless += 1
             continue
-        last = end if isinstance(end, int) and end >= start else start
-        by_season.setdefault(str(season), []).extend(range(start, last + 1))
-    compact: dict[str, object] = {season: _ranges(numbers) for season, numbers in by_season.items()}
+        numbered.append((season, start, end if isinstance(end, int) else None))
+    compact: dict[str, object] = {**season_ranges(numbered)}
     if numberless:
         compact["no_number"] = numberless
     return compact
@@ -239,12 +238,12 @@ def _compact_season(season: object) -> object:
         if episode.get("jellyfin_maybe"):
             maybe.append(episode["episode_number"])
     compact = {k: v for k, v in season.items() if k != "episodes"}
-    compact["episodes"] = {status: _ranges(numbers) for status, numbers in by_status.items()}
+    compact["episodes"] = {status: number_ranges(numbers) for status, numbers in by_status.items()}
     if jobs:
         compact["jobs"] = jobs
     # 票 28：狀態照舊（多半是缺），只是 Jellyfin 有一集編號相同、卻對不上 TMDB。
     if maybe:
-        compact["jellyfin_maybe"] = _ranges(maybe)
+        compact["jellyfin_maybe"] = number_ranges(maybe)
     if blocks := _aired_blocks(season["episodes"]):
         compact["aired_blocks"] = blocks
     return compact
@@ -272,7 +271,7 @@ def _aired_blocks(episodes: list[object]) -> list[dict[str, str]]:
             blocks.append([(number, aired)])
     return [
         {
-            "episodes": _ranges([number for number, _ in block]),
+            "episodes": number_ranges([number for number, _ in block]),
             "from": block[0][1].isoformat(),
             "to": block[-1][1].isoformat(),
         }
@@ -280,23 +279,27 @@ def _aired_blocks(episodes: list[object]) -> list[dict[str, str]]:
     ]
 
 
-def _ranges(numbers: list[int]) -> str:
-    """`[1, 2, 3, 5]` → `"1-3, 5"`。"""
-    spans: list[str] = []
-    ordered = sorted(set(numbers))
-    start = previous = ordered[0]
-    for number in [*ordered[1:], None]:
-        if number is not None and number == previous + 1:
-            previous = number
+def _compact_find_in_library(result: object) -> object:
+    """`inventory.find_in_library` 給模型的那一份（M5.6 票 06）：電影沒有 `episodes` 這一格，
+    劇集讀得到集數時不必帶一句空的原因。"""
+    if not isinstance(result, dict) or not isinstance(result.get("names"), list):
+        return result
+    for lookup in result["names"]:
+        if not isinstance(lookup, dict) or not isinstance(lookup.get("titles"), list):
             continue
-        spans.append(str(start) if start == previous else f"{start}-{previous}")
-        if number is not None:
-            start = previous = number
-    return ", ".join(spans)
+        for row in lookup["titles"]:
+            if not isinstance(row, dict):
+                continue
+            if row.get("episodes") is None:
+                row.pop("episodes", None)
+            if not row.get("episodes_note"):
+                row.pop("episodes_note", None)
+    return result
 
 
 #: 結果交給模型之前換成的樣子（JSON 形狀進、JSON 形狀出）。沒列的原樣交。
 MODEL_VIEWS: dict[str, Callable[[object], object]] = {
     "search.search_torrents": _compact_search,
     "media.read_media": _compact_media,
+    "inventory.find_in_library": _compact_find_in_library,
 }

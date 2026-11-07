@@ -111,6 +111,7 @@ from berth.domain.enums import (
     collection_type_for,
     default_notify_kinds,
 )
+from berth.domain.episodes import number_ranges, season_ranges
 from berth.domain.media import EpisodeSnapshot, MediaSnapshot, SeasonSnapshot
 from berth.domain.mediainfo import MediaInfoSummary, SubtitleTrack
 from berth.domain.parser import (
@@ -316,9 +317,11 @@ __all__ = [
     "default_notify_kinds",
     "episode_label",
     "label_of",
+    "number_ranges",
     "overall",
     "owner_of",
     "rss_label",
+    "season_ranges",
     "skipped",
     "sort_langs",
     "stalled",
