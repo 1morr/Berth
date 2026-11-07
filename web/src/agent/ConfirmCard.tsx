@@ -21,6 +21,7 @@ import {
   type SubscriptionRef,
 } from '../api/proposals'
 import { Checkbox, CONFIRM_ACTIONS, GhostButton, PrimaryButton } from '../components/controls'
+import { Dot } from '../components/Dot'
 import { RequestFailed } from '../components/RequestFailed'
 import { SIGNAL_FILL } from '../components/signal'
 import { Timestamp } from '../components/Timestamp'
@@ -52,6 +53,8 @@ import { useCardActions } from './cards'
 export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; toolCallId: string }) {
   const { t } = useTranslation()
   const titleId = useId()
+  const statusId = useId()
+  const heldId = useId()
   const queryClient = useQueryClient()
   const { respond } = useCardActions()
   const rows = proposal.arguments
@@ -93,6 +96,55 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
   const groupsUnpicked = rows.filter(
     (_, index) => choosingGroup(index) && groupPicks[index] === null,
   ).length
+  // 規模：卡的摘要一行（M5.6 票 10 的 critique P1）。大小只有送單的列有。
+  const totalSize = rows.reduce(
+    (sum, row) => sum + (isSubmit(proposal.command, row) ? (row.source.size ?? 0) : 0),
+    0,
+  )
+  // 同一條 Route 套到兩部作品時只寫一次；只選了一部分就寫出剩下的部數。
+  const pickedGroups = routeGroups.filter((group) => pickOf(group) !== null)
+  const pickedNames = [
+    ...new Set(
+      pickedGroups
+        .map((group) => group.ask.options.find((option) => option.id === pickOf(group))?.name)
+        .filter((name): name is string => name !== undefined),
+    ),
+  ]
+  const singleNames = [
+    ...new Set((proposal.preview.single_routes ?? []).flatMap((one) => (one ? [one.name] : []))),
+  ]
+  const unpickedGroups = routeGroups.length - pickedGroups.length
+  // 按過之後 Route 由每一列自己說（伺服器記下的那一條），摘要只講規模。
+  const routeSummary = !waiting
+    ? null
+    : routeGroups.length > 0
+      ? t('agent.card.summaryRoute', {
+          routes:
+            pickedGroups.length === 0
+              ? t('agent.card.routeNotChosen')
+              : unpickedGroups === 0
+                ? formatList(pickedNames, i18n.language)
+                : t('agent.card.summaryRoutePartial', {
+                    routes: formatList(pickedNames, i18n.language),
+                    count: unpickedGroups,
+                  }),
+        })
+      : singleNames.length > 0
+        ? t('agent.card.summaryRoute', { routes: formatList(singleNames, i18n.language) })
+        : null
+  // 被擋住的那一句：只畫在常駐的 `role="status"` 上（同一時間只有一個 live region，讀屏才不會漏聽）。
+  const blockedReason = !waiting
+    ? ''
+    : ticked.size === 0
+      ? t('agent.card.noneTicked')
+      : routeUnpicked > 0
+        ? t('agent.card.routeMissing', { count: routeUnpicked })
+        : groupsUnpicked > 0
+          ? t('agent.card.subgroupMissing', { count: groupsUnpicked })
+          : ''
+  // 長卡（13 列那種）：決定那一區貼在面板底端，主要動作不會被埋在好幾個畫面之下。
+  const sticky = waiting && rows.length > 4
+
   // 按過之後整排鍵收掉：焦點交給卡片標題，不掉回 `body`（WCAG 2.4.3）。只在這一頁按的才搬。
   const title = useRef<HTMLHeadingElement>(null)
   const pressed = useRef(false)
@@ -166,6 +218,33 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         </h3>
       </div>
 
+      {/* 規模與目前的選擇：在被 Route 擋住的狀態，卡上要有第二個地方說得出「這次會送多少」。 */}
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-ink">
+        <span className="value">{t('agent.card.summaryItems', { count: rows.length })}</span>
+        {totalSize > 0 ? (
+          <>
+            <Dot />
+            <span className="value">
+              {t('agent.card.summarySize', { size: formatSize(totalSize, i18n.language) })}
+            </span>
+          </>
+        ) : null}
+        {waiting && many ? (
+          <>
+            <Dot />
+            <span className="value">
+              {t('agent.card.summaryTicked', { ticked: ticked.size, count: rows.length })}
+            </span>
+          </>
+        ) : null}
+        {routeSummary !== null ? (
+          <>
+            <Dot />
+            <span>{routeSummary}</span>
+          </>
+        ) : null}
+      </p>
+
       <Effects proposal={proposal} />
       {waiting && asking ? (
         <>
@@ -173,6 +252,8 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
           <RouteChoices
             groups={routeGroups}
             picks={picks}
+            ticked={ticked}
+            describedBy={statusId}
             disabled={decide.isPending}
             onPick={chooseRoute}
             onPickAll={applyRouteToAll}
@@ -213,6 +294,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               }}
               existing={proposal.preview.existing[index] ?? []}
               held={proposal.preview.held[index] ?? []}
+              heldId={`${heldId}-${index}`}
               round={{
                 offered: roundOffers[index] === true,
                 // 按過之後是伺服器記下的那一個；沒記是預設的那一個。
@@ -233,6 +315,14 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
               {ticking ? (
                 <Checkbox
                   label={rowLabel(proposal.command, row, index)}
+                  // 一列一列勾的批次：全勾是常態，不塗「要你」的訊號黃（M5.6 票 10 的 critique）。
+                  tone={many ? 'neutral' : 'signal'}
+                  // 「含已有的…」是那一列的後果：跟這個勾選框一起念（M5.6 票 10 的 audit）。
+                  describedBy={
+                    (proposal.preview.held[index] ?? []).length > 0
+                      ? `${heldId}-${index}`
+                      : undefined
+                  }
                   checked={ticked.has(index)}
                   disabled={decide.isPending}
                   onChange={(on) =>
@@ -252,64 +342,67 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
         })}
       </ol>
 
-      {/* 一直掛著：按下去之後的結論要念得到（DESIGN.md 就地確認那一節）。 */}
-      <p role="status" className="text-sm text-ink empty:hidden">
-        {waiting ? '' : t(`agent.card.status.${proposal.status}`)}
-      </p>
-
-      {waiting ? (
-        <div className="grid gap-2">
-          {proposal.status === 'detached' ? (
-            <p className="text-xs text-ink-dim">{t('agent.card.detached')}</p>
-          ) : null}
-          {refusal ? (
-            <p role="alert" className="text-sm text-blocked-ink">
-              {t(`agent.card.refusal.${refusal.reason}`)}
-            </p>
-          ) : decide.error ? (
-            <RequestFailed error={decide.error} lead={t('agent.card.failed')} />
-          ) : null}
-          <div className={CONFIRM_ACTIONS}>
-            {ticked.size > 0 && routeUnpicked === 0 && groupsUnpicked === 0 ? (
-              <PrimaryButton
+      {/* 那一格一直掛著：按下去之後的結論要念得到（DESIGN.md 就地確認那一節；跟著結果一起掛上去的
+          live region 多數閱讀器不念）。被擋住的那一句也在同一個 region，讀屏不會漏聽。長卡的決定那一區
+          貼在面板底端，捲列時主要動作還在原位（M5.6 票 10）。 */}
+      <div
+        className={
+          sticky
+            ? 'sticky bottom-0 -mx-3 -mb-3 grid gap-2 border-t-2 border-rule bg-well px-3 pt-2 pb-3'
+            : 'grid gap-2'
+        }
+      >
+        <p id={statusId} role="status" className="text-sm text-ink empty:hidden">
+          {waiting ? blockedReason : t(`agent.card.status.${proposal.status}`)}
+        </p>
+        {waiting ? (
+          <>
+            {proposal.status === 'detached' ? (
+              <p className="text-xs text-ink-dim">{t('agent.card.detached')}</p>
+            ) : null}
+            {refusal ? (
+              <p role="alert" className="text-sm text-blocked-ink">
+                {t(`agent.card.refusal.${refusal.reason}`)}
+              </p>
+            ) : decide.error ? (
+              <RequestFailed error={decide.error} lead={t('agent.card.failed')} />
+            ) : null}
+            <div className={CONFIRM_ACTIONS}>
+              {blockedReason === '' ? (
+                <PrimaryButton
+                  type="button"
+                  // `busy` 而不是 `disabled`：停用的鍵接不住焦點（DESIGN.md〈Buttons〉）。
+                  busy={decide.isPending}
+                  onClick={() => {
+                    pressed.current = true
+                    decide.mutate(true)
+                  }}
+                >
+                  {decide.isPending && decide.variables
+                    ? t('agent.card.running')
+                    : many
+                      ? t('agent.card.confirmCount', { count: ticked.size })
+                      : t('agent.card.confirm')}
+                </PrimaryButton>
+              ) : (
+                // 一列都沒勾、或勾著的列還沒選 Route：按下去必被拒的鍵不畫（DESIGN.md「先選再確認」），
+                // 那一格留空，理由在上面那一行說。
+                <span />
+              )}
+              <GhostButton
                 type="button"
-                // `busy` 而不是 `disabled`：停用的鍵接不住焦點（DESIGN.md〈Buttons〉）。
                 busy={decide.isPending}
                 onClick={() => {
                   pressed.current = true
-                  decide.mutate(true)
+                  decide.mutate(false)
                 }}
               >
-                {decide.isPending && decide.variables
-                  ? t('agent.card.running')
-                  : many
-                    ? t('agent.card.confirmCount', { count: ticked.size })
-                    : t('agent.card.confirm')}
-              </PrimaryButton>
-            ) : (
-              // 一列都沒勾、或勾著的列還沒選 Route：按下去必被拒的鍵不畫（DESIGN.md「先選再確認」），
-              // 那一格說為什麼。
-              <p className="text-xs text-ink-dim">
-                {ticked.size === 0
-                  ? t('agent.card.noneTicked')
-                  : routeUnpicked > 0
-                    ? t('agent.card.routeMissing', { count: routeUnpicked })
-                    : t('agent.card.subgroupMissing', { count: groupsUnpicked })}
-              </p>
-            )}
-            <GhostButton
-              type="button"
-              busy={decide.isPending}
-              onClick={() => {
-                pressed.current = true
-                decide.mutate(false)
-              }}
-            >
-              {t('agent.card.reject')}
-            </GhostButton>
-          </div>
-        </div>
-      ) : null}
+                {t('agent.card.reject')}
+              </GhostButton>
+            </div>
+          </>
+        ) : null}
+      </div>
     </section>
   )
 }
@@ -399,6 +492,7 @@ function RowBody({
   subgroup,
   existing,
   held,
+  heldId,
   round,
 }: {
   command: string
@@ -413,6 +507,8 @@ function RowBody({
   existing: readonly SubscriptionRef[]
   /** 這個發佈蓋到的集裡作品已經有的（帳本或 Jellyfin，票 28）。 */
   held: readonly HeldEpisode[]
+  /** 「含已有的…」那一行的 id：勾選框的 `aria-describedby` 指到它（M5.6 票 10 的 audit）。 */
+  heldId?: string
   round: RoundSlot
 }) {
   const { t } = useTranslation()
@@ -421,7 +517,7 @@ function RowBody({
     return (
       <div className="grid gap-1">
         <SubmitRowBody row={row} labelled={labelled} route={route} />
-        <Held episodes={held} />
+        <Held id={heldId} episodes={held} />
       </div>
     )
   }
@@ -582,7 +678,10 @@ interface RoundSlot {
  */
 function RouteName({ route, fallback }: { route: RouteSlot; fallback: string }) {
   const { ask, pick, single } = route
-  if (ask !== null) return ask.options.find((option) => option.id === pick)?.name ?? '—'
+  if (ask !== null)
+    return (
+      ask.options.find((option) => option.id === pick)?.name ?? i18n.t('agent.card.routeNotChosen')
+    )
   return single?.name ?? fallback
 }
 
@@ -593,12 +692,18 @@ function RouteName({ route, fallback }: { route: RouteSlot; fallback: string }) 
 function RouteChoices({
   groups,
   picks,
+  ticked,
+  describedBy,
   disabled,
   onPick,
   onPickAll,
 }: {
   groups: readonly RouteGroup[]
   picks: ReadonlyMap<string, number | null>
+  /** 勾著的列才要人選：沒勾的那一組下拉不必擋（M5.6 票 03）。 */
+  ticked: ReadonlySet<number>
+  /** 被擋住的那一句的 id（卡片底端那個 live region）。 */
+  describedBy: string
   disabled: boolean
   onPick: (mediaId: string, route: number | null) => void
   onPickAll: (route: number) => void
@@ -613,19 +718,22 @@ function RouteChoices({
   return (
     <div className="grid gap-2">
       {shared.length > 0 ? (
-        <RouteSelect
-          label={t('agent.card.routeApplyAll')}
-          placeholder={t('agent.card.routeApplyAllChoose')}
-          // 全部套用是一個動作：沒選時顯示的那一項不是一個選得下去的狀態。
-          placeholderDisabled
-          required={false}
-          options={shared}
-          pick={sharedPick}
-          disabled={disabled}
-          onPick={(route) => {
-            if (route !== null) onPickAll(route)
-          }}
-        />
+        <div className="grid gap-0.5">
+          <RouteSelect
+            label={t('agent.card.routeApplyAll')}
+            placeholder={t('agent.card.routeApplyAllChoose')}
+            // 全部套用是一個動作：沒選時顯示的那一項不是一個選得下去的狀態。
+            placeholderDisabled
+            required={false}
+            options={shared}
+            pick={sharedPick}
+            disabled={disabled}
+            onPick={(route) => {
+              if (route !== null) onPickAll(route)
+            }}
+          />
+          <p className="max-w-prose text-xs text-ink-dim">{t('agent.card.routeApplyAllHint')}</p>
+        </div>
       ) : null}
       {groups.map((group) => (
         <WorkRoute
@@ -633,6 +741,9 @@ function RouteChoices({
           group={group}
           many={groups.length > 1}
           pick={pickOf(group)}
+          // 勾著列的作品還沒選：下拉標成不合法，並指向底下那一句（M5.6 票 10 的 audit）。
+          invalid={pickOf(group) === null && group.rows.some((index) => ticked.has(index))}
+          describedBy={describedBy}
           disabled={disabled}
           onPick={(route) => onPick(group.mediaId, route)}
         />
@@ -646,12 +757,16 @@ function WorkRoute({
   group,
   many,
   pick,
+  invalid,
+  describedBy,
   disabled,
   onPick,
 }: {
   group: RouteGroup
   many: boolean
   pick: number | null
+  invalid: boolean
+  describedBy: string
   disabled: boolean
   onPick: (route: number | null) => void
 }) {
@@ -667,6 +782,8 @@ function WorkRoute({
       placeholder={t('agent.card.routeChoose')}
       options={group.ask.options}
       pick={pick}
+      invalid={invalid}
+      describedBy={describedBy}
       disabled={disabled}
       onPick={onPick}
     />
@@ -680,6 +797,8 @@ function RouteSelect({
   required = true,
   options,
   pick,
+  invalid = false,
+  describedBy,
   disabled,
   onPick,
 }: {
@@ -690,6 +809,9 @@ function RouteSelect({
   required?: boolean
   options: RouteAsk['options']
   pick: number | null
+  /** 必選而還沒選：`aria-invalid` 與底下那一句連起來（M5.6 票 10 的 audit）。 */
+  invalid?: boolean
+  describedBy?: string
   disabled: boolean
   onPick: (route: number | null) => void
 }) {
@@ -702,6 +824,8 @@ function RouteSelect({
       <select
         id={id}
         required={required}
+        aria-invalid={invalid ? true : undefined}
+        aria-describedby={invalid ? describedBy : undefined}
         disabled={disabled}
         value={pick ?? ''}
         onChange={(event) => onPick(event.target.value === '' ? null : Number(event.target.value))}
@@ -904,11 +1028,21 @@ function SubscribeRowBody({
         />
       ) : null}
       {look.keyword ? (
-        <FirstBatch option={picked} missing={ask === null} later={round.pick === 'later'} />
+        <FirstBatch
+          option={picked}
+          missing={ask === null}
+          later={round.pick === 'later'}
+          // 有第一輪可選時，後果由那兩個選項的說明講（不然同一句話連續出現兩次，M5.6 票 10）。
+          showConsequence={!round.offered}
+        />
       ) : null}
       {look.keyword && round.offered ? (
         round.editable ? (
-          <FirstRoundChoice value={round.pick} onChange={round.onPick} />
+          <FirstRoundChoice
+            label={t('agent.card.roundLabel')}
+            value={round.pick}
+            onChange={round.onPick}
+          />
         ) : (
           <p className="text-xs text-ink">{t(`rss.subscribe.round.${round.pick}`)}</p>
         )
@@ -944,10 +1078,13 @@ function FirstBatch({
   option,
   missing,
   later,
+  showConsequence,
 }: {
   option: SubgroupOption | null
   missing: boolean
   later: boolean
+  /** 底下那句「送的是按下確認那一刻…」：有第一輪可選時由選項的說明接手。 */
+  showConsequence: boolean
 }) {
   const { t } = useTranslation()
   if (missing) return <p className="text-xs text-ink-dim">{t('agent.card.firstBatchNone')}</p>
@@ -957,9 +1094,11 @@ function FirstBatch({
     <div className="grid gap-1 text-xs">
       <p className="label text-ink-dim">{t('agent.card.fields.firstBatch')}</p>
       <ReleaseTitles titles={option.titles} />
-      <p className="max-w-prose text-ink-dim">
-        {later ? t('rss.subscribe.round.laterHint') : t('agent.card.firstBatchAfter')}
-      </p>
+      {showConsequence ? (
+        <p className="max-w-prose text-ink-dim">
+          {later ? t('rss.subscribe.round.laterHint') : t('agent.card.firstBatchAfter')}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -968,7 +1107,7 @@ function FirstBatch({
  * 這一列的發佈蓋到的集裡，作品已經有的（票 28，使用者 2026-10-30）：伺服器提出時算的（帳本或這個人的
  * Jellyfin），不靠模型說。照季分組、連續的集收成區間。
  */
-function Held({ episodes }: { episodes: readonly HeldEpisode[] }) {
+function Held({ id, episodes }: { id?: string; episodes: readonly HeldEpisode[] }) {
   const { t, i18n: i18nInstance } = useTranslation()
   if (episodes.length === 0) return null
   const language = i18nInstance.language
@@ -983,7 +1122,7 @@ function Held({ episodes }: { episodes: readonly HeldEpisode[] }) {
     }),
   )
   return (
-    <p className="label text-xs text-ink">
+    <p id={id} className="label text-xs text-ink">
       {t('agent.card.held', { episodes: formatList(parts, language) })}
     </p>
   )

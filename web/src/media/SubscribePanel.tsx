@@ -588,16 +588,19 @@ const ROUNDS: readonly PrimeMode[] = ['all', 'later']
  * 那兩顆同義、走同一支命令。作品頁與確認卡共用；每一個選項下面一句說按下去會怎樣。
  */
 export function FirstRoundChoice({
+  label,
   value,
   onChange,
 }: {
+  /** 這一組選項的標題；預設是 RSS 頁那一份（確認卡上另外命名，免得與「第一批」的清單撞名）。 */
+  label?: string
   value: PrimeMode
   onChange: (mode: PrimeMode) => void
 }) {
   const { t } = useTranslation()
   return (
     <Options
-      label={t('rss.subscribe.round.label')}
+      label={label ?? t('rss.subscribe.round.label')}
       items={ROUNDS}
       keyOf={(mode) => mode}
       picked={value}

@@ -103,12 +103,21 @@ export function PasswordField({ label, ...input }: FieldProps) {
 export function Checkbox({
   label,
   hint,
+  describedBy,
+  tone = 'signal',
   checked,
   disabled = false,
   onChange,
 }: {
   label: string
   hint?: string
+  /** 另一個說明元素的 id（例如那一列的「含已有的…」）：與 `hint` 一起進 `aria-describedby`。 */
+  describedBy?: string
+  /**
+   * 勾選框的漆。`signal` 是預設；一整批列的勾選框用 `neutral`——全勾是常態，不是「要你」的訊號
+   * （DESIGN.md 的 The Usual Stays Unpainted Rule）。
+   */
+  tone?: 'signal' | 'neutral'
   checked: boolean
   /** 鎖住但照樣顯示（票 14：精靈泊位 3 上已經有 Route 的媒體庫）。 */
   disabled?: boolean
@@ -116,6 +125,7 @@ export function Checkbox({
 }) {
   const id = useId()
   const hintId = `${id}-hint`
+  const described = [hint ? hintId : null, describedBy ?? null].filter(Boolean).join(' ')
 
   return (
     <div className="grid gap-2">
@@ -123,12 +133,14 @@ export function Checkbox({
         <input
           id={id}
           // 說明是這一格的後果或鎖住的理由：Tab 到它的螢幕閱讀器要念得到（M2 票 16 的 audit，同 `Field`）。
-          aria-describedby={hint ? hintId : undefined}
+          aria-describedby={described === '' ? undefined : described}
           type="checkbox"
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
-          className="mt-0.5 size-4 shrink-0 accent-[var(--color-assigned)] disabled:cursor-not-allowed"
+          className={`mt-0.5 size-4 shrink-0 disabled:cursor-not-allowed ${
+            tone === 'neutral' ? 'accent-[var(--color-ink)]' : 'accent-[var(--color-assigned)]'
+          }`}
         />
         <label htmlFor={id} className="text-sm leading-snug text-ink">
           {label}

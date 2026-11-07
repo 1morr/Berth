@@ -815,6 +815,176 @@ describe('ConfirmCard', () => {
     })
   })
 
+  describe('the card says how much it will send (M5.6 ticket 10)', () => {
+    const ask = {
+      options: [
+        { id: 3, name: 'Anime' },
+        { id: 5, name: 'TV' },
+      ],
+      preselected: null,
+    }
+
+    it('summarises the items, the total size and the route, and keeps the reason in one live region', async () => {
+      const asking = card({
+        arguments: [row(1), row(2), row(3)],
+        preview: {
+          ...card().preview,
+          routes: [ask, ask, ask],
+          single_routes: [],
+        },
+      })
+      serve(asking, stored('approval-requested'), () => asking)
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      // 規模：幾項、多大、勾了幾列、Route 選了沒。
+      expect(within(section).getByText('3 項')).toBeInTheDocument()
+      expect(within(section).getByText('共 2.1 GB')).toBeInTheDocument()
+      expect(within(section).getByText('已勾 3/3')).toBeInTheDocument()
+      expect(within(section).getByText('Route：還沒選')).toBeInTheDocument()
+      // 被擋住的那一句在同一個 live region 裡；下拉標成不合法並指到它。
+      const status = within(section).getByRole('status')
+      expect(status).toHaveTextContent('還有 1 部作品沒選 Route。')
+      const picker = within(section).getByRole('combobox', { name: 'Route' })
+      expect(picker).toHaveAttribute('aria-invalid', 'true')
+      expect(picker).toHaveAttribute('aria-describedby', status.id)
+
+      // 列上的 Route 那一格照同一組選的畫；還沒選時寫「還沒選」，不是破折號。
+      expect(within(section).getAllByText('還沒選')).toHaveLength(3)
+      await user.selectOptions(picker, 'Anime')
+      expect(within(section).getByText('Route：Anime')).toBeInTheDocument()
+      expect(within(section).getByRole('status')).toBeEmptyDOMElement()
+      expect(picker).not.toHaveAttribute('aria-invalid')
+    })
+
+    const tandem = (first: number | null, second: number | null) => {
+      const ask = (preselected: number | null) => ({
+        options: [
+          { id: 3, name: 'Anime' },
+          { id: 5, name: 'TV' },
+        ],
+        preselected,
+      })
+      return card({
+        arguments: [
+          { ...row(1), media_id: 'tv:120089' },
+          { ...row(2), media_id: 'tv:120089' },
+          { ...row(1), media_id: 'tv:120090' },
+        ],
+        preview: {
+          ...card().preview,
+          checked: [true, true, true],
+          external_fields: [[], [], []],
+          torrents: [1, 1, 1],
+          routes: [ask(first), ask(first), ask(second)],
+          single_routes: [],
+        },
+      })
+    }
+
+    it('names a shared route once and says how many works are still unchosen', async () => {
+      serve(tandem(3, 3), stored('approval-requested'), () => tandem(3, 3))
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      // 兩部作品套同一條：摘要只寫一次，不是「Anime、Anime」。
+      expect(within(section).getByText('Route：Anime')).toBeInTheDocument()
+      expect(within(section).queryByText(/Anime、Anime/)).toBeNull()
+    })
+
+    it('keeps the route it picked while saying how many are left', async () => {
+      serve(tandem(3, null), stored('approval-requested'), () => tandem(3, null))
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      expect(within(section).getByText('Route：Anime（還有 1 部沒選）')).toBeInTheDocument()
+    })
+
+    it('lists every single route when the works each have one', async () => {
+      const single = card({
+        arguments: [
+          { ...row(1), media_id: 'tv:120089' },
+          { ...row(1), media_id: 'tv:120090' },
+        ],
+        preview: {
+          ...card().preview,
+          checked: [true, true],
+          external_fields: [[], []],
+          torrents: [1, 1],
+          routes: [],
+          single_routes: [
+            { id: 3, name: 'Anime' },
+            { id: 5, name: 'TV' },
+          ],
+        },
+      })
+      serve(single, stored('approval-requested'), () => single)
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      expect(within(section).getByText('Route：Anime、TV')).toBeInTheDocument()
+    })
+
+    it('paints a batch of boxes neutral and says which row already holds the episodes', async () => {
+      const held = card({
+        preview: {
+          ...card().preview,
+          held: [[{ season: 1, episode: 4 }], [], []],
+        },
+      })
+      serve(held, stored('approval-requested'), () => held)
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      await within(section).findAllByText('SPY×FAMILY')
+      // 全勾是常態：批次列的勾選框不塗訊號黃（The Usual Stays Unpainted Rule）。
+      for (const box of within(section).getAllByRole('checkbox')) {
+        expect(box).toHaveClass('accent-[var(--color-ink)]')
+      }
+      // 「含已有的…」是那一列的後果：勾選框的說明指到它。
+      const first = within(section).getByRole('checkbox', { name: '[ANi] SPY×FAMILY - 1' })
+      const described = document.getElementById(first.getAttribute('aria-describedby') ?? '')
+      expect(described).toHaveTextContent('含已有的第 1 季第 4 集')
+    })
+
+    it('names the first-round choice differently from the first-batch list and explains it once', async () => {
+      const option = {
+        key: 'nyaa:ANi',
+        name: 'ANi',
+        releases: 2,
+        updated: '2026-10-20',
+        latest: '[ANi] SPY×FAMILY - 02 [1080P]',
+        titles: ['[ANi] SPY×FAMILY - 02 [1080P]', '[ANi] SPY×FAMILY - 01 [1080P]'],
+        kind: 'nyaa' as const,
+        term: 'SPY x FAMILY',
+      }
+      const work = card({
+        command: 'rss.subscribe',
+        arguments: [{ subgroup: 'ANi', media_id: 'tv:120089', route_id: 3 }],
+        preview: {
+          ...card().preview,
+          checked: [true],
+          external_fields: [[]],
+          torrents: [2],
+          subgroups: [{ options: [option], preselected: 'nyaa:ANi', required: true }],
+          first_batch: [true],
+        } as Proposal['preview'],
+      })
+      serve(work, stored('approval-requested', 'rss_subscribe'), () => work)
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '訂閱這部作品' })
+      // 「第一批」只留在發佈清單那一個標題上；選項那一組叫「現在送出什麼」。
+      expect(within(section).getAllByText('第一批')).toHaveLength(1)
+      expect(within(section).getByText('現在送出什麼')).toBeInTheDocument()
+      // 同一句後果只說一次（選項的說明接手）。
+      expect(within(section).getAllByText(/按下.*那一刻/)).toHaveLength(1)
+      // 只有一部作品，沒有「全部套用」，也就不出現它的說明。
+      expect(within(section).queryByText(/兩部以上作品有共同的 Route/)).toBeNull()
+    })
+  })
+
   describe('the subgroup is the user’s to choose (ticket 26)', () => {
     const option = (key: string, name: string, titles: string[]) => ({
       key,
