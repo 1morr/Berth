@@ -54,6 +54,7 @@ from tests.e2e.harness import (
     poll_feed,
     release_index,
     set_round,
+    tells,
     wait,
 )
 from tests.e2e.sites import AGGREGATE_URL, KIMI, RELEASES, REZERO, REZERO_URL
@@ -71,9 +72,11 @@ BOT_TOKEN = "berth-e2e-bot-token"
 #: 收件人只開這一個媒體庫：「可以看了」與「正在下載」在送出時問 Jellyfin 看不看得到（M4 票 125）。
 BOSUN_LIBRARY = "anime"
 
-#: 《与你相恋》喵萌奶茶屋&LoliHouse 第 6、7 集（`sites.RELEASES` 的第 3、4 輪）。
+#: 《与你相恋》喵萌奶茶屋&LoliHouse 第 6、7 集（`sites.RELEASES` 的第 3、4 輪），與帳本上的季集。
 SIXTH = next(r.title for r in RELEASES if r.round == 3 and r.site == "mikan")
 SEVENTH = next(r.title for r in RELEASES if r.round == 4)
+SIXTH_EPISODE = (1, 6)
+SEVENTH_EPISODE = (1, 7)
 
 #: 在 Berth 的容器裡產生到此刻為止的那一週，印出那一份的 id（同一週已經有了是 `null`）。
 _COMPOSE_WEEKLY = """
@@ -230,12 +233,7 @@ def test_an_rss_hit_tells_the_crew_it_is_downloading_then_ready_to_watch(
     之後收到「可以看了」（合併 5 分鐘）。兩則都說得出作品、季集與 Route，連到作品頁。"""
 
     def about_the_sixth(kind: str) -> Callable[[Json], bool]:
-        def matches(embed: Json) -> bool:
-            return embed["title"] == f"{kind}: {kimi.title_en}" and "S01E06" in embed.get(
-                "description", ""
-            )
-
-        return matches
+        return lambda embed: tells(embed, f"{kind}: {kimi.title_en}", SIXTH_EPISODE)
 
     downloading = _arrives(
         "the downloading notice", BOSUN_DISCORD, about_the_sixth("Downloading"), 120
@@ -258,9 +256,7 @@ def test_an_rss_hit_tells_the_crew_it_is_downloading_then_ready_to_watch(
     _arrives(
         "the admin's ready-to-watch notice in Chinese",
         ADMIN_DISCORD,
-        lambda embed: (
-            embed["title"] == f"可以看了：{kimi.title}" and "S01E06" in embed.get("description", "")
-        ),
+        lambda embed: tells(embed, f"可以看了：{kimi.title}", SIXTH_EPISODE),
         120,
     )
 
@@ -380,10 +376,7 @@ def test_a_dead_discord_blocks_nothing_and_catches_up(
     _arrives(
         "the downloading notice sent late",
         BOSUN_DISCORD,
-        lambda embed: (
-            embed["title"] == f"Downloading: {kimi.title_en}"
-            and "S01E07" in embed.get("description", "")
-        ),
+        lambda embed: tells(embed, f"Downloading: {kimi.title_en}", SEVENTH_EPISODE),
         900,
     )
 
