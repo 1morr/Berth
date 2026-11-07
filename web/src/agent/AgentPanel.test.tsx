@@ -1,5 +1,6 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AgentStatus, ConversationEntry } from '../api/agent'
@@ -1606,5 +1607,136 @@ describe('AgentPanel slash commands', () => {
     expect(await screen.findByText(/沒有「\/compactt」這個指令/)).toBeInTheDocument()
     expect(input).toHaveValue('/compactt')
     expect(sent).toHaveLength(0)
+  })
+})
+
+// 側面板的寬度（M5.6 票 10b）：桌機的把手、鍵盤、記住寬度，窄版不畫。
+describe('resizing the side panel', () => {
+  it('shows a vertical separator on the desktop, labelled in both languages', async () => {
+    serve(backend({}))
+    renderPanel()
+
+    const handle = await screen.findByRole('separator', { name: '調整側面板寬度' })
+    expect(handle).toHaveAttribute('aria-orientation', 'vertical')
+    expect(handle).toHaveAttribute('tabindex', '0')
+    expect(handle).toHaveAttribute('aria-valuenow', '26')
+    expect(handle).toHaveAttribute('aria-valuetext', '26 rem，用左右方向鍵調整')
+
+    await i18next.changeLanguage('en')
+    expect(screen.getByRole('separator', { name: 'Resize the assistant panel' })).toBe(handle)
+  })
+
+  it('does not draw the handle when the panel fills the window', async () => {
+    serve(backend({}))
+    renderInRoute(
+      <AgentProvider>
+        <AgentPanel narrow />
+      </AgentProvider>,
+      '/library',
+    )
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.queryByRole('separator')).toBeNull()
+  })
+
+  it('drags the panel wider and clamps at both limits', async () => {
+    serve(backend({}))
+    renderPanel()
+    const handle = await screen.findByRole('separator', { name: '調整側面板寬度' })
+    const panel = document.getElementById('agent-panel')
+    expect(panel).toHaveStyle({ width: '416px' })
+
+    // 往左拖 200px＝12.5rem：面板變寬。
+    fireEvent.pointerDown(handle, { button: 0, clientX: 1000, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: 800, pointerId: 1, buttons: 1 })
+    expect(handle).toHaveAttribute('aria-valuenow', '39')
+    expect(panel).toHaveStyle({ width: '616px' })
+
+    // 拖過頭：夾在 40。
+    fireEvent.pointerMove(handle, { clientX: -5000, pointerId: 1, buttons: 1 })
+    expect(handle).toHaveAttribute('aria-valuenow', '40')
+    fireEvent.pointerUp(handle, { clientX: -5000, pointerId: 1 })
+    expect(localStorage.getItem('berth.agent.width')).toBe('40')
+
+    // 往右拖過頭：夾在 24，放手才寫進瀏覽器。
+    fireEvent.pointerDown(handle, { button: 0, clientX: 0, pointerId: 2 })
+    fireEvent.pointerMove(handle, { clientX: 5000, pointerId: 2, buttons: 1 })
+    expect(handle).toHaveAttribute('aria-valuenow', '24')
+    fireEvent.pointerUp(handle, { clientX: 5000, pointerId: 2 })
+    expect(localStorage.getItem('berth.agent.width')).toBe('24')
+  })
+
+  it('stops dragging when the pointerup went missing, so a later hover does not resize', async () => {
+    serve(backend({}))
+    renderPanel()
+    const handle = await screen.findByRole('separator', { name: '調整側面板寬度' })
+
+    fireEvent.pointerDown(handle, { button: 0, clientX: 1000, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: 900, pointerId: 1, buttons: 1 })
+    expect(handle).toHaveAttribute('aria-valuenow', '32')
+
+    // 沒有 pointerup（在視窗外放手）：下一次 hover 的移動不能接著拖。
+    fireEvent.pointerMove(handle, { clientX: 200, pointerId: 1, buttons: 0 })
+    expect(handle).toHaveAttribute('aria-valuenow', '32')
+    // 收掉的那次拖動已經寫下來了。
+    expect(localStorage.getItem('berth.agent.width')).toBe('32.3')
+  })
+
+  it('resizes with the arrow keys, Shift for a bigger step, and stops at the limits', async () => {
+    serve(backend({}))
+    const user = userEvent.setup()
+    renderPanel()
+    const handle = await screen.findByRole('separator', { name: '調整側面板寬度' })
+
+    handle.focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(handle).toHaveAttribute('aria-valuenow', '27')
+    await user.keyboard('{Shift>}{ArrowLeft}{/Shift}')
+    expect(handle).toHaveAttribute('aria-valuenow', '31')
+    await user.keyboard('{ArrowRight}')
+    expect(handle).toHaveAttribute('aria-valuenow', '30')
+
+    for (let press = 0; press < 5; press++) {
+      await user.keyboard('{Shift>}{ArrowLeft}{/Shift}')
+    }
+    expect(handle).toHaveAttribute('aria-valuenow', '40')
+    for (let press = 0; press < 30; press++) await user.keyboard('{ArrowRight}')
+    expect(handle).toHaveAttribute('aria-valuenow', '24')
+  })
+
+  it('shows the width while the handle is focused, and double-click resets it', async () => {
+    serve(backend({}))
+    const user = userEvent.setup()
+    renderPanel()
+    const handle = await screen.findByRole('separator', { name: '調整側面板寬度' })
+
+    handle.focus()
+    expect(await screen.findByText('26 rem')).toBeInTheDocument()
+    for (let press = 0; press < 4; press++) await user.keyboard('{ArrowLeft}')
+    expect(screen.getByText('30 rem')).toBeInTheDocument()
+
+    fireEvent.doubleClick(handle)
+    expect(handle).toHaveAttribute('aria-valuenow', '26')
+    expect(localStorage.getItem('berth.agent.width')).toBe('26')
+
+    handle.blur()
+    await waitFor(() => expect(screen.queryByText('26 rem')).toBeNull())
+  })
+
+  it('remembers the width after a reload', async () => {
+    serve(backend({}))
+    const user = userEvent.setup()
+    const first = renderPanel()
+    const handle = await screen.findByRole('separator', { name: '調整側面板寬度' })
+    handle.focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(localStorage.getItem('berth.agent.width')).toBe('27')
+
+    first.unmount()
+    renderPanel()
+    expect(await screen.findByRole('separator', { name: '調整側面板寬度' })).toHaveAttribute(
+      'aria-valuenow',
+      '27',
+    )
   })
 })

@@ -1086,6 +1086,15 @@ Feed Item（沒有 Feed 時不畫）。每一段的 `h2` 是 `SectionHeading`：
 放在導覽之後、登出之前——它不換頁，所以不在 `<nav>` 裡。
 - **版面**：`lg` 以上外框變成兩欄，右欄是 `26rem` 寬、`sticky top-0 h-dvh` 的面板（`border-l-2 border-rule-strong`、`hull` 底），
   頁面讓位、兩邊都能操作；以下 `fixed inset-0` 蓋滿視窗，是 `role="dialog" aria-modal`，底下那一頁 `inert`。
+- **寬度可以拖**（M5.6 票 10b）：桌機面板左緣的把手是 `role="separator"`、`aria-orientation="vertical"`、`tabIndex=0`
+  （`aria-label` 與 `aria-valuetext` 走 i18n 的 `agent.resize`／`agent.resizeValue`），**命中區 24px**（`w-6`，〈命中面積〉）：
+  畫出來的是置中的 2px 線加中段一組三道 12×2px 的握把刻記（`ink-dim`；hover／聚焦轉 `ink`），平常那條線透明、露出分隔線，
+  聚焦另加全站那圈雙環。上下限 `24rem`–`40rem`、預設 `26rem`（`agent/panelWidth.ts` 的常數，超出夾住；24rem 挨著 390 的
+  手機寬，是確認卡還排得下的一階；40rem 在 1024 的 `lg` 窗寬也量過不橫向捲動，頁首換列變高是接受的代價）；左右方向鍵
+  一步 `1rem`、`Shift` 一步 `4rem`（把手在面板左緣：往左是變寬），雙擊回 `26rem`。拖動 `preventDefault`：不搶焦點、
+  不選字、不捲頁；漏收 `pointerup` 時下一次 hover 不會接著拖。拖動或聚焦時抬頭列多一格 `.value` 的寬度讀數（`26 rem`，
+  拉到底就停住，看得出是上下限）。寬度記在 `localStorage`（每人每台裝置的顯示偏好，不上伺服器），重新載入回到上次的
+  寬度。窄版面板蓋滿視窗，不畫把手。
 - **抬頭列**是 `deck` 底的 `h2`「助理」+ Ghost「對話」與 Ghost「新對話」（AI 開著才有）+ Ghost「關閉」。`Esc` 收起，焦點回到開關；打開時焦點落在輸入欄
   （對話還在讀時先落在標題，輸入欄出現了再接過去——只接標題上的，換頁重掛不搶焦點）。
 - **對話清單**（M5.5 票 18）：「對話」是 disclosure（`aria-expanded` + `aria-controls`），清單在抬頭列下方就地展開（`hull` 底、
