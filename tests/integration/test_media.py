@@ -106,6 +106,46 @@ SEASONS = {
 #: `tv/episode_group/689a…` 攤平之後的樣子（`(季, 集) → 絕對編號`）。
 ORDERING = {"689a2aec017d0bc9ecc6fac8": {(1, 1): 1, (1, 25): 25, (2, 1): 26}}
 
+#: 只有一季的作品（M5.6 票 02）：發佈名不寫季記號，整季缺時問名字本身。
+SINGLE_ID = "tv:900001"
+SINGLE = TmdbDetail(
+    tmdb_id=900001,
+    kind=MediaKind.TV,
+    title="私を喰べたい、ひとでなし",
+    original_title="私を喰べたい、ひとでなし",
+    year=2026,
+    first_air_date=date(2026, 10, 4),
+    overview="A girl who wants to be eaten.",
+    poster_path="/hito.jpg",
+    titles=("私を喰べたい、ひとでなし",),
+    seasons=(
+        TmdbSeasonEntry(
+            season_number=0, name="Specials", episode_count=1, air_date=date(2027, 1, 1)
+        ),
+        TmdbSeasonEntry(
+            season_number=1, name="Season 1", episode_count=2, air_date=date(2026, 10, 4)
+        ),
+    ),
+)
+#: 特別篇一集都還沒播（`aired=0`）：不算一季，也不缺。
+SINGLE_SEASONS = [
+    TmdbSeason(
+        season_number=0,
+        name="Specials",
+        air_date=date(2027, 1, 1),
+        episodes=(episode(0, 1, "EXTRA", date(2027, 1, 1)),),
+    ),
+    TmdbSeason(
+        season_number=1,
+        name="Season 1",
+        air_date=date(2026, 10, 4),
+        episodes=(
+            episode(1, 1, "EPISODE ONE", date(2026, 10, 4)),
+            episode(1, 2, "EPISODE TWO", date(2026, 10, 11)),
+        ),
+    ),
+]
+
 
 def tmdb(**kwargs: object) -> FakeTmdbClient:
     defaults: dict[str, object] = {
