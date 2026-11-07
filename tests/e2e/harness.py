@@ -6,6 +6,7 @@ fixture 在 `conftest.py`；這裡只有不需要 fixture 的那些。宿主上�
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 from collections import Counter
@@ -241,6 +242,44 @@ def discord_messages() -> list[Json]:
 def discord_mode(mode: str) -> None:
     """`discord.BROKEN`：假 Discord 每一支都回 503；`discord.HEALTHY`：恢復。"""
     in_container("sh", "-c", f'echo {mode} > "$1"', "sh", str(MODE), container=DISCORD_CONTAINER)
+
+
+#: `notify.describe_spans` 寫的一段季集：`S01E05`、`S01E05–E06`，或是同季的 `E07`（省了季號）。
+#: 位數不固定：那是 `f"{episode:02d}"`，第 100 集寫成 `E100`。
+_SPAN = re.compile(r"(?:S(\d+))?E(\d+)(?:–E(\d+))?")
+
+
+def tells(embed: Json, title: str, episode: tuple[int, int]) -> bool:
+    """這一則通知是不是這個標題、內文也涵蓋這一集（M5.6 票 11b）。
+
+    內文可能是一段範圍：同一部作品、同一條 Route 的幾筆在合併窗裡合成一則（「可以看了」5 分鐘；
+    「正在下載」同一輪的多筆也是），所以第 6 集會與第 5 集寫成 `S01E05–E06`。比對字串在合併時
+    永遠對不上——這是這條 e2e 自 2026-10-24 起間歇性紅的原因。
+    """
+    return embed["title"] == title and episode in episodes_in(embed.get("description", ""))
+
+
+def episodes_in(description: str) -> set[tuple[int, int]]:
+    """一則通知的內文涵蓋哪幾集（M5.6 票 11b）。
+
+    「可以看了」的內文是季集範圍（`notify.describe_spans`）：同一部作品、同一條 Route 5 分鐘內的
+    幾筆在寫入時合成一則，所以下一個 RSS 輪次只差幾分鐘時第 6 集寫成 `S01E05–E06`。要問「這一集
+    到了沒」就展開成集合再問；比對字串在合併時永遠對不上。
+
+    內文的第二段是連結（`[在 Berth 打開](…)`，`adapters/notify/discord`），只讀第一段。
+    """
+    season: int | None = None
+    found: set[tuple[int, int]] = set()
+    for span in filter(None, description.split("\n\n", 1)[0].split(", ")):
+        match = _SPAN.fullmatch(span)
+        assert match, span
+        if match.group(1):
+            season = int(match.group(1))
+        # 產品每一段都從帶季號的開始，後面同季的才省季號（`describe_spans`）。
+        assert season is not None, span
+        start, end = int(match.group(2)), int(match.group(3) or match.group(2))
+        found |= {(season, episode) for episode in range(start, end + 1)}
+    return found
 
 
 def berth_client() -> httpx.Client:
