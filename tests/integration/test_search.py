@@ -1579,8 +1579,13 @@ class TestVerdicts:
 
 
 HITODENASHI = build_media_id(MediaKind.TV, 274810)
-#: S7（M5.6 票 01）：試用機上「非人少女」那段對話的搜尋結果。13 集是喵萌奶茶屋的繁日版，
-#: 另有同一組的簡日版、ANi 的各集與 TPB 對查不到的查詢回的熱門清單。
+#: S7（M5.6 票 01）真模型逐字稿的搜尋結果（`.local/experiments/results/m5_acceptance/`
+#: `baseline-s7s8/anthropic-S7.md`）。13 集是喵萌奶茶屋的繁日雙語：片名 01、02、03、12、13
+#: 照逐字稿抄，
+#: 04–11 同一格式只換集數；info hash、大小、發佈時間照確認卡逐列抄。其餘三列是逐字稿裡的 7³ACG、
+#: Judas、SubsPlease（info hash 逐字稿截斷了，是假值；Judas 與 SubsPlease 的站與做種照抄）。
+#: TPB 那兩列不是逐字稿的（S7 的查詢只回 Mikan 與 Anime Tosho），是照原對話「查不到就回熱門清單」
+#: 補的，用來當「自己打的字對不上」那一類；發佈名照 TPB 的寫法造。
 HITODENASHI_RESULTS = Path(__file__).parents[1] / "fixtures" / "search" / "hitodenashi-2025.json"
 
 
@@ -1590,21 +1595,22 @@ async def arrange_hitodenashi(session: AsyncSession) -> None:
             id=HITODENASHI,
             tmdb_id=274810,
             kind=MediaKind.TV,
-            title_en="Watashi wo Tabetai, Hitodenashi",
+            title_en="This Monster Wants to Eat Me",
             title_original="私を喰べたい、ひとでなし",
             year=2025,
-            folder_name="Watashi wo Tabetai, Hitodenashi (2025) [tmdbid-274810]",
+            folder_name="This Monster Wants to Eat Me (2025) [tmdbid-274810]",
             tmdb_snapshot_json={
                 "tmdb_id": 274810,
                 "kind": "tv",
-                "title": "想吃掉我的非人少女",
-                "title_en": "Watashi wo Tabetai, Hitodenashi",
+                "title": "對我垂涎欲滴的非人少女",
+                "title_en": "This Monster Wants to Eat Me",
                 "title_original": "私を喰べたい、ひとでなし",
                 "year": 2025,
+                "first_air_date": "2025-10-02",
                 "titles": [
-                    "Watashi wo Tabetai, Hitodenashi",
+                    "This Monster Wants to Eat Me",
                     "私を喰べたい、ひとでなし",
-                    "想吃掉我的非人少女",
+                    "對我垂涎欲滴的非人少女",
                 ],
                 "seasons": [season_of(1, 13)],
             },
@@ -1662,11 +1668,10 @@ class TestContains:
             SourceCache(),
             media_id=HITODENASHI,
             query="非人少女",
-            contains=["lolihouse", "繁日"],
+            contains=["watashi", "繁日"],
         )
 
         assert len(view.rows) == 13
-        assert any("ＬｏｌｉＨｏｕｓｅ" in row.title for row in view.rows)
 
         # 反過來也一樣：發佈名是半形、打的字是全形。
         other = await search_torrents(
@@ -1675,7 +1680,7 @@ class TestContains:
             SourceCache(),
             media_id=HITODENASHI,
             query="非人少女",
-            contains=["ＬｏｌｉＨｏｕｓｅ", "繁日"],
+            contains=["Ｗａｔａｓｈｉ", "繁日"],
         )
         assert len(other.rows) == 13
 
@@ -1691,12 +1696,12 @@ class TestContains:
             SourceCache(),
             media_id=HITODENASHI,
             query="非人少女",
-            contains=["喵萌奶茶屋", "简日"],
+            contains=["7³ACG", "BDrip"],
         )
 
         assert [row.title for row in view.rows] == [
-            "[喵萌奶茶屋&LoliHouse] 想吃掉我的非人少女 / 私を喰べたい、ひとでなし / "
-            "Watashi wo Tabetai, Hitodenashi - 01 [WebRip 1080p HEVC-10bit AAC][简日内嵌]"
+            "[7³ACG] 对我垂涎欲滴的非人少女/Watashi o Tabetai, Hitodenashi S01 | 01-13 "
+            "[简繁字幕] BDrip 1080p x265 OPUS 2.0"
         ]
 
     @pytest.mark.asyncio
@@ -1711,8 +1716,8 @@ class TestContains:
         )
 
         assert view.contains == ()
-        assert count(view, SearchVerdict.TYPED_MATCH) == 16
-        assert count(view, SearchVerdict.TYPED_MISS) == 2
+        assert count(view, SearchVerdict.TYPED_MATCH) == 15
+        assert count(view, SearchVerdict.TYPED_MISS) == 3
 
     @pytest.mark.asyncio
     async def test_the_numbers_still_add_up(self, session: AsyncSession) -> None:

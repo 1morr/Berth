@@ -109,7 +109,7 @@ MODEL_SEARCH_ROWS = 10
 #: 帶 `contains` 時的上限（M5.6 票 05）：結果已經篩到一個字幕組、一種語言版本，一列往往就是一集。
 #: 量出來的那一份（`_compact_search` 的輸出，`tests/fixtures/search/hitodenashi-2025.json`，
 #: `json.dumps(ensure_ascii=False)`，cl100k_base）：同一組 13 列，沒放寬（10 列）約 2.5K tokens，
-#: 13 列全給約 3.2K（每列約 240）；一個字幕組一天發兩種解析度（26 列）時上限 20 約 4.8K。一次逐集
+#: 13 列全給約 3.2K（每列約 240）；一個字幕組一天發兩種解析度（26 列）時上限 20 約 5.0K。一次逐集
 #: 搜尋光是重送上下文就約 7K（`_compact_search` 的註解），所以取 20（預設的兩倍）：13 集整季進得來，
 #: 還留得下幾列別解析度或版本。
 MODEL_SEARCH_ROWS_NARROWED = 20
