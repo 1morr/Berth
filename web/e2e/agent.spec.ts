@@ -146,7 +146,8 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   page,
 }) => {
   // 假模型說「下載 SPY×FAMILY」時：搜作品、搜發佈、問 Route，再出一張三列的送單卡（M5 票 13）。
-  // 這台有兩條電視 Route（TV、Anime）、SPY×FAMILY 沒送單過：模型給的是 TV，卡片上逐列要人選（票 23b）。
+  // 這台有兩條電視 Route（TV、Anime）、SPY×FAMILY 沒送單過：模型給的是 TV，卡片上要人選一次，
+  // 三列都是同一部作品所以只有一個選擇（M5.6 票 03）。
   await signIn(page, '/jobs')
   await openBlank(page)
   const panel = page.locator('#agent-panel')
@@ -170,6 +171,8 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   await expect(rowOf('04')).toContainText('含已有的第 1 季第 4 集')
   await expect(rowOf('05')).toContainText('含已有的第 1 季第 5 集')
   await expect(rowOf('06')).not.toContainText('含已有')
+  // 截圖要看得到卡片上方的那一個 Route 選擇（面板自己捲動過）。
+  await card.getByRole('heading', { name: '送出下載' }).scrollIntoViewIfNeeded()
   await shot(page, 'card')
 
   // 還沒按就重新載入：卡片從伺服器接回來，照樣按得下去。
@@ -177,15 +180,15 @@ test('送單卡：出卡、重新載入之後照樣按得下去、取消一列�
   const reloaded = panel.getByRole('region', { name: '送出下載' })
   await expect(reloaded.getByRole('checkbox')).toHaveCount(3)
   await reloaded.getByRole('checkbox', { name: /SPY×FAMILY - 05/ }).uncheck()
-  // 沒預選、沒選齊之前沒有確認鍵；只有勾著的兩列要選。
+  // 沒預選、沒選齊之前沒有確認鍵；一部作品只有一個選擇，勾著的那兩列共用它。
   const pickers = reloaded.getByRole('combobox', { name: 'Route' })
-  await expect(pickers).toHaveCount(3)
-  await expect(pickers.first()).toHaveValue('')
+  await expect(pickers).toHaveCount(1)
+  await expect(pickers).toHaveValue('')
   await expect(reloaded.getByRole('button', { name: /確認/ })).toHaveCount(0)
-  await expect(reloaded).toContainText('還有 2 列沒選 Route。')
+  await expect(reloaded).toContainText('還有 1 部作品沒選 Route。')
+  await reloaded.getByRole('heading', { name: '送出下載' }).scrollIntoViewIfNeeded()
   await shot(page, 'route-unpicked')
-  await pickers.nth(0).selectOption({ label: 'Anime' })
-  await pickers.nth(2).selectOption({ label: 'Anime' })
+  await pickers.selectOption({ label: 'Anime' })
   await shot(page, 'route-picked')
   await reloaded.getByRole('button', { name: '確認這 2 項' }).click()
 

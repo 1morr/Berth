@@ -147,6 +147,17 @@ function serve(
           folder_frozen: false,
         })
       }
+      if (path === '/api/media/tv%3A120090') {
+        return json({
+          title: 'Frieren',
+          routes: [
+            { id: 3, name: 'Anime', slug: 'anime' },
+            { id: 4, name: 'Movies', slug: 'movies' },
+          ],
+          folder_name: 'Frieren (2023) [tmdbid-120090]',
+          folder_frozen: false,
+        })
+      }
       if (method === 'POST' && path === '/api/agent/chat') {
         chats.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
         return stream([
@@ -521,7 +532,7 @@ describe('ConfirmCard', () => {
       const picker = within(section).getByRole('combobox', { name: 'Route' })
       expect(picker).toHaveValue('')
       expect(within(section).queryByRole('button', { name: '確認' })).toBeNull()
-      expect(within(section).getByText('還有 1 列沒選 Route。')).toBeInTheDocument()
+      expect(within(section).getByText('還有 1 部作品沒選 Route。')).toBeInTheDocument()
 
       await user.selectOptions(picker, 'TV')
       await user.click(within(section).getByRole('button', { name: '確認' }))
@@ -548,20 +559,20 @@ describe('ConfirmCard', () => {
       expect(decisions).toEqual([{ approve: true, selection: null, routes: [3] }])
     })
 
-    it('only the ticked rows need a route', async () => {
+    it('one choice covers the work’s ticked rows; an unticked row sends no route', async () => {
       serve(asking(2), stored('approval-requested'), () => asking(2))
       const user = userEvent.setup()
       renderPanel()
 
       const section = await screen.findByRole('region', { name: '送出下載' })
-      const [first, second] = within(section).getAllByRole('combobox', { name: 'Route' })
-      expect(within(section).getByText('還有 2 列沒選 Route。')).toBeInTheDocument()
+      const pickers = within(section).getAllByRole('combobox', { name: 'Route' })
+      expect(pickers).toHaveLength(1)
+      expect(within(section).getByText('還有 1 部作品沒選 Route。')).toBeInTheDocument()
 
-      await user.selectOptions(second, 'TV')
-      expect(within(section).getByText('還有 1 列沒選 Route。')).toBeInTheDocument()
+      await user.selectOptions(pickers[0], 'TV')
       await user.click(within(section).getByRole('checkbox', { name: '[ANi] SPY×FAMILY - 1' }))
-      // 沒勾的那一列不必選：下拉留著（勾回來時不跳版面），送出時那一格是 null。
-      expect(first).toHaveValue('')
+      // 沒勾的那一列不必選：選擇留著（勾回來時不跳版面），送出時那一格是 null。
+      expect(pickers[0]).toHaveValue('5')
       await user.click(within(section).getByRole('button', { name: '確認這 1 項' }))
 
       expect(decisions).toEqual([{ approve: true, selection: [1], routes: [null, 5] }])
@@ -575,6 +586,140 @@ describe('ConfirmCard', () => {
       await within(section).findByText('Anime')
       expect(within(section).queryByRole('combobox')).toBeNull()
       expect(within(section).getByRole('button', { name: '確認' })).toBeInTheDocument()
+    })
+  })
+
+  describe('one route choice per work (M5.6 ticket 03)', () => {
+    const names: Record<number, string> = { 3: 'Anime', 4: 'Movies', 5: 'TV', 6: 'Kids' }
+    type Work = {
+      media: string
+      title: string
+      episodes: number[]
+      routes: number[]
+      preselected?: number | null
+    }
+
+    function worksCard(works: Work[], more: Partial<Proposal> = {}): Proposal {
+      const rows = works.flatMap((work) =>
+        work.episodes.map((episode) => ({
+          source: { title: `[ANi] ${work.title} - ${episode}`, size: 734003200 },
+          media_id: work.media,
+          route_id: work.routes[0],
+        })),
+      )
+      const asks = works.flatMap((work) =>
+        work.episodes.map(() => ({
+          options: work.routes.map((id) => ({ id, name: names[id] })),
+          preselected: work.preselected ?? null,
+        })),
+      )
+      return card({
+        arguments: rows,
+        preview: {
+          ...card().preview,
+          checked: rows.map(() => true),
+          external_fields: rows.map(() => []),
+          torrents: rows.map(() => 1),
+          routes: asks,
+        },
+        ...more,
+      })
+    }
+
+    it('13 rows of one work get one route choice, sent for every row', async () => {
+      const thirteen = worksCard([
+        {
+          media: 'tv:120089',
+          title: 'SPY×FAMILY',
+          episodes: Array.from({ length: 13 }, (_, at) => at + 1),
+          routes: [3, 5],
+        },
+      ])
+      serve(thirteen, stored('approval-requested'), () => thirteen)
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      await within(section).findAllByText('SPY×FAMILY')
+      const pickers = within(section).getAllByRole('combobox', { name: 'Route' })
+      expect(pickers).toHaveLength(1)
+      expect(within(section).queryByRole('button', { name: /確認/ })).toBeNull()
+
+      await user.selectOptions(pickers[0], 'Anime')
+      await user.click(within(section).getByRole('button', { name: '確認這 13 項' }))
+
+      expect(decisions).toEqual([
+        { approve: true, selection: null, routes: Array.from({ length: 13 }, () => 3) },
+      ])
+    })
+
+    it('two works sharing a route get an apply-to-all that fills both, which can still be changed', async () => {
+      const two = worksCard([
+        { media: 'tv:120089', title: 'SPY×FAMILY', episodes: [1, 2], routes: [3, 5] },
+        { media: 'tv:120090', title: 'Frieren', episodes: [1], routes: [3, 4] },
+      ])
+      serve(two, stored('approval-requested'), () => two)
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      await within(section).findAllByText('Frieren')
+      const apply = within(section).getByRole('combobox', { name: '全部套用' })
+      const spy = within(section).getByRole('combobox', { name: /SPY×FAMILY/ })
+      const frieren = within(section).getByRole('combobox', { name: /Frieren/ })
+      // 交集只有 Anime：全部套用的清單裡只有它。
+      expect(
+        within(apply)
+          .getAllByRole('option')
+          .map((one) => one.textContent),
+      ).toEqual(['選一條套用到全部', 'Anime'])
+
+      await user.selectOptions(apply, 'Anime')
+      expect(spy).toHaveValue('3')
+      expect(frieren).toHaveValue('3')
+      expect(apply).toHaveValue('3')
+
+      await user.selectOptions(frieren, 'Movies')
+      // 兩部作品不再一致：全部套用回到沒選的樣子。
+      expect(apply).toHaveValue('')
+      await user.click(within(section).getByRole('button', { name: '確認這 3 項' }))
+
+      expect(decisions).toEqual([{ approve: true, selection: null, routes: [3, 3, 4] }])
+    })
+
+    it('draws no apply-to-all when the works share no route', async () => {
+      const two = worksCard([
+        { media: 'tv:120089', title: 'SPY×FAMILY', episodes: [1], routes: [3, 5] },
+        { media: 'tv:120090', title: 'Frieren', episodes: [1], routes: [4, 6] },
+      ])
+      serve(two, stored('approval-requested'), () => two)
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      await within(section).findAllByText('Frieren')
+      expect(within(section).queryByRole('combobox', { name: '全部套用' })).toBeNull()
+      expect(within(section).getAllByRole('combobox', { name: /Route/ })).toHaveLength(2)
+    })
+
+    it('a work left wholly unticked does not block confirming the others', async () => {
+      const two = worksCard([
+        { media: 'tv:120089', title: 'SPY×FAMILY', episodes: [1, 2], routes: [3, 5] },
+        { media: 'tv:120090', title: 'Frieren', episodes: [1], routes: [3, 4], preselected: 4 },
+      ])
+      serve(two, stored('approval-requested'), () => two)
+      const user = userEvent.setup()
+      renderPanel()
+
+      const section = await screen.findByRole('region', { name: '送出下載' })
+      await within(section).findAllByText('Frieren')
+      for (const episode of [1, 2]) {
+        await user.click(
+          within(section).getByRole('checkbox', { name: `[ANi] SPY×FAMILY - ${episode}` }),
+        )
+      }
+      await user.click(within(section).getByRole('button', { name: '確認這 1 項' }))
+
+      expect(decisions).toEqual([{ approve: true, selection: [2], routes: [null, null, 4] }])
     })
   })
 
