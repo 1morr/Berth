@@ -1627,6 +1627,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 
 #### 結果的分類與取用
 
+- **`contains` 先篩再分類、再截斷**（M5.6 票 05）：發佈名裡每個詞都要有（NFKC 與 casefold，同 `parser.title.normalize_title`），給模型的工具用它一次列出一個字幕組的整季；字幕組、語言版本、解析度共用這一格。人用的 `GET /search` 沒帶，行為不變。給模型的列數上限帶 `contains` 時放寬（`agent_tools.MODEL_SEARCH_ROWS_NARROWED`）。
 - 結果附 `parse_release` 的 Tags 與 `map_episode` 的預估，用來在結果表顯示「S01 全季」「E05」「無法判斷」。
 - **每一筆歸到一類**（`SearchVerdict`，brief §20.20）：照 Sonarr 互動搜尋，對不上的也送、每一筆帶理由（`verdict` 與 `evidence`：觸發的那一段字），畫面預設只開「符合」。
 - 判定順序是證據硬的先：
@@ -1643,7 +1644,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
   - 符合與 `typed_match` 取 100 筆（`RESULT_LIMIT`），其餘每類 50 筆（`OTHERS_LIMIT`）。
   - `counts` 報每一類在每一站的總數。
 - **筆數的定義**：
-  - `returned` ＝ 每個查詢回的筆數加總 ＝ `merged`（`_dedupe` 合併掉的）＋ Σ`counts.total`。
+  - `returned` ＝ 每個查詢回的筆數加總 ＝ `merged`（`_dedupe` 合併掉的）＋ `filtered_out`（`contains` 篩掉的）＋ Σ`counts.total`。`filtered_out` 只在服務層：人用的 `GET /search` 不送 `contains`，對外永遠是 0。
   - 畫面一行說回了幾筆與重複的，各類的數字在篩選按鈕上，標頭只說「符合」那一份（「結果表 N 筆」）。
 - **解析只跑在送出去的那幾百筆上**（最多 100＋5×50）：`parse_release` 實測每筆 14 毫秒（1200 筆 17.4 秒），一次搜尋回一兩千筆，全部解析會把事件迴圈卡住半分鐘。粗篩用 `parser.title.mentions`（純字串）。
 

@@ -30,7 +30,14 @@ from berth.services.agent import (
     needs_card,
     pending_calls,
 )
-from berth.services.agent_tools import MODEL_VIEWS, TAVILY_TOOL, TOOLS, tool_name, visible_tools
+from berth.services.agent_tools import (
+    MODEL_SEARCH_ROWS_NARROWED,
+    MODEL_VIEWS,
+    TAVILY_TOOL,
+    TOOLS,
+    tool_name,
+    visible_tools,
+)
 from berth.services.commands import Effect
 from berth.services.registry import commands
 
@@ -266,6 +273,35 @@ class TestSearchTorrentsForTheModel:
         given = MODEL_VIEWS["search.search_torrents"]({"rows": rows, "counts": []})
         assert isinstance(given, dict)
         assert "rows_not_shown" not in given
+
+    def test_a_narrowed_search_shows_more_rows(self) -> None:
+        """帶 `contains` 時上限放寬（M5.6 票 05）：一個字幕組的整季一次進得來，不必逐集搜。"""
+        rows = [
+            {"source_id": f"s-{n}", "title": f"[Grp] Show - {n:02d}", "verdict": "typed_match"}
+            for n in range(1, 14)
+        ]
+
+        given = MODEL_VIEWS["search.search_torrents"](
+            {"rows": rows, "counts": [], "contains": ["Grp", "CHT"]}
+        )
+
+        assert isinstance(given, dict)
+        assert [row["source_id"] for row in given["rows"]] == [f"s-{n}" for n in range(1, 14)]
+        assert "rows_not_shown" not in given
+
+    def test_a_narrowed_search_still_says_what_it_left_out(self) -> None:
+        rows = [
+            {"source_id": f"s-{n}", "title": f"[Grp] Show - {n:02d}", "verdict": "typed_match"}
+            for n in range(1, 31)
+        ]
+
+        given = MODEL_VIEWS["search.search_torrents"](
+            {"rows": rows, "counts": [], "contains": ["Grp"]}
+        )
+
+        assert isinstance(given, dict)
+        assert len(given["rows"]) == MODEL_SEARCH_ROWS_NARROWED
+        assert given["rows_not_shown"] == 30 - MODEL_SEARCH_ROWS_NARROWED
 
 
 class TestWhatTheModelSeesOfAWork:

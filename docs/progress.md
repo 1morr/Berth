@@ -45,6 +45,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-07 | M5.6 工具 | 加 `.worktreeinclude`：Orca 與 Claude Code 新建的 worktree 從主資料夾複製 `.claude/settings.local.json`（本機 router 設定） | 新 session 下 `/implement .scratch/m5.6/issues/01-baseline.md` |
 | 2026-11-07 | M5.6 01 基準 | S7/S8 進腳本、summary 加種子搜尋與 skill 載入；真模型 22 列約 $0.39：S7 種子 11/22、Route 13，S8 0/6 | 新 session 下 `/implement .scratch/m5.6/issues/02-single-season-search-marks.md` |
 | 2026-11-07 | M5.6 02 單季季記號 | 單季作品整季缺時不接季記號（實測：Mikan／dmhy／ACG.RIP 帶記號零筆、名字本身回得來）；修在 `missing_batches`，判準是播過的季（brief §20.28） | 新 session 下 `/implement .scratch/m5.6/issues/03-card-route-per-work.md` |
+| 2026-11-07 | M5.6 05 搜尋 contains | 種子搜尋加 `contains`（每個詞都要有、先篩再截斷）；帶它時模型看 20 列（token 量測在票）；人用的端點不變 | 新 session 下 `/implement .scratch/m5.6/issues/06-library-episodes.md` |
 
 ## 偏差與決定
 
