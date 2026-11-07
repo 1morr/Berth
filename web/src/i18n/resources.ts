@@ -3721,6 +3721,10 @@ const zhHant = {
       series_unbound: '它的 RSS Series 還沒綁定作品：先綁定，才知道要送進哪裡。',
       feed_unprimed: '它的 Feed 還在等第一輪的決定：先選「全部下載」或「只追之後的」。',
       interval_unsupported: '只能選清單上的間隔，什麼都沒存。',
+      bangumi_not_found:
+        'Mikan 上找不到這部作品的番組，或找到的幾個用開播日分不開。換一個來源或作品再試。',
+      bangumi_without_subgroups: '找到番組了，但上面一個字幕組都沒有：Mikan 還沒有人發這部作品。',
+      subgroup_not_found: '這個字幕組不在番組頁上。從清單裡選一個。',
     },
     feeds: {
       title: 'Feed',
@@ -8205,6 +8209,11 @@ const en: Translations<typeof zhHant> = {
       feed_unprimed:
         'Its feed is still waiting on the first-round choice: pick Download everything or Only what comes next first.',
       interval_unsupported: 'Only the intervals on the list are allowed; nothing was saved.',
+      bangumi_not_found:
+        'No bangumi on Mikan matches this work, or the premiere dates cannot tell the matches apart. Try another source or title.',
+      bangumi_without_subgroups:
+        'Found the bangumi, but it has no subgroups yet: nobody on Mikan is releasing this work.',
+      subgroup_not_found: 'That subgroup is not on the bangumi page. Pick one from the list.',
     },
     feeds: {
       title: 'Feeds',

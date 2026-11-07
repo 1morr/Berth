@@ -364,7 +364,12 @@ class TestManyRoutesFit:
 
 @pytest.mark.parametrize(
     "name",
-    ["downloading.add_manual_download", "rss.subscribe_mikan", "rss.subscribe_search"],
+    [
+        "downloading.add_manual_download",
+        "rss.subscribe_mikan",
+        "rss.subscribe_search",
+        "rss.subscribe",
+    ],
 )
 async def test_every_command_that_sends_into_a_route_of_a_work_asks_on_the_card(name: str) -> None:
     """Route 選擇看的是命令輸入有沒有 `media_id` 與 `route_id`（`proposals.sends_into_a_route`）：

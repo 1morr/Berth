@@ -51,6 +51,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-07 | M5.6 06 find_in_library 集數 | 劇集命中加 `episodes`（Jellyfin 季集範圍、缺集斷開），電影沒有；同一部只讀一次，讀不到只那一部說原因 | 新 session 下 `/implement .scratch/m5.6/issues/04-server-decides-route.md` |
 | 2026-11-07 | M5.6 04 伺服器定 Route | 模型不給 route_id：一條用它、多條 RouteAsk、零條拒絕；拿掉 route_choices 與 read_media 的 Route 欄 | 新 session 下 `/implement .scratch/m5.6/issues/07-instructions-and-skills.md` |
 | 2026-11-07 | M5.6 07 系統指示與 skills | B1 四條進 `INSTRUCTIONS`；skills 5→3，三份合計 80 行；`why_not` 寫出各結論；整季 `in_jellyfin` 帶 `hint` | 新 session 下 `/implement .scratch/m5.6/issues/08-subscribe-mikan.md` |
+| 2026-11-07 | M5.6 08 以作品訂閱 | `rss.subscribe`：純函式挑番組（名字相等＋開播日）、`match_bangumi` 搜四個名字、卡片照舊；舊工具留給票 09，bench 0 錯 | 新 session 下 `/implement .scratch/m5.6/issues/09-subscribe-keyword-fallback.md` |
 
 ## 偏差與決定
 

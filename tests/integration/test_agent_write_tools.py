@@ -33,8 +33,8 @@ from berth.adapters import fs
 from berth.adapters.rss import acgrip, mikan
 from berth.adapters.websearch import WebPage
 from berth.config import Config
-from berth.domain import CollectionType
-from berth.models import DiskSettings, Media, Route, RssSeries
+from berth.domain import CollectionType, FeedKind
+from berth.models import DiskSettings, Media, Route, RssFeed, RssSeries
 from berth.services.jobs import JobSource
 from berth.services.settings import write_settings
 from berth.services.sources import SourceCache
@@ -232,9 +232,14 @@ def season(factory: FakeClientFactory, episodes: int, subgroup: int = 583) -> No
     )
 
 
-def bangumi(factory: FakeClientFactory, groups: dict[int, int], bangumi_id: int = 3310) -> None:
+def bangumi(
+    factory: FakeClientFactory,
+    groups: dict[int, int],
+    bangumi_id: int = 3310,
+    premiere: str = "4/9/2022",
+) -> None:
     """番組 `bangumi_id` 的番組頁：每個字幕組（id → 發佈數）一欄（票 26：Mikan 卡的字幕組選項與
-    集數照它）。"""
+    集數照它）。開播日對得上 SPY×FAMILY 的首播（2022-04-09），M5.6 票 08 用它挑番組。"""
     names = "".join(
         f'<a class="subgroup-name subgroup-{group}">Group {group}</a>'
         f'<span class="date">09/24/2026 12:00</span>'
@@ -249,8 +254,17 @@ def bangumi(factory: FakeClientFactory, groups: dict[int, int], bangumi_id: int 
         + "</div>"
         for group, releases in groups.items()
     )
-    page = f'<p class="bangumi-title">SPY×FAMILY</p>{names}{tables}'
+    page = f'<p class="bangumi-title">SPY×FAMILY</p>放送开始：{premiere}{names}{tables}'
     factory.rss_.pages[mikan.bangumi_url(bangumi_id)] = page.encode()
+
+
+def searching(factory: FakeClientFactory, *hits: tuple[int, str], term: str = "间谍过家家") -> None:
+    """搜尋頁：一個名字回這幾個番組（`mikan.search_page` 讀的結果格子）。"""
+    cells = "".join(
+        f'<a href="/Home/Bangumi/{bangumi_id}"><div class="an-text" title="{title}"></div></a>'
+        for bangumi_id, title in hits
+    )
+    factory.rss_.pages[mikan.search_url(term)] = f'<ul class="an-ul">{cells}</ul>'.encode()
 
 
 def keyword_row(subgroup: str = "ANi") -> dict[str, object]:
@@ -742,6 +756,107 @@ class TestTheMikanSubgroupIsPickedOnTheCard:
         assert [key for key, _, _ in subscribed_series(client)] == ["mikan:3310:584"]
         [row] = outcome_of_call(script, "m1")["rows"]
         assert row["subgroup_chosen_on_card"] == "Group 584"
+
+
+class TestSubscribingAWorkOnMikan:
+    """M5.6 票 08：模型只給作品與推薦的字幕組，伺服器自己用作品的名字搜、用開播日挑番組。
+
+    這張票之前是 `bangumi.search_bangumi` + `bangumi.read_bangumi` + `rss.subscribe_mikan` 三步，
+    挑哪一個番組的判斷寫在 skill 裡。舊的工具這一張票還留著（票 09 拿掉）。
+    """
+
+    def propose(
+        self,
+        client: TestClient,
+        script: Script,
+        factory: FakeClientFactory,
+        subgroup: str = "ANi",
+    ) -> dict[str, Any]:
+        tv, _ = seen_work(client)
+        used_before(client, tv)
+        bangumi(factory, {583: 12, 584: 3})
+        searching(factory, (3310, "间谍过家家"))
+        script.steps = [
+            tool("rss_subscribe", "s1", rows=[{"media_id": SPY_ID, "subgroup": subgroup}]),
+            say("Subscribed."),
+        ]
+        chat(client, "Subscribe it on Mikan.")
+        [proposal] = cards(client)
+        return proposal
+
+    def test_the_card_lists_the_bangumis_subgroups_with_the_recommended_one_preselected(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        proposal = self.propose(client, script, factory, subgroup="Group 583")
+
+        assert proposal["command"] == "rss.subscribe"
+        assert proposal["preview"]["flags"] == ["downloads"]
+        [ask] = proposal["preview"]["subgroups"]
+        assert ask["preselected"] == "583"
+        assert [
+            (option["key"], option["name"], option["releases"]) for option in ask["options"]
+        ] == [
+            ("583", "Group 583", 12),
+            ("584", "Group 584", 3),
+        ]
+        assert proposal["preview"]["torrents"] == [12]
+
+    def test_the_subgroup_picked_on_the_card_is_the_one_subscribed(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        proposal = self.propose(client, script, factory)
+        season(factory, 3, 584)
+
+        pressed = decide(client, proposal["id"], approve=True, subgroups=["584"])
+        resume(client, tool_call_id="s1")
+
+        assert pressed.json()["status"] == "executed", pressed.text
+        [feed] = feeds(client)
+        assert feed["url"] == mikan.bangumi_feed_url(3310, 584)
+        assert [key for key, _, _ in subscribed_series(client)] == ["mikan:3310:584"]
+
+    def test_the_card_says_what_the_work_already_has(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        """驗收 2 的「現有訂閱」照舊（M5 票 26）：訂閱之前說出來，由人決定留不留。"""
+
+        async def old_feed(session: AsyncSession) -> None:
+            session.add(
+                RssFeed(
+                    name="old",
+                    url="https://nyaa.si/?page=rss&q=old",
+                    kind=FeedKind.NYAA,
+                    media_id=SPY_ID,
+                    subgroup="ANi",
+                )
+            )
+            await session.commit()
+
+        in_db(client, old_feed)
+
+        proposal = self.propose(client, script, factory)
+
+        [existing] = proposal["preview"]["existing"]
+        assert [(ref["name"], ref["kind"], ref["subgroup"]) for ref in existing] == [
+            ("old", "nyaa", "ANi")
+        ]
+
+    def test_no_bangumi_on_mikan_is_refused_before_a_card(
+        self, client: TestClient, script: Script, factory: FakeClientFactory
+    ) -> None:
+        """找不到番組：理由交給模型（退回關鍵字來源是票 09）。"""
+        seen_work(client)
+        searching(factory)
+        script.steps = [
+            tool("rss_subscribe", "s1", rows=[{"media_id": SPY_ID, "subgroup": "ANi"}]),
+            say("Mikan does not carry it."),
+        ]
+
+        chat(client, "Subscribe it on Mikan.")
+
+        assert refusal(script)["refused"] == "bangumi_not_found"
+        assert cards(client) == []
+        assert feeds(client) == []
 
 
 class TestAKeywordSubscriptionIsACard:

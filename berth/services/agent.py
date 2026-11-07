@@ -119,7 +119,13 @@ from berth.services.agent_tools import (
     tool_name,
     visible_tools,
 )
-from berth.services.bangumi import read_bangumi
+from berth.services.bangumi import (
+    BangumiView,
+    SubgroupView,
+    match_bangumi,
+    read_bangumi,
+    subgroup_named,
+)
 from berth.services.clients import ServiceClientFactory
 from berth.services.commands import Effect, Flag, command
 from berth.services.compaction import (
@@ -626,18 +632,8 @@ async def _mikan_preview(
         page = await read_bangumi(session, turn.executor.factory, bangumi)
     except RssRejectedError as exc:
         raise CommandRefusedError("rss.subscribe_mikan", exc.reason, exc.detail) from exc
-    options = tuple(
-        SubgroupOption(
-            key=str(group.id),
-            name=group.name,
-            releases=group.releases,
-            updated=group.updated,
-            latest=group.latest,
-            titles=(),
-            arguments={"subgroup_id": group.id, "subgroup_name": group.name},
-        )
-        for group in page.subgroups
-        if group.bound_to is None
+    options = _bangumi_options(
+        page, lambda group: {"subgroup_id": group.id, "subgroup_name": group.name}
     )
     picked = str(subgroup) if any(option.key == str(subgroup) for option in options) else None
     return _RowPreview(
@@ -678,12 +674,56 @@ async def _search_preview(
     )
 
 
+async def _subscribe_preview(
+    turn: Turn, session: AsyncSession, row: Mapping[str, object]
+) -> _RowPreview:
+    """以作品訂閱 Mikan 的一列（M5.6 票 08）：伺服器自己找番組（`match_bangumi`），番組頁上的
+    字幕組都是選項（已經綁在作品上的除外），模型推薦的名字只當預選。找不到番組、番組上沒有
+    字幕組都不出卡：理由交給模型，票 09 再由它退回關鍵字來源。送出的筆數與 `_mikan_preview`
+    同一個算法（選項裡最多的那一個）。"""
+    media_id = str(row["media_id"])
+    try:
+        found = await match_bangumi(session, turn.executor.factory, media_id)
+    except RssRejectedError as exc:
+        raise CommandRefusedError("rss.subscribe", exc.reason, exc.detail) from exc
+    options = _bangumi_options(found, lambda group: {"subgroup": group.name})
+    wanted = subgroup_named(found, str(row["subgroup"]))
+    picked = str(wanted.id) if wanted is not None and wanted.bound_to is None else None
+    return _RowPreview(
+        torrents=max((option.releases for option in options), default=None),
+        subgroups=_ask(options, picked),
+        existing=await list_subscriptions(session, media_id),
+    )
+
+
 async def _feed_preview(
     _turn: Turn, session: AsyncSession, row: Mapping[str, object]
 ) -> _RowPreview:
     """加 Feed 的一列（票 26）：網址是某個 Mikan 番組的單一 feed、而那個番組已經綁在作品上時，
     說出那部作品已經有的訂閱。其他網址看不出是哪一部。"""
     return _RowPreview(existing=await subscriptions_of_feed_url(session, str(row["url"])))
+
+
+def _bangumi_options(
+    view: BangumiView, arguments: Callable[[SubgroupView], dict[str, object]]
+) -> tuple[SubgroupOption, ...]:
+    """番組頁上的字幕組 → 卡片的選項（已經綁在作品上的除外：訂了也是 `series_bound`）。
+
+    Mikan 的兩支訂閱共用；人選了它要蓋掉存下參數的那幾格由呼叫端給。
+    """
+    return tuple(
+        SubgroupOption(
+            key=str(group.id),
+            name=group.name,
+            releases=group.releases,
+            updated=group.updated,
+            latest=group.latest,
+            titles=(),
+            arguments=arguments(group),
+        )
+        for group in view.subgroups
+        if group.bound_to is None
+    )
 
 
 def _ask(options: tuple[SubgroupOption, ...], picked: str | None) -> SubgroupAsk | None:
@@ -699,6 +739,7 @@ def _ask(options: tuple[SubgroupOption, ...], picked: str | None) -> SubgroupAsk
 _PREVIEWS: dict[str, _Previewer] = {
     "downloading.add_manual_download": _submit_preview,
     "rss.subscribe_mikan": _mikan_preview,
+    "rss.subscribe": _subscribe_preview,
     "rss.subscribe_search": _search_preview,
     "rss.add_feed": _feed_preview,
 }

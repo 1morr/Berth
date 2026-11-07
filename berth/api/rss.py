@@ -106,6 +106,12 @@ _STATUS: dict[RssRefusal, int] = {
     #: 先選第一輪再放行。
     RssRefusal.FEED_UNPRIMED: status.HTTP_409_CONFLICT,
     RssRefusal.INTERVAL_UNSUPPORTED: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    #: 這部作品在 Mikan 找不到番組（M5.6 票 08）：換一個來源，不是重試。
+    RssRefusal.BANGUMI_NOT_FOUND: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    #: 番組上沒有字幕組：Mikan 上還沒有人發這部作品。
+    RssRefusal.BANGUMI_WITHOUT_SUBGROUPS: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    #: 給的字幕組不在番組頁上：從卡片上的清單選一個。
+    RssRefusal.SUBGROUP_NOT_FOUND: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
