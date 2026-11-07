@@ -56,6 +56,8 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-07 | M5.6 10 UI 收尾 | 替身加 13 列與兩部作品兩種卡；critique 25/40、audit 17/20、polish：摘要一行、長卡確認貼底、批次勾選改中性、文案與 aria 修正 | 新 session 下 `/implement .scratch/m5.6/issues/10b-assistant-panel-resize.md` |
 | 2026-11-07 | M5.6 10b 面板拖寬 | 桌機把手拖寬（24–40rem、命中區 24px）、握把刻記、寬度讀數、雙擊重設、記 localStorage；窄版不畫；critique 28/40、audit 18/20 | 新 session 下 `/implement .scratch/m5.6/issues/11-m5.6-acceptance.md` |
 | 2026-11-07 | M5.6 11 驗收 | 真模型 26 列 $0.189；13 列卡 Route 選 1 次；S7／S8 的 anthropic 未達目標（使用者接受）；S1／S6 訂閱綁錯季排 M6 第一張票；真服務 e2e 27/28（既有的「可以看了」）待 11b | 等使用者：11b 修好 e2e 之後回來重跑與封存 |
+| 2026-11-07 | M5.6 10b 面板拖寬 | 桌機把手拖寬（24–40rem、命中區 24px）、握把刻記、寬度讀數、雙擊重設、記 localStorage；窄版不畫；critique 28/40、audit 18/20 | 新 session 下 `/implement .scratch/m5.6/issues/11b-notify-ready-e2e.md` |
+| 2026-11-08 | M5.6 11b 可以看了 e2e | 真因：5 分鐘合併窗把第 5、6 集併成一則 `S01E05–E06`，測試比字串永遠對不上；改讀季集範圍，三次全套綠 | 新 session 下 `/implement .scratch/m5.6/issues/11-m5.6-acceptance.md` |
 
 ## 偏差與決定
 
