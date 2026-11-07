@@ -2551,7 +2551,7 @@ def _mikan_key(bangumi_id: int, subgroup_id: int) -> str:
     about=(
         "Subscribe a work to one Mikan bangumi and subgroup: Berth reads the whole season, "
         "downloads what is out and keeps downloading new episodes into the route. Use ids "
-        "taken from earlier tool results. The route must hold the work's kind."
+        "taken from earlier tool results."
     ),
     refusals=(RssRefusal,),
     validate=_can_subscribe_mikan,
@@ -2751,7 +2751,7 @@ async def _can_subscribe_search(
         "for works Mikan does not carry. Give the subgroup you recommend as it appears in "
         "release names; the card lists every subgroup the search finds and the user picks "
         "one. Only that subgroup is bound, and its releases already out are downloaded when "
-        "the user confirms. The route must hold the work's kind."
+        "the user confirms."
     ),
     refusals=(RssRefusal,),
     validate=_can_subscribe_search,

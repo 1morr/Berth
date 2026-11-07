@@ -71,13 +71,9 @@ in Review, or already in the user's Jellyfin makes a duplicate.
    more than one subtitle language, end that reply by asking and stop there: no
    `downloading_add_manual_download` call until they answer. Otherwise propose the card right
    after the table.
-7. Pick the route from `media_read_media` for the work: its `routes` are the ones that hold
-   this kind of work, and `default_route_id` is the one used last. Pass that one, or any of
-   `routes` when there is none. Do not ask in chat: when more than one fits, the card makes the
-   user choose the route for that row.
-8. Put every pick in one `downloading_add_manual_download` proposal, one row per torrent:
-   the release picked from the search results, media_id, route_id. Say which episodes each row
-   covers and its subgroup and subtitle language. The user confirms the card; do not claim
-   anything was sent before that.
-9. After the card is decided, report per row what happened; some rows can fail while others
+7. Put every pick in one `downloading_add_manual_download` proposal, one row per torrent:
+   the release picked from the search results and media_id. Say which episodes each row covers
+   and its subgroup and subtitle language. The user confirms the card; do not claim anything
+   was sent before that.
+8. After the card is decided, report per row what happened; some rows can fail while others
    succeed.

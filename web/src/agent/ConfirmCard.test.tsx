@@ -53,6 +53,7 @@ function card(overrides: Partial<Proposal> = {}): Proposal {
       held_back: 0,
       torrents: [1, 1, 1],
       routes: [],
+      single_routes: [],
       subgroups: [],
       existing: [],
       first_batch: [],
@@ -361,6 +362,7 @@ describe('ConfirmCard', () => {
         held_back: 0,
         torrents: [],
         routes: [],
+        single_routes: [],
         subgroups: [],
         existing: [],
         first_batch: [],
@@ -394,6 +396,7 @@ describe('ConfirmCard', () => {
           held_back: 2,
           torrents: [1, 1, 1],
           routes: [],
+          single_routes: [],
           subgroups: [],
           existing: [],
           first_batch: [],
@@ -433,6 +436,7 @@ describe('ConfirmCard', () => {
         held_back: 0,
         torrents: [12],
         routes: [],
+        single_routes: [],
         subgroups: [],
         existing: [],
         first_batch: [],
@@ -471,6 +475,7 @@ describe('ConfirmCard', () => {
           held_back: 0,
           torrents,
           routes: [],
+          single_routes: [],
           subgroups: [],
           existing: [],
           first_batch: [],
@@ -513,6 +518,7 @@ describe('ConfirmCard', () => {
           held_back: 0,
           torrents: Array.from({ length: rows }, () => 1),
           routes: Array.from({ length: rows }, () => ask(preselected)),
+          single_routes: [],
           subgroups: [],
           existing: [],
           first_batch: [],
@@ -579,11 +585,16 @@ describe('ConfirmCard', () => {
     })
 
     it('a work with a single route shows it as text, with no dropdown', async () => {
-      serve(card({ arguments: [row(1)] }), stored('approval-requested'), () => card())
+      // 名字照預覽（M5.6 票 04）：作品頁那條叫 Anime，預覽裡是提出那一刻的名字。
+      const single = card({
+        arguments: [row(1)],
+        preview: { ...card().preview, single_routes: [{ id: 3, name: 'Anime only' }] },
+      })
+      serve(single, stored('approval-requested'), () => single)
       renderPanel()
 
       const section = await screen.findByRole('region', { name: '送出下載' })
-      await within(section).findByText('Anime')
+      await within(section).findByText('Anime only')
       expect(within(section).queryByRole('combobox')).toBeNull()
       expect(within(section).getByRole('button', { name: '確認' })).toBeInTheDocument()
     })
@@ -621,6 +632,7 @@ describe('ConfirmCard', () => {
           external_fields: rows.map(() => []),
           torrents: rows.map(() => 1),
           routes: asks,
+          single_routes: [],
         },
         ...more,
       })
@@ -754,6 +766,7 @@ describe('ConfirmCard', () => {
           held_back: 0,
           torrents: [2],
           routes: [],
+          single_routes: [],
           subgroups: [{ options: [ANI, MOUSE], preselected, required: true }],
           existing: [],
           first_batch: [true],
@@ -846,6 +859,7 @@ describe('ConfirmCard', () => {
           held_back: 0,
           torrents: [15],
           routes: [],
+          single_routes: [],
           subgroups: [
             {
               options: [
@@ -902,6 +916,7 @@ describe('ConfirmCard', () => {
         held_back: 0,
         torrents: [],
         routes: [],
+        single_routes: [],
         subgroups: [],
         existing: [],
         first_batch: [],

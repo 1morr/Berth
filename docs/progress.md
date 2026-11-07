@@ -49,9 +49,11 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-07 | M5.6 05 搜尋 contains | 種子搜尋加 `contains`（每個詞都要有、先篩再截斷）；帶它時模型看 20 列（token 量測在票）；人用的端點不變 | 新 session 下 `/implement .scratch/m5.6/issues/06-library-episodes.md` |
 | 2026-11-07 | M5.6 合併 main | 合併 main（票 02）到 `1morr/t03`，02、03 兩列都留著；pre-commit、vitest 2440、pytest 5724 全綠 | 新 session 下 `/implement .scratch/m5.6/issues/04-server-decides-route.md` |
 | 2026-11-07 | M5.6 06 find_in_library 集數 | 劇集命中加 `episodes`（Jellyfin 季集範圍、缺集斷開），電影沒有；同一部只讀一次，讀不到只那一部說原因 | 新 session 下 `/implement .scratch/m5.6/issues/04-server-decides-route.md` |
+| 2026-11-07 | M5.6 04 伺服器定 Route | 模型不給 route_id：一條用它、多條 RouteAsk、零條拒絕；拿掉 route_choices 與 read_media 的 Route 欄 | 新 session 下 `/implement .scratch/m5.6/issues/07-instructions-and-skills.md` |
 
 ## 偏差與決定
 
 實作中推翻 plan / brief 的事，一行一條，附 commit hash 與改動的章節。
 
 - 2026-10-31 M6 流程：M6 起 spec 由開工 session 寫到 `.scratch/<里程碑>/spec.md`，plan §11 對應節縮成一行連結、編號不變（改 plan §11 導言、`CLAUDE.md`〈Skills〉）；M0–M5 與 docs-diet 不補。
+- 2026-11-07 M5.6 票 04：推翻 plan §7「一條的照模型給的」——模型不給 Route，提出時由伺服器定（一條用它、多條問、零條拒）；plan §6 工具清單、§7 守法與 brief §14 同輪改。

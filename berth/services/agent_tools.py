@@ -29,9 +29,9 @@ TOOLS: tuple[str, ...] = (
     "jobs.list_jobs",
     "jobs.read_job_events",
     "skills.load_skill",
-    # 票 13：送單那一條路要的讀取與第一個寫入。
+    # 票 13：送單那一條路要的讀取與第一個寫入。Route 由伺服器在提出時定，模型不查也不用給
+    # （M5.6 票 04；`media.route_choices` 留給作品頁與 `route_offer`，不再是工具）。
     "search.search_torrents",
-    "media.route_choices",
     "downloading.add_manual_download",
     TAVILY_TOOL,
     # 票 14：訂閱、加 Feed 與它們要的讀取。`routes.check_route(s)` 不給：探測會讓 qBittorrent 校驗到
@@ -198,7 +198,11 @@ def _compact_media(result: object) -> object:
     return kept
 
 
-_MEDIA_DROPPED = frozenset({"poster_url", "poster_url_en", "overview_en"})
+#: `routes` 與 `default_route_id` 也是給人的（作品頁的下拉）：模型不給 Route，也就不必看它
+#: （M5.6 票 04）。
+_MEDIA_DROPPED = frozenset(
+    {"poster_url", "poster_url_en", "overview_en", "routes", "default_route_id"}
+)
 _FILE_KEYS = ("season", "episode_start", "episode_end", "tags", "status", "presence")
 
 

@@ -57,16 +57,14 @@ one name.
    the work does not end up subscribed twice. Skip the wait only when the user already picked a
    subgroup. Your recommendation becomes the card's preselected subgroup; the user can change
    it there, and must pick one when it offers more than one.
-7. Pick the route from `media_read_media`: `default_route_id`, or any of `routes` when there
-   is none. Do not ask in chat: when more than one fits, the card makes the user choose it.
-8. Propose the subscription:
+7. Propose the subscription:
    - The subgroup is on Mikan: `rss_subscribe_mikan` with the bangumi_id and subgroup_id from
      `bangumi_read_bangumi`.
    - Only when Mikan does not have it: `rss_subscribe_search` with kind `nyaa` or `acgrip`, a
      `term` written the way that subgroup names the show in its releases, and `subgroup` as
      it appears in those release names. The card lists the first batch it will download.
-9. When a site cannot be reached (Mikan, nyaa, acg.rip or the indexers), say which one and
+8. When a site cannot be reached (Mikan, nyaa, acg.rip or the indexers), say which one and
    suggest trying again later. Do not switch to another source and subscribe there on your
    own: offer it, and wait for the user to choose.
-10. The user decides the card. Do not say the subscription exists before that; afterwards
+9. The user decides the card. Do not say the subscription exists before that; afterwards
     report what happened, including any existing subscription the result mentions.

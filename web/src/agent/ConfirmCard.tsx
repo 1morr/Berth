@@ -14,6 +14,7 @@ import {
   type Proposal,
   type ProposalRow,
   type RouteAsk,
+  type RouteOption,
   type SubgroupAsk,
   type SubgroupOption,
   type HeldEpisode,
@@ -198,6 +199,7 @@ export function ConfirmCard({ proposal, toolCallId }: { proposal: Proposal; tool
                 ask,
                 // 等人按的時候是這一頁上那部作品的選擇，按過之後是伺服器記下的那一條。
                 pick: waiting ? routePick(index) : (proposal.routes?.[index] ?? null),
+                single: proposal.preview.single_routes?.[index] ?? null,
               }}
               subgroup={{
                 ask: groupAsks[index] ?? null,
@@ -472,6 +474,8 @@ interface RouteSlot {
   ask: RouteAsk | null
   /** 選了哪一條；`null` 是還沒選（或沒得選）。 */
   pick: number | null
+  /** 只有一條放得進時伺服器提出那一刻記下的那一條（M5.6 票 04）：名字照預覽，不照參數。 */
+  single: RouteOption | null
 }
 
 /** 卡片上一部作品的一組列（M5.6 票 03）：同一部作品的 Route 只問一次。 */
@@ -517,13 +521,13 @@ interface RoundSlot {
 }
 
 /**
- * Route 的值：要人選的作品是卡片上面選的那一條，按過之後是伺服器記下的那一條；
- * 沒得選的列照 `fallback`（模型給、伺服器驗過的那一條）。
+ * Route 的值：要人選的作品是卡片上面選的那一條，按過之後是伺服器記下的那一條；只有一條可選的
+ * 列是提出時記在預覽裡的那一條（M5.6 票 04），舊的卡才照 `fallback`。
  */
 function RouteName({ route, fallback }: { route: RouteSlot; fallback: string }) {
-  const { ask, pick } = route
-  if (ask === null) return fallback
-  return ask.options.find((option) => option.id === pick)?.name ?? '—'
+  const { ask, pick, single } = route
+  if (ask !== null) return ask.options.find((option) => option.id === pick)?.name ?? '—'
+  return single?.name ?? fallback
 }
 
 /**

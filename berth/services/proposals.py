@@ -9,13 +9,17 @@
 1. **提出**（`propose`）：查登錄表、照命令的 `audience` 擋角色、每一列過輸入模型並跑 `validate`
    （乾跑）。有一列不通過就不建，丟 `InvalidProposalError` 說哪一列、什麼理由——prototype 實測的
    `route_required` 是按了確認才被擋，只好再出一張卡。
+   **會送進 Route 的命令，Route 由這裡決定**（M5.6 票 04）：給模型的卡片列沒有 `route_id`，命令
+   的輸入照舊有（API 與作品頁的手動送單在用）。零條就拒絕（`route_missing`）、一條就用它、不只
+   一條時存 `RouteAsk` 並用第一條乾跑過得去的佔位；存下的參數是完整的，`arguments_hash` 照它算。
 2. **決定**（`decide`）：只有提出者本人或管理員按得到，別人的是 `proposal_missing`（看不到就是
    沒有）。
    **先搶狀態**：compare-and-set 從讀到的那個等待狀態改成核准或拒絕，搶輸的是 `proposal_decided`，
    所以連按兩次只算一次。核准時可以帶逐列選擇。
    **Route 是唯一能在這裡給的參數**（票 23b，放寬票 08 的「存下後不可改」）：作品放得進的 Route
    不只一條時，提出時把那一列的可選清單存進預覽（`RouteAsk`），核准時勾著的每一列都要選一條、
-   只收清單裡的（`route_required` / `route_not_offered`）。只有一條的列不收。
+   只收清單裡的（`route_required` / `route_not_offered`）。只有一條的列不收，預覽的
+   `single_routes` 只讓卡片印出名字（M5.6 票 04）。
    **字幕組也是**（M5 票 26）：訂閱的字幕組可選的不只一個時，提出的一方把選項存進預覽
    （`SubgroupAsk`，模型給的只當預選），核准時勾著的每一列都要選、只收清單裡的
    （`subgroup_required` / `subgroup_not_offered`）。關鍵字訂閱的**第一輪**同理（`first_batch`：
@@ -68,11 +72,13 @@ from berth.domain import (
     ProposalStatus,
     Role,
 )
-from berth.models import Proposal, User
+from berth.models import Media, Proposal, User
+from berth.models.media import media_id as build_media_id
+from berth.models.media import parse_media_id
 from berth.services.commands import Effect, Flag, command
 from berth.services.events import EventHub, ProposalSignal
 from berth.services.executor import CommandRefusal, CommandRefusedError, Executor
-from berth.services.media import route_offer
+from berth.services.media import RouteOffer, route_offer
 from berth.services.registry import CommandSpec, Verdict, commands, dry_run, public_arguments
 from berth.services.rss import SubscriptionRef
 from berth.services.search import HeldEpisode
@@ -111,10 +117,10 @@ class RouteOption:
 
 @dataclass(frozen=True, slots=True)
 class RouteAsk:
-    """一列要人在卡片上選的 Route（票 23b）：這部作品放得進的不只一條（`media.route_choices`）。
+    """一列要人在卡片上選的 Route（票 23b）：這部作品放得進的不只一條（`media.route_offer`）。
 
-    模型給的那一條不算數（票 23 實測它不問就挑），**預選的是這部作品上次送單用的那一條**
-    （`default_route_id`，在清單裡才算）；沒用過就不預選。
+    模型不給 Route（M5.6 票 04），提出時由伺服器算可選的清單；**預選的是這部作品上次送單用的
+    那一條**（`default_route_id`，在清單裡才算）；沒用過就不預選。
     """
 
     options: tuple[RouteOption, ...]
@@ -173,6 +179,9 @@ class ProposalPreview:
     #: 逐列：要人選 Route 的列是 `RouteAsk`，其餘（只有一條、命令沒有 Route）是 `None`。命令的輸入
     #: 沒有 `media_id` 與 `route_id` 的、票 23b 之前存的卡是空的。
     routes: tuple[RouteAsk | None, ...] = ()
+    #: 逐列：作品只有一條放得進的 Route 時是那一條（不用選，卡片照它印名字）；其餘是 `None`。
+    #: 命令沒有 Route 的、票 04 之前存的卡是空的。
+    single_routes: tuple[RouteOption | None, ...] = ()
     #: 逐列：訂閱的字幕組選項（`SubgroupAsk`），其餘是 `None`。不是訂閱的命令、票 26 之前存的卡
     #: 是空的。
     subgroups: tuple[SubgroupAsk | None, ...] = ()
@@ -274,13 +283,8 @@ async def propose(
         raise CommandRefusedError(name, CommandRefusal.UNKNOWN_COMMAND)
     if spec.audience is Role.ADMIN and actor.role is not Role.ADMIN:
         raise CommandRefusedError(name, CommandRefusal.ADMIN_ONLY)
-    arguments = [spec.input.model_validate(row).model_dump(mode="json") for row in rows]
-    checked: list[bool] = []
-    for index, row in enumerate(arguments):
-        verdict = await dry_run(spec, session, row)
-        if verdict.refusal is not None:
-            raise InvalidProposalError(name, index, verdict.refusal, verdict.detail)
-        checked.append(verdict.checked)
+    arguments, asks, singles, verdicts = await _prepare(session, spec, rows)
+    checked = [verdict.checked for verdict in verdicts]
     moment = now or datetime.now(UTC)
     preview = ProposalPreview(
         effect=spec.effect,
@@ -290,7 +294,8 @@ async def propose(
         or tuple(() for _ in rows),
         held_back=held_back,
         torrents=tuple(torrents),
-        routes=await _route_asks(session, spec, arguments),
+        routes=asks,
+        single_routes=singles,
         subgroups=tuple(subgroups),
         existing=tuple(tuple(found) for found in existing),
         first_batch=(
@@ -577,28 +582,92 @@ def _settled(results: Sequence[RowResult]) -> ProposalStatus:
 
 def sends_into_a_route(spec: CommandSpec) -> bool:
     """命令把一部作品送進一條 Route（輸入有 `media_id` 與 `route_id`：送單、訂閱 Mikan、
-    關鍵字訂閱）。這幾支在作品放得進的 Route 不只一條時要人選（票 23b）。"""
+    關鍵字訂閱）。這一類命令的 Route 由伺服器在提出時定（M5.6 票 04）：給模型的卡片列不帶
+    `route_id`，命令本身的輸入照舊（API 與作品頁的手動送單在用）。"""
     return {"media_id", "route_id"} <= set(spec.input.model_fields)
 
 
-async def _route_asks(
-    session: AsyncSession, spec: CommandSpec, arguments: Sequence[Mapping[str, object]]
-) -> tuple[RouteAsk | None, ...]:
-    """逐列：作品放得進的 Route 不只一條就要人選（票 23b，`sends_into_a_route` 的命令才看）。"""
+def _refusal(spec: CommandSpec, member: str) -> StrEnum:
+    """命令自己宣告的拒絕理由（`ROUTE_MISSING` / `MEDIA_MISSING`）：送單與兩種訂閱都有這兩個。"""
+    for refusals in spec.refusals:
+        reason = getattr(refusals, member, None)
+        if isinstance(reason, StrEnum):
+            return reason
+    raise RuntimeError(f"{spec.name} has no {member} refusal")
+
+
+def _alternatives(offer: RouteOffer) -> list[int]:
+    """提出時乾跑與存檔的順序：上次用的那一條先試，其餘照 id。清單一定不空（呼叫端先擋零條）。"""
+    first = [offer.last_used] if offer.last_used is not None else []
+    return first + [choice.id for choice in offer.choices if choice.id != offer.last_used]
+
+
+async def _prepare(
+    session: AsyncSession, spec: CommandSpec, rows: Sequence[Mapping[str, object]]
+) -> tuple[
+    list[dict[str, Any]],
+    tuple[RouteAsk | None, ...],
+    tuple[RouteOption | None, ...],
+    list[Verdict],
+]:
+    """逐列補上伺服器決定的 Route 再乾跑（M5.6 票 04）。模組 docstring 第 1 點。
+
+    送進 Route 的三支命令：作品放得進的 Route 零條就拒絕（`route_missing`，作品不在是
+    `media_missing`；沿用命令自己的理由）；一條就存那一條；不只一條時預覽存 `RouteAsk`，
+    **乾跑用第一條過得去的**（預選的那一條先試），存下的 `route_id` 只是佔位——核准時人在卡片上
+    選的那一條會蓋過它（`execute`）。存下的參數因此是完整的，`arguments_hash` 照這一份算。
+    """
     if not sends_into_a_route(spec):
-        return ()
+        plain = [spec.input.model_validate(row).model_dump(mode="json") for row in rows]
+        checked: list[Verdict] = []
+        for index, argument in enumerate(plain):
+            verdict = await dry_run(spec, session, argument)
+            if verdict.refusal is not None:
+                raise InvalidProposalError(spec.name, index, verdict.refusal, verdict.detail)
+            checked.append(verdict)
+        return plain, (), (), checked
+
+    arguments: list[dict[str, Any]] = []
     asks: list[RouteAsk | None] = []
-    for row in arguments:
-        offer = await route_offer(session, str(row["media_id"]))
-        asks.append(
-            RouteAsk(
-                options=tuple(RouteOption(id=c.id, name=c.name) for c in offer.choices),
-                preselected=offer.last_used,
+    singles: list[RouteOption | None] = []
+    verdicts: list[Verdict] = []
+    for index, row in enumerate(rows):
+        media_id = str(row.get("media_id", ""))
+        offer = await route_offer(session, media_id)
+        options = tuple(RouteOption(id=choice.id, name=choice.name) for choice in offer.choices)
+        if not options:
+            parsed = parse_media_id(media_id)
+            known = (
+                parsed is not None and await session.get(Media, build_media_id(*parsed)) is not None
             )
-            if len(offer.choices) > 1
-            else None
-        )
-    return tuple(asks)
+            raise InvalidProposalError(
+                spec.name,
+                index,
+                _refusal(spec, "ROUTE_MISSING" if known else "MEDIA_MISSING"),
+                media_id,
+            )
+        if len(options) == 1:
+            asks.append(None)
+            singles.append(options[0])
+        else:
+            asks.append(RouteAsk(options=options, preselected=offer.last_used))
+            singles.append(None)
+        accepted: tuple[dict[str, Any], Verdict] | None = None
+        refused: tuple[StrEnum, str] | None = None
+        for route_id in _alternatives(offer):
+            filled = spec.input.model_validate({**row, "route_id": route_id})
+            candidate = filled.model_dump(mode="json")
+            verdict = await dry_run(spec, session, candidate)
+            if verdict.refusal is None:
+                accepted = (candidate, verdict)
+                break
+            refused = (verdict.refusal, verdict.detail)
+        if accepted is None:
+            assert refused is not None
+            raise InvalidProposalError(spec.name, index, *refused)
+        arguments.append(accepted[0])
+        verdicts.append(accepted[1])
+    return arguments, tuple(asks), tuple(singles), verdicts
 
 
 def _routes(
@@ -782,6 +851,11 @@ def _view(proposal: Proposal) -> ProposalView:
                     preselected=ask["preselected"],
                 )
                 for ask in preview.get("routes") or ()
+            ),
+            # 票 04 之前存的卡沒有這一格。
+            single_routes=tuple(
+                None if option is None else RouteOption(**option)
+                for option in preview.get("single_routes") or ()
             ),
             # 票 26 之前存的卡沒有這三格。
             subgroups=tuple(_subgroup_ask(ask) for ask in preview.get("subgroups") or ()),

@@ -171,43 +171,36 @@ def tv_routes(client: TestClient) -> list[int]:
 
 
 def seen_work(client: TestClient) -> tuple[int, int]:
-    """這段對話查過作品與它的 Route。
-
-    真的模型會先叫 `discover_search_media`、`media_route_choices`。
-    """
-    tv, movies = route_of(client, "tv"), route_of(client, "movies")
+    """這段對話查過作品。Route 由伺服器在提出時定（M5.6 票 04），模型不必查也不給。"""
     looked_up(client, {"items": [{"id": SPY_ID}]}, tool="discover_search_media")
-    looked_up(client, [{"id": tv}, {"id": movies}], tool="media_route_choices")
-    return tv, movies
+    return route_of(client, "tv"), route_of(client, "movies")
 
 
 # ---------------------------------------------------------------- id
 
 
 class TestIdsComeFromToolResults:
-    def test_a_route_no_tool_returned_gets_no_card(
-        self, client: TestClient, script: Script
-    ) -> None:
-        looked_up(client, {"items": [{"id": SPY_ID}]}, tool="discover_search_media")
+    def test_a_route_the_model_adds_is_not_taken(self, client: TestClient, script: Script) -> None:
+        """M5.6 票 04：Route 不再由模型給。多了 `route_id` 的那一列連卡都不出，模型拿到參數錯。"""
+        seen_work(client)
         script.steps = [
-            tool("rss_subscribe_search", rows=[keyword_row(99)]),
-            say("I need the routes first."),
+            tool("rss_subscribe_search", rows=[keyword_row() | {"route_id": 3}]),
+            say("The route is Berth's to pick."),
         ]
 
         chat(client, "Subscribe SPY×FAMILY on nyaa.")
 
-        assert refusal(script)["refused"] == "id_not_from_results"
-        assert "route_id=99" in refusal(script)["detail"]
+        assert "route_id" in json.dumps(refusal(script), ensure_ascii=False)
         assert cards(client) == []
         assert feeds(client) == []
-        assert [t.outcome for t in recorded(client)[-1].tools] == ["refused"]
+        assert [t.outcome for t in recorded(client)[-1].tools] == ["failed"]
 
     def test_a_mikan_subgroup_the_model_made_up_gets_no_card(
         self, client: TestClient, script: Script
     ) -> None:
-        tv, _ = seen_work(client)
+        seen_work(client)
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
-        row = {"bangumi_id": 3310, "subgroup_id": 999, "media_id": SPY_ID, "route_id": tv}
+        row = {"bangumi_id": 3310, "subgroup_id": 999, "media_id": SPY_ID}
         script.steps = [tool("rss_subscribe_mikan", rows=[row]), say("Let me read the groups.")]
 
         chat(client, "Subscribe it from Mikan.")
@@ -219,10 +212,10 @@ class TestIdsComeFromToolResults:
     def test_ids_from_tool_results_make_a_card(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
-        tv, _ = seen_work(client)
+        seen_work(client)
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
         bangumi(factory, {583: 12})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
         script.steps = [tool("rss_subscribe_mikan", rows=[row])]
 
         chat(client, "Subscribe it from Mikan.")
@@ -260,14 +253,13 @@ def bangumi(factory: FakeClientFactory, groups: dict[int, int], bangumi_id: int 
     factory.rss_.pages[mikan.bangumi_url(bangumi_id)] = page.encode()
 
 
-def keyword_row(route: int, subgroup: str = "ANi") -> dict[str, object]:
+def keyword_row(subgroup: str = "ANi") -> dict[str, object]:
     """關鍵字訂閱卡的一列（票 26）：《与你相恋》的 acg.rip 搜尋，模型建議 `subgroup`。"""
     return {
         "kind": "acgrip",
         "term": TERM,
         "subgroup": subgroup,
         "media_id": SPY_ID,
-        "route_id": route,
     }
 
 
@@ -279,9 +271,9 @@ class TestWhatACardSends:
     """按卡的人要知道自己要送多少（協調者 2026-10-27）：訂閱 Mikan 按下去就當場送整季。"""
 
     def subscribe(self, client: TestClient, script: Script) -> dict[str, Any]:
-        tv, _ = seen_work(client)
+        seen_work(client)
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
         script.steps = [tool("rss_subscribe_mikan", rows=[row])]
         chat(client, "Subscribe it from Mikan.")
         [proposal] = cards(client)
@@ -313,9 +305,9 @@ class TestWhatACardSends:
         self, client: TestClient, script: Script
     ) -> None:
         """字幕組要人選，番組頁讀不到就列不出選項：不出卡，把理由交給模型。"""
-        tv, _ = seen_work(client)
+        seen_work(client)
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
         script.steps = [tool("rss_subscribe_mikan", rows=[row]), say("Mikan is down.")]
 
         chat(client, "Subscribe it from Mikan.")
@@ -383,10 +375,10 @@ class TestExternalContent:
     def test_free_text_taken_from_a_web_page_turns_it_into_a_card(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
-        tv, _ = seen_work(client)
+        seen_work(client)
         with_tavily(client, factory, PAGE)
         factory.rss_.pages[acgrip.search_url("SPY x FAMILY Code White")] = ACGRIP_FEED
-        row = keyword_row(tv) | {"term": "SPY x FAMILY Code White"}
+        row = keyword_row() | {"term": "SPY x FAMILY Code White"}
         script.steps = [
             call("web_tavily_search", query="SPY FAMILY movie fansub name"),
             tool("rss_subscribe_search", "s1", rows=[row]),
@@ -456,20 +448,23 @@ class TestRefusedBeforeACard:
         assert refusal(script)["refused"] == "route_required"
         assert refusal(script)["detail"] == "movie"
 
-    def test_a_series_subscribed_into_the_movie_route_is_refused_before_the_card(
+    def test_a_series_is_only_offered_routes_that_hold_series(
         self, client: TestClient, script: Script, factory: FakeClientFactory
     ) -> None:
+        """Route 由伺服器從作品那一種挑（M5.6 票 04）：電影的 Route 不會出現在清單裡。"""
         _, movies = seen_work(client)
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
         bangumi(factory, {583: 12})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": movies}
-        script.steps = [tool("rss_subscribe_mikan", rows=[row]), say("That route holds films.")]
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
+        script.steps = [tool("rss_subscribe_mikan", rows=[row])]
 
         chat(client, "Subscribe it from Mikan.")
 
-        assert cards(client) == []
-        assert refusal(script)["refused"] == "route_kind_mismatch"
-        assert refusal(script)["row"] == 0
+        [proposal] = cards(client)
+        [ask] = proposal["preview"]["routes"]
+        offered = {option["id"] for option in ask["options"]}
+        assert movies not in offered
+        assert offered == set(tv_routes(client))
 
 
 # ---------------------------------------------------------------- 數量與磁碟閘
@@ -513,14 +508,12 @@ class TestHowManyOnOneCard:
         """在途量（M4 票 03）：一張卡逐列送，前面送出的那幾列算在途。"""
         gib = 1024**3
         sources: SourceCache = client.app.state.sources  # type: ignore[attr-defined]  # app.state 是 Starlette 的動態屬性
-        route = route_of(client, "tv")
         made = [
             {
                 "source_id": sources.remember(
                     JobSource(url=magnet(episode), title=f"SPY - {episode:02d}", size=2 * gib)
                 ),
                 "media_id": SPY_ID,
-                "route_id": route,
             }
             for episode in (1, 2)
         ]
@@ -564,7 +557,7 @@ class TestTorrentsOnOneCard:
         sizes: list[int | None],
     ) -> dict[str, Any]:
         """一列一個番組（3310 起），各一個字幕組 583、`sizes` 集；`None` 是番組頁上沒有字幕組。"""
-        tv, _ = seen_work(client)
+        seen_work(client)
         ids = [3310 + index for index in range(len(sizes))]
         for bangumi_id, size in zip(ids, sizes, strict=True):
             bangumi(factory, {} if size is None else {583: size}, bangumi_id)
@@ -579,7 +572,6 @@ class TestTorrentsOnOneCard:
                         "bangumi_id": bangumi_id,
                         "subgroup_id": 583,
                         "media_id": SPY_ID,
-                        "route_id": tv,
                     }
                     for bangumi_id in ids
                 ],
@@ -650,7 +642,7 @@ class TestTheRouteIsAskedOnACard:
     ) -> None:
         tv, _ = seen_work(client)
         serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", "s1", rows=[keyword_row(tv)]), say("Done.")]
+        script.steps = [tool("rss_subscribe_search", "s1", rows=[keyword_row()]), say("Done.")]
 
         chat(client, "Subscribe it on acg.rip.")
 
@@ -704,7 +696,7 @@ class TestTheMikanSubgroupIsPickedOnTheCard:
             tool="bangumi_read_bangumi",
         )
         bangumi(factory, {583: 12, 584: 3})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
         script.steps = [tool("rss_subscribe_mikan", "m1", rows=[row]), say("Subscribed.")]
         chat(client, "Subscribe it from Mikan.")
         [proposal] = cards(client)
@@ -763,7 +755,7 @@ class TestAKeywordSubscriptionIsACard:
         used_before(client, tv)
         serve_search(factory)
         script.steps = [
-            tool("rss_subscribe_search", "k1", rows=[keyword_row(tv, subgroup)]),
+            tool("rss_subscribe_search", "k1", rows=[keyword_row(subgroup)]),
             say("Subscribed."),
         ]
         chat(client, "Subscribe it on acg.rip.")
@@ -829,7 +821,7 @@ class TestAKeywordSubscriptionIsACard:
     ) -> None:
         tv, _ = seen_work(client)
         used_before(client, tv)
-        script.steps = [tool("rss_subscribe_search", rows=[keyword_row(tv)]), say("Down.")]
+        script.steps = [tool("rss_subscribe_search", rows=[keyword_row()]), say("Down.")]
 
         chat(client, "Subscribe it on acg.rip.")
 
@@ -837,8 +829,8 @@ class TestAKeywordSubscriptionIsACard:
         assert refusal(script)["refused"] == "feed_unreachable"
 
     def test_the_model_must_name_a_subgroup(self, client: TestClient, script: Script) -> None:
-        tv, _ = seen_work(client)
-        row = {k: v for k, v in keyword_row(tv).items() if k != "subgroup"}
+        seen_work(client)
+        row = {k: v for k, v in keyword_row().items() if k != "subgroup"}
         script.steps = [tool("rss_subscribe_search", rows=[row]), say("Which subgroup?")]
 
         chat(client, "Subscribe it on acg.rip.")
@@ -857,7 +849,7 @@ class TestExistingSubscriptionsAreSaid:
         tv, _ = seen_work(client)
         used_before(client, tv)
         serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", "k1", rows=[keyword_row(tv)]), say("Done.")]
+        script.steps = [tool("rss_subscribe_search", "k1", rows=[keyword_row()]), say("Done.")]
         chat(client, "Subscribe it on acg.rip.")
         [first] = cards(client)
         decide(client, first["id"], approve=True)
@@ -866,7 +858,7 @@ class TestExistingSubscriptionsAreSaid:
 
         looked_up(client, {"id": 3310, "subgroups": [{"id": 583}]}, tool="bangumi_read_bangumi")
         bangumi(factory, {583: 12})
-        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID, "route_id": tv}
+        row = {"bangumi_id": 3310, "subgroup_id": 583, "media_id": SPY_ID}
         script.steps = [tool("rss_subscribe_mikan", "m1", rows=[row]), say("Done.")]
         script.seen.clear()
         chat(client, "Also subscribe it from Mikan.")
@@ -889,7 +881,7 @@ class TestExistingSubscriptionsAreSaid:
         tv, _ = seen_work(client)
         used_before(client, tv)
         serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", rows=[keyword_row(tv)])]
+        script.steps = [tool("rss_subscribe_search", rows=[keyword_row()])]
 
         chat(client, "Subscribe it on acg.rip.")
 
@@ -907,7 +899,7 @@ class TestDeletingASubscription:
         tv, _ = seen_work(client)
         used_before(client, tv)
         serve_search(factory)
-        script.steps = [tool("rss_subscribe_search", "k1", rows=[keyword_row(tv)]), say("Done.")]
+        script.steps = [tool("rss_subscribe_search", "k1", rows=[keyword_row()]), say("Done.")]
         chat(client, "Subscribe it on acg.rip.")
         [made] = cards(client)
         decide(client, made["id"], approve=True)

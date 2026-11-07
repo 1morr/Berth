@@ -13,11 +13,24 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from berth.domain import Actor, ProposalRefusal, ProposalRowOutcome, ProposalStatus, Role
+from berth.domain import (
+    Actor,
+    JobRefusal,
+    ProposalRefusal,
+    ProposalRowOutcome,
+    ProposalStatus,
+    Role,
+)
 from berth.models import Job, Media, Proposal, Route, User
 from berth.services import proposals
 from berth.services.agent import card_outcome
-from berth.services.proposals import ProposalRejectedError, ProposalView, RouteAsk, RouteOption
+from berth.services.proposals import (
+    InvalidProposalError,
+    ProposalRejectedError,
+    ProposalView,
+    RouteAsk,
+    RouteOption,
+)
 from berth.services.registry import commands
 from tests.integration.arrange import factory_for
 from tests.integration.test_command_dry_run import harbour
@@ -53,11 +66,11 @@ async def second_tv_route(session: AsyncSession, roots: dict[str, Path]) -> Rout
     )
 
 
-def submit_row(media: Media, route: Route, *, url: str = MAGNET) -> dict[str, object]:
+def submit_row(media: Media, *, url: str = MAGNET) -> dict[str, object]:
+    """模型給的一列（M5.6 票 04）：沒有 `route_id`，由 `propose` 補。"""
     return {
         "source": {"url": url, "title": "[Sub] Kimi - 01 [1080p]"},
         "media_id": media.id,
-        "route_id": route.id,
     }
 
 
@@ -103,17 +116,75 @@ async def job_route(session: AsyncSession, job_hash: str) -> int | None:
 
 
 class TestOneRouteFits:
-    async def test_the_row_asks_nothing_and_runs_with_the_route_it_was_given(
+    async def test_the_row_asks_nothing_and_runs_with_the_only_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
+        """M5.6 票 04：模型不再給 Route。只有一條時伺服器直接用它，卡片只印名字。"""
         media, anime, _ = await harbour(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
 
-        card = await propose(session, loops, crew, submit_row(media, anime))
+        card = await propose(session, loops, crew, submit_row(media))
         view = await decide(session, loops, card, crew)
 
         assert card.preview.routes == (None,)
+        assert card.preview.single_routes == (RouteOption(id=anime.id, name="Anime"),)
+        assert card.arguments[0]["route_id"] == anime.id
+        assert view.status is ProposalStatus.EXECUTED, view.results
+        assert await job_route(session, MAGNET_HASH) == anime.id
+
+    async def test_a_work_with_no_route_is_refused_before_a_card(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """零條就拒絕，理由沿用命令自己的 `route_missing`（M5.6 票 04）。"""
+        media, anime, _ = await harbour(session, roots)
+        anime.enabled = False
+        await session.commit()
+        crew = await crew_member(session)
+        loops = Loops(factory_for(roots))
+
+        with pytest.raises(InvalidProposalError) as refused:
+            await propose(session, loops, crew, submit_row(media))
+
+        assert refused.value.row == 0
+        assert refused.value.reason is JobRefusal.ROUTE_MISSING
+        assert refused.value.detail == media.id
+        assert await session.scalar(select(Proposal.id)) is None
+
+    async def test_an_id_that_is_not_a_work_is_media_missing(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """作品認不得時說的是作品的理由，不是 `route_missing`（M5.6 票 04）。"""
+        _, _, _ = await harbour(session, roots)
+        crew = await crew_member(session)
+        loops = Loops(factory_for(roots))
+
+        with pytest.raises(InvalidProposalError) as refused:
+            await propose(session, loops, crew, {"source": {"url": MAGNET}, "media_id": "nope"})
+
+        assert refused.value.reason is JobRefusal.MEDIA_MISSING
+        assert refused.value.detail == "nope"
+
+    async def test_a_card_stored_before_the_upgrade_still_runs(
+        self, session: AsyncSession, roots: dict[str, Path]
+    ) -> None:
+        """升級前存的卡（預覽沒有 `single_routes`、參數帶 `route_id`）照樣核准與執行
+        （M5.6 票 04）。"""
+        media, anime, _ = await harbour(session, roots)
+        crew = await crew_member(session)
+        loops = Loops(factory_for(roots))
+        card = await propose(session, loops, crew, submit_row(media))
+
+        row = await session.get(Proposal, card.id, populate_existing=True)
+        assert row is not None
+        preview = dict(row.preview_json)
+        assert preview.pop("single_routes") == [{"id": anime.id, "name": "Anime"}]
+        row.preview_json = preview
+        await session.commit()
+
+        view = await decide(session, loops, card, crew)
+
+        assert view.preview.single_routes == ()
         assert view.status is ProposalStatus.EXECUTED, view.results
         assert await job_route(session, MAGNET_HASH) == anime.id
 
@@ -121,10 +192,10 @@ class TestOneRouteFits:
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
         """其餘參數照舊不收：只有一條可用的那一列不能藉 `routes` 改成別條。"""
-        media, anime, movies = await harbour(session, roots)
+        media, _, movies = await harbour(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
-        card = await propose(session, loops, crew, submit_row(media, anime))
+        card = await propose(session, loops, crew, submit_row(media))
 
         with pytest.raises(ProposalRejectedError) as refused:
             await decide(session, loops, card, crew, routes=[movies.id])
@@ -141,7 +212,7 @@ class TestManyRoutesFit:
         tv = await second_tv_route(session, roots)
         crew = await crew_member(session)
 
-        card = await propose(session, Loops(), crew, submit_row(media, anime))
+        card = await propose(session, Loops(), crew, submit_row(media))
 
         assert card.preview.routes == (
             RouteAsk(
@@ -153,14 +224,14 @@ class TestManyRoutesFit:
     async def test_the_route_this_work_used_last_is_preselected(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, anime, _ = await harbour(session, roots)
+        media, _, _ = await harbour(session, roots)
         tv = await second_tv_route(session, roots)
         media.default_route_id = tv.id
         await session.commit()
         crew = await crew_member(session)
 
-        # 模型給的是 Anime；預選的仍是這部作品上次用的那一條，不是模型挑的。
-        card = await propose(session, Loops(), crew, submit_row(media, anime))
+        # 預選的是這部作品上次用的那一條，不是乾跑用的那一條。
+        card = await propose(session, Loops(), crew, submit_row(media))
 
         [ask] = card.preview.routes
         assert ask is not None
@@ -169,11 +240,11 @@ class TestManyRoutesFit:
     async def test_approving_without_a_route_is_refused_and_runs_nothing(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, anime, _ = await harbour(session, roots)
+        media, _, _ = await harbour(session, roots)
         await second_tv_route(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
-        card = await propose(session, loops, crew, submit_row(media, anime))
+        card = await propose(session, loops, crew, submit_row(media))
 
         with pytest.raises(ProposalRejectedError) as refused:
             await decide(session, loops, card, crew)
@@ -186,11 +257,11 @@ class TestManyRoutesFit:
     async def test_a_route_outside_the_stored_choices_is_refused(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, anime, movies = await harbour(session, roots)
+        media, _, movies = await harbour(session, roots)
         await second_tv_route(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
-        card = await propose(session, loops, crew, submit_row(media, anime))
+        card = await propose(session, loops, crew, submit_row(media))
 
         with pytest.raises(ProposalRejectedError) as refused:
             await decide(session, loops, card, crew, routes=[movies.id])
@@ -205,19 +276,19 @@ class TestManyRoutesFit:
         tv = await second_tv_route(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
-        card = await propose(session, loops, crew, submit_row(media, anime))
+        card = await propose(session, loops, crew, submit_row(media))
 
         view = await decide(session, loops, card, crew, routes=[tv.id])
 
         assert view.status is ProposalStatus.EXECUTED, view.results
         assert view.routes == [tv.id]
-        # 存下的參數沒變；送出用的是卡片上選的那一條。
+        # 存下的參數沒變（乾跑用的那一條）；送出用的是卡片上選的那一條。
         assert view.arguments[0]["route_id"] == anime.id
         assert await job_route(session, MAGNET_HASH) == tv.id
         refreshed = await session.get(Media, media.id, populate_existing=True)
         assert refreshed is not None
         assert refreshed.default_route_id == tv.id
-        # 模型拿到的結果說出人選了哪一條（它給的是 Anime）。
+        # 模型拿到的結果說出人選了哪一條。
         assert card_outcome(view)["rows"] == [
             {
                 "row": 0,
@@ -240,8 +311,8 @@ class TestManyRoutesFit:
             session,
             loops,
             crew,
-            submit_row(media, anime),
-            submit_row(media, anime, url=OTHER_MAGNET),
+            submit_row(media),
+            submit_row(media, url=OTHER_MAGNET),
         )
 
         # 沒勾的那一列帶了 Route 也不記：那一列不做，不該說它選了哪一條。
@@ -258,7 +329,7 @@ class TestManyRoutesFit:
     async def test_routes_that_do_not_cover_every_row_are_refused(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, anime, _ = await harbour(session, roots)
+        media, _, _ = await harbour(session, roots)
         tv = await second_tv_route(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
@@ -266,8 +337,8 @@ class TestManyRoutesFit:
             session,
             loops,
             crew,
-            submit_row(media, anime),
-            submit_row(media, anime, url=OTHER_MAGNET),
+            submit_row(media),
+            submit_row(media, url=OTHER_MAGNET),
         )
 
         with pytest.raises(ProposalRejectedError) as refused:
@@ -278,11 +349,11 @@ class TestManyRoutesFit:
     async def test_rejecting_needs_no_route(
         self, session: AsyncSession, roots: dict[str, Path]
     ) -> None:
-        media, anime, _ = await harbour(session, roots)
+        media, _, _ = await harbour(session, roots)
         await second_tv_route(session, roots)
         crew = await crew_member(session)
         loops = Loops(factory_for(roots))
-        card = await propose(session, loops, crew, submit_row(media, anime))
+        card = await propose(session, loops, crew, submit_row(media))
 
         view = await proposals.decide(
             session, loops.executor, card.id, approve=False, user_id=crew.id, role=crew.role

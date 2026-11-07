@@ -150,8 +150,8 @@ class MediaView:
         "yet, whether the user's Jellyfin has the work at all (jellyfin: found, absent, or "
         "unknown when Jellyfin could not be asked), Jellyfin episodes that match no TMDB "
         "episode (jellyfin_unmatched, in Jellyfin's numbering; the TMDB episodes with the same "
-        "numbers are jellyfin_maybe: maybe there, still counted as missing), the routes it can "
-        "go to (routes) and the one used last (default_route_id), and the files Berth imported."
+        "numbers are jellyfin_maybe: maybe there, still counted as missing), and the files "
+        "Berth imported. Submitting a download does not need a route: Berth picks it."
     ),
     audience=Role.USER,
 )
@@ -174,8 +174,8 @@ async def read_media(
     Effect.READ,
     about=(
         "List the routes (library folders) a work can be downloaded into: only enabled routes "
-        "whose library holds the work's kind (tv or movie). Pass one of these ids as route_id "
-        "when sending a download."
+        "whose library holds the work's kind (tv or movie). The work page's route picker uses "
+        "it; sending a download does not need one, Berth picks the route."
     ),
     # 作品頁本來就給登入的人看這份下拉。
     audience=Role.USER,
@@ -199,10 +199,10 @@ class RouteOffer:
 @command(Effect.READ, flags={Flag.INTERNAL})
 async def route_offer(session: AsyncSession, media_id: str) -> RouteOffer:
     """`route_choices` 加上這部作品的 `default_route_id`。認不得的 id 是空的。"""
+    choices = await route_choices(session, media_id)
     parsed = parse_media_id(media_id)
     if parsed is None:
-        return RouteOffer(choices=(), last_used=None)
-    choices = await _routes(session, parsed[0])
+        return RouteOffer(choices=choices, last_used=None)
     row = await session.get(Media, build_media_id(*parsed))
     last = row.default_route_id if row is not None else None
     return RouteOffer(
