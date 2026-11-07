@@ -5911,6 +5911,8 @@ export interface components {
             torrents: (number | null)[];
             /** Routes */
             routes: (components["schemas"]["RouteAskOut"] | null)[];
+            /** Single Routes */
+            single_routes: (components["schemas"]["RouteOptionOut"] | null)[];
             /** Subgroups */
             subgroups: (components["schemas"]["SubgroupAskOut"] | null)[];
             /** Existing */

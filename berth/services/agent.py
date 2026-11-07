@@ -42,6 +42,7 @@ from collections import Counter
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
+from functools import cache
 from typing import Any
 
 import anyio
@@ -523,12 +524,6 @@ class SubmitRow(BaseModel):
 
     source_id: str = Field(description="The source_id of a row from search_torrents.")
     media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
-    route_id: int = Field(
-        description=(
-            "An id from route_choices for this work. When more than one fits, the user "
-            "chooses this row's route on the card."
-        )
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -551,7 +546,7 @@ def _bind_submit(turn: Turn, row: BaseModel) -> dict[str, object]:
         raise CommandRefusedError(
             "downloading.add_manual_download", JobRefusal.SOURCE_EXPIRED, row.source_id
         ) from exc
-    return {"source": source, "media_id": row.media_id, "route_id": row.route_id}
+    return {"source": source, "media_id": row.media_id}
 
 
 class SearchSubscriptionRow(BaseModel):
@@ -569,7 +564,6 @@ class SearchSubscriptionRow(BaseModel):
         ),
     )
     media_id: str = Field(description="The work's id, as search results give it (e.g. tv:65942).")
-    route_id: int = Field(description="An id from route_choices for this work.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -707,11 +701,30 @@ _CARD_INPUTS: dict[str, CardInput] = {
 }
 
 
+@cache
+def _card_row(spec: CommandSpec) -> type[BaseModel]:
+    """卡片一列給模型的形狀：會送進 Route 的命令不帶 `route_id`（M5.6 票 04）。
+
+    命令本身的輸入照舊有（API 與作品頁的手動送單在用）；Route 由 `proposals.propose` 在提出時定。
+    """
+    if not proposals.sends_into_a_route(spec):
+        return spec.input
+    fields: dict[str, Any] = {
+        name: (field.annotation, field)
+        for name, field in spec.input.model_fields.items()
+        if name != "route_id"
+    }
+    row: type[BaseModel] = create_model(
+        f"{spec.input.__name__}CardRow", __config__=ConfigDict(extra="forbid"), **fields
+    )
+    return row
+
+
 def card_input(spec: CommandSpec) -> CardInput:
     found = _CARD_INPUTS.get(spec.name)
     if found is not None:
         return found
-    return CardInput(spec.input, lambda _turn, row: row.model_dump())
+    return CardInput(_card_row(spec), lambda _turn, row: row.model_dump())
 
 
 def card_model(spec: CommandSpec) -> type[BaseModel]:

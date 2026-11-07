@@ -105,8 +105,8 @@ async def _close(session: AsyncSession, batch: DownloadRound, now: datetime) -> 
     flags={Flag.DOWNLOADS},
     about=(
         "Send one torrent from search results to qBittorrent and track it as a job for the "
-        "work. The route must hold the work's kind (tv into a tvshows library, movie into a "
-        "movies library) and be enabled and healthy; a full download disk refuses it."
+        "work. Berth picks the route from the work's own routes; a full download disk refuses "
+        "it."
     ),
     refusals=(JobRefusal,),
     validate=check_submit,

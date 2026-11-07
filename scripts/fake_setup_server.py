@@ -2571,7 +2571,8 @@ def why_not_script(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
 def _download_step(
     messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
 ) -> ModelResponse:
-    """「下載 SPY×FAMILY」的下一步：搜作品 → 搜發佈 → 問 Route → 出卡 → 照卡片的結果回答。"""
+    """「下載 SPY×FAMILY」的下一步：搜作品 → 搜發佈 → 出卡 → 照卡片的結果回答。
+    Route 由伺服器在提出時定（M5.6 票 04），模型不查也不給。"""
     result: Any = last.content
     if last.outcome == "denied":
         return _say("好，那就不送。" if chinese else "All right, nothing was sent.")
@@ -2582,20 +2583,14 @@ def _download_step(
         return ModelResponse(
             parts=[ToolCallPart("search_search_torrents", {"media_id": items[0]["id"]})]
         )
-    asked = _last_call(messages)
     if last.tool_name == "search_search_torrents":
-        return ModelResponse(
-            parts=[ToolCallPart("media_route_choices", {"media_id": asked["media_id"]})]
-        )
-    if last.tool_name == "media_route_choices":
-        found = _last_result(messages, "search_search_torrents")
-        route = result[0]["id"] if result else None
+        media_id = _last_call_of(messages, "search_search_torrents")["media_id"]
         rows = [
-            {"source_id": row["source_id"], "media_id": asked["media_id"], "route_id": route}
-            for row in found.get("rows") or []
+            {"source_id": row["source_id"], "media_id": media_id}
+            for row in result.get("rows") or []
             if row["title"] in AGENT_RELEASES
         ]
-        if not rows or route is None:
+        if not rows:
             return _say("沒有可以送的發佈。" if chinese else "There is nothing to send.")
         return ModelResponse(
             parts=[ToolCallPart("downloading_add_manual_download", {"rows": rows})]
@@ -2621,8 +2616,8 @@ def _download_step(
 def _subscribe_step(
     question: str, messages: list[ModelMessage], last: ToolReturnPart, *, chinese: bool
 ) -> ModelResponse:
-    """兩種訂閱的下一步（票 26）：搜作品 → 問 Route →（Mikan 讀番組頁）→ 出卡 → 照卡片的結果回答。
-    模型建議的字幕組是 Berth-Demo；卡上由人選。"""
+    """兩種訂閱的下一步（票 26）：搜作品 →（Mikan 讀番組頁）→ 出卡 → 照卡片的結果回答。
+    Route 由伺服器在提出時定（M5.6 票 04）；模型建議的字幕組是 Berth-Demo，卡上由人選。"""
     # `Any`：工具結果是執行器回的 JSON（`Turn.run_tool`），形狀隨工具，這裡照名字讀。
     result: Any = last.content
     mikan = _SUBSCRIBE_MIKAN.search(question.strip()) is not None
@@ -2632,13 +2627,7 @@ def _subscribe_step(
         items = result.get("items") or []
         if not items:
             return _say("找不到這部作品。" if chinese else "I could not find that title.")
-        return ModelResponse(
-            parts=[ToolCallPart("media_route_choices", {"media_id": items[0]["id"]})]
-        )
-    media_id = _last_call_of(messages, "media_route_choices")["media_id"]
-    if last.tool_name == "media_route_choices":
-        if not result:
-            return _say("沒有放得進的 Route。" if chinese else "No route fits.")
+        media_id = items[0]["id"]
         if mikan:
             return ModelResponse(
                 parts=[ToolCallPart("bangumi_read_bangumi", {"bangumi_id": SPY_BANGUMI})]
@@ -2648,17 +2637,15 @@ def _subscribe_step(
             "term": "SPY×FAMILY",
             "subgroup": "Berth-Demo",
             "media_id": media_id,
-            "route_id": result[0]["id"],
         }
         return ModelResponse(parts=[ToolCallPart("rss_subscribe_search", {"rows": [row]})])
     if last.tool_name == "bangumi_read_bangumi":
-        routes = _last_result_list(messages, "media_route_choices")
+        media_id = _last_result(messages, "discover_search_media")["items"][0]["id"]
         row = {
             "bangumi_id": SPY_BANGUMI,
             "subgroup_id": 583,
             "subgroup_name": "Berth-Demo",
             "media_id": media_id,
-            "route_id": routes[0]["id"],
         }
         return ModelResponse(parts=[ToolCallPart("rss_subscribe_mikan", {"rows": [row]})])
     if isinstance(result, dict) and "refused" in result:
@@ -2685,17 +2672,6 @@ def _last_call_of(messages: list[ModelMessage], tool: str) -> dict[str, Any]:
         if call.tool_name == tool
     ]
     return dict(calls[-1].args_as_dict())
-
-
-def _last_result_list(messages: list[ModelMessage], tool: str) -> list[Any]:
-    found = [
-        part.content
-        for message in messages
-        if isinstance(message, ModelRequest)
-        for part in message.parts
-        if isinstance(part, ToolReturnPart) and part.tool_name == tool
-    ]
-    return cast(list[Any], found[-1])
 
 
 def _feed_step(question: str, last: ToolReturnPart, *, chinese: bool) -> ModelResponse:

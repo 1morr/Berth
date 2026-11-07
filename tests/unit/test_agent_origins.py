@@ -41,7 +41,7 @@ SEARCHED = looked_up(
     "search_search_torrents",
     {"rows": [{"source_id": "s-abc", "title": "[ANi] SPY×FAMILY - 01"}]},
 )
-ROUTES = looked_up("media_route_choices", [{"id": 3, "name": "Anime"}], call="r2")
+ROUTES = looked_up("routes_list_routes", [{"route": {"id": 3, "name": "Anime"}}], call="r2")
 FOUND = looked_up("discover_search_media", {"items": [{"id": "tv:65942"}]}, call="r3")
 
 
@@ -51,7 +51,7 @@ class TestIdsComeFromToolResults:
 
         origins.check(
             "downloading.add_manual_download",
-            {"source_id": "s-abc", "media_id": "tv:65942", "route_id": 3},
+            {"source_id": "s-abc", "media_id": "tv:65942"},
             connects_out=False,
         )
 
@@ -61,28 +61,26 @@ class TestIdsComeFromToolResults:
         with pytest.raises(CommandRefusedError) as raised:
             origins.check(
                 "downloading.add_manual_download",
-                {"source_id": "s-abc", "media_id": "tv:65942", "route_id": 7},
+                {"source_id": "s-abc", "media_id": "tv:7"},
                 connects_out=False,
             )
 
         assert raised.value.reason is ToolRefusal.ID_NOT_FROM_RESULTS
-        assert "route_id=7" in raised.value.detail
+        assert "media_id=tv:7" in raised.value.detail
 
     def test_an_id_the_user_typed_or_the_model_wrote_does_not_count(self) -> None:
         """只有工具結果算：使用者的字、模型自己上一個呼叫的參數都不算。"""
         origins = Origins.of(
             [
                 asked("subscribe tv:65942 to route 3"),
-                ModelResponse(
-                    parts=[ToolCallPart("media_route_choices", {"media_id": "tv:65942"})]
-                ),
+                ModelResponse(parts=[ToolCallPart("discover_search_media", {"query": "x"})]),
             ]
         )
 
         with pytest.raises(CommandRefusedError):
             origins.check(
                 "rss.subscribe_search",
-                {"media_id": "tv:65942", "route_id": 3, "term": "x", "kind": "nyaa"},
+                {"media_id": "tv:65942", "term": "x", "kind": "nyaa"},
                 connects_out=False,
             )
 

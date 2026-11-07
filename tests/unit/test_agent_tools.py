@@ -23,6 +23,7 @@ from pydantic_ai.messages import (
 
 from berth.adapters.ai import AiEndpoint, build_model, chat_settings
 from berth.domain import AiProvider, Role
+from berth.services import proposals
 from berth.services.agent import (
     AgentRefusedError,
     AgentRuntime,
@@ -84,7 +85,35 @@ def test_the_submit_card_takes_source_ids_never_links() -> None:
     schema = card_model(spec).model_json_schema()
 
     row = schema["$defs"][schema["properties"]["rows"]["items"]["$ref"].split("/")[-1]]
-    assert sorted(row["properties"]) == ["media_id", "route_id", "source_id"]
+    assert sorted(row["properties"]) == ["media_id", "source_id"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["downloading.add_manual_download", "rss.subscribe_mikan", "rss.subscribe_search"],
+)
+def test_a_route_command_never_takes_a_route_from_the_model(name: str) -> None:
+    """M5.6 票 04：會送進 Route 的命令，Route 由伺服器在提出時定。命令本身的輸入照舊有
+    （API 與作品頁的手動送單在用）。"""
+    spec = commands()[name]
+    assert "route_id" in spec.input.model_fields
+    schema = card_model(spec).model_json_schema()
+    row = schema["$defs"][schema["properties"]["rows"]["items"]["$ref"].split("/")[-1]]
+    assert "route_id" not in row["properties"]
+
+
+def test_the_model_no_longer_looks_up_routes() -> None:
+    """作品頁與 `route_offer` 還在用這一支，但它不再是給模型的工具（M5.6 票 04）。"""
+    assert "media.route_choices" not in TOOLS
+
+
+def test_every_card_tool_that_sends_into_a_route_declares_route_missing() -> None:
+    """伺服器要替它決定 Route 就要有零條時的理由（M5.6 票 04）：`proposals._refusal` 靠命令自己
+    宣告的 `route_missing`。日後把別的命令接上卡片時，這裡會先紅。"""
+    for name in TOOLS:
+        spec = commands()[name]
+        if proposals.sends_into_a_route(spec):
+            assert any(hasattr(kind, "ROUTE_MISSING") for kind in spec.refusals), name
 
 
 class TestPendingCalls:
@@ -315,6 +344,23 @@ class TestSearchTorrentsForTheModel:
 
 class TestWhatTheModelSeesOfAWork:
     """`media.read_media` 給模型的那一份（票 16）：逐集換成狀態 → 集數範圍。"""
+
+    def test_the_route_picker_is_not_given_to_the_model(self) -> None:
+        """模型不給 Route（M5.6 票 04）：`routes` 與 `default_route_id` 是作品頁下拉在用的。"""
+        seen = MODEL_VIEWS["media.read_media"](
+            {
+                "id": "tv:1",
+                "routes": [
+                    {"id": 3, "name": "Anime", "slug": "anime", "collection_type": "tvshows"}
+                ],
+                "default_route_id": 3,
+                "seasons": [],
+            }
+        )
+
+        assert isinstance(seen, dict)
+        assert "routes" not in seen
+        assert "default_route_id" not in seen
 
     def test_episodes_become_ranges_per_status_and_jobs_stay(self) -> None:
         statuses = ["imported"] * 3 + ["missing", "imported", "downloading", "unaired"]

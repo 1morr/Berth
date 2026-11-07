@@ -144,6 +144,9 @@ class ProposalPreviewOut(BaseModel):
     torrents: list[int | None]
     #: 逐列：要人選 Route 的列是可選清單，其餘是 `null`。命令沒有 Route 的是空清單。
     routes: list[RouteAskOut | None]
+    #: 逐列：作品只有一條放得進的 Route 時是那一條（不用選，卡片印名字）；其餘是 `null`。
+    #: 命令沒有 Route 的是空清單（M5.6 票 04）。
+    single_routes: list[RouteOptionOut | None]
     #: 逐列：訂閱的字幕組選項，其餘是 `null`。不是訂閱的命令是空清單。
     subgroups: list[SubgroupAskOut | None]
     #: 逐列：這部作品已經有的訂閱。不是訂閱的命令是空清單。

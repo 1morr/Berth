@@ -1300,7 +1300,8 @@ class JobRefusal(StrEnum):
 
     #: `tv:<tmdb>` / `movie:<tmdb>` 在 Berth 手上沒有對應的 Media。
     MEDIA_MISSING = "media_missing"
-    #: 送單指定的 Route 不在了，或這一筆 Job 記著的那一條被刪了。
+    #: 送單指定的 Route 不在了、這一筆 Job 記著的那一條被刪了，或這部作品一條放得進的 Route 都沒有
+    #: （M5.6 票 04：Route 由伺服器在提出時定）。
     ROUTE_MISSING = "route_missing"
     #: 劇集只進得了 tvshows 媒體庫、電影只進得了 movies（`collection_type_for`）。
     ROUTE_KIND_MISMATCH = "route_kind_mismatch"
@@ -1698,7 +1699,8 @@ class RssRefusal(StrEnum):
     #: `tv:<tmdb>` / `movie:<tmdb>` 在 Berth 手上沒有對應的 Media（畫面先打 `GET /media/{id}`
     #: 讓它長出來，資料夾名才有得預覽）。
     MEDIA_MISSING = "media_missing"
-    #: 指定的 Route 不在了。
+    #: 指定的 Route 不在了，或這部作品一條放得進的 Route 都沒有（M5.6 票 04：Route 由伺服器在提出
+    #: 時定）。
     ROUTE_MISSING = "route_missing"
     #: Route 停用中。
     ROUTE_DISABLED = "route_disabled"

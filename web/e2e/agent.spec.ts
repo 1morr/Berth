@@ -145,9 +145,9 @@ async function expectPageFits(page: import('@playwright/test').Page) {
 test('送單卡：出卡、重新載入之後照樣按得下去、取消一列、選 Route 再確認，只送出勾著的', async ({
   page,
 }) => {
-  // 假模型說「下載 SPY×FAMILY」時：搜作品、搜發佈、問 Route，再出一張三列的送單卡（M5 票 13）。
-  // 這台有兩條電視 Route（TV、Anime）、SPY×FAMILY 沒送單過：模型給的是 TV，卡片上要人選一次，
-  // 三列都是同一部作品所以只有一個選擇（M5.6 票 03）。
+  // 假模型說「下載 SPY×FAMILY」時：搜作品、搜發佈，再出一張三列的送單卡（M5 票 13）。
+  // 這台有兩條電視 Route（TV、Anime）、SPY×FAMILY 沒送單過：Route 由伺服器在提出時定，不只一條
+  // 所以卡片上要人選一次；三列都是同一部作品只有一個選擇（M5.6 票 03、04）。
   await signIn(page, '/jobs')
   await openBlank(page)
   const panel = page.locator('#agent-panel')
@@ -304,8 +304,8 @@ test('加 Feed：使用者貼的網址出卡，網上找來的網址被擋下', 
 })
 
 test('訂閱 Mikan：字幕組由人在卡上選，送出的集數跟著選的那一組（M5 票 26）', async ({ page }) => {
-  // 假模型說「從 Mikan 訂閱 SPY×FAMILY」時：搜作品、問 Route、讀番組頁，再出一張 Mikan 訂閱卡，
-  // 建議的字幕組是 Berth-Demo（3 集）；番組頁上另有 LoliHouse（12 集）與北宇治字幕组（6 集）。
+  // 假模型說「從 Mikan 訂閱 SPY×FAMILY」時：搜作品、讀番組頁，再出一張 Mikan 訂閱卡（Route 由
+  // 伺服器定）；建議的字幕組是 Berth-Demo（3 集）；番組頁上另有 LoliHouse（12 集）與北宇治字幕组（6 集）。
   await signIn(page, '/jobs')
   await openBlank(page)
   const panel = page.locator('#agent-panel')
@@ -343,7 +343,8 @@ test('訂閱 Mikan：字幕組由人在卡上選，送出的集數跟著選的�
 })
 
 test('關鍵字訂閱：卡上選字幕組、列出第一批，說出作品已經有的訂閱（M5 票 26）', async ({ page }) => {
-  // 假模型說「在 acg.rip 訂閱 SPY×FAMILY」時：搜作品、問 Route，再出一張關鍵字訂閱卡，建議 Berth-Demo。
+  // 假模型說「在 acg.rip 訂閱 SPY×FAMILY」時：搜作品，再出一張關鍵字訂閱卡（Route 由伺服器定），
+  // 建議 Berth-Demo。
   // 搜到 Berth-Demo（3 筆）、ToonsHub（2 筆）、黒ネズミたち（1 筆）。上一條已經從 Mikan 訂了一份。
   await signIn(page, '/jobs')
   await openBlank(page)

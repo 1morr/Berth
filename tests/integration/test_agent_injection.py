@@ -329,7 +329,7 @@ ENTRIES = (
 )
 
 #: 讀取工具裡，結果不是別人寫的字的（Berth 自己的資料：Route、skill 全文）。
-BERTHS_OWN = frozenset({"skills.load_skill", "media.route_choices", "routes.list_routes"})
+BERTHS_OWN = frozenset({"skills.load_skill", "routes.list_routes"})
 #: 讀取工具裡，結果帶別人寫的字、但守法走同一條路而不另外種注入的：TMDB 的簡介與標題（趨勢）、
 #: Job 的發佈名、Mikan 番組頁上的字幕組名。守法只看「出自哪一筆工具結果」，不看是哪一個
 #: 工具。
@@ -386,20 +386,11 @@ def attacker_feeds(client: TestClient) -> list[dict[str, Any]]:
     return [feed for feed in feeds(client) if feed["url"].startswith(ATTACKER)]
 
 
-def route_seen(messages: list[ModelMessage]) -> int:
-    """模型看到的 Route 清單裡的第一條。"""
-    [route, *_] = last_result(messages, "media_route_choices")
-    return int(route["id"])
-
-
 def submit_rows(pick: Callable[[list[ModelMessage]], list[str]]) -> Step:
-    """送單：`pick` 從模型看得到的東西挑來源，作品與 Route 用查到的。"""
+    """送單：`pick` 從模型看得到的東西挑來源。Route 由伺服器在提出時定（M5.6 票 04）。"""
 
     def step(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
-        rows = [
-            {"source_id": source_id, "media_id": SPY_ID, "route_id": route_seen(messages)}
-            for source_id in pick(messages)
-        ]
+        rows = [{"source_id": source_id, "media_id": SPY_ID} for source_id in pick(messages)]
         return ModelResponse(parts=[ToolCallPart(CARD, {"rows": rows}, "card-1")])
 
     return step
@@ -437,11 +428,8 @@ def to_add_the_attackers_feed(
 
 
 def look_up_the_work() -> list[Step]:
-    """作品與 Route 的 id 也要出自工具結果（`agent_origins`）：真的模型送單之前會先查。"""
-    return [
-        call("media_read_media", media_id=SPY_ID),
-        call("media_route_choices", media_id=SPY_ID),
-    ]
+    """作品的 id 也要出自工具結果（`agent_origins`）：真的模型送單之前會先查。"""
+    return [call("media_read_media", media_id=SPY_ID)]
 
 
 # ---------------------------------------------------------------- 1 加 Feed
@@ -558,7 +546,7 @@ class TestTorrentsNobodyAskedFor:
         script.steps = [
             call("search_search_torrents", media_id=SPY_ID),
             *look_up_the_work(),
-            lambda messages, _info: ModelResponse(
+            lambda _messages, _info: ModelResponse(
                 parts=[
                     ToolCallPart(
                         "rss_subscribe_search",
@@ -569,7 +557,6 @@ class TestTorrentsNobodyAskedFor:
                                     "term": term,
                                     "subgroup": "ANi",
                                     "media_id": SPY_ID,
-                                    "route_id": route_seen(messages),
                                 }
                             ]
                         },
@@ -768,7 +755,6 @@ READ_ARGS: dict[str, dict[str, object]] = {
     "jobs.list_jobs": {},
     "skills.load_skill": {"name": "why-not-imported"},
     "search.search_torrents": {"media_id": SPY_ID},
-    "media.route_choices": {"media_id": SPY_ID},
     "web.tavily_search": {"query": "SPY×FAMILY"},
     "media.read_media": {"media_id": SPY_ID},
     "routes.list_routes": {},

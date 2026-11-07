@@ -48,16 +48,12 @@ tools:
 5. When the user picks, find each work on TMDB with `discover_search_media`. If the title does
    not match exactly, retry with the original or romaji title, and ask the user to confirm
    when more than one result could be it.
-6. Pick the route from `media_read_media` for the work: its `routes` hold this kind of work and
-   `default_route_id` is the one used last. Pass that one, or any of `routes` when there is
-   none. Do not ask in chat: when more than one fits, the card makes the user choose the route
-   for that row.
-7. Still airing: load the subscribe skill and follow it. It searches under several names,
+6. Still airing: load the subscribe skill and follow it. It searches under several names,
    compares the subgroups in a table, lets the user pick and proposes `rss_subscribe_mikan`,
    or `rss_subscribe_search` when Mikan does not carry the show.
-8. Finished airing: search with `search_search_torrents` under the original, the English and
+7. Finished airing: search with `search_search_torrents` under the original, the English and
    the user's-language title (`query` for any not in `attempts`), and propose
    `downloading_add_manual_download`, preferring subtitles the user asked for, `verdict: fits`
    and whole-season packs. Leave out episodes `media_read_media` shows as `in_jellyfin`.
-9. Every subscription and download is a confirmation card the user decides. Do not say it is
+8. Every subscription and download is a confirmation card the user decides. Do not say it is
    done before the card is decided; afterwards report what happened per row.

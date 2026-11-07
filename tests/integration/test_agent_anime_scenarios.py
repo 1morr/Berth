@@ -276,14 +276,6 @@ def last_result(messages: list[ModelMessage], tool: str) -> dict[str, Any]:
     return found[-1]
 
 
-def tv_route(messages: list[ModelMessage]) -> int:
-    """看 `media_read_media` 的 `routes` 挑 tv 那一條（skill 第 5 步）。"""
-    read = last_result(messages, "media_read_media")
-    # 長的結果會被截過，真的內容包在 `result` 裡（`agent._given`）。
-    routes = read.get("result", read)["routes"]
-    return int(next(route["id"] for route in routes if route["slug"] == "tv"))
-
-
 def call_with(
     tool: str, args: Callable[[list[ModelMessage]], dict[str, Any]]
 ) -> Callable[..., Any]:
@@ -365,7 +357,6 @@ class TestNewSeasonPicks:
             "bangumi_id": last_result(messages, "bangumi_read_bangumi")["id"],
             "subgroup_id": 370,
             "media_id": EDGERUNNERS_ID,
-            "route_id": tv_route(messages),
         }
         return {"rows": [row]}
 
@@ -501,14 +492,13 @@ def to_the_work(script: Script) -> list[Any]:
 
 
 def add_download(messages: list[ModelMessage]) -> dict[str, Any]:
-    """總覽卡的一列：作品、Route、搜尋結果的一列都抄自前面的工具結果。"""
+    """總覽卡的一列：作品與搜尋結果的一列都抄自前面的工具結果（Route 由伺服器定）。"""
     searched = last_result(messages, "search_search_torrents")
     return {
         "rows": [
             {
                 "source_id": searched["rows"][0]["source_id"],
                 "media_id": REZERO_ID,
-                "route_id": tv_route(messages),
             }
         ]
     }

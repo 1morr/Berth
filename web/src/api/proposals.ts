@@ -51,6 +51,7 @@ export function proposalsQueryOptions(conversationId: string) {
 }
 
 export type RouteAsk = Schemas['RouteAskOut']
+export type RouteOption = Schemas['RouteOptionOut']
 export type SubgroupAsk = Schemas['SubgroupAskOut']
 export type SubgroupOption = Schemas['SubgroupOptionOut']
 export type SubscriptionRef = Schemas['SubscriptionRefOut']

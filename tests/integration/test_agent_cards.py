@@ -150,18 +150,13 @@ def route_of(client: TestClient, slug: str) -> int:
 def rows(
     client: TestClient,
     *episodes: int,
-    slug: str = "tv",
     conversation: str = "c1",
     who: dict[str, str] = ADMIN,
     seen: bool = True,
 ) -> list[dict[str, Any]]:
     """送單卡的列。`seen`：這幾個 id 記進對話的一筆工具結果（id 必須出自工具結果，票 14）；
-    前端偽造的參數不必。"""
-    route = route_of(client, slug)
-    made = [
-        {"source_id": offer(client, episode), "media_id": SPY_ID, "route_id": route}
-        for episode in episodes
-    ]
+    前端偽造的參數不必。Route 由伺服器在提出時定（M5.6 票 04），列裡沒有它。"""
+    made = [{"source_id": offer(client, episode), "media_id": SPY_ID} for episode in episodes]
     if seen:
         looked_up(client, {"rows": made}, conversation=conversation, who=who)
     return made
@@ -465,7 +460,7 @@ class TestRefusedBeforeACard:
         self, client: TestClient, script: Script
     ) -> None:
         """搜過、但來源快取已經沒有它（兩小時前搜的、或重啟過）：再搜一次。"""
-        stale = [{"source_id": "src-2", "media_id": SPY_ID, "route_id": route_of(client, "tv")}]
+        stale = [{"source_id": "src-2", "media_id": SPY_ID}]
         looked_up(client, {"rows": stale})
         script.steps = [card(stale), say("I need to search first.")]
 
@@ -478,21 +473,6 @@ class TestRefusedBeforeACard:
         [turn] = recorded(client)
         assert [t.outcome for t in turn.tools] == ["refused"]
         assert turn.run.stop_reason == "completed"
-
-    def test_a_row_that_would_be_refused_is_refused_before_the_card(
-        self, client: TestClient, script: Script
-    ) -> None:
-        """實測：劇集放進電影的 Route 是按了確認才被擋（研究〈實跑才抓到的問題〉第 3 點）。"""
-        mixed = [*rows(client, 1), *rows(client, 2, slug="movies")]
-        script.steps = [card(mixed), say("That route holds films.")]
-
-        chat(client, "Download 1 and 2.")
-
-        assert cards(client) == []
-        refused = returned(script.seen[-1]).content
-        assert isinstance(refused, dict)
-        assert refused["refused"] == "route_kind_mismatch"
-        assert refused["row"] == 1
 
 
 # ---------------------------------------------------------------- 3
