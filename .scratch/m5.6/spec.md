@@ -20,7 +20,7 @@
 - **C4 `find_in_library` 給集數**（票 06）：劇集的命中多 `episodes`，用 Jellyfin 的季集號以範圍表示，註明不是 TMDB 編號。
 - **B1–B4 系統指示與 skills**（票 07）：共同規則（搜尋語言、只在要下載或問有什麼時才搜種子、已有的不重抓、確認卡的說法）寫進系統指示。5 個 skill 併成 `download`、`subscribe`、`recommend`，不點名特定作品。`why-not-imported` 改寫成 `why_not.explain` 的工具說明；「從媒體庫重建帳本」的指引只留在 `media.read_media` 輸出的 `hint`。
 - **C3 `rss.subscribe`**（票 08、09）：模型只給 `media_id` 與字幕組，伺服器用作品的各種名字找 Mikan 番組、用開播日挑；找到而且有那個字幕組就走 Mikan，否則走 nyaa / acg.rip 關鍵字。卡片列出找到的字幕組與來源，由人選一個。給模型的工具拿掉 `bangumi.search_bangumi`、`bangumi.read_bangumi`、`rss.subscribe_mikan`、`rss.subscribe_search`（命令本身留著，RSS 頁還在用），工具從 22 支減到 18 支。
-- **UI 收尾**（票 10）與**驗收**（票 11）。
+- **UI 收尾**（票 10）、**側面板可拖拉調整寬度**（票 10b，2026-11-07 使用者追加）與**驗收**（票 11）。
 
 不做：
 - A3（預選 AI 給的 Route，或按類型預選）：A1、A2 做完之後一張卡最多選一次；預選 AI 給的會回到 M5 票 23 實測的問題。之後要做時參考 Jellyseerr 的「Anime Root Folder」（未查證）。
@@ -50,6 +50,7 @@
 - `find_in_library` 命中劇集時帶 Jellyfin 季集範圍；Jellyfin 沒刮到 TMDB id 時，模型照樣說得出使用者有哪幾集。
 - `rss.subscribe`：Mikan 找得到番組與字幕組時走 Mikan，找不到時走關鍵字來源；卡片說出來源與找到的字幕組。RSS 頁的 Mikan 訂閱與關鍵字訂閱行為不變。
 - 確認卡的分組與「全部套用」在桌機與 390px 都可用（playwright），鍵盤操作得到。
+- 助理側面板可拖拉調整寬度、寬度會記住，390px 不畫把手（playwright）。
 
 ## 票序
 
@@ -67,4 +68,5 @@
 | 08 | `rss.subscribe` 走 Mikan | 04 |
 | 09 | `rss.subscribe` 退回關鍵字來源，拿掉舊的四支工具 | 07、08 |
 | 10 | M5.6 UI 收尾 | 03、04、09 |
-| 11 | M5.6 驗收 | 01–10 |
+| 10b | 助理側面板可拖拉調整寬度 | 10 |
+| 11 | M5.6 驗收 | 01–10b |
