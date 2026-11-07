@@ -21,6 +21,9 @@ library-browsing.md §2、§9）。所以「這個人看得到什麼」由 Berth
   找作品**不帶 `parentId`**；單一作品與季集走會檢查可見性的端點（`/Items/{id}?userId=`、
   `/Shows/{id}/Seasons|Episodes?userId=`），不用 `/Items?ids=`。**這部劇的 NextUp（`seriesId`）
   不套權限**，所以只問這一次 `locate` 確認過看得到的劇。
+- **用名字查媒體庫**（`find_in_library`，M5.6 票 06）：整份清單（`index`）問的是允許清單上的
+  媒體庫；從那份清單讀到的劇可以直接問集數（`series_episodes`）——它們本來就在這個人看得到的
+  媒體庫裡。
 """
 
 from __future__ import annotations
@@ -230,8 +233,11 @@ class JellyfinAccess:
         self._client = client
         self._user_id = user_id
         self.libraries = libraries
-        #: 這一次確認過看得到的作品（`locate`）。這部劇的 NextUp 只問這裡面的。
+        #: 這一次確認過看得到的作品（`locate`）。這部劇的 NextUp 與集數只問這裡面的。
         self._confirmed: set[str] = set()
+        #: 從允許清單上的媒體庫讀到的作品（`index`）。它們在這個人看得到的媒體庫裡，
+        #: 所以問這一部的集數也安全（`find_in_library`，M5.6 票 06）。
+        self._indexed: set[str] = set()
 
     def library(self, library_id: str) -> BrowsableLibrary:
         found = next((row for row in self.libraries if row.id == library_id), None)
@@ -276,12 +282,14 @@ class JellyfinAccess:
 
     async def index(self, library_id: str) -> tuple[JellyfinItem, ...]:
         """這個媒體庫的每一部作品（只有 id、名稱、年份、TMDB id、Primary 圖的 tag）。
-        同樣先驗媒體庫。"""
+        同樣先驗媒體庫；回來的那幾部記下來，之後問那一部的集數不必再確認一次（`series_episodes`）。"""
         library = self.library(library_id)
         with reachable():
-            return await self._client.library_index(
+            rows = await self._client.library_index(
                 user_id=self._user_id, library_id=library.id, item_type=library.item_type
             )
+        self._indexed.update(item.id for item in rows)
+        return rows
 
     def resume(self, library_id: str, *, limit: int) -> Awaitable[tuple[JellyfinItem, ...]]:
         """這個媒體庫看到一半的集與電影。先驗媒體庫、在呼叫的當下就拒絕
@@ -359,8 +367,9 @@ class JellyfinAccess:
 
     async def series_episodes(self, series_id: str) -> tuple[JellyfinItem, ...]:
         """這部劇每一季的集（M5 票 28）。Jellyfin 自己也查可見性（不帶 `seasonId` 一樣 404，12.1.0
-        實測），仍只問 `locate` 確認過的劇：與 `series_next_up` 同一條規矩，閘門不靠別人。"""
-        if series_id not in self._confirmed:
+        實測），仍只問確認過的劇：`locate` 確認過、或從允許清單上的媒體庫清單讀到的
+        （`index`；`find_in_library` 只有那一種 id）——閘門不靠別人。"""
+        if series_id not in self._confirmed and series_id not in self._indexed:
             raise ItemNotVisibleError("not confirmed as visible to this user")
         with reachable():
             try:

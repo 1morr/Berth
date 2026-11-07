@@ -1231,7 +1231,7 @@ REST + JSON，前綴 `/api`。端點與欄位的單一來源是 OpenAPI（`web/s
 - **agent runtime**（`services/agent.py`）：一則使用者訊息是一輪（`Turn`，也是 pydantic-ai 的 deps）。
   - **工具**是 `TOOLS`（`services/agent_tools.py`，與 skills 共用）裡的登錄表命令，看得到哪幾個照命令的 `audience`，呼叫一律經執行器、actor 是 `ai:<user id>`，每次工具呼叫一個 session。
     - 完整清單是 `TOOLS` 與 `ANIME_TOOLS`（`agent_tools.py`）；`web.tavily_search` 只在設了 Tavily key 時給。
-    - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.route_choices`、`media.read_media`（`audience=user`）、`routes.list_routes`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
+    - 讀取類：`discover.search_media`、`discover.read_trending`、`why_not.explain`、`jobs.list_jobs`、`jobs.read_job_events`、`web.tavily_search`、`skills.load_skill`、`search.search_torrents`、`media.route_choices`、`media.read_media`（`audience=user`）、`routes.list_routes`、`bangumi.search_bangumi`、`bangumi.read_bangumi`、`ANIME_TOOLS`（動漫資料來源，§8.10）、`inventory.find_in_library`（用名字在這個人看得到的每一個媒體庫找，結果帶 `in_ledger`；劇集另有 `episodes`：Jellyfin 自己的季集號，依季收成範圍，不是 TMDB 的）、`rss.list_subscriptions`（不帶作品時列每一條訂閱）。
     - 寫入類（都出確認卡，見 §7〈確認卡〉與〈守法〉）：`downloading.add_manual_download`（送單）、`rss.subscribe_mikan`、`rss.subscribe_search`、`rss.add_feed`、`rss.delete_feed`。
     - `routes.check_route(s)` 不給：探測會觸發使用者設的「完成時執行外部程式」。
   - **記帳與防護**是一個 capability（`_Guard`）：`wrap_model_request` 先看次數、做完當場寫 `ai_calls` 與 `ai_runs` 再看 token；`wrap_tool_execute` 管同工具同參數（命令拒絕、參數錯、命令出錯、結果帶 `problem` 的都不計）；`on_run_error` 補記串流時出錯的那次呼叫（串流時 `wrap_model_request` 只收到 `CancelledError`，brief §20.24）。

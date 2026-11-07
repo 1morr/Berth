@@ -51,6 +51,7 @@ from berth.domain import (
     PlanStatus,
     Role,
     Tags,
+    season_ranges,
 )
 from berth.models import Job, JobFile, LedgerEntry, Media, Plan, PlanItem, Route, media_id
 from berth.models.types import utcnow
@@ -354,6 +355,9 @@ FIND_NAMES = 60
 #: 名字（查的或媒體庫裡的，去掉標點之後）短於這麼多字時，只在整個名字相同時算對上：否則「K」、
 #: 「ID」這種名字會對上每一部。中文名多半三四個字，所以門檻是 3。
 FIND_SHORTEST = 3
+#: 一次查詢最多替幾部劇讀集數。命中本身有上限（`FIND_NAMES` × `FIND_LIMIT` × 媒體庫），但 60 個
+#: 名字全中的極端情形會一次送出數百支請求；夠新番推薦一季之用，超出的只說沒讀。
+FIND_EPISODE_READS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,6 +378,11 @@ class LibraryTitle:
     #: 整個名字相同（不分大小寫、空白、標點）。`False` 是只對上一段：媒體庫裡的是前一季、或名字
     #: 較長的另一部——不能直接說「已經有這一部」。
     exact: bool
+    #: 這部劇 Jellyfin 有哪幾集，照 **Jellyfin 自己的**季號與集號（不是 TMDB 的），一季一個字串：
+    #: `{"1": "1-5, 7-12"}`。電影沒有這一格（`None`）；劇集讀不到時是空的，原因在 `episodes_note`。
+    episodes: dict[str, str] | None
+    #: 讀不到集數的原因（英文，給模型的說法）；讀得到是空字串。
+    episodes_note: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,7 +410,9 @@ class FoundInLibrary:
         "match says its "
         "library, its media_id when Jellyfin knows the TMDB id, and in_ledger: whether "
         "Berth's records have its files (false means it was copied in by hand or imported "
-        "before Berth's records were lost)."
+        "before Berth's records were lost). A series also says which episodes the library "
+        "holds, per season as episode ranges. Those are Jellyfin's own season and episode "
+        "numbers, not TMDB's."
     ),
     audience=Role.USER,
 )
@@ -429,10 +440,24 @@ async def find_in_library(
         for library, index in zip(libraries, indexes, strict=True)
         for item, exact in _matches(name, index)[:FIND_LIMIT]
     ]
+    # 只替命中的劇讀集數，同一部只讀一次（幾個名字對到同一部是常態），最多 `FIND_EPISODE_READS` 部。
+    series = {item.id: item for _, library, item, _ in found if library.kind is MediaKind.TV}
+    read = list(series)[:FIND_EPISODE_READS]
+    episodes_by_series = dict(
+        zip(
+            read,
+            await asyncio.gather(*(_episodes_of(access, series[key]) for key in read)),
+            strict=True,
+        )
+    )
     ledger = await _in_ledger(session, [(library.kind, item) for _, library, item, _ in found])
     by_name: dict[str, list[LibraryTitle]] = {name: [] for name in wanted}
     for name, library, item, exact in found:
         work = _media_id_of(library.kind, item)
+        if library.kind is MediaKind.TV:
+            episodes, note = episodes_by_series.get(item.id, ({}, _EPISODES_NOT_READ))
+        else:
+            episodes, note = None, ""
         by_name[name].append(
             LibraryTitle(
                 title=item.name,
@@ -442,6 +467,8 @@ async def find_in_library(
                 media_id=work,
                 in_ledger=item.id in ledger or work in ledger,
                 exact=exact,
+                episodes=episodes,
+                episodes_note=note,
             )
         )
     return FoundInLibrary(
@@ -478,6 +505,37 @@ def _matches(name: str, index: Sequence[JellyfinItem]) -> list[tuple[JellyfinIte
 
 def _media_id_of(kind: MediaKind, item: JellyfinItem) -> str:
     return media_id(kind, int(item.tmdb_id)) if item.tmdb_id.isdigit() else ""
+
+
+_EPISODES_NOT_READ = (
+    f"not read: this lookup reads episodes for at most {FIND_EPISODE_READS} shows, "
+    "and more were matched"
+)
+
+
+async def _episodes_of(access: JellyfinAccess, series: JellyfinItem) -> tuple[dict[str, str], str]:
+    """這部劇 Jellyfin 有哪幾集，照季收成範圍；讀不到、或有的集沒有編號時說原因。
+
+    **這一部讀不到不拖垮整次查詢**（M5.6 票 06）：清單讀到了、集數這一支卻失敗（逾時、那一部的
+    權限被收回），只讓這一部說不出集數，其餘的名字照樣回。
+    """
+    try:
+        episodes = await access.series_episodes(series.id)
+    except JellyfinUnreachableError as exc:
+        return {}, f"Jellyfin could not read them: {exc.detail}"
+    except ItemNotVisibleError:
+        return {}, "Jellyfin would not show this series' episodes to this user"
+    numbered: list[tuple[int, int, int | None]] = []
+    unnumbered = 0
+    for episode in episodes:
+        if episode.season is None or episode.episode_start is None:
+            unnumbered += 1
+            continue
+        numbered.append((episode.season, episode.episode_start, episode.episode_end))
+    note = ""
+    if unnumbered:
+        note = f"{unnumbered} of its episodes have no season or episode number in Jellyfin"
+    return season_ranges(numbered), note
 
 
 async def _in_ledger(

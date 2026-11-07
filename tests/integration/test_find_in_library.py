@@ -11,20 +11,55 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
-from berth.adapters.jellyfin import ITEM_SERIES, JellyfinItem
+from berth.adapters.http import NotFoundError, ServiceUnavailableError
+from berth.adapters.jellyfin import ITEM_EPISODE, ITEM_SERIES, JellyfinItem
 from berth.adapters.jellyfin.fake import FakeJellyfinClient
 from berth.domain import PlanAction
 from berth.models import LedgerEntry
+from berth.services import inventory
 from tests.integration.factories import FakeClientFactory
-from tests.integration.test_inventory_api import ADMIN, CREW
-from tests.integration.test_media_in_jellyfin import client, execute, factory, jellyfin, tmdb
-from tests.integration.test_watch_area_api import BEAR
+from tests.integration.test_inventory_api import ADMIN, CREW, jellyfin_id
+from tests.integration.test_media_in_jellyfin import (
+    as_tool,
+    client,
+    execute,
+    factory,
+    jellyfin,
+    tmdb,
+)
+from tests.integration.test_watch_area_api import BEAR, BEAR_S01
 
 __all__ = ["client", "factory", "jellyfin", "tmdb"]  # pytest 的 fixture
 
 EDGERUNNERS = "a1" * 16
+#: TV 上另一部劇（`test_only_so_many_shows_are_read_per_lookup` 這幾支用）。
+OTHER_SERIES = "c1" * 16
+
+
+def add_series(jellyfin: FakeJellyfinClient, series_id: str, title: str, *episodes: int) -> None:
+    """TV 媒體庫多一部劇，每一集一個 item；路徑放在電視庫底下，替身才看得到。"""
+    [tv] = [row.locations[0] for row in jellyfin.libraries_ if row.name == "TV"]
+    folder = f"{tv}/{title}"
+    jellyfin.items_ = [
+        *jellyfin.items_,
+        JellyfinItem(series_id, ITEM_SERIES, title, folder, ""),
+        *(
+            JellyfinItem(
+                f"{series_id[:30]}{number:02d}",
+                ITEM_EPISODE,
+                f"Episode {number}",
+                f"{folder}/S01E{number:02d}.mkv",
+                "",
+                series_id=series_id,
+                season=1,
+                episode_start=number,
+            )
+            for number in episodes
+        ),
+    ]
 
 
 def find(
@@ -121,3 +156,125 @@ class TestFindInLibrary:
 
         assert titles(found, "e") == []
         assert [row.name for row in found.names] == ["e", "BEAR"]
+
+    def test_a_show_says_which_episodes_the_library_has(
+        self, client: TestClient, factory: FakeClientFactory, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """劇集的命中多一格 `episodes`（M5.6 票 06）：Jellyfin 自己的季集號，一季一段範圍，
+        中間缺的會斷開；一個檔案兩集時兩集都算。"""
+        jellyfin.items_ = [
+            *jellyfin.items_,
+            JellyfinItem(
+                "b1" * 16,
+                ITEM_EPISODE,
+                "Episode 5-6",
+                "/x/S01E05-E06.mkv",
+                "",
+                series_id=BEAR,
+                season_id=BEAR_S01,
+                season=1,
+                episode_start=5,
+                episode_end=6,
+            ),
+            # Jellyfin 數不出來的集（特典、沒編號的檔案）不算進範圍，但要說出來。
+            JellyfinItem("b2" * 16, ITEM_EPISODE, "Special", "/x/Special.mkv", "", series_id=BEAR),
+        ]
+
+        [row] = find(client, factory, CREW, "bear").names[0].titles
+
+        assert row.episodes == {"1": "1-3, 5-6"}
+        assert row.episodes_note == "1 of its episodes have no season or episode number in Jellyfin"
+
+    def test_the_model_gets_episodes_on_shows_only(
+        self, client: TestClient, factory: FakeClientFactory
+    ) -> None:
+        """電影沒有 `episodes` 這一格（M5.6 票 06）；劇集讀得到集數時不必帶空的原因。"""
+        seen = as_tool(
+            client, factory, CREW, "inventory.find_in_library", names=["Oppenheimer", "bear"]
+        )
+
+        [movie] = seen["names"][0]["titles"]
+        assert "episodes" not in movie
+        assert "episodes_note" not in movie
+        [show] = seen["names"][1]["titles"]
+        assert show["episodes"] == {"1": "1-3"}
+        assert "episodes_note" not in show
+
+    def test_each_show_is_read_once_however_many_names_hit_it(
+        self, client: TestClient, factory: FakeClientFactory, jellyfin: FakeJellyfinClient
+    ) -> None:
+        """請求數有上界（M5.6 票 06）：每個名字都對到同一部劇也只讀一次集數；電影不讀。"""
+        find(client, factory, CREW, "bear", "The Bear", "BEAR", "Oppenheimer")
+
+        reads = [query for query in jellyfin.watch_area_queries if query[0] == "series_episodes"]
+        assert reads == [("series_episodes", jellyfin_id(client, CREW), BEAR)]
+
+    def test_only_so_many_shows_are_read_per_lookup(
+        self,
+        client: TestClient,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """請求數有上界（M5.6 票 06）：一次查詢最多讀 `FIND_EPISODE_READS` 部劇，其餘的說沒讀。"""
+        add_series(jellyfin, OTHER_SERIES, "Severance", 1)
+        monkeypatch.setattr(inventory, "FIND_EPISODE_READS", 1)
+
+        found = find(client, factory, CREW, "bear", "severance")
+
+        reads = [query for query in jellyfin.watch_area_queries if query[0] == "series_episodes"]
+        assert [query[2] for query in reads] == [BEAR]
+        [skipped] = found.names[1].titles
+        assert skipped.episodes == {}
+        assert "not read" in skipped.episodes_note
+
+    def test_one_show_failing_does_not_take_the_others_episodes_down(
+        self,
+        client: TestClient,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """一部劇的集數讀不到（權限被收回、Jellyfin 一時答不出來）只影響那一部（M5.6 票 06）。"""
+        add_series(jellyfin, OTHER_SERIES, "Severance", 1, 2)
+        original = jellyfin.series_episodes
+
+        async def flaky(*, user_id: str, series_id: str) -> tuple[JellyfinItem, ...]:
+            if series_id == OTHER_SERIES:
+                raise NotFoundError("GET /Shows/x/Episodes: 404")
+            return await original(user_id=user_id, series_id=series_id)
+
+        monkeypatch.setattr(jellyfin, "series_episodes", flaky)
+
+        found = find(client, factory, CREW, "bear", "severance")
+
+        [bear] = found.names[0].titles
+        assert bear.episodes == {"1": "1-3"}
+        [other] = found.names[1].titles
+        assert other.episodes == {}
+        assert "would not show" in other.episodes_note
+
+    def test_episodes_that_cannot_be_read_say_why_without_failing_the_call(
+        self,
+        client: TestClient,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """整次呼叫不失敗（M5.6 票 06）：那一部說不出集數與原因，其餘照樣回。"""
+
+        async def down(**_: object) -> None:
+            raise ServiceUnavailableError("GET /Shows/x/Episodes: 503")
+
+        monkeypatch.setattr(jellyfin, "series_episodes", down)
+
+        seen = as_tool(
+            client, factory, CREW, "inventory.find_in_library", names=["bear", "Oppenheimer"]
+        )
+
+        [show] = seen["names"][0]["titles"]
+        assert show["episodes"] == {}
+        assert "503" in show["episodes_note"]
+        [movie] = seen["names"][1]["titles"]
+        assert movie["media_id"] == "movie:872585"
+        assert "episodes" not in movie

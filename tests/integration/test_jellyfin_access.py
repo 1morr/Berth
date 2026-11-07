@@ -829,6 +829,46 @@ class TestLocate:
 
         assert "series_next_up" not in {query for query, *_ in jellyfin.watch_area_queries}
 
+    async def test_episodes_are_asked_only_for_shows_read_from_a_visible_library(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """`find_in_library` 從清單讀到的劇可以直接問集數（M5.6 票 06）；沒讀過、沒確認過的照樣
+        拒絕，而且拒絕在問 Jellyfin 之前——替身會回，所以沒被問就是 Berth 擋的。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            with pytest.raises(ItemNotVisibleError):
+                await access.series_episodes(BEAR)
+            assert jellyfin.watch_area_queries == []
+
+            await access.index(TV)
+            episodes = await access.series_episodes(BEAR)
+
+        assert [episode.id for episode in episodes] == [BEAR_E01, BEAR_E02]
+        assert jellyfin.watch_area_queries == [("series_episodes", user.jellyfin_user_id, BEAR)]
+
+    async def test_a_show_in_a_library_this_user_cannot_see_never_becomes_readable(
+        self,
+        session: AsyncSession,
+        factory: FakeClientFactory,
+        jellyfin: FakeJellyfinClient,
+        cache: AccessCache,
+    ) -> None:
+        """清單本身先擋媒體庫；擋下來的那一部的集數也就沒有讀到它的路。"""
+        user, _ = await signed_in(session, factory, "deckhand", "rope")
+
+        async with jellyfin_access(session, factory, cache, user) as access:
+            with pytest.raises(LibraryNotVisibleError):
+                await access.index(ANIME)
+            with pytest.raises(ItemNotVisibleError):
+                await access.series_episodes(FRIEREN)
+
+        assert "series_episodes" not in {query for query, *_ in jellyfin.watch_area_queries}
+
     async def test_seasons_and_episodes_come_from_jellyfin_for_this_user(
         self,
         session: AsyncSession,

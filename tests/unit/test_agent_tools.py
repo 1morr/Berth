@@ -126,6 +126,15 @@ def test_tool_names_are_unique_and_accepted_by_both_providers() -> None:
     assert all(re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name) for name in names)
 
 
+def test_find_in_library_says_whose_numbers_the_episodes_are() -> None:
+    """Jellyfin 沒刮到 TMDB id 時模型只靠這一支說出使用者有哪幾集（M5.6 票 06）：集數是 Jellyfin
+    自己的季集號，說明要講清楚，模型才不會拿它跟 TMDB 的集數比。"""
+    about = commands()["inventory.find_in_library"].about
+
+    assert "episodes" in about
+    assert "Jellyfin's own season and episode numbers, not TMDB's" in about
+
+
 def test_a_user_sees_only_the_commands_meant_for_users() -> None:
     registry = commands()
     assert set(visible_tools(Role.ADMIN, tavily=True)) == set(TOOLS)
