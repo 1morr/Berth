@@ -55,6 +55,7 @@ M5.5（新番與導覽）也已驗收，封存於 `docs/archive/m5.5.md`。
 | 2026-11-07 | M5.6 09 退回關鍵字 | 找不到番組或字幕組時 `rss.subscribe` 自己問 nyaa／acg.rip，卡片列來源（新拒絕 `subgroups_not_found`）；工具 22→18，舊訂閱卡預覽刪掉 | 新 session 下 `/implement .scratch/m5.6/issues/10-m5.6-ui-wrap-up.md` |
 | 2026-11-07 | M5.6 10 UI 收尾 | 替身加 13 列與兩部作品兩種卡；critique 25/40、audit 17/20、polish：摘要一行、長卡確認貼底、批次勾選改中性、文案與 aria 修正 | 新 session 下 `/implement .scratch/m5.6/issues/10b-assistant-panel-resize.md` |
 | 2026-11-07 | M5.6 10b 面板拖寬 | 桌機把手拖寬（24–40rem、命中區 24px）、握把刻記、寬度讀數、雙擊重設、記 localStorage；窄版不畫；critique 28/40、audit 18/20 | 新 session 下 `/implement .scratch/m5.6/issues/11-m5.6-acceptance.md` |
+| 2026-11-07 | M5.6 11 驗收 | 真模型 26 列 $0.189；13 列卡 Route 選 1 次；S7／S8 的 anthropic 未達目標（使用者接受）；S1／S6 訂閱綁錯季排 M6 第一張票；真服務 e2e 27/28（既有的「可以看了」）待 11b | 等使用者：11b 修好 e2e 之後回來重跑與封存 |
 
 ## 偏差與決定
 
